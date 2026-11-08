@@ -334,9 +334,17 @@ upper-body slot montage plays (fire / reload / hit / grenade: the legs keep the 
 not eligible (dead, knocked down, ladder, vault, cover, prone, airborne fall, sniper pose, blizzard walk, carrying). Clip choice: idle (stand / aim / crouch) vs
 move by speed; walk -> jog blend by speed, aim-walk while aiming, crouch set crouched, sprint loop; 8 directions from the velocity vs the facing
 (`BlendDirections`, nearest two available); one shared normalized phase; play rate = speed / loop speed (0.5..1.6).
-**Fire:** `PlayShotgunFire` plays `fire_aim` (aiming) or `fire_hip` on UpperBodySlot per shot (instead of AM_Rifle_Fire). **Reload per shell:**
-`UpdateShotgunReload` plays the reload clip (or the configured section) on UpperBodySlot once per shell, fitted to `reload_per_round_s` 0.5 s (x4.8 for the whole
-2.4 s clip - `ShellReloadRate`); an order / shot interrupts between shells (the gameplay rule).
+**Fire:** `PlayShotgunFire` plays `fire_aim` (aiming) or `fire_hip` on UpperBodySlot per shot (instead of AM_Rifle_Fire). **Reload per shell
+(fixed 2026-11-08 after the designer's "he shakes strangely during the reload"):** the first version restarted the pack's single 2.4 s reload clip
+for EVERY shell at x4.8 as a montage - the gun hand snapped back 40 cm in one frame eight times. Now ONE pass of the clip, natively on spine_01 and
+below (`UpdateShotgunReload` + `FOperativeAnimInstanceProxy::BlendWeaponReload`; no montage, so the layer keeps the legs and nothing restarts),
+driven by the pure phase machine `WeaponAnimLayerRules::AdvanceShellReload`: the intro 0 - 0.833 s (left hand to the pouch and up to the port,
+the first shell) once at rate 1, the pack's own shell-insertion loop 0.833 - 1.2 s (the same pose at both ends) once per shell at
+`ShellLoopRate` = 0.367 s / 0.5 s = x0.73, then the current loop plays out and the outro from 1.833 s (the loop's pose again: hand back to the
+fore-end, back to the aim) once. Segments measured by `Scripts/Editor/measure_shotgun_reload.py` (the left hand's path), in
+`weapon_anim_sets.json` (`reload_shell_start_s` / `_end_s`, `reload_outro_start_s`, `reload_blend_in_s` / `_out_s`). Gameplay timing unchanged
+(0.5 s a shell). Blends in 0.15 s, out 0.12 s, and gives way at once to any other upper / full-body clip (a shot that interrupts the reload).
+Measured standing (ShotgunSmoke 4): torso / head 2.7 -> 1.7 cm a frame, left hand 40.3 -> 14.9 cm a frame (the clip's own fastest move ~13).
 **Check:** tests `CodexTactics.Animation.WeaponLayer.*`; `CodexTactics.ShotgunSmoke` (the layer Full standing with an idle copy from the skeleton's folder, a walk
 clip moving, a fire clip per shot, >= 8 shell clips over a reload, the PMC fighter's layer on the pack clips); `CodexTactics.ShotgunD1Shots` (rendered) writes stills
 + idle / walk / aim-fire / reload frames to `Saved/Screenshots/ShotgunD1/`.

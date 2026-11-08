@@ -1,5 +1,5 @@
 {
-  "comment": "Weapon animation sets played by the operative's native weapon layer (UOperativeAnimInstance, OperativeAnimInstanceShotgun.cpp; designer decision 21, 2026-11-03: the D-1 shotgun switches the locomotion / aim set to the user's /Game/ShotgunLocomotionPack - never modified, read here by path). Directions clockwise from forward. *_speed = the loops' authored ground speed, cm/s (the play rate follows the actual speed). retargeted = skeleton name -> the folder of its IK-retargeted copies (same clip names; Scripts/Editor/setup_shotgun_animation.py; skeletons not listed - the PMC operator, Manny hierarchy - play the pack clips). reload_shell_start_s / _end_s = the section of the reload clip one shell plays (both 0 = the whole clip, fitted to the per-shell time).",
+  "comment": "Weapon animation sets played by the operative's native weapon layer (UOperativeAnimInstance, OperativeAnimInstanceShotgun.cpp; designer decision 21, 2026-11-03: the D-1 shotgun switches the locomotion / aim set to the user's /Game/ShotgunLocomotionPack - never modified, read here by path). Directions clockwise from forward. *_speed = the loops' authored ground speed, cm/s (the play rate follows the actual speed). retargeted = skeleton name -> the folder of its IK-retargeted copies (same clip names; Scripts/Editor/setup_shotgun_animation.py; skeletons not listed - the PMC operator, Manny hierarchy - play the pack clips). reload: ONE pass of the pack's single reload clip on the upper body (designer 2026-11-08: restarting it x4.8 per shell shook him) - the intro 0 .. reload_shell_start_s once, the shell-insertion loop reload_shell_start_s .. reload_shell_end_s once per shell (rate = loop length / the per-shell step, kept 0.7..1.4), then the outro from reload_outro_start_s (the loop's end pose) to the clip's end; measured by Scripts/Editor/measure_shotgun_reload.py (the left hand at the loading port, the same pose at 0.833 / 1.2 / 1.833 s).",
   "shotgun": {
     "retargeted": {
       "UE4_Mannequin_Skeleton": "/Game/Characters/Animations/Shotgun/Male",
@@ -54,8 +54,11 @@
     "sprint_speed": 550,
     "move_start_speed": 15,
     "move_full_speed": 60,
-    "reload_shell_start_s": 0,
-    "reload_shell_end_s": 0,
+    "reload_shell_start_s": 0.8333,
+    "reload_shell_end_s": 1.2,
+    "reload_outro_start_s": 1.8333,
+    "reload_blend_in_s": 0.15,
+    "reload_blend_out_s": 0.12,
     "blend_seconds": 0.2
   }
 }

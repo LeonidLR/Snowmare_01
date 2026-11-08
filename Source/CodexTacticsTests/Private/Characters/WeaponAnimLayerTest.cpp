@@ -74,18 +74,70 @@ bool FWeaponLayerMaskTest::RunTest(const FString&)
 	TestEqual(TEXT("250 cm/s: half jog"), JogWeight(250.f, 150.f, 350.f), 0.5f, 0.001f);
 	TestEqual(TEXT("loop rate follows the speed"), LoopPlayRate(300.f, 150.f), 1.6f, 0.001f);
 	TestEqual(TEXT("... clamped low"), LoopPlayRate(20.f, 150.f), 0.5f, 0.001f);
-	float Start = 0.f;
-	float End = 0.f;
-	TestEqual(TEXT("no section: the whole 2.4 s clip in 0.5 s = x4.8"), ShellReloadRate(2.4f, 0.f, 0.f, 0.5f, Start, End), 4.8f, 0.001f);
-	TestTrue(TEXT("... from 0 to 2.4"), Start == 0.f && FMath::IsNearlyEqual(End, 2.4f));
-	TestEqual(TEXT("a 0.8-1.6 s section in 0.5 s = x1.6"), ShellReloadRate(2.4f, 0.8f, 1.6f, 0.5f, Start, End), 1.6f, 0.001f);
-	TestTrue(TEXT("... from 0.8"), FMath::IsNearlyEqual(Start, 0.8f) && FMath::IsNearlyEqual(End, 1.6f));
 	const FString Pack = TEXT("/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_idle.anim_shotgun_aim_idle");
 	TestEqual(TEXT("retargeted copy: same name in the skeleton's folder"), RetargetedClipPath(Pack, TEXT("/Game/Characters/Animations/Shotgun/Male")),
 		FString(TEXT("/Game/Characters/Animations/Shotgun/Male/anim_shotgun_aim_idle.anim_shotgun_aim_idle")));
 	TestEqual(TEXT("... a package path and a trailing slash"), RetargetedClipPath(TEXT("/Game/P/Walk/clip_a"), TEXT("/Game/X/")),
 		FString(TEXT("/Game/X/clip_a.clip_a")));
 	TestTrue(TEXT("... no folder: none (the pack clip plays)"), RetargetedClipPath(Pack, TEXT("")).IsEmpty());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponLayerShellReloadTest, "CodexTactics.Animation.WeaponLayer.ShellReload",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWeaponLayerShellReloadTest::RunTest(const FString&)
+{
+	using namespace WeaponAnimLayerRules;
+	// The pack's reload, measured (Scripts/Editor/measure_shotgun_reload.py): intro 0 - 0.833, the insertion loop 0.833 - 1.2 (the same
+	// pose at both ends), the outro from 1.833 (the loop's pose again) to 2.4.
+	TestEqual(TEXT("loop rate: 0.367 s loop per 0.5 s shell = x0.733 (near natural, was x4.8)"), ShellLoopRate(0.8333f, 1.2f, 0.5f), 0.733f, 0.002f);
+	TestEqual(TEXT("... clamped high"), ShellLoopRate(0.f, 2.4f, 0.5f), 1.4f, 0.001f);
+	TestEqual(TEXT("... no segment: 1"), ShellLoopRate(1.f, 1.f, 0.5f), 1.f);
+	FShellReloadClip Clip;
+	Clip.Length = 2.4f;
+	Clip.LoopStart = 0.8333f;
+	Clip.LoopEnd = 1.2f;
+	Clip.OutroStart = 1.8333f;
+	Clip.LoopRate = 0.733f;
+	FShellReloadState State;
+	AdvanceShellReload(State, Clip, 0.1f, false);
+	TestTrue(TEXT("not reloading: nothing"), State.Phase == EShellReloadPhase::None);
+	AdvanceShellReload(State, Clip, 0.5f, true);
+	TestTrue(TEXT("reload: the intro plays at rate 1"), State.Phase == EShellReloadPhase::Intro && FMath::IsNearlyEqual(State.Time, 0.5f));
+	AdvanceShellReload(State, Clip, 0.5f, true);
+	TestTrue(TEXT("... then the insertion loop"), State.Phase == EShellReloadPhase::Loop && State.Time >= 0.8333f && State.Time < 1.2f);
+	// 8 shells x 0.5 s: the loop wraps, the time always inside it and never jumping except at the wrap.
+	float Last = State.Time;
+	int32 Jumps = 0;
+	for (int32 Frame = 0; Frame < 240; ++Frame)
+	{
+		AdvanceShellReload(State, Clip, 1.f / 60.f, true);
+		TestTrue(TEXT("... stays in the loop"), State.Phase == EShellReloadPhase::Loop && State.Time >= 0.8333f - KINDA_SMALL_NUMBER && State.Time < 1.2f);
+		Jumps += FMath::Abs(State.Time - Last) > 0.05f ? 1 : 0;
+		Last = State.Time;
+	}
+	TestTrue(TEXT("... about one loop per shell (4 s = ~8 loops)"), State.Loops >= 7 && State.Loops <= 9);
+	TestTrue(TEXT("... the only jumps are the wraps (the same pose at both ends)"), Jumps <= State.Loops);
+	AdvanceShellReload(State, Clip, 1.f / 60.f, false);
+	TestTrue(TEXT("full: the current loop plays out"), State.Phase == EShellReloadPhase::Finishing);
+	for (int32 Frame = 0; Frame < 40 && State.Phase == EShellReloadPhase::Finishing; ++Frame)
+	{
+		AdvanceShellReload(State, Clip, 1.f / 60.f, false);
+	}
+	TestTrue(TEXT("... then the outro from 1.833 (the loop's end pose)"), State.Phase == EShellReloadPhase::Outro && State.Time >= 1.8333f && State.Time < 1.95f);
+	AdvanceShellReload(State, Clip, 0.7f, false);
+	TestTrue(TEXT("... and the reload clip is over"), State.Phase == EShellReloadPhase::None);
+	// A reload resumed while the last loop plays out goes back to looping; an invalid table loops the whole clip.
+	State = FShellReloadState();
+	AdvanceShellReload(State, Clip, 1.f, true);
+	AdvanceShellReload(State, Clip, 1.f / 60.f, false);
+	AdvanceShellReload(State, Clip, 1.f / 60.f, true);
+	TestTrue(TEXT("finishing -> reloading again: loop"), State.Phase == EShellReloadPhase::Loop);
+	FShellReloadClip Bad;
+	Bad.Length = 2.4f;
+	const FShellReloadClip Safe = SanitizeShellReloadClip(Bad);
+	TestTrue(TEXT("no table: the whole clip is the loop, no outro"), Safe.LoopStart == 0.f && FMath::IsNearlyEqual(Safe.LoopEnd, 2.4f) && Safe.OutroStart == 0.f);
 	return true;
 }
 

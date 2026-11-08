@@ -181,9 +181,15 @@ private:
 
 	/** The weapon layer (the D-1 shotgun set, 2026-11-08) blended over the graph's pose: upper / lower body weights and its clips. */
 	void BlendWeaponLayer(FPoseContext& Output) const;
+	/** The shotgun's per-shell reload clip on spine_01 and below (after the layer). */
+	void BlendWeaponReload(FPoseContext& Output) const;
 	TStaticArray<FOperativeClipState, 12> WeaponClips;
 	float WeaponUpperWeight = 0.f;
 	float WeaponLowerWeight = 0.f;
+	/** The shotgun's per-shell reload on the upper body (spine_01 and below it): clip, time, weight. */
+	const UAnimSequenceBase* WeaponReloadClip = nullptr;
+	float WeaponReloadTime = 0.f;
+	float WeaponReloadWeight = 0.f;
 };
 
 /**
@@ -1499,6 +1505,9 @@ private:
 		float MoveFullSpeed = 60.f;
 		float ShellStart = 0.f;
 		float ShellEnd = 0.f;
+		float OutroStart = 0.f;
+		float ReloadBlendIn = 0.15f;
+		float ReloadBlendOut = 0.12f;
 		float BlendSeconds = 0.2f;
 		FShotgunAnimSet()
 		{
@@ -1514,8 +1523,9 @@ private:
 	bool IsShotgunLayerEligible() const;
 	/** The shot clip of the shotgun (aim / hip) on the upper-body slot; false = not the shotgun set. */
 	bool PlayShotgunFire();
-	/** The per-shell reload clip (one section per shell); true when the shotgun set handled the reload this frame. */
-	bool UpdateShotgunReload(const AOperativeCharacter* Operative);
+	/** The per-shell reload (intro, the shell-insertion loop per shell, outro - natively on the upper body); true when the shotgun set handles
+	 * the reload this frame. */
+	bool UpdateShotgunReload(const AOperativeCharacter* Operative, float DeltaSeconds);
 	FShotgunAnimSet ShotgunSet;
 	bool bShotgunSetLoaded = false;
 	/** The retargeted-copy folder for this mesh's skeleton (weapon_anim_sets.json "retargeted"); empty = the pack clips play. */
@@ -1533,6 +1543,8 @@ private:
 	float ShotgunSprintShare = 0.f;
 	TStaticArray<FOperativeClipState, 12> ShotgunClips;
 	int32 ShotgunReloadLastClip = -1;
+	FShellReloadState ShotgunReload;
+	float ShotgunReloadWeight = 0.f;
 	int32 ShotgunFireClips = 0;
 	int32 ShotgunShellClips = 0;
 

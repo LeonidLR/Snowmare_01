@@ -155,6 +155,9 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 	Number(TEXT("move_full_speed"), ShotgunSet.MoveFullSpeed);
 	Number(TEXT("reload_shell_start_s"), ShotgunSet.ShellStart);
 	Number(TEXT("reload_shell_end_s"), ShotgunSet.ShellEnd);
+	Number(TEXT("reload_outro_start_s"), ShotgunSet.OutroStart);
+	Number(TEXT("reload_blend_in_s"), ShotgunSet.ReloadBlendIn);
+	Number(TEXT("reload_blend_out_s"), ShotgunSet.ReloadBlendOut);
 	Number(TEXT("blend_seconds"), ShotgunSet.BlendSeconds);
 }
 
@@ -282,32 +285,47 @@ bool UOperativeAnimInstance::PlayShotgunFire()
 	return true;
 }
 
-bool UOperativeAnimInstance::UpdateShotgunReload(const AOperativeCharacter* Operative)
+bool UOperativeAnimInstance::UpdateShotgunReload(const AOperativeCharacter* Operative, float DeltaSeconds)
 {
+	// The designer (2026-11-08, the render): "during the reload the character shakes strangely" - the pack's single 2.4 s reload clip was
+	// restarted for every shell at x4.8 (measured: torso / head 15.3 cm, left hand 40 cm in one frame). Now ONE pass of the clip, natively on
+	// the upper body: the intro (raise / tilt, the first shell) once, the pack's own shell-insertion loop (weapon_anim_sets.json
+	// reload_shell_start_s .. _end_s, measured with Scripts/Editor/measure_shotgun_reload.py) once per shell at a near-natural rate, the
+	// outro (pump, back to the aim) once at the end; no montage, so the layer keeps the legs and nothing restarts.
 	if (!Operative || !bShotgunWeapon || !ShotgunSet.Reload || bIsProne || bKnockedDown || bIsClimbing || !Operative->CurrentWeapon)
 	{
 		ShotgunReloadLastClip = -1;
+		ShotgunReload = FShellReloadState();
+		ShotgunReloadWeight = 0.f;
 		return false;
 	}
 	const FWeaponAmmoStats& Ammo = Operative->CurrentWeapon->Stats.Ammo;
-	const int32 Clip = Operative->CurrentClip;
-	const bool bStart = bIsReloading && !bWasReloading;
-	const bool bNextShell = bIsReloading && bWasReloading && WeaponBallisticsRules::ReloadsPerRound(Ammo) && ShotgunReloadLastClip >= 0 && Clip > ShotgunReloadLastClip;
-	if ((bStart || bNextShell) && !IsPlayingStanceTransition())
+	const bool bPerRound = WeaponBallisticsRules::ReloadsPerRound(Ammo);
+	const float Step = FMath::Max(0.1f, bPerRound ? WeaponBallisticsRules::ReloadStepSeconds(Ammo) : Operative->ReloadTimer);
+	FShellReloadClip Clip;
+	Clip.Length = ShotgunSet.Reload->GetPlayLength();
+	Clip.LoopStart = ShotgunSet.ShellStart;
+	Clip.LoopEnd = ShotgunSet.ShellEnd;
+	Clip.OutroStart = ShotgunSet.OutroStart;
+	Clip.LoopRate = WeaponAnimLayerRules::ShellLoopRate(ShotgunSet.ShellStart, ShotgunSet.ShellEnd, Step);
+	WeaponAnimLayerRules::AdvanceShellReload(ShotgunReload, Clip, DeltaSeconds, bIsReloading);
+	// A shell in: counted for the smokes (one insertion loop per shell at the matching rate).
+	const int32 Shells = Operative->CurrentClip;
+	if (ShotgunReloadLastClip >= 0 && Shells > ShotgunReloadLastClip && (bIsReloading || bWasReloading))
 	{
-		float Start = 0.f;
-		float End = 0.f;
-		const float Step = FMath::Max(0.1f, WeaponBallisticsRules::ReloadStepSeconds(Ammo));
-		const float Rate = WeaponAnimLayerRules::ShellReloadRate(ShotgunSet.Reload->GetPlayLength(), ShotgunSet.ShellStart, ShotgunSet.ShellEnd,
-			WeaponBallisticsRules::ReloadsPerRound(Ammo) ? Step : FMath::Max(0.1f, Operative->ReloadTimer), Start, End);
-		PlaySlotAnimationAsDynamicMontage(ShotgunSet.Reload, UpperBodySlot, 0.1f, 0.15f, Rate, 1, -1.f, Start);
 		++ShotgunShellClips;
 	}
-	else if (!bIsReloading && bWasReloading)
+	ShotgunReloadLastClip = Shells;
+	// Weight: in over reload_blend_in_s, out over reload_blend_out_s - and out at once under any other upper / full-body clip (a shot
+	// that interrupts the reload, a hit, a grenade, a stance change).
+	const bool bOtherClip = GetSlotMontageGlobalWeight(UpperBodySlot) > 0.01f || GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f || IsPlayingStanceTransition();
+	const bool bWant = ShotgunReload.Phase != EShellReloadPhase::None && !bOtherClip;
+	const float Seconds = bWant ? ShotgunSet.ReloadBlendIn : ShotgunSet.ReloadBlendOut;
+	ShotgunReloadWeight = FMath::FInterpConstantTo(ShotgunReloadWeight, bWant ? 1.f : 0.f, DeltaSeconds, 1.f / FMath::Max(0.01f, Seconds));
+	if (bOtherClip && ShotgunReloadWeight <= 0.f)
 	{
-		StopSlotAnimation(0.15f, UpperBodySlot);
+		ShotgunReload = FShellReloadState(); // given way: the next reload starts from the intro
 	}
-	ShotgunReloadLastClip = bIsReloading ? Clip : -1;
 	return true;
 }
 
@@ -337,6 +355,7 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 	}
 	if (Poses.IsEmpty() || Total <= KINDA_SMALL_NUMBER)
 	{
+		BlendWeaponReload(Output);
 		return;
 	}
 	for (float& Weight : Weights)
@@ -370,6 +389,43 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 		if (Weight > OperativeShotgunLayer::ShotgunMinWeight)
 		{
 			Output.Pose[Index].BlendWith(Layer[Index], FMath::Min(1.f, Weight));
+		}
+	}
+	BlendWeaponReload(Output);
+}
+
+void FOperativeAnimInstanceProxy::BlendWeaponReload(FPoseContext& Output) const
+{
+	// The per-shell reload: the clip's pose at its time on spine_01 and every bone under it (the arms, the gun hand), local space - the legs
+	// keep the locomotion / the layer.
+	if (!WeaponReloadClip || WeaponReloadWeight <= OperativeShotgunLayer::ShotgunMinWeight)
+	{
+		return;
+	}
+	FCompactPose Pose;
+	Pose.SetBoneContainer(&Output.Pose.GetBoneContainer());
+	FBlendedCurve Curve;
+	Curve.InitFrom(Output.Curve);
+	UE::Anim::FStackAttributeContainer Attributes;
+	FAnimationPoseData PoseData(Pose, Curve, Attributes);
+	WeaponReloadClip->GetAnimationPose(PoseData, FAnimExtractContext(static_cast<double>(WeaponReloadTime), false));
+	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
+	const int32 SpineMeshIndex = Bones.GetPoseBoneIndexForBoneName(TEXT("spine_01"));
+	if (SpineMeshIndex == INDEX_NONE)
+	{
+		return;
+	}
+	const FCompactPoseBoneIndex Spine = Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(SpineMeshIndex));
+	TArray<bool, TInlineAllocator<128>> Upper;
+	Upper.SetNumZeroed(Output.Pose.GetNumBones());
+	const float Weight = FMath::Min(1.f, WeaponReloadWeight);
+	for (const FCompactPoseBoneIndex Index : Output.Pose.ForEachBoneIndex())
+	{
+		const FCompactPoseBoneIndex Parent = Output.Pose.GetParentBoneIndex(Index);
+		Upper[Index.GetInt()] = Index == Spine || (Parent.GetInt() != INDEX_NONE && Upper[Parent.GetInt()]);
+		if (Upper[Index.GetInt()])
+		{
+			Output.Pose[Index].BlendWith(Pose[Index], Weight);
 		}
 	}
 }

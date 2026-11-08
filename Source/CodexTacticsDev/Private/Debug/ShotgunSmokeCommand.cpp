@@ -48,6 +48,10 @@ namespace ShotgunSmoke
 	constexpr float RecoilLimitCm = 25.f;
 	/** #51 rise check: the torso's largest move in ONE frame (a sprint is 9 cm a frame at 60 fps; the bug popped 40-80 cm). */
 	constexpr float PopLimitCm = 15.f;
+	/** The reload's smoothness: the torso / head per frame while he stands and reloads (the designer's "shaking" was the whole clip restarted x8). */
+	constexpr float ReloadTorsoStepLimitCm = 5.f;
+	/** ... and the left hand per frame (the clip's fastest hand move is 800 cm/s = 13 cm a frame; the per-shell restart snapped it 40 cm). */
+	constexpr float ReloadHandStepLimitCm = 20.f;
 
 	struct FState
 	{
@@ -103,6 +107,16 @@ namespace ShotgunSmoke
 		bool bRiseTransitionBefore = false;
 		bool bRiseTransitionAfter = false;
 		int32 RiseSkippedBefore = 0;
+		// The reload's smoothness (designer 2026-11-08: "during the reload the character shakes strangely"): per-frame world moves of the
+		// torso (spine_03 / head) and the left hand while he stands and reloads from empty, the outro included.
+		bool bReloadSampling = false;
+		bool bReloadHasLast = false;
+		FVector ReloadLastTorso = FVector::ZeroVector;
+		FVector ReloadLastHead = FVector::ZeroVector;
+		FVector ReloadLastHand = FVector::ZeroVector;
+		float ReloadMaxTorsoStep = 0.f;
+		float ReloadMaxHandStep = 0.f;
+		FString ReloadWorstWhen;
 		FDelegateHandle FrameHandle;
 	};
 
@@ -294,9 +308,40 @@ namespace ShotgunSmoke
 		}
 	}
 
+	void SampleReload(FState& State)
+	{
+		const AOperativeCharacter* Who = State.Engineer.Get();
+		if (!State.bReloadSampling || !Who || !Who->GetMesh())
+		{
+			return;
+		}
+		const USkeletalMeshComponent* Mesh = Who->GetMesh();
+		const FVector Torso = Mesh->GetBoneLocation(TEXT("spine_03"));
+		const FVector Head = Mesh->GetBoneLocation(TEXT("head"));
+		const FVector Hand = Mesh->GetBoneLocation(TEXT("hand_l"));
+		if (State.bReloadHasLast)
+		{
+			const float Step = FMath::Max(static_cast<float>(FVector::Dist(Torso, State.ReloadLastTorso)), static_cast<float>(FVector::Dist(Head, State.ReloadLastHead)));
+			if (Step > State.ReloadMaxTorsoStep)
+			{
+				const UOperativeAnimInstance* Anim = AnimOf(Who);
+				State.ReloadMaxTorsoStep = Step;
+				State.ReloadWorstWhen = FString::Printf(TEXT("stage %d at %.1f s, clip %d, reloading %d, mask %d upper %.2f, yaw %.1f, speed %.0f, head delta %s"), State.Stage,
+					State.StageTime, Who->CurrentClip, Who->bIsReloading ? 1 : 0, Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1, Anim ? Anim->GetShotgunUpperWeight() : 0.f,
+					Who->GetActorRotation().Yaw, Who->GetVelocity().Size2D(), *(Head - State.ReloadLastHead).ToCompactString());
+			}
+			State.ReloadMaxHandStep = FMath::Max(State.ReloadMaxHandStep, static_cast<float>(FVector::Dist(Hand, State.ReloadLastHand)));
+		}
+		State.ReloadLastTorso = Torso;
+		State.ReloadLastHead = Head;
+		State.ReloadLastHand = Hand;
+		State.bReloadHasLast = true;
+	}
+
 	void SampleProbe(FState& State)
 	{
 		SampleRise(State);
+		SampleReload(State);
 		const AOperativeCharacter* Who = State.Probe.Get();
 		if (!State.bProbe || !Who || !Who->GetMesh())
 		{
@@ -491,10 +536,30 @@ namespace ShotgunSmoke
 			Check(State, Anim && Anim->GetShotgunFireClips() - State.FireClipsBefore >= 10, FString::Printf(TEXT("3: every shot plays the shotgun fire clip (%d)"),
 				Anim ? Anim->GetShotgunFireClips() - State.FireClipsBefore : 0));
 			// The per-shell reload from empty (a cease fire freezes the reload: off; the target parked so nothing interrupts it).
+			// The pose is evaluated from now on (headless) and he settles for a moment first: the target parked, the aim and the last shot's clip
+			// gone, so the smoothness below measures the reload only.
 			Engineer->bTacticalCeaseFire = false;
 			SmokeUtils::ParkEnemyFarAway(State.Target.Get());
+			if (Engineer->GetMesh())
+			{
+				Engineer->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			}
+			GoTo(State, 15);
+			return true;
+		}
+		case 15:
+		{
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			const UOperativeAnimInstance* Anim = AnimOf(Engineer);
 			Engineer->CurrentClip = 0;
 			Engineer->ReserveAmmo = 40;
+			State.bReloadSampling = true;
+			State.bReloadHasLast = false;
+			State.ReloadMaxTorsoStep = 0.f;
+			State.ReloadMaxHandStep = 0.f;
 			State.ShellTimes.Reset();
 			State.LastClip = 0;
 			State.ShellClipsBefore = Anim ? Anim->GetShotgunShellClips() : 0;
@@ -514,13 +579,30 @@ namespace ShotgunSmoke
 			{
 				return true;
 			}
-			const UOperativeAnimInstance* Anim = AnimOf(Engineer);
 			const float Total = State.ShellTimes.IsEmpty() ? 0.f : State.ShellTimes.Last();
 			Check(State, Engineer->CurrentClip == 8 && Engineer->ReserveAmmo == 32 && State.ShellTimes.Num() == 8,
 				FString::Printf(TEXT("4: one shell at a time, 8 steps (clip %d, reserve %d, %d steps)"), Engineer->CurrentClip, Engineer->ReserveAmmo, State.ShellTimes.Num()));
 			Check(State, Total > 3.5f && Total < 4.6f, FString::Printf(TEXT("4: empty -> full in ~4 s (%.1f s; was 2.4 s for the magazine)"), Total));
-			Check(State, Anim && Anim->GetShotgunShellClips() - State.ShellClipsBefore >= 8, FString::Printf(TEXT("4: a reload clip per shell (%d)"),
-				Anim ? Anim->GetShotgunShellClips() - State.ShellClipsBefore : 0));
+			GoTo(State, 14); // the reload's end (pump, back to the aim) plays out while the smoothness is still measured
+			return true;
+		}
+		case 14:
+		{
+			if (State.StageTime < 1.4f)
+			{
+				return true;
+			}
+			State.bReloadSampling = false;
+			// Counted after the tail: the last shell's animation frame may come after the gameplay frame that ended the reload.
+			const UOperativeAnimInstance* ShellAnim = AnimOf(Engineer);
+			Check(State, ShellAnim && ShellAnim->GetShotgunShellClips() - State.ShellClipsBefore >= 8, FString::Printf(TEXT("4: a shell-insertion loop per shell (%d)"),
+				ShellAnim ? ShellAnim->GetShotgunShellClips() - State.ShellClipsBefore : 0));
+			UE_LOG(LogCodexTactics, Display, TEXT("ShotgunSmoke: reload smoothness: torso / head max %.1f cm a frame (%s), left hand max %.1f cm a frame"),
+				State.ReloadMaxTorsoStep, *State.ReloadWorstWhen, State.ReloadMaxHandStep);
+			Check(State, State.ReloadMaxTorsoStep < ReloadTorsoStepLimitCm, FString::Printf(TEXT("4: the reload does not shake him (torso / head max %.1f cm a frame; limit %.0f)"),
+				State.ReloadMaxTorsoStep, ReloadTorsoStepLimitCm));
+			Check(State, State.ReloadMaxHandStep < ReloadHandStepLimitCm, FString::Printf(TEXT("4: ... nor snaps the gun hand back (left hand max %.1f cm a frame; limit %.0f, the clip's own fastest move ~13; the old per-shell restart 40)"),
+				State.ReloadMaxHandStep, ReloadHandStepLimitCm));
 			// Interruption: 2 shells in, then a quick fire order.
 			Engineer->CurrentClip = 0;
 			Engineer->ReserveAmmo = 40;
