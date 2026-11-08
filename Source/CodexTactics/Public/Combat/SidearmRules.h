@@ -25,8 +25,8 @@ struct CODEXTACTICS_API FSidearmConfig
 	/** Back to the primary after this long without a target (s). */
 	float HolsterAfterSeconds = 3.f;
 	/**
-	 * In cover (any cover state - the corner peek / its fire pose included) he reloads behind the cover instead of drawing the sidearm; the
-	 * switch is for the open (moving, exposed). The coordinator's default 2026-11-09, pending the game designer's OK (CoverSmoke /
+	 * In cover (any cover state - the corner peek / its fire pose included, and his open shots off the wall: he goes back to it) he reloads
+	 * behind the cover instead of drawing the sidearm; the switch is for the open (moving, exposed). The coordinator's default 2026-11-09, pending the game designer's OK (CoverSmoke /
 	 * CornerHoldSmoke: the corner man drew the pistol instead of ducking back to reload).
 	 */
 	bool bReloadInCover = true;

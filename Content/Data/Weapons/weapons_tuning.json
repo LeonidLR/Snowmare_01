@@ -68,7 +68,7 @@
     ]
   },
   "sidearm": {
-    "comment": "The sidearm switch (SidearmRules, 2026-11-08): a primary that runs dry with an enemy within threat_range_m -> the pistol instead of the reload (no shot for draw_s while it comes up); back to the primary (which then reloads) after holster_after_s without a target or when the pistol is dry. reload_in_cover (2026-11-09, pending the game designer's OK): in cover - the corner peek / its fire pose included - he reloads behind the cover instead; the switch is for the open. The player's own switching (X, the weapon selector) is unchanged.",
+    "comment": "The sidearm switch (SidearmRules, 2026-11-08): a primary that runs dry with an enemy within threat_range_m -> the pistol instead of the reload (no shot for draw_s while it comes up); back to the primary (which then reloads) after holster_after_s without a target or when the pistol is dry. reload_in_cover (2026-11-09, pending the game designer's OK): in cover - the corner peek / its fire pose and his open shots off the wall included - he reloads behind the cover instead; the switch is for the open. The player's own switching (X, the weapon selector) is unchanged.",
     "enabled": true,
     "weapon": "pistol",
     "threat_range_m": 10,

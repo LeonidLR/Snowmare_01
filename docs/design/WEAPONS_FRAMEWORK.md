@@ -347,8 +347,9 @@ flamethrower rows of this table were dropped with the roster, section 0: those w
 
 **In cover he reloads behind the cover (2026-11-09; the coordinator's default, pending the designer's OK).** `weapons_tuning.json` "sidearm"
 `reload_in_cover` (default true; `FSidearmConfig::bReloadInCover`, `SidearmRules::ShouldDrawSidearm(.., bInCover)`): an operative in cover
-- any cover state, the corner peek and its fire pose included - does not draw the sidearm on an empty primary, he ducks back and reloads (the
-corner aim's DuckToReload); the switch is for the open (moving, exposed). Found by main's verification: CoverSmoke ("reloaded behind the
+- any cover state, the corner peek and its fire pose included, and his open shots off the wall (`IsCoverOpenShotActive`: he goes back to the
+wall) - does not draw the sidearm on an empty primary, he ducks back and reloads (the corner aim's DuckToReload); the switch is for the open
+(moving, exposed). Any primary - the Medic-Sapper's sniper rifle too (her switch in the open is kept for now, pending the designer). Found by main's verification: CoverSmoke ("reloaded behind the
 corner") and CornerHoldSmoke ("no duck behind the corner except to reload") - the corner man drew the pistol at an enemy 6.6 / 6.8 m away.
 Test `CodexTactics.Weapons.Sidearm.Rules`; PistolSmoke (the open-ground switch) unchanged.
 
