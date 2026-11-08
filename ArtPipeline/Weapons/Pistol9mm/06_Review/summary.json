@@ -1,0 +1,439 @@
+{
+  "asset": "Pistol9mm",
+  "reduce": {
+    "parts": {
+      "Pistol": {
+        "tris_before": 10334,
+        "tris_welded": 9313,
+        "tris_after": 3000,
+        "collapse_ratio": 0.3221,
+        "objects_before": 23,
+        "verts_after": 1636,
+        "texel_density_px_per_cm": 19.41,
+        "atlas_area_percent": 28.44,
+        "surface_area_cm2": 791.4
+      },
+      "Magazine": {
+        "tris_before": 1780,
+        "tris_welded": 1606,
+        "tris_after": 700,
+        "collapse_ratio": 0.4359,
+        "objects_before": 4,
+        "verts_after": 331,
+        "texel_density_px_per_cm": 12.13,
+        "atlas_area_percent": 3.09,
+        "surface_area_cm2": 220.0
+      },
+      "Bullet": {
+        "tris_before": 438,
+        "tris_welded": 436,
+        "tris_after": 120,
+        "collapse_ratio": 0.2752,
+        "objects_before": 1,
+        "verts_after": 62,
+        "texel_density_px_per_cm": 12.13,
+        "atlas_area_percent": 0.09,
+        "surface_area_cm2": 6.3
+      },
+      "Suppressor1": {
+        "tris_before": 1414,
+        "tris_welded": 1410,
+        "tris_after": 700,
+        "collapse_ratio": 0.4965,
+        "objects_before": 2,
+        "verts_after": 370,
+        "texel_density_px_per_cm": 10.92,
+        "atlas_area_percent": 2.28,
+        "surface_area_cm2": 201.0
+      },
+      "Suppressor2": {
+        "tris_before": 1274,
+        "tris_welded": 1274,
+        "tris_after": 599,
+        "collapse_ratio": 0.471,
+        "objects_before": 2,
+        "verts_after": 332,
+        "texel_density_px_per_cm": 10.92,
+        "atlas_area_percent": 1.68,
+        "surface_area_cm2": 147.8
+      },
+      "Suppressor3": {
+        "tris_before": 4765,
+        "tris_welded": 4435,
+        "tris_after": 1399,
+        "collapse_ratio": 0.3157,
+        "objects_before": 11,
+        "verts_after": 793,
+        "texel_density_px_per_cm": 9.71,
+        "atlas_area_percent": 4.54,
+        "surface_area_cm2": 505.6
+      },
+      "Laser": {
+        "tris_before": 1728,
+        "tris_welded": 1606,
+        "tris_after": 700,
+        "collapse_ratio": 0.4359,
+        "objects_before": 8,
+        "verts_after": 397,
+        "texel_density_px_per_cm": 12.13,
+        "atlas_area_percent": 1.17,
+        "surface_area_cm2": 83.3
+      },
+      "Flashlight1": {
+        "tris_before": 2970,
+        "tris_welded": 2854,
+        "tris_after": 1100,
+        "collapse_ratio": 0.3854,
+        "objects_before": 11,
+        "verts_after": 619,
+        "texel_density_px_per_cm": 12.13,
+        "atlas_area_percent": 1.79,
+        "surface_area_cm2": 127.6
+      },
+      "Flashlight2": {
+        "tris_before": 1882,
+        "tris_welded": 1813,
+        "tris_after": 800,
+        "collapse_ratio": 0.4413,
+        "objects_before": 8,
+        "verts_after": 441,
+        "texel_density_px_per_cm": 12.13,
+        "atlas_area_percent": 1.15,
+        "surface_area_cm2": 82.0
+      },
+      "RedDot": {
+        "tris_before": 4711,
+        "tris_welded": 4475,
+        "tris_after": 1100,
+        "collapse_ratio": 0.2458,
+        "objects_before": 18,
+        "verts_after": 692,
+        "texel_density_px_per_cm": 12.13,
+        "atlas_area_percent": 1.58,
+        "surface_area_cm2": 112.8
+      },
+      "Picatinny1": {
+        "tris_before": 2408,
+        "tris_welded": 2070,
+        "tris_after": 800,
+        "collapse_ratio": 0.3865,
+        "objects_before": 7,
+        "verts_after": 418,
+        "texel_density_px_per_cm": 10.92,
+        "atlas_area_percent": 1.8,
+        "surface_area_cm2": 158.0
+      },
+      "Picatinny2": {
+        "tris_before": 1716,
+        "tris_welded": 1592,
+        "tris_after": 900,
+        "collapse_ratio": 0.5653,
+        "objects_before": 1,
+        "verts_after": 434,
+        "texel_density_px_per_cm": 10.92,
+        "atlas_area_percent": 1.71,
+        "surface_area_cm2": 150.8
+      }
+    },
+    "res": 1024,
+    "atlas_coverage_percent": 49.33,
+    "total_tris_after": 11918,
+    "total_tris_before": 35420
+  },
+  "stage_times": {
+    "reduce": "2026-11-09 00:16:58",
+    "review": "2026-11-09 00:23:37",
+    "bake": "2026-11-09 00:23:16",
+    "export": "2026-11-09 00:23:28"
+  },
+  "review": {
+    "device": "OPTIX",
+    "parts": [
+      "Pistol",
+      "Magazine",
+      "Bullet",
+      "Suppressor1",
+      "Suppressor2",
+      "Suppressor3",
+      "Laser",
+      "Flashlight1",
+      "Flashlight2",
+      "RedDot",
+      "Picatinny1",
+      "Picatinny2"
+    ],
+    "cells": "06_Review/cells",
+    "samples": 32
+  },
+  "bake": {
+    "device": "OPTIX",
+    "parts": {
+      "Bullet": {
+        "high_materials": [
+          "Bullet9x19"
+        ],
+        "bake_s": 5.2
+      },
+      "Flashlight1": {
+        "high_materials": [
+          "Fleshlight1"
+        ],
+        "bake_s": 57.0
+      },
+      "Flashlight2": {
+        "high_materials": [
+          "Fleshlight2"
+        ],
+        "bake_s": 94.0
+      },
+      "Laser": {
+        "high_materials": [
+          "LaserBlock"
+        ],
+        "bake_s": 119.7
+      },
+      "Magazine": {
+        "high_materials": [
+          "Magazine9mm"
+        ],
+        "bake_s": 134.6
+      },
+      "Picatinny1": {
+        "high_materials": [
+          "PicatinyBracing1"
+        ],
+        "bake_s": 165.7
+      },
+      "Picatinny2": {
+        "high_materials": [
+          "PicatinyBracing2"
+        ],
+        "bake_s": 169.9
+      },
+      "Pistol": {
+        "high_materials": [
+          "CustomPistol9mm"
+        ],
+        "bake_s": 255.7
+      },
+      "RedDot": {
+        "high_materials": [
+          "AIM"
+        ],
+        "bake_s": 315.2
+      },
+      "Suppressor1": {
+        "high_materials": [
+          "Supressor1"
+        ],
+        "bake_s": 322.8
+      },
+      "Suppressor2": {
+        "high_materials": [
+          "Supressor2"
+        ],
+        "bake_s": 330.7
+      },
+      "Suppressor3": {
+        "high_materials": [
+          "Supressor3"
+        ],
+        "bake_s": 367.4
+      }
+    },
+    "swatch_rects_px_bottom_up": {},
+    "coverage_percent": 49.3,
+    "ray_miss_percent_of_covered": 0.123,
+    "normal_texels_clamped_percent": 6.828,
+    "ao_mean": 0.699,
+    "roughness_mean": 0.478,
+    "metallic_mean": 0.254,
+    "metallic_percent_texels_above_0_5": 31.53,
+    "layout_colors": {
+      "Bullet": [
+        0.949999988079071,
+        0.42750000953674316,
+        0.42750000953674316
+      ],
+      "Flashlight1": [
+        0.949999988079071,
+        0.6887500286102295,
+        0.42750000953674316
+      ],
+      "Flashlight2": [
+        0.949999988079071,
+        0.949999988079071,
+        0.42750000953674316
+      ],
+      "Laser": [
+        0.6887500286102295,
+        0.949999988079071,
+        0.42750000953674316
+      ],
+      "Magazine": [
+        0.42750000953674316,
+        0.949999988079071,
+        0.42750000953674316
+      ],
+      "Picatinny1": [
+        0.42750000953674316,
+        0.949999988079071,
+        0.6887500286102295
+      ],
+      "Picatinny2": [
+        0.42750000953674316,
+        0.949999988079071,
+        0.949999988079071
+      ],
+      "Pistol": [
+        0.42750000953674316,
+        0.6887500286102295,
+        0.949999988079071
+      ],
+      "RedDot": [
+        0.42750000953674316,
+        0.42750000953674316,
+        0.949999988079071
+      ],
+      "Suppressor1": [
+        0.6887500286102295,
+        0.42750000953674316,
+        0.949999988079071
+      ],
+      "Suppressor2": [
+        0.949999988079071,
+        0.42750000953674316,
+        0.949999988079071
+      ],
+      "Suppressor3": [
+        0.949999988079071,
+        0.42750000953674316,
+        0.6887500286102295
+      ]
+    },
+    "settings": {
+      "res": 1024,
+      "samples": 4,
+      "cage_extrusion_cm": 0.2,
+      "max_ray_cm": 0.8,
+      "dilate_px": 6,
+      "normal_flip_green_source": false,
+      "normal_output": "DirectX (green down), 16-bit PNG",
+      "orm": "R=AO G=Roughness B=Metallic, linear 8-bit"
+    },
+    "seconds": 373.0
+  },
+  "export": {
+    "ok": true,
+    "parts": {
+      "SM_Pistol9mm_Bullet": {
+        "triangles": 120,
+        "size_cm": [
+          2.568,
+          0.818,
+          0.818
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Flashlight1": {
+        "triangles": 1100,
+        "size_cm": [
+          7.52,
+          2.604,
+          3.425
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Flashlight2": {
+        "triangles": 800,
+        "size_cm": [
+          6.189,
+          2.247,
+          2.873
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Laser": {
+        "triangles": 700,
+        "size_cm": [
+          6.139,
+          1.929,
+          2.709
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Magazine": {
+        "triangles": 700,
+        "size_cm": [
+          7.018,
+          2.401,
+          10.357
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Picatinny1": {
+        "triangles": 800,
+        "size_cm": [
+          10.302,
+          4.009,
+          5.602
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Picatinny2": {
+        "triangles": 900,
+        "size_cm": [
+          15.838,
+          2.615,
+          3.271
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Pistol": {
+        "triangles": 3000,
+        "size_cm": [
+          18.693,
+          2.732,
+          12.029
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_RedDot": {
+        "triangles": 1100,
+        "size_cm": [
+          4.561,
+          2.667,
+          3.316
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Suppressor1": {
+        "triangles": 700,
+        "size_cm": [
+          18.595,
+          2.633,
+          2.619
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Suppressor2": {
+        "triangles": 599,
+        "size_cm": [
+          12.716,
+          2.604,
+          2.604
+        ],
+        "roundtrip_ok": true
+      },
+      "SM_Pistol9mm_Suppressor3": {
+        "triangles": 1399,
+        "size_cm": [
+          23.612,
+          2.427,
+          7.173
+        ],
+        "roundtrip_ok": true
+      }
+    }
+  }
+}

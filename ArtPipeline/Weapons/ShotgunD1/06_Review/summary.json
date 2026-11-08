@@ -1,0 +1,125 @@
+{
+  "asset": "ShotgunD1",
+  "reduce": {
+    "parts": {
+      "Stock": {
+        "tris_before": 18226,
+        "tris_welded": 18226,
+        "tris_after": 4500,
+        "collapse_ratio": 0.2469,
+        "objects_before": 1,
+        "verts_after": 4803,
+        "texel_density_px_per_cm": 15.83,
+        "atlas_area_percent": 61.2,
+        "surface_area_cm2": 2562.0
+      },
+      "PumpSwatch": {
+        "swatch": true,
+        "tris_before": 0,
+        "tris_after": 2,
+        "objects_before": 0,
+        "texel_density_px_per_cm": 15.83,
+        "atlas_area_percent": 0.02,
+        "surface_area_cm2": 1.0
+      }
+    },
+    "res": 1024,
+    "atlas_coverage_percent": 61.22,
+    "total_tris_after": 4502,
+    "total_tris_before": 18226
+  },
+  "stage_times": {
+    "reduce": "2026-11-09 00:17:34",
+    "bake": "2026-11-09 00:17:55",
+    "export": "2026-11-09 00:18:02",
+    "review": "2026-11-09 00:18:11"
+  },
+  "bake": {
+    "device": "OPTIX",
+    "parts": {
+      "Stock": {
+        "high_materials": [
+          "Aluminum_-_Anodized_Rough_Grey",
+          "Emmissive_Green",
+          "Emmissive_Red",
+          "Plastic_-_Matte_Dark_Gray",
+          "Steel_-_Black",
+          "Steel_-_Satin",
+          "Titanium_-_Satin"
+        ],
+        "bake_s": 6.8
+      },
+      "PumpSwatch": {
+        "swatch_px": [
+          13,
+          13
+        ],
+        "material": "Plastic_-_Matte_Dark_Gray"
+      }
+    },
+    "swatch_rects_px_bottom_up": {
+      "PumpSwatch": [
+        621,
+        996,
+        633,
+        1008
+      ]
+    },
+    "coverage_percent": 60.86,
+    "ray_miss_percent_of_covered": 0.067,
+    "normal_texels_clamped_percent": 3.306,
+    "ao_mean": 1.0,
+    "roughness_mean": 0.561,
+    "metallic_mean": 0.651,
+    "metallic_percent_texels_above_0_5": 65.1,
+    "layout_colors": {
+      "Stock": [
+        0.949999988079071,
+        0.42750000953674316,
+        0.42750000953674316
+      ]
+    },
+    "settings": {
+      "res": 1024,
+      "samples": 4,
+      "cage_extrusion_cm": 0.2,
+      "max_ray_cm": 0.8,
+      "dilate_px": 6,
+      "normal_flip_green_source": false,
+      "normal_output": "DirectX (green down), 16-bit PNG",
+      "orm": "R=AO G=Roughness B=Metallic, linear 8-bit"
+    },
+    "seconds": 14.5
+  },
+  "export": {
+    "ok": true,
+    "parts": {
+      "SK_ShotgunD1_1slot": {
+        "triangles": 4500,
+        "size_cm": [
+          510.138,
+          8049.653,
+          1706.162
+        ],
+        "roundtrip_ok": true
+      },
+      "SK_ShotgunD1_Pump_1slot": {
+        "triangles": 496,
+        "size_cm": [
+          11250.215,
+          12500.001,
+          37499.988
+        ],
+        "roundtrip_ok": true
+      }
+    }
+  },
+  "review": {
+    "device": "OPTIX",
+    "parts": [
+      "Stock"
+    ],
+    "cells": "06_Review/cells",
+    "samples": 24
+  }
+}

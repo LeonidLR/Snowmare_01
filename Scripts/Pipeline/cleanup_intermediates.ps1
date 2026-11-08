@@ -12,7 +12,13 @@
 #   powershell -ExecutionPolicy Bypass -File Scripts/Pipeline/cleanup_intermediates.ps1 -Asset ArtPipeline/Characters/Operatives/Post_Apo_Survivor_a [-DryRun]
 param(
     [Parameter(Mandatory = $true)][string]$Asset,
-    [switch]$DryRun
+    [switch]$DryRun,
+    # Weapons (ArtPipeline/Weapons/*): there is no Content/Characters/*/Optimized/<Asset>/SK_*.uasset to prove an import
+    # (the optimized weapon source package is only delivered, importing is another task): skip that guard. The final maps
+    # and FBX stay either way, so nothing needed for the import is lost.
+    [switch]$NoImportCheck,
+    # keep the final labelled review sheets (06_Review/<Asset>_review_main|review_parts|atlas|topdown_scale.png)
+    [switch]$KeepReviewSheets
 )
 $ErrorActionPreference = "Stop"
 $repo = (Resolve-Path (Join-Path $PSScriptRoot "..\..")).Path
@@ -21,9 +27,9 @@ $pipelineRoot = Join-Path $repo "ArtPipeline"
 if (-not $assetDir.StartsWith($pipelineRoot + "\")) { throw "Not inside ArtPipeline: $assetDir" }
 $name = Split-Path $assetDir -Leaf
 
-$imported = Get-ChildItem -Path (Join-Path $repo "Content\Characters") -Directory -Filter "Optimized" -Recurse -ErrorAction SilentlyContinue |
+$imported = if ($NoImportCheck) { @("(no import check: -NoImportCheck)") } else { Get-ChildItem -Path (Join-Path $repo "Content\Characters") -Directory -Filter "Optimized" -Recurse -ErrorAction SilentlyContinue |
     ForEach-Object { Join-Path $_.FullName $name } | Where-Object { Test-Path $_ } |
-    Where-Object { @(Get-ChildItem $_ -Filter "SK_*.uasset").Count -gt 0 }
+    Where-Object { @(Get-ChildItem $_ -Filter "SK_*.uasset").Count -gt 0 } }
 if (-not $imported) { throw "No imported asset Content/Characters/*/Optimized/$name/SK_*.uasset - import first, nothing deleted" }
 
 $tracked = @{}
@@ -42,7 +48,8 @@ $victims = Get-ChildItem -Path $assetDir -File -Recurse | Where-Object {
     switch ($stage) {
         '04_Textures_Baked' { return -not ($file.Name -match $finalMaps) }
         '05_Export' { return $file.Extension -ne '.fbx' }
-        default { return $stage -in '01_Source', '02_Textures_Source', '03_Blender', '06_Review' }
+        '06_Review' { return -not ($KeepReviewSheets -and $file.Name -match '_(review_main|review_parts|atlas|topdown_scale)\.png$') }
+        default { return $stage -in '01_Source', '02_Textures_Source', '03_Blender' }
     }
 }
 

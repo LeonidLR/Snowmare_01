@@ -1,0 +1,656 @@
+{
+  "folder": "/Game/Fab/_Model_D-1__Shotgun",
+  "meshes": [
+    {
+      "name": "Object_29",
+      "class": "SkeletalMesh",
+      "path": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Object_29.Object_29",
+      "bounds_origin": [
+        0.0,
+        -7117.6028,
+        -56289.1973
+      ],
+      "bounds_extent": [
+        5625.1074,
+        6250.0008,
+        18749.998
+      ],
+      "skeleton": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Pump_01_Skeleton.Pump_01_Skeleton",
+      "bones": [],
+      "num_lods": 1,
+      "slots": [
+        {
+          "slot": "Plastic_-_Matte_Dark_Gray",
+          "material": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Plastic_-_Matte_Dark_Gray.Plastic_-_Matte_Dark_Gray"
+        }
+      ],
+      "fbx": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-artpipe\\ArtPipeline\\Weapons\\ShotgunD1\\01_Source\\Object_29.fbx",
+      "export_ok": true
+    },
+    {
+      "name": "Stock_Plastic_-_Matte__Dark_Gray__0",
+      "class": "SkeletalMesh",
+      "path": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Stock_Plastic_-_Matte__Dark_Gray__0.Stock_Plastic_-_Matte__Dark_Gray__0",
+      "bounds_origin": [
+        0.0,
+        -441.944,
+        -539.2004
+      ],
+      "bounds_extent": [
+        250.0,
+        4024.3441,
+        849.9993
+      ],
+      "skeleton": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Stock_Plastic_-_Matte__Dark_Gray__0_Skeleton.Stock_Plastic_-_Matte__Dark_Gray__0_Skeleton",
+      "bones": [],
+      "num_lods": 1,
+      "slots": [
+        {
+          "slot": "Plastic_-_Matte_Dark_Gray",
+          "material": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Plastic_-_Matte_Dark_Gray.Plastic_-_Matte_Dark_Gray"
+        },
+        {
+          "slot": "Steel_-_Satin",
+          "material": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Steel_-_Satin.Steel_-_Satin"
+        },
+        {
+          "slot": "Emmissive_Green",
+          "material": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Emmissive_Green.Emmissive_Green"
+        },
+        {
+          "slot": "Aluminum_-_Anodized_Rough_Grey",
+          "material": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Aluminum_-_Anodized_Rough_Grey.Aluminum_-_Anodized_Rough_Grey"
+        },
+        {
+          "slot": "Steel_-_Black",
+          "material": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Steel_-_Black.Steel_-_Black"
+        },
+        {
+          "slot": "Titanium_-_Satin",
+          "material": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Titanium_-_Satin.Titanium_-_Satin"
+        },
+        {
+          "slot": "Emmissive_Red",
+          "material": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Emmissive_Red.Emmissive_Red"
+        }
+      ],
+      "fbx": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-artpipe\\ArtPipeline\\Weapons\\ShotgunD1\\01_Source\\Stock_Plastic_-_Matte__Dark_Gray__0.fbx",
+      "export_ok": true
+    }
+  ],
+  "materials": {
+    "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Plastic_-_Matte_Dark_Gray.Plastic_-_Matte_Dark_Gray": {
+      "class": "MaterialInstanceConstant",
+      "textures": [
+        "/InterchangeAssets/gltf/Textures/T_Generic_N.T_Generic_N",
+        "/InterchangeAssets/gltf/Textures/T_White_srgb.T_White_srgb",
+        "/InterchangeAssets/gltf/Textures/T_White_Linear.T_White_Linear",
+        "/InterchangeAssets/gltf/Textures/T_Anisotropy_Direction_Linear.T_Anisotropy_Direction_Linear"
+      ],
+      "base_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "metallic": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "roughness": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "emissive_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "normal": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "opacity": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "specular": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "vector_params": {
+        "BaseColorFactor": [
+          0.00025467053637839854,
+          0.004500792361795902,
+          2.8413314794306643e-05,
+          1.0
+        ]
+      },
+      "scalar_params": {
+        "MetallicFactor": 0.0,
+        "RoughnessFactor": 0.75
+      },
+      "texture_params": {}
+    },
+    "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Steel_-_Satin.Steel_-_Satin": {
+      "class": "MaterialInstanceConstant",
+      "textures": [
+        "/InterchangeAssets/gltf/Textures/T_Generic_N.T_Generic_N",
+        "/InterchangeAssets/gltf/Textures/T_White_srgb.T_White_srgb",
+        "/InterchangeAssets/gltf/Textures/T_White_Linear.T_White_Linear",
+        "/InterchangeAssets/gltf/Textures/T_Anisotropy_Direction_Linear.T_Anisotropy_Direction_Linear"
+      ],
+      "base_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "metallic": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "roughness": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "emissive_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "normal": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "opacity": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "specular": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "vector_params": {
+        "BaseColorFactor": [
+          0.15392045676708221,
+          0.1569434553384781,
+          0.15702638030052185,
+          1.0
+        ]
+      },
+      "scalar_params": {
+        "RoughnessFactor": 0.5
+      },
+      "texture_params": {}
+    },
+    "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Emmissive_Green.Emmissive_Green": {
+      "class": "MaterialInstanceConstant",
+      "textures": [
+        "/InterchangeAssets/gltf/Textures/T_Generic_N.T_Generic_N",
+        "/InterchangeAssets/gltf/Textures/T_White_srgb.T_White_srgb",
+        "/InterchangeAssets/gltf/Textures/T_White_Linear.T_White_Linear",
+        "/InterchangeAssets/gltf/Textures/T_Anisotropy_Direction_Linear.T_Anisotropy_Direction_Linear"
+      ],
+      "base_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "metallic": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "roughness": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "emissive_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "normal": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "opacity": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "specular": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "vector_params": {
+        "EmissiveFactor": [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ],
+        "BaseColorFactor": [
+          0.0,
+          1.0,
+          0.0,
+          1.0
+        ]
+      },
+      "scalar_params": {
+        "EmissiveStrength": 3.0,
+        "MetallicFactor": 0.0,
+        "RoughnessFactor": 0.0
+      },
+      "texture_params": {}
+    },
+    "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Aluminum_-_Anodized_Rough_Grey.Aluminum_-_Anodized_Rough_Grey": {
+      "class": "MaterialInstanceConstant",
+      "textures": [
+        "/InterchangeAssets/gltf/Textures/T_Generic_N.T_Generic_N",
+        "/InterchangeAssets/gltf/Textures/T_White_srgb.T_White_srgb",
+        "/InterchangeAssets/gltf/Textures/T_White_Linear.T_White_Linear",
+        "/InterchangeAssets/gltf/Textures/T_Anisotropy_Direction_Linear.T_Anisotropy_Direction_Linear"
+      ],
+      "base_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "metallic": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "roughness": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "emissive_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "normal": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "opacity": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "specular": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "vector_params": {
+        "BaseColorFactor": [
+          0.5372549891471863,
+          0.5372549891471863,
+          0.5372549891471863,
+          1.0
+        ]
+      },
+      "scalar_params": {
+        "MetallicFactor": 0.0,
+        "RoughnessFactor": 0.7885257601737976
+      },
+      "texture_params": {}
+    },
+    "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Steel_-_Black.Steel_-_Black": {
+      "class": "MaterialInstanceConstant",
+      "textures": [
+        "/InterchangeAssets/gltf/Textures/T_Generic_N.T_Generic_N",
+        "/InterchangeAssets/gltf/Textures/T_White_srgb.T_White_srgb",
+        "/InterchangeAssets/gltf/Textures/T_White_Linear.T_White_Linear",
+        "/InterchangeAssets/gltf/Textures/T_Anisotropy_Direction_Linear.T_Anisotropy_Direction_Linear"
+      ],
+      "base_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "metallic": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "roughness": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "emissive_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "normal": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "opacity": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "specular": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "vector_params": {
+        "BaseColorFactor": [
+          0.049019623547792435,
+          0.049019623547792435,
+          0.049019623547792435,
+          1.0
+        ]
+      },
+      "scalar_params": {
+        "RoughnessFactor": 0.3499999940395355
+      },
+      "texture_params": {}
+    },
+    "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Titanium_-_Satin.Titanium_-_Satin": {
+      "class": "MaterialInstanceConstant",
+      "textures": [
+        "/InterchangeAssets/gltf/Textures/T_Generic_N.T_Generic_N",
+        "/InterchangeAssets/gltf/Textures/T_White_srgb.T_White_srgb",
+        "/InterchangeAssets/gltf/Textures/T_White_Linear.T_White_Linear",
+        "/InterchangeAssets/gltf/Textures/T_Anisotropy_Direction_Linear.T_Anisotropy_Direction_Linear"
+      ],
+      "base_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "metallic": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "roughness": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "emissive_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "normal": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "opacity": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "specular": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "vector_params": {
+        "BaseColorFactor": [
+          0.730000376701355,
+          0.720000147819519,
+          0.7033333778381348,
+          1.0
+        ]
+      },
+      "scalar_params": {
+        "RoughnessFactor": 0.5
+      },
+      "texture_params": {}
+    },
+    "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/Materials/Emmissive_Red.Emmissive_Red": {
+      "class": "MaterialInstanceConstant",
+      "textures": [
+        "/InterchangeAssets/gltf/Textures/T_Generic_N.T_Generic_N",
+        "/InterchangeAssets/gltf/Textures/T_White_srgb.T_White_srgb",
+        "/InterchangeAssets/gltf/Textures/T_White_Linear.T_White_Linear",
+        "/InterchangeAssets/gltf/Textures/T_Anisotropy_Direction_Linear.T_Anisotropy_Direction_Linear"
+      ],
+      "base_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "metallic": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "roughness": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "emissive_color": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "normal": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "opacity": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "specular": {
+        "class": "MaterialExpressionMaterialFunctionCall",
+        "constant": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionMaterialFunctionCall'",
+        "r": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionMaterialFunctionCall'",
+        "g": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionMaterialFunctionCall'",
+        "b": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionMaterialFunctionCall'",
+        "parameter_name": "ERR: MaterialExpressionMaterialFunctionCall: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionMaterialFunctionCall'"
+      },
+      "vector_params": {
+        "EmissiveFactor": [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ],
+        "BaseColorFactor": [
+          1.0,
+          0.0,
+          0.0,
+          1.0
+        ]
+      },
+      "scalar_params": {
+        "EmissiveStrength": 3.0,
+        "MetallicFactor": 0.0,
+        "RoughnessFactor": 0.0
+      },
+      "texture_params": {}
+    }
+  },
+  "animations": [
+    "model_d00m_1_shotgunArmature_Fire1",
+    "model_d00m_1_shotgunArmature_Fire11",
+    "model_d00m_1_shotgunArmature_Fire2",
+    "model_d00m_1_shotgunArmature_Fire21",
+    "model_d00m_1_shotgunArmature_Reload_1",
+    "model_d00m_1_shotgunArmature_Reload_11",
+    "model_d00m_1_shotgunArmature_Reload_In",
+    "model_d00m_1_shotgunArmature_Reload_In1"
+  ],
+  "textures": [
+    "/InterchangeAssets/gltf/Textures/T_Anisotropy_Direction_Linear.T_Anisotropy_Direction_Linear",
+    "/InterchangeAssets/gltf/Textures/T_Generic_N.T_Generic_N",
+    "/InterchangeAssets/gltf/Textures/T_White_Linear.T_White_Linear",
+    "/InterchangeAssets/gltf/Textures/T_White_srgb.T_White_srgb"
+  ]
+}

@@ -23,3 +23,6 @@ Inside every asset folder:
 
 Binary files here are NOT tracked by git (see `.gitignore`); `README.md` and `*.json` manifests are.
 Resolutions (designer 2026-10-20): operatives 4K atlas, enemies 2K; ORM at half the atlas size.
+
+Weapons (`ArtPipeline/Weapons/<Weapon>/`): same layout, one 1K atlas / material per weapon (all parts of a weapon share it),
+per-weapon `weapon.json` + `README.md` (import notes). Pipeline: `docs/pipeline/WEAPON_SINGLE_MATERIAL.md`.

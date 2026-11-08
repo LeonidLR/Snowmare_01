@@ -1,0 +1,137 @@
+{
+  "asset": "ShotgunD1",
+  "res": 1024,
+  "margin_px": 2,
+  "main_part": "Stock",
+  "source_uv": "DiffuseUV",
+  "parts": {
+    "Stock": {
+      "target_tris": 4500,
+      "weight": 1.0,
+      "skinned": true,
+      "protect_below_tris": 120
+    },
+    "PumpSwatch": {
+      "swatch": {
+        "material": "Plastic_-_Matte_Dark_Gray"
+      },
+      "weight": 1.0
+    }
+  },
+  "materials": {
+    "Plastic_-_Matte_Dark_Gray": {
+      "flat": {
+        "base": [
+          0.0,
+          0.005,
+          0.0
+        ],
+        "rough": 0.75,
+        "metal": 0.0
+      }
+    },
+    "Steel_-_Satin": {
+      "flat": {
+        "base": [
+          0.154,
+          0.157,
+          0.157
+        ],
+        "rough": 0.5,
+        "metal": 1.0
+      }
+    },
+    "Emmissive_Green": {
+      "flat": {
+        "base": [
+          0.0,
+          1.0,
+          0.0
+        ],
+        "rough": 0.0,
+        "metal": 0.0
+      }
+    },
+    "Aluminum_-_Anodized_Rough_Grey": {
+      "flat": {
+        "base": [
+          0.537,
+          0.537,
+          0.537
+        ],
+        "rough": 0.789,
+        "metal": 0.0
+      }
+    },
+    "Steel_-_Black": {
+      "flat": {
+        "base": [
+          0.049,
+          0.049,
+          0.049
+        ],
+        "rough": 0.35,
+        "metal": 1.0
+      }
+    },
+    "Titanium_-_Satin": {
+      "flat": {
+        "base": [
+          0.73,
+          0.72,
+          0.703
+        ],
+        "rough": 0.5,
+        "metal": 1.0
+      }
+    },
+    "Emmissive_Red": {
+      "flat": {
+        "base": [
+          1.0,
+          0.0,
+          0.0
+        ],
+        "rough": 0.0,
+        "metal": 0.0
+      }
+    }
+  },
+  "geometry_scale": 100,
+  "merge_overlap": false,
+  "extra_meshes": [
+    {
+      "fbx": "Object_29.fbx",
+      "swatch_part": "PumpSwatch",
+      "out": "SK_ShotgunD1_Pump_1slot"
+    }
+  ],
+  "views": {
+    "side": {
+      "dir": [
+        1,
+        0,
+        0.03
+      ]
+    },
+    "top": {
+      "dir": [
+        0,
+        0,
+        1
+      ],
+      "up": [
+        -1,
+        0,
+        0
+      ]
+    },
+    "front34": {
+      "dir": [
+        0.8,
+        -0.7,
+        0.5
+      ]
+    }
+  }
+}
