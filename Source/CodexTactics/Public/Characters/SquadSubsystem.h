@@ -500,15 +500,16 @@ public:
 	 * face line; FormationWallEnd::PlanSquadPeek: the corner stack's point man - the member nearest that end, K second - else the member
 	 * nearest it). False when the squad cannot peek as a group. SquadSubsystemFormationPeek.cpp.
 	 */
-	bool PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperativeCharacter*& OutPeeker, FFormationSquadPeek& OutPlan) const;
+	bool PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperativeCharacter*& OutPeeker, FFormationSquadPeek& OutPlan, bool bAllowLeaderRunPeek = false) const;
 	/**
 	 * The squad's corner peek order (the click on the end of the squad's wall): Peeker - PlanFormationCornerPeek's - takes CornerSlot (his own
 	 * cover order; the corner stand point) and, once in cover, the manual corner peek round that end (AOperativeCharacter::OrderCornerPeek, the
 	 * single operative's order); the others form the v2.4 corner stack there (the leader's move into it: the wall slide, K second, the rear man
 	 * back along the wall) or, without a stack, hold. Over with the leader's next order, a leader switch or the end of the wall layout (the
-	 * peeker then follows the leader out of his cover as any follower in cover). False: nothing was ordered.
+	 * peeker then follows the leader out of his cover as any follower in cover). False: nothing was ordered. bRunPeek: the formation's
+	 * run-and-peek carry - the peeker's walk into the corner is a run-and-peek (straight into the peek stance; OrderWallLeadershipPeek).
 	 */
-	bool OrderFormationCornerPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace);
+	bool OrderFormationCornerPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bRunPeek = false);
 	/** The squad's corner peek in force: its peeker (null when none) - smokes. */
 	AOperativeCharacter* GetFormationPeeker() const { return Sectors.Peek.Peeker.Get(); }
 	/** Squad corner peeks whose peek order was given (the peeker reached his corner) since the level began - smokes. */
@@ -571,6 +572,11 @@ public:
 	 * for the squad's wall while he is there (the leader in cover otherwise means the single operative's peek).
 	 */
 	bool IsWallLeadershipPeeker(const AOperativeCharacter* Operative) const;
+	/**
+	 * The leader in cover still counts for the squad's corner peek plan: the corner of this squad's own wall-leadership peek, or (bAllowLeaderRunPeek,
+	 * the formation's run-and-peek carry, #55 fix 2026-11-08) he peeks from his own run-and-peek arrival there (the peek attaches to him).
+	 */
+	bool IsLeaderCoverPeekPlannable(const AOperativeCharacter& LeaderRef, bool bAllowLeaderRunPeek) const;
 	/** Operative can take a corner and the lead (decision 7): alive, on his feet, not on a ladder, not panicking, in the formation. */
 	bool CanTakeWallLead(const AOperativeCharacter* Operative) const;
 	/** Leader switches made by wall leadership since the level began - smokes. */
@@ -1113,13 +1119,15 @@ private:
 	 * Wall leadership (SquadSubsystemWallLeadership.cpp): the plan for a corner peek at EdgeOnFace - FormationWallLeadership::Plan over the
 	 * formation's members (OutWho[i] = the plan's member i, the leader first). False when the squad cannot peek as a group.
 	 */
-	bool PlanWallLeadership(const FVector& EdgeOnFace, FWallLeadershipPlan& OutPlan, TArray<AOperativeCharacter*>& OutWho) const;
+	bool PlanWallLeadership(const FVector& EdgeOnFace, FWallLeadershipPlan& OutPlan, TArray<AOperativeCharacter*>& OutWho, bool bAllowLeaderRunPeek = false) const;
 	/**
 	 * Wall leadership: the corner peek order - Peeker (the plan's) becomes the formation leader (SetLeader: selection, portrait, camera), the
 	 * old peeker / anyone in cover leaves it, the stack behind him is held (HoldCornerStack, the order's crouch) and he takes CornerSlot in cover
-	 * and peeks (the leader-peeks path of the v2.4 squad peek). False: nothing was ordered.
+	 * and peeks (the leader-peeks path of the v2.4 squad peek). False: nothing was ordered. bRunPeek (the formation's run-and-peek carry, #55
+	 * fix 2026-11-08): his walk into the corner is a run-and-peek (AOperativeCharacter::OrderTakeCoverForPeek) - the entry goes straight into
+	 * the peek stance, no wall hug first.
 	 */
-	bool OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace);
+	bool OrderWallLeadershipPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bRunPeek = false);
 	/** Wall leadership: a follower walking into the stack keeps behind the man ahead of him in the line (FormationWallLeadership::HoldBehind). */
 	FVector2D HoldBehindInWallLine(const AOperativeCharacter& Operative, const FVector2D& Target) const;
 	/** The patrol / halt looks of FrameSlots from FormationCoverRules::Allocate (rules v2.2); false when the allocator does not apply. */

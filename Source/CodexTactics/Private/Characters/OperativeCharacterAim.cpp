@@ -104,7 +104,11 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		LastThreat.Reset();
 	}
 	bTurningToThreat = false;
-	if (bRealTimeFight && !bQuickFireActive && !bSuppressActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
+	// Run-and-peek (#55 fix, the game designer's video 2026-11-08): the run's last metres turn him to the peek facing - he arrives looking
+	// where the peek looks and the run blends straight into the peek stance (no turn to the wall, no wall hug, no turn back out). It wins over
+	// the combat target / the under-fire turn for those last ~0.4 s (the peek itself aims round the corner).
+	const bool bPeekPreTurn = WantsRunCornerPeekPreTurn();
+	if (!bPeekPreTurn && bRealTimeFight && !bQuickFireActive && !bSuppressActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
 	{
 		bFacingCombatTarget = true;
 		LastThreat = Target;
@@ -125,7 +129,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	bFacingUnderFire = false;
 	AOperativeCharacter* FireShooter = nullptr;
 	FVector FlashPoint = FVector::ZeroVector;
-	if (!bFacingCombatTarget && GetUnderFireThreat(FireShooter, FlashPoint))
+	if (!bFacingCombatTarget && !bPeekPreTurn && GetUnderFireThreat(FireShooter, FlashPoint))
 	{
 		UnderFireRules::FFaceFacts Facts;
 		Facts.bRealTimeFight = bRealTimeFight;
@@ -160,9 +164,14 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		ClearIdleFacing();
 	}
 	bool bFacingWall = false;
+	if (bPeekPreTurn)
+	{
+		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, RunCornerPeekFacingYaw, 2.f * OperativeMovementRules::GetTurnRate(MovementConfig, Stance) / 57.2958f, DeltaTime), 0.f));
+		bFacingWall = true; // the movement facing below stays out of it this frame (the 8-direction locomotion strafes the last steps)
+	}
 	// Running into cover (user report 2026-10-09: two pops on entry): the last metres turn the body to face the wall, the
 	// pose the enter clip starts in (UpdateCoverEntryBlend takes out what is left of the turn).
-	if (!bFacingCombatTarget && bHasPendingCover && !bInCover && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f
+	else if (!bFacingCombatTarget && bHasPendingCover && !bInCover && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f
 		&& FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation) < CoverApproachFaceWallCm
 		&& FVector::DotProduct(SmoothedVelocity.GetSafeNormal2D(), -PendingCoverSlot.WallNormal.GetSafeNormal2D()) >= 0.5f)
 	{

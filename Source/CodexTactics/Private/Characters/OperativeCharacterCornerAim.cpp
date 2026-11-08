@@ -32,6 +32,14 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 
+namespace
+{
+	TAutoConsoleVariable<int32> CVarRunPeekStance(TEXT("Codex.Cover.RunPeekStance"), 1,
+		TEXT("1 (default): a run-and-peek arrival goes straight into the corner peek stance - the run's last metres turn to the peek facing, no ")
+		TEXT("enter clip, no wall hug, no idle -> fire step-out (the game designer's video 2026-11-08). 0: the 2026-11-07 entry (the hug, then ")
+		TEXT("the turn out round the corner; A/B)."));
+}
+
 void AOperativeCharacter::BeginCornerAim()
 {
 	if (!bInCover || CurrentCoverHeight == ECoverHeight::None || bShimmying)
@@ -395,16 +403,16 @@ EOperativeOrderResult AOperativeCharacter::OrderRunCornerPeek(const FCoverSlot& 
 		});
 		return EOperativeOrderResult::Accepted;
 	}
-	const EOperativeOrderResult Result = OrderTakeCover(CornerSlot, bSprint);
+	const int32 PeeksBefore = RunCornerPeekCount;
+	const EOperativeOrderResult Result = OrderTakeCoverForPeek(CornerSlot, EdgeOnFace, bSprint);
 	if (Result != EOperativeOrderResult::Accepted)
 	{
 		return Result;
 	}
-	// His walk into the corner slot ends in the peek: no wall-facing enter clip when he comes in along the wall (the squad peek's arrival).
-	MarkCornerPeekArrival();
-	if (!ArmRunCornerPeek(EdgeOnFace) && bInCover && CoverTraceRules::IsSameWall(CoverSlot, CornerSlot))
+	// His walk into the corner slot ends in the peek (armed by OrderTakeCoverForPeek before the walk). In cover at that wall already
+	// (OrderTakeCover became a shimmy there; nothing armed, no entry): the ordinary corner peek from his slot.
+	if (!bRunCornerPeekPending && RunCornerPeekCount == PeeksBefore && bInCover && CoverTraceRules::IsSameWall(CoverSlot, CornerSlot))
 	{
-		// Already in cover at that wall (OrderTakeCover became a shimmy there): the ordinary corner peek from his slot.
 		ECoverFacing Side = ECoverFacing::Right;
 		float EdgeAlong = 0.f;
 		if (CoverFacingRules::FindPeekEdge(CoverSlot, EdgeOnFace, nullptr, Side, EdgeAlong))
@@ -427,37 +435,92 @@ bool AOperativeCharacter::ArmRunCornerPeek(const FVector& EdgeOnFace)
 	bRunCornerPeekPending = true;
 	RunCornerPeekSlot = PendingCoverSlot;
 	RunCornerPeekEdge = EdgeOnFace;
+	// The peek facing from that slot: the run's last metres turn to it (WantsRunCornerPeekPreTurn), so he arrives looking where the peek looks.
+	ECoverFacing Side = ECoverFacing::Right;
+	float EdgeAlong = 0.f;
+	ResolveRunCornerPeekEdge(RunCornerPeekSlot, Side, EdgeAlong);
+	RunCornerPeekFacingYaw = static_cast<float>(CoverFacingRules::CornerAimDirection(RunCornerPeekSlot, Side, CornerAimOutwardDeg).Rotation().Yaw);
 	return true;
+}
+
+EOperativeOrderResult AOperativeCharacter::OrderTakeCoverForPeek(const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bSprint)
+{
+	TGuardValue<bool> Request(bRunCornerPeekRequest, true);
+	TGuardValue<FVector> RequestEdge(RunCornerPeekRequestEdge, EdgeOnFace);
+	return OrderTakeCover(CornerSlot, bSprint);
+}
+
+bool AOperativeCharacter::IsRunPeekStanceEnabled()
+{
+	return CVarRunPeekStance.GetValueOnGameThread() != 0;
+}
+
+bool AOperativeCharacter::IsRunCornerPeekArrivalAt(const FCoverSlot& Slot) const
+{
+	const float Off = static_cast<float>(FVector::Dist2D(Slot.WorldLocation, RunCornerPeekSlot.WorldLocation));
+	return RunCornerPeekRules::IsPeekArrival(bRunCornerPeekPending, CoverTraceRules::IsSameWall(RunCornerPeekSlot, Slot), Off);
+}
+
+void AOperativeCharacter::ResolveRunCornerPeekEdge(const FCoverSlot& Slot, ECoverFacing& OutSide, float& OutEdgeAlongCm) const
+{
+	// The end again from the given slot (its probes are his there), as the squad's peek does on arrival.
+	OutEdgeAlongCm = CoverTraceRules::AlongWallDistance(Slot, RunCornerPeekEdge);
+	OutSide = OutEdgeAlongCm >= 0.f ? ECoverFacing::Right : ECoverFacing::Left;
+	ECoverFacing FoundSide = OutSide;
+	float FoundAlong = OutEdgeAlongCm;
+	if (CoverFacingRules::FindPeekEdge(Slot, RunCornerPeekEdge, nullptr, FoundSide, FoundAlong))
+	{
+		OutSide = FoundSide;
+		OutEdgeAlongCm = FoundAlong;
+	}
+}
+
+bool AOperativeCharacter::WantsRunCornerPeekPreTurn() const
+{
+	if (!bRunCornerPeekPending || !bHasPendingCover || bInCover || !IsRunPeekStanceEnabled())
+	{
+		return false;
+	}
+	const bool bArmedSlot = FVector::Dist2D(PendingCoverSlot.WorldLocation, RunCornerPeekSlot.WorldLocation) <= 5.f;
+	return RunCornerPeekRules::ShouldPreTurn(bArmedSlot, static_cast<float>(FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation)),
+		static_cast<float>(GetVelocity().Size2D()));
 }
 
 void AOperativeCharacter::StartRunCornerPeekOnEntry(const FCoverSlot& Slot)
 {
 	const bool bArmed = bRunCornerPeekPending;
+	const bool bArrival = IsRunCornerPeekArrivalAt(Slot);
 	bRunCornerPeekPending = false;
 	if (!bArmed)
 	{
 		return;
 	}
 	const float Off = static_cast<float>(FVector::Dist2D(Slot.WorldLocation, RunCornerPeekSlot.WorldLocation));
-	if (!RunCornerPeekRules::IsPeekArrival(bArmed, CoverTraceRules::IsSameWall(RunCornerPeekSlot, Slot), Off) || !IsInPeekableCover())
+	if (!bArrival || !IsInPeekableCover())
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: run-and-peek dropped - entered another cover (%.0f cm off the ordered corner slot)"), *DisplayName.ToString(), Off);
 		return;
 	}
-	// The end again from the slot he entered (its probes are his now), as the squad's peek does on arrival.
-	ECoverFacing Side = CoverTraceRules::AlongWallDistance(Slot, RunCornerPeekEdge) >= 0.f ? ECoverFacing::Right : ECoverFacing::Left;
-	float EdgeAlong = CoverTraceRules::AlongWallDistance(Slot, RunCornerPeekEdge);
-	ECoverFacing FoundSide = Side;
-	float FoundAlong = EdgeAlong;
-	if (CoverFacingRules::FindPeekEdge(Slot, RunCornerPeekEdge, nullptr, FoundSide, FoundAlong))
-	{
-		Side = FoundSide;
-		EdgeAlong = FoundAlong;
-	}
+	ECoverFacing Side = ECoverFacing::Right;
+	float EdgeAlong = 0.f;
+	ResolveRunCornerPeekEdge(Slot, Side, EdgeAlong);
 	const EOperativeOrderResult Result = OrderCornerPeek(Side, EdgeAlong);
 	RunCornerPeekCount += Result == EOperativeOrderResult::Accepted ? 1 : 0;
-	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: run-and-peek - at the corner (%.0f cm off the ordered slot): the peek round the %s end (edge %.0f cm along) -> %d"),
-		*DisplayName.ToString(), Off, Side == ECoverFacing::Left ? TEXT("left") : TEXT("right"), EdgeAlong, static_cast<int32>(Result));
+	// Straight into the peek stance (the game designer's video 2026-11-08): the corner aim is on in this very frame, so the AnimInstance's
+	// entry update already sees the fire stance wanted (no frame of the back-to-the-wall idle in between).
+	bool bAimNow = false;
+	if (bCoverEntryPeekStance && Result == EOperativeOrderResult::Accepted)
+	{
+		UpdateCoverFacing(/*bAllowSnap*/ false); // the ordered corner's facing and "at that corner" now
+		if (!bCornerAimActive && IsManualCornerPeekSpot() && USuppressionSubsystem::MayExposeNow(this))
+		{
+			BeginCornerAim();
+		}
+		bAimNow = bCornerAimActive;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: run-and-peek - at the corner (%.0f cm off the ordered slot): the peek round the %s end (edge %.0f cm along) -> %d%s"),
+		*DisplayName.ToString(), Off, Side == ECoverFacing::Left ? TEXT("left") : TEXT("right"), EdgeAlong, static_cast<int32>(Result),
+		bCoverEntryPeekStance ? (bAimNow ? TEXT(", straight into the peek stance (aim on in the entry frame)") : TEXT(", peek stance entry (the aim follows)")) : TEXT(""));
 }
 
 bool AOperativeCharacter::WantsCornerHold() const

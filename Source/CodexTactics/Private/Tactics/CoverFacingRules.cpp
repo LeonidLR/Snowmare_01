@@ -362,11 +362,16 @@ namespace CoverFacingRules
 	}
 
 	ECoverEntryTurn DecideCoverEntryTurn(bool bQuiet, bool bHasEnterClip, bool bCornerPeekArrival, float ArrivalYawDeg, float WallNormalYawDeg,
-		const FCoverFacingConfig& Config)
+		const FCoverFacingConfig& Config, bool bPeekStanceArrival)
 	{
 		if (bQuiet)
 		{
 			return ECoverEntryTurn::Quiet;
+		}
+		// The run-and-peek (#55 fix, game designer 2026-11-08): the run blends straight into the peek stance - no hug, no turn out.
+		if (bPeekStanceArrival)
+		{
+			return ECoverEntryTurn::PeekStance;
 		}
 		if (!bHasEnterClip)
 		{

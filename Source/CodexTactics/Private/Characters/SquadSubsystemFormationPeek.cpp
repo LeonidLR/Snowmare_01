@@ -28,7 +28,7 @@ namespace SquadSubsystemPeekLocal
 	constexpr float SettledSpeed = 10.f;
 }
 
-bool USquadSubsystem::PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperativeCharacter*& OutPeeker, FFormationSquadPeek& OutPlan) const
+bool USquadSubsystem::PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperativeCharacter*& OutPeeker, FFormationSquadPeek& OutPlan, bool bAllowLeaderRunPeek) const
 {
 	OutPeeker = nullptr;
 	AOperativeCharacter* LeaderRef = Leader.Get();
@@ -37,7 +37,7 @@ bool USquadSubsystem::PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperat
 		// Wall leadership (game designer 2026-11-01): the member nearest the corner peeks and becomes the leader, the others stack behind him.
 		FWallLeadershipPlan Leadership;
 		TArray<AOperativeCharacter*> Who;
-		if (!PlanWallLeadership(EdgeOnFace, Leadership, Who) || !Who.IsValidIndex(Leadership.Leader))
+		if (!PlanWallLeadership(EdgeOnFace, Leadership, Who, bAllowLeaderRunPeek) || !Who.IsValidIndex(Leadership.Leader))
 		{
 			return false;
 		}
@@ -51,7 +51,7 @@ bool USquadSubsystem::PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperat
 		return OutPeeker != nullptr;
 	}
 	if (!LeaderRef || !FormationRuntime::IsEnabled() || bIsSoloMode || bFollowersHolding || HasMultiSelection() || !IsFormationActive() || Followers.IsEmpty()
-		|| Sectors.Formation != EFormationKind::Wall || !Sectors.bWallLayoutValid || LeaderRef->bInCover)
+		|| Sectors.Formation != EFormationKind::Wall || !Sectors.bWallLayoutValid || (LeaderRef->bInCover && !(bAllowLeaderRunPeek && IsLeaderCoverPeekPlannable(*LeaderRef, true))))
 	{
 		return false;
 	}
@@ -95,16 +95,16 @@ bool USquadSubsystem::PlanFormationCornerPeek(const FVector& EdgeOnFace, AOperat
 	return OutPeeker != nullptr;
 }
 
-bool USquadSubsystem::OrderFormationCornerPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace)
+bool USquadSubsystem::OrderFormationCornerPeek(AOperativeCharacter* Peeker, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bRunPeek)
 {
 	if (IsWallLeadershipEnabled())
 	{
-		return OrderWallLeadershipPeek(Peeker, CornerSlot, EdgeOnFace);
+		return OrderWallLeadershipPeek(Peeker, CornerSlot, EdgeOnFace, bRunPeek);
 	}
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	AOperativeCharacter* Planned = nullptr;
 	FFormationSquadPeek Plan;
-	if (!LeaderRef || !Peeker || !CornerSlot.IsValid() || !PlanFormationCornerPeek(EdgeOnFace, Planned, Plan) || Planned != Peeker)
+	if (!LeaderRef || !Peeker || !CornerSlot.IsValid() || !PlanFormationCornerPeek(EdgeOnFace, Planned, Plan, bRunPeek) || Planned != Peeker)
 	{
 		return false;
 	}
@@ -121,7 +121,8 @@ bool USquadSubsystem::OrderFormationCornerPeek(AOperativeCharacter* Peeker, cons
 	const bool bInPlace = Peeker->bInCover && CoverTraceRules::IsSameWall(Peeker->GetCoverSlot(), CornerSlot);
 	if (!bInPlace)
 	{
-		const EOperativeOrderResult Result = Peeker->OrderTakeCover(CornerSlot, false);
+		// The run-and-peek carry (#55 fix 2026-11-08): his walk into the corner goes straight into the peek stance (armed before the walk).
+		const EOperativeOrderResult Result = bRunPeek ? Peeker->OrderTakeCoverForPeek(CornerSlot, EdgeOnFace, false) : Peeker->OrderTakeCover(CornerSlot, false);
 		if (Result != EOperativeOrderResult::Accepted)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] squad corner peek: %s cannot take the corner (%d)"), *Peeker->DisplayName.ToString(), static_cast<int32>(Result));
@@ -259,6 +260,15 @@ void USquadSubsystem::UpdateFormationCornerPeek(AOperativeCharacter& LeaderRef, 
 		EdgeAlong = FoundAlong;
 	}
 	Peek.bPending = false;
+	if (Peeker->IsManualCornerPeek() && Peeker->GetManualCornerPeekSide() == Side && Peeker->GetRunCornerPeekCount() > 0 && Peeker->IsCoverEntryPeekStance())
+	{
+		// The carried run-and-peek (#55 fix 2026-11-08): his own arrival already went straight into this corner's peek (ArmRunCornerPeek) -
+		// the same order again would only raise a second CornerPeek.
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] squad corner peek: %s at the corner after %.1f s - already peeking round the %s end from his arrival"),
+			*Peeker->DisplayName.ToString(), Peek.Seconds, Side == ECoverFacing::Left ? TEXT("left") : TEXT("right"));
+		++Sectors.PeekCount;
+		return;
+	}
 	const EOperativeOrderResult Result = Peeker->OrderCornerPeek(Side, EdgeAlong);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] squad corner peek: %s at the corner after %.1f s - the peek round the %s end (edge %.0f cm along) -> %d"),
 		*Peeker->DisplayName.ToString(), Peek.Seconds, Side == ECoverFacing::Left ? TEXT("left") : TEXT("right"), EdgeAlong, static_cast<int32>(Result));

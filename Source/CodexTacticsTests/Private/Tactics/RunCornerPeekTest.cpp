@@ -195,6 +195,74 @@ bool FRunCornerPeekFormationCarryTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+RUN_CORNER_PEEK_TEST(FRunCornerPeekPreTurnTest, "PreTurn")
+bool FRunCornerPeekPreTurnTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// The game designer's video 2026-11-08: he must arrive already looking where the peek looks - the run's last metres turn to it.
+	TestEqual(TEXT("the pre-turn starts 1.5 m out"), PreTurnCm, 150.f);
+	TestTrue(TEXT("armed, 1.2 m out, running: turn to the peek facing"), ShouldPreTurn(true, 120.f, 375.f));
+	TestTrue(TEXT("armed, at the edge of the stretch: turn"), ShouldPreTurn(true, 150.f, 375.f));
+	TestFalse(TEXT("armed but 1.6 m out: not yet (the run faces its way)"), ShouldPreTurn(true, 160.f, 375.f));
+	TestFalse(TEXT("not armed (an ordinary cover walk): the wall-facing approach as before"), ShouldPreTurn(false, 100.f, 375.f));
+	TestFalse(TEXT("standing at the slot: the entry decides"), ShouldPreTurn(true, 20.f, 10.f));
+	TestTrue(TEXT("walking in slowly still turns"), ShouldPreTurn(true, 80.f, 60.f));
+	TestFalse(TEXT("a negative distance is no stretch"), ShouldPreTurn(true, -1.f, 375.f));
+	TestTrue(TEXT("a custom stretch"), ShouldPreTurn(true, 190.f, 375.f, 200.f));
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekStanceYawBlendTest, "PeekStanceYawBlend")
+bool FRunCornerPeekStanceYawBlendTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	TestEqual(TEXT("pre-turned (5 deg left over): the short settle"), PeekStanceYawBlendSeconds(5.f), PeekStanceYawBlendMinSeconds, 1.0e-4f);
+	TestEqual(TEXT("30 deg: still the short settle"), PeekStanceYawBlendSeconds(-30.f), PeekStanceYawBlendMinSeconds, 1.0e-4f);
+	TestEqual(TEXT("a half turn (he faced a target on the run): the longest blend"), PeekStanceYawBlendSeconds(180.f), PeekStanceYawBlendMaxSeconds, 1.0e-4f);
+	TestEqual(TEXT("105 deg: half way"), PeekStanceYawBlendSeconds(105.f), 0.5f * (PeekStanceYawBlendMinSeconds + PeekStanceYawBlendMaxSeconds), 1.0e-4f);
+	TestEqual(TEXT("the sign does not matter"), PeekStanceYawBlendSeconds(-105.f), PeekStanceYawBlendSeconds(105.f), 1.0e-4f);
+	TestEqual(TEXT("wrapped yaws: 350 deg = 10 deg"), PeekStanceYawBlendSeconds(350.f), PeekStanceYawBlendMinSeconds, 1.0e-4f);
+	TestTrue(TEXT("never shorter than the minimum"), PeekStanceYawBlendSeconds(90.f, 0.3f, 0.1f) >= 0.3f);
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekHeldTurnTest, "HeldTurnSameWayAsBlend")
+bool FRunCornerPeekHeldTurnTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// Measured 2026-11-08 (RunCornerPeekSmoke, the shoulder-line trace): the actor turns 170 deg on entry; the _R fire idle's blend turns the
+	// pose -157 deg - held +170 the body spun ~340 deg, held -190 it stayed within 20 deg.
+	TestEqual(TEXT("_R (his left): held +170, the blend -157 -> hold -190"), HeldTurnSameWayAsBlend(170.f, -157.f), -190.f, 1.0e-3f);
+	TestEqual(TEXT("_L (his right): held -170, the blend -154 -> keep -170"), HeldTurnSameWayAsBlend(-170.f, -154.f), -170.f, 1.0e-3f);
+	TestEqual(TEXT("a small held turn stays"), HeldTurnSameWayAsBlend(20.f, 15.f), 20.f, 1.0e-3f);
+	TestEqual(TEXT("held -175, the blend +170 -> hold +185"), HeldTurnSameWayAsBlend(-175.f, 170.f), 185.f, 1.0e-3f);
+	// The guard: the blend shows its way round in its first frames.
+	TestTrue(TEXT("held +172, the pose turning -5 deg: flip"), HeldTurnGoesTheOtherWay(172.f, -5.f));
+	TestFalse(TEXT("held +172, the pose turning +5 deg: right way round"), HeldTurnGoesTheOtherWay(172.f, 5.f));
+	TestFalse(TEXT("not seen yet (1 deg)"), HeldTurnGoesTheOtherWay(172.f, -1.f));
+	TestFalse(TEXT("nothing held: nothing to flip"), HeldTurnGoesTheOtherWay(0.f, -10.f));
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekHisFloorTest, "HisFloorOnly")
+bool FRunCornerPeekHisFloorTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// LadderQueueSmoke (2026-11-08): the box selection's click on the roof a metre beyond the wall ladder's head (~4 m up) - a climb, never a peek.
+	TestFalse(TEXT("a roof top 4 m above his feet: no run-and-peek"), IsClickAtHisLevel(true, 400.f));
+	TestFalse(TEXT("a wall's top: no run-and-peek (a top surface)"), IsClickAtHisLevel(true, 120.f));
+	TestFalse(TEXT("the ground at his level: a move"), IsClickAtHisLevel(true, 0.f));
+	TestTrue(TEXT("the wall's side face at chest height beside its end: a run-and-peek"), IsClickAtHisLevel(false, 120.f));
+	TestTrue(TEXT("the side face at knee height"), IsClickAtHisLevel(false, 30.f));
+	TestTrue(TEXT("up to head height"), IsClickAtHisLevel(false, 200.f));
+	TestFalse(TEXT("a face 3.5 m up (an upper floor's wall): no"), IsClickAtHisLevel(false, 350.f));
+	TestFalse(TEXT("a face 2 m below (a lower floor): no"), IsClickAtHisLevel(false, -200.f));
+	TestTrue(TEXT("the corner slot on his floor (a 40 cm step): yes"), IsCornerOnHisFloor(40.f));
+	TestFalse(TEXT("the corner slot on the roof (4 m up): no"), IsCornerOnHisFloor(400.f));
+	TestFalse(TEXT("the corner slot a floor below: no"), IsCornerOnHisFloor(-300.f));
+	return true;
+}
+
 #undef RUN_CORNER_PEEK_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -170,9 +170,10 @@ bool ACodexTacticsPlayerController::FindRunCornerPeekForHit(const AOperativeChar
 	{
 		return false;
 	}
-	// The ground at his level is a move, never a wall top.
-	if (Hit.ImpactNormal.Z > RunPeekFaceMaxNormalZ
-		&& Hit.ImpactPoint.Z - (Operative->GetActorLocation().Z - Operative->GetSimpleCollisionHalfHeight()) < RunCornerPeekRules::MinTopAboveFeetCm)
+	// His own floor only (LadderQueueSmoke regression 2026-11-08: a roof click beyond a wall ladder's head ran a peek instead of the climb): never
+	// a top surface (a wall's top, a roof, the ground), a face hit within his reach (RunCornerPeekRules::IsClickAtHisLevel).
+	const float FeetZ = static_cast<float>(Operative->GetActorLocation().Z - Operative->GetSimpleCollisionHalfHeight());
+	if (!RunCornerPeekRules::IsClickAtHisLevel(Hit.ImpactNormal.Z > RunPeekFaceMaxNormalZ, static_cast<float>(Hit.ImpactPoint.Z) - FeetZ))
 	{
 		return false;
 	}
@@ -203,6 +204,10 @@ bool ACodexTacticsPlayerController::FindRunCornerPeekForHit(const AOperativeChar
 		return false;
 	}
 	const FRunCornerPeekFace& Face = RunPeekCacheFaces[Near];
+	if (!RunCornerPeekRules::IsCornerOnHisFloor(static_cast<float>(Face.Corner.WorldLocation.Z) - FeetZ))
+	{
+		return false; // that corner stands on another floor (a ladder / stairs away): a move there, not a run-and-peek
+	}
 	OutTarget.Peeker = const_cast<AOperativeCharacter*>(Operative);
 	OutTarget.CornerSlot = Face.Corner;
 	OutTarget.Side = Face.Side;
@@ -408,6 +413,19 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 				// peek round it (the man nearest it takes it), the others keep forming up behind.
 				StartSquadPeekCarry(*Squad, *Operative, Face.Corner, true, true);
 				StackLine = PeekCarry.bActive ? TEXT(" the formation wall order there, the squad's corner peek once the leader is at it") : TEXT(" the formation wall order there (no corner to carry the peek to)");
+				// #55 fix (the game designer's video 2026-11-08): the leader's own wall place IS that corner - his run there is the run-and-peek
+				// (pre-turned, straight into the peek stance on arrival); the carry then finds the corner man peeking.
+				const FFormationSlot* LeaderPlace = Squad->GetFormationWallSlots().FindByPredicate([](const FFormationSlot& Each) { return Each.Role == EFormationRole::Commander; });
+				if (PeekCarry.bActive && AOperativeCharacter::IsRunPeekStanceEnabled() && LeaderPlace
+					&& FVector2D::Distance(LeaderPlace->Position, FVector2D(Face.Corner.WorldLocation)) <= RunCornerPeekRules::LeaderPlaceAtCornerCm)
+				{
+					Operative->SetPendingCover(Face.Corner);
+					if (Operative->ArmRunCornerPeek(Face.EdgeOnFace))
+					{
+						Operative->MarkCornerPeekArrival();
+						StackLine += TEXT("; his own place is the corner - he peeks on arrival");
+					}
+				}
 			}
 			else
 			{

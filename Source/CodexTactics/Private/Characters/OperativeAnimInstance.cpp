@@ -26,6 +26,7 @@ namespace
 #include "Animation/AnimNodeBase.h"
 #include "Engine/World.h"
 #include "Animation/AnimSequence.h"
+#include "Animation/Skeleton.h"
 #include "AnimationRuntime.h"
 #include "BonePose.h"
 #include "TwoBoneIK.h"
@@ -1461,6 +1462,8 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		CoverLoopClip.Reset();
 		CoverPendingFireClip.Reset();
 		bCoverEnterPlaying = false;
+		bCoverPeekStanceEntry = false;
+		CoverPeekStanceMontage.Reset();
 		// A cover one-shot (enter / fire / transition) must not outlive the cover: it would hold the cover pose while the
 		// capsule walks off (user-found bug 2026-10-07: grid walks slid across the floor in the cover pose).
 		if (UAnimMontage* OneShot = CoverOneShotMontage.Get(); OneShot && Montage_IsPlaying(OneShot))
@@ -1500,7 +1503,19 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	// Cover_Enter once, then the loop. Back at the wall after an open shot (he only stepped off it): straight to the loop. The squad corner
 	// peek's arrival along the wall (IsCoverEntryEasedTurn, game designer 2026-11-01): no wall-facing enter clip either - the eased turn and
 	// the peek's step-out (the fire-ready transition below) are the one animation.
-	if (bEntered && (Operative.IsQuietCoverEntry() || Operative.IsCoverEntryEasedTurn()))
+	// The run-and-peek's arrival (IsCoverEntryPeekStance, the game designer's video 2026-11-08): no enter clip (its wall-facing start and its
+	// back-to-the-wall end were the "hug"), and the fire-ready block below skips the idle -> fire step-out (the "turn out").
+	const double Now = Operative.GetWorld() ? Operative.GetWorld()->GetTimeSeconds() : 0.0;
+	if (bEntered)
+	{
+		bCoverPeekStanceEntry = Operative.IsCoverEntryPeekStance();
+		CoverPeekStanceEntryTime = Now;
+	}
+	else if (bCoverPeekStanceEntry && Now - CoverPeekStanceEntryTime > CoverPeekStanceWaitSeconds)
+	{
+		bCoverPeekStanceEntry = false; // the fire pose never came (suppressed / shimmy first): the ordinary loops and step-out from here
+	}
+	if (bEntered && (Operative.IsQuietCoverEntry() || Operative.IsCoverEntryEasedTurn() || Operative.IsCoverEntryPeekStance()))
 	{
 		bCoverEnterPlaying = false;
 		CoverLoopMontage.Reset();
@@ -1622,7 +1637,15 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	// he shimmies off the edge or leaves the cover. Without the clips the look-around corner pose stands in.
 	UAnimSequenceBase* FireIdle = PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle);
 	const bool bWantFirePose = bCoverFireReady && FireIdle;
-	if (bWantFirePose && !bCoverInFirePose)
+	bool bPeekStanceBlend = false;
+	if (bWantFirePose && !bCoverInFirePose && bCoverPeekStanceEntry && !bShimmying)
+	{
+		// The run-and-peek's peek stance: straight from the run into the fire idle (the loop below), no step-out.
+		bCoverInFirePose = true;
+		bCoverPeekStanceEntry = false;
+		bPeekStanceBlend = true;
+	}
+	else if (bWantFirePose && !bCoverInFirePose)
 	{
 		bCoverInFirePose = true;
 		if (UAnimSequenceBase* Enter = PickCoverClip(bIsCrouching ? CoverCrouchFireEnter : CoverStandFireEnter))
@@ -1692,10 +1715,19 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	// Stand <-> crouch in the fire stance: one fire_idle into the other (UpdateStanceTransition keeps it).
 	const bool bFireStanceSwitch = Wanted == FireIdle && CoverLoopClip.IsValid()
 		&& (CoverLoopClip.Get() == PickCoverClip(CoverStandFireIdle) || CoverLoopClip.Get() == PickCoverClip(CoverCrouchFireIdle));
-	const float LoopBlend = TakeCoverHandoffBlend(bFireStanceSwitch ? CoverFireStanceSwitchBlendSeconds : 0.2f);
+	const float LoopBlend = TakeCoverHandoffBlend(bPeekStanceBlend && Wanted == FireIdle ? CoverPeekStanceBlendSeconds
+		: bFireStanceSwitch ? CoverFireStanceSwitchBlendSeconds : 0.2f);
+	if (bPeekStanceBlend && Wanted == FireIdle)
+	{
+		++CoverPeekStanceBlends;
+		UE_LOG(LogCodexTactics, Display, TEXT("[CoverAnim] %s: run-and-peek arrival - the run blends straight into the peek stance %s over %.2f s (no enter clip, no step-out)"),
+			*Operative.DisplayName.ToString(), *Wanted->GetName(), LoopBlend);
+	}
 
 	CoverLoopClip = Wanted;
 	CoverLoopMontage = PlayCoverMontage(Wanted, FAlphaBlendArgs(LoopBlend), 0.2f, PlayRate, /*LoopCount*/ 1000);
+	// Any new loop ends the peek stance's blend from the run (GetCoverEnterBlendWeight follows only that one).
+	CoverPeekStanceMontage = bPeekStanceBlend && Wanted == FireIdle ? CoverLoopMontage : nullptr;
 	CoverClipsPlayed += CoverLoopMontage.IsValid() ? 1 : 0;
 	if (CoverLoopMontage.IsValid())
 	{
@@ -1730,11 +1762,57 @@ float UOperativeAnimInstance::GetCoverEnterBlendWeight() const
 {
 	if (!bCoverEnterPlaying)
 	{
+		// The run-and-peek's peek stance (#55 fix 2026-11-08): its fire idle blending in from the run stands in for the enter clip - the
+		// operative lets the held entry yaw go with its weight (EntryHeldYawFraction).
+		if (const UAnimMontage* PeekStance = CoverPeekStanceMontage.Get())
+		{
+			const FAnimMontageInstance* StanceInstance = GetActiveInstanceForMontage(PeekStance);
+			return StanceInstance ? StanceInstance->GetWeight() : -1.f;
+		}
 		return -1.f; // no enter clip playing (none assigned, done, or cut short)
 	}
 	const UAnimMontage* OneShot = CoverOneShotMontage.Get();
 	const FAnimMontageInstance* Instance = OneShot ? GetActiveInstanceForMontage(OneShot) : nullptr;
 	return Instance ? Instance->GetWeight() : -1.f;
+}
+
+bool UOperativeAnimInstance::GetPeekStanceTurnDeg(ECoverFacing Side, bool bCrouch, float& OutTurnDeg) const
+{
+	OutTurnDeg = 0.f;
+	const TArray<TObjectPtr<UAnimSequenceBase>>& Clips = bCrouch ? CoverCrouchFireIdle : CoverStandFireIdle;
+	const int32 Index = CoverFacingRules::ClipIndex(Side);
+	const UAnimSequence* Sequence = Clips.IsValidIndex(Index) ? Cast<UAnimSequence>(Clips[Index].Get()) : nullptr;
+	const USkeletalMeshComponent* Mesh = GetSkelMeshComponent();
+	const USkeleton* Skeleton = Sequence ? Sequence->GetSkeleton() : nullptr;
+	if (!Sequence || !Mesh || !Skeleton)
+	{
+		return false;
+	}
+	static const FName PelvisName(TEXT("pelvis"));
+	const FReferenceSkeleton& Reference = Skeleton->GetReferenceSkeleton();
+	const int32 ClipPelvis = Reference.FindBoneIndex(PelvisName);
+	const int32 MeshPelvis = Mesh->GetBoneIndex(PelvisName);
+	const TArray<FTransform>& MeshPose = Mesh->GetComponentSpaceTransforms();
+	if (ClipPelvis == INDEX_NONE || !MeshPose.IsValidIndex(MeshPelvis))
+	{
+		return false;
+	}
+	// The clip's pelvis in component space: up its parent chain at t = 0.
+	const FAnimExtractContext Context(0.0);
+	FTransform ClipComponent = FTransform::Identity;
+	for (int32 Bone = ClipPelvis; Bone != INDEX_NONE; Bone = Reference.GetParentIndex(Bone))
+	{
+		FTransform Local;
+		Sequence->GetBoneTransform(Local, FSkeletonPoseBoneIndex(Bone), Context, false);
+		ClipComponent = ClipComponent * Local;
+	}
+	FQuat Turn = ClipComponent.GetRotation() * MeshPose[MeshPelvis].GetRotation().Inverse();
+	if (Turn.W < 0.f)
+	{
+		Turn = -Turn; // the blend takes the shortest arc
+	}
+	OutTurnDeg = FMath::RadiansToDegrees(static_cast<float>(Turn.GetTwistAngle(FVector::UpVector)));
+	return true;
 }
 
 bool UOperativeAnimInstance::HasCoverSwitchClips(bool bCrouch) const

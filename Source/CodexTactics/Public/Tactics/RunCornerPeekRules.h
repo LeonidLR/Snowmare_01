@@ -22,8 +22,14 @@ namespace RunCornerPeekRules
 	inline constexpr float SameFaceDot = 0.95f;
 	/** A cover entry within this of the ordered corner slot (on the same wall) is the run-and-peek's arrival, cm (the arrival tolerance of a cover walk). */
 	inline constexpr float ArrivalToleranceCm = 150.f;
-	/** A wall top counts only this far above the operative's feet (the ground at his level is a move, not a wall), cm. */
-	inline constexpr float MinTopAboveFeetCm = 40.f;
+	/**
+	 * His floor only (the LadderQueueSmoke regression 2026-11-08: a box selection's click on a ROOF beyond a wall ladder's head was taken for
+	 * the end of a peekable wall - nobody climbed): a wall's side / end face counts up to about head height above his feet ...
+	 */
+	inline constexpr float MaxFaceHitAboveFeetCm = 200.f;
+	/** ... and no further than this below them; the corner slot's floor within this of his feet (another floor - a roof, the far end of a
+	 *  ladder / stairs - is never a run-and-peek), cm. */
+	inline constexpr float MaxFloorGapCm = 100.f;
 
 	/** What a click is and who gets it, for the run-and-peek decision. */
 	struct FClickFacts
@@ -50,6 +56,16 @@ namespace RunCornerPeekRules
 		 */
 		bool bCoverSwitchTarget = false;
 	};
+
+	/**
+	 * The click lies at his own level (LadderQueueSmoke regression, 2026-11-08): never a TOP surface (a wall's top, a building's roof - a
+	 * click there is a move / climb order to that level), and a side / end face hit no higher than MaxFaceAboveCm above his feet nor lower
+	 * than MaxBelowCm below them. HitAboveFeetCm = the hit point's height over his feet.
+	 */
+	CODEXTACTICS_API bool IsClickAtHisLevel(bool bTopSurface, float HitAboveFeetCm, float MaxFaceAboveCm = MaxFaceHitAboveFeetCm, float MaxBelowCm = MaxFloorGapCm);
+
+	/** The corner slot stands on his floor: its floor within MaxGapCm of his feet (CornerFloorAboveFeetCm = the slot's floor over his feet). */
+	CODEXTACTICS_API bool IsCornerOnHisFloor(float CornerFloorAboveFeetCm, float MaxGapCm = MaxFloorGapCm);
 
 	/** The click may be a run-and-peek (the wall end itself is checked by the traces); the tactical pause plans it (DecideTiming). */
 	CODEXTACTICS_API bool MayRunToPeek(const FClickFacts& Facts);
@@ -141,4 +157,50 @@ namespace RunCornerPeekRules
 	 * unchanged. The Drop rules (another order / leader, no wall order, too long) are FormationPeekCarry's.
 	 */
 	CODEXTACTICS_API FormationPeekCarry::EPeekCarryStep DecideFormationCarry(const FormationPeekCarry::FCarryProgressFacts& Facts, bool bRunPeek, bool bLeaderAtWall);
+
+	// --- Straight into the peek stance, no wall hug (the game designer's video 2026-11-08 "08.11.26_InstantLookUp_Bug_1") ---
+
+	/** Formation: the leader's wall place within this of the corner slot - his own run there is the run-and-peek, cm. */
+	inline constexpr float LeaderPlaceAtCornerCm = 60.f;
+	/** The last stretch of the run to the armed corner slot: within this of it the runner turns to the peek facing, cm. */
+	inline constexpr float PreTurnCm = 150.f;
+	/** The pre-turn only while he still runs in faster than this (standing at the slot the entry itself decides), cm/s. */
+	inline constexpr float PreTurnMinSpeedCmS = 35.f;
+	/** The peek stance's leftover turn on the mesh (his facing at the arrival vs the peek facing) eases out over MinSeconds for a small
+	 *  leftover up to MaxSeconds for a half turn (YawBlendSeconds). */
+	inline constexpr float PeekStanceYawBlendMinSeconds = 0.25f;
+	inline constexpr float PeekStanceYawBlendMaxSeconds = 0.6f;
+
+	/**
+	 * The runner turns to the peek facing now (instead of facing the wall, the pose the hug's enter clip starts in): the run-and-peek is armed
+	 * for the cover slot he walks to, he is within PreTurnDistanceCm of it and still moving faster than MinSpeedCmS. Wherever he comes from
+	 * (head-on, along the wall, at an angle) he arrives already looking the way the peek looks.
+	 */
+	CODEXTACTICS_API bool ShouldPreTurn(bool bArmedForThisSlot, float DistanceToSlotCm, float SpeedCmS, float PreTurnDistanceCm = PreTurnCm,
+		float MinSpeedCmS = PreTurnMinSpeedCmS);
+
+	/**
+	 * How long the peek stance arrival eases out the leftover turn LeftoverDeg (his facing at the arrival minus the peek facing, any sign / wrap)
+	 * on the mesh: MinSeconds up to 30 deg (the pre-turned run: a soft settle), growing linearly to MaxSeconds at 180 deg (no pre-turn - e.g.
+	 * he faced a target on the run - still one continuous turn, never a snap).
+	 */
+	CODEXTACTICS_API float PeekStanceYawBlendSeconds(float LeftoverDeg, float MinSeconds = PeekStanceYawBlendMinSeconds, float MaxSeconds = PeekStanceYawBlendMaxSeconds);
+
+	/** The pose blend counts as having shown its direction once it turned the body this far, deg (HeldTurnGoesTheOtherWay). */
+	inline constexpr float BlendDirectionSeenDeg = 3.f;
+
+	/**
+	 * The peek stance's held turn (the mesh keeps the run's yaw while the actor already stands back to the wall, released with the fire idle's
+	 * weight): HeldDeg and HeldDeg -/+ 360 draw the same first frame, but only the one turning the same way round as the pose blend
+	 * (BlendTurnDeg: the shortest arc from the run pose to the fire idle, measured on the pelvis) keeps the drawn body still - the other spins
+	 * it a full turn. Returns the equivalent of HeldDeg nearest to BlendTurnDeg.
+	 */
+	CODEXTACTICS_API float HeldTurnSameWayAsBlend(float HeldDeg, float BlendTurnDeg);
+
+	/**
+	 * The guard on that choice (the pack's fire idles stand ~180 deg from their root: a predicted blend turn near 180 can go either way): the
+	 * blend has visibly turned the pose by ObservedTurnDeg (at least MinSeenDeg) the other way round than the held turn HeldDeg - flip the held
+	 * turn by 360 (a one-frame step of 360 x the weight so far instead of a full spin).
+	 */
+	CODEXTACTICS_API bool HeldTurnGoesTheOtherWay(float HeldDeg, float ObservedTurnDeg, float MinSeenDeg = BlendDirectionSeenDeg);
 }

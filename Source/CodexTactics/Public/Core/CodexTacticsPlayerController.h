@@ -410,9 +410,11 @@ public:
 	 * gone"): the squad in group mode stands in the formation wall layout (USquadSubsystem::PlanFormationCornerPeek; the leader in no cover -
 	 * else the single operative's peek above) and Hit lies on the exposed END of its wall (the same window as the single peek:
 	 * CoverFacingRules::FindPeekEdge from the wall slot behind the leader) -> who peeks there and his corner. UpdateCornerPeekHover shows the
-	 * ghost for him, the click (TryHandleCoverClick) orders USquadSubsystem::OrderFormationCornerPeek.
+	 * ghost for him, the click (TryHandleCoverClick) orders USquadSubsystem::OrderFormationCornerPeek. bAllowLeaderRunPeek (the formation's
+	 * run-and-peek carry, #55 fix 2026-11-08): a leader in cover who peeks from his own run-and-peek arrival still counts (the squad's peek
+	 * attaches to him).
 	 */
-	bool FindSquadCornerPeekForHit(const FHitResult& Hit, FSquadCornerPeekTarget& OutTarget) const;
+	bool FindSquadCornerPeekForHit(const FHitResult& Hit, FSquadCornerPeekTarget& OutTarget, bool bAllowLeaderRunPeek = false) const;
 
 	/**
 	 * Run-and-peek (#55, user request 2026-11-07; RunCornerPeekRules): Hit lies on the END of a peekable wall (the manual corner peek's end

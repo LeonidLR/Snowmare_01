@@ -549,6 +549,29 @@ bool FCoverEntryTurnCornerPeekTest::RunTest(const FString&)
 	return true;
 }
 
+// The game designer's video 2026-11-08 ("08.11.26_InstantLookUp_Bug_1", #55): the run-and-peek ran up, hugged the wall (the enter clip), then
+// turned and peeked (the step-out) - "like a stage play". Its arrival is the peek stance: no clip, from any heading.
+COVER_FACING_TEST(FCoverEntryTurnPeekStanceTest, "EntryTurnPeekStance")
+bool FCoverEntryTurnPeekStanceTest::RunTest(const FString&)
+{
+	using namespace CoverFacingRules;
+	constexpr float Normal = -90.f; // facing into the wall = yaw 90
+	const FCoverFacingConfig Config;
+	TestTrue(TEXT("run-and-peek arrival head-on (the designer's case): the peek stance, not the enter clip"),
+		DecideCoverEntryTurn(false, true, true, 90.f, Normal, Config, true) == ECoverEntryTurn::PeekStance);
+	TestTrue(TEXT("run-and-peek arrival along the wall: the peek stance, not the eased turn"),
+		DecideCoverEntryTurn(false, true, true, 180.f, Normal, Config, true) == ECoverEntryTurn::PeekStance);
+	TestTrue(TEXT("run-and-peek arrival pre-turned to the peek facing (~170 deg off facing the wall): the peek stance"),
+		DecideCoverEntryTurn(false, true, true, -80.f, Normal, Config, true) == ECoverEntryTurn::PeekStance);
+	TestTrue(TEXT("no enter clip assigned: still the peek stance"), DecideCoverEntryTurn(false, false, false, 90.f, Normal, Config, true) == ECoverEntryTurn::PeekStance);
+	TestTrue(TEXT("a quiet return stays quiet"), DecideCoverEntryTurn(true, true, true, 90.f, Normal, Config, true) == ECoverEntryTurn::Quiet);
+	// Unchanged without it: the ordinary cover click keeps its hug.
+	TestTrue(TEXT("an ordinary cover order head-on: the enter clip (the hug, unchanged)"),
+		DecideCoverEntryTurn(false, true, false, 90.f, Normal, Config, false) == ECoverEntryTurn::EnterClip);
+	TestTrue(TEXT("the default argument is no peek stance"), DecideCoverEntryTurn(false, true, false, 90.f, Normal, Config) == ECoverEntryTurn::EnterClip);
+	return true;
+}
+
 #undef COVER_FACING_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

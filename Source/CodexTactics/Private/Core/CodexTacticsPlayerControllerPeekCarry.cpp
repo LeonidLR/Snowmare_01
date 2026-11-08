@@ -163,8 +163,8 @@ void ACodexTacticsPlayerController::TickSquadPeekCarry(float DeltaSeconds)
 	}
 	FSquadCornerPeekTarget Target;
 	AOperativeCharacter* Peeker = nullptr;
-	const bool bOrdered = FindSquadCornerPeekForHit(Hit, Target) && (Peeker = Target.Peeker.Get()) != nullptr
-		&& Squad->OrderFormationCornerPeek(Peeker, Target.CornerSlot, Target.EdgeOnFace);
+	const bool bOrdered = FindSquadCornerPeekForHit(Hit, Target, PeekCarry.bRunPeek) && (Peeker = Target.Peeker.Get()) != nullptr
+		&& Squad->OrderFormationCornerPeek(Peeker, Target.CornerSlot, Target.EdgeOnFace, PeekCarry.bRunPeek);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the carried corner peek after %.1f s (everyone at the wall %d, the leader at the wall %d, the leader still %.1f s%s): %s"),
 		PeekCarry.Seconds, Facts.bApproachDone ? 1 : 0, bLeaderAtWall ? 1 : 0, Facts.LeaderStillSeconds, PeekCarry.bRunPeek ? TEXT(", run-and-peek") : TEXT(""), bOrdered ? *FString::Printf(TEXT("%s takes the corner at (%.0f, %.0f)"), *Peeker->DisplayName.ToString(),
 			Target.EdgeOnFace.X, Target.EdgeOnFace.Y) : TEXT("no squad peek at that corner (the squad is not at that wall's end)"));

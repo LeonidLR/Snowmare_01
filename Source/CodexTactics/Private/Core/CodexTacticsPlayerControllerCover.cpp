@@ -495,7 +495,7 @@ bool ACodexTacticsPlayerController::FindCornerPeekForSlot(const FCoverSlot& Slot
 	return false;
 }
 
-bool ACodexTacticsPlayerController::FindSquadCornerPeekForHit(const FHitResult& Hit, FSquadCornerPeekTarget& OutTarget) const
+bool ACodexTacticsPlayerController::FindSquadCornerPeekForHit(const FHitResult& Hit, FSquadCornerPeekTarget& OutTarget, bool bAllowLeaderRunPeek) const
 {
 	OutTarget = FSquadCornerPeekTarget();
 	USquadSubsystem* Squad = GetSquad();
@@ -503,7 +503,10 @@ bool ACodexTacticsPlayerController::FindSquadCornerPeekForHit(const FHitResult& 
 	UWorld* World = GetWorld();
 	const AActor* HitActor = Hit.GetActor();
 	float NormalYaw = 0.f;
-	if (!Leader || !World || !HitActor || (Leader->bInCover && !Squad->IsWallLeadershipPeeker(Leader)) || GetActiveTurnBased() || HitActor->IsA<APawn>()
+	// bAllowLeaderRunPeek (the formation's run-and-peek carry, #55 fix 2026-11-08): the leader whose own run into that corner went straight into
+	// the peek stance is in cover there already - the squad's peek attaches to him (his stack forms behind him; nobody re-ordered).
+	const bool bLeaderRunPeek = Leader && Squad && Squad->IsLeaderCoverPeekPlannable(*Leader, bAllowLeaderRunPeek);
+	if (!Leader || !World || !HitActor || (Leader->bInCover && !Squad->IsWallLeadershipPeeker(Leader) && !bLeaderRunPeek) || GetActiveTurnBased() || HitActor->IsA<APawn>()
 		|| HitActor->IsA<AInteractableActor>()
 		|| HitActor->ActorHasTag(FName(TEXT("Enemy"))) || Squad->GetFormationKind() != EFormationKind::Wall || !Squad->GetFormationWallNormalYaw(NormalYaw))
 	{
@@ -535,7 +538,7 @@ bool ACodexTacticsPlayerController::FindSquadCornerPeekForHit(const FHitResult& 
 	const FVector EdgeOnFace = Base.WallPoint + Right * EdgeAlong;
 	AOperativeCharacter* Peeker = nullptr;
 	FFormationSquadPeek Plan;
-	if (!Squad->PlanFormationCornerPeek(EdgeOnFace, Peeker, Plan) || !Peeker)
+	if (!Squad->PlanFormationCornerPeek(EdgeOnFace, Peeker, Plan, bAllowLeaderRunPeek) || !Peeker)
 	{
 		return false;
 	}

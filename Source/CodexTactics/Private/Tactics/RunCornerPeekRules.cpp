@@ -13,6 +13,16 @@ namespace RunCornerPeekRules
 			&& !Facts.bHitObject && !Facts.bInCoverAtClickedObject && !Facts.bCoverSwitchTarget;
 	}
 
+	bool IsClickAtHisLevel(bool bTopSurface, float HitAboveFeetCm, float MaxFaceAboveCm, float MaxBelowCm)
+	{
+		return !bTopSurface && HitAboveFeetCm <= MaxFaceAboveCm && HitAboveFeetCm >= -MaxBelowCm;
+	}
+
+	bool IsCornerOnHisFloor(float CornerFloorAboveFeetCm, float MaxGapCm)
+	{
+		return FMath::Abs(CornerFloorAboveFeetCm) <= MaxGapCm;
+	}
+
 	bool IsFaceWideEnough(bool bLeftExposed, float LeftCm, bool bRightExposed, float RightCm, float MinWidthCm)
 	{
 		if (!bLeftExposed || !bRightExposed)
@@ -114,5 +124,35 @@ namespace RunCornerPeekRules
 			return EPeekCarryStep::Wait; // he has not set off yet (standing still is not arriving)
 		}
 		return bLeaderAtWall && Facts.LeaderStillSeconds >= LeaderStillSeconds ? EPeekCarryStep::Fire : EPeekCarryStep::Wait;
+	}
+
+	bool ShouldPreTurn(bool bArmedForThisSlot, float DistanceToSlotCm, float SpeedCmS, float PreTurnDistanceCm, float MinSpeedCmS)
+	{
+		return bArmedForThisSlot && DistanceToSlotCm >= 0.f && DistanceToSlotCm <= PreTurnDistanceCm && SpeedCmS > MinSpeedCmS;
+	}
+
+	float HeldTurnSameWayAsBlend(float HeldDeg, float BlendTurnDeg)
+	{
+		float Best = HeldDeg;
+		for (const float Candidate : { HeldDeg - 360.f, HeldDeg + 360.f })
+		{
+			if (FMath::Abs(Candidate - BlendTurnDeg) < FMath::Abs(Best - BlendTurnDeg))
+			{
+				Best = Candidate;
+			}
+		}
+		return Best;
+	}
+
+	bool HeldTurnGoesTheOtherWay(float HeldDeg, float ObservedTurnDeg, float MinSeenDeg)
+	{
+		return FMath::Abs(ObservedTurnDeg) >= MinSeenDeg && FMath::Abs(HeldDeg) > MinSeenDeg && HeldDeg * ObservedTurnDeg < 0.f;
+	}
+
+	float PeekStanceYawBlendSeconds(float LeftoverDeg, float MinSeconds, float MaxSeconds)
+	{
+		const float Deg = FMath::Abs(FRotator::NormalizeAxis(LeftoverDeg));
+		const float Alpha = FMath::Clamp((Deg - 30.f) / 150.f, 0.f, 1.f);
+		return FMath::Lerp(MinSeconds, FMath::Max(MaxSeconds, MinSeconds), Alpha);
 	}
 }
