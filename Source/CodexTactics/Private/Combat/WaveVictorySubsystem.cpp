@@ -163,7 +163,11 @@ void UWaveVictorySubsystem::StartPostCombatSequence()
 	}
 	for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 	{
-		It->Destroy();
+		// Game designer 2026-11-08: the bodies stay on the ground (UCorpseSubsystem) - only the living go.
+		if (!It->IsDying())
+		{
+			It->Destroy();
+		}
 	}
 
 	// Orders dropped; the commander leads the exploration formation. Game designer play-test 2026-10-22 (deviation from Godot

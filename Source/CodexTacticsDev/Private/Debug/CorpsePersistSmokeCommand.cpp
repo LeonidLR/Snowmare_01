@@ -1,0 +1,322 @@
+// Dev-only headless check of "corpses stay" (game designer 2026-11-08; UCorpseSubsystem, AEnemyCharacter::FreezeCorpse) on L_Gen_Depot_1:
+//   Scripts/smoke_parallel.ps1 -Commands CorpsePersistSmoke   (map /Game/Maps/Generated/L_Gen_Depot_1, Scripts/test_map.json)
+// 11 enemies of every kind (hounds, frostbitten, Military Zombies = the variant Blueprint, a cutter, a brute, a marksman, a spitter, one
+// frostbitten killed 4 m up in the air) die 8-25 m from the squad. 30 s later every body with a death pose is still there, on the ground,
+// FROZEN: no AI controller, no actor / movement / mesh tick (anims paused on the death pose), no collision, out of the enemy registry, still
+// visible. The Spitter has no Blueprint yet (the C++ placeholder body, no death pose): it still goes after 2 s, as before.
+// Then the cap: Codex.Corpse.Cap 4 -> 6 bodies fade out (scaled down over ~1 s) and the 4 NEAREST the squad stay (OldestPool 10 = all).
+
+#include "CoreMinimal.h"
+
+#if !UE_BUILD_SHIPPING
+
+#include "Characters/CorpseSubsystem.h"
+#include "Characters/EnemyAnimInstance.h"
+#include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
+#include "Combat/CombatPressureRules.h"
+#include "Combat/EnemyRegistrySubsystem.h"
+#include "Combat/HealthComponent.h"
+#include "Combat/WaveSubsystem.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Containers/Ticker.h"
+#include "Debug/SmokeUtils.h"
+#include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "HAL/IConsoleManager.h"
+#include "AIController.h"
+
+namespace CorpsePersistSmoke
+{
+	constexpr float StepSeconds = 0.1f;
+
+	struct FBody
+	{
+		TWeakObjectPtr<AEnemyCharacter> Enemy;
+		FString Label;
+		bool bAirborne = false;
+		float DistanceCm = 0.f;
+		/** No Blueprint / death pose (the Spitter's placeholder body): it is not kept. */
+		bool bPlaceholder = false;
+	};
+
+	struct FState
+	{
+		int32 Stage = 0;
+		float StageTime = 0.f;
+		float Total = 0.f;
+		int32 Failures = 0;
+		TArray<FBody> Bodies;
+		bool bShrinkSeen = false;
+	};
+
+	void Check(FState& State, bool bOk, const FString& What)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s"), bOk ? TEXT("ok  ") : TEXT("FAIL"), *What);
+		State.Failures += bOk ? 0 : 1;
+	}
+
+	void SetCVar(const TCHAR* Name, float Value)
+	{
+		if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name))
+		{
+			Variable->Set(Value, ECVF_SetByConsole);
+		}
+	}
+
+	bool Finish(const FState& State, bool bComplete)
+	{
+		SetCVar(TEXT("Codex.Corpse.Cap"), -1.f);
+		SetCVar(TEXT("Codex.Pressure.Enabled"), -1.f);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
+		FPlatformMisc::RequestExit(false, TEXT("CorpsePersistSmoke"));
+		return false;
+	}
+
+	void Next(FState& State)
+	{
+		++State.Stage;
+		State.StageTime = 0.f;
+	}
+
+	void Kill(AEnemyCharacter* Enemy)
+	{
+		if (Enemy && Enemy->GetHealthComponent())
+		{
+			FDamageSpec Spec;
+			Spec.Amount = 1000000.f;
+			Spec.ArmorPenetration = 1.f;
+			Enemy->GetHealthComponent()->TakeDamage(Spec);
+		}
+	}
+
+	/** Height of the body's mesh root over the ground right under it (the body, pawns ignored); 1e6 without ground. */
+	float RootOverGround(UWorld* World, const AEnemyCharacter& Body)
+	{
+		const FVector Root = Body.GetMesh()->GetComponentLocation();
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(CorpseSmokeGround), false, &Body);
+		FHitResult Hit;
+		if (!World->LineTraceSingleByChannel(Hit, Root + FVector(0.f, 0.f, 150.f), Root - FVector(0.f, 0.f, 1000.f), ECC_Visibility, Params))
+		{
+			return 1.e6f;
+		}
+		return static_cast<float>(Root.Z - Hit.ImpactPoint.Z);
+	}
+
+	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
+	{
+		State.StageTime += StepSeconds;
+		State.Total += StepSeconds;
+		UWorld* World = WeakWorld.Get();
+		if (!World || State.Total > 180.f)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke stopped in stage %d"), State.Stage);
+			return Finish(State, false);
+		}
+		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+		UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+		UCorpseSubsystem* Corpses = World->GetSubsystem<UCorpseSubsystem>();
+		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+		if (!Squad || !Waves || !Corpses || !Leader)
+		{
+			return State.Total < 10.f || Finish(State, false);
+		}
+		for (AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			Member->bTacticalCeaseFire = true;
+			Member->HealthComponent->SetMaxHealth(100000.f, false);
+			Member->HealthComponent->Heal(100000.f);
+		}
+		switch (State.Stage)
+		{
+		case 0:
+		{
+			if (State.StageTime < 3.f)
+			{
+				return true;
+			}
+			SetCVar(TEXT("Codex.Pressure.Enabled"), 0.f);
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				It->Destroy();
+			}
+			struct FKind { EEnemyArchetype Type; FName Variant; const TCHAR* Label; };
+			const FKind Kinds[] = {
+				{ EEnemyArchetype::FrostHound, NAME_None, TEXT("hound") }, { EEnemyArchetype::FrostHound, NAME_None, TEXT("hound") },
+				{ EEnemyArchetype::Frostbitten, NAME_None, TEXT("frostbitten") }, { EEnemyArchetype::Frostbitten, NAME_None, TEXT("frostbitten") },
+				{ EEnemyArchetype::Frostbitten, CombatPressureRules::MilitaryZombieVariant(), TEXT("Military Zombie") },
+				{ EEnemyArchetype::Frostbitten, CombatPressureRules::MilitaryZombieVariant(), TEXT("Military Zombie") },
+				{ EEnemyArchetype::Cutter, NAME_None, TEXT("cutter") }, { EEnemyArchetype::Brute, NAME_None, TEXT("brute") },
+				{ EEnemyArchetype::Marksman, NAME_None, TEXT("marksman") }, { EEnemyArchetype::Spitter, NAME_None, TEXT("spitter") } };
+			const FVector From = Leader->GetActorLocation();
+			int32 Index = 0;
+			for (const FKind& Kind : Kinds)
+			{
+				const float Distance = 800.f + 170.f * Index;
+				const FVector Direction = Leader->GetActorForwardVector().GetSafeNormal2D().RotateAngleAxis(Index * 36.f, FVector::UpVector);
+				const FVector Spot = SmokeUtils::FreeSpot(World, SmokeUtils::ClearPoint(World, From, From + Direction * Distance), Leader);
+				if (AEnemyCharacter* Enemy = Waves->SpawnEnemyVariant(Kind.Type, Spot, FRotator::ZeroRotator, Kind.Variant))
+				{
+					const UEnemyAnimInstance* Anim = Enemy->GetMesh() ? Cast<UEnemyAnimInstance>(Enemy->GetMesh()->GetAnimInstance()) : nullptr;
+					State.Bodies.Add({ Enemy, Kind.Label, false, 0.f, !Anim || !Anim->HasDeathAnimation() });
+				}
+				++Index;
+			}
+			// One killed in the air (a drop link's flight, a jump): it falls to the ground first.
+			const FVector AirSpot = SmokeUtils::FreeSpot(World, SmokeUtils::ClearPoint(World, From, From - Leader->GetActorForwardVector() * 900.f), Leader);
+			if (AEnemyCharacter* Flyer = Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, AirSpot + FVector(0.f, 0.f, 400.f)))
+			{
+				State.Bodies.Add({ Flyer, TEXT("frostbitten killed in the air"), true });
+			}
+			Check(State, State.Bodies.Num() == 11, FString::Printf(TEXT("%d enemies of every kind spawned 8-25 m from the squad"), State.Bodies.Num()));
+			Next(State);
+			return true;
+		}
+		case 1:
+		{
+			// The ground ones at once; the flyer once it is falling.
+			if (State.StageTime < 0.2f)
+			{
+				return true;
+			}
+			for (FBody& Body : State.Bodies)
+			{
+				AEnemyCharacter* Enemy = Body.Enemy.Get();
+				if (Enemy && !Enemy->IsDying() && (!Body.bAirborne || Enemy->GetCharacterMovement()->IsFalling()))
+				{
+					Kill(Enemy);
+					if (Body.bAirborne)
+					{
+						Check(State, RootOverGround(World, *Enemy) > 150.f, FString::Printf(TEXT("the flyer dies %.0f cm up in the air"), RootOverGround(World, *Enemy)));
+					}
+				}
+			}
+			bool bAllDead = true;
+			for (const FBody& Body : State.Bodies)
+			{
+				bAllDead &= !Body.Enemy.IsValid() || Body.Enemy->IsDying();
+			}
+			if (!bAllDead && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, bAllDead, TEXT("all 11 killed"));
+			Next(State);
+			return true;
+		}
+		case 2:
+		{
+			if (State.StageTime < 30.f)
+			{
+				return true;
+			}
+			// 30 s later: every body still there, frozen.
+			const UEnemyRegistrySubsystem::FEnemyList Registered = UEnemyRegistrySubsystem::GetEnemyCharacters(World);
+			int32 Kept = 0;
+			int32 Posed = 0;
+			for (FBody& Body : State.Bodies)
+			{
+				AEnemyCharacter* Enemy = Body.Enemy.Get();
+				const bool bThere = Enemy && !Enemy->IsActorBeingDestroyed();
+				if (Body.bPlaceholder)
+				{
+					Check(State, !bThere, FString::Printf(TEXT("%s: a placeholder body without a death pose still goes"), *Body.Label));
+					continue;
+				}
+				++Posed;
+				Kept += bThere ? 1 : 0;
+				if (!bThere)
+				{
+					Check(State, false, FString::Printf(TEXT("%s: the body is gone"), *Body.Label));
+					continue;
+				}
+				USkeletalMeshComponent* Mesh = Enemy->GetMesh();
+				const UCharacterMovementComponent* Move = Enemy->GetCharacterMovement();
+				const bool bFrozen = Enemy->IsCorpseFrozen() && !Enemy->GetController() && !Enemy->IsActorTickEnabled()
+					&& Mesh && Mesh->bPauseAnims && !Mesh->IsComponentTickEnabled() && Move && !Move->IsComponentTickEnabled() && Move->MovementMode == MOVE_None;
+				const bool bNoCollision = Enemy->GetCapsuleComponent()->GetCollisionEnabled() == ECollisionEnabled::NoCollision
+					&& Mesh->GetCollisionEnabled() == ECollisionEnabled::NoCollision;
+				const bool bVisible = Mesh->IsVisible() && !Enemy->IsHidden();
+				const float Ground = RootOverGround(World, *Enemy);
+				const UEnemyAnimInstance* Anim = Cast<UEnemyAnimInstance>(Mesh->GetAnimInstance());
+				const float PoseWeight = Anim ? Anim->GetSlotMontageGlobalWeight(Anim->OneShotSlot) : 0.f;
+				Check(State, bFrozen && bNoCollision && bVisible && !Registered.Contains(Enemy) && FMath::Abs(Ground) < 60.f,
+					FString::Printf(TEXT("%s (%s): stays 30 s, frozen %d (controller %s, ticks actor %d / mesh %d / move %d), collision off %d, visible %d, "
+						"out of the registry %d, on the ground (root %.0f cm), death pose weight %.2f"), *Body.Label, *GetNameSafe(Enemy->GetClass()),
+						Enemy->IsCorpseFrozen() ? 1 : 0, *GetNameSafe(Enemy->GetController()), Enemy->IsActorTickEnabled() ? 1 : 0,
+						Mesh->IsComponentTickEnabled() ? 1 : 0, Move && Move->IsComponentTickEnabled() ? 1 : 0, bNoCollision ? 1 : 0, bVisible ? 1 : 0,
+						Registered.Contains(Enemy) ? 0 : 1, Ground, PoseWeight));
+				Body.DistanceCm = FVector::Dist(Enemy->GetActorLocation(), Leader->GetActorLocation());
+			}
+			int32 Brains = 0;
+			for (TActorIterator<AAIController> It(World); It; ++It)
+			{
+				const AEnemyCharacter* Pawn = Cast<AEnemyCharacter>(It->GetPawn());
+				Brains += Pawn && Pawn->IsDying() ? 1 : 0;
+			}
+			Check(State, Posed >= 10 && Kept == Posed && Corpses->GetCorpseCount() == Posed && Corpses->GetFrozenCount() == Posed && Brains == 0,
+				FString::Printf(TEXT("%d bodies kept of %d with a death pose, %d frozen, %d AI controllers of the dead left"), Kept, Posed,
+					Corpses->GetFrozenCount(), Brains));
+			State.Bodies.RemoveAll([](const FBody& Body) { return Body.bPlaceholder; });
+			// The cap: 4 bodies on this level now.
+			SetCVar(TEXT("Codex.Corpse.Cap"), 4.f);
+			Next(State);
+			return true;
+		}
+		case 3:
+		{
+			for (const FBody& Body : State.Bodies)
+			{
+				const AEnemyCharacter* Enemy = Body.Enemy.Get();
+				if (Enemy && Corpses->IsFading(Enemy) && Enemy->GetMesh()->GetComponentScale().X < 0.9f && Enemy->GetMesh()->GetComponentScale().X > 0.05f)
+				{
+					State.bShrinkSeen = true;
+				}
+			}
+			if ((Corpses->GetCorpseCount() > 4 || Corpses->GetFadingCount() > 0) && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Corpses->GetCorpseCount() == 4 && Corpses->GetFadedTotal() == State.Bodies.Num() - 4,
+				FString::Printf(TEXT("cap 4: %d bodies left, %d faded out in %.1f s"), Corpses->GetCorpseCount(), Corpses->GetFadedTotal(), State.StageTime));
+			Check(State, State.bShrinkSeen, TEXT("... they shrank away (no pop)"));
+			TArray<FBody> ByDistance = State.Bodies;
+			ByDistance.Sort([](const FBody& A, const FBody& B) { return A.DistanceCm < B.DistanceCm; });
+			int32 NearestKept = 0;
+			for (int32 Index = 0; Index < FMath::Min(4, ByDistance.Num()); ++Index)
+			{
+				NearestKept += ByDistance[Index].Enemy.IsValid() && !ByDistance[Index].Enemy->IsActorBeingDestroyed() ? 1 : 0;
+			}
+			Check(State, NearestKept == 4, FString::Printf(TEXT("... the farthest went, the 4 nearest the squad stay (%d of 4)"), NearestKept));
+			return Finish(State, true);
+		}
+		default:
+			return Finish(State, false);
+		}
+	}
+
+	void Run(const TArray<FString>& Args, UWorld* World)
+	{
+		if (!World)
+		{
+			return;
+		}
+		TWeakObjectPtr<UWorld> WeakWorld(World);
+		TSharedRef<FState> State = MakeShared<FState>();
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
+		{
+			return Step(WeakWorld, *State);
+		}), StepSeconds);
+	}
+
+	static FAutoConsoleCommandWithWorldAndArgs Command(
+		TEXT("CodexTactics.CorpsePersistSmoke"),
+		TEXT("Dev check: enemy corpses stay frozen on the ground, the per-level cap fades the farthest; PASS / FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
+}
+
+#endif // !UE_BUILD_SHIPPING

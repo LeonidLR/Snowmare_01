@@ -33,7 +33,23 @@
   BP_Enemy_* (the script wrote the Godot per-type values once — hound / cutter 35/60 cm, frostbitten 40/90, brute 60/120,
   model scale 0.8 / 0.85 / 1.0 / 1.4 — and tags the CDO `LookAuthored`); `AEnemyCharacter::ApplyArchetypeDefaults` only
   sizes the C++ placeholder body. Stats stay Godot balance data. Re-running the script keeps every hand edit. With a death
-  clip the body stays `DeathDecayDelay` 5 s (Godot death_decay_delay), otherwise 2 s.
+  clip the body stays `DeathDecayDelay` 5 s (Godot death_decay_delay), otherwise 2 s. **Superseded 2026-11-09 (game designer 2026-11-08:
+  "corpses of ALL enemies, not only PMC, must stay on the ground"; feat/horde-firefights):** a body with a death pose (a death clip, or the
+  knockdown's Death_* from the ground) STAYS - `UCorpseSubsystem` (Characters/CorpseRules) freezes it once the pose has settled
+  (`UEnemyAnimInstance::IsDeathPoseSettled`: no montage advancing / blending, held 0.25 s, after 0.6 s; at the latest 8 s) and it lies on the
+  ground (a body killed in the air lands first - `AEnemyCharacter::Landed`; one on a ladder is dropped by the ladder): `AEnemyCharacter::FreezeCorpse`
+  destroys its AI controller, stops every tick (actor, movement, mesh with `bPauseAnims`, components; FX deactivated), turns all collision off
+  (pawns walk over it, clicks / shots go through), hides the vision cone and takes it out of `UEnemyRegistrySubsystem` (no per-frame query sees
+  it); it stays rendered. Cap per level: level JSON `corpse_cap` (default 150; `Codex.Corpse.Cap`): above it the oldest body farthest from the
+  squad (the farthest of the `Codex.Corpse.OldestPool` 10 oldest, out of the camera view first - `WasRecentlyRendered`) shrinks into its root
+  over `Codex.Corpse.FadeSeconds` 1 s and is destroyed. A body without a death pose (the C++ placeholder: the Spitter has no Blueprint) still
+  goes after 2 s. Post-combat cleanup removes only the living (`UWaveVictorySubsystem`). Not saved: a load restores the living enemies only.
+  Enemies carry no loot (fallen gear is the squad's KIA remains), so nothing else stays at a body. Hostile PMC fighters are operative corpses
+  (their own death pose, unchanged). `Codex.Corpse.Persist 0` = the old decay; `Codex.Corpse.Freeze 0` = A/B only. Measured on
+  L_Gen_Depot_1 (rendered 1280x720, `CorpseCostSmoke`): 0 / 50 / 150 frozen bodies - frame 6.5 / 7.1 / 7.1 ms, game thread 4.3 / 5.6 / 5.7 ms,
+  GPU 5.3 / 6.0 / 6.3 ms, draws 167 / 363 / 614, memory 3311 / 3671 / 3698 MB (the first 50 also load the enemy Blueprints' assets; the next 100
+  bodies +27 MB, ~0.3 MB each); the same 150 NOT frozen: game thread 19.7 ms. Tests `CodexTactics.Characters.Corpse.*`; smokes `CorpsePersistSmoke`,
+  `CorpseCostSmoke`, `EnemyDeathSmoke` (the bodies stay frozen, the pose held).
 - Placeholder meshes (engine shapes) for barrels, barricades, mines, quest objects; the user will replace them.
 - The user reported the character looks "перекручено" (twisted) — not investigated yet (ask what exactly: spine /
   hands / pose), see §8.
