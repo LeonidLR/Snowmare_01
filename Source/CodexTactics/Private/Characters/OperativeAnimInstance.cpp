@@ -64,6 +64,7 @@ FAnimInstanceProxy* UOperativeAnimInstance::CreateAnimInstanceProxy()
 void UOperativeAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
+	LoadShotgunAnimSet(); // the D-1 set (weapon_anim_sets.json), once per instance
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner()))
 	{
 		BoundOperative = Operative;
@@ -189,6 +190,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	UpdateUpperBody(DeltaSeconds);
 	UpdateColdLayer(DeltaSeconds);
 	UpdateNativeBlend(DeltaSeconds);
+	UpdateShotgunLayer(DeltaSeconds); // the D-1 shotgun set over the ABP (OperativeAnimInstanceShotgun.cpp)
 	if (bUseRifle2Locomotion)
 	{
 		const AOperativeCharacter* Rifle2Owner = Cast<AOperativeCharacter>(TryGetPawnOwner());
@@ -489,6 +491,10 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 	{
 		++FireClipsSkippedForStance;
 		return;
+	}
+	if (PlayShotgunFire())
+	{
+		return; // the D-1: the pack's aim / hip shot on the upper body (OperativeAnimInstanceShotgun.cpp)
 	}
 	UAnimMontage* Montage = bIsAiming && FireAimMontage ? FireAimMontage : FireMontage;
 	if (Montage && !bIsReloading)
@@ -959,6 +965,11 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	{
 		Reload = nullptr; // never stop the sniper clips at the reload's end
 	}
+	if (UpdateShotgunReload(Operative))
+	{
+		bWasReloading = bIsReloading; // the D-1: one reload section per shell (OperativeAnimInstanceShotgun.cpp)
+		return;
+	}
 	if (bIsReloading && !bWasReloading && Reload && Operative && !IsPlayingStanceTransition() && !bKnockedDown && !bIsClimbing)
 	{
 		const float Duration = FMath::Max(0.1f, Operative->ReloadTimer);
@@ -1290,6 +1301,9 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	const UOperativeAnimInstance* Instance = CastChecked<UOperativeAnimInstance>(InAnimInstance);
 	bUseNative = Instance->bUseNativeLocomotion;
 	LadderIK = Instance->LadderIKFrame;
+	WeaponClips = Instance->ShotgunClips;
+	WeaponUpperWeight = Instance->ShotgunUpperWeight;
+	WeaponLowerWeight = Instance->ShotgunLowerWeight;
 	for (int32 Index = 0; Index < Slot(EOperativeClip::Count); ++Index)
 	{
 		Clips[Index].Sequence = Instance->GetClip(static_cast<EOperativeClip>(Index));
@@ -1359,13 +1373,25 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	{
 		return Evaluate(Output);
 	}
-	if (!LadderIK.bActive || InRootNode != GetRootNode())
+	const bool bWeaponLayer = WeaponUpperWeight > MinSampleWeight || WeaponLowerWeight > MinSampleWeight;
+	if ((!LadderIK.bActive && !bWeaponLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 		return false; // the graph alone
 	}
 	EvaluateAnimationNode_WithRoot(Output, InRootNode);
-	ApplyLadderIK(Output);
+	if (bWeaponLayer)
+	{
+		BlendWeaponLayer(Output); // the shotgun set over the graph (WeaponAnimLayerRules)
+	}
+	if (LadderIK.bActive)
+	{
+		ApplyLadderIK(Output);
+	}
+	else
+	{
+		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
+	}
 	return true;
 }
 
