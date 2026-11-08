@@ -49,6 +49,7 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCover(const FCoverSlot& Slot
 	bCoverSwitchPending = false; // OrderCoverSwitch sets it again after this call
 	bCoverSwitchFacingPending = false;
 	bCornerPeekArrivalPending = false; // the squad's corner peek marks it again after this call (MarkCornerPeekArrival)
+	bRunCornerPeekPending = false; // a run-and-peek arms it again after this call (OrderRunCornerPeek)
 	CancelCoverWrap(TEXT("cover order"));
 	if (IsKnockedDown())
 	{
@@ -99,6 +100,7 @@ void AOperativeCharacter::SetPendingCover(const FCoverSlot& Slot)
 	bCoverSwitchFacingPending = false;
 	bCoverWrapPlanned = false; // a planned wrap sets it again after this call (SetPendingCoverWrap)
 	bCornerPeekArrivalPending = false;
+	bRunCornerPeekPending = false;
 	PendingCoverSlot = Slot;
 	bHasPendingCover = Slot.IsValid();
 }
@@ -261,6 +263,8 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	{
 		Squad->NotifyWallGroupCoverEntered(this, bSwitchFacing || bCoverSwitchEntry, bWrapArrival);
 	}
+	// Run-and-peek (#55): the entry into the ordered corner slot turns straight into the corner peek (no idle at the wall, no second click).
+	StartRunCornerPeekOnEntry(Slot);
 }
 
 void AOperativeCharacter::UpdateCoverEnteredEvent(float DeltaTime)

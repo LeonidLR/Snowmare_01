@@ -115,6 +115,12 @@ void USquadSubsystem::UnregisterOperative(AOperativeCharacter* Operative)
 	SelectedGroup.Remove(Operative); // a fallen member drops out of the selection too
 	if (Leader.Get() == Operative)
 	{
+		// #57, the game designer's answer 5 (2026-11-08): the two-corner hold's leader corner man killed - the man who led before him leads
+		// again and keeps his corner; else (or he is down too) the first member, as before.
+		if (Operative && Members.Num() > 0 && HandCornerHoldLeadOnFall(*Operative))
+		{
+			return;
+		}
 		Leader.Reset();
 		if (Members.Num() > 0)
 		{
@@ -1107,6 +1113,9 @@ void USquadSubsystem::Tick(float DeltaTime)
 	FramePace = 1.f;
 	Sectors.bActiveThisFrame = false;
 	TickFormationFollow(DeltaTime);
+	// #57: both corners of a wall held - the held corner's end conditions, the middle men's sweeping looks.
+	UpdateFormationCornerHold(DeltaTime);
+	ApplyCornerHoldSweep(DeltaTime);
 	ApplyFormationFrame();
 }
 

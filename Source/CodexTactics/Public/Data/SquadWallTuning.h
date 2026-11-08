@@ -39,6 +39,16 @@ struct CODEXTACTICS_API FSquadWallTuning
 	 * him; the path's braking on top of it made the last metre a crawl (2-40 cm/s for seconds - the "shuffle in place").
 	 */
 	float WallPathBrakingCm = 30.f;
+	/**
+	 * #57 (user request 2026-11-07): both corners of a wall held, the members between them sweep their look from one corner's peek direction to
+	 * the other's in this long (one way; there and back = twice this), eased at the ends, s (corner_sweep_s).
+	 */
+	float CornerSweepSeconds = 6.f;
+	/**
+	 * The game designer's answer 3 (2026-11-08, "6 s, option V"): CornerSweepSeconds is the sweep in combat / alert (an enemy seen or heard by
+	 * the squad, a member under fire / suppressed); out of combat it runs slowly, one way in this long, s (corner_sweep_calm_s).
+	 */
+	float CornerSweepCalmSeconds = 12.f;
 };
 
 namespace SquadWallTuning

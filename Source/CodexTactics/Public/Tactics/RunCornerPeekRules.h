@@ -1,0 +1,144 @@
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Formation/FormationPeekCarryRules.h"
+
+/**
+ * Run-and-peek (#55, user request 2026-11-07: "the peek works only after hugging the wall first - that badly hurts the pace of the fight; I
+ * want the peek at once: the operative is running, gets the order to peek round a corner in front of him, runs straight to that spot and
+ * peeks immediately"). A click on the END of a peekable wall (the manual corner peek's end region: its last ~75 cm, its end face or its top
+ * there) by an operative who is NOT in cover at that wall - standing, walking, running in the open or in cover at another wall - sends him
+ * to the corner's cover slot on the face of that wall that faces him and turns the cover entry straight into the corner peek
+ * (AOperativeCharacter::OrderRunCornerPeek). Real time and - since the game designer's answers 2026-11-08 (Q3) - planned in the tactical
+ * pause (run there and peek once the pause ends); turn-based keeps its rules. In formation the corner man peeks once the LEADER is at the
+ * wall (Q2), not after the whole squad settled. UE-only (Godot reference: none). Pure; tests CodexTactics.Tactics.Cover.RunCornerPeek.*. The runtime (face traces, slots, orders) is
+ * ACodexTacticsPlayerController::TryHandleRunCornerPeekClick / FindRunCornerPeekForHit (CodexTacticsPlayerControllerRunPeek.cpp).
+ */
+namespace RunCornerPeekRules
+{
+	/** A face narrower than this between its two exposed ends (an end face, a thin post) is no run-and-peek face, cm. */
+	inline constexpr float MinFaceWidthCm = 100.f;
+	/** Two probed faces whose normals agree this much (dot) are one face. */
+	inline constexpr float SameFaceDot = 0.95f;
+	/** A cover entry within this of the ordered corner slot (on the same wall) is the run-and-peek's arrival, cm (the arrival tolerance of a cover walk). */
+	inline constexpr float ArrivalToleranceCm = 150.f;
+	/** A wall top counts only this far above the operative's feet (the ground at his level is a move, not a wall), cm. */
+	inline constexpr float MinTopAboveFeetCm = 40.f;
+
+	/** What a click is and who gets it, for the run-and-peek decision. */
+	struct FClickFacts
+	{
+		/** Codex.Cover.RunCornerPeek is on. */
+		bool bEnabled = true;
+		/** The turn-based grid is active (its own cover rules). */
+		bool bTurnBased = false;
+		/** The tactical pause plans the orders (they run on the release): since 2026-11-08 (Q3) the run-and-peek is planned there (DecideTiming). */
+		bool bPausePlanning = false;
+		/** The squad-wide modifier (Alt) is held: Alt keeps its "take cover at that object" meaning. */
+		bool bSquadWide = false;
+		/** The tutorial has not taught the corner peek yet (PlayerCommands::CoverCornerPeek locked). */
+		bool bTutorialLocked = false;
+		/** The click hit a body (an operative, an enemy, any pawn). */
+		bool bHitPawn = false;
+		/** The click hit an object with its own click meaning (barricade / barrel / crate menus, the APC hull, a silhouette, an enemy). */
+		bool bHitObject = false;
+		/** He is in cover at the clicked object already: the in-cover corner peek / shimmy / wrap of that object decide. */
+		bool bInCoverAtClickedObject = false;
+		/**
+		 * He stands at a wall edge and the clicked cover is a wall-edge cover switch target (CoverSwitchRules: in range, Cover.Switch taught): the
+		 * switch keeps its preview + double-click dash there (2026-10-20, approved) - no run-and-peek.
+		 */
+		bool bCoverSwitchTarget = false;
+	};
+
+	/** The click may be a run-and-peek (the wall end itself is checked by the traces); the tactical pause plans it (DecideTiming). */
+	CODEXTACTICS_API bool MayRunToPeek(const FClickFacts& Facts);
+
+	/**
+	 * A face's slot spans at least MinWidthCm between its exposed ends (a closed side counts as wide: the wall goes on past the corner probes).
+	 * LeftCm / RightCm = the slot's distance to each exposed end.
+	 */
+	CODEXTACTICS_API bool IsFaceWideEnough(bool bLeftExposed, float LeftCm, bool bRightExposed, float RightCm, float MinWidthCm = MinFaceWidthCm);
+
+	/** Normal is a face not in Known yet (no known normal within SameFaceDot of it). Planar unit normals. */
+	CODEXTACTICS_API bool IsNewFace(const TArray<FVector2D>& Known, const FVector2D& Normal);
+
+	/** One peekable face of the clicked wall at the click (the probe found its slot, the click lies at its end, it is wide enough). */
+	struct FFace
+	{
+		/** The face's outward planar unit normal. */
+		FVector2D Normal = FVector2D(1.0, 0.0);
+		/** A point on the face (its slot's wall point). */
+		FVector2D Point = FVector2D::ZeroVector;
+	};
+
+	/**
+	 * Design decision 3 (#55): the face of the wall that faces the operative - the one whose normal points most towards him from its point
+	 * (dot of the normal with the unit direction to him); a tie (within 0.01) goes to the nearer face point. INDEX_NONE without faces.
+	 */
+	CODEXTACTICS_API int32 ChooseNearFace(const TArray<FFace>& Faces, const FVector2D& Operative);
+
+	/**
+	 * The planar directions the clicked wall is probed from to find its faces round the click: Count directions evenly round the circle,
+	 * the first = Primary (the clicked face's normal, or the camera's side for a top hit). Unit vectors; Count < 1 gives Primary alone.
+	 */
+	CODEXTACTICS_API TArray<FVector2D> ProbeDirections(const FVector2D& Primary, int32 Count = 8);
+
+	/**
+	 * A cover entry is the run-and-peek's arrival (the peek starts at once): the run-and-peek is still armed, the entered slot lies on the
+	 * ordered corner's wall and within ToleranceCm of the ordered corner slot.
+	 */
+	CODEXTACTICS_API bool IsPeekArrival(bool bArmed, bool bSameWall, float DistanceFromOrderedCm, float ToleranceCm = ArrivalToleranceCm);
+
+	/** Who carries a run-and-peek order out. */
+	enum class EGroup : uint8
+	{
+		/** The ordered operative alone (solo mode - the primary play mode - or no group around him). */
+		Single,
+		/** A box selection he belongs to: the member nearest the corner takes it, the others stack behind him (PlanGroupCornerPeek). */
+		BoxSelection,
+		/** The squad following him in formation: the group wall order at that corner, the squad's corner peek there once it stands at it. */
+		Formation,
+	};
+
+	/**
+	 * The group a run-and-peek click orders: a box selection of 2+ that includes him -> BoxSelection (when the group corner peek is on, else
+	 * Single); else in formation (not solo, followers that join a group cover order) -> Formation; else Single.
+	 */
+	CODEXTACTICS_API EGroup DecideGroup(bool bMultiSelection, bool bOperativeSelected, bool bGroupCornerPeekOn, bool bSoloMode, int32 GroupCoverOthers);
+
+	// --- The game designer's answers 2026-11-08 (#55 Q1-Q6) ---
+
+	/** Q4: a second click on the same corner within this of the first is the double-click (the same order at a sprint), cm. */
+	inline constexpr float DoubleClickEdgeCm = 60.f;
+	/** Q2: the leader stands within this of his wall slot - he has arrived at the wall, cm. */
+	inline constexpr float LeaderAtWallCm = 150.f;
+
+	/**
+	 * Q4 (kept): a run-and-peek runs at the normal order speed; only a double-click on the same corner (the second click within MaxSeconds and
+	 * MaxPixels of the first, its corner within MaxEdgeCm) is the same order at a sprint. SecondsSinceFirst < 0 = no first click.
+	 */
+	CODEXTACTICS_API bool IsSprintClick(double SecondsSinceFirst, double MaxSeconds, float PixelsApart, float MaxPixels, float EdgeCmApart, float MaxEdgeCm = DoubleClickEdgeCm);
+
+	/** When the run-and-peek order runs. */
+	enum class ETiming : uint8
+	{
+		/** Real time: he sets off at once. */
+		Now,
+		/** Q3 (2026-11-08): the tactical pause plans it - the walk to the corner slot is planned (the run-and-peek ghost shows it) and the
+		 *  peek on arrival armed; it runs when the pause ends, as the other planned pause orders. */
+		OnPauseRelease,
+	};
+
+	/** Q3: the tactical pause plans the run-and-peek, real time runs it now (MayRunToPeek decides whether it is one at all). */
+	CODEXTACTICS_API ETiming DecideTiming(const FClickFacts& Facts);
+
+	/**
+	 * Q2 (2026-11-08): the formation's run-and-peek - the squad's wall order at that corner with the squad's corner peek carried there - fires
+	 * the peek as soon as the LEADER is at the wall (bLeaderAtWall: within LeaderAtWallCm of his wall slot, stood still
+	 * FormationPeekCarry::LeaderStillSeconds after he set off), not once the whole squad has settled; the others keep forming up behind as
+	 * before (the wall leadership stack). bRunPeek false (a group wall order carrying a peek in force, bug_04 A): FormationPeekCarry::Decide
+	 * unchanged. The Drop rules (another order / leader, no wall order, too long) are FormationPeekCarry's.
+	 */
+	CODEXTACTICS_API FormationPeekCarry::EPeekCarryStep DecideFormationCarry(const FormationPeekCarry::FCarryProgressFacts& Facts, bool bRunPeek, bool bLeaderAtWall);
+}

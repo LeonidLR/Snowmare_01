@@ -10,6 +10,7 @@
 #include "Characters/FirePostureRules.h"
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
+#include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/CoverWrapRules.h"
 #include "UI/FormationMenuInputRules.h"
 #include "UI/FormationPlacementRules.h"
@@ -38,6 +39,21 @@ struct FSquadCornerPeekTarget
 };
 
 /**
+ * Run-and-peek (#55): one peekable face of a clicked wall at its end (ACodexTacticsPlayerController::FindRunCornerPeekForHit) - the face's
+ * slot at the click, the end's side / place from it, the end on the face line and the corner slot short of it (the stance the cover entry
+ * gives there decides the stand-off: high cover standing, low cover crouched).
+ */
+struct FRunCornerPeekFace
+{
+	FCoverSlot Base;
+	FCoverSlot Corner;
+	ECoverFacing Side = ECoverFacing::Right;
+	float EdgeAlongCm = 0.f;
+	FVector EdgeOnFace = FVector::ZeroVector;
+	bool bCrouched = false;
+};
+
+/**
  * The squad's corner peek carried over to the next wall (bug_04 A, the game designer's play-test 2026-11-01; FormationPeekCarry): a group
  * wall order given while the squad peeks, at a slot with a free corner -> once the squad is at the new wall, the squad's corner peek there.
  * Set by OrderGroupCover, run by TickSquadPeekCarry.
@@ -55,6 +71,19 @@ struct FSquadPeekCarry
 	float Seconds = 0.f;
 	float LeaderStillSeconds = 0.f;
 	bool bLeaderMoved = false;
+	/**
+	 * #55 run-and-peek in formation (the game designer's answer Q2, 2026-11-08): the corner man peeks once the LEADER is at the wall, not after
+	 * the whole squad settled (RunCornerPeekRules::DecideFormationCarry).
+	 */
+	bool bRunPeek = false;
+};
+
+/** #55 Q3 (2026-11-08): the formation's run-and-peek planned in the tactical pause - its carried peek starts when the planned wall order runs. */
+struct FPlannedRunPeekCarry
+{
+	bool bActive = false;
+	TWeakObjectPtr<AOperativeCharacter> Leader;
+	FCoverSlot Slot;
 };
 
 /**
@@ -385,6 +414,19 @@ public:
 	 */
 	bool FindSquadCornerPeekForHit(const FHitResult& Hit, FSquadCornerPeekTarget& OutTarget) const;
 
+	/**
+	 * Run-and-peek (#55, user request 2026-11-07; RunCornerPeekRules): Hit lies on the END of a peekable wall (the manual corner peek's end
+	 * region: CoverFacingRules::FindPeekEdge from that face's slot) that Operative is not in cover at -> the face of that wall facing him
+	 * (RunCornerPeekRules::ChooseNearFace over the faces probed round the click), its end and its corner slot. OutTarget.Peeker = Operative.
+	 * False for a body / an object with its own click meaning / the APC / the ground / the middle of a wall (a cover click there). OutFace
+	 * (optional) = the face found. The faces are cached while the cursor rests on the wall.
+	 */
+	bool FindRunCornerPeekForHit(const AOperativeCharacter* Operative, const FHitResult& Hit, FSquadCornerPeekTarget& OutTarget,
+		FRunCornerPeekFace* OutFace = nullptr) const;
+
+	/** Codex.Cover.RunCornerPeek is on (1, the default). */
+	static bool IsRunCornerPeekEnabled();
+
 	/** Smokes (rendered stills): the corner peek hover set by the smoke stays up (PlayerTick does not follow the real cursor for it). */
 	bool bFreezeCornerPeekHoverForTesting = false;
 
@@ -392,6 +434,12 @@ public:
 	bool IsSquadPeekCarryPending() const { return PeekCarry.bActive; }
 	/** Carried corner peeks ordered since the level began (smokes). */
 	int32 GetSquadPeekCarryCount() const { return PeekCarryFired; }
+	/** #55 Q2: the waiting carried peek is a formation run-and-peek (fires on the leader's arrival at the wall) - smokes. */
+	bool IsSquadPeekCarryRunPeek() const { return PeekCarry.bActive && PeekCarry.bRunPeek; }
+	/** #55 Q3: a formation run-and-peek planned in the tactical pause waits for the release - smokes. */
+	bool IsRunPeekCarryPlanned() const { return PlannedRunPeekCarry.bActive; }
+	/** #55 Q3: run-and-peeks planned in the tactical pause since the level began (single / box selection / formation) - smokes. */
+	int32 GetPlannedRunCornerPeekCount() const { return PlannedRunCornerPeeks; }
 	/**
 	 * Bug_04 A: one frame of the carried corner peek (FormationPeekCarry::Decide) - at the new wall, the squad's corner peek at its corner
 	 * (the same order as the player's click on that end: FindSquadCornerPeekForHit + USquadSubsystem::OrderFormationCornerPeek). PlayerTick
@@ -875,8 +923,26 @@ private:
 	/** Bug_04 A: the corner peek carried over to the next wall (OrderGroupCover sets it, TickSquadPeekCarry runs it). */
 	FSquadPeekCarry PeekCarry;
 	int32 PeekCarryFired = 0;
-	/** Bug_04 A: after a group wall order (OrderFormationWall) - carries the squad's corner peek in force to Slot's corner (FormationPeekCarry). */
-	void StartSquadPeekCarry(USquadSubsystem& Squad, AOperativeCharacter& Leader, const FCoverSlot& Slot, bool bPeekInForce);
+	/** #55 Q3: the formation run-and-peek planned in the pause (TickSquadPeekCarry starts its carry once the planned wall order runs). */
+	FPlannedRunPeekCarry PlannedRunPeekCarry;
+	int32 PlannedRunCornerPeeks = 0;
+	/**
+	 * Bug_04 A: after a group wall order (OrderFormationWall) - carries the squad's corner peek in force to Slot's corner (FormationPeekCarry).
+	 * bRunPeek (#55 Q2): a formation run-and-peek - the peek fires once the leader is at the wall.
+	 */
+	void StartSquadPeekCarry(USquadSubsystem& Squad, AOperativeCharacter& Leader, const FCoverSlot& Slot, bool bPeekInForce, bool bRunPeek = false);
+	/**
+	 * #55 Q3 (2026-11-08): the run-and-peek planned in the tactical pause for one operative - the walk to CornerSlot planned (PlanMove within
+	 * Radius, the slot pending) with the peek on arrival armed; it runs on the pause's release. Planned = the planned destination.
+	 */
+	void PlanRunCornerPeek(AOperativeCharacter& Operative, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bSprint, float Radius, FVector& OutPlanned);
+	/** The tactical pause plans orders now (FCombatTimeModeRules::GetOrderDispatch == Queue). */
+	bool IsPausePlanningOrders() const;
+	/**
+	 * #55 Q3: TryHandleRunCornerPeekClick in the tactical pause - the run-and-peek planned for Group (single: PlanRunCornerPeek; a box
+	 * selection: its corner man's and the stack's walks; formation: the squad's wall order planned, its carried peek after the release).
+	 */
+	bool PlanRunCornerPeekClick(AOperativeCharacter* Operative, const FRunCornerPeekFace& Face, RunCornerPeekRules::EGroup Group, bool bSprint, const FHitResult& Hit);
 	/** FindCornerPeekForHit's rule from a given wall slot (the operative's own, or the squad's wall behind the leader). */
 	bool FindCornerPeekForSlot(const FCoverSlot& Slot, const FHitResult& Hit, ECoverFacing& OutSide, float& OutEdgeAlongCm) const;
 	/**
@@ -889,6 +955,48 @@ private:
 	 */
 	bool PlanGroupCornerPeek(AOperativeCharacter* Operative, const FHitResult& Hit, AOperativeCharacter*& OutPeeker, ECoverFacing& OutSide, float& OutEdgeAlongCm,
 		TArray<TPair<AOperativeCharacter*, FCoverSlot>>* OutStack) const;
+
+	/**
+	 * Run-and-peek (#55): the click on a wall's end from the open / another wall's cover (TryHandleCoverClick calls it after the in-cover and
+	 * the squad-wall peeks): solo - Operative runs there and peeks (AOperativeCharacter::OrderRunCornerPeek); a box selection - the member
+	 * nearest that end takes the corner, the others run into a stack behind him (PlanRunGroupCornerPeek); formation - the group wall order
+	 * at that corner with the squad's corner peek carried there (OrderGroupCover + StartSquadPeekCarry). True when the click was taken.
+	 */
+	bool TryHandleRunCornerPeekClick(AOperativeCharacter* Operative, const FHitResult& Hit, bool bSquadWide, const class UTurnBasedCombatSubsystem* TurnBased);
+	/**
+	 * Run-and-peek of a box selection: the selected members' places along Face's wall -> FormationWallLeadership::PlanGroupCornerPeek (the
+	 * same rule as the group peek in cover): OutPeeker and, optionally, OutStack = the others' cover slots behind him on that face. False
+	 * without two able selected members.
+	 */
+	bool PlanRunGroupCornerPeek(AOperativeCharacter* Operative, const FRunCornerPeekFace& Face, AOperativeCharacter*& OutPeeker,
+		TArray<TPair<AOperativeCharacter*, FCoverSlot>>* OutStack) const;
+	/**
+	 * The corner slot for a peek round Base's end at EdgeAlong (from Base's slot) on Side: the stand point StandAlong along the wall, probed
+	 * a little further in when the wall's last cm do not probe; Base moved there when nothing probes.
+	 */
+	FCoverSlot ResolveCornerStandSlot(const FCoverSlot& Base, ECoverFacing Side, float StandAlong) const;
+	/**
+	 * The run-and-peek click / hover decision (RunCornerPeekRules::MayRunToPeek + FindRunCornerPeekForHit): the face and the target, the
+	 * target's Peeker = whoever takes the corner (a box selection: PlanRunGroupCornerPeek's man). False = not a run-and-peek here.
+	 */
+	bool FindRunCornerPeekClickTarget(AOperativeCharacter* Operative, const FHitResult& Hit, bool bSquadWide, const class UTurnBasedCombatSubsystem* TurnBased,
+		FRunCornerPeekFace& OutFace, FSquadCornerPeekTarget& OutTarget) const;
+	/** The run-and-peek under the cursor (UpdateCornerPeekHover; whose ghost, where). */
+	FSquadCornerPeekTarget RunPeekHoverTarget;
+	/** Run-and-peek faces of the hit (FindRunCornerPeekForHit's traces, uncached). */
+	void GatherRunCornerPeekFaces(const AOperativeCharacter& Operative, const FHitResult& Hit, TArray<FRunCornerPeekFace>& OutFaces) const;
+	/** The run-and-peek face cache (the cursor resting on one wall point). */
+	mutable TWeakObjectPtr<UPrimitiveComponent> RunPeekCacheComponent;
+	mutable TWeakObjectPtr<const AOperativeCharacter> RunPeekCacheOperative;
+	mutable FVector RunPeekCachePoint = FVector(TNumericLimits<float>::Max());
+	mutable TArray<FRunCornerPeekFace> RunPeekCacheFaces;
+	/** The cover click's own slot at the cached point (FindCoverSlotForHit: the wall-edge cover switch reads it). */
+	mutable FCoverSlot RunPeekCacheClickSlot;
+	mutable bool bRunPeekCacheClickSlot = false;
+	/** The last run-and-peek click (a double-click on the same corner = the same order at a sprint). */
+	double RunPeekClickTime = -1.0;
+	FVector2D RunPeekClickPosition = FVector2D::ZeroVector;
+	FVector RunPeekClickEdge = FVector::ZeroVector;
 
 	/** Godot _set_squad_tactical_cease_fire. */
 	void SetSquadCeaseFire(bool bCease);

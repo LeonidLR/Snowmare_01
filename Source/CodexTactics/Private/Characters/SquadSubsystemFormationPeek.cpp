@@ -8,6 +8,7 @@
 #include "Characters/SquadSubsystem.h"
 
 #include "Characters/OperativeCharacter.h"
+#include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
 #include "Formation/FormationGuardRuntimeRules.h"
 #include "Formation/FormationRuntimeRules.h"
@@ -181,7 +182,7 @@ void USquadSubsystem::UpdateFormationCornerPeek(AOperativeCharacter& LeaderRef, 
 	{
 		if (Peek.Leader.IsValid())
 		{
-			EndFormationCornerPeek(TEXT("the peeker is gone"));
+			EndFormationCornerPeek(TEXT("the peeker is gone"), /*bKeepHeldCorner*/ true); // #57: the other corner stays held
 		}
 		return;
 	}
@@ -237,7 +238,9 @@ void USquadSubsystem::UpdateFormationCornerPeek(AOperativeCharacter& LeaderRef, 
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] squad corner peek: the leader's move %u (the peek's %u), the stack still awaited %d, slide %d, held stack %d"), Serial,
 			Peek.LeaderSerial, Peek.bAwaitStack ? 1 : 0, Sectors.bSlide ? 1 : 0, Sectors.bCornerStack ? 1 : 0);
-		EndFormationCornerPeek(Over);
+		// #57: a corner man down / out of his corner frees his corner only - the other corner of a two-corner hold stays.
+		const bool bPeekerDown = !Peeker->HealthComponent || !Peeker->HealthComponent->IsAlive() || Peeker->IsKnockedDown();
+		EndFormationCornerPeek(Over, bPeekerDown);
 		return;
 	}
 	if (!Peek.bPending || !Peeker->IsInPeekableCover() || Peeker->bShimmying || Peeker->HasPendingCover())
@@ -293,7 +296,7 @@ bool USquadSubsystem::AreFormationWallMembersSettled() const
 	return true;
 }
 
-void USquadSubsystem::EndFormationCornerPeek(const TCHAR* Why)
+void USquadSubsystem::EndFormationCornerPeek(const TCHAR* Why, bool bKeepHeldCorner)
 {
 	FFormationSectorState::FSquadPeek& Peek = Sectors.Peek;
 	if (const AOperativeCharacter* Peeker = Peek.Peeker.Get())
@@ -302,4 +305,10 @@ void USquadSubsystem::EndFormationCornerPeek(const TCHAR* Why)
 			Peek.bPending ? TEXT(", the peek still due") : TEXT(""), Why);
 	}
 	Peek = FFormationSectorState::FSquadPeek();
+	// #57: the two-corner hold ends with the peek (the leader's next order, a new wall order, the formation over) - unless its first corner
+	// stays (a second corner order; the second corner man down).
+	if (!bKeepHeldCorner && (Sectors.HeldCorner.Holder.IsValid() || Sectors.HeldCorner.Leader.IsValid()))
+	{
+		EndCornerHold(Why);
+	}
 }

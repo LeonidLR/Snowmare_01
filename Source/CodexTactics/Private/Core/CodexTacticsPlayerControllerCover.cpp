@@ -273,6 +273,13 @@ bool ACodexTacticsPlayerController::TryHandleCoverClick(const FHitResult& Hit, U
 			return true;
 		}
 	}
+	// Run-and-peek (#55, user request 2026-11-07): a click on the END of a wall he is not in cover at (from the open, or from cover at another
+	// wall) = run to that corner and peek round it on arrival, in one click (solo; a box selection: the man nearest that end takes it, the others
+	// stack behind him; formation: the squad's wall order there with its corner peek carried). Before the proximity pick, as the peeks above.
+	if (TryHandleRunCornerPeekClick(Operative, Hit, bAlt, TurnBased))
+	{
+		return true;
+	}
 	// Objects (barricades, barrels, crates, quest objects) keep their click meaning; Alt + click takes cover at them. (Rev 5e: checked
 	// after the corner peek - the end of the barricade he crouches behind is a peek edge, its middle still opens its menu.)
 	if (HitActor->IsA<AInteractableActor>() && !bAlt)
@@ -537,26 +544,8 @@ bool ACodexTacticsPlayerController::FindSquadCornerPeekForHit(const FHitResult& 
 	const bool bCrouched = Base.Height == ECoverHeight::LowCover || (Peeker->bInCover ? Peeker->GetStance() == EOperativeStance::Crouching
 		: CoverRules::DefaultStanceFor(Base.Height) == EOperativeStance::Crouching);
 	const float Stand = CoverFacingRules::CornerPeekStandAlong(Side, EdgeAlong, CoverFacingRules::CornerStandOff(Side, bCrouched, Peeker->GetCoverFacingConfig()));
-	FCoverSlot Corner;
-	bool bCorner = false;
-	for (const float Back : { 0.f, 20.f, 40.f, 60.f })
-	{
-		// The wall's last few cm may not probe: a little further in.
-		const float Along = Stand + (Side == ECoverFacing::Right ? -Back : Back);
-		if (CoverTraceRules::FindShimmySlot(World, Base, Base.WallPoint + Right * Along, Corner) && (!Base.WallActor.IsValid() || Corner.WallActor == Base.WallActor))
-		{
-			bCorner = true;
-			break;
-		}
-	}
-	if (!bCorner)
-	{
-		Corner = Base;
-		Corner.WorldLocation += Right * Stand;
-		Corner.WallPoint += Right * Stand;
-	}
 	OutTarget.Peeker = Peeker;
-	OutTarget.CornerSlot = Corner;
+	OutTarget.CornerSlot = ResolveCornerStandSlot(Base, Side, Stand);
 	OutTarget.Side = Side;
 	OutTarget.EdgeOnFace = EdgeOnFace;
 	OutTarget.bCrouched = bCrouched;
@@ -616,6 +605,17 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 			}
 		}
 		bEdge = bPeekHoverEdge;
+	}
+	// Run-and-peek (#55): the end of a wall he is not in cover at - the ghost of the man who would run there and peek (a box selection: the
+	// one nearest that end), at its corner on the face looking at him.
+	if (!bEdge && Operative && Hit && !bPeekLocked && !GetActiveTurnBased() && IsRunCornerPeekEnabled() && !Operative->bShimmying)
+	{
+		FRunCornerPeekFace RunFace;
+		if (FindRunCornerPeekClickTarget(Operative, *Hit, IsSquadWideModifierDown(), nullptr, RunFace, RunPeekHoverTarget) && RunPeekHoverTarget.Peeker.IsValid())
+		{
+			SquadTarget = &RunPeekHoverTarget;
+			bEdge = true;
+		}
 	}
 	if (!bEdge)
 	{

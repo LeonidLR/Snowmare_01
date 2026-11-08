@@ -1111,7 +1111,7 @@ public:
 
 	/** Remembers a slot to enter once he arrives there (planned walks, grid walks). */
 	void SetPendingCover(const FCoverSlot& Slot);
-	void ClearPendingCover() { bHasPendingCover = false; }
+	void ClearPendingCover() { bHasPendingCover = false; bRunCornerPeekPending = false; }
 	bool HasPendingCover() const { return bHasPendingCover; }
 
 	// --- Wall-edge cover switch (game designer 2026-10-20, Tactics/CoverSwitchRules; cluster file OperativeCharacterCoverEntry.cpp):
@@ -1296,6 +1296,28 @@ public:
 	 * at / near that corner the aim starts in place (no shimmy within CornerSnapToleranceCm + 10 cm of the stand point).
 	 */
 	EOperativeOrderResult OrderCornerPeek(ECoverFacing Side, float EdgeAlongCm);
+
+	/**
+	 * Run-and-peek (#55, user request 2026-11-07; RunCornerPeekRules): from the open - or from cover at another wall - run to CornerSlot (a
+	 * cover slot short of a wall's end, on the face that faces him) and, entering that cover, go straight into the manual corner peek round
+	 * the end at EdgeOnFace (OrderCornerPeek with the edge found again from the entered slot: CoverFacingRules::FindPeekEdge) - no separate
+	 * "hug the wall first, then click the corner" step. The walk is his ordinary cover order (OrderTakeCover: any later order replaces it, as
+	 * any order does); its entry is a corner-peek arrival (MarkCornerPeekArrival: no wall-facing enter clip when he comes in along the wall).
+	 * Knocked down: buffered like any order. Returns OrderTakeCover's result.
+	 */
+	EOperativeOrderResult OrderRunCornerPeek(const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bSprint = false);
+
+	/**
+	 * Arms the run-and-peek on the cover order he already walks (a group order gave him the corner slot): his entry into that slot turns into
+	 * the corner peek round the end at EdgeOnFace. False (nothing armed) without a pending cover order.
+	 */
+	bool ArmRunCornerPeek(const FVector& EdgeOnFace);
+
+	/** A run-and-peek is armed: his walk to the corner is running (OrderRunCornerPeek / ArmRunCornerPeek; smokes). */
+	bool IsRunCornerPeekPending() const { return bRunCornerPeekPending; }
+
+	/** Run-and-peek arrivals whose corner peek order was accepted (smokes / stats). */
+	int32 GetRunCornerPeekCount() const { return RunCornerPeekCount; }
 
 	/** A manual corner peek is ordered and not released yet (he may still be walking to the corner). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Cover")
@@ -2358,6 +2380,13 @@ private:
 	bool bCoverEntryEasedTurn = false;
 	bool bCornerPeekArrivalPending = false;
 	int32 CornerPeekArrivalEntryCount = 0;
+	/** Run-and-peek (#55): armed by OrderRunCornerPeek / ArmRunCornerPeek, consumed by the entry into that slot (StartRunCornerPeekOnEntry). */
+	bool bRunCornerPeekPending = false;
+	FCoverSlot RunCornerPeekSlot;
+	FVector RunCornerPeekEdge = FVector::ZeroVector;
+	int32 RunCornerPeekCount = 0;
+	/** EnterCover's end: an armed run-and-peek arriving at its corner turns into the corner peek (always disarms). */
+	void StartRunCornerPeekOnEntry(const FCoverSlot& Slot);
 	/** LeaveCover raises no CoverLeft event (the open-shot step off the wall comes back on its own). */
 	bool bQuietCoverLeaveRequest = false;
 	/** EnterCover ran (new wall, not a quiet return): CoverEntered waits until the body has stopped at the slot. */

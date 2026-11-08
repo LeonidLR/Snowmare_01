@@ -94,6 +94,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			LeaveCover(TEXT("move order"));
 		}
 		bHasPendingCover = false;
+		bRunCornerPeekPending = false; // any other order replaces a run-and-peek (#55)
 	}
 	else if (bToPendingSlot && bInCover && !bCoverMoveOrder && !CoverTraceRules::IsSameWall(CoverSlot, PendingCoverSlot))
 	{
@@ -516,6 +517,7 @@ void AOperativeCharacter::HandleMoveFinished()
 		UE_LOG(LogCodexTactics, Display, TEXT("%s: cover slot not reached (%.0f cm off), stays in the open"), *DisplayName.ToString(),
 			FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation));
 		bHasPendingCover = false;
+		bRunCornerPeekPending = false;
 		if (bInCover)
 		{
 			LeaveCover(TEXT("shimmy target not reached"));
