@@ -202,7 +202,7 @@ namespace PackagedCheck
 		const FString Data = FPaths::ProjectContentDir() / TEXT("Data");
 		for (const TCHAR* File : { TEXT("AI/ai_tuning.json"), TEXT("AI/enemy_perception.json"), TEXT("AI/horde.json"), TEXT("AI/squad_roe.json"),
 				 TEXT("Environment/environment.json"), TEXT("Weapons/weapons_tuning.json"), TEXT("Campaign/campaign.json"),
-				 TEXT("Tutorial/demo_01_steps.json"), TEXT("LevelJson/L_Demo01_A_FrozenLake.json"), TEXT("LevelJson/L_Demo01_B_FrozenFactory.json") })
+				 TEXT("Tutorial/demo_01_steps.json"), TEXT("LevelJson/L_Demo01_A_FrozenLake.json"), TEXT("LevelJson/L_Gen_Depot_1.json") })
 		{
 			Check(State, IFileManager::Get().FileExists(*(Data / File)), FString::Printf(TEXT("runtime JSON staged: Data/%s"), File));
 		}

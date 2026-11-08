@@ -92,3 +92,8 @@ int32 LoadoutRules::StartingHeatPacks(int32 RoleKit, int32 LevelOverride, int32 
 	const int32 Wanted = LevelOverride >= 0 ? LevelOverride : RoleKit;
 	return FMath::Clamp(Wanted, 0, FMath::Max(MaxStack, 0));
 }
+
+bool LoadoutRules::ShouldApplyStageLoadout(bool bCampaignArrival)
+{
+	return !bCampaignArrival;
+}

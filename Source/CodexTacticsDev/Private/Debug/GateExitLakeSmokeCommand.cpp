@@ -19,14 +19,15 @@
 //     Commander (3) and the Medic-Sapper (2) have unspent points, the Engineer none -> the stat-points screen with exactly those two
 //     (title "0.0 FROZEN DAM", the next level named, the character image / role letter follows the sheet, "Continue >"), one point
 //     spent on the Commander's accuracy through the sheet, the Medic's left; the "Continue >" button -> the next campaign level
-//     /Game/Maps/L_Demo01_B_FrozenFactory opens (its own level JSON, not the run's -LevelJson); the squad stands outside the open
-//     lake door (set dressing) facing away from it, with the carried level / EXP / points / stats / kit and full health; the start fades
-//     in from black with "0.1 Frozen Factory".
-//  CodexTactics.GateExitLakeNoPointsSmoke: the same run with no unspent points -> no points screen, the factory opens at once.
+//     /Game/Maps/Generated/L_Gen_Depot_1 opens (2026-11-02 / 2026-11-08: the Depot replaced Frozen Factory as campaign level 0.1; its own
+//     level JSON, not the run's -LevelJson); the squad stands at the Depot's PlayerStart (the leader facing its way), with the carried
+//     level / EXP / points / stats / kit and full health; the start fades in from black with "0.1 Depot". The Depot's own start in
+//     detail (a staged carry, no lake run): CodexTactics.DepotCampaignStartSmoke.
+//  CodexTactics.GateExitLakeNoPointsSmoke: the same run with no unspent points -> no points screen, the Depot opens at once.
 //  CodexTactics.GateExitLakeKiaSmoke / GateExitLakeKiaNoPointsSmoke (bug 2026-10-23, "two crossed the gate line - the third was dead - and the
 //  level got stuck on the black screen"): the Engineer is killed in the yard before the fight; the two living cross (the first, then the
-//  second), the black screen leaves to the points screen (Commander + Medic-Sapper) / the factory at once; the fallen is handed over as
-//  killed in action and is not spawned on the factory. (The designer's real cause - a save loaded in editor play counted as a headless
+//  second), the black screen leaves to the points screen (Commander + Medic-Sapper) / the Depot at once; the fallen is handed over as
+//  killed in action and is not spawned on the Depot. (The designer's real cause - a save loaded in editor play counted as a headless
 //  check - is the rule test CodexTactics.Mission.Rules.StartModeAndMenu: MissionRules::IsAutomatedRun.)
 
 #include "CoreMinimal.h"
@@ -57,7 +58,11 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFlow/LevelExitSubsystem.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/WaveConfigTypes.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/PlayerStart.h"
+#include "Kismet/GameplayStatics.h"
 #include "HAL/FileManager.h"
 #include "Interactables/GateActor.h"
 #include "Misc/App.h"
@@ -271,7 +276,7 @@ namespace GateExitLakeSmoke
 		{
 			Check(State, Profile->IsReviewMode() && Profile->GetReviewCount() == 2 && Screen->GetShownMember() == Commander,
 				FString::Printf(TEXT("the points screen shows exactly the two with points, the Commander first (%d on the sheet)"), Profile->GetReviewCount()));
-			Check(State, Screen->GetTitleText().Contains(TEXT("0.0 FROZEN DAM")) && Screen->GetHintText().Contains(TEXT("0.1 Frozen Factory")),
+			Check(State, Screen->GetTitleText().Contains(TEXT("0.0 FROZEN DAM")) && Screen->GetHintText().Contains(TEXT("0.1 Depot")),
 				FString::Printf(TEXT("titles: \"%s\" / \"%s\""), *Screen->GetTitleText(), *Screen->GetHintText()));
 			Check(State, Profile->GetCloseButtonText().Contains(TEXT("Continue")), FString::Printf(TEXT("the sheet's button reads \"%s\""), *Profile->GetCloseButtonText()));
 			Check(State, Screen->HasPortraitImage() == FApp::CanEverRender() && (!Screen->HasPortraitImage() || Screen->GetPortraitTarget() == Commander),
@@ -314,7 +319,7 @@ namespace GateExitLakeSmoke
 		const UCampaignSubsystem* Campaign = UCampaignSubsystem::Get(World);
 		const FCampaignSquadCarry* Carry = Campaign ? &Campaign->GetCarry() : nullptr;
 		const int32 Fallen = Carry ? Carry->Members.FilterByPredicate([](const FCarriedOperative& Member) { return Member.bKilledInAction; }).Num() : -1;
-		Check(State, Carry && Carry->ToMap == TEXT("L_Demo01_B_FrozenFactory") && Carry->FromMap == TEXT("L_Demo01_A_FrozenLake") && Carry->Members.Num() == 3
+		Check(State, Carry && Carry->ToMap == TEXT("L_Gen_Depot_1") && Carry->FromMap == TEXT("L_Demo01_A_FrozenLake") && Carry->Members.Num() == 3
 			&& Fallen == 3 - State.Living,
 			FString::Printf(TEXT("the squad handed over: %s -> %s, %d operatives (%d killed in action)"), Carry ? *Carry->FromMap : TEXT("-"), Carry ? *Carry->ToMap : TEXT("-"),
 				Carry ? Carry->Members.Num() : 0, Fallen));
@@ -322,7 +327,7 @@ namespace GateExitLakeSmoke
 		return true;
 	}
 
-	/** The next level: the factory opened, the squad outside the open lake door with what it carried. */
+	/** The next level: the Depot opened, the squad at its PlayerStart with what it carried. */
 	bool StepArrival(FState& State)
 	{
 		if (State.Time > 600.f)
@@ -331,14 +336,14 @@ namespace GateExitLakeSmoke
 			return Finish(State, false);
 		}
 		UWorld* World = FrontendSmokeUtils::FindGameWorld();
-		const bool bFactory = World && World != State.World.Get() && World->GetMapName().Contains(TEXT("L_Demo01_B_FrozenFactory"));
-		USquadSubsystem* Squad = bFactory ? World->GetSubsystem<USquadSubsystem>() : nullptr;
-		ULevelExitSubsystem* Exit = bFactory ? World->GetSubsystem<ULevelExitSubsystem>() : nullptr;
+		const bool bDepot = World && World != State.World.Get() && World->GetMapName().Contains(TEXT("L_Gen_Depot_1"));
+		USquadSubsystem* Squad = bDepot ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+		ULevelExitSubsystem* Exit = bDepot ? World->GetSubsystem<ULevelExitSubsystem>() : nullptr;
 		if (State.Stage == EStage::Travel)
 		{
 			if (State.StageTime > 120.f)
 			{
-				Check(State, false, TEXT("the next level (L_Demo01_B_FrozenFactory) opened"));
+				Check(State, false, TEXT("the next level (L_Gen_Depot_1) opened"));
 				return Finish(State, false);
 			}
 			if (!Squad || !Exit || Squad->GetMembers().Num() < State.Living || !Exit->IsStartFadeResolved())
@@ -349,20 +354,20 @@ namespace GateExitLakeSmoke
 			State.FirstArrivalRealTime = World->GetRealTimeSeconds();
 			Check(State, true, FString::Printf(TEXT("the next level opened: %s (%.1f s after Continue)"), *World->GetMapName(), State.StageTime));
 			Check(State, Squad->GetMembers().Num() == State.Living && (!State.bKia || !FindRole(Squad, EOperativeRole::Engineer)),
-				FString::Printf(TEXT("the factory squad: %d living operatives%s"), Squad->GetMembers().Num(), State.bKia ? TEXT(" (the fallen Engineer stays behind)") : TEXT("")));
+				FString::Printf(TEXT("the Depot squad: %d living operatives%s"), Squad->GetMembers().Num(), State.bKia ? TEXT(" (the fallen Engineer stays behind)") : TEXT("")));
 			Next(State, EStage::Arrival);
 			return true;
 		}
 		if (!Squad || !Exit)
 		{
-			Check(State, false, TEXT("the factory world stays"));
+			Check(State, false, TEXT("the Depot world stays"));
 			return Finish(State, false);
 		}
 		if (State.bShot && FApp::CanEverRender())
 		{
-			// 'Shot': the arrival under the fading black, then the start view (the door behind the squad).
-			const TCHAR* Frame = State.StageTime >= 0.5f && State.StageTime < 0.6f ? TEXT("factory_start_fade.png")
-				: (State.StageTime >= 3.5f && State.StageTime < 3.6f ? TEXT("factory_start.png") : nullptr);
+			// 'Shot': the arrival under the fading black, then the start view.
+			const TCHAR* Frame = State.StageTime >= 0.5f && State.StageTime < 0.6f ? TEXT("depot_start_fade.png")
+				: (State.StageTime >= 3.5f && State.StageTime < 3.6f ? TEXT("depot_start.png") : nullptr);
 			if (Frame)
 			{
 				FScreenshotRequest::RequestScreenshot(FPaths::ConvertRelativePathToFull(FPaths::ScreenShotDir() / TEXT("GateExit") / Frame), true, false);
@@ -376,24 +381,26 @@ namespace GateExitLakeSmoke
 		{
 			return true;
 		}
-		Check(State, FMath::IsNearlyEqual(Exit->GetStartFadeSeconds(), 2.f) && Exit->GetStartTitle() == TEXT("0.1 Frozen Factory")
+		// The Depot sets no "start_fade_seconds": a campaign arrival fades in over the arrival default (CampaignRules::ResolveStartFadeSeconds).
+		const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
+		const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+		const float WantFade = CampaignRules::ResolveStartFadeSeconds(Level ? Level->Config.StartFadeSeconds : 0.f, true);
+		Check(State, FMath::IsNearlyEqual(Exit->GetStartFadeSeconds(), WantFade) && Exit->GetStartTitle() == TEXT("0.1 Depot")
 			&& (State.FirstArrivalRealTime > CampaignRules::StartHoldSeconds || State.FirstArrivalFade >= 0.99f),
-			FString::Printf(TEXT("the start fades in from black (%.1f s, \"%s\", alpha %.2f at %.2f s)"), Exit->GetStartFadeSeconds(), *Exit->GetStartTitle(),
-				State.FirstArrivalFade, State.FirstArrivalRealTime));
+			FString::Printf(TEXT("the start fades in from black (%.1f s, want %.1f, \"%s\", alpha %.2f at %.2f s)"), Exit->GetStartFadeSeconds(), WantFade,
+				*Exit->GetStartTitle(), State.FirstArrivalFade, State.FirstArrivalRealTime));
 		const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-		Check(State, Flow && Flow->GetConfig().TotalWaves == 1, FString::Printf(TEXT("the factory's own level JSON (1 wave; the run's -LevelJson is the lake's): %d"),
-			Flow ? Flow->GetConfig().TotalWaves : -1));
-		AGateActor* Dressing = nullptr;
-		for (TActorIterator<AGateActor> It(World); It; ++It)
-		{
-			Dressing = It->bSetDressing ? *It : Dressing;
-		}
-		Check(State, Dressing && !Dressing->IsOpen() && AGateActor::FindLevelGate(World) != Dressing, TEXT("the lake's blast door stands CLOSED behind the start (set dressing, not the level's gate; user decision 2026-10-22: no way back)"));
-		if (!Dressing)
+		Check(State, Level && Level->Config.LevelId == TEXT("L_Gen_Depot_1") && Flow && Flow->GetConfig().TotalWaves == 1,
+			FString::Printf(TEXT("the Depot's own level JSON (%s, 1 wave; the run's -LevelJson is the lake's): %d"), Level ? *Level->Config.LevelId : TEXT("none"),
+				Flow ? Flow->GetConfig().TotalWaves : -1));
+		const AActor* Start = UGameplayStatics::GetActorOfClass(World, APlayerStart::StaticClass());
+		Check(State, Start != nullptr, TEXT("the Depot has its PlayerStart (the squad's campaign start)"));
+		if (!Start)
 		{
 			return Finish(State, false);
 		}
-		const FVector Out = Dressing->GetActorForwardVector().GetSafeNormal2D();
+		const FVector StartAt = Start->GetActorLocation();
+		const FVector StartForward = Start->GetActorForwardVector().GetSafeNormal2D();
 		for (AOperativeCharacter* Member : Squad->GetMembers())
 		{
 			const FCarryExpect* Expect = State.Expect.FindByPredicate([Member](const FCarryExpect& E) { return E.Role == Member->SquadRole; });
@@ -405,19 +412,20 @@ namespace GateExitLakeSmoke
 					Member->Level, Member->CurrentExp, Member->UnspentStatPoints, Member->Accuracy, Member->Luck, Member->GetStatValue(EProgressStat::Health)));
 			Check(State, Expect && Member->MedkitsCount == Expect->Medkits && Member->GrenadesCount == Expect->Grenades && Member->HeatPacksCount == Expect->HeatPacks
 				&& Member->GetAmmoState(TEXT("m16")).Reserve == Expect->RifleReserve,
-				FString::Printf(TEXT("%s kit: %d medkits, %d grenades, %d heat packs, M16 reserve %d"), *Member->DisplayName.ToString(), Member->MedkitsCount,
-					Member->GrenadesCount, Member->HeatPacksCount, Member->GetAmmoState(TEXT("m16")).Reserve));
+				FString::Printf(TEXT("%s kit (not the Depot's squad_loadout): %d medkits, %d grenades, %d heat packs, M16 reserve %d"), *Member->DisplayName.ToString(),
+					Member->MedkitsCount, Member->GrenadesCount, Member->HeatPacksCount, Member->GetAmmoState(TEXT("m16")).Reserve));
 			Check(State, Health && FMath::IsNearlyEqual(Health->GetCurrentHealth(), Health->GetMaxHealth()) && Member->ColdLevel < 2.f * State.StageTime + 3.f,
 				FString::Printf(TEXT("%s arrives at full health (%.0f / %.0f), warm (cold %.2f %.1f s after the start: no carried cold)"), *Member->DisplayName.ToString(),
 					Health ? Health->GetCurrentHealth() : -1.f, Health ? Health->GetMaxHealth() : -1.f, Member->ColdLevel, State.StageTime));
-			const float Beyond = FVector::DotProduct(Member->GetActorLocation() - Dressing->GetActorLocation(), Out);
-			const float Facing = FVector::DotProduct(Member->GetActorForwardVector().GetSafeNormal2D(), Out);
-			// Formation look sectors (FORMATION_SECTORS.md, 2026-10-25): halted, each follower watches his sector centre (flankers 2 / 10
-			// o'clock, the rear man / a pair's partner 6 = towards the door), so only the leader must face straight out.
-			const bool bLeader = Squad && Squad->GetLeader() == Member;
+			const float Away = FVector::Dist2D(Member->GetActorLocation(), StartAt);
+			// Formation look sectors (FORMATION_SECTORS.md, 2026-10-25): halted, each follower watches his sector centre, so only the leader
+			// must face the PlayerStart's way.
+			const bool bLeader = Squad->GetLeader() == Member;
+			const float Facing = FVector::DotProduct(Member->GetActorForwardVector().GetSafeNormal2D(), StartForward);
 			const float MinFacing = bLeader ? 0.7f : -1.01f;
-			Check(State, Beyond > 150.f && Beyond < 1500.f && Facing > MinFacing, FString::Printf(TEXT("%s stands %.0f cm outside the open door, facing away from it (%.2f, min %.1f)"),
-				*Member->DisplayName.ToString(), Beyond, Facing, MinFacing));
+			Check(State, Away < 1200.f && FMath::Abs(Member->GetActorLocation().Z - StartAt.Z) < 300.f && Facing > MinFacing,
+				FString::Printf(TEXT("%s stands at the Depot's start (%.0f cm from the PlayerStart), facing its way (%.2f, min %.1f)"),
+					*Member->DisplayName.ToString(), Away, Facing, MinFacing));
 		}
 		return Finish(State, true);
 	}
@@ -470,7 +478,7 @@ namespace GateExitLakeSmoke
 		{
 			// No points: the exit opened the next level within the same frames (no screen waits for a click) - the lake is gone already.
 			const UCampaignSubsystem* Campaign = State.GameInstance.IsValid() ? State.GameInstance->GetSubsystem<UCampaignSubsystem>() : nullptr;
-			Check(State, Campaign && Campaign->GetCarry().ToMap == TEXT("L_Demo01_B_FrozenFactory")
+			Check(State, Campaign && Campaign->GetCarry().ToMap == TEXT("L_Gen_Depot_1")
 				&& !Campaign->GetCarry().Members.ContainsByPredicate([](const FCarriedOperative& Member) { return Member.UnspentStatPoints > 0; }),
 				TEXT("no unspent points: no points screen, the next level opened at once (squad handed over)"));
 			Next(State, EStage::Travel);
@@ -845,7 +853,7 @@ namespace GateExitLakeSmoke
 			Check(State, Exit->GetTitleAlpha() >= 1.f && Exit->GetFadeAlpha() >= 1.f, TEXT("black screen, \"MISSION COMPLETE\" shown"));
 			Check(State, Mission->IsAutomatedRun() && World->GetName().Contains(TEXT("FrozenLake")) && !Exit->HasLeaveDecision(),
 				TEXT("a headless check (an automated run) stays on the black screen (no menu travel)"));
-			Check(State, Exit->GetNextLevelMap().EndsWith(TEXT("L_Demo01_B_FrozenFactory")), FString::Printf(TEXT("the campaign's next level: %s"),
+			Check(State, Exit->GetNextLevelMap().EndsWith(TEXT("L_Gen_Depot_1")), FString::Printf(TEXT("the campaign's next level: %s"),
 				*Exit->GetNextLevelMap()));
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
@@ -942,14 +950,14 @@ namespace GateExitLakeSmoke
 	static FAutoConsoleCommandWithWorldAndArgs NoPointsCommand(
 		TEXT("CodexTactics.GateExitLakeNoPointsSmoke"),
 		TEXT("Dev check (2026-10-22 b): GateExitLakeSmoke with no unspent points - after the black screen no points screen, the next campaign level "
-			"(L_Demo01_B_FrozenFactory) opens at once with the carried squad."),
+			"(L_Gen_Depot_1) opens at once with the carried squad."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunNoPoints));
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.GateExitLakeSmoke"),
 		TEXT("Dev check (2026-10-22): the Demo 01 lake ends through the fully opened blast door - waves cleared (no end-of-fight button), the door opens, "
 			"two of three out = no fade, the third out = fade to black + mission complete; then the stat-points screen -> Continue -> the next campaign level "
-			"(L_Demo01_B_FrozenFactory) with the carried squad outside the open lake door. 'Clip' = rendered frames into Saved/Screenshots/GateExit/frames, "
+			"(L_Gen_Depot_1) with the carried squad at its start. 'Clip' = rendered frames into Saved/Screenshots/GateExit/frames, "
 			"'Shot' = one frame of the points screen into Saved/Screenshots/GateExit/points_screen.png."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }

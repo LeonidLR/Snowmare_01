@@ -54,4 +54,11 @@ namespace LoadoutRules
 	 * tactical_heat.json; both clamped to [0, MaxStack].
 	 */
 	CODEXTACTICS_API int32 StartingHeatPacks(int32 RoleKit, int32 LevelOverride, int32 MaxStack);
+
+	/**
+	 * The stage loadout (UMissionSubsystem::ApplyStageLoadout when the preparation / a sudden first wave begins) is applied only to a
+	 * squad that did NOT arrive through the campaign: a carried squad keeps the kit it brought (2026-11-08: the Depot's squad_loadout
+	 * "grenades_count" must not replace the grenades carried from the lake). UE-only.
+	 */
+	CODEXTACTICS_API bool ShouldApplyStageLoadout(bool bCampaignArrival);
 }

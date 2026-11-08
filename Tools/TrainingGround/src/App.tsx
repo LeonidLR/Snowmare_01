@@ -530,7 +530,7 @@ export const App: React.FC = () => {
                     <optgroup key={grp} label={LEVEL_GROUP_LABELS[grp]}>
                       {grpItems.map((item) => (
                         <option key={item.id} value={item.id} className="bg-slate-900 text-slate-100">
-                          {item.level_name}
+                          {item.display_name}
                         </option>
                       ))}
                     </optgroup>

@@ -1,5 +1,7 @@
 // Level listing, grouping, and classification for Training Ground.
 // Groups: Campaign (from campaign.json), Generated (L_Gen_*), Labs & tests (L_*), Legacy stage_XX (stage_* / level_01_outpost).
+// Two files that share a level_name (stage_01.json and level_01_outpost.json are both "Battle 1: Checkpoint Skirmish") get the file
+// name appended in brackets in display_name, so the selector never shows the same entry twice.
 // Tests in levelList.test.ts (`npm test`).
 
 export type LevelGroup = 'Campaign' | 'Generated' | 'Labs & tests' | 'Legacy stage_XX';
@@ -32,6 +34,8 @@ export interface LevelItem {
   file: string;
   level_id: string;
   level_name: string;
+  /** What the level selector shows: level_name, plus " (<file>)" when another listed file has the same level_name. */
+  display_name: string;
   group: LevelGroup;
   order: number;
   waves_count: number;
@@ -81,11 +85,24 @@ export function extractCampaignMapLeaves(campaign: CampaignConfig | null | undef
   return leaves;
 }
 
+/**
+ * Display names for the selector: level_name as is, or "level_name (file)" for every item whose level_name another item
+ * shares (compared trimmed, case-insensitive), so duplicates stay distinguishable without editing the level files.
+ */
+export function disambiguateNames<T extends { file: string; level_name: string }>(items: T[]): string[] {
+  const key = (name: string) => name.trim().toLowerCase();
+  const counts = new Map<string, number>();
+  for (const item of items) {
+    counts.set(key(item.level_name), (counts.get(key(item.level_name)) ?? 0) + 1);
+  }
+  return items.map((item) => ((counts.get(key(item.level_name)) ?? 0) > 1 ? `${item.level_name} (${item.file})` : item.level_name));
+}
+
 /** Builds the sorted, grouped level list from campaign config and level metadata. */
 export function buildLevelList(campaign: CampaignConfig | null | undefined, rawLevels: RawLevelMeta[]): LevelItem[] {
   const campaignMaps = extractCampaignMapLeaves(campaign);
 
-  const items: LevelItem[] = rawLevels
+  const items: Omit<LevelItem, 'display_name'>[] = rawLevels
     .filter((l) => l.file !== 'stage_template.json')
     .map((raw) => {
       const baseName = raw.file.replace(/\.json$/i, '');
@@ -126,13 +143,16 @@ export function buildLevelList(campaign: CampaignConfig | null | undefined, rawL
     'Legacy stage_XX': 4,
   };
 
-  return items.sort((a, b) => {
+  const sorted = items.sort((a, b) => {
     if (groupPriority[a.group] !== groupPriority[b.group]) {
       return groupPriority[a.group] - groupPriority[b.group];
     }
     if (a.order !== b.order) {
       return a.order - b.order;
     }
-    return a.level_name.localeCompare(b.level_name);
+    const byName = a.level_name.localeCompare(b.level_name);
+    return byName !== 0 ? byName : a.file.localeCompare(b.file);
   });
+  const names = disambiguateNames(sorted);
+  return sorted.map((item, index) => ({ ...item, display_name: names[index] }));
 }

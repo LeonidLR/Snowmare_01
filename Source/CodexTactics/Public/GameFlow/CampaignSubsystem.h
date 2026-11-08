@@ -10,7 +10,8 @@ class AOperativeCharacter;
 class UWorld;
 
 /**
- * The campaign across levels (game designer 2026-10-22: "0.0 Frozen Dam" -> "0.1 Frozen Factory"; UE-only). Reads the level order
+ * The campaign across levels (game designer 2026-10-22: "0.0 Frozen Dam" -> the second level; since 2026-11-02 / 2026-11-08 that is the
+ * generated "0.1 Depot", Frozen Factory left the campaign; UE-only). Reads the level order
  * and titles from Content/Data/Campaign/campaign.json (CampaignRules); holds the squad handed from the level just left to the next
  * one (CampaignCarry). The carry stays for its arrival map until NEW GAME or the next level transition, so a restart of the arrival
  * level (Ctrl + X, "Restart") brings the squad back as it arrived; a loaded save overwrites it with the saved values anyway.
@@ -31,7 +32,7 @@ public:
 	/** The level after World's map, nullptr at the end of the campaign / outside it. */
 	const FCampaignLevel* FindNextLevel(const UWorld* World);
 
-	/** The campaign title of a map ("0.1 Frozen Factory"); Fallback outside the campaign. */
+	/** The campaign title of a map ("0.1 Depot"); Fallback outside the campaign. */
 	FString GetLevelTitle(const FString& Map, const FString& Fallback);
 
 	/** The first level of the campaign (NEW GAME), empty without a campaign. */
