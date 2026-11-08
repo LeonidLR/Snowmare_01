@@ -1949,6 +1949,26 @@ public:
 	/** A live enemy in range and in the line of fire now (the fire's own check, Godot _find_shoot_target ray). */
 	bool CanHitEnemy(AActor* Enemy) const;
 
+	/**
+	 * Honest sight (fix/pmc-fire-through-wall 2026-11-08): his side sees Target now - the squad's sight for the player's men
+	 * (UTacticalSightSubsystem::IsVisibleToSquad), his team's for a hostile fighter (UPmcSquadSubsystem::IsVisibleToTeam). True without them.
+	 */
+	bool IsSeenByOwnSide(const AActor* Target) const;
+
+	/**
+	 * Fire at a point is worth a round (fix/pmc-fire-through-wall 2026-11-08, one rule for the squad and the PMC): the line from his muzzle at
+	 * his stance now (prone 25 cm; in cover the cover's fire origin) to Point, the world only (bodies never stop it), passes
+	 * SuppressionRules::IsFireLineUseful - clear, or blocked only near the point (the target's own cover). OutBlockedAtCm: where it is blocked
+	 * (-1 clear). Console Codex.Combat.HonestFire 0 = always true (the old rule, A/B).
+	 */
+	bool HasUsefulFireLine(const FVector& Point, float* OutBlockedAtCm = nullptr) const;
+	/** The same from a given muzzle (the commander asks before he picks a suppress order). */
+	bool HasUsefulFireLineFrom(const FVector& Muzzle, const FVector& Point, float* OutBlockedAtCm = nullptr) const;
+	/** Codex.Combat.HonestFire (default 1): honest sight for the PMC teams, the fire-line rule for fire at a point. */
+	static bool IsHonestFireOn();
+	/** Rounds at a point not fired because no line of fire reached it (smokes). */
+	int32 GetNoLineOfFireSkips() const { return NoLineOfFireSkips; }
+
 	/** A move by the autonomy: walks like a player order but keeps the tactical anchor. */
 	EOperativeOrderResult AutonomousMoveTo(const FVector& Destination);
 
@@ -2660,6 +2680,8 @@ private:
 	/** World time of the order / its last round (the order's timeout counts from it). */
 	double SuppressLastProgressTime = 0.0;
 	int32 SuppressRoundsFired = 0;
+	/** Fire at a point skipped for no line of fire (HasUsefulFireLine). */
+	int32 NoLineOfFireSkips = 0;
 	int32 FullAutoRoundsFired = 0;
 	ESuppressOrderStop LastSuppressStop = ESuppressOrderStop::None;
 	int32 SuppressedBlindShots = 0;

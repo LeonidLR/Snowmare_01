@@ -13,6 +13,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/PeekSightRules.h"
 #include "Combat/SightRules.h"
+#include "Combat/SuppressionRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -503,7 +504,7 @@ void UPmcSquadSubsystem::RefreshSight()
 	UpdateSight();
 }
 
-void UPmcSquadSubsystem::NotifyShotAt(const AActor* Shooter, const AOperativeCharacter* Victim)
+void UPmcSquadSubsystem::NotifyShotAt(const AActor* Shooter, const AOperativeCharacter* Victim, const FVector* Flash)
 {
 	UWorld* World = GetWorld();
 	FTeam* Team = Victim && Shooter && World ? Teams.Find(Victim->TeamId) : nullptr;
@@ -516,10 +517,15 @@ void UPmcSquadSubsystem::NotifyShotAt(const AActor* Shooter, const AOperativeCha
 	{
 		if (!It->Key.IsValid() || It->Value < Now)
 		{
+			Team->ShotRevealFlash.Remove(It->Key);
 			It.RemoveCurrent();
 		}
 	}
 	Team->ShotRevealUntil.Add(const_cast<AActor*>(Shooter), Now + SightRules::DemaskSeconds);
+	if (Flash)
+	{
+		Team->ShotRevealFlash.Add(const_cast<AActor*>(Shooter), *Flash);
+	}
 }
 
 void UPmcSquadSubsystem::UpdateSight()
@@ -560,38 +566,62 @@ void UPmcSquadSubsystem::UpdateSight()
 		}
 		auto Observe = [&](AActor* Target, const FVector& Profile, bool bAllRound)
 		{
-			bool bSeen = !bRulesActive;
 			// A shooter demasks himself - to the teams within earshot of the shot (2026-11-03: was the whole map, so one shot at a
-			// monster told every PMC squad of the level where the player's men stood).
-			if (!bSeen && Sight && Sight->IsDemasked(Target))
+			// monster told every PMC squad of the level where the player's men stood). Bug #43: a shooter who fired at one of us is
+			// noticed by his flash whatever the range (NotifyShotAt).
+			bool bHeard = false;
+			if (bRulesActive && Sight && Sight->IsDemasked(Target))
 			{
 				for (const AOperativeCharacter* Observer : Observers)
 				{
-					bSeen |= FVector::Dist2D(Observer->GetActorLocation(), Target->GetActorLocation()) <= PmcSquadLocal::GunfireHearingCm;
+					bHeard |= FVector::Dist2D(Observer->GetActorLocation(), Target->GetActorLocation()) <= PmcSquadLocal::GunfireHearingCm;
 				}
 			}
-			// Bug #43: a shooter who fired at one of us is seen by his flash whatever the range (NotifyShotAt).
-			if (const double* Until = !bSeen ? Team.ShotRevealUntil.Find(Target) : nullptr)
+			if (const double* Until = bRulesActive && !bHeard ? Team.ShotRevealUntil.Find(Target) : nullptr)
 			{
-				bSeen = *Until > Now;
+				bHeard = *Until > Now;
 			}
+			bool bEye = !bRulesActive;
 			for (AOperativeCharacter* Observer : Observers)
 			{
-				if (bSeen)
+				if (bEye)
 				{
 					break;
 				}
 				// A monster coming at a mate is noticed all round (it is on him), a man only inside the eye rules.
-				bSeen = SightRules::IsWithinTouchReveal(FVector::Dist2D(Observer->GetActorLocation(), Target->GetActorLocation()))
+				bEye = SightRules::IsWithinTouchReveal(FVector::Dist2D(Observer->GetActorLocation(), Target->GetActorLocation()))
 					|| (bAllRound ? Sight->HasClearSight(UTacticalSightSubsystem::EyePoint(*Observer), Profile) : Sight->CanOperativeSee(*Observer, Profile));
 			}
-			if (bSeen)
+			// Honest sight (fix/pmc-fire-through-wall 2026-11-08, the designer's prone fighter firing into the squad's wall): a heard shot / a
+			// flash is SEEN only with a clear line from one of their eyes to the shooter or his muzzle; else the team knows his spot (contact,
+			// the hunt, the commander's moves) but nobody may take him as a target. Codex.Combat.HonestFire 0 = the old "heard = seen".
+			bool bLine = false;
+			if (Sight && bHeard && !bEye && AOperativeCharacter::IsHonestFireOn())
+			{
+				const AOperativeCharacter* Shooter = Cast<AOperativeCharacter>(Target);
+				for (const AOperativeCharacter* Observer : Observers)
+				{
+					const FVector Eye = UTacticalSightSubsystem::EyePoint(*Observer);
+					// The flash of his shot at one of us (a hand short of it, toward the eye: the muzzle may poke into the corner it fires round,
+					// as the return fire's line), his muzzle now, or himself.
+					const FVector* Flash = Team.ShotRevealFlash.Find(Target);
+					auto Clear = [&](const FVector& Point) { return Sight->HasClearSight(Eye, Point + (Eye - Point).GetSafeNormal() * 15.f); };
+					if (Sight->HasClearSight(Eye, Profile) || (Flash && Clear(*Flash)) || (Shooter && Clear(Shooter->GetWeaponMuzzleLocation())))
+					{
+						bLine = true;
+						break;
+					}
+				}
+			}
+			const SightRules::EContact Contact = AOperativeCharacter::IsHonestFireOn() ? SightRules::ResolveContact(bEye, bHeard, bLine)
+				: (bEye || bHeard ? SightRules::EContact::Seen : SightRules::EContact::None);
+			if (Contact != SightRules::EContact::None)
 			{
 				FKnownTarget& Known = Team.Known.FindOrAdd(Target);
 				Known.Actor = Target;
 				Known.LastKnown = Target->GetActorLocation();
 				Known.LastSeenTime = Now;
-				Known.bSeenNow = true;
+				Known.bSeenNow = Contact == SightRules::EContact::Seen;
 				Team.LastContactTime = Now;
 				Team.bEverContact = true;
 				if (Team.FirstContactTime < 0.0)
@@ -924,6 +954,11 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			View.Threat.SecondsSince = static_cast<float>(Now - Pair.Value.LastSeenTime);
 			View.Threat.bSeenNow = Pair.Value.bSeenNow;
 		}
+	}
+	// The line of fire to the threat's spot from his muzzle at his stance now (2026-11-08): no suppress order into a wall.
+	if (View.bHasThreat && OutThreatActor && View.Threat.bSeenNow)
+	{
+		View.bFireLine = Fighter.HasUsefulFireLine(View.Threat.Location + FVector(0.f, 0.f, SuppressionRules::GetConfig().OrderAimHeightCm));
 	}
 	// Target attention (2026-11-07): how far he stands outside the look sectors of the enemies his team sees now.
 	{

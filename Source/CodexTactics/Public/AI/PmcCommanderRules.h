@@ -301,6 +301,11 @@ struct CODEXTACTICS_API FPmcFighterView
 	/** The nearest known threat (bHasThreat false: none known). */
 	bool bHasThreat = false;
 	FPmcThreatView Threat;
+	/**
+	 * A line of fire from his muzzle at his stance now to the threat's known spot reaches near it (AOperativeCharacter::HasUsefulFireLine;
+	 * fix/pmc-fire-through-wall 2026-11-08): without one a suppress order is worth nothing - he moves / flanks or holds instead.
+	 */
+	bool bFireLine = true;
 	/** The nearest wounded mate (-1: none) and his health fraction. */
 	float WoundedMateDistanceCm = -1.f;
 	float WoundedMateHealthFrac = 1.f;

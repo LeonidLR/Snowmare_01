@@ -54,6 +54,8 @@ namespace SuppressionRules
 		{ TEXT("order.spot_scatter_cm"), &FSuppressionConfig::OrderSpotScatterCm },
 		{ TEXT("order.click_radius_cm"), &FSuppressionConfig::OrderClickRadiusCm },
 		{ TEXT("order.marker_radius_cm"), &FSuppressionConfig::OrderMarkerRadiusCm },
+		{ TEXT("order.line_min_clear_fraction"), &FSuppressionConfig::OrderLineMinClearFraction },
+		{ TEXT("order.line_near_point_cm"), &FSuppressionConfig::OrderLineNearPointCm },
 		{ TEXT("explosion.pressure"), &FSuppressionConfig::ExplosionPressure },
 		{ TEXT("explosion.edge_factor"), &FSuppressionConfig::ExplosionEdgeFactor },
 		{ TEXT("explosion.radius_factor"), &FSuppressionConfig::ExplosionRadiusFactor },
@@ -366,6 +368,17 @@ namespace SuppressionRules
 		return ESuppressOrderStop::None;
 	}
 
+	bool IsFireLineUseful(const FSuppressionConfig& Config, float PointDistanceCm, float BlockedAtCm)
+	{
+		if (BlockedAtCm < 0.f || BlockedAtCm >= PointDistanceCm)
+		{
+			return true;
+		}
+		const float Needed = FMath::Max(PointDistanceCm * FMath::Clamp(Config.OrderLineMinClearFraction, 0.f, 1.f),
+			PointDistanceCm - FMath::Max(Config.OrderLineNearPointCm, 0.f));
+		return BlockedAtCm >= Needed;
+	}
+
 	const TCHAR* TierName(ESuppressionTier Tier)
 	{
 		switch (Tier)
@@ -393,6 +406,7 @@ namespace SuppressionRules
 		case ESuppressOrderStop::TargetDown: return TEXT("target down");
 		case ESuppressOrderStop::AmmoLow: return TEXT("ammo low");
 		case ESuppressOrderStop::NoWeapon: return TEXT("no ammo weapon");
+		case ESuppressOrderStop::NoLineOfFire: return TEXT("no line of fire");
 		default: return TEXT("going on");
 		}
 	}

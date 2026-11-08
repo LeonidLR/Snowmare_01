@@ -183,6 +183,23 @@ namespace SightRules
 	/** An enemy within SquadTouchRevealCm (2D) of an operative is seen whatever is in between. */
 	CODEXTACTICS_API bool IsWithinTouchReveal(float DistanceCm);
 
+	/** What a side learns of a target (fix/pmc-fire-through-wall 2026-11-08). */
+	enum class EContact : uint8
+	{
+		None,
+		/** Heard (a shot within earshot, his muzzle flash at one of us) without a line to him: known - his spot - but not a target. */
+		Heard,
+		/** Seen: the eye rules, touch, or a heard shot / flash WITH a clear line from an eye to him or to his flash. */
+		Seen
+	};
+
+	/**
+	 * Honest sight (designer 2026-11-08: a prone PMC fighter "saw" the squad behind a wall - a shot heard within 60 m counted as seen and he
+	 * fired into the wall): bEyeSees = the eye rules (or touch); bHeard = a shot / a flash told him; bLineToSource = an eye of the side has a
+	 * clear line to the target's profile or muzzle. Seen = bEyeSees || (bHeard && bLineToSource); Heard = bHeard; else None.
+	 */
+	CODEXTACTICS_API EContact ResolveContact(bool bEyeSees, bool bHeard, bool bLineToSource);
+
 	/** Blind fire hit chance: x0.2, and 0 when the enemy left its ghost's spot. */
 	CODEXTACTICS_API float BlindFireHitChance(float BaseHitChance, float EnemyDistanceFromGhostCm);
 

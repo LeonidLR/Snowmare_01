@@ -156,8 +156,9 @@ namespace PmcCommanderRules
 			return W.Flank * (F.RunningOrder == EPmcOrder::Flank ? Step(F.bHasThreat) : SeenNow) * (S.MatesSuppressing > 0 || S.Alive >= 2 ? 1.f : 0.3f) * (S.MatesFlanking == 0 ? 1.f : 0.2f) * F.HealthFrac
 				* Step(F.Threat.DistanceCm >= 600.f && F.Threat.DistanceCm <= 3500.f) * (F.bExposed ? 0.7f : 1.f) * Step(F.AmmoFrac > 0.2f) * AttentionFactor(F, W);
 		case EPmcOrder::Suppress:
-			// Pin a seen threat so a mate can move; needs ammo and a reason (a mate moving), one suppressor at a time.
-			return W.Suppress * SeenNow * InRange * Step(F.AmmoFrac >= W.SuppressAmmoMin) * (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.5f)
+			// Pin a seen threat so a mate can move; needs ammo and a reason (a mate moving), one suppressor at a time - and a line of fire that
+			// reaches it (2026-11-08: no rounds into the wall in front of him).
+			return W.Suppress * SeenNow * InRange * Step(F.bFireLine) * Step(F.AmmoFrac >= W.SuppressAmmoMin) * (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.5f)
 				* (S.MatesSuppressing == 0 ? 1.f : 0.4f) * StaticBand;
 		case EPmcOrder::FallBack:
 		{

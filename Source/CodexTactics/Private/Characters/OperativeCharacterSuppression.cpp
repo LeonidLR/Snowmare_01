@@ -5,12 +5,17 @@
 
 #include "Characters/OperativeCharacter.h"
 
+#include "AI/PmcSquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacterInternal.h"
 #include "Combat/WeaponBallisticsRules.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/SuppressionSubsystem.h"
+#include "Combat/TacticalSightSubsystem.h"
+#include "EngineUtils.h"
+#include "GameFramework/Pawn.h"
+#include "HAL/IConsoleManager.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
@@ -48,6 +53,69 @@ void AOperativeCharacter::ReportOwnRound(const FVector& Start, const FVector& En
 	Round.Weapon = GetOwnRoundClass(bFullAuto);
 	Round.WeightScale = CurrentWeapon ? CurrentWeapon->Stats.Fire.SuppressionWeight : 1.f;
 	USuppressionSubsystem::Report(this, Round);
+}
+
+namespace OperativeSuppressionLocal
+{
+	static TAutoConsoleVariable<int32> CVarHonestFire(TEXT("Codex.Combat.HonestFire"), 1,
+		TEXT("fix/pmc-fire-through-wall (designer 2026-11-08: a prone PMC fighter kept firing into the wall the squad stood behind): 1 (default) a PMC team sees a target only through a clear line (a heard shot / a flash without one makes it known, not seen), fire at a point needs a line of fire that reaches near it, a running suppress follows the target only while his side sees it; 0 = the old rules (A/B)."));
+}
+
+bool AOperativeCharacter::IsHonestFireOn()
+{
+	return OperativeSuppressionLocal::CVarHonestFire.GetValueOnGameThread() != 0;
+}
+
+bool AOperativeCharacter::IsSeenByOwnSide(const AActor* Target) const
+{
+	UWorld* World = GetWorld();
+	if (!Target || !World)
+	{
+		return false;
+	}
+	if (IsPlayerTeam())
+	{
+		const UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>();
+		return !Sight || Sight->IsVisibleToSquad(Target);
+	}
+	const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+	return !Pmc || Pmc->IsVisibleToTeam(TeamId, Target);
+}
+
+bool AOperativeCharacter::HasUsefulFireLine(const FVector& Point, float* OutBlockedAtCm) const
+{
+	return HasUsefulFireLineFrom(bInCover ? GetCoverFireOrigin() : GetMuzzleLocation(), Point, OutBlockedAtCm);
+}
+
+bool AOperativeCharacter::HasUsefulFireLineFrom(const FVector& Muzzle, const FVector& Point, float* OutBlockedAtCm) const
+{
+	if (OutBlockedAtCm)
+	{
+		*OutBlockedAtCm = -1.f;
+	}
+	UWorld* World = GetWorld();
+	if (!World || !IsHonestFireOn())
+	{
+		return true;
+	}
+	// The world only: bodies (his mates, the target, anybody) never make a line useless (FireAreaRound's round crosses them or not).
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(FireLineUseful), false, this);
+	for (TActorIterator<APawn> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It);
+	}
+	FHitResult Hit;
+	const float Distance = static_cast<float>(FVector::Dist(Muzzle, Point));
+	float BlockedAt = -1.f;
+	if (World->LineTraceSingleByChannel(Hit, Muzzle, Point, ECC_Visibility, Params))
+	{
+		BlockedAt = Hit.bStartPenetrating ? 0.f : static_cast<float>(Hit.Distance);
+	}
+	if (OutBlockedAtCm)
+	{
+		*OutBlockedAtCm = BlockedAt;
+	}
+	return SuppressionRules::IsFireLineUseful(SuppressionRules::GetConfig(), Distance, BlockedAt);
 }
 
 bool AOperativeCharacter::CanTakeSuppress(bool bExplain)
@@ -187,7 +255,9 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 		CancelSuppressFire(SuppressionRules::StopName(Stop));
 		return TEXT("suppress: done");
 	}
-	if (bEnemyAlive && !Enemy->IsHidden())
+	// Honest sight (fix/pmc-fire-through-wall 2026-11-08): the spot follows him only while this side sees him - the old check (not hidden)
+	// let a hostile fighter's order track a squad man behind a wall (the player's men are never hidden actors).
+	if (bEnemyAlive && !Enemy->IsHidden() && (!IsHonestFireOn() || IsSeenByOwnSide(Enemy)))
 	{
 		SuppressPoint = Enemy->GetActorLocation();
 	}
@@ -259,6 +329,23 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 		{
 			return TEXT("cooldown");
 		}
+	}
+
+	// No line of fire (fix/pmc-fire-through-wall 2026-11-08): a wall between his muzzle (his stance's: prone 25 cm) and the point, not just the
+	// target's own cover near it - no round; the order ends (the commander moves him / flanks, the player re-orders).
+	if (float BlockedAt = -1.f; !HasUsefulFireLine(SuppressPoint + FVector(0.f, 0.f, Config.OrderAimHeightCm), &BlockedAt))
+	{
+		++NoLineOfFireSkips;
+		LastSuppressStop = ESuppressOrderStop::NoLineOfFire;
+		if (IsPlayerTeam())
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("NO LINE OF FIRE"), FLinearColor(1.f, 0.7f, 0.2f));
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Suppress] %s: no line of fire to (%.0f, %.0f, %.0f): blocked %.0f cm out of %.0f"), *DisplayName.ToString(),
+			SuppressPoint.X, SuppressPoint.Y, SuppressPoint.Z, BlockedAt,
+			FVector::Dist(bInCover ? GetCoverFireOrigin() : GetMuzzleLocation(), SuppressPoint + FVector(0.f, 0.f, Config.OrderAimHeightCm)));
+		CancelSuppressFire(TEXT("no line of fire"));
+		return TEXT("suppress: dropped (no line of fire)");
 	}
 
 	// The round: full-auto inside bursts (assault rifles), else the weapon's cadence; a wide spray, hits by the order's factor.

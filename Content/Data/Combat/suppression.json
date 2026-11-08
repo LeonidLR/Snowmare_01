@@ -35,6 +35,8 @@
     "order.spot_scatter_cm": 120,
     "order.click_radius_cm": 400,
     "order.marker_radius_cm": 250,
+    "order.line_near_point_cm": 250,
+    "order.line_min_clear_fraction": 0.5,
     "explosion.pressure": 0.6,
     "explosion.edge_factor": 0.4,
     "explosion.radius_factor": 1.5,

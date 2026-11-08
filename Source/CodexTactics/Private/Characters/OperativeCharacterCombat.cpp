@@ -896,7 +896,7 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		}
 		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld()))
 		{
-			Pmc->NotifyShotAt(this, Victim);
+			Pmc->NotifyShotAt(this, Victim, &Flash);
 		}
 	}
 	// Patrols hear the shot (enemy_perception.json hear_gunshot_m) and engage (user request 2026-10-06).

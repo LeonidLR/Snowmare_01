@@ -404,3 +404,48 @@ The first spot check (low line only) let the fighters see the squad over a low w
 **Not done:** no ghost silhouette for a concealed fighter; no hearing of PMC steps; `USquadAutonomySubsystem` and the playtest bot still do not
 perceive hostile operatives as threats (the squad's own fire does the fighting); turn-based combat ignores them; no HUD plate / health bar over a
 PMC fighter; PMC corpses are not lootable; team-aware grenades; the radio-intel hunt is a deliberate cheat (no hearing model yet).
+
+## 8. No target without honest sight, no shot without a clear line of fire (fix/pmc-fire-through-wall, 2026-11-08)
+
+**Report (game designer, PIE on `L_Gen_Depot_1`, zone `Z_ST_south`):** a hostile PMC fighter lying PRONE in the open kept firing at the squad
+standing behind a solid wall - the tracers went straight into the wall. He never hit anybody, but he kept firing.
+
+**(a) How he acquired them - reproduced by `PmcFireLineSmoke` part A (`Codex.Combat.HonestFire 0`):** the prone eye (25 cm) and the 3D sight
+trace (`CanOperativeSee`) were right, and so was the peek range (#32, it only stretches the peek cone's range). The leak was in the team sight
+(`UPmcSquadSubsystem::UpdateSight`, `Observe`): a demasked shooter (`UTacticalSightSubsystem::IsDemasked` - every shot of the squad, 2 s) within
+`GunfireHearingCm` 60 m of any fighter of the team, and a shooter flagged by `NotifyShotAt` (bug #43, the flash), counted as **seen** - no line
+needed. A seen target is a target of the team: the shot line, the commander's `Suppress` order. The smoke: one demask behind the wall -> the
+leader is `IsVisibleToTeam` true.
+
+**(b) Why he fired with no line of fire - reproduced by part A:** the aimed fire was always gated (`EvaluateShotLine` traces from his stance's
+muzzle - prone 25 cm - to the target and refuses a blocked line), but the **suppress order** (`RunSuppressFire`, the commander's `Suppress` at
+the threat's spot) fired at a point with **no line check at all**, and it moved its point to the target's real position whenever the target
+actor was not hidden - the player's men never are, so it followed them behind the wall. The smoke: a suppress order at the leader behind the
+wall -> 20 of 20 rounds into the wall.
+
+**The rules now (one model: the squad and the PMC operatives share the code; the armed enemies' own fire already traced its line):**
+- **Honest sight** (`SightRules::ResolveContact`, `Observe`): a heard shot / a flash is **seen** only when an eye of the team has a clear line to
+  the shooter's profile point, to the flash of his shot at one of them (`NotifyShotAt` now records it; the line ends a hand short of it, like
+  the return fire's) or to his muzzle now; otherwise he is **known** (`Known` with his spot and the contact time: the commander's Advance /
+  Hold-facing / the hunt use it) but `bSeenNow` stays false - no aimed shot, no suppress order. The eye rules (FOV, range, height, conditions)
+  and touch are unchanged.
+- **A line of fire for fire at a point** (`SuppressionRules::IsFireLineUseful`, `AOperativeCharacter::HasUsefulFireLine`): the line from his
+  muzzle at his stance now (prone 25 cm, crouched 85, standing 140; in cover the cover's fire origin) to the point, bodies ignored, must be
+  clear up to within `order.line_near_point_cm` 250 cm of the point (the cover the target hides behind may stop the rounds: that is the
+  suppression) and for at least `order.line_min_clear_fraction` 0.5 of its length (`Content/Data/Combat/suppression.json`). Else no round:
+  a suppress order ends (`ESuppressOrderStop::NoLineOfFire`, "NO LINE OF FIRE" over the player's men), a quick-fire burst at a spot ends.
+- **The commander** builds `FPmcFighterView::bFireLine` (the same check to the threat's spot) and scores `Suppress` 0 without it - he picks a
+  move (Advance / Flank / Relocate) or holds instead (`CodexTactics.AI.PmcCommander.NoSuppressWithoutFireLine`).
+- **Last known spot:** a running suppress order / quick fire follows the target only while its side sees him (`IsSeenByOwnSide`); then it keeps
+  his last seen spot (fire there is allowed while a line reaches it).
+- A/B: `Codex.Combat.HonestFire 0` = the old rules. Unchanged on purpose: the player's view of a demasked hostile fighter (his concealment is
+  lifted while he fires - the player's information), the monsters' perception of a demasked operative (hearing; they do not shoot).
+
+**Checks:** unit `CodexTactics.Combat.FireLine.Useful`, `.HonestContact`, `CodexTactics.AI.PmcCommander.NoSuppressWithoutFireLine`; smoke
+**`PmcFireLineSmoke`** (L_MovementTest arena: a 3 m x 8 m wall 4 m in front of the squad, an M16 fighter prone 20 m beyond it, the squad's
+shots heard every 0.5 s): A (old rules) the leader seen by a heard shot, the suppress order puts 20 / 20 rounds into the wall; B (honest) the
+leader known not seen, the same order drops at once (blocked 19.8 m of 24 m), 0 rounds, his commander 10 s against the heard squad - 0 rounds
+into the wall (he held, prone); C the leader steps out past the wall's end, seen, suppressed, steps back - 0 rounds into the wall in the next
+6 s, he is known not seen. `PmcUnderFireSmoke` (bug #43) keeps its fighter standing while he fires over the 1.2 m wall (the squad's return
+fire put him down behind it, where his flash is hidden - with honest sight then only known) and checks that the squad's team saw him by his
+flash during the fire.
