@@ -206,7 +206,16 @@
       ],
       "distance_damage_multipliers": [],
       "penetration_class": "light",
-      "damage_falloff_floor": 0.6
+      "damage_falloff_floor": 0.6,
+      "visual": {
+        "comment": "Pistol 9mm Custom, optimized (the art package 2026-11-09: 3,000 tris, one material MI_Pistol9mm, 1K; muzzle +X, up +Z, pivot = the grip centre): the bare pistol + its seated magazine (hand_mesh_parts, attached at identity) on the weapon socket hand_r; attach_* computed from the retargeted aim pose by Scripts/Editor/calibrate_pistol_grip.py (barrel along the body's forward, slide up, the grip between the wrist and the middle knuckle); muzzle = the barrel end (suppressor 1's rear face, x 14.6) on the bore axis.",
+        "hand_mesh": "/Game/Weapons/Pistol9mm/SM_Pistol9mm_Pistol.SM_Pistol9mm_Pistol",
+        "hand_mesh_parts": ["/Game/Weapons/Pistol9mm/SM_Pistol9mm_Magazine.SM_Pistol9mm_Magazine"],
+        "attach_location": [-6.12, 0.65, -0.29],
+        "attach_rotation_pyr": [-4.38, 169.38, -7.94],
+        "attach_scale": [1, 1, 1],
+        "muzzle_offset": [14.6, 0, 6.4]
+      }
     },
     "shotgun": {
       "name": "D-1 Shotgun",
@@ -242,8 +251,8 @@
       },
       "handling": "shotgun",
       "visual": {
-        "comment": "The D-1 model (the user's Fab import /Game/Fab/_Model_D-1__Shotgun, read-only) on the weapon socket hand_r; attach_* = the model relative to hand_r (cm, pitch / yaw / roll deg), tuned on the ShotgunD1Shots render.",
-        "hand_mesh": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Stock_Plastic_-_Matte__Dark_Gray__0.Stock_Plastic_-_Matte__Dark_Gray__0",
+        "comment": "The D-1 model: the optimized copy of the user's Fab import (the art package 2026-11-09: 4,500 tris, one material MI_ShotgunD1, the original scale / pivot, so the attach values are unchanged; /Game/Fab/_Model_D-1__Shotgun stays untouched) on the weapon socket hand_r; attach_* = the model relative to hand_r (cm, pitch / yaw / roll deg), tuned on the ShotgunD1Shots render.",
+        "hand_mesh": "/Game/Weapons/ShotgunD1/SK_ShotgunD1_1slot.SK_ShotgunD1_1slot",
         "attach_location": [
           -33.02,
           1.49,
@@ -268,6 +277,7 @@
     },
     "sniper_rifle": {
       "name": "Sniper Rifle",
+      "handling": "sniper_rifle",
       "kind": "hitscan",
       "base_damage": 70,
       "attack_range_m": 120,
@@ -317,10 +327,13 @@
   },
   "enemy_weapons": {
     "marksman_rifle": {
-      "damage": 45,
+      "comment": "The Marksman enemy's rifle (2026-11-09: on the weapon schema). Ballistic part = schema keys (WeaponStatsRules): base_damage, fire_rate (the shot interval after a shot = the old shot_cooldown), effective_range_m, attack_range_m (the old max_range_m). AI part = the enemy's own: base_accuracy, aim_duration, crit_*, the stance bonuses, the preferred band; tb_* = turn based. His shot keeps the enemy-attack formula (no armour-class limit).",
+      "name": "Marksman Rifle",
+      "kind": "hitscan",
+      "base_damage": 45,
       "base_accuracy": 0.6,
       "aim_duration": 2,
-      "shot_cooldown": 2.5,
+      "fire_rate": 2.5,
       "crit_chance": 0.25,
       "crit_multiplier": 2,
       "prone_accuracy_bonus": 1.35,
@@ -328,7 +341,7 @@
       "preferred_min_range_m": 20,
       "preferred_max_range_m": 35,
       "effective_range_m": 80,
-      "max_range_m": 110,
+      "attack_range_m": 110,
       "tb_damage_scale": 1.6,
       "tb_attack_ap": 4,
       "tb_min_range_cells": 3,

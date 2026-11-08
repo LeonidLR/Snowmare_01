@@ -156,6 +156,24 @@ namespace WeaponTuning
 				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" visual.hand_mesh %s not found"), *Weapon.WeaponId, *MeshPath);
 			}
 		}
+		const TArray<TSharedPtr<FJsonValue>>* Parts = nullptr;
+		if ((*Visual)->TryGetArrayField(TEXT("hand_mesh_parts"), Parts) && Parts)
+		{
+			Weapon.HandMeshParts.Reset();
+			for (const TSharedPtr<FJsonValue>& Part : *Parts)
+			{
+				const FString PartPath = Part.IsValid() ? Part->AsString() : FString();
+				if (!PartPath.IsEmpty() && LoadObject<UStaticMesh>(nullptr, *PartPath))
+				{
+					Weapon.HandMeshParts.Add(TSoftObjectPtr<UStaticMesh>(FSoftObjectPath(PartPath)));
+				}
+				else
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" visual.hand_mesh_parts %s not found"), *Weapon.WeaponId, *PartPath);
+				}
+			}
+			bChanged = true;
+		}
 		auto ReadVector = [&Visual](const TCHAR* Key, FVector& Out)
 		{
 			const TArray<TSharedPtr<FJsonValue>>* Array = nullptr;
@@ -375,25 +393,70 @@ namespace WeaponTuning
 		Integer(*GrenadeBlock, TEXT("max_carried"), Operative.MaxGrenades);
 	}
 
-	void ApplyMarksmanRifle(FMarksmanConfig& Config)
+	FWeaponStats MarksmanRifleStats(const FMarksmanConfig& Config)
 	{
-		if (!MarksmanRifleBlock.IsValid())
-		{
-			return;
-		}
-		const FJsonObject& Json = *MarksmanRifleBlock;
+		FWeaponStats Stats;
+		Stats.Kind = EWeaponKind::Hitscan;
+		Stats.Damage.BaseDamage = Config.ShotDamage;
+		Stats.Fire.ShotIntervalSeconds = Config.ShotCooldown;
+		Stats.Range.EffectiveRangeCm = Config.EffectiveRangeCm;
+		Stats.Range.MaxRangeCm = Config.MaxRangeCm;
+		Stats.Ammo.bUsesAmmo = false; // the enemy never reloads
+		return Stats;
+	}
+
+	void ApplyMarksmanRifleJson(const FJsonObject& Json, FMarksmanConfig& Config, FWeaponStats* OutStats, TArray<FString>* OutErrors)
+	{
+		// The old key names first (files written before 2026-11-09).
 		Number(Json, TEXT("damage"), Config.ShotDamage);
+		Number(Json, TEXT("shot_cooldown"), Config.ShotCooldown);
+		Number(Json, TEXT("max_range_m"), Config.MaxRangeCm, 100.f);
+		// The ballistic part on the weapon schema.
+		FWeaponStats Stats = MarksmanRifleStats(Config);
+		TArray<FString> Unknown; // the AI keys are the enemy's own, not schema keys
+		TArray<FString> Errors;
+		WeaponStatsRules::ApplyJson(Json, Stats, &Unknown, &Errors);
+		WeaponStatsRules::Validate(Stats, Errors, TEXT("marksman_rifle"));
+		if (Errors.IsEmpty())
+		{
+			Config.ShotDamage = Stats.Damage.BaseDamage;
+			Config.ShotCooldown = Stats.Fire.ShotIntervalSeconds;
+			Config.EffectiveRangeCm = Stats.Range.EffectiveRangeCm; // bug #39
+			Config.MaxRangeCm = Stats.Range.MaxRangeCm;
+		}
+		else
+		{
+			for (const FString& Error : Errors)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: enemy_weapons.marksman_rifle REJECTED (the rifle keeps its values): %s"), *Error);
+			}
+			Stats = MarksmanRifleStats(Config);
+			if (OutErrors)
+			{
+				OutErrors->Append(Errors);
+			}
+		}
+		// The AI part: the enemy's own keys.
 		Number(Json, TEXT("base_accuracy"), Config.BaseAccuracy);
 		Number(Json, TEXT("aim_duration"), Config.AimDuration);
-		Number(Json, TEXT("shot_cooldown"), Config.ShotCooldown);
 		Number(Json, TEXT("crit_chance"), Config.CritChance);
 		Number(Json, TEXT("crit_multiplier"), Config.CritMultiplier);
 		Number(Json, TEXT("prone_accuracy_bonus"), Config.ProneAccuracyBonus);
 		Number(Json, TEXT("crouch_accuracy_bonus"), Config.CrouchAccuracyBonus);
 		Number(Json, TEXT("preferred_min_range_m"), Config.PreferredMinRange, 100.f);
 		Number(Json, TEXT("preferred_max_range_m"), Config.PreferredMaxRange, 100.f);
-		Number(Json, TEXT("effective_range_m"), Config.EffectiveRangeCm, 100.f); // bug #39
-		Number(Json, TEXT("max_range_m"), Config.MaxRangeCm, 100.f);
+		if (OutStats)
+		{
+			*OutStats = Stats;
+		}
+	}
+
+	void ApplyMarksmanRifle(FMarksmanConfig& Config)
+	{
+		if (MarksmanRifleBlock.IsValid())
+		{
+			ApplyMarksmanRifleJson(*MarksmanRifleBlock, Config);
+		}
 	}
 
 	void ApplyVehicleWeapons(FVehicleTurretConfig* Turret, FVehicleCrushConfig* Crush, FVehicleHullConfig* Hull)
@@ -563,18 +626,21 @@ namespace WeaponTuning
 		const FMarksmanConfig Marksman = MarksmanDefaults ? *MarksmanDefaults : FMarksmanConfig();
 		const FEnemyTurnProfile Turn = EnemyTurnRules::ProfileFor(EEnemyArchetype::Marksman);
 		TSharedRef<FJsonObject> Rifle = MakeShared<FJsonObject>();
-		Rifle->SetNumberField(TEXT("damage"), Round4(Marksman.ShotDamage));
+		// The ballistic part on the weapon schema (2026-11-09), the AI part the enemy's own keys.
+		Rifle->SetStringField(TEXT("name"), TEXT("Marksman Rifle"));
+		Rifle->SetStringField(TEXT("kind"), TEXT("hitscan"));
+		Rifle->SetNumberField(TEXT("base_damage"), Round4(Marksman.ShotDamage));
+		Rifle->SetNumberField(TEXT("fire_rate"), Round4(Marksman.ShotCooldown));
+		Rifle->SetNumberField(TEXT("effective_range_m"), Round4(Marksman.EffectiveRangeCm / 100.f));
+		Rifle->SetNumberField(TEXT("attack_range_m"), Round4(Marksman.MaxRangeCm / 100.f));
 		Rifle->SetNumberField(TEXT("base_accuracy"), Round4(Marksman.BaseAccuracy));
 		Rifle->SetNumberField(TEXT("aim_duration"), Round4(Marksman.AimDuration));
-		Rifle->SetNumberField(TEXT("shot_cooldown"), Round4(Marksman.ShotCooldown));
 		Rifle->SetNumberField(TEXT("crit_chance"), Round4(Marksman.CritChance));
 		Rifle->SetNumberField(TEXT("crit_multiplier"), Round4(Marksman.CritMultiplier));
 		Rifle->SetNumberField(TEXT("prone_accuracy_bonus"), Round4(Marksman.ProneAccuracyBonus));
 		Rifle->SetNumberField(TEXT("crouch_accuracy_bonus"), Round4(Marksman.CrouchAccuracyBonus));
 		Rifle->SetNumberField(TEXT("preferred_min_range_m"), Round4(Marksman.PreferredMinRange / 100.f));
 		Rifle->SetNumberField(TEXT("preferred_max_range_m"), Round4(Marksman.PreferredMaxRange / 100.f));
-		Rifle->SetNumberField(TEXT("effective_range_m"), Round4(Marksman.EffectiveRangeCm / 100.f));
-		Rifle->SetNumberField(TEXT("max_range_m"), Round4(Marksman.MaxRangeCm / 100.f));
 		Rifle->SetNumberField(TEXT("tb_damage_scale"), Round4(Turn.DamageScale));
 		Rifle->SetNumberField(TEXT("tb_attack_ap"), Round4(Turn.AttackAPCost));
 		Rifle->SetNumberField(TEXT("tb_min_range_cells"), Round4(Turn.MinRange));

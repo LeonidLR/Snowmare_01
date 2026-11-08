@@ -6,6 +6,7 @@ class AOperativeCharacter;
 class FJsonObject;
 class UWeaponDataAsset;
 struct FMarksmanConfig;
+struct FWeaponStats;
 struct FEnemyTurnProfile;
 struct FTurnBasedBalance;
 struct FVehicleTurretConfig;
@@ -81,6 +82,19 @@ namespace WeaponTuning
 	CODEXTACTICS_API void ApplyGrenades(AOperativeCharacter& Operative);
 	/** The file's enemy_weapons.marksman_rifle onto a marksman's config (BeginPlay, before the Codex.Marksman.* overrides). */
 	CODEXTACTICS_API void ApplyMarksmanRifle(FMarksmanConfig& Config);
+
+	/**
+	 * The Marksman's rifle on the weapon schema (the sniper rifle onto the framework, 2026-11-09): the ballistic part of the block is a schema
+	 * weapon block - kind, base_damage, fire_rate (the shot interval = the old shot_cooldown), effective_range_m, attack_range_m (the old
+	 * max_range_m) - parsed and validated by WeaponStatsRules into an FWeaponStats seeded from the config, and written back into ShotDamage /
+	 * ShotCooldown / EffectiveRangeCm / MaxRangeCm; the AI part (base_accuracy, aim_duration, crit_*, the stance bonuses, the preferred band)
+	 * stays the enemy's own keys. The old key names (damage, shot_cooldown, max_range_m) are still read first (old files). An invalid schema
+	 * part is rejected (the config keeps what it had) and named in OutErrors. Returns the stats in force in OutStats.
+	 */
+	CODEXTACTICS_API void ApplyMarksmanRifleJson(const FJsonObject& Json, FMarksmanConfig& Config, FWeaponStats* OutStats = nullptr, TArray<FString>* OutErrors = nullptr);
+
+	/** The rifle's stats seeded from a config (damage, shot interval, effective / max range; hitscan, no ammo). */
+	CODEXTACTICS_API FWeaponStats MarksmanRifleStats(const FMarksmanConfig& Config);
 	/**
 	 * The file's turn_based_rules onto the turn-based balance (user decisions 2026-10-04): crouch_move_cost_multiplier,
 	 * cover_fire_accuracy_multiplier, enemy_fire_at_cover_multiplier, crouch_damage_multiplier, prone_damage_multiplier
