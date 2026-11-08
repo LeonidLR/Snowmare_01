@@ -407,5 +407,17 @@ three** at it. This replaces every "deploy / bearer within 3 m / crew moves with
 WEAPONS_BALLISTICS draft's "deployed 3.5 s": the crew is a set of three slots at a map object (closest existing analogue: the turret /
 emplacement code), not a formation group on the march. Code consequences: the mortar no longer depends on the formation-group layer (P2);
 it depends on the projectile + explosion code (shared with the RPG-7) and on nest placement in the levels / level generator.
-Open questions to the designer (asked 2026-11-08): who uses the nests (enemies, the squad, both); with fewer than three at the nest - no
-fire, or slower / less accurate fire; targeting - only where one of ours has line of sight (a spotter), or anywhere on the map.
+Designer answers (2026-11-08, same day):
+- **Who:** both sides - a PMC nest shells the squad and can be suppressed / taken, then the squad fires it.
+- **Crew:** fewer than three at the nest = no fire.
+- **Ballistics: high-angle (plunging) fire, NOT the RPG's flat trajectory.** Reference (82-mm 2B14 Podnos: elevation 45-85 deg, minimum
+  range ~80 m, maximum ~4.1-4.3 km, sustained ~24 rds/min): the round goes up and comes down almost vertically, so it lands behind walls
+  and in courtyards that direct fire cannot reach; there is a minimum range; the flight takes long (real: tens of seconds; game: a few
+  seconds, tunable) - time for the target to hear the launch and run. Game rules: walls and side cover give no protection from a plunging
+  round (only a roof / interior does); the first rounds scatter and tighten while a spotter keeps the impact area in sight (bracketing,
+  simplified).
+- **Where it may fire (the spotter rule, same for the squad and the PMC):** at any point that **someone on its side currently sees** and
+  that is inside the mortar's range. In practice the useful spotter is the man farthest forward: our fighter who has moved away from the
+  squad to a flank, or the PMC fighter closest to us / a PMC observer on the side. No spotter = no fire.
+- **Range:** high but not realistic (a real 4 km covers the whole map): game min / max range tunables (start: min 30 m, max 250 m
+  **(guess - check against the level sizes)**).
