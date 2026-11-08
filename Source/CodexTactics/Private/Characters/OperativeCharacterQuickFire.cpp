@@ -286,7 +286,7 @@ void AOperativeCharacter::FireQuickFireRound(const FVector& Aim)
 	const FQuickFireConfig& Config = QuickFireRules::GetConfig();
 	const int32 StanceIndex = Stance == EOperativeStance::Prone ? 2 : (Stance == EOperativeStance::Crouching ? 1 : 0);
 	FOperativeAreaRound Spec;
-	Spec.SpreadDeg = QuickFireRules::GetSpreadDeg(StanceIndex, Config);
+	Spec.SpreadDeg = QuickFireRules::GetSpreadDeg(StanceIndex, Config) * (CurrentWeapon ? CurrentWeapon->Stats.Accuracy.SpreadScale : 1.f); // spread_scale (1 = as before)
 	Spec.HitMultiplier = Config.AreaFireHitMultiplier;
 	Spec.NextRoundDelay = FMath::Max(0.08f, CurrentWeapon ? CurrentWeapon->Stats.Fire.ShotIntervalSeconds : 0.65f);
 	Spec.LogTag = TEXT("QuickFire");

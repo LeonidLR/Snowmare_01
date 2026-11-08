@@ -31,6 +31,22 @@ enum class EArmorTier : uint8
 };
 
 /**
+ * Armour classes of bodies and vehicles (weapons framework, game designer decision 1, 2026-11-08; docs/design/WEAPONS_FRAMEWORK.md).
+ * None = unprotected, Light .. Heavy = the enemy armour tiers (EArmorTier) and body armour, Vehicle = the APC hull. A weapon's
+ * penetration class (FWeaponDamageStats::PenetrationClass) is the highest class it defeats: below the target's class its armour
+ * penetration does not apply (ArmorRules). Order matters (compared as numbers).
+ */
+UENUM(BlueprintType)
+enum class EArmorClass : uint8
+{
+	None,
+	Light,
+	Medium,
+	Heavy,
+	Vehicle
+};
+
+/**
  * Status effects matching Godot weapon_data.gd / enemy_base.gd:
  * 0: None, 1: Burning, 2: Frozen, 3: Shocked/Stagger, 4: Bleeding, 5: ArmorShred.
  */
@@ -140,6 +156,13 @@ struct CODEXTACTICS_API FDamageSpec
 	/** Armor penetration fraction [0..1] that reduces target's effective armor. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage", meta = (ClampMin = "0.0", ClampMax = "1.0"))
 	float ArmorPenetration = 0.0f;
+
+	/**
+	 * The weapon's penetration class (ArmorRules): against a body of a HIGHER armour class ArmorPenetration does not apply. Default
+	 * Vehicle = no class limit (every non-weapon source: blasts, claws, turrets, traps, status ticks keep the plain formula).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage")
+	EArmorClass PenetrationClass = EArmorClass::Vehicle;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage")
 	FString AttackerSource;

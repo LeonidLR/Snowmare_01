@@ -4,6 +4,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/MarksmanAIRules.h"
 #include "Characters/MarksmanEnemyCharacter.h"
+#include "Combat/ArmorRules.h"
 #include "Combat/WeaponRangeRules.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Tactics/EnemyTurnRules.h"
@@ -127,6 +128,22 @@ namespace WeaponTuning
 		}
 		double FileSchema = 1.0;
 		LastWeaponReport.SchemaVersion = Root->TryGetNumberField(TEXT("schema_version"), FileSchema) ? FMath::RoundToInt(FileSchema) : 1;
+		// Body armour (weapons framework, decision 1 2026-11-08): "armor.bodies" - class + reduction per body; read by the enemies /
+		// operatives as they spawn (ArmorRules::ApplyBody). No block = the C++ fallbacks.
+		{
+			TMap<FString, FBodyArmor> Bodies;
+			const TSharedPtr<FJsonObject>* Armor = nullptr;
+			if (Root->TryGetObjectField(TEXT("armor"), Armor) && Armor && Armor->IsValid())
+			{
+				ArmorRules::ParseBodies(**Armor, Bodies, &LastWeaponReport.ArmorErrors);
+			}
+			for (const FString& Error : LastWeaponReport.ArmorErrors)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s (that body keeps its code value)"), *Error);
+			}
+			LastWeaponReport.ArmorBodies = Bodies.Num();
+			ArmorRules::SetBodies(Bodies);
+		}
 		const TSharedPtr<FJsonObject>* Grenade = nullptr;
 		if (Root->TryGetObjectField(TEXT("grenade"), Grenade) && Grenade)
 		{
@@ -373,6 +390,25 @@ namespace WeaponTuning
 			Weapons->SetObjectField(Weapon->WeaponId, WeaponToJson(*Weapon));
 		}
 		Root->SetObjectField(TEXT("weapons"), Weapons);
+		// Body armour: the table in force (the file's, read at the last ApplyFile).
+		{
+			TSharedRef<FJsonObject> Armor = MakeShared<FJsonObject>();
+			Armor->SetStringField(TEXT("comment"), TEXT("Armour per body (decision 1, 2026-11-08): class none / light / medium / heavy / vehicle + the share of damage it stops; a weapon of a lower penetration_class gets no armor_penetration against it."));
+			TSharedRef<FJsonObject> Bodies = MakeShared<FJsonObject>();
+			TArray<FString> Keys;
+			ArmorRules::GetBodies().GetKeys(Keys);
+			Keys.Sort();
+			for (const FString& Key : Keys)
+			{
+				const FBodyArmor& Body = ArmorRules::GetBodies()[Key];
+				TSharedRef<FJsonObject> Entry = MakeShared<FJsonObject>();
+				Entry->SetStringField(TEXT("class"), WeaponStatsRules::ArmorClassName(Body.Class));
+				Entry->SetNumberField(TEXT("reduction"), Round4(Body.Reduction));
+				Bodies->SetObjectField(Key, Entry);
+			}
+			Armor->SetObjectField(TEXT("bodies"), Bodies);
+			Root->SetObjectField(TEXT("armor"), Armor);
+		}
 		TSharedRef<FJsonObject> RangeFalloff = MakeShared<FJsonObject>();
 		RangeFalloff->SetNumberField(TEXT("floor_multiplier"), Round4(WeaponRangeRules::GetFalloff().FloorMultiplier));
 		RangeFalloff->SetNumberField(TEXT("exponent"), Round4(WeaponRangeRules::GetFalloff().Exponent));

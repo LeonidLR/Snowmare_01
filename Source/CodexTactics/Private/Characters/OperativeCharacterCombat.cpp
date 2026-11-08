@@ -23,6 +23,7 @@
 #include "Combat/SightRules.h"
 #include "Combat/SuppressionSubsystem.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Combat/WeaponBallisticsRules.h"
 #include "Combat/UnderFireRules.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -546,9 +547,19 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 			bIsReloading = false;
 			const int32 MaxClip = CurrentWeapon ? CurrentWeapon->Stats.Ammo.MagazineSize : 30;
 			const int32 Needed = MaxClip - CurrentClip;
-			const int32 Added = FMath::Min(Needed, ReserveAmmo);
+			// A whole magazine, or one shell of a per-shell weapon (decision 3, 2026-11-08: the shotgun).
+			const int32 Added = CurrentWeapon ? WeaponBallisticsRules::ReloadStepRounds(CurrentWeapon->Stats.Ammo, CurrentClip, ReserveAmmo)
+				: FMath::Min(Needed, ReserveAmmo);
 			CurrentClip += Added;
 			ReserveAmmo -= Added;
+			// Per shell: the next shell, unless full / out of reserve or he has something to fire at with a shell in (interruptible).
+			const bool bWantsToFire = CurrentCombatTarget.IsValid() || bQuickFireActive || bSuppressActive;
+			if (CurrentWeapon && WeaponBallisticsRules::ContinueReload(CurrentWeapon->Stats.Ammo, CurrentClip, ReserveAmmo)
+				&& !WeaponBallisticsRules::InterruptReload(CurrentWeapon->Stats.Ammo, CurrentClip, bWantsToFire))
+			{
+				bIsReloading = true;
+				ReloadTimer += WeaponBallisticsRules::ReloadStepSeconds(CurrentWeapon->Stats.Ammo);
+			}
 		}
 		return TEXT("reloading");
 	}
@@ -940,7 +951,11 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 		OpenShotLastTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	}
 
-	const bool bHit = bForceHitForTesting || (FMath::FRand() <= HitChance);
+	// Pellets (decision 2, 2026-11-08): a shotgun's pellets roll the chance each; one pellet = the single roll as before.
+	const int32 PelletCount = CurrentWeapon ? FMath::Max(1, CurrentWeapon->Stats.Pellets.Count) : 1;
+	const int32 PelletHits = WeaponBallisticsRules::RollPelletHits(PelletCount, HitChance, []() { return FMath::FRand(); }, bForceHitForTesting);
+	const bool bHit = PelletHits > 0;
+	LastShotPelletHits = PelletHits;
 	if (!bHit)
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("MISS!"), FLinearColor(0.75f, 0.75f, 0.75f));
@@ -971,13 +986,13 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 
 	if (bHit)
 	{
-		ApplyRangedHit(Target, Cover, DistCells, bRagingShot);
+		ApplyRangedHit(Target, Cover, DistCells, bRagingShot, WeaponBallisticsRules::PelletDamageShare(PelletHits, PelletCount));
 	}
 
 	return bHit;
 }
 
-void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot)
+void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 DistCells, bool bRagingShot, float PelletShare)
 {
 	// Godot _shoot_at_target: crit on luck (x2), elevation (+15 %), stance, cover and distance factors.
 	const float CritRoll = ForcedCritRollForTesting >= 0.f ? (ForcedCritRollForTesting >= 1.f ? 0.f : 1.f) : FMath::FRand();
@@ -990,6 +1005,13 @@ void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 Dist
 	{
 		DistanceMultiplier = CurrentWeapon->Stats.Accuracy.DamageMultiplierByCell[FMath::Clamp(DistCells - 1, 0, CurrentWeapon->Stats.Accuracy.DamageMultiplierByCell.Num() - 1)];
 	}
+	// Damage falloff past the effective range (decision 4, 2026-11-08: the shotgun x0.4 / the pistol x0.6 at the max reach; others x1).
+	if (CurrentWeapon)
+	{
+		DistanceMultiplier *= WeaponBallisticsRules::DamageFalloffMultiplier(CurrentWeapon->Stats,
+			static_cast<float>(FVector::Dist2D(GetActorLocation(), Target->GetActorLocation())));
+	}
+	DistanceMultiplier *= PelletShare;
 	if (bCrit)
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🎯 CRIT x2!"), FLinearColor(1.f, 0.85f, 0.1f));
@@ -1006,6 +1028,7 @@ void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 Dist
 	Spec.bMelee = !UsesAmmo(); // the knife
 	Spec.DamageType = CurrentWeapon ? CurrentWeapon->Stats.Damage.DamageType : EDamageType::Kinetic;
 	Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->Stats.Damage.ArmorPenetration : 0.20f;
+	Spec.PenetrationClass = CurrentWeapon ? CurrentWeapon->Stats.Damage.PenetrationClass : EArmorClass::Vehicle; // decision 1 (no weapon: no class limit)
 	Spec.AttackerSource = DisplayName.ToString();
 	if (CurrentWeapon)
 	{

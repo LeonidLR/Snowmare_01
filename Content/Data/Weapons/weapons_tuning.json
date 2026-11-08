@@ -6,6 +6,47 @@
     "floor_multiplier": 0.1,
     "exponent": 2
   },
+  "armor": {
+    "comment": "Armour per body (game designer decision 1, 2026-11-08): class none / light / medium / heavy / vehicle + the share of damage it stops (multiplicative with the weapon's armor_penetration). A weapon whose penetration_class is below the body's class gets NO armor_penetration against it. 'operative' = the squad and the PMC fighters; the rest are the enemy archetypes. The APC hull keeps its own factors (vehicle_weapons.apc_hull).",
+    "bodies": {
+      "operative": {
+        "class": "light",
+        "reduction": 0.1
+      },
+      "base": {
+        "class": "light",
+        "reduction": 0.1
+      },
+      "frost_hound": {
+        "class": "light",
+        "reduction": 0.1
+      },
+      "frostbitten": {
+        "class": "light",
+        "reduction": 0.15
+      },
+      "cutter": {
+        "class": "light",
+        "reduction": 0.15
+      },
+      "spitter": {
+        "class": "medium",
+        "reduction": 0.4
+      },
+      "marksman": {
+        "class": "medium",
+        "reduction": 0.15
+      },
+      "cryo_drone": {
+        "class": "medium",
+        "reduction": 0.05
+      },
+      "brute": {
+        "class": "heavy",
+        "reduction": 0.75
+      }
+    }
+  },
   "weapons": {
     "cryo_emitter": {
       "name": "Absolute Cryo Emitter",
@@ -30,7 +71,8 @@
         0.35,
         0.15
       ],
-      "distance_damage_multipliers": []
+      "distance_damage_multipliers": [],
+      "penetration_class": "light"
     },
     "flamethrower": {
       "name": "Prometheus Flamethrower",
@@ -55,7 +97,8 @@
         0.35,
         0.15
       ],
-      "distance_damage_multipliers": []
+      "distance_damage_multipliers": [],
+      "penetration_class": "light"
     },
     "grenade": {
       "name": "Hand Grenade",
@@ -79,7 +122,8 @@
         0.35,
         0.15
       ],
-      "distance_damage_multipliers": []
+      "distance_damage_multipliers": [],
+      "penetration_class": "medium"
     },
     "hammer": {
       "name": "Heavy Sledgehammer",
@@ -103,7 +147,8 @@
         0.35,
         0.15
       ],
-      "distance_damage_multipliers": []
+      "distance_damage_multipliers": [],
+      "penetration_class": "medium"
     },
     "knife": {
       "name": "Tactical Knife",
@@ -127,7 +172,8 @@
         0.35,
         0.15
       ],
-      "distance_damage_multipliers": []
+      "distance_damage_multipliers": [],
+      "penetration_class": "light"
     },
     "m16": {
       "name": "M16A2 Assault Rifle",
@@ -182,7 +228,10 @@
         1,
         1,
         1
-      ]
+      ],
+      "penetration_class": "medium",
+      "recoil_per_round_deg": 0.3,
+      "recoil_recovery_s": 0.5
     },
     "pistol": {
       "name": "Beretta Pistol",
@@ -215,7 +264,9 @@
         0.4,
         0.25,
         0.12
-      ]
+      ],
+      "penetration_class": "light",
+      "damage_falloff_floor": 0.6
     },
     "plasma_carbine": {
       "name": "Spectre Plasma Carbine",
@@ -240,7 +291,8 @@
         0.35,
         0.15
       ],
-      "distance_damage_multipliers": []
+      "distance_damage_multipliers": [],
+      "penetration_class": "heavy"
     },
     "shotgun": {
       "name": "Remington 870 Shotgun",
@@ -265,7 +317,15 @@
         0.35,
         0.15
       ],
-      "distance_damage_multipliers": []
+      "distance_damage_multipliers": [],
+      "penetration_class": "light",
+      "damage_falloff_floor": 0.4,
+      "reload_mode": "per_round",
+      "reload_per_round_s": 0.5,
+      "pellets": {
+        "count": 8,
+        "cone_half_angle_deg": 6
+      }
     },
     "sniper_rifle": {
       "name": "Sniper Rifle",
@@ -306,7 +366,8 @@
         1,
         1,
         1
-      ]
+      ],
+      "penetration_class": "heavy"
     }
   },
   "grenade": {

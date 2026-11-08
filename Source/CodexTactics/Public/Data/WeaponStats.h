@@ -7,10 +7,10 @@
 
 /**
  * The unified weapon schema (weapons framework step 1, week plan 2026-11-08; docs/design/WEAPONS_FRAMEWORK.md).
- * Godot reference: resources/weapon_data.gd (the common core: damage, range, fire rate, ammo, status, thermal, grid). The
- * per-kind blocks (pellets, projectile, explosion), armour classes, spread scale and recoil are UE-only and RESERVED: they
- * are parsed and validated today, read by the ballistics / penetration code from 2026-11-09 on. Their defaults mean
- * "today's behaviour" (one pellet, no projectile, no splash, spread x1, no recoil).
+ * Godot reference: resources/weapon_data.gd (the common core: damage, range, fire rate, ammo, status, thermal, grid). UE-only:
+ * kind, armour penetration class, damage falloff, per-round reload, spread scale, recoil and pellets (read since step 2, the
+ * game designer's decisions 2026-11-08), min range + the projectile / explosion blocks (RESERVED for week 2: parsed and
+ * validated only). Defaults mean the pre-framework behaviour (one pellet, no falloff, magazine reload, spread x1, no recoil).
  *
  * Every weapon user - the squad, the hostile PMC fighters (AOperativeCharacter with TeamId != 0), the turn-based grid -
  * reads UWeaponDataAsset::Stats, never the asset's flat fields. Units: centimetres / seconds in C++, metres / seconds in
@@ -43,20 +43,7 @@ enum class EWeaponReloadMode : uint8
 	PerRound
 };
 
-/**
- * Armour classes of bodies and vehicles (reserved; penetration behaviour from 2026-11-09). None = unprotected, Light .. Heavy =
- * the enemy armour tiers (EArmorTier) and body armour, Vehicle = the APC hull. A weapon's PenetrationClass is the highest class it
- * defeats at full effect.
- */
-UENUM(BlueprintType)
-enum class EArmorClass : uint8
-{
-	None,
-	Light,
-	Medium,
-	Heavy,
-	Vehicle
-};
+/* EArmorClass (armour classes of bodies / vehicles) lives in Data/CombatTypes.h: FDamageSpec carries it too. */
 
 /** How the operative handles the weapon (fire stance, animation set). */
 UENUM(BlueprintType)
@@ -89,11 +76,11 @@ struct CODEXTACTICS_API FWeaponDamageStats
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Damage", meta = (ClampMin = "0", ClampMax = "1"))
 	float ArmorPenetration = 0.20f;
 
-	/** RESERVED (2026-11-09): the highest armour class the weapon defeats at full effect. */
+	/** The highest armour class the weapon defeats: against a higher-class body its ArmorPenetration does not apply (ArmorRules, decision 1). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Damage")
 	EArmorClass PenetrationClass = EArmorClass::Light;
 
-	/** RESERVED (2026-11-09): damage multiplier at the max reach (linear from the effective range); 1 = no damage falloff. */
+	/** Damage multiplier at the max reach, linear from the effective range (WeaponBallisticsRules, decision 4); 1 = no damage falloff. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Damage", meta = (ClampMin = "0", ClampMax = "1"))
 	float FalloffDamageFloor = 1.f;
 };
@@ -176,11 +163,11 @@ struct CODEXTACTICS_API FWeaponAmmoStats
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Ammo", meta = (ClampMin = "0"))
 	float ReloadSeconds = 2.68f;
 
-	/** RESERVED: the whole magazine at once (today, every weapon) or round by round. */
+	/** The whole magazine at once, or round by round (the shotgun, decision 3; WeaponBallisticsRules). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Ammo")
 	EWeaponReloadMode ReloadMode = EWeaponReloadMode::Magazine;
 
-	/** RESERVED: seconds per round when ReloadMode is PerRound; 0 = ReloadSeconds / MagazineSize. */
+	/** Seconds per round when ReloadMode is PerRound; 0 = ReloadSeconds / MagazineSize. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Ammo", meta = (ClampMin = "0"))
 	float PerRoundReloadSeconds = 0.f;
 };
@@ -202,15 +189,15 @@ struct CODEXTACTICS_API FWeaponAccuracyStats
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Accuracy")
 	TArray<float> DamageMultiplierByCell;
 
-	/** RESERVED (2026-11-09): x the quick fire / SUPPRESS stance spread cone (QuickFireRules / SuppressionRules); 1 = today. */
+	/** x the quick fire / SUPPRESS stance spread cone (QuickFireRules / SuppressionRules); 1 = as before. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Accuracy", meta = (ClampMin = "0"))
 	float SpreadScale = 1.f;
 
-	/** RESERVED (2026-11-09): spread added per consecutive round, degrees (bloom); 0 = no recoil. */
+	/** Spread added per full-auto round of the SUPPRESS order, degrees (bloom, decision 5); 0 = no recoil. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Accuracy", meta = (ClampMin = "0"))
 	float RecoilPerRoundDeg = 0.f;
 
-	/** RESERVED (2026-11-09): seconds for the recoil bloom to settle back to zero. */
+	/** Seconds for one round's recoil to settle (the bloom falls at RecoilPerRoundDeg / this per second). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Accuracy", meta = (ClampMin = "0"))
 	float RecoilRecoverySeconds = 0.f;
 
@@ -272,20 +259,17 @@ struct CODEXTACTICS_API FWeaponTurnBasedStats
 	int32 MaxRangeCells = 5;
 };
 
-/** RESERVED per-kind block (Hitscan; the shotgun D-1): several traces per round in a cone (JSON "pellets"). */
+/** Per-kind block (Hitscan; the shotgun, decision 2): several pellets per aimed shot, each rolling the hit chance (JSON "pellets"). */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FWeaponPelletStats
 {
 	GENERATED_BODY()
 
-	/**
-	 * Traces per round; 1 = a single bullet (today). How BaseDamage maps onto the pellets is the game designer's open question 2
-	 * (WEAPONS_FRAMEWORK.md; recommended: BaseDamage = the whole shell at point blank, split equally over Count).
-	 */
+	/** Pellets per aimed shot; 1 = a single bullet. BaseDamage = the whole shot at point blank, split evenly over Count (decision 2). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Pellets", meta = (ClampMin = "1"))
 	int32 Count = 1;
 
-	/** Half-angle of the pellet cone, degrees. */
+	/** Half-angle of the pellet cone, degrees (data for the visuals / the area fire; the aimed shot rolls per pellet). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Pellets", meta = (ClampMin = "0", ClampMax = "45"))
 	float ConeHalfAngleDeg = 0.f;
 };

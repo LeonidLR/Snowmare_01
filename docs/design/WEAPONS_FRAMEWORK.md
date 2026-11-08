@@ -5,8 +5,8 @@
 > the pistol; then the shotgun D-1 (#21), the sniper rifle moved onto the framework, the horde. Later weeks build on the same schema:
 > RPG-7 and fixed mortar nests (week 2, shared projectile / explosion code), squad of 4-6 (week 3), APC (week 4).
 >
-> **Nothing plays differently today.** Every number the game used yesterday it uses today (parity test, section 9). The new fields are
-> data only; their defaults mean "today's behaviour".
+> Step 1 changed no number (parity test, section 9). **Step 2 (section 12) changes balance on purpose** - the game designer's decisions
+> of 2026-11-08 (section 11); every changed number is listed in 12.2.
 >
 > Code: `Source/CodexTactics/Public/Data/WeaponStats.h` (the structs), `Data/WeaponStatsRules.h/.cpp` (JSON <-> stats, validation),
 > `Data/WeaponDataAsset.h` (`UWeaponDataAsset::Stats`), `Data/WeaponTuning.cpp` (the file loader). Tests `CodexTactics.Weapons.Schema.*`.
@@ -101,17 +101,17 @@ Validation ties kinds to data: a melee weapon uses no ammo; a projectile needs a
 
 ## 4. Armour classes and penetration (data today, behaviour Nov 9)
 
-What the code does today (unchanged): each body has ONE armour reduction fraction (`UHealthComponent::BaseArmorReduction`: operatives
-and PMC 0.10; hounds / cutters / frostbitten 0.10 (Light); spitter / cryo drone / marksman 0.40 (Medium); brute 0.75 (Heavy) - typed in
-C++, `EnemyCharacterArchetype.cpp`) and the hit does `damage x (1 - reduction x (1 - armor_penetration))`, then x the elemental
-affinity. The APC hull has its own factors per source (`vehicle_weapons.apc_hull.rifle_factor` 0.25, `explosion_factor` 1, ...).
+What the code did before step 2: each body has ONE armour reduction fraction (`UHealthComponent::BaseArmorReduction`: operatives and
+PMC 0.10; hound / base 0.10, frostbitten / cutter 0.15 (tier Light); spitter 0.40, marksman 0.15, cryo drone 0.05 (tier Medium); brute
+0.75 (tier Heavy) - typed in C++, `EnemyAIRules::GetBaseArmor`) and the hit does `damage x (1 - reduction x (1 - armor_penetration))`,
+then x the elemental affinity. (Step 2 moved these numbers, unchanged, into `weapons_tuning.json` "armor.bodies", section 12.) The APC hull has its own factors per source (`vehicle_weapons.apc_hull.rifle_factor` 0.25, `explosion_factor` 1, ...).
 
-Schema now: `EArmorClass` {None, Light, Medium, Heavy, Vehicle} and the weapon's `penetration_class` (the highest class it defeats at full
-effect). Recommended Nov 9 model (open question 1): bodies get `armor_class` + the class's reduction moved from C++ into data (the
+Schema: `EArmorClass` {None, Light, Medium, Heavy, Vehicle} and the weapon's `penetration_class` (the highest class it defeats at full
+effect). The model below was the recommendation of open question 1; it is decided (section 11) and implemented (section 12): bodies get `armor_class` + the class's reduction moved from C++ into data (the
 `EArmorTier` values above are the starting numbers); the multiplicative rule stays for a weapon at or above the target's class; below it,
 the penetration does not apply (the full class reduction), and against Vehicle only explosives / the RPG matter (the hull factors).
-Recommended classes per weapon (NOT in the file yet - the designer confirms first): knife / pistol / shotgun / cryo / flamethrower light,
-M16 / hammer medium, sniper / plasma heavy, grenade medium, RPG-7 vehicle.
+Classes per weapon (decided, in the file since step 2): knife / pistol / shotgun / cryo / flamethrower light, M16 / hammer / grenade
+medium, sniper / plasma heavy, RPG-7 vehicle (week 2).
 
 ## 5. Operatives, PMC fighters and enemies share it
 
@@ -244,3 +244,68 @@ pistol / shotgun numbers marked "in data". Contradictions / corrections:
    single aimed shots stay roll-based without recoil.
 
 Implementation: step 2 (ballistics + armour penetration), section 12.
+
+## 12. Step 2: ballistics + armour penetration (branch `feat/weapons-framework`, 2026-11-08, ahead of the Nov 9 plan)
+
+Code: `Combat/ArmorRules` (the class rule, the body table), `Combat/WeaponBallisticsRules` (falloff, pellets, per-shell reload, recoil),
+`UHealthComponent::ArmorClass`, `FDamageSpec::PenetrationClass`. Tests `CodexTactics.Weapons.Armour.*`, `CodexTactics.Weapons.Ballistics.*`.
+
+### 12.1 What it does
+
+1. **Armour classes on bodies (decision 1).** `weapons_tuning.json` root `"armor": {"bodies": {...}}`, nine bodies: `operative` (the
+   squad AND the PMC fighters) light 0.10, `base` / `frost_hound` light 0.10, `frostbitten` / `cutter` light 0.15, `spitter` medium 0.40,
+   `marksman` medium 0.15, `cryo_drone` medium 0.05, `brute` heavy 0.75. The reductions are the old C++ values (no reduction changed,
+   test `BodiesFromFile`), the classes the old tiers. Read as a body spawns (the enemy archetype setup, `AOperativeCharacter::BeginPlay`);
+   a body without an entry keeps the C++ fallback. The APC hull keeps its own factors (`vehicle_weapons.apc_hull`: rifle x0.25,
+   explosion x1) - it is class Vehicle by construction; nothing changed there.
+2. **The class rule (decision 1), the multiplicative formula kept.** `reduction met = base (x0.3 when shredded) x (1 - penetration)` only
+   when the weapon's `penetration_class` >= the body's class; below it `reduction met = base`. Only weapon hits carry a class
+   (`ApplyRangedHit`: aimed shots, quick fire, SUPPRESS - the squad and the PMC fighters); every other damage source (claws, blasts,
+   turrets, traps, burning ticks, the marksman's rifle) keeps the old formula (`FDamageSpec::PenetrationClass` default Vehicle = no limit).
+   Turn-based keeps its own Gorky flat armour points (no change).
+3. **Damage falloff (decision 4).** Real-time hits: x1 up to the effective range, linear to `damage_falloff_floor` at the max reach -
+   shotgun 0.4 (8 -> 15 m), pistol 0.6 (15 -> 25 m), every other weapon 1. It stacks with the per-cell `distance_damage_multipliers`.
+4. **Shotgun pellets (decision 2).** `pellets` {count 8, cone 6 deg}: an AIMED shot rolls its hit chance 8 times; the hit does
+   45 x hits / 8 (5.625 a pellet); all 8 missing = a miss. The average damage is unchanged (45 x chance); single shots vary less and a
+   "MISS" is rarer ((1 - p)^8 instead of 1 - p). Quick fire / SUPPRESS rounds stay one roll (an area spray). The shotgun is not in the
+   starting arsenal: it matters where a level / loot hands one out, and for the D-1 (#21).
+5. **Per-shell reload (decision 3).** Shotgun `reload_mode` per_round, 0.5 s a shell: 8 shells from empty = 4.0 s (was 2.4 s for the whole
+   magazine). Between shells the reload stops as soon as he has something to fire at (an engaged target, a quick fire or SUPPRESS order)
+   and at least one shell is in. The reload animation still plays once at the start (one shell's length); a per-shell loop in the ABP is
+   the user's polish.
+6. **M16 full-auto recoil (decision 5).** The SUPPRESS order's full-auto rounds add 0.3 deg of spray spread each, settling at 0.6 deg / s
+   (one round's kick in 0.5 s): a 10-round burst at 0.1 s ends 2.16 deg wider than it started (standing 3.5 -> 5.66 deg). Aimed shots,
+   quick fire and semi-auto SUPPRESS rounds: no recoil. `spread_scale` (x1, unchanged) now multiplies the quick fire / SUPPRESS spread.
+
+### 12.2 Every number that changes (real time; one hit before cover / stance / crit / elemental affinity; before -> after)
+
+Class rule (inside the effective range; only these weapon x body pairs change):
+
+| Weapon (class, penetration) | spitter (medium 0.40) | marksman (medium 0.15) | cryo drone (medium 0.05) | brute (heavy 0.75) |
+|---|---|---|---|---|
+| knife 22 (light, 0.15) | 14.52 -> 13.20 | 19.20 -> 18.70 | 21.07 -> 20.90 | 7.98 -> 5.50 |
+| pistol 16 (light, 0.10), point blank | 10.24 -> 9.60 | 13.84 -> 13.60 | 15.28 -> 15.20 | 5.20 -> 4.00 |
+| shotgun 45 (light, 0.10), all pellets in | 28.80 -> 27.00 | 38.92 -> 38.25 | 42.98 -> 42.75 | 14.62 -> 11.25 |
+| flamethrower 32 (light, 0.30) | 23.04 -> 19.20 | 28.64 -> 27.20 | 30.88 -> 30.40 | 15.20 -> 8.00 |
+| M16 18 (medium, 0.20) | 12.24 = | 15.84 = | 17.28 = | 7.20 -> 4.50 |
+| hammer 65 (medium, 0.60) | 54.60 = | 61.10 = | 63.70 = | **45.50 -> 16.25** |
+
+Unchanged: every weapon against the squad / the PMC fighters, hounds, frostbitten, cutters (all light); the cryo emitter (penetration 0:
+nothing to remove); the sniper rifle and the plasma carbine (heavy) against everything; the grenade, the turret, barrels, mines, the
+marksman's rifle and every enemy attack (no class limit); turn-based combat.
+
+Damage falloff (against a hound, light 0.10):
+
+| Weapon | 1.5 m | 5 m | 8 m | 10 m | 11.5 m | 15 m | 20 m | 25 m |
+|---|---|---|---|---|---|---|---|---|
+| shotgun | 40.95 = | 40.95 = | 40.95 = | - | 40.95 -> 28.66 | 40.95 -> 16.38 | - | - |
+| pistol | 14.56 = | 8.74 = | - | 1.75 = | - | 1.75 = | 1.75 -> 1.40 | 1.75 -> 1.05 |
+
+Shotgun against the brute: 14.62 -> 11.25 up to 8 m, 7.87 at 11.5 m, 4.50 at 15 m (class rule x falloff).
+Reload: shotgun empty -> full 2.4 s -> 4.0 s (0.5 s a shell, firing possible after the first). Recoil: M16 SUPPRESS spray +0.24 deg per
+round inside a 0.1 s burst, gone 0.5 s per round after the burst.
+
+A reading of the data for the designer (not a fork): the pistol's own per-cell table (`distance_damage_multipliers` 1 / 0.8 / 0.6 / 0.4 /
+0.25 / 0.12 per 1.5 m, from Godot's turn-based grid) already cuts its real-time damage to 12 % beyond ~8 m; the new falloff only bites past
+15 m on top of that. If the pistol should do real damage at 10-15 m, that table (not the falloff) is the number to change. Likewise the
+hammer against the brute loses most (its 0.60 penetration no longer counts on a heavy body).

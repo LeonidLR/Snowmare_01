@@ -328,6 +328,40 @@ bool FWeaponSchemaProjectFileTest::RunTest(const FString&)
 		TestTrue(TEXT("sniper handling"), Sniper->IsSniperRifle());
 		TestTrue(TEXT("knife: melee, no ammo"), Knife->Stats.Kind == EWeaponKind::Melee && !Knife->Stats.Ammo.bUsesAmmo);
 	}
+	// Step 2: the game designer's decisions 2026-11-08 written into the file (the intended new values).
+	struct FExpectedClass
+	{
+		const TCHAR* Id;
+		EArmorClass Class;
+	};
+	const FExpectedClass Classes[] = {
+		{ TEXT("knife"), EArmorClass::Light }, { TEXT("pistol"), EArmorClass::Light }, { TEXT("shotgun"), EArmorClass::Light },
+		{ TEXT("cryo_emitter"), EArmorClass::Light }, { TEXT("flamethrower"), EArmorClass::Light }, { TEXT("m16"), EArmorClass::Medium },
+		{ TEXT("hammer"), EArmorClass::Medium }, { TEXT("grenade"), EArmorClass::Medium }, { TEXT("sniper_rifle"), EArmorClass::Heavy },
+		{ TEXT("plasma_carbine"), EArmorClass::Heavy },
+	};
+	for (const FExpectedClass& Expected : Classes)
+	{
+		const UWeaponDataAsset* Weapon = WeaponSchemaTest::LoadWeapon(Expected.Id);
+		TestTrue(FString::Printf(TEXT("%s: penetration class %s"), Expected.Id, *WeaponStatsRules::ArmorClassName(Expected.Class)),
+			Weapon && Weapon->Stats.Damage.PenetrationClass == Expected.Class);
+	}
+	const UWeaponDataAsset* Shotgun = WeaponSchemaTest::LoadWeapon(TEXT("shotgun"));
+	const UWeaponDataAsset* Pistol = WeaponSchemaTest::LoadWeapon(TEXT("pistol"));
+	if (TestTrue(TEXT("shotgun + pistol"), Shotgun && Pistol && M16))
+	{
+		TestEqual(TEXT("shotgun: 8 pellets"), Shotgun->Stats.Pellets.Count, 8);
+		TestEqual(TEXT("shotgun: cone 6 deg"), Shotgun->Stats.Pellets.ConeHalfAngleDeg, 6.f);
+		TestEqual(TEXT("shotgun: 45 for the whole shot"), Shotgun->Stats.Damage.BaseDamage, 45.f);
+		TestTrue(TEXT("shotgun: per shell"), Shotgun->Stats.Ammo.ReloadMode == EWeaponReloadMode::PerRound);
+		TestEqual(TEXT("shotgun: 0.5 s a shell"), Shotgun->Stats.Ammo.PerRoundReloadSeconds, 0.5f);
+		TestEqual(TEXT("shotgun: falloff floor 0.4"), Shotgun->Stats.Damage.FalloffDamageFloor, 0.4f);
+		TestEqual(TEXT("pistol: falloff floor 0.6"), Pistol->Stats.Damage.FalloffDamageFloor, 0.6f);
+		TestEqual(TEXT("M16: no falloff"), M16->Stats.Damage.FalloffDamageFloor, 1.f);
+		TestEqual(TEXT("M16: recoil 0.3 deg"), M16->Stats.Accuracy.RecoilPerRoundDeg, 0.3f);
+		TestEqual(TEXT("M16: recovery 0.5 s"), M16->Stats.Accuracy.RecoilRecoverySeconds, 0.5f);
+		TestEqual(TEXT("pistol: no recoil"), Pistol->Stats.Accuracy.RecoilPerRoundDeg, 0.f);
+	}
 	return true;
 }
 

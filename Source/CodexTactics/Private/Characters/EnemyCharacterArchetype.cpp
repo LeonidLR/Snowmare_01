@@ -4,6 +4,7 @@
 // Godot reference: Scenes/movements/enemy_*.gd _ready (per-archetype stats); placed archetype / knockdown UE-only.
 
 #include "Characters/EnemyCharacter.h"
+#include "Combat/ArmorRules.h"
 #include "Combat/KnockdownComponent.h"
 #include "CodexTactics.h"
 #include "Characters/ProgressionRules.h"
@@ -253,7 +254,12 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 
 	// Godot per-type elemental_affinities / base_armor_reduction (enemy_frost_*.gd, enemy_cutter.gd, enemy_cryo_drone.gd).
 	HealthComponent->ElementalAffinities = EnemyAIRules::GetAffinities(Archetype);
-	HealthComponent->SetBaseArmorReduction(EnemyAIRules::GetBaseArmor(Archetype));
+	// Body armour (weapons framework, decision 1 2026-11-08): weapons_tuning.json "armor.bodies.<key>" (class + reduction) over the
+	// C++ fallback (Godot base_armor_reduction, the tier as the class).
+	FBodyArmor Armor{ ArmorRules::ClassFromTier(HealthComponent->GetArmorTier()), EnemyAIRules::GetBaseArmor(Archetype) };
+	ArmorRules::ApplyBody(ArmorRules::BodyKey(Archetype), Armor);
+	HealthComponent->SetBaseArmorReduction(Armor.Reduction);
+	HealthComponent->SetArmorClass(Armor.Class);
 
 	KillExpReward = ProgressionRules::KillReward(Archetype, nullptr);
 	// Godot enemies re-read their stats from game_balance_config.tres (imported DA_GameBalanceConfig).

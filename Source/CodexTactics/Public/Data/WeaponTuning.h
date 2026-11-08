@@ -58,6 +58,9 @@ namespace WeaponTuning
 		TArray<FString> Errors;
 		/** Unknown keys (ignored). */
 		TArray<FString> Unknown;
+		/** Bodies read from the "armor" block (ArmorRules) and its invalid entries. */
+		int32 ArmorBodies = 0;
+		TArray<FString> ArmorErrors;
 	};
 	CODEXTACTICS_API const FWeaponTuningReport& GetLastReport();
 

@@ -13,6 +13,7 @@
 #include "Combat/GrenadeActor.h"
 #include "Combat/GrenadeSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/WeaponBallisticsRules.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -187,7 +188,8 @@ void AOperativeCharacter::StartReload()
 	}
 
 	bIsReloading = true;
-	ReloadTimer = CurrentWeapon ? CurrentWeapon->Stats.Ammo.ReloadSeconds : 2.0f;
+	// Per-shell weapons (decision 3, 2026-11-08: the shotgun) time one shell, the rest a whole magazine (WeaponBallisticsRules).
+	ReloadTimer = CurrentWeapon ? WeaponBallisticsRules::ReloadStepSeconds(CurrentWeapon->Stats.Ammo) : 2.0f;
 
 	// Godot start_reload: radio callout asking for cover.
 	static const TCHAR* Callouts[] = {
