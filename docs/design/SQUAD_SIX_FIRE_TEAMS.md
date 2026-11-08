@@ -363,7 +363,7 @@ The game designer answered section 6 on 2026-11-08. These answers override the r
 | 2 | **No fixed roles for members 4-6.** Any fighter can be added; there is no "grenadier" or "mortarman" post - any fighter can carry the RPG-7, and the mortar is a crew of at least three. The three free slots go to recruits with **any** Tactics. | no new `EOperativeRole` values; heavy weapons are equipment, not roles; the mortar crew template (P4) takes any three men; the balance prefix / carry / loadout code must stop assuming one member per role (4.1) |
 | 3 | **Keys 4-5-6 select fighters; the whistle and the throw are removed from the number row** and stay as action-bar buttons (7.2). | `IA_StealthWhistle` (5) / `IA_StealthThrow` (6) leave keys 5 / 6 |
 | 4 | **Groups like RTS control groups:** `Shift+1..4` puts the selected fighters into group 1..4; `F1..F4` switches control to group 1..4. Up to **four** groups (not two). | P2's group object must allow 1..4 instances; `F1` (controls screen), `F2` (map panel), `F3` (full map) are taken today and must move (open items) |
-| 5 | **Needs a visual first.** Shapes drawn: `docs/design/squad-six-shapes.html` (5A lozenge, 5B wedge, 5C staggered column; 6A double wedge, 6B wedge + rear guard, 6C staggered column). | awaiting the designer's pick |
+| 5 | **Needs a visual first.** Shapes drawn: `docs/design/squad-six-shapes.html`; picked **5A lozenge and 6A double wedge** (7.2). | as recommended |
 | 6 | Re-asked in plain words; answer: letters (`C`, `P2`, `L2`), see 7.2. | as recommended |
 | 7 | Yes - three custom slots, up to six places each, applied to the selected group. | as planned |
 | 8 | Yes - narrow column looks alternate by index, the last man the rear guard. | as planned |
@@ -396,4 +396,6 @@ The game designer answered section 6 on 2026-11-08. These answers override the r
   merge.
 - Q6: **letters, as recommended**: places K / P / L / Z for the first four, `C` (centre), `P2`, `L2` for the extra places; shown in the
   tactical pause and in logs only. A place is a position, not a person - any fighter can take any place.
-- Still open: Q5 (pick from `squad-six-shapes.html`).
+- Q5: **5A (lozenge K / P L / C / Z) and 6A (double wedge K / P L / C / Z1 Z2)**, as recommended; both fold into the trail column in
+  narrow passages; if the TS street-share measurement shows > 60 % of time in the column, the staggered column comes back as a proposal.
+- #57 Q3 (wall sweep, same day): 6 s one way in combat / alert, 12 s out of combat (option V).
