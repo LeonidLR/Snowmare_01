@@ -16,6 +16,11 @@ import {
 const PROJECT_PATH = path.resolve(__dirname, '../../')
 const LEVELS_DIR = path.resolve(__dirname, '../../Content/Data/LevelJson')
 const CAMPAIGN_FILE = path.resolve(__dirname, '../../Content/Data/Campaign/campaign.json')
+/** A level JSON leaf inside LEVELS_DIR ("L_Gen_Depot_1" / "stage_01.json"), or null for anything with a path or odd characters. */
+const levelFileName = (leaf: string): string | null => {
+  const name = leaf.endsWith('.json') ? leaf : `${leaf}.json`
+  return /^[A-Za-z0-9_.-]+\.json$/.test(name) && !name.includes('..') ? name : null
+}
 // Weapon power (the «Оружие» tab); the game applies it at start (Source/.../Data/WeaponTuning.h).
 const WEAPONS_FILE = path.resolve(__dirname, '../../Content/Data/Weapons/weapons_tuning.json')
 const SQUAD_ROE_FILE = path.resolve(__dirname, '../../Content/Data/AI/squad_roe.json')
@@ -108,7 +113,12 @@ const setupApiMiddlewares = (middlewares: any) => {
     addCors(res)
     const url = new URL(req.url || '', 'http://localhost:5173')
     const stageId = url.searchParams.get('id') || url.searchParams.get('file') || 'stage_01'
-    const fileName = stageId.endsWith('.json') ? stageId : `${stageId}.json`
+    const fileName = levelFileName(stageId)
+    if (!fileName) {
+      res.statusCode = 400
+      res.end(JSON.stringify({ error: `Bad level file name: ${stageId}` }))
+      return
+    }
     const targetPath = path.join(LEVELS_DIR, fileName)
     if (fs.existsSync(targetPath)) {
       const content = fs.readFileSync(targetPath, 'utf-8')
@@ -144,7 +154,12 @@ const setupApiMiddlewares = (middlewares: any) => {
           const url = new URL(req.url || '', 'http://localhost:5173')
           const data = JSON.parse(body)
           const targetLeaf = url.searchParams.get('file') || url.searchParams.get('id') || data._file || data.file || data.level_id || 'stage_01'
-          const fileName = targetLeaf.endsWith('.json') ? targetLeaf : `${targetLeaf}.json`
+          const fileName = levelFileName(String(targetLeaf))
+          if (!fileName) {
+            res.statusCode = 400
+            res.end(JSON.stringify({ error: `Bad level file name: ${targetLeaf}` }))
+            return
+          }
           const targetPath = path.join(LEVELS_DIR, fileName)
           fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf-8')
 
