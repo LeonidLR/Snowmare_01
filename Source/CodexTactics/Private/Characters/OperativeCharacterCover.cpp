@@ -185,7 +185,21 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	}
 	// Back to the wall, on the slot (the feet keep their ground height), facing along the wall towards the threat side.
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const FVector BeforeSnap = GetActorLocation();
 	SetActorLocation(FVector(Slot.WorldLocation.X, Slot.WorldLocation.Y, Feet.Z + GetSimpleCollisionHalfHeight()), true);
+	if (bSameWall && CoverEntryBlendTime < 0.f)
+	{
+		// A shimmy's arrival (fix/corner-exit-jerk: the capsule stopped within the move's acceptance radius, then jumped up to 25 cm onto the
+		// slot in one frame): the body glides the rest (UpdateCoverEntryBlend eases the offset out over CoverEnterDecelSeconds).
+		const FVector Snap = BeforeSnap - GetActorLocation();
+		if (Snap.SizeSquared2D() > 4.f)
+		{
+			CoverEntryClipOffset = FVector::ZeroVector;
+			CoverEntryGlide = FVector(Snap.X, Snap.Y, 0.f);
+			CoverEntryBlendTime = 0.f;
+			UpdateCoverEntryBlend(0.f); // on the mesh in this frame already (the snap may come after this frame's actor tick: the move's end)
+		}
+	}
 	if (bWrapArrival)
 	{
 		CoverFacing = WrapFacing;
@@ -389,6 +403,10 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 		RaiseCoverEvent(GameplayEvents::CoverLeft, CoverSlot, CurrentCoverHeight == ECoverHeight::HighCover ? FName(TEXT("High")) : FName(TEXT("Low")));
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: left the cover (%s)"), *DisplayName.ToString(), *Reason);
+	if ((bCornerAimActive || bIsCornerLeaning || IsPeekingRoundCorner()) && GetWorld())
+	{
+		CornerLeaveTurnUntil = GetWorld()->GetTimeSeconds() + CornerLeaveTurnSeconds; // fix/corner-exit-jerk: the leaned-out body turns slowly
+	}
 	CancelCoverWrap(TEXT("left the cover"));
 	if (!bQuietCoverLeaveRequest)
 	{

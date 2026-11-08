@@ -167,7 +167,7 @@
       "globs": ["Source/**/AI/Pmc*", "Source/**/AI/SquadOrderCatalog*", "Source/**/Debug/Pmc*", "Content/Data/AI/pmc_*.json", "Content/Data/LevelJson/L_PmcArena.json", "Content/Data/LevelJson/L_PmcArenaDepot.json", "Content/Data/LevelJson/L_Gen_Depot_1.json", "Source/**/UI/MinimapSubsystem*",
         "Source/**/Characters/OperativeCharacterInternal*", "Source/**/Characters/OperativeCharacterCombat*", "Source/**/Characters/OperativeCharacterHealth*", "Source/**/Combat/TacticalSightSubsystem*", "Source/**/Combat/CombatCheats*", "Source/**/Combat/WaveSubsystem*"],
       "tests": ["CodexTactics.AI.PmcCommander", "CodexTactics.AI.PmcArena", "CodexTactics.AI.PmcEncounter", "CodexTactics.AI.PmcOperators", "CodexTactics.AI.SquadOrderCatalog", "CodexTactics.Combat.Sight", "CodexTactics.Combat.Cheats", "CodexTactics.LevelJson"],
-      "smokes": ["PmcTeamSmoke", "PmcUnderFireSmoke", "PmcFireLineSmoke", "UnderFireManoeuvreSmoke", "PmcDeathPoseSmoke", "FireArcSmoke", "PmcCommanderSmoke", "PmcStandoffSmoke", "PmcArenaSmoke", "PmcArenaObjectiveSmoke", "PmcEncounterSmoke", "PmcEncounterHuntSmoke", "SquadFireSmoke", "SightSmoke", "EnemyAISmoke", "SuppressionSmoke", "SaveLoadSmoke", "CoverSmoke", "FormationLabCombatSmoke"]
+      "smokes": ["PmcTeamSmoke", "PmcUnderFireSmoke", "PmcFireLineSmoke", "CornerExitSmoke", "UnderFireManoeuvreSmoke", "PmcDeathPoseSmoke", "FireArcSmoke", "PmcCommanderSmoke", "PmcStandoffSmoke", "PmcArenaSmoke", "PmcArenaObjectiveSmoke", "PmcEncounterSmoke", "PmcEncounterHuntSmoke", "SquadFireSmoke", "SightSmoke", "EnemyAISmoke", "SuppressionSmoke", "SaveLoadSmoke", "CoverSmoke", "FormationLabCombatSmoke"]
     },
     {
       "name": "falls-drops-2026-11-03",

@@ -891,6 +891,15 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
 	float CoverPeekStanceBlendSeconds = 0.3f;
 
+	/**
+	 * Leaving the corner fire pose (fix/corner-exit-jerk, RecoilProbe 2026-11-08: the upper body jumped 50-60 cm sideways): the fire idle stands
+	 * leaned out round the corner - its root ~50 cm sideways in the pose - and the clip that follows (the fire -> idle exit, the shimmy loop,
+	 * the walk off) has its root at the feet; their 0.1 - 0.2 s blend moved the body 10 - 17 cm a frame. Whatever follows the fire pose blends
+	 * in over this long (and the exit clip is the fire pose's own side, not the side a shimmy / the leave turned the facing to), s.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0.05"))
+	float CoverFireLeaveBlendSeconds = 0.45f;
+
 	/** Run-and-peek arrivals that blended straight into the peek stance's fire idle (smokes). */
 	int32 GetCoverPeekStanceBlends() const { return CoverPeekStanceBlends; }
 
@@ -1682,6 +1691,8 @@ private:
 	/** Cover baseline: the loop (idle / shimmy) by stance, facing and direction; the enter clip on the first frame. */
 	void UpdateCoverLayer(const AOperativeCharacter& Operative);
 	UAnimSequenceBase* PickCoverClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) const;
+	/** PickCoverClip for a given side (the fire pose's exit after the facing changed). */
+	UAnimSequenceBase* PickCoverClipFor(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips, ECoverFacing Facing) const;
 	/** Shimmy loop: _L / _R = the movement direction (CoverFacingRules::ShimmyClipIndex), not the facing side. */
 	UAnimSequenceBase* PickShimmyClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips, bool bForward) const;
 	/** Plays a cover one-shot on FullBodySlot (stops the loop), logs it; true when it started. */
@@ -1689,6 +1700,13 @@ private:
 	bool bWasInCover = false;
 	/** The fire-ready pose is entered (enter transition played / fire-ready idle looping) until the exit transition plays. */
 	bool bCoverInFirePose = false;
+	/** The side the fire pose was played on (its exit clip uses it) and when the fire pose ended (the leave blend window). */
+	ECoverFacing CoverFirePoseFacing = ECoverFacing::Right;
+	double CoverFireLeftTime = -1.0e9;
+	/** Within CoverFireLeaveBlendSeconds after the fire pose ended (the clips that follow blend in slowly). */
+	bool IsLeavingCoverFirePose(double Now) const { return Now - CoverFireLeftTime < CoverFireLeaveBlendSeconds; }
+	/** The fire pose ends now: its side's exit clip blends in over CoverFireLeaveBlendSeconds (UpdateCoverLayer). */
+	bool PlayCoverFireExit(double Now);
 	/** Blend-out time of the cover one-shot playing (the follow-up clip blends in over what is left of it). */
 	float CoverOneShotBlendOut = 0.2f;
 	/**
