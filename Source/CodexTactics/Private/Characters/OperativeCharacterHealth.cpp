@@ -28,6 +28,10 @@
 #include "Core/MissionSubsystem.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/Pawn.h"
+#include "EngineUtils.h"
+#include "Ladders/LadderClimbComponent.h"
+#include "Falls/FallRules.h"
 #include "Characters/TransferRules.h"
 #include "Components/BoxComponent.h"
 #include "Data/WeaponDataAsset.h"
@@ -155,10 +159,43 @@ void AOperativeCharacter::BecomeCorpse()
 	{
 		Grenades->CancelAim();
 	}
+	// fix/corpse-falls-to-ground (game designer PIE 2026-11-08, L_Gen_Depot_1: a PMC fighter killed on a ladder hung ~2 m up in his death pose):
+	// a body off the ground falls first - the ladder drops him (its death abort: off the hang line, gravity), a vault ends where he is, a
+	// ledge / a jump goes on falling - and is stopped once he lands (UpdateCorpseFall); the old DisableMovement froze him in the air.
+	const bool bWasVaulting = bVaulting;
+	if (bVaulting)
+	{
+		bVaulting = false;
+		SetActorEnableCollision(true);
+	}
+	if (LadderClimb && LadderClimb->IsClimbing())
+	{
+		LadderClimb->AbortClimb(ELadderAbortReason::Death);
+	}
 	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 	{
-		Movement->StopMovementImmediately();
-		Movement->DisableMovement();
+		float Gap = 0.f;
+		float FloorZ = 0.f;
+		const bool bFloor = TraceCorpseFloor(Gap, FloorZ);
+		const bool bLadderDrop = LadderClimb && LadderClimb->IsDropping();
+		if (!bCorpseFalling && FallRules::ShouldCorpseFall(bLadderDrop, bWasVaulting, bFloor, Gap))
+		{
+			bCorpseFalling = true;
+			CorpseFallSeconds = 0.f;
+			CorpseFallStartFeetZ = static_cast<float>(GetActorLocation().Z) - GetSimpleCollisionHalfHeight();
+			Movement->Velocity = FVector(0.f, 0.f, FMath::Min(0.f, static_cast<float>(Movement->Velocity.Z))); // straight down
+			if (Movement->MovementMode != MOVE_Falling)
+			{
+				Movement->SetMovementMode(MOVE_Falling);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[Corpse] %s: killed %.0f cm over the floor%s - he falls first"), *DisplayName.ToString(), bFloor ? Gap : -1.f,
+				bLadderDrop ? TEXT(" (on a ladder)") : (bWasVaulting ? TEXT(" (vaulting)") : TEXT("")));
+		}
+		else if (!bCorpseFalling)
+		{
+			Movement->StopMovementImmediately();
+			Movement->DisableMovement();
+		}
 	}
 	if (UCapsuleComponent* Capsule = GetCapsuleComponent())
 	{
@@ -174,6 +211,79 @@ void AOperativeCharacter::BecomeCorpse()
 	UpdateSelectionRing();
 	// Bug 2026-11-08 (a killed PMC fighter kept the orange silhouette): the corpse drops every highlight overlay; UpdateSilhouette keeps it so.
 	ClearBodyOverlays(TEXT("corpse"));
+}
+
+bool AOperativeCharacter::TraceCorpseFloor(float& OutGapCm, float& OutFloorZ) const
+{
+	UWorld* World = GetWorld();
+	OutGapCm = 0.f;
+	OutFloorZ = 0.f;
+	if (!World)
+	{
+		return false;
+	}
+	const float FeetZ = static_cast<float>(GetActorLocation().Z) - GetSimpleCollisionHalfHeight();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(CorpseFloor), false, this);
+	for (TActorIterator<APawn> It(World); It; ++It)
+	{
+		Params.AddIgnoredActor(*It); // bodies are no floor (a mate at the ladder's foot)
+	}
+	FHitResult Hit;
+	const FVector From(GetActorLocation().X, GetActorLocation().Y, FeetZ + 20.f);
+	if (!World->LineTraceSingleByChannel(Hit, From, From - FVector(0.f, 0.f, 5000.f), ECC_WorldStatic, Params) || Hit.bStartPenetrating)
+	{
+		return false;
+	}
+	OutFloorZ = static_cast<float>(Hit.ImpactPoint.Z);
+	OutGapCm = FMath::Max(0.f, FeetZ - OutFloorZ);
+	return true;
+}
+
+bool AOperativeCharacter::ShouldCorpseFallNow() const
+{
+	if (bCorpseFalling)
+	{
+		return true;
+	}
+	float Gap = 0.f;
+	float FloorZ = 0.f;
+	const bool bFloor = TraceCorpseFloor(Gap, FloorZ);
+	return FallRules::ShouldCorpseFall(IsClimbingLadder(), bVaulting, bFloor, Gap);
+}
+
+void AOperativeCharacter::UpdateCorpseFall(float DeltaTime)
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (!bCorpseFalling || !Movement)
+	{
+		return;
+	}
+	CorpseFallSeconds += DeltaTime;
+	if (Movement->MovementMode != MOVE_Falling && !Movement->IsMovingOnGround() && !(LadderClimb && LadderClimb->IsDropping()))
+	{
+		Movement->SetMovementMode(MOVE_Falling); // something stopped him mid-air (a disable, a flying mode)
+	}
+	float Gap = 0.f;
+	float FloorZ = 0.f;
+	const bool bFloor = TraceCorpseFloor(Gap, FloorZ);
+	if (!FallRules::HasCorpseLanded(Movement->IsMovingOnGround(), bFloor, Gap, CorpseFallSeconds))
+	{
+		return;
+	}
+	if (LadderClimb && LadderClimb->IsDropping() && CorpseFallSeconds < FallRules::CorpseFallTimeoutSeconds)
+	{
+		return; // the ladder's drop sees the landing first (its fall damage / landing event need him still moving on the ground)
+	}
+	if (bFloor && Gap > FallRules::CorpseLandedGapCm)
+	{
+		// Out of time (wedged): onto the floor below.
+		SetActorLocation(FVector(GetActorLocation().X, GetActorLocation().Y, FloorZ + GetSimpleCollisionHalfHeight() + 1.f), false, nullptr, ETeleportType::TeleportPhysics);
+	}
+	bCorpseFalling = false;
+	LastCorpseFallCm = FMath::Max(0.f, CorpseFallStartFeetZ - (static_cast<float>(GetActorLocation().Z) - GetSimpleCollisionHalfHeight()));
+	Movement->StopMovementImmediately();
+	Movement->DisableMovement();
+	UE_LOG(LogCodexTactics, Display, TEXT("[Corpse] %s landed after a %.0f cm fall (%.2f s) - the death pose"), *DisplayName.ToString(), LastCorpseFallCm, CorpseFallSeconds);
 }
 
 void AOperativeCharacter::SpawnRemainsLoot()

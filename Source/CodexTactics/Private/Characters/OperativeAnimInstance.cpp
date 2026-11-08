@@ -759,6 +759,13 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 {
 	// Godot play_death: a random standing variation, or the crouched / prone death; full body, held at the end.
 	const AOperativeCharacter* Operative = BoundOperative.Get();
+	// fix/corpse-falls-to-ground (game designer PIE 2026-11-08: a fighter killed on a ladder lay in his death pose in mid-air): killed off the
+	// ground he falls first - the death clip starts once he has landed (UpdateDeathPose's caller below).
+	if (!bDeathPlayed && !bDeathLanded && Operative && (Operative->IsCorpseFalling() || Operative->ShouldCorpseFallNow()))
+	{
+		bDeathDeferred = true;
+		return;
+	}
 	// Sprint 14: killed while knocked down -> Death_Back / Death_Front from the ground (UKnockdownComponent), held.
 	if (UKnockdownComponent* Knockdown = Operative ? Operative->KnockdownComponent.Get() : nullptr; !bDeathPlayed && Knockdown && Knockdown->HandleDeath())
 	{
@@ -822,6 +829,10 @@ void UOperativeAnimInstance::UpdateDeathPose(const AOperativeCharacter& Operativ
 		DeathPoseClip.Reset();
 		DeathPoseSeconds = 0.f;
 		return;
+	}
+	if (bDeathDeferred)
+	{
+		return; // still falling (HandleDied waits for the landing)
 	}
 	DeathPoseSeconds += DeltaSeconds;
 	// The clip on the FullBody slot now: the death clip, the knockdown's held fall - or something that replaced it.
@@ -1039,6 +1050,12 @@ void UOperativeAnimInstance::UpdateState()
 	// fire pose" and played the fire -> idle exit clip (PlayCoverMontage fades out every FullBody montage - the death clip too), so the
 	// corpse blended back to the standing aim pose. UpdateDeathPose holds the corpse pose against anything else that stops it.
 	bIsDead = Operative->HealthComponent && !Operative->HealthComponent->IsAlive();
+	if (bDeathDeferred && bIsDead && Operative->IsKilledInAction() && !Operative->IsCorpseFalling())
+	{
+		bDeathDeferred = false; // landed: the death clip now
+		TGuardValue<bool> Landed(bDeathLanded, true);
+		HandleDied(nullptr, FString());
+	}
 	UpdateCoverLayer(*Operative);
 	UpdateDeathPose(*Operative, StateDeltaSeconds);
 	bIsMoving = Speed > 5.f;

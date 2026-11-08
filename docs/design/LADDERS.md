@@ -273,6 +273,16 @@ drop - landing Z; `FallDamage = clamp((H - 100 cm) * 0.1 HP/cm, 0, 40)` (`Ladder
 0.1, `LadderFallDamageMax` 40): a full 7-rung ladder (~2.55 m) = ~16 HP, 4 m = 30 HP, against 120-150 HP operatives; it
 can kill (a knocked-down operative at low HP). Enemies use the same rule. Death: `AbortClimb(Death)` without the end placement - the body leaves the hang line 20 cm, falls (`MOVE_Falling`)
 and plays the knockdown death fall (`UKnockdownComponent::PlayDeathFall`) on landing.
+**Fixed 2026-11-08 (fix/corpse-falls-to-ground, game designer PIE on `L_Gen_Depot_1`: a killed PMC fighter hung ~2 m up the wall next to a
+ladder in his death pose):** the drop above was started, but the operative's / PMC fighter's own death (`AOperativeCharacter::BecomeCorpse`)
+then called `DisableMovement` - the falling body froze where it was, and the death clip played up there. Now `BecomeCorpse` aborts a climb
+itself (either order of the death listeners), leaves a body that is off the ground to gravity (`FallRules::ShouldCorpseFall`: on a ladder,
+mid-vault, the floor > 30 cm below the feet) and stops it once it lands (`UpdateCorpseFall`; after the ladder's own landing / fall damage;
+4 s timeout = put on the floor below); the death clip waits for the landing (`UOperativeAnimInstance` `bDeathDeferred`). Creatures killed in
+the air (a drop link's flight, a jump) now fall like the Cutter shot down mid-leap (world-only collision, stopped on `Landed`); one on a ladder
+is dropped by the ladder (`TickDropping`, by code - its capsule has no collision). Smoke `CorpseFallSmoke` (factory wall ladder: a squad
+member and a PMC fighter killed 1.8 m up - landed in 0.64 / 0.65 s of game time, feet 1 cm over the floor, pelvis 18 / 22 cm over the ground, 68 cm off the
+rung plane, death clip started only after the landing and held 3 s later), unit `CodexTactics.Falls.CorpseFall`.
 
 ### 7.8 Save / load
 A save during a climb stores the climber at the end he was heading to (standing on its link point, state `None`); the

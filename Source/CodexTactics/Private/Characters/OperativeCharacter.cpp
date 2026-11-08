@@ -319,6 +319,7 @@ bool AOperativeCharacter::IsPanicking() const
 void AOperativeCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	UpdateCorpseFall(DeltaTime); // fix/corpse-falls-to-ground: a body killed off the ground lands before it lies still
 	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
 	UpdateProneDive(DeltaTime);
 	if (bVaulting)

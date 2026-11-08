@@ -1454,6 +1454,11 @@ public:
 	/** Feeds one frame of the Rifle_2 machine (also used by tests / smokes with a stand-in intent). */
 	void UpdateRifle2Locomotion(float DeltaSeconds, bool bMoveIntent, float InSpeed, float InDirection, float ActorYaw);
 
+	/** The death clip / fall has started (smokes; fix/corpse-falls-to-ground: not while the body still falls). */
+	bool HasDeathPlayed() const { return bDeathPlayed; }
+	/** Killed off the ground: the death clip waits for the landing. */
+	bool IsDeathDeferred() const { return bDeathDeferred; }
+
 protected:
 	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override;
 
@@ -1484,6 +1489,10 @@ private:
 	FDelegateHandle FiredHandle;
 	FDelegateHandle GrenadeHandle;
 	bool bDeathPlayed = false;
+	/** Killed off the ground (fix/corpse-falls-to-ground): the death clip waits until the body has landed (AOperativeCharacter::IsCorpseFalling). */
+	bool bDeathDeferred = false;
+	/** HandleDied called for the landed body: no second deferral. */
+	bool bDeathLanded = false;
 	/** The death clip for his stance (Godot play_death: a random standing one, the crouched / prone one); null = the knockdown fall. */
 	UAnimSequenceBase* PickDeathClip(const AOperativeCharacter& Operative) const;
 	/**

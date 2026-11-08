@@ -500,3 +500,13 @@ namespace FallRules
 		return true;
 	}
 }
+
+bool FallRules::ShouldCorpseFall(bool bOnLadder, bool bVaulting, bool bFloorFound, float GapCm)
+{
+	return bOnLadder || bVaulting || (bFloorFound && GapCm > CorpseFloorToleranceCm);
+}
+
+bool FallRules::HasCorpseLanded(bool bMovingOnGround, bool bFloorFound, float GapCm, float FallSeconds)
+{
+	return bMovingOnGround || (bFloorFound && GapCm <= CorpseLandedGapCm) || FallSeconds >= CorpseFallTimeoutSeconds;
+}

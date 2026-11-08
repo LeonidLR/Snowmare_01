@@ -1023,6 +1023,18 @@ public:
 	bool IsKilledInAction() const { return bKilledInAction; }
 
 	/**
+	 * A body killed off the ground falls first (fix/corpse-falls-to-ground, game designer PIE 2026-11-08: a PMC fighter killed on a ladder hung
+	 * in the air in his death pose): BecomeCorpse leaves him to gravity when FallRules::ShouldCorpseFall (on a ladder - its own drop -, mid-vault,
+	 * the floor > 30 cm below his feet) and stops him once he lands (UpdateCorpseFall); the death pose waits for the landing
+	 * (UOperativeAnimInstance). True while he falls.
+	 */
+	bool IsCorpseFalling() const { return bCorpseFalling; }
+	/** The rule evaluated now (the anim asks it in the death event, before or after BecomeCorpse ran). */
+	bool ShouldCorpseFallNow() const;
+	/** The last corpse fall's height, cm (smokes). */
+	float GetLastCorpseFallCm() const { return LastCorpseFallCm; }
+
+	/**
 	 * Save-game load of a fallen member: lies as a corpse at once (no death cinematic, no remains, no HQ line), out of the
 	 * squad and the turn order. The caller restores his health to 0 itself (UHealthComponent). For the save system.
 	 */
@@ -2282,6 +2294,15 @@ private:
 	/** Leaves supplies in searchable remains at his feet (Godot corpse_loot). */
 	void SpawnRemainsLoot();
 	bool bKilledInAction = false;
+	/** IsCorpseFalling: since BecomeCorpse, until he lands. */
+	bool bCorpseFalling = false;
+	float CorpseFallSeconds = 0.f;
+	float CorpseFallStartFeetZ = 0.f;
+	float LastCorpseFallCm = 0.f;
+	/** Leaves the falling corpse to gravity until it lands, then stops it (Tick). */
+	void UpdateCorpseFall(float DeltaTime);
+	/** The floor straight below his feet (this body and every pawn ignored): found, and the gap feet -> floor, cm. */
+	bool TraceCorpseFloor(float& OutGapCm, float& OutFloorZ) const;
 	bool bHasLastHitSource = false;
 	FVector LastHitSource = FVector::ZeroVector;
 	/** Knockdown phase change: interrupts (aim, reload, move, cover), frees / restores the capsule and the movement. */

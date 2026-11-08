@@ -375,6 +375,26 @@ namespace FallRules
 	CODEXTACTICS_API bool GetValue(const FFallConfig& Config, const FString& Key, float& OutValue);
 	/** Applies the "params" object of JsonText onto InOut; false when unreadable / no params; unknown or non-numeric keys go to OutUnknown. */
 	CODEXTACTICS_API bool ApplyJson(const FString& JsonText, FFallConfig& InOut, TArray<FString>* OutUnknown = nullptr);
+	// --- A body killed off the ground (fix/corpse-falls-to-ground, game designer PIE 2026-11-08) -----------------------------------------
+
+	/** A gap under the feet up to this is "on the floor" (a step, a kerb, the capsule's float), cm. */
+	inline constexpr float CorpseFloorToleranceCm = 30.f;
+	/** A falling corpse this close over the floor has landed (the movement's own floor check is the normal way), cm. */
+	inline constexpr float CorpseLandedGapCm = 2.f;
+	/** A falling corpse settles at the latest after this (a wedge between two walls, a bottomless shaft), s. */
+	inline constexpr float CorpseFallTimeoutSeconds = 4.f;
+
+	/**
+	 * The designer's report: a PMC fighter killed on a ladder hung in the air in his death pose ~2 m up, another lay against the wall face.
+	 * A body killed on a ladder / mid-vault, or with the floor more than CorpseFloorToleranceCm below his feet (a drop, a ledge, a jump), falls
+	 * with gravity first and settles into the death pose on landing; one standing on his floor (bFloorFound, GapCm small) stays where he is.
+	 * No floor found below at all (out of the level): no fall - he would drop for ever.
+	 */
+	CODEXTACTICS_API bool ShouldCorpseFall(bool bOnLadder, bool bVaulting, bool bFloorFound, float GapCm);
+
+	/** A falling corpse has landed: on the ground by the movement, CorpseLandedGapCm over the floor, or out of time (then put on the floor). */
+	CODEXTACTICS_API bool HasCorpseLanded(bool bMovingOnGround, bool bFloorFound, float GapCm, float FallSeconds);
+
 	/** The values in force (loaded from the file on the first call). */
 	CODEXTACTICS_API const FFallConfig& GetConfig();
 	CODEXTACTICS_API void SetConfig(const FFallConfig& Config);
