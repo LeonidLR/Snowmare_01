@@ -141,6 +141,21 @@ namespace RunCornerPeekRules
 		float ToOtherEndCm);
 
 	/**
+	 * In cover at the clicked object, only HIS OWN face is left to the in-cover rules (the corner peek / shimmy at that face); ANOTHER face of
+	 * the same block at its end is the run-and-peek to that face's corner (the game designer 2026-11-08: at one end of a long block, the enemy
+	 * beyond its far side - dash the short gap to the far face's corner and peek towards them along that face, not out from the near face with
+	 * the flank open). bInCoverAtObject: he is in cover at the clicked component; bSameFace: the face found is his cover face.
+	 */
+	CODEXTACTICS_API bool IsOwnCoverFace(bool bInCoverAtObject, bool bSameFace);
+
+	/**
+	 * The click hit a face looking the other way than his cover face (HitNormal planar vs OwnWallNormal, dot <= -0.5; a wall face: |HitNormalZ|
+	 * <= 0.3): the far side, never the in-cover peek of his own face (a block 1.5 m thick puts its far face's end right at his own end) - the
+	 * run-and-peek to that face takes it. A top hit / his face / an end face (perpendicular) stay as they were.
+	 */
+	CODEXTACTICS_API bool IsBackFaceHit(const FVector2D& HitNormal, float HitNormalZ, const FVector2D& OwnWallNormal);
+
+	/**
 	 * The planar directions the clicked wall is probed from to find its faces round the click: Count directions evenly round the circle,
 	 * the first = Primary (the clicked face's normal, or the camera's side for a top hit). Unit vectors; Count < 1 gives Primary alone.
 	 */

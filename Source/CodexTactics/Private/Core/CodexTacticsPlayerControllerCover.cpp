@@ -17,6 +17,7 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Tactics/GroupCoverRules.h"
+#include "Tactics/RunCornerPeekRules.h"
 #include "Data/SquadWallTuning.h"
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationWallLeadershipRules.h"
@@ -399,6 +400,12 @@ bool ACodexTacticsPlayerController::FindCornerPeekForHit(const AOperativeCharact
 	float& OutEdgeAlongCm) const
 {
 	if (!Operative || !Operative->IsInPeekableCover())
+	{
+		return false;
+	}
+	// The far (back) face of his own cover is no in-cover peek of his face (a thin block puts its end right at his own end): the run-and-peek
+	// to that face's corner (the game designer 2026-11-08, RunCornerPeekRules::IsBackFaceHit).
+	if (RunCornerPeekRules::IsBackFaceHit(FVector2D(Hit.ImpactNormal), static_cast<float>(Hit.ImpactNormal.Z), FVector2D(Operative->GetCoverSlot().WallNormal)))
 	{
 		return false;
 	}

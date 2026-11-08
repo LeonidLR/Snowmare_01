@@ -229,6 +229,16 @@ don't work either."
   where the switch goes itself - a face on his protected side (its normal within 60 deg of his own wall's) at its end NEARER to him (the
   switch's corner in the mirrored pose); every other face and the far end are the run-and-peek to the face under the cursor. (Open for the
   game designer: drop Q1 for run-and-peek ends altogether?)
+- **Another face of HIS OWN block (the game designer's screenshot 2026-11-08, L_Gen_Depot_1, formation Wall):** at one end of a long block
+  with the enemy beyond its far side he wants to dash the short gap to the FAR face's corner and peek along it towards them, not out from
+  the near face with his flank open. In cover at the clicked object only his OWN face keeps the in-cover rules (the corner peek / shimmy);
+  another face of the same block at its end is the run-and-peek to that face's corner (`RunCornerPeekRules::IsOwnCoverFace`, decided once
+  the face is known in `FindRunCornerPeekClickTarget`; it runs before the wrap round the object, which keeps the clicks in a face's middle).
+  Smoke `RunCornerPeekSmoke` J: a 4 x 1.5 m block, he hugs its south face at the west end, the threat coming from the south past the west end
+  (the flank that face leaves open); the hover + click on the FAR (north) face's west end -> the ghost and the pending slot on the north face, he runs
+  round the west end to that corner and peeks round it towards the threat with the block between him and it (aim . to-threat >= 0.5).
+  Also `RunCornerPeekRules::IsBackFaceHit`: the far (back) face of his own cover is never his in-cover peek (a 1.5 m block puts its end right
+  at his own end - the in-cover peek grabbed that click first).
 - **Low cover is never a run-and-peek (the game designer's PIE 2026-11-08, L_Gen_Depot_1's low cubes, solo, three box-selected):** "To that
   corner - covering it, the others stack up behind me" sent the corner man to a low cube's corner and the two others "behind" a cube with no
   room - they stood in the open (a click in the cube's middle, the group cover, worked: "sometimes it works"). Now only cover tall enough to

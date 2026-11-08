@@ -23,6 +23,10 @@
 //      box-selected north of them: the real click on the middle cube's end is NO run-and-peek (no peek ghost, nobody armed) - a plain
 //      cover click (the cover ghost), its confirm = the group cover: every man ends in cover (or prone as the fallback), nobody stands in
 //      the open.
+//   J. (the far face towards the threat, the game designer 2026-11-08) a long high block (4 x 1.5 m), the leader in cover on its SOUTH face
+//      at the west end, the threat coming from the south, past the west end (his open flank there): the hover + click on the FAR (north) face's west end ->
+//      the ghost on the north face, he runs round the west end to the north face's corner (not a peek out from the south face) and peeks
+//      round the west end towards the threat with the block between him and it.
 // No wall hug (the game designer's video 2026-11-08 "08.11.26_InstantLookUp_Bug_1": "he runs to the edge of the wall, presses his back to it,
 // and only then turns and peeks - like a stage play"): in A, D, E, F and G the peeker's arrival goes STRAIGHT into the peek stance - no
 // cover enter clip, no cover idle / look-around loop, no idle -> fire step-out on him, no frame in cover without the peek pose, the peek pose and
@@ -152,6 +156,16 @@ namespace RunCornerPeekSmoke
 	constexpr float LowCubeHalfCm = 60.f;
 	constexpr float LowCubeHeightCm = 90.f;
 	const FVector2D LowCubeStart[3] = { FVector2D(3700.f, -4000.f), FVector2D(3550.f, -4050.f), FVector2D(3850.f, -4050.f) };
+	/** J: the long high block (along x), its centre / half sizes; the threat point beyond its north face, north-west; the aim agreement. */
+	const FVector2D LongBlockCentre(1600.f, -4700.f);
+	constexpr float LongBlockHalfX = 200.f;
+	constexpr float LongBlockHalfY = 75.f;
+	/**
+	 * (11 m south of the block's west end, a little further west - on the south face's side, the flank it leaves open; behind the north face:
+	 * the line from the north face's west corner to it crosses the block)
+	 */
+	const FVector2D FarThreat(1250.f, -5700.f);
+	constexpr float AimTowardThreatDot = 0.5f;
 
 	/** The body yaw trace keeps this many frames before the entry (his last ~2.5 s of the run). */
 	constexpr int32 TraceFramesBefore = 150;
@@ -929,6 +943,8 @@ namespace RunCornerPeekSmoke
 		return true;
 	}
 
+	AActor* SpawnLongBlock(UWorld* World, const FState& State);
+
 	/** I: the low cubes - the end click is no run-and-peek, its confirm puts everybody in cover. True = go on. */
 	bool StepLowCubes(UWorld* World, FState& State, ACodexTacticsPlayerController& PC, float DeltaTime)
 	{
@@ -1008,6 +1024,131 @@ namespace RunCornerPeekSmoke
 			return true;
 		}
 		Check(State, bSettled && bCovered, FString::Printf(TEXT("I: its confirm = the group cover - every man in cover (prone only as the fallback), nobody standing in the open:%s"), *Line));
+		// J: solo, the long high block.
+		if (AOperativeCharacter* Lead = State.Members[0].Get())
+		{
+			Squad->SetSelectedGroup({ Lead }, false);
+			Squad->SetLeader(Lead, true);
+			Squad->EnterSoloMode();
+		}
+		State.Block = SpawnLongBlock(World, State);
+		Check(State, State.Block.IsValid(), TEXT("J: a long high block (4 x 1.5 m) spawned"));
+		State.FaceStep = 0;
+		Next(State, 13);
+		return true;
+	}
+
+	/** J: the long block - 4 x 1.5 m, 2.5 m high, along x. */
+	AActor* SpawnLongBlock(UWorld* World, const FState& State)
+	{
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		if (!Cube)
+		{
+			return nullptr;
+		}
+		const FTransform Transform(FRotator::ZeroRotator, FVector(LongBlockCentre.X, LongBlockCentre.Y, State.GroundZ + BlockHeightCm * 0.5f),
+			FVector(LongBlockHalfX / 50.f, LongBlockHalfY / 50.f, BlockHeightCm / 100.f));
+		AStaticMeshActor* Block = World->SpawnActorDeferred<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform, nullptr, nullptr,
+			ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+		if (!Block)
+		{
+			return nullptr;
+		}
+		Block->GetStaticMeshComponent()->SetMobility(EComponentMobility::Movable);
+		Block->GetStaticMeshComponent()->SetStaticMesh(Cube);
+		Block->GetStaticMeshComponent()->SetCollisionProfileName(TEXT("BlockAll"));
+		Block->GetStaticMeshComponent()->SetCanEverAffectNavigation(true);
+		Block->FinishSpawning(Transform);
+		return Block;
+	}
+
+	/** J: in cover on the long block's south face at its west end; the click on its NORTH (far) face's west end -> that corner, aim at the threat. */
+	bool StepFarFace(UWorld* World, FState& State, ACodexTacticsPlayerController& PC, float DeltaTime)
+	{
+		AOperativeCharacter* Lead = State.Members[0].Get();
+		if (!Lead || !State.Block.IsValid())
+		{
+			return Finish(State, false);
+		}
+		const float WestX = LongBlockCentre.X - LongBlockHalfX;
+		if (State.FaceStep == 0)
+		{
+			if (State.StageTime < 1.5f)
+			{
+				return true; // the navmesh round the new block
+			}
+			FCoverSlot Home;
+			if (!CoverTraceRules::FindCoverSlotAt(World, FVector(WestX + 60.f, LongBlockCentre.Y - LongBlockHalfY, State.GroundZ + 100.f), FVector(0.f, 1.f, 0.f), Home))
+			{
+				Check(State, false, TEXT("J: a cover slot on the long block's south face at its west end"));
+				return Finish(State, false);
+			}
+			Place(State, Lead, FVector2D(Home.WorldLocation), 90.f);
+			Lead->OrderTakeCover(Home, false);
+			State.FaceStep = 1;
+			State.StageTime = 0.f;
+			return true;
+		}
+		if (State.FaceStep == 1)
+		{
+			const bool bSettled = Lead->bInCover && !Lead->bShimmying && !Lead->HasPendingCover();
+			if ((!bSettled || State.StageTime < 1.5f) && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			Check(State, bSettled && FVector2D(Lead->GetCoverSlot().WallNormal).GetSafeNormal().Y < -0.9f,
+				FString::Printf(TEXT("J: he hugs the long block's SOUTH face at its west end (in cover %d, wall normal y %.2f)"), bSettled ? 1 : 0, Lead->GetCoverSlot().WallNormal.Y));
+			// The cursor on the NORTH face (the far side, towards the threat) 30 cm in from its west end, at chest height.
+			const float Z = State.GroundZ + 120.f;
+			const float X = WestX + 30.f;
+			const float FaceY = LongBlockCentre.Y + LongBlockHalfY;
+			State.ClickFrom = FVector(X, FaceY + 250.f, Z);
+			State.ClickTo = FVector(X, FaceY - 20.f, Z);
+			State.bCustomClick = true;
+			State.RunPeekCountBefore = Lead->GetRunCornerPeekCount();
+			State.bClickPending = true;
+			State.bHoverToo = true;
+			State.bClicked = false;
+			State.FaceStep = 2;
+			State.StageTime = 0.f;
+			State.HoldTime = 0.f;
+			return true;
+		}
+		if (State.FaceStep == 2)
+		{
+			if (!State.bClicked)
+			{
+				return true;
+			}
+			State.bCustomClick = false;
+			const FVector2D Pending = FVector2D(Lead->GetPendingCoverSlot().WallNormal).GetSafeNormal();
+			Check(State, State.bLastGhost && State.LastGhostNormal.Y > 0.9f && Lead->IsRunCornerPeekPending() && Pending.Y > 0.9f,
+				FString::Printf(TEXT("J: the far (north) face's end = the run-and-peek there - its ghost (%d, wall normal y %.2f), armed %d, pending wall normal y %.2f"),
+					State.bLastGhost ? 1 : 0, State.LastGhostNormal.Y, Lead->IsRunCornerPeekPending() ? 1 : 0, Pending.Y));
+			State.FaceStep = 3;
+			State.StageTime = 0.f;
+			return true;
+		}
+		const bool bPose = InPeekPose(*Lead);
+		State.HoldTime = bPose ? State.HoldTime + DeltaTime : 0.f;
+		if (FMath::FloorToInt32(State.StageTime / 0.5f) != FMath::FloorToInt32((State.StageTime - DeltaTime) / 0.5f))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke trace %.1f s (J far face):%s"), State.StageTime, *Where(State));
+		}
+		if (State.HoldTime < 0.5f && State.StageTime < GiveUpSeconds)
+		{
+			return true;
+		}
+		const FVector2D Slot = FVector2D(Lead->GetCoverSlot().WallNormal).GetSafeNormal();
+		const FVector2D Aim = FVector2D(Lead->GetStanceAimBaseDirection()).GetSafeNormal();
+		const FVector2D ToThreat = (FarThreat - FVector2D(Lead->GetActorLocation())).GetSafeNormal();
+		const float AimDot = static_cast<float>(FVector2D::DotProduct(Aim, ToThreat));
+		const float ToCorner = static_cast<float>(FVector2D::Distance(FVector2D(Lead->GetActorLocation()), FVector2D(WestX, LongBlockCentre.Y + LongBlockHalfY)));
+		Check(State, bPose && Slot.Y > 0.9f && ToCorner <= AtEndCm && Lead->GetRunCornerPeekCount() == State.RunPeekCountBefore + 1,
+			FString::Printf(TEXT("J: he ends on the FAR (north) face's west corner peeking (pose %d, wall normal y %.2f, %.0f cm from that corner, run-peeks %d -> %d) - not on the near face"),
+				bPose ? 1 : 0, Slot.Y, ToCorner, State.RunPeekCountBefore, Lead->GetRunCornerPeekCount()));
+		Check(State, AimDot >= AimTowardThreatDot, FString::Printf(TEXT("J: his peek round the end aims towards the threat, the block between him and it (aim . to-threat %.2f >= %.1f)"), AimDot,
+			AimTowardThreatDot));
 		return Finish(State, true);
 	}
 
@@ -1482,6 +1623,8 @@ namespace RunCornerPeekSmoke
 		}
 		case 12:
 			return StepLowCubes(World, State, *PC, DeltaTime);
+		case 13:
+			return StepFarFace(World, State, *PC, DeltaTime);
 		default:
 			return Finish(State, false);
 		}

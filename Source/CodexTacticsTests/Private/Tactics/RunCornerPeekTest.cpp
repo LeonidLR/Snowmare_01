@@ -417,6 +417,15 @@ bool FRunCornerPeekFaceUnderCursorTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("the face towards him (north): the run-and-peek"), KeepsCoverSwitch(true, FVector2D(0.0, 1.0), OwnWall, 200.f, 300.f));
 	TestFalse(TEXT("a side face: the run-and-peek"), KeepsCoverSwitch(true, FVector2D(1.0, 0.0), OwnWall, 200.f, 300.f));
 	TestFalse(TEXT("no switch in range: never"), KeepsCoverSwitch(false, FVector2D(0.0, -1.0), OwnWall, 200.f, 300.f));
+	// His own block (the game designer 2026-11-08: at one end of a long block, the enemy beyond its far side): his own face keeps the in-cover
+	// corner peek / shimmy; the far face's end is the run-and-peek round to that corner.
+	TestTrue(TEXT("in cover at the block, his own face's end: the in-cover rules"), IsOwnCoverFace(true, true));
+	TestFalse(TEXT("in cover at the block, the FAR face's end: the run-and-peek there"), IsOwnCoverFace(true, false));
+	TestFalse(TEXT("not in cover at that block: the run-and-peek"), IsOwnCoverFace(false, false));
+	TestTrue(TEXT("the far (back) face of his block: never his in-cover peek"), IsBackFaceHit(FVector2D(0.0, 1.0), 0.f, FVector2D(0.0, -1.0)));
+	TestFalse(TEXT("his own face: the in-cover peek as before"), IsBackFaceHit(FVector2D(0.0, -1.0), 0.f, FVector2D(0.0, -1.0)));
+	TestFalse(TEXT("the block's end face (perpendicular): the in-cover peek as before"), IsBackFaceHit(FVector2D(-1.0, 0.0), 0.f, FVector2D(0.0, -1.0)));
+	TestFalse(TEXT("a top hit: not a face"), IsBackFaceHit(FVector2D(0.0, 0.1), 0.99f, FVector2D(0.0, -1.0)));
 	return true;
 }
 

@@ -106,6 +106,18 @@ namespace RunCornerPeekRules
 		return Pick;
 	}
 
+	bool IsBackFaceHit(const FVector2D& HitNormal, float HitNormalZ, const FVector2D& OwnWallNormal)
+	{
+		const FVector2D Hit = HitNormal.GetSafeNormal();
+		const FVector2D Own = OwnWallNormal.GetSafeNormal();
+		return FMath::Abs(HitNormalZ) <= 0.3f && !Hit.IsNearlyZero() && !Own.IsNearlyZero() && FVector2D::DotProduct(Hit, Own) <= -0.5f;
+	}
+
+	bool IsOwnCoverFace(bool bInCoverAtObject, bool bSameFace)
+	{
+		return bInCoverAtObject && bSameFace;
+	}
+
 	bool KeepsCoverSwitch(bool bSwitchVerdict, const FVector2D& ClickedFaceNormal, const FVector2D& OwnWallNormal, float ToClickedEndCm, float ToOtherEndCm)
 	{
 		const FVector2D Face = ClickedFaceNormal.GetSafeNormal();

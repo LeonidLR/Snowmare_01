@@ -254,9 +254,17 @@ bool ACodexTacticsPlayerController::FindRunCornerPeekClickTarget(AOperativeChara
 	Facts.bTutorialLocked = Tutorial && (Tutorial->IsCommandLocked(PlayerCommands::CoverCornerPeek) || Tutorial->IsCommandLocked(PlayerCommands::CoverPreview));
 	Facts.bHitPawn = HitActor->IsA<APawn>();
 	Facts.bHitObject = HitActor->IsA<AInteractableActor>() || HitActor->IsA<AEnemyGhostActor>() || HitActor->IsA<ACoverGhostActor>() || HitActor->ActorHasTag(FName(TEXT("Enemy")));
-	Facts.bInCoverAtClickedObject = Operative->bInCover && (Own.WallComponent.IsValid() ? Hit.GetComponent() == Own.WallComponent.Get() : HitActor == Own.WallActor.Get());
+	// In cover at the clicked object: decided once the face is known - his own face keeps the in-cover rules, another face of the same block
+	// is a run-and-peek to its corner (RunCornerPeekRules::IsOwnCoverFace; the game designer 2026-11-08, the far face towards the threat).
+	const bool bInCoverAtObject = Operative->bInCover && (Own.WallComponent.IsValid() ? Hit.GetComponent() == Own.WallComponent.Get() : HitActor == Own.WallActor.Get());
 	if (!RunCornerPeekRules::MayRunToPeek(Facts) || !FindRunCornerPeekForHit(Operative, Hit, OutTarget, &OutFace))
 	{
+		return false;
+	}
+	Facts.bInCoverAtClickedObject = RunCornerPeekRules::IsOwnCoverFace(bInCoverAtObject, CoverTraceRules::IsSameWall(Own, OutFace.Base));
+	if (!RunCornerPeekRules::MayRunToPeek(Facts))
+	{
+		OutTarget = FSquadCornerPeekTarget();
 		return false;
 	}
 	// From a wall edge another cover in switch range keeps the wall-edge cover switch (its ghost, its double-click dash) - since the face rule
