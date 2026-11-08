@@ -32,6 +32,17 @@ namespace VaultRules
 	/** Position at Alpha (0..1): smoothstep along the ground from Start to Landing, lifted by the sine arc over Height. */
 	CODEXTACTICS_API FVector Position(const FVector& Start, const FVector& Landing, float Height, float Alpha);
 
+	/**
+	 * #36 (user 2026-11-04, L_Gen_Depot_1: "the operatives do not vault over the low obstacles"): the level generator's covers (Scripts/Editor/
+	 * build_levelgen_map.py: cubes tagged with their layout "kind") were never tagged "Vault", so nothing on a generated map was vaultable.
+	 * The low kinds a man climbs over - sandbags, jersey barriers, barrels, low walls - are made vaultable at the start of play
+	 * (ACodexTacticsGameMode::StartPlay) when the object fits the vault: MinHeight .. MaxHeight tall and its thinner side at most
+	 * MaxVaultableDepthCm (he lands past it). Crates (110 cm) and wrecks / boilers stay cover: taller than MaxHeight (Godot's 105).
+	 */
+	constexpr float MaxVaultableDepthCm = 130.f;
+	CODEXTACTICS_API bool IsVaultableCoverKind(FName Kind);
+	CODEXTACTICS_API bool IsVaultableLevelObject(FName Kind, float HeightCm, float ThinSideCm);
+
 	/** Margin of an obstacle's vault nav area round its collision: an enemy capsule radius, so the enemies' paths round it clear the box. */
 	constexpr float NavAreaPaddingCm = 40.f;
 

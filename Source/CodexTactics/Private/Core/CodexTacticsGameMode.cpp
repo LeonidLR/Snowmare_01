@@ -28,6 +28,7 @@
 #include "Core/CodexTacticsGameState.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Engine/SkeletalMesh.h"
+#include "Characters/VaultRules.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/PlayerStart.h"
@@ -119,6 +120,34 @@ void ACodexTacticsGameMode::StartPlay()
 	ApplyLevelConfig();
 	Super::StartPlay();
 	SpawnSquad();
+	// #36 (user 2026-11-04, L_Gen_Depot_1): the generated maps' low covers carry their layout kind as a tag, never "Vault" - the ones a man
+	// climbs over (VaultRules::IsVaultableLevelObject: sandbags, jersey barriers, barrels, low walls of a vaultable size) are tagged now.
+	int32 GeneratedVaultable = 0;
+	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
+	{
+		if (It->ActorHasTag(VaultNavigation::VaultTag) || It->ActorHasTag(VaultNavigation::RelocatingTag))
+		{
+			continue;
+		}
+		for (const FName& Tag : It->Tags)
+		{
+			if (!VaultRules::IsVaultableCoverKind(Tag))
+			{
+				continue;
+			}
+			const FVector Size = It->CalculateComponentsBoundingBoxInLocalSpace(false).GetSize() * It->GetActorScale3D().GetAbs();
+			if (VaultRules::IsVaultableLevelObject(Tag, static_cast<float>(Size.Z), static_cast<float>(FMath::Min(Size.X, Size.Y))))
+			{
+				It->Tags.AddUnique(VaultNavigation::VaultTag);
+				++GeneratedVaultable;
+			}
+			break;
+		}
+	}
+	if (GeneratedVaultable > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Vault] %d generated low covers made vaultable (sandbags / jersey barriers / barrels / low walls)"), GeneratedVaultable);
+	}
 	// Level objects tagged "Vault" (Godot "vault" group): the squad paths across and vaults them (barricades do it themselves).
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 	{

@@ -207,3 +207,20 @@ opinion), rescue A (the Engineer put on the user's rim spot, off the navmesh: ba
 user's case with `Codex.Fall.LinkCommit 0`: the soft-lock happens, the safety net gets everybody down). `CodexTactics.DropLinkReachSmoke`: the
 sweep on the Lake (67 drop links, 0 dead ends). Arguments: `stages=user+holes+sweep+rescue`, `trace`, `shots` (rendered, `-RenderOffscreen`:
 `Saved/Screenshots/DropSoftlock/`), `regen`, `probe=<x>_<y>_<z>`.
+
+## Vaulting on the generated maps (#36, fix/corner-exit-jerk branch, 2026-11-08)
+
+- **Report (user 2026-11-04, `L_Gen_Depot_1`):** the operatives do not vault over the low obstacles there (vaulting works on the other maps).
+- **Root cause:** a vault needs a barricade or an actor tagged `Vault` (`VaultNavigation::IsVaultable`; `ACodexTacticsGameMode::StartPlay` makes
+  the tagged ones vaultable: their shapes off the navmesh, a `UNavArea_Vault` modifier instead). The level generator
+  (`Scripts/Editor/build_levelgen_map.py`) tags each cover cube with its layout kind only (`sandbag`, `jersey`, `barrel`, `crate`, `wreck`,
+  `boiler`) - nothing on a generated map was vaultable, so the paths went round every low cover and a blocked man never climbed.
+- **Fix (runtime, the map is not edited or rebuilt):** `StartPlay` tags the low kinds that fit the vault before the usual pass -
+  `VaultRules::IsVaultableLevelObject`: kind sandbag / jersey / barrel / low_wall, `MinHeight` 25 .. `MaxHeight` 105 cm tall, the thinner side
+  <= `MaxVaultableDepthCm` 130 cm. On the Depot: 13 sandbags (100 cm), 8 jersey barriers (90), 68 barrels (90) vaultable (log `[Vault] 89
+  generated low covers made vaultable`); the 100 crates (110 cm - over Godot's 105 cm vault) and the wrecks / boilers stay cover.
+- **Open (designer):** the crates are 1.1 m - 5 cm over the vault's limit. Vaulting them needs the vault's `MaxHeight` raised (a gameplay
+  change for every map) or the generator's crate height lowered (a Depot rebuild) - not done.
+- **Checks:** unit `CodexTactics.Movement.Vault.LevelGenCovers`; smoke **`DepotVaultSmoke`** (`L_Gen_Depot_1`): every sandbag / jersey / barrel
+  vaultable (tag + vault nav area), no crate / wreck; the leader ordered straight across a jersey barrier vaults it on the way and arrives
+  behind it; in front of a jersey, a sandbag and a barrel he vaults each (`TryVault`) and lands behind it, not on top.
