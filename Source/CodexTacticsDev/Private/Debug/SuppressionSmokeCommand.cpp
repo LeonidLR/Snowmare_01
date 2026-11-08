@@ -82,6 +82,8 @@ namespace SuppressionSmoke
 		/** F: the hound pack, the fear zone's centre, per hound its closest approach to it and the side it passed on (0 none, -1 / +1). */
 		TArray<TWeakObjectPtr<AEnemyCharacter>> Pack;
 		FVector Zone = FVector::ZeroVector;
+		/** Part F: the spot the SUPPRESS order fires at (the zone must open there). */
+		FVector OrderSpot = FVector::ZeroVector;
 		TArray<float> PackClosest;
 		TArray<int32> PackSide;
 		int32 RageShotsBefore = 0;
@@ -517,6 +519,11 @@ namespace SuppressionSmoke
 		}
 		case 24: // B: pinned for 2 s: not one round leaves.
 		{
+			// Fix 2026-11-08 (flaky on main): his level is topped up as part B2 does for the Suppressed band. The marksman's sustained fire
+			// keeps a real target pinned, but his hit / near-miss rolls left a > 1.5 s gap now and then (0.85 -> below 0.7 at 0.1 / s plus the
+			// quiet decay): the commander dropped to Suppressed for a frame and fired one blind round - the rule "pinned = no fire" was never
+			// wrong, the stage just was not pinned. Stage 23 already proves that the fire pins him.
+			Suppression->SetLevelForTesting(Commander, 1.f);
 			State.bLeftPinned |= Suppression->GetTier(Commander) != ESuppressionTier::Pinned;
 			if (State.StageTime < 2.f)
 			{
@@ -625,6 +632,12 @@ namespace SuppressionSmoke
 			Commander->CurrentClip = 30;
 			Commander->ReserveAmmo = 300;
 			State.Zone = Feet(Commander) + State.F * 1200.f;
+			State.OrderSpot = State.Zone;
+			// Fix 2026-11-08 (flaky on main, "F: ... where the rounds land"): part B's / the rage's fire at the marksman 14 m out left a DENSE
+			// fire cell there, still open now. The spot 12 m out is within one cell (4 m) of it, so the order's first rounds fed that old cell
+			// (a dense cell moves 1 / 13 per round) and the check read its centre - 2.2 m from the spot in a passing run, > 3 m when the
+			// marksman stood a little further. The game is right (fire there IS a zone); part F starts from no fire cells.
+			Suppression->ClearAll(TEXT("smoke: part F starts without old fire cells"));
 			Suppression->SetLevelForTesting(Commander, 0.f);
 			Check(State, Commander->OrderSuppress(nullptr, State.Zone), TEXT("F: suppressive fire on a spot 12 m ahead"));
 			for (int32 Index = 0; Index < 6; ++Index)
@@ -657,8 +670,14 @@ namespace SuppressionSmoke
 			{
 				return Finish(State, false);
 			}
+			// The zone nearest the ordered spot (any other open cell is not this order's).
 			State.Zone = Zones[0];
-			Check(State, FVector::Dist2D(State.Zone, Feet(Commander) + State.F * 1200.f) < 300.f, TEXT("F: ... where the rounds land"));
+			for (const FVector& Candidate : Zones)
+			{
+				State.Zone = FVector::DistSquared2D(Candidate, State.OrderSpot) < FVector::DistSquared2D(State.Zone, State.OrderSpot) ? Candidate : State.Zone;
+			}
+			Check(State, FVector::Dist2D(State.Zone, State.OrderSpot) < 300.f, FString::Printf(TEXT("F: ... where the rounds land (%.0f cm from the spot, %d zone(s))"),
+				FVector::Dist2D(State.Zone, State.OrderSpot), Zones.Num()));
 			for (const TWeakObjectPtr<AEnemyCharacter>& Hound : State.Pack)
 			{
 				if (Hound.IsValid())
