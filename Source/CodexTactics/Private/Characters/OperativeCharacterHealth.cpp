@@ -172,6 +172,8 @@ void AOperativeCharacter::BecomeCorpse()
 	}
 	SetGroupSelected(false, false);
 	UpdateSelectionRing();
+	// Bug 2026-11-08 (a killed PMC fighter kept the orange silhouette): the corpse drops every highlight overlay; UpdateSilhouette keeps it so.
+	ClearBodyOverlays(TEXT("corpse"));
 }
 
 void AOperativeCharacter::SpawnRemainsLoot()

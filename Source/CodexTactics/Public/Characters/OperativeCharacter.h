@@ -825,6 +825,13 @@ public:
 	/** Godot _check_silhouette_occlusion (20 Hz): a ray from the camera to the body centre, a hit 35 cm short = hidden. */
 	void UpdateSilhouette(float DeltaTime);
 	void SetSilhouetteVisible(bool bVisible);
+	/**
+	 * Bug 2026-11-08 (the game designer's screenshot: a killed PMC fighter lying on the ground kept the orange see-through silhouette):
+	 * takes every overlay material (the silhouette, a hit flash / target highlight, a defend / suppress marker) off all mesh components of
+	 * him and his attached actors - shown or hidden. BecomeCorpse calls it, and the corpse's tick keeps it so (nothing puts one back).
+	 * Returns the number of overlays removed.
+	 */
+	int32 ClearBodyOverlays(const TCHAR* Why);
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> SilhouetteMID;

@@ -4,6 +4,8 @@
 // PmcDeathPoseSmoke (#44 "a killed PMC keeps STANDING in the aim pose"): a hostile PMC fighter aiming at the squad is killed - he plays a
 //   death clip / the knockdown fall on the FullBody slot, his pelvis drops to the ground, the aim is cleared, the corpse stays shown;
 //   a squad member killed the same way is the control.
+//   Bug 2026-11-08 (the orange silhouette on a dead fighter): the bodies are seen only through roof slabs (the silhouette on), the target
+//   highlight flashes at the kill, the fighters die concealed and are shown 0.5 s later - no overlay on any of their meshes 1 s / 4 s after.
 // FireArcSmoke (#33 "a PRONE PMC faces one way but fires in another"): a prone fighter with the target behind his back turns first
 //   (at the prone turn rate) and fires only with his body / rifle on the target; a prone operative of the squad the same.
 // PmcUnderFireSmoke (#43 "the column in a passage does not react to a PMC firing from a corner"): see its own comment below.
@@ -19,6 +21,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
@@ -36,6 +39,8 @@
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "Camera/PlayerCameraManager.h"
+#include "GameFramework/PlayerController.h"
 #include "TimerManager.h"
 
 namespace PmcCombatBugsSmoke
@@ -65,6 +70,9 @@ namespace PmcCombatBugsSmoke
 		TArray<TWeakObjectPtr<AStaticMeshActor>> Blocks;
 		// PmcDeathPoseSmoke
 		float PelvisBefore[2] = { 0.f, 0.f };
+		/** The bug 2026-11-08 check: the fighters' components hidden at the kill (their concealment), shown again 0.5 s later. */
+		TArray<TWeakObjectPtr<USceneComponent>> ConcealedAtKill;
+		bool bOverlaysChecked = false;
 		// FireArcSmoke
 		TWeakObjectPtr<AOperativeCharacter> Shooter;
 		TWeakObjectPtr<AActor> ShotTarget;
@@ -275,6 +283,43 @@ namespace PmcCombatBugsSmoke
 
 	// --- #44 ---------------------------------------------------------------------------------------------------------------------------
 
+	/** Every mesh component of him and his attached actors that carries an overlay material (shown or hidden), as a log line. */
+	int32 CountOverlays(const AOperativeCharacter& Operative, FString& OutLine)
+	{
+		TArray<AActor*> Actors;
+		Actors.Add(const_cast<AOperativeCharacter*>(&Operative));
+		Operative.GetAttachedActors(Actors, false, true);
+		int32 Count = 0;
+		for (const AActor* Actor : Actors)
+		{
+			TArray<UMeshComponent*> Meshes;
+			Actor->GetComponents(Meshes);
+			for (const UMeshComponent* Mesh : Meshes)
+			{
+				if (Mesh && Mesh->GetOverlayMaterial())
+				{
+					++Count;
+					OutLine += FString::Printf(TEXT(" %s=%s%s;"), *Mesh->GetName(), *GetNameSafe(Mesh->GetOverlayMaterial()), Mesh->bHiddenInGame ? TEXT(" (hidden)") : TEXT(""));
+				}
+			}
+		}
+		return Count;
+	}
+
+	/**
+	 * Bug 2026-11-08: a roof slab between the camera and his body centre (1 m over his feet), 2 m above it along the camera's line - the
+	 * see-through silhouette comes on (the camera's view of him is blocked, as by a wall).
+	 */
+	void OccludeFromCamera(UWorld* World, FState& State, const AOperativeCharacter& Operative)
+	{
+		const APlayerController* PC = World->GetFirstPlayerController();
+		const FVector Centre = Operative.GetActorLocation() - FVector(0.f, 0.f, Operative.GetSimpleCollisionHalfHeight() - 100.f);
+		const FVector Camera = PC && PC->PlayerCameraManager ? PC->PlayerCameraManager->GetCameraLocation() : Centre + FVector(-800.f, 0.f, 1500.f);
+		const float Rise = FMath::Max(static_cast<float>(Camera.Z - Centre.Z), 300.f);
+		const FVector Slab = Centre + (Camera - Centre) * (200.f / Rise);
+		State.Blocks.Add(SpawnBlock(World, Slab, FRotator::ZeroRotator, FVector(260.f, 260.f, 20.f)));
+	}
+
 	bool StepDeathPose(UWorld* World, FState& State)
 	{
 		// Four bodies: a crouched (as spawned) and a standing PMC fighter, a crouched and a standing operative (the controls).
@@ -326,6 +371,16 @@ namespace PmcCombatBugsSmoke
 			}
 			Crouched->SetStance(EOperativeStance::Crouching);
 			Standing->SetStance(EOperativeStance::Standing);
+			// Bug 2026-11-08: every body seen by the camera only through a roof slab (the silhouette on at the kill).
+			OccludeFromCamera(World, State, *Crouched);
+			OccludeFromCamera(World, State, *Standing);
+			for (int32 Index = 1; Index < 3; ++Index)
+			{
+				if (const AOperativeCharacter* Control = State.Members[Index].Get())
+				{
+					OccludeFromCamera(World, State, *Control);
+				}
+			}
 			Next(State);
 			return true;
 		}
@@ -363,10 +418,49 @@ namespace PmcCombatBugsSmoke
 					static_cast<int32>(All[Index]->GetStance())));
 				HeadBefore[Index] = PelvisHeight(*All[Index]);
 			}
+			// Bug 2026-11-08 (the game designer's screenshot: a killed PMC fighter lying on the ground kept the orange silhouette): the kill
+			// as in the game - each body behind the slab shows the see-through silhouette, the shot's target highlight flashes over it, and
+			// the two fighters die concealed (their components hidden, as UTacticalSightSubsystem hides an unseen PMC fighter) - the fallen
+			// are shown again 0.5 s later.
+			UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>();
+			State.ConcealedAtKill.Reset();
+			for (int32 Index = 0; Index < 4; ++Index)
+			{
+				FString Line;
+				const int32 Count = CountOverlays(*All[Index], Line);
+				// The fighters' silhouette is the case under test (a setup check); the controls' depends on the camera angle (logged).
+				const FString What = FString::Printf(TEXT("%s behind the slab shows the see-through silhouette before the kill (%d overlay(s):%s)"), Who[Index], Count, *Line);
+				if (Index < 2)
+				{
+					Check(State, All[Index]->IsSilhouetteVisible() && Count > 0, What);
+				}
+				else
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s"), *What);
+				}
+				if (Feedback)
+				{
+					Feedback->HighlightTarget(All[Index]);
+				}
+				if (Index < 2)
+				{
+					TArray<USceneComponent*> Components;
+					All[Index]->GetComponents<USceneComponent>(Components);
+					for (USceneComponent* Component : Components)
+					{
+						if (Component && !Component->bHiddenInGame)
+						{
+							Component->SetHiddenInGame(true);
+							State.ConcealedAtKill.Add(Component);
+						}
+					}
+				}
+			}
 			for (AOperativeCharacter* Body : All)
 			{
 				Body->TakeHit(10000000.f, TEXT("Smoke"), false, true);
 			}
+			State.bOverlaysChecked = false;
 			Next(State);
 			return true;
 		}
@@ -382,9 +476,38 @@ namespace PmcCombatBugsSmoke
 						All[Index] ? *PoseHeights(*All[Index]) : TEXT("-"));
 				}
 			}
+			if (State.StageTime >= 0.5f && !State.ConcealedAtKill.IsEmpty())
+			{
+				for (const TWeakObjectPtr<USceneComponent>& Weak : State.ConcealedAtKill)
+				{
+					if (USceneComponent* Component = Weak.Get())
+					{
+						Component->SetHiddenInGame(false); // the fallen are shown (UTacticalSightSubsystem: a kill is seen)
+					}
+				}
+				State.ConcealedAtKill.Reset();
+			}
+			if (State.StageTime >= 1.f && !State.bOverlaysChecked)
+			{
+				State.bOverlaysChecked = true;
+				for (int32 Index = 0; Index < 4; ++Index)
+				{
+					FString Line;
+					const int32 Count = All[Index] ? CountOverlays(*All[Index], Line) : -1;
+					Check(State, Count == 0, FString::Printf(TEXT("%s's corpse 1 s after the kill (shown again, still behind the slab): no overlay on any mesh (%d:%s)"),
+						Who[Index], Count, *Line));
+				}
+			}
 			if (State.StageTime < 4.f) // the death cinematic slows the game for a moment
 			{
 				return true;
+			}
+			for (int32 Index = 0; Index < 4; ++Index)
+			{
+				FString Line;
+				const int32 Count = All[Index] ? CountOverlays(*All[Index], Line) : -1;
+				Check(State, Count == 0 && All[Index] && !All[Index]->IsSilhouetteVisible(),
+					FString::Printf(TEXT("%s's corpse 4 s after the kill: no silhouette / highlight overlay (%d:%s)"), Who[Index], Count, *Line));
 			}
 			for (int32 Index = 0; Index < 4; ++Index)
 			{

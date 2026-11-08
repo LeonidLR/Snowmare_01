@@ -4,6 +4,7 @@
 // _setup_vision_cone / _update_vision_cone / _is_any_enemy_spotted).
 
 #include "Characters/OperativeCharacter.h"
+#include "CodexTactics.h"
 
 #include "Camera/PlayerCameraManager.h"
 #include "Characters/EnemyCharacter.h"
@@ -263,7 +264,14 @@ FLinearColor AOperativeCharacter::GetSilhouetteColor() const
 
 void AOperativeCharacter::UpdateSilhouette(float DeltaTime)
 {
-	if (!bEnableSilhouette || !HealthComponent || !HealthComponent->IsAlive())
+	if (!HealthComponent || !HealthComponent->IsAlive())
+	{
+		// Bug 2026-11-08: a corpse shows no highlight at all - a hit flash / marker restoring an overlay it saved, or one left on a mesh
+		// that was hidden when the silhouette went off (a concealed PMC fighter), is taken off again at once.
+		ClearBodyOverlays(TEXT("dead"));
+		return;
+	}
+	if (!bEnableSilhouette)
 	{
 		SetSilhouetteVisible(false);
 		return;
@@ -323,5 +331,35 @@ void AOperativeCharacter::SetSilhouetteVisible(bool bVisible)
 		{
 			MeshComponent->SetOverlayMaterial(bVisible ? SilhouetteMID.Get() : nullptr);
 		}
+		else if (MeshComponent && !bVisible && SilhouetteMID && MeshComponent->GetOverlayMaterial() == SilhouetteMID.Get())
+		{
+			// Bug 2026-11-08: a mesh hidden right now (a concealed PMC fighter's - SetHiddenInGame -, a weapon hidden on a ladder) keeps no
+			// silhouette for the moment it is shown again (USceneComponent::IsVisible is false while hidden in game).
+			MeshComponent->SetOverlayMaterial(nullptr);
+		}
 	}
+}
+
+int32 AOperativeCharacter::ClearBodyOverlays(const TCHAR* Why)
+{
+	bSilhouetteVisible = false;
+	TArray<AActor*> Actors;
+	Actors.Add(this);
+	GetAttachedActors(Actors, false, true);
+	int32 Removed = 0;
+	for (AActor* Actor : Actors)
+	{
+		TInlineComponentArray<UMeshComponent*> Meshes(Actor);
+		for (UMeshComponent* MeshComponent : Meshes)
+		{
+			if (MeshComponent && MeshComponent->GetOverlayMaterial())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("%s (%s): overlay %s taken off %s"), *DisplayName.ToString(), Why,
+					*GetNameSafe(MeshComponent->GetOverlayMaterial()), *MeshComponent->GetName());
+				MeshComponent->SetOverlayMaterial(nullptr);
+				++Removed;
+			}
+		}
+	}
+	return Removed;
 }
