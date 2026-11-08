@@ -39,7 +39,8 @@ it at once: the operative is running, gets the order to peek round a corner in f
   silhouettes, enemies) keep it; from a wall EDGE another cover in switch range (`EvaluateCoverSwitch` = Switch on the face slot or the cover
   click's own slot, `Cover.Switch` taught) keeps the wall-edge cover switch (its ghost, its double-click dash; `CoverSwitchSmoke` /
   `CoverSwitchLakeSmoke`); Alt (squad-wide) keeps "take cover at that object"; the tutorial lock (`Cover.CornerPeek`, and `Cover.Preview`
-  before cover is taught) keeps the old click; turn-based combat and the tactical pause (planned orders) keep their rules (out of scope).
+  before cover is taught) keeps the old click; turn-based combat keeps its rules (out of scope). The tactical pause plans it since
+  2026-11-08 (Q3 below).
   Any later order replaces the run (it is his ordinary cover walk: `OrderMoveTo` / `OrderTakeCover` / `SetPendingCover` / `ClearPendingCover`
   disarm it); the peek ends as today (another order).
 - **Which face (decision 3):** `GatherRunCornerPeekFaces` probes the clicked component from 8 directions round the click
@@ -55,8 +56,8 @@ it at once: the operative is running, gets the order to peek round a corner in f
   slots a slot spacing (1 m) apart behind his stand point on that face (`OrderTakeCover`), nobody passes him; the ghost is his. Formation (not
   solo, followers joining a cover order): the existing far-wall path - the group wall order at the corner slot (`OrderGroupCover` ->
   `OrderFormationWall`, the formation wall layout) with the squad's corner peek carried there (`StartSquadPeekCarry(.., bPeekInForce=true)`,
-  bug_04 A): once the squad stands at that wall the member nearest that corner takes it and the lead (wall leadership) - so in formation the peek
-  comes after the squad settled, not on the leader's arrival (an open point for the user). The formation's own wall (the squad in the wall
+  bug_04 A): the member nearest that corner takes it and the lead (wall leadership) - since 2026-11-08 (Q2 below) as soon as the LEADER is at
+  that wall, not after the squad settled. The formation's own wall (the squad in the wall
   layout) keeps the squad corner peek (`FindSquadCornerPeekForHit`); without the wall layout (legacy group cover) he peeks on arrival
   (`ArmRunCornerPeek`).
 - **Code:** `Tactics/RunCornerPeekRules` (pure; tests `CodexTactics.Tactics.Cover.RunCornerPeek.*`); controller unit
@@ -69,7 +70,25 @@ it at once: the operative is running, gets the order to peek round a corner in f
   leader running in the open, the click on the west end 13 m ahead -> one cover entry and the peek pose 0.00 s later at the west end, south face;
   B the face's middle = the cover ghost, its confirm = cover without a peek; C from that cover the east end = the old in-cover peek (stays in cover);
   D from north of the wall the same click -> the north face's corner; E three box-selected in the open -> the man nearest the west end peeks,
-  the others in cover 0.8 / 2 m behind him.
+  the others in cover 0.8 / 2 m behind him; F (Q2) the squad in formation, the followers ~10 m behind the leader -> the carried peek fires
+  2.5 s after the click with both followers still walking (~200 cm/s), the corner man peeks round the west end; G (Q3) solo, a fight, the
+  tactical pause -> the hover shows the run-and-peek ghost (no cover ghost), the click plans it (armed, the slot pending, one planned move,
+  nobody moves), the pause's end -> he runs there and peeks on arrival (entry -> pose 0.00 s).
+- **The game designer's answers (2026-11-08):**
+  - *Q2 - changed:* in FORMATION the corner man peeks as soon as the LEADER arrives at the wall (`RunCornerPeekRules::DecideFormationCarry`:
+    the carry `FSquadPeekCarry::bRunPeek` fires once the leader stands within `LeaderAtWallCm` (1.5 m) of his wall slot, still for
+    `FormationPeekCarry::LeaderStillSeconds` after he set off; the group wall order's own carry of a peek in force (bug_04 A) still waits for
+    the squad). The others keep forming up behind (the wall-leadership stack).
+  - *Q3 - changed:* the TACTICAL PAUSE plans it (`RunCornerPeekRules::DecideTiming` = `OnPauseRelease`; `MayRunToPeek` no longer refuses the
+    pause): the hover shows the run-and-peek ghost instead of the cover ghost, the click plans "run there and peek"
+    (`PlanRunCornerPeekClick` / `PlanRunCornerPeek`: the corner slot pending, the peek on arrival armed, the walk planned with `PlanMove`
+    within the pause's order radius; a box selection plans its corner man's run and the stack's walks; formation plans the squad's wall order
+    (`PlanFormationWall`) and starts its carried peek once the pause ends - `FPlannedRunPeekCarry`). It runs on the release like the other
+    planned orders (the release's walk to the pending slot keeps the arming).
+  - *Kept (pinned by `CodexTactics.Tactics.Cover.RunCornerPeek.DesignerAnswers`):* Q1 from a wall edge the neighbouring cover's edge is the
+    slide to it, no auto-peek after it; Q4 the normal run, a sprint only on a double-click on the same corner (`IsSprintClick`); Q5 a box
+    selection's corner man by his place along the wall (`PlanGroupCornerPeek`); Q6 covers narrower than 1 m (posts, columns) and barricades
+    stay plain take cover.
 
 ## Both corners of a wall held (#57, 2026-11-07)
 

@@ -8,7 +8,8 @@ namespace RunCornerPeekRules
 {
 	bool MayRunToPeek(const FClickFacts& Facts)
 	{
-		return Facts.bEnabled && !Facts.bTurnBased && !Facts.bPausePlanning && !Facts.bSquadWide && !Facts.bTutorialLocked && !Facts.bHitPawn
+		// Q3 (2026-11-08): the tactical pause no longer refuses it - it plans it (DecideTiming).
+		return Facts.bEnabled && !Facts.bTurnBased && !Facts.bSquadWide && !Facts.bTutorialLocked && !Facts.bHitPawn
 			&& !Facts.bHitObject && !Facts.bInCoverAtClickedObject && !Facts.bCoverSwitchTarget;
 	}
 
@@ -88,5 +89,30 @@ namespace RunCornerPeekRules
 			return EGroup::Formation;
 		}
 		return EGroup::Single;
+	}
+
+	bool IsSprintClick(double SecondsSinceFirst, double MaxSeconds, float PixelsApart, float MaxPixels, float EdgeCmApart, float MaxEdgeCm)
+	{
+		return SecondsSinceFirst >= 0.0 && SecondsSinceFirst <= MaxSeconds && PixelsApart <= MaxPixels && EdgeCmApart <= MaxEdgeCm;
+	}
+
+	ETiming DecideTiming(const FClickFacts& Facts)
+	{
+		return Facts.bPausePlanning ? ETiming::OnPauseRelease : ETiming::Now;
+	}
+
+	FormationPeekCarry::EPeekCarryStep DecideFormationCarry(const FormationPeekCarry::FCarryProgressFacts& Facts, bool bRunPeek, bool bLeaderAtWall)
+	{
+		using namespace FormationPeekCarry;
+		const EPeekCarryStep Base = Decide(Facts);
+		if (!bRunPeek || Base != EPeekCarryStep::Wait)
+		{
+			return Base; // the group wall order's carry as before; Drop / Fire stand for both
+		}
+		if (!Facts.bLeaderMoved && Facts.Seconds < StartGraceSeconds)
+		{
+			return EPeekCarryStep::Wait; // he has not set off yet (standing still is not arriving)
+		}
+		return bLeaderAtWall && Facts.LeaderStillSeconds >= LeaderStillSeconds ? EPeekCarryStep::Fire : EPeekCarryStep::Wait;
 	}
 }

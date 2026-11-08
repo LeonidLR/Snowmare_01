@@ -7,12 +7,16 @@
 // Godot reference: none (UE-only; docs/systems/squad-and-orders.md "The squad's corner peek moves on to the next wall").
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Engine/World.h"
+#include "Combat/CombatTimeModeRules.h"
 #include "Formation/FormationPeekCarryRules.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "Tactics/RunCornerPeekRules.h"
 #include "UI/GameMessageSubsystem.h"
 
 #define LOCTEXT_NAMESPACE "CodexTacticsPlayerController"
@@ -29,7 +33,7 @@ namespace ControllerPeekCarryLocal
 	constexpr float AimTraceInCm = 30.f;
 }
 
-void ACodexTacticsPlayerController::StartSquadPeekCarry(USquadSubsystem& Squad, AOperativeCharacter& Leader, const FCoverSlot& Slot, bool bPeekInForce)
+void ACodexTacticsPlayerController::StartSquadPeekCarry(USquadSubsystem& Squad, AOperativeCharacter& Leader, const FCoverSlot& Slot, bool bPeekInForce, bool bRunPeek)
 {
 	using namespace ControllerPeekCarryLocal;
 	PeekCarry = FSquadPeekCarry(); // any new wall order replaces a carry still waiting
@@ -61,14 +65,41 @@ void ACodexTacticsPlayerController::StartSquadPeekCarry(USquadSubsystem& Squad, 
 	PeekCarry.WallNormal = FVector(Slot.WallNormal.X, Slot.WallNormal.Y, 0.f).GetSafeNormal();
 	PeekCarry.Leader = &Leader;
 	PeekCarry.LeaderSerial = Leader.GetMoveOrderSerial();
+	PeekCarry.bRunPeek = bRunPeek;
 	const FVector Corner = Slot.WallPoint + Right * EdgeAlong;
-	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the squad's corner peek moves on: the next wall's %s corner at (%.0f, %.0f) - the peek there once the squad is at that wall"),
-		Side == ECoverFacing::Left ? TEXT("left") : TEXT("right"), Corner.X, Corner.Y);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the squad's corner peek moves on: the next wall's %s corner at (%.0f, %.0f) - the peek there once %s"),
+		Side == ECoverFacing::Left ? TEXT("left") : TEXT("right"), Corner.X, Corner.Y,
+		bRunPeek ? TEXT("the leader is at that wall (run-and-peek, the game designer's answer Q2 2026-11-08)") : TEXT("the squad is at that wall"));
+}
+
+bool ACodexTacticsPlayerController::IsPausePlanningOrders() const
+{
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	return Flow && FCombatTimeModeRules::GetOrderDispatch(Flow->GetPhase(), Flow->GetCombatMode(), OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0)
+		== ECombatOrderDispatch::Queue;
 }
 
 void ACodexTacticsPlayerController::TickSquadPeekCarry(float DeltaSeconds)
 {
 	using namespace ControllerPeekCarryLocal;
+	// #55 Q3 (2026-11-08): the formation run-and-peek planned in the tactical pause - once the pause is over its planned wall order runs
+	// (USquadSubsystem::ExecutePlannedFormationWall) and the carried peek starts from there (fires on the leader's arrival, Q2).
+	if (PlannedRunPeekCarry.bActive && !IsPausePlanningOrders())
+	{
+		const FPlannedRunPeekCarry Planned = PlannedRunPeekCarry;
+		PlannedRunPeekCarry = FPlannedRunPeekCarry();
+		USquadSubsystem* PlanSquad = GetSquad();
+		AOperativeCharacter* PlanLeader = Planned.Leader.Get();
+		if (PlanSquad && PlanLeader && PlanSquad->GetLeader() == PlanLeader && PlanSquad->HasFormationWallOrder())
+		{
+			StartSquadPeekCarry(*PlanSquad, *PlanLeader, Planned.Slot, true, true);
+		}
+		else
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the planned run-and-peek is dropped on the pause's release (no wall order of %s)"),
+				PlanLeader ? *PlanLeader->DisplayName.ToString() : TEXT("-"));
+		}
+	}
 	if (!PeekCarry.bActive)
 	{
 		return;
@@ -93,7 +124,15 @@ void ACodexTacticsPlayerController::TickSquadPeekCarry(float DeltaSeconds)
 	Facts.bLeaderMoved = PeekCarry.bLeaderMoved;
 	Facts.LeaderStillSeconds = PeekCarry.LeaderStillSeconds;
 	Facts.Seconds = PeekCarry.Seconds;
-	const FormationPeekCarry::EPeekCarryStep Step = FormationPeekCarry::Decide(Facts);
+	// #55 Q2 (2026-11-08): a formation run-and-peek fires once the LEADER is at the wall (his wall slot), the others keep forming up behind.
+	bool bLeaderAtWall = false;
+	FVector LeaderSlot = FVector::ZeroVector;
+	float LeaderSlotYaw = 0.f;
+	if (PeekCarry.bRunPeek && Leader && Squad && Squad->GetFormationTarget(Leader, LeaderSlot, LeaderSlotYaw))
+	{
+		bLeaderAtWall = FVector::Dist2D(Leader->GetActorLocation(), LeaderSlot) <= RunCornerPeekRules::LeaderAtWallCm;
+	}
+	const FormationPeekCarry::EPeekCarryStep Step = RunCornerPeekRules::DecideFormationCarry(Facts, PeekCarry.bRunPeek, bLeaderAtWall);
 	if (Step == FormationPeekCarry::EPeekCarryStep::Wait)
 	{
 		return;
@@ -126,8 +165,8 @@ void ACodexTacticsPlayerController::TickSquadPeekCarry(float DeltaSeconds)
 	AOperativeCharacter* Peeker = nullptr;
 	const bool bOrdered = FindSquadCornerPeekForHit(Hit, Target) && (Peeker = Target.Peeker.Get()) != nullptr
 		&& Squad->OrderFormationCornerPeek(Peeker, Target.CornerSlot, Target.EdgeOnFace);
-	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the carried corner peek after %.1f s (everyone at the wall %d, the leader still %.1f s): %s"), PeekCarry.Seconds,
-		Facts.bApproachDone ? 1 : 0, Facts.LeaderStillSeconds, bOrdered ? *FString::Printf(TEXT("%s takes the corner at (%.0f, %.0f)"), *Peeker->DisplayName.ToString(),
+	UE_LOG(LogCodexTactics, Display, TEXT("[Formation] the carried corner peek after %.1f s (everyone at the wall %d, the leader at the wall %d, the leader still %.1f s%s): %s"),
+		PeekCarry.Seconds, Facts.bApproachDone ? 1 : 0, bLeaderAtWall ? 1 : 0, Facts.LeaderStillSeconds, PeekCarry.bRunPeek ? TEXT(", run-and-peek") : TEXT(""), bOrdered ? *FString::Printf(TEXT("%s takes the corner at (%.0f, %.0f)"), *Peeker->DisplayName.ToString(),
 			Target.EdgeOnFace.X, Target.EdgeOnFace.Y) : TEXT("no squad peek at that corner (the squad is not at that wall's end)"));
 	if (!bOrdered)
 	{

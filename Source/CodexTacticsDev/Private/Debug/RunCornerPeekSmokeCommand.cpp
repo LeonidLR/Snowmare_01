@@ -9,7 +9,12 @@
 //   B. from the open, a click on the face's MIDDLE = the cover ghost (take cover; no run-and-peek), its confirm = cover there, no peek;
 //   C. from that cover, a click on the EAST end = the old in-cover peek (he side-steps along the wall in cover, no run-and-peek);
 //   D. the leader NORTH of the wall, the click on the south face's west end -> the corner on the NORTH face (the face looking at him);
-//   E. all three box-selected out in the open -> the man nearest the west end takes the corner and peeks, the others in cover behind him.
+//   E. all three box-selected out in the open -> the man nearest the west end takes the corner and peeks, the others in cover behind him;
+//   F. (the game designer's answer Q2, 2026-11-08) the squad in FORMATION in the open, the followers far behind the leader: the click on the
+//      west end = the squad's wall order there, its corner peek fires as soon as the LEADER is at the wall - while a follower is still on his
+//      way - and the corner man peeks round the west end;
+//   G. (answer Q3) solo, a fight, the TACTICAL PAUSE: the hover over the west end shows the run-and-peek ghost (no cover ghost), the click
+//      plans "run there and peek" (nobody moves in the pause); the pause's end -> he runs there and peeks on arrival.
 // A/B: -PreCmds "Codex.Cover.RunCornerPeek 0" = the old rule (A, D and E fail: the click is a cover ghost).
 // Godot reference: none (UE-only; docs/systems/cover-and-peek.md "Run-and-peek").
 
@@ -23,7 +28,11 @@
 #include "Components/SkeletalMeshComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Characters/EnemyCharacter.h"
+#include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
 #include "Tactics/CoverGhostActor.h"
@@ -64,6 +73,13 @@ namespace RunCornerPeekSmoke
 	constexpr float GiveUpSeconds = 25.f;
 	/** At the corner: the body within this of the wall's end along it, cm. */
 	constexpr float AtEndCm = 130.f;
+	/** F: the leader's start in the open ~6 m from the west end, the followers ~10 m behind him (still walking when he arrives). */
+	const FVector2D FormationLeaderStart(2100.f, -3250.f);
+	const FVector2D FormationFollowerStart[2] = { FVector2D(2300.f, -4300.f), FVector2D(2550.f, -4400.f) };
+	/** F: a follower counts as still on his way above this planar speed, cm/s. */
+	constexpr float StillWalkingSpeed = 30.f;
+	/** G: the leader in the open within the pause's order radius of the west end. */
+	const FVector2D PauseStart(2000.f, -3300.f);
 
 	struct FState
 	{
@@ -88,6 +104,12 @@ namespace RunCornerPeekSmoke
 		int32 RunPeekCountBefore = 0;
 		bool bLeftCover = false;
 		TWeakObjectPtr<AOperativeCharacter> Expected;
+		/** F: the carried peek's count before, when it fired, whether a follower was still on his way then, the leader's slot distance then. */
+		int32 CarryCountBefore = 0;
+		float CarryFiredAt = -1.f;
+		bool bFollowerWalkingAtFire = false;
+		FString AtFire;
+		int32 PlannedBefore = 0;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -290,7 +312,7 @@ namespace RunCornerPeekSmoke
 			return Finish(State, false);
 		}
 		// A-D: the same operative throughout (solo mode keeps him the leader; checked at each click).
-		AOperativeCharacter* Leader = State.Stage < 7 ? State.Members[0].Get() : Squad->GetLeader();
+		AOperativeCharacter* Leader = State.Stage < 7 || State.Stage >= 8 ? State.Members[0].Get() : Squad->GetLeader();
 		if (!Leader)
 		{
 			return Finish(State, false);
@@ -508,6 +530,165 @@ namespace RunCornerPeekSmoke
 			}
 			Check(State, bBehind, FString::Printf(TEXT("E: the others ran into cover in a stack behind him on the south face:%s"), *Line));
 			Check(State, !bOtherPeeks, TEXT("E: only he peeks"));
+			// F: the squad in formation (no solo, no box selection), the followers far behind the leader in the open.
+			AOperativeCharacter* Lead = State.Members[0].Get();
+			if (!Lead)
+			{
+				return Finish(State, false);
+			}
+			Squad->SetSelectedGroup({ Lead }, false);
+			Squad->SetLeader(Lead, true);
+			Squad->ExitSoloMode(false, 0.f);
+			Place(State, Lead, FormationLeaderStart, 90.f);
+			for (int32 Index = 1; Index < 3; ++Index)
+			{
+				if (AOperativeCharacter* Each = State.Members[Index].Get())
+				{
+					Place(State, Each, FormationFollowerStart[Index - 1], 90.f);
+				}
+			}
+			Squad->ResetFormationState(FVector(0.f, 1.f, 0.f));
+			Next(State, 8);
+			return true;
+		}
+		case 8:
+		{
+			// F (Q2): the click on the west end in formation - the peek fires once the LEADER is at the wall.
+			AOperativeCharacter* Lead = State.Members[0].Get();
+			if (!Lead)
+			{
+				return Finish(State, false);
+			}
+			if (!State.bClickPending && !State.bClicked && State.StageTime >= 0.5f)
+			{
+				Check(State, !Squad->IsSoloMode() && !Squad->HasMultiSelection() && Squad->GetLeader() == Lead, FString::Printf(TEXT("F: the squad in formation, %s leads (solo %d)"),
+					*NameOf(Lead), Squad->IsSoloMode() ? 1 : 0));
+				State.CarryCountBefore = PC->GetSquadPeekCarryCount();
+				Click(State, WallWestX + EndInsetCm, true);
+				return true;
+			}
+			if (!State.bClicked)
+			{
+				return true;
+			}
+			if (State.CarryFiredAt < 0.f && State.StageTime < 0.6f + DeltaTime * 1.5f)
+			{
+				Check(State, Squad->HasFormationWallOrder() && PC->IsSquadPeekCarryRunPeek(), FString::Printf(TEXT("F: the click = the squad's wall order there, its corner peek carried as a run-and-peek (wall order %d, run-peek carry %d)"),
+					Squad->HasFormationWallOrder() ? 1 : 0, PC->IsSquadPeekCarryRunPeek() ? 1 : 0));
+			}
+			if (State.CarryFiredAt < 0.f && PC->GetSquadPeekCarryCount() > State.CarryCountBefore)
+			{
+				State.CarryFiredAt = State.StageTime;
+				for (int32 Index = 1; Index < 3; ++Index)
+				{
+					const AOperativeCharacter* Each = State.Members[Index].Get();
+					State.bFollowerWalkingAtFire |= Each && Each != Squad->GetFormationPeeker() && Each->GetVelocity().Size2D() > StillWalkingSpeed;
+				}
+				State.AtFire = Where(State);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: F: the carried peek fired %.2f s after the click (a follower still walking %d);%s"), State.StageTime,
+					State.bFollowerWalkingAtFire ? 1 : 0, *State.AtFire);
+			}
+			AOperativeCharacter* Peeker = Squad->GetFormationPeeker();
+			const bool bPose = Peeker && InPeekPose(*Peeker) && FMath::Abs(Peeker->GetActorLocation().X - WallWestX) <= AtEndCm;
+			State.HoldTime = bPose ? State.HoldTime + DeltaTime : 0.f;
+			if (FMath::FloorToInt32(State.StageTime / 0.5f) != FMath::FloorToInt32((State.StageTime - DeltaTime) / 0.5f))
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke trace %.1f s (F formation):%s"), State.StageTime, *Where(State));
+			}
+			if (State.HoldTime < HoldSeconds && State.StageTime < GiveUpSeconds)
+			{
+				return true;
+			}
+			Check(State, State.CarryFiredAt >= 0.f && State.bFollowerWalkingAtFire,
+				FString::Printf(TEXT("F (Q2): the corner peek ordered as soon as the leader is at the wall - a follower still on his way (fired %.2f s after the click, follower walking %d);%s"),
+					State.CarryFiredAt, State.bFollowerWalkingAtFire ? 1 : 0, *State.AtFire));
+			Check(State, State.HoldTime >= HoldSeconds, FString::Printf(TEXT("F: the corner man %s peeks round the west end (held %.1f s);%s"), *NameOf(Peeker), State.HoldTime,
+				*Where(State)));
+			// G: solo, a fight in the tactical pause.
+			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			if (!Flow)
+			{
+				return Finish(State, false);
+			}
+			for (int32 Index = 0; Index < 3; ++Index)
+			{
+				if (AOperativeCharacter* Each = State.Members[Index].Get())
+				{
+					Place(State, Each, Index == 0 ? PauseStart : (Index == 1 ? ParkA : ParkB), 90.f);
+				}
+			}
+			Squad->SetLeader(Lead, true);
+			Squad->EnterSoloMode();
+			Squad->ResetFormationState(FVector(0.f, 1.f, 0.f));
+			SmokeUtils::UsePreparedWaveStart();
+			Flow->TriggerCombatZone();
+			Flow->FinishCutscene();
+			Flow->FinishPreparation();
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				SmokeUtils::ParkEnemyFarAway(*It);
+				It->SetActorTickEnabled(false);
+			}
+			Next(State, 9);
+			return true;
+		}
+		case 9:
+		{
+			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
+			AOperativeCharacter* Lead = State.Members[0].Get();
+			if (!Flow || !Lead)
+			{
+				return Finish(State, false);
+			}
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			if (!State.bClickPending && !State.bClicked)
+			{
+				const bool bPause = Flow->ToggleTacticalPause() == EGameFlowResult::Ok && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause;
+				Check(State, bPause && Squad->IsSoloMode() && Squad->GetLeader() == Lead, FString::Printf(TEXT("G: solo, %s leads, a fight in the tactical pause (phase %d, mode %d)"),
+					*NameOf(Lead), static_cast<int32>(Flow->GetPhase()), static_cast<int32>(Flow->GetCombatMode())));
+				if (!bPause)
+				{
+					return Finish(State, false);
+				}
+				State.PlannedBefore = PC->GetPlannedRunCornerPeekCount();
+				State.RunPeekCountBefore = Lead->GetRunCornerPeekCount();
+				Click(State, WallWestX + EndInsetCm, true);
+				return true;
+			}
+			if (!State.bClicked)
+			{
+				return true;
+			}
+			if (State.StageTime < 1.6f)
+			{
+				return true;
+			}
+			Check(State, State.bLastGhost && State.LastGhostOf.Get() == Lead && !PC->HasCoverPreview(),
+				FString::Printf(TEXT("G (Q3): in the pause the hover over the wall end shows the run-and-peek ghost (ghost of %s, cover ghost %d)"), *NameOf(State.LastGhostOf.Get()),
+					PC->HasCoverPreview() ? 1 : 0));
+			Check(State, Lead->IsRunCornerPeekPending() && Lead->HasPendingCover() && PC->GetPlannedRunCornerPeekCount() == State.PlannedBefore + 1 && Squad->GetPlannedOrderCount() >= 1
+				&& Lead->GetVelocity().Size2D() < 5.f,
+				FString::Printf(TEXT("G: the click plans the run-and-peek - armed %d, pending cover %d, planned %d -> %d, planned orders %d, nobody moves (v %.0f)"),
+					Lead->IsRunCornerPeekPending() ? 1 : 0, Lead->HasPendingCover() ? 1 : 0, State.PlannedBefore, PC->GetPlannedRunCornerPeekCount(), Squad->GetPlannedOrderCount(),
+					Lead->GetVelocity().Size2D()));
+			Flow->ToggleTacticalPause(); // the pause's end: the planned orders run
+			Next(State, 10);
+			return true;
+		}
+		case 10:
+		{
+			AOperativeCharacter* Lead = State.Members[0].Get();
+			if (!Lead)
+			{
+				return Finish(State, false);
+			}
+			if (!WatchRunPeek(State, *Lead, DeltaTime, TEXT("G (planned in the tactical pause, released)"), false))
+			{
+				return true;
+			}
 			return Finish(State, true);
 		}
 		default:
@@ -539,7 +720,7 @@ namespace RunCornerPeekSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.RunCornerPeekSmoke"),
-		TEXT("Dev check (#55, run-and-peek): on L_FormationLab's W_B_3 - one click on the end of a wall in front of a running operative sends him there and he peeks on arrival (no second click, no idle), from the north the north face; the wall's middle is still a cover click; the old in-cover peek still works; a box selection: the man nearest the end peeks, the others stack behind him. PASS/FAIL, exits."),
+		TEXT("Dev check (#55, run-and-peek): on L_FormationLab's W_B_3 - one click on the end of a wall in front of a running operative sends him there and he peeks on arrival (no second click, no idle), from the north the north face; the wall's middle is still a cover click; the old in-cover peek still works; a box selection: the man nearest the end peeks, the others stack behind him; formation: the peek once the leader is at the wall (Q2 2026-11-08); the tactical pause plans it (Q3). PASS/FAIL, exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World) { Run(Args, World); }));
 }
 

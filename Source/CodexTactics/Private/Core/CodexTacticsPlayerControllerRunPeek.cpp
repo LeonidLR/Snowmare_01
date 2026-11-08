@@ -4,7 +4,8 @@
 // region) = run to the corner slot on the face of that wall facing him and peek on arrival (AOperativeCharacter::OrderRunCornerPeek); the
 // hover shows the peek ghost there. Solo first; a box selection: the member nearest that end takes it, the others run into a stack behind
 // him (FormationWallLeadership::PlanGroupCornerPeek, the rule of the group peek in cover); formation: the group wall order at that corner
-// with the squad's corner peek carried there (the bug_04 A carry). Pure rules: RunCornerPeekRules.
+// with the squad's corner peek carried there (the bug_04 A carry; since the game designer's answer Q2 2026-11-08 it fires once the LEADER is at
+// the wall). The tactical pause plans it (Q3: PlanRunCornerPeekClick, run on the release). Pure rules: RunCornerPeekRules.
 // Godot reference: none (UE-only; docs/systems/cover-and-peek.md "Run-and-peek").
 
 #include "Core/CodexTacticsPlayerController.h"
@@ -56,8 +57,6 @@ namespace ControllerRunPeekLocal
 	constexpr double StackKeepCm = 30.0;
 	/** The cached faces hold while the cursor stays within this of the cached point, cm. */
 	constexpr float CacheMoveCm = 5.f;
-	/** A double-click: the second click's corner within this of the first's, cm. */
-	constexpr float DoubleClickEdgeCm = 60.f;
 
 	FVector2D PlanarUnit(const FVector& Vector)
 	{
@@ -341,8 +340,9 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 	FVector2D Mouse = FVector2D::ZeroVector; // stays zero without a viewport (headless smokes)
 	GetMousePosition(Mouse.X, Mouse.Y);
 	const double Now = FApp::GetCurrentTime();
-	const bool bDouble = RunPeekClickTime >= 0.0 && Now - RunPeekClickTime <= DoubleClickSeconds && FVector2D::Distance(Mouse, RunPeekClickPosition) <= DoubleClickPixels
-		&& FVector::Dist2D(Face.EdgeOnFace, RunPeekClickEdge) <= DoubleClickEdgeCm;
+	// Q4 (the game designer 2026-11-08, kept): the normal run; a sprint only on a double-click on the same corner.
+	const bool bDouble = RunCornerPeekRules::IsSprintClick(RunPeekClickTime >= 0.0 ? Now - RunPeekClickTime : -1.0, DoubleClickSeconds,
+		static_cast<float>(FVector2D::Distance(Mouse, RunPeekClickPosition)), DoubleClickPixels, static_cast<float>(FVector::Dist2D(Face.EdgeOnFace, RunPeekClickEdge)));
 	RunPeekClickTime = bDouble ? -1.0 : Now;
 	RunPeekClickPosition = Mouse;
 	RunPeekClickEdge = Face.EdgeOnFace;
@@ -360,6 +360,13 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 	EOperativeOrderResult Result = EOperativeOrderResult::Refused;
 	FString StackLine;
 	bool bOrdered = false;
+	// Q3 (the game designer 2026-11-08): in the tactical pause the run-and-peek is planned - it runs when the pause ends.
+	RunCornerPeekRules::FClickFacts TimingFacts;
+	TimingFacts.bPausePlanning = IsPausePlanningOrders();
+	if (RunCornerPeekRules::DecideTiming(TimingFacts) == RunCornerPeekRules::ETiming::OnPauseRelease)
+	{
+		return PlanRunCornerPeekClick(Operative, Face, Group, bDouble, Hit);
+	}
 	if (Group == RunCornerPeekRules::EGroup::BoxSelection)
 	{
 		AOperativeCharacter* Peeker = nullptr;
@@ -397,9 +404,10 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 			Result = EOperativeOrderResult::Accepted;
 			if (Squad->HasFormationWallOrder())
 			{
-				// The squad's wall layout at that corner; once it stands there, the squad's corner peek round it (the man nearest it takes it).
-				StartSquadPeekCarry(*Squad, *Operative, Face.Corner, true);
-				StackLine = PeekCarry.bActive ? TEXT(" the formation wall order there, the squad's corner peek once it stands at it") : TEXT(" the formation wall order there (no corner to carry the peek to)");
+				// The squad's wall layout at that corner; Q2 (the game designer 2026-11-08): once the LEADER is at that wall, the squad's corner
+				// peek round it (the man nearest it takes it), the others keep forming up behind.
+				StartSquadPeekCarry(*Squad, *Operative, Face.Corner, true, true);
+				StackLine = PeekCarry.bActive ? TEXT(" the formation wall order there, the squad's corner peek once the leader is at it") : TEXT(" the formation wall order there (no corner to carry the peek to)");
 			}
 			else
 			{
@@ -439,6 +447,106 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 	else if (Messages)
 	{
 		Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("CornerPeekRefused", "⚠️ Can't get to that corner."));
+	}
+	return true;
+}
+
+void ACodexTacticsPlayerController::PlanRunCornerPeek(AOperativeCharacter& Operative, const FCoverSlot& CornerSlot, const FVector& EdgeOnFace, bool bSprint, float Radius,
+	FVector& OutPlanned)
+{
+	// As the planned cover click: the slot pending (entered on arrival), the walk planned; the peek on that entry armed (SetPendingCover
+	// clears both arrival flags - they are set again after it). The release's walk to the pending slot keeps them (OrderMoveTo).
+	Operative.SetPendingCover(CornerSlot);
+	Operative.ArmRunCornerPeek(EdgeOnFace);
+	Operative.MarkCornerPeekArrival();
+	USquadSubsystem* Squad = GetSquad();
+	OutPlanned = Squad ? Squad->PlanMove(&Operative, CornerSlot.WorldLocation, bSprint, Radius) : CornerSlot.WorldLocation;
+	++PlannedRunCornerPeeks;
+}
+
+bool ACodexTacticsPlayerController::PlanRunCornerPeekClick(AOperativeCharacter* Operative, const FRunCornerPeekFace& Face, RunCornerPeekRules::EGroup Group, bool bSprint,
+	const FHitResult& Hit)
+{
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = GetSquad();
+	const UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	const float Radius = Flow ? Flow->GetPauseOrderRadius() : 1200.f;
+	UCombatFeedbackSubsystem* Feedback = World ? World->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr;
+	UGameMessageSubsystem* Messages = World ? World->GetSubsystem<UGameMessageSubsystem>() : nullptr;
+	if (!Operative || !Squad)
+	{
+		return false;
+	}
+	AOperativeCharacter* PeekOperative = Operative;
+	FString Line;
+	FVector Planned = Face.Corner.WorldLocation;
+	bool bPlanned = false;
+	if (Group == RunCornerPeekRules::EGroup::BoxSelection)
+	{
+		AOperativeCharacter* Peeker = nullptr;
+		TArray<TPair<AOperativeCharacter*, FCoverSlot>> Stack;
+		if (PlanRunGroupCornerPeek(Operative, Face, Peeker, &Stack) && Peeker)
+		{
+			PeekOperative = Peeker;
+			PlanRunCornerPeek(*Peeker, Face.Corner, Face.EdgeOnFace, bSprint, Radius, Planned);
+			for (const TPair<AOperativeCharacter*, FCoverSlot>& Each : Stack)
+			{
+				Each.Key->SetPendingCover(Each.Value);
+				const FVector EachPlanned = Squad->PlanMove(Each.Key, Each.Value.WorldLocation, bSprint, Radius);
+				Line += FString::Printf(TEXT(" %s -> (%.0f, %.0f);"), *Each.Key->DisplayName.ToString(), EachPlanned.X, EachPlanned.Y);
+			}
+			bPlanned = true;
+		}
+		else
+		{
+			Group = RunCornerPeekRules::EGroup::Single;
+		}
+	}
+	else if (Group == RunCornerPeekRules::EGroup::Formation)
+	{
+		// The squad's wall order there is planned (PlanFormationWall, ordered on the release); its carried peek starts then (TickSquadPeekCarry).
+		if (OrderGroupCover(Operative, Face.Corner, true, Radius))
+		{
+			bPlanned = true;
+			if (Squad->HasPlannedFormationWall())
+			{
+				PlannedRunPeekCarry.bActive = true;
+				PlannedRunPeekCarry.Leader = Operative;
+				PlannedRunPeekCarry.Slot = Face.Corner;
+				++PlannedRunCornerPeeks;
+				Line = TEXT(" the formation wall order there planned, the squad's corner peek once the leader is at it");
+			}
+			else
+			{
+				// The legacy group cover beside him (planned walks to pending slots): his own entry into the corner slot turns into the peek.
+				Operative->ArmRunCornerPeek(Face.EdgeOnFace);
+				Operative->MarkCornerPeekArrival();
+				++PlannedRunCornerPeeks;
+				Line = TEXT(" the group cover there planned, he peeks on arrival");
+			}
+		}
+		else
+		{
+			Group = RunCornerPeekRules::EGroup::Single;
+		}
+	}
+	if (!bPlanned)
+	{
+		PlanRunCornerPeek(*Operative, Face.Corner, Face.EdgeOnFace, bSprint, Radius, Planned);
+	}
+	if (Feedback && Group != RunCornerPeekRules::EGroup::Formation)
+	{
+		Feedback->SpawnWaypointMarker(Planned);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] run-and-peek PLANNED in the tactical pause at (%.0f, %.0f, %.0f) (%s%s): %s - to the %s corner at (%.0f, %.0f), planned to (%.0f, %.0f), the peek on arrival once the pause ends;%s"),
+		Hit.ImpactPoint.X, Hit.ImpactPoint.Y, Hit.ImpactPoint.Z, Group == RunCornerPeekRules::EGroup::BoxSelection ? TEXT("box selection")
+		: Group == RunCornerPeekRules::EGroup::Formation ? TEXT("formation") : TEXT("single"), bSprint ? TEXT(", at a sprint") : TEXT(""), *PeekOperative->DisplayName.ToString(),
+		Face.Side == ECoverFacing::Left ? TEXT("left") : TEXT("right"), Face.Corner.WorldLocation.X, Face.Corner.WorldLocation.Y, Planned.X, Planned.Y,
+		Line.IsEmpty() ? TEXT(" alone") : *Line);
+	ControllerCommands::Report(this, PlayerCommands::CoverCornerPeek, nullptr, true, Group != RunCornerPeekRules::EGroup::Single, PeekOperative, Hit.ImpactPoint);
+	if (Messages && Group != RunCornerPeekRules::EGroup::Formation)
+	{
+		Messages->PostMessage(PeekOperative->DisplayName, LOCTEXT("RunCornerPeekPlanned", "📋 [PLAN] Run to that corner and cover it!"));
 	}
 	return true;
 }

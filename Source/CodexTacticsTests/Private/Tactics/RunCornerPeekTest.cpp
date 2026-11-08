@@ -4,6 +4,7 @@
 
 #include "Misc/AutomationTest.h"
 #include "Tactics/RunCornerPeekRules.h"
+#include "Formation/FormationWallLeadershipRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -25,7 +26,7 @@ bool FRunCornerPeekClickGateTest::RunTest(const FString& Parameters)
 	};
 	TestFalse(TEXT("Codex.Cover.RunCornerPeek 0: the old rule"), With([](FClickFacts& F) { F.bEnabled = false; }));
 	TestFalse(TEXT("turn-based: its own cover rules (out of scope)"), With([](FClickFacts& F) { F.bTurnBased = true; }));
-	TestFalse(TEXT("the tactical pause plans orders: the old cover click"), With([](FClickFacts& F) { F.bPausePlanning = true; }));
+	TestTrue(TEXT("Q3 (2026-11-08): the tactical pause plans the run-and-peek too (no longer the old cover click)"), With([](FClickFacts& F) { F.bPausePlanning = true; }));
 	TestFalse(TEXT("Alt (squad-wide) keeps 'take cover at that object'"), With([](FClickFacts& F) { F.bSquadWide = true; }));
 	TestFalse(TEXT("the tutorial has not taught the corner peek"), With([](FClickFacts& F) { F.bTutorialLocked = true; }));
 	TestFalse(TEXT("a click on a pawn never peeks"), With([](FClickFacts& F) { F.bHitPawn = true; }));
@@ -119,6 +120,78 @@ bool FRunCornerPeekGroupTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("formation with followers that join a cover order: formation"), DecideGroup(false, false, true, false, 2) == EGroup::Formation);
 	TestTrue(TEXT("formation, nobody joins (all on their own orders): single"), DecideGroup(false, false, true, false, 0) == EGroup::Single);
 	TestTrue(TEXT("solo mode never orders the formation"), DecideGroup(false, true, true, true, 3) == EGroup::Single);
+	return true;
+}
+
+// The game designer's answers 2026-11-08 (#55): Q2 / Q3 change, Q1 / Q4 / Q5 / Q6 pinned as they are.
+RUN_CORNER_PEEK_TEST(FRunCornerPeekDesignerAnswersTest, "DesignerAnswers")
+bool FRunCornerPeekDesignerAnswersTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// Q3: the tactical pause plans it (run there and peek when the pause ends), real time runs it now.
+	FClickFacts Pause;
+	Pause.bPausePlanning = true;
+	TestTrue(TEXT("Q3: in the tactical pause the click is a run-and-peek ..."), MayRunToPeek(Pause));
+	TestTrue(TEXT("... planned for the pause's release"), DecideTiming(Pause) == ETiming::OnPauseRelease);
+	TestTrue(TEXT("real time: now"), DecideTiming(FClickFacts()) == ETiming::Now);
+	FClickFacts PauseTurnBased = Pause;
+	PauseTurnBased.bTurnBased = true;
+	TestFalse(TEXT("turn-based keeps its own rules (pause or not)"), MayRunToPeek(PauseTurnBased));
+	// Q1 (kept): from a wall edge, the neighbouring cover's edge is the slide to it - no run-and-peek, no auto-peek after it.
+	FClickFacts Switch;
+	Switch.bCoverSwitchTarget = true;
+	TestFalse(TEXT("Q1: a cover-switch target from a wall edge stays the switch"), MayRunToPeek(Switch));
+	Switch.bPausePlanning = true;
+	TestFalse(TEXT("Q1: ... in the pause too"), MayRunToPeek(Switch));
+	// Q4 (kept): the normal run; a sprint only on a double-click on the same corner.
+	TestFalse(TEXT("Q4: one click - the normal run"), IsSprintClick(-1.0, 0.3, 0.f, 8.f, 0.f));
+	TestTrue(TEXT("Q4: the second click on the same corner within the double-click time - a sprint"), IsSprintClick(0.2, 0.3, 2.f, 8.f, 10.f));
+	TestFalse(TEXT("Q4: a second click too late - the normal run"), IsSprintClick(0.5, 0.3, 2.f, 8.f, 10.f));
+	TestFalse(TEXT("Q4: a second click on another corner - the normal run"), IsSprintClick(0.2, 0.3, 2.f, 8.f, 300.f));
+	TestFalse(TEXT("Q4: a second click far off on screen - the normal run"), IsSprintClick(0.2, 0.3, 40.f, 8.f, 10.f));
+	// Q5 (kept): a box selection - the corner man is the able one nearest the clicked end ALONG the wall (not the selection's leader).
+	const FormationWallLeadership::FGroupCornerPeekPlan Plan = FormationWallLeadership::PlanGroupCornerPeek({ 300.0, 100.0, 520.0 }, { true, true, true }, 600.0, 560.0, 100.0,
+		30.0);
+	TestEqual(TEXT("Q5: the man nearest the end along the wall takes the corner"), Plan.Peeker, 2);
+	const FormationWallLeadership::FGroupCornerPeekPlan Down = FormationWallLeadership::PlanGroupCornerPeek({ 300.0, 100.0, 520.0 }, { true, true, false }, 600.0, 560.0, 100.0,
+		30.0);
+	TestEqual(TEXT("Q5: ... the next nearest when he cannot"), Down.Peeker, 0);
+	// Q6 (kept): covers narrower than 1 m (posts, columns) and barricades stay plain take cover.
+	TestFalse(TEXT("Q6: a 60 cm column is no run-and-peek face"), IsFaceWideEnough(true, 30.f, true, 30.f));
+	TestTrue(TEXT("Q6: 1 m is"), IsFaceWideEnough(true, 50.f, true, 50.f, 100.f));
+	FClickFacts Barricade;
+	Barricade.bHitObject = true;
+	TestFalse(TEXT("Q6: a barricade (an object with its own click) stays take cover / its menu"), MayRunToPeek(Barricade));
+	return true;
+}
+
+// Q2 (2026-11-08): in formation the corner man peeks once the LEADER is at the wall, not after the whole squad settled.
+RUN_CORNER_PEEK_TEST(FRunCornerPeekFormationCarryTest, "FormationCarry")
+bool FRunCornerPeekFormationCarryTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	using FormationPeekCarry::EPeekCarryStep;
+	FormationPeekCarry::FCarryProgressFacts Facts;
+	Facts.bLeaderMoved = true;
+	Facts.Seconds = 6.f;
+	Facts.LeaderStillSeconds = 0.5f;
+	Facts.bApproachDone = false; // a follower is still on his way
+	TestTrue(TEXT("Q2: the leader at the wall, a follower still walking: the peek fires"), DecideFormationCarry(Facts, true, true) == EPeekCarryStep::Fire);
+	TestTrue(TEXT("... the same for a group wall order's carried peek (bug_04 A): waits for the squad"), DecideFormationCarry(Facts, false, true) == EPeekCarryStep::Wait);
+	TestTrue(TEXT("the leader stopped short of the wall: wait"), DecideFormationCarry(Facts, true, false) == EPeekCarryStep::Wait);
+	FormationPeekCarry::FCarryProgressFacts Walking = Facts;
+	Walking.LeaderStillSeconds = 0.1f;
+	TestTrue(TEXT("the leader still walking in: wait"), DecideFormationCarry(Walking, true, true) == EPeekCarryStep::Wait);
+	FormationPeekCarry::FCarryProgressFacts NotYet = Facts;
+	NotYet.bLeaderMoved = false;
+	NotYet.Seconds = 0.5f;
+	TestTrue(TEXT("he has not set off yet (the stand-up clip): wait"), DecideFormationCarry(NotYet, true, true) == EPeekCarryStep::Wait);
+	FormationPeekCarry::FCarryProgressFacts Other = Facts;
+	Other.bLeaderOrderUnchanged = false;
+	TestTrue(TEXT("the leader's next order: dropped"), DecideFormationCarry(Other, true, true) == EPeekCarryStep::Drop);
+	FormationPeekCarry::FCarryProgressFacts Settled = Facts;
+	Settled.bApproachDone = true;
+	TestTrue(TEXT("everyone settled: fires either way"), DecideFormationCarry(Settled, false, false) == EPeekCarryStep::Fire);
 	return true;
 }
 
