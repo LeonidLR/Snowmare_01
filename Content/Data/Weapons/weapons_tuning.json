@@ -68,12 +68,13 @@
     ]
   },
   "sidearm": {
-    "comment": "The sidearm switch (SidearmRules, 2026-11-08): a primary that runs dry with an enemy within threat_range_m -> the pistol instead of the reload (no shot for draw_s while it comes up); back to the primary (which then reloads) after holster_after_s without a target or when the pistol is dry. The player's own switching (X, the weapon selector) is unchanged.",
+    "comment": "The sidearm switch (SidearmRules, 2026-11-08): a primary that runs dry with an enemy within threat_range_m -> the pistol instead of the reload (no shot for draw_s while it comes up); back to the primary (which then reloads) after holster_after_s without a target or when the pistol is dry. reload_in_cover (2026-11-09, pending the game designer's OK): in cover - the corner peek / its fire pose and his open shots off the wall included - he reloads behind the cover instead; the switch is for the open. The player's own switching (X, the weapon selector) is unchanged.",
     "enabled": true,
     "weapon": "pistol",
     "threat_range_m": 10,
     "draw_s": 0.35,
-    "holster_after_s": 3
+    "holster_after_s": 3,
+    "reload_in_cover": true
   },
   "loadouts": {
     "comment": "The player's squad: each role's weapons, the first in hands (WeaponLoadoutRules; designer decision 21+, 2026-11-03 / 11-08: the Engineer carries the D-1 shotgun as his primary weapon and no M16). A role not listed keeps the game mode's StartingArsenal + ExtraWeapons. PMC fighters: pmc_operators.json weapon_pool.",

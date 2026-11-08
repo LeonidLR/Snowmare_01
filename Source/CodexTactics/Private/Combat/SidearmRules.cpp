@@ -24,6 +24,11 @@ namespace SidearmRules
 		{
 			Out.bEnabled = bEnabled;
 		}
+		bool bReloadInCover = true;
+		if (Block.TryGetBoolField(TEXT("reload_in_cover"), bReloadInCover))
+		{
+			Out.bReloadInCover = bReloadInCover;
+		}
 		FString Weapon;
 		if (Block.TryGetStringField(TEXT("weapon"), Weapon) && !Weapon.IsEmpty())
 		{
@@ -60,9 +65,10 @@ namespace SidearmRules
 	}
 
 	bool ShouldDrawSidearm(const FSidearmConfig& Config, bool bHoldingSidearm, bool bPrimaryClipEmpty, bool bPrimaryHasReserve, bool bSidearmUsable,
-		float ThreatDistanceCm, bool bRaging)
+		float ThreatDistanceCm, bool bRaging, bool bInCover)
 	{
 		return Config.bEnabled && !bHoldingSidearm && bPrimaryClipEmpty && bPrimaryHasReserve && bSidearmUsable && !bRaging
+			&& !(Config.bReloadInCover && bInCover)
 			&& ThreatDistanceCm >= 0.f && ThreatDistanceCm <= Config.ThreatRangeM * 100.f;
 	}
 

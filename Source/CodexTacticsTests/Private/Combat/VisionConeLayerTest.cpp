@@ -21,11 +21,6 @@ namespace VisionConeLayerTest
 	void OpenSample(float, FVisionConeRay&)
 	{
 	}
-
-	FVector2D Direction(float AngleDeg)
-	{
-		return FVector2D(FMath::Cos(FMath::DegreesToRadians(AngleDeg)), FMath::Sin(FMath::DegreesToRadians(AngleDeg)));
-	}
 }
 
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FVisionConeLayerRaysTest, "CodexTactics.Combat.VisionCone.Layer.Rays",

@@ -31,6 +31,12 @@ bool FSidearmRulesTest::RunTest(const FString&)
 	TestFalse(TEXT("pistol dry / not carried"), ShouldDrawSidearm(Config, false, true, true, false, 600.f, false));
 	TestFalse(TEXT("already holding the pistol"), ShouldDrawSidearm(Config, true, true, true, true, 600.f, false));
 	TestFalse(TEXT("raging (rage ignores the reload)"), ShouldDrawSidearm(Config, false, true, true, true, 600.f, true));
+	// 2026-11-09 (CoverSmoke / CornerHoldSmoke: the corner man drew the pistol instead of ducking back to reload): in cover he reloads behind it.
+	TestFalse(TEXT("in cover (the corner peek's fire pose too), enemy 6 m: reload behind the cover"), ShouldDrawSidearm(Config, false, true, true, true, 600.f, false, true));
+	TestTrue(TEXT("in the open, enemy 6 m: the sidearm"), ShouldDrawSidearm(Config, false, true, true, true, 600.f, false, false));
+	FSidearmConfig CoverToo = Config;
+	CoverToo.bReloadInCover = false;
+	TestTrue(TEXT("reload_in_cover off in the data: the sidearm in cover too (before)"), ShouldDrawSidearm(CoverToo, false, true, true, true, 600.f, false, true));
 	FSidearmConfig Off = Config;
 	Off.bEnabled = false;
 	TestFalse(TEXT("switched off in the data"), ShouldDrawSidearm(Off, false, true, true, true, 600.f, false));
@@ -48,6 +54,9 @@ bool FSidearmRulesTest::RunTest(const FString&)
 	TestEqual(TEXT("parse: threat range"), Read.ThreatRangeM, 12.f);
 	TestEqual(TEXT("parse: a draw of 9 s is refused (kept 0.35)"), Read.DrawSeconds, 0.35f);
 	TestEqual(TEXT("... with one error line"), Errors.Num(), 1);
+	TestTrue(TEXT("parse: reload_in_cover defaults on"), Read.bReloadInCover);
+	Block->SetBoolField(TEXT("reload_in_cover"), false);
+	TestFalse(TEXT("parse: reload_in_cover false"), Parse(*Block).bReloadInCover);
 	return true;
 }
 

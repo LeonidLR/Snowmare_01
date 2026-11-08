@@ -10,7 +10,7 @@ class FJsonObject;
  * once no target is left for a while. The player's own controls stay as they are (X cycles the weapons; the weapon selector). An empty
  * primary with no reserve left already switched for good (AOperativeCharacter::AutoSwitchOnEmpty).
  * Data: Content/Data/Weapons/weapons_tuning.json root block
- *   "sidearm": {"enabled": true, "weapon": "pistol", "threat_range_m": 10, "draw_s": 0.35, "holster_after_s": 3}
+ *   "sidearm": {"enabled": true, "weapon": "pistol", "threat_range_m": 10, "draw_s": 0.35, "holster_after_s": 3, "reload_in_cover": true}
  * UE-only (Godot had no sidearm switch). Tested in CodexTactics.Weapons.Sidearm.*.
  */
 struct CODEXTACTICS_API FSidearmConfig
@@ -24,6 +24,12 @@ struct CODEXTACTICS_API FSidearmConfig
 	float DrawSeconds = 0.35f;
 	/** Back to the primary after this long without a target (s). */
 	float HolsterAfterSeconds = 3.f;
+	/**
+	 * In cover (any cover state - the corner peek / its fire pose included, and his open shots off the wall: he goes back to it) he reloads
+	 * behind the cover instead of drawing the sidearm; the switch is for the open (moving, exposed). The coordinator's default 2026-11-09, pending the game designer's OK (CoverSmoke /
+	 * CornerHoldSmoke: the corner man drew the pistol instead of ducking back to reload).
+	 */
+	bool bReloadInCover = true;
 };
 
 namespace SidearmRules
@@ -38,10 +44,11 @@ namespace SidearmRules
 	/**
 	 * Draw the sidearm now? Only while holding a primary (not the sidearm itself) whose clip is EMPTY (a tactical top-up never switches)
 	 * and that still has reserve to reload later, the sidearm owned with rounds, and a live threat within ThreatRangeM (ThreatDistanceCm < 0
-	 * = no threat). Never while raging (rage ignores the reload, Godot).
+	 * = no threat). Never while raging (rage ignores the reload, Godot), nor in cover with Config.bReloadInCover (bInCover: he reloads
+	 * behind it).
 	 */
 	CODEXTACTICS_API bool ShouldDrawSidearm(const FSidearmConfig& Config, bool bHoldingSidearm, bool bPrimaryClipEmpty, bool bPrimaryHasReserve,
-		bool bSidearmUsable, float ThreatDistanceCm, bool bRaging);
+		bool bSidearmUsable, float ThreatDistanceCm, bool bRaging, bool bInCover = false);
 
 	/** Back to the primary? The sidearm was drawn by the rule and either no target for HolsterAfterSeconds or the sidearm is dry. */
 	CODEXTACTICS_API bool ShouldReturnToPrimary(const FSidearmConfig& Config, bool bDrawnByRule, float SecondsWithoutTarget, bool bSidearmDry);
