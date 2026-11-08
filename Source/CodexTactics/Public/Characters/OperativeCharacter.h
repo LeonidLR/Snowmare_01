@@ -1841,6 +1841,16 @@ public:
 	float CoverLeanBlendSeconds = 0.25f;
 
 	/**
+	 * Leaving the cover from the corner fire pose (fix/corner-exit-jerk): the fire idle's body stands ~55 cm off the capsule (leaned out round the
+	 * corner) and the actor's turn swung it round the capsule 17 cm a frame; for CornerLeaveTurnSeconds the turn keeps that body under this
+	 * speed (cm/s) while it stands more than 20 cm off the capsule.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "10"))
+	float CornerLeaveBodySpeed = 180.f;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Cover", meta = (ClampMin = "0"))
+	float CornerLeaveTurnSeconds = 1.2f;
+
+	/**
 	 * Corner peek (2026-10-20): the mesh leans this much further out past the wall's end than the clip's own step-out, per pack clip side, cm.
 	 * Measured on the head bone: the _L clips (his right corner) put the head 25 cm past the edge, the _R ones (his left corner) only 14 cm -
 	 * his head sits right over the pelvis - so _R gets +11. A tracked, eased mesh offset (CoverEntryAppliedOffset), gone when the peek is over;
@@ -2692,6 +2702,15 @@ private:
 	float CoverLeanCancelAlpha = 1.f;
 	/** The corner peek's extra lean share (0..1, CornerLeanExtraPack*Cm), eased by UpdateCoverEntryBlend. */
 	float CornerLeanExtraAlpha = 0.f;
+	/**
+	 * fix/corner-exit-jerk (RecoilProbe 2026-11-08): the extra lean's world direction / amount while it is on - it eases out on the side it
+	 * leaned to, also after a shimmy turned the facing (the other side's amount is 0 cm: the 11 cm jumped back in a frame) or the cover was left.
+	 */
+	FVector CornerLeanExtraVector = FVector::ZeroVector;
+	/** Leaving the cover from the corner fire pose: until then the actor's turn keeps the leaned-out body moving <= CornerLeaveBodySpeed. */
+	double CornerLeaveTurnUntil = -1.0;
+	/** Clamps this frame's turn of the actor (from YawBefore) while the drawn body still stands far off the capsule after the corner pose. */
+	void LimitCornerLeaveTurn(float YawBefore, float DeltaTime);
 	FVector CoverWallPushDir = FVector::ForwardVector;
 	/** Skin bones (no IK targets / virtual bones) of the mesh asset the list was built for. */
 	TArray<int32> CoverClearanceBones;

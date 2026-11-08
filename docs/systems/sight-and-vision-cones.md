@@ -318,6 +318,8 @@ old plain sector (`VisionConeRules::BuildFill` / `BuildOutline`).
      under 2 x 20 cm. A shadow running out to 120 m is still refined to 120 m's arc (~5 bisections -> ~4); a corner 8 m away, which the
      angle floor (0.02 deg) placed to 3 mm, is not refined at all (its base gap is 13 cm there). 320 -> 225 rays at 120 m, 263 -> 160 at 60 m;
      the rays left over are no longer forced into the first shadow edges (the old fan ran out of its 320 rays on the Depot street).
+     A gap whose two rays are blocked by different objects is measured at the max range instead (2026-11-08 follow-up: the view out
+     between two near blockers - VisionHeightSmoke's ruin roof - was missed when the short far ends stopped the bisection).
   3. **The measurement:** the check reads the worker threads' **CPU time** (`TaskCpuSeconds`, Windows `QueryThreadCycleTime` over the TSC rate)
      instead of their wall time - a task thread preempted by another process kept "working" on the wall clock (one loaded run measured 30 ms
      wall / 4 ms CPU for the same 60 m rebuild). The budget stays 6 ms and still includes the mates' re-cuts (they joined the per-rebuild

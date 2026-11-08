@@ -322,6 +322,7 @@ bool AOperativeCharacter::IsPanicking() const
 
 void AOperativeCharacter::Tick(float DeltaTime)
 {
+	const float TickYawBefore = static_cast<float>(GetActorRotation().Yaw);
 	Super::Tick(DeltaTime);
 	UpdateCorpseFall(DeltaTime); // fix/corpse-falls-to-ground: a body killed off the ground lands before it lies still
 	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
@@ -352,6 +353,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 		UpdateSniperPendingShot(DeltaTime);
 		UpdateUnderFireManoeuvre(DeltaTime); // #43: cover / a step for a line / prone under fire
 	}
+	LimitCornerLeaveTurn(TickYawBefore, DeltaTime); // fix/corner-exit-jerk: no swing of the leaned-out body round the capsule
 	UpdateCoverEntryBlend(DeltaTime);
 	EnforceMeshBaseOffset();
 	UpdateSilhouette(DeltaTime);

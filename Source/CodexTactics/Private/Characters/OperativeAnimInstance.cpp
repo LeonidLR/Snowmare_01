@@ -1650,9 +1650,22 @@ bool UOperativeAnimInstance::GetPeekStanceBodyYawCs(ECoverFacing Side, bool bCro
 
 UAnimSequenceBase* UOperativeAnimInstance::PickCoverClip(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) const
 {
+	return PickCoverClipFor(Clips, CoverFacing);
+}
+
+bool UOperativeAnimInstance::PlayCoverFireExit(double Now)
+{
+	bCoverInFirePose = false;
+	CoverFireLeftTime = Now;
+	UAnimSequenceBase* Exit = PickCoverClipFor(bIsCrouching ? CoverCrouchFireExit : CoverStandFireExit, CoverFirePoseFacing);
+	return Exit && PlayCoverOneShot(Exit, FMath::Max(CoverFireLeaveBlendSeconds, 0.05f), 0.35f); // out of it as softly: into the graph's pose (a crouched exit stands up)
+}
+
+UAnimSequenceBase* UOperativeAnimInstance::PickCoverClipFor(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips, ECoverFacing Facing) const
+{
 	// The pack names its sides facing the wall: *_L works at his own RIGHT (back to the wall), *_R at his left
 	// (CoverFacingRules::ClipIndex: Right -> 0 = _L, Left -> 1 = _R; measured 2026-10-06).
-	const int32 Index = CoverFacingRules::ClipIndex(CoverFacing);
+	const int32 Index = CoverFacingRules::ClipIndex(Facing);
 	if (Clips.IsValidIndex(Index) && Clips[Index])
 	{
 		return Clips[Index];
@@ -1737,11 +1750,13 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	{
 		return;
 	}
+	const double LayerNow = Operative.GetWorld() ? Operative.GetWorld()->GetTimeSeconds() : 0.0;
 	if (bLeft)
 	{
 		if (UAnimMontage* Loop = CoverLoopMontage.Get(); Loop && Montage_IsPlaying(Loop))
 		{
-			Montage_Stop(0.25f, Loop);
+			// Out of the fire pose (fix/corner-exit-jerk): its leaned-out body goes back slowly whatever follows (a walk off too).
+			Montage_Stop(bCoverInFirePose ? FMath::Max(CoverFireLeaveBlendSeconds, 0.25f) : 0.25f, Loop);
 		}
 		CoverLoopMontage.Reset();
 		CoverLoopClip.Reset();
@@ -1761,10 +1776,11 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		// walk leaves walking).
 		if (bCoverInFirePose && !bKnockedDown && Speed < 20.f && !Operative.IsCoverOpenShotActive() && !Operative.IsMovingOffCover())
 		{
-			if (UAnimSequenceBase* Exit = PickCoverClip(bIsCrouching ? CoverCrouchFireExit : CoverStandFireExit))
-			{
-				PlayCoverOneShot(Exit, 0.1f, 0.2f);
-			}
+			PlayCoverFireExit(LayerNow); // the fire pose's own side (the facing may have changed on the leave), the slow leave blend
+		}
+		if (bCoverInFirePose)
+		{
+			CoverFireLeftTime = LayerNow;
 		}
 		bCoverInFirePose = false;
 		return;
@@ -1877,8 +1893,9 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 		if (bShimmying && bOneShotPlaying)
 		{
 			// A shimmy cuts any cover one-shot (the fire -> idle exit, a transition): the side-step walk shows at once
-			// instead of the body sliding along the wall in the exit pose (user request 2026-10-07, seen crouched).
-			FadeOutCoverMontages(0.2f);
+			// instead of the body sliding along the wall in the exit pose (user request 2026-10-07, seen crouched). Right after the fire
+			// pose the cut takes the leave blend (fix/corner-exit-jerk: the leaned-out body jumped back in 0.2 s).
+			FadeOutCoverMontages(IsLeavingCoverFirePose(Now) ? FMath::Max(CoverFireLeaveBlendSeconds, 0.2f) : 0.2f);
 			bOneShotPlaying = false;
 			CoverPendingFireClip.Reset();
 		}
@@ -1923,16 +1940,22 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	UAnimSequenceBase* FireIdle = PickCoverClip(bIsCrouching ? CoverCrouchFireIdle : CoverStandFireIdle);
 	const bool bWantFirePose = bCoverFireReady && FireIdle;
 	bool bPeekStanceBlend = false;
+	if (bCoverInFirePose && !bShimmying)
+	{
+		CoverFirePoseFacing = CoverFacing; // the side the fire idle is drawn on (a shimmy may turn the facing before the pose ends)
+	}
 	if (bWantFirePose && !bCoverInFirePose && bCoverPeekStanceEntry && !bShimmying)
 	{
 		// The run-and-peek's peek stance: straight from the run into the fire idle (the loop below), no step-out.
 		bCoverInFirePose = true;
+		CoverFirePoseFacing = CoverFacing;
 		bCoverPeekStanceEntry = false;
 		bPeekStanceBlend = true;
 	}
 	else if (bWantFirePose && !bCoverInFirePose)
 	{
 		bCoverInFirePose = true;
+		CoverFirePoseFacing = CoverFacing;
 		if (UAnimSequenceBase* Enter = PickCoverClip(bIsCrouching ? CoverCrouchFireEnter : CoverStandFireEnter))
 		{
 			// Blend out 0.2 like the loops blend in (the fire_idle that follows takes over without a dip).
@@ -1944,13 +1967,11 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	}
 	else if (!bWantFirePose && bCoverInFirePose)
 	{
-		bCoverInFirePose = false;
-		if (UAnimSequenceBase* Exit = PickCoverClip(bIsCrouching ? CoverCrouchFireExit : CoverStandFireExit))
+		// fix/corner-exit-jerk: the fire pose's own side (a shimmy turns the facing first: the other side's exit swung the body across), the
+		// slow leave blend; a shimmy then cuts it with the same slow blend (above / the loop below).
+		if (PlayCoverFireExit(Now))
 		{
-			if (PlayCoverOneShot(Exit, 0.1f, 0.2f))
-			{
-				return;
-			}
+			return;
 		}
 	}
 	// Reload behind the corner (user request 2026-10-07; the pack has no cover reload clip): after the fire -> idle exit
@@ -2000,8 +2021,12 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	// Stand <-> crouch in the fire stance: one fire_idle into the other (UpdateStanceTransition keeps it).
 	const bool bFireStanceSwitch = Wanted == FireIdle && CoverLoopClip.IsValid()
 		&& (CoverLoopClip.Get() == PickCoverClip(CoverStandFireIdle) || CoverLoopClip.Get() == PickCoverClip(CoverCrouchFireIdle));
-	const float LoopBlend = TakeCoverHandoffBlend(bPeekStanceBlend && Wanted == FireIdle ? CoverPeekStanceBlendSeconds
+	float LoopBlend = TakeCoverHandoffBlend(bPeekStanceBlend && Wanted == FireIdle ? CoverPeekStanceBlendSeconds
 		: bFireStanceSwitch ? CoverFireStanceSwitchBlendSeconds : 0.2f);
+	if (Wanted != FireIdle && IsLeavingCoverFirePose(Now))
+	{
+		LoopBlend = FMath::Max(LoopBlend, CoverFireLeaveBlendSeconds); // the loop after the fire pose (the shimmy, the idle): the slow leave blend
+	}
 	if (bPeekStanceBlend && Wanted == FireIdle)
 	{
 		++CoverPeekStanceBlends;

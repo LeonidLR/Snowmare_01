@@ -410,10 +410,20 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 	// edge): an eased share of it on the mesh while the peek is on, tracked with the other offsets and gone when it is over.
 	const bool bLeansOut = IsPeekingRoundCorner();
 	CornerLeanExtraAlpha = FMath::FInterpConstantTo(CornerLeanExtraAlpha, bLeansOut ? 1.f : 0.f, DeltaTime, 1.f / FMath::Max(CoverLeanBlendSeconds, 0.05f));
-	if (bInCover && CornerLeanExtraAlpha > 0.f)
+	if (bLeansOut && bInCover)
 	{
+		// The side he leans to now (fix/corner-exit-jerk: kept for the ease-out - a shimmy turns the facing to the other side, whose amount
+		// is 0 cm, and the cover's slot is gone once he leaves: both dropped the 11 cm in one frame).
 		const float Extra = CoverFacingRules::ClipIndex(CoverFacing) == 0 ? CornerLeanExtraPackLCm : CornerLeanExtraPackRCm;
-		Wanted += CoverFacingRules::AlongWallDirection(CoverSlot, CoverFacing) * Extra * CornerLeanExtraAlpha;
+		CornerLeanExtraVector = CoverFacingRules::AlongWallDirection(CoverSlot, CoverFacing) * Extra;
+	}
+	if (CornerLeanExtraAlpha > 0.f)
+	{
+		Wanted += CornerLeanExtraVector * CornerLeanExtraAlpha;
+	}
+	else
+	{
+		CornerLeanExtraVector = FVector::ZeroVector;
 	}
 	// The body's yaw on entry: (1 - enter clip weight) of the turn the actor made at once is drawn back on the mesh.
 	float WantedYaw = 0.f;
@@ -554,6 +564,29 @@ void AOperativeCharacter::EnforceMeshBaseOffset()
 	FRotator Rotation = SkinMesh->GetRelativeRotation();
 	Rotation.Yaw = ExpectedYaw;
 	SkinMesh->SetRelativeRotation(Rotation);
+}
+
+void AOperativeCharacter::LimitCornerLeaveTurn(float YawBefore, float DeltaTime)
+{
+	UWorld* World = GetWorld();
+	if (!World || bInCover || World->GetTimeSeconds() >= CornerLeaveTurnUntil || !GetMesh() || DeltaTime <= 0.f)
+	{
+		return;
+	}
+	// How far the drawn body (the pelvis) stands off the capsule's axis: the leaned-out corner pose blending back.
+	const FVector Pelvis = GetMesh()->GetBoneLocation(TEXT("pelvis"));
+	const float Off = static_cast<float>(FVector::Dist2D(Pelvis, GetActorLocation()));
+	if (Off <= 20.f)
+	{
+		return;
+	}
+	const float Yaw = static_cast<float>(GetActorRotation().Yaw);
+	const float Turn = FRotator::NormalizeAxis(Yaw - YawBefore);
+	const float MaxTurn = FMath::RadiansToDegrees(CornerLeaveBodySpeed * DeltaTime / Off);
+	if (FMath::Abs(Turn) > MaxTurn)
+	{
+		SetActorRotation(FRotator(GetActorRotation().Pitch, YawBefore + FMath::Sign(Turn) * MaxTurn, GetActorRotation().Roll));
+	}
 }
 
 float AOperativeCharacter::GetMeshBaseOffsetCm() const

@@ -562,3 +562,27 @@ slot (`OrderTakeCover`; a corner slot takes up the corner hold again by the usua
 Tests `CodexTactics.Combat.Knockdown.CoverReturn`; smoke `KnockdownCoverSmoke` (blast -> back in 3.1 s at the same slot; pounce with two
 hounds -> out; blast with a hound 2 m off -> out; blast + a move ordered while down -> the order).
 
+
+## Leaving the corner fire pose without a jump (fix/corner-exit-jerk, 2026-11-08)
+
+- **Report:** the shotgun lane's `CodexTactics.RecoilProbe` saw the upper body jump 50-60 cm SIDEWAYS when an operative (squad and PMC alike)
+  left the corner fire pose - stepping back from the peek into the cover pose, or out of the cover.
+- **Measured (`CornerExitSmoke`, per frame pelvis / spine_03 in the world):** the corner fire idle stands leaned out round the corner - its
+  root ~51 cm sideways in the pose, the pelvis ~57 cm off the capsule. Four causes:
+  1. **leaving the cover:** the actor turned ~70 deg in a few frames (combat facing) while the body stood 57 cm off the capsule - it swung
+     round the capsule 17 cm a frame;
+  2. **the shimmy back:** the shimmy turns the facing to the other side first, so the fire -> idle exit (and the corner's extra lean,
+     `CornerLeanExtraPackRCm` 11 cm vs 0 on the other side) were taken for the wrong side: 11 cm in one frame, then the 0.2 s cut into the
+     walk loop moved the leaned-out body back 6-8 cm a frame;
+  3. **the exit clip's own blend** (0.1 s in, 0.2 s out) - 5-17 cm a frame;
+  4. **the shimmy's arrival:** `EnterCover` put the capsule onto the slot (it stops within the move's acceptance radius) - 25 cm in one frame.
+- **Now:** `UOperativeAnimInstance` remembers the fire pose's side (`CoverFirePoseFacing`) and plays its exit (`PlayCoverFireExit`) blended
+  in over `CoverFireLeaveBlendSeconds` 0.45 s, out over 0.35 s; whatever follows the fire pose within that window (the shimmy loop, the idle,
+  the loop stopped by a leave) blends with it too. The extra corner lean eases out on the side it leaned to (`CornerLeanExtraVector`), also
+  after the cover is left. Leaving the cover from the corner pose, the actor's turn keeps the drawn body under `CornerLeaveBodySpeed` 180 cm/s
+  for `CornerLeaveTurnSeconds` 1.2 s while it stands more than 20 cm off the capsule (`LimitCornerLeaveTurn`). A shimmy's arrival snap is
+  carried on the mesh (the entry glide, eased out over `CoverEnterDecelSeconds`), applied in the same frame. The run-and-peek entry (#55:
+  `ApplyPeekStanceYawLock`, `CoverPeekStanceBlendSeconds`) is untouched.
+- **Checks:** `CornerExitSmoke` (L_MovementTest arena: a squad man and a PMC fighter at a 2.5 m wall's end, the squad man crouched at a
+  1.2 m wall's end, a seen threat past each corner; peek, hold the fire pose, then a shimmy back / out of the cover, 10 exits): the largest
+  step per frame 3.2 - 4.5 cm (was 11 - 25.6 cm), <= 5 cm required.

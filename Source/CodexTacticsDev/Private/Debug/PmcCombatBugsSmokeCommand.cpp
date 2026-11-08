@@ -10,6 +10,7 @@
 //   (at the prone turn rate) and fires only with his body / rifle on the target; a prone operative of the squad the same.
 // PmcUnderFireSmoke (#43 "the column in a passage does not react to a PMC firing from a corner"): see its own comment below.
 // PmcFireLineSmoke (designer PIE 2026-11-08: a prone PMC fighter in the open kept firing into the wall the squad stood behind): see below.
+// CornerExitSmoke (RecoilProbe 2026-11-08: a 50-60 cm sideways jump of the upper body leaving the corner fire pose): see below.
 
 #include "CoreMinimal.h"
 
@@ -35,6 +36,7 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Data/WeaponDataAsset.h"
 #include "Debug/SmokeUtils.h"
+#include "Misc/CoreDelegates.h"
 #include "Tactics/CoverTraceRules.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
@@ -1296,6 +1298,321 @@ namespace PmcCombatBugsSmoke
 		}
 	}
 
+	// --- fix/corner-exit-jerk --------------------------------------------------------------------------------------------------------------
+	// CornerExitSmoke (found by the shotgun lane's CodexTactics.RecoilProbe 2026-11-08: the upper body jumps 50-60 cm SIDEWAYS in one frame when
+	// an operative - squad or PMC alike - leaves the corner fire pose). A squad man at a high wall's end, a PMC fighter at another and the squad
+	// man crouched at a 1.2 m wall's end, each with a seen threat past the corner (the fire-ready pose): corner peek in, held, then out - back
+	// along the wall (a shimmy, still in cover) and out of the cover (standing where he is), twice each at the high walls, once each at the low
+	// one. Every frame the pelvis / spine_03 in the world: no step > 5 cm on the way out (the shimmy's arrival included).
+
+	struct FBodyTrack
+	{
+		TWeakObjectPtr<AOperativeCharacter> Who;
+		FVector Pelvis = FVector::ZeroVector;
+		FVector Spine = FVector::ZeroVector;
+		FVector Actor = FVector::ZeroVector;
+		bool bHas = false;
+		bool bWatch = false;
+		float WatchUntil = -1.f;
+		float MaxPelvisStep = 0.f;
+		float MaxSpineStep = 0.f;
+		int32 BigSteps = 0;
+		int32 FramesWatched = 0;
+		float Yaw = 0.f;
+		FString Phase;
+	};
+
+	FBodyTrack& BodyTrack()
+	{
+		static FBodyTrack Track;
+		return Track;
+	}
+
+	void SampleBody(UWorld* World)
+	{
+		FBodyTrack& Track = BodyTrack();
+		AOperativeCharacter* Who = Track.Who.Get();
+		USkeletalMeshComponent* Mesh = Who ? Who->GetMesh() : nullptr;
+		if (!Mesh || Who->GetWorld() != World)
+		{
+			Track.bHas = false;
+			return;
+		}
+		const FVector Pelvis = Mesh->GetBoneLocation(TEXT("pelvis"));
+		const FVector Spine = Mesh->GetBoneLocation(TEXT("spine_03"));
+		const FVector Actor = Who->GetActorLocation();
+		if (Track.bHas && Track.bWatch)
+		{
+			const float PelvisStep = static_cast<float>(FVector::Dist(Pelvis, Track.Pelvis));
+			const float SpineStep = static_cast<float>(FVector::Dist(Spine, Track.Spine));
+			Track.MaxPelvisStep = FMath::Max(Track.MaxPelvisStep, PelvisStep);
+			Track.MaxSpineStep = FMath::Max(Track.MaxSpineStep, SpineStep);
+			++Track.FramesWatched;
+			if (PelvisStep > 5.f || SpineStep > 5.f || Track.FramesWatched <= 4)
+			{
+				Track.BigSteps += PelvisStep > 5.f || SpineStep > 5.f ? 1 : 0;
+				const UOperativeAnimInstance* Anim = Cast<UOperativeAnimInstance>(Mesh->GetAnimInstance());
+				FString Clip;
+				float MontageWeight = 0.f;
+				float SlotWeight = 0.f;
+				if (Anim)
+				{
+					Anim->GetCoverPlayback(Clip, MontageWeight, SlotWeight);
+				}
+				FString Montages;
+				if (Anim)
+				{
+					for (const FAnimMontageInstance* Instance : Anim->MontageInstances)
+					{
+						if (Instance && Instance->Montage)
+						{
+							const FAnimTrack& Track0 = Instance->Montage->SlotAnimTracks.IsEmpty() ? FAnimTrack() : Instance->Montage->SlotAnimTracks[0].AnimTrack;
+							const UAnimSequenceBase* Seq = Track0.AnimSegments.IsEmpty() ? nullptr : Track0.AnimSegments[0].GetAnimReference().Get();
+							Montages += FString::Printf(TEXT(" [%s w %.2f t %.2f%s]"), Seq ? *Seq->GetName() : *Instance->Montage->GetName(), Instance->GetWeight(),
+								Instance->GetPosition(), Instance->IsActive() ? TEXT("") : TEXT(" stopped"));
+						}
+					}
+				}
+				const int32 RootIndex = Mesh->GetBoneIndex(TEXT("root"));
+				const int32 PelvisIndex = Mesh->GetBoneIndex(TEXT("pelvis"));
+				const TArray<FTransform>& Cs = Mesh->GetComponentSpaceTransforms();
+				const FVector RootCs = Cs.IsValidIndex(RootIndex) ? Cs[RootIndex].GetLocation() : FVector::ZeroVector;
+				const FVector PelvisCs = Cs.IsValidIndex(PelvisIndex) ? Cs[PelvisIndex].GetLocation() : FVector::ZeroVector;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s %s frame %llu: pelvis step %.1f cm, spine_03 %.1f cm (actor %.1f cm, yaw %+.1f deg); in cover %d shimmy %d peek %d fire pose %d facing %d; mesh rel %s yaw %.1f; root cs %s pelvis cs %s; clip %s w %.2f slot %.2f;%s"),
+					*Who->DisplayName.ToString(), *Track.Phase, static_cast<unsigned long long>(GFrameCounter), PelvisStep, SpineStep, FVector::Dist(Actor, Track.Actor),
+					FRotator::NormalizeAxis(static_cast<float>(Who->GetActorRotation().Yaw) - Track.Yaw),
+					Who->bInCover ? 1 : 0, Who->bShimmying ? 1 : 0, Who->IsPeekingRoundCorner() ? 1 : 0, Anim && Anim->IsCoverInFirePose() ? 1 : 0, static_cast<int32>(Who->CoverFacing),
+					*Mesh->GetRelativeLocation().ToCompactString(), Mesh->GetRelativeRotation().Yaw, *RootCs.ToCompactString(), *PelvisCs.ToCompactString(), *Clip, MontageWeight, SlotWeight, *Montages);
+			}
+		}
+		Track.Pelvis = Pelvis;
+		Track.Spine = Spine;
+		Track.Actor = Actor;
+		Track.Yaw = static_cast<float>(Who->GetActorRotation().Yaw);
+		Track.bHas = true;
+	}
+
+	void WatchBody(AOperativeCharacter* Who, const TCHAR* Phase)
+	{
+		FBodyTrack& Track = BodyTrack();
+		Track.Who = Who;
+		Track.bHas = false;
+		Track.bWatch = true;
+		Track.MaxPelvisStep = Track.MaxSpineStep = 0.f;
+		Track.BigSteps = 0;
+		Track.FramesWatched = 0;
+		Track.Phase = Phase;
+	}
+
+	struct FCornerExitRun
+	{
+		int32 Subject = 0;   // 0 the squad man (high wall), 1 the PMC fighter (high wall), 2 the squad man crouched at a low wall
+		int32 Exit = 0;      // 0..3: shimmy, leave, shimmy, leave
+		int32 Step = 0;
+		float StepTime = 0.f;
+		FVector WallCentre = FVector::ZeroVector; // high wall, arena frame
+		float WorstPelvis[3] = { 0.f, 0.f, 0.f };
+		float WorstSpine[3] = { 0.f, 0.f, 0.f };
+		int32 Peeks[3] = { 0, 0, 0 };
+	};
+
+	FCornerExitRun& CornerExitRun()
+	{
+		static FCornerExitRun Run;
+		return Run;
+	}
+
+	/** A point of the arena frame: F along, R right, from State.O. */
+	FVector ArenaAt(const FState& State, float Forward, float Right)
+	{
+		return State.O + State.F * Forward + State.R * Right;
+	}
+
+	bool StepCornerExit(UWorld* World, FState& State)
+	{
+		FCornerExitRun& Run = CornerExitRun();
+		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+		const float WallRight[3] = { 0.f, -1800.f, -900.f }; // wall centres along R (each 4 m wide: ends at +-200); the third a 1.2 m low wall
+		const bool bLowWall = Run.Subject == 2;
+		auto Subject = [&State, &Run]() -> AOperativeCharacter* { return Run.Subject != 1 ? (State.Members.IsEmpty() ? nullptr : State.Members[0].Get()) : (State.Hostiles.IsEmpty() ? nullptr : State.Hostiles[0].Get()); };
+		switch (State.Stage)
+		{
+		case 0:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			if (!SetUp(World, State, FBox2D(FVector2D(-1000.f, -2400.f), FVector2D(1600.f, 700.f))) || !PC)
+			{
+				return Finish(State, false);
+			}
+			for (int32 Wall = 0; Wall < 3; ++Wall)
+			{
+				const float Height = Wall == 2 ? 120.f : 250.f;
+				State.Blocks.Add(SpawnBlock(World, ArenaAt(State, 600.f, WallRight[Wall]) + FVector(0.f, 0.f, Height * 0.5f), State.F.Rotation(), FVector(30.f, 400.f, Height)));
+			}
+			// The PMC fighter (subject 1) behind the second wall; the threats past each corner: the other side's man, frozen in the open.
+			AOperativeCharacter* Fighter = SpawnHostile(World, State, ArenaAt(State, 300.f, WallRight[1] + 150.f), State.F.Rotation(), 51);
+			Check(State, Fighter && State.Blocks.Num() == 3 && !State.Blocks.Contains(nullptr), TEXT("two 2.5 m walls and a 1.2 m one, a PMC fighter by the second"));
+			if (!Fighter)
+			{
+				return Finish(State, false);
+			}
+			MakeTough(Fighter);
+			Fighter->bTacticalCeaseFire = true;
+			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Members)
+			{
+				Member->bTacticalCeaseFire = true;
+			}
+			FCoreDelegates::OnEndFrame.AddLambda([WeakWorld = TWeakObjectPtr<UWorld>(World)]()
+			{
+				if (UWorld* Live = WeakWorld.Get())
+				{
+					SampleBody(Live);
+				}
+			});
+			Run = FCornerExitRun();
+			Next(State);
+			return true;
+		}
+		case 1:
+		{
+			// One peek: into cover at the wall's +R end, the threat past the corner, the peek, held, then out.
+			AOperativeCharacter* Op = Subject();
+			AOperativeCharacter* Threat = Run.Subject != 1 ? (State.Hostiles.IsEmpty() ? nullptr : State.Hostiles[0].Get())
+				: (State.Members.Num() > 1 ? State.Members[1].Get() : nullptr);
+			if (!Op || !Threat)
+			{
+				Check(State, false, TEXT("the subject and his threat"));
+				return Finish(State, false);
+			}
+			const float WallR = WallRight[Run.Subject];
+			Run.StepTime += StepSeconds;
+			// The threat: frozen in the open past the corner (12 m out, 6 m to the side), never firing.
+			const FVector ThreatSpot = ArenaAt(State, 1800.f, WallR + 900.f);
+			if (FVector::Dist2D(Threat->GetActorLocation(), ThreatSpot) > 80.f)
+			{
+				Threat->StopOperative();
+				const FVector Spot = SmokeUtils::FreeSpot(World, ThreatSpot, Threat);
+				Threat->TeleportTo(FVector(Spot.X, Spot.Y, Spot.Z + 4.f), (-State.F).Rotation(), false, true);
+			}
+			switch (Run.Step)
+			{
+			case 0:
+			{
+				// Into cover near the +R end (the slot at the click; the auto snap takes him to the corner).
+				FCoverSlot Slot;
+				const bool bFound = CoverTraceRules::FindCoverSlotAt(World, ArenaAt(State, 570.f, WallR + 150.f) + FVector(0.f, 0.f, bLowWall ? 60.f : 90.f), State.F, Slot);
+				const bool bTaken = bFound && Op->OrderTakeCover(Slot, false) == EOperativeOrderResult::Accepted;
+				Check(State, bTaken, FString::Printf(TEXT("%s takes cover at the wall's end (exit %d)"), *Op->DisplayName.ToString(), Run.Exit));
+				if (!bTaken)
+				{
+					return Finish(State, false);
+				}
+				Run.Step = 1;
+				Run.StepTime = 0.f;
+				return true;
+			}
+			case 1:
+			{
+				if ((!Op->bInCover || Op->bShimmying || Run.StepTime < 2.f) && Run.StepTime < 15.f)
+				{
+					return true;
+				}
+				const FVector EdgePoint = ArenaAt(State, 585.f, WallR + 180.f) + FVector(0.f, 0.f, bLowWall ? 90.f : 150.f);
+				AStaticMeshActor* Wall = State.Blocks[Run.Subject].Get();
+				const FHitResult EdgeHit(Wall, Wall ? Wall->GetStaticMeshComponent() : nullptr, EdgePoint, -State.F);
+				ECoverFacing Side = ECoverFacing::Left;
+				float Edge = 0.f;
+				const bool bPeek = Op->bInCover && PC->FindCornerPeekForHit(Op, EdgeHit, Side, Edge) && Op->OrderCornerPeek(Side, Edge) == EOperativeOrderResult::Accepted;
+				Check(State, bPeek, FString::Printf(TEXT("%s in cover, ordered to peek round the corner (side %d, edge %.0f)"), *Op->DisplayName.ToString(), static_cast<int32>(Side), Edge));
+				if (!bPeek)
+				{
+					return Finish(State, false);
+				}
+				Run.Step = 2;
+				Run.StepTime = 0.f;
+				return true;
+			}
+			case 2:
+			{
+				const UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+				const bool bFirePose = Op->IsPeekingRoundCorner() && Anim && Anim->IsCoverInFirePose();
+				if ((!bFirePose || Run.StepTime < 2.5f) && Run.StepTime < 12.f)
+				{
+					return true;
+				}
+				Run.Peeks[Run.Subject] += bFirePose ? 1 : 0;
+				FString PoseClip;
+				float PoseWeight = 0.f;
+				float PoseSlot = 0.f;
+				if (Anim)
+				{
+					Anim->GetCoverPlayback(PoseClip, PoseWeight, PoseSlot);
+				}
+				Check(State, bFirePose, FString::Printf(TEXT("%s holds the corner fire pose (peeking %d, fire pose %d, %s, facing %d)"), *Op->DisplayName.ToString(),
+					Op->IsPeekingRoundCorner() ? 1 : 0, Anim && Anim->IsCoverInFirePose() ? 1 : 0, *PoseClip, static_cast<int32>(Op->CoverFacing)));
+				// Out: back along the wall (a shimmy 1.5 m from the corner, still in cover) or out of the cover where he stands.
+				const bool bShimmy = Run.Exit % 2 == 0;
+				WatchBody(Op, bShimmy ? TEXT("shimmy back") : TEXT("leave cover"));
+				if (bShimmy)
+				{
+					FCoverSlot Back;
+					const bool bFound = CoverTraceRules::FindCoverSlotAt(World, ArenaAt(State, 570.f, WallR + 20.f) + FVector(0.f, 0.f, bLowWall ? 60.f : 90.f), State.F, Back);
+					Check(State, bFound && Op->OrderShimmyTo(Back) == EOperativeOrderResult::Accepted, FString::Printf(TEXT("%s shimmies back from the corner"), *Op->DisplayName.ToString()));
+				}
+				else
+				{
+					Op->LeaveCover(TEXT("CornerExitSmoke"));
+				}
+				Run.Step = 3;
+				Run.StepTime = 0.f;
+				return true;
+			}
+			case 3:
+			{
+				if (Run.StepTime < 2.f)
+				{
+					return true;
+				}
+				FBodyTrack& Track = BodyTrack();
+				Track.bWatch = false;
+				UE_LOG(LogCodexTactics, Display, TEXT("[CornerExit] %s, %s: largest step per frame - pelvis %.1f cm, spine_03 %.1f cm (%d over 5 cm)"),
+					*Op->DisplayName.ToString(), *Track.Phase, Track.MaxPelvisStep, Track.MaxSpineStep, Track.BigSteps);
+				Run.WorstPelvis[Run.Subject] = FMath::Max(Run.WorstPelvis[Run.Subject], Track.MaxPelvisStep);
+				Run.WorstSpine[Run.Subject] = FMath::Max(Run.WorstSpine[Run.Subject], Track.MaxSpineStep);
+				Check(State, Track.MaxPelvisStep <= 5.f && Track.MaxSpineStep <= 5.f, FString::Printf(TEXT("%s, %s: the body leaves the corner fire pose continuously (pelvis %.1f, spine_03 %.1f cm per frame, <= 5)"),
+					*Op->DisplayName.ToString(), *Track.Phase, Track.MaxPelvisStep, Track.MaxSpineStep));
+				if (Op->bInCover)
+				{
+					Op->LeaveCover(TEXT("CornerExitSmoke: next round"));
+				}
+				Run.Step = 0;
+				Run.StepTime = 0.f;
+				if (++Run.Exit >= (Run.Subject == 2 ? 2 : 4))
+				{
+					Run.Exit = 0;
+					if (++Run.Subject >= 3)
+					{
+						Next(State);
+					}
+				}
+				return true;
+			}
+			default:
+				return Finish(State, false);
+			}
+		}
+		case 2:
+			UE_LOG(LogCodexTactics, Display, TEXT("[CornerExit] worst per-frame step leaving the corner fire pose: squad man pelvis %.1f / spine %.1f cm (%d peeks), PMC fighter pelvis %.1f / spine %.1f cm (%d peeks), squad man at the low wall pelvis %.1f / spine %.1f cm (%d peeks)"),
+				Run.WorstPelvis[0], Run.WorstSpine[0], Run.Peeks[0], Run.WorstPelvis[1], Run.WorstSpine[1], Run.Peeks[1], Run.WorstPelvis[2], Run.WorstSpine[2], Run.Peeks[2]);
+			return Finish(State, true);
+		default:
+			return Finish(State, false);
+		}
+	}
+
 	// --- runner ------------------------------------------------------------------------------------------------------------------------
 
 	using FStepFn = bool (*)(UWorld*, FState&);
@@ -1346,6 +1663,11 @@ namespace PmcCombatBugsSmoke
 		TEXT("CodexTactics.PmcFireLineSmoke"),
 		TEXT("Dev check (designer 2026-11-08, fix/pmc-fire-through-wall): a prone PMC fighter in the open never fires into the wall the squad stands behind - heard is not seen, no suppress without a line of fire (A = the old rules reproduce the report); logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World) { Start(World, TEXT("PmcFireLineSmoke"), &StepFireLine, 90.f); }));
+
+	static FAutoConsoleCommandWithWorldAndArgs CornerExitCommand(
+		TEXT("CodexTactics.CornerExitSmoke"),
+		TEXT("Dev check (fix/corner-exit-jerk, RecoilProbe 2026-11-08): a squad man and a PMC fighter leave the corner fire pose (a shimmy back, out of the cover) with no pelvis / spine_03 step over 5 cm per frame; logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>&, UWorld* World) { Start(World, TEXT("CornerExitSmoke"), &StepCornerExit, 150.f); }));
 
 	static FAutoConsoleCommandWithWorldAndArgs UnderFireCommand(
 		TEXT("CodexTactics.PmcUnderFireSmoke"),

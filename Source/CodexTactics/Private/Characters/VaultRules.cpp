@@ -33,3 +33,21 @@ FVector VaultRules::NavAreaExtent(const FBox& LocalBounds, const FVector& Scale,
 	const float Pad = FMath::Max(0.f, PaddingCm);
 	return FVector(Half.X + Pad, Half.Y + Pad, Half.Z + 50.f);
 }
+
+bool VaultRules::IsVaultableCoverKind(FName Kind)
+{
+	static const FName Kinds[] = { FName(TEXT("sandbag")), FName(TEXT("jersey")), FName(TEXT("barrel")), FName(TEXT("low_wall")) };
+	for (const FName& Each : Kinds)
+	{
+		if (Kind == Each)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool VaultRules::IsVaultableLevelObject(FName Kind, float HeightCm, float ThinSideCm)
+{
+	return IsVaultableCoverKind(Kind) && HeightCm >= MinHeight && HeightCm <= MaxHeight && ThinSideCm > 0.f && ThinSideCm <= MaxVaultableDepthCm;
+}
