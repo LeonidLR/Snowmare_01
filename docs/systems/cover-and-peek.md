@@ -152,7 +152,60 @@ must run up and peek at once - it looks silly, like a stage play."
   within 30 deg of the peek facing, and the drawn body (the shoulder line) turning at most 90 deg in all from his last frame of the run to
   1 s in the peek (measured after the fix: 20-25 deg; a spin through the blend reads ~340). `-PreCmds "Codex.Cover.RunPeekStance 0"`
   fails those checks.
-  Frame strip: `CodexTactics.RunCornerPeekSmoke Shot` (rendered) -> `Saved/Screenshots/RunPeekNoHug/runpeek_<stance|old>_NN.png`.
+  Frame strip: `CodexTactics.RunCornerPeekSmoke Shot` (rendered) -> since Bug_2 below `Saved/Screenshots/RunPeekNoHug2/`.
+
+### Arrives already turned - no residual turn on the peek entry (#55, game designer's video Bug_2 2026-11-08)
+
+Designer (after the fix above): "In game it got much better, but still, when he runs up and peeks out from the wall, there seems to be another
+small extra turn."
+
+- **When (his video, 10 fps):** not during the last metres and not at the arrival frame itself - in the 0.3 s blend right after it
+  (frames 39-42 and 155-158: the body still faces the run's way at the arrival frame, the next 2-3 frames are motion-blurred by a quick
+  turn, then the fire idle stands still). The first fix's smoke measured it: the shoulder line turned 20-25 deg in those 0.3 s (A:
+  39 -> 47, a plateau, -> 59 deg off the peek facing), the formation corner man 53.
+- **Cause (three parts):**
+  1. The pre-turn aimed the ACTOR at the corner aim. But the run pose draws the shoulder line ~35-40 deg off the actor's yaw and the corner
+     fire idle draws it ~35-60 deg off the corner aim (by clip, `_L` / `_R` differ): the drawn body still had ~20 deg to go after the arrival.
+  2. The pose blend turns the pelvis ~160 deg (run -> fire idle) by per-bone nlerp, not linearly in the montage weight; the mesh's held
+     yaw was released linearly with the weight - even a perfectly matched total leaves a ~5 deg wobble mid-blend (the plateau), and any
+     mismatch (the held -190 vs the blend's -157 deg) shows as a quick turn inside the 0.3 s.
+  3. The 1.5 m pre-turn started from the SLOT, but the run enters the cover its glide short of it (~90 cm at a run): it had only ~60 cm
+     (~0.13 s) and snapped at the stance turn rate (the formation trace: 81 -> 26 deg in 3 frames).
+- **Fix (`Codex.Cover.RunPeekYawLock`, default 1; 0 = the first fix's arrival, A/B):**
+  - *Aim the pre-turn at the fire idle's DRAWN facing:* `RunCornerPeekRules::BodyTargetActorYaw` = the cover facing he gets at the slot
+    + the fire idle's drawn body yaw (`UOperativeAnimInstance::GetPeekStanceBodyYawCs`: the shoulder line of its first frame, component
+    space, from the clip) - the run pose's drawn body yaw now (`GetMeshBodyYawCs`, low-passed 0.08 s: the strafe the turn causes shifts it).
+    The mesh's own yaw on the capsule cancels out. Drawn body = `RunCornerPeekRules::MixBodyYaw` of the shoulder line (`upperarm_l -> _r`)
+    and the hip line (`thigh_l -> _r`), `PeekStanceBodyShoulderWeight` 1 (the torso is what the top-down camera reads).
+  - *Start earlier, turn evenly:* `PreTurnStartCm` = max(1.5 m, 0.6 s of his run) (max 4 m) before the ENTRY (+ the run-in glide,
+    `AOperativeCharacter::GetRunInGlideCm`), latched for the arming; `PreTurnStepYaw` turns at the even rate that finishes 0.1 s before
+    the entry (never past it, no snap).
+  - *Hold the drawn body through the blend exactly (anim, C++ only - no AnimBP / montage asset changed):* `EnterCover` of a peek stance
+    arrival calls `AOperativeCharacter::BeginPeekStanceYawLock` -> `UOperativeAnimInstance::BeginPeekStanceYawLock(EntryYawCs, FinalYawCs,
+    Path)`: from then the anim proxy (`FOperativeAnimInstanceProxy::ApplyPeekStanceYawLock`, after the whole graph like the ladder IK)
+    turns the root of the EVALUATED pose about the vertical so that its drawn body yaw follows `LockTargetYaw` (the run's last frame ->
+    the fire idle's own, smoothstep over the blend + 0.1 s), then lets go over `LockFadeSeconds` 0.15 s. It measures the pose it draws,
+    so the nlerp, the run stopping under the slot and the montage's start frame no longer matter. The mesh holds no yaw any more (the
+    first fix's held yaw / `HeldTurnSameWayAsBlend` / the flip guard stay only for `RunPeekYawLock 0`), except for the entry frame when
+    the anim had already drawn that frame (`GetLastAnimUpdateFrame` == `GFrameCounter`: the run pose keeps the old yaw on the mesh for
+    that one frame, `PeekStanceBridgeFrame`). Leaving the cover / death mid-lock: `ReleasePeekStanceYawLock` (the target holds, 0.15 s fade).
+  - *The graph's own few degrees:* in the game the fire idle draws the shoulders ~6 deg off its clip (the graph's layers on top of the
+    slot - the left-hand IK pulls the left shoulder; measured `_L` +6.2, `_R` +5.7, the clip itself is steady over its loop, no root motion,
+    aim offset 0). At the end of its path the lock compares the pose's own drawn yaw with the prediction (`SettlePeekStanceYawLock`):
+    the difference is learnt per fire idle (`PeekStanceBodyBias` [stand / crouch x `_L` / `_R`], added by `GetPeekStanceBodyYawCs`, so
+    the next pre-turn aims right at it; the standing ones start at the measured `RunCornerPeekRules::StandDrawnBiasSeedDeg` 6) and a
+    gap over 1 deg is eased out over `SettleSeconds` 0.4 s instead of the 0.15 s fade.
+  - *The hips:* the lock holds the TORSO (`PeekStanceBodyShoulderWeight` 1). The hip line also carries the legs' stop out of the stride
+    and the run pose's hip twist (10-25 deg against the shoulders, swinging with the gait) - no turn of the whole body takes that out,
+    and holding the hips instead would turn the shoulders by the same amount; it stays a leg motion of the stop (14-25 deg measured).
+- **Unchanged:** everything of the first fix (no wall hug, his own floor only, solo / box / formation / pause variants, the old cvars).
+- **Tests:** `CodexTactics.Tactics.Cover.RunCornerPeek.ArrivesTurned.PreTurnPlan` / `.BodyFacing` / `.YawLock` (incl. a simulated nlerp
+  blend: the linear release wobbles > 4 deg, the lock holds within 0.01). `RunCornerPeekSmoke` A / D / E / F / G: the shoulder line turns
+  < 10 deg in all from his last frame of the run to 1 s in the peek (the hips < 35: no spin), and over his last 1.5 m it turns one way
+  (back-and-forth <= 2 deg); the arrival-facing check (the ACTOR's yaw vs the corner aim) is a 60 deg sanity bound now - the actor
+  intentionally stands 20-45 deg off the corner aim so that his drawn body matches the fire idle's. `-PreCmds "Codex.Cover.RunPeekYawLock 0"`
+  fails the Bug_2 checks.
+  Frame strips: `CodexTactics.RunCornerPeekSmoke Shot` / `ShotTop` -> `Saved/Screenshots/RunPeekNoHug2/runpeek_<lock|nolock|old>_<side|top>_NN.png`.
 
 ## Both corners of a wall held (#57, 2026-11-07)
 

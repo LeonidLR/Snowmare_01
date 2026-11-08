@@ -263,6 +263,121 @@ bool FRunCornerPeekHisFloorTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+// --- Arrives already turned (the game designer's video Bug_2 2026-11-08: "another small extra turn" on the peek entry) ---
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekPreTurnPlanTest, "ArrivesTurned.PreTurnPlan")
+bool FRunCornerPeekPreTurnPlanTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// Where it starts: ~0.6 s of his run before the entry (which comes the run-in glide short of the slot), at least the first fix's 1.5 m.
+	TestEqual(TEXT("a run (450 cm/s, 90 cm glide): 0.6 s = 270 cm before the entry"), PreTurnStartCm(450.f, 90.f), 360.f, 1.0e-3f);
+	TestEqual(TEXT("a walk (150 cm/s): never shorter than 1.5 m"), PreTurnStartCm(150.f, 30.f), 180.f, 1.0e-3f);
+	TestEqual(TEXT("a very fast run: at most 4 m"), PreTurnStartCm(1000.f, 120.f), 520.f, 1.0e-3f);
+	TestEqual(TEXT("standing: the minimum"), PreTurnStartCm(0.f, 0.f), PreTurnMinCm, 1.0e-3f);
+
+	// The planned turn: a run at 450 cm/s from 270 cm before the entry, 40 deg to turn, 60 fps - an even turn done 0.1 s before the entry.
+	const float Dt = 1.f / 60.f;
+	const float Speed = 450.f;
+	float Yaw = 0.f;
+	float MaxStep = 0.f;
+	bool bMonotonic = true;
+	bool bNeverPast = true;
+	float YawAtFinish = -1.f;
+	for (float ToEntry = 270.f; ToEntry > 0.f; ToEntry -= Speed * Dt)
+	{
+		const float Next = PreTurnStepYaw(Yaw, 40.f, ToEntry, Speed, Dt);
+		const float Step = FRotator::NormalizeAxis(Next - Yaw);
+		bMonotonic &= Step >= -1.0e-4f;
+		bNeverPast &= Next <= 40.f + 1.0e-3f;
+		MaxStep = FMath::Max(MaxStep, Step);
+		Yaw = Next;
+		if (YawAtFinish < 0.f && ToEntry / Speed <= PreTurnFinishEarlySeconds)
+		{
+			YawAtFinish = Yaw;
+		}
+	}
+	TestTrue(TEXT("one way only"), bMonotonic);
+	TestTrue(TEXT("never past the target"), bNeverPast);
+	TestEqual(TEXT("done by 0.1 s before the entry"), YawAtFinish, 40.f, 1.0e-2f);
+	// Even: 40 deg over the 0.5 s to the planned end = 1.33 deg a frame (the first fix's turn rate snapped ~25 deg a frame).
+	TestTrue(FString::Printf(TEXT("an even rate, no snap (max %.2f deg a frame)"), MaxStep), MaxStep <= 40.f * Dt / 0.5f * 1.05f);
+	TestEqual(TEXT("the short way round the wrap: 170 -> -170 turns +20"), static_cast<float>(FRotator::NormalizeAxis(PreTurnStepYaw(170.f, -170.f, 0.f, Speed, Dt) - 170.f)), 20.f, 1.0e-3f);
+	TestEqual(TEXT("no time step: no turn"), PreTurnStepYaw(10.f, 50.f, 200.f, Speed, 0.f), 10.f, 1.0e-4f);
+	TestEqual(TEXT("past the planned end (or no speed): the rest at once"), PreTurnStepYaw(10.f, 50.f, 20.f, Speed, Dt), 50.f, 1.0e-3f);
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekBodyFacingTest, "ArrivesTurned.BodyFacing")
+bool FRunCornerPeekBodyFacingTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	// The drawn body: the normal of the left -> right line (forward +X, right +Y - the smoke's shoulder-line metric).
+	TestEqual(TEXT("right shoulder at +Y: facing +X (0)"), BodyLineYaw(FVector2D(0.f, -20.f), FVector2D(0.f, 20.f)), 0.f, 1.0e-3f);
+	TestEqual(TEXT("right shoulder at -X: facing +Y (90)"), BodyLineYaw(FVector2D(20.f, 0.f), FVector2D(-20.f, 0.f)), 90.f, 1.0e-3f);
+	TestEqual(TEXT("right shoulder at +X: facing -Y (-90)"), BodyLineYaw(FVector2D(-20.f, 0.f), FVector2D(20.f, 0.f)), -90.f, 1.0e-3f);
+	TestEqual(TEXT("shoulders only"), MixBodyYaw(30.f, 10.f, 1.f), 30.f, 1.0e-3f);
+	TestEqual(TEXT("hips only"), MixBodyYaw(30.f, 10.f, 0.f), 10.f, 1.0e-3f);
+	TestEqual(TEXT("half and half, the short way round the wrap"), FMath::Abs(MixBodyYaw(170.f, -170.f, 0.5f)), 180.f, 1.0e-3f);
+	// The pre-turn's target: the actor yaw that draws the run's body where the fire idle will draw it. Measured 2026-11-08 (A, the _R fire
+	// idle): the run's shoulders stood 39 deg off his yaw, the fire idle's 59 off the corner aim - the first fix's actor at the corner aim left 20.
+	const float FacingYaw = -100.f; // his cover facing at the slot (back to the wall)
+	const float FinalCs = 150.f;    // the fire idle's drawn body, component space
+	const float RunCs = 130.f;      // the run pose's, component space
+	const float MeshBase = -90.f;   // the mesh's yaw on the capsule (cancels out)
+	const float Actor = BodyTargetActorYaw(FacingYaw, FinalCs, RunCs);
+	TestEqual(TEXT("the actor 20 deg further round"), Actor, -80.f, 1.0e-3f);
+	TestEqual(TEXT("drawn: the run's last frame = the fire idle's first"), static_cast<float>(FRotator::NormalizeAxis(Actor + MeshBase + RunCs)),
+		static_cast<float>(FRotator::NormalizeAxis(FacingYaw + MeshBase + FinalCs)), 1.0e-3f);
+	TestEqual(TEXT("wrapped"), BodyTargetActorYaw(170.f, 20.f, -10.f), -160.f, 1.0e-3f);
+	return true;
+}
+
+RUN_CORNER_PEEK_TEST(FRunCornerPeekYawLockTest, "ArrivesTurned.YawLock")
+bool FRunCornerPeekYawLockTest::RunTest(const FString& Parameters)
+{
+	using namespace RunCornerPeekRules;
+	TestEqual(TEXT("the path starts at the run's last frame"), LockTargetYaw(10.f, 30.f, 0.f, 0.3f), 10.f, 1.0e-3f);
+	TestEqual(TEXT("half way"), LockTargetYaw(10.f, 30.f, 0.15f, 0.3f), 20.f, 1.0e-3f);
+	TestEqual(TEXT("ends at the fire idle's own"), LockTargetYaw(10.f, 30.f, 0.3f, 0.3f), 30.f, 1.0e-3f);
+	TestEqual(TEXT("and stays there"), LockTargetYaw(10.f, 30.f, 1.f, 0.3f), 30.f, 1.0e-3f);
+	TestEqual(TEXT("the short way round the wrap"), FMath::Abs(LockTargetYaw(170.f, -170.f, 0.15f, 0.3f)), 180.f, 1.0e-3f);
+	TestEqual(TEXT("full strength over the path"), LockAlpha(0.3f, 0.3f), 1.f, 1.0e-4f);
+	TestEqual(TEXT("half way through the fade"), LockAlpha(0.3f + 0.5f * LockFadeSeconds, 0.3f), 0.5f, 1.0e-4f);
+	TestEqual(TEXT("let go"), LockAlpha(1.f, 0.3f), 0.f, 1.0e-4f);
+	TestEqual(TEXT("the pose turned 157 deg off the target: counter-turn it"), LockCorrectionDeg(20.f, 177.f, 1.f), -157.f, 1.0e-3f);
+	TestEqual(TEXT("past 180 the same rotation the short way"), LockCorrectionDeg(20.f, -150.f, 1.f), 170.f, 1.0e-3f);
+	TestEqual(TEXT("fading"), LockCorrectionDeg(20.f, 24.f, 0.5f), -2.f, 1.0e-3f);
+
+	// Why a lock on the evaluated pose (the smoke's A trace 2026-11-08: 39 -> 47, a plateau, -> 59): the pose blend turns the pelvis
+	// ~160 deg by per-bone nlerp, not linearly in the weight - a held yaw released linearly with the weight (the first fix) leaves a
+	// wobble even when its total matches the blend's turn exactly; the lock follows the pose itself.
+	const float BlendTurn = 157.f;
+	const FQuat Run = FQuat::Identity;
+	const FQuat Idle(FVector::UpVector, FMath::DegreesToRadians(BlendTurn));
+	const auto PoseYaw = [&Run, &Idle](float Weight)
+	{
+		FQuat Blend = Run * (1.f - Weight) + Idle * Weight; // the slot blend: weighted quaternion sum, normalised (nlerp)
+		Blend.Normalize();
+		const FVector Forward = Blend.RotateVector(FVector::ForwardVector);
+		return FMath::RadiansToDegrees(FMath::Atan2(Forward.Y, Forward.X));
+	};
+	float HeldWobble = 0.f;
+	float LockError = 0.f;
+	for (int32 Frame = 0; Frame <= 18; ++Frame)
+	{
+		const float Weight = Frame / 18.f;
+		const float Pose = PoseYaw(Weight);
+		// The first fix: the mesh holds -BlendTurn x (1 - weight) (the actor turned back to the wall by the same amount).
+		HeldWobble = FMath::Max(HeldWobble, FMath::Abs(FRotator::NormalizeAxis(Pose - BlendTurn * Weight)));
+		// The lock: the drawn body held at the run's last frame (0 here) - the pose plus the lock's correction.
+		const float Drawn = FRotator::NormalizeAxis(Pose + LockCorrectionDeg(0.f, Pose, 1.f));
+		LockError = FMath::Max(LockError, FMath::Abs(Drawn));
+	}
+	TestTrue(FString::Printf(TEXT("the first fix's linear release wobbles (%.1f deg mid-blend)"), HeldWobble), HeldWobble > 4.f);
+	TestTrue(FString::Printf(TEXT("the lock holds the drawn body exactly (%.3f deg)"), LockError), LockError < 0.01f);
+	return true;
+}
+
 #undef RUN_CORNER_PEEK_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

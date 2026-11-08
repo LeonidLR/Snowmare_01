@@ -37,6 +37,7 @@ namespace
 #include "Data/WeaponDataAsset.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
 namespace
@@ -65,6 +66,9 @@ FAnimInstanceProxy* UOperativeAnimInstance::CreateAnimInstanceProxy()
 void UOperativeAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
+	// The run-and-peek's peek stance: what the graph's layers add to the standing fire idles' drawn facing, as measured (learnt on from there).
+	PeekStanceBodyBias[PeekStanceBiasSlot(ECoverFacing::Left, false)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
+	PeekStanceBodyBias[PeekStanceBiasSlot(ECoverFacing::Right, false)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner()))
 	{
 		BoundOperative = Operative;
@@ -185,6 +189,12 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 {
 	Super::NativeUpdateAnimation(DeltaSeconds);
 	StateDeltaSeconds = DeltaSeconds;
+	LastAnimUpdateFrame = GFrameCounter;
+	SettlePeekStanceYawLock();
+	if (PeekStanceYawLock.bActive && PeekStanceYawLockSeconds() > PeekStanceYawLock.PathSeconds + RunCornerPeekRules::LockFadeSeconds)
+	{
+		PeekStanceYawLock.bActive = false; // let go (the proxy saw its fade to 0)
+	}
 	UpdateState();
 	UpdateStanceTransition();
 	UpdateUpperBody(DeltaSeconds);
@@ -1281,6 +1291,19 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	const UOperativeAnimInstance* Instance = CastChecked<UOperativeAnimInstance>(InAnimInstance);
 	bUseNative = Instance->bUseNativeLocomotion;
 	LadderIK = Instance->LadderIKFrame;
+	// The peek stance yaw lock for this evaluation (time-based: begun earlier in this frame it is at its start).
+	PeekLockAlpha = 0.f;
+	if (const UOperativeAnimInstance::FPeekStanceYawLockState& Lock = Instance->PeekStanceYawLock; Lock.bActive)
+	{
+		const float Seconds = static_cast<float>(Instance->PeekStanceYawLockSeconds());
+		PeekLockAlpha = RunCornerPeekRules::LockAlpha(Seconds, Lock.PathSeconds);
+		PeekLockTargetCs = RunCornerPeekRules::LockTargetYaw(Lock.EntryYawCs, Lock.FinalYawCs, Seconds, Lock.PathSeconds);
+		PeekLockShoulderWeight = Instance->PeekStanceBodyShoulderWeight;
+	}
+	if (PeekLockAlpha <= 0.f)
+	{
+		PeekLockCorrectionDeg = 0.f;
+	}
 	for (int32 Index = 0; Index < Slot(EOperativeClip::Count); ++Index)
 	{
 		Clips[Index].Sequence = Instance->GetClip(static_cast<EOperativeClip>(Index));
@@ -1334,6 +1357,10 @@ bool FOperativeAnimInstanceProxy::Evaluate(FPoseContext& Output)
 	}
 	FAnimationPoseData OutputData(Output);
 	FAnimationRuntime::BlendPosesTogether(Poses, Curves, Attributes, Weights, OutputData);
+	if (PeekLockAlpha > 0.f)
+	{
+		ApplyPeekStanceYawLock(Output);
+	}
 	return true;
 }
 
@@ -1350,19 +1377,222 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	{
 		return Evaluate(Output);
 	}
-	if (!LadderIK.bActive || InRootNode != GetRootNode())
+	const bool bPeekLock = PeekLockAlpha > 0.f;
+	if ((!LadderIK.bActive && !bPeekLock) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 		return false; // the graph alone
 	}
 	EvaluateAnimationNode_WithRoot(Output, InRootNode);
-	ApplyLadderIK(Output);
+	if (LadderIK.bActive)
+	{
+		ApplyLadderIK(Output);
+	}
+	else
+	{
+		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
+	}
+	if (bPeekLock)
+	{
+		ApplyPeekStanceYawLock(Output);
+	}
 	return true;
 }
 
 void FOperativeAnimInstanceProxy::ApplyLadderIK(FPoseContext& Output) const
 {
 	LadderPoseIK::Apply(Output, GetComponentTransform(), LadderIK, KneeIKOffset);
+}
+
+// --- Run-and-peek: the peek stance yaw lock (#55, the game designer's video Bug_2 2026-11-08) ---------------------------------------------
+
+namespace OperativePeekStanceLock
+{
+	/** The drawn body's lines: the shoulders (upperarm_l -> upperarm_r) and the hips (thigh_l -> thigh_r), UE mannequin names. */
+	const TCHAR* const BodyLineBones[4] = { TEXT("upperarm_l"), TEXT("upperarm_r"), TEXT("thigh_l"), TEXT("thigh_r") };
+
+	/** RunCornerPeekRules::MixBodyYaw of the four bone points (component space). */
+	float BodyYaw(const FVector (&Points)[4], float ShoulderWeight)
+	{
+		const float Shoulders = RunCornerPeekRules::BodyLineYaw(FVector2D(Points[0]), FVector2D(Points[1]));
+		const float Hips = RunCornerPeekRules::BodyLineYaw(FVector2D(Points[2]), FVector2D(Points[3]));
+		return RunCornerPeekRules::MixBodyYaw(Shoulders, Hips, ShoulderWeight);
+	}
+}
+
+void FOperativeAnimInstanceProxy::ApplyPeekStanceYawLock(FPoseContext& Output) const
+{
+	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
+	FCompactPoseBoneIndex Indices[4] = { FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE),
+		FCompactPoseBoneIndex(INDEX_NONE) };
+	for (int32 Bone = 0; Bone < 4; ++Bone)
+	{
+		const int32 MeshIndex = Bones.GetPoseBoneIndexForBoneName(FName(OperativePeekStanceLock::BodyLineBones[Bone]));
+		Indices[Bone] = MeshIndex == INDEX_NONE ? FCompactPoseBoneIndex(INDEX_NONE) : Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
+		if (Indices[Bone] == INDEX_NONE)
+		{
+			PeekLockCorrectionDeg = 0.f;
+			bPeekLockNaturalValid = false;
+			return; // a LOD without the bones: no lock
+		}
+	}
+	FCSPose<FCompactPose> Pose;
+	Pose.InitPose(Output.Pose);
+	FVector Points[4];
+	for (int32 Bone = 0; Bone < 4; ++Bone)
+	{
+		Points[Bone] = Pose.GetComponentSpaceTransform(Indices[Bone]).GetLocation();
+	}
+	const float Natural = OperativePeekStanceLock::BodyYaw(Points, PeekLockShoulderWeight);
+	PeekLockNaturalCs = Natural; // the pose's own drawn yaw (UOperativeAnimInstance::SettlePeekStanceYawLock)
+	bPeekLockNaturalValid = true;
+	const float Correction = RunCornerPeekRules::LockCorrectionDeg(PeekLockTargetCs, Natural, PeekLockAlpha);
+	// The root bone's local transform is its component-space one: turning it about the vertical turns the whole pose round the capsule's axis
+	// (the mesh origin), as the held yaw on the mesh did.
+	FTransform& Root = Output.Pose[FCompactPoseBoneIndex(0)];
+	Root = Root * FTransform(FQuat(FVector::UpVector, FMath::DegreesToRadians(Correction)));
+	PeekLockCorrectionDeg = Correction;
+}
+
+int32 UOperativeAnimInstance::PeekStanceBiasSlot(ECoverFacing Side, bool bCrouch)
+{
+	return (bCrouch ? 2 : 0) + CoverFacingRules::ClipIndex(Side);
+}
+
+void UOperativeAnimInstance::SettlePeekStanceYawLock()
+{
+	FPeekStanceYawLockState& Lock = PeekStanceYawLock;
+	if (!Lock.bActive || Lock.bSettled || PeekStanceYawLockSeconds() < Lock.PathSeconds)
+	{
+		return;
+	}
+	Lock.bSettled = true;
+	// The fire idle is fully in now: the pose's own drawn yaw is the real one (the graph's layers on top of the clip - the left-hand IK pulling
+	// the left shoulder - turn it a few degrees from the clip's: measured +6 deg on both standing pack clips 2026-11-08). Learnt for the next
+	// arrival (the pre-turn then aims right at it) and eased to now over RunCornerPeekRules::SettleSeconds instead of the short fade.
+	float Natural = 0.f;
+	if (!GetProxyOnGameThread<FOperativeAnimInstanceProxy>().GetPeekLockNaturalCs(Natural))
+	{
+		return;
+	}
+	const float Off = static_cast<float>(FRotator::NormalizeAxis(Natural - Lock.FinalYawCs));
+	const bool bLearn = FMath::Abs(Off) <= RunCornerPeekRules::MaxDrawnBiasDeg;
+	if (bLearn)
+	{
+		PeekStanceBodyBias[Lock.BiasSlot] = FMath::Clamp(PeekStanceBodyBias[Lock.BiasSlot] + Off, -RunCornerPeekRules::MaxDrawnBiasDeg,
+			RunCornerPeekRules::MaxDrawnBiasDeg);
+	}
+	const bool bEase = FMath::Abs(Off) > RunCornerPeekRules::SettleMinDeg;
+	if (bEase)
+	{
+		Lock.EntryYawCs = Lock.FinalYawCs;
+		Lock.FinalYawCs = Natural;
+		Lock.PathSeconds = RunCornerPeekRules::SettleSeconds;
+		Lock.BeginTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[CoverAnim] %s: peek stance yaw lock - the fire idle draws the body %.1f deg off the predicted facing (learnt bias %.1f%s)%s"),
+		*GetNameSafe(GetOwningActor()), Off, PeekStanceBodyBias[Lock.BiasSlot], bLearn ? TEXT("") : TEXT(", too far to learn"),
+		bEase ? TEXT(", eased there") : TEXT(""));
+}
+
+double UOperativeAnimInstance::PeekStanceYawLockSeconds() const
+{
+	const UWorld* World = GetWorld();
+	return World ? FMath::Max(0.0, World->GetTimeSeconds() - PeekStanceYawLock.BeginTime) : 0.0;
+}
+
+void UOperativeAnimInstance::BeginPeekStanceYawLock(float EntryYawCs, float FinalYawCs, float PathSeconds, ECoverFacing Side, bool bCrouch)
+{
+	PeekStanceYawLock.bActive = true;
+	PeekStanceYawLock.bSettled = false;
+	PeekStanceYawLock.BiasSlot = PeekStanceBiasSlot(Side, bCrouch);
+	PeekStanceYawLock.EntryYawCs = EntryYawCs;
+	PeekStanceYawLock.FinalYawCs = FinalYawCs;
+	PeekStanceYawLock.PathSeconds = FMath::Max(PathSeconds, 0.f);
+	PeekStanceYawLock.BeginTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	++PeekStanceYawLocks;
+}
+
+void UOperativeAnimInstance::ReleasePeekStanceYawLock()
+{
+	if (!PeekStanceYawLock.bActive)
+	{
+		return;
+	}
+	const float Seconds = static_cast<float>(PeekStanceYawLockSeconds());
+	if (Seconds < PeekStanceYawLock.PathSeconds)
+	{
+		// The path ends where it is now (the target holds there) and the fade lets the pose's own facing take over.
+		const float Here = RunCornerPeekRules::LockTargetYaw(PeekStanceYawLock.EntryYawCs, PeekStanceYawLock.FinalYawCs, Seconds, PeekStanceYawLock.PathSeconds);
+		PeekStanceYawLock.EntryYawCs = Here;
+		PeekStanceYawLock.FinalYawCs = Here;
+		PeekStanceYawLock.PathSeconds = Seconds;
+	}
+}
+
+float UOperativeAnimInstance::GetPeekStanceYawLockCorrectionDeg() const
+{
+	return GetProxyOnGameThread<FOperativeAnimInstanceProxy>().GetPeekLockCorrectionDeg();
+}
+
+bool UOperativeAnimInstance::GetMeshBodyYawCs(float& OutYawCs) const
+{
+	OutYawCs = 0.f;
+	const USkeletalMeshComponent* Mesh = GetSkelMeshComponent();
+	if (!Mesh)
+	{
+		return false;
+	}
+	const TArray<FTransform>& Pose = Mesh->GetComponentSpaceTransforms();
+	FVector Points[4];
+	for (int32 Bone = 0; Bone < 4; ++Bone)
+	{
+		const int32 Index = Mesh->GetBoneIndex(FName(OperativePeekStanceLock::BodyLineBones[Bone]));
+		if (!Pose.IsValidIndex(Index))
+		{
+			return false;
+		}
+		Points[Bone] = Pose[Index].GetLocation();
+	}
+	OutYawCs = OperativePeekStanceLock::BodyYaw(Points, PeekStanceBodyShoulderWeight);
+	return true;
+}
+
+bool UOperativeAnimInstance::GetPeekStanceBodyYawCs(ECoverFacing Side, bool bCrouch, float& OutYawCs, float ClipSeconds) const
+{
+	OutYawCs = 0.f;
+	const TArray<TObjectPtr<UAnimSequenceBase>>& Clips = bCrouch ? CoverCrouchFireIdle : CoverStandFireIdle;
+	const int32 ClipIndex = CoverFacingRules::ClipIndex(Side);
+	const UAnimSequence* Sequence = Clips.IsValidIndex(ClipIndex) ? Cast<UAnimSequence>(Clips[ClipIndex].Get()) : nullptr;
+	const USkeleton* Skeleton = Sequence ? Sequence->GetSkeleton() : nullptr;
+	if (!Sequence || !Skeleton)
+	{
+		return false;
+	}
+	const FReferenceSkeleton& Reference = Skeleton->GetReferenceSkeleton();
+	const FAnimExtractContext Context(static_cast<double>(FMath::Max(ClipSeconds, 0.f))); // the montage plays it from its start (0)
+	FVector Points[4];
+	for (int32 Bone = 0; Bone < 4; ++Bone)
+	{
+		const int32 ClipBone = Reference.FindBoneIndex(FName(OperativePeekStanceLock::BodyLineBones[Bone]));
+		if (ClipBone == INDEX_NONE)
+		{
+			return false;
+		}
+		// The bone in component space: up its parent chain.
+		FTransform Component = FTransform::Identity;
+		for (int32 Chain = ClipBone; Chain != INDEX_NONE; Chain = Reference.GetParentIndex(Chain))
+		{
+			FTransform Local;
+			Sequence->GetBoneTransform(Local, FSkeletonPoseBoneIndex(Chain), Context, false);
+			Component = Component * Local;
+		}
+		Points[Bone] = Component.GetLocation();
+	}
+	// Plus what the graph's layers add on top of the clip, learnt from the arrivals so far (SettlePeekStanceYawLock).
+	OutYawCs = static_cast<float>(FRotator::NormalizeAxis(OperativePeekStanceLock::BodyYaw(Points, PeekStanceBodyShoulderWeight)
+		+ PeekStanceBodyBias[PeekStanceBiasSlot(Side, bCrouch)]));
+	return true;
 }
 
 // --- Tactical cover baseline (Sprint 12) ------------------------------------------------------------------------
@@ -1448,6 +1678,10 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	const bool bLeft = !bInCover && bWasInCover;
 	bWasInCover = bInCover;
 	bCoverEnteredThisFrame = bEntered;
+	if (bLeft || bIsDead)
+	{
+		ReleasePeekStanceYawLock(); // off the wall (another order) / dead: the peek stance's held facing lets go
+	}
 	if (!bUseNativeCoverClips || bIsDead)
 	{
 		return;

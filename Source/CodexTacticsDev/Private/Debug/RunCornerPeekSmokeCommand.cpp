@@ -20,11 +20,17 @@
 // cover enter clip, no cover idle / look-around loop, no idle -> fire step-out on him, no frame in cover without the peek pose, the peek pose and
 // its fire idle within ArrivalToPeekMaxSeconds of the entry, and he arrives facing within ArrivalFacingMaxDeg of the peek facing (the corner
 // stance's aim) - the run's last metres turned him there.
+// Arrives already turned (the game designer's video Bug_2 2026-11-08: "when he runs up and peeks out from the wall there seems to be another
+// small extra turn" - the first fix still turned the drawn body 20-25 deg after the arrival): the drawn body (the shoulder line, and the hip
+// line) turns less than ArrivalBodyTurnMaxDeg in all from his last frame of the run to 1 s in the peek, and over his last
+// ApproachMonotonicCm to the slot it turns one way only (back-and-forth within ApproachBacktrackMaxDeg).
+// -PreCmds "Codex.Cover.RunPeekYawLock 0" = the first fix's arrival (those Bug_2 checks fail: the residual turn).
 // A/B: -PreCmds "Codex.Cover.RunCornerPeek 0" = the old rule (A, D and E fail: the click is a cover ghost);
 // -PreCmds "Codex.Cover.RunPeekStance 0" = the 2026-11-07 arrival (the no-hug checks fail: the enter clip, then the step-out).
 // "Shot" (rendered, fixed step: UnrealEditor.exe <uproject> /Game/Maps/L_FormationLab -game -RenderOffscreen -ResX=1280 -ResY=720
 // -UseFixedTimeStep -FPS=60 "-LevelJson=L_FormationLab.json" "-ExecCmds=CodexTactics.RunCornerPeekSmoke Shot") saves a frame strip of A's
-// arrival to Saved/Screenshots/RunPeekNoHug/runpeek_<stance|old>_<i>.png (a camera beside the west corner, every 0.1 s from his last 2.5 m).
+// arrival to Saved/Screenshots/RunPeekNoHug2/runpeek_<lock|nolock|old>_side_<i>.png (a camera beside the west corner, every 0.1 s from
+// his last 2.5 m); "ShotTop" the same from straight above (runpeek_<..>_top_<i>.png).
 // Godot reference: none (UE-only; docs/systems/cover-and-peek.md "Run-and-peek").
 
 #include "CoreMinimal.h"
@@ -98,16 +104,31 @@ namespace RunCornerPeekSmoke
 	const FVector2D PauseStart(2000.f, -3300.f);
 	/** No wall hug: the peek pose and its fire idle within this of the cover entry, s. */
 	constexpr float ArrivalToPeekMaxSeconds = 0.3f;
-	/** He arrives facing within this of the peek facing (the corner stance's aim), deg. */
-	constexpr float ArrivalFacingMaxDeg = 30.f;
-	/** No spin: the drawn body (shoulder line) turns at most this much in all from his last frame of the run to 1 s in the peek, deg. */
-	constexpr float ArrivalBodyTurnMaxDeg = 90.f;
+	/**
+	 * He arrives facing roughly the peek's way (the corner stance's aim), deg. Since Bug_2 the run turns his DRAWN body to the fire idle's
+	 * drawn facing, so the actor's own yaw stands 20-45 deg off the corner aim by the run pose (a sprint's torso twists more): a sanity bound.
+	 */
+	constexpr float ArrivalFacingMaxDeg = 60.f;
+	/**
+	 * No residual turn (Bug_2 2026-11-08; the first fix measured 20-25, a spin through the blend ~340): the drawn body - the shoulder line -
+	 * turns less than this in all (the sum of its frame-to-frame turns) from his last frame of the run to 1 s in the peek, deg ...
+	 */
+	constexpr float ArrivalBodyTurnMaxDeg = 10.f;
+	/**
+	 * ... and the hips (the hip line) less than this: they also carry the legs' stop out of the stride and the run's hip twist, which no turn
+	 * of the whole body can take out (measured 14-26 deg on the arrival; a spin reads ~340), deg.
+	 */
+	constexpr float ArrivalHipTurnMaxDeg = 35.f;
+	/** Over his last this-many cm to the slot the drawn body (shoulder line) turns one way only ... */
+	constexpr float ApproachMonotonicCm = 150.f;
+	/** ... its back-and-forth (the turn against the net direction) at most this much, deg. */
+	constexpr float ApproachBacktrackMaxDeg = 2.f;
 	/** "Shot": the strip's stills, every this many s from his last StripFromCm to the corner. */
 	constexpr float StripEverySeconds = 0.1f;
-	constexpr int32 StripStills = 16;
+	constexpr int32 StripStills = 18;
 	constexpr float StripFromCm = 250.f;
-	/** The body yaw trace keeps this many frames before the entry. */
-	constexpr int32 TraceFramesBefore = 24;
+	/** The body yaw trace keeps this many frames before the entry (his last ~2.5 s of the run). */
+	constexpr int32 TraceFramesBefore = 150;
 
 	/** What one montage on an operative plays (by his AnimInstance's cover clip lists). */
 	enum class EClipKind : uint8
@@ -174,21 +195,44 @@ namespace RunCornerPeekSmoke
 		return nullptr;
 	}
 
-	/** The body's yaw drawn on screen: the shoulder line's normal (the mesh + its animation), deg; false without the bones. */
-	bool BodyYaw(const AOperativeCharacter& Op, float& OutYaw)
+	/** The yaw a body line (Left -> Right bone) is drawn facing on screen: its normal (the mesh + its animation), deg; false without the bones. */
+	bool LineYaw(const AOperativeCharacter& Op, const TCHAR* Left, const TCHAR* Right, float& OutYaw)
 	{
 		const USkeletalMeshComponent* Mesh = Op.GetMesh();
-		if (!Mesh || Mesh->GetBoneIndex(TEXT("upperarm_l")) == INDEX_NONE || Mesh->GetBoneIndex(TEXT("upperarm_r")) == INDEX_NONE)
+		if (!Mesh || Mesh->GetBoneIndex(Left) == INDEX_NONE || Mesh->GetBoneIndex(Right) == INDEX_NONE)
 		{
 			return false;
 		}
-		const FVector Line = Mesh->GetSocketLocation(TEXT("upperarm_r")) - Mesh->GetSocketLocation(TEXT("upperarm_l"));
+		const FVector Line = Mesh->GetSocketLocation(Right) - Mesh->GetSocketLocation(Left);
 		if (Line.Size2D() < 5.f)
 		{
 			return false;
 		}
 		OutYaw = static_cast<float>(FMath::RadiansToDegrees(FMath::Atan2(-Line.X, Line.Y)));
 		return true;
+	}
+
+	/** The body's yaw drawn on screen: the shoulder line's normal, deg. */
+	bool BodyYaw(const AOperativeCharacter& Op, float& OutYaw)
+	{
+		return LineYaw(Op, TEXT("upperarm_l"), TEXT("upperarm_r"), OutYaw);
+	}
+
+	/** The hips' yaw drawn on screen: the hip line's normal (thigh_l -> thigh_r), deg. */
+	bool HipYaw(const AOperativeCharacter& Op, float& OutYaw)
+	{
+		return LineYaw(Op, TEXT("thigh_l"), TEXT("thigh_r"), OutYaw);
+	}
+
+	/** The sum of the frame-to-frame turns of a yaw trace from From on, deg. */
+	float TotalTurn(const TArray<float>& Trace, int32 From)
+	{
+		float Turn = 0.f;
+		for (int32 Sample = FMath::Max(From, 1); Sample < Trace.Num(); ++Sample)
+		{
+			Turn += FMath::Abs(FRotator::NormalizeAxis(Trace[Sample] - Trace[Sample - 1]));
+		}
+		return Turn;
 	}
 
 	/** One operative's arrival as the stage watches it from the click on (the no-hug checks). */
@@ -209,8 +253,10 @@ namespace RunCornerPeekSmoke
 		int32 HugFrames = 0;
 		/** The peek facing (the corner stance's aim, GetStanceAimBaseDirection in the pose), deg; valid once PoseAt >= 0. */
 		float PeekYaw = 0.f;
-		/** The visual body (shoulder line) yaw trace from TraceFramesBefore frames before the entry to 1 s after it, deg. */
+		/** The visual body (shoulder line) yaw trace from TraceFramesBefore frames before the entry to 1 s after it, deg; the hip line's; where. */
 		TArray<float> BodyTrace;
+		TArray<float> HipTrace;
+		TArray<FVector2D> TraceAt;
 		/** BodyTrace's first sample in cover (INDEX_NONE before the entry). */
 		int32 EntryTraceIndex = INDEX_NONE;
 		FString Clips;
@@ -248,8 +294,9 @@ namespace RunCornerPeekSmoke
 		int32 PlannedBefore = 0;
 		/** The no-hug watch of every member from the stage's click on. */
 		TArray<FArrivalWatch> Watch;
-		/** "Shot": the frame strip of A's arrival. */
+		/** "Shot": the frame strip of A's arrival ("ShotTop": from straight above). */
 		bool bShot = false;
+		bool bShotTop = false;
 		bool bStanceOn = true;
 		bool bStripStarted = false;
 		int32 StripIndex = 0;
@@ -341,13 +388,18 @@ namespace RunCornerPeekSmoke
 				}
 			}
 			float Body = 0.f;
+			float Hips = 0.f;
 			const bool bTraceWindow = W.EntryAt < 0.f || State.StageTime - W.EntryAt <= 1.f;
-			if (bTraceWindow && BodyYaw(*Op, Body))
+			if (bTraceWindow && BodyYaw(*Op, Body) && HipYaw(*Op, Hips))
 			{
 				W.BodyTrace.Add(Body);
+				W.HipTrace.Add(Hips);
+				W.TraceAt.Add(FVector2D(Op->GetActorLocation()));
 				if (W.EntryTraceIndex == INDEX_NONE && W.BodyTrace.Num() > TraceFramesBefore)
 				{
 					W.BodyTrace.RemoveAt(0); // only the last frames before the entry
+					W.HipTrace.RemoveAt(0);
+					W.TraceAt.RemoveAt(0);
 				}
 			}
 		}
@@ -366,13 +418,26 @@ namespace RunCornerPeekSmoke
 		const float ToPose = W.EntryAt >= 0.f && W.PoseAt >= 0.f ? W.PoseAt - W.EntryAt : -1.f;
 		const float ToFireIdle = W.EntryAt >= 0.f && W.FireIdleAt >= 0.f ? W.FireIdleAt - W.EntryAt : -1.f;
 		const float FacingOff = W.PoseAt >= 0.f ? FMath::Abs(FRotator::NormalizeAxis(W.ArrivalYaw - W.PeekYaw)) : -1.f;
+		// The traces from his last ApproachMonotonicCm to the slot on (the slot: where he stands in the peek), relative to the peek facing.
+		const FVector2D SlotAt = FVector2D(Peeker.GetActorLocation());
+		int32 ApproachFrom = W.EntryTraceIndex;
+		for (int32 Sample = 0; Sample < W.EntryTraceIndex && Sample < W.TraceAt.Num(); ++Sample)
+		{
+			if (FVector2D::Distance(W.TraceAt[Sample], SlotAt) <= ApproachMonotonicCm)
+			{
+				ApproachFrom = Sample;
+				break;
+			}
+		}
 		FString Trace;
+		FString HipLine;
 		float Lo = 1e9f;
 		float Hi = -1e9f;
-		for (const float Yaw : W.BodyTrace)
+		for (int32 Sample = FMath::Max(ApproachFrom, 0); Sample < W.BodyTrace.Num(); ++Sample)
 		{
-			const float Rel = FRotator::NormalizeAxis(Yaw - W.PeekYaw);
-			Trace += FString::Printf(TEXT(" %.0f"), Rel);
+			const float Rel = FRotator::NormalizeAxis(W.BodyTrace[Sample] - W.PeekYaw);
+			Trace += FString::Printf(TEXT("%s%.0f"), Sample == W.EntryTraceIndex ? TEXT(" |") : TEXT(" "), Rel);
+			HipLine += FString::Printf(TEXT("%s%.0f"), Sample == W.EntryTraceIndex ? TEXT(" |") : TEXT(" "), FRotator::NormalizeAxis(W.HipTrace[Sample] - W.PeekYaw));
 			Lo = FMath::Min(Lo, Rel);
 			Hi = FMath::Max(Hi, Rel);
 		}
@@ -380,20 +445,59 @@ namespace RunCornerPeekSmoke
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s no-hug: entry %.2f s, pose +%.2f s, fire idle +%.2f s, hug frames %d, hug clips %d, step-outs %d, arrival facing %.0f deg off the peek facing (yaw %.0f vs %.0f; the operative's own %.0f), peek stance entries %d, anim straight blends %d; clips:%s"),
 			Label, W.EntryAt, ToPose, ToFireIdle, W.HugFrames, W.HugClips, W.StepOuts, FacingOff, W.ArrivalYaw, W.PeekYaw, Peeker.GetLastPeekStanceArrivalOffDeg(),
 			Peeker.GetPeekStanceEntryCount(), Anim ? Anim->GetCoverPeekStanceBlends() : -1, *W.Clips);
-		// The drawn body's turn in all from his last frame of the run on (a spin through the blend shows as ~340 deg).
-		float BodyTurn = -1.f;
-		if (W.EntryTraceIndex > 0 && W.EntryTraceIndex < W.BodyTrace.Num())
+		// The drawn body's turn in all from his last frame of the run on (a spin through the blend shows as ~340 deg, the first fix's residual
+		// turn 20-25), the shoulder line and the hip line each.
+		const bool bHasEntry = W.EntryTraceIndex > 0 && W.EntryTraceIndex < W.BodyTrace.Num();
+		const float BodyTurn = bHasEntry ? TotalTurn(W.BodyTrace, W.EntryTraceIndex) : -1.f;
+		const float HipTurn = bHasEntry ? TotalTurn(W.HipTrace, W.EntryTraceIndex) : -1.f;
+		// His last ApproachMonotonicCm: one way only (the turn against the net direction = (all - net) / 2).
+		float ApproachTurn = -1.f;
+		float ApproachNet = 0.f;
+		float Backtrack = -1.f;
+		if (bHasEntry && ApproachFrom >= 0 && ApproachFrom < W.EntryTraceIndex)
 		{
-			BodyTurn = 0.f;
-			for (int32 Sample = W.EntryTraceIndex; Sample < W.BodyTrace.Num(); ++Sample)
+			ApproachTurn = 0.f;
+			for (int32 Sample = ApproachFrom + 1; Sample < W.EntryTraceIndex; ++Sample)
 			{
-				BodyTurn += FMath::Abs(FRotator::NormalizeAxis(W.BodyTrace[Sample] - W.BodyTrace[Sample - 1]));
+				const float Step = FRotator::NormalizeAxis(W.BodyTrace[Sample] - W.BodyTrace[Sample - 1]);
+				ApproachTurn += FMath::Abs(Step);
+				ApproachNet += Step;
 			}
+			Backtrack = 0.5f * (ApproachTurn - FMath::Abs(ApproachNet));
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s body (shoulder line) yaw vs the peek facing, per frame, the run's last frames -> 1 s in cover: [%s ] (range %.0f..%.0f; turned %.0f deg in all from the entry)"),
-			Label, *Trace, Lo, Hi, BodyTurn);
-		Check(State, BodyTurn >= 0.f && BodyTurn <= ArrivalBodyTurnMaxDeg, FString::Printf(TEXT("%s: no turn / spin of the drawn body on the arrival (%.0f deg in all, <= %.0f)"), Label,
-			BodyTurn, ArrivalBodyTurnMaxDeg));
+		const UOperativeAnimInstance* LockAnim = Peeker.GetMesh() ? Cast<UOperativeAnimInstance>(Peeker.GetMesh()->GetAnimInstance()) : nullptr;
+		// The fire idle's drawn body as the pre-turn / the lock predicted it from the clip vs the pose on the mesh now (1 s in, the lock gone).
+		float PredictedCs = 0.f;
+		float NowCs = 0.f;
+		if (LockAnim && LockAnim->GetPeekStanceBodyYawCs(Peeker.CoverFacing, Peeker.GetStance() == EOperativeStance::Crouching, PredictedCs) && LockAnim->GetMeshBodyYawCs(NowCs))
+		{
+			float At05 = 0.f;
+			float At10 = 0.f;
+			LockAnim->GetPeekStanceBodyYawCs(Peeker.CoverFacing, Peeker.GetStance() == EOperativeStance::Crouching, At05, 0.5f);
+			LockAnim->GetPeekStanceBodyYawCs(Peeker.CoverFacing, Peeker.GetStance() == EOperativeStance::Crouching, At10, 1.0f);
+			FString RootInfo;
+			const TArray<TObjectPtr<UAnimSequenceBase>>& Idles = Peeker.GetStance() == EOperativeStance::Crouching ? LockAnim->CoverCrouchFireIdle : LockAnim->CoverStandFireIdle;
+			const int32 IdleIndex = Peeker.CoverFacing == ECoverFacing::Right ? 0 : 1;
+			if (const UAnimSequence* Idle = Idles.IsValidIndex(IdleIndex) ? Cast<UAnimSequence>(Idles[IdleIndex].Get()) : nullptr)
+			{
+				FTransform Root;
+				Idle->GetBoneTransform(Root, FSkeletonPoseBoneIndex(0), FAnimExtractContext(0.0), false);
+				RootInfo = FString::Printf(TEXT("%s root yaw %.1f at (%.0f, %.0f), root motion %d lock %d"), *Idle->GetName(), Root.Rotator().Yaw, Root.GetLocation().X,
+					Root.GetLocation().Y, Idle->bEnableRootMotion ? 1 : 0, static_cast<int32>(Idle->RootMotionRootLock.GetValue()));
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s the fire idle's drawn body (component space): predicted from the clip %.1f (at 0.5 s %.1f, 1 s %.1f), on the mesh now %.1f (lock on %d; aim pitch %.1f, aim yaw %.1f, left-hand IK %.2f; %s)"),
+				Label, PredictedCs, At05, At10, NowCs, LockAnim->IsPeekStanceYawLockActive() ? 1 : 0, LockAnim->AimPitch, LockAnim->AimYaw, LockAnim->LeftHandIKAlpha, *RootInfo);
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s body (shoulder line) yaw vs the peek facing, per frame, his last %.0f cm (%d frames) | 1 s in cover: [%s ] (range %.0f..%.0f; the approach turned %.0f deg net, %.0f in all, back-and-forth %.1f; from the entry %.1f deg in all)"),
+			Label, ApproachMonotonicCm, W.EntryTraceIndex - ApproachFrom, *Trace, Lo, Hi, ApproachNet, ApproachTurn, Backtrack, BodyTurn);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke metric: %s hips (hip line) yaw vs the peek facing: [%s ] (from the entry %.1f deg in all); yaw lock %d (locks %d, the gap it eased out %.0f deg)"),
+			Label, *HipLine, HipTurn, AOperativeCharacter::IsRunPeekYawLockEnabled() ? 1 : 0, LockAnim ? LockAnim->GetPeekStanceYawLocks() : -1, Peeker.GetLastPeekStanceBodyGapDeg());
+		Check(State, BodyTurn >= 0.f && BodyTurn < ArrivalBodyTurnMaxDeg, FString::Printf(TEXT("%s: no extra turn of the drawn body after reaching the slot (shoulders %.1f deg in all, < %.0f)"),
+			Label, BodyTurn, ArrivalBodyTurnMaxDeg));
+		Check(State, HipTurn >= 0.f && HipTurn < ArrivalHipTurnMaxDeg, FString::Printf(TEXT("%s: no spin of the hips after reaching the slot (%.1f deg in all, < %.0f)"),
+			Label, HipTurn, ArrivalHipTurnMaxDeg));
+		Check(State, Backtrack >= 0.f && Backtrack <= ApproachBacktrackMaxDeg, FString::Printf(TEXT("%s: over his last %.0f cm the drawn body turns one way (net %.0f deg, back-and-forth %.1f <= %.0f)"),
+			Label, ApproachMonotonicCm, ApproachNet, Backtrack, ApproachBacktrackMaxDeg));
 		Check(State, W.HugClips == 0 && W.StepOuts == 0, FString::Printf(TEXT("%s: no wall hug - no cover enter / back-to-the-wall idle / look-around clip and no idle->fire step-out on %s (hug clips %d, step-outs %d)"),
 			Label, *Peeker.DisplayName.ToString(), W.HugClips, W.StepOuts));
 		Check(State, W.EntryAt >= 0.f && W.HugFrames == 0, FString::Printf(TEXT("%s: no frame in cover without the peek pose (%d)"), Label, W.HugFrames));
@@ -445,9 +549,17 @@ namespace RunCornerPeekSmoke
 		{
 			return;
 		}
-		PlaceCamera(World, State, Corner + FVector(-520.f, -560.f, 330.f), Corner + FVector(60.f, -90.f, -20.f));
-		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("RunPeekNoHug") / FString::Printf(TEXT("runpeek_%s_%02d.png"),
-			State.bStanceOn ? TEXT("stance") : TEXT("old"), State.StripIndex);
+		if (State.bShotTop)
+		{
+			PlaceCamera(World, State, Corner + FVector(-90.f, -150.f, 720.f), Corner + FVector(-80.f, -120.f, -100.f)); // straight above the corner slot
+		}
+		else
+		{
+			PlaceCamera(World, State, Corner + FVector(-520.f, -560.f, 330.f), Corner + FVector(60.f, -90.f, -20.f));
+		}
+		const FString Path = FPaths::ProjectSavedDir() / TEXT("Screenshots") / TEXT("RunPeekNoHug2") / FString::Printf(TEXT("runpeek_%s_%s_%02d.png"),
+			!State.bStanceOn ? TEXT("old") : AOperativeCharacter::IsRunPeekYawLockEnabled() ? TEXT("lock") : TEXT("nolock"), State.bShotTop ? TEXT("top") : TEXT("side"),
+			State.StripIndex);
 		FScreenshotRequest::RequestScreenshot(Path, false, false);
 		UE_LOG(LogCodexTactics, Display, TEXT("RunCornerPeekSmoke: still %s at %.2f s after the click (in cover %d, peek pose %d)"), *Path, State.StageTime,
 			Op.bInCover ? 1 : 0, Op.IsCornerAimActive() ? 1 : 0);
@@ -1037,9 +1149,11 @@ namespace RunCornerPeekSmoke
 			return;
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
-		State->bShot = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); });
+		State->bShotTop = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("ShotTop"), ESearchCase::IgnoreCase); });
+		State->bShot = State->bShotTop || Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("Shot"), ESearchCase::IgnoreCase); });
 		State->bStanceOn = AOperativeCharacter::IsRunPeekStanceEnabled();
-		UE_LOG(LogCodexTactics, Display, TEXT("RunCornerPeekSmoke: Codex.Cover.RunPeekStance %d%s"), State->bStanceOn ? 1 : 0, State->bShot ? TEXT(", frame strip (Shot)") : TEXT(""));
+		UE_LOG(LogCodexTactics, Display, TEXT("RunCornerPeekSmoke: Codex.Cover.RunPeekStance %d, Codex.Cover.RunPeekYawLock %d%s"), State->bStanceOn ? 1 : 0,
+			AOperativeCharacter::IsRunPeekYawLockEnabled() ? 1 : 0, State->bShot ? (State->bShotTop ? TEXT(", frame strip from above (ShotTop)") : TEXT(", frame strip (Shot)")) : TEXT(""));
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FWorldDelegates::OnWorldPreActorTick.AddLambda([WeakWorld, State](UWorld* Ticking, ELevelTick, float)
 		{

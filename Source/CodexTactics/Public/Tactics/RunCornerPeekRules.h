@@ -203,4 +203,78 @@ namespace RunCornerPeekRules
 	 * turn by 360 (a one-frame step of 360 x the weight so far instead of a full spin).
 	 */
 	CODEXTACTICS_API bool HeldTurnGoesTheOtherWay(float HeldDeg, float ObservedTurnDeg, float MinSeenDeg = BlendDirectionSeenDeg);
+
+	// --- Arrives already turned: no residual turn on the peek entry (#55, the game designer's video Bug_2 2026-11-08: "when he runs up and
+	//     peeks out from the wall there seems to be another small extra turn") ---
+	//
+	// The residual turn was the gap between two DRAWN facings: the run's last frame (the run pose's shoulder line stands ~35-40 deg off the
+	// actor's yaw) and the fire idle round the corner (its shoulder line ~35-60 deg off the corner aim, by clip). The 1.5 m pre-turn aimed the
+	// ACTOR at the corner aim, so the drawn body still turned ~20 deg after the arrival, inside the 0.3 s blend - and unevenly: the pose blend
+	// (per-bone nlerp over a ~160 deg pelvis turn) and the mesh's linearly released held yaw disagree by up to ~5 deg mid-blend. Now the run
+	// turns the DRAWN body to the fire idle's drawn facing (BodyTargetActorYaw), earlier and at a planned even rate (PreTurnStartCm /
+	// PreTurnStepYaw), and the anim holds the drawn body's yaw through the blend exactly (the peek stance yaw lock: LockTargetYaw / LockAlpha /
+	// LockCorrectionDeg - a root yaw on the evaluated pose instead of the mesh's held yaw).
+
+	/** The pre-turn starts at least this far before the entry (the stretch of the first fix), cm ... */
+	inline constexpr float PreTurnMinCm = PreTurnCm;
+	/** ... or this many seconds of his run before the entry, whichever is further (time-based: a faster run starts it sooner) ... */
+	inline constexpr float PreTurnLeadSeconds = 0.6f;
+	/** ... but never further than this, cm. */
+	inline constexpr float PreTurnMaxCm = 400.f;
+	/** The planned pre-turn ends this long before the entry (his last frames of the run already show the final facing), s. */
+	inline constexpr float PreTurnFinishEarlySeconds = 0.1f;
+	/** The drawn body's yaw: this share of the shoulder line, the rest the hip line (the torso is what the top-down camera reads). */
+	inline constexpr float BodyShoulderWeight = 1.f;
+	/** The peek stance yaw lock lets go over this long after its path (the fire idle's own facing from then on), s. */
+	inline constexpr float LockFadeSeconds = 0.15f;
+	/**
+	 * The fire idle in the game draws the body a little off its clip (the graph's layers - the left-hand IK pulls the left shoulder: +6 deg
+	 * measured on both standing pack clips 2026-11-08): the lock learns that bias at the end of its path (up to MaxDrawnBiasDeg) for the next
+	 * arrival's pre-turn, and a gap over SettleMinDeg is eased out over SettleSeconds instead of the short fade.
+	 */
+	inline constexpr float MaxDrawnBiasDeg = 20.f;
+	inline constexpr float SettleMinDeg = 1.f;
+	inline constexpr float SettleSeconds = 0.4f;
+	/** The bias the standing fire idles start with (measured 2026-11-08: _L +6.2, _R +5.7 deg), so the first arrival is already right. */
+	inline constexpr float StandDrawnBiasSeedDeg = 6.f;
+
+	/** Where the pre-turn starts: max(MinCm, Speed x LeadSeconds) up to MaxCm, plus EntryLeadCm (the run enters that far short of the slot), cm. */
+	CODEXTACTICS_API float PreTurnStartCm(float SpeedCmS, float EntryLeadCm, float MinCm = PreTurnMinCm, float LeadSeconds = PreTurnLeadSeconds,
+		float MaxCm = PreTurnMaxCm);
+
+	/**
+	 * One frame of the planned pre-turn: the yaw moves towards TargetYaw at the even rate that gets there FinishEarlySeconds before the entry
+	 * (DistanceToEntryCm away at SpeedCmS) - never past it, no snap; once the planned end is reached it closes what is left. Returns the yaw.
+	 */
+	CODEXTACTICS_API float PreTurnStepYaw(float CurrentYaw, float TargetYaw, float DistanceToEntryCm, float SpeedCmS, float DeltaSeconds,
+		float FinishEarlySeconds = PreTurnFinishEarlySeconds);
+
+	/**
+	 * The actor yaw that draws the run's body where the fire idle will draw it: the cover facing he will get (FacingYaw) plus the fire idle's
+	 * drawn body yaw (FinalBodyYawCs, the mesh's component space) minus the run pose's now (RunBodyYawCs). The mesh's own yaw on the capsule
+	 * cancels out. Normalised, deg.
+	 */
+	CODEXTACTICS_API float BodyTargetActorYaw(float FacingYaw, float FinalBodyYawCs, float RunBodyYawCs);
+
+	/** The yaw a body line (the left bone -> the right bone, X / Y) is drawn facing: its normal, forward +X, right +Y (shoulders / hips), deg. */
+	CODEXTACTICS_API float BodyLineYaw(const FVector2D& Left, const FVector2D& Right);
+
+	/** The drawn body's yaw from its shoulder and hip lines: HipYaw + ShoulderWeight x (ShoulderYaw - HipYaw), the short way, deg. */
+	CODEXTACTICS_API float MixBodyYaw(float ShoulderYaw, float HipYaw, float ShoulderWeight = BodyShoulderWeight);
+
+	/**
+	 * The peek stance yaw lock's drawn body yaw Seconds after the entry: from EntryYaw (the run's last frame) to FinalYaw (the fire idle's own)
+	 * eased over PathSeconds the short way (the pre-turned run: EntryYaw ~ FinalYaw - the body keeps its facing), deg.
+	 */
+	CODEXTACTICS_API float LockTargetYaw(float EntryYaw, float FinalYaw, float Seconds, float PathSeconds);
+
+	/** The lock's strength: 1 over its path, then down to 0 over FadeSeconds (the pose's own facing - by then ~ the target - takes over). */
+	CODEXTACTICS_API float LockAlpha(float Seconds, float PathSeconds, float FadeSeconds = LockFadeSeconds);
+
+	/**
+	 * The root yaw that draws the evaluated pose's body (PoseBodyYaw) at TargetYaw, times Alpha, deg. The pose blend turns the body ~160 deg
+	 * from the run to the fire idle; this counter-turns exactly what it has turned so far (either way round: it is the same rotation), so the
+	 * drawn yaw follows LockTargetYaw frame by frame - no nlerp wobble, no frame of lag.
+	 */
+	CODEXTACTICS_API float LockCorrectionDeg(float TargetYaw, float PoseBodyYaw, float Alpha);
 }
