@@ -278,7 +278,8 @@ namespace VictorySmoke
 			int32 Enemies = 0;
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
-				Enemies += It->IsActorBeingDestroyed() ? 0 : 1;
+				// Game designer 2026-11-08: the bodies stay on the ground (UCorpseSubsystem) - only the living are removed.
+				Enemies += It->IsActorBeingDestroyed() || It->IsDying() ? 0 : 1;
 			}
 			int32 Turrets = 0;
 			for (TActorIterator<ATurretActor> It(World); It; ++It)
@@ -290,7 +291,7 @@ namespace VictorySmoke
 			{
 				TurretsAfter += Member->TurretsCount;
 			}
-			Check(State, Enemies == 0, TEXT("no enemies left"));
+			Check(State, Enemies == 0, TEXT("no living enemies left (the bodies stay)"));
 			Check(State, Turrets == 0 && TurretsAfter > State.TurretsBefore,
 				FString::Printf(TEXT("turrets recovered into the supply (%d -> %d)"), State.TurretsBefore, TurretsAfter));
 			return Finish(State, true);
