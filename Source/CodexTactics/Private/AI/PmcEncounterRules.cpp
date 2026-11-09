@@ -177,6 +177,11 @@ namespace PmcEncounterRules
 		return SquadCentre + FVector(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, 0.f);
 	}
 
+	bool ShouldResumeHunt(bool bHuntTeam, bool bEverContact, float SecondsSinceSeen, bool bAnySeenNow, float ResumeSeconds)
+	{
+		return bHuntTeam && bEverContact && !bAnySeenNow && SecondsSinceSeen >= ResumeSeconds;
+	}
+
 	FVector PatrolPoint(const FVector& Anchor, float RadiusCm, int32 Seed, int32 Leg)
 	{
 		FRandomStream Stream(Seed * 131 + Leg * 7919 + 17);

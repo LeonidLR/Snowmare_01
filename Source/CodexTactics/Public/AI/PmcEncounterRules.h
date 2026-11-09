@@ -67,6 +67,13 @@ namespace PmcEncounterRules
 	CODEXTACTICS_API FVector HuntSearchPoint(bool bHasBelief, const FVector& Belief, int32 Leg, const FVector& PlayerStart, const FVector& SquadCentre,
 		float JitterCm, int32 Seed);
 
+	/**
+	 * fix/pmc-hunt-honest-sight (2026-11-09, PmcEncounterHuntSmoke timed out on main): a hunting squad that met the player's men and lost them
+	 * - nobody of it has SEEN one for ResumeSeconds (honest sight: heard shots do not count) - goes back to hunting (searching towards the last
+	 * known spot, then the radio intel) instead of holding in cover at a remembered spot for good. Not while one of them sees an enemy now.
+	 */
+	CODEXTACTICS_API bool ShouldResumeHunt(bool bHuntTeam, bool bEverContact, float SecondsSinceSeen, bool bAnySeenNow, float ResumeSeconds);
+
 	/** A patrol's Leg-th roam point: seeded, RadiusCm * 0.4..1 round Anchor (planar, Anchor's Z). */
 	CODEXTACTICS_API FVector PatrolPoint(const FVector& Anchor, float RadiusCm, int32 Seed, int32 Leg);
 }

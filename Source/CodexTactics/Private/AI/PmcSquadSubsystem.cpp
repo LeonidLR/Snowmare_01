@@ -241,6 +241,8 @@ void UPmcSquadSubsystem::SetTeamPosture(int32 TeamId, EPmcPosture Posture, const
 	Team.PostureLeg = 0;
 	Team.PostureTimer = 0.f;
 	Team.AssaultPoint.Reset();
+	Team.bHuntTeam = Posture == EPmcPosture::Hunt;
+	Team.HuntResumedAt = -1.0;
 	// A patrol walks on its own until contact; defend / hunt run the commander from the start (Ambush / Advance on the search point).
 	Team.bCommanded = Posture != EPmcPosture::Patrol;
 	Team.DecisionTimer = 0.f;
@@ -259,20 +261,40 @@ bool UPmcSquadSubsystem::GetTeamPosture(int32 TeamId, EPmcPosture& OutPosture) c
 
 void UPmcSquadSubsystem::UpdatePosture(int32 TeamId, FTeam& Team, float DeltaTime)
 {
+	UWorld* World = GetWorld();
 	if (!Team.Posture.IsSet())
 	{
-		return;
+		// fix/pmc-hunt-honest-sight (2026-11-09): hunters that lost the player's men (out of sight HuntResumeSeconds after the contact) hunt again -
+		// they used to hold in cover at a remembered spot for good (PmcEncounterHuntSmoke: two survivors fell back and never came back).
+		bool bAnySeenNow = false;
+		for (const TPair<TWeakObjectPtr<AActor>, FKnownTarget>& Pair : Team.Known)
+		{
+			bAnySeenNow |= Pair.Value.Actor.IsValid() && Pair.Value.bSeenNow;
+		}
+		const double Now = World ? World->GetTimeSeconds() : 0.0;
+		if (!World || !PmcEncounterRules::ShouldResumeHunt(Team.bHuntTeam, Team.bEverContact, static_cast<float>(Now - Team.LastSeenContactTime), bAnySeenNow,
+			HuntResumeSeconds))
+		{
+			return;
+		}
+		Team.Posture = EPmcPosture::Hunt;
+		Team.HuntResumedAt = Now;
+		Team.PostureTimer = 0.f;
+		Team.PostureLeg = FMath::Max(Team.PostureLeg, 1); // the player start is no search point any more
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcEncounter] team %d lost sight of the squad %.0f s ago: the hunt resumes"), TeamId, Now - Team.LastSeenContactTime);
 	}
-	UWorld* World = GetWorld();
 	const TArray<AOperativeCharacter*> Mates = GetTeamMembers(TeamId);
 	if (!World || Mates.IsEmpty())
 	{
 		return;
 	}
 	const EPmcPosture Posture = Team.Posture.GetValue();
-	// Contact = seen an enemy (sight, touch, a shot heard within GunfireHearingCm - a hit's shooter is demasked) or seen by the squad.
-	if (IsTeamEngaged(TeamId))
+	// Contact = seen an enemy (sight, touch, a shot heard within GunfireHearingCm - a hit's shooter is demasked) or seen by the squad. A resumed
+	// hunt ends on the next SEEN enemy only (honest sight; a heard shot makes the search point, not the fight).
+	const bool bContact = Team.HuntResumedAt >= 0.0 ? Team.LastSeenContactTime > Team.HuntResumedAt : IsTeamEngaged(TeamId);
+	if (bContact)
 	{
+		Team.HuntResumedAt = -1.0;
 		// The posture ends, the utility commander runs the fight (a patrol stops its roam walk first).
 		UE_LOG(LogCodexTactics, Display, TEXT("[PmcEncounter] team %d engaged (%s): the commander takes over"), TeamId, PmcEncounterRules::PostureName(Posture));
 		Team.Posture.Reset();
@@ -319,7 +341,8 @@ void UPmcSquadSubsystem::UpdatePosture(int32 TeamId, FTeam& Team, float DeltaTim
 			++Living;
 			FVector Location;
 			float Since = 0.f;
-			if (GetTeamBelief(TeamId, Player, Location, &Since) && Since < Freshest)
+			// A resumed hunt (2026-11-09): a stale belief is no search point - the radio intel sweep instead.
+			if (GetTeamBelief(TeamId, Player, Location, &Since) && Since < Freshest && (Team.HuntResumedAt < 0.0 || Since <= HuntBeliefFreshSeconds))
 			{
 				bHasBelief = true;
 				Belief = Location;
@@ -623,6 +646,10 @@ void UPmcSquadSubsystem::UpdateSight()
 				Known.LastSeenTime = Now;
 				Known.bSeenNow = Contact == SightRules::EContact::Seen;
 				Team.LastContactTime = Now;
+				if (Known.bSeenNow)
+				{
+					Team.LastSeenContactTime = Now;
+				}
 				Team.bEverContact = true;
 				if (Team.FirstContactTime < 0.0)
 				{
@@ -968,6 +995,13 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		View.Threat.AttentionOff = Positions.IsEmpty() ? 0.5f : PmcCommanderRules::AttentionOff(Positions, Yaws, FVector2D(View.Location));
 	}
 	// The assault objective stands in for a threat while none is known (the arena's attacking side walks up to the enemy).
+	// A hunt (2026-11-09: also the one resumed after losing the player's men) walks to its search point - a remembered threat it no longer sees
+	// does not hold it in cover.
+	if (View.bHasThreat && !View.Threat.bSeenNow && Team.AssaultPoint.IsSet() && Team.Posture.IsSet() && Team.Posture.GetValue() == EPmcPosture::Hunt)
+	{
+		View.bHasThreat = false;
+		OutThreatActor = nullptr;
+	}
 	if (!View.bHasThreat && Team.AssaultPoint.IsSet())
 	{
 		View.bHasThreat = true;
