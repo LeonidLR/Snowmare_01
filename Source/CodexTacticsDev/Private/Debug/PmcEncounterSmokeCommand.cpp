@@ -16,6 +16,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/CombatCheats.h"
 #include "Combat/CombatPressureSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
@@ -196,6 +197,13 @@ namespace PmcEncounterSmoke
 			{
 				return true;
 			}
+			// The squad cannot die here (fix/pmc-hunt-honest-sight 2026-11-09): the smoke checks the encounter's flow, not the fight's balance - the
+			// PMC sniper (seed 77) killed the player's commander, the mission failed and the smoke waited out its 900 s.
+			if (IConsoleVariable* Immortal = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Cheat.Immortal")))
+			{
+				Immortal->Set(1, ECVF_SetByCode);
+			}
+			Check(State, CombatCheats::IsImmortal(World), TEXT("the squad is immortal for the smoke (Codex.Cheat.Immortal)"));
 			if (UCombatPressureSubsystem* Pressure = World->GetSubsystem<UCombatPressureSubsystem>())
 			{
 				Pressure->SetAutoSpawn(false); // the Depot's monster pressure off: the PMC encounter alone

@@ -141,6 +141,12 @@ public:
 	static constexpr float PatrolLegSeconds = 25.f;
 	static constexpr float PatrolRadiusCm = 1500.f;
 	static constexpr float HuntJitterCm = 1500.f;
+	/**
+	 * A hunting squad out of sight of the player's men this long after contact hunts again (PmcEncounterRules::ShouldResumeHunt), and a belief
+	 * older than HuntBeliefFreshSeconds is no search point (the radio intel instead), s.
+	 */
+	static constexpr float HuntResumeSeconds = 15.f;
+	static constexpr float HuntBeliefFreshSeconds = 20.f;
 
 	// --- Spawning ---
 	/**
@@ -201,6 +207,11 @@ private:
 		float DecisionTimer = 0.f;
 		bool bEverContact = false;
 		double LastContactTime = -1e9;
+		/** The last time one of the team SAW an enemy (honest sight; heard shots do not count). */
+		double LastSeenContactTime = -1e9;
+		/** The team came as hunters; it hunts again when it lost the player's men (HuntResumeSeconds); since when (-1: not resumed). */
+		bool bHuntTeam = false;
+		double HuntResumedAt = -1.0;
 		/** The fight's first contact (-1: none yet) and whether a shot was exchanged with an enemy (target attention, 2026-11-07). */
 		double FirstContactTime = -1.0;
 		bool bShotsExchanged = false;

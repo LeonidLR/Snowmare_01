@@ -139,4 +139,18 @@ bool FPmcEncounterSearchTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcEncounterResumeHuntTest, "CodexTactics.AI.PmcEncounter.ResumeHunt",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcEncounterResumeHuntTest::RunTest(const FString&)
+{
+	// fix/pmc-hunt-honest-sight (2026-11-09): hunters that lost sight of the player's men hunt again instead of holding for good.
+	TestTrue(TEXT("hunters, after contact, nobody seen for 15 s: the hunt resumes"), PmcEncounterRules::ShouldResumeHunt(true, true, 15.f, false, 15.f));
+	TestFalse(TEXT("... not before 15 s"), PmcEncounterRules::ShouldResumeHunt(true, true, 14.f, false, 15.f));
+	TestFalse(TEXT("... not while one of them sees an enemy"), PmcEncounterRules::ShouldResumeHunt(true, true, 60.f, true, 15.f));
+	TestFalse(TEXT("... not before any contact (the first hunt still runs)"), PmcEncounterRules::ShouldResumeHunt(true, false, 60.f, false, 15.f));
+	TestFalse(TEXT("a defending / patrolling squad holds its ground"), PmcEncounterRules::ShouldResumeHunt(false, true, 60.f, false, 15.f));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -454,3 +454,27 @@ into the wall (he held, prone); C the leader steps out past the wall's end, seen
 6 s, he is known not seen. `PmcUnderFireSmoke` (bug #43) keeps its fighter standing while he fires over the 1.2 m wall (the squad's return
 fire put him down behind it, where his flash is hidden - with honest sight then only known) and checks that the squad's team saw him by his
 flash during the fire.
+
+## 9. Hunters that lose the squad hunt again (fix/pmc-hunt-honest-sight, 2026-11-09)
+
+**Report:** main's full verification - `PmcEncounterHuntSmoke` timed out (900 s) in the pool and alone after "the hunters close in by
+themselves". Suspected: the honest sight of section 8.
+
+**Found (A/B with `Codex.Combat.HonestFire 0`, 5 + 2 runs):** not the honest sight - the old rules failed the same way. Two causes:
+1. **The timeout itself:** in main's run the hunting PMC sniper (seed 77: Haas M16, Lind sniper rifle, Kessler shotgun - the sniper and
+   pistol work merged tonight) killed the player's COMMANDER; the mission failed, the defeat flow took over and the smoke's fight stage waited
+   out its 900 s. The smoke checks the encounter's flow, not the fight's balance: the squad is immortal there now (`Codex.Cheat.Immortal`, set
+   by code; checked).
+2. **A freeze in the game (the other runs: "the PMC squad is down within 150 s" failed with 1-2 survivors):** after the first losses the
+   survivors fell back (outnumbered: `FallBack`), lost sight of the squad and then **held in cover at the remembered spot for good** - the
+   hunt posture had ended at the first contact and nothing ever sent them searching again (a remembered threat they no longer saw kept them in
+   Hold / TakeCover).
+
+**Now:** a team that came as hunters (`FTeam::bHuntTeam`) and has seen none of the player's men for `HuntResumeSeconds` 15 s after the contact
+(`FTeam::LastSeenContactTime`, honest sight - heard shots do not count; `PmcEncounterRules::ShouldResumeHunt`) goes back to the hunt posture: its
+search legs run again - the last known spot while it is fresher than `HuntBeliefFreshSeconds` 20 s, else the radio-intel sweep round the squad -
+and during a hunt the search point stands in for a remembered threat they do not see (`BuildFighterView`), so they walk instead of holding. The
+resumed hunt ends at the next SEEN enemy; then the commander fights as before. Defending / patrolling squads keep their ground.
+
+**Checks:** unit `CodexTactics.AI.PmcEncounter.ResumeHunt`; `PmcEncounterHuntSmoke` 5 / 5 PASS (the PMC squad down in 63 - 137 s of its 150) (log: "team 1 lost sight of the squad 15 s ago:
+the hunt resumes", the last hunter found and downed); PmcEncounter, PmcFireLine, PmcUnderFire, PmcStandoff, PmcArenaObjective, PmcCommander, PmcTeam PASS.
