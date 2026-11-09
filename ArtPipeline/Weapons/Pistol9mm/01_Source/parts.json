@@ -1,0 +1,146 @@
+{
+  "log": {
+    "pistol_lying_objects": 23,
+    "frame_object": "CustomPistol9mm.045",
+    "assembled_frames": [
+      "CustomPistol9mm.022",
+      "CustomPistol9mm.068"
+    ],
+    "frame_fit_rms_1": 0.0,
+    "frame_fit_rms_2": 0.0,
+    "pivot_in_sheet_cm": [
+      -15.145,
+      47.537,
+      5.276
+    ]
+  },
+  "parts": {
+    "Pistol": {
+      "mount": "base (the lying pistol of the sheet)"
+    },
+    "Magazine": {
+      "sheet_candidates": {
+        "1": "Magazine9mm",
+        "2": "Magazine9mm.008"
+      },
+      "mount": "mounted pose of assembled pistol 1 of the sheet"
+    },
+    "Bullet": {
+      "sheet_candidates": {},
+      "mount": "standalone: cartridge points +X, origin at the case base centre"
+    },
+    "Suppressor1": {
+      "sheet_candidates": {
+        "1": "Supressor1.001",
+        "2": "Supressor1.001"
+      },
+      "mount": "mounted pose of assembled pistol 1 of the sheet"
+    },
+    "Suppressor2": {
+      "sheet_candidates": {
+        "1": "Supressor2.002",
+        "2": "Supressor2.002"
+      },
+      "mount": "ESTIMATED: long axis on the muzzle axis, narrow end rearwards, rear face on suppressor 1's (no mounted twin in the sheet)"
+    },
+    "Suppressor3": {
+      "sheet_candidates": {},
+      "mount": "ESTIMATED: long axis on the muzzle axis, narrow end rearwards, rear face on suppressor 1's (no mounted twin in the sheet)"
+    },
+    "Laser": {
+      "sheet_candidates": {
+        "1": "LaserBlock.001",
+        "2": "LaserBlock.001"
+      },
+      "mount": "mounted pose of assembled pistol 1 of the sheet"
+    },
+    "Flashlight1": {
+      "sheet_candidates": {
+        "1": "Fleshlight1.002",
+        "2": "Fleshlight1.002"
+      },
+      "mount": "mounted pose of assembled pistol 1 of the sheet"
+    },
+    "Flashlight2": {
+      "sheet_candidates": {
+        "1": "Fleshlight2.009",
+        "2": "Fleshlight2.009"
+      },
+      "mount": "mounted pose of assembled pistol 2 of the sheet"
+    },
+    "RedDot": {
+      "sheet_candidates": {
+        "1": "AIM.002",
+        "2": "AIM.042"
+      },
+      "mount": "mounted pose of assembled pistol 2 of the sheet"
+    },
+    "Picatinny1": {
+      "sheet_candidates": {
+        "1": "PicatinyBracing1",
+        "2": "PicatinyBracing1"
+      },
+      "mount": "mounted pose of assembled pistol 1 of the sheet"
+    },
+    "Picatinny2": {
+      "sheet_candidates": {
+        "1": "PicatinyBracing2.002",
+        "2": "PicatinyBracing2.002"
+      },
+      "mount": "mounted pose of assembled pistol 2 of the sheet"
+    }
+  },
+  "stats_objects_tris": {
+    "Pistol": [
+      23,
+      10334
+    ],
+    "Magazine": [
+      4,
+      1780
+    ],
+    "Bullet": [
+      1,
+      438
+    ],
+    "Suppressor1": [
+      2,
+      1414
+    ],
+    "Suppressor2": [
+      2,
+      1274
+    ],
+    "Suppressor3": [
+      11,
+      4765
+    ],
+    "Laser": [
+      8,
+      1728
+    ],
+    "Flashlight1": [
+      11,
+      2970
+    ],
+    "Flashlight2": [
+      8,
+      1882
+    ],
+    "RedDot": [
+      18,
+      4711
+    ],
+    "Picatinny1": [
+      7,
+      2408
+    ],
+    "Picatinny2": [
+      1,
+      1716
+    ]
+  },
+  "spot_tris_dropped": 4,
+  "pivot_note": "weapon origin = grip centre (x), pistol mid plane (y), middle of the grip height (z)",
+  "orientation": "muzzle +X, up +Z (Blender axes, centimetres)"
+}

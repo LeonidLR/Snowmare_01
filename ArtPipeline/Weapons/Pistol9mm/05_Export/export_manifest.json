@@ -1,0 +1,513 @@
+{
+  "material_slot": "M_Pistol9mm",
+  "uv_map": "UV_Atlas",
+  "axis_forward": "-Y",
+  "axis_up": "Z",
+  "units": "centimetres (scene unit scale 0.01, FBX unit scale 1 cm)",
+  "parts": {
+    "SM_Pistol9mm_Bullet": {
+      "fbx": "SM_Pistol9mm_Bullet.fbx",
+      "triangles": 120,
+      "skinned": false,
+      "bounds_min_cm": [
+        0.004,
+        -0.408,
+        -0.411
+      ],
+      "bounds_max_cm": [
+        2.572,
+        0.41,
+        0.407
+      ],
+      "size_cm": [
+        2.568,
+        0.818,
+        0.818
+      ],
+      "centre_cm": [
+        1.288,
+        0.001,
+        -0.002
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 120,
+        "vertices": 62,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Flashlight1": {
+      "fbx": "SM_Pistol9mm_Flashlight1.fbx",
+      "triangles": 1100,
+      "skinned": false,
+      "bounds_min_cm": [
+        10.017,
+        -1.328,
+        -0.12
+      ],
+      "bounds_max_cm": [
+        17.536,
+        1.277,
+        3.305
+      ],
+      "size_cm": [
+        7.52,
+        2.604,
+        3.425
+      ],
+      "centre_cm": [
+        13.776,
+        -0.025,
+        1.592
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 1100,
+        "vertices": 619,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Flashlight2": {
+      "fbx": "SM_Pistol9mm_Flashlight2.fbx",
+      "triangles": 800,
+      "skinned": false,
+      "bounds_min_cm": [
+        8.958,
+        -1.152,
+        1.571
+      ],
+      "bounds_max_cm": [
+        15.147,
+        1.095,
+        4.444
+      ],
+      "size_cm": [
+        6.189,
+        2.247,
+        2.873
+      ],
+      "centre_cm": [
+        12.053,
+        -0.028,
+        3.007
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 800,
+        "vertices": 441,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Laser": {
+      "fbx": "SM_Pistol9mm_Laser.fbx",
+      "triangles": 700,
+      "skinned": false,
+      "bounds_min_cm": [
+        7.781,
+        1.357,
+        4.144
+      ],
+      "bounds_max_cm": [
+        13.92,
+        3.286,
+        6.853
+      ],
+      "size_cm": [
+        6.139,
+        1.929,
+        2.709
+      ],
+      "centre_cm": [
+        10.851,
+        2.322,
+        5.498
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 700,
+        "vertices": 397,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Magazine": {
+      "fbx": "SM_Pistol9mm_Magazine.fbx",
+      "triangles": 700,
+      "skinned": false,
+      "bounds_min_cm": [
+        -2.365,
+        -1.226,
+        -4.861
+      ],
+      "bounds_max_cm": [
+        4.653,
+        1.175,
+        5.496
+      ],
+      "size_cm": [
+        7.018,
+        2.401,
+        10.357
+      ],
+      "centre_cm": [
+        1.144,
+        -0.026,
+        0.318
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 700,
+        "vertices": 331,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Picatinny1": {
+      "fbx": "SM_Pistol9mm_Picatinny1.fbx",
+      "triangles": 800,
+      "skinned": false,
+      "bounds_min_cm": [
+        4.554,
+        -2.03,
+        2.643
+      ],
+      "bounds_max_cm": [
+        14.856,
+        1.979,
+        8.245
+      ],
+      "size_cm": [
+        10.302,
+        4.009,
+        5.602
+      ],
+      "centre_cm": [
+        9.705,
+        -0.025,
+        5.444
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 800,
+        "vertices": 418,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Picatinny2": {
+      "fbx": "SM_Pistol9mm_Picatinny2.fbx",
+      "triangles": 900,
+      "skinned": false,
+      "bounds_min_cm": [
+        -0.837,
+        -1.319,
+        4.859
+      ],
+      "bounds_max_cm": [
+        15.001,
+        1.296,
+        8.13
+      ],
+      "size_cm": [
+        15.838,
+        2.615,
+        3.271
+      ],
+      "centre_cm": [
+        7.082,
+        -0.011,
+        6.495
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 900,
+        "vertices": 434,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Pistol": {
+      "fbx": "SM_Pistol9mm_Pistol.fbx",
+      "triangles": 3000,
+      "skinned": false,
+      "bounds_min_cm": [
+        -3.607,
+        -1.362,
+        -4.2
+      ],
+      "bounds_max_cm": [
+        15.086,
+        1.37,
+        7.829
+      ],
+      "size_cm": [
+        18.693,
+        2.732,
+        12.029
+      ],
+      "centre_cm": [
+        5.74,
+        0.004,
+        1.815
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 3000,
+        "vertices": 1636,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_RedDot": {
+      "fbx": "SM_Pistol9mm_RedDot.fbx",
+      "triangles": 1100,
+      "skinned": false,
+      "bounds_min_cm": [
+        1.268,
+        -1.294,
+        7.528
+      ],
+      "bounds_max_cm": [
+        5.83,
+        1.373,
+        10.844
+      ],
+      "size_cm": [
+        4.561,
+        2.667,
+        3.316
+      ],
+      "centre_cm": [
+        3.549,
+        0.04,
+        9.186
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 1100,
+        "vertices": 692,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Suppressor1": {
+      "fbx": "SM_Pistol9mm_Suppressor1.fbx",
+      "triangles": 700,
+      "skinned": false,
+      "bounds_min_cm": [
+        14.637,
+        -1.336,
+        5.115
+      ],
+      "bounds_max_cm": [
+        33.232,
+        1.297,
+        7.734
+      ],
+      "size_cm": [
+        18.595,
+        2.633,
+        2.619
+      ],
+      "centre_cm": [
+        23.934,
+        -0.019,
+        6.425
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 700,
+        "vertices": 370,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Suppressor2": {
+      "fbx": "SM_Pistol9mm_Suppressor2.fbx",
+      "triangles": 599,
+      "skinned": false,
+      "bounds_min_cm": [
+        14.637,
+        -1.333,
+        5.141
+      ],
+      "bounds_max_cm": [
+        27.353,
+        1.271,
+        7.746
+      ],
+      "size_cm": [
+        12.716,
+        2.604,
+        2.604
+      ],
+      "centre_cm": [
+        20.995,
+        -0.031,
+        6.444
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 599,
+        "vertices": 332,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SM_Pistol9mm_Suppressor3": {
+      "fbx": "SM_Pistol9mm_Suppressor3.fbx",
+      "triangles": 1399,
+      "skinned": false,
+      "bounds_min_cm": [
+        14.63,
+        -1.232,
+        2.916
+      ],
+      "bounds_max_cm": [
+        38.242,
+        1.195,
+        10.089
+      ],
+      "size_cm": [
+        23.612,
+        2.427,
+        7.173
+      ],
+      "centre_cm": [
+        26.436,
+        -0.018,
+        6.502
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "slots": [
+          "M_Pistol9mm"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 1399,
+        "vertices": 793,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    }
+  }
+}

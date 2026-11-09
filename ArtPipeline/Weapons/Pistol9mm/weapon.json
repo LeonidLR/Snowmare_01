@@ -1,0 +1,182 @@
+{
+  "asset": "Pistol9mm",
+  "res": 1024,
+  "margin_px": 2,
+  "parts": {
+    "Pistol": {
+      "target_tris": 3000,
+      "weight": 1.6,
+      "protect_below_tris": 60
+    },
+    "Magazine": {
+      "target_tris": 700,
+      "weight": 1.0,
+      "protect_below_tris": 0
+    },
+    "Bullet": {
+      "target_tris": 120,
+      "weight": 1.0,
+      "protect_below_tris": 0
+    },
+    "Suppressor1": {
+      "target_tris": 700,
+      "weight": 0.9,
+      "protect_below_tris": 0
+    },
+    "Suppressor2": {
+      "target_tris": 600,
+      "weight": 0.9,
+      "protect_below_tris": 0
+    },
+    "Suppressor3": {
+      "target_tris": 1400,
+      "weight": 0.8,
+      "protect_below_tris": 0
+    },
+    "Laser": {
+      "target_tris": 700,
+      "weight": 1.0,
+      "protect_below_tris": 0
+    },
+    "Flashlight1": {
+      "target_tris": 1100,
+      "weight": 1.0,
+      "protect_below_tris": 0
+    },
+    "Flashlight2": {
+      "target_tris": 800,
+      "weight": 1.0,
+      "protect_below_tris": 0
+    },
+    "RedDot": {
+      "target_tris": 1100,
+      "weight": 1.0,
+      "protect_below_tris": 20
+    },
+    "Picatinny1": {
+      "target_tris": 800,
+      "weight": 0.9,
+      "protect_below_tris": 0
+    },
+    "Picatinny2": {
+      "target_tris": 900,
+      "weight": 0.9,
+      "protect_below_tris": 0
+    }
+  },
+  "texture_dir": "C:/Users/Zephyrus15Duo/Documents/Codex/ASSETS/Weapons/Pistol9mmCustom/extracted/textures",
+  "source_uv": "UVMap",
+  "normal_flip_green": false,
+  "materials": {
+    "CustomPistol9mm": {
+      "textures": {
+        "base": "CustomPistol9mm_BaseColor",
+        "normal": "CustomPistol9mm_Normal",
+        "rough": "CustomPistol9mm_Roughness",
+        "metal": "CustomPistol9mm_Metallic",
+        "ao": "CustomPistol9mml_AO"
+      }
+    },
+    "Magazine9mm": {
+      "textures": {
+        "base": "Magazin_Bullet_Magazine_BaseColor",
+        "normal": "Magazin_Bullet_Magazine_Normal",
+        "rough": "Magazin_Bullet_Magazine_Roughness",
+        "metal": "Magazin_Bullet_Magazine_Metallic",
+        "ao": "Magazin_Bullet_Magazine_AO"
+      }
+    },
+    "Bullet9x19": {
+      "textures": {
+        "base": "Magazin_Bullet_Bullet_BaseColor",
+        "normal": "Magazin_Bullet_Bullet_Normal",
+        "rough": "Magazin_Bullet_Bullet_Roughness",
+        "metal": "Magazin_Bullet_Bullet_Metallic",
+        "ao": "Magazin_Bullet_Bullet_AO"
+      }
+    },
+    "AIM": {
+      "textures": {
+        "base": "AIM_AIM_BaseColor",
+        "normal": "AIM_AIM_Normal",
+        "rough": "AIM_AIM_Roughness",
+        "metal": "AIM_AIM_Metallic",
+        "ao": "AIM_AIM_AO"
+      }
+    },
+    "Fleshlight1": {
+      "textures": {
+        "base": "FleshLightVer1_Material_BaseColor",
+        "normal": "FleshLightVer1_Material_Normal",
+        "rough": "FleshLightVer1_Material_Roughness",
+        "metal": "FleshLightVer1_Material_Metallic",
+        "ao": "FleshLightVer1_Material_AO"
+      }
+    },
+    "Fleshlight2": {
+      "textures": {
+        "base": "FleshLightVer2_Material_BaseColor",
+        "normal": "FleshLightVer2_Material_Normal",
+        "rough": "FleshLightVer2_Material_Roughness",
+        "metal": "FleshLightVer2_Material_Metallic",
+        "ao": "FleshLightVer2_Material_AO"
+      }
+    },
+    "Supressor3": {
+      "textures": {
+        "base": "FleshLightVer3_DefaultMaterial_BaseColor",
+        "normal": "FleshLightVer3_DefaultMaterial_Normal",
+        "rough": "FleshLightVer3_DefaultMaterial_Roughness",
+        "metal": "FleshLightVer3_DefaultMaterial_Metallic",
+        "ao": "FleshLightVer3_DefaultMaterial_AO"
+      }
+    },
+    "Supressor1": {
+      "textures": {
+        "base": "SupressorVer1_Material_BaseColor",
+        "normal": "SupressorVer1_Material_Normal",
+        "rough": "SupressorVer1_Material_Roughness",
+        "metal": "SupressorVer1_Material_Metallic",
+        "ao": "SupressorVer1_Material_AO"
+      }
+    },
+    "Supressor2": {
+      "textures": {
+        "base": "SupressorVer2_DefaultMaterial_BaseColor",
+        "normal": "SupressorVer2_DefaultMaterial_Normal",
+        "rough": "SupressorVer2_DefaultMaterial_Roughness",
+        "metal": "SupressorVer2_DefaultMaterial_Metallic",
+        "ao": "SupressorVer2_DefaultMaterial_AO"
+      }
+    },
+    "LaserBlock": {
+      "textures": {
+        "base": "LaserBlock_low_DefaultMaterial_BaseColor",
+        "normal": "LaserBlock_low_DefaultMaterial_Normal",
+        "rough": "LaserBlock_low_DefaultMaterial_Roughness",
+        "metal": "LaserBlock_low_DefaultMaterial_Metallic",
+        "ao": "LaserBlock_low_DefaultMaterial_AO"
+      }
+    },
+    "PicatinyBracing1": {
+      "textures": {
+        "base": "PicatinyBracings_1_BaseColor",
+        "normal": "PicatinyBracings_1_Normal",
+        "rough": "PicatinyBracings_1_Roughness",
+        "metal": "PicatinyBracings_1_Metallic",
+        "ao": "PicatinyBracings_1_AO"
+      }
+    },
+    "PicatinyBracing2": {
+      "textures": {
+        "base": "PicatinyBracings_2_BaseColor",
+        "normal": "PicatinyBracings_2_Normal",
+        "rough": "PicatinyBracings_2_Roughness",
+        "metal": "PicatinyBracings_2_Metallic",
+        "ao": "PicatinyBracings_2_AO"
+      }
+    }
+  },
+  "merge_overlap": false,
+  "main_part": "Pistol"
+}

@@ -1,0 +1,156 @@
+{
+  "material_slot": "M_ShotgunD1",
+  "uv_map": "UV_Atlas",
+  "axis_forward": "-Y",
+  "axis_up": "Z",
+  "units": "centimetres (scene unit scale 0.01, FBX unit scale 1 cm)",
+  "parts": {
+    "SK_ShotgunD1_1slot": {
+      "fbx": "SK_ShotgunD1_1slot.fbx",
+      "triangles": 4500,
+      "skinned": true,
+      "bounds_min_cm": [
+        -255.069,
+        -3582.401,
+        -1395.364
+      ],
+      "bounds_max_cm": [
+        255.069,
+        4467.252,
+        310.799
+      ],
+      "size_cm": [
+        510.138,
+        8049.653,
+        1706.162
+      ],
+      "centre_cm": [
+        0.0,
+        442.426,
+        -542.282
+      ],
+      "bones": [
+        "Sketchfab_model",
+        "7cd9b92b0d4b4457a080ed9cdaf7b421_fbx",
+        "Object_2",
+        "RootNode",
+        "Armature",
+        "Object_5",
+        "Weapon_00",
+        "Pump_01",
+        "Pump_end_02",
+        "Heatshield_B",
+        "Stock",
+        "Stock_Plastic_-_Matte__Dark_Gray__0",
+        "Handle",
+        "Handle_Plastic_-_Matte__Dark_Gray__0",
+        "Reciever",
+        "Reciever_Steel_-_Satin_0",
+        "Reciever_Emmissive_Green_0",
+        "Reciever_Aluminum_-_Anodized_Rough__Grey__0",
+        "Heatshield",
+        "Heatshield_Steel_-_Black_0",
+        "MagClamp",
+        "MagClamp_Titanium_-_Satin_0",
+        "MagClamp_Emmissive_Red_0",
+        "RIS",
+        "Mag",
+        "Mag_Steel_-_Satin_0",
+        "Barrel",
+        "Barrel_Steel_-_Satin_0",
+        "Object_28",
+        "Pump",
+        "Object_29"
+      ],
+      "armature_object": "Sketchfab_Scene",
+      "roundtrip": {
+        "meshes": 1,
+        "bones": [
+          "Sketchfab_model",
+          "7cd9b92b0d4b4457a080ed9cdaf7b421_fbx",
+          "Object_2",
+          "RootNode",
+          "Armature",
+          "Object_5",
+          "Weapon_00",
+          "Pump_01",
+          "Pump_end_02",
+          "Heatshield_B",
+          "Stock",
+          "Stock_Plastic_-_Matte__Dark_Gray__0",
+          "Handle",
+          "Handle_Plastic_-_Matte__Dark_Gray__0",
+          "Reciever",
+          "Reciever_Steel_-_Satin_0",
+          "Reciever_Emmissive_Green_0",
+          "Reciever_Aluminum_-_Anodized_Rough__Grey__0",
+          "Heatshield",
+          "Heatshield_Steel_-_Black_0",
+          "MagClamp",
+          "MagClamp_Titanium_-_Satin_0",
+          "MagClamp_Emmissive_Red_0",
+          "RIS",
+          "Mag",
+          "Mag_Steel_-_Satin_0",
+          "Barrel",
+          "Barrel_Steel_-_Satin_0",
+          "Object_28",
+          "Pump",
+          "Object_29"
+        ],
+        "slots": [
+          "M_ShotgunD1"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 4500,
+        "vertices": 4803,
+        "scale": [
+          1.0,
+          1.0,
+          1.0
+        ]
+      },
+      "roundtrip_ok": true
+    },
+    "SK_ShotgunD1_Pump_1slot": {
+      "fbx": "SK_ShotgunD1_Pump_1slot.fbx",
+      "triangles": 496,
+      "skinned": true,
+      "geometry": "untouched (only the uv map changed: every loop -> the flat-colour swatch)",
+      "swatch_uv": [
+        0.61246,
+        0.97823
+      ],
+      "bones": [
+        "Pump_end_02"
+      ],
+      "size_cm": [
+        11250.215,
+        12500.001,
+        37499.988
+      ],
+      "roundtrip": {
+        "meshes": 1,
+        "bones": [
+          "Pump_end_02"
+        ],
+        "slots": [
+          "M_ShotgunD1"
+        ],
+        "uv_maps": [
+          "UV_Atlas"
+        ],
+        "triangles": 496,
+        "vertices": 504,
+        "scale": [
+          0.0016,
+          0.0016,
+          0.0016
+        ]
+      },
+      "roundtrip_ok": true
+    }
+  }
+}

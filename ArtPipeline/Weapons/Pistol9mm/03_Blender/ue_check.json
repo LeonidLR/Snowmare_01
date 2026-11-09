@@ -1,0 +1,336 @@
+[
+  {
+    "name": "SM_Pistol9mm_Bullet",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Bullet.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Bullet.SM_Pistol9mm_Bullet"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      1.288,
+      -0.001,
+      -0.002
+    ],
+    "bounds_extent": [
+      1.284,
+      0.409,
+      0.409
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 120
+  },
+  {
+    "name": "SM_Pistol9mm_Flashlight1",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Flashlight1.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Flashlight1.SM_Pistol9mm_Flashlight1"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      13.776,
+      0.025,
+      1.592
+    ],
+    "bounds_extent": [
+      3.76,
+      1.302,
+      1.712
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 1100
+  },
+  {
+    "name": "SM_Pistol9mm_Flashlight2",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Flashlight2.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Flashlight2.SM_Pistol9mm_Flashlight2"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      12.053,
+      0.028,
+      3.007
+    ],
+    "bounds_extent": [
+      3.095,
+      1.124,
+      1.437
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 800
+  },
+  {
+    "name": "SM_Pistol9mm_Laser",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Laser.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Laser.SM_Pistol9mm_Laser"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      10.851,
+      -2.322,
+      5.498
+    ],
+    "bounds_extent": [
+      3.069,
+      0.964,
+      1.354
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 700
+  },
+  {
+    "name": "SM_Pistol9mm_Magazine",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Magazine.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Magazine.SM_Pistol9mm_Magazine"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      1.144,
+      0.026,
+      0.318
+    ],
+    "bounds_extent": [
+      3.509,
+      1.2,
+      5.179
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 700
+  },
+  {
+    "name": "SM_Pistol9mm_Picatinny1",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Picatinny1.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Picatinny1.SM_Pistol9mm_Picatinny1"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      9.705,
+      0.025,
+      5.444
+    ],
+    "bounds_extent": [
+      5.151,
+      2.005,
+      2.801
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 800
+  },
+  {
+    "name": "SM_Pistol9mm_Picatinny2",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Picatinny2.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Picatinny2.SM_Pistol9mm_Picatinny2"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      7.082,
+      0.011,
+      6.495
+    ],
+    "bounds_extent": [
+      7.919,
+      1.307,
+      1.636
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 900
+  },
+  {
+    "name": "SM_Pistol9mm_Pistol",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Pistol.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Pistol.SM_Pistol9mm_Pistol"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      5.74,
+      -0.004,
+      1.815
+    ],
+    "bounds_extent": [
+      9.347,
+      1.366,
+      6.015
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 3000
+  },
+  {
+    "name": "SM_Pistol9mm_RedDot",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_RedDot.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_RedDot.SM_Pistol9mm_RedDot"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      3.549,
+      -0.04,
+      9.186
+    ],
+    "bounds_extent": [
+      2.281,
+      1.334,
+      1.658
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 1100
+  },
+  {
+    "name": "SM_Pistol9mm_Suppressor1",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Suppressor1.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Suppressor1.SM_Pistol9mm_Suppressor1"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      23.934,
+      0.019,
+      6.425
+    ],
+    "bounds_extent": [
+      9.297,
+      1.317,
+      1.31
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 700
+  },
+  {
+    "name": "SM_Pistol9mm_Suppressor2",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Suppressor2.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Suppressor2.SM_Pistol9mm_Suppressor2"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      20.995,
+      0.031,
+      6.444
+    ],
+    "bounds_extent": [
+      6.358,
+      1.302,
+      1.302
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 599
+  },
+  {
+    "name": "SM_Pistol9mm_Suppressor3",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/Pistol9mm/05_Export/SM_Pistol9mm_Suppressor3.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SM_Pistol9mm_Suppressor3.SM_Pistol9mm_Suppressor3"
+    ],
+    "class": "StaticMesh",
+    "bounds_origin": [
+      26.436,
+      0.018,
+      6.502
+    ],
+    "bounds_extent": [
+      11.806,
+      1.214,
+      3.587
+    ],
+    "vertices": 0,
+    "slots": [
+      "M_Pistol9mm"
+    ],
+    "uv_channels": 0,
+    "triangles": 1399
+  },
+  {
+    "name": "SK_ShotgunD1_1slot",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/ShotgunD1/05_Export/SK_ShotgunD1_1slot.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SK_ShotgunD1_1slot.SK_ShotgunD1_1slot"
+    ],
+    "class": "SkeletalMesh",
+    "bounds_origin": [
+      0.0,
+      -442.426,
+      -542.283
+    ],
+    "bounds_extent": [
+      255.069,
+      4024.827,
+      853.081
+    ],
+    "slots": [
+      "M_ShotgunD1"
+    ],
+    "skeleton": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Stock_Plastic_-_Matte__Dark_Gray__0_Skeleton.Stock_Plastic_-_Matte__Dark_Gray__0_Skeleton",
+    "bones": null
+  },
+  {
+    "name": "SK_ShotgunD1_Pump_1slot",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/ShotgunD1/05_Export/SK_ShotgunD1_Pump_1slot.fbx",
+    "imported": [
+      "/Game/WeaponCheck2/SK_ShotgunD1_Pump_1slot.SK_ShotgunD1_Pump_1slot"
+    ],
+    "class": "SkeletalMesh",
+    "bounds_origin": [
+      0.0,
+      -7117.595,
+      -56289.197
+    ],
+    "bounds_extent": [
+      5625.107,
+      6250.002,
+      18749.998
+    ],
+    "slots": [
+      "M_ShotgunD1"
+    ],
+    "skeleton": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Pump_01_Skeleton.Pump_01_Skeleton",
+    "bones": null
+  }
+]

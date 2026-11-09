@@ -1,0 +1,48 @@
+[
+  {
+    "name": "SK_ShotgunD1_1slot",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/ShotgunD1/05_Export/SK_ShotgunD1_1slot.fbx",
+    "imported": [
+      "/Game/WeaponCheck/SK_ShotgunD1_1slot.SK_ShotgunD1_1slot"
+    ],
+    "class": "SkeletalMesh",
+    "bounds_origin": [
+      0.0,
+      -442.426,
+      -542.283
+    ],
+    "bounds_extent": [
+      255.069,
+      4024.827,
+      853.081
+    ],
+    "slots": [
+      "M_ShotgunD1"
+    ],
+    "skeleton": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Stock_Plastic_-_Matte__Dark_Gray__0_Skeleton.Stock_Plastic_-_Matte__Dark_Gray__0_Skeleton",
+    "bones": null
+  },
+  {
+    "name": "SK_ShotgunD1_Pump_1slot",
+    "fbx": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-artpipe/ArtPipeline/Weapons/ShotgunD1/05_Export/SK_ShotgunD1_Pump_1slot.fbx",
+    "imported": [
+      "/Game/WeaponCheck/SK_ShotgunD1_Pump_1slot.SK_ShotgunD1_Pump_1slot"
+    ],
+    "class": "SkeletalMesh",
+    "bounds_origin": [
+      0.0,
+      -7117.595,
+      -56289.197
+    ],
+    "bounds_extent": [
+      5625.107,
+      6250.002,
+      18749.998
+    ],
+    "slots": [
+      "M_ShotgunD1"
+    ],
+    "skeleton": "/Game/Fab/_Model_D-1__Shotgun/model_d00m_1_shotgun/SkeletalMeshes/Pump_01_Skeleton.Pump_01_Skeleton",
+    "bones": null
+  }
+]

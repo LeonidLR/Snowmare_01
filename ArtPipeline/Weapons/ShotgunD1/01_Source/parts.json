@@ -1,0 +1,35 @@
+{
+  "log": {
+    "mesh": "Stock_Plastic_-_Matte__Dark_Gray__0.001",
+    "armature": "Sketchfab_Scene",
+    "bones": 31,
+    "vertex_groups": [
+      "Stock_Plastic_-_Matte__Dark_Gray__0",
+      "Handle_Plastic_-_Matte__Dark_Gray__0",
+      "Reciever_Steel_-_Satin_0",
+      "Reciever_Emmissive_Green_0",
+      "Reciever_Aluminum_-_Anodized_Rough__Grey__0",
+      "Heatshield_Steel_-_Black_0",
+      "MagClamp_Titanium_-_Satin_0",
+      "MagClamp_Emmissive_Red_0",
+      "Mag_Steel_-_Satin_0",
+      "Barrel_Steel_-_Satin_0"
+    ]
+  },
+  "stats_objects_tris": {
+    "Stock": [
+      1,
+      18226
+    ]
+  },
+  "tris_by_material": {
+    "Plastic_-_Matte_Dark_Gray": 7230,
+    "Steel_-_Satin": 1551,
+    "Emmissive_Green": 6,
+    "Aluminum_-_Anodized_Rough_Grey": 55,
+    "Steel_-_Black": 7906,
+    "Titanium_-_Satin": 1366,
+    "Emmissive_Red": 112
+  },
+  "orientation": "as exported by Unreal (skeleton + mesh untouched)"
+}
