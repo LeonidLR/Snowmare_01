@@ -848,7 +848,7 @@ void AOperativeCharacter::TraceFireDecision(const TCHAR* Reason, const AActor* T
 
 bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 {
-	if (!Target || (UsesAmmo() && CurrentClip <= 0) || !SniperShotAllowed())
+	if (!Target || (UsesAmmo() && CurrentClip <= 0) || !SniperShotAllowed() || !LauncherShotAllowed(Target))
 	{
 		return false;
 	}
@@ -881,6 +881,11 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	if (UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
 	{
 		Sight->NotifyFired(this);
+	}
+	// The RPG-7 (2026-11-09): the rocket flies through the shared projectile layer (OperativeCharacterLauncher.cpp).
+	if (IsLauncherEquipped())
+	{
+		return FireLauncherAt(Target, bRagingShot);
 	}
 	// Bug #43 (UnderFireRules): the round's target and his mates near him hear it come in and see the flash.
 	if (AOperativeCharacter* Victim = Cast<AOperativeCharacter>(Target); Victim && Victim != this && Victim->TeamId != TeamId)

@@ -171,3 +171,25 @@
 - **Checks:** tests `CodexTactics.Weapons.Explosion.*` (Falloff, Occlusion, ArmorClass, Parity, Backblast) and `CodexTactics.Weapons.Projectile.*`
   (Launch, FixedStep, Schema); `CodexTactics.ProjectileSmoke` (a flat round at a hound 25 m away, a high-angle round at a hound 40 m away, the
   pool reuse; a projectile blast behind a wall x0.25, a plunging one ignoring the wall, a roof stopping it, the grenade ignoring the wall).
+
+## The RPG-7 (2026-11-09; the shared layer's first weapon; placeholder model; numbers proposed, pending the designer)
+
+- **Data** (`weapons_tuning.json` "weapons.rpg7", asset `/Game/Data/Weapons/DA_Weapon_rpg7`): `handling: launcher`, `kind: projectile`, a
+  flat rocket at 115 m/s, arming after 10 m (`min_range_m` 10: no target closer), self-destruct after 4.5 s; `base_damage` 140 = the blast's
+  base (4 m, full to 1.5 m, x0.15 at the edge), `explosion.direct_hit_damage` 60 on the actor struck, explosive, class **vehicle** (hurts hulls,
+  decision 1), armour penetration 0.8; one rocket in the tube, 3 in reserve, 4.5 s reload (it starts by itself after the shot); reach 150 m,
+  effective 100 m.
+- **Back-blast** (`explosion.back_blast_*`): a cone 8 m long, 30 degrees each side behind the shooter - anyone in it (mates too) takes
+  `back_blast_damage` 60 x (1 - distance / 8 m), unless a wall stands between. A wall closer than `back_blast_clearance_m` 2 m behind, or a
+  closed room (a roof over him + a wall within the 8 m behind), **refuses the shot** with a warning (`back_blast_refuses: true`; false = it
+  fires with the warning).
+- **Stance:** standing or kneeling, never prone (refused with a warning). Refusals in order: empty, prone, too close, back-blast
+  (`LauncherRules::Refusal`). A miss (the weapon's hit chance) puts the aim point 1.5 - 3.5 m off; the rocket still explodes where it lands.
+- **Who carries it:** any fighter can be the grenadier (the designer decides later): it is in the roster as `next` and in **no loadout yet**.
+  Dev: `CodexTactics.GiveWeapon rpg7 [squad index]` (the leader by default) adds it to the arsenal and puts it in his hands.
+- **Code:** `LauncherRules` (pure), `AOperativeCharacter::FireLauncherAt` / `LauncherShotAllowed` / `ApplyLauncherBackblast`
+  (`OperativeCharacterLauncher.cpp`; `ShootAtTarget` branches to it for a launcher) on `UProjectileSubsystem` + `Explosions::Detonate`.
+  The animation is the rifle's for now (handling `launcher` -> the standard layer). Not yet: the PMC / enemy AI using it, turn-based
+  specifics, the real model (Fab, the coordinator is choosing).
+- **Checks:** tests `CodexTactics.Weapons.Rpg.Data` / `.Rules`; `CodexTactics.RpgSmoke` (30 / 80 m hits through the shared blast, the back-blast
+  on a mate 2.5 m behind, one rocket reloaded, a wall behind / a closed room / prone / too close refused).

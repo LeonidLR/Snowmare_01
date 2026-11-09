@@ -25,6 +25,7 @@ namespace WeaponStatsRulesInternal
 		{ EWeaponHandling::SniperRifle, TEXT("sniper_rifle") },
 		{ EWeaponHandling::Shotgun, TEXT("shotgun") },
 		{ EWeaponHandling::Pistol, TEXT("pistol") },
+		{ EWeaponHandling::Launcher, TEXT("launcher") },
 	};
 
 	static const TWeaponEnumName<EDamageType> WeaponDamageTypeNames[] = {
@@ -123,7 +124,8 @@ namespace WeaponStatsRulesInternal
 	static const TCHAR* const WeaponProjectileKeys[] = { TEXT("comment"), TEXT("speed_mps"), TEXT("gravity_scale"), TEXT("arming_distance_m"), TEXT("trajectory"),
 		TEXT("max_flight_s"), TEXT("high_angle") };
 	static const TCHAR* const WeaponExplosionKeys[] = { TEXT("comment"), TEXT("radius_m"), TEXT("full_damage_radius_m"), TEXT("edge_damage_multiplier"),
-		TEXT("back_blast_length_m"), TEXT("back_blast_half_angle_deg") };
+		TEXT("back_blast_length_m"), TEXT("back_blast_half_angle_deg"), TEXT("direct_hit_damage"), TEXT("back_blast_damage"),
+		TEXT("back_blast_clearance_m"), TEXT("back_blast_refuses") };
 
 	template <int32 N>
 	void CollectUnknown(const FJsonObject& Json, const TCHAR* const (&Known)[N], const FString& Prefix, TArray<FString>* OutUnknown)
@@ -412,6 +414,10 @@ namespace WeaponStatsRules
 			Block.Number(TEXT("edge_damage_multiplier"), InOut.Explosion.EdgeDamageMultiplier);
 			Block.Number(TEXT("back_blast_length_m"), InOut.Explosion.BackBlastLengthCm, 100.f);
 			Block.Number(TEXT("back_blast_half_angle_deg"), InOut.Explosion.BackBlastHalfAngleDeg);
+			Block.Number(TEXT("direct_hit_damage"), InOut.Explosion.DirectHitDamage);
+			Block.Number(TEXT("back_blast_damage"), InOut.Explosion.BackBlastDamage);
+			Block.Number(TEXT("back_blast_clearance_m"), InOut.Explosion.BackBlastClearanceCm, 100.f);
+			Block.Bool(TEXT("back_blast_refuses"), InOut.Explosion.bBackBlastRefuses);
 			Read.bOk &= Block.bOk;
 		}
 		return Read.bOk;
@@ -472,6 +478,10 @@ namespace WeaponStatsRules
 		Explosion->SetNumberField(TEXT("edge_damage_multiplier"), WeaponRound4(Stats.Explosion.EdgeDamageMultiplier));
 		Explosion->SetNumberField(TEXT("back_blast_length_m"), WeaponRound4(Stats.Explosion.BackBlastLengthCm / 100.f));
 		Explosion->SetNumberField(TEXT("back_blast_half_angle_deg"), WeaponRound4(Stats.Explosion.BackBlastHalfAngleDeg));
+		Explosion->SetNumberField(TEXT("direct_hit_damage"), WeaponRound4(Stats.Explosion.DirectHitDamage));
+		Explosion->SetNumberField(TEXT("back_blast_damage"), WeaponRound4(Stats.Explosion.BackBlastDamage));
+		Explosion->SetNumberField(TEXT("back_blast_clearance_m"), WeaponRound4(Stats.Explosion.BackBlastClearanceCm / 100.f));
+		Explosion->SetBoolField(TEXT("back_blast_refuses"), Stats.Explosion.bBackBlastRefuses);
 		Json->SetObjectField(TEXT("explosion"), Explosion);
 		return Json;
 	}
@@ -546,6 +556,10 @@ namespace WeaponStatsRules
 			TEXT("a ballistic / high-angle projectile needs projectile.gravity_scale > 0"));
 		const FWeaponExplosionStats& Blast = Stats.Explosion;
 		Check(Blast.RadiusCm >= 0.f && Blast.FullDamageRadiusCm >= 0.f && Blast.BackBlastLengthCm >= 0.f, TEXT("explosion radii must not be negative"));
+		Check(Blast.DirectHitDamage >= 0.f && Blast.BackBlastDamage >= 0.f && Blast.BackBlastClearanceCm >= 0.f,
+			TEXT("explosion.direct_hit_damage / back_blast_damage / back_blast_clearance_m must not be negative"));
+		Check(Blast.BackBlastClearanceCm <= Blast.BackBlastLengthCm || Blast.BackBlastLengthCm <= 0.f,
+			FString::Printf(TEXT("explosion.back_blast_clearance_m %.2f is beyond back_blast_length_m %.2f"), Blast.BackBlastClearanceCm / 100.f, Blast.BackBlastLengthCm / 100.f));
 		Check(Blast.FullDamageRadiusCm <= Blast.RadiusCm, FString::Printf(TEXT("explosion.full_damage_radius_m %.2f is beyond radius_m %.2f"),
 			Blast.FullDamageRadiusCm / 100.f, Blast.RadiusCm / 100.f));
 		Check(Blast.EdgeDamageMultiplier >= 0.f && Blast.EdgeDamageMultiplier <= 1.f,
