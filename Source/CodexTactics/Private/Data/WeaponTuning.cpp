@@ -21,6 +21,7 @@
 #include "Combat/SidearmRules.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/StaticMesh.h"
+#include "NiagaraSystem.h"
 #include "Data/GodotBalanceAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
@@ -204,6 +205,56 @@ namespace WeaponTuning
 		{
 			Weapon.HandMeshMuzzleOffset = Muzzle;
 			bChanged = true;
+		}
+		// The RPG-7 (2026-11-09): the loaded round on the model, the flying round's model and the effect hooks (empty = none).
+		auto ReadAsset = [&Weapon](const FJsonObject& Block, const TCHAR* Key, auto& Out, auto* TypeTag)
+		{
+			using FAssetType = std::remove_pointer_t<decltype(TypeTag)>;
+			FString Path;
+			if (!Block.TryGetStringField(Key, Path))
+			{
+				return false;
+			}
+			if (Path.IsEmpty())
+			{
+				Out.Reset();
+				return true;
+			}
+			if (LoadObject<FAssetType>(nullptr, *Path))
+			{
+				Out = TSoftObjectPtr<FAssetType>(FSoftObjectPath(Path));
+				return true;
+			}
+			UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: \"%s\" visual.%s %s not found"), *Weapon.WeaponId, Key, *Path);
+			return false;
+		};
+		bChanged |= ReadAsset(**Visual, TEXT("loaded_round_mesh"), Weapon.LoadedRoundMesh, static_cast<UStaticMesh*>(nullptr));
+		bChanged |= ReadAsset(**Visual, TEXT("projectile_mesh"), Weapon.ProjectileMesh, static_cast<UStaticMesh*>(nullptr));
+		{
+			FVector RoundLocation = Weapon.ProjectileMeshTransform.GetLocation();
+			const FRotator RoundRotator = Weapon.ProjectileMeshTransform.Rotator();
+			FVector RoundRotation(RoundRotator.Pitch, RoundRotator.Yaw, RoundRotator.Roll);
+			FVector RoundScale = Weapon.ProjectileMeshTransform.GetScale3D();
+			const bool bAny = ReadVector(TEXT("projectile_mesh_location"), RoundLocation) | ReadVector(TEXT("projectile_mesh_rotation_pyr"), RoundRotation)
+				| ReadVector(TEXT("projectile_mesh_scale"), RoundScale);
+			if (bAny)
+			{
+				Weapon.ProjectileMeshTransform = FTransform(FRotator(RoundRotation.X, RoundRotation.Y, RoundRotation.Z), RoundLocation, RoundScale);
+				bChanged = true;
+			}
+		}
+		FVector Backblast;
+		if (ReadVector(TEXT("backblast_offset"), Backblast))
+		{
+			Weapon.BackblastOffset = Backblast;
+			bChanged = true;
+		}
+		const TSharedPtr<FJsonObject>* Fx = nullptr;
+		if ((*Visual)->TryGetObjectField(TEXT("fx"), Fx) && Fx && Fx->IsValid())
+		{
+			bChanged |= ReadAsset(**Fx, TEXT("muzzle_flash"), Weapon.MuzzleFlashFx, static_cast<UNiagaraSystem*>(nullptr));
+			bChanged |= ReadAsset(**Fx, TEXT("backblast"), Weapon.BackblastFx, static_cast<UNiagaraSystem*>(nullptr));
+			bChanged |= ReadAsset(**Fx, TEXT("trail"), Weapon.TrailFx, static_cast<UNiagaraSystem*>(nullptr));
 		}
 		return bChanged;
 	}

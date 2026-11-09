@@ -8,6 +8,9 @@
 #include "GameFramework/Actor.h"
 #include "ProjectileActor.generated.h"
 
+class UNiagaraComponent;
+class UNiagaraSystem;
+class UStaticMesh;
 class UStaticMeshComponent;
 
 /** One shot of a projectile weapon (UProjectileSubsystem::Fire). */
@@ -38,6 +41,11 @@ struct CODEXTACTICS_API FProjectileLaunch
 	bool bSquadNoise = false;
 	/** The sweep radius, cm. */
 	float CollisionRadiusCm = 8.f;
+	/** The round's look (the weapon's "visual"; 2026-11-09, the RPG-7's rocket): its model relative to the round (+X = the flight; null = the
+	 * small sphere) and a trail effect attached for the flight (null = none). The weapon asset keeps both referenced. */
+	UStaticMesh* VisualMesh = nullptr;
+	FTransform VisualTransform = FTransform::Identity;
+	UNiagaraSystem* TrailFx = nullptr;
 };
 
 /** How a flight ended. */
@@ -110,9 +118,24 @@ public:
 	UFUNCTION(BlueprintImplementableEvent, Category = "CodexTactics|Projectile")
 	void ReceiveFinished(const FVector& Location, bool bExploded);
 
+	/** The model this flight shows: the weapon's projectile mesh, else null (the sphere; smokes). */
+	const UStaticMesh* GetVisualMesh() const;
+	/** The drawn round model's world transform (smokes: its nose along the flight). */
+	FTransform GetVisualTransform() const;
+	/** A trail effect is attached to this flight (smokes). */
+	bool HasTrail() const { return Trail != nullptr; }
+
 protected:
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Projectile")
 	TObjectPtr<UStaticMeshComponent> Mesh;
+
+	/** The weapon's own round model (FProjectileLaunch::VisualMesh), unscaled by the root sphere; hidden without one. */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Projectile")
+	TObjectPtr<UStaticMeshComponent> VisualMeshComponent;
+
+	/** The trail of this flight (FProjectileLaunch::TrailFx), released when it ends. */
+	UPROPERTY(Transient)
+	TObjectPtr<UNiagaraComponent> Trail;
 
 private:
 	/** The flight's end: the damage, the blast, the report, back to the pool. */

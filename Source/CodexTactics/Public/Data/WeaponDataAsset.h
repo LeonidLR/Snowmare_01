@@ -6,6 +6,7 @@
 #include "Data/WeaponStats.h"
 #include "WeaponDataAsset.generated.h"
 
+class UNiagaraSystem;
 class UStaticMesh;
 class USkeletalMesh;
 
@@ -65,6 +66,38 @@ public:
 	/** Muzzle on HandMesh (its own space) when the mesh has no "Muzzle" socket; zero = the operative's MuzzleOffset. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
 	FVector HandMeshMuzzleOffset = FVector::ZeroVector;
+
+	/**
+	 * The loaded round shown on the model (the RPG-7's rocket on the tube, 2026-11-09): attached to the hand model at identity, hidden from the
+	 * shot until the reload clip pushes the next one in (WeaponAnimLayerRules::LauncherRoundVisible). weapons_tuning.json "visual.loaded_round_mesh".
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	TSoftObjectPtr<UStaticMesh> LoadedRoundMesh;
+
+	/** The flying round's model (a projectile weapon; empty = the shared layer's small sphere). "visual.projectile_mesh". */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	TSoftObjectPtr<UStaticMesh> ProjectileMesh;
+
+	/** ProjectileMesh relative to the flying round (its +X = the flight direction, origin = the point that strikes). "visual.projectile_mesh_*". */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	FTransform ProjectileMeshTransform;
+
+	/**
+	 * Data hooks for the look (empty by default; the designer drops a Niagara system in by data - "visual.fx"): the muzzle flash at the muzzle
+	 * along the shot, the back-blast smoke at BackblastOffset facing backwards, the trail attached to the flying round.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	TSoftObjectPtr<UNiagaraSystem> MuzzleFlashFx;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	TSoftObjectPtr<UNiagaraSystem> BackblastFx;
+
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	TSoftObjectPtr<UNiagaraSystem> TrailFx;
+
+	/** The back-blast point on the hand model (its own space; the tube's rear end). "visual.backblast_offset". */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	FVector BackblastOffset = FVector::ZeroVector;
 
 	/** Shot tracer / muzzle flash colour (Godot WeaponData tracer_color; M16 = default). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")

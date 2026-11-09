@@ -49,10 +49,34 @@ namespace WeaponAnimLayerRules
 		return Out;
 	}
 
-	EWeaponLayerMask ResolveMask(bool bEligible, bool bFullBodyMontage, bool bUpperBodyMontage)
+	EWeaponLayerMask ResolveMask(bool bEligible, bool bFullBodyMontage, bool bUpperBodyMontage, bool bFullBodySet)
 	{
-		// The layer drives the upper body only, so an upper-body montage (which owns the torso) leaves nothing for it to drive.
-		return bEligible && !bFullBodyMontage && !bUpperBodyMontage ? EWeaponLayerMask::Full : EWeaponLayerMask::Off;
+		if (!bEligible || bFullBodyMontage)
+		{
+			return EWeaponLayerMask::Off;
+		}
+		// An upper-body set leaves nothing to drive under an upper-body montage (it owns the torso); a full-body set keeps the legs.
+		if (bUpperBodyMontage)
+		{
+			return bFullBodySet ? EWeaponLayerMask::LowerBody : EWeaponLayerMask::Off;
+		}
+		return EWeaponLayerMask::Full;
+	}
+
+	float BlendedNominalSpeed(const FWeaponLayerDirectionBlend& Blend, const TStaticArray<float, 8>& Speeds, float Fallback)
+	{
+		const float A = Speeds[static_cast<int32>(Blend.A)] > 0.f ? Speeds[static_cast<int32>(Blend.A)] : Fallback;
+		const float B = Speeds[static_cast<int32>(Blend.B)] > 0.f ? Speeds[static_cast<int32>(Blend.B)] : Fallback;
+		return FMath::Lerp(A, B, FMath::Clamp(Blend.Alpha, 0.f, 1.f));
+	}
+
+	float TurnClipAdvance(float YawDeltaDeg, float ClipTurnDeg, float ClipLength)
+	{
+		if (FMath::Abs(ClipTurnDeg) <= KINDA_SMALL_NUMBER || ClipLength <= KINDA_SMALL_NUMBER)
+		{
+			return 0.f;
+		}
+		return FMath::Abs(YawDeltaDeg) / FMath::Abs(ClipTurnDeg) * ClipLength;
 	}
 
 	float MoveWeight(float Speed, float StartSpeed, float FullSpeed)
@@ -208,5 +232,108 @@ namespace WeaponAnimLayerRules
 			State = FShellReloadState();
 			return;
 		}
+	}
+
+	TStaticArray<float, 9> AimPoseWeights(float YawDeg, float PitchDeg, float YawRangeDeg, float PitchRangeDeg, const TStaticArray<bool, 9>& Available)
+	{
+		TStaticArray<float, 9> Out;
+		for (int32 Index = 0; Index < 9; ++Index)
+		{
+			Out[Index] = 0.f;
+		}
+		const float Y = YawRangeDeg > KINDA_SMALL_NUMBER ? FMath::Clamp(YawDeg / YawRangeDeg, -1.f, 1.f) : 0.f;
+		const float P = PitchRangeDeg > KINDA_SMALL_NUMBER ? FMath::Clamp(PitchDeg / PitchRangeDeg, -1.f, 1.f) : 0.f;
+		const float Cols[3] = { FMath::Max(0.f, -Y), 1.f - FMath::Abs(Y), FMath::Max(0.f, Y) };   // left, centre, right
+		const float Rows[3] = { FMath::Max(0.f, P), 1.f - FMath::Abs(P), FMath::Max(0.f, -P) };   // up, level, down
+		for (int32 Row = 0; Row < 3; ++Row)
+		{
+			for (int32 Col = 0; Col < 3; ++Col)
+			{
+				const int32 Index = Row * 3 + Col;
+				const float Weight = Rows[Row] * Cols[Col];
+				if (Weight <= 0.f)
+				{
+					continue;
+				}
+				if (Available[Index] || Index == static_cast<int32>(EWeaponAimPose::Center))
+				{
+					Out[Index] += Weight;
+					continue;
+				}
+				// A missing corner = its row's edge pose + its column's edge pose (additive deltas sum up to the diagonal).
+				if (Row != 1 && Col != 1)
+				{
+					const int32 RowEdge = Row * 3 + 1;
+					const int32 ColEdge = 3 + Col;
+					if (Available[RowEdge])
+					{
+						Out[RowEdge] += Weight;
+					}
+					if (Available[ColEdge])
+					{
+						Out[ColEdge] += Weight;
+					}
+				}
+			}
+		}
+		return Out;
+	}
+
+	bool LauncherRoundVisible(bool bRoundInTube, bool bReloading, float ReloadProgress01, float InsertAt01)
+	{
+		if (bRoundInTube)
+		{
+			return true;
+		}
+		return bReloading && ReloadProgress01 >= FMath::Clamp(InsertAt01, 0.f, 1.f);
+	}
+
+	float LauncherReloadClipTime(float ElapsedSeconds, float TotalSeconds, float ClipLength, float LeadInSeconds)
+	{
+		if (ClipLength <= KINDA_SMALL_NUMBER || TotalSeconds <= KINDA_SMALL_NUMBER)
+		{
+			return -1.f;
+		}
+		const float LeadIn = FMath::Clamp(LeadInSeconds, 0.f, TotalSeconds * 0.5f);
+		if (ElapsedSeconds < LeadIn)
+		{
+			return -1.f;
+		}
+		const float Rate = ClipLength / FMath::Max(0.05f, TotalSeconds - LeadIn);
+		return FMath::Clamp((ElapsedSeconds - LeadIn) * Rate, 0.f, ClipLength);
+	}
+
+	float LauncherInsertFraction(float InsertSeconds, float ClipLength, float TotalSeconds, float LeadInSeconds)
+	{
+		if (ClipLength <= KINDA_SMALL_NUMBER || TotalSeconds <= KINDA_SMALL_NUMBER)
+		{
+			return 0.5f;
+		}
+		const float LeadIn = FMath::Clamp(LeadInSeconds, 0.f, TotalSeconds * 0.5f);
+		const float Insert = FMath::Clamp(InsertSeconds, 0.f, ClipLength);
+		return FMath::Clamp((LeadIn + Insert * (TotalSeconds - LeadIn) / ClipLength) / TotalSeconds, 0.f, 1.f);
+	}
+
+	ELauncherAction ResolveLauncherAction(float ShotSeconds, float ShotLength, float ReloadClipTime)
+	{
+		if (ShotSeconds >= 0.f && ShotSeconds < ShotLength)
+		{
+			return ELauncherAction::Shot;
+		}
+		return ReloadClipTime >= 0.f ? ELauncherAction::Reload : ELauncherAction::None;
+	}
+
+	float TurnInPlaceShare(float YawRateDegPerSec, float Speed, float MoveSpeed, float MinRate, float FullRate)
+	{
+		if (Speed >= MoveSpeed)
+		{
+			return 0.f;
+		}
+		const float Rate = FMath::Abs(YawRateDegPerSec);
+		if (FullRate <= MinRate)
+		{
+			return Rate >= MinRate ? 1.f : 0.f;
+		}
+		return FMath::Clamp((Rate - MinRate) / (FullRate - MinRate), 0.f, 1.f);
 	}
 }

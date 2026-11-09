@@ -156,7 +156,7 @@
     "SniperSmoke": { "fixedStepFps": 240, "_why": "per-frame body yaw check (max 25 deg in one frame): 41.7 at 30 fps, 20.8 at 60 fps for the same turn" },
     "TutorialSmoke": { "realTime": true, "_why": "the dialogue Enter hold (0.6 s skip) is timed on the wall clock (FPlatformTime, the dialogue pause freezes the game clock); a fixed step runs the game faster than the wall clock, so the held key is too short" }
   },
-  "nonSmokeDebugCommands": ["PmcArena", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots"],
+  "nonSmokeDebugCommands": ["PmcArena", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots"],
   "rules": [
     {
       "name": "leader-switch-keeps-move-2026-11-08",
@@ -476,7 +476,7 @@
     {
       "name": "shotgun-d1",
       "globs": ["Source/**/Characters/OperativeAnimInstanceShotgun*", "Source/**/Characters/WeaponAnimLayerRules*", "Source/**/Data/WeaponLoadoutRules*",
-        "Source/**/Combat/WeaponBallisticsRules*", "Source/**/Combat/ArmorRules*", "Source/**/Debug/ShotgunSmoke*", "Source/**/Debug/ShotgunD1Shots*",
+        "Source/**/Combat/WeaponBallisticsRules*", "Source/**/Combat/ArmorRules*", "Source/**/Debug/ShotgunSmoke*", "Source/**/Debug/ShotgunD1Shots*", "Source/**/Debug/ShotgunLoopShots*", "Content/Characters/Animations/Shotgun/**",
         "Content/Data/Weapons/weapon_anim_sets.json", "Content/Characters/Enemies/PMC/Operator/**", "Source/**/Combat/SidearmRules*", "Source/**/Debug/PistolSmoke*", "Source/**/Tactics/TurnBasedRules*"],
       "tests": ["CodexTactics.Weapons", "CodexTactics.Animation.WeaponLayer"],
       "smokes": ["ShotgunSmoke", "PistolSmoke", "WeaponSelectorSmoke", "QuickFireSmoke", "SaveRoundTripSmoke", "PmcStandoffSmoke"]

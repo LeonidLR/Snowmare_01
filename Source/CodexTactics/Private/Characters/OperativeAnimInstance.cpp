@@ -726,6 +726,10 @@ void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealt
 		Clip = HitProneAnimation;
 		Slot = FullBodySlot;
 	}
+	else if (UAnimSequenceBase* LauncherHit = PickLauncherHitClip())
+	{
+		Clip = LauncherHit; // the RPG-7 in his hands: the launcher pack's Get_Hit (upper body, the tube stays shouldered)
+	}
 	else if (bFromBehind && HitBackAnimation)
 	{
 		Clip = HitBackAnimation;
@@ -823,8 +827,9 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 		}
 		return;
 	}
+	const bool bLauncherDeath = LauncherSetData.Deaths.Contains(Clip); // the launcher's falls play from their first frame
 	if (UAnimMontage* Montage = PlaySlotAnimationAsDynamicMontage(Clip, FullBodySlot, 0.15f, 0.f, 1.f, 1, -1.f,
-		Stance == EOperativeStance::Standing ? FMath::Min(DeathStartOffset, Clip->GetPlayLength() * 0.9f) : 0.f))
+		Stance == EOperativeStance::Standing && !bLauncherDeath ? FMath::Min(DeathStartOffset, Clip->GetPlayLength() * 0.9f) : 0.f))
 	{
 		// Held on the last frame (the running instance's flag; the montage asset's is copied only at the start).
 		if (FAnimMontageInstance* Instance = GetActiveInstanceForMontage(Montage))
@@ -853,6 +858,10 @@ bool UOperativeAnimInstance::IsDeathPoseSettled() const
 
 UAnimSequenceBase* UOperativeAnimInstance::PickDeathClip(const AOperativeCharacter& Operative) const
 {
+	if (UAnimSequenceBase* LauncherDeath = PickLauncherDeathClip(Operative))
+	{
+		return LauncherDeath; // the RPG-7 standing: the launcher pack's Dead_01 / Dead_02 (they end lying, unlike the rifle pack's)
+	}
 	TArray<UAnimSequenceBase*> StandClips;
 	for (const TObjectPtr<UAnimSequenceBase>& Stand : DeathStandAnimations)
 	{
@@ -1004,6 +1013,11 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 	else if (bSniperPose)
 	{
 		Reload = nullptr; // never stop the sniper clips at the reload's end
+	}
+	if (UpdateLauncherAction(BoundOperative.Get(), DeltaSeconds))
+	{
+		bWasReloading = bIsReloading; // the RPG-7: the pack's reload natively on the upper body, fitted to the reload time (OperativeAnimInstanceShotgun.cpp)
+		return;
 	}
 	if (UpdateShotgunReload(Operative, DeltaSeconds))
 	{
@@ -1374,12 +1388,27 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	}
 	WeaponClips = Instance->ShotgunClips;
 	WeaponUpperWeight = Instance->ShotgunUpperWeight;
+	WeaponLowerWeight = Instance->ShotgunLowerWeight;
+	bWeaponFullBody = Instance->bShotgunWeapon && Instance->ActiveWeaponSet().bFullBody;
 	bWeaponProbe = Instance->bWeaponLayerProbe;
 	WeaponReloadClip = Instance->ShotgunReloadWeight > MinSampleWeight ? Instance->ActiveWeaponSet().Reload : nullptr;
 	WeaponReloadTime = Instance->ShotgunReload.Time;
 	WeaponReloadWeight = Instance->ShotgunReloadWeight;
 	WeaponFireAdditive = Instance->WeaponFireAdditiveTime >= 0.f ? Instance->WeaponFireAdditiveClip : nullptr;
 	WeaponFireAdditiveTime = FMath::Max(0.f, Instance->WeaponFireAdditiveTime);
+	// The launcher set: its action clip and the aim poses (OperativeAnimInstanceShotgun.cpp).
+	const bool bLauncherLayer = Instance->LayerHandling == EWeaponHandling::Launcher;
+	WeaponActionClip = bLauncherLayer && Instance->LauncherActionWeight > MinSampleWeight ? Instance->LauncherActionClip : nullptr;
+	WeaponActionTime = FMath::Max(0.f, Instance->LauncherActionTime);
+	WeaponActionWeight = Instance->LauncherActionWeight;
+	// Any set's pose aim offset (the launcher's, the shotgun's).
+	const bool bAimLayer = Instance->bShotgunWeapon;
+	WeaponAimBase = bAimLayer ? Instance->ActiveWeaponSet().AimPoseBase : nullptr;
+	for (int32 Index = 0; Index < 9; ++Index)
+	{
+		WeaponAimPoses[Index] = bAimLayer ? Instance->ActiveWeaponSet().AimPoses[Index] : nullptr;
+		WeaponAimWeights[Index] = bAimLayer ? Instance->LauncherAimWeights[Index] : 0.f;
+	}
 	for (int32 Index = 0; Index < Slot(EOperativeClip::Count); ++Index)
 	{
 		Clips[Index].Sequence = Instance->GetClip(static_cast<EOperativeClip>(Index));
@@ -1454,7 +1483,8 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 		return Evaluate(Output);
 	}
 	const bool bPeekLock = PeekLockAlpha > 0.f;
-	const bool bWeaponLayer = WeaponUpperWeight > MinSampleWeight || (WeaponReloadClip && WeaponReloadWeight > MinSampleWeight) || WeaponFireAdditive != nullptr;
+	const bool bWeaponLayer = WeaponUpperWeight > MinSampleWeight || WeaponLowerWeight > MinSampleWeight || (WeaponReloadClip && WeaponReloadWeight > MinSampleWeight)
+		|| WeaponFireAdditive != nullptr;
 	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;

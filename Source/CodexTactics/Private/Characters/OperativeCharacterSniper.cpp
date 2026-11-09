@@ -251,6 +251,23 @@ void AOperativeCharacter::ApplyWeaponVisual()
 			}
 		}
 	}
+	// The loaded round on the model (the RPG-7's rocket on the tube, 2026-11-09): its own component, shown / hidden by UpdateLauncherRoundVisual.
+	UStaticMesh* RoundMesh = HandAsset && CurrentWeapon && !CurrentWeapon->LoadedRoundMesh.IsNull() ? CurrentWeapon->LoadedRoundMesh.LoadSynchronous() : nullptr;
+	if (RoundMesh && !WeaponRoundMesh)
+	{
+		WeaponRoundMesh = NewObject<UStaticMeshComponent>(this, TEXT("WeaponRoundMesh"), RF_Transient);
+		WeaponRoundMesh->SetupAttachment(WeaponMesh);
+		WeaponRoundMesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		WeaponRoundMesh->SetCastShadow(WeaponMesh->CastShadow);
+		WeaponRoundMesh->RegisterComponent();
+		WeaponRoundMesh->AttachToComponent(WeaponMesh, FAttachmentTransformRules::SnapToTargetNotIncludingScale);
+		WeaponRoundMesh->SetRelativeTransform(FTransform::Identity);
+	}
+	if (WeaponRoundMesh && WeaponRoundMesh->GetStaticMesh() != RoundMesh)
+	{
+		WeaponRoundMesh->SetStaticMesh(RoundMesh);
+		WeaponRoundMesh->SetVisibility(RoundMesh != nullptr);
+	}
 }
 
 void AOperativeCharacter::PlayShotClip(AActor* Target, bool bHit)

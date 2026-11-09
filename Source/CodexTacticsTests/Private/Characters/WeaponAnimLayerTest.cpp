@@ -9,6 +9,10 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
+#include "Misc/FileHelper.h"
+#include "Misc/PackageName.h"
+#include "Misc/Paths.h"
+
 #if WITH_DEV_AUTOMATION_TESTS
 
 namespace WeaponAnimLayerTest
@@ -68,6 +72,11 @@ bool FWeaponLayerMaskTest::RunTest(const FString&)
 	TestTrue(TEXT("an upper-body montage (fire / reload) owns the torso, the ABP the legs: off"), ResolveMask(true, false, true) == EWeaponLayerMask::Off);
 	TestTrue(TEXT("both montages: off"), ResolveMask(true, true, true) == EWeaponLayerMask::Off);
 	TestTrue(TEXT("free: the upper body only (the mask never names the legs)"), ResolveMask(true, false, false) == EWeaponLayerMask::Full);
+	// A "full" set (the shotgun on Loop_Root, designer 2026-11-09 b): its legs stay under an upper-body montage, a full-body one still wins.
+	TestTrue(TEXT("full set, free: full"), ResolveMask(true, false, false, true) == EWeaponLayerMask::Full);
+	TestTrue(TEXT("full set under a hit reaction: its legs only"), ResolveMask(true, false, true, true) == EWeaponLayerMask::LowerBody);
+	TestTrue(TEXT("full set under a full-body montage: off"), ResolveMask(true, true, false, true) == EWeaponLayerMask::Off);
+	TestTrue(TEXT("full set not eligible: off"), ResolveMask(false, false, false, true) == EWeaponLayerMask::Off);
 	TestEqual(TEXT("standing: idle"), MoveWeight(5.f, 15.f, 60.f), 0.f);
 	TestEqual(TEXT("37.5 cm/s: half"), MoveWeight(37.5f, 15.f, 60.f), 0.5f, 0.001f);
 	TestEqual(TEXT("walking: the walk set"), MoveWeight(150.f, 15.f, 60.f), 1.f);
@@ -185,6 +194,68 @@ bool FWeaponLoadoutProjectTest::RunTest(const FString&)
 		&& Medic == TArray<FString>({ TEXT("m16"), TEXT("sniper_rifle"), TEXT("pistol"), TEXT("grenade") }));
 	TArray<FString> Recruit;
 	TestFalse(TEXT("the recruit keeps the Blueprint loadout"), WeaponLoadoutRules::Find(TEXT("recruit"), Recruit));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponLayerLauncherRulesTest, "CodexTactics.Animation.WeaponLayer.LauncherRules",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWeaponLayerLauncherRulesTest::RunTest(const FString&)
+{
+	using namespace WeaponAnimLayerRules;
+	TStaticArray<bool, 9> Edges(InPlace, false);
+	Edges[static_cast<int32>(EWeaponAimPose::Up)] = Edges[static_cast<int32>(EWeaponAimPose::Down)] = true;
+	Edges[static_cast<int32>(EWeaponAimPose::Left)] = Edges[static_cast<int32>(EWeaponAimPose::Right)] = true;
+	auto W = [](const TStaticArray<float, 9>& Weights, EWeaponAimPose Pose) { return Weights[static_cast<int32>(Pose)]; };
+	// The aim poses (the pack's Rotation_90_* at +-90 deg).
+	TStaticArray<float, 9> A = AimPoseWeights(0.f, 0.f, 90.f, 90.f, Edges);
+	TestEqual(TEXT("level, ahead: no delta"), W(A, EWeaponAimPose::Up) + W(A, EWeaponAimPose::Down) + W(A, EWeaponAimPose::Left) + W(A, EWeaponAimPose::Right), 0.f);
+	A = AimPoseWeights(0.f, 45.f, 90.f, 90.f, Edges);
+	TestEqual(TEXT("45 deg up: half the up pose"), W(A, EWeaponAimPose::Up), 0.5f, 0.001f);
+	A = AimPoseWeights(0.f, -120.f, 90.f, 90.f, Edges);
+	TestEqual(TEXT("past the range: clamped to the down pose"), W(A, EWeaponAimPose::Down), 1.f, 0.001f);
+	A = AimPoseWeights(-45.f, 45.f, 90.f, 90.f, Edges);
+	// Missing corner (up-left 0.25): its share goes to up and left (the deltas add up to the diagonal) - up 0.25 + 0.25, left 0.25 + 0.25:
+	// the pitch and the yaw poses each at their own share, as two separate offsets would be.
+	TestEqual(TEXT("up-left without the corner: up 0.25 + 0.25"), W(A, EWeaponAimPose::Up), 0.5f, 0.001f);
+	TestEqual(TEXT("... left 0.25 + 0.25"), W(A, EWeaponAimPose::Left), 0.5f, 0.001f);
+	TestEqual(TEXT("... no right"), W(A, EWeaponAimPose::Right), 0.f);
+	TStaticArray<bool, 9> All(InPlace, true);
+	A = AimPoseWeights(90.f, -90.f, 90.f, 90.f, All);
+	TestEqual(TEXT("with the corner: the down-right pose alone"), W(A, EWeaponAimPose::DownRight), 1.f, 0.001f);
+	// The rocket on the tube.
+	TestTrue(TEXT("a round in the tube: shown"), LauncherRoundVisible(true, false, 0.f, 0.5f));
+	TestFalse(TEXT("fired, not reloading: gone"), LauncherRoundVisible(false, false, 0.f, 0.5f));
+	TestFalse(TEXT("reloading, before the insertion: gone"), LauncherRoundVisible(false, true, 0.3f, 0.5f));
+	TestTrue(TEXT("reloading, past the insertion: back on the tube"), LauncherRoundVisible(false, true, 0.6f, 0.5f));
+	// The reload clip fitted to the 4.5 s reload after the shot's 0.6 s follow-through (the pack's 2.333 s clip).
+	TestTrue(TEXT("during the follow-through: not started"), LauncherReloadClipTime(0.3f, 4.5f, 2.333f, 0.6f) < 0.f);
+	TestEqual(TEXT("its start"), LauncherReloadClipTime(0.6f, 4.5f, 2.333f, 0.6f), 0.f, 0.001f);
+	TestEqual(TEXT("its end at the reload's end"), LauncherReloadClipTime(4.5f, 4.5f, 2.333f, 0.6f), 2.333f, 0.001f);
+	TestEqual(TEXT("half-way through the clip"), LauncherReloadClipTime(0.6f + 1.95f, 4.5f, 2.333f, 0.6f), 2.333f * 0.5f, 0.001f);
+	const float Insert = LauncherInsertFraction(1.333f, 2.333f, 4.5f, 0.6f);
+	TestEqual(TEXT("the insertion share matches the clip time"), LauncherReloadClipTime(Insert * 4.5f, 4.5f, 2.333f, 0.6f), 1.333f, 0.002f);
+	TestEqual(TEXT("no clip: half way"), LauncherInsertFraction(1.f, 0.f, 4.5f, 0.f), 0.5f);
+	// The action.
+	TestTrue(TEXT("the shot plays first"), ResolveLauncherAction(0.2f, 0.667f, 0.1f) == ELauncherAction::Shot);
+	TestTrue(TEXT("then the reload"), ResolveLauncherAction(-1.f, 0.667f, 0.1f) == ELauncherAction::Reload);
+	TestTrue(TEXT("the shot over, no reload yet: none"), ResolveLauncherAction(0.7f, 0.667f, -1.f) == ELauncherAction::None);
+	// Turn in place and the speed match (the full-body set).
+	TestEqual(TEXT("walking: no turn clip"), TurnInPlaceShare(120.f, 200.f, 15.f), 0.f);
+	TestEqual(TEXT("a slow turn: none"), TurnInPlaceShare(20.f, 0.f, 15.f), 0.f);
+	TestEqual(TEXT("60 deg/s: half"), TurnInPlaceShare(-60.f, 0.f, 15.f), 0.5f, 0.001f);
+	TestEqual(TEXT("the turn clip follows the body: 45 deg = half the 90 deg clip"), TurnClipAdvance(-45.f, 90.f, 1.333f), 0.6665f, 0.001f);
+	TStaticArray<float, 8> Speeds(InPlace, 0.f);
+	Speeds[0] = 92.f;
+	Speeds[2] = 112.5f;
+	FWeaponLayerDirectionBlend Blend;
+	Blend.A = EWeaponLayerDirection::Forward;
+	Blend.B = EWeaponLayerDirection::Right;
+	Blend.Alpha = 0.5f;
+	TestEqual(TEXT("forward / right half and half: the speeds mixed"), BlendedNominalSpeed(Blend, Speeds, 150.f), (92.f + 112.5f) * 0.5f, 0.01f);
+	Blend.B = EWeaponLayerDirection::Backward;
+	Speeds[4] = 0.f;
+	TestEqual(TEXT("an unlisted direction falls back to the set's speed"), BlendedNominalSpeed(Blend, Speeds, 150.f), (92.f + 150.f) * 0.5f, 0.01f);
 	return true;
 }
 

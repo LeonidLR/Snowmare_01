@@ -7,6 +7,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "NiagaraComponent.h"
+#include "NiagaraFunctionLibrary.h"
 #include "Vehicles/VehicleHullRules.h"
 #include "Vehicles/VehiclePawn.h"
 #include "UObject/ConstructorHelpers.h"
@@ -25,7 +27,23 @@ AProjectileActor::AProjectileActor()
 	{
 		Mesh->SetStaticMesh(Sphere.Object);
 	}
+	VisualMeshComponent = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("VisualMesh"));
+	VisualMeshComponent->SetupAttachment(Mesh);
+	VisualMeshComponent->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+	VisualMeshComponent->SetCastShadow(false);
+	VisualMeshComponent->SetUsingAbsoluteScale(true); // the root sphere is scaled 0.12
+	VisualMeshComponent->SetVisibility(false);
 	SetActorHiddenInGame(true);
+}
+
+const UStaticMesh* AProjectileActor::GetVisualMesh() const
+{
+	return VisualMeshComponent && VisualMeshComponent->IsVisible() ? VisualMeshComponent->GetStaticMesh() : nullptr;
+}
+
+FTransform AProjectileActor::GetVisualTransform() const
+{
+	return VisualMeshComponent ? VisualMeshComponent->GetComponentTransform() : GetActorTransform();
 }
 
 FExplosionSpec AProjectileActor::BlastSpecFor(const FProjectileLaunch& Launch, const FVector& Centre, AActor* Source)
@@ -62,6 +80,21 @@ void AProjectileActor::Launch(const FProjectileLaunch& InLaunch, float WorldGrav
 	MaxFlightSeconds = ProjectileRules::MaxFlightSeconds(Shot.Projectile);
 	bInFlight = true;
 	SetActorLocationAndRotation(Shot.From, Shot.Velocity.Rotation());
+	// The weapon's own round model (the RPG-7's rocket, nose along the flight) instead of the sphere; a pooled round keeps nothing of the last.
+	const bool bOwnModel = Shot.VisualMesh != nullptr;
+	Mesh->SetVisibility(!bOwnModel);
+	VisualMeshComponent->SetStaticMesh(Shot.VisualMesh);
+	// The root sphere's scale also scales a child's relative location: undo it so the model's offset stays in centimetres.
+	const FVector RootScale = Mesh->GetRelativeScale3D();
+	VisualMeshComponent->SetRelativeLocationAndRotation(Shot.VisualTransform.GetLocation() / RootScale.ComponentMax(FVector(0.001f)),
+		Shot.VisualTransform.GetRotation());
+	VisualMeshComponent->SetWorldScale3D(Shot.VisualTransform.GetScale3D());
+	VisualMeshComponent->SetVisibility(bOwnModel);
+	if (Shot.TrailFx)
+	{
+		Trail = UNiagaraFunctionLibrary::SpawnSystemAttached(Shot.TrailFx, Mesh, NAME_None, FVector::ZeroVector, FRotator::ZeroRotator,
+			EAttachLocation::KeepRelativeOffset, false);
+	}
 	SetActorHiddenInGame(false);
 	SetActorTickEnabled(true);
 	ReceiveLaunched(Shot.Velocity);
@@ -70,6 +103,12 @@ void AProjectileActor::Launch(const FProjectileLaunch& InLaunch, float WorldGrav
 void AProjectileActor::Park()
 {
 	bInFlight = false;
+	if (Trail)
+	{
+		Trail->Deactivate(); // the smoke left behind fades on its own
+		Trail->DetachFromComponent(FDetachmentTransformRules::KeepWorldTransform);
+		Trail = nullptr;
+	}
 	SetActorTickEnabled(false);
 	SetActorHiddenInGame(true);
 }
