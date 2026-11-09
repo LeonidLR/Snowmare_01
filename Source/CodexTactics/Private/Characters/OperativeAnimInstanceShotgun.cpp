@@ -14,10 +14,12 @@
 #include "CodexTactics.h"
 #include "Characters/HitReactionRules.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/WeaponLayerHandoffRules.h"
 #include "Combat/WeaponBallisticsRules.h"
 #include "Data/WeaponDataAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/SkeletalMesh.h"
+#include "HAL/IConsoleManager.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
@@ -27,6 +29,10 @@
 namespace OperativeShotgunLayer
 {
 	constexpr float ShotgunMinWeight = 0.005f;
+
+	/** Dev switch (FormationJitterSmoke's A/B): 0 = the weapon layer never drives the body (the ABP alone with the weapon in hands). */
+	TAutoConsoleVariable<int32> CVarWeaponLayer(TEXT("Codex.Anim.WeaponLayer"), 1,
+		TEXT("1 = the native weapon animation layer (shotgun / pistol / launcher sets) drives the body; 0 = off (the ABP's rifle locomotion; dev A/B)."));
 
 	static const TCHAR* const DirectionKeys[8] = { TEXT("fwd"), TEXT("fwd_right"), TEXT("right"), TEXT("bwd_right"), TEXT("bwd"), TEXT("bwd_left"),
 		TEXT("left"), TEXT("fwd_left") };
@@ -293,6 +299,20 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 	ShotgunSet.AimTurnLeft = Sequence(TEXT("aim_turn_left"));
 	ShotgunSet.AimTurnRight = Sequence(TEXT("aim_turn_right"));
 	Number(TEXT("turn_clip_deg"), ShotgunSet.TurnClipDeg);
+	// "crouch_body": "abp" (the D-1, the game designer 2026-11-09): crouched, the WHOLE body is the ABP's crouch locomotion (the squad's rifle
+	// crouch); "upper" (the launcher) = the ABP's crouch legs under the set's torso; unset = the set's own crouch loops. "cover_mode": "abp" - the
+	// cover approach's last "cover_approach_abp_cm" and the open shot off the wall are the ABP's too (in cover every set is).
+	FString CrouchMode;
+	ShotgunSet.bCrouchAbp = Block->TryGetStringField(TEXT("crouch_body"), CrouchMode) && CrouchMode.Equals(TEXT("abp"), ESearchCase::IgnoreCase);
+	FString CoverMode;
+	ShotgunSet.bCoverAbp = Block->TryGetStringField(TEXT("cover_mode"), CoverMode) && CoverMode.Equals(TEXT("abp"), ESearchCase::IgnoreCase);
+	ShotgunSet.bTorsoForward = false;
+	Block->TryGetBoolField(TEXT("torso_follows_forward"), ShotgunSet.bTorsoForward);
+	Number(TEXT("cover_approach_abp_cm"), ShotgunSet.CoverApproachCm);
+	Number(TEXT("direction_smooth_s"), ShotgunSet.DirectionSmoothSeconds);
+	Number(TEXT("direction_dead_zone_deg"), ShotgunSet.DirectionDeadZoneDeg);
+	Number(TEXT("direction_snap_deg"), ShotgunSet.DirectionSnapDeg);
+	Number(TEXT("direction_fade_s"), ShotgunSet.DirectionFadeSeconds);
 	// The retargeted copies' own stride (a longer-legged body steps further per cycle: the launcher's copies +16 % male / +12 % female,
 	// measured by Scripts/Editor/setup_launcher_animation.py) - their authored speeds scale with it, so the play rate keeps the feet planted.
 	const TSharedPtr<FJsonObject>* StrideScales = nullptr;
@@ -319,7 +339,7 @@ bool UOperativeAnimInstance::IsShotgunLayerEligible() const
 {
 	const FShotgunAnimSet& ShotgunSet = ActiveWeaponSet();
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner());
-	return bShotgunWeapon && ShotgunSet.StandIdle && Operative && !bIsDead && !bKnockedDown && !bIsClimbing && !bIsVaulting && !bInCover && !bIsProne
+	return bShotgunWeapon && ShotgunSet.StandIdle && Operative && OperativeShotgunLayer::CVarWeaponLayer.GetValueOnGameThread() != 0 && !bIsDead && !bKnockedDown && !bIsClimbing && !bIsVaulting && !bInCover && !bIsProne
 		&& !bFallAirborne && !bSniperPose && !bBlizzardWalkActive && !Operative->bCarrying;
 }
 
@@ -366,7 +386,20 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	}
 	// A stance transition counts as full body from its first frame (its weight is still ~0 then): the layer blending in over the rise from
 	// prone popped the torso ~15 cm (ShotgunSmoke 7).
-	ShotgunMask = ResolveMask(IsShotgunLayerEligible(), GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f || IsPlayingStanceTransition(),
+	// The ABP's own locomotion takes the body (the game designer 2026-11-09): crouched with a "crouch_body": "abp" set, and the whole cover mechanics
+	// (in cover, the cover approach's last metres, an open shot off the wall) - the same as an M16 operative. The layer stays eligible (the D-1's
+	// fire clip and the per-shell reload still play over the ABP pose); its weights blend out / in over blend_seconds below.
+	FWeaponLayerHandoffFacts Handoff;
+	Handoff.bCrouchAbpSet = ShotgunSet.bCrouchAbp;
+	Handoff.bCrouching = bIsCrouching;
+	Handoff.bCoverAbpSet = ShotgunSet.bCoverAbp;
+	Handoff.bInCover = Operative && Operative->bInCover;
+	Handoff.bPendingCover = Operative && Operative->HasPendingCover();
+	Handoff.PendingCoverDistanceCm = Handoff.bPendingCover
+		? static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), Operative->GetPendingCoverSlot().WorldLocation)) : 0.f;
+	Handoff.bCoverOpenShot = Operative && Operative->IsCoverOpenShotActive();
+	bLayerAbpHandoff = WeaponLayerHandoffRules::DefersToAbp(Handoff, ShotgunSet.CoverApproachCm);
+	ShotgunMask = ResolveMask(IsShotgunLayerEligible() && !bLayerAbpHandoff, GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f || IsPlayingStanceTransition(),
 		GetSlotMontageGlobalWeight(UpperBodySlot) > 0.01f, IsWeaponLayerFullBody());
 	const float BlendRate = DeltaSeconds / FMath::Max(0.01f, ShotgunSet.BlendSeconds);
 	auto Step = [BlendRate](float Weight, float Target)
@@ -380,6 +413,8 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	{
 		Clip = FOperativeClipState();
 	}
+	LayerTorsoRef = nullptr;
+	LayerTorsoAlpha = 0.f;
 	// The set's pose aim offset (the launcher's Rotation_* poses, the shotgun pack's AimOffset poses): the weights for the aim pitch / yaw
 	// (UpdateAimOffset, this frame) x its alpha (0 while reloading, sprinting, without a target ...): the ABP's own aim offset node acts before
 	// this layer, which replaces the torso.
@@ -408,15 +443,37 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	if (ShotgunUpperWeight <= OperativeShotgunLayer::ShotgunMinWeight && ShotgunLowerWeight <= OperativeShotgunLayer::ShotgunMinWeight)
 	{
 		LayerTurnShare = 0.f;
+		LayerDirection = FWeaponLayerDirectionState();
 		return;
+	}
+	// The directional legs' direction (FormationJitterSmoke 2026-11-09, the designer's "twitches / spins" following in the formation): a
+	// full-body set's directional clips hold the hips far apart, so the follower's back-and-forth direction (his slot corrections) is eased
+	// with a dead zone and a reversal cross-fades the clips instead of sweeping through the strafes; an upper-body set (and a standing body:
+	// Direction is held below 30 cm/s) follows Direction as before.
+	if (ShotgunSet.bFullBody)
+	{
+		WeaponLayerHandoffRules::StepLayerDirection(LayerDirection, Direction, DeltaSeconds, ShotgunSet.DirectionSmoothSeconds, ShotgunSet.DirectionDeadZoneDeg,
+			ShotgunSet.DirectionSnapDeg, ShotgunSet.DirectionFadeSeconds);
+	}
+	else
+	{
+		LayerDirection = FWeaponLayerDirectionState();
+		LayerDirection.Current = LayerDirection.From = Direction;
+		LayerDirection.bValid = true;
 	}
 
 	// The clips: idle against the moving set by speed; the crouch / aim / sprint sets by eased shares (a stance or aim change cross-fades over
 	// blend_seconds - switching them in one frame popped the torso ~20 cm, RecoilProbe 2026-11-08); each walking set two directions.
 	const float MoveSpeed = Speed;
-	const float Move = MoveWeight(MoveSpeed, ShotgunSet.MoveStartSpeed, ShotgunSet.MoveFullSpeed);
+	// The clip weights of a full-body set by the ABP's smoothed speed (LocomotionSpeed, as its own blend space): a follower stopping and
+	// restarting at his slot hunts 0 .. 60 cm/s frame by frame and the raw speed flicked the whole body between the idle and the walk
+	// (FormationJitterSmoke 2026-11-09: the hips 40 deg in 0.1 s); the loops' phase keeps the real speed (the feet).
+	const float WeightSpeed = ShotgunSet.bFullBody ? LocomotionSpeed : MoveSpeed;
+	const float Move = MoveWeight(WeightSpeed, ShotgunSet.MoveStartSpeed, ShotgunSet.MoveFullSpeed);
 	const bool bSprint = bIsSprinting && ShotgunSet.Sprint && !bIsCrouching;
-	ShotgunCrouchShare = OperativeShotgunLayer::EaseShare(ShotgunCrouchShare, bIsCrouching && ShotgunSet.CrouchIdle ? 1.f : 0.f, DeltaSeconds, ShotgunSet.BlendSeconds);
+	// A "crouch_body": "abp" set never crouches itself: while it fades out over the ABP's crouch it keeps its standing clips.
+	ShotgunCrouchShare = OperativeShotgunLayer::EaseShare(ShotgunCrouchShare, bIsCrouching && ShotgunSet.CrouchIdle && !ShotgunSet.bCrouchAbp ? 1.f : 0.f,
+		DeltaSeconds, ShotgunSet.BlendSeconds);
 	ShotgunAimShare = OperativeShotgunLayer::EaseShare(ShotgunAimShare, bIsAiming ? 1.f : 0.f, DeltaSeconds, ShotgunSet.BlendSeconds);
 	ShotgunSprintShare = OperativeShotgunLayer::EaseShare(ShotgunSprintShare, bSprint ? 1.f : 0.f, DeltaSeconds, ShotgunSet.BlendSeconds);
 	auto Available = [](const TStaticArray<UAnimSequence*, 8>& Set)
@@ -453,7 +510,7 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 		const bool bAimTurn = !bCrouchTurn && ShotgunAimShare >= 0.5f && ShotgunSet.AimTurnLeft && ShotgunSet.AimTurnRight;
 		UAnimSequence* TurnClip = YawDelta < 0.f ? (bCrouchTurn ? ShotgunSet.CrouchTurnLeft : (bAimTurn ? ShotgunSet.AimTurnLeft : ShotgunSet.TurnLeft))
 			: (bCrouchTurn ? ShotgunSet.CrouchTurnRight : (bAimTurn ? ShotgunSet.AimTurnRight : ShotgunSet.TurnRight));
-		const float Want = TurnInPlaceShare(YawRate, MoveSpeed, ShotgunSet.MoveStartSpeed);
+		const float Want = TurnInPlaceShare(YawRate, WeightSpeed, ShotgunSet.MoveStartSpeed);
 		if (Want > 0.f && TurnClip && TurnClip != LayerTurnClip)
 		{
 			LayerTurnClip = TurnClip; // a new turn (or the other way round) starts the clip from its first frame
@@ -489,11 +546,13 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	// A full-body set blends walk -> jog over its own speed band (jog_blend_speeds; the pack's walk 154 / jog 439 cm/s are far apart: a long
 	// mixed band slides the feet), else over walk_speed .. jog_speed.
 	const float JogShare = ShotgunSet.JogBlendFullSpeed > ShotgunSet.JogBlendStartSpeed
-		? JogWeight(MoveSpeed, ShotgunSet.JogBlendStartSpeed, ShotgunSet.JogBlendFullSpeed) : JogWeight(MoveSpeed, ShotgunSet.WalkSpeed, ShotgunSet.JogSpeed);
-	const FWeaponLayerDirectionBlend WalkDir = BlendDirections(Direction, Available(ShotgunSet.Walk));
-	const FWeaponLayerDirectionBlend AimDir = BlendDirections(Direction, Available(ShotgunSet.AimWalk));
-	const FWeaponLayerDirectionBlend CrouchDir = BlendDirections(Direction, Available(ShotgunSet.Crouch));
-	const FWeaponLayerDirectionBlend JogDir = BlendDirections(Direction, Available(ShotgunSet.Jog));
+		? JogWeight(WeightSpeed, ShotgunSet.JogBlendStartSpeed, ShotgunSet.JogBlendFullSpeed) : JogWeight(WeightSpeed, ShotgunSet.WalkSpeed, ShotgunSet.JogSpeed);
+	const FWeaponLayerDirectionBlend WalkDir = BlendDirections(LayerDirection.Current, Available(ShotgunSet.Walk));
+	const FWeaponLayerDirectionBlend AimDir = BlendDirections(LayerDirection.Current, Available(ShotgunSet.AimWalk));
+	const FWeaponLayerDirectionBlend CrouchDir = BlendDirections(LayerDirection.Current, Available(ShotgunSet.Crouch));
+	const FWeaponLayerDirectionBlend JogDir = BlendDirections(LayerDirection.Current, Available(ShotgunSet.Jog));
+	// A reversal's cross-fade (StepLayerDirection): the old direction's clips fade out under the new ones.
+	const float FromShare = 1.f - LayerDirection.Fade;
 	// One normalized phase for every loop (the pack's loops start on the same foot), advanced by the speed against the dominant set's
 	// nominal speed.
 	const bool bCrouchLead = ShotgunCrouchShare >= 0.5f;
@@ -553,12 +612,20 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	{
 		return Clip ? SyncedClipTime(ShotgunPhase, ShotgunSet.PhaseOffsets.FindRef(Clip->GetFName()), Clip->GetPlayLength()) : 0.f;
 	};
-	auto AddPair = [&Add, &At](const TStaticArray<UAnimSequence*, 8>& Set, const FWeaponLayerDirectionBlend& Dir, float Weight)
+	auto AddOnePair = [&Add, &At](const TStaticArray<UAnimSequence*, 8>& Set, const FWeaponLayerDirectionBlend& Dir, float Weight)
 	{
 		UAnimSequence* A = Set[static_cast<int32>(Dir.A)];
 		UAnimSequence* B = Set[static_cast<int32>(Dir.B)];
 		Add(A, Weight * (1.f - Dir.Alpha), At(A));
 		Add(B, Weight * Dir.Alpha, At(B));
+	};
+	auto AddPair = [&AddOnePair, &Available, FromShare, this](const TStaticArray<UAnimSequence*, 8>& Set, const FWeaponLayerDirectionBlend& Dir, float Weight)
+	{
+		AddOnePair(Set, Dir, Weight * (1.f - FromShare));
+		if (FromShare > OperativeShotgunLayer::ShotgunMinWeight)
+		{
+			AddOnePair(Set, BlendDirections(LayerDirection.From, Available(Set)), Weight * FromShare);
+		}
 	};
 	AddPair(ShotgunSet.Crouch, CrouchDir, Move * ShotgunCrouchShare);
 	const float Sprint = ShotgunSet.Sprint ? ShotgunSprintShare : 0.f;
@@ -567,6 +634,15 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	AddPair(ShotgunSet.AimWalk, AimDir, Upright * AimMoveShare);
 	AddPair(ShotgunSet.Walk, WalkDir, Upright * (1.f - AimMoveShare) * (1.f - JogShare));
 	AddPair(ShotgunSet.Jog, JogDir, Upright * (1.f - AimMoveShare) * JogShare);
+	// The torso reference (StabilizeWeaponTorso): the upright gait's forward clip at the shared phase; the sprint runs forward only.
+	if (ShotgunSet.bFullBody && ShotgunSet.bTorsoForward)
+	{
+		const int32 Fwd = static_cast<int32>(EWeaponLayerDirection::Forward);
+		UAnimSequence* Ref = AimMoveShare >= 0.5f ? ShotgunSet.AimWalk[Fwd] : (JogShare >= 0.5f ? ShotgunSet.Jog[Fwd] : ShotgunSet.Walk[Fwd]);
+		LayerTorsoRef = Ref;
+		LayerTorsoRefTime = At(Ref);
+		LayerTorsoAlpha = Ref ? Upright : 0.f;
+	}
 }
 
 bool UOperativeAnimInstance::PlayShotgunFire()
@@ -683,6 +759,10 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 	UE::Anim::FStackAttributeContainer LayerAttributes;
 	FAnimationPoseData LayerData(Layer, LayerCurve, LayerAttributes);
 	FAnimationRuntime::BlendPosesTogether(Poses, Curves, Attributes, Weights, LayerData);
+	if (bWeaponFullBody && WeaponTorsoRef)
+	{
+		StabilizeWeaponTorso(Layer); // the chest keeps the forward clip's yaw in every direction (before the aim poses act on it)
+	}
 	// The launcher: the shot / reload clip, then the aim poses, inside the layer's pose (the torso below then sits on the ABP's pelvis).
 	BlendWeaponAction(Layer, LayerCurve, LayerAttributes);
 	BlendWeaponAimPoses(Layer, LayerCurve, LayerAttributes);
@@ -774,6 +854,59 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 	}
 	BlendWeaponReload(Output);
 	BlendWeaponFireAdditive(Output);
+}
+
+void FOperativeAnimInstanceProxy::StabilizeWeaponTorso(FCompactPose& Layer) const
+{
+	const FBoneContainer& Bones = Layer.GetBoneContainer();
+	auto Find = [&Bones](const TCHAR* Name)
+	{
+		const int32 MeshIndex = Bones.GetPoseBoneIndexForBoneName(Name);
+		return MeshIndex != INDEX_NONE ? Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex)) : FCompactPoseBoneIndex(INDEX_NONE);
+	};
+	const FCompactPoseBoneIndex ArmL = Find(TEXT("upperarm_l"));
+	const FCompactPoseBoneIndex ArmR = Find(TEXT("upperarm_r"));
+	const FCompactPoseBoneIndex Spines[3] = { Find(TEXT("spine_01")), Find(TEXT("spine_02")), Find(TEXT("spine_03")) };
+	if (ArmL.GetInt() == INDEX_NONE || ArmR.GetInt() == INDEX_NONE || Spines[0].GetInt() == INDEX_NONE)
+	{
+		return;
+	}
+	// The shoulder line's yaw (component space) of the layer's pose and of the reference clip at the same phase.
+	auto ShoulderYaw = [ArmL, ArmR](const FCompactPose& Pose)
+	{
+		FCSPose<FCompactPose> Component;
+		Component.InitPose(Pose);
+		const FVector Line = Component.GetComponentSpaceTransform(ArmR).GetLocation() - Component.GetComponentSpaceTransform(ArmL).GetLocation();
+		return FMath::RadiansToDegrees(FMath::Atan2(static_cast<float>(Line.Y), static_cast<float>(Line.X)));
+	};
+	FCompactPose Reference;
+	Reference.SetBoneContainer(&Bones);
+	FBlendedCurve Curve;
+	UE::Anim::FStackAttributeContainer Attributes;
+	FAnimationPoseData ReferenceData(Reference, Curve, Attributes);
+	WeaponTorsoRef->GetAnimationPose(ReferenceData, FAnimExtractContext(static_cast<double>(WeaponTorsoRefTime), false));
+	// The difference, at most 60 deg, by the moving share; spread over the three spine bones about the mesh's up axis.
+	const float Delta = FMath::Clamp(FMath::FindDeltaAngleDegrees(ShoulderYaw(Layer), ShoulderYaw(Reference)), -60.f, 60.f) * FMath::Clamp(WeaponTorsoAlpha, 0.f, 1.f);
+	int32 Count = 0;
+	for (const FCompactPoseBoneIndex Spine : Spines)
+	{
+		Count += Spine.GetInt() != INDEX_NONE ? 1 : 0;
+	}
+	const FQuat Step(FVector::UpVector, FMath::DegreesToRadians(Delta / FMath::Max(1, Count)));
+	for (const FCompactPoseBoneIndex Spine : Spines)
+	{
+		if (Spine.GetInt() == INDEX_NONE)
+		{
+			continue;
+		}
+		// The parent's mesh-space rotation (root included): local' = Parent^-1 * Step * Parent * local.
+		FQuat Parent = FQuat::Identity;
+		for (FCompactPoseBoneIndex Bone = Layer.GetParentBoneIndex(Spine); Bone.GetInt() != INDEX_NONE; Bone = Layer.GetParentBoneIndex(Bone))
+		{
+			Parent = Layer[Bone].GetRotation() * Parent;
+		}
+		Layer[Spine].SetRotation((Parent.Inverse() * Step * Parent * Layer[Spine].GetRotation()).GetNormalized());
+	}
 }
 
 float UOperativeAnimInstance::GetWeaponLayerLowerDeviation() const

@@ -5,6 +5,9 @@
 // 2. standing: the layer drives the whole body (mask Full) with a ShotgunLocomotionPack clip; walking: a shotgun walk / jog clip. 2b (the
 //    full-body set on the pack's Loop_Root loops, the game designer 2026-11-09 b): walking and sprinting, the pelvis / legs follow the pack
 //    (the layer moves lower-body bones off the ABP's pose) and the planted foot does not slide (its mean world speed while on the ground).
+// 2c. crouched (the game designer's play-test 2026-11-09: "hunched over in three folds"; "crouch_body": "abp"): crouch idle and crouch walk are the
+//    ABP's crouch locomotion for the whole body (the layer's mask Off, its weights 0, the probe: no lower AND no upper bone changed); the
+//    layer blends out / back in on standing up without a pop (its weights change < 0.15 a frame).
 // 3. shots at a target 3 / 8 / 14.5 m out, every pellet forced to hit: 8 pellets each, the 14.5 m shot does x the falloff (0.4 at the
 //    15 m max reach: 0.443) of the 3 m one, the 8 m shot (= the effective range) the full damage; free shots at 8 m: partial pellet hits,
 //    damage proportional to the pellets that hit; every shot plays the shotgun fire clip.
@@ -137,6 +140,17 @@ namespace ShotgunSmoke
 		float ReloadMaxTorsoStep = 0.f;
 		float ReloadMaxHandStep = 0.f;
 		FString ReloadWorstWhen;
+		// 2c crouch: the probe's maxima while crouched (idle / walk) and the layer weights' largest per-frame step over the crouch cycle.
+		bool bCrouchSampling = false;
+		bool bCrouchSteps = false;
+		bool bCrouchHasLast = false;
+		float CrouchLastUpper = 0.f;
+		float CrouchLastLower = 0.f;
+		float CrouchMaxStep = 0.f;
+		float CrouchMaxLower = 0.f;
+		float CrouchMaxUpper = 0.f;
+		float CrouchMaxWeight = 0.f;
+		int32 CrouchFrames = 0;
 		FDelegateHandle FrameHandle;
 	};
 
@@ -414,9 +428,52 @@ namespace ShotgunSmoke
 		State.FootBodySamples = 0;
 	}
 
+	void SampleCrouch(FState& State)
+	{
+		const UOperativeAnimInstance* Anim = AnimOf(State.Engineer.Get());
+		if (!Anim)
+		{
+			return;
+		}
+		const float Upper = Anim->GetShotgunUpperWeight();
+		const float Lower = Anim->GetShotgunLowerWeight();
+		if (State.bCrouchSteps && State.bCrouchHasLast)
+		{
+			State.CrouchMaxStep = FMath::Max3(State.CrouchMaxStep, FMath::Abs(Upper - State.CrouchLastUpper), FMath::Abs(Lower - State.CrouchLastLower));
+		}
+		State.CrouchLastUpper = Upper;
+		State.CrouchLastLower = Lower;
+		State.bCrouchHasLast = true;
+		if (State.bCrouchSampling)
+		{
+			State.CrouchMaxLower = FMath::Max(State.CrouchMaxLower, Anim->GetWeaponLayerLowerDeviation());
+			State.CrouchMaxUpper = FMath::Max(State.CrouchMaxUpper, Anim->GetWeaponLayerUpperDeviation());
+			State.CrouchMaxWeight = FMath::Max3(State.CrouchMaxWeight, Upper, Lower);
+			++State.CrouchFrames;
+		}
+	}
+
+	void ResetCrouchSamples(FState& State)
+	{
+		State.CrouchMaxLower = State.CrouchMaxUpper = State.CrouchMaxWeight = 0.f;
+		State.CrouchFrames = 0;
+	}
+
+	/** 2c: the crouched pose is the ABP's - the layer changed no bone and has no weight. */
+	void CheckCrouchSamples(FState& State, const FString& What)
+	{
+		const UOperativeAnimInstance* Anim = AnimOf(State.Engineer.Get());
+		Check(State, State.CrouchFrames >= 8 && State.CrouchMaxLower < 0.01f && State.CrouchMaxUpper < 0.01f && State.CrouchMaxWeight < 0.01f
+			&& Anim && Anim->GetShotgunLayerMask() == EWeaponLayerMask::Off && Anim->IsWeaponLayerAbpHandoff(),
+			FString::Printf(TEXT("2c: %s - the ABP's crouch for the whole body (the layer's largest bone change lower %.3f / upper %.3f, weight %.3f over %d frames; mask %d, handoff %d)"),
+				*What, State.CrouchMaxLower, State.CrouchMaxUpper, State.CrouchMaxWeight, State.CrouchFrames, Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1,
+				Anim && Anim->IsWeaponLayerAbpHandoff() ? 1 : 0));
+	}
+
 	void SampleProbe(FState& State)
 	{
 		SampleRise(State);
+		SampleCrouch(State);
 		SampleReload(State);
 		SampleFeet(State);
 		const AOperativeCharacter* Who = State.Probe.Get();
@@ -615,11 +672,79 @@ namespace ShotgunSmoke
 				GoTo(State, 16);
 				return true;
 			}
+			State.bFootSampling = false;
+			GoTo(State, 17);
+			return true;
+		}
+		case 17: // 2c: crouch (idle): the ABP's crouch, the layer blended out
+		{
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			if (Engineer->GetStance() != EOperativeStance::Crouching)
+			{
+				State.bCrouchSteps = true;
+				State.bCrouchHasLast = false;
+				State.CrouchMaxStep = 0.f;
+				Engineer->SetStance(EOperativeStance::Crouching);
+				State.StageTime = 0.f;
+				return true;
+			}
+			if (State.StageTime < 2.5f)
+			{
+				return true;
+			}
+			if (!State.bCrouchSampling)
+			{
+				ResetCrouchSamples(State);
+				State.bCrouchSampling = true;
+				return true;
+			}
+			if (State.StageTime < 3.5f)
+			{
+				return true;
+			}
+			State.bCrouchSampling = false;
+			CheckCrouchSamples(State, TEXT("crouch idle"));
+			Check(State, DominantName(Engineer) == TEXT("none"), FString::Printf(TEXT("2c: ... no shotgun clip plays crouched (%s)"), *DominantName(Engineer)));
+			ResetCrouchSamples(State);
+			Engineer->OrderMoveTo(SmokeUtils::ClearPoint(World, Engineer->GetActorLocation(), Engineer->GetActorLocation() - Engineer->GetActorForwardVector() * 600.f), false);
+			GoTo(State, 18);
+			return true;
+		}
+		case 18: // 2c: crouch walk
+		{
+			State.bCrouchSampling = Engineer->GetVelocity().Size2D() > 40.f;
+			if (State.StageTime < 6.f && (State.StageTime < 1.f || (Engineer->GetVelocity().Size2D() > 40.f && State.CrouchFrames < 120)))
+			{
+				return true;
+			}
+			State.bCrouchSampling = false;
+			Check(State, Engineer->GetStance() == EOperativeStance::Crouching, TEXT("2c: he walked crouched"));
+			CheckCrouchSamples(State, FString::Printf(TEXT("crouch walk (%.0f cm/s now)"), Engineer->GetVelocity().Size2D()));
+			Engineer->StopOperative();
+			Engineer->SetStance(EOperativeStance::Standing);
+			GoTo(State, 19);
+			return true;
+		}
+		case 19: // 2c: standing again - the layer back, blended in
+		{
+			if (State.StageTime < 2.5f)
+			{
+				return true;
+			}
+			const UOperativeAnimInstance* Anim = AnimOf(Engineer);
+			Check(State, Anim && Anim->GetShotgunLayerMask() == EWeaponLayerMask::Full && Anim->GetShotgunUpperWeight() > 0.95f && !Anim->IsWeaponLayerAbpHandoff(),
+				FString::Printf(TEXT("2c: standing up, the D-1 layer is back (mask %d, upper %.2f)"), Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1,
+					Anim ? Anim->GetShotgunUpperWeight() : 0.f));
+			Check(State, State.CrouchMaxStep < 0.15f, FString::Printf(TEXT("2c: ... the layer blended out / in over the crouch, no pop (largest weight step %.3f a frame; limit 0.15)"),
+				State.CrouchMaxStep));
+			State.bCrouchSteps = false;
 			if (UOperativeAnimInstance* Probe = AnimOf(Engineer))
 			{
 				Probe->bWeaponLayerProbe = false;
 			}
-			State.bFootSampling = false;
 			GoTo(State, 3);
 			return true;
 		}
