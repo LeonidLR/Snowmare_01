@@ -1374,7 +1374,7 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	}
 	WeaponClips = Instance->ShotgunClips;
 	WeaponUpperWeight = Instance->ShotgunUpperWeight;
-	WeaponLowerWeight = Instance->ShotgunLowerWeight;
+	bWeaponProbe = Instance->bWeaponLayerProbe;
 	WeaponReloadClip = Instance->ShotgunReloadWeight > MinSampleWeight ? Instance->ActiveWeaponSet().Reload : nullptr;
 	WeaponReloadTime = Instance->ShotgunReload.Time;
 	WeaponReloadWeight = Instance->ShotgunReloadWeight;
@@ -1454,7 +1454,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 		return Evaluate(Output);
 	}
 	const bool bPeekLock = PeekLockAlpha > 0.f;
-	const bool bWeaponLayer = WeaponUpperWeight > MinSampleWeight || WeaponLowerWeight > MinSampleWeight || (WeaponReloadClip && WeaponReloadWeight > MinSampleWeight) || WeaponFireAdditive != nullptr;
+	const bool bWeaponLayer = WeaponUpperWeight > MinSampleWeight || (WeaponReloadClip && WeaponReloadWeight > MinSampleWeight) || WeaponFireAdditive != nullptr;
 	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
@@ -1463,7 +1463,16 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	EvaluateAnimationNode_WithRoot(Output, InRootNode);
 	if (bWeaponLayer)
 	{
+		FCompactPose GraphPose;
+		if (bWeaponProbe)
+		{
+			GraphPose = Output.Pose;
+		}
 		BlendWeaponLayer(Output); // the shotgun set over the graph (WeaponAnimLayerRules)
+		if (bWeaponProbe)
+		{
+			RecordWeaponProbe(GraphPose, Output.Pose);
+		}
 	}
 	if (LadderIK.bActive)
 	{

@@ -65,8 +65,9 @@ bool FWeaponLayerMaskTest::RunTest(const FString&)
 	using namespace WeaponAnimLayerRules;
 	TestTrue(TEXT("not eligible: off"), ResolveMask(false, false, false) == EWeaponLayerMask::Off);
 	TestTrue(TEXT("a full-body montage: off"), ResolveMask(true, true, false) == EWeaponLayerMask::Off);
-	TestTrue(TEXT("an upper-body montage (fire / reload): legs only"), ResolveMask(true, false, true) == EWeaponLayerMask::LowerBody);
-	TestTrue(TEXT("free: the whole body"), ResolveMask(true, false, false) == EWeaponLayerMask::Full);
+	TestTrue(TEXT("an upper-body montage (fire / reload) owns the torso, the ABP the legs: off"), ResolveMask(true, false, true) == EWeaponLayerMask::Off);
+	TestTrue(TEXT("both montages: off"), ResolveMask(true, true, true) == EWeaponLayerMask::Off);
+	TestTrue(TEXT("free: the upper body only (the mask never names the legs)"), ResolveMask(true, false, false) == EWeaponLayerMask::Full);
 	TestEqual(TEXT("standing: idle"), MoveWeight(5.f, 15.f, 60.f), 0.f);
 	TestEqual(TEXT("37.5 cm/s: half"), MoveWeight(37.5f, 15.f, 60.f), 0.5f, 0.001f);
 	TestEqual(TEXT("walking: the walk set"), MoveWeight(150.f, 15.f, 60.f), 1.f);

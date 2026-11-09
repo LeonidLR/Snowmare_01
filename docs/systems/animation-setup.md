@@ -384,6 +384,17 @@ Measured standing (ShotgunSmoke 4): torso / head 2.7 -> 1.7 cm a frame, left han
 clip moving, a fire clip per shot, >= 8 shell clips over a reload, the PMC fighter's layer on the pack clips); `CodexTactics.ShotgunD1Shots` (rendered) writes stills
 + idle / walk / aim-fire / reload frames to `Saved/Screenshots/ShotgunD1/`.
 
+**UPPER BODY ONLY (game designer 2026-11-09, `fix/weapon-layer-upper-body`) - supersedes the "bones under spine_01 take the upper weight, the rest the lower weight" and "LowerBody" wording above:**
+the shotgun and pistol sets drive spine_01 and everything under it (spine, neck, head, clavicles, arms, hands, weapon bones); the root, pelvis, legs, feet and IK
+foot bones always come from the ABP's rifle locomotion (idle, walk, jog, sprint, crouch, strafe, turn in place). There is no lower weight any more;
+`EWeaponLayerMask` is Off / Full (= upper body), and an upper-body montage (fire / reload / hit / grenade) means Off (the montage owns the torso, the ABP the legs).
+**Facing on the ABP's pelvis:** the clips' pelvis yaw / sway differs from the rifle pelvis, so a plain local-space blend would twist the torso. spine_01's MESH-space
+rotation is taken from the clip (equivalent of a Layered Blend Per Bone with "Mesh Space Rotation Blend"): its local rotation is re-expressed as
+`inverse(ABP pelvis chain) * clip pelvis chain * clip spine_01`; everything under spine_01 keeps the clip's local transforms. Chosen over a bare pelvis-delta
+compensation because it needs no per-clip data and also removes the clips' own pelvis lean from the torso. The torso position follows the ABP pelvis (bone lengths kept: no foot slide).
+The pistol's additive recoil and the D-1 reload overlay act on upper bones only. **Check:** `ShotgunSmoke` / `PistolSmoke` stage 2b (probe `bWeaponLayerProbe`:
+walking and sprinting, the layer changes no lower-body bone (< 0.01) and the upper body does), `CodexTactics.Animation.WeaponLayer.MaskAndSpeed`.
+
 ## Pistol weapon layer (the whole pistol, 2026-11-08)
 
 The same native layer as the shotgun (`OperativeAnimInstanceShotgun.cpp`, no ABP edit), now with two sets read from

@@ -78,8 +78,8 @@ namespace ShotgunD1Shots
 		{
 			const UOperativeAnimInstance* Anim = Hero->GetMesh() ? Cast<UOperativeAnimInstance>(Hero->GetMesh()->GetAnimInstance()) : nullptr;
 			const UAnimSequenceBase* Clip = Anim ? Anim->GetShotgunDominantClip() : nullptr;
-			UE_LOG(LogCodexTactics, Display, TEXT("ShotgunD1Shots: %s - layer mask %d upper %.2f lower %.2f clip %s weapon %s"), *Name, Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1,
-				Anim ? Anim->GetShotgunUpperWeight() : 0.f, Anim ? Anim->GetShotgunLowerWeight() : 0.f, Clip ? *Clip->GetName() : TEXT("none"),
+			UE_LOG(LogCodexTactics, Display, TEXT("ShotgunD1Shots: %s - layer mask %d upper %.2f clip %s weapon %s"), *Name, Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1,
+				Anim ? Anim->GetShotgunUpperWeight() : 0.f, Clip ? *Clip->GetName() : TEXT("none"),
 				Hero->CurrentWeapon ? *Hero->CurrentWeapon->WeaponId : TEXT("none"));
 		}
 		const FString Path = Runner->Dir / (Name + TEXT(".png"));

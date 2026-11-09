@@ -206,14 +206,23 @@ public:
 		return bPeekLockNaturalValid && PeekLockAlpha > 0.f;
 	}
 
+	float GetWeaponProbeLower() const { return WeaponProbeLower; }
+	float GetWeaponProbeUpper() const { return WeaponProbeUpper; }
+
 private:
 	FLadderIKFrame LadderIK;
 	mutable FVector KneeIKOffset[2] = { FVector::ZeroVector, FVector::ZeroVector };
 	TStaticArray<FOperativeClipState, static_cast<int32>(EOperativeClip::Count)> Clips;
 	bool bUseNative = true;
 
-	/** The weapon layer (the D-1 shotgun set, 2026-11-08) blended over the graph's pose: upper / lower body weights and its clips. */
+	/** The weapon layer (the D-1 shotgun set, 2026-11-08) blended over the graph's pose: upper-body weight (the legs are never its) and its clips. */
 	void BlendWeaponLayer(FPoseContext& Output) const;
+	/** Smokes: records how far the layer moved the lower-body (non-torso) and upper-body bones from the graph's pose (local space). */
+	void RecordWeaponProbe(const FCompactPose& Before, const FCompactPose& After) const;
+	/** The probe: on (Instance->bWeaponLayerProbe), the largest local translation (cm) / rotation (deg) change of a lower / upper-body bone this frame. */
+	bool bWeaponProbe = false;
+	mutable float WeaponProbeLower = 0.f;
+	mutable float WeaponProbeUpper = 0.f;
 	/** The shotgun's per-shell reload clip on spine_01 and below (after the layer). */
 	void BlendWeaponReload(FPoseContext& Output) const;
 	/** An additive fire clip (the pistol's mesh-space recoil) on top of the layer's pose. */
@@ -222,7 +231,6 @@ private:
 	float WeaponFireAdditiveTime = 0.f;
 	TStaticArray<FOperativeClipState, 12> WeaponClips;
 	float WeaponUpperWeight = 0.f;
-	float WeaponLowerWeight = 0.f;
 	/** The shotgun's per-shell reload on the upper body (spine_01 and below it): clip, time, weight. */
 	const UAnimSequenceBase* WeaponReloadClip = nullptr;
 	float WeaponReloadTime = 0.f;
@@ -1265,15 +1273,19 @@ public:
 	// --- The shotgun weapon layer (the D-1, designer decision 21, 2026-11-03; WeaponAnimLayerRules) ---------------------------------
 	// The user's ShotgunLocomotionPack clips (Content/Data/Weapons/weapon_anim_sets.json "shotgun") blended natively over the ABP's
 	// pose while a shotgun (EWeaponHandling::Shotgun) is in hands: idle / walk / jog / sprint / crouch by speed and direction, the aim
-	// set while aiming; an upper-body montage (fire, reload, grenade, hit) keeps the torso and the layer drives the legs only; a full-body
+	// set while aiming; an upper-body montage (fire, reload, grenade, hit) owns the torso, so the layer is off then - it never drives the legs (the ABP's); a full-body
 	// montage, cover, prone, ladders, vaults, carrying, death and knockdowns leave the ABP alone. No AnimGraph node.
 
 	/** The layer's mask this frame (smokes, the HUD trace). */
 	EWeaponLayerMask GetShotgunLayerMask() const { return ShotgunMask; }
 
-	/** The layer's current blend weights (0..1) on the torso and on the legs. */
+	/** Smokes: turn the probe on, then read how far the layer moved the lower / upper-body bones from the ABP's pose last frame (cm + deg, local space). */
+	bool bWeaponLayerProbe = false;
+	float GetWeaponLayerLowerDeviation() const;
+	float GetWeaponLayerUpperDeviation() const;
+
+	/** The layer's current blend weight (0..1) on the upper body; the legs always come from the ABP (no lower weight, designer 2026-11-09). */
 	float GetShotgunUpperWeight() const { return ShotgunUpperWeight; }
-	float GetShotgunLowerWeight() const { return ShotgunLowerWeight; }
 
 	/** The heaviest shotgun locomotion clip this frame (smokes: "a known shotgun clip plays"). */
 	const UAnimSequenceBase* GetShotgunDominantClip() const;
@@ -1687,7 +1699,6 @@ private:
 	bool bShotgunWeapon = false;
 	EWeaponLayerMask ShotgunMask = EWeaponLayerMask::Off;
 	float ShotgunUpperWeight = 0.f;
-	float ShotgunLowerWeight = 0.f;
 	float ShotgunPhase = 0.f;
 	float ShotgunIdleTime = 0.f;
 	/** Eased shares (0..1, over blend_seconds) of the crouch / aim / sprint sets: a stance or aim change cross-fades the clip sets

@@ -219,16 +219,13 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 		GetSlotMontageGlobalWeight(UpperBodySlot) > 0.01f);
 	const float BlendRate = DeltaSeconds / FMath::Max(0.01f, ShotgunSet.BlendSeconds);
 	const float TargetUpper = ShotgunMask == EWeaponLayerMask::Full ? 1.f : 0.f;
-	const float TargetLower = ShotgunMask == EWeaponLayerMask::Off ? 0.f : 1.f;
 	ShotgunUpperWeight = FMath::Clamp(ShotgunUpperWeight + FMath::Sign(TargetUpper - ShotgunUpperWeight) * BlendRate, FMath::Min(ShotgunUpperWeight, TargetUpper),
 		FMath::Max(ShotgunUpperWeight, TargetUpper));
-	ShotgunLowerWeight = FMath::Clamp(ShotgunLowerWeight + FMath::Sign(TargetLower - ShotgunLowerWeight) * BlendRate, FMath::Min(ShotgunLowerWeight, TargetLower),
-		FMath::Max(ShotgunLowerWeight, TargetLower));
 	for (FOperativeClipState& Clip : ShotgunClips)
 	{
 		Clip = FOperativeClipState();
 	}
-	if (ShotgunUpperWeight <= OperativeShotgunLayer::ShotgunMinWeight && ShotgunLowerWeight <= OperativeShotgunLayer::ShotgunMinWeight)
+	if (ShotgunUpperWeight <= OperativeShotgunLayer::ShotgunMinWeight)
 	{
 		return;
 	}
@@ -413,29 +410,83 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 	FAnimationPoseData LayerData(Layer, LayerCurve, LayerAttributes);
 	FAnimationRuntime::BlendPosesTogether(Poses, Curves, Attributes, Weights, LayerData);
 
-	// Per bone: spine_01 and everything under it = the torso (upper weight), the rest below the root = pelvis / legs (lower weight); the
-	// root keeps the graph's (the capsule-relative placement, root motion off anyway).
+	// Upper body ONLY (designer 2026-11-09): spine_01 and everything under it take the layer; the root, pelvis, legs, feet and IK bones keep the
+	// ABP's pose (the rifle locomotion), in every state.
 	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
 	const int32 SpineMeshIndex = Bones.GetPoseBoneIndexForBoneName(TEXT("spine_01"));
 	const FCompactPoseBoneIndex Spine = SpineMeshIndex != INDEX_NONE ? Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(SpineMeshIndex)) : FCompactPoseBoneIndex(INDEX_NONE);
+	const float Weight = FMath::Min(1.f, WeaponUpperWeight);
+	if (Spine.GetInt() != INDEX_NONE && Weight > OperativeShotgunLayer::ShotgunMinWeight)
+	{
+		// The torso must face where the clip's torso faces on top of the ABP's pelvis (whose yaw / sway differs from the clip's): spine_01's
+		// MESH-SPACE rotation is taken from the layer (the clip), so its local rotation is re-expressed under the ABP's pelvis chain - the same
+		// as Layered Blend Per Bone's "Mesh Space Rotation Blend". Everything under spine_01 keeps the clip's local transforms (relative to it).
+		auto MeshRotation = [](const FCompactPose& Pose, FCompactPoseBoneIndex Bone, bool bSkipRoot)
+		{
+			FQuat Rotation = FQuat::Identity;
+			for (; Bone.GetInt() != INDEX_NONE; Bone = Pose.GetParentBoneIndex(Bone))
+			{
+				if (!(bSkipRoot && Bone.IsRootBone()))
+				{
+					Rotation = Pose[Bone].GetRotation() * Rotation;
+				}
+			}
+			return Rotation;
+		};
+		const FCompactPoseBoneIndex SpineParent = Output.Pose.GetParentBoneIndex(Spine);
+		// The root keeps the graph's (as before: the capsule-relative placement), so the clip's chain is taken below the root and put under the ABP's root.
+		const FQuat ParentGraph = SpineParent.GetInt() != INDEX_NONE ? MeshRotation(Output.Pose, SpineParent, false) : FQuat::Identity;
+		const FQuat ParentLayer = SpineParent.GetInt() != INDEX_NONE
+			? Output.Pose[FCompactPoseBoneIndex(0)].GetRotation() * MeshRotation(Layer, SpineParent, true) : FQuat::Identity;
+		// The layer's spine_01 mesh rotation = ParentLayer * LocalLayer; under the ABP's pelvis: local = ParentGraph^-1 * ParentLayer * LocalLayer.
+		const FQuat Compensated = (ParentGraph.Inverse() * ParentLayer * Layer[Spine].GetRotation()).GetNormalized();
+		Layer[Spine].SetRotation(Compensated);
+	}
 	TArray<bool, TInlineAllocator<128>> Upper;
 	Upper.SetNumZeroed(Output.Pose.GetNumBones());
 	for (const FCompactPoseBoneIndex Index : Output.Pose.ForEachBoneIndex())
 	{
 		const FCompactPoseBoneIndex Parent = Output.Pose.GetParentBoneIndex(Index);
 		Upper[Index.GetInt()] = Index == Spine || (Parent.GetInt() != INDEX_NONE && Upper[Parent.GetInt()]);
-		if (Index.IsRootBone())
+		if (Upper[Index.GetInt()] && Weight > OperativeShotgunLayer::ShotgunMinWeight)
 		{
-			continue;
-		}
-		const float Weight = Upper[Index.GetInt()] ? WeaponUpperWeight : WeaponLowerWeight;
-		if (Weight > OperativeShotgunLayer::ShotgunMinWeight)
-		{
-			Output.Pose[Index].BlendWith(Layer[Index], FMath::Min(1.f, Weight));
+			Output.Pose[Index].BlendWith(Layer[Index], Weight);
 		}
 	}
 	BlendWeaponReload(Output);
 	BlendWeaponFireAdditive(Output);
+}
+
+float UOperativeAnimInstance::GetWeaponLayerLowerDeviation() const
+{
+	return GetProxyOnGameThread<FOperativeAnimInstanceProxy>().GetWeaponProbeLower();
+}
+
+float UOperativeAnimInstance::GetWeaponLayerUpperDeviation() const
+{
+	return GetProxyOnGameThread<FOperativeAnimInstanceProxy>().GetWeaponProbeUpper();
+}
+
+void FOperativeAnimInstanceProxy::RecordWeaponProbe(const FCompactPose& Before, const FCompactPose& After) const
+{
+	const FBoneContainer& Bones = After.GetBoneContainer();
+	const int32 SpineMeshIndex = Bones.GetPoseBoneIndexForBoneName(TEXT("spine_01"));
+	const FCompactPoseBoneIndex Spine = SpineMeshIndex != INDEX_NONE ? Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(SpineMeshIndex)) : FCompactPoseBoneIndex(INDEX_NONE);
+	TArray<bool, TInlineAllocator<128>> Upper;
+	Upper.SetNumZeroed(After.GetNumBones());
+	float Lower = 0.f;
+	float UpperMax = 0.f;
+	for (const FCompactPoseBoneIndex Index : After.ForEachBoneIndex())
+	{
+		const FCompactPoseBoneIndex Parent = After.GetParentBoneIndex(Index);
+		Upper[Index.GetInt()] = Index == Spine || (Parent.GetInt() != INDEX_NONE && Upper[Parent.GetInt()]);
+		const float Move = static_cast<float>(FVector::Dist(Before[Index].GetTranslation(), After[Index].GetTranslation()))
+			+ FMath::RadiansToDegrees(static_cast<float>(Before[Index].GetRotation().AngularDistance(After[Index].GetRotation())));
+		float& Target = Upper[Index.GetInt()] ? UpperMax : Lower;
+		Target = FMath::Max(Target, Move);
+	}
+	WeaponProbeLower = Lower;
+	WeaponProbeUpper = UpperMax;
 }
 
 void FOperativeAnimInstanceProxy::BlendWeaponFireAdditive(FPoseContext& Output) const
@@ -451,9 +502,25 @@ void FOperativeAnimInstanceProxy::BlendWeaponFireAdditive(FPoseContext& Output) 
 	UE::Anim::FStackAttributeContainer Attributes;
 	FAnimationPoseData Additive(Pose, Curve, Attributes);
 	WeaponFireAdditive->GetAnimationPose(Additive, FAnimExtractContext(static_cast<double>(WeaponFireAdditiveTime), false));
+	// Upper body only: the pelvis / legs / root stay the ABP's, whatever the additive clip holds there.
+	const FCompactPose Before = Output.Pose;
 	FAnimationPoseData Base(Output);
 	FAnimationRuntime::AccumulateAdditivePose(Base, Additive, 1.f, WeaponFireAdditive->GetAdditiveAnimType());
 	Output.Pose.NormalizeRotations();
+	const int32 SpineMeshIndex = Output.Pose.GetBoneContainer().GetPoseBoneIndexForBoneName(TEXT("spine_01"));
+	const FCompactPoseBoneIndex Spine = SpineMeshIndex != INDEX_NONE ? Output.Pose.GetBoneContainer().MakeCompactPoseIndex(FMeshPoseBoneIndex(SpineMeshIndex))
+		: FCompactPoseBoneIndex(INDEX_NONE);
+	TArray<bool, TInlineAllocator<128>> Upper;
+	Upper.SetNumZeroed(Output.Pose.GetNumBones());
+	for (const FCompactPoseBoneIndex Index : Output.Pose.ForEachBoneIndex())
+	{
+		const FCompactPoseBoneIndex Parent = Output.Pose.GetParentBoneIndex(Index);
+		Upper[Index.GetInt()] = Index == Spine || (Parent.GetInt() != INDEX_NONE && Upper[Parent.GetInt()]);
+		if (!Upper[Index.GetInt()])
+		{
+			Output.Pose[Index] = Before[Index];
+		}
+	}
 }
 
 void FOperativeAnimInstanceProxy::BlendWeaponReload(FPoseContext& Output) const

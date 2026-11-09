@@ -51,11 +51,8 @@ namespace WeaponAnimLayerRules
 
 	EWeaponLayerMask ResolveMask(bool bEligible, bool bFullBodyMontage, bool bUpperBodyMontage)
 	{
-		if (!bEligible || bFullBodyMontage)
-		{
-			return EWeaponLayerMask::Off;
-		}
-		return bUpperBodyMontage ? EWeaponLayerMask::LowerBody : EWeaponLayerMask::Full;
+		// The layer drives the upper body only, so an upper-body montage (which owns the torso) leaves nothing for it to drive.
+		return bEligible && !bFullBodyMontage && !bUpperBodyMontage ? EWeaponLayerMask::Full : EWeaponLayerMask::Off;
 	}
 
 	float MoveWeight(float Speed, float StartSpeed, float FullSpeed)
