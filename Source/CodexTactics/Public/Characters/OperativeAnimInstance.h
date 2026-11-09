@@ -246,6 +246,10 @@ private:
 	float WeaponActionWeight = 0.f;
 	/** A "full" set (the launcher, designer 2026-11-09 b): every bone but the root from the layer; the lower body's own weight (pelvis + legs). */
 	bool bWeaponFullBody = false;
+	bool bWeaponRootReference = false;
+	/** A full set's crouched upper-body mode ("crouch_body": "upper"): the torso faces the capsule, not the ABP's turned root (its crouch
+	 * orientation warping turned the launcher ~23 deg off the target). */
+	bool bWeaponTorsoOnCapsule = false;
 	float WeaponLowerWeight = 0.f;
 	TStaticArray<const UAnimSequenceBase*, 9> WeaponAimPoses = TStaticArray<const UAnimSequenceBase*, 9>(InPlace, nullptr);
 	const UAnimSequenceBase* WeaponAimBase = nullptr;
@@ -1304,7 +1308,7 @@ public:
 	/** The layer's weight on the pelvis and legs (0..1): a "full" set only (the launcher, designer 2026-11-09 b), else 0. */
 	float GetShotgunLowerWeight() const { return ShotgunLowerWeight; }
 	/** The set in hands drives the whole body ("body": "full" in weapon_anim_sets.json). */
-	bool IsWeaponLayerFullBody() const { return bShotgunWeapon && ActiveWeaponSet().bFullBody; }
+	bool IsWeaponLayerFullBody() const { return bShotgunWeapon && ActiveWeaponSet().bFullBody && !(bIsCrouching && ActiveWeaponSet().bCrouchUpper); }
 	/** The layer's clips this frame (sequence, time, weight) and its shared loop phase 0..1 (smokes / diagnostics). */
 	const TStaticArray<FOperativeClipState, 12>& GetWeaponLayerClips() const { return ShotgunClips; }
 	float GetWeaponLayerPhase() const { return ShotgunPhase; }
@@ -1730,6 +1734,13 @@ private:
 		bool bFullBody = false;
 		/** The loops' play rate cap ("max_play_rate"; a full-body set needs the real speed ratio, else the feet slide). */
 		float MaxPlayRate = 1.6f;
+		/** "root_translation": "reference" = a full set also drops the graph's root TRANSLATION (default "graph": only its rotation is dropped). */
+		bool bRootReference = false;
+		/** "crouch_body": "upper" = a full set drives only the upper body while crouched (the ABP's crouch legs; the launcher pack's crouch walk
+		 * shuffles its feet: they slid 76 % of the speed). */
+		bool bCrouchUpper = false;
+		/** Per-loop sync offsets ("phase_offsets": clip name -> the share of the loop where its left heel strikes; none = 0). */
+		TMap<FName, float> PhaseOffsets;
 		/** The walk -> jog blend band ("jog_blend_speeds": [start, full] cm/s; unset = walk_speed .. jog_speed). */
 		float JogBlendStartSpeed = 0.f;
 		float JogBlendFullSpeed = 0.f;
