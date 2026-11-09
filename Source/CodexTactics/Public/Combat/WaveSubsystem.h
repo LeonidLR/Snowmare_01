@@ -82,6 +82,16 @@ public:
 	/** Enemies of the current wave when it started (Godot total_wave_enemies). */
 	int32 GetTotalWaveEnemies() const { return TotalWaveEnemies; }
 
+	/**
+	 * Game designer 2026-11-09: enemies still to come into the current fight from outside the wave queue - the firefight horde's members held
+	 * back by its wave's max_simultaneous_enemies (UHordeSubsystem). The fight does not end while any are owed.
+	 */
+	void SetExternalPendingSpawns(int32 Count) { ExternalPendingSpawns = FMath::Max(0, Count); }
+	int32 GetExternalPendingSpawns() const { return ExternalPendingSpawns; }
+
+	/** A level wave of the level's "waves" was played as a scripted wave on this level (the firefight horde then keeps to its "horde" block). */
+	bool HasPlayedLevelWaves() const { return bLevelWavesPlayed; }
+
 	/** A hostile PMC fighter (an operative of another team, UPmcSquadSubsystem) died: the fight ends when he was the last hostile. */
 	void NotifyHostileOperativeDied() { CheckWaveCompletion(); }
 
@@ -184,6 +194,10 @@ private:
 	int32 CurrentWaveIndex = 0;
 	int32 TotalWaveEnemies = 0;
 	int32 MaxSimultaneousEnemies = 8;
+	/** See SetExternalPendingSpawns. */
+	int32 ExternalPendingSpawns = 0;
+	/** See HasPlayedLevelWaves. */
+	bool bLevelWavesPlayed = false;
 	bool bWaveActive = false;
 	float SpawnTimer = 0.0f;
 	float ColdDrainMultiplier = 1.0f;

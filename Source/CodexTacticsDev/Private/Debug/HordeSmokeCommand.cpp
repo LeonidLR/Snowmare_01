@@ -5,9 +5,10 @@
 // shortened to the argument (default 3 s) through Codex.Horde.FirefightWarningSeconds. A wave fight with one frozen far-off keeper (so the
 // fight never clears) and an immortal squad holding fire:
 //   no horde comes by itself however long the fight runs (no Codex.Horde.TriggerSeconds any more); the request posts the HQ warning, the
-//   countdown runs in real time and stops in the tactical pause; at its end 8 enemies (5 frost hounds, 3 frostbitten) appear 25-45 m from
-//   the squad's centre, clustered, as fight members that know where the squad is; the HUD warning is up; they close in on the squad; no
-//   second horde without a second request.
+//   countdown runs in real time and stops in the tactical pause; at its end 8 enemies (5 frost hounds, 3 frostbitten: the horde.json block -
+//   this level plays its waves as scripted fights, so they do not feed the horde) appear far from the squad's centre (game designer
+//   2026-11-09: 260-340 m, or the farthest point the map has), clustered, as fight members that know where the squad is; the HUD warning is
+//   up; they close in on the squad; no second horde without a second request.
 // 2026-11-02: the world's proximity mines are removed first - the smoke measures the horde's arrival and rush, and mines placed on the
 // user's L_MovementTest killed horde members on the way (a flaky "they joined the wave" / "rushes the squad").
 
@@ -267,9 +268,15 @@ namespace HordeSmoke
 			Check(State, Members.Num() == 8 && Hounds == 5 && Frostbitten == 3,
 				FString::Printf(TEXT("8 enemies: %d frost hounds, %d frostbitten"), Hounds, Frostbitten));
 			const float Distance = FVector::Dist2D(Horde->GetLastSpawnPoint(), Horde->GetLastSquadCentre());
-			Check(State, Distance >= 2500.f - 1.f && Distance <= 4500.f + 1.f,
-				FString::Printf(TEXT("spawned %.1f m from the squad's centre (band 25-45 m, %s)"), Distance / 100.f,
+			// Game designer 2026-11-09: the firefight horde comes from far away (260-340 m; L_MovementTest is smaller: the farthest it has).
+			const bool bInBand = Horde->GetLastSpawnPick() == EHordeFarPick::InBand;
+			Check(State, bInBand ? Distance >= HordeRules::FarBandMinCm(Horde->GetConfig()) - 1.f && Distance <= HordeRules::FarBandMaxCm(Horde->GetConfig()) + 1.f
+				: Horde->GetLastSpawnPick() == EHordeFarPick::Farthest && Distance >= Horde->GetConfig().MinDistanceCm - 1.f,
+				FString::Printf(TEXT("spawned %.1f m from the squad's centre (%s, %s)"), Distance / 100.f,
+					bInBand ? TEXT("the 260-340 m band") : TEXT("no point that far on this map: the farthest"),
 					Horde->WasLastSpawnHidden() ? TEXT("out of sight") : TEXT("in sight: no hidden spot")));
+			Check(State, Horde->GetActivePlan().SourceWave == 0 && Horde->GetActiveQueued() == 0,
+				TEXT("... a level whose waves run as scripted fights: the horde block (horde.json), all at once"));
 			Check(State, bClustered, TEXT("clustered around the spawn point"));
 			Check(State, bAllHunters, TEXT("they know where the squad is (no patrol / perception)"));
 			Check(State, Waves->GetAliveEnemyCount() >= 9, FString::Printf(TEXT("they joined the fight (%d alive)"), Waves->GetAliveEnemyCount()));

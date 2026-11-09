@@ -105,7 +105,8 @@ void UWaveSubsystem::Tick(float DeltaTime)
 		return;
 	}
 	// 2026-10-21: a skirmish whose enemies are all down already (killed by the very shot that started it) ends here.
-	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->IsSkirmish() && PendingSpawns.Num() == 0)
+	if (const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>(); Flow && Flow->IsSkirmish() && PendingSpawns.Num() == 0
+		&& ExternalPendingSpawns == 0)
 	{
 		CheckWaveCompletion();
 		if (!bWaveActive)
@@ -177,6 +178,7 @@ void UWaveSubsystem::StartWave(int32 WaveIndex)
 		FWaveDefinition Def = LevelConfig->Config.Waves[WaveIndex - 1];
 		Def.Spawns = ResolveRoster(Def.Spawns, WaveIndex);
 		CurrentWaveSpawns = Def.Spawns;
+		bLevelWavesPlayed = true; // this level plays its waves as scripted fights (its firefight horde keeps to the "horde" block)
 		SpawnLevelWave(Def);
 		OnWaveStarted.Broadcast(CurrentWaveIndex, TotalWaveEnemies);
 		return;
@@ -501,7 +503,9 @@ void UWaveSubsystem::CheckWaveCompletion()
 	AliveEnemies.RemoveAll([](const TWeakObjectPtr<AEnemyCharacter>& E) { return !E.IsValid() || E->IsDying(); });
 
 	// Teams (2026-11-03): a fight with living hostile PMC fighters in it goes on until they are down too.
-	if (bWaveActive && PendingSpawns.Num() == 0 && AliveEnemies.Num() == 0 && !UPmcSquadSubsystem::HasLiveHostileOperatives(GetWorld()))
+	// 2026-11-09: a horde held back by its wave's max_simultaneous_enemies is still owed to the fight (ExternalPendingSpawns).
+	if (bWaveActive && PendingSpawns.Num() == 0 && ExternalPendingSpawns == 0 && AliveEnemies.Num() == 0
+		&& !UPmcSquadSubsystem::HasLiveHostileOperatives(GetWorld()))
 	{
 		bWaveActive = false;
 
@@ -543,6 +547,7 @@ void UWaveSubsystem::CheckWaveCompletion()
 void UWaveSubsystem::ClearAllEnemies()
 {
 	PendingSpawns.Empty();
+	ExternalPendingSpawns = 0;
 	for (TWeakObjectPtr<AEnemyCharacter>& WeakEnemy : AliveEnemies)
 	{
 		if (WeakEnemy.IsValid())
