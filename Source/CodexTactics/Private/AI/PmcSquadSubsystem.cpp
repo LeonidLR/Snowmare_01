@@ -4,6 +4,9 @@
 #include "AI/PmcSquadSubsystem.h"
 
 #include "AI/PmcOperatorRules.h"
+#include "Combat/MortarNestActor.h"
+#include "Combat/MortarRules.h"
+#include "Combat/MortarSubsystem.h"
 #include "AI/SquadOrderCatalog.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -1072,8 +1075,46 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		}
 	}
 
+	// Mortar nests (2026-11-09, SQUAD_SIX_FIRE_TEAMS.md 7.3): a manned nest of the team shells the biggest cluster of enemies the team sees now
+	// (the spotter rule; PmcCommanderRules::ScoreMortarFire >= mortar_threshold). Its crew stays at the tube (no orders of their own).
+	UMortarSubsystem* Mortars = UMortarSubsystem::Get(World);
+	if (Mortars)
+	{
+		TArray<FVector> Seen;
+		for (const TPair<TWeakObjectPtr<AActor>, FKnownTarget>& Pair : Team.Known)
+		{
+			if (const AActor* Target = Pair.Value.Actor.Get(); Target && Pair.Value.bSeenNow)
+			{
+				Seen.Add(Target->GetActorLocation() - FVector(0.f, 0.f, Target->GetSimpleCollisionHalfHeight()));
+			}
+		}
+		const FMortarNestConfig& MortarConfig = MortarRules::Get();
+		for (AMortarNestActor* Nest : Mortars->GetNests(TeamId))
+		{
+			FVector Centre;
+			int32 Count = 0;
+			if (Nest->IsFiring() || !MortarRules::BestCluster(Seen, Team.Weights.MortarClusterRadiusCm, Nest->GetActorLocation(), Centre, Count))
+			{
+				continue;
+			}
+			const float Distance = static_cast<float>(FVector::Dist2D(Nest->GetActorLocation(), Centre));
+			const bool bBand = Distance >= MortarConfig.MinRangeCm && (MortarConfig.MaxRangeCm <= 0.f || Distance <= MortarConfig.MaxRangeCm);
+			const float Score = PmcCommanderRules::ScoreMortarFire(Count, Nest->GetCrewAtNest() >= MortarConfig.CrewNeeded, bBand, Team.Weights);
+			if (Score >= Team.Weights.MortarThreshold)
+			{
+				const EMortarRefusal Refusal = Nest->OrderFire(Centre);
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: mortar %s at a cluster of %d (score %.2f, %.0f m): %s"), TeamId, *Nest->NestId, Count, Score,
+					Distance / 100.f, Refusal == EMortarRefusal::None ? TEXT("fire") : *MortarRules::RefusalText(Refusal));
+			}
+		}
+	}
+
 	for (AOperativeCharacter* Fighter : Mates)
 	{
+		if (Mortars && Mortars->FindNestOf(Fighter))
+		{
+			continue; // a mortar crewman stays at his place
+		}
 		FFighterState& State = Team.Fighters.FindOrAdd(Fighter);
 		FCoverSlot Cover;
 		float CoverQuality = 0.f;

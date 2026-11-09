@@ -174,6 +174,14 @@ struct CODEXTACTICS_API FPmcWeights
 	float ContactMemorySeconds = 5.f;
 	/** The commander decides this often, s. */
 	float DecisionInterval = 0.5f;
+	/**
+	 * Mortar nests (2026-11-09, SQUAD_SIX_FIRE_TEAMS.md 7.3): a manned nest of the team fires at the biggest cluster of enemies the team SEES now
+	 * - score = mortar_fire x min(1, cluster / mortar_cluster_full) (0 out of the nest's range band); it fires at >= mortar_threshold.
+	 */
+	float MortarFire = 0.8f;
+	float MortarThreshold = 0.3f;
+	float MortarClusterRadiusCm = 800.f;
+	float MortarClusterFull = 3.f;
 	/** An order keeps running while its score is within this of the best (hysteresis). */
 	float SwitchMargin = 0.1f;
 	/** A running WALK (advance / flank / fall back / cover) is only broken by a score this much above it (the man commits to his move). */
@@ -363,6 +371,9 @@ namespace PmcCommanderRules
 
 	/** The order is a walk the man commits to (advance / flank / fall back / relocate / take cover). */
 	CODEXTACTICS_API bool IsMoveOrder(EPmcOrder Order);
+
+	/** A team's mortar nest: the fire score at a seen cluster of ClusterCount enemies (0 unmanned / out of the band). */
+	CODEXTACTICS_API float ScoreMortarFire(int32 ClusterCount, bool bManned, bool bInRangeBand, const FPmcWeights& Weights);
 
 	/**
 	 * The flank point: DistanceCm (>= 0; else FlankDistanceCm - the commander passes FlankDistanceFor his band) from Threat, FlankAngleDeg off the Threat -> SquadCentre line, on the threat's side away from

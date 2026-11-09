@@ -26,6 +26,7 @@ public:
 	ATacticalCameraPawn();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void Tick(float DeltaSeconds) override;
 
 	/** Actor the camera follows; null keeps the camera in place. */
@@ -169,6 +170,9 @@ private:
 	UFUNCTION()
 	void HandleLeaderChanged(AOperativeCharacter* NewLeader);
 
+	/** A blast (Explosions::OnDetonated): weapons_tuning.json explosions.camera_trauma at the focus, falling off over 4 radii (0 = none). */
+	void HandleExplosion(UWorld* World, const struct FExplosionResult& Result);
+
 	/** True once the mission left pure exploration (Godot: is_combat_phase / is_combat_phase_unlocked). */
 	bool IsCombatView() const;
 	/** The pan stays where the player leaves it, in the combat range: combat, or exploration with the free camera (2026-10-25). */
@@ -215,6 +219,9 @@ private:
 	float PreTurnBasedDistance = 0.f;
 
 	float ShakeTrauma = 0.f;
+	/** The trauma came from a blast: it shakes in real time too (the weapon shake is turn-based only). */
+	bool bBlastShake = false;
+	FDelegateHandle ExplosionHandle;
 	float ShakeNoiseTime = 0.f;
 	FVector ShakeOffset = FVector::ZeroVector;
 

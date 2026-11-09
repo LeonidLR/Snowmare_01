@@ -1,4 +1,5 @@
 #include "Interactables/InteractableActor.h"
+#include "Combat/Explosion.h"
 #include "Combat/EncounterQueries.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Interactables/DeployableRules.h"
@@ -341,64 +342,22 @@ EDefusalResult AInteractableActor::AttemptDefusal(AOperativeCharacter* Operative
 void AInteractableActor::ApplyBlast(float EnemyDamageBase, float SquadDamageBase, float Radius, float ArmorPenetration, EDamageType DamageType,
 	const FText& Source, const FText& SquadLine, EStatusEffect Status, float StatusDuration, float StatusTickDamage)
 {
-	const FVector Center = GetActorLocation();
-	// A placed charge / trap (tripwire, mine, trapped object, barrel): its damage is a trap event — a patrol searches
-	// instead of engaging and no ambush fight starts (user amendment 2026-10-06).
-	const AEnemyCharacter::FScopedTrapBlast TrapBlast;
-	// Enemies (Godot group "enemies"; UE actors tagged Enemy with a health component).
-	for (AActor* Tagged : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
+	// The shared explosion model (WEAPONS_FRAMEWORK.md 16; parity with the old inline code: CodexTactics.Weapons.Explosion.Parity). A placed
+	// charge / trap (tripwire, mine, trapped object, barrel): its damage is a trap event - a patrol searches instead of engaging and no ambush
+	// fight starts (user amendment 2026-10-06); enemies x0.4 / the squad x0.5 linear curves, vehicles, the knockdown (2.5 m), the patrols
+	// within the trap alert radius (20 m) go searching, the explosion event (snow crater + suppression).
+	FExplosionSpec Spec = Explosions::ChargeSpec(GetActorLocation(), EnemyDamageBase, SquadDamageBase, Radius, ArmorPenetration, DamageType,
+		Source.ToString(), this);
+	Spec.Status = Status;
+	Spec.StatusDuration = StatusDuration;
+	Spec.StatusTickDamage = StatusTickDamage;
+	Spec.TriggeredByVehicle = Cast<AVehiclePawn>(BlastTriggeredByVehicle.Get());
+	Spec.OnSquadHit = [this, &SquadLine](AOperativeCharacter& Member, float SquadDamage)
 	{
-		AActor* Candidate = Tagged;
-		if (!Candidate || !Candidate->ActorHasTag(CombatQueries::EnemyTag))
-		{
-			continue;
-		}
-		UHealthComponent* Health = Candidate->FindComponentByClass<UHealthComponent>();
-		const float EnemyDamage = DeployableRules::GetBlastDamage(EnemyDamageBase, FVector::Dist(Center, Candidate->GetActorLocation()), Radius,
-			DeployableRules::EnemyFalloff);
-		if (Health && Health->IsAlive() && EnemyDamage > 0.f)
-		{
-			FDamageSpec Spec;
-			Spec.Amount = EnemyDamage;
-			Spec.DamageType = DamageType;
-			Spec.ArmorPenetration = ArmorPenetration;
-			Spec.AttackerSource = Source.ToString();
-			Spec.StatusEffect = Status;
-			Spec.StatusDuration = StatusDuration;
-			Spec.StatusTickDamage = StatusTickDamage;
-			Health->TakeDamage(Spec);
-		}
-	}
-	// Friendly fire on the squad.
-	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
-	{
-		for (AOperativeCharacter* Member : Squad->GetMembers())
-		{
-			UHealthComponent* Health = Member ? Member->HealthComponent.Get() : nullptr;
-			if (!Health || !Health->IsAlive())
-			{
-				continue;
-			}
-			const float SquadDamage = DeployableRules::GetBlastDamage(SquadDamageBase,
-				FVector::Dist(Center, Member->GetActorLocation()), Radius, DeployableRules::SquadFalloff);
-			if (SquadDamage > 0.f)
-			{
-				Member->TakeHit(SquadDamage, Source.ToString(), false, true); // Godot take_damage(..., bypass_avoidance)
-				Member->StopOperative();
-				PostLine(Member->DisplayName, FText::Format(SquadLine, FMath::FloorToInt(SquadDamage)));
-			}
-		}
-	}
-	// APC P4: the hull of any vehicle in reach (the mine / tripwire it set off itself: the flat mine damage).
-	UVehicleSubsystem::ApplyBlastToVehicles(GetWorld(), Center, Radius, [EnemyDamageBase, Radius](float HullDistance)
-	{
-		return DeployableRules::GetBlastDamage(EnemyDamageBase, HullDistance, Radius, DeployableRules::EnemyFalloff);
-	}, Cast<AVehiclePawn>(BlastTriggeredByVehicle.Get()), Source.ToString());
-	// Sprint 14: a fuel barrel / mine / trap blast closer than 2.5 m knocks everyone down.
-	UKnockdownComponent::NotifyExplosion(GetWorld(), Center);
-	// Patrols within the trap alert radius (20 m) go searching around the blast.
-	AEnemyCharacter::AlertPatrolsNearTrap(GetWorld(), Center);
-	GameplayEvents::RaiseExplosion(this, GameplayEvents::GetExplosionKind(this), Center, Radius, this); // visual listeners only (snow crater)
+		Member.StopOperative();
+		PostLine(Member.DisplayName, FText::Format(SquadLine, FMath::FloorToInt(SquadDamage)));
+	};
+	Explosions::Detonate(GetWorld(), Spec);
 	ReceiveExploded(Radius);
 }
 

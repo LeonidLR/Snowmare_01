@@ -84,5 +84,9 @@
   "squad_loadout": {
     "simulation_mode": "EXPLORE_AND_COLLECT",
     "preset_tier": "STANDARD"
-  }
+  },
+  "mortar_nests": [
+    { "id": "MORTAR_SQUAD", "comment": "2026-11-09 test nest of the squad near the start: CodexTactics.MortarMan 0 then CodexTactics.MortarFire 0 cursor (a point someone of the squad sees, 30-250 m).", "side": "squad", "pos": [-4600, -5300], "yaw": 45 },
+    { "id": "MORTAR_PMC", "comment": "2026-11-09 test nest of the PMC in the far corner, UNMANNED (the lab smokes stay unshelled): CodexTactics.MortarCrewPmc 1 gives it a commanded PMC crew that shells what its team sees; the squad can also take it.", "side": "pmc", "pos": [4600, 4400], "yaw": 225, "crew": 0 }
+  ]
 }

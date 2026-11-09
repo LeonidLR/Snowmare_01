@@ -67,6 +67,42 @@
       "plasma_carbine"
     ]
   },
+  "explosions": {
+    "comment": "The shared explosion model (Explosions::Detonate, 2026-11-09): every blast (grenade, barrels, mines, tripwires, trapped objects, projectiles) uses it. The cover rule: a wall between the blast and a body x wall_multiplier; a plunging round (high-angle) ignores walls - only a roof above protects (x roof_multiplier). occlusion: which blast kinds use the cover rule (off for the legacy kinds = the old numbers). camera_trauma: the shake a blast adds at the camera focus (0 = none).",
+    "wall_multiplier": 0.25,
+    "roof_multiplier": 0.0,
+    "camera_trauma": 0.0,
+    "occlusion": {
+      "projectile": true,
+      "grenade": false,
+      "barrel": false,
+      "mine": false,
+      "tripwire": false,
+      "trap": false
+    }
+  },
+  "mortar_nest": {
+    "comment": "Mortar nests (2026-11-09, SQUAD_SIX_FIRE_TEAMS.md 7.3; numbers proposed, pending the designer; MortarRules): fixed nests of either side from the level JSON \"mortar_nests\"; fires only with crew_needed men at the nest, only at a point someone of its side SEES now (the spotter rule) within min_range_m .. max_range_m; rounds_per_order rounds every interval_s; bracketing: the first round first_error_m off the aim point, each next x shrink (not under min_error_m) while the aim stays within same_target_m. The round is in the weapon schema (kind projectile, trajectory high_angle: a plunging blast - walls do not protect, a roof does). gravity_scale 4 keeps the flight to a few seconds (~5 s at 80 m).",
+    "crew_needed": 3,
+    "crew_radius_m": 1.6,
+    "crew_leave_m": 2.5,
+    "min_range_m": 30,
+    "max_range_m": 250,
+    "interval_s": 3.5,
+    "rounds_per_order": 6,
+    "ammo": 24,
+    "spot_height_m": 0.6,
+    "bracketing": { "first_error_m": 15, "shrink": 0.55, "min_error_m": 1.5, "same_target_m": 10 },
+    "round": {
+      "kind": "projectile",
+      "damage_type": "explosive",
+      "base_damage": 110,
+      "armor_penetration": 0.6,
+      "penetration_class": "vehicle",
+      "projectile": { "speed_mps": 110, "gravity_scale": 4, "trajectory": "high_angle", "arming_distance_m": 10, "max_flight_s": 15 },
+      "explosion": { "radius_m": 6, "full_damage_radius_m": 2.5, "edge_damage_multiplier": 0.2 }
+    }
+  },
   "sidearm": {
     "comment": "The sidearm switch (SidearmRules, 2026-11-08): a primary that runs dry with an enemy within threat_range_m -> the pistol instead of the reload (no shot for draw_s while it comes up); back to the primary (which then reloads) after holster_after_s without a target or when the pistol is dry. reload_in_cover (2026-11-09, pending the game designer's OK): in cover - the corner peek / its fire pose and his open shots off the wall included - he reloads behind the cover instead; the switch is for the open. The player's own switching (X, the weapon selector) is unchanged.",
     "enabled": true,
@@ -317,6 +353,81 @@
         1
       ],
       "penetration_class": "heavy"
+    },
+    "rpg7": {
+      "comment": "The RPG-7 (2026-11-09; numbers proposed, pending the designer; LauncherRules, docs/systems/weapons.md \"The RPG-7\"): a flat rocket through the shared projectile layer (arms after 10 m, self-destructs after 4.5 s), base_damage = the blast's base (explosion.direct_hit_damage on the actor struck on top), class vehicle (hurts hulls), fires standing / kneeling only, one rocket then a reload; the back-blast cone behind the shooter (8 m, 30 deg) hurts anyone in it, and a wall within 2 m behind / a closed room refuses the shot (back_blast_refuses). In the roster as next: no loadout carries it yet (dev: CodexTactics.GiveWeapon rpg7). The model is a placeholder tube.",
+      "name": "RPG-7",
+      "handling": "launcher",
+      "kind": "projectile",
+      "damage_type": "explosive",
+      "base_damage": 140,
+      "attack_range_m": 150,
+      "effective_range_m": 100,
+      "min_range_m": 10,
+      "fire_rate": 1.0,
+      "armor_penetration": 0.8,
+      "penetration_class": "vehicle",
+      "max_clip_size": 1,
+      "default_reserve_ammo": 3,
+      "reload_time": 4.5,
+      "max_range_cells": 12,
+      "suppression_weight": 3,
+      "base_hit_chances": [
+        0.95,
+        0.95,
+        0.92,
+        0.9,
+        0.88,
+        0.85,
+        0.82,
+        0.8,
+        0.78,
+        0.75,
+        0.72,
+        0.7
+      ],
+      "projectile": {
+        "speed_mps": 115,
+        "gravity_scale": 0,
+        "trajectory": "flat",
+        "arming_distance_m": 10,
+        "max_flight_s": 4.5
+      },
+      "explosion": {
+        "radius_m": 4,
+        "full_damage_radius_m": 1.5,
+        "edge_damage_multiplier": 0.15,
+        "direct_hit_damage": 60,
+        "back_blast_length_m": 8,
+        "back_blast_half_angle_deg": 30,
+        "back_blast_damage": 60,
+        "back_blast_clearance_m": 2,
+        "back_blast_refuses": true
+      },
+      "visual": {
+        "comment": "PLACEHOLDER (2026-11-09): an engine cylinder as the tube (9 cm x 1 m) along the barrel until the Fab model arrives.",
+        "hand_mesh": "/Engine/BasicShapes/Cylinder.Cylinder",
+        "attach_location": [
+          -10,
+          0,
+          6
+        ],
+        "attach_rotation_pyr": [
+          90,
+          0,
+          0
+        ],
+        "attach_scale": [
+          0.09,
+          0.09,
+          1.0
+        ],
+        "muzzle_offset": [
+          0,
+          0,
+          50
+        ]
+      }
     }
   },
   "grenade": {

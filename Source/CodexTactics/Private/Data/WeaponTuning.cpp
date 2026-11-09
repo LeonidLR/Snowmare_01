@@ -5,6 +5,8 @@
 #include "Characters/MarksmanAIRules.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Combat/ArmorRules.h"
+#include "Combat/ExplosionRules.h"
+#include "Combat/MortarRules.h"
 #include "Combat/WeaponRangeRules.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Tactics/EnemyTurnRules.h"
@@ -239,6 +241,29 @@ namespace WeaponTuning
 			SidearmRules::Set(Root->TryGetObjectField(TEXT("sidearm"), SidearmBlock) && SidearmBlock && SidearmBlock->IsValid()
 				? SidearmRules::Parse(**SidearmBlock, &SidearmErrors) : FSidearmConfig());
 			for (const FString& Error : SidearmErrors)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
+			}
+		}
+		// The shared explosion model (2026-11-09, WEAPONS_FRAMEWORK.md 16): the cover rule's multipliers, which blast kinds use it, the camera
+		// trauma; no block = the defaults (wall x0.25, roof x0, the cover rule on for projectiles only, no shake).
+		{
+			const TSharedPtr<FJsonObject>* ExplosionBlock = nullptr;
+			TArray<FString> ExplosionErrors;
+			ExplosionRules::Set(Root->TryGetObjectField(TEXT("explosions"), ExplosionBlock) && ExplosionBlock && ExplosionBlock->IsValid()
+				? ExplosionRules::Parse(**ExplosionBlock, &ExplosionErrors) : ExplosionRules::Defaults());
+			for (const FString& Error : ExplosionErrors)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
+			}
+		}
+		// The mortar nests (2026-11-09, SQUAD_SIX_FIRE_TEAMS.md 7.3): the crew, the range band, the rate, the ammo, the bracketing, the round.
+		{
+			const TSharedPtr<FJsonObject>* MortarBlock = nullptr;
+			TArray<FString> MortarErrors;
+			MortarRules::Set(Root->TryGetObjectField(TEXT("mortar_nest"), MortarBlock) && MortarBlock && MortarBlock->IsValid()
+				? MortarRules::Parse(**MortarBlock, &MortarErrors) : MortarRules::Defaults());
+			for (const FString& Error : MortarErrors)
 			{
 				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
 			}

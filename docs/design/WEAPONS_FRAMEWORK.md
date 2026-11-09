@@ -363,3 +363,30 @@ the schema key names (`damage` -> `base_damage`, `shot_cooldown` -> `fire_rate`,
 like a weapon; old files load. Parity: `CodexTactics.Weapons.Sniper.MarksmanOnSchema` (the config from the schema block = the old values) and
 SniperSmoke part 8 (a spawned Marksman's config).
 
+
+## 16. The shared projectile + explosion layer (2026-11-09; week 2's foundation for the RPG-7 and the mortar nests - no RPG-7 yet)
+
+**Projectile kind** (`kind: projectile`, block `projectile`): `speed_mps`, `gravity_scale`, `max_flight_s`, `arming_distance_m`, `trajectory`
+`flat` (rocket: gravity 0, straight at the aim point) / `ballistic` (the low-angle arc that reaches the aim point) / `high_angle` (the high
+arc: plunging fire over walls - the mortar nests, SQUAD_SIX_FIRE_TEAMS.md 7.3, `range.min_range_m` 30 / `attack_range_m` 250). Pure
+`ProjectileRules`: the launch velocity that reaches the aim point (none when out of reach), a fixed-step flight (1/120 s steps whatever the frame
+rate - the same path at 30, 60 or the smokes' fixed step), arming. `AProjectileActor` (pooled by `UProjectileSubsystem`): sweeps each step's
+segment against geometry, characters and vehicles; an armed round explodes at the impact (a direct-hit share on the actor hit), an unarmed one
+is a dud; past `max_flight_s` it bursts in the air (armed) or vanishes.
+
+**One explosion model** (`ExplosionRules` + `Explosions::Detonate`) for the grenade, the fuel barrel, mines / tripwires / trapped objects, and
+later the RPG-7 and the mortar: radius + falloff model (the grenade's half-at-the-edge curve, the deployables' linear curve, the weapon block's
+full-core + edge multiplier), separate enemy / squad numbers, explosive damage = armour class Vehicle (decision 1: it can hurt vehicles; the
+hull keeps its own hull rules), status effect, chained barrels / traps, vehicles, noise / patrol alert, the knockdown (2.5 m) hook, the
+suppression report and the explosion event (snow craters, camera, a knockback hook later) - every blast through one function.
+**Cover:** a wall between the blast and the body cuts the damage (`explosions.wall_multiplier`, default x0.25); a plunging round (high-angle)
+ignores walls and side cover - only a roof / ceiling above the body protects (`roof_multiplier`, default x0). Occlusion is switched per blast
+kind (`explosions.occlusion`): ON for projectiles, OFF for the grenade / barrel / mines / traps so their numbers stay exactly as today (parity
+test); the designer can turn it on in data. **Camera shake** per blast (`explosions.camera_trauma`, 0 = off as today).
+**Back-blast** (the RPG-7, later): `explosion.back_blast_length_m` / `back_blast_half_angle_deg` - `ExplosionRules::BackblastMultiplier`: 1 at
+the launcher, 0 at the cone's end / outside it.
+
+**Built (2026-11-09):** `Combat/ExplosionRules`, `Combat/Explosion` (`Explosions::Detonate`, `GrenadeSpec` / `ChargeSpec`), `Combat/ProjectileRules`,
+`Combat/ProjectileActor`, `Combat/ProjectileSubsystem`; the grenade and `AInteractableActor::ApplyBlast` (barrel, mines, tripwires, trapped
+objects) moved onto it with parity; the APC cannon's splash keeps its own direct-hit code. A dud's direct share is kinetic. Details:
+`docs/systems/weapons.md` "The shared explosion model" / "The shared projectile layer".

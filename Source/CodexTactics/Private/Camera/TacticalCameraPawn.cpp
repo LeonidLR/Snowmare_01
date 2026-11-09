@@ -2,6 +2,7 @@
 #include "Ladders/LadderClimbComponent.h"
 #include "Core/PlayerCommands.h"
 #include "Camera/CameraComponent.h"
+#include "Combat/Explosion.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -80,6 +81,29 @@ void ATacticalCameraPawn::BeginPlay()
 	{
 		Squad->OnLeaderChanged.AddDynamic(this, &ATacticalCameraPawn::HandleLeaderChanged);
 		SetFollowTarget(Squad->GetLeader());
+	}
+	ExplosionHandle = Explosions::OnDetonated().AddUObject(this, &ATacticalCameraPawn::HandleExplosion);
+}
+
+void ATacticalCameraPawn::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	Explosions::OnDetonated().Remove(ExplosionHandle);
+	ExplosionHandle.Reset();
+	Super::EndPlay(EndPlayReason);
+}
+
+void ATacticalCameraPawn::HandleExplosion(UWorld* World, const FExplosionResult& Result)
+{
+	if (World != GetWorld())
+	{
+		return;
+	}
+	const float Trauma = ExplosionRules::CameraTrauma(ExplosionRules::Get().CameraTrauma, static_cast<float>(FVector::Dist(Focus, Result.Centre)),
+		Result.RadiusCm);
+	if (Trauma > 0.f)
+	{
+		ShakeTrauma = CameraShakeRules::AddTrauma(ShakeTrauma, Trauma);
+		bBlastShake = true;
 	}
 }
 
@@ -210,9 +234,10 @@ void ATacticalCameraPawn::TriggerWeaponShake(const FString& WeaponType)
 
 FVector ATacticalCameraPawn::UpdateShake(float RealDelta, const FRotator& ViewRotation)
 {
-	if (!IsTurnBased() || ShakeTrauma <= 0.f)
+	if ((!IsTurnBased() && !bBlastShake) || ShakeTrauma <= 0.f)
 	{
 		ShakeTrauma = 0.f;
+		bBlastShake = false;
 		return FVector::ZeroVector;
 	}
 	ShakeTrauma = CameraShakeRules::Decay(ShakeConfig, ShakeTrauma, RealDelta);

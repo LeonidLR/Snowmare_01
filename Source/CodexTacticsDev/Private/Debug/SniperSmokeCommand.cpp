@@ -30,6 +30,7 @@
 #include "CodexTactics.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/KnockdownComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -706,12 +707,28 @@ namespace SniperSmoke
 					return -1.f;
 				}
 				Health->SetMaxHealth(100000.f, true);
+				// The flake (2026-11-09: 82.25 / 109.39): a >= 40 HP hit knocks the target down on a 50 % roll, and a downed body takes the next
+				// hit x1.33 (KnockdownRules DownedDamageMultiplier). Every measured shot meets a standing target that cannot fall.
+				UKnockdownComponent* Knockdown = Target->FindComponentByClass<UKnockdownComponent>();
+				const bool bCouldFall = Knockdown && Knockdown->bCanBeKnockedDown;
+				if (Knockdown)
+				{
+					if (Knockdown->IsDown())
+					{
+						Knockdown->ResetForLoad();
+					}
+					Knockdown->bCanBeKnockedDown = false;
+				}
 				const float Before = Health->GetCurrentHealth();
 				Medic->CurrentClip = FMath::Max(Medic->CurrentClip, 1);
 				Medic->bForceHitForTesting = true;
 				Medic->ForcedCritRollForTesting = 0.f;
 				const bool bShot = Medic->ShootAtTarget(Target);
 				Medic->bForceHitForTesting = false;
+				if (Knockdown)
+				{
+					Knockdown->bCanBeKnockedDown = bCouldFall;
+				}
 				return bShot ? Before - Health->GetCurrentHealth() : -1.f;
 			};
 			const FVector Forward = Medic->GetActorForwardVector();

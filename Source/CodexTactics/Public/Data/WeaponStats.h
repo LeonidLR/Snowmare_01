@@ -65,7 +65,12 @@ enum class EWeaponHandling : uint8
 	 * Pistol (the weapons week, "the whole pistol", 2026-11-08): the operative's locomotion / aim / fire / reload switch to the pistol set
 	 * (the same native weapon layer as the shotgun; weapon_anim_sets.json "pistol").
 	 */
-	Pistol
+	Pistol,
+	/**
+	 * Shoulder-fired launcher (the RPG-7, 2026-11-09; LauncherRules): fires standing or kneeling, never prone (the back-blast), not with a
+	 * wall right behind / from a closed room (explosion.back_blast_*), one rocket at a time; the round flies through the shared projectile layer.
+	 */
+	Launcher
 };
 
 /** Damage of one round / blow before armour, cover and stance (JSON base_damage, damage_type, armor_penetration, penetration_class). */
@@ -284,7 +289,19 @@ struct CODEXTACTICS_API FWeaponPelletStats
 	float ConeHalfAngleDeg = 0.f;
 };
 
-/** RESERVED per-kind block (Projectile / Thrown; RPG-7, mortar, week 2): the flying round (JSON "projectile"). */
+/** How a projectile flies (JSON projectile.trajectory; ProjectileRules::SolveLaunch). */
+UENUM(BlueprintType)
+enum class EProjectileTrajectory : uint8
+{
+	/** Straight along the aim, no gravity (a rocket: the RPG-7). */
+	Flat,
+	/** The low arc to the aim point (gravity x gravity_scale). */
+	Ballistic,
+	/** The high arc (> 45 deg): plunging fire over walls - walls do not protect, a roof does (the mortar; SQUAD_SIX_FIRE_TEAMS.md 7.3). */
+	HighAngle
+};
+
+/** Per-kind block (Projectile; the shared projectile layer 2026-11-09 - the RPG-7, the mortar): the flying round (JSON "projectile"). */
 USTRUCT(BlueprintType)
 struct CODEXTACTICS_API FWeaponProjectileStats
 {
@@ -302,9 +319,15 @@ struct CODEXTACTICS_API FWeaponProjectileStats
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Projectile", meta = (ClampMin = "0"))
 	float ArmingDistanceCm = 0.f;
 
-	/** Plunging high-angle fire over walls (the mortar; SQUAD_SIX_FIRE_TEAMS.md 7.3). */
+	/** The flight: flat (rocket), ballistic (low arc) or high-angle (plunging; JSON "trajectory"; the legacy "high_angle": true = HighAngle). */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Projectile")
-	bool bHighAngle = false;
+	EProjectileTrajectory Trajectory = EProjectileTrajectory::Flat;
+
+	/** Past this flight time the round bursts in the air (a rocket's self-destruct; 0 = the default 10 s). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Projectile", meta = (ClampMin = "0"))
+	float MaxFlightSeconds = 0.f;
+
+	bool IsHighAngle() const { return Trajectory == EProjectileTrajectory::HighAngle; }
 };
 
 /** RESERVED per-kind block (Projectile / Thrown; shared explosion code, week 2): the blast (JSON "explosion"). */
@@ -332,6 +355,22 @@ struct CODEXTACTICS_API FWeaponExplosionStats
 	/** Half-angle of the back-blast cone, degrees. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0", ClampMax = "90"))
 	float BackBlastHalfAngleDeg = 0.f;
+
+	/** Extra damage on the actor the round strikes (on top of the blast; base_damage = the blast's base). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0"))
+	float DirectHitDamage = 0.f;
+
+	/** The back-blast's damage at the launcher (x LauncherRules / ExplosionRules::BackblastMultiplier along the cone): friendly fire too. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0"))
+	float BackBlastDamage = 0.f;
+
+	/** A wall closer than this behind the launcher blocks the shot, cm (the blast would come straight back). */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0"))
+	float BackBlastClearanceCm = 0.f;
+
+	/** A blocked back-blast (a wall right behind / a closed room): true = no shot (a warning), false = the shot goes with a warning. */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion")
+	bool bBackBlastRefuses = true;
 };
 
 /**

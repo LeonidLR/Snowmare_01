@@ -133,3 +133,95 @@
 - **Checks:** tests `CodexTactics.Weapons.Sniper.RifleData`, `.MarksmanOnSchema`; `CodexTactics.SniperSmoke` part 8 (the same damage at 10 / 30 m,
   the Brute, the Marksman's config from the schema, a PMC fighter's rifle); render `CodexTactics.ShotgunD1Shots sniper` -> `Saved/Screenshots/SniperRifle/`.
 
+## The shared explosion model (2026-11-09; `docs/design/WEAPONS_FRAMEWORK.md` 16)
+
+- **One function for every blast:** `Explosions::Detonate(World, FExplosionSpec)` (`Combat/Explosion.h`) - the grenade (`AGrenadeActor::ApplyAreaEffect`),
+  the placed charges (`AInteractableActor::ApplyBlast`: fuel barrel, proximity mine, tripwire, trapped objects / crates / turrets / barricades) and
+  the projectiles. It applies the falloff to enemies / the squad / other bodies, explosive damage = armour class Vehicle (decision 1), the
+  status, chained barrels / traps, the vehicles' hulls, the noise / patrol alert, the knockdown (2.5 m), the explosion event (snow craters +
+  the suppression report) and `Explosions::OnDetonated()` (the camera shake; a knockback hook later). Returns the victims (`FExplosionResult`).
+- **Parity:** `GrenadeSpec` / `ChargeSpec` build the old numbers (grenade half-at-the-edge curve, the squad x0.65, every actor in reach;
+  charges: enemies x0.4 / squad x0.5 linear curves, the trap event); `CodexTactics.Weapons.Explosion.Parity` compares them bit-exact with
+  `GrenadeRules::DamageFalloff` / `DeployableRules::GetBlastDamage` at every caller's numbers. The vehicle cannon's splash keeps its own
+  direct-hit / kill-credit code (`VehicleTurretComponent`; not a blast of this model).
+- **Pure rules** (`ExplosionRules`): the falloff family (`HalfAtEdge`, `Linear`, `FullCore` from a weapon's `explosion` block), the cover rule,
+  the RPG-7 back-blast cone (`BackblastMultiplier`: 1 at the launcher, 0 at `back_blast_length_m` / outside `back_blast_half_angle_deg`), the
+  camera trauma (linear to 0 at 4 radii).
+- **Cover:** `weapons_tuning.json` "explosions": a wall between the blast and a body x`wall_multiplier` (0.25; a Visibility trace from 50 cm
+  above the centre to the body's chest); a plunging round (high-angle) ignores walls - only a roof above the body (a trace 10 m up from its
+  head) protects, x`roof_multiplier` (0). `occlusion` switches the rule per blast kind: on for `projectile`, off for grenade / barrel / mine /
+  tripwire / trap (their numbers stay as they were; the designer can turn it on in data).
+- **Camera shake:** `explosions.camera_trauma` (0 = off, as before) - the tactical camera adds it at its focus on every blast, in real time
+  too (`ATacticalCameraPawn::HandleExplosion`).
+
+## The shared projectile layer (2026-11-09; no RPG-7 yet)
+
+- **Schema:** `kind: projectile`, block `projectile`: `speed_mps`, `gravity_scale`, `arming_distance_m`, `max_flight_s` (0 = 10 s),
+  `trajectory` `flat` / `ballistic` / `high_angle` (the old `high_angle: true` still reads as the high-angle trajectory); a ballistic /
+  high-angle round needs `gravity_scale > 0`. The mortar's band is the core `min_range_m` / `attack_range_m` (30 / 250 m,
+  `ProjectileRules::IsWithinFireBand`).
+- **Flight** (`ProjectileRules`): `SolveLaunch` (flat = straight at the aim point; ballistic = the low arc; high-angle = the high plunging arc;
+  false when out of reach), fixed 1/120 s steps with exact constant-gravity kinematics (the same points at any frame rate; at most 0.5 s per
+  frame), arming by the flown distance.
+- **Actor + pool:** `UProjectileSubsystem::Fire` / `FireAt(FProjectileLaunch, Target)` take a parked `AProjectileActor` (or spawn one). Each step
+  sweeps a sphere (8 cm) against WorldStatic / WorldDynamic / Pawn / PhysicsBody / Vehicle / Destructible, the shooter ignored. Armed impact:
+  the direct share on the actor struck + `Explosions::Detonate` (`AProjectileActor::BlastSpecFor`: every actor in reach, the weapon's full-core
+  curve, plunging for a high-angle round); unarmed: a dud (the direct share as kinetic damage); past `max_flight_s`: an air burst (armed) or
+  gone. `OnProjectileFinished` reports each flight's end; the round goes back to the pool.
+- **Checks:** tests `CodexTactics.Weapons.Explosion.*` (Falloff, Occlusion, ArmorClass, Parity, Backblast) and `CodexTactics.Weapons.Projectile.*`
+  (Launch, FixedStep, Schema); `CodexTactics.ProjectileSmoke` (a flat round at a hound 25 m away, a high-angle round at a hound 40 m away, the
+  pool reuse; a projectile blast behind a wall x0.25, a plunging one ignoring the wall, a roof stopping it, the grenade ignoring the wall).
+
+## The RPG-7 (2026-11-09; the shared layer's first weapon; placeholder model; numbers proposed, pending the designer)
+
+- **Data** (`weapons_tuning.json` "weapons.rpg7", asset `/Game/Data/Weapons/DA_Weapon_rpg7`): `handling: launcher`, `kind: projectile`, a
+  flat rocket at 115 m/s, arming after 10 m (`min_range_m` 10: no target closer), self-destruct after 4.5 s; `base_damage` 140 = the blast's
+  base (4 m, full to 1.5 m, x0.15 at the edge), `explosion.direct_hit_damage` 60 on the actor struck, explosive, class **vehicle** (hurts hulls,
+  decision 1), armour penetration 0.8; one rocket in the tube, 3 in reserve, 4.5 s reload (it starts by itself after the shot); reach 150 m,
+  effective 100 m.
+- **Back-blast** (`explosion.back_blast_*`): a cone 8 m long, 30 degrees each side behind the shooter - anyone in it (mates too) takes
+  `back_blast_damage` 60 x (1 - distance / 8 m), unless a wall stands between. A wall closer than `back_blast_clearance_m` 2 m behind, or a
+  closed room (a roof over him + a wall within the 8 m behind), **refuses the shot** with a warning (`back_blast_refuses: true`; false = it
+  fires with the warning).
+- **Stance:** standing or kneeling, never prone (refused with a warning). Refusals in order: empty, prone, too close, back-blast
+  (`LauncherRules::Refusal`). A miss (the weapon's hit chance) puts the aim point 1.5 - 3.5 m off; the rocket still explodes where it lands.
+- **Who carries it:** any fighter can be the grenadier (the designer decides later): it is in the roster as `next` and in **no loadout yet**.
+  Dev: `CodexTactics.GiveWeapon rpg7 [squad index]` (the leader by default) adds it to the arsenal and puts it in his hands.
+- **Code:** `LauncherRules` (pure), `AOperativeCharacter::FireLauncherAt` / `LauncherShotAllowed` / `ApplyLauncherBackblast`
+  (`OperativeCharacterLauncher.cpp`; `ShootAtTarget` branches to it for a launcher) on `UProjectileSubsystem` + `Explosions::Detonate`.
+  The animation is the rifle's for now (handling `launcher` -> the standard layer). Not yet: the PMC / enemy AI using it, turn-based
+  specifics, the real model (Fab, the coordinator is choosing).
+- **Checks:** tests `CodexTactics.Weapons.Rpg.Data` / `.Rules`; `CodexTactics.RpgSmoke` (30 / 80 m hits through the shared blast, the back-blast
+  on a mate 2.5 m behind, one rocket reloaded, a wall behind / a closed room / prone / too close refused).
+
+## Mortar nests (2026-11-09; SQUAD_SIX_FIRE_TEAMS.md 7.3; placeholder visuals; numbers proposed, pending the designer)
+
+- **Fixed nests, both sides, not carried:** `AMortarNestActor`, spawned by `UMortarSubsystem` from the level JSON `"mortar_nests"`
+  (`[{"id", "side": "squad" | "pmc", "team": N, "pos": [x, y(, z)], "yaw", "crew": N, "ammo": N}]`; no z = dropped on the ground; a PMC nest
+  with `crew` gets its own commanded PMC team at its places). The combat lab (`L_FormationLabCombat.json`) has two test nests: `MORTAR_SQUAD`
+  near the start and an UNMANNED `MORTAR_PMC` in the far corner (unmanned so the lab smokes are not shelled; `CodexTactics.MortarCrewPmc 1`
+  gives it a crew). No Depot nests yet.
+- **Crew of three** (`mortar_nest.crew_needed`): `AssignCrew` sends a man to a free place round the tube (behind / beside it), holds him there
+  once he arrives (the formation no longer pulls him); he leaves the crew when he walks off (his own move order) or is more than
+  `crew_leave_m` from his place, or dies. Fewer than three at the nest = no fire - every round re-checks. A nest left with no crew of its side
+  changes side when the other side mans it (taken).
+- **The spotter rule (the same for both sides):** a nest fires only at a point that a living man of its side SEES now
+  (`UTacticalSightSubsystem::CanOperativeSee` at the point + `spot_height_m`), re-checked before every round: no spotter = no fire.
+- **Range band** 30 m .. 250 m (`min_range_m` / `max_range_m`; 250 m is the designer's guess - the combat lab is 120 x 120 m and the Depot
+  ~124 x 177 m, so 250 m reaches anywhere on today's maps; ~120-150 m would leave safe ground, a designer call).
+- **The round** (`mortar_nest.round`, the weapon schema): a high-angle projectile (110 m/s, `gravity_scale` 4 - about 5-6 s of flight at any
+  range in the band), blast 110 / 6 m (full to 2.5 m), explosive, class vehicle; through `Explosions::Detonate` as a plunging blast - walls and
+  side cover do not protect, only a roof. `interval_s` 3.5 between rounds, `rounds_per_order` 6, `ammo` 24.
+- **Bracketing (simplified):** the first round of a target lands `first_error_m` 15 m off (a random direction), each next one x `shrink` 0.55
+  (8.2, 4.5, 2.5 m ...) down to `min_error_m` 1.5 m; an aim point more than `same_target_m` 10 m from the last one starts the walk again.
+- **The player's orders (minimal, console):** `CodexTactics.MortarList`, `CodexTactics.MortarMan [nest] [squad indices]` (no indices = the
+  squad), `CodexTactics.MortarFire [nest] <x y [z] | cursor>` (refused with the reason: crew / ammo / too close / too far / nobody sees it),
+  `CodexTactics.MortarCease [nest]`. No HUD target picker yet (the grenade aim ghost could show the band later).
+- **The PMC commander:** each decision a manned nest of the team that is not firing scores the biggest cluster of enemies the team sees now
+  (`MortarRules::BestCluster`, `mortar_cluster_radius_cm` 8 m): `mortar_fire` 0.8 x min(1, cluster / `mortar_cluster_full` 3), 0 out of the
+  band; it orders fire at >= `mortar_threshold` 0.3 (one seen man: 0.27, no; two: 0.53, yes) - `pmc_commander.json`. Its crewmen get no
+  orders of their own (they stay at the tube).
+- **Checks:** tests `CodexTactics.Weapons.Mortar.*` (Checks, Bracketing, Round, PmcCluster, Placement); `CodexTactics.MortarSmoke` (a crew of
+  three walks rounds in on a seen point 80 m away - 15 / 8.2 / 4.5 / 2.5 m, 5.6 s flights; the open dummy hurt, the roofed one untouched; a man
+  off -> the fire stops, a crew of two refused; a point behind a wall refused (no spotter), 15 m refused; a PMC nest 70 m away shells the
+  spotted squad on its commander's own decision).

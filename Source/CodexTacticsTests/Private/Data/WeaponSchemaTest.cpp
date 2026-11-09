@@ -33,6 +33,7 @@ namespace WeaponSchemaTest
 		{ TEXT("pistol"), EWeaponKind::Hitscan },
 		{ TEXT("shotgun"), EWeaponKind::Hitscan },
 		{ TEXT("sniper_rifle"), EWeaponKind::Hitscan },
+		{ TEXT("rpg7"), EWeaponKind::Projectile }, // 2026-11-09: the RPG-7 (roster "next", no loadout yet)
 	};
 
 	/** The designer removed these (2026-11-08); their assets stay on disk, unreferenced. */
@@ -216,7 +217,7 @@ bool FWeaponSchemaEveryWeaponLoadsTest::RunTest(const FString&)
 	{
 		return false;
 	}
-	TestEqual(TEXT("the file lists the roster's five weapons"), FileWeapons->Values.Num(), static_cast<int32>(UE_ARRAY_COUNT(Weapons)));
+	TestEqual(TEXT("the file lists the roster's six weapons"), FileWeapons->Values.Num(), static_cast<int32>(UE_ARRAY_COUNT(Weapons)));
 	for (const TCHAR* Out : OutOfPlay)
 	{
 		TestFalse(FString::Printf(TEXT("%s: not in the file (out of play)"), Out), FileWeapons->HasField(Out));
@@ -289,6 +290,7 @@ bool FWeaponSchemaParityTest::RunTest(const FString&)
 		{
 			Old.Handling = HandlingName == TEXT("shotgun") ? EWeaponHandling::Shotgun
 				: HandlingName == TEXT("pistol") ? EWeaponHandling::Pistol // the pistol layer (2026-11-08)
+				: HandlingName == TEXT("launcher") ? EWeaponHandling::Launcher // the RPG-7 (2026-11-09)
 				: (HandlingName == TEXT("sniper_rifle") ? EWeaponHandling::SniperRifle : EWeaponHandling::Standard);
 		}
 		UWeaponDataAsset* Scratch = MakeScratch(Asset->MakeBaseStats());
@@ -317,11 +319,11 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponSchemaProjectFileTest, "CodexTactics.Wea
 
 bool FWeaponSchemaProjectFileTest::RunTest(const FString&)
 {
-	// What StartPlay does: the whole file onto the roster's five assets, schema v2, nothing rejected, no typo keys.
+	// What StartPlay does: the whole file onto the roster's six assets (the RPG-7 since 2026-11-09), schema v2, nothing rejected, no typo keys.
 	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath());
 	const WeaponTuning::FWeaponTuningReport& Report = WeaponTuning::GetLastReport();
 	TestEqual(TEXT("schema version 2"), Report.SchemaVersion, WeaponStatsRules::SchemaVersion);
-	TestEqual(TEXT("five weapons applied"), Report.Applied, 5);
+	TestEqual(TEXT("six weapons applied"), Report.Applied, 6);
 	TestEqual(TEXT("five weapons out of play"), Report.RosterOut, 5);
 	TestEqual(TEXT("nothing rejected"), Report.Rejected.Num(), 0);
 	TestEqual(TEXT("no unknown keys"), Report.Unknown.Num(), 0);
