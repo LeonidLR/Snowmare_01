@@ -73,7 +73,7 @@
     "bonus_multiplier": 1.5,
     "pairs": [
       { "from": "MARKSMAN", "to": "FROSTBITTEN", "ratio": 2 },
-      { "from": "SPITTER", "to": "CUTTER", "ratio": 1 }
+      { "from": "SPITTER", "to": "MILITARY_ZOMBIE", "ratio": 1 }
     ],
     "bonus_types": ["HOUND"],
     "suitability": {

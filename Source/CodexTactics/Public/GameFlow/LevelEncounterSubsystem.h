@@ -24,6 +24,8 @@ enum class EAmbushTrigger : uint8
 };
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnAmbushCombatStarted, EAmbushTrigger, Trigger);
+/** Every hostile contact reported (horde #12: UFirefightSubsystem counts the firefights), before the encounter rules act on it. */
+DECLARE_MULTICAST_DELEGATE_TwoParams(FOnHostileContactNative, EAmbushTrigger /*Trigger*/, AActor* /*Source*/);
 
 /**
  * Per-level encounter settings (user request 2026-10-06, UE-only).
@@ -95,6 +97,9 @@ public:
 
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Encounter")
 	FOnAmbushCombatStarted OnAmbushCombatStarted;
+
+	/** Every NotifyHostileContact call (any phase, any level: a fight that already runs too), first thing. */
+	FOnHostileContactNative OnHostileContact;
 
 private:
 	const FLevelCombatConfig* GetLevelConfig() const;

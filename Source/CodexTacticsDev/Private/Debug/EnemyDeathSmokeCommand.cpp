@@ -1,9 +1,10 @@
 // Dev-only console command for a headless check of enemy deaths on L_MovementTest:
 //   Scripts/smoke.ps1 -Command CodexTactics.EnemyDeathSmoke
-// Godot enemy_base.gd _die: the death clip plays and the body stays on its last frame until it is removed
-// (death_decay_delay); it must never return to the idle / locomotion pose. One enemy of each type with a Blueprint
-// (hound, frostbitten, cutter, brute) is killed, then hit a few more times (shots landing on the body); the
-// one-shot slot weight is sampled every 0.1 s until the actor is gone.
+// Godot enemy_base.gd _die: the death clip plays and the body stays on its last frame; it must never return to the idle / locomotion
+// pose. One enemy of each type with a Blueprint (hound, frostbitten, cutter, brute) is killed, then hit a few more times (shots landing
+// on the body); the one-shot slot weight is sampled every 0.1 s. Since 2026-11-08 (game designer: "corpses of ALL enemies must stay on
+// the ground", UCorpseSubsystem) a body with a death clip is no longer removed after death_decay_delay: it must still be there 10 s
+// later, frozen (AEnemyCharacter::FreezeCorpse) with the pose held; a body without a clip still goes.
 
 #include "CoreMinimal.h"
 
@@ -34,6 +35,7 @@ namespace EnemyDeathSmoke
 		float DeadFor = 0.f;
 		bool bHasClip = false;
 		bool bGone = false;
+		bool bFrozen = false;
 	};
 
 	struct FState
@@ -92,6 +94,7 @@ namespace EnemyDeathSmoke
 			}
 			const UEnemyAnimInstance* Anim = Cast<UEnemyAnimInstance>(Enemy->GetMesh()->GetAnimInstance());
 			const float Weight = Anim ? Anim->GetSlotMontageGlobalWeight(Anim->OneShotSlot) : 0.f;
+			Tracked.bFrozen = Enemy->IsCorpseFrozen();
 			if (Tracked.DeadFor > 0.35f)
 			{
 				Tracked.MinHeldWeight = FMath::Min(Tracked.MinHeldWeight, Weight);
@@ -101,7 +104,7 @@ namespace EnemyDeathSmoke
 				Tracked.Timeline += FString::Printf(TEXT(" %.1fs:%.2f"), Tracked.DeadFor, Weight);
 			}
 		}
-		if (!bAllGone && State.Time < 20.f)
+		if (!bAllGone && State.Time < 12.f)
 		{
 			return true;
 		}
@@ -109,10 +112,12 @@ namespace EnemyDeathSmoke
 		for (const FTracked& Tracked : State.Enemies)
 		{
 			const bool bHeld = !Tracked.bHasClip || Tracked.MinHeldWeight > 0.9f;
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s death clip=%d, removed=%d after %.1f s, one-shot weight%s -> %s"),
-				bHeld && Tracked.bGone ? TEXT("ok  ") : TEXT("FAIL"), *Name(Tracked.Type), Tracked.bHasClip ? 1 : 0,
-				Tracked.bGone ? 1 : 0, Tracked.DeadFor, *Tracked.Timeline, bHeld ? TEXT("held") : TEXT("RETURNED TO THE GRAPH"));
-			bOk &= bHeld && Tracked.bGone;
+			// A body with a death clip stays (frozen); one without still goes.
+			const bool bFate = Tracked.bHasClip ? !Tracked.bGone && Tracked.bFrozen : Tracked.bGone;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s death clip=%d, removed=%d, frozen=%d after %.1f s, one-shot weight%s -> %s"),
+				bHeld && bFate ? TEXT("ok  ") : TEXT("FAIL"), *Name(Tracked.Type), Tracked.bHasClip ? 1 : 0,
+				Tracked.bGone ? 1 : 0, Tracked.bFrozen ? 1 : 0, Tracked.DeadFor, *Tracked.Timeline, bHeld ? TEXT("held") : TEXT("RETURNED TO THE GRAPH"));
+			bOk &= bHeld && bFate;
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("EnemyDeathSmoke"));

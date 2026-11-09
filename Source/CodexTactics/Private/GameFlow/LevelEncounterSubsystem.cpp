@@ -83,6 +83,7 @@ bool ULevelEncounterSubsystem::IsAmbushCombatStart() const
 
 bool ULevelEncounterSubsystem::NotifyHostileContact(EAmbushTrigger Trigger, AActor* Source)
 {
+	OnHostileContact.Broadcast(Trigger, Source); // horde #12: the firefight count sees every contact
 	UWorld* World = GetWorld();
 	UGameFlowSubsystem* Flow = World ? World->GetSubsystem<UGameFlowSubsystem>() : nullptr;
 	// 2026-10-21: a skirmish is on - another level enemy that engages the squad joins it (the rest keep patrolling).

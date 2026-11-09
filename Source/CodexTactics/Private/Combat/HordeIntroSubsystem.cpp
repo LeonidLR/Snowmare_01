@@ -84,7 +84,11 @@ void UHordeIntroSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCo
 		}
 		return;
 	}
-	if (Stage == EHordeIntroStage::Waiting && !Flow->IsAwaitingHordeIntro())
+	if (Stage == EHordeIntroStage::Waiting && bExternalHorde && Phase == ECodexGamePhase::WaveCombat && CombatMode == ECodexCombatMode::RealTime)
+	{
+		return; // horde #12: an external horde never waits on the flow's horde-intro flag
+	}
+	if (Stage == EHordeIntroStage::Waiting && (bExternalHorde || !Flow->IsAwaitingHordeIntro()))
 	{
 		if (CombatMode == ECodexCombatMode::TacticalPause)
 		{
@@ -109,8 +113,40 @@ void UHordeIntroSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCo
 	}
 	if (Stage == EHordeIntroStage::Idle && Flow->IsAwaitingHordeIntro())
 	{
+		bExternalHorde = false;
 		BeginWaiting();
 	}
+}
+
+bool UHordeIntroSubsystem::BeginExternalHorde(const TArray<AEnemyCharacter*>& Members)
+{
+	UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	if (Stage != EHordeIntroStage::Idle || !Flow || Flow->GetPhase() != ECodexGamePhase::WaveCombat
+		|| Flow->GetCombatMode() != ECodexCombatMode::RealTime || Members.IsEmpty())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[HordeIntro] external horde: no intro (%s)"), Stage != EHordeIntroStage::Idle ? TEXT("another intro runs")
+			: TEXT("the fight is not in real time"));
+		return false;
+	}
+	Config = HordeIntroRules::GetConfig();
+	bExternalHorde = true;
+	ExternalMembers.Reset();
+	for (AEnemyCharacter* Member : Members)
+	{
+		ExternalMembers.Add(Member);
+	}
+	++ExternalIntroCount;
+	++IntroCount;
+	WaveIndex = Flow->GetWaveIndex();
+	Stage = EHordeIntroStage::Waiting;
+	GameSinceSpawn = 0.f;
+	MassRunningSeconds = 0.f;
+	bMassFormed = false;
+	CurrentShot = INDEX_NONE;
+	Shots.Reset();
+	bPreTriggerSlowed = false; // the fight is on already: no pre-trigger slow-down
+	UE_LOG(LogCodexTactics, Display, TEXT("[HordeIntro] external horde of %d (firefights): waiting for its running mass"), ExternalMembers.Num());
+	return true;
 }
 
 void UHordeIntroSubsystem::BeginWaiting()
@@ -209,7 +245,8 @@ void UHordeIntroSubsystem::Tick(float DeltaTime)
 	if (Stage == EHordeIntroStage::Waiting)
 	{
 		const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-		if (!Flow || !Flow->IsAwaitingHordeIntro())
+		const bool bStillWaiting = Flow && (bExternalHorde ? Flow->GetPhase() == ECodexGamePhase::WaveCombat : Flow->IsAwaitingHordeIntro());
+		if (!bStillWaiting)
 		{
 			Stage = EHordeIntroStage::Idle; // cancelled (smokes / the bot)
 			bPreTriggerSlowed = false;
@@ -301,7 +338,9 @@ void UHordeIntroSubsystem::GiveWarning(bool bFlyover)
 	// User decision 2026-10-26: the warning keeps the fight in real time (the pause only on the player's Space); the old rule
 	// (Codex.HordeIntro.AutoPause 1) opens the free pause here.
 	bOpeningPause = true;
-	const EGameFlowResult Result = !Flow ? EGameFlowResult::WrongPhase : (Config.bAutoPause ? Flow->EnterFreeTacticalPause() : Flow->NotifyHordeWarned());
+	const EGameFlowResult Result = !Flow ? EGameFlowResult::WrongPhase
+		: bExternalHorde ? (Flow->GetPhase() == ECodexGamePhase::WaveCombat ? EGameFlowResult::Ok : EGameFlowResult::WrongPhase) // horde #12
+		: (Config.bAutoPause ? Flow->EnterFreeTacticalPause() : Flow->NotifyHordeWarned());
 	bOpeningPause = false;
 	const bool bWasSlowed = bPreTriggerSlowed;
 	bPreTriggerSlowed = false;
@@ -310,7 +349,7 @@ void UHordeIntroSubsystem::GiveWarning(bool bFlyover)
 		Stage = EHordeIntroStage::Idle;
 		return;
 	}
-	FlyoverMode = Config.bAutoPause ? ECodexCombatMode::TacticalPause : ECodexCombatMode::RealTime;
+	FlyoverMode = Config.bAutoPause && !bExternalHorde ? ECodexCombatMode::TacticalPause : ECodexCombatMode::RealTime;
 	++WarningCount;
 	ShowAlert();
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
@@ -680,6 +719,19 @@ FVector UHordeIntroSubsystem::SquadCentre() const
 void UHordeIntroSubsystem::GatherEnemies(TArray<AEnemyCharacter*>& OutEnemies) const
 {
 	OutEnemies.Reset();
+	if (bExternalHorde)
+	{
+		// Horde #12: the firefight horde's own members (the skirmish's other enemies are not the horde).
+		for (const TWeakObjectPtr<AEnemyCharacter>& Member : ExternalMembers)
+		{
+			AEnemyCharacter* Enemy = Member.Get();
+			if (IsValid(Enemy) && !Enemy->IsDying() && (!Enemy->GetHealthComponent() || Enemy->GetHealthComponent()->IsAlive()))
+			{
+				OutEnemies.Add(Enemy);
+			}
+		}
+		return;
+	}
 	// 2026-10-22: the fight's own enemies (the wave); the level's other enemies (patrols elsewhere on the lake, parked ones) are
 	// never part of the horde intro. Every registered enemy only when the fight has none (a test spawn outside a wave).
 	if (const UWaveSubsystem* Waves = GetWorld() ? GetWorld()->GetSubsystem<UWaveSubsystem>() : nullptr)

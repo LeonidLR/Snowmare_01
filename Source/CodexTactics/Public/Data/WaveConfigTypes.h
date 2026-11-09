@@ -54,6 +54,13 @@ struct CODEXTACTICS_API FEnemySpawnEntry
 	/** "environment_lock": true - the weather / time-of-day roster never changes this entry (Wave Editor row lock; EnvironmentRosterRules). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn")
 	bool bEnvironmentLocked = false;
+
+	/**
+	 * A variant Blueprint of EnemyType (ACodexTacticsGameMode::EnemyVariantClasses, e.g. "MilitaryZombie" = BP_Enemy_MilitaryZombie, a
+	 * Frostbitten). Set by the weather roster's pairs (horde #12, 2026-11-09: SPITTER -> MILITARY_ZOMBIE); NAME_None = the archetype's own.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Wave|Spawn")
+	FName Variant;
 };
 
 USTRUCT(BlueprintType)
@@ -262,9 +269,24 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	float PatrolSearchSeconds = -1.f;
 
-	/** "horde_enabled": false switches the horde after a long real-time fight off on this level (UHordeSubsystem). */
+	/** "horde_enabled": false switches the horde off on this level (both: after a long real-time fight, after N firefights; UHordeSubsystem). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	bool bHordeEnabled = true;
+
+	/**
+	 * "horde_after_firefights" (horde #12, game designer 2026-11-02 / 11-03 / 11-08): the horde comes after this many firefights IN A ROW on
+	 * this level (slipping past an enemy group undetected resets the streak; FirefightRules, UFirefightSubsystem). Default 6, min 1;
+	 * edited by the Training Ground waves tab.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level", meta = (ClampMin = "1"))
+	int32 HordeAfterFirefights = 6;
+
+	/**
+	 * "corpse_cap" (game designer 2026-11-08: "corpses of ALL enemies must stay on the ground"): at most this many enemy bodies stay on the
+	 * level; above it the oldest one farthest from the squad fades out (CorpseRules, UCorpseSubsystem). Default 150, min 1.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level", meta = (ClampMin = "1"))
+	int32 CorpseCap = 150;
 
 	/**
 	 * "ambush_fight": "skirmish" (2026-10-21, user: "they attack, we kill them and play on - no waves at this stage"): an ambush fight of

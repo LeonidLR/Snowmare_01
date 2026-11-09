@@ -146,7 +146,7 @@ int32 ACampfireActor::AlertPatrols()
 	TArray<AEnemyCharacter*> Heard;
 	for (TActorIterator<AEnemyCharacter> It(GetWorld()); It; ++It)
 	{
-		if (It->IsOnPatrol() && !It->IsSearching() && FVector::Dist2D(It->GetActorLocation(), GetActorLocation()) <= Radius)
+		if (!It->IsDying() && It->IsOnPatrol() && !It->IsSearching() && FVector::Dist2D(It->GetActorLocation(), GetActorLocation()) <= Radius)
 		{
 			Heard.Add(*It);
 		}

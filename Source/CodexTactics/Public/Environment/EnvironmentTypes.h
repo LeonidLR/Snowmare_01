@@ -56,9 +56,16 @@ struct CODEXTACTICS_API FEnvironmentRosterPair
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
 	EEnemyArchetype To = EEnemyArchetype::Frostbitten;
 
-	/** Enemies of To per substituted From (MARKSMAN -> 2 FROSTBITTEN, SPITTER -> 1 CUTTER). */
+	/** Enemies of To per substituted From (MARKSMAN -> 2 FROSTBITTEN, SPITTER -> 1 MILITARY_ZOMBIE). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster", meta = (ClampMin = "1"))
 	int32 Ratio = 1;
+
+	/**
+	 * To's variant Blueprint (environment.json "to": "MILITARY_ZOMBIE" = Frostbitten + "MilitaryZombie", ACodexTacticsGameMode::EnemyVariantClasses;
+	 * horde #12 / task #34, 2026-11-09: the SPITTER pair swaps into the Military Zombie); NAME_None = To's own Blueprint.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Roster")
+	FName ToVariant;
 };
 
 /**

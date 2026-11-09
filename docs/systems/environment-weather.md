@@ -79,7 +79,8 @@ clarity Clear 1.0, Overcast 0.8, Snowfall 0.5, Blizzard 0.2). One number feeds t
 - Visibility bands: Long >= 0.60 ("Long sight", as written), Mid 0.35-0.59 ("Grey day": 50 % MARKSMAN -> 2 FROSTBITTEN), Close 0.15-0.34
   ("White veil": all MARKSMAN -> 2 FROSTBITTEN, 50 % SPITTER -> CUTTER), Blind < 0.15 ("White dark": all MARKSMAN -> 2 FROSTBITTEN, all SPITTER -> CUTTER);
   overlay "Night hunt" HOUND x1.5 in the Night phase; BRUTE never changes.
-- Pairs: MARKSMAN / FROSTBITTEN (1 -> 2), SPITTER / CUTTER (1 -> 1). Custom presets = the same rule kinds (substitute from -> to with share and ratio,
+- Pairs: MARKSMAN / FROSTBITTEN (1 -> 2), SPITTER / CUTTER (1 -> 1) (2026-11-09, horde #12 / task #34: SPITTER -> MILITARY_ZOMBIE 1 -> 1 -
+  a pair's "to" may name a variant: `FEnvironmentRosterPair::ToVariant` -> `FEnemySpawnEntry::Variant` -> the variant Blueprint). Custom presets = the same rule kinds (substitute from -> to with share and ratio,
   count multiplier, ban), assignable per cell for a level or per wave. Priority: Wave Editor row lock > wave preset > level matrix > global matrix, then
   wave modifiers and `max_simultaneous_enemies`. Conditions are sampled once at wave start.
 

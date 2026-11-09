@@ -278,6 +278,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	bool IsDying() const { return bIsDying; }
 
+	/**
+	 * Corpses stay (game designer 2026-11-08, UCorpseSubsystem): the body lying still in its death pose costs nothing more - its AI
+	 * controller destroyed, no actor / movement / component tick (anims paused on the final pose), no collision for pawns, clicks or
+	 * traces, the vision cone hidden, out of the enemy registry; it stays rendered. Once (after HandleDied).
+	 */
+	void FreezeCorpse();
+
+	/** FreezeCorpse ran. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
+	bool IsCorpseFrozen() const { return bCorpseFrozen; }
+
+	/** The body is still on its way down (killed in the air / a drop link: the crash landing pending, or falling). */
+	bool IsCorpseFalling() const;
+
+	/** The death clip (or the knockdown's Death_*) holds its last frame: no montage advancing, no blend running (UEnemyAnimInstance). */
+	bool IsDeathPoseSettled() const;
+
 	/** Sprint 14 knockdown (Frostbitten / Brute only; the Brute has heavy poise; TANDEM request #12). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Knockdown")
 	TObjectPtr<class UKnockdownComponent> KnockdownComponent;
@@ -1016,6 +1033,8 @@ protected:
 	float JumpFlightDuration = 0.7f;
 	bool bJumpDamageDealt = false;
 	bool bAirborneDeath = false;
+	/** FreezeCorpse ran (corpses stay, 2026-11-08). */
+	bool bCorpseFrozen = false;
 	TWeakObjectPtr<AActor> JumpTarget;
 	/** Bug 06 (2026-11-01): the counters behind GetMeleeWallHolds / GetLeapWallRefusals / GetLeapsLaunched, and the last target logged. */
 	int32 MeleeWallHolds = 0;

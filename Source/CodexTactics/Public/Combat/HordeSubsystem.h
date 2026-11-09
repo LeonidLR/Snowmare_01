@@ -22,6 +22,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHordeReleased, int32, HordeInd
  * for audio / VFX) and the optional "warning_sound". Data: Content/Data/AI/horde.json + the level JSON "horde_enabled" /
  * "horde" (HordeRules::ResolveForLevel); console Codex.Horde.TriggerSeconds / Codex.Horde.Enabled, command
  * CodexTactics.Horde.Release.
+ * Horde #12 (game designer 2026-11-02 / 11-03 / 11-08): the horde also comes after "horde_after_firefights" firefights IN A ROW on the level
+ * (UFirefightSubsystem counts them, RequestFirefightHorde): the HQ warning at once, the horde Firefight.WarningLeadSeconds later (running
+ * game time; in exploration the fight starts with it), then the horde intro (UHordeIntroSubsystem::BeginExternalHorde: the «HORDE INCOMING»
+ * alert, the flyover once per level). "horde_enabled": false = never (neither rule).
  */
 UCLASS()
 class CODEXTACTICS_API UHordeSubsystem : public UTickableWorldSubsystem
@@ -73,6 +77,24 @@ public:
 	/** Re-reads the config for the current level (start of every fight; smokes after changing the console values). */
 	void RefreshConfig();
 
+	/** Smokes: horde.json keys applied over the level's config at every RefreshConfig (empty = none); refreshes now. */
+	void SetDevOverrideJson(const FString& Json) { DevOverrideJson = Json; RefreshConfig(); }
+
+	/**
+	 * Horde #12: the firefight streak reached the level's threshold (UFirefightSubsystem). Posts the HQ warning now and releases the horde
+	 * Firefight.WarningLeadSeconds of running game time later (the tactical pause / turn-based / a dialogue stop the countdown; in
+	 * exploration the fight starts with it). False when the horde is off on this level or one is already pending.
+	 */
+	bool RequestFirefightHorde();
+
+	/** A firefight horde is announced and not yet out. */
+	bool IsFirefightHordePending() const { return FirefightHordeCountdown >= 0.f; }
+	/** Seconds of the countdown left (-1: none pending). */
+	float GetFirefightHordeSecondsLeft() const { return FirefightHordeCountdown; }
+	/** Firefight hordes announced / released on this level. */
+	int32 GetFirefightHordesAnnounced() const { return FirefightHordesAnnounced; }
+	int32 GetFirefightHordesReleased() const { return FirefightHordesReleased; }
+
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Horde")
 	FOnHordeReleased OnHordeReleased;
 
@@ -90,6 +112,15 @@ private:
 	int32 SpawnHorde(int32 HordeIndex);
 	/** Seconds until the next attempt after a failed one (no spawn point). */
 	float RetryCooldown = 0.f;
+	/** Horde #12: counts the firefight horde's warning down (running game time); spawns it at 0. */
+	void TickFirefightHorde(float DeltaTime);
+	/** Horde #12: the firefight horde now (starts the fight from exploration); false = try again shortly. */
+	bool ReleaseFirefightHorde();
+	FString DevOverrideJson;
+	float FirefightHordeCountdown = -1.f;
+	float FirefightRetryCooldown = 0.f;
+	int32 FirefightHordesAnnounced = 0;
+	int32 FirefightHordesReleased = 0;
 
 	FHordeConfig Config;
 	FHordeTimer Timer;

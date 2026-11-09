@@ -3,7 +3,12 @@
 // Godot reference: Scenes/movements/enemy_base.gd (take_damage, _die), enemy_cutter.gd; knockdown Sprint 14 (UE-only).
 
 #include "Characters/EnemyCharacter.h"
+#include "Characters/CorpseSubsystem.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/KnockdownComponent.h"
+#include "Combat/VisionConeComponent.h"
+#include "Falls/LedgeFallComponent.h"
+#include "Particles/ParticleSystemComponent.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Characters/EnemyTacticsSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -120,6 +125,7 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 	}
 
 	bIsDying = true;
+	const bool bDownAtDeath = IsKnockedDown(); // the knockdown plays its own Death_* from the ground (a death pose too)
 	Tags.Remove(FName(TEXT("Enemy")));
 	if (UEnemyTacticsSubsystem* Tactics = GetWorld()->GetSubsystem<UEnemyTacticsSubsystem>())
 	{
@@ -201,12 +207,80 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 
 	// Godot enemy_base.gd _die: with a death clip the body stays death_decay_delay seconds, otherwise it goes quickly.
 	float LifeSpan = 2.0f;
+	bool bDeathPose = false;
 	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
 	{
 		Anim->NotifyDeath();
 		LifeSpan = Anim->HasDeathAnimation() ? Anim->DeathDecayDelay : LifeSpan;
+		bDeathPose = Anim->HasDeathAnimation() || bDownAtDeath;
 	}
-	SetLifeSpan(LifeSpan);
+	// Game designer 2026-11-08: every enemy body with a death pose stays on the ground (UCorpseSubsystem freezes it once it has settled and
+	// lies on the floor; the level's corpse_cap fades the oldest far one). Without a death pose (a placeholder body) it still goes.
+	UCorpseSubsystem* Corpses = bDeathPose && GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr;
+	if (!Corpses || !Corpses->RegisterCorpse(this))
+	{
+		SetLifeSpan(LifeSpan);
+	}
+}
+
+bool AEnemyCharacter::IsCorpseFalling() const
+{
+	const UCharacterMovementComponent* Move = GetCharacterMovement();
+	return bAirborneDeath || (Move && Move->IsFalling()) || (LedgeFall && LedgeFall->IsBusy());
+}
+
+bool AEnemyCharacter::IsDeathPoseSettled() const
+{
+	const UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	return !Anim || Anim->IsDeathPoseSettled();
+}
+
+void AEnemyCharacter::FreezeCorpse()
+{
+	if (bCorpseFrozen || !bIsDying)
+	{
+		return;
+	}
+	bCorpseFrozen = true;
+	bAirborneDeath = false;
+	// No brain left: the AI controller goes (its path following, perception, state tree ticks with it).
+	if (AController* Brain = GetController())
+	{
+		Brain->UnPossess();
+		Brain->Destroy();
+	}
+	if (UCharacterMovementComponent* Move = GetCharacterMovement())
+	{
+		Move->StopMovementImmediately();
+		Move->DisableMovement();
+	}
+	if (USkeletalMeshComponent* Body = GetMesh())
+	{
+		Body->bPauseAnims = true; // the final pose stays on screen
+	}
+	if (VisionCone)
+	{
+		VisionCone->SetVisibility(false, true);
+	}
+	// Nothing on the body ticks any more; nothing collides with it (the squad walks over it, clicks and shots go through); still rendered.
+	ForEachComponent<UActorComponent>(false, [](UActorComponent* Component)
+	{
+		Component->SetComponentTickEnabled(false);
+		if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Component))
+		{
+			Primitive->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+		if (UFXSystemComponent* Effect = Cast<UFXSystemComponent>(Component))
+		{
+			Effect->Deactivate();
+		}
+	});
+	SetActorTickEnabled(false);
+	// Out of the per-frame enemy queries (targeting, sight, HUD, snow, pack tactics): a corpse is no enemy.
+	if (UEnemyRegistrySubsystem* Registry = GetWorld() ? GetWorld()->GetSubsystem<UEnemyRegistrySubsystem>() : nullptr)
+	{
+		Registry->UnregisterEnemy(this);
+	}
 }
 
 void AEnemyCharacter::Landed(const FHitResult& Hit)

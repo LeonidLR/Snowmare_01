@@ -47,6 +47,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Wave")
 	AEnemyCharacter* SpawnEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator);
 
+	/** SpawnEnemy (joins the fight) of a variant Blueprint of the archetype (SpawnLevelEnemy's Variant; the horde, the roster's swaps). */
+	AEnemyCharacter* SpawnEnemyVariant(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation, FName Variant);
+
 	/**
 	 * Spawns an enemy that is NOT part of the current fight (combat lab, docs/design/COMBAT_LAB.md: the pressure's patrols / ambushers are
 	 * level enemies spawned at runtime): it is not counted as a living enemy of the wave / skirmish until it engages the squad

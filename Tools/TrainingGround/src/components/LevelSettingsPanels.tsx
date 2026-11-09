@@ -241,7 +241,7 @@ export const LevelHordePanel: React.FC<PanelProps> = ({ config, onChange }) => {
         </label>
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
-        UE: орда после N перестрелок в реальном времени (horde_after_firefights, default 6, min 1).
+        UE: орда после N перестрелок ПОДРЯД (horde_after_firefights, default 6, min 1); проскользнуть мимо группы врагов незамеченным — счёт с нуля; horde_enabled: false — никогда.
       </p>
       <Errors errors={errors} />
     </div>

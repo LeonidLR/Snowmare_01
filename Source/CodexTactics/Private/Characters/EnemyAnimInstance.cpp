@@ -180,6 +180,23 @@ void UEnemyAnimInstance::NotifyDeath()
 	}
 }
 
+bool UEnemyAnimInstance::IsDeathPoseSettled() const
+{
+	if (!bDeathPlayed)
+	{
+		return false;
+	}
+	for (const FAnimMontageInstance* Instance : MontageInstances)
+	{
+		// A held death clip stops advancing at its end (bPlaying false, no auto blend-out); anything still playing or blending is not settled.
+		if (Instance && Instance->IsValid() && (Instance->IsPlaying() || !Instance->GetBlend().IsComplete()))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 UAnimMontage* UEnemyAnimInstance::PlayOneShot(UAnimSequenceBase* Clip, float PlayRate, float StartTime, bool bHold)
 {
 	if (!Clip)

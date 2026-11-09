@@ -83,6 +83,7 @@ TArray<FEnemySpawnEntry> EnvironmentRosterRules::ResolveSpawns(const FEnvironmen
 				const int32 Ratio = FMath::Max(1, Pair->Ratio);
 				FEnemySpawnEntry Swap; // the type's own stats: custom stats belong to the written type
 				Swap.EnemyType = Pair->To;
+				Swap.Variant = Pair->ToVariant; // horde #12: "MILITARY_ZOMBIE" = Frostbitten + its Blueprint
 				Swap.Count = Moved * Ratio;
 				Swap.SpawnLane = Source.SpawnLane;
 				Swap.SpawnDelaySec = Source.SpawnDelaySec;
@@ -93,7 +94,8 @@ TArray<FEnemySpawnEntry> EnvironmentRosterRules::ResolveSpawns(const FEnvironmen
 				if (OutLog)
 				{
 					OutLog->Add(FString::Printf(TEXT("%s %.2f < %.1f: %d -> %d %s"), RosterTypeName(Entry.EnemyType), Score,
-						Share >= 1.f ? Roster.AllBelow : Roster.HalfBelow, Moved, Swap.Count, RosterTypeName(Pair->To)));
+						Share >= 1.f ? Roster.AllBelow : Roster.HalfBelow, Moved, Swap.Count,
+						Pair->ToVariant.IsNone() ? RosterTypeName(Pair->To) : *Pair->ToVariant.ToString()));
 				}
 			}
 		}

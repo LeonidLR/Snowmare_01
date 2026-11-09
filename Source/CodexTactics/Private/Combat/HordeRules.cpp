@@ -1,6 +1,8 @@
 #include "Combat/HordeRules.h"
 #include "Data/LevelJsonRules.h"
 
+#include "CodexTactics.h"
+
 #include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -83,6 +85,16 @@ namespace HordeRules
 	TArray<EEnemyArchetype> BuildComposition(const FHordeConfig& Config, int32 Total)
 	{
 		TArray<EEnemyArchetype> Result;
+		for (const FPressureEnemyType& Member : BuildMembers(Config, Total))
+		{
+			Result.Add(Member.Type);
+		}
+		return Result;
+	}
+
+	TArray<FPressureEnemyType> BuildMembers(const FHordeConfig& Config, int32 Total)
+	{
+		TArray<FPressureEnemyType> Result;
 		float WeightSum = 0.f;
 		for (const FHordeMixEntry& Entry : Config.Composition)
 		{
@@ -94,7 +106,7 @@ namespace HordeRules
 		}
 		if (WeightSum <= 0.f)
 		{
-			Result.Init(EEnemyArchetype::FrostHound, Total);
+			Result.Init(FPressureEnemyType(EEnemyArchetype::FrostHound), Total);
 			return Result;
 		}
 		// Largest remainder: floor of each share, the rest to the biggest fractions (ties: list order).
@@ -119,10 +131,34 @@ namespace HordeRules
 		{
 			for (int32 Count = 0; Count < Counts[Index]; ++Count)
 			{
-				Result.Add(Config.Composition[Index].Type);
+				Result.Add(FPressureEnemyType(Config.Composition[Index].Type, Config.Composition[Index].Variant));
 			}
 		}
 		return Result;
+	}
+
+	bool IsAllowedHordeType(EEnemyArchetype Type)
+	{
+		return Type != EEnemyArchetype::Spitter && Type != EEnemyArchetype::Base;
+	}
+
+	bool ParseCompositionKey(const FString& Key, FHordeMixEntry& OutEntry)
+	{
+		FPressureEnemyType Variant;
+		if (CombatPressureRules::ParseVariantKey(Key, Variant))
+		{
+			OutEntry.Type = Variant.Type;
+			OutEntry.Variant = Variant.Variant;
+			return true;
+		}
+		EEnemyArchetype Type = EEnemyArchetype::FrostHound;
+		if (!LevelJsonRules::ParseEnemyType(Key, Type) || !IsAllowedHordeType(Type))
+		{
+			return false;
+		}
+		OutEntry.Type = Type;
+		OutEntry.Variant = NAME_None;
+		return true;
 	}
 
 	FVector ClusterOffset(int32 Index, int32 Count, float ClusterRadiusCm)
@@ -174,7 +210,13 @@ namespace HordeRules
 			{
 				FHordeMixEntry MixEntry;
 				double Weight = 0.0;
-				if (LevelJsonRules::ParseEnemyType(Entry.Key, MixEntry.Type) && Entry.Value.IsValid() && Entry.Value->TryGetNumber(Weight) && Weight > 0.0)
+				if (!ParseCompositionKey(Entry.Key, MixEntry))
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[Horde] composition: '%s' skipped (unknown, or the Spitter - the Military Zombie took its place)"),
+						*Entry.Key);
+					continue;
+				}
+				if (Entry.Value.IsValid() && Entry.Value->TryGetNumber(Weight) && Weight > 0.0)
 				{
 					MixEntry.Weight = static_cast<float>(Weight);
 					Parsed.Add(MixEntry);
@@ -221,6 +263,41 @@ namespace HordeRules
 		{
 			Config.WarningSound = Text;
 		}
+		// Horde #12: the firefight count (FirefightRules).
+		FFirefightConfig& Fire = Config.Firefight;
+		if (Json.TryGetNumberField(TEXT("firefight_lost_contact_seconds"), Number))
+		{
+			Fire.LostContactSeconds = FMath::Max(1.f, static_cast<float>(Number));
+		}
+		if (Json.TryGetNumberField(TEXT("firefight_contact_range_m"), Number))
+		{
+			Fire.ContactRangeCm = FMath::Max(0.f, static_cast<float>(Number) * 100.f);
+		}
+		if (Json.TryGetBoolField(TEXT("firefight_slip_past_resets"), Bool))
+		{
+			Fire.bSlipPastResets = Bool;
+		}
+		if (Json.TryGetNumberField(TEXT("firefight_slip_min_reach_m"), Number))
+		{
+			Fire.SlipMinReachCm = FMath::Max(0.f, static_cast<float>(Number) * 100.f);
+		}
+		if (Json.TryGetNumberField(TEXT("firefight_slip_max_reach_m"), Number))
+		{
+			Fire.SlipMaxReachCm = FMath::Max(0.f, static_cast<float>(Number) * 100.f);
+		}
+		Fire.SlipMaxReachCm = FMath::Max(Fire.SlipMaxReachCm, Fire.SlipMinReachCm);
+		if (Json.TryGetNumberField(TEXT("firefight_slip_exit_factor"), Number))
+		{
+			Fire.SlipExitFactor = FMath::Max(1.f, static_cast<float>(Number));
+		}
+		if (Json.TryGetNumberField(TEXT("firefight_warning_seconds"), Number))
+		{
+			Fire.WarningLeadSeconds = FMath::Max(0.f, static_cast<float>(Number));
+		}
+		if (Json.TryGetNumberField(TEXT("firefight_hint_before"), Number))
+		{
+			Fire.HintFirefightsBefore = FMath::Max(0, FMath::RoundToInt(Number));
+		}
 	}
 
 	bool ApplyJsonText(const FString& Text, FHordeConfig& Config)
@@ -250,9 +327,10 @@ namespace HordeRules
 		return Config;
 	}
 
-	FHordeConfig ResolveForLevel(const FHordeConfig& Defaults, bool bLevelHordeEnabled, const FString& LevelOverrideJson)
+	FHordeConfig ResolveForLevel(const FHordeConfig& Defaults, bool bLevelHordeEnabled, const FString& LevelOverrideJson, int32 LevelAfterFirefights)
 	{
 		FHordeConfig Config = Defaults;
+		Config.AfterFirefights = FMath::Max(1, LevelAfterFirefights);
 		if (!LevelOverrideJson.IsEmpty())
 		{
 			ApplyJsonText(LevelOverrideJson, Config);

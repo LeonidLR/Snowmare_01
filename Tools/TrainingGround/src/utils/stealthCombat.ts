@@ -125,14 +125,26 @@ export const HORDE_BUILTIN: JsonObject = {
   apply_wave_modifiers: true,
   warning_seconds: 6,
   warning_sound: '',
+  // Horde #12 (2026-11-09): the firefight count (FFirefightConfig, Source/CodexTactics/Public/Combat/FirefightRules.h).
+  firefight_lost_contact_seconds: 20,
+  firefight_contact_range_m: 40,
+  firefight_slip_past_resets: true,
+  firefight_slip_min_reach_m: 15,
+  firefight_slip_max_reach_m: 40,
+  firefight_slip_exit_factor: 1.25,
+  firefight_warning_seconds: 10,
+  firefight_hint_before: 1,
 };
 
-/** Level-JSON enemy types the horde can spawn (LevelJsonRules::ParseEnemyType; HOUND is an alias of FROST_HOUND). */
+/**
+ * Level-JSON enemy types the horde can spawn (HordeRules::ParseCompositionKey; HOUND is an alias of FROST_HOUND). Horde #12 (2026-11-09):
+ * MILITARY_ZOMBIE = the Frostbitten variant Blueprint; the SPITTER is refused by the game (it stays in the stage waves only).
+ */
 export const HORDE_ARCHETYPES: { key: string; label: string }[] = [
   { key: 'FROST_HOUND', label: 'Ледяная гончая' },
   { key: 'FROSTBITTEN', label: 'Промёрзший' },
   { key: 'BRUTE', label: 'Ледяной громила' },
-  { key: 'SPITTER', label: 'Плеватель' },
+  { key: 'MILITARY_ZOMBIE', label: 'Военный зомби (вариант Промёрзшего)' },
   { key: 'CUTTER', label: 'Механо-гончая Cutter' },
   { key: 'MARKSMAN', label: 'Снайпер' },
   { key: 'CRYO_DRONE', label: 'Крио-дрон' },
@@ -148,6 +160,13 @@ export const HORDE_NUMBER_FIELDS: NumField[] = [
   { key: 'cluster_radius_m', label: 'Радиус группы', unit: 'м', hint: 'орда собирается в этом радиусе от точки появления', step: 0.5, min: 0, max: 50 },
   { key: 'spawn_samples', label: 'Проб точек', unit: 'шт', hint: 'случайных кандидатов на навмеше (1–256)', step: 1, min: 1, max: 256, integer: true },
   { key: 'warning_seconds', label: 'Предупреждение', unit: 'с', hint: 'сколько HUD показывает «ОРДА!» и стрелку', step: 1, min: 0, max: 60 },
+  { key: 'firefight_warning_seconds', label: 'Перестрелки: штаб предупреждает за', unit: 'с', hint: 'орда после N перестрелок подряд приходит через столько секунд после радио', step: 1, min: 0, max: 120 },
+  { key: 'firefight_hint_before', label: 'Перестрелки: подсказка за', unit: 'шт', hint: 'штаб говорит «ещё одна перестрелка — и придёт орда» за столько перестрелок до порога (0 — нет)', step: 1, min: 0, max: 10, integer: true },
+  { key: 'firefight_lost_contact_seconds', label: 'Перестрелка кончается без контакта', unit: 'с', hint: 'нет контакта столько секунд — перестрелка окончена', step: 1, min: 1, max: 300 },
+  { key: 'firefight_contact_range_m', label: 'Контакт держится в', unit: 'м', hint: 'враг, охотящийся за отрядом ближе этого, держит контакт', step: 1, min: 0, max: 200 },
+  { key: 'firefight_slip_min_reach_m', label: 'Проскользнуть: мин. дальность обнаружения', unit: 'м', hint: 'дальность группы = её дальность зрения, не меньше этой (засада с приглушёнными чувствами)', step: 1, min: 0, max: 200 },
+  { key: 'firefight_slip_max_reach_m', label: 'Проскользнуть: макс. дальность обнаружения', unit: 'м', hint: 'и не больше этой (дальнозоркие снайперы / ЧВК)', step: 1, min: 0, max: 300 },
+  { key: 'firefight_slip_exit_factor', label: 'Проскользнуть: ушли дальше, чем', unit: '×', hint: 'отряд ушёл: каждый боец дальше дальности обнаружения × это', step: 0.05, min: 1, max: 5 },
 ];
 
 export const HORDE_BOOL_FIELDS: { key: string; label: string; hint: string }[] = [
@@ -155,6 +174,7 @@ export const HORDE_BOOL_FIELDS: { key: string; label: string; hint: string }[] =
   { key: 'repeats', label: 'Повторять', hint: 'после первой орды — новые каждые «Повтор каждые» секунд' },
   { key: 'prefer_out_of_sight', label: 'Вне поля зрения', hint: 'точка, которую не видит ни один боец, важнее видимой' },
   { key: 'apply_wave_modifiers', label: 'Модификаторы волны', hint: 'HP / урон / скорость текущей волны (сложность уровня) действуют и на орду' },
+  { key: 'firefight_slip_past_resets', label: 'Проскользнуть — сброс счёта', hint: 'отряд прошёл мимо группы врагов незамеченным — счёт перестрелок подряд обнуляется' },
 ];
 
 /** Problems of a horde config (whole horde.json or a level override merged over it). */

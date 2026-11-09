@@ -7,9 +7,30 @@
 >
 > Key files:
 > - `GameFlow/*`, `Combat/WaveSubsystem`, `HordeIntroRules`, `HordeIntroSubsystem`, `GameFlow/LevelEncounterSubsystem`, `LevelEncounterRules`, `Content/Data/LevelJson/*.json`
-> - Smokes `HordeSmoke`, `HordeIntroSmoke`, `LevelWaveSmoke`, `PatrolAmbushSmoke`, `WaveCombatSmoke`; Wave Editor: [tools-bot-waveeditor](tools-bot-waveeditor.md)
+> - Horde #12 (2026-11-09): `Combat/FirefightRules`, `UFirefightSubsystem` - the horde after N firefights in a row (section below)
+> - Smokes `HordeSmoke`, `HordeFirefightsSmoke`, `HordeIntroSmoke`, `LevelWaveSmoke`, `PatrolAmbushSmoke`, `WaveCombatSmoke`; Wave Editor: [tools-bot-waveeditor](tools-bot-waveeditor.md)
 >
 > Moved verbatim from the old `docs/port/HANDOFF.md` (split of 2026-10-19; nothing was dropped). [HANDOFF](../port/HANDOFF.md) | [system docs index](README.md) | [CHANGELOG](../port/CHANGELOG.md)
+
+## The horde after N firefights in a row (horde #12, game designer 2026-11-02 / 11-03 / 11-08; feat/horde-firefights 2026-11-09)
+
+"If the squad gets into firefights too often instead of moving stealthily, the HORDE invades." A second horde trigger next to the 240 s
+real-time-fight clock below (both data-driven, both off with `"horde_enabled": false`).
+
+| Piece | What |
+|---|---|
+| Firefight | `Combat/FirefightRules` + `UFirefightSubsystem`. ONE encounter with the level's enemies (`ULevelEncounterSubsystem::IsLevelEnemy`: placed patrols, the pressure's patrols / ambushers; hostile PMC fighters; never a scripted wave, never the horde - `bKnowsSquadPosition`) that started by contact and in which shots were exchanged: an aware enemy (it spotted / heard the squad, broke its patrol, attacks) AND a shot / blow by either side - or an ambush sprung on the squad (a pressure ambusher engaging). Input = every `ULevelEncounterSubsystem::NotifyHostileContact` (new native `OnHostileContact`): `PatrolDetection` -> aware (ignored when the source is already dead: the lethal hit breaks the body's patrol too - a silent one-shot kill is NO firefight), `EnemyAttack` -> aware + shot, `EnemyDamaged` / `AttackOrder` / `SquadAutoFire` -> the squad's shot (a hostile PMC's own opening shot = his attack). One per encounter, not per shot; the encounter ends when every enemy that engaged in it is down (`AllDown`) or after `firefight_lost_contact_seconds` (20) without contact (an engaged enemy hunting the squad within `firefight_contact_range_m` 40 m keeps it). Log lines `[Firefight] encounter N: contact ...`, `firefight K on the level ...: S in a row of N`, `encounter N over ...`. |
+| Streak / reset | `FFirefightStreak`: firefights in a row; at the level's threshold (level JSON root `horde_after_firefights`, default 6, min 1 - the Training Ground waves tab writes it; console `Codex.Horde.AfterFirefights`) the horde is requested and the count starts again. SLIP-PAST resets it (`firefight_slip_past_resets`, default true, pending the designer): a level enemy group (the pressure's group id, else the escort leader) the squad came within the DETECTION REACH of (its members' `GetVisionConeRange`, clamped to `firefight_slip_min_reach_m` 15 .. `firefight_slip_max_reach_m` 40) that never spotted the squad (never broke its patrol, no hostile contact), and the squad then left that reach x `firefight_slip_exit_factor` 1.25 (or the group was recycled while the squad was in it). Checked at 4 Hz. Not saved: a load starts a fresh streak. |
+| What the player sees | HQ hint `firefight_hint_before` (1) firefights before the threshold ("Your shooting carries for kilometres. One more firefight and the horde will come - slip past the patrols."); a slip-past that resets a running streak: "Good - they never saw you. Keep it quiet."; at the threshold the HQ warning "All that shooting has drawn them in - a HORDE is closing on your position! About N seconds - take up defensive positions!", then `firefight_warning_seconds` (10 s of running game time: the tactical pause / turn-based / dialogues stop it) later the horde spawns (`UHordeSubsystem::RequestFirefightHorde` / `ReleaseFirefightHorde`: the existing spawn - 25-45 m, out of sight, clustered, hunting; the HUD "HORDE!" banner + arrow + the HQ distance line). In exploration (the firefight is over) the horde starts a fight of its own (`StartAmbushCombat`: a skirmish level ends it when the horde is dead). Then the EXISTING horde intro (`UHordeIntroSubsystem::BeginExternalHorde`: waits for the running mass, the «HORDE INCOMING» alert + HQ line, the flyover by the level's memory - the wide shot once per level, later only new types; real time, Space = an ordinary pause). |
+| Horde size / mix | The same `horde.json` + the level JSON `"horde"` override the Training Ground horde section writes (count, composition, distances, ...); the firefight horde is horde index 0 (`count`). |
+| Data | `Content/Data/AI/horde.json` new keys `firefight_lost_contact_seconds`, `firefight_contact_range_m`, `firefight_slip_past_resets`, `firefight_slip_min_reach_m`, `firefight_slip_max_reach_m`, `firefight_slip_exit_factor`, `firefight_warning_seconds`, `firefight_hint_before` (also per level in `"horde"`); level JSON `horde_after_firefights`; console `Codex.Horde.AfterFirefights`, `Codex.Horde.FirefightWarningSeconds`. Every shipped campaign / lab level has `"horde_enabled": false` today (open question to the designer). |
+
+Variants in the horde (task #34 leftover): the composition takes `MILITARY_ZOMBIE` (Frostbitten + `BP_Enemy_MilitaryZombie` through
+`ACodexTacticsGameMode::EnemyVariantClasses`, `HordeRules::BuildMembers` -> `UWaveSubsystem::SpawnEnemyVariant`); `SPITTER` is refused
+(`HordeRules::IsAllowedHordeType`; the Spitter stays for the stage waves). Tests `CodexTactics.Combat.Firefight.*` (Definition,
+EndsWhenDownOrContactLost, StreakToTheThreshold, SlipPastResetsTheStreak, DataKeys, HordeMilitaryZombieNoSpitter); smoke `HordeFirefightsSmoke`
+(L_Gen_Depot_1, threshold 2 by the console: firefight 1 + hint, a slip-past reset, firefights 2 and 3 -> the warning -> the horde with Military
+Zombies starts a fight from exploration -> the horde intro (alert + flyover); the horde's own fight is no firefight).
 
 ## No enemy count on screen (game designer bug 08, 2026-11-01)
 

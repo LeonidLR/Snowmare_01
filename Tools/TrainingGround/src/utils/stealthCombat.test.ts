@@ -7,6 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { jsonEqual, parseJsonText, patchJsonText } from './jsonTextPatch.ts';
 import {
+  HORDE_ARCHETYPES, HORDE_BOOL_FIELDS, HORDE_BUILTIN, HORDE_NUMBER_FIELDS,
   applyLevelEncounterPatch, buildLevelPatch, effectiveHorde, mergeAiTuningCvars, pickLevelEncounter, validateCVarEdits,
   validateHorde, validateLevelPatch, validatePerception,
 } from './stealthCombat.ts';
@@ -115,4 +116,23 @@ test('ai_tuning cvars: whitelisted stealth knobs only, other keys kept, empty re
   assert.equal(validateCVarEdits({ 'Codex.Perception.SightRangeScale': 'abc' }).length, 1);
   assert.equal(validateCVarEdits({ 'Codex.RealTimeOrders': '0' }).length, 1, 'informational cvars are not editable');
   assert.deepEqual(validateCVarEdits({ 'Codex.Patrol.SearchSeconds': '-1', 'Codex.Perception.FovScale': '' }), []);
+});
+
+test('horde #12: the horde tab edits the keys the game reads (horde.json firefight_*, Military Zombie, no Spitter)', () => {
+  const shipped = JSON.parse(fs.readFileSync(path.join(AI_DIR, 'horde.json'), 'utf-8'));
+  // Every horde.json key has a built-in value (the game's FHordeConfig) and every firefight key an editor field.
+  for (const key of Object.keys(shipped).filter((k) => k !== 'comment')) {
+    assert.ok(key in HORDE_BUILTIN, `${key} has a built-in value`);
+  }
+  const edited = new Set([...HORDE_NUMBER_FIELDS.map((f) => f.key), ...HORDE_BOOL_FIELDS.map((f) => f.key)]);
+  for (const key of Object.keys(shipped).filter((k) => k.startsWith('firefight_'))) {
+    assert.ok(edited.has(key), `${key} is editable`);
+  }
+  assert.deepEqual(validateHorde(shipped), [], 'the shipped horde.json is valid');
+  const types = HORDE_ARCHETYPES.map((a) => a.key);
+  assert.ok(types.includes('MILITARY_ZOMBIE'), 'the Military Zombie is offered');
+  assert.ok(!types.includes('SPITTER'), 'the Spitter is not (the game refuses it in the horde)');
+  assert.ok(!Object.keys(shipped.composition).includes('SPITTER'), 'no Spitter in the shipped composition');
+  // A firefight value out of range is reported.
+  assert.equal(validateHorde({ ...shipped, firefight_slip_exit_factor: 0.5 }).length, 1);
 });

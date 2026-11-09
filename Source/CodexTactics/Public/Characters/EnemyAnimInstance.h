@@ -79,8 +79,11 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Enemy Animation")
 	void SetIdleVariation(int32 Index);
 
-	/** True when a death clip is set (the body then stays DeathDecayDelay seconds, Godot death_decay_delay). */
+	/** True when a death clip is set (the body then stays DeathDecayDelay seconds, Godot death_decay_delay; since 2026-11-08 it stays for good). */
 	bool HasDeathAnimation() const { return !DeathAnimations.IsEmpty(); }
+
+	/** The death was played and its pose holds: no montage still advancing or blending (UCorpseSubsystem freezes the body then). */
+	bool IsDeathPoseSettled() const;
 
 	/**
 	 * The enemy noticed the squad (patrol / guard break, AEnemyCharacter::BreakPatrol): plays one of AlertAnimations (the Military
