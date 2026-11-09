@@ -36,6 +36,8 @@ namespace SquadSubsystemFormationLocal
 {
 	TAutoConsoleVariable<int32> CVarFormationLeaderLevel(TEXT("Codex.Formation.LeaderLevelSlots"), 1,
 		TEXT("Bug 2026-11-02 (L_Gen_Depot_1's cut ladder): 1 = a follower's slot lies on the LEADER's level (projected from his floor) and a follower on another level walks there by the nav mesh's way (ramp / stair / ladder); 0 = the slot at the follower's own height (followed a leader up 3 m, never down - A/B)"));
+	TAutoConsoleVariable<int32> CVarFormationLookFilter(TEXT("Codex.Formation.LookFilter"), 1,
+		TEXT("The game designer's video 09.11.2026_ Trembling_Bug_01 (FormationJitterSmoke): 1 = a member's formation look that jumps more than 35 deg is taken only once it has held 0.15 s, walking in the formation only (ClearLook flipped between the free span edges on both sides frame by frame along walls and the bodies spun back and forth); 0 = every frame's look at once (A/B)"));
 	TAutoConsoleVariable<int32> CVarFormationDebug(TEXT("Codex.Formation.Debug"), 0,
 		TEXT("1: log the formation probe (each raw terrain class change with its probe hits); 2: also every follower repath; 3: also each member's formation look whenever it changes, and every look ClearLook turns"));
 	TAutoConsoleVariable<int32> CVarFormationWallEnd(TEXT("Codex.Formation.WallEnd"), 1,
@@ -125,8 +127,20 @@ void USquadSubsystem::ApplyFormationFrame()
 		{
 			continue;
 		}
-		const float* Yaw = FrameLooks.Find(Member);
-		Operative->SetFormationLookYaw(Yaw ? TOptional<float>(*Yaw) : TOptional<float>());
+		const float* RawYaw = FrameLooks.Find(Member);
+		// One-frame flips between the two sides of a wall (ClearLook) never reach the body (FormationLookFilterRules).
+		const TOptional<float> Raw = RawYaw ? TOptional<float>(*RawYaw) : TOptional<float>();
+		// Only for a member walking in the formation: at a wall (in cover, on his way to a slot, the squad's wall pose) the cover's own looks turn
+		// him at once (a held-back look there broke the shimmy to the threat's corner - CoverSmoke / CoverHugSmoke).
+		const bool bFilter = SquadSubsystemFormationLocal::CVarFormationLookFilter.GetValueOnGameThread() != 0 && !Operative->bInCover
+			&& !Operative->HasPendingCover() && !Operative->IsInFormationWallPose();
+		const TOptional<float> Filtered = bFilter ? FormationLookFilterRules::Step(LookFilters.FindOrAdd(Member), Raw, GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.f) : Raw;
+		if (!bFilter)
+		{
+			LookFilters.Remove(Member);
+		}
+		const float* Yaw = Filtered.IsSet() ? &Filtered.GetValue() : nullptr;
+		Operative->SetFormationLookYaw(Filtered);
 		const float* Logged = LastLoggedLook.Find(Member);
 		const float LookNow = Yaw ? *Yaw : 99999.f;
 		if (bDebugLooks && (!Logged || FMath::Abs(FMath::FindDeltaAngleDegrees(*Logged, LookNow)) > 5.f || (*Logged > 9999.f) != (LookNow > 9999.f)))

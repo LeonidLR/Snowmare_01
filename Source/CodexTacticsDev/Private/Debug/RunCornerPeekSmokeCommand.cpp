@@ -134,7 +134,7 @@ namespace RunCornerPeekSmoke
 	 * ... and the hips (the hip line) less than this: they also carry the legs' stop out of the stride and the run's hip twist, which no turn
 	 * of the whole body can take out (measured 8-35 deg on the arrival - a sprint's stop dips 15 deg and back; a spin reads ~340), deg.
 	 */
-	constexpr float ArrivalHipTurnMaxDeg = 60.f; // back to 60 (2026-11-09 b): the D-1 Engineer's legs are the pack's full-body Loop_Root set again - case E (box selection) measures 36.8 (on the ABP's rifle legs 70, the old in-place shotgun legs 39), a spin ~340
+	constexpr float ArrivalHipTurnMaxDeg = 60.f; // 2026-11-09 k ("cover_mode": "abp"): the D-1 Engineer's last 7 m to the slot are the ABP's whole body, as an M16 man's - case E (box selection) measures 14.0 (the pack's full-body legs 36.8, the ABP's rifle legs under the old upper-body layer 70), a spin ~340
 	/** Over his last this-many cm to the slot the drawn body (shoulder line) turns one way only ... */
 	constexpr float ApproachMonotonicCm = 150.f;
 	/** ... its back-and-forth (the turn against the net direction) at most this much, deg. */

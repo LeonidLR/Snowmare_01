@@ -1392,6 +1392,9 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	bWeaponFullBody = Instance->IsWeaponLayerFullBody();
 	bWeaponRootReference = bWeaponFullBody && Instance->ActiveWeaponSet().bRootReference;
 	bWeaponTorsoOnCapsule = !bWeaponFullBody && Instance->bShotgunWeapon && Instance->ActiveWeaponSet().bFullBody && Instance->ActiveWeaponSet().bCrouchUpper;
+	WeaponTorsoRef = Instance->LayerTorsoAlpha > MinSampleWeight ? Instance->LayerTorsoRef : nullptr;
+	WeaponTorsoRefTime = Instance->LayerTorsoRefTime;
+	WeaponTorsoAlpha = Instance->LayerTorsoAlpha;
 	bWeaponProbe = Instance->bWeaponLayerProbe;
 	WeaponReloadClip = Instance->ShotgunReloadWeight > MinSampleWeight ? Instance->ActiveWeaponSet().Reload : nullptr;
 	WeaponReloadTime = Instance->ShotgunReload.Time;
@@ -1487,6 +1490,10 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	const bool bPeekLock = PeekLockAlpha > 0.f;
 	const bool bWeaponLayer = WeaponUpperWeight > MinSampleWeight || WeaponLowerWeight > MinSampleWeight || (WeaponReloadClip && WeaponReloadWeight > MinSampleWeight)
 		|| WeaponFireAdditive != nullptr;
+	if (bWeaponProbe && !bWeaponLayer)
+	{
+		WeaponProbeLower = WeaponProbeUpper = 0.f; // the layer is off: it changes no bone (the probe reads 0, not the last layer frame)
+	}
 	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;

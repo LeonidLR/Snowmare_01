@@ -8,6 +8,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
 #include "Characters/WeaponAnimLayerRules.h"
+#include "Characters/WeaponLayerHandoffRules.h"
 #include "Data/WeaponStats.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "Survival/ColdRules.h"
@@ -229,7 +230,7 @@ private:
 	void BlendWeaponFireAdditive(FPoseContext& Output) const;
 	const UAnimSequenceBase* WeaponFireAdditive = nullptr;
 	float WeaponFireAdditiveTime = 0.f;
-	TStaticArray<FOperativeClipState, 12> WeaponClips;
+	TStaticArray<FOperativeClipState, 16> WeaponClips;
 	float WeaponUpperWeight = 0.f;
 	/** The shotgun's per-shell reload on the upper body (spine_01 and below it): clip, time, weight. */
 	const UAnimSequenceBase* WeaponReloadClip = nullptr;
@@ -251,6 +252,15 @@ private:
 	 * orientation warping turned the launcher ~23 deg off the target). */
 	bool bWeaponTorsoOnCapsule = false;
 	float WeaponLowerWeight = 0.f;
+	/**
+	 * A full-body set's torso yaw held to its forward clip's (FormationJitterSmoke 2026-11-09): the pack's directional clips twist the chest
+	 * -27 .. +16 deg off the body (the ABP's rifle legs keep it within +-6), so every change of direction - a formation follower's slot
+	 * corrections - swung the shoulders and the gun; the spine takes out the difference to the gait's forward clip at the same phase.
+	 */
+	void StabilizeWeaponTorso(FCompactPose& Layer) const;
+	const UAnimSequenceBase* WeaponTorsoRef = nullptr;
+	float WeaponTorsoRefTime = 0.f;
+	float WeaponTorsoAlpha = 0.f;
 	TStaticArray<const UAnimSequenceBase*, 9> WeaponAimPoses = TStaticArray<const UAnimSequenceBase*, 9>(InPlace, nullptr);
 	const UAnimSequenceBase* WeaponAimBase = nullptr;
 	TStaticArray<float, 9> WeaponAimWeights = TStaticArray<float, 9>(InPlace, 0.f);
@@ -1310,10 +1320,12 @@ public:
 	/** The set in hands drives the whole body ("body": "full" in weapon_anim_sets.json). */
 	bool IsWeaponLayerFullBody() const { return bShotgunWeapon && ActiveWeaponSet().bFullBody && !(bIsCrouching && ActiveWeaponSet().bCrouchUpper); }
 	/** The layer's clips this frame (sequence, time, weight) and its shared loop phase 0..1 (smokes / diagnostics). */
-	const TStaticArray<FOperativeClipState, 12>& GetWeaponLayerClips() const { return ShotgunClips; }
+	const TStaticArray<FOperativeClipState, 16>& GetWeaponLayerClips() const { return ShotgunClips; }
 	float GetWeaponLayerPhase() const { return ShotgunPhase; }
 	/** The turn-in-place clip's share this frame (a full-body set; smokes). */
 	float GetWeaponLayerTurnShare() const { return LayerTurnShare; }
+	/** The layer gives the body to the ABP's own locomotion now (crouched with a "crouch_body": "abp" set, the cover mechanics; smokes). */
+	bool IsWeaponLayerAbpHandoff() const { return bLayerAbpHandoff; }
 
 	/** The heaviest shotgun locomotion clip this frame (smokes: "a known shotgun clip plays"). */
 	const UAnimSequenceBase* GetShotgunDominantClip() const;
@@ -1760,6 +1772,22 @@ private:
 		UAnimSequence* AimTurnLeft = nullptr;
 		UAnimSequence* AimTurnRight = nullptr;
 		float TurnClipDeg = 90.f;
+		/** "crouch_body": "abp" - crouched, the ABP's crouch locomotion takes the whole body (the D-1, game designer 2026-11-09); else the set's crouch. */
+		bool bCrouchAbp = false;
+		/** "cover_mode": "abp" - the cover approach's last CoverApproachCm and the open shot off the wall are the ABP's too (in cover every set is). */
+		bool bCoverAbp = false;
+		/** "torso_follows_forward": a full-body set's chest keeps the yaw of its gait's forward clip in every direction (StabilizeWeaponTorso). */
+		bool bTorsoForward = false;
+		/** The last this-many cm of a walk to a cover slot are the ABP's ("cover_approach_abp_cm"; WeaponLayerHandoffRules). */
+		float CoverApproachCm = 700.f;
+		/** A full-body set's directional legs follow the direction eased over this ("direction_smooth_s"; 0 = at once) with a dead zone
+		 * ("direction_dead_zone_deg"): WeaponLayerHandoffRules::SmoothLayerDirection, FormationJitterSmoke. */
+		float DirectionSmoothSeconds = 0.f;
+		float DirectionDeadZoneDeg = 0.f;
+		/** ... and a bigger change than this cross-fades the directional clips over DirectionFadeSeconds ("direction_snap_deg" /
+		 * "direction_fade_s"; 0 = it sweeps through the clips between). */
+		float DirectionSnapDeg = 0.f;
+		float DirectionFadeSeconds = 0.f;
 		FShotgunAnimSet()
 		{
 			for (int32 Index = 0; Index < 8; ++Index)
@@ -1836,6 +1864,14 @@ private:
 	UAnimSequence* LayerTurnClip = nullptr;
 	float LayerTurnShare = 0.f;
 	float LayerTurnTime = 0.f;
+	/** The layer hands the body to the ABP this frame (crouched "abp" / the cover mechanics; WeaponLayerHandoffRules::DefersToAbp). */
+	bool bLayerAbpHandoff = false;
+	/** The direction the layer's directional clips follow (WeaponLayerHandoffRules::StepLayerDirection of Direction; a full-body set). */
+	FWeaponLayerDirectionState LayerDirection;
+	/** The torso reference this frame (the gait's forward clip at the phase) and its share (FOperativeAnimInstanceProxy::StabilizeWeaponTorso). */
+	UAnimSequence* LayerTorsoRef = nullptr;
+	float LayerTorsoRefTime = 0.f;
+	float LayerTorsoAlpha = 0.f;
 	float LayerLastYaw = 0.f;
 	bool bLayerYawValid = false;
 	float ShotgunPhase = 0.f;
@@ -1845,7 +1881,8 @@ private:
 	float ShotgunCrouchShare = 0.f;
 	float ShotgunAimShare = 0.f;
 	float ShotgunSprintShare = 0.f;
-	TStaticArray<FOperativeClipState, 12> ShotgunClips;
+	/** 16: a full-body set cross-fading its directional clips on a reversal plays two pairs per gait (FormationJitterSmoke 2026-11-09). */
+	TStaticArray<FOperativeClipState, 16> ShotgunClips;
 	int32 ShotgunReloadLastClip = -1;
 	FShellReloadState ShotgunReload;
 	float ShotgunReloadWeight = 0.f;

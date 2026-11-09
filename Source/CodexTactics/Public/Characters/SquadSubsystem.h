@@ -11,6 +11,7 @@
 #include "Formation/FormationCoverRules.h"
 #include "Formation/FormationCustomRules.h"
 #include "Formation/FormationGuardRules.h"
+#include "Formation/FormationLookFilterRules.h"
 #include "Formation/FormationMenuRules.h"
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTypes.h"
@@ -1375,6 +1376,8 @@ private:
 	const FFormationSlot* FindFrameSlot(EFormationRole Role) const;
 	/** The looks this frame (applied to every member at the end of Tick; a member not in it gets none) and the leader's patrol pace. */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, float> FrameLooks;
+	/** Each member's applied look against one-frame flips (FormationLookFilterRules; Codex.Formation.LookFilter). */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FFormationLookFilter> LookFilters;
 	/** The slot each follower's sector follow step resolved this frame (GetFormationGivenSlot). */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector2D> FrameGivenByMember;
 	TWeakObjectPtr<AOperativeCharacter> FramePaceLeader;
