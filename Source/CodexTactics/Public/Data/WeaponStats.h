@@ -67,8 +67,8 @@ enum class EWeaponHandling : uint8
 	 */
 	Pistol,
 	/**
-	 * Shoulder-fired launcher (the RPG-7, 2026-11-09; LauncherRules): fires standing or kneeling, never prone (the back-blast), not with a
-	 * wall right behind / from a closed room (explosion.back_blast_*), one rocket at a time; the round flies through the shared projectile layer.
+	 * Shoulder-fired launcher (the RPG-7, 2026-11-09; LauncherRules): any stance, no target inside its minimum range (its own blast), one
+	 * rocket at a time; the round flies through the shared projectile layer (the designer's numbers 2026-11-09: no back-blast damage or rules).
 	 */
 	Launcher
 };
@@ -348,7 +348,7 @@ struct CODEXTACTICS_API FWeaponExplosionStats
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0", ClampMax = "1"))
 	float EdgeDamageMultiplier = 1.f;
 
-	/** The RPG-7 back-blast danger zone behind the shooter: length, cm; 0 = none. */
+	/** The back-blast cone behind the shooter (the RPG-7's puff / a later visual; no damage since the designer's 2026-11-09 numbers): length, cm; 0 = none. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0"))
 	float BackBlastLengthCm = 0.f;
 
@@ -356,21 +356,12 @@ struct CODEXTACTICS_API FWeaponExplosionStats
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0", ClampMax = "90"))
 	float BackBlastHalfAngleDeg = 0.f;
 
-	/** Extra damage on the actor the round strikes (on top of the blast; base_damage = the blast's base). */
+	/**
+	 * The actor the round strikes takes THIS as its whole damage (the blast leaves it out; the designer 2026-11-09: the RPG-7's direct hit = 140,
+	 * not 140 + the splash); everyone else in the blast takes base_damage x the falloff. 0 = the actor struck is just in the blast like the rest.
+	 */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0"))
 	float DirectHitDamage = 0.f;
-
-	/** The back-blast's damage at the launcher (x LauncherRules / ExplosionRules::BackblastMultiplier along the cone): friendly fire too. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0"))
-	float BackBlastDamage = 0.f;
-
-	/** A wall closer than this behind the launcher blocks the shot, cm (the blast would come straight back). */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion", meta = (ClampMin = "0"))
-	float BackBlastClearanceCm = 0.f;
-
-	/** A blocked back-blast (a wall right behind / a closed room): true = no shot (a warning), false = the shot goes with a warning. */
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Explosion")
-	bool bBackBlastRefuses = true;
 };
 
 /**

@@ -1,9 +1,8 @@
-// CodexTactics.Weapons.Rpg.* - the RPG-7 on the shared projectile + explosion layer (2026-11-09; docs/systems/weapons.md "The RPG-7"): its data
-// (a flat rocket arming at 10 m, class vehicle, one rocket, the back-blast cone), the stance rule (no prone), the back-blast check (a wall right
-// behind, a closed room), the back-blast's damage on a body behind, the shot's refusals in order, the miss scatter; the roster keeps it "next"
-// and out of every loadout.
+// CodexTactics.Weapons.Rpg.* - the RPG-7 on the shared projectile + explosion layer (2026-11-09, the game designer's numbers the same day;
+// docs/systems/weapons.md "The RPG-7"): its data (a flat 115 m/s rocket armed at once, a direct hit 140 on the target struck, the splash 60 within
+// 4 m, class vehicle, one rocket, no back-blast damage), the one refusal left (a target inside the minimum range - never inside its own blast),
+// the damage split, the miss scatter; the roster keeps it "next" and out of every loadout.
 
-#include "Characters/OperativeMovementRules.h"
 #include "Combat/ArmorRules.h"
 #include "Combat/LauncherRules.h"
 #include "Data/WeaponDataAsset.h"
@@ -74,20 +73,25 @@ bool FRpgDataTest::RunTest(const FString&)
 	TestTrue(TEXT("handling launcher"), Stats.Handling == EWeaponHandling::Launcher);
 	TestTrue(TEXT("a flat rocket"), Stats.Projectile.Trajectory == EProjectileTrajectory::Flat);
 	TestTrue(TEXT("a real launch speed"), Stats.Projectile.SpeedCmS >= 5000.f);
-	TestEqual(TEXT("arms after 10 m"), Stats.Projectile.ArmingDistanceCm, 1000.f);
+	TestEqual(TEXT("115 m/s (the designer)"), Stats.Projectile.SpeedCmS, 11500.f);
+	TestEqual(TEXT("the fuse arms at once (the designer: no safe flight)"), Stats.Projectile.ArmingDistanceCm, 0.f);
 	TestTrue(TEXT("a max flight time"), Stats.Projectile.MaxFlightSeconds > 0.f);
 	TestTrue(TEXT("explosive"), Stats.Damage.DamageType == EDamageType::Explosive);
 	TestTrue(TEXT("class vehicle (it hurts hulls; decision 1)"), Stats.Damage.PenetrationClass == EArmorClass::Vehicle);
 	TestEqual(TEXT("its penetration applies to a vehicle body"), ArmorRules::EffectiveReduction(0.5f, false, Stats.Damage.ArmorPenetration,
 		Stats.Damage.PenetrationClass, EArmorClass::Vehicle), 0.5f * (1.f - Stats.Damage.ArmorPenetration), 1e-5f);
 	TestTrue(TEXT("a blast with a full-damage core"), Stats.Explosion.RadiusCm > 0.f && Stats.Explosion.FullDamageRadiusCm > 0.f);
-	TestTrue(TEXT("a direct-hit share"), Stats.Explosion.DirectHitDamage > 0.f);
+	TestEqual(TEXT("a direct hit = 140 on the target struck (the designer)"), Stats.Explosion.DirectHitDamage, 140.f);
+	TestEqual(TEXT("the splash = 60 (the designer)"), Stats.Damage.BaseDamage, 60.f);
+	TestEqual(TEXT("within the 4 m blast"), Stats.Explosion.RadiusCm, 400.f);
+	TestEqual(TEXT("the struck target takes 140 in all (not 140 + the splash)"), LauncherRules::DamageOn(Stats, true, 0.f), 140.f);
+	TestEqual(TEXT("a body at the burst point (not struck): the splash 60"), LauncherRules::DamageOn(Stats, false, 0.f), 60.f);
+	TestTrue(TEXT("a body 3 m off: less than 60"), LauncherRules::DamageOn(Stats, false, 300.f) < 60.f && LauncherRules::DamageOn(Stats, false, 300.f) > 0.f);
+	TestEqual(TEXT("a body 5 m off: nothing"), LauncherRules::DamageOn(Stats, false, 500.f), 0.f);
 	TestEqual(TEXT("one rocket in the tube"), Stats.Ammo.MagazineSize, 1);
 	TestTrue(TEXT("a reload per rocket"), Stats.Ammo.ReloadSeconds > 0.f);
-	TestTrue(TEXT("a back-blast cone behind"), Stats.Explosion.BackBlastLengthCm > 0.f && Stats.Explosion.BackBlastHalfAngleDeg > 0.f
-		&& Stats.Explosion.BackBlastDamage > 0.f);
-	TestTrue(TEXT("a wall within the clearance refuses the shot"), Stats.Explosion.BackBlastClearanceCm > 0.f && Stats.Explosion.bBackBlastRefuses);
-	TestEqual(TEXT("no target closer than the arming distance"), LauncherRules::MinimumRangeCm(Stats), 1000.f);
+	TestEqual(TEXT("no target closer than min_range_m 10"), LauncherRules::MinimumRangeCm(Stats), 1000.f);
+	TestTrue(TEXT("the minimum range keeps the shooter out of his own blast"), LauncherRules::MinimumRangeCm(Stats) > Stats.Explosion.RadiusCm);
 
 	// The roster: "next", in no loadout yet (any fighter can be the grenadier: the designer decides later).
 	const TSharedPtr<FJsonObject> Root = LauncherRulesTest::LauncherProjectFile();
@@ -119,51 +123,24 @@ bool FRpgRulesTest::RunTest(const FString&)
 	FWeaponStats Stats;
 	Stats.Kind = EWeaponKind::Projectile;
 	Stats.Handling = EWeaponHandling::Launcher;
-	Stats.Projectile.ArmingDistanceCm = 1000.f;
-	Stats.Explosion.BackBlastLengthCm = 800.f;
-	Stats.Explosion.BackBlastHalfAngleDeg = 30.f;
-	Stats.Explosion.BackBlastDamage = 60.f;
-	Stats.Explosion.BackBlastClearanceCm = 200.f;
-	Stats.Explosion.bBackBlastRefuses = true;
+	Stats.Range.MinRangeCm = 1000.f;
+	Stats.Explosion.RadiusCm = 400.f;
 
-	// Stances.
-	TestTrue(TEXT("standing: fires"), LauncherRules::StanceAllows(EOperativeStance::Standing));
-	TestTrue(TEXT("kneeling: fires"), LauncherRules::StanceAllows(EOperativeStance::Crouching));
-	TestFalse(TEXT("prone: never"), LauncherRules::StanceAllows(EOperativeStance::Prone));
-
-	// The back-blast check.
-	const FWeaponExplosionStats& Blast = Stats.Explosion;
-	TestTrue(TEXT("nothing behind: clear"), LauncherRules::ClassifyBackblast(-1.f, false, Blast) == ELauncherBackblast::Clear);
-	TestTrue(TEXT("a wall 1 m behind: blocked"), LauncherRules::ClassifyBackblast(100.f, false, Blast) == ELauncherBackblast::WallBehind);
-	TestTrue(TEXT("a wall 1 m behind under a roof: still the wall"), LauncherRules::ClassifyBackblast(100.f, true, Blast) == ELauncherBackblast::WallBehind);
-	TestTrue(TEXT("a wall 5 m behind in the open: clear"), LauncherRules::ClassifyBackblast(500.f, false, Blast) == ELauncherBackblast::Clear);
-	TestTrue(TEXT("a wall 5 m behind under a roof: a closed room"), LauncherRules::ClassifyBackblast(500.f, true, Blast) == ELauncherBackblast::ClosedRoom);
-	TestTrue(TEXT("a roof and nothing behind: clear (a porch)"), LauncherRules::ClassifyBackblast(-1.f, true, Blast) == ELauncherBackblast::Clear);
-	FWeaponExplosionStats NoBlast;
-	TestTrue(TEXT("no back-blast: always clear"), LauncherRules::ClassifyBackblast(50.f, true, NoBlast) == ELauncherBackblast::Clear);
-
-	// The back-blast's damage behind him.
-	const FVector Launcher(0.f, 0.f, 100.f);
-	const FVector Aim(1.f, 0.f, 0.f);
-	TestEqual(TEXT("a mate 2 m right behind: 75 %"), LauncherRules::BackblastDamageAt(Blast, Launcher, Aim, Launcher - FVector(200.f, 0.f, 0.f)), 45.f, 0.01f);
-	TestEqual(TEXT("a mate 6 m behind: 25 %"), LauncherRules::BackblastDamageAt(Blast, Launcher, Aim, Launcher - FVector(600.f, 0.f, 0.f)), 15.f, 0.01f);
-	TestEqual(TEXT("a mate beside him: nothing"), LauncherRules::BackblastDamageAt(Blast, Launcher, Aim, Launcher + FVector(0.f, 200.f, 0.f)), 0.f);
-	TestEqual(TEXT("a mate in front: nothing"), LauncherRules::BackblastDamageAt(Blast, Launcher, Aim, Launcher + FVector(300.f, 0.f, 0.f)), 0.f);
-	TestEqual(TEXT("a mate 9 m behind: nothing"), LauncherRules::BackblastDamageAt(Blast, Launcher, Aim, Launcher - FVector(900.f, 0.f, 0.f)), 0.f);
-
-	// The refusals, in the player's order.
+	// The refusals left (the designer 2026-11-09): empty, then a target too close - nothing about stance or walls behind.
 	using ELR = ELauncherRefusal;
-	TestTrue(TEXT("empty first"), LauncherRules::Refusal(false, EOperativeStance::Prone, 50.f, ELauncherBackblast::WallBehind, Stats) == ELR::Empty);
-	TestTrue(TEXT("then prone"), LauncherRules::Refusal(true, EOperativeStance::Prone, 50.f, ELauncherBackblast::WallBehind, Stats) == ELR::Prone);
-	TestTrue(TEXT("then too close"), LauncherRules::Refusal(true, EOperativeStance::Standing, 900.f, ELauncherBackblast::WallBehind, Stats) == ELR::TooClose);
-	TestTrue(TEXT("then the back-blast"), LauncherRules::Refusal(true, EOperativeStance::Crouching, 3000.f, ELauncherBackblast::ClosedRoom, Stats) == ELR::Backblast);
-	TestTrue(TEXT("all clear: it fires"), LauncherRules::Refusal(true, EOperativeStance::Standing, 3000.f, ELauncherBackblast::Clear, Stats) == ELR::None);
-	Stats.Explosion.bBackBlastRefuses = false;
-	TestTrue(TEXT("back_blast_refuses false: a warning only, it fires"),
-		LauncherRules::Refusal(true, EOperativeStance::Standing, 3000.f, ELauncherBackblast::WallBehind, Stats) == ELR::None);
-	TestFalse(TEXT("a refusal has a warning text"), LauncherRules::RefusalText(ELR::Backblast, ELauncherBackblast::WallBehind).IsEmpty());
+	TestTrue(TEXT("empty first"), LauncherRules::Refusal(false, 50.f, Stats) == ELR::Empty);
+	TestTrue(TEXT("a target 9 m away: too close"), LauncherRules::Refusal(true, 900.f, Stats) == ELR::TooClose);
+	TestTrue(TEXT("a target 10 m away: fires"), LauncherRules::Refusal(true, 1000.f, Stats) == ELR::None);
+	TestTrue(TEXT("a target 30 m away: fires"), LauncherRules::Refusal(true, 3000.f, Stats) == ELR::None);
+	TestFalse(TEXT("a refusal has a warning text"), LauncherRules::RefusalText(ELR::TooClose).IsEmpty());
+
+	// The minimum range is never inside the rocket's own blast, whatever min_range_m says.
+	Stats.Range.MinRangeCm = 0.f;
+	TestEqual(TEXT("min_range_m 0: the blast radius is the minimum"), LauncherRules::MinimumRangeCm(Stats), 400.f);
+	TestTrue(TEXT("... a target 3 m away refused"), LauncherRules::Refusal(true, 300.f, Stats) == ELR::TooClose);
 
 	// The miss scatter: off the aim point by 1.5 .. 3.5 m, both sides.
+	const FVector Aim(1.f, 0.f, 0.f);
 	const FVector AimPoint(5000.f, 0.f, 100.f);
 	for (const float Roll : { 0.f, 0.3f, 0.7f, 0.999f })
 	{

@@ -2,12 +2,13 @@
 // "The RPG-7") on L_MovementTest:
 //   Scripts/smoke_parallel.ps1 -Commands RpgSmoke -Jobs 2 -NoRetry -ExtraArgs "-Multiprocess"
 // Builds a range 30 m above the leader (a floor slab, target dummies: boxes with a deep health pool), gives the leader the RPG-7 the way
-// CodexTactics.GiveWeapon does, and checks:
-//   1. a rocket at the dummy 30 m away strikes it armed - the direct share + the blast through Explosions::Detonate; the back-blast hurts the
-//      mate 2.5 m behind him; the tube reloads one rocket (reserve - 1);
-//   2. a rocket at the dummy 80 m away strikes it (the flight time = 80 m at the launch speed);
-//   3. a wall 1 m right behind him: the shot is refused with a warning (no rocket, the tube still loaded);
-//   4. a closed room (a roof + a wall 5 m behind): refused; 5. prone: refused; 6. a target closer than the arming distance: refused.
+// CodexTactics.GiveWeapon does, and checks (the game designer's numbers 2026-11-09):
+//   1. a rocket at the dummy 30 m away strikes it armed - the direct hit 140 is its whole damage (the blast leaves it out), a dummy 2 m beside it
+//      takes the splash (<= 60) through Explosions::Detonate; the mate 2.5 m behind the shooter is NOT hurt (no back-blast damage); the tube
+//      reloads one rocket (reserve - 1);
+//   2. a rocket at the dummy 80 m away strikes it (the flight time = 80 m at 115 m/s);
+//   3. a wall 1 m right behind him, 4. a closed room, 5. prone: the shot GOES (the designer removed those refusals);
+//   6. a target 5 m away (inside the minimum range, his own blast): refused.
 // Logs PASS/FAIL, then exits.
 
 #include "CoreMinimal.h"
@@ -48,6 +49,7 @@ namespace RpgSmoke
 		TWeakObjectPtr<AActor> Near;
 		TWeakObjectPtr<AActor> Far;
 		TWeakObjectPtr<AActor> Close;
+		TWeakObjectPtr<AActor> Bystander;
 		TArray<TWeakObjectPtr<AActor>> Props;
 		TArray<FProjectileImpact> Impacts;
 		FDelegateHandle ImpactHandle;
@@ -152,9 +154,27 @@ namespace RpgSmoke
 		const int32 ShotsBefore = Hero->GetLauncherShots();
 		const bool bShot = Hero->ShootAtTarget(Target);
 		Check(State, !bShot && Hero->GetLauncherShots() == ShotsBefore && Hero->CurrentClip == ClipBefore && Hero->GetLastLauncherRefusal() == Expected,
-			FString::Printf(TEXT("%s: refused (shot %d, refusal %d, back-blast %d, clip %d -> %d) \"%s\""), What, bShot ? 1 : 0,
-				static_cast<int32>(Hero->GetLastLauncherRefusal()), static_cast<int32>(Hero->GetLastLauncherBackblast()), ClipBefore, Hero->CurrentClip,
-				*LauncherRules::RefusalText(Hero->GetLastLauncherRefusal(), Hero->GetLastLauncherBackblast())));
+			FString::Printf(TEXT("%s: refused (shot %d, refusal %d, clip %d -> %d) \"%s\""), What, bShot ? 1 : 0,
+				static_cast<int32>(Hero->GetLastLauncherRefusal()), ClipBefore, Hero->CurrentClip, *LauncherRules::RefusalText(Hero->GetLastLauncherRefusal())));
+	}
+
+	/** One shot that must GO (the designer removed the back-blast / stance refusals): a rocket leaves the loaded tube. */
+	void ExpectShot(FState& State, AActor* Target, const TCHAR* What)
+	{
+		AOperativeCharacter* Hero = State.Hero.Get();
+		if (!Hero || !Target)
+		{
+			Check(State, false, FString::Printf(TEXT("%s: the hero and the target"), What));
+			return;
+		}
+		Hero->bIsReloading = false;
+		Hero->CurrentClip = 1;
+		const int32 ShotsBefore = Hero->GetLauncherShots();
+		Hero->bForceHitForTesting = true;
+		const bool bShot = Hero->ShootAtTarget(Target);
+		Hero->bForceHitForTesting = false;
+		Check(State, bShot && Hero->GetLauncherShots() == ShotsBefore + 1 && Hero->GetLastLauncherRefusal() == ELauncherRefusal::None,
+			FString::Printf(TEXT("%s: the rocket goes (shot %d, refusal %d)"), What, bShot ? 1 : 0, static_cast<int32>(Hero->GetLastLauncherRefusal())));
 	}
 
 	void DestroyProps(FState& State, int32 Keep)
@@ -205,9 +225,7 @@ namespace RpgSmoke
 				Check(State, bShot && Hero->GetLauncherShots() == State.ShotsBefore + 1, FString::Printf(TEXT("1: the rocket left the tube (refusal %d)"),
 					static_cast<int32>(Hero->GetLastLauncherRefusal())));
 				const float MateLost = State.MateHealthBefore - Health(Mate);
-				Check(State, Mate && Hero->GetLastBackblastVictims() >= 1 && MateLost > 0.f, FString::Printf(
-					TEXT("1: the back-blast hurt the mate 2.5 m behind (-%.1f HP, %d bodies, %.1f damage)"), MateLost, Hero->GetLastBackblastVictims(),
-					Hero->GetLastBackblastDamage()));
+				Check(State, Mate && MateLost <= 0.f, FString::Printf(TEXT("1: no back-blast damage on the mate 2.5 m behind (-%.1f HP)"), MateLost));
 			}
 			Hero->bForceHitForTesting = false;
 			if (Mate)
@@ -227,9 +245,13 @@ namespace RpgSmoke
 				Check(State, Impact.End == EProjectileEnd::Impact && Target && Impact.HitActor.Get() == Target,
 					FString::Printf(TEXT("1: it struck the 30 m dummy armed (end %d, hit %s)"), static_cast<int32>(Impact.End),
 						Impact.HitActor.IsValid() ? *Impact.HitActor->GetName() : TEXT("nothing")));
-				Check(State, Impact.bExploded && bInBlast && Impact.DirectDamage > 0.f && Lost > Impact.DirectDamage,
-					FString::Printf(TEXT("1: the direct share %.0f + the shared blast (-%.1f HP, %d blast victims)"), Impact.DirectDamage, Lost,
-						Impact.Blast.Victims.Num()));
+				Check(State, Impact.bExploded && !bInBlast && Impact.DirectDamage == 140.f && Lost > 0.f,
+					FString::Printf(TEXT("1: the direct hit 140 is its whole damage, the blast leaves it out (-%.1f HP after the body's armour / explosive factor, in the blast %d)"), Lost,
+						bInBlast ? 1 : 0));
+				const AActor* Side = State.Bystander.Get();
+				const FExplosionVictim* Splash = Impact.Blast.Victims.FindByPredicate([Side](const FExplosionVictim& Victim) { return Side && Victim.Actor.Get() == Side; });
+				Check(State, Splash && Splash->Damage > 0.f && Splash->Damage <= 60.f,
+					FString::Printf(TEXT("1: the dummy 2.5 m beside it takes the splash (%.1f of 60 at %.0f cm)"), Splash ? Splash->Damage : 0.f, Splash ? Splash->DistanceCm : 0.f));
 				Enter(State, 2);
 			}
 			return true;
@@ -271,20 +293,18 @@ namespace RpgSmoke
 				return true;
 			}
 			const int32 KeepProps = State.Props.Num();
-			// 3. A wall 1 m right behind him.
+			// 3. A wall 1 m right behind him: the rocket goes (the designer removed the refusal).
 			SpawnBlock(World, State, Hero->GetActorLocation() - State.F * 100.f, FVector(30.f, 400.f, 300.f));
-			ExpectRefusal(State, State.Near.Get(), ELauncherRefusal::Backblast, TEXT("3: a wall 1 m behind"));
-			Check(State, Hero->GetLastLauncherBackblast() == ELauncherBackblast::WallBehind, TEXT("3: ... as a wall behind"));
+			ExpectShot(State, State.Near.Get(), TEXT("3: a wall 1 m behind"));
 			DestroyProps(State, KeepProps);
-			// 4. A closed room: a roof over him and a wall 5 m behind.
+			// 4. A closed room: a roof over him and a wall 5 m behind - it goes too.
 			SpawnBlock(World, State, Hero->GetActorLocation() - State.F * 500.f, FVector(30.f, 600.f, 400.f));
 			SpawnBlock(World, State, Hero->GetActorLocation() + FVector(0.f, 0.f, 250.f) - State.F * 250.f, FVector(600.f, 600.f, 20.f));
-			ExpectRefusal(State, State.Near.Get(), ELauncherRefusal::Backblast, TEXT("4: a closed room"));
-			Check(State, Hero->GetLastLauncherBackblast() == ELauncherBackblast::ClosedRoom, TEXT("4: ... as a closed room"));
+			ExpectShot(State, State.Near.Get(), TEXT("4: a closed room"));
 			DestroyProps(State, KeepProps);
-			// 6. Closer than the arming distance.
+			// 6. Inside the minimum range (his own blast): the one refusal left.
 			ExpectRefusal(State, State.Close.Get(), ELauncherRefusal::TooClose, TEXT("6: a target 5 m away"));
-			// 5. Prone.
+			// 5. Prone: it goes.
 			Hero->SetStance(EOperativeStance::Prone);
 			Enter(State, 5);
 			return true;
@@ -295,7 +315,7 @@ namespace RpgSmoke
 			{
 				return true;
 			}
-			ExpectRefusal(State, State.Near.Get(), ELauncherRefusal::Prone, TEXT("5: prone"));
+			ExpectShot(State, State.Near.Get(), TEXT("5: prone"));
 			Finish(World, State);
 			return false;
 
@@ -331,6 +351,7 @@ namespace RpgSmoke
 		State->Near = SpawnDummy(World, *State, At(*State, 3000.f, 0.f));
 		State->Far = SpawnDummy(World, *State, At(*State, 8000.f, 600.f));
 		State->Close = SpawnDummy(World, *State, At(*State, 400.f, -300.f));
+		State->Bystander = SpawnDummy(World, *State, At(*State, 2900.f, -250.f)); // beside and a little in front (off the 80 m line): the struck dummy does not shade it
 		PlaceHero(*State);
 		// The RPG-7 the way CodexTactics.GiveWeapon gives it.
 		UWeaponDataAsset* Rpg = LoadObject<UWeaponDataAsset>(nullptr, TEXT("/Game/Data/Weapons/DA_Weapon_rpg7.DA_Weapon_rpg7"));

@@ -2,7 +2,8 @@
 // on L_MovementTest:
 //   Scripts/smoke_parallel.ps1 -Commands ProjectileSmoke -Jobs 2 -NoRetry -ExtraArgs "-Multiprocess"
 // Builds a test range 30 m above the leader (a floor slab, frozen frost hounds with a deep health pool) and checks:
-//   1. a flat round (a rocket: 40 m/s, no gravity) fired at a hound 25 m away strikes it, armed: the direct share + the blast;
+//   1. a flat round (a rocket: 40 m/s, no gravity) fired at a hound 25 m away strikes it, armed: the direct hit is its whole damage (the
+//      blast leaves the actor struck out; the designer 2026-11-09);
 //   2. a high-angle round (25 m/s, gravity 1: the plunging arc) fired at a hound 40 m away comes down on it (within 1.5 m) and hurts it;
 //      the pool hands the parked round of shot 1 back out;
 //   3. the cover rule: a projectile blast 3.5 m from a hound behind a wall does x0.25 of the same blast in the open; a plunging blast ignores
@@ -217,8 +218,9 @@ namespace ProjectileSmoke
 				Check(State, Target && Impact.HitActor.Get() == Target, FString::Printf(TEXT("1: it struck the hound (%s)"),
 					Impact.HitActor.IsValid() ? *Impact.HitActor->GetName() : TEXT("nothing")));
 				const bool bInBlast = Impact.Blast.Victims.ContainsByPredicate([Target](const FExplosionVictim& Victim) { return Target && Victim.Actor.Get() == Target; });
-				Check(State, Impact.bExploded && Impact.DirectDamage == 30.f && bInBlast && Lost > 0.f,
-					FString::Printf(TEXT("1: the direct share + the blast (-%.1f HP, %d blast victims, the hound among them %d)"), Lost,
+				// The designer 2026-11-09: the actor struck takes the direct hit as its whole share - the blast leaves it out.
+				Check(State, Impact.bExploded && Impact.DirectDamage == 30.f && !bInBlast && Lost > 0.f,
+					FString::Printf(TEXT("1: the direct hit is its whole damage, the blast leaves it out (-%.1f HP, %d blast victims, the hound among them %d)"), Lost,
 						Impact.Blast.Victims.Num(), bInBlast ? 1 : 0));
 				Check(State, FMath::IsNearlyEqual(Impact.FlightSeconds, 2500.f / 4000.f, 0.1f),
 					FString::Printf(TEXT("1: flight %.2f s / %.0f cm (25 m at 40 m/s)"), Impact.FlightSeconds, Impact.FlightDistanceCm));

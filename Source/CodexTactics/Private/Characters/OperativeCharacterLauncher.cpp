@@ -1,17 +1,16 @@
-// AOperativeCharacter - the RPG-7 (2026-11-09; docs/systems/weapons.md "The RPG-7"; new - no Godot reference): the launcher's shot rules
-// (stand / kneel, never prone; no wall right behind, not from a closed room; not closer than the arming distance), the rocket through the shared
-// projectile layer (UProjectileSubsystem -> Explosions::Detonate) and the back-blast cone behind him (friendly fire too).
+// AOperativeCharacter - the RPG-7 (2026-11-09; the game designer's numbers the same day; docs/systems/weapons.md "The RPG-7"; new - no Godot
+// reference): the launcher's one shot rule (no target inside its minimum range - the shooter would catch his own blast) and the rocket through the
+// shared projectile layer (UProjectileSubsystem -> a direct hit / Explosions::Detonate). The designer removed the back-blast damage and the
+// wall-behind / closed-room / prone refusals.
 
 #include "Characters/OperativeCharacter.h"
 
 #include "Characters/EnemyCharacter.h"
 #include "CodexTactics.h"
-#include "Combat/HealthComponent.h"
 #include "Combat/LauncherRules.h"
 #include "Combat/ProjectileSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/World.h"
-#include "EngineUtils.h"
 #include "UI/FloatingTextSubsystem.h"
 
 namespace OperativeLauncherInternal
@@ -21,42 +20,11 @@ namespace OperativeLauncherInternal
 	{
 		return Target ? Target->GetActorLocation() : FVector::ZeroVector;
 	}
-
-	FCollisionObjectQueryParams Geometry()
-	{
-		FCollisionObjectQueryParams Objects;
-		Objects.AddObjectTypesToQuery(ECC_WorldStatic);
-		Objects.AddObjectTypesToQuery(ECC_WorldDynamic);
-		return Objects;
-	}
 }
 
 bool AOperativeCharacter::IsLauncherEquipped() const
 {
 	return CurrentWeapon && CurrentWeapon->Stats.Handling == EWeaponHandling::Launcher && CurrentWeapon->Stats.Kind == EWeaponKind::Projectile;
-}
-
-ELauncherBackblast AOperativeCharacter::CheckLauncherBackblast(const FVector& AimDir) const
-{
-	const UWorld* World = GetWorld();
-	if (!World || !CurrentWeapon)
-	{
-		return ELauncherBackblast::Clear;
-	}
-	const FWeaponExplosionStats& Blast = CurrentWeapon->Stats.Explosion;
-	if (Blast.BackBlastLengthCm <= 0.f)
-	{
-		return ELauncherBackblast::Clear;
-	}
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(LauncherBackblast), false, this);
-	const FVector Shoulder = GetActorLocation() + FVector(0.f, 0.f, 50.f);
-	const FVector Back = -AimDir.GetSafeNormal();
-	FHitResult Hit;
-	const float WallBehind = World->LineTraceSingleByObjectType(Hit, Shoulder, Shoulder + Back * Blast.BackBlastLengthCm,
-		OperativeLauncherInternal::Geometry(), Params) ? static_cast<float>(Hit.Distance) : -1.f;
-	FHitResult Roof;
-	const bool bRoof = World->LineTraceSingleByObjectType(Roof, Shoulder, Shoulder + FVector(0.f, 0.f, 600.f), OperativeLauncherInternal::Geometry(), Params);
-	return LauncherRules::ClassifyBackblast(WallBehind, bRoof, Blast);
 }
 
 bool AOperativeCharacter::LauncherShotAllowed(AActor* Target)
@@ -65,28 +33,22 @@ bool AOperativeCharacter::LauncherShotAllowed(AActor* Target)
 	{
 		return true;
 	}
-	const FVector AimDir = (OperativeLauncherInternal::AimPointOn(Target) - GetWeaponMuzzleLocation()).GetSafeNormal();
-	LastLauncherBackblast = CheckLauncherBackblast(AimDir);
-	LastLauncherRefusal = LauncherRules::Refusal(CurrentClip > 0, Stance, static_cast<float>(FVector::Dist(GetActorLocation(), Target->GetActorLocation())),
-		LastLauncherBackblast, CurrentWeapon->Stats);
+	LastLauncherRefusal = LauncherRules::Refusal(CurrentClip > 0, static_cast<float>(FVector::Dist(GetActorLocation(), Target->GetActorLocation())),
+		CurrentWeapon->Stats);
+	if (LastLauncherRefusal == ELauncherRefusal::None)
+	{
+		return true;
+	}
+	++LauncherRefusals;
 	const UWorld* World = GetWorld();
 	const double Now = World ? World->GetTimeSeconds() : 0.0;
-	const bool bWarn = LastLauncherRefusal != ELauncherRefusal::None || LastLauncherBackblast != ELauncherBackblast::Clear;
-	if (bWarn && Now - LauncherLastWarningTime > 2.0)
+	if (Now - LauncherLastWarningTime > 2.0)
 	{
 		LauncherLastWarningTime = Now;
-		const FString Text = LastLauncherRefusal != ELauncherRefusal::None ? LauncherRules::RefusalText(LastLauncherRefusal, LastLauncherBackblast)
-			: LauncherRules::RefusalText(ELauncherRefusal::Backblast, LastLauncherBackblast) + TEXT(" (fired anyway)");
-		UFloatingTextSubsystem::SpawnAboveOperative(this, Text, FLinearColor(1.f, 0.55f, 0.15f));
+		UFloatingTextSubsystem::SpawnAboveOperative(this, LauncherRules::RefusalText(LastLauncherRefusal), FLinearColor(1.f, 0.55f, 0.15f));
 	}
-	if (LastLauncherRefusal != ELauncherRefusal::None)
-	{
-		++LauncherRefusals;
-		UE_LOG(LogCodexTactics, Display, TEXT("[RPG] %s: shot refused (%s)"), *DisplayName.ToString(),
-			*LauncherRules::RefusalText(LastLauncherRefusal, LastLauncherBackblast));
-		return false;
-	}
-	return true;
+	UE_LOG(LogCodexTactics, Display, TEXT("[RPG] %s: shot refused (%s)"), *DisplayName.ToString(), *LauncherRules::RefusalText(LastLauncherRefusal));
+	return false;
 }
 
 bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
@@ -116,8 +78,8 @@ bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
 	Launch.From = Muzzle;
 	Launch.Projectile = Stats.Projectile;
 	Launch.Explosion = Stats.Explosion;
-	Launch.DirectDamage = Stats.Explosion.DirectHitDamage;
-	Launch.BlastDamage = Stats.Damage.BaseDamage;
+	Launch.DirectDamage = Stats.Explosion.DirectHitDamage; // the actor struck: its whole share (the blast leaves it out)
+	Launch.BlastDamage = Stats.Damage.BaseDamage;          // the splash on everyone else in the radius
 	Launch.DamageType = Stats.Damage.DamageType;
 	Launch.ArmorPenetration = Stats.Damage.ArmorPenetration;
 	Launch.PenetrationClass = Stats.Damage.PenetrationClass;
@@ -140,67 +102,10 @@ bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
 	NoteShotAim(Target, AimPoint, false);
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
-	ApplyLauncherBackblast(AimDir);
 	// One rocket in the tube: the next one goes in at once (the weapon's reload_time).
 	if (UsesAmmo() && CurrentClip <= 0 && ReserveAmmo > 0)
 	{
 		StartReload();
 	}
 	return true;
-}
-
-void AOperativeCharacter::ApplyLauncherBackblast(const FVector& AimDir)
-{
-	LastBackblastVictims = 0;
-	LastBackblastDamage = 0.f;
-	UWorld* World = GetWorld();
-	if (!World || !CurrentWeapon)
-	{
-		return;
-	}
-	const FWeaponExplosionStats& Blast = CurrentWeapon->Stats.Explosion;
-	if (Blast.BackBlastLengthCm <= 0.f || Blast.BackBlastDamage <= 0.f)
-	{
-		return;
-	}
-	const FVector Launcher = GetActorLocation();
-	FCollisionQueryParams Params(SCENE_QUERY_STAT(LauncherBackblastVictim), false, this);
-	for (TActorIterator<ACharacter> It(World); It; ++It)
-	{
-		ACharacter* Body = *It;
-		if (Body == this || FVector::DistSquared(Body->GetActorLocation(), Launcher) > FMath::Square(Blast.BackBlastLengthCm + 50.f))
-		{
-			continue;
-		}
-		const float Damage = LauncherRules::BackblastDamageAt(Blast, Launcher, AimDir, Body->GetActorLocation());
-		UHealthComponent* Health = Body->FindComponentByClass<UHealthComponent>();
-		if (Damage <= 0.f || !Health || !Health->IsAlive())
-		{
-			continue;
-		}
-		Params.ClearIgnoredActors();
-		Params.AddIgnoredActor(this);
-		Params.AddIgnoredActor(Body);
-		FHitResult Wall;
-		if (World->LineTraceSingleByObjectType(Wall, Launcher, Body->GetActorLocation(), OperativeLauncherInternal::Geometry(), Params))
-		{
-			continue; // a wall between him and the body takes the blast
-		}
-		const FString Source = TEXT("RPG back-blast");
-		if (AOperativeCharacter* Mate = Cast<AOperativeCharacter>(Body))
-		{
-			Mate->TakeHit(Damage, Source, false, true, this);
-		}
-		else
-		{
-			FDamageSpec Hit;
-			Hit.Amount = Damage;
-			Hit.DamageType = EDamageType::Explosive;
-			Hit.AttackerSource = Source;
-			Health->TakeDamage(Hit);
-		}
-		++LastBackblastVictims;
-		LastBackblastDamage += Damage;
-		UE_LOG(LogCodexTactics, Display, TEXT("[RPG] %s: back-blast hits %s for %.1f"), *DisplayName.ToString(), *Body->GetName(), Damage);
-	}
 }

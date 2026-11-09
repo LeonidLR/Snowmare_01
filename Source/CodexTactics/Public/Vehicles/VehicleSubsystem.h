@@ -118,7 +118,7 @@ public:
 	 * the flat mine damage instead (VehicleHullRules::GetBlastHullDamage).
 	 */
 	static void ApplyBlastToVehicles(UWorld* World, const FVector& Centre, float Radius, TFunctionRef<float(float)> DamageAtHullDistance,
-		const AVehiclePawn* TriggeredBy, const FString& Source);
+		const AVehiclePawn* TriggeredBy, const FString& Source, const AVehiclePawn* Skip = nullptr);
 
 	/** The manned vehicle an enemy at From goes for (VehicleHullRules::IsEnemyTarget; the nearest hull), nullptr when none. */
 	AVehiclePawn* FindEnemyTargetVehicle(const FVector& From, bool bHordeKnowsSquad, float* OutHullDistanceCm = nullptr) const;

@@ -1,57 +1,30 @@
 #include "Combat/LauncherRules.h"
 
-#include "Characters/OperativeMovementRules.h"
 #include "Combat/ExplosionRules.h"
 
 namespace LauncherRules
 {
-	bool StanceAllows(EOperativeStance Stance)
-	{
-		return Stance != EOperativeStance::Prone;
-	}
-
-	ELauncherBackblast ClassifyBackblast(float WallBehindCm, bool bRoofAbove, const FWeaponExplosionStats& Stats)
-	{
-		if (Stats.BackBlastLengthCm <= 0.f || WallBehindCm < 0.f)
-		{
-			return ELauncherBackblast::Clear;
-		}
-		if (WallBehindCm < Stats.BackBlastClearanceCm)
-		{
-			return ELauncherBackblast::WallBehind;
-		}
-		return bRoofAbove && WallBehindCm <= Stats.BackBlastLengthCm ? ELauncherBackblast::ClosedRoom : ELauncherBackblast::Clear;
-	}
-
-	float BackblastDamageAt(const FWeaponExplosionStats& Stats, const FVector& Launcher, const FVector& AimDir, const FVector& Point)
-	{
-		return Stats.BackBlastDamage * ExplosionRules::BackblastMultiplier(Launcher, AimDir, Point, Stats.BackBlastLengthCm, Stats.BackBlastHalfAngleDeg);
-	}
-
 	float MinimumRangeCm(const FWeaponStats& Stats)
 	{
-		return FMath::Max(Stats.Range.MinRangeCm, Stats.Projectile.ArmingDistanceCm);
+		return FMath::Max3(Stats.Range.MinRangeCm, Stats.Explosion.RadiusCm, Stats.Projectile.ArmingDistanceCm);
 	}
 
-	ELauncherRefusal Refusal(bool bLoaded, EOperativeStance Stance, float TargetDistanceCm, ELauncherBackblast Backblast, const FWeaponStats& Stats)
+	ELauncherRefusal Refusal(bool bLoaded, float TargetDistanceCm, const FWeaponStats& Stats)
 	{
 		if (!bLoaded)
 		{
 			return ELauncherRefusal::Empty;
 		}
-		if (!StanceAllows(Stance))
+		return TargetDistanceCm < MinimumRangeCm(Stats) ? ELauncherRefusal::TooClose : ELauncherRefusal::None;
+	}
+
+	float DamageOn(const FWeaponStats& Stats, bool bStruck, float DistanceCm)
+	{
+		if (bStruck && Stats.Explosion.DirectHitDamage > 0.f)
 		{
-			return ELauncherRefusal::Prone;
+			return Stats.Explosion.DirectHitDamage;
 		}
-		if (TargetDistanceCm < MinimumRangeCm(Stats))
-		{
-			return ELauncherRefusal::TooClose;
-		}
-		if (Backblast != ELauncherBackblast::Clear && Stats.Explosion.bBackBlastRefuses)
-		{
-			return ELauncherRefusal::Backblast;
-		}
-		return ELauncherRefusal::None;
+		return ExplosionRules::VictimDamage(Stats.Damage.BaseDamage, ExplosionRules::FromWeapon(Stats.Explosion), DistanceCm, Stats.Explosion.RadiusCm);
 	}
 
 	FVector MissPoint(const FVector& AimPoint, const FVector& AimDir, float Roll01, float SideRoll)
@@ -65,17 +38,13 @@ namespace LauncherRules
 		return AimPoint + Right * (Side * Scatter * 0.8f) + Forward * (Scatter * 0.6f * (Roll01 < 0.5f ? -1.f : 1.f));
 	}
 
-	FString RefusalText(ELauncherRefusal Refusal, ELauncherBackblast Backblast)
+	FString RefusalText(ELauncherRefusal Refusal)
 	{
 		switch (Refusal)
 		{
-		case ELauncherRefusal::Prone: return TEXT("RPG: not prone - stand or kneel (the back-blast)");
-		case ELauncherRefusal::TooClose: return TEXT("RPG: too close - the warhead would not arm");
+		case ELauncherRefusal::TooClose: return TEXT("RPG: too close - you would be inside your own blast");
 		case ELauncherRefusal::Empty: return TEXT("RPG: no rocket loaded");
-		case ELauncherRefusal::Backblast:
-			return Backblast == ELauncherBackblast::ClosedRoom ? TEXT("RPG: not from a closed room - the back-blast") : TEXT("RPG: wall right behind - the back-blast");
-		default:
-			return FString();
+		default: return FString();
 		}
 	}
 }

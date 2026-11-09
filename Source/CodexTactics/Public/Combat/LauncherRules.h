@@ -3,35 +3,20 @@
 #include "CoreMinimal.h"
 #include "Data/WeaponStats.h"
 
-enum class EOperativeStance : uint8;
-
 /**
- * The RPG-7's pure rules (the weapons framework, 2026-11-09; docs/systems/weapons.md "The RPG-7"; new - no Godot reference): the stances it
- * fires from, the back-blast check (a wall right behind the launcher / a closed room), the back-blast's damage on a body in the cone behind,
- * the minimum range (the warhead arms at its arming distance) and the miss scatter. The world part is AOperativeCharacter::FireLauncherAt
- * (OperativeCharacterLauncher.cpp) on the shared projectile layer. UE-only. Tested in CodexTactics.Weapons.Rpg.*.
+ * The RPG-7's pure rules (the weapons framework, 2026-11-09; the game designer's numbers the same day; docs/systems/weapons.md "The RPG-7";
+ * new - no Godot reference): the one launch refusal left (a target closer than the minimum range - at least past the rocket's own blast, so the
+ * shooter never catches his own splash), the damage split (a direct hit = direct_hit_damage on the actor struck, the splash base_damage on
+ * everyone else in the blast) and the miss scatter. The designer removed the back-blast damage and the wall-behind / closed-room / prone
+ * refusals (2026-11-09). The world part is AOperativeCharacter::FireLauncherAt (OperativeCharacterLauncher.cpp) on the shared projectile layer.
+ * UE-only. Tested in CodexTactics.Weapons.Rpg.*.
  */
-
-/** What the back-blast check found behind the launcher. */
-enum class ELauncherBackblast : uint8
-{
-	/** The cone behind is open enough. */
-	Clear,
-	/** A wall closer than explosion.back_blast_clearance_m behind: the blast would come straight back. */
-	WallBehind,
-	/** A roof above and a wall within the back-blast length behind: a closed room. */
-	ClosedRoom
-};
 
 /** Why a launcher shot did not go. */
 enum class ELauncherRefusal : uint8
 {
 	None,
-	/** Prone: the back-blast would hit his own legs (stand or kneel). */
-	Prone,
-	/** The back-blast is blocked (explosion.back_blast_refuses). */
-	Backblast,
-	/** The target is closer than the arming distance (the warhead would not go off). */
+	/** The target is closer than the minimum range (the shooter would be inside his own blast). */
 	TooClose,
 	/** No rocket loaded. */
 	Empty
@@ -39,25 +24,17 @@ enum class ELauncherRefusal : uint8
 
 namespace LauncherRules
 {
-	/** The launcher fires standing or kneeling (crouched), never prone. */
-	CODEXTACTICS_API bool StanceAllows(EOperativeStance Stance);
-
-	/**
-	 * The back-blast check from the measured surroundings: WallBehindCm = the distance to the first wall along the cone's axis behind the
-	 * launcher (< 0 = none within the back-blast length), bRoofAbove = a ceiling over the shooter. A wall inside the clearance = WallBehind;
-	 * a roof with any wall inside the back-blast length = ClosedRoom; else Clear. No back-blast (length 0) = always Clear.
-	 */
-	CODEXTACTICS_API ELauncherBackblast ClassifyBackblast(float WallBehindCm, bool bRoofAbove, const FWeaponExplosionStats& Stats);
-
-	/** The back-blast's damage on a body at Point (BackBlastDamage x the cone multiplier; 0 outside the cone). */
-	CODEXTACTICS_API float BackblastDamageAt(const FWeaponExplosionStats& Stats, const FVector& Launcher, const FVector& AimDir, const FVector& Point);
-
-	/** The nearest target worth a rocket: past the arming distance (and the weapon's min_range_m), cm. */
+	/** The nearest target worth a rocket, cm: min_range_m, never inside the rocket's own blast radius (nor its arming distance). */
 	CODEXTACTICS_API float MinimumRangeCm(const FWeaponStats& Stats);
 
-	/** The shot's refusal, the checks in the player's order: empty, prone, too close, then the back-blast (when it refuses). */
-	CODEXTACTICS_API ELauncherRefusal Refusal(bool bLoaded, EOperativeStance Stance, float TargetDistanceCm, ELauncherBackblast Backblast,
-		const FWeaponStats& Stats);
+	/** The shot's refusal: empty, then too close. */
+	CODEXTACTICS_API ELauncherRefusal Refusal(bool bLoaded, float TargetDistanceCm, const FWeaponStats& Stats);
+
+	/**
+	 * The damage a body takes from a rocket bursting DistanceCm from it before its armour: the actor struck takes direct_hit_damage as its whole
+	 * share (bStruck; the blast leaves it out), everyone else the splash base_damage x the blast falloff (0 outside the radius).
+	 */
+	CODEXTACTICS_API float DamageOn(const FWeaponStats& Stats, bool bStruck, float DistanceCm);
 
 	/**
 	 * Where a missed rocket goes: the aim point pushed sideways (along Right) and along the line of fire by Roll01 in [0, 1) - between
@@ -69,5 +46,5 @@ namespace LauncherRules
 	constexpr float MaxScatterCm = 350.f;
 
 	/** The feed / floating text for a refusal ("" for None). */
-	CODEXTACTICS_API FString RefusalText(ELauncherRefusal Refusal, ELauncherBackblast Backblast);
+	CODEXTACTICS_API FString RefusalText(ELauncherRefusal Refusal);
 }
