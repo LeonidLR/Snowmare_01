@@ -27,6 +27,35 @@
   read by `AOperativeCharacter::ShootAtTarget` (operatives / PMC at an operative, both ways), `AMarksmanEnemyCharacter` (the sniper's chance) and the
   acid spit of `AEnemyCharacter` (it always hit; now it misses a leaned-out target half the time: "MISS", a deflected tracer, the round strikes his cover).
 
+## Two peekers exchange fire: the shot goes to what shows (fix/corner-peek-standoff, game designer play-test 2026-11-09)
+
+**Report (L_Gen_Depot_1):** "A PMC fighter and our fighter. Both peek out from behind a corner, but they don't shoot at each other." Our
+Commander (AGGRESSIVE) leaned out at the near corner of a long wall, a PMC fighter at the far corner / along the same face 15-20 m away, each
+inside the other's cone.
+
+**Found (smoke `CornerStandoffSmoke` A / B before the fix, its `[Standoff]` lines):** both sides SAW each other (`seen 1`: the honest sight
+looks at a peeking man's leaned-out head and shoulder, `UTacticalSightSubsystem::ProfilePoint` -> `GetPeekExposedPoint`), posture AGG
+(auto fire on), no cover hold, corner hold + corner aim + leaning, the target a corner-shot target 11-13 deg off the aim, 20.9 m of the M16's
+60 m, full clip, no cooldown, the fighter's order Hold - and `EvaluateShotLine` refused: "line blocked". The line ran from the corner fire
+origin (leaned out, ~20-30 cm past the west face) to the target's BODY (feet + 80 cm, his capsule behind his own corner, 30-56 cm inside the
+face) and cut the wall half-way (hit at 862 / 744 cm of 2091 cm). The sight point and the shot point were different parts of him, so two
+peekers could see but never shoot; a man out in the open (D, the control) was fired at at once.
+
+**Now:** `EvaluateShotLine` keeps the body as the aim point whenever its line is clear; when a WALL stops it and the target shows a peek-exposed
+part (`GetPeekExposedPoint`: he is leaned out round a corner or over a low wall) with a clear line from the shooter's origin, the shot goes
+there (`SquadFireRules::ChooseShotAimPoint`, `FShootCandidate::bExposedAim`; the round's tracer / suppression report end at that point).
+A barricade keeps its stance rules on the body (`JudgeLine`). Unchanged designer rules: no fire through walls (honest sight + the line);
+a leaned-out man is the smaller target (x0.5 from the far side, `Codex.Cover.LeanHitMultiplier` - the smoke checks every round at a peeker
+was rolled at x0.5); the corner still hides what does not show (no exposed part, or its line blocked -> no shot). One model: the squad and
+the PMC fighters share `EvaluateShotLine`.
+
+**Checks:** unit `CodexTactics.Combat.SquadFire.PeekAimPoint`; smoke `CornerStandoffSmoke` (L_MovementTest arena, a 20 x 6 x 3 m block, our
+man in cover at the south face's west end, an M16 fighter at the north face's west end, 21 m): A we lean out first, B he does - both fire
+within 4 s (first rounds 0.15-0.30 s after both peek), every round at a peeker x0.5; C he stands just behind his corner, nothing showing - no
+round either way (run first: a man fired at seeks cover by himself, #43, and holds his corner leaned out); D he stands in the open -
+both fire. Note for C: a man in cover AT a corner leans out by himself in a fight (the corner hold), so "in cover at the corner" is a peeker. Dev diagnostics: `AOperativeCharacter::DescribeShotLine(Target)` (the verdict, the traced
+line's ends, the blocker, the exposed-head line).
+
 ## Corner peek reveals traps (old §5)
 
 - **The corner peek reveals hidden traps (rev 5h, every level):** `AOperativeCharacter::IsPeekingRoundCorner` (in cover, corner aim active, at a manual peek spot or the corner-hold spot) -> `UpdatePeekTrapSpotting` (called from `UpdateCover`, cluster file `OperativeCharacterCornerAim.cpp`; every `PeekSpotConfig.IntervalSeconds` 0.2 s; not in the wave fight): every `AInteractableActor::IsHiddenTrap()` (an armed hidden level mine; an armed, laid, concealed PMC wire) inside `TrapSpotRules::IsInPeekSightCone(GetCoverFireOrigin(), CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg), Target, RangeCm 1200, HalfAngleDeg 30)` with a clear visibility trace (pawns do not block) is revealed by `RevealByPeek` (the normal spot response of part 1; the spotter is not turned, so the pose stays; extra event `TrapSpotted.Peek`). `FTrapPeekSpotConfig PeekSpotConfig` = BP_Operative Class Defaults -> CodexTactics|Cover|Peek (`bEnabled`, `RangeCm`, `HalfAngleDeg`, `bRequireLineOfSight`, `TargetHeightCm` 20, `IntervalSeconds`). **Trap groups:** `AInteractableActor::SpotEventTag` (Details -> CodexTactics|Trap) raises `TrapSpotted.<tag>` and counts in the tutorial condition stat **`traps_spotted.<tag>`** (`TrapSpotRules::ParseSpottedStatTag`, `TutorialRules::IsKnownStat`, `UTutorialSubsystem::GetConditionStat`: traps of that tag no longer hidden). Tests `Interactables.TrapSpot.PeekCone` / `.GroupEventAndStat`; smoke `PeekMinesSmoke`.

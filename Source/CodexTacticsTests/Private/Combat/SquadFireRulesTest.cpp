@@ -58,4 +58,27 @@ bool FSquadFireRulesTest::RunTest(const FString&)
 	return true;
 }
 
+// fix/corner-peek-standoff (game designer play-test 2026-11-09, L_Gen_Depot_1): our man and a PMC fighter peeking round two corners saw each
+// other (the honest sight looks at the leaned-out head) but the shot line ran to the body behind the corner - nobody fired. UE-only.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSquadFirePeekAimPointTest, "CodexTactics.Combat.SquadFire.PeekAimPoint",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FSquadFirePeekAimPointTest::RunTest(const FString&)
+{
+	using SquadFireRules::ChooseShotAimPoint;
+	// The body stays the aim point while its line is clear (an exposed head changes nothing then).
+	TestTrue(TEXT("a clear body line: the body"), ChooseShotAimPoint(EShotLineHit::Clear, true, EShotLineHit::Clear) == EShotAimPoint::Body);
+	TestTrue(TEXT("a clear body line, nobody peeking: the body"), ChooseShotAimPoint(EShotLineHit::Clear, false, EShotLineHit::Blocked) == EShotAimPoint::Body);
+	// The bug: the body behind his corner, the head and shoulder out with a clear line - aim there.
+	TestTrue(TEXT("body behind his corner, his head out with a clear line: the exposed part"),
+		ChooseShotAimPoint(EShotLineHit::Blocked, true, EShotLineHit::Clear) == EShotAimPoint::Exposed);
+	// Corners still protect: not peeking (nothing shows), or the line to the head is blocked too -> the blocked body line stands (no shot).
+	TestTrue(TEXT("behind his corner, not peeking: the body (blocked, no shot)"), ChooseShotAimPoint(EShotLineHit::Blocked, false, EShotLineHit::Clear) == EShotAimPoint::Body);
+	TestTrue(TEXT("peeking, but the wall blocks the head too: the body (blocked)"), ChooseShotAimPoint(EShotLineHit::Blocked, true, EShotLineHit::Blocked) == EShotAimPoint::Body);
+	TestTrue(TEXT("peeking, a barricade in front of the head: the body (blocked)"), ChooseShotAimPoint(EShotLineHit::Blocked, true, EShotLineHit::Barricade) == EShotAimPoint::Body);
+	// A barricade keeps its own stance rules (JudgeLine) on the body.
+	TestTrue(TEXT("a barricade before the body: the body (JudgeLine decides)"), ChooseShotAimPoint(EShotLineHit::Barricade, true, EShotLineHit::Clear) == EShotAimPoint::Body);
+	return true;
+}
+
 #endif

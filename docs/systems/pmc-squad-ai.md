@@ -455,6 +455,9 @@ into the wall (he held, prone); C the leader steps out past the wall's end, seen
 fire put him down behind it, where his flash is hidden - with honest sight then only known) and checks that the squad's team saw him by his
 flash during the fire.
 
+**Peekers (fix/corner-peek-standoff, 2026-11-09):** a man leaned out round a corner is seen by his head and shoulder; the aimed fire now aims
+there too when his body is behind the wall (both ways, the squad and the PMC) - see [cover-and-peek](cover-and-peek.md) "Two peekers exchange fire".
+
 ## 9. Hunters that lose the squad hunt again (fix/pmc-hunt-honest-sight, 2026-11-09)
 
 **Report:** main's full verification - `PmcEncounterHuntSmoke` timed out (900 s) in the pool and alone after "the hunters close in by

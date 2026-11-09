@@ -74,7 +74,7 @@ bool AOperativeCharacter::IsBehindBarricade() const
 }
 
 bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked,
-	const TCHAR** OutReason) const
+	const TCHAR** OutReason, FString* OutDetail) const
 {
 	bOutBarricadeBlocked = false;
 	const TCHAR* Unused = nullptr;
@@ -128,7 +128,16 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 	EShotLineHit Kind = EShotLineHit::Clear;
 	AActor* HitEnemy = Enemy;
 	FHitResult Hit;
-	if (World->LineTraceSingleByChannel(Hit, bCornerShot ? GetCoverFireOrigin() : GetMuzzleLocation(), EnemyFeet + FVector(0.f, 0.f, 80.f), ECC_Visibility, Params))
+	const FVector LineFrom = bCornerShot ? GetCoverFireOrigin() : GetMuzzleLocation();
+	const FVector LineTo = EnemyFeet + FVector(0.f, 0.f, 80.f);
+	const bool bLineHit = World->LineTraceSingleByChannel(Hit, LineFrom, LineTo, ECC_Visibility, Params);
+	if (OutDetail)
+	{
+		*OutDetail = FString::Printf(TEXT("from %s (%s) to %s (feet + 80), %s"), *LineFrom.ToCompactString(), bCornerShot ? TEXT("cover fire origin") : TEXT("muzzle"),
+			*LineTo.ToCompactString(), bLineHit ? *FString::Printf(TEXT("hit %s at %.0f of %.0f cm"), *GetNameSafe(Hit.GetActor()), Hit.Distance,
+			FVector::Dist(LineFrom, LineTo)) : TEXT("clear"));
+	}
+	if (bLineHit)
 	{
 		AActor* Blocker = Hit.GetActor();
 		if (Blocker && Blocker != Enemy)
@@ -142,6 +151,34 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 				Kind = Blocker->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
 			}
 		}
+	}
+	// fix/corner-peek-standoff (game designer play-test 2026-11-09): a man peeking round his corner is SEEN by his leaned-out head and
+	// shoulder (UTacticalSightSubsystem::ProfilePoint), while his body - the line's end above - stays behind the corner: the line was
+	// blocked and two peekers in each other's cones never fired. A wall in the body's way moves the aim to the part that shows when the
+	// line to it is clear (SquadFireRules::ChooseShotAimPoint); the lean multiplier (x0.5) of ShootAtTarget makes him the smaller target.
+	Out.bExposedAim = false;
+	FVector Exposed = FVector::ZeroVector;
+	const AOperativeCharacter* TargetOperative = Kind == EShotLineHit::Blocked ? Cast<AOperativeCharacter>(Enemy) : nullptr;
+	const bool bHasExposed = TargetOperative && TargetOperative->GetPeekExposedPoint(Exposed);
+	EShotLineHit ExposedKind = EShotLineHit::Blocked;
+	if (bHasExposed)
+	{
+		FHitResult ExposedHit;
+		const bool bExposedHit = World->LineTraceSingleByChannel(ExposedHit, LineFrom, Exposed, ECC_Visibility, Params);
+		ExposedKind = !bExposedHit || ExposedHit.GetActor() == Enemy ? EShotLineHit::Clear
+			: (ExposedHit.GetActor() && ExposedHit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked);
+		if (OutDetail)
+		{
+			*OutDetail += FString::Printf(TEXT("; the exposed head %s: %s"), *Exposed.ToCompactString(),
+				bExposedHit && ExposedHit.GetActor() != Enemy ? *FString::Printf(TEXT("hit %s at %.0f cm"), *GetNameSafe(ExposedHit.GetActor()), ExposedHit.Distance) : TEXT("clear"));
+		}
+	}
+	if (SquadFireRules::ChooseShotAimPoint(Kind, bHasExposed, ExposedKind) == EShotAimPoint::Exposed)
+	{
+		Kind = EShotLineHit::Clear;
+		HitEnemy = Enemy;
+		Out.bExposedAim = true;
+		Out.AimPoint = Exposed;
 	}
 	const FShotLineVerdict Verdict = SquadFireRules::JudgeLine(Kind, Stance, Elevation);
 	bOutBarricadeBlocked = Verdict.bBarricadeBlocked;
@@ -305,6 +342,16 @@ AActor* AOperativeCharacter::FindBestCombatTarget() const
 		}
 	}
 	return Best;
+}
+
+FString AOperativeCharacter::DescribeShotLine(AActor* Target) const
+{
+	FShootCandidate Candidate;
+	bool bBlocked = false;
+	const TCHAR* Reason = TEXT("-");
+	FString Detail;
+	const bool bOk = Target && EvaluateShotLine(Target, true, Candidate, bBlocked, &Reason, &Detail);
+	return FString::Printf(TEXT("%s: %s%s%s"), bOk ? TEXT("SHOT") : TEXT("no shot"), Reason, Detail.IsEmpty() ? TEXT("") : TEXT(" | "), *Detail);
 }
 
 bool AOperativeCharacter::CanHitEnemy(AActor* Enemy) const
@@ -788,6 +835,8 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	TGuardValue<bool> Blind(bBlindShot, Shot.bBlind);
 	TGuardValue<FVector> Aim(BlindAimPoint, Shot.AimPoint);
 	TGuardValue<bool> CoverBlind(bCoverBlindShot, bInCover && (CoverFireMode == ECoverFireMode::BlindFire || SuppressionFire.bBlind));
+	TGuardValue<bool> ExposedShot(bExposedAimShot, Shot.bExposedAim && !Shot.bBlind && !bRaging);
+	TGuardValue<FVector> ExposedAim(ExposedAimPoint, Shot.AimPoint);
 	ReturnFireShots += Shot.bReturnFire ? 1 : 0;
 	ShootAtTarget(Target, Shot.Cover);
 	return TEXT("fired");
@@ -972,12 +1021,13 @@ bool AOperativeCharacter::ShootAtTarget(AActor* Target, float Cover)
 	{
 		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("MISS!"), FLinearColor(0.75f, 0.75f, 0.75f));
 	}
-	NoteShotAim(Target, bBlindShot ? BlindAimPoint : Target->GetActorLocation(), bBlindShot);
+	NoteShotAim(Target, bBlindShot ? BlindAimPoint : (bExposedAimShot ? ExposedAimPoint : Target->GetActorLocation()), bBlindShot);
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
 
 	// Godot _spawn_muzzle_tracer: to the target, or deflected next to it on a miss (suppressed: x the suppression spread).
-	FVector RoundEnd = bBlindShot ? BlindAimPoint : Target->GetActorLocation();
+	// A peeking man's exposed head and shoulder (fix/corner-peek-standoff): the round flies to the part that shows, not into his corner.
+	FVector RoundEnd = bBlindShot ? BlindAimPoint : (bExposedAimShot ? ExposedAimPoint : Target->GetActorLocation());
 	if (!bHit)
 	{
 		FVector Offset(FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(-140.f, 140.f), FMath::FRandRange(20.f, 120.f));

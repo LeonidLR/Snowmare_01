@@ -88,6 +88,12 @@ FShotLineVerdict SquadFireRules::JudgeLine(EShotLineHit Hit, EOperativeStance St
 	return Verdict;
 }
 
+EShotAimPoint SquadFireRules::ChooseShotAimPoint(EShotLineHit BodyLine, bool bHasExposedPoint, EShotLineHit ExposedLine)
+{
+	// Only a wall in the body's way moves the aim; a barricade keeps JudgeLine's stance rules on the body.
+	return BodyLine == EShotLineHit::Blocked && bHasExposedPoint && ExposedLine == EShotLineHit::Clear ? EShotAimPoint::Exposed : EShotAimPoint::Body;
+}
+
 bool SquadFireRules::IsSignificantlyCloser(float ClosestDistanceCm, float CurrentDistanceCm, float SwitchRatio)
 {
 	return ClosestDistanceCm < CurrentDistanceCm * SwitchRatio || ClosestDistanceCm < 350.f;

@@ -134,6 +134,12 @@ struct FShootCandidate
 	FVector AimPoint = FVector::ZeroVector;
 	/** A return round at an under-fire muzzle flash (bug #43, UnderFireRules; blind, AimPoint = the flash). */
 	bool bReturnFire = false;
+	/**
+	 * Aimed at the part of a peeking man that shows (fix/corner-peek-standoff 2026-11-09, SquadFireRules::ChooseShotAimPoint): his body is
+	 * behind his corner, the line to his leaned-out head and shoulder (AOperativeCharacter::GetPeekExposedPoint) is clear; AimPoint = that point.
+	 * A normal aimed shot (not blind); the lean multiplier (x0.5) is the target's GetIncomingHitChanceMultiplier.
+	 */
+	bool bExposedAim = false;
 };
 
 /**
@@ -2050,6 +2056,12 @@ public:
 	bool CanHitEnemy(AActor* Enemy) const;
 
 	/**
+	 * Dev diagnostics (fix/corner-peek-standoff 2026-11-09, smokes / Codex.Debug.FireTrace): the real-time fire's shot-line verdict at Target
+	 * as one line - the reason (EvaluateShotLine), the traced line's origin and end point and what stopped it.
+	 */
+	FString DescribeShotLine(AActor* Target) const;
+
+	/**
 	 * Honest sight (fix/pmc-fire-through-wall 2026-11-08): his side sees Target now - the squad's sight for the player's men
 	 * (UTacticalSightSubsystem::IsVisibleToSquad), his team's for a hostile fighter (UPmcSquadSubsystem::IsVisibleToTeam). True without them.
 	 */
@@ -2429,7 +2441,7 @@ private:
 	 * barricades by SquadFireRules::JudgeLine, another enemy in the way becomes the target unless bKeepTarget).
 	 */
 	bool EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked,
-		const TCHAR** OutReason = nullptr) const;
+		const TCHAR** OutReason = nullptr, FString* OutDetail = nullptr) const;
 	/** ProcessCombatShooting's body: returns why no shot left this frame ("fired" when one did) and the target it had. */
 	const TCHAR* RunCombatShooting(float DeltaTime, AActor*& OutTarget);
 	/**
@@ -2521,6 +2533,9 @@ private:
 	FVector BlindAimPoint = FVector::ZeroVector;
 	/** Set around ShootAtTarget for a cover blind shot (head down, -40 %). */
 	bool bCoverBlindShot = false;
+	/** Set around ShootAtTarget for a shot at a peeking man's exposed head and shoulder (FShootCandidate::bExposedAim): the round's end point. */
+	bool bExposedAimShot = false;
+	FVector ExposedAimPoint = FVector::ZeroVector;
 	/** Cover state (Sprint 12). */
 	FCoverSlot CoverSlot;
 	FCoverSlot PendingCoverSlot;
