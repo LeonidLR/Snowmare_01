@@ -356,6 +356,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	LimitCornerLeaveTurn(TickYawBefore, DeltaTime); // fix/corner-exit-jerk: no swing of the leaned-out body round the capsule
 	UpdateCoverEntryBlend(DeltaTime);
 	EnforceMeshBaseOffset();
+	UpdateLauncherRoundVisual(); // the RPG-7's rocket on the tube (OperativeCharacterLauncher.cpp)
 	UpdateSilhouette(DeltaTime);
 	UpdateSelectionRing();
 	UpdateVisionCone(DeltaTime);

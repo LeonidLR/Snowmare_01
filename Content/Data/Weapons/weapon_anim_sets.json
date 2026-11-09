@@ -1,57 +1,119 @@
 {
-  "comment": "Weapon animation sets played by the operative's native weapon layer (UOperativeAnimInstance, OperativeAnimInstanceShotgun.cpp; designer decision 21, 2026-11-03: the D-1 shotgun switches the locomotion / aim set to the user's /Game/ShotgunLocomotionPack - never modified, read here by path). Directions clockwise from forward. *_speed = the loops' authored ground speed, cm/s (the play rate follows the actual speed). retargeted = skeleton name -> the folder of its IK-retargeted copies (same clip names; Scripts/Editor/setup_shotgun_animation.py; skeletons not listed - the PMC operator, Manny hierarchy - play the pack clips). reload: ONE pass of the pack's single reload clip on the upper body (designer 2026-11-08: restarting it x4.8 per shell shook him) - the intro 0 .. reload_shell_start_s once, the shell-insertion loop reload_shell_start_s .. reload_shell_end_s once per shell (rate = loop length / the per-shell step, kept 0.7..1.4), then the outro from reload_outro_start_s (the loop's end pose) to the clip's end; measured by Scripts/Editor/measure_shotgun_reload.py (the left hand at the loading port, the same pose at 0.833 / 1.2 / 1.833 s).",
+  "comment": "Weapon animation sets played by the operative's native weapon layer (UOperativeAnimInstance, OperativeAnimInstanceShotgun.cpp; designer decision 21, 2026-11-03: the D-1 shotgun switches the locomotion / aim set to the user's /Game/ShotgunLocomotionPack - never modified, read here by path). Directions clockwise from forward. *_speed = the loops' authored ground speed, cm/s (the play rate follows the actual speed). retargeted = skeleton name -> the folder of its IK-retargeted copies (same clip names; Scripts/Editor/setup_shotgun_animation.py; skeletons not listed - the PMC operator, Manny hierarchy - play the pack clips). reload: ONE pass of the pack's single reload clip on the upper body (designer 2026-11-08: restarting it x4.8 per shell shook him) - the intro 0 .. reload_shell_start_s once, the shell-insertion loop reload_shell_start_s .. reload_shell_end_s once per shell (rate = loop length / the per-shell step, kept 0.7..1.4), then the outro from reload_outro_start_s (the loop's end pose) to the clip's end; measured by Scripts/Editor/measure_shotgun_reload.py (the left hand at the loading port, the same pose at 0.833 / 1.2 / 1.833 s). body (default \"upper\"): \"upper\" = the set drives spine_01 and below, the pelvis / legs stay the ABP's rifle locomotion (the pistol); \"full\" = every bone but the root (the shotgun since the designer's 2026-11-09 b: the pack's Loop_Root legs, speed-matched per direction).",
   "shotgun": {
+    "comment": "The D-1 shotgun, FULL BODY on the pack's root-motion loops (the game designer 2026-11-09 b: 'In /Game/ShotgunLocomotionPack/Animations/Loop_Root there are the animations to set up the shotgun locomotion'): walk 7 directions (the pack has no walk_45_fwd_right root clip: forward-right blends forward + right), aim walk / jog 8, crouch 4, sprint - all *_loop_root; idles from Idle/, turn in place from TurnInPlace/ (the clips turn 90 deg in their root: played by the body's own turn, feet planted), the pose aim offset from AimOffset/ (single-frame poses against front_C: yaw +-90, pitch +-75). The capsule moves the body (no root motion): the root stays the ABP's (the clips' root travel is dropped - no drift, no seam pop), each loop plays at speed / its natural speed (*_speeds = the root clips' measured root travel / length, Scripts/Editor/measure_shotgun_loop_root.py; x stride_scale for the retargeted copies: the IK retarget scales the root travel by the body's height, measured male x1.094 / female x1.018, the pelvis stays put on the root). Walk -> jog by speed over jog_blend_speeds (280 -> 360 cm/s: the operative's 220 cm/s walk plays the walk loops at ~x1.3, no long walk / jog mix), sprint when sprinting (the phase follows the blended cycle distance, so a mix keeps its feet), aim walk while aiming. Fire / reload unchanged (the reload natively on the upper body; the fire clip a montage: the legs stay the pack's - mask LowerBody).",
     "retargeted": {
       "UE4_Mannequin_Skeleton": "/Game/Characters/Animations/Shotgun/Male",
       "Female_Soldier_Skeleton": "/Game/Characters/Animations/Shotgun/Female"
     },
+    "body": "full",
     "stand_idle": "/Game/ShotgunLocomotionPack/Animations/Idle/anim_shotgun_stand_idle.anim_shotgun_stand_idle",
     "aim_idle": "/Game/ShotgunLocomotionPack/Animations/Idle/anim_shotgun_aim_idle.anim_shotgun_aim_idle",
     "crouch_idle": "/Game/ShotgunLocomotionPack/Animations/Idle/anim_shotgun_crouch_idle.anim_shotgun_crouch_idle",
-    "sprint": "/Game/ShotgunLocomotionPack/Animations/Sprint/anim_shotgun_sprint_loop.anim_shotgun_sprint_loop",
+    "sprint": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_sprint_loop_root.anim_shotgun_sprint_loop_root",
     "walk": {
-      "fwd": "/Game/ShotgunLocomotionPack/Animations/Walk/anim_shotgun_walk_fwd_loop.anim_shotgun_walk_fwd_loop",
-      "fwd_right": "/Game/ShotgunLocomotionPack/Animations/Walk/anim_shotgun_walk_45_fwd_right_loop.anim_shotgun_walk_45_fwd_right_loop",
-      "right": "/Game/ShotgunLocomotionPack/Animations/Walk/anim_shotgun_walk_right_loop.anim_shotgun_walk_right_loop",
-      "bwd_right": "/Game/ShotgunLocomotionPack/Animations/Walk/anim_shotgun_walk_45_bwd_right_loop.anim_shotgun_walk_45_bwd_right_loop",
-      "bwd": "/Game/ShotgunLocomotionPack/Animations/Walk/anim_shotgun_walk_bwd_loop.anim_shotgun_walk_bwd_loop",
-      "bwd_left": "/Game/ShotgunLocomotionPack/Animations/Walk/anim_shotgun_walk_45_bwd_left_loop.anim_shotgun_walk_45_bwd_left_loop",
-      "left": "/Game/ShotgunLocomotionPack/Animations/Walk/anim_shotgun_walk_left_loop.anim_shotgun_walk_left_loop",
-      "fwd_left": "/Game/ShotgunLocomotionPack/Animations/Walk/anim_shotgun_walk_45_fwd_left_loop.anim_shotgun_walk_45_fwd_left_loop"
+      "fwd": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_walk_fwd_loop_root.anim_shotgun_walk_fwd_loop_root",
+      "right": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_walk_right_loop_root.anim_shotgun_walk_right_loop_root",
+      "bwd_right": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_walk_45_bwd_right_loop_root.anim_shotgun_walk_45_bwd_right_loop_root",
+      "bwd": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_walk_bwd_loop_root.anim_shotgun_walk_bwd_loop_root",
+      "bwd_left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_walk_45_bwd_left_loop_root.anim_shotgun_walk_45_bwd_left_loop_root",
+      "left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_walk_left_loop_root.anim_shotgun_walk_left_loop_root",
+      "fwd_left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_walk_45_fwd_left_loop_root.anim_shotgun_walk_45_fwd_left_loop_root"
     },
     "aim_walk": {
-      "fwd": "/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_walk_fwd_loop.anim_shotgun_aim_walk_fwd_loop",
-      "fwd_right": "/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_walk_45_fwd_right_loop.anim_shotgun_aim_walk_45_fwd_right_loop",
-      "right": "/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_walk_right_loop.anim_shotgun_aim_walk_right_loop",
-      "bwd_right": "/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_walk_45_bwd_right_loop.anim_shotgun_aim_walk_45_bwd_right_loop",
-      "bwd": "/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_walk_bwd_loop.anim_shotgun_aim_walk_bwd_loop",
+      "fwd": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_aim_walk_fwd_loop_root.anim_shotgun_aim_walk_fwd_loop_root",
+      "fwd_right": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_aim_walk_45_fwd_right_loop_root.anim_shotgun_aim_walk_45_fwd_right_loop_root",
+      "right": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_aim_walk_right_loop_root.anim_shotgun_aim_walk_right_loop_root",
+      "bwd_right": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_aim_walk_45_bwd_right_loop_root.anim_shotgun_aim_walk_45_bwd_right_loop_root",
+      "bwd": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_aim_walk_bwd_loop_root.anim_shotgun_aim_walk_bwd_loop_root",
       "bwd_left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_aim_walk_45_bwd_left_loop.anim_shotgun_aim_walk_45_bwd_left_loop",
-      "left": "/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_walk_left_loop.anim_shotgun_aim_walk_left_loop",
-      "fwd_left": "/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_walk_45_fwd_left_loop.anim_shotgun_aim_walk_45_fwd_left_loop"
+      "left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_aim_walk_left_loop_root.anim_shotgun_aim_walk_left_loop_root",
+      "fwd_left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_aim_walk_45_fwd_left_loop_root.anim_shotgun_aim_walk_45_fwd_left_loop_root"
     },
     "jog": {
-      "fwd": "/Game/ShotgunLocomotionPack/Animations/Jog/anim_shotgun_jog_fwd_loop.anim_shotgun_jog_fwd_loop",
-      "fwd_right": "/Game/ShotgunLocomotionPack/Animations/Jog/anim_shotgun_jog_45_fwd_right_loop.anim_shotgun_jog_45_fwd_right_loop",
-      "right": "/Game/ShotgunLocomotionPack/Animations/Jog/anim_shotgun_jog_right_loop.anim_shotgun_jog_right_loop",
-      "bwd_right": "/Game/ShotgunLocomotionPack/Animations/Jog/anim_shotgun_jog_45_bwd_right_loop.anim_shotgun_jog_45_bwd_right_loop",
-      "bwd": "/Game/ShotgunLocomotionPack/Animations/Jog/anim_shotgun_jog_bwd_loop.anim_shotgun_jog_bwd_loop",
-      "bwd_left": "/Game/ShotgunLocomotionPack/Animations/Jog/anim_shotgun_jog_45_bwd_left_loop.anim_shotgun_jog_45_bwd_left_loop",
-      "left": "/Game/ShotgunLocomotionPack/Animations/Jog/anim_shotgun_jog_left_loop.anim_shotgun_jog_left_loop",
-      "fwd_left": "/Game/ShotgunLocomotionPack/Animations/Jog/anim_shotgun_jog_45_fwd_left_loop.anim_shotgun_jog_45_fwd_left_loop"
+      "fwd": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_jog_fwd_loop_root.anim_shotgun_jog_fwd_loop_root",
+      "fwd_right": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_jog_45_fwd_right_loop_root.anim_shotgun_jog_45_fwd_right_loop_root",
+      "right": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_jog_right_loop_root.anim_shotgun_jog_right_loop_root",
+      "bwd_right": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_jog_45_bwd_right_loop_root.anim_shotgun_jog_45_bwd_right_loop_root",
+      "bwd": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_jog_bwd_loop_root.anim_shotgun_jog_bwd_loop_root",
+      "bwd_left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_jog_45_bwd_left_loop_root.anim_shotgun_jog_45_bwd_left_loop_root",
+      "left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_jog_left_loop_root.anim_shotgun_jog_left_loop_root",
+      "fwd_left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_jog_45_fwd_left_loop_root.anim_shotgun_jog_45_fwd_left_loop_root"
     },
     "crouch": {
-      "fwd": "/Game/ShotgunLocomotionPack/Animations/Crouch/anim_shotgun_crouch_fwd_loop.anim_shotgun_crouch_fwd_loop",
-      "right": "/Game/ShotgunLocomotionPack/Animations/Crouch/anim_shotgun_crouch_walk_right_loop.anim_shotgun_crouch_walk_right_loop",
-      "bwd": "/Game/ShotgunLocomotionPack/Animations/Crouch/anim_shotgun_crouch_bwd_loop.anim_shotgun_crouch_bwd_loop",
-      "left": "/Game/ShotgunLocomotionPack/Animations/Crouch/anim_shotgun_crouch_walk_left_loop.anim_shotgun_crouch_walk_left_loop"
+      "fwd": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_crouch_fwd_loop_root.anim_shotgun_crouch_fwd_loop_root",
+      "right": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_crouch_walk_right_loop_root.anim_shotgun_crouch_walk_right_loop_root",
+      "bwd": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_crouch_bwd_loop_root.anim_shotgun_crouch_bwd_loop_root",
+      "left": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_crouch_walk_left_loop_root.anim_shotgun_crouch_walk_left_loop_root"
     },
+    "turn_left": "/Game/ShotgunLocomotionPack/Animations/TurnInPlace/anim_shotgun_turn_90_left_inplace.anim_shotgun_turn_90_left_inplace",
+    "turn_right": "/Game/ShotgunLocomotionPack/Animations/TurnInPlace/anim_shotgun_turn_90_right_inplace.anim_shotgun_turn_90_right_inplace",
+    "aim_turn_left": "/Game/ShotgunLocomotionPack/Animations/TurnInPlace/anim_shotgun_aim_turn_90_left_inplace.anim_shotgun_aim_turn_90_left_inplace",
+    "aim_turn_right": "/Game/ShotgunLocomotionPack/Animations/TurnInPlace/anim_shotgun_aim_turn_90_right_inplace.anim_shotgun_aim_turn_90_right_inplace",
+    "turn_clip_deg": 90,
+    "aim_pose_base": "/Game/ShotgunLocomotionPack/Animations/AimOffset/anim_shotgun_aimoffset_front_C.anim_shotgun_aimoffset_front_C",
+    "aim_poses": {
+      "up_left": "/Game/ShotgunLocomotionPack/Animations/AimOffset/anim_shotgun_aimoffset_left_U.anim_shotgun_aimoffset_left_U",
+      "up": "/Game/ShotgunLocomotionPack/Animations/AimOffset/anim_shotgun_aimoffset_front_U.anim_shotgun_aimoffset_front_U",
+      "up_right": "/Game/ShotgunLocomotionPack/Animations/AimOffset/anim_shotgun_aimoffset_right_U.anim_shotgun_aimoffset_right_U",
+      "left": "/Game/ShotgunLocomotionPack/Animations/AimOffset/anim_shotgun_aimoffset_left_C.anim_shotgun_aimoffset_left_C",
+      "right": "/Game/ShotgunLocomotionPack/Animations/AimOffset/anim_shotgun_aimoffset_right_C.anim_shotgun_aimoffset_right_C",
+      "down_left": "/Game/ShotgunLocomotionPack/Animations/AimOffset/anim_shotgun_aimoffset_left_D.anim_shotgun_aimoffset_left_D",
+      "down": "/Game/ShotgunLocomotionPack/Animations/AimOffset/anim_shotgun_aimoffset_front_D.anim_shotgun_aimoffset_front_D",
+      "down_right": "/Game/ShotgunLocomotionPack/Animations/AimOffset/anim_shotgun_aimoffset_right_D.anim_shotgun_aimoffset_right_D"
+    },
+    "aim_yaw_range_deg": 90,
+    "aim_pitch_range_deg": 75,
     "fire_aim": "/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_fire_01.anim_shotgun_aim_fire_01",
     "fire_hip": "/Game/ShotgunLocomotionPack/Animations/Loop_Root/anim_shotgun_hip_fire_01.anim_shotgun_hip_fire_01",
     "reload": "/Game/ShotgunLocomotionPack/Animations/Aim/anim_shotgun_aim_reload.anim_shotgun_aim_reload",
-    "walk_speed": 150,
-    "jog_speed": 350,
-    "crouch_speed": 120,
-    "sprint_speed": 550,
+    "walk_speed": 154,
+    "jog_speed": 439,
+    "crouch_speed": 160,
+    "sprint_speed": 941,
+    "jog_blend_speeds": [
+      280,
+      360
+    ],
+    "walk_speeds": {
+      "fwd": 154.1,
+      "right": 127.9,
+      "bwd_right": 121.9,
+      "bwd": 154.9,
+      "bwd_left": 124.8,
+      "left": 130.7,
+      "fwd_left": 121.9
+    },
+    "aim_walk_speeds": {
+      "fwd": 137.3,
+      "fwd_right": 124.8,
+      "right": 127.5,
+      "bwd_right": 132.7,
+      "bwd": 136.8,
+      "bwd_left": 124.8,
+      "left": 123.8,
+      "fwd_left": 132.8
+    },
+    "jog_speeds": {
+      "fwd": 438.9,
+      "fwd_right": 334.5,
+      "right": 337.8,
+      "bwd_right": 334.5,
+      "bwd": 256.4,
+      "bwd_left": 328.1,
+      "left": 329.6,
+      "fwd_left": 334.5
+    },
+    "crouch_speeds": {
+      "fwd": 160.5,
+      "right": 120,
+      "bwd": 160.5,
+      "left": 120
+    },
+    "stride_scale": {
+      "UE4_Mannequin_Skeleton": 1.094,
+      "Female_Soldier_Skeleton": 1.018
+    },
     "move_start_speed": 15,
     "move_full_speed": 60,
     "reload_shell_start_s": 0.8333,

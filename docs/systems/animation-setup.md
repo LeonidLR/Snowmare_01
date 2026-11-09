@@ -395,6 +395,41 @@ compensation because it needs no per-clip data and also removes the clips' own p
 The pistol's additive recoil and the D-1 reload overlay act on upper bones only. **Check:** `ShotgunSmoke` / `PistolSmoke` stage 2b (probe `bWeaponLayerProbe`:
 walking and sprinting, the layer changes no lower-body bone (< 0.01) and the upper body does), `CodexTactics.Animation.WeaponLayer.MaskAndSpeed`.
 
+**FULL BODY on the pack's root-motion loops (game designer 2026-11-09 b, branch `feat/rpg7-launcher-pack`) - supersedes "UPPER BODY ONLY" for the
+SHOTGUN (the pistol stays upper-body only):** "In /Game/ShotgunLocomotionPack/Animations/Loop_Root there are the animations to set up the shotgun
+locomotion." `weapon_anim_sets.json` sets take a switch **`"body": "full" | "upper"`** (default upper; the pistol block is unchanged). A full set drives
+every bone but the root (the pelvis + legs at `ShotgunLowerWeight`, the torso at the upper weight); under an upper-body montage (the D-1's fire clip, a hit,
+the grenade) the mask is `EWeaponLayerMask::LowerBody` - the pack's legs keep walking, the montage owns the torso; a full-body montage / not eligible (cover,
+prone, ladder, vault, carrying, sniper pose, blizzard walk, dead / knocked down) = Off as before. The per-shell reload and the pistol-style fire additive
+still act on spine_01 and below.
+- **Clips** (all IK-retargeted by `Scripts/Editor/setup_shotgun_animation.py` into `/Game/Characters/Animations/Shotgun/{Male,Female}`; the pack is not
+  touched): walk 7 directions (`anim_shotgun_walk_*_loop_root`; the pack has NO walk_45_fwd_right root clip - forward-right blends forward + right), aim walk 8
+  (`anim_shotgun_aim_walk_*`, bwd_left without the _root suffix), jog 8, crouch 4, sprint - all `Loop_Root`; idles from `Idle/` (unchanged), turn in place
+  `TurnInPlace/anim_shotgun_[aim_]turn_90_{left,right}_inplace`, the pose aim offset `AimOffset/anim_shotgun_aimoffset_*` (9 single-frame poses against
+  `front_C`, `aim_pose_base`; yaw +-90, pitch +-75 measured), fire / reload unchanged. The 28 old in-place copies (Walk / Jog / Aim walk / Crouch / Sprint
+  folders) were deleted from the copy folders (21 MB for both now). Every clip and its measured numbers: `Scripts/Editor/measure_shotgun_loop_root.py` ->
+  `Saved/Logs/measure_shotgun_loop_root.json`.
+- **Root locked, speed matched.** The capsule moves the body (CharacterMovementComponent; no root motion): the root keeps the graph's translation, so the
+  clips' root travel is dropped (the pelvis stays put on the root in every copy: no drift, no seam pop - seams 0.05-0.37 cm), and **its rotation is the
+  reference rotation** - the ABP's orientation warping / root yaw offset turns the root towards the movement for ITS forward legs; the pack's directional
+  legs on that turned root walked 20-35 deg off the travel and their feet slid 66-74 % of the body's speed (found by ShotgunSmoke 2b). Each loop's natural
+  speed = its root clip's travel / length (walk 122-155, aim walk 124-137, jog 256-439, crouch 120-161, sprint 941 cm/s; `*_speeds` per direction),
+  x `stride_scale` per skeleton (the IK retarget scales the root travel by the body's height: male x1.094, female x1.018; the plant speed of the ball of the foot matches the root travel: male sprint copy 1015 vs 1029 cm/s - its
+  ankle sweeps only 550, it strikes on the forefoot). The shared phase advances by the speed over the BLENDED CYCLE DISTANCE
+  (each loop's speed x length, weighted like the clips), so a walk / jog / sprint mix keeps its feet; walk -> jog over `jog_blend_speeds` 280 -> 360 cm/s
+  (the operative's 220 cm/s walk = the walk loops at ~x1.3), aim walk while aiming, sprint when sprinting; `max_play_rate` 1.6.
+- **Turn in place** (a full set, not with the Rifle2 graph's root yaw offset): standing still and turning, the turn clip plays by the body's own yaw (the
+  clips turn 90 deg in their root: the time follows the capsule's turn, the feet stay planted), the aim turn while aiming.
+- **The pose aim offset** (any set with `aim_poses`): the poses' mesh-space rotation deltas against `aim_pose_base` (else each pose clip's own first
+  frame) x the bilinear 3 x 3 weights x `AimOffsetAlpha` (`WeaponAnimLayerRules::AimPoseWeights`); a full set keeps its legs / pelvis from the offset.
+- **A body swapped after the anim instance started** (the Medic-Sapper's member Blueprint) reloads the sets for its skeleton
+  (`LoadedSetsSkeleton`). Note: in the game her body is on `UE4_Mannequin_Skeleton` too, so she plays the Male copies.
+- **Checks:** `CodexTactics.Animation.WeaponLayer.*` (MaskAndSpeed: the LowerBody mask of a full set; LauncherRules: the aim pose weights, turn advance,
+  blended speeds); `ShotgunSmoke` 2b - walking and sprinting the lower body follows the pack (deviation > 1, an upper set < 0.01) and the planted foot's (the ball's)
+  median mid-stance world drift stays under 20 % of his speed (measured: see the CHANGELOG row); `RunCornerPeekSmoke` `ArrivalHipTurnMaxDeg` back to 60
+  (case E 36.8 deg). Rendered: `CodexTactics.ShotgunLoopShots` -> `Saved/Screenshots/ShotgunLoopRoot/` (the Engineer from the side: idle, walk 150 /
+  220, jog 400, sprint, crouch walk).
+
 ## Pistol weapon layer (the whole pistol, 2026-11-08)
 
 The same native layer as the shotgun (`OperativeAnimInstanceShotgun.cpp`, no ABP edit), now with two sets read from

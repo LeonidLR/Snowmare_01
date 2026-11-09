@@ -2976,7 +2976,35 @@ public:
 	int32 GetLauncherShots() const { return LauncherShots; }
 	int32 GetLauncherRefusals() const { return LauncherRefusals; }
 
+	/**
+	 * The loaded rocket on the tube (the weapon's "visual.loaded_round_mesh", 2026-11-09): shown while a round is in the tube, hidden from the shot,
+	 * back from the reload clip's insertion moment (WeaponAnimLayerRules::LauncherRoundVisible). False without a launcher / its round model.
+	 */
+	bool IsLauncherRoundVisible() const;
+
+	/**
+	 * The share of the whole reload (0..1) at which the round shows on the model again: set by the anim instance from the reload clip it plays
+	 * (UOperativeAnimInstance, the launcher set's reload_insert_s; the clip's rate fitted to the reload time); 0.5 without a launcher clip.
+	 */
+	float LauncherRoundInsertFraction = 0.5f;
+
+	/** The effect hooks the last launcher shot spawned (muzzle flash + back-blast; 0 while the data hooks are empty; smokes). */
+	int32 GetLauncherFxSpawned() const { return LauncherFxSpawned; }
+
+	/** The reload's progress, 0..1 (0 when not reloading): the elapsed share of the weapon's reload time. */
+	float GetReloadProgress01() const;
+
 private:
+	/** Shows / hides the round on the model (every tick; ApplyWeaponVisual creates the component). */
+	void UpdateLauncherRoundVisual();
+	/** The launcher's muzzle flash / back-blast effect hooks at the shot (no-op while the weapon's "visual.fx" is empty). */
+	void SpawnLauncherShotFx(const FVector& Muzzle, const FVector& AimDirection);
+
+	/** The loaded round's component on the hand model (created on demand, transient). */
+	UPROPERTY(Transient)
+	TObjectPtr<UStaticMeshComponent> WeaponRoundMesh;
+	int32 LauncherFxSpawned = 0;
+
 	/** The launcher rules allow the shot (refuses with a warning + counts otherwise); true for any other weapon. */
 	bool LauncherShotAllowed(AActor* Target);
 	/** Launches the rocket at Target (a miss scatters the aim point). */

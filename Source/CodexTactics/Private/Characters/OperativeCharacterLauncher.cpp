@@ -6,11 +6,17 @@
 #include "Characters/OperativeCharacter.h"
 
 #include "Characters/EnemyCharacter.h"
+#include "Characters/WeaponAnimLayerRules.h"
 #include "CodexTactics.h"
 #include "Combat/LauncherRules.h"
 #include "Combat/ProjectileSubsystem.h"
+#include "Combat/WeaponBallisticsRules.h"
+#include "Components/StaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
+#include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraSystem.h"
 #include "UI/FloatingTextSubsystem.h"
 
 namespace OperativeLauncherInternal
@@ -86,12 +92,17 @@ bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
 	Launch.Instigator = this;
 	Launch.SourceName = CurrentWeapon->WeaponName.IsEmpty() ? CurrentWeapon->WeaponId : CurrentWeapon->WeaponName.ToString();
 	Launch.bSquadNoise = IsPlayerTeam();
+	// The look (2026-11-09, the launcher pack): the rocket model nose-first along the flight, the trail hook.
+	Launch.VisualMesh = CurrentWeapon->ProjectileMesh.IsNull() ? nullptr : CurrentWeapon->ProjectileMesh.LoadSynchronous();
+	Launch.VisualTransform = CurrentWeapon->ProjectileMeshTransform;
+	Launch.TrailFx = CurrentWeapon->TrailFx.IsNull() ? nullptr : CurrentWeapon->TrailFx.LoadSynchronous();
 	if (!Projectiles->FireAt(Launch, Point))
 	{
 		Launch.Velocity = (Point - Muzzle).GetSafeNormal() * Stats.Projectile.SpeedCmS;
 		Projectiles->Fire(Launch);
 	}
 	++LauncherShots;
+	SpawnLauncherShotFx(Muzzle, AimDir);
 	UE_LOG(LogCodexTactics, Display, TEXT("[RPG] %s: rocket at %s (%.0f m, %s, chance %.2f)"), *DisplayName.ToString(), *Target->GetName(), Dist / 100.f,
 		bHit ? TEXT("on target") : TEXT("off"), HitChance);
 	// The launch is loud (patrols hear it; the blast's own noise comes at the impact).
@@ -108,4 +119,59 @@ bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
 		StartReload();
 	}
 	return true;
+}
+
+float AOperativeCharacter::GetReloadProgress01() const
+{
+	if (!bIsReloading || !CurrentWeapon)
+	{
+		return 0.f;
+	}
+	const float Total = FMath::Max(0.05f, WeaponBallisticsRules::ReloadStepSeconds(CurrentWeapon->Stats.Ammo));
+	return FMath::Clamp(1.f - ReloadTimer / Total, 0.f, 1.f);
+}
+
+bool AOperativeCharacter::IsLauncherRoundVisible() const
+{
+	return WeaponRoundMesh && WeaponRoundMesh->GetStaticMesh() && WeaponRoundMesh->IsVisible();
+}
+
+void AOperativeCharacter::UpdateLauncherRoundVisual()
+{
+	if (!WeaponRoundMesh)
+	{
+		return;
+	}
+	// The rocket rides on the tube while one is in it; the shot takes it away, the reload clip's insertion moment puts the next one on.
+	const bool bModelShown = WeaponMesh && WeaponMesh->IsVisible() && WeaponMesh->GetStaticMesh();
+	const bool bVisible = bModelShown && WeaponRoundMesh->GetStaticMesh() && IsLauncherEquipped()
+		&& WeaponAnimLayerRules::LauncherRoundVisible(CurrentClip > 0, bIsReloading, GetReloadProgress01(), LauncherRoundInsertFraction);
+	if (WeaponRoundMesh->IsVisible() != bVisible)
+	{
+		WeaponRoundMesh->SetVisibility(bVisible);
+	}
+}
+
+void AOperativeCharacter::SpawnLauncherShotFx(const FVector& Muzzle, const FVector& AimDirection)
+{
+	if (!CurrentWeapon)
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	const FRotator Forward = AimDirection.Rotation();
+	if (UNiagaraSystem* Flash = CurrentWeapon->MuzzleFlashFx.IsNull() ? nullptr : CurrentWeapon->MuzzleFlashFx.LoadSynchronous())
+	{
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, Flash, Muzzle, Forward);
+		++LauncherFxSpawned;
+	}
+	if (UNiagaraSystem* Blast = CurrentWeapon->BackblastFx.IsNull() ? nullptr : CurrentWeapon->BackblastFx.LoadSynchronous())
+	{
+		// The tube's rear end on the model (its own space), the smoke facing backwards along the tube.
+		const FTransform Model = WeaponMesh ? WeaponMesh->GetComponentTransform() : GetActorTransform();
+		const FVector Rear = Model.TransformPosition(CurrentWeapon->BackblastOffset);
+		const FVector Back = (Rear - Muzzle).GetSafeNormal();
+		UNiagaraFunctionLibrary::SpawnSystemAtLocation(World, Blast, Rear, (Back.IsNearlyZero() ? -AimDirection : Back).Rotation());
+		++LauncherFxSpawned;
+	}
 }

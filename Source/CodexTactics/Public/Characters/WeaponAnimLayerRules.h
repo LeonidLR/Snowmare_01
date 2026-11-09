@@ -22,10 +22,12 @@ enum class EWeaponLayerMask : uint8
 	/** The ABP alone (a full-body montage: knockdown, death, cover, interaction, stance transition; or not eligible). */
 	Off,
 	/**
-	 * The UPPER BODY only (spine_01 and everything under it: spine, neck, head, clavicles, arms, hands, weapon bones). The pelvis, legs, feet and
-	 * root always come from the ABP's locomotion (designer 2026-11-09: weapon animations only on the upper body).
+	 * The set's whole share: an "upper" set (the shotgun, the pistol - designer 2026-11-09) drives spine_01 and everything under it (the pelvis,
+	 * legs, feet and root stay the ABP's); a "full" set (the RPG-7 launcher pack, designer 2026-11-09 b) drives every bone but the root.
 	 */
-	Full
+	Full,
+	/** A "full" set under an upper-body montage (a hit reaction): the set keeps the pelvis and legs, the montage owns the torso. */
+	LowerBody
 };
 
 /** The two directional clips to blend and the share of the second. */
@@ -68,6 +70,23 @@ struct CODEXTACTICS_API FWeaponLayerDirectionBlend
 	float Alpha = 0.f;
 };
 
+/**
+ * The nine poses of a pose-based aim offset (the launcher pack's Rotation_* clips, 2026-11-09): pitch rows (up / level / down) x yaw columns
+ * (left / centre / right). The centre is the set's aim idle; the others are applied as additive deltas against it.
+ */
+enum class EWeaponAimPose : uint8
+{
+	UpLeft, Up, UpRight, Left, Center, Right, DownLeft, Down, DownRight, Count
+};
+
+/** The launcher's action clip on the upper body this frame (the shot, the reload, or none). */
+enum class ELauncherAction : uint8
+{
+	None,
+	Shot,
+	Reload
+};
+
 namespace WeaponAnimLayerRules
 {
 	/** The direction's angle, degrees clockwise from forward (Right = 90, Backward = 180, Left = -90). */
@@ -84,7 +103,19 @@ namespace WeaponAnimLayerRules
 	 * The mask this frame (gates: eligible = shotgun in hands, alive, up, not climbing / vaulting / in cover / prone / carrying). Any montage
 	 * (full body, or an upper-body one: fire / reload / grenade / hit) owns the body, so the layer is Off then; the legs are never the layer's.
 	 */
-	CODEXTACTICS_API EWeaponLayerMask ResolveMask(bool bEligible, bool bFullBodyMontage, bool bUpperBodyMontage);
+	CODEXTACTICS_API EWeaponLayerMask ResolveMask(bool bEligible, bool bFullBodyMontage, bool bUpperBodyMontage, bool bFullBodySet = false);
+
+	/**
+	 * The authored ground speed of a directional blend: the two clips' own speeds (cm/s; <= 0 = Fallback) mixed by the blend's alpha - the play
+	 * rate speed / this keeps a full-body set's feet planted in every direction (the launcher pack: walk forward 92, back / sides 112.5 cm/s).
+	 */
+	CODEXTACTICS_API float BlendedNominalSpeed(const FWeaponLayerDirectionBlend& Blend, const TStaticArray<float, 8>& Speeds, float Fallback);
+
+	/**
+	 * Advance of a turn-in-place clip that turns ClipTurnDeg over ClipLength seconds for a body that turned YawDeltaDeg this frame: the clip time
+	 * follows the body's own turn (feet planted when the capsule turns at the clip's rate), in seconds.
+	 */
+	CODEXTACTICS_API float TurnClipAdvance(float YawDeltaDeg, float ClipTurnDeg, float ClipLength);
 
 	/**
 	 * Share of the moving set against the idle clip by speed (cm/s): 0 below StartSpeed, 1 from FullSpeed on, linear between (the
@@ -121,4 +152,42 @@ namespace WeaponAnimLayerRules
 	 * the outro it starts over at the intro. The clip time never jumps except at those matching poses.
 	 */
 	CODEXTACTICS_API void AdvanceShellReload(FShellReloadState& State, const FShellReloadClip& Clip, float DeltaSeconds, bool bReloading);
+
+	// --- The launcher set (the RPG-7 on the game designer's launcher pack, 2026-11-09) -----------------------------------------------------
+
+	/**
+	 * Weights of the nine aim poses (EWeaponAimPose order) for YawDeg (+ = to the body's right) / PitchDeg (+ = up): bilinear over the 3 x 3 grid
+	 * whose outer poses sit at +-YawRangeDeg / +-PitchRangeDeg (clamped there). The poses are additive deltas against the centre, so a missing
+	 * CORNER is made of its two edge neighbours (its weight goes to both - their deltas add up to the diagonal); a missing edge pose drops its
+	 * share. The centre's weight is reported but carries no delta.
+	 */
+	CODEXTACTICS_API TStaticArray<float, 9> AimPoseWeights(float YawDeg, float PitchDeg, float YawRangeDeg, float PitchRangeDeg,
+		const TStaticArray<bool, 9>& Available);
+
+	/**
+	 * Is the loaded rocket on the tube? bRoundInTube = a round in the clip (or a shot whose rocket has not left yet): yes. Empty and reloading:
+	 * from the moment the reload clip pushes it in (ReloadProgress01 >= InsertAt01 of the whole reload). Empty, not reloading: no.
+	 */
+	CODEXTACTICS_API bool LauncherRoundVisible(bool bRoundInTube, bool bReloading, float ReloadProgress01, float InsertAt01);
+
+	/**
+	 * The reload clip's time for a reload ElapsedSeconds into TotalSeconds: it waits LeadInSeconds (the shot clip's follow-through after the
+	 * launch), then plays its whole ClipLength over the rest (the clip's rate matched to the weapon's reload_time). < 0 = not started yet.
+	 */
+	CODEXTACTICS_API float LauncherReloadClipTime(float ElapsedSeconds, float TotalSeconds, float ClipLength, float LeadInSeconds);
+
+	/** The share of the whole reload (0..1) at which the clip reaches InsertSeconds (the rocket goes onto the tube), same timing as above. */
+	CODEXTACTICS_API float LauncherInsertFraction(float InsertSeconds, float ClipLength, float TotalSeconds, float LeadInSeconds);
+
+	/**
+	 * Which action clip the launcher shows: the shot while it plays (ShotSeconds in [0, ShotLength)), then the reload clip once it has started;
+	 * otherwise none (the locomotion / aim set).
+	 */
+	CODEXTACTICS_API ELauncherAction ResolveLauncherAction(float ShotSeconds, float ShotLength, float ReloadClipTime);
+
+	/**
+	 * Share of the turn-in-place clip (0..1) for a body turning at YawRateDegPerSec while (nearly) standing: 0 while moving (Speed >= MoveSpeed) or
+	 * turning slower than MinRate, 1 from FullRate on.
+	 */
+	CODEXTACTICS_API float TurnInPlaceShare(float YawRateDegPerSec, float Speed, float MoveSpeed, float MinRate = 30.f, float FullRate = 90.f);
 }

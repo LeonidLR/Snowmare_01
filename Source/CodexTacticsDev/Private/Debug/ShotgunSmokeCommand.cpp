@@ -2,7 +2,9 @@
 //   Scripts/smoke_parallel.ps1 -Commands ShotgunSmoke
 // 1. loadout: the Engineer spawns with the D-1 in hands ("D-1 Shotgun", id shotgun), no M16, pistol + grenade, 8 shells + 40, the D-1
 //    model on the weapon socket (WeaponSkeletalMesh); the shotgun animation layer loaded.
-// 2. standing: the layer drives the whole body (mask Full) with a ShotgunLocomotionPack clip; walking: a shotgun walk / jog clip.
+// 2. standing: the layer drives the whole body (mask Full) with a ShotgunLocomotionPack clip; walking: a shotgun walk / jog clip. 2b (the
+//    full-body set on the pack's Loop_Root loops, the game designer 2026-11-09 b): walking and sprinting, the pelvis / legs follow the pack
+//    (the layer moves lower-body bones off the ABP's pose) and the planted foot does not slide (its mean world speed while on the ground).
 // 3. shots at a target 3 / 8 / 14.5 m out, every pellet forced to hit: 8 pellets each, the 14.5 m shot does x the falloff (0.4 at the
 //    15 m max reach: 0.443) of the 3 m one, the 8 m shot (= the effective range) the full damage; free shots at 8 m: partial pellet hits,
 //    damage proportional to the pellets that hit; every shot plays the shotgun fire clip.
@@ -71,6 +73,19 @@ namespace ShotgunSmoke
 		float MoveMaxSpeed = 0.f;
 		int32 MoveSamples = 0;
 		FString MoveClip;
+		// Foot plant (the full-body set, 2026-11-09 b): per frame, a foot within 2.5 cm of its lowest height is planted; its world drift.
+		bool bFootSampling = false;
+		bool bFeetValid = false;
+		FVector LastFoot[2];
+		float MinFootZ[2] = { 1.e6f, 1.e6f };
+		float TopSpeed = 0.f;
+		int32 LastLower = -1;
+		int32 LowerFrames = 0;
+		TArray<float> PlantSpeeds;
+		double PlantDriftCm = 0.0;
+		double PlantSeconds = 0.0;
+		double FootBodySpeedSum = 0.0;
+		int32 FootBodySamples = 0;
 		// Shots.
 		float Damage3 = 0.f;
 		float Damage8 = 0.f;
@@ -342,10 +357,68 @@ namespace ShotgunSmoke
 		State.bReloadHasLast = true;
 	}
 
+	/**
+	 * The planted foot's world drift while he moves steadily (the full-body set's no-foot-sliding check): per frame at >= 85 % of his top speed
+	 * so far, the LOWER foot, when it is within 3 cm of the lowest foot height seen and was the lower foot last frame too, adds its horizontal
+	 * world move - a planted foot adds ~0, a sliding one its slide.
+	 */
+	void SampleFeet(FState& State)
+	{
+		const AOperativeCharacter* Who = State.Engineer.Get();
+		UWorld* World = Who ? Who->GetWorld() : nullptr;
+		if (!State.bFootSampling || !Who || !Who->GetMesh() || !World)
+		{
+			State.bFeetValid = false;
+			return;
+		}
+		const float Dt = World->GetDeltaSeconds();
+		const float Ground = static_cast<float>(Who->GetActorLocation().Z) - Who->GetSimpleCollisionHalfHeight();
+		// The ball of the foot: the contact that stays put (a sprint strikes on the forefoot - the ankle rolls over it: the male sprint copy's
+		// ankle sweeps 550 cm/s against the ball's 1015, Scripts/Editor/measure_shotgun_loop_root.py).
+		const FVector Feet[2] = { Who->GetMesh()->GetBoneLocation(TEXT("ball_l")), Who->GetMesh()->GetBoneLocation(TEXT("ball_r")) };
+		const float Speed = static_cast<float>(Who->GetVelocity().Size2D());
+		State.TopSpeed = FMath::Max(State.TopSpeed, Speed);
+		const bool bSteady = Speed > 80.f && Speed >= State.TopSpeed * 0.85f;
+		const int32 Lower = Feet[0].Z <= Feet[1].Z ? 0 : 1;
+		const float Height = static_cast<float>(Feet[Lower].Z) - Ground;
+		if (bSteady)
+		{
+			State.MinFootZ[0] = FMath::Min(State.MinFootZ[0], Height);
+			State.LowerFrames = State.LastLower == Lower ? State.LowerFrames + 1 : 0;
+			// Mid-stance: the lower foot for 4+ frames (past the heel strike's roll), still on the ground.
+			if (State.bFeetValid && State.LowerFrames >= 4 && Dt > KINDA_SMALL_NUMBER && Height < State.MinFootZ[0] + 1.5f)
+			{
+				const float Step = static_cast<float>(FVector::Dist2D(Feet[Lower], State.LastFoot[Lower]));
+				State.PlantDriftCm += Step;
+				State.PlantSeconds += Dt;
+				State.PlantSpeeds.Add(Step / Dt);
+			}
+			State.FootBodySpeedSum += Speed;
+			++State.FootBodySamples;
+		}
+		State.LastFoot[0] = Feet[0];
+		State.LastFoot[1] = Feet[1];
+		State.LastLower = Lower;
+		State.bFeetValid = bSteady;
+	}
+
+	void ResetFeet(FState& State)
+	{
+		State.bFeetValid = false;
+		State.MinFootZ[0] = State.MinFootZ[1] = 1.e6f;
+		State.TopSpeed = 0.f;
+		State.LastLower = -1;
+		State.LowerFrames = 0;
+		State.PlantSpeeds.Reset();
+		State.PlantDriftCm = State.PlantSeconds = State.FootBodySpeedSum = 0.0;
+		State.FootBodySamples = 0;
+	}
+
 	void SampleProbe(FState& State)
 	{
 		SampleRise(State);
 		SampleReload(State);
+		SampleFeet(State);
 		const AOperativeCharacter* Who = State.Probe.Get();
 		if (!State.bProbe || !Who || !Who->GetMesh())
 		{
@@ -475,7 +548,9 @@ namespace ShotgunSmoke
 				// A body off screen skips its pose evaluation (the probe would read nothing): evaluate every frame.
 				Engineer->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 			}
-			Engineer->OrderMoveTo(SmokeUtils::ClearPoint(World, Engineer->GetActorLocation(), Engineer->GetActorLocation() + Engineer->GetActorRightVector() * 600.f), false);
+			Engineer->OrderMoveTo(SmokeUtils::ClearPoint(World, Engineer->GetActorLocation(), Engineer->GetActorLocation() + Engineer->GetActorForwardVector() * 700.f), false);
+			ResetFeet(State);
+			State.bFootSampling = true;
 			GoTo(State, 2);
 			return true;
 		}
@@ -498,24 +573,45 @@ namespace ShotgunSmoke
 					State.MoveClip = Clip;
 				}
 			}
-			if ((!State.bSawMoveClip && State.StageTime < 5.f) || (State.MoveSamples < 8 && State.StageTime < 5.f))
+			// Until he stops (or 2 s of samples): the foot-plant check needs steady strides.
+			if ((!State.bSawMoveClip && State.StageTime < 5.f) || (State.MoveSamples < 20 && State.StageTime < 6.f && (State.MoveSamples < 8 || Engineer->GetVelocity().Size2D() > 80.f)))
 			{
 				return true;
 			}
 			const bool bSprintLeg = State.Stage == 16;
 			Check(State, State.bSawMoveClip, FString::Printf(TEXT("2: %s, a shotgun walk / jog / sprint clip plays (%s)"), bSprintLeg ? TEXT("sprinting") : TEXT("walking"), *State.MoveClip));
-			// The legs are the ABP's: the layer changes no pelvis / thigh / calf / foot bone, and it does change the upper body (the weapon hold).
-			Check(State, State.MoveSamples >= 8 && State.MoveMaxLower < 0.01f && State.MoveMaxUpper > 1.f,
-				FString::Printf(TEXT("2b: %s at up to %.0f cm/s over %d frames: the lower body is the ABP's (max change %.4f), the upper body is the weapon hold (max change %.1f; mask %d, weight %.2f)"),
-					bSprintLeg ? TEXT("sprinting") : TEXT("walking"), State.MoveMaxSpeed, State.MoveSamples, State.MoveMaxLower, State.MoveMaxUpper, AnimOf(Engineer) ? static_cast<int32>(AnimOf(Engineer)->GetShotgunLayerMask()) : -1,
-					AnimOf(Engineer) ? AnimOf(Engineer)->GetShotgunUpperWeight() : 0.f));
+			// The shotgun set is "full" (the designer 2026-11-09 b: the pack's Loop_Root legs): the pelvis / legs follow the pack (the layer moves
+			// lower-body bones off the ABP's pose) and the upper body too; an "upper" set would change no lower bone (< 0.01).
+			const UOperativeAnimInstance* MoveAnim = AnimOf(Engineer);
+			const bool bFull = MoveAnim && MoveAnim->IsWeaponLayerFullBody();
+			Check(State, State.MoveSamples >= 8 && (bFull ? State.MoveMaxLower > 1.f : State.MoveMaxLower < 0.01f) && State.MoveMaxUpper > 1.f,
+				FString::Printf(TEXT("2b: %s at up to %.0f cm/s over %d frames: the lower body %s (max change %.2f), the upper body is the weapon hold (max change %.1f; mask %d, upper %.2f, lower %.2f)"),
+					bSprintLeg ? TEXT("sprinting") : TEXT("walking"), State.MoveMaxSpeed, State.MoveSamples, bFull ? TEXT("follows the pack (full-body set)") : TEXT("is the ABP's"),
+					State.MoveMaxLower, State.MoveMaxUpper, MoveAnim ? static_cast<int32>(MoveAnim->GetShotgunLayerMask()) : -1, MoveAnim ? MoveAnim->GetShotgunUpperWeight() : 0.f,
+					MoveAnim ? MoveAnim->GetShotgunLowerWeight() : 0.f));
+			// No foot sliding: the planted foot's mean world speed while on the ground (0 = perfectly planted) against his speed.
+			const float MeanPlantSpeed = State.PlantSeconds > KINDA_SMALL_NUMBER ? static_cast<float>(State.PlantDriftCm / State.PlantSeconds) : -1.f;
+			State.PlantSpeeds.Sort();
+			// The median mid-stance drift (the mean also counts the odd frame where the foot rolls onto its toes).
+			const float PlantSpeed = State.PlantSpeeds.Num() > 0 ? State.PlantSpeeds[State.PlantSpeeds.Num() / 2] : -1.f;
+			const float BodySpeed = State.FootBodySamples > 0 ? static_cast<float>(State.FootBodySpeedSum / State.FootBodySamples) : 0.f;
+			UE_LOG(LogCodexTactics, Display, TEXT("ShotgunSmoke: foot plant %s: planted foot drift median %.1f cm/s / mean %.1f cm/s (%.0f %% / %.0f %% of %.0f cm/s) over %.2f s mid-stance (%d frames)"),
+				bSprintLeg ? TEXT("sprinting") : TEXT("walking"), PlantSpeed, MeanPlantSpeed, BodySpeed > 1.f ? PlantSpeed / BodySpeed * 100.f : 0.f,
+				BodySpeed > 1.f ? MeanPlantSpeed / BodySpeed * 100.f : 0.f, BodySpeed, State.PlantSeconds, State.PlantSpeeds.Num());
+			if (bFull)
+			{
+				Check(State, PlantSpeed >= 0.f && PlantSpeed < FMath::Max(25.f, BodySpeed * 0.2f),
+					FString::Printf(TEXT("2b: %s, no foot sliding: the planted foot drifts %.1f cm/s on the ground (%.0f %% of his %.0f cm/s; limit 20 %%)"),
+						bSprintLeg ? TEXT("sprinting") : TEXT("walking"), PlantSpeed, BodySpeed > 1.f ? PlantSpeed / BodySpeed * 100.f : 0.f, BodySpeed));
+			}
+			ResetFeet(State);
 			Engineer->StopOperative();
 			if (!bSprintLeg)
 			{
 				State.MoveMaxLower = State.MoveMaxUpper = State.MoveMaxSpeed = 0.f;
 				State.MoveSamples = 0;
 				State.bSawMoveClip = false;
-				Engineer->OrderMoveTo(SmokeUtils::ClearPoint(World, Engineer->GetActorLocation(), Engineer->GetActorLocation() - Engineer->GetActorRightVector() * 600.f), true);
+				Engineer->OrderMoveTo(SmokeUtils::ClearPoint(World, Engineer->GetActorLocation(), Engineer->GetActorLocation() + Engineer->GetActorForwardVector() * 1500.f), true);
 				GoTo(State, 16);
 				return true;
 			}
@@ -523,6 +619,7 @@ namespace ShotgunSmoke
 			{
 				Probe->bWeaponLayerProbe = false;
 			}
+			State.bFootSampling = false;
 			GoTo(State, 3);
 			return true;
 		}

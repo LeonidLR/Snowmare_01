@@ -235,6 +235,21 @@ private:
 	const UAnimSequenceBase* WeaponReloadClip = nullptr;
 	float WeaponReloadTime = 0.f;
 	float WeaponReloadWeight = 0.f;
+	/**
+	 * The launcher set (the RPG-7, 2026-11-09): its action clip (the shot / the reload) blended INTO the layer's pose before the torso is put on
+	 * the ABP's pelvis, then the pose-based aim offset (the Rotation_* poses' last frame against their first, mesh-space rotation additives).
+	 */
+	void BlendWeaponAction(FCompactPose& Layer, FBlendedCurve& Curve, UE::Anim::FStackAttributeContainer& Attributes) const;
+	void BlendWeaponAimPoses(FCompactPose& Layer, FBlendedCurve& Curve, UE::Anim::FStackAttributeContainer& Attributes) const;
+	const UAnimSequenceBase* WeaponActionClip = nullptr;
+	float WeaponActionTime = 0.f;
+	float WeaponActionWeight = 0.f;
+	/** A "full" set (the launcher, designer 2026-11-09 b): every bone but the root from the layer; the lower body's own weight (pelvis + legs). */
+	bool bWeaponFullBody = false;
+	float WeaponLowerWeight = 0.f;
+	TStaticArray<const UAnimSequenceBase*, 9> WeaponAimPoses = TStaticArray<const UAnimSequenceBase*, 9>(InPlace, nullptr);
+	const UAnimSequenceBase* WeaponAimBase = nullptr;
+	TStaticArray<float, 9> WeaponAimWeights = TStaticArray<float, 9>(InPlace, 0.f);
 };
 
 /**
@@ -1284,8 +1299,17 @@ public:
 	float GetWeaponLayerLowerDeviation() const;
 	float GetWeaponLayerUpperDeviation() const;
 
-	/** The layer's current blend weight (0..1) on the upper body; the legs always come from the ABP (no lower weight, designer 2026-11-09). */
+	/** The layer's current blend weight (0..1) on the upper body; an "upper" set's legs always come from the ABP (designer 2026-11-09). */
 	float GetShotgunUpperWeight() const { return ShotgunUpperWeight; }
+	/** The layer's weight on the pelvis and legs (0..1): a "full" set only (the launcher, designer 2026-11-09 b), else 0. */
+	float GetShotgunLowerWeight() const { return ShotgunLowerWeight; }
+	/** The set in hands drives the whole body ("body": "full" in weapon_anim_sets.json). */
+	bool IsWeaponLayerFullBody() const { return bShotgunWeapon && ActiveWeaponSet().bFullBody; }
+	/** The layer's clips this frame (sequence, time, weight) and its shared loop phase 0..1 (smokes / diagnostics). */
+	const TStaticArray<FOperativeClipState, 12>& GetWeaponLayerClips() const { return ShotgunClips; }
+	float GetWeaponLayerPhase() const { return ShotgunPhase; }
+	/** The turn-in-place clip's share this frame (a full-body set; smokes). */
+	float GetWeaponLayerTurnShare() const { return LayerTurnShare; }
 
 	/** The heaviest shotgun locomotion clip this frame (smokes: "a known shotgun clip plays"). */
 	const UAnimSequenceBase* GetShotgunDominantClip() const;
@@ -1297,13 +1321,34 @@ public:
 	int32 GetShotgunFireClips() const { return ShotgunFireClips; }
 	int32 GetShotgunShellClips() const { return ShotgunShellClips; }
 	/** The folder the shotgun clips come from for this skeleton (empty: the pack's own clips). */
-	const FString& GetShotgunRetargetFolder() const { return LayerHandling == EWeaponHandling::Pistol ? PistolRetargetFolder : ShotgunRetargetFolder; }
+	const FString& GetShotgunRetargetFolder() const
+	{
+		return LayerHandling == EWeaponHandling::Pistol ? PistolRetargetFolder : (LayerHandling == EWeaponHandling::Launcher ? LauncherRetargetFolder : ShotgunRetargetFolder);
+	}
 	/** The handling whose set the weapon layer plays (Shotgun / Pistol; Standard = none). */
 	EWeaponHandling GetWeaponLayerHandling() const { return LayerHandling; }
 	/** Equip clips played when a layer weapon came into the hands (the pistol draw; for the smokes). */
 	int32 GetWeaponEquipClips() const { return WeaponEquipClips; }
 	/** The weapon layer's reload clip weight on the upper body (0..1; the D-1 per shell, the pistol's magazine; for the smokes). */
 	float GetWeaponReloadWeight() const { return ShotgunReloadWeight; }
+
+	// --- The launcher set (the RPG-7 on the game designer's launcher pack, 2026-11-09; weapon_anim_sets.json "launcher") ----------------
+	/** The launcher's action clip now (the shot / the reload / none) and its weight on the upper body (smokes). */
+	ELauncherAction GetLauncherAction() const { return LauncherAction; }
+	float GetLauncherActionWeight() const { return LauncherActionWeight; }
+	const UAnimSequenceBase* GetLauncherActionClip() const { return LauncherActionClip; }
+	/** The launcher's action clip time now, seconds (smokes). */
+	float GetLauncherActionTime() const { return LauncherActionTime; }
+	/** The sum of the aim poses' weights this frame (x the aim offset's alpha; 0 = level, no target; any set with aim poses - the launcher, the
+	 * shotgun; smokes). */
+	float GetLauncherAimWeightSum() const;
+	/** The aim pose weights this frame (EWeaponAimPose order; smokes). */
+	const TStaticArray<float, 9>& GetLauncherAimWeights() const { return LauncherAimWeights; }
+	/** Launcher shot clips started (smokes). */
+	int32 GetLauncherShotClips() const { return LauncherShotClips; }
+	/** The launcher set's hit / death clips played (smokes). */
+	int32 GetLauncherHitClips() const { return LauncherHitClips; }
+	int32 GetLauncherDeathClips() const { return LauncherDeathClips; }
 
 	/** The grenade throw clip is still playing (the arms throw: no rifle shot meanwhile, user rule 2026-10-07). */
 	bool IsThrowingGrenade() const { return GrenadeThrowSecondsLeft > 0.f; }
@@ -1665,11 +1710,54 @@ private:
 		float BlendSeconds = 0.2f;
 		/** The draw when the weapon comes into the hands (the pistol's equip clip; upper body). */
 		UAnimSequenceBase* Equip = nullptr;
+		// The launcher set (2026-11-09): crouched shot / reload, the nine aim poses (EWeaponAimPose order, the centre unused), hits, deaths.
+		UAnimSequenceBase* FireCrouch = nullptr;
+		UAnimSequenceBase* ReloadCrouch = nullptr;
+		TStaticArray<UAnimSequence*, 9> AimPoses;
+		/** The aim poses' common base ("aim_pose_base": the shotgun pack's single-frame front_C); null = each pose clip's own first frame. */
+		UAnimSequence* AimPoseBase = nullptr;
+		TArray<UAnimSequenceBase*> Hits;
+		TArray<UAnimSequenceBase*> Deaths;
+		float ReloadInsert = 0.f;
+		float ReloadCrouchInsert = 0.f;
+		float AimYawRange = 90.f;
+		float AimPitchRange = 90.f;
+		float FireBlendIn = 0.05f;
+		float FireBlendOut = 0.15f;
+		/** A skeleton with no retargeted copies may play the pack clips by bone name ("pack_playback"; false for the launcher's UE4 pack). */
+		bool bPackPlayback = true;
+		/** "body": "full" = the set drives the pelvis and legs too (the launcher), "upper" = spine_01 and below only (the shotgun, the pistol). */
+		bool bFullBody = false;
+		/** The loops' play rate cap ("max_play_rate"; a full-body set needs the real speed ratio, else the feet slide). */
+		float MaxPlayRate = 1.6f;
+		/** The walk -> jog blend band ("jog_blend_speeds": [start, full] cm/s; unset = walk_speed .. jog_speed). */
+		float JogBlendStartSpeed = 0.f;
+		float JogBlendFullSpeed = 0.f;
+		/** The set has its own aim-walk loops (else aiming walks with the walk / jog loops). */
+		bool bHasAimWalk = false;
+		/** Per-direction authored ground speeds of the loops (cm/s, 0 = the set's single speed): the play rate per direction. */
+		TStaticArray<float, 8> WalkSpeeds = TStaticArray<float, 8>(InPlace, 0.f);
+		TStaticArray<float, 8> AimWalkSpeeds = TStaticArray<float, 8>(InPlace, 0.f);
+		TStaticArray<float, 8> JogSpeeds = TStaticArray<float, 8>(InPlace, 0.f);
+		TStaticArray<float, 8> CrouchSpeeds = TStaticArray<float, 8>(InPlace, 0.f);
+		/** Turn in place (a full-body set): the clips turn TurnClipDeg in the root; played by the body's own turn. */
+		UAnimSequence* TurnLeft = nullptr;
+		UAnimSequence* TurnRight = nullptr;
+		UAnimSequence* CrouchTurnLeft = nullptr;
+		UAnimSequence* CrouchTurnRight = nullptr;
+		/** Turn in place while aiming (the shotgun pack's aim_turn_90_*); null = the plain turn clips. */
+		UAnimSequence* AimTurnLeft = nullptr;
+		UAnimSequence* AimTurnRight = nullptr;
+		float TurnClipDeg = 90.f;
 		FShotgunAnimSet()
 		{
 			for (int32 Index = 0; Index < 8; ++Index)
 			{
 				Walk[Index] = AimWalk[Index] = Jog[Index] = Crouch[Index] = nullptr;
+			}
+			for (int32 Index = 0; Index < 9; ++Index)
+			{
+				AimPoses[Index] = nullptr;
 			}
 		}
 	};
@@ -1685,8 +1773,41 @@ private:
 	/** The weapon sets of the layer: weapon_anim_sets.json "shotgun" / "pistol" (the pistol, 2026-11-08). */
 	FShotgunAnimSet ShotgunSetData;
 	FShotgunAnimSet PistolSetData;
-	/** The set of the weapon in hands (the pistol's for EWeaponHandling::Pistol, else the shotgun's). */
-	const FShotgunAnimSet& ActiveWeaponSet() const { return LayerHandling == EWeaponHandling::Pistol ? PistolSetData : ShotgunSetData; }
+	FShotgunAnimSet LauncherSetData;
+	/** The set of the weapon in hands (the pistol's for EWeaponHandling::Pistol, the launcher's for Launcher, else the shotgun's). */
+	const FShotgunAnimSet& ActiveWeaponSet() const
+	{
+		return LayerHandling == EWeaponHandling::Pistol ? PistolSetData : (LayerHandling == EWeaponHandling::Launcher ? LauncherSetData : ShotgunSetData);
+	}
+	FString LauncherRetargetFolder;
+	/** The body skeleton the sets were loaded for: a body swapped after the anim instance started (the Medic-Sapper's member Blueprint / body
+	 * mesh) reloads them, so it plays its own skeleton's copies. */
+	TWeakObjectPtr<const USkeleton> LoadedSetsSkeleton;
+	/**
+	 * The launcher's upper-body action (the shot, then the reload fitted to the reload time after the shot's follow-through; natively, no
+	 * montage - the layer keeps the torso and the aim offset). Returns true when the launcher set handles this frame's reload (no rifle reload
+	 * montage then). Publishes the rocket's insertion share to the operative (AOperativeCharacter::LauncherRoundInsertFraction).
+	 */
+	bool UpdateLauncherAction(AOperativeCharacter* Operative, float DeltaSeconds);
+	/** The launcher's shot clip (stance: standing / crouched) from its first frame. */
+	bool PlayLauncherShot();
+	/** The launcher set's hit / standing death clip, or null when it has none (OperativeAnimInstanceShotgun.cpp). */
+	UAnimSequenceBase* PickLauncherHitClip();
+	UAnimSequenceBase* PickLauncherDeathClip(const AOperativeCharacter& Operative) const;
+	ELauncherAction LauncherAction = ELauncherAction::None;
+	UAnimSequenceBase* LauncherShotClip = nullptr;
+	float LauncherShotTime = -1.f;
+	/** The reload in progress: its clip, the shot's follow-through it waits for, whether it was seen starting. */
+	UAnimSequenceBase* LauncherReloadClip = nullptr;
+	float LauncherReloadLeadIn = 0.f;
+	bool bLauncherReloadActive = false;
+	UAnimSequenceBase* LauncherActionClip = nullptr;
+	float LauncherActionTime = 0.f;
+	float LauncherActionWeight = 0.f;
+	TStaticArray<float, 9> LauncherAimWeights = TStaticArray<float, 9>(InPlace, 0.f);
+	int32 LauncherShotClips = 0;
+	int32 LauncherHitClips = 0;
+	mutable int32 LauncherDeathClips = 0;
 	/** Reads one block of weapon_anim_sets.json into Set (clips by path, the skeleton's retargeted copies first). */
 	void LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAnimSet& ShotgunSet, FString& OutRetargetFolder);
 	EWeaponHandling LayerHandling = EWeaponHandling::Standard;
@@ -1699,6 +1820,13 @@ private:
 	bool bShotgunWeapon = false;
 	EWeaponLayerMask ShotgunMask = EWeaponLayerMask::Off;
 	float ShotgunUpperWeight = 0.f;
+	float ShotgunLowerWeight = 0.f;
+	/** Turn in place of a full-body set: the clip, its share, its time, the body's yaw last frame. */
+	UAnimSequence* LayerTurnClip = nullptr;
+	float LayerTurnShare = 0.f;
+	float LayerTurnTime = 0.f;
+	float LayerLastYaw = 0.f;
+	bool bLayerYawValid = false;
 	float ShotgunPhase = 0.f;
 	float ShotgunIdleTime = 0.f;
 	/** Eased shares (0..1, over blend_seconds) of the crouch / aim / sprint sets: a stance or aim change cross-fades the clip sets
