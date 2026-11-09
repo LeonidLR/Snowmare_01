@@ -6,6 +6,7 @@
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Combat/ArmorRules.h"
 #include "Combat/ExplosionRules.h"
+#include "Combat/MortarRules.h"
 #include "Combat/WeaponRangeRules.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Tactics/EnemyTurnRules.h"
@@ -252,6 +253,17 @@ namespace WeaponTuning
 			ExplosionRules::Set(Root->TryGetObjectField(TEXT("explosions"), ExplosionBlock) && ExplosionBlock && ExplosionBlock->IsValid()
 				? ExplosionRules::Parse(**ExplosionBlock, &ExplosionErrors) : ExplosionRules::Defaults());
 			for (const FString& Error : ExplosionErrors)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
+			}
+		}
+		// The mortar nests (2026-11-09, SQUAD_SIX_FIRE_TEAMS.md 7.3): the crew, the range band, the rate, the ammo, the bracketing, the round.
+		{
+			const TSharedPtr<FJsonObject>* MortarBlock = nullptr;
+			TArray<FString> MortarErrors;
+			MortarRules::Set(Root->TryGetObjectField(TEXT("mortar_nest"), MortarBlock) && MortarBlock && MortarBlock->IsValid()
+				? MortarRules::Parse(**MortarBlock, &MortarErrors) : MortarRules::Defaults());
+			for (const FString& Error : MortarErrors)
 			{
 				UE_LOG(LogCodexTactics, Warning, TEXT("Weapon tuning: %s"), *Error);
 			}

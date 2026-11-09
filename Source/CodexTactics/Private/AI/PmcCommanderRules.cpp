@@ -390,6 +390,15 @@ namespace PmcCommanderRules
 		return FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(DirA, DirB), -1.f, 1.f)));
 	}
 
+	float ScoreMortarFire(int32 ClusterCount, bool bManned, bool bInRangeBand, const FPmcWeights& Weights)
+	{
+		if (!bManned || !bInRangeBand || ClusterCount <= 0)
+		{
+			return 0.f;
+		}
+		return Weights.MortarFire * FMath::Clamp(ClusterCount / FMath::Max(1.f, Weights.MortarClusterFull), 0.f, 1.f);
+	}
+
 	FPmcWeights FromJson(const FJsonObject& Json, const FPmcWeights& Base)
 	{
 		using namespace PmcCommanderLocal;
@@ -420,6 +429,10 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("relocate_after_seconds"), Out.RelocateAfterSeconds);
 		ReadNumber(Json, TEXT("contact_memory_seconds"), Out.ContactMemorySeconds);
 		ReadNumber(Json, TEXT("decision_interval"), Out.DecisionInterval);
+		ReadNumber(Json, TEXT("mortar_fire"), Out.MortarFire);
+		ReadNumber(Json, TEXT("mortar_threshold"), Out.MortarThreshold);
+		ReadNumber(Json, TEXT("mortar_cluster_radius_cm"), Out.MortarClusterRadiusCm);
+		ReadNumber(Json, TEXT("mortar_cluster_full"), Out.MortarClusterFull);
 		ReadNumber(Json, TEXT("switch_margin"), Out.SwitchMargin);
 		ReadNumber(Json, TEXT("move_switch_margin"), Out.MoveSwitchMargin);
 		ReadNumber(Json, TEXT("commit_seconds"), Out.CommitSeconds);

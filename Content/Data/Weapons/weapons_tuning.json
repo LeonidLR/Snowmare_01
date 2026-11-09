@@ -81,6 +81,28 @@
       "trap": false
     }
   },
+  "mortar_nest": {
+    "comment": "Mortar nests (2026-11-09, SQUAD_SIX_FIRE_TEAMS.md 7.3; numbers proposed, pending the designer; MortarRules): fixed nests of either side from the level JSON \"mortar_nests\"; fires only with crew_needed men at the nest, only at a point someone of its side SEES now (the spotter rule) within min_range_m .. max_range_m; rounds_per_order rounds every interval_s; bracketing: the first round first_error_m off the aim point, each next x shrink (not under min_error_m) while the aim stays within same_target_m. The round is in the weapon schema (kind projectile, trajectory high_angle: a plunging blast - walls do not protect, a roof does). gravity_scale 4 keeps the flight to a few seconds (~5 s at 80 m).",
+    "crew_needed": 3,
+    "crew_radius_m": 1.6,
+    "crew_leave_m": 2.5,
+    "min_range_m": 30,
+    "max_range_m": 250,
+    "interval_s": 3.5,
+    "rounds_per_order": 6,
+    "ammo": 24,
+    "spot_height_m": 0.6,
+    "bracketing": { "first_error_m": 15, "shrink": 0.55, "min_error_m": 1.5, "same_target_m": 10 },
+    "round": {
+      "kind": "projectile",
+      "damage_type": "explosive",
+      "base_damage": 110,
+      "armor_penetration": 0.6,
+      "penetration_class": "vehicle",
+      "projectile": { "speed_mps": 110, "gravity_scale": 4, "trajectory": "high_angle", "arming_distance_m": 10, "max_flight_s": 15 },
+      "explosion": { "radius_m": 6, "full_damage_radius_m": 2.5, "edge_damage_multiplier": 0.2 }
+    }
+  },
   "sidearm": {
     "comment": "The sidearm switch (SidearmRules, 2026-11-08): a primary that runs dry with an enemy within threat_range_m -> the pistol instead of the reload (no shot for draw_s while it comes up); back to the primary (which then reloads) after holster_after_s without a target or when the pistol is dry. The player's own switching (X, the weapon selector) is unchanged.",
     "enabled": true,

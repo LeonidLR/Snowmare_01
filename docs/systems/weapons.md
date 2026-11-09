@@ -193,3 +193,35 @@
   specifics, the real model (Fab, the coordinator is choosing).
 - **Checks:** tests `CodexTactics.Weapons.Rpg.Data` / `.Rules`; `CodexTactics.RpgSmoke` (30 / 80 m hits through the shared blast, the back-blast
   on a mate 2.5 m behind, one rocket reloaded, a wall behind / a closed room / prone / too close refused).
+
+## Mortar nests (2026-11-09; SQUAD_SIX_FIRE_TEAMS.md 7.3; placeholder visuals; numbers proposed, pending the designer)
+
+- **Fixed nests, both sides, not carried:** `AMortarNestActor`, spawned by `UMortarSubsystem` from the level JSON `"mortar_nests"`
+  (`[{"id", "side": "squad" | "pmc", "team": N, "pos": [x, y(, z)], "yaw", "crew": N, "ammo": N}]`; no z = dropped on the ground; a PMC nest
+  with `crew` gets its own commanded PMC team at its places). The combat lab (`L_FormationLabCombat.json`) has two test nests: `MORTAR_SQUAD`
+  near the start and an UNMANNED `MORTAR_PMC` in the far corner (unmanned so the lab smokes are not shelled; `CodexTactics.MortarCrewPmc 1`
+  gives it a crew). No Depot nests yet.
+- **Crew of three** (`mortar_nest.crew_needed`): `AssignCrew` sends a man to a free place round the tube (behind / beside it), holds him there
+  once he arrives (the formation no longer pulls him); he leaves the crew when he walks off (his own move order) or is more than
+  `crew_leave_m` from his place, or dies. Fewer than three at the nest = no fire - every round re-checks. A nest left with no crew of its side
+  changes side when the other side mans it (taken).
+- **The spotter rule (the same for both sides):** a nest fires only at a point that a living man of its side SEES now
+  (`UTacticalSightSubsystem::CanOperativeSee` at the point + `spot_height_m`), re-checked before every round: no spotter = no fire.
+- **Range band** 30 m .. 250 m (`min_range_m` / `max_range_m`; 250 m is the designer's guess - the combat lab is 120 x 120 m and the Depot
+  ~124 x 177 m, so 250 m reaches anywhere on today's maps; ~120-150 m would leave safe ground, a designer call).
+- **The round** (`mortar_nest.round`, the weapon schema): a high-angle projectile (110 m/s, `gravity_scale` 4 - about 5-6 s of flight at any
+  range in the band), blast 110 / 6 m (full to 2.5 m), explosive, class vehicle; through `Explosions::Detonate` as a plunging blast - walls and
+  side cover do not protect, only a roof. `interval_s` 3.5 between rounds, `rounds_per_order` 6, `ammo` 24.
+- **Bracketing (simplified):** the first round of a target lands `first_error_m` 15 m off (a random direction), each next one x `shrink` 0.55
+  (8.2, 4.5, 2.5 m ...) down to `min_error_m` 1.5 m; an aim point more than `same_target_m` 10 m from the last one starts the walk again.
+- **The player's orders (minimal, console):** `CodexTactics.MortarList`, `CodexTactics.MortarMan [nest] [squad indices]` (no indices = the
+  squad), `CodexTactics.MortarFire [nest] <x y [z] | cursor>` (refused with the reason: crew / ammo / too close / too far / nobody sees it),
+  `CodexTactics.MortarCease [nest]`. No HUD target picker yet (the grenade aim ghost could show the band later).
+- **The PMC commander:** each decision a manned nest of the team that is not firing scores the biggest cluster of enemies the team sees now
+  (`MortarRules::BestCluster`, `mortar_cluster_radius_cm` 8 m): `mortar_fire` 0.8 x min(1, cluster / `mortar_cluster_full` 3), 0 out of the
+  band; it orders fire at >= `mortar_threshold` 0.3 (one seen man: 0.27, no; two: 0.53, yes) - `pmc_commander.json`. Its crewmen get no
+  orders of their own (they stay at the tube).
+- **Checks:** tests `CodexTactics.Weapons.Mortar.*` (Checks, Bracketing, Round, PmcCluster, Placement); `CodexTactics.MortarSmoke` (a crew of
+  three walks rounds in on a seen point 80 m away - 15 / 8.2 / 4.5 / 2.5 m, 5.6 s flights; the open dummy hurt, the roofed one untouched; a man
+  off -> the fire stops, a crew of two refused; a point behind a wall refused (no spotter), 15 m refused; a PMC nest 70 m away shells the
+  spotted squad on its commander's own decision).
