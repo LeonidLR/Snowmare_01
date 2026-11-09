@@ -92,6 +92,12 @@ To support combat gameplay, armor simulation, and AI engagement bands, the schem
 * **Resolution**: The shot generates 8 individual traces radiating from the muzzle socket with a pseudo-random Halton distribution within the cone. Allows hitting multiple clustered targets or partially hitting a target partially occluded by low cover.
 
 ### 2.4 RPG-7 Rocket Ballistics
+
+> **Superseded by the game designer's numbers (2026-11-09; implemented, `docs/systems/weapons.md` "The RPG-7"):** 115 m/s flat, the fuse armed
+> at once (no arming distance, no dud), a direct hit 140 on the target struck, the splash 60 within 4 m on everyone else, class vehicle, no
+> back-blast damage and no wall-behind / closed-room / prone refusals; the only refusal is a target closer than 10 m (never inside its own
+> blast). The proposal below is kept for history.
+
 * **Flight Velocity (proposal)**: Initial launch velocity of 115 m/s, accelerating to 180 m/s after 0.2s rocket booster ignition.
 * **Arming Distance (proposal)**: 10 meters minimum.
   * If impact occurs at $<10$ m, the warhead does not detonate; it deals 35 blunt impact kinetic damage to the target actor without explosive splash.

@@ -1576,7 +1576,7 @@ void UVehicleSubsystem::UpdateRepairs(float DeltaTime)
 }
 
 void UVehicleSubsystem::ApplyBlastToVehicles(UWorld* World, const FVector& Centre, float Radius, TFunctionRef<float(float)> DamageAtHullDistance,
-	const AVehiclePawn* TriggeredBy, const FString& Source)
+	const AVehiclePawn* TriggeredBy, const FString& Source, const AVehiclePawn* Skip)
 {
 	const UVehicleSubsystem* Self = World ? World->GetSubsystem<UVehicleSubsystem>() : nullptr;
 	if (!Self)
@@ -1585,6 +1585,10 @@ void UVehicleSubsystem::ApplyBlastToVehicles(UWorld* World, const FVector& Centr
 	}
 	for (AVehiclePawn* Vehicle : Self->GetVehicles())
 	{
+		if (Vehicle == Skip)
+		{
+			continue; // a round's direct hit already struck this hull (Explosions FExplosionSpec::StruckActor)
+		}
 		const bool bTriggered = Vehicle == TriggeredBy;
 		const float HullDistance = Vehicle->GetHullDistance2D(Centre);
 		if (!bTriggered && (HullDistance > Radius || FMath::Abs(Centre.Z - Vehicle->GetActorLocation().Z) > 500.f))

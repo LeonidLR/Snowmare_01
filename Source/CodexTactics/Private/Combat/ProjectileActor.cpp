@@ -7,6 +7,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "Vehicles/VehicleHullRules.h"
+#include "Vehicles/VehiclePawn.h"
 #include "UObject/ConstructorHelpers.h"
 
 AProjectileActor::AProjectileActor()
@@ -139,16 +141,31 @@ void AProjectileActor::Finish(EProjectileEnd End, const FVector& Location, AActo
 	Impact.FlightDistanceCm = Flight.DistanceCm;
 	Impact.SourceName = Shot.SourceName;
 	SetActorLocation(Location);
-	// The direct share on the actor struck (armed or a dud).
+	// The direct hit on the actor struck (armed or a dud): its whole share - the blast below leaves it out (the designer 2026-11-09: the RPG-7's
+	// direct hit = 140, not 140 + the splash).
+	AActor* Struck = nullptr;
 	if (HitActor && Shot.DirectDamage > 0.f && (End == EProjectileEnd::Impact || End == EProjectileEnd::Dud))
 	{
 		const USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
 		AOperativeCharacter* Operative = Cast<AOperativeCharacter>(HitActor);
 		UHealthComponent* Health = HitActor->FindComponentByClass<UHealthComponent>();
-		if (Operative && Squad && Squad->GetMembers().Contains(Operative))
+		if (AVehiclePawn* Vehicle = Cast<AVehiclePawn>(HitActor))
+		{
+			// A hull: the explosive hit through the vehicle's hull rules (as the blast's hull damage would be).
+			EVehicleDamageSource DamageSource = End == EProjectileEnd::Dud ? EVehicleDamageSource::Other : EVehicleDamageSource::Explosion;
+			if (End != EProjectileEnd::Dud)
+			{
+				VehicleHullRules::GetBlastHullDamage(Shot.DirectDamage, false, Vehicle->HullConfig, DamageSource);
+			}
+			Vehicle->ApplyHullDamage(Shot.DirectDamage, DamageSource, Shot.SourceName, Shot.Instigator.Get());
+			Impact.DirectDamage = Shot.DirectDamage;
+			Struck = Vehicle;
+		}
+		else if (Operative && Squad && Squad->GetMembers().Contains(Operative))
 		{
 			Operative->TakeHit(Shot.DirectDamage, Shot.SourceName, false, true, Shot.Instigator.Get());
 			Impact.DirectDamage = Shot.DirectDamage;
+			Struck = Operative;
 		}
 		else if (Health && Health->IsAlive())
 		{
@@ -160,6 +177,7 @@ void AProjectileActor::Finish(EProjectileEnd End, const FVector& Location, AActo
 			Hit.AttackerSource = Shot.SourceName;
 			Health->TakeDamage(Hit);
 			Impact.DirectDamage = Shot.DirectDamage;
+			Struck = HitActor;
 		}
 	}
 	// The blast (an armed impact or an air burst).
@@ -167,7 +185,9 @@ void AProjectileActor::Finish(EProjectileEnd End, const FVector& Location, AActo
 	{
 		// Out of the wall's surface a little so the cover trace starts on the shooter's side.
 		const FVector Centre = Location - Flight.Velocity.GetSafeNormal() * 5.f;
-		Impact.Blast = Explosions::Detonate(World, BlastSpecFor(Shot, Centre, this));
+		FExplosionSpec Spec = BlastSpecFor(Shot, Centre, this);
+		Spec.StruckActor = Struck;
+		Impact.Blast = Explosions::Detonate(World, Spec);
 		Impact.bExploded = true;
 	}
 	ReceiveFinished(Location, Impact.bExploded);

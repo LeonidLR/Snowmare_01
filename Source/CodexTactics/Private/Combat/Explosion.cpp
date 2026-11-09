@@ -15,6 +15,7 @@
 #include "Interactables/BarrelActor.h"
 #include "Interactables/DeployableRules.h"
 #include "Interactables/InteractableActor.h"
+#include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 namespace Explosions
@@ -168,7 +169,7 @@ namespace Explosions
 			UVehicleSubsystem::ApplyBlastToVehicles(World, Centre, Spec.RadiusCm, [&Spec](float HullDistance)
 			{
 				return Spec.EnemyDamage * ExplosionRules::Falloff(Spec.EnemyFalloff, HullDistance, Spec.RadiusCm);
-			}, Spec.TriggeredByVehicle, Spec.SourceName);
+			}, Spec.TriggeredByVehicle, Spec.SourceName, Cast<AVehiclePawn>(Spec.StruckActor.Get()));
 			if (Spec.bSquadNoise)
 			{
 				AEnemyCharacter::NotifySquadNoise(World, Centre, ESquadNoise::Explosion);
@@ -200,9 +201,9 @@ namespace Explosions
 					}
 				}
 				UHealthComponent* Health = IsValid(Candidate) ? Candidate->FindComponentByClass<UHealthComponent>() : nullptr;
-				if (!Health || !Health->IsAlive())
+				if (!Health || !Health->IsAlive() || Candidate == Spec.StruckActor.Get())
 				{
-					continue;
+					continue; // the actor struck already took its direct hit
 				}
 				const float Distance = static_cast<float>(FVector::Dist(Centre, Candidate->GetActorLocation()));
 				const float Cover = ExplosionLocal::CoverFor(World, Spec, bOcclusion, Candidate);
@@ -239,7 +240,7 @@ namespace Explosions
 			// The placed charges' order (AInteractableActor::ApplyBlast): enemies, the squad, vehicles.
 			for (AActor* Candidate : UEnemyRegistrySubsystem::GetTaggedEnemies(World))
 			{
-				if (!Candidate || Candidate == Spec.Source || !Candidate->ActorHasTag(CombatQueries::EnemyTag))
+				if (!Candidate || Candidate == Spec.Source || Candidate == Spec.StruckActor.Get() || !Candidate->ActorHasTag(CombatQueries::EnemyTag))
 				{
 					continue;
 				}
@@ -262,7 +263,7 @@ namespace Explosions
 				for (AOperativeCharacter* Member : Squad->GetMembers())
 				{
 					UHealthComponent* Health = Member ? Member->HealthComponent.Get() : nullptr;
-					if (!Health || !Health->IsAlive())
+					if (!Health || !Health->IsAlive() || Member == Spec.StruckActor.Get())
 					{
 						continue;
 					}
@@ -283,7 +284,7 @@ namespace Explosions
 			UVehicleSubsystem::ApplyBlastToVehicles(World, Centre, Spec.RadiusCm, [&Spec](float HullDistance)
 			{
 				return Spec.EnemyDamage * ExplosionRules::Falloff(Spec.EnemyFalloff, HullDistance, Spec.RadiusCm);
-			}, Spec.TriggeredByVehicle, Spec.SourceName);
+			}, Spec.TriggeredByVehicle, Spec.SourceName, Cast<AVehiclePawn>(Spec.StruckActor.Get()));
 		}
 		if (Spec.bKnockdown)
 		{

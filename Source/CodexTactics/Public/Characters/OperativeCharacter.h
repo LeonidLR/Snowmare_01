@@ -2966,36 +2966,24 @@ private:
 	bool SniperShotAllowed();
 
 public:
-	// --- The RPG-7 (2026-11-09; LauncherRules, OperativeCharacterLauncher.cpp) ---
+	// --- The RPG-7 (2026-11-09; the designer's numbers the same day; LauncherRules, OperativeCharacterLauncher.cpp) ---
 
 	/** The weapon in hands is a launcher (handling "launcher" with a projectile block). */
 	bool IsLauncherEquipped() const;
 
-	/** The back-blast check behind him for a shot along AimDir (a wall within the clearance / a closed room). */
-	ELauncherBackblast CheckLauncherBackblast(const FVector& AimDir) const;
-
 	/** The last launcher shot's refusal (None = it went). */
 	ELauncherRefusal GetLastLauncherRefusal() const { return LastLauncherRefusal; }
-	ELauncherBackblast GetLastLauncherBackblast() const { return LastLauncherBackblast; }
 	int32 GetLauncherShots() const { return LauncherShots; }
 	int32 GetLauncherRefusals() const { return LauncherRefusals; }
-	/** Bodies the last rocket's back-blast hurt, and the damage it dealt them (before their armour). */
-	int32 GetLastBackblastVictims() const { return LastBackblastVictims; }
-	float GetLastBackblastDamage() const { return LastBackblastDamage; }
 
 private:
 	/** The launcher rules allow the shot (refuses with a warning + counts otherwise); true for any other weapon. */
 	bool LauncherShotAllowed(AActor* Target);
-	/** Launches the rocket at Target (a miss scatters the aim point), then the back-blast behind him. */
+	/** Launches the rocket at Target (a miss scatters the aim point). */
 	bool FireLauncherAt(AActor* Target, bool bRagingShot);
-	/** The back-blast cone behind the launcher: friendly fire too. */
-	void ApplyLauncherBackblast(const FVector& AimDir);
 
 	ELauncherRefusal LastLauncherRefusal = ELauncherRefusal::None;
-	ELauncherBackblast LastLauncherBackblast = ELauncherBackblast::Clear;
 	int32 LauncherShots = 0;
 	int32 LauncherRefusals = 0;
-	int32 LastBackblastVictims = 0;
-	float LastBackblastDamage = 0.f;
 	double LauncherLastWarningTime = -100.0;
 };

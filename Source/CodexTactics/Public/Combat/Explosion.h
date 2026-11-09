@@ -67,6 +67,11 @@ struct CODEXTACTICS_API FExplosionSpec
 	TOptional<bool> OcclusionOverride;
 	/** The vehicle that set the charge off itself (flat mine damage on its hull). */
 	const AVehiclePawn* TriggeredByVehicle = nullptr;
+	/**
+	 * The actor a round struck and already damaged with its direct hit (a weapon's explosion.direct_hit_damage = its whole share; the designer
+	 * 2026-11-09): the blast leaves it out (a barrel struck still chains; a vehicle struck takes no second hull hit). Null = nobody.
+	 */
+	TWeakObjectPtr<AActor> StruckActor;
 	/** The exploding actor (never a victim; the event's subject). */
 	AActor* Source = nullptr;
 	/** Raise GameplayEvents::Explosion (+ the suppression report). */
