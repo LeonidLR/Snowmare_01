@@ -834,6 +834,23 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 	}
 }
 
+bool UOperativeAnimInstance::IsDeathPoseSettled() const
+{
+	if (!bDeathPlayed || bDeathDeferred)
+	{
+		return false;
+	}
+	for (const FAnimMontageInstance* Instance : MontageInstances)
+	{
+		// The held death clip / fall stops advancing at its end (no auto blend-out); anything still playing or blending is not settled.
+		if (Instance && Instance->IsValid() && (Instance->IsPlaying() || !Instance->GetBlend().IsComplete()))
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
 UAnimSequenceBase* UOperativeAnimInstance::PickDeathClip(const AOperativeCharacter& Operative) const
 {
 	TArray<UAnimSequenceBase*> StandClips;

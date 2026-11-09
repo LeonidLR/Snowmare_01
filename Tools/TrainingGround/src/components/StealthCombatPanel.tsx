@@ -389,7 +389,7 @@ export const StealthCombatPanel: React.FC<{
       {/* 2. Horde defaults */}
       <div className="bg-slate-900 border border-slate-800 rounded-xl p-5 shadow-xl">
         <SectionHeader icon={<Skull className="w-5 h-5" />} title="Орда — значения по умолчанию"
-          subtitle="Content/Data/AI/horde.json — орда после долгого боя в реальном времени; уровень может выключить или переопределить"
+          subtitle="Content/Data/AI/horde.json — орда после N перестрелок подряд (порог — horde_after_firefights уровня, по умолчанию 10); уровень может выключить или переопределить"
           dirty={hordeDirty} valid={hordeErrors.length === 0} status={hordeStatus} onSave={saveHorde}
           onUndo={() => hordeSaved && setHorde(clone(hordeSaved))} />
         <StatusLine status={hordeStatus} errors={hordeErrors} />
@@ -509,7 +509,7 @@ export const StealthCombatPanel: React.FC<{
           </table>
         </div>
         <div className="mt-3 text-[11px] text-slate-500">
-          Команды: <code>CodexTactics.DumpPerception</code> — таблица восприятия в лог; <code>CodexTactics.Horde.Release</code> — выпустить орду сейчас.
+          Команды: <code>CodexTactics.DumpPerception</code> — таблица восприятия в лог; <code>CodexTactics.Horde.Release</code> — выпустить орду сейчас (без предупреждения).
         </div>
       </div>
     </div>

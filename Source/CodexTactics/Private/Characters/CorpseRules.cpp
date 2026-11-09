@@ -32,7 +32,7 @@ namespace CorpseRules
 		for (int32 Index = 0; Index < Corpses.Num(); ++Index)
 		{
 			const FCorpseCandidate& Corpse = Corpses[Index];
-			if (Corpse.bFrozen && !Corpse.bFading)
+			if (Corpse.bFrozen && !Corpse.bFading && !(Corpse.bUnsearchedLoot && Corpse.bInView))
 			{
 				Pool.Add(Index);
 				bAnyHidden |= !Corpse.bInView;
@@ -72,5 +72,16 @@ namespace CorpseRules
 	int32 ResolveCap(int32 LevelCap, int32 ConsoleCap)
 	{
 		return ConsoleCap >= 1 ? ConsoleCap : FMath::Max(LevelCap, 1);
+	}
+
+	bool IsKeptUnderCap(ECorpseKind Kind)
+	{
+		return Kind != ECorpseKind::SquadOperative;
+	}
+
+	float LyingBodyCentreZ(float CapsuleHalfHeightCm, float BodyHalfThicknessCm)
+	{
+		const float HalfHeight = FMath::Max(CapsuleHalfHeightCm, 0.f);
+		return -HalfHeight + FMath::Clamp(BodyHalfThicknessCm, 0.f, HalfHeight);
 	}
 }

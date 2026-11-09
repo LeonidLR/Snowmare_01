@@ -224,7 +224,7 @@ export const LevelHordePanel: React.FC<PanelProps> = ({ config, onChange }) => {
           />
           Орда включена
         </label>
-        <label className="flex flex-col gap-1" title="Порог вызова орды: орда триггерится после N перестрелок в реальном времени (по умолчанию 6, мин. 1)">
+        <label className="flex flex-col gap-1" title="Порог вызова орды: орда приходит после N перестрелок подряд (по умолчанию 10, мин. 1; подсказка штаба за одну до порога)">
           <span className="text-slate-500">Horde after N firefights <span className="text-slate-600">(боёв)</span></span>
           <input
             type="number"
@@ -241,7 +241,7 @@ export const LevelHordePanel: React.FC<PanelProps> = ({ config, onChange }) => {
         </label>
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
-        UE: орда после N перестрелок ПОДРЯД (horde_after_firefights, default 6, min 1); проскользнуть мимо группы врагов незамеченным — счёт с нуля; horde_enabled: false — никогда.
+        UE: орда после N перестрелок ПОДРЯД (horde_after_firefights, default 10, min 1) — единственный вызов орды с 2026-11-09 (таймера боя больше нет); проскользнуть мимо группы врагов незамеченным — счёт с нуля; horde_enabled: false — никогда (Депо: вкл., Озеро: выкл.).
       </p>
       <Errors errors={errors} />
     </div>

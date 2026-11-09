@@ -4,6 +4,7 @@
 #include "AI/PatrolRouteRules.h"
 #include "AI/PerceptionRules.h"
 #include "AI/ScentRules.h"
+#include "Characters/CorpseBody.h"
 #include "Characters/EnemyAIRules.h"
 #include "Characters/MeleeLineRules.h"
 #include "GameFramework/Character.h"
@@ -162,7 +163,7 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnEnemyDiedNative, AEnemyCharacter*);
  * scent), Search (patrol search, stealth lure), Performance (variant seed, look variants, alert roar / spawn entrance; 2026-10-20).
  */
 UCLASS()
-class CODEXTACTICS_API AEnemyCharacter : public ACharacter
+class CODEXTACTICS_API AEnemyCharacter : public ACharacter, public ICorpseBody
 {
 	GENERATED_BODY()
 
@@ -279,21 +280,32 @@ public:
 	bool IsDying() const { return bIsDying; }
 
 	/**
-	 * Corpses stay (game designer 2026-11-08, UCorpseSubsystem): the body lying still in its death pose costs nothing more - its AI
-	 * controller destroyed, no actor / movement / component tick (anims paused on the final pose), no collision for pawns, clicks or
-	 * traces, the vision cone hidden, out of the enemy registry; it stays rendered. Once (after HandleDied).
+	 * Corpses stay (game designer 2026-11-08, UCorpseSubsystem; ICorpseBody): the body lying still in its death pose costs nothing more -
+	 * its AI controller destroyed, no actor / movement / component tick (anims paused on the final pose), no collision for pawns, clicks or
+	 * traces, the vision cone hidden, out of the enemy registry; it stays rendered. A body without a death pose (the C++ placeholder of an
+	 * enemy with no Blueprint yet - the Spitter -, or a Blueprint without a death clip) is laid on the ground first (LayCorpseDown,
+	 * 2026-11-09). Once (after HandleDied).
 	 */
-	void FreezeCorpse();
+	virtual void FreezeCorpse() override;
 
 	/** FreezeCorpse ran. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
-	bool IsCorpseFrozen() const { return bCorpseFrozen; }
+	virtual bool IsCorpseFrozen() const override { return bCorpseFrozen; }
 
 	/** The body is still on its way down (killed in the air / a drop link: the crash landing pending, or falling). */
-	bool IsCorpseFalling() const;
+	virtual bool IsCorpseFalling() const override;
 
 	/** The death clip (or the knockdown's Death_*) holds its last frame: no montage advancing, no blend running (UEnemyAnimInstance). */
-	bool IsDeathPoseSettled() const;
+	virtual bool IsDeathPoseSettled() const override;
+
+	/** ICorpseBody: still on / at a ladder (IsLadderBusy: its drop not finished). */
+	virtual bool IsCorpseOnLadder() const override { return IsLadderBusy(); }
+
+	/** ICorpseBody: the skeletal mesh of an art Blueprint, else the C++ placeholder body (BodyMesh). */
+	virtual UPrimitiveComponent* GetCorpseVisual() const override;
+
+	/** The body had no death pose when it died: FreezeCorpse lays it on the ground (2026-11-09). */
+	bool IsLaidDownCorpse() const { return bLayDownOnFreeze; }
 
 	/** Sprint 14 knockdown (Frostbitten / Brute only; the Brute has heavy poise; TANDEM request #12). */
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Knockdown")
@@ -1035,6 +1047,10 @@ protected:
 	bool bAirborneDeath = false;
 	/** FreezeCorpse ran (corpses stay, 2026-11-08). */
 	bool bCorpseFrozen = false;
+	/** Died without a death pose (placeholder body / no death clip): FreezeCorpse lays it on the ground (2026-11-09). */
+	bool bLayDownOnFreeze = false;
+	/** Lays a body without a death pose on the ground: the placeholder cylinder on its side, a skeletal mesh tipped onto its back. */
+	void LayCorpseDown();
 	TWeakObjectPtr<AActor> JumpTarget;
 	/** Bug 06 (2026-11-01): the counters behind GetMeleeWallHolds / GetLeapWallRefusals / GetLeapsLaunched, and the last target logged. */
 	int32 MeleeWallHolds = 0;

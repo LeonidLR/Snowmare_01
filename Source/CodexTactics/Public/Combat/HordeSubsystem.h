@@ -11,21 +11,20 @@ class AEnemyCharacter;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnHordeReleased, int32, HordeIndex, int32, EnemyCount, FVector, Location);
 
 /**
- * Horde after a long real-time fight (user request 2026-10-06, UE-only; no Godot counterpart). Every fight (a wave, an
- * ambush fight) has a clock that runs only while the fight runs in full real time — not in the tactical pause, not in
- * turn-based combat, not while a dialogue / cutscene holds the world AI (FHordeTimer, HordeRules::IsCountingTime). At
- * TriggerSeconds (240 s) a group of enemies (8: frost hounds + frostbitten) appears at a random reachable navmesh point
- * 25-45 m from the squad's centre, out of the squad's sight when possible, clustered within 4 m; they know where the
- * squad is (AEnemyCharacter::bKnowsSquadPosition: no patrol, no perception, no fall-back) and rush it. They join the
- * wave (UWaveSubsystem::SpawnEnemy), so the fight ends only when they are dead. Once per fight unless "repeats".
- * HUD: "HORDE!" banner + an arrow towards it (ACodexTacticsHUD::DrawHordeWarning), the radio line, OnHordeReleased (hook
- * for audio / VFX) and the optional "warning_sound". Data: Content/Data/AI/horde.json + the level JSON "horde_enabled" /
- * "horde" (HordeRules::ResolveForLevel); console Codex.Horde.TriggerSeconds / Codex.Horde.Enabled, command
- * CodexTactics.Horde.Release.
- * Horde #12 (game designer 2026-11-02 / 11-03 / 11-08): the horde also comes after "horde_after_firefights" firefights IN A ROW on the level
- * (UFirefightSubsystem counts them, RequestFirefightHorde): the HQ warning at once, the horde Firefight.WarningLeadSeconds later (running
- * game time; in exploration the fight starts with it), then the horde intro (UHordeIntroSubsystem::BeginExternalHorde: the «HORDE INCOMING»
- * alert, the flyover once per level). "horde_enabled": false = never (neither rule).
+ * The horde (UE-only; no Godot counterpart). Horde #12 (game designer 2026-11-02 / 11-03 / 11-08; the ONLY trigger since 2026-11-09): it
+ * comes after "horde_after_firefights" (default 10) firefights IN A ROW on the level - UFirefightSubsystem counts them and calls
+ * RequestFirefightHorde: the HQ warning at once, the horde Firefight.WarningLeadSeconds later (running game time: the tactical pause /
+ * turn-based / a dialogue stop the countdown, HordeRules::IsCountdownRunning; in exploration the fight starts with it), then the horde intro
+ * (UHordeIntroSubsystem::BeginExternalHorde: the «HORDE INCOMING» alert, the flyover once per level). The group (8: frost hounds +
+ * frostbitten by default) appears at a random reachable navmesh point 25-45 m from the squad's centre, out of the squad's sight when
+ * possible, clustered within 4 m; they know where the squad is (AEnemyCharacter::bKnowsSquadPosition: no patrol, no perception, no
+ * fall-back) and rush it. They join the fight (UWaveSubsystem::SpawnEnemy), so it ends only when they are dead.
+ * HUD: "HORDE!" banner + an arrow towards it (ACodexTacticsHUD::DrawHordeWarning), the radio line, OnHordeReleased (hook for audio / VFX)
+ * and the optional "warning_sound". Data: Content/Data/AI/horde.json + the level JSON "horde_enabled" / "horde_after_firefights" / "horde"
+ * (HordeRules::ResolveForLevel); console Codex.Horde.Enabled / AfterFirefights / FirefightWarningSeconds, command CodexTactics.Horde.Release
+ * (a direct debug release, no countdown). "horde_enabled": false = never.
+ * Removed 2026-11-09 (game designer: only the firefight streak summons the horde): the 240 s real-time-fight clock (FHordeTimer,
+ * "trigger_seconds" / "repeats", Codex.Horde.TriggerSeconds / RepeatSeconds). Scripted stage waves are not the horde and are unchanged.
  */
 UCLASS()
 class CODEXTACTICS_API UHordeSubsystem : public UTickableWorldSubsystem
@@ -39,26 +38,19 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
 
-	/** The config of the current fight (defaults + level + console overrides). */
+	/** The config in force (defaults + level + console overrides). */
 	const FHordeConfig& GetConfig() const { return Config; }
 
-	/** Running real-time seconds of the current fight (the horde clock). */
+	/** Hordes released on this level (the firefight hordes and the dev command's). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Horde")
-	float GetCombatSeconds() const { return Timer.CombatSeconds; }
+	int32 GetHordesReleased() const { return HordesReleased; }
 
-	/** Hordes released in the current fight. */
-	UFUNCTION(BlueprintPure, Category = "CodexTactics|Horde")
-	int32 GetHordesReleased() const { return Timer.HordesReleased; }
-
-	/** A fight is on and its horde clock exists (it may be stopped by the pause / turn-based combat). */
-	bool IsFightTracked() const { return bFightTracked; }
-
-	/** The clock ran on the last tick. */
-	bool IsCounting() const { return bCountingNow; }
+	/** The firefight horde's countdown ran on the last tick (false while the pause / turn-based / a dialogue holds it). */
+	bool IsCountdownRunning() const { return bCountdownRunning; }
 
 	/**
-	 * Releases a horde now (the clock's trigger, the dev command, smokes): finds the spawn point and spawns the group.
-	 * Returns how many enemies appeared (0: no spawn point / no squad).
+	 * Releases a horde now with no warning (the dev command CodexTactics.Horde.Release, smokes): finds the spawn point and spawns the group
+	 * (it joins the running fight; no fight is started). Returns how many enemies appeared (0: no spawn point / no squad).
 	 */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Horde")
 	int32 ReleaseHorde();
@@ -74,7 +66,7 @@ public:
 	FVector GetLastSquadCentre() const { return LastSquadCentre; }
 	bool WasLastSpawnHidden() const { return bLastSpawnHidden; }
 
-	/** Re-reads the config for the current level (start of every fight; smokes after changing the console values). */
+	/** Re-reads the config for the current level (start of every fight, a firefight horde request; smokes after changing the console values). */
 	void RefreshConfig();
 
 	/** Smokes: horde.json keys applied over the level's config at every RefreshConfig (empty = none); refreshes now. */
@@ -108,10 +100,8 @@ private:
 	bool FindSpawnPoint(const FVector& Centre, FVector& OutPoint, bool& bOutHidden) const;
 	/** Some living operative sees Point (Visibility channel, pawns ignored). */
 	bool IsVisibleToSquad(const FVector& Point) const;
-	/** Spawns horde number HordeIndex (0 = first of the fight); returns how many enemies appeared. */
-	int32 SpawnHorde(int32 HordeIndex);
-	/** Seconds until the next attempt after a failed one (no spawn point). */
-	float RetryCooldown = 0.f;
+	/** Spawns a horde; returns how many enemies appeared. */
+	int32 SpawnHorde();
 	/** Horde #12: counts the firefight horde's warning down (running game time); spawns it at 0. */
 	void TickFirefightHorde(float DeltaTime);
 	/** Horde #12: the firefight horde now (starts the fight from exploration); false = try again shortly. */
@@ -123,10 +113,9 @@ private:
 	int32 FirefightHordesReleased = 0;
 
 	FHordeConfig Config;
-	FHordeTimer Timer;
+	int32 HordesReleased = 0;
 	ECodexGamePhase LastPhase = ECodexGamePhase::Exploration;
-	bool bFightTracked = false;
-	bool bCountingNow = false;
+	bool bCountdownRunning = false;
 	double WarningUntil = -1.0;
 	int32 WarningCount = 0;
 	FVector LastSpawnPoint = FVector::ZeroVector;

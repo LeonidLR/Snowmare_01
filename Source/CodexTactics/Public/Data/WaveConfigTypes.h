@@ -269,17 +269,17 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	float PatrolSearchSeconds = -1.f;
 
-	/** "horde_enabled": false switches the horde off on this level (both: after a long real-time fight, after N firefights; UHordeSubsystem). */
+	/** "horde_enabled": false switches the horde off on this level (the horde after N firefights in a row - its only trigger since 2026-11-09; UHordeSubsystem). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	bool bHordeEnabled = true;
 
 	/**
 	 * "horde_after_firefights" (horde #12, game designer 2026-11-02 / 11-03 / 11-08): the horde comes after this many firefights IN A ROW on
-	 * this level (slipping past an enemy group undetected resets the streak; FirefightRules, UFirefightSubsystem). Default 6, min 1;
-	 * edited by the Training Ground waves tab.
+	 * this level (slipping past an enemy group undetected resets the streak; FirefightRules, UFirefightSubsystem). Default 10 (game designer
+	 * 2026-11-09; FirefightRules::DefaultAfterFirefights), min 1; edited by the Training Ground waves tab.
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level", meta = (ClampMin = "1"))
-	int32 HordeAfterFirefights = 6;
+	int32 HordeAfterFirefights = 10;
 
 	/**
 	 * "corpse_cap" (game designer 2026-11-08: "corpses of ALL enemies must stay on the ground"): at most this many enemy bodies stay on the
@@ -306,8 +306,8 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	int32 SusaninWave = -1;
 
 	/**
-	 * "horde": this level's overrides of Content/Data/AI/horde.json (same keys, e.g. {"trigger_seconds": 180,
-	 * "count": 10}), kept as JSON text; empty = the file's values (HordeRules::ResolveForLevel).
+	 * "horde": this level's overrides of Content/Data/AI/horde.json (same keys, e.g. {"count": 10,
+	 * "firefight_warning_seconds": 15}), kept as JSON text; empty = the file's values (HordeRules::ResolveForLevel).
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level", meta = (MultiLine = true))
 	FString HordeOverrideJson;

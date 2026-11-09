@@ -10,7 +10,7 @@ enum class EAmbushTrigger : uint8;
 
 /**
  * Horde #12 (game designer decisions 2026-11-02 / 2026-11-03 / 2026-11-08; UE-only, no Godot reference): counts the squad's FIREFIGHTS IN A
- * ROW on the level and asks UHordeSubsystem for the horde at the level's threshold ("horde_after_firefights", default 6). Definitions in
+ * ROW on the level and asks UHordeSubsystem for the horde at the level's threshold ("horde_after_firefights", default 10 - FirefightRules::DefaultAfterFirefights). Definitions in
  * FirefightRules.h. Input: every hostile contact (ULevelEncounterSubsystem::OnHostileContact - an enemy spotted / attacked the squad, the
  * squad hit / attacked an enemy) with one of the level's enemies (ULevelEncounterSubsystem::IsLevelEnemy: placed patrols, the pressure's
  * patrols / ambushers; hostile PMC fighters) - never a scripted wave, never the horde itself (bKnowsSquadPosition). One encounter at a

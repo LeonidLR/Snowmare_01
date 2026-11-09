@@ -9,43 +9,11 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
-float FHordeTimer::GetNextTriggerSeconds(const FHordeConfig& Config) const
-{
-	if (!Config.bEnabled)
-	{
-		return TNumericLimits<float>::Max();
-	}
-	if (HordesReleased == 0)
-	{
-		return Config.TriggerSeconds;
-	}
-	if (!Config.bRepeats)
-	{
-		return TNumericLimits<float>::Max();
-	}
-	return Config.TriggerSeconds + HordesReleased * FMath::Max(Config.RepeatSeconds, 1.f);
-}
-
-bool FHordeTimer::Advance(float DeltaSeconds, bool bCounting, const FHordeConfig& Config)
-{
-	if (!bCounting || !Config.bEnabled)
-	{
-		return false;
-	}
-	CombatSeconds += FMath::Max(DeltaSeconds, 0.f);
-	if (CombatSeconds < GetNextTriggerSeconds(Config))
-	{
-		return false;
-	}
-	++HordesReleased;
-	return true;
-}
-
 namespace HordeRules
 {
-	bool IsCountingTime(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bWorldAIPaused)
+	bool IsCountdownRunning(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bWorldAIPaused)
 	{
-		return Phase == ECodexGamePhase::WaveCombat && Mode == ECodexCombatMode::RealTime && !bWorldAIPaused;
+		return !bWorldAIPaused && (Phase == ECodexGamePhase::Exploration || (Phase == ECodexGamePhase::WaveCombat && Mode == ECodexCombatMode::RealTime));
 	}
 
 	bool IsInDistanceBand(float DistanceCm, const FHordeConfig& Config)
@@ -77,9 +45,9 @@ namespace HordeRules
 		return Best;
 	}
 
-	int32 GetHordeSize(const FHordeConfig& Config, int32 HordeIndex)
+	int32 GetHordeSize(const FHordeConfig& Config)
 	{
-		return FMath::Max(1, Config.Count + Config.CountIncreasePerRepeat * FMath::Max(HordeIndex, 0));
+		return FMath::Max(1, Config.Count);
 	}
 
 	TArray<EEnemyArchetype> BuildComposition(const FHordeConfig& Config, int32 Total)
@@ -182,25 +150,11 @@ namespace HordeRules
 		{
 			Config.bEnabled = Bool;
 		}
-		if (Json.TryGetNumberField(TEXT("trigger_seconds"), Number))
-		{
-			Config.TriggerSeconds = FMath::Max(1.f, static_cast<float>(Number));
-		}
-		if (Json.TryGetBoolField(TEXT("repeats"), Bool))
-		{
-			Config.bRepeats = Bool;
-		}
-		if (Json.TryGetNumberField(TEXT("repeat_seconds"), Number))
-		{
-			Config.RepeatSeconds = FMath::Max(1.f, static_cast<float>(Number));
-		}
+		// Game designer 2026-11-09: no horde after a long real-time fight any more - "trigger_seconds" / "repeats" / "repeat_seconds" /
+		// "count_increase_per_repeat" are not read (an old level override that still has them changes nothing).
 		if (Json.TryGetNumberField(TEXT("count"), Number))
 		{
 			Config.Count = FMath::Max(1, FMath::RoundToInt(Number));
-		}
-		if (Json.TryGetNumberField(TEXT("count_increase_per_repeat"), Number))
-		{
-			Config.CountIncreasePerRepeat = FMath::Max(0, FMath::RoundToInt(Number));
 		}
 		const TSharedPtr<FJsonObject>* Mix = nullptr;
 		if (Json.TryGetObjectField(TEXT("composition"), Mix) && Mix && Mix->IsValid())

@@ -118,7 +118,8 @@ test('level_01_outpost.json: gate values read, validate, and an edit round-trips
 });
 
 
-test('horde_after_firefights: default 6, min 1, set / validate / roundtrip', () => {
+test('horde_after_firefights: default 10, min 1, set / validate / roundtrip', () => {
+  assert.equal(HORDE_AFTER_FIREFIGHTS_DEFAULT, 10, 'game designer 2026-11-09');
   assert.equal(getHordeAfterFirefights({}), HORDE_AFTER_FIREFIGHTS_DEFAULT);
   assert.equal(getHordeAfterFirefights({ horde_after_firefights: 10 }), 10);
   assert.equal(getHordeEnabled({}), true);

@@ -1610,6 +1610,11 @@ public:
 	bool HasDeathPlayed() const { return bDeathPlayed; }
 	/** Killed off the ground: the death clip waits for the landing. */
 	bool IsDeathDeferred() const { return bDeathDeferred; }
+	/**
+	 * The corpse pose holds (2026-11-09, UCorpseSubsystem freezes a hostile PMC body then): the death clip / fall has started (not deferred)
+	 * and no montage is still advancing or blending (the held clip stops at its end).
+	 */
+	bool IsDeathPoseSettled() const;
 
 protected:
 	virtual FAnimInstanceProxy* CreateAnimInstanceProxy() override;

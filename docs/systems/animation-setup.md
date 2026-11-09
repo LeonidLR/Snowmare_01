@@ -42,10 +42,29 @@
   (pawns walk over it, clicks / shots go through), hides the vision cone and takes it out of `UEnemyRegistrySubsystem` (no per-frame query sees
   it); it stays rendered. Cap per level: level JSON `corpse_cap` (default 150; `Codex.Corpse.Cap`): above it the oldest body farthest from the
   squad (the farthest of the `Codex.Corpse.OldestPool` 10 oldest, out of the camera view first - `WasRecentlyRendered`) shrinks into its root
-  over `Codex.Corpse.FadeSeconds` 1 s and is destroyed. A body without a death pose (the C++ placeholder: the Spitter has no Blueprint) still
-  goes after 2 s. Post-combat cleanup removes only the living (`UWaveVictorySubsystem`). Not saved: a load restores the living enemies only.
-  Enemies carry no loot (fallen gear is the squad's KIA remains), so nothing else stays at a body. Hostile PMC fighters are operative corpses
-  (their own death pose, unchanged). `Codex.Corpse.Persist 0` = the old decay; `Codex.Corpse.Freeze 0` = A/B only. Measured on
+  over `Codex.Corpse.FadeSeconds` 1 s and is destroyed. ~~A body without a death pose (the C++ placeholder: the Spitter has no Blueprint) still
+  goes after 2 s.~~ Post-combat cleanup removes only the living (`UWaveVictorySubsystem`). Not saved: a load restores the living enemies only.
+  Enemies carry no loot (fallen gear is the squad's KIA remains), so nothing else stays at a body. ~~Hostile PMC fighters are operative corpses
+  (their own death pose, unchanged).~~ **2026-11-09 (game designer: "every enemy body stays, ALL enemies", one cap; feat/horde-decisions):**
+  `UCorpseSubsystem` keeps any `ICorpseBody` (`Characters/CorpseBody.h`, native interface: `IsDeathPoseSettled`, `IsCorpseFalling`,
+  `IsCorpseOnLadder`, `FreezeCorpse`, `IsCorpseFrozen`, `GetCorpseVisual` - what the fade scales and the in-view test reads -, `HoldsUnsearchedLoot`).
+  (a) **Hostile PMC fighters** (`AOperativeCharacter`, another team): `HandleDied` registers the body (`CorpseRules::IsKeptUnderCap`:
+  monsters and hostile operatives yes, the player's own squad's KIA NEVER - they stay for good, they hold the remains, save, death cam); the
+  SAME level cap counts monsters and PMC together. Frozen once it lies settled (`UOperativeAnimInstance::IsDeathPoseSettled`: the death clip /
+  held fall started, not deferred by a fall, no montage advancing / blending; the corpse fall to the ground comes first - `FreezeCorpse` refuses
+  while `bCorpseFalling`): `AOperativeCharacter::FreezeCorpse` destroys his AI controller, disables movement, pauses the anims on the death pose,
+  stops every component tick, turns all collision off, deactivates FX - still rendered with the weapon in his hands (log `[Corpse] <name> (PMC
+  team N): the body is frozen where he fell`). Loot: a hostile PMC fighter leaves NO remains crate (only the player's own KIA do), so
+  `HoldsUnsearchedLoot` is false today; the rule is in place anyway - `CorpseRules::PickCorpseToFade` never picks a body holding unsearched loot
+  while it is in the camera view (out of view it may go). The arena's next round destroys its fighters (`UPmcSquadSubsystem::DestroyTeam`): the
+  subsystem drops them. (b) **A body without a death pose** (the Spitter's C++ placeholder - no Blueprint yet -, or any Blueprint without a death
+  clip / not an `UEnemyAnimInstance`) STAYS too: registered like the rest, its pose counts as settled at once, and `AEnemyCharacter::FreezeCorpse`
+  first lays it on the ground (`LayCorpseDown`: the placeholder cylinder on its side along the facing, resting `CorpseRules::LyingBodyCentreZ`
+  its radius above the floor; a skeletal body tipped onto its back round its root, lifted by half the capsule radius; log `[Corpse] <name> had no
+  death pose: laid on the ground`) until it gets a real model / clip. `Codex.Corpse.Persist 0` = the old decay (an enemy's life span; a PMC
+  body unmanaged as before); `Codex.Corpse.Cap` / `CodexTactics.Corpse.Status` count both kinds. Tests `CodexTactics.Characters.Corpse.*`
+  (+ `HostilePmcBodiesShareTheCap`, `PlaceholderBodyStaysOnTheGround`); smokes `CorpsePersistSmoke` (now 12 bodies: + the laid-down Spitter and
+  a hostile PMC fighter, all frozen; cap 4 fades 8), `EnemyDeathSmoke` (every body stays frozen). `Codex.Corpse.Persist 0` = the old decay; `Codex.Corpse.Freeze 0` = A/B only. Measured on
   L_Gen_Depot_1 (rendered 1280x720, `CorpseCostSmoke`): 0 / 50 / 150 frozen bodies - frame 6.5 / 7.1 / 7.1 ms, game thread 4.3 / 5.6 / 5.7 ms,
   GPU 5.3 / 6.0 / 6.3 ms, draws 167 / 363 / 614, memory 3311 / 3671 / 3698 MB (the first 50 also load the enemy Blueprints' assets; the next 100
   bodies +27 MB, ~0.3 MB each); the same 150 NOT frozen: game thread 19.7 ms. Tests `CodexTactics.Characters.Corpse.*`; smokes `CorpsePersistSmoke`,

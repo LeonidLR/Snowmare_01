@@ -4,6 +4,7 @@
 
 #include "Characters/EnemyCharacter.h"
 #include "Characters/CorpseSubsystem.h"
+#include "CodexTactics.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/VisionConeComponent.h"
@@ -21,6 +22,7 @@
 #include "Core/PlayerCommands.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/CharacterMovementComponent.h"
 
@@ -214,13 +216,50 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 		LifeSpan = Anim->HasDeathAnimation() ? Anim->DeathDecayDelay : LifeSpan;
 		bDeathPose = Anim->HasDeathAnimation() || bDownAtDeath;
 	}
-	// Game designer 2026-11-08: every enemy body with a death pose stays on the ground (UCorpseSubsystem freezes it once it has settled and
-	// lies on the floor; the level's corpse_cap fades the oldest far one). Without a death pose (a placeholder body) it still goes.
-	UCorpseSubsystem* Corpses = bDeathPose && GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr;
+	// Game designer 2026-11-08: every enemy body stays on the ground (UCorpseSubsystem freezes it once it has settled and lies on the floor;
+	// the level's corpse_cap, shared with the hostile PMC bodies, fades the oldest far one). 2026-11-09 (game designer: ALL enemies): a body
+	// without a death pose (the C++ placeholder - the Spitter has no Blueprint yet - or a Blueprint without a death clip) stays too and is
+	// laid on the ground when it is frozen (LayCorpseDown) until it gets a real model / clip. Codex.Corpse.Persist 0: the old decay.
+	bLayDownOnFreeze = !bDeathPose;
+	UCorpseSubsystem* Corpses = GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr;
 	if (!Corpses || !Corpses->RegisterCorpse(this))
 	{
 		SetLifeSpan(LifeSpan);
 	}
+}
+
+UPrimitiveComponent* AEnemyCharacter::GetCorpseVisual() const
+{
+	if (GetMesh() && GetMesh()->GetSkeletalMeshAsset())
+	{
+		return GetMesh();
+	}
+	return BodyMesh ? BodyMesh.Get() : static_cast<UPrimitiveComponent*>(GetMesh());
+}
+
+void AEnemyCharacter::LayCorpseDown()
+{
+	const float HalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.f;
+	if (GetMesh() && GetMesh()->GetSkeletalMeshAsset())
+	{
+		// A Blueprint body without a death clip: tipped onto its back round the feet (the root), lifted by half its thickness.
+		USkeletalMeshComponent* Body = GetMesh();
+		const float Radius = GetCapsuleComponent() ? GetCapsuleComponent()->GetUnscaledCapsuleRadius() : 35.f;
+		const FQuat Tip(FVector::RightVector, FMath::DegreesToRadians(-90.f));
+		Body->SetRelativeRotation(Tip * Body->GetRelativeRotation().Quaternion());
+		FVector Location = Body->GetRelativeLocation();
+		Location.Z = CorpseRules::LyingBodyCentreZ(HalfHeight, Radius * 0.5f);
+		Body->SetRelativeLocation(Location);
+	}
+	else if (BodyMesh)
+	{
+		// The C++ placeholder (an engine cylinder, radius 50 cm x its scale): on its side along the facing, resting on the floor.
+		const float Radius = 50.f * static_cast<float>(BodyMesh->GetRelativeScale3D().X);
+		BodyMesh->SetRelativeRotation(FRotator(90.f, 0.f, 0.f));
+		BodyMesh->SetRelativeLocation(FVector(0.f, 0.f, CorpseRules::LyingBodyCentreZ(HalfHeight, Radius)));
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Corpse] %s had no death pose: laid on the ground (%s)"), *GetName(),
+		GetMesh() && GetMesh()->GetSkeletalMeshAsset() ? TEXT("Blueprint body without a death clip") : TEXT("C++ placeholder body"));
 }
 
 bool AEnemyCharacter::IsCorpseFalling() const
@@ -243,6 +282,10 @@ void AEnemyCharacter::FreezeCorpse()
 	}
 	bCorpseFrozen = true;
 	bAirborneDeath = false;
+	if (bLayDownOnFreeze)
+	{
+		LayCorpseDown(); // landed and still: no death pose to hold, so it lies down (2026-11-09)
+	}
 	// No brain left: the AI controller goes (its path following, perception, state tree ticks with it).
 	if (AController* Brain = GetController())
 	{
