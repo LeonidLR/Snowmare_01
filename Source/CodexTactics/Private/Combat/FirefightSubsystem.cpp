@@ -63,7 +63,7 @@ const FFirefightConfig& UFirefightSubsystem::GetConfig() const
 int32 UFirefightSubsystem::GetThreshold() const
 {
 	const UHordeSubsystem* Horde = GetWorld() ? GetWorld()->GetSubsystem<UHordeSubsystem>() : nullptr;
-	return Horde ? FMath::Max(1, Horde->GetConfig().AfterFirefights) : 6;
+	return Horde ? FMath::Max(1, Horde->GetConfig().AfterFirefights) : FirefightRules::DefaultAfterFirefights;
 }
 
 void UFirefightSubsystem::ResetForTest()

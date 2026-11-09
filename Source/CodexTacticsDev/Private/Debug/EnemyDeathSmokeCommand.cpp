@@ -4,7 +4,8 @@
 // pose. One enemy of each type with a Blueprint (hound, frostbitten, cutter, brute) is killed, then hit a few more times (shots landing
 // on the body); the one-shot slot weight is sampled every 0.1 s. Since 2026-11-08 (game designer: "corpses of ALL enemies must stay on
 // the ground", UCorpseSubsystem) a body with a death clip is no longer removed after death_decay_delay: it must still be there 10 s
-// later, frozen (AEnemyCharacter::FreezeCorpse) with the pose held; a body without a clip still goes.
+// later, frozen (AEnemyCharacter::FreezeCorpse) with the pose held. 2026-11-09 (game designer: ALL enemies): a body without a clip stays
+// too (laid on the ground, frozen) - no body goes any more.
 
 #include "CoreMinimal.h"
 
@@ -112,8 +113,8 @@ namespace EnemyDeathSmoke
 		for (const FTracked& Tracked : State.Enemies)
 		{
 			const bool bHeld = !Tracked.bHasClip || Tracked.MinHeldWeight > 0.9f;
-			// A body with a death clip stays (frozen); one without still goes.
-			const bool bFate = Tracked.bHasClip ? !Tracked.bGone && Tracked.bFrozen : Tracked.bGone;
+			// Every body stays, frozen (2026-11-09: one without a clip too, laid on the ground).
+			const bool bFate = !Tracked.bGone && Tracked.bFrozen;
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s death clip=%d, removed=%d, frozen=%d after %.1f s, one-shot weight%s -> %s"),
 				bHeld && bFate ? TEXT("ok  ") : TEXT("FAIL"), *Name(Tracked.Type), Tracked.bHasClip ? 1 : 0,
 				Tracked.bGone ? 1 : 0, Tracked.bFrozen ? 1 : 0, Tracked.DeadFor, *Tracked.Timeline, bHeld ? TEXT("held") : TEXT("RETURNED TO THE GRAPH"));

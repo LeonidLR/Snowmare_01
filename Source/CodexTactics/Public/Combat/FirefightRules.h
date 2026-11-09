@@ -12,8 +12,9 @@
  * shot / struck (the squad hit or attacked an enemy, or an enemy attacked the squad) - or an ambush was sprung on the squad. One per
  * encounter, not per shot: the encounter starts with its first hostile contact and ends when every enemy that engaged in it is down, or
  * when there was no contact for LostContactSeconds. A silent kill (dead before it noticed anybody) is no firefight.
- * The STREAK counts firefights in a row; at the level's threshold ("horde_after_firefights", default 6) the horde comes and the streak
- * starts again. SLIPPING PAST resets it (data, pending the designer): an enemy group that the squad came within its detection reach of,
+ * The STREAK counts firefights in a row; at the level's threshold ("horde_after_firefights", default 10 - game designer 2026-11-09) the
+ * horde comes and the streak starts again; it is the ONLY horde trigger since 2026-11-09 (the 240 s real-time-fight clock is gone).
+ * SLIPPING PAST resets it (confirmed by the game designer 2026-11-09): an enemy group that the squad came within its detection reach of,
  * never spotted the squad (never broke its patrol, no hostile contact), and the squad then left that reach (x SlipExitFactor) - or the
  * group went away (recycled) while the squad was inside it.
  */
@@ -112,6 +113,9 @@ enum class ESlipVerdict : uint8
 
 namespace FirefightRules
 {
+	/** The level's threshold when its JSON has no "horde_after_firefights" (game designer 2026-11-09: 10 firefights in a row; was 6). */
+	constexpr int32 DefaultAfterFirefights = 10;
+
 	/** Applies a contact at Now (starts the encounter if needed); true when this contact made it a firefight (once per encounter). */
 	CODEXTACTICS_API bool ApplyEvent(FFirefightEncounter& Encounter, EFirefightEvent Event, double Now);
 

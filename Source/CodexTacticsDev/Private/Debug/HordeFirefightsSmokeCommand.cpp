@@ -1,6 +1,6 @@
 // Dev-only headless check of horde #12 (game designer 2026-11-02 / 11-03 / 11-08; UFirefightSubsystem, UHordeSubsystem::RequestFirefightHorde,
-// UHordeIntroSubsystem::BeginExternalHorde) on L_Gen_Depot_1 (the level JSON as shipped; the smoke turns the horde on and the threshold to
-// 2 by the console, the pressure off, the squad tough and holding fire):
+// UHordeIntroSubsystem::BeginExternalHorde) on L_Gen_Depot_1 (the level JSON as shipped: since 2026-11-09 the horde is ON there after 10
+// firefights - checked first; the smoke then sets the threshold to 2 by the console, the pressure off, the squad tough and holding fire):
 //   Scripts/smoke_parallel.ps1 -Commands HordeFirefightsSmoke   (map /Game/Maps/Generated/L_Gen_Depot_1, Scripts/test_map.json)
 // 1. Firefight 1: a pressure patrol (2 frostbitten) 12 m ahead, the squad's shot hits one -> it notices (contact + shots) = ONE firefight
 //    (more hits in the same encounter do not add one); the HQ hint "one more firefight"; both killed -> the encounter is over (all down).
@@ -68,7 +68,6 @@ namespace HordeFirefightsSmoke
 		SetCVar(TEXT("Codex.Horde.Enabled"), -1.f);
 		SetCVar(TEXT("Codex.Horde.AfterFirefights"), -1.f);
 		SetCVar(TEXT("Codex.Horde.FirefightWarningSeconds"), -1.f);
-		SetCVar(TEXT("Codex.Horde.TriggerSeconds"), -1.f);
 		SetCVar(TEXT("Codex.Pressure.Enabled"), -1.f);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("HordeFirefightsSmoke"));
@@ -184,11 +183,16 @@ namespace HordeFirefightsSmoke
 			{
 				return true;
 			}
+			// The Depot as shipped (game designer 2026-11-09): the horde on, after 10 firefights in a row; no real-time-fight clock.
+			Horde->RefreshConfig();
+			Check(State, Horde->GetConfig().bEnabled && Horde->GetConfig().AfterFirefights == 10 && Fire->GetThreshold() == 10,
+				FString::Printf(TEXT("the Depot's level JSON: horde %s after %d firefights in a row"), Horde->GetConfig().bEnabled ? TEXT("on") : TEXT("OFF"),
+					Horde->GetConfig().AfterFirefights));
+			Check(State, IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Horde.TriggerSeconds")) == nullptr, TEXT("... no real-time-fight horde clock"));
 			SetCVar(TEXT("Codex.Pressure.Enabled"), 0.f);
 			SetCVar(TEXT("Codex.Horde.Enabled"), 1.f);
 			SetCVar(TEXT("Codex.Horde.AfterFirefights"), 2.f);
 			SetCVar(TEXT("Codex.Horde.FirefightWarningSeconds"), 4.f);
-			SetCVar(TEXT("Codex.Horde.TriggerSeconds"), 100000.f); // the time-based horde stays out of it
 			Horde->SetDevOverrideJson(TEXT("{\"count\": 6, \"composition\": {\"FROST_HOUND\": 2, \"MILITARY_ZOMBIE\": 1}}"));
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
@@ -197,7 +201,7 @@ namespace HordeFirefightsSmoke
 			Fire->ResetForTest();
 			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("exploring the Depot"));
 			Check(State, Fire->GetThreshold() == 2 && Horde->GetConfig().bEnabled,
-				FString::Printf(TEXT("the horde after %d firefights in a row (level horde_after_firefights 6 -> console 2), horde on"), Fire->GetThreshold()));
+				FString::Printf(TEXT("the horde after %d firefights in a row (level horde_after_firefights 10 -> console 2), horde on"), Fire->GetThreshold()));
 			Next(State);
 			return true;
 		}

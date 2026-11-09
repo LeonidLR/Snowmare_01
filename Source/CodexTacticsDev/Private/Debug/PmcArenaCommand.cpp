@@ -52,6 +52,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/HordeSubsystem.h"
 #include "Combat/SightRules.h"
 #include "Containers/Ticker.h"
 #include "Data/LevelJsonRules.h"
@@ -1885,6 +1886,17 @@ namespace PmcArena
 				{
 					Variable->Set(0, ECVF_SetByConsole);
 				}
+			}
+			// Game designer 2026-11-09: the horde is ON at the Depot (L_Gen_Depot_1.json) - never in the arena / the night trainer, even when the
+			// arena runs on the Depot map without -LevelJson=L_PmcArenaDepot.json (horde off there too): no firefight horde in self-play.
+			if (IConsoleVariable* HordeOn = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Horde.Enabled")))
+			{
+				HordeOn->Set(0, ECVF_SetByConsole);
+			}
+			if (UHordeSubsystem* Horde = World->GetSubsystem<UHordeSubsystem>())
+			{
+				Horde->RefreshConfig();
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] the horde is %s in the arena (Codex.Horde.Enabled 0)"), Horde->GetConfig().bEnabled ? TEXT("STILL ON") : TEXT("off"));
 			}
 			State.Config = LoadConfig(World);
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] objective %s: radius %.0f m, hold %.0f s, offset %.2f (%s); scenario %s"), State.Options.bObjective ? TEXT("on") : TEXT("off"),

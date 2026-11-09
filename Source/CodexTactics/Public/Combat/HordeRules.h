@@ -21,25 +21,20 @@ struct CODEXTACTICS_API FHordeMixEntry
 };
 
 /**
- * Horde after a long real-time fight (user request 2026-10-06, UE-only). Defaults: Content/Data/AI/horde.json (read at
- * game start, like enemy_perception.json); per level: the level JSON "horde_enabled" (false switches it off) and an
- * optional "horde" object with any of the same keys (overrides the file for that level). Distances in the JSON are in
- * meters, times in seconds; here in cm / s. Console: Codex.Horde.TriggerSeconds / Codex.Horde.Enabled (-1 = data).
+ * The horde (UE-only). Since the game designer's decision 2026-11-09 it comes ONLY after N firefights in a row on the level (FirefightRules,
+ * UFirefightSubsystem); the old trigger after 240 s of real-time fight (user request 2026-10-06: "trigger_seconds", "repeats",
+ * "repeat_seconds", "count_increase_per_repeat", Codex.Horde.TriggerSeconds / RepeatSeconds) is gone - those keys are ignored if a file
+ * still has them. Defaults: Content/Data/AI/horde.json (read at game start, like enemy_perception.json); per level: the level JSON
+ * "horde_enabled" (false switches it off), "horde_after_firefights" and an optional "horde" object with any of the same keys (overrides the
+ * file for that level). Distances in the JSON are in meters, times in seconds; here in cm / s. Console: Codex.Horde.Enabled /
+ * Codex.Horde.AfterFirefights / Codex.Horde.FirefightWarningSeconds (-1 = data).
  */
 struct CODEXTACTICS_API FHordeConfig
 {
 	/** "enabled": the horde exists at all (the level's "horde_enabled" must agree). */
 	bool bEnabled = true;
-	/** "trigger_seconds": real-time fight seconds (pause / turn-based / dialogue excluded) before the first horde. */
-	float TriggerSeconds = 240.f;
-	/** "repeats": more hordes after the first, every RepeatSeconds of further fight time. */
-	bool bRepeats = false;
-	/** "repeat_seconds". */
-	float RepeatSeconds = 120.f;
-	/** "count": enemies of the first horde. */
+	/** "count": enemies of a horde. */
 	int32 Count = 8;
-	/** "count_increase_per_repeat": extra enemies for each further horde of the same fight. */
-	int32 CountIncreasePerRepeat = 0;
 	/**
 	 * "composition": { "FROST_HOUND": 5, "FROSTBITTEN": 3 } — weights per level-JSON enemy type or variant key ("MILITARY_ZOMBIE"); the
 	 * Spitter is refused (task #34 / horde #12: the Military Zombie replaced it outside the stage waves).
@@ -62,9 +57,9 @@ struct CODEXTACTICS_API FHordeConfig
 	FString WarningSound;
 	/**
 	 * Horde #12: the horde comes after this many firefights IN A ROW on the level (the level JSON root key "horde_after_firefights", default
-	 * 6, min 1; console Codex.Horde.AfterFirefights; FirefightRules).
+	 * 10 - game designer 2026-11-09, FirefightRules::DefaultAfterFirefights; min 1; console Codex.Horde.AfterFirefights).
 	 */
-	int32 AfterFirefights = 6;
+	int32 AfterFirefights = FirefightRules::DefaultAfterFirefights;
 	/** Horde #12: the firefight count and slip-past tuning ("firefight_*" keys of horde.json / the level "horde" override). */
 	FFirefightConfig Firefight;
 };
@@ -81,37 +76,15 @@ struct CODEXTACTICS_API FHordeSpawnCandidate
 	bool bVisibleToSquad = false;
 };
 
-/**
- * Fight clock of the horde: counts only running real-time fight time and fires at TriggerSeconds, then (option) every
- * RepeatSeconds. Reset at the start of every fight (a wave, an ambush fight).
- */
-struct CODEXTACTICS_API FHordeTimer
-{
-	/** Running real-time fight seconds counted so far. */
-	float CombatSeconds = 0.f;
-	/** Hordes released in this fight. */
-	int32 HordesReleased = 0;
-
-	void Reset() { CombatSeconds = 0.f; HordesReleased = 0; }
-
-	/** Fight seconds of the next horde (TNumericLimits<float>::Max() when none is left). */
-	float GetNextTriggerSeconds(const FHordeConfig& Config) const;
-
-	/**
-	 * Adds DeltaSeconds when bCounting; true when a horde is due now (HordesReleased is then incremented — one per call,
-	 * a long frame never releases two at once).
-	 */
-	bool Advance(float DeltaSeconds, bool bCounting, const FHordeConfig& Config);
-};
-
 /** Pure horde rules (tests CodexTactics.Combat.Horde.*). */
 namespace HordeRules
 {
 	/**
-	 * Does the fight clock run now: a wave fight in full real time, not in the tactical pause, not in turn-based combat,
-	 * not while dialogues / cutscenes hold the world AI (UWorldAIPauseSubsystem).
+	 * The firefight horde's warning countdown runs now: in exploration or a wave fight in full real time - not in the tactical pause, not in
+	 * turn-based combat, not while dialogues / cutscenes hold the world AI (UWorldAIPauseSubsystem), not in a cutscene / preparation /
+	 * post-combat phase.
 	 */
-	CODEXTACTICS_API bool IsCountingTime(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bWorldAIPaused);
+	CODEXTACTICS_API bool IsCountdownRunning(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bWorldAIPaused);
 
 	/** The distance lies in [MinDistanceCm, MaxDistanceCm]. */
 	CODEXTACTICS_API bool IsInDistanceBand(float DistanceCm, const FHordeConfig& Config);
@@ -122,8 +95,8 @@ namespace HordeRules
 	 */
 	CODEXTACTICS_API int32 PickSpawnPoint(const TArray<FHordeSpawnCandidate>& Candidates, const FHordeConfig& Config);
 
-	/** Enemies of horde number HordeIndex (0 = the first): Count + CountIncreasePerRepeat x HordeIndex, at least 1. */
-	CODEXTACTICS_API int32 GetHordeSize(const FHordeConfig& Config, int32 HordeIndex);
+	/** Enemies of a horde: Count, at least 1. */
+	CODEXTACTICS_API int32 GetHordeSize(const FHordeConfig& Config);
 
 	/** The archetypes of one horde of Total enemies by the composition weights (largest remainder, stable order). */
 	CODEXTACTICS_API TArray<EEnemyArchetype> BuildComposition(const FHordeConfig& Config, int32 Total);
@@ -140,7 +113,10 @@ namespace HordeRules
 	/** Spawn offset of member Index of Count within the cluster radius (the first at the centre, then a sunflower). */
 	CODEXTACTICS_API FVector ClusterOffset(int32 Index, int32 Count, float ClusterRadiusCm);
 
-	/** Applies the keys present in Json over Config (meters -> cm); unknown archetypes in "composition" are skipped. */
+	/**
+	 * Applies the keys present in Json over Config (meters -> cm); unknown archetypes in "composition" are skipped; the removed timer keys
+	 * ("trigger_seconds", "repeats", "repeat_seconds", "count_increase_per_repeat") are ignored.
+	 */
 	CODEXTACTICS_API void ApplyJson(const FJsonObject& Json, FHordeConfig& Config);
 
 	/** ApplyJson from a JSON text; false (Config unchanged) when it is not a JSON object. */
@@ -157,5 +133,5 @@ namespace HordeRules
 	 * when the level says "horde_enabled": false.
 	 */
 	CODEXTACTICS_API FHordeConfig ResolveForLevel(const FHordeConfig& Defaults, bool bLevelHordeEnabled, const FString& LevelOverrideJson,
-		int32 LevelAfterFirefights = 6);
+		int32 LevelAfterFirefights = FirefightRules::DefaultAfterFirefights);
 }

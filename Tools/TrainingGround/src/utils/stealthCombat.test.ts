@@ -7,7 +7,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { jsonEqual, parseJsonText, patchJsonText } from './jsonTextPatch.ts';
 import {
-  HORDE_ARCHETYPES, HORDE_BOOL_FIELDS, HORDE_BUILTIN, HORDE_NUMBER_FIELDS,
+  CVARS, HORDE_ARCHETYPES, HORDE_BOOL_FIELDS, HORDE_BUILTIN, HORDE_NUMBER_FIELDS,
   applyLevelEncounterPatch, buildLevelPatch, effectiveHorde, mergeAiTuningCvars, pickLevelEncounter, validateCVarEdits,
   validateHorde, validateLevelPatch, validatePerception,
 } from './stealthCombat.ts';
@@ -52,12 +52,12 @@ test('patchJsonText: level patch keeps every other key and the file style', () =
   const file = path.join(LEVELS_DIR, 'stage_02.json');
   const text = fs.readFileSync(file, 'utf-8');
   const level = parseJsonText(text) as Record<string, unknown>;
-  const patched = applyLevelEncounterPatch(level, { combat_start: 'ambush', patrol_search_seconds: 45, horde: { trigger_seconds: 180 } });
+  const patched = applyLevelEncounterPatch(level, { combat_start: 'ambush', patrol_search_seconds: 45, horde: { count: 10 } });
   const out = patchJsonText(text, patched);
   const back = parseJsonText(out) as Record<string, unknown>;
   assert.equal(back.combat_start, 'ambush');
   assert.equal(back.patrol_search_seconds, 45);
-  assert.deepEqual(back.horde, { trigger_seconds: 180 });
+  assert.deepEqual(back.horde, { count: 10 });
   for (const key of Object.keys(level)) assert.ok(jsonEqual(back[key], level[key]), key);
   assert.ok(out.includes('"prep_phase_duration": 45.0'), 'untouched values keep their spelling');
   // Removing the keys again restores the original text.
@@ -135,4 +135,12 @@ test('horde #12: the horde tab edits the keys the game reads (horde.json firefig
   assert.ok(!Object.keys(shipped.composition).includes('SPITTER'), 'no Spitter in the shipped composition');
   // A firefight value out of range is reported.
   assert.equal(validateHorde({ ...shipped, firefight_slip_exit_factor: 0.5 }).length, 1);
+  // 2026-11-09 (game designer): no horde after a long real-time fight - the timer keys are gone from the file, the built-ins and the editor.
+  for (const key of ['trigger_seconds', 'repeats', 'repeat_seconds', 'count_increase_per_repeat']) {
+    assert.ok(!(key in shipped), `horde.json has no ${key}`);
+    assert.ok(!(key in HORDE_BUILTIN), `no built-in ${key}`);
+    assert.ok(!edited.has(key), `${key} is not edited`);
+  }
+  assert.ok(!CVARS.some((c) => c.name === 'Codex.Horde.TriggerSeconds' || c.name === 'Codex.Horde.RepeatSeconds'), 'the clock cvars are gone');
+  assert.ok(CVARS.some((c) => c.name === 'Codex.Horde.AfterFirefights'), 'the threshold cvar is listed');
 });

@@ -1,12 +1,20 @@
 // CodexTactics.Combat.Firefight.* — horde #12 (game designer 2026-11-02 / 11-03 / 11-08, UE-only; FirefightRules, UFirefightSubsystem):
 // what a firefight is (contact + shots with an aware enemy, or an ambush sprung; one per encounter), when it ends (all down / contact lost),
 // the streak to the level's threshold, the slip-past reset, the data keys (horde.json "firefight_*", level "horde_after_firefights"), and
-// the horde's composition with the Military Zombie variant (no Spitter).
+// the horde's composition with the Military Zombie variant (no Spitter). 2026-11-09 (game designer): the default threshold is 10 (the HQ
+// hint at 9), the streak is the ONLY horde trigger (the 240 s real-time-fight clock and its keys are gone), the Depot has the horde, the Lake
+// and the PMC arenas do not.
 
 #include "Misc/AutomationTest.h"
 #include "Combat/FirefightRules.h"
 #include "Combat/HordeRules.h"
 #include "Data/LevelJsonRules.h"
+#include "Data/WaveConfigTypes.h"
+#include "Dom/JsonObject.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -188,7 +196,7 @@ bool FFirefightDataTest::RunTest(const FString&)
 	TestEqual(TEXT("Shipped: 10 s warning"), Shipped.Firefight.WarningLeadSeconds, 10.f);
 	TestTrue(TEXT("Shipped: slip-past resets"), Shipped.Firefight.bSlipPastResets);
 
-	// The level JSON root key horde_after_firefights (Training Ground waves tab): default 6, min 1.
+	// The level JSON root key horde_after_firefights (Training Ground waves tab): default 10 (game designer 2026-11-09), min 1.
 	FLevelCombatConfig Level;
 	FString Error;
 	TestTrue(TEXT("Level parsed"), LevelJsonRules::ParseLevel(TEXT("{\"level_id\": \"t\", \"horde_after_firefights\": 2, \"waves\": []}"), TEXT("t"), Level, Error));
@@ -196,7 +204,7 @@ bool FFirefightDataTest::RunTest(const FString&)
 	TestEqual(TEXT("... resolved for the level"), ResolveForLevel(FHordeConfig(), Level.bHordeEnabled, Level.HordeOverrideJson, Level.HordeAfterFirefights).AfterFirefights, 2);
 	FLevelCombatConfig Plain;
 	TestTrue(TEXT("Plain level parsed"), LevelJsonRules::ParseLevel(TEXT("{\"level_id\": \"p\", \"waves\": []}"), TEXT("p"), Plain, Error));
-	TestEqual(TEXT("Default 6"), Plain.HordeAfterFirefights, 6);
+	TestEqual(TEXT("Default 10"), Plain.HordeAfterFirefights, 10);
 	FLevelCombatConfig Zero;
 	TestTrue(TEXT("Zero parsed"), LevelJsonRules::ParseLevel(TEXT("{\"level_id\": \"z\", \"horde_after_firefights\": 0, \"waves\": []}"), TEXT("z"), Zero, Error));
 	TestEqual(TEXT("Min 1"), Zero.HordeAfterFirefights, 1);
@@ -233,6 +241,97 @@ bool FFirefightHordeVariantTest::RunTest(const FString&)
 	for (const FHordeMixEntry& Entry : LoadDefaults().Composition)
 	{
 		TestTrue(TEXT("Shipped composition: no Spitter"), Entry.Type != EEnemyArchetype::Spitter);
+	}
+	return true;
+}
+
+FIREFIGHT_TEST(FFirefightThresholdTenTest, "ThresholdDefaultTenHintAtNine")
+bool FFirefightThresholdTenTest::RunTest(const FString&)
+{
+	using namespace FirefightRules;
+	// Game designer 2026-11-09: the horde after 10 firefights in a row (was 6) - every place the default lives agrees.
+	TestEqual(TEXT("FirefightRules default"), DefaultAfterFirefights, 10);
+	TestEqual(TEXT("FHordeConfig default"), FHordeConfig().AfterFirefights, 10);
+	TestEqual(TEXT("FLevelCombatConfig default"), FLevelCombatConfig().HordeAfterFirefights, 10);
+	TestEqual(TEXT("ResolveForLevel default argument"), HordeRules::ResolveForLevel(FHordeConfig(), true, FString()).AfterFirefights, 10);
+	TestEqual(TEXT("No console override: the level's value"), ResolveThreshold(DefaultAfterFirefights, -1), 10);
+
+	// The streak: 9 firefights - the HQ hint (one more and the horde comes), no horde; the 10th brings the horde and starts again.
+	const FFirefightConfig Config; // HintFirefightsBefore 1
+	FFirefightStreak Streak;
+	int32 HintAt = 0;
+	for (int32 Index = 1; Index <= 9; ++Index)
+	{
+		TestFalse(FString::Printf(TEXT("Firefight %d: no horde"), Index), Streak.AddFirefight(DefaultAfterFirefights));
+		if (ShouldHint(Streak.Remaining(DefaultAfterFirefights), Config))
+		{
+			TestEqual(TEXT("Only one hint"), HintAt, 0);
+			HintAt = Index;
+		}
+	}
+	TestEqual(TEXT("The HQ hint after the 9th firefight"), HintAt, 9);
+	TestTrue(TEXT("The 10th in a row: the horde"), Streak.AddFirefight(DefaultAfterFirefights));
+	TestEqual(TEXT("... and the count starts again"), Streak.Count, 0);
+	return true;
+}
+
+FIREFIGHT_TEST(FFirefightOnlyTriggerTest, "NoTimerHordeOnlyTheStreak")
+bool FFirefightOnlyTriggerTest::RunTest(const FString&)
+{
+	using namespace HordeRules;
+	// Game designer 2026-11-09: no horde after 240 s of real-time fight any more - the old keys change nothing.
+	FHordeConfig Old;
+	TestTrue(TEXT("An old override with the timer keys still parses"),
+		ApplyJsonText(TEXT("{\"trigger_seconds\": 5, \"repeats\": true, \"repeat_seconds\": 5, \"count_increase_per_repeat\": 7}"), Old));
+	const FHordeConfig Defaults;
+	TestEqual(TEXT("... the horde size unchanged"), GetHordeSize(Old), GetHordeSize(Defaults));
+	TestEqual(TEXT("... the horde size is count"), GetHordeSize(Defaults), Defaults.Count);
+
+	// The shipped horde.json no longer carries the timer keys.
+	FString Text;
+	TSharedPtr<FJsonObject> Root;
+	TestTrue(TEXT("horde.json read"), FFileHelper::LoadFileToString(Text, *GetDefaultPath())
+		&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid());
+	if (Root.IsValid())
+	{
+		for (const TCHAR* Key : { TEXT("trigger_seconds"), TEXT("repeats"), TEXT("repeat_seconds"), TEXT("count_increase_per_repeat") })
+		{
+			TestFalse(FString::Printf(TEXT("horde.json: no '%s'"), Key), Root->HasField(Key));
+		}
+	}
+
+	// The firefight horde's warning countdown runs in running game time only (exploration or a real-time fight).
+	TestTrue(TEXT("Exploration runs"), IsCountdownRunning(ECodexGamePhase::Exploration, ECodexCombatMode::None, false));
+	TestTrue(TEXT("Real-time fight runs"), IsCountdownRunning(ECodexGamePhase::WaveCombat, ECodexCombatMode::RealTime, false));
+	TestFalse(TEXT("Tactical pause holds it"), IsCountdownRunning(ECodexGamePhase::WaveCombat, ECodexCombatMode::TacticalPause, false));
+	TestFalse(TEXT("Turn-based holds it"), IsCountdownRunning(ECodexGamePhase::WaveCombat, ECodexCombatMode::TurnBased, false));
+	TestFalse(TEXT("A dialogue / cutscene AI pause holds it"), IsCountdownRunning(ECodexGamePhase::Exploration, ECodexCombatMode::None, true));
+	TestFalse(TEXT("Preparation holds it"), IsCountdownRunning(ECodexGamePhase::Preparation, ECodexCombatMode::None, false));
+
+	// The shipped levels (2026-11-09): the horde ON at the Depot (threshold 10), OFF at the Lake and the PMC arenas.
+	auto Load = [this](const TCHAR* File, FLevelCombatConfig& Out)
+	{
+		FString Json;
+		FString Error;
+		const bool bOk = FFileHelper::LoadFileToString(Json, *(LevelJsonRules::GetLevelsDirectory() / File))
+			&& LevelJsonRules::ParseLevel(Json, FPaths::GetBaseFilename(File), Out, Error);
+		TestTrue(FString::Printf(TEXT("%s parsed %s"), File, *Error), bOk);
+		return bOk;
+	};
+	FLevelCombatConfig Depot;
+	if (Load(TEXT("L_Gen_Depot_1.json"), Depot))
+	{
+		const FHordeConfig Resolved = ResolveForLevel(FHordeConfig(), Depot.bHordeEnabled, Depot.HordeOverrideJson, Depot.HordeAfterFirefights);
+		TestTrue(TEXT("Depot: the horde on"), Resolved.bEnabled);
+		TestEqual(TEXT("Depot: after 10 firefights"), Resolved.AfterFirefights, 10);
+	}
+	for (const TCHAR* File : { TEXT("L_Demo01_A_FrozenLake.json"), TEXT("L_PmcArena.json"), TEXT("L_PmcArenaDepot.json") })
+	{
+		FLevelCombatConfig Level;
+		if (Load(File, Level))
+		{
+			TestFalse(FString::Printf(TEXT("%s: no horde"), File), Level.bHordeEnabled);
+		}
 	}
 	return true;
 }

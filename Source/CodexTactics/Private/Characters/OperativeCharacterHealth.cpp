@@ -6,6 +6,7 @@
 
 #include "AI/PmcSquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Characters/CorpseSubsystem.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacterInternal.h"
 #include "Characters/OperativeHitRules.h"
@@ -31,6 +32,7 @@
 #include "GameFramework/Pawn.h"
 #include "EngineUtils.h"
 #include "Ladders/LadderClimbComponent.h"
+#include "Particles/ParticleSystemComponent.h"
 #include "Falls/FallRules.h"
 #include "Characters/TransferRules.h"
 #include "Components/BoxComponent.h"
@@ -96,6 +98,15 @@ void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSour
 		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld()))
 		{
 			Pmc->NotifyOperativeDied(this, AttackerSource);
+		}
+		// Game designer 2026-11-09 ("every enemy body stays, ALL enemies, one cap"): his body goes under the level's corpse cap with the
+		// monsters and is frozen once it lies settled (UCorpseSubsystem; the fall to the ground first). The player's own KIA never do.
+		if (CorpseRules::IsKeptUnderCap(ECorpseKind::HostileOperative))
+		{
+			if (UCorpseSubsystem* Corpses = GetWorld()->GetSubsystem<UCorpseSubsystem>())
+			{
+				Corpses->RegisterCorpse(this);
+			}
 		}
 		return;
 	}
@@ -211,6 +222,75 @@ void AOperativeCharacter::BecomeCorpse()
 	UpdateSelectionRing();
 	// Bug 2026-11-08 (a killed PMC fighter kept the orange silhouette): the corpse drops every highlight overlay; UpdateSilhouette keeps it so.
 	ClearBodyOverlays(TEXT("corpse"));
+}
+
+bool AOperativeCharacter::IsDeathPoseSettled() const
+{
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	return !Anim || Anim->IsDeathPoseSettled();
+}
+
+bool AOperativeCharacter::IsCorpseOnLadder() const
+{
+	return LadderClimb && (LadderClimb->IsOnLadder() || LadderClimb->IsDropping());
+}
+
+UPrimitiveComponent* AOperativeCharacter::GetCorpseVisual() const
+{
+	if (GetMesh() && GetMesh()->GetSkeletalMeshAsset())
+	{
+		return GetMesh();
+	}
+	return BodyMesh ? BodyMesh.Get() : static_cast<UPrimitiveComponent*>(GetMesh());
+}
+
+void AOperativeCharacter::FreezeCorpse()
+{
+	// Only a hostile PMC body under the corpse cap (2026-11-09); the player's own KIA keep their full actor (remains, save, death cam).
+	if (bCorpseFrozen || !bKilledInAction || IsPlayerTeam() || bCorpseFalling)
+	{
+		return;
+	}
+	bCorpseFrozen = true;
+	// No brain left: the AI controller goes (path following, its tick).
+	if (AController* Brain = GetController())
+	{
+		Brain->UnPossess();
+		Brain->Destroy();
+	}
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->StopMovementImmediately();
+		Movement->DisableMovement();
+	}
+	if (USkeletalMeshComponent* Body = GetMesh())
+	{
+		Body->bPauseAnims = true; // the death pose stays on screen
+	}
+	// Nothing on the body ticks any more; nothing collides with it (shots and clicks go through); still rendered, the weapon in his hands.
+	// The capsule keeps its (query) collision but ignores every channel: a capsule with collision OFF reports a zero simple-collision half
+	// height (AActor::GetSimpleCollisionCylinder), and the feet / floor code (minimap floor, corpse floor, smokes) reads it.
+	UCapsuleComponent* Capsule = GetCapsuleComponent();
+	ForEachComponent<UActorComponent>(false, [Capsule](UActorComponent* Component)
+	{
+		Component->SetComponentTickEnabled(false);
+		if (Component == Capsule)
+		{
+			Capsule->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+			Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
+			Capsule->SetGenerateOverlapEvents(false);
+		}
+		else if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Component))
+		{
+			Primitive->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+		if (UFXSystemComponent* Effect = Cast<UFXSystemComponent>(Component))
+		{
+			Effect->Deactivate();
+		}
+	});
+	SetActorTickEnabled(false);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Corpse] %s (PMC team %d): the body is frozen where he fell"), *DisplayName.ToString(), TeamId);
 }
 
 bool AOperativeCharacter::TraceCorpseFloor(float& OutGapCm, float& OutFloorZ) const

@@ -4,6 +4,7 @@
 #include "Combat/AIGrenadeRules.h"
 #include "Combat/SquadFireRules.h"
 #include "GameFramework/Character.h"
+#include "Characters/CorpseBody.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/PersonalItemRules.h"
 #include "Characters/ProgressionRules.h"
@@ -148,7 +149,7 @@ struct FShootCandidate
  * knockdown, death), Weapons, Combat (target selection, fire), Aim, TargetedShots, Cover, CoverEntry, CornerAim, Sniper.
  */
 UCLASS(Blueprintable)
-class CODEXTACTICS_API AOperativeCharacter : public ACharacter
+class CODEXTACTICS_API AOperativeCharacter : public ACharacter, public ICorpseBody
 {
 	GENERATED_BODY()
 
@@ -1065,9 +1066,32 @@ public:
 	 * A body killed off the ground falls first (fix/corpse-falls-to-ground, game designer PIE 2026-11-08: a PMC fighter killed on a ladder hung
 	 * in the air in his death pose): BecomeCorpse leaves him to gravity when FallRules::ShouldCorpseFall (on a ladder - its own drop -, mid-vault,
 	 * the floor > 30 cm below his feet) and stops him once he lands (UpdateCorpseFall); the death pose waits for the landing
-	 * (UOperativeAnimInstance). True while he falls.
+	 * (UOperativeAnimInstance). True while he falls. (ICorpseBody: UCorpseSubsystem never freezes a hostile PMC body in the air.)
 	 */
-	bool IsCorpseFalling() const { return bCorpseFalling; }
+	virtual bool IsCorpseFalling() const override { return bCorpseFalling; }
+
+	/**
+	 * ICorpseBody (game designer 2026-11-09: "every enemy body stays, ALL enemies, one cap"): a HOSTILE PMC fighter's body goes under the
+	 * level's corpse cap with the monsters (UCorpseSubsystem, registered in HandleDied); the player's own squad's KIA never do (they stay for
+	 * good, they hold the remains). The death clip / held fall holds its last frame (UOperativeAnimInstance::IsDeathPoseSettled).
+	 */
+	virtual bool IsDeathPoseSettled() const override;
+	/** ICorpseBody: still climbing / dropped by a ladder. */
+	virtual bool IsCorpseOnLadder() const override;
+	/**
+	 * ICorpseBody: a settled hostile PMC body costs nothing more - his AI controller destroyed, no actor / movement / component tick (anims
+	 * paused on the death pose, the weapon still in his hands), no collision; still rendered where he fell. Never for the player's squad.
+	 */
+	virtual void FreezeCorpse() override;
+	/** FreezeCorpse ran. */
+	virtual bool IsCorpseFrozen() const override { return bCorpseFrozen; }
+	/** ICorpseBody: the skeletal body (the C++ placeholder cylinder without one). */
+	virtual UPrimitiveComponent* GetCorpseVisual() const override;
+	/**
+	 * ICorpseBody: a hostile PMC fighter leaves no remains crate (HandleDied: only the player's own KIA do), so his body never holds
+	 * unsearched loot today; were he given one, CorpseRules keeps the body while it is in view.
+	 */
+	virtual bool HoldsUnsearchedLoot() const override { return false; }
 	/** The rule evaluated now (the anim asks it in the death event, before or after BecomeCorpse ran). */
 	bool ShouldCorpseFallNow() const;
 	/** The last corpse fall's height, cm (smokes). */
@@ -2358,6 +2382,8 @@ private:
 	/** Leaves supplies in searchable remains at his feet (Godot corpse_loot). */
 	void SpawnRemainsLoot();
 	bool bKilledInAction = false;
+	/** FreezeCorpse ran (a hostile PMC body under the corpse cap, 2026-11-09). */
+	bool bCorpseFrozen = false;
 	/** IsCorpseFalling: since BecomeCorpse, until he lands. */
 	bool bCorpseFalling = false;
 	float CorpseFallSeconds = 0.f;

@@ -108,14 +108,14 @@ export function validatePerception(doc: unknown): string[] {
 // ---------------------------------------------------------------------------------------------------------------------
 // Horde
 
-/** Built-in FHordeConfig (Source/CodexTactics/Public/Combat/HordeRules.h) — what a missing key of horde.json means. */
+/**
+ * Built-in FHordeConfig (Source/CodexTactics/Public/Combat/HordeRules.h) — what a missing key of horde.json means. 2026-11-09 (game designer):
+ * the horde comes ONLY after N firefights in a row (level JSON horde_after_firefights, default 10) — the old 240 s real-time-fight clock
+ * (trigger_seconds / repeats / repeat_seconds / count_increase_per_repeat) is gone; the game ignores those keys.
+ */
 export const HORDE_BUILTIN: JsonObject = {
   enabled: true,
-  trigger_seconds: 240,
-  repeats: false,
-  repeat_seconds: 120,
   count: 8,
-  count_increase_per_repeat: 0,
   composition: { FROST_HOUND: 5, FROSTBITTEN: 3 },
   min_distance_m: 25,
   max_distance_m: 45,
@@ -151,10 +151,7 @@ export const HORDE_ARCHETYPES: { key: string; label: string }[] = [
 ];
 
 export const HORDE_NUMBER_FIELDS: NumField[] = [
-  { key: 'trigger_seconds', label: 'Орда через', unit: 'с', hint: 'секунды боя в реальном времени (пауза, пошаговый бой, диалоги не считаются)', step: 10, min: 1, max: 3600 },
-  { key: 'repeat_seconds', label: 'Повтор каждые', unit: 'с', hint: 'период следующих орд (если «Повторять» включено)', step: 10, min: 1, max: 3600 },
-  { key: 'count', label: 'Размер орды', unit: 'шт', hint: 'врагов в первой орде', step: 1, min: 1, max: 200, integer: true },
-  { key: 'count_increase_per_repeat', label: 'Прирост за повтор', unit: 'шт', hint: '+ врагов к каждой следующей орде того же боя', step: 1, min: 0, max: 100, integer: true },
+  { key: 'count', label: 'Размер орды', unit: 'шт', hint: 'врагов в орде (она приходит после N перестрелок подряд — horde_after_firefights уровня)', step: 1, min: 1, max: 200, integer: true },
   { key: 'min_distance_m', label: 'Мин. дистанция', unit: 'м', hint: 'ближайшая точка появления от центра отряда', step: 1, min: 0, max: 500 },
   { key: 'max_distance_m', label: 'Макс. дистанция', unit: 'м', hint: 'дальняя граница точки появления', step: 1, min: 0, max: 500 },
   { key: 'cluster_radius_m', label: 'Радиус группы', unit: 'м', hint: 'орда собирается в этом радиусе от точки появления', step: 0.5, min: 0, max: 50 },
@@ -171,7 +168,6 @@ export const HORDE_NUMBER_FIELDS: NumField[] = [
 
 export const HORDE_BOOL_FIELDS: { key: string; label: string; hint: string }[] = [
   { key: 'enabled', label: 'Орда включена', hint: 'глобально; уровень может выключить её флагом horde_enabled' },
-  { key: 'repeats', label: 'Повторять', hint: 'после первой орды — новые каждые «Повтор каждые» секунд' },
   { key: 'prefer_out_of_sight', label: 'Вне поля зрения', hint: 'точка, которую не видит ни один боец, важнее видимой' },
   { key: 'apply_wave_modifiers', label: 'Модификаторы волны', hint: 'HP / урон / скорость текущей волны (сложность уровня) действуют и на орду' },
   { key: 'firefight_slip_past_resets', label: 'Проскользнуть — сброс счёта', hint: 'отряд прошёл мимо группы врагов незамеченным — счёт перестрелок подряд обнуляется' },
@@ -353,8 +349,8 @@ export const CVARS: CVarInfo[] = [
   { name: 'Codex.Patrol.SearchSeconds', defaultValue: '-1', unit: 'с', description: 'время поиска патруля (-1 = JSON уровня / enemy_perception.json); главнее уровня', source: 'Data/EnemyPerception.cpp', editable: true, min: -1, max: 600 },
   { name: 'Codex.Patrol.SearchRadius', defaultValue: '-1', unit: 'см', description: 'радиус прочёсывания в САНТИМЕТРАХ (-1 = данные)', source: 'Data/EnemyPerception.cpp', editable: true, min: -1, max: 10000 },
   { name: 'Codex.Patrol.SearchSpeedScale', defaultValue: '1', unit: '×', description: 'множитель скорости поиска', source: 'Data/EnemyPerception.cpp', editable: true, min: 0, max: 5 },
-  { name: 'Codex.Horde.TriggerSeconds', defaultValue: '-1', unit: 'с', description: 'секунды боя до первой орды (-1 = horde.json / уровень)', source: 'Combat/HordeSubsystem.cpp' },
-  { name: 'Codex.Horde.RepeatSeconds', defaultValue: '-1', unit: 'с', description: '> 0 — включает повтор орд с этим периодом (-1 = данные)', source: 'Combat/HordeSubsystem.cpp' },
+  { name: 'Codex.Horde.AfterFirefights', defaultValue: '-1', unit: 'шт', description: '>= 1 — орда после стольких перестрелок подряд (-1 = horde_after_firefights уровня, по умолчанию 10; подсказка штаба за одну до порога)', source: 'Combat/HordeSubsystem.cpp' },
+  { name: 'Codex.Horde.FirefightWarningSeconds', defaultValue: '-1', unit: 'с', description: '>= 0 — секунды от радио штаба до орды (-1 = horde.json firefight_warning_seconds)', source: 'Combat/HordeSubsystem.cpp' },
   { name: 'Codex.Horde.Enabled', defaultValue: '-1', unit: '', description: '1 вкл, 0 выкл, -1 = данные (horde.json && horde_enabled уровня)', source: 'Combat/HordeSubsystem.cpp' },
   { name: 'Codex.Enemy.OperativeAttackersBeforeObjects', defaultValue: '2', unit: 'врагов', description: 'сначала бойцы: враг отвлекается на баррикаду / турель, только когда на КАЖДОМ доступном бойце уже столько других врагов (0 = старое правило Godot)', source: 'Characters/EnemyCharacterBehavior.cpp', editable: true, min: 0, max: 20 },
   { name: 'Codex.Posture.DefensiveSquadWide', defaultValue: '0', unit: '', description: '1: атака на любого бойца провоцирует всех «Оборонительных»; 0: только атакованного', source: 'Characters/SquadSubsystem.cpp' },

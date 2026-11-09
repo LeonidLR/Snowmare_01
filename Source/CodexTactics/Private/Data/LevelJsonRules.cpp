@@ -2,6 +2,7 @@
 #include "AI/PmcEncounterRules.h"
 #include "Bot/BotRouteRules.h"
 #include "CodexTactics.h"
+#include "Combat/FirefightRules.h"
 #include "Environment/EnvironmentRules.h"
 #include "GameFlow/LevelEncounterRules.h"
 #include "Quests/GateExitRules.h"
@@ -369,11 +370,12 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	}
 	Config.PatrolSearchSeconds = LevelJsonNumber(Root, TEXT("patrol_search_seconds"), -1.f);
 	Config.ColdRateMult = FMath::Max(0.f, LevelJsonNumber(Root, TEXT("cold_rate_mult"), 1.f));
-	// UE-only (user request 2026-10-06): the horde after a long real-time fight (defaults in Content/Data/AI/horde.json).
+	// UE-only: the horde (defaults in Content/Data/AI/horde.json); since 2026-11-09 only after N firefights in a row.
 	bool bHordeEnabled = true;
 	Config.bHordeEnabled = !Root->TryGetBoolField(TEXT("horde_enabled"), bHordeEnabled) || bHordeEnabled;
-	// Horde #12 (game designer 2026-11-08): the horde after N firefights in a row (Training Ground waves tab), at least 1.
-	Config.HordeAfterFirefights = FMath::Max(1, FMath::RoundToInt(LevelJsonNumber(Root, TEXT("horde_after_firefights"), 6.f)));
+	// Horde #12 (game designer 2026-11-08 / 11-09): the horde after N firefights in a row (Training Ground waves tab), default 10, at least 1.
+	Config.HordeAfterFirefights = FMath::Max(1, FMath::RoundToInt(LevelJsonNumber(Root, TEXT("horde_after_firefights"),
+		static_cast<float>(FirefightRules::DefaultAfterFirefights))));
 	// Game designer 2026-11-08: every enemy corpse stays; at most corpse_cap of them (the oldest farthest one fades), at least 1.
 	Config.CorpseCap = FMath::Max(1, FMath::RoundToInt(LevelJsonNumber(Root, TEXT("corpse_cap"), 150.f)));
 	// 2026-10-21: "ambush_fight": "level" | "skirmish" (placed-enemy fights) and "susanin_wave" (0 = off).

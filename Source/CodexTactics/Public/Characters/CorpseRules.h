@@ -9,6 +9,10 @@
  * ladder's drop), then costs no game-thread time (no actor / movement / anim tick, no AI controller, out of the enemy registry, no collision
  * for pawns or clicks - still rendered). At most Cap bodies per level (level JSON "corpse_cap", default 150): above it the oldest one
  * FARTHEST from the squad fades out over FadeSeconds (scaled down), one not in the camera view first.
+ * 2026-11-09 (game designer: "every enemy body stays, ALL enemies"): the hostile PMC fighters' bodies share the SAME cap and freeze
+ * (UCorpseSubsystem takes any ICorpseBody); the player's own squad's KIA are never under it (they stay for good, they hold the remains);
+ * a body without a death pose (the Spitter's C++ placeholder) stays too, laid on the ground; a body still holding unsearched loot is never
+ * faded while it is in the camera view.
  */
 struct CODEXTACTICS_API FCorpseConfig
 {
@@ -41,6 +45,19 @@ struct CODEXTACTICS_API FCorpseCandidate
 	bool bFrozen = false;
 	/** Already fading out. */
 	bool bFading = false;
+	/** It still holds loot the player has not searched (ICorpseBody::HoldsUnsearchedLoot): never faded while in view. */
+	bool bUnsearchedLoot = false;
+};
+
+/** Whose body it is (CorpseRules::IsKeptUnderCap). */
+enum class ECorpseKind : uint8
+{
+	/** A monster (AEnemyCharacter), with or without a death pose. */
+	Enemy,
+	/** A hostile PMC fighter (AOperativeCharacter of another team). */
+	HostileOperative,
+	/** One of the player's own squad killed in action. */
+	SquadOperative
 };
 
 namespace CorpseRules
@@ -57,7 +74,8 @@ namespace CorpseRules
 
 	/**
 	 * The body to fade: among the frozen, not fading ones - those out of the camera view when there are any - the OldestPool oldest, of
-	 * them the farthest from the squad (a tie: the older). INDEX_NONE when no frozen body is left.
+	 * them the farthest from the squad (a tie: the older). A body with unsearched loot in the camera view is never picked. INDEX_NONE when
+	 * no such body is left.
 	 */
 	CODEXTACTICS_API int32 PickCorpseToFade(const TArray<FCorpseCandidate>& Corpses, const FCorpseConfig& Config);
 
@@ -66,4 +84,17 @@ namespace CorpseRules
 
 	/** The cap in force: the console value when >= 1, else the level's, at least 1. */
 	CODEXTACTICS_API int32 ResolveCap(int32 LevelCap, int32 ConsoleCap);
+
+	/**
+	 * The body goes under the shared cap and the freeze (UCorpseSubsystem): every monster and every hostile PMC fighter; never the player's
+	 * own squad's KIA (2026-11-09).
+	 */
+	CODEXTACTICS_API bool IsKeptUnderCap(ECorpseKind Kind);
+
+	/**
+	 * A body without a death pose laid on the ground (2026-11-09): the height of its centre (the placeholder cylinder's axis / a skeletal
+	 * root) relative to the capsule centre - the floor lies HalfHeight below it, the body rests BodyHalfThickness above the floor (at most
+	 * the capsule centre).
+	 */
+	CODEXTACTICS_API float LyingBodyCentreZ(float CapsuleHalfHeightCm, float BodyHalfThicknessCm);
 }

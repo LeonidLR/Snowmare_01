@@ -222,7 +222,8 @@ export function validateLevelSettings(level: LevelLike): string[] {
 
 // ---- Level Horde ("horde_enabled", "horde_after_firefights") ----
 
-export const HORDE_AFTER_FIREFIGHTS_DEFAULT = 6;
+/** Game designer 2026-11-09: the horde after 10 firefights in a row (was 6); FirefightRules::DefaultAfterFirefights. */
+export const HORDE_AFTER_FIREFIGHTS_DEFAULT = 10;
 export const HORDE_AFTER_FIREFIGHTS_MIN = 1;
 
 export function getHordeEnabled(level: LevelLike): boolean {

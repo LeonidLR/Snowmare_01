@@ -1,11 +1,11 @@
 #include "Characters/CorpseSubsystem.h"
 
-#include "Characters/EnemyCharacter.h"
+#include "Characters/CorpseBody.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
-#include "Components/SkeletalMeshComponent.h"
+#include "Components/PrimitiveComponent.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/WaveConfigTypes.h"
 #include "Engine/World.h"
@@ -14,9 +14,9 @@
 namespace CorpseTuning
 {
 	static TAutoConsoleVariable<int32> CVarPersist(TEXT("Codex.Corpse.Persist"), 1,
-		TEXT("Enemy corpses stay on the ground (1, game designer 2026-11-08); 0 = the old death decay life span"));
+		TEXT("Enemy corpses (monsters and hostile PMC fighters) stay on the ground (1, game designer 2026-11-08 / 11-09); 0 = the old death decay life span / unmanaged PMC bodies"));
 	static TAutoConsoleVariable<int32> CVarCap(TEXT("Codex.Corpse.Cap"), -1,
-		TEXT(">= 1 = enemy bodies kept on the level (-1: the level JSON corpse_cap, default 150)"));
+		TEXT(">= 1 = enemy bodies (monsters + hostile PMC, one cap) kept on the level (-1: the level JSON corpse_cap, default 150)"));
 	static TAutoConsoleVariable<float> CVarFadeSeconds(TEXT("Codex.Corpse.FadeSeconds"), 1.f,
 		TEXT("Seconds a body over the cap takes to fade out (scaled down)"));
 	static TAutoConsoleVariable<int32> CVarFreeze(TEXT("Codex.Corpse.Freeze"), 1,
@@ -53,10 +53,20 @@ FCorpseConfig UCorpseSubsystem::GetConfig() const
 	return Config;
 }
 
-bool UCorpseSubsystem::RegisterCorpse(AEnemyCharacter* Body)
+ICorpseBody* UCorpseSubsystem::AsCorpse(AActor* Body)
+{
+	return IsValid(Body) ? Cast<ICorpseBody>(Body) : nullptr;
+}
+
+const ICorpseBody* UCorpseSubsystem::AsCorpse(const AActor* Body)
+{
+	return AsCorpse(const_cast<AActor*>(Body));
+}
+
+bool UCorpseSubsystem::RegisterCorpse(AActor* Body)
 {
 	UWorld* World = GetWorld();
-	if (!World || !Body || !GetConfig().bPersist)
+	if (!World || !AsCorpse(Body) || !GetConfig().bPersist)
 	{
 		return false;
 	}
@@ -89,12 +99,12 @@ int32 UCorpseSubsystem::GetFadingCount() const
 	return Count;
 }
 
-TArray<AEnemyCharacter*> UCorpseSubsystem::GetCorpses() const
+TArray<AActor*> UCorpseSubsystem::GetCorpses() const
 {
-	TArray<AEnemyCharacter*> Out;
+	TArray<AActor*> Out;
 	for (const FKeptCorpse& Kept : Corpses)
 	{
-		if (AEnemyCharacter* Body = Kept.Body.Get())
+		if (AActor* Body = Kept.Body.Get())
 		{
 			Out.Add(Body);
 		}
@@ -102,12 +112,12 @@ TArray<AEnemyCharacter*> UCorpseSubsystem::GetCorpses() const
 	return Out;
 }
 
-bool UCorpseSubsystem::IsKept(const AEnemyCharacter* Body) const
+bool UCorpseSubsystem::IsKept(const AActor* Body) const
 {
 	return Body && Corpses.ContainsByPredicate([Body](const FKeptCorpse& Kept) { return Kept.Body.Get() == Body; });
 }
 
-bool UCorpseSubsystem::IsFading(const AEnemyCharacter* Body) const
+bool UCorpseSubsystem::IsFading(const AActor* Body) const
 {
 	return Body && Corpses.ContainsByPredicate([Body](const FKeptCorpse& Kept) { return Kept.Body.Get() == Body && Kept.FadeStart >= 0.0; });
 }
@@ -116,7 +126,8 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 {
 	for (FKeptCorpse& Kept : Corpses)
 	{
-		AEnemyCharacter* Body = Kept.Body.Get();
+		AActor* Actor = Kept.Body.Get();
+		ICorpseBody* Body = AsCorpse(Actor);
 		if (!Body || Kept.bFrozen || CorpseTuning::CVarFreeze.GetValueOnGameThread() == 0)
 		{
 			continue;
@@ -132,11 +143,11 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 		}
 		const float SinceDeath = static_cast<float>(Now - Kept.DeathTime);
 		const float SinceSettled = Kept.SettledTime < 0.0 ? -1.f : static_cast<float>(Now - Kept.SettledTime);
-		if (CorpseRules::ShouldFreeze(SinceDeath, SinceSettled, Body->IsCorpseFalling(), Body->IsLadderBusy(), Config))
+		if (CorpseRules::ShouldFreeze(SinceDeath, SinceSettled, Body->IsCorpseFalling(), Body->IsCorpseOnLadder(), Config))
 		{
 			Body->FreezeCorpse();
 			Kept.bFrozen = true;
-			UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s frozen %.2f s after its death (%s)"), *Body->GetName(), SinceDeath,
+			UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s frozen %.2f s after its death (%s)"), *Actor->GetName(), SinceDeath,
 				SinceSettled >= 0.f ? TEXT("death pose settled") : TEXT("settle time out"));
 		}
 	}
@@ -160,11 +171,14 @@ void UCorpseSubsystem::ApplyCap(const FCorpseConfig& Config, double Now)
 	for (const FKeptCorpse& Kept : Corpses)
 	{
 		FCorpseCandidate& Candidate = Candidates.AddDefaulted_GetRef();
-		const AEnemyCharacter* Body = Kept.Body.Get();
+		const AActor* Body = Kept.Body.Get();
+		const ICorpseBody* Corpse = AsCorpse(Body);
+		const UPrimitiveComponent* Visual = Corpse ? Corpse->GetCorpseVisual() : nullptr;
 		Candidate.DeathTime = Kept.DeathTime;
 		Candidate.bFrozen = Kept.bFrozen;
 		Candidate.bFading = Kept.FadeStart >= 0.0;
-		Candidate.bInView = Body && Body->GetMesh() && Body->GetMesh()->WasRecentlyRendered(CorpseTuning::InViewSeconds);
+		Candidate.bInView = Visual && Visual->WasRecentlyRendered(CorpseTuning::InViewSeconds);
+		Candidate.bUnsearchedLoot = Corpse && Corpse->HoldsUnsearchedLoot();
 		Candidate.SquadDistanceCm = Squaddies.IsEmpty() ? 0.f : TNumericLimits<float>::Max();
 		for (const FVector& Point : Squaddies)
 		{
@@ -184,9 +198,9 @@ void UCorpseSubsystem::ApplyCap(const FCorpseConfig& Config, double Now)
 		Candidates[Pick].bFading = true;
 		FKeptCorpse& Kept = Corpses[Pick];
 		Kept.FadeStart = Now;
-		if (const AEnemyCharacter* Body = Kept.Body.Get(); Body && Body->GetMesh())
+		if (const ICorpseBody* Corpse = AsCorpse(Kept.Body.Get()); Corpse && Corpse->GetCorpseVisual())
 		{
-			Kept.BaseScale = Body->GetMesh()->GetComponentScale();
+			Kept.BaseScale = Corpse->GetCorpseVisual()->GetComponentScale();
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[Corpse] over the cap of %d: %s fades out (%.0f m from the squad%s)"), Config.Cap,
 			*GetNameSafe(Kept.Body.Get()), Candidates[Pick].SquadDistanceCm / 100.f, Candidates[Pick].bInView ? TEXT(", in view: no hidden body left") : TEXT(""));
@@ -198,10 +212,10 @@ void UCorpseSubsystem::UpdateFades(double Now, const FCorpseConfig& Config)
 	for (int32 Index = Corpses.Num() - 1; Index >= 0; --Index)
 	{
 		FKeptCorpse& Kept = Corpses[Index];
-		AEnemyCharacter* Body = Kept.Body.Get();
+		AActor* Body = Kept.Body.Get();
 		if (!Body || Body->IsActorBeingDestroyed())
 		{
-			Corpses.RemoveAt(Index); // gone another way (level cleanup, a load)
+			Corpses.RemoveAt(Index); // gone another way (level cleanup, a load, the arena's next round)
 			continue;
 		}
 		if (Kept.FadeStart < 0.0)
@@ -216,9 +230,9 @@ void UCorpseSubsystem::UpdateFades(double Now, const FCorpseConfig& Config)
 			++FadedTotal;
 			continue;
 		}
-		if (USkeletalMeshComponent* Mesh = Body->GetMesh())
+		if (UPrimitiveComponent* Visual = AsCorpse(Body) ? AsCorpse(Body)->GetCorpseVisual() : nullptr)
 		{
-			Mesh->SetWorldScale3D(Kept.BaseScale * Scale); // shrinks into its root on the ground
+			Visual->SetWorldScale3D(Kept.BaseScale * Scale); // shrinks into its root on the ground
 		}
 	}
 }
@@ -247,7 +261,7 @@ namespace CorpseCommands
 {
 	static FAutoConsoleCommandWithWorld Status(
 		TEXT("CodexTactics.Corpse.Status"),
-		TEXT("Logs the enemy bodies kept on this level (frozen / settling / fading) and the cap."),
+		TEXT("Logs the enemy bodies (monsters + hostile PMC) kept on this level (frozen / settling / fading) and the cap."),
 		FConsoleCommandWithWorldDelegate::CreateLambda([](UWorld* World)
 		{
 			if (const UCorpseSubsystem* Corpses = World ? World->GetSubsystem<UCorpseSubsystem>() : nullptr)

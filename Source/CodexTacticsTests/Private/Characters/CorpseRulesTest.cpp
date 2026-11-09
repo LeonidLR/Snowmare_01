@@ -1,9 +1,14 @@
 // CodexTactics.Characters.Corpse.* — corpses stay (game designer 2026-11-08, UE-only; CorpseRules, UCorpseSubsystem): when a body is
 // frozen (settled death pose, on the ground first), the cap (the oldest body farthest from the squad, out of the camera view first) and
-// the fade, plus the level JSON key corpse_cap.
+// the fade, plus the level JSON key corpse_cap. 2026-11-09 (game designer: "every enemy body stays, ALL enemies, one cap"): the hostile PMC
+// bodies share the cap (never the player's own KIA), a body with unsearched loot never fades in view, a body without a death pose (the
+// Spitter's placeholder) stays and lies on the ground.
 
 #include "Misc/AutomationTest.h"
+#include "Characters/CorpseBody.h"
 #include "Characters/CorpseRules.h"
+#include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeCharacter.h"
 #include "Data/LevelJsonRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -101,6 +106,59 @@ bool FCorpseFadeTest::RunTest(const FString&)
 	FLevelCombatConfig Plain;
 	TestTrue(TEXT("Plain parsed"), LevelJsonRules::ParseLevel(TEXT("{\"level_id\": \"p\", \"waves\": []}"), TEXT("p"), Plain, Error));
 	TestEqual(TEXT("Default 150"), Plain.CorpseCap, 150);
+	return true;
+}
+
+CORPSE_TEST(FCorpsePmcUnderTheCapTest, "HostilePmcBodiesShareTheCap")
+bool FCorpsePmcUnderTheCapTest::RunTest(const FString&)
+{
+	using namespace CorpseRules;
+	using CorpseTest::Body;
+	// Who goes under the cap: every monster and every hostile PMC fighter; never the player's own KIA (they stay for good, with the remains).
+	TestTrue(TEXT("Monsters"), IsKeptUnderCap(ECorpseKind::Enemy));
+	TestTrue(TEXT("Hostile PMC fighters"), IsKeptUnderCap(ECorpseKind::HostileOperative));
+	TestFalse(TEXT("Never the player's own squad"), IsKeptUnderCap(ECorpseKind::SquadOperative));
+	// Both body classes are corpses UCorpseSubsystem can keep (ICorpseBody).
+	TestTrue(TEXT("AEnemyCharacter is an ICorpseBody"), AEnemyCharacter::StaticClass()->ImplementsInterface(UCorpseBody::StaticClass()));
+	TestTrue(TEXT("AOperativeCharacter is an ICorpseBody"), AOperativeCharacter::StaticClass()->ImplementsInterface(UCorpseBody::StaticClass()));
+	TestFalse(TEXT("A hostile PMC body leaves no remains: no unsearched loot"), Cast<ICorpseBody>(GetMutableDefault<AOperativeCharacter>())->HoldsUnsearchedLoot());
+
+	// ONE cap for both kinds: 3 monsters + 2 PMC bodies, cap 4 -> one over; the oldest farthest goes whatever it was (here a PMC body).
+	FCorpseConfig Config;
+	TArray<FCorpseCandidate> Mixed = { Body(10.0, 5.f), Body(20.0, 8.f), Body(30.0, 12.f), /* PMC */ Body(4.0, 60.f), /* PMC */ Body(50.0, 3.f) };
+	TestEqual(TEXT("5 bodies, cap 4: one over"), CountOverCap(Mixed, 4), 1);
+	TestEqual(TEXT("The oldest farthest (the PMC body at 60 m)"), PickCorpseToFade(Mixed, Config), 3);
+
+	// A body still holding unsearched loot is never faded while it is in the camera view - not even when every body is in view.
+	TArray<FCorpseCandidate> Loot = { Body(1.0, 90.f, true), Body(2.0, 10.f, true) };
+	Loot[0].bUnsearchedLoot = true;
+	TestEqual(TEXT("All in view: the looted far one is skipped"), PickCorpseToFade(Loot, Config), 1);
+	Loot[1].bUnsearchedLoot = true;
+	TestEqual(TEXT("Only looted bodies in view: none fades"), PickCorpseToFade(Loot, Config), INDEX_NONE);
+	Loot[0].bInView = false;
+	TestEqual(TEXT("Out of view the looted body may go"), PickCorpseToFade(Loot, Config), 0);
+	return true;
+}
+
+CORPSE_TEST(FCorpsePlaceholderTest, "PlaceholderBodyStaysOnTheGround")
+bool FCorpsePlaceholderTest::RunTest(const FString&)
+{
+	using namespace CorpseRules;
+	// The Spitter's C++ placeholder has no death animation: its pose counts as settled at once, so it is frozen (and laid down) right after
+	// the minimum settle time - once it is on the ground.
+	const FCorpseConfig Config;
+	TestFalse(TEXT("Not before the minimum"), ShouldFreeze(0.5f, 0.5f, false, false, Config));
+	TestTrue(TEXT("Frozen at min + hold"), ShouldFreeze(Config.MinSettleSeconds + Config.SettleHoldSeconds, Config.MinSettleSeconds + Config.SettleHoldSeconds,
+		false, false, Config));
+	TestFalse(TEXT("Killed in the air: lands first"), ShouldFreeze(1.f, 1.f, true, false, Config));
+	// Laid on the ground: the cylinder's axis rests its radius above the floor (the floor lies the capsule's half height below its centre).
+	TestEqual(TEXT("Spitter: half height 90, radius 35 -> 55 cm below the capsule centre"), LyingBodyCentreZ(90.f, 35.f), -55.f);
+	TestEqual(TEXT("Never above the capsule centre"), LyingBodyCentreZ(40.f, 60.f), 0.f);
+	TestEqual(TEXT("No thickness: on the floor"), LyingBodyCentreZ(60.f, -5.f), -60.f);
+	// The enemy CDO: not frozen, not laid down (the flag is set at the death).
+	const AEnemyCharacter* Enemy = GetDefault<AEnemyCharacter>();
+	TestFalse(TEXT("CDO not frozen"), Enemy->IsCorpseFrozen());
+	TestFalse(TEXT("CDO not laid down"), Enemy->IsLaidDownCorpse());
 	return true;
 }
 

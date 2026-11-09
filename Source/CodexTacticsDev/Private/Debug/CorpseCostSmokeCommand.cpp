@@ -159,7 +159,7 @@ namespace CorpseCostSmoke
 		{
 			PC->GetViewportSize(SizeX, SizeY);
 		}
-		for (const AEnemyCharacter* Body : Corpses.GetCorpses())
+		for (const AEnemyCharacter* Body : Corpses.GetCorpsesOf<AEnemyCharacter>())
 		{
 			State.Current.InView += Body->GetMesh() && Body->GetMesh()->WasRecentlyRendered(0.2f) ? 1 : 0;
 			FVector2D Screen;
@@ -301,7 +301,7 @@ namespace CorpseCostSmoke
 			if (SampleFrame(State, FrameMs))
 			{
 				// The A/B: the same 150 bodies left ticking (no freeze).
-				for (AEnemyCharacter* Body : Corpses->GetCorpses())
+				for (AActor* Body : Corpses->GetCorpses())
 				{
 					Body->Destroy();
 				}
