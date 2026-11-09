@@ -63,11 +63,22 @@ def master():
     base = param(unreal.MaterialExpressionTextureSampleParameter2D, "BaseColor", -500, -250)
     normal = param(unreal.MaterialExpressionTextureSampleParameter2D, "Normal", -500, 0, unreal.MaterialSamplerType.SAMPLERTYPE_NORMAL)
     orm = param(unreal.MaterialExpressionTextureSampleParameter2D, "ORM", -500, 250, unreal.MaterialSamplerType.SAMPLERTYPE_MASKS)
+    # TRAP (2026-11-09): a parameter without a default texture falls back to the engine's COLOUR DefaultTexture, and a Normal / Masks
+    # sampler on it fails the compile ("Sampler type is Normal, should be Color") -> every MI renders the default grey material.
+    # Always give each parameter a default of the matching type. T_WeaponDefault_ORM comes from Scripts/Editor/fix_weapon_master_defaults.py.
+    base.set_editor_property("texture", unreal.load_asset("/Engine/EngineMaterials/DefaultWhiteGrid"))
+    normal.set_editor_property("texture", unreal.load_asset("/Engine/EngineMaterials/DefaultNormal"))
+    orm_default = lib.load_asset("/Game/Weapons/Materials/T_WeaponDefault_ORM")
+    if orm_default:
+        orm.set_editor_property("texture", orm_default)
+    else:
+        say("WARNING: /Game/Weapons/Materials/T_WeaponDefault_ORM missing: run fix_weapon_master_defaults.py (the master will not compile)")
     mel.connect_material_property(base, "RGB", unreal.MaterialProperty.MP_BASE_COLOR)
     mel.connect_material_property(normal, "RGB", unreal.MaterialProperty.MP_NORMAL)
     mel.connect_material_property(orm, "R", unreal.MaterialProperty.MP_AMBIENT_OCCLUSION)
     mel.connect_material_property(orm, "G", unreal.MaterialProperty.MP_ROUGHNESS)
     mel.connect_material_property(orm, "B", unreal.MaterialProperty.MP_METALLIC)
+    mat.set_editor_property("used_with_skeletal_mesh", True)  # the D-1 gun and pump are skeletal meshes
     mel.recompile_material(mat)
     lib.save_loaded_asset(mat, False)
     say(f"master {MASTER} created (BaseColor / Normal / ORM, opaque, no emissive)")
@@ -147,10 +158,9 @@ def slot_assign(mesh, mi):
         for i in range(len(mesh.get_editor_property("static_materials"))):
             mesh.set_material(i, mi)
     else:
-        mats = mesh.get_editor_property("materials")
-        for m in mats:
-            m.set_editor_property("material_interface", mi)
-        mesh.set_editor_property("materials", mats)
+        # A copy of a slot struct ignores the assignment (the D-1 stayed on WorldGridMaterial until 2026-11-09): write FRESH structs.
+        mesh.set_editor_property("materials", [unreal.SkeletalMaterial(material_interface=mi, material_slot_name=m.get_editor_property("material_slot_name"))
+                                               for m in mesh.get_editor_property("materials")])
     lib.save_loaded_asset(mesh, False)
 
 

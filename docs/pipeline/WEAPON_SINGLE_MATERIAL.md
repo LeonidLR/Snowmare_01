@@ -44,3 +44,27 @@ Run: `powershell -ExecutionPolicy Bypass -File Scripts/Pipeline/run_weapon_pipel
   625x (a Sketchfab glTF scale trick): the pump geometry / skeleton are never changed; only its uv map is re-pointed.
 - The Fab shotgun materials are flat colours (gltf factors, no textures): the atlas of the gun is a baked colour + normal
   atlas, the pump takes a flat swatch of it.
+
+## The master's parameter defaults (2026-11-09, `fix/weapon-master-material`)
+
+`/Game/Weapons/Materials/M_WeaponMaster` (BaseColor / Normal / ORM texture parameters) did NOT compile: the Normal parameter (sampler
+Normal) and the ORM parameter (sampler Masks) had no default texture, UE substituted `/Engine/EngineResources/DefaultTexture` (a colour
+texture) and reported `Sampler type is Normal / Masks, should be Color` -> "Failed to compile Material for platform PCD3D_SM6, Default
+Material will be used in game". Every weapon MI then rendered with the engine's default grey material (the pistol and the D-1 looked plain
+light grey) - visible only in RENDERED runs (-nullrhi never compiles shaders).
+
+Rule: **every texture parameter of a weapon master has a default texture of the sampler's own type.** Now: BaseColor =
+`/Engine/EngineMaterials/DefaultWhiteGrid` (sRGB colour), Normal = `/Engine/EngineMaterials/DefaultNormal` (TC_Normalmap), ORM =
+`/Game/Weapons/Materials/T_WeaponDefault_ORM` (4x4, linear, TC_Masks, AO 1 / roughness 0.5 / metallic 0). Reproduce / repair with
+`Scripts/Editor/fix_weapon_master_defaults.py` (also checks that every MI keeps its own BaseColor / Normal / ORM); the master builder in
+`Scripts/Editor/import_optimized_weapons.py` (`master()`) sets the same defaults, so a rebuild cannot bring the bug back. A new weapon MI (the
+RPG-7) only sets its own three textures on this master. After touching the master look for `Failed to compile` in a rendered log.
+
+Two more traps found on the same task (rendered stills, the D-1 stayed light grey after the master compiled):
+- A master used on a SKELETAL mesh (the D-1 gun and pump) needs `Used with Skeletal Mesh`; the master now has it on.
+- `SK_ShotgunD1_1slot` / `_Pump_1slot` had the engine's `WorldGridMaterial` in their only slot since the import (the importer's
+  `slot_assign` changed a COPY of the slot struct, which Python silently ignores). Write FRESH `unreal.SkeletalMaterial(material_interface=mi,
+  material_slot_name=<old name>)` structs into `materials` (done in `fix_weapon_master_defaults.py` and the importer). Check with the
+  red-swatch test: set an MI's BaseColor to a solid red texture, render - the weapon must change.
+- Rendered proof right after a master change: the first run compiles the shaders and shows the DEFAULT material in its stills - judge the
+  second run (or wait for the shader compile).
