@@ -21,10 +21,11 @@ enum class EWeaponLayerMask : uint8
 {
 	/** The ABP alone (a full-body montage: knockdown, death, cover, interaction, stance transition; or not eligible). */
 	Off,
-	/** Every bone below the root (locomotion + the shotgun hold). */
-	Full,
-	/** Pelvis and legs only: an upper-body montage plays (fire, reload, grenade, hit) and owns the torso. */
-	LowerBody
+	/**
+	 * The UPPER BODY only (spine_01 and everything under it: spine, neck, head, clavicles, arms, hands, weapon bones). The pelvis, legs, feet and
+	 * root always come from the ABP's locomotion (designer 2026-11-09: weapon animations only on the upper body).
+	 */
+	Full
 };
 
 /** The two directional clips to blend and the share of the second. */
@@ -79,7 +80,10 @@ namespace WeaponAnimLayerRules
 	 */
 	CODEXTACTICS_API FWeaponLayerDirectionBlend BlendDirections(float AngleDeg, const TStaticArray<bool, 8>& Available);
 
-	/** The mask this frame (gates: eligible = shotgun in hands, alive, up, not climbing / vaulting / in cover / prone / carrying). */
+	/**
+	 * The mask this frame (gates: eligible = shotgun in hands, alive, up, not climbing / vaulting / in cover / prone / carrying). Any montage
+	 * (full body, or an upper-body one: fire / reload / grenade / hit) owns the body, so the layer is Off then; the legs are never the layer's.
+	 */
 	CODEXTACTICS_API EWeaponLayerMask ResolveMask(bool bEligible, bool bFullBodyMontage, bool bUpperBodyMontage);
 
 	/**

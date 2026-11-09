@@ -65,6 +65,11 @@ namespace ShotgunSmoke
 		FVector Start = FVector::ZeroVector;
 		FVector Forward = FVector::ForwardVector;
 		bool bSawMoveClip = false;
+		// Upper-body-only probe (designer 2026-11-09): the largest change the layer made to a lower / upper-body bone while moving.
+		float MoveMaxLower = 0.f;
+		float MoveMaxUpper = 0.f;
+		float MoveMaxSpeed = 0.f;
+		int32 MoveSamples = 0;
 		FString MoveClip;
 		// Shots.
 		float Damage3 = 0.f;
@@ -225,9 +230,8 @@ namespace ShotgunSmoke
 			{
 				const UOperativeAnimInstance* Anim = AnimOf(Who);
 				State.RiseMaxPop = Pop;
-				State.RisePopWhen = FString::Printf(TEXT("%.2f s after the rise order, transition %d, shotgun mask %d upper %.2f lower %.2f, delta %s"), State.StageTime - State.RiseTime,
-					Anim && Anim->IsPlayingStanceTransition() ? 1 : 0, Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1, Anim ? Anim->GetShotgunUpperWeight() : 0.f,
-					Anim ? Anim->GetShotgunLowerWeight() : 0.f, *(Torso - State.RiseLast).ToCompactString());
+				State.RisePopWhen = FString::Printf(TEXT("%.2f s after the rise order, transition %d, shotgun mask %d upper %.2f, delta %s"), State.StageTime - State.RiseTime,
+					Anim && Anim->IsPlayingStanceTransition() ? 1 : 0, Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1, Anim ? Anim->GetShotgunUpperWeight() : 0.f, *(Torso - State.RiseLast).ToCompactString());
 			}
 		}
 		State.RiseLast = Torso;
@@ -455,8 +459,8 @@ namespace ShotgunSmoke
 			const UOperativeAnimInstance* Anim = AnimOf(Engineer);
 			const FString Clip = DominantName(Engineer);
 			Check(State, Anim && Anim->GetShotgunLayerMask() == EWeaponLayerMask::Full && Anim->GetShotgunUpperWeight() > 0.95f,
-				FString::Printf(TEXT("2: standing, the shotgun layer drives the body (mask %d, upper %.2f, lower %.2f)"), Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1,
-					Anim ? Anim->GetShotgunUpperWeight() : 0.f, Anim ? Anim->GetShotgunLowerWeight() : 0.f));
+				FString::Printf(TEXT("2: standing, the shotgun layer drives the upper body (mask %d, upper %.2f)"), Anim ? static_cast<int32>(Anim->GetShotgunLayerMask()) : -1,
+					Anim ? Anim->GetShotgunUpperWeight() : 0.f));
 			const float StandSpeed = Engineer->GetVelocity().Size2D();
 			Check(State, Clip.StartsWith(TEXT("anim_shotgun_")) && (StandSpeed > 10.f || Clip.Contains(TEXT("idle"))),
 				FString::Printf(TEXT("2: ... a pack idle clip standing still (%s, %.0f cm/s)"), *Clip, StandSpeed));
@@ -465,27 +469,60 @@ namespace ShotgunSmoke
 			const FString ClipPath = Dominant ? Dominant->GetPathName() : FString();
 			Check(State, Anim && !Anim->GetShotgunRetargetFolder().IsEmpty() && ClipPath.StartsWith(Anim->GetShotgunRetargetFolder() + TEXT("/")),
 				FString::Printf(TEXT("2: ... the retargeted copy for this skeleton (%s)"), *ClipPath));
+			if (UOperativeAnimInstance* Probe = AnimOf(Engineer))
+			{
+				Probe->bWeaponLayerProbe = true;
+				// A body off screen skips its pose evaluation (the probe would read nothing): evaluate every frame.
+				Engineer->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			}
 			Engineer->OrderMoveTo(SmokeUtils::ClearPoint(World, Engineer->GetActorLocation(), Engineer->GetActorLocation() + Engineer->GetActorRightVector() * 600.f), false);
 			GoTo(State, 2);
 			return true;
 		}
+		case 16: // the sprint leg of the upper-body-only check
 		case 2: // walking: a walk / jog clip
 		{
 			if (Engineer->GetVelocity().Size2D() > 80.f)
 			{
+				if (const UOperativeAnimInstance* Probe = AnimOf(Engineer))
+				{
+					State.MoveMaxLower = FMath::Max(State.MoveMaxLower, Probe->GetWeaponLayerLowerDeviation());
+					State.MoveMaxUpper = FMath::Max(State.MoveMaxUpper, Probe->GetWeaponLayerUpperDeviation());
+					State.MoveMaxSpeed = FMath::Max(State.MoveMaxSpeed, Engineer->GetVelocity().Size2D());
+					++State.MoveSamples;
+				}
 				const FString Clip = DominantName(Engineer);
-				if (Clip.Contains(TEXT("walk")) || Clip.Contains(TEXT("jog")))
+				if (Clip.Contains(TEXT("walk")) || Clip.Contains(TEXT("jog")) || Clip.Contains(TEXT("sprint")))
 				{
 					State.bSawMoveClip = true;
 					State.MoveClip = Clip;
 				}
 			}
-			if (!State.bSawMoveClip && State.StageTime < 5.f)
+			if ((!State.bSawMoveClip && State.StageTime < 5.f) || (State.MoveSamples < 8 && State.StageTime < 5.f))
 			{
 				return true;
 			}
-			Check(State, State.bSawMoveClip, FString::Printf(TEXT("2: walking, a shotgun walk / jog clip plays (%s)"), *State.MoveClip));
+			const bool bSprintLeg = State.Stage == 16;
+			Check(State, State.bSawMoveClip, FString::Printf(TEXT("2: %s, a shotgun walk / jog / sprint clip plays (%s)"), bSprintLeg ? TEXT("sprinting") : TEXT("walking"), *State.MoveClip));
+			// The legs are the ABP's: the layer changes no pelvis / thigh / calf / foot bone, and it does change the upper body (the weapon hold).
+			Check(State, State.MoveSamples >= 8 && State.MoveMaxLower < 0.01f && State.MoveMaxUpper > 1.f,
+				FString::Printf(TEXT("2b: %s at up to %.0f cm/s over %d frames: the lower body is the ABP's (max change %.4f), the upper body is the weapon hold (max change %.1f; mask %d, weight %.2f)"),
+					bSprintLeg ? TEXT("sprinting") : TEXT("walking"), State.MoveMaxSpeed, State.MoveSamples, State.MoveMaxLower, State.MoveMaxUpper, AnimOf(Engineer) ? static_cast<int32>(AnimOf(Engineer)->GetShotgunLayerMask()) : -1,
+					AnimOf(Engineer) ? AnimOf(Engineer)->GetShotgunUpperWeight() : 0.f));
 			Engineer->StopOperative();
+			if (!bSprintLeg)
+			{
+				State.MoveMaxLower = State.MoveMaxUpper = State.MoveMaxSpeed = 0.f;
+				State.MoveSamples = 0;
+				State.bSawMoveClip = false;
+				Engineer->OrderMoveTo(SmokeUtils::ClearPoint(World, Engineer->GetActorLocation(), Engineer->GetActorLocation() - Engineer->GetActorRightVector() * 600.f), true);
+				GoTo(State, 16);
+				return true;
+			}
+			if (UOperativeAnimInstance* Probe = AnimOf(Engineer))
+			{
+				Probe->bWeaponLayerProbe = false;
+			}
 			GoTo(State, 3);
 			return true;
 		}

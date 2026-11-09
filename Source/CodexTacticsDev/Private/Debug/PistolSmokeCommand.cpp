@@ -51,6 +51,12 @@ namespace PistolSmoke
 		float MaxReloadWeight = 0.f;
 		float ReloadDone = -1.f;
 		int32 DrawsBefore = 0;
+		// Upper-body-only probe (designer 2026-11-09).
+		float MoveMaxLower = 0.f;
+		float MoveMaxUpper = 0.f;
+		float MoveMaxSpeed = 0.f;
+		int32 MoveSamples = 0;
+		bool bSprintLeg = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -214,6 +220,56 @@ namespace PistolSmoke
 			const FString Path = ClipPath(Hero);
 			Check(State, Anim && !Anim->GetShotgunRetargetFolder().IsEmpty() && Path.StartsWith(Anim->GetShotgunRetargetFolder() + TEXT("/")),
 				FString::Printf(TEXT("2: ... with the skeleton's retargeted pistol clip (%s)"), *Path));
+			if (UOperativeAnimInstance* Probe = AnimOf(Hero))
+			{
+				Probe->bWeaponLayerProbe = true;
+			}
+			Hero->OrderMoveTo(SmokeUtils::ClearPoint(World, Hero->GetActorLocation(), Hero->GetActorLocation() + Hero->GetActorRightVector() * 600.f), false);
+			GoTo(State, 20);
+			return true;
+		}
+		case 20: // walking, then sprinting: the legs are the ABP's, the upper body is the pistol hold
+		{
+			if (Hero->GetVelocity().Size2D() > 80.f)
+			{
+				if (const UOperativeAnimInstance* Probe = AnimOf(Hero))
+				{
+					State.MoveMaxLower = FMath::Max(State.MoveMaxLower, Probe->GetWeaponLayerLowerDeviation());
+					State.MoveMaxUpper = FMath::Max(State.MoveMaxUpper, Probe->GetWeaponLayerUpperDeviation());
+					State.MoveMaxSpeed = FMath::Max(State.MoveMaxSpeed, Hero->GetVelocity().Size2D());
+					++State.MoveSamples;
+				}
+			}
+			if (State.MoveSamples < 8 && State.StageTime < 5.f)
+			{
+				return true;
+			}
+			Check(State, State.MoveSamples >= 8 && State.MoveMaxLower < 0.01f && State.MoveMaxUpper > 1.f,
+				FString::Printf(TEXT("2b: %s at up to %.0f cm/s over %d frames: the lower body is the ABP's (max change %.4f), the upper body is the pistol hold (max change %.1f)"),
+					State.bSprintLeg ? TEXT("sprinting") : TEXT("walking"), State.MoveMaxSpeed, State.MoveSamples, State.MoveMaxLower, State.MoveMaxUpper));
+			Hero->StopOperative();
+			if (!State.bSprintLeg)
+			{
+				State.bSprintLeg = true;
+				State.MoveMaxLower = State.MoveMaxUpper = State.MoveMaxSpeed = 0.f;
+				State.MoveSamples = 0;
+				Hero->OrderMoveTo(SmokeUtils::ClearPoint(World, Hero->GetActorLocation(), Hero->GetActorLocation() - Hero->GetActorRightVector() * 600.f), true);
+				GoTo(State, 20);
+				return true;
+			}
+			if (UOperativeAnimInstance* Probe = AnimOf(Hero))
+			{
+				Probe->bWeaponLayerProbe = false;
+			}
+			GoTo(State, 21);
+			return true;
+		}
+		case 21: // let him stop before the shots
+		{
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
 			GoTo(State, 2);
 			return true;
 		}
