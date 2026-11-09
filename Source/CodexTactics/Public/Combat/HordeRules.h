@@ -4,6 +4,7 @@
 #include "Combat/CombatPressureRules.h"
 #include "Combat/FirefightRules.h"
 #include "Data/CombatTypes.h"
+#include "Data/WaveConfigTypes.h"
 #include "GameFlow/GameFlowTypes.h"
 
 class FJsonObject;
@@ -62,6 +63,101 @@ struct CODEXTACTICS_API FHordeConfig
 	int32 AfterFirefights = FirefightRules::DefaultAfterFirefights;
 	/** Horde #12: the firefight count and slip-past tuning ("firefight_*" keys of horde.json / the level "horde" override). */
 	FFirefightConfig Firefight;
+
+	/**
+	 * Game designer play-test 2026-11-09 ("the horde must appear far away - about 300 m - and in a different place every time"): the
+	 * FIREFIGHT horde's spawn distance from the squad's centre, "firefight_spawn_distance_m" (300) +- "firefight_spawn_spread_m" (40) = the
+	 * band 260-340 m. On a map with no reachable out-of-sight point that far the farthest ones are taken (HordeRules::PickFarSpawnPoint).
+	 * The dev command CodexTactics.Horde.Release keeps the near band MinDistanceCm..MaxDistanceCm.
+	 */
+	float FirefightSpawnDistanceCm = 30000.f;
+	float FirefightSpawnSpreadCm = 4000.f;
+	/** "firefight_bearing_change_deg": the next firefight horde comes from a bearing at least this far from the previous one's (90). */
+	float FirefightBearingChangeDeg = 90.f;
+	/**
+	 * "firefight_bearing_relax_share": the new-bearing rule gives way when the points off the previous bearing reach less than this share of
+	 * the farthest out-of-sight distance. 0 (default, the designer's "a different place every time"): only when there is no point off it at
+	 * all - on the Depot's southern start the second horde then comes from ~80 m on a new side, not from 166 m on the old one; 0.5 would
+	 * prefer the distance there.
+	 */
+	float FirefightBearingRelaxShare = 0.f;
+	/** "firefight_spawn_bearings": directions sampled round the squad for the far spawn (16; 4..64). */
+	int32 FirefightSpawnBearings = 16;
+	/**
+	 * "firefight_fallback_share": no point in the band (a small map) - a random one among the points at least this share of the farthest
+	 * reachable out-of-sight distance (0.85; 1 = exactly the farthest).
+	 */
+	float FirefightFallbackShare = 0.85f;
+	/**
+	 * "waves_feed_horde" (game designer 2026-11-09): on a level that does not play its "waves" as scripted waves (an ambush-start level such
+	 * as the Depot) the waves feed the firefight hordes in order - horde 1 = wave 1, 2 = wave 2, ..., then the last wave repeats (inactive
+	 * waves are skipped by the level parser); false = always the "count" / "composition" of this file / the level's "horde" block.
+	 */
+	bool bWavesFeedHorde = true;
+};
+
+/** One member of a horde plan: its type (+ variant) and the wave spawn entry it came from (custom_stats; INDEX_NONE = none). */
+struct CODEXTACTICS_API FHordeMember
+{
+	FPressureEnemyType Enemy;
+	int32 EntryIndex = INDEX_NONE;
+};
+
+/** What one horde brings (HordeRules::PlanFromWave / PlanFromConfig). */
+struct CODEXTACTICS_API FHordePlan
+{
+	/** The members in spawn order. */
+	TArray<FHordeMember> Members;
+	/** The wave's spawn entries (their custom_stats apply to their members); empty for the "horde" block / horde.json. */
+	TArray<FEnemySpawnEntry> Entries;
+	/** The most members alive at once (the wave's max_simultaneous_enemies; the rest come as the living fall); 0 = all at once. */
+	int32 MaxAlive = 0;
+	/** The wave's hp / damage / speed multipliers apply (always for a wave-fed horde). */
+	bool bHasModifiers = false;
+	FWaveModifiers Modifiers;
+	/** The level wave (1-based among the active waves) this horde comes from; 0 = the "horde" block / horde.json. */
+	int32 SourceWave = 0;
+	/** Spitter entries mapped to the Military Zombie (the Spitter is refused in the horde, game designer 2026-11-09). */
+	int32 SpitterSwaps = 0;
+
+	/** "4 FROSTBITTEN, 30 FROST_HOUND" (logs, smokes). */
+	FString Describe() const;
+};
+
+/** A far (firefight) spawn candidate measured by the subsystem. */
+struct CODEXTACTICS_API FHordeFarCandidate
+{
+	FVector Location = FVector::ZeroVector;
+	/** 2D distance to the squad's centre, cm. */
+	float DistanceCm = 0.f;
+	/** Bearing from the squad's centre, degrees (HordeRules::BearingDeg). */
+	float BearingDeg = 0.f;
+	/** On the navmesh with a full path to the squad. */
+	bool bReachable = false;
+	/** Some living operative sees the point (a clear line within his sight range). */
+	bool bVisibleToSquad = false;
+};
+
+/** How the far spawn point was chosen. */
+enum class EHordeFarPick : uint8
+{
+	/** No reachable candidate at all. */
+	None,
+	/** A point in the 260-340 m band. */
+	InBand,
+	/** The map has none that far: among the farthest reachable ones (logged). */
+	Farthest,
+};
+
+/** HordeRules::PickFarSpawnPoint's answer. */
+struct CODEXTACTICS_API FHordeFarPick
+{
+	int32 Index = INDEX_NONE;
+	EHordeFarPick Kind = EHordeFarPick::None;
+	/** No usable point off the previous bearing: the bearing rule was dropped. */
+	bool bBearingRelaxed = false;
+	/** No out-of-sight point: a visible one was taken. */
+	bool bVisible = false;
 };
 
 /** A candidate spawn point measured by the subsystem (navmesh, path, squad sight). */
@@ -134,4 +230,57 @@ namespace HordeRules
 	 */
 	CODEXTACTICS_API FHordeConfig ResolveForLevel(const FHordeConfig& Defaults, bool bLevelHordeEnabled, const FString& LevelOverrideJson,
 		int32 LevelAfterFirefights = FirefightRules::DefaultAfterFirefights);
+
+	// ---- Waves feed the horde (game designer 2026-11-09) -----------------------------------------------------------------------------
+
+	/**
+	 * The level's waves feed the firefight horde: the config allows it (bWavesFeedHorde), the level has (active) waves, its fight starts by
+	 * ambush (combat_start "ambush", or "auto" on a map with patrols / placed enemies: the "Start battle" flow never plays them) and no
+	 * scripted level wave has been played on this level (a level that runs its waves as scripted fights keeps them for those - its firefight
+	 * horde uses the "horde" block / horde.json).
+	 */
+	CODEXTACTICS_API bool ShouldWavesFeedHorde(const FHordeConfig& Config, int32 NumLevelWaves, bool bAmbushCombatStart, bool bScriptedWavesPlayed);
+
+	/** The level wave (0-based among the active waves) of the level's HordeOrdinal-th firefight horde (1-based): min(N, waves) - 1, so the last wave repeats; INDEX_NONE without waves. */
+	CODEXTACTICS_API int32 WaveForHorde(int32 HordeOrdinal, int32 NumLevelWaves);
+
+	/**
+	 * The horde of one level wave: every spawn entry's count in entry order (custom_stats kept), the SPITTER mapped to the MILITARY_ZOMBIE
+	 * (the Spitter is refused in the horde - SpitterSwaps counts them), other refused types (Base) skipped; MaxAlive = max_simultaneous_enemies
+	 * (>= 1); the wave's modifiers. spawn_delay_sec / initial_delay_sec are not used (like the scripted waves, user decision 2026-09-29).
+	 */
+	CODEXTACTICS_API FHordePlan PlanFromWave(const FWaveDefinition& Wave, int32 WaveNumber);
+
+	/** The horde of the "horde" block / horde.json: Count members by the composition weights, all at once (MaxAlive 0), no modifiers. */
+	CODEXTACTICS_API FHordePlan PlanFromConfig(const FHordeConfig& Config);
+
+	/** Members of Plan that may still come when Alive of them live and Spawned of them came: min(cap - alive, left); no cap = all left. */
+	CODEXTACTICS_API int32 MembersToSpawnNow(const FHordePlan& Plan, int32 Spawned, int32 Alive);
+
+	// ---- The far (firefight) spawn point (game designer 2026-11-09: ~300 m, a different place every time) -------------------------------
+
+	/** Bearing of To from From in the XY plane, degrees in [0, 360). */
+	CODEXTACTICS_API float BearingDeg(const FVector& From, const FVector& To);
+
+	/** The bearings differ by at least MinChangeDeg (the shorter way round). */
+	CODEXTACTICS_API bool IsBearingFarEnough(float BearingA, float BearingB, float MinChangeDeg);
+
+	/** The firefight band in cm: distance +- spread (min >= MinDistanceCm). */
+	CODEXTACTICS_API float FarBandMinCm(const FHordeConfig& Config);
+	CODEXTACTICS_API float FarBandMaxCm(const FHordeConfig& Config);
+
+	/**
+	 * Radii probed along each bearing, farthest first: the band's max, the distance, the band's min, then x0.8 steps down to MinDistanceCm
+	 * (the first reachable one along a bearing is that bearing's candidate - on a small map the farthest it has).
+	 */
+	CODEXTACTICS_API TArray<float> FarProbeRadii(const FHordeConfig& Config);
+
+	/**
+	 * The firefight horde's spawn point among Candidates: only reachable ones at least MinDistanceCm away. Out of sight first
+	 * (bPreferOutOfSight), then a bearing at least FirefightBearingChangeDeg off the previous horde's (when there was one) - the bearing rule
+	 * is dropped when it leaves no point (or, with FirefightBearingRelaxShare > 0, only points under that share as far as without it). Within that set: a random point in the band (InBand), else a
+	 * random one among those >= FirefightFallbackShare x the farthest distance (Farthest). Random picks use Random.
+	 */
+	CODEXTACTICS_API FHordeFarPick PickFarSpawnPoint(const TArray<FHordeFarCandidate>& Candidates, const FHordeConfig& Config, bool bHasPreviousBearing,
+		float PreviousBearingDeg, FRandomStream& Random);
 }

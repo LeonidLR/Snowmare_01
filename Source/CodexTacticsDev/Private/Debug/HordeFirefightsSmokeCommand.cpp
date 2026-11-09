@@ -1,13 +1,23 @@
-// Dev-only headless check of horde #12 (game designer 2026-11-02 / 11-03 / 11-08; UFirefightSubsystem, UHordeSubsystem::RequestFirefightHorde,
-// UHordeIntroSubsystem::BeginExternalHorde) on L_Gen_Depot_1 (the level JSON as shipped: since 2026-11-09 the horde is ON there after 10
-// firefights - checked first; the smoke then sets the threshold to 2 by the console, the pressure off, the squad tough and holding fire):
+// Dev-only headless check of horde #12 (game designer 2026-11-02 / 11-03 / 11-08 / 11-09; UFirefightSubsystem, UHordeSubsystem::RequestFirefightHorde,
+// UHordeIntroSubsystem::BeginExternalHorde) on L_Gen_Depot_1 with the pinned level JSON SmokeFixtures/horde_firefights_smoke.json (the Depot's
+// settings - horde ON after 10 firefights, checked first - with fixed waves, no PMC squads; the smoke then sets the threshold to 2 by the
+// console, the pressure off, the squad tough and holding fire):
 //   Scripts/smoke_parallel.ps1 -Commands HordeFirefightsSmoke   (map /Game/Maps/Generated/L_Gen_Depot_1, Scripts/test_map.json)
+//   any level JSON (the designer's Training Ground waves): -LevelJson=<file> and "CodexTactics.HordeFirefightsSmoke hordes=3" - every check
+//   reads the level's own waves.
 // 1. Firefight 1: a pressure patrol (2 frostbitten) 12 m ahead, the squad's shot hits one -> it notices (contact + shots) = ONE firefight
 //    (more hits in the same encounter do not add one); the HQ hint "one more firefight"; both killed -> the encounter is over (all down).
 // 2. Slip-past: a patrol with muted senses comes within its detection reach (10 m) and is left behind (30 m) unseen -> the streak resets.
 // 3. Firefight 2: 1 of 2 again (no horde). Firefight 3: 2 of 2 -> the HQ warning, the patrol is killed at once (exploration again), the
-//    countdown runs out -> the fight starts with the horde (6: 4 hounds + 2 MILITARY ZOMBIES via the variant Blueprint), the horde intro
-//    gives its warning (alert, flyover) for the external horde; the horde never counts as a firefight (the streak stays 0).
+//    countdown runs out -> the fight starts with the horde, the horde intro gives its warning (alert, flyover) for the external horde; the
+//    horde never counts as a firefight (the streak stays 0).
+// 4. Game designer play-test 2026-11-09 (feat/horde-300m-waves), per horde (hordes=N, default 2; the 2nd+ requested straight away): it
+//    spawns FAR away (in the 260-340 m band, or - the Depot is 177 x 124 m - among the farthest reachable out-of-sight points), out of
+//    sight, somewhere new (>= 30 m from the earlier hordes' points, the bearing >= 90 deg off the previous one); it is the level's wave N
+//    (the last repeating; inactive waves skipped) - its composition with SPITTER as MILITARY_ZOMBIE, its max_simultaneous_enemies first,
+//    the rest held back in the fight (UWaveSubsystem::GetExternalPendingSpawns) and coming as the living fall, its enemy_hp_mult; the HUD
+//    warning points at it, the HQ line gives the distance; each kind's first members run to the squad (arrival times logged:
+//    "Smoke: arrival ..."), timed kinds are shot down; the fight ends only when the whole wave is down.
 
 #include "CoreMinimal.h"
 
@@ -25,6 +35,8 @@
 #include "Combat/HordeIntroSubsystem.h"
 #include "Combat/HordeSubsystem.h"
 #include "Combat/WaveSubsystem.h"
+#include "Core/CodexTacticsGameMode.h"
+#include "Data/WaveConfigTypes.h"
 #include "Containers/Ticker.h"
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
@@ -47,7 +59,65 @@ namespace HordeFirefightsSmoke
 		int32 FeedMark = 0;
 		/** Which firefight the running stage plays (1..3). */
 		int32 Firefight = 0;
+		/** The horde loop (stages 10-12). */
+		int32 HordeK = 1;
+		int32 HordesToRun = 2;
+		TSet<TWeakObjectPtr<AEnemyCharacter>> Seen;
+		TWeakObjectPtr<AEnemyCharacter> LastSeen;
+		TMap<FString, int32> SpawnedByLabel;
+		TMap<FString, int32> Expected;
+		int32 ExpectedTotal = 0;
+		bool bCapChecked = false;
+		bool bIntroChecked = false;
+		int32 WarningsBefore = 0;
+		bool bHuntersOnly = true;
+		bool bModifierChecked = false;
+		float WaveHpMult = 1.f;
+		float HoundBaseHealth = 0.f;
+		/** A kind's members are left alive this long to reach the squad, then shot down anyway. */
+		float TypeTimeout = 200.f;
+		TMap<FString, UHordeSubsystem::FArrival> Timed;
+		TArray<float> Distances;
+		TArray<FVector> SpawnPoints;
+		TArray<float> Bearings;
 	};
+
+	/** The label the horde logs for an enemy (CombatPressureRules::EnemyLabel; the Military Zombie by its Blueprint). */
+	FString LabelOf(const AEnemyCharacter& Enemy)
+	{
+		const bool bZombie = GetNameSafe(Enemy.GetClass()).Contains(TEXT("MilitaryZombie"));
+		return CombatPressureRules::EnemyLabel(FPressureEnemyType(Enemy.GetArchetype(), bZombie ? CombatPressureRules::MilitaryZombieVariant() : NAME_None))
+			.Replace(TEXT("EEnemyArchetype::"), TEXT(""));
+	}
+
+	const TArray<FWaveDefinition>& LevelWavesOf(UWorld* World)
+	{
+		static const TArray<FWaveDefinition> None;
+		const ACodexTacticsGameMode* GameMode = World ? World->GetAuthGameMode<ACodexTacticsGameMode>() : nullptr;
+		const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+		return Level ? Level->Config.Waves : None;
+	}
+
+	/** What a wave should bring as a horde, by label - read straight from its spawn entries (SPITTER -> MILITARY_ZOMBIE). */
+	TMap<FString, int32> ExpectedLabels(const TArray<FWaveDefinition>& Waves, int32 WaveIndex)
+	{
+		TMap<FString, int32> Out;
+		if (!Waves.IsValidIndex(WaveIndex))
+		{
+			return Out;
+		}
+		for (const FEnemySpawnEntry& Entry : Waves[WaveIndex].Spawns)
+		{
+			if (Entry.EnemyType == EEnemyArchetype::Base || Entry.Count <= 0)
+			{
+				continue;
+			}
+			const FString Label = Entry.EnemyType == EEnemyArchetype::Spitter ? FString(TEXT("MILITARY_ZOMBIE"))
+				: CombatPressureRules::EnemyLabel(FPressureEnemyType(Entry.EnemyType, Entry.Variant)).Replace(TEXT("EEnemyArchetype::"), TEXT(""));
+			Out.FindOrAdd(Label) += Entry.Count;
+		}
+		return Out;
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -152,7 +222,7 @@ namespace HordeFirefightsSmoke
 		State.StageTime += StepSeconds;
 		State.Total += StepSeconds;
 		UWorld* World = WeakWorld.Get();
-		if (!World || State.Total > 240.f)
+		if (!World || State.Total > 1500.f)
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke stopped in stage %d"), State.Stage);
 			return Finish(State, false);
@@ -183,17 +253,24 @@ namespace HordeFirefightsSmoke
 			{
 				return true;
 			}
-			// The Depot as shipped (game designer 2026-11-09): the horde on, after 10 firefights in a row; no real-time-fight clock.
+			// The Depot's settings (game designer 2026-11-09; the pinned fixture: on, after 10 firefights in a row - another -LevelJson its own
+			// horde_after_firefights); no real-time-fight clock.
 			Horde->RefreshConfig();
-			Check(State, Horde->GetConfig().bEnabled && Horde->GetConfig().AfterFirefights == 10 && Fire->GetThreshold() == 10,
+			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
+			const ULevelConfigAsset* LevelConfig = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
+			const int32 LevelThreshold = LevelConfig ? LevelConfig->Config.HordeAfterFirefights : 10;
+			Check(State, Horde->GetConfig().bEnabled && Horde->GetConfig().AfterFirefights == LevelThreshold && Fire->GetThreshold() == LevelThreshold,
 				FString::Printf(TEXT("the Depot's level JSON: horde %s after %d firefights in a row"), Horde->GetConfig().bEnabled ? TEXT("on") : TEXT("OFF"),
 					Horde->GetConfig().AfterFirefights));
+			Check(State, Horde->GetConfig().FirefightSpawnDistanceCm == 30000.f && Horde->GetConfig().bWavesFeedHorde,
+				TEXT("... the firefight horde 300 m away, the level's waves feed it (horde.json)"));
+			Check(State, !LevelWavesOf(World).IsEmpty(), FString::Printf(TEXT("... %d active level waves"), LevelWavesOf(World).Num()));
 			Check(State, IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Horde.TriggerSeconds")) == nullptr, TEXT("... no real-time-fight horde clock"));
 			SetCVar(TEXT("Codex.Pressure.Enabled"), 0.f);
 			SetCVar(TEXT("Codex.Horde.Enabled"), 1.f);
 			SetCVar(TEXT("Codex.Horde.AfterFirefights"), 2.f);
 			SetCVar(TEXT("Codex.Horde.FirefightWarningSeconds"), 4.f);
-			Horde->SetDevOverrideJson(TEXT("{\"count\": 6, \"composition\": {\"FROST_HOUND\": 2, \"MILITARY_ZOMBIE\": 1}}"));
+			Horde->RefreshConfig(); // the console values above
 			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
 			{
 				It->Destroy();
@@ -326,55 +403,212 @@ namespace HordeFirefightsSmoke
 		}
 		case 10:
 		{
-			// The countdown runs in exploration (the patrol is dead): the horde starts a fight of its own.
-			if (Horde->GetFirefightHordesReleased() == 0 && State.StageTime < 12.f)
+			// Horde K is announced: the first by the firefight streak (above), the next ones straight away (what the 2nd / 3rd threshold does).
+			if (State.HordeK > 1)
 			{
-				return true;
-			}
-			Check(State, Horde->GetFirefightHordesReleased() == 1 && Flow->GetPhase() == ECodexGamePhase::WaveCombat,
-				FString::Printf(TEXT("the horde came %.1f s after the warning and the fight is on"), State.StageTime));
-			int32 Hounds = 0;
-			int32 Zombies = 0;
-			bool bHunters = true;
-			for (const TWeakObjectPtr<AEnemyCharacter>& Member : Horde->GetLastHorde())
-			{
-				const AEnemyCharacter* Enemy = Member.Get();
-				if (!Enemy)
+				if (Flow->GetPhase() != ECodexGamePhase::Exploration && State.StageTime < 15.f)
 				{
-					continue;
+					return true;
 				}
-				Hounds += Enemy->GetArchetype() == EEnemyArchetype::FrostHound ? 1 : 0;
-				Zombies += Enemy->GetArchetype() == EEnemyArchetype::Frostbitten && GetNameSafe(Enemy->GetClass()).Contains(TEXT("MilitaryZombie")) ? 1 : 0;
-				bHunters &= Enemy->bKnowsSquadPosition;
+				State.FeedMark = FeedCount(World);
+				Check(State, Horde->RequestFirefightHorde(), FString::Printf(TEXT("horde %d: requested (the level's %d-th firefight horde)"), State.HordeK, State.HordeK));
 			}
-			Check(State, Hounds == 4 && Zombies == 2, FString::Printf(TEXT("6 of the horde: %d hounds, %d Military Zombies (variant Blueprint)"), Hounds, Zombies));
-			Check(State, bHunters && Waves->GetAliveEnemyCount() >= 6, FString::Printf(TEXT("... they know where the squad is, in the fight (%d alive)"),
-				Waves->GetAliveEnemyCount()));
-			Check(State, Intro->GetExternalIntroCount() == 1, TEXT("the horde intro takes the external horde"));
+			State.Seen.Reset();
+			State.SpawnedByLabel.Reset();
+			State.bCapChecked = false;
 			Next(State);
 			return true;
 		}
 		case 11:
 		{
-			if (Intro->GetWarningCount() == 0 && State.StageTime < 15.f)
+			// The countdown runs in exploration: the horde starts a fight of its own, far away.
+			if (Horde->GetFirefightHordesReleased() < State.HordeK && State.StageTime < 15.f)
 			{
 				return true;
 			}
-			Check(State, Intro->GetWarningCount() == 1, FString::Printf(TEXT("the horde intro's warning: alert + HQ line (%s)"), Intro->IsFlyoverActive()
-				? TEXT("the flyover runs - the level's first horde") : TEXT("no flyover")));
-			Check(State, Intro->GetStartedCount() == 1, TEXT("... the level's first horde gets its flyover"));
-			Intro->DismissIntro();
+			Check(State, Horde->GetFirefightHordesReleased() == State.HordeK && Flow->GetPhase() == ECodexGamePhase::WaveCombat,
+				FString::Printf(TEXT("horde %d came %.1f s after the warning and the fight is on"), State.HordeK, State.StageTime));
+			const FHordePlan& Plan = Horde->GetActivePlan();
+			const FVector Point = Horde->GetLastSpawnPoint();
+			const float Distance = FVector::Dist2D(Point, Horde->GetLastSquadCentre());
+			const float BandMin = HordeRules::FarBandMinCm(Horde->GetConfig());
+			const bool bInBand = Horde->GetLastSpawnPick() == EHordeFarPick::InBand;
+			Check(State, bInBand ? Distance >= BandMin - 1.f : Horde->GetLastSpawnPick() == EHordeFarPick::Farthest && Distance >= Horde->GetConfig().MinDistanceCm,
+				FString::Printf(TEXT("horde %d: %.0f m from the squad at bearing %.0f deg (%s; search %.1f ms)"), State.HordeK, Distance / 100.f,
+					Horde->GetLastSpawnBearingDeg(), bInBand ? TEXT("in the 260-340 m band") : TEXT("this map has no point 260-340 m away: the farthest"),
+					Horde->GetLastSpawnSearchMs()));
+			Check(State, Horde->WasLastSpawnHidden(), TEXT("... out of the squad's sight"));
+			State.Distances.Add(Distance);
+			for (int32 Index = 0; Index < State.SpawnPoints.Num(); ++Index)
+			{
+				const float Apart = FVector::Dist2D(State.SpawnPoints[Index], Point);
+				const float Turn = FMath::Abs(FMath::FindDeltaAngleDegrees(State.Bearings[Index], Horde->GetLastSpawnBearingDeg()));
+				// The previous horde's bearing is kept off unless no reachable out-of-sight point off it existed (logged by the horde).
+				const bool bLast = Index == State.SpawnPoints.Num() - 1;
+				Check(State, Apart > 3000.f && (!bLast || Turn >= Horde->GetConfig().FirefightBearingChangeDeg - 1.f || Horde->WasLastSpawnBearingRelaxed()),
+					FString::Printf(TEXT("... a different place than horde %d: %.0f m apart, the bearing turned %.0f deg%s"), Index + 1, Apart / 100.f, Turn,
+						bLast && Horde->WasLastSpawnBearingRelaxed() ? TEXT(" (no out-of-sight point off the previous bearing: relaxed)") : TEXT("")));
+			}
+			State.SpawnPoints.Add(Point);
+			State.Bearings.Add(Horde->GetLastSpawnBearingDeg());
+			// The wave it comes from: the level's active waves in order, the last repeating.
+			const TArray<FWaveDefinition>& LevelWaves = LevelWavesOf(World);
+			const int32 WaveIndex = HordeRules::WaveForHorde(State.HordeK, LevelWaves.Num());
+			State.Expected = ExpectedLabels(LevelWaves, WaveIndex);
+			State.ExpectedTotal = 0;
+			for (const TPair<FString, int32>& Each : State.Expected)
+			{
+				State.ExpectedTotal += Each.Value;
+			}
+			const int32 Cap = LevelWaves.IsValidIndex(WaveIndex) ? FMath::Max(1, LevelWaves[WaveIndex].MaxSimultaneousEnemies) : 0;
+			Check(State, Plan.SourceWave == WaveIndex + 1 && Plan.Members.Num() == State.ExpectedTotal && Plan.MaxAlive == Cap,
+				FString::Printf(TEXT("horde %d = level wave %d: %s (%d, at most %d alive)"), State.HordeK, Plan.SourceWave, *Plan.Describe(),
+					Plan.Members.Num(), Plan.MaxAlive));
+			const int32 First = FMath::Min(Cap, State.ExpectedTotal);
+			Check(State, Horde->GetActiveSpawned() == First && Waves->GetExternalPendingSpawns() == State.ExpectedTotal - First,
+				FString::Printf(TEXT("... %d came first (the wave's max_simultaneous_enemies), %d held back for the fight"), Horde->GetActiveSpawned(),
+					Waves->GetExternalPendingSpawns()));
+			if (LevelWaves.IsValidIndex(WaveIndex))
+			{
+				State.WaveHpMult = LevelWaves[WaveIndex].Modifiers.EnemyHpMult;
+			}
+			FVector WarningAt;
+			int32 WarningCount = 0;
+			float WarningLeft = 0.f;
+			Check(State, Horde->GetActiveWarning(WarningAt, WarningCount, WarningLeft) && WarningAt.Equals(Point, 1.f),
+				TEXT("... the HUD \"HORDE!\" warning + arrow points at it"));
+			Check(State, FeedSince(World, State.FeedMark).Contains(FString::Printf(TEXT("%.0f m!"), Distance / 100.f)),
+				TEXT("... the HQ line gives its distance"));
+			if (State.HordeK == 1)
+			{
+				Check(State, Intro->GetExternalIntroCount() == 1, TEXT("the horde intro takes the external horde"));
+			}
+			State.WarningsBefore = Intro->GetWarningCount();
 			Next(State);
 			return true;
 		}
 		case 12:
 		{
-			if (State.StageTime < 3.f)
+			// The horde runs in: each kind's first members are left to reach the squad (the arrival times); kinds already timed are shot down so
+			// the held-back members come (from the horde's spawn point, as the living fall). The whole wave must come, then the fight ends.
+			if (Intro->IsIntroPending() && (Intro->GetWarningCount() > State.WarningsBefore || State.StageTime > 15.f))
+			{
+				if (State.HordeK == 1 && !State.bIntroChecked)
+				{
+					State.bIntroChecked = true;
+					Check(State, Intro->GetWarningCount() == 1 && Intro->GetStartedCount() == 1, TEXT("the horde intro's warning + the level's first flyover"));
+				}
+				Intro->DismissIntro(); // the run-in is measured in real time
+			}
+			int32 Alive = 0;
+			for (const TWeakObjectPtr<AEnemyCharacter>& Member : Horde->GetLastHorde())
+			{
+				AEnemyCharacter* Enemy = Member.Get();
+				if (!Enemy)
+				{
+					continue;
+				}
+				if (!State.Seen.Contains(TWeakObjectPtr<AEnemyCharacter>(Enemy)))
+				{
+					State.Seen.Add(TWeakObjectPtr<AEnemyCharacter>(Enemy));
+					State.LastSeen = Enemy;
+					++State.SpawnedByLabel.FindOrAdd(LabelOf(*Enemy));
+					State.bHuntersOnly &= Enemy->bKnowsSquadPosition;
+					if (State.WaveHpMult > 1.01f && Enemy->GetArchetype() == EEnemyArchetype::FrostHound && State.HoundBaseHealth > 0.f && !State.bModifierChecked)
+					{
+						State.bModifierChecked = true;
+						const float Ratio = Enemy->GetHealthComponent()->GetMaxHealth() / State.HoundBaseHealth;
+						Check(State, FMath::IsNearlyEqual(Ratio, State.WaveHpMult, 0.02f),
+							FString::Printf(TEXT("the wave's enemy_hp_mult x%.2f on the horde's hounds (x%.2f measured)"), State.WaveHpMult, Ratio));
+					}
+					if (Enemy->GetArchetype() == EEnemyArchetype::FrostHound && State.WaveHpMult <= 1.01f && State.HoundBaseHealth <= 0.f)
+					{
+						State.HoundBaseHealth = Enemy->GetHealthComponent()->GetMaxHealth();
+					}
+				}
+				if (Enemy->IsDying())
+				{
+					continue;
+				}
+				++Alive;
+				const FString Label = LabelOf(*Enemy);
+				const bool bTimed = State.Timed.Contains(Label);
+				if (bTimed || State.StageTime > State.TypeTimeout)
+				{
+					Hit(Enemy, *Leader, 100000.f);
+				}
+			}
+			for (const UHordeSubsystem::FArrival& Arrival : Horde->GetArrivals())
+			{
+				if (!State.Timed.Contains(Arrival.Label))
+				{
+					State.Timed.Add(Arrival.Label, Arrival);
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke: arrival %s %.1f s from %.0f m (%.1f m/s straight line; 300 m = ~%.0f s)"), *Arrival.Label,
+						Arrival.Seconds, Arrival.SpawnDistanceCm / 100.f, Arrival.SpawnDistanceCm / 100.f / FMath::Max(Arrival.Seconds, 0.1f),
+						Arrival.Seconds * 30000.f / FMath::Max(Arrival.SpawnDistanceCm, 1.f));
+				}
+			}
+			if (!State.bCapChecked && Horde->GetActiveSpawned() > FMath::Min(Horde->GetActivePlan().MaxAlive, State.ExpectedTotal))
+			{
+				State.bCapChecked = true;
+				Check(State, FVector::Dist2D((State.LastSeen.IsValid() ? State.LastSeen->GetActorLocation() : FVector::ZeroVector), Horde->GetLastSpawnPoint()) < 30000.f,
+					TEXT("the held-back members come as the living fall"));
+			}
+			const bool bAllCame = Horde->GetActiveQueued() == 0 && Horde->GetActiveSpawned() == State.ExpectedTotal;
+			if ((!bAllCame || Alive > 0 || Flow->GetPhase() != ECodexGamePhase::Exploration) && State.StageTime < State.TypeTimeout + 60.f)
 			{
 				return true;
 			}
+			Check(State, bAllCame && Alive == 0, FString::Printf(TEXT("horde %d: the whole wave came (%d / %d), all down"), State.HordeK,
+				Horde->GetActiveSpawned(), State.ExpectedTotal));
+			TArray<FString> Got;
+			bool bSame = State.SpawnedByLabel.Num() == State.Expected.Num();
+			for (const TPair<FString, int32>& Each : State.Expected)
+			{
+				const int32* Count = State.SpawnedByLabel.Find(Each.Key);
+				bSame &= Count && *Count == Each.Value;
+			}
+			for (const TPair<FString, int32>& Each : State.SpawnedByLabel)
+			{
+				Got.Add(FString::Printf(TEXT("%d %s"), Each.Value, *Each.Key));
+			}
+			Check(State, bSame && !State.SpawnedByLabel.Contains(TEXT("Spitter")),
+				FString::Printf(TEXT("... the wave's composition, SPITTER as MILITARY_ZOMBIE (%s)"), *FString::Join(Got, TEXT(", "))));
+			Check(State, State.bHuntersOnly, TEXT("... they all knew where the squad was"));
+			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration && Waves->GetExternalPendingSpawns() == 0,
+				TEXT("... the fight held until the last held-back member was down, then back to exploration"));
+			if (State.HordeK < State.HordesToRun)
+			{
+				++State.HordeK;
+				State.Stage = 10;
+				State.StageTime = 0.f;
+				return true;
+			}
+			Next(State);
+			return true;
+		}
+		case 13:
+		{
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			FString Times;
+			for (const TPair<FString, UHordeSubsystem::FArrival>& Each : State.Timed)
+			{
+				Times += FString::Printf(TEXT(" %s %.1f s / %.0f m (300 m ~%.0f s);"), *Each.Key, Each.Value.Seconds, Each.Value.SpawnDistanceCm / 100.f,
+					Each.Value.Seconds * 30000.f / FMath::Max(Each.Value.SpawnDistanceCm, 1.f));
+			}
+			FString Distances;
+			for (const float Each : State.Distances)
+			{
+				Distances += FString::Printf(TEXT(" %.0f m"), Each / 100.f);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: horde spawn distances:%s; arrivals (within %.0f m of the squad):%s"), *Distances,
+				UHordeSubsystem::ArrivalRangeCm / 100.f, *Times);
+			Check(State, State.Timed.Num() > 0, TEXT("arrival times measured"));
 			Check(State, Fire->GetStreak() == 0 && Fire->GetFirefightCount() == 3,
-				FString::Printf(TEXT("the horde's own fight is no firefight (streak %d, %d on the level)"), Fire->GetStreak(), Fire->GetFirefightCount()));
+				FString::Printf(TEXT("the hordes' own fights are no firefights (streak %d, %d on the level)"), Fire->GetStreak(), Fire->GetFirefightCount()));
 			return Finish(State, true);
 		}
 		default:
@@ -390,6 +624,14 @@ namespace HordeFirefightsSmoke
 		}
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
+		for (const FString& Arg : Args)
+		{
+			FString Value;
+			if (Arg.Split(TEXT("="), nullptr, &Value) && Arg.StartsWith(TEXT("hordes=")))
+			{
+				State->HordesToRun = FMath::Clamp(FCString::Atoi(*Value), 1, 6);
+			}
+		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
 			return Step(WeakWorld, *State);
@@ -398,7 +640,7 @@ namespace HordeFirefightsSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.HordeFirefightsSmoke"),
-		TEXT("Dev check of horde #12 on L_Gen_Depot_1: firefights in a row, the slip-past reset, the warning and the horde; PASS / FAIL, then exits."),
+		TEXT("Dev check of horde #12 on L_Gen_Depot_1: firefights in a row, the slip-past reset, the warning, then N hordes (hordes=N, default 2) far away, each from the level's next wave; PASS / FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

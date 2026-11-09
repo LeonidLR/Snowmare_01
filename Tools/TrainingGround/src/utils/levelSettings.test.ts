@@ -8,6 +8,8 @@ import {
   GATE_DEFAULTS, getDemo, getGate, isGateFieldInvalid, setDemoEnabled, setDemoKey, setGateKey, validateDemo, validateGate,
   validateLevelSettings, getColdRateMult, setColdRateMult, validateColdRate,
   HORDE_AFTER_FIREFIGHTS_DEFAULT, HORDE_AFTER_FIREFIGHTS_MIN, getHordeAfterFirefights, getHordeEnabled, setHordeAfterFirefights, setHordeEnabled, validateHordeAfterFirefights,
+  HORDE_SPAWN_DISTANCE_DEFAULT, activeWaves, describeHordeWaves, getHordeSpawnDistance, getHordeWaveFeed, hasOwnHordeSpawnDistance, setHordeSpawnDistance,
+  validateHordeSpawnDistance, waveForHorde,
 } from './levelSettings.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -142,4 +144,52 @@ test('horde_after_firefights: default 10, min 1, set / validate / roundtrip', ()
 
   assert.equal(validateLevelSettings({ waves: [], horde_after_firefights: -1 }).length, 1);
   assert.equal(validateLevelSettings({ waves: [], horde_after_firefights: 8 }).length, 0);
+});
+
+test('horde from waves (game designer 2026-11-09): which levels feed it, horde N = wave N then the last, SPITTER -> MILITARY_ZOMBIE', () => {
+  const depot = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelJson/L_Gen_Depot_1.json'), 'utf-8'));
+  assert.equal(getHordeWaveFeed(depot), 'waves', 'the Depot (combat_start ambush) feeds the horde from its waves');
+  const lake = JSON.parse(fs.readFileSync(FROZEN_LAKE, 'utf-8'));
+  assert.equal(getHordeWaveFeed(lake), 'scripted', 'the Lake (button) plays its waves as scripted fights');
+  assert.equal(getHordeWaveFeed({ waves: [{ spawns: [] }] }), 'map', 'auto: depends on the map');
+  assert.equal(getHordeWaveFeed({ combat_start: 'ambush', waves: [] }), 'none');
+  assert.equal(getHordeWaveFeed({ combat_start: 'ambush', waves: [{ is_active: false }] }), 'none', 'inactive waves do not count');
+  assert.equal(getHordeWaveFeed({ combat_start: 'ambush', waves: [{}], horde: { waves_feed_horde: false } }), 'off');
+  // The game's HordeRules::WaveForHorde.
+  assert.deepEqual([1, 2, 3, 4, 7].map((n) => waveForHorde(n, 3)), [0, 1, 2, 2, 2]);
+  assert.equal(waveForHorde(1, 0), -1);
+  // The designer's Training Ground waves (2026-11-09).
+  const level = {
+    combat_start: 'ambush',
+    waves: [
+      { wave_index: 1, max_simultaneous_enemies: 2, spawns: [{ enemy_type: 'FROSTBITTEN', count: 4 }, { enemy_type: 'HOUND', count: 30 }] },
+      { wave_index: 2, is_active: false, spawns: [{ enemy_type: 'BRUTE', count: 9 }] },
+      { wave_index: 3, max_simultaneous_enemies: 12, spawns: [{ enemy_type: 'HOUND', count: 55 }, { enemy_type: 'SPITTER', count: 2 }] },
+    ],
+  };
+  assert.equal(activeWaves(level).length, 2);
+  const lines = describeHordeWaves(level);
+  assert.equal(lines.length, 2);
+  assert.match(lines[0], /^Орда 1 ← волна 1: 4 FROSTBITTEN \+ 30 HOUND, до 2 одновременно$/);
+  assert.match(lines[1], /^Орда 2 \(и все следующие орды\) ← волна 3: 55 HOUND \+ 2 MILITARY_ZOMBIE, до 12 одновременно; SPITTER → MILITARY_ZOMBIE$/);
+});
+
+test('horde distance (game designer 2026-11-09): default 300 m from horde.json, a level override in "horde", removed when emptied', () => {
+  assert.equal(getHordeSpawnDistance({}), HORDE_SPAWN_DISTANCE_DEFAULT);
+  assert.equal(HORDE_SPAWN_DISTANCE_DEFAULT, 300);
+  const level = { level_id: 'x', waves: [], horde: { count: 12 } };
+  const far = setHordeSpawnDistance(level, 400);
+  assert.equal(getHordeSpawnDistance(far), 400);
+  assert.ok(hasOwnHordeSpawnDistance(far));
+  assert.deepEqual(far.horde, { count: 12, firefight_spawn_distance_m: 400 }, 'other horde keys kept');
+  assert.equal('firefight_spawn_distance_m' in level.horde, false, 'input not mutated');
+  const back = setHordeSpawnDistance(far, undefined);
+  assert.deepEqual(back.horde, { count: 12 });
+  const plain = setHordeSpawnDistance(setHordeSpawnDistance({ waves: [] }, 250), undefined);
+  assert.equal('horde' in plain, false, 'an emptied horde object is removed');
+  assert.deepEqual(validateHordeSpawnDistance(300), []);
+  assert.equal(validateHordeSpawnDistance(10).length, 1);
+  assert.equal(validateHordeSpawnDistance(NaN).length, 1);
+  assert.equal(validateLevelSettings({ waves: [], horde: { firefight_spawn_distance_m: 5 } }).length, 1);
+  assert.equal(validateLevelSettings({ waves: [], horde: { firefight_spawn_distance_m: 300 } }).length, 0);
 });
