@@ -16,6 +16,15 @@ enum class EShotLineHit : uint8
 	Blocked
 };
 
+/** Which point of the target an aimed shot's line ends at (fix/corner-peek-standoff 2026-11-09). */
+enum class EShotAimPoint : uint8
+{
+	/** His body (feet + 80 cm, Godot's ray): every target, the old rule. */
+	Body,
+	/** The leaned-out head and shoulder of a man peeking round a corner / over a low wall (his body is behind the cover). */
+	Exposed
+};
+
 /** Result of the barricade rules for one line of fire (Godot _find_shoot_target). */
 struct CODEXTACTICS_API FShotLineVerdict
 {
@@ -67,6 +76,15 @@ namespace SquadFireRules
 
 	/** Barricade rules: elevated shots bypass it, prone is blocked, crouched gets cover 0.8, standing shoots over. */
 	CODEXTACTICS_API FShotLineVerdict JudgeLine(EShotLineHit Hit, EOperativeStance Stance, const FElevationAdvantage& Elevation);
+
+	/**
+	 * fix/corner-peek-standoff (game designer play-test 2026-11-09: our man and a PMC fighter peek round two corners in each other's sight
+	 * cones and neither fires): the honest sight sees a peeking man by his leaned-out head and shoulder, but the shot line ran to his body,
+	 * which stays behind his corner - blocked, no shot either way. The body stays the aim point whenever its line is clear, and a barricade
+	 * keeps its own rules (JudgeLine); only a body line stopped by a WALL (Blocked) moves to the exposed part, when the target shows one
+	 * (bHasExposedPoint: he peeks) and the line to it is clear. The hidden rest of him stays covered: no exposed part, no shot.
+	 */
+	CODEXTACTICS_API EShotAimPoint ChooseShotAimPoint(EShotLineHit BodyLine, bool bHasExposedPoint, EShotLineHit ExposedLine);
 
 	/** The closest candidate replaces the current target when much closer (ratio) or within 3.5 m. */
 	CODEXTACTICS_API bool IsSignificantlyCloser(float ClosestDistanceCm, float CurrentDistanceCm, float SwitchRatio);
