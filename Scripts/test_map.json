@@ -21,7 +21,7 @@
     "SquadFireSmoke", "RageSmoke", "SquadControlSmoke", "AIGrenadeSmoke", "EnemyAISmoke", "CutterSmoke",
     "ClickRulesSmoke", "NarrativeSmoke", "HoldSphereSmoke", "ProgressionSmoke", "VictorySmoke", "TurnBasedCameraSmoke",
     "EventBusSmoke", "SilhouetteSmoke", "AttackModeSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "TurnWalkSmoke", "TurnBlastDeathSmoke",
-    "EnemyHuntSmoke", "VaultSmoke", "DepotVaultSmoke", "BarricadeContactSmoke", "CombatMoveSmoke", "EnemyDeathSmoke", "TurnSelectSmoke",
+    "EnemyHuntSmoke", "VaultSmoke", "DepotVaultSmoke", "CornerExitSmoke", "BarricadeContactSmoke", "CombatMoveSmoke", "EnemyDeathSmoke", "TurnSelectSmoke",
     "PanicSmoke", "FacingSmoke", "MarksmanSmoke", "EnemyHitLayerSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke",
     "BotMarksmanSmoke", "BarricadeTurnContactSmoke", "MarksmanAdvanceSmoke", "BotRepairSmoke", "PatrolSmoke",
     "AmbushSmoke", "RealTimeControlSmoke", "PostureSmoke", "RealtimeSelectSmoke", "MarksmanCloseShotSmoke",
@@ -350,7 +350,7 @@
       "name": "designer-2026-10-22-vault-back",
       "globs": ["Source/**/Interactables/VaultNavigation*", "Source/**/Interactables/RelocationSubsystem*", "Source/**/Interactables/BarricadeActor*", "Source/**/Debug/BarricadeVaultBackSmoke*"],
       "tests": ["CodexTactics.Interactables"],
-      "smokes": ["BarricadeVaultBackSmoke", "VaultSmoke", "RelocationSmoke", "PauseBarrelOrderSmoke", "TurnBasedBarricadeSmoke"]
+      "smokes": ["BarricadeVaultBackSmoke", "VaultSmoke", "DepotVaultSmoke", "RelocationSmoke", "PauseBarrelOrderSmoke", "TurnBasedBarricadeSmoke"]
     },
     {
       "name": "designer-2026-10-22-heat-fear",
