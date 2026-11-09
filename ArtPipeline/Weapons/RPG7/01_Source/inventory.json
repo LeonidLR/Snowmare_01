@@ -1,0 +1,214 @@
+{
+  "folder": "/Game/Launcher_Animations/Mesh",
+  "meshes": [
+    {
+      "name": "SK_Weapon_Body_Mesh",
+      "class": "SkeletalMesh",
+      "path": "/Game/Launcher_Animations/Mesh/SK_Weapon_Body_Mesh.SK_Weapon_Body_Mesh",
+      "bounds_origin": [
+        -0.1631,
+        -15.6289,
+        -5.332
+      ],
+      "bounds_extent": [
+        5.9921,
+        51.281,
+        12.0808
+      ],
+      "skeleton": "/Game/Launcher_Animations/Mesh/SK_Weapon_Body_Mesh_Skeleton.SK_Weapon_Body_Mesh_Skeleton",
+      "bones": [],
+      "num_lods": 1,
+      "slots": [
+        {
+          "slot": "Weapon",
+          "material": "/Game/Launcher_Animations/Materials/M_Launcher.M_Launcher"
+        }
+      ],
+      "fbx": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-rpgfull\\ArtPipeline\\Weapons\\RPG7\\01_Source\\SK_Weapon_Body_Mesh.fbx",
+      "export_ok": true
+    },
+    {
+      "name": "SK_Weapon_Glasses_Mesh",
+      "class": "SkeletalMesh",
+      "path": "/Game/Launcher_Animations/Mesh/SK_Weapon_Glasses_Mesh.SK_Weapon_Glasses_Mesh",
+      "bounds_origin": [
+        5.4851,
+        2.8636,
+        11.3337
+      ],
+      "bounds_extent": [
+        1.4052,
+        6.3631,
+        3.8746
+      ],
+      "skeleton": "/Game/Launcher_Animations/Mesh/SK_Weapon_Body_Mesh_Skeleton.SK_Weapon_Body_Mesh_Skeleton",
+      "bones": [],
+      "num_lods": 1,
+      "slots": [
+        {
+          "slot": "Weapon",
+          "material": "/Game/Launcher_Animations/Materials/M_Launcher.M_Launcher"
+        }
+      ],
+      "fbx": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-rpgfull\\ArtPipeline\\Weapons\\RPG7\\01_Source\\SK_Weapon_Glasses_Mesh.fbx",
+      "export_ok": true
+    },
+    {
+      "name": "SK_Weapon_Rocket_Mesh",
+      "class": "SkeletalMesh",
+      "path": "/Game/Launcher_Animations/Mesh/SK_Weapon_Rocket_Mesh.SK_Weapon_Rocket_Mesh",
+      "bounds_origin": [
+        -0.0495,
+        45.628,
+        0.2615
+      ],
+      "bounds_extent": [
+        5.0602,
+        30.3853,
+        5.0484
+      ],
+      "skeleton": "/Game/Launcher_Animations/Mesh/SK_Weapon_Body_Mesh_Skeleton.SK_Weapon_Body_Mesh_Skeleton",
+      "bones": [],
+      "num_lods": 1,
+      "slots": [
+        {
+          "slot": "Weapon",
+          "material": "/Game/Launcher_Animations/Materials/M_Launcher.M_Launcher"
+        }
+      ],
+      "fbx": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-rpgfull\\ArtPipeline\\Weapons\\RPG7\\01_Source\\SK_Weapon_Rocket_Mesh.fbx",
+      "export_ok": true
+    },
+    {
+      "name": "SK_Weapon_Sight_01_Mesh",
+      "class": "SkeletalMesh",
+      "path": "/Game/Launcher_Animations/Mesh/SK_Weapon_Sight_01_Mesh.SK_Weapon_Sight_01_Mesh",
+      "bounds_origin": [
+        5.7737,
+        3.6214,
+        6.6481
+      ],
+      "bounds_extent": [
+        2.4883,
+        8.8666,
+        9.8561
+      ],
+      "skeleton": "/Game/Launcher_Animations/Mesh/SK_Weapon_Body_Mesh_Skeleton.SK_Weapon_Body_Mesh_Skeleton",
+      "bones": [],
+      "num_lods": 1,
+      "slots": [
+        {
+          "slot": "Weapon",
+          "material": "/Game/Launcher_Animations/Materials/M_Launcher.M_Launcher"
+        }
+      ],
+      "fbx": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-rpgfull\\ArtPipeline\\Weapons\\RPG7\\01_Source\\SK_Weapon_Sight_01_Mesh.fbx",
+      "export_ok": true
+    },
+    {
+      "name": "SK_Weapon_Sight_02_Mesh",
+      "class": "SkeletalMesh",
+      "path": "/Game/Launcher_Animations/Mesh/SK_Weapon_Sight_02_Mesh.SK_Weapon_Sight_02_Mesh",
+      "bounds_origin": [
+        1.5933,
+        32.8027,
+        6.7814
+      ],
+      "bounds_extent": [
+        0.7856,
+        0.8782,
+        3.39
+      ],
+      "skeleton": "/Game/Launcher_Animations/Mesh/SK_Weapon_Body_Mesh_Skeleton.SK_Weapon_Body_Mesh_Skeleton",
+      "bones": [],
+      "num_lods": 1,
+      "slots": [
+        {
+          "slot": "Weapon",
+          "material": "/Game/Launcher_Animations/Materials/M_Launcher.M_Launcher"
+        }
+      ],
+      "fbx": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-rpgfull\\ArtPipeline\\Weapons\\RPG7\\01_Source\\SK_Weapon_Sight_02_Mesh.fbx",
+      "export_ok": true
+    },
+    {
+      "name": "SK_Weapon_Sight_03_Mesh",
+      "class": "SkeletalMesh",
+      "path": "/Game/Launcher_Animations/Mesh/SK_Weapon_Sight_03_Mesh.SK_Weapon_Sight_03_Mesh",
+      "bounds_origin": [
+        1.5054,
+        0.4993,
+        9.6147
+      ],
+      "bounds_extent": [
+        1.4657,
+        0.947,
+        4.842
+      ],
+      "skeleton": "/Game/Launcher_Animations/Mesh/SK_Weapon_Body_Mesh_Skeleton.SK_Weapon_Body_Mesh_Skeleton",
+      "bones": [],
+      "num_lods": 1,
+      "slots": [
+        {
+          "slot": "Weapon",
+          "material": "/Game/Launcher_Animations/Materials/M_Launcher.M_Launcher"
+        }
+      ],
+      "fbx": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-rpgfull\\ArtPipeline\\Weapons\\RPG7\\01_Source\\SK_Weapon_Sight_03_Mesh.fbx",
+      "export_ok": true
+    }
+  ],
+  "materials": {
+    "/Game/Launcher_Animations/Materials/M_Launcher.M_Launcher": {
+      "class": "Material",
+      "textures": [
+        "/Game/Launcher_Animations/Textures/T_Launcher_Weapon_Normal.T_Launcher_Weapon_Normal",
+        "/Game/Launcher_Animations/Textures/T_Launcher_Weapon_Albedo.T_Launcher_Weapon_Albedo",
+        "/Game/Launcher_Animations/Textures/T_Launcher_Weapon_Metallic.T_Launcher_Weapon_Metallic",
+        "/Game/Launcher_Animations/Textures/T_Launcher_Weapon_Ao.T_Launcher_Weapon_Ao"
+      ],
+      "base_color": {
+        "class": "MaterialExpressionTextureSample",
+        "constant": "ERR: MaterialExpressionTextureSample: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionTextureSample'",
+        "r": "ERR: MaterialExpressionTextureSample: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionTextureSample'",
+        "g": "ERR: MaterialExpressionTextureSample: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionTextureSample'",
+        "b": "ERR: MaterialExpressionTextureSample: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionTextureSample'",
+        "parameter_name": "ERR: MaterialExpressionTextureSample: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionTextureSample'"
+      },
+      "metallic": {
+        "class": "MaterialExpressionTextureSample",
+        "constant": "ERR: MaterialExpressionTextureSample: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionTextureSample'",
+        "r": "ERR: MaterialExpressionTextureSample: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionTextureSample'",
+        "g": "ERR: MaterialExpressionTextureSample: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionTextureSample'",
+        "b": "ERR: MaterialExpressionTextureSample: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionTextureSample'",
+        "parameter_name": "ERR: MaterialExpressionTextureSample: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionTextureSample'"
+      },
+      "roughness": {
+        "class": "MaterialExpressionTextureSample",
+        "constant": "ERR: MaterialExpressionTextureSample: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionTextureSample'",
+        "r": "ERR: MaterialExpressionTextureSample: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionTextureSample'",
+        "g": "ERR: MaterialExpressionTextureSample: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionTextureSample'",
+        "b": "ERR: MaterialExpressionTextureSample: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionTextureSample'",
+        "parameter_name": "ERR: MaterialExpressionTextureSample: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionTextureSample'"
+      },
+      "emissive_color": null,
+      "normal": {
+        "class": "MaterialExpressionTextureSample",
+        "constant": "ERR: MaterialExpressionTextureSample: Failed to find property 'constant' for attribute 'constant' on 'MaterialExpressionTextureSample'",
+        "r": "ERR: MaterialExpressionTextureSample: Failed to find property 'r' for attribute 'r' on 'MaterialExpressionTextureSample'",
+        "g": "ERR: MaterialExpressionTextureSample: Failed to find property 'g' for attribute 'g' on 'MaterialExpressionTextureSample'",
+        "b": "ERR: MaterialExpressionTextureSample: Failed to find property 'b' for attribute 'b' on 'MaterialExpressionTextureSample'",
+        "parameter_name": "ERR: MaterialExpressionTextureSample: Failed to find property 'parameter_name' for attribute 'parameter_name' on 'MaterialExpressionTextureSample'"
+      },
+      "opacity": null,
+      "specular": null
+    }
+  },
+  "animations": [],
+  "textures": [
+    "/Game/Launcher_Animations/Textures/T_Launcher_Weapon_Albedo.T_Launcher_Weapon_Albedo",
+    "/Game/Launcher_Animations/Textures/T_Launcher_Weapon_Ao.T_Launcher_Weapon_Ao",
+    "/Game/Launcher_Animations/Textures/T_Launcher_Weapon_Metallic.T_Launcher_Weapon_Metallic",
+    "/Game/Launcher_Animations/Textures/T_Launcher_Weapon_Normal.T_Launcher_Weapon_Normal"
+  ]
+}

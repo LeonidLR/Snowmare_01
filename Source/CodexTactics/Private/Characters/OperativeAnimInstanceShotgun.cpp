@@ -248,6 +248,22 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 	FString BodyMode;
 	ShotgunSet.bFullBody = Block->TryGetStringField(TEXT("body"), BodyMode) && BodyMode.Equals(TEXT("full"), ESearchCase::IgnoreCase);
 	Number(TEXT("max_play_rate"), ShotgunSet.MaxPlayRate);
+	FString RootMode;
+	ShotgunSet.bRootReference = Block->TryGetStringField(TEXT("root_translation"), RootMode) && RootMode.Equals(TEXT("reference"), ESearchCase::IgnoreCase);
+	FString CrouchBody;
+	ShotgunSet.bCrouchUpper = Block->TryGetStringField(TEXT("crouch_body"), CrouchBody) && CrouchBody.Equals(TEXT("upper"), ESearchCase::IgnoreCase);
+	const TSharedPtr<FJsonObject>* Offsets = nullptr;
+	if (Block->TryGetObjectField(TEXT("phase_offsets"), Offsets) && Offsets)
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Offsets)->Values)
+		{
+			double Value = 0.0;
+			if (Pair.Value.IsValid() && Pair.Value->TryGetNumber(Value))
+			{
+				ShotgunSet.PhaseOffsets.Add(FName(*Pair.Key), static_cast<float>(Value));
+			}
+		}
+	}
 	const TArray<TSharedPtr<FJsonValue>>* JogBlend = nullptr;
 	if (Block->TryGetArrayField(TEXT("jog_blend_speeds"), JogBlend) && JogBlend && JogBlend->Num() == 2)
 	{
@@ -351,7 +367,7 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	// A stance transition counts as full body from its first frame (its weight is still ~0 then): the layer blending in over the rise from
 	// prone popped the torso ~15 cm (ShotgunSmoke 7).
 	ShotgunMask = ResolveMask(IsShotgunLayerEligible(), GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f || IsPlayingStanceTransition(),
-		GetSlotMontageGlobalWeight(UpperBodySlot) > 0.01f, ShotgunSet.bFullBody && bShotgunWeapon);
+		GetSlotMontageGlobalWeight(UpperBodySlot) > 0.01f, IsWeaponLayerFullBody());
 	const float BlendRate = DeltaSeconds / FMath::Max(0.01f, ShotgunSet.BlendSeconds);
 	auto Step = [BlendRate](float Weight, float Target)
 	{
@@ -359,7 +375,7 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	};
 	ShotgunUpperWeight = Step(ShotgunUpperWeight, ShotgunMask == EWeaponLayerMask::Full ? 1.f : 0.f);
 	// A "full" set (the launcher) also drives the pelvis and legs - under a hit reaction too (LowerBody); an "upper" set never does.
-	ShotgunLowerWeight = Step(ShotgunLowerWeight, bShotgunWeapon && ShotgunSet.bFullBody && ShotgunMask != EWeaponLayerMask::Off ? 1.f : 0.f);
+	ShotgunLowerWeight = Step(ShotgunLowerWeight, IsWeaponLayerFullBody() && ShotgunMask != EWeaponLayerMask::Off ? 1.f : 0.f);
 	for (FOperativeClipState& Clip : ShotgunClips)
 	{
 		Clip = FOperativeClipState();
@@ -532,7 +548,11 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	{
 		ShotgunPhase = FMath::Fmod(ShotgunPhase + DeltaSeconds * LoopPlayRate(MoveSpeed, LeadNominal, 0.5f, ShotgunSet.MaxPlayRate) / LeadLength, 1.f);
 	}
-	auto At = [this](const UAnimSequence* Clip) { return Clip ? ShotgunPhase * Clip->GetPlayLength() : 0.f; };
+	// Each loop on the shared phase plus its own sync offset (the left heel strike; phase_offsets).
+	auto At = [this, &ShotgunSet](const UAnimSequence* Clip)
+	{
+		return Clip ? SyncedClipTime(ShotgunPhase, ShotgunSet.PhaseOffsets.FindRef(Clip->GetFName()), Clip->GetPlayLength()) : 0.f;
+	};
 	auto AddPair = [&Add, &At](const TStaticArray<UAnimSequence*, 8>& Set, const FWeaponLayerDirectionBlend& Dir, float Weight)
 	{
 		UAnimSequence* A = Set[static_cast<int32>(Dir.A)];
@@ -691,8 +711,14 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 				// their planted feet slid (ShotgunSmoke 2b). The set's root faces the capsule (the reference rotation).
 				if (Lower > OperativeShotgunLayer::ShotgunMinWeight)
 				{
-					const FQuat Reference = Output.Pose.GetBoneContainer().GetRefPoseTransform(Index).GetRotation();
-					Output.Pose[Index].SetRotation(FQuat::Slerp(Output.Pose[Index].GetRotation(), Reference, Lower).GetNormalized());
+					const FTransform& Reference = Output.Pose.GetBoneContainer().GetRefPoseTransform(Index);
+					Output.Pose[Index].SetRotation(FQuat::Slerp(Output.Pose[Index].GetRotation(), Reference.GetRotation(), Lower).GetNormalized());
+					if (bWeaponRootReference)
+					{
+						// "root": "reference" (the launcher): the graph's root translation too (the ABP's crouch lowers its root for ITS crouch clips;
+						// the pack's crouch on that root sank its planted feet ~8 cm into the ground).
+						Output.Pose[Index].SetTranslation(FMath::Lerp(Output.Pose[Index].GetTranslation(), Reference.GetTranslation(), Lower));
+					}
 				}
 				continue;
 			}
@@ -726,8 +752,11 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 		const FCompactPoseBoneIndex SpineParent = Output.Pose.GetParentBoneIndex(Spine);
 		// The root keeps the graph's (as before: the capsule-relative placement), so the clip's chain is taken below the root and put under the ABP's root.
 		const FQuat ParentGraph = SpineParent.GetInt() != INDEX_NONE ? MeshRotation(Output.Pose, SpineParent, false) : FQuat::Identity;
-		const FQuat ParentLayer = SpineParent.GetInt() != INDEX_NONE
-			? Output.Pose[FCompactPoseBoneIndex(0)].GetRotation() * MeshRotation(Layer, SpineParent, true) : FQuat::Identity;
+		// A full set's crouched torso (bWeaponTorsoOnCapsule) is put on the reference root (the capsule's facing): the ABP's crouch root yaw
+		// turned the launcher 23 deg off the target (RpgShots "tube yaw"); the upper sets keep the ABP's root (their torso turns with its legs).
+		const FCompactPoseBoneIndex RootIndex(0);
+		const FQuat RootRotation = bWeaponTorsoOnCapsule ? Bones.GetRefPoseTransform(RootIndex).GetRotation() : Output.Pose[RootIndex].GetRotation();
+		const FQuat ParentLayer = SpineParent.GetInt() != INDEX_NONE ? RootRotation * MeshRotation(Layer, SpineParent, true) : FQuat::Identity;
 		// The layer's spine_01 mesh rotation = ParentLayer * LocalLayer; under the ABP's pelvis: local = ParentGraph^-1 * ParentLayer * LocalLayer.
 		const FQuat Compensated = (ParentGraph.Inverse() * ParentLayer * Layer[Spine].GetRotation()).GetNormalized();
 		Layer[Spine].SetRotation(Compensated);

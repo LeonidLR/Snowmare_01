@@ -112,6 +112,13 @@ namespace WeaponAnimLayerRules
 	CODEXTACTICS_API float BlendedNominalSpeed(const FWeaponLayerDirectionBlend& Blend, const TStaticArray<float, 8>& Speeds, float Fallback);
 
 	/**
+	 * A loop's time on the shared phase, its own sync offset added (the share of the loop where its LEFT heel strikes - a set's loops then all
+	 * plant the same foot at the same phase, so a direction blend does not mix one clip's planted foot with another's swinging one; the launcher
+	 * pack's loops strike at 0 forward / right, ~0.5 back / left, measured). Wraps into [0, Length).
+	 */
+	CODEXTACTICS_API float SyncedClipTime(float Phase, float Offset, float Length);
+
+	/**
 	 * Advance of a turn-in-place clip that turns ClipTurnDeg over ClipLength seconds for a body that turned YawDeltaDeg this frame: the clip time
 	 * follows the body's own turn (feet planted when the capsule turns at the clip's rate), in seconds.
 	 */

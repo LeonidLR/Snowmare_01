@@ -113,9 +113,10 @@
     "reload_in_cover": true
   },
   "loadouts": {
-    "comment": "The player's squad: each role's weapons, the first in hands (WeaponLoadoutRules; designer decision 21+, 2026-11-03 / 11-08: the Engineer carries the D-1 shotgun as his primary weapon and no M16). A role not listed keeps the game mode's StartingArsenal + ExtraWeapons. PMC fighters: pmc_operators.json weapon_pool.",
+    "comment": "The player's squad: each role's weapons, the first in hands (WeaponLoadoutRules; designer decision 21+, 2026-11-03 / 11-08: the Engineer carries the D-1 shotgun as his primary weapon and no M16). A role not listed keeps the game mode's StartingArsenal + ExtraWeapons. PMC fighters: pmc_operators.json weapon_pool. The Commander's rpg7 (2026-11-09) is FOR TESTING, pending the designer's decision on who carries the RPG-7 (the selector X cycles to it).",
     "commander": [
       "m16",
+      "rpg7",
       "pistol",
       "grenade"
     ],
@@ -355,7 +356,7 @@
       "penetration_class": "heavy"
     },
     "rpg7": {
-      "comment": "The RPG-7 (2026-11-09; the game designer's numbers the same day; LauncherRules, docs/systems/weapons.md \"The RPG-7\"): a flat rocket at 115 m/s through the shared projectile layer, the fuse armed at once (arming_distance_m 0), self-destruct after 4.5 s; a DIRECT hit = explosion.direct_hit_damage 140 on the target struck (its whole share), everyone else within the 4 m blast takes the splash base_damage 60 x the falloff; class vehicle (hurts hulls), armour penetration 0.8; one rocket then a reload. No back-blast damage and no wall-behind / closed-room / prone refusals (the designer removed them); the only refusal is a target closer than min_range_m 10 (never inside its own blast). back_blast_length_m / half_angle stay for a later puff visual only. In the roster as next: no loadout carries it yet (dev: CodexTactics.GiveWeapon rpg7). The model is a placeholder tube.",
+      "comment": "The RPG-7 (2026-11-09; the game designer's numbers the same day; LauncherRules, docs/systems/weapons.md \"The RPG-7\"): a flat rocket at 115 m/s through the shared projectile layer, the fuse armed at once (arming_distance_m 0), self-destruct after 4.5 s; a DIRECT hit = explosion.direct_hit_damage 140 on the target struck (its whole share), everyone else within the 4 m blast takes the splash base_damage 60 x the falloff; class vehicle (hurts hulls), armour penetration 0.8; one rocket then a reload. No back-blast damage and no wall-behind / closed-room / prone refusals (the designer removed them); the only refusal is a target closer than min_range_m 10 (never inside its own blast). back_blast_length_m / half_angle stay for a later puff visual only. In the roster as next; for testing the Commander carries it (loadouts, pending the designer). Model + animation: the designer's launcher pack (visual below; weapon_anim_sets.json \"launcher\").",
       "name": "RPG-7",
       "handling": "launcher",
       "kind": "projectile",
@@ -402,28 +403,25 @@
         "back_blast_half_angle_deg": 30
       },
       "visual": {
-        "comment": "PLACEHOLDER (2026-11-09): an engine cylinder as the tube (9 cm x 1 m) along the barrel until the Fab model arrives.",
-        "hand_mesh": "/Engine/BasicShapes/Cylinder.Cylinder",
-        "attach_location": [
-          -10,
-          0,
-          6
-        ],
-        "attach_rotation_pyr": [
-          90,
-          0,
-          0
-        ],
-        "attach_scale": [
-          0.09,
-          0.09,
-          1.0
-        ],
-        "muzzle_offset": [
-          0,
-          0,
-          50
-        ]
+        "comment": "The game designer's launcher pack model, optimized (2026-11-09, feat/rpg7-launcher-pack; ArtPipeline/Weapons/RPG7, Scripts/Pipeline/blender_weapon_rpg7.py: ONE material MI_RPG7 of M_WeaponMaster, 1K BaseColor / Normal / ORM): the body (9,369 -> 5,000 tris) + the optic Sight01 (8,297 -> 1,099; the iron sights Sight02 / Sight03 stay in /Game/Weapons/RPG7/Attachments for later) + the loaded rocket (3,062 -> 900), every part in the pack's weapon frame (cm: muzzle +Y, up +Z) on the weapon socket hand_r; attach_* from the retargeted shouldered idle by Scripts/Editor/calibrate_launcher_grip.py (the tube level along the body's forward as in the pack, the right hand on the pistol grip; the Commander's / Engineer's male body - on the Medic-Sapper the tube sits ~2.5 deg off). loaded_round_mesh = the rocket on the tube (hidden from the shot until the reload clip pushes the next one in); projectile_mesh = the same rocket flying nose first (its tip at the round's point); muzzle_offset = the tube's front, backblast_offset = its rear end. fx = the Niagara hooks, EMPTY until the designer's look reference (a path here, nothing else to change): muzzle_flash at the muzzle along the shot, backblast at the rear facing back, trail attached to the flying rocket.",
+        "hand_mesh": "/Game/Weapons/RPG7/SM_RPG7_Body.SM_RPG7_Body",
+        "hand_mesh_parts": ["/Game/Weapons/RPG7/SM_RPG7_Sight01.SM_RPG7_Sight01"],
+        "loaded_round_mesh": "/Game/Weapons/RPG7/SM_RPG7_Rocket.SM_RPG7_Rocket",
+        "attach_location": [-2.44, 8.78, 13.99],
+        "attach_rotation_pyr": [-0.21, 108.04, 25.97],
+        "attach_scale": [1, 1, 1],
+        "muzzle_offset": [0, 36, 0.3],
+        "backblast_offset": [0, -67, 0.3],
+        "projectile_mesh": "/Game/Weapons/RPG7/SM_RPG7_Rocket.SM_RPG7_Rocket",
+        "projectile_mesh_location": [-76, 0, -0.3],
+        "projectile_mesh_rotation_pyr": [0, -90, 0],
+        "projectile_mesh_scale": [1, 1, 1],
+        "fx": {
+          "comment": "Niagara system object paths (e.g. /Game/Launcher_Animations/FX/NS_X.NS_X); empty = none.",
+          "muzzle_flash": "",
+          "backblast": "",
+          "trail": ""
+        }
       }
     }
   },

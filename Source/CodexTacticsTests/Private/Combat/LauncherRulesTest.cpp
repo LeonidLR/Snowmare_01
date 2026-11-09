@@ -1,7 +1,7 @@
 // CodexTactics.Weapons.Rpg.* - the RPG-7 on the shared projectile + explosion layer (2026-11-09, the game designer's numbers the same day;
 // docs/systems/weapons.md "The RPG-7"): its data (a flat 115 m/s rocket armed at once, a direct hit 140 on the target struck, the splash 60 within
 // 4 m, class vehicle, one rocket, no back-blast damage), the one refusal left (a target inside the minimum range - never inside its own blast),
-// the damage split, the miss scatter; the roster keeps it "next" and out of every loadout.
+// the damage split, the miss scatter; the roster keeps it "next"; only the Commander carries it (FOR TESTING, pending the designer, 2026-11-09).
 
 #include "Combat/ArmorRules.h"
 #include "Combat/LauncherRules.h"
@@ -107,9 +107,11 @@ bool FRpgDataTest::RunTest(const FString&)
 	const TSharedPtr<FJsonObject>* LoadoutBlock = nullptr;
 	if (TestTrue(TEXT("loadouts block"), Root.IsValid() && Root->TryGetObjectField(TEXT("loadouts"), LoadoutBlock) && LoadoutBlock))
 	{
+		// For testing (2026-11-09, the launcher pack task): the Commander carries it, nobody else - pending the designer's decision.
 		for (const TPair<FString, TArray<FString>>& Role : WeaponLoadoutRules::Parse(**LoadoutBlock, &LoadoutErrors))
 		{
-			TestFalse(FString::Printf(TEXT("the %s's loadout has no rpg7 yet"), *Role.Key), Role.Value.Contains(TEXT("rpg7")));
+			TestEqual(FString::Printf(TEXT("the %s's loadout: rpg7 only for the Commander (testing)"), *Role.Key), Role.Value.Contains(TEXT("rpg7")),
+				Role.Key == TEXT("commander"));
 		}
 	}
 	return true;
@@ -154,4 +156,35 @@ bool FRpgRulesTest::RunTest(const FString&)
 	return true;
 }
 
+#endif // WITH_DEV_AUTOMATION_TESTS
+
+#if WITH_DEV_AUTOMATION_TESTS
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FRpgVisualTest, "CodexTactics.Weapons.Rpg.Visual",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FRpgVisualTest::RunTest(const FString&)
+{
+	// The launcher pack model (2026-11-09): the optimized body + optic on the hand, the loaded rocket, the flying rocket nose first, the effect
+	// hooks EMPTY by default (the designer drops his Niagara systems in by data).
+	const TSharedPtr<FJsonObject> Json = LauncherRulesTest::LauncherBlock(LauncherRulesTest::LauncherProjectFile(), TEXT("weapons"), TEXT("rpg7"));
+	if (!TestTrue(TEXT("weapons.rpg7"), Json.IsValid()))
+	{
+		return false;
+	}
+	UWeaponDataAsset* Weapon = NewObject<UWeaponDataAsset>();
+	Weapon->WeaponId = TEXT("rpg7");
+	TestTrue(TEXT("the visual applies"), WeaponTuning::ApplyWeaponPresentation(*Json, *Weapon));
+	TestEqual(TEXT("the body model"), Weapon->HandMesh.ToSoftObjectPath().GetAssetName(), FString(TEXT("SM_RPG7_Body")));
+	TestTrue(TEXT("the optic on it"), Weapon->HandMeshParts.Num() == 1 && Weapon->HandMeshParts[0].ToSoftObjectPath().GetAssetName() == TEXT("SM_RPG7_Sight01"));
+	TestEqual(TEXT("the loaded rocket"), Weapon->LoadedRoundMesh.ToSoftObjectPath().GetAssetName(), FString(TEXT("SM_RPG7_Rocket")));
+	TestEqual(TEXT("the flying rocket"), Weapon->ProjectileMesh.ToSoftObjectPath().GetAssetName(), FString(TEXT("SM_RPG7_Rocket")));
+	// The model's +Y (its muzzle) turned onto the flight's +X.
+	const FVector Nose = Weapon->ProjectileMeshTransform.TransformVectorNoScale(FVector(0.f, 1.f, 0.f));
+	TestTrue(TEXT("the rocket flies nose first (+Y of the model = the flight)"), Nose.Equals(FVector(1.f, 0.f, 0.f), 0.01f));
+	TestTrue(TEXT("the muzzle at the tube's front (+Y)"), Weapon->HandMeshMuzzleOffset.Y > 30.f);
+	TestTrue(TEXT("the back-blast at its rear (-Y)"), Weapon->BackblastOffset.Y < -60.f);
+	TestTrue(TEXT("the effect hooks are empty by default"), Weapon->MuzzleFlashFx.IsNull() && Weapon->BackblastFx.IsNull() && Weapon->TrailFx.IsNull());
+	TestTrue(TEXT("its own attach transform"), Weapon->bOverrideHandMeshTransform);
+	return true;
+}
 #endif // WITH_DEV_AUTOMATION_TESTS

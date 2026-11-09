@@ -454,6 +454,57 @@ from the rifle, the sidearm draw) plays the set's `equip` clip once on the upper
 **Check:** `CodexTactics.PistolSmoke`; render `CodexTactics.ShotgunD1Shots pistol` (the Commander: stills, idle, walk, aim + fire, reload, the
 switch from the M16) -> `Saved/Screenshots/PistolD/`.
 
+## Launcher weapon layer: the RPG-7 on the game designer's launcher pack (2026-11-09, `feat/rpg7-launcher-pack`)
+
+**Request:** "fully set up the locomotion for it, check every animation against our skeletons, fully set up the firing" on the designer's pack
+`/Game/Launcher_Animations` (user content through a junction: only READ, never saved). Then (2026-11-09 b): the launcher drives the WHOLE body from the pack
+(`weapon_anim_sets.json` "launcher" `"body": "full"`; set it to "upper" for the torso only on the ABP's legs). Same native layer as the shotgun
+(`OperativeAnimInstanceShotgun.cpp`), no ABP edit; `EWeaponHandling::Launcher` picks the "launcher" set.
+- **Skeleton check + retarget:** the pack's `SK_Mannequin_Skeleton` is the UE4 mannequin hierarchy (69 bones). `Scripts/Editor/setup_launcher_animation.py`
+  builds a transient UE4 -> UE4 retargeter (the M4 pack's `IK_UE4_Mannequin` both sides, the template's op stack, "Blend to Source" off; never saved) and
+  retargets the 35 clips the set lists onto `SK_Post_Apo_Survivor_a` -> `/Game/Characters/Animations/Launcher/Male` and `SK_Female_soldier` -> `.../Female`,
+  re-keys each copy (ACL kept): 70 copies, 12.6 MB (the pack's whole Animations folder 7.2 MB). In the game all three operatives' bodies are on
+  `UE4_Mannequin_Skeleton` (the Medic-Sapper too), so they play the Male copies; the PMC operator (UE5 hierarchy) gets NO launcher set (`"pack_playback":
+  false`). Measured per clip and body against the pack (`Saved/Logs/setup_launcher_animation.json`): posture (head / hands vs pelvis) 7.6-10.8 cm male,
+  8.2-31 cm female; lengths / frames unchanged; in-place loops drift 0.0-0.1 cm; the tube on the pack's socket ~9.4 deg off on the operatives' hand_r ->
+  the model's attach is calibrated per body (`calibrate_launcher_grip.py`, weapons.md "The RPG-7"): then the left hand <= 3.7 cm off its grip, the
+  shoulder 8.7 cm off the tube's axis (pack 9.6).
+- **Clips used** (Set_02 = the tube on the shoulder): idle `Idle_01` (stand / aim idle), walk + run 4 directions, crouch idle `Sit_Idle` + crouch walk 4
+  directions (`Walk_Sit*`), turn in place `Turn_Left/Right` + `Sit_Turn_Left/Right` (the clips turn 90 deg in their root: played by the body's own yaw),
+  sprint = `Set_01/Run_Fast` (a lowered carry - nobody sprints with the tube shouldered), the shot `Shot` / `Sit_Shot`, the reload `Reload` / `Sit_Reload`,
+  the pose aim offset `Rotation_90_UP/Down/Left/Right` (last frame against first; measured tube yaw / pitch -91.5 / +88.8 / +85.8 / -89 deg -> 3 x 3 grid
+  +-90 / +-90, corners = the sums of the edges), hits `Get_Hit_01/02` (upper body, alternating), deaths `Dead_01` (a front hit: falls backwards) / `Dead_02`
+  (from behind: forwards; both end lying, pelvis ~16 cm). NOT used: the `*_Root` variants (the capsule moves the body), `Jamp` / `Set_01/Jump` (no jumping in
+  the game), `Set_01/Attack_01/02` (a melee bash - the RPG has none), the rest of Set_01 (a lowered carry with only forward loops; offered as an option),
+  `Set_01/Get_Hit_01` / `Dead_01` (the lowered-carry variants), the `Rotation_45_*` diagonals (retargeted but measured off the grid's corners), the `Set_01`
+  AnimBlueprint (the pack's own; ABP_Operative is never edited).
+- **Natural speeds = the planted ball-of-the-foot speed of the male copies** (240 Hz): walk fwd 132 / sides 77 / back 130, run 185 / 151-159 / 176, crouch
+  133 / 77-79 / 132, sprint 464 cm/s (the pack's `*_Root` travel does NOT match the feet: Walk_Right 150 cm/s of root travel vs 77 of foot); female x0.945
+  (`stride_scale`); walk -> run over `jog_blend_speeds` 140 -> 180; `max_play_rate` 2.4. The root: the reference translation AND rotation
+  (`"root_translation": "reference"`: the in-place clips carry no travel, the capsule moves the body; the ABP's orientation warping otherwise turned the
+  legs against the travel). The loops are phase-aligned on the left heel strike (`"phase_offsets"` per clip, the foot's furthest point along the travel,
+  `WeaponAnimLayerRules::SyncedClipTime`), so the 4-direction blend does not cross the feet.
+- **Crouch = the ABP's legs** (`"crouch_body": "upper"`): the pack's crouch walk shuffles its feet (the side clips move the ball ~2 cm up and down, the
+  feet do not match the root travel) - with it on the legs the planted foot slid 75 cm/s = 76 % of the crouch speed (RpgAnimSmoke). Crouched, the set
+  drives the torso only (the Sit_* idle / walk / shot / reload above spine_01), the legs are the ABP's crouch locomotion. Set "crouch_body" to "full" (or
+  drop it) to see the pack's crouch legs again. The crouched torso is put on the capsule's facing (the reference root, `bWeaponTorsoOnCapsule`), not
+  on the ABP's root: the ABP's crouch root yaw had turned the tube 23 deg off the target (measured by `RpgShots` "tube yaw"; now -1 deg crouched idle,
+  -0.6 deg crouched shot, as the pack's own legs give). RpgAnimSmoke checks the tube within 8 deg of the target line on every shot.
+- **Measured foot slide** (RpgAnimSmoke, Commander, median planted-ball drift on the steady frames): walk 34 cm/s = 19 % of the speed, sprint 16 cm/s = 2 %
+  (limit 20 %).
+- **Firing:** `PlayShotgunFire` -> `PlayLauncherShot`: the Shot / Sit_Shot clip natively (no montage: the layer keeps the legs and the aim offset) from
+  frame 0 - the pack's kick starts on frame 0, so the rocket leaves at the trigger. The reload (4.5 s) = the Reload / Sit_Reload clip (2.333 s) after
+  the shot's follow-through, its rate fitted to the rest of the reload time (`LauncherReloadClipTime`, x0.6); the rocket shows on the tube again
+  from the clip's insertion moment `reload_insert_s` 1.333 s (the left hand nearest the tube's front, measured) = 63 % of the reload
+  (`LauncherInsertFraction` -> `AOperativeCharacter::LauncherRoundInsertFraction`, `WeaponAnimLayerRules::LauncherRoundVisible`). Shot / reload take
+  spine_01 and below (their torso re-expressed on the set's pelvis); the legs keep walking.
+- **Gates:** as the other sets - off in cover, prone (NO prone clips in the pack: prone shows the ABP's prone rifle pose with the tube in the hand; the
+  shot is allowed prone by the designer's rules, animation-wise it is the ABP's prone fire), ladder, vault, carrying, airborne fall, sniper pose,
+  blizzard walk, dead / knocked down; a stance transition / full-body montage = Off, an upper-body montage (a hit) = the set's legs only.
+- **Checks:** tests `CodexTactics.Animation.WeaponLayer.LauncherRules` / `.LauncherSetData`, `CodexTactics.Weapons.Rpg.Visual`; `CodexTactics.RpgAnimSmoke`;
+  rendered `CodexTactics.RpgShots` -> `Saved/Screenshots/RPG7/` (no HUD; moves from both sides square to the travel - the pack's Set_02 stance
+  turns the torso, so his right side shows mostly the backpack, his left side the true profile; aim / shot from his left; logs the tube's yaw per still).
+
 ## #51: the "thrown back while firing" pop (game designer video 2026-11-06; fixed 2026-11-08)
 
 **Symptom:** PMC fighters jerk violently when they fire (`Videos/PMC_ShootingndZoominBUG_0.avi`). **Measured, not guessed:** `CodexTactics.RecoilProbe`

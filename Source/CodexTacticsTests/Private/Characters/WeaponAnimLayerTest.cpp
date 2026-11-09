@@ -187,8 +187,9 @@ bool FWeaponLoadoutProjectTest::RunTest(const FString&)
 	TestTrue(TEXT("engineer listed"), WeaponLoadoutRules::Find(TEXT("engineer"), Engineer));
 	TestTrue(TEXT("engineer: shotgun, pistol, grenade"), Engineer == TArray<FString>({ TEXT("shotgun"), TEXT("pistol"), TEXT("grenade") }));
 	TArray<FString> Commander;
-	TestTrue(TEXT("commander: m16, pistol, grenade"), WeaponLoadoutRules::Find(TEXT("commander"), Commander)
-		&& Commander == TArray<FString>({ TEXT("m16"), TEXT("pistol"), TEXT("grenade") }));
+	// The RPG-7 for testing (2026-11-09, pending the designer): the Commander's second weapon, the selector X cycles to it.
+	TestTrue(TEXT("commander: m16, rpg7 (testing), pistol, grenade"), WeaponLoadoutRules::Find(TEXT("commander"), Commander)
+		&& Commander == TArray<FString>({ TEXT("m16"), TEXT("rpg7"), TEXT("pistol"), TEXT("grenade") }));
 	TArray<FString> Medic;
 	TestTrue(TEXT("medic-sapper: m16, sniper rifle, pistol, grenade (as the Blueprint gave her)"), WeaponLoadoutRules::Find(TEXT("medic_sapper"), Medic)
 		&& Medic == TArray<FString>({ TEXT("m16"), TEXT("sniper_rifle"), TEXT("pistol"), TEXT("grenade") }));
@@ -256,6 +257,101 @@ bool FWeaponLayerLauncherRulesTest::RunTest(const FString&)
 	Blend.B = EWeaponLayerDirection::Backward;
 	Speeds[4] = 0.f;
 	TestEqual(TEXT("an unlisted direction falls back to the set's speed"), BlendedNominalSpeed(Blend, Speeds, 150.f), (92.f + 150.f) * 0.5f, 0.01f);
+	// The loops' sync offsets (the left foot's touchdown): phase 0 = every loop at its own touchdown.
+	TestEqual(TEXT("no offset: phase x length"), SyncedClipTime(0.25f, 0.f, 1.333f), 0.25f * 1.333f, 0.001f);
+	TestEqual(TEXT("phase 0 = the loop's left heel strike (0.5 of Walk_Left)"), SyncedClipTime(0.f, 0.5f, 1.333f), 0.5f * 1.333f, 0.001f);
+	TestEqual(TEXT("wraps past the loop's end"), SyncedClipTime(0.75f, 0.5f, 2.f), 0.5f, 0.001f);
+	TestTrue(TEXT("never at the very end"), SyncedClipTime(0.5f, 0.5f, 1.f) < 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponLayerLauncherDataTest, "CodexTactics.Animation.WeaponLayer.LauncherSetData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWeaponLayerLauncherDataTest::RunTest(const FString&)
+{
+	// weapon_anim_sets.json: the launcher and the shotgun drive the whole body (designer 2026-11-09 b), the pistol the upper body; every launcher
+	// clip has its retargeted copy for both squad skeletons (the pack is never played by bone name).
+	FString Text;
+	TSharedPtr<FJsonObject> Root;
+	if (!TestTrue(TEXT("weapon_anim_sets.json"), FFileHelper::LoadFileToString(Text, *(FPaths::ProjectContentDir() / TEXT("Data/Weapons/weapon_anim_sets.json")))
+		&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid()))
+	{
+		return false;
+	}
+	// A missing field = the default ("body" upper, "crouch_body" full).
+	auto Field = [&Root](const TCHAR* Key, const TCHAR* Name, const TCHAR* Default)
+	{
+		const TSharedPtr<FJsonObject>* Block = nullptr;
+		FString Value;
+		return Root->TryGetObjectField(Key, Block) && Block && (*Block)->TryGetStringField(Name, Value) ? Value : FString(Default);
+	};
+	TestEqual(TEXT("the launcher: full body"), Field(TEXT("launcher"), TEXT("body"), TEXT("upper")), FString(TEXT("full")));
+	TestEqual(TEXT("the launcher crouched: upper body only (the pack's crouch walk slides its feet)"),
+		Field(TEXT("launcher"), TEXT("crouch_body"), TEXT("full")), FString(TEXT("upper")));
+	TestEqual(TEXT("the launcher: no root travel from the in-place clips"), Field(TEXT("launcher"), TEXT("root_translation"), TEXT("")),
+		FString(TEXT("reference")));
+	TestEqual(TEXT("the shotgun: full body (its Loop_Root loops, designer 2026-11-09 b)"), Field(TEXT("shotgun"), TEXT("body"), TEXT("upper")),
+		FString(TEXT("full")));
+	TestEqual(TEXT("the pistol: upper body"), Field(TEXT("pistol"), TEXT("body"), TEXT("upper")), FString(TEXT("upper")));
+	const TSharedPtr<FJsonObject>* Launcher = nullptr;
+	if (!TestTrue(TEXT("launcher block"), Root->TryGetObjectField(TEXT("launcher"), Launcher) && Launcher))
+	{
+		return false;
+	}
+	bool bPack = true;
+	TestTrue(TEXT("pack_playback false"), (*Launcher)->TryGetBoolField(TEXT("pack_playback"), bPack) && !bPack);
+	const TSharedPtr<FJsonObject>* Retargeted = nullptr;
+	TestTrue(TEXT("retargeted for both squad skeletons"), (*Launcher)->TryGetObjectField(TEXT("retargeted"), Retargeted) && Retargeted
+		&& (*Retargeted)->HasField(TEXT("UE4_Mannequin_Skeleton")) && (*Retargeted)->HasField(TEXT("Female_Soldier_Skeleton")));
+	TArray<FString> Paths;
+	TFunction<void(const TSharedPtr<FJsonValue>&)> Walk = [&Paths, &Walk](const TSharedPtr<FJsonValue>& Value)
+	{
+		if (!Value.IsValid())
+		{
+			return;
+		}
+		if (Value->Type == EJson::String && Value->AsString().StartsWith(TEXT("/Game/Launcher_Animations/")))
+		{
+			Paths.AddUnique(Value->AsString());
+		}
+		else if (Value->Type == EJson::Object)
+		{
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Value->AsObject()->Values)
+			{
+				Walk(Pair.Value);
+			}
+		}
+		else if (Value->Type == EJson::Array)
+		{
+			for (const TSharedPtr<FJsonValue>& Item : Value->AsArray())
+			{
+				Walk(Item);
+			}
+		}
+	};
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Launcher)->Values)
+	{
+		Walk(Pair.Value);
+	}
+	TestTrue(TEXT("~35 launcher clips listed"), Paths.Num() >= 30);
+	int32 Missing = 0;
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Folder : (*Retargeted)->Values)
+	{
+		for (const FString& Path : Paths)
+		{
+			const FString Copy = WeaponAnimLayerRules::RetargetedClipPath(Path, Folder.Value->AsString());
+			if (!FPackageName::DoesPackageExist(FPackageName::ObjectPathToPackageName(Copy)))
+			{
+				AddError(FString::Printf(TEXT("no retargeted copy %s"), *Copy));
+				++Missing;
+			}
+		}
+	}
+	TestEqual(TEXT("every copy exists"), Missing, 0);
+	double Insert = 0.0;
+	TestTrue(TEXT("the rocket's insertion moment inside the reload clip (2.333 s)"), (*Launcher)->TryGetNumberField(TEXT("reload_insert_s"), Insert) && Insert > 0.5
+		&& Insert < 2.3);
 	return true;
 }
 

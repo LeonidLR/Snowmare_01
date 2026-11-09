@@ -172,7 +172,7 @@
   (Launch, FixedStep, Schema); `CodexTactics.ProjectileSmoke` (a flat round at a hound 25 m away, a high-angle round at a hound 40 m away, the
   pool reuse; a projectile blast behind a wall x0.25, a plunging one ignoring the wall, a roof stopping it, the grenade ignoring the wall).
 
-## The RPG-7 (2026-11-09; the shared layer's first weapon; placeholder model; THE GAME DESIGNER'S NUMBERS 2026-11-09)
+## The RPG-7 (2026-11-09; the shared layer's first weapon; THE GAME DESIGNER'S NUMBERS 2026-11-09; the launcher pack model + animation)
 
 - **Data** (`weapons_tuning.json` "weapons.rpg7", asset `/Game/Data/Weapons/DA_Weapon_rpg7`): `handling: launcher`, `kind: projectile`, a
   flat rocket at **115 m/s**, the fuse **armed at once** (`arming_distance_m` 0), self-destruct after 4.5 s; a **direct hit = 140** on the
@@ -186,12 +186,21 @@
 - **The one refusal left:** a target closer than the minimum range (`min_range_m` 10 m; `LauncherRules::MinimumRangeCm` never lets it fall
   inside the rocket's own blast radius, so the shooter never catches his own splash). Refusals in order: empty, too close. A miss (the weapon's
   hit chance) puts the aim point 1.5 - 3.5 m off; the rocket still explodes where it lands.
-- **Who carries it:** any fighter can be the grenadier (the designer decides later): it is in the roster as `next` and in **no loadout yet**.
-  Dev: `CodexTactics.GiveWeapon rpg7 [squad index]` (the leader by default) adds it to the arsenal and puts it in his hands.
+- **Who carries it:** not decided by the designer yet. FOR TESTING the Commander carries it: `loadouts.commander` = m16 / **rpg7** / pistol /
+  grenade (the selector X cycles from the M16 to it). Dev: `CodexTactics.GiveWeapon rpg7 [squad index]`.
+- **The model (2026-11-09, the designer's launcher pack):** `/Game/Weapons/RPG7/SM_RPG7_Body` (9,369 -> 5,000 tris) + `SM_RPG7_Sight01` (the optic, 8,297
+  -> 1,099) on the hand, `SM_RPG7_Rocket` (3,062 -> 900) as `visual.loaded_round_mesh` (the rocket on the tube: hidden from the shot until the reload
+  clip's insertion moment - `AOperativeCharacter::IsLauncherRoundVisible`) and as `visual.projectile_mesh` (the flying round: `AProjectileActor`'s own
+  model component, nose along the flight, tip at the round's point); the iron sights in `Attachments/`. ONE `MI_RPG7` of `M_WeaponMaster`, 1K
+  BaseColor / Normal / ORM (the pack's 4K maps: ~80 MB -> 5.5 MB; the folder 6.3 MB). The pack's weapon frame (muzzle +Y, up +Z); `attach_*` calibrated
+  from the retargeted shouldered idle (`Scripts/Editor/calibrate_launcher_grip.py`). `ArtPipeline/Weapons/RPG7/README.md`.
+- **Effect hooks (empty by default):** `visual.fx.muzzle_flash` (at the muzzle along the shot), `.backblast` (at `backblast_offset`, the tube's rear,
+  facing back), `.trail` (attached to the flying rocket) - Niagara system paths; `GetLauncherFxSpawned` counts them.
+- **Animation:** the launcher set of the weapon layer ([animation-setup](animation-setup.md) "Launcher weapon layer").
 - **Code:** `LauncherRules` (pure: `MinimumRangeCm`, `Refusal`, `DamageOn`, `MissPoint`), `AOperativeCharacter::FireLauncherAt` /
   `LauncherShotAllowed` (`OperativeCharacterLauncher.cpp`; `ShootAtTarget` branches to it for a launcher) on `UProjectileSubsystem` +
   `Explosions::Detonate` (`FExplosionSpec::StruckActor`: the actor a round's direct hit already struck is left out of its blast - any
-  projectile with `direct_hit_damage` > 0). The animation is the rifle's for now. Not yet: the AI using it, turn-based specifics, the real model.
+  projectile with `direct_hit_damage` > 0). Not yet: the AI using it, turn-based specifics.
 - **Checks:** tests `CodexTactics.Weapons.Rpg.Data` / `.Rules`; `CodexTactics.RpgSmoke` (30 m: the direct hit 140 is the struck dummy's whole
   damage, a dummy 2.5 m beside it takes the splash <= 60; no back-blast damage on a mate 2.5 m behind; one rocket reloaded; 80 m hit; a wall
   behind / a closed room / prone fire; a target 5 m away refused).

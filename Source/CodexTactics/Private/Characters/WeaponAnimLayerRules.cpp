@@ -70,6 +70,16 @@ namespace WeaponAnimLayerRules
 		return FMath::Lerp(A, B, FMath::Clamp(Blend.Alpha, 0.f, 1.f));
 	}
 
+	float SyncedClipTime(float Phase, float Offset, float Length)
+	{
+		if (Length <= KINDA_SMALL_NUMBER)
+		{
+			return 0.f;
+		}
+		const float Wrapped = FMath::Fmod(FMath::Fmod(Phase + Offset, 1.f) + 1.f, 1.f);
+		return FMath::Min(Wrapped * Length, Length - KINDA_SMALL_NUMBER);
+	}
+
 	float TurnClipAdvance(float YawDeltaDeg, float ClipTurnDeg, float ClipLength)
 	{
 		if (FMath::Abs(ClipTurnDeg) <= KINDA_SMALL_NUMBER || ClipLength <= KINDA_SMALL_NUMBER)
