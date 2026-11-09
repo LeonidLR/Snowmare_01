@@ -1,0 +1,107 @@
+{
+  "material_slot": "M_RPG7",
+  "frame": "pack weapon frame (cm): muzzle +Y, up +Z, the optic on +X",
+  "parts": {
+    "Body": {
+      "fbx": "SM_RPG7_Body.fbx",
+      "sources": [
+        "SK_Weapon_Body_Mesh"
+      ],
+      "tris_source": 9369,
+      "tris_welded": 9369,
+      "tris": 5000,
+      "target": 5000,
+      "bounds_min_ue_cm": [
+        -6.16,
+        -66.91,
+        -17.41
+      ],
+      "bounds_max_ue_cm": [
+        5.83,
+        35.65,
+        6.75
+      ]
+    },
+    "Sight01": {
+      "fbx": "SM_RPG7_Sight01.fbx",
+      "sources": [
+        "SK_Weapon_Sight_01_Mesh",
+        "SK_Weapon_Glasses_Mesh"
+      ],
+      "tris_source": 8297,
+      "tris_welded": 8297,
+      "tris": 1099,
+      "target": 1100,
+      "bounds_min_ue_cm": [
+        3.35,
+        -5.25,
+        -3.1
+      ],
+      "bounds_max_ue_cm": [
+        8.3,
+        12.36,
+        16.46
+      ]
+    },
+    "Sight02": {
+      "fbx": "SM_RPG7_Sight02.fbx",
+      "sources": [
+        "SK_Weapon_Sight_02_Mesh"
+      ],
+      "tris_source": 204,
+      "tris_welded": 204,
+      "tris": 200,
+      "target": 200,
+      "bounds_min_ue_cm": [
+        0.81,
+        31.92,
+        3.39
+      ],
+      "bounds_max_ue_cm": [
+        2.38,
+        33.68,
+        10.17
+      ]
+    },
+    "Sight03": {
+      "fbx": "SM_RPG7_Sight03.fbx",
+      "sources": [
+        "SK_Weapon_Sight_03_Mesh"
+      ],
+      "tris_source": 676,
+      "tris_welded": 676,
+      "tris": 498,
+      "target": 500,
+      "bounds_min_ue_cm": [
+        0.05,
+        -0.45,
+        4.77
+      ],
+      "bounds_max_ue_cm": [
+        2.97,
+        1.45,
+        14.46
+      ]
+    },
+    "Rocket": {
+      "fbx": "SM_RPG7_Rocket.fbx",
+      "sources": [
+        "SK_Weapon_Rocket_Mesh"
+      ],
+      "tris_source": 3062,
+      "tris_welded": 3062,
+      "tris": 900,
+      "target": 900,
+      "bounds_min_ue_cm": [
+        -5.11,
+        15.24,
+        -4.79
+      ],
+      "bounds_max_ue_cm": [
+        5.01,
+        76.02,
+        5.3
+      ]
+    }
+  }
+}

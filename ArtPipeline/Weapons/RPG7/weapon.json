@@ -1,0 +1,13 @@
+{
+  "asset": "RPG7",
+  "comment": "The RPG-7 from the game designer's launcher pack (/Game/Launcher_Animations, 2026-11-09): ONE material + ONE atlas in the pack already (M_Launcher, 4K Albedo / Ao / Metallic(+roughness in A) / Normal), so no re-atlas / re-bake: every part is decimated with the artist's uv islands shielded and the 4K maps are resampled to the 1K BaseColor / Normal / ORM set (Scripts/Pipeline/blender_weapon_rpg7.py + rpg7_textures.py). Frame = the pack's own weapon frame (SK_Weapon_Body_Mesh component space: muzzle +Y, up +Z, the optic on +X = the shooter's left), so the pack's hand socket transform (SK_Mannequin 'Soket_Launcher' on hand_r) mounts it unchanged.",
+  "res": 1024,
+  "slot": "M_RPG7",
+  "parts": {
+    "Body": { "src": ["SK_Weapon_Body_Mesh"], "target_tris": 5000 },
+    "Sight01": { "src": ["SK_Weapon_Sight_01_Mesh", "SK_Weapon_Glasses_Mesh"], "target_tris": 1100, "comment": "the PGO-7 style optic + its lens (Glasses): the sight on the game model" },
+    "Sight02": { "src": ["SK_Weapon_Sight_02_Mesh"], "target_tris": 200, "comment": "iron front sight post (an attachment for later)" },
+    "Sight03": { "src": ["SK_Weapon_Sight_03_Mesh"], "target_tris": 500, "comment": "iron rear sight (an attachment for later)" },
+    "Rocket": { "src": ["SK_Weapon_Rocket_Mesh"], "target_tris": 900, "comment": "the loaded rocket on the tube (shown / hidden by the reload) and the flying projectile" }
+  }
+}
