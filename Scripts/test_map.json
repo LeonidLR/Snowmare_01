@@ -28,7 +28,7 @@
     "HordeSmoke", "CoverSmoke", "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke",
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
-    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke", "ShotgunSmoke", "PistolSmoke", "ProjectileSmoke", "RpgSmoke",
+    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke", "ShotgunSmoke", "PistolSmoke", "ProjectileSmoke", "RpgSmoke", "MortarSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "SuppressionSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
@@ -145,7 +145,7 @@
     "SniperSmoke": { "fixedStepFps": 240, "_why": "per-frame body yaw check (max 25 deg in one frame): 41.7 at 30 fps, 20.8 at 60 fps for the same turn" },
     "TutorialSmoke": { "realTime": true, "_why": "the dialogue Enter hold (0.6 s skip) is timed on the wall clock (FPlatformTime, the dialogue pause freezes the game clock); a fixed step runs the game faster than the wall clock, so the held key is too short" }
   },
-  "nonSmokeDebugCommands": ["PmcArena", "GiveWeapon", "ShotgunD1Shots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots"],
+  "nonSmokeDebugCommands": ["PmcArena", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots"],
   "rules": [
     {
       "name": "pmc-squad-ai-2026-11-03",
@@ -421,9 +421,9 @@
       "_why": "2026-11-09: the shared projectile + explosion layer - every blast (grenade, barrel, mines, tripwires, trapped objects, projectiles) goes through Explosions::Detonate",
       "globs": ["Source/**/Combat/Explosion*", "Source/**/Combat/Projectile*", "Source/**/Combat/GrenadeActor*", "Source/**/Interactables/InteractableActor*",
         "Source/**/Debug/ProjectileSmoke*", "Source/**/Combat/LauncherRules*", "Source/**/Characters/OperativeCharacterLauncher*", "Source/**/Debug/RpgSmoke*",
-        "Source/**/Debug/GiveWeapon*"],
-      "tests": ["CodexTactics.Weapons.Explosion", "CodexTactics.Weapons.Projectile", "CodexTactics.Weapons.Rpg", "CodexTactics.Combat.Grenade", "CodexTactics.Interactables"],
-      "smokes": ["ProjectileSmoke", "RpgSmoke", "GrenadeSmoke", "BarrelSmoke", "AIGrenadeSmoke", "DeployableSmoke", "TripwireSmoke", "TurnBlastDeathSmoke", "KnockdownSmoke", "TrapSoloSmoke"]
+        "Source/**/Debug/GiveWeapon*", "Source/**/Combat/Mortar*", "Source/**/Debug/MortarSmoke*"],
+      "tests": ["CodexTactics.Weapons.Explosion", "CodexTactics.Weapons.Projectile", "CodexTactics.Weapons.Rpg", "CodexTactics.Weapons.Mortar", "CodexTactics.Combat.Grenade", "CodexTactics.Interactables"],
+      "smokes": ["ProjectileSmoke", "RpgSmoke", "MortarSmoke", "GrenadeSmoke", "BarrelSmoke", "AIGrenadeSmoke", "DeployableSmoke", "TripwireSmoke", "TurnBlastDeathSmoke", "KnockdownSmoke", "TrapSoloSmoke"]
     },
     {
       "name": "cover",
