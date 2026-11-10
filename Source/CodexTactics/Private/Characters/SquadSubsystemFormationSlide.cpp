@@ -176,7 +176,8 @@ void USquadSubsystem::ReassignFormationPlaces()
 		{
 			continue;
 		}
-		if (IsOnOwnOrder(Operative) || Operative->bInCover || HasGroupCoverProne(Operative) || Operative->IsTrafficHeld())
+		// Fast regroup on B (2026-11-10): a man still running in from far away - no place shuffling until he has joined.
+		if (IsOnOwnOrder(Operative) || Operative->bInCover || HasGroupCoverProne(Operative) || Operative->IsTrafficHeld() || IsFastRegrouping(Operative))
 		{
 			return; // somebody is not walking in his place: keep the places
 		}
