@@ -4,12 +4,16 @@
 - **Агент**: Gemini (`$env:CODEX_AGENT = "gemini"`)
 - **Ворктри**: `C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics-gemtgts`
 - **Ветка**: `gemini/tg-pass1-ts` (ответвлена от `origin/main`)
-- **Хеш коммита**: `39bd71b99cd0d67873a7ddbb4dd8bb52cb21a0a8`
+- **Коммиты**:
+  - `39bd71b99cd0d67873a7ddbb4dd8bb52cb21a0a8` — Реализация панелей погоды, вооружения и снаряжения уровня, фиксы багов C & D.
+  - `b24fc8635f85a427f69ec861dd0255deadee949d` — Устранение 3 замечаний ревью (сохранение неизвестных ключей kit, удаление `kit_override_carry`, защита от командных инъекций в боте).
 - **Затронутые файлы**:
   - `Tools/TrainingGround/src/types.ts`
   - `Tools/TrainingGround/src/utils/levelSettings.ts`
   - `Tools/TrainingGround/src/utils/levelSettings.test.ts`
   - `Tools/TrainingGround/src/utils/stealthCombat.test.ts`
+  - `Tools/TrainingGround/src/utils/botRunner.ts` *(новый файл)*
+  - `Tools/TrainingGround/src/utils/botRunner.test.ts` *(новый файл)*
   - `Tools/TrainingGround/src/components/LevelSettingsPanels.tsx`
   - `Tools/TrainingGround/src/components/LevelOperativesPanel.tsx` *(новый файл)*
   - `Tools/TrainingGround/src/components/SquadLoadoutControls.tsx`
@@ -46,7 +50,6 @@
 ### 1.3. Редактор стартового комплекта снаряжения уровня (`LevelOperativesPanel` -> `kit`)
 - Реализован редактор стартового комплекта на уровне:
   - Структура в JSON: `"kit": { "<key>": { "grenades": n, "medkits": n, "heat_packs": n, "ammo": { "<weapon_id>": n } } }`.
-  - Корневой чекбокс **«Снаряжение уровня важнее перенесённого»** (`"kit_override_carry": true`).
   - Для каждого оперативника настраивается количество осколочных гранат, аптечек, термопакетов и резервных патронов под каждое доступное оружие.
   - При отсутствии значения отображается плейсхолдер `"по умолчанию"`; пустое или отрицательное поле не пишется в JSON, сохраняя игровое значение по умолчанию.
 - **Исправление в `SquadLoadoutControls.tsx`**:
@@ -65,54 +68,70 @@
 
 ---
 
-## 2. Результаты тестов и верификации
+## 2. Устранение замечаний ревью (004-tg-pass1-ts-review.md)
 
-### 2.1. Модульные тесты (`npm test`)
-Запуск Vitest показал 100% прохождение всех тестов:
-```
-Test Files  15 passed (15)
-     Tests  260 passed (260)
-  Start at  12:35:10
-  Duration  3.90s (transform 324ms, setup 0ms, collect 388ms, tests 83ms, environment 0ms, prepare 283ms)
-```
+1. **Сохранение неизвестных per-operative ключей в `setOperativeKit`**:
+   - Функция начинает очистку с клонирования существующего объекта бойца: `const cleaned: Record<string, any> = { ...existingOp, ...kit };`.
+   - Модифицируются и удаляются только 4 стандартных поля (`grenades`, `medkits`, `heat_packs`, `ammo`), любые кастомные/дизайнерские поля (например, перки, броня) бережно сохраняются.
+   - Добавлен тест в `levelSettings.test.ts`.
 
-Новые модульные тесты:
-- `src/utils/levelSettings.test.ts`:
-  - `getEnvironment` / `setEnvironmentKey`: валидация и сериализация полей `override_carry`, `exposure_bias`, погоды, климата.
-  - `getLoadouts` / `setOperativeLoadout`: валидация массивов вооружения, проверка первого элемента как основного оружия.
-  - `getKit` / `setOperativeKit` / `kit_override_carry`: проверка работы с частичными данными, сохранение пропущенных полей как дефолтных.
-  - `validateLevelSettings`: валидация ошибок при выходе за диапазоны.
-  - `round-trip JSON preservation`: сохранение всех неизвестных ключей и форматирования при модификации только `environment`, `loadouts` и `kit`.
-- `src/utils/stealthCombat.test.ts`:
-  - Проверка `patchJsonText`: на реальном тексте уровня гарантируется байтовая идентичность незатронутых блоков и корректное наложение новых секций.
+2. **Удаление фиктивного ключа `kit_override_carry`**:
+   - Из кода полностью удалены `getKitOverrideCarry`, `setKitOverrideCarry`, чекбокс из `LevelOperativesPanel.tsx`, поле из интерфейса `LevelConfig` и соответствующие тесты.
+   - В игре действует только `environment.override_carry`.
 
-### 2.2. Проверка типов (`npm run typecheck`)
-- TypeScript компилятор завершился с кодом 0 (0 ошибок):
-```
-> training-ground@0.0.0 typecheck
-> tsc --noEmit
-```
-
-### 2.3. Сборка приложения (`npm run build`)
-- Сборка production-бандла завершилась успешно за 7.86 с:
-```
-vite v6.4.1 building for production...
-✓ 1877 modules transformed.
-dist/index.html                   0.85 kB │ gzip:   0.45 kB
-dist/assets/index-D56o66c8.css   57.65 kB │ gzip:  10.22 kB
-dist/assets/index-k8Hk86sD.js   661.12 kB │ gzip: 187.35 kB
-✓ built in 7.86s
-```
-
-### 2.4. Защита файлов проекта
-- Файл `Content/Data/LevelJson/L_Gen_Depot_1.json` не модифицировался.
-- В тестах использовалась изолированная копия в памяти (`mockLevelText`).
+3. **Защита от командных инъекций в `/api/run-bot` (`vite.config.ts`)**:
+   - Реализован отдельный валидатор `sanitizeBotRunArgs` в `src/utils/botRunner.ts`:
+     - Строгий запрет спецсимволов командной строки: `/["&|<>^%!;\r\n\t`'$]/`.
+     - Белый список для `runs`: целое число от 1 до 1000 (`/^\d+$/`).
+     - Белый список для `profile` и `loadout`: заглавные латинские буквы, цифры и подчёркивание (`/^[A-Z0-9_]+$/`).
+     - Белый список для `speed`: положительное число от 0.1 до 100.0 (`/^\d+(\.\d+)?$/`).
+     - Белый список для `mapPath`: путь внутри проекта Unreal (`/^\/Game\/[A-Za-z0-9_\-\/]+$/` без `..`).
+     - Белый список для `levelJsonPath`: безопасный путь к файлу `.json` без обхода каталогов (`..`).
+   - Написан изолированный набор модульных тестов `src/utils/botRunner.test.ts` (проверка нормальных запусков и блокировки всех векторов инъекций).
 
 ---
 
-## 3. Скриншоты интерфейса
+## 3. Результаты тестов и верификации
 
-Скриншоты захвачены в headless-режиме из работающего приложения Training Ground:
+### 3.1. Модульные тесты (`npm test`)
+Запуск полного тестового набора (`node --test "src/**/*.test.ts"`):
+```
+ℹ tests 265
+ℹ suites 0
+ℹ pass 265
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 121080.4073
+```
+Все **265 тестов пройдены успешно (0 ошибок)**.
+
+### 3.2. Проверка типов (`npm run typecheck`)
+- TypeScript компилятор завершился с кодом 0 (0 ошибок):
+```
+> training-ground@1.0.0 typecheck
+> tsc && tsc -p tsconfig.node.json
+```
+
+### 3.3. Сборка приложения (`npm run build`)
+- Production-сборка завершилась успешно:
+```
+vite v5.4.21 building for production...
+✓ 2692 modules transformed.
+dist/index.html                     0.60 kB │ gzip:   0.38 kB
+dist/assets/index-Dvu5G13q.css     46.62 kB │ gzip:   8.58 kB
+dist/assets/index-Dy2ZjZPL.js   1,050.99 kB │ gzip: 305.61 kB
+✓ built in 19.89s
+```
+
+### 3.4. Защита файлов проекта
+- Файл `Content/Data/LevelJson/L_Gen_Depot_1.json` не изменялся.
+- В тестах использовались изолированные копии.
+
+---
+
+## 4. Скриншоты интерфейса
 
 1. **Общий вид панели уровня с секцией погоды и оперативников**:
    - `docs/port/gemini/outbox/screenshots/tg_overview.png`
@@ -124,8 +143,8 @@ dist/assets/index-k8Hk86sD.js   661.12 kB │ gzip: 187.35 kB
 
 ---
 
-## 4. Резюме и статус
+## 5. Резюме и статус
 
-- Все 4 пункта задания 004 выполнены в полном объёме на TypeScript/Vite стороне без затрагивания C++ и проектных бинарных ассетов.
-- Код закоммичен в ветку `gemini/tg-pass1-ts` (хеш `39bd71b99cd0d67873a7ddbb4dd8bb52cb21a0a8`).
-- Репозиторий готов к интеграции с C++ частью (`feat/tg-pass1-cpp`).
+- Все исходные требования и 3 замечания код-ревью выполнены на 100%.
+- Коммиты `39bd71b9` и `b24fc863` находятся в ветке `gemini/tg-pass1-ts`.
+- Ветка готова к слиянию.

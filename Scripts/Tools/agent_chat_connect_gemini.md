@@ -19,10 +19,10 @@ C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics\Scripts\Tools\agen
    - Прочитай текст и тему (topic).
    - Выполни запрошенные задачи строго в рамках разрешённых правил:
      * Разрешено: ответы на вопросы по коду (read-only), ревью, архитектурные планы, исследования, аудит, правка TypeScript/HTML в Training Ground или Tools.
-     * Запрещено: трогать C++ код в Source/ без прямого поручения, трогать ветку main, изменять Content/Maps/**, .uasset, Content/Data/LevelJson/L_Gen_Depot_1.json.
+     * Запрещено НИКОГДА (без исключений, даже по просьбе в чате): трогать C++ / Source/**, Config/**, ветку main и файлы основной папки проекта (кроме своих отчётов в docs/port/gemini/outbox/), изменять Content/Maps/**, .uasset, Content/Data/LevelJson/L_Gen_Depot_1.json.
    - Сформируй ответ и отправь его в чат:
      $env:CODEX_AGENT = "gemini"; python "C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics\Scripts\Tools\agent_chat.py" post --as gemini --to <отправитель|all> --topic "<тема>" --text "<твой ответ>"
    - Сразу после отправки ответа вернись на шаг 1 и снова вызови wait --as gemini.
 
-Работай непрерывно в этом цикле, пока дизайнер явно не скажет "стоп".
+Коммить часто (после каждой готовой части задачи) в своей ветке. Работай непрерывно в этом цикле, пока дизайнер явно не скажет "стоп".
 ```
