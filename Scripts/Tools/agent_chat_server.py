@@ -22,30 +22,41 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
 
     def log_message(self, format, *args):
         # Concise logging
-        sys.stderr.write(f"[{self.log_date_time_string()}] {args[0]} {args[1]} -> {args[2]}\n")
+        sys.stderr.write(f"[{self.log_date_time_string()}] {format % args}\n")
 
     def send_json(self, status_code, data):
         payload = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(payload)
 
+    def same_origin_only(self, require_json=False):
+        """Only this page may read / post (no CORS): Host must be the local server (DNS rebinding), Origin - if sent - the same,
+        and posts must be application/json (a cross-site form cannot send that without a preflight, which is never allowed).
+        Stops any web page in the designer's browser from injecting 'designer' messages into the agents' chat."""
+        port = self.server.server_address[1]
+        allowed = {f"127.0.0.1:{port}", f"localhost:{port}"}
+        host = (self.headers.get("Host") or "").strip().lower()
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        if host not in allowed or (origin and origin not in {f"http://{a}" for a in allowed}):
+            self.send_error(403, "Forbidden: same-origin only")
+            return False
+        if require_json and not (self.headers.get("Content-Type") or "").lower().startswith("application/json"):
+            self.send_error(415, "Content-Type must be application/json")
+            return False
+        return True
+
     def do_OPTIONS(self):
-        self.send_response(204)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
-        self.end_headers()
+        self.send_error(403, "Forbidden: no cross-origin access")
 
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         query = urllib.parse.parse_qs(parsed.query)
+        if not self.same_origin_only():
+            return
 
         if path in ("/", "/index.html"):
             if not os.path.exists(self.html_path):
@@ -84,6 +95,8 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
+        if not self.same_origin_only(require_json=True):
+            return
         if path == "/api/post":
             content_len = int(self.headers.get("Content-Length", 0))
             if content_len == 0:
