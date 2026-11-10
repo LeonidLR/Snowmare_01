@@ -149,9 +149,9 @@ namespace LauncherTacticsRules
 	CODEXTACTICS_API float ClusterFactor(const FLauncherTacticsConfig& Config, int32 Count);
 
 	/** The best reason and its score (no vetoes). */
-	CODEXTACTICS_API FLauncherChoice Score(const FLauncherTacticsConfig& Config, const FLauncherTargetView& View);
+	CODEXTACTICS_API FLauncherChoice ScoreReasons(const FLauncherTacticsConfig& Config, const FLauncherTargetView& View);
 
-	/** Score + Veto; bUse at Score >= Threshold with no veto. */
+	/** ScoreReasons + Veto; bUse at Score >= Threshold with no veto. */
 	CODEXTACTICS_API FLauncherChoice Evaluate(const FLauncherTacticsConfig& Config, const FLauncherTargetView& View, float Threshold);
 
 	/** The index of the best usable choice (bUse, the highest score; ties: the first), INDEX_NONE when none is usable. */

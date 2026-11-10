@@ -91,7 +91,7 @@ namespace LauncherTacticsRules
 		return Full <= 1.f ? 1.f : FMath::Clamp((static_cast<float>(Count) - 1.f) / (Full - 1.f), 0.f, 1.f);
 	}
 
-	FLauncherChoice Score(const FLauncherTacticsConfig& Config, const FLauncherTargetView& View)
+	FLauncherChoice ScoreReasons(const FLauncherTacticsConfig& Config, const FLauncherTargetView& View)
 	{
 		FLauncherChoice Out;
 		auto Offer = [&Out](ELauncherUse Reason, float Value)
@@ -113,7 +113,7 @@ namespace LauncherTacticsRules
 
 	FLauncherChoice Evaluate(const FLauncherTacticsConfig& Config, const FLauncherTargetView& View, float Threshold)
 	{
-		FLauncherChoice Out = Score(Config, View);
+		FLauncherChoice Out = ScoreReasons(Config, View);
 		Out.Veto = Veto(Config, View);
 		Out.bUse = Out.Veto == ELauncherVeto::None && Out.Reason != ELauncherUse::None && Out.Score > 0.f && Out.Score >= Threshold;
 		return Out;
