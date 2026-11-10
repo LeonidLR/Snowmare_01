@@ -49,6 +49,7 @@
 
 #include "AI/AmbushWatchRules.h"
 #include "AI/PmcArenaPlayArea.h"
+#include "AI/PmcArenaRoundRules.h"
 #include "AI/PmcArenaViewRules.h"
 #include "AI/PmcCommanderRules.h"
 #include "AI/PmcSquadSubsystem.h"
@@ -64,7 +65,9 @@
 #include "Combat/HealthComponent.h"
 #include "Components/MeshComponent.h"
 #include "Combat/HordeSubsystem.h"
+#include "Combat/ProjectileSubsystem.h"
 #include "Combat/SightRules.h"
+#include "Combat/SuppressionRules.h"
 #include "Containers/Ticker.h"
 #include "Data/LevelJsonRules.h"
 #include "Environment/EnvironmentSubsystem.h"
@@ -156,6 +159,17 @@ namespace PmcArena
 		float CamMaxCm = 11000.f;
 		/** PlayArea=on|off (fix/arena-no-outer-strip, default on): off ignores the level's "play_area" (the before / after measurement). */
 		bool bPlayArea = true;
+		/**
+		 * RocketContact=on|off (fix/arena-rpg-contact-roof 2026-11-10, default on): an RPG-7 rocket's burst within launcher.radius_cm
+		 * (suppression.json) of a live enemy of the shooter is a contact moment (the round's contact + flow); off = only the shots (the
+		 * before / after measurement). The rocket's launch at an enemy is a shot either way (OnWeaponFiredNative).
+		 */
+		bool bRocketContact = true;
+		/**
+		 * ObjectiveReach=on|off (fix/arena-rpg-contact-roof, default on): the objective must be reached by a full navmesh path from BOTH
+		 * sides' spawns (PmcArenaRoundRules::IsReachableFromBoth), else another point; off = the old placement (the measurement).
+		 */
+		bool bObjectiveReach = true;
 	};
 
 	/** PmcStalemateSmoke's limits (the designer 2026-11-08): the fight resumes within this after a quiet spell, s. */
@@ -254,6 +268,16 @@ namespace PmcArena
 		int32 Detours = 0;
 		/** Arena resupplies (Ammo=resupply): reserves refilled after running dry. */
 		int32 Resupplies = 0;
+		/**
+		 * fix/arena-rpg-contact-roof: per side the RPG-7 rockets launched (part of Shots) and their bursts within launcher.radius_cm of a
+		 * live enemy; the round's contact moments (shots + those bursts with RocketContact=on).
+		 */
+		int32 Rockets[2] = { 0, 0 };
+		int32 RocketBurstsNear[2] = { 0, 0 };
+		int32 ContactEvents = 0;
+		/** The objective's reach at placement: a full navmesh path from the attackers' / the defenders' spawn to the point. */
+		bool bReachAttacker = true;
+		bool bReachDefender = true;
 	};
 
 	/** The last hit a fighter took (the HP drops of the next samples are that shooter's damage). */
@@ -304,6 +328,14 @@ namespace PmcArena
 		int32 AttackerDistSamples = 0;
 		float AttackerClosestCm = -1.f;
 		int32 Resupplies = 0;
+		/**
+		 * fix/arena-rpg-contact-roof: per side the rockets launched and their bursts near a live enemy (PmcArenaRoundRules::IsLauncherContact),
+		 * the times of those bursts (contact moments next to ShotTimes), the projectile layer's listener (bound once).
+		 */
+		int32 Rockets[2] = { 0, 0 };
+		int32 RocketBurstsNear[2] = { 0, 0 };
+		TArray<float> RocketBurstTimes;
+		FDelegateHandle ProjectileHandle;
 	};
 	constexpr float TrackInterval = 0.2f;
 
@@ -338,6 +370,9 @@ namespace PmcArena
 		FPmcObjectiveClock Clock;
 		bool bRoundObjective = false;
 		FVector Objective = FVector::ZeroVector;
+		/** fix/arena-rpg-contact-roof: this round's objective reached by a full path from the attackers' / the defenders' spawn. */
+		bool bReachAttacker = true;
+		bool bReachDefender = true;
 		bool bAAttacks = false;
 		bool bWeatherForced = false;
 		bool bInitialWeatherKnown = false;
@@ -398,6 +433,8 @@ namespace PmcArena
 			else if (Key == TEXT("cammin")) { Options.CamMinCm = FMath::Clamp(FCString::Atof(*Value), 5.f, 200.f) * 100.f; }
 			else if (Key == TEXT("cammax")) { Options.CamMaxCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 300.f) * 100.f; }
 			else if (Key == TEXT("playarea")) { Options.bPlayArea = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
+			else if (Key == TEXT("rocketcontact")) { Options.bRocketContact = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
+			else if (Key == TEXT("objectivereach")) { Options.bObjectiveReach = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
 			else if (Key == TEXT("scenario"))
 			{
 				EPmcScenario Scenario = EPmcScenario::Skirmish;
@@ -767,8 +804,10 @@ namespace PmcArena
 			FNavLocation OnNav;
 			const FVector Candidate = Site + Away.RotateAngleAxis(Bearing, FVector::UpVector) * State.Config.DefenderOffsetCm;
 			if (Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(300.f, 300.f, 150.f)) && FMath::Abs(OnNav.Location.Z - Site.Z) < 250.f
-				&& InArea(State, OnNav.Location) && HasNavPath(World, Nav, Site, OnNav.Location))
+				&& InArea(State, OnNav.Location) && HasNavPath(World, Nav, Site, OnNav.Location)
+				&& (!State.Options.bObjectiveReach || HasNavPath(World, Nav, OnNav.Location, Site)))
 			{
+				// fix/arena-rpg-contact-roof: the defenders walk FROM their spawn TO the site (a one-way drop link off a roof is no way up).
 				return OnNav.Location;
 			}
 		}
@@ -779,10 +818,65 @@ namespace PmcArena
 		return Site;
 	}
 
+	/** A full navmesh path From -> To (PmcArenaRoundRules::IsFullPath); a point is always reachable from itself. */
+	bool HasFullNavPath(UWorld* World, UNavigationSystemV1* Nav, const FVector& From, const FVector& To)
+	{
+		return FVector::DistSquared(From, To) < 50.f * 50.f || HasNavPath(World, Nav, From, To);
+	}
+
+	/**
+	 * What a pawn would stand on at a navmesh point: a Pawn-channel trace from 1 m above to 3 m below (pawns ignored). OutFloorZ = the hit's
+	 * Z (the trace's end without a hit), OutWhat = the actor / component hit for the log.
+	 */
+	bool TracePawnFloor(UWorld* World, const FVector& NavPoint, float& OutFloorZ, FString& OutWhat)
+	{
+		FHitResult Hit;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(PmcArenaFloor), false);
+		const FVector From = NavPoint + FVector(0.f, 0.f, 100.f);
+		const FVector To = NavPoint - FVector(0.f, 0.f, 300.f);
+		bool bHit = false;
+		for (int32 Try = 0; Try < 4; ++Try)
+		{
+			bHit = World->LineTraceSingleByChannel(Hit, From, To, ECC_Pawn, Params);
+			if (!bHit || !Cast<APawn>(Hit.GetActor()))
+			{
+				break;
+			}
+			Params.AddIgnoredActor(Hit.GetActor());
+		}
+		OutFloorZ = bHit ? static_cast<float>(Hit.ImpactPoint.Z) : static_cast<float>(To.Z);
+		OutWhat = bHit ? FString::Printf(TEXT("%s/%s"), Hit.GetActor() ? *Hit.GetActor()->GetName() : TEXT("?"), Hit.GetComponent() ? *Hit.GetComponent()->GetName() : TEXT("?"))
+			: FString(TEXT("nothing"));
+		return bHit;
+	}
+
+	/** The path From -> To for the log: points, length, partial, where it ends (3D) and its highest / lowest point. */
+	FString DescribeNavPath(UWorld* World, UNavigationSystemV1* Nav, const FVector& From, const FVector& To)
+	{
+		const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, From, To) : nullptr;
+		if (!Path || !Path->IsValid() || Path->PathPoints.IsEmpty())
+		{
+			return TEXT("no path");
+		}
+		float MinZ = TNumericLimits<float>::Max();
+		float MaxZ = TNumericLimits<float>::Lowest();
+		for (const FVector& Point : Path->PathPoints)
+		{
+			MinZ = FMath::Min(MinZ, static_cast<float>(Point.Z));
+			MaxZ = FMath::Max(MaxZ, static_cast<float>(Point.Z));
+		}
+		const FVector End = Path->PathPoints.Last();
+		return FString::Printf(TEXT("%d points, %.0f cm, partial %d, ends at %s (%.0f cm from the goal, dZ %.0f), z %.0f..%.0f"), Path->PathPoints.Num(),
+			Path->GetPathLength(), Path->IsPartial() ? 1 : 0, *End.ToCompactString(), FVector::Dist(End, To), End.Z - To.Z, MinZ, MaxZ);
+	}
+
 	/**
 	 * The objective of a skirmish / fixed-spawn round: from the defender's spawn towards the attacker's, ObjectiveOffsetFrac x (0.75-1.25,
 	 * seeded) of the way, on the navmesh at the defender's level with a path from both spawns, inside the play area; half that, then the
 	 * defender's spawn itself (a Warning when the play area turned a candidate down, or the defender's spawn itself lies outside it).
+	 * fix/arena-rpg-contact-roof (ObjectiveReach=on): when neither of the two is reached by a FULL path from both spawns, more points -
+	 * 1 / 0.75 / 0.5 / 0.25 of the way at 25 / 50 deg off the spawn line - then the defender's spawn only when the attackers reach it
+	 * (PmcArenaRoundRules::PickReachable); a Warning when no point is reachable from both.
 	 */
 	FVector PlaceObjectiveNear(const FState& State, UWorld* World, const FVector& Defender, const FVector& Attacker, int32 Seed)
 	{
@@ -804,6 +898,35 @@ namespace PmcArena
 			{
 				return OnNav.Location;
 			}
+		}
+		if (State.Options.bObjectiveReach)
+		{
+			// More points off the spawn line, nearer the defender; the defender's spawn last (the attackers must reach it too).
+			TArray<FVector> Candidates;
+			const FVector Offset = (Attacker - Defender) * Frac;
+			for (const float Scale : { 1.f, 0.75f, 0.5f, 0.25f })
+			{
+				for (const float Bearing : { 25.f, -25.f, 50.f, -50.f })
+				{
+					FVector Candidate = Defender + Offset.RotateAngleAxis(Bearing, FVector::UpVector) * Scale;
+					Candidate.Z = Defender.Z;
+					FNavLocation OnNav;
+					if (Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(300.f, 300.f, 150.f)) && FMath::Abs(OnNav.Location.Z - Defender.Z) < 250.f
+						&& InArea(State, OnNav.Location))
+					{
+						Candidates.Add(OnNav.Location);
+					}
+				}
+			}
+			Candidates.Add(Defender);
+			const int32 Pick = PmcArenaRoundRules::PickReachable(Candidates, Attacker, Defender,
+				[World, Nav](const FVector& From, const FVector& To) { return HasFullNavPath(World, Nav, From, To); });
+			if (Pick != INDEX_NONE)
+			{
+				return Candidates[Pick];
+			}
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] seed %d: no objective point reachable by a full path from both spawns (%d candidates) - on the defender's spawn %s, the attackers at %s cannot reach it"),
+				Seed, Candidates.Num(), *Defender.ToCompactString(), *Attacker.ToCompactString());
 		}
 		if (State.AreaRejects > RejectsBefore || !PmcArenaPlayAreaRules::IsInside(State.Config.PlayArea, Defender))
 		{
@@ -830,6 +953,18 @@ namespace PmcArena
 				continue;
 			}
 			const FVector Defender = PickNearSpawn(State, World, Site, Attacker);
+			// fix/arena-rpg-contact-roof: the site must be reached by a full path from both spawns, else the next site.
+			if (State.Options.bObjectiveReach)
+			{
+				UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+				if (!PmcArenaRoundRules::IsReachableFromBoth(Site, Attacker, Defender,
+					[World, Nav](const FVector& From, const FVector& To) { return HasFullNavPath(World, Nav, From, To); }))
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] scenario %s seed %d: site %s not reached by a full path from both spawns - the next site"),
+						PmcCommanderRules::ScenarioName(Scenario), Seed, *Site.ToCompactString());
+					continue;
+				}
+			}
 			FSide& Atk = State.Sides[AttackerIndex];
 			FSide& Def = State.Sides[1 - AttackerIndex];
 			Atk.Spawn = Attacker;
@@ -1290,6 +1425,20 @@ namespace PmcArena
 		return Json;
 	}
 
+	/**
+	 * The round's contact moments (fix/arena-rpg-contact-roof): the shots between the sides (the RPG-7's launches at an enemy among them)
+	 * and, with RocketContact=on, the rocket bursts near a live enemy. ResolveRound's contact and the flow stats both read these.
+	 */
+	TArray<float> ContactTimesOf(const FState& State)
+	{
+		TArray<float> Times = State.Track.ShotTimes;
+		if (State.Options.bRocketContact)
+		{
+			Times.Append(State.Track.RocketBurstTimes);
+		}
+		return Times;
+	}
+
 	void StartTrack(FState& State, UWorld* World)
 	{
 		FTrack& Track = State.Track;
@@ -1318,7 +1467,52 @@ namespace PmcArena
 		Track.AttackerDistSamples = 0;
 		Track.AttackerClosestCm = -1.f;
 		Track.Resupplies = 0;
+		Track.Rockets[0] = Track.Rockets[1] = 0;
+		Track.RocketBurstsNear[0] = Track.RocketBurstsNear[1] = 0;
+		Track.RocketBurstTimes.Reset();
 		FState* StatePtr = &State;
+		// fix/arena-rpg-contact-roof: an RPG-7 rocket's burst within launcher.radius_cm (suppression.json) of a live enemy of its shooter is
+		// contact (a round where only rockets flew was a no_contact draw, -3 in the trainer). Bound once for the run.
+		if (UProjectileSubsystem* Projectiles = World->GetSubsystem<UProjectileSubsystem>(); Projectiles && !Track.ProjectileHandle.IsValid())
+		{
+			Track.ProjectileHandle = Projectiles->OnProjectileFinished.AddLambda([StatePtr](const FProjectileImpact& Impact)
+			{
+				if (!Impact.bLauncher || !Impact.bExploded || StatePtr->Stage != 2)
+				{
+					return;
+				}
+				const AOperativeCharacter* Shooter = Cast<AOperativeCharacter>(Impact.Instigator.Get());
+				const int32 ShooterSide = SideIndexOf(*StatePtr, Shooter);
+				if (ShooterSide == INDEX_NONE)
+				{
+					return;
+				}
+				TArray<FVector> Enemies;
+				for (const TWeakObjectPtr<AOperativeCharacter>& Member : StatePtr->Sides[1 - ShooterSide].Members)
+				{
+					const AOperativeCharacter* Operative = Member.Get();
+					if (Operative && !Operative->IsKilledInAction() && Operative->HealthComponent && Operative->HealthComponent->IsAlive())
+					{
+						Enemies.Add(Operative->GetActorLocation());
+					}
+				}
+				const float RadiusCm = SuppressionRules::GetConfig().LauncherRadiusCm;
+				const bool bNear = PmcArenaRoundRules::IsLauncherContact(Impact.Location, Enemies, RadiusCm);
+				FTrack& BurstTrack = StatePtr->Track;
+				TSharedRef<FJsonObject> Json = EventJson(*StatePtr, TEXT("rocket_burst"));
+				Json->SetStringField(TEXT("from"), Shooter->DisplayName.ToString());
+				Json->SetStringField(TEXT("side"), SideOf(*StatePtr, Shooter));
+				Json->SetNumberField(TEXT("x"), FMath::RoundToFloat(Impact.Location.X));
+				Json->SetNumberField(TEXT("y"), FMath::RoundToFloat(Impact.Location.Y));
+				Json->SetBoolField(TEXT("near_enemy"), bNear);
+				BurstTrack.Events.Add(MakeShared<FJsonValueObject>(Json));
+				if (bNear)
+				{
+					++BurstTrack.RocketBurstsNear[ShooterSide];
+					BurstTrack.RocketBurstTimes.Add(StatePtr->StageTime);
+				}
+			});
+		}
 		for (FSide& Side : State.Sides)
 		{
 			for (const TWeakObjectPtr<AOperativeCharacter>& Member : Side.Members)
@@ -1348,6 +1542,13 @@ namespace PmcArena
 					const AOperativeCharacter* Victim = Cast<AOperativeCharacter>(Target);
 					const int32 ShooterSide = SideIndexOf(*StatePtr, Shooter);
 					const int32 VictimSide = SideIndexOf(*StatePtr, Victim);
+					// The RPG-7's launch (fix/arena-rpg-contact-roof): counted per side whatever its target; at an enemy it is a shot below, and its
+					// burst near an enemy is another contact moment (the projectile listener).
+					if (Shooter && ShooterSide != INDEX_NONE && Shooter->IsLauncherEquipped())
+					{
+						++StatePtr->Track.Rockets[ShooterSide];
+						Json->SetBoolField(TEXT("rocket"), true);
+					}
 					if (Shooter && Victim && ShooterSide != INDEX_NONE && VictimSide != INDEX_NONE && ShooterSide != VictimSide)
 					{
 						FTrack& ShotTrack = StatePtr->Track;
@@ -1801,6 +2002,9 @@ namespace PmcArena
 					Objective->SetNumberField(TEXT("radius_m"), State.Config.ObjectiveRadiusCm / 100.f);
 					Objective->SetNumberField(TEXT("hold_s"), State.Config.HoldSeconds);
 					Objective->SetNumberField(TEXT("attacker_clock_s"), FMath::RoundToFloat(Result.AttackerHeld * 10.f) / 10.f);
+					// fix/arena-rpg-contact-roof: a full navmesh path from each side's spawn to the point at placement.
+					Objective->SetBoolField(TEXT("reach_attacker"), Result.bReachAttacker);
+					Objective->SetBoolField(TEXT("reach_defender"), Result.bReachDefender);
 				}
 				Round->SetObjectField(TEXT("objective"), Objective);
 			}
@@ -1825,6 +2029,7 @@ namespace PmcArena
 				Flow->SetNumberField(TEXT("orders_failed"), Result.OrdersFailed);
 				Flow->SetNumberField(TEXT("detours"), Result.Detours);
 				Flow->SetNumberField(TEXT("resupplies"), Result.Resupplies);
+				Flow->SetNumberField(TEXT("contact_events"), Result.ContactEvents);
 				Round->SetObjectField(TEXT("flow"), Flow);
 			}
 			Round->SetNumberField(TEXT("lead_swings"), Result.LeadSwings);
@@ -1861,6 +2066,8 @@ namespace PmcArena
 				Side->SetNumberField(TEXT("objective_hold_s"), FMath::RoundToFloat(Result.ObjectiveHoldS[Index] * 10.f) / 10.f);
 				Side->SetNumberField(TEXT("median_engagement_m"), FMath::RoundToFloat(Result.MedianEngagementM[Index] * 10.f) / 10.f);
 				Side->SetNumberField(TEXT("shots"), Result.Shots[Index]);
+				Side->SetNumberField(TEXT("rockets"), Result.Rockets[Index]);
+				Side->SetNumberField(TEXT("rocket_bursts_near"), Result.RocketBurstsNear[Index]);
 				Side->SetNumberField(TEXT("strikes_unobserved"), Result.StrikesUnobserved[Index]);
 				Sides->SetObjectField(Index == 0 ? TEXT("A") : TEXT("B"), Side);
 			}
@@ -1940,6 +2147,15 @@ namespace PmcArena
 				Check(State, (*Round)->HasField(TEXT("scenario")) && (*Round)->HasField(TEXT("objective")), FString::Printf(TEXT("scenario '%s' + objective recorded"),
 					*(*Round)->GetStringField(TEXT("scenario"))));
 				Check(State, Reason == TEXT("elimination") || Reason == TEXT("objective") || Reason == TEXT("time_limit"), FString::Printf(TEXT("end_reason %s"), *Reason));
+				// fix/arena-rpg-contact-roof: the objective is reached by a full navmesh path from both sides' spawns; the rocket counters recorded.
+				if (!State.Results.IsEmpty() && State.Results.Last().bObjective && State.Options.bObjectiveReach)
+				{
+					const FRoundResult& Placed = State.Results.Last();
+					Check(State, Placed.bReachAttacker && Placed.bReachDefender, FString::Printf(TEXT("the objective is reached by a full path from both spawns (attackers %s, defenders %s)"),
+						Placed.bReachAttacker ? TEXT("yes") : TEXT("no"), Placed.bReachDefender ? TEXT("yes") : TEXT("no")));
+				}
+				Check(State, bRoles && (*RoundSides)->GetObjectField(TEXT("A"))->HasField(TEXT("rockets")) && (*RoundSides)->GetObjectField(TEXT("B"))->HasField(TEXT("rocket_bursts_near")),
+					TEXT("sides.<X>.rockets / rocket_bursts_near recorded"));
 				if (State.Options.bSmokeStalemate && !State.Results.IsEmpty())
 				{
 					// PmcStalemateSmoke (the designer 2026-11-08): the fight does not freeze.
@@ -2020,6 +2236,11 @@ namespace PmcArena
 			{
 				Pmc->DestroyTeam(TeamA);
 				Pmc->DestroyTeam(TeamB);
+			}
+			if (UProjectileSubsystem* Projectiles = World->GetSubsystem<UProjectileSubsystem>(); Projectiles && State.Track.ProjectileHandle.IsValid())
+			{
+				Projectiles->OnProjectileFinished.Remove(State.Track.ProjectileHandle);
+				State.Track.ProjectileHandle.Reset();
 			}
 			State.OutputPath = WriteJson(State, World);
 			if (State.Options.bSmoke)
@@ -2108,6 +2329,31 @@ namespace PmcArena
 		if (State.bRoundObjective && !bSitePlaced)
 		{
 			State.Objective = PlaceObjectiveNear(State, World, State.Sides[1 - AttackerIndex].Spawn, State.Sides[AttackerIndex].Spawn, Seed);
+		}
+		// fix/arena-rpg-contact-roof: the objective's reach as placed (always measured; ObjectiveReach=on makes both true when any point is).
+		State.bReachAttacker = State.bReachDefender = true;
+		if (State.bRoundObjective)
+		{
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			State.bReachAttacker = HasFullNavPath(World, Nav, State.Sides[AttackerIndex].Spawn, State.Objective);
+			State.bReachDefender = HasFullNavPath(World, Nav, State.Sides[1 - AttackerIndex].Spawn, State.Objective);
+			const FString Line = FString::Printf(TEXT("[PmcArena] seed %d objective reach: %s at level %d - from the attackers' spawn %s, from the defenders' spawn %s"), Seed,
+				*State.Objective.ToCompactString(), LevelOf(State, State.Objective), State.bReachAttacker ? TEXT("full path") : TEXT("NO full path"),
+				State.bReachDefender ? TEXT("full path") : TEXT("NO full path"));
+			float FloorZ = 0.f;
+			FString FloorWhat;
+			const bool bFloor = TracePawnFloor(World, State.Objective, FloorZ, FloorWhat);
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] seed %d objective paths: attackers %s; defenders %s; pawn floor %s at z %.0f (%s)"), Seed,
+				*DescribeNavPath(World, Nav, State.Sides[AttackerIndex].Spawn, State.Objective), *DescribeNavPath(World, Nav, State.Sides[1 - AttackerIndex].Spawn, State.Objective),
+				bFloor ? TEXT("hit") : TEXT("NONE"), FloorZ, *FloorWhat);
+			if (State.bReachAttacker && State.bReachDefender)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("%s"), *Line);
+			}
+			else
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("%s"), *Line);
+			}
 		}
 		State.Clock = FPmcObjectiveClock();
 		State.Clock.HoldSeconds = State.Config.HoldSeconds;
@@ -2242,6 +2488,8 @@ namespace PmcArena
 		Result.Weather = Weather;
 		Result.bObjective = State.bRoundObjective;
 		Result.ObjectiveLocation = State.Objective;
+		Result.bReachAttacker = State.bReachAttacker;
+		Result.bReachDefender = State.bReachDefender;
 		for (int32 Index = 0; Index < 2; ++Index)
 		{
 			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[Index].Members)
@@ -2309,15 +2557,18 @@ namespace PmcArena
 		{
 			const FTrack& Track = State.Track;
 			const float Minutes = FMath::Max(Result.Duration, 1.f) / 60.f;
-			Result.bContact = !Track.ShotTimes.IsEmpty();
-			Result.ShotsPerMin = Track.ShotTimes.Num() / Minutes;
-			Result.FirstContactS = Result.bContact ? Track.ShotTimes[0] : -1.f;
-			float Longest = Result.bContact ? Result.Duration - Track.ShotTimes.Last() : Result.Duration;
-			for (int32 Index = 1; Index < Track.ShotTimes.Num(); ++Index)
+			// fix/arena-rpg-contact-roof: contact + quiet spells from every contact moment (shots, rockets, rocket bursts near an enemy).
+			const FPmcArenaFlow Flow = PmcArenaRoundRules::ComputeFlow(ContactTimesOf(State), Result.Duration);
+			Result.bContact = Flow.bContact;
+			Result.ShotsPerMin = Flow.EventsPerMin;
+			Result.FirstContactS = Flow.FirstContactS;
+			Result.LongestQuietS = Flow.LongestQuietS;
+			Result.ContactEvents = Flow.Events;
+			for (int32 Index = 0; Index < 2; ++Index)
 			{
-				Longest = FMath::Max(Longest, Track.ShotTimes[Index] - Track.ShotTimes[Index - 1]);
+				Result.Rockets[Index] = Track.Rockets[Index];
+				Result.RocketBurstsNear[Index] = Track.RocketBurstsNear[Index];
 			}
-			Result.LongestQuietS = Longest;
 			Result.AttackerMeanDistM = Track.AttackerDistSamples > 0 ? static_cast<float>(Track.AttackerDistSum / Track.AttackerDistSamples) / 100.f : -1.f;
 			Result.AttackerClosestM = Track.AttackerClosestCm >= 0.f ? Track.AttackerClosestCm / 100.f : -1.f;
 			Result.OrdersPerFighterMin = Track.Orders / FMath::Max(1, Track.Fighters.Num()) / Minutes;
@@ -2327,6 +2578,27 @@ namespace PmcArena
 			Result.OrdersFailed = Result.Stats[0].OrdersFailed + Result.Stats[1].OrdersFailed;
 			Result.Detours = Result.Stats[0].Detours + Result.Stats[1].Detours;
 			Result.Resupplies = Track.Resupplies;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d contact: %s (%d moments: %d shots, rockets A %d / B %d, bursts near an enemy A %d / B %d, rocket contact %s), objective reach attackers %s / defenders %s"),
+			State.Round, Result.bContact ? TEXT("yes") : TEXT("no"), Result.ContactEvents, State.Track.ShotTimes.Num(), Result.Rockets[0], Result.Rockets[1],
+			Result.RocketBurstsNear[0], Result.RocketBurstsNear[1], State.Options.bRocketContact ? TEXT("on") : TEXT("off"),
+			Result.bReachAttacker ? TEXT("yes") : TEXT("NO"), Result.bReachDefender ? TEXT("yes") : TEXT("NO"));
+		if (Result.bObjective)
+		{
+			// Where everybody ended against the point, in 3D (a man under a roof point is 2D-close but a level below).
+			FString Ends;
+			for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
+			{
+				for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[SideIndex].Members)
+				{
+					if (const AOperativeCharacter* Operative = Member.Get())
+					{
+						const FVector Delta = Operative->GetActorLocation() - State.Objective;
+						Ends += FString::Printf(TEXT(" %s:%.0fm/dz%.0fm"), *State.Sides[SideIndex].Label, Delta.Size2D() / 100.f, Delta.Z / 100.f);
+					}
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d ends vs the objective (2D m / dZ m):%s"), State.Round, *Ends);
 		}
 		Result.LeadSwings = State.Track.LeadSwings;
 		Result.HighlightScore = HighlightScoreOf(Result);
@@ -2499,7 +2771,8 @@ namespace PmcArena
 			ResupplyAmmo(State);
 			UpdateObjective(State, World);
 			const FPmcRoundOutcome Outcome = PmcCommanderRules::ResolveRound(CountAlive(State.Sides[0].Members), CountAlive(State.Sides[1].Members),
-				State.StageTime >= State.Options.TimeLimit, State.bRoundObjective, State.Clock, State.bAAttacks, !State.Track.ShotTimes.IsEmpty());
+				State.StageTime >= State.Options.TimeLimit, State.bRoundObjective, State.Clock, State.bAAttacks,
+				!State.Track.ShotTimes.IsEmpty() || (State.Options.bRocketContact && !State.Track.RocketBurstTimes.IsEmpty()));
 			if (!Outcome.bOver)
 			{
 				return true;

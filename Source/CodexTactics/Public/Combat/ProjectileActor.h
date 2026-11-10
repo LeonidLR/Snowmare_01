@@ -80,6 +80,10 @@ struct CODEXTACTICS_API FProjectileImpact
 	FString SourceName;
 	/** Units the burst held Suppressed / Pinned (a launcher rocket only; FProjectileLaunch::bLauncherSuppression). */
 	int32 SuppressedUnits = 0;
+	/** The shooter (FProjectileLaunch::Instigator; the PMC arena attributes a rocket's burst to his side, fix/arena-rpg-contact-roof). */
+	TWeakObjectPtr<AActor> Instigator;
+	/** A launcher rocket (FProjectileLaunch::bLauncherSuppression): the RPG-7. */
+	bool bLauncher = false;
 };
 
 /**
