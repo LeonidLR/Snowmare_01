@@ -422,10 +422,10 @@ The shared fixtures are written first by Claude: `Content/Data/LevelGen/props/fi
 ### 6.1 The designer's answers (2026-11-10)
 
 1. Existing layout covers stay as cover geometry; props are added on top and avoid them. Look of the props (greybox): **barrels are
-   cylinders**, **crates are coloured blue and red** (the meaning of the two colours - pending, see the chat).
+   cylinders**, **crates are coloured**: **blue = an ordinary crate (loot)**, **red = a dangerous one (mined / explosive)** - the colour tells the player what is safe to open.
 2. A deleted generated object keeps a keep-out disk after a re-roll until «Сбросить правку» - **yes**.
 3. Mines on mandatory-route doorways forbidden by default, opt-in per layer - **agreed**.
 4. Visible marker within 3 m, a shot detonates - **agreed, and DISARMING must exist**: add task C7b (a disarm action on a mine /
    mined crate / doorway tripwire - who can disarm, time, failure chance from data; inert in `MinesInert`), after C7.
 5. Explosive chains allowed, explosives >= 400 cm apart - **agreed**.
-6. Freezing - pending.
+6. Freezing - **yes**: `frozen: true` once he signs off a campaign map's props; re-rolls then need an explicit unfreeze in the TG.
