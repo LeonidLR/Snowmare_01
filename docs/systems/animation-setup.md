@@ -606,7 +606,8 @@ slow injured walk; standing still cold keeps the existing shiver idle; wounded f
   takes the root (-> the reference: the ABP's orientation warping turned it for its forward legs), the pelvis, the legs and the foot IK bones;
   spine_01 keeps the graph's mesh-space rotation re-expressed under the injured pelvis (the torso rides the limp's bob, `torso_pelvis_share` 0.3
   of the pelvis rotation when not aiming, 0 aiming), the hand IK bones keep their mesh-space transform. Fire / reload / grenade / blizzard
-  clips (upper-body slot) and the weapon layers' torsos play on top unchanged.
+  clips (upper-body slot) and the weapon layers' torsos play on top unchanged. **Superseded while wounded (2026-11-10 evening, the full body
+  below);** the cold walks keep this lower-body rule.
 - **Speeds:** forward / back / slow / crawl = the setup script's "best speed" (the ground speed at which a loop's best-planted contact moves
   least): Front 160.6, Back 144.0, slow walk 35.3, crawl 63.0 cm/s (x stride_scale male 1.091 / female 1.035, crawl 0.972 / 0.998). The
   diagonals / strafes were tuned in game (the script's 110-124 slid 40-50 %): FR 150, R 160, BR 135, BL 124, L 160, FL 110 - their stance foot
@@ -636,6 +637,69 @@ slow injured walk; standing still cold keeps the existing shiver idle; wounded f
   sideways = `Walk_Injured_Front` / `_Right`, still = the shiver idle with the layer 0; cold 92 %: forward = `Walk_Injured_Slow`). Dev switch
   `-AnimPackFallback=injured` (the pack by bone name, for a skeleton without copies). Arg `shots` (rendered):
   `Saved/Screenshots/InjuredLocomotion/<state>.png`.
+
+### Wound tiers + the full body (the game designer 2026-11-10, `feat/injured-tiers-fullbody`)
+
+**Request:** "the pack has animations for practically every case - apply them ALL; when he is wounded it must be visible; if he has to shoot,
+he will rise into the firing position"; an idle for every situation. Supersedes the "LOWER body only" decision above while wounded.
+- **Tiers (`CriticalWoundRules::ChooseWoundTier` / `TierSpeedScale`, `Content/Data/Movement/critical_wound.json`):** LIGHT = `IsWounded`
+  (HP < 50 %) down to `heavy_from` 0.35 - speed x0.65 (`WoundedSpeedMultiplier`), no sprint, running allowed; HEAVY = under 35 % down to
+  `critical_from` 0.2 - standing speed x`heavy_speed_multiplier` 0.45 (220 -> 99 cm/s; crouched / prone keep the light tier's), no run (the
+  fast regroup walks: `ESquadRegroupPace::WoundedWalk`); CRITICAL = under 20 % (the critical-wound rule: down, crawl only). Heavy / critical
+  only where the critical rule applies (the squad; hostiles with `apply_to_hostiles`). `AOperativeCharacter::GetWoundTier` /
+  `GetWoundTierSpeedScale` (GetMaxSpeed, GetSprintSpeedCap).
+- **Clip per state (`weapon_anim_sets.json` "injured"; `InjuredLocomotionRules::ChooseTierGait`, `RunShare`, `ChooseIdleSet`,
+  `NextIdleVariant`):**
+
+  | State | Clip | Idle (alternating per loop, `idle_variants` alternate, cross-fade `idle_crossfade_s` 0.35) |
+  |---|---|---|
+  | light, walking | `Walk_Injured_BS` 8 directions (as before) | `Idle_Walk_Injured1` / `2` (`stand_idles`) |
+  | light, running (the wounded regroup run 480 x 0.65 = 312 cm/s) | `Run_Injured` forward over `run_blend_speeds` [170, 250] cm/s inside `run_forward_cone_deg` [45, 90] (the 8-direction walk outside it), `run_speed` 340.3 x stride_scale | standing within `run_idle_hold_s` 6 s after a run: `Idle_Run_Injured1` / `2` (`run_idles`) |
+  | heavy, walking | `Walk_Injured_Slow` forward (`slow_forward_cone_deg` [35, 80]); other directions the 8-direction walk at the heavy speed (the pack has no slow BS: play rate = speed / authored speed) | `Idle_Walk_Injured_Slow1` / `2` (`slow_idles`) |
+  | critical (prone) | `Crawl_Injured` forward (the other 7 = the mocap crawl) | `Idle_Crawl_Injured1` / `2` on all fours (`crawl_idles`), also lying still |
+  | light + frostbite (cold >= 0.9) | the heavy tier's clips (the worse wins) | the slow idles |
+  | light / heavy + freezing (0.7-0.9) | the wound's clips | the wound's idles (the shiver yields to the wound, as before) |
+  | cold alone | unchanged: freezing = the 8-direction walk, >= 0.9 = the slow walk, standing = the ABP's shiver | the shiver (Cold_1) |
+  | crouched, wounded | no pack clip crouches: the ABP's crouch + the hunch cue x`crouch_scale` 0.6 | the ABP's crouch idle + the hunch |
+  | in cover, wounded | no pack clip hugs a wall: the cover pose + the hunch cue x`cover_scale` 0.5, off while firing | the cover idle + the hunch |
+
+  `Walk_Injured` (the plain forward walk, 1.20 s, best 188 cm/s) is measured only: a different loop from `Walk_Injured_BS/Front` (1.07 s,
+  160.6), outside the 8-direction set's shared phase.
+- **Full body (`"full_body"`: `enabled` true, `raise_to_fire_s` 0.25, `lower_after_s` 1.0, `lower_blend_s` 0.4;
+  `InjuredLocomotionRules::StepRaiseShare` / `UpperBodyShare` / `HoldsShotForRaise` / `FirstShotRaiseDelay`):** a wound gait standing and not
+  firing -> spine_01 and below (arms, neck, head) take the clip too (the left hand on the wound, the rifle hanging from the right hand - it
+  stays on its hand socket); the hand IK chain keeps the graph's. A demand - a fire attempt with a target (`HoldShotForInjuredRaise` in
+  `RunCombatShooting`, quick fire, suppress: every frame he wants to shoot), a shot (`HandleWeaponFired`), a reload, the turn-based aim -
+  raises the torso to the ABP's / the weapon layer's pose over `raise_to_fire_s`; the round waits until it is >= 98 % up. The raise runs in
+  parallel with the aim turn. `lower_after_s` without a demand lowers it over `lower_blend_s`. Upper-body clips (fire, reload, grenade, the
+  blizzard shield) take the torso by their slot weight. The critical crawl idle rises into the ABP's prone aim the same way. Cold walks keep
+  the weapon torso. No delay when the layer does not hold the torso (healthy, cover, crouched, an animation that does not tick).
+  `"enabled": false` = the morning's lower-body layer, no delay.
+- **The first shot's delay vs before:** from the lowered (idle / walking) pose the first round leaves `raise_to_fire_s x 0.98 = 0.245 s`
+  later than before, + at most one frame (the demand reaches the animation the next frame) - and only when the aim turn is shorter than that;
+  rounds within `lower_after_s` 1.0 s of the last attempt are not delayed. Measured: `InjuredLocomotionSmoke` 2c / 7b 0.25 s (0.05 s
+  ticker), lowered back 1.35 s after the last attempt; `InjuredLocomotionDepotSmoke` (60 fps game step, the fire opened with the torso 1.00
+  in the clip): the first round 0.25 s after the first raise hold = 0.27 s after the fire opened (M16 light, RPG-7 light, M16 heavy), where it
+  left on the first frame (~0.02 s) before.
+- **The hanging rifle (`InjuredLocomotionSmoke` `MeasureHangingWeapon`):** the weapon's long axis (98 cm M16 bounds) vs the leg bones and the
+  floor - light idle: ends 120 / 62 cm above the floor, its axis 14.0 cm from thigh_r; heavy idle (`Idle_Walk_Injured_Slow2` bends 34 cm
+  down): ends 93 / 3 cm, lowest point 1 cm, axis 8.5 cm from thigh_r - the muzzle grazes the floor and passes along the thigh at about its
+  surface (the smoke gates: lowest > -2 cm, axis > 6 cm).
+- **The retargeted copies (`Scripts/Editor/setup_injured_animation.py`, 2026-11-10 17:16):** 7 more per body - `Run_Injured`,
+  `Idle_Run_Injured1/2`, `Idle_Walk_Injured2`, `Idle_Walk_Injured_Slow1/2`, `Idle_Crawl_Injured2` (19 / 19 copies per body, 11.8 MB).
+  Run_Injured: 0.67 s, pack best speed 340.3 cm/s (own slide 8.8 %), phase 0.075; on him 368.6 (stride 1.108, slide 8.2 %), on her 361.6
+  (1.016, 12.2 %). Idles: posture within 4.5-15.8 cm, pelvis drift <= 0.15 cm (`Idle_Walk_Injured_Slow2` / `Idle_Walk_Injured2` are the big
+  bending ones, bob 34 / 11 cm).
+- **Checks:** tests `CodexTactics.Animation.Injured.Tiers.*` (GaitFromTier, RunAndIdles, RaiseToFire), `CodexTactics.Characters.CriticalWound.Tiers`
+  (+ DataFileMirrorsDefaults), `CodexTactics.Squad.Regroup.*` (WoundedWalk); smokes `InjuredLocomotionSmoke` stages 2b / 2c (light idles
+  alternate, the whole body, the hanging rifle, the raise and the lowering), 3b (the run = Run_Injured, then the run idles), 6b (heavy: x0.45,
+  the slow idles, forward = Walk_Injured_Slow, strafe = Walk_Injured_Right, crouched = the hunch cue), 7b (critical: the crawl idles on all
+  fours, the raise into the prone aim); `InjuredLocomotionDepotSmoke` legs heavy_m16 / heavy_m16_aiming + the raise per aiming leg (the fire
+  opens with the torso lowered, the first round ~raise_to_fire_s later). Args `shots gamecam` (rendered) = the player's game-camera frames
+  `Saved/Screenshots/InjuredLocomotion/game_<state>.png`.
+- **Over-head labels:** "· WOUNDED" (light), "· BADLY WOUNDED" (heavy, new), "· CRITICAL"; every HUD label kind has a switch in
+  `Content/Data/UI/hud_labels.json` (`HudLabelRules`, `docs/systems/camera-hud-minimap.md` "HUD label switches"), console
+  `Codex.HUD.WoundTags` -1 / 0 / 1.
 
 ## #51: the "thrown back while firing" pop (game designer video 2026-11-06; fixed 2026-11-08)
 

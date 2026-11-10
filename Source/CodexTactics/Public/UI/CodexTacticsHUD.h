@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/HUD.h"
 #include "Interactables/ActionMenuTypes.h"
+#include "UI/HudLabelRules.h"
 #include "UI/HudTextCache.h"
 #include "CodexTacticsHUD.generated.h"
 
@@ -341,6 +342,10 @@ private:
 	// Audit 2026-10-11 P6 / P7: text work done once per text instead of every frame (keys are the raw texts).
 	/** World label (DrawWorldLabels): glyph-stripped lines + measured sizes. */
 	HudTextCache::TBoundedStringCache<HudTextCache::FLabelLayout> LabelLayouts;
+	/** The label switches this frame (Content/Data/UI/hud_labels.json + the Codex.HUD.WoundTags override; HudLabelRules). */
+	HudLabelRules::FHudLabelConfig FrameLabels;
+	/** A label kind is drawn this frame. */
+	bool ShowsLabel(HudLabelRules::EHudLabel Label) const { return FrameLabels.IsShown(Label); }
 	/** Message feed: the glyph-stripped, wrapped lines of a message text. */
 	HudTextCache::TBoundedStringCache<TArray<FString>> FeedWraps;
 	/** Message feed speaker names (glyph-stripped, upper case). */

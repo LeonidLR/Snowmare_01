@@ -799,6 +799,10 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 			: TEXT("no target (auto fire held by the posture)"));
 	}
 
+	// Wounded (feat/injured-tiers-fullbody): the full-body injured clip lowers the rifle - the torso rises into the weapon pose first (asked
+	// now, in parallel with the turn below; every attempt keeps it up), the round waits for it.
+	const bool bRaiseHold = HoldShotForInjuredRaise();
+
 	// Before the sniper step (a direct order stops HER and she kneels: never while she crawls on an order).
 	if (bCrawlHold)
 	{
@@ -885,6 +889,10 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 			return bCornerAimActive ? TEXT("corner hold: outside the aim cone") : TEXT("corner hold: aim not active");
 		}
 	}
+	if (bRaiseHold)
+	{
+		return TEXT("wounded: raising the weapon");
+	}
 	if (ShootTimer > 0.0f || MisfireCooldownTimer > 0.0f || SniperStep != ESniperFireStep::Ready)
 	{
 		return TEXT("cooldown");
@@ -901,6 +909,23 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	ReturnFireShots += Shot.bReturnFire ? 1 : 0;
 	ShootAtTarget(Target, Shot.Cover);
 	return TEXT("fired");
+}
+
+bool AOperativeCharacter::HoldShotForInjuredRaise()
+{
+	UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	if (!Anim)
+	{
+		return false;
+	}
+	Anim->DemandInjuredRaise();
+	if (!Anim->IsInjuredRaisePending())
+	{
+		return false;
+	}
+	++InjuredRaiseHolds;
+	LastInjuredRaiseHoldTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	return true;
 }
 
 void AOperativeCharacter::TraceFireDecision(const TCHAR* Reason, const AActor* Target)

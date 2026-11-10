@@ -10,6 +10,7 @@
 #include "Characters/FacingRules.h"
 #include "CodexTactics.h"
 #include "UI/OverheadLabel.h"
+#include "UI/HudLabelRules.h"
 #include "Characters/EnemyAIController.h"
 #include "AIController.h"
 #include "Navigation/PathFollowingComponent.h"
@@ -282,7 +283,41 @@ bool AEnemyCharacter::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	{
 		return false;
 	}
+	// The full plate (every part on = HudLabelRules' defaults; the HUD recomposes it under the hud_labels.json switches).
+	OutLabel.Text = HudLabelRules::ComposeEnemyLabel(HudLabelRules::FHudLabelConfig(), EnemyDisplayName, GetOverheadStatus(),
+		FMath::FloorToInt(FMath::Max(0.f, HealthComponent->GetCurrentHealth())), FMath::FloorToInt(HealthComponent->GetMaxHealth()));
+	OutLabel.Color = FLinearColor(1.f, 0.4f, 0.4f);
+	OutLabel.HeightCm = Archetype == EEnemyArchetype::FrostHound || Archetype == EEnemyArchetype::Cutter ? 115.f
+		: (Archetype == EEnemyArchetype::Brute ? 240.f : 180.f);
+	// Godot armor_tier: brute heavy (red), spitter medium (yellow), the rest light (green).
+	OutLabel.bHasMarker = true;
+	OutLabel.MarkerColor = Archetype == EEnemyArchetype::Brute ? FLinearColor(0.95f, 0.2f, 0.2f)
+		: (Archetype == EEnemyArchetype::Spitter ? FLinearColor(0.95f, 0.85f, 0.2f) : FLinearColor(0.25f, 0.9f, 0.3f));
+	return true;
+}
+
+bool AEnemyCharacter::GetHudOverheadLabel(FOverheadLabel& OutLabel, const HudLabelRules::FHudLabelConfig& Labels) const
+{
+	if (!GetOverheadLabel(OutLabel))
+	{
+		return false;
+	}
+	if (!Labels.IsEnemyPlateDefault())
+	{
+		OutLabel.Text = HudLabelRules::ComposeEnemyLabel(Labels, EnemyDisplayName, GetOverheadStatus(),
+			FMath::FloorToInt(FMath::Max(0.f, HealthComponent->GetCurrentHealth())), FMath::FloorToInt(HealthComponent->GetMaxHealth()));
+		OutLabel.bHasMarker = OutLabel.bHasMarker && Labels.IsShown(HudLabelRules::EHudLabel::EnemyArmorMarker);
+	}
+	return !OutLabel.Text.IsEmpty() || OutLabel.bHasMarker;
+}
+
+FString AEnemyCharacter::GetOverheadStatus() const
+{
 	FString Status;
+	if (!HealthComponent)
+	{
+		return Status;
+	}
 	if (HealthComponent->HasStatusEffect(EStatusEffect::Burning))
 	{
 		Status += TEXT(" BURNING");
@@ -299,14 +334,5 @@ bool AEnemyCharacter::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	{
 		Status += TEXT(" ARMOR-");
 	}
-	OutLabel.Text = FString::Printf(TEXT("%s%s\n%d/%d"), *EnemyDisplayName, *Status,
-		FMath::FloorToInt(FMath::Max(0.f, HealthComponent->GetCurrentHealth())), FMath::FloorToInt(HealthComponent->GetMaxHealth()));
-	OutLabel.Color = FLinearColor(1.f, 0.4f, 0.4f);
-	OutLabel.HeightCm = Archetype == EEnemyArchetype::FrostHound || Archetype == EEnemyArchetype::Cutter ? 115.f
-		: (Archetype == EEnemyArchetype::Brute ? 240.f : 180.f);
-	// Godot armor_tier: brute heavy (red), spitter medium (yellow), the rest light (green).
-	OutLabel.bHasMarker = true;
-	OutLabel.MarkerColor = Archetype == EEnemyArchetype::Brute ? FLinearColor(0.95f, 0.2f, 0.2f)
-		: (Archetype == EEnemyArchetype::Spitter ? FLinearColor(0.95f, 0.85f, 0.2f) : FLinearColor(0.25f, 0.9f, 0.3f));
-	return true;
+	return Status;
 }

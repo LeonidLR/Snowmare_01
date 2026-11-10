@@ -320,6 +320,25 @@ bool AOperativeCharacter::IsCriticallyWounded() const
 		&& CriticalWoundRules::IsCritical(Config, HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth());
 }
 
+CriticalWoundRules::EWoundTier AOperativeCharacter::GetWoundTier() const
+{
+	using CriticalWoundRules::EWoundTier;
+	const CriticalWoundRules::FCriticalWoundConfig& Config = CriticalWoundRules::GetWoundConfig();
+	EWoundTier Tier = HealthComponent ? CriticalWoundRules::ChooseWoundTier(Config, HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth(),
+		MovementConfig.WoundedHealthThreshold, CriticalWoundRules::AppliesTo(Config, IsPlayerTeam())) : EWoundTier::None;
+	if (Tier == EWoundTier::None && bWounded && (!HealthComponent || HealthComponent->GetCurrentHealth() > 0.f))
+	{
+		Tier = EWoundTier::Light; // bWounded forces IsWounded (tests)
+	}
+	return Tier;
+}
+
+float AOperativeCharacter::GetWoundTierSpeedScale() const
+{
+	return CriticalWoundRules::TierSpeedScale(CriticalWoundRules::GetWoundConfig(), GetWoundTier(), Stance == EOperativeStance::Standing,
+		MovementConfig.WoundedSpeedMultiplier);
+}
+
 bool AOperativeCharacter::NotifyCriticalWoundRefusal() const
 {
 	if (!IsCriticallyWounded())

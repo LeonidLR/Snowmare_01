@@ -5,6 +5,7 @@
 #include "Combat/SquadFireRules.h"
 #include "GameFramework/Character.h"
 #include "Characters/CorpseBody.h"
+#include "Characters/CriticalWoundRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/PersonalItemRules.h"
 #include "Characters/ProgressionRules.h"
@@ -346,6 +347,26 @@ public:
 	 */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	bool IsCriticallyWounded() const;
+
+	/**
+	 * The wound tier (the game designer 2026-11-10, feat/injured-tiers-fullbody; CriticalWoundRules::ChooseWoundTier): Light = IsWounded down to
+	 * critical_wound.json "heavy_from" (35 %), Heavy = under it (the slow injured walk, no run, standing speed x "heavy_speed_multiplier" 0.45),
+	 * Critical = IsCriticallyWounded. Heavy / critical only where the critical rule applies (the squad; hostiles with "apply_to_hostiles").
+	 */
+	CriticalWoundRules::EWoundTier GetWoundTier() const;
+
+	/** The heavy tier's extra speed factor while standing (CriticalWoundRules::TierSpeedScale; 1 otherwise). */
+	float GetWoundTierSpeedScale() const;
+
+	/**
+	 * The wounded full-body layer holds this shot while the torso rises from the injured clip to the weapon pose (InjuredLocomotionRules,
+	 * "raise_to_fire_s" in weapon_anim_sets.json "injured"): asks the animation for the raise (every fire attempt with a target keeps it up)
+	 * and returns true while the shot must wait. False when the layer does not hold the torso (healthy, cover, crouched, no animation tick).
+	 */
+	bool HoldShotForInjuredRaise();
+	/** Fire attempts the raise held (smokes) and the world time of the last one (-1 = none). */
+	int32 InjuredRaiseHolds = 0;
+	double LastInjuredRaiseHoldTime = -1.0;
 
 	/** The critical wound holds him down right now (UpdateCriticalWound's state: set when he went down, cleared when healed). */
 	bool IsHeldDownByCriticalWound() const { return bCriticalWoundDown; }

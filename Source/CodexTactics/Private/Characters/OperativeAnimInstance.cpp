@@ -449,6 +449,7 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 		return; // Sprint 14: no fire clip over the knockdown (nor over the climb)
 	}
 	AimTimer = AimHoldAfterShot;
+	DemandInjuredRaise(); // wounded: the weapon stays up for lower_after_s after the shot (feat/injured-tiers-fullbody)
 	// Sniper rifle (user request 2026-10-09): the stance's shot + the bolt while rounds remain, full body.
 	if (bSniperWeapon && bSniperPose && Shooter)
 	{
@@ -1395,6 +1396,7 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	InjuredWeight = Instance->InjuredWeight;
 	InjuredTorsoShare = Instance->InjuredTorsoShare;
 	InjuredLimpAngles = Instance->InjuredLimpAngles;
+	InjuredUpperShare = Instance->InjuredUpperShare;
 	WeaponUpperWeight = Instance->ShotgunUpperWeight;
 	WeaponLowerWeight = Instance->ShotgunLowerWeight;
 	bWeaponFullBody = Instance->IsWeaponLayerFullBody();
@@ -1504,7 +1506,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 		WeaponProbeLower = WeaponProbeUpper = 0.f; // the layer is off: it changes no bone (the probe reads 0, not the last layer frame)
 	}
 	const bool bCrawlLayer = CrawlWeight > MinSampleWeight;
-	const bool bInjuredLayer = InjuredWeight > MinSampleWeight;
+	const bool bInjuredLayer = InjuredWeight > MinSampleWeight || !InjuredLimpAngles.IsNearlyZero(); // the cue alone crouched / in cover
 	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer && !bCrawlLayer && !bInjuredLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
@@ -1530,7 +1532,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	}
 	if (bInjuredLayer)
 	{
-		BlendInjuredLayer(Output); // the injured legs under the graph's / the weapon layer's torso (InjuredLocomotionRules)
+		BlendInjuredLayer(Output); // the injured body; the torso rises to the graph's / the weapon layer's when firing (InjuredLocomotionRules)
 	}
 	if (LadderIK.bActive)
 	{

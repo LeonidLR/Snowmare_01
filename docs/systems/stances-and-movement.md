@@ -240,7 +240,11 @@ carrying of the wounded (the designer: too complex).
   "<name> is critically wounded - heal him"; `CanSprint` false; a ladder link refuses him (`ELadderRefusal::CriticallyWounded`, "CRITICALLY
   WOUNDED - HEAL HIM", no queue); turn-based: the stance change is refused with no AP spent; vaults never start prone. Moves are crawls (the
   prone speed); the injured locomotion layer plays the injured crawl (wounded + prone). Prone fire is unchanged. HUD: the squad label shows
-  "· CRITICAL" (and "· WOUNDED" under 50 %).
+  "· CRITICAL" (and "· WOUNDED" under 50 %, "· BADLY WOUNDED" in the heavy tier).
+- **Wound tiers (feat/injured-tiers-fullbody, the designer 2026-11-10):** LIGHT 50-35 % HP (x0.65, no sprint, runs), HEAVY 35-20 %
+  (`heavy_from` 0.35: standing speed x`heavy_speed_multiplier` 0.45 = 99 cm/s at the 220 base, no run - the fast regroup walks, the slow
+  injured walk), CRITICAL < 20 % (this rule). `CriticalWoundRules::ChooseWoundTier` / `TierSpeedScale`, `AOperativeCharacter::GetWoundTier`;
+  the clips per tier: `docs/systems/animation-setup.md` "Wound tiers + the full body".
 - **Checks:** unit `CodexTactics.Characters.CriticalWound.*` (threshold, stance lock, the tick step, parsing, the data file = the defaults) and
   `CodexTactics.Ladder.Rules.Refusals` (the ladder refusal); smoke `InjuredLocomotionSmoke` stage 7 (HP 15 % -> down by himself, the stand
   orders refused with the feed line, no sprint, the injured crawl; healed to 40 % -> stands on the order, limps forward).

@@ -42,6 +42,33 @@ namespace CriticalWoundRules
 		return bPlayerSide || Config.bApplyToHostiles;
 	}
 
+	EWoundTier ChooseWoundTier(const FCriticalWoundConfig& Config, float Health, float MaxHealth, float WoundedFrom, bool bApplies)
+	{
+		if (MaxHealth <= 0.f || Health <= 0.f)
+		{
+			return EWoundTier::None;
+		}
+		const float Share = Health / MaxHealth;
+		if (bApplies && IsCritical(Config, Health, MaxHealth))
+		{
+			return EWoundTier::Critical;
+		}
+		if (bApplies && Config.HeavyFrom > 0.f && Share < Config.HeavyFrom)
+		{
+			return EWoundTier::Heavy;
+		}
+		return Share < WoundedFrom ? EWoundTier::Light : EWoundTier::None;
+	}
+
+	float TierSpeedScale(const FCriticalWoundConfig& Config, EWoundTier Tier, bool bStanding, float WoundedMultiplier)
+	{
+		if (Tier != EWoundTier::Heavy || !bStanding || WoundedMultiplier <= KINDA_SMALL_NUMBER || Config.HeavySpeedMultiplier <= 0.f)
+		{
+			return 1.f;
+		}
+		return Config.HeavySpeedMultiplier / WoundedMultiplier;
+	}
+
 	bool AllowsStance(bool bCritical, EOperativeStance Wanted)
 	{
 		return !bCritical || Wanted == EOperativeStance::Prone;
@@ -78,6 +105,14 @@ namespace CriticalWoundRules
 		{
 			Parsed.CriticalFrom = SanitizeShare(Number);
 		}
+		if (Root->TryGetNumberField(TEXT("heavy_from"), Number))
+		{
+			Parsed.HeavyFrom = SanitizeShare(Number);
+		}
+		if (Root->TryGetNumberField(TEXT("heavy_speed_multiplier"), Number))
+		{
+			Parsed.HeavySpeedMultiplier = FMath::IsFinite(Number) ? FMath::Clamp(static_cast<float>(Number), 0.05f, 1.f) : Parsed.HeavySpeedMultiplier;
+		}
 		bool bFlag = false;
 		if (Root->TryGetBoolField(TEXT("apply_to_hostiles"), bFlag))
 		{
@@ -109,8 +144,8 @@ namespace CriticalWoundRules
 			}
 			else
 			{
-				UE_LOG(LogCodexTactics, Display, TEXT("Critical wound: critical_from %.2f, hostiles %s (%s)"), Loaded.CriticalFrom,
-					Loaded.bApplyToHostiles ? TEXT("too") : TEXT("no"), *GetWoundConfigPath());
+				UE_LOG(LogCodexTactics, Display, TEXT("Critical wound: critical_from %.2f, heavy_from %.2f (speed x%.2f), hostiles %s (%s)"), Loaded.CriticalFrom,
+					Loaded.HeavyFrom, Loaded.HeavySpeedMultiplier, Loaded.bApplyToHostiles ? TEXT("too") : TEXT("no"), *GetWoundConfigPath());
 			}
 			ConfigInForce() = Loaded;
 		}

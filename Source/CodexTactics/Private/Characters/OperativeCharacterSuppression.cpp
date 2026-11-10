@@ -320,10 +320,15 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 	{
 		// Turn the body to the point (eased, never slower than AimTurnRateDegPerSec; prone at the prone turn rate, bug #33); no round
 		// where he does not aim.
+		const bool bRaiseHold = HoldShotForInjuredRaise(); // wounded: the torso rises from the injured clip first (feat/injured-tiers-fullbody)
 		TurnAimTowards(AimAt, DeltaTime);
 		if (GetShotAimResidualDeg(AimAt) > AimConeDeg)
 		{
 			return TEXT("suppress: turning");
+		}
+		if (bRaiseHold)
+		{
+			return TEXT("suppress: wounded, raising the weapon");
 		}
 		if (ShootTimer > 0.f || MisfireCooldownTimer > 0.f)
 		{

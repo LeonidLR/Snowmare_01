@@ -69,6 +69,8 @@ bool FSquadRegroupPaceTest::RunTest(const FString&)
 	TestTrue(TEXT("No combat but no sprint allowed (cold / carrying): run"), ChoosePace(false, false, false, Tuning) == ESquadRegroupPace::Run);
 	TestTrue(TEXT("Wounded, no combat: the wounded run, never a sprint"), ChoosePace(false, true, true, Tuning) == ESquadRegroupPace::WoundedRun);
 	TestTrue(TEXT("Wounded, combat: the wounded run"), ChoosePace(true, true, false, Tuning) == ESquadRegroupPace::WoundedRun);
+	TestTrue(TEXT("Heavy wound (may not run): the wounded walk"), ChoosePace(true, true, false, Tuning, false) == ESquadRegroupPace::WoundedWalk);
+	TestTrue(TEXT("Not wounded, bMayRun ignored: the run"), ChoosePace(true, false, false, Tuning, false) == ESquadRegroupPace::Run);
 	Tuning.bSprintOutOfCombat = false;
 	TestTrue(TEXT("sprint_out_of_combat 0: run out of combat too"), ChoosePace(false, false, true, Tuning) == ESquadRegroupPace::Run);
 
@@ -77,6 +79,7 @@ bool FSquadRegroupPaceTest::RunTest(const FString&)
 	TestEqual(TEXT("Run = 480 cm/s"), PaceSpeed(ESquadRegroupPace::Run, 725.f, 0.65f, 1.f, Defaults), 480.f);
 	TestEqual(TEXT("Run in the cold (x0.8) = 384 cm/s"), PaceSpeed(ESquadRegroupPace::Run, 725.f, 0.65f, 0.8f, Defaults), 384.f, 0.01f);
 	TestEqual(TEXT("Wounded run = 480 x 0.65 = 312 cm/s"), PaceSpeed(ESquadRegroupPace::WoundedRun, 725.f, 0.65f, 1.f, Defaults), 312.f, 0.01f);
+	TestEqual(TEXT("Wounded walk = his own (heavy) walk"), PaceSpeed(ESquadRegroupPace::WoundedWalk, 99.f, 0.65f, 1.f, Defaults), 99.f);
 	// Every regroup pace beats the formation's walking catch-up (220 x 1.25 = 275 cm/s), the wounded one too.
 	TestTrue(TEXT("The wounded run beats the formation catch-up"), PaceSpeed(ESquadRegroupPace::WoundedRun, 725.f, 0.65f, 1.f, Defaults) > 275.f);
 	return true;

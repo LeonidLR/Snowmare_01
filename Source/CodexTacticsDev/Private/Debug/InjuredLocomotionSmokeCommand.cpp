@@ -13,9 +13,18 @@
 //     player's stand order (Alt + Z path) and a direct SetStance are refused with the feed line "... is critically wounded - heal him", no
 //     sprint; crawling forward plays the injured crawl; healed to 40 % -> the lock lifts (still prone), the stand order stands him up, walking
 //     forward = the injured walk (he limps).
+// The WOUND TIERS + FULL BODY (the designer 2026-11-10, feat/injured-tiers-fullbody), in between:
+//  2b. light (40 %) standing: the whole body is the clip's (the upper share > 0.9), Idle_Walk_Injured1 -> 2 alternate per loop; the rifle hanging
+//      from the right hand is measured against the legs and the floor; 2c. a fire attempt (HoldShotForInjuredRaise every step): the shot waits
+//      for the raise (measured: ~raise_to_fire_s), then it lowers back after lower_after_s;
+//  3b. light: the wounded run (FollowTo at 480 x 0.65 = 312 cm/s) = Run_Injured (foot slide), then standing = Idle_Run_Injured*;
+//  6b. heavy (30 %): the standing speed = the light tier's x 0.45 / 0.65, the slow idles alternate, forward = Walk_Injured_Slow, sideways =
+//      Walk_Injured_Right; crouched = the ABP's crouch + the hunch cue (no pack clip crouches);
+//  7b. critical lying still: the crawl idles on all fours (Idle_Crawl_Injured1 / 2), a fire attempt raises him into the prone aim (measured).
 // Before the copies are imported (/Game/Characters/Animations/Injured), run with -ExtraArgs "-AnimPackFallback=injured": the pack's clips by bone
 // name - the logic is checked, the foot numbers are only logged (the pack mannequin's proportions).
-// Arg "shots" (rendered run): one frame per state, no HUD, to Saved/Screenshots/InjuredLocomotion/<state>.png.
+// Arg "shots" (rendered run): one frame per state, no HUD, to Saved/Screenshots/InjuredLocomotion/<state>.png; with "gamecam" too, the frames
+// are the player's GAME camera (its own distance and pitch, the HUD on) instead of the close 3/4 camera.
 // Nothing is saved.
 
 #include "CoreMinimal.h"
@@ -25,6 +34,9 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/StaticMesh.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/InjuredLocomotionRules.h"
 #include "Characters/OperativeAnimInstance.h"
@@ -63,6 +75,10 @@ namespace InjuredLocomotionSmoke
 	constexpr float FreezingCold = 75.f;
 	constexpr float FrostCold = 92.f;
 	constexpr float CriticalHealth = 15.f;
+	constexpr float HeavyHealth = 30.f;
+	/** The wounded regroup run (SquadRegroupRules: 480 cm/s x the wounded 0.65). */
+	constexpr float WoundedRunSpeed = 312.f;
+	constexpr float RunCm = 700.f;
 	/**
 	 * The best-planted foot's median world drift as a share of the body's speed, with a floor in cm/s: forward / back / the slow walk; the pack's
 	 * diagonals / strafes pivot the stance foot (Scripts/Editor/setup_injured_animation.py: their own slide 25-38 % on the copies at their best
@@ -77,14 +93,23 @@ namespace InjuredLocomotionSmoke
 		Setup,
 		Healthy,
 		WoundedIdle,
+		LightRaise,
 		WoundedWalk,
+		LightRun,
+		RunIdle,
 		Prone,
 		Crawl,
 		ColdWalk,
 		ColdStrafe,
 		ColdIdle,
 		FrostWalk,
+		HeavyIdle,
+		HeavyWalk,
+		HeavyStrafe,
+		HeavyCrouch,
 		CriticalDown,
+		CriticalIdle,
+		CriticalRaise,
 		CriticalCrawl,
 		CriticalHealed,
 		CriticalWalk,
@@ -120,6 +145,9 @@ namespace InjuredLocomotionSmoke
 		bool bFeetValid = false;
 		/** The leg's frame was taken ("shots"). */
 		bool bShotTaken = false;
+		/** The torso's share in the injured clip (the full body) and the run's share, summed over the steady frames. */
+		double UpperSum = 0.0;
+		double RunSum = 0.0;
 	};
 
 	struct FState
@@ -145,6 +173,20 @@ namespace InjuredLocomotionSmoke
 		float IdleMaxWeight = 0.f;
 		TMap<FString, int32> IdleVotes;
 		bool bShiverSeen = false;
+		bool bGameCam = false;
+		/** The healthy walk's MaxWalkSpeed (the heavy speed check's reference). */
+		float HealthySpeed = 0.f;
+		/** The idle clips seen in front (GetInjuredIdleClip / GetInjuredCrawlIdleClip) and the variant switches at the stage start. */
+		TSet<FString> IdleSeen;
+		int32 IdleSwitchesAtStart = 0;
+		float IdleUpperMin = 1.f;
+		/** The raise check: the time the fire attempts began, when the shot was free, when it was lowered again (< 0 = not yet). */
+		float RaiseStart = -1.f;
+		float RaiseFree = -1.f;
+		float LowerStart = -1.f;
+		float LowerDone = -1.f;
+		bool bRaiseDemand = false;
+		TArray<FString> TierReport;
 		TArray<FString> SlideReport;
 		FDelegateHandle FrameHandle;
 	};
@@ -161,6 +203,10 @@ namespace InjuredLocomotionSmoke
 		if (!State.SlideReport.IsEmpty())
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke foot slide (planted foot / best-planted limb median drift): %s"), *FString::Join(State.SlideReport, TEXT(" | ")));
+		}
+		for (const FString& Line : State.TierReport)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke tiers: %s"), *Line);
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("InjuredLocomotionSmoke"));
@@ -226,7 +272,16 @@ namespace InjuredLocomotionSmoke
 
 	void Shot(UWorld* World, FState& State, const AOperativeCharacter& Op, const TCHAR* Name, float HeightCm = 40.f)
 	{
-		if (State.bShots)
+		if (State.bShots && State.bGameCam)
+		{
+			// The player's view (its own distance / pitch, the HUD on: the squad label's wound tag) - what the designer sees.
+			const APlayerController* PC = World->GetFirstPlayerController();
+			const APlayerCameraManager* Camera = PC ? PC->PlayerCameraManager.Get() : nullptr;
+			FScreenshotRequest::RequestScreenshot(FString::Printf(TEXT("%s/game_%s.png"), *State.Dir, Name), true, false);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: frame %s/game_%s.png (game camera %.0f cm from him, pitch %.0f)"), *State.Dir, Name,
+				Camera ? FVector::Dist(Camera->GetCameraLocation(), Op.GetActorLocation()) : -1.f, Camera ? Camera->GetCameraRotation().Pitch : 0.f);
+		}
+		else if (State.bShots)
 		{
 			FrameCamera(World, State, Op, HeightCm);
 			FScreenshotRequest::RequestScreenshot(FString::Printf(TEXT("%s/%s.png"), *State.Dir, Name), false, false);
@@ -257,6 +312,21 @@ namespace InjuredLocomotionSmoke
 		FMoveSamples& Move = State.Move;
 		const UOperativeAnimInstance* Anim = AnimOf(Op);
 		UWorld* World = Op->GetWorld();
+		if (Anim)
+		{
+			if (const UAnimSequenceBase* Idle = Anim->GetInjuredIdleClip())
+			{
+				State.IdleSeen.Add(Idle->GetName());
+			}
+			if (const UAnimSequenceBase* CrawlIdle = Anim->IsInjuredCrawlIdleActive() ? Anim->GetInjuredCrawlIdleClip() : nullptr)
+			{
+				State.IdleSeen.Add(CrawlIdle->GetName());
+			}
+		}
+		if (State.bRaiseDemand)
+		{
+			Op->HoldShotForInjuredRaise(); // a fire attempt every frame (as the fire decision does with a target)
+		}
 		if (!Move.bActive || !Anim || !World)
 		{
 			Move.bFeetValid = false;
@@ -297,6 +367,8 @@ namespace InjuredLocomotionSmoke
 		}
 		Move.MaxWeight = FMath::Max(Move.MaxWeight, Anim->GetInjuredWeight());
 		Move.WeightSum += Anim->GetInjuredWeight();
+		Move.UpperSum += Anim->GetInjuredUpperShare();
+		Move.RunSum += Anim->GetInjuredRunShare();
 		Move.RateSum += Anim->GetInjuredPlayRate();
 		Move.DirSum += Anim->GetInjuredDirection();
 		Move.FacingErrSum += FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), State.LookYaw));
@@ -381,6 +453,131 @@ namespace InjuredLocomotionSmoke
 		State.bMoveStarted = false;
 		State.IdleMaxWeight = 0.f;
 		State.IdleVotes.Reset();
+		State.IdleSeen.Reset();
+		State.IdleUpperMin = 1.f;
+		if (const UOperativeAnimInstance* Anim = AnimOf(State.Op.Get()))
+		{
+			State.IdleSwitchesAtStart = Anim->GetInjuredIdleSwitches();
+		}
+	}
+
+	FString Joined(const TSet<FString>& Names)
+	{
+		TArray<FString> Sorted = Names.Array();
+		Sorted.Sort();
+		return Sorted.IsEmpty() ? FString(TEXT("none")) : FString::Join(Sorted, TEXT(", "));
+	}
+
+	/**
+	 * The rifle hanging from the right hand in the full-body injured clip: the segment from its grip (the weapon component on the hand socket)
+	 * to the muzzle against the leg bones (thigh -> calf -> foot, both legs) and the floor - a leg is ~8 cm thick, so a segment nearer than
+	 * that passes through it.
+	 */
+	void MeasureHangingWeapon(FState& State, const AOperativeCharacter& Op, const TCHAR* Label)
+	{
+		const USkeletalMeshComponent* Body = Op.GetMesh();
+		const UStaticMeshComponent* Weapon = Op.WeaponMesh;
+		if (!Body || !Weapon)
+		{
+			return;
+		}
+		// The rifle's long axis: its model's local box, the longest extent, both ends in the world (the barrel's tip and the stock's end).
+		const UStaticMesh* Model = Weapon->GetStaticMesh();
+		if (!Model)
+		{
+			return;
+		}
+		const FBox Local = Model->GetBoundingBox();
+		const FVector Extent = Local.GetExtent();
+		const int32 Axis = Extent.X >= Extent.Y && Extent.X >= Extent.Z ? 0 : (Extent.Y >= Extent.Z ? 1 : 2);
+		FVector Half = FVector::ZeroVector;
+		Half[Axis] = Extent[Axis];
+		const FTransform& ToWorld = Weapon->GetComponentTransform();
+		const FVector Grip = ToWorld.TransformPosition(Local.GetCenter() - Half);
+		const FVector Muzzle = ToWorld.TransformPosition(Local.GetCenter() + Half);
+		static const TCHAR* LegBones[2][3] = { { TEXT("thigh_l"), TEXT("calf_l"), TEXT("foot_l") }, { TEXT("thigh_r"), TEXT("calf_r"), TEXT("foot_r") } };
+		float Nearest = TNumericLimits<float>::Max();
+		FString NearestBone;
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			for (int32 Seg = 0; Seg < 2; ++Seg)
+			{
+				FVector OnGun;
+				FVector OnLeg;
+				FMath::SegmentDistToSegmentSafe(Grip, Muzzle, Body->GetBoneLocation(LegBones[Side][Seg]), Body->GetBoneLocation(LegBones[Side][Seg + 1]), OnGun, OnLeg);
+				const float Dist = static_cast<float>(FVector::Dist(OnGun, OnLeg));
+				if (Dist < Nearest)
+				{
+					Nearest = Dist;
+					NearestBone = LegBones[Side][Seg];
+				}
+			}
+		}
+		const float Floor = static_cast<float>(Op.GetActorLocation().Z - Op.GetSimpleCollisionHalfHeight());
+		const float Lowest = static_cast<float>(Weapon->Bounds.GetBox().Min.Z) - Floor;
+		const FString Line = FString::Printf(TEXT("%s: the hanging rifle - its ends %.0f / %.0f cm above the floor, its lowest point %.0f cm; nearest leg bone %s %.1f cm from its axis; %.0f cm long"),
+			Label, Grip.Z - Floor, Muzzle.Z - Floor, Lowest, *NearestBone, Nearest, FVector::Dist(Grip, Muzzle));
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s"), *Line);
+		State.TierReport.Add(Line);
+		Check(State, Lowest > -2.f, FString::Printf(TEXT("%s: the hanging rifle stays above the floor (lowest %.0f cm)"), Label, Lowest));
+		Check(State, Nearest > 6.f, FString::Printf(TEXT("%s: the hanging rifle's axis keeps out of the legs (%s at %.1f cm)"), Label, *NearestBone, Nearest));
+	}
+
+	/**
+	 * The raise check (a fire attempt every frame from the lowered pose): the time until the shot is free (HoldShotForInjuredRaise false), then -
+	 * the attempts stopped - the time until the torso is back in the clip (upper share > 0.9). Returns true when done.
+	 */
+	bool StepRaise(FState& State, AOperativeCharacter& Op, const UOperativeAnimInstance& Anim, const TCHAR* Label, bool bProne, float Wanted)
+	{
+		const float Share = bProne ? (Anim.IsInjuredCrawlIdleActive() ? Anim.GetProneCrawlWeight() : 0.f) : Anim.GetInjuredUpperShare();
+		if (State.RaiseStart < 0.f)
+		{
+			State.RaiseStart = State.StageTime;
+			State.bRaiseDemand = true;
+			return false;
+		}
+		if (State.RaiseFree < 0.f)
+		{
+			if (!Anim.IsInjuredRaisePending())
+			{
+				State.RaiseFree = State.StageTime;
+				Shot(Op.GetWorld(), State, Op, bProne ? TEXT("critical_raise_prone_aim") : TEXT("light_raise_to_fire"), bProne ? 80.f : 40.f);
+			}
+			else if (State.StageTime - State.RaiseStart > 3.f)
+			{
+				State.RaiseFree = State.StageTime;
+				Check(State, false, FString::Printf(TEXT("%s: the raise never freed the shot (share %.2f)"), Label, Share));
+			}
+			return false;
+		}
+		if (State.LowerStart < 0.f)
+		{
+			if (State.StageTime - State.RaiseFree < 0.5f)
+			{
+				return false; // a short burst's worth of attempts held up
+			}
+			State.bRaiseDemand = false;
+			State.LowerStart = State.StageTime;
+			return false;
+		}
+		if (State.LowerDone < 0.f && Share > 0.9f)
+		{
+			State.LowerDone = State.StageTime;
+		}
+		if (State.LowerDone < 0.f && State.StageTime - State.LowerStart < 4.f)
+		{
+			return false;
+		}
+		const float Delay = State.RaiseFree - State.RaiseStart;
+		const float Lowered = State.LowerDone >= 0.f ? State.LowerDone - State.LowerStart : -1.f;
+		const FString Line = FString::Printf(TEXT("%s: the first shot waited %.2f s for the raise (raise_to_fire_s %.2f; the ticker's 0.05 s step), the body back in the clip %.2f s after the last attempt"),
+			Label, Delay, Wanted, Lowered);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s"), *Line);
+		State.TierReport.Add(Line);
+		Check(State, Delay >= Wanted * 0.6f && Delay <= Wanted + 0.2f, FString::Printf(TEXT("%s: the shot waits for the raise (%.2f s, wanted ~%.2f)"), Label, Delay, Wanted));
+		Check(State, Lowered >= 0.8f && Lowered <= 2.5f, FString::Printf(TEXT("%s: lowered back after lower_after_s (%.2f s)"), Label, Lowered));
+		State.RaiseStart = State.RaiseFree = State.LowerStart = State.LowerDone = -1.f;
+		return true;
 	}
 
 	bool StepWound(TWeakObjectPtr<UWorld> WeakWorld, TSharedRef<FState> StateRef)
@@ -393,7 +590,7 @@ namespace InjuredLocomotionSmoke
 		{
 			return false;
 		}
-		if (State.Time > 300.f)
+		if (State.Time > 480.f)
 		{
 			Check(State, false, FString::Printf(TEXT("timeout in stage %d leg %d"), static_cast<int32>(State.Stage), State.Leg));
 			return Finish(State, false);
@@ -503,6 +700,7 @@ namespace InjuredLocomotionSmoke
 			EndMove(State, TEXT("healthy forward"), false, &Mean);
 			Check(State, State.Move.SteadyFrames > 10 && State.Move.MaxWeight < 0.01f,
 				FString::Printf(TEXT("1: full HP walking: the injured layer stays off (weight max %.3f, %d frames)"), State.Move.MaxWeight, State.Move.SteadyFrames));
+			State.HealthySpeed = Op->GetMaxSpeed();
 			Op->HealthComponent->RestoreHealth(WoundedHealth, 100.f);
 			Reset(*Op, State);
 			Enter(State, EStage::WoundedIdle);
@@ -514,17 +712,41 @@ namespace InjuredLocomotionSmoke
 			{
 				State.IdleMaxWeight = FMath::Max(State.IdleMaxWeight, Anim->GetInjuredWeight());
 				State.IdleVotes.FindOrAdd(ClipName(Anim->GetInjuredDominantClip()))++;
+				State.IdleUpperMin = FMath::Min(State.IdleUpperMin, Anim->GetInjuredUpperShare());
 			}
-			if (State.StageTime < 3.f)
+			if (State.StageTime >= 2.f && State.StageTime < 2.f + StepSeconds)
+			{
+				MeasureHangingWeapon(State, *Op, TEXT("2b: light idle"));
+				Shot(World, State, *Op, TEXT("light_idle"));
+			}
+			if (State.StageTime < 6.5f)
 			{
 				return true;
 			}
+			const int32 Switches = Anim->GetInjuredIdleSwitches() - State.IdleSwitchesAtStart;
+			const FString IdleLine = FString::Printf(TEXT("2b: light (40 %%) standing - idles %s, %d switch(es), the torso's share in the clip >= %.2f, tier %d"),
+				*Joined(State.IdleSeen), Switches, State.IdleUpperMin, static_cast<int32>(Anim->GetInjuredTier()));
+			State.TierReport.Add(IdleLine);
+			Check(State, Anim->GetInjuredTier() == CriticalWoundRules::EWoundTier::Light && Anim->GetInjuredIdleSet() == InjuredLocomotionRules::EInjuredIdleSet::Walk,
+				FString::Printf(TEXT("2b: 40 %% = the light tier, the walk idles (tier %d, set %d)"), static_cast<int32>(Anim->GetInjuredTier()), static_cast<int32>(Anim->GetInjuredIdleSet())));
+			Check(State, State.IdleSeen.Contains(TEXT("Idle_Walk_Injured1")) && State.IdleSeen.Contains(TEXT("Idle_Walk_Injured2")) && Switches >= 1,
+				FString::Printf(TEXT("2b: the light idles alternate per loop (%s)"), *IdleLine));
+			Check(State, State.IdleUpperMin > 0.9f, FString::Printf(TEXT("2b: standing wounded, the WHOLE body plays the clip (the torso's share >= %.2f)"), State.IdleUpperMin));
 			const FString Top = TopVote(State.IdleVotes);
 			Check(State, Op->IsWounded() && Anim->GetInjuredGait() == EInjuredGait::Wounded,
 				FString::Printf(TEXT("2: HP %.0f %% - wounded, the injured gait (%d)"), Op->HealthComponent->GetHealthFraction() * 100.f, static_cast<int32>(Anim->GetInjuredGait())));
 			Check(State, State.IdleMaxWeight > 0.9f && Top.StartsWith(TEXT("Idle_Walk_Injured")),
 				FString::Printf(TEXT("2: standing still wounded: the injured idle drives the legs (weight %.2f, clip %s)"), State.IdleMaxWeight, *Top));
 			Shot(World, State, *Op, TEXT("wounded_idle"));
+			Enter(State, EStage::LightRaise);
+			return true;
+		}
+		case EStage::LightRaise:
+		{
+			if (!StepRaise(State, *Op, *Anim, TEXT("2c: light, a fire attempt"), false, 0.25f))
+			{
+				return true;
+			}
 			State.Leg = 0;
 			Reset(*Op, State);
 			Enter(State, EStage::WoundedWalk);
@@ -564,12 +786,63 @@ namespace InjuredLocomotionSmoke
 			Check(State, State.Move.SteadyFrames > 10 && Mean > 0.9f,
 				FString::Printf(TEXT("3: %s: the injured layer drives the legs (steady weight mean %.2f, %d frames)"), *Label, Mean, State.Move.SteadyFrames));
 			Check(State, Top == LegClips[State.Leg], FString::Printf(TEXT("3: %s: the clip of the direction plays (%s, wanted %s)"), *Label, *Top, LegClips[State.Leg]));
+			const float Upper = static_cast<float>(State.Move.UpperSum / FMath::Max(1, State.Move.SteadyFrames));
+			Check(State, Upper > 0.9f, FString::Printf(TEXT("3: %s: the whole body walks the clip (the torso's share %.2f)"), *Label, Upper));
 			if (++State.Leg < 8)
 			{
 				Reset(*Op, State);
 				Enter(State, EStage::WoundedWalk);
 				return true;
 			}
+			Reset(*Op, State);
+			Enter(State, EStage::LightRun);
+			return true;
+		}
+		case EStage::LightRun:
+		{
+			if (!State.bMoveStarted)
+			{
+				if (State.StageTime < 1.f)
+				{
+					return true;
+				}
+				State.Move = FMoveSamples();
+				State.Move.bActive = true;
+				State.bMoveStarted = true;
+				Op->FollowTo(SmokeUtils::ClearPoint(World, Op->GetActorLocation(), Op->GetActorLocation() + State.Forward * RunCm), WoundedRunSpeed);
+				return true;
+			}
+			if (State.bShots && !State.Move.bShotTaken && State.Move.SteadyFrames >= 20)
+			{
+				State.Move.bShotTaken = true;
+				Shot(World, State, *Op, TEXT("light_run"));
+			}
+			if ((State.StageTime < 1.5f || Op->GetVelocity().Size2D() > 5.f) && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			const FString Top = EndMove(State, TEXT("light run"), true);
+			const float RunMean = static_cast<float>(State.Move.RunSum / FMath::Max(1, State.Move.SteadyFrames));
+			const float Speed = static_cast<float>(State.Move.SpeedSum / FMath::Max(1, State.Move.SteadyFrames));
+			State.TierReport.Add(FString::Printf(TEXT("3b: light run at %.0f cm/s - clip %s, run share %.2f"), Speed, *Top, RunMean));
+			Check(State, State.Move.SteadyFrames > 5 && RunMean > 0.8f && Top == TEXT("Run_Injured"),
+				FString::Printf(TEXT("3b: the light wound's run = Run_Injured (%s, run share %.2f, %.0f cm/s, %d frames)"), *Top, RunMean, Speed, State.Move.SteadyFrames));
+			Enter(State, EStage::RunIdle);
+			return true;
+		}
+		case EStage::RunIdle:
+		{
+			if (State.StageTime < 3.f)
+			{
+				if (State.StageTime >= 2.f && State.StageTime < 2.f + StepSeconds)
+				{
+					Shot(World, State, *Op, TEXT("light_after_run_idle"));
+				}
+				return true;
+			}
+			State.TierReport.Add(FString::Printf(TEXT("3b: standing after the run - idles %s"), *Joined(State.IdleSeen)));
+			Check(State, Anim->GetInjuredIdleSet() == InjuredLocomotionRules::EInjuredIdleSet::Run && Joined(State.IdleSeen).Contains(TEXT("Idle_Run_Injured")),
+				FString::Printf(TEXT("3b: standing after the run: the run idles (set %d, %s)"), static_cast<int32>(Anim->GetInjuredIdleSet()), *Joined(State.IdleSeen)));
 			Reset(*Op, State);
 			Op->SetStance(EOperativeStance::Prone);
 			Enter(State, EStage::Prone);
@@ -656,8 +929,8 @@ namespace InjuredLocomotionSmoke
 				State.bHoldCold = false;
 				Op->ColdLevel = 0.f;
 				Reset(*Op, State);
-				Op->HealthComponent->RestoreHealth(CriticalHealth, 100.f);
-				Enter(State, EStage::CriticalDown);
+				Op->HealthComponent->RestoreHealth(HeavyHealth, 100.f);
+				Enter(State, EStage::HeavyIdle);
 				return true;
 			}
 			Reset(*Op, State);
@@ -694,6 +967,108 @@ namespace InjuredLocomotionSmoke
 			Enter(State, EStage::FrostWalk);
 			return true;
 		}
+		case EStage::HeavyIdle:
+		{
+			if (State.StageTime > 1.f)
+			{
+				State.IdleUpperMin = FMath::Min(State.IdleUpperMin, Anim->GetInjuredUpperShare());
+			}
+			if (State.StageTime >= 2.f && State.StageTime < 2.f + StepSeconds)
+			{
+				MeasureHangingWeapon(State, *Op, TEXT("6b: heavy idle"));
+				Shot(World, State, *Op, TEXT("heavy_idle"));
+			}
+			if (State.StageTime < 7.5f)
+			{
+				return true;
+			}
+			const int32 Switches = Anim->GetInjuredIdleSwitches() - State.IdleSwitchesAtStart;
+			const float Speed = Op->GetMaxSpeed();
+			const float Wanted = State.HealthySpeed * 0.45f;
+			const FString Line = FString::Printf(TEXT("6b: heavy (30 %%) standing - idles %s, %d switch(es), the torso's share >= %.2f; standing speed %.0f cm/s (healthy %.0f, wanted x0.45 = %.0f)"),
+				*Joined(State.IdleSeen), Switches, State.IdleUpperMin, Speed, State.HealthySpeed, Wanted);
+			State.TierReport.Add(Line);
+			Check(State, Op->GetWoundTier() == CriticalWoundRules::EWoundTier::Heavy && Anim->GetInjuredGait() == EInjuredGait::WoundedHeavy,
+				FString::Printf(TEXT("6b: 30 %% = the heavy tier (tier %d, gait %d)"), static_cast<int32>(Op->GetWoundTier()), static_cast<int32>(Anim->GetInjuredGait())));
+			Check(State, State.IdleSeen.Contains(TEXT("Idle_Walk_Injured_Slow1")) && State.IdleSeen.Contains(TEXT("Idle_Walk_Injured_Slow2")) && Switches >= 1,
+				FString::Printf(TEXT("6b: the heavy idles alternate (%s)"), *Line));
+			Check(State, State.IdleUpperMin > 0.9f, FString::Printf(TEXT("6b: the whole body plays the heavy idle (%.2f)"), State.IdleUpperMin));
+			Check(State, FMath::IsNearlyEqual(Speed, Wanted, 2.f), FString::Printf(TEXT("6b: the heavy standing speed = x0.45 (%.0f vs %.0f cm/s)"), Speed, Wanted));
+			Check(State, !Op->CanSprint(), TEXT("6b: heavy - no sprint"));
+			Reset(*Op, State);
+			Enter(State, EStage::HeavyWalk);
+			return true;
+		}
+		case EStage::HeavyWalk:
+		case EStage::HeavyStrafe:
+		{
+			const bool bStrafe = State.Stage == EStage::HeavyStrafe;
+			if (!State.bMoveStarted)
+			{
+				if (State.StageTime < 1.f)
+				{
+					return true;
+				}
+				Reset(*Op, State);
+				StartMove(State, *Op, bStrafe ? State.Forward.RotateAngleAxis(90.f, FVector::UpVector) : State.Forward, LegCm, false);
+				return true;
+			}
+			if (State.bShots && !bStrafe && !State.Move.bShotTaken && State.Move.SteadyFrames >= 25)
+			{
+				State.Move.bShotTaken = true;
+				Shot(World, State, *Op, TEXT("heavy_slow_walk"));
+			}
+			if (Op->HasOwnMoveOrder() && State.StageTime < 20.f)
+			{
+				return true;
+			}
+			float Mean = 0.f;
+			const TCHAR* Label = bStrafe ? TEXT("heavy strafe right") : TEXT("heavy forward");
+			const FString Top = EndMove(State, Label, true, &Mean, bStrafe ? FootSlideShareLimitSide : FootSlideShareLimit);
+			const TCHAR* WantedClip = bStrafe ? TEXT("Walk_Injured_Right") : TEXT("Walk_Injured_Slow");
+			const float Upper = static_cast<float>(State.Move.UpperSum / FMath::Max(1, State.Move.SteadyFrames));
+			State.TierReport.Add(FString::Printf(TEXT("6b: %s - clip %s, weight %.2f, the torso's share %.2f"), Label, *Top, Mean, Upper));
+			Check(State, State.Move.SteadyFrames > 10 && Mean > 0.9f && Top == WantedClip && Upper > 0.9f,
+				FString::Printf(TEXT("6b: %s: %s, the whole body (clip %s, weight %.2f, torso %.2f)"), Label, WantedClip, *Top, Mean, Upper));
+			Reset(*Op, State);
+			if (!bStrafe)
+			{
+				Enter(State, EStage::HeavyStrafe);
+				return true;
+			}
+			Op->SetStance(EOperativeStance::Crouching);
+			State.Move = FMoveSamples(); // the crouch stage's frame flag
+			Enter(State, EStage::HeavyCrouch);
+			return true;
+		}
+		case EStage::HeavyCrouch:
+		{
+			if (State.StageTime < 2.5f || Anim->IsStanceChangePending())
+			{
+				return true;
+			}
+			if (!State.Move.bShotTaken)
+			{
+				// The frame first, the stage change a few frames later (the screenshot is captured on a later frame).
+				State.Move.bShotTaken = true;
+				State.StageTime = 2.5f;
+				Shot(World, State, *Op, TEXT("heavy_crouch_cue"));
+				return true;
+			}
+			if (State.StageTime < 2.8f)
+			{
+				return true;
+			}
+			const float Cue = Anim->GetInjuredLimpAmount();
+			State.TierReport.Add(FString::Printf(TEXT("6b: heavy crouched - no pack clip crouches: the ABP's crouch, the hunch cue %.2f (injured weight %.2f)"), Cue, Anim->GetInjuredWeight()));
+			Check(State, Op->GetStance() == EOperativeStance::Crouching && Anim->GetInjuredWeight() < 0.01f && Cue > 0.4f,
+				FString::Printf(TEXT("6b: crouched wounded: the crouch pose keeps, the hunch cue shows (cue %.2f, weight %.2f)"), Cue, Anim->GetInjuredWeight()));
+			Op->SetStance(EOperativeStance::Standing);
+			Reset(*Op, State);
+			Op->HealthComponent->RestoreHealth(CriticalHealth, 100.f);
+			Enter(State, EStage::CriticalDown);
+			return true;
+		}
 		case EStage::CriticalDown:
 		{
 			if (State.StageTime < 3.f || Anim->IsStanceChangePending())
@@ -722,6 +1097,34 @@ namespace InjuredLocomotionSmoke
 				FString::Printf(TEXT("7: the stand / crouch orders are refused, no sprint (stance %d)"), static_cast<int32>(Op->GetStance())));
 			Check(State, bLine, TEXT("7: the feed line \"... is critically wounded - heal him\""));
 			Shot(World, State, *Op, TEXT("critical_down"), 80.f);
+			Enter(State, EStage::CriticalIdle);
+			return true;
+		}
+		case EStage::CriticalIdle:
+		{
+			if (State.StageTime >= 2.f && State.StageTime < 2.f + StepSeconds)
+			{
+				Shot(World, State, *Op, TEXT("critical_crawl_idle"), 80.f);
+			}
+			if (State.StageTime < 4.5f)
+			{
+				return true;
+			}
+			const int32 Switches = Anim->GetInjuredIdleSwitches() - State.IdleSwitchesAtStart;
+			const FString Line = FString::Printf(TEXT("7b: critical lying still - crawl idles %s, %d switch(es), crawl weight %.2f"), *Joined(State.IdleSeen), Switches,
+				Anim->GetProneCrawlWeight());
+			State.TierReport.Add(Line);
+			Check(State, Anim->IsInjuredCrawlIdleActive() && Anim->GetProneCrawlWeight() > 0.9f && State.IdleSeen.Contains(TEXT("Idle_Crawl_Injured1"))
+				&& State.IdleSeen.Contains(TEXT("Idle_Crawl_Injured2")) && Switches >= 1, FString::Printf(TEXT("7b: critical still: the crawl idles on all fours alternate (%s)"), *Line));
+			Enter(State, EStage::CriticalRaise);
+			return true;
+		}
+		case EStage::CriticalRaise:
+		{
+			if (!StepRaise(State, *Op, *Anim, TEXT("7b: critical prone, a fire attempt"), true, 0.25f))
+			{
+				return true;
+			}
 			Enter(State, EStage::CriticalCrawl);
 			return true;
 		}
@@ -731,6 +1134,11 @@ namespace InjuredLocomotionSmoke
 			{
 				StartMove(State, *Op, State.Forward, CrawlCm, true);
 				return true;
+			}
+			if (State.bShots && !State.Move.bShotTaken && State.Move.SteadyFrames >= 30)
+			{
+				State.Move.bShotTaken = true; // mid-crawl (the frame is captured a frame later: never on the heal below)
+				Shot(World, State, *Op, TEXT("critical_crawl"), 80.f);
 			}
 			if (Op->HasOwnMoveOrder() && State.StageTime < 20.f)
 			{
@@ -812,6 +1220,7 @@ namespace InjuredLocomotionSmoke
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->bShots = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("shots"), ESearchCase::IgnoreCase); });
+		State->bGameCam = Args.ContainsByPredicate([](const FString& Arg) { return Arg.Equals(TEXT("gamecam"), ESearchCase::IgnoreCase); });
 		State->Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Screenshots/InjuredLocomotion"));
 		FString Fallback;
 		State->bPackFallback = FParse::Value(FCommandLine::Get(), TEXT("AnimPackFallback="), Fallback) && Fallback.Contains(TEXT("injured"));
@@ -821,7 +1230,7 @@ namespace InjuredLocomotionSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.InjuredLocomotionSmoke"),
-		TEXT("Dev check (the injured locomotion, L_MovementTest): full HP the layer is off; at 40 % HP the injured idle, the 8-direction injured walk (clip per direction, foot slide), the injured crawl prone; cold 75 % the injured walk forward / sideways and the shiver idle standing, cold 92 % the slow injured walk forward; HP 15 % the critical wound (down, stand refused, the injured crawl; healed to 40 % he stands and limps). Logs PASS/FAIL, then exits. Arg \"shots\": rendered frames to Saved/Screenshots/InjuredLocomotion."),
+		TEXT("Dev check (the injured locomotion, L_MovementTest): full HP the layer is off; at 40 % HP the injured idle, the 8-direction injured walk (clip per direction, foot slide), the injured crawl prone; cold 75 % the injured walk forward / sideways and the shiver idle standing, cold 92 % the slow injured walk forward; HP 30 % the heavy tier (x0.45, the slow idles / walk, crouched = the hunch cue); HP 15 % the critical wound (down, the crawl idles, the raise into the prone aim, stand refused, the injured crawl; healed to 40 % he stands and limps); 40 % also the full body, the idle variants, the run, the raise to fire. Logs PASS/FAIL, then exits. Arg \"shots\": rendered frames to Saved/Screenshots/InjuredLocomotion (+ \"gamecam\": the player's game camera)."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

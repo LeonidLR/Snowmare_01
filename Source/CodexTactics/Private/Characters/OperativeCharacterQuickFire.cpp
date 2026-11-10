@@ -236,11 +236,16 @@ const TCHAR* AOperativeCharacter::RunQuickFire(float DeltaTime, AActor*& OutTarg
 	{
 		// Turn the body to the point (eased, never slower than AimTurnRateDegPerSec; prone at the prone turn rate, bug #33); no round
 		// where he does not aim.
+		const bool bRaiseHold = HoldShotForInjuredRaise(); // wounded: the torso rises from the injured clip first (feat/injured-tiers-fullbody)
 		TurnAimTowards(AimAt, DeltaTime);
 		Residual = GetShotAimResidualDeg(AimAt);
 		if (Residual > AimConeDeg)
 		{
 			return TEXT("quick fire: turning");
+		}
+		if (bRaiseHold)
+		{
+			return TEXT("quick fire: wounded, raising the weapon");
 		}
 		if (ShootTimer > 0.f || MisfireCooldownTimer > 0.f)
 		{

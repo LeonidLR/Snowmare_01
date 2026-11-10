@@ -32,6 +32,110 @@ namespace InjuredLocomotionRules
 		return EInjuredGait::None;
 	}
 
+	EInjuredGait ChooseTierGait(const FInjuredTriggers& Triggers, CriticalWoundRules::EWoundTier Tier, float ColdShare)
+	{
+		using CriticalWoundRules::EWoundTier;
+		const EInjuredGait Cold = ChooseGait(Triggers, false, ColdShare);
+		if (!Triggers.bWounded || Tier == EWoundTier::None)
+		{
+			return Cold;
+		}
+		if (Tier == EWoundTier::Heavy || Tier == EWoundTier::Critical)
+		{
+			return EInjuredGait::WoundedHeavy;
+		}
+		return Cold == EInjuredGait::ColdSlow ? EInjuredGait::WoundedHeavy : EInjuredGait::Wounded;
+	}
+
+	bool IsWoundGait(EInjuredGait Gait)
+	{
+		return Gait == EInjuredGait::Wounded || Gait == EInjuredGait::WoundedHeavy;
+	}
+
+	float RunShare(EInjuredGait Gait, float Speed, float StartSpeed, float FullSpeed, float ConeShare)
+	{
+		if (Gait != EInjuredGait::Wounded || FullSpeed <= 0.f)
+		{
+			return 0.f;
+		}
+		const float Start = FMath::Min(StartSpeed, FullSpeed);
+		const float Band = FullSpeed - Start > KINDA_SMALL_NUMBER ? FMath::Clamp((Speed - Start) / (FullSpeed - Start), 0.f, 1.f) : (Speed >= FullSpeed ? 1.f : 0.f);
+		return Band * FMath::Clamp(ConeShare, 0.f, 1.f);
+	}
+
+	EInjuredIdleSet ChooseIdleSet(EInjuredGait Gait, float SecondsSinceRun, float RunIdleHoldSeconds)
+	{
+		switch (Gait)
+		{
+		case EInjuredGait::Wounded:
+			return SecondsSinceRun >= 0.f && SecondsSinceRun < RunIdleHoldSeconds ? EInjuredIdleSet::Run : EInjuredIdleSet::Walk;
+		case EInjuredGait::WoundedHeavy:
+			return EInjuredIdleSet::Slow;
+		default:
+			return EInjuredIdleSet::None;
+		}
+	}
+
+	int32 NextIdleVariant(int32 Previous, int32 Count, bool bRandom, float Random01)
+	{
+		if (Count <= 1 || Previous < 0)
+		{
+			return 0;
+		}
+		const int32 Last = FMath::Clamp(Previous, 0, Count - 1);
+		if (!bRandom)
+		{
+			return (Last + 1) % Count;
+		}
+		const int32 Pick = FMath::Clamp(static_cast<int32>(FMath::Clamp(Random01, 0.f, 0.9999f) * static_cast<float>(Count - 1)), 0, Count - 2);
+		return Pick >= Last ? Pick + 1 : Pick;
+	}
+
+	FInjuredRaiseConfig SanitizeRaise(const FInjuredRaiseConfig& Config)
+	{
+		auto Seconds = [](float Value, float Fallback) { return FMath::IsFinite(Value) ? FMath::Clamp(Value, 0.f, 5.f) : Fallback; };
+		FInjuredRaiseConfig Out = Config;
+		Out.RaiseSeconds = Seconds(Config.RaiseSeconds, 0.25f);
+		Out.LowerAfterSeconds = Seconds(Config.LowerAfterSeconds, 1.f);
+		Out.LowerSeconds = Seconds(Config.LowerSeconds, 0.4f);
+		return Out;
+	}
+
+	float StepRaiseShare(float Share, float SecondsSinceDemand, float DeltaSeconds, const FInjuredRaiseConfig& Config)
+	{
+		const bool bDemand = SecondsSinceDemand >= 0.f && SecondsSinceDemand <= Config.LowerAfterSeconds;
+		const float Seconds = bDemand ? Config.RaiseSeconds : Config.LowerSeconds;
+		const float Target = bDemand ? 1.f : 0.f;
+		if (Seconds <= KINDA_SMALL_NUMBER)
+		{
+			return Target;
+		}
+		return FMath::FInterpConstantTo(FMath::Clamp(Share, 0.f, 1.f), Target, FMath::Max(0.f, DeltaSeconds), 1.f / Seconds);
+	}
+
+	float UpperBodyShare(const FInjuredRaiseConfig& Config, float LayerWeight, float RaiseShare, float UpperSlotWeight)
+	{
+		if (!Config.bFullBody)
+		{
+			return 0.f;
+		}
+		return FMath::Clamp(LayerWeight, 0.f, 1.f) * (1.f - FMath::Clamp(RaiseShare, 0.f, 1.f)) * (1.f - FMath::Clamp(UpperSlotWeight, 0.f, 1.f));
+	}
+
+	bool HoldsShotForRaise(float UpperShare)
+	{
+		return UpperShare > ShotRaiseTolerance;
+	}
+
+	float FirstShotRaiseDelay(const FInjuredRaiseConfig& Config, float RaiseShare)
+	{
+		if (!Config.bFullBody)
+		{
+			return 0.f;
+		}
+		return Config.RaiseSeconds * FMath::Max(0.f, 1.f - ShotRaiseTolerance - FMath::Clamp(RaiseShare, 0.f, 1.f));
+	}
+
 	float ForwardConeShare(float RelativeDeg, float FullDeg, float ZeroDeg)
 	{
 		const float Abs = FMath::Abs(FRotator::NormalizeAxis(RelativeDeg));
@@ -57,6 +161,7 @@ namespace InjuredLocomotionRules
 		switch (Gait)
 		{
 		case EInjuredGait::Wounded:
+		case EInjuredGait::WoundedHeavy:
 			return 1.f;
 		case EInjuredGait::Cold:
 		case EInjuredGait::ColdSlow:
@@ -68,7 +173,7 @@ namespace InjuredLocomotionRules
 
 	float SlowWalkShare(EInjuredGait Gait, float ConeShare)
 	{
-		return Gait == EInjuredGait::ColdSlow ? FMath::Clamp(ConeShare, 0.f, 1.f) : 0.f;
+		return Gait == EInjuredGait::ColdSlow || Gait == EInjuredGait::WoundedHeavy ? FMath::Clamp(ConeShare, 0.f, 1.f) : 0.f;
 	}
 
 	float BandedAlpha(float Alpha, float BandDeg, float GapDeg)
@@ -92,7 +197,7 @@ namespace InjuredLocomotionRules
 
 	bool UsesInjuredCrawl(EInjuredGait Gait, bool bProne, bool bHasInjuredCrawl)
 	{
-		return Gait == EInjuredGait::Wounded && bProne && bHasInjuredCrawl;
+		return IsWoundGait(Gait) && bProne && bHasInjuredCrawl;
 	}
 
 	float TorsoPelvisShare(float Share, bool bAiming)
@@ -107,6 +212,8 @@ namespace InjuredLocomotionRules
 		Out.SwayDeg = FMath::IsFinite(Cue.SwayDeg) ? FMath::Clamp(Cue.SwayDeg, 0.f, 20.f) : 0.f;
 		Out.SwayPhase = FMath::IsFinite(Cue.SwayPhase) ? Cue.SwayPhase - FMath::FloorToFloat(Cue.SwayPhase) : 0.f;
 		Out.AimingScale = FMath::IsFinite(Cue.AimingScale) ? FMath::Clamp(Cue.AimingScale, 0.f, 1.f) : 0.f;
+		Out.CrouchScale = FMath::IsFinite(Cue.CrouchScale) ? FMath::Clamp(Cue.CrouchScale, 0.f, 1.f) : 0.f;
+		Out.CoverScale = FMath::IsFinite(Cue.CoverScale) ? FMath::Clamp(Cue.CoverScale, 0.f, 1.f) : 0.f;
 		return Out;
 	}
 

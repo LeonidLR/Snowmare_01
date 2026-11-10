@@ -1,0 +1,32 @@
+{
+  "schema": "codex.hud_labels/1",
+  "comment": "Which labels the canvas HUD draws (the game designer 2026-11-10, feat/injured-tiers-fullbody: one switch per label kind; the Training Ground gets a panel for it). Read by HudLabelRules (Source/CodexTactics/Public/UI/HudLabelRules.h) at each level start and, in dev builds, re-read within a second when this file changes. show = drawn; label = the Russian name for the panel; doc = what it is and where it is drawn. Every default is true = the HUD as it was. A missing key keeps its default (on); an unknown key is logged and ignored. Console override for the wound / critical tags: Codex.HUD.WoundTags -1 (this file) / 0 (off) / 1 (on). The whole squad plate + panel also obey CodexTactics.HUD.ShowStatus. Hostile PMC fighters have no over-head plate of their own today (only the knockdown / suppression badges, which are shared). Test CodexTactics.UI.HudLabels.DataFileMirrorsDefaults.",
+  "labels": {
+    "operative_name": { "show": true, "label": "Имя оперативника", "doc": "The squad member's name at the start of his over-head plate (the leader's plate is yellow)." },
+    "operative_stance": { "show": true, "label": "Стойка оперативника", "doc": "The stance word in the plate: Standing / Crouching / Prone." },
+    "frostbite_tag": { "show": true, "label": "Метка «обморожение»", "doc": "' · FROSTBITTEN' in the plate while his cold survival is at frostbite." },
+    "wound_tag": { "show": true, "label": "Метка ранения", "doc": "' · WOUNDED' (light wound, HP under 50 %) or ' · BADLY WOUNDED' (heavy wound, under 35 %) in the plate." },
+    "critical_tag": { "show": true, "label": "Метка «критическое ранение»", "doc": "' · CRITICAL' in the plate under 20 % HP (down, crawls only)." },
+    "panic_badge": { "show": true, "label": "Паника / стресс", "doc": "'PANIC! [COWERING]' / 'PANIC! [FLEEING]', or 'STRESS: n%' from 50 % stress in combat, above the plate." },
+    "rage_badge": { "show": true, "label": "Ярость", "doc": "'RAGE!' above the plate while he rages." },
+    "posture_letters": { "show": true, "label": "Буквы режима огня (P / D / A)", "doc": "The fire posture letter in a coloured box over each operative's head (brighter frame = selected)." },
+    "knockdown_badges": { "show": true, "label": "«Сбит с ног» + полоса", "doc": "'[KNOCKED DOWN]' with the recovery bar over any downed character (squad, enemies, PMC)." },
+    "suppression_badges": { "show": true, "label": "Подавление + полоса", "doc": "The suppression tier badge with its level bar over any suppressed unit (squad, enemies, PMC)." },
+    "recruit_prompt": { "show": true, "label": "Подсказка рекрута", "doc": "'[Click] Talk' / '[Click] Go and rescue' over the recruit (Susanin)." },
+    "enemy_names": { "show": true, "label": "Имена врагов", "doc": "The enemy's name on the first line of its plate (Frost Hound, Brute, ...)." },
+    "enemy_status": { "show": true, "label": "Статусы врагов", "doc": "BURNING / ICED / STUNNED / ARMOR- after the enemy's name." },
+    "enemy_health": { "show": true, "label": "Здоровье врагов (n/m)", "doc": "The enemy's health numbers on the second line of its plate." },
+    "enemy_armor_marker": { "show": true, "label": "Квадрат брони врага", "doc": "The small coloured square before the enemy's name: green light, yellow medium, red heavy armour." },
+    "enemy_alert_markers": { "show": true, "label": "Метки «?» / HEARS / SCENT", "doc": "Over an enemy: '?' investigating a lure, 'HEARS' (the lure preview), '~ SNIFF ?' / '~ SCENT ?' (a hound on a scent)." },
+    "interactable_labels": { "show": true, "label": "Подписи объектов", "doc": "Plates over interactables: loot crates, dropped items, barricades, turrets, tripwires, narrative elements, the generator." },
+    "gate_labels": { "show": true, "label": "Подписи ворот", "doc": "The plate over a gate / blast door." },
+    "vehicle_hull_labels": { "show": true, "label": "Корпус БТР", "doc": "'<vehicle>: HULL n/m' over a damaged or disabled vehicle." },
+    "floating_texts": { "show": true, "label": "Всплывающие боевые тексты", "doc": "The rising, fading texts over units: damage numbers, MISS, CRIT x2, RPG!, AMBUSH!, NO LINE OF FIRE, REGROUPING, the cover entry, ..." },
+    "cover_texts": { "show": true, "label": "«IN COVER» при входе в укрытие", "doc": "The floating 'IN COVER (-35% damage)' when an operative takes cover (off hides only these; floating_texts off hides all)." },
+    "defense_markers": { "show": true, "label": "Щиты HOLD LINE / SUPPRESS", "doc": "The green HOLD LINE / red SUPPRESS shield markers of the defend / suppress orders, with 'xN' defenders." },
+    "hit_chance": { "show": true, "label": "Шанс попадания (пошаговый бой)", "doc": "The yellow hit chance / damage over the hovered cell in the turn-based fight." },
+    "horde_warning": { "show": true, "label": "Предупреждение «HORDE!»", "doc": "The pulsing 'HORDE! n m' banner and the frame / edge arrow towards it." },
+    "combat_mode_badge": { "show": true, "label": "Режим боя и огня (вверху)", "doc": "The top-centre lines: REAL TIME / TACTICAL PAUSE / TURN-BASED with the keys, FIRE posture of the selection, turret / hull / blast door status." },
+    "squad_status_panel": { "show": true, "label": "Панель отряда (приказы / состояние)", "doc": "The squad panel under the objective: per operative his slot, stance, fire posture, HOLD LINE order, walking / sprinting, HP, cold, ammo, matches, grenades, deployables." }
+  }
+}
