@@ -2,7 +2,8 @@
 // "the squad stands together at the foot of a ramp; one operative ordered up onto the roof - 'Run to position!', 'Group (3 operatives) moving
 // into position!' - they all just get STUCK at the bottom; moved aside and ordered again, 2 of 3 went up and 1 stayed on the ground").
 // docs/systems/squad-and-orders.md "The formation across height levels", docs/design/levelgen/LEVEL_GENERATOR.md 7 (external stairs /
-// stairwells). The stairs are the accepted layout's (the level JSON's "levelgen_layout"); with the pressure off (Codex.Pressure.Enabled 0),
+// stairwells). The stairs are the accepted layout's (the level JSON's "levelgen_layout"); with the pressure and the PMC encounters off (Codex.Pressure.Enabled 0,
+// Codex.Pmc.Encounters 0),
 // per stair from the ground (every external stair and stairwell of the layout; a stair whose ramp navmesh does not join its foot to its top is a
 // layout defect - reported as a WARN line and skipped, strictnav = a FAIL):
 //  1. squad  - squad mode, the squad bunched in the stair's mouth; the man at the BACK is selected (he becomes the leader) and the player's
@@ -648,6 +649,12 @@ namespace LevelGenRampSmoke
 		if (IConsoleVariable* Pressure = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pressure.Enabled")))
 		{
 			Pressure->Set(0, ECVF_SetByConsole);
+		}
+		// 2026-11-10: nor the Depot's scheduled PMC squads (pmc_squads at 30 s / 120 s) - their firefight (covers, grenades, the RPG, the
+		// horde after it) kept the ordered man in cover / took his order mid-leg; this smoke checks the stairs, not a fight.
+		if (IConsoleVariable* Encounters = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pmc.Encounters")))
+		{
+			Encounters->Set(0, ECVF_SetByConsole);
 		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)
 		{

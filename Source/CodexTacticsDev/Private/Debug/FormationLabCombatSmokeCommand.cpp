@@ -40,6 +40,7 @@
 #include "Combat/HealthComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
+#include "Data/WeaponDataAsset.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
@@ -119,7 +120,8 @@ namespace FormationLabCombatSmoke
 		bool bSideMoveIssued = false;
 		/** Per member: health / clip / reserve when the checks began; the worst seen since. */
 		TMap<TWeakObjectPtr<AOperativeCharacter>, float> HealthAtStart;
-		TMap<TWeakObjectPtr<AOperativeCharacter>, int32> ClipAtStart;
+		/** Per member AND weapon (the Commander's RPG-7 is drawn by the launcher rule since 2026-11-09: a switch is no dropped clip). */
+		TMap<FString, int32> ClipAtStart;
 		float WorstHealthLoss = 0.f;
 		int32 WorstClipLoss = 0;
 		int32 FightsEnded = 0;
@@ -234,16 +236,24 @@ namespace FormationLabCombatSmoke
 			{
 				continue;
 			}
+			const FString ClipKey = FString::Printf(TEXT("%s/%s"), *Member->GetName(), Member->CurrentWeapon ? *Member->CurrentWeapon->WeaponId : TEXT("-"));
 			const float* Health = State.HealthAtStart.Find(Member);
-			const int32* Clip = State.ClipAtStart.Find(Member);
-			if (!Health || !Clip)
+			if (!Health)
 			{
 				State.HealthAtStart.Add(Member, Member->HealthComponent->GetCurrentHealth());
-				State.ClipAtStart.Add(Member, Member->CurrentClip);
-				continue;
 			}
-			State.WorstHealthLoss = FMath::Max(State.WorstHealthLoss, *Health - Member->HealthComponent->GetCurrentHealth());
-			State.WorstClipLoss = FMath::Max(State.WorstClipLoss, *Clip - Member->CurrentClip);
+			else
+			{
+				State.WorstHealthLoss = FMath::Max(State.WorstHealthLoss, *Health - Member->HealthComponent->GetCurrentHealth());
+			}
+			if (const int32* Clip = State.ClipAtStart.Find(ClipKey))
+			{
+				State.WorstClipLoss = FMath::Max(State.WorstClipLoss, *Clip - Member->CurrentClip);
+			}
+			else
+			{
+				State.ClipAtStart.Add(ClipKey, Member->CurrentClip);
+			}
 		}
 	}
 
@@ -846,6 +856,12 @@ namespace FormationLabCombatSmoke
 
 	void Start(UWorld* World, bool bShot)
 	{
+		// 2026-11-10: the Commander's RPG-7 (testing loadout) drawn by the launcher rule ends the patrol fight in one rocket or two - the
+		// "the squad kept moving in the fight" travel then depends on where a rocket lands. The launcher's own rule has RpgAiSmoke.
+		if (IConsoleVariable* LauncherAI = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Combat.LauncherAI")))
+		{
+			LauncherAI->Set(0, ECVF_SetByConsole);
+		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->bShot = bShot;
 		TWeakObjectPtr<UWorld> WeakWorld(World);

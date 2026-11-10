@@ -472,6 +472,12 @@ namespace UnderFireManoeuvreSmoke
 			{
 				return;
 			}
+			// 2026-11-10: the rifle manoeuvre is under test - the Commander's RPG-7 (testing loadout) drawn by the launcher rule knocked the PMC
+			// fighter of part C down with a rocket (no cover move then). The launcher's own rule has RpgAiSmoke / RpgPmcSmoke.
+			if (IConsoleVariable* LauncherAI = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Combat.LauncherAI")))
+			{
+				LauncherAI->Set(0, ECVF_SetByConsole);
+			}
 			TWeakObjectPtr<UWorld> WeakWorld(World);
 			TSharedRef<FState> State = MakeShared<FState>();
 			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float) { return Step(WeakWorld, *State); }), StepSeconds);

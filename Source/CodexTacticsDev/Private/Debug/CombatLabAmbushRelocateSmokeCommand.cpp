@@ -328,6 +328,17 @@ namespace CombatLabAmbushRelocateSmoke
 			{
 				return true;
 			}
+			// 2026-11-10 (Solo without ties): the tower watcher is still on the roof when Solo ends and climbs down to regroup - the next
+			// placement must not teleport a man in the middle of a ladder climb (his climb then ends at the tower, a member cut off).
+			bool bClimbing = false;
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				bClimbing |= Member && Member->IsClimbingLadder();
+			}
+			if (bClimbing && State.StageTime < 25.f)
+			{
+				return true;
+			}
 			Check(State, Flow->GetPhase() == ECodexGamePhase::Exploration, TEXT("the fight over: exploring"));
 			EStage Next = EStage::HoldPlace;
 			if (State.Stage == EStage::PlanSettle)

@@ -204,6 +204,12 @@ namespace PmcEncounterSmoke
 				Immortal->Set(1, ECVF_SetByCode);
 			}
 			Check(State, CombatCheats::IsImmortal(World), TEXT("the squad is immortal for the smoke (Codex.Cheat.Immortal)"));
+			// 2026-11-10: nor the firefight horde - the designer's live Depot JSON may bring it after the first firefight (his Training Ground
+			// edit horde_after_firefights 1): the fight then never ended into exploration. This smoke checks the PMC encounter's flow.
+			if (IConsoleVariable* Horde = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Horde.Enabled")))
+			{
+				Horde->Set(0, ECVF_SetByCode);
+			}
 			if (UCombatPressureSubsystem* Pressure = World->GetSubsystem<UCombatPressureSubsystem>())
 			{
 				Pressure->SetAutoSpawn(false); // the Depot's monster pressure off: the PMC encounter alone

@@ -8,8 +8,8 @@
 //  2. a 10 s halt: everyone crouches as before - only after >= 4 s standing still;
 //  3. a move stands them up at once: the leader's own order (<= 0.5 s) and - Commander Mode off, the formation walks on - the followers'
 //     formation follow (<= 1.5 s); they follow upright;
-//  4. Solo ("teammates hold crouched", e.g. the leader climbs a tower): the waiting followers stand on, the guard crouch comes after the same
-//     hold_crouch_after_sec standing still (2026-11-02, the game designer's review of ambush v3; was: at once).
+//  4. Solo: the followers keep the stance they had - no guard crouch (2026-11-09, the game designer's solo start: Solo without ties,
+//     Codex.Squad.SoloIndependent 1; was: the guard crouch after hold_crouch_after_sec standing still, 2026-11-02).
 // Godot reference: none (UE-only; the autonomy's stance is Sprint 07-C).
 
 #include "CoreMinimal.h"
@@ -382,15 +382,15 @@ namespace SquadHaltStanceSmoke
 			TrackMembers(State);
 			if (State.StageTime >= 1.f && !State.bChecked)
 			{
-				// 2026-11-02 (the game designer's review of ambush v3): the guard crouch no longer comes at once - the waiting followers stand.
+				// 2026-11-09 (the game designer's solo start, Codex.Squad.SoloIndependent 1): Solo has no guard crouch - each one holds as left.
 				State.bChecked = true;
-				bool bAllWaiting = true;
+				bool bAllStanding = true;
 				for (const FMember& Each : State.Members)
 				{
 					const AOperativeCharacter* Operative = Each.Operative.Get();
-					bAllWaiting &= Operative == Leader || (Operative && Operative->GetStance() == EOperativeStance::Standing && Squad->IsSoloGuardCrouchWaiting(Operative));
+					bAllStanding &= Operative == Leader || (Operative && Operative->GetStance() == EOperativeStance::Standing && !Squad->IsSoloGuardCrouchWaiting(Operative));
 				}
-				Check(State, bAllWaiting, TEXT("Solo on: the waiting followers still stand 1 s later (the guard crouch waits hold_crouch_after_sec)"));
+				Check(State, bAllStanding, TEXT("Solo on: the followers stand as they were left 1 s later, no guard crouch waits (Solo without ties)"));
 			}
 			if (State.StageTime < CrouchAfter + 3.f)
 			{
@@ -404,9 +404,9 @@ namespace SquadHaltStanceSmoke
 					Check(State, Operative->GetStance() == EOperativeStance::Standing, TEXT("Solo: the leader keeps his own stance"));
 					continue;
 				}
-				Check(State, Operative && Operative->GetStance() == EOperativeStance::Crouching && Each.CrouchedAt >= CrouchAfter - 0.2f
-					&& Each.CrouchedAt <= CrouchAfter + 1.5f, FString::Printf(TEXT("Solo: %s takes the guard crouch %.1f s after Solo began (hold_crouch_after_sec %.1f)"),
-						*NameOf(Each), Each.CrouchedAt, CrouchAfter));
+				Check(State, Operative && Operative->GetStance() == EOperativeStance::Standing && Each.CrouchedAt < 0.f,
+					FString::Printf(TEXT("Solo: %s keeps standing %.1f s into Solo - no guard crouch (was: after hold_crouch_after_sec %.1f)"),
+						*NameOf(Each), State.StageTime, CrouchAfter));
 			}
 			Squad->ExitSoloMode(false, 0.f);
 			return Finish(World, State, true);
