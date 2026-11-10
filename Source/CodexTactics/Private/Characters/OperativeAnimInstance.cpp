@@ -203,6 +203,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	UpdateColdLayer(DeltaSeconds);
 	UpdateNativeBlend(DeltaSeconds);
 	UpdateShotgunLayer(DeltaSeconds); // the D-1 shotgun set over the ABP (OperativeAnimInstanceShotgun.cpp)
+	UpdateInjuredLayer(DeltaSeconds); // the injured walk / slow walk on the legs; decides the injured crawl set (OperativeAnimInstanceInjured.cpp)
 	UpdateProneCrawlLayer(DeltaSeconds); // the 8-direction prone crawl over the ABP's prone pose (OperativeAnimInstanceProneCrawl.cpp)
 	if (bUseRifle2Locomotion)
 	{
@@ -1390,6 +1391,9 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	WeaponClips = Instance->ShotgunClips;
 	CrawlClips = Instance->CrawlClips;
 	CrawlWeight = Instance->CrawlWeight;
+	InjuredClips = Instance->InjuredClips;
+	InjuredWeight = Instance->InjuredWeight;
+	InjuredTorsoShare = Instance->InjuredTorsoShare;
 	WeaponUpperWeight = Instance->ShotgunUpperWeight;
 	WeaponLowerWeight = Instance->ShotgunLowerWeight;
 	bWeaponFullBody = Instance->IsWeaponLayerFullBody();
@@ -1499,7 +1503,8 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 		WeaponProbeLower = WeaponProbeUpper = 0.f; // the layer is off: it changes no bone (the probe reads 0, not the last layer frame)
 	}
 	const bool bCrawlLayer = CrawlWeight > MinSampleWeight;
-	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer && !bCrawlLayer) || InRootNode != GetRootNode())
+	const bool bInjuredLayer = InjuredWeight > MinSampleWeight;
+	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer && !bCrawlLayer && !bInjuredLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 		return false; // the graph alone
@@ -1521,6 +1526,10 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 		{
 			RecordWeaponProbe(GraphPose, Output.Pose);
 		}
+	}
+	if (bInjuredLayer)
+	{
+		BlendInjuredLayer(Output); // the injured legs under the graph's / the weapon layer's torso (InjuredLocomotionRules)
 	}
 	if (LadderIK.bActive)
 	{

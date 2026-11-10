@@ -56,7 +56,8 @@ void UOperativeAnimInstance::UpdateProneCrawlLayer(float DeltaSeconds)
 {
 	using namespace WeaponAnimLayerRules;
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner());
-	const FShotgunAnimSet& Set = CrawlSetData;
+	// Wounded and prone: the injured crawl in the forward slot + its idle (UpdateInjuredLayer ran first; OperativeAnimInstanceInjured.cpp).
+	const FShotgunAnimSet& Set = ActiveCrawlSet();
 	for (FOperativeClipState& Clip : CrawlClips)
 	{
 		Clip = FOperativeClipState();
