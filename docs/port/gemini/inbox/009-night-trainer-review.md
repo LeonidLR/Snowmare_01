@@ -4,8 +4,9 @@ No code changes. Do not edit any tracked file. Allowed writes: your report `docs
 and generated pages under `Saved/Orchestrator/replay/` (main checkout). Run tools with `python -I`.
 
 ## Input
-- The night's run: the NEWEST folder under `Saved/Trainer/` that is not `check-*`, `mock-*`, `smoke-*` (scheduler.log / latest.json say
-  which run started at 2026-11-10 22:15). Inside: generations `gen_*/jobs/*.arena/round_*.track.json` + arena result JSONs, the
+- The night's run: it CONTINUES the run id `pmc-v3` (scheduler.log: "2026-11-10T22:15:01 start run pmc-v3 until 2026-11-11T08:00"), so
+  tonight = the `Saved/Trainer/pmc-v3/gen_*` folders written after 2026-11-10 22:15 JST (by file time); the older pmc-v3 generations
+  (before today's arena fixes) are the baseline. Inside: generations `gen_*/jobs/*.arena/round_*.track.json` + arena result JSONs, the
   trainer's own summaries / champion genes, and clips (mp4) - you do not need to watch the clips.
 - Baselines: the older runs `Saved/Trainer/pmc-v3` (before today's fixes) and `Saved/Trainer/check-2026-11-10` (the fix check run).
 - Today's arena changes (docs/port/CHANGELOG.md 2026-11-10 rows, docs/systems/pmc-squad-ai.md sections 11-12): order commitment,
