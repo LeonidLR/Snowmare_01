@@ -10,6 +10,9 @@
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Templates/Function.h"
+#include "Dom/JsonObject.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -86,15 +89,22 @@ bool FPropsLayoutDepotGateTest::RunTest(const FString&)
 	TestEqual(TEXT("gate along the fence (y)"), Gate->Along, FIntPoint(0, 1));
 	TestEqual(TEXT("gate walk layer"), Gate->WalkLayer, FString(TEXT("ground")));
 	TestTrue(TEXT("gate is on the mandatory route"), Gate->bOnMandatoryRoute);
+	TestTrue(TEXT("R_main passes THROUGH the gate"), Gate->bRouteThrough);
 	TestEqual(TEXT("R_main passes through the gate"), Gate->MandatoryRouteDistCm, 0);
 
-	// every compound gate of the Depot (300 cm gaps of fences); the tank farm's 500 cm gaps are wider than the 80-400 gate rule
+	// every compound gate of the Depot: the 300 cm fence gaps and (designer 2026-11-10, gates up to 600 cm) the tractor yard's 500 cm gaps
 	TestEqual(TEXT("gates"), DoorwayIds(View, EPropsDoorwayKind::Gate), TArray<FString>{ TEXT("F_boilers_S#g0"), TEXT("F_compound_N#g0"),
-		TEXT("F_junkyard_S#g0"), TEXT("F_junkyard_S#g1"), TEXT("F_lot_N#g0"), TEXT("F_lot_S#g0"), TEXT("F_tanks_E#g0") });
-	const FPropsWallGap* TanksGap = View.GetWallGaps().FindByPredicate([](const FPropsWallGap& G) { return G.Group == TEXT("F_tanks_N"); });
-	if (TestNotNull(TEXT("tank farm fence gap exists"), TanksGap))
+		TEXT("F_junkyard_S#g0"), TEXT("F_junkyard_S#g1"), TEXT("F_lot_N#g0"), TEXT("F_lot_S#g0"), TEXT("F_tanks_E#g0"), TEXT("F_tanks_N#g0"),
+		TEXT("F_tanks_S#g0") });
+	for (const TCHAR* Id : { TEXT("F_tanks_N#g0"), TEXT("F_tanks_S#g0") })
 	{
-		TestEqual(TEXT("tank farm gap width"), TanksGap->WidthCm, 500);
+		const FPropsDoorway* Tanks = View.FindDoorway(Id);
+		if (TestNotNull(FString::Printf(TEXT("%s found"), Id), Tanks))
+		{
+			TestEqual(FString::Printf(TEXT("%s width"), Id), Tanks->WidthCm, 500);
+			TestEqual(FString::Printf(TEXT("%s centre y"), Id), Tanks->Pos.Y, -2992);
+			TestFalse(FString::Printf(TEXT("%s is not on the mandatory route"), Id), Tanks->bOnMandatoryRoute);
+		}
 	}
 	return true;
 }
@@ -118,24 +128,41 @@ bool FPropsLayoutDepotPumpDoorTest::RunTest(const FString&)
 	TestEqual(TEXT("outward = -y (the footprint's min-y side)"), Pump->Outward, FIntPoint(0, -1));
 	TestEqual(TEXT("along the wall (x)"), Pump->Along, FIntPoint(1, 0));
 	TestEqual(TEXT("width from the wall gap"), Pump->WidthCm, 180);
+	// designer 2026-11-10: R_main runs along y -2080 past it (180 cm) with a straight vertex at (-4452, -2080) in front of it - passing
+	// by is NOT on the route: no crossing of the door's wall line, no reversal / end in front of it
 	TestFalse(TEXT("B_pump#0 is not on the mandatory route"), Pump->bOnMandatoryRoute);
-	// R_main runs along y -2080 past it: 180 cm, above the 150 cm tolerance
+	TestFalse(TEXT("B_pump#0: the route does not pass through"), Pump->bRouteThrough);
+	TestFalse(TEXT("B_pump#0: the route does not turn at it"), Pump->bRouteTurnsAt);
 	TestEqual(TEXT("distance to R_main"), Pump->MandatoryRouteDistCm, 180);
 
-	// the shed door: design 2.1 names it as an example of a door on the mandatory route, but R_main turns back 180 cm in front of it
-	// (point (797, -7070)), so under the same 150 cm rule it is not - kept as a fact here, reported to the designer
+	// the shed door (design 2.1's example): R_main turns back at (797, -7070), 180 cm in front of it - "turns at it" = on the route
 	const FPropsDoorway* Shed = View.FindDoorway(TEXT("B_shed#0"));
 	if (TestNotNull(TEXT("B_shed#0 found"), Shed))
 	{
+		TestEqual(TEXT("shed door outward +y"), Shed->Outward, FIntPoint(0, 1));
 		TestEqual(TEXT("shed door distance to R_main"), Shed->MandatoryRouteDistCm, 180);
+		TestTrue(TEXT("shed door: R_main turns at it"), Shed->bRouteTurnsAt);
+		TestFalse(TEXT("shed door: R_main does not pass through"), Shed->bRouteThrough);
+		TestTrue(TEXT("shed door is on the mandatory route"), Shed->bOnMandatoryRoute);
 	}
-	// a door R_main passes close by: the ruin's north door
+	// R_main leaves the ruin through its north door (the leg (-3360, 1815) -> (-2900, 1025) crosses y 1150 at x -2973, 129 cm off centre)
 	const FPropsDoorway* Ruin = View.FindDoorway(TEXT("B_ruin#0"));
 	if (TestNotNull(TEXT("B_ruin#0 found"), Ruin))
 	{
-		TestTrue(TEXT("ruin door on the mandatory route (112 cm)"), Ruin->bOnMandatoryRoute);
+		TestTrue(TEXT("ruin door: R_main passes through"), Ruin->bRouteThrough);
+		TestTrue(TEXT("ruin door on the mandatory route"), Ruin->bOnMandatoryRoute);
 		TestEqual(TEXT("ruin door distance"), Ruin->MandatoryRouteDistCm, 112);
 	}
+	// exactly three doorways of the Depot are on R_main
+	TArray<FString> OnRoute;
+	for (const FPropsDoorway& D : View.GetDoorways())
+	{
+		if (D.bOnMandatoryRoute)
+		{
+			OnRoute.Add(D.Id);
+		}
+	}
+	TestEqual(TEXT("doorways on the mandatory route"), OnRoute, TArray<FString>{ TEXT("B_ruin#0"), TEXT("B_shed#0"), TEXT("F_compound_N#g0") });
 	return true;
 }
 
@@ -157,16 +184,16 @@ bool FPropsLayoutDepotCutGapsTest::RunTest(const FString&)
 			TestTrue(TEXT("cut gap is a crossing opening (400 / 500 cm)"), G.WidthCm == 400 || G.WidthCm == 500);
 		}
 	}
-	// CUTWALL_N / CUTWALL_S each open at the ramp X_centre and the bridge X_ne; the 400 cm ones would pass the gate width rule
+	// CUTWALL_N / CUTWALL_S each open at the ramp X_centre and the bridge X_ne; all of them would pass the 80-600 gate width rule
 	TestEqual(TEXT("four cut wall gaps"), CutGapCentres.Num(), 4);
 	for (const FPropsDoorway& D : View.GetDoorways())
 	{
 		TestFalse(FString::Printf(TEXT("%s is not in a cut wall"), *D.Id), D.WallGroup.StartsWith(TEXT("CUTWALL")));
 		TestFalse(FString::Printf(TEXT("%s is not at a cut gap"), *D.Id), CutGapCentres.Contains(D.Pos));
 	}
-	// 14 building doors + 7 gates, nothing else
+	// 14 building doors + 9 gates, nothing else
 	TestEqual(TEXT("building doors"), DoorwayIds(View, EPropsDoorwayKind::BuildingDoor).Num(), 14);
-	TestEqual(TEXT("doorways"), View.GetDoorways().Num(), 21);
+	TestEqual(TEXT("doorways"), View.GetDoorways().Num(), 23);
 	return true;
 }
 
@@ -344,6 +371,7 @@ bool FPropsLayoutFixtureDoorwaysTest::RunTest(const FString&)
 		TestEqual(TEXT("gate pos"), Gate->Pos, FIntPoint(800, 0));
 		TestEqual(TEXT("gate width"), Gate->WidthCm, 300);
 		TestTrue(TEXT("gate on the mandatory route"), Gate->bOnMandatoryRoute);
+		TestTrue(TEXT("R_main passes through the gate (vertex on the gate line)"), Gate->bRouteThrough);
 		TestEqual(TEXT("gate outward (none)"), Gate->Outward, FIntPoint(0, 0));
 	}
 	const FPropsDoorway* West = View.FindDoorway(TEXT("B_shed#0"));
@@ -539,6 +567,161 @@ bool FPropsLayoutStrictReadTest::RunTest(const FString&)
 		TArray<FString> Errors;
 		TestTrue(TEXT("mixed-case keys"), FPropsLayoutView::Build(Json, View, Errors));
 		TestTrue(TEXT("mixed-case wall read"), View.IsBlocked(FIntPoint(500, 0), TEXT("ground"), 0));
+	}
+	return true;
+}
+
+// ---- designer 2026-11-10: "on the mandatory route" = through or turns at; gates up to 600 cm ---------------------------------
+
+namespace PropsLayoutViewTestLocal
+{
+	/** Building B [[0,0],[1000,1000]] with a 180 cm door at (500, 0) (outward -y, along x) and one mandatory route. */
+	FString DoorLayout(const FString& RoutePoints, const FString& ExtraWalls = FString())
+	{
+		return FString::Printf(TEXT("{\"schema\":\"codex.levelgen_layout/1\",\"name\":\"door\",\"bounds\":{\"min\":[-2000,-2000],\"max\":[2000,2000]},")
+			TEXT("\"ground_z\":0,\"spawn\":{\"pos\":[-1900,-1900]},\"end\":[1900,1900],\"walls\":[")
+			TEXT("{\"id\":\"B_S_0\",\"a\":[0,0],\"b\":[410,0],\"thickness\":30,\"kind\":\"building\",\"building\":\"B\"},")
+			TEXT("{\"id\":\"B_S_1\",\"a\":[590,0],\"b\":[1000,0],\"thickness\":30,\"kind\":\"building\",\"building\":\"B\"}%s],")
+			TEXT("\"buildings\":[{\"id\":\"B\",\"footprint\":[[0,0],[1000,1000]],\"floors\":1,\"enterable\":true,\"doors\":[{\"pos\":[500,0],\"floor\":0}]}],")
+			TEXT("\"covers\":[],\"ladders\":[],\"zones\":[],\"routes\":[{\"id\":\"R\",\"mandatory\":true,\"points\":%s}]}"), *ExtraWalls, *RoutePoints);
+	}
+}
+
+PROPS_LAYOUT_TEST(FPropsLayoutDoorOnRouteRuleTest, "Doorways.OnRouteThroughOrTurnsAt")
+bool FPropsLayoutDoorOnRouteRuleTest::RunTest(const FString&)
+{
+	using namespace PropsLayoutViewTestLocal;
+	struct FCase
+	{
+		const TCHAR* Name;
+		const TCHAR* Points;
+		bool bThrough;
+		bool bTurns;
+	};
+	// door (500, 0), opening 180 -> reach H = 90 + 60 = 150 along the wall; turn reach 250 in front (outward = -y)
+	const FCase Cases[] = {
+		{ TEXT("passing by 100 cm in front"), TEXT("[[-500,-100],[1500,-100]]"), false, false },
+		{ TEXT("reverses 240 cm in front"), TEXT("[[-500,-500],[500,-240],[-500,-500]]"), false, true },
+		{ TEXT("reverses 250 cm in front (inclusive)"), TEXT("[[-500,-500],[450,-250],[-500,-500]]"), false, true },
+		{ TEXT("reverses 260 cm in front"), TEXT("[[-500,-500],[500,-260],[-500,-500]]"), false, false },
+		{ TEXT("reverses 151 cm to the side"), TEXT("[[-500,-500],[651,-100],[-500,-500]]"), false, false },
+		{ TEXT("ends 200 cm in front"), TEXT("[[-500,-500],[550,-200]]"), false, true },
+		{ TEXT("starts 100 cm in front"), TEXT("[[500,-100],[-1500,-100]]"), false, true },
+		{ TEXT("90 degree turn in front is not a reversal"), TEXT("[[-500,-200],[500,-200],[500,-1500]]"), false, false },
+		{ TEXT("reverses behind the door (inside)"), TEXT("[[200,500],[500,100],[200,500]]"), false, false },
+		{ TEXT("straight through the door"), TEXT("[[500,-500],[500,500]]"), true, false },
+		{ TEXT("diagonal through"), TEXT("[[400,-300],[600,300]]"), true, false },
+		{ TEXT("crossing 150 cm off centre"), TEXT("[[650,-500],[650,500]]"), true, false },
+		{ TEXT("crossing 151 cm off centre"), TEXT("[[651,-500],[651,500]]"), false, false },
+		{ TEXT("a vertex on the wall line counts as through"), TEXT("[[500,-500],[500,0],[1500,500]]"), true, false },
+		{ TEXT("a leg lying on the wall line does not cross it"), TEXT("[[-500,0],[-100,0]]"), false, false },
+	};
+	for (const FCase& C : Cases)
+	{
+		FPropsLayoutView View;
+		TArray<FString> Errors;
+		if (!TestTrue(FString::Printf(TEXT("%s: builds"), C.Name), FPropsLayoutView::Build(DoorLayout(C.Points), View, Errors)))
+		{
+			continue;
+		}
+		const FPropsDoorway* Door = View.FindDoorway(TEXT("B#0"));
+		if (!TestNotNull(FString::Printf(TEXT("%s: door"), C.Name), Door))
+		{
+			continue;
+		}
+		TestEqual(FString::Printf(TEXT("%s: width"), C.Name), Door->WidthCm, 180);
+		TestEqual(FString::Printf(TEXT("%s: through"), C.Name), Door->bRouteThrough, C.bThrough);
+		TestEqual(FString::Printf(TEXT("%s: turns at"), C.Name), Door->bRouteTurnsAt, C.bTurns);
+		TestEqual(FString::Printf(TEXT("%s: on route"), C.Name), Door->bOnMandatoryRoute, C.bThrough || C.bTurns);
+	}
+
+	// a gate has no outward side: a reversal on either side within the reach counts
+	const FString GateWalls = TEXT(",{\"id\":\"F_g_0\",\"a\":[-1500,-1000],\"b\":[-1500,-150],\"thickness\":10,\"kind\":\"fence\"},")
+		TEXT("{\"id\":\"F_g_1\",\"a\":[-1500,150],\"b\":[-1500,1000],\"thickness\":10,\"kind\":\"fence\"}");
+	for (const TCHAR* Points : { TEXT("[[-1900,-900],[-1700,0],[-1900,-900]]"), TEXT("[[-1000,-900],[-1300,0],[-1000,-900]]") })
+	{
+		FPropsLayoutView View;
+		TArray<FString> Errors;
+		if (TestTrue(TEXT("gate layout builds"), FPropsLayoutView::Build(DoorLayout(Points, GateWalls), View, Errors)))
+		{
+			const FPropsDoorway* G = View.FindDoorway(TEXT("F_g#g0"));
+			if (TestNotNull(TEXT("gate"), G))
+			{
+				TestTrue(FString::Printf(TEXT("gate: reversal 200 cm away on either side (%s)"), Points), G->bRouteTurnsAt);
+				TestFalse(FString::Printf(TEXT("gate: no crossing (%s)"), Points), G->bRouteThrough);
+			}
+		}
+	}
+	return true;
+}
+
+PROPS_LAYOUT_TEST(FPropsLayoutGateWidthRuleTest, "Doorways.GatesUpTo600")
+bool FPropsLayoutGateWidthRuleTest::RunTest(const FString&)
+{
+	using namespace PropsLayoutViewTestLocal;
+	const FString Json = Inline(TEXT("[")
+		TEXT("{\"id\":\"F_a_0\",\"a\":[0,-2000],\"b\":[0,-300],\"thickness\":10,\"kind\":\"fence\"},")
+		TEXT("{\"id\":\"F_a_1\",\"a\":[0,300],\"b\":[0,2000],\"thickness\":10,\"kind\":\"fence\"},")
+		TEXT("{\"id\":\"F_b_0\",\"a\":[500,-2000],\"b\":[500,-301],\"thickness\":10,\"kind\":\"fence\"},")
+		TEXT("{\"id\":\"F_b_1\",\"a\":[500,300],\"b\":[500,2000],\"thickness\":10,\"kind\":\"fence\"},")
+		TEXT("{\"id\":\"CUTWALL_X_0\",\"a\":[1000,-2000],\"b\":[1000,-250],\"thickness\":20,\"kind\":\"cut_wall\"},")
+		TEXT("{\"id\":\"CUTWALL_X_1\",\"a\":[1000,250],\"b\":[1000,2000],\"thickness\":20,\"kind\":\"cut_wall\"}]"));
+	FPropsLayoutView View;
+	TArray<FString> Errors;
+	if (!TestTrue(TEXT("builds"), FPropsLayoutView::Build(Json, View, Errors)))
+	{
+		return false;
+	}
+	TestEqual(TEXT("600 cm fence gap is a gate, 601 and the cut's 500 are not"), DoorwayIds(View, EPropsDoorwayKind::Gate), TArray<FString>{ TEXT("F_a#g0") });
+
+	FPropsLayoutConfig Narrow;
+	Narrow.GateMaxGapCm = 400;
+	FPropsLayoutView NarrowView;
+	TestTrue(TEXT("builds with a narrower config"), FPropsLayoutView::Build(Json, NarrowView, Errors, Narrow));
+	TestEqual(TEXT("the width rule comes from the config"), DoorwayIds(NarrowView, EPropsDoorwayKind::Gate).Num(), 0);
+	return true;
+}
+
+PROPS_LAYOUT_TEST(FPropsLayoutConfigFromBalanceTest, "Config.FromBalance")
+bool FPropsLayoutConfigFromBalanceTest::RunTest(const FString&)
+{
+	FString Json;
+	if (!TestTrue(TEXT("props_balance.json readable"), FFileHelper::LoadFileToString(Json, *(FPaths::ProjectContentDir() / TEXT("Data/Balance/props_balance.json")))))
+	{
+		return false;
+	}
+	TSharedPtr<FJsonObject> Root;
+	if (!TestTrue(TEXT("valid JSON"), FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Json), Root) && Root.IsValid()))
+	{
+		return false;
+	}
+	FPropsLayoutConfig Config;
+	Config.GateMinGapCm = 1;
+	Config.GateMaxGapCm = 1;
+	Config.DoorThroughSlackCm = 1;
+	Config.DoorTurnReachCm = 1;
+	Config.DoorFallbackWidthCm = 1;
+	TArray<FString> Errors;
+	TestTrue(TEXT("layout_view reads"), FPropsLayoutView::ReadConfig(*Root, Config, Errors));
+	const FPropsLayoutConfig Defaults;
+	TestEqual(TEXT("gate_min_gap_cm = default"), Config.GateMinGapCm, Defaults.GateMinGapCm);
+	TestEqual(TEXT("gate_max_gap_cm = default"), Config.GateMaxGapCm, Defaults.GateMaxGapCm);
+	TestEqual(TEXT("designer: gates up to 600 cm"), Config.GateMaxGapCm, 600);
+	TestEqual(TEXT("door_through_slack_cm = default"), Config.DoorThroughSlackCm, Defaults.DoorThroughSlackCm);
+	TestEqual(TEXT("door_turn_reach_cm = default"), Config.DoorTurnReachCm, Defaults.DoorTurnReachCm);
+	TestEqual(TEXT("door_fallback_width_cm = default"), Config.DoorFallbackWidthCm, Defaults.DoorFallbackWidthCm);
+
+	TSharedPtr<FJsonObject> Bad;
+	TestTrue(TEXT("bad block parses"), FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(
+		TEXT("{\"layout_view\":{\"gate_max_gap_cm\":\"wide\",\"door_turn_reach_cm\":-5}}")), Bad) && Bad.IsValid());
+	if (Bad.IsValid())
+	{
+		FPropsLayoutConfig Kept;
+		TArray<FString> BadErrors;
+		TestFalse(TEXT("bad values are errors"), FPropsLayoutView::ReadConfig(*Bad, Kept, BadErrors));
+		TestEqual(TEXT("two errors"), BadErrors.Num(), 2);
+		TestEqual(TEXT("default kept on a wrong type"), Kept.GateMaxGapCm, Defaults.GateMaxGapCm);
+		TestEqual(TEXT("default kept on a negative value"), Kept.DoorTurnReachCm, Defaults.DoorTurnReachCm);
 	}
 	return true;
 }

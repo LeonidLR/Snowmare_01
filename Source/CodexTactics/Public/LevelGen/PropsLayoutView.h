@@ -17,14 +17,25 @@ class FJsonObject;
  * Tests: CodexTactics.LevelGen.Props.LayoutView.*.
  */
 
-/** Geometry conventions (not balance). Defaults are the values of the design / the TS schema / the map builder. */
+/**
+ * Geometry conventions. Defaults are the values of the design / the TS schema / the map builder. The designer-tunable rule numbers (gate
+ * widths, the "on the mandatory route" rule) are data: props_balance.json "layout_view", read by FPropsLayoutView::ReadConfig; the
+ * defaults below equal that file (a test checks it).
+ */
 struct FPropsLayoutConfig
 {
-	/** Gate = a gap between collinear segments of one fence / wall of this width, inclusive (2.1: 80-400 cm). */
+	/** Gate = a gap between collinear segments of one fence / wall of this width, inclusive (designer 2026-11-10: 80-600 cm). */
 	int32 GateMinGapCm = 80;
-	int32 GateMaxGapCm = 400;
-	/** A doorway is "on the mandatory route" when a mandatory leg on the doorway's walk layer passes within this distance (2.1: 150 cm). */
-	int32 MandatoryDoorToleranceCm = 150;
+	int32 GateMaxGapCm = 600;
+	/**
+	 * "On the mandatory route" (designer 2026-11-10) = the route passes THROUGH the doorway or turns around AT it; passing by is not
+	 * enough. Reach of the opening across its wall: half the opening width + this slack (route polylines are approximate nav paths).
+	 */
+	int32 DoorThroughSlackCm = 60;
+	/** "Turns at it": a route vertex where the route reverses or ends, at most this far in front of the doorway (outward side). */
+	int32 DoorTurnReachCm = 250;
+	/** Opening width assumed for a building door without a matching wall gap (WidthCm 0). */
+	int32 DoorFallbackWidthCm = 180;
 	/** Walkable roof = footprint minus this inset (2.1: 50 cm). */
 	int32 RoofInsetCm = 50;
 	/** Half the side of a square roof / floor hole (schema.ts HOLE_HALF_CM). The rim (exclude.hole_rim_cm) is added on top. */
@@ -92,7 +103,19 @@ struct FPropsDoorway
 	FString WalkLayer = TEXT("ground");
 	/** Distance (cm, rounded up) to the nearest mandatory route leg on WalkLayer; MAX_int32 when there is none. */
 	int32 MandatoryRouteDistCm = MAX_int32;
-	/** A mandatory leg on WalkLayer passes within MandatoryDoorToleranceCm (exact). */
+	/**
+	 * THROUGH: a mandatory leg with both ends on WalkLayer crosses (or touches) the doorway's wall line - the axis line through Pos along
+	 * Along - at most H from Pos, H = (WidthCm, or DoorFallbackWidthCm when 0) / 2 (floored) + DoorThroughSlackCm. A leg lying on the
+	 * line does not cross it. Exact integer test.
+	 */
+	bool bRouteThrough = false;
+	/**
+	 * TURNS AT: a mandatory route vertex on WalkLayer that is the route's first / last vertex or a reversal (dot(V - Prev, Next - V) < 0),
+	 * with lateral offset |dot(V - Pos, Along)| <= H and depth in front of the doorway 0 <= dot(V - Pos, Outward) <= DoorTurnReachCm
+	 * (gates have no outward side: |depth across the wall| <= DoorTurnReachCm). Exact integer test.
+	 */
+	bool bRouteTurnsAt = false;
+	/** bRouteThrough || bRouteTurnsAt (designer 2026-11-10: passing by within a distance is NOT on the route). */
 	bool bOnMandatoryRoute = false;
 };
 
@@ -186,6 +209,13 @@ public:
 	static bool Build(const FString& Json, FPropsLayoutView& Out, TArray<FString>& Errors, const FPropsLayoutConfig& Config = FPropsLayoutConfig());
 	static bool Build(const FJsonObject& Root, FPropsLayoutView& Out, TArray<FString>& Errors, const FPropsLayoutConfig& Config = FPropsLayoutConfig());
 
+	/**
+	 * Reads props_balance.json "layout_view" (gate_min_gap_cm, gate_max_gap_cm, door_through_slack_cm, door_turn_reach_cm,
+	 * door_fallback_width_cm) over the defaults. A missing block / key keeps the default; a key of the wrong type or a negative value is
+	 * an error (default kept). Returns false on any error.
+	 */
+	static bool ReadConfig(const FJsonObject& Balance, FPropsLayoutConfig& Out, TArray<FString>& Errors);
+
 	const FString& GetName() const { return Name; }
 	const FPropsLayoutConfig& GetConfig() const { return Config; }
 	FIntPoint GetBoundsMin() const { return BoundsMin; }
@@ -223,6 +253,21 @@ public:
 
 	/** IsWalkable && !IsBlocked. */
 	bool IsFree(FIntPoint P, const FString& WalkLayer, int32 ClearanceCm) const;
+
+	/** Lattice scan rectangle of a walk layer (inclusive): ground = bounds, cut = the cut polygon's box, floor / roof = the footprint. */
+	bool GetLayerExtent(const FString& WalkLayer, FIntPoint& OutMin, FIntPoint& OutMax) const;
+
+	/** Exact: a wall of the layer (schema.ts layerWalls) has its face within ClearanceCm of P (centre line <= thickness / 2 + clearance). */
+	bool IsNearWall(FIntPoint P, const FString& WalkLayer, int32 ClearanceCm) const;
+
+	/** Exact: a cover box is within ClearanceCm of P (covers stand on the ground layer only). */
+	bool IsNearCover(FIntPoint P, const FString& WalkLayer, int32 ClearanceCm) const;
+
+	/**
+	 * The nearest wall of the layer whose face is within ClearanceCm (smallest exact ceil distance to its centre line; ties = the first
+	 * in the layer's wall order). False when there is none. bOutAlongX: the wall runs mostly along X (|dx| >= |dy|).
+	 */
+	bool FindNearestWallAxis(FIntPoint P, const FString& WalkLayer, int32 ClearanceCm, bool& bOutAlongX) const;
 
 	/** Distance (cm, rounded up) from P to the nearest mandatory route leg whose both ends lie on WalkLayer; MAX_int32 when none. */
 	int32 DistanceToMandatoryRouteCm(FIntPoint P, const FString& WalkLayer) const;

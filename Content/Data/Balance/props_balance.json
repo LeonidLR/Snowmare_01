@@ -76,6 +76,20 @@
 		"dangerous_comment": "Designer #1: red = a dangerous crate (mined / explosive). The colour tells the player what is safe to open. Derived from the data (a mines-layer object attached to the crate), not drawn separately: the share of mined crates is mines_default.crates.percent."
 	},
 
+	"layout_view": {
+		"comment": "Doorway rules of the layout view (PROPS_LAYERS.md 2.1, read by FPropsLayoutView::ReadConfig; the C++ defaults equal these values).",
+		"gate_min_gap_cm": 80,
+		"gate_min_gap_cm_comment": "Narrowest gap between collinear fence / wall segments that counts as a gate.",
+		"gate_max_gap_cm": 600,
+		"gate_max_gap_cm_comment": "Designer 2026-11-10: fence gaps up to 600 cm are gates (the tractor yard F_tanks_N / F_tanks_S 500 cm gaps). Building doors and the cut's gaps are not affected.",
+		"door_through_slack_cm": 60,
+		"door_through_slack_cm_comment": "Designer 2026-11-10: a doorway is on the mandatory route only when the route passes THROUGH it (crosses its wall line within half the opening + this slack) or turns around at it. Passing by is not enough.",
+		"door_turn_reach_cm": 250,
+		"door_turn_reach_cm_comment": "'Turns at it' = a route vertex where the route reverses or ends, at most this far in front of the doorway on its outward side (R_main turns 180 cm in front of the shed door).",
+		"door_fallback_width_cm": 180,
+		"door_fallback_width_cm_comment": "Opening width of a building door that has no matching wall gap."
+	},
+
 	"presets": {
 		"standard": {
 			"exclude": {
