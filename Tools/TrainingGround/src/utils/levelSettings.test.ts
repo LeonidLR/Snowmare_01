@@ -12,7 +12,7 @@ import {
   validateHordeSpawnDistance, waveForHorde,
   getEnvironment, setEnvironmentKey, validateEnvironment,
   getLoadouts, setOperativeLoadout, validateLoadouts,
-  getKit, setOperativeKit, getKitOverrideCarry, setKitOverrideCarry, validateKit,
+  getKit, setOperativeKit, validateKit,
 } from './levelSettings.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -268,12 +268,22 @@ test('loadouts: get, set, reorder, empty list removes key, validate, unknown key
   assert.equal(validateLoadouts({ commander: 'm16' as any }).length, 1);
 });
 
-test('kit: get, set, partial fields, ammo, kit_override_carry, validate', () => {
+test('kit: get, set, partial fields, ammo, validate, preserves unknown per-operative keys', () => {
   assert.deepEqual(getKit({}), {});
-  assert.equal(getKitOverrideCarry({}), false);
-  const level = { level_id: 'test_lvl', keep_this: true };
+  const level = {
+    level_id: 'test_lvl',
+    keep_this: true,
+    kit: {
+      commander: {
+        grenades: 1,
+        armor_plating: 150,
+        special_perk: 'sniper_focus',
+        ammo: { m16: 60, pistol: 15 },
+      },
+    },
+  };
 
-  // Set kit for commander
+  // Set kit for commander: updates grenades & medkits, but MUST PRESERVE unknown fields (armor_plating, special_perk)
   let next = setOperativeKit(level, 'commander', {
     grenades: 2,
     medkits: 1,
@@ -284,16 +294,11 @@ test('kit: get, set, partial fields, ammo, kit_override_carry, validate', () => 
     grenades: 2,
     medkits: 1,
     heat_packs: 2,
+    armor_plating: 150,
+    special_perk: 'sniper_focus',
     ammo: { m16: 90, pistol: 24 },
   });
   assert.equal(next.keep_this, true);
-
-  // kit_override_carry toggle
-  next = setKitOverrideCarry(next, true);
-  assert.equal(getKitOverrideCarry(next), true);
-  next = setKitOverrideCarry(next, false);
-  assert.equal(getKitOverrideCarry(next), false);
-  assert.equal('kit_override_carry' in next, false);
 
   // Partial fields: missing fields are omitted
   next = setOperativeKit(next, 'engineer', { grenades: 3 });
@@ -326,7 +331,6 @@ test('level JSON round-trip: environment + loadouts + kit edit preserves all oth
   updated = setEnvironmentKey(updated, 'start_hour', 21.0);
   updated = setOperativeLoadout(updated, 'commander', ['m16', 'pistol', 'shotgun']);
   updated = setOperativeKit(updated, 'commander', { grenades: 4, ammo: { m16: 150 } });
-  updated = setKitOverrideCarry(updated, true);
 
   // Validate entire level settings
   const errors = validateLevelSettings(updated);
@@ -337,7 +341,6 @@ test('level JSON round-trip: environment + loadouts + kit edit preserves all oth
   assert.equal(updated.environment.start_hour, 21.0);
   assert.deepEqual(updated.loadouts.commander, ['m16', 'pistol', 'shotgun']);
   assert.deepEqual(updated.kit.commander, { grenades: 4, ammo: { m16: 150 } });
-  assert.equal(updated.kit_override_carry, true);
 
   // Check preserved fields
   assert.equal(updated.level_id, 'L_Demo01_A_FrozenLake');

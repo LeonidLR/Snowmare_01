@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Swords, Shield, Backpack, ArrowUp, ArrowDown, X, Plus, AlertTriangle } from 'lucide-react';
 import {
-  AVAILABLE_WEAPONS, STANDARD_OPERATIVES, getKit, getKitOverrideCarry, getLoadouts,
-  setKitOverrideCarry, setOperativeKit, setOperativeLoadout, validateKit, validateLoadouts,
+  AVAILABLE_WEAPONS, STANDARD_OPERATIVES, getKit, getLoadouts,
+  setOperativeKit, setOperativeLoadout, validateKit, validateLoadouts,
 } from '../utils/levelSettings';
 import type { LevelConfig, OperativeKit } from '../types';
 
@@ -17,7 +17,6 @@ export const LevelOperativesPanel: React.FC<LevelOperativesPanelProps> = ({ conf
 
   const loadouts = getLoadouts(config);
   const kit = getKit(config);
-  const kitOverride = getKitOverrideCarry(config);
 
   const loadoutErrors = validateLoadouts(loadouts);
   const kitErrors = validateKit(kit);
@@ -107,20 +106,6 @@ export const LevelOperativesPanel: React.FC<LevelOperativesPanelProps> = ({ conf
             </p>
           </div>
         </div>
-
-        {/* kit_override_carry checkbox */}
-        <label
-          className="flex items-center gap-2 bg-slate-950 px-3 py-1.5 rounded-lg border border-slate-800 cursor-pointer hover:border-slate-700 text-xs text-slate-200"
-          title="kit_override_carry: при переходе из кампании стартовое снаряжение этого уровня заменяет перенесённые припасы"
-        >
-          <input
-            type="checkbox"
-            checked={kitOverride}
-            onChange={(e) => onChange(setKitOverrideCarry(config, e.target.checked) as LevelConfig)}
-            className="accent-rose-500 w-4 h-4"
-          />
-          <span className="font-semibold text-rose-200">Снаряжение уровня важнее перенесённого (kit_override_carry)</span>
-        </label>
       </div>
 
       {/* Operative selector tabs */}

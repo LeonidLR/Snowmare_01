@@ -534,25 +534,51 @@ export function getKit(level: LevelLike): LevelKit {
 
 export function setOperativeKit(level: LevelLike, operativeKey: string, kit: OperativeKit | undefined): LevelLike {
   const next: LevelLike = { ...level };
-  const fullKit: Record<string, OperativeKit> = { ...(getKit(level) as Record<string, OperativeKit>) };
+  const fullKit: Record<string, any> = { ...(getKit(level) as Record<string, any>) };
   const cleanKey = operativeKey.trim().toLowerCase();
 
   if (!kit) {
     delete fullKit[cleanKey];
   } else {
-    const cleaned: OperativeKit = {};
-    if (typeof kit.grenades === 'number' && !Number.isNaN(kit.grenades)) cleaned.grenades = Math.max(0, Math.round(kit.grenades));
-    if (typeof kit.medkits === 'number' && !Number.isNaN(kit.medkits)) cleaned.medkits = Math.max(0, Math.round(kit.medkits));
-    if (typeof kit.heat_packs === 'number' && !Number.isNaN(kit.heat_packs)) cleaned.heat_packs = Math.max(0, Math.round(kit.heat_packs));
+    // Preserve any existing unknown per-operative keys (Claude review defect #1)
+    const existingOp = fullKit[cleanKey] && typeof fullKit[cleanKey] === 'object' ? fullKit[cleanKey] : {};
+    const cleaned: Record<string, any> = { ...existingOp, ...kit };
+
+    if (typeof kit.grenades === 'number' && !Number.isNaN(kit.grenades)) {
+      cleaned.grenades = Math.max(0, Math.round(kit.grenades));
+    } else if (kit.grenades === undefined) {
+      delete cleaned.grenades;
+    }
+
+    if (typeof kit.medkits === 'number' && !Number.isNaN(kit.medkits)) {
+      cleaned.medkits = Math.max(0, Math.round(kit.medkits));
+    } else if (kit.medkits === undefined) {
+      delete cleaned.medkits;
+    }
+
+    if (typeof kit.heat_packs === 'number' && !Number.isNaN(kit.heat_packs)) {
+      cleaned.heat_packs = Math.max(0, Math.round(kit.heat_packs));
+    } else if (kit.heat_packs === undefined) {
+      delete cleaned.heat_packs;
+    }
 
     if (kit.ammo && typeof kit.ammo === 'object') {
-      const cleanAmmo: Record<string, number> = {};
+      const existingAmmo = existingOp.ammo && typeof existingOp.ammo === 'object' ? existingOp.ammo : {};
+      const cleanAmmo: Record<string, number> = { ...existingAmmo };
       for (const [w, count] of Object.entries(kit.ammo)) {
         if (typeof count === 'number' && !Number.isNaN(count) && count >= 0) {
           cleanAmmo[w.trim().toLowerCase()] = Math.round(count);
+        } else if (count === undefined) {
+          delete cleanAmmo[w.trim().toLowerCase()];
         }
       }
-      if (Object.keys(cleanAmmo).length > 0) cleaned.ammo = cleanAmmo;
+      if (Object.keys(cleanAmmo).length > 0) {
+        cleaned.ammo = cleanAmmo;
+      } else {
+        delete cleaned.ammo;
+      }
+    } else if (kit.ammo === undefined && !existingOp.ammo) {
+      delete cleaned.ammo;
     }
 
     if (Object.keys(cleaned).length === 0) {
@@ -566,20 +592,6 @@ export function setOperativeKit(level: LevelLike, operativeKey: string, kit: Ope
     delete next.kit;
   } else {
     next.kit = fullKit;
-  }
-  return next;
-}
-
-export function getKitOverrideCarry(level: LevelLike): boolean {
-  return level.kit_override_carry === true;
-}
-
-export function setKitOverrideCarry(level: LevelLike, value: boolean | undefined): LevelLike {
-  const next: LevelLike = { ...level };
-  if (value) {
-    next.kit_override_carry = true;
-  } else {
-    delete next.kit_override_carry;
   }
   return next;
 }

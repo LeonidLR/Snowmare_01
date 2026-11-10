@@ -8,6 +8,7 @@ import { setupMovementApi } from './server/movementApi.ts'
 import { setupCombatLabApi } from './server/combatLabApi.ts'
 import { setupLevelgenApi } from './server/levelgenApi.ts'
 import { buildLevelList, type RawLevelMeta, type CampaignConfig } from './src/utils/levelList.ts'
+import { sanitizeBotRunArgs } from './src/utils/botRunner.ts'
 import {
   applyLevelEncounterPatch, effectiveHorde, isJsonObject, mergeAiTuningCvars, pickLevelEncounter,
   validateCVarEdits, validateHorde, validateLevelPatch, validatePerception,
@@ -603,6 +604,25 @@ const setupApiMiddlewares = (middlewares: any) => {
           }
           const levelJsonPath = fileName ? path.resolve(LEVELS_DIR, fileName) : ''
 
+          // Валидация аргументов запуска против командных инъекций (Claude review defect #3)
+          const validation = sanitizeBotRunArgs({
+            runs: payload.runs,
+            profile: payload.profile,
+            speed: payload.speed,
+            loadout: payload.loadout,
+            mapPath,
+            levelJsonPath,
+          })
+
+          if (!validation.ok) {
+            res.statusCode = 400
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: validation.error }))
+            return
+          }
+
+          const { args: cleanArgs } = validation
+
           // Запускаем отдельное видимое консольное окно с аргументами пресета
           // Unreal playtest bot (Scripts/run_simulations.bat, the C++ bot); not there yet -> say so instead of failing silently.
           const batPath = path.resolve(__dirname, '../../Scripts/run_simulations.bat')
@@ -612,14 +632,16 @@ const setupApiMiddlewares = (middlewares: any) => {
             res.end(JSON.stringify({ error: 'Бот Unreal ещё не готов (Scripts/run_simulations.bat отсутствует). Конфиг уровня сохранён.' }))
             return
           }
-          const args = ['/c', 'start', '""', batPath]
-          if (payload.runs) {
-            args.push(String(payload.runs))
-            args.push(String(payload.profile || 'NORMAL'))
-            args.push(String(payload.speed || '5.0'))
-            args.push(String(payload.loadout || 'COLLECT'))
-            args.push(mapPath)
-            args.push(levelJsonPath)
+          const args = ['/c', 'start', 'CodexTactics Bot Simulator', batPath]
+          if (cleanArgs.runs) {
+            args.push(cleanArgs.runs)
+            args.push(cleanArgs.profile)
+            args.push(cleanArgs.speed)
+            args.push(cleanArgs.loadout)
+            args.push(cleanArgs.mapPath)
+            if (cleanArgs.levelJsonPath) {
+              args.push(cleanArgs.levelJsonPath)
+            }
           }
 
           const child = spawn('cmd.exe', args, {
@@ -633,8 +655,8 @@ const setupApiMiddlewares = (middlewares: any) => {
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify({
             success: true,
-            message: payload.runs 
-              ? `Запущен пресет: ${payload.runs} забегов (${payload.profile || 'NORMAL'}, ${payload.speed || 5.0}x)`
+            message: cleanArgs.runs 
+              ? `Запущен пресет: ${cleanArgs.runs} забегов (${cleanArgs.profile}, ${cleanArgs.speed}x)`
               : 'Окно симулятора открыто! Выберите режим в консоли.'
           }))
         } catch (e: any) {

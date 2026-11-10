@@ -216,8 +216,6 @@ export interface LevelConfig {
   loadouts?: LevelLoadouts;
   /** Per-level starting kit (grenades, medkits, heat_packs, ammo) per operative/role. */
   kit?: LevelKit;
-  /** Campaign policy: on campaign arrival level's kit supplies win over carried supplies (default false). */
-  kit_override_carry?: boolean;
   waves: WaveConfig[];
 }
 
