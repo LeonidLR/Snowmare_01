@@ -337,6 +337,12 @@ struct CODEXTACTICS_API FLevelCombatConfig
 	 */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	bool bIntroDialogue = true;
+	/**
+	 * "start_mode" (top level, game designer 2026-11-09: the game starts in Solo): "solo" (default) | "formation" - the squad mode the level
+	 * starts in (USquadSubsystem::ApplyLevelStartMode; a save's own mode wins). The Lake tutorial starts in formation (its first lesson is B).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	bool bStartInFormation = false;
 	/** "demo": demo game-mode flags (Panic off, vision cones, tutorial, demo HUD preset). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FDemoModeSettings Demo;

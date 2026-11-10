@@ -202,6 +202,28 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsSoloMode() const { return bIsSoloMode; }
 
+	/**
+	 * Solo without ties and the autonomy off (game designer 2026-11-09, Codex.Squad.SoloIndependent): every operative holds exactly where
+	 * he was sent - he fires from his spot by his fire mode, but no manoeuvre under fire / cover of his own (UnderFireRules::bSoloHold).
+	 */
+	bool IsSoloHoldingInPlace() const;
+
+	/** Codex.Squad.SoloIndependent (default 1): Solo has no leash and no guard crouch; 0 = the old rules (25 m leash, guard crouch). */
+	static bool IsSoloIndependent();
+
+	/**
+	 * The level start's squad mode was applied, or a save / an explicit switch chose one first (ApplyLevelStartMode). Smokes written for the
+	 * formation start call ExitSoloMode, which counts as the choice.
+	 */
+	bool IsStartModeResolved() const { return bStartModeResolved; }
+
+	/**
+	 * Smokes / tools written for the formation start: the level start's Solo (only while nothing else switched the mode since) quietly
+	 * ends - no regroup line, no stance copy - and a start not applied yet becomes the formation. Any Solo entered by B / a trap / the
+	 * tutorial / a save stays. True when the squad is in formation afterwards.
+	 */
+	bool UseFormationStart();
+
 	/** Solo holds him standing and his guard crouch still waits out hold_crouch_after_sec (ArmSoloGuardCrouch; smokes / debug). */
 	bool IsSoloGuardCrouchWaiting(const AOperativeCharacter* Operative) const;
 
@@ -290,7 +312,7 @@ public:
 	/** Posture tuning (CVars Codex.Posture.DefensiveSquadWide / Codex.Posture.AggressiveExplorationFire). */
 	static FFirePostureConfig GetPostureConfig();
 
-	/** Max scout distance from followers in solo mode before auto-exit (cm, 25m matching Godot). */
+	/** Max scout distance from followers in solo mode before auto-exit (cm, 25m matching Godot); only with Codex.Squad.SoloIndependent 0. */
 	static constexpr float SoloModeMaxDistance = 2500.f;
 
 	/**
@@ -777,7 +799,13 @@ private:
 	void HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatMode CombatMode);
 
 	/** EnterSoloMode body; bForTrap: the trap hold (no leash, operatives in cover keep their stance, the trap line instead). */
-	void EnterSoloModeInternal(bool bForTrap);
+	void EnterSoloModeInternal(bool bForTrap, bool bAnnounce = true);
+
+	/**
+	 * 2026-11-09 (the game starts in Solo): once the world plays and the squad has a leader, Solo comes on unless the level data asks for the
+	 * formation ("start_mode": "formation") or a save / an explicit switch chose the mode first (SquadOrderRules::StartsInSolo). Once per world.
+	 */
+	void ApplyLevelStartMode();
 
 	/**
 	 * Solo's guard crouch (2026-11-02, the game designer's review of ambush v3): a holding follower who stands waits squad_roe.json
@@ -1437,6 +1465,10 @@ private:
 	bool bIsSoloMode = false;
 	/** Rev 5h: the Solo was entered by a spotted trap (no leash). */
 	bool bTrapSolo = false;
+	/** The level start's mode is applied / was chosen (ApplyLevelStartMode). */
+	bool bStartModeResolved = false;
+	/** The Solo running is the level start's own (no switch since) - UseFormationStart may end it. */
+	bool bSoloFromLevelStart = false;
 	bool bAutonomousSquadCombat = false;
 	/**
 	 * Wall leadership (2026-11-01): SetLeader runs inside OrderWallLeadershipPeek - the wall order is re-keyed by the peek itself (no

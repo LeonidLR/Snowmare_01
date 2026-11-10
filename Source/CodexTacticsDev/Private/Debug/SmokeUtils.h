@@ -400,6 +400,9 @@ namespace SmokeUtils
 		{
 			return;
 		}
+		// 2026-11-09: levels start in Solo; the smokes placing the squad here were written for the formation start (a smoke testing Solo
+		// switches it on itself - B / EnterSoloMode - which this never undoes).
+		Squad->UseFormationStart();
 		TArray<AOperativeCharacter*> Members = Squad->GetMembers();
 		Members.Sort([](const AOperativeCharacter& A, const AOperativeCharacter& B) { return A.SquadIndex < B.SquadIndex; });
 		const FTransform Layout = LayoutTransform(World);

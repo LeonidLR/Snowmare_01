@@ -79,6 +79,16 @@ FString LevelJsonRules::ResolveLevelJsonFile(const FString& MapName, const FStri
 	return ChooseLevelJsonFile(MapName, bExists, DefaultFile, CommandLineOverride);
 }
 
+bool LevelJsonRules::ParseStartMode(const FString& Name, bool& bOutFormation)
+{
+	if (Name.Equals(TEXT("solo"), ESearchCase::IgnoreCase) || Name.Equals(TEXT("formation"), ESearchCase::IgnoreCase))
+	{
+		bOutFormation = Name.Equals(TEXT("formation"), ESearchCase::IgnoreCase);
+		return true;
+	}
+	return false;
+}
+
 bool LevelJsonRules::ParseEnemyType(const FString& Name, EEnemyArchetype& OutType)
 {
 	static const TMap<FString, EEnemyArchetype> Types = {
@@ -426,6 +436,12 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 
 	// 2026-10-22 b (campaign): the level starts behind a black screen that fades in over this many real seconds (0 = no fade).
 	Config.StartFadeSeconds = FMath::Max(0.f, LevelJsonNumber(Root, TEXT("start_fade_seconds"), 0.f));
+	// 2026-11-09 (the game starts in Solo): "start_mode": "solo" (default) | "formation".
+	if (!LevelJsonRules::ParseStartMode(LevelJsonString(Root, TEXT("start_mode"), TEXT("solo")), Config.bStartInFormation))
+	{
+		OutError = FString::Printf(TEXT("unknown start_mode '%s' (solo | formation)"), *LevelJsonString(Root, TEXT("start_mode"), FString()));
+		return false;
+	}
 	// 2026-10-22 d: "intro_dialogue": false drops the mission start briefing on this level (not only on demo levels).
 	{
 		bool bIntro = true;

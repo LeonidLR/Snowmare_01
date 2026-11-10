@@ -31,6 +31,9 @@ namespace LevelJsonRules
 	CODEXTACTICS_API FString ResolveLevelJsonFile(const FString& MapName, const FString& DefaultFile, const FString& CommandLineOverride);
 
 	/** "HOUND" / "FROST_HOUND", "SPITTER", "BRUTE", "FROSTBITTEN", "CUTTER", "CRYO_DRONE", "MARKSMAN" (any case). */
+	/** "start_mode" (2026-11-09): "solo" -> false, "formation" -> true (case-insensitive); false on anything else. */
+	CODEXTACTICS_API bool ParseStartMode(const FString& Name, bool& bOutFormation);
+
 	CODEXTACTICS_API bool ParseEnemyType(const FString& Name, EEnemyArchetype& OutType);
 
 	/**

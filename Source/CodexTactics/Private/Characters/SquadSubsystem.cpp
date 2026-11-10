@@ -18,7 +18,12 @@
 #include "Characters/OperativeCharacter.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TargetedShotRules.h"
+#include "Core/CodexTacticsGameMode.h"
 #include "Data/SquadROE.h"
+#include "Data/LevelJsonRules.h"
+#include "Data/WaveConfigTypes.h"
+#include "Misc/CommandLine.h"
+#include "Misc/Parse.h"
 #include "Data/TacticalHeatTuning.h"
 #include "CodexTactics.h"
 #include "CollisionQueryParams.h"
@@ -55,6 +60,9 @@ namespace
 		TEXT("1 (default): a follower the squad takes out of his cover drops his pending cover slot and its walk - Regroup any (a walk to a cover slot too), the leave to follow only the side-step along the wall he leaves, e.g. the automatic walk to the corner (bug 2026-11-02); 0: the old rule (the walk ran on and he entered the cover again)."));
 	TAutoConsoleVariable<int32> CVarSquadSoloOwnStance(TEXT("Codex.Squad.SoloOwnStance"), 1,
 		TEXT("1 (default): in Solo every operative keeps the stance the player gave him - a leader switch never re-applies the guard crouch to it, a player's stance order ends a pending guard crouch, a manual corner peek keeps its pose (bug 2026-11-08); 0: the old rule (selecting the next operative crouched the previous one, prone or not)."));
+
+	TAutoConsoleVariable<int32> CVarSquadSoloIndependent(TEXT("Codex.Squad.SoloIndependent"), 1,
+		TEXT("1 (default, game designer 2026-11-09): Solo has no distance limit and no guard crouch - every operative holds exactly where he was sent, in his stance; with the autonomy off he fires from his spot but never manoeuvres / takes cover on his own; 0: the old rules (the 25 m leash regroups, Solo's guard crouch, the manoeuvre under fire)."));
 
 	TAutoConsoleVariable<int32> CVarSquadLeaderSwitchKeepsMove(TEXT("Codex.Squad.LeaderSwitchKeepsMove"), 1,
 		TEXT("1 (default): in formation mode selecting another member while the squad carries out the leader's order lets the formation finish it with the old leader; the selected member leads from the next order / when it is done (bug 2026-11-08); 0: the old rule (the switch re-planned the formation at once - the squad stopped)."));
@@ -733,8 +741,72 @@ void USquadSubsystem::EnterSoloMode()
 	EnterSoloModeInternal(false);
 }
 
-void USquadSubsystem::EnterSoloModeInternal(bool bForTrap)
+bool USquadSubsystem::IsSoloIndependent()
 {
+	return CVarSquadSoloIndependent.GetValueOnGameThread() != 0;
+}
+
+bool USquadSubsystem::IsSoloHoldingInPlace() const
+{
+	return bIsSoloMode && !bAutonomousSquadCombat && IsSoloIndependent();
+}
+
+void USquadSubsystem::ApplyLevelStartMode()
+{
+	UWorld* World = GetWorld();
+	if (bStartModeResolved || !World || !World->HasBegunPlay() || !Leader.IsValid())
+	{
+		return;
+	}
+	ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
+	const ULevelConfigAsset* Level = GameMode ? GameMode->PeekLevelConfig() : nullptr;
+	bool bFormation = Level && Level->Config.bStartInFormation;
+#if !UE_BUILD_SHIPPING
+	// Dev runs: -SquadStart=formation | solo overrides the level data (smoke_parallel gives the smokes written for the formation start
+	// "formation" - test_map.json smokeDefaults.squadStart; "level" or nothing = the level's own).
+	if (FString Override; FParse::Value(FCommandLine::Get(), TEXT("SquadStart="), Override))
+	{
+		bool bOverrideFormation = false;
+		if (LevelJsonRules::ParseStartMode(Override, bOverrideFormation))
+		{
+			bFormation = bOverrideFormation;
+		}
+	}
+#endif
+	const bool bSolo = SquadOrderRules::StartsInSolo(bFormation, bIsSoloMode);
+	bStartModeResolved = true;
+	if (bSolo)
+	{
+		EnterSoloModeInternal(/*bForTrap*/ false, /*bAnnounce*/ false); // the level just started: no feed line, no floating text
+		bSoloFromLevelStart = bIsSoloMode;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Squad] level start: %s (start_mode %s)"), bIsSoloMode ? TEXT("SOLO") : TEXT("formation"),
+		bFormation ? TEXT("formation") : TEXT("solo"));
+}
+
+bool USquadSubsystem::UseFormationStart()
+{
+	if (!bStartModeResolved)
+	{
+		bStartModeResolved = true;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Squad] formation start requested before the level start - formation"));
+	}
+	else if (bIsSoloMode && bSoloFromLevelStart)
+	{
+		bIsSoloMode = false;
+		bTrapSolo = false;
+		bSoloFromLevelStart = false;
+		SoloGuardCrouchWait.Reset();
+		SetFollowersHolding(false);
+		UE_LOG(LogCodexTactics, Display, TEXT("[Squad] formation start requested - the level start's Solo ends quietly"));
+	}
+	return !bIsSoloMode;
+}
+
+void USquadSubsystem::EnterSoloModeInternal(bool bForTrap, bool bAnnounce)
+{
+	bStartModeResolved = true; // an explicit Solo before the level start's own (a smoke, the tutorial, a trap) is the choice
+	bSoloFromLevelStart = false;
 	if (PendingLeader.IsValid())
 	{
 		CommitPendingLeader(/*bEndOldOrder*/ false, /*bHisOrderRunning*/ false, TEXT("Solo on")); // the selected one is the leader Solo starts from
@@ -755,21 +827,28 @@ void USquadSubsystem::EnterSoloModeInternal(bool bForTrap)
 	// follower crouches only after squad_roe.json hold_crouch_after_sec standing still - the autonomy's hold crouch delay
 	// (ArmSoloGuardCrouch / UpdateSoloGuardCrouch).
 	SoloGuardCrouchWait.Reset();
+	// 2026-11-09 (Codex.Squad.SoloIndependent): no guard crouch - each one keeps the stance he has.
 	for (FFollowerState& Follower : Followers)
 	{
-		if (AOperativeCharacter* Operative = Follower.Operative.Get();
-			Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !(bForTrap && Operative->bInCover)
+		if (AOperativeCharacter* Operative = Follower.Operative.Get(); SquadOrderRules::UsesSoloGuardCrouch(IsSoloIndependent())
+			&& Operative && SquadOrderRules::ShouldHoldNow(IsOnOwnOrder(Operative)) && !(bForTrap && Operative->bInCover)
 			&& !HasGroupCoverProne(Operative)) // 2026-10-20: lying behind a cover on a group cover order: stays prone
 		{
 			ArmSoloGuardCrouch(*Operative);
 		}
 	}
+	if (!bAnnounce)
+	{
+		return;
+	}
 	UFloatingTextSubsystem::SpawnAboveOperative(LeaderRef, TEXT("👤 SOLO MODE [B]"), FLinearColor(0.2f, 0.9f, 1.f));
 
 	if (UGameMessageSubsystem* Messages = bForTrap ? nullptr : GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
-		Messages->PostMessage(LeaderRef->DisplayName,
-			FText::Format(LOCTEXT("SoloModeOn", "👤 [SOLO MODE: ON] {0} scouts alone (max 25 m). Teammates hold their positions, crouched!"),
+		// Game designer 2026-11-09: no distance limit, nobody follows / crouches - the line says what Solo is now.
+		Messages->PostMessage(LeaderRef->DisplayName, IsSoloIndependent()
+			? LOCTEXT("SoloModeOnFree", "👤 [SOLO MODE: ON] Each operative holds where you send him. [B] regroups.")
+			: FText::Format(LOCTEXT("SoloModeOn", "👤 [SOLO MODE: ON] {0} scouts alone (max 25 m). Teammates hold their positions, crouched!"),
 				LeaderRef->DisplayName));
 	}
 }
@@ -803,6 +882,11 @@ void USquadSubsystem::NotePlayerStanceOrder(AOperativeCharacter& Operative)
 void USquadSubsystem::ArmSoloGuardCrouch(AOperativeCharacter& Operative, bool bLeaderSwitch)
 {
 	using namespace SquadAutonomyRules;
+	if (!SquadOrderRules::UsesSoloGuardCrouch(IsSoloIndependent()))
+	{
+		SoloGuardCrouchWait.Remove(&Operative); // 2026-11-09: Solo without ties - his stance stays his
+		return;
+	}
 	// Bug 2026-11-08 (the game designer, PIE: Solo, the first operative ordered prone, the next one selected and ordered prone - the first got up
 	// into a crouch): a leader switch re-armed the guard crouch on the old leader, and a prone / crouched one "takes it at once". In Solo every
 	// operative keeps the stance the player gave him; a manual corner peek keeps its pose.
@@ -872,6 +956,8 @@ void USquadSubsystem::UpdateSoloGuardCrouch(float DeltaTime)
 
 void USquadSubsystem::RestoreSoloForLoad(bool bSolo, bool bInTrapSolo)
 {
+	bStartModeResolved = true; // the save's mode wins over the level start's
+	bSoloFromLevelStart = false;
 	bIsSoloMode = bSolo;
 	bTrapSolo = bSolo && bInTrapSolo;
 	SetFollowersHolding(bSolo);
@@ -889,8 +975,11 @@ void USquadSubsystem::RestoreSoloForLoad(bool bSolo, bool bInTrapSolo)
 			{
 				Operative->StopOperative(); // they hold where the save put them
 				// ... in the saved stance; one saved standing takes the guard crouch after hold_crouch_after_sec (UpdateSoloGuardCrouch only
-				// crouches a standing follower - the save's stance may still be applied after this).
-				SoloGuardCrouchWait.Add(Operative, 0.f);
+				// crouches a standing follower - the save's stance may still be applied after this). Not in Solo without ties (2026-11-09).
+				if (SquadOrderRules::UsesSoloGuardCrouch(IsSoloIndependent()))
+				{
+					SoloGuardCrouchWait.Add(Operative, 0.f);
+				}
 			}
 		}
 	}
@@ -937,6 +1026,8 @@ void USquadSubsystem::HoldForSpottedTrap(AOperativeCharacter* Spotter, const FTe
 
 void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 {
+	bStartModeResolved = true; // the formation chosen before the level start's Solo (a smoke written for the formation start, the bot)
+	bSoloFromLevelStart = false;
 	if (!bIsSoloMode)
 	{
 		return;
@@ -1366,6 +1457,7 @@ void USquadSubsystem::RebuildFollowers()
 void USquadSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	ApplyLevelStartMode(); // 2026-11-09: the level starts in Solo unless its data says "formation" (once)
 	UpdatePendingLeader(); // bug 2026-11-08: a leader switch that waits for the running order (before the formation follows this frame)
 	RetryPlannedShots(DeltaTime);
 	UpdateGroupCoverProne(DeltaTime); // fights too (the formation is off there, a prone order still lies down on arrival)
@@ -1398,7 +1490,8 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 		return;
 	}
 
-	if (bIsSoloMode && !bTrapSolo) // rev 5h: no leash after a spotted trap (a regroup would walk the formation through it)
+	// Rev 5h: no leash after a spotted trap (a regroup would walk the formation through it); 2026-11-09: no leash at all (SoloIndependent).
+	if (bIsSoloMode && SquadOrderRules::ShouldLeashRegroup(IsSoloIndependent(), bTrapSolo, 1.f, 0.f))
 	{
 		float MaxDist = 0.f;
 		for (const FFollowerState& Follower : Followers)
@@ -1413,7 +1506,7 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 			}
 		}
 
-		if (MaxDist > SoloModeMaxDistance)
+		if (SquadOrderRules::ShouldLeashRegroup(IsSoloIndependent(), bTrapSolo, MaxDist, SoloModeMaxDistance))
 		{
 			ExitSoloMode(true, MaxDist / 100.f);
 		}

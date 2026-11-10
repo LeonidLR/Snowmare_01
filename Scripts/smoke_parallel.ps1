@@ -71,6 +71,11 @@ function Start-SmokeProcess([string]$Name, [string]$Suffix) {
     $log = Join-Path $LogDir "Smoke-$Name$Suffix.log"
     Remove-Item $log -ErrorAction SilentlyContinue # a stale log must never pass for this run's result
     $extra = (Get-Option $Name "extra" "") + " " + (Get-ClockArgs $Name) + " " + $ExtraArgs
+    # 2026-11-09: levels start in Solo; smokes written for the formation start get -SquadStart=formation (smokeDefaults.squadStart),
+    # a smoke's own "squadStart": "level" runs the level's real start mode.
+    $startDefault = $(if ($TestMap.PSObject.Properties["smokeDefaults"] -and $TestMap.smokeDefaults.PSObject.Properties["squadStart"]) { $TestMap.smokeDefaults.squadStart } else { "level" })
+    $squadStart = Get-Option $Name "squadStart" $startDefault
+    if ($squadStart -and $squadStart -ne "level") { $extra += " -SquadStart=$squadStart" }
     $map = Get-Option $Name "map" $Map
     # A "rendered" smoke (test_map smokeOptions, e.g. SnowTracksSmoke reads a render target back) needs a real RHI: offscreen instead of -nullrhi.
     $rhi = $(if (Get-Option $Name "rendered" $false) { "-RenderOffscreen -ResX=1280 -ResY=720" } else { "-nullrhi" })

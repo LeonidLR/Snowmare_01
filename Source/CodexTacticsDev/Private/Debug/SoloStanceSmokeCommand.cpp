@@ -7,11 +7,12 @@
 // crouched one "takes it at once" (SquadAutonomyRules::StartSoloGuardCrouch). Fix: KeepsOwnStanceInSolo (Codex.Squad.SoloOwnStance 1).
 // The real keys through Enhanced Input (1 / 2 / 3 select, V / C / Z stance), Solo on (B's handler: USquadSubsystem::EnterSoloMode):
 //  1. prone: A selected -> V; key 2 -> V: A stays prone at once and hold_crouch_after_sec + 2 s later, B prone; C (no stance order, standing
-//     when Solo came on) still takes the guard crouch (Solo's "teammates hold crouched" stays as designed);
+//     when Solo came on) stays standing (2026-11-09, Solo without ties: no guard crouch - Codex.Squad.SoloIndependent);
 //  2. crouch: C selected -> C; key 1 -> C: both crouched, C's crouch still the player's (not turned into the squad's);
 //  3. stand: A -> Z; key 3: A still stands hold_crouch_after_sec + 2 s later (no guard crouch over the player's stand);
 //  4. box select A + B -> V: both prone, C untouched; key 3: A and B stay prone;
-//  5. A/B: Codex.Squad.SoloOwnStance 0 (the old rule): A selected (prone), key 2: A gets up into a crouch - the reported bug reproduces.
+//  5. A/B: Codex.Squad.SoloOwnStance 0 + SoloIndependent 0 (the old rules): A selected (prone), key 2: A gets up into a crouch - the reported
+//     bug reproduces.
 // Godot reference: none (UE-only; Godot _sync_squad_stances made the squad copy the leader).
 
 #include "CoreMinimal.h"
@@ -58,9 +59,13 @@ namespace SoloStanceSmoke
 
 	void SetOwnStanceRule(int32 Value)
 	{
-		if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Squad.SoloOwnStance")))
+		// 2026-11-09: the guard crouch the old rule re-armed exists only with Solo's ties (Codex.Squad.SoloIndependent 0).
+		for (const TCHAR* Name : { TEXT("Codex.Squad.SoloOwnStance"), TEXT("Codex.Squad.SoloIndependent") })
 		{
-			CVar->Set(Value, ECVF_SetByConsole);
+			if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(Name))
+			{
+				CVar->Set(Value, ECVF_SetByConsole);
+			}
 		}
 	}
 
@@ -217,7 +222,9 @@ namespace SoloStanceSmoke
 			CheckStance(State, A, EOperativeStance::Prone, FString::Printf(TEXT("%.0f s later the first one is still prone"), LongWait));
 			Check(State, !Squad->IsSoloGuardCrouchWaiting(A), TEXT("... no guard crouch waits for him"));
 			CheckStance(State, B, EOperativeStance::Prone, TEXT("the second one prone too"));
-			CheckStance(State, C, EOperativeStance::Crouching, TEXT("the third (no stance order, standing when Solo came on) takes Solo's guard crouch as designed"));
+			// 2026-11-09 (Solo without ties): nobody auto-crouches - the third keeps the stance he had.
+			CheckStance(State, C, EOperativeStance::Standing, TEXT("the third (no stance order, standing when Solo came on) still stands - no guard crouch"));
+			Check(State, !Squad->IsSoloGuardCrouchWaiting(C), TEXT("... and no guard crouch waits for him"));
 			// Reset for the crouch variant: everybody standing (the smoke's stance), C leads, Solo on again.
 			Squad->ExitSoloMode(false, 0.f);
 			for (AOperativeCharacter* Member : Members)
@@ -339,7 +346,7 @@ namespace SoloStanceSmoke
 			{
 				return true;
 			}
-			CheckStance(State, A, EOperativeStance::Crouching, TEXT("Codex.Squad.SoloOwnStance 0 (the old rule): key 2 gets the previous operative up into a crouch - the reported bug reproduces"));
+			CheckStance(State, A, EOperativeStance::Crouching, TEXT("Codex.Squad.SoloOwnStance 0 + SoloIndependent 0 (the old rules): key 2 gets the previous operative up into a crouch - the reported bug reproduces"));
 			return Finish(World, State, true);
 		default:
 			return false;

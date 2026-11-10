@@ -1820,7 +1820,7 @@ void USaveGameSubsystem::RestoreGameState(FSaveRestoreContext& Context)
 		{
 			Squad->SetLeader(Context.NewLeader);
 		}
-		Squad->RestoreSoloForLoad(SaveBool(*GameState, TEXT("is_solo_mode"), false), SaveBool(*GameState, TEXT("is_trap_solo"), false));
+		Squad->RestoreSoloForLoad(SaveBool(*GameState, TEXT("is_solo_mode"), true) /* 2026-11-09: the game starts in Solo */, SaveBool(*GameState, TEXT("is_trap_solo"), false));
 		ESquadFirePosture Posture = FirePostureRules::DefaultPosture;
 		if (LoadEnumName(SaveString(*GameState, TEXT("squad_posture")), Posture))
 		{
