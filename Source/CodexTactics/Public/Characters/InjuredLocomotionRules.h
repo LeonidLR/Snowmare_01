@@ -81,4 +81,33 @@ namespace InjuredLocomotionRules
 	 * the aim; "torso_pelvis_share" = the limp shows in the shoulders): 0 while aiming, the share clamped to [0, 1] otherwise.
 	 */
 	CODEXTACTICS_API float TorsoPelvisShare(float Share, bool bAiming);
+
+	/**
+	 * The torso LIMP CUE ("limp" in weapon_anim_sets.json "injured"; bug 2026-11-10, fix/injured-layer-visible): from the game camera (~26 m,
+	 * pitch -35, a body ~100 px tall) the lower-body injured walk under the upright rifle torso was not visible. The cue bends the torso on top of
+	 * the layer: a forward hunch (constant) and a side sway toward the hurt leg once per gait cycle (a limp leans once a cycle, a sound walk
+	 * sways twice). While aiming both are scaled by AimingScale (the gun dips / rolls a few degrees, the aim's yaw is never touched).
+	 */
+	struct FInjuredLimpCue
+	{
+		/** "enabled": the cue on. */
+		bool bEnabled = false;
+		/** "hunch_deg": the forward bend of the torso at full layer weight (standing and walking). */
+		float HunchDeg = 0.f;
+		/** "sway_deg": the side lean's amplitude at full walk share. */
+		float SwayDeg = 0.f;
+		/** "sway_phase": the share of the gait cycle (0..1) at which the lean peaks (the hurt leg's stance in the loops). */
+		float SwayPhase = 0.f;
+		/** "aiming_scale": the cue's share while aiming (0 = off while aiming, 1 = full). */
+		float AimingScale = 0.f;
+	};
+
+	/** The cue as read: hunch clamped to [0, 30] deg, sway [0, 20] deg, the phase wrapped into [0, 1), the aiming scale [0, 1]. */
+	CODEXTACTICS_API FInjuredLimpCue SanitizeLimpCue(const FInjuredLimpCue& Cue);
+
+	/**
+	 * The cue's angles this frame (deg): X = the forward hunch = HunchDeg x LayerWeight; Y = the signed side sway = SwayDeg x LayerWeight x
+	 * WalkShare x sin(2 pi (GaitPhase + SwayPhase)); both x AimingScale while aiming; zero when disabled.
+	 */
+	CODEXTACTICS_API FVector2D LimpCueAngles(const FInjuredLimpCue& Cue, float LayerWeight, float WalkShare, float GaitPhase, bool bAiming);
 }

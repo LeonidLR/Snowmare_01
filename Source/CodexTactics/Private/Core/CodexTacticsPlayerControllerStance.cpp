@@ -33,6 +33,10 @@ void ACodexTacticsPlayerController::SetEntireSquadStance(EOperativeStance Stance
 				continue;
 			}
 		}
+		else if (Member->NotifyCriticalWoundRefusal())
+		{
+			continue; // the critical wound: he stays down until healed (CriticalWoundRules)
+		}
 		else
 		{
 			Member->SetStance(Stance);
@@ -116,6 +120,10 @@ void ACodexTacticsPlayerController::ApplyStance(EOperativeStance Stance)
 		}
 		if (Stance != EOperativeStance::Prone)
 		{
+			if (Member->NotifyCriticalWoundRefusal())
+			{
+				continue; // the critical wound: "<name> is critically wounded - heal him", he stays down
+			}
 			Member->SetStance(Stance);
 		}
 		Squad->NotePlayerStanceOrder(*Member);
@@ -139,6 +147,10 @@ void ACodexTacticsPlayerController::CycleLeaderStance()
 	if (!Leader || IsDialogueOpen() || BlockRealTimeOrder())
 	{
 		return;
+	}
+	if (Leader->GetStance() == EOperativeStance::Prone && Leader->NotifyCriticalWoundRefusal())
+	{
+		return; // the critical wound: the cycle would stand him up
 	}
 	EOperativeStance Next = static_cast<EOperativeStance>((static_cast<int32>(Leader->GetStance()) + 1) % 3);
 	if (RefuseIfLocked(ControllerCommands::ForStance(Next, false)))

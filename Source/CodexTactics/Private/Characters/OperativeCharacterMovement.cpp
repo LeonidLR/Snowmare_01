@@ -6,6 +6,7 @@
 #include "Characters/OperativeCharacter.h"
 
 #include "CodexTactics.h"
+#include "Characters/CriticalWoundRules.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/SquadSubsystem.h"
@@ -577,7 +578,8 @@ bool AOperativeCharacter::IsWounded() const
 
 bool AOperativeCharacter::CanSprint() const
 {
-	return !bCarrying && OperativeMovementRules::CanSprint(MovementConfig, Stance, ColdLevel, IsWounded());
+	return !bCarrying && OperativeMovementRules::CanSprint(MovementConfig, Stance, ColdLevel, IsWounded())
+		&& CriticalWoundRules::AllowsSprint(IsCriticallyWounded()); // the critical wound: down, crawling only
 }
 
 float AOperativeCharacter::GetMaxSpeed() const

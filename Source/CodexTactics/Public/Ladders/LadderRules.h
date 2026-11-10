@@ -182,6 +182,8 @@ namespace LadderRules
 		bool bHasClips = true;
 		bool bLeasedByOther = false;
 		bool bStanding = true;
+		/** Critically wounded (CriticalWoundRules): he cannot stand, so no climb (a refusal, not a wait). */
+		bool bCriticallyWounded = false;
 	};
 
 	/** Why he may not start the climb now (None = go; Leased / MustStand = wait at the link). */

@@ -1789,6 +1789,11 @@ bool UTurnBasedCombatSubsystem::SetActiveUnitStance(EOperativeStance NewStance)
 	{
 		return true;
 	}
+	if (NewStance != EOperativeStance::Prone && Unit->IsCriticallyWounded())
+	{
+		Log(FString::Printf(TEXT("🩸 %s is critically wounded - heal him (he cannot get up)"), *NameOf(Unit))); // CriticalWoundRules: no AP spent
+		return false;
+	}
 	if (State->AP < Balance.StanceAPCost)
 	{
 		Log(FString::Printf(TEXT("⚠️ Not enough AP to change stance (%d/%d AP)!"), State->AP, Balance.StanceAPCost));

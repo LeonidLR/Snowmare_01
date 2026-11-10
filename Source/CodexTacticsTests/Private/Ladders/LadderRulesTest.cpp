@@ -117,6 +117,8 @@ bool FLadderRefusalTest::RunTest(const FString&)
 	auto With = [](TFunctionRef<void(FEntryContext&)> Set) { FEntryContext Context; Set(Context); return CanStartClimb(Context); };
 	TestTrue(TEXT("turn-based: forbidden"), With([](FEntryContext& C) { C.bTurnBased = true; }) == ELadderRefusal::TurnBased);
 	TestTrue(TEXT("carrying: refused"), With([](FEntryContext& C) { C.bCarrying = true; }) == ELadderRefusal::Carrying);
+	TestTrue(TEXT("critically wounded (prone, cannot stand): refused, not a wait to stand"),
+		With([](FEntryContext& C) { C.bCriticallyWounded = true; C.bStanding = false; }) == ELadderRefusal::CriticallyWounded);
 	TestTrue(TEXT("mounted: refused"), With([](FEntryContext& C) { C.bMounted = true; }) == ELadderRefusal::Mounted);
 	TestTrue(TEXT("knocked down: refused"), With([](FEntryContext& C) { C.bKnockedDown = true; }) == ELadderRefusal::KnockedDown);
 	TestTrue(TEXT("dead: refused"), With([](FEntryContext& C) { C.bDead = true; }) == ELadderRefusal::Dead);

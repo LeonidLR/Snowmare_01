@@ -1,0 +1,5 @@
+{
+  "comment": "The CRITICAL wound (the game designer 2026-11-10, fix/injured-layer-visible; docs/systems/stances-and-movement.md 'Critical wound'). Read by CriticalWoundRules::GetConfig (Source/CodexTactics/Public/Characters/CriticalWoundRules.h) at game start; the code defaults mirror these values (test CodexTactics.Characters.CriticalWound.DataFileMirrorsDefaults). critical_from: the health share (0..1) under which an operative goes DOWN by himself (prone) and only crawls - the injured crawl - cannot stand / crouch / run / climb a ladder (orders refused with the feed line '<name> is critically wounded - heal him'), still fires prone; healed back to critical_from or above he may stand again (he stays prone until ordered up). 0 = the rule off. No carrying of the wounded (the designer: too complex). apply_to_hostiles: the hostile PMC fighters share the operative body - true = they go down too (off: their utility AI has no crawl-only order set yet).",
+  "critical_from": 0.2,
+  "apply_to_hostiles": false
+}

@@ -55,6 +55,7 @@ namespace LadderClimbInternal
 		case ELadderRefusal::KnockedDown: return TEXT("KNOCKED DOWN");
 		case ELadderRefusal::NotClimbable: return TEXT("THIS LADDER CAN'T BE CLIMBED");
 		case ELadderRefusal::NoClips: return TEXT("CAN'T CLIMB");
+		case ELadderRefusal::CriticallyWounded: return TEXT("CRITICALLY WOUNDED - HEAL HIM");
 		default: return TEXT("CAN'T CLIMB");
 		}
 	}
@@ -560,6 +561,7 @@ void ULadderClimbComponent::StartEntry()
 	Context.bCarrying = Operative && Operative->bCarrying;
 	Context.bLeasedByOther = Target->IsBusyFor(Character); // held, or someone came before him (the queue)
 	Context.bStanding = !Operative || Operative->GetStance() == EOperativeStance::Standing;
+	Context.bCriticallyWounded = Operative && Operative->IsCriticallyWounded();
 	const ELadderRefusal Refusal = LadderRules::CanStartClimb(Context);
 	const bool bWasQueued = State == ELadderClimbState::Queue;
 	if (Refusal == ELadderRefusal::Leased || Refusal == ELadderRefusal::MustStand

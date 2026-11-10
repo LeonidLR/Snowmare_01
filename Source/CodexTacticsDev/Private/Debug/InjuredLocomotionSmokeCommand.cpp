@@ -9,6 +9,10 @@
 //  4. prone: crawling forward 2.5 m the prone crawl layer plays the injured crawl (Crawl_Injured); the best-planted limb's slide;
 //  5. full HP, cold 75 % (Freezing): walking forward / sideways = the injured walk (Walk_Injured_Front / _Right); standing still = the existing
 //     shiver idle (the warm-idle Cold_1 set), the layer off; 6. cold 92 % (>= cold_slow_from 0.9): walking forward = the slow injured walk.
+//  7. the CRITICAL wound (the designer 2026-11-10, CriticalWoundRules): HP 15 % standing -> he goes down by himself (prone, held down); the
+//     player's stand order (Alt + Z path) and a direct SetStance are refused with the feed line "... is critically wounded - heal him", no
+//     sprint; crawling forward plays the injured crawl; healed to 40 % -> the lock lifts (still prone), the stand order stands him up, walking
+//     forward = the injured walk (he limps).
 // Before the copies are imported (/Game/Characters/Animations/Injured), run with -ExtraArgs "-AnimPackFallback=injured": the pack's clips by bone
 // name - the logic is checked, the foot numbers are only logged (the pack mannequin's proportions).
 // Arg "shots" (rendered run): one frame per state, no HUD, to Saved/Screenshots/InjuredLocomotion/<state>.png.
@@ -26,6 +30,8 @@
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Core/CodexTacticsPlayerController.h"
+#include "UI/GameMessageSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/CombatPressureSubsystem.h"
 #include "Combat/EnemyRegistrySubsystem.h"
@@ -56,6 +62,7 @@ namespace InjuredLocomotionSmoke
 	constexpr float WoundedHealth = 40.f;
 	constexpr float FreezingCold = 75.f;
 	constexpr float FrostCold = 92.f;
+	constexpr float CriticalHealth = 15.f;
 	/**
 	 * The best-planted foot's median world drift as a share of the body's speed, with a floor in cm/s: forward / back / the slow walk; the pack's
 	 * diagonals / strafes pivot the stance foot (Scripts/Editor/setup_injured_animation.py: their own slide 25-38 % on the copies at their best
@@ -77,6 +84,10 @@ namespace InjuredLocomotionSmoke
 		ColdStrafe,
 		ColdIdle,
 		FrostWalk,
+		CriticalDown,
+		CriticalCrawl,
+		CriticalHealed,
+		CriticalWalk,
 		Done
 	};
 
@@ -372,7 +383,7 @@ namespace InjuredLocomotionSmoke
 		State.IdleVotes.Reset();
 	}
 
-	bool Step(TWeakObjectPtr<UWorld> WeakWorld, TSharedRef<FState> StateRef)
+	bool StepWound(TWeakObjectPtr<UWorld> WeakWorld, TSharedRef<FState> StateRef)
 	{
 		FState& State = *StateRef;
 		State.Time += StepSeconds;
@@ -644,7 +655,10 @@ namespace InjuredLocomotionSmoke
 			{
 				State.bHoldCold = false;
 				Op->ColdLevel = 0.f;
-				return Finish(State, true);
+				Reset(*Op, State);
+				Op->HealthComponent->RestoreHealth(CriticalHealth, 100.f);
+				Enter(State, EStage::CriticalDown);
+				return true;
 			}
 			Reset(*Op, State);
 			Enter(State, bStrafe ? EStage::ColdIdle : EStage::ColdStrafe);
@@ -680,6 +694,109 @@ namespace InjuredLocomotionSmoke
 			Enter(State, EStage::FrostWalk);
 			return true;
 		}
+		case EStage::CriticalDown:
+		{
+			if (State.StageTime < 3.f || Anim->IsStanceChangePending())
+			{
+				return true;
+			}
+			Check(State, Op->IsCriticallyWounded() && Op->IsHeldDownByCriticalWound() && Op->GetStance() == EOperativeStance::Prone,
+				FString::Printf(TEXT("7: HP %.0f %%: critically wounded, he went down by himself (stance %d, held %d, downs %d)"),
+					Op->HealthComponent->GetHealthFraction() * 100.f, static_cast<int32>(Op->GetStance()), Op->IsHeldDownByCriticalWound() ? 1 : 0, Op->GetCriticalWoundDowns()));
+			UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>();
+			const int32 Before = Messages ? Messages->GetHistory().Num() : 0;
+			if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController()))
+			{
+				PC->SetEntireSquadStance(EOperativeStance::Standing); // the player's stand order (Alt + Z)
+			}
+			Op->SetStance(EOperativeStance::Crouching); // any other caller (formation, autonomy, cover)
+			bool bLine = false;
+			if (Messages)
+			{
+				for (int32 Index = Before; Index < Messages->GetHistory().Num(); ++Index)
+				{
+					bLine |= Messages->GetHistory()[Index].Text.ToString().Contains(TEXT("is critically wounded - heal him"));
+				}
+			}
+			Check(State, Op->GetStance() == EOperativeStance::Prone && !Op->CanSprint(),
+				FString::Printf(TEXT("7: the stand / crouch orders are refused, no sprint (stance %d)"), static_cast<int32>(Op->GetStance())));
+			Check(State, bLine, TEXT("7: the feed line \"... is critically wounded - heal him\""));
+			Shot(World, State, *Op, TEXT("critical_down"), 80.f);
+			Enter(State, EStage::CriticalCrawl);
+			return true;
+		}
+		case EStage::CriticalCrawl:
+		{
+			if (!State.bMoveStarted)
+			{
+				StartMove(State, *Op, State.Forward, CrawlCm, true);
+				return true;
+			}
+			if (Op->HasOwnMoveOrder() && State.StageTime < 20.f)
+			{
+				return true;
+			}
+			const FString Top = EndMove(State, TEXT("critical crawl"), false);
+			Check(State, Op->GetStance() == EOperativeStance::Prone && State.Move.SteadyFrames > 10 && State.Move.InjuredCrawlFrames > State.Move.SteadyFrames / 2
+				&& Top.StartsWith(TEXT("Crawl_Injured")), FString::Printf(TEXT("7: critical, he crawls the injured crawl (%s, injured set %d / %d frames)"), *Top,
+					State.Move.InjuredCrawlFrames, State.Move.SteadyFrames));
+			Op->HealthComponent->RestoreHealth(WoundedHealth, 100.f); // a medkit / the medic on the spot
+			Enter(State, EStage::CriticalHealed);
+			return true;
+		}
+		case EStage::CriticalHealed:
+		{
+			if (State.StageTime < 1.f)
+			{
+				return true;
+			}
+			if (!State.bMoveStarted)
+			{
+				Check(State, !Op->IsCriticallyWounded() && !Op->IsHeldDownByCriticalWound() && Op->GetStance() == EOperativeStance::Prone,
+					FString::Printf(TEXT("7: healed to %.0f %%: the lock lifts, he stays prone until ordered up (stance %d)"), Op->HealthComponent->GetHealthFraction() * 100.f,
+						static_cast<int32>(Op->GetStance())));
+				if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController()))
+				{
+					PC->SetEntireSquadStance(EOperativeStance::Standing);
+				}
+				State.bMoveStarted = true;
+				return true;
+			}
+			if ((Anim->IsStanceChangePending() || Op->GetStance() != EOperativeStance::Standing) && State.StageTime < 6.f)
+			{
+				return true;
+			}
+			Check(State, Op->GetStance() == EOperativeStance::Standing, FString::Printf(TEXT("7: healed, the stand order stands him up (stance %d)"), static_cast<int32>(Op->GetStance())));
+			Reset(*Op, State);
+			Enter(State, EStage::CriticalWalk);
+			return true;
+		}
+		case EStage::CriticalWalk:
+		{
+			if (!State.bMoveStarted)
+			{
+				if (State.StageTime < 1.f || (Anim->GetInjuredWeight() < 0.95f && State.StageTime < 4.f)) // the layer back in after the stand-up clip
+				{
+					return true;
+				}
+				StartMove(State, *Op, State.Forward, LegCm, false);
+				return true;
+			}
+			if (State.bShots && !State.Move.bShotTaken && State.Move.SteadyFrames >= 25)
+			{
+				State.Move.bShotTaken = true;
+				Shot(World, State, *Op, TEXT("healed_walk_limp"));
+			}
+			if (Op->HasOwnMoveOrder() && State.StageTime < 15.f)
+			{
+				return true;
+			}
+			float Mean = 0.f;
+			const FString Top = EndMove(State, TEXT("healed wounded forward"), false, &Mean);
+			Check(State, State.Move.SteadyFrames > 10 && Mean > 0.9f && Top == TEXT("Walk_Injured_Front") && Anim->GetInjuredLimpAmount() > 0.5f,
+				FString::Printf(TEXT("7: healed to 40 %%, he limps forward (weight %.2f, clip %s, limp cue %.2f)"), Mean, *Top, Anim->GetInjuredLimpAmount()));
+			return Finish(State, true);
+		}
 		default:
 			break;
 		}
@@ -699,12 +816,12 @@ namespace InjuredLocomotionSmoke
 		FString Fallback;
 		State->bPackFallback = FParse::Value(FCommandLine::Get(), TEXT("AnimPackFallback="), Fallback) && Fallback.Contains(TEXT("injured"));
 		State->FrameHandle = FCoreDelegates::OnEndFrame.AddLambda([State]() { SampleFrame(*State); });
-		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float) { return Step(WeakWorld, State); }), StepSeconds);
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float) { return StepWound(WeakWorld, State); }), StepSeconds);
 	}
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.InjuredLocomotionSmoke"),
-		TEXT("Dev check (the injured locomotion, L_MovementTest): full HP the layer is off; at 40 % HP the injured idle, the 8-direction injured walk (clip per direction, foot slide), the injured crawl prone; cold 75 % the injured walk forward / sideways and the shiver idle standing, cold 92 % the slow injured walk forward. Logs PASS/FAIL, then exits. Arg \"shots\": rendered frames to Saved/Screenshots/InjuredLocomotion."),
+		TEXT("Dev check (the injured locomotion, L_MovementTest): full HP the layer is off; at 40 % HP the injured idle, the 8-direction injured walk (clip per direction, foot slide), the injured crawl prone; cold 75 % the injured walk forward / sideways and the shiver idle standing, cold 92 % the slow injured walk forward; HP 15 % the critical wound (down, stand refused, the injured crawl; healed to 40 % he stands and limps). Logs PASS/FAIL, then exits. Arg \"shots\": rendered frames to Saved/Screenshots/InjuredLocomotion."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

@@ -606,7 +606,11 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	{
 		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 		{
-			if (!Leader->CanSprint() && Leader->ColdLevel >= Leader->MovementConfig.MaxColdToSprint)
+			if (Leader->IsCriticallyWounded())
+			{
+				Leader->NotifyCriticalWoundRefusal(); // he crawls there (CriticalWoundRules)
+			}
+			else if (!Leader->CanSprint() && Leader->ColdLevel >= Leader->MovementConfig.MaxColdToSprint)
 			{
 				Messages->PostMessage(Leader->DisplayName, FText::FromString(FString::Printf(TEXT("🥶 %s is frozen (%d%% cold) and cannot run! Walking."),
 					*Leader->DisplayName.ToString(), FMath::FloorToInt(Leader->ColdLevel))));

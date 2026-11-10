@@ -99,4 +99,26 @@ namespace InjuredLocomotionRules
 	{
 		return bAiming ? 0.f : FMath::Clamp(Share, 0.f, 1.f);
 	}
+
+	FInjuredLimpCue SanitizeLimpCue(const FInjuredLimpCue& Cue)
+	{
+		FInjuredLimpCue Out = Cue;
+		Out.HunchDeg = FMath::IsFinite(Cue.HunchDeg) ? FMath::Clamp(Cue.HunchDeg, 0.f, 30.f) : 0.f;
+		Out.SwayDeg = FMath::IsFinite(Cue.SwayDeg) ? FMath::Clamp(Cue.SwayDeg, 0.f, 20.f) : 0.f;
+		Out.SwayPhase = FMath::IsFinite(Cue.SwayPhase) ? Cue.SwayPhase - FMath::FloorToFloat(Cue.SwayPhase) : 0.f;
+		Out.AimingScale = FMath::IsFinite(Cue.AimingScale) ? FMath::Clamp(Cue.AimingScale, 0.f, 1.f) : 0.f;
+		return Out;
+	}
+
+	FVector2D LimpCueAngles(const FInjuredLimpCue& Cue, float LayerWeight, float WalkShare, float GaitPhase, bool bAiming)
+	{
+		if (!Cue.bEnabled)
+		{
+			return FVector2D::ZeroVector;
+		}
+		const float Scale = FMath::Clamp(LayerWeight, 0.f, 1.f) * (bAiming ? FMath::Clamp(Cue.AimingScale, 0.f, 1.f) : 1.f);
+		const float Hunch = Cue.HunchDeg * Scale;
+		const float Sway = Cue.SwayDeg * Scale * FMath::Clamp(WalkShare, 0.f, 1.f) * FMath::Sin(UE_TWO_PI * (GaitPhase + Cue.SwayPhase));
+		return FVector2D(Hunch, Sway);
+	}
 }

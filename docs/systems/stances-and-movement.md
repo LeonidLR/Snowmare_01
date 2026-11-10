@@ -224,3 +224,24 @@ sweep on the Lake (67 drop links, 0 dead ends). Arguments: `stages=user+holes+sw
 - **Checks:** unit `CodexTactics.Movement.Vault.LevelGenCovers`; smoke **`DepotVaultSmoke`** (`L_Gen_Depot_1`): every sandbag / jersey / barrel
   vaultable (tag + vault nav area), no crate / wreck; the leader ordered straight across a jersey barrier vaults it on the way and arrives
   behind it; in front of a jersey, a sandbag and a barrel he vaults each (`TryVault`) and lands behind it, not on top.
+
+## Critical wound (the game designer 2026-11-10, fix/injured-layer-visible)
+
+**Request:** a critically wounded operative goes DOWN by himself and only crawls; he cannot stand up until healed; he can still fire prone; no
+carrying of the wounded (the designer: too complex).
+- **Rule (`CriticalWoundRules`, `Content/Data/Movement/critical_wound.json`):** `critical_from` 0.2 - HP under 20 % of his max health (alive) =
+  critical; 0 = the rule off. `apply_to_hostiles` false: the hostile PMC fighters share the operative body but their utility AI has no
+  crawl-only order set yet, so they do not go down (true = they do). `Step` per tick: became critical and free -> down (stop, leave the cover,
+  prone in place, one feed line + the floating "CRITICALLY WOUNDED!"); busy (ladder, knockdown, vault, ledge fall, prone dive, vehicle) ->
+  he goes down as soon as he is free (a knockdown's get-up standing is followed by going down again); healed back to `critical_from` or above
+  -> the lock lifts (feed line "... is patched up - he can stand again"), he stays prone until ordered up.
+- **Refusals:** `AOperativeCharacter::SetStance` refuses any non-prone stance while critical (every caller: the formation, the autonomy, a cover
+  entry, a ladder's MustStand, a save load); the player's stance keys (selection, Alt + Z / C / V, the cycle) and the double-click sprint post
+  "<name> is critically wounded - heal him"; `CanSprint` false; a ladder link refuses him (`ELadderRefusal::CriticallyWounded`, "CRITICALLY
+  WOUNDED - HEAL HIM", no queue); turn-based: the stance change is refused with no AP spent; vaults never start prone. Moves are crawls (the
+  prone speed); the injured locomotion layer plays the injured crawl (wounded + prone). Prone fire is unchanged. HUD: the squad label shows
+  "· CRITICAL" (and "· WOUNDED" under 50 %).
+- **Checks:** unit `CodexTactics.Characters.CriticalWound.*` (threshold, stance lock, the tick step, parsing, the data file = the defaults) and
+  `CodexTactics.Ladder.Rules.Refusals` (the ladder refusal); smoke `InjuredLocomotionSmoke` stage 7 (HP 15 % -> down by himself, the stand
+  orders refused with the feed line, no sprint, the injured crawl; healed to 40 % -> stands on the order, limps forward).
+

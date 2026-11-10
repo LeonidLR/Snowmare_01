@@ -44,6 +44,17 @@ namespace OperativeInjuredLayer
 		const int32 MeshIndex = Bones.GetPoseBoneIndexForBoneName(FName(Name));
 		return MeshIndex != INDEX_NONE ? Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex)) : FCompactPoseBoneIndex(INDEX_NONE);
 	}
+
+	/** A bone's component-space location in the reference pose (zero for a missing bone). */
+	FVector InjuredRefComponentLocation(const FBoneContainer& Bones, FCompactPoseBoneIndex Bone)
+	{
+		FTransform Chain = FTransform::Identity;
+		for (; Bone.GetInt() != INDEX_NONE; Bone = Bones.GetParentBoneIndex(Bone))
+		{
+			Chain = Chain * Bones.GetRefPoseTransform(Bone);
+		}
+		return Chain.GetLocation();
+	}
 }
 
 void UOperativeAnimInstance::LoadInjuredAnimSet()
@@ -71,6 +82,35 @@ bool UOperativeAnimInstance::IsInjuredLayerEligible() const
 	return Operative && InjuredSetData.StandIdle && OperativeInjuredLayer::CVarInjuredLayer.GetValueOnGameThread() != 0 && !bIsProne && !bIsCrouching
 		&& !bIsDead && !bKnockedDown && !bIsClimbing && !bIsVaulting && !bInCover && !bFallAirborne && !bSniperPose && !Operative->bCarrying
 		&& !IsPlayingStanceTransition();
+}
+
+FString UOperativeAnimInstance::DescribeInjuredLayerGates() const
+{
+	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner());
+	TArray<FString> Closed;
+	auto Gate = [&Closed](bool bClosed, const TCHAR* Name)
+	{
+		if (bClosed)
+		{
+			Closed.Add(Name);
+		}
+	};
+	Gate(!Operative, TEXT("no operative"));
+	Gate(!InjuredSetData.StandIdle, TEXT("no set"));
+	Gate(OperativeInjuredLayer::CVarInjuredLayer.GetValueOnGameThread() == 0, TEXT("cvar off"));
+	Gate(bIsProne, TEXT("prone"));
+	Gate(bIsCrouching, TEXT("crouched"));
+	Gate(bIsDead, TEXT("dead"));
+	Gate(bKnockedDown, TEXT("knocked down"));
+	Gate(bIsClimbing, TEXT("ladder"));
+	Gate(bIsVaulting, TEXT("vault"));
+	Gate(bInCover, TEXT("cover"));
+	Gate(bFallAirborne, TEXT("airborne"));
+	Gate(bSniperPose, TEXT("sniper pose"));
+	Gate(Operative && Operative->bCarrying, TEXT("carrying"));
+	Gate(IsPlayingStanceTransition(), TEXT("stance clip"));
+	Gate(GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f, TEXT("full-body clip"));
+	return Closed.IsEmpty() ? FString(TEXT("open")) : FString::Join(Closed, TEXT(", "));
 }
 
 const UAnimSequenceBase* UOperativeAnimInstance::GetInjuredDominantClip() const
@@ -129,6 +169,8 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 	{
 		InjuredWeight = 0.f;
 		InjuredPlayRate = 0.f;
+		InjuredLimpAmount = 0.f;
+		InjuredLimpAngles = FVector2D::ZeroVector;
 		if (Target <= 0.f)
 		{
 			InjuredClipGait = InjuredGait;
@@ -193,6 +235,10 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 	const float Rate = ProneCrawlRules::PhaseRate(MoveSpeed, Cycle, 0.f, 0.f, MaxRate, LeadLength);
 	InjuredPhase = FMath::Fmod(InjuredPhase + DeltaSeconds * Rate, 1.f);
 	InjuredPlayRate = Rate * LeadLength;
+	// The torso limp cue (bug 2026-11-10: from the game camera the lower-body limp under the upright rifle torso did not read): the hunch by the
+	// layer's weight, the sway by the walk share on the shared gait phase (once a cycle - the hurt leg's stance).
+	InjuredLimpAmount = Set.LimpCue.bEnabled ? InjuredWeight : 0.f;
+	InjuredLimpAngles = LimpCueAngles(Set.LimpCue, InjuredWeight, WalkShare, InjuredPhase, bIsAiming);
 	auto AddPair = [&Add, &At, &Set](const FWeaponLayerDirectionBlend& Blend, float Weight)
 	{
 		UAnimSequence* A = Set.Walk[static_cast<int32>(Blend.A)];
@@ -259,6 +305,21 @@ void FOperativeAnimInstanceProxy::BlendInjuredLayer(FPoseContext& Output) const
 	const FTransform GraphRoot = Output.Pose[Root];
 	const FQuat SpineParentGraph = SpineParent.GetInt() != INDEX_NONE ? InjuredChainRotation(Output.Pose, SpineParent) : FQuat::Identity;
 	const float TorsoShare = FMath::Clamp(InjuredTorsoShare, 0.f, 1.f);
+	// The body's forward / lateral axes in component space for the limp cue: from the reference pose (the root goes to the reference above),
+	// forward = the left foot -> its ball, horizontal; the hunch axis = up x forward (rotates up towards forward).
+	FVector CueForward = FVector::ForwardVector;
+	FVector CueHunchAxis = FVector::RightVector;
+	if (!InjuredLimpAngles.IsNearlyZero())
+	{
+		const FVector Foot = InjuredRefComponentLocation(Bones, InjuredBone(Bones, TEXT("foot_l")));
+		const FVector Ball = InjuredRefComponentLocation(Bones, InjuredBone(Bones, TEXT("ball_l")));
+		const FVector Toward = FVector(Ball.X - Foot.X, Ball.Y - Foot.Y, 0.f).GetSafeNormal();
+		if (!Toward.IsNearlyZero())
+		{
+			CueForward = Toward;
+			CueHunchAxis = FVector::CrossProduct(FVector::UpVector, CueForward).GetSafeNormal();
+		}
+	}
 	TArray<bool, TInlineAllocator<128>> Upper;
 	Upper.SetNumZeroed(Output.Pose.GetNumBones());
 	for (const FCompactPoseBoneIndex Index : Output.Pose.ForEachBoneIndex())
@@ -280,8 +341,18 @@ void FOperativeAnimInstanceProxy::BlendInjuredLayer(FPoseContext& Output) const
 			// parents are final, they come first), TorsoShare of the pelvis's own limp riding along (0 while aiming: the aim stays exact). The
 			// local translation stays: the torso rides the pelvis's bob.
 			const FQuat Graph = Output.Pose[Index].GetRotation();
-			const FQuat Kept = (InjuredChainRotation(Output.Pose, SpineParent).Inverse() * SpineParentGraph * Graph).GetNormalized();
-			Output.Pose[Index].SetRotation(FQuat::Slerp(Kept, Graph, TorsoShare).GetNormalized());
+			const FQuat ParentNow = InjuredChainRotation(Output.Pose, SpineParent);
+			const FQuat Kept = (ParentNow.Inverse() * SpineParentGraph * Graph).GetNormalized();
+			FQuat Local = FQuat::Slerp(Kept, Graph, TorsoShare).GetNormalized();
+			if (!InjuredLimpAngles.IsNearlyZero())
+			{
+				// The limp cue: a component-space bend of the whole torso about the pelvis - the hunch about the body's lateral axis (up towards
+				// forward), the sway about its forward axis - re-expressed in spine_01's local space (the aim's yaw untouched).
+				const FQuat Cue = (FQuat(CueHunchAxis, FMath::DegreesToRadians(InjuredLimpAngles.X))
+					* FQuat(CueForward, FMath::DegreesToRadians(InjuredLimpAngles.Y))).GetNormalized();
+				Local = (ParentNow.Inverse() * Cue * ParentNow * Local).GetNormalized();
+			}
+			Output.Pose[Index].SetRotation(Local);
 			continue;
 		}
 		if (Index == HandIK && Parent.GetInt() != INDEX_NONE)
