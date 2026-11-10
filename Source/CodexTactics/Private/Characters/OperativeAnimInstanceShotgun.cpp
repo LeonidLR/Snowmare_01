@@ -23,6 +23,7 @@
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
 #include "Misc/Paths.h"
+#include "Misc/ScopeExit.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -36,6 +37,20 @@ namespace OperativeShotgunLayer
 
 	static const TCHAR* const DirectionKeys[8] = { TEXT("fwd"), TEXT("fwd_right"), TEXT("right"), TEXT("bwd_right"), TEXT("bwd"), TEXT("bwd_left"),
 		TEXT("left"), TEXT("fwd_left") };
+
+	/** Bone's mesh-space rotation in Pose: its local rotations up the chain (the root's left out with bSkipRoot). */
+	FQuat ChainRotation(const FCompactPose& Pose, FCompactPoseBoneIndex Bone, bool bSkipRoot)
+	{
+		FQuat Rotation = FQuat::Identity;
+		for (; Bone.GetInt() != INDEX_NONE; Bone = Pose.GetParentBoneIndex(Bone))
+		{
+			if (!(bSkipRoot && Bone.IsRootBone()))
+			{
+				Rotation = Pose[Bone].GetRotation() * Rotation;
+			}
+		}
+		return Rotation;
+	}
 
 	FString AnimSetsPath()
 	{
@@ -260,6 +275,34 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 	ShotgunSet.bRootReference = Block->TryGetStringField(TEXT("root_translation"), RootMode) && RootMode.Equals(TEXT("reference"), ESearchCase::IgnoreCase);
 	FString CrouchBody;
 	ShotgunSet.bCrouchUpper = Block->TryGetStringField(TEXT("crouch_body"), CrouchBody) && CrouchBody.Equals(TEXT("upper"), ESearchCase::IgnoreCase);
+	// "legs_abp": ["run", "sprint", "walk_forward", "walk"] (a "full" set only; the RPG-7, the designer 2026-11-10): moving in those gaits the
+	// LOWER body is the ABP's locomotion (the M16 legs, as an "upper" set), by the gaits' clip weight (WeaponAnimLayerRules::LegsAbpWeight);
+	// idle, turn in place and the other gaits keep the set's legs. Absent = the set's legs everywhere.
+	ShotgunSet.LegsAbp = WeaponAnimLayerRules::FWeaponLegsAbpGaits();
+	// "legs_abp_forward_cone_deg": "walk_forward" counts fully within this cone (a leader walks up to ~30 deg off his path under a formation look
+	// sector; at a 2/3 forward share the two unsynced leg sets mixed and slid most, RpgAnimSmoke 2026-11-10); 0 = the walk blend's forward weight.
+	ShotgunSet.LegsAbpForwardConeDeg = 0.f;
+	Number(TEXT("legs_abp_forward_cone_deg"), ShotgunSet.LegsAbpForwardConeDeg);
+	// "legs_abp_run_speeds": [start, full] - "run" counts by this band instead of the clips' jog share (he runs ~175 cm/s with the tube, inside the
+	// pack's 140 .. 180 band: 12 % of the pack's strafe legs stayed mixed in and slid, RpgAnimSmoke 2026-11-10). Unset = the jog share.
+	ShotgunSet.LegsAbpRunStartSpeed = ShotgunSet.LegsAbpRunFullSpeed = 0.f;
+	const TArray<TSharedPtr<FJsonValue>>* LegsRun = nullptr;
+	if (Block->TryGetArrayField(TEXT("legs_abp_run_speeds"), LegsRun) && LegsRun && LegsRun->Num() == 2)
+	{
+		ShotgunSet.LegsAbpRunStartSpeed = static_cast<float>((*LegsRun)[0]->AsNumber());
+		ShotgunSet.LegsAbpRunFullSpeed = static_cast<float>((*LegsRun)[1]->AsNumber());
+	}
+	TArray<FString> LegsAbpNames;
+	if (Block->TryGetStringArrayField(TEXT("legs_abp"), LegsAbpNames))
+	{
+		TArray<FString> Unknown;
+		ShotgunSet.LegsAbp = WeaponAnimLayerRules::ParseLegsAbpGaits(LegsAbpNames, &Unknown);
+		if (!Unknown.IsEmpty())
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("weapon_anim_sets.json %s: unknown legs_abp gait(s) %s (run / sprint / walk / walk_forward)"), BlockKey,
+				*FString::Join(Unknown, TEXT(", ")));
+		}
+	}
 	const TSharedPtr<FJsonObject>* Offsets = nullptr;
 	if (Block->TryGetObjectField(TEXT("phase_offsets"), Offsets) && Offsets)
 	{
@@ -411,6 +454,13 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	ShotgunUpperWeight = Step(ShotgunUpperWeight, ShotgunMask == EWeaponLayerMask::Full ? 1.f : 0.f);
 	// A "full" set (the launcher) also drives the pelvis and legs - under a hit reaction too (LowerBody); an "upper" set never does.
 	ShotgunLowerWeight = Step(ShotgunLowerWeight, IsWeaponLayerFullBody() && ShotgunMask != EWeaponLayerMask::Off ? 1.f : 0.f);
+	// "legs_abp" (the RPG-7, the designer 2026-11-10): the share of that lower body given to the ABP's legs - the clip weight of the listed gaits
+	// (set below, once the clip shares are known; 0 on every early way out), eased over blend_seconds like the layer's own weights.
+	float LegsAbpTarget = 0.f;
+	ON_SCOPE_EXIT
+	{
+		ShotgunLegsAbpWeight = Step(ShotgunLegsAbpWeight, IsWeaponLayerFullBody() ? LegsAbpTarget : 0.f);
+	};
 	for (FOperativeClipState& Clip : ShotgunClips)
 	{
 		Clip = FOperativeClipState();
@@ -636,6 +686,28 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 	AddPair(ShotgunSet.AimWalk, AimDir, Upright * AimMoveShare);
 	AddPair(ShotgunSet.Walk, WalkDir, Upright * (1.f - AimMoveShare) * (1.f - JogShare));
 	AddPair(ShotgunSet.Jog, JogDir, Upright * (1.f - AimMoveShare) * JogShare);
+	// "legs_abp": the listed gaits' share of these clips (the walk's forward share follows the eased direction and its reversal cross-fade).
+	if (ShotgunSet.bFullBody && ShotgunSet.LegsAbp.Any())
+	{
+		// The forward share of the walk blend at the direction with the set's forward cone (ForwardConeAngle; cone 0 = the blend's own Dir).
+		const float Cone = ShotgunSet.LegsAbpForwardConeDeg;
+		auto Forward = [&Available, FromShare, Cone, this](const TStaticArray<UAnimSequence*, 8>& Set, const FWeaponLayerDirectionBlend& Dir)
+		{
+			const float Current = Cone > 0.f ? ForwardShare(BlendDirections(ForwardConeAngle(LayerDirection.Current, Cone), Available(Set))) : ForwardShare(Dir);
+			return FromShare > OperativeShotgunLayer::ShotgunMinWeight
+				? FMath::Lerp(Current, ForwardShare(BlendDirections(ForwardConeAngle(LayerDirection.From, Cone), Available(Set))), FromShare) : Current;
+		};
+		FWeaponLegsAbpShares Shares;
+		Shares.Move = Move;
+		Shares.Crouch = ShotgunCrouchShare;
+		Shares.Sprint = Sprint;
+		Shares.AimMove = AimMoveShare;
+		Shares.Jog = ShotgunSet.LegsAbpRunFullSpeed > ShotgunSet.LegsAbpRunStartSpeed
+			? JogWeight(WeightSpeed, ShotgunSet.LegsAbpRunStartSpeed, ShotgunSet.LegsAbpRunFullSpeed) : JogShare;
+		Shares.WalkForward = Forward(ShotgunSet.Walk, WalkDir);
+		Shares.AimWalkForward = Forward(ShotgunSet.AimWalk, AimDir);
+		LegsAbpTarget = LegsAbpWeight(ShotgunSet.LegsAbp, Shares);
+	}
 	// The torso reference (StabilizeWeaponTorso): the upright gait's forward clip at the shared phase; the sprint runs forward only.
 	if (ShotgunSet.bFullBody && ShotgunSet.bTorsoForward)
 	{
@@ -779,7 +851,10 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 	{
 		// A "full" set (the launcher, designer 2026-11-09 b): every bone but the root from the set - the pelvis and legs at the lower weight (it
 		// stays under a hit reaction), the torso at the upper weight; the root keeps the graph's (the capsule-relative placement).
-		const float Lower = FMath::Min(1.f, WeaponLowerWeight);
+		// "legs_abp" (the RPG-7 running / walking forward, the designer 2026-11-10): that share of the lower body (the root's yaw / translation,
+		// the pelvis, legs and IK bones) stays the graph's - the ABP's M16 legs, as an "upper" set.
+		const float LegsAbp = FMath::Clamp(WeaponLegsAbpWeight, 0.f, 1.f);
+		const float Lower = FMath::Min(1.f, WeaponLowerWeight) * (1.f - LegsAbp);
 		TArray<bool, TInlineAllocator<128>> UpperFull;
 		UpperFull.SetNumZeroed(Output.Pose.GetNumBones());
 		for (const FCompactPoseBoneIndex Index : Output.Pose.ForEachBoneIndex())
@@ -805,6 +880,20 @@ void FOperativeAnimInstanceProxy::BlendWeaponLayer(FPoseContext& Output) const
 				continue;
 			}
 			const float BoneWeight = UpperFull[Index.GetInt()] ? Weight : Lower;
+			if (Index == Spine && LegsAbp > OperativeShotgunLayer::ShotgunMinWeight && BoneWeight > OperativeShotgunLayer::ShotgunMinWeight
+				&& Parent.GetInt() != INDEX_NONE)
+			{
+				// The torso on the ABP's legs keeps the set's mesh-space facing on the capsule (the reference root, as the crouched launcher's
+				// bWeaponTorsoOnCapsule): spine_01's local rotation re-expressed under the blended pelvis chain (already final - parents come first),
+				// eased in by the share so the set's own legs (share 0) are untouched.
+				const FQuat ParentOutput = OperativeShotgunLayer::ChainRotation(Output.Pose, Parent, false);
+				const FQuat ParentLayer = Bones.GetRefPoseTransform(FCompactPoseBoneIndex(0)).GetRotation() * OperativeShotgunLayer::ChainRotation(Layer, Parent, true);
+				const FQuat Compensated = (ParentOutput.Inverse() * ParentLayer * Layer[Index].GetRotation()).GetNormalized();
+				FTransform SpineLayer = Layer[Index];
+				SpineLayer.SetRotation(FQuat::Slerp(Layer[Index].GetRotation(), Compensated, LegsAbp).GetNormalized());
+				Output.Pose[Index].BlendWith(SpineLayer, BoneWeight);
+				continue;
+			}
 			if (BoneWeight > OperativeShotgunLayer::ShotgunMinWeight)
 			{
 				Output.Pose[Index].BlendWith(Layer[Index], BoneWeight);

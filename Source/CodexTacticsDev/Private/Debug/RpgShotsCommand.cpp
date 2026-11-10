@@ -7,6 +7,8 @@
 // rocket off the tube, pushed back in) standing and crouched. The camera follows him; no keys, no desktop capture.
 // "CodexTactics.RpgShots pmc" (2026-11-09, feat/rpg-ai-pmc): a hostile PMC fighter (SKM_PmcOperator, the launcher set retargeted to his
 // skeleton) with the RPG-7 instead -> Saved/Screenshots/RpgPmc/: the model in his hands, idle, aim, the shot, the reload, crouched - side views.
+// "CodexTactics.RpgShots legs" (2026-11-10, fix/rpg-legs-m16): the launcher's "legs_abp" -> Saved/Screenshots/RpgLegs/: walking forward at
+// 110 cm/s and running (the ABP's M16 legs), walking / running sideways looking 90 deg off the path (the pack's legs walking, the ABP's running).
 
 #include "CoreMinimal.h"
 
@@ -29,6 +31,7 @@
 #include "Debug/SmokeUtils.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "Kismet/GameplayStatics.h"
@@ -66,6 +69,11 @@ namespace RpgShots
 		bool bFrameOnTarget = false;
 		/** "pmc": a hostile PMC fighter holds the RPG-7 (the launcher set on his own skeleton). */
 		bool bPmc = false;
+		/** "legs": the "legs_abp" proof (the designer 2026-11-10) - walking forward, running, strafing; > 0 holds his walk speed (cm/s). */
+		bool bLegs = false;
+		float SpeedOverride = 0.f;
+		bool bHoldLook = false;
+		float LookYaw = 0.f;
 	};
 
 	TSharedPtr<FRunner> Runner;
@@ -179,6 +187,18 @@ namespace RpgShots
 		{
 			UpdateCamera(World);
 		}
+		if (AOperativeCharacter* Held = R.SpeedOverride > 0.f ? R.Hero.Get() : nullptr)
+		{
+			if (UCharacterMovementComponent* Movement = Held->GetCharacterMovement())
+			{
+				Movement->MaxWalkSpeed = R.SpeedOverride;
+			}
+		}
+		// A held look (the strafes): his formation look, written after the squad's tick (the combat target's facing needs a wave fight).
+		if (AOperativeCharacter* Looking = R.bHoldLook ? R.Hero.Get() : nullptr)
+		{
+			Looking->SetFormationLookYaw(R.LookYaw);
+		}
 		if (R.Wait > 0)
 		{
 			--R.Wait;
@@ -272,6 +292,42 @@ namespace RpgShots
 			S.Add([Name, Index](UWorld*) { Still(FString::Printf(TEXT("%s_left_%d"), *Name, Index + 1)); return 5; });
 		}
 		S.Add([](UWorld*) { const AOperativeCharacter* H = CurrentHero(); return H && H->GetVelocity().Size2D() > 10.f ? -1 : 20; });
+	}
+
+	/**
+	 * "legs": one leg along the arena at Speed (0 = his own), bSide looking 90 deg right of the path all the way (a strafe); stills from the
+	 * side of the travel (a forward leg) or three-quarters ahead (a strafe).
+	 */
+	void AddLegsLeg(TArray<FStep>& S, const FString& Name, float Speed, bool bSide)
+	{
+		S.Add([](UWorld*) { Runner->bHandCam = false; Runner->bHoldLook = false; BackToStart(EOperativeStance::Standing); Runner->SpeedOverride = 0.f; return 40; });
+		S.Add([bSide](UWorld*)
+		{
+			if (AEnemyCharacter* T = Runner->Target.Get())
+			{
+				SmokeUtils::ParkEnemyFarAway(T);
+			}
+			Runner->bHoldLook = bSide;
+			Runner->LookYaw = static_cast<float>(FVector::CrossProduct(FVector::UpVector, ArenaForward).Rotation().Yaw);
+			return bSide ? 40 : 2; // turned to the look before he walks
+		});
+		S.Add([Speed, bSide](UWorld* World)
+		{
+			if (AOperativeCharacter* H = CurrentHero())
+			{
+				Runner->SpeedOverride = Speed;
+				H->OrderMoveTo(SmokeUtils::ClearPoint(World, H->GetActorLocation(), ArenaOrigin + ArenaForward * 900.f), false);
+			}
+			Runner->CamOffset = bSide ? FVector(330.f, 380.f, 60.f) : FVector(0.f, 520.f, 30.f);
+			Runner->LookHeight = -5.f;
+			Runner->Fov = 40.f;
+			return 40;
+		});
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			S.Add([Name, Index](UWorld*) { Still(FString::Printf(TEXT("%s_%d"), *Name, Index + 1)); return 6; });
+		}
+		S.Add([](UWorld*) { const AOperativeCharacter* H = CurrentHero(); return H && H->GetVelocity().Size2D() > 10.f ? -1 : 10; });
 	}
 
 	/** The PMC fighter's stills (side views: his left = the chest side of the pack's Set_02 stance, his right). */
@@ -446,6 +502,14 @@ namespace RpgShots
 			AddPmcSteps(S);
 			return;
 		}
+		if (Runner->bLegs)
+		{
+			AddLegsLeg(S, TEXT("walk_forward"), 110.f, false);
+			AddLegsLeg(S, TEXT("run_forward"), 0.f, false);
+			AddLegsLeg(S, TEXT("strafe_walk"), 110.f, true);
+			AddLegsLeg(S, TEXT("strafe_run"), 0.f, true);
+			return;
+		}
 		// The model in his hands.
 		S.Add([](UWorld*) { Runner->HandCamOffset = FVector(10.f, 200.f, 20.f); return 6; });
 		S.Add([](UWorld*) { Still(TEXT("hands_side")); return 4; });
@@ -538,7 +602,8 @@ namespace RpgShots
 	{
 		Runner = MakeShared<FRunner>();
 		Runner->bPmc = Args.Contains(TEXT("pmc"));
-		Runner->Dir = FPaths::ProjectSavedDir() / (Runner->bPmc ? TEXT("Screenshots/RpgPmc") : TEXT("Screenshots/RPG7"));
+		Runner->bLegs = !Runner->bPmc && Args.Contains(TEXT("legs"));
+		Runner->Dir = FPaths::ProjectSavedDir() / (Runner->bPmc ? TEXT("Screenshots/RpgPmc") : (Runner->bLegs ? TEXT("Screenshots/RpgLegs") : TEXT("Screenshots/RPG7")));
 		IFileManager::Get().DeleteDirectory(*Runner->Dir, false, true);
 		IFileManager::Get().MakeDirectory(*Runner->Dir, true);
 		AddSteps(Runner->Steps);

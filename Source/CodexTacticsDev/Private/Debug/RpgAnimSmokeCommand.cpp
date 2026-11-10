@@ -6,9 +6,12 @@
 //     (weapon_anim_sets.json "body": "full", designer 2026-11-09 b), the optimized model (SM_RPG7_Body + the optic) with the rocket on the tube;
 //     the Engineer and the Medic-Sapper given it load the layer too (their own copies: Male / Female);
 //  1. standing: the pack's idle drives the whole body - the legs too (the layer moves lower-body bones off the ABP's pose) and the upper body;
-//  2. walking (the pack's run loops at his 220 cm/s), 3. sprinting (the Set_01 Run_Fast), 4. crouch-walking (Walk_Sit*): a launcher loop
-//     plays, the lower body is the pack's (deviation > 0), and the feet stay planted (the slower foot's mean world speed is a small share of
-//     the body's: the play rate follows the authored speed per direction);
+//  2. running forward (the pack's run loops at his 220 cm/s), 3. sprinting (the Set_01 Run_Fast), 4. crouch-walking (Walk_Sit*): a launcher
+//     loop plays and the feet stay planted (the planted foot's median world drift is a small share of the body's speed); running / sprinting
+//     the legs are the ABP's M16 locomotion (launcher "legs_abp", the designer 2026-11-10), crouched too ("crouch_body": "upper");
+//  12. walking forward at 110 cm/s: the ABP's legs; 13. walking sideways (a held look 90 deg off his path): the pack's legs;
+//  14. running sideways: the ABP's legs; 15. forward -> strafe mid-walk: no pop (the pelvis / feet in component space, the legs share's step);
+//     the planted foot's drift of every leg is logged ("Smoke foot slide");
 //  5. aim up / 6. aim down: a shot at a target 9 m above / 4 m below: the Shot clip plays natively (no montage), the rocket leaves the tube (hidden
 //     on the model), the flying rocket is the SM_RPG7_Rocket model nose first along the flight, and the aim poses bend him up / down;
 //  7. the standing reload from empty: the Reload clip on the body, the rocket stays off the tube until the clip's insertion moment and is back
@@ -74,6 +77,25 @@ namespace RpgAnimSmoke
 		int32 LastLower = -1;
 		int32 LowerFrames = 0;
 		TArray<float> PlantSpeeds;
+		/** "legs_abp" (the designer 2026-11-10): the steady frames' largest lower-body change by the layer, the ABP-legs share (sum / frames). */
+		float SteadyMaxLower = 0.f;
+		double SteadyLowerSum = 0.0;
+		double LegsAbpSum = 0.0;
+		int32 LegsAbpFrames = 0;
+		/** The ABP's movement direction against the body on the steady frames (|deg|: sum, max). */
+		double DirectionSum = 0.0;
+		float DirectionMax = 0.f;
+		/** Seam probe: the fastest component-space move of the pelvis / balls of the feet (cm/s) before and after the turn into a strafe, and the
+		 * largest one-frame change of the ABP-legs share. */
+		bool bLocalValid = false;
+		FVector LastLocal[3];
+		bool bSeamWindow = false;
+		float PreSeamMaxLocal = 0.f;
+		float SeamMaxLocal = 0.f;
+		float LastLegsAbp = 0.f;
+		float MaxLegsAbpStep = 0.f;
+		/** The legs' foot slide per leg for the report (name -> median drift cm/s, his speed). */
+		TArray<FString> SlideReport;
 		// Shots / reload.
 		int32 ShotClipsBefore = 0;
 		bool bSawRocketModel = false;
@@ -93,6 +115,13 @@ namespace RpgAnimSmoke
 		int32 HitClipsBefore = 0;
 		bool bFired = false;
 		bool bShotChecked = false;
+		/** The legs stages' walk speed (> 0: held on his movement every step - below the launcher's walk -> run band, 140 cm/s). */
+		float SpeedOverride = 0.f;
+		bool bMoveStarted = false;
+		/** A held look (the strafes): written as his formation look at every frame end, after the squad's tick wrote its own (the combat
+		 * target's facing needs a wave fight); the body then strafes along his path like a formation member looking at his sector. */
+		bool bHoldLook = false;
+		float LookYaw = 0.f;
 		FDelegateHandle FrameHandle;
 	};
 
@@ -139,6 +168,10 @@ namespace RpgAnimSmoke
 	 */
 	void SampleFrame(FState& State)
 	{
+		if (AOperativeCharacter* Looking = State.bHoldLook ? State.Hero.Get() : nullptr)
+		{
+			Looking->SetFormationLookYaw(State.LookYaw);
+		}
 		const AOperativeCharacter* Hero = State.Hero.Get();
 		const UOperativeAnimInstance* Anim = AnimOf(Hero);
 		UWorld* World = Hero ? Hero->GetWorld() : nullptr;
@@ -150,26 +183,53 @@ namespace RpgAnimSmoke
 		const float Dt = World->GetDeltaSeconds();
 		const float BodySpeed = static_cast<float>(Hero->GetVelocity().Size2D());
 		const FVector Feet[2] = { Hero->GetMesh()->GetBoneLocation(TEXT("ball_l")), Hero->GetMesh()->GetBoneLocation(TEXT("ball_r")) };
+		// The seam probe: the pelvis and the balls of the feet in component space - a pop between the set's legs and the ABP's shows as a spike.
+		const FName LocalBones[3] = { TEXT("pelvis"), TEXT("ball_l"), TEXT("ball_r") };
+		float LocalSpeed = 0.f;
+		for (int32 Index = 0; Index < 3; ++Index)
+		{
+			const FVector Local = Hero->GetMesh()->GetBoneLocation(LocalBones[Index], EBoneSpaces::ComponentSpace);
+			if (State.bLocalValid && Dt > KINDA_SMALL_NUMBER)
+			{
+				LocalSpeed = FMath::Max(LocalSpeed, static_cast<float>(FVector::Dist(Local, State.LastLocal[Index])) / Dt);
+			}
+			State.LastLocal[Index] = Local;
+		}
+		if (State.bLocalValid && BodySpeed > 60.f)
+		{
+			float& Max = State.bSeamWindow ? State.SeamMaxLocal : State.PreSeamMaxLocal;
+			Max = FMath::Max(Max, LocalSpeed);
+			State.MaxLegsAbpStep = FMath::Max(State.MaxLegsAbpStep, FMath::Abs(Anim->GetWeaponLayerLegsAbpWeight() - State.LastLegsAbp));
+		}
+		State.bLocalValid = true;
+		State.LastLegsAbp = Anim->GetWeaponLayerLegsAbpWeight();
 		if (BodySpeed > 60.f)
 		{
 			State.MaxLower = FMath::Max(State.MaxLower, Anim->GetWeaponLayerLowerDeviation());
 			State.MaxUpper = FMath::Max(State.MaxUpper, Anim->GetWeaponLayerUpperDeviation());
 			++State.MoveSamples;
-			const FString Clip = DominantName(Hero);
-			if (Clip.StartsWith(TEXT("Anim_Set_0")))
-			{
-				State.MoveClip = Clip;
-			}
 		}
 		State.TopSpeed = FMath::Max(State.TopSpeed, BodySpeed);
 		// Steady: at >= 90 % of the speed the movement allows him now (the acceleration's frames would set the lowest foot height of a slower gait).
 		const float MaxSpeed = Hero->GetCharacterMovement() ? Hero->GetCharacterMovement()->MaxWalkSpeed : BodySpeed;
 		const bool bSteady = BodySpeed > 60.f && BodySpeed >= MaxSpeed * 0.9f;
+		// The leg's loop: the dominant clip on the steady frames (the braking at the goal falls back to the walk loops).
+		const FString Clip = BodySpeed > 60.f ? DominantName(Hero) : FString();
+		if (Clip.StartsWith(TEXT("Anim_Set_0")) && (bSteady || State.MoveClip.IsEmpty()))
+		{
+			State.MoveClip = Clip;
+		}
 		const float Ground = static_cast<float>(Hero->GetActorLocation().Z) - Hero->GetSimpleCollisionHalfHeight();
 		const int32 Lower = Feet[0].Z <= Feet[1].Z ? 0 : 1;
 		const float Height = static_cast<float>(Feet[Lower].Z) - Ground;
 		if (bSteady)
 		{
+			State.SteadyMaxLower = FMath::Max(State.SteadyMaxLower, Anim->GetWeaponLayerLowerDeviation());
+			State.SteadyLowerSum += Anim->GetWeaponLayerLowerDeviation();
+			State.LegsAbpSum += Anim->GetWeaponLayerLegsAbpWeight();
+			State.DirectionSum += FMath::Abs(Anim->Direction);
+			State.DirectionMax = FMath::Max(State.DirectionMax, FMath::Abs(Anim->Direction));
+			++State.LegsAbpFrames;
 			State.MinFootZ = FMath::Min(State.MinFootZ, Height);
 			State.LowerFrames = State.LastLower == Lower ? State.LowerFrames + 1 : 0;
 			if (State.bFeetValid && State.LowerFrames >= 4 && Dt > KINDA_SMALL_NUMBER && Height < State.MinFootZ + 1.5f)
@@ -198,13 +258,33 @@ namespace RpgAnimSmoke
 		State.LowerFrames = 0;
 		State.PlantSpeeds.Reset();
 		State.MoveClip.Reset();
+		State.SteadyMaxLower = 0.f;
+		State.LegsAbpSum = 0.0;
+		State.SteadyLowerSum = 0.0;
+		State.LegsAbpFrames = 0;
+		State.DirectionSum = 0.0;
+		State.DirectionMax = 0.f;
+		State.bLocalValid = false;
+		State.bSeamWindow = false;
+		State.PreSeamMaxLocal = State.SeamMaxLocal = 0.f;
+		State.MaxLegsAbpStep = 0.f;
 	}
 
-	/** The moving check: a launcher loop, the pack's legs (deviation > 0), the planted foot's median drift under 20 % of his speed; a leg in the
-	 * set's upper-body mode (crouched: "crouch_body": "upper") instead keeps the ABP's legs (lower deviation < 0.01) and is not foot-checked. */
-	void CheckMove(FState& State, const TCHAR* What, const TCHAR* ClipPart, bool bUpperOnly = false)
+	/** Which legs a moving leg expects: the set's own (the pack), the ABP's ("legs_abp" gaits: running, walking forward), the crouched upper mode. */
+	enum class ELegs : uint8
 	{
-		if (bUpperOnly)
+		Pack,
+		Abp,
+		CrouchUpper
+	};
+
+	/** The moving check: a launcher loop, the planted foot's median drift under 20 % of his speed, and the legs: the pack's (deviation > 0), or a
+	 * "legs_abp" gait's the ABP's (weapon_anim_sets.json launcher "legs_abp", the designer 2026-11-10: running / walking forward - the share ~1
+	 * and the layer moves no lower-body bone on the steady frames); a leg in the set's upper-body mode (crouched: "crouch_body": "upper") keeps
+	 * the ABP's legs (lower deviation < 0.01) and is not foot-checked. */
+	void CheckMove(FState& State, const TCHAR* What, const TCHAR* ClipPart, ELegs Legs = ELegs::Pack, bool bSlideReportOnly = false)
+	{
+		if (Legs == ELegs::CrouchUpper)
 		{
 			State.bMoveSampling = false;
 			Check(State, State.MoveClip.Contains(ClipPart), FString::Printf(TEXT("%s: the launcher loop plays (%s)"), What, *State.MoveClip));
@@ -218,9 +298,32 @@ namespace RpgAnimSmoke
 		State.PlantSpeeds.Sort();
 		const float Drift = State.PlantSpeeds.Num() > 0 ? State.PlantSpeeds[State.PlantSpeeds.Num() / 2] : -1.f;
 		Check(State, State.MoveClip.Contains(ClipPart), FString::Printf(TEXT("%s: the launcher loop plays (%s)"), What, *State.MoveClip));
-		Check(State, State.MoveSamples >= 8 && State.MaxLower > 1.f && State.MaxUpper > 1.f,
-			FString::Printf(TEXT("%s over %d frames: the FULL-body set moves the legs off the ABP's (max %.1f) and the upper body (max %.1f)"), What,
-				State.MoveSamples, State.MaxLower, State.MaxUpper));
+		const float LegsAbp = State.LegsAbpFrames > 0 ? static_cast<float>(State.LegsAbpSum / State.LegsAbpFrames) : 0.f;
+		if (Legs == ELegs::Abp)
+		{
+			// The run's share is the legs' run band's (legs_abp_run_speeds, below his ~175 cm/s with the tube), the walk
+			// forward's the forward cone's: mostly the ABP's.
+			Check(State, State.MoveSamples >= 8 && State.LegsAbpFrames >= 5 && LegsAbp > 0.9f && State.MaxUpper > 1.f,
+				FString::Printf(TEXT("%s over %d frames: legs_abp - the ABP's M16 legs (share %.2f over %d steady frames, the layer's largest lower-body change %.2f), the pack's torso (max %.1f)"),
+					What, State.MoveSamples, LegsAbp, State.LegsAbpFrames, State.SteadyMaxLower, State.MaxUpper));
+		}
+		else
+		{
+			Check(State, State.MoveSamples >= 8 && State.MaxLower > 1.f && State.MaxUpper > 1.f && LegsAbp < 0.1f,
+				FString::Printf(TEXT("%s over %d frames: the FULL-body set moves the legs off the ABP's (max %.1f, ABP-legs share %.2f) and the upper body (max %.1f)"), What,
+					State.MoveSamples, State.MaxLower, LegsAbp, State.MaxUpper));
+		}
+		const float MeanDirection = State.LegsAbpFrames > 0 ? static_cast<float>(State.DirectionSum / State.LegsAbpFrames) : 0.f;
+		const float MeanLower = State.LegsAbpFrames > 0 ? static_cast<float>(State.SteadyLowerSum / State.LegsAbpFrames) : 0.f;
+		State.SlideReport.Add(FString::Printf(TEXT("%s: %.1f cm/s at %.0f cm/s (%.0f %% over %d frames, legs-ABP %.2f, layer's lower-body change mean %.1f, |direction| mean %.0f max %.0f deg)"),
+			What, Drift, Speed, Speed > 1.f ? Drift / Speed * 100.f : 0.f, State.PlantSpeeds.Num(), LegsAbp, MeanLower, MeanDirection, State.DirectionMax));
+		if (Legs == ELegs::Abp || bSlideReportOnly)
+		{
+			// The ABP's own locomotion (the M16 legs) is the reference here, not the layer: its drift is reported (Codex.Anim.WeaponLayer 0 gives the
+			// M16 baseline: run forward 68 %, sprint 22 %, walk forward 62 % on 2026-11-10), not held to the pack's 20 %. bSlideReportOnly: the
+			// pack's side walk at 110 cm/s leaves the mid-stance probe (almost) no frames - reported, unchanged by legs_abp (its share ~0).
+			return;
+		}
 		Check(State, State.PlantSpeeds.Num() >= 5 && Drift >= 0.f && Drift < FMath::Max(25.f, Speed * FootSlideShareLimit),
 			FString::Printf(TEXT("%s at %.0f cm/s: no foot sliding - the planted foot drifts %.1f cm/s (median of %d mid-stance frames, %.0f %% of his speed; limit %.0f %%)"),
 				What, Speed, Drift, State.PlantSpeeds.Num(), Speed > 1.f ? Drift / Speed * 100.f : 0.f, FootSlideShareLimit * 100.f));
@@ -304,7 +407,7 @@ namespace RpgAnimSmoke
 		}
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
-		if (State.Time > 140.f)
+		if (State.Time > 220.f)
 		{
 			Check(State, false, FString::Printf(TEXT("finished in time (stage %d)"), State.Stage));
 			return Finish(State, false);
@@ -312,6 +415,10 @@ namespace RpgAnimSmoke
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		AOperativeCharacter* Hero = State.Hero.Get();
 		UOperativeAnimInstance* Anim = AnimOf(Hero);
+		if (Hero && State.SpeedOverride > 0.f && Hero->GetCharacterMovement())
+		{
+			Hero->GetCharacterMovement()->MaxWalkSpeed = State.SpeedOverride;
+		}
 		switch (State.Stage)
 		{
 		case 0: // the squad, the loadout, the draw
@@ -451,7 +558,7 @@ namespace RpgAnimSmoke
 			{
 				return true;
 			}
-			CheckMove(State, TEXT("3: walking"), TEXT("Anim_Set_02_"));
+			CheckMove(State, TEXT("3: running forward (his 220 cm/s: the run loops)"), TEXT("Anim_Set_02_"), ELegs::Abp);
 			Hero->StopOperative();
 			StartMove(State);
 			Hero->OrderMoveTo(SmokeUtils::ClearPoint(World, Hero->GetActorLocation(), Hero->GetActorLocation() + Hero->GetActorForwardVector() * 1500.f), true);
@@ -462,7 +569,7 @@ namespace RpgAnimSmoke
 			{
 				return true;
 			}
-			CheckMove(State, TEXT("4: sprinting"), TEXT("Run_Fast"));
+			CheckMove(State, TEXT("4: sprinting"), TEXT("Run_Fast"), ELegs::Abp);
 			Hero->StopOperative();
 			Hero->SetStance(EOperativeStance::Crouching);
 			GoTo(State, 5);
@@ -482,7 +589,7 @@ namespace RpgAnimSmoke
 			{
 				return true;
 			}
-			CheckMove(State, TEXT("5: crouch-walking"), TEXT("Walk_Sit"), true);
+			CheckMove(State, TEXT("5: crouch-walking"), TEXT("Walk_Sit"), ELegs::CrouchUpper);
 			Hero->StopOperative();
 			Hero->SetStance(EOperativeStance::Standing);
 			GoTo(State, 6);
@@ -643,10 +750,90 @@ namespace RpgAnimSmoke
 			}
 			Check(State, Anim && Anim->GetLauncherHitClips() == State.HitClipsBefore, FString::Printf(TEXT("11: a hit plays the launcher pack's Get_Hit (%d)"),
 				Anim ? Anim->GetLauncherHitClips() : -1));
+			GoTo(State, 12);
+			return true;
+		}
+		// "legs_abp" (the game designer 2026-11-10): walking forward / running the legs are the ABP's M16 locomotion, walking sideways the pack's;
+		// each leg goes the other way along the line (back and forth on the same strip); a held look 90 deg off the path makes the strafe.
+		case 12: // walking forward at 110 cm/s (below the walk -> run band 140 .. 180)
+		case 13: // walking sideways at 110 cm/s (he looks 90 deg right of his path)
+		case 14: // running sideways at his 220 cm/s
+		case 15: // the seam: walking forward at 110 cm/s, mid-walk he turns to look at his side - forward -> strafe
+		{
+			const bool bSide = State.Stage == 13 || State.Stage == 14;
+			if (!State.bMoveStarted)
+			{
+				if (State.StageTime < 1.f)
+				{
+					return true; // settle (standing after the hit / the last leg)
+				}
+				State.bMoveStarted = true;
+				// Along the strip: stage 12 / 14 ahead, 13 / 15 back.
+				const FVector Along = (State.Stage == 12 || State.Stage == 14) ? State.Forward : -State.Forward;
+				const float Distance = State.Stage == 15 ? 1000.f : 700.f;
+				const FVector Goal = SmokeUtils::ClearPoint(World, Hero->GetActorLocation(), Hero->GetActorLocation() + Along * Distance);
+				if (AEnemyCharacter* Target = State.Target.Get())
+				{
+					SmokeUtils::ParkEnemyFarAway(Target);
+				}
+				// A strafe: he looks 90 deg to the right of his path all the way.
+				State.bHoldLook = bSide;
+				State.LookYaw = static_cast<float>(FVector::CrossProduct(FVector::UpVector, Along).Rotation().Yaw);
+				State.SpeedOverride = State.Stage == 14 ? 0.f : 110.f;
+				StartMove(State);
+				Hero->OrderMoveTo(Goal, false);
+				State.bMoveSampling = true;
+				return true;
+			}
+			if (State.Stage == 15 && !State.bSeamWindow && State.StageTime >= 4.f && Hero->GetVelocity().Size2D() > 60.f)
+			{
+				// Mid-walk: he turns to look 90 deg right of his path and walks on sideways.
+				State.bHoldLook = true;
+				State.LookYaw = static_cast<float>(FVector::CrossProduct(FVector::UpVector, Hero->GetVelocity().GetSafeNormal2D()).Rotation().Yaw);
+				State.bSeamWindow = true;
+			}
+			if ((State.MoveSamples < 30 || Hero->GetVelocity().Size2D() > 10.f) && State.StageTime < 14.f)
+			{
+				return true;
+			}
+			const float Facing = FMath::Abs(FMath::FindDeltaAngleDegrees(Hero->GetActorRotation().Yaw, State.LookYaw));
+			switch (State.Stage)
+			{
+			case 12:
+				CheckMove(State, TEXT("12: walking forward (110 cm/s)"), TEXT("Anim_Set_02_Walk"), ELegs::Abp);
+				break;
+			case 13:
+				Check(State, Facing < 25.f, FString::Printf(TEXT("13: he looks 90 deg off his path while walking (%.0f deg off that look)"), Facing));
+				CheckMove(State, TEXT("13: walking sideways (110 cm/s)"), TEXT("Anim_Set_02_Walk_"), ELegs::Pack, true);
+				break;
+			case 14:
+				Check(State, Facing < 25.f, FString::Printf(TEXT("14: he looks 90 deg off his path while running (%.0f deg off that look)"), Facing));
+				CheckMove(State, TEXT("14: running sideways (220 cm/s)"), TEXT("Anim_Set_02_Run_"), ELegs::Abp);
+				break;
+			default:
+			{
+				State.bMoveSampling = false;
+				// A pop between the set's legs and the ABP's shows as a component-space spike of the pelvis / feet far above the walk's own.
+				Check(State, State.bSeamWindow && State.SeamMaxLocal > 0.f && State.SeamMaxLocal < FMath::Max(600.f, State.PreSeamMaxLocal * 2.f) && State.MaxLegsAbpStep < 0.2f,
+					FString::Printf(TEXT("15: forward -> strafe walking: no pop (pelvis / feet in component space max %.0f cm/s after the turn vs %.0f walking forward; the ABP-legs share's largest one-frame step %.3f, %.0f deg off the side look)"),
+						State.SeamMaxLocal, State.PreSeamMaxLocal, State.MaxLegsAbpStep, Facing));
+				break;
+			}
+			}
+			Hero->StopOperative();
+			State.SpeedOverride = 0.f;
+			State.bMoveStarted = false;
+			State.bHoldLook = false;
+			if (State.Stage < 15)
+			{
+				GoTo(State, State.Stage + 1);
+				return true;
+			}
 			if (Anim)
 			{
 				Anim->bWeaponLayerProbe = false;
 			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke foot slide (planted foot median drift): %s"), *FString::Join(State.SlideReport, TEXT(" | ")));
 			return Finish(State, true);
 		}
 		default:

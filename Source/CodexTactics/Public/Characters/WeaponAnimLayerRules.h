@@ -197,4 +197,62 @@ namespace WeaponAnimLayerRules
 	 * turning slower than MinRate, 1 from FullRate on.
 	 */
 	CODEXTACTICS_API float TurnInPlaceShare(float YawRateDegPerSec, float Speed, float MoveSpeed, float MinRate = 30.f, float FullRate = 90.f);
+
+	// --- "legs_abp": a full-body set's gaits on the ABP's legs (the game designer 2026-11-10, the RPG-7) ---------------------------------------
+
+	/**
+	 * Share of the Forward clip in a directional blend (0..1): the forward clip's own weight (1 - Alpha as A, Alpha as B), 0 when neither
+	 * side of the blend is Forward (strafes, backwards).
+	 */
+	CODEXTACTICS_API float ForwardShare(const FWeaponLayerDirectionBlend& Blend);
+
+	/**
+	 * The direction "walk_forward" measures (deg, -180..180) with a forward cone of ConeDeg ("legs_abp_forward_cone_deg"): inside +-ConeDeg it is
+	 * 0 (fully forward - a leader walking under a formation look sector faces up to ~30 deg off his path, measured 2026-11-10), from there to
+	 * +-90 it is stretched back over 0..90 (the strafe stays the strafe), beyond 90 unchanged. ConeDeg <= 0: AngleDeg as it is.
+	 */
+	CODEXTACTICS_API float ForwardConeAngle(float AngleDeg, float ConeDeg);
+
+	/**
+	 * The gaits named by a full-body set's "legs_abp" list (weapon_anim_sets.json): while he moves in one of them the LOWER body (root yaw,
+	 * pelvis, legs, IK bones) blends to ABP_Operative's own locomotion (the M16 legs, as an "upper" set) and the set keeps only the torso.
+	 * "run" = the jog loops (any direction), "sprint" = the sprint loop, "walk" = the walk / aim-walk loops (any direction), "walk_forward" =
+	 * the forward clip's share of the walk / aim-walk blend. Unknown names are ignored (OutUnknown lists them).
+	 */
+	struct CODEXTACTICS_API FWeaponLegsAbpGaits
+	{
+		bool bRun = false;
+		bool bSprint = false;
+		bool bWalk = false;
+		bool bWalkForward = false;
+		bool Any() const { return bRun || bSprint || bWalk || bWalkForward; }
+	};
+
+	CODEXTACTICS_API FWeaponLegsAbpGaits ParseLegsAbpGaits(const TArray<FString>& Names, TArray<FString>* OutUnknown = nullptr);
+
+	/** The layer's clip shares this frame (UOperativeAnimInstance::UpdateShotgunLayer), each 0..1. */
+	struct CODEXTACTICS_API FWeaponLegsAbpShares
+	{
+		/** Moving against the idle (MoveWeight). */
+		float Move = 0.f;
+		/** The crouch loops against the upright ones. */
+		float Crouch = 0.f;
+		/** The sprint loop against the walk / jog (upright). */
+		float Sprint = 0.f;
+		/** The aim-walk loops against the walk / jog (a set with its own aim walk only). */
+		float AimMove = 0.f;
+		/** Running against walking: the jog loops' share (JogWeight over the set's jog band), or the legs' own band ("legs_abp_run_speeds"). */
+		float Jog = 0.f;
+		/** ForwardShare of the walk / aim-walk direction blends (the reversal cross-fade's old direction mixed in by its share). */
+		float WalkForward = 0.f;
+		float AimWalkForward = 0.f;
+	};
+
+	/**
+	 * How much of the lower body is the ABP's (0..1): the summed clip weight of the gaits in Gaits - Move x upright x (sprint x S + (1 - sprint)
+	 * x ((1 - aim) x (jog x R + (1 - jog) x W(walk forward)) + aim x W(aim-walk forward))), where S / R are 1 for a listed sprint / run, W(f) = 1
+	 * for "walk", f for "walk_forward", else 0. The legs then follow the clips' own blend (no pop between forward and a strafe: the forward share
+	 * fades with the eased direction); the caller still eases it over blend_seconds. No gaits = 0 (today's full-body legs).
+	 */
+	CODEXTACTICS_API float LegsAbpWeight(const FWeaponLegsAbpGaits& Gaits, const FWeaponLegsAbpShares& Shares);
 }

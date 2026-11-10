@@ -151,6 +151,8 @@ its start and end (no corners) - for the corners of a walk query a string-pulled
 
 2026-11-10 (`fix/arena-no-outer-strip`, the game designer: no arena fights in the Depot's outer strip behind the perimeter wall; arena only): the arena's spawns, squad slots, scenario sites, defender / attacker offsets and objectives keep to a per-level play area - `pmc_arena.play_area` in the level JSON (`include_box_cm` + `exclude_boxes_cm`, world cm; pure rules `AI/PmcArenaPlayArea`, tests `CodexTactics.AI.PmcArena.PlayArea.*`); L_PmcArenaDepot.json = the generator layout's bounds + the sliver behind the west fence F_south; no valid point = the old fallback with a Warning; `PlayArea=off` for A/B. 20 Depot seeds: 18 / 120 fighters + 3 / 20 objectives in the strip before, 0 after - `docs/systems/pmc-squad-ai.md` "Play area".
 
+2026-11-10 (`fix/rpg-legs-m16`, the game designer): the RPG-7 runs, sprints and walks forward on the ABP's M16 legs - `weapon_anim_sets.json` launcher `"legs_abp": ["run", "sprint", "walk_forward"]` (+ `legs_abp_forward_cone_deg` 35, `legs_abp_run_speeds` [120, 160]); the pack keeps the torso (facing the capsule) and the legs idle / turning / strafe- or backward-walking; no key = unchanged for every other set. Rules `WeaponAnimLayerRules::LegsAbpWeight` / `ForwardShare` / `ForwardConeAngle` (tests `CodexTactics.Animation.WeaponLayer.LegsAbp*`), RpgAnimSmoke 12-15, `CodexTactics.RpgShots legs`. Trap: the M16 legs themselves slide more than the pack's at the launcher's speeds (the ABP alone: 62-68 % walking / running forward) - see `docs/systems/animation-setup.md` "Running / walking forward = the ABP's legs".
+
 What is waiting for the user: section 7 (open questions) and `docs/port/NEXT_STEPS.md`.
 
 ---
