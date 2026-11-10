@@ -189,6 +189,14 @@ export interface LevelPropsFile {
   [key: string]: unknown;
 }
 
+function isInteger(val: unknown): val is number {
+  return typeof val === 'number' && Number.isInteger(val);
+}
+
+function isValidPos(pos: unknown): pos is [number, number] {
+  return Array.isArray(pos) && pos.length === 2 && isInteger(pos[0]) && isInteger(pos[1]);
+}
+
 /** Validates arbitrary data against codex.levelgen_props/1. Returns an array of error messages (empty if valid). */
 export function validateProps(data: unknown): string[] {
   if (!data || typeof data !== 'object' || Array.isArray(data)) {
@@ -209,12 +217,14 @@ export function validateProps(data: unknown): string[] {
   if (typeof doc.layout_hash !== 'string') {
     errs.push('layout_hash: expected a string');
   }
-  if (typeof doc.revision !== 'number' || !Number.isInteger(doc.revision) || doc.revision < 0) {
+  if (!isInteger(doc.revision) || (doc.revision as number) < 0) {
     errs.push('revision: expected a non-negative integer');
   }
   if (typeof doc.frozen !== 'boolean') {
     errs.push('frozen: expected a boolean');
   }
+
+  const allObjectIds = new Set<string>();
 
   if (!Array.isArray(doc.layers)) {
     errs.push('layers: expected an array');
@@ -241,7 +251,7 @@ export function validateProps(data: unknown): string[] {
       if (typeof l.enabled !== 'boolean') {
         errs.push(`layer "${String(l.id ?? i)}": enabled must be a boolean`);
       }
-      if (typeof l.seed !== 'number' || !Number.isInteger(l.seed) || l.seed < 0 || l.seed > 0xffffffff) {
+      if (!isInteger(l.seed) || (l.seed as number) < 0 || (l.seed as number) > 0xffffffff) {
         errs.push(`layer "${String(l.id ?? i)}": missing or invalid seed (expected uint32)`);
       }
       if (typeof l.locked !== 'boolean') {
@@ -263,18 +273,23 @@ export function validateProps(data: unknown): string[] {
           const o = obj as Record<string, unknown>;
           if (typeof o.id !== 'string' || !o.id.trim()) {
             errs.push(`layer "${String(l.id ?? i)}" object[${j}]: id must be a non-empty string`);
+          } else if (allObjectIds.has(o.id)) {
+            errs.push(`duplicate object id "${o.id}"`);
+          } else {
+            allObjectIds.add(o.id);
           }
+
           if (typeof o.variant !== 'string' || !o.variant.trim()) {
             errs.push(`layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": variant must be a non-empty string`);
           }
-          if (!Array.isArray(o.pos) || o.pos.length !== 2 || typeof o.pos[0] !== 'number' || typeof o.pos[1] !== 'number') {
-            errs.push(`layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": pos must be [x, y] in cm`);
+          if (!isValidPos(o.pos)) {
+            errs.push(`layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": pos must be [x, y] in integer cm`);
           }
           if (typeof o.walk_layer !== 'string' || !o.walk_layer.trim()) {
             errs.push(`layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": walk_layer must be a non-empty string`);
           }
-          if (o.yaw !== undefined && typeof o.yaw !== 'number') {
-            errs.push(`layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": yaw must be a number`);
+          if (o.yaw !== undefined && !isInteger(o.yaw)) {
+            errs.push(`layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": yaw must be an integer degree`);
           }
           if (o.locked !== undefined && typeof o.locked !== 'boolean') {
             errs.push(`layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": locked must be a boolean`);
@@ -301,31 +316,44 @@ export function validateProps(data: unknown): string[] {
         }
         if (o.op === 'move') {
           if (typeof o.id !== 'string' || !o.id.trim()) errs.push(`override move[${i}]: id must be a string`);
-          if (!Array.isArray(o.pos) || o.pos.length !== 2 || typeof o.pos[0] !== 'number' || typeof o.pos[1] !== 'number') {
-            errs.push(`override move[${i}]: pos must be [x, y]`);
+          if (!isValidPos(o.pos)) {
+            errs.push(`override move[${i}]: pos must be [x, y] in integer cm`);
           }
           if (typeof o.walk_layer !== 'string' || !o.walk_layer.trim()) errs.push(`override move[${i}]: walk_layer must be a string`);
+          if (o.yaw !== undefined && !isInteger(o.yaw)) errs.push(`override move[${i}]: yaw must be an integer degree`);
         } else if (o.op === 'delete') {
           if (typeof o.id !== 'string' || !o.id.trim()) errs.push(`override delete[${i}]: id must be a string`);
-          if (!Array.isArray(o.pos) || o.pos.length !== 2 || typeof o.pos[0] !== 'number' || typeof o.pos[1] !== 'number') {
-            errs.push(`override delete[${i}]: pos must be [x, y]`);
+          if (!isValidPos(o.pos)) {
+            errs.push(`override delete[${i}]: pos must be [x, y] in integer cm`);
           }
         } else if (o.op === 'add') {
           if (!o.object || typeof o.object !== 'object' || Array.isArray(o.object)) {
             errs.push(`override add[${i}]: object must be an object`);
           } else {
             const addObj = o.object as Record<string, unknown>;
-            if (typeof addObj.id !== 'string' || !addObj.id.trim()) errs.push(`override add[${i}]: object.id must be a string`);
+            if (typeof addObj.id !== 'string' || !addObj.id.trim()) {
+              errs.push(`override add[${i}]: object.id must be a string`);
+            } else if (allObjectIds.has(addObj.id)) {
+              errs.push(`duplicate object id "${addObj.id}"`);
+            } else {
+              allObjectIds.add(addObj.id);
+            }
             if (typeof addObj.variant !== 'string' || !addObj.variant.trim()) errs.push(`override add[${i}]: object.variant must be a string`);
-            if (!Array.isArray(addObj.pos) || addObj.pos.length !== 2 || typeof addObj.pos[0] !== 'number' || typeof addObj.pos[1] !== 'number') {
-              errs.push(`override add[${i}]: object.pos must be [x, y]`);
+            if (!isValidPos(addObj.pos)) {
+              errs.push(`override add[${i}]: object.pos must be [x, y] in integer cm`);
             }
             if (typeof addObj.walk_layer !== 'string' || !addObj.walk_layer.trim()) errs.push(`override add[${i}]: object.walk_layer must be a string`);
+            if (addObj.yaw !== undefined && !isInteger(addObj.yaw)) errs.push(`override add[${i}]: object.yaw must be an integer degree`);
           }
         } else if (o.op === 'set') {
           if (typeof o.id !== 'string' || !o.id.trim()) errs.push(`override set[${i}]: id must be a string`);
           if (!o.fields || typeof o.fields !== 'object' || Array.isArray(o.fields)) {
             errs.push(`override set[${i}]: fields must be an object`);
+          } else {
+            const f = o.fields as Record<string, unknown>;
+            if ('id' in f) errs.push(`override set[${i}]: fields must not modify id`);
+            if ('pos' in f) errs.push(`override set[${i}]: fields must not modify pos (use move)`);
+            if ('walk_layer' in f) errs.push(`override set[${i}]: fields must not modify walk_layer (use move)`);
           }
         }
       }
@@ -338,16 +366,30 @@ export function validateProps(data: unknown): string[] {
 export interface FormatPropsOptions {
   crlf?: boolean;
   indent?: string;
+  skipValidation?: boolean;
 }
 
+/**
+ * Formats a value as compact JSON string.
+ * Keeps insertion order of object keys (never sorts nested keys, as variants order drives rolls).
+ * Skips keys with undefined values. Escapes keys via JSON.stringify.
+ */
 function inlineJson(val: unknown): string {
+  if (val === undefined) {
+    return 'null';
+  }
   if (Array.isArray(val)) {
-    return '[' + val.map(inlineJson).join(', ') + ']';
+    return '[' + val.map((x) => (x === undefined ? 'null' : inlineJson(x))).join(', ') + ']';
   }
   if (val !== null && typeof val === 'object') {
     const obj = val as Record<string, unknown>;
-    const keys = Object.keys(obj).sort();
-    return '{ ' + keys.map((k) => `"${k}": ${inlineJson(obj[k])}`).join(', ') + ' }';
+    const items: string[] = [];
+    for (const k of Object.keys(obj)) {
+      if (obj[k] !== undefined) {
+        items.push(`${JSON.stringify(k)}: ${inlineJson(obj[k])}`);
+      }
+    }
+    return '{ ' + items.join(', ') + ' }';
   }
   return JSON.stringify(val);
 }
@@ -357,11 +399,14 @@ const OBJ_KNOWN_ORDER: readonly string[] = [
 ];
 
 function inlineObjectJson(obj: PropObject): string {
+  if (!obj || typeof obj !== 'object' || Array.isArray(obj)) {
+    return inlineJson(obj);
+  }
   const o = obj as Record<string, unknown>;
-  const known = OBJ_KNOWN_ORDER.filter((k) => k in o);
-  const unknown = Object.keys(o).filter((k) => !OBJ_KNOWN_ORDER.includes(k)).sort();
+  const known = OBJ_KNOWN_ORDER.filter((k) => k in o && o[k] !== undefined);
+  const unknown = Object.keys(o).filter((k) => !OBJ_KNOWN_ORDER.includes(k) && o[k] !== undefined);
   const keys = [...known, ...unknown];
-  const items = keys.map((k) => `"${k}": ${inlineJson(o[k])}`);
+  const items = keys.map((k) => `${JSON.stringify(k)}: ${inlineJson(o[k])}`);
   return '{ ' + items.join(', ') + ' }';
 }
 
@@ -370,18 +415,21 @@ const OV_KNOWN_ORDER: readonly string[] = [
 ];
 
 function inlineOverrideJson(ov: PropOverride): string {
+  if (!ov || typeof ov !== 'object' || Array.isArray(ov)) {
+    return inlineJson(ov);
+  }
   const o = ov as Record<string, unknown>;
-  const known = OV_KNOWN_ORDER.filter((k) => k in o);
-  const unknown = Object.keys(o).filter((k) => !OV_KNOWN_ORDER.includes(k)).sort();
+  const known = OV_KNOWN_ORDER.filter((k) => k in o && o[k] !== undefined);
+  const unknown = Object.keys(o).filter((k) => !OV_KNOWN_ORDER.includes(k) && o[k] !== undefined);
   const keys = [...known, ...unknown];
   const items = keys.map((k) => {
     if (k === 'object') {
-      return `"object": ${inlineObjectJson(o.object as PropObject)}`;
+      return `${JSON.stringify(k)}: ${o.object && typeof o.object === 'object' && !Array.isArray(o.object) ? inlineObjectJson(o.object as PropObject) : inlineJson(o.object)}`;
     }
     if (k === 'fields') {
-      return `"fields": ${inlineJson(o.fields)}`;
+      return `${JSON.stringify(k)}: ${inlineJson(o.fields)}`;
     }
-    return `"${k}": ${inlineJson(o[k])}`;
+    return `${JSON.stringify(k)}: ${inlineJson(o[k])}`;
   });
   return '{ ' + items.join(', ') + ' }';
 }
@@ -396,89 +444,103 @@ const LAYER_KNOWN_ORDER: readonly string[] = [
 
 /**
  * Formats a LevelPropsFile into stable, canonically ordered JSON string.
- * Keeps all unknown root / layer / object keys.
+ * - Orders known top-level and layer keys.
+ * - Preserves exact insertion order of nested keys (rules, variants, etc.) without reordering.
+ * - Preserves all unknown keys.
+ * - Properly handles empty overrides array (`overrides: []`).
+ * - Validates document before serialization unless skipValidation is true.
  */
 export function formatPropsJson(doc: LevelPropsFile, options: FormatPropsOptions = {}): string {
+  if (!options.skipValidation) {
+    const errs = validateProps(doc);
+    if (errs.length > 0) {
+      throw new Error(`Cannot format invalid props file: ${errs.join('; ')}`);
+    }
+  }
+
   const crlf = options.crlf ?? false;
   const nl = crlf ? '\r\n' : '\n';
   const tab = options.indent ?? '\t';
   const d = doc as Record<string, unknown>;
 
-  const lines: string[] = ['{'];
+  const rootItems: string[] = [];
 
-  const rootKnown = ROOT_KNOWN_ORDER.filter((k) => k in d);
-  const rootCustom = Object.keys(d).filter((k) => !ROOT_KNOWN_ORDER.includes(k) && k !== 'layers' && k !== 'overrides').sort();
+  const rootKnown = ROOT_KNOWN_ORDER.filter((k) => k in d && d[k] !== undefined);
+  const rootCustom = Object.keys(d).filter((k) => !ROOT_KNOWN_ORDER.includes(k) && k !== 'layers' && k !== 'overrides' && d[k] !== undefined);
   const topKeys = [...rootKnown, ...rootCustom];
 
   for (const k of topKeys) {
-    lines.push(`${tab}"${k}": ${inlineJson(d[k])},`);
+    rootItems.push(`${tab}${JSON.stringify(k)}: ${inlineJson(d[k])}`);
   }
 
-  const layers = Array.isArray(doc.layers) ? doc.layers : [];
-  const overrides = Array.isArray(doc.overrides) ? doc.overrides : [];
-  const hasOverrides = overrides.length > 0;
+  if (Array.isArray(doc.layers)) {
+    const layerBlockLines: string[] = [`${tab}"layers": [`];
+    const layerBlocks: string[] = [];
 
-  lines.push(`${tab}"layers": [`);
-  for (let li = 0; li < layers.length; li++) {
-    const layer = layers[li];
-    const l = layer as Record<string, unknown>;
-    lines.push(`${tab}${tab}{`);
+    for (let li = 0; li < doc.layers.length; li++) {
+      const layer = doc.layers[li];
+      const l = layer as Record<string, unknown>;
+      const layerFieldLines: string[] = [];
 
-    const layerKnown = LAYER_KNOWN_ORDER.filter((k) => k in l);
-    const layerCustom = Object.keys(l).filter((k) => !LAYER_KNOWN_ORDER.includes(k) && k !== 'objects' && k !== 'report').sort();
+      const layerKnown = LAYER_KNOWN_ORDER.filter((k) => k in l && l[k] !== undefined);
+      const layerCustom = Object.keys(l).filter((k) => !LAYER_KNOWN_ORDER.includes(k) && k !== 'objects' && k !== 'report' && l[k] !== undefined);
 
-    for (const k of [...layerKnown, ...layerCustom]) {
-      if (k === 'rules') {
-        lines.push(`${tab}${tab}${tab}"rules": {`);
-        const rk = Object.keys(layer.rules ?? {}).sort();
-        for (let ri = 0; ri < rk.length; ri++) {
-          const r = rk[ri];
-          const comma = ri < rk.length - 1 ? ',' : '';
-          const ruleVal = (layer.rules as Record<string, unknown>)[r];
-          lines.push(`${tab}${tab}${tab}${tab}"${r}": ${inlineJson(ruleVal)}${comma}`);
+      for (const k of [...layerKnown, ...layerCustom]) {
+        if (k === 'rules') {
+          const rulesObj = (layer.rules ?? {}) as Record<string, unknown>;
+          const ruleKeys = Object.keys(rulesObj).filter((rk) => rulesObj[rk] !== undefined);
+          if (ruleKeys.length === 0) {
+            layerFieldLines.push(`${tab}${tab}${tab}${JSON.stringify(k)}: {}`);
+          } else {
+            const ruleLines: string[] = [`${tab}${tab}${tab}${JSON.stringify(k)}: {`];
+            const ruleItems = ruleKeys.map((rk) => `${tab}${tab}${tab}${tab}${JSON.stringify(rk)}: ${inlineJson(rulesObj[rk])}`);
+            ruleLines.push(ruleItems.join(',' + nl));
+            ruleLines.push(`${tab}${tab}${tab}}`);
+            layerFieldLines.push(ruleLines.join(nl));
+          }
+        } else {
+          layerFieldLines.push(`${tab}${tab}${tab}${JSON.stringify(k)}: ${inlineJson(l[k])}`);
         }
-        const hasMoreAfterRules = ('rules_hash' in l) || layerCustom.length > 0 || ('objects' in l) || ('report' in l);
-        const comma = hasMoreAfterRules ? ',' : '';
-        lines.push(`${tab}${tab}${tab}}${comma}`);
-      } else {
-        lines.push(`${tab}${tab}${tab}"${k}": ${inlineJson(l[k])},`);
       }
-    }
 
-    if (Array.isArray(layer.objects)) {
-      lines.push(`${tab}${tab}${tab}"objects": [`);
-      for (let oi = 0; oi < layer.objects.length; oi++) {
-        const obj = layer.objects[oi];
-        const comma = oi < layer.objects.length - 1 ? ',' : '';
-        lines.push(`${tab}${tab}${tab}${tab}${inlineObjectJson(obj)}${comma}`);
+      if (Array.isArray(layer.objects)) {
+        if (layer.objects.length === 0) {
+          layerFieldLines.push(`${tab}${tab}${tab}"objects": []`);
+        } else {
+          const objLines: string[] = [`${tab}${tab}${tab}"objects": [`];
+          const objItems = layer.objects.map((obj) => `${tab}${tab}${tab}${tab}${inlineObjectJson(obj)}`);
+          objLines.push(objItems.join(',' + nl));
+          objLines.push(`${tab}${tab}${tab}]`);
+          layerFieldLines.push(objLines.join(nl));
+        }
       }
-      const hasReport = 'report' in l && l.report !== undefined;
-      const comma = hasReport ? ',' : '';
-      lines.push(`${tab}${tab}${tab}]${comma}`);
+
+      if ('report' in l && l.report !== undefined) {
+        layerFieldLines.push(`${tab}${tab}${tab}"report": ${inlineJson(l.report)}`);
+      }
+
+      layerBlocks.push(`${tab}${tab}{${nl}${layerFieldLines.join(',' + nl)}${nl}${tab}${tab}}`);
     }
 
-    if ('report' in l && l.report !== undefined) {
-      lines.push(`${tab}${tab}${tab}"report": ${inlineJson(l.report)}`);
-    }
-
-    const comma = li < layers.length - 1 ? ',' : '';
-    lines.push(`${tab}${tab}}${comma}`);
-  }
-  const layersComma = hasOverrides ? ',' : '';
-  lines.push(`${tab}]${layersComma}`);
-
-  if (hasOverrides) {
-    lines.push(`${tab}"overrides": [`);
-    for (let oi = 0; oi < overrides.length; oi++) {
-      const ov = overrides[oi];
-      const comma = oi < overrides.length - 1 ? ',' : '';
-      lines.push(`${tab}${tab}${inlineOverrideJson(ov)}${comma}`);
-    }
-    lines.push(`${tab}]`);
+    layerBlockLines.push(layerBlocks.join(',' + nl));
+    layerBlockLines.push(`${tab}]`);
+    rootItems.push(layerBlockLines.join(nl));
   }
 
-  lines.push('}');
-  return lines.join(nl) + nl;
+  // Preserve overrides array even if empty (overrides: [])
+  if (doc.overrides !== undefined && Array.isArray(doc.overrides)) {
+    if (doc.overrides.length === 0) {
+      rootItems.push(`${tab}"overrides": []`);
+    } else {
+      const ovLines: string[] = [`${tab}"overrides": [`];
+      const ovItems = doc.overrides.map((ov) => `${tab}${tab}${inlineOverrideJson(ov)}`);
+      ovLines.push(ovItems.join(',' + nl));
+      ovLines.push(`${tab}]`);
+      rootItems.push(ovLines.join(nl));
+    }
+  }
+
+  return `{${nl}${rootItems.join(',' + nl)}${nl}}${nl}`;
 }
 
 /** Parses JSON text and validates against LevelPropsFile schema. Preserves all unknown keys. */
@@ -495,13 +557,13 @@ export function parsePropsJson(text: string): LevelPropsFile {
 export const readPropsJson = parsePropsJson;
 export const writePropsJson = formatPropsJson;
 
-/** Reads a props file from disk, detecting CRLF and validating content. */
+/** Reads a props file from disk, validating content and schema. */
 export function readPropsFile(filePath: string): LevelPropsFile {
   const text = fs.readFileSync(filePath, 'utf8');
   return parsePropsJson(text);
 }
 
-/** Writes a props file to disk with stable key order, preserving CRLF if present or requested. */
+/** Writes a props file to disk with stable key order and validated data. */
 export function writePropsFile(filePath: string, props: LevelPropsFile, options: FormatPropsOptions = {}): void {
   const text = formatPropsJson(props, options);
   fs.writeFileSync(filePath, text, 'utf8');
