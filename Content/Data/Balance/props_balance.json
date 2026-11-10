@@ -123,12 +123,12 @@
 			"exclude_comment": "The standard keep-out set below; a layer's rules.exclude overrides it key by key."
 		},
 		"barrels_default": {
-			"count": { "mode": "count", "value": 30 },
-			"count_comment": "Barrels per map.",
-			"cluster": { "min": 1, "max": 4, "ring_cm": [70, 130] },
+			"count": { "mode": "count", "value": 8 },
+			"count_comment": "Barrels per map. Designer 2026-11-10: ALL barrels are explosive and there must be few of them (was 30 with 30 % explosive clusters).",
+			"cluster": { "min": 1, "max": 3, "ring_cm": [70, 130] },
 			"cluster_comment": "Members per cluster and the ring offset range (cm).",
-			"explosive": { "share": 0.3, "min_gap_cm": 400, "never_within_cm_of": { "spawn": 2500 } },
-			"explosive_comment": "share of clusters that are explosive; min_gap_cm 400 = designer #5; no explosive within 25 m of spawn.",
+			"explosive": { "share": 1.0, "min_gap_cm": 400, "never_within_cm_of": { "spawn": 2500 } },
+			"explosive_comment": "share of clusters that are explosive (designer 2026-11-10: every barrel is explosive -> 1.0); min_gap_cm 400 = designer #5; no explosive within 25 m of spawn.",
 			"min_spacing_cm": 600,
 			"min_spacing_cm_comment": "Between cluster anchors.",
 			"min_gap_any_cm": 100,
