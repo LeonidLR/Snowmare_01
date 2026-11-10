@@ -119,7 +119,7 @@ bool FLevelJsonPerMapTest::RunTest(const FString&)
 
 	FLevelCombatConfig Config;
 	FString Error;
-	if (TestTrue(FString::Printf(TEXT("Demo level loads (%s)"), *Error), LevelJsonRules::LoadLevel(Demo, Config, Error)))
+	if (TestTrue(FString::Printf(TEXT("Demo level loads (%s)"), *Error), LevelJsonRules::LoadLevel(TEXT("SmokeFixtures/lake_rules_fixture.json") /* Demo resolved above; its rules on the pinned copy (the live lake is designer-editable) */, Config, Error)))
 	{
 		TestTrue(TEXT("Demo flag"), Config.Demo.bDemo);
 		TestFalse(TEXT("Panic off"), Config.Demo.bPanicEnabled);
@@ -236,7 +236,7 @@ bool FLevelJsonPressureTest::RunTest(const FString&)
 
 	// The combat lab's own file: both cheats on, the designer's numbers.
 	FLevelCombatConfig Lab;
-	if (TestTrue(TEXT("L_FormationLabCombat.json parses"), LevelJsonRules::LoadLevel(TEXT("L_FormationLabCombat.json"), Lab, Error)))
+	if (TestTrue(TEXT("L_FormationLabCombat.json parses"), LevelJsonRules::LoadLevel(TEXT("SmokeFixtures/lab_rules_fixture.json") /* pinned copy of the designer-editable combat lab */, Lab, Error)))
 	{
 		TestTrue(TEXT("Lab: pressure on"), Lab.Pressure.bEnabled);
 		TestEqual(TEXT("Lab: every 2 minutes"), Lab.Pressure.IntervalSeconds, 120.f);

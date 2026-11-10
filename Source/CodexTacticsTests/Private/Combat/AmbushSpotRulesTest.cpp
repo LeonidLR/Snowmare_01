@@ -193,7 +193,7 @@ bool FAmbushSpotLabTest::RunTest(const FString&)
 	TestEqual(TEXT("20 walls + 4 towers"), Boxes.Num(), 24);
 	FLevelCombatConfig Level;
 	FString Error;
-	if (!TestTrue(TEXT("L_FormationLabCombat.json parses"), LevelJsonRules::LoadLevel(TEXT("L_FormationLabCombat.json"), Level, Error)))
+	if (!TestTrue(TEXT("L_FormationLabCombat.json parses"), LevelJsonRules::LoadLevel(TEXT("SmokeFixtures/lab_rules_fixture.json") /* pinned copy of the designer-editable combat lab */, Level, Error)))
 	{
 		return false;
 	}

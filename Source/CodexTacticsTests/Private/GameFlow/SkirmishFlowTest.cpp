@@ -37,7 +37,7 @@ bool FSkirmishLevelJsonTest::RunTest(const FString&)
 
 	// The Demo 01 lake: skirmishes, no Susanin.
 	FString Json;
-	const FString Path = FPaths::ProjectContentDir() / TEXT("Data/LevelJson/L_Demo01_A_FrozenLake.json");
+	const FString Path = FPaths::ProjectContentDir() / TEXT("Data/LevelJson/SmokeFixtures/lake_rules_fixture.json") /* pinned copy: the live lake is designer-editable (Training Ground) */;
 	TestTrue(TEXT("the lake's level JSON loads"), FFileHelper::LoadFileToString(Json, *Path));
 	FLevelCombatConfig Lake;
 	TestTrue(TEXT("... parses"), LevelJsonRules::ParseLevel(Json, TEXT("L_Demo01_A_FrozenLake"), Lake, Error));

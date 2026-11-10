@@ -250,7 +250,7 @@ bool FBotRouteCombatLabFileTest::RunTest(const FString&)
 	// The combat lab's route (L_FormationLabCombat.json "bot_route"): a loop through walls, corners, doorways and the four towers.
 	FLevelCombatConfig Level;
 	FString Error;
-	if (!TestTrue(FString::Printf(TEXT("L_FormationLabCombat.json loads (%s)"), *Error), LevelJsonRules::LoadLevel(TEXT("L_FormationLabCombat.json"), Level, Error)))
+	if (!TestTrue(FString::Printf(TEXT("L_FormationLabCombat.json loads (%s)"), *Error), LevelJsonRules::LoadLevel(TEXT("SmokeFixtures/lab_rules_fixture.json") /* pinned copy of the designer-editable combat lab */, Level, Error)))
 	{
 		return false;
 	}
@@ -329,9 +329,14 @@ bool FBotRouteGeneratedDepotTest::RunTest(const FString&)
 	const FBotRouteConfig& Route = Level.BotRoute;
 	TestTrue(TEXT("it has a route"), Route.IsValid());
 	TestTrue(TEXT("a loop"), Route.bLoop);
-	TestTrue(TEXT("an endless pressure level"), Level.Pressure.bEnabled);
-	// #46 (bcc22613, user 2026-11-06 "the Depot with real stakes"): immortality off, infinite ammo stays until loot exists.
-	TestTrue(TEXT("mortal + infinite ammo (#46)"), !Level.bCheatImmortal && Level.bCheatInfiniteAmmo);
+	// The designer edits the live file's pressure / cheats in the Training Ground (2026-11-10): those rules on the pinned copy.
+	FLevelCombatConfig Pinned;
+	if (TestTrue(TEXT("the Depot fixture loads"), LevelJsonRules::LoadLevel(TEXT("SmokeFixtures/depot_rules_fixture.json"), Pinned, Error)))
+	{
+		TestTrue(TEXT("an endless pressure level"), Pinned.Pressure.bEnabled);
+		// #46 (bcc22613, user 2026-11-06 "the Depot with real stakes"): immortality off, infinite ammo stays until loot exists.
+		TestTrue(TEXT("mortal + infinite ammo (#46)"), !Pinned.bCheatImmortal && Pinned.bCheatInfiniteAmmo);
+	}
 	TArray<FString> Drops;
 	int32 Roof = 0;
 	int32 Walls = 0;

@@ -1,0 +1,370 @@
+{
+  "_fixture": "Pinned copy of L_FormationLabCombat.json as committed 2026-11-10 for the unit tests (AmbushSpotRulesTest, BotRouteRulesTest, MortarRulesTest, LevelJsonRulesTest): the designer edits the live file in the Training Ground, so tests assert the rules here and only check that the live file parses.",
+  "$schema": "../../Schemas/level_config.schema.json",
+  "level_id": "L_FormationLabCombat",
+  "level_name": "Formation Lab - Combat",
+  "description": "Combat copy of the formation lab (game designer decisions 2026-11-01, docs/design/COMBAT_LAB.md; built by Scripts/Editor/build_formation_lab.py from Content/Data/FormationLab/Combat/formation_lab_combat_01.json = the lab layout + 4 towers with ladders). The squad meets endless enemy pressure: the first group at 30 s, then every 2 minutes a group of 1-3 (Hound, Frostbitten, Military Zombie, Cutter, Marksman; the Military Zombie replaced the Spitter, task #34 2026-11-07) - a patrol walking a loop or ambushers hidden at wall ends / doorways / the authored ambush points near the squad's way that strike when their side is unwatched; some ambushes are coordinated plans of 4-6 (flanks first, then rear + front, ranged ones suppress; their own alive cap 6); a bypassed ambush runs a concealed route on foot to a new spot ahead (spotted on the way it attacks; no concealed route: it stays, then follows the squad as a patrol), an ambush watched all along strikes after 60-90 s, hiding spots hug the wall (0.8 m). Fights start on contact (combat_start ambush) as skirmishes and end straight in exploration. No cold, no intro briefing, no horde; the squad is immortal with infinite ammo by default (Codex.Cheat.Immortal / Codex.Cheat.InfiniteAmmo 0 turn them off). ONE small wave only because the level file must hold a valid wave (CodexTactics.LevelJson.AllFilesParse); it is never played (the fights are skirmishes).",
+  "combat_start": "ambush",
+  "ambush_fight": "skirmish",
+  "susanin_wave": 0,
+  "horde_enabled": false,
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "cold_rate_mult": 0,
+  "intro_dialogue": false,
+  "cheats": {
+    "immortal": true,
+    "infinite_ammo": true
+  },
+  "pressure": {
+    "enabled": true,
+    "interval_sec": 120,
+    "first_event_sec": 30,
+    "group_min": 1,
+    "group_max": 3,
+    "max_alive": 4,
+    "patrol_share": 0.6,
+    "seed": 1101,
+    "types": {
+      "HOUND": 1,
+      "FROSTBITTEN": 1,
+      "MILITARY_ZOMBIE": 1,
+      "CUTTER": 1,
+      "MARKSMAN": 1
+    },
+    "wall_clearance_cm": 250,
+    "min_squad_distance_cm": 2500,
+    "max_squad_distance_cm": 5000,
+    "patrol": {
+      "points": 4,
+      "radius_cm": 1200,
+      "wait_sec": 2
+    },
+    "ambush": {
+      "min_squad_distance_cm": 1400,
+      "max_squad_distance_cm": 3000,
+      "watch_half_angle_deg": 45,
+      "watch_range_cm": 5000,
+      "strike_range_cm": 1800,
+      "hold_strike_min_sec": 60,
+      "hold_strike_max_sec": 90,
+      "spots": {
+        "wall_standoff_cm": 80,
+        "end_inset_cm": 100,
+        "min_wall_length_cm": 150,
+        "joined_gap_cm": 30,
+        "doorway_min_cm": 80,
+        "doorway_max_cm": 600,
+        "authored_bonus": 0.5,
+        "doorway_bonus": 0.25,
+        "merge_cm": 100
+      },
+      "points": [
+        [
+          4800,
+          -4000
+        ],
+        [
+          2750,
+          -2420
+        ],
+        [
+          -3750,
+          -1780
+        ],
+        [
+          2250,
+          120
+        ],
+        [
+          -2000,
+          2220
+        ],
+        [
+          -2700,
+          5020
+        ],
+        [
+          5100,
+          3400
+        ],
+        [
+          4800,
+          5000
+        ]
+      ],
+      "coordinated": {
+        "share": 0.35,
+        "bodies_min": 4,
+        "bodies_max": 6,
+        "max_alive": 6,
+        "min_squad_distance_cm": 1000,
+        "max_squad_distance_cm": 3000,
+        "anchor_ahead_cm": 500,
+        "flank_offset_cm": 1500,
+        "front_offset_cm": 1600,
+        "rear_offset_cm": 1500,
+        "min_separation_cm": 600,
+        "trigger_range_cm": 1800,
+        "assault_min_sec": 1.5,
+        "assault_max_sec": 4,
+        "block_distance_cm": 900,
+        "min_ranged": 1
+      },
+      "relocate": {
+        "enabled": true,
+        "after_sec": 15,
+        "behind_angle_deg": 100,
+        "far_cm": 3500,
+        "min_ahead_cos": 0.2,
+        "route_sample_cm": 100,
+        "max_route_cm": 10000,
+        "run_speed_scale": 1,
+        "no_route_tries": 2,
+        "no_route_patrol": true
+      }
+    },
+    "recycle": {
+      "distance_cm": 6000,
+      "after_sec": 60
+    }
+  },
+  "bot_route": {
+    "name": "combat_lab_loop_01",
+    "comment": "The playtest bot's planned route (Training Ground 'Combat lab', game designer 2026-11-01: every map has a route; docs/design/COMBAT_LAB.md section 7). A loop from the spawn through the lab: tower T_SW, the W_C_4 corner, tower T_NW, the inner corner of lane E, the V2 6 m doorway, the W_E_14 end, tower T_NE, a wall hug at W_G_20, tower T_SE, both lane D corridors, the lane C 2 m doorway, a wall hug at W_B_2 and its west end. 'wall' = a click on the wall face at 'wall' (the formation wall layout), 'climb' = the leader alone climbs the nearest tower ladder and back. ~453 m a lap.",
+    "loop": true,
+    "reach_radius_cm": 250,
+    "stuck_after_sec": 12,
+    "stuck_move_cm": 150,
+    "max_retries": 2,
+    "fight_hold_sec": 20,
+    "fight_cover": {
+      "enabled": true,
+      "search_cm": 1500,
+      "hold_sec": 45,
+      "min_wall_cm": 200,
+      "min_height_cm": 120,
+      "min_threat_cm": 400,
+      "min_facing_cos": 0.5
+    },
+    "action_timeout_sec": 45,
+    "points": [
+      {
+        "at": [
+          -5000,
+          -4500
+        ],
+        "label": "start (spawn)"
+      },
+      {
+        "at": [
+          -4600,
+          -2200
+        ],
+        "label": "tower T_SW",
+        "action": "climb",
+        "hold_sec": 3
+      },
+      {
+        "at": [
+          -4800,
+          -1000
+        ],
+        "label": "W_C_4 west end (corner)"
+      },
+      {
+        "at": [
+          -4600,
+          3800
+        ],
+        "label": "tower T_NW",
+        "action": "climb",
+        "hold_sec": 3
+      },
+      {
+        "at": [
+          -300,
+          3000
+        ],
+        "label": "lane E inner corner"
+      },
+      {
+        "at": [
+          -300,
+          4850
+        ],
+        "label": "lane E north leg"
+      },
+      {
+        "at": [
+          -2100,
+          4850
+        ],
+        "label": "V2 6 m doorway (south)"
+      },
+      {
+        "at": [
+          -2100,
+          5700
+        ],
+        "label": "V2 6 m doorway (north)"
+      },
+      {
+        "at": [
+          700,
+          5650
+        ],
+        "label": "W_E_14 north end (corner)"
+      },
+      {
+        "at": [
+          2200,
+          4840
+        ],
+        "label": "tower T_NE",
+        "action": "climb",
+        "hold_sec": 3
+      },
+      {
+        "at": [
+          4380,
+          3350
+        ],
+        "label": "W_G_20 west face",
+        "action": "wall",
+        "wall": [
+          4780,
+          3350
+        ],
+        "hold_sec": 3
+      },
+      {
+        "at": [
+          4000,
+          1900
+        ],
+        "label": "east of corridor D"
+      },
+      {
+        "at": [
+          4650,
+          -200
+        ],
+        "label": "tower T_SE",
+        "action": "climb",
+        "hold_sec": 3
+      },
+      {
+        "at": [
+          3900,
+          800
+        ],
+        "label": "corridor D wide (east mouth)"
+      },
+      {
+        "at": [
+          700,
+          800
+        ],
+        "label": "corridor D wide (west mouth)"
+      },
+      {
+        "at": [
+          -800,
+          800
+        ],
+        "label": "corridor D narrow (east mouth)"
+      },
+      {
+        "at": [
+          -3800,
+          800
+        ],
+        "label": "corridor D narrow (west mouth)"
+      },
+      {
+        "at": [
+          -1800,
+          -950
+        ],
+        "label": "lane C 2 m doorway (north)"
+      },
+      {
+        "at": [
+          -1800,
+          -2050
+        ],
+        "label": "lane C 2 m doorway (south)"
+      },
+      {
+        "at": [
+          -2750,
+          -2900
+        ],
+        "label": "W_B_2 north face",
+        "action": "wall",
+        "wall": [
+          -2750,
+          -3280
+        ],
+        "hold_sec": 3
+      },
+      {
+        "at": [
+          -4350,
+          -3000
+        ],
+        "label": "W_B_2 west end (corner)"
+      }
+    ]
+  },
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 2,
+      "spawns": [
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 2,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1,
+        "enemy_damage_mult": 1,
+        "enemy_speed_mult": 1,
+        "cold_drain_mult": 1
+      }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD"
+  },
+  "mortar_nests": [
+    {
+      "id": "MORTAR_SQUAD",
+      "comment": "2026-11-09 test nest of the squad near the start: CodexTactics.MortarMan 0 then CodexTactics.MortarFire 0 cursor (a point someone of the squad sees, 30-250 m).",
+      "side": "squad",
+      "pos": [
+        -4600,
+        -5300
+      ],
+      "yaw": 45
+    },
+    {
+      "id": "MORTAR_PMC",
+      "comment": "2026-11-09 test nest of the PMC in the far corner, UNMANNED (the lab smokes stay unshelled): CodexTactics.MortarCrewPmc 1 gives it a commanded PMC crew that shells what its team sees; the squad can also take it.",
+      "side": "pmc",
+      "pos": [
+        4600,
+        4400
+      ],
+      "yaw": 225,
+      "crew": 0
+    }
+  ]
+}

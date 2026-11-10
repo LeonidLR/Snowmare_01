@@ -312,11 +312,15 @@ namespace DepotCampaignStartSmoke
 			const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>();
 			const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
 			Check(State, Campaign && Campaign->GetCarryFor(World) != nullptr, TEXT("the carry is for this map (a restart brings the squad back as it arrived)"));
-			Check(State, Level && Level->Config.LevelId == DepotShort && Level->Config.LevelName.ToString() == TEXT("0.1 Depot") && !Level->Config.bCheatImmortal,
-				FString::Printf(TEXT("the Depot's own level JSON: %s \"%s\", mortal"), Level ? *Level->Config.LevelId : TEXT("none"),
-					Level ? *Level->Config.LevelName.ToString() : TEXT("")));
+			// The Depot's numbers (waves, cheats, environment) are designer-editable in the Training Ground (2026-11-10): the arrival must run
+			// the Depot's OWN level JSON, whatever it holds; the pinned rules are unit-tested (CampaignTest DataFile, SmokeFixtures/depot_rules_fixture.json).
+			Check(State, Level && Level->Config.LevelId == DepotShort && Level->Config.LevelName.ToString() == TEXT("0.1 Depot"),
+				FString::Printf(TEXT("the Depot's own level JSON: %s \"%s\" (%s)"), Level ? *Level->Config.LevelId : TEXT("none"),
+					Level ? *Level->Config.LevelName.ToString() : TEXT(""), Level && Level->Config.bCheatImmortal ? TEXT("immortal") : TEXT("mortal")));
 			const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-			Check(State, Flow && Flow->GetConfig().TotalWaves == 1, FString::Printf(TEXT("... its wave list (%d waves)"), Flow ? Flow->GetConfig().TotalWaves : -1));
+			const int32 WantWaves = Level ? Level->Config.Waves.Num() : -1;
+			Check(State, Flow && WantWaves > 0 && Flow->GetConfig().TotalWaves == WantWaves,
+				FString::Printf(TEXT("... its wave list (%d waves, the Depot's JSON has %d)"), Flow ? Flow->GetConfig().TotalWaves : -1, WantWaves));
 			const float WantFade = CampaignRules::ResolveStartFadeSeconds(Level ? Level->Config.StartFadeSeconds : 0.f, true);
 			Check(State, WantFade > 0.f && FMath::IsNearlyEqual(Exit->GetStartFadeSeconds(), WantFade) && Exit->GetStartTitle() == TEXT("0.1 Depot"),
 				FString::Printf(TEXT("the level starts with a %.1f s fade-in (want %.1f: the arrival default) and the title card \"%s\""), Exit->GetStartFadeSeconds(),
@@ -324,11 +328,15 @@ namespace DepotCampaignStartSmoke
 			Check(State, State.FirstGameTime > CampaignRules::StartHoldSeconds || State.FirstAlpha >= 0.99f,
 				FString::Printf(TEXT("black at the start (alpha %.2f at %.2f s)"), State.FirstAlpha, State.FirstGameTime));
 			Check(State, Campaign && Campaign->FindNextLevel(World) == nullptr, TEXT("the Depot is the campaign's last level"));
-			// Game designer 2026-11-08: a clear sunny day, no weather changes, while the squad trains - not the lake's night snowfall.
+			// Game designer 2026-11-08: a clear sunny day, no weather changes, while the squad trains - not the lake's night snowfall. The Depot's
+			// own "environment" block decides (designer-editable): locked -> its weather / hour, not the handed-over snowy night.
 			const UEnvironmentSubsystem* Environment = UEnvironmentSubsystem::Get(World);
-			Check(State, Environment && Environment->IsLocked() && Environment->GetState().Weather == EWeatherState::Clear
-				&& FMath::IsNearlyEqual(Environment->GetHour(), 12.f, 0.05f),
-				FString::Printf(TEXT("the Depot's locked clear day, not the handed-over snowy night: %s, hour %.2f, %s"),
+			const FEnvironmentLevelSettings* Want = Level ? &Level->Config.Environment : nullptr;
+			const bool bWantLocked = Want && Want->bLocked;
+			Check(State, Environment && Environment->IsLocked() == bWantLocked
+				&& (!bWantLocked || !Want->bHasWeather || Environment->GetState().Weather == Want->Weather)
+				&& (!bWantLocked || !Want->bHasStartHour || FMath::IsNearlyEqual(Environment->GetHour(), Want->StartHour, 0.05f)),
+				FString::Printf(TEXT("the Depot's own environment, not the handed-over snowy night: %s, hour %.2f, %s"),
 					Environment ? *Environment->GetWeatherDisplayName() : TEXT("-"), Environment ? Environment->GetHour() : -1.f,
 					Environment && Environment->IsLocked() ? TEXT("locked") : TEXT("NOT locked")));
 			// "intro_dialogue": false - no MovementTest briefing (neither the window nor its radio line).

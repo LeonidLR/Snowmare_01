@@ -277,7 +277,7 @@ bool FSnowCoverLevelJsonTest::RunTest(const FString&)
 
 	// The shipped Demo 01 lake: a snowy night, 0.6.
 	FString Json;
-	const FString Path = FPaths::ProjectContentDir() / TEXT("Data/LevelJson/L_Demo01_A_FrozenLake.json");
+	const FString Path = FPaths::ProjectContentDir() / TEXT("Data/LevelJson/SmokeFixtures/lake_rules_fixture.json") /* pinned copy: the live lake is designer-editable (Training Ground) */;
 	if (TestTrue(TEXT("lake level JSON readable"), FFileHelper::LoadFileToString(Json, *Path)))
 	{
 		FLevelCombatConfig Level;

@@ -308,7 +308,8 @@ bool FFirefightOnlyTriggerTest::RunTest(const FString&)
 	TestFalse(TEXT("A dialogue / cutscene AI pause holds it"), IsCountdownRunning(ECodexGamePhase::Exploration, ECodexCombatMode::None, true));
 	TestFalse(TEXT("Preparation holds it"), IsCountdownRunning(ECodexGamePhase::Preparation, ECodexCombatMode::None, false));
 
-	// The shipped levels (2026-11-09): the horde ON at the Depot (threshold 10), OFF at the Lake and the PMC arenas.
+	// The Depot's rules (2026-11-09: the horde ON, threshold 10) on the pinned copy SmokeFixtures/depot_rules_fixture.json. The live level
+	// files are designer-editable in the Training Ground (2026-11-10): they only have to parse and resolve to their own keys.
 	auto Load = [this](const TCHAR* File, FLevelCombatConfig& Out)
 	{
 		FString Json;
@@ -319,18 +320,24 @@ bool FFirefightOnlyTriggerTest::RunTest(const FString&)
 		return bOk;
 	};
 	FLevelCombatConfig Depot;
-	if (Load(TEXT("L_Gen_Depot_1.json"), Depot))
+	if (Load(TEXT("SmokeFixtures/depot_rules_fixture.json"), Depot))
 	{
 		const FHordeConfig Resolved = ResolveForLevel(FHordeConfig(), Depot.bHordeEnabled, Depot.HordeOverrideJson, Depot.HordeAfterFirefights);
-		TestTrue(TEXT("Depot: the horde on"), Resolved.bEnabled);
-		TestEqual(TEXT("Depot: after 10 firefights"), Resolved.AfterFirefights, 10);
+		TestTrue(TEXT("Depot (fixture): the horde on"), Resolved.bEnabled);
+		TestEqual(TEXT("Depot (fixture): after 10 firefights"), Resolved.AfterFirefights, 10);
 	}
-	for (const TCHAR* File : { TEXT("L_Demo01_A_FrozenLake.json"), TEXT("L_PmcArena.json"), TEXT("L_PmcArenaDepot.json") })
+	for (const TCHAR* File : { TEXT("L_Gen_Depot_1.json"), TEXT("L_Demo01_A_FrozenLake.json"), TEXT("L_PmcArena.json"), TEXT("L_PmcArenaDepot.json") })
 	{
 		FLevelCombatConfig Level;
 		if (Load(File, Level))
 		{
-			TestFalse(FString::Printf(TEXT("%s: no horde"), File), Level.bHordeEnabled);
+			const FHordeConfig Resolved = ResolveForLevel(FHordeConfig(), Level.bHordeEnabled, Level.HordeOverrideJson, Level.HordeAfterFirefights);
+			TestTrue(FString::Printf(TEXT("%s: horde_enabled false keeps the horde off"), File), Level.bHordeEnabled || !Resolved.bEnabled);
+			if (Level.HordeOverrideJson.IsEmpty())
+			{
+				TestEqual(FString::Printf(TEXT("%s: the threshold is its own horde_after_firefights"), File), Resolved.AfterFirefights,
+					FMath::Max(1, Level.HordeAfterFirefights));
+			}
 		}
 	}
 	return true;

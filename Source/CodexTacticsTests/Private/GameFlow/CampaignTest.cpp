@@ -107,8 +107,10 @@ bool FCampaignDataFileTest::RunTest(const FString&)
 	}
 	// The Depot as a campaign arrival: the start fades in (no own "start_fade_seconds" -> the arrival default), no tutorial / intro briefing,
 	// it is the last level (no gate exit to a next one), and its stage loadout never replaces the carried kit (LoadoutRules::ShouldApplyStageLoadout).
+	// The live L_Gen_Depot_1.json is designer-editable in the Training Ground (2026-11-10): it only has to load (above); the rules are
+	// asserted on the pinned copy SmokeFixtures/depot_rules_fixture.json.
 	FLevelCombatConfig Depot;
-	TestTrue(TEXT("the Depot's level JSON loads"), LevelJsonRules::LoadLevel(TEXT("L_Gen_Depot_1.json"), Depot, Error));
+	TestTrue(TEXT("the Depot's fixture loads"), LevelJsonRules::LoadLevel(TEXT("SmokeFixtures/depot_rules_fixture.json"), Depot, Error));
 	TestTrue(TEXT("the Depot: no tutorial, no intro briefing, no gate exit, one wave"), !Depot.Demo.bDemo && !Depot.Demo.bTutorial && !Depot.bIntroDialogue
 		&& !Depot.GateExit.bEnabled && Depot.Waves.Num() == 1);
 	TestEqual(TEXT("the Depot's campaign arrival fades in over the arrival default"), CampaignRules::ResolveStartFadeSeconds(Depot.StartFadeSeconds, true),
