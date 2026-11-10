@@ -419,3 +419,13 @@ The shared fixtures are written first by Claude: `Content/Data/LevelGen/props/fi
    *Default:* allowed, limited by `explosive.min_gap_cm` 400 between explosives, so chains happen only inside a cluster.
 6. **Freezing.**
    *Default:* `L_Gen_Depot_1` (campaign 0.1) gets `frozen: true` once you sign off its props. Further re-rolls on it need an explicit unfreeze in the TG.
+### 6.1 The designer's answers (2026-11-10)
+
+1. Existing layout covers stay as cover geometry; props are added on top and avoid them. Look of the props (greybox): **barrels are
+   cylinders**, **crates are coloured blue and red** (the meaning of the two colours - pending, see the chat).
+2. A deleted generated object keeps a keep-out disk after a re-roll until «Сбросить правку» - **yes**.
+3. Mines on mandatory-route doorways forbidden by default, opt-in per layer - **agreed**.
+4. Visible marker within 3 m, a shot detonates - **agreed, and DISARMING must exist**: add task C7b (a disarm action on a mine /
+   mined crate / doorway tripwire - who can disarm, time, failure chance from data; inert in `MinesInert`), after C7.
+5. Explosive chains allowed, explosives >= 400 cm apart - **agreed**.
+6. (the 6th question was cut off by the output limit - re-ask.)
