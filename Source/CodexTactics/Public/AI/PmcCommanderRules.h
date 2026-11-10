@@ -45,6 +45,12 @@ enum class EPmcOrder : uint8
 	 * when the attackers stand on it or he strayed out of its overwatch.
 	 */
 	Objective,
+	/**
+	 * The RPG gunner's rocket (the game designer 2026-11-09: "an RPG suppress / breach option when it has an RPG gunner"): draw the launcher
+	 * and fire one rocket at the best rocket target the team sees (a cluster, a man in cover, a group to suppress - LauncherTacticsRules),
+	 * then back to the rifle (AOperativeCharacter::OrderLauncherStrike).
+	 */
+	RpgStrike,
 	Count
 };
 
@@ -157,6 +163,8 @@ struct CODEXTACTICS_API FPmcWeights
 	float Reload = 0.8f;
 	float Sidearm = 1.2f;
 	float Crouch = 0.5f;
+	/** "rpg_strike" (2026-11-09): the RPG gunner's ordered rocket - x min(1, the launcher rule's best target score). */
+	float RpgStrike = 1.1f;
 	/** A mate below this health fraction is a patient. */
 	float HealBelow = 0.45f;
 	/** Below this health fraction the fighter breaks contact. */
@@ -319,6 +327,10 @@ struct CODEXTACTICS_API FPmcFighterView
 	float WoundedMateHealthFrac = 1.f;
 	/** The round's objective (the arena, task #53; inactive elsewhere). */
 	FPmcObjectiveView Objective;
+	/** He carries a launcher with rockets left (the squad's RPG gunner, 2026-11-09). */
+	bool bHasLauncher = false;
+	/** The launcher rule's best target score among the targets his team sees (ordered_threshold, no veto; 0: none). */
+	float LauncherScore = 0.f;
 };
 
 /** The squad as a whole. */
@@ -335,6 +347,8 @@ struct CODEXTACTICS_API FPmcSquadView
 	int32 MatesFlanking = 0;
 	int32 MatesAdvancing = 0;
 	int32 MatesHealing = 0;
+	/** Mates running an RpgStrike (one rocket at a time per squad). */
+	int32 MatesRpgStriking = 0;
 	/** A shot was fired between this team and an enemy in this fight (an ambush holding its fire is blown). */
 	bool bShotsExchanged = false;
 	/** Seconds since the team's first contact of the fight (0 before it). */

@@ -47,6 +47,10 @@ struct CODEXTACTICS_API FSuppressionStats
 	int32 ZonesOpened = 0;
 	/** Rounds fired under a deliberate "suppress target" intent (the combat lab's suppressing ambushers, 2026-11-01). */
 	int32 DeliberateRounds = 0;
+	/** RPG-7 rocket bursts reported (ReportLauncherBlast) / units they held Suppressed / Pinned (2026-11-09). */
+	int32 LauncherBlasts = 0;
+	int32 LauncherSuppressed = 0;
+	int32 LauncherPinned = 0;
 };
 
 /** A unit's tier changed: Unit, old tier, new tier. */
@@ -94,6 +98,8 @@ public:
 	static ESuppressionTier GetActingTierOf(const AActor* Unit);
 	/** ReportExplosion on the world of WorldContext (GameplayEvents::RaiseExplosion calls it for every blast). */
 	static void ReportExplosionIn(const UObject* WorldContext, const FVector& Location, float BlastRadiusCm);
+	/** ReportLauncherBlast on the world of WorldContext (AProjectileActor calls it for every RPG-7 rocket's burst). */
+	static int32 ReportLauncherBlastIn(const UObject* WorldContext, const FVector& Location, AActor* Shooter);
 
 	/**
 	 * Applies one round to every unit of the side it flies at that it hit, passed near or struck the cover of; a squad round also
@@ -106,6 +112,15 @@ public:
 	 * burst of suppression (SuppressionRules::ExplosionPressure / AddBurst: decays faster than gunfire).
 	 */
 	void ReportExplosion(const FVector& Location, float BlastRadiusCm);
+
+	/**
+	 * An RPG-7 rocket burst at Location (a hit or a near miss; the game designer 2026-11-09: "one RPG salvo is enough to make any squad duck"):
+	 * every live enemy of Shooter's side within launcher.radius_cm - monsters, the player's squad when a hostile fighter fired, the PMC
+	 * fighters of other teams - is held Suppressed / Pinned for seconds (SuppressionRules::LauncherHold / AddHold), on top of the generic
+	 * blast burst; an operative among them also takes the shooter's position as the flash he is under fire from (the manoeuvre: cover /
+	 * sidestep / prone). The shooter's own side is never suppressed. Returns how many units it held.
+	 */
+	int32 ReportLauncherBlast(const FVector& Location, AActor* Shooter);
 
 	/**
 	 * Dense fire scatters melee packs (user decision 2026-10-26): the open fear zone nearest to Feet that Feet is within (its radius +

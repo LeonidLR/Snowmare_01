@@ -4,6 +4,7 @@
 #include "Characters/OperativeCharacter.h"
 
 #include "CodexTactics.h"
+#include "Animation/Skeleton.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Combat/SniperRules.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -212,6 +213,13 @@ void AOperativeCharacter::ApplyWeaponVisual()
 		if (CurrentWeapon->bOverrideHandMeshTransform)
 		{
 			Transform = CurrentWeapon->HandMeshAttachTransform;
+		}
+		// A body with its own hand frame (the PMC fighters' UE5 skeleton, 2026-11-09): its calibrated transform.
+		const USkeletalMesh* Body = GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr;
+		const USkeleton* BodySkeleton = Body ? Body->GetSkeleton() : nullptr;
+		if (const FTransform* Own = BodySkeleton ? CurrentWeapon->HandMeshAttachBySkeleton.Find(BodySkeleton->GetFName()) : nullptr)
+		{
+			Transform = *Own;
 		}
 	}
 	if (WeaponSkeletalMesh && WeaponSkeletalMesh->GetSkeletalMeshAsset() != SkeletalAsset)

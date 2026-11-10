@@ -63,6 +63,14 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual", meta = (EditCondition = "bOverrideHandMeshTransform"))
 	FTransform HandMeshAttachTransform;
 
+	/**
+	 * A body skeleton's own HandMesh transform (2026-11-09, the RPG-7 on the PMC fighters' UE5 body: its hand_r frame differs from the
+	 * operatives' UE4 one): skeleton asset name -> the transform on hand_r, used instead of HandMeshAttachTransform for that body.
+	 * weapons_tuning.json "visual.attach_by_skeleton" {"<skeleton>": {"attach_location", "attach_rotation_pyr", "attach_scale"}}.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
+	TMap<FName, FTransform> HandMeshAttachBySkeleton;
+
 	/** Muzzle on HandMesh (its own space) when the mesh has no "Muzzle" socket; zero = the operative's MuzzleOffset. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Weapon|Visual")
 	FVector HandMeshMuzzleOffset = FVector::ZeroVector;

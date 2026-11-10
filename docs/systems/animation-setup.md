@@ -481,8 +481,15 @@ switch from the M16) -> `Saved/Screenshots/PistolD/`.
   builds a transient UE4 -> UE4 retargeter (the M4 pack's `IK_UE4_Mannequin` both sides, the template's op stack, "Blend to Source" off; never saved) and
   retargets the 35 clips the set lists onto `SK_Post_Apo_Survivor_a` -> `/Game/Characters/Animations/Launcher/Male` and `SK_Female_soldier` -> `.../Female`,
   re-keys each copy (ACL kept): 70 copies, 12.6 MB (the pack's whole Animations folder 7.2 MB). In the game all three operatives' bodies are on
-  `UE4_Mannequin_Skeleton` (the Medic-Sapper too), so they play the Male copies; the PMC operator (UE5 hierarchy) gets NO launcher set (`"pack_playback":
-  false`). Measured per clip and body against the pack (`Saved/Logs/setup_launcher_animation.json`): posture (head / hands vs pelvis) 7.6-10.8 cm male,
+  `UE4_Mannequin_Skeleton` (the Medic-Sapper too), so they play the Male copies. The PMC operator (UE5 hierarchy) had NO launcher set (`"pack_playback":
+  false`) until 2026-11-09 (`feat/rpg-ai-pmc`, the designer: "PMC fighters must be able to use the RPG"): the same script, body "Pmc"
+  (`CODEX_LAUNCHER_BODIES=Pmc`), retargets the 35 clips UE4 -> UE5 (source `IK_UE4_Mannequin`, target the M4 pack's `IK_Mannequin`, the op stack of
+  `RTG_UE4Manny_UE5Manny`, transient) onto `SKM_PmcOperator` -> `/Game/Characters/Animations/Launcher/Pmc` (35 copies, 11 MB; skeleton
+  `SK_PmcOperator_Skeleton`, mapped in "retargeted"); measured against the pack: posture 6.6-8.9 cm (the deaths 10-14), the left hand in the
+  launcher's frame 8.0-9.4 cm on the pack's socket (the falls 28-29), aim 8.1 deg on the pack's socket (the UE5 hand frame) - the tube's own
+  attach for this skeleton (`rpg7.visual.attach_by_skeleton.SK_PmcOperator_Skeleton`, `calibrate_launcher_grip.py`: [-1.92, 6.17, 15.40] /
+  [10.37, 115.68, 23.74]) brings the left hand <= 5.0 cm off its grip and the shoulder 9.3 cm off the tube's axis (pack 9.6), the tube along the pack's
+  direction; lengths unchanged (Reload / Sit_Reload 2.333 s, Shot / Sit_Shot 0.667 s). Measured per clip and body against the pack (`Saved/Logs/setup_launcher_animation.json`): posture (head / hands vs pelvis) 7.6-10.8 cm male,
   8.2-31 cm female; lengths / frames unchanged; in-place loops drift 0.0-0.1 cm; the tube on the pack's socket ~9.4 deg off on the operatives' hand_r ->
   the model's attach is calibrated per body (`calibrate_launcher_grip.py`, weapons.md "The RPG-7"): then the left hand <= 3.7 cm off its grip, the
   shoulder 8.7 cm off the tube's axis (pack 9.6).
@@ -510,9 +517,11 @@ switch from the M16) -> `Saved/Screenshots/PistolD/`.
 - **Measured foot slide** (RpgAnimSmoke, Commander, median planted-ball drift on the steady frames): walk 34 cm/s = 19 % of the speed, sprint 16 cm/s = 2 %
   (limit 20 %).
 - **Firing:** `PlayShotgunFire` -> `PlayLauncherShot`: the Shot / Sit_Shot clip natively (no montage: the layer keeps the legs and the aim offset) from
-  frame 0 - the pack's kick starts on frame 0, so the rocket leaves at the trigger. The reload (4.5 s) = the Reload / Sit_Reload clip (2.333 s) after
-  the shot's follow-through, its rate fitted to the rest of the reload time (`LauncherReloadClipTime`, x0.6); the rocket shows on the tube again
-  from the clip's insertion moment `reload_insert_s` 1.333 s (the left hand nearest the tube's front, measured) = 63 % of the reload
+  frame 0 - the pack's kick starts on frame 0, so the rocket leaves at the trigger. The reload = the Reload / Sit_Reload clip (both 2.333 s) AT RATE 1
+  (the designer 2026-11-09: `reload_time` 2.333 = the clip): the character starts the reload when the Shot clip's follow-through (0.667 s) is over
+  (`AOperativeCharacter::IsLauncherReloadPending` / `UpdateLauncherReloadStart`), so `LauncherReloadClipTime`'s lead-in is 0 and its rate 1 (was the
+  4.5 s reload from the launch, the clip fitted x0.6; RpgAnimSmoke checks the rate); the rocket shows on the tube again
+  from the clip's insertion moment `reload_insert_s` 1.333 s (the left hand nearest the tube's front, measured) = 57 % of the 2.333 s reload (was 63 % of 4.5 s)
   (`LauncherInsertFraction` -> `AOperativeCharacter::LauncherRoundInsertFraction`, `WeaponAnimLayerRules::LauncherRoundVisible`). Shot / reload take
   spine_01 and below (their torso re-expressed on the set's pelvis); the legs keep walking.
 - **Gates:** as the other sets - off in cover, prone (NO prone clips in the pack: prone shows the ABP's prone rifle pose with the tube in the hand; the

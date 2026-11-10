@@ -4,6 +4,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/ProjectileSubsystem.h"
+#include "Combat/SuppressionSubsystem.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
@@ -228,6 +229,11 @@ void AProjectileActor::Finish(EProjectileEnd End, const FVector& Location, AActo
 		Spec.StruckActor = Struck;
 		Impact.Blast = Explosions::Detonate(World, Spec);
 		Impact.bExploded = true;
+		// The RPG-7 (the game designer 2026-11-09): "one RPG salvo is enough to make any squad duck" - a hit or a near miss.
+		if (Shot.bLauncherSuppression)
+		{
+			Impact.SuppressedUnits = USuppressionSubsystem::ReportLauncherBlastIn(World, Centre, Shot.Instigator.Get());
+		}
 	}
 	ReceiveFinished(Location, Impact.bExploded);
 	Park();

@@ -164,6 +164,18 @@ struct CODEXTACTICS_API FSuppressionConfig
 	/** "explosion.decay_per_second": the burst decays this fast (gunfire's level: 0.1 / 0.4 per second). */
 	float ExplosionDecayPerSecond = 0.6f;
 
+	// --- The RPG-7's blast (the game designer 2026-11-09: "one RPG salvo is enough to make any squad duck") ---
+	/** "launcher.radius_cm": every enemy of the shooter within this of a rocket's burst (a hit or a near miss) is suppressed. */
+	float LauncherRadiusCm = 900.f;
+	/** "launcher.pinned_radius_cm": within this he is PINNED (no fire at all, he ducks / takes cover), beyond it up to the radius Suppressed. */
+	float LauncherPinnedRadiusCm = 600.f;
+	/** "launcher.pinned_seconds": how long the pin holds at the burst point (whatever the level's decay). */
+	float LauncherPinnedSeconds = 3.f;
+	/** "launcher.suppressed_seconds": how long he stays at least Suppressed at the burst point (blind fire, no peek). */
+	float LauncherSuppressedSeconds = 5.f;
+	/** "launcher.edge_factor": both holds x this at the radius' edge (linear from 1 at the burst point). */
+	float LauncherEdgeFactor = 0.5f;
+
 	// --- Dense fire scatters melee packs (user decision 2026-10-26; the burning-barrel fear zone, AEnemyCharacter::FindNearestFireZone) ---
 	/** "zone.cell_cm": the squad's rounds are counted per fire cell - a round ending within this of a cell's centre counts to it. */
 	float ZoneCellCm = 400.f;
@@ -208,6 +220,9 @@ struct CODEXTACTICS_API FSuppressionState
 	float Burst = 0.f;
 	/** Seconds since the last round near him. */
 	float QuietTime = 0.f;
+	/** The RPG-7 blast's holds (SuppressionRules::AddHold): at least Pinned / Suppressed while these run, whatever the level. */
+	float HoldPinned = 0.f;
+	float HoldSuppressed = 0.f;
 	ESuppressionTier Tier = ESuppressionTier::None;
 };
 
@@ -269,6 +284,18 @@ namespace SuppressionRules
 	CODEXTACTICS_API float ExplosionPressure(const FSuppressionConfig& Config, float BlastRadiusCm, float DistanceCm);
 	/** Adds a burst (capped at ExplosionMaxBurst; the stronger of the two when one is still running), re-resolves the tier. */
 	CODEXTACTICS_API void AddBurst(const FSuppressionConfig& Config, FSuppressionState& State, float Amount);
+
+	// --- The RPG-7's blast (the game designer 2026-11-09) ---
+
+	/**
+	 * The holds a unit DistanceCm from a rocket's burst gets: within launcher.pinned_radius_cm pinned for launcher.pinned_seconds, within
+	 * launcher.radius_cm suppressed for launcher.suppressed_seconds, both x lerp(1, launcher.edge_factor, distance / radius); 0 / 0 beyond.
+	 */
+	CODEXTACTICS_API void LauncherHold(const FSuppressionConfig& Config, float DistanceCm, float& OutPinnedSeconds, float& OutSuppressedSeconds);
+	/** Adds the holds (the longer of the running one and the new one), re-resolves the tier. */
+	CODEXTACTICS_API void AddHold(const FSuppressionConfig& Config, FSuppressionState& State, float PinnedSeconds, float SuppressedSeconds);
+	/** The tier from the level (hysteresis) raised by the holds: Pinned while HoldPinned runs, at least Suppressed while HoldSuppressed runs. */
+	CODEXTACTICS_API ESuppressionTier ResolveStateTier(const FSuppressionConfig& Config, const FSuppressionState& State);
 
 	// --- Dense fire scatters melee packs (user decision 2026-10-26) ---
 

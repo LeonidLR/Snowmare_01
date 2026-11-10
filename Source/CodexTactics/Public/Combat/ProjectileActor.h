@@ -46,6 +46,11 @@ struct CODEXTACTICS_API FProjectileLaunch
 	UStaticMesh* VisualMesh = nullptr;
 	FTransform VisualTransform = FTransform::Identity;
 	UNiagaraSystem* TrailFx = nullptr;
+	/**
+	 * The RPG-7's rocket (2026-11-09): its burst - a hit or a near miss - holds every enemy of the shooter round it Suppressed / Pinned
+	 * (USuppressionSubsystem::ReportLauncherBlast, suppression.json "launcher.*").
+	 */
+	bool bLauncherSuppression = false;
 };
 
 /** How a flight ended. */
@@ -73,6 +78,8 @@ struct CODEXTACTICS_API FProjectileImpact
 	FExplosionResult Blast;
 	bool bExploded = false;
 	FString SourceName;
+	/** Units the burst held Suppressed / Pinned (a launcher rocket only; FProjectileLaunch::bLauncherSuppression). */
+	int32 SuppressedUnits = 0;
 };
 
 /**

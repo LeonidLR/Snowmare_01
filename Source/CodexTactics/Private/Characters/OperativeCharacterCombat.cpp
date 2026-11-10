@@ -589,6 +589,16 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	// The sidearm switch (SidearmRules, 2026-11-08): back to the primary when the threat is gone; the pistol instead of an empty primary's
 	// reload when an enemy is close.
 	UpdateSidearmReturn(DeltaTime);
+	// The RPG-7 drawn by the rule (2026-11-09, OperativeCharacterLauncherAI.cpp): an enemy inside its minimum range -> the rifle at once.
+	if (!bRaging && UpdateLauncherReturn(DeltaTime))
+	{
+		return TEXT("launcher: back to the rifle (enemy close)");
+	}
+	UpdateLauncherReloadStart(); // the tube's reload after the shot's follow-through
+	if (bLauncherReloadPending)
+	{
+		return TEXT("launcher: the shot's follow-through");
+	}
 	if (bIsReloading && !bRaging && TryDrawSidearm())
 	{
 		return TEXT("sidearm drawn");
@@ -740,6 +750,13 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	else
 	{
 		Shot = FindShootTarget(DeltaTime, bAutoTargets);
+	}
+	// Who fires the RPG-7 (the game designer 2026-11-09, LauncherTacticsRules): a cluster / a man in cover / a group to suppress draws it -
+	// also beyond the rifle's reach (no rifle target then); a lone exposed man keeps the rifle; the player's pick and ordered attacks win.
+	if (const TCHAR* LauncherStep = UpdateLauncherChoice(DeltaTime, Shot, bAutoFire))
+	{
+		OutTarget = Shot.Enemy;
+		return LauncherStep;
 	}
 	AActor* Target = Shot.Enemy;
 	OutTarget = Target;

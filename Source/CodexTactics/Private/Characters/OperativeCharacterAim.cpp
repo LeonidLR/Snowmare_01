@@ -243,7 +243,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// The sniper clips aim straight along the body (measured: the pack's Offset_F holds the rifle on the mesh forward axis).
 	if (bAlignBarrelWithTarget && !IsSniperWeaponEquipped() && Anim && Anim->bIsAiming && WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
 	{
-		const FVector Barrel = WeaponMesh->GetComponentTransform().TransformVectorNoScale(MuzzleOffset.GetSafeNormal());
+		const FVector Barrel = WeaponMesh->GetComponentTransform().TransformVectorNoScale(GetBarrelAxisOnModel());
 		if (FMath::Abs(Barrel.Z) < 0.7f) // roughly level, i.e. really aimed
 		{
 			// The pose's own barrel yaw: the 2D aim offset's twist (in these bones since the last evaluation, with the AimYaw
@@ -350,6 +350,18 @@ bool AOperativeCharacter::GetUnderFireThreat(AOperativeCharacter*& OutShooter, F
 		&& UnderFireRules::IsThreatActive(GetWorld()->GetTimeSeconds(), UnderFireTime, UnderFireRules::GetConfig().MemorySeconds);
 }
 
+FVector AOperativeCharacter::GetBarrelAxisOnModel() const
+{
+	// The launcher's own model frame (the pack's: muzzle +Y, 2026-11-09, feat/rpg-ai-pmc): its muzzle_offset IS the bore axis. The Blueprint's
+	// MuzzleOffset belongs to the rifle stand-in - on the tube it pointed up, so a live pose read "not aimed" (180 deg) and the RPG never fired
+	// from the auto fire once the body's pose was evaluated (RpgPmcSmoke).
+	if (IsLauncherEquipped() && CurrentWeapon && !CurrentWeapon->HandMeshMuzzleOffset.IsNearlyZero())
+	{
+		return CurrentWeapon->HandMeshMuzzleOffset.GetSafeNormal();
+	}
+	return MuzzleOffset.GetSafeNormal();
+}
+
 float AOperativeCharacter::GetPoseAimResidualDeg(const FVector& TargetLocation) const
 {
 	// The real barrel when the rifle is out and level (the pose as animated, the 2D aim offset's twist included): the shot
@@ -369,7 +381,7 @@ float AOperativeCharacter::GetPoseAimResidualDeg(const FVector& TargetLocation) 
 		|| Body->WasRecentlyRendered(0.25f)); // headless (not rendered) the bones keep a stale pose
 	if (bPoseLive && WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible() && UsesAmmo())
 	{
-		const FVector Barrel = WeaponMesh->GetComponentTransform().TransformVectorNoScale(MuzzleOffset.GetSafeNormal());
+		const FVector Barrel = WeaponMesh->GetComponentTransform().TransformVectorNoScale(GetBarrelAxisOnModel());
 		if (Barrel.Size2D() < 0.3f)
 		{
 			return 180.f; // the rifle points up / down (a clip in between): not aimed at anything

@@ -87,6 +87,7 @@ namespace PmcCommanderRules
 		case EPmcOrder::Sidearm: return TEXT("Sidearm");
 		case EPmcOrder::Crouch: return TEXT("Crouch");
 		case EPmcOrder::Objective: return TEXT("Objective");
+		case EPmcOrder::RpgStrike: return TEXT("RpgStrike");
 		default: return TEXT("?");
 		}
 	}
@@ -207,6 +208,11 @@ namespace PmcCommanderRules
 			const float Return = Step(!O.bEnemyOnPoint && O.DistanceCm > OverwatchCm) * 0.7f;
 			return FMath::Max(W.Objective, 0.f) * FMath::Max(Retake, Return) * F.HealthFrac;
 		}
+		case EPmcOrder::RpgStrike:
+			// The squad's RPG gunner (2026-11-09): a rocket target the team sees (the shared launcher rule's score, capped at 1) - worth more
+			// while a mate moves (the rocket makes them duck), one rocket at a time per squad.
+			return FMath::Max(W.RpgStrike, 0.f) * Step(F.bHasLauncher) * Clamp01(F.LauncherScore) * (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.85f)
+				* (S.MatesRpgStriking == 0 ? 1.f : 0.2f);
 		default:
 			return 0.f;
 		}
@@ -421,6 +427,7 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("reload"), Out.Reload);
 		ReadNumber(Json, TEXT("sidearm"), Out.Sidearm);
 		ReadNumber(Json, TEXT("crouch"), Out.Crouch);
+		ReadNumber(Json, TEXT("rpg_strike"), Out.RpgStrike);
 		ReadNumber(Json, TEXT("heal_below"), Out.HealBelow);
 		ReadNumber(Json, TEXT("fall_back_below"), Out.FallBackBelow);
 		ReadNumber(Json, TEXT("suppress_ammo_min"), Out.SuppressAmmoMin);

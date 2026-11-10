@@ -1307,6 +1307,7 @@ namespace PmcArena
 		Json->SetNumberField(TEXT("stuck_events"), Stats.StuckEvents);
 		Json->SetNumberField(TEXT("orders"), Stats.OrdersIssued);
 		Json->SetNumberField(TEXT("objective_moves"), Stats.ObjectiveMoves);
+		Json->SetNumberField(TEXT("rpg_strikes"), Stats.RpgStrikes);
 		return Json;
 	}
 

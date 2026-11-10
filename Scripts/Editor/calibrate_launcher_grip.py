@@ -25,6 +25,9 @@ BODIES = {
                                     "/Game/Characters/Animations/Launcher/Male/Anim_Set_02_Idle_01"),
     "female (Medic-Sapper)": ("/Game/Characters/Operatives/Optimized/Female_Soldier/SK_Female_Soldier_1slot",
                               "/Game/Characters/Animations/Launcher/Female/Anim_Set_02_Idle_01"),
+    # 2026-11-09 (feat/rpg-ai-pmc): the PMC fighters' UE5 body -> weapons_tuning.json "rpg7.visual.attach_by_skeleton.SK_PmcOperator_Skeleton"
+    "pmc (PMC operator)": ("/Game/Characters/Enemies/PMC/Operator/SKM_PmcOperator",
+                           "/Game/Characters/Animations/Launcher/Pmc/Anim_Set_02_Idle_01"),
 }
 CHECK_CLIPS = ("Anim_Set_02_Walk", "Anim_Set_02_Run", "Anim_Set_02_Sit_Idle", "Anim_Set_02_Shot", "Anim_Set_02_Reload")
 log = []

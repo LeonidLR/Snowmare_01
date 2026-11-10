@@ -169,6 +169,7 @@ bool AOperativeCharacter::SwitchToWeaponById(const FString& WeaponId)
 	}
 	CurrentWeapon = *Found;
 	bSidearmDrawnByRule = false; // any switch ends the rule's draw (TryDrawSidearm sets it again after its own switch)
+	bLauncherDrawnByRule = false; // the same for the launcher rule (UpdateLauncherChoice sets it again after its own switch)
 	SidearmNoTargetSeconds = 0.f;
 	FWeaponAmmoState Ammo = AmmoInventory.FindRef(WeaponId);
 	if (WeaponId == TEXT("grenade"))

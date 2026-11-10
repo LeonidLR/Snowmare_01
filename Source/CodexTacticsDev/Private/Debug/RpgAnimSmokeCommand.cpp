@@ -86,6 +86,9 @@ namespace RpgAnimSmoke
 		float RoundBackAt = -1.f;
 		float ReloadMaxWeight = 0.f;
 		FString ReloadClip;
+		/** The reload clip's play rate seen (clip time / reload time elapsed; the designer 2026-11-09: rate 1) and its length. */
+		float ReloadClipRate = 0.f;
+		float ReloadClipLength = 0.f;
 		FString ShotClip;
 		int32 HitClipsBefore = 0;
 		bool bFired = false;
@@ -569,6 +572,12 @@ namespace RpgAnimSmoke
 				{
 					State.ReloadMaxWeight = FMath::Max(State.ReloadMaxWeight, Anim->GetLauncherActionWeight());
 					State.ReloadClip = ClipName(Anim->GetLauncherActionClip());
+					const float Elapsed = Progress * (Hero->CurrentWeapon ? Hero->CurrentWeapon->Stats.Ammo.ReloadSeconds : 1.f);
+					if (Elapsed > 0.5f && Anim->GetLauncherActionClip())
+					{
+						State.ReloadClipRate = Anim->GetLauncherActionTime() / Elapsed;
+						State.ReloadClipLength = Anim->GetLauncherActionClip()->GetPlayLength();
+					}
 				}
 				if (Progress > 0.05f && Progress < Hero->LauncherRoundInsertFraction - 0.05f && !Hero->IsLauncherRoundVisible())
 				{
@@ -581,13 +590,18 @@ namespace RpgAnimSmoke
 				}
 				return State.StageTime < 9.f ? true : (Check(State, false, TEXT("the reload ended in time")), Finish(State, false));
 			}
-			if (State.StageTime < 0.5f)
+			if (State.StageTime < 0.5f || (Hero->IsLauncherReloadPending() && State.StageTime < 4.f))
 			{
-				return true; // the reload starts at the launch
+				return true; // the reload starts after the shot's follow-through (the designer 2026-11-09: the Reload clip at rate 1)
 			}
 			Check(State, State.ReloadMaxWeight > 0.9f && State.ReloadClip.Contains(bCrouched ? TEXT("Sit_Reload") : TEXT("Anim_Set_02_Reload")),
 				FString::Printf(TEXT("%s: the pack's reload clip on the body (%s, weight %.2f), fitted to the %.1f s reload"), bCrouched ? TEXT("10") : TEXT("8"), *State.ReloadClip,
 					State.ReloadMaxWeight, Hero->CurrentWeapon ? Hero->CurrentWeapon->Stats.Ammo.ReloadSeconds : 0.f));
+			Check(State, FMath::Abs(State.ReloadClipRate - 1.f) < 0.08f && Hero->CurrentWeapon
+					&& FMath::Abs(Hero->CurrentWeapon->Stats.Ammo.ReloadSeconds - State.ReloadClipLength) < 0.05f,
+				FString::Printf(TEXT("%s: the reload clip plays at rate %.2f (the designer: 1), reload_time %.3f s vs the clip %.3f s"), bCrouched ? TEXT("10") : TEXT("8"),
+					State.ReloadClipRate, Hero->CurrentWeapon ? Hero->CurrentWeapon->Stats.Ammo.ReloadSeconds : 0.f, State.ReloadClipLength));
+			State.ReloadClipRate = 0.f;
 			Check(State, State.bRoundHiddenEarly && State.bRoundBackBeforeEnd && Hero->IsLauncherRoundVisible() && Hero->CurrentClip == 1,
 				FString::Printf(TEXT("%s: the rocket stays off the tube until the clip pushes it in (back at %.0f %% of the reload; the clip's insertion %.0f %%), loaded after"),
 					bCrouched ? TEXT("10") : TEXT("8"), State.RoundBackAt * 100.f, Hero->LauncherRoundInsertFraction * 100.f));

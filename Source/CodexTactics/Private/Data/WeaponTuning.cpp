@@ -200,6 +200,36 @@ namespace WeaponTuning
 			Weapon.HandMeshAttachTransform = FTransform(FRotator(Rotation.X, Rotation.Y, Rotation.Z), Location, Scale);
 			bChanged = true;
 		}
+		// A body skeleton's own transform (the PMC fighters' UE5 body, 2026-11-09).
+		const TSharedPtr<FJsonObject>* BySkeleton = nullptr;
+		if ((*Visual)->TryGetObjectField(TEXT("attach_by_skeleton"), BySkeleton) && BySkeleton && BySkeleton->IsValid())
+		{
+			Weapon.HandMeshAttachBySkeleton.Reset();
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*BySkeleton)->Values)
+			{
+				const TSharedPtr<FJsonObject>* Entry = nullptr;
+				if (!Pair.Value.IsValid() || !Pair.Value->TryGetObject(Entry) || !Entry || !Entry->IsValid() || Pair.Key.StartsWith(TEXT("comment")))
+				{
+					continue;
+				}
+				auto Read3 = [&Entry](const TCHAR* Key, FVector& Out)
+				{
+					const TArray<TSharedPtr<FJsonValue>>* Array = nullptr;
+					if ((*Entry)->TryGetArrayField(Key, Array) && Array && Array->Num() == 3)
+					{
+						Out = FVector((*Array)[0]->AsNumber(), (*Array)[1]->AsNumber(), (*Array)[2]->AsNumber());
+					}
+				};
+				FVector OwnLocation = Location;
+				FVector OwnRotation = Rotation;
+				FVector OwnScale = Scale;
+				Read3(TEXT("attach_location"), OwnLocation);
+				Read3(TEXT("attach_rotation_pyr"), OwnRotation);
+				Read3(TEXT("attach_scale"), OwnScale);
+				Weapon.HandMeshAttachBySkeleton.Add(FName(*Pair.Key), FTransform(FRotator(OwnRotation.X, OwnRotation.Y, OwnRotation.Z), OwnLocation, OwnScale));
+			}
+			bChanged = true;
+		}
 		FVector Muzzle;
 		if (ReadVector(TEXT("muzzle_offset"), Muzzle))
 		{

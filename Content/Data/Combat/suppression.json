@@ -1,5 +1,5 @@
 {
-  "comment": "Suppressive fire tuning (game designer decisions 2026-10-26; spec docs/design/SUPPRESSION.md). Read by SuppressionRules::GetConfig (Source/CodexTactics/Public/Combat/SuppressionRules.h) at game start; the FSuppressionConfig defaults mirror these values (test CodexTactics.Combat.Suppression.TuningFileMirrorsDefaults). Levels are 0..1, distances cm, times s. Per-weapon full-auto cadence and suppression weight: Content/Data/Weapons/weapons_tuning.json (full_auto_interval, suppression_weight). A/B: console variable Codex.Combat.Suppression 0 = no suppression.",
+  "comment": "Suppressive fire tuning (game designer decisions 2026-10-26; spec docs/design/SUPPRESSION.md). Read by SuppressionRules::GetConfig (Source/CodexTactics/Public/Combat/SuppressionRules.h) at game start; the FSuppressionConfig defaults mirror these values (test CodexTactics.Combat.Suppression.TuningFileMirrorsDefaults). Levels are 0..1, distances cm, times s. Per-weapon full-auto cadence and suppression weight: Content/Data/Weapons/weapons_tuning.json (full_auto_interval, suppression_weight). A/B: console variable Codex.Combat.Suppression 0 = no suppression. launcher.* (the game designer 2026-11-09, 'one RPG salvo is enough to make any squad duck'): every enemy of the shooter within launcher.radius_cm of an RPG-7 rocket's burst (a hit or a near miss) is held Suppressed for launcher.suppressed_seconds, within launcher.pinned_radius_cm PINNED (no fire, he ducks / takes cover) for launcher.pinned_seconds - both x lerp(1, launcher.edge_factor, distance / radius); monsters, our squad and the PMC fighters alike, never the shooter's own side.",
   "params": {
     "tier.suppressed_enter": 0.5,
     "tier.suppressed_exit": 0.4,
@@ -43,6 +43,11 @@
     "explosion.min_radius_cm": 400,
     "explosion.max_burst": 0.9,
     "explosion.decay_per_second": 0.6,
+    "launcher.radius_cm": 900,
+    "launcher.pinned_radius_cm": 600,
+    "launcher.pinned_seconds": 3,
+    "launcher.suppressed_seconds": 5,
+    "launcher.edge_factor": 0.5,
     "zone.cell_cm": 400,
     "zone.density_threshold": 6,
     "zone.density_decay_per_second": 2.5,
