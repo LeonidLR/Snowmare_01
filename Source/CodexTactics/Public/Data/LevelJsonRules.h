@@ -49,8 +49,23 @@ namespace LevelJsonRules
 	 * absent keys keep the procedural default, an unknown weather name is ignored (bHasWeather false) and reported in OutError.
 	 * Section 17: "climate": "arctic" (default) | "temperate" (parsed first; a temperate level also takes the weather names Sunny / SunnyDay /
 	 * Rain / Storm), "wetness" / "puddles" 0..1 (temperate start values); an unknown climate is reported and stays arctic.
+	 * Training Ground pass 1 (2026-11-09): "override_carry": true (default false) - the level's start hour / weather win over a campaign carry.
 	 */
 	CODEXTACTICS_API FEnvironmentLevelSettings ParseEnvironmentSettings(const FJsonObject& Environment, FString* OutError = nullptr);
+
+	/**
+	 * The level JSON "loadouts" object (Training Ground pass 1, 2026-11-09): {"<role or operative id>": ["<weapon_id>", ...]}, first = primary.
+	 * Keys / ids are normalized (LevelLoadoutRules::NormalizeKey), duplicates dropped; a non-array value, a non-string id or an empty list is
+	 * skipped and reported in OutWarnings (never fails the level). Weapon ids are checked at spawn (the asset), not here.
+	 */
+	CODEXTACTICS_API void ParseLoadouts(const FJsonObject& Loadouts, TMap<FString, FLevelWeaponLoadout>& OutLoadouts, TArray<FString>* OutWarnings = nullptr);
+
+	/**
+	 * The level JSON "kit" object (Training Ground pass 1, 2026-11-09): {"<role or operative id>": {"grenades": n, "medkits": n, "heat_packs": n,
+	 * "ammo": {"<weapon_id>": n}}}. Absent fields stay -1 / absent (= keep); a non-object entry or a negative / non-number ammo value is
+	 * skipped and reported in OutWarnings (never fails the level).
+	 */
+	CODEXTACTICS_API void ParseKits(const FJsonObject& Kit, TMap<FString, FLevelOperativeKit>& OutKits, TArray<FString>* OutWarnings = nullptr);
 
 	/**
 	 * The level JSON "pressure" object (combat lab, game designer 2026-11-01, docs/design/COMBAT_LAB.md): {"enabled": true, "interval_sec": 120,

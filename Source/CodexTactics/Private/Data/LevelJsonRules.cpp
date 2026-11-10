@@ -3,6 +3,7 @@
 #include "Bot/BotRouteRules.h"
 #include "CodexTactics.h"
 #include "Combat/FirefightRules.h"
+#include "Data/LevelLoadoutRules.h"
 #include "Environment/EnvironmentRules.h"
 #include "GameFlow/LevelEncounterRules.h"
 #include "Quests/GateExitRules.h"
@@ -206,7 +207,104 @@ FEnvironmentLevelSettings LevelJsonRules::ParseEnvironmentSettings(const FJsonOb
 	{
 		Settings.ExposureBias = FMath::Clamp(static_cast<float>(Number), -4.f, 4.f);
 	}
+	// Training Ground pass 1 (2026-11-09): the level's start hour / weather win over a campaign carry (UEnvironmentSubsystem::ResolveInitialState).
+	bool bOverrideCarry = false;
+	if (Environment.TryGetBoolField(TEXT("override_carry"), bOverrideCarry))
+	{
+		Settings.bOverrideCarry = bOverrideCarry;
+	}
 	return Settings;
+}
+
+void LevelJsonRules::ParseLoadouts(const FJsonObject& Loadouts, TMap<FString, FLevelWeaponLoadout>& OutLoadouts, TArray<FString>* OutWarnings)
+{
+	OutLoadouts.Reset();
+	const auto Warn = [OutWarnings](const FString& Message)
+	{
+		if (OutWarnings)
+		{
+			OutWarnings->Add(Message);
+		}
+	};
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : Loadouts.Values)
+	{
+		const FString Key = LevelLoadoutRules::NormalizeKey(Entry.Key);
+		const TArray<TSharedPtr<FJsonValue>>* Ids = nullptr;
+		if (Key.IsEmpty() || !Entry.Value.IsValid() || !Entry.Value->TryGetArray(Ids) || !Ids)
+		{
+			Warn(FString::Printf(TEXT("loadouts.%s: expected a list of weapon ids; skipped"), *Entry.Key));
+			continue;
+		}
+		FLevelWeaponLoadout Loadout;
+		for (const TSharedPtr<FJsonValue>& IdValue : *Ids)
+		{
+			FString Id;
+			if (!IdValue.IsValid() || IdValue->Type != EJson::String || !IdValue->TryGetString(Id))
+			{
+				Warn(FString::Printf(TEXT("loadouts.%s: a weapon id is not a string; skipped"), *Entry.Key));
+				continue;
+			}
+			Id = LevelLoadoutRules::NormalizeKey(Id);
+			if (!Id.IsEmpty())
+			{
+				Loadout.WeaponIds.AddUnique(Id);
+			}
+		}
+		if (Loadout.WeaponIds.IsEmpty())
+		{
+			Warn(FString::Printf(TEXT("loadouts.%s: empty list; the global loadout is used"), *Entry.Key));
+			continue;
+		}
+		OutLoadouts.Add(Key, MoveTemp(Loadout));
+	}
+}
+
+void LevelJsonRules::ParseKits(const FJsonObject& Kit, TMap<FString, FLevelOperativeKit>& OutKits, TArray<FString>* OutWarnings)
+{
+	OutKits.Reset();
+	const auto Warn = [OutWarnings](const FString& Message)
+	{
+		if (OutWarnings)
+		{
+			OutWarnings->Add(Message);
+		}
+	};
+	const auto Count = [](const FJsonObject& Object, const TCHAR* Key)
+	{
+		double Value = -1.0;
+		return Object.TryGetNumberField(Key, Value) && Value >= 0.0 ? FMath::RoundToInt(Value) : -1;
+	};
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : Kit.Values)
+	{
+		const FString Key = LevelLoadoutRules::NormalizeKey(Entry.Key);
+		const TSharedPtr<FJsonObject>* Object = nullptr;
+		if (Key.IsEmpty() || !Entry.Value.IsValid() || !Entry.Value->TryGetObject(Object) || !Object || !Object->IsValid())
+		{
+			Warn(FString::Printf(TEXT("kit.%s: expected an object; skipped"), *Entry.Key));
+			continue;
+		}
+		FLevelOperativeKit Parsed;
+		Parsed.Grenades = Count(**Object, TEXT("grenades"));
+		Parsed.Medkits = Count(**Object, TEXT("medkits"));
+		Parsed.HeatPacks = Count(**Object, TEXT("heat_packs"));
+		const TSharedPtr<FJsonObject>* Ammo = nullptr;
+		if ((*Object)->TryGetObjectField(TEXT("ammo"), Ammo) && Ammo && Ammo->IsValid())
+		{
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Reserve : (*Ammo)->Values)
+			{
+				double Value = 0.0;
+				const FString WeaponId = LevelLoadoutRules::NormalizeKey(Reserve.Key);
+				if (WeaponId.IsEmpty() || !Reserve.Value.IsValid() || Reserve.Value->Type != EJson::Number || !Reserve.Value->TryGetNumber(Value)
+					|| Value < 0.0)
+				{
+					Warn(FString::Printf(TEXT("kit.%s.ammo.%s: expected a number >= 0; skipped"), *Entry.Key, *Reserve.Key));
+					continue;
+				}
+				Parsed.AmmoReserve.Add(WeaponId, FMath::RoundToInt(Value));
+			}
+		}
+		OutKits.Add(Key, MoveTemp(Parsed));
+	}
 }
 
 bool LevelJsonRules::ParsePressureSettings(const FJsonObject& Pressure, FCombatPressureConfig& OutConfig, FString* OutError)
@@ -636,6 +734,24 @@ bool LevelJsonRules::ParseLevel(const FString& Json, const FString& FallbackId, 
 	Config.SquadLoadout.PistolAmmo = FMath::RoundToInt(LevelJsonNumber(Loadout, TEXT("pistol_ammo"), 48.f));
 	Config.SquadLoadout.GrenadesCount = FMath::RoundToInt(LevelJsonNumber(Loadout, TEXT("grenades_count"), -1.f));
 	Config.SquadLoadout.HeatPacksCount = FMath::RoundToInt(LevelJsonNumber(Loadout, TEXT("heat_packs_count"), -1.f));
+
+	// Training Ground pass 1 (2026-11-09): per-level weapons ("loadouts") and starting kit ("kit") per role / operative id. A bad entry is
+	// skipped with a warning, never the level; absent keys = empty maps = today's behaviour.
+	{
+		TArray<FString> TgWarnings;
+		if (const TSharedPtr<FJsonObject> Loadouts = LevelJsonObject(Root, TEXT("loadouts")))
+		{
+			ParseLoadouts(*Loadouts, Config.Loadouts, &TgWarnings);
+		}
+		if (const TSharedPtr<FJsonObject> Kit = LevelJsonObject(Root, TEXT("kit")))
+		{
+			ParseKits(*Kit, Config.Kits, &TgWarnings);
+		}
+		for (const FString& Warning : TgWarnings)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("Level JSON %s: %s"), *Config.LevelId, *Warning);
+		}
+	}
 	OutConfig = MoveTemp(Config);
 	return true;
 }

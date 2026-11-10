@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Core/MissionSessionSubsystem.h"
 #include "Data/WaveConfigTypes.h"
+#include "GameFlow/GameFlowTypes.h"
 
 /** How the squad's engineering supply is set when the preparation begins. */
 enum class ELoadoutMode : uint8
@@ -61,4 +62,14 @@ namespace LoadoutRules
 	 * "grenades_count" must not replace the grenades carried from the lake). UE-only.
 	 */
 	CODEXTACTICS_API bool ShouldApplyStageLoadout(bool bCampaignArrival);
+
+	/**
+	 * Whether a game-flow phase change runs the stage loadout (Training Ground pass 1, 2026-11-09): at most once per level, at the first of
+	 * the cutscene end / sudden first wave (bCutsceneEnded) or the first change into Preparation / WaveCombat (ambush / skirmish / firefight
+	 * levels without a cutscene end). Before, a mis-indented call ran it on EVERY phase change (grenades reset at each fight start / end).
+	 */
+	CODEXTACTICS_API bool ShouldRunStageLoadout(bool bAlreadyApplied, bool bCutsceneEnded, ECodexGamePhase NewPhase);
+
+	/** "Kit wins" (level JSON "kit"): the current value when the level's kit sets the field, else the stage value (Stage < 0 = keep the current one). */
+	CODEXTACTICS_API int32 StageOrKit(int32 Stage, int32 Current, bool bKitSets);
 }

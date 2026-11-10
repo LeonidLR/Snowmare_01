@@ -593,6 +593,15 @@ struct CODEXTACTICS_API FEnvironmentLevelSettings
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
 	bool bLocked = false;
 
+	/**
+	 * "override_carry" (Training Ground pass 1, 2026-11-09; default false): on a campaign arrival this level's own "start_hour" / "weather"
+	 * (and "seed" / "snow_cover" / "wetness" / "puddles" when set) win over the carried previous level's state even when the level is not
+	 * locked; whatever the level does not set continues from the carry (UEnvironmentSubsystem::ResolveInitialState). No effect without a
+	 * carry or on a locked level.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
+	bool bOverrideCarry = false;
+
 	/** "start_hour" present (used when the level is locked or there is no previous level to continue). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment")
 	bool bHasStartHour = false;

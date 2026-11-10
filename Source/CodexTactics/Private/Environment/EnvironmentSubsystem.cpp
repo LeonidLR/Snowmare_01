@@ -187,6 +187,41 @@ FEnvironmentState UEnvironmentSubsystem::ResolveInitialState(const FEnvironmentC
 		FEnvironmentState State = Carried.GetValue();
 		State.Hour = WrapHour(State.Hour);
 		State.bLocked = false;
+		if (Level.bOverrideCarry)
+		{
+			// Training Ground pass 1 ("override_carry"): what the level sets wins, the rest continues from the carry.
+			if (Level.bHasStartHour)
+			{
+				State.Hour = WrapHour(Level.StartHour);
+			}
+			if (Level.Seed != 0)
+			{
+				State.RandomSeed = Level.Seed;
+			}
+			if (Level.bHasWeather)
+			{
+				// Same as EnvironmentRules BeginDwell: a fresh dwell in the level's weather, the next weather rolled from the state's RNG.
+				FRandomStream Stream(State.RandomSeed);
+				State.Weather = Level.Weather;
+				State.NextWeather = EnvironmentRules::PickNextWeather(Config, Level.Weather, Stream);
+				State.WeatherElapsedSeconds = 0.f;
+				State.WeatherDwellSeconds = EnvironmentRules::GetWeatherDwellSeconds(Config, EnvironmentRules::GetPhase(Config, State.Hour));
+				State.RandomSeed = Stream.GetCurrentSeed();
+			}
+			if (Level.bHasSnowCover)
+			{
+				State.SnowAmount = FMath::Clamp(Level.SnowCover, 0.f, 1.f);
+				State.ObjectSnow.Top = State.SnowAmount;
+			}
+			if (Level.bHasWetness)
+			{
+				State.Wetness = FMath::Clamp(Level.Wetness, 0.f, 1.f);
+			}
+			if (Level.bHasPuddles)
+			{
+				State.PuddleAmount = FMath::Clamp(Level.Puddles, 0.f, 1.f);
+			}
+		}
 		return State;
 	}
 	if (Carried.IsSet())
@@ -195,8 +230,11 @@ FEnvironmentState UEnvironmentSubsystem::ResolveInitialState(const FEnvironmentC
 		// ground start over for this level's profile (its "weather" / "snow_cover" / "wetness" when set); the time of day continues and
 		// the start is drawn from the carried RNG (deterministic).
 		FEnvironmentLevelSettings Reinit = Level;
-		Reinit.bHasStartHour = true;
-		Reinit.StartHour = Carried->Hour;
+		if (!(Level.bOverrideCarry && Level.bHasStartHour)) // override_carry: the level's own hour wins
+		{
+			Reinit.bHasStartHour = true;
+			Reinit.StartHour = Carried->Hour;
+		}
 		if (Reinit.Seed == 0)
 		{
 			Reinit.Seed = Carried->RandomSeed;

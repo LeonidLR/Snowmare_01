@@ -97,3 +97,14 @@ bool LoadoutRules::ShouldApplyStageLoadout(bool bCampaignArrival)
 {
 	return !bCampaignArrival;
 }
+
+bool LoadoutRules::ShouldRunStageLoadout(bool bAlreadyApplied, bool bCutsceneEnded, ECodexGamePhase NewPhase)
+{
+	return !bAlreadyApplied
+		&& (bCutsceneEnded || NewPhase == ECodexGamePhase::Preparation || NewPhase == ECodexGamePhase::WaveCombat);
+}
+
+int32 LoadoutRules::StageOrKit(int32 Stage, int32 Current, bool bKitSets)
+{
+	return bKitSets || Stage < 0 ? Current : Stage;
+}

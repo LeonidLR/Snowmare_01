@@ -1,6 +1,8 @@
 #include "Core/CodexTacticsGameMode.h"
 #include "Core/LoadoutRules.h"
 #include "Data/LevelJsonRules.h"
+#include "Data/LevelLoadoutRules.h"
+#include "Data/WeaponRoster.h"
 #include "GameFlow/CampaignCarry.h"
 #include "GameFlow/CampaignSubsystem.h"
 #include "Characters/EnemyCharacter.h"
@@ -227,6 +229,54 @@ ULevelConfigAsset* ACodexTacticsGameMode::LoadLevelConfig()
 	return Level;
 }
 
+namespace
+{
+	/** Level JSON "kit" (Training Ground pass 1): the operative's starting kit onto its current values; a missing field keeps them. */
+	void ApplyLevelKit(AOperativeCharacter& Operative, const FLevelCombatConfig& Config)
+	{
+		if (Config.Kits.IsEmpty() || Operative.TeamId != 0)
+		{
+			return;
+		}
+		const FLevelOperativeKit* Kit = LevelLoadoutRules::FindPerOperative(Config.Kits, LevelLoadoutRules::OperativeIdFor(Operative),
+			LevelLoadoutRules::RoleKeyFor(Operative));
+		if (!Kit)
+		{
+			return;
+		}
+		Operative.GrenadesCount = LevelLoadoutRules::ApplyKitCount(Operative.GrenadesCount, Kit->Grenades, Operative.MaxGrenades);
+		Operative.MedkitsCount = LevelLoadoutRules::ApplyKitCount(Operative.MedkitsCount, Kit->Medkits, MAX_int32);
+		Operative.HeatPacksCount = LevelLoadoutRules::ApplyKitCount(Operative.HeatPacksCount, Kit->HeatPacks, TacticalHeatTuning::Get().HeatPackMaxStack);
+		for (const TPair<FString, int32>& Ammo : Kit->AmmoReserve)
+		{
+			if (FWeaponAmmoState* State = Operative.AmmoInventory.Find(Ammo.Key))
+			{
+				State->Reserve = FMath::Max(0, Ammo.Value);
+				if (Operative.CurrentWeapon && Operative.CurrentWeapon->WeaponId == Ammo.Key)
+				{
+					Operative.ReserveAmmo = State->Reserve; // the weapon in hands keeps its live reserve outside the inventory
+				}
+			}
+			else
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("Level kit: %s carries no weapon \"%s\" - ammo entry ignored"), *Operative.DisplayName.ToString(), *Ammo.Key);
+			}
+		}
+	}
+
+	/** Level loadout ids (Training Ground pass 1): a weapon is usable when it is in play (WeaponRoster) and its DA_Weapon_<id> asset exists. */
+	bool IsKnownLevelWeapon(const FString& Id)
+	{
+		if (WeaponRoster::IsOutOfPlay(Id))
+		{
+			return false;
+		}
+		const FSoftObjectPath AssetPath(WeaponLoadoutRules::WeaponAssetPath(Id));
+		return FPackageName::DoesPackageExist(AssetPath.GetLongPackageName())
+			&& LoadObject<UWeaponDataAsset>(nullptr, *AssetPath.ToString()) != nullptr;
+	}
+}
+
 void ACodexTacticsGameMode::SpawnSquad()
 {
 	UWorld* World = GetWorld();
@@ -257,6 +307,14 @@ void ACodexTacticsGameMode::SpawnSquad()
 				CampaignCarry::Apply(**It, *Carried);
 			}
 		}
+		if (ActiveLevelConfig)
+		{
+			// Training Ground pass 1: the level's kit also covers a placed squad (TeamId 0), after the carry.
+			for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+			{
+				ApplyLevelKit(**It, ActiveLevelConfig->Config);
+			}
+		}
 		return;
 	}
 
@@ -282,6 +340,10 @@ void ACodexTacticsGameMode::SpawnSquad()
 			CampaignCarry::Apply(*Operative, *Carried);
 			UE_LOG(LogCodexTactics, Display, TEXT("Campaign: %s arrives from %s - level %d, EXP %d, %d unspent points"), *Entry.DisplayName.ToString(),
 				*Carry->FromMap, Operative->Level, Operative->CurrentExp, Operative->UnspentStatPoints);
+		}
+		if (Operative && ActiveLevelConfig)
+		{
+			ApplyLevelKit(*Operative, ActiveLevelConfig->Config); // after the carry: a kit field wins over spawn defaults and the carry
 		}
 	}
 }
@@ -340,8 +402,30 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 		// no M16); a role without one (and every PMC fighter) keeps StartingArsenal + its ExtraWeapons (the Blueprint data).
 		TArray<FString> LoadoutIds;
 		const UEnum* RoleEnum = StaticEnum<EOperativeRole>();
-		const bool bDataLoadout = InTeamId == 0 && RoleEnum
-			&& WeaponLoadoutRules::Find(WeaponLoadoutRules::RoleKey(RoleEnum->GetNameStringByValue(static_cast<int64>(Entry.Role))), LoadoutIds);
+		bool bDataLoadout = false;
+		// Training Ground pass 1: the level's "loadouts" (operative id, then role) come before the global weapons_tuning.json ones.
+		if (InTeamId == 0 && ActiveLevelConfig && !ActiveLevelConfig->Config.Loadouts.IsEmpty())
+		{
+			if (const FLevelWeaponLoadout* LevelLoadout = LevelLoadoutRules::FindPerOperative(ActiveLevelConfig->Config.Loadouts,
+				LevelLoadoutRules::OperativeIdFor(*Operative), LevelLoadoutRules::RoleKeyFor(*Operative)))
+			{
+				TArray<FString> UnknownIds;
+				bDataLoadout = LevelLoadoutRules::FilterKnownWeapons(LevelLoadout->WeaponIds, IsKnownLevelWeapon, LoadoutIds, UnknownIds);
+				for (const FString& Unknown : UnknownIds)
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("Level loadout: \"%s\" is out of play or has no weapon asset (dropped)"), *Unknown);
+				}
+				if (!bDataLoadout)
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("Level loadout of %s has no usable weapon - the global loadout is used"), *Operative->DisplayName.ToString());
+				}
+			}
+		}
+		if (!bDataLoadout)
+		{
+			bDataLoadout = InTeamId == 0 && RoleEnum
+				&& WeaponLoadoutRules::Find(WeaponLoadoutRules::RoleKey(RoleEnum->GetNameStringByValue(static_cast<int64>(Entry.Role))), LoadoutIds);
+		}
 		if (bDataLoadout)
 		{
 			for (const FString& Id : LoadoutIds)

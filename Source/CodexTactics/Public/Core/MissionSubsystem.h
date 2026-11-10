@@ -136,4 +136,6 @@ private:
 	bool bCombatFinished = false;
 	bool bMissionFailed = false;
 	bool bMissionComplete = false;
+	/** ApplyStageLoadout ran (or was decided) for this level: it runs at most once per level (LoadoutRules::ShouldRunStageLoadout). */
+	bool bStageLoadoutApplied = false;
 };

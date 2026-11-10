@@ -11,6 +11,7 @@
 #include "Core/CodexTacticsGameMode.h"
 #include "Core/MissionRules.h"
 #include "Core/LoadoutRules.h"
+#include "Data/LevelLoadoutRules.h"
 #include "Data/DialogueSequenceAsset.h"
 #include "UI/DialogueSubsystem.h"
 #include "Engine/World.h"
@@ -217,7 +218,13 @@ void UMissionSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexComba
 			}
 		}
 	}
+	// Training Ground pass 1 (2026-11-09): once per level - the cutscene end / sudden first wave, else the first Preparation / WaveCombat
+	// (ambush, skirmish, firefight levels). It ran on EVERY phase change before (a mis-indented call outside the bCutsceneEnded block).
+	if (LoadoutRules::ShouldRunStageLoadout(bStageLoadoutApplied, bCutsceneEnded, Phase))
+	{
+		bStageLoadoutApplied = true;
 		ApplyStageLoadout();
+	}
 	const UGameFlowSubsystem* Flow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
 	FText PhaseObjective;
 	if (Flow && MissionRules::GetPhaseObjective(Phase, Flow->GetWaveIndex(), Flow->GetPreparationTimeRemaining(), bCombatFinished, PhaseObjective))
@@ -333,6 +340,12 @@ void UMissionSubsystem::ApplyStageLoadout()
 	const ULevelConfigAsset* Level = GameMode ? GameMode->GetActiveLevelConfig() : nullptr;
 	const FSquadLoadout Loadout = Level ? Level->Config.SquadLoadout : FSquadLoadout();
 	const ELoadoutMode Mode = LoadoutRules::ResolveMode(Loadout.SimulationMode, StartMode);
+	// Training Ground pass 1: a field the level's "kit" sets for an operative wins over this stage loadout.
+	const auto KitOf = [Level](const AOperativeCharacter* Member) -> const FLevelOperativeKit*
+	{
+		return Level && Member ? LevelLoadoutRules::FindPerOperative(Level->Config.Kits, LevelLoadoutRules::OperativeIdFor(*Member),
+			LevelLoadoutRules::RoleKeyFor(*Member)) : nullptr;
+	};
 	AOperativeCharacter* Roles[3] = { nullptr, nullptr, nullptr };
 	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{
@@ -367,26 +380,25 @@ void UMissionSubsystem::ApplyStageLoadout()
 		Member->TurretsCount = Supply[Index].Turrets;
 		Member->BarricadesCount = Supply[Index].Barricades;
 		Member->MinesCount = Supply[Index].Mines;
-		if (Supply[Index].Medkits >= 0)
-		{
-			Member->MedkitsCount = Supply[Index].Medkits;
-		}
+		const FLevelOperativeKit* Kit = KitOf(Member);
+		Member->MedkitsCount = LoadoutRules::StageOrKit(Supply[Index].Medkits, Member->MedkitsCount, Kit && Kit->Medkits >= 0);
 		// Godot sets ammo_inventory["m16" / "pistol"].reserve (the weapons not in hands) for the commander.
 		if (Index == 0 && RifleReserve >= 0)
 		{
 			if (FWeaponAmmoState* Rifle = Member->AmmoInventory.Find(TEXT("m16")))
 			{
-				Rifle->Reserve = RifleReserve;
+				Rifle->Reserve = LoadoutRules::StageOrKit(RifleReserve, Rifle->Reserve, Kit && Kit->AmmoReserve.Contains(TEXT("m16")));
 			}
 			if (FWeaponAmmoState* Pistol = Member->AmmoInventory.Find(TEXT("pistol")))
 			{
-				Pistol->Reserve = PistolReserve;
+				Pistol->Reserve = LoadoutRules::StageOrKit(PistolReserve, Pistol->Reserve, Kit && Kit->AmmoReserve.Contains(TEXT("pistol")));
 			}
 		}
 	}
 	for (AOperativeCharacter* Member : Roles)
 	{
-		const int32 Grenades = Member ? LoadoutRules::GrenadesFor(Mode, Loadout, Member->MaxGrenades) : -1;
+		const FLevelOperativeKit* GrenadeKit = KitOf(Member);
+		const int32 Grenades = Member && !(GrenadeKit && GrenadeKit->Grenades >= 0) ? LoadoutRules::GrenadesFor(Mode, Loadout, Member->MaxGrenades) : -1;
 		if (Grenades >= 0)
 		{
 			Member->GrenadesCount = Grenades;
