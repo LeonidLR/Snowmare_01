@@ -1,0 +1,49 @@
+{
+ "schema": "codex.levelgen_layout/1",
+ "name": "fixture_small",
+ "comment": "C1 fixture: a fenced yard with a 300 cm gate on the mandatory route, a shed with two doors, a roof ladder, two zones. Used by C2-C4 as well.",
+ "bounds": { "min": [-2000, -2000], "max": [2000, 2000] },
+ "ground_z": 0,
+ "spawn": { "pos": [0, -1800], "yaw": 90 },
+ "end": [300, 0],
+ "walls": [
+  { "id": "F_yard_N_0", "a": [800, -1000], "b": [800, -150], "height": 250, "thickness": 10, "kind": "fence" },
+  { "id": "F_yard_N_1", "a": [800, 150], "b": [800, 1000], "height": 250, "thickness": 10, "kind": "fence" },
+  { "id": "F_yard_S_0", "a": [-200, -1000], "b": [-200, 1000], "height": 250, "thickness": 10, "kind": "fence" },
+  { "id": "F_yard_W_0", "a": [800, -1000], "b": [-200, -1000], "height": 250, "thickness": 10, "kind": "fence" },
+  { "id": "F_yard_E_0", "a": [800, 1000], "b": [-200, 1000], "height": 250, "thickness": 10, "kind": "fence" },
+  { "id": "B_shed_S_0", "a": [1100, -1000], "b": [1100, -660], "height": 300, "thickness": 30, "kind": "building", "building": "B_shed" },
+  { "id": "B_shed_S_1", "a": [1100, -540], "b": [1100, -200], "height": 300, "thickness": 30, "kind": "building", "building": "B_shed" },
+  { "id": "B_shed_N_0", "a": [1900, -1000], "b": [1900, -200], "height": 300, "thickness": 30, "kind": "building", "building": "B_shed" },
+  { "id": "B_shed_W_0", "a": [1100, -1000], "b": [1900, -1000], "height": 300, "thickness": 30, "kind": "building", "building": "B_shed" },
+  { "id": "B_shed_E_0", "a": [1100, -200], "b": [1440, -200], "height": 300, "thickness": 30, "kind": "building", "building": "B_shed" },
+  { "id": "B_shed_E_1", "a": [1560, -200], "b": [1900, -200], "height": 300, "thickness": 30, "kind": "building", "building": "B_shed" }
+ ],
+ "buildings": [
+  {
+   "id": "B_shed", "footprint": [[1100, -1000], [1900, -200]], "height": 300, "floors": 1, "enterable": true, "roof_walkable": true,
+   "doors": [{ "pos": [1100, -600], "floor": 0 }, { "pos": [1500, -200], "floor": 0 }],
+   "stairs": [], "roof_holes": [], "floor_holes": [], "set_piece": "one_entry_compound"
+  }
+ ],
+ "cut": { "poly": [], "level": -1, "floor_z": -300, "crossings": [] },
+ "ladders": [
+  { "id": "LAD_B_shed", "pos": [1090, -350], "yaw": 0, "rungs": 8, "plinth_cm": 8.8, "from": "ground", "to": "roof:B_shed", "level_from": 0, "level_to": 1, "foot": [990, -350], "top": [1200, -350] }
+ ],
+ "covers": [],
+ "zones": [
+  { "id": "Z_yard", "kind": "open", "set_piece": "one_entry_compound", "poly": [[800, -1000], [800, 1000], [-200, 1000], [-200, -1000]] },
+  { "id": "Z_open", "kind": "open", "set_piece": "open_square", "poly": [[-2000, -2000], [-2000, 2000], [-300, 2000], [-300, -2000]] }
+ ],
+ "routes": [
+  {
+   "id": "R_main", "pace": "walk", "mandatory": true,
+   "points": [[0, -1800], [900, -1500], [900, 0], [800, 0], [300, 0]],
+   "layers": ["ground", "ground", "ground", "ground", "ground"],
+   "links": [], "set_pieces": ["one_entry_compound"]
+  }
+ ],
+ "spawn_points": [],
+ "ambush_points": [],
+ "patrol_routes": []
+}

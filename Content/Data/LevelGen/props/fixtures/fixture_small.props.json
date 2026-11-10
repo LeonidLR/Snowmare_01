@@ -1,0 +1,67 @@
+{
+	"schema": "codex.levelgen_props/1",
+	"map": "L_Fixture_Small",
+	"layout": "fixture_small",
+	"layout_hash": "0000000000000000000000000000000000000000",
+	"revision": 14,
+	"frozen": false,
+	"x_note": "unknown root key: must survive a round-trip",
+	"layers": [
+		{
+			"id": "crates",
+			"kind": "crates",
+			"enabled": true,
+			"seed": 7,
+			"locked": false,
+			"preset": "crates_default",
+			"rules": {
+				"count": { "mode": "count", "value": 2 },
+				"min_gap_any_cm": 120,
+				"min_spacing_cm": 250,
+				"variants": { "crate_l": 1, "crate_s": 3 }
+			},
+			"rules_hash": "a91e",
+			"objects": [
+				{ "id": "crates_00000007_0", "variant": "crate_s", "pos": [300, -500], "walk_layer": "ground", "yaw": 90, "locked": true, "x_tag": "keep me" },
+				{ "id": "crates_00000007_1", "variant": "crate_s", "pos": [500, 300], "walk_layer": "ground", "yaw": 0, "locked": false }
+			],
+			"report": { "gate": "pass", "placed": 2, "requested": 2 }
+		},
+		{
+			"id": "barrels",
+			"kind": "barrels",
+			"enabled": true,
+			"seed": 3,
+			"locked": false,
+			"rules": {
+				"count": { "mode": "count", "value": 2 },
+				"explosive": { "min_gap_cm": 400, "share": 0.3 },
+				"min_spacing_cm": 600
+			},
+			"objects": [
+				{ "id": "barrels_00000003_0", "variant": "barrel_explosive", "pos": [-1200, -300], "walk_layer": "ground", "yaw": 0, "locked": false },
+				{ "id": "barrels_00000003_1", "variant": "barrel", "pos": [-1100, 500], "walk_layer": "ground", "yaw": 0, "locked": false }
+			]
+		},
+		{
+			"id": "mines",
+			"kind": "mines",
+			"enabled": true,
+			"seed": 11,
+			"locked": false,
+			"rules": {
+				"doorways": { "inside_cm": 80, "kinds": ["building_door"], "mandatory_route": "forbid", "mode": "count", "trigger": "tripwire", "value": 1 }
+			},
+			"objects": [
+				{ "id": "mines_0000000b_0", "variant": "mine_tripwire", "door": "B_shed#0", "pos": [1160, -600], "walk_layer": "ground", "yaw": 90, "trigger": "tripwire", "locked": false },
+				{ "id": "mines_0000000b_1", "variant": "mine_crate", "attach": "crates_00000007_0", "pos": [300, -500], "walk_layer": "ground", "yaw": 0, "trigger": "crate_open", "locked": false }
+			]
+		}
+	],
+	"overrides": [
+		{ "op": "move", "id": "barrels_00000003_0", "pos": [-1180, -340], "walk_layer": "ground", "yaw": 30 },
+		{ "op": "delete", "id": "crates_00000007_1", "pos": [500, 300] },
+		{ "op": "add", "object": { "id": "hand_barrels_0", "origin": "hand", "variant": "barrel_explosive", "pos": [-1500, 1200], "walk_layer": "ground", "yaw": 0 } },
+		{ "op": "set", "id": "crates_00000007_0", "fields": { "variant": "crate_l", "loot_table": "ammo_common" } }
+	]
+}
