@@ -146,4 +146,19 @@ namespace SquadOrderRules
 		}
 		return bGroupCoverInCombat && IsFollowPhase(Phase, Mode, bPostCombatFormation, bCombatFormation);
 	}
+
+	bool ShouldLeashRegroup(bool bSoloIndependent, bool bTrapSolo, float MaxDistanceCm, float LimitCm)
+	{
+		return !bSoloIndependent && !bTrapSolo && MaxDistanceCm > LimitCm;
+	}
+
+	bool UsesSoloGuardCrouch(bool bSoloIndependent)
+	{
+		return !bSoloIndependent;
+	}
+
+	bool StartsInSolo(bool bLevelStartsInFormation, bool bModeAlreadyChosen)
+	{
+		return !bLevelStartsInFormation && !bModeAlreadyChosen;
+	}
 }

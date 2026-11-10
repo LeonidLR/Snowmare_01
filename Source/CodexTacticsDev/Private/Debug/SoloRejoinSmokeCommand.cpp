@@ -137,6 +137,15 @@ namespace SoloRejoinSmoke
 		}
 	}
 
+	/** 2026-11-09: Solo without ties has no guard crouch; the 2026-10-20 regroup sprint scenario needs it (the old Solo, 0). */
+	void SetSoloIndependent(int32 Value)
+	{
+		if (IConsoleVariable* CVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Squad.SoloIndependent")))
+		{
+			CVar->Set(Value, ECVF_SetByConsole);
+		}
+	}
+
 	void Check(FState& State, bool bOk, const FString& What)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: %s"), bOk ? TEXT("ok  ") : TEXT("FAIL"), *What);
@@ -145,6 +154,7 @@ namespace SoloRejoinSmoke
 
 	bool Finish(const FState& State, bool bComplete)
 	{
+		SetSoloIndependent(1);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		if (State.Wall.IsValid())
 		{
@@ -447,6 +457,7 @@ namespace SoloRejoinSmoke
 			// Regroup + sprint (bug 2026-10-20): a fresh start at the wall; pass 0 = the old rule, pass 1 = the fix.
 			SetSprintStandUp(State.SprintPass == 0 ? 0 : 1);
 			UseOldFormationRuleSolo(State.SprintPass == 0); // the old rule's reproduction on the old formation
+			SetSoloIndependent(0); // the squad-given crouch of this bug came from Solo's guard crouch (gone since 2026-11-09)
 			ResetSquad(World, Squad, State);
 			NextStage(State);
 			return true;
@@ -565,6 +576,7 @@ namespace SoloRejoinSmoke
 			}
 			SetSprintStandUp(1);
 			UseOldFormationRuleSolo(false);
+			SetSoloIndependent(1);
 			State.bFlag = false;
 			NextStage(State);
 			return true;

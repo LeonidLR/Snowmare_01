@@ -265,6 +265,7 @@ void AOperativeCharacter::DecideUnderFireManoeuvre(AOperativeCharacter& Shooter,
 	Facts.bFormationWalking = Facts.bFormationFollower && !Leader->IsOnUnderFireManoeuvreMove()
 		&& (Leader->HasOwnMoveOrder() || Leader->GetVelocity().SizeSquared2D() > 50.f * 50.f);
 	Facts.bAutonomyOwnsCover = Squad && Squad->IsAutonomousSquadCombat();
+	Facts.bSoloHold = Squad && Squad->IsSoloHoldingInPlace(); // 2026-11-09: Solo, autonomy off - he fires from where he was sent
 	if (!UnderFireRules::MayManoeuvre(Config, Facts))
 	{
 		return;

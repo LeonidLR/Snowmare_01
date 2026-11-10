@@ -170,7 +170,8 @@ namespace UnderFireRules
 			return false;
 		}
 		// In cover already, or an order of his own (the player's explicit move / fire / facing order, the commander's, a use task): left alone.
-		if (Facts.bInCover || Facts.bCoverPending || Facts.bOwnOrder || Facts.bFireOrFacingOrder || Facts.bCarrying || Facts.bPanicking || Facts.bAutonomyOwnsCover)
+		if (Facts.bInCover || Facts.bCoverPending || Facts.bOwnOrder || Facts.bFireOrFacingOrder || Facts.bCarrying || Facts.bPanicking || Facts.bAutonomyOwnsCover
+			|| Facts.bSoloHold)
 		{
 			return false;
 		}

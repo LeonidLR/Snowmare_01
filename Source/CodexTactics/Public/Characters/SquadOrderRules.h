@@ -270,4 +270,23 @@ namespace SquadOrderRules
 	 */
 	CODEXTACTICS_API bool IsGroupCoverPhase(ECodexGamePhase Phase, ECodexCombatMode Mode, bool bPostCombatFormation = true, bool bCombatFormation = true,
 		bool bGroupCoverInCombat = true);
+	/**
+	 * Solo without ties (game designer 2026-11-09: "Solo has no distance limit; each operative stays exactly where he was sent").
+	 * Codex.Squad.SoloIndependent on: no leash. Off (the old rule): Solo ends with a regroup once a member is farther than LimitCm from
+	 * the selected operative - never in a trap Solo (a regroup would walk the formation through the trap, rev 5h).
+	 */
+	CODEXTACTICS_API bool ShouldLeashRegroup(bool bSoloIndependent, bool bTrapSolo, float MaxDistanceCm, float LimitCm);
+
+	/**
+	 * Solo's guard crouch ("teammates hold their positions, crouched", 2026-10-20 / 2026-11-02) - only with Codex.Squad.SoloIndependent
+	 * off. On (2026-11-09): nobody auto-crouches in Solo, each operative keeps the stance he had / was given.
+	 */
+	CODEXTACTICS_API bool UsesSoloGuardCrouch(bool bSoloIndependent);
+
+	/**
+	 * The squad mode a level starts in (2026-11-09: the game starts in Solo): Solo unless the level data asks for the formation
+	 * (level JSON "start_mode": "formation", e.g. the Lake tutorial, whose first lesson teaches B). A save's mode or an explicit switch
+	 * before the start was applied wins (bModeAlreadyChosen: nothing to apply).
+	 */
+	CODEXTACTICS_API bool StartsInSolo(bool bLevelStartsInFormation, bool bModeAlreadyChosen);
 }

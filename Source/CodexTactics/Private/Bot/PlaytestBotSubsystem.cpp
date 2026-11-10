@@ -187,6 +187,8 @@ void UPlaytestBotSubsystem::SetupRun()
 	if (USquadSubsystem* BotSquad = GetWorld()->GetSubsystem<USquadSubsystem>())
 	{
 		BotSquad->SetSquadPosture(BotStealthRules::PostureFor(!bStealthLevel));
+		// 2026-11-09: levels start in Solo; the bot's tactics are written for the formation (the leader leads, the others follow).
+		BotSquad->ExitSoloMode();
 	}
 	if (bStealthLevel)
 	{

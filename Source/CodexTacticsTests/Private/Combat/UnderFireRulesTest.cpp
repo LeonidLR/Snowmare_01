@@ -99,6 +99,8 @@ bool FUnderFireManoeuvreGateTest::RunTest(const FString&)
 	TestFalse(TEXT("exploration"), With([](FManoeuvreFacts& F) { F.bRealTimeFight = false; }));
 	TestFalse(TEXT("forgotten threat"), With([](FManoeuvreFacts& F) { F.bThreatActive = false; }));
 	TestFalse(TEXT("Commander Mode owns the cover decisions"), With([](FManoeuvreFacts& F) { F.bAutonomyOwnsCover = true; }));
+	// Game designer 2026-11-09: Solo with the autonomy off - he fires from where he was sent, no manoeuvre of his own.
+	TestFalse(TEXT("Solo, autonomy off: he holds where he was sent"), With([](FManoeuvreFacts& F) { F.bSoloHold = true; }));
 	TestFalse(TEXT("formation: nothing while it walks (the leader's slot logic first)"),
 		With([](FManoeuvreFacts& F) { F.bFormationFollower = true; F.bFormationWalking = true; }));
 	TestFalse(TEXT("formation halted: a moment's grace after the first round"),

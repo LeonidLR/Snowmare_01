@@ -144,6 +144,11 @@ namespace UnderFireRules
 		bool bFormationWalking = false;
 		/** Commander Mode runs the squad's own cover decisions (USquadAutonomySubsystem). */
 		bool bAutonomyOwnsCover = false;
+		/**
+		 * Solo with the autonomy off (game designer 2026-11-09): he holds where he was sent - he fires from his spot by his fire mode,
+		 * but never moves, takes cover or drops prone on his own (the autonomy, Ctrl + T, adds that).
+		 */
+		bool bSoloHold = false;
 	};
 
 	/** He may manoeuvre now (then the cover / sidestep searches run and ChooseManoeuvre picks). */

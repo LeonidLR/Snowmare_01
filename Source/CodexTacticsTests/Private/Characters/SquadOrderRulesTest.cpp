@@ -4,6 +4,8 @@
 
 #include "Misc/AutomationTest.h"
 #include "Characters/SquadOrderRules.h"
+#include "Data/LevelJsonRules.h"
+#include "Data/WaveConfigTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -354,3 +356,37 @@ bool FSquadOrderBoxSelectionTest::RunTest(const FString&)
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS
+
+SQUAD_ORDER_TEST(FSquadOrderSoloWithoutTiesTest, "SoloWithoutTies")
+bool FSquadOrderSoloWithoutTiesTest::RunTest(const FString&)
+{
+	// Game designer 2026-11-09: the game starts in Solo; Solo has no distance limit and nobody auto-crouches.
+	using namespace SquadOrderRules;
+	TestFalse(TEXT("Solo without ties: 60 m apart, no leash regroup"), ShouldLeashRegroup(true, false, 6000.f, 2500.f));
+	TestTrue(TEXT("Old rule (SoloIndependent 0): 26 m > 25 m regroups"), ShouldLeashRegroup(false, false, 2600.f, 2500.f));
+	TestFalse(TEXT("Old rule: within 25 m no regroup"), ShouldLeashRegroup(false, false, 2400.f, 2500.f));
+	TestFalse(TEXT("Old rule: a trap Solo has no leash (rev 5h)"), ShouldLeashRegroup(false, true, 6000.f, 2500.f));
+	TestFalse(TEXT("Solo without ties: no guard crouch"), UsesSoloGuardCrouch(true));
+	TestTrue(TEXT("Old rule: the guard crouch"), UsesSoloGuardCrouch(false));
+
+	TestTrue(TEXT("A level without start_mode starts in Solo"), StartsInSolo(false, false));
+	TestFalse(TEXT("start_mode formation (the Lake tutorial) starts in formation"), StartsInSolo(true, false));
+	TestFalse(TEXT("A save's / an explicit mode chosen first wins"), StartsInSolo(false, true));
+
+	bool bFormation = true;
+	TestTrue(TEXT("'solo' parses"), LevelJsonRules::ParseStartMode(TEXT("solo"), bFormation) && !bFormation);
+	TestTrue(TEXT("'Formation' parses (any case)"), LevelJsonRules::ParseStartMode(TEXT("Formation"), bFormation) && bFormation);
+	TestFalse(TEXT("unknown start_mode refused"), LevelJsonRules::ParseStartMode(TEXT("squad"), bFormation));
+
+	FLevelCombatConfig Level;
+	FString Error;
+	TestTrue(TEXT("Level without start_mode parsed"), LevelJsonRules::ParseLevel(TEXT("{\"level_id\": \"t\", \"waves\": []}"), TEXT("t"), Level, Error));
+	TestFalse(TEXT("... starts in Solo"), Level.bStartInFormation);
+	TestTrue(TEXT("Level with start_mode formation parsed"),
+		LevelJsonRules::ParseLevel(TEXT("{\"level_id\": \"t\", \"start_mode\": \"formation\", \"waves\": []}"), TEXT("t"), Level, Error));
+	TestTrue(TEXT("... starts in formation"), Level.bStartInFormation);
+	FLevelCombatConfig Bad;
+	TestFalse(TEXT("Level with an unknown start_mode refused"),
+		LevelJsonRules::ParseLevel(TEXT("{\"level_id\": \"t\", \"start_mode\": \"squad\", \"waves\": []}"), TEXT("t"), Bad, Error));
+	return true;
+}
