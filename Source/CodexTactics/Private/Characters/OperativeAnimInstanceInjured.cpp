@@ -7,8 +7,12 @@
 //   per-loop left-foot strike offsets) + the injured idle. Prone: the prone crawl layer plays the injured crawl forward (ActiveCrawlSet).
 // - Cold walking (no wound): Freezing (>= "cold_from") the 8-direction injured walk, Frostbite (>= "cold_slow_from") the slow injured walk
 //   (Walk_Injured_Slow) by a forward cone; still = the ABP's shiver idle.
-// - LOWER body only (root -> the reference, pelvis, legs, foot IK bones): the clips are unarmed (hands on the wound, measured by the setup
-//   script), so the torso stays the ABP's / the weapon layer's - the weapon pose, the aim offset, fire / reload / grenade / blizzard clips.
+// - The wound tiers (the game designer 2026-11-10, feat/injured-tiers-fullbody): light = the 8-direction walk + Run_Injured + the walk idles
+//   (the run idles after a run), heavy = the slow walk forward + the slow idles, no run, critical = the injured crawl + the crawl idles (lying
+//   still too: OperativeAnimInstanceProneCrawl.cpp); the idles alternate per loop.
+// - FULL BODY while wounded and not firing (the hand on the wound, the rifle hanging from the right hand); a fire attempt / a shot / a reload
+//   raise the torso back into the ABP's / the weapon layer's weapon pose over "raise_to_fire_s" (the shot waits for it), "lower_after_s" without
+//   one lowers it. The cold walks keep the weapon torso (the lower body only, as before).
 // Rules: Characters/InjuredLocomotionRules.
 
 #include "Characters/OperativeAnimInstance.h"
@@ -123,6 +127,74 @@ const UAnimSequenceBase* UOperativeAnimInstance::GetInjuredDominantClip() const
 	return Best && InjuredWeight > OperativeInjuredLayer::InjuredMinWeight ? Best->Sequence.Get() : nullptr;
 }
 
+void UOperativeAnimInstance::DemandInjuredRaise()
+{
+	const UWorld* World = GetWorld();
+	LastInjuredDemandTime = World ? World->GetTimeSeconds() : 0.0;
+	if (bInjuredCrawlActive)
+	{
+		HoldAimPose(); // the critical body rises from the crawl idle into the ABP's prone aim (the rifle on the target, like a stopped crawl)
+	}
+}
+
+bool UOperativeAnimInstance::IsInjuredRaisePending() const
+{
+	const UWorld* World = GetWorld();
+	if (!World || LastInjuredUpdateTime < 0.0 || World->GetTimeSeconds() - LastInjuredUpdateTime > 0.25)
+	{
+		return false; // the animation does not tick (off screen, no body): never hold a shot for a pose nobody sees
+	}
+	return InjuredLocomotionRules::HoldsShotForRaise(FMath::Max(InjuredUpperShare, bCriticalCrawlIdle ? CrawlWeight : 0.f));
+}
+
+void UOperativeAnimInstance::StepInjuredIdle(FInjuredIdleCycle& Cycle, int32 SetId, const TArray<UAnimSequence*>& Clips, float DeltaSeconds, bool bRandom,
+	float FadeSeconds)
+{
+	auto Length = [](const UAnimSequence* Clip) { return Clip ? FMath::Max(0.1f, Clip->GetPlayLength()) : 1.f; };
+	if (Clips.IsEmpty())
+	{
+		Cycle = FInjuredIdleCycle();
+		return;
+	}
+	Cycle.PrevTime = Cycle.Prev ? FMath::Fmod(Cycle.PrevTime + DeltaSeconds, Length(Cycle.Prev)) : 0.f;
+	if (SetId != Cycle.SetId || !Cycle.Clip)
+	{
+		// A new set (a wound tier change, the run idle -> the walk idle): its first variant, cross-faded from what played.
+		Cycle.Prev = Cycle.Clip;
+		Cycle.PrevTime = Cycle.Time;
+		Cycle.SetId = SetId;
+		Cycle.Variant = InjuredLocomotionRules::NextIdleVariant(-1, Clips.Num(), bRandom, 0.f);
+		Cycle.Clip = Clips[Cycle.Variant];
+		Cycle.Time = 0.f;
+		Cycle.Fade = Cycle.Prev ? 0.f : 1.f;
+	}
+	else
+	{
+		Cycle.Time += DeltaSeconds;
+		const float ClipLength = Length(Cycle.Clip);
+		if (Cycle.Time >= ClipLength)
+		{
+			// The loop's end: the next variant (alternating, or a random other one), cross-faded - the pack's idles start / end in one stance.
+			const int32 Next = InjuredLocomotionRules::NextIdleVariant(Cycle.Variant, Clips.Num(), bRandom, FMath::FRand());
+			if (Next != Cycle.Variant && Clips.IsValidIndex(Next))
+			{
+				Cycle.Prev = Cycle.Clip;
+				Cycle.PrevTime = ClipLength - KINDA_SMALL_NUMBER;
+				Cycle.Variant = Next;
+				Cycle.Clip = Clips[Next];
+				Cycle.Fade = 0.f;
+				++Cycle.Switches;
+			}
+			Cycle.Time = FMath::Fmod(Cycle.Time - ClipLength, Length(Cycle.Clip));
+		}
+	}
+	Cycle.Fade = FadeSeconds > KINDA_SMALL_NUMBER ? FMath::Min(1.f, Cycle.Fade + DeltaSeconds / FadeSeconds) : 1.f;
+	if (Cycle.Fade >= 1.f)
+	{
+		Cycle.Prev = nullptr;
+	}
+}
+
 void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 {
 	using namespace WeaponAnimLayerRules;
@@ -138,15 +210,30 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 		InjuredWeight = 0.f;
 		InjuredGait = EInjuredGait::None;
 		bInjuredCrawlActive = false;
+		InjuredRaise = InjuredUpperShare = InjuredCueOnly = 0.f;
 		return;
 	}
+	const UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	LastInjuredUpdateTime = Now;
 	const bool bLayerOn = OperativeInjuredLayer::CVarInjuredLayer.GetValueOnGameThread() != 0;
-	InjuredGait = ChooseGait(Set.Triggers, Operative->IsWounded(), Operative->ColdLevel / 100.f);
+	// The wound tier (feat/injured-tiers-fullbody): light = the injured walk / run, heavy (and critical standing) = the slow walk, the cold keeps
+	// its mapping unless the wound is worse.
+	InjuredTier = Operative->GetWoundTier();
+	InjuredGait = ChooseTierGait(Set.Triggers, InjuredTier, Operative->ColdLevel / 100.f);
 	bInjuredCrawlActive = bLayerOn && UsesInjuredCrawl(InjuredGait, bIsProne, bHasInjuredCrawl);
 	if (InjuredGait != EInjuredGait::None)
 	{
 		InjuredClipGait = InjuredGait; // a fading layer keeps the clips of the gait that ended
 	}
+	// The raise (the full body): a fire attempt (DemandInjuredRaise), a shot (HandleWeaponFired), a reload, the turn-based attack mode want the
+	// weapon up; lower_after_s without one lowers it back into the injured clip.
+	if (bIsReloading || (bIsAiming && AimTimer <= 0.f))
+	{
+		LastInjuredDemandTime = Now;
+	}
+	const float SinceDemand = LastInjuredDemandTime < 0.0 ? -1.f : static_cast<float>(Now - LastInjuredDemandTime);
+	InjuredRaise = StepRaiseShare(InjuredRaise, SinceDemand, DeltaSeconds, Set.Raise);
 	// The direction: the velocity relative to the body, eased and cross-faded on a reversal like the crawl (its own: the ABP's Direction is held
 	// below 30 cm/s and a wounded, frozen walk is slower).
 	const FVector Velocity = Operative->GetVelocity();
@@ -160,17 +247,31 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 	}
 	const float Move = MoveWeight(LocomotionSpeed, Set.MoveStartSpeed, Set.MoveFullSpeed);
 	// A full-body clip owns the body (a hit, the warm idles, an interaction, the death): the layer fades out under it; an upper-body clip (fire,
-	// reload, grenade, the blizzard shield) keeps the legs injured.
+	// reload, grenade, the blizzard shield) keeps the legs injured and takes the torso (UpperBodyShare).
 	const bool bFullBodyClip = GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f;
 	const float Target = LayerTarget(InjuredGait, IsInjuredLayerEligible() && !bFullBodyClip, Move);
 	InjuredWeight = FMath::FInterpConstantTo(InjuredWeight, Target, DeltaSeconds, 1.f / FMath::Max(0.01f, Set.BlendSeconds));
 	InjuredTorsoShare = TorsoPelvisShare(Set.TorsoPelvisShare, bIsAiming);
+	// Crouched / in cover and wounded: no pack clip crouches or hugs a wall - the pose stays the ABP's / the cover clip's, the hunch of the limp
+	// cue alone shows the wound (crouch_scale / cover_scale; off while the weapon is up).
+	const bool bWound = bLayerOn && IsWoundGait(InjuredGait);
+	const bool bCueOnlyPose = bWound && !bIsProne && !bIsDead && !bKnockedDown && !bIsClimbing && !bIsVaulting && !bFullBodyClip && (bInCover || bIsCrouching);
+	const float CueOnlyTarget = bCueOnlyPose ? (bInCover ? Set.LimpCue.CoverScale : Set.LimpCue.CrouchScale) * (1.f - InjuredRaise) : 0.f;
+	InjuredCueOnly = Set.LimpCue.bEnabled ? FMath::FInterpConstantTo(InjuredCueOnly, CueOnlyTarget, DeltaSeconds, 1.f / FMath::Max(0.01f, Set.BlendSeconds)) : 0.f;
+	InjuredRunShare = 0.f;
+	if (InjuredSinceRun >= 0.f)
+	{
+		InjuredSinceRun += DeltaSeconds;
+	}
 	if (InjuredWeight <= OperativeInjuredLayer::InjuredMinWeight)
 	{
 		InjuredWeight = 0.f;
 		InjuredPlayRate = 0.f;
-		InjuredLimpAmount = 0.f;
-		InjuredLimpAngles = FVector2D::ZeroVector;
+		InjuredUpperShare = 0.f;
+		InjuredIdleSetNow = EInjuredIdleSet::None;
+		InjuredIdle = FInjuredIdleCycle();
+		InjuredLimpAmount = InjuredCueOnly;
+		InjuredLimpAngles = InjuredCueOnly > OperativeInjuredLayer::InjuredMinWeight ? LimpCueAngles(Set.LimpCue, InjuredCueOnly, 0.f, 0.f, false) : FVector2D::ZeroVector;
 		if (Target <= 0.f)
 		{
 			InjuredClipGait = InjuredGait;
@@ -190,11 +291,11 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 	{
 		return Clip ? SyncedClipTime(InjuredPhase, Set.PhaseOffsets.FindRef(Clip->GetFName()), Clip->GetPlayLength()) : 0.f;
 	};
-	// The 8-direction injured walk (wounded, freezing; frostbite outside the slow walk's forward cone) and the slow walk (frostbite, by the
-	// cone) on ONE shared phase: each loop = one gait cycle, its stride = its authored speed x its length; the cycle is the clips' blend (the two
-	// directions, the old direction's during a reversal's cross-fade, the slow walk's share), played at the body's real speed - the feet of every
-	// loop in play strike together (the per-loop left-heel strike offsets). Wounded: the injured idle against the walk by the smoothed speed;
-	// cold: no idle (the layer's weight is the move share - standing still is the ABP's shiver).
+	// The 8-direction injured walk (light wound, freezing; the heavy wound / frostbite outside the slow walk's forward cone), the slow walk (heavy
+	// wound, frostbite, by the cone) and the run (light wound, by the speed band and its forward cone) on ONE shared phase: each loop = one gait
+	// cycle, its stride = its authored speed x its length; the cycle is the clips' blend, played at the body's real speed - the feet of every
+	// loop in play strike together (the per-loop left-heel strike offsets). A wound: its idle set against the walk by the smoothed speed; cold:
+	// no idle (the layer's weight is the move share - standing still is the ABP's shiver).
 	const TStaticArray<bool, 8> Avail = [&Set]()
 	{
 		TStaticArray<bool, 8> Out;
@@ -214,13 +315,36 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 	const FWeaponLayerDirectionBlend FromDir = Banded(InjuredDirection.From);
 	const float FromShare = 1.f - InjuredDirection.Fade;
 	const float Slow = Set.SlowWalk ? SlowWalkShare(InjuredClipGait, ForwardConeShare(InjuredDirection.Current, Set.SlowConeFullDeg, Set.SlowConeZeroDeg)) : 0.f;
-	if (InjuredClipGait == EInjuredGait::Wounded)
+	const float Run = Set.Run ? RunShare(InjuredClipGait, LocomotionSpeed, Set.RunStartSpeed, Set.RunFullSpeed,
+		ForwardConeShare(InjuredDirection.Current, Set.RunConeFullDeg, Set.RunConeZeroDeg)) : 0.f;
+	InjuredRunShare = Run;
+	if (Run >= 0.5f)
 	{
-		InjuredIdleTime = Set.StandIdle && Set.StandIdle->GetPlayLength() > KINDA_SMALL_NUMBER
-			? FMath::Fmod(InjuredIdleTime + DeltaSeconds, Set.StandIdle->GetPlayLength()) : 0.f;
-		Add(Set.StandIdle, 1.f - Move, InjuredIdleTime);
+		InjuredSinceRun = 0.f; // standing within run_idle_hold_s from now on plays the run idles (out of breath)
 	}
-	const float WalkShare = InjuredClipGait == EInjuredGait::Wounded ? Move : 1.f;
+	const bool bWoundClips = IsWoundGait(InjuredClipGait);
+	if (bWoundClips)
+	{
+		InjuredIdleSetNow = ChooseIdleSet(InjuredClipGait, InjuredSinceRun, Set.RunIdleHoldSeconds);
+		const TArray<UAnimSequence*>* Clips = &Set.StandIdles;
+		if (InjuredIdleSetNow == EInjuredIdleSet::Run && !Set.RunIdles.IsEmpty())
+		{
+			Clips = &Set.RunIdles;
+		}
+		else if (InjuredIdleSetNow == EInjuredIdleSet::Slow && !Set.SlowIdles.IsEmpty())
+		{
+			Clips = &Set.SlowIdles;
+		}
+		StepInjuredIdle(InjuredIdle, static_cast<int32>(InjuredIdleSetNow), *Clips, DeltaSeconds, Set.bIdleRandom, Set.IdleCrossfadeSeconds);
+		Add(InjuredIdle.Clip, (1.f - Move) * InjuredIdle.Fade, InjuredIdle.Time);
+		Add(InjuredIdle.Prev, (1.f - Move) * (1.f - InjuredIdle.Fade), InjuredIdle.PrevTime);
+	}
+	else
+	{
+		InjuredIdleSetNow = EInjuredIdleSet::None;
+		InjuredIdle = FInjuredIdleCycle();
+	}
+	const float WalkShare = bWoundClips ? Move : 1.f;
 	auto CycleOf = [&Set, &Length](const FWeaponLayerDirectionBlend& Blend)
 	{
 		const float Nominal = BlendedNominalSpeed(Blend, Set.WalkSpeeds, Set.WalkSpeed);
@@ -228,17 +352,20 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 	};
 	const float WalkCycle = FMath::Lerp(CycleOf(Dir), CycleOf(FromDir), FMath::Clamp(FromShare, 0.f, 1.f));
 	const float SlowLength = Length(Set.SlowWalk);
-	const float Cycle = FMath::Lerp(WalkCycle, Set.SlowWalkSpeed * SlowLength, Slow);
-	UAnimSequence* Lead = Slow >= 0.5f ? Set.SlowWalk : Set.Walk[static_cast<int32>(Dir.Alpha < 0.5f ? Dir.A : Dir.B)];
+	const float Cycle = FMath::Lerp(FMath::Lerp(WalkCycle, Set.SlowWalkSpeed * SlowLength, Slow), Set.RunSpeed * Length(Set.Run), Run);
+	UAnimSequence* Lead = Run >= 0.5f ? Set.Run : (Slow >= 0.5f ? Set.SlowWalk : Set.Walk[static_cast<int32>(Dir.Alpha < 0.5f ? Dir.A : Dir.B)]);
 	const float LeadLength = Length(Lead);
 	const float MaxRate = FMath::Lerp(Set.MaxPlayRate, Set.SlowMaxPlayRate > 0.f ? Set.SlowMaxPlayRate : Set.MaxPlayRate, Slow);
 	const float Rate = ProneCrawlRules::PhaseRate(MoveSpeed, Cycle, 0.f, 0.f, MaxRate, LeadLength);
 	InjuredPhase = FMath::Fmod(InjuredPhase + DeltaSeconds * Rate, 1.f);
 	InjuredPlayRate = Rate * LeadLength;
 	// The torso limp cue (bug 2026-11-10: from the game camera the lower-body limp under the upright rifle torso did not read): the hunch by the
-	// layer's weight, the sway by the walk share on the shared gait phase (once a cycle - the hurt leg's stance).
+	// layer's weight, the sway by the walk share on the shared gait phase (once a cycle - the hurt leg's stance). Under the full body it shows
+	// only while the weapon is up (the proxy blends it away with the clip's own torso).
 	InjuredLimpAmount = Set.LimpCue.bEnabled ? InjuredWeight : 0.f;
 	InjuredLimpAngles = LimpCueAngles(Set.LimpCue, InjuredWeight, WalkShare, InjuredPhase, bIsAiming);
+	// The full body (a wound only; the cold walks keep the weapon torso): the torso's share in the injured clip.
+	InjuredUpperShare = bWoundClips ? UpperBodyShare(Set.Raise, InjuredWeight, InjuredRaise, GetSlotMontageGlobalWeight(UpperBodySlot)) : 0.f;
 	auto AddPair = [&Add, &At, &Set](const FWeaponLayerDirectionBlend& Blend, float Weight)
 	{
 		UAnimSequence* A = Set.Walk[static_cast<int32>(Blend.A)];
@@ -246,22 +373,57 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 		Add(A, Weight * (1.f - Blend.Alpha), At(A));
 		Add(B, Weight * Blend.Alpha, At(B));
 	};
-	Add(Set.SlowWalk, WalkShare * Slow, At(Set.SlowWalk));
-	AddPair(Dir, WalkShare * (1.f - Slow) * (1.f - FromShare));
+	Add(Set.Run, WalkShare * Run, At(Set.Run));
+	Add(Set.SlowWalk, WalkShare * (1.f - Run) * Slow, At(Set.SlowWalk));
+	AddPair(Dir, WalkShare * (1.f - Run) * (1.f - Slow) * (1.f - FromShare));
 	if (FromShare > OperativeInjuredLayer::InjuredMinWeight)
 	{
-		AddPair(FromDir, WalkShare * (1.f - Slow) * FromShare);
+		AddPair(FromDir, WalkShare * (1.f - Run) * (1.f - Slow) * FromShare);
 	}
 }
 
 void FOperativeAnimInstanceProxy::BlendInjuredLayer(FPoseContext& Output) const
 {
 	using namespace OperativeInjuredLayer;
-	// The layer's pose: its clips blended by weight (the crawl layer's sampling; at most six clips, inline - nothing allocates on the heap).
-	TArray<FCompactPose, TInlineAllocator<6>> Poses;
-	TArray<FBlendedCurve, TInlineAllocator<6>> Curves;
-	TArray<UE::Anim::FStackAttributeContainer, TInlineAllocator<6>> Attributes;
-	TArray<float, TInlineAllocator<6>> Weights;
+	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
+	const FCompactPoseBoneIndex Spine = InjuredBone(Bones, TEXT("spine_01"));
+	const FCompactPoseBoneIndex SpineParent = Spine.GetInt() != INDEX_NONE ? Output.Pose.GetParentBoneIndex(Spine) : FCompactPoseBoneIndex(INDEX_NONE);
+	// The body's forward / lateral axes in component space for the limp cue: from the reference pose (the root goes to the reference below),
+	// forward = the left foot -> its ball, horizontal; the hunch axis = up x forward (rotates up towards forward).
+	FVector CueForward = FVector::ForwardVector;
+	FVector CueHunchAxis = FVector::RightVector;
+	if (!InjuredLimpAngles.IsNearlyZero())
+	{
+		const FVector Foot = InjuredRefComponentLocation(Bones, InjuredBone(Bones, TEXT("foot_l")));
+		const FVector Ball = InjuredRefComponentLocation(Bones, InjuredBone(Bones, TEXT("ball_l")));
+		const FVector Toward = FVector(Ball.X - Foot.X, Ball.Y - Foot.Y, 0.f).GetSafeNormal();
+		if (!Toward.IsNearlyZero())
+		{
+			CueForward = Toward;
+			CueHunchAxis = FVector::CrossProduct(FVector::UpVector, CueForward).GetSafeNormal();
+		}
+	}
+	auto ApplyCue = [this, &CueForward, &CueHunchAxis](const FQuat& ParentNow, const FQuat& Local)
+	{
+		// The limp cue: a component-space bend of the whole torso about the pelvis - the hunch about the body's lateral axis (up towards forward),
+		// the sway about its forward axis - re-expressed in spine_01's local space (the aim's yaw untouched).
+		const FQuat Cue = (FQuat(CueHunchAxis, FMath::DegreesToRadians(InjuredLimpAngles.X)) * FQuat(CueForward, FMath::DegreesToRadians(InjuredLimpAngles.Y))).GetNormalized();
+		return (ParentNow.Inverse() * Cue * ParentNow * Local).GetNormalized();
+	};
+	if (InjuredWeight <= InjuredMinWeight)
+	{
+		// The cue alone (crouched / in cover and wounded): the pose stays the graph's, the torso hunches.
+		if (!InjuredLimpAngles.IsNearlyZero() && Spine.GetInt() != INDEX_NONE && SpineParent.GetInt() != INDEX_NONE)
+		{
+			Output.Pose[Spine].SetRotation(ApplyCue(InjuredChainRotation(Output.Pose, SpineParent), Output.Pose[Spine].GetRotation()));
+		}
+		return;
+	}
+	// The layer's pose: its clips blended by weight (the crawl layer's sampling; at most eight clips, inline - nothing allocates on the heap).
+	TArray<FCompactPose, TInlineAllocator<8>> Poses;
+	TArray<FBlendedCurve, TInlineAllocator<8>> Curves;
+	TArray<UE::Anim::FStackAttributeContainer, TInlineAllocator<8>> Attributes;
+	TArray<float, TInlineAllocator<8>> Weights;
 	float Total = 0.f;
 	for (const FOperativeClipState& Clip : InjuredClips)
 	{
@@ -296,36 +458,22 @@ void FOperativeAnimInstanceProxy::BlendInjuredLayer(FPoseContext& Output) const
 	FAnimationRuntime::BlendPosesTogether(Poses, Curves, Attributes, Weights, LayerData);
 
 	const float Weight = FMath::Min(1.f, InjuredWeight);
-	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
-	const FCompactPoseBoneIndex Spine = InjuredBone(Bones, TEXT("spine_01"));
+	// The full body (feat/injured-tiers-fullbody): the torso's share in the clip - the hand on the wound, the rifle hanging from the right hand
+	// (it stays on its hand socket); 0 = the weapon pose (raised to fire).
+	const float UpperShare = FMath::Clamp(InjuredUpperShare, 0.f, 1.f);
 	const FCompactPoseBoneIndex HandIK = InjuredBone(Bones, TEXT("ik_hand_root"));
-	const FCompactPoseBoneIndex SpineParent = Spine.GetInt() != INDEX_NONE ? Output.Pose.GetParentBoneIndex(Spine) : FCompactPoseBoneIndex(INDEX_NONE);
 	// The graph's (+ the weapon layer's) torso and hand IK placement before the legs change: kept in component space.
 	const FCompactPoseBoneIndex Root(0);
 	const FTransform GraphRoot = Output.Pose[Root];
 	const FQuat SpineParentGraph = SpineParent.GetInt() != INDEX_NONE ? InjuredChainRotation(Output.Pose, SpineParent) : FQuat::Identity;
 	const float TorsoShare = FMath::Clamp(InjuredTorsoShare, 0.f, 1.f);
-	// The body's forward / lateral axes in component space for the limp cue: from the reference pose (the root goes to the reference above),
-	// forward = the left foot -> its ball, horizontal; the hunch axis = up x forward (rotates up towards forward).
-	FVector CueForward = FVector::ForwardVector;
-	FVector CueHunchAxis = FVector::RightVector;
-	if (!InjuredLimpAngles.IsNearlyZero())
-	{
-		const FVector Foot = InjuredRefComponentLocation(Bones, InjuredBone(Bones, TEXT("foot_l")));
-		const FVector Ball = InjuredRefComponentLocation(Bones, InjuredBone(Bones, TEXT("ball_l")));
-		const FVector Toward = FVector(Ball.X - Foot.X, Ball.Y - Foot.Y, 0.f).GetSafeNormal();
-		if (!Toward.IsNearlyZero())
-		{
-			CueForward = Toward;
-			CueHunchAxis = FVector::CrossProduct(FVector::UpVector, CueForward).GetSafeNormal();
-		}
-	}
-	TArray<bool, TInlineAllocator<128>> Upper;
-	Upper.SetNumZeroed(Output.Pose.GetNumBones());
+	// 1 = the torso chain (spine_01 and below), 2 = the hand IK chain (ik_hand_root and below).
+	TArray<uint8, TInlineAllocator<128>> Chain;
+	Chain.SetNumZeroed(Output.Pose.GetNumBones());
 	for (const FCompactPoseBoneIndex Index : Output.Pose.ForEachBoneIndex())
 	{
 		const FCompactPoseBoneIndex Parent = Output.Pose.GetParentBoneIndex(Index);
-		Upper[Index.GetInt()] = Index == Spine || Index == HandIK || (Parent.GetInt() != INDEX_NONE && Upper[Parent.GetInt()]);
+		Chain[Index.GetInt()] = Index == Spine ? 1 : (Index == HandIK ? 2 : (Parent.GetInt() != INDEX_NONE ? Chain[Parent.GetInt()] : 0));
 		if (Index.IsRootBone())
 		{
 			// The root faces the capsule (the reference): the ABP's orientation warping / root yaw turns it towards the movement for ITS forward
@@ -338,19 +486,20 @@ void FOperativeAnimInstanceProxy::BlendInjuredLayer(FPoseContext& Output) const
 		if (Index == Spine && SpineParent.GetInt() != INDEX_NONE)
 		{
 			// The torso keeps the graph's mesh-space rotation on the injured pelvis (its local rotation re-expressed under the new pelvis chain -
-			// parents are final, they come first), TorsoShare of the pelvis's own limp riding along (0 while aiming: the aim stays exact). The
-			// local translation stays: the torso rides the pelvis's bob.
+			// parents are final, they come first), TorsoShare of the pelvis's own limp riding along (0 while aiming: the aim stays exact) + the
+			// limp cue; then UpperShare towards the clip's own torso (the full body). The local translation stays: the torso rides the pelvis's bob.
 			const FQuat Graph = Output.Pose[Index].GetRotation();
 			const FQuat ParentNow = InjuredChainRotation(Output.Pose, SpineParent);
 			const FQuat Kept = (ParentNow.Inverse() * SpineParentGraph * Graph).GetNormalized();
 			FQuat Local = FQuat::Slerp(Kept, Graph, TorsoShare).GetNormalized();
 			if (!InjuredLimpAngles.IsNearlyZero())
 			{
-				// The limp cue: a component-space bend of the whole torso about the pelvis - the hunch about the body's lateral axis (up towards
-				// forward), the sway about its forward axis - re-expressed in spine_01's local space (the aim's yaw untouched).
-				const FQuat Cue = (FQuat(CueHunchAxis, FMath::DegreesToRadians(InjuredLimpAngles.X))
-					* FQuat(CueForward, FMath::DegreesToRadians(InjuredLimpAngles.Y))).GetNormalized();
-				Local = (ParentNow.Inverse() * Cue * ParentNow * Local).GetNormalized();
+				Local = ApplyCue(ParentNow, Local);
+			}
+			if (UpperShare > InjuredMinWeight)
+			{
+				Local = FQuat::Slerp(Local, Layer[Index].GetRotation(), UpperShare).GetNormalized();
+				Output.Pose[Index].SetTranslation(FMath::Lerp(Output.Pose[Index].GetTranslation(), Layer[Index].GetTranslation(), UpperShare));
 			}
 			Output.Pose[Index].SetRotation(Local);
 			continue;
@@ -363,9 +512,14 @@ void FOperativeAnimInstanceProxy::BlendInjuredLayer(FPoseContext& Output) const
 			Output.Pose[Index] = Output.Pose[Index] * ParentGraph * ParentNow.Inverse();
 			continue;
 		}
-		if (!Upper[Index.GetInt()])
+		const uint8 Kind = Chain[Index.GetInt()];
+		if (Kind == 0)
 		{
 			Output.Pose[Index].BlendWith(Layer[Index], Weight);
+		}
+		else if (Kind == 1 && UpperShare > InjuredMinWeight)
+		{
+			Output.Pose[Index].BlendWith(Layer[Index], UpperShare); // the arms, the neck, the head: the clip's (the hand on the wound)
 		}
 	}
 }

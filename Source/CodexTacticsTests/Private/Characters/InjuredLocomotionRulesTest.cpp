@@ -1,6 +1,7 @@
 // CodexTactics.Animation.Injured.* - the injured locomotion (the game designer 2026-11-10, InjuredLocomotionRules): a wounded operative walks /
 // stands / crawls injured; a freezing one (cold >= cold_from 0.7) walks the injured walk, a frostbitten one (cold >= cold_slow_from 0.9) the slow
 // injured walk forward, both keep the shiver idle standing; wounded first.
+// Tiers.* (feat/injured-tiers-fullbody): the light / heavy / critical gaits, the run and the idle sets, the idle variants, the full-body raise.
 
 #include "Misc/AutomationTest.h"
 #include "Characters/InjuredLocomotionRules.h"
@@ -151,6 +152,127 @@ bool FInjuredLimpCueTest::RunTest(const FString&)
 	TestEqual(TEXT("sanitize: sway >= 0"), Clean.SwayDeg, 0.f);
 	TestEqual(TEXT("sanitize: the phase wraps"), Clean.SwayPhase, 0.25f, 1e-4f);
 	TestEqual(TEXT("sanitize: aiming scale <= 1"), Clean.AimingScale, 1.f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInjuredTierGaitTest, "CodexTactics.Animation.Injured.Tiers.GaitFromTier",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FInjuredTierGaitTest::RunTest(const FString&)
+{
+	using namespace InjuredLocomotionRules;
+	using CriticalWoundRules::EWoundTier;
+	FInjuredTriggers Triggers;
+	Triggers.ColdFrom = 0.7f;
+	Triggers.ColdSlowFrom = 0.9f;
+	TestTrue(TEXT("no wound, warm -> off"), ChooseTierGait(Triggers, EWoundTier::None, 0.f) == EInjuredGait::None);
+	TestTrue(TEXT("light wound -> the injured walk (Wounded)"), ChooseTierGait(Triggers, EWoundTier::Light, 0.f) == EInjuredGait::Wounded);
+	TestTrue(TEXT("heavy wound -> the slow walk (WoundedHeavy)"), ChooseTierGait(Triggers, EWoundTier::Heavy, 0.f) == EInjuredGait::WoundedHeavy);
+	TestTrue(TEXT("critical (standing a moment before he goes down) -> WoundedHeavy"), ChooseTierGait(Triggers, EWoundTier::Critical, 0.f) == EInjuredGait::WoundedHeavy);
+	TestTrue(TEXT("no wound, freezing -> the cold walk (its mapping stays)"), ChooseTierGait(Triggers, EWoundTier::None, 0.75f) == EInjuredGait::Cold);
+	TestTrue(TEXT("no wound, frostbite -> the cold slow walk"), ChooseTierGait(Triggers, EWoundTier::None, 0.95f) == EInjuredGait::ColdSlow);
+	TestTrue(TEXT("light wound + freezing -> the wound (the same walk, the wounded idle)"), ChooseTierGait(Triggers, EWoundTier::Light, 0.75f) == EInjuredGait::Wounded);
+	TestTrue(TEXT("light wound + frostbite -> the worse: the heavy clips"), ChooseTierGait(Triggers, EWoundTier::Light, 0.95f) == EInjuredGait::WoundedHeavy);
+	TestTrue(TEXT("heavy wound + freezing -> heavy"), ChooseTierGait(Triggers, EWoundTier::Heavy, 0.75f) == EInjuredGait::WoundedHeavy);
+	Triggers.bWounded = false;
+	TestTrue(TEXT("the wounded trigger off: a heavy wound, warm -> off"), ChooseTierGait(Triggers, EWoundTier::Heavy, 0.f) == EInjuredGait::None);
+	TestTrue(TEXT("the wounded trigger off: heavy + freezing -> the cold walk"), ChooseTierGait(Triggers, EWoundTier::Heavy, 0.8f) == EInjuredGait::Cold);
+	TestTrue(TEXT("wound gaits"), IsWoundGait(EInjuredGait::Wounded) && IsWoundGait(EInjuredGait::WoundedHeavy) && !IsWoundGait(EInjuredGait::Cold)
+		&& !IsWoundGait(EInjuredGait::ColdSlow) && !IsWoundGait(EInjuredGait::None));
+	TestEqual(TEXT("heavy standing still: the slow idle is the layer's"), LayerTarget(EInjuredGait::WoundedHeavy, true, 0.f), 1.f);
+	TestEqual(TEXT("heavy walking forward: the slow walk"), SlowWalkShare(EInjuredGait::WoundedHeavy, 1.f), 1.f);
+	TestEqual(TEXT("heavy strafing: the 8-direction walk"), SlowWalkShare(EInjuredGait::WoundedHeavy, 0.f), 0.f);
+	TestTrue(TEXT("heavy / critical prone: the injured crawl"), UsesInjuredCrawl(EInjuredGait::WoundedHeavy, true, true));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInjuredRunAndIdleTest, "CodexTactics.Animation.Injured.Tiers.RunAndIdles",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FInjuredRunAndIdleTest::RunTest(const FString&)
+{
+	using namespace InjuredLocomotionRules;
+	// The run (light wound, Run_Injured over run_blend_speeds [170, 250] cm/s within the forward cone).
+	TestEqual(TEXT("light, walking 143 cm/s: no run"), RunShare(EInjuredGait::Wounded, 143.f, 170.f, 250.f, 1.f), 0.f);
+	TestEqual(TEXT("light, the wounded regroup run 312 cm/s forward: the run"), RunShare(EInjuredGait::Wounded, 312.f, 170.f, 250.f, 1.f), 1.f);
+	TestEqual(TEXT("light, 210 cm/s: half way"), RunShare(EInjuredGait::Wounded, 210.f, 170.f, 250.f, 1.f), 0.5f, 0.001f);
+	TestEqual(TEXT("light, running sideways (outside the cone): the walk"), RunShare(EInjuredGait::Wounded, 312.f, 170.f, 250.f, 0.f), 0.f);
+	TestEqual(TEXT("heavy: never runs"), RunShare(EInjuredGait::WoundedHeavy, 400.f, 170.f, 250.f, 1.f), 0.f);
+	TestEqual(TEXT("cold: no run clip"), RunShare(EInjuredGait::Cold, 400.f, 170.f, 250.f, 1.f), 0.f);
+	TestEqual(TEXT("no band (full 0): off"), RunShare(EInjuredGait::Wounded, 400.f, 0.f, 0.f, 1.f), 0.f);
+	// The idle sets per state.
+	TestTrue(TEXT("light, never ran: the walk idles"), ChooseIdleSet(EInjuredGait::Wounded, -1.f, 6.f) == EInjuredIdleSet::Walk);
+	TestTrue(TEXT("light, 2 s after a run: the run idles"), ChooseIdleSet(EInjuredGait::Wounded, 2.f, 6.f) == EInjuredIdleSet::Run);
+	TestTrue(TEXT("light, 6 s after a run: back to the walk idles"), ChooseIdleSet(EInjuredGait::Wounded, 6.f, 6.f) == EInjuredIdleSet::Walk);
+	TestTrue(TEXT("heavy: the slow idles"), ChooseIdleSet(EInjuredGait::WoundedHeavy, 1.f, 6.f) == EInjuredIdleSet::Slow);
+	TestTrue(TEXT("cold: no injured idle (the shiver)"), ChooseIdleSet(EInjuredGait::Cold, -1.f, 6.f) == EInjuredIdleSet::None);
+	// The variants: alternating 1 / 2 per loop, random = always another one.
+	TestEqual(TEXT("the first loop: variant 0"), NextIdleVariant(-1, 2, false, 0.f), 0);
+	TestEqual(TEXT("alternate: 0 -> 1"), NextIdleVariant(0, 2, false, 0.f), 1);
+	TestEqual(TEXT("alternate: 1 -> 0"), NextIdleVariant(1, 2, false, 0.f), 0);
+	TestEqual(TEXT("alternate of three: 2 -> 0"), NextIdleVariant(2, 3, false, 0.f), 0);
+	TestEqual(TEXT("one variant: stays"), NextIdleVariant(0, 1, true, 0.7f), 0);
+	TestEqual(TEXT("random of two: the other one"), NextIdleVariant(0, 2, true, 0.1f), 1);
+	TestEqual(TEXT("random of two from 1: 0"), NextIdleVariant(1, 2, true, 0.99f), 0);
+	bool bNeverSame = true;
+	for (int32 Step = 0; Step < 20; ++Step)
+	{
+		bNeverSame &= NextIdleVariant(1, 3, true, Step / 20.f) != 1;
+	}
+	TestTrue(TEXT("random of three never repeats the previous"), bNeverSame);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInjuredRaiseTest, "CodexTactics.Animation.Injured.Tiers.RaiseToFire",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FInjuredRaiseTest::RunTest(const FString&)
+{
+	using namespace InjuredLocomotionRules;
+	FInjuredRaiseConfig Config;
+	Config.bFullBody = true; // the designer's defaults: raise 0.25 s, lower after 1.0 s, over 0.4 s
+	TestEqual(TEXT("defaults"), Config.RaiseSeconds == 0.25f && Config.LowerAfterSeconds == 1.f && Config.LowerSeconds == 0.4f, true);
+	// Raising from the lowered pose at 60 fps: the shot waits until the torso is >= 98 % up.
+	float Raise = 0.f;
+	int32 Frames = 0;
+	while (HoldsShotForRaise(UpperBodyShare(Config, 1.f, Raise, 0.f)) && Frames < 200)
+	{
+		Raise = StepRaiseShare(Raise, 0.f, 1.f / 60.f, Config);
+		++Frames;
+	}
+	TestEqual(TEXT("the first shot from the lowered pose waits 15 frames at 60 fps (0.25 s)"), Frames, 15);
+	TestEqual(TEXT("FirstShotRaiseDelay: lowered = 0.245 s"), FirstShotRaiseDelay(Config, 0.f), 0.245f, 0.0001f);
+	TestEqual(TEXT("FirstShotRaiseDelay: already up = 0"), FirstShotRaiseDelay(Config, 1.f), 0.f);
+	TestEqual(TEXT("FirstShotRaiseDelay: half up = 0.12 s"), FirstShotRaiseDelay(Config, 0.5f), 0.12f, 0.0001f);
+	// Held up while the demands keep coming (a burst, the cooldown between rounds), then lowered after lower_after_s.
+	Raise = 1.f;
+	Raise = StepRaiseShare(Raise, 0.9f, 0.1f, Config);
+	TestEqual(TEXT("0.9 s after the last attempt: still up"), Raise, 1.f);
+	Raise = StepRaiseShare(Raise, 1.05f, 0.1f, Config);
+	TestEqual(TEXT("1.05 s after it: lowering at 1 / 0.4 s"), Raise, 0.75f, 0.0001f);
+	Raise = StepRaiseShare(Raise, 2.f, 1.f, Config);
+	TestEqual(TEXT("lowered"), Raise, 0.f);
+	TestEqual(TEXT("no demand yet (-1): stays lowered"), StepRaiseShare(0.f, -1.f, 0.1f, Config), 0.f);
+	FInjuredRaiseConfig Instant = Config;
+	Instant.RaiseSeconds = 0.f;
+	TestEqual(TEXT("raise_to_fire_s 0: up at once"), StepRaiseShare(0.f, 0.f, 0.016f, Instant), 1.f);
+	// The torso's share in the clip.
+	TestEqual(TEXT("lowered, full layer: the whole torso is the clip's"), UpperBodyShare(Config, 1.f, 0.f, 0.f), 1.f);
+	TestEqual(TEXT("raised: the weapon pose"), UpperBodyShare(Config, 1.f, 1.f, 0.f), 0.f);
+	TestEqual(TEXT("an upper-body clip (a reload / a grenade) takes the torso by its weight"), UpperBodyShare(Config, 1.f, 0.f, 0.75f), 0.25f, 0.0001f);
+	TestEqual(TEXT("the layer half in"), UpperBodyShare(Config, 0.5f, 0.f, 0.f), 0.5f);
+	FInjuredRaiseConfig Off;
+	TestEqual(TEXT("full_body off (the morning's lower-body layer): never the clip's torso"), UpperBodyShare(Off, 1.f, 0.f, 0.f), 0.f);
+	TestEqual(TEXT("full_body off: no shot delay"), FirstShotRaiseDelay(Off, 0.f), 0.f);
+	TestFalse(TEXT("the healthy body (share 0) never holds a shot"), HoldsShotForRaise(0.f));
+	FInjuredRaiseConfig Wild;
+	Wild.RaiseSeconds = -3.f;
+	Wild.LowerAfterSeconds = 99.f;
+	Wild.LowerSeconds = FMath::Sqrt(-1.f);
+	const FInjuredRaiseConfig Clean = SanitizeRaise(Wild);
+	TestEqual(TEXT("sanitize: raise >= 0"), Clean.RaiseSeconds, 0.f);
+	TestEqual(TEXT("sanitize: lower_after <= 5"), Clean.LowerAfterSeconds, 5.f);
+	TestEqual(TEXT("sanitize: NaN lower -> 0.4"), Clean.LowerSeconds, 0.4f);
 	return true;
 }
 

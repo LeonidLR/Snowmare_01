@@ -52,6 +52,7 @@ WALK_CONTACTS = ("foot_l", "foot_r", "ball_l", "ball_r")
 CRAWL_CONTACTS = ("hand_l", "hand_r", "calf_l", "calf_r", "ball_l", "ball_r")
 TORSO = ("spine_01", "spine_02", "spine_03")
 RATE = 60.0  # samples per second
+MEASURE_ONLY = ("Walk_Injured",)
 log = []
 report = {"clips": {}, "bodies": {}}
 
@@ -311,6 +312,19 @@ for name, clip in pack.items():
         f"(own slide {entry.get('intrinsic_slide')}, at contact {entry.get('slide_at_contact')}), heading {entry.get('walk_heading_deg')}, "
         f"strikes {entry.get('strikes_foot_l')}, phase {entry.get('phase')}, hands {entry['hands']}, pelvis rot {entry['pelvis_rot_range_deg']}, "
         f"spine_03 rot {entry['spine_03_rot_range_deg']}, bob {entry['pelvis_bob_cm']} cm, drift {entry['drift_cm']} cm")
+
+# Measured only, never copied (2026-11-10, feat/injured-tiers-fullbody: "apply ALL the pack's clips"): the plain forward walk - the layer plays
+# its Walk_Injured_BS/Walk_Injured_Front twin (the 8-direction set's phase / speed data); the report shows whether the two are the same loop.
+for name in MEASURE_ONLY:
+    clip = load(PACK + "Animations/In-Place/" + name)
+    if not clip:
+        continue
+    entry = {"length": round(clip.get_editor_property("sequence_length"), 3), "frames": unreal.AnimationLibrary.get_num_frames(clip),
+             "measure_only": True, "travel": root_travel(name)}
+    entry.update(measure(clip, name))
+    report["clips"][name] = entry
+    say(f"  {name} (measured only, not copied): {entry['length']:.2f} s, {entry['frames']} frames, travel {entry.get('travel')}, best speed "
+        f"{entry.get('best_speed')} (own slide {entry.get('intrinsic_slide')}), heading {entry.get('walk_heading_deg')}, phase {entry.get('phase')}")
 
 # --- Retarget -------------------------------------------------------------------------------------------------------------------------
 retargeter = make_retargeter()

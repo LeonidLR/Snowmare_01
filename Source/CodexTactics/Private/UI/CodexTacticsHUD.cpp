@@ -87,6 +87,10 @@ namespace
 		TEXT("CodexTactics.HUD.ShowStatus"), true,
 		TEXT("Show the squad status panel and the labels above operatives."));
 
+	TAutoConsoleVariable<int32> CVarWoundTags(
+		TEXT("Codex.HUD.WoundTags"), -1,
+		TEXT("The over-head wound tags (WOUNDED / BADLY WOUNDED / CRITICAL): -1 = Content/Data/UI/hud_labels.json (wound_tag, critical_tag), 0 = off, 1 = on."));
+
 	constexpr float Margin = 16.f;
 	constexpr float LinePadding = 3.f;
 	const FLinearColor PanelColor(0.f, 0.f, 0.f, 0.55f);
@@ -195,6 +199,9 @@ bool ACodexTacticsHUD::ShouldDrawStatus() const
 void ACodexTacticsHUD::BeginPlay()
 {
 	Super::BeginPlay();
+	// The label switches (Content/Data/UI/hud_labels.json): read at each level start; DrawHUD re-reads them when the file changes (dev builds).
+	HudLabelRules::ReloadConfig();
+	FrameLabels = HudLabelRules::GetConfig();
 	if (ActionMenuWidgetClass && GetOwningPlayerController())
 	{
 		ActionMenu = CreateWidget<UActionMenuWidget>(GetOwningPlayerController(), ActionMenuWidgetClass);
@@ -418,27 +425,58 @@ void ACodexTacticsHUD::DrawHUD()
 	{
 		return;
 	}
+	// The label switches (HudLabelRules): the file re-read when it changed (dev builds, at most once a second) + the wound tag override.
+	using HudLabelRules::EHudLabel;
+	HudLabelRules::PollConfigFile(FPlatformTime::Seconds());
+	FrameLabels = HudLabelRules::ApplyWoundTagOverride(HudLabelRules::GetConfig(), CVarWoundTags.GetValueOnGameThread());
 	if (ShouldDrawStatus())
 	{
 		DrawOperativeLabels();
 	}
 	DrawWorldLabels();
-	DrawDefenseMarkers();
+	if (ShowsLabel(EHudLabel::DefenseMarkers))
+	{
+		DrawDefenseMarkers();
+	}
 	DrawSpaceCharge();
-	DrawCombatModeBadge();
+	if (ShowsLabel(EHudLabel::CombatModeBadge))
+	{
+		DrawCombatModeBadge();
+	}
 	DrawInteriorViewHint();
-	DrawPostureMarkers();
-	DrawStealthLureMarkers();
-	DrawKnockdownBars();
-	DrawSuppressionBadges();
-	DrawHordeWarning();
-	DrawHitChanceLabel();
+	if (ShowsLabel(EHudLabel::PostureLetters))
+	{
+		DrawPostureMarkers();
+	}
+	if (ShowsLabel(EHudLabel::EnemyAlertMarkers))
+	{
+		DrawStealthLureMarkers();
+	}
+	if (ShowsLabel(EHudLabel::KnockdownBadges))
+	{
+		DrawKnockdownBars();
+	}
+	if (ShowsLabel(EHudLabel::SuppressionBadges))
+	{
+		DrawSuppressionBadges();
+	}
+	if (ShowsLabel(EHudLabel::HordeWarning))
+	{
+		DrawHordeWarning();
+	}
+	if (ShowsLabel(EHudLabel::HitChance))
+	{
+		DrawHitChanceLabel();
+	}
 	DrawSelectionBox();
 	DrawCoverSwitchPreview();
 	DrawSquadMovePreview();
 	DrawDropMarkers();
 	DrawFormationPlacement();
-	DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
+	if (ShowsLabel(EHudLabel::FloatingTexts))
+	{
+		DrawFloatingTexts(); // over the name plates (Godot Label3D no_depth_test), under the panels
+	}
 	// Minimap (2026-10-18): the top-right panel shows the feed or the map (F6 / its header), Tab the full-screen map.
 	UMinimapSubsystem* Minimap = GetWorld()->GetSubsystem<UMinimapSubsystem>();
 	if (Minimap)
@@ -455,7 +493,7 @@ void ACodexTacticsHUD::DrawHUD()
 	}
 	DrawMinimapHeader();
 	const float ObjectiveBottom = DrawObjectiveBanner();
-	if (ShouldDrawStatus())
+	if (ShouldDrawStatus() && ShowsLabel(EHudLabel::SquadStatusPanel))
 	{
 		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
 	}
@@ -1248,16 +1286,18 @@ void ACodexTacticsHUD::DrawWorldLabels()
 			Y += LineHeight;
 		}
 	};
+	using HudLabelRules::EHudLabel;
 	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
 	{
-		// Godot: the enemies left in stasis outside a turn-based fight hide their plates.
+		// Godot: the enemies left in stasis outside a turn-based fight hide their plates. hud_labels.json: the name / statuses / health /
+		// armour marker each under its switch.
 		FOverheadLabel Label;
-		if (!Enemy->IsHidden() && (!bTurnBased || TurnBased->GetUnitState(Enemy)) && Enemy->GetOverheadLabel(Label))
+		if (!Enemy->IsHidden() && (!bTurnBased || TurnBased->GetUnitState(Enemy)) && Enemy->GetHudOverheadLabel(Label, FrameLabels))
 		{
 			Draw(Enemy, Label);
 		}
 	}
-	for (TActorIterator<AInteractableActor> It(World); It; ++It)
+	for (TActorIterator<AInteractableActor> It(World); It && ShowsLabel(EHudLabel::InteractableLabels); ++It)
 	{
 		FOverheadLabel Label;
 		if (!It->IsHidden() && It->GetOverheadLabel(Label))
@@ -1265,7 +1305,7 @@ void ACodexTacticsHUD::DrawWorldLabels()
 			Draw(*It, Label);
 		}
 	}
-	for (TActorIterator<AGateActor> It(World); It; ++It)
+	for (TActorIterator<AGateActor> It(World); It && ShowsLabel(EHudLabel::GateLabels); ++It)
 	{
 		FOverheadLabel Label;
 		if (!It->IsHidden() && It->GetOverheadLabel(Label))
@@ -1274,7 +1314,7 @@ void ACodexTacticsHUD::DrawWorldLabels()
 		}
 	}
 	// APC P4: a damaged / disabled hull shows its state over the vehicle («HULL 840/1200», «HULL DISABLED - Engineer [Y] repairs»).
-	if (const UVehicleSubsystem* Vehicles = World->GetSubsystem<UVehicleSubsystem>())
+	if (const UVehicleSubsystem* Vehicles = ShowsLabel(EHudLabel::VehicleHullLabels) ? World->GetSubsystem<UVehicleSubsystem>() : nullptr)
 	{
 		for (const AVehiclePawn* Vehicle : Vehicles->GetVehicles())
 		{
@@ -1302,8 +1342,13 @@ void ACodexTacticsHUD::DrawFloatingTexts()
 	// Godot Label3D: font 20 at pixel_size 0.007, black outline, rising and fading out.
 	UFont* Font = GEngine->GetSmallFont();
 	const double Now = GetWorld()->GetTimeSeconds();
+	const bool bCoverTexts = ShowsLabel(HudLabelRules::EHudLabel::CoverTexts);
 	for (const FCombatFloatingText& Entry : Floating->GetTexts())
 	{
+		if (!bCoverTexts && HudLabelRules::IsCoverText(Entry.Text))
+		{
+			continue; // hud_labels.json cover_texts off: no «IN COVER (-35% damage)»
+		}
 		const float Progress = FMath::Clamp(Entry.GetProgress(Now), 0.f, 1.f);
 		const FVector Screen = Project(Entry.Start + FVector(0.f, 0.f, Entry.Rise * Progress), true);
 		if (Screen.Z <= 0.f)
@@ -1551,27 +1596,29 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		{
 			continue; // behind the camera
 		}
-		FString Label = FString::Printf(TEXT("%s · %s"), *Member->DisplayName.ToString(),
-			*AOperativeCharacter::GetStanceDisplayName(Member->GetStance()).ToString());
-		if (Member->ColdSurvival && Member->ColdSurvival->IsFrostbitten())
-		{
-			Label += TEXT(" · FROSTBITTEN");
-		}
-		// The wound tag (bug 2026-11-10, fix/injured-layer-visible: from the game camera the limp alone is easy to miss).
+		// The plate: name · stance [· FROSTBITTEN] [· the wound tag: WOUNDED / BADLY WOUNDED (the heavy tier) / CRITICAL - bug 2026-11-10,
+		// fix/injured-layer-visible: from the game camera the limp alone is easy to miss], each part under its hud_labels.json switch.
+		using HudLabelRules::EHudLabel;
+		CriticalWoundRules::EWoundTier Tier = Member->GetWoundTier();
 		if (Member->IsCriticallyWounded())
 		{
-			Label += TEXT(" · CRITICAL");
+			Tier = CriticalWoundRules::EWoundTier::Critical;
 		}
-		else if (Member->IsWounded())
+		else if (Tier == CriticalWoundRules::EWoundTier::None && Member->IsWounded())
 		{
-			Label += TEXT(" · WOUNDED");
+			Tier = CriticalWoundRules::EWoundTier::Light;
 		}
+		const FString Label = HudLabelRules::ComposeOperativePlate(FrameLabels, Member->DisplayName.ToString(),
+			AOperativeCharacter::GetStanceDisplayName(Member->GetStance()).ToString(), Member->ColdSurvival && Member->ColdSurvival->IsFrostbitten(), Tier);
 		float W = 0.f;
 		float H = 0.f;
 		Canvas->StrLen(Font, Label, W, H);
 		const bool bLeader = Member == Squad->GetLeader();
-		DrawRect(PanelColor, Screen.X - W * 0.5f - 4.f, Screen.Y - 2.f, W + 8.f, H + 4.f);
-		DrawText(Label, bLeader ? SpeakerColor : TextColor, Screen.X - W * 0.5f, Screen.Y, Font);
+		if (!Label.IsEmpty())
+		{
+			DrawRect(PanelColor, Screen.X - W * 0.5f - 4.f, Screen.Y - 2.f, W + 8.f, H + 4.f);
+			DrawText(Label, bLeader ? SpeakerColor : TextColor, Screen.X - W * 0.5f, Screen.Y, Font);
+		}
 		// Godot PanicIndicator: «PANIC!» with the phase while panicking, «STRESS: n%» from 50 % stress.
 		const UPanicComponent* Panic = Member->PanicComponent;
 		FString PanicBadge;
@@ -1583,7 +1630,7 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		{
 			PanicBadge = FString::Printf(TEXT("STRESS: %d%%"), FMath::FloorToInt(Panic->GetStress()));
 		}
-		if (!PanicBadge.IsEmpty() && !Member->IsRaging())
+		if (!PanicBadge.IsEmpty() && !Member->IsRaging() && ShowsLabel(EHudLabel::PanicBadge))
 		{
 			float BW = 0.f;
 			float BH = 0.f;
@@ -1592,7 +1639,7 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 			DrawRect(PanelColor, Screen.X - BW * 0.5f - 4.f, Screen.Y - BH - 8.f, BW + 8.f, BH + 4.f);
 			DrawText(PanicBadge, BadgeColor, Screen.X - BW * 0.5f, Screen.Y - BH - 6.f, Font);
 		}
-		if (Member->IsRaging())
+		if (Member->IsRaging() && ShowsLabel(EHudLabel::RageBadge))
 		{
 			// Godot RageBadge «🔥 RAGE!» above the head.
 			const FString Badge = StripUnsupportedGlyphs(TEXT("🔥 RAGE!"));
@@ -1607,7 +1654,7 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 	// Godot recruit_susanin.gd OverheadPrompt: «[Click] Talk», blue «[Click] Go and rescue» while freezing.
 	const URecruitSubsystem* Recruits = GetWorld()->GetSubsystem<URecruitSubsystem>();
 	const AOperativeCharacter* Recruit = Recruits ? Recruits->GetSusanin() : nullptr;
-	if (Recruit && Recruits->IsRecruit(Recruit))
+	if (Recruit && Recruits->IsRecruit(Recruit) && ShowsLabel(HudLabelRules::EHudLabel::RecruitPrompt))
 	{
 		const FVector Screen = Project(Recruit->GetActorLocation() + FVector(0.f, 0.f, Recruit->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 60.f), true);
 		if (Screen.Z > 0.f)

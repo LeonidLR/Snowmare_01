@@ -30,7 +30,8 @@ bool AOperativeCharacter::IsDroppingOffLedge() const
 
 float AOperativeCharacter::GetSprintSpeedCap() const
 {
-	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, EOperativeStance::Standing, CanSprint(), IsWounded(), bCarrying) * ColdSpeedMultiplier;
+	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, EOperativeStance::Standing, CanSprint(), IsWounded(), bCarrying) * ColdSpeedMultiplier
+		* (Stance == EOperativeStance::Standing ? GetWoundTierSpeedScale() : 1.f);
 }
 
 bool AOperativeCharacter::IsCommittedToNavLinkDrop() const

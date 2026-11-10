@@ -44,6 +44,8 @@ enum class ESquadRegroupPace : uint8
 	Run,
 	/** IsWounded: never a sprint - the run scaled by his wound (MovementConfig.WoundedSpeedMultiplier). */
 	WoundedRun,
+	/** A HEAVY wound (feat/injured-tiers-fullbody, the game designer 2026-11-10: "no running"): he walks his own (heavy) walk back. */
+	WoundedWalk,
 };
 
 namespace SquadRegroupRules
@@ -63,12 +65,15 @@ namespace SquadRegroupRules
 	 */
 	CODEXTACTICS_API bool KeepsFastRegroup(float GapCm, bool bCriticallyWounded, const FSquadRegroupTuning& Tuning);
 
-	/** Sprint out of combat when he may; run in combat; a wounded man runs at his wounded pace (no sprint). */
-	CODEXTACTICS_API ESquadRegroupPace ChoosePace(bool bCombat, bool bWounded, bool bCanSprint, const FSquadRegroupTuning& Tuning);
+	/**
+	 * Sprint out of combat when he may; run in combat; a wounded man runs at his wounded pace (no sprint); a wounded man who may not run
+	 * (bMayRun false: the heavy wound tier) walks.
+	 */
+	CODEXTACTICS_API ESquadRegroupPace ChoosePace(bool bCombat, bool bWounded, bool bCanSprint, const FSquadRegroupTuning& Tuning, bool bMayRun = true);
 
 	/**
 	 * His regroup speed, cm/s: Sprint = SprintSpeed (his sprint, cold included), Run = RunSpeed x ColdMultiplier, WoundedRun = RunSpeed x
-	 * WoundedMultiplier x ColdMultiplier.
+	 * WoundedMultiplier x ColdMultiplier, WoundedWalk = SprintSpeed too (the caller passes his current max speed: not sprinting = his walk).
 	 */
 	CODEXTACTICS_API float PaceSpeed(ESquadRegroupPace Pace, float SprintSpeed, float WoundedMultiplier, float ColdMultiplier, const FSquadRegroupTuning& Tuning);
 

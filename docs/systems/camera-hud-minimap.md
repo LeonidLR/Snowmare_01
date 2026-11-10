@@ -98,3 +98,23 @@ stripped once (`StrippedFloatingTexts`); all keyed case-sensitively on the raw t
 font / width change (`ValidateTextCaches`). `UActionBarWidget::Refresh` (every frame) only calls a setter when the value changed
 (`ActionBarDirty::*`, `SetToolTipIfChanged`: `SetToolTipText` built a new SToolTip each call) - audit P8.
 
+
+## HUD label switches (the game designer 2026-11-10, `feat/injured-tiers-fullbody`)
+
+**Request:** one switch per label kind the HUD draws (the Training Ground gets a panel for it), with a Russian name and an English doc.
+`Content/Data/UI/hud_labels.json` (schema `codex.hud_labels/1`): `"labels": { "<key>": { "show": bool, "label": "<ru>", "doc": "<en>" } }`
+(the short form `"<key>": bool` is read too). Pure `UI/HudLabelRules` (`GetKeys`, `ParseConfig`, `ComposeOperativePlate`,
+`ComposeEnemyLabel`, `WoundTagText`, `IsCoverText`, `ApplyWoundTagOverride`); every default = the HUD as it was (all on); a missing key keeps
+its default, an unknown key is logged, a wrong schema keeps the defaults. Read at each level start (`ACodexTacticsHUD::BeginPlay` ->
+`ReloadConfig`); dev builds re-read it within a second when the file's timestamp changes (`PollConfigFile` from `DrawHUD`; shipping never
+polls). Console override `Codex.HUD.WoundTags` -1 (the file) / 0 / 1 for `wound_tag` + `critical_tag`. `CodexTactics.HUD.ShowStatus` still
+hides the squad plates and the panel as a whole.
+Keys (26): `operative_name`, `operative_stance`, `frostbite_tag`, `wound_tag` ("· WOUNDED" light, "· BADLY WOUNDED" heavy), `critical_tag`,
+`panic_badge`, `rage_badge`, `posture_letters` (P / D / A), `knockdown_badges`, `suppression_badges`, `recruit_prompt`, `enemy_names`,
+`enemy_status` (BURNING / ICED / STUNNED / ARMOR-), `enemy_health` (n/m), `enemy_armor_marker`, `enemy_alert_markers` (? / HEARS / SCENT),
+`interactable_labels` (crates, items, barricades, turrets, tripwires, narrative elements), `gate_labels`, `vehicle_hull_labels`,
+`floating_texts`, `cover_texts` ("IN COVER (-35% damage)" alone), `defense_markers` (HOLD LINE / SUPPRESS shields), `hit_chance`,
+`horde_warning`, `combat_mode_badge` (top-centre mode / fire posture / turret / hull / blast door lines), `squad_status_panel`. Not switched:
+the objective banner, the message feed / minimap, the space-hold bar, the interior view hint, drag / drop markers, selection / move previews
+(panels and cursors, not labels). Hostile PMC fighters draw no plate of their own today (only the shared knockdown / suppression badges).
+Tests `CodexTactics.UI.HudLabels.*` (OperativePlate, EnemyPlate, Parse, DataFileMirrorsDefaults).

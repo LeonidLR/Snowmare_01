@@ -281,9 +281,11 @@ private:
 	 * torso's weapon pose / aim; TorsoShare of the injured pelvis's rotation rides along) and the hand IK bones their mesh-space transform.
 	 */
 	void BlendInjuredLayer(FPoseContext& Output) const;
-	TStaticArray<FOperativeClipState, 6> InjuredClips;
+	TStaticArray<FOperativeClipState, 8> InjuredClips;
 	float InjuredWeight = 0.f;
 	float InjuredTorsoShare = 0.f;
+	/** The torso's share in the injured clip (the full body, feat/injured-tiers-fullbody; 0 = the weapon pose). */
+	float InjuredUpperShare = 0.f;
 	/** The limp cue this frame (deg): X = the torso's forward hunch, Y = its signed side sway (InjuredLocomotionRules::LimpCueAngles). */
 	FVector2D InjuredLimpAngles = FVector2D::ZeroVector;
 };
@@ -1381,6 +1383,30 @@ public:
 	/** The limp cue's strength this frame (0..1 of the "limp" block's amplitudes, 0 when off; smokes). */
 	float GetInjuredLimpAmount() const { return InjuredLimpAmount; }
 
+	// The wound tiers + the full body (the game designer 2026-11-10, feat/injured-tiers-fullbody; InjuredLocomotionRules).
+	/** A fire attempt / an aimed action wants the weapon up: the full-body injured clip's torso rises to the weapon pose (raise_to_fire_s). */
+	void DemandInjuredRaise();
+	/** The shot must wait: the torso is still (partly) in the injured clip or the critical crawl idle (false when the animation is not ticking). */
+	bool IsInjuredRaisePending() const;
+	/** The raise share (0 = the injured clip's torso, 1 = the weapon pose; smokes). */
+	float GetInjuredRaise() const { return InjuredRaise; }
+	/** The torso's share in the injured clip this frame (LayerWeight x (1 - raise) x (1 - the upper-body slot); smokes). */
+	float GetInjuredUpperShare() const { return InjuredUpperShare; }
+	/** The wound tier the layer read this frame (smokes). */
+	CriticalWoundRules::EWoundTier GetInjuredTier() const { return InjuredTier; }
+	/** The standing idle set this frame (smokes). */
+	InjuredLocomotionRules::EInjuredIdleSet GetInjuredIdleSet() const { return InjuredIdleSetNow; }
+	/** The idle clip in front (the current variant; null when none; smokes). */
+	const UAnimSequenceBase* GetInjuredIdleClip() const { return InjuredIdle.Clip; }
+	/** Idle variant changes so far (standing + the critical crawl idle; smokes). */
+	int32 GetInjuredIdleSwitches() const { return InjuredIdle.Switches + CrawlIdleCycle.Switches; }
+	/** The critical crawl idle's clip in front (null when none; smokes). */
+	const UAnimSequenceBase* GetInjuredCrawlIdleClip() const { return CrawlIdleCycle.Clip; }
+	/** The run's share of the injured walk this frame (Run_Injured; smokes). */
+	float GetInjuredRunShare() const { return InjuredRunShare; }
+	/** The critical body lies in the crawl idle now (the crawl layer drives him while still; smokes). */
+	bool IsInjuredCrawlIdleActive() const { return bCriticalCrawlIdle; }
+
 	// --- The shotgun weapon layer (the D-1, designer decision 21, 2026-11-03; WeaponAnimLayerRules) ---------------------------------
 	// The user's ShotgunLocomotionPack clips (Content/Data/Weapons/weapon_anim_sets.json "shotgun") blended natively over the ABP's
 	// pose while a shotgun (EWeaponHandling::Shotgun) is in hands: idle / walk / jog / sprint / crouch by speed and direction, the aim
@@ -1899,6 +1925,27 @@ private:
 		float TorsoPelvisShare = 0.f;
 		/** "limp": the torso cue over the injured layer (InjuredLocomotionRules::FInjuredLimpCue; absent = off). */
 		InjuredLocomotionRules::FInjuredLimpCue LimpCue;
+		// The wound tiers (feat/injured-tiers-fullbody): the idle variants per state, the run, the full-body raise.
+		/** "stand_idles" (the light wound's idles; none = stand_idle alone), "slow_idles" (heavy), "run_idles" (after a run), "crawl_idles". */
+		TArray<UAnimSequence*> StandIdles;
+		TArray<UAnimSequence*> SlowIdles;
+		TArray<UAnimSequence*> RunIdles;
+		TArray<UAnimSequence*> CrawlIdles;
+		/** "run": the light wound's run (a forward loop) at "run_speed" (x stride_scale) over "run_blend_speeds" [start, full] cm/s. */
+		UAnimSequence* Run = nullptr;
+		float RunSpeed = 340.f;
+		float RunStartSpeed = 0.f;
+		float RunFullSpeed = 0.f;
+		/** "run_forward_cone_deg": [full, zero] - the run counts fully within the first, not from the second on (the walk outside it). */
+		float RunConeFullDeg = 45.f;
+		float RunConeZeroDeg = 90.f;
+		/** "run_idle_hold_s": standing within this long after a run plays the run idles (out of breath). */
+		float RunIdleHoldSeconds = 0.f;
+		/** "idle_variants": "random" = a random other variant per loop, else they alternate; "idle_crossfade_s" between two variants. */
+		bool bIdleRandom = false;
+		float IdleCrossfadeSeconds = 0.3f;
+		/** "full_body": the whole body while wounded and not firing (InjuredLocomotionRules::FInjuredRaiseConfig). */
+		InjuredLocomotionRules::FInjuredRaiseConfig Raise;
 		FShotgunAnimSet()
 		{
 			for (int32 Index = 0; Index < 8; ++Index)
@@ -2052,8 +2099,42 @@ private:
 	/** The limp cue's angles this frame (deg; X hunch, Y signed sway) for the proxy. */
 	FVector2D InjuredLimpAngles = FVector2D::ZeroVector;
 	FWeaponLayerDirectionState InjuredDirection;
-	/** The injured idle + two directional loops + the previous direction's two during a reversal's cross-fade (or the slow walk alone). */
-	TStaticArray<FOperativeClipState, 6> InjuredClips;
+	/** The injured idle (two variants cross-fading) + the run / the slow walk + two directional loops + the previous direction's two during a
+	 * reversal's cross-fade. */
+	TStaticArray<FOperativeClipState, 8> InjuredClips;
+	/** One idle set's variants playing in turn (InjuredLocomotionRules::NextIdleVariant at each loop's end, cross-faded). */
+	struct FInjuredIdleCycle
+	{
+		int32 SetId = -1;
+		int32 Variant = -1;
+		UAnimSequence* Clip = nullptr;
+		float Time = 0.f;
+		UAnimSequence* Prev = nullptr;
+		float PrevTime = 0.f;
+		/** The current variant's share (1 = alone; the previous one has the rest). */
+		float Fade = 1.f;
+		int32 Switches = 0;
+	};
+	/** Steps a cycle on the set SetId's clips (a new set cross-fades from the old clip to its first variant). */
+	static void StepInjuredIdle(FInjuredIdleCycle& Cycle, int32 SetId, const TArray<UAnimSequence*>& Clips, float DeltaSeconds, bool bRandom,
+		float FadeSeconds);
+	FInjuredIdleCycle InjuredIdle;
+	FInjuredIdleCycle CrawlIdleCycle;
+	CriticalWoundRules::EWoundTier InjuredTier = CriticalWoundRules::EWoundTier::None;
+	InjuredLocomotionRules::EInjuredIdleSet InjuredIdleSetNow = InjuredLocomotionRules::EInjuredIdleSet::None;
+	/** The raise share (InjuredLocomotionRules::StepRaiseShare) and the world time of the last demand (-1 = none yet). */
+	float InjuredRaise = 0.f;
+	double LastInjuredDemandTime = -1.0;
+	/** The world time of the last UpdateInjuredLayer (a shot is never held by an animation that does not tick). */
+	double LastInjuredUpdateTime = -1.0;
+	float InjuredUpperShare = 0.f;
+	float InjuredRunShare = 0.f;
+	/** Seconds since the last run (-1 = never ran). */
+	float InjuredSinceRun = -1.f;
+	/** The hunch alone while crouched / in cover and wounded (the "limp" block's crouch_scale / cover_scale, eased). */
+	float InjuredCueOnly = 0.f;
+	/** The critical body's crawl idle drives the prone body this frame (UpdateProneCrawlLayer). */
+	bool bCriticalCrawlIdle = false;
 
 	void UpdateState();
 	void UpdateUpperBody(float DeltaSeconds);

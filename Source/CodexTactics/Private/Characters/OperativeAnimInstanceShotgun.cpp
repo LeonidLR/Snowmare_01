@@ -400,7 +400,66 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 		Cue.SwayDeg = (*Limp)->TryGetNumberField(TEXT("sway_deg"), Value) ? static_cast<float>(Value) : 0.f;
 		Cue.SwayPhase = (*Limp)->TryGetNumberField(TEXT("sway_phase"), Value) ? static_cast<float>(Value) : 0.f;
 		Cue.AimingScale = (*Limp)->TryGetNumberField(TEXT("aiming_scale"), Value) ? static_cast<float>(Value) : 0.f;
+		Cue.CrouchScale = (*Limp)->TryGetNumberField(TEXT("crouch_scale"), Value) ? static_cast<float>(Value) : 0.f;
+		Cue.CoverScale = (*Limp)->TryGetNumberField(TEXT("cover_scale"), Value) ? static_cast<float>(Value) : 0.f;
 		ShotgunSet.LimpCue = InjuredLocomotionRules::SanitizeLimpCue(Cue);
+	}
+	// The wound tiers (feat/injured-tiers-fullbody, OperativeAnimInstanceInjured.cpp): the idle variants per state, the run, the full body.
+	auto Sequences = [&Load, &Block](const TCHAR* Key, TArray<UAnimSequence*>& Out)
+	{
+		Out.Reset();
+		const TArray<TSharedPtr<FJsonValue>>* List = nullptr;
+		if (Block->TryGetArrayField(Key, List) && List)
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *List)
+			{
+				if (UAnimSequence* Clip = Value.IsValid() ? Cast<UAnimSequence>(Load(Value->AsString())) : nullptr)
+				{
+					Out.Add(Clip);
+				}
+			}
+		}
+	};
+	Sequences(TEXT("stand_idles"), ShotgunSet.StandIdles);
+	if (ShotgunSet.StandIdles.IsEmpty() && ShotgunSet.StandIdle)
+	{
+		ShotgunSet.StandIdles.Add(ShotgunSet.StandIdle);
+	}
+	Sequences(TEXT("slow_idles"), ShotgunSet.SlowIdles);
+	Sequences(TEXT("run_idles"), ShotgunSet.RunIdles);
+	Sequences(TEXT("crawl_idles"), ShotgunSet.CrawlIdles);
+	if (ShotgunSet.CrawlIdles.IsEmpty() && ShotgunSet.InjuredCrawlIdle)
+	{
+		ShotgunSet.CrawlIdles.Add(ShotgunSet.InjuredCrawlIdle);
+	}
+	ShotgunSet.Run = Sequence(TEXT("run"));
+	Number(TEXT("run_speed"), ShotgunSet.RunSpeed);
+	Number(TEXT("run_idle_hold_s"), ShotgunSet.RunIdleHoldSeconds);
+	Number(TEXT("idle_crossfade_s"), ShotgunSet.IdleCrossfadeSeconds);
+	FString IdleMode;
+	ShotgunSet.bIdleRandom = Block->TryGetStringField(TEXT("idle_variants"), IdleMode) && IdleMode.Equals(TEXT("random"), ESearchCase::IgnoreCase);
+	auto Pair = [&Block](const TCHAR* Key, float& OutA, float& OutB)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* List = nullptr;
+		if (Block->TryGetArrayField(Key, List) && List && List->Num() == 2)
+		{
+			OutA = static_cast<float>((*List)[0]->AsNumber());
+			OutB = static_cast<float>((*List)[1]->AsNumber());
+		}
+	};
+	Pair(TEXT("run_blend_speeds"), ShotgunSet.RunStartSpeed, ShotgunSet.RunFullSpeed);
+	Pair(TEXT("run_forward_cone_deg"), ShotgunSet.RunConeFullDeg, ShotgunSet.RunConeZeroDeg);
+	// "full_body": { "enabled", "raise_to_fire_s", "lower_after_s", "lower_blend_s" } (InjuredLocomotionRules::FInjuredRaiseConfig; absent = off).
+	const TSharedPtr<FJsonObject>* FullBody = nullptr;
+	if (Block->TryGetObjectField(TEXT("full_body"), FullBody) && FullBody)
+	{
+		InjuredLocomotionRules::FInjuredRaiseConfig Raise;
+		(*FullBody)->TryGetBoolField(TEXT("enabled"), Raise.bFullBody);
+		double Value = 0.0;
+		Raise.RaiseSeconds = (*FullBody)->TryGetNumberField(TEXT("raise_to_fire_s"), Value) ? static_cast<float>(Value) : Raise.RaiseSeconds;
+		Raise.LowerAfterSeconds = (*FullBody)->TryGetNumberField(TEXT("lower_after_s"), Value) ? static_cast<float>(Value) : Raise.LowerAfterSeconds;
+		Raise.LowerSeconds = (*FullBody)->TryGetNumberField(TEXT("lower_blend_s"), Value) ? static_cast<float>(Value) : Raise.LowerSeconds;
+		ShotgunSet.Raise = InjuredLocomotionRules::SanitizeRaise(Raise);
 	}
 	const TArray<TSharedPtr<FJsonValue>>* SlowCone = nullptr;
 	if (Block->TryGetArrayField(TEXT("slow_forward_cone_deg"), SlowCone) && SlowCone && SlowCone->Num() == 2)
@@ -433,6 +492,7 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 		ShotgunSet.CrouchSpeed *= Scale;
 		ShotgunSet.SprintSpeed *= Scale;
 		ShotgunSet.SlowWalkSpeed *= Scale;
+		ShotgunSet.RunSpeed *= Scale;
 		for (int32 Index = 0; Index < 8; ++Index)
 		{
 			ShotgunSet.WalkSpeeds[Index] *= Scale;

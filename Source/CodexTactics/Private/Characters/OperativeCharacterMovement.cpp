@@ -584,7 +584,8 @@ bool AOperativeCharacter::CanSprint() const
 
 float AOperativeCharacter::GetMaxSpeed() const
 {
-	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, bSprinting, IsWounded(), bCarrying) * ColdSpeedMultiplier;
+	// The heavy wound tier walks slower than the light one (feat/injured-tiers-fullbody: Walk_Injured_Slow; standing only).
+	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, bSprinting, IsWounded(), bCarrying) * ColdSpeedMultiplier * GetWoundTierSpeedScale();
 }
 
 void AOperativeCharacter::HandleHealthChanged(float NewHealth, float MaxHealth, float Delta)

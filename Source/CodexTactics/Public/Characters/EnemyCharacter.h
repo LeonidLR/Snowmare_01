@@ -17,6 +17,7 @@ class AAIController;
 class APatrolRouteActor;
 class UHealthComponent;
 struct FOverheadLabel;
+namespace HudLabelRules { struct FHudLabelConfig; }
 class UStaticMeshComponent;
 class UMaterialInstanceDynamic;
 class UVisionConeComponent;
@@ -388,6 +389,12 @@ public:
 	 * others 1.8 m up). The status emoji the HUD font lacks are written as words.
 	 */
 	bool GetOverheadLabel(FOverheadLabel& OutLabel) const;
+
+	/** The plate's status words (" BURNING ICED STUNNED ARMOR-", empty when none; HudLabelRules::ComposeEnemyLabel recomposes the plate). */
+	FString GetOverheadStatus() const;
+
+	/** The plate under the HUD's label switches (hud_labels.json: name / statuses / health / armour marker); false = nothing to draw. */
+	bool GetHudOverheadLabel(FOverheadLabel& OutLabel, const HudLabelRules::FHudLabelConfig& Labels) const;
 
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	float GetAttackDamage() const { return AttackDamage; }

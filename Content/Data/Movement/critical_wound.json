@@ -1,5 +1,8 @@
 {
   "comment": "The CRITICAL wound (the game designer 2026-11-10, fix/injured-layer-visible; docs/systems/stances-and-movement.md 'Critical wound'). Read by CriticalWoundRules::GetConfig (Source/CodexTactics/Public/Characters/CriticalWoundRules.h) at game start; the code defaults mirror these values (test CodexTactics.Characters.CriticalWound.DataFileMirrorsDefaults). critical_from: the health share (0..1) under which an operative goes DOWN by himself (prone) and only crawls - the injured crawl - cannot stand / crouch / run / climb a ladder (orders refused with the feed line '<name> is critically wounded - heal him'), still fires prone; healed back to critical_from or above he may stand again (he stays prone until ordered up). 0 = the rule off. No carrying of the wounded (the designer: too complex). apply_to_hostiles: the hostile PMC fighters share the operative body - true = they go down too (off: their utility AI has no crawl-only order set yet).",
+  "tiers_comment": "The WOUND TIERS (the game designer 2026-11-10, feat/injured-tiers-fullbody): LIGHT = wounded (MovementConfig.WoundedHealthThreshold 0.5: speed x WoundedSpeedMultiplier 0.65, no sprint) down to heavy_from; HEAVY = under heavy_from down to critical_from: the slow injured walk (Walk_Injured_Slow), no run (the fast regroup walks), STANDING speed x heavy_speed_multiplier instead of 0.65 (220 cm/s -> 99; crouched / prone keep the light tier's); CRITICAL = under critical_from. Heavy applies to the same bodies as the critical rule (apply_to_hostiles). heavy_from <= 0 = no heavy tier. CriticalWoundRules::ChooseWoundTier / TierSpeedScale.",
   "critical_from": 0.2,
+  "heavy_from": 0.35,
+  "heavy_speed_multiplier": 0.45,
   "apply_to_hostiles": false
 }

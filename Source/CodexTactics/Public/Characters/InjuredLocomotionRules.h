@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Characters/CriticalWoundRules.h"
 
 /**
  * The injured locomotion (the game designer 2026-11-10: "operatives sometimes walk very slowly and I cannot see why - give a wounded operative a
@@ -17,6 +18,14 @@
  *   ~1.4x); standing still the layer is off - the existing shiver idle (the warm-idle sets' Cold_1) plays. It replaces the empty ColdWalkClips
  *   slots of the ABP's cold layer for the 70 / 90 tiers.
  * - Wounded takes priority over cold.
+ * - THE WOUND TIERS + FULL BODY (the game designer 2026-11-10, feat/injured-tiers-fullbody: "the pack has animations for practically every case -
+ *   apply them ALL; when he is wounded it must be visible; if he has to shoot, he will rise into the firing position"): the tier
+ *   (CriticalWoundRules::EWoundTier) picks the clips - LIGHT the 8-direction walk + Run_Injured (the wounded regroup run) + the walk idles
+ *   (Idle_Run_Injured* for a while after a run), HEAVY the slow walk forward (the 8-direction walk outside its cone) + the slow idles, no run,
+ *   CRITICAL the injured crawl + the crawl idles (on all fours, also lying still). Idles alternate per loop (NextIdleVariant). While wounded
+ *   and not firing the WHOLE body plays the clip (the hand on the wound, the rifle hanging from the right hand); a fire attempt, a shot, a
+ *   reload raise the torso to the weapon pose over "raise_to_fire_s" (the shot waits for it: HoldsShotForRaise), "lower_after_s" without one
+ *   lowers it again.
  * Tests CodexTactics.Animation.Injured.*; smoke CodexTactics.InjuredLocomotionSmoke. Console A/B: Codex.Anim.InjuredLayer (0 = off).
  */
 namespace InjuredLocomotionRules
@@ -42,8 +51,85 @@ namespace InjuredLocomotionRules
 		/** Freezing: the 8-direction injured walk while walking; idle = the ABP's shiver. */
 		Cold,
 		/** Frostbite: the slow injured walk while walking forward (the injured walk outside the cone); idle = the ABP's shiver. */
-		ColdSlow
+		ColdSlow,
+		/** A HEAVY wound (or a light one frostbitten): the slow injured walk forward (the injured walk outside the cone) + the slow idles, no run. */
+		WoundedHeavy
 	};
+
+	/** The idle set a standing injured body plays. */
+	enum class EInjuredIdleSet : uint8
+	{
+		/** No injured idle (cold: the ABP's shiver; not standing). */
+		None,
+		/** Idle_Walk_Injured1/2 (the light wound). */
+		Walk,
+		/** Idle_Run_Injured1/2 (the light wound, standing within run_idle_hold_s after a run - out of breath). */
+		Run,
+		/** Idle_Walk_Injured_Slow1/2 (the heavy wound). */
+		Slow
+	};
+
+	/** The full-body raise ("full_body" in weapon_anim_sets.json "injured"). */
+	struct FInjuredRaiseConfig
+	{
+		/** "enabled": the whole body plays the injured clips while not firing (off = the lower body only, the 2026-11-10 morning layer). */
+		bool bFullBody = false;
+		/** "raise_to_fire_s": the torso rises from the injured clip to the weapon pose over this (a shot waits for it). */
+		float RaiseSeconds = 0.25f;
+		/** "lower_after_s": no fire attempt / shot / reload for this long -> the torso lowers back into the injured clip. */
+		float LowerAfterSeconds = 1.f;
+		/** "lower_blend_s": the lowering's blend. */
+		float LowerSeconds = 0.4f;
+	};
+
+	/** The torso share still in the injured clip at which a shot may leave (the weapon pose >= 98 % up). */
+	constexpr float ShotRaiseTolerance = 0.02f;
+
+	/**
+	 * The gait from the wound TIER and the cold: the wounded trigger off or no wound -> the cold's gait (ChooseGait without a wound); heavy /
+	 * critical -> WoundedHeavy; light -> Wounded, or WoundedHeavy when the cold alone would be frostbite (the cold keeps its mapping unless the
+	 * wound is worse; the worse of the two wins).
+	 */
+	CODEXTACTICS_API EInjuredGait ChooseTierGait(const FInjuredTriggers& Triggers, CriticalWoundRules::EWoundTier Tier, float ColdShare);
+
+	/** A gait of the wound (Wounded / WoundedHeavy): the injured idle standing, the full-body clips, the injured crawl prone. */
+	CODEXTACTICS_API bool IsWoundGait(EInjuredGait Gait);
+
+	/**
+	 * The run's share of the light wound's walk (Run_Injured, a forward loop): the speed band [StartSpeed, FullSpeed] x the forward cone
+	 * share; 0 for any other gait (the heavy wound does not run, the cold has no run).
+	 */
+	CODEXTACTICS_API float RunShare(EInjuredGait Gait, float Speed, float StartSpeed, float FullSpeed, float ConeShare);
+
+	/** The standing idle set: light = Run within RunIdleHoldSeconds after a run, else Walk; heavy = Slow; anything else None. */
+	CODEXTACTICS_API EInjuredIdleSet ChooseIdleSet(EInjuredGait Gait, float SecondsSinceRun, float RunIdleHoldSeconds);
+
+	/**
+	 * The next idle variant at the end of a loop: Count <= 1 or no previous (< 0) -> 0; alternate -> the next one round; random -> one of the
+	 * OTHER variants by Random01 in [0, 1).
+	 */
+	CODEXTACTICS_API int32 NextIdleVariant(int32 Previous, int32 Count, bool bRandom, float Random01);
+
+	/** The raise config as read: the times clamped to [0, 5] s (0 = at once). */
+	CODEXTACTICS_API FInjuredRaiseConfig SanitizeRaise(const FInjuredRaiseConfig& Config);
+
+	/**
+	 * The raise share (0 = the injured clip's torso, 1 = the weapon pose) after DeltaSeconds: rising at 1 / RaiseSeconds while the last demand
+	 * (a fire attempt, a shot, a reload) is at most LowerAfterSeconds old, else falling at 1 / LowerSeconds; no demand yet (< 0) = falling.
+	 */
+	CODEXTACTICS_API float StepRaiseShare(float Share, float SecondsSinceDemand, float DeltaSeconds, const FInjuredRaiseConfig& Config);
+
+	/** The torso's share in the injured clip: full body on -> LayerWeight x (1 - Raise) x (1 - the upper-body slot's weight), else 0. */
+	CODEXTACTICS_API float UpperBodyShare(const FInjuredRaiseConfig& Config, float LayerWeight, float RaiseShare, float UpperSlotWeight);
+
+	/** A shot waits while the torso is still in the injured clip (UpperShare > ShotRaiseTolerance). */
+	CODEXTACTICS_API bool HoldsShotForRaise(float UpperShare);
+
+	/**
+	 * How much later the first shot leaves because of the raise, s (the report's number; the game adds at most one frame - the demand reaches
+	 * the animation the frame after): fully lowered = RaiseSeconds x (1 - ShotRaiseTolerance); already raised = 0; full body off = 0.
+	 */
+	CODEXTACTICS_API float FirstShotRaiseDelay(const FInjuredRaiseConfig& Config, float RaiseShare);
 
 	/** A "cold_from" value as read (a share 0..1; a percent 1..100 is taken as a percent); anything else = off (0). */
 	CODEXTACTICS_API float SanitizeColdFrom(double Value);
@@ -73,7 +159,7 @@ namespace InjuredLocomotionRules
 	 */
 	CODEXTACTICS_API float BandedAlpha(float Alpha, float BandDeg, float GapDeg = 45.f);
 
-	/** The prone crawl plays the injured crawl (wounded, prone; the crawl set has the injured clips). */
+	/** The prone crawl plays the injured crawl (a wound gait - light or heavy / critical -, prone; the crawl set has the injured clips). */
 	CODEXTACTICS_API bool UsesInjuredCrawl(EInjuredGait Gait, bool bProne, bool bHasInjuredCrawl);
 
 	/**
@@ -100,9 +186,13 @@ namespace InjuredLocomotionRules
 		float SwayPhase = 0.f;
 		/** "aiming_scale": the cue's share while aiming (0 = off while aiming, 1 = full). */
 		float AimingScale = 0.f;
+		/** "crouch_scale": the hunch alone while crouched and wounded (no pack clip crouches: the ABP's crouch pose + this share of the cue). */
+		float CrouchScale = 0.f;
+		/** "cover_scale": the hunch alone in cover and wounded (the cover pose stays; this share of the cue, off while firing). */
+		float CoverScale = 0.f;
 	};
 
-	/** The cue as read: hunch clamped to [0, 30] deg, sway [0, 20] deg, the phase wrapped into [0, 1), the aiming scale [0, 1]. */
+	/** The cue as read: hunch clamped to [0, 30] deg, sway [0, 20] deg, the phase wrapped into [0, 1), the aiming / crouch / cover scales [0, 1]. */
 	CODEXTACTICS_API FInjuredLimpCue SanitizeLimpCue(const FInjuredLimpCue& Cue);
 
 	/**

@@ -77,10 +77,22 @@ void UOperativeAnimInstance::UpdateProneCrawlLayer(float DeltaSeconds)
 	}
 	// A full-body clip owns the body (a prone hit / reload, the death): the layer fades out under it.
 	const bool bFullBodyClip = GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f;
-	const float Target = ProneCrawlRules::LayerTarget(bEligible && !bFullBodyClip, bOrdered, LocomotionSpeed, Set.MoveStartSpeed);
+	const float MoveTarget = ProneCrawlRules::LayerTarget(bEligible && !bFullBodyClip, bOrdered, LocomotionSpeed, Set.MoveStartSpeed);
+	// The CRITICAL wound lying still (feat/injured-tiers-fullbody): the injured crawl idles on all fours drive him too; a fire attempt raises him
+	// into the ABP's prone aim (1 - the raise share: the shot waits for it, IsInjuredRaisePending).
+	const bool bCriticalIdle = bEligible && !bFullBodyClip && bInjuredCrawlActive && InjuredTier == CriticalWoundRules::EWoundTier::Critical
+		&& !InjuredSetData.CrawlIdles.IsEmpty();
+	const float IdleTarget = bCriticalIdle ? 1.f - InjuredRaise : 0.f;
+	const float Target = FMath::Max(MoveTarget, IdleTarget);
 	CrawlWeight = FMath::FInterpConstantTo(CrawlWeight, Target, DeltaSeconds, 1.f / FMath::Max(0.01f, Set.BlendSeconds));
+	bCriticalCrawlIdle = bCriticalIdle && MoveTarget <= 0.f;
+	if (bCriticalCrawlIdle)
+	{
+		CrawlWeight = FMath::Min(CrawlWeight, 1.f - InjuredRaise); // the raise is the full-body raise's pace, not the crawl blend's
+	}
 	if (CrawlWeight <= OperativeProneCrawlLayer::CrawlMinWeight)
 	{
+		CrawlWeight = 0.f;
 		CrawlDirection = FWeaponLayerDirectionState();
 		CrawlPlayRate = 0.f;
 		return;
@@ -105,6 +117,17 @@ void UOperativeAnimInstance::UpdateProneCrawlLayer(float DeltaSeconds)
 	const float Move = MoveWeight(LocomotionSpeed, Set.MoveStartSpeed, Set.MoveFullSpeed);
 	CrawlIdleTime = Set.StandIdle && Set.StandIdle->GetPlayLength() > KINDA_SMALL_NUMBER
 		? FMath::Fmod(CrawlIdleTime + DeltaSeconds, Set.StandIdle->GetPlayLength()) : 0.f;
+	// The injured crawl's idles alternate per loop (Idle_Crawl_Injured1 / 2; feat/injured-tiers-fullbody).
+	const bool bInjuredIdles = bInjuredCrawlActive && !InjuredSetData.CrawlIdles.IsEmpty();
+	if (bInjuredIdles)
+	{
+		StepInjuredIdle(CrawlIdleCycle, 1, InjuredSetData.CrawlIdles, DeltaSeconds, InjuredSetData.bIdleRandom, InjuredSetData.IdleCrossfadeSeconds);
+	}
+	else
+	{
+		CrawlIdleCycle.SetId = -1;
+		CrawlIdleCycle.Clip = CrawlIdleCycle.Prev = nullptr;
+	}
 	int32 Next = 0;
 	auto Add = [this, &Next](UAnimSequence* Clip, float Weight, float Time)
 	{
@@ -113,7 +136,15 @@ void UOperativeAnimInstance::UpdateProneCrawlLayer(float DeltaSeconds)
 			CrawlClips[Next++] = { Clip, Time, Weight };
 		}
 	};
-	Add(Set.StandIdle, 1.f - Move, CrawlIdleTime);
+	if (bInjuredIdles)
+	{
+		Add(CrawlIdleCycle.Clip, (1.f - Move) * CrawlIdleCycle.Fade, CrawlIdleCycle.Time);
+		Add(CrawlIdleCycle.Prev, (1.f - Move) * (1.f - CrawlIdleCycle.Fade), CrawlIdleCycle.PrevTime);
+	}
+	else
+	{
+		Add(Set.StandIdle, 1.f - Move, CrawlIdleTime);
+	}
 	// One shared phase: the hands / knees of every loop in play cover their own stride per cycle (the cycle = each loop's authored crawl speed x
 	// its length, the two directions blended like the clips, the old direction's during a reversal's cross-fade - so the clips that still show
 	// keep their contacts planted), played at the body's real speed.

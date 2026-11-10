@@ -151,7 +151,9 @@ bool USquadSubsystem::UpdateFastRegroup(FFollowerState& Follower, AOperativeChar
 	}
 
 	// The pace: sprint out of combat (fit, standing), run in combat, the wounded run; in a crouch / prone (the leader's stance kept) his stance's.
-	const ESquadRegroupPace Pace = SquadRegroupRules::ChoosePace(bFrameRegroupCombat, Operative.IsWounded(), Operative.CanSprint(), Tuning);
+	// The heavy wound tier does not run (feat/injured-tiers-fullbody: the slow injured walk; CriticalWoundRules::EWoundTier).
+	const bool bMayRun = Operative.GetWoundTier() != CriticalWoundRules::EWoundTier::Heavy && Operative.GetWoundTier() != CriticalWoundRules::EWoundTier::Critical;
+	const ESquadRegroupPace Pace = SquadRegroupRules::ChoosePace(bFrameRegroupCombat, Operative.IsWounded(), Operative.CanSprint(), Tuning, bMayRun);
 	const bool bStanding = Operative.GetStance() == EOperativeStance::Standing;
 	Operative.SetSprinting(bStanding && Pace == ESquadRegroupPace::Sprint);
 	if (!State->LoggedPace.IsSet() || State->LoggedPace.GetValue() != Pace)

@@ -8,7 +8,11 @@
 //  1. 45 % HP, M16, no threat: the injured walk drives the legs;
 //  2. 45 % HP, the RPG-7 drawn (the launcher's full-body set, its "legs_abp" walk), no threat;
 //  3. 45 % HP, M16, a PMC fighter 14 m ahead (immortal, his fire held): the Commander aims at him walking;
-//  4. 45 % HP, the RPG-7 drawn, the same fighter: aiming the tube walking.
+//  4. 45 % HP, the RPG-7 drawn, the same fighter: aiming the tube walking;
+//  5. / 6. 30 % HP (the HEAVY tier, feat/injured-tiers-fullbody), M16: the slow injured walk without / with the fighter.
+// The full body (feat/injured-tiers-fullbody): without a threat the torso plays the injured clip (its share > 0.8 - the hand on the wound, the
+// rifle hanging); with the fighter he raises the weapon (the share < 0.3 while aiming) and the first round leaves after the raise (logged: the
+// first raise hold -> the first round).
 // Checks per wounded leg: the layer's steady weight mean > 0.9, an injured walk loop dominates, the limp cue is on ("limp" block); not aiming,
 // the torso (pelvis -> neck_01) leans >= 7 deg further forward than the healthy walk and sways >= 2 deg wider; in the combat legs the
 // Commander aims most of the walk. Per leg it logs the gates that held the layer off
@@ -49,8 +53,11 @@ namespace InjuredLocomotionDepotSmoke
 {
 	constexpr float StepSeconds = 0.05f;
 	constexpr float WoundedShare = 0.45f;
+	constexpr float HeavyShare = 0.3f;
 	constexpr float LegCm = 600.f;
 	constexpr float ThreatCm = 1400.f;
+	/** A threat leg's fire opens this long after the leg starts (the previous leg's raise: lower_after_s 1.0 + lower_blend_s 0.4 + margin). */
+	constexpr float FireOpenSeconds = 1.6f;
 
 	struct FLeg
 	{
@@ -58,6 +65,7 @@ namespace InjuredLocomotionDepotSmoke
 		bool bWounded;
 		bool bRpg;
 		bool bThreat;
+		bool bHeavy = false;
 	};
 	static const FLeg Legs[] = {
 		{ TEXT("healthy_m16"), false, false, false },
@@ -66,6 +74,8 @@ namespace InjuredLocomotionDepotSmoke
 		{ TEXT("wounded_rpg"), true, true, false },
 		{ TEXT("wounded_m16_aiming"), true, false, true },
 		{ TEXT("wounded_rpg_aiming"), true, true, true },
+		{ TEXT("heavy_m16"), true, false, false, true },
+		{ TEXT("heavy_m16_aiming"), true, false, true, true },
 	};
 	constexpr int32 LegCount = UE_ARRAY_COUNT(Legs);
 
@@ -85,6 +95,19 @@ namespace InjuredLocomotionDepotSmoke
 		TMap<FString, int32> ClipVotes;
 		TMap<FString, int32> ClosedGates;
 		bool bShotTaken = false;
+		/** The torso's share in the injured clip (the full body): summed over the steady frames, over the aiming ones. */
+		double UpperSum = 0.0;
+		double AimUpperSum = 0.0;
+		/** The first raise hold and the first round of the leg (world s; < 0 = none), the holds, the rounds. */
+		double FirstHold = -1.0;
+		double FirstShot = -1.0;
+		int32 HoldsAtStart = 0;
+		int32 Rounds = 0;
+		/** A threat leg opens fire only once the torso is back in the clip (the previous leg's raise lowered: FireOpenSeconds after the
+		 * leg's start): the world time it opened, the torso's share in the clip then. */
+		bool bFireOpen = false;
+		double FireOpenTime = -1.0;
+		float UpperAtOpen = 0.f;
 	};
 
 	struct FState
@@ -162,7 +185,16 @@ namespace InjuredLocomotionDepotSmoke
 		AOperativeCharacter* Op = State.Op.Get();
 		const UOperativeAnimInstance* Anim = AnimOf(Op);
 		FSamples& S = State.Samples;
-		if (!S.bActive || !Op || !Anim)
+		if (!Op || !Anim)
+		{
+			return;
+		}
+		const double Now = Op->GetWorld() ? Op->GetWorld()->GetTimeSeconds() : 0.0;
+		if (S.bFireOpen && S.FirstHold < 0.0 && Op->InjuredRaiseHolds > S.HoldsAtStart)
+		{
+			S.FirstHold = Now;
+		}
+		if (!S.bActive)
 		{
 			return;
 		}
@@ -175,6 +207,8 @@ namespace InjuredLocomotionDepotSmoke
 		++S.SteadyFrames;
 		S.SpeedSum += Speed;
 		S.AimFrames += Anim->bIsAiming ? 1 : 0;
+		S.UpperSum += Anim->GetInjuredUpperShare();
+		S.AimUpperSum += Anim->bIsAiming ? Anim->GetInjuredUpperShare() : 0.f;
 		const float Weight = Anim->GetInjuredWeight();
 		S.WeightSum += Weight;
 		S.MaxWeight = FMath::Max(S.MaxWeight, Weight);
@@ -254,10 +288,11 @@ namespace InjuredLocomotionDepotSmoke
 		if (Op.HealthComponent)
 		{
 			const float Max = Op.HealthComponent->GetMaxHealth();
-			Op.HealthComponent->RestoreHealth(Max * (Leg.bWounded ? WoundedShare : 1.f), Max);
+			Op.HealthComponent->RestoreHealth(Max * (Leg.bWounded ? (Leg.bHeavy ? HeavyShare : WoundedShare) : 1.f), Max);
 		}
+		State.Samples.HoldsAtStart = Op.InjuredRaiseHolds;
 		Op.ColdLevel = 0.f;
-		Op.bTacticalCeaseFire = !Leg.bThreat;
+		Op.bTacticalCeaseFire = true; // a threat leg opens fire after FireOpenSeconds (the torso lowered again)
 		Equip(Op, Leg.bRpg);
 		if (AOperativeCharacter* Fighter = State.Fighter.Get())
 		{
@@ -366,6 +401,19 @@ namespace InjuredLocomotionDepotSmoke
 			Fighter->SetStance(EOperativeStance::Standing);
 			Fighter->bTacticalCeaseFire = true;
 			State.Op = Op;
+			// The rounds he fires (the infinite-ammo level keeps the clip full: counted by the shot event).
+			TWeakPtr<FState> WeakState = StateRef;
+			Op->OnWeaponFiredNative.AddLambda([WeakState](AOperativeCharacter* Shooter, AActor*, bool)
+			{
+				if (const TSharedPtr<FState> Pinned = WeakState.Pin(); Pinned && Pinned->Samples.bFireOpen && Shooter)
+				{
+					++Pinned->Samples.Rounds;
+					if (Pinned->Samples.FirstShot < 0.0 && Shooter->GetWorld())
+					{
+						Pinned->Samples.FirstShot = Shooter->GetWorld()->GetTimeSeconds();
+					}
+				}
+			});
 			State.Fighter = Fighter;
 			State.Stage = 1;
 			State.Leg = 0;
@@ -385,6 +433,15 @@ namespace InjuredLocomotionDepotSmoke
 		}
 		const FLeg& Leg = Legs[State.Leg];
 		FSamples& S = State.Samples;
+		if (Leg.bThreat && !S.bFireOpen && State.StageTime >= FireOpenSeconds)
+		{
+			// The fire opens with the torso lowered (wounded: the full-body clip's): the first round waits for the raise (raise_to_fire_s).
+			S.bFireOpen = true;
+			S.FireOpenTime = World->GetTimeSeconds();
+			S.UpperAtOpen = Anim->GetInjuredUpperShare();
+			S.HoldsAtStart = Op->InjuredRaiseHolds;
+			Op->bTacticalCeaseFire = false;
+		}
 		if (!State.bMoveStarted)
 		{
 			if (State.StageTime < 2.f)
@@ -425,9 +482,14 @@ namespace InjuredLocomotionDepotSmoke
 			State.HealthyLean[Weapon] = Lean;
 			State.HealthySway[Weapon] = Sway;
 		}
-		const FString Line = FString::Printf(TEXT("%s: steady %d frames at %.0f cm/s, injured weight mean %.2f max %.2f, clip %s, limp cue %.2f, torso lean fwd %.1f deg (healthy %.1f), side sway +-%.1f deg (healthy +-%.1f), aiming %.0f %%, weapon %s, gates closed: %s"),
+		const float Upper = static_cast<float>(S.UpperSum / N);
+		const float AimUpper = S.AimFrames > 0 ? static_cast<float>(S.AimUpperSum / S.AimFrames) : -1.f;
+		const float RaiseWait = S.FirstHold >= 0.0 && S.FirstShot >= 0.0 ? static_cast<float>(S.FirstShot - S.FirstHold) : -1.f;
+		const float OpenToShot = S.FireOpenTime >= 0.0 && S.FirstShot >= 0.0 ? static_cast<float>(S.FirstShot - S.FireOpenTime) : -1.f;
+		const FString Line = FString::Printf(TEXT("%s: steady %d frames at %.0f cm/s, injured weight mean %.2f max %.2f, clip %s, limp cue %.2f, torso lean fwd %.1f deg (healthy %.1f), side sway +-%.1f deg (healthy +-%.1f), aiming %.0f %%, the torso in the injured clip %.2f (aiming %.2f), fire opened with the torso %.2f in the clip, raise holds %d, rounds %d, first round %.2f s after the first raise hold (%.2f s after the fire opened), weapon %s, gates closed: %s"),
 			Leg.Name, S.SteadyFrames, S.SpeedSum / N, Mean, S.MaxWeight, *Top, Limp, Lean, State.HealthyLean[Weapon], Sway, State.HealthySway[Weapon], Aim * 100.f,
-			Op->CurrentWeapon ? *Op->CurrentWeapon->WeaponId : TEXT("-"), *Histogram(S.ClosedGates));
+			Upper, AimUpper, S.UpperAtOpen, Op->InjuredRaiseHolds - S.HoldsAtStart, S.Rounds, RaiseWait, OpenToShot, Op->CurrentWeapon ? *Op->CurrentWeapon->WeaponId : TEXT("-"),
+			*Histogram(S.ClosedGates));
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s"), *Line);
 		State.Summary.Add(Line);
 		Check(State, S.SteadyFrames > 10, FString::Printf(TEXT("%s: the Commander walked the squad order (%d steady frames)"), Leg.Name, S.SteadyFrames));
@@ -437,6 +499,22 @@ namespace InjuredLocomotionDepotSmoke
 		{
 			Check(State, Mean > 0.9f && Top.StartsWith(TEXT("Walk_Injured")), FString::Printf(TEXT("%s: the injured walk drives the legs (weight mean %.2f, clip %s)"), Leg.Name, Mean, *Top));
 			Check(State, Limp > 0.5f, FString::Printf(TEXT("%s: the limp cue is on (%.2f)"), Leg.Name, Limp));
+			if (Leg.bHeavy && !Leg.bThreat) // aiming at the fighter ahead while the move goes sideways, the legs strafe (the 8-direction walk)
+			{
+				Check(State, Top == TEXT("Walk_Injured_Slow"), FString::Printf(TEXT("%s: the heavy tier walks the slow injured walk (%s)"), Leg.Name, *Top));
+			}
+			if (!Leg.bThreat)
+			{
+				// The full body (feat/injured-tiers-fullbody): not aiming, the torso is the clip's (the hand on the wound, the weapon lowered).
+				Check(State, Upper > 0.8f, FString::Printf(TEXT("%s: the whole body plays the injured clip (the torso's share %.2f)"), Leg.Name, Upper));
+			}
+			else
+			{
+				Check(State, AimUpper >= 0.f && AimUpper < 0.3f, FString::Printf(TEXT("%s: aiming, the torso is raised into the weapon pose (its share in the clip %.2f)"), Leg.Name, AimUpper));
+				Check(State, S.UpperAtOpen > 0.9f && S.Rounds > 0 && S.FirstHold >= 0.0 && RaiseWait >= 0.15f && RaiseWait <= 0.6f,
+					FString::Printf(TEXT("%s: the fire opened lowered (%.2f), the raise held the first round ~raise_to_fire_s, then he fired (%d holds, %d rounds, %.2f s)"), Leg.Name,
+					S.UpperAtOpen, Op->InjuredRaiseHolds - S.HoldsAtStart, S.Rounds, RaiseWait));
+			}
 			if (!Leg.bThreat)
 			{
 				// Not aiming: the full hunch (the data's hunch_deg 14) - at least 7 deg more forward lean than the healthy walk, a wider sway.
@@ -478,7 +556,7 @@ namespace InjuredLocomotionDepotSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.InjuredLocomotionDepotSmoke"),
-		TEXT("Dev check (the designer's bug 2026-11-10, L_Gen_Depot_1 + SmokeFixtures/injured_depot_smoke.json): the Commander at 45 % HP walks squad move orders with the M16 / the RPG-7, with and without aiming at a PMC fighter - the injured walk drives his legs, the limp cue is on; logs the gates that held the layer off. Arg \"shots\": game-camera frames to Saved/Screenshots/InjuredLocomotion/depot_<leg>.png."),
+		TEXT("Dev check (the designer's bug 2026-11-10, L_Gen_Depot_1 + SmokeFixtures/injured_depot_smoke.json): the Commander at 45 % HP walks squad move orders with the M16 / the RPG-7, with and without aiming at a PMC fighter, at 30 % (heavy) with the M16 - the injured walk drives his legs, the whole body without a threat, the raise to fire with one; logs the gates that held the layer off. Arg \"shots\": game-camera frames to Saved/Screenshots/InjuredLocomotion/depot_<leg>.png."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

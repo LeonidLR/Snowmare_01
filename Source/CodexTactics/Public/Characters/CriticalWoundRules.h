@@ -11,6 +11,10 @@
  * fires prone. Healing on the spot (a medkit, the medic) that brings him back to "critical_from" or above lets him stand again - he stays
  * prone until ordered up. No carrying of the wounded (the designer: too complex).
  * Hostile PMC fighters share the operative body: "apply_to_hostiles" (default false) decides whether they collapse too.
+ * The WOUND TIERS (the game designer 2026-11-10, feat/injured-tiers-fullbody: "apply ALL the pack's injured animations"): LIGHT = wounded
+ * (MovementConfig.WoundedHealthThreshold, 50 %) down to "heavy_from" (35 %) - the injured walk / run, speed x WoundedSpeedMultiplier 0.65;
+ * HEAVY = under "heavy_from" down to "critical_from" - the slow injured walk, no run, standing speed x "heavy_speed_multiplier" 0.45 (instead
+ * of the light tier's 0.65); CRITICAL = under "critical_from" (the rule above). Heavy and critical apply to the same bodies (AppliesTo).
  * The character side: AOperativeCharacter::IsCriticallyWounded / UpdateCriticalWound (OperativeCharacterStance.cpp).
  * Tests CodexTactics.Characters.CriticalWound.*; smoke stage in CodexTactics.InjuredLocomotionSmoke.
  */
@@ -21,9 +25,38 @@ namespace CriticalWoundRules
 	{
 		/** "critical_from": the health share (0..1; a percent 1..100 is read as a percent) under which he is critical; <= 0 = off. */
 		float CriticalFrom = 0.2f;
-		/** "apply_to_hostiles": the hostile PMC fighters (TeamId != 0, the same body) go down too. */
+		/** "apply_to_hostiles": the hostile PMC fighters (TeamId != 0, the same body) go down too (and get the heavy tier). */
 		bool bApplyToHostiles = false;
+		/** "heavy_from": the health share under which a wound is HEAVY (the slow injured walk, no run); <= 0 = no heavy tier. */
+		float HeavyFrom = 0.35f;
+		/** "heavy_speed_multiplier": the standing speed multiplier of the heavy tier (replaces the light tier's WoundedSpeedMultiplier). */
+		float HeavySpeedMultiplier = 0.45f;
 	};
+
+	/** The wound tier from his health. */
+	enum class EWoundTier : uint8
+	{
+		/** At or above the wounded threshold (or dead). */
+		None,
+		/** Wounded: under WoundedFrom (MovementConfig.WoundedHealthThreshold), at or above HeavyFrom. */
+		Light,
+		/** Under HeavyFrom, at or above CriticalFrom. */
+		Heavy,
+		/** Under CriticalFrom (IsCritical). */
+		Critical
+	};
+
+	/**
+	 * The tier: None when MaxHealth <= 0 or he is dead; Critical / Heavy only where the rule applies (bApplies = AppliesTo) and their threshold
+	 * is on; Light under WoundedFrom; a heavy / critical body is always at least Light (whatever WoundedFrom).
+	 */
+	CODEXTACTICS_API EWoundTier ChooseWoundTier(const FCriticalWoundConfig& Config, float Health, float MaxHealth, float WoundedFrom, bool bApplies);
+
+	/**
+	 * The heavy tier's extra speed factor on top of ComputeMaxSpeed's wounded multiplier (which the light tier already applies): standing
+	 * Heavy = HeavySpeedMultiplier / WoundedMultiplier (0.45 / 0.65), anything else 1 (the critical crawl, crouched, prone keep today's speed).
+	 */
+	CODEXTACTICS_API float TierSpeedScale(const FCriticalWoundConfig& Config, EWoundTier Tier, bool bStanding, float WoundedMultiplier);
 
 	/** What the character does this tick (UpdateCriticalWound). */
 	enum class ECriticalWoundAction : uint8

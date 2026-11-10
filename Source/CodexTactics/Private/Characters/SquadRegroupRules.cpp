@@ -29,11 +29,11 @@ namespace SquadRegroupRules
 		return !bCriticallyWounded && GapCm > Tuning.JoinCm;
 	}
 
-	ESquadRegroupPace ChoosePace(bool bCombat, bool bWounded, bool bCanSprint, const FSquadRegroupTuning& Tuning)
+	ESquadRegroupPace ChoosePace(bool bCombat, bool bWounded, bool bCanSprint, const FSquadRegroupTuning& Tuning, bool bMayRun)
 	{
 		if (bWounded)
 		{
-			return ESquadRegroupPace::WoundedRun;
+			return bMayRun ? ESquadRegroupPace::WoundedRun : ESquadRegroupPace::WoundedWalk;
 		}
 		return !bCombat && bCanSprint && Tuning.bSprintOutOfCombat ? ESquadRegroupPace::Sprint : ESquadRegroupPace::Run;
 	}
@@ -44,6 +44,7 @@ namespace SquadRegroupRules
 		switch (Pace)
 		{
 		case ESquadRegroupPace::Sprint:
+		case ESquadRegroupPace::WoundedWalk:
 			return FMath::Max(SprintSpeed, 0.f);
 		case ESquadRegroupPace::WoundedRun:
 			return Tuning.RunSpeed * FMath::Max(WoundedMultiplier, 0.f) * Cold;
@@ -60,6 +61,8 @@ namespace SquadRegroupRules
 			return TEXT("sprint");
 		case ESquadRegroupPace::WoundedRun:
 			return TEXT("wounded run");
+		case ESquadRegroupPace::WoundedWalk:
+			return TEXT("wounded walk (heavy wound: no run)");
 		default:
 			return TEXT("run");
 		}
