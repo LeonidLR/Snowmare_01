@@ -1,0 +1,208 @@
+{
+	"schema": "codex.props_balance/1",
+	"comment": "Props balance (PROPS_LAYERS.md section 1 / 3). The C++ hardcodes nothing. Every number has a '<key>_comment' next to it. Values marked PLACEHOLDER are not named by the design or the designer yet: tune them here.",
+
+	"kinds": {
+		"barrel": {
+			"shape": "cylinder",
+			"shape_comment": "Designer 2026-11-10 #1: barrels are cylinders in the greybox.",
+			"radius_cm": 30,
+			"radius_cm_comment": "From the layout's barrel covers (60 x 60 footprint).",
+			"height_cm": 90,
+			"height_cm_comment": "From the layout's barrel covers.",
+			"hp": 60,
+			"hp_comment": "PLACEHOLDER.",
+			"nav_affecting": true,
+			"nav_affecting_comment": "Obstacle for the nav gate (section 2.4)."
+		},
+		"barrel_explosive": {
+			"shape": "cylinder",
+			"shape_comment": "Same look as a barrel, red band in the greybox.",
+			"radius_cm": 30,
+			"radius_cm_comment": "As the barrel.",
+			"height_cm": 90,
+			"height_cm_comment": "As the barrel.",
+			"hp": 30,
+			"hp_comment": "PLACEHOLDER.",
+			"explosion_radius_cm": 350,
+			"explosion_radius_cm_comment": "PLACEHOLDER. Kept below explosive.min_gap_cm (400) so only a cluster chains.",
+			"explosion_damage": 120,
+			"explosion_damage_comment": "PLACEHOLDER.",
+			"nav_affecting": true,
+			"nav_affecting_comment": "Obstacle for the nav gate."
+		},
+		"crate_s": {
+			"size_cm": [120, 120, 110],
+			"size_cm_comment": "From the layout's crate covers.",
+			"hp": 100,
+			"hp_comment": "PLACEHOLDER.",
+			"nav_affecting": true,
+			"nav_affecting_comment": "Obstacle for the nav gate."
+		},
+		"crate_l": {
+			"size_cm": [160, 160, 140],
+			"size_cm_comment": "PLACEHOLDER.",
+			"hp": 160,
+			"hp_comment": "PLACEHOLDER.",
+			"nav_affecting": true,
+			"nav_affecting_comment": "Obstacle for the nav gate."
+		},
+		"turret_mg": {
+			"hp": 200,
+			"hp_comment": "PLACEHOLDER.",
+			"nav_affecting": true,
+			"nav_affecting_comment": "Obstacle for the nav gate."
+		},
+		"mine": {
+			"marker_visible_cm": 300,
+			"marker_visible_cm_comment": "Designer 2026-11-10 #4: a visible marker within 3 m.",
+			"blast_radius_cm": 250,
+			"blast_radius_cm_comment": "PLACEHOLDER.",
+			"blast_damage": 90,
+			"blast_damage_comment": "PLACEHOLDER.",
+			"shot_detonates": true,
+			"shot_detonates_comment": "Designer #4: a shot detonates the mine. Disarming is task C7b (its numbers come with it).",
+			"trigger_radius_cm": 120,
+			"trigger_radius_cm_comment": "PLACEHOLDER. Proximity trigger.",
+			"nav_affecting": false,
+			"nav_affecting_comment": "A mine never blocks navigation (section 2.3)."
+		}
+	},
+
+	"crate_colors": {
+		"safe": "blue",
+		"safe_comment": "Designer #1: blue = an ordinary crate (loot).",
+		"dangerous": "red",
+		"dangerous_comment": "Designer #1: red = a dangerous crate (mined / explosive). The colour tells the player what is safe to open. Derived from the data (a mines-layer object attached to the crate), not drawn separately: the share of mined crates is mines_default.crates.percent."
+	},
+
+	"presets": {
+		"standard": {
+			"exclude": {
+				"spawn_cm": 1500,
+				"spawn_cm_comment": "Keep-out radius around spawn (section 1.3 crates example).",
+				"end_cm": 500,
+				"end_cm_comment": "Around the end point.",
+				"ladder_cm": 300,
+				"ladder_cm_comment": "Around ladders.",
+				"stair_cm": 250,
+				"stair_cm_comment": "Around the stair corridor.",
+				"door_cm": 250,
+				"door_cm_comment": "Around doorways.",
+				"route_cm": { "mandatory": 260, "variants": 200 },
+				"route_cm_comment": "Corridor half-width on the mandatory route / on variants.",
+				"crossing": true,
+				"hole_rim_cm": 200,
+				"hole_rim_cm_comment": "Beyond the roof / floor hole rim."
+			}
+		},
+		"crates_default": {
+			"count": { "mode": "density", "per_100m2": 0.25, "max": 80 },
+			"count_comment": "per_100m2 = crates per 100 m2 of eligible area; max = cap for this layer.",
+			"variants": { "crate_s": 3, "crate_l": 1 },
+			"variants_comment": "Draw weights.",
+			"min_spacing_cm": 250,
+			"min_spacing_cm_comment": "Between crates; also the keep-out radius of a deleted crate.",
+			"min_gap_any_cm": 120,
+			"min_gap_any_cm_comment": "To objects of every other layer.",
+			"exclude": { "$preset": "standard" },
+			"exclude_comment": "The standard keep-out set below; a layer's rules.exclude overrides it key by key."
+		},
+		"barrels_default": {
+			"count": { "mode": "count", "value": 30 },
+			"count_comment": "Barrels per map.",
+			"cluster": { "min": 1, "max": 4, "ring_cm": [70, 130] },
+			"cluster_comment": "Members per cluster and the ring offset range (cm).",
+			"explosive": { "share": 0.3, "min_gap_cm": 400, "never_within_cm_of": { "spawn": 2500 } },
+			"explosive_comment": "share of clusters that are explosive; min_gap_cm 400 = designer #5; no explosive within 25 m of spawn.",
+			"min_spacing_cm": 600,
+			"min_spacing_cm_comment": "Between cluster anchors.",
+			"min_gap_any_cm": 100,
+			"min_gap_any_cm_comment": "To objects of every other layer.",
+			"exclude": { "$preset": "standard" },
+			"exclude_comment": "The standard keep-out set."
+		},
+		"turrets_default": {
+			"count": { "mode": "count", "value": 2 },
+			"count_comment": "Turrets per map.",
+			"cover_route": { "range_cm": [1000, 4000], "arc_deg": 90, "min_covered_m": 25 },
+			"cover_route_comment": "Range window (cm), firing arc (deg), minimum metres of the route covered.",
+			"min_spacing_cm": 3000,
+			"min_spacing_cm_comment": "Between turrets."
+		},
+		"mines_default": {
+			"doorways": { "mode": "percent", "value": 25, "inside_cm": 80, "mandatory_route": "forbid" },
+			"doorways_comment": "25 % of the eligible doors, 80 cm inside; mandatory-route doors forbidden (designer #3).",
+			"crates": { "percent": 10 },
+			"crates_comment": "Percent of the crates that carry a trap.",
+			"field": { "count": { "mode": "count", "value": 4 }, "min_spacing_cm": 500 },
+			"field_comment": "Free-standing mines in the cut."
+		},
+		"loot_default": {
+			"budget_value": 600,
+			"tables": ["ammo_common", "med_common", "rare_roof"],
+			"tables_comment": "Loot tables the layer draws from (loot_tables below).",
+			"budget_value_comment": "Total loot value of the map (table values below).",
+			"containers": { "crates_share": 0.3 },
+			"containers_comment": "Share of crates that hold loot.",
+			"loose": { "prefer_far_from_route_cm": [1400, 3000], "roof_table": "rare_roof" },
+			"loose_comment": "Loose piles prefer this distance band from the route; roof piles use roof_table (a reward for climbing).",
+			"min_spacing_cm": 800,
+			"min_spacing_cm_comment": "Between loot objects."
+		}
+	},
+
+	"loot_tables": {
+		"ammo_common": {
+			"value": 40,
+			"value_comment": "PLACEHOLDER. Budget cost of one roll.",
+			"entries": { "ammo_pack": 3, "ammo_box": 1 },
+			"entries_comment": "PLACEHOLDER. Item id -> draw weight."
+		},
+		"med_common": {
+			"value": 60,
+			"value_comment": "PLACEHOLDER.",
+			"entries": { "medkit": 2, "bandage": 3 },
+			"entries_comment": "PLACEHOLDER."
+		},
+		"rare_roof": {
+			"value": 150,
+			"value_comment": "PLACEHOLDER. A reward for climbing.",
+			"entries": { "heat_pack": 2, "grenade": 2, "medkit": 1 },
+			"entries_comment": "PLACEHOLDER."
+		}
+	},
+
+	"budgets": {
+		"total": 400,
+		"total_comment": "Props per map (section 3.3).",
+		"crates": 120,
+		"crates_comment": "Cap for the crates layer.",
+		"barrels": 80,
+		"barrels_comment": "Cap for the barrels layer.",
+		"turrets": 12,
+		"turrets_comment": "Cap for the turrets layer.",
+		"mines": 40,
+		"mines_comment": "Cap for the mines layer.",
+		"loot": 80,
+		"loot_comment": "Cap for the loot layer.",
+		"spawn_ms_warn": 60,
+		"spawn_ms_warn_comment": "WARN when spawning on Depot takes longer (ms).",
+		"nav_agent_radius_cm": 35,
+		"nav_agent_radius_cm_comment": "Obstacles are widened by this in the nav gate (section 2.4)."
+	},
+
+	"class_map": {
+		"comment": "variant -> soft class path. PLACEHOLDER paths: the real classes arrive with C6; nothing is hardcoded in C++. Keys 'comment' / '*_comment' are not variants.",
+		"barrel": "/Game/Props/BP_PropBarrel.BP_PropBarrel_C",
+		"barrel_explosive": "/Game/Props/BP_PropBarrelExplosive.BP_PropBarrelExplosive_C",
+		"crate_s": "/Game/Props/BP_PropCrate.BP_PropCrate_C",
+		"crate_l": "/Game/Props/BP_PropCrate.BP_PropCrate_C",
+		"turret_mg": "/Game/Props/BP_PropTurret.BP_PropTurret_C",
+		"mine_tripwire": "/Game/Props/BP_PropMine.BP_PropMine_C",
+		"mine_proximity": "/Game/Props/BP_PropMine.BP_PropMine_C",
+		"mine_crate": "",
+		"mine_crate_comment": "No actor: a mined crate = the crate actor + an armed UCodexPropTrapComponent (section 3.2); the mine object exists only in data.",
+		"loot_pile": "/Game/Props/BP_PropLootPile.BP_PropLootPile_C"
+	}
+}
