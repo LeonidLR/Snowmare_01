@@ -318,6 +318,18 @@ not commanded) - the attackers' Objective orders walk them onto the point and th
 objective_hold_s 15.0); `PmcArenaSmoke` checks the roles + stats on a real round. Tests `CodexTactics.AI.PmcArena.{ObjectiveClock,
 RoundOutcome, Scenario}`.
 
+**Play area** (fix/arena-no-outer-strip, the game designer 2026-11-10: no fights in the Depot's outer strip between the long perimeter wall and
+the map edge - hidden from the camera, little to learn): the level JSON's `pmc_arena.play_area` = `include_box_cm {min, max}` (optional) +
+`exclude_boxes_cm [{id, min, max}]`, world cm, XY only (`AI/PmcArenaPlayArea.h`, `PmcArenaPlayAreaRules::IsInside`: the inclusion box closed,
+an exclusion box closed and winning on a shared edge). Every arena sampler keeps to it - the random spawn candidates, the scenario sites,
+the far / near (defender) spawns, the objective, the squad's spawn slots (`PlaceAround`) and the fixed far spot; the random samplers draw
+inside the navmesh bounds clipped to the inclusion box. No valid point = the old fallback (previous spawns / the site / the defender's spawn)
+with a Warning; per round `[PmcArena] play area seed N: k / n fighters outside, objective inside|OUTSIDE, m points turned down`.
+L_PmcArenaDepot.json: the generator layout's bounds (-6200..6200 x -8850..8850; the builder lays 10 m more ground round them) + the
+sliver behind the west fence F_south; L_PmcArena.json (combat lab): none. `PlayArea=off` ignores it (the A/B measurement: 20 Depot
+seeds 501-520, 18 / 120 fighters and 3 / 20 objectives outside before, 0 / 0 after). Tests `CodexTactics.AI.PmcArena.PlayArea.{Rule,
+SampleBounds, Json}`.
+
 **Result JSON** (`Out=`, else `Saved/Arena/<run>.json`, `<run>` = `YYYYMMDD-HHMMSS[-record]`), schema `codex.pmc_arena/1` = the trainer's contract
 plus extras: `map, opponent (Pmc|Player|Bot), seed, rounds_requested, rounds_limited, time_limit_s, squad_size, run, record, weights_a, weights_b
 (None for Bot), highlight_formula, started, finished (+ _utc), weights {A, B: file, name, loaded}, rounds [ {index, seed (the round's own), attacker,
