@@ -13,13 +13,14 @@ import { WeaponTuningPanel } from './components/WeaponTuningPanel';
 import { EnemyWeaponsPanel } from './components/EnemyWeaponsPanel';
 import { CommanderROEPanel } from './components/CommanderROEPanel';
 import { StealthCombatPanel } from './components/StealthCombatPanel';
+import { HudLabelsPanel } from './components/HudLabelsPanel';
 import { applyLevelEncounterPatch } from './utils/stealthCombat';
 import { BlastDoorPanel, DemoPanel, LevelColdPanel, LevelHordePanel, LevelEnvironmentPanel } from './components/LevelSettingsPanels';
 import { LevelOperativesPanel } from './components/LevelOperativesPanel';
 import { LevelItem, LEVEL_GROUPS, LEVEL_GROUP_LABELS } from './utils/levelList';
 import { validateLevelSettings } from './utils/levelSettings';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
-import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2, Eye } from 'lucide-react';
+import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2, Eye, Tag } from 'lucide-react';
 
 const DEFAULT_LEVEL: LevelConfig = {
   $schema: "../../schemas/level_config.schema.json",
@@ -168,7 +169,7 @@ export const App: React.FC = () => {
   };
 
   const [selectedWaveIndex, setSelectedWaveIndex] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry' | 'weapons' | 'enemyWeapons' | 'squadRoe' | 'stealth'>('waves');
+  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry' | 'weapons' | 'enemyWeapons' | 'squadRoe' | 'stealth' | 'hudLabels'>('waves');
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [isServerConnected, setIsServerConnected] = useState<boolean | null>(null);
 
@@ -737,6 +738,17 @@ export const App: React.FC = () => {
               <Eye className="w-3.5 h-3.5" />
               Скрытность и бой
             </button>
+            <button
+              onClick={() => setActiveTab('hudLabels')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'hudLabels'
+                  ? 'bg-amber-400 text-slate-950 shadow-md shadow-amber-400/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Tag className="w-3.5 h-3.5" />
+              Метки HUD
+            </button>
           </div>
 
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-mono">
@@ -761,6 +773,8 @@ export const App: React.FC = () => {
             levelName={config.level_name}
             onLevelPatched={(patch) => setConfig((prev) => applyLevelEncounterPatch(prev, patch))}
           />
+        ) : activeTab === 'hudLabels' ? (
+          <HudLabelsPanel />
         ) : (
           <>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
