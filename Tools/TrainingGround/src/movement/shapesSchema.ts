@@ -7,7 +7,8 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import type { Role } from './rules.ts';
+import crypto from 'node:crypto';
+import { rolesFor, type Role } from './rules.ts';
 import { CUSTOM_MAX_RADIUS } from './custom.ts';
 
 export const FORMATION_SHAPES_SCHEMA = 'codex.formation_shapes/1';
@@ -129,12 +130,16 @@ export function validateFormationShapes(data: unknown): string[] {
             if (s.members.length !== count) {
               errs.push(`formations.${formName}["${countStr}"]: members array length ${s.members.length} does not match count ${count}`);
             }
+            const expectedRoles = new Set(rolesFor(count).map((r) => ROLE_LETTER_TO_NAME[r]));
             const rolesSeen = new Set<string>();
             for (let i = 0; i < s.members.length; i++) {
               const m = s.members[i] as Record<string, unknown>;
               if (!m || typeof m !== 'object') {
                 errs.push(`formations.${formName}["${countStr}"].members[${i}]: expected an object`);
                 continue;
+              }
+              if (i === 0 && m.role !== 'commander') {
+                errs.push(`formations.${formName}["${countStr}"]: member 0 must be the commander`);
               }
               if (!FORMATION_ROLES.includes(m.role as FormationRole)) {
                 errs.push(`formations.${formName}["${countStr}"].members[${i}]: bad role "${String(m.role)}"`);
@@ -151,18 +156,21 @@ export function validateFormationShapes(data: unknown): string[] {
                 errs.push(`formations.${formName}["${countStr}"]: commander must be at fwd 0, right 0`);
               }
               if (isInteger(m.fwd) && isInteger(m.right)) {
-                const r = Math.hypot(m.fwd, m.right);
+                const r = Math.hypot(m.fwd as number, m.right as number);
                 if (r > CUSTOM_MAX_RADIUS) {
                   errs.push(`formations.${formName}["${countStr}"].members[${i}]: distance ${Math.round(r)} cm exceeds CUSTOM_MAX_RADIUS ${CUSTOM_MAX_RADIUS}`);
                 }
               }
 
-              if (!isInteger(m.look) || m.look <= -180 || m.look > 180) {
+              if (!isInteger(m.look) || (m.look as number) <= -180 || (m.look as number) > 180) {
                 errs.push(`formations.${formName}["${countStr}"].members[${i}]: look must be integer degrees in (-180, 180]`);
               }
-              if (m.arc !== undefined && (!isInteger(m.arc) || m.arc < 10 || m.arc > 360)) {
+              if (m.arc !== undefined && (!isInteger(m.arc) || (m.arc as number) < 10 || (m.arc as number) > 360)) {
                 errs.push(`formations.${formName}["${countStr}"].members[${i}]: arc must be integer degrees between 10 and 360`);
               }
+            }
+            if (rolesSeen.size > 0 && (rolesSeen.size !== expectedRoles.size || ![...expectedRoles].every((r) => rolesSeen.has(r)))) {
+              errs.push(`formations.${formName}["${countStr}"]: roles must match rolesFor(${count}) [${[...expectedRoles].join(', ')}]`);
             }
           }
         }
@@ -187,10 +195,19 @@ export function validateFormationShapes(data: unknown): string[] {
         if (!Array.isArray(s.members)) {
           errs.push(`custom.${slotKey}.members: expected an array`);
         } else {
+          const squadSeen = new Set<number>();
           for (let i = 0; i < s.members.length; i++) {
             const m = s.members[i] as Record<string, unknown>;
-            if (!isInteger(m.squad) || m.squad < 0 || m.squad > 3) {
+            if (!m || typeof m !== 'object') {
+              errs.push(`custom.${slotKey}.members[${i}]: expected an object`);
+              continue;
+            }
+            if (!isInteger(m.squad) || (m.squad as number) < 0 || (m.squad as number) > 3) {
               errs.push(`custom.${slotKey}.members[${i}]: squad must be 0..3`);
+            } else if (squadSeen.has(m.squad as number)) {
+              errs.push(`custom.${slotKey}: duplicate squad index "${m.squad}"`);
+            } else {
+              squadSeen.add(m.squad as number);
             }
             if (!isInteger(m.fwd) || !isInteger(m.right)) {
               errs.push(`custom.${slotKey}.members[${i}]: fwd and right must be integer cm`);
@@ -198,8 +215,17 @@ export function validateFormationShapes(data: unknown): string[] {
             if (m.squad === 0 && (m.fwd !== 0 || m.right !== 0)) {
               errs.push(`custom.${slotKey}: squad 0 (anchor) must be at fwd 0, right 0`);
             }
-            if (!isInteger(m.look) || m.look <= -180 || m.look > 180) {
+            if (isInteger(m.fwd) && isInteger(m.right)) {
+              const r = Math.hypot(m.fwd as number, m.right as number);
+              if (r > CUSTOM_MAX_RADIUS) {
+                errs.push(`custom.${slotKey}.members[${i}]: distance ${Math.round(r)} cm exceeds CUSTOM_MAX_RADIUS ${CUSTOM_MAX_RADIUS}`);
+              }
+            }
+            if (!isInteger(m.look) || (m.look as number) <= -180 || (m.look as number) > 180) {
               errs.push(`custom.${slotKey}.members[${i}]: look must be integer degrees in (-180, 180]`);
+            }
+            if (m.arc !== undefined && (!isInteger(m.arc) || (m.arc as number) < 10 || (m.arc as number) > 360)) {
+              errs.push(`custom.${slotKey}.members[${i}]: arc must be integer degrees between 10 and 360`);
             }
           }
         }
@@ -288,6 +314,14 @@ export function formatFormationShapesJson(doc: FormationShapesFile, options: For
           sLines.push(`${tab}${tab}${tab}${tab}"members": [`);
           sLines.push(mItems.join(',' + nl));
           sLines.push(`${tab}${tab}${tab}${tab}]`);
+          if (shape && typeof shape === 'object') {
+            for (const sk of Object.keys(shape)) {
+              if (sk !== 'members' && (shape as Record<string, unknown>)[sk] !== undefined) {
+                sLines[sLines.length - 1] += ',';
+                sLines.push(`${tab}${tab}${tab}${tab}${JSON.stringify(sk)}: ${inlineJson((shape as Record<string, unknown>)[sk])}`);
+              }
+            }
+          }
           sLines.push(`${tab}${tab}${tab}}`);
           countItems.push(sLines.join(nl));
         }
@@ -317,6 +351,14 @@ export function formatFormationShapesJson(doc: FormationShapesFile, options: For
         sLines.push(`${tab}${tab}${tab}"members": [`);
         sLines.push(mItems.join(',' + nl));
         sLines.push(`${tab}${tab}${tab}]`);
+        if (shape && typeof shape === 'object') {
+          for (const sk of Object.keys(shape)) {
+            if (sk !== 'members' && (shape as Record<string, unknown>)[sk] !== undefined) {
+              sLines[sLines.length - 1] += ',';
+              sLines.push(`${tab}${tab}${tab}${JSON.stringify(sk)}: ${inlineJson((shape as Record<string, unknown>)[sk])}`);
+            }
+          }
+        }
         sLines.push(`${tab}${tab}}`);
         customItems.push(sLines.join(nl));
       }
@@ -362,14 +404,29 @@ export function readFormationShapesFile(filePath: string): FormationShapesFile {
   return parseFormationShapesJson(text);
 }
 
-/** Writes formation shapes to file with atomic write (temp file + rename). */
+/** Writes formation shapes to file with atomic write (unique temp file + fsync + rename + cleanup). */
 export function writeFormationShapesFile(filePath: string, shapes: FormationShapesFile, options: FormatShapesOptions = {}): void {
   const text = formatFormationShapesJson(shapes, options);
   const dir = path.dirname(filePath);
   if (!fs.existsSync(dir)) {
     fs.mkdirSync(dir, { recursive: true });
   }
-  const tempPath = `${filePath}.tmp.${Date.now()}`;
-  fs.writeFileSync(tempPath, text, 'utf8');
-  fs.renameSync(tempPath, filePath);
+  const tempPath = `${filePath}.tmp.${process.pid}.${crypto.randomUUID()}`;
+  try {
+    const fd = fs.openSync(tempPath, 'w');
+    try {
+      fs.writeFileSync(fd, text, 'utf8');
+      fs.fsyncSync(fd);
+    } finally {
+      fs.closeSync(fd);
+    }
+    fs.renameSync(tempPath, filePath);
+  } catch (err) {
+    try {
+      fs.rmSync(tempPath, { force: true });
+    } catch {
+      // ignore cleanup errors
+    }
+    throw err;
+  }
 }

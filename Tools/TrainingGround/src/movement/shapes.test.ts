@@ -32,7 +32,7 @@ import {
 
 import { configValues, type FormationConfigFile } from './config.ts';
 import { ROOT, readConfigFile, readLayout } from './cli/paths.ts';
-import { buildNav, simulate, type Frame } from './sim.ts';
+import { buildNav, simulate, getSavedFormationShape, type Frame } from './sim.ts';
 
 const FIXTURES_DIR = path.join(ROOT, 'Content/Data/FormationLab/fixtures');
 
@@ -379,4 +379,200 @@ test('Golden fixtures: verify formation_shapes_diamond4 and formation_shapes_ech
   const calculatedMirror = mirrorFormationShape('echelon_left', em.formations.echelon_left['4']);
   assert.equal(calculatedMirror.formation, 'echelon_right');
   assert.deepEqual(calculatedMirror.shape.members, em.formations.echelon_right['4'].members);
+});
+
+test('008 review defect 1: readBody rejects invalid JSON and handles valid JSON', async () => {
+  const { readBody } = await import('../../server/movementApi.ts');
+  const makeReq = (bodyStr: string) => ({
+    on: (ev: string, cb: (chunk?: unknown) => void) => {
+      if (ev === 'data') cb(bodyStr);
+      if (ev === 'end') cb();
+    },
+  });
+
+  await assert.rejects(
+    async () => {
+      await readBody(makeReq('{ invalid json '));
+    },
+    (err: unknown) => err instanceof SyntaxError
+  );
+
+  const resEmpty = await readBody(makeReq(''));
+  assert.deepEqual(resEmpty, {});
+
+  const resValid = await readBody(makeReq('{"foo": 123}'));
+  assert.deepEqual(resValid, { foo: 123 });
+});
+
+test('008 review defect 2: formatFormationShapesJson preserves unknown keys on shapes and custom shapes', () => {
+  const doc: FormationShapesFile = {
+    schema: FORMATION_SHAPES_SCHEMA,
+    formations: {
+      column: {
+        '2': {
+          members: [
+            { role: 'commander', fwd: 0, right: 0, look: 0 },
+            { role: 'rear', fwd: -200, right: 0, look: 0 },
+          ],
+          designer_note: 'keep extra field',
+          spacing_multiplier: 1.5,
+        } as any,
+      },
+    },
+    custom: {
+      custom_1: {
+        name: 'Custom alpha',
+        members: [
+          { squad: 0, fwd: 0, right: 0, look: 0 },
+          { squad: 1, fwd: -100, right: 100, look: 45 },
+        ],
+        extra_custom_metadata: { active: true },
+      } as any,
+    },
+  };
+
+  const formatted = formatFormationShapesJson(doc);
+  assert.ok(formatted.includes('"designer_note": "keep extra field"'));
+  assert.ok(formatted.includes('"spacing_multiplier": 1.5'));
+  assert.ok(formatted.includes('"extra_custom_metadata": { "active": true }'));
+
+  const parsed = parseFormationShapesJson(formatted);
+  assert.equal((parsed.formations?.column?.['2'] as any)?.designer_note, 'keep extra field');
+  assert.equal((parsed.custom?.custom_1 as any)?.extra_custom_metadata?.active, true);
+});
+
+test('008 review defect 3: validateFormationShapes enforces commander at member 0 and exact role match to rolesFor(count)', () => {
+  // member 0 not commander
+  const badLeaderDoc: FormationShapesFile = {
+    schema: FORMATION_SHAPES_SCHEMA,
+    formations: {
+      column: {
+        '2': {
+          members: [
+            { role: 'rear', fwd: 0, right: 0, look: 0 },
+            { role: 'commander', fwd: -200, right: 0, look: 0 },
+          ],
+        },
+      },
+    },
+  };
+  const errs1 = validateFormationShapes(badLeaderDoc);
+  assert.ok(errs1.some((e) => e.includes('member 0 must be the commander')));
+
+  // missing role for 4-member (commander, right, rear, rear instead of commander, right, left, rear)
+  const badRolesDoc: FormationShapesFile = {
+    schema: FORMATION_SHAPES_SCHEMA,
+    formations: {
+      wedge: {
+        '4': {
+          members: [
+            { role: 'commander', fwd: 0, right: 0, look: 0 },
+            { role: 'right', fwd: -150, right: 150, look: 30 },
+            { role: 'point', fwd: -150, right: -150, look: -30 }, // point not valid role for wedge 4
+            { role: 'rear', fwd: -300, right: 0, look: 180 },
+          ],
+        },
+      },
+    },
+  };
+  const errs2 = validateFormationShapes(badRolesDoc);
+  assert.ok(errs2.some((e) => e.includes('roles must match rolesFor(4)')));
+});
+
+test('008 review defect 4: getSavedFormationShape pair shape only applies to pair or 2-man column fallback', () => {
+  const shapes: FormationShapesFile = {
+    schema: FORMATION_SHAPES_SCHEMA,
+    formations: {
+      pair: {
+        '2': {
+          members: [
+            { role: 'commander', fwd: 0, right: 0, look: 0 },
+            { role: 'rear', fwd: 0, right: 150, look: 0 },
+          ],
+        },
+      },
+      wedge: {
+        '3': {
+          members: [
+            { role: 'commander', fwd: 0, right: 0, look: 0 },
+            { role: 'right', fwd: -100, right: 100, look: 0 },
+            { role: 'rear', fwd: -100, right: -100, look: 0 },
+          ],
+        },
+      },
+    },
+  };
+
+  // For pair formation: returns pair
+  const pairRes = getSavedFormationShape(shapes, 'pair', 2);
+  assert.ok(pairRes !== undefined);
+  assert.equal(pairRes!.members[1].right, 150);
+
+  // For 2-man column: falls back to pair if column not specified
+  const colRes = getSavedFormationShape(shapes, 'column', 2);
+  assert.ok(colRes !== undefined);
+  assert.equal(colRes!.members[1].right, 150);
+
+  // For 2-man wedge: does NOT fall back to pair! Must be undefined since wedge['2'] is not in saved
+  const wedgeRes = getSavedFormationShape(shapes, 'wedge', 2);
+  assert.equal(wedgeRes, undefined);
+});
+
+test('008 review defect 5: custom shape validation catches radius, arc, duplicate squad, non-object member', () => {
+  const badCustom: any = {
+    schema: FORMATION_SHAPES_SCHEMA,
+    custom: {
+      custom_1: {
+        name: 'Excessive radius and bad arc',
+        members: [
+          { squad: 0, fwd: 0, right: 0, look: 0 },
+          { squad: 1, fwd: 5000, right: 0, look: 0, arc: 400 }, // > 4000 cm, arc > 360
+          { squad: 1, fwd: 100, right: 100, look: 0 }, // duplicate squad index
+          null, // not an object
+        ],
+      },
+      custom_2: {
+        name: 'Bad arc float',
+        members: [
+          { squad: 0, fwd: 0, right: 0, look: 0, arc: 45.5 },
+        ],
+      },
+    },
+  };
+  const errs = validateFormationShapes(badCustom);
+  assert.ok(errs.some((e) => e.includes('exceeds CUSTOM_MAX_RADIUS 4000')));
+  assert.ok(errs.some((e) => e.includes('arc must be integer degrees between 10 and 360')));
+  assert.ok(errs.some((e) => e.includes('duplicate squad index')));
+  assert.ok(errs.some((e) => e.includes('expected an object')));
+});
+
+test('008 review defect 6: writeFormationShapesFile writes atomically with fsync and cleans up on error', () => {
+  const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'shapes-atomic-test-'));
+  try {
+    const targetFile = path.join(tmpDir, 'formation_shapes.json');
+    const doc: FormationShapesFile = {
+      schema: FORMATION_SHAPES_SCHEMA,
+      formations: {
+        column: {
+          '2': {
+            members: [
+              { role: 'commander', fwd: 0, right: 0, look: 0 },
+              { role: 'rear', fwd: -200, right: 0, look: 0 },
+            ],
+          },
+        },
+      },
+    };
+
+    writeFormationShapesFile(targetFile, doc);
+    assert.ok(fs.existsSync(targetFile));
+    const loaded = readFormationShapesFile(targetFile);
+    assert.equal(loaded.schema, FORMATION_SHAPES_SCHEMA);
+
+    // Verify temp files are cleaned up
+    const remainingFiles = fs.readdirSync(tmpDir);
+    assert.deepEqual(remainingFiles, ['formation_shapes.json']);
+  } finally {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  }
 });

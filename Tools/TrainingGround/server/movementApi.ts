@@ -40,10 +40,16 @@ const send = (res: Res, status: number, data: unknown) => {
   res.end(JSON.stringify(data));
 };
 
-const readBody = (req: Req): Promise<Record<string, unknown>> => new Promise((resolve) => {
+export const readBody = (req: Req): Promise<Record<string, unknown>> => new Promise((resolve, reject) => {
   let body = '';
   req.on('data', (c) => { body += String(c); });
-  req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); } });
+  req.on('end', () => {
+    try {
+      resolve(body ? JSON.parse(body) : {});
+    } catch (err) {
+      reject(err);
+    }
+  });
 });
 
 /** Runs a movement CLI with node (type stripping), returns its exit code and output. */
@@ -85,7 +91,12 @@ export function setupMovementApi(use: Use): void {
       }
     }
     if (req.method === 'POST') {
-      const b = await readBody(req);
+      let b: Record<string, unknown>;
+      try {
+        b = await readBody(req);
+      } catch {
+        return send(res, 400, { error: 'invalid JSON' });
+      }
       const errors = validateFormationShapes(b);
       if (errors.length > 0) {
         return send(res, 400, { error: `Validation failed: ${errors.join('; ')}` });

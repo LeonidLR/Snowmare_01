@@ -17,19 +17,19 @@ import {
   CLASSIFY_START, CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules,
   FormationShapeRules, FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
 } from './rules.ts';
-import { ROLE_NAME_TO_LETTER, type FormationShapesFile, type FormationShape } from './shapesSchema.ts';
+import { ROLE_NAME_TO_LETTER, type FormationShapesFile, type FormationShape, type EditableFormation } from './shapesSchema.ts';
 
-function getSavedFormationShape(
+export function getSavedFormationShape(
   savedShapes: FormationShapesFile | undefined,
-  formation: Formation,
+  formation: Formation | EditableFormation,
   memberCount: number
 ): FormationShape | undefined {
   if (!savedShapes?.formations) return undefined;
   const countKey = String(memberCount);
-  if (memberCount === 2 && savedShapes.formations.pair?.[countKey]) {
-    return savedShapes.formations.pair[countKey];
+  if ((formation as string) === 'pair' || (memberCount === 2 && formation === 'column' && savedShapes.formations.pair?.[countKey])) {
+    return savedShapes.formations.pair?.[countKey] ?? (savedShapes.formations as Record<string, Record<string, FormationShape> | undefined>)[formation]?.[countKey];
   }
-  return savedShapes.formations[formation]?.[countKey];
+  return (savedShapes.formations as Record<string, Record<string, FormationShape> | undefined>)[formation]?.[countKey];
 }
 
 export const SIM_DT = 1 / 30;
