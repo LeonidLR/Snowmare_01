@@ -17,6 +17,8 @@ import { guardHudText } from '../movement/labels';
 import type { RunMetrics } from '../movement/checks';
 import type { RedteamFailureView, RedteamView } from '../movement/redteamView';
 import { groupLayoutNames, redteamView, seekFor } from '../movement/redteamView';
+import { FormationEditor } from './FormationEditor';
+import type { FormationShapesFile } from '../movement/shapesSchema';
 
 const BYPASS_RU: Record<string, string> = { shortest: 'кратчайший путь', shielded: 'укрыт от угрозы', too_long: 'укрытый путь слишком длинный' };
 const ROLE_RU: Record<string, string> = { K: 'командир', P: 'правый', L: 'левый', Z: 'замыкающий' };
@@ -77,6 +79,8 @@ export const MovementDepartment: React.FC = () => {
   const [rounds, setRounds] = useState(10);
   const [dryRun, setDryRun] = useState(true);
   const [rtView, setRtView] = useState<RedteamView | null>(null);
+  const [subTab, setSubTab] = useState<'sim' | 'editor'>('sim');
+  const [savedShapes, setSavedShapes] = useState<FormationShapesFile | null>(null);
   // A red-team failure picked: the replay starts 2 s before it once the run is simulated.
   const pendingSeek = useRef<number | null>(null);
 
@@ -93,6 +97,7 @@ export const MovementDepartment: React.FC = () => {
   useEffect(() => {
     fetch('/api/movement/layouts').then((r) => r.json()).then((d) => setLayouts(d.layouts ?? [])).catch(() => setError('Нет связи с сервером Training Ground'));
     fetch('/api/movement/config').then((r) => r.json()).then(setConfigFile).catch(() => {});
+    fetch('/api/movement/formation-shapes').then((r) => r.json()).then(setSavedShapes).catch(() => {});
     fetch('/api/movement/report?kind=bot').then((r) => r.json()).then((d) => setBotReport(d.text ?? '')).catch(() => {});
     fetch('/api/movement/report?kind=train').then((r) => r.json()).then((d) => setTrainReport(d.text ?? '')).catch(() => {});
   }, []);
@@ -120,9 +125,10 @@ export const MovementDepartment: React.FC = () => {
     simulate({ layout, route, memberCount: members, config, seed, nav,
       manualFormation: FormationMenuRules.Resolve(manual, members).manualFormation ?? undefined,
       allForward: FormationMenuRules.Resolve(manual, members).allForward, blizzard,
+      savedShapes: savedShapes ?? undefined,
       onFrame: (f) => { out.push(f); collector.onFrame(f); } });
     return { frames: out, metrics: collector.finish() };
-  }, [layout, routeId, config, nav, members, seed, manual, blizzard]);
+  }, [layout, routeId, config, nav, members, seed, manual, blizzard, savedShapes]);
 
   useEffect(() => { setT(pendingSeek.current ?? 0); pendingSeek.current = null; }, [frames]);
   const last = useRef(0);
@@ -183,8 +189,47 @@ export const MovementDepartment: React.FC = () => {
   ] : [];
 
   return (
-    <div className="p-6 grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
-      <div className="flex flex-col gap-4 min-w-0">
+    <div className="p-6 flex flex-col gap-6">
+      {/* Sub-tab switcher */}
+      <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setSubTab('sim')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              subTab === 'sim'
+                ? 'bg-cyan-600 text-white border-cyan-500 shadow-sm'
+                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            Прогон в симуляторе
+          </button>
+          <button
+            onClick={() => setSubTab('editor')}
+            className={`px-3 py-1.5 rounded-lg text-xs font-semibold border transition-colors ${
+              subTab === 'editor'
+                ? 'bg-cyan-600 text-white border-cyan-500 shadow-sm'
+                : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'
+            }`}
+          >
+            Редактор строев (360° / сетка)
+          </button>
+        </div>
+      </div>
+
+      {subTab === 'editor' ? (
+        config ? (
+          <FormationEditor
+            config={config}
+            savedShapes={savedShapes}
+            onShapesSaved={(newDoc) => setSavedShapes(newDoc)}
+            initialMemberCount={members}
+          />
+        ) : (
+          <div className="text-slate-400 text-sm">Загрузка конфигурации...</div>
+        )
+      ) : (
+        <div className="grid gap-6 xl:grid-cols-[minmax(0,1fr)_420px]">
+          <div className="flex flex-col gap-4 min-w-0">
         {error && <div className="text-sm text-amber-300 bg-amber-950/40 border border-amber-800 rounded-lg px-3 py-2">{error}</div>}
         <Panel title="Прогон в симуляторе" right={
           <div className="flex items-center gap-2">
@@ -337,6 +382,8 @@ export const MovementDepartment: React.FC = () => {
           <pre className="text-[11px] leading-snug bg-slate-950 border border-slate-800 rounded-lg p-3 overflow-x-auto whitespace-pre text-slate-300 max-h-80">{trainReport || 'Обучение ещё не запускалось.'}</pre>
         </Panel>
       </div>
+    </div>
+      )}
     </div>
   );
 };
