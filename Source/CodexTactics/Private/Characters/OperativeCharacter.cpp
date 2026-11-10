@@ -324,6 +324,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 {
 	const float TickYawBefore = static_cast<float>(GetActorRotation().Yaw);
 	Super::Tick(DeltaTime);
+	UpdateCriticalWound(); // the critical wound: down and crawling only until healed (CriticalWoundRules, OperativeCharacterStance.cpp)
 	UpdateCorpseFall(DeltaTime); // fix/corpse-falls-to-ground: a body killed off the ground lands before it lies still
 	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
 	UpdateProneDive(DeltaTime);

@@ -393,6 +393,8 @@
     "move_full_speed": 30,
     "slow_forward_cone_deg": [35, 80],
     "torso_pelvis_share": 0.3,
+    "limp_comment": "The torso LIMP CUE (bug 2026-11-10, fix/injured-layer-visible: from the game camera - ~26 m, pitch -35, the body ~100 px tall - the lower-body injured walk under the upright rifle torso did not read; InjuredLocomotionDepotSmoke frames). On top of the layer the whole torso bends about the pelvis: hunch_deg forward (standing and walking, by the layer weight), sway_deg sideways once per gait cycle (a limp leans once a cycle; sway_phase = the share of the cycle, after the left heel strike, where the lean peaks), both x aiming_scale while aiming (the gun dips / rolls a little, the aim yaw is untouched). enabled false = the clips alone (InjuredLocomotionRules::FInjuredLimpCue).",
+    "limp": { "enabled": true, "hunch_deg": 14, "sway_deg": 7, "sway_phase": 0.0, "aiming_scale": 0.35 },
     "direction_smooth_s": 0.2,
     "direction_clip_band_deg": 10,
     "direction_snap_deg": 75,

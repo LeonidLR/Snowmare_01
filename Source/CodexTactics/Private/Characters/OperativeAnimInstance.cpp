@@ -1394,6 +1394,7 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	InjuredClips = Instance->InjuredClips;
 	InjuredWeight = Instance->InjuredWeight;
 	InjuredTorsoShare = Instance->InjuredTorsoShare;
+	InjuredLimpAngles = Instance->InjuredLimpAngles;
 	WeaponUpperWeight = Instance->ShotgunUpperWeight;
 	WeaponLowerWeight = Instance->ShotgunLowerWeight;
 	bWeaponFullBody = Instance->IsWeaponLayerFullBody();

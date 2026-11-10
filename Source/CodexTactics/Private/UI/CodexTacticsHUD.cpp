@@ -1557,6 +1557,15 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 		{
 			Label += TEXT(" · FROSTBITTEN");
 		}
+		// The wound tag (bug 2026-11-10, fix/injured-layer-visible: from the game camera the limp alone is easy to miss).
+		if (Member->IsCriticallyWounded())
+		{
+			Label += TEXT(" · CRITICAL");
+		}
+		else if (Member->IsWounded())
+		{
+			Label += TEXT(" · WOUNDED");
+		}
 		float W = 0.f;
 		float H = 0.f;
 		Canvas->StrLen(Font, Label, W, H);

@@ -114,4 +114,44 @@ bool FInjuredCrawlAndTorsoTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FInjuredLimpCueTest, "CodexTactics.Animation.Injured.LimpCue",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FInjuredLimpCueTest::RunTest(const FString&)
+{
+	// Bug 2026-11-10 (fix/injured-layer-visible): from the game camera the lower-body limp did not read - the torso cue bends the torso.
+	using namespace InjuredLocomotionRules;
+	FInjuredLimpCue Cue;
+	Cue.bEnabled = true;
+	Cue.HunchDeg = 14.f;
+	Cue.SwayDeg = 7.f;
+	Cue.SwayPhase = 0.f;
+	Cue.AimingScale = 0.35f;
+	const FVector2D Full = LimpCueAngles(Cue, 1.f, 1.f, 0.25f, false);
+	TestEqual(TEXT("full weight: the whole hunch"), static_cast<float>(Full.X), 14.f, 1e-3f);
+	TestEqual(TEXT("the sway peaks a quarter cycle after the phase"), static_cast<float>(Full.Y), 7.f, 1e-3f);
+	TestEqual(TEXT("... and swings the other way half a cycle on (once per cycle)"), static_cast<float>(LimpCueAngles(Cue, 1.f, 1.f, 0.75f, false).Y), -7.f, 1e-3f);
+	TestEqual(TEXT("standing still (walk share 0): the hunch stays, no sway"), static_cast<float>(LimpCueAngles(Cue, 1.f, 0.f, 0.25f, false).Y), 0.f, 1e-4f);
+	TestEqual(TEXT("standing still: the hunch"), static_cast<float>(LimpCueAngles(Cue, 1.f, 0.f, 0.25f, false).X), 14.f, 1e-3f);
+	TestEqual(TEXT("half the layer: half the hunch"), static_cast<float>(LimpCueAngles(Cue, 0.5f, 1.f, 0.f, false).X), 7.f, 1e-3f);
+	const FVector2D Aim = LimpCueAngles(Cue, 1.f, 1.f, 0.25f, true);
+	TestEqual(TEXT("aiming: the hunch x aiming_scale"), static_cast<float>(Aim.X), 14.f * 0.35f, 1e-3f);
+	TestEqual(TEXT("aiming: the sway x aiming_scale"), static_cast<float>(Aim.Y), 7.f * 0.35f, 1e-3f);
+	Cue.SwayPhase = 0.25f;
+	TestEqual(TEXT("sway_phase shifts the peak"), static_cast<float>(LimpCueAngles(Cue, 1.f, 1.f, 0.f, false).Y), 7.f, 1e-3f);
+	Cue.bEnabled = false;
+	TestTrue(TEXT("disabled: no cue"), LimpCueAngles(Cue, 1.f, 1.f, 0.25f, false).IsNearlyZero());
+	FInjuredLimpCue Wild;
+	Wild.HunchDeg = 90.f;
+	Wild.SwayDeg = -5.f;
+	Wild.SwayPhase = 1.25f;
+	Wild.AimingScale = 3.f;
+	const FInjuredLimpCue Clean = SanitizeLimpCue(Wild);
+	TestEqual(TEXT("sanitize: hunch <= 30"), Clean.HunchDeg, 30.f);
+	TestEqual(TEXT("sanitize: sway >= 0"), Clean.SwayDeg, 0.f);
+	TestEqual(TEXT("sanitize: the phase wraps"), Clean.SwayPhase, 0.25f, 1e-4f);
+	TestEqual(TEXT("sanitize: aiming scale <= 1"), Clean.AimingScale, 1.f);
+	return true;
+}
+
 #endif

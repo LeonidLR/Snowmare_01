@@ -83,7 +83,9 @@ enum class ELadderRefusal : uint8
 	/** Not standing: not a refusal, he stands up first. */
 	MustStand,
 	/** No clips for this body (a climbing class without its clip set). */
-	NoClips
+	NoClips,
+	/** Critically wounded (CriticalWoundRules: down, crawling only - a ladder is stand-only). */
+	CriticallyWounded
 };
 
 /** A limb that grips the rungs (rung IK, LADDERS.md 6.2). */

@@ -339,6 +339,23 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	bool IsWounded() const;
 
+	/**
+	 * The critical wound (the game designer 2026-11-10, CriticalWoundRules; critical_wound.json "critical_from" 0.2): HP under that share - he
+	 * goes down by himself and only crawls (the injured crawl), no stand / crouch / sprint / ladder; he still fires prone. Healed back to the
+	 * threshold he may stand again. The squad always; a hostile PMC fighter only with "apply_to_hostiles".
+	 */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
+	bool IsCriticallyWounded() const;
+
+	/** The critical wound holds him down right now (UpdateCriticalWound's state: set when he went down, cleared when healed). */
+	bool IsHeldDownByCriticalWound() const { return bCriticalWoundDown; }
+
+	/** Posts "<name> is critically wounded - heal him" (a refused stand / crouch / run order) when he is critical; false otherwise. */
+	bool NotifyCriticalWoundRefusal() const;
+
+	/** Times he went down by the critical wound (smokes). */
+	int32 GetCriticalWoundDowns() const { return CriticalWoundDowns; }
+
 	/** Max ground speed for the current stance/sprint/wound/carry state, cm/s. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	float GetMaxSpeed() const;
@@ -2957,6 +2974,11 @@ private:
 
 	/** Rev 5e item 6 / rev 5f: the prone dive on the move with root motion (DropProne / UpdateProneDive). */
 	EProneDive ProneDive = EProneDive::None;
+	/** The critical wound holds him prone (CriticalWoundRules::Step; OperativeCharacterStance.cpp). */
+	bool bCriticalWoundDown = false;
+	int32 CriticalWoundDowns = 0;
+	/** Per tick: down when he became critical (as soon as he is free), the lock lifted when healed. */
+	void UpdateCriticalWound();
 	double ProneDiveStartTime = 0.0;
 	float ProneDiveLength = 0.f;
 	TWeakObjectPtr<UAnimSequenceBase> ProneDiveClip;

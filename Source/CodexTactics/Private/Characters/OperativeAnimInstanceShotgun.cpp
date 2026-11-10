@@ -389,6 +389,19 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 	Number(TEXT("crawl_speed"), ShotgunSet.InjuredCrawlSpeed);
 	Number(TEXT("torso_pelvis_share"), ShotgunSet.TorsoPelvisShare);
 	Number(TEXT("direction_clip_band_deg"), ShotgunSet.DirectionClipBandDeg);
+	// "limp": { "enabled", "hunch_deg", "sway_deg", "sway_phase", "aiming_scale" } - the torso cue (InjuredLocomotionRules::FInjuredLimpCue).
+	const TSharedPtr<FJsonObject>* Limp = nullptr;
+	if (Block->TryGetObjectField(TEXT("limp"), Limp) && Limp)
+	{
+		InjuredLocomotionRules::FInjuredLimpCue Cue;
+		(*Limp)->TryGetBoolField(TEXT("enabled"), Cue.bEnabled);
+		double Value = 0.0;
+		Cue.HunchDeg = (*Limp)->TryGetNumberField(TEXT("hunch_deg"), Value) ? static_cast<float>(Value) : 0.f;
+		Cue.SwayDeg = (*Limp)->TryGetNumberField(TEXT("sway_deg"), Value) ? static_cast<float>(Value) : 0.f;
+		Cue.SwayPhase = (*Limp)->TryGetNumberField(TEXT("sway_phase"), Value) ? static_cast<float>(Value) : 0.f;
+		Cue.AimingScale = (*Limp)->TryGetNumberField(TEXT("aiming_scale"), Value) ? static_cast<float>(Value) : 0.f;
+		ShotgunSet.LimpCue = InjuredLocomotionRules::SanitizeLimpCue(Cue);
+	}
 	const TArray<TSharedPtr<FJsonValue>>* SlowCone = nullptr;
 	if (Block->TryGetArrayField(TEXT("slow_forward_cone_deg"), SlowCone) && SlowCone && SlowCone->Num() == 2)
 	{

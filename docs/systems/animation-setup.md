@@ -616,9 +616,22 @@ slow injured walk; standing still cold keeps the existing shiver idle; wounded f
   best-planted foot's median drift / speed):** the ABP walk (baseline) 9 %; wounded Front 12 %, Back 14 %, FR 35 %, R 34 %, BR 31 %, BL 32 %,
   L 39 %, FL 40 %; wounded crawl (`Crawl_Injured`) 14 %; freezing forward 17 % (rate 0.42), freezing strafe 39 %; 90 %+ slow walk 15 % (rate 1.07).
   At the game's 220 cm/s base: wounded 143 cm/s plays ~0.8-1.2x, freezing 99 cm/s ~0.6x, Hypothermia 55 cm/s slow walk ~1.4x.
+- **Bug 2026-11-10 "he did not see the injured walk" (fix/injured-layer-visible).** The designer's PIE on the Depot (12:37, the Commander
+  66 / 140 HP walking squad moves, M16 in hand, a PMC target at 58 m). Reproduced on the Depot (`InjuredLocomotionDepotSmoke`, pinned
+  `SmokeFixtures/injured_depot_smoke.json`): the layer was ON - weight 1.00 on every steady frame with the M16, the RPG-7 drawn, aiming at a
+  PMC fighter while walking with either, no gate closed (`UOperativeAnimInstance::DescribeInjuredLayerGates`). The cause is visibility: the
+  game camera sits ~26 m out at pitch -35 (the body ~100 px tall) and the layer bent only the legs under an upright rifle torso - from there
+  the wounded walk looked like a slower normal walk (frames `Saved/Screenshots/InjuredLocomotion/depot_*.png`). **Fix: the torso limp cue**
+  (`"limp"` in "injured", `InjuredLocomotionRules::FInjuredLimpCue` / `LimpCueAngles`): the whole torso bends about the pelvis on top of the
+  layer - `hunch_deg` 14 forward (by the layer weight, standing too), `sway_deg` 7 sideways once per gait cycle on the layer's phase
+  (`sway_phase`), both x `aiming_scale` 0.35 while aiming (the aim's yaw untouched; the gun dips ~5 deg). `"enabled": false` = the clips
+  alone. The squad labels show "· WOUNDED" / "· CRITICAL" too (CodexTacticsHUD).
 - **ColdWalkClips** (the ABP cold layer's walk per tier, Godot 25 / 40 / 70 / 90) stay empty on purpose: the 70 / 90 walk is this layer's
   (keeps the weapon torso, only while walking); the shiver standing still is the warm-idle Cold_1 set.
-- **Checks:** tests `CodexTactics.Animation.Injured.*`; smoke `InjuredLocomotionSmoke` (L_MovementTest: full HP layer 0; 40 % HP injured idle,
+- **Checks:** tests `CodexTactics.Animation.Injured.*` (+ `LimpCue`); smoke `InjuredLocomotionDepotSmoke` (L_Gen_Depot_1, the pinned fixture: the
+  Commander at 45 % HP on squad move orders - M16, RPG-7, aiming at a PMC fighter with each: weight > 0.9, an injured loop, the cue on; not
+  aiming, the torso leans >= 7 deg further forward and sways >= 2 deg wider than the healthy walk; arg `shots` = game-camera frames); smoke
+  `InjuredLocomotionSmoke` (L_MovementTest: full HP layer 0; 40 % HP injured idle,
   8 directions with their clip + the foot slide (forward / back <= 25 %, the rest <= 45 %), prone -> `Crawl_Injured`; cold 75 %: forward /
   sideways = `Walk_Injured_Front` / `_Right`, still = the shiver idle with the layer 0; cold 92 %: forward = `Walk_Injured_Slow`). Dev switch
   `-AnimPackFallback=injured` (the pack by bone name, for a skeleton without copies). Arg `shots` (rendered):

@@ -245,8 +245,12 @@ namespace SquadControlSmoke
 			{
 				return true;
 			}
-			Check(State, Mover && Mover->IsInBarricadeCover() && Floating->HasShown(TEXT("IN COVER")),
-				TEXT("arrived next to the barricade in combat: crouched in cover"));
+			// The "IN COVER" text is spawned only on the arrival behind a barricade, crouching (OnMoveCompleted's barricade rule): with it, crouched is
+			// enough - on the unthrottled fixed step one smoke step covers many game frames, and the formation's rear-guard catch-up may already
+			// have walked him (crouched) off the 220 cm barricade radius (2026-11-10, fix/injured-layer-visible: crouched, the text shown, 0 behind in 3 of 4 runs).
+			Check(State, Mover && Mover->GetStance() == EOperativeStance::Crouching && Floating->HasShown(TEXT("IN COVER")),
+				FString::Printf(TEXT("arrived next to the barricade in combat: crouched in cover (stance %d, behind %d, text %d, t %.2f s)"),
+					Mover ? static_cast<int32>(Mover->GetStance()) : -1, Mover && Mover->IsBehindBarricade() ? 1 : 0, Floating->HasShown(TEXT("IN COVER")) ? 1 : 0, State.StageTime));
 			++State.Stage;
 			State.StageTime = 0.f;
 			return true;

@@ -8,6 +8,7 @@
 
 #include "CodexTactics.h"
 #include "Animation/AnimSequence.h"
+#include "Characters/CriticalWoundRules.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -18,7 +19,11 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "NavigationSystem.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "UI/FloatingTextSubsystem.h"
+#include "UI/GameMessageSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
+
+#define LOCTEXT_NAMESPACE "OperativeCharacterStance"
 
 float AOperativeCharacter::GetStanceChangeDelay(EOperativeStance From, EOperativeStance To) const
 {
@@ -44,6 +49,13 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 	if (ColdSurvival && ColdSurvival->IsFrostbitten() && NewStance != EOperativeStance::Prone)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("%s: frostbitten, cannot leave prone"), *DisplayName.ToString());
+		return;
+	}
+	// The critical wound (the game designer 2026-11-10, CriticalWoundRules): down and crawling only until healed. Any caller - the player's
+	// keys (they post the feed line), the formation, the autonomy, a cover entry, a ladder - is refused here.
+	if (!CriticalWoundRules::AllowsStance(IsCriticallyWounded(), NewStance))
+	{
+		UE_LOG(LogCodexTactics, Verbose, TEXT("%s: critically wounded, cannot leave prone"), *DisplayName.ToString());
 		return;
 	}
 	// User decision 2026-10-01: getting up from prone needs a full stop — a crawling operative stops, then rises in place.
@@ -300,3 +312,83 @@ void AOperativeCharacter::UpdatePlaceholderPose(float Alpha)
 	BodyMesh->SetRelativeScale3D(FMath::Lerp(BodyMesh->GetRelativeScale3D(), Shape.PlaceholderScale, Alpha));
 	FacingMarker->SetRelativeLocation(FMath::Lerp(FacingMarker->GetRelativeLocation(), MarkerLocation, Alpha));
 }
+
+bool AOperativeCharacter::IsCriticallyWounded() const
+{
+	const CriticalWoundRules::FCriticalWoundConfig& Config = CriticalWoundRules::GetWoundConfig();
+	return HealthComponent && CriticalWoundRules::AppliesTo(Config, IsPlayerTeam())
+		&& CriticalWoundRules::IsCritical(Config, HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth());
+}
+
+bool AOperativeCharacter::NotifyCriticalWoundRefusal() const
+{
+	if (!IsCriticallyWounded())
+	{
+		return false;
+	}
+	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+	{
+		Messages->PostMessage(DisplayName, FText::Format(LOCTEXT("CriticalRefused", "🩸 {0} is critically wounded - heal him"), DisplayName));
+	}
+	return true;
+}
+
+void AOperativeCharacter::UpdateCriticalWound()
+{
+	using namespace CriticalWoundRules;
+	const bool bAlive = HealthComponent && HealthComponent->IsAlive();
+	const bool bCritical = bAlive && IsCriticallyWounded();
+	// Busy: he cannot lie down this tick - he goes down as soon as he is free (off the ladder, up from the knockdown, landed, out of the vault).
+	const bool bBusy = !bAlive || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge() || bVaulting || IsProneDiving()
+		|| VehicleQueries::IsMounted(this);
+	switch (StepWound(bCriticalWoundDown, bCritical, Stance == EOperativeStance::Prone, bBusy))
+	{
+	case ECriticalWoundAction::GoDown:
+	{
+		const bool bWasDown = bCriticalWoundDown;
+		bCriticalWoundDown = true;
+		bSprinting = false;
+		if (Stance != EOperativeStance::Prone)
+		{
+			if (bInCover)
+			{
+				LeaveCover(TEXT("critically wounded"));
+			}
+			ClearPendingCover();
+			StopOperative();
+			SetStance(EOperativeStance::Prone);
+		}
+		if (!bWasDown)
+		{
+			++CriticalWoundDowns;
+			UE_LOG(LogCodexTactics, Display, TEXT("[CriticalWound] %s goes down (HP %.0f / %.0f < %.0f %%): crawling only until healed"), *DisplayName.ToString(),
+				HealthComponent->GetCurrentHealth(), HealthComponent->GetMaxHealth(), GetWoundConfig().CriticalFrom * 100.f);
+			if (IsPlayerTeam())
+			{
+				UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("🩸 CRITICALLY WOUNDED!"), FLinearColor(1.f, 0.25f, 0.2f));
+				if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+				{
+					Messages->PostMessage(DisplayName, FText::Format(LOCTEXT("CriticalDown", "🩸 {0} is critically wounded and goes down! He can only crawl - heal him."), DisplayName));
+				}
+			}
+		}
+		break;
+	}
+	case ECriticalWoundAction::MayStand:
+		bCriticalWoundDown = false;
+		UE_LOG(LogCodexTactics, Display, TEXT("[CriticalWound] %s healed (HP %.0f / %.0f): may stand again"), *DisplayName.ToString(),
+			HealthComponent ? HealthComponent->GetCurrentHealth() : 0.f, HealthComponent ? HealthComponent->GetMaxHealth() : 0.f);
+		if (IsPlayerTeam() && bAlive)
+		{
+			if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+			{
+				Messages->PostMessage(DisplayName, FText::Format(LOCTEXT("CriticalHealed", "🩹 {0} is patched up - he can stand again."), DisplayName));
+			}
+		}
+		break;
+	default:
+		break;
+	}
+}
+
+#undef LOCTEXT_NAMESPACE

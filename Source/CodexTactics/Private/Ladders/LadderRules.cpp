@@ -298,6 +298,10 @@ namespace LadderRules
 		{
 			return ELadderRefusal::Carrying;
 		}
+		if (Context.bCriticallyWounded)
+		{
+			return ELadderRefusal::CriticallyWounded;
+		}
 		if (Context.bLeasedByOther)
 		{
 			return ELadderRefusal::Leased;

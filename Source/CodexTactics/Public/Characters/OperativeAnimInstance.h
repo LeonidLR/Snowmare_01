@@ -284,6 +284,8 @@ private:
 	TStaticArray<FOperativeClipState, 6> InjuredClips;
 	float InjuredWeight = 0.f;
 	float InjuredTorsoShare = 0.f;
+	/** The limp cue this frame (deg): X = the torso's forward hunch, Y = its signed side sway (InjuredLocomotionRules::LimpCueAngles). */
+	FVector2D InjuredLimpAngles = FVector2D::ZeroVector;
 };
 
 /**
@@ -1374,6 +1376,10 @@ public:
 	bool HasInjuredSet() const { return InjuredSetData.StandIdle != nullptr; }
 	/** The prone crawl layer plays the injured crawl set now (wounded, prone). */
 	bool IsInjuredCrawlActive() const { return bInjuredCrawlActive; }
+	/** Which gates hold the standing injured layer off this frame ("open" when none; smokes / logs: why a wounded man does not limp). */
+	FString DescribeInjuredLayerGates() const;
+	/** The limp cue's strength this frame (0..1 of the "limp" block's amplitudes, 0 when off; smokes). */
+	float GetInjuredLimpAmount() const { return InjuredLimpAmount; }
 
 	// --- The shotgun weapon layer (the D-1, designer decision 21, 2026-11-03; WeaponAnimLayerRules) ---------------------------------
 	// The user's ShotgunLocomotionPack clips (Content/Data/Weapons/weapon_anim_sets.json "shotgun") blended natively over the ABP's
@@ -1891,6 +1897,8 @@ private:
 		/** "direction_clip_band_deg": within this many deg of a directional clip it plays alone (InjuredLocomotionRules::BandedAlpha). */
 		float DirectionClipBandDeg = 0.f;
 		float TorsoPelvisShare = 0.f;
+		/** "limp": the torso cue over the injured layer (InjuredLocomotionRules::FInjuredLimpCue; absent = off). */
+		InjuredLocomotionRules::FInjuredLimpCue LimpCue;
 		FShotgunAnimSet()
 		{
 			for (int32 Index = 0; Index < 8; ++Index)
@@ -2039,6 +2047,10 @@ private:
 	float InjuredIdleTime = 0.f;
 	float InjuredPlayRate = 0.f;
 	float InjuredTorsoShare = 0.f;
+	/** The limp cue's strength (the layer weight while the "limp" block is on, else 0). */
+	float InjuredLimpAmount = 0.f;
+	/** The limp cue's angles this frame (deg; X hunch, Y signed sway) for the proxy. */
+	FVector2D InjuredLimpAngles = FVector2D::ZeroVector;
 	FWeaponLayerDirectionState InjuredDirection;
 	/** The injured idle + two directional loops + the previous direction's two during a reversal's cross-fade (or the slow walk alone). */
 	TStaticArray<FOperativeClipState, 6> InjuredClips;
