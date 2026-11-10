@@ -4,6 +4,7 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadFormation.h"
+#include "Characters/SquadRegroupRules.h"
 #include "Characters/FirePostureRules.h"
 #include "Formation/FormationBypassRules.h"
 #include "Formation/FormationCornerHoldRules.h"
@@ -210,6 +211,14 @@ public:
 
 	/** Codex.Squad.SoloIndependent (default 1): Solo has no leash and no guard crouch; 0 = the old rules (25 m leash, guard crouch). */
 	static bool IsSoloIndependent();
+
+	/**
+	 * Fast regroup on B (the game designer's bug 2026-11-10, SquadRegroupRules): he was far from the formation at the Regroup and still closes
+	 * the distance at his run / sprint straight to the leader (not yet in the formation's pacing). Smokes / debug.
+	 */
+	bool IsFastRegrouping(const AOperativeCharacter* Operative) const;
+	/** Codex.Squad.FastRegroup (default 1); 0 = the old rule (B puts everyone straight into the formation's pacing). */
+	static bool IsFastRegroupEnabled();
 
 	/**
 	 * The level start's squad mode was applied, or a save / an explicit switch chose one first (ApplyLevelStartMode). Smokes written for the
@@ -822,6 +831,32 @@ private:
 	/** Solo's waiting followers -> seconds each has stood still since Solo held him (ArmSoloGuardCrouch). */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, float> SoloGuardCrouchWait;
 
+	// --- Fast regroup on B (the game designer's bug 2026-11-10; SquadRegroupRules; SquadSubsystemRegroup.cpp) ---
+	/** One member's regroup since B (kept by member, not by FFollowerState: a RebuildFollowers on the way keeps it). */
+	struct FFastRegroupState
+	{
+		/** Set by ExitSoloMode; the first formation frame with his slot known decides (SquadRegroupRules::ShouldStartFastRegroup). */
+		bool bArmed = true;
+		/** He runs / sprints to the leader's live position (SquadRegroupRules::KeepsFastRegroup). */
+		bool bActive = false;
+		/** He was stood up to run instead of taking the leader's crouch / prone: he takes the leader's stance when he joins. */
+		bool bStancePending = false;
+		/** World time of the B, s (the join time in the log). */
+		double StartTime = 0.0;
+		/** The pace last logged (a change is logged). */
+		TOptional<ESquadRegroupPace> LoggedPace;
+	};
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FFastRegroupState> FastRegroups;
+	/** This frame's combat facts for the regroup pace (a fight, an enemy known to the squad, a member under fire / suppressed). */
+	bool bFrameRegroupCombat = false;
+	/**
+	 * ExitSoloMode (B): arms the fast regroup for a follower farther than FSquadRegroupTuning::StartCm from the leader (not critically
+	 * wounded); true when armed (he then stands up to run when the tuning says so - ExitSoloMode gives him the stance).
+	 */
+	bool ArmFastRegroup(AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef);
+	/** The squad is in combat for the regroup pace (no sprint then): a fight, a known enemy (seen / heard), a member under fire / suppressed. */
+	bool IsRegroupCombat() const;
+
 	// --- The squad on a narrow ramp / stair (bug report 2026-11-02 item 7; RampFileRules; SquadSubsystemRampFile.cpp) ---
 	/**
 	 * Each frame (Codex.Squad.RampFile): the members on a ramp / stair or in its mouth walk it single file - the man behind waits until the
@@ -1415,6 +1450,14 @@ private:
 	TMap<TWeakObjectPtr<AOperativeCharacter>, TPair<float, double>> LeaderFacingMemory;
 	void UpdateSlotSwap(float DeltaTime);
 	void UpdateFollower(FFollowerState& Follower, AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime, float TimeSeconds);
+	/** Fast regroup (2026-11-10): his gap to the formation this frame - the nearer of his slot (the sector frame's, else the old slot math) and the leader, cm. */
+	float FastRegroupGapCm(const FFollowerState& Follower, const AOperativeCharacter& Operative, const AOperativeCharacter& LeaderRef) const;
+	/**
+	 * Fast regroup (2026-11-10), from UpdateFollower: drives a fast-regrouping follower (true) - the run / sprint to the leader's live position
+	 * along the nav path, every FSquadRegroupTuning::RepathSeconds - or ends it (false: he joins the formation this frame, taking the leader's
+	 * stance if it was deferred).
+	 */
+	bool UpdateFastRegroup(FFollowerState& Follower, AOperativeCharacter& Operative, AOperativeCharacter& LeaderRef, float DeltaTime);
 	bool IsSlotPathBlocked(const AOperativeCharacter& LeaderRef, const FVector& SlotLocation) const;
 	/**
 	 * A follower in cover / lying behind it on a group cover order (rev 5g, 2026-10-20): holds it (true) or leaves it to follow the

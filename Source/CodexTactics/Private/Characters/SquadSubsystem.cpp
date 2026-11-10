@@ -819,6 +819,7 @@ void USquadSubsystem::EnterSoloModeInternal(bool bForTrap, bool bAnnounce)
 
 	bIsSoloMode = true;
 	bTrapSolo = bForTrap;
+	FastRegroups.Reset(); // Solo again: a regroup still running ends - each holds where he is (2026-11-10)
 	SetFollowersHolding(true);
 
 	// Followers crouch when holding in solo mode (Godot solo_wait_stance = 1 / CROUCHING); one still on his own order walks on in
@@ -960,6 +961,7 @@ void USquadSubsystem::RestoreSoloForLoad(bool bSolo, bool bInTrapSolo)
 	bSoloFromLevelStart = false;
 	bIsSoloMode = bSolo;
 	bTrapSolo = bSolo && bInTrapSolo;
+	FastRegroups.Reset(); // a load puts everyone where the save had him (2026-11-10)
 	SetFollowersHolding(bSolo);
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	if (LeaderRef && HasMultiSelection())
@@ -1079,7 +1081,11 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 				}
 				DropGroupCoverProne(Operative, TEXT("regroup")); // ... and one lying behind a cover after a group cover order
 				DropGroupCoverWait(Operative, TEXT("regroup")); // ... and one waiting off the wall for the leader (2026-10-23)
-				Operative->SetStance(LeaderRef->GetStance());
+				// Bug 2026-11-10: far from the leader he regroups fast (SquadSubsystemRegroup.cpp) - stood up to run when the leader is low
+				// (squad_regroup.json stand_up_to_run), the leader's stance when he joins.
+				const bool bFastRegroup = ArmFastRegroup(*Operative, *LeaderRef);
+				const FFastRegroupState* Regroup = bFastRegroup ? FastRegroups.Find(Operative) : nullptr;
+				Operative->SetStance(Regroup && Regroup->bStancePending ? EOperativeStance::Standing : LeaderRef->GetStance());
 				// Bug 2026-10-20: the copied stance is the squad's - crouched after the Solo guard crouch, he stands up to sprint with the
 				// leader (UpdateFollower; Solo on / off again used to be the only cure).
 				Operative->MarkStanceFromSquad();
@@ -1570,8 +1576,19 @@ void USquadSubsystem::TickFormationFollow(float DeltaTime)
 			EndFormationWallOrder(TEXT("the formation is off (turn-based / Commander Mode / Codex.Squad.CombatFormation 0)"));
 		}
 		Sectors.bSlide = false;
+		FastRegroups.Reset(); // no formation to regroup into (turn-based / Commander Mode's own fight): the B's fast regroup is over
 		return;
 	}
+	// Fast regroup (2026-11-10): the leader never chases himself (a regrouping man selected); the pace's combat facts once per frame.
+	FastRegroups.Remove(LeaderRef);
+	for (auto It = FastRegroups.CreateIterator(); It; ++It)
+	{
+		if (!It.Key().IsValid())
+		{
+			It.RemoveCurrent();
+		}
+	}
+	bFrameRegroupCombat = !FastRegroups.IsEmpty() && IsRegroupCombat();
 	if (Sectors.bWallOrder && !IsGroupCoverFormation())
 	{
 		// User decision 2026-10-26: the wall layout runs in the fight too (Codex.GroupCover.InCombat 0: it ends when the fight starts).
@@ -1695,6 +1712,12 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 	}
 	// Rules v2.2 wall group (Codex.Formation.Sectors): taken out of his cover slot into the back-to-wall pose, he holds it facing his look.
 	if (HoldsWallGroupPose(Follower, *Operative))
+	{
+		return;
+	}
+	// Fast regroup on B (the game designer's bug 2026-11-10): far from the formation he first runs / sprints straight to the leader - no
+	// formation pacing, no sprint copy, no slot look - and joins the formation close to it (SquadSubsystemRegroup.cpp).
+	if (UpdateFastRegroup(Follower, *Operative, LeaderRef, DeltaTime))
 	{
 		return;
 	}

@@ -1,0 +1,10 @@
+{
+  "_comment": "Fast regroup on B (the game designer's bug 2026-11-10; docs/systems/squad-and-orders.md). Read by SquadRegroupTuning (C++, Source/CodexTactics/Public/Characters/SquadRegroupRules.h). On B (Regroup / Solo off) a member farther than start_m from the formation (his slot, or the leader when nearer) closes the distance as fast as he may - straight to the leader's live position along the nav path, no formation pacing, no slot shuffling - and joins the formation within join_m. Out of combat (no enemy known to the squad, no fight, nobody under fire) a fit man sprints (sprint_out_of_combat 1), in combat he runs at run_speed_cm_s; a wounded man (IsWounded) runs at run_speed_cm_s x his wound multiplier, never sprints; below critical_health_pct of max HP (the prone crawl) he is left to the normal formation. stand_up_to_run 1: a man the regroup would give the leader's crouch / prone stands up to run and takes that stance when he joins. repath_s: how often his path to the leader's live position is renewed. Codex.Squad.FastRegroup 0 = the old rule (everyone straight into the formation pacing).",
+  "start_m": 12,
+  "join_m": 6,
+  "run_speed_cm_s": 480,
+  "sprint_out_of_combat": 1,
+  "critical_health_pct": 20,
+  "stand_up_to_run": 1,
+  "repath_s": 0.5
+}

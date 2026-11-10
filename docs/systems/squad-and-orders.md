@@ -72,7 +72,8 @@ takes cover on his own; autonomy ON (Ctrl+T) adds moving / covering. B gathers e
   automatic fire by the posture stays). Ctrl + T (the autonomy) owns the cover decisions as before. HQ line on B: `[SOLO MODE: ON] Each operative
   holds where you send him. [B] regroups.` (the old "scouts alone (max 25 m) ... crouched" line only with 0).
 - **B** (`ToggleSoloMode`) unchanged: Regroup releases the own orders and every follower paths to his slot round the selected leader from any
-  distance (the formation never had a cap; catch-up speed `SquadFormation::ComputeFollowerSpeed`); B again = Solo, everybody stays.
+  distance (the formation never had a cap; catch-up speed `SquadFormation::ComputeFollowerSpeed`); B again = Solo, everybody stays. Since
+  2026-11-10 the far ones first run / sprint to the leader ("Fast regroup on B" below).
   Kept: box selection moves several together, per-operative stance (`SoloOwnStance`), the trap Solo.
 - **Holders stepping out of the selected man's path** (narrow ramps, "The squad on a narrow ramp") still apply in Solo - a yield of a few metres,
   not an order of his own (open question for the designer).
@@ -84,6 +85,34 @@ takes cover on his own; autonomy ON (Ctrl+T) adds moving / covering. B gathers e
   New `SoloStartSmoke` (L_MovementTest): the level starts in Solo; A and B walk 60+ m apart and stay, C never moves / crouches; a frozen hound in
   C's sight - C fires from his spot (AGG, autonomy off) and holds under fire; B - everybody on his formation slot; B - Solo, all stay; A/B with
   `SoloIndependent 0` - C manoeuvres under fire. Tests `CodexTactics.Squad.Orders.SoloWithoutTies`, `CodexTactics.Combat.UnderFire.*`.
+
+## Fast regroup on B (the game designer's bug 2026-11-10, branch fix/fast-regroup-on-b)
+
+Designer: "one operative is far away (tens of metres), I press B - the others switch to the formation at once and follow him slowly in formation
+pacing; the squad takes very long to join up. Members far from their slot must first close the distance as fast as possible, then form up."
+
+- **Where the slow join came from:** `ExitSoloMode` put every follower straight into the formation follow. With the sector formation on, the
+  follow speed is `FormationRuntime::FollowerMove`: his walk (220 cm/s) x `move.catchup_mult` 1.25 = 275 cm/s at most, plus the slot's
+  feed-forward and the arrival law (distance x FollowGain) - a walk, never a run, from 40 m away (the old formation's `SquadFormation::
+  ComputeFollowerSpeed` with `SlowRadius 250` / `CatchUpMultiplier 1.25` is the same pacing). The places were also re-weighed by travel
+  (`ReassignFormationPlaces`) while the far man came in.
+- **Now** (`SquadSubsystemRegroup.cpp`, pure `SquadRegroupRules`, data `Content/Data/AI/squad_regroup.json`, `Codex.Squad.FastRegroup` 1;
+  0 = the old rule): `ExitSoloMode` arms every follower farther than `start_m` (12) from the leader (`ArmFastRegroup`; not a critically wounded
+  one - HP < `critical_health_pct` 20 %, the prone crawl); the first formation frame decides by his gap to the formation = the nearer of his slot
+  and the leader (`ShouldStartFastRegroup`). A fast regrouper is driven by `UpdateFastRegroup` before the formation code in `UpdateFollower`:
+  `FollowTo(the leader's LIVE position)` along the nav path every `repath_s` (0.5), no formation pacing, no sector look, no sprint copy; out of
+  combat (no fight, no enemy known to the squad within `bypass.threat_memory_s`, nobody under fire / suppressed: `IsRegroupCombat`) a fit man
+  sprints (`MovementConfig.RunSpeed` 725), in combat he runs at `run_speed_cm_s` 480, a wounded man (`IsWounded`) runs at 480 x
+  `WoundedSpeedMultiplier` 0.65 = 312 and never sprints (`ChoosePace` / `PaceSpeed`, cold multiplier applied). He joins the formation within
+  `join_m` (6) of it (`KeepsFastRegroup`; a critical wound on the way ends it too) - from then on the normal formation follow. The leader is never
+  stopped: a leader walking on is chased at his live position. While anyone regroups fast `ReassignFormationPlaces` keeps the places (no
+  shuffling). Ladders / ramps keep their queue rules (`FollowTo` refuses on a ladder / at a drop; a ramp-file traffic hold returns earlier).
+- **Stance:** with `stand_up_to_run` 1 a fast regrouper whose leader crouches / lies stands up to run and takes the leader's stance when he
+  joins (unless the player gave him another one meanwhile); the near ones copy the leader's stance at once as before.
+- Solo again, a load, or the formation switched off (turn-based, Commander Mode's fight) end every running fast regroup.
+- **Smoke `FastRegroupSmoke`** (L_MovementTest, the level's Solo start): A sprints ~40 m away, B - pass 0 the old rule (the "before"
+  numbers), pass 1 the fix (armed, sprinting, within 6 m in budget and < 60 % of the old time, joined close, everyone at his slot), pass 2 the
+  leader walks 10 m on after B (chased, reached, formed up). Tests `CodexTactics.Squad.Regroup.*`.
 
 ## Group cover order: the others go along (game designer 2026-10-20)
 
