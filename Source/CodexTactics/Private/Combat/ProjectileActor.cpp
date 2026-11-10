@@ -180,6 +180,8 @@ void AProjectileActor::Finish(EProjectileEnd End, const FVector& Location, AActo
 	Impact.FlightSeconds = Flight.FlightSeconds();
 	Impact.FlightDistanceCm = Flight.DistanceCm;
 	Impact.SourceName = Shot.SourceName;
+	Impact.Instigator = Shot.Instigator;
+	Impact.bLauncher = Shot.bLauncherSuppression;
 	SetActorLocation(Location);
 	// The direct hit on the actor struck (armed or a dud): its whole share - the blast below leaves it out (the designer 2026-11-09: the RPG-7's
 	// direct hit = 140, not 140 + the splash).

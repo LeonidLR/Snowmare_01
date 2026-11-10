@@ -365,10 +365,10 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 		const UPathFollowingComponent* TracedFollowing = AIController->GetPathFollowingComponent();
 		const FNavPathSharedPtr TracedPath = TracedFollowing ? TracedFollowing->GetPath() : nullptr;
 		const bool bValidPath = TracedPath.IsValid() && TracedPath->IsValid() && TracedPath->GetPathPoints().Num() > 0;
-		UE_LOG(LogCodexTactics, Display, TEXT("[MoveTrace] %s: path to (%.0f, %.0f): result %d, %d points, length %.0f, partial %d, ends %.0f cm from the goal"),
-			*DisplayName.ToString(), Destination.X, Destination.Y, static_cast<int32>(Result), bValidPath ? TracedPath->GetPathPoints().Num() : 0,
+		UE_LOG(LogCodexTactics, Display, TEXT("[MoveTrace] %s: path to (%.0f, %.0f, z %.0f): result %d, %d points, length %.0f, partial %d, ends %.0f cm from the goal (z %.0f)"),
+			*DisplayName.ToString(), Destination.X, Destination.Y, Destination.Z, static_cast<int32>(Result), bValidPath ? TracedPath->GetPathPoints().Num() : 0,
 			bValidPath ? TracedPath->GetLength() : 0.f, bValidPath && TracedPath->IsPartial() ? 1 : 0,
-			bValidPath ? FVector::Dist2D(TracedPath->GetEndLocation(), Destination) : -1.f);
+			bValidPath ? FVector::Dist2D(TracedPath->GetEndLocation(), Destination) : -1.f, bValidPath ? TracedPath->GetEndLocation().Z : 0.0);
 	}
 	return EOperativeOrderResult::Accepted;
 }

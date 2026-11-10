@@ -597,3 +597,42 @@ one real 180 s 3v3 objective round): contact, every quiet spell <= 45 s, the att
 running order replaced inside its minimum hold, <= 20 orders per fighter-minute (one per minimum hold), <= 2 x squad same-order
 re-decisions within 2 s.
 
+## 12. Arena gaps: RPG contact, objective reach (fix/arena-rpg-contact-roof, 2026-11-10)
+
+**Asked:** (1) a round where only RPG-7 rockets flew must not be a `no_contact` draw; (2) an objective no attacker can reach (a roof without
+a ladder route) must not be placed.
+
+**Now (pure rules `AI/PmcArenaRoundRules.h`, used by `PmcArenaCommand.cpp`):**
+- Contact moments = the shots between the sides (the RPG-7's launch at an enemy already was one: `FireLauncherAt` broadcasts
+  `OnWeaponFiredNative`) + every rocket burst within `launcher.radius_cm` (suppression.json, 9 m, 3D) of a live enemy of the shooter
+  (`IsLauncherContact`; `UProjectileSubsystem::OnProjectileFinished`, `FProjectileImpact` now carries `Instigator` + `bLauncher`).
+  `ResolveRound`'s contact and the flow (`ComputeFlow`: per minute, first contact, longest quiet spell) read all of them.
+  Round JSON: `sides.<X>.rockets`, `sides.<X>.rocket_bursts_near`, `flow.contact_events`; track event `rocket_burst {near_enemy}`.
+- Objective reach (`IsReachableFromBoth` / `PickReachable`): a FULL navmesh path from BOTH spawns to the point (direction spawn -> point:
+  a drop link is one-way). `PlaceObjectiveNear` tries the old two points, then 16 more (1 / 0.75 / 0.5 / 0.25 of the way, 25 / 50 deg off
+  the spawn line), then the defender's spawn only when the attackers reach it; a Warning when none. Scenario sites: `PickNearSpawn` checks
+  defender spawn -> site too, a site not reached from both spawns takes the next one. Round JSON `objective.reach_attacker / reach_defender`;
+  log `[PmcArena] seed N objective reach / objective paths` (points, length, partial, end dZ, the pawn floor under the point) and
+  `round N ends vs the objective` (each fighter's 2D distance / dZ). The arena smokes check both reaches.
+- A/B switches: `RocketContact=off`, `ObjectiveReach=off` (the measurement).
+
+**Measured** (Depot `L_PmcArenaDepot.json`, 10 rounds seeds 101-110, 240 s, baseline vs baseline, Scenario=random; before = both switches off):
+
+| | before | after |
+|---|---|---|
+| rounds `no_contact` while rockets were fired | 0 / 10 (14 rockets, 6 bursts near an enemy) | 0 / 10 (8 rockets, 4 near) |
+| objectives without a full path from both spawns | 0 / 10 | 0 / 10 |
+| `no_contact` rounds at all | 1 (seed 103) | 1 (seed 103) |
+
+Both gaps were already closed in practice on this sample: the launch counts as a shot, and the old placement already demanded paths from both
+spawns for its main candidates (the new rule closes the fallbacks: the defender's spawn, a scenario site's defender spawn by a one-way link).
+
+**Open (the real cause of the remaining roof draw, seed 103 blizzard):** the objective sits on a roof (level 3, z 910, a Pawn-blocking floor);
+the navmesh has a full 130 m route up from the attackers' spawn (17 points), yet the operatives' own moves to the point get a 2-point straight
+path (`[MoveTrace] ... path to (2583, 1028, z 910): 2 points, length 5978`) and every fighter ends on the ground under it (dZ -8 m, 2.6 m off
+in 2D); the on-point tests (the arena's clock, `View.Objective.DistanceCm`, the walk's arrival / `ended short`) are 2D, so the attackers "stand
+on the point", hold, and nobody fires (blizzard, a level apart) for 240 s. Next: find why the AIController path differs from
+`FindPathToLocationSynchronously` for the same goal, and make the on-point / arrival tests level-aware (|dZ| <= one level).
+
+**Checks:** unit `CodexTactics.AI.PmcArena.RocketContact`, `.ContactFlow`, `.ObjectiveReach`; smokes `PmcArenaSmoke`, `PmcArenaObjectiveSmoke`,
+`PmcStalemateSmoke` (objective reached from both spawns, the rocket counters in the JSON).
