@@ -319,5 +319,37 @@
     "fire_blend_in_s": 0.05,
     "fire_blend_out_s": 0.15,
     "blend_seconds": 0.2
+  },
+  "prone_crawl": {
+    "comment": "The prone crawl (the game designer's CrawlAndShoot_Bug_01, 2026-11-09, fix/prone-crawl-under-fire; the pack /Game/Crawl_MocapAnimPack is the user's - never modified, read here by path): NOT a weapon - a native full-body layer over ABP_Operative's prone pose for every weapon while he crawls on an order / moves prone (OperativeAnimInstanceProneCrawl.cpp, ProneCrawlRules). The body (capsule) faces the threat, the 8 in-place loops play the move direction relative to it (strafe-crawl); root_translation reference: the root keeps the reference pose (the ABP's prone root yaw would turn the body off the threat). The squad's UE4 skeletons play IK-retargeted copies (retargeted; Scripts/Editor/setup_crawl_animation.py, the same UE4 rig both ways, measured 2026-11-10: posture within 9.5 cm male / 16.1 cm female, pelvis drift 0); pack_playback false (the PMC operator's UE5 body gets no crawl layer). walk_speeds = the pack's root-motion twins' travel (Loco_Linear_root, F / B 20.7, L / R 29.4, 45R / 135L 25.9, 45L / 135R 21.3 cm/s) x the male copies' measured stride 0.913 (their planted limbs against the pack's); stride_scale female 0.896 / 0.913 = 0.981; phase_offsets = each loop's left-hand reach (hand_l furthest along the travel, share of the loop, male copies) so a direction blend plants the same hand; play rate = speed / the blended authored speed, max_play_rate 3.5 (the crawl at ~0.28 x walk speed plays the loops at ~2-3x).",
+    "retargeted": {
+      "UE4_Mannequin_Skeleton": "/Game/Characters/Animations/Crawl/Male",
+      "Female_Soldier_Skeleton": "/Game/Characters/Animations/Crawl/Female"
+    },
+    "pack_playback": false,
+    "body": "full",
+    "root_translation": "reference",
+    "stand_idle": "/Game/Crawl_MocapAnimPack/Animations/Idle_Set/Crawl_Idle01.Crawl_Idle01",
+    "walk": {
+      "fwd": "/Game/Crawl_MocapAnimPack/Animations/Locomotion_Set/Crawl_Walk_F_IPC.Crawl_Walk_F_IPC",
+      "fwd_right": "/Game/Crawl_MocapAnimPack/Animations/Locomotion_Set/Crawl_Walk_45R_IPC.Crawl_Walk_45R_IPC",
+      "right": "/Game/Crawl_MocapAnimPack/Animations/Locomotion_Set/Crawl_Walk_R_IPC.Crawl_Walk_R_IPC",
+      "bwd_right": "/Game/Crawl_MocapAnimPack/Animations/Locomotion_Set/Crawl_Walk_135R_IPC.Crawl_Walk_135R_IPC",
+      "bwd": "/Game/Crawl_MocapAnimPack/Animations/Locomotion_Set/Crawl_Walk_B_IPC.Crawl_Walk_B_IPC",
+      "bwd_left": "/Game/Crawl_MocapAnimPack/Animations/Locomotion_Set/Crawl_Walk_135L_IPC.Crawl_Walk_135L_IPC",
+      "left": "/Game/Crawl_MocapAnimPack/Animations/Locomotion_Set/Crawl_Walk_L_IPC.Crawl_Walk_L_IPC",
+      "fwd_left": "/Game/Crawl_MocapAnimPack/Animations/Locomotion_Set/Crawl_Walk_45L_IPC.Crawl_Walk_45L_IPC"
+    },
+    "walk_speed": 18.9,
+    "walk_speeds": { "fwd": 18.9, "fwd_right": 23.6, "right": 26.8, "bwd_right": 19.4, "bwd": 18.9, "bwd_left": 23.6, "left": 26.8, "fwd_left": 19.4 },
+    "phase_offsets": { "Crawl_Walk_F_IPC": 0.643, "Crawl_Walk_45R_IPC": 0.173, "Crawl_Walk_R_IPC": 0.236, "Crawl_Walk_135R_IPC": 0.129, "Crawl_Walk_B_IPC": 0.533, "Crawl_Walk_135L_IPC": 0.182, "Crawl_Walk_L_IPC": 0.195, "Crawl_Walk_45L_IPC": 0.194 },
+    "stride_scale": { "UE4_Mannequin_Skeleton": 1.0, "Female_Soldier_Skeleton": 0.981 },
+    "max_play_rate": 3.5,
+    "move_start_speed": 8,
+    "move_full_speed": 30,
+    "direction_smooth_s": 0.2,
+    "direction_snap_deg": 75,
+    "direction_fade_s": 0.3,
+    "blend_seconds": 0.3
   }
 }

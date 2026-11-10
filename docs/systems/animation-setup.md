@@ -531,6 +531,33 @@ switch from the M16) -> `Saved/Screenshots/PistolD/`.
   rendered `CodexTactics.RpgShots` -> `Saved/Screenshots/RPG7/` (no HUD; moves from both sides square to the travel - the pack's Set_02 stance
   turns the torso, so his right side shows mostly the backpack, his left side the true profile; aim / shot from his left; logs the tube's yaw per still).
 
+## Prone crawl layer + crawl under fire (game designer CrawlAndShoot_Bug_01, 2026-11-09, `fix/prone-crawl-under-fire`)
+
+**Bug:** prone under fire and ordered to crawl, he crawled AND returned fire at once. **Wanted:** the crawl order has priority (no round while
+crawling, the target is kept, the fire resumes when he stops); the body keeps facing the threat while he moves the ordered way (strafe-crawl);
+the pack's 8-direction crawl set.
+- **Gameplay (`ProneCrawlRules`, `AOperativeCharacter::IsOrderedCrawl` / `IsCrawlFireHeld`):** an ORDERED CRAWL = prone, alive, out of cover, his
+  own move order running (a pause on the path counts) or a formation move above 10 cm/s. While it lasts `RunCombatShooting` holds the round, the
+  grenade and a new reload (the target search still runs); raging ignores it; `Codex.Combat.ProneCrawlHoldFire 0` = the old rule. Facing
+  (`UpdateCombatFacing`): target > muzzle flash > the threat he fought (`FindThreatPoint`, ordered crawl only) > movement.
+- **Two traps found by the smoke (bones live):** (1) the crawl clips carry the rifle across the body - `BarrelYawOffset` (the aim pose's barrel
+  yaw) followed it and turned the crawling body up to 43 deg off the threat: the offset is not measured while the crawl layer weight > 0.01;
+  (2) the aim pose (`AimTimer`) dropped during the hold and the ABP's prone idle holds the rifle ~30 deg off the body = outside the 30 deg aim
+  cone, so no first round ever left after the stop: `UOperativeAnimInstance::HoldAimPose` keeps it up while the hold has a target.
+- **Animation (`OperativeAnimInstanceProneCrawl.cpp`, `weapon_anim_sets.json` "prone_crawl"):** the user's `/Game/Crawl_MocapAnimPack` (never
+  modified) `Crawl_Walk_{F,45R,R,135R,B,135L,L,45L}_IPC` + `Crawl_Idle01`, IK-retargeted (UE4 rig both ways, `Scripts/Editor/setup_crawl_animation.py`)
+  to `/Game/Characters/Animations/Crawl/{Male,Female}` (posture within 9.5 / 16.1 cm, drift 0, 5.5 MB). Blended natively in the proxy over the ABP's
+  prone pose, full body, every bone but the root (the root keeps the reference: the ABP's prone root yaw would turn the strafing body off the
+  threat); no AnimGraph node, ABP_Operative untouched. Direction = velocity relative to the body (eased / reversal cross-fade like the weapon
+  sets), play rate = speed / the blended authored speed (walk_speeds = the pack's root-motion twins' travel x the copies' stride 0.913, female
+  x0.981; phase_offsets = left-hand reach), max 3.5. Off under a full-body montage, in cover, on a ladder, carrying, sniper pose, stance clip;
+  a prone fire clip still playing when the order starts is cut (`GetCrawlFireClipsStopped`). `Codex.Anim.ProneCrawlLayer 0` = the ABP's crawl.
+- **Measured (`CodexTactics.ProneCrawlSmoke`, L_Gen_Depot_1, 3 m legs toward / right / back / left of a PMC fighter 14 m off, 41 cm/s):** before
+  (both cvars 0, i.e. main) 11 rounds while crawling, body up to 44.9 deg off the threat, best-planted limb slide 144 %; after 0 rounds, 0.0 deg,
+  the F / R / B / L clip plays, first round 0.10 s after the stop, slide 58 % (the pack's army crawl drags: its limbs sweep at about half the
+  root-motion travel, so a full plant would need ~4x play rate and looks frantic - left at 2.2x).
+- **Checks:** tests `CodexTactics.Characters.ProneCrawl.*`; smoke `ProneCrawlSmoke` (arg `shots`, rendered: `Saved/Screenshots/ProneCrawl/crawl_<dir>.png`, no HUD).
+
 ## #51: the "thrown back while firing" pop (game designer video 2026-11-06; fixed 2026-11-08)
 
 **Symptom:** PMC fighters jerk violently when they fire (`Videos/PMC_ShootingndZoominBUG_0.avi`). **Measured, not guessed:** `CodexTactics.RecoilProbe`
