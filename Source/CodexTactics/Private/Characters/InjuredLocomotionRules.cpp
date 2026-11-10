@@ -21,6 +21,10 @@ namespace InjuredLocomotionRules
 		{
 			return EInjuredGait::Wounded;
 		}
+		if (Triggers.ColdSlowFrom > 0.f && ColdShare >= Triggers.ColdSlowFrom)
+		{
+			return EInjuredGait::ColdSlow;
+		}
 		if (Triggers.ColdFrom > 0.f && ColdShare >= Triggers.ColdFrom)
 		{
 			return EInjuredGait::Cold;
@@ -44,7 +48,7 @@ namespace InjuredLocomotionRules
 		return 1.f - (Abs - Full) / (Zero - Full);
 	}
 
-	float LayerTarget(EInjuredGait Gait, bool bEligible, float MoveShare, float ConeShare)
+	float LayerTarget(EInjuredGait Gait, bool bEligible, float MoveShare)
 	{
 		if (!bEligible)
 		{
@@ -55,10 +59,35 @@ namespace InjuredLocomotionRules
 		case EInjuredGait::Wounded:
 			return 1.f;
 		case EInjuredGait::Cold:
-			return FMath::Clamp(MoveShare, 0.f, 1.f) * FMath::Clamp(ConeShare, 0.f, 1.f);
+		case EInjuredGait::ColdSlow:
+			return FMath::Clamp(MoveShare, 0.f, 1.f);
 		default:
 			return 0.f;
 		}
+	}
+
+	float SlowWalkShare(EInjuredGait Gait, float ConeShare)
+	{
+		return Gait == EInjuredGait::ColdSlow ? FMath::Clamp(ConeShare, 0.f, 1.f) : 0.f;
+	}
+
+	float BandedAlpha(float Alpha, float BandDeg, float GapDeg)
+	{
+		const float A = FMath::Clamp(Alpha, 0.f, 1.f);
+		const float Band = GapDeg > KINDA_SMALL_NUMBER ? FMath::Clamp(BandDeg / GapDeg, 0.f, 0.49f) : 0.f;
+		if (Band <= 0.f)
+		{
+			return A;
+		}
+		if (A <= Band)
+		{
+			return 0.f;
+		}
+		if (A >= 1.f - Band)
+		{
+			return 1.f;
+		}
+		return (A - Band) / (1.f - 2.f * Band);
 	}
 
 	bool UsesInjuredCrawl(EInjuredGait Gait, bool bProne, bool bHasInjuredCrawl)

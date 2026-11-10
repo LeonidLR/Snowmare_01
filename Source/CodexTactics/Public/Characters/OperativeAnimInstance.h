@@ -598,8 +598,8 @@ public:
 
 	/**
 	 * Cold walk per tier (Godot cold_* 25 / 40 / 70 / 90) - left EMPTY on purpose (2026-11-10): the 70 / 90 tiers' walk is the injured layer's
-	 * slow injured walk (weapon_anim_sets.json "injured" triggers.cold_from 0.7, OperativeAnimInstanceInjured.cpp; the game designer 2026-11-10) -
-	 * a native lower-body layer that keeps the weapon torso and plays only while walking forward. Filled, these slots (with the idle ones) would
+	 * injured walk / slow injured walk (weapon_anim_sets.json "injured" triggers cold_from 0.7 / cold_slow_from 0.9, OperativeAnimInstanceInjured.cpp;
+	 * the game designer 2026-11-10) - a native lower-body layer that keeps the weapon torso and plays only while walking. Filled, these slots (with the idle ones) would
 	 * switch on UpdateColdLayer's idle -> walk pose blend (ColdVisualWeight; bHasPose needs both) for the ABP on top of it. The 25 / 40 tiers have
 	 * no walk clip (the normal walk); standing still the shiver is the warm-idle Cold_1 set (UWarmIdleSubsystem).
 	 */
@@ -1357,7 +1357,8 @@ public:
 	// The designer's /Game/CON_Injured clips (weapon_anim_sets.json "injured", IK-retargeted copies /Game/Characters/Animations/Injured/{Male,Female}
 	// by Scripts/Editor/setup_injured_animation.py) on the LOWER body over the ABP (the torso stays the ABP's / the weapon layer's): wounded
 	// (IsWounded) standing = the 8-direction injured walk + the injured idle, prone = the injured crawl forward (the prone crawl layer's forward
-	// slot + idle); cold >= "cold_from" while walking forward = the slow injured walk (still = the ABP's shiver idle). No AnimGraph node.
+	// slot + idle); walking frozen = the injured walk (Freezing, "cold_from") / the slow injured walk forward (Frostbite, "cold_slow_from"); still =
+	// the ABP's shiver idle. No AnimGraph node.
 
 	/** The injured layer's blend weight this frame (0..1; smokes). */
 	float GetInjuredWeight() const { return InjuredWeight; }
@@ -1887,6 +1888,8 @@ private:
 		InjuredLocomotionRules::FInjuredTriggers Triggers;
 		float SlowConeFullDeg = 35.f;
 		float SlowConeZeroDeg = 80.f;
+		/** "direction_clip_band_deg": within this many deg of a directional clip it plays alone (InjuredLocomotionRules::BandedAlpha). */
+		float DirectionClipBandDeg = 0.f;
 		float TorsoPelvisShare = 0.f;
 		FShotgunAnimSet()
 		{

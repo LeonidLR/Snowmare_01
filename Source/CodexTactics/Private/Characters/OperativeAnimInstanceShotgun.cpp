@@ -388,19 +388,24 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 	Number(TEXT("slow_max_play_rate"), ShotgunSet.SlowMaxPlayRate);
 	Number(TEXT("crawl_speed"), ShotgunSet.InjuredCrawlSpeed);
 	Number(TEXT("torso_pelvis_share"), ShotgunSet.TorsoPelvisShare);
+	Number(TEXT("direction_clip_band_deg"), ShotgunSet.DirectionClipBandDeg);
 	const TArray<TSharedPtr<FJsonValue>>* SlowCone = nullptr;
 	if (Block->TryGetArrayField(TEXT("slow_forward_cone_deg"), SlowCone) && SlowCone && SlowCone->Num() == 2)
 	{
 		ShotgunSet.SlowConeFullDeg = static_cast<float>((*SlowCone)[0]->AsNumber());
 		ShotgunSet.SlowConeZeroDeg = static_cast<float>((*SlowCone)[1]->AsNumber());
 	}
-	// "triggers": { "wounded": bool, "cold_from": share } - absent = wounded on, the cold off (InjuredLocomotionRules::FInjuredTriggers).
+	// "triggers": { "wounded": bool, "cold_from": share, "cold_slow_from": share } - absent = wounded on, the cold off
+	// (InjuredLocomotionRules::FInjuredTriggers).
 	const TSharedPtr<FJsonObject>* Triggers = nullptr;
 	if (Block->TryGetObjectField(TEXT("triggers"), Triggers) && Triggers)
 	{
 		(*Triggers)->TryGetBoolField(TEXT("wounded"), ShotgunSet.Triggers.bWounded);
 		double ColdFrom = 0.0;
 		ShotgunSet.Triggers.ColdFrom = (*Triggers)->TryGetNumberField(TEXT("cold_from"), ColdFrom) ? InjuredLocomotionRules::SanitizeColdFrom(ColdFrom) : 0.f;
+		double ColdSlowFrom = 0.0;
+		ShotgunSet.Triggers.ColdSlowFrom = (*Triggers)->TryGetNumberField(TEXT("cold_slow_from"), ColdSlowFrom)
+			? InjuredLocomotionRules::SanitizeColdFrom(ColdSlowFrom) : 0.f;
 	}
 	// The retargeted copies' own stride (a longer-legged body steps further per cycle: the launcher's copies +16 % male / +12 % female,
 	// measured by Scripts/Editor/setup_launcher_animation.py) - their authored speeds scale with it, so the play rate keeps the feet planted.

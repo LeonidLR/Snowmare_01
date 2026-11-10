@@ -583,38 +583,46 @@ the pack's 8-direction crawl set.
 
 **Request:** operatives sometimes walk very slowly and he cannot see why (Gemini's scout `docs/port/gemini/outbox/005-injured-scout.report.md`:
 `IsWounded()` = HP < 50 % -> speed x0.65, no sprint; cold tiers x0.70 / x0.45 / x0.25) - a wounded operative must LOOK injured. Then (2026-11-10):
-cold >= 70 % while walking plays the slow injured walk too; standing still cold keeps the existing shiver idle; wounded first.
-- **Rules (`InjuredLocomotionRules`):** `ChooseGait` (wounded trigger + IsWounded -> Wounded; else `cold_from` > 0 and ColdLevel / 100 >= it ->
-  Cold; else None), `LayerTarget` (Wounded = 1: idle and walk are the layer's; Cold = move share x `ForwardConeShare` - idle and strafes stay the
-  ABP's), `UsesInjuredCrawl` (wounded + prone + the clips), `TorsoPelvisShare` (0 while aiming), `SanitizeColdFrom` (share or percent, else off).
+frozen walking looks injured too - Freezing (cold 70-89 %) the injured walk, from 90 % (Hypothermia 90-99, the frostbite collapse at 100) the
+slow injured walk; standing still cold keeps the existing shiver idle; wounded first.
+- **Rules (`InjuredLocomotionRules`):** `ChooseGait` (wounded trigger + IsWounded -> Wounded; ColdLevel / 100 >= `cold_slow_from` -> ColdSlow;
+  >= `cold_from` -> Cold; else None), `LayerTarget` (Wounded = 1: idle and walk are the layer's; Cold / ColdSlow = the move share - standing still
+  stays the ABP's), `SlowWalkShare` (ColdSlow: the forward cone share), `ForwardConeShare`, `BandedAlpha` (a direction within
+  `direction_clip_band_deg` of a clip plays it alone), `UsesInjuredCrawl` (wounded + prone + the clips), `TorsoPelvisShare` (0 while aiming),
+  `SanitizeColdFrom` (share or percent, else off).
 - **Animation (`OperativeAnimInstanceInjured.cpp`, `weapon_anim_sets.json` "injured"):** the designer's `/Game/CON_Injured` (never modified) UE4 set
   - `Walk_Injured_BS/Walk_Injured_{Front,Front_Right,Right,Back_Right,Back,Back_Left,Left,Front_Left}` (8 in-place loops, 1 gait cycle each),
-  `Idle_Walk_Injured1`, `Walk_Injured_Slow`, `Crawl_Injured`, `Idle_Crawl_Injured1` - IK-retargeted (UE4 rig both ways, `Scripts/Editor/setup_injured_animation.py`)
-  to `/Game/Characters/Animations/Injured/{Male,Female}` (posture within 7.8 / 13.4 cm, pelvis drift <= 1.9 cm). Wounded standing: idle against
-  the 8-direction walk by speed, direction = velocity relative to the body (eased / reversal cross-fade like the crawl), one shared phase with
-  per-loop left-heel-strike offsets, play rate = speed / the blended authored speed (max 1.8). Prone: the prone crawl layer swaps in
-  `InjuredCrawlSetData` (its forward slot = `Crawl_Injured`, its idle = `Idle_Crawl_Injured1`; the other 7 directions keep the mocap crawl).
-  Cold: `Walk_Injured_Slow` alone by the forward cone [35, 80] deg (`slow_max_play_rate` 2.8). Off: crouched, prone (the crawl layer's), in cover,
-  ladder, vault, falling, carrying, sniper pose, stance clip, under a full-body montage (hit, warm idles, interactions, death).
-  `Codex.Anim.InjuredLayer 0` = off. No AnimGraph node, ABP_Operative untouched. PMC (UE5 body): not wired (no copies; `pack_playback` false).
+  `Idle_Walk_Injured1`, `Walk_Injured_Slow`, `Crawl_Injured`, `Idle_Crawl_Injured1` - IK-retargeted (UE4 rig both ways,
+  `Scripts/Editor/setup_injured_animation.py`) to `/Game/Characters/Animations/Injured/{Male,Female}` (24 copies, 5.4 MB; posture within 7.8 /
+  13.4 cm, pelvis drift <= 1.9 cm). The 8-direction walk: direction = velocity relative to the body (eased / reversal cross-fade like the crawl),
+  one shared phase with per-loop left-heel-strike offsets, play rate = speed / the blended authored speed (max 1.8); wounded adds the idle by
+  speed. ColdSlow: `Walk_Injured_Slow` by the forward cone [35, 80] deg, the injured walk outside it, on the same phase (`slow_max_play_rate` 2.8).
+  Prone + wounded: the prone crawl layer swaps in `InjuredCrawlSetData` (forward slot = `Crawl_Injured`, idle = `Idle_Crawl_Injured1`; the other
+  7 directions keep the mocap crawl). Off: crouched, prone (the crawl layer's), in cover, ladder, vault, falling, carrying, sniper pose, stance
+  clip, under a full-body montage (hit, warm idles, interactions, death). `Codex.Anim.InjuredLayer 0` = off. No AnimGraph node, ABP_Operative
+  untouched. PMC (UE5 body): not wired (no copies; `pack_playback` false).
 - **Upper body - decision: LOWER body only.** Measured: the clips are unarmed - the left hand rests on the torso (~21 cm from the spine: the
   wound), the right arm hangs ~34 cm out; their torso would drop the rifle and lose the aim. So the layer (after the graph and the weapon layer)
   takes the root (-> the reference: the ABP's orientation warping turned it for its forward legs), the pelvis, the legs and the foot IK bones;
   spine_01 keeps the graph's mesh-space rotation re-expressed under the injured pelvis (the torso rides the limp's bob, `torso_pelvis_share` 0.3
   of the pelvis rotation when not aiming, 0 aiming), the hand IK bones keep their mesh-space transform. Fire / reload / grenade / blizzard
   clips (upper-body slot) and the weapon layers' torsos play on top unchanged.
-- **Speeds (the setup script's "best speed"):** each loop's speed at which its best-planted contact moves least: Front 160.6, Back 144.0,
-  diagonals / strafes 110-124 cm/s (x stride_scale male 1.091 / female 1.035), slow walk 35.3, crawl 63.0 (x crawl_stride_scale 0.972 / 0.998).
-  The loops' own slide at that speed: forward / back 10-14 %, diagonals / strafes 22-38 % (their stance foot pivots - no bone stands still), slow
-  walk 9-10 %, crawl 8-14 %. In game: wounded 143 cm/s plays the copies at ~0.8-1.2x; the slow walk at the freezing speed (99 cm/s) ~2.6x (a
-  hurried drag - open question to the designer: keep, or the normal injured walk for freezing and the slow one from frostbite 55 cm/s, ~1.4x).
-- **ColdWalkClips** (the ABP cold layer's walk per tier, Godot 25 / 40 / 70 / 90) stay empty on purpose: the 70 / 90 walk is this layer's slow
-  walk (keeps the weapon torso, only while walking forward); the shiver standing still is the warm-idle Cold_1 set.
+- **Speeds:** forward / back / slow / crawl = the setup script's "best speed" (the ground speed at which a loop's best-planted contact moves
+  least): Front 160.6, Back 144.0, slow walk 35.3, crawl 63.0 cm/s (x stride_scale male 1.091 / female 1.035, crawl 0.972 / 0.998). The
+  diagonals / strafes were tuned in game (the script's 110-124 slid 40-50 %): FR 150, R 160, BR 135, BL 124, L 160, FL 110 - their stance foot
+  pivots, so they slide ~30-40 % at ANY play rate (probed 110-185; own slide on the copies 25-38 %): the clips' limit, not the layer's.
+  `move_full_speed` 30 (the 90 %+ walk at 44-55 cm/s is fully the layer's).
+- **Measured (`InjuredLocomotionSmoke`, the copies; the L_MovementTest leader walks 175 cm/s, so wounded 114 / freezing 79 / 90 %+ 44 cm/s; the
+  best-planted foot's median drift / speed):** the ABP walk (baseline) 9 %; wounded Front 12 %, Back 14 %, FR 35 %, R 34 %, BR 31 %, BL 32 %,
+  L 39 %, FL 40 %; wounded crawl (`Crawl_Injured`) 14 %; freezing forward 17 % (rate 0.42), freezing strafe 39 %; 90 %+ slow walk 15 % (rate 1.07).
+  At the game's 220 cm/s base: wounded 143 cm/s plays ~0.8-1.2x, freezing 99 cm/s ~0.6x, Hypothermia 55 cm/s slow walk ~1.4x.
+- **ColdWalkClips** (the ABP cold layer's walk per tier, Godot 25 / 40 / 70 / 90) stay empty on purpose: the 70 / 90 walk is this layer's
+  (keeps the weapon torso, only while walking); the shiver standing still is the warm-idle Cold_1 set.
 - **Checks:** tests `CodexTactics.Animation.Injured.*`; smoke `InjuredLocomotionSmoke` (L_MovementTest: full HP layer 0; 40 % HP injured idle,
-  8 directions with their clip + the best-planted foot's slide (forward / back <= 25 %, the rest <= 45 %), prone -> `Crawl_Injured`; cold 75 %:
-  forward = `Walk_Injured_Slow`, sideways = the ABP, still = the shiver idle with the layer 0). Before the copies exist: `-ExtraArgs
-  "-Multiprocess -AnimPackFallback=injured"` (dev switch: the pack by bone name - the logic is checked, the foot numbers are not the copies').
-  Arg `shots` (rendered): `Saved/Screenshots/InjuredLocomotion/<state>.png`.
+  8 directions with their clip + the foot slide (forward / back <= 25 %, the rest <= 45 %), prone -> `Crawl_Injured`; cold 75 %: forward /
+  sideways = `Walk_Injured_Front` / `_Right`, still = the shiver idle with the layer 0; cold 92 %: forward = `Walk_Injured_Slow`). Dev switch
+  `-AnimPackFallback=injured` (the pack by bone name, for a skeleton without copies). Arg `shots` (rendered):
+  `Saved/Screenshots/InjuredLocomotion/<state>.png`.
 
 ## #51: the "thrown back while firing" pop (game designer video 2026-11-06; fixed 2026-11-08)
 

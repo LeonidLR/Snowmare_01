@@ -5,7 +5,8 @@
 // the prone crawl layer (OperativeAnimInstanceProneCrawl.cpp): no AnimGraph node, the user's ABP stays as it is.
 // - Wounded (IsWounded) standing: the 8-direction injured walk (Walk_Injured_BS clips by the velocity relative to the body, one shared phase,
 //   per-loop left-foot strike offsets) + the injured idle. Prone: the prone crawl layer plays the injured crawl forward (ActiveCrawlSet).
-// - Cold >= "cold_from" walking (no wound): the slow injured walk (Walk_Injured_Slow) by a forward cone; still = the ABP's shiver idle.
+// - Cold walking (no wound): Freezing (>= "cold_from") the 8-direction injured walk, Frostbite (>= "cold_slow_from") the slow injured walk
+//   (Walk_Injured_Slow) by a forward cone; still = the ABP's shiver idle.
 // - LOWER body only (root -> the reference, pelvis, legs, foot IK bones): the clips are unarmed (hands on the wound, measured by the setup
 //   script), so the torso stays the ABP's / the weapon layer's - the weapon pose, the aim offset, fire / reload / grenade / blizzard clips.
 // Rules: Characters/InjuredLocomotionRules.
@@ -118,12 +119,10 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 			Set.DirectionSnapDeg, Set.DirectionFadeSeconds);
 	}
 	const float Move = MoveWeight(LocomotionSpeed, Set.MoveStartSpeed, Set.MoveFullSpeed);
-	const float Cone = ForwardConeShare(InjuredDirection.Current, Set.SlowConeFullDeg, Set.SlowConeZeroDeg);
 	// A full-body clip owns the body (a hit, the warm idles, an interaction, the death): the layer fades out under it; an upper-body clip (fire,
 	// reload, grenade, the blizzard shield) keeps the legs injured.
 	const bool bFullBodyClip = GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f;
-	const bool bColdWalkable = InjuredGait != EInjuredGait::Cold || Set.SlowWalk != nullptr;
-	const float Target = LayerTarget(InjuredGait, IsInjuredLayerEligible() && !bFullBodyClip && bColdWalkable, Move, Cone);
+	const float Target = LayerTarget(InjuredGait, IsInjuredLayerEligible() && !bFullBodyClip, Move);
 	InjuredWeight = FMath::FInterpConstantTo(InjuredWeight, Target, DeltaSeconds, 1.f / FMath::Max(0.01f, Set.BlendSeconds));
 	InjuredTorsoShare = TorsoPelvisShare(Set.TorsoPelvisShare, bIsAiming);
 	if (InjuredWeight <= OperativeInjuredLayer::InjuredMinWeight)
@@ -149,20 +148,11 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 	{
 		return Clip ? SyncedClipTime(InjuredPhase, Set.PhaseOffsets.FindRef(Clip->GetFName()), Clip->GetPlayLength()) : 0.f;
 	};
-	if (InjuredClipGait == EInjuredGait::Cold)
-	{
-		// The slow walk alone (the layer's weight already carries the move and the forward cone): played at the body's speed over its stride.
-		const float Len = Length(Set.SlowWalk);
-		const float MaxRate = Set.SlowMaxPlayRate > 0.f ? Set.SlowMaxPlayRate : Set.MaxPlayRate;
-		const float Rate = ProneCrawlRules::PhaseRate(MoveSpeed, Set.SlowWalkSpeed * Len, 0.f, 0.f, MaxRate, Len);
-		InjuredPhase = FMath::Fmod(InjuredPhase + DeltaSeconds * Rate, 1.f);
-		InjuredPlayRate = Rate * Len;
-		Add(Set.SlowWalk, 1.f, At(Set.SlowWalk));
-		return;
-	}
-	// Wounded: the injured idle against the 8-direction walk by the smoothed speed; one shared phase (each loop = one gait cycle, its stride =
-	// its authored speed x its length, the two directions blended like the clips, the old direction's during a reversal's cross-fade), played
-	// at the body's real speed - the feet of every loop in play strike together (the per-loop left-foot strike offsets).
+	// The 8-direction injured walk (wounded, freezing; frostbite outside the slow walk's forward cone) and the slow walk (frostbite, by the
+	// cone) on ONE shared phase: each loop = one gait cycle, its stride = its authored speed x its length; the cycle is the clips' blend (the two
+	// directions, the old direction's during a reversal's cross-fade, the slow walk's share), played at the body's real speed - the feet of every
+	// loop in play strike together (the per-loop left-heel strike offsets). Wounded: the injured idle against the walk by the smoothed speed;
+	// cold: no idle (the layer's weight is the move share - standing still is the ABP's shiver).
 	const TStaticArray<bool, 8> Avail = [&Set]()
 	{
 		TStaticArray<bool, 8> Out;
@@ -172,20 +162,35 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 		}
 		return Out;
 	}();
-	const FWeaponLayerDirectionBlend Dir = BlendDirections(InjuredDirection.Current, Avail);
-	const FWeaponLayerDirectionBlend FromDir = BlendDirections(InjuredDirection.From, Avail);
+	auto Banded = [&Set, &Avail](float Angle)
+	{
+		FWeaponLayerDirectionBlend Blend = BlendDirections(Angle, Avail);
+		Blend.Alpha = BandedAlpha(Blend.Alpha, Set.DirectionClipBandDeg);
+		return Blend;
+	};
+	const FWeaponLayerDirectionBlend Dir = Banded(InjuredDirection.Current);
+	const FWeaponLayerDirectionBlend FromDir = Banded(InjuredDirection.From);
 	const float FromShare = 1.f - InjuredDirection.Fade;
-	InjuredIdleTime = Set.StandIdle && Set.StandIdle->GetPlayLength() > KINDA_SMALL_NUMBER
-		? FMath::Fmod(InjuredIdleTime + DeltaSeconds, Set.StandIdle->GetPlayLength()) : 0.f;
-	Add(Set.StandIdle, 1.f - Move, InjuredIdleTime);
+	const float Slow = Set.SlowWalk ? SlowWalkShare(InjuredClipGait, ForwardConeShare(InjuredDirection.Current, Set.SlowConeFullDeg, Set.SlowConeZeroDeg)) : 0.f;
+	if (InjuredClipGait == EInjuredGait::Wounded)
+	{
+		InjuredIdleTime = Set.StandIdle && Set.StandIdle->GetPlayLength() > KINDA_SMALL_NUMBER
+			? FMath::Fmod(InjuredIdleTime + DeltaSeconds, Set.StandIdle->GetPlayLength()) : 0.f;
+		Add(Set.StandIdle, 1.f - Move, InjuredIdleTime);
+	}
+	const float WalkShare = InjuredClipGait == EInjuredGait::Wounded ? Move : 1.f;
 	auto CycleOf = [&Set, &Length](const FWeaponLayerDirectionBlend& Blend)
 	{
 		const float Nominal = BlendedNominalSpeed(Blend, Set.WalkSpeeds, Set.WalkSpeed);
 		return Nominal * FMath::Lerp(Length(Set.Walk[static_cast<int32>(Blend.A)]), Length(Set.Walk[static_cast<int32>(Blend.B)]), Blend.Alpha);
 	};
-	UAnimSequence* Lead = Set.Walk[static_cast<int32>(Dir.Alpha < 0.5f ? Dir.A : Dir.B)];
+	const float WalkCycle = FMath::Lerp(CycleOf(Dir), CycleOf(FromDir), FMath::Clamp(FromShare, 0.f, 1.f));
+	const float SlowLength = Length(Set.SlowWalk);
+	const float Cycle = FMath::Lerp(WalkCycle, Set.SlowWalkSpeed * SlowLength, Slow);
+	UAnimSequence* Lead = Slow >= 0.5f ? Set.SlowWalk : Set.Walk[static_cast<int32>(Dir.Alpha < 0.5f ? Dir.A : Dir.B)];
 	const float LeadLength = Length(Lead);
-	const float Rate = ProneCrawlRules::PhaseRate(MoveSpeed, CycleOf(Dir), CycleOf(FromDir), FromShare, Set.MaxPlayRate, LeadLength);
+	const float MaxRate = FMath::Lerp(Set.MaxPlayRate, Set.SlowMaxPlayRate > 0.f ? Set.SlowMaxPlayRate : Set.MaxPlayRate, Slow);
+	const float Rate = ProneCrawlRules::PhaseRate(MoveSpeed, Cycle, 0.f, 0.f, MaxRate, LeadLength);
 	InjuredPhase = FMath::Fmod(InjuredPhase + DeltaSeconds * Rate, 1.f);
 	InjuredPlayRate = Rate * LeadLength;
 	auto AddPair = [&Add, &At, &Set](const FWeaponLayerDirectionBlend& Blend, float Weight)
@@ -195,10 +200,11 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 		Add(A, Weight * (1.f - Blend.Alpha), At(A));
 		Add(B, Weight * Blend.Alpha, At(B));
 	};
-	AddPair(Dir, Move * (1.f - FromShare));
+	Add(Set.SlowWalk, WalkShare * Slow, At(Set.SlowWalk));
+	AddPair(Dir, WalkShare * (1.f - Slow) * (1.f - FromShare));
 	if (FromShare > OperativeInjuredLayer::InjuredMinWeight)
 	{
-		AddPair(FromDir, Move * FromShare);
+		AddPair(FromDir, WalkShare * (1.f - Slow) * FromShare);
 	}
 }
 

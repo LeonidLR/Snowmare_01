@@ -12,9 +12,10 @@
  * - WOUNDED (AOperativeCharacter::IsWounded: HP < MovementConfig.WoundedHealthThreshold, the speed x0.65 and no sprint): standing, the 8-direction
  *   injured walk (Walk_Injured_BS clips, blended by the move direction relative to the body, phase-matched) and the injured idle; prone, the
  *   prone crawl layer plays the injured crawl forward (Crawl_Injured + its idle; the other directions keep the mocap crawl).
- * - COLD ("cold_from", the designer 2026-11-10: on at 0.7): cold >= cold_from while WALKING plays the slow injured walk (Walk_Injured_Slow, a
- *   forward clip: by a forward cone, strafes / backwards stay the ABP's); standing still the layer is off - the existing shiver idle (the warm-idle
- *   sets' Cold_1, UpdateColdLayer) plays. It replaces the empty ColdWalkClips slots of the ABP's cold layer for the 70 / 90 tiers.
+ * - COLD (the designer 2026-11-10): Freezing ("cold_from" 0.7) while WALKING plays the 8-direction injured walk (~0.6x at the freezing speed);
+ *   Frostbite ("cold_slow_from" 0.9) the slow injured walk (Walk_Injured_Slow, a forward clip: by a forward cone, the injured walk outside it,
+ *   ~1.4x); standing still the layer is off - the existing shiver idle (the warm-idle sets' Cold_1) plays. It replaces the empty ColdWalkClips
+ *   slots of the ABP's cold layer for the 70 / 90 tiers.
  * - Wounded takes priority over cold.
  * Tests CodexTactics.Animation.Injured.*; smoke CodexTactics.InjuredLocomotionSmoke. Console A/B: Codex.Anim.InjuredLayer (0 = off).
  */
@@ -25,8 +26,10 @@ namespace InjuredLocomotionRules
 	{
 		/** "wounded": IsWounded turns the injured walk on. */
 		bool bWounded = true;
-		/** "cold_from": the cold share (0..1) from which a walking body plays the slow injured walk; <= 0 or absent = off. */
+		/** "cold_from": the cold share (0..1) from which a walking body plays the injured walk (Freezing); <= 0 or absent = off. */
 		float ColdFrom = 0.f;
+		/** "cold_slow_from": the cold share from which it plays the slow injured walk instead (Frostbite); <= 0 or absent = off. */
+		float ColdSlowFrom = 0.f;
 	};
 
 	/** The gait the layer plays. */
@@ -36,14 +39,16 @@ namespace InjuredLocomotionRules
 		None,
 		/** Wounded: the 8-direction injured walk + the injured idle (prone: the injured crawl). */
 		Wounded,
-		/** Cold: the slow injured walk while walking forward; idle = the ABP's shiver. */
-		Cold
+		/** Freezing: the 8-direction injured walk while walking; idle = the ABP's shiver. */
+		Cold,
+		/** Frostbite: the slow injured walk while walking forward (the injured walk outside the cone); idle = the ABP's shiver. */
+		ColdSlow
 	};
 
 	/** A "cold_from" value as read (a share 0..1; a percent 1..100 is taken as a percent); anything else = off (0). */
 	CODEXTACTICS_API float SanitizeColdFrom(double Value);
 
-	/** The gait: wounded (trigger on) first, then cold (cold_from on and ColdShare >= it), else none. */
+	/** The gait: wounded (trigger on) first, then frostbite (cold_slow_from on and ColdShare >= it), then freezing (cold_from), else none. */
 	CODEXTACTICS_API EInjuredGait ChooseGait(const FInjuredTriggers& Triggers, bool bWounded, float ColdShare);
 
 	/**
@@ -53,10 +58,20 @@ namespace InjuredLocomotionRules
 	CODEXTACTICS_API float ForwardConeShare(float RelativeDeg, float FullDeg, float ZeroDeg);
 
 	/**
-	 * The standing layer's weight target: off when not eligible / no gait; wounded = 1 (idle and walk are the layer's); cold = the move share x
-	 * the forward cone share (idle and strafes stay the ABP's: the shiver idle, its walk).
+	 * The standing layer's weight target: off when not eligible / no gait; wounded = 1 (idle and walk are the layer's); cold (freezing /
+	 * frostbite) = the move share (standing still stays the ABP's: the shiver idle).
 	 */
-	CODEXTACTICS_API float LayerTarget(EInjuredGait Gait, bool bEligible, float MoveShare, float ConeShare);
+	CODEXTACTICS_API float LayerTarget(EInjuredGait Gait, bool bEligible, float MoveShare);
+
+	/** The slow walk's share of the layer's walk: frostbite = the forward cone share (the injured walk outside it), else 0. */
+	CODEXTACTICS_API float SlowWalkShare(EInjuredGait Gait, float ConeShare);
+
+	/**
+	 * A direction blend's alpha with a clip band (deg, "direction_clip_band_deg"): within BandDeg of either clip's direction (GapDeg apart) the
+	 * blend is that clip alone, the rest is remapped linearly - a walk a few degrees off a clip (path following wobbles +-3..7 deg) plays that
+	 * clip pure instead of mixing in the neighbour's different stance (the strafes' pivoting feet slid ~10 points more when mixed).
+	 */
+	CODEXTACTICS_API float BandedAlpha(float Alpha, float BandDeg, float GapDeg = 45.f);
 
 	/** The prone crawl plays the injured crawl (wounded, prone; the crawl set has the injured clips). */
 	CODEXTACTICS_API bool UsesInjuredCrawl(EInjuredGait Gait, bool bProne, bool bHasInjuredCrawl);

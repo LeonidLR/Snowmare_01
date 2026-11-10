@@ -7,8 +7,8 @@
 //  2. HP 40 % (wounded): standing still the injured idle drives the legs; 3. walking 3 m in 8 directions relative to the body: the layer drives
 //     the legs (weight > 0.9) with the clip of that direction (Walk_Injured_<dir>); the best-planted foot's world drift (foot slide) per leg;
 //  4. prone: crawling forward 2.5 m the prone crawl layer plays the injured crawl (Crawl_Injured); the best-planted limb's slide;
-//  5. full HP, cold 75 %: walking forward = the slow injured walk (Walk_Injured_Slow); walking sideways = the ABP's walk (layer ~0);
-//     standing still = the existing shiver idle (the warm-idle Cold_1 set), the layer off.
+//  5. full HP, cold 75 % (Freezing): walking forward / sideways = the injured walk (Walk_Injured_Front / _Right); standing still = the existing
+//     shiver idle (the warm-idle Cold_1 set), the layer off; 6. cold 92 % (>= cold_slow_from 0.9): walking forward = the slow injured walk.
 // Before the copies are imported (/Game/Characters/Animations/Injured), run with -ExtraArgs "-AnimPackFallback=injured": the pack's clips by bone
 // name - the logic is checked, the foot numbers are only logged (the pack mannequin's proportions).
 // Arg "shots" (rendered run): one frame per state, no HUD, to Saved/Screenshots/InjuredLocomotion/<state>.png.
@@ -54,7 +54,8 @@ namespace InjuredLocomotionSmoke
 	constexpr float LegCm = 300.f;
 	constexpr float CrawlCm = 250.f;
 	constexpr float WoundedHealth = 40.f;
-	constexpr float ColdLevel = 75.f;
+	constexpr float FreezingCold = 75.f;
+	constexpr float FrostCold = 92.f;
 	/**
 	 * The best-planted foot's median world drift as a share of the body's speed, with a floor in cm/s: forward / back / the slow walk; the pack's
 	 * diagonals / strafes pivot the stance foot (Scripts/Editor/setup_injured_animation.py: their own slide 25-38 % on the copies at their best
@@ -75,6 +76,7 @@ namespace InjuredLocomotionSmoke
 		ColdWalk,
 		ColdStrafe,
 		ColdIdle,
+		FrostWalk,
 		Done
 	};
 
@@ -127,6 +129,7 @@ namespace InjuredLocomotionSmoke
 		bool bHoldLook = false;
 		float LookYaw = 0.f;
 		bool bHoldCold = false;
+		float HeldCold = 0.f;
 		FMoveSamples Move;
 		float IdleMaxWeight = 0.f;
 		TMap<FString, int32> IdleVotes;
@@ -238,7 +241,7 @@ namespace InjuredLocomotionSmoke
 		}
 		if (State.bHoldCold)
 		{
-			Op->ColdLevel = ColdLevel;
+			Op->ColdLevel = State.HeldCold;
 		}
 		FMoveSamples& Move = State.Move;
 		const UOperativeAnimInstance* Anim = AnimOf(Op);
@@ -596,17 +599,20 @@ namespace InjuredLocomotionSmoke
 			Op->SetStance(EOperativeStance::Standing);
 			Op->HealthComponent->RestoreHealth(100.f, 100.f);
 			State.bHoldCold = true;
-			Op->ColdLevel = ColdLevel;
+			State.HeldCold = FreezingCold;
+			Op->ColdLevel = FreezingCold;
 			Enter(State, EStage::ColdWalk);
 			return true;
 		}
 		case EStage::ColdWalk:
 		case EStage::ColdStrafe:
+		case EStage::FrostWalk:
 		{
 			const bool bStrafe = State.Stage == EStage::ColdStrafe;
+			const bool bFrost = State.Stage == EStage::FrostWalk;
 			if (!State.bMoveStarted)
 			{
-				if (State.StageTime < (bStrafe ? 1.f : 3.5f) || Anim->IsStanceChangePending() || Op->GetStance() != EOperativeStance::Standing)
+				if (State.StageTime < (bStrafe ? 1.f : (bFrost ? 2.f : 3.5f)) || Anim->IsStanceChangePending() || Op->GetStance() != EOperativeStance::Standing)
 				{
 					return true;
 				}
@@ -617,27 +623,31 @@ namespace InjuredLocomotionSmoke
 			if (State.bShots && !bStrafe && !State.Move.bShotTaken && State.Move.SteadyFrames >= 25)
 			{
 				State.Move.bShotTaken = true;
-				Shot(World, State, *Op, TEXT("cold_slow_walk"));
+				Shot(World, State, *Op, bFrost ? TEXT("frostbite_slow_walk") : TEXT("freezing_walk_forward"));
 			}
-			if (Op->HasOwnMoveOrder() && State.StageTime < 15.f)
+			if (Op->HasOwnMoveOrder() && State.StageTime < (bFrost ? 20.f : 15.f))
 			{
 				return true;
 			}
 			float Mean = 0.f;
-			const FString Top = EndMove(State, bStrafe ? TEXT("cold strafe right") : TEXT("cold forward"), !bStrafe, &Mean);
-			if (!bStrafe)
+			const TCHAR* Label = bFrost ? TEXT("frostbite forward") : (bStrafe ? TEXT("freezing strafe right") : TEXT("freezing forward"));
+			const FString Top = EndMove(State, Label, true, &Mean, bStrafe ? FootSlideShareLimitSide : FootSlideShareLimit);
+			const EInjuredGait Wanted = bFrost ? EInjuredGait::ColdSlow : EInjuredGait::Cold;
+			const TCHAR* WantedClip = bFrost ? TEXT("Walk_Injured_Slow") : (bStrafe ? TEXT("Walk_Injured_Right") : TEXT("Walk_Injured_Front"));
+			Check(State, Anim->GetInjuredGait() == Wanted && !Op->IsWounded(),
+				FString::Printf(TEXT("%s: cold %.0f %%, full HP: the %s gait (%d)"), bFrost ? TEXT("6") : TEXT("5"), Op->ColdLevel,
+					bFrost ? TEXT("frostbite") : TEXT("freezing"), static_cast<int32>(Anim->GetInjuredGait())));
+			Check(State, State.Move.SteadyFrames > 10 && Mean > 0.7f && Top == WantedClip,
+				FString::Printf(TEXT("%s: %s: %s (weight mean %.2f, clip %s)"), bFrost ? TEXT("6") : TEXT("5"), Label,
+					bFrost ? TEXT("the slow injured walk") : TEXT("the injured walk"), Mean, *Top));
+			if (bFrost)
 			{
-				Check(State, Anim->GetInjuredGait() == EInjuredGait::Cold && !Op->IsWounded(),
-					FString::Printf(TEXT("5: cold %.0f %%, full HP: the cold gait (%d)"), Op->ColdLevel, static_cast<int32>(Anim->GetInjuredGait())));
-				Check(State, State.Move.SteadyFrames > 10 && Mean > 0.7f && Top == TEXT("Walk_Injured_Slow"),
-					FString::Printf(TEXT("5: walking forward frozen: the slow injured walk (weight mean %.2f, clip %s)"), Mean, *Top));
-				Enter(State, EStage::ColdStrafe);
-				return true;
+				State.bHoldCold = false;
+				Op->ColdLevel = 0.f;
+				return Finish(State, true);
 			}
-			Check(State, State.Move.SteadyFrames > 10 && Mean < 0.1f,
-				FString::Printf(TEXT("5: walking sideways frozen: the ABP's walk (the slow walk is a forward clip; weight mean %.2f)"), Mean));
 			Reset(*Op, State);
-			Enter(State, EStage::ColdIdle);
+			Enter(State, bStrafe ? EStage::ColdIdle : EStage::ColdStrafe);
 			return true;
 		}
 		case EStage::ColdIdle:
@@ -664,9 +674,11 @@ namespace InjuredLocomotionSmoke
 			Check(State, State.bShiverSeen, FString::Printf(TEXT("5: standing still frozen: the shiver idle plays (warm-idle pose %d, active %d, clip %s)"),
 				static_cast<int32>(Anim->WarmIdlePose), Anim->bWarmIdleActive ? 1 : 0, *ClipName(Anim->GetWarmClip())));
 			Check(State, State.IdleMaxWeight < 0.05f, FString::Printf(TEXT("5: ... and the injured layer stays off (weight max %.3f)"), State.IdleMaxWeight));
-			State.bHoldCold = false;
-			Op->ColdLevel = 0.f;
-			return Finish(State, true);
+			State.HeldCold = FrostCold;
+			Op->ColdLevel = FrostCold;
+			Reset(*Op, State);
+			Enter(State, EStage::FrostWalk);
+			return true;
 		}
 		default:
 			break;
@@ -692,7 +704,7 @@ namespace InjuredLocomotionSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.InjuredLocomotionSmoke"),
-		TEXT("Dev check (the injured locomotion, L_MovementTest): full HP the layer is off; at 40 % HP the injured idle, the 8-direction injured walk (clip per direction, foot slide), the injured crawl prone; cold 75 % the slow injured walk forward, the ABP sideways, the shiver idle standing. Logs PASS/FAIL, then exits. Arg \"shots\": rendered frames to Saved/Screenshots/InjuredLocomotion."),
+		TEXT("Dev check (the injured locomotion, L_MovementTest): full HP the layer is off; at 40 % HP the injured idle, the 8-direction injured walk (clip per direction, foot slide), the injured crawl prone; cold 75 % the injured walk forward / sideways and the shiver idle standing, cold 92 % the slow injured walk forward. Logs PASS/FAIL, then exits. Arg \"shots\": rendered frames to Saved/Screenshots/InjuredLocomotion."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
