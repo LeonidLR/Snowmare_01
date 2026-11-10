@@ -2,6 +2,7 @@
 
   python Scripts/Trainer/night_trainer.py --run-id pmc-main [--mock] [--max-generations 50] [--hours 10]
          [--stop-at 2026-11-09T07:00] [--parallel 2] [--yield-to-editor] [--config Scripts/Trainer/trainer_config.json]
+  python Scripts/Trainer/night_trainer.py --run-id check-<date> --check 3 [--check-jobs 2] [--no-clips]   (no evolution)
 
 The same --run-id resumes (from the last finished generation; finished arena jobs of an unfinished generation are reused).
 Population / rounds / seed overrides only apply when the run is created (a resume keeps run.json's snapshot).
@@ -44,6 +45,11 @@ def parse_args(argv=None):
     ap.add_argument("--make-highlights", action="store_true",
                     help="only (re)make the highlight clips of --run-id and rewrite its report")
     ap.add_argument("--force", action="store_true", help="with --make-highlights: re-render existing clips too")
+    ap.add_argument("--check", type=int, metavar="ROUNDS",
+                    help="check mode: the baseline vs itself, ROUNDS rounds per job, no evolution; highlight clips + "
+                         "fight-flow stats (<run>/check/flow_stats.json)")
+    ap.add_argument("--check-jobs", type=int, default=1, help="with --check: arena jobs (different seeds)")
+    ap.add_argument("--no-clips", action="store_true", help="with --check: skip the highlight clips")
     ap.add_argument("--repo-root", default=REPO_ROOT)
     return ap.parse_args(argv)
 
@@ -87,6 +93,10 @@ def _run(args, cfg, run_id) -> int:
     trainer = Trainer(cfg, run_id, args.repo_root, mock=args.mock, deadline=deadline_from(args),
                       max_generations=args.max_generations, parallel=args.parallel,
                       yield_to_editor=args.yield_to_editor, poll_s=args.poll_s)
+    if args.check:
+        summary = trainer.check(args.check, args.check_jobs, clips=not args.no_clips)
+        print(f"check flow: {summary}; report: {os.path.join(trainer.run_dir, 'report.html')}")
+        return 0 if summary else 1
     if args.make_highlights:
         made = trainer.make_highlights(force=args.force)
         print(f"clips made: {made}; report: {os.path.join(trainer.run_dir, 'report.html')}")

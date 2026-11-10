@@ -171,6 +171,11 @@ class ArenaAdapter:
                              ("round_index", _dig(rnd, rc.get("round_index_key", "index")))):
                 if isinstance(src, (int, float)) and not isinstance(src, bool):
                     row[key] = float(src) if key != "round_seed" else int(src)
+            # fix/pmc-arena-stalemate (2026-11-10): whether the sides fought at all (a shot between them); a round without
+            # contact is a draw with no reward (fitness.no_contact_score). Older results without the key count as contact.
+            contact = _dig(rnd, rc.get("contact_key", "contact"))
+            if isinstance(contact, bool):
+                row["contact"] = contact
             end_reason = _dig(rnd, rc.get("end_reason_key", "end_reason"))
             if end_reason:
                 row["end_reason"] = str(end_reason)

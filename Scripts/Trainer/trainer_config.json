@@ -33,6 +33,8 @@
     "draw_survivor_factor": 0.0,
     "draw_hp_factor": 0.5,
     "timeout_penalty": -3.0,
+    "_no_contact_comment": "fix/pmc-arena-stalemate 2026-11-10 (the designer): a round without contact (result 'contact': false - no shot between the sides) = a draw with no reward: the round scores exactly no_contact_score (no survivors / objective / duration credit); a capture of an empty point is still a win.",
+    "no_contact_score": -3.0,
     "_ambush_comment": "The user 2026-11-06: hiding is good when it sets up a better ambush. The timeout penalty only hits rounds with no damage on either side; damage dealt (opponent HP lost / HP max) and the kill advantage pay, so waiting then striking beats both pure hiding and a frontal rush.",
     "damage_dealt": 4.0,
     "kill_advantage": 1.5,
@@ -99,6 +101,7 @@
       "end_reason_key": "end_reason",
       "scenario_key": "scenario",
       "track_key": "track",
+      "contact_key": "contact",
       "pad_missing_rounds_as_crash": true,
       "fields": {
         "survivors": "survivors",

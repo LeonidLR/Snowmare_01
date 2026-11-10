@@ -40,6 +40,12 @@ struct CODEXTACTICS_API FPmcTeamStats
 	int32 ObjectiveMoves = 0;
 	/** RpgStrike orders taken (the RPG gunner's ordered rocket, 2026-11-09). */
 	int32 RpgStrikes = 0;
+	/** fix/pmc-arena-stalemate (2026-11-10): orders that ended short of their goal / were not taken (cooldown), detours taken after
+	 * RepathAfterSeconds without progress, running orders replaced by a clearly better one, decisions made while the team pushed. */
+	int32 OrdersFailed = 0;
+	int32 Detours = 0;
+	int32 Preempts = 0;
+	int32 PushDecisions = 0;
 };
 
 /**
@@ -162,8 +168,8 @@ public:
 
 	static constexpr float SightInterval = 0.2f;
 
-	/** A fighter took an order (team, fighter, the order, its score): the arena's track log. */
-	DECLARE_MULTICAST_DELEGATE_FourParams(FOnFighterOrder, int32, AOperativeCharacter*, EPmcOrder, float);
+	/** A fighter took an order (team, fighter, the order, its score, why it was picked): the arena's track log. */
+	DECLARE_MULTICAST_DELEGATE_FiveParams(FOnFighterOrder, int32, AOperativeCharacter*, EPmcOrder, float, EPmcPickReason);
 	FOnFighterOrder OnFighterOrder;
 
 private:
@@ -195,6 +201,15 @@ private:
 		bool bHoldingFire = false;
 		/** The RPG gunner's best rocket target this decision (BuildFighterView; the RpgStrike order fires at it). */
 		TWeakObjectPtr<AActor> LauncherTarget;
+		/** fix/pmc-arena-stalemate: a walk order was given and has not ended yet (ending short of its goal = failed). */
+		bool bWalkPending = false;
+		/** An RpgStrike was given and has not ended yet (its end starts a cooldown: no rocket order every decision). */
+		bool bStrikePending = false;
+		/** Detours taken on the running walk (one, then it fails). */
+		int32 Detours = 0;
+		/** The last failed order and when (PickCommitted's cooldown). */
+		EPmcOrder FailedOrder = EPmcOrder::Count;
+		double FailedAt = -1e9;
 	};
 
 	struct FTeam
@@ -219,10 +234,13 @@ private:
 		/** The fight's first contact (-1: none yet) and whether a shot was exchanged with an enemy (target attention, 2026-11-07). */
 		double FirstContactTime = -1.0;
 		bool bShotsExchanged = false;
+		/** The last shot between this team and an enemy (either way; fix/pmc-arena-stalemate: the quiet clock of the push). */
+		double LastShotTime = -1e9;
 		FPmcTeamStats Stats;
 		TOptional<FVector> AssaultPoint;
-		/** The round objective (the arena, task #53; DistanceCm is filled per fighter). */
+		/** The round objective (the arena, task #53; DistanceCm is filled per fighter) and when it was set (the quiet clock's start). */
 		TOptional<FPmcObjectiveView> Objective;
+		double ObjectiveSetTime = -1e9;
 		/** The encounter posture (before contact). */
 		TOptional<EPmcPosture> Posture;
 		FVector PostureAnchor = FVector::ZeroVector;
@@ -253,6 +271,15 @@ private:
 	bool FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
 		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr) const;
 	bool ProjectToNav(const FVector& Point, FVector& OutPoint) const;
+	/** A full (not partial) navmesh path From -> To. */
+	bool HasFullNavPath(const FVector& From, const FVector& To) const;
+	/**
+	 * fix/pmc-arena-stalemate: the running walk made no progress for RepathAfterSeconds - steer it through a side waypoint (6-9 m off his line
+	 * to the goal, either side, or back-diagonal) that has full paths from him and on to the goal (AOperativeCharacter::SteerOwnMoveVia).
+	 */
+	bool TryDetour(AOperativeCharacter& Fighter, const FFighterState& State) const;
+	/** The order failed (cooldown in PickCommitted); counted and logged. */
+	void MarkFailed(int32 TeamId, FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State, EPmcOrder Order, const TCHAR* Why);
 	bool IsExposedTo(int32 TeamId, const AOperativeCharacter& Fighter) const;
 	/** The enemies the team sees now: their positions and facings as seen (target attention, 2026-11-07). */
 	void SeenWatchers(const FTeam& Team, TArray<FVector2D>& OutPositions, TArray<float>& OutYaws) const;

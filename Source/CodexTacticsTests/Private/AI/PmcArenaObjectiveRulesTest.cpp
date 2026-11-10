@@ -86,12 +86,20 @@ bool FPmcArenaRoundOutcomeTest::RunTest(const FString&)
 	const FPmcRoundOutcome Captured = PmcCommanderRules::ResolveRound(1, 3, false, true, Clock, false);
 	TestTrue(TEXT("captured: B (the attacker) wins by objective"), Captured.bOver && Captured.Winner == TEXT("B") && Captured.Reason == TEXT("objective")
 		&& Captured.ObjectiveResult == TEXT("captured"));
-	// The time limit: the defenders win with the point held, a draw while the attackers stand on it, a draw without an objective.
+	// The time limit (fix/pmc-arena-stalemate): the defenders win only standing on the point alone, a draw while the attackers stand on it
+	// or nobody does, a no-contact draw when no shot was fired, a draw without an objective.
 	Clock = FPmcObjectiveClock();
+	const FPmcRoundOutcome Empty = PmcCommanderRules::ResolveRound(3, 3, true, true, Clock, true);
+	TestTrue(TEXT("time limit, nobody on the point: an empty draw (the defender hid off it)"), Empty.bOver && Empty.Winner == TEXT("draw")
+		&& Empty.ObjectiveResult == TEXT("empty"));
+	Clock.Step(0, 2, 0.1f);
+	TestTrue(TEXT("the defenders alone on it: holding"), Clock.bDefendersHolding);
+	const FPmcRoundOutcome NoContact = PmcCommanderRules::ResolveRound(3, 3, true, true, Clock, true, false);
+	TestTrue(TEXT("time limit without contact: a no_contact draw even on the point"), NoContact.Winner == TEXT("draw") && NoContact.ObjectiveResult == TEXT("no_contact"));
 	const FPmcRoundOutcome Held = PmcCommanderRules::ResolveRound(3, 3, true, true, Clock, true);
 	TestTrue(TEXT("time limit, point held: B (the defender) wins"), Held.bOver && Held.Winner == TEXT("B") && Held.Reason == TEXT("time_limit")
 		&& Held.ObjectiveResult == TEXT("held"));
-	Clock.bAttackersHolding = true;
+	Clock.Step(1, 0, 0.1f);
 	const FPmcRoundOutcome Contested = PmcCommanderRules::ResolveRound(3, 3, true, true, Clock, true);
 	TestTrue(TEXT("time limit, attackers on it: contested draw"), Contested.Winner == TEXT("draw") && Contested.ObjectiveResult == TEXT("contested"));
 	const FPmcRoundOutcome NoObjective = PmcCommanderRules::ResolveRound(3, 3, true, false, Clock, true);

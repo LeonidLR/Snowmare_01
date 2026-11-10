@@ -33,7 +33,12 @@
   unreadable track or no shots = no penalty. Remove the `close_range` key to disable.
   **Draws / fights** (2026-11-06, after pmc-v2 learnt "don't fight"): a draw pays `draw_value` 0, survivors don't count in it, HP
   loss half; a time-limit end with no damage either way costs `timeout_penalty`; `damage_dealt` (opponent HP lost / HP max) and
-  `kill_advantage` pay. **Objective rounds** (task #53, 2026-11-07; the arena's `Objective=1 Scenario=random`): small capped bonuses
+  `kill_advantage` pay. **No contact** (fix/pmc-arena-stalemate 2026-11-10, the designer): a round whose result says `"contact": false`
+  (no shot between the sides) and that the side did not win scores exactly `no_contact_score` (-3: no survivors / objective / duration
+  credit) - and the arena no longer gives the defender a time-limit win unless he stands on the point alone at that moment. The commander
+  genes `rpg_strike`, `rpg_gunner_share` (the squad's RPG gunner chance, set by the arena before the spawn), `order_min_hold_s`,
+  `failed_order_cooldown_s` and `push` evolve like the others; `push_after_s` 30 / `repath_after_s` 5 are frozen (the designer's rules).
+  **Objective rounds** (task #53, 2026-11-07; the arena's `Objective=1 Scenario=random`): small capped bonuses
   `damage_from_concealment` 1.5 (cap 100 HP = one man), `first_strike` 0.75, `objective_win` 2.0 (the adapter's 1.0 when the
   side won AS the objective's attacker by `end_reason` objective, or as the defender at the time limit), `strikes_unobserved` 0.5
   (cap 2; first hits on a target looking away). A defender now WINS a held time limit, so hiding only pays for the side that holds
@@ -55,6 +60,11 @@ python Scripts/Trainer/night_trainer.py --mock --run-id mock-test --max-generati
 # a real run by hand (resumes when the run id exists):
 python Scripts/Trainer/night_trainer.py --run-id pmc-main [--hours 9] [--stop-at 2026-11-09T07:00] [--max-generations 200]
        [--parallel 2] [--yield-to-editor] [--population 12 --rounds-per-job 4 --seed N   (new runs only)]
+# check run, NO evolution (fix/pmc-arena-stalemate 2026-11-10): the baseline weights vs themselves, highlight clips + the fight-flow stats
+# (shots / min, longest quiet spell, attackers' distance to the point, orders per fighter-minute) in <run>/check/flow_stats.json:
+python Scripts/Trainer/night_trainer.py --run-id check-2026-11-10 --check 3 [--check-jobs 2] [--no-clips]
+# the same stats for any arena result / track (before / after comparisons):
+python Scripts/Trainer/nighttrainer/stalemate_stats.py Saved/Arena/<result>.json [--json out.json]
 # scheduler (NOT registered automatically - run one of these yourself):
 powershell -ExecutionPolicy Bypass -File Scripts\Trainer\install_night_trainer.ps1 -Mode Nightly -StartTime 22:00 -EndTime 08:00 -RunId pmc-main -YieldToEditor
 powershell -ExecutionPolicy Bypass -File Scripts\Trainer\install_night_trainer.ps1 -Mode Weekend -RunId pmc-main    # Fri 20:00 -> Mon 07:00

@@ -37,6 +37,8 @@ namespace PmcSquadLocal
 	constexpr float ArriveCm = 250.f;
 	constexpr float StuckSeconds = 4.f;
 	constexpr float StuckProgressCm = 100.f;
+	/** A walk that ends farther than this from its goal failed (fix/pmc-arena-stalemate). */
+	constexpr float FailShortCm = 400.f;
 	constexpr float AidReachCm = 230.f;
 	constexpr float MonsterSightCm = 2500.f;
 	/** A demasked shooter (his own fire) is noticed by the teams with a man this close (planar). */
@@ -433,6 +435,7 @@ void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVe
 	Objective.Location = Location;
 	Objective.RadiusCm = RadiusCm;
 	Team.Objective = Objective;
+	Team.ObjectiveSetTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	// Target attention (2026-11-07): the defenders lie in wait with their fire held from the start (the first decision may come after the
 	// first sighting; their own Aggressive auto-fire would spring the ambush before the commander could hold it).
 	if (Role == EPmcRole::Defender && Team.Weights.AmbushPatience > 0.f)
@@ -827,9 +830,11 @@ void UPmcSquadSubsystem::ResetTeam(int32 TeamId)
 	Team.LastContactTime = -1e9;
 	Team.FirstContactTime = -1.0;
 	Team.bShotsExchanged = false;
+	Team.LastShotTime = -1e9;
 	Team.DecisionTimer = 0.f;
 	Team.AssaultPoint.Reset();
 	Team.Objective.Reset();
+	Team.ObjectiveSetTime = -1e9;
 	Team.Posture.Reset();
 }
 
@@ -910,15 +915,43 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 				State.ProgressPoint = Location;
 				State.ProgressTime = Now;
 			}
-			else if (Now - State.ProgressTime > PmcSquadLocal::StuckSeconds)
+			else if (Now - State.ProgressTime > Team.Weights.RepathAfterSeconds)
 			{
+				// fix/pmc-arena-stalemate (the designer 2026-11-08): no progress for 5 s -> another route (a detour waypoint), not standing
+				// still; a second time on the same walk -> the order failed (PickCommitted keeps it out for its cooldown).
 				++Team.Stats.StuckEvents;
-				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcAI] team %d: %s stuck on %s - order dropped"), TeamId, *Fighter->DisplayName.ToString(),
-					PmcCommanderRules::OrderName(State.Order));
-				Fighter->StopOperative();
-				State.Order = EPmcOrder::Hold;
+				if (State.Detours < 1 && TryDetour(*Fighter, State))
+				{
+					++State.Detours;
+					++Team.Stats.Detours;
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s made no progress on %s for %.0f s - a detour"), TeamId,
+						*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(State.Order), Team.Weights.RepathAfterSeconds);
+				}
+				else
+				{
+					Fighter->StopOperative();
+					MarkFailed(TeamId, Team, *Fighter, State, State.Order, TEXT("stuck (no progress, no detour)"));
+					State.Order = EPmcOrder::Hold;
+				}
 				State.ProgressPoint = Location;
 				State.ProgressTime = Now;
+			}
+		}
+		// A rocket order that ended (fired, or refused by the launcher rule): the order cools down like a failed one - the smoke's gunner
+		// re-took RpgStrike 18 times in a minute.
+		if (State.bStrikePending && !IsOrderRunning(*Fighter, State))
+		{
+			State.bStrikePending = false;
+			State.FailedOrder = EPmcOrder::RpgStrike;
+			State.FailedAt = Now;
+		}
+		// A walk that ended short of its goal (no path / dropped on the way): failed - not re-decided twice a second (pmc-v3 2026-11-08).
+		if (State.bWalkPending && !IsOrderRunning(*Fighter, State))
+		{
+			State.bWalkPending = false;
+			if (bWalking && !State.Goal.IsNearlyZero() && FVector::Dist2D(Location, State.Goal) > PmcSquadLocal::FailShortCm)
+			{
+				MarkFailed(TeamId, Team, *Fighter, State, State.Order, TEXT("ended short of its goal"));
 			}
 		}
 		// Exposure at one spot.
@@ -1107,6 +1140,9 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 	Squad.bEverContact = Team.bEverContact || Team.AssaultPoint.IsSet(); // an assault never waits in ambush
 	Squad.bShotsExchanged = Team.bShotsExchanged;
 	Squad.ContactSeconds = Team.FirstContactTime >= 0.0 ? static_cast<float>(Now - Team.FirstContactTime) : 0.f;
+	// The quiet clock (fix/pmc-arena-stalemate): since the last SHOT between the team and an enemy (seeing each other out of reach is no
+	// fight - the Depot blizzard round watched each other at 55 m for 4 minutes), or since the round's objective was set.
+	Squad.QuietSeconds = static_cast<float>(FMath::Max(0.0, Now - FMath::Max(Team.LastShotTime, Team.ObjectiveSetTime)));
 	for (AOperativeCharacter* Mate : Mates)
 	{
 		if (const FFighterState* State = Team.Fighters.Find(Mate); State && IsOrderRunning(*Mate, *State))
@@ -1202,21 +1238,45 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 				bHoldFire ? TEXT("holds his fire") : TEXT("opens fire"), View.Threat.DistanceCm, View.Threat.AttentionOff);
 		}
 		const TArray<FPmcOrderScore> Scored = PmcCommanderRules::ScoreAll(View, Own, Team.Weights);
-		// A committed walk, or any order younger than CommitSeconds, is only broken by a clearly better one.
-		const bool bCommitted = bRunning && (PmcCommanderRules::IsMoveOrder(State.Order) || Now - State.OrderSince < Team.Weights.CommitSeconds);
-		const EPmcOrder Pick = PmcCommanderRules::PickWithMargin(Scored, State.Order, bRunning, bCommitted ? Team.Weights.MoveSwitchMargin : Team.Weights.SwitchMargin);
+		Team.Stats.PushDecisions += PmcCommanderRules::IsPushing(View, Own, Team.Weights) ? 1 : 0;
+		// Order commitment (fix/pmc-arena-stalemate): a running order holds OrderMinHoldSeconds unless invalid, then only a clearly better one
+		// breaks it; a failed order sits out its cooldown.
+		FPmcCommitment Commitment;
+		Commitment.Current = State.Order;
+		Commitment.bRunning = bRunning;
+		Commitment.AgeSeconds = static_cast<float>(Now - State.OrderSince);
+		Commitment.Failed = State.FailedOrder;
+		Commitment.FailedAgeSeconds = static_cast<float>(Now - State.FailedAt);
+		EPmcPickReason Reason = EPmcPickReason::Best;
+		EPmcOrder Pick = PmcCommanderRules::PickCommitted(Scored, Commitment, Team.Weights, &Reason);
 		if (Pick == State.Order && bRunning)
 		{
 			continue; // the running order keeps going
 		}
-		if (Pick == State.Order && (Pick == EPmcOrder::Hold || Pick == EPmcOrder::Ambush || Pick == EPmcOrder::Crouch))
+		if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick))
 		{
 			continue; // nothing new to do
 		}
-		if (ExecuteOrder(TeamId, Team, *Fighter, State, Pick, View, ThreatActor, Cover, Mates))
+		// An order that cannot be taken now (no path, no target) fails at once: the next best one this decision, not the same one again.
+		bool bTaken = ExecuteOrder(TeamId, Team, *Fighter, State, Pick, View, ThreatActor, Cover, Mates);
+		for (int32 Retry = 0; !bTaken && Retry < 2 && !PmcCommanderRules::IsStaticOrder(Pick); ++Retry)
+		{
+			MarkFailed(TeamId, Team, *Fighter, State, Pick, TEXT("could not be taken"));
+			Commitment.Failed = Pick;
+			Commitment.FailedAgeSeconds = 0.f;
+			Commitment.bRunning = false;
+			Pick = PmcCommanderRules::PickCommitted(Scored, Commitment, Team.Weights, &Reason);
+			if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick))
+			{
+				break;
+			}
+			bTaken = ExecuteOrder(TeamId, Team, *Fighter, State, Pick, View, ThreatActor, Cover, Mates);
+		}
+		if (bTaken)
 		{
 			++Team.Stats.OrdersIssued;
-			OnFighterOrder.Broadcast(TeamId, Fighter, Pick, Scored[0].Score);
+			Team.Stats.Preempts += Reason == EPmcPickReason::Preempt ? 1 : 0;
+			OnFighterOrder.Broadcast(TeamId, Fighter, Pick, Scored[0].Score, Reason);
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s -> %s (score %.2f; threat %s at %.0f cm, hp %.0f%%, cover %.2f)"), TeamId,
 				*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(Pick), Scored[0].Score, View.bHasThreat ? (View.Threat.bSeenNow ? TEXT("seen") : TEXT("remembered")) : TEXT("none"),
 				View.Threat.DistanceCm, View.HealthFrac * 100.f, View.CoverQuality);
@@ -1262,6 +1322,34 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			}
 		}
 		if (!bOnNav)
+		{
+			return false;
+		}
+		// fix/pmc-arena-stalemate: a goal with no full path from him (an island, a roof part without access) - the walk would end at once and
+		// be re-decided twice a second (pmc-v3): a reachable spot round it instead (4 / 8 m), else the order is not taken.
+		if (Nav && !HasFullPath(Goal))
+		{
+			bool bFound = false;
+			for (int32 Ring = 1; Ring <= 2 && !bFound; ++Ring)
+			{
+				for (int32 Step = 0; Step < 8 && !bFound; ++Step)
+				{
+					FVector Near;
+					const FVector Probe = Goal + FRotator(0.f, Step * 45.f, 0.f).Vector() * (400.f * Ring);
+					if (ProjectToNav(Probe, Near) && HasFullPath(Near))
+					{
+						Goal = Near;
+						bFound = true;
+					}
+				}
+			}
+			if (!bFound)
+			{
+				return false;
+			}
+		}
+		// A walk that goes nowhere is no order (the Depot street round re-took an Objective walk 30 times: each "arrived" at once).
+		if (FVector::Dist2D(Goal, Fighter.GetActorLocation()) < PmcSquadLocal::ArriveCm)
 		{
 			return false;
 		}
@@ -1456,6 +1544,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	case EPmcOrder::RpgStrike:
 		// The RPG gunner's rocket (2026-11-09): at the rule's best target this decision (not while an ambush holds its fire).
 		Context.Target = State.LauncherTarget.Get();
+		// A suppression still running blocks the launcher (the fire loop keeps the rifle for it): the rocket replaces it.
+		if (!State.bHoldingFire && Context.Target && Fighter.HasSuppressOrder())
+		{
+			Fighter.CancelSuppressFire(TEXT("RPG strike"));
+		}
 		bTaken = !State.bHoldingFire && Context.Target && SquadOrderCatalog::Execute(ESquadOrder::LauncherStrike, Context);
 		Team.Stats.RpgStrikes += bTaken ? 1 : 0;
 		if (bTaken)
@@ -1476,6 +1569,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	}
 	if (bTaken)
 	{
+		State.bWalkPending = PmcCommanderRules::IsMoveOrder(Order) && (Fighter.HasOwnMoveOrder() || Fighter.HasPendingCover());
+		State.bStrikePending = Order == EPmcOrder::RpgStrike;
+		State.Detours = 0;
 		State.Order = Order;
 		State.OrderSince = Now;
 		State.Goal = Goal;
@@ -1637,6 +1733,47 @@ void UPmcSquadSubsystem::SeenWatchers(const FTeam& Team, TArray<FVector2D>& OutP
 	}
 }
 
+bool UPmcSquadSubsystem::HasFullNavPath(const FVector& From, const FVector& To) const
+{
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(GetWorld(), From, To) : nullptr;
+	return Path && Path->IsValid() && !Path->IsPartial();
+}
+
+bool UPmcSquadSubsystem::TryDetour(AOperativeCharacter& Fighter, const FFighterState& State) const
+{
+	const FVector From = Fighter.GetActorLocation();
+	FVector Dir = (State.Goal - From).GetSafeNormal2D();
+	if (Dir.IsNearlyZero())
+	{
+		Dir = Fighter.GetActorForwardVector().GetSafeNormal2D();
+	}
+	const FVector Side(-Dir.Y, Dir.X, 0.f);
+	const FVector Offsets[] = { Side * 600.f + Dir * 300.f, -Side * 600.f + Dir * 300.f, Side * 900.f, -Side * 900.f,
+		Side * 500.f - Dir * 500.f, -Side * 500.f - Dir * 500.f };
+	for (const FVector& Offset : Offsets)
+	{
+		FVector Via;
+		if (ProjectToNav(From + Offset, Via) && FVector::Dist2D(Via, From) > 300.f && HasFullNavPath(From, Via) && HasFullNavPath(Via, State.Goal)
+			&& Fighter.SteerOwnMoveVia(Via))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+void UPmcSquadSubsystem::MarkFailed(int32 TeamId, FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State, EPmcOrder Order, const TCHAR* Why)
+{
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	State.FailedOrder = Order;
+	State.FailedAt = Now;
+	State.bWalkPending = false;
+	++Team.Stats.OrdersFailed;
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s's %s failed (%s) - not again for %.0f s"), TeamId, *Fighter.DisplayName.ToString(),
+		PmcCommanderRules::OrderName(Order), Why, Team.Weights.FailedOrderCooldownSeconds);
+}
+
 bool UPmcSquadSubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) const
 {
 	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
@@ -1664,6 +1801,7 @@ void UPmcSquadSubsystem::HandleWeaponFired(AOperativeCharacter* Shooter, AActor*
 			if (FTeam* Team = Teams.Find(TeamId))
 			{
 				Team->bShotsExchanged = true;
+				Team->LastShotTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 			}
 		}
 		return;
@@ -1761,7 +1899,14 @@ AOperativeCharacter* UPmcSquadSubsystem::SpawnFighter(int32 TeamId, const FVecto
 		Fighter->SwitchToWeaponById(WeaponId);
 	}
 	// The squad's RPG gunner (the game designer 2026-11-09): the launcher on top of his pool weapon; the shared launcher rule draws it.
-	const bool bRpgGunner = PmcOperatorRules::IsRpgGunner(Config, Seed, Index);
+	// The trainer tunes the gunner's share per personality (pmc_commander.json rpg_gunner_share; the arena sets the team's weights before
+	// the spawn): it overrides the operators file's share.
+	FPmcOperatorConfig GunnerConfig = Config;
+	if (const FTeam* Team = FindTeam(TeamId); Team && Team->Weights.RpgGunnerShare >= 0.f)
+	{
+		GunnerConfig.RpgGunner.Share = FMath::Clamp(Team->Weights.RpgGunnerShare, 0.f, 1.f);
+	}
+	const bool bRpgGunner = PmcOperatorRules::IsRpgGunner(GunnerConfig, Seed, Index);
 	if (bRpgGunner && !PmcSquadLocal::HasWeaponId(*Fighter, *Config.RpgGunner.WeaponId))
 	{
 		if (UWeaponDataAsset* Launcher = LoadObject<UWeaponDataAsset>(nullptr, *PmcOperatorRules::WeaponAssetPath(Config.RpgGunner.WeaponId)))

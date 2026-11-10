@@ -17,6 +17,7 @@ bool FPmcObjectiveClock::Step(int32 AttackersOnPoint, int32 DefendersOnPoint, fl
 {
 	const float Delta = FMath::Max(DeltaSeconds, 0.f);
 	bAttackersHolding = AttackersOnPoint > 0 && DefendersOnPoint == 0;
+	bDefendersHolding = DefendersOnPoint > 0 && AttackersOnPoint == 0;
 	if (bAttackersHolding)
 	{
 		ControlSeconds[0] += Delta;
@@ -119,6 +120,12 @@ namespace PmcCommanderRules
 		const FPmcObjectiveView& O = F.Objective;
 		const bool bObjective = O.IsActive();
 		const float OverwatchCm = bObjective ? OverwatchRangeCm(O, F.Band, F.WeaponRangeCm) : 0.f;
+		// The push (fix/pmc-arena-stalemate, the designer 2026-11-08): quiet for PushAfterSeconds in an objective round, a man off the point
+		// stops sitting in cover - his static / cover orders lose x 1 / Push and the walk onto the point (Objective) gains.
+		const bool bOffPoint = bObjective && O.DistanceCm > 0.7f * O.RadiusCm;
+		const bool bPush = IsPushing(F, S, W);
+		const float PushGain = FMath::Max(1.f, W.Push);
+		const float PushDamp = bPush && bOffPoint ? 1.f / PushGain : 1.f;
 		float HoldHere = 1.f;
 		if (bObjective && O.Role == EPmcRole::Attacker && O.DistanceCm <= O.RadiusCm)
 		{
@@ -132,11 +139,13 @@ namespace PmcCommanderRules
 		{
 		case EPmcOrder::Hold:
 			// The baseline: the fighter keeps shooting from where he is; worth more in cover and in contact.
-			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere;
+			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere * PushDamp;
 		case EPmcOrder::TakeCover:
 			// Exposed and badly covered against a known threat, with somewhere to go (a slot at his band's distance preferred).
-			return W.TakeCover * Step(F.bCoverAvailable && F.bHasThreat) * (1.f - F.CoverQuality) * (0.4f + 0.6f * Contact) * (0.5f + 0.5f * Step(F.bExposed))
-				* Step(!F.bInCover || F.CoverQuality < 0.3f) * FMath::Lerp(1.f, Clamp01(F.CoverBandFactor), Clamp01(W.BandPosition));
+			// Not from a stand-in (the assault / objective point with no enemy known): hiding from a point nobody holds flapped with the
+			// Objective walk 160 times a round (fix/pmc-arena-stalemate, the Depot chokepoint round).
+			return W.TakeCover * Step(F.bCoverAvailable && F.bHasThreat && !F.Threat.bStandIn) * (1.f - F.CoverQuality) * (0.4f + 0.6f * Contact) * (0.5f + 0.5f * Step(F.bExposed))
+				* Step(!F.bInCover || F.CoverQuality < 0.3f) * FMath::Lerp(1.f, Clamp01(F.CoverBandFactor), Clamp01(W.BandPosition)) * PushDamp;
 		case EPmcOrder::Advance:
 		{
 			// Bounding overwatch: one man moves while the others hold; worth it with numbers, health, ammo, and a threat beyond his band (the
@@ -176,10 +185,10 @@ namespace PmcCommanderRules
 				* (S.EnemiesSeenNow == 0 ? 1.f : 0.3f) * (S.MatesHealing == 0 ? 1.f : 0.2f);
 		case EPmcOrder::Relocate:
 			// Spotted at this spot for too long: move to another cover.
-			return W.Relocate * Contact * Step(F.bExposed && F.SecondsExposedHere >= W.RelocateAfterSeconds && F.bCoverAvailable);
+			return W.Relocate * Contact * Step(!F.Threat.bStandIn) * Step(F.bExposed && F.SecondsExposedHere >= W.RelocateAfterSeconds && F.bCoverAvailable) * PushDamp;
 		case EPmcOrder::Ambush:
 			// No contact yet in this fight: hold in cover, crouched, and let them come.
-			return W.Ambush * Step(!S.bEverContact) * (F.bInCover ? 1.f : 0.6f) * HoldHere;
+			return W.Ambush * Step(!S.bEverContact) * (F.bInCover ? 1.f : 0.6f) * HoldHere * PushDamp;
 		case EPmcOrder::Reload:
 			// A low clip with rounds in reserve; best behind cover or out of contact.
 			return W.Reload * Step(F.ClipFrac < 0.3f && F.bHasReserve) * (F.bInCover || S.EnemiesSeenNow == 0 ? 1.f : 0.5f);
@@ -188,7 +197,7 @@ namespace PmcCommanderRules
 			return W.Sidearm * Step(F.bHasSidearm && F.ClipFrac <= 0.f && F.bHasThreat && F.Threat.DistanceCm < 400.f && F.Threat.bSeenNow);
 		case EPmcOrder::Crouch:
 			// In contact, standing still in the open: get low.
-			return W.Crouch * Contact * Step(!F.bMoving && !F.bInCover && F.Stance == EOperativeStance::Standing) * StaticBand;
+			return W.Crouch * Contact * Step(!F.bMoving && !F.bInCover && F.Stance == EOperativeStance::Standing) * StaticBand * PushDamp;
 		case EPmcOrder::Objective:
 		{
 			if (!bObjective)
@@ -199,6 +208,12 @@ namespace PmcCommanderRules
 			{
 				// Onto the point: more urgent as the clock runs down (the defenders win at the time limit), less under fire / against men on it.
 				const float Urgency = Clamp01(W.ObjectiveUrgency);
+				if (bPush)
+				{
+					// Quiet too long: onto the point, whatever the clock or his scratches (nobody shoots at him).
+					return FMath::Max(W.Objective, 0.f) * PushGain * Step(bOffPoint) * FMath::Max(0.5f, F.HealthFrac) * Step(F.AmmoFrac > 0.1f)
+						* (O.bEnemyOnPoint ? 0.8f : 1.f);
+				}
 				return FMath::Max(W.Objective, 0.f) * Step(O.DistanceCm > 0.7f * O.RadiusCm) * (1.f - Urgency + Urgency * Clamp01(O.TimeFrac)) * F.HealthFrac
 					* Step(F.AmmoFrac > 0.1f) * (SeenNow > 0.f ? 0.6f : 1.f) * (O.bEnemyOnPoint ? 0.8f : 1.f) * AttentionFactor(F, W);
 			}
@@ -206,12 +221,19 @@ namespace PmcCommanderRules
 			// its overwatch when he strayed.
 			const float Retake = Step(O.bEnemyOnPoint && O.DistanceCm > 0.7f * O.RadiusCm) * (0.2f + 0.8f * Clamp01(O.HoldFrac));
 			const float Return = Step(!O.bEnemyOnPoint && O.DistanceCm > OverwatchCm) * 0.7f;
-			return FMath::Max(W.Objective, 0.f) * FMath::Max(Retake, Return) * F.HealthFrac;
+			// fix/pmc-arena-stalemate: the defenders win on time only standing on the point - onto it when the round goes quiet (the push)
+			// and as the time limit nears (from 60 % of the round, full at 85 %).
+			const float Occupy = Step(bOffPoint) * FMath::Max(Step(bPush) * 0.8f, Clamp01((O.TimeFrac - 0.6f) / 0.25f) * 0.9f);
+			return FMath::Max(W.Objective, 0.f) * FMath::Max(FMath::Max(Retake, Return), Occupy) * FMath::Max(0.5f, F.HealthFrac);
 		}
 		case EPmcOrder::RpgStrike:
 			// The squad's RPG gunner (2026-11-09): a rocket target the team sees (the shared launcher rule's score, capped at 1) - worth more
 			// while a mate moves (the rocket makes them duck), one rocket at a time per squad.
-			return FMath::Max(W.RpgStrike, 0.f) * Step(F.bHasLauncher) * Clamp01(F.LauncherScore) * (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.85f)
+			// A strike in flight stays valid while the launcher works on it (draw / aim; the launcher's own timeout ends it): its target may
+			// drop out of the rule's score for a moment, and a Suppress taking over cancelled the rocket (fix/pmc-arena-stalemate, RpgPmcSmoke).
+			return FMath::Max(W.RpgStrike, 0.f) * Step(F.bHasLauncher)
+				* (F.RunningOrder == EPmcOrder::RpgStrike ? FMath::Max(Clamp01(F.LauncherScore), 0.5f) : Clamp01(F.LauncherScore))
+				* (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.85f)
 				* (S.MatesRpgStriking == 0 ? 1.f : 0.2f);
 		default:
 			return 0.f;
@@ -247,6 +269,63 @@ namespace PmcCommanderRules
 			}
 		}
 		return Scored[0].Order;
+	}
+
+	bool IsStaticOrder(EPmcOrder Order)
+	{
+		return Order == EPmcOrder::Hold || Order == EPmcOrder::Ambush || Order == EPmcOrder::Crouch;
+	}
+
+	bool IsPushing(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
+	{
+		return Fighter.Objective.IsActive() && Weights.PushAfterSeconds > 0.f && Squad.QuietSeconds >= Weights.PushAfterSeconds;
+	}
+
+	EPmcOrder PickCommitted(const TArray<FPmcOrderScore>& Scored, const FPmcCommitment& C, const FPmcWeights& W, EPmcPickReason* OutReason)
+	{
+		EPmcPickReason Reason = EPmcPickReason::Best;
+		const bool bCooling = C.Failed != EPmcOrder::Count && C.FailedAgeSeconds < W.FailedOrderCooldownSeconds;
+		EPmcOrder Best = EPmcOrder::Hold;
+		float BestScore = 0.f;
+		float CurrentScore = 0.f;
+		for (const FPmcOrderScore& Entry : Scored)
+		{
+			const float Score = bCooling && Entry.Order == C.Failed ? 0.f : Entry.Score;
+			if (Score > BestScore)
+			{
+				BestScore = Score;
+				Best = Entry.Order;
+			}
+			if (Entry.Order == C.Current)
+			{
+				CurrentScore = Score;
+			}
+		}
+		EPmcOrder Pick = Best;
+		if (C.bRunning && !IsStaticOrder(C.Current))
+		{
+			if (CurrentScore <= 0.f)
+			{
+				Reason = EPmcPickReason::Invalid;
+			}
+			else if (C.AgeSeconds < W.OrderMinHoldSeconds)
+			{
+				Pick = C.Current;
+				Reason = EPmcPickReason::Keep;
+			}
+			else
+			{
+				const float Margin = IsMoveOrder(C.Current) || C.AgeSeconds < W.CommitSeconds ? W.MoveSwitchMargin : W.SwitchMargin;
+				const bool bKeep = CurrentScore >= BestScore - Margin;
+				Pick = bKeep ? C.Current : Best;
+				Reason = bKeep ? EPmcPickReason::Keep : EPmcPickReason::Preempt;
+			}
+		}
+		if (OutReason)
+		{
+			*OutReason = Reason;
+		}
+		return Pick;
 	}
 
 	EPmcOrder Pick(const TArray<FPmcOrderScore>& Scored, EPmcOrder Current, bool bCurrentRunning, const FPmcWeights& Weights)
@@ -444,6 +523,14 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("switch_margin"), Out.SwitchMargin);
 		ReadNumber(Json, TEXT("move_switch_margin"), Out.MoveSwitchMargin);
 		ReadNumber(Json, TEXT("commit_seconds"), Out.CommitSeconds);
+		// Order commitment and the push (fix/pmc-arena-stalemate 2026-11-10).
+		ReadNumber(Json, TEXT("order_min_hold_s"), Out.OrderMinHoldSeconds);
+		ReadNumber(Json, TEXT("failed_order_cooldown_s"), Out.FailedOrderCooldownSeconds);
+		ReadNumber(Json, TEXT("repath_after_s"), Out.RepathAfterSeconds);
+		ReadNumber(Json, TEXT("push_after_s"), Out.PushAfterSeconds);
+		ReadNumber(Json, TEXT("push"), Out.Push);
+		ReadNumber(Json, TEXT("rpg_gunner_share"), Out.RpgGunnerShare);
+		Out.RepathAfterSeconds = FMath::Max(1.f, Out.RepathAfterSeconds);
 		ReadNumber(Json, TEXT("high_ground"), Out.HighGround);
 		float MaxLevels = static_cast<float>(Out.HighGroundMaxLevels);
 		ReadNumber(Json, TEXT("high_ground_max_levels"), MaxLevels);
@@ -533,7 +620,7 @@ namespace PmcCommanderRules
 		return 1.f + FMath::Max(Weights.Overwatch, 0.f) * Reach;
 	}
 
-	FPmcRoundOutcome ResolveRound(int32 AliveA, int32 AliveB, bool bTimeUp, bool bObjective, const FPmcObjectiveClock& Clock, bool bAttackerIsA)
+	FPmcRoundOutcome ResolveRound(int32 AliveA, int32 AliveB, bool bTimeUp, bool bObjective, const FPmcObjectiveClock& Clock, bool bAttackerIsA, bool bContact)
 	{
 		FPmcRoundOutcome Out;
 		const TCHAR* Attacker = bAttackerIsA ? TEXT("A") : TEXT("B");
@@ -556,10 +643,17 @@ namespace PmcCommanderRules
 		{
 			Out.bOver = true;
 			Out.Reason = TEXT("time_limit");
-			if (bObjective)
+			if (!bContact)
 			{
-				Out.Winner = Clock.bAttackersHolding ? TEXT("draw") : Defender;
-				Out.ObjectiveResult = Clock.bAttackersHolding ? TEXT("contested") : TEXT("held");
+				// No shot between the sides all round: nobody earned anything (the designer 2026-11-08).
+				Out.Winner = TEXT("draw");
+				Out.ObjectiveResult = bObjective ? TEXT("no_contact") : TEXT("none");
+			}
+			else if (bObjective)
+			{
+				// The defenders win on time only standing on the point alone (fix/pmc-arena-stalemate).
+				Out.Winner = Clock.bDefendersHolding ? Defender : TEXT("draw");
+				Out.ObjectiveResult = Clock.bDefendersHolding ? TEXT("held") : (Clock.bAttackersHolding ? TEXT("contested") : TEXT("empty"));
 			}
 		}
 		return Out;
