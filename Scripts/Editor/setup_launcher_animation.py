@@ -7,6 +7,10 @@ IK_UE4_Mannequin on BOTH sides (a transient retargeter built here, never saved; 
 the pack's SK_Mannequin onto
   male:   SK_Post_Apo_Survivor_a -> /Game/Characters/Animations/Launcher/Male/<pack clip name>   (the Commander, the Engineer: UE4_Mannequin_Skeleton)
   female: SK_Female_soldier      -> /Game/Characters/Animations/Launcher/Female/<pack clip name> (the Medic-Sapper: Female_Soldier_Skeleton)
+  pmc:    SKM_PmcOperator        -> /Game/Characters/Animations/Launcher/Pmc/<pack clip name>    (the hostile PMC fighters: SK_PmcOperator_Skeleton,
+          a UE5 Manny hierarchy - retargeted UE4 -> UE5 with IK_UE4_Mannequin -> IK_Mannequin, the M4 pack's RTG_UE4Manny_UE5Manny op stack;
+          the game designer 2026-11-09: "PMC fighters must be able to use the RPG", feat/rpg-ai-pmc)
+CODEX_LAUNCHER_BODIES=He,She,Pmc (default all three) limits the bodies retargeted / measured.
 The clip list = every pack path in Content/Data/Weapons/weapon_anim_sets.json "launcher" (strings, directional blocks, aim_poses, hits, deaths).
 Then each copy is re-keyed (the retarget leaves the source's key data behind - trim_weapon_anims.py's rebake) and keeps the project's ACL
 compression. Per clip and body the script measures against the pack clip (component space, the launcher on the pack's 'Soket_Launcher' of hand_r):
@@ -32,9 +36,16 @@ RESET = os.environ.get("CODEX_RESET_LAUNCHER_CLIPS") == "1"
 PACK = "/Game/Launcher_Animations/"
 PACK_MESH = PACK + "Mesh/SK_Mannequin"
 IK_UE4 = "/Game/M4_Cover_Pack/Demo/Characters/Mannequin_UE4/Rigs/IK_UE4_Mannequin"
+IK_UE5 = "/Game/M4_Cover_Pack/Demo/Characters/Mannequins/Rigs/IK_Mannequin"
 TEMPLATE_RTG = "/Game/M4_Cover_Pack/Demo/Characters/Mannequin_UE4/Rigs/RTG_UE5Manny_UE4Manny"
-OUT = {"He": "/Game/Characters/Animations/Launcher/Male", "She": "/Game/Characters/Animations/Launcher/Female"}
-TARGET_MESH = {"He": "/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a", "She": "/Game/Female_Soldier/Mesh/SK_Female_soldier"}
+TEMPLATE_RTG_UE5 = "/Game/M4_Cover_Pack/Demo/Characters/Mannequin_UE4/Rigs/RTG_UE4Manny_UE5Manny"
+OUT = {"He": "/Game/Characters/Animations/Launcher/Male", "She": "/Game/Characters/Animations/Launcher/Female",
+       "Pmc": "/Game/Characters/Animations/Launcher/Pmc"}
+TARGET_MESH = {"He": "/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a", "She": "/Game/Female_Soldier/Mesh/SK_Female_soldier",
+               "Pmc": "/Game/Characters/Enemies/PMC/Operator/SKM_PmcOperator"}
+# The target side's IK rig per body (the UE4 operatives: the pack's own rig; the PMC body: the UE5 Manny rig).
+TARGET_IK = {"He": IK_UE4, "She": IK_UE4, "Pmc": IK_UE5}
+BODIES = [b.strip() for b in os.environ.get("CODEX_LAUNCHER_BODIES", "He,She,Pmc").split(",") if b.strip() in OUT]
 WORLD = unreal.AnimPoseSpaces.WORLD
 TUBE_FRONT = unreal.Vector(0.0, 35.6, 0.0)  # the launcher's muzzle in its own frame (cm; the rocket goes in here)
 log = []
@@ -122,20 +133,24 @@ def dist(a, b):
     return (a - b).length()
 
 
-def make_retargeter():
-    """UE4 rig -> UE4 rig, transient (never saved): the template's op stack with both sides on IK_UE4_Mannequin."""
-    template = load(TEMPLATE_RTG)
+def make_retargeter(target_ik_path=IK_UE4):
+    """UE4 rig -> the body's rig, transient (never saved): the template's op stack, the source on IK_UE4_Mannequin, the target on
+    target_ik_path (IK_UE4_Mannequin for the operatives; IK_Mannequin - the UE5 Manny - for the PMC body, from RTG_UE4Manny_UE5Manny)."""
+    ue5 = target_ik_path != IK_UE4
+    template = load(TEMPLATE_RTG_UE5 if ue5 else TEMPLATE_RTG)
     ik = load(IK_UE4)
-    if not template or not ik:
+    target_ik = load(target_ik_path)
+    if not template or not ik or not target_ik:
         return None
-    rtg = unreal.AssetToolsHelpers.get_asset_tools().duplicate_asset("RTG_LauncherPack_UE4_TMP", "/Game/Characters/Animations/Launcher/_Tmp", template)
+    rtg = unreal.AssetToolsHelpers.get_asset_tools().duplicate_asset("RTG_LauncherPack_UE5_TMP" if ue5 else "RTG_LauncherPack_UE4_TMP",
+                                                                      "/Game/Characters/Animations/Launcher/_Tmp", template)
     if not rtg:
         return None
     ctrl = unreal.IKRetargeterController.get_controller(rtg)
     ctrl.set_ik_rig(unreal.RetargetSourceOrTarget.SOURCE, ik)
-    ctrl.set_ik_rig(unreal.RetargetSourceOrTarget.TARGET, ik)
+    ctrl.set_ik_rig(unreal.RetargetSourceOrTarget.TARGET, target_ik)
     try:
-        ctrl.assign_ik_rig_to_all_ops(unreal.RetargetSourceOrTarget.TARGET, ik)
+        ctrl.assign_ik_rig_to_all_ops(unreal.RetargetSourceOrTarget.TARGET, target_ik)
     except Exception as e:  # noqa: BLE001 - older signature
         say(f"assign_ik_rig_to_all_ops: {e}")
     try:
@@ -145,7 +160,7 @@ def make_retargeter():
     index = ctrl.get_index_of_op_by_name("Blend to Source")
     if index >= 0:
         ctrl.set_retarget_op_enabled(index, False)
-    say(f"transient retargeter UE4 -> UE4 (IK_UE4_Mannequin both sides, ops {ctrl.get_num_retarget_ops()}, 'Blend to Source' off)")
+    say(f"transient retargeter UE4 -> {'UE5 (IK_Mannequin)' if ue5 else 'UE4 (IK_UE4_Mannequin both sides)'}, ops {ctrl.get_num_retarget_ops()}, 'Blend to Source' off")
     return rtg
 
 
@@ -235,12 +250,15 @@ for k in ("Anim_Set_02_Rotation_90_Left", "Anim_Set_02_Rotation_90_Right", "Anim
         say(f"  aim pose {k}: tube yaw / pitch {report['clips'][k].get('aim_yaw_pitch')} (idle {report['pack_idle_tube']})")
 
 # --- Retarget ------------------------------------------------------------------------------------------------------------------------
-retargeter = make_retargeter()
+retargeters = {}
 source_mesh = load(PACK_MESH)
 registry = unreal.AssetRegistryHelpers.get_asset_registry()
 mb_before = sum(folder_mb(o) for o in OUT.values())
-for gender in ("He", "She"):
+for gender in BODIES:
     target_mesh = load(TARGET_MESH[gender])
+    if TARGET_IK[gender] not in retargeters:
+        retargeters[TARGET_IK[gender]] = make_retargeter(TARGET_IK[gender])
+    retargeter = retargeters[TARGET_IK[gender]]
     copies, todo = {}, []
     for path in paths:
         name = path.rsplit("/", 1)[1]
@@ -295,8 +313,9 @@ for gender in ("He", "She"):
 mb_after = sum(folder_mb(o) for o in OUT.values())
 report["size_mb"] = {"before": round(mb_before, 2), "after": round(mb_after, 2),
                      "pack_animations": round(folder_mb(PACK + "Animations"), 2)}
-if retargeter:
-    lib.delete_loaded_asset(retargeter)
+for rtg in retargeters.values():
+    if rtg:
+        lib.delete_loaded_asset(rtg)
 say(f"copies {mb_after:.1f} MB (pack Animations folder {report['size_mb']['pack_animations']:.1f} MB)")
 say("DRY RUN: nothing saved" if DRY else "done")
 with open(os.path.join(unreal.Paths.project_saved_dir(), "Logs", "setup_launcher_animation.json"), "w", encoding="utf-8") as f:
