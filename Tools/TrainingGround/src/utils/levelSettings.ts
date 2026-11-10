@@ -217,6 +217,7 @@ export function validateLevelSettings(level: LevelLike): string[] {
     ...validateDemo(getDemo(level)),
     ...validateColdRate(getColdRateMult(level)),
     ...hordeErrors,
+    ...(hasOwnHordeSpawnDistance(level) ? validateHordeSpawnDistance(getHordeSpawnDistance(level)) : []),
   ];
 }
 
@@ -261,4 +262,99 @@ export function validateHordeAfterFirefights(value: number): string[] {
     return [`Орда после N перестрелок: целое число >= ${HORDE_AFTER_FIREFIGHTS_MIN} (по умолчанию ${HORDE_AFTER_FIREFIGHTS_DEFAULT})`];
   }
   return [];
+}
+
+// ---- The firefight horde: distance + the waves that feed it (game designer play-test 2026-11-09) ----
+// The game: HordeRules::ShouldWavesFeedHorde / WaveForHorde / PlanFromWave (Source/CodexTactics/Private/Combat/HordeRules.cpp),
+// horde.json firefight_spawn_distance_m (300) / waves_feed_horde (true); the level "horde" object overrides them for one level.
+
+/** horde.json firefight_spawn_distance_m: the firefight horde appears this far from the squad (+- firefight_spawn_spread_m 40). */
+export const HORDE_SPAWN_DISTANCE_DEFAULT = 300;
+export const HORDE_SPAWN_DISTANCE_MIN = 25;
+export const HORDE_SPAWN_DISTANCE_MAX = 2000;
+
+function hordeOverride(level: LevelLike): Record<string, any> | undefined {
+  const horde = level.horde;
+  return horde && typeof horde === 'object' && !Array.isArray(horde) ? horde : undefined;
+}
+
+/** The level's firefight horde distance in metres (its "horde" override, else the horde.json default 300). */
+export function getHordeSpawnDistance(level: LevelLike): number {
+  const value = hordeOverride(level)?.firefight_spawn_distance_m;
+  return typeof value === 'number' && Number.isFinite(value) ? value : HORDE_SPAWN_DISTANCE_DEFAULT;
+}
+
+/** The level has its own distance (in its "horde" override). */
+export function hasOwnHordeSpawnDistance(level: LevelLike): boolean {
+  return typeof hordeOverride(level)?.firefight_spawn_distance_m === 'number';
+}
+
+/** Writes / removes "horde": { "firefight_spawn_distance_m" } (an emptied "horde" object is removed); other keys kept, input not mutated. */
+export function setHordeSpawnDistance(level: LevelLike, value: number | undefined): LevelLike {
+  const next: LevelLike = { ...level };
+  const horde: Record<string, any> = { ...(hordeOverride(level) ?? {}) };
+  if (value === undefined || Number.isNaN(value)) {
+    delete horde.firefight_spawn_distance_m;
+  } else {
+    horde.firefight_spawn_distance_m = value;
+  }
+  if (Object.keys(horde).length === 0) delete next.horde;
+  else next.horde = horde;
+  return next;
+}
+
+export function validateHordeSpawnDistance(value: number): string[] {
+  if (!Number.isFinite(value) || value < HORDE_SPAWN_DISTANCE_MIN || value > HORDE_SPAWN_DISTANCE_MAX) {
+    return [`Дистанция орды: ${HORDE_SPAWN_DISTANCE_MIN}..${HORDE_SPAWN_DISTANCE_MAX} м (по умолчанию ${HORDE_SPAWN_DISTANCE_DEFAULT})`];
+  }
+  return [];
+}
+
+/**
+ * Whether the level's waves feed the firefight horde (the game decides at run time - HordeRules::ShouldWavesFeedHorde):
+ * 'waves' - combat_start "ambush": the waves are never played as scripted waves, they feed the hordes in order;
+ * 'scripted' - combat_start "button": the waves are the scripted fights, the horde uses the horde.json / "horde" count + composition;
+ * 'map' - "auto": an ambush level when the map has patrols / placed enemies (then 'waves'), else 'scripted';
+ * 'off' - the level's "horde" override says waves_feed_horde: false; 'none' - no active waves (the horde.json count + composition).
+ */
+export type HordeWaveFeed = 'waves' | 'scripted' | 'map' | 'off' | 'none';
+
+export function activeWaves(level: LevelLike): Record<string, any>[] {
+  return (Array.isArray(level.waves) ? level.waves : []).filter((w: any) => w && typeof w === 'object' && w.is_active !== false);
+}
+
+export function getHordeWaveFeed(level: LevelLike): HordeWaveFeed {
+  if (hordeOverride(level)?.waves_feed_horde === false) return 'off';
+  if (activeWaves(level).length === 0) return 'none';
+  const start = typeof level.combat_start === 'string' ? level.combat_start.trim().toLowerCase() : 'auto';
+  if (start === 'ambush') return 'waves';
+  if (start === 'button') return 'scripted';
+  return 'map';
+}
+
+/** The 0-based active wave of the level's N-th firefight horde (1-based): min(N, waves) - 1 (the last wave repeats); -1 without waves. */
+export function waveForHorde(hordeOrdinal: number, activeWaveCount: number): number {
+  if (activeWaveCount <= 0) return -1;
+  return Math.min(Math.max(1, Math.round(hordeOrdinal)), activeWaveCount) - 1;
+}
+
+/** One line per active wave: "Орда 1 ← волна 1: 4 FROSTBITTEN + 30 HOUND, до 2 одновременно" (SPITTER shown as MILITARY_ZOMBIE). */
+export function describeHordeWaves(level: LevelLike): string[] {
+  const waves = activeWaves(level);
+  return waves.map((wave, index) => {
+    const parts: string[] = [];
+    let swaps = 0;
+    for (const spawn of Array.isArray(wave.spawns) ? wave.spawns : []) {
+      const count = typeof spawn?.count === 'number' ? spawn.count : 1;
+      if (count <= 0) continue;
+      const type = String(spawn?.enemy_type ?? '?').toUpperCase();
+      if (type === 'SPITTER') swaps += count;
+      parts.push(`${count} ${type === 'SPITTER' ? 'MILITARY_ZOMBIE' : type}`);
+    }
+    const cap = typeof wave.max_simultaneous_enemies === 'number' ? Math.max(1, Math.round(wave.max_simultaneous_enemies)) : 8;
+    const label = typeof wave.wave_index === 'number' ? wave.wave_index : index + 1;
+    const repeat = index === waves.length - 1 ? ` (и все следующие орды)` : '';
+    const spitter = swaps > 0 ? `; SPITTER → MILITARY_ZOMBIE` : '';
+    return `Орда ${index + 1}${repeat} ← волна ${label}: ${parts.join(' + ') || 'никого'}, до ${cap} одновременно${spitter}`;
+  });
 }

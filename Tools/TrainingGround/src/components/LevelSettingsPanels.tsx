@@ -5,7 +5,18 @@ import {
   getColdRateMult, getDemo, getGate, isGateFieldInvalid, setColdRateMult, setDemoEnabled, setDemoKey, setGateKey, validateColdRate,
   validateDemo, validateGate,
   HORDE_AFTER_FIREFIGHTS_MIN, getHordeAfterFirefights, getHordeEnabled, setHordeAfterFirefights, setHordeEnabled, validateHordeAfterFirefights,
+  HORDE_SPAWN_DISTANCE_DEFAULT, HORDE_SPAWN_DISTANCE_MAX, HORDE_SPAWN_DISTANCE_MIN, HordeWaveFeed, describeHordeWaves, getHordeSpawnDistance,
+  getHordeWaveFeed, hasOwnHordeSpawnDistance, setHordeSpawnDistance, validateHordeSpawnDistance,
 } from '../utils/levelSettings';
+
+/** Game designer 2026-11-09: what the waves of this level do for the firefight horde (HordeRules::ShouldWavesFeedHorde). */
+const HORDE_FEED_TEXT: Record<HordeWaveFeed, string> = {
+  waves: 'combat_start "ambush": волны этого уровня НЕ играются как скриптовые — они по порядку и есть орды после перестрелок (орда 1 = волна 1, орда 2 = волна 2, орда 3 = волна 3, дальше повторяется последняя). Действуют max_simultaneous_enemies (сколько живых одновременно, остальные подходят по мере гибели), wave_modifiers и custom_stats; spawn_delay_sec / initial_delay_sec не используются.',
+  map: 'combat_start "auto": если на карте есть патрули / расставленные враги, это засадный уровень — волны кормят орду по порядку (как у "ambush"); иначе волны — скриптовые бои, а орда берёт count / composition из horde.json.',
+  scripted: 'combat_start "button": волны — скриптовые бои уровня; орда после перестрелок берёт count / composition из horde.json (или блока horde уровня).',
+  off: 'В блоке horde уровня waves_feed_horde: false — орда всегда берёт count / composition из horde.json / блока horde.',
+  none: 'Активных волн нет — орда берёт count / composition из horde.json (или блока horde уровня).',
+};
 
 // Level-wide settings (not per wave): «Бластовая дверь» (gate_* keys), «Демо / туториал» (the "demo" object) and
 // «Холод уровня» (cold_rate_mult).
@@ -203,9 +214,13 @@ export const LevelColdPanel: React.FC<PanelProps> = ({ config, onChange }) => {
 export const LevelHordePanel: React.FC<PanelProps> = ({ config, onChange }) => {
   const enabled = getHordeEnabled(config);
   const firefights = getHordeAfterFirefights(config);
-  const errors = config.horde_after_firefights !== undefined
-    ? validateHordeAfterFirefights(config.horde_after_firefights)
-    : [];
+  const errors = [
+    ...(config.horde_after_firefights !== undefined ? validateHordeAfterFirefights(config.horde_after_firefights) : []),
+    ...(hasOwnHordeSpawnDistance(config) ? validateHordeSpawnDistance(getHordeSpawnDistance(config)) : []),
+  ];
+  const distance = getHordeSpawnDistance(config);
+  const feed = getHordeWaveFeed(config);
+  const waveLines = feed === 'waves' || feed === 'map' ? describeHordeWaves(config) : [];
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4" title="Level JSON keys horde_enabled, horde_after_firefights">
@@ -236,9 +251,36 @@ export const LevelHordePanel: React.FC<PanelProps> = ({ config, onChange }) => {
               const val = e.target.value;
               onChange(setHordeAfterFirefights(config, val === '' ? undefined : Number(val)));
             }}
-            className={`${fieldCls(errors.length > 0)} w-28`}
+            className={`${fieldCls(config.horde_after_firefights !== undefined && validateHordeAfterFirefights(config.horde_after_firefights).length > 0)} w-28`}
           />
         </label>
+        <label className="flex flex-col gap-1" title={`Орда после перестрелок появляется так далеко от центра отряда (+- 40 м), в новом месте каждый раз (направление не ближе 90 градусов к прошлому), вне поля зрения отряда. Карта меньше — берётся самая дальняя достижимая точка вне поля зрения. Пусто = horde.json (${HORDE_SPAWN_DISTANCE_DEFAULT} м). Ключ уровня: horde.firefight_spawn_distance_m`}>
+          <span className="text-slate-500">Дистанция орды <span className="text-slate-600">(м)</span></span>
+          <input
+            type="number"
+            min={HORDE_SPAWN_DISTANCE_MIN}
+            max={HORDE_SPAWN_DISTANCE_MAX}
+            step={10}
+            disabled={!enabled}
+            value={hasOwnHordeSpawnDistance(config) ? distance : ''}
+            placeholder={String(HORDE_SPAWN_DISTANCE_DEFAULT)}
+            onChange={(e) => {
+              const val = e.target.value;
+              onChange(setHordeSpawnDistance(config, val === '' ? undefined : Number(val)));
+            }}
+            className={`${fieldCls(hasOwnHordeSpawnDistance(config) && validateHordeSpawnDistance(distance).length > 0)} w-28`}
+          />
+        </label>
+      </div>
+      <div className="mt-2 rounded border border-rose-900/60 bg-rose-950/30 px-2 py-1.5 text-[11px] text-rose-200" title="HordeRules::ShouldWavesFeedHorde">
+        <div className="font-semibold">Волны → орда</div>
+        <div className="text-rose-200/80">{HORDE_FEED_TEXT[feed]}</div>
+        {waveLines.length > 0 && (
+          <ul className="mt-1 list-disc pl-4 text-rose-100/90">
+            {waveLines.map((line) => <li key={line}>{line}</li>)}
+          </ul>
+        )}
+        <div className="mt-1 text-rose-200/70">Орда появляется ~{distance} м от отряда (+- 40 м) в новом месте каждый раз; если карта меньше — в самой дальней достижимой точке вне поля зрения. SPITTER в орде не бывает — его заменяет MILITARY_ZOMBIE.</div>
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
         UE: орда после N перестрелок ПОДРЯД (horde_after_firefights, default 10, min 1) — единственный вызов орды с 2026-11-09 (таймера боя больше нет); проскользнуть мимо группы врагов незамеченным — счёт с нуля; horde_enabled: false — никогда (Депо: вкл., Озеро: выкл.).

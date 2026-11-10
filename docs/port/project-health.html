@@ -1,0 +1,41 @@
+<!doctype html><html lang='en'><head><meta charset='utf-8'><meta name='viewport' content='width=device-width,initial-scale=1'>
+<title>Project Health</title><style>
+:root{--bg:#fff;--fg:#1a1a1a;--mut:#666;--line:#ddd;--bad:#b3261e;--ok:#1b7a3a}
+@media(prefers-color-scheme:dark){:root{--bg:#161616;--fg:#eee;--mut:#999;--line:#333;--bad:#ff8a80;--ok:#6fdc8c}}
+body{margin:0;padding:16px;background:var(--bg);color:var(--fg);font:15px/1.4 system-ui,sans-serif;max-width:900px}
+h1{font-size:20px}h2{font-size:16px;margin-top:24px}table{border-collapse:collapse;width:100%}
+th,td{padding:4px 6px;border-bottom:1px solid var(--line);text-align:right}th:first-child,td:first-child{text-align:left}
+.wrap{overflow-x:auto}.bad{color:var(--bad);font-weight:600}.mut{color:var(--mut)}.card{display:flex;gap:16px;flex-wrap:wrap}
+.card div{border:1px solid var(--line);border-radius:6px;padding:8px 12px}</style></head><body><h1>CodexTactics project health</h1>
+<p class='mut'>Latest audit: 2026-11-10 (1 runs). Generated from docs/port/audit/audit_*.json.</p>
+<div class='card'><div><b>78</b><br>analyzer warnings<br><span class='mut'>high 74</span></div><div><b>295</b><br>commits (7d)</div><div><b>3</b><br>grey zones</div></div>
+<h2>Actions of the week</h2><ol><li>Разобрать 74 серьёзных предупреждений из базовой линии анализатора (топ в отчёте).</li><li>Покрыть тестом PmcSquadSubsystem.cpp (изменён 12 раз за неделю, 1779 строк, риск Jev 2.77).</li><li>Серая зона: система Falls (3848 строк, 26 правок, тестов 2, смоков 12) - добавить тесты.</li></ol>
+<h2>Weekly trends</h2><div class='wrap'><table><tr><th>Date</th><th>Commits</th><th>Warnings</th><th>High</th><th>New</th><th>Grey</th></tr>
+<tr><td>2026-11-10</td><td>295</td><td>78</td><td>74</td><td>base</td><td>3</td></tr>
+</table></div>
+<p>Warnings <svg viewBox="0 0 160 36" width="160" height="36" role="img"><polyline fill="none" stroke="currentColor" stroke-width="2" points="2.0,33.0"/></svg> &nbsp; Commits <svg viewBox="0 0 160 36" width="160" height="36" role="img"><polyline fill="none" stroke="currentColor" stroke-width="2" points="2.0,33.0"/></svg></p>
+<h2>Systems</h2><div class='wrap'><table><tr><th>System</th><th>LOC</th><th>Tests</th><th>Smokes</th><th>7d</th><th>Grey</th></tr>
+<tr><td class='bad'>Falls</td><td>3848</td><td>2</td><td>12</td><td>26</td><td class='bad'>3.48</td></tr>
+<tr><td class='bad'>Characters</td><td>48188</td><td>98</td><td>185</td><td>247</td><td class='bad'>2.5</td></tr>
+<tr><td class='bad'>Vehicles</td><td>6376</td><td>3</td><td>16</td><td>2</td><td class='bad'>2.12</td></tr>
+<tr><td>Tutorial</td><td>9463</td><td>14</td><td>16</td><td>0</td><td>1.75</td></tr>
+<tr><td>Camera</td><td>3482</td><td>4</td><td>22</td><td>17</td><td>1.72</td></tr>
+<tr><td>Data</td><td>7656</td><td>18</td><td>77</td><td>63</td><td>1.65</td></tr>
+<tr><td>AI</td><td>7450</td><td>32</td><td>41</td><td>48</td><td>1.48</td></tr>
+<tr><td>Core</td><td>14136</td><td>30</td><td>109</td><td>58</td><td>1.44</td></tr>
+<tr><td>UI</td><td>18511</td><td>14</td><td>124</td><td>18</td><td>1.36</td></tr>
+<tr><td>Combat</td><td>27106</td><td>129</td><td>116</td><td>111</td><td>1.28</td></tr>
+<tr><td>Tactics</td><td>13829</td><td>36</td><td>66</td><td>23</td><td>1.25</td></tr>
+<tr><td>Survival</td><td>3453</td><td>4</td><td>11</td><td>0</td><td>1.19</td></tr>
+<tr><td>Interactables</td><td>12026</td><td>16</td><td>76</td><td>7</td><td>1.14</td></tr>
+<tr><td>Formation</td><td>10015</td><td>33</td><td>45</td><td>16</td><td>1.09</td></tr>
+<tr><td>Environment</td><td>12842</td><td>49</td><td>18</td><td>2</td><td>1.05</td></tr>
+<tr><td>Ladders</td><td>3555</td><td>7</td><td>10</td><td>0</td><td>1.05</td></tr>
+<tr><td>Bot</td><td>5786</td><td>22</td><td>8</td><td>2</td><td>1.0</td></tr>
+<tr><td>GameFlow</td><td>3136</td><td>5</td><td>36</td><td>7</td><td>0.81</td></tr>
+<tr><td>Level</td><td>797</td><td>1</td><td>6</td><td>0</td><td>0.44</td></tr>
+<tr><td>Quests</td><td>1240</td><td>4</td><td>14</td><td>0</td><td>0.39</td></tr>
+<tr><td>Telemetry</td><td>525</td><td>0</td><td>4</td><td>0</td><td>0.38</td></tr>
+<tr><td>Subsystems</td><td>132</td><td>0</td><td>6</td><td>0</td><td>0.08</td></tr>
+<tr><td>Text</td><td>0</td><td>2</td><td>0</td><td>0</td><td>0.0</td></tr>
+</table></div></body></html>

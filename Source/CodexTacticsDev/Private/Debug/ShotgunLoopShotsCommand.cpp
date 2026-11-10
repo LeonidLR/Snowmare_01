@@ -5,6 +5,8 @@
 //     -benchmark -fps=30 -ExecCmds="CodexTactics.ShotgunLoopShots"
 // Output: Saved/Screenshots/ShotgunLoopRoot/NN_<what>.png - the Engineer with the D-1 from the side (the pack's legs): idle, walk (150 cm/s),
 // his normal walk (220), jog (400), sprint, aim walk, crouch walk. The camera follows him; no keys, no desktop capture.
+// "CodexTactics.ShotgunLoopShots crouch" (the game designer's play-test 2026-11-09: crouched = the ABP's crouch, "crouch_body": "abp"): only the
+// crouch - idle and crouch walk from his right AND his left side (the left hand on the D-1's fore-end) -> Saved/Screenshots/ShotgunCrouch/.
 
 #include "CoreMinimal.h"
 
@@ -186,7 +188,7 @@ namespace ShotgunLoopShots
 		}
 	}
 
-	void AddMoveStills(TArray<FStep>& S, const FString& Name, float Distance, bool bRun, float Speed, bool bCrouch = false)
+	void AddMoveStills(TArray<FStep>& S, const FString& Name, float Distance, bool bRun, float Speed, bool bCrouch = false, float CamSide = 520.f)
 	{
 		// Back to the arena's start, the stance set, then the leg.
 		S.Add([bCrouch](UWorld*)
@@ -199,11 +201,11 @@ namespace ShotgunLoopShots
 			}
 			return 50;
 		});
-		S.Add([Distance, bRun, Speed](UWorld* World)
+		S.Add([Distance, bRun, Speed, CamSide](UWorld* World)
 		{
 			SpeedOverride = Speed;
 			MoveAhead(World, Distance, bRun);
-			Runner->CamOffset = FVector(0.f, 520.f, 30.f);
+			Runner->CamOffset = FVector(0.f, CamSide, 30.f);
 			Runner->LookHeight = -5.f;
 			Runner->Fov = 40.f;
 			return bRun ? 30 : 22;
@@ -216,7 +218,7 @@ namespace ShotgunLoopShots
 		S.Add([](UWorld*) { SpeedOverride = -1.f; if (AOperativeCharacter* H = CurrentHero()) { H->ApplyMovementParams(); } return 5; });
 	}
 
-	void AddSteps(TArray<FStep>& S)
+	void AddSteps(TArray<FStep>& S, bool bCrouchOnly)
 	{
 		S.Add([](UWorld* World) { return World->GetSubsystem<USquadSubsystem>() && World->GetSubsystem<USquadSubsystem>()->GetMembers().Num() >= 3 ? 60 : -1; });
 		S.Add([](UWorld* World)
@@ -271,6 +273,16 @@ namespace ShotgunLoopShots
 			return 45;
 		});
 		S.Add([](UWorld*) { Runner->CamOffset = FVector(0.f, 520.f, 30.f); Runner->LookHeight = -5.f; Runner->Fov = 40.f; return 20; });
+		if (bCrouchOnly)
+		{
+			S.Add([](UWorld*) { if (AOperativeCharacter* H = CurrentHero()) { H->TeleportTo(ArenaOrigin, ArenaForward.Rotation(), false, true); H->SetStance(EOperativeStance::Crouching); } return 50; });
+			S.Add([](UWorld*) { Still(TEXT("crouch_idle_right")); return 4; });
+			S.Add([](UWorld*) { Runner->CamOffset = FVector(0.f, -520.f, 30.f); return 10; });
+			S.Add([](UWorld*) { Still(TEXT("crouch_idle_left")); return 4; });
+			AddMoveStills(S, TEXT("crouch_walk_right"), 600.f, false, -1.f, true, 520.f);
+			AddMoveStills(S, TEXT("crouch_walk_left"), 600.f, false, -1.f, true, -520.f);
+			return;
+		}
 		S.Add([](UWorld*) { Still(TEXT("idle_side")); return 4; });
 		AddMoveStills(S, TEXT("walk150"), 700.f, false, 150.f);
 		AddMoveStills(S, TEXT("walk220"), 700.f, false, -1.f);
@@ -284,10 +296,11 @@ namespace ShotgunLoopShots
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
-		Runner->Dir = FPaths::ProjectSavedDir() / TEXT("Screenshots/ShotgunLoopRoot");
+		const bool bCrouchOnly = Args.Contains(TEXT("crouch"));
+		Runner->Dir = FPaths::ProjectSavedDir() / (bCrouchOnly ? TEXT("Screenshots/ShotgunCrouch") : TEXT("Screenshots/ShotgunLoopRoot"));
 		IFileManager::Get().DeleteDirectory(*Runner->Dir, false, true);
 		IFileManager::Get().MakeDirectory(*Runner->Dir, true);
-		AddSteps(Runner->Steps);
+		AddSteps(Runner->Steps, bCrouchOnly);
 		Runner->Handle = FCoreDelegates::OnEndFrame.AddStatic(&Tick);
 		UE_LOG(LogCodexTactics, Display, TEXT("ShotgunLoopShots: start -> %s"), *Runner->Dir);
 	}

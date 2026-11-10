@@ -28,7 +28,7 @@
     "HordeSmoke", "CoverSmoke", "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke",
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
-    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke", "ShotgunSmoke", "PistolSmoke", "ProjectileSmoke", "RpgSmoke", "RpgAnimSmoke", "RpgAiSmoke", "RpgPmcSmoke", "MortarSmoke",
+    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke", "ShotgunSmoke", "ShotgunCoverSmoke", "FormationJitterSmoke", "PistolSmoke", "ProjectileSmoke", "RpgSmoke", "RpgAnimSmoke", "RpgAiSmoke", "RpgPmcSmoke", "MortarSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "SuppressionSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
@@ -113,6 +113,8 @@
     "TowerVisionSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 300, "_why": "bug 09 (game designer 2026-11-01): an operative on a lab tower sees over a 3 m wall only where the line clears it - his cone on the ground below, the roof edge's dead zone and the wall's shadow cut, drawn = CanOperativeSee; an enemy in the shadow unseen, beyond it seen; a ground-level operative's cone the flat model" },
     "CombatLabAmbushRelocateSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 900, "_why": "the game designer's decisions 2026-11-01 night (docs/design/COMBAT_LAB.md 2.1): a plan watched all round strikes after its hold limit; a relocation run spotted by a ground / a tower watcher strikes at once; no concealed route -> no teleport, it stays, then follows the squad as a patrol; a single ambush watched all along strikes after its 60-90 s" },
     "SoloStanceSmoke": { "timeout": 300, "_why": "the game designer's PIE report 2026-11-08 (Solo: the first operative ordered prone got up into a crouch when the next one was selected and ordered prone): real keys 1-3 / V / C / Z, a stance the player gave stays with that operative through selection switches (prone, crouch, stand), a box selection's V lays both selected down and nobody else, Codex.Squad.SoloOwnStance 0 reproduces the bug" },
+    "FormationJitterSmoke": { "timeout": 500, "_why": "the game designer's shotgun play-test 2026-11-09: the D-1 Engineer following the Commander in the formation twitched / spun - his hip / shoulder yaw jitter, direction-clip switches and turn-clip restarts against an M16 follower in the same slot (layer on / off / M16)" },
+    "ShotgunCoverSmoke": { "timeout": 240, "_why": "the game designer's shotgun play-test 2026-11-09: the D-1 Engineer in every cover state (approach, pressed, shimmy, low, corner peek, open shot, leaving) is the ABP's pose, the weapon layer off and blended" },
     "LeaderSwitchMoveSmoke": { "timeout": 300, "_why": "the game designer's PIE report 2026-11-08 (formation mode: a number key mid-move stopped the squad and cancelled the order): real clicks and keys - the old leader finishes the order, nobody stops, all arrive, the selected one leads from arrival; the next order mid-move is planned with the new leader; Codex.Squad.LeaderSwitchKeepsMove 0 reproduces the bug" },
     "LeaderSwitchLadderSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "the game designer's PIE report 2026-11-08 (\"an order to move, e.g. onto a roof\"): formation mode, a click on the wall ladder's roof, key 2 while the leader climbs - the old leader leads the climb to its end, one on the ladder at a time, all three on the roof, then the selected one leads" },
     "SquadHaltStanceSmoke": { "map": "/Game/Maps/L_FormationLabCombat", "extra": "-LevelJson=L_FormationLabCombat.json", "timeout": 600, "_why": "decision 6 (2026-11-01 night, the stance jitter): in a fight a 3 s halt crouches no follower, a long halt crouches them after squad_roe.json hold_crouch_after_sec, the next move stands them up at once, Solo's guard crouch waits the same hold_crouch_after_sec (2026-11-02)" },
@@ -132,7 +134,7 @@
     "FormationLabSmoke": { "map": "/Game/Maps/L_FormationLab", "extra": "-LevelJson=L_FormationLab.json", "timeout": 1200, "_why": "formation stage 6 (2026-10-25, docs/design/FORMATION_SECTORS.md): the squad (4th man spawned) walks every lab route - formation per zone, no wall stare, the rear man keeps up, patrol pace, the wall layout at the dead ends, the group cover order as the wall layout, a 3-man wedge" },
     "LadderQueueSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-23 (docs/design/LADDERS.md 7.1): 3 operatives ordered onto the wall ladder's roof together - one on the ladder at a time, the others wait at its foot in the order they came" },
     "LadderEnemySmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "2026-10-23 (docs/design/LADDERS.md 7.5): the Marksman, the Frozen PMC Fighter and the Military Zombie climb the factory's test ladders through their nav links (knockdown / death on the way down drop them); the Hound, the Frostbitten and the Brute never take a ladder" },
-    "HordeFirefightsSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "timeout": 600, "_why": "horde #12 (game designer 2026-11-02 / 11-03 / 11-08): on the Depot with the threshold at 2 by the console - a firefight = contact + shots (once per encounter), the HQ hint, a slip-past (a blind patrol within its reach, left behind) resets the streak, the 2nd firefight in a row -> the HQ warning -> the horde (with Military Zombies) starts a fight from exploration -> the horde intro; the horde is no firefight" },
+    "HordeFirefightsSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=SmokeFixtures/horde_firefights_smoke.json", "timeout": 1800, "_why": "horde #12 (game designer 2026-11-02 / 11-03 / 11-08 / 11-09): on the Depot with the threshold at 2 by the console - a firefight = contact + shots (once per encounter), the HQ hint, a slip-past (a blind patrol within its reach, left behind) resets the streak, the 2nd firefight in a row -> the HQ warning -> the horde starts a fight from exploration -> the horde intro; the horde is no firefight. 2026-11-09 (feat/horde-300m-waves): two hordes far away (260-340 m or the farthest the Depot has) in different places, each from the level wave in order (pinned waves in SmokeFixtures/horde_firefights_smoke.json - the user edits the Depot waves: wave 1 capped by max_simultaneous_enemies, an inactive wave skipped, wave 3 with SPITTER -> MILITARY_ZOMBIE and enemy_hp_mult 1.5), the arrival times per kind" },
     "CorpsePersistSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "timeout": 500, "_why": "corpses stay (game designer 2026-11-08 / 11-09 'ALL enemies, one cap'): 11 monster bodies of every kind (a hound, the Military Zombie, one killed in the air, the placeholder Spitter laid on the ground) + a hostile PMC fighter stay 30 s frozen on the ground (no AI controller, no ticks, no collision, out of the registry, visible), then cap 4 fades the 8 farthest" },
     "CorpseCostSmoke": { "rendered": true, "map": "/Game/Maps/Generated/L_Gen_Depot_1", "timeout": 600, "_why": "corpses stay (2026-11-08): the measured cost of 0 / 50 / 150 frozen bodies and 150 unfrozen on the Depot, rendered offscreen 1280x720 ([CorpseCost] lines); fails if 150 frozen bodies add >= 1 ms of game-thread time" },
     "CorpseFallSmoke": { "map": "/Game/Maps/L_Demo01_B_FrozenFactory", "timeout": 600, "_why": "game designer PIE 2026-11-08 (fix/corpse-falls-to-ground): a squad member and a PMC fighter killed ~2 m up the factory's wall ladder fall to the ground, land within 1.5 s (feet at the floor, pelvis on the ground, off the wall face) and only then hold the death pose" },
@@ -225,9 +227,9 @@
     },
     {
       "name": "formation-runtime-2026-10-25",
-      "globs": ["Source/**/Characters/SquadSubsystemFormation*", "Source/**/Debug/FormationLabSmoke*", "Source/**/Formation/FormationRuntimeRules*"],
+      "globs": ["Source/**/Characters/SquadSubsystemFormation*", "Source/**/Debug/FormationLabSmoke*", "Source/**/Formation/FormationRuntimeRules*", "Source/**/Formation/FormationLookFilterRules*"],
       "tests": ["CodexTactics.Formation", "CodexTactics.Squad"],
-      "smokes": ["FormationLabSmoke", "FormationWallGroupSmoke", "FormationSlideSmoke", "SquadControlSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "MovementSmoke", "SoloRejoinSmoke", "RegroupAfterLossesSmoke", "WarmIdleSmoke", "TrapSoloSmoke", "StanceSmoke", "TutorialSmoke"]
+      "smokes": ["FormationLabSmoke", "FormationJitterSmoke", "FormationWallGroupSmoke", "FormationSlideSmoke", "SquadControlSmoke", "CoverSmoke", "CoverHugSmoke", "GroupCoverSmoke", "GroupCoverPrioritySmoke", "MovementSmoke", "SoloRejoinSmoke", "RegroupAfterLossesSmoke", "WarmIdleSmoke", "TrapSoloSmoke", "StanceSmoke", "TutorialSmoke"]
     },
     {
       "name": "formation-v21-runtime-2026-10-26",
@@ -483,10 +485,10 @@
     {
       "name": "shotgun-d1",
       "globs": ["Source/**/Characters/OperativeAnimInstanceShotgun*", "Source/**/Characters/WeaponAnimLayerRules*", "Source/**/Data/WeaponLoadoutRules*",
-        "Source/**/Combat/WeaponBallisticsRules*", "Source/**/Combat/ArmorRules*", "Source/**/Debug/ShotgunSmoke*", "Source/**/Debug/ShotgunD1Shots*", "Source/**/Debug/ShotgunLoopShots*", "Content/Characters/Animations/Shotgun/**",
+        "Source/**/Combat/WeaponBallisticsRules*", "Source/**/Combat/ArmorRules*", "Source/**/Debug/ShotgunSmoke*", "Source/**/Debug/ShotgunCoverSmoke*", "Source/**/Debug/FormationJitterSmoke*", "Source/**/Characters/WeaponLayerHandoffRules*", "Source/**/Debug/ShotgunD1Shots*", "Source/**/Debug/ShotgunLoopShots*", "Content/Characters/Animations/Shotgun/**",
         "Content/Data/Weapons/weapon_anim_sets.json", "Content/Characters/Enemies/PMC/Operator/**", "Source/**/Combat/SidearmRules*", "Source/**/Debug/PistolSmoke*", "Source/**/Tactics/TurnBasedRules*"],
       "tests": ["CodexTactics.Weapons", "CodexTactics.Animation.WeaponLayer"],
-      "smokes": ["ShotgunSmoke", "PistolSmoke", "WeaponSelectorSmoke", "QuickFireSmoke", "SaveRoundTripSmoke", "PmcStandoffSmoke"]
+      "smokes": ["ShotgunSmoke", "ShotgunCoverSmoke", "FormationJitterSmoke", "PistolSmoke", "WeaponSelectorSmoke", "QuickFireSmoke", "SaveRoundTripSmoke", "PmcStandoffSmoke"]
     },
     {
       "name": "rpg7-launcher-pack",
@@ -611,9 +613,9 @@
     },
     {
       "name": "horde",
-      "globs": ["Source/**/Combat/Horde*", "Content/Data/AI/horde.json"],
+      "globs": ["Source/**/Combat/Horde*", "Content/Data/AI/horde.json", "Content/Data/LevelJson/SmokeFixtures/horde_firefights_smoke.json"],
       "tests": ["CodexTactics.Combat.Horde", "CodexTactics.Combat.Firefight"],
-      "smokes": ["HordeSmoke", "HordeFirefightsSmoke", "WaveCombatSmoke", "HordeIntroSmoke"]
+      "smokes": ["HordeSmoke", "HordeFirefightsSmoke", "WaveCombatSmoke", "HordeIntroSmoke", "HordeArrowsSmoke", "LevelWaveSmoke"]
     },
     {
       "name": "horde-firefights",

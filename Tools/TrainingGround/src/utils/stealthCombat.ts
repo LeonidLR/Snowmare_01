@@ -134,6 +134,14 @@ export const HORDE_BUILTIN: JsonObject = {
   firefight_slip_exit_factor: 1.25,
   firefight_warning_seconds: 10,
   firefight_hint_before: 1,
+  // Game designer play-test 2026-11-09: the firefight horde far away, somewhere new each time; the level's waves feed it (HordeRules.h).
+  firefight_spawn_distance_m: 300,
+  firefight_spawn_spread_m: 40,
+  firefight_bearing_change_deg: 90,
+  firefight_bearing_relax_share: 0,
+  firefight_spawn_bearings: 16,
+  firefight_fallback_share: 0.85,
+  waves_feed_horde: true,
 };
 
 /**
@@ -151,9 +159,15 @@ export const HORDE_ARCHETYPES: { key: string; label: string }[] = [
 ];
 
 export const HORDE_NUMBER_FIELDS: NumField[] = [
-  { key: 'count', label: 'Размер орды', unit: 'шт', hint: 'врагов в орде (она приходит после N перестрелок подряд — horde_after_firefights уровня)', step: 1, min: 1, max: 200, integer: true },
-  { key: 'min_distance_m', label: 'Мин. дистанция', unit: 'м', hint: 'ближайшая точка появления от центра отряда', step: 1, min: 0, max: 500 },
-  { key: 'max_distance_m', label: 'Макс. дистанция', unit: 'м', hint: 'дальняя граница точки появления', step: 1, min: 0, max: 500 },
+  { key: 'count', label: 'Размер орды', unit: 'шт', hint: 'врагов в орде (она приходит после N перестрелок подряд — horde_after_firefights уровня); на уровне, где волны кормят орду (засадный старт), состав берётся из волн', step: 1, min: 1, max: 200, integer: true },
+  { key: 'firefight_spawn_distance_m', label: 'Дистанция орды', unit: 'м', hint: 'орда после перестрелок появляется так далеко от центра отряда (2026-11-09: 300 м), вне поля зрения; карта меньше — самая дальняя достижимая точка', step: 10, min: 25, max: 2000 },
+  { key: 'firefight_spawn_spread_m', label: 'Дистанция орды: разброс ±', unit: 'м', hint: 'полоса дистанции = дистанция ± это (300 ± 40 = 260–340 м)', step: 5, min: 0, max: 500 },
+  { key: 'firefight_bearing_change_deg', label: 'Новое направление: не ближе', unit: '°', hint: 'следующая орда приходит с направления, отличного от прошлой хотя бы на столько (новое место каждый раз)', step: 5, min: 0, max: 180 },
+  { key: 'firefight_bearing_relax_share', label: 'Новое направление уступает, если дальность <', unit: '×', hint: 'правило нового направления отменяется, если точки с новых направлений дальше этой доли самой дальней не бывают (0 = никогда, пока есть хоть одна точка с нового направления)', step: 0.05, min: 0, max: 1 },
+  { key: 'firefight_spawn_bearings', label: 'Направлений проверяется', unit: 'шт', hint: 'сколько направлений вокруг отряда пробуется для дальней точки (4–64)', step: 1, min: 4, max: 64, integer: true },
+  { key: 'firefight_fallback_share', label: 'Маленькая карта: не ближе доли', unit: '×', hint: 'нет точки в полосе — случайная среди точек не ближе этой доли от самой дальней (1 = ровно самая дальняя)', step: 0.05, min: 0, max: 1 },
+  { key: 'min_distance_m', label: 'Мин. дистанция (команда)', unit: 'м', hint: 'только dev-команда CodexTactics.Horde.Release: ближняя граница; и минимальная дистанция дальней орды', step: 1, min: 0, max: 500 },
+  { key: 'max_distance_m', label: 'Макс. дистанция (команда)', unit: 'м', hint: 'только dev-команда CodexTactics.Horde.Release: дальняя граница', step: 1, min: 0, max: 500 },
   { key: 'cluster_radius_m', label: 'Радиус группы', unit: 'м', hint: 'орда собирается в этом радиусе от точки появления', step: 0.5, min: 0, max: 50 },
   { key: 'spawn_samples', label: 'Проб точек', unit: 'шт', hint: 'случайных кандидатов на навмеше (1–256)', step: 1, min: 1, max: 256, integer: true },
   { key: 'warning_seconds', label: 'Предупреждение', unit: 'с', hint: 'сколько HUD показывает «ОРДА!» и стрелку', step: 1, min: 0, max: 60 },
@@ -170,6 +184,7 @@ export const HORDE_BOOL_FIELDS: { key: string; label: string; hint: string }[] =
   { key: 'enabled', label: 'Орда включена', hint: 'глобально; уровень может выключить её флагом horde_enabled' },
   { key: 'prefer_out_of_sight', label: 'Вне поля зрения', hint: 'точка, которую не видит ни один боец, важнее видимой' },
   { key: 'apply_wave_modifiers', label: 'Модификаторы волны', hint: 'HP / урон / скорость текущей волны (сложность уровня) действуют и на орду' },
+  { key: 'waves_feed_horde', label: 'Волны кормят орду', hint: 'уровень, где волны не играются скриптово (засадный старт, напр. Депо): орда 1 = волна 1, орда 2 = волна 2, ..., дальше последняя; max_simultaneous_enemies / wave_modifiers волны; SPITTER → MILITARY_ZOMBIE' },
   { key: 'firefight_slip_past_resets', label: 'Проскользнуть — сброс счёта', hint: 'отряд прошёл мимо группы врагов незамеченным — счёт перестрелок подряд обнуляется' },
 ];
 
