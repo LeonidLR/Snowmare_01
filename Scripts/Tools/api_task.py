@@ -71,6 +71,9 @@ def main() -> int:
     msg = client.messages.create(model=args.model, max_tokens=args.max_tokens,
                                  messages=[{"role": "user", "content": text}])
     answer = "".join(block.text for block in msg.content if getattr(block, "type", "") == "text")
+    if not answer.strip():
+        # 2026-11-10: a big input can spend the whole max_tokens before any text (stop_reason max_tokens) - say so, don't write silence.
+        print(f"warning: no text in the answer (stop_reason {msg.stop_reason}) - raise --max-tokens", file=sys.stderr)
     usd = msg.usage.input_tokens / 1e6 * in_price + msg.usage.output_tokens / 1e6 * out_price
     os.makedirs(os.path.dirname(os.path.abspath(args.out)), exist_ok=True)
     with open(args.out, "w", encoding="utf-8") as f:
