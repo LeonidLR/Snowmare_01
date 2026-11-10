@@ -1,10 +1,12 @@
-"""Turns the in-engine clip recorder's PNG frames (CodexTactics.ClipRecorder, Saved/Screenshots/Clips/<name>/f_NNNNN.png) into phone-sized
+"""Turns the in-engine clip recorder's frames (CodexTactics.ClipRecorder, Saved/Screenshots/Clips/<name>/f_NNNNN.jpg, or .png with its
+format=png) into phone-sized
 mp4s for the level generator pipeline (Scripts/levelgen_record_run.ps1, docs/design/levelgen/LEVEL_GENERATOR.md section 8). Never a
 desktop capture: the frames are the game's own view.
 
   watch    --frames DIR --segments DIR --pid N [--fps 30] [--seg-frames 900] [--status FILE]
-           while the game (pid N) records: every full block of frames -> a real-speed segment mp4 (crf 18), the PNGs deleted at once
-           (a 10 min run is 18000 frames, ~25 GB as PNG - the disk never holds more than ~2 blocks); the rest when the game has exited.
+           while the game (pid N) records: every full block of frames -> a real-speed segment mp4 (crf 18), the frames deleted at once
+           (a 10 min run is 18000 frames, ~25 GB as PNG, a few GB as JPEG - the disk never holds more than ~2 blocks); the rest when the
+           game has exited.
   assemble --segments DIR --log GAME_LOG --name NAME --out DIR [--fps 30] [--speedup 4] [--highlights 3] [--report RUN_JSON]
            [--status FILE] [--keep]
            -> <out>/<name>_full_x<K>.mp4 (the whole run sped up, a small "xK" overlay, H.264 crf 28, <= 1280x720, <= 40 MB),
@@ -12,6 +14,10 @@ desktop capture: the frames are the game's own view.
               video by the recorder's "ClipRecorder <name> f=N" lines), <out>/clips.json (the manifest). Every mp4 is checked: duration
               and the mean brightness of its middle frame (YAVG > 8 = not black / empty). Exit 0 = all good, 1 = no video, 2 = a clip failed.
   python Scripts/Tools/clip_assemble.py --test     (the pure helpers' self-test)
+
+The H.264 encoder (2026-11-10, cheaper clips): h264_nvenc when `ffmpeg -encoders` lists it AND a one-frame probe encode works (the GPU;
+the game's CPU stays free), else libx264; CODEX_CLIP_ENCODER=libx264|h264_nvenc forces one. The quality numbers (crf 18 / 26 / 28..32)
+map onto nvenc's constant quality (-rc vbr -cq N -b:v 0); the size caps and the re-encode ladder are the same for both.
 
 Manifest clips.json (schema codex.levelgen_clips/1): {name, created_utc, fps, speedup, frames, video_sec, game_log, run_report,
   files: [{kind: "full" | "fight", file (abs), name, duration_sec, size_bytes, yavg, ok, start_sec?, end_sec?, event?}],
@@ -32,6 +38,10 @@ MAX_MB = 40.0
 CLIP_BEFORE_SEC = 3.0
 CLIP_AFTER_SEC = 16.0
 MIN_YAVG = 8.0
+
+FRAME_FILE_RE = re.compile(r"f_(\d+)\.(png|jpg)$")
+X264_TO_NVENC_PRESET = {"veryfast": "p2", "fast": "p3", "medium": "p5", "slow": "p6"}
+_ENCODER = None
 
 FRAME_RE = re.compile(r"ClipRecorder (\S+) f=(\d+) t=([\d.]+)")
 EVENT_RES = [
@@ -86,23 +96,64 @@ def pid_alive(pid):
         return False
 
 
-def frame_numbers(frames_dir):
-    out = []
+def h264_encoder():
+    """h264_nvenc when ffmpeg lists it and a tiny probe encode succeeds (cached), else libx264; CODEX_CLIP_ENCODER overrides."""
+    global _ENCODER
+    if _ENCODER:
+        return _ENCODER
+    forced = os.environ.get("CODEX_CLIP_ENCODER", "").strip()
+    if forced in ("libx264", "h264_nvenc"):
+        _ENCODER = forced
+        return _ENCODER
+    _ENCODER = "libx264"
+    code, out = run(["ffmpeg", "-hide_banner", "-encoders"])
+    if code == 0 and re.search(r"^\s*V\S*\s+h264_nvenc\b", out, re.M):
+        code, _ = run(["ffmpeg", "-hide_banner", "-loglevel", "error", "-f", "lavfi", "-i", "color=c=gray:s=256x256:d=0.1", "-frames:v", "1",
+                       "-c:v", "h264_nvenc", "-f", "null", "-"])
+        if code == 0:
+            _ENCODER = "h264_nvenc"
+    return _ENCODER
+
+
+def h264_args(crf, preset, encoder=None):
+    """The video codec arguments for an x264-style quality / preset on the chosen encoder (h264_encoder)."""
+    encoder = encoder or h264_encoder()
+    if encoder == "h264_nvenc":
+        return ["-c:v", "h264_nvenc", "-preset", X264_TO_NVENC_PRESET.get(preset, "p4"), "-rc", "vbr", "-cq", str(crf), "-b:v", "0"]
+    return ["-c:v", "libx264", "-preset", preset, "-crf", str(crf)]
+
+
+def frame_files(frames_dir):
+    """{frame number: file name} of the recorder's frames (f_NNNNN.jpg / .png)."""
+    out = {}
     for f in os.listdir(frames_dir) if os.path.isdir(frames_dir) else []:
-        m = re.match(r"f_(\d+)\.png$", f)
+        m = FRAME_FILE_RE.match(f)
         if m:
-            out.append(int(m.group(1)))
-    return sorted(out)
+            out[int(m.group(1))] = f
+    return out
+
+
+def frame_numbers(frames_dir):
+    return sorted(frame_files(frames_dir))
+
+
+def frame_ext(frames_dir, number):
+    """The extension of frame `number` (jpg first: the recorder's default), "png" when neither exists."""
+    for ext in ("jpg", "png"):
+        if os.path.exists(os.path.join(frames_dir, "f_%05d.%s" % (number, ext))):
+            return ext
+    return "png"
 
 
 def encode_segment(frames_dir, seg_path, start, count, fps):
-    code, out = run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(fps), "-start_number", str(start), "-i", os.path.join(frames_dir, "f_%05d.png"),
-                     "-frames:v", str(count), "-c:v", "libx264", "-preset", "veryfast", "-crf", "18", "-pix_fmt", "yuv420p", seg_path])
+    ext = frame_ext(frames_dir, start)
+    code, out = run(["ffmpeg", "-y", "-loglevel", "error", "-framerate", str(fps), "-start_number", str(start), "-i", os.path.join(frames_dir, "f_%05d." + ext),
+                     "-frames:v", str(count)] + h264_args(18, "veryfast") + ["-pix_fmt", "yuv420p", seg_path])
     if code != 0:
         raise RuntimeError("ffmpeg segment %s: %s" % (seg_path, out[-800:]))
     for n in range(start, start + count):
         try:
-            os.remove(os.path.join(frames_dir, "f_%05d.png" % n))
+            os.remove(os.path.join(frames_dir, "f_%05d.%s" % (n, ext)))
         except OSError:
             pass
 
@@ -120,7 +171,7 @@ def cmd_watch(a):
     os.makedirs(a.segments, exist_ok=True)
     start = 0
     seg = len(glob.glob(os.path.join(a.segments, "seg_*.mp4")))
-    margin = a.fps  # a second of frames behind the newest: never read a PNG still being written
+    margin = a.fps  # a second of frames behind the newest: never read a frame still being written
     while True:
         alive = pid_alive(a.pid)
         nums = [n for n in frame_numbers(a.frames) if n >= start]
@@ -211,15 +262,15 @@ def encode_full(src, dst, speedup, crf=28, scale=None):
         vf += ",scale=%s" % scale
     vf += (",drawtext=fontfile='%s':text='x%g speed':x=w-tw-18:y=16:fontsize=26:fontcolor=white:box=1:boxcolor=black@0.55:boxborderw=6"
            % (FONT, speedup))
-    code, out = run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-vf", vf, "-an", "-c:v", "libx264", "-preset", "medium", "-crf", str(crf),
-                     "-pix_fmt", "yuv420p", "-movflags", "+faststart", dst])
+    code, out = run(["ffmpeg", "-y", "-loglevel", "error", "-i", src, "-vf", vf, "-an"] + h264_args(crf, "medium") +
+                    ["-pix_fmt", "yuv420p", "-movflags", "+faststart", dst])
     if code != 0:
         raise RuntimeError("ffmpeg full: %s" % out[-800:])
 
 
 def encode_clip(src, dst, start, end, crf=26):
-    code, out = run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "%.2f" % start, "-i", src, "-t", "%.2f" % (end - start), "-an", "-c:v", "libx264",
-                     "-preset", "medium", "-crf", str(crf), "-pix_fmt", "yuv420p", "-movflags", "+faststart", dst])
+    code, out = run(["ffmpeg", "-y", "-loglevel", "error", "-ss", "%.2f" % start, "-i", src, "-t", "%.2f" % (end - start), "-an"] +
+                    h264_args(crf, "medium") + ["-pix_fmt", "yuv420p", "-movflags", "+faststart", dst])
     if code != 0:
         raise RuntimeError("ffmpeg clip: %s" % out[-800:])
 
@@ -312,6 +363,15 @@ def self_test():
     assert [(x["start"], x["end"]) for x in w] == [(7.0, 26.0), (97.0, 116.0)], w   # the 2nd fight overlaps the 1st window: skipped
     assert all(x["end"] - x["start"] <= 20.0 for x in w)
     assert contiguous_from([3, 4, 5, 7], 3) == 3 and contiguous_from([], 0) == 0
+    # The frame glob takes the recorder's JPEG frames and the PNG ones (format=png); other files are ignored.
+    import tempfile
+    with tempfile.TemporaryDirectory() as d:
+        for name in ("f_00000.jpg", "f_00001.jpg", "f_00002.png", "f_3.jpg", "g_00004.jpg", "f_00005.jpeg"):
+            open(os.path.join(d, name), "w").close()
+        assert frame_numbers(d) == [0, 1, 2, 3], frame_numbers(d)
+        assert frame_ext(d, 0) == "jpg" and frame_ext(d, 2) == "png" and frame_ext(d, 9) == "png"
+    assert h264_args(18, "veryfast", "libx264") == ["-c:v", "libx264", "-preset", "veryfast", "-crf", "18"]
+    assert h264_args(28, "medium", "h264_nvenc") == ["-c:v", "h264_nvenc", "-preset", "p5", "-rc", "vbr", "-cq", "28", "-b:v", "0"]
     print("clip_assemble self-test: ok")
     return 0
 

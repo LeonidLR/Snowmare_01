@@ -1,8 +1,8 @@
 # Records the playtest bot's run through a (generated) map as phone-sized videos (level generator pipeline, 2026-11-02;
 # docs/design/levelgen/LEVEL_GENERATOR.md section 8). The game runs RENDERED offscreen (never a desktop capture): the bot's route mode
 # (-CodexBot -BotRoute=1: the squad walks the level JSON's "bot_route" and fights the pressure enemies) and CodexTactics.ClipRecorder (every
-# frame to a PNG, the director camera on the action); Scripts/Tools/clip_assemble.py encodes the frames block by block while the game runs
-# (the PNGs deleted at once) and then cuts the videos.
+# frame to a JPEG (format=png: PNG), the director camera on the action); Scripts/Tools/clip_assemble.py encodes the frames block by block while the game runs
+# (the frames deleted at once; h264_nvenc when the GPU driver allows, else libx264) and then cuts the videos.
 #   powershell -ExecutionPolicy Bypass -File Scripts\levelgen_record_run.ps1 -Map /Game/Maps/Generated/L_Gen_Depot_1 -LevelJson L_Gen_Depot_1.json
 #     -Name lgdepot [-Seconds 600] [-SpeedUp 4] [-Highlights 3] [-Seed 1] [-OutDir Saved\Screenshots\LevelGenRun] [-StatusFile <json>]
 #     [-LockWaitMinutes 60] [-Keep]

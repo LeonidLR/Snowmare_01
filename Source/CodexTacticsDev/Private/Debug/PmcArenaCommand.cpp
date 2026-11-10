@@ -10,8 +10,10 @@
 // highlight_score in the result (the formula: HighlightScoreOf). Replay / capture of a round: the same seed + weights with record=1 on a RENDERED
 // run (-RenderOffscreen, -UseFixedTimeStep -FPS=60 -FixedSeed) and the clip recorder in front:
 //   -ExecCmds="CodexTactics.ClipRecorder pmcarena nodirector,CodexTactics.PmcArena seed=7 rounds=1 record=1 ..." -> Saved/Screenshots/Clips/pmcarena/f_NNNNN.png
-//   (Scripts/Tools/clip_assemble.py turns the frames into an mp4 as Scripts/levelgen_record_run.ps1 does). The arena's overview camera follows
-//   the fighters' centre. Determinism: the same weights + seed + fixed step reproduce the spawns, looks, weapons and orders; the crowd avoidance,
+//   (Scripts/Tools/clip_assemble.py turns the frames into an mp4 as Scripts/levelgen_record_run.ps1 does). The arena's overview camera
+//   (fix/arena-clip-readability 2026-11-10) frames the box of all LIVE fighters + the objective every rendered frame, eased, 65 deg down,
+//   its yaw across the round's spawn axis (CamPitch=<deg> CamMin= / CamMax=<m>, 20 / 110; a lone flanker 30 m from everybody is left out of the box); a rendered run colours the teams with a
+//   see-through overlay - A red, B green, dim on the fallen (Teams=off disables it, TeamGlow=<f> its intensity). Determinism: the same weights + seed + fixed step reproduce the spawns, looks, weapons and orders; the crowd avoidance,
 //   async navmesh work and physics hits can still drift a long round (known limit: check the track's winner / duration against the original).
 // Args (keys case-insensitive, the night trainer's template "Map=.. Rounds=.. Seed=.. WeightsA=.. Opponent=Bot|Pmc WeightsB=..|None TimeLimit=.. Out=.."
 // fits, docs/tools/night-trainer.md 6): rounds=N seed=S weightsA=<file> weightsB=<file>|None opponent=pmc|player|bot time|timelimit=<s> out=<project-relative
@@ -43,6 +45,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "AI/AmbushWatchRules.h"
+#include "AI/PmcArenaViewRules.h"
 #include "AI/PmcCommanderRules.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "AI/SquadOrderCatalog.h"
@@ -55,6 +58,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Components/MeshComponent.h"
 #include "Combat/HordeSubsystem.h"
 #include "Combat/SightRules.h"
 #include "Containers/Ticker.h"
@@ -62,6 +66,7 @@
 #include "Environment/EnvironmentSubsystem.h"
 #include "Debug/SmokeUtils.h"
 #include "Dom/JsonObject.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Combat/TacticalSightSubsystem.h"
@@ -73,6 +78,9 @@
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
+#include "Misc/App.h"
 #include "Math/RandomStream.h"
 #include "Misc/CommandLine.h"
 #include "Misc/DateTime.h"
@@ -131,6 +139,17 @@ namespace PmcArena
 		 * arena-only training rule (the Depot tracks: empty rifles stood on the point next to each other for 3 minutes, unable to fight).
 		 */
 		bool bResupply = true;
+		/**
+		 * Teams=on|off (fix/arena-clip-readability 2026-11-10, default on): a rendered run colours every live fighter with a see-through team
+		 * overlay (A red, B green, dim on the fallen; M_TargetFresnel, no depth test) instead of the operatives' red occlusion silhouette. TeamGlow=<f> = its
+		 * Intensity. Rendering only (headless runs never load it).
+		 */
+		bool bTeams = true;
+		float TeamGlow = 0.6f;
+		/** The record camera (record=1): CamPitch=<deg below the horizon> CamMin= / CamMax=<m>. */
+		float CamPitchDeg = 65.f;
+		float CamMinCm = 2000.f;
+		float CamMaxCm = 11000.f;
 	};
 
 	/** PmcStalemateSmoke's limits (the designer 2026-11-08): the fight resumes within this after a quiet spell, s. */
@@ -312,6 +331,15 @@ namespace PmcArena
 		bool bWeatherForced = false;
 		bool bInitialWeatherKnown = false;
 		EWeatherState InitialWeather = EWeatherState::Clear;
+		/** The record camera (fix/arena-clip-readability): the framing (yaw per round across the spawns) and the smoothed view. */
+		FPmcArenaFraming Framing;
+		FPmcArenaView View;
+		bool bHasView = false;
+		/** The team overlays (one MID per side; the fighters' meshes hold them) and the fighters already switched off their silhouette. */
+		TWeakObjectPtr<UMaterialInstanceDynamic> TeamOverlay[2];
+		TWeakObjectPtr<UMaterialInstanceDynamic> TeamOverlayDim[2];
+		TSet<TWeakObjectPtr<AOperativeCharacter>> TeamColoured;
+		TSet<TWeakObjectPtr<AOperativeCharacter>> TeamDimmed;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -351,6 +379,11 @@ namespace PmcArena
 			else if (Key == TEXT("objective")) { Options.bObjective = FCString::Atoi(*Value) != 0; }
 			else if (Key == TEXT("smokecapture")) { Options.bSmokeCapture = FCString::Atoi(*Value) != 0; }
 			else if (Key == TEXT("ammo")) { Options.bResupply = !Value.Equals(TEXT("real"), ESearchCase::IgnoreCase); }
+			else if (Key == TEXT("teams")) { Options.bTeams = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
+			else if (Key == TEXT("teamglow")) { Options.TeamGlow = FMath::Clamp(FCString::Atof(*Value), 0.05f, 5.f); }
+			else if (Key == TEXT("campitch")) { Options.CamPitchDeg = FMath::Clamp(FCString::Atof(*Value), 30.f, 89.f); }
+			else if (Key == TEXT("cammin")) { Options.CamMinCm = FMath::Clamp(FCString::Atof(*Value), 5.f, 200.f) * 100.f; }
+			else if (Key == TEXT("cammax")) { Options.CamMaxCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 300.f) * 100.f; }
 			else if (Key == TEXT("scenario"))
 			{
 				EPmcScenario Scenario = EPmcScenario::Skirmish;
@@ -847,18 +880,68 @@ namespace PmcArena
 		return true;
 	}
 
-	/** Spawns=Random: the squad round its spawn spot on free navmesh (SmokeUtils::FreeSpot keeps a roof squad on its roof), facing the other side. */
-	void PlaceAround(UWorld* World, const FSide& Side)
+	/** The navmesh path length From -> To, cm; -1 without a full path. */
+	float NavPathLength(UWorld* World, UNavigationSystemV1* Nav, const FVector& From, const FVector& To)
 	{
+		const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, From, To) : nullptr;
+		return Path && Path->IsValid() && !Path->IsPartial() ? static_cast<float>(Path->GetPathLength()) : -1.f;
+	}
+
+	/**
+	 * Spawns=Random: the squad round its spawn spot on free navmesh (SmokeUtils::FreeSpot keeps a roof squad on its roof), facing the other
+	 * side. fix/arena-clip-readability 2026-11-10 (the designer's clips: part of a squad stood behind the Depot street's fence): FreeSpot
+	 * searches up to 6 m round a slot, through fences and walls - every spot must now reach Goal (the objective, else the other side's
+	 * spawn) by a full path and lie close to the spawn by the navmesh too (PmcArenaViewRules::IsSpawnSpotUsable); the next slot (the
+	 * line's other places, then rows behind it) otherwise, the spawn spot itself as the last resort.
+	 */
+	void PlaceAround(UWorld* World, const FSide& Side, const FVector& Goal)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 		const FVector Right = Side.Facing.RotateVector(FVector::RightVector);
+		const FVector Back = -Side.Facing.Vector();
 		const int32 Count = Side.Members.Num();
+		const int32 Wide = FMath::Max(Count, 3);
+		TArray<FVector> Slots;
+		for (const int32 Row : { 0, 1, 2 })
+		{
+			for (int32 Index = 0; Index < Wide; ++Index)
+			{
+				Slots.Add(Side.Spawn + Right * ((Index - (Wide - 1) * 0.5f) * 150.f) + Back * (Row * 150.f));
+			}
+		}
 		for (int32 Index = 0; Index < Count; ++Index)
 		{
-			if (AOperativeCharacter* Member = Side.Members[Index].Get())
+			AOperativeCharacter* Member = Side.Members[Index].Get();
+			if (!Member)
 			{
-				const FVector Spot = SmokeUtils::FreeSpot(World, Side.Spawn + Right * ((Index - (Count - 1) * 0.5f) * 150.f) + FVector(0.f, 0.f, 50.f), Member);
-				Member->TeleportTo(Spot, Side.Facing, false, true);
+				continue;
 			}
+			FVector Chosen = SmokeUtils::FreeSpot(World, Side.Spawn + FVector(0.f, 0.f, 50.f), Member);
+			bool bFound = false;
+			for (int32 Try = 0; Try < Slots.Num() && !bFound; ++Try)
+			{
+				// Each man's own slot first, then the others in turn.
+				const FVector Spot = SmokeUtils::FreeSpot(World, Slots[(Index + Try) % Slots.Num()] + FVector(0.f, 0.f, 50.f), Member);
+				const float Straight = static_cast<float>(FVector::Dist(Side.Spawn, Spot));
+				// The spawn spot itself (FreeSpot's capsule centre right over it): the path query finds no path between one point and itself.
+				const float FromSpawn = !Nav || Straight <= 120.f ? Straight : NavPathLength(World, Nav, Side.Spawn, Spot);
+				const bool bReachesGoal = !Nav || HasNavPath(World, Nav, Spot, Goal);
+				if (PmcArenaViewRules::IsSpawnSpotUsable(bReachesGoal, FromSpawn, Straight))
+				{
+					Chosen = Spot;
+					bFound = true;
+				}
+				else
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] side %s man %d: spawn spot %s rejected (path from the spawn %.0f cm for %.0f cm straight, reaches the goal %d)"),
+						*Side.Label, Index, *Spot.ToCompactString(), FromSpawn, Straight, bReachesGoal ? 1 : 0);
+				}
+			}
+			if (!bFound)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] side %s man %d: no usable spawn slot - placed at the spawn spot %s"), *Side.Label, Index, *Chosen.ToCompactString());
+			}
+			Member->TeleportTo(Chosen, Side.Facing, false, true);
 		}
 	}
 
@@ -880,57 +963,22 @@ namespace PmcArena
 		}
 	}
 
-	void AimCamera(FState& State, UWorld* World)
+	bool IsLive(const AOperativeCharacter* Operative)
 	{
-		if (!State.Options.bShots && !State.Options.bRecord)
-		{
-			return;
-		}
-		const FVector A = State.Sides[0].Spawn;
-		const FVector B = State.Sides[1].Spawn;
-		FVector Centre = (A + B) * 0.5f;
-		int32 Counted = 0;
-		FVector Mean = FVector::ZeroVector;
-		for (const FSide& Side : State.Sides)
-		{
-			for (const TWeakObjectPtr<AOperativeCharacter>& Member : Side.Members)
-			{
-				if (const AOperativeCharacter* Operative = Member.Get(); Operative && !Operative->IsKilledInAction())
-				{
-					Mean += Operative->GetActorLocation();
-					++Counted;
-				}
-			}
-		}
-		if (Counted > 0)
-		{
-			Centre = Mean / Counted;
-		}
-		// Once the squads met, frame the fighters (their spread), not the spawn spots.
-		float Spread = 0.f;
-		if (Counted > 0)
-		{
-			for (const FSide& Side : State.Sides)
-			{
-				for (const TWeakObjectPtr<AOperativeCharacter>& Member : Side.Members)
-				{
-					if (const AOperativeCharacter* Operative = Member.Get(); Operative && !Operative->IsKilledInAction())
-					{
-						Spread = FMath::Max(Spread, static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), Centre)));
-					}
-				}
-			}
-		}
-		const float Span = FMath::Clamp(Spread * 2.2f, 1400.f, FMath::Max(1400.f, static_cast<float>(FVector::Dist2D(A, B))));
-		const FVector Eye = Centre + FVector(-0.35f * Span, -0.55f * Span, 0.7f * Span);
+		return Operative && !Operative->IsKilledInAction() && (!Operative->HealthComponent || Operative->HealthComponent->IsAlive());
+	}
+
+	/** The overview camera (shots / record): spawned once, the canvas HUD and the widgets off, the player's view on it. */
+	ACameraActor* EnsureCamera(FState& State, UWorld* World)
+	{
 		ACameraActor* Camera = State.Camera.Get();
 		if (!Camera)
 		{
-			Camera = World->SpawnActor<ACameraActor>(Eye, FRotator::ZeroRotator);
+			Camera = World->SpawnActor<ACameraActor>(FVector::ZeroVector, FRotator::ZeroRotator);
 			State.Camera = Camera;
 			if (Camera)
 			{
-				Camera->GetCameraComponent()->SetFieldOfView(50.f);
+				Camera->GetCameraComponent()->SetFieldOfView(State.Framing.HorizontalFovDeg);
 				Camera->GetCameraComponent()->bConstrainAspectRatio = false;
 				Camera->GetCameraComponent()->PostProcessSettings.bOverride_MotionBlurAmount = true;
 				Camera->GetCameraComponent()->PostProcessSettings.MotionBlurAmount = 0.f;
@@ -942,14 +990,191 @@ namespace PmcArena
 				PC->GetHUD()->bShowHUD = false;
 			}
 		}
+		if (Camera)
+		{
+			if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0); PC && PC->GetViewTarget() != Camera)
+			{
+				PC->SetViewTarget(Camera);
+			}
+		}
+		return Camera;
+	}
+
+	/**
+	 * The overview camera (fix/arena-clip-readability 2026-11-10): frames the box of every LIVE fighter + the objective point
+	 * (PmcArenaViewRules::FrameBox; the spawns before anybody stands), steep (CamPitch, 65 deg) so the fences hide less, the yaw across the
+	 * round's spawn axis, CamMin..CamMax away; eased (bSnap = jump, a new round / a still shot) - record=1 calls it every rendered frame.
+	 */
+	void AimCamera(FState& State, UWorld* World, float DeltaSeconds = 0.f, bool bSnap = true)
+	{
+		if (!State.Options.bShots && !State.Options.bRecord)
+		{
+			return;
+		}
+		ACameraActor* Camera = EnsureCamera(State, World);
 		if (!Camera)
 		{
 			return;
 		}
-		Camera->SetActorLocationAndRotation(Eye, (Centre - Eye).Rotation());
-		if (APlayerController* PC = UGameplayStatics::GetPlayerController(World, 0); PC && PC->GetViewTarget() != Camera)
+		TArray<FVector> Fighters;
+		TArray<int32> FighterSides;
+		for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
 		{
-			PC->SetViewTarget(Camera);
+			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[SideIndex].Members)
+			{
+				if (const AOperativeCharacter* Operative = Member.Get(); IsLive(Operative))
+				{
+					Fighters.Add(Operative->GetActorLocation());
+					FighterSides.Add(SideIndex);
+				}
+			}
+		}
+		TArray<FVector> Points = PmcArenaViewRules::FramedFighters(Fighters, FighterSides, State.bRoundObjective, State.Objective);
+		if (Points.IsEmpty())
+		{
+			Points.Add(State.Sides[0].Spawn);
+			Points.Add(State.Sides[1].Spawn);
+		}
+		if (State.bRoundObjective)
+		{
+			Points.Add(State.Objective);
+		}
+		State.Framing.PitchDeg = State.Options.CamPitchDeg;
+		State.Framing.MinDistanceCm = State.Options.CamMinCm;
+		State.Framing.MaxDistanceCm = FMath::Max(State.Options.CamMinCm, State.Options.CamMaxCm);
+		if (const UGameViewportClient* Viewport = World->GetGameViewport())
+		{
+			FVector2D Size;
+			Viewport->GetViewportSize(Size);
+			if (Size.X > 1.0 && Size.Y > 1.0)
+			{
+				State.Framing.Aspect = static_cast<float>(Size.X / Size.Y);
+			}
+		}
+		const FPmcArenaView Target = PmcArenaViewRules::FrameBox(Points, State.Framing);
+		State.View = (bSnap || !State.bHasView) ? Target : PmcArenaViewRules::Smooth(State.View, Target, DeltaSeconds);
+		State.bHasView = true;
+		if (FMath::FloorToInt(State.StageTime / 2.f) != FMath::FloorToInt((State.StageTime - DeltaSeconds) / 2.f) || bSnap)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] camera t=%.1f: %d points (of %d fighters), look %s, distance %.0f m (target %.0f m), yaw %.0f, pitch %.0f"), State.StageTime,
+				Points.Num(), Fighters.Num(), *State.View.Look.ToCompactString(), State.View.DistanceCm / 100.f, Target.DistanceCm / 100.f, State.Framing.YawDeg, State.Framing.PitchDeg);
+		}
+		Camera->SetActorLocationAndRotation(PmcArenaViewRules::EyeOf(State.View, State.Framing), FRotator(-State.Framing.PitchDeg, State.Framing.YawDeg, 0.f));
+	}
+
+	/**
+	 * The team overlay MID of a side (M_TargetFresnel: unlit, translucent, no depth test - seen through fences and walls), made once;
+	 * bDim = the corpse's (a third of the glow, half the colour: who fell where stays readable, without looking alive).
+	 */
+	UMaterialInstanceDynamic* TeamOverlayOf(FState& State, int32 SideIndex, bool bDim = false)
+	{
+		TWeakObjectPtr<UMaterialInstanceDynamic>& Slot = bDim ? State.TeamOverlayDim[SideIndex] : State.TeamOverlay[SideIndex];
+		if (UMaterialInstanceDynamic* Existing = Slot.Get())
+		{
+			return Existing;
+		}
+		UMaterialInterface* Fresnel = LoadObject<UMaterialInterface>(nullptr, TEXT("/Game/VFX/Materials/M_TargetFresnel.M_TargetFresnel"));
+		if (!Fresnel)
+		{
+			return nullptr;
+		}
+		UMaterialInstanceDynamic* Overlay = UMaterialInstanceDynamic::Create(Fresnel, GetTransientPackage());
+		FLinearColor Color = PmcArenaViewRules::TeamColor(SideIndex);
+		if (bDim)
+		{
+			Color = FLinearColor(Color.R * 0.5f, Color.G * 0.5f, Color.B * 0.5f, Color.A * 0.6f);
+		}
+		Overlay->SetVectorParameterValue(TEXT("Color"), Color);
+		Overlay->SetScalarParameterValue(TEXT("Intensity"), State.Options.TeamGlow * (bDim ? 0.35f : 1.f));
+		Slot = Overlay;
+		return Overlay;
+	}
+
+	/** Every mesh of the operative and of his attached actors (the weapon / launcher actors). */
+	void ForEachBodyMesh(AOperativeCharacter* Operative, TFunctionRef<void(UMeshComponent*)> Visit)
+	{
+		TArray<AActor*> Actors;
+		Actors.Add(Operative);
+		Operative->GetAttachedActors(Actors, false, true);
+		for (AActor* Actor : Actors)
+		{
+			TInlineComponentArray<UMeshComponent*> Meshes(Actor);
+			for (UMeshComponent* Mesh : Meshes)
+			{
+				if (Mesh)
+				{
+					Visit(Mesh);
+				}
+			}
+		}
+	}
+
+	/**
+	 * Teams=on on a rendered run: every live fighter's visible meshes (the body, the weapon, attached actors) carry his side's overlay; his
+	 * own occlusion silhouette (red for every PMC fighter) is switched off. Run every step: a mesh shown later (a weapon switch) or one
+	 * whose overlay a hit flash took and gave back empty gets it again; a mesh with another overlay on (a hit flash) is left alone. Killed
+	 * in action: once, the team overlay turns dim (TeamOverlayOf bDim) - the fallen stay readable by team (the operative's own corpse rule
+	 * clears overlays only once the health reaches 0, not on KIA).
+	 */
+	void ApplyTeamOverlays(FState& State)
+	{
+		if (!State.Options.bTeams || !FApp::CanEverRender())
+		{
+			return;
+		}
+		for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
+		{
+			UMaterialInstanceDynamic* Overlay = TeamOverlayOf(State, SideIndex);
+			if (!Overlay)
+			{
+				continue;
+			}
+			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[SideIndex].Members)
+			{
+				AOperativeCharacter* Operative = Member.Get();
+				if (!Operative)
+				{
+					continue;
+				}
+				if (!IsLive(Operative))
+				{
+					UMaterialInstanceDynamic* Dim = TeamOverlayOf(State, SideIndex, true);
+					if (Dim && State.TeamColoured.Contains(Member) && !State.TeamDimmed.Contains(Member))
+					{
+						// A hit flash still on a mesh gives our bright overlay back when it ends: dimmed only once no flash is left.
+						bool bFlashOn = false;
+						ForEachBodyMesh(Operative, [Overlay, Dim, &bFlashOn](UMeshComponent* Mesh)
+						{
+							UMaterialInterface* Current = Mesh->GetOverlayMaterial();
+							if (Current == Overlay || (Mesh->IsVisible() && !Current))
+							{
+								Mesh->SetOverlayMaterial(Dim);
+							}
+							else if (Current && Current != Dim)
+							{
+								bFlashOn = true;
+							}
+						});
+						if (!bFlashOn)
+						{
+							State.TeamDimmed.Add(Member);
+						}
+					}
+					continue;
+				}
+				if (!State.TeamColoured.Contains(Member))
+				{
+					State.TeamColoured.Add(Member);
+					Operative->bEnableSilhouette = false;
+				}
+				ForEachBodyMesh(Operative, [Overlay](UMeshComponent* Mesh)
+				{
+					if (Mesh->IsVisible() && !Mesh->GetOverlayMaterial())
+					{
+						Mesh->SetOverlayMaterial(Overlay);
+					}
+				});
+			}
 		}
 	}
 
@@ -1747,6 +1972,31 @@ namespace PmcArena
 		return false;
 	}
 
+	/**
+	 * The round's spawn evidence (fix/arena-clip-readability): each fighter's spot, its navmesh path to the objective (or the other side's
+	 * spawn) and the straight distance - a path much longer than the straight line = he stands behind a fence / wall from it.
+	 */
+	void LogSpawnReach(FState& State, UWorld* World)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
+		{
+			const FVector Goal = State.bRoundObjective ? State.Objective : State.Sides[1 - SideIndex].Spawn;
+			for (int32 Index = 0; Index < State.Sides[SideIndex].Members.Num(); ++Index)
+			{
+				const AOperativeCharacter* Operative = State.Sides[SideIndex].Members[Index].Get();
+				if (!Operative)
+				{
+					continue;
+				}
+				const FVector Spot = Operative->GetActorLocation();
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d side %s man %d at %s: path to the %s %.0f cm, straight %.0f cm"), State.Round,
+					*State.Sides[SideIndex].Label, Index, *Spot.ToCompactString(), State.bRoundObjective ? TEXT("objective") : TEXT("enemy spawn"),
+					NavPathLength(World, Nav, Spot, Goal), FVector::Dist(Spot, Goal));
+			}
+		}
+	}
+
 	void StartRound(FState& State, UWorld* World)
 	{
 		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
@@ -1808,7 +2058,7 @@ namespace PmcArena
 		}
 		if (bRandomPair)
 		{
-			PlaceAround(World, A);
+			PlaceAround(World, A, State.bRoundObjective ? State.Objective : State.Sides[1].Spawn);
 		}
 		Pmc->SetTeamCommanded(TeamA, true, &State.WeightsA);
 		// Side B.
@@ -1822,7 +2072,7 @@ namespace PmcArena
 			}
 			if (bRandomPair)
 			{
-				PlaceAround(World, B);
+				PlaceAround(World, B, State.bRoundObjective ? State.Objective : State.Sides[0].Spawn);
 			}
 			Pmc->SetTeamCommanded(TeamB, true, &State.WeightsB);
 		}
@@ -1908,6 +2158,13 @@ namespace PmcArena
 			}
 		}
 		StartTrack(State, World);
+		// The record camera: across this round's spawn axis, a cut (no easing from the last round); the team colours on at once.
+		State.Framing.YawDeg = PmcArenaViewRules::YawAcross(A.Spawn, B.Spawn);
+		State.bHasView = false;
+		State.TeamColoured.Reset();
+		State.TeamDimmed.Reset();
+		ApplyTeamOverlays(State);
+		LogSpawnReach(State, World);
 		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d: A %d men at %s vs B %d men at %s, attacker %s, scenario %s (asked %s), weather %s, objective %s at %s (r %.0f m, hold %.0f s)"),
 			State.Round, A.Members.Num(), *A.Spawn.ToCompactString(), B.Members.Num(), *B.Spawn.ToCompactString(), *Result.Attacker, *Result.Scenario, *ScenarioRequested, *Weather,
 			State.bRoundObjective ? TEXT("on") : TEXT("off"), *State.Objective.ToCompactString(), State.Config.ObjectiveRadiusCm / 100.f, State.Config.HoldSeconds);
@@ -2123,10 +2380,8 @@ namespace PmcArena
 		case 2: // the fight
 		{
 			SampleTrack(State, World, StepSeconds);
-			if (State.Options.bRecord)
-			{
-				AimCamera(State, World);
-			}
+			ApplyTeamOverlays(State);
+			// record=1: the camera follows every rendered frame (RunWith's frame ticker), not this 10 Hz step.
 			if (State.Options.bShots && State.Round == 1)
 			{
 				AimCamera(State, World);
@@ -2204,6 +2459,23 @@ namespace PmcArena
 		{
 			return Step(WeakWorld, *State);
 		}), StepSeconds);
+		if (State->Options.bRecord)
+		{
+			// The record camera eases every frame (the 10 Hz step made it jump in a 30 fps clip); a new round cuts (StartRound).
+			FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float DeltaSeconds)
+			{
+				UWorld* World = WeakWorld.Get();
+				if (!World)
+				{
+					return false;
+				}
+				if (State->Stage == 2)
+				{
+					AimCamera(*State, World, DeltaSeconds, false);
+				}
+				return true;
+			}));
+		}
 	}
 
 	void Run(const TArray<FString>& Args, UWorld* World)
