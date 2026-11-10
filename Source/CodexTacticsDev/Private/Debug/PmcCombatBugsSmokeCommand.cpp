@@ -358,6 +358,12 @@ namespace PmcCombatBugsSmoke
 				FUnderFireConfig NoManoeuvre = UnderFireRules::GetConfig();
 				NoManoeuvre.ManoeuvreEnabled = 0.f;
 				UnderFireRules::SetConfig(NoManoeuvre);
+				// 2026-11-10: nor from the Commander's RPG-7 (testing loadout): the launcher rule fired it at the two fighters (a cluster) and
+				// the blast knocked the crouched one down before the kill. The launcher's own rule has RpgAiSmoke / RpgPmcSmoke.
+				if (IConsoleVariable* LauncherAI = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Combat.LauncherAI")))
+				{
+					LauncherAI->Set(0, ECVF_SetByConsole);
+				}
 			}
 			for (int32 Index = 1; Index < 3; ++Index)
 			{
