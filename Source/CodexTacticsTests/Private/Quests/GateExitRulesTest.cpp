@@ -144,7 +144,7 @@ bool FGateExitLevelJsonTest::RunTest(const FString&)
 	TestTrue(TEXT("... naming it"), Error.Contains(TEXT("north")));
 
 	FString Json;
-	TestTrue(TEXT("the lake's level JSON loads"), FFileHelper::LoadFileToString(Json, *(FPaths::ProjectContentDir() / TEXT("Data/LevelJson/L_Demo01_A_FrozenLake.json"))));
+	TestTrue(TEXT("the lake's level JSON loads"), FFileHelper::LoadFileToString(Json, *(FPaths::ProjectContentDir() / TEXT("Data/LevelJson/SmokeFixtures/lake_rules_fixture.json") /* pinned copy: the live lake is designer-editable (Training Ground) */)));
 	FLevelCombatConfig Lake;
 	TestTrue(TEXT("... parses"), LevelJsonRules::ParseLevel(Json, TEXT("L_Demo01_A_FrozenLake"), Lake, Error));
 	TestTrue(TEXT("the Demo 01 lake ends through its blast door (gate_exit auto)"), Lake.GateExit.bEnabled && Lake.GateExit.Side == EGateExitSide::Auto);

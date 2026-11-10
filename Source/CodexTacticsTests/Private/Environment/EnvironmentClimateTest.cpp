@@ -413,7 +413,7 @@ bool FClimateArcticUnchangedTest::RunTest(const FString&)
 
 	// The shipped Demo 01 lake stays arctic, locked Night + Snowfall.
 	FString Text;
-	if (TestTrue(TEXT("lake JSON"), FFileHelper::LoadFileToString(Text, *(FPaths::ProjectContentDir() / TEXT("Data/LevelJson/L_Demo01_A_FrozenLake.json")))))
+	if (TestTrue(TEXT("lake JSON"), FFileHelper::LoadFileToString(Text, *(FPaths::ProjectContentDir() / TEXT("Data/LevelJson/SmokeFixtures/lake_rules_fixture.json") /* pinned copy: the live lake is designer-editable (Training Ground) */))))
 	{
 		const TSharedPtr<FJsonObject> Root = ClimateJson(Text);
 		const TSharedPtr<FJsonObject>* Environment = nullptr;

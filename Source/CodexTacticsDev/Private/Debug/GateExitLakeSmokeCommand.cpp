@@ -390,9 +390,10 @@ namespace GateExitLakeSmoke
 			FString::Printf(TEXT("the start fades in from black (%.1f s, want %.1f, \"%s\", alpha %.2f at %.2f s)"), Exit->GetStartFadeSeconds(), WantFade,
 				*Exit->GetStartTitle(), State.FirstArrivalFade, State.FirstArrivalRealTime));
 		const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-		Check(State, Level && Level->Config.LevelId == TEXT("L_Gen_Depot_1") && Flow && Flow->GetConfig().TotalWaves == 1,
-			FString::Printf(TEXT("the Depot's own level JSON (%s, 1 wave; the run's -LevelJson is the lake's): %d"), Level ? *Level->Config.LevelId : TEXT("none"),
-				Flow ? Flow->GetConfig().TotalWaves : -1));
+		// The Depot's wave count is designer-editable (Training Ground, 2026-11-10): the flow must run the Depot's own list, whatever its length.
+		Check(State, Level && Level->Config.LevelId == TEXT("L_Gen_Depot_1") && Flow && Flow->GetConfig().TotalWaves == Level->Config.Waves.Num(),
+			FString::Printf(TEXT("the Depot's own level JSON (%s, %d waves; the run's -LevelJson is the lake's): %d"), Level ? *Level->Config.LevelId : TEXT("none"),
+				Level ? Level->Config.Waves.Num() : -1, Flow ? Flow->GetConfig().TotalWaves : -1));
 		const AActor* Start = UGameplayStatics::GetActorOfClass(World, APlayerStart::StaticClass());
 		Check(State, Start != nullptr, TEXT("the Depot has its PlayerStart (the squad's campaign start)"));
 		if (!Start)
@@ -655,7 +656,8 @@ namespace GateExitLakeSmoke
 			}
 			if (Flow->GetPhase() == ECodexGamePhase::PostCombat)
 			{
-				Check(State, State.LastWave == Flow->GetConfig().TotalWaves && State.LastWave == 3 && State.RestsRunOut == 2,
+				// The lake's own wave count (designer-editable in the Training Ground, 2026-11-10; 3 when written): one rest between each pair.
+				Check(State, State.LastWave == Flow->GetConfig().TotalWaves && State.LastWave >= 1 && State.RestsRunOut == State.LastWave - 1,
 					FString::Printf(TEXT("the last wave (%d of %d) went straight to post-combat - no panel, no \"End combat\" button"), State.LastWave,
 						Flow->GetConfig().TotalWaves));
 				Next(State, EStage::GateOpening);

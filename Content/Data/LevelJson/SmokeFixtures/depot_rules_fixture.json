@@ -1,0 +1,167 @@
+{
+  "_comment": "Pinned copy of the Depot rules (L_Gen_Depot_1.json as committed 2026-11-10) for the unit tests (CampaignTest DataFile, FirefightRulesTest, BotRouteRulesTest): the designer edits the live Depot JSON in the Training Ground, so tests assert the parser / rules here and only check that the live file parses. No map, no bot_route, no pmc_squads.",
+  "level_id": "L_Gen_Depot_1",
+  "level_name": "0.1 Depot",
+  "combat_start": "ambush",
+  "ambush_fight": "skirmish",
+  "susanin_wave": 0,
+  "horde_enabled": true,
+  "horde_after_firefights": 10,
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "cold_rate_mult": 0,
+  "intro_dialogue": false,
+  "environment": {
+    "_comment": "Game designer 2026-11-08: a clear sunny day, no weather changes, while the squad trains on the Depot - the clock and the weather are locked (a campaign arrival no longer continues the lake's night snowfall); snow cover as the lab had it.",
+    "locked": true,
+    "start_hour": 12,
+    "weather": "Clear",
+    "snow_cover": 0.35,
+    "seed": 1
+  },
+  "cheats": {
+    "immortal": false,
+    "infinite_ammo": true
+  },
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 2,
+      "spawns": [
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 2,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1,
+        "enemy_damage_mult": 1,
+        "enemy_speed_mult": 1,
+        "cold_drain_mult": 1
+      }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD",
+    "turrets_count": 1,
+    "barricades_count": 1,
+    "mines_count": 2,
+    "medkits_count": 2,
+    "m16_ammo": 120,
+    "pistol_ammo": 48,
+    "canned_food": 0,
+    "matches": 3,
+    "grenades_count": 2,
+    "heat_packs_count": 1
+  },
+  "pressure": {
+    "first_event_sec": 30,
+    "interval_sec": 90,
+    "group_min": 2,
+    "group_max": 4,
+    "max_alive": 8,
+    "patrol_share": 0.3,
+    "seed": 1,
+    "ambush": {
+      "points": [
+        [
+          350,
+          -7150
+        ],
+        [
+          -2060,
+          -3342
+        ],
+        [
+          -1540,
+          -3342
+        ],
+        [
+          -2060,
+          -2642
+        ],
+        [
+          -1540,
+          -2642
+        ],
+        [
+          -2132,
+          3990
+        ],
+        [
+          5160,
+          3410
+        ],
+        [
+          -1240,
+          4090
+        ],
+        [
+          -3915,
+          3960
+        ],
+        [
+          -2220,
+          -3921
+        ],
+        [
+          -3393,
+          -4044
+        ],
+        [
+          4902,
+          -5929
+        ],
+        [
+          2706,
+          4220
+        ],
+        [
+          3645,
+          4858
+        ],
+        [
+          4335,
+          4867
+        ],
+        [
+          3357,
+          5850
+        ],
+        [
+          -2883,
+          -4253
+        ],
+        [
+          -2006,
+          -1348
+        ],
+        [
+          -3276,
+          -5799
+        ],
+        [
+          -1595,
+          -8125
+        ],
+        [
+          -3953,
+          -6220
+        ],
+        [
+          -6039,
+          1480
+        ]
+      ],
+      "coordinated": {
+        "share": 0.5,
+        "max_alive": 8
+      }
+    }
+  }
+}
