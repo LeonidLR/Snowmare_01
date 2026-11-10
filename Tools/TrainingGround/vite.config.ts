@@ -161,12 +161,12 @@ const setupApiMiddlewares = (middlewares: any) => {
             return
           }
           const targetPath = path.join(LEVELS_DIR, fileName)
-          fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf-8')
-
-          // Only sync to level_01_outpost.json if that is the level being edited
-          if (fileName === 'level_01_outpost.json') {
-            const activeLevelPath = path.join(LEVELS_DIR, 'level_01_outpost.json')
-            fs.writeFileSync(activeLevelPath, JSON.stringify(data, null, 2), 'utf-8')
+          if (fs.existsSync(targetPath)) {
+            const original = fs.readFileSync(targetPath, 'utf-8')
+            const next = patchJsonText(original, data)
+            fs.writeFileSync(targetPath, next, 'utf-8')
+          } else {
+            fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf-8')
           }
 
           res.statusCode = 200
@@ -559,15 +559,49 @@ const setupApiMiddlewares = (middlewares: any) => {
         try {
           const payload = body ? JSON.parse(body) : {}
 
-          // Сохраняем выбранный конфиг перед запуском
-          if (payload.config) {
-            const activeLevelPath = path.join(LEVELS_DIR, 'level_01_outpost.json')
-            fs.writeFileSync(activeLevelPath, JSON.stringify(payload.config, null, 2), 'utf-8')
-            if (payload.config.level_id) {
-              const stagePath = path.join(LEVELS_DIR, `${payload.config.level_id}.json`)
+          // Сохраняем выбранный конфиг перед запуском (только в выбранный файл, через patchJsonText)
+          const targetLeaf = payload.file || (payload.config && (payload.config._file || payload.config.level_id)) || 'stage_01'
+          const fileName = levelFileName(String(targetLeaf))
+          if (payload.config && fileName) {
+            const stagePath = path.join(LEVELS_DIR, fileName)
+            if (fs.existsSync(stagePath)) {
+              const original = fs.readFileSync(stagePath, 'utf-8')
+              fs.writeFileSync(stagePath, patchJsonText(original, payload.config), 'utf-8')
+            } else {
               fs.writeFileSync(stagePath, JSON.stringify(payload.config, null, 2), 'utf-8')
             }
           }
+
+          // Определяем карту и путь level_json для выбранного уровня
+          let mapPath = '/Game/Maps/L_MovementTest'
+          if (fileName) {
+            const base = fileName.replace(/\.json$/i, '')
+            let foundCampaignMap = ''
+            if (fs.existsSync(CAMPAIGN_FILE)) {
+              try {
+                const camp = JSON.parse(fs.readFileSync(CAMPAIGN_FILE, 'utf-8'))
+                if (camp && Array.isArray(camp.levels)) {
+                  for (const lvl of camp.levels) {
+                    if (lvl.map) {
+                      const leaf = lvl.map.split('/').pop() || ''
+                      if (leaf.toLowerCase() === base.toLowerCase()) {
+                        foundCampaignMap = lvl.map
+                        break
+                      }
+                    }
+                  }
+                }
+              } catch (_) {}
+            }
+            if (foundCampaignMap) {
+              mapPath = foundCampaignMap
+            } else if (base.startsWith('L_Gen_')) {
+              mapPath = `/Game/Maps/Generated/${base}`
+            } else if (base.startsWith('L_')) {
+              mapPath = `/Game/Maps/${base}`
+            }
+          }
+          const levelJsonPath = fileName ? path.resolve(LEVELS_DIR, fileName) : ''
 
           // Запускаем отдельное видимое консольное окно с аргументами пресета
           // Unreal playtest bot (Scripts/run_simulations.bat, the C++ bot); not there yet -> say so instead of failing silently.
@@ -583,6 +617,9 @@ const setupApiMiddlewares = (middlewares: any) => {
             args.push(String(payload.runs))
             args.push(String(payload.profile || 'NORMAL'))
             args.push(String(payload.speed || '5.0'))
+            args.push(String(payload.loadout || 'COLLECT'))
+            args.push(mapPath)
+            args.push(levelJsonPath)
           }
 
           const child = spawn('cmd.exe', args, {

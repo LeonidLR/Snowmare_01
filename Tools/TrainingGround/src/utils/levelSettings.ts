@@ -3,6 +3,8 @@
 // (gate_open_mode, gate_progress_per_second, gate_max_progress_before_final, gate_full_open_after_wave; ParseDemoSettings).
 // Round-trip safety: every function returns a NEW level object that keeps all other keys (including an untouched "demo").
 
+import type { EnvironmentConfig, LevelLoadouts, LevelKit, OperativeKit } from '../types.ts';
+
 export type GateOpenMode = 'generator_waves' | 'instant';
 export type LevelLike = Record<string, any>;
 
@@ -206,7 +208,7 @@ export function validateColdRate(value: number): string[] {
   return [];
 }
 
-/** All level-settings errors of a level (gate + demo + cold); used to block the save. */
+/** All level-settings errors of a level (gate + demo + cold + horde + environment + loadouts + kit); used to block the save. */
 export function validateLevelSettings(level: LevelLike): string[] {
   const waves = Array.isArray(level.waves) ? level.waves.length : 0;
   const hordeErrors = typeof level.horde_after_firefights === 'number'
@@ -218,6 +220,9 @@ export function validateLevelSettings(level: LevelLike): string[] {
     ...validateColdRate(getColdRateMult(level)),
     ...hordeErrors,
     ...(hasOwnHordeSpawnDistance(level) ? validateHordeSpawnDistance(getHordeSpawnDistance(level)) : []),
+    ...validateEnvironment(getEnvironment(level)),
+    ...validateLoadouts(level.loadouts),
+    ...validateKit(level.kit),
   ];
 }
 
@@ -357,4 +362,249 @@ export function describeHordeWaves(level: LevelLike): string[] {
     const spitter = swaps > 0 ? `; SPITTER → MILITARY_ZOMBIE` : '';
     return `Орда ${index + 1}${repeat} ← волна ${label}: ${parts.join(' + ') || 'никого'}, до ${cap} одновременно${spitter}`;
   });
+}
+
+// ---- Environment ("environment" object, FEnvironmentLevelSettings) ----
+
+export const ARCTIC_WEATHER_OPTIONS: { value: string; label: string }[] = [
+  { value: 'Clear', label: 'Ясно (Clear)' },
+  { value: 'Overcast', label: 'Пасмурно (Overcast)' },
+  { value: 'Snowfall', label: 'Снегопад (Snowfall)' },
+  { value: 'Blizzard', label: 'Метель (Blizzard)' },
+];
+
+export const TEMPERATE_WEATHER_OPTIONS: { value: string; label: string }[] = [
+  ...ARCTIC_WEATHER_OPTIONS,
+  { value: 'Sunny', label: 'Солнечно (Sunny)' },
+  { value: 'SunnyDay', label: 'Ясный день (SunnyDay)' },
+  { value: 'Rain', label: 'Дождь (Rain)' },
+  { value: 'Storm', label: 'Шторм (Storm)' },
+];
+
+export const CLIMATE_OPTIONS: { value: 'arctic' | 'temperate'; label: string }[] = [
+  { value: 'arctic', label: 'Арктический (arctic, по умолчанию)' },
+  { value: 'temperate', label: 'Умеренный (temperate, сюжетные уровни)' },
+];
+
+export function getEnvironment(level: LevelLike): EnvironmentConfig {
+  const env = level.environment;
+  return env && typeof env === 'object' && !Array.isArray(env) ? { ...env } : {};
+}
+
+export function setEnvironmentKey<K extends keyof EnvironmentConfig>(
+  level: LevelLike,
+  key: K,
+  value: EnvironmentConfig[K] | undefined
+): LevelLike {
+  const next: LevelLike = { ...level };
+  const env: Record<string, any> = { ...(getEnvironment(level) as Record<string, any>) };
+
+  if (
+    value === undefined ||
+    (typeof value === 'number' && Number.isNaN(value)) ||
+    (key === 'override_carry' && value === false) ||
+    (key === 'locked' && value === false) ||
+    (key === 'visuals' && value === true)
+  ) {
+    delete env[key];
+  } else {
+    env[key] = value;
+  }
+
+  if (Object.keys(env).length === 0) {
+    delete next.environment;
+  } else {
+    next.environment = env;
+  }
+  return next;
+}
+
+export function validateEnvironment(env: EnvironmentConfig): string[] {
+  const errors: string[] = [];
+  if (env.start_hour !== undefined) {
+    if (!Number.isFinite(env.start_hour) || env.start_hour < 0 || env.start_hour > 24) {
+      errors.push('Час старта погоды: число от 0 до 24');
+    }
+  }
+  if (env.climate !== undefined && env.climate !== 'arctic' && env.climate !== 'temperate') {
+    errors.push("Климат: 'arctic' или 'temperate'");
+  }
+  if (env.weather !== undefined) {
+    const isTemperate = env.climate === 'temperate';
+    const valid = isTemperate
+      ? ['Clear', 'Overcast', 'Snowfall', 'Blizzard', 'Sunny', 'SunnyDay', 'Rain', 'Storm']
+      : ['Clear', 'Overcast', 'Snowfall', 'Blizzard'];
+    if (!valid.includes(env.weather)) {
+      errors.push(
+        isTemperate
+          ? 'Погода: Clear, Overcast, Snowfall, Blizzard, Sunny, SunnyDay, Rain или Storm'
+          : 'Погода для арктики: Clear, Overcast, Snowfall или Blizzard'
+      );
+    }
+  }
+  if (env.snow_cover !== undefined) {
+    if (!Number.isFinite(env.snow_cover) || env.snow_cover < 0 || env.snow_cover > 1) {
+      errors.push('Снежный покров: число от 0 до 1');
+    }
+  }
+  if (env.wetness !== undefined) {
+    if (!Number.isFinite(env.wetness) || env.wetness < 0 || env.wetness > 1) {
+      errors.push('Влажность: число от 0 до 1');
+    }
+  }
+  if (env.puddles !== undefined) {
+    if (!Number.isFinite(env.puddles) || env.puddles < 0 || env.puddles > 1) {
+      errors.push('Лужи: число от 0 до 1');
+    }
+  }
+  if (env.exposure_bias !== undefined) {
+    if (!Number.isFinite(env.exposure_bias) || env.exposure_bias < -4 || env.exposure_bias > 4) {
+      errors.push('Экспозиция (EV): число от -4 до 4');
+    }
+  }
+  return errors;
+}
+
+// ---- Per-Level Weapons ("loadouts") ----
+
+export const AVAILABLE_WEAPONS: { id: string; name: string }[] = [
+  { id: 'm16', name: 'M16' },
+  { id: 'pistol', name: 'Пистолет' },
+  { id: 'shotgun', name: 'Дробовик' },
+  { id: 'sniper_rifle', name: 'Снайперская винтовка' },
+  { id: 'rpg7', name: 'РПГ-7' },
+  { id: 'grenade', name: 'Граната' },
+];
+
+export const STANDARD_OPERATIVES: { key: string; role: string; label: string; defaultWeapons: string[] }[] = [
+  { key: 'commander', role: 'Командир', label: 'Командир (Commander / slot_0)', defaultWeapons: ['m16', 'pistol'] },
+  { key: 'engineer', role: 'Инженер', label: 'Инженер (Engineer / slot_1)', defaultWeapons: ['shotgun', 'pistol'] },
+  { key: 'medic_sapper', role: 'Медик-сапёр', label: 'Медик-сапёр (Medic-Sapper / slot_2)', defaultWeapons: ['m16', 'pistol'] },
+  { key: 'recruit', role: 'Новобранец', label: 'Новобранец (Recruit)', defaultWeapons: ['pistol'] },
+];
+
+export function getLoadouts(level: LevelLike): LevelLoadouts {
+  const l = level.loadouts;
+  return l && typeof l === 'object' && !Array.isArray(l) ? { ...l } : {};
+}
+
+export function setOperativeLoadout(level: LevelLike, operativeKey: string, weapons: string[] | undefined): LevelLike {
+  const next: LevelLike = { ...level };
+  const loadouts: Record<string, string[]> = { ...(getLoadouts(level) as Record<string, string[]>) };
+  const cleanKey = operativeKey.trim().toLowerCase();
+
+  const cleanWeapons = (weapons || []).map((w) => w.trim().toLowerCase()).filter(Boolean);
+  if (cleanWeapons.length === 0) {
+    delete loadouts[cleanKey];
+  } else {
+    loadouts[cleanKey] = cleanWeapons;
+  }
+
+  if (Object.keys(loadouts).length === 0) {
+    delete next.loadouts;
+  } else {
+    next.loadouts = loadouts;
+  }
+  return next;
+}
+
+export function validateLoadouts(loadouts: LevelLoadouts | undefined): string[] {
+  if (!loadouts || typeof loadouts !== 'object') return [];
+  const errors: string[] = [];
+  for (const [key, list] of Object.entries(loadouts)) {
+    if (!Array.isArray(list)) {
+      errors.push(`Оружие для ${key}: должен быть список`);
+      continue;
+    }
+    for (const w of list) {
+      if (typeof w !== 'string' || !w.trim()) {
+        errors.push(`Оружие для ${key}: недопустимый идентификатор оружия`);
+      }
+    }
+  }
+  return errors;
+}
+
+// ---- Per-Level Starting Kit ("kit") ----
+
+export function getKit(level: LevelLike): LevelKit {
+  const k = level.kit;
+  return k && typeof k === 'object' && !Array.isArray(k) ? { ...k } : {};
+}
+
+export function setOperativeKit(level: LevelLike, operativeKey: string, kit: OperativeKit | undefined): LevelLike {
+  const next: LevelLike = { ...level };
+  const fullKit: Record<string, OperativeKit> = { ...(getKit(level) as Record<string, OperativeKit>) };
+  const cleanKey = operativeKey.trim().toLowerCase();
+
+  if (!kit) {
+    delete fullKit[cleanKey];
+  } else {
+    const cleaned: OperativeKit = {};
+    if (typeof kit.grenades === 'number' && !Number.isNaN(kit.grenades)) cleaned.grenades = Math.max(0, Math.round(kit.grenades));
+    if (typeof kit.medkits === 'number' && !Number.isNaN(kit.medkits)) cleaned.medkits = Math.max(0, Math.round(kit.medkits));
+    if (typeof kit.heat_packs === 'number' && !Number.isNaN(kit.heat_packs)) cleaned.heat_packs = Math.max(0, Math.round(kit.heat_packs));
+
+    if (kit.ammo && typeof kit.ammo === 'object') {
+      const cleanAmmo: Record<string, number> = {};
+      for (const [w, count] of Object.entries(kit.ammo)) {
+        if (typeof count === 'number' && !Number.isNaN(count) && count >= 0) {
+          cleanAmmo[w.trim().toLowerCase()] = Math.round(count);
+        }
+      }
+      if (Object.keys(cleanAmmo).length > 0) cleaned.ammo = cleanAmmo;
+    }
+
+    if (Object.keys(cleaned).length === 0) {
+      delete fullKit[cleanKey];
+    } else {
+      fullKit[cleanKey] = cleaned;
+    }
+  }
+
+  if (Object.keys(fullKit).length === 0) {
+    delete next.kit;
+  } else {
+    next.kit = fullKit;
+  }
+  return next;
+}
+
+export function getKitOverrideCarry(level: LevelLike): boolean {
+  return level.kit_override_carry === true;
+}
+
+export function setKitOverrideCarry(level: LevelLike, value: boolean | undefined): LevelLike {
+  const next: LevelLike = { ...level };
+  if (value) {
+    next.kit_override_carry = true;
+  } else {
+    delete next.kit_override_carry;
+  }
+  return next;
+}
+
+export function validateKit(kit: LevelKit | undefined): string[] {
+  if (!kit || typeof kit !== 'object') return [];
+  const errors: string[] = [];
+  for (const [key, opKit] of Object.entries(kit)) {
+    if (!opKit || typeof opKit !== 'object') continue;
+    if (opKit.grenades !== undefined && (!Number.isInteger(opKit.grenades) || opKit.grenades < 0)) {
+      errors.push(`Снаряжение ${key}: гранаты >= 0`);
+    }
+    if (opKit.medkits !== undefined && (!Number.isInteger(opKit.medkits) || opKit.medkits < 0)) {
+      errors.push(`Снаряжение ${key}: аптечки >= 0`);
+    }
+    if (opKit.heat_packs !== undefined && (!Number.isInteger(opKit.heat_packs) || opKit.heat_packs < 0)) {
+      errors.push(`Снаряжение ${key}: теплопакеты >= 0`);
+    }
+    if (opKit.ammo && typeof opKit.ammo === 'object') {
+      for (const [w, count] of Object.entries(opKit.ammo)) {
+        if (!Number.isInteger(count) || count < 0) {
+          errors.push(`Снаряжение ${key}: патроны для ${w} >= 0`);
+        }
+      }
+    }
+  }
+  return errors;
 }

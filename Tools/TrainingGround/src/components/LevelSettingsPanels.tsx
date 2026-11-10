@@ -1,5 +1,5 @@
 import React from 'react';
-import { DoorClosed, FlaskConical, AlertTriangle, Snowflake, Skull } from 'lucide-react';
+import { DoorClosed, FlaskConical, AlertTriangle, Snowflake, Skull, CloudSun } from 'lucide-react';
 import {
   COLD_RATE_HINT, COLD_RATE_MAX, COLD_RATE_MIN, DEMO_DEFAULT_STEPS, DEMO_HINTS, GATE_FIELDS, GATE_MODE_OPTIONS, GateOpenMode, LevelLike, Tri,
   getColdRateMult, getDemo, getGate, isGateFieldInvalid, setColdRateMult, setDemoEnabled, setDemoKey, setGateKey, validateColdRate,
@@ -7,6 +7,7 @@ import {
   HORDE_AFTER_FIREFIGHTS_MIN, getHordeAfterFirefights, getHordeEnabled, setHordeAfterFirefights, setHordeEnabled, validateHordeAfterFirefights,
   HORDE_SPAWN_DISTANCE_DEFAULT, HORDE_SPAWN_DISTANCE_MAX, HORDE_SPAWN_DISTANCE_MIN, HordeWaveFeed, describeHordeWaves, getHordeSpawnDistance,
   getHordeWaveFeed, hasOwnHordeSpawnDistance, setHordeSpawnDistance, validateHordeSpawnDistance,
+  getEnvironment, setEnvironmentKey, validateEnvironment, ARCTIC_WEATHER_OPTIONS, TEMPERATE_WEATHER_OPTIONS, CLIMATE_OPTIONS,
 } from '../utils/levelSettings';
 
 /** Game designer 2026-11-09: what the waves of this level do for the firefight horde (HordeRules::ShouldWavesFeedHorde). */
@@ -284,6 +285,173 @@ export const LevelHordePanel: React.FC<PanelProps> = ({ config, onChange }) => {
       </div>
       <p className="mt-2 text-[11px] text-slate-500">
         UE: орда после N перестрелок ПОДРЯД (horde_after_firefights, default 10, min 1) — единственный вызов орды с 2026-11-09 (таймера боя больше нет); проскользнуть мимо группы врагов незамеченным — счёт с нуля; horde_enabled: false — никогда (Депо: вкл., Озеро: выкл.).
+      </p>
+      <Errors errors={errors} />
+    </div>
+  );
+};
+
+export const LevelEnvironmentPanel: React.FC<{ config: LevelLike; onChange: (next: any) => void }> = ({ config, onChange }) => {
+  const env = getEnvironment(config);
+  const errors = validateEnvironment(env);
+  const isTemperate = env.climate === 'temperate';
+  const weatherOptions = isTemperate ? TEMPERATE_WEATHER_OPTIONS : ARCTIC_WEATHER_OPTIONS;
+
+  return (
+    <div className="bg-slate-900 border border-slate-800 rounded-xl p-4" title="Level JSON object 'environment' (FEnvironmentLevelSettings)">
+      <div className="flex items-center gap-2 mb-3">
+        <CloudSun className="w-4 h-4 text-amber-300" />
+        <h3 className="text-sm font-bold text-slate-100">Погода и время суток уровня</h3>
+        <span className="text-[11px] text-slate-500">environment</span>
+      </div>
+
+      {/* Флаги фиксации и приоритета */}
+      <div className="flex flex-wrap items-center gap-4 mb-3 text-xs">
+        <label className="flex items-center gap-1.5 text-slate-200 cursor-pointer" title="locked = погода и стрелки часов заморожены на весь уровень; на зафиксированном уровне погода не меняет холод">
+          <input
+            type="checkbox"
+            checked={env.locked === true}
+            onChange={(e) => onChange(setEnvironmentKey(config, 'locked', e.target.checked))}
+            className="accent-amber-400 w-4 h-4"
+          />
+          <span className="font-semibold">Зафиксировать погоду и часы (locked)</span>
+        </label>
+
+        <label className="flex items-center gap-1.5 text-amber-200 cursor-pointer" title="Погода уровня важнее перенесённой (override_carry): при переходе из кампании погода и время старта уровня имеют приоритет над перенесённым состоянием (даже если уровень не зафиксирован)">
+          <input
+            type="checkbox"
+            checked={env.override_carry === true}
+            onChange={(e) => onChange(setEnvironmentKey(config, 'override_carry', e.target.checked))}
+            className="accent-amber-500 w-4 h-4"
+          />
+          <span className="font-semibold">Погода уровня важнее перенесённой</span>
+        </label>
+
+        <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer" title="visuals: false отключает презентер погоды (остаётся авторское освещение карты)">
+          <input
+            type="checkbox"
+            checked={env.visuals !== false}
+            onChange={(e) => onChange(setEnvironmentKey(config, 'visuals', e.target.checked ? undefined : false))}
+            className="accent-slate-500 w-4 h-4"
+          />
+          <span>Визуализатор погоды</span>
+        </label>
+      </div>
+
+      {/* Селекторы параметров */}
+      <div className="flex flex-wrap items-end gap-4 text-xs">
+        <label className="flex flex-col gap-1">
+          <span className="text-slate-500">Климат (climate)</span>
+          <select
+            value={env.climate || 'arctic'}
+            onChange={(e) => {
+              const val = e.target.value as 'arctic' | 'temperate';
+              let nextConf = setEnvironmentKey(config, 'climate', val === 'arctic' ? undefined : val);
+              // If switched to arctic and weather was temperate-only, reset weather to Overcast
+              if (val === 'arctic' && env.weather && !['Clear', 'Overcast', 'Snowfall', 'Blizzard'].includes(env.weather)) {
+                nextConf = setEnvironmentKey(nextConf, 'weather', 'Overcast');
+              }
+              onChange(nextConf);
+            }}
+            className={fieldCls(false)}
+          >
+            {CLIMATE_OPTIONS.map((c) => (
+              <option key={c.value} value={c.value}>{c.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1">
+          <span className="text-slate-500">Погода на старте (weather)</span>
+          <select
+            value={env.weather || ''}
+            onChange={(e) => onChange(setEnvironmentKey(config, 'weather', (e.target.value || undefined) as any))}
+            className={fieldCls(false)}
+          >
+            <option value="">По умолчанию (Overcast)</option>
+            {weatherOptions.map((w) => (
+              <option key={w.value} value={w.value}>{w.label}</option>
+            ))}
+          </select>
+        </label>
+
+        <label className="flex flex-col gap-1" title="start_hour: час старта уровня (0..24), например 23 (Ночь) или 12 (День)">
+          <span className="text-slate-500">Время суток <span className="text-slate-600">(0..24 ч)</span></span>
+          <input
+            type="number"
+            min={0}
+            max={24}
+            step={0.5}
+            placeholder="по умолчанию"
+            value={env.start_hour !== undefined ? env.start_hour : ''}
+            onChange={(e) => onChange(setEnvironmentKey(config, 'start_hour', e.target.value === '' ? undefined : Number(e.target.value)))}
+            className={`${fieldCls(env.start_hour !== undefined && (env.start_hour < 0 || env.start_hour > 24))} w-28`}
+          />
+        </label>
+
+        <label className="flex flex-col gap-1" title="snow_cover: стартовый снежный покров 0..1">
+          <span className="text-slate-500">Снег <span className="text-slate-600">(0..1)</span></span>
+          <input
+            type="number"
+            min={0}
+            max={1}
+            step={0.05}
+            placeholder="по умолчанию"
+            value={env.snow_cover !== undefined ? env.snow_cover : ''}
+            onChange={(e) => onChange(setEnvironmentKey(config, 'snow_cover', e.target.value === '' ? undefined : Number(e.target.value)))}
+            className={`${fieldCls(env.snow_cover !== undefined && (env.snow_cover < 0 || env.snow_cover > 1))} w-24`}
+          />
+        </label>
+
+        {isTemperate && (
+          <>
+            <label className="flex flex-col gap-1" title="wetness: намокание 0..1 (для умеренного климата)">
+              <span className="text-slate-500">Влажность <span className="text-slate-600">(0..1)</span></span>
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                placeholder="0"
+                value={env.wetness !== undefined ? env.wetness : ''}
+                onChange={(e) => onChange(setEnvironmentKey(config, 'wetness', e.target.value === '' ? undefined : Number(e.target.value)))}
+                className={`${fieldCls(env.wetness !== undefined && (env.wetness < 0 || env.wetness > 1))} w-24`}
+              />
+            </label>
+
+            <label className="flex flex-col gap-1" title="puddles: лужи 0..1 (для умеренного климата)">
+              <span className="text-slate-500">Лужи <span className="text-slate-600">(0..1)</span></span>
+              <input
+                type="number"
+                min={0}
+                max={1}
+                step={0.05}
+                placeholder="0"
+                value={env.puddles !== undefined ? env.puddles : ''}
+                onChange={(e) => onChange(setEnvironmentKey(config, 'puddles', e.target.value === '' ? undefined : Number(e.target.value)))}
+                className={`${fieldCls(env.puddles !== undefined && (env.puddles < 0 || env.puddles > 1))} w-24`}
+              />
+            </label>
+          </>
+        )}
+
+        <label className="flex flex-col gap-1" title="exposure_bias: коррекция экспозиции (-4..+4 EV)">
+          <span className="text-slate-500">Экспозиция <span className="text-slate-600">(EV)</span></span>
+          <input
+            type="number"
+            min={-4}
+            max={4}
+            step={0.2}
+            placeholder="0"
+            value={env.exposure_bias !== undefined ? env.exposure_bias : ''}
+            onChange={(e) => onChange(setEnvironmentKey(config, 'exposure_bias', e.target.value === '' ? undefined : Number(e.target.value)))}
+            className={`${fieldCls(env.exposure_bias !== undefined && (env.exposure_bias < -4 || env.exposure_bias > 4))} w-20`}
+          />
+        </label>
+      </div>
+
+      <p className="mt-2 text-[11px] text-slate-500">
+        locked = погода и стрелки часов заморожены на весь уровень; на зафиксированном уровне погода не меняет холод. Галочка «Погода уровня важнее перенесённой» заставляет уровень запускать указанную погоду и час даже при переходе отряда из кампании.
       </p>
       <Errors errors={errors} />
     </div>

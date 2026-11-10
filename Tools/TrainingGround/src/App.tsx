@@ -14,7 +14,8 @@ import { EnemyWeaponsPanel } from './components/EnemyWeaponsPanel';
 import { CommanderROEPanel } from './components/CommanderROEPanel';
 import { StealthCombatPanel } from './components/StealthCombatPanel';
 import { applyLevelEncounterPatch } from './utils/stealthCombat';
-import { BlastDoorPanel, DemoPanel, LevelColdPanel, LevelHordePanel } from './components/LevelSettingsPanels';
+import { BlastDoorPanel, DemoPanel, LevelColdPanel, LevelHordePanel, LevelEnvironmentPanel } from './components/LevelSettingsPanels';
+import { LevelOperativesPanel } from './components/LevelOperativesPanel';
 import { LevelItem, LEVEL_GROUPS, LEVEL_GROUP_LABELS } from './utils/levelList';
 import { validateLevelSettings } from './utils/levelSettings';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
@@ -376,6 +377,7 @@ export const App: React.FC = () => {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           config,
+          file: activeStageId,
           runs: preset.runs,
           profile: preset.profile,
           speed: preset.speed
@@ -799,8 +801,9 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Настройки уровня (не волны): бластовая дверь, демо / туториал, холод уровня, орда */}
+        {/* Настройки уровня (не волны): погода и время суток, бластовая дверь, орда, демо / туториал, холод уровня */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
+          <LevelEnvironmentPanel config={config} onChange={(next) => setConfig(next)} />
           <BlastDoorPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
           <LevelHordePanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
           <DemoPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
@@ -863,6 +866,12 @@ export const App: React.FC = () => {
             onSelectWave={setSelectedWaveIndex}
           />
         </div>
+
+        {/* Индивидуальное вооружение и стартовое снаряжение бойцов на этом уровне (loadouts / kit) */}
+        <LevelOperativesPanel
+          config={config}
+          onChange={(updated) => setConfig(updated)}
+        />
 
         {/* Настройка снаряжения отряда и режима симуляции */}
         <SquadLoadoutControls

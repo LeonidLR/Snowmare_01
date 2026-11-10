@@ -42,6 +42,8 @@ set PROFILE=%2
 if "%PROFILE%"=="" set PROFILE=VETERAN
 set LOADOUT=%4
 if "%LOADOUT%"=="" set LOADOUT=COLLECT
+set MAP=%5
+set LEVEL_JSON=%6
 goto START_SIM
 
 :CREATE_CUSTOM_PRESET
@@ -76,7 +78,12 @@ goto FINISH
 :START_SIM
 echo.
 echo [КОНФИГУРАЦИЯ] Забегов: %RUNS%, Профиль: %PROFILE%, Снаряжение: %LOADOUT%
-powershell -NoProfile -ExecutionPolicy Bypass -File Scripts\bot_run.ps1 -Runs %RUNS% -Profile %PROFILE% -Loadout %LOADOUT%
+if not "%MAP%"=="" echo [КАРТА] %MAP%
+if not "%LEVEL_JSON%"=="" echo [LEVEL JSON] %LEVEL_JSON%
+set EXTRA_BOT_ARGS=
+if not "%MAP%"=="" set EXTRA_BOT_ARGS=!EXTRA_BOT_ARGS! -Map "%MAP%"
+if not "%LEVEL_JSON%"=="" set EXTRA_BOT_ARGS=!EXTRA_BOT_ARGS! -LevelJson "%LEVEL_JSON%"
+powershell -NoProfile -ExecutionPolicy Bypass -File Scripts\bot_run.ps1 -Runs %RUNS% -Profile %PROFILE% -Loadout %LOADOUT% !EXTRA_BOT_ARGS!
 
 :FINISH
 echo.

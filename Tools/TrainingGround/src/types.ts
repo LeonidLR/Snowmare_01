@@ -151,7 +151,24 @@ export interface EnvironmentConfig {
   /** Section 17 (temperate): start wetness / puddles 0..1 (absent: wet when the level starts in rain / storm). */
   wetness?: number;
   puddles?: number;
+  /** Section 19.6: extra exposure bias (-4..4 EV) for the level's presenter. */
+  exposure_bias?: number;
+  /** When true, level's weather / start_hour win over campaign carry state even if not locked (default false; omit when false). */
+  override_carry?: boolean;
 }
+
+export type OperativeKey = 'commander' | 'engineer' | 'medic_sapper' | 'recruit' | 'slot_0' | 'slot_1' | 'slot_2' | string;
+
+export type LevelLoadouts = Record<string, string[]>;
+
+export interface OperativeKit {
+  grenades?: number;
+  medkits?: number;
+  heat_packs?: number;
+  ammo?: Record<string, number>;
+}
+
+export type LevelKit = Record<string, OperativeKit>;
 
 export interface LevelConfig {
   $schema?: string;
@@ -171,7 +188,7 @@ export interface LevelConfig {
   patrol_search_seconds?: number;
   /** UE horde after 4 min of real-time fight (Content/Data/AI/horde.json); false switches it off for the level. */
   horde_enabled?: boolean;
-  /** UE: horde triggers after N real-time firefights (default 6, min 1). */
+  /** UE: horde triggers after N real-time firefights (default 10, min 1). */
   horde_after_firefights?: number;
   /** UE (2026-10-21): placed-enemy fights - level (all of them, wave panel) | skirmish (only those that engaged; straight back to exploration). */
   ambush_fight?: 'level' | 'skirmish';
@@ -195,6 +212,12 @@ export interface LevelConfig {
   intro_dialogue?: boolean;
   /** UE: day cycle / weather / climate start of this level (EnvironmentConfig). */
   environment?: EnvironmentConfig;
+  /** Per-level weapon lists per operative/role (first = primary; empty list = absent/global). */
+  loadouts?: LevelLoadouts;
+  /** Per-level starting kit (grenades, medkits, heat_packs, ammo) per operative/role. */
+  kit?: LevelKit;
+  /** Campaign policy: on campaign arrival level's kit supplies win over carried supplies (default false). */
+  kit_override_carry?: boolean;
   waves: WaveConfig[];
 }
 
