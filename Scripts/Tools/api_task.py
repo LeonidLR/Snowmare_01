@@ -68,8 +68,10 @@ def main() -> int:
     import anthropic
 
     client = anthropic.Anthropic()
-    msg = client.messages.create(model=args.model, max_tokens=args.max_tokens,
-                                 messages=[{"role": "user", "content": text}])
+    # Streamed (2026-11-10): the SDK refuses a non-streamed call whose max_tokens may run past 10 minutes (Opus, 24k).
+    with client.messages.stream(model=args.model, max_tokens=args.max_tokens,
+                                messages=[{"role": "user", "content": text}]) as stream:
+        msg = stream.get_final_message()
     answer = "".join(block.text for block in msg.content if getattr(block, "type", "") == "text")
     if not answer.strip():
         # 2026-11-10: a big input can spend the whole max_tokens before any text (stop_reason max_tokens) - say so, don't write silence.
