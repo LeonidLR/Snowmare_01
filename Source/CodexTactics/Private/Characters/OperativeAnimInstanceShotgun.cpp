@@ -20,8 +20,10 @@
 #include "Dom/JsonObject.h"
 #include "Engine/SkeletalMesh.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
+#include "Misc/Parse.h"
 #include "Misc/Paths.h"
 #include "Misc/ScopeExit.h"
 #include "Serialization/JsonReader.h"
@@ -104,6 +106,9 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 		PistolSetData = FShotgunAnimSet();
 		LauncherSetData = FShotgunAnimSet();
 		CrawlSetData = FShotgunAnimSet();
+		InjuredSetData = FShotgunAnimSet();
+		InjuredCrawlSetData = FShotgunAnimSet();
+		bHasInjuredCrawl = false;
 		ShotgunClipRefs.Reset();
 		LauncherShotClip = LauncherReloadClip = LauncherActionClip = nullptr;
 		LauncherShotTime = -1.f;
@@ -117,6 +122,7 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 	LoadWeaponAnimSet(TEXT("pistol"), PistolSetData, PistolRetargetFolder);
 	LoadWeaponAnimSet(TEXT("launcher"), LauncherSetData, LauncherRetargetFolder);
 	LoadWeaponAnimSet(TEXT("prone_crawl"), CrawlSetData, CrawlRetargetFolder); // the prone crawl layer (OperativeAnimInstanceProneCrawl.cpp)
+	LoadInjuredAnimSet(); // the injured locomotion layer (OperativeAnimInstanceInjured.cpp; after the crawl set: its injured crawl is built on it)
 }
 
 void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAnimSet& ShotgunSet, FString& OutRetargetFolder)
@@ -142,6 +148,22 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 	// bend another hierarchy, e.g. the PMC operator's UE5 one) - the layer stays off for it.
 	bool bPackPlayback = true;
 	Block->TryGetBoolField(TEXT("pack_playback"), bPackPlayback);
+#if !UE_BUILD_SHIPPING
+	// Dev only: -AnimPackFallback=injured[,launcher...] lets a skeleton without copies play those blocks' pack clips by bone name - a check of the
+	// layer's logic before the copies are imported (the proportions are the pack mannequin's: the foot numbers are not the real ones).
+	FString Fallback;
+	if (!bPackPlayback && FParse::Value(FCommandLine::Get(), TEXT("AnimPackFallback="), Fallback))
+	{
+		TArray<FString> Blocks;
+		Fallback.ParseIntoArray(Blocks, TEXT(","));
+		bPackPlayback = Blocks.Contains(BlockKey);
+		if (bPackPlayback)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Weapon layer %s: -AnimPackFallback - the pack clips play where this skeleton has no copy (%s)"), BlockKey,
+				RetargetFolder.IsEmpty() ? TEXT("no copy folder") : *RetargetFolder);
+		}
+	}
+#endif
 	ShotgunSet.bPackPlayback = bPackPlayback;
 	if (!bPackPlayback && RetargetFolder.IsEmpty())
 	{
@@ -358,6 +380,33 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 	Number(TEXT("direction_dead_zone_deg"), ShotgunSet.DirectionDeadZoneDeg);
 	Number(TEXT("direction_snap_deg"), ShotgunSet.DirectionSnapDeg);
 	Number(TEXT("direction_fade_s"), ShotgunSet.DirectionFadeSeconds);
+	// The injured set's own keys (2026-11-10, OperativeAnimInstanceInjured.cpp).
+	ShotgunSet.SlowWalk = Sequence(TEXT("slow_walk"));
+	ShotgunSet.InjuredCrawl = Sequence(TEXT("crawl"));
+	ShotgunSet.InjuredCrawlIdle = Sequence(TEXT("crawl_idle"));
+	Number(TEXT("slow_walk_speed"), ShotgunSet.SlowWalkSpeed);
+	Number(TEXT("slow_max_play_rate"), ShotgunSet.SlowMaxPlayRate);
+	Number(TEXT("crawl_speed"), ShotgunSet.InjuredCrawlSpeed);
+	Number(TEXT("torso_pelvis_share"), ShotgunSet.TorsoPelvisShare);
+	Number(TEXT("direction_clip_band_deg"), ShotgunSet.DirectionClipBandDeg);
+	const TArray<TSharedPtr<FJsonValue>>* SlowCone = nullptr;
+	if (Block->TryGetArrayField(TEXT("slow_forward_cone_deg"), SlowCone) && SlowCone && SlowCone->Num() == 2)
+	{
+		ShotgunSet.SlowConeFullDeg = static_cast<float>((*SlowCone)[0]->AsNumber());
+		ShotgunSet.SlowConeZeroDeg = static_cast<float>((*SlowCone)[1]->AsNumber());
+	}
+	// "triggers": { "wounded": bool, "cold_from": share, "cold_slow_from": share } - absent = wounded on, the cold off
+	// (InjuredLocomotionRules::FInjuredTriggers).
+	const TSharedPtr<FJsonObject>* Triggers = nullptr;
+	if (Block->TryGetObjectField(TEXT("triggers"), Triggers) && Triggers)
+	{
+		(*Triggers)->TryGetBoolField(TEXT("wounded"), ShotgunSet.Triggers.bWounded);
+		double ColdFrom = 0.0;
+		ShotgunSet.Triggers.ColdFrom = (*Triggers)->TryGetNumberField(TEXT("cold_from"), ColdFrom) ? InjuredLocomotionRules::SanitizeColdFrom(ColdFrom) : 0.f;
+		double ColdSlowFrom = 0.0;
+		ShotgunSet.Triggers.ColdSlowFrom = (*Triggers)->TryGetNumberField(TEXT("cold_slow_from"), ColdSlowFrom)
+			? InjuredLocomotionRules::SanitizeColdFrom(ColdSlowFrom) : 0.f;
+	}
 	// The retargeted copies' own stride (a longer-legged body steps further per cycle: the launcher's copies +16 % male / +12 % female,
 	// measured by Scripts/Editor/setup_launcher_animation.py) - their authored speeds scale with it, so the play rate keeps the feet planted.
 	const TSharedPtr<FJsonObject>* StrideScales = nullptr;
@@ -370,6 +419,7 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 		ShotgunSet.JogSpeed *= Scale;
 		ShotgunSet.CrouchSpeed *= Scale;
 		ShotgunSet.SprintSpeed *= Scale;
+		ShotgunSet.SlowWalkSpeed *= Scale;
 		for (int32 Index = 0; Index < 8; ++Index)
 		{
 			ShotgunSet.WalkSpeeds[Index] *= Scale;
@@ -377,6 +427,14 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 			ShotgunSet.JogSpeeds[Index] *= Scale;
 			ShotgunSet.CrouchSpeeds[Index] *= Scale;
 		}
+	}
+	// The injured crawl's own stride on the copies ("crawl_stride_scale": a crawl's planted hands / knees scale unlike a walk's feet).
+	const TSharedPtr<FJsonObject>* CrawlStrides = nullptr;
+	double CrawlStride = 1.0;
+	if (BodySkeleton && Block->TryGetObjectField(TEXT("crawl_stride_scale"), CrawlStrides) && CrawlStrides
+		&& (*CrawlStrides)->TryGetNumberField(BodySkeleton->GetName(), CrawlStride) && CrawlStride > 0.1)
+	{
+		ShotgunSet.InjuredCrawlSpeed *= static_cast<float>(CrawlStride);
 	}
 }
 

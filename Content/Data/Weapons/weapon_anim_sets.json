@@ -354,5 +354,46 @@
     "direction_snap_deg": 75,
     "direction_fade_s": 0.3,
     "blend_seconds": 0.3
+  },
+  "injured": {
+    "comment": "The injured locomotion (the game designer 2026-11-10: a wounded operative walks visibly injured; the pack /Game/CON_Injured is his - never modified, read here by path): NOT a weapon - a native layer over ABP_Operative on the LOWER body only (root -> the reference, pelvis, legs, foot IK bones; OperativeAnimInstanceInjured.cpp, InjuredLocomotionRules). Upper body: the clips are UNARMED (measured, Scripts/Editor/setup_injured_animation.py: the left hand held on the torso ~21 cm from the spine - the wound - the right arm hanging ~34 cm out), so the torso keeps the ABP's / the weapon layer's mesh-space pose (the weapon, the aim, fire / reload / grenade / blizzard clips); torso_pelvis_share 0.3 of the injured pelvis's rotation rides along when not aiming (0 while aiming). triggers: wounded (IsWounded, HP < 50 %) = the 8-direction walk (Walk_Injured_BS clips, the velocity relative to the body) + stand_idle; prone = the prone crawl layer plays crawl / crawl_idle in its forward slot; the cold (the designer 2026-11-10): Freezing cold_from 0.7 = walking plays the same 8-direction injured walk (~0.6x at its 99 cm/s), Frostbite cold_slow_from 0.9 = slow_walk by slow_forward_cone_deg [full, zero] (the injured walk outside it; ~1.4x at its 55 cm/s), standing still = the existing shiver idle (the layer is off) - this replaces the ABP's empty ColdWalkClips tiers; wounded first. The squad's UE4 skeletons play IK-retargeted copies (retargeted; the same UE4 rig both ways like the crawl; measured 2026-11-10: posture within 7.8 cm male / 13.4 cm female, pelvis drift <= 1.9 cm); pack_playback false (the PMC operator's UE5 body: no injured layer - the pack's UE5 set is not wired). fwd / bwd walk_speeds, slow_walk_speed, crawl_speed = each pack loop's best speed (cm/s: the ground speed at which its best-planted contact - the slowest of heels / balls, the crawl's hands / knees / balls - moves least, median over the loop; each loop = 1 gait cycle, 1.07 s; own slide there: forward / back 10-14 %, the slow walk 9 % - its root-motion twin travels 40.3, its feet fit 35.3 - the crawl 8 %, 63.0 vs Crawl_Injured_RM's 53.3); the diagonals / strafes were tuned in game on the copies (InjuredLocomotionSmoke, 3 probes each 2026-11-10: the script's 110-124 slid 40-50 %, the best of 110 / 135 / 150 / 160 / 185 kept per leg): their stance foot pivots, so they slide ~29-38 % at ANY play rate (own slide on the copies 25-38 %) - the clips' limit, not the layer's; direction_clip_band_deg 10 = within 10 deg of a clip it plays alone; stride_scale = the copies' planted-foot speed / the pack's (male 1.091, female 1.035, walk median), crawl_stride_scale male 0.972, female 0.998; phase_offsets = each loop's left heel strike (share of the loop, male copies; the crawl = its left-hand reach). Play rate = the body's speed / the blended authored speed: wounded 143 cm/s on the copies' 120-175 cm/s loops = ~0.8-1.2x; the slow walk only from Frostbite (55 cm/s on 38.5 cm/s = ~1.4x; at the freezing speed it would have needed ~2.6x - the designer chose the injured walk there 2026-11-10); slow_max_play_rate 2.8.",
+    "retargeted": {
+      "UE4_Mannequin_Skeleton": "/Game/Characters/Animations/Injured/Male",
+      "Female_Soldier_Skeleton": "/Game/Characters/Animations/Injured/Female"
+    },
+    "pack_playback": false,
+    "triggers": { "wounded": true, "cold_from": 0.7, "cold_slow_from": 0.9 },
+    "stand_idle": "/Game/CON_Injured/Animations/In-Place/Idle_Walk_Injured1.Idle_Walk_Injured1",
+    "walk": {
+      "fwd": "/Game/CON_Injured/Animations/In-Place/Walk_Injured_BS/Walk_Injured_Front.Walk_Injured_Front",
+      "fwd_right": "/Game/CON_Injured/Animations/In-Place/Walk_Injured_BS/Walk_Injured_Front_Right.Walk_Injured_Front_Right",
+      "right": "/Game/CON_Injured/Animations/In-Place/Walk_Injured_BS/Walk_Injured_Right.Walk_Injured_Right",
+      "bwd_right": "/Game/CON_Injured/Animations/In-Place/Walk_Injured_BS/Walk_Injured_Back_Right.Walk_Injured_Back_Right",
+      "bwd": "/Game/CON_Injured/Animations/In-Place/Walk_Injured_BS/Walk_Injured_Back.Walk_Injured_Back",
+      "bwd_left": "/Game/CON_Injured/Animations/In-Place/Walk_Injured_BS/Walk_Injured_Back_Left.Walk_Injured_Back_Left",
+      "left": "/Game/CON_Injured/Animations/In-Place/Walk_Injured_BS/Walk_Injured_Left.Walk_Injured_Left",
+      "fwd_left": "/Game/CON_Injured/Animations/In-Place/Walk_Injured_BS/Walk_Injured_Front_Left.Walk_Injured_Front_Left"
+    },
+    "slow_walk": "/Game/CON_Injured/Animations/In-Place/Walk_Injured_Slow.Walk_Injured_Slow",
+    "crawl": "/Game/CON_Injured/Animations/In-Place/Crawl_Injured.Crawl_Injured",
+    "crawl_idle": "/Game/CON_Injured/Animations/In-Place/Idle_Crawl_Injured1.Idle_Crawl_Injured1",
+    "walk_speed": 160.6,
+    "walk_speeds": { "fwd": 160.6, "fwd_right": 150.0, "right": 160.0, "bwd_right": 135.0, "bwd": 144.0, "bwd_left": 124.0, "left": 160.0, "fwd_left": 110.0 },
+    "slow_walk_speed": 35.3,
+    "crawl_speed": 63.0,
+    "phase_offsets": { "Walk_Injured_Front": 0.031, "Walk_Injured_Front_Right": 0.031, "Walk_Injured_Right": 0.031, "Walk_Injured_Back_Right": 0.641, "Walk_Injured_Back": 0.656, "Walk_Injured_Back_Left": 0.641, "Walk_Injured_Left": 0.031, "Walk_Injured_Front_Left": 0.031, "Walk_Injured_Slow": 0.942, "Crawl_Injured": 0.972 },
+    "stride_scale": { "UE4_Mannequin_Skeleton": 1.091, "Female_Soldier_Skeleton": 1.035 },
+    "crawl_stride_scale": { "UE4_Mannequin_Skeleton": 0.972, "Female_Soldier_Skeleton": 0.998 },
+    "max_play_rate": 1.8,
+    "slow_max_play_rate": 2.8,
+    "move_start_speed": 10,
+    "move_full_speed": 30,
+    "slow_forward_cone_deg": [35, 80],
+    "torso_pelvis_share": 0.3,
+    "direction_smooth_s": 0.2,
+    "direction_clip_band_deg": 10,
+    "direction_snap_deg": 75,
+    "direction_fade_s": 0.3,
+    "blend_seconds": 0.35
   }
 }

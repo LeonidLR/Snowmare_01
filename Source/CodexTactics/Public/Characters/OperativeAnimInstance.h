@@ -4,6 +4,7 @@
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimInstanceProxy.h"
 #include "Characters/BlizzardWalkRules.h"
+#include "Characters/InjuredLocomotionRules.h"
 #include "Characters/InteractionAnimRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/RifleLocomotionRules.h"
@@ -274,6 +275,15 @@ private:
 	void BlendProneCrawlLayer(FPoseContext& Output) const;
 	TStaticArray<FOperativeClipState, 6> CrawlClips;
 	float CrawlWeight = 0.f;
+	/**
+	 * The injured locomotion layer (the game designer 2026-11-10; OperativeAnimInstanceInjured.cpp): the CON_Injured clips on the LOWER body (root
+	 * -> the reference, pelvis, legs, foot IK bones) after the graph and the weapon layer; spine_01 keeps the graph's mesh-space rotation (the
+	 * torso's weapon pose / aim; TorsoShare of the injured pelvis's rotation rides along) and the hand IK bones their mesh-space transform.
+	 */
+	void BlendInjuredLayer(FPoseContext& Output) const;
+	TStaticArray<FOperativeClipState, 6> InjuredClips;
+	float InjuredWeight = 0.f;
+	float InjuredTorsoShare = 0.f;
 };
 
 /**
@@ -586,6 +596,13 @@ public:
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cold Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> ColdIdleClips = { nullptr, nullptr, nullptr, nullptr };
 
+	/**
+	 * Cold walk per tier (Godot cold_* 25 / 40 / 70 / 90) - left EMPTY on purpose (2026-11-10): the 70 / 90 tiers' walk is the injured layer's
+	 * injured walk / slow injured walk (weapon_anim_sets.json "injured" triggers cold_from 0.7 / cold_slow_from 0.9, OperativeAnimInstanceInjured.cpp;
+	 * the game designer 2026-11-10) - a native lower-body layer that keeps the weapon torso and plays only while walking. Filled, these slots (with the idle ones) would
+	 * switch on UpdateColdLayer's idle -> walk pose blend (ColdVisualWeight; bHasPose needs both) for the ABP on top of it. The 25 / 40 tiers have
+	 * no walk clip (the normal walk); standing still the shiver is the warm-idle Cold_1 set (UWarmIdleSubsystem).
+	 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "CodexTactics|Cold Animation", EditFixedSize)
 	TArray<TObjectPtr<UAnimSequenceBase>> ColdWalkClips = { nullptr, nullptr, nullptr, nullptr };
 
@@ -1336,6 +1353,28 @@ public:
 	/** Prone fire clips cut short because a crawl order started (crawl first; smokes). */
 	int32 GetCrawlFireClipsStopped() const { return CrawlFireClipsStopped; }
 
+	// --- The injured locomotion layer (the game designer 2026-11-10; OperativeAnimInstanceInjured.cpp, InjuredLocomotionRules) ---------------
+	// The designer's /Game/CON_Injured clips (weapon_anim_sets.json "injured", IK-retargeted copies /Game/Characters/Animations/Injured/{Male,Female}
+	// by Scripts/Editor/setup_injured_animation.py) on the LOWER body over the ABP (the torso stays the ABP's / the weapon layer's): wounded
+	// (IsWounded) standing = the 8-direction injured walk + the injured idle, prone = the injured crawl forward (the prone crawl layer's forward
+	// slot + idle); walking frozen = the injured walk (Freezing, "cold_from") / the slow injured walk forward (Frostbite, "cold_slow_from"); still =
+	// the ABP's shiver idle. No AnimGraph node.
+
+	/** The injured layer's blend weight this frame (0..1; smokes). */
+	float GetInjuredWeight() const { return InjuredWeight; }
+	/** The gait the layer plays this frame (smokes). */
+	InjuredLocomotionRules::EInjuredGait GetInjuredGait() const { return InjuredGait; }
+	/** The heaviest injured clip this frame (null when the layer is off; smokes). */
+	const UAnimSequenceBase* GetInjuredDominantClip() const;
+	/** The direction the injured walk plays, deg clockwise from the body's forward (smokes). */
+	float GetInjuredDirection() const { return InjuredDirection.Current; }
+	/** The injured loops' play rate this frame (the lead loop's; smokes / logs). */
+	float GetInjuredPlayRate() const { return InjuredPlayRate; }
+	/** The injured set is loaded for this body (its skeleton has retargeted copies). */
+	bool HasInjuredSet() const { return InjuredSetData.StandIdle != nullptr; }
+	/** The prone crawl layer plays the injured crawl set now (wounded, prone). */
+	bool IsInjuredCrawlActive() const { return bInjuredCrawlActive; }
+
 	// --- The shotgun weapon layer (the D-1, designer decision 21, 2026-11-03; WeaponAnimLayerRules) ---------------------------------
 	// The user's ShotgunLocomotionPack clips (Content/Data/Weapons/weapon_anim_sets.json "shotgun") blended natively over the ABP's
 	// pose while a shotgun (EWeaponHandling::Shotgun) is in hands: idle / walk / jog / sprint / crouch by speed and direction, the aim
@@ -1837,6 +1876,21 @@ private:
 		 * "direction_fade_s"; 0 = it sweeps through the clips between). */
 		float DirectionSnapDeg = 0.f;
 		float DirectionFadeSeconds = 0.f;
+		// The injured set's own keys (2026-11-10, "injured"): the slow walk (a forward loop), the injured crawl + its idle, their authored speeds
+		// (x stride_scale / crawl_stride_scale), the triggers, the slow walk's forward cone [full, zero] deg, the torso's share of the pelvis.
+		UAnimSequence* SlowWalk = nullptr;
+		UAnimSequence* InjuredCrawl = nullptr;
+		UAnimSequence* InjuredCrawlIdle = nullptr;
+		float SlowWalkSpeed = 60.f;
+		/** The slow walk's own play-rate cap ("slow_max_play_rate"; <= 0 = max_play_rate): the freezing body walks ~2.2x its authored pace. */
+		float SlowMaxPlayRate = 0.f;
+		float InjuredCrawlSpeed = 20.f;
+		InjuredLocomotionRules::FInjuredTriggers Triggers;
+		float SlowConeFullDeg = 35.f;
+		float SlowConeZeroDeg = 80.f;
+		/** "direction_clip_band_deg": within this many deg of a directional clip it plays alone (InjuredLocomotionRules::BandedAlpha). */
+		float DirectionClipBandDeg = 0.f;
+		float TorsoPelvisShare = 0.f;
 		FShotgunAnimSet()
 		{
 			for (int32 Index = 0; Index < 8; ++Index)
@@ -1959,6 +2013,35 @@ private:
 	/** The crawl idle + two directional loops + the previous direction's two during a reversal's cross-fade. */
 	TStaticArray<FOperativeClipState, 6> CrawlClips;
 	int32 CrawlFireClipsStopped = 0;
+	/** The crawl set this frame: the injured crawl's while bInjuredCrawlActive, else the prone crawl's. */
+	const FShotgunAnimSet& ActiveCrawlSet() const { return bInjuredCrawlActive ? InjuredCrawlSetData : CrawlSetData; }
+
+	// The injured locomotion layer (OperativeAnimInstanceInjured.cpp).
+	/** The "injured" block: StandIdle = the injured idle, Walk = the 8 injured walk loops, SlowWalk / InjuredCrawl / InjuredCrawlIdle. */
+	FShotgunAnimSet InjuredSetData;
+	/** The prone crawl set with the injured crawl in its forward slot and its idle (built from CrawlSetData; empty without the clips). */
+	FShotgunAnimSet InjuredCrawlSetData;
+	FString InjuredRetargetFolder;
+	bool bHasInjuredCrawl = false;
+	/** Reads "injured" (after "prone_crawl": the injured crawl set is built on the crawl set). */
+	void LoadInjuredAnimSet();
+	/** Runs before the prone crawl layer (it decides which crawl set plays). */
+	void UpdateInjuredLayer(float DeltaSeconds);
+	/** The standing injured layer may drive the legs (standing, alive, up, out of cover, not on a ladder / vaulting / falling / carrying / in the
+	 * sniper pose / a stance clip). */
+	bool IsInjuredLayerEligible() const;
+	InjuredLocomotionRules::EInjuredGait InjuredGait = InjuredLocomotionRules::EInjuredGait::None;
+	/** The gait whose clips play (kept while the layer fades out after the gait ended). */
+	InjuredLocomotionRules::EInjuredGait InjuredClipGait = InjuredLocomotionRules::EInjuredGait::None;
+	bool bInjuredCrawlActive = false;
+	float InjuredWeight = 0.f;
+	float InjuredPhase = 0.f;
+	float InjuredIdleTime = 0.f;
+	float InjuredPlayRate = 0.f;
+	float InjuredTorsoShare = 0.f;
+	FWeaponLayerDirectionState InjuredDirection;
+	/** The injured idle + two directional loops + the previous direction's two during a reversal's cross-fade (or the slow walk alone). */
+	TStaticArray<FOperativeClipState, 6> InjuredClips;
 
 	void UpdateState();
 	void UpdateUpperBody(float DeltaSeconds);
