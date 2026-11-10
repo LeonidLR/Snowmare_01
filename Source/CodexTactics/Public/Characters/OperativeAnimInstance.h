@@ -264,6 +264,13 @@ private:
 	TStaticArray<const UAnimSequenceBase*, 9> WeaponAimPoses = TStaticArray<const UAnimSequenceBase*, 9>(InPlace, nullptr);
 	const UAnimSequenceBase* WeaponAimBase = nullptr;
 	TStaticArray<float, 9> WeaponAimWeights = TStaticArray<float, 9>(InPlace, 0.f);
+	/**
+	 * The prone crawl layer (the game designer's CrawlAndShoot_Bug_01, 2026-11-09): the 8-direction crawl clips blended over the graph's prone
+	 * pose on every bone but the root (the root keeps its reference rotation / translation: the capsule moves the body and faces the threat).
+	 */
+	void BlendProneCrawlLayer(FPoseContext& Output) const;
+	TStaticArray<FOperativeClipState, 6> CrawlClips;
+	float CrawlWeight = 0.f;
 };
 
 /**
@@ -1299,6 +1306,33 @@ public:
 	UAnimSequenceBase* GetSniperLoopClip() const { return SniperLoopClip.Get(); }
 	const TArray<FString>& GetSniperClipLog() const { return SniperClipLog; }
 
+	// --- The prone crawl layer (the game designer's CrawlAndShoot_Bug_01, 2026-11-09; OperativeAnimInstanceProneCrawl.cpp, ProneCrawlRules) ---
+	// The user's Crawl_MocapAnimPack 8-direction in-place crawl loops + the crawl idle (weapon_anim_sets.json "prone_crawl", IK-retargeted copies
+	// /Game/Characters/Animations/Crawl/{Male,Female} by Scripts/Editor/setup_crawl_animation.py) blended natively over the ABP's prone pose, full
+	// body (the root keeps the reference: the capsule moves and faces), for every weapon: while he crawls on an order or moves prone. The direction
+	// is the velocity relative to the body (the body faces the threat: strafe-crawl), the play rate the speed over the clips' authored crawl
+	// speed. Off under a full-body montage (the dive, a stance clip, a prone fire / reload / hit) and when still (the ABP's rifle prone pose
+	// then: the aim / fire / reload clips). No AnimGraph node.
+
+	/** The crawl layer's blend weight this frame (0..1; smokes). */
+	float GetProneCrawlWeight() const { return CrawlWeight; }
+	/** The heaviest crawl clip this frame (null when the layer is off; smokes: "the clip of the move's direction plays"). */
+	const UAnimSequenceBase* GetProneCrawlDominantClip() const;
+	/** The direction the crawl clips play, deg clockwise from the body's forward (smokes). */
+	float GetProneCrawlDirection() const { return CrawlDirection.Current; }
+	/** The crawl loops' play rate this frame (the lead loop's: speed / its authored speed; smokes / logs). */
+	float GetProneCrawlPlayRate() const { return CrawlPlayRate; }
+	/** The crawl set is loaded for this body (its skeleton has retargeted copies). */
+	bool HasProneCrawlSet() const { return CrawlSetData.StandIdle != nullptr; }
+	/**
+	 * Keeps the aim pose up (AimTimer, as after a shot) while a crawl holds his fire with a target: the pose waits under the full-body crawl
+	 * layer and the rifle is on the target the moment he stops (the ABP's prone idle holds it ~30 deg off the body - outside the aim cone,
+	 * so no first round would ever leave; ProneCrawlSmoke 2026-11-10).
+	 */
+	void HoldAimPose() { AimTimer = FMath::Max(AimTimer, AimHoldAfterShot); }
+	/** Prone fire clips cut short because a crawl order started (crawl first; smokes). */
+	int32 GetCrawlFireClipsStopped() const { return CrawlFireClipsStopped; }
+
 	// --- The shotgun weapon layer (the D-1, designer decision 21, 2026-11-03; WeaponAnimLayerRules) ---------------------------------
 	// The user's ShotgunLocomotionPack clips (Content/Data/Weapons/weapon_anim_sets.json "shotgun") blended natively over the ABP's
 	// pose while a shotgun (EWeaponHandling::Shotgun) is in hands: idle / walk / jog / sprint / crouch by speed and direction, the aim
@@ -1892,6 +1926,22 @@ private:
 	float WeaponFireAdditiveTime = -1.f;
 	int32 ShotgunFireClips = 0;
 	int32 ShotgunShellClips = 0;
+
+	// The prone crawl layer (OperativeAnimInstanceProneCrawl.cpp).
+	/** The "prone_crawl" block: StandIdle = the crawl idle, Walk = the 8 in-place crawl loops, WalkSpeeds = their authored crawl speeds. */
+	FShotgunAnimSet CrawlSetData;
+	FString CrawlRetargetFolder;
+	void UpdateProneCrawlLayer(float DeltaSeconds);
+	/** The crawl layer may drive the body (prone, alive, up, out of cover, not on a ladder / vaulting / carrying / in the sniper pose / a stance clip). */
+	bool IsProneCrawlEligible() const;
+	float CrawlWeight = 0.f;
+	float CrawlPhase = 0.f;
+	float CrawlIdleTime = 0.f;
+	float CrawlPlayRate = 0.f;
+	FWeaponLayerDirectionState CrawlDirection;
+	/** The crawl idle + two directional loops + the previous direction's two during a reversal's cross-fade. */
+	TStaticArray<FOperativeClipState, 6> CrawlClips;
+	int32 CrawlFireClipsStopped = 0;
 
 	void UpdateState();
 	void UpdateUpperBody(float DeltaSeconds);

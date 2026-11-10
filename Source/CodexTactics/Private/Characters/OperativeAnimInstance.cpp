@@ -203,6 +203,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	UpdateColdLayer(DeltaSeconds);
 	UpdateNativeBlend(DeltaSeconds);
 	UpdateShotgunLayer(DeltaSeconds); // the D-1 shotgun set over the ABP (OperativeAnimInstanceShotgun.cpp)
+	UpdateProneCrawlLayer(DeltaSeconds); // the 8-direction prone crawl over the ABP's prone pose (OperativeAnimInstanceProneCrawl.cpp)
 	if (bUseRifle2Locomotion)
 	{
 		const AOperativeCharacter* Rifle2Owner = Cast<AOperativeCharacter>(TryGetPawnOwner());
@@ -1387,6 +1388,8 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 		PeekLockCorrectionDeg = 0.f;
 	}
 	WeaponClips = Instance->ShotgunClips;
+	CrawlClips = Instance->CrawlClips;
+	CrawlWeight = Instance->CrawlWeight;
 	WeaponUpperWeight = Instance->ShotgunUpperWeight;
 	WeaponLowerWeight = Instance->ShotgunLowerWeight;
 	bWeaponFullBody = Instance->IsWeaponLayerFullBody();
@@ -1494,12 +1497,17 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	{
 		WeaponProbeLower = WeaponProbeUpper = 0.f; // the layer is off: it changes no bone (the probe reads 0, not the last layer frame)
 	}
-	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer) || InRootNode != GetRootNode())
+	const bool bCrawlLayer = CrawlWeight > MinSampleWeight;
+	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer && !bCrawlLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 		return false; // the graph alone
 	}
 	EvaluateAnimationNode_WithRoot(Output, InRootNode);
+	if (bCrawlLayer)
+	{
+		BlendProneCrawlLayer(Output); // the directional prone crawl over the graph's prone pose (ProneCrawlRules)
+	}
 	if (bWeaponLayer)
 	{
 		FCompactPose GraphPose;

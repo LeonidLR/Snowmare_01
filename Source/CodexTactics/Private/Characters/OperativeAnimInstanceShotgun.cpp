@@ -88,6 +88,7 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 		ShotgunSetData = FShotgunAnimSet();
 		PistolSetData = FShotgunAnimSet();
 		LauncherSetData = FShotgunAnimSet();
+		CrawlSetData = FShotgunAnimSet();
 		ShotgunClipRefs.Reset();
 		LauncherShotClip = LauncherReloadClip = LauncherActionClip = nullptr;
 		LauncherShotTime = -1.f;
@@ -100,6 +101,7 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 	LoadWeaponAnimSet(TEXT("shotgun"), ShotgunSetData, ShotgunRetargetFolder);
 	LoadWeaponAnimSet(TEXT("pistol"), PistolSetData, PistolRetargetFolder);
 	LoadWeaponAnimSet(TEXT("launcher"), LauncherSetData, LauncherRetargetFolder);
+	LoadWeaponAnimSet(TEXT("prone_crawl"), CrawlSetData, CrawlRetargetFolder); // the prone crawl layer (OperativeAnimInstanceProneCrawl.cpp)
 }
 
 void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAnimSet& ShotgunSet, FString& OutRetargetFolder)

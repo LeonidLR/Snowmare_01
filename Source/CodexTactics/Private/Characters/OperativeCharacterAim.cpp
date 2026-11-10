@@ -9,6 +9,7 @@
 #include "Characters/FacingRules.h"
 #include "Characters/FireArcRules.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Characters/ProneCrawlRules.h"
 #include "Characters/ThreatFacingRules.h"
 #include "Combat/UnderFireRules.h"
 #include "Characters/EnemyCharacter.h"
@@ -159,6 +160,23 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 			TurnAimTowards(FlashPoint, DeltaTime);
 		}
 	}
+	// The game designer's CrawlAndShoot_Bug_01 (2026-11-09, ProneCrawlRules): crawling on an order he keeps the body facing the danger and moves
+	// the ordered way (the directional crawl clips strafe) - the combat target / the flash above; with neither (the target out of sight a
+	// moment) the threat he fought in this fight, instead of turning to the path and back.
+	CrawlFacingKind = static_cast<uint8>(ProneCrawlRules::ECrawlFacing::Movement);
+	if (IsOrderedCrawl())
+	{
+		FVector CrawlThreat = FVector::ZeroVector;
+		const bool bRemembered = !bFacingCombatTarget && !bPeekPreTurn && bRealTimeFight && bFoughtThisFight && !bExplicitFacing && !bQuickFireActive
+			&& !bSuppressActive && !IsPanicking() && FindThreatPoint(CrawlThreat);
+		const ProneCrawlRules::ECrawlFacing Facing = ProneCrawlRules::ChooseFacing(true, bFacingCombatTarget && !bFacingUnderFire, bFacingUnderFire, bRemembered);
+		CrawlFacingKind = static_cast<uint8>(Facing);
+		if (Facing == ProneCrawlRules::ECrawlFacing::RememberedThreat)
+		{
+			bFacingCombatTarget = true; // the movement facing below stays out of it
+			TurnAimTowards(CrawlThreat, DeltaTime);
+		}
+	}
 	// Godot _face_movement_target / _safe_look_at: otherwise the body turns to the (smoothed) movement above 0.35 m/s
 	// with lerp_angle(turn_speed of the stance) and holds still below it — no trembling while braking at the goal.
 	SmoothedVelocity = FacingRules::SmoothVelocity(SmoothedVelocity, GetVelocity(), DeltaTime);
@@ -241,7 +259,10 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	float Offset = 0.f;
 	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 	// The sniper clips aim straight along the body (measured: the pack's Offset_F holds the rifle on the mesh forward axis).
-	if (bAlignBarrelWithTarget && !IsSniperWeaponEquipped() && Anim && Anim->bIsAiming && WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
+	// Not under the prone crawl layer (CrawlAndShoot_Bug_01): the crawl clips carry the rifle across the body - measured, it turned the
+	// crawling body up to 43 deg off the threat (ProneCrawlSmoke 2026-11-10); the body faces the threat itself there.
+	const bool bCrawlPose = Anim && Anim->GetProneCrawlWeight() > 0.01f;
+	if (bAlignBarrelWithTarget && !bCrawlPose && !IsSniperWeaponEquipped() && Anim && Anim->bIsAiming && WeaponMesh && WeaponMesh->GetStaticMesh() && WeaponMesh->IsVisible())
 	{
 		const FVector Barrel = WeaponMesh->GetComponentTransform().TransformVectorNoScale(MuzzleOffset.GetSafeNormal());
 		if (FMath::Abs(Barrel.Z) < 0.7f) // roughly level, i.e. really aimed

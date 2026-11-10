@@ -1796,6 +1796,19 @@ public:
 	int32 UnderFireSidesteps = 0;
 	int32 UnderFireProneDrops = 0;
 
+	/**
+	 * The prone crawl under fire (the game designer's CrawlAndShoot_Bug_01, 2026-11-09, ProneCrawlRules): prone, out of cover, moving on an
+	 * order (his own, or a formation move he really crawls on). He crawls first: no round / grenade / new reload until he stops; his body faces
+	 * the danger (the target, the flash, the threat he fought) while the directional crawl clips move him the ordered way.
+	 */
+	bool IsOrderedCrawl() const;
+	/** The fire hold is on now (IsOrderedCrawl, Codex.Combat.ProneCrawlHoldFire, not raging). */
+	bool IsCrawlFireHeld() const;
+	/** Frames the crawl held his fire with something to fire at (smokes). */
+	int32 CrawlFireHolds = 0;
+	/** What his crawling body faced this frame (ProneCrawlRules::ECrawlFacing as uint8; 0 = the movement / not crawling - smokes, logs). */
+	uint8 GetCrawlFacingKind() const { return CrawlFacingKind; }
+
 	/** Turns the body at once so the barrel points at TargetLocation (a grid shot resolves in the same frame). */
 	void FaceAimAt(const FVector& TargetLocation);
 
@@ -2474,6 +2487,8 @@ private:
 	FVector UnderFirePoint = FVector::ZeroVector;
 	double UnderFireTime = -1.0e9;
 	bool bFacingUnderFire = false;
+	/** ProneCrawlRules::ECrawlFacing of this frame's crawl facing (UpdateCombatFacing). */
+	uint8 CrawlFacingKind = 0;
 	// The manoeuvre under fire (#43, UpdateUnderFireManoeuvre).
 	/** The first round of the current spell under fire (-1e9: none running). */
 	double UnderFireSpellStart = -1.0e9;

@@ -12,6 +12,7 @@
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacterInternal.h"
 #include "Characters/PanicComponent.h"
+#include "Characters/ProneCrawlRules.h"
 #include "Characters/RageComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/CombatFeedbackSubsystem.h"
@@ -45,6 +46,30 @@ namespace OperativeFireTrace
 {
 	static TAutoConsoleVariable<int32> CVarFireTrace(TEXT("Codex.Debug.FireTrace"), 0,
 		TEXT("Dev trace (2026-10-18): 1 logs every operative's real-time fire decision when its reason changes, and every 2 s while an enemy is within 5 m and no shot leaves"));
+}
+
+namespace OperativeCrawlFire
+{
+	static TAutoConsoleVariable<int32> CVarProneCrawlHoldFire(TEXT("Codex.Combat.ProneCrawlHoldFire"), 1,
+		TEXT("The game designer's CrawlAndShoot_Bug_01 (2026-11-09, ProneCrawlRules): 1 = a prone operative crawling on an order holds his fire until he stops; 0 = the old rule (he fires while crawling; dev A/B)."));
+}
+
+bool AOperativeCharacter::IsOrderedCrawl() const
+{
+	ProneCrawlRules::FCrawlFacts Facts;
+	Facts.bAlive = HealthComponent && HealthComponent->IsAlive() && !IsKnockedDown();
+	Facts.bProne = Stance == EOperativeStance::Prone;
+	Facts.bInCover = bInCover;
+	Facts.bOwnMoveOrder = HasOwnMoveOrder();
+	Facts.bFormationMove = bHasMoveOrder && !bOwnMoveOrder;
+	Facts.Speed2D = static_cast<float>(GetVelocity().Size2D());
+	return ProneCrawlRules::IsOrderedCrawl(Facts);
+}
+
+bool AOperativeCharacter::IsCrawlFireHeld() const
+{
+	// Raging he ignores every order (Godot rage: chaotic fire) - the crawl too.
+	return OperativeCrawlFire::CVarProneCrawlHoldFire.GetValueOnGameThread() != 0 && !IsRaging() && IsOrderedCrawl();
 }
 
 bool AOperativeCharacter::IsBehindBarricade() const
@@ -705,9 +730,13 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	const bool bCoverHold = bInCover && bCoverHoldFire;
 	const bool bAutoFire = MayAutoFireNow() && !bCoverHold;
 	const bool bAutoTargets = FirePostureRules::AllowsAutoTargets(GetFirePosture()) && !bCoverHold;
+	// The game designer's CrawlAndShoot_Bug_01 (2026-11-09, ProneCrawlRules): told to crawl, he crawls first - no grenade, no new reload, no
+	// round until he stops (a prone fire / reload clip is full body: it froze the crawl). The target search below still runs (the target and
+	// the threat are kept, the body faces them: UpdateCombatFacing), so the fire resumes the frame the order ends.
+	const bool bCrawlHold = IsCrawlFireHeld();
 
 	// Godot: a clustered pack gets a grenade before the rifle (not while raging or reloading).
-	if (bAutoFire && !bRaging && !bIsReloading && GrenadesCount > 0 && AIGrenadeCooldown <= 0.f && TryAIGrenadeThrow())
+	if (bAutoFire && !bCrawlHold && !bRaging && !bIsReloading && GrenadesCount > 0 && AIGrenadeCooldown <= 0.f && TryAIGrenadeThrow())
 	{
 		ShootTimer = 1.f;
 		return TEXT("threw a grenade");
@@ -719,6 +748,10 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		if (PanicComponent)
 		{
 			PanicComponent->OnLowAmmo(); // Godot: the clip ran dry under fire
+		}
+		if (bCrawlHold)
+		{
+			return TEXT("crawling: the reload waits"); // the prone reload is a full-body clip: it starts when he stops
 		}
 		if (ReserveAmmo > 0)
 		{
@@ -747,6 +780,17 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	{
 		return bAutoFire ? TEXT("no target") : (bAutoTargets ? TEXT("no target (defensive: none has detected the squad)")
 			: TEXT("no target (auto fire held by the posture)"));
+	}
+
+	// Before the sniper step (a direct order stops HER and she kneels: never while she crawls on an order).
+	if (bCrawlHold)
+	{
+		++CrawlFireHolds;
+		if (UOperativeAnimInstance* CrawlAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+		{
+			CrawlAnim->HoldAimPose(); // the rifle comes up on the target the moment he stops (fire resumes at once)
+		}
+		return TEXT("crawling: fire held until he stops");
 	}
 
 	// Sniper rifle (user request 2026-10-09, SniperRules): only kneeling / prone and still. A direct order (priority target,
