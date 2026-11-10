@@ -140,7 +140,7 @@ Everything the trainer assumes about the arena is in `adapter.py` + `trainer_con
   `frames[]` = per tick one `[x, y]` (or `null` when dead) per fighter in `fighters` order, `events[] {t, type: shot|kill|down|heal|tactic,
   from/to/hit | by/target | side/decision}`. The viewer auto-fits the bounds, so any planar unit works.
 - **Record re-run** (`arena.record`): `<arena command with Rounds=1 Seed=<round seed>> Record=1,CodexTactics.ClipRecorder <clip> seconds=<n>`
-  rendered offscreen (`-RenderOffscreen -ResX=1280 -ResY=720 -fps=30`); the recorder's PNG frames in `Saved/Screenshots/Clips/<clip>/`
+  rendered offscreen (`-RenderOffscreen -ResX=1280 -ResY=720 -fps=30`); the recorder's JPEG frames (2026-11-10; `format=png` for PNG) in `Saved/Screenshots/Clips/<clip>/`
   are encoded by `clip_assemble.py watch`, then concatenated and scaled to 960 px. The same seed must replay the same round.
 
 **Left to wire when the arena lands**: check the real arg syntax / key names against `arena.arg_template` and `arena.result`;
