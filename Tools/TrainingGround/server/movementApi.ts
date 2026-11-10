@@ -12,6 +12,12 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import {
+  readFormationShapesFile,
+  writeFormationShapesFile,
+  validateFormationShapes,
+  type FormationShapesFile,
+} from '../src/movement/shapesSchema.ts';
 
 // fileURLToPath, not URL.pathname: the pathname keeps %20 for the space in "Unreal Projects" (ENOENT on Windows).
 const TOOL_DIR = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -19,6 +25,7 @@ const ROOT = path.resolve(TOOL_DIR, '../..');
 const LAB_DIR = path.join(ROOT, 'Content/Data/FormationLab');
 const OUT_DIR = path.join(ROOT, 'Saved/TrainingGround/movement');
 const CONFIG = path.join(LAB_DIR, 'formation_config.json');
+const SHAPES_PATH = path.join(LAB_DIR, 'formation_shapes.json');
 const REDTEAM_DIR = path.join(LAB_DIR, 'redteam');
 const NAME = /^(redteam\/)?[A-Za-z0-9_-]+$/;
 const REPORTS: Record<string, string> = { bot: 'report.md', train: 'train_report.md', redteam: 'redteam_report.md', regression: 'redteam_regression.md' };
@@ -53,7 +60,7 @@ function runTool(script: string, args: string[]): Promise<{ code: number; out: s
 
 const jsonNames = (dir: string) => (fs.existsSync(dir) ? fs.readdirSync(dir).filter((f) => f.endsWith('.json')).map((f) => f.slice(0, -5)) : []);
 const layoutNames = () => [
-  ...jsonNames(LAB_DIR).filter((n) => n !== 'formation_config').sort(),
+  ...jsonNames(LAB_DIR).filter((n) => n !== 'formation_config' && n !== 'formation_shapes').sort(),
   ...jsonNames(REDTEAM_DIR).sort((a, b) => a.localeCompare(b, 'en', { numeric: true })).map((n) => `redteam/${n}`),
 ];
 
@@ -67,6 +74,31 @@ export function setupMovementApi(use: Use): void {
   });
 
   use('/api/movement/config', (_req, res) => send(res, 200, JSON.parse(fs.readFileSync(CONFIG, 'utf8'))));
+
+  use('/api/movement/formation-shapes', async (req, res, next) => {
+    if (req.method === 'GET' || !req.method) {
+      try {
+        const shapes = readFormationShapesFile(SHAPES_PATH);
+        return send(res, 200, shapes);
+      } catch (err) {
+        return send(res, 500, { error: String(err) });
+      }
+    }
+    if (req.method === 'POST') {
+      const b = await readBody(req);
+      const errors = validateFormationShapes(b);
+      if (errors.length > 0) {
+        return send(res, 400, { error: `Validation failed: ${errors.join('; ')}` });
+      }
+      try {
+        writeFormationShapesFile(SHAPES_PATH, b as FormationShapesFile, { crlf: false });
+        return send(res, 200, { ok: true });
+      } catch (err) {
+        return send(res, 500, { error: String(err) });
+      }
+    }
+    return next ? next() : send(res, 405, { error: 'GET or POST only' });
+  });
 
   use('/api/movement/report', (req, res) => {
     const kind = REPORTS[new URL(req.url ?? '', 'http://x').searchParams.get('kind') ?? ''] ?? REPORTS.bot;
