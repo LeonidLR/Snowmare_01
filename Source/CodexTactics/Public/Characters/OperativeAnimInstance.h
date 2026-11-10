@@ -252,6 +252,9 @@ private:
 	 * orientation warping turned the launcher ~23 deg off the target). */
 	bool bWeaponTorsoOnCapsule = false;
 	float WeaponLowerWeight = 0.f;
+	/** A full set's "legs_abp" share: the root yaw, pelvis, legs and IK bones go back to the graph's pose by it, and spine_01 is re-expressed so
+	 * the torso keeps the set's facing on the capsule (the reference root) over the ABP's pelvis. */
+	float WeaponLegsAbpWeight = 0.f;
 	/**
 	 * A full-body set's torso yaw held to its forward clip's (FormationJitterSmoke 2026-11-09): the pack's directional clips twist the chest
 	 * -27 .. +16 deg off the body (the ABP's rifle legs keep it within +-6), so every change of direction - a formation follower's slot
@@ -1351,6 +1354,9 @@ public:
 	float GetShotgunUpperWeight() const { return ShotgunUpperWeight; }
 	/** The layer's weight on the pelvis and legs (0..1): a "full" set only (the launcher, designer 2026-11-09 b), else 0. */
 	float GetShotgunLowerWeight() const { return ShotgunLowerWeight; }
+	/** The share of that lower body given to the ABP's own legs while moving in a "legs_abp" gait (0 = the set's legs; the RPG-7 running / walking
+	 * forward, the designer 2026-11-10). */
+	float GetWeaponLayerLegsAbpWeight() const { return ShotgunLegsAbpWeight; }
 	/** The set in hands drives the whole body ("body": "full" in weapon_anim_sets.json). */
 	bool IsWeaponLayerFullBody() const { return bShotgunWeapon && ActiveWeaponSet().bFullBody && !(bIsCrouching && ActiveWeaponSet().bCrouchUpper); }
 	/** The layer's clips this frame (sequence, time, weight) and its shared loop phase 0..1 (smokes / diagnostics). */
@@ -1785,6 +1791,15 @@ private:
 		/** "crouch_body": "upper" = a full set drives only the upper body while crouched (the ABP's crouch legs; the launcher pack's crouch walk
 		 * shuffles its feet: they slid 76 % of the speed). */
 		bool bCrouchUpper = false;
+		/** "legs_abp": ["run", "sprint", "walk", "walk_forward"] = a full set's gaits whose LOWER body is the ABP's locomotion (the M16 legs, as an
+		 * "upper" set) - blended by those gaits' clip weight (WeaponAnimLayerRules::LegsAbpWeight; the RPG-7, the designer 2026-11-10). None = the
+		 * set's own legs in every gait. */
+		WeaponAnimLayerRules::FWeaponLegsAbpGaits LegsAbp;
+		/** "legs_abp_forward_cone_deg": "walk_forward" counts fully within this many deg of straight ahead (WeaponAnimLayerRules::ForwardConeAngle). */
+		float LegsAbpForwardConeDeg = 0.f;
+		/** "legs_abp_run_speeds": [start, full] cm/s - the legs' own walk -> run band for "run" (unset = the clips' jog share: jog_blend_speeds). */
+		float LegsAbpRunStartSpeed = 0.f;
+		float LegsAbpRunFullSpeed = 0.f;
 		/** Per-loop sync offsets ("phase_offsets": clip name -> the share of the loop where its left heel strikes; none = 0). */
 		TMap<FName, float> PhaseOffsets;
 		/** The walk -> jog blend band ("jog_blend_speeds": [start, full] cm/s; unset = walk_speed .. jog_speed). */
@@ -1894,6 +1909,8 @@ private:
 	EWeaponLayerMask ShotgunMask = EWeaponLayerMask::Off;
 	float ShotgunUpperWeight = 0.f;
 	float ShotgunLowerWeight = 0.f;
+	/** The share of a full set's lower body handed to the ABP's legs ("legs_abp"; WeaponAnimLayerRules::LegsAbpWeight eased over blend_seconds). */
+	float ShotgunLegsAbpWeight = 0.f;
 	/** Turn in place of a full-body set: the clip, its share, its time, the body's yaw last frame. */
 	UAnimSequence* LayerTurnClip = nullptr;
 	float LayerTurnShare = 0.f;

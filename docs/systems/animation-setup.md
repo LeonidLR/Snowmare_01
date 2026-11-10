@@ -514,6 +514,27 @@ switch from the M16) -> `Saved/Screenshots/PistolD/`.
   drop it) to see the pack's crouch legs again. The crouched torso is put on the capsule's facing (the reference root, `bWeaponTorsoOnCapsule`), not
   on the ABP's root: the ABP's crouch root yaw had turned the tube 23 deg off the target (measured by `RpgShots` "tube yaw"; now -1 deg crouched idle,
   -0.6 deg crouched shot, as the pack's own legs give). RpgAnimSmoke checks the tube within 8 deg of the target line on every shot.
+- **Running / walking forward = the ABP's legs** (`"legs_abp": ["run", "sprint", "walk_forward"]`, the game designer 2026-11-10, branch
+  `fix/rpg-legs-m16`): moving in a listed gait the LOWER body (the root's yaw / translation, pelvis, legs, IK bones) blends to ABP_Operative's own
+  locomotion - the M16 legs, as an `"upper"` set - and the set keeps the torso. Gaits: `run` = the jog loops in any direction, `sprint` = the sprint
+  loop, `walk_forward` = the forward clip's share of the walk's direction blend (`WeaponAnimLayerRules::ForwardShare`; 1 straight ahead, 0.5 at
+  45 deg, 0 sideways / backwards), `walk` = every walk direction (not used). The share = those gaits' clip weight (`WeaponAnimLayerRules::LegsAbpWeight`:
+  move x upright x the gait shares), eased over `blend_seconds` (`ShotgunLegsAbpWeight` -> the proxy's `WeaponLegsAbpWeight`); the walk's forward share
+  follows the eased direction (`direction_smooth_s`, the reversal cross-fade), so forward -> strafe fades instead of popping. The torso on the ABP's
+  pelvis keeps the set's mesh-space facing on the capsule (spine_01 re-expressed under the blended pelvis chain, by the share - at 0 nothing changes).
+  Idle, turn in place, walking sideways / backwards keep the pack's legs; crouched stays `crouch_body: upper`; the shot / reload unchanged. No key =
+  the set's legs in every gait (the shotgun, the pistol). Two optional tuning keys (measured by RpgAnimSmoke 2026-11-10): **`legs_abp_forward_cone_deg`**
+  (launcher 35; `WeaponAnimLayerRules::ForwardConeAngle`) - walk_forward counts fully within that many deg of straight ahead and fades to 0 at 90:
+  a leader under a formation look sector walks ~22 deg (max 35) off his path, and at the bare blend weight (2/3) the two unsynced leg sets mixed and
+  slid the most (119 % of the speed); **`legs_abp_run_speeds`** (launcher [120, 160]) - "run" counts by its own speed band instead of the clips'
+  jog share: he runs ~175 cm/s with the tube, inside the 140 -> 180 jog band, so ~12 % of the pack's strafe legs stayed mixed in. RpgAnimSmoke 12-15
+  (walk forward 110 cm/s, strafe walk, strafe run, the forward -> strafe seam); `CodexTactics.RpgShots legs` -> Saved/Screenshots/RpgLegs/.
+  Foot slide, planted-ball median drift / share of the speed - pack legs (no key) -> legs_abp -> the ABP alone (`Codex.Anim.WeaponLayer 0`, the M16
+  baseline): run forward 176 cm/s 35 (20 %) -> 139 (79 %) -> 119 (68 %); sprint 13 (2 %) -> 159 (22 %) -> 159 (22 %); walk forward 110 cm/s 68 (62 %) ->
+  130 (119 %, 25 frames) -> 68 (62 %); strafe run 32 (18 %) -> 81 (46 %) -> 101 (58 %); strafe walk keeps the pack's legs (share 0.02; the probe finds
+  no mid-stance frames there, as before). The M16 legs slide more than the pack's at the launcher's speeds - that is the ABP's own locomotion (its
+  numbers with the layer off), not the layer; the forward -> strafe seam: pelvis / feet in component space 462 cm/s peak after the turn vs 554 walking
+  forward (no pop), the share's largest one-frame step 0.083 (eased over blend_seconds).
 - **Measured foot slide** (RpgAnimSmoke, Commander, median planted-ball drift on the steady frames): walk 34 cm/s = 19 % of the speed, sprint 16 cm/s = 2 %
   (limit 20 %).
 - **Firing:** `PlayShotgunFire` -> `PlayLauncherShot`: the Shot / Sit_Shot clip natively (no montage: the layer keeps the legs and the aim offset) from

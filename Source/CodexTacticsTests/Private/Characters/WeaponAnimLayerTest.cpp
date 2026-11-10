@@ -358,4 +358,153 @@ bool FWeaponLayerLauncherDataTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponLayerLegsAbpTest, "CodexTactics.Animation.WeaponLayer.LegsAbp",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWeaponLayerLegsAbpTest::RunTest(const FString&)
+{
+	// "legs_abp" (the game designer 2026-11-10): the RPG-7's legs are the ABP's M16 locomotion running and walking forward, the pack's elsewhere.
+	using namespace WeaponAnimLayerRules;
+	TStaticArray<bool, 8> FourWay = WeaponAnimLayerTest::All(false);
+	FourWay[static_cast<int32>(EWeaponLayerDirection::Forward)] = FourWay[static_cast<int32>(EWeaponLayerDirection::Right)] = true;
+	FourWay[static_cast<int32>(EWeaponLayerDirection::Backward)] = FourWay[static_cast<int32>(EWeaponLayerDirection::Left)] = true;
+
+	// The forward clip's share of a 4-way blend.
+	TestEqual(TEXT("forward: all the forward clip"), ForwardShare(BlendDirections(0.f, FourWay)), 1.f, 0.001f);
+	TestEqual(TEXT("30 deg right: 2/3 forward"), ForwardShare(BlendDirections(30.f, FourWay)), 2.f / 3.f, 0.001f);
+	TestEqual(TEXT("30 deg left: 2/3 forward (Forward as the B side)"), ForwardShare(BlendDirections(-30.f, FourWay)), 2.f / 3.f, 0.001f);
+	TestEqual(TEXT("strafe right: none"), ForwardShare(BlendDirections(90.f, FourWay)), 0.f, 0.001f);
+	TestEqual(TEXT("backward-left: none"), ForwardShare(BlendDirections(-135.f, FourWay)), 0.f, 0.001f);
+	// Continuous through the strafe: the forward -> strafe switch has no step (it follows the eased direction).
+	float Last = ForwardShare(BlendDirections(0.f, FourWay));
+	float MaxStep = 0.f;
+	for (float Angle = 1.f; Angle <= 180.f; Angle += 1.f)
+	{
+		const float Share = ForwardShare(BlendDirections(Angle, FourWay));
+		MaxStep = FMath::Max(MaxStep, FMath::Abs(Share - Last));
+		Last = Share;
+	}
+	TestTrue(FString::Printf(TEXT("0 -> 180 deg: the forward share changes by at most 1/90 per degree (%.4f)"), MaxStep), MaxStep <= 1.f / 90.f + 0.0001f);
+
+	// The forward cone (legs_abp_forward_cone_deg): fully forward inside it, stretched back to the strafe at 90, nothing beyond 90 changes.
+	TestEqual(TEXT("no cone: the angle as it is"), ForwardConeAngle(30.f, 0.f), 30.f, 0.001f);
+	TestEqual(TEXT("cone 35: 22 deg off the path (a formation look) = forward"), ForwardConeAngle(22.f, 35.f), 0.f, 0.001f);
+	TestEqual(TEXT("cone 35: -35 deg = forward"), ForwardConeAngle(-35.f, 35.f), 0.f, 0.001f);
+	TestEqual(TEXT("cone 35: 62.5 deg = halfway to the strafe"), ForwardConeAngle(62.5f, 35.f), 45.f, 0.001f);
+	TestEqual(TEXT("cone 35: the strafe stays the strafe"), ForwardConeAngle(-90.f, 35.f), -90.f, 0.001f);
+	TestEqual(TEXT("cone 35: backwards unchanged"), ForwardConeAngle(150.f, 35.f), 150.f, 0.001f);
+	TestEqual(TEXT("cone 35, 4-way: 22 deg -> the whole forward clip"), ForwardShare(BlendDirections(ForwardConeAngle(22.f, 35.f), FourWay)), 1.f, 0.001f);
+	TestEqual(TEXT("cone 35, 4-way: 62.5 deg -> half"), ForwardShare(BlendDirections(ForwardConeAngle(62.5f, 35.f), FourWay)), 0.5f, 0.001f);
+	// Continuous with the cone too (no step at its edge or at 90).
+	Last = ForwardShare(BlendDirections(ForwardConeAngle(0.f, 35.f), FourWay));
+	MaxStep = 0.f;
+	for (float Angle = 0.5f; Angle <= 180.f; Angle += 0.5f)
+	{
+		const float Share = ForwardShare(BlendDirections(ForwardConeAngle(Angle, 35.f), FourWay));
+		MaxStep = FMath::Max(MaxStep, FMath::Abs(Share - Last));
+		Last = Share;
+	}
+	TestTrue(FString::Printf(TEXT("cone 35: 0 -> 180 deg changes by at most 1/55 per degree (%.4f per 0.5 deg)"), MaxStep), MaxStep <= 0.5f / 55.f + 0.0001f);
+
+	// Parsing.
+	TArray<FString> Unknown;
+	const FWeaponLegsAbpGaits Launcher = ParseLegsAbpGaits({ TEXT("run"), TEXT(" Sprint "), TEXT("walk_forward"), TEXT("hop") }, &Unknown);
+	TestTrue(TEXT("run / sprint / walk_forward parsed (case and spaces ignored)"), Launcher.bRun && Launcher.bSprint && Launcher.bWalkForward && !Launcher.bWalk);
+	TestTrue(TEXT("an unknown gait is reported"), Unknown.Num() == 1 && Unknown[0] == TEXT("hop"));
+	TestFalse(TEXT("an empty list = no gaits"), ParseLegsAbpGaits({}).Any());
+
+	// The weight.
+	FWeaponLegsAbpShares Shares;
+	Shares.Move = 1.f;
+	Shares.Jog = 1.f;
+	TestEqual(TEXT("no gaits (absent key): always the set's legs"), LegsAbpWeight(FWeaponLegsAbpGaits(), Shares), 0.f, 0.001f);
+	TestEqual(TEXT("running (the jog loops), any direction: the ABP's legs"), LegsAbpWeight(Launcher, Shares), 1.f, 0.001f);
+	Shares.Jog = 0.f;
+	Shares.WalkForward = 1.f;
+	TestEqual(TEXT("walking forward: the ABP's legs"), LegsAbpWeight(Launcher, Shares), 1.f, 0.001f);
+	Shares.WalkForward = 0.f;
+	TestEqual(TEXT("walking sideways / backwards: the pack's legs"), LegsAbpWeight(Launcher, Shares), 0.f, 0.001f);
+	Shares.WalkForward = 0.5f;
+	TestEqual(TEXT("walking diagonally forward (45 deg): half"), LegsAbpWeight(Launcher, Shares), 0.5f, 0.001f);
+	Shares.WalkForward = 0.f;
+	Shares.Jog = 0.25f;
+	TestEqual(TEXT("strafing in the walk -> run band: the run's share"), LegsAbpWeight(Launcher, Shares), 0.25f, 0.001f);
+	Shares.Jog = 0.f;
+	Shares.Sprint = 1.f;
+	TestEqual(TEXT("sprinting with \"sprint\" listed: the ABP's legs"), LegsAbpWeight(Launcher, Shares), 1.f, 0.001f);
+	FWeaponLegsAbpGaits RunOnly;
+	RunOnly.bRun = true;
+	TestEqual(TEXT("sprinting without \"sprint\": the pack's legs"), LegsAbpWeight(RunOnly, Shares), 0.f, 0.001f);
+	Shares.Sprint = 0.f;
+	Shares.Move = 0.f;
+	Shares.WalkForward = 1.f;
+	TestEqual(TEXT("standing (idle, turn in place): the pack's legs"), LegsAbpWeight(Launcher, Shares), 0.f, 0.001f);
+	Shares.Move = 0.4f;
+	TestEqual(TEXT("starting to walk forward: by the move share"), LegsAbpWeight(Launcher, Shares), 0.4f, 0.001f);
+	Shares.Move = 1.f;
+	Shares.Crouch = 1.f;
+	TestEqual(TEXT("crouched: never (crouch_body handles the crouch)"), LegsAbpWeight(Launcher, Shares), 0.f, 0.001f);
+	Shares.Crouch = 0.f;
+	Shares.AimMove = 1.f;
+	Shares.AimWalkForward = 0.f;
+	TestEqual(TEXT("an aim-walk set strafing: the pack's legs"), LegsAbpWeight(Launcher, Shares), 0.f, 0.001f);
+	Shares.AimWalkForward = 1.f;
+	TestEqual(TEXT("an aim-walk set walking forward: the ABP's legs"), LegsAbpWeight(Launcher, Shares), 1.f, 0.001f);
+	FWeaponLegsAbpGaits AnyWalk;
+	AnyWalk.bWalk = true;
+	Shares.AimMove = 0.f;
+	Shares.WalkForward = 0.f;
+	TestEqual(TEXT("\"walk\": every walk direction"), LegsAbpWeight(AnyWalk, Shares), 1.f, 0.001f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponLayerLegsAbpDataTest, "CodexTactics.Animation.WeaponLayer.LegsAbpData",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWeaponLayerLegsAbpDataTest::RunTest(const FString&)
+{
+	// weapon_anim_sets.json: only the launcher lists legs_abp (running + walking forward on the ABP's legs; the designer 2026-11-10); every
+	// other set keeps its own legs in every gait (no key).
+	FString Text;
+	TSharedPtr<FJsonObject> Root;
+	if (!TestTrue(TEXT("weapon_anim_sets.json"), FFileHelper::LoadFileToString(Text, *(FPaths::ProjectContentDir() / TEXT("Data/Weapons/weapon_anim_sets.json")))
+		&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid()))
+	{
+		return false;
+	}
+	for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : Root->Values)
+	{
+		const TSharedPtr<FJsonObject>* Block = nullptr;
+		if (!Pair.Value.IsValid() || !Pair.Value->TryGetObject(Block) || !Block)
+		{
+			continue;
+		}
+		TArray<FString> Names;
+		const bool bHas = (*Block)->TryGetStringArrayField(TEXT("legs_abp"), Names);
+		if (Pair.Key == TEXT("launcher"))
+		{
+			TArray<FString> Unknown;
+			const WeaponAnimLayerRules::FWeaponLegsAbpGaits Gaits = WeaponAnimLayerRules::ParseLegsAbpGaits(Names, &Unknown);
+			TestTrue(TEXT("the launcher: legs_abp run + sprint + walk_forward, nothing unknown"), bHas && Gaits.bRun && Gaits.bSprint && Gaits.bWalkForward
+				&& !Gaits.bWalk && Unknown.IsEmpty());
+			FString Body;
+			TestTrue(TEXT("the launcher stays a full-body set (the pack's legs idle / turning / strafing)"), (*Block)->TryGetStringField(TEXT("body"), Body)
+				&& Body == TEXT("full"));
+			double Cone = 0.0;
+			TestTrue(TEXT("the launcher: a forward cone within 0 .. 60 deg (walk_forward counts under a formation look)"),
+				(*Block)->TryGetNumberField(TEXT("legs_abp_forward_cone_deg"), Cone) && Cone >= 0.0 && Cone <= 60.0);
+			// The legs' run band ends below his run with the tube (~175 cm/s measured): running is wholly the ABP's legs, not a mix.
+			const TArray<TSharedPtr<FJsonValue>>* RunBand = nullptr;
+			TestTrue(TEXT("the launcher: legs_abp_run_speeds [start < full <= 170 cm/s]"), (*Block)->TryGetArrayField(TEXT("legs_abp_run_speeds"), RunBand) && RunBand
+				&& RunBand->Num() == 2 && (*RunBand)[0]->AsNumber() < (*RunBand)[1]->AsNumber() && (*RunBand)[1]->AsNumber() <= 170.0);
+		}
+		else
+		{
+			TestFalse(FString::Printf(TEXT("%s: no legs_abp (its legs unchanged)"), *Pair.Key), bHas || (*Block)->HasField(TEXT("legs_abp_forward_cone_deg"))
+				|| (*Block)->HasField(TEXT("legs_abp_run_speeds")));
+		}
+	}
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

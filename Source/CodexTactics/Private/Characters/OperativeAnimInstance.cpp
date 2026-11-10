@@ -1394,6 +1394,7 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	WeaponLowerWeight = Instance->ShotgunLowerWeight;
 	bWeaponFullBody = Instance->IsWeaponLayerFullBody();
 	bWeaponRootReference = bWeaponFullBody && Instance->ActiveWeaponSet().bRootReference;
+	WeaponLegsAbpWeight = bWeaponFullBody ? Instance->ShotgunLegsAbpWeight : 0.f;
 	bWeaponTorsoOnCapsule = !bWeaponFullBody && Instance->bShotgunWeapon && Instance->ActiveWeaponSet().bFullBody && Instance->ActiveWeaponSet().bCrouchUpper;
 	WeaponTorsoRef = Instance->LayerTorsoAlpha > MinSampleWeight ? Instance->LayerTorsoRef : nullptr;
 	WeaponTorsoRefTime = Instance->LayerTorsoRefTime;

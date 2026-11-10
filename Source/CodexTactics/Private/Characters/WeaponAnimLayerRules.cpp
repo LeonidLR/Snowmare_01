@@ -324,6 +324,18 @@ namespace WeaponAnimLayerRules
 		return FMath::Clamp((LeadIn + Insert * (TotalSeconds - LeadIn) / ClipLength) / TotalSeconds, 0.f, 1.f);
 	}
 
+	float ForwardConeAngle(float AngleDeg, float ConeDeg)
+	{
+		const float Angle = FRotator::NormalizeAxis(AngleDeg);
+		const float Cone = FMath::Min(ConeDeg, 89.f);
+		const float Abs = FMath::Abs(Angle);
+		if (Cone <= 0.f || Abs >= 90.f)
+		{
+			return Angle;
+		}
+		return FMath::Sign(Angle) * FMath::Max(0.f, Abs - Cone) * 90.f / (90.f - Cone);
+	}
+
 	ELauncherAction ResolveLauncherAction(float ShotSeconds, float ShotLength, float ReloadClipTime)
 	{
 		if (ShotSeconds >= 0.f && ShotSeconds < ShotLength)
@@ -345,5 +357,57 @@ namespace WeaponAnimLayerRules
 			return Rate >= MinRate ? 1.f : 0.f;
 		}
 		return FMath::Clamp((Rate - MinRate) / (FullRate - MinRate), 0.f, 1.f);
+	}
+
+	float ForwardShare(const FWeaponLayerDirectionBlend& Blend)
+	{
+		const float Alpha = FMath::Clamp(Blend.Alpha, 0.f, 1.f);
+		return (Blend.A == EWeaponLayerDirection::Forward ? 1.f - Alpha : 0.f) + (Blend.B == EWeaponLayerDirection::Forward ? Alpha : 0.f);
+	}
+
+	FWeaponLegsAbpGaits ParseLegsAbpGaits(const TArray<FString>& Names, TArray<FString>* OutUnknown)
+	{
+		FWeaponLegsAbpGaits Gaits;
+		for (const FString& Raw : Names)
+		{
+			const FString Name = Raw.TrimStartAndEnd();
+			if (Name.Equals(TEXT("run"), ESearchCase::IgnoreCase))
+			{
+				Gaits.bRun = true;
+			}
+			else if (Name.Equals(TEXT("sprint"), ESearchCase::IgnoreCase))
+			{
+				Gaits.bSprint = true;
+			}
+			else if (Name.Equals(TEXT("walk"), ESearchCase::IgnoreCase))
+			{
+				Gaits.bWalk = true;
+			}
+			else if (Name.Equals(TEXT("walk_forward"), ESearchCase::IgnoreCase))
+			{
+				Gaits.bWalkForward = true;
+			}
+			else if (OutUnknown)
+			{
+				OutUnknown->Add(Raw);
+			}
+		}
+		return Gaits;
+	}
+
+	float LegsAbpWeight(const FWeaponLegsAbpGaits& Gaits, const FWeaponLegsAbpShares& Shares)
+	{
+		if (!Gaits.Any())
+		{
+			return 0.f;
+		}
+		auto Unit = [](float Value) { return FMath::Clamp(Value, 0.f, 1.f); };
+		auto Walk = [&Gaits, &Unit](float Forward) { return Gaits.bWalk ? 1.f : (Gaits.bWalkForward ? Unit(Forward) : 0.f); };
+		const float Sprint = Unit(Shares.Sprint);
+		const float Aim = Unit(Shares.AimMove);
+		const float Jog = Unit(Shares.Jog);
+		const float Upright = (1.f - Aim) * (Jog * (Gaits.bRun ? 1.f : 0.f) + (1.f - Jog) * Walk(Shares.WalkForward)) + Aim * Walk(Shares.AimWalkForward);
+		const float Gait = Sprint * (Gaits.bSprint ? 1.f : 0.f) + (1.f - Sprint) * Upright;
+		return Unit(Unit(Shares.Move) * (1.f - Unit(Shares.Crouch)) * Gait);
 	}
 }
