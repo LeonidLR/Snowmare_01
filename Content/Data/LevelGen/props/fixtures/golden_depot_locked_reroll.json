@@ -35,71 +35,71 @@
 				{
 					"id": "crates_00000001_0",
 					"variant": "crate_s",
-					"pos": [-5350, -3250],
+					"pos": [-1600, -1550],
 					"walk_layer": "ground",
-					"yaw": 0,
+					"yaw": 90,
 					"locked": true
 				},
 				{
 					"id": "crates_00000001_2",
-					"variant": "crate_l",
-					"pos": [-3950, -7950],
+					"variant": "crate_s",
+					"pos": [-4450, -5400],
 					"walk_layer": "ground",
 					"yaw": 270,
 					"locked": true
 				},
 				{
 					"id": "crates_00000001_3",
-					"variant": "crate_s",
-					"pos": [4050, 4950],
+					"variant": "crate_l",
+					"pos": [2700, -4900],
 					"walk_layer": "ground",
-					"yaw": 0,
+					"yaw": 180,
 					"locked": false
 				},
 				{
 					"id": "crates_00000001_4",
 					"variant": "crate_s",
-					"pos": [-4150, -7150],
+					"pos": [4400, 8850],
 					"walk_layer": "ground",
-					"yaw": 90,
+					"yaw": 0,
 					"locked": true
 				},
 				{
 					"id": "crates_00000002_0",
 					"variant": "crate_s",
-					"pos": [-4300, -6000],
+					"pos": [5000, -4800],
 					"walk_layer": "ground",
-					"yaw": 270,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_1",
 					"variant": "crate_s",
-					"pos": [-2750, 3750],
-					"walk_layer": "ground",
-					"yaw": 270,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_2",
-					"variant": "crate_s",
-					"pos": [-4250, -4300],
+					"pos": [-3100, -6800],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false
 				},
 				{
-					"id": "crates_00000002_3",
+					"id": "crates_00000002_2",
 					"variant": "crate_s",
-					"pos": [6000, 2700],
+					"pos": [-2100, -6300],
 					"walk_layer": "ground",
 					"yaw": 270,
 					"locked": false
 				},
 				{
+					"id": "crates_00000002_3",
+					"variant": "crate_s",
+					"pos": [1600, 7500],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
 					"id": "crates_00000002_4",
 					"variant": "crate_s",
-					"pos": [1200, 7000],
+					"pos": [1600, 5650],
 					"walk_layer": "ground",
 					"yaw": 90,
 					"locked": false
@@ -107,39 +107,39 @@
 				{
 					"id": "crates_00000002_5",
 					"variant": "crate_s",
-					"pos": [-4500, -4650],
+					"pos": [4550, 8550],
 					"walk_layer": "ground",
-					"yaw": 90,
+					"yaw": 0,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_6",
 					"variant": "crate_s",
-					"pos": [1050, 7650],
-					"walk_layer": "ground",
-					"yaw": 270,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_7",
-					"variant": "crate_s",
-					"pos": [-2650, -1650],
+					"pos": [-2450, -2700],
 					"walk_layer": "ground",
 					"yaw": 90,
 					"locked": false
 				},
 				{
+					"id": "crates_00000002_7",
+					"variant": "crate_s",
+					"pos": [-1000, 8700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
 					"id": "crates_00000002_8",
 					"variant": "crate_s",
-					"pos": [5000, -1150],
+					"pos": [-900, -8850],
 					"walk_layer": "ground",
-					"yaw": 180,
+					"yaw": 270,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_9",
 					"variant": "crate_s",
-					"pos": [3550, -2450],
+					"pos": [1350, 3400],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false
@@ -147,55 +147,55 @@
 				{
 					"id": "crates_00000002_10",
 					"variant": "crate_l",
-					"pos": [4600, 2200],
+					"pos": [-3950, -2600],
 					"walk_layer": "ground",
 					"yaw": 180,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_11",
-					"variant": "crate_l",
-					"pos": [-1300, -7100],
+					"variant": "crate_s",
+					"pos": [-1450, -150],
 					"walk_layer": "ground",
-					"yaw": 180,
+					"yaw": 270,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_12",
 					"variant": "crate_s",
-					"pos": [3200, -5150],
+					"pos": [-3050, -7650],
 					"walk_layer": "ground",
 					"yaw": 180,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_13",
-					"variant": "crate_s",
-					"pos": [-2900, -6450],
+					"variant": "crate_l",
+					"pos": [3850, -7400],
 					"walk_layer": "ground",
-					"yaw": 0,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_14",
 					"variant": "crate_s",
-					"pos": [-950, 1100],
+					"pos": [-5250, -3500],
 					"walk_layer": "ground",
-					"yaw": 90,
+					"yaw": 180,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_15",
 					"variant": "crate_s",
-					"pos": [-2150, 5550],
+					"pos": [-3950, -5300],
 					"walk_layer": "ground",
-					"yaw": 90,
+					"yaw": 0,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_16",
 					"variant": "crate_s",
-					"pos": [-1700, 550],
+					"pos": [5700, 2800],
 					"walk_layer": "ground",
 					"yaw": 90,
 					"locked": false
@@ -203,23 +203,23 @@
 				{
 					"id": "crates_00000002_17",
 					"variant": "crate_s",
-					"pos": [4800, -1550],
+					"pos": [-1900, 7100],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_18",
-					"variant": "crate_l",
-					"pos": [-2600, 2450],
+					"variant": "crate_s",
+					"pos": [-1200, 6750],
 					"walk_layer": "ground",
-					"yaw": 0,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_19",
 					"variant": "crate_s",
-					"pos": [4050, -400],
+					"pos": [1650, 8500],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false
@@ -227,15 +227,15 @@
 				{
 					"id": "crates_00000002_20",
 					"variant": "crate_s",
-					"pos": [-5100, -6750],
+					"pos": [5900, -100],
 					"walk_layer": "ground",
-					"yaw": 0,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_21",
-					"variant": "crate_l",
-					"pos": [-3650, 7550],
+					"variant": "crate_s",
+					"pos": [-2500, 900],
 					"walk_layer": "ground",
 					"yaw": 270,
 					"locked": false
@@ -243,55 +243,55 @@
 				{
 					"id": "crates_00000002_22",
 					"variant": "crate_s",
-					"pos": [6050, 50],
-					"walk_layer": "ground",
+					"pos": [-3650, 1400],
+					"walk_layer": "floor:B_ruin:1",
 					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_23",
-					"variant": "crate_s",
-					"pos": [-3300, 250],
-					"walk_layer": "ground",
-					"yaw": 270,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_24",
-					"variant": "crate_s",
-					"pos": [-1100, -7950],
-					"walk_layer": "ground",
-					"yaw": 270,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_25",
-					"variant": "crate_s",
-					"pos": [-5650, -850],
+					"variant": "crate_l",
+					"pos": [4350, 4050],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false
 				},
 				{
-					"id": "crates_00000002_26",
+					"id": "crates_00000002_24",
 					"variant": "crate_s",
-					"pos": [3800, -150],
+					"pos": [1250, 4550],
 					"walk_layer": "ground",
 					"yaw": 90,
 					"locked": false
 				},
 				{
+					"id": "crates_00000002_25",
+					"variant": "crate_s",
+					"pos": [-2300, -5400],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_26",
+					"variant": "crate_s",
+					"pos": [-700, -2250],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
 					"id": "crates_00000002_27",
 					"variant": "crate_s",
-					"pos": [-1400, 3550],
+					"pos": [-750, -2650],
 					"walk_layer": "ground",
 					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_28",
-					"variant": "crate_l",
-					"pos": [6050, 1050],
+					"variant": "crate_s",
+					"pos": [-4250, -3150],
 					"walk_layer": "ground",
 					"yaw": 180,
 					"locked": false
@@ -299,161 +299,161 @@
 				{
 					"id": "crates_00000002_29",
 					"variant": "crate_s",
-					"pos": [-5200, -2550],
+					"pos": [-4500, 750],
 					"walk_layer": "ground",
-					"yaw": 180,
+					"yaw": 0,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_30",
 					"variant": "crate_s",
-					"pos": [-2450, 3350],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_31",
-					"variant": "crate_s",
-					"pos": [3100, -5600],
-					"walk_layer": "ground",
-					"yaw": 270,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_32",
-					"variant": "crate_s",
-					"pos": [6150, 2350],
-					"walk_layer": "ground",
-					"yaw": 270,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_33",
-					"variant": "crate_s",
-					"pos": [4500, -4150],
-					"walk_layer": "ground",
-					"yaw": 270,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_34",
-					"variant": "crate_s",
-					"pos": [2200, -1250],
-					"walk_layer": "ground",
-					"yaw": 180,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_35",
-					"variant": "crate_s",
-					"pos": [4450, -6150],
+					"pos": [4100, 1650],
 					"walk_layer": "ground",
 					"yaw": 90,
 					"locked": false
 				},
 				{
+					"id": "crates_00000002_31",
+					"variant": "crate_s",
+					"pos": [4550, 5350],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_32",
+					"variant": "crate_l",
+					"pos": [-5750, 2800],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_33",
+					"variant": "crate_s",
+					"pos": [4450, -1050],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_34",
+					"variant": "crate_s",
+					"pos": [5850, 5150],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_35",
+					"variant": "crate_l",
+					"pos": [-5050, 5450],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
 					"id": "crates_00000002_36",
 					"variant": "crate_s",
-					"pos": [-3350, -7300],
+					"pos": [-3250, 2650],
 					"walk_layer": "ground",
-					"yaw": 270,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_37",
 					"variant": "crate_s",
-					"pos": [3050, 1150],
+					"pos": [-3700, -5050],
 					"walk_layer": "ground",
-					"yaw": 270,
+					"yaw": 180,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_38",
 					"variant": "crate_s",
-					"pos": [-4000, -8200],
+					"pos": [-900, 6300],
 					"walk_layer": "ground",
-					"yaw": 270,
+					"yaw": 180,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_39",
-					"variant": "crate_s",
-					"pos": [-1000, 3500],
+					"variant": "crate_l",
+					"pos": [-600, -2950],
 					"walk_layer": "ground",
-					"yaw": 270,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_40",
 					"variant": "crate_s",
-					"pos": [-5050, -4000],
-					"walk_layer": "ground",
-					"yaw": 270,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_41",
-					"variant": "crate_s",
-					"pos": [4950, -8700],
+					"pos": [1850, -550],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false
 				},
 				{
-					"id": "crates_00000002_42",
+					"id": "crates_00000002_41",
 					"variant": "crate_s",
-					"pos": [-5500, 5850],
-					"walk_layer": "ground",
-					"yaw": 180,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_43",
-					"variant": "crate_s",
-					"pos": [-3600, 7000],
-					"walk_layer": "ground",
-					"yaw": 180,
-					"locked": false
-				},
-				{
-					"id": "crates_00000002_44",
-					"variant": "crate_s",
-					"pos": [4600, 2900],
+					"pos": [-3050, -6500],
 					"walk_layer": "ground",
 					"yaw": 270,
 					"locked": false
 				},
 				{
+					"id": "crates_00000002_42",
+					"variant": "crate_s",
+					"pos": [-6150, 2800],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_43",
+					"variant": "crate_l",
+					"pos": [-1550, -3000],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_44",
+					"variant": "crate_s",
+					"pos": [-5450, -7300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
 					"id": "crates_00000002_45",
 					"variant": "crate_s",
-					"pos": [1000, -3500],
+					"pos": [-3350, 200],
 					"walk_layer": "ground",
-					"yaw": 180,
+					"yaw": 0,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_46",
 					"variant": "crate_s",
-					"pos": [-900, 3100],
+					"pos": [-6150, -2050],
 					"walk_layer": "ground",
 					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_47",
-					"variant": "crate_s",
-					"pos": [4400, -1200],
+					"variant": "crate_l",
+					"pos": [-2850, 8700],
 					"walk_layer": "ground",
-					"yaw": 90,
+					"yaw": 0,
 					"locked": false
 				},
 				{
 					"id": "crates_00000002_48",
-					"variant": "crate_l",
-					"pos": [-3300, -1300],
+					"variant": "crate_s",
+					"pos": [2450, 7100],
 					"walk_layer": "ground",
-					"yaw": 0,
+					"yaw": 180,
 					"locked": false
 				}
 			],
@@ -463,15 +463,15 @@
 				"kept": 5,
 				"placed": 49,
 				"rejected": {
-					"blocked": 50379,
-					"door": 73,
-					"keepout": 69,
-					"ladder": 763,
-					"other": 65,
+					"blocked": 29130,
+					"door": 803,
+					"keepout": 39,
+					"ladder": 1479,
+					"other": 91,
 					"other_layer": 0,
-					"route": 6573,
-					"spacing": 224,
-					"spawn": 1298
+					"route": 9599,
+					"spacing": 265,
+					"spawn": 1579
 				},
 				"requested": 54,
 				"short_by": 0,
@@ -504,21 +504,21 @@
 		{
 			"op": "move",
 			"id": "crates_00000001_3",
-			"pos": [4150, 4950],
+			"pos": [2800, -4900],
 			"walk_layer": "ground",
-			"yaw": 0
+			"yaw": 180
 		},
 		{
 			"op": "delete",
 			"id": "crates_00000001_1",
-			"pos": [-2700, -6900]
+			"pos": [1300, 6750]
 		},
 		{
 			"op": "add",
 			"object": {
 				"id": "hand_crates_0",
 				"variant": "crate_s",
-				"pos": [-700, -2700],
+				"pos": [-4500, -6350],
 				"walk_layer": "ground",
 				"yaw": 90,
 				"locked": false,

@@ -45,49 +45,49 @@
 				{
 					"id": "crates_00000015_1",
 					"variant": "crate_s",
-					"pos": [-1850, -650],
+					"pos": [-400, -700],
 					"walk_layer": "ground",
-					"yaw": 270,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000015_3",
 					"variant": "crate_s",
-					"pos": [1300, 850],
+					"pos": [-1650, 250],
 					"walk_layer": "ground",
-					"yaw": 0,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000015_4",
 					"variant": "crate_s",
-					"pos": [-550, 1500],
+					"pos": [1050, 1300],
 					"walk_layer": "ground",
-					"yaw": 180,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000015_5",
 					"variant": "crate_s",
-					"pos": [-1000, 950],
+					"pos": [-1150, -1150],
 					"walk_layer": "ground",
-					"yaw": 180,
+					"yaw": 270,
 					"locked": false
 				},
 				{
 					"id": "crates_00000015_6",
 					"variant": "crate_s",
-					"pos": [450, 700],
+					"pos": [1100, 300],
 					"walk_layer": "ground",
-					"yaw": 0,
+					"yaw": 90,
 					"locked": false
 				},
 				{
 					"id": "crates_00000015_7",
-					"variant": "crate_s",
-					"pos": [1900, -1350],
+					"variant": "crate_l",
+					"pos": [-1850, -250],
 					"walk_layer": "ground",
-					"yaw": 180,
+					"yaw": 0,
 					"locked": false
 				}
 			],
@@ -97,15 +97,15 @@
 				"kept": 2,
 				"placed": 6,
 				"rejected": {
-					"blocked": 1667,
-					"door": 7,
+					"blocked": 703,
+					"door": 76,
 					"keepout": 69,
-					"ladder": 10,
+					"ladder": 89,
 					"other": 0,
 					"other_layer": 90,
-					"route": 104,
+					"route": 171,
 					"spacing": 138,
-					"spawn": 694
+					"spawn": 828
 				},
 				"requested": 8,
 				"short_by": 0,
