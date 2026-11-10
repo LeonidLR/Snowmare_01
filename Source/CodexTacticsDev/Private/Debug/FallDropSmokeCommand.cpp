@@ -723,6 +723,12 @@ namespace FallDropSmoke
 	void Run(FState& State, UWorld* World, USquadSubsystem& Squad, float Dt)
 	{
 		AOperativeCharacter* Leader = Squad.GetLeader();
+		if (!Leader)
+		{
+			Check(State, false, TEXT("a squad leader"));
+			Finish(State, false);
+			return;
+		}
 		const ULedgeFallComponent& Fall = *Leader->LedgeFall;
 		const EStage Stage = static_cast<EStage>(State.Stage);
 		const FallRules::FFallConfig& Config = FallRules::GetConfig();

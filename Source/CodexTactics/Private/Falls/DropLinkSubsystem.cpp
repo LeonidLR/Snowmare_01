@@ -144,7 +144,10 @@ void UDropLinkSubsystem::PollNavigationReady()
 		if (WaitedSeconds > 180.f)
 		{
 			UE_LOG(LogCodexTactics, Warning, TEXT("[DropLinks] the navmesh was not ready after %.0f s - no drop links"), WaitedSeconds);
-			World->GetTimerManager().ClearTimer(PollTimer);
+			if (World)
+			{
+				World->GetTimerManager().ClearTimer(PollTimer);
+			}
 		}
 		return;
 	}

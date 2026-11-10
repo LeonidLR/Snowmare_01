@@ -68,6 +68,10 @@ namespace HitFlashOverlaySmoke
 				{
 					Feedback2->FlashEnemyHit(Hound.Get()); // overlaps the first flash
 				}
+				if (!W2)
+				{
+					return;
+				}
 				FTimerHandle Check;
 				W2->GetTimerManager().SetTimer(Check, FTimerDelegate::CreateLambda([Visible, Original]()
 				{

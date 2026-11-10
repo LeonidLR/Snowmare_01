@@ -576,7 +576,7 @@ namespace DropSoftlockSmoke
 				State.Phase = EPhase::Rescue;
 				return true;
 			}
-			if (Squad->IsSoloMode())
+			if (Squad && Squad->IsSoloMode())
 			{
 				Squad->ExitSoloMode();
 			}
@@ -604,6 +604,11 @@ namespace DropSoftlockSmoke
 				return true; // the teleport settles
 			}
 			const FLeg& Leg = State.Legs[State.Leg];
+			if (!Leader)
+			{
+				Check(State, false, TEXT("a squad leader"));
+				return Finish(State, false);
+			}
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: leg %d / %d - %s: %s clicks %s; paths:%s"), State.Leg + 1, State.Legs.Num(), *Leg.Name,
 				*Leader->DisplayName.ToString(), *Leg.Click1.ToCompactString(), *Describe(World, *Squad, Leg.Click1, State));
 			Click(World, Leg.Click1);

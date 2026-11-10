@@ -646,6 +646,11 @@ namespace LevelGenLaddersSmoke
 				return true; // the teleport settles
 			}
 			const FLeg& Leg = State.Legs[State.Leg];
+			if (!Leader)
+			{
+				Check(State, false, TEXT("a squad leader"));
+				return Finish(State, false);
+			}
 			const EOperativeOrderResult Result = Leader->OrderMoveTo(Leg.Goal, false);
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: leg %d / %d - %s %s: the leader at %s ordered to %s (result %d)"), State.Leg + 1, State.Legs.Num(), *Leg.Id,
 				KindName(Leg.Kind), *Leader->GetActorLocation().ToCompactString(), *Leg.Goal.ToCompactString(), static_cast<int32>(Result));
