@@ -18,8 +18,8 @@ import sys
 # USD per million tokens (input, output) - keep in sync with the current price list.
 PRICES = {
     "claude-haiku-5-5": (1.0, 5.0),
-    "claude-sonnet-5-5": (3.0, 15.0),
-    "claude-opus-5-5": (15.0, 75.0),
+    "claude-sonnet-5-5": (2.0, 10.0),   # 2026-11-10: published price (was 3 / 15)
+    "claude-opus-5-5": (4.0, 20.0),     # 2026-11-10: published price (was 15 / 75 - the ledger overstated Opus ~3.75x)
 }
 LEDGER = os.path.join("Saved", "Orchestrator", "api_spend.jsonl")
 
@@ -46,6 +46,8 @@ def main() -> int:
     ap.add_argument("--max-tokens", type=int, default=8000)
     ap.add_argument("--budget-usd", type=float, default=100.0, help="total cap over the whole ledger")
     ap.add_argument("--label", default="")
+    ap.add_argument("--effort", choices=["low", "medium", "high", "max"], default="medium",
+                    help="output_config.effort: caps the adaptive thinking (2026-11-10: a 32k Opus patch job spent everything thinking)")
     args = ap.parse_args()
 
     if not os.environ.get("ANTHROPIC_API_KEY"):
@@ -70,7 +72,8 @@ def main() -> int:
     client = anthropic.Anthropic()
     # Streamed (2026-11-10): the SDK refuses a non-streamed call whose max_tokens may run past 10 minutes (Opus, 24k).
     with client.messages.stream(model=args.model, max_tokens=args.max_tokens,
-                                messages=[{"role": "user", "content": text}]) as stream:
+                                messages=[{"role": "user", "content": text}],
+                                extra_body={"output_config": {"effort": args.effort}}) as stream:
         msg = stream.get_final_message()
     answer = "".join(block.text for block in msg.content if getattr(block, "type", "") == "text")
     if not answer.strip():
