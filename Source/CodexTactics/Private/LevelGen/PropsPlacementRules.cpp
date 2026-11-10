@@ -304,7 +304,7 @@ namespace PropsPlacementLocal
 		 */
 		EReject StaticReject(FIntPoint P, const FString& Layer, int32 Half) const
 		{
-			if (View.IsBlocked(P, Layer, Half + R.MinGapAnyCm))
+			if (View.IsBlocked(P, Layer, Half + R.WallGapCm))
 			{
 				return EReject::Blocked;
 			}
@@ -534,6 +534,8 @@ bool PropsPlacementRules::BuildRules(const FJsonObject& Balance, const FLevelPro
 	}
 	NonNegative(R, TEXT("min_spacing_cm"), Out.MinSpacingCm);
 	NonNegative(R, TEXT("min_gap_any_cm"), Out.MinGapAnyCm);
+	Out.WallGapCm = Out.MinGapAnyCm;
+	NonNegative(R, TEXT("wall_gap_cm"), Out.WallGapCm);
 	if (const TSharedPtr<FJsonObject> Ex = R.Object(TEXT("exclude")))
 	{
 		ReadExclude(*Ex, Ctx + TEXT(".exclude"), Out.Exclude, Errors);
@@ -1036,7 +1038,7 @@ TArray<FPropsViolation> PropsPlacementRules::Validate(const FPropsPlacementInput
 		{
 			Add(O, TEXT("not on its walk layer"));
 		}
-		if (View.IsBlocked(O.Pos, O.WalkLayer, Half + R.MinGapAnyCm))
+		if (View.IsBlocked(O.Pos, O.WalkLayer, Half + R.WallGapCm))
 		{
 			Add(O, TEXT("blocked"));
 		}

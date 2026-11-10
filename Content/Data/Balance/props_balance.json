@@ -119,6 +119,8 @@
 			"min_spacing_cm_comment": "Between crates; also the keep-out radius of a deleted crate.",
 			"min_gap_any_cm": 120,
 			"min_gap_any_cm_comment": "To objects of every other layer.",
+			"wall_gap_cm": 5,
+			"wall_gap_cm_comment": "Gap to walls / footprints / covers (the designer 2026-11-10: crates stand right against walls, along them); doorways stay clear through exclude.door_cm 250.",
 			"exclude": { "$preset": "standard" },
 			"exclude_comment": "The standard keep-out set below; a layer's rules.exclude overrides it key by key."
 		},

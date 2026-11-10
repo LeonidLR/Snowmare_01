@@ -48,6 +48,8 @@ struct FPropsRules
 	TArray<TPair<FString, int32>> Variants;
 	int32 MinSpacingCm = 0;
 	int32 MinGapAnyCm = 0;
+	/** Gap to the layout's blocked geometry (walls, footprints, covers); absent = MinGapAnyCm. The designer 2026-11-10: crates may stand right against walls (crates_default wall_gap_cm 5), doorways stay clear through exclude.door_cm. */
+	int32 WallGapCm = 0;
 	FPropsExclusionParams Exclude;
 	/** Barrels: members per cluster (min >= 1, max >= min) and the member ring (cm) around the anchor. */
 	int32 ClusterMin = 1;
