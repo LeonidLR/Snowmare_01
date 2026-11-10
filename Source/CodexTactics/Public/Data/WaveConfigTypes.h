@@ -169,6 +169,46 @@ struct CODEXTACTICS_API FSquadLoadout
 };
 
 /**
+ * One role's / operative's weapons on a level (level JSON "loadouts" value, Training Ground pass 1, 2026-11-09). Read at spawn before the
+ * global weapons_tuning.json "loadouts" (WeaponLoadoutRules); lists EVERY weapon the operative carries (the roster's ExtraWeapons are skipped).
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FLevelWeaponLoadout
+{
+	GENERATED_BODY()
+
+	/** Weapon ids of weapons_tuning.json "weapons" (lower case, no duplicates) in order; the first is the primary, in hands at spawn. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Loadout")
+	TArray<FString> WeaponIds;
+};
+
+/**
+ * One role's / operative's starting kit on a level (level JSON "kit" value, Training Ground pass 1, 2026-11-09): applied at the level start
+ * (ACodexTacticsGameMode::SpawnSquad, after the campaign carry) in every mode. -1 / a missing ammo entry = keep the current value.
+ */
+USTRUCT(BlueprintType)
+struct CODEXTACTICS_API FLevelOperativeKit
+{
+	GENERATED_BODY()
+
+	/** "grenades": grenades carried (clamped to the operative's MaxGrenades); -1 = keep. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Kit")
+	int32 Grenades = -1;
+
+	/** "medkits": medkits carried (>= 0); -1 = keep. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Kit")
+	int32 Medkits = -1;
+
+	/** "heat_packs": heat packs carried (clamped to tactical_heat.json heat_pack_max_stack); -1 = keep. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Kit")
+	int32 HeatPacks = -1;
+
+	/** "ammo": {"<weapon_id>": reserve} - the reserve rounds of a carried weapon (lower-case id, >= 0); a weapon not listed keeps its reserve. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Kit")
+	TMap<FString, int32> AmmoReserve;
+};
+
+/**
  * How the fight of a level starts (user request 2026-10-06, level JSON "combat_start"). Auto: by ambush when the map
  * holds patrols (an APatrolRouteActor or an enemy with a route / escort leader), else by the button / combat zone.
  */
@@ -252,6 +292,22 @@ struct CODEXTACTICS_API FLevelCombatConfig
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
 	FSquadLoadout SquadLoadout;
+
+	/**
+	 * "loadouts": {"<role or operative id>": ["<weapon_id>", ...]} (Training Ground pass 1, 2026-11-09; LevelJsonRules::ParseLoadouts). Keys are
+	 * lower case: an operative id "slot_<n>" (0-based roster SquadIndex) wins over a role key ("commander", "engineer", "medic_sapper",
+	 * "recruit"; LevelLoadoutRules::FindPerOperative). Empty = the global weapons_tuning.json loadouts for everyone (today's behaviour).
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	TMap<FString, FLevelWeaponLoadout> Loadouts;
+
+	/**
+	 * "kit": {"<role or operative id>": {"grenades": n, "medkits": n, "heat_packs": n, "ammo": {"<weapon_id>": n}}} (Training Ground pass 1,
+	 * 2026-11-09; LevelJsonRules::ParseKits): the starting kit applied at the level start, campaign arrivals included; a field set here is
+	 * never overwritten by squad_loadout. Same key resolution as Loadouts. Empty = today's behaviour.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")
+	TMap<FString, FLevelOperativeKit> Kits;
 
 	/** "combat_start": "auto" (default) | "ambush" | "button". */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level")

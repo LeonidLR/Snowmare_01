@@ -48,3 +48,26 @@ under-fire tuning, camera / formation cvars (a level `cvars` block would cover m
 10. PMC squads editor (+ later per-squad weapon pool / stats). 11. Combat Lab pressure / cheats on every level.
 12. Enemy mix per level for non-wave levels; `environment_lock` checkbox; CRYO_DRONE + several entries per type in the wave editor.
 13. `corpse_cap`, `start_fade_seconds`, `intro_dialogue`, `gate_exit`. 14. Level `cvars` block. 15. Squad composition + start mode per level.
+
+## C++ side done (Training Ground pass 1, branch feat/tg-pass1-cpp, 2026-11-10)
+Items 2, 3, 4 and bug B are in the game; the TS side (Training Ground panels) still has to write these keys. A level JSON without them
+behaves exactly as before. Schema: `Content/Data/Schemas/level_config.schema.json`. Tests: `CodexTactics.Data.LevelJson.Tg*`,
+`CodexTactics.Mission.StageLoadoutOnce`.
+- **Bug B fixed**: `ApplyStageLoadout` (squad_loadout) runs once per level - at the cutscene end / sudden first wave, else the first change
+  into Preparation / WaveCombat (ambush / skirmish / firefight levels) - not on every phase change (`LoadoutRules::ShouldRunStageLoadout`).
+- **`environment.override_carry`** (bool, default false), inside the existing `environment` object:
+  `"environment": {"override_carry": true, "start_hour": 6, "weather": "Clear"}`. On a campaign arrival the level's own `start_hour` /
+  `weather` (and `seed` / `snow_cover` / `wetness` / `puddles` when set) win over the carried previous level; what the level does not set
+  continues from the carry. No effect without a carry or on a `locked` level (`UEnvironmentSubsystem::ResolveInitialState`).
+- **`loadouts`** (top level): `"loadouts": {"commander": ["m16", "pistol", "grenade"], "slot_1": ["shotgun", "pistol"]}`. Value = EVERY
+  weapon the operative carries, in order, the first in hands (the roster extras, e.g. the Medic-Sapper's sniper rifle, are not added - list
+  them). Read at spawn before the global `weapons_tuning.json` loadouts. Unknown / out-of-play ids are dropped with a warning; an empty list
+  or no usable id = the global loadout.
+- **`kit`** (top level): `"kit": {"commander": {"grenades": 3, "medkits": 2, "heat_packs": 1, "ammo": {"m16": 90, "pistol": 24}}}`. Applied
+  at the level start in every mode (fresh starts, campaign arrivals, level-placed squads) after the campaign carry; every field is optional
+  (missing = keep the current value), integers >= 0; grenades clamped to the operative's max, heat_packs to `heat_pack_max_stack`; an ammo
+  entry for a weapon he does not carry is ignored with a warning. A field the kit sets is never overwritten by `squad_loadout`
+  (grenades_count, medkits, m16 / pistol ammo). To keep carried supplies on an arrival, leave that field out.
+- **Keys of `loadouts` / `kit`** (trimmed, case-insensitive): an operative id `slot_<n>` (0-based roster index: `slot_0` Commander, `slot_1`
+  Engineer, `slot_2` Medic-Sapper) wins over a role key (`commander`, `engineer`, `medic_sapper`, `recruit`); no entry = today's behaviour.
+  Bad entries (non-array / non-object / non-number) are skipped with a log warning, never the level.
