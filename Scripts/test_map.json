@@ -47,7 +47,8 @@
     "_squadStart": "2026-11-09 (the game starts in Solo, branch feat/solo-start): -SquadStart=<this> for every smoke - the smokes written before it assume the formation start; a smoke's own \"squadStart\": \"level\" runs the level's real start mode (Solo unless the level JSON says start_mode formation)"
   },
   "knownFlaky": {
-    "_comment": "Smokes known to pass only on a re-run, name -> reason (smoke_parallel prints them apart from NEW flaky ones). Goal: empty. Cleanup day 2026-10-15 fixed CornerHold, TurnBasedAim, Knockdown, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics (+ Panic, SquadControl, VisionCone failing) - see docs/port/KNOWN_GAPS.md (the old HANDOFF section 9)."
+    "_comment": "Smokes known to pass only on a re-run, name -> reason (smoke_parallel prints them apart from NEW flaky ones). Goal: empty. Cleanup day 2026-10-15 fixed CornerHold, TurnBasedAim, Knockdown, Cover, LevelWave, GroupSelect, TurnBlastDeath, EnemyTactics (+ Panic, SquadControl, VisionCone failing) - see docs/port/KNOWN_GAPS.md (the old HANDOFF section 9).",
+    "HordeFirefightsSmoke": "2026-11-10: the 2nd horde sometimes spawns 0-19 m from the 1st on the small Depot when the new-bearing rule relaxes (3 of 5 runs); waits for the designer's bearing decision (bearing 45 deg / relax 0.5)"
   },
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run; realTime = wall clock instead of the fixed step (smokeDefaults); fixedStepFps = this smoke's own fixed step; rendered = a real RHI offscreen (-RenderOffscreen -ResX=1280 -ResY=720) instead of -nullrhi; _why = the reason of an override",
