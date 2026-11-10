@@ -152,6 +152,11 @@ namespace DefendSmoke
 			{
 				return true;
 			}
+			if (!Defender)
+			{
+				Check(State, false, TEXT("the defender is gone"));
+				return Finish(State);
+			}
 			const float ToObject = FVector::Dist2D(Defender->GetActorLocation(), State.Object);
 			Check(State, ToObject <= 650.f, FString::Printf(TEXT("he went to the object: %.1f m from it"), ToObject / 100.f));
 			// The visuals: one marker, faded in, the green fresnel overlay on the barricade's mesh.

@@ -354,6 +354,11 @@ namespace CornerEntrySmoke
 			}
 			UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 			SmokeUtils::StartWaveFight(Flow); // sudden horde start, its free pause released
+			if (!Squad)
+			{
+				Check(State, false, TEXT("squad subsystem"));
+				return Finish(State);
+			}
 			Op = Squad->GetLeader();
 			State.Op = Op;
 			{
@@ -403,6 +408,11 @@ namespace CornerEntrySmoke
 		}
 		if (State.PathIndex >= UE_ARRAY_COUNT(Paths))
 		{
+			return Finish(State);
+		}
+		if (!Op)
+		{
+			Check(State, false, TEXT("the operative is gone"));
 			return Finish(State);
 		}
 		const FPath& Path = Paths[State.PathIndex];

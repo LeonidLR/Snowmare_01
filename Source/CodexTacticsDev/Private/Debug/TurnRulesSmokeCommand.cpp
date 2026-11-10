@@ -92,6 +92,11 @@ namespace TurnRulesSmoke
 			Check(State, Unit && TurnBased->SetActiveUnitStance(EOperativeStance::Crouching), TEXT("active operative crouches"));
 			const FTurnUnitState* UnitState = TurnBased->GetUnitState(Unit);
 			State.APBefore = UnitState ? UnitState->AP : 0;
+			if (!UnitState)
+			{
+				Check(State, false, TEXT("missing unit state"));
+				return Finish(State, false);
+			}
 			// Two free orthogonal steps away (any side).
 			bool bMoved = false;
 			const FIntPoint Directions[] = { { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } };

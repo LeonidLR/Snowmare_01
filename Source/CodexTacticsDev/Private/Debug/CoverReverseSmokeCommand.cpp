@@ -290,6 +290,11 @@ namespace CoverReverseSmoke
 			{
 				return true;
 			}
+			if (!Op)
+			{
+				Check(State, false, TEXT("the operative is gone"));
+				return Finish(State, false);
+			}
 			const FVector Click = State.bCrouch ? FVector(0.f, 0.f, 30.f) : FVector(0.f, 0.f, 90.f);
 			const bool bFound = CoverTraceRules::FindCoverSlotAt(World, State.P + State.F * 580.f + Click, State.F, State.Slot);
 			Check(State, bFound, TEXT("cover slot at the wall's middle"));

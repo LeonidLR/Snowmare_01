@@ -201,6 +201,11 @@ namespace GroupCoverPrioritySmoke
 	void CheckSettled(FState& State, const TCHAR* Tag)
 	{
 		const AOperativeCharacter* Three[] = { Member(State, 0), Member(State, 1), Member(State, 2) };
+		if (!Three[0] || !Three[1] || !Three[2])
+		{
+			Check(State, false, TEXT("three operatives"));
+			return;
+		}
 		bool bSameWall = true;
 		float MaxAlong = 0.f;
 		float MinGap = 1.0e9f;

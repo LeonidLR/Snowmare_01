@@ -195,6 +195,11 @@ namespace AimOffsetSmoke
 			return Next();
 		case 4:
 			// No more shots: after the hold the target is gone and the pitch eases back to 0.
+			if (!Op)
+			{
+				Check(State, false, TEXT("the operative is gone"));
+				return Finish(State);
+			}
 			if (State.StageTime < Op->AimTargetHoldSeconds + 1.5f || !Anim)
 			{
 				return true;

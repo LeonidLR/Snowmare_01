@@ -160,7 +160,7 @@ namespace TurnBasedSmoke
 				Check(State, Hud->GetPhaseText().ToString() == TEXT("⚔️ SQUAD TURN") && Hud->GetApText().ToString() == TEXT("AP: 8/8"),
 					TEXT("turn-based panel: squad phase, AP 8/8"));
 			}
-			Check(State, TurnBased->SetActiveUnitStance(EOperativeStance::Crouching) && Active->AP == 7, TEXT("stance change costs 1 AP"));
+			Check(State, TurnBased->SetActiveUnitStance(EOperativeStance::Crouching) && Active && Active->AP == 7, TEXT("stance change costs 1 AP"));
 			State.EnemyCellBefore = TurnBased->GetUnitState(State.Enemy.Get())->GridPos;
 			State.SquadHealthBefore = SquadHealth(World);
 			TurnBased->PassSquadTurn();

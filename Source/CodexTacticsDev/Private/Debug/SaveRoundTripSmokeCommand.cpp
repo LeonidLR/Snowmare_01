@@ -809,7 +809,7 @@ namespace SaveRoundTripSmoke
 		Check(State, Tutorial && Tutorial->GetStepState(TEXT("rt_done")) == ETutorialStepState::Completed
 			&& Tutorial->GetStepState(TEXT("rt_skip")) == ETutorialStepState::Skipped && Tutorial->GetStepState(TEXT("rt_obj")) == ETutorialStepState::Active
 			&& Tutorial->GetCurrentBeat() == FName(TEXT("T0")), TEXT("tutorial: completed / skipped steps, the shown objective and the beat restored"));
-		Check(State, Medic->IsSniperWeaponEquipped() && Medic->CurrentClip == 3 && Medic->GetMesh()->GetSkeletalMeshAsset()
+		Check(State, Medic && Medic->IsSniperWeaponEquipped() && Medic->CurrentClip == 3 && Medic->GetMesh()->GetSkeletalMeshAsset()
 			&& Medic->GetMesh()->GetSkeletalMeshAsset()->GetName() == State.MedicBodyBefore,
 			FString::Printf(TEXT("Medic-Sapper: same body (%s), sniper rifle back in hands [%d/%d]"), *State.MedicBodyBefore, Medic->CurrentClip, Medic->ReserveAmmo));
 		const ABarrelActor* Barrel = FindNamed<ABarrelActor>(World, State.BarrelName);

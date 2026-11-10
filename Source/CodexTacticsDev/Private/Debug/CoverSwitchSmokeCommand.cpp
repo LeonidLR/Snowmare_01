@@ -341,7 +341,7 @@ namespace CoverSwitchSmoke
 			const FString Played = Anim ? Anim->GetLastCoverSwitchClip() : FString();
 			Check(State, bSwitched && State.bSawSwitchEntry, FString::Printf(TEXT("%s: arrived through the switch run-in (count %d -> %d)"), Label,
 				State.SwitchCountBefore, Op->GetCoverSwitchCount()));
-			Check(State, Played.Replace(TEXT("_sprint_"), TEXT("_jog_")) == State.ExpectedClip && Played.Contains(TEXT("_sprint_")) && Anim->GetCoverClipLog().Contains(Played),
+			Check(State, Played.Replace(TEXT("_sprint_"), TEXT("_jog_")) == State.ExpectedClip && Played.Contains(TEXT("_sprint_")) && Anim && Anim->GetCoverClipLog().Contains(Played),
 				FString::Printf(TEXT("%s: the run-in clip %s (expected %s), started at %.2f s, the clip body %.0f cm off the runner"), Label, *Played,
 					*State.ExpectedClip, Anim ? Anim->GetLastCoverSwitchStartSeconds() : -1.f, Op->GetLastCoverSwitchMismatchCm()));
 			Check(State, Anim && Anim->GetLastCoverSwitchStartSeconds() > 0.2f, FString::Printf(TEXT("%s: only the last metres of the clip played"), Label));

@@ -302,8 +302,11 @@ bool FWeaponLayerLauncherDataTest::RunTest(const FString&)
 	bool bPack = true;
 	TestTrue(TEXT("pack_playback false"), (*Launcher)->TryGetBoolField(TEXT("pack_playback"), bPack) && !bPack);
 	const TSharedPtr<FJsonObject>* Retargeted = nullptr;
-	TestTrue(TEXT("retargeted for both squad skeletons"), (*Launcher)->TryGetObjectField(TEXT("retargeted"), Retargeted) && Retargeted
-		&& (*Retargeted)->HasField(TEXT("UE4_Mannequin_Skeleton")) && (*Retargeted)->HasField(TEXT("Female_Soldier_Skeleton")));
+	if (!TestTrue(TEXT("retargeted for both squad skeletons"), (*Launcher)->TryGetObjectField(TEXT("retargeted"), Retargeted) && Retargeted
+		&& (*Retargeted)->HasField(TEXT("UE4_Mannequin_Skeleton")) && (*Retargeted)->HasField(TEXT("Female_Soldier_Skeleton"))))
+	{
+		return false;
+	}
 	TArray<FString> Paths;
 	TFunction<void(const TSharedPtr<FJsonValue>&)> Walk = [&Paths, &Walk](const TSharedPtr<FJsonValue>& Value)
 	{
