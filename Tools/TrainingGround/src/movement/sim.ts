@@ -17,6 +17,20 @@ import {
   CLASSIFY_START, CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules,
   FormationShapeRules, FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
 } from './rules.ts';
+import { ROLE_NAME_TO_LETTER, type FormationShapesFile, type FormationShape, type EditableFormation } from './shapesSchema.ts';
+
+export function getSavedFormationShape(
+  savedShapes: FormationShapesFile | undefined,
+  formation: Formation | EditableFormation,
+  memberCount: number
+): FormationShape | undefined {
+  if (!savedShapes?.formations) return undefined;
+  const countKey = String(memberCount);
+  if ((formation as string) === 'pair' || (memberCount === 2 && formation === 'column' && savedShapes.formations.pair?.[countKey])) {
+    return savedShapes.formations.pair?.[countKey] ?? (savedShapes.formations as Record<string, Record<string, FormationShape> | undefined>)[formation]?.[countKey];
+  }
+  return (savedShapes.formations as Record<string, Record<string, FormationShape> | undefined>)[formation]?.[countKey];
+}
 
 export const SIM_DT = 1 / 30;
 const HEADING_SMOOTHING = 3.5; // FSquadFormationConfig::RotationSmoothing
@@ -121,6 +135,8 @@ export interface SimOptions {
   blizzard?: boolean;
   /** v1.2: the menu's "All forward" - walking, everyone looks at 12 (LookYaw mode 'forward'). */
   allForward?: boolean;
+  /** Saved formation shapes from formation_shapes.json (or the formation editor). */
+  savedShapes?: FormationShapesFile;
   /** Seconds the squad stays after the leader reaches the end of the route. */
   haltSeconds?: number;
   /** Shared grid (built once per layout). */
@@ -182,7 +198,14 @@ export function simulate(o: SimOptions): number {
   const finalPoint = points[points.length - 1];
 
   let heading = yawOf(sub(legs[1] ?? add(legs[0], [1, 0]), legs[0]));
-  const startSlots = FormationShapeRules.Slots(n >= 4 ? 'diamond' : 'wedge', n, legs[0], heading, c);
+  const startFormation = n >= 4 ? 'diamond' : 'wedge';
+  const savedStart = getSavedFormationShape(o.savedShapes, startFormation, n);
+  const startSlots = savedStart
+    ? savedStart.members.map((m) => ({
+        role: ROLE_NAME_TO_LETTER[m.role],
+        pos: localToWorld(legs[0], heading, [m.fwd, m.right]),
+      }))
+    : FormationShapeRules.Slots(startFormation, n, legs[0], heading, c);
   const spawnAt = (slot: Vec2): Vec2 => {
     const p = add(slot, [(random() - 0.5) * 60, (random() - 0.5) * 60]);
     if (nav.walkable(p)) return p;
@@ -370,14 +393,25 @@ export function simulate(o: SimOptions): number {
           // crossed obliquely is not a corridor (P's "forward over the shoulder" aimed at the door's wall end 0.5 m away).
           decided: FormationSectorRules.Decided(s.role, 'column', n, passage, c) };
       });
-    } else if (formation === 'custom' && o.customShape) {
+    } else if (formation === 'custom' && (o.customShape || (o.savedShapes?.custom && o.manualFormation && o.manualFormation in o.savedShapes.custom))) {
+      const customDef = o.customShape ?? o.savedShapes?.custom?.[o.manualFormation as keyof typeof o.savedShapes.custom];
       // 17.2: the player's places (the members are squad 0..n-1, the leader first); the looks are his (Look below, per member).
-      targets = FormationCustomRules.CustomSlots(o.customShape, members.map((_, i) => i), leader.pos, heading, c).map((s) => ({ role: s.role, pos: s.pos, yaw: s.yaw }));
+      targets = FormationCustomRules.CustomSlots(customDef!, members.map((_, i) => i), leader.pos, heading, c).map((s) => ({ role: s.role, pos: s.pos, yaw: s.yaw }));
     } else {
-      targets = FormationShapeRules.Slots(formation, n, leader.pos, heading, c).map((s) => ({
-        ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, passage, c),
-        decided: FormationSectorRules.Decided(s.role, formation, n, passage, c),
-      }));
+      const saved = getSavedFormationShape(o.savedShapes, formation, n);
+      if (saved) {
+        targets = saved.members.map((m) => ({
+          role: ROLE_NAME_TO_LETTER[m.role],
+          pos: localToWorld(leader.pos, heading, [m.fwd, m.right]),
+          yaw: normYaw(heading + m.look),
+          decided: true,
+        }));
+      } else {
+        targets = FormationShapeRules.Slots(formation, n, leader.pos, heading, c).map((s) => ({
+          ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, passage, c),
+          decided: FormationSectorRules.Decided(s.role, formation, n, passage, c),
+        }));
+      }
     }
     // v2.1: slicing the pie - one member looks round the end of the wall the squad passes (patrol only; not in the wall layout).
     // v2.1 fix: a new formation in effect (fold, unfold, mirror, any switch) -> the followers take its places by minimal travel.
@@ -425,7 +459,8 @@ export function simulate(o: SimOptions): number {
     // layout and the STANDING hedgehog ring keep their rules (walking, the hedgehog is just a shape).
     let rearGuard: Role | null = slideRear;
     let shoulder: { role: Role; yaw: number }[] = []; // v2.3 part 7 (Q3 = c): the allocator's over-the-shoulder members (ClearLook's limit)
-    if (n >= 3 && (mode === 'walk' || (mode === 'halt' && formation !== 'hedgehog')) && formation !== 'wall' && formation !== 'custom') {
+    const savedEffective = getSavedFormationShape(o.savedShapes, formation, n);
+    if (n >= 3 && (mode === 'walk' || (mode === 'halt' && formation !== 'hedgehog')) && formation !== 'wall' && formation !== 'custom' && !savedEffective) {
       const trailOn = FormationGuardRules.Effective(guard).trail;
       const hv = dirOf(heading);
       // v2.3 (1A clarified): the looks the user decided for the formation (the narrow column's K / P / L) are fixed looks too.
