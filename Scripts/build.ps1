@@ -7,18 +7,23 @@
 # Usage: powershell -ExecutionPolicy Bypass -File Scripts\build.ps1 [-Target CodexTacticsEditor] [-Config Development]
 #        [-NoUnity]     every .cpp compiled alone (UBT -DisableUnity): proves each file includes what it uses
 #        [-FullUnity]   unity blobs also for the files changed in git (UBT -DisableAdaptiveUnity): what main's build sees
+#        [-StaticAnalyzer Default|VisualCpp]   UBT static analysis of the project modules only (-StaticAnalyzerProjectOnly, MSVC /analyze):
+#                       log -> Saved\Logs\StaticAnalysis.log (used by Scripts\Tools\weekly_audit.ps1); the next normal build recompiles
 param(
     [string]$Target = "CodexTacticsEditor",
     [string]$Config = "Development",
     [switch]$NoUnity,
-    [switch]$FullUnity
+    [switch]$FullUnity,
+    [ValidateSet("None", "Default", "VisualCpp")][string]$StaticAnalyzer = "None",
+    [string]$ProjectDirOverride = ""
 )
 
 $ErrorActionPreference = "Stop"
 $EngineRoot = "C:\Program Files\Epic Games\UE_5.8"
 $ProjectDir = Split-Path $PSScriptRoot -Parent
+if ($ProjectDirOverride) { $ProjectDir = $ProjectDirOverride } # analyse another checkout (the weekly audit reads main)
 $Project = Join-Path $ProjectDir "CodexTactics.uproject"
-$LogFile = Join-Path $ProjectDir "Saved\Logs\Build.log"
+$LogFile = Join-Path $ProjectDir $(if ($StaticAnalyzer -ne "None") { "Saved\Logs\StaticAnalysis.log" } else { "Saved\Logs\Build.log" })
 New-Item -ItemType Directory -Force (Split-Path $LogFile) | Out-Null
 
 # Only an editor of THIS checkout locks our DLLs (another project's editor, or the user's editor on the main folder while we
@@ -39,6 +44,7 @@ if ((Test-Path $ClashScript) -and (Get-Command python -ErrorAction SilentlyConti
 
 $UbtExtra = @()
 if ($FullUnity) { $UbtExtra += "-DisableAdaptiveUnity" }
+if ($StaticAnalyzer -ne "None") { $UbtExtra += @("-StaticAnalyzer=$StaticAnalyzer", "-StaticAnalyzerProjectOnly") }
 # Both proof builds re-plan the target: the cached UBT makefile ignores changed unity settings ("Target is up to date", also
 # with -NoUBTMakefiles), so it is deleted (UBT writes a new one; the next normal build re-plans once more).
 if ($FullUnity -or $NoUnity) {
@@ -78,6 +84,10 @@ try {
     }
 }
 
+if ($StaticAnalyzer -ne "None") {
+    Write-Host "Static analysis exit code $code. Log: $LogFile ($((Get-Item $LogFile).Length) bytes)"
+    exit $code
+}
 $lines = Get-Content $LogFile
 $issues = $lines | Where-Object { $_ -match "(error|warning)" -and $_ -notmatch "Epic Games\\UE_5\.8\\Engine\\" -and $_ -notmatch "not a preferred version|has not been heavily tested" }
 $issues | Select-Object -First 40 | ForEach-Object { Write-Host $_ }

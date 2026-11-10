@@ -190,6 +190,8 @@ One line per trap; the full rows (with consequences and exact commands) are in [
 versions there). Never edit another agent's worktree or the main checkout from yours; the lead merges into `main` once the user's editor is closed, after build + tests
 pass. One builder at a time: `$env:CODEX_AGENT = "claude"` (or `"gemini"`), `Scripts/agent_lock.ps1 -Status` shows the holder; builds refuse while the user's editor is open.
 
+**Weekly audit (chore/weekly-audit).** `Scripts/Tools/weekly_audit.ps1` runs the UBT static analyzer (`Scripts/build.ps1 -StaticAnalyzer Default`), churn + Jev risk and the per-system coverage map, and writes `docs/port/audit/AUDIT_<date>.md` + `audit_<date>.json` + `docs/port/project-health.html`; `Scripts/Tools/register_weekly_audit.ps1` schedules it (Sunday 02:00; not registered until the user says so). Read the latest AUDIT first thing on Monday; details `docs/tools/weekly-audit.md`.
+
 ```
 powershell -ExecutionPolicy Bypass -File Scripts/build.ps1                    # [-FullUnity | -NoUnity]; runs the unity-clash finder first (yellow WARNING per hit)
 python Scripts/Tools/find_unity_clashes.py                                   # the clash check alone (exit 1 on a clash)
