@@ -428,4 +428,4 @@ The shared fixtures are written first by Claude: `Content/Data/LevelGen/props/fi
 4. Visible marker within 3 m, a shot detonates - **agreed, and DISARMING must exist**: add task C7b (a disarm action on a mine /
    mined crate / doorway tripwire - who can disarm, time, failure chance from data; inert in `MinesInert`), after C7.
 5. Explosive chains allowed, explosives >= 400 cm apart - **agreed**.
-6. (the 6th question was cut off by the output limit - re-ask.)
+6. Freezing - pending.
