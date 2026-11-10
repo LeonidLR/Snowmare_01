@@ -32,6 +32,9 @@
 //   target's team), first_strike (1 = this side's hit came first), objective_hold_s (seconds of sole control of the point),
 //   median_engagement_m (its shots' median distance).
 // CodexTactics.PmcArenaSmoke = one pmc round + the JSON validated (Smoke RESULT: PASS / FAIL).
+// CodexTactics.PmcStalemateSmoke (fix/pmc-arena-stalemate 2026-11-10) = one real 3v3 objective round on the Depot: contact happens and resumes
+//   within 45 s after every quiet spell, the attackers reach the point area, no running order is replaced inside its minimum hold, the
+//   decision churn per fighter is measured (the round's "flow" object).
 // CodexTactics.PmcArenaObjectiveSmoke = one round where the defenders are parked out of the fight: the attackers must walk onto the point
 //   and capture it (end_reason objective, the attacker wins, his objective_hold_s >= hold_s).
 
@@ -62,6 +65,7 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Combat/TacticalSightSubsystem.h"
+#include "Data/WeaponDataAsset.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "GameFramework/HUD.h"
@@ -120,7 +124,19 @@ namespace PmcArena
 		int32 Scenario = -1;
 		/** PmcArenaObjectiveSmoke: the defenders are parked out of the fight after the spawn - the attackers must take the point. */
 		bool bSmokeCapture = false;
+		/** PmcStalemateSmoke: a real objective round, the fight flow checked (quiet spells, the point reached, order commitment). */
+		bool bSmokeStalemate = false;
+		/**
+		 * Ammo=resupply|real (fix/pmc-arena-stalemate, default resupply): a fighter whose reserve runs dry gets his weapon's reserve back - an
+		 * arena-only training rule (the Depot tracks: empty rifles stood on the point next to each other for 3 minutes, unable to fight).
+		 */
+		bool bResupply = true;
 	};
+
+	/** PmcStalemateSmoke's limits (the designer 2026-11-08): the fight resumes within this after a quiet spell, s. */
+	constexpr float MaxQuietSeconds = 45.f;
+	/** The same fighter's next order sooner than this counts as a quick re-decision (pmc-v3: a flank re-decided twice a second), s. */
+	constexpr float QuickRedecisionSeconds = 2.f;
 
 	/**
 	 * The arena's own data (task #53): the level JSON's "pmc_arena" object (L_PmcArenaDepot.json / L_PmcArena.json), the code defaults
@@ -188,6 +204,26 @@ namespace PmcArena
 		int32 Shots[2] = { 0, 0 };
 		/** First hits on a target that was not looking towards the shooter (his facing > 45 deg off; user 2026-11-07). */
 		int32 StrikesUnobserved[2] = { 0, 0 };
+		/**
+		 * The fight's flow (fix/pmc-arena-stalemate 2026-11-10): a shot between the sides at all, shots per minute, the first shot, the longest
+		 * quiet spell after it (gaps between shots + the quiet tail to the end), the attackers' mean / closest distance to the point, the
+		 * orders per fighter per minute, quick re-decisions (same fighter < 2 s; of the same order), running orders replaced inside their
+		 * minimum hold (must be 0), orders failed, detours.
+		 */
+		bool bContact = false;
+		float ShotsPerMin = 0.f;
+		float FirstContactS = -1.f;
+		float LongestQuietS = 0.f;
+		float AttackerMeanDistM = -1.f;
+		float AttackerClosestM = -1.f;
+		float OrdersPerFighterMin = 0.f;
+		int32 QuickRedecisions = 0;
+		int32 QuickSameOrder = 0;
+		int32 EarlyPreempts = 0;
+		int32 OrdersFailed = 0;
+		int32 Detours = 0;
+		/** Arena resupplies (Ammo=resupply): reserves refilled after running dry. */
+		int32 Resupplies = 0;
 	};
 
 	/** The last hit a fighter took (the HP drops of the next samples are that shooter's damage). */
@@ -227,6 +263,17 @@ namespace PmcArena
 		/** Fighters already hit this round, and per side the first hits on a target looking away (strikes_unobserved). */
 		TSet<TWeakObjectPtr<AOperativeCharacter>> StruckOnce;
 		int32 StrikesUnobserved[2] = { 0, 0 };
+		/** The fight flow (fix/pmc-arena-stalemate): shot times between the sides, each fighter's last order (time, order), the counters. */
+		TArray<float> ShotTimes;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, TPair<float, EPmcOrder>> LastOrder;
+		int32 Orders = 0;
+		int32 QuickRedecisions = 0;
+		int32 QuickSameOrder = 0;
+		int32 EarlyPreempts = 0;
+		double AttackerDistSum = 0.0;
+		int32 AttackerDistSamples = 0;
+		float AttackerClosestCm = -1.f;
+		int32 Resupplies = 0;
 	};
 	constexpr float TrackInterval = 0.2f;
 
@@ -303,6 +350,7 @@ namespace PmcArena
 			else if (Key == TEXT("spawnmax")) { Options.SpawnMaxCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 300.f) * 100.f; }
 			else if (Key == TEXT("objective")) { Options.bObjective = FCString::Atoi(*Value) != 0; }
 			else if (Key == TEXT("smokecapture")) { Options.bSmokeCapture = FCString::Atoi(*Value) != 0; }
+			else if (Key == TEXT("ammo")) { Options.bResupply = !Value.Equals(TEXT("real"), ESearchCase::IgnoreCase); }
 			else if (Key == TEXT("scenario"))
 			{
 				EPmcScenario Scenario = EPmcScenario::Skirmish;
@@ -975,6 +1023,13 @@ namespace PmcArena
 		Track.ShotDistM[1].Reset();
 		Track.StruckOnce.Reset();
 		Track.StrikesUnobserved[0] = Track.StrikesUnobserved[1] = 0;
+		Track.ShotTimes.Reset();
+		Track.LastOrder.Reset();
+		Track.Orders = Track.QuickRedecisions = Track.QuickSameOrder = Track.EarlyPreempts = 0;
+		Track.AttackerDistSum = 0.0;
+		Track.AttackerDistSamples = 0;
+		Track.AttackerClosestCm = -1.f;
+		Track.Resupplies = 0;
 		FState* StatePtr = &State;
 		for (FSide& Side : State.Sides)
 		{
@@ -1008,6 +1063,7 @@ namespace PmcArena
 					if (Shooter && Victim && ShooterSide != INDEX_NONE && VictimSide != INDEX_NONE && ShooterSide != VictimSide)
 					{
 						FTrack& ShotTrack = StatePtr->Track;
+						ShotTrack.ShotTimes.Add(StatePtr->StageTime);
 						const float DistM = static_cast<float>(FVector::Dist2D(Shooter->GetActorLocation(), Victim->GetActorLocation())) / 100.f;
 						ShotTrack.ShotDistM[ShooterSide].Add(DistM);
 						const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(Shooter->GetWorld());
@@ -1051,9 +1107,29 @@ namespace PmcArena
 		if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World); Pmc && !Track.OrderHandle.IsValid())
 		{
 			// The commander's decisions: the chosen option with its (top) score; heals / flanks / suppressions / ambushes / retreats among them.
-			Track.OrderHandle = Pmc->OnFighterOrder.AddLambda([StatePtr](int32 TeamId, AOperativeCharacter* Fighter, EPmcOrder Order, float Score)
+			Track.OrderHandle = Pmc->OnFighterOrder.AddLambda([StatePtr](int32 TeamId, AOperativeCharacter* Fighter, EPmcOrder Order, float Score, EPmcPickReason Reason)
 			{
 				TSharedRef<FJsonObject> Json = EventJson(*StatePtr, TEXT("tactic"));
+				// The fight flow (fix/pmc-arena-stalemate): why it was picked, quick re-decisions, a running order replaced inside its minimum hold.
+				FTrack& FlowTrack = StatePtr->Track;
+				++FlowTrack.Orders;
+				const TCHAR* ReasonName = Reason == EPmcPickReason::Preempt ? TEXT("preempt") : (Reason == EPmcPickReason::Invalid ? TEXT("invalid")
+					: (Reason == EPmcPickReason::Keep ? TEXT("keep") : TEXT("best")));
+				Json->SetStringField(TEXT("why"), ReasonName);
+				// Ages on the world clock (the commander's own; the arena's stage clock steps in 0.1 s ticks).
+				const float WorldNow = Fighter && Fighter->GetWorld() ? static_cast<float>(Fighter->GetWorld()->GetTimeSeconds()) : StatePtr->StageTime;
+				if (const TPair<float, EPmcOrder>* Last = Fighter ? FlowTrack.LastOrder.Find(Fighter) : nullptr)
+				{
+					const float Age = WorldNow - Last->Key;
+					FlowTrack.QuickRedecisions += Age < QuickRedecisionSeconds ? 1 : 0;
+					FlowTrack.QuickSameOrder += Age < QuickRedecisionSeconds && Last->Value == Order ? 1 : 0;
+					const FPmcWeights& Weights = Fighter->TeamId == TeamA ? StatePtr->WeightsA : StatePtr->WeightsB;
+					FlowTrack.EarlyPreempts += Reason == EPmcPickReason::Preempt && Age < Weights.OrderMinHoldSeconds - 0.05f ? 1 : 0;
+				}
+				if (Fighter)
+				{
+					FlowTrack.LastOrder.Add(Fighter, TPair<float, EPmcOrder>(WorldNow, Order));
+				}
 				Json->SetStringField(TEXT("who"), Fighter ? Fighter->DisplayName.ToString() : TEXT("?"));
 				Json->SetStringField(TEXT("side"), SideOf(*StatePtr, Fighter));
 				Json->SetNumberField(TEXT("team"), TeamId);
@@ -1116,6 +1192,28 @@ namespace PmcArena
 		}
 		Track.Frames.Add(MakeShared<FJsonValueArray>(Frame));
 		Track.States.Add(MakeShared<FJsonValueArray>(Detail));
+		// The attackers' distance to the point (fix/pmc-arena-stalemate: do they walk onto it?).
+		if (State.bRoundObjective)
+		{
+			double Sum = 0.0;
+			int32 Count = 0;
+			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[State.bAAttacks ? 0 : 1].Members)
+			{
+				const AOperativeCharacter* Operative = Member.Get();
+				if (Operative && !Operative->IsKilledInAction() && Operative->HealthComponent && Operative->HealthComponent->IsAlive())
+				{
+					const float Distance = static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), State.Objective));
+					Sum += Distance;
+					++Count;
+					Track.AttackerClosestCm = Track.AttackerClosestCm < 0.f ? Distance : FMath::Min(Track.AttackerClosestCm, Distance);
+				}
+			}
+			if (Count > 0)
+			{
+				Track.AttackerDistSum += Sum / Count;
+				++Track.AttackerDistSamples;
+			}
+		}
 		// Heals: the team statistics' counter moving between two samples.
 		for (int32 Index = 0; Index < 2; ++Index)
 		{
@@ -1183,6 +1281,36 @@ namespace PmcArena
 			}
 		}
 		return Count;
+	}
+
+	/** Ammo=resupply: a live fighter whose current weapon's reserve ran dry (the clip too low to fight on) gets the weapon's reserve back. */
+	void ResupplyAmmo(FState& State)
+	{
+		if (!State.Options.bResupply)
+		{
+			return;
+		}
+		for (FSide& Side : State.Sides)
+		{
+			for (const TWeakObjectPtr<AOperativeCharacter>& Member : Side.Members)
+			{
+				AOperativeCharacter* Operative = Member.Get();
+				if (!Operative || Operative->IsKilledInAction() || !Operative->UsesAmmo() || !Operative->CurrentWeapon || Operative->IsLauncherEquipped()
+					|| Operative->ReserveAmmo > 0)
+				{
+					continue;
+				}
+				const int32 Magazine = FMath::Max(1, Operative->CurrentWeapon->Stats.Ammo.MagazineSize);
+				if (Operative->CurrentClip * 3 > Magazine)
+				{
+					continue;
+				}
+				Operative->ReserveAmmo = FMath::Max(Magazine, Operative->CurrentWeapon->Stats.Ammo.ReserveAmmo);
+				++State.Track.Resupplies;
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] resupply: %s's %s reserve back to %d (Ammo=resupply)"), *Operative->DisplayName.ToString(),
+					*Operative->CurrentWeapon->WeaponId, Operative->ReserveAmmo);
+			}
+		}
 	}
 
 	/** One step of the capture clock and the commanders' objective inputs (the time fraction, the clock, an enemy on the point). */
@@ -1308,6 +1436,10 @@ namespace PmcArena
 		Json->SetNumberField(TEXT("orders"), Stats.OrdersIssued);
 		Json->SetNumberField(TEXT("objective_moves"), Stats.ObjectiveMoves);
 		Json->SetNumberField(TEXT("rpg_strikes"), Stats.RpgStrikes);
+		Json->SetNumberField(TEXT("orders_failed"), Stats.OrdersFailed);
+		Json->SetNumberField(TEXT("detours"), Stats.Detours);
+		Json->SetNumberField(TEXT("preempts"), Stats.Preempts);
+		Json->SetNumberField(TEXT("push_decisions"), Stats.PushDecisions);
 		return Json;
 	}
 
@@ -1388,6 +1520,25 @@ namespace PmcArena
 			Round->SetNumberField(TEXT("duration_s"), FMath::RoundToFloat(Result.Duration * 10.f) / 10.f);
 			Round->SetStringField(TEXT("end_reason"), Result.EndReason);
 			Round->SetBoolField(TEXT("fight_started"), Result.bFightStarted);
+			// fix/pmc-arena-stalemate: a round without a shot between the sides is a no-reward draw for the trainer; the fight flow numbers.
+			Round->SetBoolField(TEXT("contact"), Result.bContact);
+			{
+				TSharedRef<FJsonObject> Flow = MakeShared<FJsonObject>();
+				auto Round1 = [](float Value) { return FMath::RoundToFloat(Value * 10.f) / 10.f; };
+				Flow->SetNumberField(TEXT("shots_per_min"), Round1(Result.ShotsPerMin));
+				Flow->SetNumberField(TEXT("first_contact_s"), Round1(Result.FirstContactS));
+				Flow->SetNumberField(TEXT("longest_quiet_s"), Round1(Result.LongestQuietS));
+				Flow->SetNumberField(TEXT("attacker_mean_dist_m"), Round1(Result.AttackerMeanDistM));
+				Flow->SetNumberField(TEXT("attacker_closest_m"), Round1(Result.AttackerClosestM));
+				Flow->SetNumberField(TEXT("orders_per_fighter_min"), FMath::RoundToFloat(Result.OrdersPerFighterMin * 100.f) / 100.f);
+				Flow->SetNumberField(TEXT("quick_redecisions"), Result.QuickRedecisions);
+				Flow->SetNumberField(TEXT("quick_same_order"), Result.QuickSameOrder);
+				Flow->SetNumberField(TEXT("early_preempts"), Result.EarlyPreempts);
+				Flow->SetNumberField(TEXT("orders_failed"), Result.OrdersFailed);
+				Flow->SetNumberField(TEXT("detours"), Result.Detours);
+				Flow->SetNumberField(TEXT("resupplies"), Result.Resupplies);
+				Round->SetObjectField(TEXT("flow"), Flow);
+			}
 			Round->SetNumberField(TEXT("lead_swings"), Result.LeadSwings);
 			Round->SetNumberField(TEXT("highlight_score"), Result.HighlightScore);
 			// The track relative to this result file (the trainer's convention).
@@ -1501,6 +1652,30 @@ namespace PmcArena
 				Check(State, (*Round)->HasField(TEXT("scenario")) && (*Round)->HasField(TEXT("objective")), FString::Printf(TEXT("scenario '%s' + objective recorded"),
 					*(*Round)->GetStringField(TEXT("scenario"))));
 				Check(State, Reason == TEXT("elimination") || Reason == TEXT("objective") || Reason == TEXT("time_limit"), FString::Printf(TEXT("end_reason %s"), *Reason));
+				if (State.Options.bSmokeStalemate && !State.Results.IsEmpty())
+				{
+					// PmcStalemateSmoke (the designer 2026-11-08): the fight does not freeze.
+					const FRoundResult& Flow = State.Results.Last();
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] stalemate smoke flow: %s by %s, contact %s, shots %.1f/min, first contact %.1f s, longest quiet %.1f s, attackers mean %.1f m / closest %.1f m from the point, orders %.2f per fighter-min, quick re-decisions %d (same order %d), early preempts %d, failed %d, detours %d"),
+						*Flow.Winner, *Flow.EndReason, Flow.bContact ? TEXT("yes") : TEXT("no"), Flow.ShotsPerMin, Flow.FirstContactS, Flow.LongestQuietS, Flow.AttackerMeanDistM,
+						Flow.AttackerClosestM, Flow.OrdersPerFighterMin, Flow.QuickRedecisions, Flow.QuickSameOrder, Flow.EarlyPreempts, Flow.OrdersFailed, Flow.Detours);
+					Check(State, Flow.bContact, TEXT("the sides made contact (shots between them)"));
+					Check(State, Flow.LongestQuietS <= MaxQuietSeconds, FString::Printf(TEXT("the fight resumes within %.0f s after every quiet spell (longest %.1f s)"),
+						MaxQuietSeconds, Flow.LongestQuietS));
+					const float Radius = State.Config.ObjectiveRadiusCm / 100.f;
+					const bool bAttackersDown = Flow.EndReason == TEXT("elimination") && Flow.Winner != Flow.Attacker;
+					Check(State, bAttackersDown || (Flow.AttackerClosestM >= 0.f && Flow.AttackerClosestM <= 1.5f * Radius),
+						FString::Printf(TEXT("the attackers reached the point area (closest %.1f m <= %.1f m, or they were wiped out)"), Flow.AttackerClosestM, 1.5f * Radius));
+					Check(State, Flow.EarlyPreempts == 0, FString::Printf(TEXT("no running order replaced inside its minimum hold (%d)"), Flow.EarlyPreempts));
+					// One order per minimum hold at most (3 s -> 20 a minute); the pmc-v3 flank flapped at ~120.
+					const float MaxChurn = 60.f / FMath::Max(1.f, State.WeightsA.OrderMinHoldSeconds);
+					Check(State, Flow.OrdersPerFighterMin <= MaxChurn, FString::Printf(TEXT("decision churn %.2f orders per fighter-minute <= %.0f (one per minimum hold)"),
+						Flow.OrdersPerFighterMin, MaxChurn));
+					// A re-take after a finished walk / cover is fine now and then; the pmc-v3 loop did it ~120 times a minute per fighter.
+					const int32 MaxQuickSame = FMath::Max(2 * State.Options.Squad, FMath::CeilToInt(2 * State.Options.Squad * Flow.Duration / 60.f));
+					Check(State, Flow.QuickSameOrder <= MaxQuickSame, FString::Printf(TEXT("the same order re-decided within %.0f s at most %d times (once per fighter-minute; %d)"),
+						QuickRedecisionSeconds, MaxQuickSame, Flow.QuickSameOrder));
+				}
 				if (State.Options.bSmokeCapture)
 				{
 					// PmcArenaObjectiveSmoke: the defenders were parked - the attackers walked onto the point and held it.
@@ -1625,6 +1800,8 @@ namespace PmcArena
 		const FString Weather = ApplyWeather(State, World, Scenario == EPmcScenario::Blizzard);
 		// Side A: a PMC squad at the start (or at the round's random spot).
 		FSide& A = State.Sides[0];
+		// The personality before the spawn: its rpg_gunner_share decides the squad's RPG gunner (a trainer gene).
+		Pmc->SetTeamWeights(TeamA, State.WeightsA);
 		for (AOperativeCharacter* Fighter : Pmc->SpawnSquad(TeamA, A.Spawn, A.Facing, State.Options.Squad, Seed))
 		{
 			A.Members.Add(Fighter);
@@ -1638,6 +1815,7 @@ namespace PmcArena
 		FSide& B = State.Sides[1];
 		if (State.Options.Opponent == EOpponent::Pmc)
 		{
+			Pmc->SetTeamWeights(TeamB, State.WeightsB);
 			for (AOperativeCharacter* Fighter : Pmc->SpawnSquad(TeamB, B.Spawn, B.Facing, State.Options.Squad, Seed + 1000))
 			{
 				B.Members.Add(Fighter);
@@ -1777,6 +1955,29 @@ namespace PmcArena
 			{
 				++Result.RetreatsSurvived[State.Sides[0].Members.Contains(Operative) ? 0 : 1];
 			}
+		}
+		// The fight flow (fix/pmc-arena-stalemate).
+		{
+			const FTrack& Track = State.Track;
+			const float Minutes = FMath::Max(Result.Duration, 1.f) / 60.f;
+			Result.bContact = !Track.ShotTimes.IsEmpty();
+			Result.ShotsPerMin = Track.ShotTimes.Num() / Minutes;
+			Result.FirstContactS = Result.bContact ? Track.ShotTimes[0] : -1.f;
+			float Longest = Result.bContact ? Result.Duration - Track.ShotTimes.Last() : Result.Duration;
+			for (int32 Index = 1; Index < Track.ShotTimes.Num(); ++Index)
+			{
+				Longest = FMath::Max(Longest, Track.ShotTimes[Index] - Track.ShotTimes[Index - 1]);
+			}
+			Result.LongestQuietS = Longest;
+			Result.AttackerMeanDistM = Track.AttackerDistSamples > 0 ? static_cast<float>(Track.AttackerDistSum / Track.AttackerDistSamples) / 100.f : -1.f;
+			Result.AttackerClosestM = Track.AttackerClosestCm >= 0.f ? Track.AttackerClosestCm / 100.f : -1.f;
+			Result.OrdersPerFighterMin = Track.Orders / FMath::Max(1, Track.Fighters.Num()) / Minutes;
+			Result.QuickRedecisions = Track.QuickRedecisions;
+			Result.QuickSameOrder = Track.QuickSameOrder;
+			Result.EarlyPreempts = Track.EarlyPreempts;
+			Result.OrdersFailed = Result.Stats[0].OrdersFailed + Result.Stats[1].OrdersFailed;
+			Result.Detours = Result.Stats[0].Detours + Result.Stats[1].Detours;
+			Result.Resupplies = Track.Resupplies;
 		}
 		Result.LeadSwings = State.Track.LeadSwings;
 		Result.HighlightScore = HighlightScoreOf(Result);
@@ -1935,9 +2136,10 @@ namespace PmcArena
 				}
 			}
 			UpdateDamage(State);
+			ResupplyAmmo(State);
 			UpdateObjective(State, World);
 			const FPmcRoundOutcome Outcome = PmcCommanderRules::ResolveRound(CountAlive(State.Sides[0].Members), CountAlive(State.Sides[1].Members),
-				State.StageTime >= State.Options.TimeLimit, State.bRoundObjective, State.Clock, State.bAAttacks);
+				State.StageTime >= State.Options.TimeLimit, State.bRoundObjective, State.Clock, State.bAAttacks, !State.Track.ShotTimes.IsEmpty());
 			if (!Outcome.bOver)
 			{
 				return true;
@@ -1965,7 +2167,7 @@ namespace PmcArena
 		}
 	}
 
-	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false)
+	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false, bool bSmokeStalemate = false)
 	{
 		if (!World)
 		{
@@ -1979,6 +2181,14 @@ namespace PmcArena
 			State->Options.Rounds = 1;
 			State->Options.Opponent = EOpponent::Pmc;
 			State->Options.TimeLimit = FMath::Min(State->Options.TimeLimit, 90.f);
+		}
+		if (bSmokeStalemate)
+		{
+			// A real objective round (180 s), long enough for quiet spells and the push (30 s) to show.
+			State->Options.bSmokeStalemate = true;
+			State->Options.bObjective = true;
+			State->Options.Squad = 3;
+			State->Options.TimeLimit = 180.f;
 		}
 		if (bSmokeCapture)
 		{
@@ -2011,6 +2221,11 @@ namespace PmcArena
 		RunWith(Args, World, true, true);
 	}
 
+	void RunStalemateSmoke(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, true, false, true);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
 		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard; writes Saved/Arena/<timestamp>.json, then exits."),
@@ -2025,6 +2240,11 @@ namespace PmcArena
 		TEXT("CodexTactics.PmcArenaObjectiveSmoke"),
 		TEXT("Dev check (task #53): one arena round with the defenders parked out of the fight - the attackers must walk onto the objective and capture it; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunObjectiveSmoke));
+
+	static FAutoConsoleCommandWithWorldAndArgs StalemateSmokeCommand(
+		TEXT("CodexTactics.PmcStalemateSmoke"),
+		TEXT("Dev check (fix/pmc-arena-stalemate): one real 3v3 objective round (Depot) - contact resumes within 45 s after every quiet spell, the attackers reach the point area, no order replaced inside its minimum hold, decision churn measured; logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunStalemateSmoke));
 }
 
 #endif // !UE_BUILD_SHIPPING

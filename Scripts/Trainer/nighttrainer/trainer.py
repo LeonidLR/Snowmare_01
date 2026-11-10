@@ -257,6 +257,45 @@ class Trainer:
                         champion=state["champion"]["id"], eta=self.eta(state))
         return True
 
+    def check(self, rounds: int, jobs: int = 1, clips: bool = True) -> dict:
+        """Check mode (fix/pmc-arena-stalemate 2026-11-10): the baseline weights against themselves, `jobs` x `rounds` arena
+        rounds - no evolution, no champion change. Highlights (+ clips) and the fight-flow stats (stalemate_stats) go to
+        <run>/check/ and the report; returns the stats summary."""
+        from . import stalemate_stats
+        state = self.load_state()
+        guard = Guard(self.run_dir, self.repo_root, self.deadline, check_lock=not self.mock,
+                      hold_lock=(not self.mock) and bool(self.cfg["arena"].get("hold_build_lock", True)),
+                      yield_to_editor=self.yield_to_editor, on_status=lambda s, n="": self.set_status(s, n),
+                      poll_s=self.poll_s)
+        check_dir = os.path.join(self.run_dir, "check")
+        job_list = [{"id": f"check_baseline_champion_{i}", "dir": os.path.join(check_dir, "jobs"),
+                     "weights_a": self.baseline_path, "opponent": "champion", "weights_b": self.baseline_path,
+                     "rounds": int(rounds), "seed": seed_for(self.run_seed, 0, "check", i),
+                     "map": self.cfg["arena"].get("map"), "time_limit_s": self.cfg["arena"].get("time_limit_s", 300)}
+                    for i in range(int(jobs))]
+        self.log(f"check {self.run_id}: {jobs} job(s) x {rounds} round(s), baseline vs baseline, no evolution")
+        self.set_status("running", phase="check", jobs_total=len(job_list), jobs_done=0)
+        results = self.runner.run_jobs(job_list, guard, self._job_done)
+        if results is None:
+            self.set_status("stopped", guard.stopped_reason or "")
+            return {}
+        rows = []
+        for job in job_list:
+            result = os.path.join(job["dir"], job["id"] + ".arena.json")
+            if os.path.exists(result):
+                rows += stalemate_stats.stats_for_path(result)
+        summary = stalemate_stats.summary(rows)
+        write_json(os.path.join(check_dir, "flow_stats.json"), {"rows": rows, "summary": summary})
+        self.log(f"check flow: {summary}")
+        hl_cfg = dict(self.cfg.get("highlights", {}), top_n=int(self.cfg.get("highlights", {}).get("top_n", 3)))
+        highlights.update(self.run_dir, hl_cfg, state, 0, job_list, results, "baseline", "check_baseline_")
+        self.save_state(state)
+        if clips and state.get("highlights"):
+            self.make_highlights(state)
+        self.set_status("finished", "check")
+        report.write_all(self, state)
+        return summary
+
     def make_highlights(self, state: dict | None = None, force: bool = False) -> int:
         """Clips for the session's highlights (after the night's last generation, or make_highlights.ps1)."""
         state = state or self.load_state()

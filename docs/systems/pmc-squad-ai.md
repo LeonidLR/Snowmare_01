@@ -155,7 +155,9 @@ suppressing / flanking / advancing / healing - never counting the fighter himsel
 quality against the nearest known threat, a better slot nearby, exposed and for how long at this spot, stance, moving, medkit, sidearm, weapon range, the
 nearest threat with its distance / seen-now / seconds since, the nearest wounded mate). Every order's score = weight x the product of its 0..1
 considerations (`ScoreOrder`); `PickWithMargin` keeps a running order within `switch_margin` (0.1) of the best, a committed WALK or any order younger than
-`commit_seconds` (2 s) within `move_switch_margin` (0.45) - the fix for the flank / suppress flapping seen in the first run.
+`commit_seconds` (2 s) within `move_switch_margin` (0.45) - the fix for the flank / suppress flapping seen in the first run. Since
+fix/pmc-arena-stalemate (section 11) the pick is `PickCommitted`: a running order holds `order_min_hold_s` (3 s) unless it turns invalid,
+a failed order (ended short of its goal / not takeable) sits out `failed_order_cooldown_s` (5 s), a walk without progress for 5 s detours once.
 
 | Order | When it scores (short) | Executes |
 |---|---|---|
@@ -511,3 +513,75 @@ copies by the body's skeleton name). The tube's grip on his UE5 hand frame: `rpg
 behind a 1.1 m wall, a commanded PMC team of two 26 m away: the gunner draws the RPG on the rule, the launcher layer plays the Pmc copies, the
 Shot clip of `SK_PmcOperator_Skeleton`, the rocket bursts at the wall and holds our men; then with `Codex.Combat.LauncherAI 0` the commander's
 RpgStrike order fires one); rendered `CodexTactics.RpgShots pmc` -> `Saved/Screenshots/RpgPmc/`.
+
+## 11. The arena stalemate: commitment, re-path, the push, honest outcomes (fix/pmc-arena-stalemate, 2026-11-10)
+
+**Report (the designer, clips of the night trainer pmc-v3, 2026-11-08: "a total failure"):** after the first minute both teams sat in corners;
+the Flank order was re-decided ~2x/s and the fighter never walked; the attackers did not walk to the point; the defender won on time hiding
+off the point; the 33 -> 67 % win rate was noise.
+
+**Causes found (tracks + logs of baseline-vs-baseline rounds on the Depot, seed 101):**
+1. **No commitment once a walk ended:** hysteresis only held a RUNNING order. A walk whose goal had no full path (an island / a roof part,
+   a partial path) or that the move system dropped ended at once -> not running -> the same order scored best again -> re-issued every
+   0.5 s decision (one round: 44 orders per fighter-minute, 1021 re-decisions within 2 s). Same for TakeCover to an unreachable slot,
+   Advance into a wall, the RPG gunner's RpgStrike (18 re-takes a minute).
+2. **Cover from a stand-in:** with no enemy known the attackers' threat is the assault / objective point itself (`bStandIn`); TakeCover scored
+   against it, so they took cover from the empty point, left it for the Objective walk, took cover again (160 flips a round).
+3. **A stuck walk was dropped, not re-routed** (`stuck ... order dropped` 37 times for one fighter), so the man stood still.
+4. **Nothing broke a quiet standoff:** the teams' threats are remembered forever; holding in cover against a remembered threat beat the
+   attackers' Objective walk early in the round, and sight at 55 m in a blizzard (out of rifle reach) kept "contact" alive with no shot.
+5. **The time limit paid the defender for hiding:** ResolveRound gave him the win whenever the attackers were not on the point.
+6. **Ammo** (Depot street rounds): after the first exchange empty rifles stood next to each other on the point for 3 minutes (the arena's
+   cheats are off; Reload / Suppress could not be taken).
+7. Measurement trap: a PowerShell call with an unquoted `-LevelJson=L_PmcArenaDepot.json` splits at the dot - the game falls back to
+   `DA_Level_*` (cold on: frostbitten fighters cannot leave prone). The trainer (python argv) is not affected; quote it in scripts.
+
+**Now:**
+- `PmcCommanderRules::PickCommitted` (`FPmcCommitment`, `EPmcPickReason` Best / Keep / Invalid / Preempt): a running active order (not
+  Hold / Ambush / Crouch, `IsStaticOrder`) is kept `order_min_hold_s` 3 s unless its score is 0; after that `move_switch_margin` (walks /
+  orders younger than `commit_seconds`) or `switch_margin`; the last failed order scores 0 for `failed_order_cooldown_s` 5 s.
+- Failure detection (`UPmcSquadSubsystem::UpdateTeamRunning` / `MarkFailed`, stat `orders_failed`): a walk that stopped running more than
+  4 m short of its goal, an order `ExecuteOrder` could not take (the next best one is tried at once, twice), a walk stuck twice. An ended
+  RpgStrike cools down the same way. Log `[PmcAI] team N: X's Flank failed (ended short of its goal) - not again for 5 s`.
+- Walk goals need a FULL navmesh path: a goal without one takes a reachable spot 4 / 8 m round it, else the order is not taken; a walk that
+  would go nowhere (< 2.5 m) is no order.
+- Re-path: `repath_after_s` 5 s without 1 m progress -> `TryDetour` steers the running walk through a side waypoint 6-9 m off his line (full
+  paths to it and on to the goal, `AOperativeCharacter::SteerOwnMoveVia`; stat `detours`); a second stall fails the order.
+- No TakeCover / Relocate against a stand-in threat.
+- RpgStrike: a strike in flight keeps scoring (>= 0.5 of the weight) while the launcher draws / aims, an RpgStrike cancels the fighter's
+  running suppression (it kept the rifle and the rocket timed out), an ended strike cools down 5 s (no rocket order every decision).
+- **The push** (`IsPushing`): an objective round quiet for `push_after_s` 30 s - since the last SHOT between the team and an enemy
+  (`FTeam::LastShotTime`, `FPmcSquadView::QuietSeconds`; before the first shot since the objective was set) - makes an attacker off the point
+  walk onto it (Objective = `objective` x `push` 2, whatever the clock / a seen enemy) while his Hold / TakeCover / Relocate / Ambush / Crouch
+  lose x 1 / push; a defender goes back onto the point (0.8), and from 60 % of the round on he occupies it anyway (0.9 at 85 %).
+- `ResolveRound(..., bContact)`: at the time limit the defender wins ONLY standing on the point alone (`FPmcObjectiveClock::bDefendersHolding`,
+  `held`); attackers on it = `contested`, nobody / both = `empty` draws; a round without a shot between the sides = a `no_contact` draw.
+- The arena (`PmcArenaCommand.cpp`): round field `contact` + `flow {shots_per_min, first_contact_s, longest_quiet_s, attacker_mean_dist_m,
+  attacker_closest_m, orders_per_fighter_min, quick_redecisions, quick_same_order, early_preempts, orders_failed, detours, resupplies}`, track
+  tactic events carry `why`; `Ammo=resupply` (default; `Ammo=real` = off): a fighter whose reserve ran dry (clip below a third) gets his
+  weapon's reserve back - an arena-only training rule; the team weights are set before the spawn (`rpg_gunner_share`).
+- Trainer: `fitness.no_contact_score` (-3) for a round with `contact: false` the side did not win; genes `rpg_strike`, `rpg_gunner_share`,
+  `order_min_hold_s`, `failed_order_cooldown_s`, `push` (bounds in `pmc_commander.bounds.json`), `push_after_s` / `repath_after_s` frozen;
+  `night_trainer.py --check N` = baseline vs baseline, no evolution, highlights + `check/flow_stats.json`;
+  `nighttrainer/stalemate_stats.py` = the same flow stats from any result / track ([night trainer](../tools/night-trainer.md)).
+
+**Measured** (baseline vs baseline, Depot `-LevelJson=L_PmcArenaDepot.json`, seed 101, 4 rounds x 240 s; `stalemate_stats.py`):
+
+| | before (main d9f17fe5) | after |
+|---|---|---|
+| rounds without contact | 2 / 4 | 0 / 4 |
+| shots per minute (mean of rounds) | 47.1 | 52.6 |
+| longest quiet spell, mean / max | 122 s / 240 s | 59 s / 86 s |
+| attackers' mean distance to the point | 20.8 m (the two no-fight rounds sat on / took an empty point) | 36.0 m (real fights, flanks and retreats) |
+| orders per fighter-minute | 2.6 | 5.5 |
+| outcomes | 2 captures of an undefended point, 2 defender time wins (one without a shot) | 2 eliminations, 2 defender wins holding the point |
+
+On the broken setup (unquoted LevelJson, cold on) the old code also showed the pmc-v3 symptom directly: 44 orders per fighter-minute and
+1021 re-decisions within 2 s in one round, attackers never closer than 46-60 m in two rounds.
+
+**Checks:** unit `CodexTactics.AI.PmcCommander.Commitment`, `.Push`, `CodexTactics.AI.PmcArena.RoundOutcome` (held / empty / no_contact),
+python `Scripts/Trainer/tests/test_stalemate.py` + `test_loop.CheckModeTests`; smoke **`PmcStalemateSmoke`** (Depot, `-LevelJson=L_PmcArenaDepot.json`,
+one real 180 s 3v3 objective round): contact, every quiet spell <= 45 s, the attackers within 1.5 x radius of the point (or wiped out), no
+running order replaced inside its minimum hold, <= 20 orders per fighter-minute (one per minimum hold), <= 2 x squad same-order
+re-decisions within 2 s.
+

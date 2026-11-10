@@ -138,5 +138,21 @@ class LoopTests(unittest.TestCase):
                 self.assertIn("<video", f.read())
 
 
+class CheckModeTests(unittest.TestCase):
+    def test_check_runs_baseline_without_evolution(self):
+        """fix/pmc-arena-stalemate: --check plays the baseline against itself, writes the flow stats + highlights, evolves nothing."""
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = make_repo(tmp)
+            cfg["mock"]["tracks"] = True
+            t = trainer(cfg, tmp, "check", 1)
+            summary = t.check(rounds=2, jobs=1, clips=False)
+            self.assertEqual(summary.get("rounds"), 2)
+            self.assertTrue(os.path.exists(os.path.join(t.run_dir, "check", "flow_stats.json")))
+            state = t.load_state()
+            self.assertEqual(state["generation_done"], -1)
+            self.assertEqual(state["champion"]["id"], "baseline")
+            self.assertTrue(state.get("highlights", {}).get("top"))
+
+
 if __name__ == "__main__":
     unittest.main()

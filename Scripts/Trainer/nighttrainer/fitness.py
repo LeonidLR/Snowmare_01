@@ -30,6 +30,11 @@ def round_score(r: dict, cfg: dict) -> float:
     if r.get("crashed"):
         return float(cfg.get("crash_penalty", -5.0))
     won = _num(r, "won")
+    # fix/pmc-arena-stalemate (2026-11-10, the designer): a round without contact (no shot between the sides) is a draw
+    # with no reward - neither the hiding side nor the "defender who won on time" is paid; a capture of an empty point
+    # still counts as the attacker's win.
+    if r.get("contact") is False and won < 1.0:
+        return float(cfg.get("no_contact_score", 0.0))
     squad = max(1.0, _num(r, "squad_size", 4.0))
     hp_max = _num(r, "hp_max") or squad * float(cfg.get("hp_per_unit", 100.0))
     # 2026-11-06: the pmc-v2 night learnt "don't fight" - a time-limit draw paid ~8 (half a win + all survivors).

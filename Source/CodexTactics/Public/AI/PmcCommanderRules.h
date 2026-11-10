@@ -93,6 +93,8 @@ struct CODEXTACTICS_API FPmcObjectiveClock
 	/** The attackers' cumulative hold since the defenders last retook the point, s. */
 	float Held = 0.f;
 	bool bAttackersHolding = false;
+	/** Live defenders and no attacker within the radius at the last step (fix/pmc-arena-stalemate: the defenders win on time only so). */
+	bool bDefendersHolding = false;
 	bool bCaptured = false;
 	/** Seconds of sole control per role: [0] attackers, [1] defenders. */
 	float ControlSeconds[2] = { 0.f, 0.f };
@@ -107,7 +109,10 @@ struct CODEXTACTICS_API FPmcRoundOutcome
 {
 	FString Winner = TEXT("draw");
 	FString Reason = TEXT("time_limit");
-	/** captured (the attackers took it) / held (the defenders kept it to the time limit) / contested (attackers on it at the limit) / none. */
+	/**
+	 * captured (the attackers took it) / held (the defenders stood on it alone at the time limit) / contested (attackers on it at the limit) /
+	 * empty (nobody, or both, on it at the limit: a draw) / no_contact (no shot between the sides all round: a draw) / eliminated / none.
+	 */
 	FString ObjectiveResult = TEXT("none");
 	bool bOver = false;
 };
@@ -196,6 +201,21 @@ struct CODEXTACTICS_API FPmcWeights
 	float MoveSwitchMargin = 0.45f;
 	/** Any order holds at least this long before another replaces it, s. */
 	float CommitSeconds = 2.f;
+	/**
+	 * Order commitment (fix/pmc-arena-stalemate 2026-11-10): a running order is kept at least this long unless it turns invalid (scores 0);
+	 * after it the margins above apply. Static orders (Hold / Ambush / Crouch) are not commitments.
+	 */
+	float OrderMinHoldSeconds = 3.f;
+	/** An order that ended without reaching its goal (no path, a dropped walk, a failed detour) sits out this long, s. */
+	float FailedOrderCooldownSeconds = 5.f;
+	/** A walk without StuckProgressCm of progress for this long takes a detour once (an alternative route), then fails, s. */
+	float RepathAfterSeconds = 5.f;
+	/** Objective rounds (the arena): this long without a shot between the sides and both push onto the point, s (0 = never). */
+	float PushAfterSeconds = 30.f;
+	/** The push's strength: an attacker's Objective walk x Push, his static / cover orders / Push; a defender returns onto the point. */
+	float Push = 2.f;
+	/** The squad's chance of an RPG gunner when the arena spawns it (overrides pmc_operators.json rpg_gunner.share; < 0 = the operators file). */
+	float RpgGunnerShare = -1.f;
 	/**
 	 * High ground (user request 2026-11-03, the Depot arena): a cover / relocate / ambush position's score grows by this per height
 	 * level above the ground (3 m steps, SightRules::HeightLevel), up to HighGroundMaxLevels levels. 0 = height ignored.
@@ -353,6 +373,34 @@ struct CODEXTACTICS_API FPmcSquadView
 	bool bShotsExchanged = false;
 	/** Seconds since the team's first contact of the fight (0 before it). */
 	float ContactSeconds = 0.f;
+	/** Seconds since the last shot between the team and an enemy (or since the objective was set; fix/pmc-arena-stalemate: the push). */
+	float QuietSeconds = 0.f;
+};
+
+/** A fighter's order as the commitment rule sees it (fix/pmc-arena-stalemate 2026-11-10). */
+struct CODEXTACTICS_API FPmcCommitment
+{
+	EPmcOrder Current = EPmcOrder::Hold;
+	/** The order is still executing (a walk under way, a suppression, a reload, ...). */
+	bool bRunning = false;
+	/** Seconds since the order was given. */
+	float AgeSeconds = 0.f;
+	/** The last order that failed (ended short of its goal; Count = none) and how long ago. */
+	EPmcOrder Failed = EPmcOrder::Count;
+	float FailedAgeSeconds = 0.f;
+};
+
+/** Why PickCommitted chose its order. */
+enum class EPmcPickReason : uint8
+{
+	/** The best scored order (nothing running, or a static order). */
+	Best,
+	/** The running order goes on (minimum hold or within the margin). */
+	Keep,
+	/** The running order scored 0 (no longer valid) - replaced at once. */
+	Invalid,
+	/** A clearly better order replaced the running one after its minimum hold. */
+	Preempt
 };
 
 struct CODEXTACTICS_API FPmcOrderScore
@@ -382,6 +430,21 @@ namespace PmcCommanderRules
 	CODEXTACTICS_API EPmcOrder Pick(const TArray<FPmcOrderScore>& Scored, EPmcOrder Current, bool bCurrentRunning, const FPmcWeights& Weights);
 	/** Pick with an explicit hysteresis margin (a committed walk uses Weights.MoveSwitchMargin). */
 	CODEXTACTICS_API EPmcOrder PickWithMargin(const TArray<FPmcOrderScore>& Scored, EPmcOrder Current, bool bCurrentRunning, float Margin);
+
+	/**
+	 * The order to run now with commitment (fix/pmc-arena-stalemate 2026-11-10; the night trainer's fighters re-decided a flank twice a
+	 * second): the failed order sits out FailedOrderCooldownSeconds (its score counts 0); a running active order (not Hold / Ambush / Crouch)
+	 * is kept for OrderMinHoldSeconds unless it scores 0 (invalid), then PickWithMargin's hysteresis (MoveSwitchMargin for a walk or an order
+	 * younger than CommitSeconds, else SwitchMargin). Otherwise the best order; Hold when nothing scores.
+	 */
+	CODEXTACTICS_API EPmcOrder PickCommitted(const TArray<FPmcOrderScore>& Scored, const FPmcCommitment& Commitment, const FPmcWeights& Weights,
+		EPmcPickReason* OutReason = nullptr);
+
+	/** Hold / Ambush / Crouch: a posture, not a commitment (nothing to finish). */
+	CODEXTACTICS_API bool IsStaticOrder(EPmcOrder Order);
+
+	/** The objective round's push (fix/pmc-arena-stalemate): an active objective and the team quiet for PushAfterSeconds (> 0). */
+	CODEXTACTICS_API bool IsPushing(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
 
 	/** The order is a walk the man commits to (advance / flank / fall back / relocate / take cover). */
 	CODEXTACTICS_API bool IsMoveOrder(EPmcOrder Order);
@@ -475,10 +538,13 @@ namespace PmcCommanderRules
 
 	/**
 	 * The round's end (the arena): a side down = elimination (both down: a draw); the attackers' capture = objective; the time limit =
-	 * the defenders win when the point is not held by the attackers at that moment (else a contested draw). Without an objective the
-	 * time limit is a draw. bAttackerIsA: side A attacks. bOver false while the round goes on.
+	 * the defenders win ONLY while they hold the point alone at that moment (fix/pmc-arena-stalemate, the designer 2026-11-08), else a
+	 * draw (contested: attackers on it; empty: nobody / both). A round without contact (bContact false: no shot between the sides) that
+	 * runs out of time is a no_contact draw whatever the point. Without an objective the time limit is a draw. bAttackerIsA: side A
+	 * attacks. bOver false while the round goes on.
 	 */
-	CODEXTACTICS_API FPmcRoundOutcome ResolveRound(int32 AliveA, int32 AliveB, bool bTimeUp, bool bObjective, const FPmcObjectiveClock& Clock, bool bAttackerIsA);
+	CODEXTACTICS_API FPmcRoundOutcome ResolveRound(int32 AliveA, int32 AliveB, bool bTimeUp, bool bObjective, const FPmcObjectiveClock& Clock, bool bAttackerIsA,
+		bool bContact = true);
 
 	/**
 	 * Target attention at Point (user 2026-11-07): for every watcher (an enemy the team sees now: his position and facing as seen) within
