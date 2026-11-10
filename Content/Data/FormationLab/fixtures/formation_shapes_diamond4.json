@@ -1,0 +1,16 @@
+{
+  "schema": "codex.formation_shapes/1",
+  "formations": {
+    "diamond": {
+      "4": {
+        "members": [
+          { "role": "commander", "fwd": 0, "right": 0, "look": 0, "arc": 90 },
+          { "role": "right", "fwd": -280, "right": 260, "look": 60, "arc": 90 },
+          { "role": "left", "fwd": -280, "right": -260, "look": -60, "arc": 90 },
+          { "role": "rear", "fwd": -560, "right": 0, "look": 180, "arc": 90 }
+        ]
+      }
+    }
+  },
+  "custom": {}
+}
