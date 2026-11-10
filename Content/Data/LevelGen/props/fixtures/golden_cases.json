@@ -1,0 +1,13 @@
+{
+	"schema": "codex.levelgen_props_golden/1",
+	"comment": "Golden outputs of the C++ props placement (PROPS_LAYERS.md 5 C3 / T2). Paths are relative to this folder. For each case: parse 'input', re-roll 'layer' with 'seed' (PropsPlacementRules::RerollLayer) on 'layout' with 'balance', write the whole props file with the canonical writer (LevelPropsFile::Write: tab indent, LF, trailing newline) = 'output' byte for byte. 'derived_from': the input is that case's output with indices 'lock' locked, 'delete' deleted (override with pos), 'move' moved by move_by_cm (override) and 'hand' turned into a hand add (removed from the layer, override add 'hand_<layer>_0' at its pos). Regenerate: set CODEX_PROPS_GOLDEN_WRITE=1 and run CodexTactics.LevelGen.Props.Placement.Golden.",
+	"balance": "../../../Balance/props_balance.json",
+	"cases": [
+		{ "case": "small_crates", "layout": "fixture_small.layout.json", "input": "golden_in_small.props.json", "layer": "crates", "seed": 21, "output": "golden_small_crates.json" },
+		{ "case": "small_barrels_explosive", "layout": "fixture_small.layout.json", "input": "golden_in_small.props.json", "layer": "barrels", "seed": 5, "output": "golden_small_barrels.json" },
+		{ "case": "depot_crates_s1", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_in_depot.props.json", "layer": "crates", "seed": 1, "output": "golden_depot_crates_s1.json" },
+		{ "case": "depot_locked_reroll", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_in_depot_locked.props.json", "layer": "crates", "seed": 2, "output": "golden_depot_locked_reroll.json",
+		  "derived_from": "depot_crates_s1", "lock": [0, 2, 4], "delete": [1], "move": [3], "move_by_cm": [100, 0], "hand": [5] },
+		{ "case": "depot_barrels_s1", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_in_depot_locked.props.json", "layer": "barrels", "seed": 1, "output": "golden_depot_barrels_s1.json" }
+	]
+}

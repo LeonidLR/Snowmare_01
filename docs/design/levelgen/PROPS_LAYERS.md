@@ -1,6 +1,6 @@
 # Level authoring stage 1: PROPS LAYERS (design)
 
-> 2026-11-09. Branch `tools/levelgen-props`. Status: design, not started.
+> 2026-11-09. Branch `tools/levelgen-props`. Status: C1 + C2 merged; C3 (RNG, crates + barrels, golden outputs) on `tools/levelgen-props-c3`. TS port notes: section 7.
 >
 > **The request (game designer, 2026-11-09).** Maps are big and hand placement takes too long. He wants to author props iteratively:
 > - generate one layer at a time: barrels (some explosive), crates, turrets, mines, loot;
@@ -443,3 +443,87 @@ The shared fixtures are written first by Claude: `Content/Data/LevelGen/props/fi
 8. **Fence gaps up to 600 cm are gates** (2026-11-10; was 400): the tractor yard's `F_tanks_N` / `F_tanks_S` 500 cm gaps become
    gates `F_tanks_N#g0` / `F_tanks_S#g0` (Depot: 14 doors + 9 gates). Building doors and the cut's gaps (crossings) are unchanged.
    Number in `props_balance.json` `layout_view.gate_max_gap_cm`.
+
+## 7. TS port notes (C3 -> T2): the exact order the C++ reference follows
+
+The TS port must reproduce `Content/Data/LevelGen/props/fixtures/golden_*.json` byte for byte. The cases are listed in
+`fixtures/golden_cases.json` (layout, input, layer, seed, output; `derived_from` = an input built from an earlier output by a recipe).
+Per case: parse the input, `RerollLayer(file, balance, view, layer, seed)`, write the whole file with the canonical writer of C1
+(`LevelPropsFile::Write`: fixed known-key order, opaque blocks and unknown keys sorted ordinally, tab indent, LF, trailing newline).
+Code: `Source/CodexTactics/Private/LevelGen/PropsPlacementRules.cpp`, `PropsRng.cpp`, `PropsLayoutView.cpp`.
+
+**Numbers.** Everything is integer cm / degrees; comparisons in exact integer math (C++ int64; JS: safe integers / BigInt).
+"At least R apart" rejects when `dx² + dy² < R²` (spacing, `min_gap_any`, keep-outs, the barrel member gap, the explosive gap);
+exclusion shapes and `never_within_cm_of` include their boundary (reject when `<= R²`). Every distance is 2D, across walk layers.
+Fractions in the rules become thousandths with `Math.round(x * 1000)` (`share`, `per_100m2`); JSON integers round half up (C1).
+
+**RNG** (`PropsRng.h` holds the JS reference and the vectors). One stream per roll:
+`rng = mulberry32((seed ^ fnv1a(layer.id)) >>> 0)`, raw uint32 outputs; `nextBelow(n) = (next() * n) >> 32` exact (BigInt),
+`n = 0` draws nothing; shuffle = Fisher-Yates from the end with `j = nextBelow(i + 1)`.
+
+**Rules** (`BuildRules`). Preset = `layer.preset`, else `<kind>_default` (a missing implicit preset is silent). Merge: objects key by
+key recursively, everything else replaced by the layer's value. Then `exclude.$preset` = `presets[name].exclude` with the other
+`exclude` keys on top. `route_cm` is a number (both corridors) or `{ mandatory, variants }`. Defaults: `walk_layers ["ground"]`,
+count mode `count`, cluster 1..1, ring 0..0. `variants`: keys sorted ordinally, weight 0 dropped. `near`: `what` wall | cover only,
+weight clamped to 1..1000. Half size per variant from `balance.kinds`: `radius_cm`, else `(max(size_x, size_y) + 1) >> 1`; unknown
+variants 0. Budget = `balance.budgets[kind]`. The layout view reads `balance.layout_view` (6.1 #7 / #8).
+
+**Placement input** (`MakeInput`). `ApplyOverrides(file)` (C1): this layer's resolved objects that are locked, pinned (move / set) or
+hand = **kept**, in resolved order; this layer's keep-outs (radius 0 = the merged `min_spacing_cm`); all other resolved objects =
+**others**. **Reserved ids** = kept ids + the others' ids + every override `id` / `object.id` + every stored object id of the other
+layers. The discarded objects' ids are NOT reserved (re-rolling a roll with its own seed reproduces it, ids included).
+
+**Candidates.** Walk layers = the view's layers (schema.ts `layersOf` order) matching a pattern (exact, or a prefix ending in `*`).
+Scan rectangle per layer: ground = bounds, cut = the cut polygon's box, floor / roof = the footprint; points `x, y` = multiples of 50
+from the rounded-up minimum to the maximum, inclusive; per layer y outer, x inner. A point is **eligible** when `IsWalkable` and
+inside a listed zone (none / `*` = all). Then the hard filters, the first failure counted in `report.rejected`, with H = the largest
+half size of the rules' variants (barrels: max(barrel, barrel_explosive)):
+1. `IsBlocked(p, layer, H + min_gap_any)` -> `blocked`;
+2. the first `BuildExclusions` shape containing p -> spawn / end: `spawn`; ladder foot / top, stair: `ladder`; door: `door`;
+   route, crossing: `route`; hole rim: `other`;
+3. a keep-out disk -> `keepout`;
+4. an other-layer object closer than `H + half(other) + min_gap_any` -> `other_layer`;
+5. a kept object closer than `min_spacing_cm` -> `spacing`.
+
+Weight = the product of the matched `near` clauses (wall: `IsNearWall(p, layer, H + max_cm)`; cover: `IsNearCover`, ground only),
+capped at 1000. The candidate list is sorted by (y, x, layer name ordinal).
+
+**Target.** count: `value`; density: `floor((per_100m2_milli x eligible + 200000) / 400000)` (eligible x 0.25 m², rounded half up);
+per_zone: `value x matched zones`. Then `min(target, count.max, budget)`, >= 0 = `requested`; new objects to place =
+`requested - kept` (>= 0).
+
+**Weighted draw.** `roll = nextBelow(sum of alive weights)`; walk the alive candidates in list order, the first whose cumulative
+weight exceeds `roll` is picked. After a pick the picked candidate and every alive candidate closer than `min_spacing_cm` die.
+
+**Crates, per pick (RNG calls in this order):** 1. candidate (weighted draw); 2. variant = `nextBelow(sum of variant weights)` over
+the sorted variants; 3. yaw: when a `near` clause with `what: wall` exists (the first one) and `FindNearestWallAxis(p, layer,
+H + max_cm)` finds a wall (smallest exact ceil distance to the wall's centre line, ties = the first in the layer's wall order),
+yaw = 0 if that wall runs mostly along x (`|dx| >= |dy|`) else 90, **no draw**; otherwise `(next() % 4) * 90`. Loop until the target
+is reached or no weight is left.
+
+**Barrels, per cluster:** 1. anchor (weighted draw); 2. size = `min + nextBelow(max - min + 1)` (always drawn), clamped to the barrels
+still to place; the anchor is created first (variant `barrel`, yaw 0, extra field `cluster` = its own id); 3. for each further member:
+valid offsets = lattice offsets `(dx, dy)` with `|dx|, |dy| <= floor(ring_max / 50) x 50`, enumerated dy outer / dx inner ascending,
+`ring_min² <= d² <= ring_max²`, `d > 0`, where `anchor + offset` is walkable on the anchor's layer, passes filters 1-4 with
+H = half(barrel), and is at least `max(ring_min, 2 x half(barrel))` from every kept barrel and every new barrel so far (zones are not
+checked for members); none -> the cluster ends; else `valid[nextBelow(valid.length)]` (variant `barrel`, yaw 0, `cluster` = the
+anchor id); 4. kill around the anchor.
+**After all clusters, explosives:** `wanted = floor((share_milli x clusters + 500) / 1000)`; only when `wanted > 0`:
+`order = [0 .. clusters - 1]`, `shuffle(order)`; the explosive list starts with the kept `barrel_explosive` positions; walk `order`
+until `wanted` are chosen: a cluster qualifies when every member is farther than `never_within_cm_of.spawn` / `.end` (when > 0) from
+the layout's spawn / end and at least `min_gap_cm` from every listed explosive; a qualifying cluster turns all its members into
+`barrel_explosive` and adds them to the list. Fewer than wanted -> warning `explosive_short <n>`.
+
+**Ids.** `<layer>_<seed as 8 lowercase hex digits>_<n>`, n from 0 in creation order (crates: pick order; barrels: the anchor, then
+its members, cluster by cluster), skipping reserved and already used ids (case-sensitive).
+
+**Stored result** (`RerollLayer`; refused for a frozen file, a locked or missing layer, a C4 kind). `layer.seed` = the seed;
+`layer.objects` = for each kept object that has a stored record in the layer, that record unchanged (the overrides re-apply at load;
+hand objects stay in the overrides only), then the new objects; `layer.report` = `{ requested, placed, kept, short_by, eligible,
+status: ok | short, gate: "n/a", rejected: { blocked, spacing, route, spawn, ladder, door, keepout, other_layer, other },
+warnings: [] }` (the writer sorts the keys). `rules_hash` is not recomputed in C3. Warning codes: `no_layout`, `no_variants`,
+`kind_unsupported <kind>`, `no_candidates`, `explosive_short <n>`. The C++ reports `gate: "n/a"`; the TS fast gate (T3) sets it.
+
+**Open data point for the designer.** `crates_default` has `min_gap_any_cm` 120, which section 2.1 also applies to walls, so a crate's
+edge stays >= 120 cm from any wall while the near-wall weight reaches only 150 cm: a 30 cm band. Crates therefore rarely sit against
+walls and mostly get a random yaw. If crates should hug walls, lower `min_gap_any_cm` or apply it to objects only (a rule change).

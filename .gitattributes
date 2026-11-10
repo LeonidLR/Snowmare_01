@@ -19,3 +19,6 @@
 # Formation golden vectors / lab data: byte-compared by the Training Ground tests (generator writes LF)
 Tools/TrainingGround/golden/** text eol=lf
 Content/Data/FormationLab/** text eol=lf
+
+# Props golden fixtures are compared byte for byte by the C++ and TS placement (PROPS_LAYERS.md "TS port notes")
+Content/Data/LevelGen/props/fixtures/*.json text eol=lf

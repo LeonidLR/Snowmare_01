@@ -1,0 +1,196 @@
+{
+	"schema": "codex.levelgen_props/1",
+	"map": "L_Fixture_Small",
+	"layout": "fixture_small",
+	"layout_hash": "0000000000000000000000000000000000000000",
+	"revision": 1,
+	"frozen": false,
+	"x_note": "C3 golden input (PROPS_LAYERS.md 5 C3): a locked crate, an unlocked crate (re-rolled away), a deleted crate (keep-out), a hand crate, a locked explosive barrel and a mine of another layer.",
+	"layers": [
+		{
+			"id": "crates",
+			"kind": "crates",
+			"enabled": true,
+			"seed": 21,
+			"locked": false,
+			"preset": "crates_default",
+			"rules": {
+				"count": {
+					"mode": "count",
+					"value": 8
+				},
+				"exclude": {
+					"spawn_cm": 800
+				},
+				"where": {
+					"near": [
+						{
+							"max_cm": 150,
+							"weight": 3,
+							"what": "wall"
+						}
+					],
+					"walk_layers": ["ground", "roof:*"]
+				}
+			},
+			"objects": [
+				{
+					"id": "crates_00000015_0",
+					"variant": "crate_s",
+					"pos": [-1000, 1500],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": true
+				},
+				{
+					"id": "crates_00000015_1",
+					"variant": "crate_s",
+					"pos": [-1850, -650],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000015_3",
+					"variant": "crate_s",
+					"pos": [1300, 850],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000015_4",
+					"variant": "crate_s",
+					"pos": [-550, 1500],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000015_5",
+					"variant": "crate_s",
+					"pos": [-1000, 950],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000015_6",
+					"variant": "crate_s",
+					"pos": [450, 700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000015_7",
+					"variant": "crate_s",
+					"pos": [1900, -1350],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				}
+			],
+			"report": {
+				"eligible": 6786,
+				"gate": "n/a",
+				"kept": 2,
+				"placed": 6,
+				"rejected": {
+					"blocked": 1667,
+					"door": 7,
+					"keepout": 69,
+					"ladder": 10,
+					"other": 0,
+					"other_layer": 90,
+					"route": 104,
+					"spacing": 138,
+					"spawn": 694
+				},
+				"requested": 8,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "barrels",
+			"kind": "barrels",
+			"enabled": true,
+			"seed": 5,
+			"locked": false,
+			"preset": "barrels_default",
+			"rules": {
+				"cluster": {
+					"max": 4,
+					"min": 2,
+					"ring_cm": [70, 130]
+				},
+				"count": {
+					"mode": "count",
+					"value": 12
+				},
+				"exclude": {
+					"$preset": "standard",
+					"spawn_cm": 800
+				},
+				"explosive": {
+					"min_gap_cm": 400,
+					"never_within_cm_of": {
+						"spawn": 1000
+					},
+					"share": 0.5
+				},
+				"min_spacing_cm": 500
+			},
+			"objects": [
+				{
+					"id": "barrels_00000005_0",
+					"variant": "barrel_explosive",
+					"pos": [-1700, 1700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": true,
+					"cluster": "barrels_00000005_0"
+				}
+			]
+		},
+		{
+			"id": "mines",
+			"kind": "mines",
+			"enabled": true,
+			"seed": 11,
+			"locked": false,
+			"objects": [
+				{
+					"id": "mines_0000000b_0",
+					"variant": "mine_proximity",
+					"pos": [-1200, 0],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				}
+			]
+		}
+	],
+	"overrides": [
+		{
+			"op": "delete",
+			"id": "crates_00000015_2",
+			"pos": [-1000, 0]
+		},
+		{
+			"op": "add",
+			"object": {
+				"id": "hand_crates_0",
+				"variant": "crate_l",
+				"pos": [-1600, 1000],
+				"walk_layer": "ground",
+				"yaw": 0,
+				"locked": false,
+				"origin": "hand"
+			}
+		}
+	]
+}

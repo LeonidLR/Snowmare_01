@@ -1,0 +1,39 @@
+{
+	"schema": "codex.levelgen_props/1",
+	"map": "L_Gen_Depot_1",
+	"layout": "gen_ref_01_02_depot_1",
+	"layout_hash": "0000000000000000000000000000000000000000",
+	"revision": 1,
+	"frozen": false,
+	"x_note": "C3 golden input on the accepted Depot layout: a fresh crates layer (density preset, ground + floors, near wall / cover) and an empty barrels layer.",
+	"layers": [
+		{
+			"id": "crates",
+			"kind": "crates",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "crates_default",
+			"rules": {
+				"where": {
+					"near": [{ "max_cm": 150, "weight": 3, "what": "wall" }, { "max_cm": 200, "weight": 2, "what": "cover" }],
+					"walk_layers": ["ground", "floor:*"]
+				}
+			},
+			"objects": []
+		},
+		{
+			"id": "barrels",
+			"kind": "barrels",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "barrels_default",
+			"rules": {
+				"where": { "near": [{ "max_cm": 120, "weight": 2, "what": "wall" }] }
+			},
+			"objects": []
+		}
+	],
+	"overrides": []
+}

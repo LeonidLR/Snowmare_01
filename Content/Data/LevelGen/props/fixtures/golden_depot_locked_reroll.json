@@ -1,0 +1,529 @@
+{
+	"schema": "codex.levelgen_props/1",
+	"map": "L_Gen_Depot_1",
+	"layout": "gen_ref_01_02_depot_1",
+	"layout_hash": "0000000000000000000000000000000000000000",
+	"revision": 1,
+	"frozen": false,
+	"x_note": "C3 golden input on the accepted Depot layout: a fresh crates layer (density preset, ground + floors, near wall / cover) and an empty barrels layer.",
+	"layers": [
+		{
+			"id": "crates",
+			"kind": "crates",
+			"enabled": true,
+			"seed": 2,
+			"locked": false,
+			"preset": "crates_default",
+			"rules": {
+				"where": {
+					"near": [
+						{
+							"max_cm": 150,
+							"weight": 3,
+							"what": "wall"
+						},
+						{
+							"max_cm": 200,
+							"weight": 2,
+							"what": "cover"
+						}
+					],
+					"walk_layers": ["ground", "floor:*"]
+				}
+			},
+			"objects": [
+				{
+					"id": "crates_00000001_0",
+					"variant": "crate_s",
+					"pos": [-5350, -3250],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": true
+				},
+				{
+					"id": "crates_00000001_2",
+					"variant": "crate_l",
+					"pos": [-3950, -7950],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": true
+				},
+				{
+					"id": "crates_00000001_3",
+					"variant": "crate_s",
+					"pos": [4050, 4950],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_4",
+					"variant": "crate_s",
+					"pos": [-4150, -7150],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": true
+				},
+				{
+					"id": "crates_00000002_0",
+					"variant": "crate_s",
+					"pos": [-4300, -6000],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_1",
+					"variant": "crate_s",
+					"pos": [-2750, 3750],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_2",
+					"variant": "crate_s",
+					"pos": [-4250, -4300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_3",
+					"variant": "crate_s",
+					"pos": [6000, 2700],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_4",
+					"variant": "crate_s",
+					"pos": [1200, 7000],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_5",
+					"variant": "crate_s",
+					"pos": [-4500, -4650],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_6",
+					"variant": "crate_s",
+					"pos": [1050, 7650],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_7",
+					"variant": "crate_s",
+					"pos": [-2650, -1650],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_8",
+					"variant": "crate_s",
+					"pos": [5000, -1150],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_9",
+					"variant": "crate_s",
+					"pos": [3550, -2450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_10",
+					"variant": "crate_l",
+					"pos": [4600, 2200],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_11",
+					"variant": "crate_l",
+					"pos": [-1300, -7100],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_12",
+					"variant": "crate_s",
+					"pos": [3200, -5150],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_13",
+					"variant": "crate_s",
+					"pos": [-2900, -6450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_14",
+					"variant": "crate_s",
+					"pos": [-950, 1100],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_15",
+					"variant": "crate_s",
+					"pos": [-2150, 5550],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_16",
+					"variant": "crate_s",
+					"pos": [-1700, 550],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_17",
+					"variant": "crate_s",
+					"pos": [4800, -1550],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_18",
+					"variant": "crate_l",
+					"pos": [-2600, 2450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_19",
+					"variant": "crate_s",
+					"pos": [4050, -400],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_20",
+					"variant": "crate_s",
+					"pos": [-5100, -6750],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_21",
+					"variant": "crate_l",
+					"pos": [-3650, 7550],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_22",
+					"variant": "crate_s",
+					"pos": [6050, 50],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_23",
+					"variant": "crate_s",
+					"pos": [-3300, 250],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_24",
+					"variant": "crate_s",
+					"pos": [-1100, -7950],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_25",
+					"variant": "crate_s",
+					"pos": [-5650, -850],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_26",
+					"variant": "crate_s",
+					"pos": [3800, -150],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_27",
+					"variant": "crate_s",
+					"pos": [-1400, 3550],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_28",
+					"variant": "crate_l",
+					"pos": [6050, 1050],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_29",
+					"variant": "crate_s",
+					"pos": [-5200, -2550],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_30",
+					"variant": "crate_s",
+					"pos": [-2450, 3350],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_31",
+					"variant": "crate_s",
+					"pos": [3100, -5600],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_32",
+					"variant": "crate_s",
+					"pos": [6150, 2350],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_33",
+					"variant": "crate_s",
+					"pos": [4500, -4150],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_34",
+					"variant": "crate_s",
+					"pos": [2200, -1250],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_35",
+					"variant": "crate_s",
+					"pos": [4450, -6150],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_36",
+					"variant": "crate_s",
+					"pos": [-3350, -7300],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_37",
+					"variant": "crate_s",
+					"pos": [3050, 1150],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_38",
+					"variant": "crate_s",
+					"pos": [-4000, -8200],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_39",
+					"variant": "crate_s",
+					"pos": [-1000, 3500],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_40",
+					"variant": "crate_s",
+					"pos": [-5050, -4000],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_41",
+					"variant": "crate_s",
+					"pos": [4950, -8700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_42",
+					"variant": "crate_s",
+					"pos": [-5500, 5850],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_43",
+					"variant": "crate_s",
+					"pos": [-3600, 7000],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_44",
+					"variant": "crate_s",
+					"pos": [4600, 2900],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_45",
+					"variant": "crate_s",
+					"pos": [1000, -3500],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_46",
+					"variant": "crate_s",
+					"pos": [-900, 3100],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_47",
+					"variant": "crate_s",
+					"pos": [4400, -1200],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000002_48",
+					"variant": "crate_l",
+					"pos": [-3300, -1300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				}
+			],
+			"report": {
+				"eligible": 85781,
+				"gate": "n/a",
+				"kept": 5,
+				"placed": 49,
+				"rejected": {
+					"blocked": 50379,
+					"door": 73,
+					"keepout": 69,
+					"ladder": 763,
+					"other": 65,
+					"other_layer": 0,
+					"route": 6573,
+					"spacing": 224,
+					"spawn": 1298
+				},
+				"requested": 54,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "barrels",
+			"kind": "barrels",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "barrels_default",
+			"rules": {
+				"where": {
+					"near": [
+						{
+							"max_cm": 120,
+							"weight": 2,
+							"what": "wall"
+						}
+					]
+				}
+			},
+			"objects": []
+		}
+	],
+	"overrides": [
+		{
+			"op": "move",
+			"id": "crates_00000001_3",
+			"pos": [4150, 4950],
+			"walk_layer": "ground",
+			"yaw": 0
+		},
+		{
+			"op": "delete",
+			"id": "crates_00000001_1",
+			"pos": [-2700, -6900]
+		},
+		{
+			"op": "add",
+			"object": {
+				"id": "hand_crates_0",
+				"variant": "crate_s",
+				"pos": [-700, -2700],
+				"walk_layer": "ground",
+				"yaw": 90,
+				"locked": false,
+				"origin": "hand"
+			}
+		}
+	]
+}
