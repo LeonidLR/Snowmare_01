@@ -1,0 +1,551 @@
+{
+"created": "2026-11-10",
+"warnings": [
+{
+"file": "Source/CodexTactics/Private/AI/PmcSquadSubsystem.cpp",
+"line": 618,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'this->Sight'. : Lines: 598, 599, 606, 610, 611, 613, 618",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Bot/PlaytestBotSubsystem.cpp",
+"line": 102,
+"code": "C6239",
+"message": "(<non-zero constant> && <expression>) always evaluates to the result of <expression>:  Did you intend to use the bitwise-and (`&`) operator? If not, consider removing the redundant '<non-zero constant>' and the `&&` operator.",
+"severity": "medium"
+},
+{
+"file": "Source/CodexTactics/Private/Camera/InteriorExitSubsystem.cpp",
+"line": 125,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Shown'. : Lines: 85, 86, 87, 88, 95, 96, 97, 98, 106, 107, 115, 119, 120, 121, 122, 124, 125",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp",
+"line": 123,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Anim'. : Lines: 90, 91, 92, 93, 94, 95, 96, 100, 107, 118, 122, 123",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp",
+"line": 126,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Clip'. : Lines: 90, 91, 92, 93, 94, 95, 96, 100, 107, 118, 122, 123, 124, 125, 126",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Characters/OperativeCharacterSuppression.cpp",
+"line": 199,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Target'. : Lines: 190, 194, 195, 196, 197, 198, 199",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Characters/SquadAutonomySubsystem.cpp",
+"line": 508,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'View.Enemy'. : Lines: 494, 495, 496, 497, 498, 499, 500, 502, 503, 507, 508, 509, 510, 511, 512, 513, 514, 515, 516, 517, 522, 523, 500, 502, 503, 507, 508",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Characters/SquadSubsystemCornerHold.cpp",
+"line": 422,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Previous'. : Lines: 397, 398, 399, 400, 401, 402, 403, 404, 405, 406, 407, 408, 412, 419, 422",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Characters/SquadSubsystemCornerHold.cpp",
+"line": 467,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Holder'. : Lines: 397, 398, 399, 400, 401, 402, 403, 404, 405, 406, 407, 408, 412, 419, 433, 434, 435, 436, 437, 438, 439, 440, 441, 442, 444, 445, 444, 450, 453, 454, 465, 466, 467",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Combat/HordeIntroSubsystem.cpp",
+"line": 406,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Camera'. : Lines: 337, 340, 341, 344, 345, 346, 347, 352, 353, 354, 355, 361, 365, 366, 379, 381, 395, 396, 397, 401, 402, 403, 404, 405, 406",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerPeekCarry.cpp",
+"line": 153,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Squad'. : Lines: 87, 103, 107, 108, 109, 110, 117, 119, 120, 121, 122, 123, 124, 125, 126, 128, 129, 130, 131, 135, 136, 140, 141, 149, 150, 151, 152, 153",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerRunPeek.cpp",
+"line": 458,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Squad'. : Lines: 376, 377, 378, 382, 383, 384, 388, 389, 391, 392, 393, 395, 397, 398, 399, 401, 402, 403, 404, 406, 410, 411, 412, 413, 415, 416, 417, 421, 447, 449, 453, 454, 456, 457, 458",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Core/SaveGameSubsystem.cpp",
+"line": 1721,
+"code": "C28182",
+"message": "Dereferencing NULL pointer. 'Candidate' contains the same NULL value as 'Member' did. See line 1721 for an earlier location where this can occur: Lines: 1671, 1672, 1673, 1674, 1677, 1678, 1679, 1706, 1707, 1709, 1711, 1712, 178, 1716, 178, 1717, 1718, 1719, 1721, 1723, 1719, 1721",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Core/SaveGameSubsystem.cpp",
+"line": 2178,
+"code": "C4996",
+"message": "Rename will no longer call ResetLoaders making this flag no longer needed. Prefer REN_AllowPackageLinkerMismatch if you wish to intentionally allow the linker to contain references to objects whose names no longer match what was loaded from disk. - Please update your code to the new API before upgrading to the next release, otherwise your project will no longer compile.",
+"severity": "low"
+},
+{
+"file": "Source/CodexTactics/Private/Falls/DropLinkSubsystem.cpp",
+"line": 147,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'World'. : Lines: 138, 139, 140, 141, 142, 144, 146, 147",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Interactables/RelocationSubsystem.cpp",
+"line": 447,
+"code": "C28182",
+"message": "Dereferencing NULL pointer. 'Member' contains the same NULL value as 'Carrier' did. : Lines: 420, 421, 425, 426, 427, 428, 435, 436, 437, 441, 444, 445, 447, 449, 445, 447",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Tutorial/TutorialSubsystem.cpp",
+"line": 1990,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Route'. : Lines: 1913, 1914, 1915, 1916, 1921, 1922, 1923, 1924, 1928, 1929, 1952, 1953, 1962, 1968, 1970, 1981, 1982, 1983, 1985, 1986, 1990",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/UI/ActionBarWidget.cpp",
+"line": 532,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Member'. : Lines: 406, 407, 408, 412, 420, 428, 437, 452, 453, 472, 489, 507, 513, 514, 515, 517, 518, 519, 520, 521, 523, 524, 525, 529, 531, 533, 532",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/UI/CodexTacticsHUD.cpp",
+"line": 1582,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Panic'. : Lines: 1540, 1541, 1545, 1546, 1548, 1549, 1550, 1555, 1554, 1556, 1560, 1561, 1562, 1563, 1564, 1565, 1567, 1568, 1569, 1573, 1577, 1579, 1580, 1581, 1582",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/UI/PhaseBannersWidget.cpp",
+"line": 259,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Flow'. : Lines: 228, 229, 230, 231, 235, 239, 243, 247, 252, 253, 257, 259",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/UI/TutorialOverlayWidget.cpp",
+"line": 434,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Renderer'. : Lines: 429, 430, 431, 432, 434",
+"severity": "high"
+},
+{
+"file": "Source/CodexTactics/Private/Vehicles/VehicleSubsystem.cpp",
+"line": 1324,
+"code": "C28182",
+"message": "Dereferencing NULL pointer. 'Candidate' contains the same NULL value as 'Operative' did. See line 1324 for an earlier location where this can occur: Lines: 1266, 1267, 1269, 1270, 1274, 1275, 1276, 1279, 1280, 1281, 1282, 1285, 1286, 1287, 1288, 1286, 1289, 1290, 1294, 1296, 1297, 1298, 1299, 1300, 1301, 1302, 1306, 1307, 1311, 1312, 1314, 1315, 1319, 1320, 1321, 1322, 1324, 1326, 1322, 1324",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/AimOffsetSmokeCommand.cpp",
+"line": 198,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Op'. : Lines: 97, 98, 99, 100, 104, 105, 106, 111, 117, 112, 118, 196, 198",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/BlizzardWalkSmokeCommand.cpp",
+"line": 311,
+"code": "C6336",
+"message": "Arithmetic operator has precedence over question operator, use parentheses to clarify intent.",
+"severity": "medium"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/CornerEntrySmokeCommand.cpp",
+"line": 357,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Squad'. : Lines: 318, 319, 320, 321, 322, 326, 327, 328, 337, 349, 351, 355, 356, 357",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/CornerEntrySmokeCommand.cpp",
+"line": 415,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Op'. : Lines: 318, 319, 320, 321, 322, 326, 327, 328, 337, 349, 404, 408, 409, 410, 412, 415",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/CoverReverseSmokeCommand.cpp",
+"line": 311,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Op'. : Lines: 196, 197, 198, 199, 203, 204, 205, 206, 210, 211, 212, 216, 287, 289, 293, c:\\users\\zephyrus15duo\\documents\\unreal projects\\codextactics\\source\\codextactics\\public\\tactics\\covertracerules.h:100, c:\\users\\zephyrus15duo\\documents\\unreal projects\\codextactics\\source\\codextacticsdev\\private\\debug\\coverreversesmokecommand.cpp:294, 295, 296, 300, 304, 311",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/CoverSwitchSmokeCommand.cpp",
+"line": 344,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Anim'. : Lines: 319, 320, 321, 325, 326, 327, 328, 329, 330, 333, 334, 335, 336, 335, 333, 337, 338, 341, 342, 344",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/CutterWallSmokeCommand.cpp",
+"line": 159,
+"code": "C6336",
+"message": "Arithmetic operator has precedence over question operator, use parentheses to clarify intent.",
+"severity": "medium"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/DefendSmokeCommand.cpp",
+"line": 155,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Defender'. : Lines: 79, 80, 81, 85, 86, 87, 88, 91, 93, 95, 105, 107, 108, 113, 149, 151, 155",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/DropSoftlockSmokeCommand.cpp",
+"line": 579,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Squad'. : Lines: 485, 487, 488, 489, 493, 494, 495, 496, 497, 498, 499, 504, 528, 530, 534, 538, 539, 540, 541, 542, 543, 548, 579",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/DropSoftlockSmokeCommand.cpp",
+"line": 607,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Leader'. : Lines: 485, 487, 488, 489, 493, 494, 495, 496, 497, 498, 499, 504, 600, 602, 606, 607",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/EncounterProbeCommand.cpp",
+"line": 56,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Member'. : Lines: 31, 32, 33, 39, 50, 51, 53, 55, 56",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/EnvironmentRainShotsCommand.cpp",
+"line": 468,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Rain'. : Lines: 356, 357, 358, 359, 360, 366, 367, 368, 372, 373, 374, 381, 382, 383, 385, 386, 387, 388, 392, 393, 394, 395, 397, 426, 427, 432, 434, 436, 450, 456, 465, 466, 468",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/EnvironmentRainShotsCommand.cpp",
+"line": 560,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Presenter'. : Lines: 356, 357, 358, 359, 360, 366, 367, 368, 372, 373, 374, 381, 382, 383, 385, 386, 387, 388, 392, 393, 394, 395, 397, 544, 545, 546, 547, 548, 549, 550, 551, 552, 553, 554, 556, 557, 558, 559, 560",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/FallDropSmokeCommand.cpp",
+"line": 747,
+"code": "C28182",
+"message": "Dereferencing NULL pointer. 'Leader' contains the same NULL value as 'Watched' did. See line 726 for an earlier location where this can occur: Lines: 725, 726, 727, 728, 729, 731, 741, 742, 747",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/FallDropSmokeCommand.cpp",
+"line": 1100,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Squad'. : Lines: 1010, 1012, 1013, 1014, 1018, 1019, 1020, 1021, 1022, 1023, 1024, 1029, 1095, 1096, 1100",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/GroupCoverPrioritySmokeCommand.cpp",
+"line": 210,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Three[I]'. : Lines: 203, 204, 205, 206, 207, 209, 210",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/GroupSelectSmokeCommand.cpp",
+"line": 90,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Squad'. : Lines: 60, 61, 62, 63, 67, 68, 69, 70, 71, 73, 75, 82, 83, 84, 86, 87, 88, 89, 90",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/HitFlashOverlaySmokeCommand.cpp",
+"line": 72,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'W2'. : Lines: 66, 67, 71, 87, 72",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/LeanPoseSmokeCommand.cpp",
+"line": 337,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Case'. : Lines: 222, 223, 224, 225, 229, 233, 234, 235, 236, 241, 246, 247, 257, 258, 263, 264, 327, 329, 333, 337",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/LevelGenLaddersSmokeCommand.cpp",
+"line": 650,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Leader'. : Lines: 574, 576, 577, 578, 582, 583, 584, 585, 586, 587, 592, 642, 644, 648, 649, 650",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/LevelGenRampSmokeCommand.cpp",
+"line": 541,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Squad'. : Lines: 464, 466, 467, 468, 472, 473, 474, 475, 476, 477, 482, 518, 520, 524, 525, 526, 531, 538, 540, 541",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/SaveRoundTripSmokeCommand.cpp",
+"line": 812,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Medic'. : Lines: 661, 662, 663, 664, 665, 666, 667, 668, 669, 671, 672, 673, 674, 675, 676, 677, 678, 679, 678, 682, 686, 687, 691, 692, 693, 694, 695, 696, 697, 698, 699, 700, 701, 702, 703, 704, 705, 706, 707, 711, 714, 715, 720, 726, 727, 730, 732, 733, 734, 735, 736, 737, 740, 741, 744, 745, 748, 749, 753, 754, 755, 759, 765, 766, 771, 775, 779, 784, 788, 793, 798, 799, 800, 801, 802, 804, 805, 806, 809, 811, 809, 812",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/SnowIndoorSmokeCommand.cpp",
+"line": 471,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'SnowFx'. : Lines: 325, 326, 330, 331, 332, 333, 334, 335, 336, 338, 421, 422, 430, 431, 435, 438, 439, 440, 442, 464, 466, 468, 471",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/TurnBasedSmokeCommand.cpp",
+"line": 163,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Active'. : Lines: 115, 116, 117, 118, 123, 124, 125, 126, 128, 130, 134, 135, 138, 139, 141, 144, 146, 147, 149, 150, 151, 152, 151, 154, 155, 154, 156, 157, 158, 163",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsDev/Private/Debug/TurnRulesSmokeCommand.cpp",
+"line": 100,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'UnitState'. : Lines: 54, 55, 56, 57, 61, 62, 63, 64, 85, 87, 91, 92, 93, 94, 96, 97, 98, 100",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Bot/BotCoverRulesTest.cpp",
+"line": 160,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Cover'. : Lines: 123, 124, 125, 127, 129, 127, 129, 127, 131, 133, 131, 133, 131, 135, 137, 135, 137, 135, 139, 141, 139, 141, 139, 143, 145, 143, 145, 143, 147, 148, 149, 150, 151, 152, 153, 154, 155, 156, 157, 158, 160",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Characters/ArsenalTest.cpp",
+"line": 40,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'M16'. : Lines: 23, 24, 25, 26, 27, 31, 32, 33, 34, 37, 38, 39, 40",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Characters/ArsenalTest.cpp",
+"line": 49,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Pistol'. : Lines: 23, 24, 25, 26, 27, 31, 32, 33, 34, 37, 38, 39, 40, 41, 42, 43, 44, 45, 47, 48, 49",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Characters/EnemyAIRulesTest.cpp",
+"line": 162,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'CVars'. : Lines: 149, 150, 154, 155, 156, 161, 162",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Characters/EnemyTargetPriorityTest.cpp",
+"line": 152,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'CVars'. : Lines: 139, 140, 144, 145, 146, 151, 152",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Characters/MilitaryZombieAssetTest.cpp",
+"line": 100,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Mesh'. : Lines: 79, 84, 85, 86, 88, 92, 93, 94, 95, 96, 100",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Characters/MilitaryZombieAssetTest.cpp",
+"line": 107,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Body'. : Lines: 79, 84, 85, 86, 88, 92, 93, 94, 95, 96, 100, 101, 102, 103, 106, 107",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Characters/WeaponAnimLayerTest.cpp",
+"line": 339,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Retargeted'. : Lines: 275, 276, 278, 277, 288, 283, 289, 290, 291, 290, 291, 290, 292, 293, 292, 294, 295, 294, 296, 297, 298, 302, 303, 304, 305, 307, 332, 308, 333, 337, 338, 339",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Characters/WeaponLayerHandoffTest.cpp",
+"line": 78,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Pistol'. : Lines: 58, 59, 60, 61, 66, 67, 68, 72, 73, 74, 75, 76, 78",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Combat/LauncherRulesTest.cpp",
+"line": 102,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'RosterBlock'. : Lines: 66, 67, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 97, 98, 99, 100, 102",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Combat/LauncherRulesTest.cpp",
+"line": 111,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'LoadoutBlock'. : Lines: 66, 67, 71, 72, 73, 74, 75, 76, 77, 78, 79, 80, 81, 83, 84, 85, 86, 87, 88, 89, 90, 91, 92, 93, 94, 97, 98, 99, 100, 104, 105, 106, 107, 108, 111",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Combat/MortarRulesTest.cpp",
+"line": 42,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Block'. : Lines: 35, 36, 37, 41, 42",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Combat/PistolRulesTest.cpp",
+"line": 83,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Pistol'. : Lines: 69, 70, 71, 72, 74, 73, 79, 80, 81, 82, 83",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Combat/WeaponBallisticsTest.cpp",
+"line": 175,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Pistol'. : Lines: 152, 153, 154, 155, 156, 157, 158, 159, 162, 163, 171, 172, 173, 175",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Combat/WeaponBallisticsTest.cpp",
+"line": 176,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Shotgun'. : Lines: 152, 153, 154, 155, 156, 157, 158, 159, 162, 163, 171, 172, 173, 175, 176",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Data/WeaponSchemaTest.cpp",
+"line": 248,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Block'. : Lines: 215, 216, 220, 221, 223, 221, 223, 221, 225, 227, 228, 232, 234, 235, 236, 240, 241, 245, 246, 247, 248",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Data/WeaponSchemaTest.cpp",
+"line": 342,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Sniper'. : Lines: 323, 324, 325, 326, 327, 328, 329, 330, 335, 336, 337, 339, 340, 341, 342",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Data/WeaponSchemaTest.cpp",
+"line": 365,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Shotgun'. : Lines: 323, 324, 325, 326, 327, 328, 329, 330, 335, 336, 337, 346, 351, 355, 357, 358, 355, 357, 358, 355, 361, 362, 363, 365",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Data/WeaponSchemaTest.cpp",
+"line": 371,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Pistol'. : Lines: 323, 324, 325, 326, 327, 328, 329, 330, 335, 336, 337, 346, 351, 355, 357, 358, 355, 357, 358, 355, 361, 362, 363, 365, 366, 367, 368, 369, 370, 371",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Data/WeaponSchemaTest.cpp",
+"line": 372,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'M16'. : Lines: 323, 324, 325, 326, 327, 328, 329, 330, 335, 336, 337, 346, 351, 355, 357, 358, 355, 357, 358, 355, 361, 362, 363, 365, 366, 367, 368, 369, 370, 371, 372",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Data/WeaponTuningTest.cpp",
+"line": 110,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'M16Json'. : Lines: 93, 94, 96, 95, 100, 101, 102, 103, 108, 109, 110",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Data/WeaponTuningTest.cpp",
+"line": 111,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'SniperJson'. : Lines: 93, 94, 96, 95, 100, 101, 102, 103, 108, 109, 110, 111",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Environment/EnvironmentClimateTest.cpp",
+"line": 113,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Environment'. : Lines: 66, 67, 68, 69, 70, 73, 74, 75, 78, 79, 80, 81, 82, 83, 84, 85, 87, 88, 89, 90, 93, 94, 95, 96, 98, 99, 100, 101, 102, 105, 106, 107, 109, 110, 111, 113",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Environment/EnvironmentClimateTest.cpp",
+"line": 422,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Environment'. : Lines: 356, 357, 358, 362, 363, 364, 365, 366, 368, 369, 376, 366, 368, 369, 376, 366, 378, 379, 381, 392, 399, 400, 401, 402, 403, 405, 407, 408, 409, 410, 411, 412, 415, 416, 418, 419, 420, 422",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Formation/FormationWallEndRulesTest.cpp",
+"line": 102,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'P'. : Lines: 84, 85, 86, 87, 88, 89, 91, 92, 93, 94, 95, 96, 97, 101, 102",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Formation/FormationWallEndRulesTest.cpp",
+"line": 103,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'K'. : Lines: 84, 85, 86, 87, 88, 89, 91, 92, 93, 94, 95, 96, 97, 101, 102, 103",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Formation/FormationWallEndRulesTest.cpp",
+"line": 104,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'Z'. : Lines: 84, 85, 86, 87, 88, 89, 91, 92, 93, 94, 95, 96, 97, 101, 102, 103, 104",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Formation/FormationWallGroupRulesTest.cpp",
+"line": 88,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'K'. : Lines: 67, 68, 74, 75, 79, 74, 81, 82, 83, 84, 88",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Formation/FormationWallLeadershipRulesTest.cpp",
+"line": 143,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'EK'. : Lines: 110, 111, 112, 113, 114, 115, 116, 117, 132, 133, 134, 135, 137, 138, 139, 140, 141, 143",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Formation/FormationWallLeadershipRulesTest.cpp",
+"line": 144,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'EP'. : Lines: 110, 111, 112, 113, 114, 115, 116, 117, 132, 133, 134, 135, 137, 138, 139, 140, 141, 143, 144",
+"severity": "high"
+},
+{
+"file": "Source/CodexTacticsTests/Private/Formation/FormationWallLeadershipRulesTest.cpp",
+"line": 144,
+"code": "C6011",
+"message": "Dereferencing NULL pointer 'EZ'. : Lines: 110, 111, 112, 113, 114, 115, 116, 117, 132, 133, 134, 135, 137, 138, 139, 140, 141, 143, 144",
+"severity": "high"
+}
+]
+}
