@@ -28,6 +28,8 @@ export type EditableFormation = (typeof EDITABLE_FORMATIONS)[number];
 export const FORMATION_ROLES = ['commander', 'right', 'left', 'rear'] as const;
 export type FormationRole = (typeof FORMATION_ROLES)[number];
 
+export const DEFAULT_ARC_DEG = 90;
+
 export const ROLE_LETTER_TO_NAME: Record<Role, FormationRole> = {
   K: 'commander',
   P: 'right',
