@@ -7,6 +7,9 @@
       "Female_Soldier_Skeleton": "/Game/Characters/Animations/Shotgun/Female"
     },
     "body": "full",
+    "legs_abp": ["run", "sprint"],
+    "legs_abp_run_speeds": [280, 360],
+    "legs_abp_comment": "The game designer 2026-11-10: any operative with the shotgun WALKS on the shotgun pack (full body, as before) and RUNS / SPRINTS on the M16 (ABP) legs with the shotgun upper body; the run share follows the pack walk -> jog band (jog_blend_speeds 280 -> 360).",
     "crouch_body": "abp",
     "cover_mode": "abp",
     "cover_approach_abp_cm": 700,

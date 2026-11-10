@@ -657,9 +657,14 @@ namespace ShotgunSmoke
 				BodySpeed > 1.f ? MeanPlantSpeed / BodySpeed * 100.f : 0.f, BodySpeed, State.PlantSeconds, State.PlantSpeeds.Num());
 			if (bFull)
 			{
-				Check(State, PlantSpeed >= 0.f && PlantSpeed < FMath::Max(25.f, BodySpeed * 0.2f),
-					FString::Printf(TEXT("2b: %s, no foot sliding: the planted foot drifts %.1f cm/s on the ground (%.0f %% of his %.0f cm/s; limit 20 %%)"),
-						bSprintLeg ? TEXT("sprinting") : TEXT("walking"), PlantSpeed, BodySpeed > 1.f ? PlantSpeed / BodySpeed * 100.f : 0.f, BodySpeed));
+				// The designer 2026-11-10: the shotgun RUNS / SPRINTS on the M16 (ABP) legs ("legs_abp"). Those legs slide like the M16's own
+				// (RpgAnimSmoke measured the bare ABP sprint at 22 % with the layer off), so on ABP legs the limit is the M16's reference band.
+				const bool bAbpLegs = MoveAnim && MoveAnim->GetWeaponLayerLegsAbpWeight() > 0.5f;
+				const float SlideShare = bAbpLegs ? 0.35f : 0.2f;
+				Check(State, PlantSpeed >= 0.f && PlantSpeed < FMath::Max(25.f, BodySpeed * SlideShare),
+					FString::Printf(TEXT("2b: %s, no foot sliding: the planted foot drifts %.1f cm/s on the ground (%.0f %% of his %.0f cm/s; limit %.0f %%, %s legs)"),
+						bSprintLeg ? TEXT("sprinting") : TEXT("walking"), PlantSpeed, BodySpeed > 1.f ? PlantSpeed / BodySpeed * 100.f : 0.f, BodySpeed,
+						SlideShare * 100.f, bAbpLegs ? TEXT("the M16 (ABP)") : TEXT("the pack's")));
 			}
 			ResetFeet(State);
 			Engineer->StopOperative();

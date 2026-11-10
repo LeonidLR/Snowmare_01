@@ -488,7 +488,7 @@
 				},
 				{
 					"id": "barrels_00000001_1",
-					"variant": "barrel",
+					"variant": "barrel_explosive",
 					"pos": [-6200, 8600],
 					"walk_layer": "ground",
 					"yaw": 0,
@@ -497,7 +497,7 @@
 				},
 				{
 					"id": "barrels_00000001_2",
-					"variant": "barrel",
+					"variant": "barrel_explosive",
 					"pos": [-6200, 8500],
 					"walk_layer": "ground",
 					"yaw": 0,
@@ -506,7 +506,7 @@
 				},
 				{
 					"id": "barrels_00000001_3",
-					"variant": "barrel",
+					"variant": "barrel_explosive",
 					"pos": [-6200, 8700],
 					"walk_layer": "ground",
 					"yaw": 0,
@@ -515,7 +515,7 @@
 				},
 				{
 					"id": "barrels_00000001_4",
-					"variant": "barrel",
+					"variant": "barrel_explosive",
 					"pos": [-3650, 6900],
 					"walk_layer": "ground",
 					"yaw": 0,
@@ -524,7 +524,7 @@
 				},
 				{
 					"id": "barrels_00000001_5",
-					"variant": "barrel",
+					"variant": "barrel_explosive",
 					"pos": [-3600, 6800],
 					"walk_layer": "ground",
 					"yaw": 0,
@@ -533,7 +533,7 @@
 				},
 				{
 					"id": "barrels_00000001_6",
-					"variant": "barrel",
+					"variant": "barrel_explosive",
 					"pos": [-3750, 6850],
 					"walk_layer": "ground",
 					"yaw": 0,
@@ -542,217 +542,19 @@
 				},
 				{
 					"id": "barrels_00000001_7",
-					"variant": "barrel",
-					"pos": [-3600, 6950],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_4"
-				},
-				{
-					"id": "barrels_00000001_8",
-					"variant": "barrel",
-					"pos": [-5500, -2500],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_8"
-				},
-				{
-					"id": "barrels_00000001_9",
-					"variant": "barrel",
-					"pos": [-5450, -2450],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_8"
-				},
-				{
-					"id": "barrels_00000001_10",
-					"variant": "barrel",
-					"pos": [-5500, -2400],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_8"
-				},
-				{
-					"id": "barrels_00000001_11",
-					"variant": "barrel",
-					"pos": [-5400, -2550],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_8"
-				},
-				{
-					"id": "barrels_00000001_12",
-					"variant": "barrel",
-					"pos": [-5550, -900],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_12"
-				},
-				{
-					"id": "barrels_00000001_13",
-					"variant": "barrel",
-					"pos": [-5650, -850],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_12"
-				},
-				{
-					"id": "barrels_00000001_14",
-					"variant": "barrel",
-					"pos": [-5500, -850],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_12"
-				},
-				{
-					"id": "barrels_00000001_15",
-					"variant": "barrel",
-					"pos": [-5550, -1000],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_12"
-				},
-				{
-					"id": "barrels_00000001_16",
-					"variant": "barrel",
-					"pos": [-1750, -7750],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_16"
-				},
-				{
-					"id": "barrels_00000001_17",
 					"variant": "barrel_explosive",
-					"pos": [4100, -5000],
+					"pos": [4800, -50],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
-					"cluster": "barrels_00000001_17"
-				},
-				{
-					"id": "barrels_00000001_18",
-					"variant": "barrel_explosive",
-					"pos": [4150, -5050],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_17"
-				},
-				{
-					"id": "barrels_00000001_19",
-					"variant": "barrel_explosive",
-					"pos": [4200, -5000],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_17"
-				},
-				{
-					"id": "barrels_00000001_20",
-					"variant": "barrel_explosive",
-					"pos": [-600, -7350],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_20"
-				},
-				{
-					"id": "barrels_00000001_21",
-					"variant": "barrel_explosive",
-					"pos": [-650, -7450],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_20"
-				},
-				{
-					"id": "barrels_00000001_22",
-					"variant": "barrel_explosive",
-					"pos": [-650, -7300],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_20"
-				},
-				{
-					"id": "barrels_00000001_23",
-					"variant": "barrel",
-					"pos": [-1250, 750],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_23"
-				},
-				{
-					"id": "barrels_00000001_24",
-					"variant": "barrel",
-					"pos": [-1150, 750],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_23"
-				},
-				{
-					"id": "barrels_00000001_25",
-					"variant": "barrel",
-					"pos": [-5100, 950],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_25"
-				},
-				{
-					"id": "barrels_00000001_26",
-					"variant": "barrel",
-					"pos": [-5100, 1050],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_25"
-				},
-				{
-					"id": "barrels_00000001_27",
-					"variant": "barrel_explosive",
-					"pos": [2400, 8450],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_27"
-				},
-				{
-					"id": "barrels_00000001_28",
-					"variant": "barrel",
-					"pos": [-4400, 7500],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_28"
-				},
-				{
-					"id": "barrels_00000001_29",
-					"variant": "barrel",
-					"pos": [-4350, 7450],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_28"
+					"cluster": "barrels_00000001_7"
 				}
 			],
 			"report": {
 				"eligible": 84363,
 				"gate": "n/a",
 				"kept": 0,
-				"placed": 30,
+				"placed": 8,
 				"rejected": {
 					"blocked": 35901,
 					"door": 546,
@@ -764,7 +566,7 @@
 					"spacing": 0,
 					"spawn": 1479
 				},
-				"requested": 30,
+				"requested": 8,
 				"short_by": 0,
 				"status": "ok",
 				"warnings": []
