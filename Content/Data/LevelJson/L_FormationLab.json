@@ -1,4 +1,5 @@
 {
+  "start_mode": "formation",
   "$schema": "../Schemas/level_config.schema.json",
   "level_id": "L_FormationLab",
   "level_name": "Formation Lab",
