@@ -346,11 +346,11 @@ bool FHordeFarDataTest::RunTest(const FString&)
 	TestEqual(TEXT("Fallback share"), Config.FirefightFallbackShare, 0.5f);
 	TestFalse(TEXT("Waves feed off"), Config.bWavesFeedHorde);
 	TestEqual(TEXT("Band 175-225 m"), FarBandMinCm(Config), 17500.f);
-	// The shipped horde.json: the designer's 300 m (260-340), 90 deg, the waves feed the horde; the dev command keeps 25-45 m.
+	// The shipped horde.json: the designer's 300 m (260-340), 45 deg (2026-11-10, was 90), the waves feed the horde; the dev command keeps 25-45 m.
 	const FHordeConfig Shipped = LoadDefaults();
 	TestEqual(TEXT("Shipped: 300 m"), Shipped.FirefightSpawnDistanceCm, 30000.f);
 	TestEqual(TEXT("Shipped: +- 40 m"), Shipped.FirefightSpawnSpreadCm, 4000.f);
-	TestEqual(TEXT("Shipped: 90 deg"), Shipped.FirefightBearingChangeDeg, 90.f);
+	TestEqual(TEXT("Shipped: 45 deg"), Shipped.FirefightBearingChangeDeg, 45.f);
 	TestTrue(TEXT("Shipped: waves feed the horde"), Shipped.bWavesFeedHorde);
 	TestEqual(TEXT("Shipped: the dev band stays 25 m"), Shipped.MinDistanceCm, 2500.f);
 	TestEqual(TEXT("Shipped: 10 s HQ warning kept"), Shipped.Firefight.WarningLeadSeconds, 10.f);

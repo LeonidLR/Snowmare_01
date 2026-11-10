@@ -463,7 +463,7 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponLayerLegsAbpDataTest, "CodexTactics.Anim
 
 bool FWeaponLayerLegsAbpDataTest::RunTest(const FString&)
 {
-	// weapon_anim_sets.json: only the launcher lists legs_abp (running + walking forward on the ABP's legs; the designer 2026-11-10); every
+	// weapon_anim_sets.json: the launcher and (2026-11-10) the shotgun list legs_abp (running + walking forward on the ABP's legs; the designer 2026-11-10); every
 	// other set keeps its own legs in every gait (no key).
 	FString Text;
 	TSharedPtr<FJsonObject> Root;
@@ -497,6 +497,12 @@ bool FWeaponLayerLegsAbpDataTest::RunTest(const FString&)
 			const TArray<TSharedPtr<FJsonValue>>* RunBand = nullptr;
 			TestTrue(TEXT("the launcher: legs_abp_run_speeds [start < full <= 170 cm/s]"), (*Block)->TryGetArrayField(TEXT("legs_abp_run_speeds"), RunBand) && RunBand
 				&& RunBand->Num() == 2 && (*RunBand)[0]->AsNumber() < (*RunBand)[1]->AsNumber() && (*RunBand)[1]->AsNumber() <= 170.0);
+		}
+		else if (Pair.Key == TEXT("shotgun"))
+		{
+			// The designer 2026-11-10: the shotgun WALKS on the pack and RUNS / SPRINTS on the M16 (ABP) legs, no walk_forward.
+			const WeaponAnimLayerRules::FWeaponLegsAbpGaits Gaits = WeaponAnimLayerRules::ParseLegsAbpGaits(Names, nullptr);
+			TestTrue(TEXT("the shotgun: legs_abp run + sprint only"), bHas && Gaits.bRun && Gaits.bSprint && !Gaits.bWalkForward);
 		}
 		else
 		{
