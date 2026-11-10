@@ -169,8 +169,8 @@
 |---|---|
 | Walk layers + Z | `layersOf` / `levelZ`: ground, `cut` (-300), floors, walkable roofs. Roof area = footprint minus 50 cm inset minus `roof_holes`. |
 | Blocked area | `walls[]` (widened by thickness/2 + the object's half size + `min_gap_any_cm`), building footprints (ground layer only), `covers[]` footprints, chimneys, silos. |
-| Doorways | `buildings[].doors[]` (id `<building>#<i>`, side read from the footprint). **Gates** = gaps of 80-400 cm between collinear wall segments of one wall/fence. Example: `F_compound_N_0` ends at y -6234, `F_compound_N_1` starts at -5934, so the gate is at (1400, -6084), 300 cm wide. Gaps in `CUTWALL_*` are crossings, not doors. |
-| Routes | `routes[]` polylines per layer. `mandatory` and variants are kept apart. A door on the mandatory route = the route polyline passes within 150 cm of it (e.g. the compound gate above, the shed door (797, -7250)). |
+| Doorways | `buildings[].doors[]` (id `<building>#<i>`, side read from the footprint). **Gates** = gaps of 80-600 cm between collinear wall segments of one wall/fence (designer 2026-11-10; was 80-400). Example: `F_compound_N_0` ends at y -6234, `F_compound_N_1` starts at -5934, so the gate is at (1400, -6084), 300 cm wide. Gaps in `CUTWALL_*` are crossings, not doors. |
+| Routes | `routes[]` polylines per layer. `mandatory` and variants are kept apart. A door on the mandatory route = the route passes **through** it or **turns around at** it (designer 2026-11-10, exact rule in 6.1 #7), e.g. the compound gate above (through) and the shed door (797, -7250) (R_main turns at (797, -7070)). Passing by is not enough: `B_pump#0` with R_main 180 cm away along its wall is not on the route. |
 | Fixed points | `spawn.pos`, `end`, ladders (`pos`, `foot`, `top`), stairs (the `pos` -> `top` corridor, 2 x half-width), roof/floor holes (rim = half side + 0.8 m), crossings polygons. |
 | Anchors | Zones (`poly`, `kind`, `set_piece`, `intent`), `ambush_points`, `spawn_points`, `patrol_routes`. Dead ends = `Z_*` with `kind: wall_end`. Roof edges = roof perimeter inset 100 cm. |
 
@@ -429,3 +429,17 @@ The shared fixtures are written first by Claude: `Content/Data/LevelGen/props/fi
    mined crate / doorway tripwire - who can disarm, time, failure chance from data; inert in `MinesInert`), after C7.
 5. Explosive chains allowed, explosives >= 400 cm apart - **agreed**.
 6. Freezing - **yes**: `frozen: true` once he signs off a campaign map's props; re-rolls then need an explicit unfreeze in the TG.
+7. **A doorway is on the mandatory route only when the route passes THROUGH it or turns around AT it** - not when it merely passes by
+   within some distance (2026-11-10). Exact rule (integer cm, `FPropsLayoutView::BuildDoorways`; numbers in `props_balance.json`
+   `layout_view`), with H = half the opening width (or of `door_fallback_width_cm` 180 when the door has no wall gap) +
+   `door_through_slack_cm` 60:
+   - **through**: a mandatory leg with both ends on the doorway's walk layer crosses or touches the doorway's wall line (the axis line
+     through the doorway centre along the wall) at most H from the centre; a leg lying on that line does not cross it;
+   - **turns at**: a mandatory route vertex on that layer that is the route's first / last vertex or a reversal
+     (dot(V - prev, next - V) < 0; a 90 degree turn is not one), with |lateral offset| <= H and depth in front of the doorway
+     0..`door_turn_reach_cm` 250 on its outward side (gates have no outward side: either side).
+   Depot: on the route = `F_compound_N#g0` (through), `B_shed#0` (R_main reverses at (797, -7070), 180 cm in front), `B_ruin#0`
+   (R_main leaves the ruin through it); `B_pump#0` is not (R_main runs along its wall 180 cm away, no reversal there).
+8. **Fence gaps up to 600 cm are gates** (2026-11-10; was 400): the tractor yard's `F_tanks_N` / `F_tanks_S` 500 cm gaps become
+   gates `F_tanks_N#g0` / `F_tanks_S#g0` (Depot: 14 doors + 9 gates). Building doors and the cut's gaps (crossings) are unchanged.
+   Number in `props_balance.json` `layout_view.gate_max_gap_cm`.

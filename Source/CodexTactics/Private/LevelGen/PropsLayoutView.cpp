@@ -832,7 +832,74 @@ void FPropsLayoutView::BuildDoorways()
 	for (FPropsDoorway& W : Doorways)
 	{
 		W.MandatoryRouteDistCm = DistanceToMandatoryRouteCm(W.Pos, W.WalkLayer);
-		W.bOnMandatoryRoute = IsNearMandatoryRoute(W.Pos, W.WalkLayer, Config.MandatoryDoorToleranceCm);
+		const int64 Reach = static_cast<int64>((W.WidthCm > 0 ? W.WidthCm : Config.DoorFallbackWidthCm) / 2) + Config.DoorThroughSlackCm;
+		// the wall line through the opening is axis aligned: Across = the axis perpendicular to Along
+		const bool bLineAlongY = W.Along.Y != 0;
+		for (const FRoute& Route : Routes)
+		{
+			if (!Route.bMandatory)
+			{
+				continue;
+			}
+			const int32 N = Route.Points.Num();
+			for (int32 I = 0; I < N; ++I)
+			{
+				const FIntPoint V = Route.Points[I];
+				// THROUGH: leg I -> I + 1 crosses / touches the wall line within Reach of the opening's centre
+				if (I + 1 < N && Route.Layers[I] == W.WalkLayer && Route.Layers[I + 1] == W.WalkLayer)
+				{
+					const FIntPoint B = Route.Points[I + 1];
+					const int64 S0 = bLineAlongY ? static_cast<int64>(V.X) - W.Pos.X : static_cast<int64>(V.Y) - W.Pos.Y;
+					const int64 S1 = bLineAlongY ? static_cast<int64>(B.X) - W.Pos.X : static_cast<int64>(B.Y) - W.Pos.Y;
+					const bool bCrosses = !((S0 > 0 && S1 > 0) || (S0 < 0 && S1 < 0) || (S0 == 0 && S1 == 0));
+					if (bCrosses)
+					{
+						// lateral offset of the crossing point x |S1 - S0|, exact
+						const int64 Den = S1 - S0;
+						const int64 L0 = bLineAlongY ? static_cast<int64>(V.Y) - W.Pos.Y : static_cast<int64>(V.X) - W.Pos.X;
+						const int64 L1 = bLineAlongY ? static_cast<int64>(B.Y) - W.Pos.Y : static_cast<int64>(B.X) - W.Pos.X;
+						const int64 Num = L0 * Den - S0 * (L1 - L0);
+						if (FMath::Abs(Num) <= Reach * FMath::Abs(Den))
+						{
+							W.bRouteThrough = true;
+						}
+					}
+				}
+				// TURNS AT: a reversal / end vertex in front of the doorway
+				if (Route.Layers[I] != W.WalkLayer)
+				{
+					continue;
+				}
+				const int64 Rx = static_cast<int64>(V.X) - W.Pos.X;
+				const int64 Ry = static_cast<int64>(V.Y) - W.Pos.Y;
+				const int64 Lateral = FMath::Abs(Rx * W.Along.X + Ry * W.Along.Y);
+				bool bInFront = false;
+				if (W.Outward == FIntPoint::ZeroValue)
+				{
+					bInFront = FMath::Abs(bLineAlongY ? Rx : Ry) <= Config.DoorTurnReachCm;
+				}
+				else
+				{
+					const int64 Depth = Rx * W.Outward.X + Ry * W.Outward.Y;
+					bInFront = Depth >= 0 && Depth <= Config.DoorTurnReachCm;
+				}
+				if (!bInFront || Lateral > Reach)
+				{
+					continue;
+				}
+				bool bTurn = I == 0 || I == N - 1;
+				if (!bTurn)
+				{
+					const FIntPoint P = Route.Points[I - 1];
+					const FIntPoint Q = Route.Points[I + 1];
+					const int64 Dot = (static_cast<int64>(V.X) - P.X) * (static_cast<int64>(Q.X) - V.X)
+						+ (static_cast<int64>(V.Y) - P.Y) * (static_cast<int64>(Q.Y) - V.Y);
+					bTurn = Dot < 0;
+				}
+				W.bRouteTurnsAt |= bTurn;
+			}
+		}
+		W.bOnMandatoryRoute = W.bRouteThrough || W.bRouteTurnsAt;
 	}
 	Doorways.Sort([](const FPropsDoorway& A, const FPropsDoorway& B) { return A.Id.Compare(B.Id, ESearchCase::CaseSensitive) < 0; });
 }
@@ -1133,4 +1200,133 @@ bool FPropsLayoutView::IsExcluded(const TArray<FPropsExclusion>& Shapes, FIntPoi
 		}
 	}
 	return false;
+}
+
+bool FPropsLayoutView::GetLayerExtent(const FString& WalkLayer, FIntPoint& OutMin, FIntPoint& OutMax) const
+{
+	const FPropsWalkLayer* L = FindLayer(WalkLayer);
+	if (!L)
+	{
+		return false;
+	}
+	switch (L->Kind)
+	{
+	case EPropsWalkLayerKind::Ground:
+		OutMin = BoundsMin;
+		OutMax = BoundsMax;
+		return true;
+	case EPropsWalkLayerKind::Cut:
+	{
+		if (CutPoly.Num() < 3)
+		{
+			return false;
+		}
+		OutMin = CutPoly[0];
+		OutMax = CutPoly[0];
+		for (const FIntPoint& P : CutPoly)
+		{
+			OutMin = FIntPoint(FMath::Min(OutMin.X, P.X), FMath::Min(OutMin.Y, P.Y));
+			OutMax = FIntPoint(FMath::Max(OutMax.X, P.X), FMath::Max(OutMax.Y, P.Y));
+		}
+		return true;
+	}
+	default:
+		OutMin = Buildings[L->BuildingIndex].Min;
+		OutMax = Buildings[L->BuildingIndex].Max;
+		return true;
+	}
+}
+
+bool FPropsLayoutView::IsNearWall(FIntPoint P, const FString& WalkLayer, int32 ClearanceCm) const
+{
+	bool bAlongX = false;
+	return FindNearestWallAxis(P, WalkLayer, ClearanceCm, bAlongX);
+}
+
+bool FPropsLayoutView::IsNearCover(FIntPoint P, const FString& WalkLayer, int32 ClearanceCm) const
+{
+	using namespace PropsLayoutViewLocal;
+	const FPropsWalkLayer* L = FindLayer(WalkLayer);
+	if (!L || L->Kind != EPropsWalkLayerKind::Ground)
+	{
+		return false;
+	}
+	const int64 Clearance = ClampRadius(ClearanceCm);
+	for (const FCover& C : Covers)
+	{
+		if (CoverWithin(P, C.Pos, C.Yaw, C.SizeX, C.SizeY, Clearance))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool FPropsLayoutView::FindNearestWallAxis(FIntPoint P, const FString& WalkLayer, int32 ClearanceCm, bool& bOutAlongX) const
+{
+	using namespace PropsLayoutViewLocal;
+	const int32 LayerIndex = Layers.IndexOfByPredicate([&WalkLayer](const FPropsWalkLayer& L) { return L.Name.Equals(WalkLayer, ESearchCase::CaseSensitive); });
+	if (LayerIndex == INDEX_NONE)
+	{
+		return false;
+	}
+	const int64 Clearance = ClampRadius(ClearanceCm);
+	int32 BestDist = MAX_int32;
+	const FLayerWall* Best = nullptr;
+	for (const FLayerWall& W : LayerWalls[LayerIndex])
+	{
+		if (!SegmentWithin(P, W.A, W.B, static_cast<int64>(W.Thickness) + 2 * Clearance, 2))
+		{
+			continue;
+		}
+		const int32 D = CeilDistance(P, W.A, W.B);
+		if (D < BestDist)
+		{
+			BestDist = D;
+			Best = &W;
+		}
+	}
+	if (!Best)
+	{
+		return false;
+	}
+	bOutAlongX = FMath::Abs(static_cast<int64>(Best->B.X) - Best->A.X) >= FMath::Abs(static_cast<int64>(Best->B.Y) - Best->A.Y);
+	return true;
+}
+
+bool FPropsLayoutView::ReadConfig(const FJsonObject& Balance, FPropsLayoutConfig& Out, TArray<FString>& Errors)
+{
+	using namespace LevelGenJson;
+	const int32 FirstError = Errors.Num();
+	FFieldReader R(Balance, TEXT("props_balance"), Errors);
+	const TSharedPtr<FJsonObject> Block = R.Object(TEXT("layout_view"));
+	if (Block.IsValid())
+	{
+		FFieldReader B(*Block, TEXT("props_balance.layout_view"), Errors);
+		const auto Read = [&B](const TCHAR* Key, int32& Value)
+		{
+			int32 V = Value;
+			if (B.Int(Key, V))
+			{
+				if (V < 0)
+				{
+					B.Fail(FString::Printf(TEXT("'%s' must be >= 0"), Key));
+				}
+				else
+				{
+					Value = V;
+				}
+			}
+		};
+		Read(TEXT("gate_min_gap_cm"), Out.GateMinGapCm);
+		Read(TEXT("gate_max_gap_cm"), Out.GateMaxGapCm);
+		Read(TEXT("door_through_slack_cm"), Out.DoorThroughSlackCm);
+		Read(TEXT("door_turn_reach_cm"), Out.DoorTurnReachCm);
+		Read(TEXT("door_fallback_width_cm"), Out.DoorFallbackWidthCm);
+	}
+	for (int32 I = FirstError; I < Errors.Num(); ++I)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("Props layout config: %s"), *Errors[I]);
+	}
+	return Errors.Num() == FirstError;
 }
