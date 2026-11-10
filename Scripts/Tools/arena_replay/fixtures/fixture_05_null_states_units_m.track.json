@@ -1,0 +1,61 @@
+{
+  "version": 1,
+  "map": "L_FormationLabCombat",
+  "round": 5,
+  "scenario": "StressTest_NullsAndMeters",
+  "winner": "A",
+  "end_reason": "TeamB_Eliminated",
+  "duration_s": 10.0,
+  "dt": 0.2,
+  "units": "m",
+  "objective": {
+    "x": 0.0,
+    "y": 0.0,
+    "radius": null,
+    "attacker": "A"
+  },
+  "fighters": [
+    { "id": "Alpha_1", "role": "Commander", "side": "A" },
+    { "id": "Alpha_2", "role": "Point", "side": "A" },
+    { "id": "Alpha_3", "role": "Rear", "side": "A" },
+    { "id": "Bravo_1", "role": "Commander", "side": "B" },
+    { "id": "Bravo_2", "role": "Point", "side": "B" },
+    { "id": "Bravo_3", "role": "Rear", "side": "B" }
+  ],
+  "frames": [
+    [[-15.0, 0.0], [-16.0, 2.0], [-16.0, -2.0], [15.0, 0.0], [16.0, 2.0], [16.0, -2.0]],
+    null,
+    [[-14.0, 0.2], null, [-15.0, -1.8], [14.0, -0.2], [15.0, 1.8], null],
+    [[-13.0, 0.5], [-14.0, 2.2], [-14.0, -1.5], [13.0, -0.5], [14.0, 1.5], [14.0, -1.5]],
+    [[-12.0, 1.0], [-13.0, 2.5], [-13.0, -1.0], [12.0, -1.0], [13.0, 1.0], [13.0, -1.0]],
+    [[-10.0, 1.5], [-11.0, 2.8], [-11.0, -0.5], [10.0, -1.5], [11.0, 0.5], null],
+    [[-8.0, 1.8], [-9.0, 3.0], [-9.0, 0.0], [8.0, -1.8], [9.0, 0.0], null],
+    [[-5.0, 2.0], [-6.0, 3.0], [-6.0, 0.5], [5.0, -2.0], [6.0, -0.5], null],
+    [[-2.0, 2.0], [-3.0, 3.0], [-3.0, 1.0], [2.0, -2.0], null, null],
+    [[0.0, 1.0], [-1.0, 2.0], [-1.0, 1.0], null, null, null]
+  ],
+  "states": [
+    [[0, "stand", 150, "Advance"], [0, "crouch", 150, "Cover"], [0, "stand", 150, "Idle"], [180, "stand", 150, "Defend"], [180, "stand", 150, "Defend"], [180, "stand", 150, "Defend"]],
+    null,
+    [[null, null, null, null], [0, "crouch", 140, "Cover"], null, [180, "stand", 150, "Defend"], null, [180, "stand", 0, "KIA"]],
+    [[0, "stand", 150, "Advance"], [0, "stand", 140, "Cover"], [0, "stand", 150, "Advance"], [180, "stand", 130, "Shoot"], [180, "crouch", 150, "Cover"], [180, "stand", 0, "KIA"]],
+    [[0, "stand", 140, "Shoot"], [0, "stand", 140, "Advance"], [0, "stand", 150, "Advance"], [180, "stand", 90, "Shoot"], [180, "crouch", 120, "Cover"], [180, "stand", 0, "KIA"]],
+    [[0, "stand", 140, "Advance"], [0, "stand", 140, "Advance"], [0, "stand", 150, "Advance"], [180, "crouch", 50, "FallBack"], [180, "crouch", 80, "Cover"], [180, "stand", 0, "KIA"]],
+    [[0, "stand", 140, "Advance"], [0, "stand", 140, "Advance"], [0, "stand", 150, "Advance"], [180, "crouch", 20, "FallBack"], [180, "crouch", 40, "Cover"], [180, "stand", 0, "KIA"]],
+    [[0, "stand", 140, "Advance"], [0, "stand", 140, "Advance"], [0, "stand", 150, "Advance"], [180, "stand", 0, "KIA"], [180, "crouch", 10, "Cover"], [180, "stand", 0, "KIA"]],
+    [[0, "stand", 140, "Advance"], [0, "stand", 140, "Advance"], [0, "stand", 150, "Advance"], [180, "stand", 0, "KIA"], [180, "stand", 0, "KIA"], [180, "stand", 0, "KIA"]],
+    [[0, "stand", 140, "Hold"], [0, "stand", 140, "Hold"], [0, "stand", 150, "Hold"], [180, "stand", 0, "KIA"], [180, "stand", 0, "KIA"], [180, "stand", 0, "KIA"]]
+  ],
+  "events": [
+    { "type": "shot", "t": null, "from": "Alpha_1", "to": "Bravo_1", "hit": true, "dist_m": null },
+    { "type": "shot", "t": 0.8, "from": "Bravo_1", "to": "Alpha_1", "hit": true, "dist_m": 28.0 },
+    { "type": "kill", "t": 0.4, "victim": "Bravo_3", "by": "Alpha_1", "side": "A" },
+    { "type": "objective", "t": 1.2, "event": "contested", "side": "A" },
+    { "type": "shot", "t": 1.4, "from": "Alpha_1", "to": "Bravo_1", "hit": true, "dist_m": 22.0 },
+    { "type": "kill", "t": 1.4, "victim": "Bravo_1", "by": "Alpha_1", "side": "A" },
+    { "type": "shot", "t": 1.6, "from": "Alpha_2", "to": "Bravo_2", "hit": true, "dist_m": 15.0 },
+    { "type": "kill", "t": 1.6, "victim": "Bravo_2", "by": "Alpha_2", "side": "A" },
+    { "type": "objective", "t": 1.8, "event": "captured", "side": "A" },
+    { "type": "tactic", "t": 0.2, "who": "Alpha_1", "order": "Assault" }
+  ]
+}

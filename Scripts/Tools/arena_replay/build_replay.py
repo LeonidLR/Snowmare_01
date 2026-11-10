@@ -811,6 +811,7 @@ __REPLAY_DATA_JSON__
         resetCamera();
         setupScrubberMarkers();
         updateBanner();
+        initRosterDOM();
         buildEventLog();
         render();
       }
@@ -888,11 +889,23 @@ __REPLAY_DATA_JSON__
         allEvts.forEach(ev => {
           const row = document.createElement('div');
           row.className = 'event-row';
-          row.innerHTML = `
-            <span class="event-time">${ev.t.toFixed(1)}s</span>
-            <span class="event-icon">${ev.icon}</span>
-            <span class="event-text">${ev.text}</span>
-          `;
+
+          const timeSpan = document.createElement('span');
+          timeSpan.className = 'event-time';
+          timeSpan.textContent = `${Number(ev.t || 0).toFixed(1)}s`;
+
+          const iconSpan = document.createElement('span');
+          iconSpan.className = 'event-icon';
+          iconSpan.textContent = ev.icon || '';
+
+          const textSpan = document.createElement('span');
+          textSpan.className = 'event-text';
+          textSpan.textContent = ev.text || '';
+
+          row.appendChild(timeSpan);
+          row.appendChild(iconSpan);
+          row.appendChild(textSpan);
+
           row.addEventListener('click', () => {
             currentTime = ev.t;
             render();
@@ -1179,24 +1192,25 @@ __REPLAY_DATA_JSON__
 
         // 5. Draw Fighters
         const frameIdx = getFrameIndex();
-        const frame = round.frames[frameIdx] || [];
+        const frame = (round.frames && round.frames[frameIdx]) ? round.frames[frameIdx] : [];
         const stateRow = (round.states && round.states[frameIdx]) ? round.states[frameIdx] : [];
 
         let aliveA = 0, aliveB = 0;
         let totalHpA = 0, totalHpB = 0;
 
-        round.fighters.forEach((f, i) => {
-          const pos = frame[i];
-          const st = stateRow[i];
-          const isDown = !st || st[2] <= 0;
+        (round.fighters || []).forEach((f, i) => {
+          const pos = (frame && i < frame.length) ? frame[i] : null;
+          const st = (stateRow && i < stateRow.length) ? stateRow[i] : null;
+          const rawHp = (st && st[2] !== null && st[2] !== undefined) ? Number(st[2]) : 0;
+          const isDown = !st || rawHp <= 0;
           const side = f.side || (i < 3 ? 'A' : 'B');
 
           if (!isDown) {
-            if (side === 'A') { aliveA++; totalHpA += st[2]; }
-            else { aliveB++; totalHpB += st[2]; }
+            if (side === 'A') { aliveA++; totalHpA += rawHp; }
+            else { aliveB++; totalHpB += rawHp; }
           }
 
-          if (pos) {
+          if (pos && pos.length >= 2 && pos[0] !== null && pos[1] !== null) {
             drawFighter(ctx, i, f, pos, st, isDown, tPos, scale);
           }
         });
@@ -1478,8 +1492,8 @@ __REPLAY_DATA_JSON__
         const totalA = round.fighters.filter((f, i) => (f.side || (i < 3 ? 'A' : 'B')) === 'A').length;
         const totalB = round.fighters.length - totalA;
 
-        aliveTeamA.textContent = `A: ${aliveA}/${totalA} (${hpA} HP)`;
-        aliveTeamB.textContent = `B: ${aliveB}/${totalB} (${hpB} HP)`;
+        aliveTeamA.textContent = `A: ${aliveA}/${totalA} (${Math.round(hpA)} HP)`;
+        aliveTeamB.textContent = `B: ${aliveB}/${totalB} (${Math.round(hpB)} HP)`;
         countTeamA.textContent = `${aliveA}/${totalA} Alive`;
         countTeamB.textContent = `${aliveB}/${totalB} Alive`;
 
@@ -1492,48 +1506,115 @@ __REPLAY_DATA_JSON__
         scrubFill.style.width = `${frac * 100}%`;
         scrubThumb.style.left = `${frac * 100}%`;
 
-        // Update Roster lists
-        updateRosterUI(rosterTeamA, 'A', stateRow);
-        updateRosterUI(rosterTeamB, 'B', stateRow);
+        // Update Roster lists in-place (no DOM rebuild)
+        updateRosterUI(stateRow);
       }
 
-      function updateRosterUI(container, teamSide, stateRow) {
-        container.innerHTML = '';
+      const rosterCards = [];
+
+      function initRosterDOM() {
+        rosterTeamA.innerHTML = '';
+        rosterTeamB.innerHTML = '';
+        rosterCards.length = 0;
+
+        if (!round || !round.fighters) return;
+
         round.fighters.forEach((f, idx) => {
           const side = f.side || (idx < 3 ? 'A' : 'B');
-          if (side !== teamSide) return;
-
-          const st = stateRow[idx];
-          const isDown = !st || st[2] <= 0;
-          const hp = st ? st[2] : 0;
-          const maxHp = 150; // default tactical health
-          const hpPct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
-          const order = st ? (st[3] || 'Idle') : 'KIA';
-          const stance = st ? st[1] : '-';
+          const container = (side === 'A') ? rosterTeamA : rosterTeamB;
 
           const card = document.createElement('div');
-          card.className = `dossier-card ${isDown ? 'down' : ''} ${selectedFighterIdx === idx ? 'selected' : ''}`;
-          card.innerHTML = `
-            <div class="card-top">
-              <span class="card-name">
-                <span class="card-tag tag-${side.toLowerCase()}">${side}</span>
-                ${f.id}
-              </span>
-              <span style="font-family:monospace;font-size:11px;">${isDown ? 'KIA' : hp + ' HP'}</span>
-            </div>
-            <div class="card-hp-bar">
-              <div class="card-hp-fill" style="width:${hpPct}%; background:${side === 'A' ? 'var(--team-a)' : 'var(--team-b)'};"></div>
-            </div>
-            <div class="card-details">
-              <span>Stance: <strong>${stance}</strong></span>
-              <span class="order-badge">${order}</span>
-            </div>
-          `;
+          card.className = 'dossier-card';
+
+          const cardTop = document.createElement('div');
+          cardTop.className = 'card-top';
+
+          const cardName = document.createElement('span');
+          cardName.className = 'card-name';
+
+          const tag = document.createElement('span');
+          const safeSide = (side === 'A' || side === 'B') ? side.toLowerCase() : 'a';
+          tag.className = `card-tag tag-${safeSide}`;
+          tag.textContent = side;
+
+          const fighterLabel = f.id || (`Fighter ${idx + 1}`);
+          const nameText = document.createTextNode(` ${fighterLabel}`);
+          cardName.appendChild(tag);
+          cardName.appendChild(nameText);
+
+          const hpText = document.createElement('span');
+          hpText.style.fontFamily = 'monospace';
+          hpText.style.fontSize = '11px';
+
+          cardTop.appendChild(cardName);
+          cardTop.appendChild(hpText);
+
+          const hpBar = document.createElement('div');
+          hpBar.className = 'card-hp-bar';
+
+          const hpFill = document.createElement('div');
+          hpFill.className = 'card-hp-fill';
+          hpFill.style.background = (side === 'A') ? 'var(--team-a)' : 'var(--team-b)';
+          hpBar.appendChild(hpFill);
+
+          const cardDetails = document.createElement('div');
+          cardDetails.className = 'card-details';
+
+          const stanceLabel = document.createElement('span');
+          stanceLabel.textContent = 'Stance: ';
+          const stanceStrong = document.createElement('strong');
+          stanceStrong.textContent = '-';
+          stanceLabel.appendChild(stanceStrong);
+
+          const orderBadge = document.createElement('span');
+          orderBadge.className = 'order-badge';
+          orderBadge.textContent = 'Idle';
+
+          cardDetails.appendChild(stanceLabel);
+          cardDetails.appendChild(orderBadge);
+
+          card.appendChild(cardTop);
+          card.appendChild(hpBar);
+          card.appendChild(cardDetails);
+
           card.addEventListener('click', () => {
             selectedFighterIdx = idx;
             render();
           });
+
           container.appendChild(card);
+
+          rosterCards[idx] = {
+            card: card,
+            hpText: hpText,
+            hpFill: hpFill,
+            stanceStrong: stanceStrong,
+            orderBadge: orderBadge,
+            side: side,
+          };
+        });
+      }
+
+      function updateRosterUI(stateRow) {
+        if (!rosterCards || rosterCards.length === 0) return;
+
+        rosterCards.forEach((rc, idx) => {
+          if (!rc) return;
+          const st = (stateRow && idx < stateRow.length) ? stateRow[idx] : null;
+          const rawHp = (st && st[2] !== null && st[2] !== undefined) ? Number(st[2]) : 0;
+          const hp = Math.max(0, rawHp);
+          const isDown = !st || rawHp <= 0;
+          const maxHp = 150;
+          const hpPct = Math.max(0, Math.min(100, (hp / maxHp) * 100));
+          const order = (st && st[3] !== null && st[3] !== undefined) ? String(st[3]) : (isDown ? 'KIA' : 'Idle');
+          const stance = (st && st[1] !== null && st[1] !== undefined) ? String(st[1]) : '-';
+
+          const isSel = (selectedFighterIdx === idx);
+          rc.card.className = `dossier-card ${isDown ? 'down' : ''} ${isSel ? 'selected' : ''}`;
+          rc.hpText.textContent = isDown ? 'KIA' : `${Math.round(hp)} HP`;
+          rc.hpFill.style.width = `${hpPct}%`;
+          rc.stanceStrong.textContent = stance;
+          rc.orderBadge.textContent = order;
         });
       }
 
@@ -1550,37 +1631,52 @@ __REPLAY_DATA_JSON__
 def parse_round_track(track_data: dict, run_dir: str = "", map_layout: Optional[dict] = None) -> dict:
     """Parses one round track and computes derived metrics and pre-processed events."""
     dt = float(track_data.get("dt") or 0.2)
-    units = str(track_data.get("units", "cm")).lower()
+    units = str(track_data.get("units") or "cm").lower()
     # Normalize coordinates to cm
     scale_to_cm = 100.0 if units == "m" else 1.0
 
-    frames = track_data.get("frames") or []
+    raw_frames = track_data.get("frames") or []
+    scaled_frames = []
+    for f in raw_frames:
+        if f is None:
+            scaled_frames.append(None)
+        else:
+            scaled_f = []
+            for p in f:
+                if p and len(p) >= 2 and p[0] is not None and p[1] is not None:
+                    scaled_f.append([round(float(p[0]) * scale_to_cm, 1), round(float(p[1]) * scale_to_cm, 1)])
+                else:
+                    scaled_f.append(None)
+            scaled_frames.append(scaled_f)
+    frames = scaled_frames
+
     states = track_data.get("states") or []
     fighters = track_data.get("fighters") or []
     events = track_data.get("events") or []
 
-    duration_s = float(track_data.get("duration_s") or (len(frames) * dt))
+    duration_s = float(track_data.get("duration_s") or (len(frames) * dt if frames else 0.0))
     winner = track_data.get("winner")
 
     # Objective
     raw_obj = track_data.get("objective")
     obj_data = None
     if isinstance(raw_obj, dict):
+        def_radius = 6.0 if units == "m" else 600.0
         obj_data = {
-            "x": float(raw_obj.get("x", 0.0)) * scale_to_cm,
-            "y": float(raw_obj.get("y", 0.0)) * scale_to_cm,
-            "radius": float(raw_obj.get("radius", 600.0)) * scale_to_cm,
+            "x": float(raw_obj.get("x") or 0.0) * scale_to_cm,
+            "y": float(raw_obj.get("y") or 0.0) * scale_to_cm,
+            "radius": float(raw_obj.get("radius") or def_radius) * scale_to_cm,
             "attacker": raw_obj.get("attacker"),
         }
 
     # Bounding box
     all_x = []
     all_y = []
-    for f in frames:
-        for p in f:
-            if p and len(p) >= 2:
-                all_x.append(p[0] * scale_to_cm)
-                all_y.append(p[1] * scale_to_cm)
+    for f in (frames or []):
+        for p in (f or []):
+            if p and len(p) >= 2 and p[0] is not None and p[1] is not None:
+                all_x.append(float(p[0]))
+                all_y.append(float(p[1]))
     if obj_data:
         all_x.extend([obj_data["x"] - obj_data["radius"], obj_data["x"] + obj_data["radius"]])
         all_y.extend([obj_data["y"] - obj_data["radius"], obj_data["y"] + obj_data["radius"]])
@@ -1589,10 +1685,10 @@ def parse_round_track(track_data: dict, run_dir: str = "", map_layout: Optional[
     if all_x and all_y:
         pad_x = max(200.0, (max(all_x) - min(all_x)) * 0.15)
         pad_y = max(200.0, (max(all_y) - min(all_y)) * 0.15)
-        bounds = [min(all_x) - pad_x, min(all_y) - pad_y, max(all_x) + pad_x, max(all_y) + pad_y]
+        bounds = [round(min(all_x) - pad_x, 1), round(min(all_y) - pad_y, 1), round(max(all_x) + pad_x, 1), round(max(all_y) + pad_y, 1)]
 
     # Pre-process Events
-    shots_t = sorted(float(e.get("t", 0.0)) for e in events if e.get("type") == "shot")
+    shots_t = sorted(float(e.get("t") or 0.0) for e in events if isinstance(e, dict) and e.get("type") == "shot")
 
     # Quiet spells (> 30s without a shot)
     quiet_spells = []
@@ -1611,6 +1707,8 @@ def parse_round_track(track_data: dict, run_dir: str = "", map_layout: Optional[
     fighter_side = {}
     fighter_idx_map = {}
     for i, f in enumerate(fighters):
+        if not f:
+            continue
         s = f.get("side") or ("A" if i < len(fighters) // 2 else "B")
         fighter_side[(f.get("id"), s)] = i
         fighter_idx_map[i] = f
@@ -1623,33 +1721,39 @@ def parse_round_track(track_data: dict, run_dir: str = "", map_layout: Optional[
     objective_events = []
 
     for e in events:
+        if not isinstance(e, dict):
+            continue
         tp = e.get("type")
-        t = float(e.get("t", 0.0))
+        t = float(e.get("t") or 0.0)
 
         if tp == "shot":
             shooter_name = e.get("from")
             shooter_side = e.get("side", "A")
             target_raw = e.get("to")
             hit = bool(e.get("hit"))
-            dist_m = float(e.get("dist_m", 0.0))
+            dist_m = float(e.get("dist_m") or 0.0)
 
             frame_idx = max(0, min(len(frames) - 1, int(round(t / dt)))) if dt > 0 and frames else 0
-            cur_frame = frames[frame_idx] if frame_idx < len(frames) else []
-            cur_states = states[frame_idx] if frame_idx < len(states) else []
+            cur_frame = (frames[frame_idx] or []) if (frames and frame_idx < len(frames)) else []
+            cur_states = (states[frame_idx] or []) if (states and frame_idx < len(states)) else []
 
             # Shooter position
             shooter_idx = None
             for idx, f in enumerate(fighters):
-                if f.get("id") == shooter_name and (f.get("side") == shooter_side or not f.get("side")):
+                if f and f.get("id") == shooter_name and (f.get("side") == shooter_side or not f.get("side")):
                     shooter_idx = idx
                     break
 
-            from_pos = [0, 0]
-            shooter_yaw = 0
-            if shooter_idx is not None and shooter_idx < len(cur_frame) and cur_frame[shooter_idx]:
-                from_pos = [cur_frame[shooter_idx][0] * scale_to_cm, cur_frame[shooter_idx][1] * scale_to_cm]
-                if shooter_idx < len(cur_states) and cur_states[shooter_idx]:
-                    shooter_yaw = cur_states[shooter_idx][0]
+            from_pos = [0.0, 0.0]
+            shooter_yaw = 0.0
+            if shooter_idx is not None and shooter_idx < len(cur_frame):
+                pt = cur_frame[shooter_idx]
+                if pt and len(pt) >= 2 and pt[0] is not None and pt[1] is not None:
+                    from_pos = [float(pt[0]), float(pt[1])]
+                if shooter_idx < len(cur_states):
+                    st = cur_states[shooter_idx]
+                    if st and len(st) > 0 and st[0] is not None:
+                        shooter_yaw = float(st[0])
 
             # Resolve Target position
             to_pos = None
@@ -1658,20 +1762,24 @@ def parse_round_track(track_data: dict, run_dir: str = "", map_layout: Optional[
             # 1. Match direct target name if given
             if target_raw:
                 for idx, f in enumerate(fighters):
-                    if f.get("id") == target_raw and f.get("side") == enemy_side:
-                        if idx < len(cur_frame) and cur_frame[idx]:
-                            to_pos = [cur_frame[idx][0] * scale_to_cm, cur_frame[idx][1] * scale_to_cm]
+                    if f and f.get("id") == target_raw and f.get("side") == enemy_side:
+                        if idx < len(cur_frame):
+                            pt = cur_frame[idx]
+                            if pt and len(pt) >= 2 and pt[0] is not None and pt[1] is not None:
+                                to_pos = [float(pt[0]), float(pt[1])]
                         break
 
             # 2. If target is actor or not resolved, find alive enemy
             if not to_pos and cur_frame:
                 alive_enemies = []
                 for idx, f in enumerate(fighters):
-                    if f.get("side") == enemy_side:
+                    if f and f.get("side") == enemy_side:
                         st = cur_states[idx] if idx < len(cur_states) else None
-                        if st and st[2] > 0 and idx < len(cur_frame) and cur_frame[idx]:
-                            epos = [cur_frame[idx][0] * scale_to_cm, cur_frame[idx][1] * scale_to_cm]
-                            alive_enemies.append((idx, epos))
+                        if st and len(st) > 2 and st[2] is not None and st[2] > 0:
+                            if idx < len(cur_frame):
+                                pt = cur_frame[idx]
+                                if pt and len(pt) >= 2 and pt[0] is not None and pt[1] is not None:
+                                    alive_enemies.append((idx, [float(pt[0]), float(pt[1])]))
 
                 if alive_enemies:
                     # Pick enemy closest to yaw aim direction
@@ -1729,7 +1837,7 @@ def parse_round_track(track_data: dict, run_dir: str = "", map_layout: Optional[
             })
 
     return {
-        "round": track_data.get("round", 1),
+        "round": int(track_data.get("round") or 1),
         "map": track_data.get("map", "L_FormationLabCombat"),
         "scenario": track_data.get("scenario"),
         "winner": winner,
@@ -1799,7 +1907,7 @@ def generate_replay_html(run_id: str, parsed_rounds: List[dict], output_path: st
     }
     json_str = json.dumps(payload, ensure_ascii=False)
     # Safely escape for inline script tag
-    json_escaped = json_str.replace("</script>", "<\\/script>")
+    json_escaped = json_str.replace("<", "\\u003c")
 
     html_content = HTML_TEMPLATE.replace("__REPLAY_DATA_JSON__", json_escaped)
 
@@ -1897,7 +2005,7 @@ def run_self_test(fixtures_dir: str, output_dir: str) -> bool:
         print(f"FAIL: Generating HTML failed: {e}")
         return False
 
-    print("\nALL SELF-TEST CHECKS PASSED (4/4 fixtures valid, HTML generated).")
+    print("\nALL SELF-TEST CHECKS PASSED (5/5 fixtures valid, HTML generated).")
     print("=" * 60)
     return True
 
@@ -1986,8 +2094,11 @@ def main():
 
         parsed_rounds.append(parsed)
 
-    out_file = os.path.join(default_out_dir, f"{run_id}_replay.html")
-    generate_replay_html(run_id, parsed_rounds, out_file)
+    clean_run_id = re.sub(r"[^\w.-]", "_", str(run_id or "replay")).strip("._")
+    if not clean_run_id:
+        clean_run_id = "replay"
+    out_file = os.path.join(default_out_dir, f"{clean_run_id}_replay.html")
+    generate_replay_html(clean_run_id, parsed_rounds, out_file)
     print(f"Successfully generated arena replay: {out_file} ({os.path.getsize(out_file)} bytes)")
 
 
