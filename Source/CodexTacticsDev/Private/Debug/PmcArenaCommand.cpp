@@ -26,6 +26,9 @@
 //   the defenders hold it, the attackers win by holding it (an attacker within the radius, no live defender within it) for hold_s seconds
 //   or by elimination; the defenders win by elimination or at the time limit with the point not held by the attackers (held by them at
 //   the limit = a contested draw). Radius / hold seconds / placement: the level JSON's "pmc_arena" object (PmcArena::LoadConfig).
+//   playarea=on|off (fix/arena-no-outer-strip 2026-11-10, default on): the level's arena play area ("pmc_arena" -> "play_area": an
+//   inclusion box + exclusion boxes in world cm, AI/PmcArenaPlayArea.h) - no spawn, squad slot or objective outside it (the Depot's
+//   outer strip between the long perimeter wall and the map edge: hidden from the camera); off = the whole navmesh as before.
 //   scenario=random|skirmish|chokepoint|street|roofs|blizzard (default random = per round from its seed, PmcCommanderRules::PickScenario;
 //   needs spawns=random): skirmish = the random spawn pair; chokepoint = the objective + the defender spawn at a narrow passage (1-3 m
 //   between walls >= 3 m); street = the objective on open ground; roofs = the objective on a roof level; blizzard = a skirmish in a
@@ -45,6 +48,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "AI/AmbushWatchRules.h"
+#include "AI/PmcArenaPlayArea.h"
 #include "AI/PmcArenaViewRules.h"
 #include "AI/PmcCommanderRules.h"
 #include "AI/PmcSquadSubsystem.h"
@@ -150,6 +154,8 @@ namespace PmcArena
 		float CamPitchDeg = 65.f;
 		float CamMinCm = 2000.f;
 		float CamMaxCm = 11000.f;
+		/** PlayArea=on|off (fix/arena-no-outer-strip, default on): off ignores the level's "play_area" (the before / after measurement). */
+		bool bPlayArea = true;
 	};
 
 	/** PmcStalemateSmoke's limits (the designer 2026-11-08): the fight resumes within this after a quiet spell, s. */
@@ -172,6 +178,11 @@ namespace PmcArena
 		float PassageMinCm = 100.f;
 		float PassageMaxCm = 300.f;
 		float WallHeightCm = 300.f;
+		/**
+		 * fix/arena-no-outer-strip 2026-11-10 (the game designer): "play_area" - where spawns / squad slots / objectives may stand
+		 * (PmcArenaPlayAreaRules::IsInside); unrestricted without it or with PlayArea=off.
+		 */
+		FPmcArenaPlayArea PlayArea;
 		FString Source = TEXT("defaults");
 	};
 
@@ -340,6 +351,8 @@ namespace PmcArena
 		TWeakObjectPtr<UMaterialInstanceDynamic> TeamOverlayDim[2];
 		TSet<TWeakObjectPtr<AOperativeCharacter>> TeamColoured;
 		TSet<TWeakObjectPtr<AOperativeCharacter>> TeamDimmed;
+		/** Points the play area turned down this round (samples, offsets, squad slots; logged at the round start). */
+		mutable int32 AreaRejects = 0;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -384,6 +397,7 @@ namespace PmcArena
 			else if (Key == TEXT("campitch")) { Options.CamPitchDeg = FMath::Clamp(FCString::Atof(*Value), 30.f, 89.f); }
 			else if (Key == TEXT("cammin")) { Options.CamMinCm = FMath::Clamp(FCString::Atof(*Value), 5.f, 200.f) * 100.f; }
 			else if (Key == TEXT("cammax")) { Options.CamMaxCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 300.f) * 100.f; }
+			else if (Key == TEXT("playarea")) { Options.bPlayArea = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
 			else if (Key == TEXT("scenario"))
 			{
 				EPmcScenario Scenario = EPmcScenario::Skirmish;
@@ -475,8 +489,11 @@ namespace PmcArena
 		return false;
 	}
 
-	/** A spot DistanceCm from Origin with a navmesh path from it: the start facing first, then the bearings round it. */
-	bool FindFarSpot(UWorld* World, const FVector& Origin, float Yaw, float DistanceCm, FVector& OutSpot)
+	/**
+	 * A spot DistanceCm from Origin with a navmesh path from it: the start facing first, then the bearings round it. Area = the play area
+	 * (nullptr = anywhere): a spot outside it is skipped.
+	 */
+	bool FindFarSpot(UWorld* World, const FVector& Origin, float Yaw, float DistanceCm, FVector& OutSpot, const FPmcArenaPlayArea* Area = nullptr)
 	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 		if (!Nav)
@@ -489,7 +506,7 @@ namespace PmcArena
 			{
 				const FVector Candidate = Origin + FRotator(0.f, Yaw + Bearing, 0.f).Vector() * DistanceCm * Scale;
 				FNavLocation OnNav;
-				if (!Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(600.f, 600.f, 400.f)))
+				if (!Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(600.f, 600.f, 400.f)) || (Area && !PmcArenaPlayAreaRules::IsInside(*Area, OnNav.Location)))
 				{
 					continue;
 				}
@@ -541,6 +558,12 @@ namespace PmcArena
 		Read(TEXT("wall_min_height_m"), Config.WallHeightCm, 100.f, 100.f, 2000.f);
 		Config.PassageMaxCm = FMath::Max(Config.PassageMaxCm, Config.PassageMinCm);
 		Config.Source = FPaths::GetCleanFilename(Path);
+		TArray<FString> AreaErrors;
+		PmcArenaPlayAreaRules::ReadJson(**Arena, Config.PlayArea, AreaErrors);
+		for (const FString& Error : AreaErrors)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] %s: %s"), *Config.Source, *Error);
+		}
 		return Config;
 	}
 
@@ -550,13 +573,35 @@ namespace PmcArena
 		return Path && Path->IsValid() && !Path->IsPartial();
 	}
 
-	/** A seeded navmesh point anywhere in Bounds at about Level x 3 m over GroundZ (the random spawns' sampling). */
-	bool SampleNav(UNavigationSystemV1* Nav, const FBox& Bounds, FRandomStream& Stream, float GroundZ, int32 Level, FVector& Out)
+	/** Point may hold a spawn / squad slot / objective (the level's play area, PmcArenaPlayAreaRules::IsInside); a rejection is counted. */
+	bool InArea(const FState& State, const FVector& Point)
+	{
+		if (PmcArenaPlayAreaRules::IsInside(State.Config.PlayArea, Point))
+		{
+			return true;
+		}
+		++State.AreaRejects;
+		return false;
+	}
+
+	/** The box the random samplers draw from: the navmesh bounds clipped to the play area's inclusion box (invalid without a navmesh). */
+	FBox SampleBox(const FState& State, UNavigationSystemV1* Nav)
+	{
+		const ANavigationData* NavData = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
+		return NavData ? PmcArenaPlayAreaRules::SampleBounds(State.Config.PlayArea, NavData->GetBounds()) : FBox(ForceInit);
+	}
+
+	/**
+	 * A seeded navmesh point anywhere in Bounds at about Level x 3 m over the ground (the random spawns' sampling); false off the navmesh
+	 * or outside the play area (fix/arena-no-outer-strip).
+	 */
+	bool SampleNav(const FState& State, UNavigationSystemV1* Nav, const FBox& Bounds, FRandomStream& Stream, int32 Level, FVector& Out)
 	{
 		const float X = Stream.FRandRange(static_cast<float>(Bounds.Min.X), static_cast<float>(Bounds.Max.X));
 		const float Y = Stream.FRandRange(static_cast<float>(Bounds.Min.Y), static_cast<float>(Bounds.Max.Y));
 		FNavLocation OnNav;
-		if (!Nav->ProjectPointToNavigation(FVector(X, Y, GroundZ + Level * 300.f + 100.f), OnNav, FVector(300.f, 300.f, 200.f)))
+		if (!Nav->ProjectPointToNavigation(FVector(X, Y, State.GroundZ + Level * 300.f + 100.f), OnNav, FVector(300.f, 300.f, 200.f))
+			|| !InArea(State, OnNav.Location))
 		{
 			return false;
 		}
@@ -590,8 +635,7 @@ namespace PmcArena
 	bool FindSite(const FState& State, UWorld* World, EPmcScenario Scenario, int32 Seed, int32 Skip, FVector& OutSite, FVector& OutAxis)
 	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
-		const ANavigationData* NavData = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
-		const FBox Bounds = NavData ? NavData->GetBounds() : FBox(ForceInit);
+		const FBox Bounds = SampleBox(State, Nav);
 		if (!Bounds.IsValid)
 		{
 			return false;
@@ -603,7 +647,7 @@ namespace PmcArena
 		{
 			const int32 Level = Scenario == EPmcScenario::Roofs ? Stream.RandRange(1, 3) : 0;
 			FVector Point;
-			if (!SampleNav(Nav, Bounds, Stream, State.GroundZ, Level, Point))
+			if (!SampleNav(State, Nav, Bounds, Stream, Level, Point))
 			{
 				continue;
 			}
@@ -672,8 +716,7 @@ namespace PmcArena
 	bool PickFarSpawn(const FState& State, UWorld* World, const FVector& Site, const FVector* Axis, int32 Seed, FVector& Out)
 	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
-		const ANavigationData* NavData = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
-		const FBox Bounds = NavData ? NavData->GetBounds() : FBox(ForceInit);
+		const FBox Bounds = SampleBox(State, Nav);
 		if (!Bounds.IsValid)
 		{
 			return false;
@@ -683,7 +726,7 @@ namespace PmcArena
 		for (int32 Try = 0; Try < 300 && PathChecks < 16; ++Try)
 		{
 			FVector Point;
-			if (!SampleNav(Nav, Bounds, Stream, State.GroundZ, 0, Point) || LevelOf(State, Point) != 0)
+			if (!SampleNav(State, Nav, Bounds, Stream, 0, Point) || LevelOf(State, Point) != 0)
 			{
 				continue;
 			}
@@ -706,7 +749,10 @@ namespace PmcArena
 		return false;
 	}
 
-	/** The defenders' spawn DefenderOffsetCm behind Site (away from the attackers), on its level with a path from it; Site itself without one. */
+	/**
+	 * The defenders' spawn DefenderOffsetCm behind Site (away from the attackers), on its level with a path from it, inside the play area;
+	 * Site itself without one (a Warning when the play area turned an offset down).
+	 */
 	FVector PickNearSpawn(const FState& State, UWorld* World, const FVector& Site, const FVector& Attacker)
 	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
@@ -715,22 +761,28 @@ namespace PmcArena
 		{
 			return Site;
 		}
+		const int32 RejectsBefore = State.AreaRejects;
 		for (const float Bearing : { 0.f, 45.f, -45.f, 90.f, -90.f })
 		{
 			FNavLocation OnNav;
 			const FVector Candidate = Site + Away.RotateAngleAxis(Bearing, FVector::UpVector) * State.Config.DefenderOffsetCm;
 			if (Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(300.f, 300.f, 150.f)) && FMath::Abs(OnNav.Location.Z - Site.Z) < 250.f
-				&& HasNavPath(World, Nav, Site, OnNav.Location))
+				&& InArea(State, OnNav.Location) && HasNavPath(World, Nav, Site, OnNav.Location))
 			{
 				return OnNav.Location;
 			}
+		}
+		if (State.AreaRejects > RejectsBefore)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] no defender spawn behind the site %s inside the play area - the site itself"), *Site.ToCompactString());
 		}
 		return Site;
 	}
 
 	/**
 	 * The objective of a skirmish / fixed-spawn round: from the defender's spawn towards the attacker's, ObjectiveOffsetFrac x (0.75-1.25,
-	 * seeded) of the way, on the navmesh at the defender's level with a path from both spawns; half that, then the defender's spawn itself.
+	 * seeded) of the way, on the navmesh at the defender's level with a path from both spawns, inside the play area; half that, then the
+	 * defender's spawn itself (a Warning when the play area turned a candidate down, or the defender's spawn itself lies outside it).
 	 */
 	FVector PlaceObjectiveNear(const FState& State, UWorld* World, const FVector& Defender, const FVector& Attacker, int32 Seed)
 	{
@@ -741,16 +793,22 @@ namespace PmcArena
 		}
 		FRandomStream Stream(Seed * 1543 + 11);
 		const float Frac = State.Config.ObjectiveOffsetFrac * Stream.FRandRange(0.75f, 1.25f);
+		const int32 RejectsBefore = State.AreaRejects;
 		for (const float Scale : { 1.f, 0.5f })
 		{
 			FVector Candidate = FMath::Lerp(Defender, Attacker, Frac * Scale);
 			Candidate.Z = Defender.Z;
 			FNavLocation OnNav;
 			if (Nav->ProjectPointToNavigation(Candidate, OnNav, FVector(300.f, 300.f, 150.f)) && FMath::Abs(OnNav.Location.Z - Defender.Z) < 250.f
-				&& HasNavPath(World, Nav, Defender, OnNav.Location) && HasNavPath(World, Nav, Attacker, OnNav.Location))
+				&& InArea(State, OnNav.Location) && HasNavPath(World, Nav, Defender, OnNav.Location) && HasNavPath(World, Nav, Attacker, OnNav.Location))
 			{
 				return OnNav.Location;
 			}
+		}
+		if (State.AreaRejects > RejectsBefore || !PmcArenaPlayAreaRules::IsInside(State.Config.PlayArea, Defender))
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] seed %d: no objective inside the play area between the spawns - on the defender's spawn %s%s"), Seed,
+				*Defender.ToCompactString(), PmcArenaPlayAreaRules::IsInside(State.Config.PlayArea, Defender) ? TEXT("") : TEXT(" (itself OUTSIDE the play area)"));
 		}
 		return Defender;
 	}
@@ -832,8 +890,7 @@ namespace PmcArena
 	bool PickRandomSpawns(FState& State, UWorld* World, int32 Seed)
 	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
-		const ANavigationData* NavData = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
-		const FBox Bounds = NavData ? NavData->GetBounds() : FBox(ForceInit);
+		const FBox Bounds = SampleBox(State, Nav);
 		if (!Bounds.IsValid)
 		{
 			return false;
@@ -847,7 +904,8 @@ namespace PmcArena
 			const float Y = Stream.FRandRange(static_cast<float>(Bounds.Min.Y), static_cast<float>(Bounds.Max.Y));
 			const int32 Level = Stream.RandRange(0, 3);
 			FNavLocation OnNav;
-			if (!Nav->ProjectPointToNavigation(FVector(X, Y, State.GroundZ + Level * 300.f + 100.f), OnNav, FVector(300.f, 300.f, 200.f)))
+			if (!Nav->ProjectPointToNavigation(FVector(X, Y, State.GroundZ + Level * 300.f + 100.f), OnNav, FVector(300.f, 300.f, 200.f))
+				|| !InArea(State, OnNav.Location))
 			{
 				continue;
 			}
@@ -894,7 +952,7 @@ namespace PmcArena
 	 * spawn) by a full path and lie close to the spawn by the navmesh too (PmcArenaViewRules::IsSpawnSpotUsable); the next slot (the
 	 * line's other places, then rows behind it) otherwise, the spawn spot itself as the last resort.
 	 */
-	void PlaceAround(UWorld* World, const FSide& Side, const FVector& Goal)
+	void PlaceAround(const FState& State, UWorld* World, const FSide& Side, const FVector& Goal)
 	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 		const FVector Right = Side.Facing.RotateVector(FVector::RightVector);
@@ -926,7 +984,12 @@ namespace PmcArena
 				// The spawn spot itself (FreeSpot's capsule centre right over it): the path query finds no path between one point and itself.
 				const float FromSpawn = !Nav || Straight <= 120.f ? Straight : NavPathLength(World, Nav, Side.Spawn, Spot);
 				const bool bReachesGoal = !Nav || HasNavPath(World, Nav, Spot, Goal);
-				if (PmcArenaViewRules::IsSpawnSpotUsable(bReachesGoal, FromSpawn, Straight))
+				// fix/arena-no-outer-strip: a slot over the play area's edge (the Depot's outer strip behind the perimeter wall) is no slot.
+				if (!InArea(State, Spot))
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] side %s man %d: spawn spot %s rejected (outside the play area)"), *Side.Label, Index, *Spot.ToCompactString());
+				}
+				else if (PmcArenaViewRules::IsSpawnSpotUsable(bReachesGoal, FromSpawn, Straight))
 				{
 					Chosen = Spot;
 					bFound = true;
@@ -2009,6 +2072,7 @@ namespace PmcArena
 		// The round's own seed (base + round - 1, the trainer's convention): Rounds=1 Seed=<it> replays this round - its spawns, looks,
 		// weapons AND its attacker (by the seed's parity, not the round index).
 		const int32 Seed = State.Options.Seed + State.Round - 1;
+		State.AreaRejects = 0;
 		for (FSide& Side : State.Sides)
 		{
 			Side.Members.Reset();
@@ -2058,7 +2122,7 @@ namespace PmcArena
 		}
 		if (bRandomPair)
 		{
-			PlaceAround(World, A, State.bRoundObjective ? State.Objective : State.Sides[1].Spawn);
+			PlaceAround(State, World, A, State.bRoundObjective ? State.Objective : State.Sides[1].Spawn);
 		}
 		Pmc->SetTeamCommanded(TeamA, true, &State.WeightsA);
 		// Side B.
@@ -2072,7 +2136,7 @@ namespace PmcArena
 			}
 			if (bRandomPair)
 			{
-				PlaceAround(World, B, State.bRoundObjective ? State.Objective : State.Sides[0].Spawn);
+				PlaceAround(State, World, B, State.bRoundObjective ? State.Objective : State.Sides[0].Spawn);
 			}
 			Pmc->SetTeamCommanded(TeamB, true, &State.WeightsB);
 		}
@@ -2101,6 +2165,34 @@ namespace PmcArena
 			else
 			{
 				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] no playtest bot in this build: the player's squad fights on its own fire alone"));
+			}
+		}
+		// fix/arena-no-outer-strip: the round's placement against the play area (every fighter and the objective must be inside it).
+		if (State.Config.PlayArea.IsRestricted())
+		{
+			int32 Outside = 0;
+			int32 Placed = 0;
+			for (const FSide& Side : State.Sides)
+			{
+				for (const TWeakObjectPtr<AOperativeCharacter>& Member : Side.Members)
+				{
+					if (const AOperativeCharacter* Operative = Member.Get())
+					{
+						++Placed;
+						Outside += PmcArenaPlayAreaRules::IsInside(State.Config.PlayArea, Operative->GetActorLocation()) ? 0 : 1;
+					}
+				}
+			}
+			const bool bObjectiveInside = !State.bRoundObjective || PmcArenaPlayAreaRules::IsInside(State.Config.PlayArea, State.Objective);
+			const FString Line = FString::Printf(TEXT("[PmcArena] play area seed %d: %d / %d fighters outside, objective %s, %d points turned down"), Seed, Outside, Placed,
+				bObjectiveInside ? TEXT("inside") : TEXT("OUTSIDE"), State.AreaRejects);
+			if (Outside > 0 || !bObjectiveInside)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("%s"), *Line);
+			}
+			else
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("%s"), *Line);
 			}
 		}
 		// The defender waits in ambush, the attacker advances on the objective (task #53; without one: on the defender's spawn).
@@ -2293,8 +2385,22 @@ namespace PmcArena
 				Check(State, false, TEXT("a start spot (the squad / a PlayerStart)"));
 				return Finish(State, World, false);
 			}
+			// The arena data first: the far spot (the fixed spawns' B) keeps to the play area too.
+			State.Config = LoadConfig(World);
+			if (!State.Options.bPlayArea && State.Config.PlayArea.IsRestricted())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] PlayArea=off: the level's play area (%s) is ignored"), *PmcArenaPlayAreaRules::Describe(State.Config.PlayArea));
+				State.Config.PlayArea = FPmcArenaPlayArea();
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] play area: %s (%s)"), *PmcArenaPlayAreaRules::Describe(State.Config.PlayArea), *State.Config.Source);
 			FVector Far;
-			if (!FindFarSpot(World, Start, Facing.Yaw, State.Options.DistanceCm, Far))
+			bool bFar = FindFarSpot(World, Start, Facing.Yaw, State.Options.DistanceCm, Far, &State.Config.PlayArea);
+			if (!bFar && State.Config.PlayArea.IsRestricted())
+			{
+				bFar = FindFarSpot(World, Start, Facing.Yaw, State.Options.DistanceCm, Far);
+				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] no far spot inside the play area - %s"), bFar ? TEXT("one outside it") : TEXT("none at all"));
+			}
+			if (!bFar)
 			{
 				Check(State, false, TEXT("a far spot with a navmesh path from the start"));
 				return Finish(State, World, false);
@@ -2357,7 +2463,6 @@ namespace PmcArena
 				Horde->RefreshConfig();
 				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] the horde is %s in the arena (Codex.Horde.Enabled 0)"), Horde->GetConfig().bEnabled ? TEXT("STILL ON") : TEXT("off"));
 			}
-			State.Config = LoadConfig(World);
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] objective %s: radius %.0f m, hold %.0f s, offset %.2f (%s); scenario %s"), State.Options.bObjective ? TEXT("on") : TEXT("off"),
 				State.Config.ObjectiveRadiusCm / 100.f, State.Config.HoldSeconds, State.Config.ObjectiveOffsetFrac, *State.Config.Source,
 				State.Options.Scenario < 0 ? TEXT("random") : PmcCommanderRules::ScenarioName(static_cast<EPmcScenario>(State.Options.Scenario)));
