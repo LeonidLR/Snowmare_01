@@ -171,6 +171,7 @@ considerations (`ScoreOrder`); `PickWithMargin` keeps a running order within `sw
 | Reload | clip < 30 % with reserve, in cover / out of sight | `StartReload` |
 | Sidearm | an empty clip, a seen threat under 4 m, a pistol | `SwitchToWeaponById("pistol")` |
 | Crouch | in contact, standing still in the open | crouch |
+| RpgStrike | the RPG gunner sees a rocket target (the shared launcher rule's score, `rpg_strike` 1.1 x min(1, score) x 0.85 unless a mate flanks / advances, x0.2 while a mate fires one) | `OrderLauncherStrike` (catalog `LauncherStrike`): draw, one rocket, back to the rifle (section 10) |
 
 **High ground** (2026-11-03, the Depot arena): `FindCoverNear` (the one search behind TakeCover, Relocate and Ambush) scores every slot x
 `HighGroundFactor(level)` = 1 + `high_ground` (0.2) x min(level, `high_ground_max_levels` 3), the level = `SightRules::HeightLevel` (3 m steps) of the
@@ -481,3 +482,32 @@ resumed hunt ends at the next SEEN enemy; then the commander fights as before. D
 
 **Checks:** unit `CodexTactics.AI.PmcEncounter.ResumeHunt`; `PmcEncounterHuntSmoke` 5 / 5 PASS (the PMC squad down in 63 - 137 s of its 150) (log: "team 1 lost sight of the squad 15 s ago:
 the hunt resumes", the last hunter found and downed); PmcEncounter, PmcFireLine, PmcUnderFire, PmcStandoff, PmcArenaObjective, PmcCommander, PmcTeam PASS.
+
+## 10. The RPG gunner (the game designer's answers on the RPG-7, 2026-11-09, items 6 / 7; branch `feat/rpg-ai-pmc`)
+
+**Who.** `pmc_operators.json` "rpg_gunner" `{ "weapon": "rpg7", "share": 0.5, "max_per_squad": 1, "slot_span": 3 }` (`PmcOperatorRules::IsRpgGunner`,
+deterministic per squad seed): a squad gets its gunner with the chance `share`, at most `max_per_squad`, among the fighter indices 0 .. `slot_span` - 1.
+`SpawnFighter` adds `DA_Weapon_rpg7` to his arsenal ON TOP of his pool weapon (in hands); the spawn log says `+ rpg7 gunner`. `share` 0 = no gunners.
+The designer's numbers apply unchanged (instant fuse, 140 direct / 60 splash 4 m, no back-blast damage, only the 10 m refusal) and the rocket's
+model / trail / loaded-round visuals are the weapon's own.
+
+**When he fires it.** The shared launcher rule of the fire loop ([weapons](weapons.md) "The RPG-7: who fires it and when") - the same weights as our
+squad: a cluster, a man behind cover, a group to suppress, a heavy target; a lone exposed man gets the rifle. Plus the commander's **RpgStrike**
+order (table in section 4): `BuildFighterView` scores the team's seen targets with the rule (`ordered_threshold` 0.3) into
+`FPmcFighterView::bHasLauncher` / `LauncherScore` and keeps the best one (`FFighterState::LauncherTarget`); the order fires there (not while an
+ambush holds its fire), one strike per squad at a time (`FPmcSquadView::MatesRpgStriking`), worth more while a mate flanks / advances (the rocket
+makes them duck). Running = the strike pending or the launcher still drawn by the rule. A launcher in hands is no rifle for the commander's view
+(its one-rocket tube does not read as an empty clip -> no Reload / Sidearm order). Arena stat `rpg_strikes`. The rocket's burst holds our men
+within 9 m suppressed / 6 m pinned (`suppression.json` "launcher.*").
+
+**The launcher set on the PMC skeleton.** `Scripts/Editor/setup_launcher_animation.py` (the same pipeline as the operatives' copies; body "Pmc",
+`CODEX_LAUNCHER_BODIES=Pmc`) retargets the 35 clips UE4 -> UE5 (source `IK_UE4_Mannequin`, target the M4 pack's `IK_Mannequin`, the op stack of
+`RTG_UE4Manny_UE5Manny`, transient) onto `SKM_PmcOperator` -> `/Game/Characters/Animations/Launcher/Pmc` (skeleton `SK_PmcOperator_Skeleton`);
+`weapon_anim_sets.json` "launcher.retargeted" maps `SK_PmcOperator_Skeleton` to that folder (the layer's code path is unchanged - it picks the
+copies by the body's skeleton name). The tube's grip on his UE5 hand frame: `rpg7.visual.attach_by_skeleton.SK_PmcOperator_Skeleton`
+(`UWeaponDataAsset::HandMeshAttachBySkeleton`, from `calibrate_launcher_grip.py`). Measured: [animation-setup](animation-setup.md) "Launcher weapon layer".
+
+**Checks:** tests `CodexTactics.Weapons.RpgAI.PmcGunner` / `.CommanderStrike`; smoke `CodexTactics.RpgPmcSmoke` (L_MovementTest: our three men
+behind a 1.1 m wall, a commanded PMC team of two 26 m away: the gunner draws the RPG on the rule, the launcher layer plays the Pmc copies, the
+Shot clip of `SK_PmcOperator_Skeleton`, the rocket bursts at the wall and holds our men; then with `Codex.Combat.LauncherAI 0` the commander's
+RpgStrike order fires one); rendered `CodexTactics.RpgShots pmc` -> `Saved/Screenshots/RpgPmc/`.

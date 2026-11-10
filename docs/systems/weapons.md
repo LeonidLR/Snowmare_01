@@ -179,15 +179,17 @@
   target struck (`explosion.direct_hit_damage` - its whole share, the blast leaves it out: 140, not 140 + the splash); everyone else within the
   **4 m** blast takes the **splash 60** (`base_damage`; full to 1.5 m, x0.15 at the edge); explosive, class **vehicle** (hurts hulls, decision 1;
   a hull struck takes the 140 through its hull rules, no second hull hit from the blast), armour penetration 0.8; one rocket in the tube,
-  3 in reserve, 4.5 s reload (it starts by itself after the shot); reach 150 m, effective 100 m.
+  3 in reserve, **2.333 s reload = the pack's Reload clip at rate 1** (the designer 2026-11-09; it starts by itself once the Shot clip's
+  follow-through is over - `IsLauncherReloadPending` / `UpdateLauncherReloadStart`; was 4.5 s with the clip fitted x0.6); reach 150 m, effective 100 m.
 - **No back-blast damage, no back-blast / stance refusals** (the designer, 2026-11-09): mates behind the shooter are safe, he may fire with a
   wall right behind him, from a closed room and prone. `back_blast_length_m` / `back_blast_half_angle_deg` stay for a later puff visual only
   (the schema keys `back_blast_damage` / `back_blast_clearance_m` / `back_blast_refuses` are gone).
 - **The one refusal left:** a target closer than the minimum range (`min_range_m` 10 m; `LauncherRules::MinimumRangeCm` never lets it fall
   inside the rocket's own blast radius, so the shooter never catches his own splash). Refusals in order: empty, too close. A miss (the weapon's
   hit chance) puts the aim point 1.5 - 3.5 m off; the rocket still explodes where it lands.
-- **Who carries it:** not decided by the designer yet. FOR TESTING the Commander carries it: `loadouts.commander` = m16 / **rpg7** / pistol /
-  grenade (the selector X cycles from the M16 to it). Dev: `CodexTactics.GiveWeapon rpg7 [squad index]`.
+- **Who carries it (the designer 2026-11-09):** in our squad ONLY the Commander: `loadouts.commander` = m16 / **rpg7** / pistol / grenade (the
+  selector X cycles from the M16 to it; the launcher rule below draws it by itself). PMC squads: at most one RPG gunner per squad
+  (`pmc_operators.json` "rpg_gunner", [pmc-squad-ai](pmc-squad-ai.md) 10). Dev: `CodexTactics.GiveWeapon rpg7 [squad index]`.
 - **The model (2026-11-09, the designer's launcher pack):** `/Game/Weapons/RPG7/SM_RPG7_Body` (9,369 -> 5,000 tris) + `SM_RPG7_Sight01` (the optic, 8,297
   -> 1,099) on the hand, `SM_RPG7_Rocket` (3,062 -> 900) as `visual.loaded_round_mesh` (the rocket on the tube: hidden from the shot until the reload
   clip's insertion moment - `AOperativeCharacter::IsLauncherRoundVisible`) and as `visual.projectile_mesh` (the flying round: `AProjectileActor`'s own
@@ -200,10 +202,59 @@
 - **Code:** `LauncherRules` (pure: `MinimumRangeCm`, `Refusal`, `DamageOn`, `MissPoint`), `AOperativeCharacter::FireLauncherAt` /
   `LauncherShotAllowed` (`OperativeCharacterLauncher.cpp`; `ShootAtTarget` branches to it for a launcher) on `UProjectileSubsystem` +
   `Explosions::Detonate` (`FExplosionSpec::StruckActor`: the actor a round's direct hit already struck is left out of its blast - any
-  projectile with `direct_hit_damage` > 0). Not yet: the AI using it, turn-based specifics.
+  projectile with `direct_hit_damage` > 0). The AI's use: the next section. Not yet: turn-based specifics.
 - **Checks:** tests `CodexTactics.Weapons.Rpg.Data` / `.Rules`; `CodexTactics.RpgSmoke` (30 m: the direct hit 140 is the struck dummy's whole
   damage, a dummy 2.5 m beside it takes the splash <= 60; no back-blast damage on a mate 2.5 m behind; one rocket reloaded; 80 m hit; a wall
   behind / a closed room / prone fire; a target 5 m away refused).
+
+## The RPG-7: who fires it and when (the game designer's answers 2026-11-09, item 7; branch `feat/rpg-ai-pmc`)
+
+- **Why the Commander rarely fired it before (measured, `CodexTactics.RpgAiSmoke` stage 1 with `Codex.Combat.LauncherAI 0` = the old code):**
+  nothing but the player ever put it in his hands. He spawns with the M16 (the loadout's first weapon), the fire loop only shoots the weapon in
+  hands, the squad autonomy's weapon step knew the pistol / shotgun / knife only, and the M16's 25 m reach keeps a group at 30-100 m out of his
+  target list altogether. When the player did cycle to it, one rocket went, the reload started and the sidearm rule (an enemy within 10 m) or the
+  autonomy's point-blank switch swapped it for the pistol, which then went back to the PRIMARY - the M16: one rocket per manual pick. In the smoke:
+  a cluster of three 22 m away for 8 s = 0 rockets, M16 rounds only.
+- **One rule for our squad and the PMC** (`Combat/LauncherTacticsRules` pure, `Content/Data/Combat/launcher_tactics.json` weights;
+  `AOperativeCharacter::UpdateLauncherChoice` / `UpdateLauncherReturn` in `OperativeCharacterLauncherAI.cpp`, called from the shared fire loop
+  `RunCombatShooting` after the target search - it sees targets beyond the rifle's reach too). Every target his side SEES scores the best of:
+  `weight.cluster` 1.2 x the cluster factor (enemies within `cluster.radius_m` 4 of the aim point: 2 -> 0.5, 3+ -> 1), `weight.cover` 0.8 (behind
+  cover / a barricade: the rocket's line hits a wall within 0.8 x the blast radius in front of him, a low wall blocks the line to his knees, or he
+  holds a cover slot), `weight.heavy` 1.5 (a vehicle, a turret, a mortar crewman), `weight.suppress` 0.7 (a group of 2+ within
+  `suppress.group_radius_m` 9 that is a threat: closing in, a monster hunting the squad, a fighter targeting our side, or the shooter is under fire),
+  `weight.single_exposed` 0 (a lone man in the open: the rifle). **Vetoes first:** no rockets, inside `min_range_m` 10, past the reach, a mate
+  within `friendly_clear_m` 6 of the impact (or within 1 m of the rocket's line), the line blocked well short of the target, the last
+  `keep_rockets_for_heavy` (0 by default: no enemy vehicles yet) kept for a heavy target. **A score >= `threshold` 0.5 draws the launcher**
+  (`draw_s` 0.6 = the switch cost; an empty tube reloads first), the rocket goes at that target; with no rocket target he goes back to the weapon
+  he had (a rifle target in sight: at once; none: after `return_after_s` 2 with the tube loaded), at once when an enemy comes inside 10 m, and
+  draws again only after `redraw_cooldown_s` 3; re-scored every `decision_interval_s` 0.25. Log `[RpgChoice] <name> (team N): draws the rpg7 for
+  X (22 m): cluster, score 1.20 (cluster 3, group 3 threat, cover 0, heavy 0, rockets 4)` / `keeps the m16 for X ...: none, score 0.00 < 0.50,
+  veto none` (every 2 s) / `back to the m16 (...)`. Console `Codex.Combat.LauncherAI 0` = the old behaviour (A/B); `enabled` 0 in the file too.
+- **Who wins:** the player's own pick (X, the weapon selector, the turn-based bar -> `NotePlayerWeaponChoice`) holds `player_choice_hold_s` 45 s:
+  a picked rifle is never swapped for the launcher. **A picked launcher in auto-fire** (autonomy OFF in solo too: he fires from his spot by his
+  fire mode) fires at any target without a veto (the reasons do not matter: the player chose it); a target with a veto (inside 10 m, a mate near
+  it) -> he **falls back to the rifle** and goes back to the launcher as soon as a valid target shows. Ordered attacks (Ctrl + click priority
+  target, quick fire, SUPPRESS, blind fire at a silhouette, the return fire at a flash) use the weapon in hands. The squad autonomy (Commander
+  Mode) leaves a launcher in hands to this rule (`SquadAutonomySubsystem::UpdateWeapons`).
+- **The blast's suppression** (`suppression.json` "launcher.*", `SuppressionRules::LauncherHold` / `AddHold`, `USuppressionSubsystem::ReportLauncherBlast`
+  from `AProjectileActor` on every rocket burst - a hit or a near miss): every live enemy of the shooter's side within `launcher.radius_cm` **9 m**
+  is held at least **Suppressed** for `launcher.suppressed_seconds` **5 s** (blind fire, no peek), within `launcher.pinned_radius_cm` **6 m PINNED**
+  (no fire at all) for `launcher.pinned_seconds` **3 s**, both x lerp(1, `launcher.edge_factor` 0.5, distance / radius) - whatever the level's
+  decay does (`FSuppressionState::HoldPinned / HoldSuppressed`); monsters, our squad (a PMC rocket) and the PMC fighters (ours) alike, never the
+  shooter's own side. An operative held so also takes the shooter as the flash he is under fire from (the under-fire manoeuvre: cover / sidestep /
+  prone). The generic blast burst (`explosion.*`, 6 m, 0.6) still comes on top. Log `[RPG] burst at X by Y: N enemies held (P pinned) within 9 m`.
+- **The reload at rate 1:** `reload_time` 2.333 = the pack's `Anim_Set_02_Reload` (and `Sit_Reload`, the same length - measured by
+  `setup_launcher_animation.py`); the reload starts when the Shot clip's follow-through ends, so the anim's lead-in is 0 and the clip plays at rate 1
+  (RpgAnimSmoke checks the rate and the length); the rocket shows at the clip's insertion 1.333 s as before.
+- **The aim with a live pose:** the shot waits until the weapon's barrel points at the target (`GetPoseAimResidualDeg`); for a launcher the barrel axis is
+  its own `visual.muzzle_offset` (the tube's bore, `AOperativeCharacter::GetBarrelAxisOnModel`) - the Blueprint's `MuzzleOffset` belongs to the rifle
+  stand-in and pointed UP on the tube, so with an evaluated pose (rendered, or `AlwaysTickPoseAndRefreshBones`) the auto fire never let a rocket go
+  ("outside the aim cone"; found by RpgPmcSmoke).
+- **Checks:** tests `CodexTactics.Weapons.RpgAI.WeaponChoice` (every reason, every veto, the threshold, the player's pick), `.TuningFileMirrorsDefaults`,
+  `.SuppressionRadius` (the holds by distance, the tier over time), `.PmcGunner`, `.CommanderStrike`; smokes `CodexTactics.RpgAiSmoke` (the
+  evidence, the cluster -> a rocket on his own and the fighters pinned / silent, a lone man -> the rifle, a man behind a wall -> the rocket, the
+  player's M16 pick wins, the player's RPG falls back to the rifle and back, a mate near the cluster vetoes) and `CodexTactics.RpgPmcSmoke`
+  ([pmc-squad-ai](pmc-squad-ai.md) 10).
 
 ## Mortar nests (2026-11-09; SQUAD_SIX_FIRE_TEAMS.md 7.3; placeholder visuals; numbers proposed, pending the designer)
 
