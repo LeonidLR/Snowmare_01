@@ -38,6 +38,8 @@ struct CODEXTACTICS_API FPmcTeamStats
 	int32 OrdersIssued = 0;
 	/** Objective orders taken (task #53: walks onto / back to the round's point). */
 	int32 ObjectiveMoves = 0;
+	/** RpgStrike orders taken (the RPG gunner's ordered rocket, 2026-11-09). */
+	int32 RpgStrikes = 0;
 };
 
 /**
@@ -191,6 +193,8 @@ private:
 		bool bWasSuppressing = false;
 		/** An ambusher holding his fire (the Passive posture, PmcCommanderRules::ShouldHoldFire; user 2026-11-07). */
 		bool bHoldingFire = false;
+		/** The RPG gunner's best rocket target this decision (BuildFighterView; the RpgStrike order fires at it). */
+		TWeakObjectPtr<AActor> LauncherTarget;
 	};
 
 	struct FTeam

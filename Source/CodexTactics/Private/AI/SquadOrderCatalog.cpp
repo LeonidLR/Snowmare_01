@@ -152,6 +152,10 @@ namespace SquadOrderCatalog
 					}
 					return true;
 				});
+
+			Add(ESquadOrder::LauncherStrike, TEXT("LauncherStrike"), TEXT("One rocket at Target: draw the launcher, fire, back to the rifle (the launcher rule may pick a better target near it)."),
+				[](const FSquadOrderContext& C) { return Gate(C) && C.Target && C.Operative->HasLauncherRockets(); },
+				[](const FSquadOrderContext& C) { return C.Operative->OrderLauncherStrike(C.Target); });
 			return Entries;
 		}
 	}

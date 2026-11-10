@@ -21,6 +21,7 @@
 #include "Combat/KnockdownRules.h"
 #include "Combat/KnockdownTypes.h"
 #include "Combat/LauncherRules.h"
+#include "Combat/LauncherTacticsRules.h"
 #include "Combat/SniperRules.h"
 #include "Combat/PeekSightRules.h"
 #include "Combat/SuppressionRules.h"
@@ -1755,6 +1756,8 @@ public:
 	 * body's own error (bug #33, FireArcRules::ShotResidualDeg).
 	 */
 	float GetShotAimResidualDeg(const FVector& TargetLocation) const;
+	/** The barrel's direction in the hand model's own space (MuzzleOffset; a launcher: its weapon's muzzle_offset, the tube's bore). */
+	FVector GetBarrelAxisOnModel() const;
 
 	/** One frame of the aim turn to AimAt (FireArcRules::StepAimYaw: eased / AimTurnRateDegPerSec, prone at the prone turn rate). */
 	void TurnAimTowards(const FVector& AimAt, float DeltaTime);
@@ -3009,6 +3012,11 @@ public:
 	/** The reload's progress, 0..1 (0 when not reloading): the elapsed share of the weapon's reload time. */
 	float GetReloadProgress01() const;
 
+	/** The tube's reload waits for the shot's follow-through (the game designer 2026-11-09: the Reload clip at rate 1 after the Shot clip). */
+	bool IsLauncherReloadPending() const { return bLauncherReloadPending; }
+	/** The launcher's Shot clip still plays (or the rocket left this instant). */
+	bool IsLauncherShotFollowThrough() const;
+
 private:
 	/** Shows / hides the round on the model (every tick; ApplyWeaponVisual creates the component). */
 	void UpdateLauncherRoundVisual();
@@ -3024,9 +3032,87 @@ private:
 	bool LauncherShotAllowed(AActor* Target);
 	/** Launches the rocket at Target (a miss scatters the aim point). */
 	bool FireLauncherAt(AActor* Target, bool bRagingShot);
+	/** The fire loop: starts the pending tube reload once the shot's follow-through is over. */
+	void UpdateLauncherReloadStart();
+	bool bLauncherReloadPending = false;
+	double LauncherLastShotTime = -100.0;
 
 	ELauncherRefusal LastLauncherRefusal = ELauncherRefusal::None;
 	int32 LauncherShots = 0;
 	int32 LauncherRefusals = 0;
 	double LauncherLastWarningTime = -100.0;
+
+public:
+	// --- Who fires the RPG-7 and when (the game designer's answers 2026-11-09, item 7; LauncherTacticsRules, OperativeCharacterLauncherAI.cpp) ---
+	// One rule for the squad and the PMC fighters, in the shared fire loop: a cluster / a man in cover / a heavy target / a group to suppress
+	// draws the launcher, a lone exposed man keeps the rifle; the player's own pick and ordered attacks always win.
+
+	/**
+	 * The player picked the weapon in hands (X / the weapon selector / the turn-based bar): the launcher rule leaves his pick alone for
+	 * launcher_tactics.json "player_choice_hold_s" (a picked launcher fires at any valid target, a picked rifle is never swapped for it).
+	 */
+	void NotePlayerWeaponChoice();
+	/** Forgets the player's pick, a running fallback / strike and the rule's draw state (a new fight, smokes). */
+	void ResetLauncherChoice();
+	/** The id of the launcher he owns with a rocket in the tube or in reserve ("" = none). */
+	FString GetLauncherWeaponId() const;
+	/** He owns a launcher with rockets left. */
+	bool HasLauncherRockets() const;
+	/** The launcher in hands was drawn by the rule (it goes back to the primary when the rocket targets are gone). */
+	bool IsLauncherDrawnByRule() const { return bLauncherDrawnByRule; }
+	/**
+	 * An ordered rocket (the PMC commander's RpgStrike, catalog LauncherStrike): draw the launcher, fire one rocket at Target (or the better
+	 * rocket target the rule finds near it: ordered_threshold), then back to the primary. False: no launcher / rockets, no live target.
+	 */
+	bool OrderLauncherStrike(AActor* Target);
+	bool HasLauncherStrikeOrder() const { return LauncherStrikeTarget.IsValid(); }
+	void CancelLauncherStrike(const TCHAR* Why);
+	/**
+	 * The rule's verdict on Target for a rocket from here now (the world view: distance, the cluster / group round it, cover, heavy, mates near
+	 * the impact, rockets left) against Threshold (< 0: launcher_tactics.json "threshold"). OutView gets the view it scored.
+	 */
+	FLauncherChoice EvaluateLauncherTarget(AActor* Target, float Threshold = -1.f, FLauncherTargetView* OutView = nullptr) const;
+	/** The best rocket target among his live targets (GatherTargetsFor; null: none usable) and its verdict. */
+	AActor* FindBestLauncherTarget(float Threshold, FLauncherChoice& OutChoice) const;
+	/** The last decision line of the rule (smokes / the log): "<what> <target>: <reason>, score, veto". */
+	const FString& GetLastLauncherDecision() const { return LastLauncherDecision; }
+	int32 GetLauncherAutoDraws() const { return LauncherAutoDraws; }
+	int32 GetLauncherAutoReturns() const { return LauncherAutoReturns; }
+	int32 GetLauncherFallbacks() const { return LauncherFallbacks; }
+	int32 GetLauncherStrikeShots() const { return LauncherStrikeShots; }
+
+private:
+	/**
+	 * The weapon choice in the fire loop, after the target is found (RunCombatShooting): may draw the launcher (returns the fire-trace reason:
+	 * no shot this tick), go back to the primary, or retarget InOutShot to the rocket target. Null = fire on as decided.
+	 */
+	const TCHAR* UpdateLauncherChoice(float DeltaTime, FShootCandidate& InOutShot, bool bAutoFire);
+	/** Before the reload / sidearm step: a rule-drawn launcher goes back to the primary when an enemy is inside its minimum range. */
+	bool UpdateLauncherReturn(float DeltaTime);
+	/** Back to the primary from a rule-drawn launcher (Why to the log); the launcher keeps its tube / reserve. */
+	bool ReturnFromLauncher(const TCHAR* Why);
+	/** A shot candidate at Target for the rocket (its line evaluated; the target's centre when no line - the blast reaches behind cover). */
+	FShootCandidate MakeLauncherCandidate(AActor* Target) const;
+	void NoteLauncherDecision(const FString& Line);
+
+	bool bLauncherDrawnByRule = false;
+	/** The player's pick: the weapon id and when (-1000 = never). */
+	FString PlayerWeaponPickId;
+	double PlayerWeaponPickTime = -1000.0;
+	/** A player-picked launcher temporarily swapped for the rifle (the target is inside its minimum range / a mate near it). */
+	bool bLauncherFallbackActive = false;
+	TWeakObjectPtr<AActor> LauncherRuleTarget;
+	TWeakObjectPtr<AActor> LauncherStrikeTarget;
+	double LauncherStrikeSince = 0.0;
+	float LauncherNoTargetSeconds = 0.f;
+	float LauncherDecisionTimer = 0.f;
+	double LauncherReturnTime = -100.0;
+	double LauncherDecisionLogTime = -100.0;
+	/** The weapon the rule's draw came from (it goes back to it). */
+	FString LauncherReturnWeaponId;
+	FString LastLauncherDecision;
+	int32 LauncherAutoDraws = 0;
+	int32 LauncherAutoReturns = 0;
+	int32 LauncherFallbacks = 0;
+	int32 LauncherStrikeShots = 0;
 };

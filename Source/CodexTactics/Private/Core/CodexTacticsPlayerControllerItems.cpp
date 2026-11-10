@@ -404,6 +404,7 @@ void ACodexTacticsPlayerController::CycleWeaponKey()
 	{
 		return;
 	}
+	Leader->NotePlayerWeaponChoice(); // the player's pick wins over the launcher rule (2026-11-09)
 	ControllerCommands::Report(this, PlayerCommands::CycleWeapon);
 	UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>();
 	UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>();

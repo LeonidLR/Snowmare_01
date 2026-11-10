@@ -31,6 +31,23 @@ struct CODEXTACTICS_API FPmcWeaponChoice
 	int32 Weight = 1;
 };
 
+/**
+ * The squad's RPG gunner (the game designer 2026-11-09: "PMC fighters must be able to use the RPG"; pmc_operators.json "rpg_gunner"): a squad
+ * (one seed) gets gunners with the chance Share; they are max_per_squad consecutive fighter indices from a seeded start among the first
+ * slot_span. A gunner carries the launcher IN ADDITION to his pool weapon (in hands); the shared launcher rule draws it (LauncherTacticsRules).
+ */
+struct CODEXTACTICS_API FPmcRpgGunnerConfig
+{
+	/** The launcher's weapon id ("" = no gunners). */
+	FString WeaponId = TEXT("rpg7");
+	/** 0..1: the chance a squad has its gunner(s). */
+	float Share = 0.5f;
+	/** At most this many gunners per squad. */
+	int32 MaxPerSquad = 1;
+	/** The gunners are among fighter indices 0 .. slot_span - 1 (a squad smaller than that may draw none). */
+	int32 SlotSpan = 3;
+};
+
 struct CODEXTACTICS_API FPmcOperatorConfig
 {
 	/**
@@ -54,6 +71,8 @@ struct CODEXTACTICS_API FPmcOperatorConfig
 	float SelfDefenceCm = 1200.f;
 	/** The cold affects the PMC like the player's men (default yes, pending the user's confirmation). */
 	bool bColdApplies = true;
+	/** The squad's RPG gunner (2026-11-09). */
+	FPmcRpgGunnerConfig RpgGunner;
 };
 
 namespace PmcOperatorRules
@@ -71,6 +90,9 @@ namespace PmcOperatorRules
 	CODEXTACTICS_API FString PickName(const FPmcOperatorConfig& Config, int32 Seed, int32 Index);
 	/** Weighted pick from the pool ("m16" when the pool is empty). */
 	CODEXTACTICS_API FString PickWeaponId(const FPmcOperatorConfig& Config, int32 Seed, int32 Index);
+
+	/** Fighter Index of the squad seeded Seed carries the RPG gunner's launcher (FPmcRpgGunnerConfig; deterministic, at most max_per_squad). */
+	CODEXTACTICS_API bool IsRpgGunner(const FPmcOperatorConfig& Config, int32 Seed, int32 Index);
 
 	/** /Game/Data/Weapons/DA_Weapon_<id>.DA_Weapon_<id> */
 	CODEXTACTICS_API FString WeaponAssetPath(const FString& WeaponId);

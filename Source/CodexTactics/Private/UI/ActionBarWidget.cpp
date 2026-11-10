@@ -674,6 +674,10 @@ bool UActionBarWidget::SelectWeapon(const FString& WeaponId)
 	{
 		return false;
 	}
+	if (!(TurnBased && TurnBased->IsActive()))
+	{
+		Leader->NotePlayerWeaponChoice(); // the player's pick wins over the launcher rule (2026-11-09)
+	}
 	if (SelectorPanel)
 	{
 		SelectorPanel->SetVisibility(ESlateVisibility::Collapsed);

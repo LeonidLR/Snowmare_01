@@ -113,7 +113,7 @@
     "reload_in_cover": true
   },
   "loadouts": {
-    "comment": "The player's squad: each role's weapons, the first in hands (WeaponLoadoutRules; designer decision 21+, 2026-11-03 / 11-08: the Engineer carries the D-1 shotgun as his primary weapon and no M16). A role not listed keeps the game mode's StartingArsenal + ExtraWeapons. PMC fighters: pmc_operators.json weapon_pool. The Commander's rpg7 (2026-11-09) is FOR TESTING, pending the designer's decision on who carries the RPG-7 (the selector X cycles to it).",
+    "comment": "The player's squad: each role's weapons, the first in hands (WeaponLoadoutRules; designer decision 21+, 2026-11-03 / 11-08: the Engineer carries the D-1 shotgun as his primary weapon and no M16). A role not listed keeps the game mode's StartingArsenal + ExtraWeapons. PMC fighters: pmc_operators.json weapon_pool. The Commander carries the RPG-7 (the game designer's decision 2026-11-09: only the Commander in our squad; the selector X cycles to it, the launcher rule draws it on its own - launcher_tactics.json).",
     "commander": [
       "m16",
       "rpg7",
@@ -356,7 +356,7 @@
       "penetration_class": "heavy"
     },
     "rpg7": {
-      "comment": "The RPG-7 (2026-11-09; the game designer's numbers the same day; LauncherRules, docs/systems/weapons.md \"The RPG-7\"): a flat rocket at 115 m/s through the shared projectile layer, the fuse armed at once (arming_distance_m 0), self-destruct after 4.5 s; a DIRECT hit = explosion.direct_hit_damage 140 on the target struck (its whole share), everyone else within the 4 m blast takes the splash base_damage 60 x the falloff; class vehicle (hurts hulls), armour penetration 0.8; one rocket then a reload. No back-blast damage and no wall-behind / closed-room / prone refusals (the designer removed them); the only refusal is a target closer than min_range_m 10 (never inside its own blast). back_blast_length_m / half_angle stay for a later puff visual only. In the roster as next; for testing the Commander carries it (loadouts, pending the designer). Model + animation: the designer's launcher pack (visual below; weapon_anim_sets.json \"launcher\").",
+      "comment": "The RPG-7 (2026-11-09; the game designer's numbers the same day; LauncherRules, docs/systems/weapons.md \"The RPG-7\"): a flat rocket at 115 m/s through the shared projectile layer, the fuse armed at once (arming_distance_m 0), self-destruct after 4.5 s; a DIRECT hit = explosion.direct_hit_damage 140 on the target struck (its whole share), everyone else within the 4 m blast takes the splash base_damage 60 x the falloff; class vehicle (hurts hulls), armour penetration 0.8; one rocket then a reload. No back-blast damage and no wall-behind / closed-room / prone refusals (the designer removed them); the only refusal is a target closer than min_range_m 10 (never inside its own blast). back_blast_length_m / half_angle stay for a later puff visual only. In the roster as next; only the Commander carries it in our squad (loadouts, the designer 2026-11-09), PMC squads may have one RPG gunner (pmc_operators.json rpg_gunner). reload_time = the pack's Reload clip at rate 1, timed from the end of the shot's follow-through (the designer 2026-11-09). Model + animation: the designer's launcher pack (visual below; weapon_anim_sets.json \"launcher\").",
       "name": "RPG-7",
       "handling": "launcher",
       "kind": "projectile",
@@ -370,7 +370,7 @@
       "penetration_class": "vehicle",
       "max_clip_size": 1,
       "default_reserve_ammo": 3,
-      "reload_time": 4.5,
+      "reload_time": 2.333,
       "max_range_cells": 12,
       "suppression_weight": 3,
       "base_hit_chances": [
@@ -410,6 +410,10 @@
         "attach_location": [-2.44, 8.78, 13.99],
         "attach_rotation_pyr": [-0.21, 108.04, 25.97],
         "attach_scale": [1, 1, 1],
+        "attach_by_skeleton": {
+          "comment": "2026-11-09 (feat/rpg-ai-pmc): the PMC fighters' UE5 body (SK_PmcOperator_Skeleton) has its own hand_r frame - Scripts/Editor/calibrate_launcher_grip.py on the Pmc launcher copies (left hand <= 5.0 cm off its grip, the shoulder 9.3 cm off the tube's axis; the pack 9.6).",
+          "SK_PmcOperator_Skeleton": { "attach_location": [-1.92, 6.17, 15.4], "attach_rotation_pyr": [10.37, 115.68, 23.74] }
+        },
         "muzzle_offset": [0, 36, 0.3],
         "backblast_offset": [0, -67, 0.3],
         "projectile_mesh": "/Game/Weapons/RPG7/SM_RPG7_Rocket.SM_RPG7_Rocket",

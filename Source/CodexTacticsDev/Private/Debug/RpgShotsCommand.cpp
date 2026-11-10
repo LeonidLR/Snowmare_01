@@ -5,11 +5,14 @@
 // Output: Saved/Screenshots/RPG7/NN_<what>.png - the Commander with the RPG-7: the model in his hands (side / front / top), idle, walk / run /
 // sprint / crouch walk from the side (the pack's legs), aim up / down, the shot (the rocket leaving the tube, three frames), the reload (the
 // rocket off the tube, pushed back in) standing and crouched. The camera follows him; no keys, no desktop capture.
+// "CodexTactics.RpgShots pmc" (2026-11-09, feat/rpg-ai-pmc): a hostile PMC fighter (SKM_PmcOperator, the launcher set retargeted to his
+// skeleton) with the RPG-7 instead -> Saved/Screenshots/RpgPmc/: the model in his hands, idle, aim, the shot, the reload, crouched - side views.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
+#include "AI/PmcSquadSubsystem.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Characters/EnemyCharacter.h"
@@ -18,6 +21,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
@@ -60,6 +64,8 @@ namespace RpgShots
 		float LookAhead = 0.f;
 		/** Frame on the line to the target (aim / shot: he faces it with the aim offset, the capsule may point elsewhere). */
 		bool bFrameOnTarget = false;
+		/** "pmc": a hostile PMC fighter holds the RPG-7 (the launcher set on his own skeleton). */
+		bool bPmc = false;
 	};
 
 	TSharedPtr<FRunner> Runner;
@@ -268,6 +274,66 @@ namespace RpgShots
 		S.Add([](UWorld*) { const AOperativeCharacter* H = CurrentHero(); return H && H->GetVelocity().Size2D() > 10.f ? -1 : 20; });
 	}
 
+	/** The PMC fighter's stills (side views: his left = the chest side of the pack's Set_02 stance, his right). */
+	void AddPmcSteps(TArray<FStep>& S)
+	{
+		S.Add([](UWorld*) { Runner->HandCamOffset = FVector(10.f, 200.f, 20.f); return 6; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_hands_side")); return 4; });
+		S.Add([](UWorld*) { Runner->bHandCam = false; Runner->CamOffset = FVector(0.f, -480.f, 20.f); Runner->LookHeight = 20.f; Runner->Fov = 45.f; return 20; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_idle_side_left")); return 4; });
+		S.Add([](UWorld*) { Runner->CamOffset = FVector(0.f, 480.f, 20.f); return 6; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_idle_side_right")); return 4; });
+		S.Add([](UWorld*) { Runner->CamOffset = FVector(380.f, 300.f, 110.f); return 6; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_idle_front")); return 4; });
+		// The aim: the target 25 m ahead, a shot without reserve so the aim pose holds; framed square to the shot line.
+		S.Add([](UWorld*) { Runner->CamOffset = FVector(0.f, -480.f, 0.f); Runner->LookHeight = 60.f; Runner->Fov = 55.f; Runner->bFrameOnTarget = true; PlaceTarget(2500.f, 60.f); return 10; });
+		S.Add([](UWorld*) { Fire(0); return 24; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_aim_side")); return 10; });
+		S.Add([](UWorld*) { PlaceTarget(1500.f, 600.f); return 5; });
+		S.Add([](UWorld*) { Fire(0); return 22; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_aim_up_side")); return 20; });
+		// The shot (frames 1, 2, 4 after the trigger), side.
+		S.Add([](UWorld*) { PlaceTarget(2500.f, 60.f); Runner->CamOffset = FVector(0.f, -480.f, 0.f); Runner->LookHeight = 60.f; Runner->Fov = 55.f; return 20; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_shot_0_before")); return 3; });
+		S.Add([](UWorld*) { Fire(3); return 0; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_shot_1")); return 0; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_shot_2")); return 1; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_shot_3")); return 3; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_shot_4_followthrough")); return 2; });
+		// The reload (cease fire off so it runs; the hound parked).
+		S.Add([](UWorld*)
+		{
+			Runner->bFrameOnTarget = false;
+			Runner->CamOffset = FVector(0.f, -480.f, 20.f);
+			Runner->LookHeight = 30.f;
+			if (AOperativeCharacter* H = CurrentHero())
+			{
+				H->bTacticalCeaseFire = false;
+			}
+			if (AEnemyCharacter* T = Runner->Target.Get())
+			{
+				SmokeUtils::ParkEnemyFarAway(T);
+			}
+			return 20;
+		});
+		for (int32 Index = 0; Index < 5; ++Index)
+		{
+			S.Add([Index](UWorld*) { Still(FString::Printf(TEXT("pmc_reload_%d"), Index + 1)); return 15; });
+		}
+		S.Add([](UWorld*) { const AOperativeCharacter* H = CurrentHero(); return H && (H->bIsReloading || H->IsLauncherReloadPending()) ? -1 : 15; });
+		S.Add([](UWorld*) { Still(TEXT("pmc_reload_done")); return 5; });
+		S.Add([](UWorld*)
+		{
+			if (AOperativeCharacter* H = CurrentHero())
+			{
+				H->bTacticalCeaseFire = true;
+				H->SetStance(EOperativeStance::Crouching);
+			}
+			return 45;
+		});
+		S.Add([](UWorld*) { Still(TEXT("pmc_crouch_idle_side")); return 4; });
+	}
+
 	void AddSteps(TArray<FStep>& S)
 	{
 		S.Add([](UWorld* World) { return World->GetSubsystem<USquadSubsystem>() && World->GetSubsystem<USquadSubsystem>()->GetMembers().Num() >= 3 ? 60 : -1; });
@@ -321,6 +387,44 @@ namespace RpgShots
 					Member->TeleportTo(SmokeUtils::FreeSpot(World, ArenaOrigin - ArenaForward * 1500.f, Member), Member->GetActorRotation(), false, true);
 				}
 			}
+			if (Runner->bPmc)
+			{
+				// A PMC fighter takes the Commander's place; our men leave the frame and are no targets (hidden), he is shown (no fog of war).
+				UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+				AOperativeCharacter* Fighter = Pmc ? Pmc->SpawnFighter(1, ArenaOrigin + FVector(0.f, 0.f, 20.f), ArenaForward.Rotation(), 7, 0) : nullptr;
+				if (Fighter)
+				{
+					Pmc->SetTeamCommanded(1, false);
+					if (!Fighter->HasLauncherRockets())
+					{
+						if (UWeaponDataAsset* Launcher = LoadObject<UWeaponDataAsset>(nullptr, TEXT("/Game/Data/Weapons/DA_Weapon_rpg7.DA_Weapon_rpg7")))
+						{
+							Fighter->AddArsenalWeapon(Launcher);
+						}
+					}
+					Fighter->SwitchToWeaponById(TEXT("rpg7"));
+					Fighter->HealthComponent->SetMaxHealth(5000.f, true);
+					Fighter->bTacticalCeaseFire = true;
+					if (USkeletalMeshComponent* Body = Fighter->GetMesh())
+					{
+						Body->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+					}
+					for (AOperativeCharacter* Member : Squad->GetMembers())
+					{
+						Member->TeleportTo(SmokeUtils::FreeSpot(World, ArenaOrigin - ArenaForward * 3000.f, Member), Member->GetActorRotation(), false, true);
+						Member->SetActorHiddenInGame(true);
+					}
+					if (UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>())
+					{
+						Sight->SetRevealHostileOperatives(true);
+					}
+					Runner->Hero = Fighter;
+					Commander = Fighter;
+					UE_LOG(LogCodexTactics, Display, TEXT("RpgShots: PMC fighter %s (body %s) with %s"), *Fighter->DisplayName.ToString(),
+						Fighter->GetMesh() && Fighter->GetMesh()->GetSkeletalMeshAsset() ? *Fighter->GetMesh()->GetSkeletalMeshAsset()->GetName() : TEXT("?"),
+						Fighter->CurrentWeapon ? *Fighter->CurrentWeapon->WeaponId : TEXT("-"));
+				}
+			}
 			const FVector Spot = SmokeUtils::ClearPoint(World, Commander->GetActorLocation(), Commander->GetActorLocation() + Commander->GetActorForwardVector() * 2500.f);
 			if (AEnemyCharacter* Hound = World->GetSubsystem<UWaveSubsystem>()->SpawnEnemy(EEnemyArchetype::FrostHound, Spot + FVector(0.f, 0.f, 60.f),
 				(-Commander->GetActorForwardVector()).Rotation()))
@@ -337,6 +441,11 @@ namespace RpgShots
 			Runner->bHandCam = true;
 			return 45;
 		});
+		if (Runner->bPmc)
+		{
+			AddPmcSteps(S);
+			return;
+		}
 		// The model in his hands.
 		S.Add([](UWorld*) { Runner->HandCamOffset = FVector(10.f, 200.f, 20.f); return 6; });
 		S.Add([](UWorld*) { Still(TEXT("hands_side")); return 4; });
@@ -428,7 +537,8 @@ namespace RpgShots
 	void Run(const TArray<FString>& Args, UWorld* World)
 	{
 		Runner = MakeShared<FRunner>();
-		Runner->Dir = FPaths::ProjectSavedDir() / TEXT("Screenshots/RPG7");
+		Runner->bPmc = Args.Contains(TEXT("pmc"));
+		Runner->Dir = FPaths::ProjectSavedDir() / (Runner->bPmc ? TEXT("Screenshots/RpgPmc") : TEXT("Screenshots/RPG7"));
 		IFileManager::Get().DeleteDirectory(*Runner->Dir, false, true);
 		IFileManager::Get().MakeDirectory(*Runner->Dir, true);
 		AddSteps(Runner->Steps);
@@ -438,7 +548,7 @@ namespace RpgShots
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.RpgShots"),
-		TEXT("Rendered proof: the Commander with the RPG-7 on the launcher pack (the model in his hands, idle, walk / sprint / crouch walk from the side, aim up / down, the shot with the rocket leaving, the reload standing and crouched) -> Saved/Screenshots/RPG7/."),
+		TEXT("Rendered proof: the Commander with the RPG-7 on the launcher pack (the model in his hands, idle, walk / sprint / crouch walk from the side, aim up / down, the shot with the rocket leaving, the reload standing and crouched) -> Saved/Screenshots/RPG7/. 'pmc': a PMC fighter with it -> Saved/Screenshots/RpgPmc/."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

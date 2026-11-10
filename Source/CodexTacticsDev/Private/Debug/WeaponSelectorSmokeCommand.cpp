@@ -78,7 +78,7 @@ namespace WeaponSelectorSmoke
 		{
 			// User request 2026-10-09: the Medic-Sapper also carries the sniper rifle (5 weapons).
 			// Designer decision 21+ (2026-11-08): the Engineer carries the D-1 shotgun instead of the M16 (8 + 40 shells).
-			// The Commander's rpg7 FOR TESTING (2026-11-09, pending the designer): 4 weapons.
+			// The Commander's rpg7 (the game designer 2026-11-09: only the Commander carries it in our squad): 4 weapons.
 			const int32 Expected = Member->SquadRole == EOperativeRole::MedicSapper || Member->SquadRole == EOperativeRole::Commander ? 4 : 3; // no knife since 2026-11-08
 			const bool bEngineer = Member->SquadRole == EOperativeRole::Engineer;
 			bArsenal &= Member->AvailableWeapons.Num() == Expected && WeaponId(Member) == (bEngineer ? TEXT("shotgun") : TEXT("m16"))

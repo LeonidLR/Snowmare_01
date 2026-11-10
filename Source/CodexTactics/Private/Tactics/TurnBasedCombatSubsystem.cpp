@@ -2270,6 +2270,7 @@ bool UTurnBasedCombatSubsystem::SwitchActiveUnitWeapon(const FString& WeaponId)
 	{
 		return false;
 	}
+	Unit->NotePlayerWeaponChoice(); // the player's pick wins over the launcher rule (2026-11-09)
 	const FString Name = Unit->CurrentWeapon && !Unit->CurrentWeapon->WeaponName.IsEmpty() ? Unit->CurrentWeapon->WeaponName.ToString() : WeaponId;
 	Log(FString::Printf(TEXT("🔫 %s selects weapon: %s"), *NameOf(Unit), *Name));
 	RefreshOverlay();

@@ -1,0 +1,26 @@
+{
+  "comment": "When a shooter fires the RPG-7 instead of his rifle (the game designer's answers on the RPG-7, 2026-11-09, item 7; docs/systems/weapons.md 'The RPG-7: who fires it and when'). Read by LauncherTacticsRules::GetConfig (Source/CodexTactics/Public/Combat/LauncherTacticsRules.h); the FLauncherTacticsConfig defaults mirror these values (test CodexTactics.Weapons.RpgAI.TuningFileMirrorsDefaults). ONE rule for our squad's operatives and the hostile PMC fighters (the shared fire loop) and the PMC commander's RpgStrike order. Each target a shooter could fire at scores the best of its reasons: weight.cluster x the cluster factor (cluster.min enemies within cluster.radius_m of the aim point = (min - 1) / (full - 1), 1 from cluster.full), weight.cover (behind cover / a barricade: the rifle cannot hit him well), weight.heavy (a vehicle / turret / mortar crewman), weight.suppress (a group of suppress.group_min within suppress.group_radius_m that fires at us or closes in: one rocket makes it duck), weight.single_exposed (a lone man in the open: 0 = the rifle). Vetoes first: no rockets, inside the weapon's min_range_m (10 m), past its reach, a mate within friendly_clear_m of the impact, the last keep_rockets_for_heavy rockets kept for a heavy target. A score >= threshold draws the launcher (draw_s = the switch cost, then an empty tube reloads first) and the rocket goes at that target; with no rocket target for return_after_s (tube loaded) or an enemy inside the minimum range he goes back to the rifle, and draws again only after redraw_cooldown_s; the rule re-scores every decision_interval_s. The PMC commander's ordered strike accepts ordered_threshold and is dropped after strike_timeout_s. The player's own pick (X / the weapon selector) holds player_choice_hold_s; ordered attacks (priority target, quick fire, SUPPRESS) use the weapon in hands. enabled 0 (or console Codex.Combat.LauncherAI 0) = the AI never draws it on its own. The blast's suppression: Content/Data/Combat/suppression.json 'launcher.*'.",
+  "params": {
+    "enabled": 1,
+    "threshold": 0.5,
+    "ordered_threshold": 0.3,
+    "cluster.radius_m": 4,
+    "cluster.min": 2,
+    "cluster.full": 3,
+    "weight.cluster": 1.2,
+    "weight.cover": 0.8,
+    "weight.heavy": 1.5,
+    "weight.suppress": 0.7,
+    "weight.single_exposed": 0,
+    "suppress.group_radius_m": 9,
+    "suppress.group_min": 2,
+    "friendly_clear_m": 6,
+    "keep_rockets_for_heavy": 0,
+    "draw_s": 0.6,
+    "return_after_s": 2,
+    "redraw_cooldown_s": 3,
+    "decision_interval_s": 0.25,
+    "player_choice_hold_s": 45,
+    "strike_timeout_s": 6
+  }
+}

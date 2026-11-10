@@ -134,6 +134,15 @@ namespace PmcOperatorRules
 			double Metres = 0.0;
 			if ((*Factions)->TryGetNumberField(TEXT("pmc_self_defence_m"), Metres)) { Out.SelfDefenceCm = static_cast<float>(Metres) * 100.f; }
 		}
+		const TSharedPtr<FJsonObject>* Gunner = nullptr;
+		if (Json.TryGetObjectField(TEXT("rpg_gunner"), Gunner) && Gunner->IsValid())
+		{
+			(*Gunner)->TryGetStringField(TEXT("weapon"), Out.RpgGunner.WeaponId);
+			double Value = 0.0;
+			if ((*Gunner)->TryGetNumberField(TEXT("share"), Value)) { Out.RpgGunner.Share = FMath::Clamp(static_cast<float>(Value), 0.f, 1.f); }
+			if ((*Gunner)->TryGetNumberField(TEXT("max_per_squad"), Value)) { Out.RpgGunner.MaxPerSquad = FMath::Max(0, FMath::RoundToInt(Value)); }
+			if ((*Gunner)->TryGetNumberField(TEXT("slot_span"), Value)) { Out.RpgGunner.SlotSpan = FMath::Max(1, FMath::RoundToInt(Value)); }
+		}
 		return Out;
 	}
 
@@ -206,6 +215,25 @@ namespace PmcOperatorRules
 			}
 		}
 		return Config.WeaponPool.Last().WeaponId;
+	}
+
+	bool IsRpgGunner(const FPmcOperatorConfig& Config, int32 Seed, int32 Index)
+	{
+		const FPmcRpgGunnerConfig& Gunner = Config.RpgGunner;
+		const int32 Span = FMath::Max(1, Gunner.SlotSpan);
+		const int32 Count = FMath::Min(Gunner.MaxPerSquad, Span);
+		if (Gunner.WeaponId.IsEmpty() || Count <= 0 || Gunner.Share <= 0.f || Index < 0 || Index >= Span)
+		{
+			return false;
+		}
+		// The squad's roll (one per seed), then Count consecutive slots from a seeded start.
+		const float Roll = static_cast<float>(PmcOperatorLocal::Hash(Seed, 0, 53u) % 10000u) / 10000.f;
+		if (Roll >= Gunner.Share)
+		{
+			return false;
+		}
+		const int32 Start = static_cast<int32>(PmcOperatorLocal::Hash(Seed, 0, 59u) % static_cast<uint32>(Span));
+		return (Index - Start + Span) % Span < Count;
 	}
 
 	FString WeaponAssetPath(const FString& WeaponId)

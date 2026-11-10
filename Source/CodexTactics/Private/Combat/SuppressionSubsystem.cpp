@@ -2,6 +2,7 @@
 
 #include "Combat/SuppressionSubsystem.h"
 
+#include "AI/PmcSquadSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -95,6 +96,96 @@ void USuppressionSubsystem::ReportExplosionIn(const UObject* WorldContext, const
 	{
 		Suppression->ReportExplosion(Location, BlastRadiusCm);
 	}
+}
+
+int32 USuppressionSubsystem::ReportLauncherBlastIn(const UObject* WorldContext, const FVector& Location, AActor* Shooter)
+{
+	USuppressionSubsystem* Suppression = Get(WorldContext);
+	return Suppression ? Suppression->ReportLauncherBlast(Location, Shooter) : 0;
+}
+
+int32 USuppressionSubsystem::ReportLauncherBlast(const FVector& Location, AActor* Shooter)
+{
+	UWorld* World = GetWorld();
+	if (!World || IsSuppressionOff())
+	{
+		return 0;
+	}
+	++Stats.LauncherBlasts;
+	const FSuppressionConfig& Config = SuppressionRules::GetConfig();
+	AOperativeCharacter* ShooterOperative = Cast<AOperativeCharacter>(Shooter);
+	const int32 ShooterTeam = ShooterOperative ? ShooterOperative->TeamId : 0;
+	int32 Held = 0;
+	int32 Pinned = 0;
+	auto Hold = [&](AActor* Unit)
+	{
+		if (!IsValid(Unit) || Unit == Shooter)
+		{
+			return;
+		}
+		float PinnedSeconds = 0.f;
+		float SuppressedSeconds = 0.f;
+		SuppressionRules::LauncherHold(Config, static_cast<float>(FVector::Dist(Unit->GetActorLocation(), Location)), PinnedSeconds, SuppressedSeconds);
+		if (PinnedSeconds <= 0.f && SuppressedSeconds <= 0.f)
+		{
+			return;
+		}
+		FSuppressionState& State = States.FindOrAdd(Unit);
+		const ESuppressionTier Old = State.Tier;
+		SuppressionRules::AddHold(Config, State, PinnedSeconds, SuppressedSeconds);
+		NoteTier(Unit, Old, State.Tier);
+		++Held;
+		Pinned += PinnedSeconds > 0.f ? 1 : 0;
+		// An operative takes the shooter as the flash he is under fire from: the manoeuvre (cover / sidestep / prone) and the turn to it.
+		if (AOperativeCharacter* Victim = Cast<AOperativeCharacter>(Unit); Victim && ShooterOperative)
+		{
+			Victim->NoteUnderFire(ShooterOperative, ShooterOperative->GetActorLocation());
+			if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
+			{
+				const FVector Flash = ShooterOperative->GetActorLocation();
+				Pmc->NotifyShotAt(ShooterOperative, Victim, &Flash);
+			}
+		}
+	};
+	// Monsters are everyone's enemies; a monster's own blast (none fires a rocket) would leave them alone.
+	if (!Cast<AEnemyCharacter>(Shooter))
+	{
+		for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
+		{
+			if (IsValid(Enemy) && !Enemy->IsDying() && Enemy->GetHealthComponent() && Enemy->GetHealthComponent()->IsAlive())
+			{
+				Hold(Enemy);
+			}
+		}
+	}
+	if (ShooterTeam != 0 || !ShooterOperative)
+	{
+		if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>(); Squad && ShooterOperative)
+		{
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (IsValid(Member) && Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member))
+				{
+					Hold(Member);
+				}
+			}
+		}
+	}
+	if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
+	{
+		for (AOperativeCharacter* Fighter : Pmc->GetHostileOperatives())
+		{
+			if (IsValid(Fighter) && Fighter->TeamId != ShooterTeam && Fighter->HealthComponent && Fighter->HealthComponent->IsAlive())
+			{
+				Hold(Fighter);
+			}
+		}
+	}
+	Stats.LauncherSuppressed += Held;
+	Stats.LauncherPinned += Pinned;
+	UE_LOG(LogCodexTactics, Display, TEXT("[RPG] burst at %s by %s: %d enemies held (%d pinned) within %.0f m"), *Location.ToCompactString(),
+		Shooter ? *Shooter->GetName() : TEXT("?"), Held, Pinned, Config.LauncherRadiusCm / 100.f);
+	return Held;
 }
 
 bool USuppressionSubsystem::IsSuppressionOff() const

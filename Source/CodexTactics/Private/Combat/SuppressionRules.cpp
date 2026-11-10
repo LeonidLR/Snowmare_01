@@ -62,6 +62,11 @@ namespace SuppressionRules
 		{ TEXT("explosion.min_radius_cm"), &FSuppressionConfig::ExplosionMinRadiusCm },
 		{ TEXT("explosion.max_burst"), &FSuppressionConfig::ExplosionMaxBurst },
 		{ TEXT("explosion.decay_per_second"), &FSuppressionConfig::ExplosionDecayPerSecond },
+		{ TEXT("launcher.radius_cm"), &FSuppressionConfig::LauncherRadiusCm },
+		{ TEXT("launcher.pinned_radius_cm"), &FSuppressionConfig::LauncherPinnedRadiusCm },
+		{ TEXT("launcher.pinned_seconds"), &FSuppressionConfig::LauncherPinnedSeconds },
+		{ TEXT("launcher.suppressed_seconds"), &FSuppressionConfig::LauncherSuppressedSeconds },
+		{ TEXT("launcher.edge_factor"), &FSuppressionConfig::LauncherEdgeFactor },
 		{ TEXT("zone.cell_cm"), &FSuppressionConfig::ZoneCellCm },
 		{ TEXT("zone.density_threshold"), &FSuppressionConfig::ZoneDensityThreshold },
 		{ TEXT("zone.density_decay_per_second"), &FSuppressionConfig::ZoneDensityDecayPerSecond },
@@ -172,7 +177,7 @@ namespace SuppressionRules
 		}
 		State.Level = FMath::Clamp(State.Level + Amount, 0.f, 1.f);
 		State.QuietTime = 0.f;
-		State.Tier = ResolveTier(Config, EffectiveLevel(State), State.Tier);
+		State.Tier = ResolveStateTier(Config, State);
 	}
 
 	void Step(const FSuppressionConfig& Config, FSuppressionState& State, float DeltaSeconds)
@@ -185,7 +190,45 @@ namespace SuppressionRules
 		const float Rate = FMath::Max(0.f, Config.DecayPerSecond) + (State.QuietTime >= Config.QuietSeconds ? FMath::Max(0.f, Config.QuietDecayPerSecond) : 0.f);
 		State.Level = FMath::Max(0.f, State.Level - Rate * DeltaSeconds);
 		State.Burst = FMath::Max(0.f, State.Burst - FMath::Max(0.f, Config.ExplosionDecayPerSecond) * DeltaSeconds);
-		State.Tier = ResolveTier(Config, EffectiveLevel(State), State.Tier);
+		State.HoldPinned = FMath::Max(0.f, State.HoldPinned - DeltaSeconds);
+		State.HoldSuppressed = FMath::Max(0.f, State.HoldSuppressed - DeltaSeconds);
+		State.Tier = ResolveStateTier(Config, State);
+	}
+
+	ESuppressionTier ResolveStateTier(const FSuppressionConfig& Config, const FSuppressionState& State)
+	{
+		const ESuppressionTier FromLevel = ResolveTier(Config, EffectiveLevel(State), State.Tier);
+		if (State.HoldPinned > 0.f)
+		{
+			return ESuppressionTier::Pinned;
+		}
+		return State.HoldSuppressed > 0.f && FromLevel == ESuppressionTier::None ? ESuppressionTier::Suppressed : FromLevel;
+	}
+
+	void LauncherHold(const FSuppressionConfig& Config, float DistanceCm, float& OutPinnedSeconds, float& OutSuppressedSeconds)
+	{
+		OutPinnedSeconds = 0.f;
+		OutSuppressedSeconds = 0.f;
+		const float Radius = FMath::Max(0.f, Config.LauncherRadiusCm);
+		if (Radius <= 0.f || DistanceCm > Radius || DistanceCm < 0.f)
+		{
+			return;
+		}
+		const float Factor = FMath::Lerp(1.f, FMath::Clamp(Config.LauncherEdgeFactor, 0.f, 1.f), FMath::Clamp(DistanceCm / Radius, 0.f, 1.f));
+		OutSuppressedSeconds = FMath::Max(0.f, Config.LauncherSuppressedSeconds) * Factor;
+		OutPinnedSeconds = DistanceCm <= FMath::Max(0.f, Config.LauncherPinnedRadiusCm) ? FMath::Max(0.f, Config.LauncherPinnedSeconds) * Factor : 0.f;
+	}
+
+	void AddHold(const FSuppressionConfig& Config, FSuppressionState& State, float PinnedSeconds, float SuppressedSeconds)
+	{
+		if (PinnedSeconds <= 0.f && SuppressedSeconds <= 0.f)
+		{
+			return;
+		}
+		State.HoldPinned = FMath::Max(State.HoldPinned, PinnedSeconds);
+		State.HoldSuppressed = FMath::Max(State.HoldSuppressed, FMath::Max(SuppressedSeconds, PinnedSeconds));
+		State.QuietTime = 0.f;
+		State.Tier = ResolveStateTier(Config, State);
 	}
 
 	float EffectiveLevel(const FSuppressionState& State)
@@ -216,7 +259,7 @@ namespace SuppressionRules
 		}
 		// Two blasts close together do not stack beyond the cap; the stronger one counts.
 		State.Burst = FMath::Clamp(FMath::Max(State.Burst, Amount), 0.f, FMath::Max(0.f, Config.ExplosionMaxBurst));
-		State.Tier = ResolveTier(Config, EffectiveLevel(State), State.Tier);
+		State.Tier = ResolveStateTier(Config, State);
 	}
 
 	int32 FindFireCell(const FSuppressionConfig& Config, const TArray<FSuppressionFireCell>& Cells, const FVector& End)

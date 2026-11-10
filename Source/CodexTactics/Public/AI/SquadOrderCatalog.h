@@ -42,6 +42,8 @@ enum class ESquadOrder : uint8
 	SwitchWeapon,
 	/** Stop where he stands and face Location (StopAndFace); a zero Location only stops him. */
 	Hold,
+	/** One rocket at Target: draw the launcher, fire, back to the rifle (OrderLauncherStrike; 2026-11-09). */
+	LauncherStrike,
 	Count
 };
 

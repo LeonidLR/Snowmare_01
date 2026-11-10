@@ -430,9 +430,9 @@ void USquadAutonomySubsystem::UpdateWeapons(AOperativeCharacter& Operative, FOpe
 	using namespace SquadAutonomyRules;
 	const FSquadROE& ROE = SquadROE::Get();
 	const UWeaponDataAsset* Weapon = Operative.CurrentWeapon;
-	if (!Weapon)
+	if (!Weapon || Operative.IsLauncherEquipped())
 	{
-		return;
+		return; // the launcher (2026-11-09): its own rule (OperativeCharacterLauncherAI.cpp) draws it and puts it away; never the "primary" here
 	}
 	const bool bOnSidearm = State.bOnAutoSidearm && Weapon->WeaponId != State.PrimaryWeaponId;
 	State.bOnAutoSidearm = bOnSidearm;

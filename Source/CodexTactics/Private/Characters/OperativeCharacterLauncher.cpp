@@ -6,11 +6,13 @@
 #include "Characters/OperativeCharacter.h"
 
 #include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/WeaponAnimLayerRules.h"
 #include "CodexTactics.h"
 #include "Combat/LauncherRules.h"
 #include "Combat/ProjectileSubsystem.h"
 #include "Combat/WeaponBallisticsRules.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Engine/StaticMesh.h"
@@ -92,6 +94,7 @@ bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
 	Launch.Instigator = this;
 	Launch.SourceName = CurrentWeapon->WeaponName.IsEmpty() ? CurrentWeapon->WeaponId : CurrentWeapon->WeaponName.ToString();
 	Launch.bSquadNoise = IsPlayerTeam();
+	Launch.bLauncherSuppression = true; // the burst holds the enemies round it Suppressed / Pinned (suppression.json "launcher.*")
 	// The look (2026-11-09, the launcher pack): the rocket model nose-first along the flight, the trail hook.
 	Launch.VisualMesh = CurrentWeapon->ProjectileMesh.IsNull() ? nullptr : CurrentWeapon->ProjectileMesh.LoadSynchronous();
 	Launch.VisualTransform = CurrentWeapon->ProjectileMeshTransform;
@@ -102,6 +105,13 @@ bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
 		Projectiles->Fire(Launch);
 	}
 	++LauncherShots;
+	LauncherNoTargetSeconds = 0.f;
+	if (LauncherStrikeTarget.IsValid())
+	{
+		++LauncherStrikeShots; // the ordered strike is done (the rule takes him back to his rifle when nothing else is worth a rocket)
+		LauncherStrikeTarget.Reset();
+		LauncherStrikeSince = 0.0;
+	}
 	SpawnLauncherShotFx(Muzzle, AimDir);
 	UE_LOG(LogCodexTactics, Display, TEXT("[RPG] %s: rocket at %s (%.0f m, %s, chance %.2f)"), *DisplayName.ToString(), *Target->GetName(), Dist / 100.f,
 		bHit ? TEXT("on target") : TEXT("off"), HitChance);
@@ -113,12 +123,49 @@ bool AOperativeCharacter::FireLauncherAt(AActor* Target, bool bRagingShot)
 	NoteShotAim(Target, AimPoint, false);
 	OnWeaponFired.Broadcast(this, Target, bHit);
 	OnWeaponFiredNative.Broadcast(this, Target, bHit);
-	// One rocket in the tube: the next one goes in at once (the weapon's reload_time).
+	// One rocket in the tube: the next one goes in once the shot's follow-through is over (the game designer 2026-11-09: reload_time = the
+	// pack's Reload clip at rate 1 - UpdateLauncherReloadStart starts it from the fire loop).
 	if (UsesAmmo() && CurrentClip <= 0 && ReserveAmmo > 0)
 	{
+		bLauncherReloadPending = true;
+	}
+	LauncherLastShotTime = World ? World->GetTimeSeconds() : 0.0;
+	return true;
+}
+
+bool AOperativeCharacter::IsLauncherShotFollowThrough() const
+{
+	const UWorld* World = GetWorld();
+	const double Since = World ? World->GetTimeSeconds() - LauncherLastShotTime : 100.0;
+	if (Since < 0.1)
+	{
+		return true; // the anim instance starts the shot clip on its next update
+	}
+	if (Since > 3.0)
+	{
+		return false; // never hold the reload longer than the longest shot clip
+	}
+	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+	return Anim && Anim->GetLauncherAction() == ELauncherAction::Shot;
+}
+
+void AOperativeCharacter::UpdateLauncherReloadStart()
+{
+	if (!bLauncherReloadPending || bIsReloading)
+	{
+		bLauncherReloadPending = false;
+		return;
+	}
+	if (!IsLauncherEquipped() || CurrentClip > 0 || ReserveAmmo <= 0)
+	{
+		bLauncherReloadPending = false;
+		return;
+	}
+	if (!IsLauncherShotFollowThrough())
+	{
+		bLauncherReloadPending = false;
 		StartReload();
 	}
-	return true;
 }
 
 float AOperativeCharacter::GetReloadProgress01() const

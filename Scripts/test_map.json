@@ -28,7 +28,7 @@
     "HordeSmoke", "CoverSmoke", "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke",
     "CoverCrouchSmoke", "CoverMoveSmoke", "CoverReverseSmoke", "CoverWallSmoke", "CoverWallMedicSmoke", "CoverHugSmoke", "CoverHugMedicSmoke", "DefendSmoke", "EnemyTacticsSmoke", "GrenadeAnimSmoke", "LeftHandIKSmoke",
     "PrepDeploySmoke", "SightSmoke", "TripwireSmoke", "TurnRulesSmoke", "BotStealthSmoke", "PauseBarrelOrderSmoke",
-    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke", "ShotgunSmoke", "PistolSmoke", "ProjectileSmoke", "RpgSmoke", "RpgAnimSmoke", "MortarSmoke",
+    "TurnBasedAimSmoke", "KnockdownSmoke", "DeathCamSmoke", "CameraZoneModeSmoke", "FrontendSmoke", "SniperSmoke", "ShotgunSmoke", "PistolSmoke", "ProjectileSmoke", "RpgSmoke", "RpgAnimSmoke", "RpgAiSmoke", "RpgPmcSmoke", "MortarSmoke",
     "HordeIntroSmoke", "SoloRejoinSmoke", "CombatFormationSmoke", "PatrolAmbushSmoke", "VisionConeSmoke", "GateGeneratorSmoke", "TutorialSmoke", "TutorialSaveSmoke", "ControlsScreenSmoke", "InteriorExitSmoke",
     "PMCTripwireSmoke", "CoverEventSmoke", "WarmIdleSmoke", "BridgeFenceSmoke", "TrapSoloSmoke", "PeekMinesSmoke", "RoofCutawaySmoke", "StealthLureSmoke", "KnockdownCoverSmoke", "HoundScentSmoke", "MinimapSmoke", "QuickFireSmoke", "SuppressionSmoke", "PeekSightSmoke", "LeanPoseSmoke", "CoverSwitchSmoke", "CoverWrapSmoke", "CoverSwitchLakeSmoke",
     "SaveCoverageSmoke", "SaveCoverageLakeSmoke", "TutorialAmbushLakeSmoke", "TutorialAmbushLakeSpottedSmoke", "TutorialAmbushLakeLureSpottedSmoke", "TutorialAmbushLakeEarlyKillSmoke", "TutorialAmbushLakeMineSmoke",
@@ -496,6 +496,14 @@
         "Content/Data/Weapons/weapon_anim_sets.json", "Content/Data/Weapons/weapons_tuning.json", "Content/Weapons/RPG7/**", "Content/Characters/Animations/Launcher/**"],
       "tests": ["CodexTactics.Weapons.Rpg", "CodexTactics.Animation.WeaponLayer", "CodexTactics.Weapons.Loadout"],
       "smokes": ["RpgAnimSmoke", "RpgSmoke", "ShotgunSmoke", "PistolSmoke", "WeaponSelectorSmoke", "ProjectileSmoke"]
+    },
+    {
+      "name": "rpg-ai-pmc",
+      "_why": "2026-11-09 (feat/rpg-ai-pmc): who fires the RPG-7 and when - the shared launcher rule (LauncherTacticsRules, launcher_tactics.json) in the squad's and the PMC's fire loop, the blast's suppression (suppression.json launcher.*), the PMC RPG gunner (pmc_operators.json rpg_gunner) + the commander's RpgStrike order, the launcher set retargeted to the PMC skeleton",
+      "globs": ["Source/**/Combat/LauncherTactics*", "Source/**/Characters/OperativeCharacterLauncherAI*", "Source/**/Debug/RpgAiSmoke*", "Source/**/Debug/RpgPmcSmoke*",
+        "Content/Data/Combat/launcher_tactics.json", "Content/Characters/Animations/Launcher/Pmc/**", "Scripts/Editor/setup_launcher_animation.py", "Scripts/Editor/calibrate_launcher_grip.py"],
+      "tests": ["CodexTactics.Weapons.RpgAI", "CodexTactics.Weapons.Rpg", "CodexTactics.Combat.Suppression", "CodexTactics.AI.PmcCommander", "CodexTactics.AI.PmcOperators", "CodexTactics.AI.SquadOrderCatalog"],
+      "smokes": ["RpgAiSmoke", "RpgPmcSmoke", "RpgSmoke", "RpgAnimSmoke", "SuppressionSmoke", "PmcArenaSmoke"]
     },
     {
       "name": "weapons-arsenal",

@@ -1,5 +1,5 @@
 {
-  "comment": "PMC Operator fighters (docs/systems/pmc-squad-ai.md; PmcOperatorRules): the hostile operatives UPmcSquadSubsystem::SpawnFighter makes from the operative Blueprint. looks: coat_material = a material instance for the Explorer_Coat slot (made by Scripts/Editor/create_pmc_operator_variants.py under /Game/Characters/Enemies/PMC/Operator; a missing asset falls back to the tint alone), tint_srgb = the coat tint (the operative's role-colour parameter), snow = the starting snow share of the jacket. weapon_pool: weighted draw per fighter from Content/Data/Weapons (DA_Weapon_<id>). factions: monsters_attack_pmc = zombies / hounds hunt PMC fighters too; pmc_self_defence_m = a fighter shoots a monster only when it hunts a mate within this distance; cold_applies = the cold affects the PMC like the player's men (pending the user's confirmation).",
+  "comment": "PMC Operator fighters (docs/systems/pmc-squad-ai.md; PmcOperatorRules): the hostile operatives UPmcSquadSubsystem::SpawnFighter makes from the operative Blueprint. looks: coat_material = a material instance for the Explorer_Coat slot (made by Scripts/Editor/create_pmc_operator_variants.py under /Game/Characters/Enemies/PMC/Operator; a missing asset falls back to the tint alone), tint_srgb = the coat tint (the operative's role-colour parameter), snow = the starting snow share of the jacket. weapon_pool: weighted draw per fighter from Content/Data/Weapons (DA_Weapon_<id>). factions: monsters_attack_pmc = zombies / hounds hunt PMC fighters too; pmc_self_defence_m = a fighter shoots a monster only when it hunts a mate within this distance; cold_applies = the cold affects the PMC like the player's men (pending the user's confirmation). rpg_gunner (the game designer 2026-11-09: 'PMC fighters must be able to use the RPG'; PmcOperatorRules::IsRpgGunner): a squad (one seed) has its RPG gunner with the chance share, at most max_per_squad, among fighter indices 0 .. slot_span - 1; he carries DA_Weapon_<weapon> on top of his pool weapon (in hands) and the shared launcher rule draws it (Content/Data/Combat/launcher_tactics.json); share 0 = no PMC gunners.",
   "body_mesh": "/Game/Characters/Enemies/PMC/Operator/SKM_PmcOperator.SKM_PmcOperator",
   "display_names": ["Operator Kessler", "Operator Vance", "Operator Roux", "Operator Moreau", "Operator Dahl", "Operator Petrov", "Operator Haas", "Operator Lind"],
   "looks": [
@@ -12,6 +12,7 @@
     { "id": "shotgun", "weight": 1 },
     { "id": "sniper_rifle", "weight": 1 }
   ],
+  "rpg_gunner": { "weapon": "rpg7", "share": 0.5, "max_per_squad": 1, "slot_span": 3 },
   "stats": { "accuracy": 85, "luck": 25, "fortitude": 20, "medkits": 1, "grenades": 0 },
   "factions": { "monsters_attack_pmc": true, "pmc_self_defence_m": 12, "cold_applies": true }
 }

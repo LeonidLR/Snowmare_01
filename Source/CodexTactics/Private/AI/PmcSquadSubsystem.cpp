@@ -4,6 +4,7 @@
 #include "AI/PmcSquadSubsystem.h"
 
 #include "AI/PmcOperatorRules.h"
+#include "Combat/LauncherTacticsRules.h"
 #include "Combat/MortarNestActor.h"
 #include "Combat/MortarRules.h"
 #include "Combat/MortarSubsystem.h"
@@ -870,6 +871,8 @@ bool UPmcSquadSubsystem::IsOrderRunning(const AOperativeCharacter& Fighter, cons
 			&& Fighter.MedkitsCount > 0;
 	case EPmcOrder::Reload:
 		return Fighter.bIsReloading;
+	case EPmcOrder::RpgStrike:
+		return Fighter.HasLauncherStrikeOrder() || Fighter.IsLauncherDrawnByRule();
 	default:
 		return false;
 	}
@@ -951,6 +954,24 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 	View.ClipFrac = Fighter.UsesAmmo() ? FMath::Clamp(static_cast<float>(Fighter.CurrentClip) / ClipSize, 0.f, 1.f) : 1.f;
 	View.AmmoFrac = Fighter.UsesAmmo() ? FMath::Clamp(static_cast<float>(Fighter.CurrentClip + Fighter.ReserveAmmo) / (ClipSize + Reserve), 0.f, 1.f) : 1.f;
 	View.bHasReserve = Fighter.ReserveAmmo > 0;
+	// The RPG gunner (2026-11-09): a launcher in hands is no rifle - its one-rocket tube must not read as an empty clip (Reload / Sidearm).
+	if (Fighter.IsLauncherEquipped())
+	{
+		View.ClipFrac = 1.f;
+		View.AmmoFrac = 1.f;
+		View.bHasReserve = true;
+	}
+	View.bHasLauncher = Fighter.HasLauncherRockets();
+	State.LauncherTarget.Reset();
+	if (View.bHasLauncher)
+	{
+		FLauncherChoice Choice;
+		if (AActor* Rocket = Fighter.FindBestLauncherTarget(LauncherTacticsRules::GetConfig().OrderedThreshold, Choice))
+		{
+			View.LauncherScore = Choice.Score;
+			State.LauncherTarget = Rocket;
+		}
+	}
 	View.bInCover = Fighter.bInCover;
 	View.bExposed = State.ExposedSince >= 0.0;
 	View.SecondsExposedHere = View.bExposed ? static_cast<float>(Now - State.ExposedSince) : 0.f;
@@ -1094,6 +1115,7 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 			Squad.MatesFlanking += State->Order == EPmcOrder::Flank ? 1 : 0;
 			Squad.MatesAdvancing += State->Order == EPmcOrder::Advance ? 1 : 0;
 			Squad.MatesHealing += State->Order == EPmcOrder::Heal ? 1 : 0;
+			Squad.MatesRpgStriking += State->Order == EPmcOrder::RpgStrike ? 1 : 0;
 		}
 	}
 	// The ambush springs: the first contact of a fight while men hold in ambush.
@@ -1164,6 +1186,7 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 			Own.MatesFlanking -= State.Order == EPmcOrder::Flank ? 1 : 0;
 			Own.MatesAdvancing -= State.Order == EPmcOrder::Advance ? 1 : 0;
 			Own.MatesHealing -= State.Order == EPmcOrder::Heal ? 1 : 0;
+			Own.MatesRpgStriking -= State.Order == EPmcOrder::RpgStrike ? 1 : 0;
 		}
 		// Target attention (2026-11-07): an objective defender in ambush holds his fire until the seen target looks away (or is deep in
 		// the kill zone / the ambush is blown) - the Passive posture, back to Aggressive when he strikes.
@@ -1202,6 +1225,7 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 			Squad.MatesFlanking += Pick == EPmcOrder::Flank ? 1 : 0;
 			Squad.MatesAdvancing += Pick == EPmcOrder::Advance ? 1 : 0;
 			Squad.MatesHealing += Pick == EPmcOrder::Heal ? 1 : 0;
+			Squad.MatesRpgStriking += Pick == EPmcOrder::RpgStrike ? 1 : 0;
 		}
 	}
 }
@@ -1428,6 +1452,17 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	case EPmcOrder::Sidearm:
 		Context.WeaponId = TEXT("pistol");
 		bTaken = SquadOrderCatalog::Execute(ESquadOrder::SwitchWeapon, Context);
+		break;
+	case EPmcOrder::RpgStrike:
+		// The RPG gunner's rocket (2026-11-09): at the rule's best target this decision (not while an ambush holds its fire).
+		Context.Target = State.LauncherTarget.Get();
+		bTaken = !State.bHoldingFire && Context.Target && SquadOrderCatalog::Execute(ESquadOrder::LauncherStrike, Context);
+		Team.Stats.RpgStrikes += bTaken ? 1 : 0;
+		if (bTaken)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s RPG strike at %s (launcher score %.2f)"), TeamId, *Fighter.DisplayName.ToString(),
+				*Context.Target->GetName(), View.LauncherScore);
+		}
 		break;
 	case EPmcOrder::Crouch:
 		// 2026-11-04: a rifleman / sniper in the open at his band's distance goes prone (a smaller target, the steadier shot); pistols and
@@ -1725,14 +1760,24 @@ AOperativeCharacter* UPmcSquadSubsystem::SpawnFighter(int32 TeamId, const FVecto
 	{
 		Fighter->SwitchToWeaponById(WeaponId);
 	}
+	// The squad's RPG gunner (the game designer 2026-11-09): the launcher on top of his pool weapon; the shared launcher rule draws it.
+	const bool bRpgGunner = PmcOperatorRules::IsRpgGunner(Config, Seed, Index);
+	if (bRpgGunner && !PmcSquadLocal::HasWeaponId(*Fighter, *Config.RpgGunner.WeaponId))
+	{
+		if (UWeaponDataAsset* Launcher = LoadObject<UWeaponDataAsset>(nullptr, *PmcOperatorRules::WeaponAssetPath(Config.RpgGunner.WeaponId)))
+		{
+			Fighter->AddArsenalWeapon(Launcher);
+			Fighter->SwitchToWeaponById(WeaponId); // the pool weapon stays in hands
+		}
+	}
 	// Hostile fighters fire at anything they see.
 	FSquadOrderContext Posture;
 	Posture.Operative = Fighter;
 	Posture.Posture = ESquadFirePosture::Aggressive;
 	SquadOrderCatalog::Execute(ESquadOrder::FirePosture, Posture);
 	RegisterOperative(Fighter); // BeginPlay did it already; harmless twice
-	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: spawned %s (look %s, %s) at %s"), TeamId, *Fighter->DisplayName.ToString(), *Look.Id, *WeaponId,
-		*Location.ToCompactString());
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: spawned %s (look %s, %s%s) at %s"), TeamId, *Fighter->DisplayName.ToString(), *Look.Id, *WeaponId,
+		bRpgGunner ? *FString::Printf(TEXT(" + %s gunner"), *Config.RpgGunner.WeaponId) : TEXT(""), *Location.ToCompactString());
 	return Fighter;
 }
 

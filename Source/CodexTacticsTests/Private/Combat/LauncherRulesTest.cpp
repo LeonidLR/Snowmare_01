@@ -93,7 +93,7 @@ bool FRpgDataTest::RunTest(const FString&)
 	TestEqual(TEXT("no target closer than min_range_m 10"), LauncherRules::MinimumRangeCm(Stats), 1000.f);
 	TestTrue(TEXT("the minimum range keeps the shooter out of his own blast"), LauncherRules::MinimumRangeCm(Stats) > Stats.Explosion.RadiusCm);
 
-	// The roster: "next", in no loadout yet (any fighter can be the grenadier: the designer decides later).
+	// The roster: "next"; the loadouts: only the Commander (the game designer 2026-11-09).
 	const TSharedPtr<FJsonObject> Root = LauncherRulesTest::LauncherProjectFile();
 	const TSharedPtr<FJsonObject>* RosterBlock = nullptr;
 	FWeaponRoster Roster;
@@ -107,10 +107,10 @@ bool FRpgDataTest::RunTest(const FString&)
 	const TSharedPtr<FJsonObject>* LoadoutBlock = nullptr;
 	if (TestTrue(TEXT("loadouts block"), Root.IsValid() && Root->TryGetObjectField(TEXT("loadouts"), LoadoutBlock) && LoadoutBlock))
 	{
-		// For testing (2026-11-09, the launcher pack task): the Commander carries it, nobody else - pending the designer's decision.
+		// The game designer 2026-11-09: only the Commander carries it in our squad (PMC squads: pmc_operators.json rpg_gunner).
 		for (const TPair<FString, TArray<FString>>& Role : WeaponLoadoutRules::Parse(**LoadoutBlock, &LoadoutErrors))
 		{
-			TestEqual(FString::Printf(TEXT("the %s's loadout: rpg7 only for the Commander (testing)"), *Role.Key), Role.Value.Contains(TEXT("rpg7")),
+			TestEqual(FString::Printf(TEXT("the %s's loadout: rpg7 only for the Commander (the designer)"), *Role.Key), Role.Value.Contains(TEXT("rpg7")),
 				Role.Key == TEXT("commander"));
 		}
 	}
