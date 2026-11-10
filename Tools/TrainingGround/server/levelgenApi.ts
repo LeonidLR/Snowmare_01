@@ -19,6 +19,7 @@ import type { Evaluation } from '../src/levelgen/evaluate.ts';
 import { ACCEPTED_DIR, ensureReferencePng, LEVELGEN_OUT, listProfiles, NAME_RE, readLedger, readProfileById, writeLedger } from '../src/levelgen/node/files.ts';
 import type { GenLayout } from '../src/levelgen/schema.ts';
 import { validateGenLayout } from '../src/levelgen/schema.ts';
+import { setupPropsApi } from './propsApi.ts';
 
 type Req = { method?: string; url?: string; on: (ev: string, cb: (chunk?: unknown) => void) => void };
 type Res = { statusCode: number; setHeader: (k: string, v: string) => void; end: (body?: string | Buffer) => void };
@@ -37,6 +38,8 @@ const readBody = (req: Req): Promise<Record<string, unknown>> => new Promise((re
 const query = (req: Req, key: string) => new URL(req.url ?? '', 'http://x').searchParams.get(key) ?? '';
 
 export function setupLevelgenApi(use: Use): void {
+  setupPropsApi(use);
+
   use('/api/levelgen/profiles', (_req, res) => {
     try { send(res, 200, { profiles: listProfiles() }); } catch (e) { send(res, 500, { error: String(e) }); }
   });
