@@ -8,6 +8,7 @@ import { setupMovementApi } from './server/movementApi.ts'
 import { setupCombatLabApi } from './server/combatLabApi.ts'
 import { setupLevelgenApi } from './server/levelgenApi.ts'
 import { buildLevelList, type RawLevelMeta, type CampaignConfig } from './src/utils/levelList.ts'
+import { sanitizeBotRunArgs } from './src/utils/botRunner.ts'
 import {
   applyLevelEncounterPatch, effectiveHorde, isJsonObject, mergeAiTuningCvars, pickLevelEncounter,
   validateCVarEdits, validateHorde, validateLevelPatch, validatePerception,
@@ -161,12 +162,12 @@ const setupApiMiddlewares = (middlewares: any) => {
             return
           }
           const targetPath = path.join(LEVELS_DIR, fileName)
-          fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf-8')
-
-          // Only sync to level_01_outpost.json if that is the level being edited
-          if (fileName === 'level_01_outpost.json') {
-            const activeLevelPath = path.join(LEVELS_DIR, 'level_01_outpost.json')
-            fs.writeFileSync(activeLevelPath, JSON.stringify(data, null, 2), 'utf-8')
+          if (fs.existsSync(targetPath)) {
+            const original = fs.readFileSync(targetPath, 'utf-8')
+            const next = patchJsonText(original, data)
+            fs.writeFileSync(targetPath, next, 'utf-8')
+          } else {
+            fs.writeFileSync(targetPath, JSON.stringify(data, null, 2), 'utf-8')
           }
 
           res.statusCode = 200
@@ -559,15 +560,68 @@ const setupApiMiddlewares = (middlewares: any) => {
         try {
           const payload = body ? JSON.parse(body) : {}
 
-          // Сохраняем выбранный конфиг перед запуском
-          if (payload.config) {
-            const activeLevelPath = path.join(LEVELS_DIR, 'level_01_outpost.json')
-            fs.writeFileSync(activeLevelPath, JSON.stringify(payload.config, null, 2), 'utf-8')
-            if (payload.config.level_id) {
-              const stagePath = path.join(LEVELS_DIR, `${payload.config.level_id}.json`)
+          // Сохраняем выбранный конфиг перед запуском (только в выбранный файл, через patchJsonText)
+          const targetLeaf = payload.file || (payload.config && (payload.config._file || payload.config.level_id)) || 'stage_01'
+          const fileName = levelFileName(String(targetLeaf))
+          if (payload.config && fileName) {
+            const stagePath = path.join(LEVELS_DIR, fileName)
+            if (fs.existsSync(stagePath)) {
+              const original = fs.readFileSync(stagePath, 'utf-8')
+              fs.writeFileSync(stagePath, patchJsonText(original, payload.config), 'utf-8')
+            } else {
               fs.writeFileSync(stagePath, JSON.stringify(payload.config, null, 2), 'utf-8')
             }
           }
+
+          // Определяем карту и путь level_json для выбранного уровня
+          let mapPath = '/Game/Maps/L_MovementTest'
+          if (fileName) {
+            const base = fileName.replace(/\.json$/i, '')
+            let foundCampaignMap = ''
+            if (fs.existsSync(CAMPAIGN_FILE)) {
+              try {
+                const camp = JSON.parse(fs.readFileSync(CAMPAIGN_FILE, 'utf-8'))
+                if (camp && Array.isArray(camp.levels)) {
+                  for (const lvl of camp.levels) {
+                    if (lvl.map) {
+                      const leaf = lvl.map.split('/').pop() || ''
+                      if (leaf.toLowerCase() === base.toLowerCase()) {
+                        foundCampaignMap = lvl.map
+                        break
+                      }
+                    }
+                  }
+                }
+              } catch (_) {}
+            }
+            if (foundCampaignMap) {
+              mapPath = foundCampaignMap
+            } else if (base.startsWith('L_Gen_')) {
+              mapPath = `/Game/Maps/Generated/${base}`
+            } else if (base.startsWith('L_')) {
+              mapPath = `/Game/Maps/${base}`
+            }
+          }
+          const levelJsonPath = fileName ? path.resolve(LEVELS_DIR, fileName) : ''
+
+          // Валидация аргументов запуска против командных инъекций (Claude review defect #3)
+          const validation = sanitizeBotRunArgs({
+            runs: payload.runs,
+            profile: payload.profile,
+            speed: payload.speed,
+            loadout: payload.loadout,
+            mapPath,
+            levelJsonPath,
+          })
+
+          if (!validation.ok) {
+            res.statusCode = 400
+            res.setHeader('Content-Type', 'application/json')
+            res.end(JSON.stringify({ error: validation.error }))
+            return
+          }
+
+          const { args: cleanArgs } = validation
 
           // Запускаем отдельное видимое консольное окно с аргументами пресета
           // Unreal playtest bot (Scripts/run_simulations.bat, the C++ bot); not there yet -> say so instead of failing silently.
@@ -578,11 +632,16 @@ const setupApiMiddlewares = (middlewares: any) => {
             res.end(JSON.stringify({ error: 'Бот Unreal ещё не готов (Scripts/run_simulations.bat отсутствует). Конфиг уровня сохранён.' }))
             return
           }
-          const args = ['/c', 'start', '""', batPath]
-          if (payload.runs) {
-            args.push(String(payload.runs))
-            args.push(String(payload.profile || 'NORMAL'))
-            args.push(String(payload.speed || '5.0'))
+          const args = ['/c', 'start', 'CodexTactics Bot Simulator', batPath]
+          if (cleanArgs.runs) {
+            args.push(cleanArgs.runs)
+            args.push(cleanArgs.profile)
+            args.push(cleanArgs.speed)
+            args.push(cleanArgs.loadout)
+            args.push(cleanArgs.mapPath)
+            if (cleanArgs.levelJsonPath) {
+              args.push(cleanArgs.levelJsonPath)
+            }
           }
 
           const child = spawn('cmd.exe', args, {
@@ -596,8 +655,8 @@ const setupApiMiddlewares = (middlewares: any) => {
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify({
             success: true,
-            message: payload.runs 
-              ? `Запущен пресет: ${payload.runs} забегов (${payload.profile || 'NORMAL'}, ${payload.speed || 5.0}x)`
+            message: cleanArgs.runs 
+              ? `Запущен пресет: ${cleanArgs.runs} забегов (${cleanArgs.profile}, ${cleanArgs.speed}x)`
               : 'Окно симулятора открыто! Выберите режим в консоли.'
           }))
         } catch (e: any) {

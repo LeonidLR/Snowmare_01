@@ -65,6 +65,38 @@ test('patchJsonText: level patch keeps every other key and the file style', () =
   assert.equal(patchJsonText(out, restored), text);
 });
 
+test('patchJsonText: environment, loadouts, kit patch keeps other keys and formatting', () => {
+  const file = path.join(LEVELS_DIR, 'stage_02.json');
+  const text = fs.readFileSync(file, 'utf-8');
+  const level = parseJsonText(text) as Record<string, unknown>;
+
+  const patched = {
+    ...level,
+    environment: { locked: true, start_hour: 23, weather: 'Snowfall', override_carry: true },
+    loadouts: { commander: ['m16', 'pistol'], engineer: ['shotgun', 'pistol'] },
+    kit: { commander: { grenades: 3, medkits: 2, heat_packs: 1, ammo: { m16: 90 } } },
+    kit_override_carry: true,
+  };
+
+  const out = patchJsonText(text, patched);
+  const back = parseJsonText(out) as Record<string, any>;
+  assert.deepEqual(back.environment, { locked: true, start_hour: 23, weather: 'Snowfall', override_carry: true });
+  assert.deepEqual(back.loadouts, { commander: ['m16', 'pistol'], engineer: ['shotgun', 'pistol'] });
+  assert.deepEqual(back.kit, { commander: { grenades: 3, medkits: 2, heat_packs: 1, ammo: { m16: 90 } } });
+  assert.equal(back.kit_override_carry, true);
+  for (const key of Object.keys(level)) {
+    assert.ok(jsonEqual(back[key], level[key]), `key ${key} preserved`);
+  }
+
+  // Removing the added keys restores original
+  const emptyPatch = { ...back, environment: undefined, loadouts: undefined, kit: undefined, kit_override_carry: undefined };
+  delete emptyPatch.environment;
+  delete emptyPatch.loadouts;
+  delete emptyPatch.kit;
+  delete emptyPatch.kit_override_carry;
+  assert.equal(patchJsonText(out, emptyPatch), text);
+});
+
 test('perception: repo file is valid; negatives / FOV > 180 / NaN are rejected', () => {
   const doc = parseJsonText(fs.readFileSync(path.join(AI_DIR, 'enemy_perception.json'), 'utf-8'));
   assert.deepEqual(validatePerception(doc), []);

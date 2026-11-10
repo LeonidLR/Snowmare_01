@@ -10,6 +10,9 @@ import {
   HORDE_AFTER_FIREFIGHTS_DEFAULT, HORDE_AFTER_FIREFIGHTS_MIN, getHordeAfterFirefights, getHordeEnabled, setHordeAfterFirefights, setHordeEnabled, validateHordeAfterFirefights,
   HORDE_SPAWN_DISTANCE_DEFAULT, activeWaves, describeHordeWaves, getHordeSpawnDistance, getHordeWaveFeed, hasOwnHordeSpawnDistance, setHordeSpawnDistance,
   validateHordeSpawnDistance, waveForHorde,
+  getEnvironment, setEnvironmentKey, validateEnvironment,
+  getLoadouts, setOperativeLoadout, validateLoadouts,
+  getKit, setOperativeKit, validateKit,
 } from './levelSettings.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -192,4 +195,158 @@ test('horde distance (game designer 2026-11-09): default 300 m from horde.json, 
   assert.equal(validateHordeSpawnDistance(NaN).length, 1);
   assert.equal(validateLevelSettings({ waves: [], horde: { firefight_spawn_distance_m: 5 } }).length, 1);
   assert.equal(validateLevelSettings({ waves: [], horde: { firefight_spawn_distance_m: 300 } }).length, 0);
+});
+
+test('environment: get, set, override_carry, climate/weather validation, remove when empty', () => {
+  assert.deepEqual(getEnvironment({}), {});
+  const level = { level_id: 'test_lvl', custom_unknown_field: 'preserved_data' };
+
+  // Set locked and override_carry
+  let next = setEnvironmentKey(level, 'locked', true);
+  assert.equal(next.environment.locked, true);
+  assert.equal(next.custom_unknown_field, 'preserved_data');
+
+  next = setEnvironmentKey(next, 'override_carry', true);
+  assert.equal(next.environment.override_carry, true);
+
+  next = setEnvironmentKey(next, 'start_hour', 22.5);
+  next = setEnvironmentKey(next, 'weather', 'Blizzard');
+  assert.equal(next.environment.start_hour, 22.5);
+  assert.equal(next.environment.weather, 'Blizzard');
+
+  // Validation
+  assert.deepEqual(validateEnvironment(getEnvironment(next)), []);
+  assert.equal(validateEnvironment({ start_hour: 25 }).length, 1);
+  assert.equal(validateEnvironment({ start_hour: -1 }).length, 1);
+  assert.equal(validateEnvironment({ climate: 'arctic', weather: 'Rain' as any }).length, 1, 'Rain requires temperate climate');
+  assert.deepEqual(validateEnvironment({ climate: 'temperate', weather: 'Rain' }), []);
+  assert.equal(validateEnvironment({ snow_cover: 1.5 }).length, 1);
+  assert.equal(validateEnvironment({ exposure_bias: 5 }).length, 1);
+
+  // False override_carry is omitted from JSON
+  next = setEnvironmentKey(next, 'override_carry', false);
+  assert.equal('override_carry' in next.environment, false);
+
+  // Clearing all keys removes environment object
+  next = setEnvironmentKey(next, 'locked', false);
+  next = setEnvironmentKey(next, 'start_hour', undefined);
+  next = setEnvironmentKey(next, 'weather', undefined);
+  assert.equal('environment' in next, false, 'emptied environment object is removed');
+  assert.equal(next.custom_unknown_field, 'preserved_data');
+});
+
+test('loadouts: get, set, reorder, empty list removes key, validate, unknown keys preserved', () => {
+  assert.deepEqual(getLoadouts({}), {});
+  const level = { level_id: 'test_lvl', preserve_me: 42 };
+
+  // Set loadout for commander
+  let next = setOperativeLoadout(level, 'commander', ['m16', 'pistol']);
+  assert.deepEqual(getLoadouts(next), { commander: ['m16', 'pistol'] });
+  assert.equal(next.preserve_me, 42);
+
+  // Add engineer
+  next = setOperativeLoadout(next, 'engineer', ['shotgun', 'pistol']);
+  assert.deepEqual(getLoadouts(next).engineer, ['shotgun', 'pistol']);
+
+  // Case normalization
+  next = setOperativeLoadout(next, 'Commander', ['M16', 'PISTOL', 'GRENADE']);
+  assert.deepEqual(getLoadouts(next).commander, ['m16', 'pistol', 'grenade']);
+
+  // Empty list removes operative key
+  next = setOperativeLoadout(next, 'commander', []);
+  assert.equal('commander' in getLoadouts(next), false);
+  assert.deepEqual(getLoadouts(next).engineer, ['shotgun', 'pistol']);
+
+  // Removing last operative removes loadouts object
+  next = setOperativeLoadout(next, 'engineer', undefined);
+  assert.equal('loadouts' in next, false);
+  assert.equal(next.preserve_me, 42);
+
+  // Validation
+  assert.deepEqual(validateLoadouts(undefined), []);
+  assert.deepEqual(validateLoadouts({ commander: ['m16', 'pistol'] }), []);
+  assert.equal(validateLoadouts({ commander: 'm16' as any }).length, 1);
+});
+
+test('kit: get, set, partial fields, ammo, validate, preserves unknown per-operative keys', () => {
+  assert.deepEqual(getKit({}), {});
+  const level = {
+    level_id: 'test_lvl',
+    keep_this: true,
+    kit: {
+      commander: {
+        grenades: 1,
+        armor_plating: 150,
+        special_perk: 'sniper_focus',
+        ammo: { m16: 60, pistol: 15 },
+      },
+    },
+  };
+
+  // Set kit for commander: updates grenades & medkits, but MUST PRESERVE unknown fields (armor_plating, special_perk)
+  let next = setOperativeKit(level, 'commander', {
+    grenades: 2,
+    medkits: 1,
+    heat_packs: 2,
+    ammo: { m16: 90, pistol: 24 },
+  });
+  assert.deepEqual(getKit(next).commander, {
+    grenades: 2,
+    medkits: 1,
+    heat_packs: 2,
+    armor_plating: 150,
+    special_perk: 'sniper_focus',
+    ammo: { m16: 90, pistol: 24 },
+  });
+  assert.equal(next.keep_this, true);
+
+  // Partial fields: missing fields are omitted
+  next = setOperativeKit(next, 'engineer', { grenades: 3 });
+  assert.deepEqual(getKit(next).engineer, { grenades: 3 });
+  assert.equal('medkits' in getKit(next).engineer, false);
+
+  // Validation
+  assert.deepEqual(validateKit(getKit(next)), []);
+  assert.equal(validateKit({ commander: { grenades: -1 } }).length, 1);
+  assert.equal(validateKit({ commander: { ammo: { m16: -5 } } }).length, 1);
+
+  // Empty kit removes key
+  next = setOperativeKit(next, 'commander', undefined);
+  assert.equal('commander' in getKit(next), false);
+  next = setOperativeKit(next, 'engineer', {});
+  assert.equal('kit' in next, false);
+});
+
+test('level JSON round-trip: environment + loadouts + kit edit preserves all other keys', () => {
+  // Read a real level as template
+  const originalJson = fs.readFileSync(FROZEN_LAKE, 'utf-8');
+  const level = JSON.parse(originalJson);
+
+  // Add extra unknown custom keys to simulate external / designer properties
+  level.designer_notes = 'Authored by lead level designer';
+  level.custom_patrol_v2 = { route_id: 101, waypoints: [1, 2, 3] };
+
+  // Apply environment, loadouts, kit
+  let updated = setEnvironmentKey(level, 'override_carry', true);
+  updated = setEnvironmentKey(updated, 'start_hour', 21.0);
+  updated = setOperativeLoadout(updated, 'commander', ['m16', 'pistol', 'shotgun']);
+  updated = setOperativeKit(updated, 'commander', { grenades: 4, ammo: { m16: 150 } });
+
+  // Validate entire level settings
+  const errors = validateLevelSettings(updated);
+  assert.deepEqual(errors, []);
+
+  // Check new fields
+  assert.equal(updated.environment.override_carry, true);
+  assert.equal(updated.environment.start_hour, 21.0);
+  assert.deepEqual(updated.loadouts.commander, ['m16', 'pistol', 'shotgun']);
+  assert.deepEqual(updated.kit.commander, { grenades: 4, ammo: { m16: 150 } });
+
+  // Check preserved fields
+  assert.equal(updated.level_id, 'L_Demo01_A_FrozenLake');
+  assert.equal(updated.level_name, '0.0 Frozen Dam');
+  assert.equal(updated.designer_notes, 'Authored by lead level designer');
+  assert.deepEqual(updated.custom_patrol_v2, { route_id: 101, waypoints: [1, 2, 3] });
+  assert.equal(updated.cold_rate_mult, 0.4);
+  assert.deepEqual(updated.waves, level.waves);
 });

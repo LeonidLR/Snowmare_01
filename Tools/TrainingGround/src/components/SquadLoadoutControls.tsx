@@ -18,7 +18,7 @@ const DEFAULT_LOADOUT: SquadLoadoutConfig = {
   pistol_ammo: 48,
   canned_food: 4,
   matches: 3,
-  grenades_count: 2,
+  grenades_count: -1,
 };
 
 export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
@@ -78,13 +78,13 @@ export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
           </div>
           <div>
             <h3 className="text-base font-semibold text-slate-100 flex items-center gap-2">
-              Снаряжение отряда и Режим симуляции
+              Снаряжение симулятора и Режим ботов (squad_loadout)
               <span className="text-xs px-2 py-0.5 bg-indigo-900/50 text-indigo-300 rounded border border-indigo-700/50 font-mono">
                 {current.simulation_mode}
               </span>
             </h3>
             <p className="text-xs text-slate-400">
-              Управление сбором объектов на карте, выдачей стартовых турелей/баррикад/мин и пресетами для симуляции
+              Настройки только для симулятора и ботов (EDITOR_PRESET). Реальное вооружение и припасы бойцов на уровне настраиваются в панели выше.
             </p>
           </div>
         </div>
@@ -289,19 +289,21 @@ export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
             </div>
             <input
               type="number"
-              min="0"
+              min="-1"
               max="10"
-              value={current.grenades_count ?? 2}
-              onChange={(e) => updateField('grenades_count', parseInt(e.target.value) || 0)}
+              placeholder="-1 (по умолчанию)"
+              value={loadout?.grenades_count !== undefined && loadout.grenades_count !== -1 ? loadout.grenades_count : ''}
+              onChange={(e) => updateField('grenades_count', e.target.value === '' ? -1 : parseInt(e.target.value) || 0)}
               className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-500"
             />
-            <span className="text-[10px] text-slate-500 block mt-1">У каждого бойца (лимит переноски — вкладка «Оружие»)</span>
+            <span className="text-[10px] text-slate-500 block mt-1">-1 / пусто = сохранить своё; число = выдать</span>
           </div>
 
           {/* Консервы */}
           <div className="bg-slate-900/80 p-2.5 rounded-lg border border-slate-700/60">
             <div className="flex items-center gap-1.5 text-xs text-yellow-400 mb-1 font-medium">
               <span>Консервы</span>
+              <span className="text-[9px] text-slate-500 font-normal">(не в игре)</span>
             </div>
             <input
               type="number"
@@ -311,7 +313,7 @@ export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
               onChange={(e) => updateField('canned_food', parseInt(e.target.value) || 0)}
               className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-500"
             />
-            <span className="text-[10px] text-slate-500 block mt-1">Еда</span>
+            <span className="text-[10px] text-slate-500 block mt-1">Еда (только боты)</span>
           </div>
 
           {/* Спички */}
@@ -319,6 +321,7 @@ export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
             <div className="flex items-center gap-1.5 text-xs text-orange-400 mb-1 font-medium">
               <Flame className="w-3.5 h-3.5" />
               <span>Спички</span>
+              <span className="text-[9px] text-slate-500 font-normal">(не в игре)</span>
             </div>
             <input
               type="number"
@@ -328,7 +331,7 @@ export const SquadLoadoutControls: React.FC<SquadLoadoutControlsProps> = ({
               onChange={(e) => updateField('matches', parseInt(e.target.value) || 0)}
               className="w-full bg-slate-800 border border-slate-700 rounded px-2 py-1 text-sm font-semibold text-slate-100 focus:outline-none focus:border-cyan-500"
             />
-            <span className="text-[10px] text-slate-500 block mt-1">Обогрев</span>
+            <span className="text-[10px] text-slate-500 block mt-1">Огонь (только боты)</span>
           </div>
         </div>
       </div>
