@@ -1,5 +1,24 @@
 {
   "schema": "codex.formation_shapes/1",
-  "formations": {},
+  "formations": {
+    "echelon_left": {
+      "3": {
+        "members": [
+        { "role": "commander", "fwd": 0, "right": 0, "look": -10, "arc": 90 },
+        { "role": "right", "fwd": -130, "right": -190, "look": -50, "arc": 90 },
+        { "role": "rear", "fwd": -350, "right": -350, "look": -89, "arc": 90 }
+        ]
+      }
+    },
+    "echelon_right": {
+      "3": {
+        "members": [
+        { "role": "commander", "fwd": 0, "right": 0, "look": 0, "arc": 90 },
+        { "role": "right", "fwd": -180, "right": 200, "look": 45, "arc": 90 },
+        { "role": "rear", "fwd": -360, "right": 360, "look": 90, "arc": 90 }
+        ]
+      }
+    }
+  },
   "custom": {}
 }
