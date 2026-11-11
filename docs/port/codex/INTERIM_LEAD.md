@@ -55,3 +55,12 @@ open questions. Claude reviews `git log main..interim/2026-11-12` and merges.
   have ~15 $ until Saturday. Use it for second-opinion reviews of diffs (Sonnet, ~0.05-0.2 $), Gemini branch reviews, and patch drafts
   for well-scoped C++ (split big patches into 2-3 file calls; Opus only for design). Always `--label codex-...`. List the spend in
   INTERIM_REPORT.md.
+
+## State after Claude's 2-hour cover (2026-11-11 ~12:30 JST) - you lead again
+- Your stealth runtime was committed by Claude as `90a6bf64` on interim/2026-11-12 (your 19 files + 4 new, unchanged; backup
+  Saved/Orchestrator/backup/interim-wip-1314). Gemini's chat idle banner merged into interim as `56d26c46` (8/8 unittest).
+- Gemini works queue docs/port/gemini/inbox/013-afternoon-queue.md (board draft done 6f09c6f8; drop-down #42 plan; stealth test spec;
+  Training Ground T10). His C5 / C6 prep: branch gemini/interim-c5-prep 03fea4c6 (C5 addendum) + 14a91b4e (C6 runtime map).
+- Your queue now: (a) stealth leftovers - game-camera frames into MAIN Saved/Orchestrator/stealth/, the smoke gaps from Gemini's 013
+  item 3 spec when it lands, the open risk "weapon parts attached after entering stealth", 003 report final; (b) props C5 using his
+  addendum; (c) props C6 using his runtime map. Follow the new rules in README.md ("Work rules added 2026-11-11").
