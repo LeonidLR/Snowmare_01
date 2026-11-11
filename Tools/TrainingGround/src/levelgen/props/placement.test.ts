@@ -279,8 +279,7 @@ test('props T2: derived case input reproduces golden_in_depot_locked.props.json 
 });
 
 for (const c of manifest.cases) {
-  const skip = c.step === 'C4' ? 'C4 case: TS port pending (PROPS_LAYERS.md 7.1)' : false;
-  test(`props T2 golden case: ${c.case} reproduces ${c.output} byte for byte`, { skip }, () => {
+  test(`props T2 golden case: ${c.case} reproduces ${c.output} byte for byte`, () => {
     const layoutPath = path.resolve(FIXTURES_DIR, c.layout);
     const inputPath = path.resolve(FIXTURES_DIR, c.input);
     const outputPath = path.resolve(FIXTURES_DIR, c.output);

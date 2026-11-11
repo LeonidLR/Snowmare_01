@@ -20,6 +20,9 @@ export interface PropsLayoutConfig {
   parapetThicknessCm: number;
   cutEdgeThicknessCm: number;
   doorGapMatchCm: number;
+  tallCoverMinCm: number;
+  eyeHeightCm: number;
+  roofEdgeInsetCm: number;
 }
 
 export const DEFAULT_LAYOUT_CONFIG: PropsLayoutConfig = {
@@ -36,6 +39,9 @@ export const DEFAULT_LAYOUT_CONFIG: PropsLayoutConfig = {
   parapetThicknessCm: 20,
   cutEdgeThicknessCm: 20,
   doorGapMatchCm: 2,
+  tallCoverMinCm: 140,
+  eyeHeightCm: 160,
+  roofEdgeInsetCm: 100,
 };
 
 export type PropsWalkLayerKind = 'ground' | 'cut' | 'floor' | 'roof';
@@ -88,6 +94,39 @@ export interface PropsZone {
 export interface PropsAnchorPoint {
   id: string;
   pos: [number, number];
+}
+
+export interface PropsRoute {
+  id: string;
+  points: [number, number][];
+  bMandatory: boolean;
+  layers: string[];
+}
+
+export interface PropsCover {
+  id: string;
+  pos: [number, number];
+  yaw: number;
+  sizeX: number;
+  sizeY: number;
+  heightCm: number;
+}
+
+export interface PropsBuildingSummary {
+  id: string;
+  min: [number, number];
+  max: [number, number];
+  floors: number;
+  bHollow: boolean;
+  bEnterable: boolean;
+  bRoofWalkable: boolean;
+}
+
+export interface PropsSightSegment {
+  ax: bigint;
+  ay: bigint;
+  bx: bigint;
+  by: bigint;
 }
 
 export interface PropsExclusionParams {
@@ -145,6 +184,31 @@ export function sinQ(deg: number): bigint {
 
 export function cosQ(deg: number): bigint {
   return sinQ((deg % 360) + 90);
+}
+
+export const SIGHT_SCALE = 32768; // 2 * G_SIN_SCALE
+
+export function isqrt(v: bigint | number): bigint {
+  const vBig = BigInt(v);
+  if (vBig <= 0n) return 0n;
+  let r = BigInt(Math.floor(Math.sqrt(Number(vBig))));
+  while (r > 0n && r * r > vBig) {
+    r--;
+  }
+  while ((r + 1n) * (r + 1n) <= vBig) {
+    r++;
+  }
+  return r;
+}
+
+export function floorDiv(a: bigint | number, b: bigint | number): number {
+  if (typeof a === 'bigint' || typeof b === 'bigint') {
+    const aBig = BigInt(a);
+    const bBig = BigInt(b);
+    const q = aBig / bBig;
+    return Number(aBig % bBig !== 0n && ((aBig < 0n) !== (bBig < 0n)) ? q - 1n : q);
+  }
+  return Math.floor(a / b);
 }
 
 export function floorHalf(v: bigint): number {
@@ -331,6 +395,7 @@ interface InternalWall {
   b: [number, number];
   thickness: number;
   floor: number;
+  height: number;
 }
 
 interface InternalLayerWall {
@@ -373,6 +438,7 @@ interface InternalCover {
   yaw: number;
   sizeX: number;
   sizeY: number;
+  heightCm: number;
 }
 
 interface InternalRoute {
@@ -423,6 +489,9 @@ export class PropsLayoutView {
       if (typeof o.door_through_slack_cm === 'number' && o.door_through_slack_cm >= 0) cfg.doorThroughSlackCm = Math.floor(o.door_through_slack_cm);
       if (typeof o.door_turn_reach_cm === 'number' && o.door_turn_reach_cm >= 0) cfg.doorTurnReachCm = Math.floor(o.door_turn_reach_cm);
       if (typeof o.door_fallback_width_cm === 'number' && o.door_fallback_width_cm >= 0) cfg.doorFallbackWidthCm = Math.floor(o.door_fallback_width_cm);
+      if (typeof o.tall_cover_min_cm === 'number' && o.tall_cover_min_cm >= 0) cfg.tallCoverMinCm = Math.floor(o.tall_cover_min_cm);
+      if (typeof o.eye_height_cm === 'number' && o.eye_height_cm >= 0) cfg.eyeHeightCm = Math.floor(o.eye_height_cm);
+      if (typeof o.roof_edge_inset_cm === 'number' && o.roof_edge_inset_cm >= 0) cfg.roofEdgeInsetCm = Math.floor(o.roof_edge_inset_cm);
     }
     return cfg;
   }
@@ -466,6 +535,7 @@ export class PropsLayoutView {
             b: [Math.floor(w.b[0]), Math.floor(w.b[1])],
             thickness: typeof w.thickness === 'number' ? Math.floor(w.thickness) : 0,
             floor: typeof w.floor === 'number' ? Math.floor(w.floor) : 0,
+            height: typeof w.height === 'number' ? Math.floor(w.height) : 0,
           });
         }
       }
@@ -584,6 +654,7 @@ export class PropsLayoutView {
             yaw: typeof c.yaw === 'number' ? Math.floor(c.yaw) : 0,
             sizeX: Math.floor(c.size[0]),
             sizeY: Math.floor(c.size[1]),
+            heightCm: c.size.length >= 3 && typeof c.size[2] === 'number' ? Math.floor(c.size[2]) : 0,
           });
         }
       }
@@ -1230,6 +1301,187 @@ export class PropsLayoutView {
   static isExcluded(shapes: PropsExclusion[], p: [number, number], walkLayer: string): boolean {
     for (const s of shapes) {
       if (exclusionContains(s, p, walkLayer)) return true;
+    }
+    return false;
+  }
+
+  getRoutes(): PropsRoute[] {
+    return this.routes;
+  }
+
+  getMandatoryRouteIds(): string[] {
+    return this.routes.filter((r) => r.bMandatory).map((r) => r.id);
+  }
+
+  findRoute(id: string): PropsRoute | undefined {
+    return this.routes.find((r) => r.id === id);
+  }
+
+  getCovers(): PropsCover[] {
+    return this.covers;
+  }
+
+  getZones(): PropsZone[] {
+    return this.zones;
+  }
+
+  getBuildings(): PropsBuildingSummary[] {
+    return this.buildings.map((b) => ({
+      id: b.id,
+      min: b.min,
+      max: b.max,
+      floors: b.floors,
+      bHollow: b.bHollow,
+      bEnterable: b.bEnterable,
+      bRoofWalkable: b.bRoofWalkable,
+    }));
+  }
+
+  distanceToRouteCm(p: [number, number], route: PropsRoute, layer?: string): number {
+    let best = 2147483647;
+    for (let i = 0; i + 1 < route.points.length; i++) {
+      if (!layer || (route.layers[i] === layer && route.layers[i + 1] === layer)) {
+        best = Math.min(best, ceilDistance(p, route.points[i], route.points[i + 1]));
+      }
+    }
+    return best;
+  }
+
+  distanceToMandatoryRouteAnyLayerCm(p: [number, number]): number {
+    let best = 2147483647;
+    for (const route of this.routes) {
+      if (route.bMandatory) {
+        best = Math.min(best, this.distanceToRouteCm(p, route));
+      }
+    }
+    return best;
+  }
+
+  getSightBlockers(eyeLayer: string): PropsSightSegment[] {
+    const out: PropsSightSegment[] = [];
+    const layerIndex = this.layers.findIndex((l) => l.name === eyeLayer);
+    if (layerIndex === -1) {
+      return out;
+    }
+    const K = BigInt(SIGHT_SCALE);
+    const addWall = (a: [number, number], b: [number, number]) => {
+      out.push({
+        ax: BigInt(a[0]) * K,
+        ay: BigInt(a[1]) * K,
+        bx: BigInt(b[0]) * K,
+        by: BigInt(b[1]) * K,
+      });
+    };
+    const addCover = (c: InternalCover) => {
+      const cs = cosQ(c.yaw);
+      const sn = sinQ(c.yaw);
+      const signs = [
+        [1, 1],
+        [-1, 1],
+        [-1, -1],
+        [1, -1],
+      ];
+      const x: bigint[] = [];
+      const y: bigint[] = [];
+      for (let i = 0; i < 4; i++) {
+        const lx = BigInt(c.sizeX) * BigInt(signs[i][0]);
+        const ly = BigInt(c.sizeY) * BigInt(signs[i][1]);
+        x.push(BigInt(c.pos[0]) * K + cs * lx - sn * ly);
+        y.push(BigInt(c.pos[1]) * K + sn * lx + cs * ly);
+      }
+      for (let i = 0; i < 4; i++) {
+        out.push({
+          ax: x[i],
+          ay: y[i],
+          bx: x[(i + 1) % 4],
+          by: y[(i + 1) % 4],
+        });
+      }
+    };
+
+    const l = this.layers[layerIndex];
+    if (l.kind === 'roof') {
+      const eye = BigInt(l.level) * BigInt(this.config.levelHeightCm) + BigInt(this.config.eyeHeightCm);
+      for (const w of this.walls) {
+        if (BigInt(w.floor) * BigInt(this.config.levelHeightCm) + BigInt(w.height) >= eye) {
+          addWall(w.a, w.b);
+        }
+      }
+      for (const c of this.covers) {
+        if (BigInt(c.heightCm) >= eye) {
+          addCover(c);
+        }
+      }
+      return out;
+    }
+    for (const w of this.layerWalls[layerIndex]) {
+      addWall(w.a, w.b);
+    }
+    if (l.kind === 'ground') {
+      for (const c of this.covers) {
+        if (c.heightCm >= this.config.tallCoverMinCm) {
+          addCover(c);
+        }
+      }
+    }
+    return out;
+  }
+
+  static isSightBlocked(
+    from: [number, number],
+    to: [number, number],
+    blockers: PropsSightSegment[]
+  ): boolean {
+    const K = BigInt(SIGHT_SCALE);
+    const px = BigInt(from[0]) * K;
+    const py = BigInt(from[1]) * K;
+    const dx = BigInt(to[0] - from[0]) * K;
+    const dy = BigInt(to[1] - from[1]) * K;
+    const minX = dx < 0n ? dx : 0n;
+    const maxX = dx > 0n ? dx : 0n;
+    const minY = dy < 0n ? dy : 0n;
+    const maxY = dy > 0n ? dy : 0n;
+
+    const orient = (ax: bigint, ay: bigint, bx: bigint, by: bigint, cx: bigint, cy: bigint): number => {
+      const c = (bx - ax) * (cy - ay) - (by - ay) * (cx - ax);
+      return c > 0n ? 1 : c < 0n ? -1 : 0;
+    };
+    const onSeg = (ax: bigint, ay: bigint, bx: bigint, by: bigint, cx: bigint, cy: bigint): boolean => {
+      const minAbX = ax < bx ? ax : bx;
+      const maxAbX = ax > bx ? ax : bx;
+      const minAbY = ay < by ? ay : by;
+      const maxAbY = ay > by ? ay : by;
+      return cx >= minAbX && cx <= maxAbX && cy >= minAbY && cy <= maxAbY;
+    };
+
+    for (const s of blockers) {
+      const ax = s.ax - px;
+      const ay = s.ay - py;
+      const bx = s.bx - px;
+      const by = s.by - py;
+      const minSAbX = ax < bx ? ax : bx;
+      const maxSAbX = ax > bx ? ax : bx;
+      const minSAbY = ay < by ? ay : by;
+      const maxSAbY = ay > by ? ay : by;
+
+      if (maxSAbX < minX || minSAbX > maxX || maxSAbY < minY || minSAbY > maxY) {
+        continue;
+      }
+      const o1 = orient(0n, 0n, dx, dy, ax, ay);
+      const o2 = orient(0n, 0n, dx, dy, bx, by);
+      const o3 = orient(ax, ay, bx, by, 0n, 0n);
+      const o4 = orient(ax, ay, bx, by, dx, dy);
+      if (o1 * o2 < 0 && o3 * o4 < 0) {
+        return true;
+      }
+      if (
+        (o1 === 0 && onSeg(0n, 0n, dx, dy, ax, ay)) ||
+        (o2 === 0 && onSeg(0n, 0n, dx, dy, bx, by)) ||
+        (o3 === 0 && onSeg(ax, ay, bx, by, 0n, 0n)) ||
+        (o4 === 0 && onSeg(ax, ay, bx, by, dx, dy))
+      ) {
+        return true;
+      }
     }
     return false;
   }
