@@ -6,8 +6,8 @@ NEVER on `main`. Everything goes into the integration branch **`interim/2026-11-
 
 ## Hard rules (in addition to docs/port/codex/README.md)
 - `main` is frozen for you: never commit, merge, reset, rebase or push it. Never push anything (a pre-push guard refuses non-Claude pushes).
-- The integration worktree: `powershell -ExecutionPolicy Bypass -File Scripts/Tools/new_agent_worktree.ps1 -Name interim -Branch interim/2026-11-12`
-  (the branch exists - the script checks it out). Build / test / play-test only there. Task branches (yours, Gemini's) are merged into
+- The integration worktree ALREADY EXISTS: `C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics-interim` on
+  `interim/2026-11-12` (from main 8b0bb579 = tag `before-interim-2026-11-11`). Build / test / play-test only there. Task branches (yours, Gemini's) are merged into
   `interim/2026-11-12` with `git merge --no-ff` after review + build + tests.
 - Never touch: `Content/Maps/**` (the designer edits L_Gen_Depot_1.umap by hand - uncommitted, it lives in the MAIN checkout only),
   `Config/**`, `Content/VFX/**`, `.uasset` files, `Content/Data/LevelJson/L_Gen_Depot_1.json`, `CLAUDE.md`, `/Game/CON_Injured` and
@@ -28,8 +28,7 @@ fast regroup on B, PMC level-aware on-point + three-step detour, your 001 + 002.
 docs/design/DOORWAY_BREACH.md (answers 2026-11-11), docs/port/gemini/outbox/011-door-breach-plan.report.md.
 
 ## The queue (in order; one task branch each, merged into interim/2026-11-12)
-1. Gemini: finish step 6 of docs/port/gemini/inbox/011-day-queue.md - the C4 TS port (branch gemini/props-t4-c4, worktree CodexTactics-gemc4),
-   byte-identical with the C4 goldens. Review + merge.
+1. (Done 2026-11-11 by Claude: the C4 TS port is already merged in main.)
 2. Gemini: the TS sim pair rule (FORMATION_CONTRACT.md 19.2: 'pair' only for the game's pair, not a 2-man column) - small branch.
 3. You: props C5 - the static validator (PROPS_LAYERS.md section 5 C5 + 2.4): bad / dangling objects dropped with id logs, locked / hand
    ones flagged; tests on the fixtures.
