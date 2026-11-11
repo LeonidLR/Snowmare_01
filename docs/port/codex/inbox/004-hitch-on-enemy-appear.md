@@ -56,3 +56,6 @@ of the 243 clips / meshes), the assets then stay in memory. Still fix it (a pack
 gameplay-frame freeze is never OK), but rank it: (1) the first-enemy frame (move loads out of the gameplay frame, stagger
 Pressure vs PmcEncounter, prepare SKM_PmcOperator at start), (2) the start: one async preload of the anim sets per level (shared,
 not per operative) behind the start cover. Measure both on a FIRST Play after an editor restart and in a `-game` run.
+2nd Play: the first enemies also appeared without a freeze -> both hitches are first-load costs (sync loads + editor first-use
+builds), not per-spawn CPU. The fix is therefore loading: async preload at level start behind the start cover, nothing loaded
+synchronously in a gameplay frame. No sight / perception / nav suspects needed unless the first-Play probe says otherwise.
