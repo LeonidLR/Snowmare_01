@@ -30,6 +30,8 @@ export interface PropObject {
   trigger?: string; // tripwire, crate_open, proximity
   loot_table?: string;
   arc?: number; // arc degrees for turrets
+  covered_m?: number;
+  width_cm?: number;
   z_offset?: number;
   [key: string]: unknown; // unknown keys preserved
 }
@@ -70,16 +72,39 @@ export interface SetOverride {
 
 export type PropOverride = MoveOverride | DeleteOverride | AddOverride | SetOverride;
 
+export interface PropSubReport {
+  eligible: number;
+  requested: number;
+  placed: number;
+  kept: number;
+  dropped: number;
+  forbidden: number;
+}
+
+export interface PropBudgetReport {
+  value: number;
+  spent: number;
+  left: number;
+}
+
 /** Placement report for a layer. */
 export interface PropLayerReport {
   requested?: number;
   placed?: number;
   kept?: number;
   short_by?: number;
+  eligible?: number;
+  status?: 'ok' | 'short' | string;
   gate?: 'pass' | 'fail' | string;
   gate_leg?: string;
   gate_blockers?: string[];
   rejected?: Record<string, number>;
+  doorways?: PropSubReport;
+  crates?: PropSubReport;
+  field?: PropSubReport;
+  containers?: PropSubReport;
+  loose?: PropSubReport;
+  budget?: PropBudgetReport;
   warnings?: string[];
   [key: string]: unknown;
 }
