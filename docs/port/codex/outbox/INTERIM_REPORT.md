@@ -62,3 +62,7 @@ Current prep inputs: C5 addendum 03fea4c6 and C6 runtime map 14a91b4e. Gemini 01
 - Routing trial: 2 | gpt-6-luna | read-only API lookup: partial REDO (first answer incorrectly called protected TickPatrolPerception public; access modifier verified and corrected). Corrected route uses public Enemy Tick after real StartPatrol; no files changed. Other useful corrections: invented ResetPatrolAlert/ApplyKnockdown signatures, actual female body path, death helper signature.
 - Working part 1 is complete: original override slots (including null) restore correctly; late parts and rounds are enrolled around ApplyWeaponVisual. See runtime fix `4d15a54f` and final 003 report.
 - Working part 2 is complete: expanded male/female, acoustic, animation, knockdown/death, and rendered verification passed. The documentation closeout is level 1 | gpt-6-luna | REDO: primary corrected date and stale queue/banner status; final reviewed. Latest status: tasks 004 and 005 then C5/C6; no completion is claimed for those queued tasks.
+
+### Stealth designer feedback reopened (2026-11-11)
+
+First follow-up: passive on entry and healthy prone crawl retained (build 51.41 s, expanded smoke 54.3 s PASS). Router `3 | current Codex session | PASS`. Detection, PMC parity, last-seen-point fire and pack-specific wall/peek corrections remain ahead of 004/005/C5/C6; see updated 003 report.

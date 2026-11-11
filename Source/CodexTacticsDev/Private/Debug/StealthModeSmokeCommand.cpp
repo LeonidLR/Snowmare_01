@@ -451,6 +451,7 @@ namespace StealthModeSmoke
 			if (State.StageTime < 2.f) { return true; }
 			Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching, TEXT("HUD command toggles selected operative into crouched stealth"));
 			CheckVisuals(State, Op);
+			Check(State, Op->GetFirePosture() == ESquadFirePosture::Passive && !Op->MayAutoFireNow(), TEXT("stealth entry selects passive and forbids automatic fire"));
 			Check(State, Anim(Op)->GetStealthWeight() > 0.9f, TEXT("native stealth idle owns the pose"));
 			if (!State.bFemale) { CheckWeaponSwaps(State, Op); }
 			// Mixed selection enables all eligible members; a fully enabled selection disables all.
@@ -468,6 +469,20 @@ namespace StealthModeSmoke
 					break;
 				}
 			}
+			Op->SetStance(EOperativeStance::Prone);
+			Op->OrderMoveTo(State.Origin + State.Forward * 150.f, false);
+			Next(State, 12);
+			break;
+		case 12:
+			if (State.StageTime < 3.f) { return true; }
+			Check(State, Op->GetStance() == EOperativeStance::Prone && Op->IsInStealthMode(), TEXT("healthy prone crawl preserves stealth"));
+			Check(State, FVector::Dist2D(State.Origin, Op->GetActorLocation()) > 20.f, TEXT("stealthed prone operative actually crawls"));
+			CheckVisuals(State, Op);
+			Op->StopOperative();
+			Op->SetStealthMode(false);
+			Op->SetStealthMode(true);
+			Check(State, Op->GetStance() == EOperativeStance::Prone, TEXT("entering stealth while prone does not stand up"));
+			Op->SetStance(EOperativeStance::Crouching);
 			Next(State, 10);
 			break;
 		case 10:

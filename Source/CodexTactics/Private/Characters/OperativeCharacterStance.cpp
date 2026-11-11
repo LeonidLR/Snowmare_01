@@ -42,16 +42,9 @@ float AOperativeCharacter::GetStanceChangeDelay(EOperativeStance From, EOperativ
 
 void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 {
-	if (IsInStealthMode())
+	if (IsInStealthMode() && NewStance == EOperativeStance::Standing)
 	{
-		if (NewStance == EOperativeStance::Prone)
-		{
-			SetStealthMode(false); // a prone/critical body belongs to the existing crawl rules
-		}
-		else if (NewStance == EOperativeStance::Standing)
-		{
-			NewStance = EOperativeStance::Crouching; // cover entry must not stand a stealthed operative up
-		}
+		NewStance = EOperativeStance::Crouching; // cover entry must not stand a stealthed operative up
 	}
 	if (Stance == NewStance || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge())
 	{

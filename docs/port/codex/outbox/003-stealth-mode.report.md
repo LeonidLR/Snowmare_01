@@ -1,6 +1,6 @@
 # 003 - Stealth mode: final interim verification
 
-**Status:** verified on `CodexTactics-interim`, branch `interim/2026-11-12`. Main remains frozen; no merge or push. Runtime baseline: Claude checkpoint `90a6bf64`. The runtime/material follow-up, expanded integration coverage, and pure rules are recorded at `4d15a54f`, `561a29ed`, and `8ff5d194`; the approved animation-copy commit is `1843f002`.
+**Status:** baseline verified; reopened for designer playtest feedback (six corrections, including pack-specific wall/peek animations). Work continues on `CodexTactics-interim`, branch `interim/2026-11-12`. Main remains frozen; no merge or push. Runtime baseline: Claude checkpoint `90a6bf64`. The runtime/material follow-up, expanded integration coverage, and pure rules are recorded at `4d15a54f`, `561a29ed`, and `8ff5d194`; the approved animation-copy commit is `1843f002`.
 
 ## Delivered behavior
 
@@ -38,3 +38,10 @@ powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Filter 'CodexTactics.
 ```
 
 Rendered evidence used the same console command with `shots`, `-RenderOffscreen -ResX=1280 -ResY=720 -SquadStart=formation`; full command line is in Saved/Logs/StealthExpanded-rendered.log.
+
+## Designer feedback follow-up (2026-11-11)
+
+- First working part: entering stealth selects the operative personal Passive posture; healthy prone/crawling keeps stealth and its material, including entering stealth while already prone. Critical wounds, knockdowns and death still cancel it.
+- Build PASS (51.41 s). Expanded `StealthModeSmoke` PASS (54.3 s), including passive/no automatic fire, actual prone movement, retained grey materials and prone re-entry assertions. Evidence: `Saved/Logs/StealthFeedback-passive-prone-results.json`.
+- Routing: `3 | current Codex session | PASS` for the feedback implementation/testing.
+- Remaining before renewed handoff: confirmed detection cancels state/material; PMC stealth visibility parity; stable last-seen-point fire; visible wall approach/hug/peek using StealthLocomotion copies only, without formation/M4 cover pose transitions. Then resume 004, 005, C5/C6. Earlier readiness refers to the baseline, not these pending corrections.

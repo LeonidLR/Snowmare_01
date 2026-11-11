@@ -55,7 +55,12 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		StealthOriginalMaterials.Reset();
 		SetSprinting(false);
 		bStealthMode = true;
-		SetStance(EOperativeStance::Crouching);
+		bHasPostureOverride = true;
+		PostureOverride = ESquadFirePosture::Passive;
+		if (Stance != EOperativeStance::Prone)
+		{
+			SetStance(EOperativeStance::Crouching);
+		}
 	}
 	else
 	{
@@ -143,7 +148,7 @@ void AOperativeCharacter::UpdateStealthMode()
 {
 	if (bStealthMode && (!HealthComponent || !HealthComponent->IsAlive() || IsCriticallyWounded() || IsKnockedDown()
 		|| IsPanicking() || IsRaging() || bCarrying || bVaulting || IsClimbingLadder() || VehicleQueries::IsMounted(this)
-		|| Stance == EOperativeStance::Prone || StealthModeRules::ShouldBreak(true, false, bSprinting, StealthModeRules::GetConfig())))
+		|| StealthModeRules::ShouldBreak(true, false, bSprinting, StealthModeRules::GetConfig())))
 	{
 		SetStealthMode(false);
 	}
