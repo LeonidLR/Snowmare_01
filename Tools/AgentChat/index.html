@@ -322,6 +322,10 @@
         <span class="status-dot" id="dot-gemini"></span>
         <span>Gemini: <strong id="status-gemini">офлайн</strong></span>
       </div>
+      <div class="presence-item" id="presence-codex" title="Codex (OpenAI)">
+        <span class="status-dot" id="dot-codex"></span>
+        <span>Codex: <strong id="status-codex">офлайн</strong></span>
+      </div>
     </div>
   </header>
 
@@ -477,6 +481,13 @@
           } else {
             dotGemini.className = 'status-dot';
             statusGemini.textContent = 'офлайн';
+          }
+          const dotCodex = document.getElementById('dot-codex');
+          const statusCodex = document.getElementById('status-codex');
+          if (dotCodex && statusCodex) {
+            const codexOn = !!(pres.codex && pres.codex.active);
+            dotCodex.className = codexOn ? 'status-dot active' : 'status-dot';
+            statusCodex.textContent = codexOn ? 'слушает' : 'офлайн';
           }
         } catch (e) {
           console.warn('Error fetching presence:', e);
