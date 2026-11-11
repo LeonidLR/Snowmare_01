@@ -176,10 +176,11 @@ $$t = \sqrt{rac{2H}{g_{eff}}} = \sqrt{rac{2H}{2205}}$$
 ## 5. Аудит импортированного клипа `/Game/Animations/Humanoids/Jumping_1__UE`
 
 Проведённый анализ ассета выявил следующие критические свойства:
-1. **Несовпадение скелета (Skeleton Mismatch):**
-   - Бинарный осмотр показал: `Jumping_1__UE.uasset` ссылается на `/Game/Biochemical_Monster_1/baze_mech/ue4/SK_UE4_Mannequin_Skeleton`.
+1. **Скелет ассета и совместимость (UE4 Mannequin, Compatible Skeletons):**
+   - Бинарный осмотр ассета выявил ссылку на `/Game/Biochemical_Monster_1/baze_mech/ue4/SK_UE4_Mannequin_Skeleton`.
+   - **Важное уточнение:** Несмотря на путь к папке пака, скелет является стандартным **UE4 Mannequin** (а не кастомным скелетом монстра). Иерархия костей, имена суставов и пропорции на 100% совпадают с эпиковским стандартом Mannequin.
    - Основной `ABP_Operative` использует `/Game/Post_Apo_Survivor/Demo/Mannequin/Character/Mesh/UE4_Mannequin_Skeleton`.
-   - **Необходимое действие:** Перед включением в `ABP_Operative` клип должен быть переназначен на целевой скелет `UE4_Mannequin_Skeleton` (через `SetSkeletalMeshSkeleton` или `setup_operative_fall_animation.py` / Compatible Skeletons), иначе компиляция AnimBP выдаст ошибку несовместимости скелета.
+   - **Решение без дублирования ассетов:** Ретаргетинг костей не требуется. Достаточно зарегистрировать совместимость скелетов через механизм **Compatible Skeletons** в Unreal Engine (`USkeleton::AddCompatibleSkeleton` в коде/скрипте или во вкладке *Retargeting / Compatible Skeletons* редактора скелетов `UE4_Mannequin_Skeleton`). После добавления `SK_UE4_Mannequin_Skeleton` в список совместимых скелетов, AnimBP `ABP_Operative` принимает `Jumping_1__UE` напрямую и без предупреждений компилятора.
 2. **Root Motion (Движение корня):**
    - В CodexTactics баллистическая траектория падения и горизонтальное смещение в воздухе рассчитываются программно через физическую капсулу и `ULedgeFallComponent`.
    - Если клип содержит перемещение кости `root` по оси Z или горизонтали с включенным Root Motion, возникнет паразитное ускорение или конфликт («двойная гравитация»).
