@@ -676,3 +676,200 @@ export const AmbushRelocateRules = {
     return elapsed >= limit ? 'timed_out' : 'running';
   },
 };
+
+// --- SightConditionsRules (SightRules::ConditionsSightMultiplier / Weather / Daylight) --------------------------------
+
+export type WeatherType = 'clear' | 'overcast' | 'snowfall' | 'blizzard' | 'light_snow' | 'fog';
+export type TimeOfDayType = 'day' | 'twilight' | 'night';
+
+export interface SightConditionsConfig {
+  squadBaseRangeM: number;
+  humanEnemyRangeMultiplier: number;
+  weather: Record<string, number>;
+  timeOfDay: {
+    day: number;
+    twilight: number;
+    night: number;
+    daySunElevationDeg: number;
+    nightSunElevationDeg: number;
+  };
+}
+
+export const DEFAULT_SIGHT_CONDITIONS: SightConditionsConfig = {
+  squadBaseRangeM: 120,
+  humanEnemyRangeMultiplier: 2.0,
+  weather: {
+    clear: 1.0,
+    overcast: 0.85,
+    snowfall: 0.6,
+    blizzard: 0.5,
+    light_snow: 0.75,
+    fog: 0.4,
+  },
+  timeOfDay: {
+    day: 1.0,
+    twilight: 0.7,
+    night: 0.35,
+    daySunElevationDeg: 10,
+    nightSunElevationDeg: -10,
+  },
+};
+
+export const SightConditionsRules = {
+  parseFromJson(raw: unknown): SightConditionsConfig {
+    if (!raw || typeof raw !== 'object') return DEFAULT_SIGHT_CONDITIONS;
+    const obj = raw as Record<string, unknown>;
+    const sc = (obj.sight_conditions && typeof obj.sight_conditions === 'object') ? (obj.sight_conditions as Record<string, unknown>) : obj;
+    const weatherObj = (sc.weather && typeof sc.weather === 'object') ? (sc.weather as Record<string, number>) : DEFAULT_SIGHT_CONDITIONS.weather;
+    const todObj = (sc.time_of_day && typeof sc.time_of_day === 'object') ? (sc.time_of_day as Record<string, number>) : {};
+    return {
+      squadBaseRangeM: typeof sc.squad_base_range_m === 'number' ? sc.squad_base_range_m : DEFAULT_SIGHT_CONDITIONS.squadBaseRangeM,
+      humanEnemyRangeMultiplier: typeof sc.human_enemy_range_multiplier === 'number' ? sc.human_enemy_range_multiplier : DEFAULT_SIGHT_CONDITIONS.humanEnemyRangeMultiplier,
+      weather: { ...DEFAULT_SIGHT_CONDITIONS.weather, ...weatherObj },
+      timeOfDay: {
+        day: typeof todObj.day === 'number' ? todObj.day : DEFAULT_SIGHT_CONDITIONS.timeOfDay.day,
+        twilight: typeof todObj.twilight === 'number' ? todObj.twilight : DEFAULT_SIGHT_CONDITIONS.timeOfDay.twilight,
+        night: typeof todObj.night === 'number' ? todObj.night : DEFAULT_SIGHT_CONDITIONS.timeOfDay.night,
+        daySunElevationDeg: typeof todObj.day_sun_elevation_deg === 'number' ? todObj.day_sun_elevation_deg : DEFAULT_SIGHT_CONDITIONS.timeOfDay.daySunElevationDeg,
+        nightSunElevationDeg: typeof todObj.night_sun_elevation_deg === 'number' ? todObj.night_sun_elevation_deg : DEFAULT_SIGHT_CONDITIONS.timeOfDay.nightSunElevationDeg,
+      },
+    };
+  },
+
+  weatherMultiplier(c: SightConditionsConfig, weather: string): number {
+    const key = weather.toLowerCase();
+    return c.weather[key] ?? 1.0;
+  },
+
+  daylightMultiplier(c: SightConditionsConfig, sunElevationDeg: number): number {
+    if (!Number.isFinite(sunElevationDeg)) return c.timeOfDay.day;
+    const dayDeg = Math.max(c.timeOfDay.daySunElevationDeg, 0.01);
+    const nightDeg = Math.min(c.timeOfDay.nightSunElevationDeg, -0.01);
+    if (sunElevationDeg >= 0) {
+      const a = Math.min(1, Math.max(0, sunElevationDeg / dayDeg));
+      return (1 - a) * c.timeOfDay.twilight + a * c.timeOfDay.day;
+    } else {
+      const a = Math.min(1, Math.max(0, sunElevationDeg / nightDeg));
+      return (1 - a) * c.timeOfDay.twilight + a * c.timeOfDay.night;
+    }
+  },
+
+  sunElevationFromHour(hour: number): number {
+    // 06:00 / 18:00 = 0 deg (twilight horizon); 12:00 = +45 deg (full day); 00:00 = -45 deg (full night)
+    return 45 * Math.sin(((hour - 6) / 12) * Math.PI);
+  },
+
+  conditionsMultiplier(c: SightConditionsConfig, weather: string, sunElevationOrHour: number, isHour = false): number {
+    const elev = isHour ? SightConditionsRules.sunElevationFromHour(sunElevationOrHour) : sunElevationOrHour;
+    return SightConditionsRules.weatherMultiplier(c, weather) * SightConditionsRules.daylightMultiplier(c, elev);
+  },
+
+  squadSightRangeCm(c: SightConditionsConfig, weather: string, sunElevationOrHour: number, isHour = false): number {
+    return c.squadBaseRangeM * 100 * SightConditionsRules.conditionsMultiplier(c, weather, sunElevationOrHour, isHour);
+  },
+
+  enemySightRangeCm(baseSightRangeM: number, isHuman: boolean, c: SightConditionsConfig, weather: string, sunElevationOrHour: number, isHour = false): number {
+    const base = baseSightRangeM * 100 * (isHuman ? c.humanEnemyRangeMultiplier : 1.0);
+    return base * SightConditionsRules.conditionsMultiplier(c, weather, sunElevationOrHour, isHour);
+  },
+};
+
+// --- WeaponRules & EngagementBands -----------------------------------------------------------------------------------
+
+export interface WeaponStats {
+  name: string;
+  attackRangeM: number;
+  effectiveRangeM: number;
+  baseDamage: number;
+  fireRate: number;
+}
+
+export interface EngagementBand {
+  minM: number;
+  maxM: number;
+  closeQuarters?: boolean;
+}
+
+export interface WeaponsConfig {
+  weapons: Record<string, WeaponStats>;
+  rangeFalloff: {
+    floorMultiplier: number;
+    exponent: number;
+  };
+  engagementBands?: Record<string, EngagementBand>;
+}
+
+export const DEFAULT_WEAPONS: WeaponsConfig = {
+  rangeFalloff: { floorMultiplier: 0.1, exponent: 2 },
+  weapons: {
+    m16: { name: 'M16A2 Assault Rifle', attackRangeM: 60, effectiveRangeM: 28, baseDamage: 18, fireRate: 0.65 },
+    sniper_rifle: { name: 'Sniper Rifle', attackRangeM: 120, effectiveRangeM: 90, baseDamage: 70, fireRate: 2.4 },
+    pistol: { name: 'Beretta Pistol', attackRangeM: 25, effectiveRangeM: 10, baseDamage: 16, fireRate: 0.45 },
+    shotgun: { name: 'D-1 Shotgun', attackRangeM: 15, effectiveRangeM: 8, baseDamage: 45, fireRate: 1.15 },
+    rpg7: { name: 'RPG-7', attackRangeM: 150, effectiveRangeM: 100, baseDamage: 60, fireRate: 1.0 },
+  },
+  engagementBands: {
+    m16: { minM: 25, maxM: 60 },
+    sniper_rifle: { minM: 45, maxM: 110 },
+    pistol: { minM: 10, maxM: 25 },
+    shotgun: { minM: 4, maxM: 14, closeQuarters: true },
+  },
+};
+
+export const WeaponRules = {
+  parseFromJson(rawWeaponsTuning: unknown, rawPmcCommander?: unknown): WeaponsConfig {
+    if (!rawWeaponsTuning || typeof rawWeaponsTuning !== 'object') return DEFAULT_WEAPONS;
+    const wt = rawWeaponsTuning as Record<string, unknown>;
+    const rawWeapons = (wt.weapons && typeof wt.weapons === 'object') ? (wt.weapons as Record<string, Record<string, unknown>>) : {};
+    const weapons: Record<string, WeaponStats> = {};
+    for (const [id, w] of Object.entries(rawWeapons)) {
+      if (typeof w !== 'object' || !w) continue;
+      weapons[id] = {
+        name: typeof w.name === 'string' ? w.name : id,
+        attackRangeM: typeof w.attack_range_m === 'number' ? w.attack_range_m : 25,
+        effectiveRangeM: typeof w.effective_range_m === 'number' ? w.effective_range_m : 15,
+        baseDamage: typeof w.base_damage === 'number' ? w.base_damage : 15,
+        fireRate: typeof w.fire_rate === 'number' ? w.fire_rate : 1.0,
+      };
+    }
+    const rf = (wt.range_falloff && typeof wt.range_falloff === 'object') ? (wt.range_falloff as Record<string, number>) : {};
+    const rangeFalloff = {
+      floorMultiplier: typeof rf.floor_multiplier === 'number' ? rf.floor_multiplier : 0.1,
+      exponent: typeof rf.exponent === 'number' ? rf.exponent : 2,
+    };
+    let engagementBands: Record<string, EngagementBand> | undefined;
+    if (rawPmcCommander && typeof rawPmcCommander === 'object') {
+      const pmc = rawPmcCommander as Record<string, unknown>;
+      if (pmc.engagement_bands && typeof pmc.engagement_bands === 'object') {
+        engagementBands = {};
+        for (const [wid, b] of Object.entries(pmc.engagement_bands as Record<string, Record<string, unknown>>)) {
+          if (typeof b === 'object' && b) {
+            engagementBands[wid] = {
+              minM: typeof b.min_m === 'number' ? b.min_m : 10,
+              maxM: typeof b.max_m === 'number' ? b.max_m : 50,
+              closeQuarters: Boolean(b.close_quarters),
+            };
+          }
+        }
+      }
+    }
+    return {
+      weapons: Object.keys(weapons).length ? weapons : DEFAULT_WEAPONS.weapons,
+      rangeFalloff,
+      engagementBands: engagementBands ?? DEFAULT_WEAPONS.engagementBands,
+    };
+  },
+
+  falloffMultiplier(distanceM: number, effectiveRangeM: number, attackRangeM: number, floorMultiplier = 0.1, exponent = 2): number {
+    if (attackRangeM > 0 && distanceM > attackRangeM) return 0.0;
+    const effective = attackRangeM > 0 ? Math.min(effectiveRangeM, attackRangeM) : effectiveRangeM;
+    if (distanceM <= effective || (attackRangeM > 0 && attackRangeM <= effective)) return 1.0;
+    const t = Math.max(0, Math.min(1, (distanceM - effective) / Math.max(0.1, attackRangeM - effective)));
+    const floor = Math.max(0, Math.min(1, floorMultiplier));
+    return 1.0 - (1.0 - floor) * Math.pow(t, Math.max(0.1, exponent));
+  },
+
+  isInEngagementBand(distanceM: number, band: EngagementBand): boolean {
+    return distanceM >= band.minM && distanceM <= band.maxM;
+  },
+};
