@@ -1590,7 +1590,12 @@ void ACodexTacticsHUD::DrawOperativeLabels()
 	UFont* Font = GEngine->GetSmallFont();
 	for (const AOperativeCharacter* Member : Squad->GetMembers())
 	{
-		const float Top = Member->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 40.f;
+		const UCapsuleComponent* Capsule = Member->GetCapsuleComponent();
+		if (!Capsule)
+		{
+			continue;
+		}
+		const float Top = Capsule->GetScaledCapsuleHalfHeight() + 40.f;
 		const FVector Screen = Project(Member->GetActorLocation() + FVector(0.f, 0.f, Top), true);
 		if (Screen.Z <= 0.f)
 		{
