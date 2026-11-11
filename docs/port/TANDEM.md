@@ -1004,6 +1004,14 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 4/4): HUD labels skip a member without a capsule; four fixes ready for Claude review. Build, 47 focused tests, the required three smokes and the extra Depot smoke passed. No assets changed.
+
+- 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 3/4): fix(squad): preserve critical wound stance on regroup Review finding 4: skip SetStance and MarkStanceFromSquad for critically wounded followers, preserving their prone stance.
+
+- 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 2/4): fix(combat): count injured raise holds after fire refusals Review finding 3: keep DemandInjuredRaise before turning to preserve the 0.25 s raise, and evaluate the hold and its telemetry after crawl, sniper move and aim refusals.
+
+- 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 1/4): fix(squad): guard fast regroup time without a world Review finding 2: use the same zero-time fallback as ArmFastRegroup when no world is available.
+
 - 2026-11-01 (Claude, `formation/wall-leadership`, worktree `../CodexTactics-lead`): wall leadership - new `Formation/FormationWallLeadershipRules`, new `SquadSubsystemWallLeadership.cpp`, `SquadSubsystem.*` (SetLeader's `bWallLeadershipSwitch`), `SquadSubsystemFormation.cpp` (`HoldBehindInWallLine` in the follower's wall step), `SquadSubsystemFormationPeek.cpp`, `CodexTacticsPlayerController.cpp` / `...Cover.cpp` (the leader holding the squad peek's corner), smokes `WallLeadershipSmoke` (new) / `FormationWallEndSmokeCommand.cpp`, `Scripts/test_map.json`. No asset change.
 - 2026-11-01 (Claude, `formation/wall-far-side`, worktree `../CodexTactics-farside`): the far side of a wall - `CodexTacticsPlayerController*` (new unit `WallSide`, `Selection`, `Cover`, `Orders`, main), `SquadSubsystem.*` (`IsSquadAtWall`), `SquadSubsystemFormation.cpp`, new `SquadSubsystemFormationRoute.cpp`, new `Tactics/WallSideRules`, `Formation/FormationWallRouteRules`, `Camera/OccluderFadeSubsystem`, smoke `FormationFarSideSmoke`. New asset `Content/UI/Materials/M_OccluderFade.uasset` (made by `Scripts/Editor/create_occluder_fade_material.py`; Claude's, the user may retune its parameters).
 - 2026-10-27 (Claude, `formation/wall-hug-gap`, worktree `../CodexTactics-hug`): the squad hugging a wall tight - `SquadSubsystem.h`, `SquadSubsystemFormation.cpp` (`TraceFormationWall`, `GlideToWallSlot`), `SquadSubsystemWallGroup.cpp` (`TraceLookWalls`), `SquadSubsystemFormationSlide.cpp` (the slide's lead men clear of the leader), `FormationRuntimeRules.*` (`NearestWallHit`, `WallSlotGlide`), test `FormationWallHugTest.cpp`, smoke `FormationWallHugSmokeCommand.cpp`, `Scripts/test_map.json`; C++ / docs only, no assets / maps (the smoke's low wall is spawned at runtime, nothing saved).

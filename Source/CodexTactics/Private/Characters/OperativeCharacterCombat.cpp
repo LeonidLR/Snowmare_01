@@ -801,7 +801,10 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 
 	// Wounded (feat/injured-tiers-fullbody): the full-body injured clip lowers the rifle - the torso rises into the weapon pose first (asked
 	// now, in parallel with the turn below; every attempt keeps it up), the round waits for it.
-	const bool bRaiseHold = HoldShotForInjuredRaise();
+	if (UOperativeAnimInstance* InjuredAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	{
+		InjuredAnim->DemandInjuredRaise();
+	}
 
 	// Before the sniper step (a direct order stops HER and she kneels: never while she crawls on an order).
 	if (bCrawlHold)
@@ -889,7 +892,8 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 			return bCornerAimActive ? TEXT("corner hold: outside the aim cone") : TEXT("corner hold: aim not active");
 		}
 	}
-	if (bRaiseHold)
+	// Count a raise hold only when the other fire refusals above have cleared.
+	if (HoldShotForInjuredRaise())
 	{
 		return TEXT("wounded: raising the weapon");
 	}

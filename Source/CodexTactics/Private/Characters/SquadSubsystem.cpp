@@ -1085,10 +1085,13 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 				// (squad_regroup.json stand_up_to_run), the leader's stance when he joins.
 				const bool bFastRegroup = ArmFastRegroup(*Operative, *LeaderRef);
 				const FFastRegroupState* Regroup = bFastRegroup ? FastRegroups.Find(Operative) : nullptr;
-				Operative->SetStance(Regroup && Regroup->bStancePending ? EOperativeStance::Standing : LeaderRef->GetStance());
-				// Bug 2026-10-20: the copied stance is the squad's - crouched after the Solo guard crouch, he stands up to sprint with the
-				// leader (UpdateFollower; Solo on / off again used to be the only cure).
-				Operative->MarkStanceFromSquad();
+				if (!Operative->IsCriticallyWounded())
+				{
+					Operative->SetStance(Regroup && Regroup->bStancePending ? EOperativeStance::Standing : LeaderRef->GetStance());
+					// Bug 2026-10-20: the copied stance is the squad's - crouched after the Solo guard crouch, he stands up to sprint with the
+					// leader (UpdateFollower; Solo on / off again used to be the only cure).
+					Operative->MarkStanceFromSquad();
+				}
 				UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🏃 REGROUPING"), FLinearColor(1.f, 0.85f, 0.2f));
 			}
 		}

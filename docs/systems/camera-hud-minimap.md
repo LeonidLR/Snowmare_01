@@ -101,6 +101,8 @@ font / width change (`ValidateTextCaches`). `UActionBarWidget::Refresh` (every f
 
 ## HUD label switches (the game designer 2026-11-10, `feat/injured-tiers-fullbody`)
 
+Review fix 001 (2026-11-11): operative labels skip members without a capsule component.
+
 **Request:** one switch per label kind the HUD draws (the Training Ground gets a panel for it), with a Russian name and an English doc.
 `Content/Data/UI/hud_labels.json` (schema `codex.hud_labels/1`): `"labels": { "<key>": { "show": bool, "label": "<ru>", "doc": "<en>" } }`
 (the short form `"<key>": bool` is read too). Pure `UI/HudLabelRules` (`GetKeys`, `ParseConfig`, `ComposeOperativePlate`,
