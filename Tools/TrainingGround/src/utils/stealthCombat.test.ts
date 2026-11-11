@@ -175,10 +175,10 @@ test('horde #12: the horde tab edits the keys the game reads (horde.json firefig
   }
   assert.ok(!CVARS.some((c) => c.name === 'Codex.Horde.TriggerSeconds' || c.name === 'Codex.Horde.RepeatSeconds'), 'the clock cvars are gone');
   assert.ok(CVARS.some((c) => c.name === 'Codex.Horde.AfterFirefights'), 'the threshold cvar is listed');
-  // Game designer play-test 2026-11-09: the firefight horde 300 m away (+- 40), a new bearing (90 deg), the waves feed it - shipped and editable.
+  // Game designer play-test 2026-11-09: the firefight horde 300 m away (+- 40), a new bearing (45 deg; was 90), the waves feed it - shipped and editable.
   assert.equal(shipped.firefight_spawn_distance_m, 300);
   assert.equal(shipped.firefight_spawn_spread_m, 40);
-  assert.equal(shipped.firefight_bearing_change_deg, 90);
+  assert.equal(shipped.firefight_bearing_change_deg, 45);
   assert.equal(shipped.waves_feed_horde, true);
   assert.ok(edited.has('waves_feed_horde'), 'waves_feed_horde is editable');
   assert.equal(validateHorde({ ...shipped, firefight_spawn_distance_m: 5 }).length, 1, 'a 5 m horde distance is refused');
