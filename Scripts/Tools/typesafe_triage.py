@@ -234,6 +234,9 @@ PROTECTED_FOR = {
                "Content/Input/", "Content/LevelPrototyping/", "Content/ThirdPerson/", "Content/__ExternalActors__/",
                "Content/__ExternalObjects__/", "Content/VigilanteContent/", "CLAUDE.md"],
     "gemini": ["Source/CodexTactics/", "Source/CodexTacticsTests/", "Content/Maps/L_MovementTest.umap"],
+    # Codex (OpenAI, 2026-11-11 trial): C++ allowed on its own codex/* branch for Claude-briefed tasks; the designer's assets / maps /
+    # configs are off limits like for Claude.
+    "codex": ["Content/VFX/", "Shaders/", "Config/", "Content/Maps/", "CLAUDE.md", "Content/Data/LevelJson/L_Gen_Depot_1.json"],
 }
 
 

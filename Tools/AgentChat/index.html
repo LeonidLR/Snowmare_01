@@ -19,6 +19,8 @@
       --color-claude-bg: rgba(245, 158, 11, 0.12);
       --color-gemini: #38bdf8;
       --color-gemini-bg: rgba(56, 189, 248, 0.12);
+      --color-codex: #34d399;
+      --color-codex-bg: rgba(52, 211, 153, 0.12);
       --color-designer: #c084fc;
       --color-designer-bg: rgba(192, 132, 252, 0.15);
       
@@ -158,6 +160,8 @@
     }
     .from-claude .msg-author { color: var(--color-claude); }
     .from-gemini .msg-author { color: var(--color-gemini); }
+    .message.from-codex { background-color: var(--color-codex-bg); }
+    .from-codex .msg-author { color: var(--color-codex); }
     .from-designer .msg-author { color: var(--color-designer); }
 
     .msg-target {
@@ -334,6 +338,7 @@
           <option value="all">Все (all)</option>
           <option value="claude">Claude</option>
           <option value="gemini">Gemini</option>
+          <option value="codex">Codex</option>
         </select>
       </div>
 
