@@ -68,6 +68,7 @@ open questions. Claude reviews `git log main..interim/2026-11-12` and merges.
 ## Queue extension (designer 2026-11-11 ~14:00: "move on through the unimplemented mechanics"; mortars postponed)
 After (a) stealth leftovers, 004 hitch, (b) C5, (c) C6 - in this order, one task branch each:
 (c2) 005 dead enemies stay standing + ragdoll on death (docs/port/codex/inbox/005-dead-enemies-standing-ragdoll.md) - right after 004, before C5.
+(c3) 006 formation look-sweep toggle (small; docs/port/codex/inbox/006-formation-scan-toggle.md) after 005.
 (d) #42 drop-down animation - Gemini's plan docs/port/gemini/outbox/drop-anim-plan.report.md (Jumping_1__UE = UE4 Mannequin ->
     Compatible Skeletons; asset changes only while the editor is closed, ask the designer in chat first);
 (e) #4 wall-to-wall cover dash - Gemini's 016 item 3a map when it lands;
