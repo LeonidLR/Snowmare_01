@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "provider": "codex",
+  "confidence_threshold": 0.6,
+  "timeout_seconds": 4.0,
+  "reasoning_effort": null,
+  "models": {
+    "luna": "gpt-6-luna",
+    "sol": "gpt-6.1-sol",
+    "terra": "gpt-6.1-terra",
+    "astra": "gpt-6-astra"
+  }
+}

@@ -66,3 +66,9 @@ Current prep inputs: C5 addendum 03fea4c6 and C6 runtime map 14a91b4e. Gemini 01
 ### Stealth designer feedback reopened (2026-11-11)
 
 First follow-up: passive on entry and healthy prone crawl retained (build 51.41 s, expanded smoke 54.3 s PASS). Router `3 | current Codex session | PASS`. Detection, PMC parity, last-seen-point fire and pack-specific wall/peek corrections remain ahead of 004/005/C5/C6; see updated 003 report.
+
+### Designer model routing update (2026-11-11)
+
+Designer superseded the fixed cheap/main mapping: Jev remains the classifier and directly chooses ONLY Luna (`gpt-6-luna`), Sol (`gpt-6.1-sol`), Terra (`gpt-6.1-terra`), or Astra (`gpt-6-astra`). Interim now contains its own enabled `.claude/model_router.json` and `Scripts/Tools/model_router.py`; main and global app settings were not changed. Routing is advisory: the coordinator passes the returned real model_id to collaboration.spawn_agent; no promise of switching the current session. Below 0.6 model confidence or on errors/follow-ups it does not dispatch. Complexity 1-4 is independent and retained for reports.
+
+Validation: 9 mocked tests PASS (all four allowed models, independent level, malformed choices/config/probabilities, NaN, exception, timeout, context, enabled/disabled CLI/hook). Live classify returned `3 | gpt-6.1-terra | route=true, confidence 0.94` for stealth perception. Router implementation `2 | gpt-6.1-terra | PASS after review adjustments` (initial bootstrap selection had 0.57, so it was manually assigned under the explicit designer request, not claimed an automatic dispatch). No Claude API used. Jev audits/classification remain authorized by the latest instruction.
