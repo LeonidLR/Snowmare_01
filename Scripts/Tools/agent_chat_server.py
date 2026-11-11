@@ -16,6 +16,9 @@ import urllib.parse
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent_chat
 
+compute_idle_seconds = agent_chat.compute_idle_seconds
+get_idle_dict = agent_chat.get_idle_dict
+
 class AgentChatHandler(http.server.BaseHTTPRequestHandler):
     storage_dir = None
     html_path = None
@@ -73,7 +76,9 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
 
         if path == "/api/messages":
             chat_file = os.path.join(self.storage_dir, "chat.jsonl")
-            messages = agent_chat.read_all_messages(chat_file)
+            all_messages = agent_chat.read_all_messages(chat_file)
+            idle_dict = agent_chat.compute_idle_seconds(all_messages)
+            messages = all_messages
             since_val = query.get("since", [None])[0]
             if since_val is not None:
                 try:
@@ -81,12 +86,22 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
                     messages = [m for m in messages if m.get("id", 0) > since_id]
                 except ValueError:
                     pass
-            self.send_json(200, {"messages": messages})
+            self.send_json(200, {"messages": messages, "idle": idle_dict})
             return
 
         if path == "/api/presence":
             pres = agent_chat.get_presence_dict(self.storage_dir)
+            chat_file = os.path.join(self.storage_dir, "chat.jsonl")
+            all_messages = agent_chat.read_all_messages(chat_file)
+            pres["idle"] = agent_chat.compute_idle_seconds(all_messages)
             self.send_json(200, pres)
+            return
+
+        if path == "/api/idle":
+            chat_file = os.path.join(self.storage_dir, "chat.jsonl")
+            all_messages = agent_chat.read_all_messages(chat_file)
+            idle_dict = agent_chat.compute_idle_seconds(all_messages)
+            self.send_json(200, {"idle": idle_dict})
             return
 
         self.send_error(404, "Endpoint not found")
