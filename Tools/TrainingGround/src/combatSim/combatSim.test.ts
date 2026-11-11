@@ -17,7 +17,7 @@ import { runBatch, seedRange } from './batch.ts';
 import { DEFAULT_SIM_CONSTANTS, parsePressureConfig } from './config.ts';
 import { calibrationMarkdown, calibrationTable } from './report.ts';
 import type { PressureBox, Watcher } from './rules.ts';
-import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_HEIGHT_SIGHT, DEFAULT_PLAN_PARAMS, DEFAULT_RELOCATE_PARAMS, DEFAULT_SPOT_PARAMS, DEFAULT_WATCH_PARAMS, HeightSightRules, findDeltaAngleDeg, unwindDeg } from './rules.ts';
+import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_HEIGHT_SIGHT, DEFAULT_PLAN_PARAMS, DEFAULT_RELOCATE_PARAMS, DEFAULT_SIGHT_CONDITIONS, DEFAULT_SPOT_PARAMS, DEFAULT_WATCH_PARAMS, DEFAULT_WEAPONS, HeightSightRules, SightConditionsRules, WeaponRules, findDeltaAngleDeg, unwindDeg } from './rules.ts';
 import { validateCombatSimBatch } from './schema.ts';
 import { runCombatSim } from './sim.ts';
 import { buildSquadTrack } from './squadTrack.ts';
@@ -415,4 +415,141 @@ test('runBatch writes a valid codex.combat_sim/1 document with a <= 40-line repo
   assert.ok(Object.values(batch.aggregate.eventOutcomes).reduce((s, v) => s + v, 0) > 0);
   assert.equal((batch.constants as { dt: number }).dt, DEFAULT_SIM_CONSTANTS.dt);
   assert.deepEqual(validateCombatSimBatch({ schema: 'nope' }).length > 0, true);
+});
+
+// --- T10: Sight conditions (weather / night) and weapon ranges -----------------------------------------------------------
+
+test('SightConditionsRules: visibility with weather and night (T10, enemy_perception.json sight_conditions)', () => {
+  const S = SightConditionsRules;
+  const c = DEFAULT_SIGHT_CONDITIONS;
+
+  // Weather multipliers
+  assert.equal(S.weatherMultiplier(c, 'Clear'), 1.0);
+  assert.equal(S.weatherMultiplier(c, 'Overcast'), 0.85);
+  assert.equal(S.weatherMultiplier(c, 'Snowfall'), 0.6);
+  assert.equal(S.weatherMultiplier(c, 'Blizzard'), 0.5);
+  assert.equal(S.weatherMultiplier(c, 'unknown_weather'), 1.0);
+
+  // Daylight multipliers (sun elevation)
+  assert.equal(S.daylightMultiplier(c, 15), 1.0); // full day (> 10 deg)
+  assert.equal(S.daylightMultiplier(c, 10), 1.0);
+  assert.equal(S.daylightMultiplier(c, 0), 0.7); // twilight at horizon
+  assert.equal(S.daylightMultiplier(c, -10), 0.35); // full night (<= -10 deg)
+  assert.equal(S.daylightMultiplier(c, -30), 0.35);
+  assert.equal(Math.round(S.daylightMultiplier(c, 5) * 100) / 100, 0.85); // midpoint day-twilight
+
+  // Combined conditions
+  // Clear Day: 120 m * 1.0 * 1.0 = 120 m (12000 cm)
+  assert.equal(S.squadSightRangeCm(c, 'Clear', 12, true), 12000);
+  // Blizzard Day: 120 m * 0.5 * 1.0 = 60 m (6000 cm)
+  assert.equal(S.squadSightRangeCm(c, 'Blizzard', 12, true), 6000);
+  // Clear Night: 120 m * 1.0 * 0.35 = 42 m (4200 cm)
+  assert.equal(S.squadSightRangeCm(c, 'Clear', 0, true), 4200);
+  // Blizzard Night: 120 m * 0.5 * 0.35 = 21 m (2100 cm)
+  assert.equal(S.squadSightRangeCm(c, 'Blizzard', 0, true), 2100);
+
+  // Real repo data file validation
+  const perceptionRaw = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/AI/enemy_perception.json'), 'utf8'));
+  const parsed = S.parseFromJson(perceptionRaw);
+  assert.equal(parsed.squadBaseRangeM, 120);
+  assert.equal(parsed.weather.blizzard, 0.5);
+  assert.equal(parsed.timeOfDay.night, 0.35);
+  assert.equal(parsed.humanEnemyRangeMultiplier, 2.0);
+
+  // Enemy sight scaling (human enemy x2.0 base sight; beasts 1.0x base sight)
+  // Frostbitten (beast: 20 m base) in blizzard night: 20 m * 1.0 * 0.5 * 0.35 = 3.5 m (350 cm)
+  assert.equal(S.enemySightRangeCm(20, false, parsed, 'blizzard', 0, true), 350);
+  // Marksman (human: 45 m base x 2.0 = 90 m) in clear day: 90 m * 1.0 * 1.0 = 90 m (9000 cm)
+  assert.equal(S.enemySightRangeCm(45, true, parsed, 'clear', 12, true), 9000);
+  // Marksman in blizzard night: 90 m * 0.5 * 0.35 = 15.75 m (1575 cm)
+  assert.equal(S.enemySightRangeCm(45, true, parsed, 'blizzard', 0, true), 1575);
+});
+
+test('WeaponRules: ranges, falloff curve and engagement bands (T10, weapons_tuning.json & pmc_commander.json)', () => {
+  const W = WeaponRules;
+  const c = DEFAULT_WEAPONS;
+
+  // Weapon catalog verification
+  assert.equal(c.weapons.m16.attackRangeM, 60);
+  assert.equal(c.weapons.m16.effectiveRangeM, 28);
+  assert.equal(c.weapons.sniper_rifle.attackRangeM, 120);
+  assert.equal(c.weapons.sniper_rifle.effectiveRangeM, 90);
+  assert.equal(c.weapons.shotgun.attackRangeM, 15);
+  assert.equal(c.weapons.shotgun.effectiveRangeM, 8);
+  assert.equal(c.weapons.pistol.attackRangeM, 25);
+  assert.equal(c.weapons.pistol.effectiveRangeM, 10);
+
+  // Falloff curve: effective range = 1.0, attack range = 0.1, past attack range = 0.0
+  assert.equal(W.falloffMultiplier(20, 28, 60), 1.0);
+  assert.equal(W.falloffMultiplier(28, 28, 60), 1.0);
+  assert.equal(Math.round(W.falloffMultiplier(60, 28, 60) * 100) / 100, 0.1);
+  assert.equal(W.falloffMultiplier(65, 28, 60), 0.0);
+
+  // Engagement bands
+  assert.equal(c.engagementBands?.m16.minM, 25);
+  assert.equal(c.engagementBands?.m16.maxM, 60);
+  assert.equal(c.engagementBands?.shotgun.closeQuarters, true);
+  assert.equal(W.isInEngagementBand(30, c.engagementBands!.m16), true);
+  assert.equal(W.isInEngagementBand(10, c.engagementBands!.m16), false);
+
+  // Real repo file parsing
+  const wtRaw = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/Weapons/weapons_tuning.json'), 'utf8'));
+  const pmcRaw = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/AI/pmc_commander.json'), 'utf8'));
+  const parsed = W.parseFromJson(wtRaw, pmcRaw);
+  assert.equal(parsed.weapons.m16.attackRangeM, 60);
+  assert.equal(parsed.weapons.shotgun.attackRangeM, 15);
+  assert.equal(parsed.rangeFalloff.floorMultiplier, 0.1);
+  assert.equal(parsed.engagementBands?.m16.minM, 25);
+  assert.equal(parsed.engagementBands?.shotgun.closeQuarters, true);
+});
+
+test('CombatSim: run with sight conditions (weather/night) and weapon ranges (T10 parity)', () => {
+  const world = new SimWorld(fixture, parsePressureConfig({ ...(fixture.pressure as object), enabled: true }));
+  const track = buildSquadTrack(world, formationConfig, { members: 3 });
+
+  // 1. Baseline run (legacy flat 60 m sight, flat 25 m rifle)
+  const baseline = runCombatSim({ world, track, seed: 42, durationSec: 300 });
+
+  // 2. Exact backward compatibility check: when options are false, outputs are identical
+  const compat = runCombatSim({
+    world,
+    track,
+    seed: 42,
+    durationSec: 300,
+    constants: { useSightConditions: false, useWeaponRanges: false },
+  });
+  assert.equal(compat.metrics.contacts, baseline.metrics.contacts);
+  assert.equal(compat.metrics.rounds, baseline.metrics.rounds);
+  assert.equal(compat.metrics.fights, baseline.metrics.fights);
+
+  // 3. Sight conditions in Blizzard at Night: sight cone shrinks from 120 m to 21 m
+  const blizzardNight = runCombatSim({
+    world,
+    track,
+    seed: 42,
+    durationSec: 300,
+    constants: {
+      useSightConditions: true,
+      weather: 'blizzard',
+      hour: 0, // midnight (sun elevation < -10 deg)
+      sightConditions: DEFAULT_SIGHT_CONDITIONS,
+    },
+  });
+  // In blizzard night with narrow 21 m sight, first sight is delayed or contacts differ
+  assert.ok(blizzardNight.metrics.first_sight_sec >= 0, 'first sight recorded');
+
+  // 4. Weapon ranges: per-operative loadout (Commander: M16 60 m, Engineer: Shotgun 15 m, Medic: Sniper 120 m)
+  const weaponSim = runCombatSim({
+    world,
+    track,
+    seed: 42,
+    durationSec: 300,
+    constants: {
+      useWeaponRanges: true,
+      weaponsConfig: DEFAULT_WEAPONS,
+      squadWeapons: ['m16', 'shotgun', 'sniper_rifle'],
+    },
+  });
+  assert.ok(weaponSim.metrics.rounds > 0, 'operative fired weapon rounds');
+  assert.ok(weaponSim.metrics.enemies_spawned > 0, 'enemies spawned and simulated');
 });

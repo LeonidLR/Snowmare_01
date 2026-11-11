@@ -11,7 +11,7 @@ import { add, dirOf, dist, normYaw, rng, scale, segmentBlocked, sub, yawOf } fro
 import type { EnemyStats, SimCheats, SimConstants } from './config.ts';
 import { DEFAULT_SIM_CONSTANTS, ENEMY_STATS } from './config.ts';
 import type { AmbushSpot, EnemyType, Party, PlanPhase, PressureBox, RouteCandidate, SpawnKind, SpotKind, Watcher } from './rules.ts';
-import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_HEIGHT_SIGHT, HeightSightRules, PLAN_PARTIES, findDeltaAngleDeg } from './rules.ts';
+import { AmbushPlanRules, AmbushRelocateRules, AmbushSpotRules, AmbushWatchRules, CombatPressureRules, DEFAULT_HEIGHT_SIGHT, HeightSightRules, PLAN_PARTIES, SightConditionsRules, WeaponRules, findDeltaAngleDeg } from './rules.ts';
 import type { SquadTrack, TrackFrame } from './squadTrack.ts';
 import { frameHeading } from './squadTrack.ts';
 import type { SimWorld } from './world.ts';
@@ -330,9 +330,18 @@ export function runCombatSim(o: RunOptions): RunResult {
   /**
    * UTacticalSightSubsystem::GetSightRangeCm (2026-11-02): MaxSightCm x the height level's multiplier - his eye over the ground below him (the
    * sim's buildings stand on the street: level x 300 + the eye; in the -3 m cut the cut floor is his ground, level 0).
+   * T10: When useSightConditions is enabled, base sight range scales with weather and sun elevation / hour.
    */
-  const squadSightRangeCm = (m: Operative): number =>
-    K.sightRangeCm * HeightSightRules.rangeMultiplierAt(DEFAULT_HEIGHT_SIGHT, Math.max(0, m.level) * 300 + K.sightEyeCm);
+  const squadSightRangeCm = (m: Operative): number => {
+    const baseSightCm = K.useSightConditions && K.sightConditions
+      ? SightConditionsRules.squadSightRangeCm(
+          K.sightConditions,
+          K.weather ?? 'clear',
+          K.sunElevationDeg ?? (K.hour !== undefined ? SightConditionsRules.sunElevationFromHour(K.hour) : 45),
+        )
+      : K.sightRangeCm;
+    return baseSightCm * HeightSightRules.rangeMultiplierAt(DEFAULT_HEIGHT_SIGHT, Math.max(0, m.level) * 300 + K.sightEyeCm);
+  };
   /** IsPointInSquadSight: the real eyes (any direction), within his sight range (MaxSightCm x his height bonus). */
   const pointInSquadSight = (p: Vec2, z: number): boolean => {
     for (const m of ops) {
@@ -921,11 +930,20 @@ export function runCombatSim(o: RunOptions): RunResult {
   const perceive = (e: Enemy): boolean => {
     // Patrol perception (enemy_perception.json): sight (range, cone, a clear line, time to detect), proximity.
     let seeing = false;
+    const enemySightCm = K.useSightConditions && K.sightConditions
+      ? SightConditionsRules.enemySightRangeCm(
+          e.stats.sightRangeM,
+          e.type === 'MARKSMAN',
+          K.sightConditions,
+          K.weather ?? 'clear',
+          K.sunElevationDeg ?? (K.hour !== undefined ? SightConditionsRules.sunElevationFromHour(K.hour) : 45),
+        )
+      : e.stats.sightRangeM * 100;
     for (const m of ops) {
       const d = dist(e.pos, m.pos);
       if (d <= PROXIMITY_CM && m.level === 0) return true;
       // the enemies stand on the street in the sim: level 0, x1 (an armed human on a roof would get the squad's height bonus - UE only)
-      if (d > e.stats.sightRangeM * 100) continue;
+      if (d > enemySightCm) continue;
       if (Math.abs(findDeltaAngleDeg(e.yaw, AmbushWatchRules.bearingDeg(e.pos, m.pos))) > e.stats.sightHalfAngleDeg) continue;
       if (world.los(e.pos, K.eyeLiftCm, m.pos, m.level * 300 + K.targetLiftCm)) { seeing = true; break; }
     }
@@ -1052,6 +1070,15 @@ export function runCombatSim(o: RunOptions): RunResult {
     for (let i = 0; i < ops.length; i++) {
       const m = ops[i];
       if (clock < m.knockedUntil) { m.target = -1; continue; }
+      const weaponId = K.squadWeapons?.[i] ?? 'm16';
+      const weapon = (K.useWeaponRanges && K.weaponsConfig?.weapons[weaponId]) ? K.weaponsConfig.weapons[weaponId] : null;
+      const maxRangeCm = weapon ? weapon.attackRangeM * 100 : K.rifleRangeCm;
+      const returnFireRangeCm = weapon ? weapon.attackRangeM * 100 * 1.1 : K.rifleReturnFireRangeCm;
+      const weaponDamage = weapon ? weapon.baseDamage : K.rifleDamage;
+      const weaponInterval = weapon && weapon.fireRate > 0
+        ? (weapon.name.toLowerCase().includes('sniper') ? weapon.fireRate : (weapon.fireRate <= 1.0 ? 1 / weapon.fireRate : weapon.fireRate))
+        : K.rifleInterval;
+
       // the nearest enemy he can see (within the rifle's range; a fighting squad turns to every engaged enemy in sight)
       let best: Enemy | null = null, bestD = Infinity;
       for (const e of living()) {
@@ -1061,7 +1088,7 @@ export function runCombatSim(o: RunOptions): RunResult {
           if (!spottedBySquad(e)) continue;
         }
         const d = dist(m.pos, e.pos);
-        if (d > (e.state === 'engaged' ? K.rifleReturnFireRangeCm : K.rifleRangeCm) || d >= bestD) continue;
+        if (d > (e.state === 'engaged' ? returnFireRangeCm : maxRangeCm) || d >= bestD) continue;
         if (!world.los(m.pos, m.level * 300 + K.sightEyeCm, e.pos, K.targetLiftCm)) continue;
         best = e; bestD = d;
       }
@@ -1069,14 +1096,24 @@ export function runCombatSim(o: RunOptions): RunResult {
       if (m.target !== best.id) { if (m.sawAt < 0 || m.target !== best.id) m.sawAt = m.sawAt < 0 ? clock : m.sawAt; m.target = best.id; }
       if (firstSight < 0) firstSight = clock;
       if (clock < m.sawAt + K.reactionSeconds || clock < m.nextShot) continue;
-      m.nextShot = clock + K.rifleInterval;
+      m.nextShot = clock + weaponInterval;
       m.rounds++;
       lastShotAt = clock;
       m.bodyYaw = AmbushWatchRules.bearingDeg(m.pos, best.pos);
       const cell = Math.min(cells.length - 1, Math.floor(bestD / K.rifleCellCm));
       if (best.state !== 'engaged') engage(best, 'shot');
-      if (fightRng() < cells[cell]) {
-        best.hp -= K.rifleDamage * (1 - K.enemyArmor);
+      let hitChance = cells[cell];
+      if (weapon && K.weaponsConfig) {
+        hitChance *= WeaponRules.falloffMultiplier(
+          bestD / 100,
+          weapon.effectiveRangeM,
+          weapon.attackRangeM,
+          K.weaponsConfig.rangeFalloff.floorMultiplier,
+          K.weaponsConfig.rangeFalloff.exponent,
+        );
+      }
+      if (fightRng() < hitChance) {
+        best.hp -= weaponDamage * (1 - K.enemyArmor);
         if (!best.stats.ranged) best.nextAttack = Math.max(best.nextAttack, clock + K.hitStaggerSeconds); // the hit reaction interrupts the blow
         if (best.hp <= 0) { best.state = 'dead'; P.killed++; }
       }
