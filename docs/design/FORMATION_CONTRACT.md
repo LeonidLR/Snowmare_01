@@ -880,9 +880,8 @@ The Training Ground formation editor (task 008: `shapesSchema.ts`, `shapesCovera
 4. Nothing -> the formula of `formation_config.json` (sections 2 / 12 / 13), unchanged.
 Never from the file: wall, hedgehog, blizzard (rule-driven), the trail column (the wall / narrow passage / sharp-turn fold, 10.1 / 13.6 - the
 guard is unchanged and still tests the formula's slots), the custom shape (17).
-Known difference to the TS lookup (`getSavedFormationShape`): TS gives `pair` to a 2-man COLUMN (before a saved `column/2`) and never to the
-2-man wedge - the C++ follows the review finding above; the golden cases leave `pair` out. Recommended TS fix: use `pair` for wedge / diamond
-with 2 members only.
+The TS lookup (`getSavedFormationShape`) follows the same pair rule: exact saved entries win; `pair/2` is a fallback only for the
+2-member wedge / diamond. A 2-member column, line or echelon never reads it. Regression coverage: `shapes.test.ts`.
 
 ### 19.3 Slots, looks, arcs (`FormationShapes::Slots` = TS `savedShapeTargets`)
 `pos = localToWorld(leaderPos, heading, [fwd, right])`, `yaw = normYaw(heading + look)`, `arc = arc ?? 90`. The runtime puts them in

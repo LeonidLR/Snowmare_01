@@ -479,7 +479,7 @@ test('008 review defect 3: validateFormationShapes enforces commander at member 
   assert.ok(errs2.some((e) => e.includes('roles must match rolesFor(4)')));
 });
 
-test('008 review defect 4: getSavedFormationShape pair shape only applies to pair or 2-man column fallback', () => {
+test('saved pair is only a fallback for a 2-member wedge or diamond; exact shapes win', () => {
   const shapes: FormationShapesFile = {
     schema: FORMATION_SHAPES_SCHEMA,
     formations: {
@@ -503,19 +503,24 @@ test('008 review defect 4: getSavedFormationShape pair shape only applies to pai
     },
   };
 
-  // For pair formation: returns pair
-  const pairRes = getSavedFormationShape(shapes, 'pair', 2);
-  assert.ok(pairRes !== undefined);
-  assert.equal(pairRes!.members[1].right, 150);
+  const pair = shapes.formations.pair!['2'];
+  assert.equal(getSavedFormationShape(shapes, 'pair', 2), pair);
+  assert.equal(getSavedFormationShape(shapes, 'wedge', 2), pair);
+  assert.equal(getSavedFormationShape(shapes, 'diamond', 2), pair);
+  assert.equal(getSavedFormationShape(shapes, 'wedge', 3), shapes.formations.wedge!['3']);
+  assert.equal(getSavedFormationShape(shapes, 'diamond', 3), undefined);
+  for (const formation of ['column', 'line', 'echelon_left', 'echelon_right'] as const) {
+    assert.equal(getSavedFormationShape(shapes, formation, 2), undefined, `${formation} never takes pair`);
+  }
+  assert.equal(getSavedFormationShape(undefined, 'wedge', 2), undefined);
 
-  // For 2-man column: falls back to pair if column not specified
-  const colRes = getSavedFormationShape(shapes, 'column', 2);
-  assert.ok(colRes !== undefined);
-  assert.equal(colRes!.members[1].right, 150);
-
-  // For 2-man wedge: does NOT fall back to pair! Must be undefined since wedge['2'] is not in saved
-  const wedgeRes = getSavedFormationShape(shapes, 'wedge', 2);
-  assert.equal(wedgeRes, undefined);
+  const own: FormationShape = { members: pair.members.map((m) => ({ ...m, right: m.right + 35 })) };
+  shapes.formations.column = { '2': own };
+  shapes.formations.wedge!['2'] = own;
+  shapes.formations.diamond = { '2': own };
+  for (const formation of ['column', 'wedge', 'diamond'] as const) {
+    assert.equal(getSavedFormationShape(shapes, formation, 2), own, `${formation}/2 exact entry wins over pair`);
+  }
 });
 
 test('008 review defect 5: custom shape validation catches radius, arc, duplicate squad, non-object member', () => {

@@ -26,10 +26,12 @@ export function getSavedFormationShape(
 ): FormationShape | undefined {
   if (!savedShapes?.formations) return undefined;
   const countKey = String(memberCount);
-  if ((formation as string) === 'pair' || (memberCount === 2 && formation === 'column' && savedShapes.formations.pair?.[countKey])) {
-    return savedShapes.formations.pair?.[countKey] ?? (savedShapes.formations as Record<string, Record<string, FormationShape> | undefined>)[formation]?.[countKey];
-  }
-  return (savedShapes.formations as Record<string, Record<string, FormationShape> | undefined>)[formation]?.[countKey];
+  const exact = (savedShapes.formations as Record<string, Record<string, FormationShape> | undefined>)[formation]?.[countKey];
+  if (exact) return exact;
+  // The game's pair is a 2-member wedge/diamond; other formations keep their own shape or formula.
+  return memberCount === 2 && (formation === 'wedge' || formation === 'diamond')
+    ? savedShapes.formations.pair?.[countKey]
+    : undefined;
 }
 
 /**
