@@ -67,10 +67,18 @@ struct CODEXTACTICS_API FPmcObjectiveView
 {
 	EPmcRole Role = EPmcRole::None;
 	FVector Location = FVector::ZeroVector;
-	/** Planar distance fighter -> point, cm. */
+	/**
+	 * Level-aware distance fighter -> point, cm (PmcCommanderRules::ObjectiveDistanceCm): planar while his feet are on the point's level,
+	 * else planar + the climb and never inside the radius (fix/pmc-onpoint-3d-detour: a roof point did count the men under it).
+	 */
 	float DistanceCm = 0.f;
 	/** The hold radius, cm (attackers within it and no live defender within it = the attackers hold the point). */
 	float RadiusCm = 0.f;
+	/**
+	 * The point's level (fix/pmc-onpoint-3d-detour 2026-11-11): a man is on / near it only with |his feet Z - the point's Z| <= this, cm
+	 * (the arena's pmc_arena.objective_level_m; <= 0 = planar, the old test).
+	 */
+	float LevelToleranceCm = 150.f;
 	/** 0..1 of the round's time limit gone (the attackers' urgency). */
 	float TimeFrac = 0.f;
 	/** 0..1 of the attackers' capture clock (HoldSeconds held without a defender on the point). */
@@ -208,8 +216,19 @@ struct CODEXTACTICS_API FPmcWeights
 	float OrderMinHoldSeconds = 3.f;
 	/** An order that ended without reaching its goal (no path, a dropped walk, a failed detour) sits out this long, s. */
 	float FailedOrderCooldownSeconds = 5.f;
-	/** A walk without StuckProgressCm of progress for this long takes a detour once (an alternative route), then fails, s. */
+	/** A walk without StuckProgressCm of progress for this long takes the next detour step (NextDetourStep), then fails, s. */
 	float RepathAfterSeconds = 5.f;
+	/**
+	 * fix/pmc-onpoint-3d-detour (Gemini review 009, the designer 2026-11-11): the re-route steps of a stalled walk before its order fails -
+	 * 1 = a side waypoint (the old rule), 2 = + the other side, 3 = + a short step back along the way he came, then the walk re-routes.
+	 */
+	int32 DetourMax = 3;
+	/** The side waypoint's distance off his line to the goal, cm (the ring further out = 1.5 x, the lean towards the goal = 0.5 x). */
+	float DetourSideCm = 600.f;
+	/** The step back along his arrival direction, cm (the designer: 50-100). */
+	float DetourStepBackCm = 75.f;
+	/** One height level for the walks' arrival tests: a walk ending further than this above / below its goal did not arrive, cm (<= 0 = planar). */
+	float LevelToleranceCm = 150.f;
 	/** Objective rounds (the arena): this long without a shot between the sides and both push onto the point, s (0 = never). */
 	float PushAfterSeconds = 30.f;
 	/** The push's strength: an attacker's Objective walk x Push, his static / cover orders / Push; a defender returns onto the point. */
@@ -271,6 +290,31 @@ struct CODEXTACTICS_API FPmcWeights
 	float KillZoneFrac = 0.6f;
 	/** ... and at most this long after the team's first contact, s (then it fires whatever he looks at). */
 	float AmbushMaxHoldSeconds = 20.f;
+};
+
+/**
+ * The re-route steps of a stalled walk (fix/pmc-onpoint-3d-detour, Gemini review 009 recommendation 2: one side tried once sent 998 night
+ * rounds into stuck events and the failed-order cooldown): a side waypoint, then the side opposite the one taken, then a short step back.
+ */
+enum class EPmcDetourStep : uint8
+{
+	/** A waypoint off his line to the goal, either side (left first). */
+	Side,
+	/** A waypoint on the side opposite the one the Side step took. */
+	OtherSide,
+	/** A short step back along the way he came; the walk then re-routes to its goal from there. */
+	StepBack,
+	/** No step left: the order fails. */
+	None
+};
+
+/** One detour waypoint candidate: the offset from the fighter (planar) and its side of the travel (+1 left, -1 right, 0 behind). */
+struct CODEXTACTICS_API FPmcDetourCandidate
+{
+	FVector Offset = FVector::ZeroVector;
+	int32 Side = 0;
+	/** The projected waypoint must lie at least this far from him (planar), cm. */
+	float MinDistanceCm = 0.f;
 };
 
 /** One spawn candidate of the arena's seeded spawn pairs: a navmesh point and its height level (0 = the ground). */
@@ -535,6 +579,52 @@ namespace PmcCommanderRules
 	 */
 	CODEXTACTICS_API float ObjectivePositionFactor(const FVector& Position, const FVector& FighterLocation, const FPmcObjectiveView& Objective,
 		const FPmcEngagementBand& Band, float WeaponRangeCm, const FPmcWeights& Weights);
+
+	// --- Levels (fix/pmc-onpoint-3d-detour 2026-11-11, Gemini review 009 recommendation 1: a roof point at z 910 counted the men on the
+	// ground under it - 155 time-limit draws of the pmc-v3 night). Z values are FEET / navmesh heights (the actor's capsule centre minus
+	// its half height), so one floor (3 m) apart reads as 300 and the same floor as ~0. ---
+
+	/** |FeetZ - PointZ| <= ToleranceCm: the same height level (floors are 3 m apart). ToleranceCm <= 0 = always (planar, the old tests). */
+	CODEXTACTICS_API bool IsSameLevel(float FeetZ, float PointZ, float ToleranceCm);
+
+	/**
+	 * The distance still to cover to Point: planar while on its level (IsSameLevel), else max(planar + |dZ|, OffLevelMinCm) - a man a level
+	 * off is never "near" (OffLevelMinCm = the radius + 1 keeps him outside it).
+	 */
+	CODEXTACTICS_API float LevelAwareDistanceCm(const FVector& Feet, const FVector& Point, float ToleranceCm, float OffLevelMinCm);
+
+	/** On the point: within RadiusCm (planar) AND on its level. */
+	CODEXTACTICS_API bool IsOnPoint(const FVector& Feet, const FVector& Point, float RadiusCm, float ToleranceCm);
+
+	/** The commander's objective distance (FPmcObjectiveView::DistanceCm): LevelAwareDistanceCm with the objective's tolerance, off-level > radius. */
+	CODEXTACTICS_API float ObjectiveDistanceCm(const FVector& Feet, const FPmcObjectiveView& Objective);
+
+	/**
+	 * A walk's arrival test: the fighter stands farther than PlanarCm from Goal or off its level. True = short of it (the "ended short" failure
+	 * at 4 m; at 2.5 m "a walk that goes nowhere" is false only on the goal's level - a roof goal over his head is a walk to take).
+	 */
+	CODEXTACTICS_API bool IsWalkShort(const FVector& Feet, const FVector& Goal, float PlanarCm, float ToleranceCm);
+
+	// --- Detours (fix/pmc-onpoint-3d-detour, Gemini review 009 recommendation 2) ---
+
+	/**
+	 * The step of a stalled walk's re-route attempt Attempt (0-based, counting the steps already tried on this walk, found or not): 0 = Side,
+	 * 1 = OtherSide when the Side step took a side (LastSide +-1), else StepBack, 2 = StepBack after a side; None from MaxDetours on (and
+	 * after the step back). MaxDetours 1 = the old one-side rule.
+	 */
+	CODEXTACTICS_API EPmcDetourStep NextDetourStep(int32 Attempt, int32 LastSide, int32 MaxDetours);
+
+	/**
+	 * The waypoint candidates of a detour step, best first. ToGoalDir = his planar direction to the goal; ArrivalDir = the way he was walking
+	 * (the path's current segment; zero = ToGoalDir). Side: 6 m off either side leaning 3 m to the goal, 9 m off, 5 m back-diagonal (x
+	 * DetourSideCm / 600), left before right; OtherSide: those on the side opposite LastSide; StepBack: DetourStepBackCm straight back along
+	 * the arrival, then 30 deg either way. None: no candidates.
+	 */
+	CODEXTACTICS_API void DetourCandidates(const FVector& ToGoalDir, const FVector& ArrivalDir, EPmcDetourStep Step, int32 LastSide, const FPmcWeights& Weights,
+		TArray<FPmcDetourCandidate>& OutCandidates);
+
+	/** "side" / "other_side" / "step_back" / "none" (logs). */
+	CODEXTACTICS_API const TCHAR* DetourStepName(EPmcDetourStep Step);
 
 	/**
 	 * The round's end (the arena): a side down = elimination (both down: a draw); the attackers' capture = objective; the time limit =

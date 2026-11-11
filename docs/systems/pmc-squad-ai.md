@@ -636,3 +636,55 @@ on the point", hold, and nobody fires (blizzard, a level apart) for 240 s. Next:
 
 **Checks:** unit `CodexTactics.AI.PmcArena.RocketContact`, `.ContactFlow`, `.ObjectiveReach`; smokes `PmcArenaSmoke`, `PmcArenaObjectiveSmoke`,
 `PmcStalemateSmoke` (objective reached from both spawns, the rocket counters in the JSON).
+
+## 13. Level-aware on-point / arrival, the three-step detour (fix/pmc-onpoint-3d-detour, 2026-11-11)
+
+**Asked** (Gemini's night review `docs/port/gemini/outbox/009-night-trainer-review.report.md`, recommendations 1-2, approved by the game
+designer): (1) the on-point / arrival / objective-distance checks must count the height - a roof point (z 910) counted the men on the ground
+under it (155 `draw/time_limit (empty)` rounds of the pmc-v3 night); (2) a stalled walk tried one side once and then failed its order
+(998 rounds with stuck events).
+
+**Now** (pure rules in `PmcCommanderRules`, used by `UPmcSquadSubsystem` and `PmcArenaCommand.cpp`; Z values are FEET = capsule centre -
+half height, against navmesh points):
+- `IsSameLevel` (|dZ| <= tolerance; <= 0 = planar), `IsOnPoint` (radius AND level), `LevelAwareDistanceCm` (planar on the level, else
+  max(planar + |dZ|, radius + 1): a man a floor off is never "near"), `ObjectiveDistanceCm` (`FPmcObjectiveView::DistanceCm`),
+  `IsWalkShort` (the walk's "ended short" 4 m and "goes nowhere" 2.5 m tests: a roof goal over his head is a walk to take, the ground
+  under it is not an arrival).
+- Data: `pmc_commander.json` `level_tolerance_cm` 150 (the walks), the arena's `pmc_arena.objective_level_m` 1.5 (`L_PmcArena.json`,
+  `L_PmcArenaDepot.json`; `CountOnPoint` was the capsule centre within 3 m, which let a man one floor below hold). `SetTeamObjective` takes
+  the level; `FPmcObjectiveView::LevelToleranceCm`.
+- Commander: `ObjectivePositionFactor` - a cover slot a level off the point gets at most half the approach gain; the Objective walk keeps the
+  point's level (its ring spot falls back to the point itself when the offset projects off the roof; no "threat's level" retry, no
+  reachable-spot fallback on another level); the no-full-path ring probe prefers a spot on the goal's level. A fighter on a ladder / mid-drop
+  is not re-decided and his walk counts as running (`IsTraversingLink`: the climb used to read as "ended short", fail the order and turn him
+  round at the next rung); climbing restarts the stall clock.
+- Detour (`NextDetourStep` / `DetourCandidates`, `pmc_commander.json` `detour_max` 3, `detour_side_cm` 600, `detour_step_back_cm` 75, all
+  frozen in the bounds): stall 1 = a side waypoint (the old 6-candidate ring, left first), stall 2 = the side opposite the one taken, stall 3
+  = a short step back along the path's current direction (on his floor), then the order fails; a step with no waypoint tries the next at
+  once. `detour_max` 1 = the old rule.
+- The 2-point `[MoveTrace]` path of section 12 is not a straight line: crowd following skips string pulling (`UCrowdFollowingComponent`),
+  the route is the navmesh corridor - the trace now prints `corridor N polys / string-pulled` (the roof walks show 24-75 polys, and the
+  attackers do climb: `[Ladder] ... link going up`).
+- Arena JSON: `objective.level_m`, `config.objective_level_m`, `flow.attacker_under_point_s` (man-seconds within the radius but off the
+  level); `attacker_mean_dist_m` / `attacker_closest_m` are level-aware. `Codex.Debug.MoveTrace 1` logs why a commander walk was not taken.
+
+**Measured** (Depot, 1 round each, baseline vs baseline, 240 s, the 009 seeds; before = main's build, after = this branch; the runs are not
+deterministic, the same seed varies a lot run to run):
+
+| | before (7 rounds) | after (9 rounds) |
+|---|---|---|
+| orders failed "stuck (no progress, no detour)" | 3 | 2 (both in one traced round with 16 detours) |
+| detours taken (side / other side / step back) | 19 (side only) | 30 (in the traced round: 8 / 5 / 3) |
+| roof rounds won by the attackers' capture | 1 / 6 | 1 / 8 |
+| roof rounds ending `time_limit` with the point empty (honest now: a defender a floor below no longer holds) | 0 / 6 | 2 / 8 |
+| attackers under a roof point (within the radius, off its level), man-s per round | n/a | 0-6.6 |
+
+**Open:** the attackers' roof walks are long (35-80 m of corridor) and the commander replaces them within 2-5 s by TakeCover / Flank /
+FallBack under fire (seed 1840048047 traced: 11 Objective walks of one attacker, none lasted to the stairs) - the roof capture rate is a
+commitment / push question (review 009 recommendation 3: the pmc-v4 run for `push`), not pathing. The "failed orders" totals (60-235 per
+round on both builds) are dominated by one panicking or off-navmesh fighter re-failing "could not be taken" every decision.
+
+**Checks:** unit `CodexTactics.AI.PmcArena.OnPointLevel`, `CodexTactics.AI.PmcCommander.WalkArrivalLevel`, `.Detour` (+ all 35
+`CodexTactics.AI.Pmc*`), `Scripts/Trainer/tests/test_stalemate.py`; smokes `PmcArenaSmoke`, `PmcArenaObjectiveSmoke` PASS,
+`PmcStalemateSmoke` 3 of 4 PASS (the FAIL: a ground-level street point, attackers never closer than 25.7 m, a 50.9 s quiet spell - stays in
+`knownFlaky`).

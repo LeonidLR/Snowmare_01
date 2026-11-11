@@ -9,6 +9,7 @@
 #include "Combat/MortarRules.h"
 #include "Combat/MortarSubsystem.h"
 #include "AI/SquadOrderCatalog.h"
+#include "AIController.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
@@ -25,8 +26,12 @@
 #include "Data/WeaponDataAsset.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
+#include "Falls/LedgeFallComponent.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "HAL/IConsoleManager.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "Materials/MaterialInterface.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Tactics/CoverTraceRules.h"
@@ -47,6 +52,22 @@ namespace PmcSquadLocal
 	inline bool IsLiveOperative(const AOperativeCharacter* Operative)
 	{
 		return IsValid(Operative) && !Operative->IsHidden() && !Operative->IsKilledInAction() && Operative->HealthComponent && Operative->HealthComponent->IsAlive();
+	}
+
+	/**
+	 * fix/pmc-onpoint-3d-detour: he is on a ladder / a drop link of his walk (queued at the ladder, climbing, running off the edge, landing).
+	 * The ladder's StartEntry stops his path following (StopOperative) and resumes the walk after the climb (ResumeMoveAfterLadder), so for
+	 * the commander the walk is still running - it used to read as "ended short of its goal", failed the order and re-decided mid-climb.
+	 */
+	inline bool IsTraversingLink(const AOperativeCharacter& Operative)
+	{
+		return (Operative.LadderClimb && Operative.LadderClimb->IsBusy()) || (Operative.LedgeFall && Operative.LedgeFall->IsBusy());
+	}
+
+	/** His feet: the capsule centre minus its half height (the level tests compare feet with navmesh points; fix/pmc-onpoint-3d-detour). */
+	inline FVector FeetOf(const AOperativeCharacter& Operative)
+	{
+		return Operative.GetActorLocation() - FVector(0.f, 0.f, Operative.GetSimpleCollisionHalfHeight());
 	}
 
 	inline float HealthFractionOf(const AOperativeCharacter& Operative)
@@ -422,7 +443,7 @@ void UPmcSquadSubsystem::SetTeamAssault(int32 TeamId, const FVector* Point)
 	}
 }
 
-void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVector& Location, float RadiusCm)
+void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVector& Location, float RadiusCm, float LevelToleranceCm)
 {
 	FTeam& Team = TeamOf(TeamId);
 	if (Role == EPmcRole::None || RadiusCm <= 0.f)
@@ -434,6 +455,7 @@ void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVe
 	Objective.Role = Role;
 	Objective.Location = Location;
 	Objective.RadiusCm = RadiusCm;
+	Objective.LevelToleranceCm = LevelToleranceCm;
 	Team.Objective = Objective;
 	Team.ObjectiveSetTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	// Target attention (2026-11-07): the defenders lie in wait with their fire held from the start (the first decision may come after the
@@ -868,7 +890,7 @@ bool UPmcSquadSubsystem::IsOrderRunning(const AOperativeCharacter& Fighter, cons
 	case EPmcOrder::Relocate:
 	case EPmcOrder::TakeCover:
 	case EPmcOrder::Objective:
-		return Fighter.HasOwnMoveOrder() || Fighter.HasPendingCover();
+		return Fighter.HasOwnMoveOrder() || Fighter.HasPendingCover() || PmcSquadLocal::IsTraversingLink(Fighter);
 	case EPmcOrder::Suppress:
 		return Fighter.HasSuppressOrder();
 	case EPmcOrder::Heal:
@@ -900,7 +922,11 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 			Team.Stats.SuppressionSeconds += DeltaTime;
 		}
 		const FVector Location = Fighter->GetActorLocation();
-		if (State.Order == EPmcOrder::Flank && !State.bFlankCounted && FVector::Dist2D(Location, State.Goal) <= PmcSquadLocal::ArriveCm)
+		// fix/pmc-onpoint-3d-detour: the arrival tests compare his FEET with the navmesh goal on its level (a roof goal is not reached from
+		// the ground under it).
+		const FVector Feet = PmcSquadLocal::FeetOf(*Fighter);
+		if (State.Order == EPmcOrder::Flank && !State.bFlankCounted
+			&& !PmcCommanderRules::IsWalkShort(Feet, State.Goal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
 		{
 			State.bFlankCounted = true;
 			++Team.Stats.FlanksSucceeded;
@@ -908,7 +934,13 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 		}
 		const bool bWalking = State.Order == EPmcOrder::Advance || State.Order == EPmcOrder::Flank || State.Order == EPmcOrder::FallBack
 			|| State.Order == EPmcOrder::Relocate || State.Order == EPmcOrder::TakeCover || State.Order == EPmcOrder::Objective;
-		if (bWalking && Fighter->HasOwnMoveOrder())
+		if (bWalking && PmcSquadLocal::IsTraversingLink(*Fighter))
+		{
+			// Climbing / dropping is progress (vertical); the stall clock restarts after it.
+			State.ProgressPoint = Location;
+			State.ProgressTime = Now;
+		}
+		else if (bWalking && Fighter->HasOwnMoveOrder())
 		{
 			if (FVector::Dist2D(Location, State.ProgressPoint) >= PmcSquadLocal::StuckProgressCm)
 			{
@@ -918,16 +950,32 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 			else if (Now - State.ProgressTime > Team.Weights.RepathAfterSeconds)
 			{
 				// fix/pmc-arena-stalemate (the designer 2026-11-08): no progress for 5 s -> another route (a detour waypoint), not standing
-				// still; a second time on the same walk -> the order failed (PickCommitted keeps it out for its cooldown).
+				// still. fix/pmc-onpoint-3d-detour (Gemini review 009): a side waypoint, then the other side, then a short step back along
+				// the way he came (each step tried at once when the one before finds no waypoint); none left -> the order failed
+				// (PickCommitted keeps it out for its cooldown).
 				++Team.Stats.StuckEvents;
-				if (State.Detours < 1 && TryDetour(*Fighter, State))
+				bool bDetoured = false;
+				for (EPmcDetourStep Step = PmcCommanderRules::NextDetourStep(State.DetourAttempts, State.DetourSide, Team.Weights.DetourMax);
+					Step != EPmcDetourStep::None && !bDetoured;
+					Step = PmcCommanderRules::NextDetourStep(State.DetourAttempts, State.DetourSide, Team.Weights.DetourMax))
 				{
-					++State.Detours;
-					++Team.Stats.Detours;
-					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s made no progress on %s for %.0f s - a detour"), TeamId,
-						*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(State.Order), Team.Weights.RepathAfterSeconds);
+					int32 Side = 0;
+					bDetoured = TryDetour(*Fighter, State, Team.Weights, Step, Side);
+					++State.DetourAttempts;
+					if (Step == EPmcDetourStep::Side)
+					{
+						State.DetourSide = bDetoured ? Side : 0;
+					}
+					if (bDetoured)
+					{
+						++State.Detours;
+						++Team.Stats.Detours;
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s made no progress on %s for %.0f s - a detour (%s)"), TeamId,
+							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(State.Order), Team.Weights.RepathAfterSeconds,
+							PmcCommanderRules::DetourStepName(Step));
+					}
 				}
-				else
+				if (!bDetoured)
 				{
 					Fighter->StopOperative();
 					MarkFailed(TeamId, Team, *Fighter, State, State.Order, TEXT("stuck (no progress, no detour)"));
@@ -949,7 +997,7 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 		if (State.bWalkPending && !IsOrderRunning(*Fighter, State))
 		{
 			State.bWalkPending = false;
-			if (bWalking && !State.Goal.IsNearlyZero() && FVector::Dist2D(Location, State.Goal) > PmcSquadLocal::FailShortCm)
+			if (bWalking && !State.Goal.IsNearlyZero() && PmcCommanderRules::IsWalkShort(Feet, State.Goal, PmcSquadLocal::FailShortCm, Team.Weights.LevelToleranceCm))
 			{
 				MarkFailed(TeamId, Team, *Fighter, State, State.Order, TEXT("ended short of its goal"));
 			}
@@ -1072,7 +1120,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 	if (Team.Objective.IsSet())
 	{
 		View.Objective = Team.Objective.GetValue();
-		View.Objective.DistanceCm = static_cast<float>(FVector::Dist2D(View.Location, View.Objective.Location));
+		View.Objective.DistanceCm = PmcCommanderRules::ObjectiveDistanceCm(PmcSquadLocal::FeetOf(Fighter), View.Objective);
 	}
 	// Cover: the quality of the slot he holds, and the best slot nearby (for TakeCover / Relocate).
 	OutCover = FCoverSlot();
@@ -1207,6 +1255,12 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		{
 			continue; // a mortar crewman stays at his place
 		}
+		// fix/pmc-onpoint-3d-detour: on a ladder / mid-drop he can do nothing else - the walk goes on after it (no new order mid-climb: a goal
+		// behind him turned him round at the next rung, the attackers never got onto the roof).
+		if (Fighter->IsClimbingLadder() || Fighter->IsDroppingOffLedge())
+		{
+			continue;
+		}
 		FFighterState& State = Team.Fighters.FindOrAdd(Fighter);
 		FCoverSlot Cover;
 		float CoverQuality = 0.f;
@@ -1298,6 +1352,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	Context.Operative = &Fighter;
 	bool bTaken = false;
 	FVector Goal = FVector::ZeroVector;
+	// Why the walk was not taken (Codex.Debug.MoveTrace logs it; fix/pmc-onpoint-3d-detour).
+	const TCHAR* WalkRefusal = nullptr;
+	// The Objective walk keeps the point's level (fix/pmc-onpoint-3d-detour): no "same spot on the threat's level" retry (it sent an attacker
+	// of a roof point down into the Depot's cut where the threat was) and no reachable spot round it on another level (under the point).
+	bool bKeepGoalLevel = false;
 	auto Walk = [&](const FVector& Point, bool bSprint)
 	{
 		// Levels (the Depot arena, 2026-11-03): a goal at the fighter's height can hang over a drop (a roof squad's advance point over
@@ -1311,7 +1370,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		};
 		bool bOnNav = ProjectToNav(Point, Goal);
 		// A goal snapped far from the asked point (the roof edge under an advance point over the street) counts as missed too.
-		if (View.bHasThreat && FMath::Abs(Point.Z - View.Threat.Location.Z) > 250.f
+		if (!bKeepGoalLevel && View.bHasThreat && FMath::Abs(Point.Z - View.Threat.Location.Z) > 250.f
 			&& (!bOnNav || FVector::Dist2D(Goal, Point) > 200.f || !HasFullPath(Goal)))
 		{
 			FVector ThreatLevel;
@@ -1323,13 +1382,17 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		}
 		if (!bOnNav)
 		{
+			WalkRefusal = TEXT("the goal is off the navmesh");
 			return false;
 		}
 		// fix/pmc-arena-stalemate: a goal with no full path from him (an island, a roof part without access) - the walk would end at once and
 		// be re-decided twice a second (pmc-v3): a reachable spot round it instead (4 / 8 m), else the order is not taken.
+		// fix/pmc-onpoint-3d-detour: a spot on the goal's own level first (a roof goal's ring probe can snap to a lower roof / the street).
 		if (Nav && !HasFullPath(Goal))
 		{
 			bool bFound = false;
+			FVector OtherLevel = FVector::ZeroVector;
+			bool bOtherLevel = false;
 			for (int32 Ring = 1; Ring <= 2 && !bFound; ++Ring)
 			{
 				for (int32 Step = 0; Step < 8 && !bFound; ++Step)
@@ -1338,19 +1401,35 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 					const FVector Probe = Goal + FRotator(0.f, Step * 45.f, 0.f).Vector() * (400.f * Ring);
 					if (ProjectToNav(Probe, Near) && HasFullPath(Near))
 					{
-						Goal = Near;
-						bFound = true;
+						if (PmcCommanderRules::IsSameLevel(static_cast<float>(Near.Z), static_cast<float>(Goal.Z), Team.Weights.LevelToleranceCm))
+						{
+							Goal = Near;
+							bFound = true;
+						}
+						else if (!bOtherLevel)
+						{
+							OtherLevel = Near;
+							bOtherLevel = true;
+						}
 					}
 				}
 			}
+			if (!bFound && bOtherLevel && !bKeepGoalLevel)
+			{
+				Goal = OtherLevel;
+				bFound = true;
+			}
 			if (!bFound)
 			{
+				WalkRefusal = TEXT("no full path to the goal or a spot 4 / 8 m round it");
 				return false;
 			}
 		}
-		// A walk that goes nowhere is no order (the Depot street round re-took an Objective walk 30 times: each "arrived" at once).
-		if (FVector::Dist2D(Goal, Fighter.GetActorLocation()) < PmcSquadLocal::ArriveCm)
+		// A walk that goes nowhere is no order (the Depot street round re-took an Objective walk 30 times: each "arrived" at once) - on the
+		// goal's level only: a roof goal right over his head is a walk up (fix/pmc-onpoint-3d-detour).
+		if (!PmcCommanderRules::IsWalkShort(PmcSquadLocal::FeetOf(Fighter), Goal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
 		{
+			WalkRefusal = TEXT("he already stands at the goal");
 			return false;
 		}
 		// A rifleman lying at band distance (the prone Crouch order) gets up to crouch before he walks off (no crawling retreats / advances).
@@ -1533,7 +1612,17 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		const int32 Index = FMath::Max(0, Mates.IndexOfByKey(&Fighter));
 		const FVector Offset = Index == 0 ? FVector::ZeroVector
 			: FRotator(0.f, Index * 120.f, 0.f).Vector() * 0.4f * View.Objective.RadiusCm;
-		bTaken = Walk(View.Objective.Location + Offset, !(View.bHasThreat && View.Threat.bSeenNow));
+		// fix/pmc-onpoint-3d-detour: his ring spot must lie on the point's level - on a small roof the offset projects past the edge onto
+		// the street below (a walk to the ground under the point); then the point itself.
+		FVector Spot = View.Objective.Location + Offset;
+		FVector SpotOnNav;
+		if (!Offset.IsNearlyZero() && (!ProjectToNav(Spot, SpotOnNav) || !PmcCommanderRules::IsSameLevel(static_cast<float>(SpotOnNav.Z),
+			static_cast<float>(View.Objective.Location.Z), View.Objective.LevelToleranceCm)))
+		{
+			Spot = View.Objective.Location;
+		}
+		bKeepGoalLevel = true;
+		bTaken = Walk(Spot, !(View.bHasThreat && View.Threat.bSeenNow));
 		Team.Stats.ObjectiveMoves += bTaken ? 1 : 0;
 		break;
 	}
@@ -1572,12 +1661,23 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		State.bWalkPending = PmcCommanderRules::IsMoveOrder(Order) && (Fighter.HasOwnMoveOrder() || Fighter.HasPendingCover());
 		State.bStrikePending = Order == EPmcOrder::RpgStrike;
 		State.Detours = 0;
+		State.DetourAttempts = 0;
+		State.DetourSide = 0;
 		State.Order = Order;
 		State.OrderSince = Now;
 		State.Goal = Goal;
 		State.Target = ThreatActor;
 		State.ProgressPoint = Fighter.GetActorLocation();
 		State.ProgressTime = Now;
+	}
+	else if (WalkRefusal)
+	{
+		static const IConsoleVariable* MoveTrace = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Debug.MoveTrace"));
+		if (MoveTrace && MoveTrace->GetInt() != 0)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[MoveTrace] %s: %s walk not taken: %s (goal %s, feet %s)"), *Fighter.DisplayName.ToString(),
+				PmcCommanderRules::OrderName(Order), WalkRefusal, *Goal.ToCompactString(), *PmcSquadLocal::FeetOf(Fighter).ToCompactString());
+		}
 	}
 	return bTaken;
 }
@@ -1654,7 +1754,7 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		const float SlotBand = PmcCommanderRules::BandFactor(SlotThreatCm, Band, Weights);
 		const bool bCorner = Band.IsValid() && PeekSightRules::IsCornerInPeekReach(Slot.bLeftEdgeExposed || Slot.bRightEdgeExposed, SlotThreatCm, PeekRangeCm);
 		// The round objective (task #53): attackers prefer slots on the way to / round the point, defenders slots overwatching it.
-		const float ObjectiveFactor = Objective ? PmcCommanderRules::ObjectivePositionFactor(Slot.WorldLocation, Chest, *Objective, Band, WeaponRangeCm, Weights) : 1.f;
+		const float ObjectiveFactor = Objective ? PmcCommanderRules::ObjectivePositionFactor(Slot.WorldLocation, Feet, *Objective, Band, WeaponRangeCm, Weights) : 1.f;
 		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)
 			* PmcCommanderRules::HighGroundFactor(Level, Weights) * FMath::Lerp(1.f, SlotBand, FMath::Clamp(Weights.BandPosition, 0.f, 1.f))
 			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f) * ObjectiveFactor;
@@ -1740,23 +1840,47 @@ bool UPmcSquadSubsystem::HasFullNavPath(const FVector& From, const FVector& To) 
 	return Path && Path->IsValid() && !Path->IsPartial();
 }
 
-bool UPmcSquadSubsystem::TryDetour(AOperativeCharacter& Fighter, const FFighterState& State) const
+bool UPmcSquadSubsystem::TryDetour(AOperativeCharacter& Fighter, const FFighterState& State, const FPmcWeights& Weights, EPmcDetourStep Step,
+	int32& OutSide) const
 {
+	OutSide = 0;
 	const FVector From = Fighter.GetActorLocation();
 	FVector Dir = (State.Goal - From).GetSafeNormal2D();
 	if (Dir.IsNearlyZero())
 	{
 		Dir = Fighter.GetActorForwardVector().GetSafeNormal2D();
 	}
-	const FVector Side(-Dir.Y, Dir.X, 0.f);
-	const FVector Offsets[] = { Side * 600.f + Dir * 300.f, -Side * 600.f + Dir * 300.f, Side * 900.f, -Side * 900.f,
-		Side * 500.f - Dir * 500.f, -Side * 500.f - Dir * 500.f };
-	for (const FVector& Offset : Offsets)
+	// The arrival vector: the segment of the path he was walking when he stalled (the step back undoes it), else his facing.
+	FVector Arrival = FVector::ZeroVector;
+	if (const AAIController* Controller = Cast<AAIController>(Fighter.GetController()))
+	{
+		if (const UPathFollowingComponent* Following = Controller->GetPathFollowingComponent())
+		{
+			Arrival = Following->GetCurrentDirection().GetSafeNormal2D();
+		}
+	}
+	if (Arrival.IsNearlyZero())
+	{
+		Arrival = Fighter.GetActorForwardVector().GetSafeNormal2D();
+	}
+	TArray<FPmcDetourCandidate> Candidates;
+	PmcCommanderRules::DetourCandidates(Dir, Arrival, Step, State.DetourSide, Weights, Candidates);
+	const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+	for (const FPmcDetourCandidate& Candidate : Candidates)
 	{
 		FVector Via;
-		if (ProjectToNav(From + Offset, Via) && FVector::Dist2D(Via, From) > 300.f && HasFullNavPath(From, Via) && HasFullNavPath(Via, State.Goal)
-			&& Fighter.SteerOwnMoveVia(Via))
+		if (!ProjectToNav(From + Candidate.Offset, Via) || FVector::Dist2D(Via, From) < Candidate.MinDistanceCm)
 		{
+			continue;
+		}
+		// The step back stays on his floor (a 75 cm step that snaps to the street below is no step back).
+		if (Step == EPmcDetourStep::StepBack && !PmcCommanderRules::IsSameLevel(static_cast<float>(Via.Z), static_cast<float>(Feet.Z), Weights.LevelToleranceCm))
+		{
+			continue;
+		}
+		if (HasFullNavPath(From, Via) && HasFullNavPath(Via, State.Goal) && Fighter.SteerOwnMoveVia(Via))
+		{
+			OutSide = Candidate.Side;
 			return true;
 		}
 	}

@@ -58,6 +58,10 @@ class GenomeTests(unittest.TestCase):
         # the designer's rules stay fixed: push after 30 s quiet, re-path after 5 s without progress
         for key in ("/push_after_s", "/repath_after_s"):
             self.assertTrue(bounds[key].get("frozen"), key)
+        # fix/pmc-onpoint-3d-detour: the detour steps and the walks' level are the designer's rules too (in the weights, frozen)
+        for key in ("/detour_max", "/detour_side_cm", "/detour_step_back_cm", "/level_tolerance_cm"):
+            self.assertIn(key, genes)
+            self.assertTrue(bounds[key].get("frozen"), key)
         self.assertGreaterEqual(bounds["/push"]["min"], 1.0)  # evolution can't switch the push off
 
 

@@ -531,6 +531,15 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("push"), Out.Push);
 		ReadNumber(Json, TEXT("rpg_gunner_share"), Out.RpgGunnerShare);
 		Out.RepathAfterSeconds = FMath::Max(1.f, Out.RepathAfterSeconds);
+		// Detours and levels (fix/pmc-onpoint-3d-detour 2026-11-11).
+		float DetourMax = static_cast<float>(Out.DetourMax);
+		ReadNumber(Json, TEXT("detour_max"), DetourMax);
+		Out.DetourMax = FMath::Clamp(FMath::RoundToInt(DetourMax), 0, 3);
+		ReadNumber(Json, TEXT("detour_side_cm"), Out.DetourSideCm);
+		Out.DetourSideCm = FMath::Clamp(Out.DetourSideCm, 200.f, 2000.f);
+		ReadNumber(Json, TEXT("detour_step_back_cm"), Out.DetourStepBackCm);
+		Out.DetourStepBackCm = FMath::Clamp(Out.DetourStepBackCm, 25.f, 300.f);
+		ReadNumber(Json, TEXT("level_tolerance_cm"), Out.LevelToleranceCm);
 		ReadNumber(Json, TEXT("high_ground"), Out.HighGround);
 		float MaxLevels = static_cast<float>(Out.HighGroundMaxLevels);
 		ReadNumber(Json, TEXT("high_ground_max_levels"), MaxLevels);
@@ -607,17 +616,134 @@ namespace PmcCommanderRules
 		{
 			return 1.f;
 		}
-		const float SlotDistance = static_cast<float>(FVector::Dist2D(Position, Objective.Location));
+		// fix/pmc-onpoint-3d-detour: level-aware (Position = the slot's navmesh point, FighterLocation = his feet) - a slot under a roof
+		// point is no slot on it; a slot a level off still counts as progress on the way, at most half the on-point gain.
+		const float SlotDistance = ObjectiveDistanceCm(Position, Objective);
 		if (Objective.Role == EPmcRole::Attacker)
 		{
-			const float FighterDistance = static_cast<float>(FVector::Dist2D(FighterLocation, Objective.Location));
-			const float Gain = SlotDistance <= Objective.RadiusCm ? 1.f
+			const float FighterDistance = ObjectiveDistanceCm(FighterLocation, Objective);
+			const bool bSlotOnLevel = IsSameLevel(static_cast<float>(Position.Z), static_cast<float>(Objective.Location.Z), Objective.LevelToleranceCm);
+			float Gain = SlotDistance <= Objective.RadiusCm ? 1.f
 				: FMath::Clamp((FighterDistance - SlotDistance) / FMath::Max(Objective.RadiusCm, 1.f), -1.f, 1.f);
+			if (!bSlotOnLevel)
+			{
+				Gain = FMath::Min(Gain, 0.5f);
+			}
 			return FMath::Max(0.25f, 1.f + FMath::Max(Weights.ObjectiveApproach, 0.f) * Gain);
 		}
 		const float Overwatch = OverwatchRangeCm(Objective, Band, WeaponRangeCm);
 		const float Reach = SlotDistance <= Overwatch ? 1.f : PmcCommanderLocal::Clamp01(1.f - (SlotDistance - Overwatch) / FMath::Max(Overwatch, 1.f));
 		return 1.f + FMath::Max(Weights.Overwatch, 0.f) * Reach;
+	}
+
+	bool IsSameLevel(float FeetZ, float PointZ, float ToleranceCm)
+	{
+		return ToleranceCm <= 0.f || FMath::Abs(FeetZ - PointZ) <= ToleranceCm;
+	}
+
+	float LevelAwareDistanceCm(const FVector& Feet, const FVector& Point, float ToleranceCm, float OffLevelMinCm)
+	{
+		const float Planar = static_cast<float>(FVector::Dist2D(Feet, Point));
+		if (IsSameLevel(static_cast<float>(Feet.Z), static_cast<float>(Point.Z), ToleranceCm))
+		{
+			return Planar;
+		}
+		return FMath::Max(Planar + static_cast<float>(FMath::Abs(Feet.Z - Point.Z)), OffLevelMinCm);
+	}
+
+	bool IsOnPoint(const FVector& Feet, const FVector& Point, float RadiusCm, float ToleranceCm)
+	{
+		return FVector::Dist2D(Feet, Point) <= RadiusCm && IsSameLevel(static_cast<float>(Feet.Z), static_cast<float>(Point.Z), ToleranceCm);
+	}
+
+	float ObjectiveDistanceCm(const FVector& Feet, const FPmcObjectiveView& Objective)
+	{
+		return LevelAwareDistanceCm(Feet, Objective.Location, Objective.LevelToleranceCm, FMath::Max(Objective.RadiusCm, 0.f) + 1.f);
+	}
+
+	bool IsWalkShort(const FVector& Feet, const FVector& Goal, float PlanarCm, float ToleranceCm)
+	{
+		return FVector::Dist2D(Feet, Goal) > PlanarCm || !IsSameLevel(static_cast<float>(Feet.Z), static_cast<float>(Goal.Z), ToleranceCm);
+	}
+
+	EPmcDetourStep NextDetourStep(int32 Attempt, int32 LastSide, int32 MaxDetours)
+	{
+		if (Attempt < 0 || Attempt >= FMath::Min(MaxDetours, 3))
+		{
+			return EPmcDetourStep::None;
+		}
+		switch (Attempt)
+		{
+		case 0:
+			return EPmcDetourStep::Side;
+		case 1:
+			return LastSide != 0 ? EPmcDetourStep::OtherSide : EPmcDetourStep::StepBack;
+		default:
+			return LastSide != 0 ? EPmcDetourStep::StepBack : EPmcDetourStep::None;
+		}
+	}
+
+	void DetourCandidates(const FVector& ToGoalDir, const FVector& ArrivalDir, EPmcDetourStep Step, int32 LastSide, const FPmcWeights& Weights,
+		TArray<FPmcDetourCandidate>& OutCandidates)
+	{
+		OutCandidates.Reset();
+		FVector Dir = ToGoalDir.GetSafeNormal2D();
+		if (Dir.IsNearlyZero())
+		{
+			Dir = FVector::ForwardVector;
+		}
+		const FVector Left(-Dir.Y, Dir.X, 0.f);
+		const float SideCm = FMath::Max(Weights.DetourSideCm, 1.f);
+		switch (Step)
+		{
+		case EPmcDetourStep::Side:
+		case EPmcDetourStep::OtherSide:
+		{
+			// The old ring at 600: 600 off + 300 towards the goal, 900 off, 500 off + 500 back (x DetourSideCm / 600).
+			const float Diagonal = SideCm * (500.f / 600.f);
+			const struct { FVector Offset; int32 Side; } Ring[] = {
+				{ Left * SideCm + Dir * (0.5f * SideCm), 1 }, { -Left * SideCm + Dir * (0.5f * SideCm), -1 },
+				{ Left * (1.5f * SideCm), 1 }, { -Left * (1.5f * SideCm), -1 },
+				{ Left * Diagonal - Dir * Diagonal, 1 }, { -Left * Diagonal - Dir * Diagonal, -1 } };
+			for (const auto& Entry : Ring)
+			{
+				if (Step == EPmcDetourStep::OtherSide && Entry.Side != -LastSide)
+				{
+					continue;
+				}
+				OutCandidates.Add({ Entry.Offset, Entry.Side, 0.5f * SideCm });
+			}
+			break;
+		}
+		case EPmcDetourStep::StepBack:
+		{
+			// Back the way he came (the arrival vector): out of the corner he walked into, then the walk re-routes from there.
+			FVector Back = -ArrivalDir.GetSafeNormal2D();
+			if (Back.IsNearlyZero())
+			{
+				Back = -Dir;
+			}
+			const float BackCm = FMath::Max(Weights.DetourStepBackCm, 1.f);
+			for (const float Yaw : { 0.f, 30.f, -30.f })
+			{
+				OutCandidates.Add({ Back.RotateAngleAxis(Yaw, FVector::UpVector) * BackCm, 0, 0.5f * BackCm });
+			}
+			break;
+		}
+		default:
+			break;
+		}
+	}
+
+	const TCHAR* DetourStepName(EPmcDetourStep Step)
+	{
+		switch (Step)
+		{
+		case EPmcDetourStep::Side: return TEXT("side");
+		case EPmcDetourStep::OtherSide: return TEXT("other_side");
+		case EPmcDetourStep::StepBack: return TEXT("step_back");
+		default: return TEXT("none");
+		}
 	}
 
 	FPmcRoundOutcome ResolveRound(int32 AliveA, int32 AliveB, bool bTimeUp, bool bObjective, const FPmcObjectiveClock& Clock, bool bAttackerIsA, bool bContact)

@@ -181,11 +181,13 @@ namespace PmcArena
 	 * The arena's own data (task #53): the level JSON's "pmc_arena" object (L_PmcArenaDepot.json / L_PmcArena.json), the code defaults
 	 * below without it: objective_radius_m, objective_hold_s, objective_offset_frac (the point from the defender's spawn towards the
 	 * attacker's, x 0.75-1.25 seeded), defender_offset_m (a scenario site -> the defender's spawn), passage_min_m / passage_max_m /
-	 * wall_min_height_m (the chokepoint search).
+	 * wall_min_height_m (the chokepoint search), objective_level_m (fix/pmc-onpoint-3d-detour: a man is on the point only within this
+	 * height of it, feet vs the navmesh point - one floor is 3 m).
 	 */
 	struct FArenaConfig
 	{
 		float ObjectiveRadiusCm = 600.f;
+		float ObjectiveLevelCm = 150.f;
 		float HoldSeconds = 15.f;
 		float ObjectiveOffsetFrac = 0.2f;
 		float DefenderOffsetCm = 800.f;
@@ -260,6 +262,8 @@ namespace PmcArena
 		float LongestQuietS = 0.f;
 		float AttackerMeanDistM = -1.f;
 		float AttackerClosestM = -1.f;
+		/** fix/pmc-onpoint-3d-detour: man-seconds attackers stood within the radius (planar) but off the point's level (under a roof point). */
+		float AttackerUnderPointS = 0.f;
 		float OrdersPerFighterMin = 0.f;
 		int32 QuickRedecisions = 0;
 		int32 QuickSameOrder = 0;
@@ -327,6 +331,7 @@ namespace PmcArena
 		double AttackerDistSum = 0.0;
 		int32 AttackerDistSamples = 0;
 		float AttackerClosestCm = -1.f;
+		float AttackerUnderPointS = 0.f;
 		int32 Resupplies = 0;
 		/**
 		 * fix/arena-rpg-contact-roof: per side the rockets launched and their bursts near a live enemy (PmcArenaRoundRules::IsLauncherContact),
@@ -587,6 +592,7 @@ namespace PmcArena
 			}
 		};
 		Read(TEXT("objective_radius_m"), Config.ObjectiveRadiusCm, 100.f, 100.f, 3000.f);
+		Read(TEXT("objective_level_m"), Config.ObjectiveLevelCm, 100.f, 0.f, 1000.f);
 		Read(TEXT("objective_hold_s"), Config.HoldSeconds, 1.f, 1.f, 600.f);
 		Read(TEXT("objective_offset_frac"), Config.ObjectiveOffsetFrac, 1.f, 0.f, 0.5f);
 		Read(TEXT("defender_offset_m"), Config.DefenderOffsetCm, 100.f, 0.f, 3000.f);
@@ -602,6 +608,12 @@ namespace PmcArena
 			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] %s: %s"), *Config.Source, *Error);
 		}
 		return Config;
+	}
+
+	/** A fighter's feet (the capsule centre minus its half height): the level tests compare them with navmesh points. */
+	FVector FeetOf(const AOperativeCharacter& Operative)
+	{
+		return Operative.GetActorLocation() - FVector(0.f, 0.f, Operative.GetSimpleCollisionHalfHeight());
 	}
 
 	bool HasNavPath(UWorld* World, UNavigationSystemV1* Nav, const FVector& From, const FVector& To)
@@ -1466,6 +1478,7 @@ namespace PmcArena
 		Track.AttackerDistSum = 0.0;
 		Track.AttackerDistSamples = 0;
 		Track.AttackerClosestCm = -1.f;
+		Track.AttackerUnderPointS = 0.f;
 		Track.Resupplies = 0;
 		Track.Rockets[0] = Track.Rockets[1] = 0;
 		Track.RocketBurstsNear[0] = Track.RocketBurstsNear[1] = 0;
@@ -1691,7 +1704,15 @@ namespace PmcArena
 				const AOperativeCharacter* Operative = Member.Get();
 				if (Operative && !Operative->IsKilledInAction() && Operative->HealthComponent && Operative->HealthComponent->IsAlive())
 				{
-					const float Distance = static_cast<float>(FVector::Dist2D(Operative->GetActorLocation(), State.Objective));
+					// fix/pmc-onpoint-3d-detour: level-aware (a man under a roof point is not "at" it).
+					const FVector Feet = FeetOf(*Operative);
+					const float Distance = PmcCommanderRules::LevelAwareDistanceCm(Feet, State.Objective, State.Config.ObjectiveLevelCm,
+						State.Config.ObjectiveRadiusCm + 1.f);
+					if (FVector::Dist2D(Feet, State.Objective) <= State.Config.ObjectiveRadiusCm && !PmcCommanderRules::IsOnPoint(Feet, State.Objective,
+						State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm))
+					{
+						Track.AttackerUnderPointS += TrackInterval;
+					}
 					Sum += Distance;
 					++Count;
 					Track.AttackerClosestCm = Track.AttackerClosestCm < 0.f ? Distance : FMath::Min(Track.AttackerClosestCm, Distance);
@@ -1755,7 +1776,10 @@ namespace PmcArena
 		}
 	}
 
-	/** Live men of Side within the objective's radius (planar) and on its level (3 m). */
+	/**
+	 * Live men of Side on the point: within the objective's radius (planar) AND on its level (fix/pmc-onpoint-3d-detour: feet vs the navmesh
+	 * point within objective_level_m, 1.5 m; was the capsule centre within 3 m, which let a man one floor below count).
+	 */
 	int32 CountOnPoint(const FState& State, const FSide& Side)
 	{
 		int32 Count = 0;
@@ -1763,8 +1787,7 @@ namespace PmcArena
 		{
 			const AOperativeCharacter* Operative = Member.Get();
 			if (Operative && !Operative->IsKilledInAction() && Operative->HealthComponent && Operative->HealthComponent->IsAlive()
-				&& FVector::Dist2D(Operative->GetActorLocation(), State.Objective) <= State.Config.ObjectiveRadiusCm
-				&& FMath::Abs(Operative->GetActorLocation().Z - State.Objective.Z) <= 300.f)
+				&& PmcCommanderRules::IsOnPoint(FeetOf(*Operative), State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm))
 			{
 				++Count;
 			}
@@ -1953,6 +1976,7 @@ namespace PmcArena
 		{
 			TSharedRef<FJsonObject> Config = MakeShared<FJsonObject>();
 			Config->SetNumberField(TEXT("objective_radius_m"), State.Config.ObjectiveRadiusCm / 100.f);
+			Config->SetNumberField(TEXT("objective_level_m"), State.Config.ObjectiveLevelCm / 100.f);
 			Config->SetNumberField(TEXT("objective_hold_s"), State.Config.HoldSeconds);
 			Config->SetNumberField(TEXT("objective_offset_frac"), State.Config.ObjectiveOffsetFrac);
 			Config->SetStringField(TEXT("source"), State.Config.Source);
@@ -2000,6 +2024,7 @@ namespace PmcArena
 					Objective->SetNumberField(TEXT("y"), FMath::RoundToFloat(Result.ObjectiveLocation.Y));
 					Objective->SetNumberField(TEXT("z"), FMath::RoundToFloat(Result.ObjectiveLocation.Z));
 					Objective->SetNumberField(TEXT("radius_m"), State.Config.ObjectiveRadiusCm / 100.f);
+					Objective->SetNumberField(TEXT("level_m"), State.Config.ObjectiveLevelCm / 100.f);
 					Objective->SetNumberField(TEXT("hold_s"), State.Config.HoldSeconds);
 					Objective->SetNumberField(TEXT("attacker_clock_s"), FMath::RoundToFloat(Result.AttackerHeld * 10.f) / 10.f);
 					// fix/arena-rpg-contact-roof: a full navmesh path from each side's spawn to the point at placement.
@@ -2022,6 +2047,7 @@ namespace PmcArena
 				Flow->SetNumberField(TEXT("longest_quiet_s"), Round1(Result.LongestQuietS));
 				Flow->SetNumberField(TEXT("attacker_mean_dist_m"), Round1(Result.AttackerMeanDistM));
 				Flow->SetNumberField(TEXT("attacker_closest_m"), Round1(Result.AttackerClosestM));
+				Flow->SetNumberField(TEXT("attacker_under_point_s"), Round1(Result.AttackerUnderPointS));
 				Flow->SetNumberField(TEXT("orders_per_fighter_min"), FMath::RoundToFloat(Result.OrdersPerFighterMin * 100.f) / 100.f);
 				Flow->SetNumberField(TEXT("quick_redecisions"), Result.QuickRedecisions);
 				Flow->SetNumberField(TEXT("quick_same_order"), Result.QuickSameOrder);
@@ -2160,9 +2186,9 @@ namespace PmcArena
 				{
 					// PmcStalemateSmoke (the designer 2026-11-08): the fight does not freeze.
 					const FRoundResult& Flow = State.Results.Last();
-					UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] stalemate smoke flow: %s by %s, contact %s, shots %.1f/min, first contact %.1f s, longest quiet %.1f s, attackers mean %.1f m / closest %.1f m from the point, orders %.2f per fighter-min, quick re-decisions %d (same order %d), early preempts %d, failed %d, detours %d"),
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] stalemate smoke flow: %s by %s, contact %s, shots %.1f/min, first contact %.1f s, longest quiet %.1f s, attackers mean %.1f m / closest %.1f m from the point (level-aware), under the point %.1f man-s, orders %.2f per fighter-min, quick re-decisions %d (same order %d), early preempts %d, failed %d, detours %d"),
 						*Flow.Winner, *Flow.EndReason, Flow.bContact ? TEXT("yes") : TEXT("no"), Flow.ShotsPerMin, Flow.FirstContactS, Flow.LongestQuietS, Flow.AttackerMeanDistM,
-						Flow.AttackerClosestM, Flow.OrdersPerFighterMin, Flow.QuickRedecisions, Flow.QuickSameOrder, Flow.EarlyPreempts, Flow.OrdersFailed, Flow.Detours);
+						Flow.AttackerClosestM, Flow.AttackerUnderPointS, Flow.OrdersPerFighterMin, Flow.QuickRedecisions, Flow.QuickSameOrder, Flow.EarlyPreempts, Flow.OrdersFailed, Flow.Detours);
 					Check(State, Flow.bContact, TEXT("the sides made contact (shots between them)"));
 					Check(State, Flow.LongestQuietS <= MaxQuietSeconds, FString::Printf(TEXT("the fight resumes within %.0f s after every quiet spell (longest %.1f s)"),
 						MaxQuietSeconds, Flow.LongestQuietS));
@@ -2455,8 +2481,8 @@ namespace PmcArena
 		}
 		if (State.bRoundObjective)
 		{
-			Pmc->SetTeamObjective(State.Sides[AttackerIndex].TeamId, EPmcRole::Attacker, State.Objective, State.Config.ObjectiveRadiusCm);
-			Pmc->SetTeamObjective(State.Sides[1 - AttackerIndex].TeamId, EPmcRole::Defender, State.Objective, State.Config.ObjectiveRadiusCm);
+			Pmc->SetTeamObjective(State.Sides[AttackerIndex].TeamId, EPmcRole::Attacker, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
+			Pmc->SetTeamObjective(State.Sides[1 - AttackerIndex].TeamId, EPmcRole::Defender, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
 		}
 		// PmcArenaObjectiveSmoke: the defenders out of the fight (parked far away, alive, not commanded) - only the capture can end it.
 		if (State.Options.bSmokeCapture)
@@ -2571,6 +2597,7 @@ namespace PmcArena
 			}
 			Result.AttackerMeanDistM = Track.AttackerDistSamples > 0 ? static_cast<float>(Track.AttackerDistSum / Track.AttackerDistSamples) / 100.f : -1.f;
 			Result.AttackerClosestM = Track.AttackerClosestCm >= 0.f ? Track.AttackerClosestCm / 100.f : -1.f;
+			Result.AttackerUnderPointS = Track.AttackerUnderPointS;
 			Result.OrdersPerFighterMin = Track.Orders / FMath::Max(1, Track.Fighters.Num()) / Minutes;
 			Result.QuickRedecisions = Track.QuickRedecisions;
 			Result.QuickSameOrder = Track.QuickSameOrder;
@@ -2593,12 +2620,12 @@ namespace PmcArena
 				{
 					if (const AOperativeCharacter* Operative = Member.Get())
 					{
-						const FVector Delta = Operative->GetActorLocation() - State.Objective;
+						const FVector Delta = FeetOf(*Operative) - State.Objective;
 						Ends += FString::Printf(TEXT(" %s:%.0fm/dz%.0fm"), *State.Sides[SideIndex].Label, Delta.Size2D() / 100.f, Delta.Z / 100.f);
 					}
 				}
 			}
-			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d ends vs the objective (2D m / dZ m):%s"), State.Round, *Ends);
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d ends vs the objective (2D m / feet dZ m):%s"), State.Round, *Ends);
 		}
 		Result.LeadSwings = State.Track.LeadSwings;
 		Result.HighlightScore = HighlightScoreOf(Result);
