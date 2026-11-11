@@ -12,7 +12,7 @@
 
 This report delivers the complete preload manifest draft for level `L_Gen_Depot_1` to support Codex's implementation of the level preload subsystem (`004-hitch-on-enemy-appear.md`).
 
-Runtime profiling (`014-hitch-scan.report.md`, `hitch-2026-11-11-play2.log`, `hitch-2026-11-11-play3.log`) demonstrated that dynamic spawning during combat (Combat Pressure events, Wave spawns, and PMC Encounters) causes severe game-thread stalls (up to 2.34s sync loading and 3.90s asset initialization/skin compile). 
+Runtime profiling (`014-hitch-scan.report.md`, `hitch-2026-11-11-play.log`, `hitch-2026-11-11-play2.log`) demonstrated that dynamic spawning during combat (Combat Pressure events, Wave spawns, and PMC Encounters) causes severe game-thread stalls (up to 2.34s sync loading and 3.90s asset initialization/skin compile). 
 
 The generated manifest `015-preload-manifest.draft.json` aggregates **356 essential assets** into structured groups, enabling a single asynchronous or post-level-load warmup step before combat begins.
 
@@ -87,7 +87,7 @@ Today, assets are resolved and loaded synchronously right as characters or event
 
 ## 4. Deep Dive: Origin of the 2-Second `SK_Cutter_1slot` Hitch
 
-In `hitch-2026-11-11-play2.log` (frame 835) and `hitch-2026-11-11-play3.log` (frame 614), a 2000+ ms stall is observed when `SK_Cutter_1slot` is first touched.
+In `hitch-2026-11-11-play2.log` (frame 835, 13:24:16 -> 13:24:18), a ~2 s stall is observed when `SK_Cutter_1slot` is first touched (whereas in `hitch-2026-11-11-play.log` frame 614 waited for `SKM_PmcOperator`).
 
 ### 4.1. Identity and Ownership
 * **Asset Path:** `/Game/Characters/Enemies/Optimized/Cutter/SK_Cutter_1slot.SK_Cutter_1slot`
