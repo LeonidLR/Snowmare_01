@@ -3,6 +3,9 @@
 // (requested 'custom'). The three stored shapes (the placement mode stores them, the save game / campaign carry keep them), the per-tick slots and
 // fixed looks of the shape in the leader's frame (FormationCustomRules::CustomSlots), and its guard: a wall cutting the shape or a man cut off folds
 // the squad into the trail column (the v2.1 guard's level 2), which opens back into the shape after classify.hold_distance of path.
+// Contract 19.4 (game designer 2026-11-10): the formation editor's formation_shapes.json "custom" seeds the three slots - a slot the player
+// stored nothing in shows the file's custom_<n> (live reload in dev builds); his own shape (placement, save game, carry) wins once he stores one,
+// and only his own shapes are exported (the save game / carry never freeze a file default).
 
 #include "Characters/SquadSubsystem.h"
 
@@ -10,12 +13,25 @@
 #include "CodexTactics.h"
 #include "Formation/FormationCustomRules.h"
 #include "Formation/FormationGuardRuntimeRules.h"
+#include "Formation/FormationShapesFile.h"
 #include "Formation/FormationTuning.h"
 
-const FFormationCustomShape& USquadSubsystem::GetFormationCustomShape(int32 Slot) const
+const FFormationCustomShape& USquadSubsystem::GetFormationCustomOwnShape(int32 Slot) const
 {
 	static const FFormationCustomShape Empty;
 	return CustomShapes.IsValidIndex(Slot - 1) ? CustomShapes[Slot - 1] : Empty;
+}
+
+FFormationCustomShape USquadSubsystem::GetFormationCustomShape(int32 Slot) const
+{
+	const FFormationCustomShape& Own = GetFormationCustomOwnShape(Slot);
+	if (!Own.IsEmpty() || Slot < 1 || Slot > FormationCustomRules::SlotCount)
+	{
+		return Own;
+	}
+	// Contract 19.4: the slot holds no shape of the player's - the formation editor's default (empty when the file has none).
+	const FFormationShapesFile& File = FormationShapes::Get();
+	return File.Custom.IsValidIndex(Slot - 1) ? File.Custom[Slot - 1] : Own;
 }
 
 void USquadSubsystem::SetFormationCustomShape(int32 Slot, const FFormationCustomShape& Shape)
@@ -65,7 +81,7 @@ TArray<FString> USquadSubsystem::ExportFormationCustomSlots() const
 	TArray<FString> Out;
 	for (int32 Slot = 1; Slot <= FormationCustomRules::SlotCount; ++Slot)
 	{
-		Out.Add(FormationCustomRules::ToJsonString(GetFormationCustomShape(Slot)));
+		Out.Add(FormationCustomRules::ToJsonString(GetFormationCustomOwnShape(Slot)));
 	}
 	return Out;
 }
@@ -104,7 +120,7 @@ void USquadSubsystem::StepFormationCustomGuard(const AOperativeCharacter& Leader
 		}
 	}
 	const bool bAllInSight = FormationGuardRuntime::AllInSight(Sectors.WorldWalls, LeaderPos, InFormation);
-	const FFormationCustomShape& Shape = GetFormationCustomShape(Sectors.CustomSlot);
+	const FFormationCustomShape Shape = GetFormationCustomShape(Sectors.CustomSlot);
 	const TArray<int32> Present = GetFormationCustomPresent();
 	const FFormationGuardState Before = Sectors.Guard;
 	Sectors.Guard = FormationCustomRules::Resolve(Sectors.WorldWalls, Shape, Present, LeaderPos, Sectors.HeadingYaw, Ahead, Sectors.Guard, Sectors.LastStepDistance,

@@ -17,7 +17,7 @@ import {
   CLASSIFY_START, CORNER_START, FormationAssignRules, FormationBypassRules, FormationCoverRules, FormationCornerRules, FormationGuardRules, FormationSectorRules,
   FormationShapeRules, FormationTerrainRules, FormationWallRules, GUARD_START, rolesFor, wallRoom,
 } from './rules.ts';
-import { ROLE_NAME_TO_LETTER, type FormationShapesFile, type FormationShape, type EditableFormation } from './shapesSchema.ts';
+import { DEFAULT_ARC_DEG, ROLE_NAME_TO_LETTER, type FormationShapesFile, type FormationShape, type EditableFormation } from './shapesSchema.ts';
 
 export function getSavedFormationShape(
   savedShapes: FormationShapesFile | undefined,
@@ -30,6 +30,19 @@ export function getSavedFormationShape(
     return savedShapes.formations.pair?.[countKey] ?? (savedShapes.formations as Record<string, Record<string, FormationShape> | undefined>)[formation]?.[countKey];
   }
   return (savedShapes.formations as Record<string, Record<string, FormationShape> | undefined>)[formation]?.[countKey];
+}
+
+/**
+ * A saved shape's slots in the leader's frame (FORMATION_CONTRACT.md 19.3; C++ FormationShapes::Slots, parity golden
+ * formation_SavedShapes.json): pos = localToWorld(leaderPos, heading, [fwd, right]), yaw = normYaw(heading + look), arc = arc ?? 90.
+ */
+export function savedShapeTargets(shape: FormationShape, leaderPos: Vec2, heading: number): { role: Role; pos: Vec2; yaw: number; arc: number }[] {
+  return shape.members.map((m) => ({
+    role: ROLE_NAME_TO_LETTER[m.role],
+    pos: localToWorld(leaderPos, heading, [m.fwd, m.right]),
+    yaw: normYaw(heading + m.look),
+    arc: m.arc ?? DEFAULT_ARC_DEG,
+  }));
 }
 
 export const SIM_DT = 1 / 30;
@@ -201,10 +214,7 @@ export function simulate(o: SimOptions): number {
   const startFormation = n >= 4 ? 'diamond' : 'wedge';
   const savedStart = getSavedFormationShape(o.savedShapes, startFormation, n);
   const startSlots = savedStart
-    ? savedStart.members.map((m) => ({
-        role: ROLE_NAME_TO_LETTER[m.role],
-        pos: localToWorld(legs[0], heading, [m.fwd, m.right]),
-      }))
+    ? savedShapeTargets(savedStart, legs[0], heading).map((s) => ({ role: s.role, pos: s.pos }))
     : FormationShapeRules.Slots(startFormation, n, legs[0], heading, c);
   const spawnAt = (slot: Vec2): Vec2 => {
     const p = add(slot, [(random() - 0.5) * 60, (random() - 0.5) * 60]);
@@ -400,12 +410,7 @@ export function simulate(o: SimOptions): number {
     } else {
       const saved = getSavedFormationShape(o.savedShapes, formation, n);
       if (saved) {
-        targets = saved.members.map((m) => ({
-          role: ROLE_NAME_TO_LETTER[m.role],
-          pos: localToWorld(leader.pos, heading, [m.fwd, m.right]),
-          yaw: normYaw(heading + m.look),
-          decided: true,
-        }));
+        targets = savedShapeTargets(saved, leader.pos, heading).map((s) => ({ role: s.role, pos: s.pos, yaw: s.yaw, decided: true }));
       } else {
         targets = FormationShapeRules.Slots(formation, n, leader.pos, heading, c).map((s) => ({
           ...s, yaw: FormationSectorRules.LookYaw(s.role, formation, mode, n, t, heading, passage, c),

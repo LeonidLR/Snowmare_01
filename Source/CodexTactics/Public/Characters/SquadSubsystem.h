@@ -453,6 +453,16 @@ public:
 	bool GetFormationTarget(const AOperativeCharacter* Operative, FVector& OutSlot, float& OutLookYaw) const;
 
 	/**
+	 * Contract 19 (game designer 2026-11-10): this frame's slots and looks are a saved shape of the formation editor's formation_shapes.json
+	 * (FormationShapes::Find for the formation in effect and the member count), not the formula.
+	 */
+	bool IsFormationSavedShape() const { return Sectors.bActiveThisFrame && Sectors.bSavedShape; }
+	/** The saved shape in force: "<formation>/<count>" (+ " mirrored" for an echelon taken from the other one); "" without one. */
+	const FString& GetFormationSavedShapeName() const { return Sectors.SavedShapeName; }
+	/** Contract 19.3: Role's look sector width this frame from the saved shape (its arc, 90 when the file gives none); false without a saved shape. */
+	bool GetFormationLookArc(EFormationRole Role, float& OutArc) const;
+
+	/**
 	 * The slot this frame's formation follow step gave a follower (Z = his feet height): his formation slot, or - when it is off the navmesh -
 	 * the stand-in ResolveReachableSlot chose (rules v2.3 contract 13.5: kept slot.min_spacing from the slots given out before him). False
 	 * when the follow step did not resolve one for him this frame (the leader, no role, console off, ...). What he really walks to; the bot's
@@ -690,8 +700,15 @@ public:
 
 	// --- The custom formation (game designer decisions 2026-11-01; contract 17; SquadSubsystemFormationCustom.cpp) ---
 
-	/** The stored shape of custom slot 1..3 (empty = an empty slot; an invalid slot = empty). */
-	const FFormationCustomShape& GetFormationCustomShape(int32 Slot) const;
+	/**
+	 * The shape of custom slot 1..3 in force: the player's own stored shape, else (contract 19.4) the formation editor's default custom_<Slot> of
+	 * formation_shapes.json (FormationShapes::Get; a copy - a live reload replaces the file's shapes); empty = an empty slot (an invalid slot = empty).
+	 */
+	FFormationCustomShape GetFormationCustomShape(int32 Slot) const;
+	/** The player's own stored shape of custom slot 1..3 (placement / save game / carry) - never the file's default; empty when he stored none. */
+	const FFormationCustomShape& GetFormationCustomOwnShape(int32 Slot) const;
+	/** Custom slot 1..3 shows the file's default (the player stored no shape of his own there). */
+	bool IsFormationCustomSlotDefault(int32 Slot) const { return GetFormationCustomOwnShape(Slot).IsEmpty() && !GetFormationCustomShape(Slot).IsEmpty(); }
 	/** Stores a shape in custom slot 1..3 (the placement mode's confirm, the save game / campaign carry restore); logs it. */
 	void SetFormationCustomShape(int32 Slot, const FFormationCustomShape& Shape);
 	/** Custom slot 1..3 holds a shape. */
@@ -700,7 +717,7 @@ public:
 	int32 GetFormationCustomSlot() const { return Sectors.Requested == EFormationKind::Custom ? Sectors.CustomSlot : 0; }
 	/** CustomSlots' "present": the leader's SquadIndex first, then the formation followers' by SquadIndex (contract 17.2). */
 	TArray<int32> GetFormationCustomPresent() const;
-	/** The three slots as contract 17.1 JSON strings ("" = empty) - the save game and the campaign carry. */
+	/** The player's own three slots as contract 17.1 JSON strings ("" = empty; the file's defaults are never exported) - the save game and the campaign carry. */
 	TArray<FString> ExportFormationCustomSlots() const;
 	/** Restores ExportFormationCustomSlots' strings (missing / malformed entries -> empty slots). */
 	void ImportFormationCustomSlots(const TArray<FString>& Slots);
@@ -976,6 +993,10 @@ private:
 		bool bWasEnabled = true;
 		/** This frame's slots and look yaws by role (Slots / LookYaw, or the wall layout). */
 		TArray<FFormationSlot> FrameSlots;
+		/** Contract 19: FrameSlots are a saved shape (formation_shapes.json), its name ("diamond/4") and each role's arc (Yaw = the arc, deg). */
+		bool bSavedShape = false;
+		FString SavedShapeName;
+		TArray<FFormationRoleYaw> SavedArcs;
 		/** The wall layout in force (the automatic one on arrival or the order's). */
 		bool bWallLayoutValid = false;
 		TArray<FFormationSlot> WallSlots;
@@ -1290,6 +1311,11 @@ private:
 	void StepFormationCustomGuard(const AOperativeCharacter& LeaderRef, bool bLeaderMoving);
 	/** The custom shape's slots and fixed looks this frame (FormationCustomRules::CustomSlots) and Sectors.CustomRoles. */
 	void BuildCustomFrameSlots(const AOperativeCharacter& LeaderRef, const FVector2D& LeaderPos);
+	/**
+	 * Contract 19: the saved shape of formation_shapes.json for the formation in effect and Count -> FrameSlots (Roles order), the looks
+	 * (run / "all forward" keep LookYaw: everybody faces 12) and Sectors.SavedArcs; false (nothing set) without one.
+	 */
+	bool BuildSavedShapeFrameSlots(const FVector2D& LeaderPos, int32 Count);
 	/** The three custom formation slots (contract 17.1; kept across levels by the campaign carry, in the save game). */
 	TArray<FFormationCustomShape> CustomShapes;
 	/** The trail column's slots and looks this frame (FormationShapeRules::TrailSlots, LookYaw column by each man's room). */

@@ -1,0 +1,1302 @@
+{
+ "schema": "codex.formation_golden/1",
+ "rule": "SavedShapes",
+ "tolerance": {
+  "cm": 0.5,
+  "deg": 0.5
+ },
+ "fixtures": [
+  "formation_shapes_diamond4.json",
+  "formation_shapes_echelon_mirror.json"
+ ],
+ "notes": "op slots: in fixture, formation, memberCount, leaderPos, leaderYaw -> out.slots [{role, pos, yaw, arc}] in the shape's member order (null = no saved shape: the formula); op mirror: in fixture, formation, memberCount -> out {formation, members [{role, fwd, right, look, arc}]}.",
+ "cases": [
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "diamond",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "diamond",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "diamond",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -280,
+       260
+      ],
+      "yaw": 60,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       -280,
+       -260
+      ],
+      "yaw": -60,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -560,
+       0
+      ],
+      "yaw": 180,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "diamond",
+    "memberCount": 4,
+    "leaderPos": [
+     1234.5,
+     -678.25
+    ],
+    "leaderYaw": 37.5
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       1234.5,
+       -678.25
+      ],
+      "yaw": 37.5,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       854.083,
+       -642.431
+      ],
+      "yaw": 97.5,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       1170.639,
+       -1054.975
+      ],
+      "yaw": -22.5,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       790.222,
+       -1019.156
+      ],
+      "yaw": -142.5,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "diamond",
+    "memberCount": 4,
+    "leaderPos": [
+     1234.5,
+     -678.25
+    ],
+    "leaderYaw": -120
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       1234.5,
+       -678.25
+      ],
+      "yaw": -120,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       1599.667,
+       -565.763
+      ],
+      "yaw": -60,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       1149.333,
+       -305.763
+      ],
+      "yaw": 180,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1514.5,
+       -193.276
+      ],
+      "yaw": 60,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "diamond",
+    "memberCount": 4,
+    "leaderPos": [
+     -300,
+     450
+    ],
+    "leaderYaw": 180
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -300,
+       450
+      ],
+      "yaw": 180,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -20,
+       190
+      ],
+      "yaw": -120,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       -20,
+       710
+      ],
+      "yaw": 120,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       260,
+       450
+      ],
+      "yaw": 0,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "wedge",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "wedge",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "wedge",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "line",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "line",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "line",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "echelon_left",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "echelon_right",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "echelon_right",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "column",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "column",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "column",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "mirror",
+    "fixture": "formation_shapes_diamond4.json",
+    "formation": "diamond",
+    "memberCount": 4
+   },
+   "out": {
+    "formation": "diamond",
+    "members": [
+     {
+      "role": "commander",
+      "fwd": 0,
+      "right": 0,
+      "look": 0,
+      "arc": 90
+     },
+     {
+      "role": "left",
+      "fwd": -280,
+      "right": -260,
+      "look": -60,
+      "arc": 90
+     },
+     {
+      "role": "right",
+      "fwd": -280,
+      "right": 260,
+      "look": 60,
+      "arc": 90
+     },
+     {
+      "role": "rear",
+      "fwd": -560,
+      "right": 0,
+      "look": 180,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "diamond",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "diamond",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "diamond",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "wedge",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "wedge",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "wedge",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "line",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "line",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "line",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_left",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_left",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       -200,
+       -200
+      ],
+      "yaw": -45,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -400,
+       -400
+      ],
+      "yaw": -90,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -200,
+       150
+      ],
+      "yaw": 90,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     1234.5,
+     -678.25
+    ],
+    "leaderYaw": 37.5
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       1234.5,
+       -678.25
+      ],
+      "yaw": 37.5,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       1197.582,
+       -958.673
+      ],
+      "yaw": -7.5,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1160.663,
+       -1239.096
+      ],
+      "yaw": -52.5,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       984.515,
+       -680.999
+      ],
+      "yaw": 127.5,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     1234.5,
+     -678.25
+    ],
+    "leaderYaw": -120
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       1234.5,
+       -678.25
+      ],
+      "yaw": -120,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       1161.295,
+       -405.045
+      ],
+      "yaw": -165,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1088.09,
+       -131.84
+      ],
+      "yaw": 150,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       1464.404,
+       -580.045
+      ],
+      "yaw": -30,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_left",
+    "memberCount": 4,
+    "leaderPos": [
+     -300,
+     450
+    ],
+    "leaderYaw": 180
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -300,
+       450
+      ],
+      "yaw": 180,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       -100,
+       650
+      ],
+      "yaw": 135,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       100,
+       850
+      ],
+      "yaw": 90,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       300
+      ],
+      "yaw": -90,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_right",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_right",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       0,
+       0
+      ],
+      "yaw": 0,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -200,
+       200
+      ],
+      "yaw": 45,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       -400,
+       400
+      ],
+      "yaw": 90,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       -200,
+       -150
+      ],
+      "yaw": -90,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     1234.5,
+     -678.25
+    ],
+    "leaderYaw": 37.5
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       1234.5,
+       -678.25
+      ],
+      "yaw": 37.5,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       954.077,
+       -641.332
+      ],
+      "yaw": 82.5,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       673.654,
+       -604.413
+      ],
+      "yaw": 127.5,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       1167.144,
+       -919.005
+      ],
+      "yaw": -52.5,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     1234.5,
+     -678.25
+    ],
+    "leaderYaw": -120
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       1234.5,
+       -678.25
+      ],
+      "yaw": -120,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       1507.705,
+       -605.045
+      ],
+      "yaw": -75,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       1780.91,
+       -531.84
+      ],
+      "yaw": -30,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       1204.596,
+       -430.045
+      ],
+      "yaw": 150,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_right",
+    "memberCount": 4,
+    "leaderPos": [
+     -300,
+     450
+    ],
+    "leaderYaw": 180
+   },
+   "out": {
+    "slots": [
+     {
+      "role": "K",
+      "pos": [
+       -300,
+       450
+      ],
+      "yaw": 180,
+      "arc": 90
+     },
+     {
+      "role": "P",
+      "pos": [
+       -100,
+       250
+      ],
+      "yaw": -135,
+      "arc": 90
+     },
+     {
+      "role": "Z",
+      "pos": [
+       100,
+       50
+      ],
+      "yaw": -90,
+      "arc": 90
+     },
+     {
+      "role": "L",
+      "pos": [
+       -100,
+       600
+      ],
+      "yaw": 90,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "column",
+    "memberCount": 2,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "column",
+    "memberCount": 3,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "slots",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "column",
+    "memberCount": 4,
+    "leaderPos": [
+     0,
+     0
+    ],
+    "leaderYaw": 0
+   },
+   "out": {
+    "slots": null
+   }
+  },
+  {
+   "in": {
+    "op": "mirror",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_left",
+    "memberCount": 4
+   },
+   "out": {
+    "formation": "echelon_right",
+    "members": [
+     {
+      "role": "commander",
+      "fwd": 0,
+      "right": 0,
+      "look": 0,
+      "arc": 90
+     },
+     {
+      "role": "right",
+      "fwd": -200,
+      "right": 200,
+      "look": 45,
+      "arc": 90
+     },
+     {
+      "role": "rear",
+      "fwd": -400,
+      "right": 400,
+      "look": 90,
+      "arc": 90
+     },
+     {
+      "role": "left",
+      "fwd": -200,
+      "right": -150,
+      "look": -90,
+      "arc": 90
+     }
+    ]
+   }
+  },
+  {
+   "in": {
+    "op": "mirror",
+    "fixture": "formation_shapes_echelon_mirror.json",
+    "formation": "echelon_right",
+    "memberCount": 4
+   },
+   "out": {
+    "formation": "echelon_left",
+    "members": [
+     {
+      "role": "commander",
+      "fwd": 0,
+      "right": 0,
+      "look": 0,
+      "arc": 90
+     },
+     {
+      "role": "left",
+      "fwd": -200,
+      "right": -200,
+      "look": -45,
+      "arc": 90
+     },
+     {
+      "role": "rear",
+      "fwd": -400,
+      "right": -400,
+      "look": -90,
+      "arc": 90
+     },
+     {
+      "role": "right",
+      "fwd": -200,
+      "right": 150,
+      "look": 90,
+      "arc": 90
+     }
+    ]
+   }
+  }
+ ]
+}
