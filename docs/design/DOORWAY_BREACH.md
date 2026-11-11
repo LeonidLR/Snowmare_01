@@ -230,3 +230,15 @@ No new wheels invented; this design maps directly to existing C++ systems:
 5. **Formations & Sectors:**
    - `Source/CodexTactics/Private/Characters/Formation/`
    - Reuse sector allocations from `FORMATION_SECTORS.md`.
+
+## The game designer's answers (2026-11-11), on Gemini's plan docs/port/gemini/outbox/011-door-breach-plan.report.md
+1. Solo: clicking a doorway sends ONLY the selected operative to the nearest jamb (cover + peek); the others stay.
+2. One jamb blocked (crate / drop / no navmesh): the triad is not cancelled - the open jamb is taken, the centre covers, the third
+   stacks behind the jamb man.
+3. Building doors AND fence / compound gates (PropsLayoutView doorways incl. gates up to 600 cm) both support the breach.
+4. Choice breach vs wall cover: a click INTO the opening = the breach triad; a click on the wall more than 40 cm from the opening =
+   ordinary wall cover. NO Tab toggle - the existing two-click pattern (the first click shows the ghosts, a second click on the same
+   spot confirms), like cover orders.
+5. The centre man crouches at 2.2 m from the door.
+6. Enter / clear: once the triad is set, a click inside the room = the buttonhook entry (man 1 right corner, man 2 left, man 3 centre).
+Week 2, after level authoring stage 1 (6 steps in the plan, section 4).
