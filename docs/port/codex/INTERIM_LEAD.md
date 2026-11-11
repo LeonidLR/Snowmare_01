@@ -29,6 +29,8 @@ docs/design/DOORWAY_BREACH.md (answers 2026-11-11), docs/port/gemini/outbox/011-
 
 ## The queue (in order; one task branch each, merged into interim/2026-11-12)
 1. (Done 2026-11-11 by Claude: the C4 TS port is already merged in main.)
+1b. PRIORITY (the designer's last task 2026-11-11): stealth mode - docs/port/codex/inbox/003-stealth-mode.md. Do it right after the
+   small pair-rule task (2), before C5 / C6.
 2. Gemini: the TS sim pair rule (FORMATION_CONTRACT.md 19.2: 'pair' only for the game's pair, not a 2-man column) - small branch.
 3. You: props C5 - the static validator (PROPS_LAYERS.md section 5 C5 + 2.4): bad / dangling objects dropped with id logs, locked / hand
    ones flagged; tests on the fixtures.
