@@ -99,9 +99,9 @@ class JsonOut {
     this.s += text;
   }
 
-  fieldStr(k: string, v: string): void {
+  fieldStr(k: string, v: string | undefined | null): void {
     this.key(k);
-    this.raw(JSON.stringify(v));
+    this.raw(JSON.stringify(v ?? ''));
   }
 
   fieldInt(k: string, v: number): void {
