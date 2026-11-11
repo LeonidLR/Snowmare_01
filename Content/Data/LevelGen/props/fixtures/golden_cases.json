@@ -1,6 +1,6 @@
 {
 	"schema": "codex.levelgen_props_golden/1",
-	"comment": "Golden outputs of the C++ props placement (PROPS_LAYERS.md 5 C3 / T2). Paths are relative to this folder. For each case: parse 'input', re-roll 'layer' with 'seed' (PropsPlacementRules::RerollLayer) on 'layout' with 'balance', write the whole props file with the canonical writer (LevelPropsFile::Write: tab indent, LF, trailing newline) = 'output' byte for byte. 'derived_from': the input is that case's output with indices 'lock' locked, 'delete' deleted (override with pos), 'move' moved by move_by_cm (override) and 'hand' turned into a hand add (removed from the layer, override add 'hand_<layer>_0' at its pos). Regenerate: set CODEX_PROPS_GOLDEN_WRITE=1 and run CodexTactics.LevelGen.Props.Placement.Golden.",
+	"comment": "Golden outputs of the C++ props placement (PROPS_LAYERS.md 5 C3 / T2). Paths are relative to this folder. For each case: parse 'input', re-roll 'layer' with 'seed' (PropsPlacementRules::RerollLayer) on 'layout' with 'balance', write the whole props file with the canonical writer (LevelPropsFile::Write: tab indent, LF, trailing newline) = 'output' byte for byte. 'derived_from': the input is that case's output with indices 'lock' locked, 'delete' deleted (override with pos), 'move' moved by move_by_cm (override) and 'hand' turned into a hand add (removed from the layer, override add 'hand_<layer>_0' at its pos). Regenerate: set CODEX_PROPS_GOLDEN_WRITE=1 and run CodexTactics.LevelGen.Props.Placement.Golden. C4 cases ('step': 'C4', PROPS_LAYERS.md 5 C4 / section 7 C4 notes): run by CodexTactics.LevelGen.Props.C4.Golden (regenerate the same way); an 'input' may be an earlier case's output (a chain: turrets -> mines -> loot -> crates re-roll); 'derived_from' takes that case's output FILE, appends the layers of 'add_layers' (a props file) and applies the recipe above to the case's layer.",
 	"balance": "../../../Balance/props_balance.json",
 	"cases": [
 		{ "case": "small_crates", "layout": "fixture_small.layout.json", "input": "golden_in_small.props.json", "layer": "crates", "seed": 21, "output": "golden_small_crates.json" },
@@ -8,6 +8,16 @@
 		{ "case": "depot_crates_s1", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_in_depot.props.json", "layer": "crates", "seed": 1, "output": "golden_depot_crates_s1.json" },
 		{ "case": "depot_locked_reroll", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_in_depot_locked.props.json", "layer": "crates", "seed": 2, "output": "golden_depot_locked_reroll.json",
 		  "derived_from": "depot_crates_s1", "lock": [0, 2, 4], "delete": [1], "move": [3], "move_by_cm": [100, 0], "hand": [5] },
-		{ "case": "depot_barrels_s1", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_in_depot_locked.props.json", "layer": "barrels", "seed": 1, "output": "golden_depot_barrels_s1.json" }
+		{ "case": "depot_barrels_s1", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_in_depot_locked.props.json", "layer": "barrels", "seed": 1, "output": "golden_depot_barrels_s1.json" },
+		{ "case": "small_turrets", "step": "C4", "layout": "fixture_small.layout.json", "input": "golden_in_small_c4.props.json", "layer": "turrets", "seed": 1, "output": "golden_small_turrets.json" },
+		{ "case": "small_mines", "step": "C4", "layout": "fixture_small.layout.json", "input": "golden_small_turrets.json", "layer": "mines", "seed": 11, "output": "golden_small_mines.json" },
+		{ "case": "small_loot", "step": "C4", "layout": "fixture_small.layout.json", "input": "golden_small_mines.json", "layer": "loot", "seed": 5, "output": "golden_small_loot.json" },
+		{ "case": "depot_turrets_s1", "step": "C4", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_in_depot_c4.props.json", "layer": "turrets", "seed": 1, "output": "golden_depot_turrets_s1.json",
+		  "derived_from": "depot_barrels_s1", "add_layers": "golden_in_depot_c4_layers.props.json" },
+		{ "case": "depot_mines_s1", "step": "C4", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_depot_turrets_s1.json", "layer": "mines", "seed": 1, "output": "golden_depot_mines_s1.json" },
+		{ "case": "depot_loot_s1", "step": "C4", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_depot_mines_s1.json", "layer": "loot", "seed": 1, "output": "golden_depot_loot_s1.json" },
+		{ "case": "depot_crates_after_c4", "step": "C4", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_depot_loot_s1.json", "layer": "crates", "seed": 5, "output": "golden_depot_crates_after_c4.json" },
+		{ "case": "depot_mines_locked_dropped", "step": "C4", "layout": "../../accepted/gen_ref_01_02_depot_1.json", "input": "golden_in_depot_mines_locked.props.json", "layer": "mines", "seed": 2, "output": "golden_depot_mines_locked_dropped.json",
+		  "derived_from": "depot_crates_after_c4", "lock": [0, 5, 6] }
 	]
 }

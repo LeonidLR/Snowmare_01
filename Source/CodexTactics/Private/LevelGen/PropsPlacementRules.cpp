@@ -7,6 +7,7 @@
 #include "LevelGen/PropsRng.h"
 
 #include "LevelGenJsonRead.h"
+#include "PropsPlacementInternal.h"
 
 namespace PropsPlacementLocal
 {
@@ -14,64 +15,6 @@ namespace PropsPlacementLocal
 
 	const TCHAR* const GPresets = TEXT("presets");
 	const TCHAR* const GPresetRef = TEXT("$preset");
-
-	int64 DistSq(FIntPoint A, FIntPoint B)
-	{
-		const int64 DX = static_cast<int64>(A.X) - B.X;
-		const int64 DY = static_cast<int64>(A.Y) - B.Y;
-		return DX * DX + DY * DY;
-	}
-
-	/** dist(A, B) < R, exact ("at least R apart" fails). R <= 0 is never closer. */
-	bool Closer(FIntPoint A, FIntPoint B, int64 R)
-	{
-		return R > 0 && DistSq(A, B) < R * R;
-	}
-
-	/** dist(A, B) <= R, exact (boundary inside, like the layout view's exclusion shapes). R <= 0 never. */
-	bool Within(FIntPoint A, FIntPoint B, int64 R)
-	{
-		return R > 0 && DistSq(A, B) <= R * R;
-	}
-
-	/** Smallest multiple of the lattice step >= V (also for negatives). */
-	int32 CeilStep(int32 V)
-	{
-		const int32 S = PropsPlacementRules::LatticeCm;
-		return V >= 0 ? ((V + S - 1) / S) * S : -((-V / S) * S);
-	}
-
-	bool MatchLayer(const FString& Pattern, const FString& Name)
-	{
-		if (Pattern.EndsWith(TEXT("*"), ESearchCase::CaseSensitive))
-		{
-			return Name.StartsWith(Pattern.LeftChop(1), ESearchCase::CaseSensitive);
-		}
-		return Pattern.Equals(Name, ESearchCase::CaseSensitive);
-	}
-
-	bool MatchAnyLayer(const TArray<FString>& Patterns, const FString& Name)
-	{
-		for (const FString& P : Patterns)
-		{
-			if (MatchLayer(P, Name))
-			{
-				return true;
-			}
-		}
-		return false;
-	}
-
-	bool ContainsExact(const TArray<FString>& Items, const FString& Id)
-	{
-		return Items.ContainsByPredicate([&Id](const FString& S) { return S.Equals(Id, ESearchCase::CaseSensitive); });
-	}
-
-	int32 HalfOf(const FPropsRules& Rules, const FString& Variant)
-	{
-		const int32* Half = Rules.HalfSizeCm.Find(Variant);
-		return Half ? *Half : 0;
-	}
 
 	/** The barrel's cluster key: its "cluster" field, else its own id (a lone / hand barrel is its own anchor). */
 	FString ClusterOf(const FLevelPropsObject& O)
@@ -189,242 +132,317 @@ namespace PropsPlacementLocal
 		}
 	}
 
-	// ---- placement --------------------------------------------------------------------------------------------------------
+	const TCHAR* const GAnchorNames[] = { TEXT("ambush_points"), TEXT("roof_edges"), TEXT("behind_tall_cover"), TEXT("dead_ends"),
+		TEXT("roof_centres"), TEXT("building_interiors") };
 
-	enum class EReject : uint8
+	bool IsAnchorName(const FString& Name)
 	{
-		None,
-		Blocked,
-		Route,
-		Spawn,
-		Ladder,
-		Door,
-		Keepout,
-		OtherLayer,
-		Spacing,
-		Other
-	};
-
-	EReject RejectOfExclusion(EPropsExclusionKind Kind)
-	{
-		switch (Kind)
+		for (const TCHAR* A : GAnchorNames)
 		{
-		case EPropsExclusionKind::Spawn:
-		case EPropsExclusionKind::End:
-			return EReject::Spawn;
-		case EPropsExclusionKind::LadderFoot:
-		case EPropsExclusionKind::LadderTop:
-		case EPropsExclusionKind::Stair:
-			return EReject::Ladder;
-		case EPropsExclusionKind::Door:
-			return EReject::Door;
-		case EPropsExclusionKind::Route:
-		case EPropsExclusionKind::Crossing:
-			return EReject::Route;
-		default:
-			return EReject::Other;
-		}
-	}
-
-	const TCHAR* ExclusionName(EPropsExclusionKind Kind)
-	{
-		switch (Kind)
-		{
-		case EPropsExclusionKind::Spawn: return TEXT("spawn");
-		case EPropsExclusionKind::End: return TEXT("end");
-		case EPropsExclusionKind::LadderFoot: return TEXT("ladder_foot");
-		case EPropsExclusionKind::LadderTop: return TEXT("ladder_top");
-		case EPropsExclusionKind::Stair: return TEXT("stair");
-		case EPropsExclusionKind::Door: return TEXT("door");
-		case EPropsExclusionKind::Route: return TEXT("route");
-		case EPropsExclusionKind::Crossing: return TEXT("crossing");
-		default: return TEXT("hole_rim");
-		}
-	}
-
-	void Count(FPropsRejectCounts& C, EReject R)
-	{
-		switch (R)
-		{
-		case EReject::Blocked: ++C.Blocked; break;
-		case EReject::Route: ++C.Route; break;
-		case EReject::Spawn: ++C.Spawn; break;
-		case EReject::Ladder: ++C.Ladder; break;
-		case EReject::Door: ++C.Door; break;
-		case EReject::Keepout: ++C.Keepout; break;
-		case EReject::OtherLayer: ++C.OtherLayer; break;
-		case EReject::Spacing: ++C.Spacing; break;
-		case EReject::Other: ++C.Other; break;
-		default: break;
-		}
-	}
-
-	struct FCandidate
-	{
-		FIntPoint Pos = FIntPoint::ZeroValue;
-		int32 Layer = 0;
-		uint32 Weight = 1;
-	};
-
-	/** Shared state of one Place call: the static hard filters (everything that does not depend on the picks). */
-	struct FContext
-	{
-		const FPropsPlacementInput& In;
-		const FPropsLayoutView& View;
-		const FPropsRules& R;
-		TArray<FPropsExclusion> Shapes;
-		TArray<FString> LayerNames;
-		TArray<int32> OtherHalf;
-
-		FContext(const FPropsPlacementInput& InInput)
-			: In(InInput), View(*InInput.View), R(InInput.Rules)
-		{
-			Shapes = View.BuildExclusions(R.Exclude);
-			for (const FPropsWalkLayer& L : View.GetLayers())
-			{
-				if (MatchAnyLayer(R.WalkLayers, L.Name))
-				{
-					LayerNames.Add(L.Name);
-				}
-			}
-			for (const FLevelPropsObject& O : In.OtherObjects)
-			{
-				OtherHalf.Add(HalfOf(R, O.Variant));
-			}
-		}
-
-		int32 KeepOutRadius(const FLevelPropsKeepOut& K) const
-		{
-			return K.RadiusCm > 0 ? K.RadiusCm : R.MinSpacingCm;
-		}
-
-		/**
-		 * Hard filters 2-5 of section 2.2 in their fixed order: blocked, exclusions (first containing shape), keep-outs, other layers.
-		 * Half = the object's half size used for the blocked / gap tests.
-		 */
-		EReject StaticReject(FIntPoint P, const FString& Layer, int32 Half) const
-		{
-			if (View.IsBlocked(P, Layer, Half + R.WallGapCm))
-			{
-				return EReject::Blocked;
-			}
-			for (const FPropsExclusion& S : Shapes)
-			{
-				if (S.Contains(P, Layer))
-				{
-					return RejectOfExclusion(S.Kind);
-				}
-			}
-			for (const FLevelPropsKeepOut& K : In.KeepOuts)
-			{
-				if (Closer(P, K.Pos, KeepOutRadius(K)))
-				{
-					return EReject::Keepout;
-				}
-			}
-			for (int32 I = 0; I < In.OtherObjects.Num(); ++I)
-			{
-				if (Closer(P, In.OtherObjects[I].Pos, static_cast<int64>(Half) + OtherHalf[I] + R.MinGapAnyCm))
-				{
-					return EReject::OtherLayer;
-				}
-			}
-			return EReject::None;
-		}
-
-		bool InZones(FIntPoint P) const
-		{
-			if (R.Zones.Num() == 0 || ContainsExact(R.Zones, TEXT("*")))
+			if (Name.Equals(A, ESearchCase::CaseSensitive))
 			{
 				return true;
 			}
-			for (const FString& Z : R.Zones)
+		}
+		return false;
+	}
+
+	/** where: zones, walk_layers, near, anchors (C4). */
+	void ReadWhere(const FJsonObject& Where, const FString& Ctx, FPropsCommonRules& Out, TArray<FString>& Errors)
+	{
+		FFieldReader W(Where, Ctx, Errors);
+		Strings(W, TEXT("zones"), Out.Zones);
+		Strings(W, TEXT("walk_layers"), Out.WalkLayers);
+		if (const TArray<TSharedPtr<FJsonValue>>* Near = W.Array(TEXT("near")))
+		{
+			Out.Near.Reset();
+			for (int32 I = 0; I < Near->Num(); ++I)
 			{
-				if (View.IsInZone(P, Z))
+				const TSharedPtr<FJsonObject> NearObject = AsObject((*Near)[I]);
+				if (!NearObject.IsValid())
 				{
-					return true;
+					W.Fail(FString::Printf(TEXT("'near'[%d] must be an object"), I));
+					continue;
+				}
+				FFieldReader N(*NearObject, FString::Printf(TEXT("%s.near[%d]"), *Ctx, I), Errors);
+				FPropsNearClause Clause;
+				N.Str(TEXT("what"), Clause.What);
+				NonNegative(N, TEXT("max_cm"), Clause.MaxCm);
+				N.Int(TEXT("weight"), Clause.Weight);
+				if (Clause.What != TEXT("wall") && Clause.What != TEXT("cover"))
+				{
+					N.Fail(FString::Printf(TEXT("'what' must be wall | cover (got '%s'); clause ignored"), *Clause.What));
+					continue;
+				}
+				Clause.Weight = FMath::Clamp(Clause.Weight, 1, PropsPlacementRules::MaxWeight);
+				Out.Near.Add(Clause);
+			}
+		}
+		if (W.Has(TEXT("anchors")))
+		{
+			TArray<FString> Anchors;
+			Strings(W, TEXT("anchors"), Anchors);
+			Out.Anchors.Reset();
+			for (const FString& A : Anchors)
+			{
+				if (IsAnchorName(A))
+				{
+					Out.Anchors.Add(A);
+				}
+				else
+				{
+					W.Fail(FString::Printf(TEXT("unknown anchor '%s'; ignored"), *A));
 				}
 			}
+		}
+	}
+
+	/** The common block (count, where, variants, spacing, gaps, exclude), in the C3 read order. */
+	void ReadCommon(FFieldReader& R, const FString& Ctx, FPropsCommonRules& Out, TArray<FString>& Errors)
+	{
+		if (const TSharedPtr<FJsonObject> CountObject = R.Object(TEXT("count")))
+		{
+			FFieldReader C(*CountObject, Ctx + TEXT(".count"), Errors);
+			C.Str(TEXT("mode"), Out.CountMode);
+			NonNegative(C, TEXT("value"), Out.CountValue);
+			Milli(C, TEXT("per_100m2"), Out.DensityMilli);
+			NonNegative(C, TEXT("max"), Out.CountMax);
+			if (Out.CountMode != TEXT("count") && Out.CountMode != TEXT("density") && Out.CountMode != TEXT("per_zone"))
+			{
+				C.Fail(FString::Printf(TEXT("unknown count mode '%s' (count | density | per_zone)"), *Out.CountMode));
+				Out.CountMode = TEXT("count");
+			}
+		}
+		if (const TSharedPtr<FJsonObject> Where = R.Object(TEXT("where")))
+		{
+			ReadWhere(*Where, Ctx + TEXT(".where"), Out, Errors);
+		}
+		if (const TSharedPtr<FJsonObject> Variants = R.Object(TEXT("variants")))
+		{
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& E : SortedEntries(*Variants)) // ordinal key order
+			{
+				int32 Weight = 0;
+				if (IsNullValue(E.Value) || E.Value->Type != EJson::Number || !ToInt32(E.Value->AsNumber(), Weight) || Weight < 0)
+				{
+					R.Fail(FString::Printf(TEXT("variants.%s must be an integer >= 0"), *E.Key));
+					continue;
+				}
+				if (Weight > 0)
+				{
+					Out.Variants.Emplace(E.Key, Weight);
+				}
+			}
+		}
+		NonNegative(R, TEXT("min_spacing_cm"), Out.MinSpacingCm);
+		NonNegative(R, TEXT("min_gap_any_cm"), Out.MinGapAnyCm);
+		Out.WallGapCm = Out.MinGapAnyCm;
+		NonNegative(R, TEXT("wall_gap_cm"), Out.WallGapCm);
+		if (const TSharedPtr<FJsonObject> Ex = R.Object(TEXT("exclude")))
+		{
+			ReadExclude(*Ex, Ctx + TEXT(".exclude"), Out.Exclude, Errors);
+		}
+	}
+
+	/** [min, max] of two integers, 0 <= min <= max (each clamped to Cap). False (error) on anything else; Out unchanged then. */
+	bool ReadRange(FFieldReader& R, const TCHAR* Key, int32& OutMin, int32& OutMax, int32 Cap)
+	{
+		const TArray<TSharedPtr<FJsonValue>>* Range = R.Array(Key);
+		if (!Range)
+		{
 			return false;
 		}
-
-		int32 ZoneCount() const
+		int32 A = 0;
+		int32 B = 0;
+		if (Range->Num() != 2 || IsNullValue((*Range)[0]) || IsNullValue((*Range)[1]) || (*Range)[0]->Type != EJson::Number
+			|| (*Range)[1]->Type != EJson::Number || !ToInt32((*Range)[0]->AsNumber(), A) || !ToInt32((*Range)[1]->AsNumber(), B)
+			|| A < 0 || B < A)
 		{
-			if (R.Zones.Num() == 0 || ContainsExact(R.Zones, TEXT("*")))
-			{
-				return View.GetZones().Num();
-			}
-			int32 N = 0;
-			for (const FString& Z : R.Zones)
-			{
-				N += View.FindZone(Z) ? 1 : 0;
-			}
-			return N;
+			R.Fail(FString::Printf(TEXT("'%s' must be [min, max] with 0 <= min <= max"), Key));
+			return false;
 		}
+		OutMin = FMath::Min(A, Cap);
+		OutMax = FMath::Min(B, Cap);
+		return true;
+	}
 
-		uint32 WeightAt(FIntPoint P, const FString& Layer, int32 Half) const
+	/** Container.exclude.$preset resolved like the layer's own (Container is a copy; the balance JSON is never mutated). */
+	void ResolveExcludePreset(FJsonObject& Container, const TSharedPtr<FJsonObject>& Presets, const FString& Ctx, TArray<FString>& Errors)
+	{
+		const TSharedPtr<FJsonObject> Ex = AsObject(Container.TryGetField(TEXT("exclude")));
+		if (!Ex.IsValid())
 		{
-			int64 W = 1;
-			for (const FPropsNearClause& C : R.Near)
+			return;
+		}
+		const TSharedPtr<FJsonValue> Ref = Ex->TryGetField(GPresetRef);
+		if (IsNullValue(Ref))
+		{
+			return;
+		}
+		TSharedRef<FJsonObject> Rest = MakeShared<FJsonObject>();
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& E : SortedEntries(*Ex))
+		{
+			if (!E.Key.Equals(GPresetRef, ESearchCase::CaseSensitive))
 			{
-				const bool bNear = C.What == TEXT("wall") ? View.IsNearWall(P, Layer, Half + C.MaxCm)
-					: C.What == TEXT("cover") ? View.IsNearCover(P, Layer, Half + C.MaxCm) : false;
-				if (bNear)
+				Rest->SetField(E.Key, E.Value);
+			}
+		}
+		const TSharedPtr<FJsonObject> RefPreset = Ref->Type == EJson::String && Presets.IsValid() ? AsObject(Presets->TryGetField(Ref->AsString())) : nullptr;
+		const TSharedPtr<FJsonObject> RefExclude = RefPreset.IsValid() ? AsObject(RefPreset->TryGetField(TEXT("exclude"))) : nullptr;
+		if (!RefExclude.IsValid())
+		{
+			Errors.Add(FString::Printf(TEXT("%s: exclude.$preset names no preset with an 'exclude' block"), *Ctx));
+		}
+		Container.SetField(TEXT("exclude"), MakeShared<FJsonValueObject>(MergeObjects(RefExclude.Get(), &Rest.Get())));
+	}
+
+	void ReadTurret(FFieldReader& R, const FString& Ctx, FPropsTurretRules& Out, TArray<FString>& Errors)
+	{
+		const TSharedPtr<FJsonObject> Cover = R.Object(TEXT("cover_route"));
+		if (!Cover.IsValid())
+		{
+			return;
+		}
+		FFieldReader C(*Cover, Ctx + TEXT(".cover_route"), Errors);
+		C.Str(TEXT("route"), Out.RouteId);
+		ReadRange(C, TEXT("range_cm"), Out.RangeMinCm, Out.RangeMaxCm, FPropsLayoutView::MaxRadiusCm);
+		if (C.Int(TEXT("arc_deg"), Out.ArcDeg) && (Out.ArcDeg < 1 || Out.ArcDeg > 360))
+		{
+			C.Fail(TEXT("'arc_deg' must be 1..360"));
+			Out.ArcDeg = FMath::Clamp(Out.ArcDeg, 1, 360);
+		}
+		NonNegative(C, TEXT("min_covered_m"), Out.MinCoveredM);
+		NonNegative(C, TEXT("behind_cover_gap_cm"), Out.BehindCoverGapCm);
+	}
+
+	void ReadMines(FJsonObject& Merged, FFieldReader& R, const FString& Ctx, const TSharedPtr<FJsonObject>& Presets, FPropsRules& Out, TArray<FString>& Errors)
+	{
+		if (const TSharedPtr<FJsonObject> Doors = R.Object(TEXT("doorways")))
+		{
+			FPropsMineDoorRules& D = Out.MineDoors;
+			FFieldReader DR(*Doors, Ctx + TEXT(".doorways"), Errors);
+			D.bEnabled = true;
+			DR.Str(TEXT("mode"), D.Mode);
+			if (D.Mode != TEXT("count") && D.Mode != TEXT("percent"))
+			{
+				DR.Fail(FString::Printf(TEXT("unknown mode '%s' (count | percent); percent kept"), *D.Mode));
+				D.Mode = TEXT("percent");
+			}
+			NonNegative(DR, TEXT("value"), D.Value);
+			Strings(DR, TEXT("kinds"), D.Kinds);
+			for (const FString& K : D.Kinds)
+			{
+				if (K != TEXT("building_door") && K != TEXT("gate"))
 				{
-					W = FMath::Min<int64>(W * FMath::Clamp(C.Weight, 1, PropsPlacementRules::MaxWeight), PropsPlacementRules::MaxWeight);
+					DR.Fail(FString::Printf(TEXT("unknown doorway kind '%s' (building_door | gate)"), *K));
 				}
 			}
-			return static_cast<uint32>(W);
-		}
-	};
-
-	/** The next free id "<layer>_<seed hex8>_<n>". */
-	FString NextId(const FPropsPlacementInput& In, int32& Counter, TArray<FString>& Used)
-	{
-		for (;;)
-		{
-			FString Id = FString::Printf(TEXT("%s_%08x_%d"), *In.LayerId, In.Seed, Counter++);
-			if (!ContainsExact(In.ReservedIds, Id) && !ContainsExact(Used, Id))
+			FString Mandatory = TEXT("forbid");
+			DR.Str(TEXT("mandatory_route"), Mandatory);
+			if (Mandatory != TEXT("forbid") && Mandatory != TEXT("allow"))
 			{
-				Used.Add(Id);
-				return Id;
+				DR.Fail(FString::Printf(TEXT("'mandatory_route' must be forbid | allow (got '%s'); forbid kept"), *Mandatory));
+				Mandatory = TEXT("forbid");
 			}
+			D.bAllowMandatory = Mandatory == TEXT("allow");
+			NonNegative(DR, TEXT("inside_cm"), D.InsideCm);
+			D.Trigger = TEXT("tripwire");
+			DR.Str(TEXT("trigger"), D.Trigger);
+			D.Variant = TEXT("mine_tripwire");
+			DR.Str(TEXT("variant"), D.Variant);
+		}
+		if (const TSharedPtr<FJsonObject> Crates = R.Object(TEXT("crates")))
+		{
+			FPropsMineCrateRules& C = Out.MineCrates;
+			FFieldReader CR(*Crates, Ctx + TEXT(".crates"), Errors);
+			C.bEnabled = true;
+			CR.Str(TEXT("source_layer"), C.SourceLayer);
+			NonNegative(CR, TEXT("percent"), C.Percent);
+			C.Trigger = TEXT("crate_open");
+			CR.Str(TEXT("trigger"), C.Trigger);
+			C.Variant = TEXT("mine_crate");
+			CR.Str(TEXT("variant"), C.Variant);
+		}
+		if (const TSharedPtr<FJsonObject> FieldIn = R.Object(TEXT("field")))
+		{
+			// a copy: its exclude.$preset is resolved on it, never on the balance file's object
+			const TSharedRef<FJsonObject> Field = MergeObjects(FieldIn.Get(), nullptr);
+			ResolveExcludePreset(*Field, Presets, Ctx + TEXT(".field"), Errors);
+			Merged.SetField(TEXT("field"), MakeShared<FJsonValueObject>(Field));
+			FPropsMineFieldRules& F = Out.MineField;
+			F.bEnabled = true;
+			F.Common.WalkLayers = { TEXT("ground") };
+			FFieldReader FR(*Field, Ctx + TEXT(".field"), Errors);
+			ReadCommon(FR, Ctx + TEXT(".field"), F.Common, Errors);
+			F.Trigger = TEXT("proximity");
+			FR.Str(TEXT("trigger"), F.Trigger);
+			F.Variant = TEXT("mine_proximity");
+			FR.Str(TEXT("variant"), F.Variant);
 		}
 	}
 
-	/** Weighted draw over the alive candidates in list order: roll = NextBelow(total), first cumulative weight > roll. */
-	int32 DrawWeighted(FPropsRng& Rng, const TArray<FCandidate>& Cands, const TArray<bool>& Alive, uint64 Total)
+	void ReadLoot(const FJsonObject& Balance, FFieldReader& R, const FString& Ctx, FPropsRules& Out, TArray<FString>& Errors)
 	{
-		const uint64 Roll = Rng.NextBelow(static_cast<uint32>(Total));
-		uint64 Cum = 0;
-		for (int32 I = 0; I < Cands.Num(); ++I)
+		FPropsLootRules& L = Out.Loot;
+		NonNegative(R, TEXT("budget_value"), L.BudgetValue);
+		const TSharedPtr<FJsonObject> LootTables = AsObject(Balance.TryGetField(TEXT("loot_tables")));
+		const auto TableValue = [&LootTables](const FString& Name, int32& OutValue)
 		{
-			if (Alive[I])
+			const TSharedPtr<FJsonObject> T = LootTables.IsValid() ? AsObject(LootTables->TryGetField(Name)) : nullptr;
+			const TSharedPtr<FJsonValue> V = T.IsValid() ? T->TryGetField(TEXT("value")) : nullptr;
+			return !IsNullValue(V) && V->Type == EJson::Number && ToInt32(V->AsNumber(), OutValue) && OutValue > 0;
+		};
+		TArray<FString> Tables;
+		Strings(R, TEXT("tables"), Tables);
+		for (const FString& T : Tables)
+		{
+			int32 Value = 0;
+			if (!TableValue(T, Value))
 			{
-				Cum += Cands[I].Weight;
-				if (Roll < Cum)
-				{
-					return I;
-				}
+				R.Fail(FString::Printf(TEXT("loot table '%s' is not in props_balance.json loot_tables (with a value > 0); ignored"), *T));
+				continue;
+			}
+			if (!ContainsExact(L.Tables, T))
+			{
+				L.Tables.Add(T);
+				L.TableValues.Add(Value);
 			}
 		}
-		return INDEX_NONE; // unreachable while Total is the sum of the alive weights
-	}
-
-	/** Kills the picked candidate and every alive candidate closer than Spacing; returns the weight removed. */
-	uint64 DropAround(const TArray<FCandidate>& Cands, TArray<bool>& Alive, int32 Picked, int32 Spacing)
-	{
-		uint64 Removed = 0;
-		const FIntPoint P = Cands[Picked].Pos;
-		for (int32 I = 0; I < Cands.Num(); ++I)
+		if (const TSharedPtr<FJsonObject> Containers = R.Object(TEXT("containers")))
 		{
-			if (Alive[I] && (I == Picked || Closer(Cands[I].Pos, P, Spacing)))
+			FFieldReader C(*Containers, Ctx + TEXT(".containers"), Errors);
+			Milli(C, TEXT("crates_share"), L.ContainersShareMilli);
+			L.ContainersShareMilli = FMath::Clamp(L.ContainersShareMilli, 0, 1000);
+			Milli(C, TEXT("budget_share"), L.ContainersBudgetMilli);
+			L.ContainersBudgetMilli = FMath::Clamp(L.ContainersBudgetMilli, 0, 1000);
+			C.Str(TEXT("source_layer"), L.SourceLayer);
+			C.Str(TEXT("variant"), L.ContainerVariant);
+		}
+		if (const TSharedPtr<FJsonObject> Loose = R.Object(TEXT("loose")))
+		{
+			FFieldReader LR(*Loose, Ctx + TEXT(".loose"), Errors);
+			if (const TSharedPtr<FJsonObject> Where = LR.Object(TEXT("where")))
 			{
-				Alive[I] = false;
-				Removed += Cands[I].Weight;
+				ReadWhere(*Where, Ctx + TEXT(".loose.where"), Out, Errors);
+			}
+			ReadRange(LR, TEXT("prefer_far_from_route_cm"), L.FarMinCm, L.FarMaxCm, MAX_int32);
+			LR.Str(TEXT("variant"), L.PileVariant);
+			if (LR.Str(TEXT("roof_table"), L.RoofTable) && !L.RoofTable.IsEmpty() && !TableValue(L.RoofTable, L.RoofTableValue))
+			{
+				LR.Fail(FString::Printf(TEXT("roof_table '%s' is not in loot_tables (with a value > 0); ignored"), *L.RoofTable));
+				L.RoofTable.Reset();
+				L.RoofTableValue = 0;
+			}
+			if (const TSharedPtr<FJsonObject> Weights = LR.Object(TEXT("weights")))
+			{
+				FFieldReader WR(*Weights, Ctx + TEXT(".loose.weights"), Errors);
+				WR.Int(TEXT("near"), L.WeightNear);
+				WR.Int(TEXT("band"), L.WeightBand);
+				WR.Int(TEXT("far"), L.WeightFar);
+				L.WeightNear = FMath::Clamp(L.WeightNear, 1, PropsPlacementRules::MaxWeight);
+				L.WeightBand = FMath::Clamp(L.WeightBand, 1, PropsPlacementRules::MaxWeight);
+				L.WeightFar = FMath::Clamp(L.WeightFar, 1, PropsPlacementRules::MaxWeight);
 			}
 		}
-		return Removed;
 	}
 }
 
@@ -473,73 +491,7 @@ bool PropsPlacementRules::BuildRules(const FJsonObject& Balance, const FLevelPro
 	}
 
 	FFieldReader R(*Merged, Ctx, Errors);
-	if (const TSharedPtr<FJsonObject> CountObject = R.Object(TEXT("count")))
-	{
-		FFieldReader C(*CountObject, Ctx + TEXT(".count"), Errors);
-		C.Str(TEXT("mode"), Out.CountMode);
-		NonNegative(C, TEXT("value"), Out.CountValue);
-		Milli(C, TEXT("per_100m2"), Out.DensityMilli);
-		NonNegative(C, TEXT("max"), Out.CountMax);
-		if (Out.CountMode != TEXT("count") && Out.CountMode != TEXT("density") && Out.CountMode != TEXT("per_zone"))
-		{
-			C.Fail(FString::Printf(TEXT("unknown count mode '%s' (count | density | per_zone)"), *Out.CountMode));
-			Out.CountMode = TEXT("count");
-		}
-	}
-	if (const TSharedPtr<FJsonObject> Where = R.Object(TEXT("where")))
-	{
-		FFieldReader W(*Where, Ctx + TEXT(".where"), Errors);
-		Strings(W, TEXT("zones"), Out.Zones);
-		Strings(W, TEXT("walk_layers"), Out.WalkLayers);
-		if (const TArray<TSharedPtr<FJsonValue>>* Near = W.Array(TEXT("near")))
-		{
-			for (int32 I = 0; I < Near->Num(); ++I)
-			{
-				const TSharedPtr<FJsonObject> NearObject = AsObject((*Near)[I]);
-				if (!NearObject.IsValid())
-				{
-					W.Fail(FString::Printf(TEXT("'near'[%d] must be an object"), I));
-					continue;
-				}
-				FFieldReader N(*NearObject, FString::Printf(TEXT("%s.where.near[%d]"), *Ctx, I), Errors);
-				FPropsNearClause Clause;
-				N.Str(TEXT("what"), Clause.What);
-				NonNegative(N, TEXT("max_cm"), Clause.MaxCm);
-				N.Int(TEXT("weight"), Clause.Weight);
-				if (Clause.What != TEXT("wall") && Clause.What != TEXT("cover"))
-				{
-					N.Fail(FString::Printf(TEXT("'what' must be wall | cover (got '%s'); clause ignored"), *Clause.What));
-					continue;
-				}
-				Clause.Weight = FMath::Clamp(Clause.Weight, 1, MaxWeight);
-				Out.Near.Add(Clause);
-			}
-		}
-	}
-	if (const TSharedPtr<FJsonObject> Variants = R.Object(TEXT("variants")))
-	{
-		for (const TPair<FString, TSharedPtr<FJsonValue>>& E : SortedEntries(*Variants)) // ordinal key order
-		{
-			int32 Weight = 0;
-			if (IsNullValue(E.Value) || E.Value->Type != EJson::Number || !ToInt32(E.Value->AsNumber(), Weight) || Weight < 0)
-			{
-				R.Fail(FString::Printf(TEXT("variants.%s must be an integer >= 0"), *E.Key));
-				continue;
-			}
-			if (Weight > 0)
-			{
-				Out.Variants.Emplace(E.Key, Weight);
-			}
-		}
-	}
-	NonNegative(R, TEXT("min_spacing_cm"), Out.MinSpacingCm);
-	NonNegative(R, TEXT("min_gap_any_cm"), Out.MinGapAnyCm);
-	Out.WallGapCm = Out.MinGapAnyCm;
-	NonNegative(R, TEXT("wall_gap_cm"), Out.WallGapCm);
-	if (const TSharedPtr<FJsonObject> Ex = R.Object(TEXT("exclude")))
-	{
-		ReadExclude(*Ex, Ctx + TEXT(".exclude"), Out.Exclude, Errors);
-	}
+	ReadCommon(R, Ctx, Out, Errors);
 	if (const TSharedPtr<FJsonObject> Cluster = R.Object(TEXT("cluster")))
 	{
 		FFieldReader C(*Cluster, Ctx + TEXT(".cluster"), Errors);
@@ -575,6 +527,18 @@ bool PropsPlacementRules::BuildRules(const FJsonObject& Balance, const FLevelPro
 			NonNegative(N, TEXT("spawn"), Out.ExplosiveNeverSpawnCm);
 			NonNegative(N, TEXT("end"), Out.ExplosiveNeverEndCm);
 		}
+	}
+	if (Layer.Kind == KindTurrets)
+	{
+		ReadTurret(R, Ctx, Out.Turret, Errors);
+	}
+	else if (Layer.Kind == KindMines)
+	{
+		ReadMines(*Merged, R, Ctx, Presets, Out, Errors);
+	}
+	else if (Layer.Kind == KindLoot)
+	{
+		ReadLoot(Balance, R, Ctx, Out, Errors);
 	}
 
 	// half sizes and the budget from the balance file
@@ -612,6 +576,8 @@ bool PropsPlacementRules::BuildRules(const FJsonObject& Balance, const FLevelPro
 		FFieldReader B(*Budgets, TEXT("props_balance.budgets"), Errors);
 		NonNegative(B, *Layer.Kind, Out.BudgetCap);
 	}
+	Out.MineField.Common.HalfSizeCm = Out.HalfSizeCm;
+	Out.MineField.Common.BudgetCap = Out.BudgetCap;
 
 	for (int32 I = FirstError; I < Errors.Num(); ++I)
 	{
@@ -652,8 +618,13 @@ bool PropsPlacementRules::MakeInput(const FLevelPropsFile& File, const FJsonObje
 		else
 		{
 			Out.OtherObjects.Add(R.Object);
+			Out.OtherLayerIds.Add(R.LayerId);
 			Out.ReservedIds.Add(R.Object.Id);
 		}
+	}
+	for (const FLevelPropsLayer& L : File.Layers)
+	{
+		Out.LayerKinds.Add(L.Id, L.Kind);
 	}
 	for (const FLevelPropsKeepOut& K : Resolved.KeepOuts)
 	{
@@ -698,6 +669,7 @@ FPropsPlacementResult PropsPlacementRules::Place(const FPropsPlacementInput& In)
 	Result.Objects = In.Kept;
 	Report.Kept = In.Kept.Num();
 	const FPropsRules& R = In.Rules;
+	Report.Kind = R.Kind;
 	const bool bCrates = R.Kind == KindCrates;
 	const bool bBarrels = R.Kind == KindBarrels;
 
@@ -705,7 +677,7 @@ FPropsPlacementResult PropsPlacementRules::Place(const FPropsPlacementInput& In)
 	{
 		Report.ShortBy = FMath::Max(0, Report.Requested - Report.Kept - Report.Placed);
 	};
-	if (!bCrates && !bBarrels)
+	if (!IsPlaceableKind(R.Kind))
 	{
 		Report.Warnings.Add(FString::Printf(TEXT("kind_unsupported %s"), *R.Kind));
 		return Result;
@@ -713,6 +685,21 @@ FPropsPlacementResult PropsPlacementRules::Place(const FPropsPlacementInput& In)
 	if (!In.View)
 	{
 		Report.Warnings.Add(TEXT("no_layout"));
+		return Result;
+	}
+	if (R.Kind == KindTurrets)
+	{
+		PlaceTurrets(In, Result);
+		return Result;
+	}
+	if (R.Kind == KindMines)
+	{
+		PlaceMines(In, Result);
+		return Result;
+	}
+	if (R.Kind == KindLoot)
+	{
+		PlaceLoot(In, Result);
 		return Result;
 	}
 	if (bCrates && R.Variants.Num() == 0)
@@ -728,79 +715,13 @@ FPropsPlacementResult PropsPlacementRules::Place(const FPropsPlacementInput& In)
 
 	// 2. candidates: the 50 cm lattice of every matched walk layer, sorted by (y, x, layer name); 3. hard filters; 4. weights
 	TArray<FCandidate> Cands;
-	for (int32 LayerIndex = 0; LayerIndex < Ctx.LayerNames.Num(); ++LayerIndex)
-	{
-		const FString& Layer = Ctx.LayerNames[LayerIndex];
-		FIntPoint Min;
-		FIntPoint Max;
-		if (!View.GetLayerExtent(Layer, Min, Max))
-		{
-			continue;
-		}
-		for (int32 Y = CeilStep(Min.Y); Y <= Max.Y; Y += LatticeCm)
-		{
-			for (int32 X = CeilStep(Min.X); X <= Max.X; X += LatticeCm)
-			{
-				const FIntPoint P(X, Y);
-				if (!View.IsWalkable(P, Layer) || !Ctx.InZones(P))
-				{
-					continue;
-				}
-				++Report.Eligible;
-				EReject Reject = Ctx.StaticReject(P, Layer, Half);
-				if (Reject == EReject::None)
-				{
-					for (const FLevelPropsObject& K : In.Kept)
-					{
-						if (Closer(P, K.Pos, R.MinSpacingCm))
-						{
-							Reject = EReject::Spacing;
-							break;
-						}
-					}
-				}
-				if (Reject != EReject::None)
-				{
-					Count(Report.Rejected, Reject);
-					continue;
-				}
-				FCandidate& C = Cands.AddDefaulted_GetRef();
-				C.Pos = P;
-				C.Layer = LayerIndex;
-				C.Weight = Ctx.WeightAt(P, Layer, Half);
-			}
-		}
-	}
-	Cands.StableSort([&Ctx](const FCandidate& A, const FCandidate& B)
-	{
-		if (A.Pos.Y != B.Pos.Y) { return A.Pos.Y < B.Pos.Y; }
-		if (A.Pos.X != B.Pos.X) { return A.Pos.X < B.Pos.X; }
-		return Ctx.LayerNames[A.Layer].Compare(Ctx.LayerNames[B.Layer], ESearchCase::CaseSensitive) < 0;
-	});
+	GatherLattice(Ctx, Half, In.Kept, Report.Eligible, Report.Rejected, Cands);
 
 	// 1. target count
-	int64 Total = 0;
-	if (R.CountMode == TEXT("density"))
-	{
-		Total = (static_cast<int64>(R.DensityMilli) * Report.Eligible + 200000) / 400000; // Eligible x 0.25 m2, per 100 m2, round half up
-	}
-	else if (R.CountMode == TEXT("per_zone"))
-	{
-		Total = static_cast<int64>(R.CountValue) * Ctx.ZoneCount();
-	}
-	else
-	{
-		Total = R.CountValue;
-	}
-	Total = FMath::Clamp<int64>(FMath::Min3<int64>(Total, R.CountMax, R.BudgetCap), 0, MAX_int32);
-	Report.Requested = static_cast<int32>(Total);
+	Report.Requested = ComputeRequested(R, Report.Eligible, Ctx.ZoneCount());
 	const int32 Target = FMath::Max(0, Report.Requested - Report.Kept);
 
-	uint64 TotalWeight = 0;
-	for (const FCandidate& C : Cands)
-	{
-		TotalWeight += C.Weight;
-	}
+	uint64 TotalWeight = TotalWeightOf(Cands);
 	TArray<bool> Alive;
 	Alive.Init(true, Cands.Num());
 	if (Target > 0 && Cands.Num() == 0)
@@ -1009,6 +930,11 @@ TArray<FPropsViolation> PropsPlacementRules::Validate(const FPropsPlacementInput
 	{
 		return Out;
 	}
+	if (In.Rules.Kind == KindTurrets || In.Rules.Kind == KindMines || In.Rules.Kind == KindLoot)
+	{
+		ValidateC4(In, Objects, Out);
+		return Out;
+	}
 	const FContext Ctx(In);
 	const FPropsLayoutView& View = *In.View;
 	const FPropsRules& R = In.Rules;
@@ -1058,7 +984,7 @@ TArray<FPropsViolation> PropsPlacementRules::Validate(const FPropsPlacementInput
 		}
 		for (int32 I = 0; I < In.OtherObjects.Num(); ++I)
 		{
-			if (Closer(O.Pos, In.OtherObjects[I].Pos, static_cast<int64>(Half) + Ctx.OtherHalf[I] + R.MinGapAnyCm))
+			if (Ctx.IsObstacle(I) && Closer(O.Pos, In.OtherObjects[I].Pos, static_cast<int64>(Half) + Ctx.OtherHalf[I] + R.MinGapAnyCm))
 			{
 				Add(O, FString::Printf(TEXT("min_gap_any to %s"), *In.OtherObjects[I].Id));
 			}
@@ -1134,6 +1060,37 @@ TSharedRef<FJsonObject> PropsPlacementRules::ReportToJson(const FPropsPlacementR
 	Rejected->SetNumberField(TEXT("keepout"), Report.Rejected.Keepout);
 	Rejected->SetNumberField(TEXT("other_layer"), Report.Rejected.OtherLayer);
 	Rejected->SetNumberField(TEXT("other"), Report.Rejected.Other);
+	const auto Sub = [](const FPropsSubReport& S)
+	{
+		TSharedRef<FJsonObject> O = MakeShared<FJsonObject>();
+		O->SetNumberField(TEXT("eligible"), S.Eligible);
+		O->SetNumberField(TEXT("requested"), S.Requested);
+		O->SetNumberField(TEXT("placed"), S.Placed);
+		O->SetNumberField(TEXT("kept"), S.Kept);
+		O->SetNumberField(TEXT("dropped"), S.Dropped);
+		O->SetNumberField(TEXT("forbidden"), S.Forbidden);
+		return O;
+	};
+	if (Report.Kind == KindTurrets)
+	{
+		Rejected->SetNumberField(TEXT("coverage"), Report.Rejected.Coverage);
+	}
+	else if (Report.Kind == KindMines)
+	{
+		J->SetObjectField(TEXT("doorways"), Sub(Report.SubA));
+		J->SetObjectField(TEXT("crates"), Sub(Report.SubB));
+		J->SetObjectField(TEXT("field"), Sub(Report.SubC));
+	}
+	else if (Report.Kind == KindLoot)
+	{
+		J->SetObjectField(TEXT("containers"), Sub(Report.SubA));
+		J->SetObjectField(TEXT("loose"), Sub(Report.SubB));
+		TSharedRef<FJsonObject> Budget = MakeShared<FJsonObject>();
+		Budget->SetNumberField(TEXT("value"), Report.BudgetValue);
+		Budget->SetNumberField(TEXT("spent"), Report.BudgetSpent);
+		Budget->SetNumberField(TEXT("left"), FMath::Max(0, Report.BudgetValue - Report.BudgetSpent));
+		J->SetObjectField(TEXT("budget"), Budget);
+	}
 	J->SetObjectField(TEXT("rejected"), Rejected);
 	TArray<TSharedPtr<FJsonValue>> Warnings;
 	for (const FString& W : Report.Warnings)
@@ -1163,11 +1120,24 @@ bool PropsPlacementRules::RerollLayer(FLevelPropsFile& File, const FJsonObject& 
 		Errors.Add(FString::Printf(TEXT("props: layer '%s' is locked; re-roll refused"), *LayerId));
 		return false;
 	}
-	if (Layer->Kind != KindCrates && Layer->Kind != KindBarrels)
+	if (!IsPlaceableKind(Layer->Kind))
 	{
-		Errors.Add(FString::Printf(TEXT("props: layer '%s' kind '%s' is placed by C4 (not yet)"), *LayerId, *Layer->Kind));
+		Errors.Add(FString::Printf(TEXT("props: layer '%s' kind '%s' cannot be placed (crates | barrels | turrets | mines | loot)"), *LayerId, *Layer->Kind));
 		return false;
 	}
+	const auto LayerIds = [&LayerId](const FLevelPropsResolved& Resolved)
+	{
+		TSet<FString> Ids;
+		for (const FLevelPropsResolvedObject& R : Resolved.Objects)
+		{
+			if (R.LayerId.Equals(LayerId, ESearchCase::CaseSensitive))
+			{
+				Ids.Add(R.Object.Id);
+			}
+		}
+		return Ids;
+	};
+	const TSet<FString> IdsBefore = LayerIds(LevelPropsFile::ApplyOverrides(File));
 	const uint32 OldSeed = Layer->Seed;
 	Layer->Seed = Seed;
 	FPropsPlacementInput In;
@@ -1182,7 +1152,8 @@ bool PropsPlacementRules::RerollLayer(FLevelPropsFile& File, const FJsonObject& 
 	for (int32 I = 0; I < Result.Objects.Num(); ++I)
 	{
 		const FLevelPropsObject& O = Result.Objects[I];
-		if (I < In.Kept.Num())
+		// a kept object, by id (the C4 kinds drop kept objects whose crate / door is gone)
+		if (In.Kept.ContainsByPredicate([&O](const FLevelPropsObject& K) { return K.Id.Equals(O.Id, ESearchCase::CaseSensitive); }))
 		{
 			// a kept object keeps its stored record (its overrides re-apply at load); hand-added ones live in the overrides
 			if (const FLevelPropsObject* Record = Layer->Objects.FindByPredicate([&O](const FLevelPropsObject& S) { return S.Id.Equals(O.Id, ESearchCase::CaseSensitive); }))
@@ -1194,10 +1165,49 @@ bool PropsPlacementRules::RerollLayer(FLevelPropsFile& File, const FJsonObject& 
 		Stored.Add(O);
 	}
 	Layer->Objects = MoveTemp(Stored);
+
+	// other layers' objects attached to an object of this layer that the re-roll removed: reported, dropped by their own re-roll / C5
+	const FLevelPropsResolved After = LevelPropsFile::ApplyOverrides(File);
+	const TSet<FString> IdsAfter = LayerIds(After);
+	for (const FLevelPropsResolvedObject& R : After.Objects)
+	{
+		if (!R.LayerId.Equals(LayerId, ESearchCase::CaseSensitive) && !R.Object.Attach.IsEmpty() && IdsBefore.Contains(R.Object.Attach)
+			&& !IdsAfter.Contains(R.Object.Attach))
+		{
+			Result.Report.Warnings.Add(FString::Printf(TEXT("attach_orphaned %s"), *R.Object.Id));
+		}
+	}
 	Layer->Report = ReportToJson(Result.Report);
 	if (OutResult)
 	{
 		*OutResult = MoveTemp(Result);
 	}
 	return true;
+}
+
+bool PropsPlacementRules::RerollAll(FLevelPropsFile& File, const FJsonObject& Balance, const FPropsLayoutView& View, TArray<FString>& Errors)
+{
+	bool bOk = true;
+	for (const TCHAR* Kind : { KindCrates, KindBarrels, KindTurrets, KindMines, KindLoot })
+	{
+		TArray<FString> Ids;
+		for (const FLevelPropsLayer& L : File.Layers)
+		{
+			if (L.Kind == Kind && L.bEnabled && !L.bLocked)
+			{
+				Ids.Add(L.Id);
+			}
+		}
+		for (const FString& Id : Ids)
+		{
+			const FLevelPropsLayer* L = File.Layers.FindByPredicate([&Id](const FLevelPropsLayer& X) { return X.Id.Equals(Id, ESearchCase::CaseSensitive); });
+			bOk &= L && RerollLayer(File, Balance, View, Id, L->Seed, Errors);
+		}
+	}
+	return bOk;
+}
+
+bool PropsPlacementRules::IsPlaceableKind(const FString& Kind)
+{
+	return Kind == KindCrates || Kind == KindBarrels || Kind == KindTurrets || Kind == KindMines || Kind == KindLoot;
 }

@@ -791,9 +791,9 @@ bool FPropsPlacementShortTest::RunTest(const FString&)
 		TestTrue(TEXT("no_layout warning"), R.Report.Warnings.Contains(TEXT("no_layout")));
 	}
 	{
-		FPropsPlacementInput Turrets = In;
-		Turrets.Rules.Kind = TEXT("turrets");
-		TestTrue(TEXT("kind_unsupported"), PropsPlacementRules::Place(Turrets).Report.Warnings.Contains(TEXT("kind_unsupported turrets")));
+		FPropsPlacementInput Statues = In;
+		Statues.Rules.Kind = TEXT("statues");
+		TestTrue(TEXT("kind_unsupported"), PropsPlacementRules::Place(Statues).Report.Warnings.Contains(TEXT("kind_unsupported statues")));
 	}
 	{
 		// a 3 x 3 m layout: a density roll finds no room at all and reports it
@@ -840,7 +840,9 @@ bool FPropsPlacementRefusalsTest::RunTest(const FString&)
 	FindLayer(Locked, TEXT("crates"))->bLocked = true;
 	Refused(Locked, TEXT("crates"), TEXT("locked layer"));
 	Refused(W.File, TEXT("nope"), TEXT("missing layer"));
-	Refused(W.File, TEXT("mines"), TEXT("C4 kind"));
+	FLevelPropsFile Unknown = W.File;
+	FindLayer(Unknown, TEXT("mines"))->Kind = TEXT("statues");
+	Refused(Unknown, TEXT("mines"), TEXT("unknown kind"));
 	return true;
 }
 
@@ -864,6 +866,11 @@ bool FPropsPlacementGoldenTest::RunTest(const FString&)
 	for (const TSharedPtr<FJsonValue>& CaseValue : Cases)
 	{
 		const TSharedPtr<FJsonObject> Case = CaseValue->AsObject();
+		FString Step;
+		if (Case->TryGetStringField(TEXT("step"), Step) && Step != TEXT("C3"))
+		{
+			continue; // C4 cases: CodexTactics.LevelGen.Props.C4.Golden
+		}
 		const FString Name = Case->GetStringField(TEXT("case"));
 		const FString Input = Case->GetStringField(TEXT("input"));
 		const FString Layer = Case->GetStringField(TEXT("layer"));

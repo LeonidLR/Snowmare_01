@@ -1,0 +1,15 @@
+{
+	"schema": "codex.levelgen_props/1",
+	"map": "L_Gen_Depot_1",
+	"layout": "gen_ref_01_02_depot_1",
+	"layout_hash": "0000000000000000000000000000000000000000",
+	"revision": 1,
+	"frozen": false,
+	"x_note": "C4 golden recipe part (golden_cases.json 'add_layers'): the turrets / mines / loot layers appended to the depot_barrels_s1 output (crates + barrels) to make golden_in_depot_c4.props.json. Default presets.",
+	"layers": [
+		{ "id": "turrets", "kind": "turrets", "enabled": true, "seed": 1, "locked": false, "preset": "turrets_default", "objects": [] },
+		{ "id": "mines", "kind": "mines", "enabled": true, "seed": 1, "locked": false, "preset": "mines_default", "objects": [] },
+		{ "id": "loot", "kind": "loot", "enabled": true, "seed": 1, "locked": false, "preset": "loot_default", "objects": [] }
+	],
+	"overrides": []
+}

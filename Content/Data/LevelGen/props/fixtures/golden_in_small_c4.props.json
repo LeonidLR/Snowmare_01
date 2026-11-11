@@ -1,0 +1,74 @@
+{
+	"schema": "codex.levelgen_props/1",
+	"map": "L_Fixture_Small",
+	"layout": "fixture_small",
+	"layout_hash": "0000000000000000000000000000000000000000",
+	"revision": 1,
+	"frozen": false,
+	"x_note": "C4 golden input (PROPS_LAYERS.md 5 C4): six crates (one locked), turrets on the shed roof, mines (doorways by %, crates by % of the unlocked crates, a locked crate mine on the locked crate, a locked crate mine whose crate is gone, a field in Z_open), loot within a budget.",
+	"layers": [
+		{
+			"id": "crates",
+			"kind": "crates",
+			"enabled": true,
+			"seed": 21,
+			"locked": true,
+			"preset": "crates_default",
+			"objects": [
+				{ "id": "crates_00000015_0", "variant": "crate_s", "pos": [-1000, 1500], "walk_layer": "ground", "yaw": 0, "locked": true },
+				{ "id": "crates_00000015_1", "variant": "crate_s", "pos": [-1500, -500], "walk_layer": "ground", "yaw": 90, "locked": false },
+				{ "id": "crates_00000015_2", "variant": "crate_l", "pos": [-1000, 0], "walk_layer": "ground", "yaw": 0, "locked": false },
+				{ "id": "crates_00000015_3", "variant": "crate_s", "pos": [-1700, 600], "walk_layer": "ground", "yaw": 90, "locked": false },
+				{ "id": "crates_00000015_4", "variant": "crate_s", "pos": [-800, -1200], "walk_layer": "ground", "yaw": 0, "locked": false },
+				{ "id": "crates_00000015_5", "variant": "crate_s", "pos": [-1400, 1200], "walk_layer": "ground", "yaw": 0, "locked": false }
+			]
+		},
+		{
+			"id": "turrets",
+			"kind": "turrets",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "turrets_default",
+			"rules": {
+				"count": { "mode": "count", "value": 2 },
+				"cover_route": { "min_covered_m": 5, "range_cm": [300, 2500] },
+				"exclude": { "spawn_cm": 300 },
+				"min_spacing_cm": 600
+			},
+			"objects": []
+		},
+		{
+			"id": "mines",
+			"kind": "mines",
+			"enabled": true,
+			"seed": 11,
+			"locked": false,
+			"preset": "mines_default",
+			"rules": {
+				"crates": { "percent": 30 },
+				"doorways": { "value": 60 },
+				"field": { "count": { "mode": "count", "value": 3 }, "where": { "walk_layers": ["ground"], "zones": ["Z_open"] } }
+			},
+			"objects": [
+				{ "id": "mines_0000000b_0", "variant": "mine_crate", "pos": [-1000, 1500], "walk_layer": "ground", "yaw": 0, "locked": true, "attach": "crates_00000015_0", "trigger": "crate_open" },
+				{ "id": "mines_0000000b_1", "variant": "mine_crate", "pos": [-1100, -1500], "walk_layer": "ground", "yaw": 0, "locked": true, "attach": "crates_00000015_9", "trigger": "crate_open" },
+				{ "id": "mines_0000000b_2", "variant": "mine_tripwire", "pos": [1180, -600], "walk_layer": "ground", "yaw": 0, "locked": false, "door": "B_shed#0", "trigger": "tripwire" }
+			]
+		},
+		{
+			"id": "loot",
+			"kind": "loot",
+			"enabled": true,
+			"seed": 5,
+			"locked": false,
+			"preset": "loot_default",
+			"rules": {
+				"budget_value": 300,
+				"containers": { "crates_share": 0.5 }
+			},
+			"objects": []
+		}
+	],
+	"overrides": []
+}
