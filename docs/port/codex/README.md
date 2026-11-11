@@ -42,7 +42,7 @@ Read docs/port/codex/README.md in C:\Users\Zephyrus15Duo\Documents\Unreal Projec
 - **Chat:** post results with a commit hash and real questions only - no "accepted" / "starting" lines (each post wakes Claude).
 
 ## Local model (designer 2026-11-11, free)
-`python Scripts/Tools/local_task.py --prompt "..." --files <f...> [--out answer.md]` runs qwen2.5-coder:14b on the designer's RTX 3080
+`python Scripts/Tools/local_task.py --prompt "..." --files <f...> [--out answer.md]` runs qwen3-coder:30b on the designer's RTX 3080
 (Ollama, ~25-33 tok/s warm, slower while the night trainer runs). Use it for model-router level 1 (and small level 2) before any paid
 model: JSON edits, one-file explanations, one-liners, test boilerplate, commit messages, short summaries. Verify the answer. Log
 `level | local | result` in your report like the router trial.

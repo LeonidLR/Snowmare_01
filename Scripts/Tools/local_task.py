@@ -17,7 +17,7 @@ import sys
 import time
 import urllib.request
 
-DEFAULT_MODEL = "qwen2.5-coder:14b"
+DEFAULT_MODEL = "qwen3-coder:30b"
 URL = "http://127.0.0.1:11434/api/generate"
 MAX_FILE_CHARS = 40000
 
