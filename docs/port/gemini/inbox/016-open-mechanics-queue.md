@@ -5,6 +5,7 @@ Rules as always: one branch per item from `main` (`gemini/016-<n>-<slug>`), TS /
 Source, Config, Content assets, maps, .uasset, main, push. Chat: only "016 item N done <hash>" or a real question (Russian, with a
 recommended default). Design questions go to the designer and you CONTINUE with the default.
 
+0. **FIRST (designer 2026-11-11): 3c ragdoll map below - Codex needs it for task 005 (dead enemies stay standing; ragdoll brought forward).** Also list which Depot archetypes have a Physics Asset (path) and which do not.
 1. **T11 / #26 Depot x2 - the generator's "extend" mode (TypeScript, Training Ground).** Board T11 + register pl-depot-x2: the level
    generator takes an existing level JSON (the designer's L_Gen_Depot_1.json is READ-ONLY - work on a copy fixture) and builds the
    doubled area around it, keeping every hand-placed object; candidate layouts listed with a score. npm test + typecheck green, report.
