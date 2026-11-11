@@ -1469,3 +1469,5 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 2026-11-11 Codex interim coordination: reviewed actual Gemini C5 prep 2f50e91a without merging. Gemini queue 012 is report-only; no C++/assets/main/push. Native stealth first smoke PASS; integration remains WIP.
 
 2026-11-11 Codex interim resumed: owns stealth leftovers in interim/2026-11-12. Working part 1 checkpoint (late weapon meshes / material overrides) saved while full MSVC rebuild runs. No main/push/assets writes.
+
+2026-11-11 Codex stealth checkpoint: male/female/rendered smokes and 44 tests PASS, 3 game-camera frames copied to main Saved/Orchestrator/stealth (explicit task exception). No main assets/push. Female fixture uses existing optimized female body in memory because movement-map roster overrides all bodies male.

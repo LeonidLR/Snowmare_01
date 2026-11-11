@@ -1373,6 +1373,10 @@ public:
 	/** Stealth layer diagnostics for the in-game smoke. */
 	bool HasStealthSet() const { return StealthSetData.StandIdle != nullptr; }
 	float GetStealthWeight() const { return StealthWeight; }
+	/** Current native pose samples / shared phase / measured speed, for integration smokes. */
+	const TStaticArray<FOperativeClipState, 12>& GetStealthClips() const { return StealthClips; }
+	float GetStealthPhase() const { return StealthPhase; }
+	float GetStealthNominalSpeed(FName ClipName) const { return StealthSetData.ClipSpeeds.FindRef(ClipName); }
 	const UAnimSequenceBase* GetStealthDominantClip() const;
 	/** Pack crouch entry, used by both the stance montage and its movement hold. */
 	UAnimSequenceBase* GetStealthCrouchClip() const;
