@@ -1,0 +1,1047 @@
+{
+	"schema": "codex.levelgen_props/1",
+	"map": "L_Gen_Depot_1",
+	"layout": "gen_ref_01_02_depot_1",
+	"layout_hash": "0000000000000000000000000000000000000000",
+	"revision": 1,
+	"frozen": false,
+	"x_note": "C3 golden input on the accepted Depot layout: a fresh crates layer (density preset, ground + floors, near wall / cover) and an empty barrels layer.",
+	"layers": [
+		{
+			"id": "crates",
+			"kind": "crates",
+			"enabled": true,
+			"seed": 5,
+			"locked": false,
+			"preset": "crates_default",
+			"rules": {
+				"where": {
+					"near": [
+						{
+							"max_cm": 150,
+							"weight": 3,
+							"what": "wall"
+						},
+						{
+							"max_cm": 200,
+							"weight": 2,
+							"what": "cover"
+						}
+					],
+					"walk_layers": ["ground", "floor:*"]
+				}
+			},
+			"objects": [
+				{
+					"id": "crates_00000001_0",
+					"variant": "crate_s",
+					"pos": [-1600, -1550],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": true
+				},
+				{
+					"id": "crates_00000001_2",
+					"variant": "crate_s",
+					"pos": [-4450, -5400],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": true
+				},
+				{
+					"id": "crates_00000001_3",
+					"variant": "crate_l",
+					"pos": [2700, -4900],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_4",
+					"variant": "crate_s",
+					"pos": [4400, 8850],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": true
+				},
+				{
+					"id": "crates_00000005_0",
+					"variant": "crate_s",
+					"pos": [-3900, 3750],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_1",
+					"variant": "crate_s",
+					"pos": [-1800, 3500],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_2",
+					"variant": "crate_s",
+					"pos": [-5350, 1200],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_3",
+					"variant": "crate_l",
+					"pos": [-5250, -5400],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_4",
+					"variant": "crate_l",
+					"pos": [6150, 6950],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_5",
+					"variant": "crate_l",
+					"pos": [-2300, -7100],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_6",
+					"variant": "crate_l",
+					"pos": [4300, -4100],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_7",
+					"variant": "crate_s",
+					"pos": [-6150, 8250],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_8",
+					"variant": "crate_s",
+					"pos": [1200, 5950],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_9",
+					"variant": "crate_s",
+					"pos": [4150, 6650],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_10",
+					"variant": "crate_s",
+					"pos": [-3400, -1450],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_11",
+					"variant": "crate_s",
+					"pos": [4800, 3100],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_12",
+					"variant": "crate_l",
+					"pos": [1900, -5800],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_13",
+					"variant": "crate_l",
+					"pos": [-600, -7450],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_14",
+					"variant": "crate_s",
+					"pos": [-3600, 7450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_15",
+					"variant": "crate_s",
+					"pos": [-4150, -8200],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_16",
+					"variant": "crate_l",
+					"pos": [-2600, -7100],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_17",
+					"variant": "crate_l",
+					"pos": [5800, 6450],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_18",
+					"variant": "crate_s",
+					"pos": [1750, 750],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_19",
+					"variant": "crate_l",
+					"pos": [-4450, 7400],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_20",
+					"variant": "crate_s",
+					"pos": [-1850, 650],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_21",
+					"variant": "crate_s",
+					"pos": [4650, -3950],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_22",
+					"variant": "crate_l",
+					"pos": [-1200, 4800],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_23",
+					"variant": "crate_l",
+					"pos": [-5250, -5000],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_24",
+					"variant": "crate_s",
+					"pos": [4700, -3650],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_25",
+					"variant": "crate_s",
+					"pos": [1250, -2400],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_26",
+					"variant": "crate_s",
+					"pos": [-5350, -850],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_27",
+					"variant": "crate_l",
+					"pos": [-4000, -6250],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_28",
+					"variant": "crate_l",
+					"pos": [2600, 8500],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_29",
+					"variant": "crate_s",
+					"pos": [1450, 2300],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_30",
+					"variant": "crate_s",
+					"pos": [3050, 7950],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_31",
+					"variant": "crate_s",
+					"pos": [3200, -6800],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_32",
+					"variant": "crate_s",
+					"pos": [-4400, -8500],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_33",
+					"variant": "crate_s",
+					"pos": [3350, -850],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_34",
+					"variant": "crate_s",
+					"pos": [550, 8300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_35",
+					"variant": "crate_s",
+					"pos": [1000, -7400],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_36",
+					"variant": "crate_s",
+					"pos": [-2050, -2350],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_37",
+					"variant": "crate_s",
+					"pos": [-5300, 5900],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_38",
+					"variant": "crate_s",
+					"pos": [-5800, 2300],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_39",
+					"variant": "crate_s",
+					"pos": [-5300, 900],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_40",
+					"variant": "crate_l",
+					"pos": [-1700, -3350],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_41",
+					"variant": "crate_l",
+					"pos": [-1300, -6550],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_42",
+					"variant": "crate_l",
+					"pos": [2350, 5600],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_43",
+					"variant": "crate_s",
+					"pos": [3600, -3550],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_44",
+					"variant": "crate_l",
+					"pos": [2000, -4800],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_45",
+					"variant": "crate_s",
+					"pos": [-3550, 5000],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_46",
+					"variant": "crate_s",
+					"pos": [3650, -4550],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_47",
+					"variant": "crate_l",
+					"pos": [1200, -5350],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false
+				},
+				{
+					"id": "crates_00000005_48",
+					"variant": "crate_l",
+					"pos": [800, -7650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				}
+			],
+			"report": {
+				"eligible": 85781,
+				"gate": "n/a",
+				"kept": 5,
+				"placed": 49,
+				"rejected": {
+					"blocked": 29130,
+					"door": 803,
+					"keepout": 39,
+					"ladder": 1479,
+					"other": 91,
+					"other_layer": 623,
+					"route": 9599,
+					"spacing": 265,
+					"spawn": 1579
+				},
+				"requested": 54,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": ["attach_orphaned mines_00000001_5", "attach_orphaned mines_00000001_6", "attach_orphaned mines_00000001_7", "attach_orphaned mines_00000001_8", "attach_orphaned mines_00000001_9", "attach_orphaned loot_00000001_0", "attach_orphaned loot_00000001_1", "attach_orphaned loot_00000001_2", "attach_orphaned loot_00000001_3", "attach_orphaned loot_00000001_4", "attach_orphaned loot_00000001_5", "attach_orphaned loot_00000001_6"]
+			}
+		},
+		{
+			"id": "barrels",
+			"kind": "barrels",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "barrels_default",
+			"rules": {
+				"where": {
+					"near": [
+						{
+							"max_cm": 120,
+							"weight": 2,
+							"what": "wall"
+						}
+					]
+				}
+			},
+			"objects": [
+				{
+					"id": "barrels_00000001_0",
+					"variant": "barrel_explosive",
+					"pos": [-5000, 5300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_0"
+				},
+				{
+					"id": "barrels_00000001_1",
+					"variant": "barrel_explosive",
+					"pos": [4550, 8500],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_1"
+				},
+				{
+					"id": "barrels_00000001_2",
+					"variant": "barrel_explosive",
+					"pos": [4600, 8400],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_1"
+				},
+				{
+					"id": "barrels_00000001_3",
+					"variant": "barrel_explosive",
+					"pos": [4450, 8450],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_1"
+				},
+				{
+					"id": "barrels_00000001_4",
+					"variant": "barrel_explosive",
+					"pos": [-1250, 6700],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_4"
+				},
+				{
+					"id": "barrels_00000001_5",
+					"variant": "barrel_explosive",
+					"pos": [-1200, 6600],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_4"
+				},
+				{
+					"id": "barrels_00000001_6",
+					"variant": "barrel_explosive",
+					"pos": [-1150, 6650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_4"
+				},
+				{
+					"id": "barrels_00000001_7",
+					"variant": "barrel_explosive",
+					"pos": [3350, 0],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"cluster": "barrels_00000001_7"
+				}
+			],
+			"report": {
+				"eligible": 84363,
+				"gate": "n/a",
+				"kept": 0,
+				"placed": 8,
+				"rejected": {
+					"blocked": 35901,
+					"door": 546,
+					"keepout": 0,
+					"ladder": 1218,
+					"other": 0,
+					"other_layer": 1455,
+					"route": 8472,
+					"spacing": 0,
+					"spawn": 1479
+				},
+				"requested": 8,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "turrets",
+			"kind": "turrets",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "turrets_default",
+			"objects": [
+				{
+					"id": "turrets_00000001_0",
+					"variant": "turret_mg",
+					"pos": [2950, 3150],
+					"walk_layer": "roof:B_warehouse",
+					"yaw": 165,
+					"locked": false,
+					"arc": 90,
+					"covered_m": 46
+				},
+				{
+					"id": "turrets_00000001_1",
+					"variant": "turret_mg",
+					"pos": [-4400, 6250],
+					"walk_layer": "roof:B_steelworks",
+					"yaw": 225,
+					"locked": false,
+					"arc": 90,
+					"covered_m": 46
+				}
+			],
+			"report": {
+				"eligible": 1054,
+				"gate": "n/a",
+				"kept": 0,
+				"placed": 2,
+				"rejected": {
+					"blocked": 167,
+					"coverage": 114,
+					"door": 0,
+					"keepout": 0,
+					"ladder": 184,
+					"other": 0,
+					"other_layer": 43,
+					"route": 0,
+					"spacing": 0,
+					"spawn": 67
+				},
+				"requested": 2,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "mines",
+			"kind": "mines",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "mines_default",
+			"objects": [
+				{
+					"id": "mines_00000001_0",
+					"variant": "mine_tripwire",
+					"pos": [3200, -4100],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": true,
+					"door": "F_boilers_S#g0",
+					"trigger": "tripwire",
+					"width_cm": 300
+				},
+				{
+					"id": "mines_00000001_1",
+					"variant": "mine_tripwire",
+					"pos": [1433, 8103],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "F_junkyard_S#g1",
+					"trigger": "tripwire",
+					"width_cm": 300
+				},
+				{
+					"id": "mines_00000001_2",
+					"variant": "mine_tripwire",
+					"pos": [-3720, 2441],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "B_ruin#1",
+					"trigger": "tripwire",
+					"width_cm": 180
+				},
+				{
+					"id": "mines_00000001_3",
+					"variant": "mine_tripwire",
+					"pos": [-2322, 4330],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false,
+					"door": "B_steelworks#1",
+					"trigger": "tripwire",
+					"width_cm": 180
+				},
+				{
+					"id": "mines_00000001_4",
+					"variant": "mine_tripwire",
+					"pos": [-4420, 5397],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"door": "B_steelworks#0",
+					"trigger": "tripwire",
+					"width_cm": 180
+				},
+				{
+					"id": "mines_00000001_5",
+					"variant": "mine_crate",
+					"pos": [1250, 5150],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": true,
+					"attach": "crates_00000001_24",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_6",
+					"variant": "mine_crate",
+					"pos": [4150, 4000],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": true,
+					"attach": "crates_00000001_22",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_7",
+					"variant": "mine_crate",
+					"pos": [3500, -7350],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_41",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_8",
+					"variant": "mine_crate",
+					"pos": [-2200, 650],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_44",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_9",
+					"variant": "mine_crate",
+					"pos": [-3700, -4400],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_18",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_10",
+					"variant": "mine_proximity",
+					"pos": [100, -5600],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_11",
+					"variant": "mine_proximity",
+					"pos": [150, 5250],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_12",
+					"variant": "mine_proximity",
+					"pos": [100, 3450],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				},
+				{
+					"id": "mines_00000001_13",
+					"variant": "mine_proximity",
+					"pos": [-200, -6150],
+					"walk_layer": "cut",
+					"yaw": 0,
+					"locked": false,
+					"trigger": "proximity"
+				}
+			],
+			"report": {
+				"crates": {
+					"dropped": 0,
+					"eligible": 50,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 5,
+					"requested": 5
+				},
+				"doorways": {
+					"dropped": 0,
+					"eligible": 20,
+					"forbidden": 3,
+					"kept": 0,
+					"placed": 5,
+					"requested": 5
+				},
+				"eligible": 0,
+				"field": {
+					"dropped": 0,
+					"eligible": 4248,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 4,
+					"requested": 4
+				},
+				"gate": "n/a",
+				"kept": 0,
+				"placed": 14,
+				"rejected": {
+					"blocked": 1456,
+					"door": 0,
+					"keepout": 0,
+					"ladder": 182,
+					"other": 0,
+					"other_layer": 0,
+					"route": 144,
+					"spacing": 0,
+					"spawn": 0
+				},
+				"requested": 14,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		},
+		{
+			"id": "loot",
+			"kind": "loot",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "loot_default",
+			"objects": [
+				{
+					"id": "loot_00000001_0",
+					"variant": "loot_crate",
+					"pos": [3750, -2300],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_32",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_1",
+					"variant": "loot_crate",
+					"pos": [1300, 7050],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_29",
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_2",
+					"variant": "loot_crate",
+					"pos": [1300, 3350],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_10",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_3",
+					"variant": "loot_crate",
+					"pos": [-4350, 6600],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_26",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_4",
+					"variant": "loot_crate",
+					"pos": [3050, -5950],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_16",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_5",
+					"variant": "loot_crate",
+					"pos": [1400, 2750],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_21",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_6",
+					"variant": "loot_crate",
+					"pos": [-5400, 6050],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_17",
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_7",
+					"variant": "loot_pile",
+					"pos": [-1540, -2642],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "med_common"
+				},
+				{
+					"id": "loot_00000001_8",
+					"variant": "loot_pile",
+					"pos": [-2006, -1348],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_9",
+					"variant": "loot_pile",
+					"pos": [-2950, 5750],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_10",
+					"variant": "loot_pile",
+					"pos": [3357, 5850],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_11",
+					"variant": "loot_pile",
+					"pos": [3400, 2050],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "ammo_common"
+				},
+				{
+					"id": "loot_00000001_12",
+					"variant": "loot_pile",
+					"pos": [3645, 4858],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"loot_table": "med_common"
+				}
+			],
+			"report": {
+				"budget": {
+					"left": 20,
+					"spent": 580,
+					"value": 600
+				},
+				"containers": {
+					"dropped": 0,
+					"eligible": 45,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 7,
+					"requested": 14
+				},
+				"eligible": 0,
+				"gate": "n/a",
+				"kept": 0,
+				"loose": {
+					"dropped": 0,
+					"eligible": 296,
+					"forbidden": 0,
+					"kept": 0,
+					"placed": 6,
+					"requested": 0
+				},
+				"placed": 13,
+				"rejected": {
+					"blocked": 88,
+					"door": 1,
+					"keepout": 0,
+					"ladder": 0,
+					"other": 0,
+					"other_layer": 0,
+					"route": 99,
+					"spacing": 0,
+					"spawn": 80
+				},
+				"requested": 13,
+				"short_by": 0,
+				"status": "ok",
+				"warnings": []
+			}
+		}
+	],
+	"overrides": [
+		{
+			"op": "move",
+			"id": "crates_00000001_3",
+			"pos": [2800, -4900],
+			"walk_layer": "ground",
+			"yaw": 180
+		},
+		{
+			"op": "delete",
+			"id": "crates_00000001_1",
+			"pos": [1300, 6750]
+		},
+		{
+			"op": "add",
+			"object": {
+				"id": "hand_crates_0",
+				"variant": "crate_s",
+				"pos": [-4500, -6350],
+				"walk_layer": "ground",
+				"yaw": 90,
+				"locked": false,
+				"origin": "hand"
+			}
+		}
+	]
+}

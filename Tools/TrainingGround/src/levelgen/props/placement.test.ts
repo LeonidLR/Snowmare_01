@@ -171,6 +171,8 @@ interface GoldenCase {
   seed: number;
   output: string;
   derived_from?: string;
+  /** "C4": turrets / mines / loot cases (PROPS_LAYERS.md 7.1), skipped until the TS port of C4 lands. */
+  step?: string;
   lock?: number[];
   delete?: number[];
   move?: number[];
@@ -277,7 +279,8 @@ test('props T2: derived case input reproduces golden_in_depot_locked.props.json 
 });
 
 for (const c of manifest.cases) {
-  test(`props T2 golden case: ${c.case} reproduces ${c.output} byte for byte`, () => {
+  const skip = c.step === 'C4' ? 'C4 case: TS port pending (PROPS_LAYERS.md 7.1)' : false;
+  test(`props T2 golden case: ${c.case} reproduces ${c.output} byte for byte`, { skip }, () => {
     const layoutPath = path.resolve(FIXTURES_DIR, c.layout);
     const inputPath = path.resolve(FIXTURES_DIR, c.input);
     const outputPath = path.resolve(FIXTURES_DIR, c.output);

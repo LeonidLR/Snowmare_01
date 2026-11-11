@@ -1,6 +1,6 @@
 # Level authoring stage 1: PROPS LAYERS (design)
 
-> 2026-11-09. Branch `tools/levelgen-props`. Status: C1 + C2 merged; C3 (RNG, crates + barrels, golden outputs) on `tools/levelgen-props-c3`. TS port notes: section 7.
+> 2026-11-09. Branch `tools/levelgen-props`. Status: C1 + C2 + C3 merged (T2 ported C3); C4 (turrets, mines, loot, golden outputs) on `tools/levelgen-props-c4`. TS port notes: section 7 (C3) and 7.1 (C4).
 >
 > **The request (game designer, 2026-11-09).** Maps are big and hand placement takes too long. He wants to author props iteratively:
 > - generate one layer at a time: barrels (some explosive), crates, turrets, mines, loot;
@@ -385,7 +385,7 @@ The shared fixtures are written first by Claude: `Content/Data/LevelGen/props/fi
 | C1 | `codex.levelgen_props/1` + `props_balance.json` + fixtures + `FLevelPropsFile` parse/write + `ApplyOverrides` (pure) | Round-trip equal; unknown major refused with a log; overrides: move/delete/add/set applied; a deleted id becomes a keep-out after a re-roll. |
 | C2 | `PropsLayoutView` (pure): walk layers, blocked test, doorways incl. gates, exclusion shapes from the layout | On Depot: the gate (1400, -6084) is found and is on the mandatory route; `B_pump#0` is not on it; the cut gaps are not doors; `B_hall_n` has 2 doors. |
 | C3 | `PropsRng` (mulberry32, fnv1a) + common algorithm + crates + barrels | Same seed -> byte-identical objects; a different seed differs; locked objects are kept and counted; spacing / `min_gap_any` / every exclusion holds on 50 seeds; explosive gap holds; `short` report when the area is too small (no crash). |
-| C4 | Turrets + mines (doorway N and %, crate %, field) + loot | Doorway % = ceil(p x eligible); `forbid` never picks a mandatory door; a crate mine is dropped (reported) when its unlocked crate is re-rolled; turrets score > `min_covered_m`; loot stays within budget. Golden fixtures match. |
+| C4 | Turrets + mines (doorway N and %, crate %, field) + loot | Doorway % = ceil(p x eligible); `forbid` never picks a mandatory door; a crate mine is dropped (reported) when its unlocked crate is re-rolled; turrets score >= `min_covered_m`; loot stays within budget. Golden fixtures match. Done: section 7.1, tests `CodexTactics.LevelGen.Props.C4.*`. |
 | C5 | Static validator + nav-free checks (door corridor, ladder disks) | Bad fixture objects are dropped with id logs; locked/hand ones are flagged `LOCKED/HAND INVALID`. |
 | C6 | `UCodexLevelPropsSubsystem` + actor classes / class map + tags + nav modifiers + the builder sets `DynamicModifiersOnly` | `LevelPropsSpawnSmoke` on Depot: count per layer = file; tags present; 0 tickers; spawn <= 60 ms; `Codex.Props.Enabled 0` spawns nothing. |
 | C7 | Trap component (mined crate), doorway mine, `MinesInert` + save/load of destroyed/looted/triggered | Smoke: opening a mined crate fires (inert: logs only); a door tripwire fires on overlap; save -> load skips destroyed ids. |
@@ -527,3 +527,141 @@ warnings: [] }` (the writer sorts the keys). `rules_hash` is not recomputed in C
 **Open data point for the designer.** `crates_default` has `min_gap_any_cm` 120, which section 2.1 also applies to walls, so a crate's
 edge stays >= 120 cm from any wall while the near-wall weight reaches only 150 cm: a 30 cm band. Crates therefore rarely sit against
 walls and mostly get a random yaw. If crates should hug walls, lower `min_gap_any_cm` or apply it to objects only (a rule change).
+
+## 7.1 TS port notes, C4 (-> T2 extension): turrets, mines, loot
+
+Code: `Source/CodexTactics/Private/LevelGen/PropsPlacementC4.cpp` (+ the shared `PropsPlacementInternal.h`, the rules readers in
+`PropsPlacementRules.cpp`, the sight / route helpers at the end of `PropsLayoutView.cpp`). Golden cases: `golden_cases.json` entries
+with `"step": "C4"` (C++ test `CodexTactics.LevelGen.Props.C4.Golden`); run them in manifest order - an `input` may be an earlier case's
+`output` (turrets -> mines -> loot -> a crates re-roll -> a mines re-roll with locked crate mines). A `derived_from` C4 case = that case's
+output file + the layers of `add_layers` (a props file) appended + `lock` (indices into the case layer's objects); the derived input is
+stored, so the port only needs the inputs. Everything of section 7 still holds (numbers, RNG, ids, reserved ids, report keys, the writer).
+
+**Changes to the common part (C3 outputs unchanged).**
+- An other-layer object with `attach` set (a crate mine, loot in a crate) is never an obstacle: filter 4 (`other_layer`) and the
+  validator's `min_gap_any` skip it.
+- `RerollLayer` accepts all five kinds; a kept object is recognised by id (C4 drops some kept objects). After storing, every resolved
+  object of ANOTHER layer whose `attach` named an object of this layer that existed before the re-roll and is gone after it adds the
+  warning `attach_orphaned <that object's id>` (resolved order); the other layers are not changed.
+- Rules: `where.anchors` (list, names below; unknown = error, ignored); a nested rule block with its own `exclude.$preset` (mines
+  `field`) is resolved like the layer's. Keep-outs of radius 0 always use the layer's top-level `min_spacing_cm`.
+- `layout_view` adds `tall_cover_min_cm` 140, `eye_height_cm` 160, `roof_edge_inset_cm` 100. Layout reading adds walls' `height`
+  (missing 0) and covers' `size[2]` (missing 0).
+- Report: `kind`-specific sections, all sub-objects with the six keys `{ eligible, requested, placed, kept, dropped, forbidden }`:
+  turrets add `rejected.coverage`; mines add `doorways`, `crates`, `field`; loot adds `containers`, `loose` (its `requested` is 0) and
+  `budget: { value, spent, left }`. `status` is `short` when `short_by > 0` or (loot) the budget is short.
+- `RerollAll` ("Generate all") = `RerollLayer` with the stored seed for every enabled, unlocked layer, kinds in the order crates ->
+  barrels -> turrets -> mines -> loot, file order inside a kind.
+
+**Integer helpers** (`PropsGeometry`): `isqrt(v)` = the largest r with r² <= v; `floorDiv(a, b)` = Math.floor(a / b);
+`sinQ(d)` / `cosQ(d)` = the 0..90 table of `PropsLayoutView.cpp` (round(sin x 16384)), `cosQ(d) = sinQ(d + 90)`.
+`snapCentre(min, max)` = per axis `floorStep(floorDiv(min + max, 2))`, floorStep = the largest multiple of 50 <= v.
+
+**Anchors** (`GatherAnchors`, in the order of `where.anchors`; each yields (pos, layer)):
+- `ambush_points`: each layout ambush point, `ground`.
+- `roof_edges`: per matched walk layer (the view's layer order) that is a roof, the 50 cm lattice of its footprint (scan as section 7)
+  whose edge distance `min(x - min.x, max.x - x, y - min.y, max.y - y)` is in `[roof_edge_inset_cm, roof_edge_inset_cm + 50)`.
+- `roof_centres`: per matched roof layer, `snapCentre(footprint)`.
+- `behind_tall_cover` (turrets): per layout cover with `size[2] >= tall_cover_min_cm`, in layout order, 4 points
+  `pos + off` with `K = 32768`, `C = cosQ(yaw)`, `S = sinQ(yaw)`, `Lx = size_x + 2 gap`, `Ly = size_y + 2 gap`
+  (gap = `cover_route.behind_cover_gap_cm`): +x `(floorDiv(C Lx, K), floorDiv(S Lx, K))`, -x `(floorDiv(-C Lx, K), floorDiv(-S Lx, K))`,
+  +y `(floorDiv(-S Ly, K), floorDiv(C Ly, K))`, -y `(floorDiv(S Ly, K), floorDiv(-C Ly, K))`; a point is kept only when
+  `dist(point, cover route ground legs) > dist(cover centre, same)` (the far side; `DistanceToRouteCm` = the C2 ceil distance over the
+  legs with both ends on `ground`; none -> MAX, never kept). Layer `ground`.
+- `dead_ends`: per zone with `kind: wall_end` (layout order), the 50 cm lattice of the polygon's box (y outer, x inner) inside the zone
+  (the C2 point-in-polygon), `ground`.
+- `building_interiors`: per enterable building (layout order): `snapCentre(footprint)` on `ground`, then on `floor:<B>:<n>` for
+  n = 1 .. floors - 1 unless hollow.
+
+**Anchor candidates** (`FilterAnchors`): keep an anchor whose layer is a matched walk layer, walkable, inside the zones; sort by
+(y, x, layer name ordinal) (stable), drop exact duplicates (same pos and layer) = `eligible`; then the hard filters 1-5 of section 7
+(first failure counted; H = the largest half size of the variants (turrets) / of `loose.variant` (loot); the spacing set = this layer's
+kept objects (turrets) / every loot object so far (loot)).
+
+**Turrets** (`PlaceTurrets`; `no_variants` without variants):
+1. Cover route = `cover_route.route`, else the first mandatory route; samples: every leg with both ends on one layer, `len = isqrt(dx² +
+   dy²)`, skip 0, `n = ceil(len / 100)`, samples `A + (floorDiv(dx k, n), floorDiv(dy k, n))`, k = 0..n-1 (the leg's end is not sampled;
+   the next leg starts there). One sample = one covered metre.
+2. Anchors -> candidates (above). `requested` = the target of section 7 with eligible = the anchor count; new = requested - kept.
+   No route: warning `no_cover_route`, no candidates.
+3. Score per candidate in list order: eye layer = the candidate's; blockers = `GetSightBlockers(layer)`: a roof = every layout wall with
+   `floor x 300 + height >= level x 300 + eye_height_cm` (the roof's level = floors) and every cover with `size[2] >=` that eye height;
+   any other layer = that layer's walls (schema.ts layerWalls, as `IsBlocked`), on the ground plus every cover with
+   `size[2] >= tall_cover_min_cm`; a cover = its 4 corner edges (corner order +x+y, -x+y, -x-y, +x-y; corner x K = `pos x K + C sx size_x
+   - S sy size_y`, y: `pos y K + S sx size_x + C sy size_y`). A sample counts when its layer is the turret's (or `ground` from a roof),
+   `range_min² <= d² <= range_max²` and the closed segment turret -> sample touches no blocker (exact orientation tests in units of
+   1/32768 cm, collinear overlap = blocked, wall thickness ignored). Visible offsets D = sample - turret. For yaw = 0, 15, .., 345:
+   `start = yaw - floor(arc / 2)`, `end = start + arc`, `S = (cosQ(start), sinQ(start))`, `E = (cosQ(end), sinQ(end))`; D is in the arc
+   when arc >= 360, else (arc <= 180) `cross(S, D) >= 0 && cross(D, E) >= 0`, else `!(cross(E, D) > 0 && cross(D, S) > 0)` with
+   `cross(a, b) = a.x b.y - a.y b.x`. Score = the largest count, yaw = the first yaw reaching it (ties: the smallest).
+4. Drop scores below `max(1, min_covered_m)` (`rejected.coverage`); weight = `min(score, 1000)`.
+5. Per pick (RNG in this order): candidate (weighted draw); variant `nextBelow(sum)` over the sorted variants. Object: yaw = the score's
+   yaw, `arc` = arc_deg, extra `covered_m` = the score. Kill within `min_spacing_cm`.
+
+**Mines** (`PlaceMines`, one RNG stream for the whole layer, sub-rules in this order; a sub-rule is on when its block exists - a layer
+can switch one off with `null`):
+0. Kept mines in input order: `door` set -> its doorway must exist (else dropped, warning `door_missing <id>`, `doorways.dropped`);
+   `attach` set -> the crate must be among the resolved objects of `crates.source_layer` (else dropped, `attach_dropped <id>`,
+   `crates.dropped`) - a locked mine keeps its crate only while the crate exists (a locked crate always does, an unlocked one is gone
+   after its re-roll); neither -> a field mine. The rest are kept and counted per sub-rule. Budget = `budgets.mines` for the three
+   `requested` together: each sub-rule's `requested = min(target, budget left)`, then the budget shrinks by it.
+1. Doorways: the view's doorways in id order; skip a kind not in `kinds` (none = all; `building_door` | `gate`); a mandatory-route door
+   (C2 `bOnMandatoryRoute`) with `mandatory_route: forbid` -> `doorways.forbidden`; a door with a kept mine -> eligible, not free;
+   position `door.pos - outward x inside_cm` (a gate: its centre) inside the first top-level `exclude` shape -> that reject count, inside a
+   keep-out -> `keepout`; else eligible + free. Target: `count` = value, `percent` = `ceil(value x eligible / 100)` =
+   `(value x eligible + 99) / 100`. `order = [0 .. free - 1]`, `shuffle(order)` (always, also when nothing is wanted), take the first
+   `requested - kept` free doors: variant, pos above, the door's walk layer, yaw 90 when the wall runs along x else 0, `door`, `trigger`,
+   extra `width_cm` = the opening (or `door_fallback_width_cm`).
+2. Crates: the resolved objects of `source_layer` sorted by id; locked ones are skipped (not eligible: "a % of the UNLOCKED crates");
+   eligible counted; free = without a kept mine. Target `ceil(percent x eligible / 100)`; `shuffle(order)` over the free ones; take
+   `requested - kept`: pos / walk layer of the crate, yaw 0, `attach` = the crate id, `trigger`. A mined crate is red: derived by
+   `ResolveCrateColors` (crate_colors), never written into the crates layer. Warning `no_source_layer <id>` when the layer is missing.
+3. Field: the common lattice algorithm (section 7) with the field block's own count / where / spacing / gaps / exclude (H = the half size
+   of its `variant`, 0 for mines), the spacing set = every mine so far (kept + new doorway + new crate); per pick only the candidate
+   draw (no variant / yaw draw): variant, yaw 0, `trigger`; kill within the field `min_spacing_cm`.
+`short_by` = the sum over the sub-rules of `max(0, requested - kept - placed)`; `placed` / `requested` = the sums.
+
+**Loot** (`PlaceLoot`):
+0. Kept loot in input order: `attach` set -> the crate must be among the resolved `containers.source_layer` objects (else dropped,
+   `attach_dropped <id>`, `containers.dropped`); each kept object's table value is spent first (an unknown table: 0, warning
+   `unknown_table <id>`). `remaining = max(0, budget_value - kept value)`; object cap = `budgets.loot - kept`.
+   Ground tables = `tables` without `roof_table` (all of them when that leaves none); cheapest = min(ground values, roof value).
+1. Containers: the source layer's resolved objects by id; skip locked ones and the mined (red) ones (a mines-kind layer object attaches to
+   it); eligible counted; free = without kept loot. `requested = (crates_share_milli x eligible + 500) / 1000`; `shuffle(order)`; for each
+   free crate in order while `placed < requested - kept` and the cap allows: options = ground tables with
+   `value <= min(remaining, floor(budget_value x budget_share_milli / 1000) - container value so far)` (kept containers included); none ->
+   stop; table = `options[nextBelow(options.length)]` (drawn also for one option); object `containers.variant` at the crate, `attach`,
+   `loot_table`, yaw 0.
+2. Loose piles: anchors -> candidates (above, top-level rules; the keys of `loose.where` override `where`); weight by
+   `d = DistanceToMandatoryRouteAnyLayerCm` (ceil distance to every leg of every mandatory route, any layers): `d < far_min` -> `near`,
+   `d <= far_max` -> `band`, else `far` (`loose.weights`, 1..1000). While cap > 0, weight left and `remaining >= cheapest`: candidate
+   (weighted draw); on a roof with a `roof_table`: that table if affordable (no draw); elsewhere: affordable ground tables, table =
+   `options[nextBelow(n)]`; nothing affordable -> only this candidate dies (its weight leaves the total), continue; else object
+   `loose.variant`, `loot_table`, yaw 0, spend, kill within `min_spacing_cm`.
+3. `requested = kept + placed`, `short_by` 0; `budget.spent` = kept value + new value; when `remaining >= cheapest` at the end the
+   status is `short` with the warning `budget_left <remaining>`.
+
+**Validation** (`Validate`, new objects): turrets - walk layer / walkable / blocked / exclusions / keep-outs / gap / spacing, the
+coverage recomputed (>= max(1, min) and equal to `covered_m`, yaw equal); mines - a doorway mine's door exists, its kind is allowed, not
+mandatory under forbid, at its position, one mine per door; a crate mine's crate exists and is unlocked; a field mine as the common
+checks with the field rules; the layer within `budgets.mines`; loot - a known table, a container's crate exists and is not red, a
+loose pile as the common checks, the roof table iff on a roof, the spacing between loose piles, total value <= budget_value, count <=
+`budgets.loot`.
+
+**Defaults taken for C4 (open for the designer).**
+1. "Drop candidates scoring below `min_covered_m`": a turret needs `score >= min_covered_m` (and >= 1); covered metres = 1 m route
+   samples (legs sampled every started metre, reversals counted twice).
+2. Turret sight: the evaluator's blockers (walls of the layer + covers >= 140 cm on the ground; the elevated rule on roofs), wall
+   thickness ignored, a line touching a wall end is blocked; a roof turret sees the ground legs + its roof's legs, a ground turret its
+   layer's legs only. `behind_tall_cover` = 4 points 60 cm off the cover's sides, kept on the far side from the route.
+3. Doorway mine yaw = the way through the opening (0 / 90; the design example `B_pump#0` yaw 90); the tripwire width is stored as
+   `width_cm`. Doorway mines respect the mines layer's top-level `exclude` (spawn 15 m, end 5 m) and the keep-outs, nothing else.
+4. Crate mines and loot containers use only UNLOCKED crates (a locked crate is the designer's frozen choice); hand-added and moved crates
+   are unlocked and count. A crate's "red" is derived (`ResolveCrateColors`), not stored on the crate (a re-roll changes only its layer).
+5. The crates re-roll only reports orphaned mines / loot (`attach_orphaned`); the mines / loot re-roll drops them (`attach_dropped`);
+   the C5 validator will drop dangling ones at load.
+6. Field mines (named by the design example): 4 in the cut, 5 m apart, off ladders / stairs / crossings / the mandatory corridor
+   (variants corridor 0: allowed on the V3 cut route).
+7. Loot order: crates first, then loose piles; new knob `containers.budget_share` 0.5 (without it the 14 Depot crates spent the whole
+   600 and no loose / roof pile appeared). Roof piles take only `roof_table`; ground piles and crates never do. Loose weights near 1 /
+   band 4 / far 2 (PLACEHOLDER). Kinds `turret_mg` radius 50, `loot_pile` radius 30 (PLACEHOLDER).

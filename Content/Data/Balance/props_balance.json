@@ -48,6 +48,8 @@
 			"nav_affecting_comment": "Obstacle for the nav gate."
 		},
 		"turret_mg": {
+			"radius_cm": 50,
+			"radius_cm_comment": "PLACEHOLDER. Footprint half size for the placement gaps (C4).",
 			"hp": 200,
 			"hp_comment": "PLACEHOLDER.",
 			"nav_affecting": true,
@@ -66,6 +68,12 @@
 			"trigger_radius_cm_comment": "PLACEHOLDER. Proximity trigger.",
 			"nav_affecting": false,
 			"nav_affecting_comment": "A mine never blocks navigation (section 2.3)."
+		},
+		"loot_pile": {
+			"radius_cm": 30,
+			"radius_cm_comment": "PLACEHOLDER. Footprint half size of a loose loot pile for the placement gaps (C4).",
+			"nav_affecting": false,
+			"nav_affecting_comment": "Loot never blocks navigation (section 2.4)."
 		}
 	},
 
@@ -87,7 +95,13 @@
 		"door_turn_reach_cm": 250,
 		"door_turn_reach_cm_comment": "'Turns at it' = a route vertex where the route reverses or ends, at most this far in front of the doorway on its outward side (R_main turns 180 cm in front of the shed door).",
 		"door_fallback_width_cm": 180,
-		"door_fallback_width_cm_comment": "Opening width of a building door that has no matching wall gap."
+		"door_fallback_width_cm_comment": "Opening width of a building door that has no matching wall gap.",
+		"tall_cover_min_cm": 140,
+		"tall_cover_min_cm_comment": "Turret sightlines (C4): covers at least this tall block a standing man's view on the ground (the evaluator's rule, evaluate.ts).",
+		"eye_height_cm": 160,
+		"eye_height_cm_comment": "Turret sightlines: the eye above the surface; on a roof only walls / covers reaching roof level + this block (the evaluator's elevated rule).",
+		"roof_edge_inset_cm": 100,
+		"roof_edge_inset_cm_comment": "Anchor 'roof_edges' (2.1): the lattice ring this far inside a walkable roof's footprint edge."
 	},
 
 	"presets": {
@@ -141,30 +155,51 @@
 		"turrets_default": {
 			"count": { "mode": "count", "value": 2 },
 			"count_comment": "Turrets per map.",
-			"cover_route": { "range_cm": [1000, 4000], "arc_deg": 90, "min_covered_m": 25 },
-			"cover_route_comment": "Range window (cm), firing arc (deg), minimum metres of the route covered.",
+			"cover_route": { "range_cm": [1000, 4000], "arc_deg": 90, "min_covered_m": 25, "behind_cover_gap_cm": 60 },
+			"cover_route_comment": "Range window (cm), firing arc (deg), minimum metres of the route covered (route = the first mandatory one unless 'route' names one). behind_cover_gap_cm: a behind_tall_cover anchor stands this far off the cover's side (PLACEHOLDER).",
+			"where": { "walk_layers": ["roof:*", "ground"], "anchors": ["ambush_points", "roof_edges", "behind_tall_cover"] },
+			"where_comment": "Turrets stand only at anchors (2.3): ambush points, roof edges, the far side of covers >= 140 cm.",
+			"variants": { "turret_mg": 1 },
+			"variants_comment": "Draw weights.",
 			"min_spacing_cm": 3000,
-			"min_spacing_cm_comment": "Between turrets."
+			"min_spacing_cm_comment": "Between turrets.",
+			"min_gap_any_cm": 100,
+			"min_gap_any_cm_comment": "PLACEHOLDER. To objects of every other layer.",
+			"wall_gap_cm": 20,
+			"wall_gap_cm_comment": "PLACEHOLDER. To walls / parapets / covers (a roof-edge anchor is 100 cm inside the parapet).",
+			"exclude": { "$preset": "standard", "spawn_cm": 4000, "stair_cm": 300 },
+			"exclude_comment": "The standard keep-outs; no turret within 40 m of the spawn (section 1.3 example)."
 		},
 		"mines_default": {
-			"doorways": { "mode": "percent", "value": 25, "inside_cm": 80, "mandatory_route": "forbid" },
-			"doorways_comment": "25 % of the eligible doors, 80 cm inside; mandatory-route doors forbidden (designer #3).",
-			"crates": { "percent": 10 },
-			"crates_comment": "Percent of the crates that carry a trap.",
-			"field": { "count": { "mode": "count", "value": 4 }, "min_spacing_cm": 500 },
-			"field_comment": "Free-standing mines in the cut."
+			"doorways": { "mode": "percent", "value": 25, "inside_cm": 80, "mandatory_route": "forbid", "kinds": ["building_door", "gate"], "trigger": "tripwire", "variant": "mine_tripwire" },
+			"doorways_comment": "ceil(25 % x eligible doors), 80 cm inside; mandatory-route doors forbidden unless 'mandatory_route': 'allow' (designer #3). mode count = 'value' doors.",
+			"crates": { "percent": 10, "source_layer": "crates", "trigger": "crate_open", "variant": "mine_crate" },
+			"crates_comment": "ceil(10 % x the source layer's UNLOCKED crates) carry a trap; a mined crate is red (crate_colors.dangerous).",
+			"field": { "count": { "mode": "count", "value": 4 }, "min_spacing_cm": 500, "min_gap_any_cm": 100, "where": { "walk_layers": ["cut"] }, "exclude": { "$preset": "standard", "route_cm": { "mandatory": 260, "variants": 0 } }, "trigger": "proximity", "variant": "mine_proximity" },
+			"field_comment": "Free-standing mines in the cut (section 1.3 example); kept off ladders, stairs and the mandatory route corridor, allowed on variants.",
+			"min_spacing_cm": 500,
+			"min_spacing_cm_comment": "Keep-out radius of a deleted mine (any sub-rule).",
+			"exclude": { "spawn_cm": 1500, "end_cm": 500 },
+			"exclude_comment": "Doorway mines: no doorway mine this close to the spawn / end."
 		},
 		"loot_default": {
 			"budget_value": 600,
 			"tables": ["ammo_common", "med_common", "rare_roof"],
-			"tables_comment": "Loot tables the layer draws from (loot_tables below).",
+			"tables_comment": "Loot tables the layer draws from (loot_tables below). Ground piles and crates draw from these minus roof_table.",
 			"budget_value_comment": "Total loot value of the map (table values below).",
-			"containers": { "crates_share": 0.3 },
-			"containers_comment": "Share of crates that hold loot.",
-			"loose": { "prefer_far_from_route_cm": [1400, 3000], "roof_table": "rare_roof" },
-			"loose_comment": "Loose piles prefer this distance band from the route; roof piles use roof_table (a reward for climbing).",
+			"containers": { "crates_share": 0.3, "budget_share": 0.5, "source_layer": "crates", "variant": "loot_crate" },
+			"containers_comment": "round(crates_share x the unlocked, not mined (blue) crates) hold loot; together they spend at most budget_share x budget_value (PLACEHOLDER), the rest buys loose piles.",
+			"loose": { "prefer_far_from_route_cm": [1400, 3000], "roof_table": "rare_roof", "weights": { "near": 1, "band": 4, "far": 2 }, "variant": "loot_pile",
+				"where": { "walk_layers": ["ground", "floor:*", "roof:*"], "anchors": ["dead_ends", "roof_centres", "building_interiors", "ambush_points"] } },
+			"loose_comment": "Loose piles at the anchors, weighted by the distance to the mandatory route (weights: nearer than the band / inside it / beyond it; PLACEHOLDER); roof piles use roof_table (a reward for climbing).",
 			"min_spacing_cm": 800,
-			"min_spacing_cm_comment": "Between loot objects."
+			"min_spacing_cm_comment": "Between loose piles (and from a loose pile to a filled crate).",
+			"min_gap_any_cm": 100,
+			"min_gap_any_cm_comment": "PLACEHOLDER. A loose pile to objects of every other layer.",
+			"wall_gap_cm": 20,
+			"wall_gap_cm_comment": "PLACEHOLDER. A loose pile to walls / covers.",
+			"exclude": { "$preset": "standard" },
+			"exclude_comment": "The standard keep-outs for loose piles."
 		}
 	},
 
@@ -218,6 +253,8 @@
 		"mine_tripwire": "/Game/Props/BP_PropMine.BP_PropMine_C",
 		"mine_proximity": "/Game/Props/BP_PropMine.BP_PropMine_C",
 		"mine_crate": "",
+		"loot_crate": "",
+		"loot_crate_comment": "No actor: loot inside a crate is the crate actor's loot table (section 3.2).",
 		"mine_crate_comment": "No actor: a mined crate = the crate actor + an armed UCodexPropTrapComponent (section 3.2); the mine object exists only in data.",
 		"loot_pile": "/Game/Props/BP_PropLootPile.BP_PropLootPile_C"
 	}

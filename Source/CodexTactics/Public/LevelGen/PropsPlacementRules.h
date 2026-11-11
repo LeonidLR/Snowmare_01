@@ -7,12 +7,13 @@
 class FJsonObject;
 
 /**
- * Pure deterministic props placement: the common algorithm (docs/design/levelgen/PROPS_LAYERS.md 2.2) + crates and barrels (2.3) + the
- * static validation subset (2.4) + the failure report (2.5); task C3 of section 5. Turrets / mines / loot are C4.
+ * Pure deterministic props placement: the common algorithm (docs/design/levelgen/PROPS_LAYERS.md 2.2) + crates and barrels (2.3, task
+ * C3 of section 5) + turrets, mines (doorways, crates, field) and loot (2.3, task C4, PropsPlacementC4.cpp) + the static validation
+ * subset (2.4) + the failure report (2.5).
  * No world, no floats in any decision: integer cm, a 50 cm lattice, mulberry32 (PropsRng.h), ties by (y, x, layer name).
  * The TS port (task T2) follows "TS port notes" in PROPS_LAYERS.md - the exact candidate order, filter order and RNG call order -
  * and must reproduce the golden outputs Content/Data/LevelGen/props/fixtures/golden_*.json byte for byte.
- * Godot reference: none (UE-only level authoring). Tests: CodexTactics.LevelGen.Props.Placement.*.
+ * Godot reference: none (UE-only level authoring). Tests: CodexTactics.LevelGen.Props.Placement.* (C3), CodexTactics.LevelGen.Props.C4.*.
  */
 
 /** A "near" weight clause: the candidate's weight is multiplied by Weight when the obstacle face is within (half size + MaxCm). */
@@ -25,11 +26,12 @@ struct FPropsNearClause
 	int32 Weight = 1;
 };
 
-/** A layer's rules merged with the balance preset, as integers. Built by PropsPlacementRules::BuildRules. */
-struct FPropsRules
+/**
+ * The rules every lattice / anchor placement shares (count, where, spacing, gaps, exclusions, sizes). The layer's own rules and the
+ * mines layer's "field" sub-rule are each one of these.
+ */
+struct FPropsCommonRules
 {
-	/** crates | barrels (others: C4; Place reports them as unsupported). */
-	FString Kind;
 	/** count | density | per_zone. */
 	FString CountMode = TEXT("count");
 	/** count: objects; per_zone: objects per matched zone. */
@@ -51,6 +53,94 @@ struct FPropsRules
 	/** Gap to the layout's blocked geometry (walls, footprints, covers); absent = MinGapAnyCm. The designer 2026-11-10: crates may stand right against walls (crates_default wall_gap_cm 5), doorways stay clear through exclude.door_cm. */
 	int32 WallGapCm = 0;
 	FPropsExclusionParams Exclude;
+	/** where.anchors (C4 turrets / loot): ambush_points | roof_edges | behind_tall_cover | dead_ends | roof_centres | building_interiors. */
+	TArray<FString> Anchors;
+	/** variant -> half footprint (cm) from the balance kinds: radius_cm, or ceil(max(size_cm x, y) / 2). Unknown variants: 0. */
+	TMap<FString, int32> HalfSizeCm;
+};
+
+/** Turrets (2.3): coverage of a route from anchor candidates. */
+struct FPropsTurretRules
+{
+	/** cover_route.route; empty = the layout's first mandatory route. */
+	FString RouteId;
+	/** cover_route.range_cm [min, max] (max clamped to FPropsLayoutView::MaxRadiusCm). */
+	int32 RangeMinCm = 0;
+	int32 RangeMaxCm = 0;
+	/** cover_route.arc_deg, 1..360. */
+	int32 ArcDeg = 360;
+	/** cover_route.min_covered_m: candidates scoring below are dropped (score = covered metres = covered 1 m samples). */
+	int32 MinCoveredM = 0;
+	/** cover_route.behind_cover_gap_cm: a "behind_tall_cover" anchor stands this far off the cover's side. */
+	int32 BehindCoverGapCm = 0;
+};
+
+/** Mines, doorway sub-rule. */
+struct FPropsMineDoorRules
+{
+	bool bEnabled = false;
+	/** count | percent. */
+	FString Mode = TEXT("percent");
+	int32 Value = 0;
+	/** building_door | gate (empty = both). */
+	TArray<FString> Kinds;
+	/** mandatory_route: forbid (default) | allow (designer 6.1 #3: opt-in per layer). */
+	bool bAllowMandatory = false;
+	int32 InsideCm = 0;
+	FString Trigger;
+	FString Variant;
+};
+
+/** Mines, crate sub-rule: a share of the source layer's unlocked crates carries a trap (a mined crate is red, 6.1 #1). */
+struct FPropsMineCrateRules
+{
+	bool bEnabled = false;
+	FString SourceLayer = TEXT("crates");
+	int32 Percent = 0;
+	FString Trigger;
+	FString Variant;
+};
+
+/** Mines, field sub-rule: the common algorithm with its own count / where / spacing / exclude. */
+struct FPropsMineFieldRules
+{
+	bool bEnabled = false;
+	FPropsCommonRules Common;
+	FString Trigger;
+	FString Variant;
+};
+
+/** Loot (2.3): containers in crates, then loose piles at anchors, until the budget is spent. */
+struct FPropsLootRules
+{
+	int32 BudgetValue = 0;
+	/** The layer's tables (known ones only, in rules order) and their loot_tables values (> 0). */
+	TArray<FString> Tables;
+	TArray<int32> TableValues;
+	/** containers.crates_share in thousandths; containers.source_layer. */
+	int32 ContainersShareMilli = 0;
+	/** containers.budget_share in thousandths: the crates spend at most floor(budget_value x share) (kept ones included); 1000 = no cap. */
+	int32 ContainersBudgetMilli = 1000;
+	FString SourceLayer = TEXT("crates");
+	/** loose.roof_table (piles on roofs use only it; empty = roofs draw from the tables like the ground); its value. */
+	FString RoofTable;
+	int32 RoofTableValue = 0;
+	/** loose.prefer_far_from_route_cm [min, max] and loose.weights { near, band, far }. */
+	int32 FarMinCm = 0;
+	int32 FarMaxCm = 0;
+	int32 WeightNear = 1;
+	int32 WeightBand = 1;
+	int32 WeightFar = 1;
+	/** containers.variant / loose.variant. */
+	FString ContainerVariant = TEXT("loot_crate");
+	FString PileVariant = TEXT("loot_pile");
+};
+
+/** A layer's rules merged with the balance preset, as integers. Built by PropsPlacementRules::BuildRules. */
+struct FPropsRules : FPropsCommonRules
+{
+	/** crates | barrels | turrets | mines | loot. */
+	FString Kind;
 	/** Barrels: members per cluster (min >= 1, max >= min) and the member ring (cm) around the anchor. */
 	int32 ClusterMin = 1;
 	int32 ClusterMax = 1;
@@ -61,8 +151,11 @@ struct FPropsRules
 	int32 ExplosiveMinGapCm = 0;
 	int32 ExplosiveNeverSpawnCm = 0;
 	int32 ExplosiveNeverEndCm = 0;
-	/** variant -> half footprint (cm) from the balance kinds: radius_cm, or ceil(max(size_cm x, y) / 2). Unknown variants: 0. */
-	TMap<FString, int32> HalfSizeCm;
+	FPropsTurretRules Turret;
+	FPropsMineDoorRules MineDoors;
+	FPropsMineCrateRules MineCrates;
+	FPropsMineFieldRules MineField;
+	FPropsLootRules Loot;
 };
 
 /** Candidates rejected by the hard filters, by the first failing filter (section 2.5 "rejected"). */
@@ -77,6 +170,21 @@ struct FPropsRejectCounts
 	int32 Keepout = 0;
 	int32 OtherLayer = 0;
 	int32 Other = 0;
+	/** Turrets only (written for them only): anchors scoring below cover_route.min_covered_m. */
+	int32 Coverage = 0;
+};
+
+/** A sub-rule's counts (mines: doorways / crates / field; loot: containers / loose). */
+struct FPropsSubReport
+{
+	int32 Eligible = 0;
+	int32 Requested = 0;
+	int32 Placed = 0;
+	int32 Kept = 0;
+	/** Mines crates / loot containers: kept objects dropped because their crate is gone. */
+	int32 Dropped = 0;
+	/** Mines doorways: mandatory-route doors removed by mandatory_route forbid. */
+	int32 Forbidden = 0;
 };
 
 /** Section 2.5 report. Requested = the target total (kept included), Placed = new objects, Kept = locked / pinned / hand objects. */
@@ -93,8 +201,18 @@ struct FPropsPlacementReport
 	FString Gate = TEXT("n/a");
 	/** Fixed codes (see PROPS_LAYERS.md "TS port notes"), e.g. "explosive_short 1". */
 	TArray<FString> Warnings;
+	/** The layer kind; ReportToJson writes the C4 sections for turrets / mines / loot only. */
+	FString Kind;
+	/** Mines: SubA doorways, SubB crates, SubC field. Loot: SubA containers, SubB loose. */
+	FPropsSubReport SubA;
+	FPropsSubReport SubB;
+	FPropsSubReport SubC;
+	/** Loot: budget_value, the value spent (kept included), and "a table was still affordable but no room was left". */
+	int32 BudgetValue = 0;
+	int32 BudgetSpent = 0;
+	bool bBudgetShort = false;
 
-	bool IsShort() const { return ShortBy > 0; }
+	bool IsShort() const { return ShortBy > 0 || bBudgetShort; }
 };
 
 struct FPropsPlacementInput
@@ -110,6 +228,10 @@ struct FPropsPlacementInput
 	TArray<FLevelPropsKeepOut> KeepOuts;
 	/** The current objects of all other layers (overrides applied): obstacles for MinGapAnyCm. */
 	TArray<FLevelPropsObject> OtherObjects;
+	/** The layer id of each OtherObjects entry (parallel array; C4 mines / loot read their source crates from it). */
+	TArray<FString> OtherLayerIds;
+	/** layer id -> kind of every layer of the file (C4: which layers are mines). */
+	TMap<FString, FString> LayerKinds;
 	/** Ids a new object must not take (kept ids, override targets, other layers' ids; compared case-sensitively); the counter n skips them. */
 	TArray<FString> ReservedIds;
 };
@@ -135,6 +257,17 @@ namespace PropsPlacementRules
 	constexpr int32 MaxWeight = 1000;
 	constexpr const TCHAR* KindCrates = TEXT("crates");
 	constexpr const TCHAR* KindBarrels = TEXT("barrels");
+	constexpr const TCHAR* KindTurrets = TEXT("turrets");
+	constexpr const TCHAR* KindMines = TEXT("mines");
+	constexpr const TCHAR* KindLoot = TEXT("loot");
+	/** Turrets: extra field "covered_m" = the score (covered route metres) at placement. */
+	constexpr const TCHAR* CoveredField = TEXT("covered_m");
+	/** Doorway mines: extra field "width_cm" = the opening the tripwire spans (the gap width or layout_view door_fallback_width_cm). */
+	constexpr const TCHAR* WidthField = TEXT("width_cm");
+	/** Sample step along the cover route: one sample per started metre of a leg. */
+	constexpr int32 RouteSampleCm = 100;
+	/** Turret yaw candidates: 0, 15, ..., 345. */
+	constexpr int32 TurretYawStepDeg = 15;
 	constexpr const TCHAR* VariantBarrel = TEXT("barrel");
 	constexpr const TCHAR* VariantBarrelExplosive = TEXT("barrel_explosive");
 	/** Extra field of a barrel: the id of its cluster's anchor (the anchor names itself). */
@@ -155,8 +288,24 @@ namespace PropsPlacementRules
 	CODEXTACTICS_API bool MakeInput(const FLevelPropsFile& File, const FJsonObject& Balance, const FPropsLayoutView& View, const FString& LayerId,
 		FPropsPlacementInput& Out, TArray<FString>& Errors);
 
-	/** The common algorithm for crates / barrels. Never throws; too small an area gives a short report. */
+	/** True for crates | barrels | turrets | mines | loot. */
+	CODEXTACTICS_API bool IsPlaceableKind(const FString& Kind);
+
+	/** Every kind (crates / barrels: C3; turrets / mines / loot: C4). Never throws; too small an area gives a short report. */
 	CODEXTACTICS_API FPropsPlacementResult Place(const FPropsPlacementInput& In);
+
+	/**
+	 * Turret coverage of a point (C4): covered metres of the cover route seen from P on Layer within range and the best 15 degree arc;
+	 * OutYaw = that arc's centre. 0 when the route is missing. Exact integer maths (PROPS_LAYERS.md section 7, C4 notes).
+	 */
+	CODEXTACTICS_API int32 TurretCoverage(const FPropsLayoutView& View, const FPropsRules& Rules, FIntPoint P, const FString& Layer, int32& OutYaw);
+
+	/**
+	 * Crate colours (designer 6.1 #1): every crate of a crates-kind layer after the overrides -> props_balance crate_colors.dangerous
+	 * ("red") when an object of a mines-kind layer attaches to it, else crate_colors.safe ("blue"). Derived, never stored: a mines
+	 * re-roll does not rewrite the crates layer.
+	 */
+	CODEXTACTICS_API TMap<FString, FString> ResolveCrateColors(const FLevelPropsFile& File, const FJsonObject& Balance);
 
 	/**
 	 * Section 2.4 static checks of the NEW objects (ids not in In.Kept) of a layer: walk layer, blocked, exclusions, keep-outs, the gap to
@@ -171,8 +320,16 @@ namespace PropsPlacementRules
 	/**
 	 * Re-rolls one layer of a props file with Seed: refuses (false + Errors) a frozen file, a locked or missing layer, or an unsupported
 	 * kind. Stores the seed, the objects (the kept objects' stored records - hand-added ones stay in the overrides - then the new ones)
-	 * and the report; never touches the overrides. OutResult (optional) gets the placement result.
+	 * and the report; never touches the overrides or the other layers. Objects of other layers whose "attach" names an object of this
+	 * layer that is gone are reported (warning "attach_orphaned <id>"); the mines / loot re-roll drops them. OutResult (optional) gets
+	 * the placement result.
 	 */
 	CODEXTACTICS_API bool RerollLayer(FLevelPropsFile& File, const FJsonObject& Balance, const FPropsLayoutView& View, const FString& LayerId,
 		uint32 Seed, TArray<FString>& Errors, FPropsPlacementResult* OutResult = nullptr);
+
+	/**
+	 * "Generate all" (2.2): re-rolls every enabled, unlocked layer with its stored seed in the fixed kind order crates -> barrels ->
+	 * turrets -> mines -> loot (file order inside a kind). False when any re-roll was refused (the others still run).
+	 */
+	CODEXTACTICS_API bool RerollAll(FLevelPropsFile& File, const FJsonObject& Balance, const FPropsLayoutView& View, TArray<FString>& Errors);
 }

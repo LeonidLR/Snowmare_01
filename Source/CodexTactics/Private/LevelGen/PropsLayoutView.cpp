@@ -391,6 +391,7 @@ bool FPropsLayoutView::Build(const FJsonObject& Root, FPropsLayoutView& Out, TAr
 		WR.Str(TEXT("kind"), W.Kind);
 		WR.Str(TEXT("building"), W.Building);
 		WR.Int(TEXT("floor"), W.Floor);
+		WR.Int(TEXT("height"), W.Height);
 		if (WR.bOk && SegmentTooLong(W.A, W.B))
 		{
 			WR.Fail(FString::Printf(TEXT("longer than %d cm (exact geometry limit)"), MaxSegmentCm));
@@ -527,7 +528,7 @@ bool FPropsLayoutView::Build(const FJsonObject& Root, FPropsLayoutView& Out, TAr
 	ForEachObject(R, TEXT("covers"), [&](const FJsonObject& J, const FString& Ctx)
 	{
 		FFieldReader CR(J, Ctx, Errors);
-		FCover C;
+		FPropsCover C;
 		Need(CR, TEXT("id"), CR.Str(TEXT("id"), C.Id));
 		Need(CR, TEXT("pos"), CR.Point(TEXT("pos"), C.Pos));
 		CR.Int(TEXT("yaw"), C.Yaw);
@@ -536,6 +537,10 @@ bool FPropsLayoutView::Build(const FJsonObject& Root, FPropsLayoutView& Out, TAr
 			&& (Size->Num() < 2 || !NumberToInt((*Size)[0], C.SizeX) || !NumberToInt((*Size)[1], C.SizeY) || C.SizeX < 0 || C.SizeY < 0))
 		{
 			CR.Fail(TEXT("'size' must be [x, y, h] in cm"));
+		}
+		if (Size && Size->Num() >= 3 && !NumberToInt((*Size)[2], C.HeightCm))
+		{
+			CR.Fail(TEXT("'size'[2] (height) must be a number in cm"));
 		}
 		if (CR.bOk && (C.SizeX > MaxSegmentCm || C.SizeY > MaxSegmentCm))
 		{
@@ -577,7 +582,7 @@ bool FPropsLayoutView::Build(const FJsonObject& Root, FPropsLayoutView& Out, TAr
 	ForEachObject(R, TEXT("routes"), [&](const FJsonObject& J, const FString& Ctx)
 	{
 		FFieldReader RR(J, Ctx, Errors);
-		FRoute Route;
+		FPropsRoute Route;
 		Need(RR, TEXT("id"), RR.Str(TEXT("id"), Route.Id));
 		RR.Ctx = FString::Printf(TEXT("%s (%s)"), *Ctx, *Route.Id);
 		Need(RR, TEXT("points"), ReadPoly(RR, TEXT("points"), Route.Points));
@@ -617,6 +622,17 @@ bool FPropsLayoutView::Build(const FJsonObject& Root, FPropsLayoutView& Out, TAr
 		}
 	});
 
+	for (const FBuilding& B : Out.Buildings)
+	{
+		FPropsBuildingSummary& S = Out.BuildingSummaries.AddDefaulted_GetRef();
+		S.Id = B.Id;
+		S.Min = B.Min;
+		S.Max = B.Max;
+		S.Floors = B.Floors;
+		S.bHollow = B.bHollow;
+		S.bEnterable = B.bEnterable;
+		S.bRoofWalkable = B.bRoofWalkable;
+	}
 	Out.BuildLayers();
 	Out.FindGaps();
 	Out.BuildDoorways();
@@ -835,7 +851,7 @@ void FPropsLayoutView::BuildDoorways()
 		const int64 Reach = static_cast<int64>((W.WidthCm > 0 ? W.WidthCm : Config.DoorFallbackWidthCm) / 2) + Config.DoorThroughSlackCm;
 		// the wall line through the opening is axis aligned: Across = the axis perpendicular to Along
 		const bool bLineAlongY = W.Along.Y != 0;
-		for (const FRoute& Route : Routes)
+		for (const FPropsRoute& Route : Routes)
 		{
 			if (!Route.bMandatory)
 			{
@@ -1028,7 +1044,7 @@ bool FPropsLayoutView::IsBlocked(FIntPoint P, const FString& WalkLayer, int32 Cl
 			return true;
 		}
 	}
-	for (const FCover& C : Covers)
+	for (const FPropsCover& C : Covers)
 	{
 		if (CoverWithin(P, C.Pos, C.Yaw, C.SizeX, C.SizeY, Clearance))
 		{
@@ -1046,7 +1062,7 @@ bool FPropsLayoutView::IsFree(FIntPoint P, const FString& WalkLayer, int32 Clear
 int32 FPropsLayoutView::DistanceToMandatoryRouteCm(FIntPoint P, const FString& WalkLayer) const
 {
 	int32 Best = MAX_int32;
-	for (const FRoute& Route : Routes)
+	for (const FPropsRoute& Route : Routes)
 	{
 		if (!Route.bMandatory)
 		{
@@ -1066,7 +1082,7 @@ int32 FPropsLayoutView::DistanceToMandatoryRouteCm(FIntPoint P, const FString& W
 bool FPropsLayoutView::IsNearMandatoryRoute(FIntPoint P, const FString& WalkLayer, int32 RadiusCm) const
 {
 	const int32 Radius = PropsLayoutViewLocal::ClampRadius(RadiusCm);
-	for (const FRoute& Route : Routes)
+	for (const FPropsRoute& Route : Routes)
 	{
 		if (!Route.bMandatory)
 		{
@@ -1146,7 +1162,7 @@ TArray<FPropsExclusion> FPropsLayoutView::BuildExclusions(const FPropsExclusionP
 			Shape(EPropsExclusionKind::Door, D.Id, D.WalkLayer, { D.Pos }, Params.DoorCm, false);
 		}
 	}
-	for (const FRoute& Route : Routes)
+	for (const FPropsRoute& Route : Routes)
 	{
 		const int32 Radius = Route.bMandatory ? Params.RouteMandatoryCm : Params.RouteVariantsCm;
 		if (Radius <= 0)
@@ -1252,7 +1268,7 @@ bool FPropsLayoutView::IsNearCover(FIntPoint P, const FString& WalkLayer, int32 
 		return false;
 	}
 	const int64 Clearance = ClampRadius(ClearanceCm);
-	for (const FCover& C : Covers)
+	for (const FPropsCover& C : Covers)
 	{
 		if (CoverWithin(P, C.Pos, C.Yaw, C.SizeX, C.SizeY, Clearance))
 		{
@@ -1323,10 +1339,200 @@ bool FPropsLayoutView::ReadConfig(const FJsonObject& Balance, FPropsLayoutConfig
 		Read(TEXT("door_through_slack_cm"), Out.DoorThroughSlackCm);
 		Read(TEXT("door_turn_reach_cm"), Out.DoorTurnReachCm);
 		Read(TEXT("door_fallback_width_cm"), Out.DoorFallbackWidthCm);
+		Read(TEXT("tall_cover_min_cm"), Out.TallCoverMinCm);
+		Read(TEXT("eye_height_cm"), Out.EyeHeightCm);
+		Read(TEXT("roof_edge_inset_cm"), Out.RoofEdgeInsetCm);
 	}
 	for (int32 I = FirstError; I < Errors.Num(); ++I)
 	{
 		UE_LOG(LogCodexTactics, Warning, TEXT("Props layout config: %s"), *Errors[I]);
 	}
 	return Errors.Num() == FirstError;
+}
+
+// ---- C4: exact helpers, routes, sight ------------------------------------------------------------------------------------------
+
+int64 PropsGeometry::SinQ(int32 Deg)
+{
+	return PropsLayoutViewLocal::SinQ(Deg);
+}
+
+int64 PropsGeometry::CosQ(int32 Deg)
+{
+	return PropsLayoutViewLocal::CosQ(Deg);
+}
+
+int64 PropsGeometry::ISqrt(int64 V)
+{
+	if (V <= 0)
+	{
+		return 0;
+	}
+	int64 R = static_cast<int64>(FMath::Sqrt(static_cast<double>(V))); // an estimate only; corrected exactly below
+	while (R > 0 && R * R > V)
+	{
+		--R;
+	}
+	while ((R + 1) * (R + 1) <= V)
+	{
+		++R;
+	}
+	return R;
+}
+
+int64 PropsGeometry::FloorDiv(int64 A, int64 B)
+{
+	const int64 Q = A / B;
+	return (A % B != 0 && ((A < 0) != (B < 0))) ? Q - 1 : Q;
+}
+
+const FPropsRoute* FPropsLayoutView::FindRoute(const FString& Id) const
+{
+	return Routes.FindByPredicate([&Id](const FPropsRoute& R) { return R.Id.Equals(Id, ESearchCase::CaseSensitive); });
+}
+
+int32 FPropsLayoutView::DistanceToRouteCm(FIntPoint P, const FPropsRoute& Route, const FString* Layer) const
+{
+	int32 Best = MAX_int32;
+	for (int32 I = 0; I + 1 < Route.Points.Num(); ++I)
+	{
+		if (!Layer || (Route.Layers[I] == *Layer && Route.Layers[I + 1] == *Layer))
+		{
+			Best = FMath::Min(Best, PropsLayoutViewLocal::CeilDistance(P, Route.Points[I], Route.Points[I + 1]));
+		}
+	}
+	return Best;
+}
+
+int32 FPropsLayoutView::DistanceToMandatoryRouteAnyLayerCm(FIntPoint P) const
+{
+	int32 Best = MAX_int32;
+	for (const FPropsRoute& Route : Routes)
+	{
+		if (Route.bMandatory)
+		{
+			Best = FMath::Min(Best, DistanceToRouteCm(P, Route, nullptr));
+		}
+	}
+	return Best;
+}
+
+void FPropsLayoutView::GetSightBlockers(const FString& EyeLayer, TArray<FPropsSightSegment>& Out) const
+{
+	using namespace PropsLayoutViewLocal;
+	Out.Reset();
+	const int32 LayerIndex = Layers.IndexOfByPredicate([&EyeLayer](const FPropsWalkLayer& L) { return L.Name.Equals(EyeLayer, ESearchCase::CaseSensitive); });
+	if (LayerIndex == INDEX_NONE)
+	{
+		return;
+	}
+	const int64 K = PropsGeometry::SightScale;
+	const auto AddWall = [&Out, K](FIntPoint A, FIntPoint B)
+	{
+		Out.Add({ A.X * K, A.Y * K, B.X * K, B.Y * K });
+	};
+	const auto AddCover = [&Out, K](const FPropsCover& C)
+	{
+		const int64 Cs = CosQ(C.Yaw);
+		const int64 Sn = SinQ(C.Yaw);
+		// corner(sx, sy) x SightScale = pos x K + (cos, sin) x SizeX x sx + (-sin, cos) x SizeY x sy  (K x half size = 16384 x size)
+		const int32 Signs[4][2] = { { 1, 1 }, { -1, 1 }, { -1, -1 }, { 1, -1 } };
+		int64 X[4];
+		int64 Y[4];
+		for (int32 I = 0; I < 4; ++I)
+		{
+			const int64 Lx = static_cast<int64>(C.SizeX) * Signs[I][0];
+			const int64 Ly = static_cast<int64>(C.SizeY) * Signs[I][1];
+			X[I] = C.Pos.X * K + Cs * Lx - Sn * Ly;
+			Y[I] = C.Pos.Y * K + Sn * Lx + Cs * Ly;
+		}
+		for (int32 I = 0; I < 4; ++I)
+		{
+			Out.Add({ X[I], Y[I], X[(I + 1) % 4], Y[(I + 1) % 4] });
+		}
+	};
+	const FPropsWalkLayer& L = Layers[LayerIndex];
+	if (L.Kind == EPropsWalkLayerKind::Roof)
+	{
+		// the elevated rule: only what reaches the eye blocks (levels are relative to the ground, like schema.ts levelZ)
+		const int64 Eye = static_cast<int64>(L.Level) * Config.LevelHeightCm + Config.EyeHeightCm;
+		for (const FWall& W : Walls)
+		{
+			if (static_cast<int64>(W.Floor) * Config.LevelHeightCm + W.Height >= Eye)
+			{
+				AddWall(W.A, W.B);
+			}
+		}
+		for (const FPropsCover& C : Covers)
+		{
+			if (C.HeightCm >= Eye)
+			{
+				AddCover(C);
+			}
+		}
+		return;
+	}
+	for (const FLayerWall& W : LayerWalls[LayerIndex])
+	{
+		AddWall(W.A, W.B);
+	}
+	if (L.Kind == EPropsWalkLayerKind::Ground)
+	{
+		for (const FPropsCover& C : Covers)
+		{
+			if (C.HeightCm >= Config.TallCoverMinCm)
+			{
+				AddCover(C);
+			}
+		}
+	}
+}
+
+bool FPropsLayoutView::IsSightBlocked(FIntPoint From, FIntPoint To, const TArray<FPropsSightSegment>& Blockers)
+{
+	const int64 K = PropsGeometry::SightScale;
+	const int64 PX = From.X * K;
+	const int64 PY = From.Y * K;
+	const int64 DX = (static_cast<int64>(To.X) - From.X) * K;
+	const int64 DY = (static_cast<int64>(To.Y) - From.Y) * K;
+	const int64 MinX = FMath::Min<int64>(0, DX);
+	const int64 MaxX = FMath::Max<int64>(0, DX);
+	const int64 MinY = FMath::Min<int64>(0, DY);
+	const int64 MaxY = FMath::Max<int64>(0, DY);
+	// everything relative to From: after the bounding-box reject every cross product stays inside int64 for blockers up to
+	// MaxSegmentCm long and sight lines up to MaxRadiusCm
+	const auto Orient = [](int64 AX, int64 AY, int64 BX, int64 BY, int64 CX, int64 CY)
+	{
+		const int64 C = (BX - AX) * (CY - AY) - (BY - AY) * (CX - AX);
+		return C > 0 ? 1 : (C < 0 ? -1 : 0);
+	};
+	const auto OnSeg = [](int64 AX, int64 AY, int64 BX, int64 BY, int64 CX, int64 CY)
+	{
+		return CX >= FMath::Min(AX, BX) && CX <= FMath::Max(AX, BX) && CY >= FMath::Min(AY, BY) && CY <= FMath::Max(AY, BY);
+	};
+	for (const FPropsSightSegment& S : Blockers)
+	{
+		const int64 AX = S.AX - PX;
+		const int64 AY = S.AY - PY;
+		const int64 BX = S.BX - PX;
+		const int64 BY = S.BY - PY;
+		if (FMath::Max(AX, BX) < MinX || FMath::Min(AX, BX) > MaxX || FMath::Max(AY, BY) < MinY || FMath::Min(AY, BY) > MaxY)
+		{
+			continue;
+		}
+		const int32 O1 = Orient(0, 0, DX, DY, AX, AY);
+		const int32 O2 = Orient(0, 0, DX, DY, BX, BY);
+		const int32 O3 = Orient(AX, AY, BX, BY, 0, 0);
+		const int32 O4 = Orient(AX, AY, BX, BY, DX, DY);
+		if (O1 * O2 < 0 && O3 * O4 < 0)
+		{
+			return true;
+		}
+		if ((O1 == 0 && OnSeg(0, 0, DX, DY, AX, AY)) || (O2 == 0 && OnSeg(0, 0, DX, DY, BX, BY))
+			|| (O3 == 0 && OnSeg(AX, AY, BX, BY, 0, 0)) || (O4 == 0 && OnSeg(AX, AY, BX, BY, DX, DY)))
+		{
+			return true;
+		}
+	}
+	return false;
 }

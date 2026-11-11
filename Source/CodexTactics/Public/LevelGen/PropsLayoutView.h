@@ -14,7 +14,8 @@ class FJsonObject;
  * Determinism: every input and output is integer cm and every decision (blocked, walkable, excluded, "door on the mandatory route") is
  * exact integer math (int64), no floats - the TS port reproduces it bit for bit. Exactness holds for segments up to MaxSegmentCm and
  * radii up to MaxRadiusCm (Build refuses longer walls / route legs and thicker walls; radii are clamped).
- * Tests: CodexTactics.LevelGen.Props.LayoutView.*.
+ * C4 adds the sight blockers of the turret coverage (GetSightBlockers / IsSightBlocked), the routes / covers / buildings accessors and
+ * the integer helpers of PropsGeometry. Tests: CodexTactics.LevelGen.Props.LayoutView.*, CodexTactics.LevelGen.Props.C4.*.
  */
 
 /**
@@ -50,7 +51,33 @@ struct FPropsLayoutConfig
 	int32 CutEdgeThicknessCm = 20;
 	/** A building door takes the width of the building wall gap whose centre is within this distance (cm, per axis). */
 	int32 DoorGapMatchCm = 2;
+	/** Sight (C4 turrets): a cover at least this tall blocks a standing man's view on the ground (evaluate.ts tallCoverSegs 140). */
+	int32 TallCoverMinCm = 140;
+	/** Sight: eye above the surface a man stands on (evaluate.ts EYE_CM 160); on a roof only obstacles reaching that height block. */
+	int32 EyeHeightCm = 160;
+	/** Anchors (C4): "roof edges" = the walkable roof's lattice ring this far inside the footprint edge (2.1: inset 100 cm). */
+	int32 RoofEdgeInsetCm = 100;
 };
+
+/**
+ * Exact integer helpers shared by the layout view and the props placement (C4). The TS port copies them (JS: safe integers / BigInt).
+ */
+namespace PropsGeometry
+{
+	/** Scale of the sin / cos table: round(sin(d deg) x 16384). */
+	constexpr int64 SinScale = 16384;
+	/** Sight segments are in units of 1 / SightScale cm (2 x SinScale, so a rotated cover corner is an exact integer). */
+	constexpr int64 SightScale = 32768;
+
+	/** round(sin(Deg) x 16384) from the 0..90 table, any integer Deg. */
+	CODEXTACTICS_API int64 SinQ(int32 Deg);
+	/** SinQ(Deg + 90). */
+	CODEXTACTICS_API int64 CosQ(int32 Deg);
+	/** floor(sqrt(V)) exactly, V >= 0 (0 for negatives). */
+	CODEXTACTICS_API int64 ISqrt(int64 V);
+	/** floor(A / B) towards minus infinity (JS Math.floor(a / b)), B != 0. */
+	CODEXTACTICS_API int64 FloorDiv(int64 A, int64 B);
+}
 
 enum class EPropsWalkLayerKind : uint8
 {
@@ -148,6 +175,47 @@ struct FPropsAnchorPoint
 	FIntPoint Pos = FIntPoint::ZeroValue;
 };
 
+/** A route polyline of the layout (routes[]), one walk layer name per point. */
+struct FPropsRoute
+{
+	FString Id;
+	bool bMandatory = false;
+	TArray<FIntPoint> Points;
+	TArray<FString> Layers;
+};
+
+/** A layout cover (covers[]): an oriented box size x / y centred on pos, rotated by yaw; Height = size[2] (0 when absent). */
+struct FPropsCover
+{
+	FString Id;
+	FIntPoint Pos = FIntPoint::ZeroValue;
+	int32 Yaw = 0;
+	int32 SizeX = 0;
+	int32 SizeY = 0;
+	int32 HeightCm = 0;
+};
+
+/** What the placement needs to know of a building (buildings[]), in layout order. */
+struct FPropsBuildingSummary
+{
+	FString Id;
+	FIntPoint Min = FIntPoint::ZeroValue;
+	FIntPoint Max = FIntPoint::ZeroValue;
+	int32 Floors = 1;
+	bool bHollow = false;
+	bool bEnterable = false;
+	bool bRoofWalkable = false;
+};
+
+/** A sight blocker in units of 1 / PropsGeometry::SightScale cm (exact; thickness ignored). */
+struct FPropsSightSegment
+{
+	int64 AX = 0;
+	int64 AY = 0;
+	int64 BX = 0;
+	int64 BY = 0;
+};
+
 /** Radii of a rules.exclude block (cm); 0 / false = that shape is not produced. Mapping from the rules JSON is the placement's job (C3). */
 struct FPropsExclusionParams
 {
@@ -211,7 +279,7 @@ public:
 
 	/**
 	 * Reads props_balance.json "layout_view" (gate_min_gap_cm, gate_max_gap_cm, door_through_slack_cm, door_turn_reach_cm,
-	 * door_fallback_width_cm) over the defaults. A missing block / key keeps the default; a key of the wrong type or a negative value is
+	 * door_fallback_width_cm, tall_cover_min_cm, eye_height_cm, roof_edge_inset_cm) over the defaults. A missing block / key keeps the default; a key of the wrong type or a negative value is
 	 * an error (default kept). Returns false on any error.
 	 */
 	static bool ReadConfig(const FJsonObject& Balance, FPropsLayoutConfig& Out, TArray<FString>& Errors);
@@ -231,6 +299,13 @@ public:
 	const FPropsZone* FindZone(const FString& Id) const;
 	const TArray<FPropsAnchorPoint>& GetAmbushPoints() const { return AmbushPoints; }
 	const TArray<FString>& GetMandatoryRouteIds() const { return MandatoryRouteIds; }
+	/** Every route in layout order. */
+	const TArray<FPropsRoute>& GetRoutes() const { return Routes; }
+	const FPropsRoute* FindRoute(const FString& Id) const;
+	/** Every cover in layout order (Height = size[2]). */
+	const TArray<FPropsCover>& GetCovers() const { return Covers; }
+	/** Every building in layout order. */
+	const TArray<FPropsBuildingSummary>& GetBuildings() const { return BuildingSummaries; }
 	FIntPoint GetSpawnPos() const { return SpawnPos; }
 	FIntPoint GetEndPos() const { return EndPos; }
 
@@ -275,6 +350,27 @@ public:
 	/** Exact: a mandatory route leg on WalkLayer passes within RadiusCm of P. */
 	bool IsNearMandatoryRoute(FIntPoint P, const FString& WalkLayer, int32 RadiusCm) const;
 
+	/**
+	 * Distance (cm, rounded up, CeilDistance) from P to the nearest leg of Route; Layer non-null = only legs with both ends on that
+	 * layer, null = every leg (2D across layers). MAX_int32 when no leg qualifies.
+	 */
+	int32 DistanceToRouteCm(FIntPoint P, const FPropsRoute& Route, const FString* Layer) const;
+
+	/** DistanceToRouteCm over every mandatory route, every leg (2D across layers). MAX_int32 when there is none. */
+	int32 DistanceToMandatoryRouteAnyLayerCm(FIntPoint P) const;
+
+	/**
+	 * The sight blockers of an eye standing on EyeLayer (evaluate.ts sightWalls): a roof = every wall whose top (floor x LevelHeightCm +
+	 * height) and every cover whose height reaches the eye (roof level x LevelHeightCm + EyeHeightCm); any other layer = that layer's
+	 * walls (schema.ts layerWalls), on the ground plus the 4 edges of every cover at least TallCoverMinCm tall. Walls in wall order, then
+	 * covers in layout order, each cover's corners (+x+y, -x+y, -x-y, +x-y in its local frame, the table rotation) joined in that order.
+	 * Unknown layer: empty.
+	 */
+	void GetSightBlockers(const FString& EyeLayer, TArray<FPropsSightSegment>& Out) const;
+
+	/** Exact: the closed segment From -> To touches or crosses a blocker (closed segments, collinear overlap counts). */
+	static bool IsSightBlocked(FIntPoint From, FIntPoint To, const TArray<FPropsSightSegment>& Blockers);
+
 	/** Exclusion shapes for the given radii, in a fixed order: spawn, end, ladders, stairs, doorways, routes, crossings, holes. */
 	TArray<FPropsExclusion> BuildExclusions(const FPropsExclusionParams& Params) const;
 
@@ -292,6 +388,8 @@ private:
 		int32 Thickness = 0;
 		/** Height level the wall stands on (missing = 0). */
 		int32 Floor = 0;
+		/** "height" (cm above its floor; missing = 0): the elevated sight rule (C4). */
+		int32 Height = 0;
 	};
 	struct FLayerWall
 	{
@@ -331,14 +429,6 @@ private:
 		TArray<FIntPoint> RoofHoles;
 		TArray<FFloorHole> FloorHoles;
 	};
-	struct FCover
-	{
-		FString Id;
-		FIntPoint Pos = FIntPoint::ZeroValue;
-		int32 Yaw = 0;
-		int32 SizeX = 0;
-		int32 SizeY = 0;
-	};
 	struct FLadder
 	{
 		FString Id;
@@ -347,13 +437,6 @@ private:
 		FIntPoint Top = FIntPoint::ZeroValue;
 		FString From = TEXT("ground");
 		FString To = TEXT("ground");
-	};
-	struct FRoute
-	{
-		FString Id;
-		bool bMandatory = false;
-		TArray<FIntPoint> Points;
-		TArray<FString> Layers;
 	};
 	struct FCrossing
 	{
@@ -375,11 +458,12 @@ private:
 	FIntPoint EndPos = FIntPoint::ZeroValue;
 	TArray<FWall> Walls;
 	TArray<FBuilding> Buildings;
-	TArray<FCover> Covers;
+	TArray<FPropsBuildingSummary> BuildingSummaries;
+	TArray<FPropsCover> Covers;
 	TArray<FLadder> Ladders;
 	TArray<FPropsZone> Zones;
 	TArray<FPropsAnchorPoint> AmbushPoints;
-	TArray<FRoute> Routes;
+	TArray<FPropsRoute> Routes;
 	TArray<FString> MandatoryRouteIds;
 	bool bHasCut = false;
 	TArray<FIntPoint> CutPoly;
