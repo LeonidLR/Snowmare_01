@@ -1,0 +1,7 @@
+{
+  "_comment": "The squad walks at its most wounded member's pace (the game designer's decision 'a' 2026-11-11; docs/systems/squad-and-orders.md 'Wounded member in the formation'). Read by SquadWoundPaceTuning (C++, Source/CodexTactics/Public/Characters/SquadWoundPaceRules.h). enabled 1: while a wounded member (light / heavy wound tier, HP under 50 %) leads or follows the formation, the leader walks at min(pace.patrol x his walk, pace_share x the slowest wounded member's allowed walk incl. the tier x0.65 / x0.45 and the cold) - pace_share 0.8 = the fit squad's own share of the leader's walk, so the wounded man keeps the fit men's margin to hold his slot. cap_wounded_follower 1: a wounded follower's formation move never exceeds his allowed walk (no catch-up multiplier above it). limit_sprint 1: the leader's sprint ends while the pace is in effect (the whole squad walks). The critically wounded (HP under 20 %, down, crawling) never sets the pace: he crawls after his slot at his own crawl speed. Members in Solo, on a fast regroup (B), on an order of their own do not set it. Console Codex.Squad.WoundPace -1 = this file, 0 = the old pacing, 1 = on.",
+  "enabled": 1,
+  "pace_share": 0.8,
+  "limit_sprint": 1,
+  "cap_wounded_follower": 1
+}

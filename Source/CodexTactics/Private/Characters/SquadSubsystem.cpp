@@ -1480,6 +1480,8 @@ void USquadSubsystem::Tick(float DeltaTime)
 	FormationGuardRuntime::AgeClearHeld(ClearHeld);
 	FramePaceLeader.Reset();
 	FramePace = 1.f;
+	FrameWoundPace.Reset();
+	FrameWoundPaceBy.Reset();
 	Sectors.bActiveThisFrame = false;
 	TickFormationFollow(DeltaTime);
 	// #57: both corners of a wall held - the held corner's end conditions, the middle men's sweeping looks.
