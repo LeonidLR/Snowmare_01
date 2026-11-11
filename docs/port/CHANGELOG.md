@@ -544,3 +544,5 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 2026-11-11 Codex interim: user-approved stealth retarget checkpoint, 62 male + 62 female copies, source hash verification PASS; native runtime integration / smoke pending.
 
 2026-11-11 Codex interim: Gemini four-item read-only queue 012 (stealth review, schema cross-check for C5, C6 integration map, existing trainer results). Designer requested chat attention indicator after stealth. Stealth native WIP: build / 44 tests / first end-to-end smoke PASS, regressions and rendered evidence pending.
+
+2026-11-11 Codex resumed interim: late stealth weapon components and null material-override restoration checkpoint; pistol/RPG swap assertions added. Full rebuild / smoke pending, not a completion claim.

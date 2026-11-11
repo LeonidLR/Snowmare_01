@@ -19,6 +19,7 @@
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Debug/SmokeUtils.h"
+#include "Data/WeaponDataAsset.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
@@ -91,6 +92,47 @@ namespace StealthModeSmoke
 			Check(State, FMath::IsNearlyEqual(Color.R, Config.VisualGray) && FMath::IsNearlyEqual(Color.G, Config.VisualGray) && FMath::IsNearlyEqual(Color.B, Config.VisualGray)
 				&& FMath::IsNearlyEqual(Material->K2_GetScalarParameterValue(TEXT("OpacityFill")), Config.VisualOpacity), TEXT("material grey and opacity match stealth data"));
 		}
+	}
+	void CheckWeaponSwaps(FState& State, AOperativeCharacter* Op)
+	{
+		const FString Held = Op->CurrentWeapon ? Op->CurrentWeapon->WeaponId : FString();
+		Check(State, Op->SwitchToWeaponById(TEXT("pistol")), TEXT("late-parts: real switch to pistol accepted"));
+		UMaterialInterface* Stealth = Op->GetMesh()->GetMaterial(0);
+		int32 Parts = 0;
+		for (UStaticMeshComponent* Part : Op->WeaponMeshParts)
+		{
+			if (Part && Part->GetStaticMesh())
+			{
+				++Parts;
+				Check(State, Part->GetMaterial(0) == Stealth && Part->GetOverlayMaterial() == Stealth, TEXT("late-parts: new magazine receives stealth slots and overlay immediately"));
+			}
+		}
+		Check(State, Parts > 0 && Op->IsInStealthMode(), TEXT("late-parts: magazine actually exists and swap keeps stealth"));
+		Op->SetStealthMode(false);
+		for (UStaticMeshComponent* Part : Op->WeaponMeshParts)
+		{
+			if (Part && Part->GetStaticMesh())
+			{
+				Check(State, Part->GetMaterial(0) == Part->GetStaticMesh()->GetMaterial(0) && !Part->GetOverlayMaterial(), TEXT("late-parts: exit restores the magazine's own default material"));
+			}
+		}
+		Op->SetStealthMode(true);
+		Check(State, Op->SwitchToWeaponById(TEXT("rpg7")), TEXT("late-parts: real switch to launcher accepted"));
+		TInlineComponentArray<UStaticMeshComponent*> Components(Op);
+		UStaticMeshComponent* Round = nullptr;
+		for (UStaticMeshComponent* Part : Components)
+		{
+			if (Part->GetName() == TEXT("WeaponRoundMesh")) { Round = Part; }
+		}
+		Stealth = Op->GetMesh()->GetMaterial(0);
+		Check(State, Round && Round->GetStaticMesh() && Round->GetMaterial(0) == Stealth && Round->GetOverlayMaterial() == Stealth,
+			TEXT("late-parts: dynamically attached launcher round receives stealth material"));
+		Op->SetStealthMode(false);
+		Check(State, Round && Round->GetStaticMesh() && Round->GetMaterial(0) == Round->GetStaticMesh()->GetMaterial(0) && !Round->GetOverlayMaterial(),
+			TEXT("late-parts: round's own material restored on exit"));
+		Op->SetStealthMode(true);
+		Check(State, Op->SwitchToWeaponById(Held) && Op->IsInStealthMode(), TEXT("late-parts: return to initial weapon retains stealth"));
+		CheckVisuals(State, Op);
 	}
 	void Shot(const FState& State, const TCHAR* Name)
 	{
@@ -224,6 +266,7 @@ namespace StealthModeSmoke
 			Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching, TEXT("HUD command toggles selected operative into crouched stealth"));
 			CheckVisuals(State, Op);
 			Check(State, Anim(Op)->GetStealthWeight() > 0.9f, TEXT("native stealth idle owns the pose"));
+			CheckWeaponSwaps(State, Op);
 			// Mixed selection enables all eligible members; a fully enabled selection disables all.
 			for (AOperativeCharacter* Mate : Squad->GetMembers())
 			{
@@ -242,7 +285,8 @@ namespace StealthModeSmoke
 			Next(State, 10);
 			break;
 		case 10:
-			if (State.StageTime < 1.f) { return true; }
+			if (State.StageTime < 1.f || (Anim(Op)->GetStealthWeight() < 0.9f && State.StageTime < 4.f)) { return true; }
+			Check(State, Anim(Op)->GetStealthWeight() > 0.9f, TEXT("stealth idle settled after weapon-swap checks"));
 			Shot(State, TEXT("stealth"));
 			Next(State, 11);
 			break;

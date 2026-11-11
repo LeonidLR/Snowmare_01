@@ -1467,3 +1467,5 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 2026-11-11 Codex interim: explicit primary-chat approval covers only 124 new Stealth/{Male,Female} copies. Generated with editor closed / SCC disabled, source SHA-256 unchanged. Gemini accepted read-only C5 prep (#132).
 
 2026-11-11 Codex interim coordination: reviewed actual Gemini C5 prep 2f50e91a without merging. Gemini queue 012 is report-only; no C++/assets/main/push. Native stealth first smoke PASS; integration remains WIP.
+
+2026-11-11 Codex interim resumed: owns stealth leftovers in interim/2026-11-12. Working part 1 checkpoint (late weapon meshes / material overrides) saved while full MSVC rebuild runs. No main/push/assets writes.

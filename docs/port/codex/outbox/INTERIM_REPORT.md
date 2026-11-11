@@ -57,3 +57,12 @@ STEALTH bottom action-bar button / key 7, selected mixed/all-on toggle, crouched
 - Set CODEX_AGENT=codex in shells and PYTHONIOENCODING=utf-8 for agent chat. Chat post advances seen state: read incoming messages before posting; avoid multiple concurrent waiters.
 - Anthropic API spend by Codex: **$0**. Main API ledger observed read-only: $14.6072, cap $30. No key printed. TypeSafe audits used separately.
 - Earlier compiler C4458 local Mesh/member shadowing fixed before successful runtime builds. No unresolved build/test failure at this checkpoint.
+
+## Codex resumed interim leadership (2026-11-11, after Claude cover)
+- Runtime checkpoint is now committed by Claude as 90a6bf64; chat banner 56d26c46 and Gemini 013 reports are integrated. Current user queue: stealth leftovers, C5 (03fea4c6), C6 (14a91b4e), then chat loop. Earlier hand-back headings are historical.
+- Router script/config are absent in interim but available in main; classify was invoked read-only from its main path with PYTHONDONTWRITEBYTECODE=1, shell cwd interim. No main writes or router settings changes.
+- Routing trial: 3 | Codex main session | weapon-material lifecycle: implementation + real pistol/RPG smoke prepared, verification pending.
+- Routing trial: 3 | Codex main session | game-camera diagnosis/captures: pending.
+- Routing trial: 3 | Codex main session | six Gemini integration-test gaps: pending.
+- Routing trial: 2 | gpt-6-luna | read-only API lookup: partial REDO (first answer incorrectly called protected TickPatrolPerception public; access modifier verified and corrected). Corrected route uses public Enemy Tick after real StartPatrol; no files changed. Other useful corrections: invented ResetPatrolAlert/ApplyKnockdown signatures, actual female body path, death helper signature.
+- Working part 1: restore original override slots (including null), enroll late weapon mesh parts/rounds, restore/re-capture overrides around ApplyWeaponVisual. Build is a full 73-action rebuild after MSVC version changed; no completion claimed yet.

@@ -53,23 +53,6 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		StealthMeshes.Reset();
 		StealthMaterialCounts.Reset();
 		StealthOriginalMaterials.Reset();
-		TArray<UMeshComponent*> Meshes;
-		GetComponents(Meshes);
-		for (UMeshComponent* BodyPart : Meshes)
-		{
-			const bool bBodyOrWeapon = BodyPart->IsA<USkeletalMeshComponent>() || BodyPart == BodyMesh.Get() || BodyPart == WeaponMesh.Get()
-				|| WeaponMeshParts.ContainsByPredicate([BodyPart](const TObjectPtr<UStaticMeshComponent>& Part) { return Part.Get() == BodyPart; });
-			if (!bBodyOrWeapon)
-			{
-				continue; // facing markers, rings and vision meshes keep their own visuals
-			}
-			StealthMeshes.Add(BodyPart);
-			StealthMaterialCounts.Add(BodyPart->GetNumMaterials());
-			for (int32 Slot = 0; Slot < BodyPart->GetNumMaterials(); ++Slot)
-			{
-				StealthOriginalMaterials.Add(BodyPart->GetMaterial(Slot));
-			}
-		}
 		SetSprinting(false);
 		bStealthMode = true;
 		SetStance(EOperativeStance::Crouching);
@@ -88,6 +71,27 @@ void AOperativeCharacter::RefreshStealthVisuals()
 	{
 		return;
 	}
+	if (bStealthMode)
+	{
+		TInlineComponentArray<UMeshComponent*> Meshes(this);
+		for (UMeshComponent* BodyPart : Meshes)
+		{
+			const bool bBodyOrWeapon = BodyPart->IsA<USkeletalMeshComponent>() || BodyPart == BodyMesh.Get() || BodyPart == WeaponMesh.Get()
+				|| BodyPart == WeaponRoundMesh.Get()
+				|| WeaponMeshParts.ContainsByPredicate([BodyPart](const TObjectPtr<UStaticMeshComponent>& Part) { return Part.Get() == BodyPart; });
+			if (!bBodyOrWeapon || StealthMeshes.Contains(BodyPart))
+			{
+				continue; // markers / vision meshes keep their visuals; existing snapshots stay stable
+			}
+			StealthMeshes.Add(BodyPart);
+			StealthMaterialCounts.Add(BodyPart->GetNumMaterials());
+			for (int32 Slot = 0; Slot < BodyPart->GetNumMaterials(); ++Slot)
+			{
+				// Preserve a null override as null: otherwise changing the mesh would keep the previous weapon's default material.
+				StealthOriginalMaterials.Add(BodyPart->OverrideMaterials.IsValidIndex(Slot) ? BodyPart->OverrideMaterials[Slot].Get() : nullptr);
+			}
+		}
+	}
 	int32 Saved = 0;
 	for (int32 Index = 0; Index < StealthMeshes.Num(); ++Index)
 	{
@@ -104,7 +108,7 @@ void AOperativeCharacter::RefreshStealthVisuals()
 			{
 				if (Current != StealthMaterial)
 				{
-					StealthOriginalMaterials[Saved] = Current; // a weapon/mesh swap keeps its latest original material
+					StealthOriginalMaterials[Saved] = BodyPart->OverrideMaterials.IsValidIndex(Slot) ? BodyPart->OverrideMaterials[Slot].Get() : nullptr;
 					BodyPart->SetMaterial(Slot, StealthMaterial);
 				}
 			}
