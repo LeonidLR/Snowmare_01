@@ -1,6 +1,6 @@
-# Interim hand-back report - designer handover to Claude, 2026-11-11
+# Interim hand-back and status report - 2026-11-11, updated 2026-11-11
 
-**Current authority:** designer chat #141 requests hand-back to Claude for the next two hours. Codex is finishing this checkpoint and then listening; C5/C6/chat-indicator implementation has NOT started. Do not merge main without Claude's review.
+**Current authority:** Codex leads interim integration again through Saturday 2026-11-14; main remains frozen. Stealth 003 is verified and ready for designer playtest in the interim branch. Do not merge main without Claude's review. Next: Claude-relayed tasks 004 and 005, then C5/C6; those tasks are not claimed complete.
 
 **Only own working location:** C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-interim, branch interim/2026-11-12. Frozen tag before-interim-2026-11-11 = 8b0bb579. Handover/tool docs already present before our first commit: 56e1d1f2, 11065194, a1100f29. Own commits are directly on interim because the designer explicitly required work only on that branch/worktree. No push, main build, scheduler edits or source asset writes.
 
@@ -13,40 +13,35 @@
 | 8ff5d194 | Stealth pure rules/data: selected toggle, break, range/buildup/noise multipliers, optional JSON tuning; 4 focused tests PASS. |
 | 1843f002 | Exactly 124 explicitly approved new animation copies (62 Male + 62 Female), LFS, reproducible guarded script. Source SHA-256 unchanged, target skeleton/rebake checks PASS. |
 | 4a29d093 | Four-item read-only Gemini queue 012 + checkpoint documentation. |
-| runtime checkpoint | Native stealth / actor / HUD / perception / smoke; hash recorded after final audit. See 003-stealth-mode.report.md. |
+| 90a6bf64 | Claude runtime checkpoint for stealth. |
+| 4d15a54f | Runtime material lifecycle fix: late weapon parts/rounds and original override restoration. |
+| 561a29ed | Expanded integration tests and smoke fixtures. |
 
 Tasks 001/002 were completed and merged by Claude before the frozen base; no duplicate work. Props C4 TS already merged before interim. No Gemini branch has been merged by Codex.
 
-## Stealth 003 - current implementation and evidence
+## Stealth 003 - final verified status
 
-STEALTH bottom action-bar button / key 7, selected mixed/all-on toggle, crouched native eight-direction Slow/Fast animation layer, wall/lean clips, actual corner reveal in shared minimap sight, runtime grey translucent materials, patrol/combat detection and noise reduction, fire/sprint breaks. Native clip timings use measured per-body speeds / left-foot strike offsets. Default exit stays crouched; fire posture and hound scent unchanged. Peek visibility lasts while LoS holds; existing exploration last-known ghost 12 s and combat memory unchanged.
+STEALTH action-bar button / key 7, selected group toggle, native eight-direction Slow/Fast animation, wall/lean/peek, runtime translucent materials, patrol/combat detection scaling, and firearm/sprint breaks are verified. Late pistol/RPG parts restore correctly. Female smoke, real acoustic patrol brackets, knockdown recovery/death cleanup, controlled fast gait samples, and rendered evidence are now covered. Details, logs and test limitations are in `docs/port/codex/outbox/003-stealth-mode.report.md`.
 
-- Latest native build PASS, 21.02 s after review fixes. Earlier integration build PASS 173.85 s; 44/44 Animation / StealthMode / AI.Perception / Combat.Sight tests PASS. Unit evidence Saved/Logs/StealthNative-unit.log.
-- Impact map check PASS.
-- All required smokes PASS without retries: StealthModeSmoke 57.4 s; InjuredLocomotionSmoke 76.6 s; ProneCrawlSmoke 67.6 s; CoverSwitchSmoke 59.9 s; FormationLabSmoke 201.3 s; SoloStartSmoke 56.6 s. Saved/Logs/StealthRegression-results.json.
-- Gemini review e3c05788 confirmed wall phase sign bug: actor faces wall normal; now uses existing IsShimmyForward. Reload fade softened, post-shot aim priority preserved. Final StealthModeSmoke after these fixes PASS 53.9 s; actual wall movement sampled on 92 frames. Saved/Logs/StealthMode-final-results.json.
-- Rendered smoke first PASS. Final capture is being repeated with explicit holds so screenshots represent stealth/wall/peek before the next command. Three requested game-camera frames will be in main Saved/Orchestrator/stealth/ (the task's explicit evidence-path exception); no main source/assets changed.
-- Full per-file/authorization/review details: docs/port/codex/outbox/003-stealth-mode.report.md. This is a review checkpoint, not a claim that every edge case has dedicated runtime coverage.
+- Corrected full-header build PASS (384.38 s); final smoke-only build PASS (28.15 s). Expanded male stealth smoke PASS (113.1 s); female full scenario PASS; 44/44 relevant rules/animation/perception/sight tests PASS; impact map and rendered smoke PASS.
+- Three visually inspected 1280x720 game-camera frames are in main `Saved/Orchestrator/stealth/`. These three PNGs are the only main-worktree writes; no main source/assets changed.
+- Expanded coverage includes late weapon parts and restoration, four wall movement legs, controlled 120/300/480 cm/s animation sampling, real patrol hearing and wall occlusion, female asset/skeleton/calibration/root drift, and knockdown/get-up/death stealth cleanup. The female scenario applies the existing optimized female body to Medic in memory; the committed `L_MovementTest` roster remains all male.
+- Earlier regression baseline smokes all passed but were not rerun in the final expanded pass; see 003 report for exact durations. Gemini review `1a05804e`: PASS with minor recommendations. No known implementation follow-up remains from the prior late-parts concern.
 
-### Stealth review follow-ups for Claude
-
-1. Concrete remaining limitation: new weapon mesh components created after entering stealth are not part of its initial material snapshot. A weapon change creating modular parts may show those parts opaque. Smoke currently uses the initial weapon.
-2. Female copies have skeleton/rebake/phase measurements, but no female-specific game smoke yet. Fast gait, acoustic end-to-end detection, reload/damage/death and action transition edges lack dedicated runtime assertions.
-3. Gemini's hypothesized hit-flash SLOT-material corruption is not reproduced by current code: CombatFeedbackActor changes/restores OverlayMaterial only (131-163). Current logic lets feedback own the overlay and cleans a late restore of the stealth overlay. Re-check any other material writers if expanding that review.
-4. Uncrouch copy is retained because all 62 copies were explicitly authorized; toggle exit deliberately remains crouched. Grenade throw is not a firearm shot; designer default questions were proposed #123, no contrary answer observed.
-
-## Gemini handover
+## Gemini coordination (historical handover, updated below)
 
 - Branch gemini/interim-c5-prep, worktree CodexTactics-gemc5. Actual commit 2f50e91a: C5 read-only prep (one report file); e3c05788: stealth read-only review. Both verified via git show; not merged. Reports reside on that branch and remain available for Claude.
 - Four-item queue committed in docs/port/gemini/inbox/012-interim-review-queue.md: stealth review (done), C5 schema verification, C6 reuse/integration map, read-only existing night-trainer review. Designer requested batch queues, chat only status. After #141 Gemini was told to finish current review and stand by; he acknowledged #146. Do not assume remaining items completed.
 - Review C5 report's suggested hand/origin fields against actual schema before implementing; it is analysis, not an approved data contract.
 
+Current prep inputs: C5 addendum 03fea4c6 and C6 runtime map 14a91b4e. Gemini 013 items 1-4 and review 1a05804e are integrated by Claude; queue 016 and task-005 ragdoll mapping are current work. The older 012 handover notes above are historical, not pending assignments.
+
 ## Remaining queue - not started
 
-1. Stealth review/edge-case follow-ups above, then Claude acceptance.
+1. Stealth 003 is verified; designer playtest is ready in interim. Next are Claude-relayed tasks 004 (hitch) and 005 (dead enemies / ragdoll), in that order.
 2. C5 props static validator: PROPS_LAYERS 2.4 / 5, generated invalid/dangling props dropped with IDs; locked/hand props flagged and kept; fixtures and idempotence. Gemini prep is input, not implementation.
 3. C6 UCodexLevelPropsSubsystem runtime spawner: greybox barrel cylinders / blue-red crates, tags/nav modifiers, no tickers, LevelPropsSpawnSmoke counts match committed Depot props file. Designer waits for visible props.
-4. Designer #139 follow-up AFTER stealth: agent_chat_server.py detects messages to gemini/all unanswered by Gemini >10 min, Tools/AgentChat red 'Gemini спит' + elapsed time, Python test. No server/UI implementation started.
+4. Chat attention indicator is ALREADY DONE by Claude/Gemini: 56d26c46, 8/8 Python tests. Do not repeat it.
 5. Morning night trainer review: read-only main Saved/Trainer/pmc-v4 and scheduler.log via Gemini; do not touch task schedule/main binaries and never consume massive raw telemetry (use TypeSafe telemetry).
 
 ## Boundaries / reproducibility
@@ -58,11 +53,12 @@ STEALTH bottom action-bar button / key 7, selected mixed/all-on toggle, crouched
 - Anthropic API spend by Codex: **$0**. Main API ledger observed read-only: $14.6072, cap $30. No key printed. TypeSafe audits used separately.
 - Earlier compiler C4458 local Mesh/member shadowing fixed before successful runtime builds. No unresolved build/test failure at this checkpoint.
 
-## Codex resumed interim leadership (2026-11-11, after Claude cover)
-- Runtime checkpoint is now committed by Claude as 90a6bf64; chat banner 56d26c46 and Gemini 013 reports are integrated. Current user queue: stealth leftovers, C5 (03fea4c6), C6 (14a91b4e), then chat loop. Earlier hand-back headings are historical.
+## Codex resumed interim leadership (2026-11-11, after Claude cover; status updated 2026-11-11)
+- Runtime checkpoint is committed by Claude as 90a6bf64; chat banner 56d26c46 and Gemini 013 reports are integrated. Current queue: Claude-relayed tasks 004 and 005, then C5 (03fea4c6), C6 (14a91b4e), then chat loop. Earlier hand-back headings are historical.
 - Router script/config are absent in interim but available in main; classify was invoked read-only from its main path with PYTHONDONTWRITEBYTECODE=1, shell cwd interim. No main writes or router settings changes.
-- Routing trial: 3 | Codex main session | weapon-material lifecycle: implementation + real pistol/RPG smoke prepared, verification pending.
-- Routing trial: 3 | Codex main session | game-camera diagnosis/captures: pending.
-- Routing trial: 3 | Codex main session | six Gemini integration-test gaps: pending.
+- Routing trial: 3 | Codex main session | weapon-material lifecycle + expanded integration coverage: PASS after test-fixture corrections.
+- Routing trial: 3 | Codex main session | game-camera diagnosis/captures: PASS; three inspected frames copied to the permitted main evidence path.
+- Routing trial: 3 | Codex main session | six Gemini integration-test gaps: PASS (see final 003 report).
 - Routing trial: 2 | gpt-6-luna | read-only API lookup: partial REDO (first answer incorrectly called protected TickPatrolPerception public; access modifier verified and corrected). Corrected route uses public Enemy Tick after real StartPatrol; no files changed. Other useful corrections: invented ResetPatrolAlert/ApplyKnockdown signatures, actual female body path, death helper signature.
-- Working part 1: restore original override slots (including null), enroll late weapon mesh parts/rounds, restore/re-capture overrides around ApplyWeaponVisual. Build is a full 73-action rebuild after MSVC version changed; no completion claimed yet.
+- Working part 1 is complete: original override slots (including null) restore correctly; late parts and rounds are enrolled around ApplyWeaponVisual. See runtime fix `4d15a54f` and final 003 report.
+- Working part 2 is complete: expanded male/female, acoustic, animation, knockdown/death, and rendered verification passed. The documentation closeout is level 1 | gpt-6-luna | REDO: primary corrected date and stale queue/banner status; final reviewed. Latest status: tasks 004 and 005 then C5/C6; no completion is claimed for those queued tasks.
