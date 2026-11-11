@@ -1463,3 +1463,5 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
   No night system exists, so "removes night accuracy penalties" has no hook. Design decisions listed in docs/port/OPEN_QUESTIONS.md for the user.
 - Tests `CodexTactics.Survival.TacticalHeat.*` (7) + smoke `CodexTactics.TacticalHeatSmoke` (registered in `Scripts/test_map.json`, rule
   `tactical-heat`); `SaveRoundTripSmoke` covers the new save keys. Visual placeholders only — request #15 to Gemini (Niagara slots by path).
+
+2026-11-11 Codex interim: explicit primary-chat approval covers only 124 new Stealth/{Male,Female} copies. Generated with editor closed / SCC disabled, source SHA-256 unchanged. Gemini accepted read-only C5 prep (#132).

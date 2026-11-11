@@ -44,3 +44,10 @@ This is a living hand-back report and will be updated before Saturday.
 ## Stealth part 1 — verified pure rules/data
 
 Commit `feat(stealth): add configurable mode rules` (hash recorded on next update): `StealthModeRules.{h,cpp}`, four focused unit tests, and `Content/Data/AI/stealth_mode.json`. Selection toggle, fire/sprint break conditions and range/buildup/noise multipliers tested. Build Succeeded and all four tests PASS; the later runtime regression run passed 44/44. This commit does not claim the full feature or asset import complete. Runtime actor/HUD/perception and animation work remain separate.
+
+## Stealth retarget checkpoint (2026-11-11)
+- Primary-chat user explicitly authorized ONLY 124 new copies (62 male, 62 female), then confirmed the editor was closed. The earlier automatic-review rejection was resolved by that explicit authorization.
+- setup_stealth_animation.py completed with SourceControl disabled; each destination contains exactly 62 .uasset files. Temporary retargeter was never saved. Source-pack SHA-256 verification PASS (source_pack_unchanged=true).
+- Output: Content/Characters/Animations/Stealth/{Male,Female}; LFS. Source pack / main / other assets untouched. Measurement evidence: Saved/Logs/setup_stealth_animation.json and StealthRetarget.log.
+- This checkpoint commits generated copies and their reproducible script only. Runtime wiring and full StealthModeSmoke remain in progress; no claim of task completion.
+- Gemini independently reviewed pair commit c6a68eb4 PASS (chat #126); accepted read-only C5 validator preparation (chat #132).
