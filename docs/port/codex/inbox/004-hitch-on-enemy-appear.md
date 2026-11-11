@@ -70,3 +70,9 @@ So it is not only the first Play: EVERY first use of an enemy type / its mesh / 
 gameplay frame. The fix must cover the whole roster of the level: preload (async, at level start) all enemy classes the level's
 Pressure / ambush / PmcEncounter / horde tables can spawn, their meshes, weapons and anim clips; resolve ladder clips once per level
 (shared), not per spawned character. Probe: spawn one of each enemy type in a fresh session, no frame > 250 ms.
+
+## Inputs from Gemini (in interim): 014-hitch-scan.report.md (243 clips sync in UOperativeAnimInstance::NativeInitializeAnimation;
+Pressure + PmcEncounter both at 30 s) and 015-preload-manifest.draft.json / .report.md (all spawnable assets on Depot, 5 enemy
+archetypes; SK_Cutter_1slot = the Cutter). CAUTION: section 4 of the 015 report cites a non-existent "hitch-...-play3.log" and puts
+SK_Cutter_1slot in frame 614 - wrong: only play.log (frame 614 waited for SKM_PmcOperator) and play2.log (frame 835, SK_Cutter_1slot)
+exist. Verify the manifest against the code / data before using it.
