@@ -40,3 +40,9 @@ Read docs/port/codex/README.md in C:\Users\Zephyrus15Duo\Documents\Unreal Projec
   (e.g. a sub-run `codex exec -m <cheaper model>` or a cheaper profile - say which you use); level 3-4 -> your main model. Log every
   task in your report as `level | model | result (pass / redo)`. If the cheaper model's work has to be redone often, say so - we drop it.
 - **Chat:** post results with a commit hash and real questions only - no "accepted" / "starting" lines (each post wakes Claude).
+
+## Local model (designer 2026-11-11, free)
+`python Scripts/Tools/local_task.py --prompt "..." --files <f...> [--out answer.md]` runs qwen2.5-coder:14b on the designer's RTX 3080
+(Ollama, ~25-33 tok/s warm, slower while the night trainer runs). Use it for model-router level 1 (and small level 2) before any paid
+model: JSON edits, one-file explanations, one-liners, test boilerplate, commit messages, short summaries. Verify the answer. Log
+`level | local | result` in your report like the router trial.
