@@ -381,6 +381,12 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	float GetMaxSpeed() const;
 
+	/**
+	 * His allowed walk now, cm/s: GetMaxSpeed without the sprint (stance, wound tier, cold, carrying) - what the formation's wound pace
+	 * (SquadWoundPaceRules) compares.
+	 */
+	float GetAllowedWalkSpeed() const;
+
 	/** True while the operative has a move order in progress or still visibly moves. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
 	bool IsMoving() const;

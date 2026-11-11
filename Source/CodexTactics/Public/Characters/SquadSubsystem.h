@@ -5,6 +5,7 @@
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadFormation.h"
 #include "Characters/SquadRegroupRules.h"
+#include "Characters/SquadWoundPaceRules.h"
 #include "Characters/FirePostureRules.h"
 #include "Formation/FormationBypassRules.h"
 #include "Formation/FormationCornerHoldRules.h"
@@ -219,6 +220,12 @@ public:
 	bool IsFastRegrouping(const AOperativeCharacter* Operative) const;
 	/** Codex.Squad.FastRegroup (default 1); 0 = the old rule (B puts everyone straight into the formation's pacing). */
 	static bool IsFastRegroupEnabled();
+
+	/**
+	 * The wound pace this frame (the game designer's decision 2026-11-11, SquadWoundPaceRules): a wounded member in the formation - the
+	 * formation walks at OutCapSpeed (cm/s) set by OutSlowest. False when nobody wounded sets it (or the rule is off / Solo / no formation).
+	 */
+	bool GetFormationWoundPace(float& OutCapSpeed, AOperativeCharacter*& OutSlowest) const;
 
 	/**
 	 * The level start's squad mode was applied, or a save / an explicit switch chose one first (ApplyLevelStartMode). Smokes written for the
@@ -1471,6 +1478,16 @@ private:
 	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector2D> FrameGivenByMember;
 	TWeakObjectPtr<AOperativeCharacter> FramePaceLeader;
 	float FramePace = 1.f;
+	/** The wound pace of this frame (UpdateFormationWoundPace; unset = none) and the member who sets it. */
+	TOptional<FSquadWoundPace> FrameWoundPace;
+	TWeakObjectPtr<AOperativeCharacter> FrameWoundPaceBy;
+	/** The pace last logged (a change of the cap / its member logs one line). */
+	float LoggedWoundPaceCap = -1.f;
+	TWeakObjectPtr<AOperativeCharacter> LoggedWoundPaceBy;
+	/** Fills FrameWoundPace from the members in the formation; ends the leader's sprint while it holds (limit_sprint). */
+	void UpdateFormationWoundPace(AOperativeCharacter& LeaderRef);
+	/** The rule is on and caps a wounded follower's formation move (SquadWoundPaceRules::FollowerTopSpeed / CapFixedSpeed). */
+	bool IsWoundPaceCapOn() const;
 	FFormationSectorState Sectors;
 	/** Formation sectors (bug 2026-10-26): each former leader's own facing and the world time he stopped leading (SetLeader). */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, TPair<float, double>> LeaderFacingMemory;

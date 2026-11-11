@@ -754,6 +754,8 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	const FFormationConfig& Config = FormationTuning::Get();
 	Sectors.bActiveThisFrame = true;
 	Sectors.MemberCount = 1 + Followers.Num();
+	// The game designer's decision 2026-11-11: a wounded member in the formation sets its pace (before the mode: a sprint it ends is a walk).
+	UpdateFormationWoundPace(LeaderRef);
 	const int32 Count = FMath::Min(Sectors.MemberCount, 4);
 	Sectors.HeadingYaw = static_cast<float>(FormationHeading.Rotation().Yaw);
 	Sectors.bHeadingValid = true;
@@ -1051,7 +1053,8 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		if (Sectors.Mode == EFormationMode::Walk || Sectors.Mode == EFormationMode::Forward)
 		{
 			FramePaceLeader = &LeaderRef;
-			FramePace = Config.PacePatrol;
+			// Decision 2026-11-11: with a wounded member in the formation, at most pace_share x his allowed walk (SquadWoundPaceRules).
+			FramePace = SquadWoundPaceRules::LeaderPaceMultiplier(Config.PacePatrol, LeaderRef.GetAllowedWalkSpeed(), FrameWoundPace);
 		}
 	}
 }
@@ -1223,6 +1226,9 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 		&& !Follower.bReformTurned;
 	const bool bRun = !bRearCover && (LeaderRef.IsSprinting() || Operative.GetStance() == EOperativeStance::Prone);
 	const float Top = Operative.GetMaxSpeed(); // his walk / crawl, or the sprint he copies from the leader
+	// Decision 2026-11-11: a wounded follower's move never exceeds his allowed walk (FollowerMove's catch-up multiplier is taken out of his top).
+	const bool bWoundCap = IsWoundPaceCapOn() && Operative.IsWounded();
+	const float MoveTop = SquadWoundPaceRules::FollowerTopSpeed(Top, bWoundCap, FormationTuning::Get().MoveCatchupMult, SquadWoundPaceTuning::Get(), bWoundCap);
 	// Bug D (2026-10-26): walking into the wall layout along the wall, a team-mate standing in the line between him and his place is stepped
 	// round on the open side (the nav mesh ignores bodies: a man re-forming past the crouched leader pushed against him for good).
 	FVector2D MoveTarget = Target;
@@ -1344,11 +1350,11 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	{
 		Follower.bParked = false;
 		Follower.bCatchUp = true;
-		Operative.FollowTo(SlotLocation, FormationTuning::Get().PaceWalkSpeed);
+		Operative.FollowTo(SlotLocation, SquadWoundPaceRules::CapFixedSpeed(FormationTuning::Get().PaceWalkSpeed, Top, bWoundCap, SquadWoundPaceTuning::Get(), bWoundCap));
 		return true;
 	}
 	const FormationRuntime::FFollowerMove Move = FormationRuntime::FollowerMove(Here, static_cast<float>(Operative.GetActorRotation().Yaw), MoveTarget,
-		SlotVelocity, Jitter, Top, bRearCover ? FMath::Min(Top, FormationTuning::Get().PaceWalkSpeed) : Top, bRun, FormationTuning::Get());
+		SlotVelocity, Jitter, MoveTop, bRearCover ? FMath::Min(Top, FormationTuning::Get().PaceWalkSpeed) : Top, bRun, FormationTuning::Get());
 	Follower.bCatchUp = !Move.bStop && Move.Speed > 1.f;
 	Follower.CatchUpMoveYaw = FormationMath::YawOf(Move.Velocity);
 	const bool bSlotStill = SlotVelocity.Size() < FormationRuntime::SlotStillSpeed;

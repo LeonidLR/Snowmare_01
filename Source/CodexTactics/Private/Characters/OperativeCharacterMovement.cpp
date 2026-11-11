@@ -593,6 +593,11 @@ float AOperativeCharacter::GetMaxSpeed() const
 	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, bSprinting, IsWounded(), bCarrying) * ColdSpeedMultiplier * GetWoundTierSpeedScale();
 }
 
+float AOperativeCharacter::GetAllowedWalkSpeed() const
+{
+	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, /*bSprinting*/ false, IsWounded(), bCarrying) * ColdSpeedMultiplier * GetWoundTierSpeedScale();
+}
+
 void AOperativeCharacter::HandleHealthChanged(float NewHealth, float MaxHealth, float Delta)
 {
 	if (bSprinting && !CanSprint())

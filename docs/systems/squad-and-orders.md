@@ -116,6 +116,44 @@ pacing; the squad takes very long to join up. Members far from their slot must f
   numbers), pass 1 the fix (armed, sprinting, within 6 m in budget and < 60 % of the old time, joined close, everyone at his slot), pass 2 the
   leader walks 10 m on after B (chased, reached, formed up). Tests `CodexTactics.Squad.Regroup.*`.
 
+## Wounded member in the formation (the game designer's bug + decision "a" 2026-11-11, branch fix/wounded-follower-pace)
+
+Designer: "a WOUNDED operative who is not the leader but walks in the formation (a) does not keep the formation, (b) looks only along his
+movement, (c) falls far behind while his injured clip looks as if he tries to keep the healthy pace." Decision "a": while a wounded member is in
+the formation the whole squad slows to the most wounded member's pace.
+
+- **Cause:** the slots move with the leader's patrol walk (walk 220 x `pace.patrol` 0.8 = 176 cm/s) while a wounded man may walk x0.65
+  (143) or, badly wounded, x0.45 (99). The follow law (`FormationRuntime::FollowerMove`) asked him for his walk x `move.catchup_mult` 1.25
+  (179 / 124 cm/s - above his allowed walk, so the injured clip played hurried), he still fell behind, and once more than
+  `move.rear_turn_lag` (150 cm) behind as the rear guard (the place reassignment hands the rear place to the man farthest back) the v2.6
+  rule turned him round to catch up facing his run - "looks only along his movement".
+- **Now** (pure `SquadWoundPaceRules`, `USquadSubsystem::UpdateFormationWoundPace` in `SquadSubsystemWoundPace.cpp`, data
+  `Content/Data/AI/squad_wound_pace.json`, console `Codex.Squad.WoundPace` -1 = the file / 0 = the old pacing / 1 = on): each formation frame
+  the slowest wounded member (light / heavy tier; the leader included) sets the pace = `pace_share` 0.8 x his allowed walk
+  (`AOperativeCharacter::GetAllowedWalkSpeed`: stance, tier, cold, no sprint) - the fit squad's own share, so he keeps the fit men's margins
+  (x1.25 forward, x1.125 walking backwards). The leader's pace multiplier = min(`pace.patrol`, cap / his walk) (40 % HP: 114 cm/s, 25 %:
+  79 cm/s); a wounded follower's formation move tops out at his allowed walk (`cap_wounded_follower`: FollowerMove's catch-up multiplier is
+  taken out of his top; the walk to a slot on another level too); a leader's sprint ends while the pace holds (`limit_sprint`: the whole
+  squad walks - the formation's Run mode would leave the wounded man behind). Log line `[Formation] wound pace: ...`.
+- **His look:** unchanged code - kept within his slot, he is never rear-turned, so his body faces his formation look (`SetFormationLookYaw`)
+  and the injured layer's 8-direction `Walk_Injured_BS` blend (relative to the body, as the healthy men's strafe) walks his legs along the
+  movement. The heavy tier: `Walk_Injured_Slow` inside its forward cone (`slow_forward_cone_deg` [35, 80]), the 8-direction injured walk at the
+  heavy speed outside it (sideways / backwards in his sector) - no change needed.
+- **Who does not set the pace:** the critically wounded (HP < 20 %, down, crawling - the squad would crawl): he crawls after his slot at his
+  own crawl speed (also capped, never pushed x1.25), the squad does not wait - heal him; members in Solo, on a fast regroup, on an order of
+  their own, panicking / knocked down / aboard. A fit crouched man does not set it (only the wound does).
+- **The wounded leader:** his own pace was already x0.8 of his wounded walk = the cap - unchanged; the fit followers follow his slower slots
+  (no overrun; smoke `leader_light`). A wounded leader with a heavier follower slows further to the follower's pace.
+- **Fast regroup on B:** unchanged - it never drags a wounded man past his allowed speed (the light tier runs its wounded run 480 x 0.65 =
+  312, the run the tier allows; the heavy tier walks its heavy walk; nobody wounded sprints - `CodexTactics.Squad.WoundPace.FastRegroupNeverAboveAllowed`).
+  The regrouper sets no pace until he joins (a heavy-wounded regrouper chasing a leader who walks on only closes when the leader stops).
+- **Checks:** tests `CodexTactics.Squad.WoundPace.*`; smoke `WoundedFollowerSmoke` (L_MovementTest, formation of 3, 25 m walk): off_light
+  (the old pace), on_light / on_heavy (the squad at 0.8 x his walk, he never walks faster than his walk, slot p95 <= 150 cm, faces his look
+  >= 85 % of the walk, injured clips), leader_light, on_sprint, on_critical; arg `shots` (rendered) = game-camera frames
+  `Saved/Screenshots/WoundedFollower/game_<pass>.png`.
+
+- **Verified completion (Codex task 002, 2026-11-11):** the previously untracked `squad_wound_pace.json` is included. Build Succeeded; Squad 39/39 and Animation.Injured 9/9; WoundedFollower, InjuredLocomotion, FastRegroup, FormationLab and SoloStart smokes all PASS without retries, plus the rendered wounded-follower smoke. Light / heavy: leader 114 / 79 cm/s, wounded max 143 / 99 cm/s, slot p95 34 / 53 cm, formation look 100 %. Wounded leader: follower slot p95 19 / 22 cm, neither ahead of the slot. Sprint ends in 0.02 s; critical member crawls at max 40 cm/s and sets no pace. Game-camera frames `game_on_light.png` / `game_on_heavy.png` copied to main `Saved/Orchestrator/woundfollow/`.
+
 ## Group cover order: the others go along (game designer 2026-10-20)
 
 - **Reverses the 2026-10-11 decision "Followers in cover: NO automatic stacking - cover is taught as manual orders per operative" for

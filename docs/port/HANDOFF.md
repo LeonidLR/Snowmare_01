@@ -7,6 +7,7 @@ it was split verbatim, nothing was dropped - old `HANDOFF §N` references resolv
 Last update: 2026-10-19 (split into an index + per-system docs + CHANGELOG; the per-system content is current to main `2a6561c`).
 
 **Codex task 001 (`codex/review-fixes`, 2026-11-11):** all four review fixes ready for Claude review (world/capsule null guards, injured-raise telemetry with timing preserved, critical-wound stance on regroup). Build, 47 focused tests, three required smokes and Depot smoke PASS; report `docs/port/codex/outbox/001-review-fixes.report.md`. No merge or push.
+**Codex task 002 (`fix/wounded-follower-pace`, 2026-11-11):** verified wounded-follower pace, critical crawlers excluded; shipped data toggle included. Build, 48 focused tests, five required smokes and rendered smoke PASS. Two game-camera frames in main `Saved/Orchestrator/woundfollow/`; report `docs/port/codex/outbox/002-wounded-follower-finish.report.md`. Ready for Claude review.
 
 **Project status report (non-technical, for planning): `docs/port/PROJECT_STATUS_2026-10-14.md`.**
 
