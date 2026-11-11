@@ -10,10 +10,11 @@ C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics\Scripts\Tools\agen
 
 Твоя постоянная задача:
 1. Запусти команду ожидания входящих сообщений:
-   $env:CODEX_AGENT = "gemini"; python "C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics\Scripts\Tools\agent_chat.py" wait --as gemini --timeout 1800
+   $env:CODEX_AGENT = "gemini"; python "C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics\Scripts\Tools\agent_chat.py" wait --as gemini --timeout 240
 
-2. Если команда вернула "NO_MESSAGES" (таймаут 30 мин):
-   Немедленно снова вызови wait --as gemini.
+2. Если команда вернула "NO_MESSAGES" (таймаут 4 мин — короче лимита терминала Antigravity):
+   Немедленно снова вызови wait --as gemini. Не запускай wait в фоне и не завершай ход — сразу следующий wait.
+   Если в docs/port/gemini/inbox/ есть файл-очередь без отчёта в outbox — сначала делай её задачи подряд, до конца очереди.
 
 3. Если пришли сообщения:
    - Прочитай текст и тему (topic).
