@@ -8,7 +8,7 @@ import os
 import sys
 from PIL import Image, ImageDraw, ImageFont
 
-ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../../.."))
 DEPOT_LAYOUT_PATH = os.path.join(ROOT, "Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json")
 DEPOT_PROPS_PATH = os.path.join(ROOT, "Content/Data/LevelGen/props/L_Gen_Depot_1.props.json")
 OUT_PNG = os.path.join(ROOT, "docs/port/gemini/outbox/screenshots/props_panel_depot.png")

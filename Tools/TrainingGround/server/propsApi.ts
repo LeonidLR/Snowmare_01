@@ -124,25 +124,37 @@ export function listPropsFiles(): PropsFileInfo[] {
   return results;
 }
 
+export const BARE_NAME_RE = /^[A-Za-z0-9_.-]+$/;
+
+export function isValidPropsName(name: string): boolean {
+  if (!name || typeof name !== 'string') return false;
+  if (name.includes('/') || name.includes('\\') || name.includes('..')) return false;
+  return BARE_NAME_RE.test(name);
+}
+
 export function resolvePropsFile(mapOrName: string): { fullPath: string; isFixture: boolean } | null {
-  if (fs.existsSync(mapOrName)) {
-    const isFixture = mapOrName.includes('fixtures');
-    return { fullPath: path.resolve(mapOrName), isFixture };
+  if (!isValidPropsName(mapOrName)) {
+    return null;
   }
 
   const clean = mapOrName.replace(/\.props\.json$/, '').replace(/\.json$/, '');
-  const candidates = [
-    { p: path.join(PROPS_DIR, `${clean}.props.json`), isFixture: false },
-    { p: path.join(PROPS_DIR, `${clean}.json`), isFixture: false },
-    { p: path.join(PROPS_FIXTURES_DIR, `${clean}.props.json`), isFixture: true },
-    { p: path.join(PROPS_FIXTURES_DIR, `${clean}.json`), isFixture: true },
-    { p: path.join(PROPS_FIXTURES_DIR, `golden_${clean}.json`), isFixture: true },
-    { p: path.join(PROPS_FIXTURES_DIR, `golden_in_${clean}.props.json`), isFixture: true },
+  const candidates: Array<{ p: string; dir: string; isFixture: boolean }> = [
+    { p: path.join(PROPS_DIR, `${clean}.props.json`), dir: PROPS_DIR, isFixture: false },
+    { p: path.join(PROPS_DIR, `${clean}.json`), dir: PROPS_DIR, isFixture: false },
+    { p: path.join(PROPS_FIXTURES_DIR, `${clean}.props.json`), dir: PROPS_FIXTURES_DIR, isFixture: true },
+    { p: path.join(PROPS_FIXTURES_DIR, `${clean}.json`), dir: PROPS_FIXTURES_DIR, isFixture: true },
+    { p: path.join(PROPS_FIXTURES_DIR, `golden_${clean}.json`), dir: PROPS_FIXTURES_DIR, isFixture: true },
+    { p: path.join(PROPS_FIXTURES_DIR, `golden_in_${clean}.props.json`), dir: PROPS_FIXTURES_DIR, isFixture: true },
   ];
 
   for (const c of candidates) {
     if (fs.existsSync(c.p)) {
-      return { fullPath: c.p, isFixture: c.isFixture };
+      const fullPath = path.resolve(c.p);
+      const rel = path.relative(c.dir, fullPath);
+      if (rel.startsWith('..') || path.isAbsolute(rel)) {
+        continue;
+      }
+      return { fullPath, isFixture: c.isFixture };
     }
   }
 
@@ -150,27 +162,35 @@ export function resolvePropsFile(mapOrName: string): { fullPath: string; isFixtu
   const all = listPropsFiles();
   const match = all.find((f) => f.map === mapOrName || f.id === clean || f.name === mapOrName);
   if (match && fs.existsSync(match.filePath)) {
-    return { fullPath: match.filePath, isFixture: match.isFixture };
+    const fullPath = path.resolve(match.filePath);
+    const expectedDir = match.isFixture ? PROPS_FIXTURES_DIR : PROPS_DIR;
+    const rel = path.relative(expectedDir, fullPath);
+    if (!rel.startsWith('..') && !path.isAbsolute(rel)) {
+      return { fullPath, isFixture: match.isFixture };
+    }
   }
 
   return null;
 }
 
 export function resolveLayoutFile(layoutName: string): GenLayout | null {
-  if (!layoutName) return null;
+  if (!layoutName || !isValidPropsName(layoutName)) return null;
   const clean = layoutName.replace(/\.layout\.json$/, '').replace(/\.json$/, '');
   const candidates = [
-    path.join(ACCEPTED_DIR, `${clean}.json`),
-    path.join(PROPS_FIXTURES_DIR, `${clean}.layout.json`),
-    path.join(PROPS_FIXTURES_DIR, `${clean}.json`),
-    path.join(ROOT, 'Saved/TrainingGround/levelgen', `${clean}.json`),
-    path.join(ROOT, 'Content/Data/LevelGen/refs', `${clean}.json`),
+    { p: path.join(ACCEPTED_DIR, `${clean}.json`), dir: ACCEPTED_DIR },
+    { p: path.join(PROPS_FIXTURES_DIR, `${clean}.layout.json`), dir: PROPS_FIXTURES_DIR },
+    { p: path.join(PROPS_FIXTURES_DIR, `${clean}.json`), dir: PROPS_FIXTURES_DIR },
+    { p: path.join(ROOT, 'Saved/TrainingGround/levelgen', `${clean}.json`), dir: path.join(ROOT, 'Saved/TrainingGround/levelgen') },
+    { p: path.join(ROOT, 'Content/Data/LevelGen/refs', `${clean}.json`), dir: path.join(ROOT, 'Content/Data/LevelGen/refs') },
   ];
 
-  for (const p of candidates) {
-    if (fs.existsSync(p)) {
+  for (const c of candidates) {
+    if (fs.existsSync(c.p)) {
+      const fullPath = path.resolve(c.p);
+      const rel = path.relative(c.dir, fullPath);
+      if (rel.startsWith('..') || path.isAbsolute(rel)) continue;
       try {
-        return JSON.parse(fs.readFileSync(p, 'utf8')) as GenLayout;
+        return JSON.parse(fs.readFileSync(fullPath, 'utf8')) as GenLayout;
       } catch {
         // continue
       }
@@ -185,9 +205,16 @@ export function readPropsData(mapOrName: string): {
   balance?: Record<string, unknown> | null;
   filePath: string;
 } {
+  if (!isValidPropsName(mapOrName)) {
+    throw {
+      status: 400,
+      message: `Invalid props map name "${mapOrName}". Bare name matching /^[A-Za-z0-9_.-]+$/ required.`,
+    };
+  }
+
   const resolved = resolvePropsFile(mapOrName);
   if (!resolved) {
-    throw new Error(`Props file not found for "${mapOrName}"`);
+    throw { status: 404, message: `Props file not found for "${mapOrName}"` };
   }
 
   const text = fs.readFileSync(resolved.fullPath, 'utf8');
@@ -227,13 +254,65 @@ export function savePropsData(
   layers: PropLayer[],
   overrides?: PropOverride[]
 ): SavePropsResult {
-  const resolved = resolvePropsFile(mapOrName);
-  let targetPath = resolved?.fullPath;
+  if (!isValidPropsName(mapOrName)) {
+    throw {
+      status: 400,
+      message: `Invalid props map name "${mapOrName}". Only bare names matching /^[A-Za-z0-9_.-]+$/ without path separators are allowed.`,
+    };
+  }
 
-  if (!targetPath) {
-    // If not found, target Content/Data/LevelGen/props/<name>.props.json
-    const clean = mapOrName.replace(/\.props\.json$/, '').replace(/\.json$/, '');
-    targetPath = path.join(PROPS_DIR, `${clean}.props.json`);
+  // Refuse fixtures and golden files
+  if (
+    mapOrName.startsWith('golden_') ||
+    mapOrName.includes('fixture') ||
+    mapOrName.startsWith('golden')
+  ) {
+    throw {
+      status: 400,
+      message: `Refused: "${mapOrName}" is a test fixture. PUT/save cannot modify fixtures.`,
+    };
+  }
+
+  // Refuse extensions other than .props.json if an extension was explicitly provided
+  if (mapOrName.includes('.') && !mapOrName.endsWith('.props.json')) {
+    throw {
+      status: 400,
+      message: `Refused: target file "${mapOrName}" must end with .props.json.`,
+    };
+  }
+
+  const resolved = resolvePropsFile(mapOrName);
+  if (resolved?.isFixture || resolved?.fullPath.includes('fixtures') || path.basename(resolved?.fullPath ?? '').startsWith('golden_')) {
+    throw {
+      status: 400,
+      message: `Refused: "${mapOrName}" resolves to a test fixture. Edits to fixtures are forbidden.`,
+    };
+  }
+
+  const clean = mapOrName.replace(/\.props\.json$/, '').replace(/\.json$/, '');
+  const targetPath = resolved ? resolved.fullPath : path.join(PROPS_DIR, `${clean}.props.json`);
+
+  // Ensure targetPath is strictly inside PROPS_DIR
+  const rel = path.relative(PROPS_DIR, targetPath);
+  if (rel.startsWith('..') || path.isAbsolute(rel) || targetPath.includes('fixtures')) {
+    throw {
+      status: 400,
+      message: 'Path traversal or fixture modification refused: target file must reside directly in PROPS_DIR.',
+    };
+  }
+
+  if (!targetPath.endsWith('.props.json')) {
+    throw {
+      status: 400,
+      message: `Invalid file extension: target "${targetPath}" must end with .props.json.`,
+    };
+  }
+
+  if (path.basename(targetPath).startsWith('golden_')) {
+    throw {
+      status: 400,
+      message: 'Refused: cannot save to golden files.',
+    };
   }
 
   if (!fs.existsSync(targetPath)) {
