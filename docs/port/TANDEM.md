@@ -1004,6 +1004,8 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 3/4): fix(squad): preserve critical wound stance on regroup Review finding 4: skip SetStance and MarkStanceFromSquad for critically wounded followers, preserving their prone stance.
+
 - 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 2/4): fix(combat): count injured raise holds after fire refusals Review finding 3: keep DemandInjuredRaise before turning to preserve the 0.25 s raise, and evaluate the hold and its telemetry after crawl, sniper move and aim refusals.
 
 - 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 1/4): fix(squad): guard fast regroup time without a world Review finding 2: use the same zero-time fallback as ArmFastRegroup when no world is available.

@@ -6,7 +6,7 @@ it was split verbatim, nothing was dropped - old `HANDOFF §N` references resolv
 
 Last update: 2026-10-19 (split into an index + per-system docs + CHANGELOG; the per-system content is current to main `2a6561c`).
 
-**Codex task 001 (`codex/review-fixes`, 2026-11-11):** fixes 2/4 committed for review; Review finding 3: keep DemandInjuredRaise before turning to preserve the 0.25 s raise, and evaluate the hold and its telemetry after crawl, sniper move and aim refusals. No merge or push.
+**Codex task 001 (`codex/review-fixes`, 2026-11-11):** fixes 3/4 committed for review; Review finding 4: skip SetStance and MarkStanceFromSquad for critically wounded followers, preserving their prone stance. No merge or push.
 
 **Project status report (non-technical, for planning): `docs/port/PROJECT_STATUS_2026-10-14.md`.**
 
