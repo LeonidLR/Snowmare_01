@@ -43,3 +43,15 @@ Stop and ask the designer (chat) if a step needs a design decision that the docs
 ## Saturday hand-back
 Write `docs/port/codex/outbox/INTERIM_REPORT.md`: every task branch merged into interim (commit, what, tests), anything skipped / broken,
 open questions. Claude reviews `git log main..interim/2026-11-12` and merges.
+
+## Tools you may use (designer 2026-11-11)
+- **Jev (TypeSafe)**: `python Scripts/Tools/typesafe_triage.py --audit-diff --agent codex` (mandatory before merges), `Scripts/test.ps1 -Smart`
+  (impact-based test selection), `python Scripts/Tools/typesafe_triage.py --telemetry <runs.jsonl>` for trainer / bot logs (never read raw
+  logs into context). See .claude/skills/typesafe-ai for the API.
+- **Anthropic API** (the designer's credit, NOT Claude's subscription): `python Scripts/Tools/api_task.py --model claude-sonnet-5-5
+  --effort medium --prompt-file <brief> --files <files...> --out <answer.md> --max-tokens 12000 --label codex-<what> --budget-usd 30`.
+  Load the key into the process only: `$env:ANTHROPIC_API_KEY = [Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY','User')` -
+  NEVER print it. `--budget-usd 30` is the hard cap on the WHOLE ledger (Saved/Orchestrator/api_spend.jsonl, ~14.6 $ spent now), so you
+  have ~15 $ until Saturday. Use it for second-opinion reviews of diffs (Sonnet, ~0.05-0.2 $), Gemini branch reviews, and patch drafts
+  for well-scoped C++ (split big patches into 2-3 file calls; Opus only for design). Always `--label codex-...`. List the spend in
+  INTERIM_REPORT.md.
