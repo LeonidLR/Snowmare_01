@@ -1,7 +1,7 @@
 # Implementation Map #16 — Character Death Ragdoll & Standing Corpses Fix
 
 **Author:** Gemini (Architecture & Systems Specialist)  
-**Date:** 2026-11-11  
+**Date:** 2026-11-11 (Updated after Codex review #196)  
 **Target:** Task #16 (`pl-ragdoll`) & Codex Task 005 — Рэгдолл (физика падений и тел) & Исправление застывших трупов на Depot  
 **Target Assignee:** Codex / Claude  
 **Governing Documents:** `docs/port/codex/inbox/005-dead-enemies-standing-ragdoll.md`, `docs/port/TASK_BOARD.md` §16, `docs/systems/pmc-squad-ai.md`
@@ -20,27 +20,27 @@ Code inspection reveals three concurrent root causes:
 
 ---
 
-## 2. Depot Archetype Physics Asset Inventory
+## 2. Depot Archetype Physics Asset & Skeleton Compatibility Audit
 
-Per designer requirement (2026-11-11), every enemy archetype appearing on Depot plus operative bodies has been audited for Physics Asset (`UPhysicsAsset`) availability on disk:
+Per designer requirement and Codex review #196, every enemy archetype appearing on Depot plus operative bodies has been audited directly against the `.uasset` binary import tables and runtime CDOs for exact **Skeleton $\leftrightarrow$ Physics Asset** binding compatibility:
 
-| Archetype / Character | Blueprint Class | Skeletal Mesh Path | Physics Asset (`.uasset`) Path | Status | Notes |
+| Archetype / Character | Blueprint Class | Skeletal Mesh Path | Assigned Runtime Skeleton | Assigned Physics Asset (`.uasset`) | Compatibility & Verification Status |
 | :--- | :--- | :--- | :--- | :--- | :--- |
-| **Frost Hound** | `BP_Enemy_Hound` | `/Game/Combat_Dog/Mesh/SK_Combat_Dog` | `/Game/Combat_Dog/Mesh/PA_Combat_Dog.uasset` | **PRESENT** | Custom quadruped dog ragdoll setup. |
-| **Frost Brute** | `BP_Enemy_Brute` | `/Game/Mutant_monster_1/Meshes/base_mesh/SK_base_mesh_1` | `/Game/Mutant_monster_1/Meshes/base_mesh/PHYS_baze_mesh_PhysicsAsset_1.uasset` | **PRESENT** | Heavy humanoid physics asset. |
-| **Frostbitten** | `BP_Enemy_Frostbitten` | `/Game/mutant_monster_2/base_mesh/SK_base_mesh` | `/Game/mutant_monster_2/base_mesh/PHYS_base_mesh_PhysicsAsset.uasset` | **PRESENT** | Standard humanoid mutant ragdoll. |
-| **Military Zombie** (Var 1..3) | `BP_Enemy_MilitaryZombie` | `/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1..3` | `/Game/military_zombie_set2/Meshes/mech_separate/PA_bodi_set_2.uasset` | **PRESENT** | Shared across variants via `PA_bodi_set_2` / `PA_bodi2_set_2`. |
-| **Cutter Mech-Hound** | `BP_Enemy_Cutter` | `/Game/Biochemical_Monster_2/baze_mech/ue4/SKM_baze_mesh` | `/Game/Biochemical_Monster_2/baze_mech/ue4/PA_Mannequin_PhysicsAsset_2.uasset` | **PRESENT** | Quadruped / mech rig physics asset. |
-| **Marksman** | `BP_Enemy_Marksman` | `/Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh1` | `/Game/Biochemical_Monster_1/baze_mech/ue4/PA_Mannequin_baze_mesh_PhysicsAsset.uasset` | **PRESENT** | Humanoid sniper physics asset. |
-| **Spitter** | `None` (C++ default) | *None* (Static Cylinder `BodyMesh`) | *None* | **MISSING** | C++ placeholder cylinder. Uses `LayCorpseDown()` 90° tip. |
-| **Cryo Drone** | `None` (C++ default) | *None* (Drone model) | *None* | **MISSING** | Flying unit; falls by gravity or explodes in place. |
-| **Hostile PMC Operator** | `BP_Operative` (Hostile) | `/Game/Characters/Enemies/PMC/Operator/SKM_PmcOperator` | `/Game/Characters/Mannequins/Rigs/PA_Mannequin.uasset` | **PRESENT (Shared)** | UE5 Mannequin hierarchy. Matches `PA_Mannequin`. |
-| **Player Operative A** | `BP_Operative` | `/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a` | `/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a_PhysicsAsset.uasset` | **PRESENT** | Full humanoid survivor ragdoll. |
-| **Player Operative B** | `BP_Operative_FemaleSoldier`| `/Game/Female_Soldier/Mesh/SK_Female_soldier` | `/Game/Female_Soldier/Mesh/SK_Female_Soldier_Physics.uasset` | **PRESENT** | Military female soldier ragdoll. |
-| **Player Operative C** | `BP_Operative` (Explorer) | `/Game/Cyberpunk_Explorer_A/Meshes/SK_Cyberpunk_Explorer_A` | `/Game/Cyberpunk_Explorer_A/Meshes/Cyberpunk_Explorer_A_UE5_PhysicsAsset.uasset`| **PRESENT** | Full UE5 humanoid ragdoll. |
+| **Frost Hound** | `BP_Enemy_Hound` | `/Game/Combat_Dog/Mesh/SK_Combat_Dog` | `/Game/Combat_Dog/Mesh/CH_Combat_Dog` | `/Game/Combat_Dog/Mesh/PA_Combat_Dog.uasset` | **VERIFIED (1:1 Match)**. Quadruped dog rig. `SK_Hound_1slot` inherits identical PA. |
+| **Frost Brute** | `BP_Enemy_Brute` | `/Game/Mutant_monster_1/Meshes/base_mesh/SK_base_mesh_1` | `/Game/Mutant_monster_1/Meshes/base_mesh/SK_UE4_Mannequin_Skeleton` | `/Game/Mutant_monster_1/Meshes/base_mesh/PHYS_baze_mesh_PhysicsAsset_1.uasset` | **VERIFIED (1:1 Match)**. Humanoid mutant rig. `SK_Brute_1slot` inherits identical PA. |
+| **Frostbitten** | `BP_Enemy_Frostbitten` | `/Game/mutant_monster_2/base_mesh/SK_base_mesh` | `/Game/mutant_monster_2/base_mesh/SK_UE4_Mannequin_Skeleton` | `/Game/mutant_monster_2/base_mesh/PHYS_base_mesh_PhysicsAsset.uasset` | **VERIFIED (1:1 Match)**. Humanoid mutant rig. `SK_Frostbitten_1slot` inherits identical PA. |
+| **Military Zombie** (Var 1..3) | `BP_Enemy_MilitaryZombie` | `/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1..3` | `/Game/military_zombie_set2/Meshes/base_mesh/SKM_base_mesh_set2_1_Skeleton` | `/Game/military_zombie_set2/Meshes/base_mesh/PA_Mannequin.uasset` | **VERIFIED (1:1 Match)**. Pointed directly to `PA_Mannequin` in `base_mesh/`. `SK_MilitaryZombie_1_1slot` inherits identical PA. |
+| **Cutter Mech-Hound** | `BP_Enemy_Cutter` | `/Game/Biochemical_Monster_2/baze_mech/ue4/SKM_baze_mesh` | `/Game/Biochemical_Monster_2/baze_mech/ue4/SK_UE4_Mannequin_Skeleton` | `/Game/Biochemical_Monster_2/baze_mech/ue4/PA_Mannequin_PhysicsAsset_2.uasset` | **VERIFIED (1:1 Match)**. Mech/predator rig. `SK_Cutter_1slot` inherits identical PA. |
+| **Marksman** | `BP_Enemy_Marksman` | `/Game/Biochemical_Monster_1/baze_mech/ue4/SKM_baze_mesh1` | `/Game/Biochemical_Monster_1/baze_mech/ue4/SK_UE4_Mannequin_Skeleton` | `/Game/Biochemical_Monster_1/baze_mech/ue4/PA_Mannequin_baze_mesh_PhysicsAsset.uasset` | **VERIFIED (1:1 Match)**. Humanoid sniper rig. `SK_Marksman_1slot` inherits identical PA. |
+| **Hostile PMC Operator** | `BP_Operative` (Hostile) | `/Game/Characters/Enemies/PMC/Operator/SKM_PmcOperator` | `/Game/Characters/Enemies/PMC/Operator/SK_PmcOperator_Skeleton` | `/Game/Cyberpunk_Explorer_A/Meshes/Cyberpunk_Explorer_A_UE5_PhysicsAsset.uasset` | **VERIFIED (1:1 Match)**. Bound directly in `SKM_PmcOperator.uasset` to Cyberpunk Explorer UE5 PA (compatible UE5 hierarchy). |
+| **Player Operative A** | `BP_Operative` | `/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a` | `/Game/Post_Apo_Survivor/Demo/Mannequin/Character/Mesh/UE4_Mannequin_Skeleton` | `/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a_PhysicsAsset.uasset` | **VERIFIED (1:1 Match)**. Humanoid survivor rig. `SK_Post_Apo_Survivor_a_1slot` inherits identical PA. |
+| **Player Operative B** | `BP_Operative_FemaleSoldier`| `/Game/Female_Soldier/Mesh/SK_Female_soldier` | `/Game/Female_Soldier/Mesh/Female_Soldier_Skeleton` | `/Game/Female_Soldier/Mesh/SK_Female_Soldier_Physics.uasset` | **VERIFIED (1:1 Match)**. Female soldier rig. `SK_Female_Soldier_1slot` inherits identical PA. |
+| **Player Operative C** | `BP_Operative` (Explorer) | `/Game/Cyberpunk_Explorer_A/Meshes/SK_Cyberpunk_Explorer_A` | `/Game/Cyberpunk_Explorer_A/Meshes/Cyberpunk_Explorer_A_UE5_Skeleton` | `/Game/Cyberpunk_Explorer_A/Meshes/Cyberpunk_Explorer_A_UE5_PhysicsAsset.uasset` | **VERIFIED (1:1 Match)**. Full UE5 humanoid rig. |
+| **Spitter** | `None` (C++ default) | *None* (Static Cylinder `BodyMesh`) | *None* | *None* | **MISSING (Expected)**. C++ cylinder placeholder; uses `LayCorpseDown()` 90° tip code fallback. |
+| **Cryo Drone** | `None` (C++ default) | *None* (Static Drone model) | *None* | *None* | **MISSING (Expected)**. Flying unit; falls by gravity or explodes in place. |
 
 > [!IMPORTANT]
-> **Summary for Codex:** All primary combat archetypes active on Depot (`Hound`, `Brute`, `Frostbitten`, `MilitaryZombie`, `Cutter`, `Marksman`, and `PMC Operator`) **ALREADY HAVE** valid Physics Assets on disk. No new `.uasset` authoring in Unreal Editor is blocked or strictly required. Only the placeholder Spitter and CryoDrone lack physics assets, which correctly use code fallbacks.
+> **Summary on Physics Asset Compatibility:** All 10 active character meshes have confirmed 1:1 Physics Assets mapped to their exact runtime skeleton. Furthermore, automated test `EnemyLookBodiesAssetTest.cpp:66` explicitly asserts that every single-slot optimized body (`SK_*_1slot`) has `Each.Mesh->GetPhysicsAsset() == Mesh->GetPhysicsAsset()`. No physics asset creation or asset modification is needed.
 
 ---
 
@@ -54,8 +54,11 @@ Per designer requirement (2026-11-11), every enemy archetype appearing on Depot 
 | **Operative Death Handler** | `Source/CodexTactics/Private/Characters/OperativeCharacterHealth.cpp:52-132` | `AOperativeCharacter::HandleDied()` and `BecomeCorpse()`. |
 | **Corpse Lifecycle & Subsystem** | `Source/CodexTactics/Private/Characters/CorpseSubsystem.cpp:14-180` | `UCorpseSubsystem::Tick()` monitors settle time, counts caps, freezes rigid bodies, and fades oldest corpses. |
 | **Freeze & Settle Rules** | `Source/CodexTactics/Private/Characters/CorpseRules.cpp:5-17` | `CorpseRules::ShouldFreeze()` pure logic: evaluates settle duration, falling status, and ladder status. |
-| **Knockdown Component** | `Source/CodexTactics/Private/Combat/KnockdownComponent.cpp:1-250` | `UKnockdownComponent` handles blast reactions. Needs death guard. |
-| **Ledge Fall Component** | `Source/CodexTactics/Private/Movement/LedgeFallComponent.cpp:1-200` | Handles airborne drops and terminal velocity impacts. |
+| **Knockdown Component** | `Source/CodexTactics/Private/Combat/KnockdownComponent.cpp:1-250` | `UKnockdownComponent` handles blast reactions. Needs death guard via `!HealthComponent->IsAlive()`. |
+| **Ledge Fall Component** | `Source/CodexTactics/Private/Falls/LedgeFallComponent.cpp:1-200` | `ULedgeFallComponent` (in `Falls/`, header `Falls/LedgeFallComponent.h`) handles airborne drops and terminal velocity impacts. |
+| **Health Component API** | `Source/CodexTactics/Public/Combat/HealthComponent.h:49-50` | `bool IsAlive() const { return CurrentHealth > 0.0f; }`. Note: Check `!HealthComponent->IsAlive()` as there is no `IsDead()` method. |
+| **Suppression Subsystem** | `Source/CodexTactics/Public/Combat/SuppressionSubsystem.h:69` | `USuppressionSubsystem` is a `UTickableWorldSubsystem` (not an actor component). |
+| **Stagger Status Effect** | `Source/CodexTactics/Public/Data/CombatTypes.h:59` | `EStatusEffect::Stagger` managed directly on `UHealthComponent` (`HealthComponent->HasStatusEffect(EStatusEffect::Stagger)`). |
 
 ### 3.2. New Code Required (~15%)
 
@@ -65,8 +68,11 @@ Per designer requirement (2026-11-11), every enemy archetype appearing on Depot 
    - Maps damage type / weapon source (Kinetic, RPG Blast, Heavy Melee, Sniper) to linear impulse vectors and angular kick.
    - Evaluates whether body velocity has fallen below settle threshold ($v < 15\text{ cm/s}$, $\omega < 0.2\text{ rad/s}$) for $> 0.5\text{ s}$.
    - Manages simultaneous active ragdoll limits to protect frame budget ($< 4$ active simulating ragdolls concurrently).
-2. **Death State Guards Across Auxiliary Components:**
-   - In `UKnockdownComponent`, `UStaggerComponent`, `USuppressionComponent`, `UEnemyAnimInstance`: strictly abort and reject any event if `HealthComponent->IsDead()`.
+2. **Death State Guards Across Auxiliary Systems:**
+   - In `UKnockdownComponent` (`Combat/KnockdownComponent.cpp`): Abort if `OwnerHealth && !OwnerHealth->IsAlive()`.
+   - In `UHealthComponent` (`Combat/HealthComponent.cpp`): Ignore status effect application (`Stagger`, `Burning`, `Frozen`) when `!IsAlive()`.
+   - In `USuppressionSubsystem` (`Combat/SuppressionSubsystem.cpp`): Verify target `HealthComponent && HealthComponent->IsAlive()` before accumulating suppression pressure.
+   - In `UEnemyAnimInstance` (`Characters/EnemyAnimInstance.cpp`): Ensure death state prevents montage blend-out to idle.
 
 ---
 
@@ -100,15 +106,16 @@ Configured in `Content/Data/Combat/death_ragdoll.json`:
 
 ## 5. Insertion Points & Execution Flow
 
-### 5.1. Knockdown & Reaction Guards
+### 5.1. Knockdown Guard (Resolving Task 005 / Frame 7526 Bug)
 In `Source/CodexTactics/Private/Combat/KnockdownComponent.cpp`:
 ```cpp
 bool UKnockdownComponent::TryApplyKnockdown(const FVector& HitDirection, float Strength)
 {
     // Fix for Task 005 / Frame 7526 race condition:
+    // UHealthComponent exposes IsAlive(); do NOT call IsDead()
     if (OwnerHealth && !OwnerHealth->IsAlive())
     {
-        UE_LOG(LogCodexTactics, Verbose, TEXT("[Knockdown] Ignored: %s is already dead"), *GetOwner()->GetName());
+        UE_LOG(LogCodexTactics, Verbose, TEXT("[Knockdown] Ignored: %s is dead"), *GetOwner()->GetName());
         return false;
     }
     // Proceed with knockdown...
@@ -139,7 +146,7 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
     GetCapsuleComponent()->SetCollisionEnabled(ECollisionEnabled::NoCollision);
     GetCapsuleComponent()->SetCollisionResponseToAllChannels(ECR_Ignore);
 
-    // 3. Check for Ragdoll capability
+    // 3. Check for Ragdoll capability (PhysicsAsset present on mesh asset)
     USkeletalMeshComponent* Body = GetMesh();
     const bool bHasPhysicsAsset = Body && Body->GetSkeletalMeshAsset() && Body->GetSkeletalMeshAsset()->GetPhysicsAsset();
     
@@ -193,7 +200,7 @@ When `CorpseRules::ShouldFreeze()` evaluates to true:
   2. Applies lethal damage via Sniper Rifle $\to$ asserts ragdoll activates and character collapses.
   3. Ticks until settle time elapsed $\to$ asserts pelvis height $Z < 35\text{ cm}$ above floor (lying flat, NEVER standing).
   4. Spawns explosive RPG blast hitting multiple targets $\to$ asserts simultaneous ragdoll limits respected and no frame $> 250\text{ ms}$.
-  5. Asserts `UKnockdownComponent` does not fire get-up sequence on dead actors.
+  5. Asserts `UKnockdownComponent` does not fire get-up sequence on dead actors (`!IsAlive()`).
 
 ---
 
@@ -204,7 +211,7 @@ When `CorpseRules::ShouldFreeze()` evaluates to true:
    - *Recommended Default:* Retain authored cinematic death montages for player operatives during the death camera window ($1.8\text{ s}$); transition to ragdoll physics only if fatal damage came from massive explosive blast ($> 150\text{ damage}$), otherwise hold final authored pose.
 2. **Airborne / Roof Fall Ragdoll Transition:**
    - *Question:* When an operative or enemy falls from a high ledge / roof ($> 3\text{ m}$), should ragdoll activate during flight or upon ground impact?
-   - *Recommended Default:* Ragdoll activates upon ground impact if terminal velocity exceeds $12\text{ m/s}$ (fatal collision). During flight, preserve falling motion for predictable trajectory and obstacle clearing.
+   - *Recommended Default:* Ragdoll activates upon ground impact if terminal velocity exceeds $12\text{ m/s}$ (fatal collision). During flight, preserve falling motion via `ULedgeFallComponent` for predictable trajectory and obstacle clearing.
 3. **Corpse Loot Interaction Collision Profile:**
    - *Question:* When an operative approaches a frozen ragdoll to loot supplies, does the physical mesh block navigation?
    - *Recommended Default:* Frozen ragdolls set collision to `QueryOnly` with `ECC_Visibility` and `ECC_Interactable` enabled, ignoring `ECC_Pawn`. Operatives can smoothly walk up to or over remains without pathing hitches.
