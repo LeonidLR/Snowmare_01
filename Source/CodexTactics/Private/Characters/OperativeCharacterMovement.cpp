@@ -25,6 +25,7 @@
 #include "Level/CrawlGapActor.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationData.h"
+#include "NavMesh/NavMeshPath.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "Tactics/CoverTraceRules.h"
 #include "TimerManager.h"
@@ -366,10 +367,14 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 		const UPathFollowingComponent* TracedFollowing = AIController->GetPathFollowingComponent();
 		const FNavPathSharedPtr TracedPath = TracedFollowing ? TracedFollowing->GetPath() : nullptr;
 		const bool bValidPath = TracedPath.IsValid() && TracedPath->IsValid() && TracedPath->GetPathPoints().Num() > 0;
-		UE_LOG(LogCodexTactics, Display, TEXT("[MoveTrace] %s: path to (%.0f, %.0f, z %.0f): result %d, %d points, length %.0f, partial %d, ends %.0f cm from the goal (z %.0f)"),
+		// fix/pmc-onpoint-3d-detour: a crowd-following move skips the string pulling (UCrowdFollowingComponent::OnPathfindingQuery), so its
+		// path has 2 points (the ends) and GetLength is the straight line; the route itself is the navmesh corridor (polys, corridor length).
+		const FNavMeshPath* MeshPath = bValidPath ? TracedPath->CastPath<FNavMeshPath>() : nullptr;
+		UE_LOG(LogCodexTactics, Display, TEXT("[MoveTrace] %s: path to (%.0f, %.0f, z %.0f): result %d, %d points, length %.0f, partial %d, ends %.0f cm from the goal (z %.0f), corridor %d polys / %.0f cm, string-pulled %d"),
 			*DisplayName.ToString(), Destination.X, Destination.Y, Destination.Z, static_cast<int32>(Result), bValidPath ? TracedPath->GetPathPoints().Num() : 0,
 			bValidPath ? TracedPath->GetLength() : 0.f, bValidPath && TracedPath->IsPartial() ? 1 : 0,
-			bValidPath ? FVector::Dist2D(TracedPath->GetEndLocation(), Destination) : -1.f, bValidPath ? TracedPath->GetEndLocation().Z : 0.0);
+			bValidPath ? FVector::Dist2D(TracedPath->GetEndLocation(), Destination) : -1.f, bValidPath ? TracedPath->GetEndLocation().Z : 0.0,
+			MeshPath ? MeshPath->PathCorridor.Num() : -1, MeshPath ? MeshPath->GetTotalPathLength() : -1.0, MeshPath && MeshPath->IsStringPulled() ? 1 : 0);
 	}
 	return EOperativeOrderResult::Accepted;
 }

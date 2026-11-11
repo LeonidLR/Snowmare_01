@@ -127,8 +127,9 @@ public:
 	/**
 	 * The round objective (the arena, task #53): the team's role (attacker / defender), the point and its hold radius - the commander's
 	 * Objective order and the objective considerations (PmcCommanderRules::ObjectivePositionFactor) read it. Role None clears it.
+	 * LevelToleranceCm = the point's level (fix/pmc-onpoint-3d-detour: on / near it only within this height, FPmcObjectiveView).
 	 */
-	void SetTeamObjective(int32 TeamId, EPmcRole Role, const FVector& Location, float RadiusCm);
+	void SetTeamObjective(int32 TeamId, EPmcRole Role, const FVector& Location, float RadiusCm, float LevelToleranceCm = 150.f);
 	/** The objective's live state for the team's next decisions: the round's time fraction, the capture clock, an enemy on the point. */
 	void UpdateTeamObjective(int32 TeamId, float TimeFrac, float HoldFrac, bool bEnemyOnPoint);
 
@@ -205,8 +206,14 @@ private:
 		bool bWalkPending = false;
 		/** An RpgStrike was given and has not ended yet (its end starts a cooldown: no rocket order every decision). */
 		bool bStrikePending = false;
-		/** Detours taken on the running walk (one, then it fails). */
+		/** Detours taken on the running walk. */
 		int32 Detours = 0;
+		/**
+		 * fix/pmc-onpoint-3d-detour: re-route steps tried on the running walk (found or not; PmcCommanderRules::NextDetourStep) and the side
+		 * the Side step took (+1 left, -1 right, 0 none).
+		 */
+		int32 DetourAttempts = 0;
+		int32 DetourSide = 0;
 		/** The last failed order and when (PickCommitted's cooldown). */
 		EPmcOrder FailedOrder = EPmcOrder::Count;
 		double FailedAt = -1e9;
@@ -274,10 +281,12 @@ private:
 	/** A full (not partial) navmesh path From -> To. */
 	bool HasFullNavPath(const FVector& From, const FVector& To) const;
 	/**
-	 * fix/pmc-arena-stalemate: the running walk made no progress for RepathAfterSeconds - steer it through a side waypoint (6-9 m off his line
-	 * to the goal, either side, or back-diagonal) that has full paths from him and on to the goal (AOperativeCharacter::SteerOwnMoveVia).
+	 * fix/pmc-arena-stalemate + fix/pmc-onpoint-3d-detour: the running walk made no progress for RepathAfterSeconds - steer it through the
+	 * first waypoint of the detour Step (PmcCommanderRules::DetourCandidates: a side, the other side, a short step back) that has full paths
+	 * from him and on to the goal (AOperativeCharacter::SteerOwnMoveVia; the walk re-routes to its goal from the waypoint). OutSide = the
+	 * side taken.
 	 */
-	bool TryDetour(AOperativeCharacter& Fighter, const FFighterState& State) const;
+	bool TryDetour(AOperativeCharacter& Fighter, const FFighterState& State, const FPmcWeights& Weights, EPmcDetourStep Step, int32& OutSide) const;
 	/** The order failed (cooldown in PickCommitted); counted and logged. */
 	void MarkFailed(int32 TeamId, FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State, EPmcOrder Order, const TCHAR* Why);
 	bool IsExposedTo(int32 TeamId, const AOperativeCharacter& Fighter) const;
