@@ -119,7 +119,7 @@ bool USquadSubsystem::UpdateFastRegroup(FFollowerState& Follower, AOperativeChar
 	const UHealthComponent* Health = Operative.HealthComponent;
 	const bool bCritical = Health && SquadRegroupRules::IsCriticallyWounded(Health->GetCurrentHealth(), Health->GetMaxHealth(), Tuning);
 	const float Gap = FastRegroupGapCm(Follower, Operative, LeaderRef);
-	const double Now = GetWorld()->GetTimeSeconds();
+	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
 	if (State->bArmed)
 	{
 		State->bArmed = false;

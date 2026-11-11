@@ -6,6 +6,8 @@ it was split verbatim, nothing was dropped - old `HANDOFF §N` references resolv
 
 Last update: 2026-10-19 (split into an index + per-system docs + CHANGELOG; the per-system content is current to main `2a6561c`).
 
+**Codex task 001 (`codex/review-fixes`, 2026-11-11):** fixes 1/4 committed for review; Review finding 2: use the same zero-time fallback as ArmFastRegroup when no world is available. No merge or push.
+
 **Project status report (non-technical, for planning): `docs/port/PROJECT_STATUS_2026-10-14.md`.**
 
 **Mechanics register (since 2026-11-08, the designer's overview on the phone):** data `docs/port/mechanics_register.json` (every mechanic: what / how / off cvar / guarding smokes / decision / status main|branch|planned, plus the planned group), page built by `python Scripts/Tools/build_mechanics_register.py` -> `docs/port/mechanics-register.html`, published at https://claude.ai/artifact/JbSgrK7BfnXAuXnz9E5KdJ (Desktop shortcut). **Update it with every merge** (new items, branch -> main, planned -> branch) and the `plan` block (day-by-day status: done / doing / todo / moved, with commit refs) at the end of every work block, rebuild, republish.

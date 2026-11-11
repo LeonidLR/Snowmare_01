@@ -109,6 +109,7 @@ pacing; the squad takes very long to join up. Members far from their slot must f
   shuffling). Ladders / ramps keep their queue rules (`FollowTo` refuses on a ladder / at a drop; a ramp-file traffic hold returns earlier).
 - **Stance:** with `stand_up_to_run` 1 a fast regrouper whose leader crouches / lies stands up to run and takes the leader's stance when he
   joins (unless the player gave him another one meanwhile); the near ones copy the leader's stance at once as before.
+- Review fix 001 (2026-11-11): fast-regroup elapsed time uses the sibling functions' zero-time fallback without a world.
 - Solo again, a load, or the formation switched off (turn-based, Commander Mode's fight) end every running fast regroup.
 - **Smoke `FastRegroupSmoke`** (L_MovementTest, the level's Solo start): A sprints ~40 m away, B - pass 0 the old rule (the "before"
   numbers), pass 1 the fix (armed, sprinting, within 6 m in budget and < 60 % of the old time, joined close, everyone at his slot), pass 2 the
