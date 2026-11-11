@@ -675,6 +675,7 @@ he will rise into the firing position"; an idle for every situation. Supersedes 
   blizzard shield) take the torso by their slot weight. The critical crawl idle rises into the ABP's prone aim the same way. Cold walks keep
   the weapon torso. No delay when the layer does not hold the torso (healthy, cover, crouched, an animation that does not tick).
   `"enabled": false` = the morning's lower-body layer, no delay.
+- Review fix 001 (2026-11-11): combat still demands the injured raise in parallel with turning; the hold decision and its telemetry run only after crawl, sniper movement, and aim refusals clear. Depot smoke measures the first-shot delay from opening fire, since aiming can consume most of the raise before any hold is counted.
 - **The first shot's delay vs before:** from the lowered (idle / walking) pose the first round leaves `raise_to_fire_s x 0.98 = 0.245 s`
   later than before, + at most one frame (the demand reaches the animation the next frame) - and only when the aim turn is shorter than that;
   rounds within `lower_after_s` 1.0 s of the last attempt are not delayed. Measured: `InjuredLocomotionSmoke` 2c / 7b 0.25 s (0.05 s

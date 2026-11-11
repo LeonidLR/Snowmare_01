@@ -511,9 +511,11 @@ namespace InjuredLocomotionDepotSmoke
 			else
 			{
 				Check(State, AimUpper >= 0.f && AimUpper < 0.3f, FString::Printf(TEXT("%s: aiming, the torso is raised into the weapon pose (its share in the clip %.2f)"), Leg.Name, AimUpper));
-				Check(State, S.UpperAtOpen > 0.9f && S.Rounds > 0 && S.FirstHold >= 0.0 && RaiseWait >= 0.15f && RaiseWait <= 0.6f,
-					FString::Printf(TEXT("%s: the fire opened lowered (%.2f), the raise held the first round ~raise_to_fire_s, then he fired (%d holds, %d rounds, %.2f s)"), Leg.Name,
-					S.UpperAtOpen, Op->InjuredRaiseHolds - S.HoldsAtStart, S.Rounds, RaiseWait));
+				// The raise starts while turning; hold telemetry begins only after the other fire refusals clear.
+				// Measure from opening fire, since the first counted hold can be near the end of the raise (or absent).
+				Check(State, S.UpperAtOpen > 0.9f && S.Rounds > 0 && OpenToShot >= 0.15f && OpenToShot <= 0.6f,
+					FString::Printf(TEXT("%s: the fire opened lowered (%.2f), the first round waited ~raise_to_fire_s after opening fire (%d holds, %d rounds, %.2f s)"), Leg.Name,
+					S.UpperAtOpen, Op->InjuredRaiseHolds - S.HoldsAtStart, S.Rounds, OpenToShot));
 			}
 			if (!Leg.bThreat)
 			{

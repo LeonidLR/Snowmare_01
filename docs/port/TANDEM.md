@@ -1004,6 +1004,8 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 2/4): fix(combat): count injured raise holds after fire refusals Review finding 3: keep DemandInjuredRaise before turning to preserve the 0.25 s raise, and evaluate the hold and its telemetry after crawl, sniper move and aim refusals.
+
 - 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 1/4): fix(squad): guard fast regroup time without a world Review finding 2: use the same zero-time fallback as ArmFastRegroup when no world is available.
 
 - 2026-11-01 (Claude, `formation/wall-leadership`, worktree `../CodexTactics-lead`): wall leadership - new `Formation/FormationWallLeadershipRules`, new `SquadSubsystemWallLeadership.cpp`, `SquadSubsystem.*` (SetLeader's `bWallLeadershipSwitch`), `SquadSubsystemFormation.cpp` (`HoldBehindInWallLine` in the follower's wall step), `SquadSubsystemFormationPeek.cpp`, `CodexTacticsPlayerController.cpp` / `...Cover.cpp` (the leader holding the squad peek's corner), smokes `WallLeadershipSmoke` (new) / `FormationWallEndSmokeCommand.cpp`, `Scripts/test_map.json`. No asset change.
