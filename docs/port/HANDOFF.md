@@ -9,7 +9,7 @@ Last update: 2026-10-19 (split into an index + per-system docs + CHANGELOG; the 
 **Codex task 001 (`codex/review-fixes`, 2026-11-11):** all four review fixes ready for Claude review (world/capsule null guards, injured-raise telemetry with timing preserved, critical-wound stance on regroup). Build, 47 focused tests, three required smokes and Depot smoke PASS; report `docs/port/codex/outbox/001-review-fixes.report.md`. No merge or push.
 **Codex task 002 (`fix/wounded-follower-pace`, 2026-11-11):** verified wounded-follower pace, critical crawlers excluded; shipped data toggle included. Build, 48 focused tests, five required smokes and rendered smoke PASS. Two game-camera frames in main `Saved/Orchestrator/woundfollow/`; report `docs/port/codex/outbox/002-wounded-follower-finish.report.md`. Ready for Claude review.
 
-**Interim leadership (Codex, through Saturday 2026-11-14):** integration only in `CodexTactics-interim` / `interim/2026-11-12`, main frozen, no pushes. Queue: pair rule (Gemini), stealth 003, props C5/C6. Living hand-back: `docs/port/codex/outbox/INTERIM_REPORT.md`.
+**Interim leadership (Codex, through Saturday 2026-11-14):** integration only in `CodexTactics-interim` / `interim/2026-11-12`, main frozen, no pushes. Pair rule verified at `c6a68eb4`; stealth 003 in progress (pure rules/data tested, full runtime smoke/animations pending), props C5/C6 next. Living hand-back: `docs/port/codex/outbox/INTERIM_REPORT.md`.
 
 **Project status report (non-technical, for planning): `docs/port/PROJECT_STATUS_2026-10-14.md`.**
 

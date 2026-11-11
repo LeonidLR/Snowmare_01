@@ -1004,6 +1004,8 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-11-11 (Codex, interim, task 003 leaf): stealth pure rules/data + four unit tests verified. Actor/HUD/perception runtime changes compile and 44 regressions pass, but remain uncommitted pending the full smoke/animation step. Source-only pack inspection: 62 clips, UE4 skeleton, source hashes unchanged; no assets generated.
+
 - 2026-11-11 (Codex, `interim/2026-11-12`, queue 2): verified and committed the small TS pair rule after supplying the patch to Gemini and clarifying crossed task messages; no actual Gemini branch commit was present at completion. Exact saved shapes win; pair only for 2-member wedge/diamond. Targeted TS tests 18/18 + typecheck PASS; baseline Unreal build and 25 animation/shape tests PASS. Own stealth work remains separate and uncommitted.
 
 - 2026-11-11 (Codex, interim lead): took over integration worktree `../CodexTactics-interim` on `interim/2026-11-12`; main frozen. Assigned Gemini the TS formation pair rule (chat 113), preparing stealth 003 next; no implementation or merges yet. Hand-back report initialized.

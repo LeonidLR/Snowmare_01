@@ -11,7 +11,7 @@ Tasks 001 and 002 were merged by Claude before the frozen base; their reports re
 
 ### Queue 2 — TS formation pair rule
 
-Own task commit on `interim/2026-11-12`: `fix(formation): align saved pair lookup with runtime` (its hash will be listed in the next report update). The designer requested own work only on this integration branch; no other worktree/branch was checked out.
+Own task commit on `interim/2026-11-12`: `c6a68eb4` — `fix(formation): align saved pair lookup with runtime`. The designer requested own work only on this integration branch; no other worktree/branch was checked out.
 - Exact saved shapes now win. `pair/2` is a fallback only for 2-member wedge/diamond; column/line/echelons never consume it.
 - Updated `shapes.test.ts` for exact column/wedge/diamond precedence, missing pair-ineligible shapes, mixed counts and absent file; removed the obsolete TS/C++ mismatch note in FORMATION_CONTRACT 19.2.
 - `node --test src/movement/shapes.test.ts src/movement/shapesGolden.test.ts`: 18/18 PASS. Saved-shape golden unchanged and current.
@@ -23,7 +23,7 @@ Own task commit on `interim/2026-11-12`: `fix(formation): align saved pair looku
 
 1. Props C4 TypeScript: already merged before takeover; no repeat work.
 2. Formation pair lookup: own verified patch committed after coordination above; awaiting any additional Gemini review/contribution. No Gemini merge claimed.
-3. Priority stealth mode, inbox 003: independent pure rules/data prepared and built; four new StealthMode tests PASS. Actor state, gray runtime visuals, fire/sprint breaks, patrol/combat perception and STEALTH/7 input are being compiled (not yet verified or committed). Guarded source-inspection/retarget script prepared; no assets generated yet. Source pack accessible through a read-only-use junction. Designer defaults proposed in chat 123.
+3. Priority stealth mode, inbox 003: independent pure rules/data prepared and built; four new StealthMode tests PASS. Actor state, gray runtime visuals, fire/sprint breaks, patrol/combat perception and STEALTH/7 input compile; 44 focused rules/animation/perception/sight tests PASS, but runtime smoke and full animation integration remain pending and these runtime changes are not committed yet. First runtime build found two C4458 local Mesh/member shadowing errors; renamed the locals and rebuilt successfully (24.55 s). Guarded source inspection succeeded: 62 in-place source clips, own UE4 skeleton confirmed, source-pack hashes unchanged; no assets generated yet. Source pack accessible through a read-only-use junction. Designer defaults proposed in chat 123.
 4. Props C5 static validator: pending after stealth.
 5. Props C6 runtime spawner: pending after C5.
 6. Night trainer review: read-only morning review to Gemini when results are available; main binaries, outputs and scheduler remain untouched.
@@ -38,5 +38,9 @@ Own task commit on `interim/2026-11-12`: `fix(formation): align saved pair looku
 
 ## Verification / failures / open questions
 
-Verification is listed per task above. No implementation failures recorded so far; runtime stealth is still incomplete and must not be described as complete. Anthropic API spend by Codex: $0 (not used); TypeSafe pre-commit audits are recorded separately. Chat shells now set PYTHONIOENCODING=utf-8 to avoid the older agent-chat reader failing on Russian text.
+Verification is listed per task above. The initial runtime compiler naming failure was fixed as recorded above; runtime stealth is still incomplete and must not be described as complete. Anthropic API spend by Codex: $0 (not used); TypeSafe pre-commit audits are recorded separately. Chat shells now set PYTHONIOENCODING=utf-8 to avoid the older agent-chat reader failing on Russian text.
 This is a living hand-back report and will be updated before Saturday.
+
+## Stealth part 1 — verified pure rules/data
+
+Commit `feat(stealth): add configurable mode rules` (hash recorded on next update): `StealthModeRules.{h,cpp}`, four focused unit tests, and `Content/Data/AI/stealth_mode.json`. Selection toggle, fire/sprint break conditions and range/buildup/noise multipliers tested. Build Succeeded and all four tests PASS; the later runtime regression run passed 44/44. This commit does not claim the full feature or asset import complete. Runtime actor/HUD/perception and animation work remain separate.
