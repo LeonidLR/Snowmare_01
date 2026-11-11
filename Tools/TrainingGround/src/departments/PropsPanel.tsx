@@ -137,6 +137,11 @@ export const PropsPanel: React.FC = () => {
     return ['all', ...layersOf(layout)];
   }, [layout]);
 
+  const failingLayer = useMemo(
+    () => propsFile?.layers.find((l) => l.report?.gate === 'fail'),
+    [propsFile]
+  );
+
   // 4. Toggle layer visibility
   const toggleLayerVisibility = (layerId: string) => {
     setVisibleLayers((prev) => ({
@@ -200,7 +205,7 @@ export const PropsPanel: React.FC = () => {
         const seedToUse = customSeed !== undefined ? customSeed : (layer.seed ?? 1) + 1;
         // Deep clone file before mutating
         const cloned: LevelPropsFile = JSON.parse(JSON.stringify(propsFile));
-        rerollLayer(cloned, balance, layoutView, layerId, seedToUse);
+        rerollLayer(cloned, balance, layoutView, layerId, seedToUse, layout ?? undefined);
 
         setPropsFile(cloned);
         setIsDirty(true);
@@ -225,7 +230,7 @@ export const PropsPanel: React.FC = () => {
         for (const l of cloned.layers) {
           if (!l.locked && l.enabled !== false && (l.kind === 'crates' || l.kind === 'barrels')) {
             const nextSeed = (l.seed ?? 1) + 1;
-            rerollLayer(cloned, balance, layoutView, l.id, nextSeed);
+            rerollLayer(cloned, balance, layoutView, l.id, nextSeed, layout ?? undefined);
           }
         }
         setPropsFile(cloned);
@@ -357,6 +362,17 @@ export const PropsPanel: React.FC = () => {
             {isDirty && (
               <span className="px-2 py-0.5 rounded text-[11px] bg-amber-950/80 border border-amber-800 text-amber-300">
                 Есть несохраненные правки
+              </span>
+            )}
+            {failingLayer && (
+              <span className="px-2 py-0.5 rounded text-[11px] font-semibold bg-rose-950/90 border border-rose-700 text-rose-300 flex items-center gap-1.5">
+                <ShieldAlert size={12} />
+                route blocked at {failingLayer.report?.gate_leg ?? 'route'}
+                {failingLayer.report?.gate_blockers && failingLayer.report.gate_blockers.length > 0 && (
+                  <span className="font-mono text-[10px] text-rose-200">
+                    ({failingLayer.report.gate_blockers.join(', ')})
+                  </span>
+                )}
               </span>
             )}
           </div>
@@ -497,6 +513,21 @@ export const PropsPanel: React.FC = () => {
                       </span>
                     )}
                   </div>
+
+                  {/* Gate failure badge */}
+                  {l.report?.gate === 'fail' && (
+                    <div className="flex items-center gap-1.5 px-2 py-1.5 rounded bg-rose-950/90 border border-rose-800 text-rose-300 text-xs font-semibold">
+                      <ShieldAlert size={13} className="shrink-0 text-rose-400" />
+                      <div className="flex flex-col min-w-0">
+                        <span>route blocked at {l.report.gate_leg ?? 'route'}</span>
+                        {l.report.gate_blockers && l.report.gate_blockers.length > 0 && (
+                          <span className="text-[10px] font-mono text-rose-400 truncate">
+                            blockers: {l.report.gate_blockers.join(', ')}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  )}
                 </div>
               );
             })}

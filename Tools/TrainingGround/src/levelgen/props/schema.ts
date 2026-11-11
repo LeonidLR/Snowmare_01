@@ -78,6 +78,7 @@ export interface PropLayerReport {
   short_by?: number;
   gate?: 'pass' | 'fail' | string;
   gate_leg?: string;
+  gate_blockers?: string[];
   rejected?: Record<string, number>;
   warnings?: string[];
   [key: string]: unknown;

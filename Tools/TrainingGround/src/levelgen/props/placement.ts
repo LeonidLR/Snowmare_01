@@ -5,6 +5,8 @@
 import type { LevelPropsFile, PropLayer, PropObject } from './schema.ts';
 import { PropsLayoutView } from './layoutView.ts';
 import { PropsRng, streamSeed } from './rng.ts';
+import { runFastGate } from './fastGate.ts';
+import type { GenLayout } from '../schema.ts';
 
 export const LATTICE_CM = 50;
 export const MAX_WEIGHT = 1000;
@@ -66,6 +68,8 @@ export interface PropsPlacementReport {
   eligible: number;
   status: 'ok' | 'short';
   gate: string;
+  gate_leg?: string;
+  gate_blockers?: string[];
   rejected: PropsRejectCounts;
   warnings: string[];
 }
@@ -1024,7 +1028,7 @@ export function place(input: PropsPlacementInput): PropsPlacementResult {
 // ---------------- Report to JSON ----------------
 
 export function reportToJson(report: PropsPlacementReport): Record<string, unknown> {
-  return {
+  const json: Record<string, unknown> = {
     eligible: report.eligible,
     gate: report.gate,
     kept: report.kept,
@@ -1045,6 +1049,13 @@ export function reportToJson(report: PropsPlacementReport): Record<string, unkno
     status: report.status,
     warnings: [...report.warnings],
   };
+  if (report.gate_leg !== undefined) {
+    json.gate_leg = report.gate_leg;
+  }
+  if (report.gate_blockers !== undefined) {
+    json.gate_blockers = [...report.gate_blockers];
+  }
+  return json;
 }
 
 // ---------------- RerollLayer ----------------
@@ -1054,7 +1065,8 @@ export function rerollLayer(
   balance: Record<string, unknown>,
   view: PropsLayoutView,
   layerId: string,
-  seed: number
+  seed: number,
+  layout?: GenLayout
 ): PropsPlacementResult {
   if (file.frozen) {
     throw new Error('props: the file is frozen; re-roll refused');
@@ -1089,6 +1101,17 @@ export function rerollLayer(
 
   layer.objects = stored;
   layer.report = reportToJson(result.report);
+
+  if (layout) {
+    const gateRes = runFastGate(layout, file, balance, layerId);
+    layer.report.gate = gateRes.gate;
+    if (gateRes.gate === 'fail') {
+      layer.report.gate_leg = gateRes.gate_leg;
+      if (gateRes.gate_blockers) {
+        layer.report.gate_blockers = [...gateRes.gate_blockers];
+      }
+    }
+  }
 
   return result;
 }
