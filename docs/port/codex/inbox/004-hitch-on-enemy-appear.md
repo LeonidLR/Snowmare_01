@@ -59,3 +59,14 @@ not per operative) behind the start cover. Measure both on a FIRST Play after an
 2nd Play: the first enemies also appeared without a freeze -> both hitches are first-load costs (sync loads + editor first-use
 builds), not per-spawn CPU. The fix is therefore loading: async preload at level start behind the start cover, nothing loaded
 synchronously in a gameplay frame. No sight / perception / nav suspects needed unless the first-Play probe says otherwise.
+
+## Designer follow-up 3 (2026-11-11): a ~2 s freeze later in the SAME session, when enemies spawned in another zone
+Log copy: MAIN Saved/Orchestrator/hitch-2026-11-11-play2.log, frame 835 (13:24:16 -> 13:24:18): ambushers (MILITARY_ZOMBIE groups 2 / 4)
+spawn -> `FlushAsyncLoading(739): 1 QueuedPackages` (0.8 s) -> `[Ladder] climb out ...` -> another spawn -> `Waiting for skinned
+assets to be ready 0/1 (SK_Cutter_1slot)` (an enemy body / weapon mesh used for the first time this session).
+Whole log: 9 FlushAsyncLoading, 7 `[Ladder] climb out` setups (they follow enemy spawns -> the ladder clips seem resolved per spawned
+character, possibly via a sync load), mesh waits for SKM_PmcOperator and SK_Cutter_1slot.
+So it is not only the first Play: EVERY first use of an enemy type / its mesh / its clips in a session costs a sync load in a
+gameplay frame. The fix must cover the whole roster of the level: preload (async, at level start) all enemy classes the level's
+Pressure / ambush / PmcEncounter / horde tables can spawn, their meshes, weapons and anim clips; resolve ladder clips once per level
+(shared), not per spawned character. Probe: spawn one of each enemy type in a fresh session, no frame > 250 ms.
