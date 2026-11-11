@@ -20,6 +20,7 @@
 #include "Formation/FormationRuntimeRules.h"
 #include "Formation/FormationSectorRules.h"
 #include "Formation/FormationShapeRules.h"
+#include "Formation/FormationShapesFile.h"
 #include "Formation/FormationTerrainRules.h"
 #include "Formation/FormationTuning.h"
 #include "Formation/FormationWallRules.h"
@@ -226,6 +227,55 @@ bool USquadSubsystem::GetFormationTarget(const AOperativeCharacter* Operative, F
 	}
 	OutSlot = FVector(Slot->Position.X, Slot->Position.Y, SquadSubsystemFormationLocal::FormationFeetZ(*Operative));
 	OutLookYaw = Slot->Yaw;
+	return true;
+}
+
+bool USquadSubsystem::GetFormationLookArc(EFormationRole Role, float& OutArc) const
+{
+	if (!IsFormationSavedShape())
+	{
+		return false;
+	}
+	const FFormationRoleYaw* Arc = Sectors.SavedArcs.FindByPredicate([Role](const FFormationRoleYaw& Each) { return Each.Role == Role; });
+	if (!Arc)
+	{
+		return false;
+	}
+	OutArc = Arc->Yaw;
+	return true;
+}
+
+bool USquadSubsystem::BuildSavedShapeFrameSlots(const FVector2D& LeaderPos, int32 Count)
+{
+	bool bMirrored = false;
+	const TOptional<FFormationShape> Shape = FormationShapes::Find(FormationShapes::Get(), Sectors.Formation, Count, &bMirrored);
+	if (!Shape.IsSet())
+	{
+		Sectors.SavedArcs.Reset();
+		return false;
+	}
+	TArray<float> Arcs;
+	const TArray<FFormationSlot> Slots = FormationShapes::Slots(Shape.GetValue(), LeaderPos, Sectors.HeadingYaw, &Arcs);
+	// FrameSlots in the formula's role order (index 0 = the leader); the shape's member order is free after the commander.
+	Sectors.FrameSlots.Reset();
+	Sectors.SavedArcs.Reset();
+	for (const EFormationRole Role : FormationShapeRules::Roles(Count))
+	{
+		const int32 Index = Slots.IndexOfByPredicate([Role](const FFormationSlot& Each) { return Each.Role == Role; });
+		if (Index == INDEX_NONE)
+		{
+			continue;
+		}
+		FFormationSlot& Slot = Sectors.FrameSlots.Add_GetRef(Slots[Index]);
+		if (Sectors.Mode == EFormationMode::Run || Sectors.Mode == EFormationMode::Forward)
+		{
+			// A run and the menu's "All forward" are the player's order to face 12 - the shape's looks wait until the walk / halt.
+			Slot.Yaw = FormationSectorRules::LookYaw(Role, Sectors.Formation, Sectors.Mode, Count, Sectors.PatrolTime, Sectors.HeadingYaw, Sectors.PassageWidth,
+				FormationTuning::Get());
+		}
+		Sectors.SavedArcs.Add({ Role, Arcs[Index] });
+	}
+	Sectors.SavedShapeName = FString::Printf(TEXT("%s/%d%s"), FormationNames::ToString(Sectors.Formation), Count, bMirrored ? TEXT(" mirrored") : TEXT(""));
 	return true;
 }
 
@@ -888,6 +938,8 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	}
 
 	// This frame's slots and looks by role.
+	const FString SavedShapeNameBefore = Sectors.SavedShapeName;
+	Sectors.bSavedShape = false; // contract 19: set again below when a saved shape gives this frame's slots
 	Sectors.WallRouteRoles.Reset(); // fixes d / e: set again below while a wall order's members walk the leader's route
 	if (!bWall || Sectors.bSlide)
 	{
@@ -913,6 +965,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	else
 	{
 		const bool bCustom = Sectors.Formation == EFormationKind::Custom;
+		bool bSaved = false;
 		if (Sectors.bTrail)
 		{
 			BuildTrailFrameSlots(LeaderPos, Count); // rules v2.1: the column along the leader's own path
@@ -920,6 +973,10 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		else if (bCustom)
 		{
 			BuildCustomFrameSlots(LeaderRef, LeaderPos); // contract 17: the player's shape and his fixed looks
+		}
+		else if (BuildSavedShapeFrameSlots(LeaderPos, Count))
+		{
+			bSaved = true; // contract 19: the formation editor's saved shape (formation_shapes.json) - its slots and looks replace the formula's
 		}
 		else
 		{
@@ -951,8 +1008,28 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 				Sectors.CornerLooks.Reset();
 			}
 			// Rules v2.2: walking / halted with 3+ the coverage allocator replaces the per-formation tables (the pair and a run keep LookYaw).
-			AllocateFormationLooks(LeaderRef, LeaderPos);
+			// Contract 19: a saved shape's looks are the designer's (sim.ts: no allocator for a saved shape) - no allocator, no rear guard.
+			if (bSaved)
+			{
+				Sectors.ShoulderLooks.Reset();
+				Sectors.RearGuard.Reset();
+			}
+			else
+			{
+				AllocateFormationLooks(LeaderRef, LeaderPos);
+			}
 		}
+		Sectors.bSavedShape = bSaved;
+	}
+	if (!Sectors.bSavedShape)
+	{
+		Sectors.SavedShapeName.Reset();
+		Sectors.SavedArcs.Reset();
+	}
+	if (Sectors.SavedShapeName != SavedShapeNameBefore)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] saved shape: %s (formation_shapes.json revision %u)"),
+			Sectors.bSavedShape ? *FString::Printf(TEXT("%s in effect"), *Sectors.SavedShapeName) : TEXT("off - the formula"), FormationShapes::GetRevision());
 	}
 
 	// The leader (not with a box selection: each faces his own path): his sector, and the patrol pace while the squad walks.

@@ -1101,7 +1101,7 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 		TArray<TSharedPtr<FJsonValue>> CustomSlots;
 		for (int32 Slot = 1; Slot <= FormationCustomRules::SlotCount; ++Slot)
 		{
-			const TSharedPtr<FJsonObject> Shape = FormationCustomRules::ToJson(Squad->GetFormationCustomShape(Slot));
+			const TSharedPtr<FJsonObject> Shape = FormationCustomRules::ToJson(Squad->GetFormationCustomOwnShape(Slot)); // contract 19.4: never a file default
 			CustomSlots.Add(Shape.IsValid() ? StaticCastSharedRef<FJsonValue>(MakeShared<FJsonValueObject>(Shape)) : StaticCastSharedRef<FJsonValue>(MakeShared<FJsonValueNull>()));
 		}
 		GameState->SetArrayField(TEXT("formation_custom"), CustomSlots);

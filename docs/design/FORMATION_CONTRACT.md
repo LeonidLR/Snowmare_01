@@ -848,3 +848,71 @@ currentYaw, config, held)` (13.1 / 13.4; no limit, no ahead).
 - Checks 2 (rear cover) and 10 (coverage) count the patrol frames in which a rear guard is turned, and `LIMITS.rearTurnGrace` 0.5 s after (his body coming round again), as held (the open rear is the designer's
   accepted cost); `RunMetrics.rearTurn` {walkTime, time, turns, pct}; report info line 15 (runs with a turn, the worst share of the patrol).
 - Q3 = keep: no change (the 5 m hold).
+
+## 19. Saved formation shapes - the formation editor's file in the game (game designer 2026-11-10, variant B; runtime 2026-11-11)
+The Training Ground formation editor (task 008: `shapesSchema.ts`, `shapesCoverage.ts`, `FormationEditor.tsx`) saves
+`Content/Data/FormationLab/formation_shapes.json`, schema `codex.formation_shapes/1`. The TS simulator (`sim.ts` `getSavedFormationShape`,
+`savedShapeTargets`) and the game (C++ `Source/CodexTactics/*/Formation/FormationShapesFile.*`, `FormationShapes::`) read it the same way.
+
+### 19.1 The file
+```json
+{ "schema": "codex.formation_shapes/1",
+  "formations": { "diamond": { "4": { "members": [ { "role": "commander", "fwd": 0, "right": 0, "look": 0, "arc": 90 },
+                                                  { "role": "right", "fwd": -280, "right": 260, "look": 60 }, ... ] } } },
+  "custom": { "custom_1": { "members": [ { "squad": 0, "fwd": 0, "right": 0, "look": 0 }, { "squad": 2, "fwd": -250, "right": 300, "look": 60 } ] } } }
+```
+- `formations.<name>.<count>`: count "2" / "3" / "4"; `members.length == count`; `members[0]` the commander at (0, 0); roles unique and equal to
+  `rolesFor(count)` (2: commander + rear; 3: + right; 4: + left); `fwd` / `right` integer cm in the leader's frame (forward along the heading,
+  right = heading + 90), within `CUSTOM_MAX_RADIUS` (4000); `look` integer deg relative to the heading in (-180, 180]; `arc` optional integer
+  10..360 (absent = 90; `"arc": null` is an error, as in TS `m.arc !== undefined`). Unknown keys are allowed (the editor keeps them).
+- `custom.custom_1..3`: `members [{squad 0..3 unique, fwd, right, look, arc?}]` (squad 0 at (0, 0); members[0] = the anchor, 17.2).
+- Strict reading (C++ `FormationShapes::Parse` = TS `validateFormationShapes`): JSON numbers must be integers (no string / bool coercion); any
+  error rejects the WHOLE file (the TS parse throws). The C++ also drops, with a warning and no error, a formation name the game does not know and
+  `wall` / `hedgehog` / `blizzard` / `custom` (rule-driven), and a `pair` entry other than "2".
+
+### 19.2 Which shape (C++ `FormationShapes::Find(file, formation in effect, memberCount)`)
+1. `formations[<formation>][min(n, 4)]` - the formation IN EFFECT (after the guard: the mirror echelon, the trail column and the custom shape are
+   their own: the trail column and the custom shape never read `formations`).
+2. The pair: the game's pair is the wedge / diamond with 2 members (menu 1:30, HUD "Pair") -> `formations.pair["2"]` when the exact entry is not
+   saved. No other 2-man formation (column, line, echelons) ever takes the pair (review 008 finding 4).
+3. Echelons: an echelon not saved -> the other echelon's shape for that count MIRRORED (`mirrorFormationShape`: right -> -right, look -> -look
+   (-180 -> 180), left <-> right, arc kept) - so a saved echelon_left also serves the guard's mirror (10.1 level 1).
+4. Nothing -> the formula of `formation_config.json` (sections 2 / 12 / 13), unchanged.
+Never from the file: wall, hedgehog, blizzard (rule-driven), the trail column (the wall / narrow passage / sharp-turn fold, 10.1 / 13.6 - the
+guard is unchanged and still tests the formula's slots), the custom shape (17).
+Known difference to the TS lookup (`getSavedFormationShape`): TS gives `pair` to a 2-man COLUMN (before a saved `column/2`) and never to the
+2-man wedge - the C++ follows the review finding above; the golden cases leave `pair` out. Recommended TS fix: use `pair` for wedge / diamond
+with 2 members only.
+
+### 19.3 Slots, looks, arcs (`FormationShapes::Slots` = TS `savedShapeTargets`)
+`pos = localToWorld(leaderPos, heading, [fwd, right])`, `yaw = normYaw(heading + look)`, `arc = arc ?? 90`. The runtime puts them in
+`Sectors.FrameSlots` (role order) and keeps the shape's looks fixed: no coverage allocator (13.x; the TS sim skips it too), no rear guard, so no
+rear catch-up turn (18.2); the corner watch on patrol (11) and ClearLook (13.1) still apply as for the formula; the places are still dealt by
+minimal travel (10.6). A run and the menu's "All forward" keep facing 12 (LookYaw). The arc is carried per role
+(`USquadSubsystem::GetFormationLookArc`) - the TS simulator uses it only for the editor's coverage radar, the game does not yet narrow /
+sweep looks by it (open for the game designer). `IsFormationSavedShape` / `GetFormationSavedShapeName` ("diamond/4", "echelon_right/4 mirrored");
+the log line `[Formation] saved shape: ... in effect` on every change.
+
+### 19.4 The custom defaults
+`custom.custom_k` = the DEFAULT of custom slot k: a slot the player stored nothing in shows it (the menu's Custom k is filled, the placement
+mode starts from it); once he stores his own shape (placement, save game, campaign carry) his wins. Only his own shapes are exported
+(`ExportFormationCustomSlots`, save game `formation_custom`), so a file default is never frozen into a save; clearing his slot shows the
+default again. (`GetFormationCustomShape` = in force, `GetFormationCustomOwnShape` = his, `IsFormationCustomSlotDefault`.)
+Why `SaveGameSubsystem.cpp` changed: its `formation_custom` writer called `GetFormationCustomShape`, which now returns the shape IN FORCE (a
+file default included) - without the switch to `GetFormationCustomOwnShape` a save would freeze the designer's default as the player's own
+shape, and a later edit of `formation_shapes.json` would no longer reach that slot after a load.
+
+### 19.5 Live reload, A/B
+`FormationShapes::Get()` reads the file on first use; in non-shipping builds it re-reads it when its timestamp or size changes (checked every
+0.5 s), so a Training Ground save shows up without a restart; a removed file = the formula again; an invalid save keeps the last valid shapes
+(warnings list the errors). `Codex.Formation.SavedShapes 0` = the file is ignored (A/B).
+
+### 19.6 Golden, tests, smoke
+- Golden `Tools/TrainingGround/golden/formation_SavedShapes.json` (`node src/movement/cli/shapesGolden.ts`; staleness test
+  `shapesGolden.test.ts`), built from the fixtures `Content/Data/FormationLab/fixtures/formation_shapes_diamond4.json` /
+  `formation_shapes_echelon_mirror.json`: op `slots` (fixture, formation, memberCount, leaderPos, leaderYaw -> slots [{role, pos, yaw, arc}] |
+  null) for diamond / wedge / line / echelons / column x 2-4 x 4 poses, op `mirror` (-> formation, members). C++
+  `CodexTactics.Formation.Parity.SavedShapes` parses the same fixtures with `FormationShapes::Parse` and reproduces every case.
+- `CodexTactics.Formation.Shapes.{Parse, Reject, Find, Slots, Runtime}`; smoke `FormationShapesSmoke` (L_FormationLab: no file = the formula's
+  diamond; a diamond-4 saved while running = its slots / looks / arcs, the flanker walks there; echelon right mirrored from a saved echelon left;
+  custom_1 seeds an empty slot, the player's own wins; the file removed = the formula; a scratch copy in `Saved/`).
