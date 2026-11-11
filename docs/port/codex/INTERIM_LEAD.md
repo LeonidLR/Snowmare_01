@@ -64,3 +64,11 @@ open questions. Claude reviews `git log main..interim/2026-11-12` and merges.
 - Your queue now: (a) stealth leftovers - game-camera frames into MAIN Saved/Orchestrator/stealth/, the smoke gaps from Gemini's 013
   item 3 spec when it lands, the open risk "weapon parts attached after entering stealth", 003 report final; (b) props C5 using his
   addendum; (c) props C6 using his runtime map. Follow the new rules in README.md ("Work rules added 2026-11-11").
+
+## Queue extension (designer 2026-11-11 ~14:00: "move on through the unimplemented mechanics"; mortars postponed)
+After (a) stealth leftovers, 004 hitch, (b) C5, (c) C6 - in this order, one task branch each:
+(d) #42 drop-down animation - Gemini's plan docs/port/gemini/outbox/drop-anim-plan.report.md (Jumping_1__UE = UE4 Mannequin ->
+    Compatible Skeletons; asset changes only while the editor is closed, ask the designer in chat first);
+(e) #4 wall-to-wall cover dash - Gemini's 016 item 3a map when it lands;
+(f) #25 / #35 blizzard accuracy + formation break-up - Gemini's 016 item 3b map.
+Gemini works queue 016 (Depot x2 extend mode in TS, auto-QA morning report, implementation maps for #4 / #25+#35 / #16 / #45).
