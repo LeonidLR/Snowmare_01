@@ -14,6 +14,22 @@ there (Russian, one message) if it is not in this file yet.
   long-frame lines, synchronous loads on the game thread, shader / PSO compiles at the freeze time.
 - Nothing was fixed; no hypothesis is confirmed.
 
+## Evidence from the designer's play session (2026-11-11 13:04, PIE, L_Gen_Depot_1) - log copy: MAIN Saved/Orchestrator/hitch-2026-11-11-play.log
+Designer: Play took ~20 s to start; when the first enemies appeared while he walked the commander, the game froze ~15 s.
+- **Start (PIE total start time 20.99 s):** frame 352 has a silent 13.9 s gap right after `[EnvTrace] start cover on`
+  (13:04:22.058) until `Critical wound: ...` (13:04:35.927) - something synchronous runs under the start cover with no log line.
+  Prime suspect: the operative / anim-layer setup resolving all clips synchronously (injured tiers "use ALL pack clips" + legs_abp +
+  critical wound merged 11-10 = "since yesterday"). Instrument with SCOPE_LOG_TIME / Insights to name it.
+- **First enemies (frame 614, ~9 s in one frame, 13:05:05 -> 13:05:14):** at 30 s the first [Pressure] event (zombie patrol) and the
+  [PmcEncounter] squad spawn land in the SAME frame:
+  `FlushAsyncLoading(608): 3 QueuedPackages` (2.3 s) -> ladder clip setup -> zombie spawn -> `Waiting for skinned assets to be ready
+  0/1 (SKM_PmcOperator)` (3.9 s) -> 3 PMC operators spawned. So: synchronous loads on the spawn path + the PMC body mesh not
+  ready (editor builds it on first use) + two spawn systems firing in one frame.
+- Fix directions (verify): preload / async-load everything the spawners and anim layers need during level start (behind the start
+  cover, not in a gameplay frame); remove LoadObject / LoadSynchronous / FlushAsyncLoading from spawn paths; stagger PMC encounter
+  spawn vs the Pressure schedule; measure the start phase and keep PIE start reasonable. Also compare a 2nd Play in the same editor
+  session (editor-only first-use compiles) - say which part remains in a standalone run (`-game`).
+
 ## Suspects (merged 2026-11-09 .. 11-11; verify, do not assume)
 1. Synchronous `LoadObject` / `StaticLoadObject` of animation clips on enemy spawn / first sight (injured tiers layer, legs_abp layer,
    weapon_anim_sets.json resolution, critical wound) instead of preloading at level load.
