@@ -49,3 +49,10 @@ Designer: Play took ~20 s to start; when the first enemies appeared while he wal
 ## Done =
 Root cause with evidence (log / trace lines, the commit that introduced it), a fix on the task branch, the probe smoke green
 (no frame > 250 ms) plus the regression smokes of the touched systems, report docs/port/codex/outbox/004-hitch-on-enemy-appear.report.md.
+
+## Designer follow-up (2026-11-11 ~13:20)
+A 2nd Play in the same editor session started almost instantly -> the start cost is first-load (disk load + editor first-use builds
+of the 243 clips / meshes), the assets then stay in memory. Still fix it (a packaged game pays the first load on every launch, and a
+gameplay-frame freeze is never OK), but rank it: (1) the first-enemy frame (move loads out of the gameplay frame, stagger
+Pressure vs PmcEncounter, prepare SKM_PmcOperator at start), (2) the start: one async preload of the anim sets per level (shared,
+not per operative) behind the start cover. Measure both on a FIRST Play after an editor restart and in a `-game` run.
