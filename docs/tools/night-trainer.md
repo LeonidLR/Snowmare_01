@@ -158,3 +158,11 @@ the round with `Record=1` and that ClipRecorder works with the arena camera; pic
 ```
 python -m unittest discover -s Scripts/Trainer/tests      # 51 tests, ~15-30 s (+ tests/test_objective.py: objective rounds, single-instance lock) (genome, operators, fitness, adapter, guards, loop, resume, highlights)
 ```
+
+## 2026-11-11: run pmc-v4 (seeded)
+The scheduled task now runs `-RunId pmc-v4`. pmc-v3 (created 2026-11-07) froze its gene list, so the genes added on 2026-11-10
+(`push`, `push_after_s`, `order_min_hold_s`, `failed_order_cooldown_s`, `rpg_strike`, `rpg_gunner_share`) never evolved (Gemini's
+review 009). pmc-v4 was created by hand from a SEED: `Saved/Trainer/seeds/pmc_commander.seed_v4.json` = the repo's
+`Content/Data/AI/pmc_commander.json` (every gene) with the pmc-v3 champion's values overlaid (40 values), bounds from
+`pmc_commander.bounds.json`. The game file is unchanged (apply a champion only with `apply_champion.ps1`). If you reinstall the task
+with install_night_trainer.ps1, pass `-RunId pmc-v4`.
