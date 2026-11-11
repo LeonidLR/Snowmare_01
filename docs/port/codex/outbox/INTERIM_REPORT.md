@@ -51,3 +51,11 @@ Commit `feat(stealth): add configurable mode rules` (hash recorded on next updat
 - Output: Content/Characters/Animations/Stealth/{Male,Female}; LFS. Source pack / main / other assets untouched. Measurement evidence: Saved/Logs/setup_stealth_animation.json and StealthRetarget.log.
 - This checkpoint commits generated copies and their reproducible script only. Runtime wiring and full StealthModeSmoke remain in progress; no claim of task completion.
 - Gemini independently reviewed pair commit c6a68eb4 PASS (chat #126); accepted read-only C5 validator preparation (chat #132).
+
+## Coordination checkpoint
+- Retarget checkpoint: 1843f002 (124 LFS copies + script); no push / main changes.
+- Gemini C5 prep actual commit 2f50e91a reviewed read-only; not merged yet. Four-item follow-up queue: docs/port/gemini/inbox/012-interim-review-queue.md, per designer decision relayed in chat #139.
+- Designer follow-up AFTER stealth: isolated chat server/UI unanswered Gemini/all message marker after 10 minutes + Python test. Pending; stealth retains priority.
+- Current native stealth WIP: build PASS (173.85 s), 44 tests PASS, first StealthModeSmoke PASS (58.7 s). Stronger visual/map/ammo assertions and mandatory regressions currently running; task 003 NOT complete.
+- Anthropic API spend by Codex remains zero; existing main ledger 14.6072 USD observed read-only.
+
