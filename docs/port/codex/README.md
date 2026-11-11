@@ -28,3 +28,15 @@ something, Codex goes back to non-C++ work.
 ```text
 Read docs/port/codex/README.md in C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics and do the lowest-numbered task in docs/port/codex/inbox/ that has no report in docs/port/codex/outbox/, following the README rules exactly.
 ```
+
+## Work rules added 2026-11-11 (designer + Claude)
+- **Commit after every working part** (rules, data, one runtime piece, a smoke) - never hold more than ~1 hour of uncommitted work. Your
+  token limit can end mid-task; uncommitted work is then handed over by hand (it happened on the stealth hand-over).
+- **Low-limit warning:** when your remaining limit gets low, commit, update your report and post ONE chat line
+  `--topic codex-limit "limit low: <state>, last commit <hash>, next <step>"` BEFORE you stop.
+- **Model router trial (one week, until 2026-11-18):** before each task / sub-part run
+  `python Scripts/Tools/model_router.py --classify "<one-line task>"` (it uses Jev; the level 1-4 is model-agnostic, ignore the Claude
+  model names). Level 1-2 (trivial / routine: data edits, renames, docs, small helpers, test boilerplate) -> run on your cheaper model
+  (e.g. a sub-run `codex exec -m <cheaper model>` or a cheaper profile - say which you use); level 3-4 -> your main model. Log every
+  task in your report as `level | model | result (pass / redo)`. If the cheaper model's work has to be redone often, say so - we drop it.
+- **Chat:** post results with a commit hash and real questions only - no "accepted" / "starting" lines (each post wakes Claude).
