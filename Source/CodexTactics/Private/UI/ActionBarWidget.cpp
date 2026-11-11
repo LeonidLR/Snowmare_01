@@ -181,6 +181,12 @@ void UActionBarWidget::BuildDefaultLayout()
 	VehicleButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleVehicle);
 	VehicleButton->SetVisibility(ESlateVisibility::Collapsed);
 
+	StealthModeText = MakeText(TEXT("BarStealthModeText"), 10, BarTextColor);
+	StealthModeText->SetText(LOCTEXT("StealthMode", "STEALTH\n[7]"));
+	StealthModeButton = MakeSlotButton(TEXT("BarStealthModeButton"), BarStealthColor, 58.f, 56.f, StealthModeText, Row);
+	StealthModeButton->SetToolTipText(LOCTEXT("StealthModeTip", "Toggle stealth for the selected operatives [7]. Crouched movement; fire or sprint breaks it for that operative."));
+	StealthModeButton->OnClicked.AddDynamic(this, &UActionBarWidget::HandleStealthMode);
+
 	// Stealth lure (user decisions 2026-10-18): whistle / stone throw, only while exploring undetected.
 	StealthWhistleText = MakeText(TEXT("BarWhistleText"), 10, BarTextColor);
 	StealthWhistleButton = MakeSlotButton(TEXT("BarWhistleButton"), BarStealthColor, 58.f, 56.f, StealthWhistleText, Row);
@@ -817,6 +823,23 @@ void UActionBarWidget::HandleVehicle()
 
 void UActionBarWidget::RefreshStealthButtons(const AOperativeCharacter& Leader)
 {
+	if (StealthModeButton)
+	{
+		const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+		bool bAnyStealthed = false;
+		bool bAvailable = false;
+		for (const AOperativeCharacter* Member : Squad ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>())
+		{
+			bAnyStealthed |= Member->IsInStealthMode();
+			bAvailable |= Member->IsInStealthMode() || Member->CanEnterStealthMode();
+		}
+		ActionBarDirty::SetBackground(StealthModeButton, bAnyStealthed ? BarStealthActiveColor : BarStealthColor);
+		ActionBarDirty::SetText(StealthModeText, bAnyStealthed ? LOCTEXT("StealthModeOn", "STEALTH\nON [7]") : LOCTEXT("StealthMode", "STEALTH\n[7]"));
+		if (StealthModeButton->GetIsEnabled() != bAvailable)
+		{
+			StealthModeButton->SetIsEnabled(bAvailable);
+		}
+	}
 	UStealthLureSubsystem* Lure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
 	if (!Lure || !StealthWhistleButton || !StealthThrowButton)
 	{
@@ -872,6 +895,15 @@ bool UActionBarWidget::IsStealthButtonEnabled(bool bThrow) const
 {
 	const UButton* Button = bThrow ? StealthThrowButton.Get() : StealthWhistleButton.Get();
 	return Button && Button->GetIsEnabled();
+}
+
+void UActionBarWidget::HandleStealthMode()
+{
+	if (ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayer()))
+	{
+		PC->ToggleStealthModeKey();
+	}
+	Refresh();
 }
 
 void UActionBarWidget::HandleStealthWhistle()

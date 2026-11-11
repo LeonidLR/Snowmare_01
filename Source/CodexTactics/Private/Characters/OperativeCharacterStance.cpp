@@ -32,7 +32,8 @@ float AOperativeCharacter::GetStanceChangeDelay(EOperativeStance From, EOperativ
 	{
 		return 0.f;
 	}
-	const UAnimSequenceBase* Clip = From == EOperativeStance::Prone
+	const UAnimSequenceBase* StealthEntry = IsInStealthMode() && From == EOperativeStance::Standing && To == EOperativeStance::Crouching ? Anim->GetStealthCrouchClip() : nullptr;
+	const UAnimSequenceBase* Clip = StealthEntry ? StealthEntry : From == EOperativeStance::Prone
 		? (To == EOperativeStance::Crouching ? Anim->ProneToCrouchAnimation.Get() : Anim->ProneToStandAnimation.Get())
 		: To == EOperativeStance::Prone ? (From == EOperativeStance::Crouching ? Anim->CrouchToProneAnimation.Get() : Anim->StandToProneAnimation.Get())
 		: To == EOperativeStance::Crouching ? Anim->StandToCrouchAnimation.Get() : Anim->CrouchToStandAnimation.Get();
@@ -41,6 +42,17 @@ float AOperativeCharacter::GetStanceChangeDelay(EOperativeStance From, EOperativ
 
 void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 {
+	if (IsInStealthMode())
+	{
+		if (NewStance == EOperativeStance::Prone)
+		{
+			SetStealthMode(false); // a prone/critical body belongs to the existing crawl rules
+		}
+		else if (NewStance == EOperativeStance::Standing)
+		{
+			NewStance = EOperativeStance::Crouching; // cover entry must not stand a stealthed operative up
+		}
+	}
 	if (Stance == NewStance || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge())
 	{
 		return; // knocked down: he gets up standing (the get-up clip); on a ladder: standing until he is off it

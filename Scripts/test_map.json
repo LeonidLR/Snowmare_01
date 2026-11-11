@@ -37,7 +37,7 @@
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke", "FormationCustomSmoke", "FormationShapesSmoke",
     "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke", "FormationFarSideSmoke",
     "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "CombatLabAmbushSmoke", "SquadPeekNextWallSmoke", "CameraFreePanSmoke", "TowerVisionSmoke", "VisionHeightSmoke", "WallLeadershipSmoke", "CombatLabAmbushRelocateSmoke", "SquadHaltStanceSmoke", "LevelGenRouteSmoke", "LevelGenLaddersSmoke", "LevelGenRampSmoke", "RoofCutawayFocusSmoke", "FallDropSmoke", "DropSoftlockSmoke", "DropLinkReachSmoke", "WallSectorsSmoke", "GroupCoverNearbySmoke", "WallLeadershipSlideSmoke", "GroupCornerPeekSmoke", "RunCornerPeekSmoke", "TwoCornerHoldSmoke", "WallMoveNearestLeadsSmoke",
-    "PmcTeamSmoke", "PmcCommanderSmoke", "PmcArenaSmoke", "PmcArenaObjectiveSmoke", "PmcStalemateSmoke", "PmcEncounterSmoke", "PmcEncounterHuntSmoke", "PmcStandoffSmoke", "SightConditionsSmoke", "ConePerfSmoke", "WeaponReachSmoke", "PmcDeathPoseSmoke", "FireArcSmoke", "PmcUnderFireSmoke", "UnderFireManoeuvreSmoke", "SoloStanceSmoke", "LeaderSwitchMoveSmoke", "LeaderSwitchLadderSmoke", "PmcFireLineSmoke", "CornerStandoffSmoke", "HordeFirefightsSmoke", "CorpsePersistSmoke", "CorpseCostSmoke", "ProneCrawlSmoke", "InjuredLocomotionSmoke", "SoloStartSmoke", "FastRegroupSmoke", "InjuredLocomotionDepotSmoke", "WoundedFollowerSmoke"
+    "PmcTeamSmoke", "PmcCommanderSmoke", "PmcArenaSmoke", "PmcArenaObjectiveSmoke", "PmcStalemateSmoke", "PmcEncounterSmoke", "PmcEncounterHuntSmoke", "PmcStandoffSmoke", "SightConditionsSmoke", "ConePerfSmoke", "WeaponReachSmoke", "PmcDeathPoseSmoke", "FireArcSmoke", "PmcUnderFireSmoke", "UnderFireManoeuvreSmoke", "SoloStanceSmoke", "LeaderSwitchMoveSmoke", "LeaderSwitchLadderSmoke", "PmcFireLineSmoke", "CornerStandoffSmoke", "HordeFirefightsSmoke", "CorpsePersistSmoke", "CorpseCostSmoke", "ProneCrawlSmoke", "InjuredLocomotionSmoke", "StealthModeSmoke", "SoloStartSmoke", "FastRegroupSmoke", "InjuredLocomotionDepotSmoke", "WoundedFollowerSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -175,6 +175,31 @@
   },
   "nonSmokeDebugCommands": ["PmcArena", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RpgShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots"],
   "rules": [
+    {
+      "globs": [
+        "Source/**/Characters/StealthModeRules*",
+        "Source/**/Characters/OperativeCharacterStealth*",
+        "Source/**/Characters/OperativeAnimInstanceStealth*",
+        "Source/**/Debug/StealthModeSmoke*",
+        "Content/Data/AI/stealth_mode.json",
+        "Scripts/Editor/setup_stealth_animation.py"
+      ],
+      "tests": [
+        "CodexTactics.Characters.StealthMode",
+        "CodexTactics.Animation",
+        "CodexTactics.AI.Perception",
+        "CodexTactics.Combat.Sight"
+      ],
+      "smokes": [
+        "StealthModeSmoke",
+        "PeekSightSmoke",
+        "CoverSwitchSmoke",
+        "InjuredLocomotionSmoke",
+        "ProneCrawlSmoke",
+        "FormationLabSmoke",
+        "SoloStartSmoke"
+      ]
+    },
     {
       "name": "wound-pace-2026-11-11",
       "_comment": "The game designer's bug + decision 'a' 2026-11-11: while a wounded member is in the formation the whole squad walks at his pace (SquadWoundPaceRules, USquadSubsystem::UpdateFormationWoundPace in SquadSubsystemWoundPace.cpp, the leader's pace / the follower's top in SquadSubsystemFormation.cpp, Content/Data/AI/squad_wound_pace.json; Codex.Squad.WoundPace).",

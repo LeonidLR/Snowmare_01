@@ -18,6 +18,7 @@
 #include "Interactables/RelocationSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/StealthModeRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
 
@@ -209,6 +210,35 @@ void ACodexTacticsPlayerController::StartFlareAim()
 	}
 	Grenades->StartFlareAim(Leader);
 	ControllerCommands::Report(this, PlayerCommands::FlareAim);
+}
+
+void ACodexTacticsPlayerController::ToggleStealthModeKey()
+{
+	USquadSubsystem* Squad = GetSquad();
+	if (!Squad || RefuseIfLocked(PlayerCommands::StealthMode))
+	{
+		return;
+	}
+	const TArray<AOperativeCharacter*> Selected = Squad->GetSelectedGroup();
+	int32 Eligible = 0;
+	int32 Stealthed = 0;
+	for (const AOperativeCharacter* Member : Selected)
+	{
+		if (Member->IsInStealthMode() || Member->CanEnterStealthMode())
+		{
+			++Eligible;
+			Stealthed += Member->IsInStealthMode() ? 1 : 0;
+		}
+	}
+	const bool bEnable = StealthModeRules::EnableForSelection(Eligible, Stealthed);
+	for (AOperativeCharacter* Member : Selected)
+	{
+		const bool bWasEnabled = Member->IsInStealthMode();
+		if (Member->SetStealthMode(bEnable) && bWasEnabled != Member->IsInStealthMode())
+		{
+			ControllerCommands::Report(this, PlayerCommands::StealthMode, nullptr, false, false, Member);
+		}
+	}
 }
 
 void ACodexTacticsPlayerController::StealthWhistleKey()

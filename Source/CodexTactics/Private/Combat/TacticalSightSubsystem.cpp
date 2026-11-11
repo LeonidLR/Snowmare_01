@@ -7,6 +7,7 @@
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/StealthModeRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/EnemyGhostActor.h"
@@ -890,8 +891,11 @@ void UTacticalSightSubsystem::Update()
 			const float Distance = FVector::Dist2D(Operative->GetActorLocation(), Enemy->GetActorLocation());
 			// Sprint 12-E: high cover with the head down hides him from everything behind the wall (firing demasks).
 			const bool bCoverHidden = Operative->IsHiddenInCoverFrom(Enemy->GetActorLocation());
-			const bool bPerceives = IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance())
-				|| (!bCoverHidden && Distance <= EnemySightCm && HasClearSight(Eye, ProfilePoint(*Operative)));
+			const FStealthModeConfig& Stealth = StealthModeRules::GetConfig();
+			const float RangeScale = StealthModeRules::DetectionRangeScale(Operative->IsInStealthMode(), Stealth);
+			const float NoiseScale = StealthModeRules::FootstepNoiseScale(Operative->IsInStealthMode(), Stealth);
+			const bool bPerceives = IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance()) * NoiseScale
+				|| (!bCoverHidden && Distance <= EnemySightCm * RangeScale && HasClearSight(Eye, ProfilePoint(*Operative)));
 			if (bPerceives)
 			{
 				Known.Add(Operative, { Operative->GetActorLocation(), Now, -1.0, true });

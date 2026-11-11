@@ -173,6 +173,15 @@ private:
 	void HandleStealthWhistle();
 
 	UFUNCTION()
+	void HandleStealthMode();
+
+	UPROPERTY()
+	TObjectPtr<UButton> StealthModeButton;
+
+	UPROPERTY()
+	TObjectPtr<UTextBlock> StealthModeText;
+
+	UFUNCTION()
 	void HandleStealthThrow();
 
 	UPROPERTY()

@@ -29,6 +29,8 @@
 #include "OperativeCharacter.generated.h"
 
 class UMaterialInterface;
+class UMaterialInstanceDynamic;
+class UMeshComponent;
 enum class EOperativeHitKind : uint8; // Characters/OperativeHitRules.h
 
 /** One area-fire round (AOperativeCharacter::FireAreaRound): quick fire or the SUPPRESS order (2026-10-26). */
@@ -386,6 +388,16 @@ public:
 	 * (SquadWoundPaceRules) compares.
 	 */
 	float GetAllowedWalkSpeed() const;
+
+	/** Designer task 003: explicit per-operative stealth toggle; entering crouches, leaving keeps the stance. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Stealth")
+	bool SetStealthMode(bool bEnabled);
+	/** Eligibility for the HUD and group toggle; critical, incapacitated, mounted and traversal states refuse entry. */
+	bool CanEnterStealthMode() const;
+	/** Whether this operative is currently stealthed (fire/sprint require an explicit re-entry). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Stealth")
+	bool IsInStealthMode() const { return bStealthMode; }
+
 
 	/** True while the operative has a move order in progress or still visibly moves. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Operative")
@@ -3179,4 +3191,18 @@ private:
 	int32 LauncherAutoReturns = 0;
 	int32 LauncherFallbacks = 0;
 	int32 LauncherStrikeShots = 0;
+private:
+	// Stealth mode (UE-only, designer task 003). Material instances are runtime-only; no asset is saved.
+	UPROPERTY(Transient)
+	bool bStealthMode = false;
+	UPROPERTY(Transient)
+	TObjectPtr<UMaterialInstanceDynamic> StealthMaterial;
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<UMaterialInterface>> StealthOriginalMaterials;
+	TArray<TWeakObjectPtr<UMeshComponent>> StealthMeshes;
+	TArray<int32> StealthMaterialCounts;
+	void UpdateStealthMode();
+	void RefreshStealthVisuals();
+	void HandleStealthWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit);
+
 };

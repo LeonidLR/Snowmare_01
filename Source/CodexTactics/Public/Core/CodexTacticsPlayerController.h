@@ -690,6 +690,9 @@ public:
 	 */
 	void StealthWhistleKey();
 
+	/** 7 / the STEALTH action-bar button: toggle the selected operatives together (designer task 003). */
+	void ToggleStealthModeKey();
+
 	/** 6 / the action bar THROW: the stone throw aim (UGrenadeSubsystem::StartLureAim); again while aiming: cancel. */
 	void StealthThrowKey();
 
@@ -779,6 +782,9 @@ private:
 	/** Stealth lure keys 5 (whistle) / 6 (throw) - free number keys next to the squad keys 1-4. */
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> StealthWhistleAction;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UInputAction> StealthModeAction;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UInputAction> StealthThrowAction;

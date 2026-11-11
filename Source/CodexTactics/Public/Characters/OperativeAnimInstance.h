@@ -272,6 +272,10 @@ private:
 	 * The prone crawl layer (the game designer's CrawlAndShoot_Bug_01, 2026-11-09): the 8-direction crawl clips blended over the graph's prone
 	 * pose on every bone but the root (the root keeps its reference rotation / translation: the capsule moves the body and faces the threat).
 	 */
+	/** Full-body stealth pose, sampled from the game-thread snapshot. */
+	void BlendStealthLayer(FPoseContext& Output) const;
+	TStaticArray<FOperativeClipState, 12> StealthClips;
+	float StealthWeight = 0.f;
 	void BlendProneCrawlLayer(FPoseContext& Output) const;
 	TStaticArray<FOperativeClipState, 6> CrawlClips;
 	float CrawlWeight = 0.f;
@@ -1366,6 +1370,12 @@ public:
 
 	/** The injured layer's blend weight this frame (0..1; smokes). */
 	float GetInjuredWeight() const { return InjuredWeight; }
+	/** Stealth layer diagnostics for the in-game smoke. */
+	bool HasStealthSet() const { return StealthSetData.StandIdle != nullptr; }
+	float GetStealthWeight() const { return StealthWeight; }
+	const UAnimSequenceBase* GetStealthDominantClip() const;
+	/** Pack crouch entry, used by both the stance montage and its movement hold. */
+	UAnimSequenceBase* GetStealthCrouchClip() const;
 	/** The gait the layer plays this frame (smokes). */
 	InjuredLocomotionRules::EInjuredGait GetInjuredGait() const { return InjuredGait; }
 	/** The heaviest injured clip this frame (null when the layer is off; smokes). */
@@ -1816,6 +1826,9 @@ private:
 		UAnimSequence* AimIdle = nullptr;
 		UAnimSequence* CrouchIdle = nullptr;
 		UAnimSequence* Sprint = nullptr;
+		/** Optional named actions / wall loops; rooted by ShotgunClipRefs like the directional clips. */
+		TMap<FName, UAnimSequence*> NamedClips;
+		TMap<FName, float> ClipSpeeds;
 		TStaticArray<UAnimSequence*, 8> Walk;
 		TStaticArray<UAnimSequence*, 8> AimWalk;
 		TStaticArray<UAnimSequence*, 8> Jog;
@@ -2073,6 +2086,23 @@ private:
 
 	// The injured locomotion layer (OperativeAnimInstanceInjured.cpp).
 	/** The "injured" block: StandIdle = the injured idle, Walk = the 8 injured walk loops, SlowWalk / InjuredCrawl / InjuredCrawlIdle. */
+	FShotgunAnimSet StealthSetData;
+	FString StealthRetargetFolder;
+	void UpdateStealthLayer(float DeltaSeconds);
+	TStaticArray<FOperativeClipState, 12> StealthClips;
+	FWeaponLayerDirectionState StealthDirection;
+	float StealthWeight = 0.f;
+	float StealthPhase = 0.f;
+	float StealthIdleTime = 0.f;
+	float StealthActionTime = 0.f;
+	float StealthFireBlockSeconds = 0.f;
+	UAnimSequence* StealthAction = nullptr;
+	bool bStealthWasActive = false;
+	bool bStealthWasMoving = false;
+	bool bStealthWasPeeking = false;
+	bool bStealthWasAtWall = false;
+	ECoverFacing StealthLastSide = ECoverFacing::Right;
+	float StealthLastYaw = 0.f;
 	FShotgunAnimSet InjuredSetData;
 	/** The prone crawl set with the injured crawl in its forward slot and its idle (built from CrawlSetData; empty without the clips). */
 	FShotgunAnimSet InjuredCrawlSetData;

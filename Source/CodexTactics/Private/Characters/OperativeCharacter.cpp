@@ -131,6 +131,7 @@ void AOperativeCharacter::OnConstruction(const FTransform& Transform)
 void AOperativeCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	OnWeaponFiredNative.AddUObject(this, &AOperativeCharacter::HandleStealthWeaponFired);
 	// Body armour (weapons framework, decision 1 2026-11-08): the squad and the PMC fighters share weapons_tuning.json
 	// "armor.bodies.operative" (class + reduction) over the constructor's fallback.
 	if (HealthComponent)
@@ -291,6 +292,7 @@ void AOperativeCharacter::ApplyBodyColor()
 
 void AOperativeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	SetStealthMode(false);
 	if (SelectionRing)
 	{
 		SelectionRing->Destroy();
@@ -325,6 +327,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	const float TickYawBefore = static_cast<float>(GetActorRotation().Yaw);
 	Super::Tick(DeltaTime);
 	UpdateCriticalWound(); // the critical wound: down and crawling only until healed (CriticalWoundRules, OperativeCharacterStance.cpp)
+	UpdateStealthMode();
 	UpdateCorpseFall(DeltaTime); // fix/corpse-falls-to-ground: a body killed off the ground lands before it lies still
 	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
 	UpdateProneDive(DeltaTime);

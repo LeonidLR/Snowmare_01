@@ -485,6 +485,12 @@ void AOperativeCharacter::StopOperative()
 
 void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 {
+	if (bNewSprinting && IsInStealthMode() && !bCarrying && !IsCriticallyWounded()
+		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
+	{
+		SetStealthMode(false);
+		SetStance(EOperativeStance::Standing);
+	}
 	const bool bAllowed = bNewSprinting && CanSprint() && Stance == EOperativeStance::Standing;
 	if (bSprinting != bAllowed)
 	{
