@@ -1004,6 +1004,8 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-11-11 (Codex, interim lead): took over integration worktree `../CodexTactics-interim` on `interim/2026-11-12`; main frozen. Assigned Gemini the TS formation pair rule (chat 113), preparing stealth 003 next; no implementation or merges yet. Hand-back report initialized.
+
 - 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 4/4): HUD labels skip a member without a capsule; four fixes ready for Claude review. Build, 47 focused tests, the required three smokes and the extra Depot smoke passed. No assets changed.
 
 - 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 3/4): fix(squad): preserve critical wound stance on regroup Review finding 4: skip SetStance and MarkStanceFromSquad for critically wounded followers, preserving their prone stance.
