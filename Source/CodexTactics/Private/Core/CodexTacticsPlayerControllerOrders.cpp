@@ -360,7 +360,8 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	}
 
 	// Stealth v2 §5 (manual look anchor): Shift + LMB fixes a look point (or clears it when clicking a selected stealthed operative).
-	// Wins in stealth before suppress/select/move; outside stealth Shift + LMB behavior is unchanged.
+	// Wins when the active selection is purely stealthed and not Shift-clicking an unselected/non-stealthed squad member;
+	// mixed selections and Shift+click squad select/suppress/watch-sector keep their normal behavior.
 	if (IsShiftModifierDown())
 	{
 		const TArray<AOperativeCharacter*> SelectedGroup = Squad->GetSelectedGroup();
@@ -374,8 +375,12 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		}
 		if (!StealthedSelected.IsEmpty())
 		{
-			AOperativeCharacter* ClickedSelf = FindClickedMember(InHit);
-			if (ClickedSelf && StealthedSelected.Contains(ClickedSelf))
+			AOperativeCharacter* ClickedSelf = FindClickedMember(Hit);
+			if (ClickedSelf && !StealthedSelected.Contains(ClickedSelf))
+			{
+				// Allow normal Shift+click add/remove selection on unselected or non-stealthed operatives.
+			}
+			else if (ClickedSelf)
 			{
 				bool bClearedAny = false;
 				for (AOperativeCharacter* Member : StealthedSelected)
@@ -385,18 +390,18 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 				}
 				if (bClearedAny)
 				{
-					UFloatingTextSubsystem::SpawnAboveOperative(ClickedSelf, TEXT("👁️ LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+					UFloatingTextSubsystem::SpawnAboveOperative(ClickedSelf, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
 				}
 				HideCoverPreview();
 				return;
 			}
-			if (Hit.bBlockingHit)
+			else if (StealthedSelected.Num() == SelectedGroup.Num() && Hit.bBlockingHit)
 			{
 				for (AOperativeCharacter* Member : StealthedSelected)
 				{
 					Member->SetStealthManualLookTarget(Hit.ImpactPoint);
 				}
-				UFloatingTextSubsystem::SpawnAboveOperative(StealthedSelected[0], TEXT("👁️ LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+				UFloatingTextSubsystem::SpawnAboveOperative(StealthedSelected[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
 				HideCoverPreview();
 				return;
 			}

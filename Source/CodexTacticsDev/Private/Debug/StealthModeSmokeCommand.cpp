@@ -998,6 +998,7 @@ namespace StealthModeSmoke
 			ResetHit.bBlockingHit = true;
 			PC->HandleWorldHit(ResetHit);
 			PC->RightMousePressed();
+			PC->RightMouseReleased();
 			PC->SetSimulatedShiftModifier(false);
 			Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: Shift + RMB clears manual stealth look anchor"));
 			PC->SetSimulatedShiftModifier(true);

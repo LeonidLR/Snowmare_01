@@ -118,7 +118,8 @@ void AOperativeCharacter::ClearStealthManualLookTarget()
 
 bool AOperativeCharacter::GetStealthLookPoint(FVector& OutPoint) const
 {
-	if (HasStealthManualLookTarget() && FVector::DistSquared2D(GetActorLocation(), StealthManualLookTarget) > 4.f)
+	constexpr float LookPointDeadRadiusSq = 50.f * 50.f;
+	if (HasStealthManualLookTarget() && FVector::DistSquared2D(GetActorLocation(), StealthManualLookTarget) > LookPointDeadRadiusSq)
 	{
 		OutPoint = StealthManualLookTarget;
 		return true;

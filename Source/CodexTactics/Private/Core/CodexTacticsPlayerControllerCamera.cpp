@@ -11,6 +11,7 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
@@ -148,17 +149,21 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 	{
 		if (USquadSubsystem* Squad = GetSquad())
 		{
-			bool bClearedAny = false;
+			AOperativeCharacter* FirstCleared = nullptr;
 			for (AOperativeCharacter* Member : Squad->GetSelectedGroup())
 			{
 				if (Member && Member->HasStealthManualLookTarget())
 				{
 					Member->ClearStealthManualLookTarget();
-					bClearedAny = true;
+					if (!FirstCleared)
+					{
+						FirstCleared = Member;
+					}
 				}
 			}
-			if (bClearedAny)
+			if (FirstCleared)
 			{
+				UFloatingTextSubsystem::SpawnAboveOperative(FirstCleared, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
 				return;
 			}
 		}

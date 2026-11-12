@@ -832,8 +832,7 @@ bool USquadSubsystem::UseFormationStart()
 		bTrapSolo = false;
 		bSoloFromLevelStart = false;
 		SoloGuardCrouchWait.Reset();
-		SetFollowersHolding(false);
-		EnforceFormationStealthRule();
+		SetFollowersHolding(false); // EnforceFormationStealthRule() runs inside SetFollowersHolding(false) after bIsSoloMode is cleared
 		UE_LOG(LogCodexTactics, Display, TEXT("[Squad] formation start requested - the level start's Solo ends quietly"));
 	}
 	return !bIsSoloMode;

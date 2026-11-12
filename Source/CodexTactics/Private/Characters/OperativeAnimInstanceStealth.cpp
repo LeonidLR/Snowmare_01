@@ -75,10 +75,10 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	const FString WallPrefix = CoverFacing == ECoverFacing::Left ? TEXT("Stealth_LeftWall_") : TEXT("Stealth_RightWall_");
 	auto Named = [&Set](const FString& Name) { return Set.NamedClips.FindRef(FName(*Name)); };
 	auto Length = [](const UAnimSequence* Clip) { return Clip ? FMath::Max(0.1f, Clip->GetPlayLength()) : 1.f; };
-	if (MoveSpeed > 3.f)
+	if (bMoving)
 	{
 		// Start each walk cleanly from its actual initial heading instead of sweeping from 0 deg (F) or a prior walk.
-		if (!bStealthWasMoving && bMoving)
+		if (!bStealthWasMoving)
 		{
 			StealthDirection = FWeaponLayerDirectionState();
 		}
