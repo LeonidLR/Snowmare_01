@@ -178,8 +178,8 @@
   "rules": [
     {
       "name": "hitch-probe-2026-11-12",
-      "globs": ["Source/**/Debug/HitchProbeSmoke*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Characters/OperativeAnimInstance*", "Source/**/Ladders/LadderClimbComponent*", "Source/**/Combat/WaveSubsystem*", "Source/**/AI/PmcSquadSubsystem*"],
-      "tests": [],
+      "globs": ["Source/**/Core/GameplayPreload*", "Source/**/Debug/HitchProbeSmoke*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Characters/OperativeAnimInstance*", "Source/**/Ladders/LadderClimbComponent*", "Source/**/Combat/WaveSubsystem*", "Source/**/AI/PmcSquadSubsystem*"],
+      "tests": ["CodexTactics.Core.GameplayPreload"],
       "smokes": ["HitchProbeSmoke"]
     },
     {

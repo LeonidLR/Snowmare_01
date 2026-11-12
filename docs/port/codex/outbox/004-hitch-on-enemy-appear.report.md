@@ -36,3 +36,25 @@ Terra traced the existing load paths through git history. These are introduction
 | Concurrent 30-second schedules | Pressure b385755c (11-01), PMC 2f05a0e9 (11-03) | Schedule overlap predates the report; do not call it a newly introduced scheduling regression. |
 
 Dates above follow commit-local timestamps; normalize against log timestamps before causal ordering. JSON clip-path leaf counts are not runtime-load counts (retarget/fallback/repeated references differ). No bisect, cold/warm timing, packaged test, or >250 ms gate has yet run for this checkpoint.
+
+## Executed baseline and first catalog part (2026-11-12)
+
+Current diagnostic C++ build PASS (46.89 s, UE 5.8.3 CL58210709). Two fresh-process -game runs reproduced the issue; these are NOT cold/warm PIE measurements:
+
+| Measurement | First process | Second process, explicit CPU trace |
+|---|---:|---:|
+| Process elapsed | 92.4 s | 33.8 s |
+| Maximum measured gameplay frame | 3641.83 ms | 1755.95 ms |
+| PMC squad spawn (3) | 2366.08 ms | 1320.89 ms |
+| Military zombie spawn, same frame | 1266.16 ms | 431.07 ms |
+| Same-frame spawn sum | 3632.23 ms | 1751.96 ms |
+
+Leader actually moved 575.9 cm; configured class and seven-entry roster checks passed. Both performance gates FAIL as expected before a fix. First-run startup: SpawnSquad 7434.34 ms, first operative AnimInitialize 3460.69 ms. Second-run startup: StartPlay 4049.62 ms, SpawnSquad 3989.28 ms, first AnimInitialize 1802.11 ms. Process/DDC warm-up differs; do not equate the second fresh process with a second PIE in the same editor.
+
+Evidence in interim Saved: Logs/HitchProbe-cold-baseline-2026-11-12.json; Logs/HitchProbe-traced-baseline-2026-11-12.json; Orchestrator/hitch-baseline-traced-2026-11-12.log; Orchestrator/hitch-baseline-2026-11-12.utrace; Orchestrator/hitch-baseline-events.csv. The first harness log was overwritten by its normal second-run log naming; first metrics above were captured before overwrite. Explicit -tracefile was needed: the first run had only an in-memory trace. Insights relative export initially landed in its executable directory; that single generated CSV was moved to interim, future exports must use absolute paths. No engine source/assets were changed.
+
+CPU trace proof (GameThread, second run): FEngineLoop::Tick at trace t28.538724 = 1.756003 s; Tick_Core = 1.752362 s; SKM_PmcOperator / ABP_Operative_C -> Codex_OperativeAnimInitialize = 1.251966 s; military-zombie LoadObject -> StaticLoadObjectInternal -> LoadPackageInternal -> FlushAsyncLoading = 0.407535 s. These are measured synchronous load/initialization stalls, not speculative perception/nav cost. Original 13.9 s PIE gap still has no direct trace attribution. Engine toolset Python startup AttributeError messages are separate pre-measurement engine-plugin errors, not attributed to the spawn hitch.
+
+First implementation part: new Core/GameplayPreloadCatalog gathers configured enemy/variant classes, squad/PMC bodies, loadout/PMC weapons/looks, ladder CDO clips and process-cached weapon-animation JSON paths, retaining the runtime retarget helper and excluding folder metadata. It performs no loading and does not alter gameplay yet. Native M4/ProneDive/interaction/blizzard and Blueprint/SCS overrides remain explicit gaps. Catalog build PASS 9.07 s; two CodexTactics.Core.GameplayPreload tests PASS; impact-map check PASS. Build's Find unity-clash heuristic warning concerns distinct named test namespaces, no compiler/link failure.
+
+Routing: 4 | gpt-6-astra | readiness/lifecycle design PASS (review only); 3 (Jev .89) | gpt-6.1-terra | initial catalog PASS after build/tests. Async coordinator, complete catalog, deferred binding, shared ladder preparation, readiness/spawn gates and post-fix proof remain IN PROGRESS; task004 is not done.
