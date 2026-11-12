@@ -222,6 +222,7 @@ void ACodexTacticsPlayerController::ToggleStealthModeKey()
 	const TArray<AOperativeCharacter*> Selected = Squad->GetSelectedGroup();
 	int32 Eligible = 0;
 	int32 Stealthed = 0;
+	bool bBlockedByFormation = false;
 	for (const AOperativeCharacter* Member : Selected)
 	{
 		if (Member->IsInStealthMode() || Member->CanEnterStealthMode())
@@ -229,12 +230,23 @@ void ACodexTacticsPlayerController::ToggleStealthModeKey()
 			++Eligible;
 			Stealthed += Member->IsInStealthMode() ? 1 : 0;
 		}
+		else if (Member->CanEnterStealthWithoutFormation() && Squad->IsStealthBlockedByFormation(*Member))
+		{
+			bBlockedByFormation = true;
+		}
 	}
-	const bool bEnable = StealthModeRules::EnableForSelection(Eligible, Stealthed);
 	if (Eligible == 0)
 	{
+		if (bBlockedByFormation)
+		{
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(NSLOCTEXT("Squad", "SquadSender", "SQUAD"), StealthModeRules::GetFormationBlockedTooltip());
+			}
+		}
 		return;
 	}
+	const bool bEnable = StealthModeRules::EnableForSelection(Eligible, Stealthed);
 	for (AOperativeCharacter* Member : Selected)
 	{
 		const bool bWasEnabled = Member->IsInStealthMode();

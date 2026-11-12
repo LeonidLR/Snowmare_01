@@ -835,8 +835,8 @@ void UActionBarWidget::RefreshStealthButtons(const AOperativeCharacter& Leader)
 			bAnyStealthed |= Member->IsInStealthMode();
 			const bool bCan = Member->IsInStealthMode() || Member->CanEnterStealthMode();
 			bAvailable |= bCan;
-			bAnyBlockedByFormation |= !bCan && Squad && StealthModeRules::IsBlockedByFormation(Squad->IsSoloMode() || Squad->AreFollowersHolding(),
-				Squad->IsFormationActive(), Member->bGuarding);
+			bAnyBlockedByFormation |= !Member->IsInStealthMode() && Member->CanEnterStealthWithoutFormation()
+				&& Squad && Squad->IsStealthBlockedByFormation(*Member);
 		}
 		ActionBarDirty::SetBackground(StealthModeButton, bAnyStealthed ? BarStealthActiveColor : BarStealthColor);
 		ActionBarDirty::SetText(StealthModeText, bAnyStealthed ? LOCTEXT("StealthModeOn", "STEALTH\nON [7]") : LOCTEXT("StealthMode", "STEALTH\n[7]"));
@@ -845,7 +845,7 @@ void UActionBarWidget::RefreshStealthButtons(const AOperativeCharacter& Leader)
 			StealthModeButton->SetIsEnabled(bAvailable);
 		}
 		SetToolTipIfChanged(StealthModeButton, !bAvailable && bAnyBlockedByFormation
-			? LOCTEXT("StealthSoloOnlyTip", "Стелс - только в соло")
+			? StealthModeRules::GetFormationBlockedTooltip()
 			: LOCTEXT("StealthModeTip", "Toggle stealth for the selected operatives [7]. Crouched movement; fire or sprint breaks it for that operative."));
 	}
 	UStealthLureSubsystem* Lure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();

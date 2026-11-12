@@ -471,6 +471,7 @@ void ACodexTacticsHUD::DrawHUD()
 	DrawSelectionBox();
 	DrawCoverSwitchPreview();
 	DrawSquadMovePreview();
+	DrawStealthLookMarkers();
 	DrawDropMarkers();
 	DrawFormationPlacement();
 	if (ShowsLabel(EHudLabel::FloatingTexts))
@@ -1064,6 +1065,46 @@ void ACodexTacticsHUD::DrawStealthLureMarkers()
 		{
 			Marker(Enemy, SmallFont, TEXT("HEARS"), FLinearColor(0.35f, 0.85f, 1.f), 40.f, 1.2f);
 		}
+	}
+}
+
+void ACodexTacticsHUD::DrawStealthLookMarkers()
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (!Squad)
+	{
+		return;
+	}
+	const FLinearColor LineColor(0.25f, 0.9f, 1.f, 0.72f);
+	const FLinearColor EyeColor(0.45f, 0.98f, 1.f, 0.95f);
+	TArray<FVector> DrawnEyes;
+	for (const AOperativeCharacter* Member : Squad->GetSelectedGroup())
+	{
+		if (!Member || !Member->HasStealthManualLookTarget())
+		{
+			continue;
+		}
+		const FVector Anchor = Member->GetStealthManualLookTarget();
+		const FVector Start = Member->GetActorLocation() - FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight() - 8.f);
+		const FVector ScreenStart = Project(Start, true);
+		const FVector ScreenEnd = Project(Anchor + FVector(0.f, 0.f, 8.f), true);
+		if (ScreenStart.Z > 0.f && ScreenEnd.Z > 0.f)
+		{
+			DrawLine(ScreenStart.X, ScreenStart.Y, ScreenEnd.X, ScreenEnd.Y, LineColor, 1.5f);
+		}
+		if (ScreenEnd.Z <= 0.f || DrawnEyes.ContainsByPredicate([&Anchor](const FVector& Existing) { return FVector::DistSquared(Existing, Anchor) < 25.f; }))
+		{
+			continue;
+		}
+		DrawnEyes.Add(Anchor);
+		const FVector2D C(ScreenEnd.X, ScreenEnd.Y);
+		constexpr float HalfW = 11.f;
+		constexpr float HalfH = 5.5f;
+		DrawLine(C.X - HalfW, C.Y, C.X, C.Y - HalfH, EyeColor, 1.8f);
+		DrawLine(C.X, C.Y - HalfH, C.X + HalfW, C.Y, EyeColor, 1.8f);
+		DrawLine(C.X + HalfW, C.Y, C.X, C.Y + HalfH, EyeColor, 1.8f);
+		DrawLine(C.X, C.Y + HalfH, C.X - HalfW, C.Y, EyeColor, 1.8f);
+		DrawRect(EyeColor, C.X - 2.5f, C.Y - 2.5f, 5.f, 5.f);
 	}
 }
 

@@ -75,11 +75,20 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	const FString WallPrefix = CoverFacing == ECoverFacing::Left ? TEXT("Stealth_LeftWall_") : TEXT("Stealth_RightWall_");
 	auto Named = [&Set](const FString& Name) { return Set.NamedClips.FindRef(FName(*Name)); };
 	auto Length = [](const UAnimSequence* Clip) { return Clip ? FMath::Max(0.1f, Clip->GetPlayLength()) : 1.f; };
-	if (MoveSpeed > 3.f || !StealthDirection.bValid)
+	if (MoveSpeed > 3.f)
 	{
-		const float Raw = MoveSpeed > 3.f ? ProneCrawlRules::RelativeMoveDeg(static_cast<float>(Operative->GetActorRotation().Yaw), static_cast<float>(Velocity.Rotation().Yaw)) : 0.f;
+		// Start each walk cleanly from its actual initial heading instead of sweeping from 0 deg (F) or a prior walk.
+		if (!bStealthWasMoving && bMoving)
+		{
+			StealthDirection = FWeaponLayerDirectionState();
+		}
+		const float Raw = ProneCrawlRules::RelativeMoveDeg(static_cast<float>(Operative->GetActorRotation().Yaw), static_cast<float>(Velocity.Rotation().Yaw));
 		WeaponLayerHandoffRules::StepLayerDirection(StealthDirection, Raw, DeltaSeconds, Set.DirectionSmoothSeconds, Set.DirectionDeadZoneDeg,
 			Set.DirectionSnapDeg, Set.DirectionFadeSeconds);
+	}
+	else if (!bStealthWasMoving && !StealthAction)
+	{
+		StealthDirection = FWeaponLayerDirectionState();
 	}
 	TStaticArray<bool, 8> Available;
 	for (int32 Index = 0; Index < 8; ++Index)

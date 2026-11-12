@@ -82,9 +82,16 @@ namespace StealthModeSmoke
 		FVector Forward = FVector::ForwardVector;
 		FVector Right = FVector::RightVector;
 		FVector WallOrigin = FVector::ZeroVector;
+		FVector AnchorPoint = FVector::ZeroVector;
+		int32 AnchorSamples = 0;
+		int32 AnchorSideClipSamples = 0;
+		int32 AnchorForwardClipSamples = 0;
+		int32 AnchorWrongYawFrames = 0;
+		int32 AnchorLostSightFrames = 0;
 		float GroundZ = 0.f;
 		TWeakObjectPtr<AOperativeCharacter> Op;
 		TWeakObjectPtr<AEnemyCharacter> Enemy;
+		TWeakObjectPtr<AEnemyCharacter> AnchorEnemy;
 		TWeakObjectPtr<AStaticMeshActor> Wall;
 		TWeakObjectPtr<UMaterialInterface> OriginalMaterial;
 		TMap<FString, int32> Votes;
@@ -354,6 +361,39 @@ namespace StealthModeSmoke
 			else { State.bWallPhaseValid = false; }
 		}
 
+		if (State.Stage == 612)
+		{
+			if (const UTacticalSightSubsystem* Sight = Op->GetWorld() ? Op->GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
+			{
+				if (State.AnchorEnemy.IsValid() && !Sight->IsVisibleToSquad(State.AnchorEnemy.Get()))
+				{
+					++State.AnchorLostSightFrames;
+				}
+			}
+			const float ExpectedYaw = static_cast<float>((State.AnchorPoint - Op->GetActorLocation()).Rotation().Yaw);
+			if (FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw)) > 10.f)
+			{
+				++State.AnchorWrongYawFrames;
+			}
+			const UOperativeAnimInstance* Instance = Anim(Op);
+			if (Instance && Instance->GetStealthWeight() > 0.9f && Op->GetVelocity().Size2D() > 20.f)
+			{
+				if (const UAnimSequenceBase* Clip = Instance->GetStealthDominantClip())
+				{
+					++State.AnchorSamples;
+					const FString Name = Clip->GetName();
+					if (Name.Contains(TEXT("_L_")) || Name.Contains(TEXT("_FL_")) || Name.Contains(TEXT("_BL_")))
+					{
+						++State.AnchorSideClipSamples;
+					}
+					else if (Name.Contains(TEXT("_F_")))
+					{
+						++State.AnchorForwardClipSamples;
+					}
+				}
+			}
+		}
+
 		if (State.Stage == 2)
 		{
 			Op->SetFormationLookYaw(static_cast<float>(State.Forward.Rotation().Yaw));
@@ -470,9 +510,19 @@ namespace StealthModeSmoke
 				if (Bar)
 				{
 					Check(State, !Bar->IsStealthModeButtonEnabled(), TEXT("STEALTH button disabled in formation mode"));
-					Check(State, Bar->GetStealthModeButtonToolTip().ToString().Contains(TEXT("Стелс - только в соло")),
+					Check(State, Bar->GetStealthModeButtonToolTip().EqualTo(StealthModeRules::GetFormationBlockedTooltip()),
 						TEXT("STEALTH button shows solo-only tooltip in formation mode"));
 				}
+				Squad->ToggleGuard(Op);
+				Check(State, Op->bGuarding && Op->CanEnterStealthMode(), TEXT("guarding member in formation may stealth"));
+				PC->ToggleStealthModeKey();
+				Check(State, Op->IsInStealthMode(), TEXT("guarding member enters stealth via key 7"));
+				Squad->ToggleGuard(Op);
+				Check(State, !Op->bGuarding && !Op->IsInStealthMode(), TEXT("un-guarding in formation immediately exits stealth"));
+				Squad->SetFollowersHolding(true);
+				Check(State, Op->CanEnterStealthMode() && Op->SetStealthMode(true), TEXT("holding followers outside solo allows stealth"));
+				Squad->SetFollowersHolding(false);
+				Check(State, !Op->IsInStealthMode(), TEXT("hold -> follow in formation immediately exits stealth"));
 				Squad->EnterSoloMode();
 				if (Bar) { Bar->Refresh(); }
 				Check(State, Squad->IsSoloMode() && Op->CanEnterStealthMode() && (!Bar || Bar->IsStealthModeButtonEnabled()),
@@ -874,12 +924,96 @@ namespace StealthModeSmoke
 			if (!Op->bInCover && State.StageTime < 8.f) { return true; }
 			Check(State, Op->bInCover && Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && !Op->IsStealthFast(),
 				TEXT("section 4: fast stealth cover arrival enters wall cover in stealth without standing up"));
-			Op->LeaveCover(TEXT("section 4: reset before knockdown"));
+			Op->LeaveCover(TEXT("section 4: reset before manual look anchor"));
 			Op->StopOperative();
 			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
 			Op->SetActorRotation(State.Forward.Rotation());
+			Next(State, 610);
+			break;
+		case 610:
+		{
+			if (State.StageTime < 0.3f) { return true; }
+			Op->SetFormationLookYaw(TOptional<float>());
+			Op->SetStealthMode(true);
+			State.AnchorPoint = State.Origin + State.Right * 380.f;
+			if (UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>())
+			{
+				if (AEnemyCharacter* AnchorEnemy = Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, State.AnchorPoint, (-State.Right).Rotation()))
+				{
+					AnchorEnemy->SetActorTickEnabled(false);
+					AnchorEnemy->CustomTimeDilation = 0.f;
+					AnchorEnemy->bOverridePerception = true;
+					AnchorEnemy->PerceptionOverride.SightRangeCm = 0.f;
+					AnchorEnemy->PerceptionOverride.ProximityCm = 0.f;
+					AnchorEnemy->PerceptionOverride.SmellRadiusCm = 0.f;
+					State.AnchorEnemy = AnchorEnemy;
+				}
+			}
+			Sight->Refresh();
+			Check(State, State.AnchorEnemy.IsValid(), TEXT("section 5: anchor enemy fixture spawned"));
+			PC->SetSimulatedShiftModifier(true);
+			FHitResult AnchorHit(nullptr, nullptr, State.AnchorPoint, FVector::UpVector);
+			AnchorHit.bBlockingHit = true;
+			PC->HandleWorldHit(AnchorHit);
+			PC->SetSimulatedShiftModifier(false);
+			Check(State, Op->HasStealthManualLookTarget() && FVector::Dist2D(Op->GetStealthManualLookTarget(), State.AnchorPoint) < 5.f,
+				TEXT("section 5: Shift + LMB on ground fixes manual stealth look anchor"));
+			Next(State, 611);
+			break;
+		}
+		case 611:
+		{
+			if (State.StageTime < 0.35f) { return true; }
+			const float ExpectedYaw = static_cast<float>((State.AnchorPoint - Op->GetActorLocation()).Rotation().Yaw);
+			Check(State, FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw)) <= 10.f,
+				TEXT("section 5: operative rotates onto manual look anchor"));
+			Sight->Refresh();
+			Check(State, State.AnchorEnemy.IsValid() && Sight->IsVisibleToSquad(State.AnchorEnemy.Get()),
+				TEXT("section 5: enemy at manual anchor visible before orthogonal move"));
+			State.AnchorSamples = State.AnchorSideClipSamples = State.AnchorForwardClipSamples = 0;
+			State.AnchorWrongYawFrames = State.AnchorLostSightFrames = 0;
+			Op->OrderMoveTo(State.Origin + State.Forward * 380.f, false);
+			Next(State, 612);
+			break;
+		}
+		case 612:
+		{
+			if ((State.StageTime < 0.4f || Op->GetVelocity().Size2D() > 10.f) && State.StageTime < 8.f) { return true; }
+			Check(State, State.AnchorSamples > 0 && State.AnchorWrongYawFrames == 0,
+				TEXT("section 5: yaw stays within 10 deg of manual anchor throughout orthogonal move"));
+			Check(State, State.AnchorSideClipSamples > 0 && State.AnchorForwardClipSamples == 0,
+				FString::Printf(TEXT("section 5: lateral stealth clip plays instead of forward F clip while moving 90 deg off anchor (side=%d fwd=%d total=%d)"),
+					State.AnchorSideClipSamples, State.AnchorForwardClipSamples, State.AnchorSamples));
+			Check(State, State.AnchorLostSightFrames == 0 && State.AnchorEnemy.IsValid() && Sight->IsVisibleToSquad(State.AnchorEnemy.Get()),
+				TEXT("section 5: enemy at anchor stays visible to the squad during orthogonal stealth move"));
+			// Clear via Shift + LMB on self, then re-set and clear via Shift + RMB, then auto-clear on leaving stealth.
+			PC->SetSimulatedShiftModifier(true);
+			FHitResult SelfHit(Op, nullptr, Op->GetActorLocation(), FVector::UpVector);
+			SelfHit.bBlockingHit = true;
+			PC->HandleWorldHit(SelfHit);
+			PC->SetSimulatedShiftModifier(false);
+			Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: Shift + LMB on self clears manual stealth look anchor"));
+			PC->SetSimulatedShiftModifier(true);
+			FHitResult ResetHit(nullptr, nullptr, State.AnchorPoint, FVector::UpVector);
+			ResetHit.bBlockingHit = true;
+			PC->HandleWorldHit(ResetHit);
+			PC->RightMousePressed();
+			PC->SetSimulatedShiftModifier(false);
+			Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: Shift + RMB clears manual stealth look anchor"));
+			PC->SetSimulatedShiftModifier(true);
+			PC->HandleWorldHit(ResetHit);
+			PC->SetSimulatedShiftModifier(false);
+			Check(State, Op->HasStealthManualLookTarget(), TEXT("section 5: manual anchor re-armed before stealth exit check"));
+			Op->SetStealthMode(false);
+			Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: leaving stealth clears manual stealth look anchor"));
+			if (State.AnchorEnemy.IsValid()) { State.AnchorEnemy->Destroy(); }
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			Op->SetStealthMode(true);
 			Next(State, 601);
 			break;
+		}
 		case 601:
 			if (State.StageTime < 1.f) { return true; }
 			Check(State, Op->KnockdownComponent && Op->KnockdownComponent->ForceKnockDown(EKnockdownDirection::Back, EKnockdownCause::HeavyHit),

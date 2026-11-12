@@ -18,6 +18,11 @@ namespace StealthModeRules
 		return !bSoloOrHolding && bFormationActive && !bGuarding;
 	}
 
+	FText GetFormationBlockedTooltip()
+	{
+		return NSLOCTEXT("StealthModeRules", "FormationBlockedTip", "Stealth is only available in Solo (or while guarding / holding position).");
+	}
+
 	bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, const FStealthModeConfig& Config)
 	{
 		return bActive && (bSprinting || (bFired && Config.bBreakOnFire));

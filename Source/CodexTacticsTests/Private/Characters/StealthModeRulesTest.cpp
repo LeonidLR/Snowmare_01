@@ -134,6 +134,8 @@ bool FStealthFormationRuleTest::RunTest(const FString&)
 	TestTrue(TEXT("Formation mode blocks stealth for non-guarding member"), IsBlockedByFormation(false, true, false));
 	TestFalse(TEXT("Guarding member outside formation may enter stealth"), IsBlockedByFormation(false, true, true));
 	TestFalse(TEXT("Solo mode allows stealth"), IsBlockedByFormation(true, true, false));
+	TestFalse(TEXT("Solo/holding while guarding allows stealth"), IsBlockedByFormation(true, true, true));
+	TestFalse(TEXT("Solo/holding without formation allows stealth"), IsBlockedByFormation(true, false, false));
 	TestFalse(TEXT("Inactive formation does not block stealth"), IsBlockedByFormation(false, false, false));
 	return true;
 }

@@ -394,6 +394,8 @@ public:
 	bool SetStealthMode(bool bEnabled);
 	/** Eligibility for the HUD and group toggle; critical, incapacitated, mounted and traversal states refuse entry. */
 	bool CanEnterStealthMode() const;
+	/** Personal eligibility checks ignoring squad formation mode (for formation-only UI tooltips/refusals). */
+	bool CanEnterStealthWithoutFormation() const;
 	/** Whether this operative is currently stealthed (fire/sprint require an explicit re-entry). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Stealth")
 	bool IsInStealthMode() const { return bStealthMode; }
@@ -402,6 +404,13 @@ public:
 	bool IsStealthFast() const { return bStealthMode && bStealthFast; }
 	bool CanStealthFast() const;
 	void SetStealthFast(bool bFast);
+	/** Stealth v2 §5: manual look anchor fixed by Shift + LMB while moving/holding in stealth; cleared on self Shift+LMB, Shift+RMB, or stealth exit. */
+	void SetStealthManualLookTarget(const FVector& WorldPoint);
+	void ClearStealthManualLookTarget();
+	bool HasStealthManualLookTarget() const { return bStealthMode && bHasStealthManualLook; }
+	FVector GetStealthManualLookTarget() const { return StealthManualLookTarget; }
+	/** Returns the active stealth look target point (priority: manual look anchor > automatic threat lock in §1). */
+	bool GetStealthLookPoint(FVector& OutPoint) const;
 
 
 	/** True while the operative has a move order in progress or still visibly moves. */
@@ -3202,6 +3211,10 @@ private:
 	bool bStealthMode = false;
 	UPROPERTY(Transient)
 	bool bStealthFast = false;
+	UPROPERTY(Transient)
+	bool bHasStealthManualLook = false;
+	UPROPERTY(Transient)
+	FVector StealthManualLookTarget = FVector::ZeroVector;
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> StealthMaterial;
 	UPROPERTY(Transient)

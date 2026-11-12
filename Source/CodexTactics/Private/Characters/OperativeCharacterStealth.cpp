@@ -12,15 +12,20 @@
 #include "Materials/MaterialInterface.h"
 #include "Vehicles/VehicleSubsystem.h"
 
+bool AOperativeCharacter::CanEnterStealthWithoutFormation() const
+{
+	return StealthModeRules::GetConfig().bEnabled && HealthComponent && HealthComponent->IsAlive() && !IsCriticallyWounded()
+		&& !IsKnockedDown() && !IsPanicking() && !IsRaging() && !bCarrying && !bVaulting && !IsClimbingLadder() && !VehicleQueries::IsMounted(this);
+}
+
 bool AOperativeCharacter::CanEnterStealthMode() const
 {
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-	if (Squad && StealthModeRules::IsBlockedByFormation(Squad->IsSoloMode() || Squad->AreFollowersHolding(), Squad->IsFormationActive(), bGuarding))
+	if (Squad && Squad->IsStealthBlockedByFormation(*this))
 	{
 		return false;
 	}
-	return StealthModeRules::GetConfig().bEnabled && HealthComponent && HealthComponent->IsAlive() && !IsCriticallyWounded()
-		&& !IsKnockedDown() && !IsPanicking() && !IsRaging() && !bCarrying && !bVaulting && !IsClimbingLadder() && !VehicleQueries::IsMounted(this);
+	return CanEnterStealthWithoutFormation();
 }
 
 bool AOperativeCharacter::SetStealthMode(bool bEnabled)
@@ -61,6 +66,7 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		StealthOriginalMaterials.Reset();
 		SetSprinting(false);
 		bStealthFast = false;
+		ClearStealthManualLookTarget();
 		bStealthMode = true;
 		if (Stance != EOperativeStance::Prone)
 		{
@@ -70,6 +76,7 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 	else
 	{
 		bStealthFast = false;
+		ClearStealthManualLookTarget();
 		bStealthMode = false;
 		ApplyMovementParams();
 	}
@@ -90,6 +97,33 @@ void AOperativeCharacter::SetStealthFast(bool bFast)
 		bStealthFast = bAllowed;
 		ApplyMovementParams();
 	}
+}
+
+void AOperativeCharacter::SetStealthManualLookTarget(const FVector& WorldPoint)
+{
+	if (!bStealthMode)
+	{
+		ClearStealthManualLookTarget();
+		return;
+	}
+	bHasStealthManualLook = true;
+	StealthManualLookTarget = WorldPoint;
+}
+
+void AOperativeCharacter::ClearStealthManualLookTarget()
+{
+	bHasStealthManualLook = false;
+	StealthManualLookTarget = FVector::ZeroVector;
+}
+
+bool AOperativeCharacter::GetStealthLookPoint(FVector& OutPoint) const
+{
+	if (HasStealthManualLookTarget() && FVector::DistSquared2D(GetActorLocation(), StealthManualLookTarget) > 4.f)
+	{
+		OutPoint = StealthManualLookTarget;
+		return true;
+	}
+	return false;
 }
 
 void AOperativeCharacter::RefreshStealthVisuals()
@@ -169,7 +203,7 @@ void AOperativeCharacter::HandleStealthWeaponFired(AOperativeCharacter* Shooter,
 void AOperativeCharacter::UpdateStealthMode()
 {
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-	const bool bFormationBlocked = Squad && StealthModeRules::IsBlockedByFormation(Squad->IsSoloMode() || Squad->AreFollowersHolding(), Squad->IsFormationActive(), bGuarding);
+	const bool bFormationBlocked = Squad && Squad->IsStealthBlockedByFormation(*this);
 	if (bStealthMode && (bFormationBlocked || !HealthComponent || !HealthComponent->IsAlive() || IsCriticallyWounded() || IsKnockedDown()
 		|| IsPanicking() || IsRaging() || bCarrying || bVaulting || IsClimbingLadder() || VehicleQueries::IsMounted(this)
 		|| StealthModeRules::ShouldBreak(true, false, bSprinting, StealthModeRules::GetConfig())))

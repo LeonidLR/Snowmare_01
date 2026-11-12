@@ -181,6 +181,11 @@ public:
 	 */
 	bool IsPostFightHoldActive() const { return bPostFightHold; }
 
+	/** True when formation mode currently blocks stealth for Operative (alive squad member not in Solo/holding and not guarding). */
+	bool IsStealthBlockedByFormation(const AOperativeCharacter& Operative) const;
+	/** Clears stealth on any squad member for whom IsStealthBlockedByFormation is true. */
+	void EnforceFormationStealthRule();
+
 	/** Toggles solo scout mode (Godot main.gd toggle_solo_mode on B key). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	void ToggleSoloMode();
