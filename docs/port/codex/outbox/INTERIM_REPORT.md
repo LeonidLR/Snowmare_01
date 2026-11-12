@@ -84,3 +84,5 @@ Stealth core feedback build PASS 175.76 s, male wall/movement smoke PASS 141.2 s
 - `gemini/016-3-implementation-maps` / `9d0cd4dc`: reviewed documentation-only merge, including corrected physics-asset/API map from review #196. Chat idle regression suite 8/8 PASS; Jev boundary audit PASS, risk 0. Markdown hard-break trailing spaces are intentional; no C++/assets changed by this merge.
 
 - Stealth validation follow-up: female and rendered male scenarios PASS; three fresh interim-only game-camera images inspected. Female head 26.8 cm beyond physical edge, male 27.4 cm. Main untouched. Local report draft `2 | codex-local | PARTIAL REDO` (parent corrected linkage between independent results). Remaining stealth subpart: independent Marksman live-target bypass.
+
+- `gemini/017-1-implementation-maps` / `d80ff93a`: documentation-only merge; checked governing narrative/trap facts, kept proposed implementation maps separate from completed gameplay claims. Chat idle regression 8/8 PASS, Markdown-aware diff check PASS, Jev boundary audit PASS (risk 0).
