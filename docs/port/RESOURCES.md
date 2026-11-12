@@ -1,11 +1,13 @@
 # Who does what (designer decision 2026-11-12, review 2026-11-19)
 
+**Update 2026-11-12 afternoon:** Codex removed. C++ now: Gemini (well-specified systems on named paths) + Claude via Sonnet (cross-system / half-finished / risky parts). Claude also integrates Gemini's branches (interim -> main).
+
 Six resources. Rule: the cheapest one that can do the job reliably; the expensive ones only where they are irreplaceable.
 
 | Resource | Role | Gets | Never |
 |---|---|---|---|
 | **Claude (Max subscription)** - scarce, protect | Orchestrator + gatekeeper | merges into main, final reviews (diff skim + tests), architecture / design docs, hard bugs nobody else cracked, designer questions | routine code, reading big logs, babysitting chat (the dispatcher does it) |
-| **OpenAI Codex (Pro, 1 month)** | Main C++ implementer | all gameplay C++ / AI / anim layers / smokes on codex/* or interim branches; integrates Gemini branches into interim; uses the router + local model for small parts | main, push, maps / Config / packs; holding work uncommitted > 1 h |
+| **OpenAI Codex** | REMOVED from development 2026-11-12 (designer: limits drain too fast) | his work handed over (interim/2026-11-12 + docs/port/codex/outbox/004 report) | - |
 | **Gemini (Pro, Antigravity)** | Reader + TS / Python + reviewer | implementation maps, code reviews of Codex branches, Training Ground (TS), Python tooling, docs (RU guides), log / trainer analysis, merge plans; C++ only as approved trials on named paths | C++ outside an approved trial, main, push |
 | **Anthropic API** (designer's credit, ledger cap) | Second opinion + gap filler | Sonnet: independent reviews of risky diffs (~0.1-0.3 $), patch drafts when Codex is out of limit; Opus: rare design drafts. Always `--label`, `--budget-usd` | bulk reading, anything a subscription can do now |
 | **Jev (TypeSafe)** | Cheap judgment | boundary audits before merges, `test.ps1 -Smart`, telemetry digests, model-router classification, typed yes / no checks in tools | C++ / syntax / boilerplate |
