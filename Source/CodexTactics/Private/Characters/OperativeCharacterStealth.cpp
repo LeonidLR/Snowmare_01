@@ -71,9 +71,14 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 	return true;
 }
 
+bool AOperativeCharacter::CanStealthFast() const
+{
+	return bStealthMode && !bCarrying && !IsWounded() && !IsCriticallyWounded() && Stance == EOperativeStance::Crouching;
+}
+
 void AOperativeCharacter::SetStealthFast(bool bFast)
 {
-	const bool bAllowed = bFast && bStealthMode && !bCarrying && !IsCriticallyWounded() && Stance == EOperativeStance::Crouching;
+	const bool bAllowed = bFast && CanStealthFast();
 	if (bStealthFast != bAllowed)
 	{
 		bStealthFast = bAllowed;

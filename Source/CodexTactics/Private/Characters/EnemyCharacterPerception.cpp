@@ -94,7 +94,7 @@ AActor* AEnemyCharacter::FindVisibleOperative(const FEnemyPerceptionParams& Para
 		}
 		const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
 		FEnemyPerceptionParams TargetParams = Params;
-		const float StealthRange = StealthModeRules::DetectionRangeScale(Member->IsInStealthMode(), StealthModeRules::GetConfig());
+		const float StealthRange = StealthModeRules::DetectionRangeScale(Member->IsInStealthMode(), Member->IsStealthFast(), StealthModeRules::GetConfig());
 		TargetParams.SightRangeCm *= StealthRange;
 		TargetParams.ProximityCm *= StealthRange;
 		// Range by stance and the field of view first (cheap), the trace only for candidates. Sprint 12: a man behind a
@@ -180,7 +180,7 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 	const AActor* Seen = FindVisibleOperative(Params, SeenDistance, SeenRange);
 	const float Before = PatrolSuspicion;
 	AOperativeCharacter* SeenOperative = const_cast<AOperativeCharacter*>(Cast<AOperativeCharacter>(Seen));
-	const float BuildupScale = StealthModeRules::DetectionBuildupScale(SeenOperative && SeenOperative->IsInStealthMode(), StealthModeRules::GetConfig());
+	const float BuildupScale = StealthModeRules::DetectionBuildupScale(SeenOperative && SeenOperative->IsInStealthMode(), SeenOperative && SeenOperative->IsStealthFast(), StealthModeRules::GetConfig());
 	PatrolSuspicion = PerceptionRules::StepSuspicion(Params, PatrolSuspicion, Step * BuildupScale, Seen != nullptr, SeenDistance, SeenRange);
 	if (Seen && Before <= 0.f && PatrolSuspicion < 1.f && !bIsDying)
 	{
@@ -206,10 +206,11 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 				continue;
 			}
 			const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
-			const ESquadMovementNoise Noise = PerceptionRules::ClassifyMovement(Member->GetStance(), Member->GetVelocity().Size2D(), Member->IsSprinting());
+			const EOperativeStance NoiseStance = Member->IsStealthFast() ? EOperativeStance::Standing : Member->GetStance();
+			const ESquadMovementNoise Noise = PerceptionRules::ClassifyMovement(NoiseStance, Member->GetVelocity().Size2D(), Member->IsSprinting());
 			// Walls between muffle the footsteps (x HearingOcclusionPerWall each; user report 2026-10-06): traced only when
 			// the open-air radius reaches him.
-			const float NoiseScale = StealthModeRules::FootstepNoiseScale(Member->IsInStealthMode(), StealthModeRules::GetConfig());
+			const float NoiseScale = StealthModeRules::FootstepNoiseScale(Member->IsInStealthMode(), Member->IsStealthFast(), StealthModeRules::GetConfig());
 			const float NoiseDistance = NoiseScale > 0.f ? Distance / NoiseScale : TNumericLimits<float>::Max();
 			if (!Heard && PerceptionRules::HearsMovement(Params, Noise, NoiseDistance)
 				&& PerceptionRules::HearsMovementThroughWalls(Params, Noise, NoiseDistance, CountHearingWalls(*Member)))

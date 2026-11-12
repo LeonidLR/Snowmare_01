@@ -466,7 +466,7 @@ bool AMarksmanEnemyCharacter::CanSeeStealthTarget(const AOperativeCharacter& Tar
 {
 	const UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
 	if (!Sight || Target.IsHiddenInCoverFrom(GetActorLocation())) { return false; }
-	const float RangeScale = StealthModeRules::DetectionRangeScale(true, StealthModeRules::GetConfig());
+	const float RangeScale = StealthModeRules::DetectionRangeScale(true, Target.IsStealthFast(), StealthModeRules::GetConfig());
 	const float Range = Sight->GetSightRangeCm(*this) * RangeScale;
 	const FEnemyPerceptionParams Params = GetPerception();
 	const bool bFacing = FVector::Dist(GetActorLocation(), Target.GetActorLocation()) <= Params.ProximityCm * RangeScale

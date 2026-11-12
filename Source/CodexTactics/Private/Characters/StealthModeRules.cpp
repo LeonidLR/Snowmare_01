@@ -50,7 +50,16 @@ namespace StealthModeRules
 
 	float FootstepNoiseScale(bool bActive, const FStealthModeConfig& Config)
 	{
-		return bActive && Config.bEnabled ? FMath::Clamp(Config.FootstepNoiseMultiplier, 0.f, 1.f) : 1.f;
+		return FootstepNoiseScale(bActive, false, Config);
+	}
+
+	float FootstepNoiseScale(bool bActive, bool bFast, const FStealthModeConfig& Config)
+	{
+		if (!bActive || !Config.bEnabled || bFast)
+		{
+			return 1.f;
+		}
+		return FMath::Clamp(Config.FootstepNoiseMultiplier, 0.f, 1.f);
 	}
 
 	FStealthModeConfig FromJson(const FJsonObject& Json, const FStealthModeConfig& Base)

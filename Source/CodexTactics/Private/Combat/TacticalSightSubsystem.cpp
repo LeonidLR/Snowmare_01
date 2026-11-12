@@ -450,7 +450,7 @@ bool UTacticalSightSubsystem::GetBelief(const AEnemyCharacter* Enemy, const AAct
 	bool bActuallyPerceived = Entry->bPerceived;
 	if (OperativeCharacter && OperativeCharacter->IsInStealthMode())
 	{
-		const float RangeScale = StealthModeRules::DetectionRangeScale(true, StealthModeRules::GetConfig());
+		const float RangeScale = StealthModeRules::DetectionRangeScale(true, OperativeCharacter->IsStealthFast(), StealthModeRules::GetConfig());
 		bActuallyPerceived = false;
 		if (Enemy)
 		{
@@ -910,8 +910,9 @@ void UTacticalSightSubsystem::Update()
 			// Sprint 12-E: high cover with the head down hides him from everything behind the wall (firing demasks).
 			const bool bCoverHidden = Operative->IsHiddenInCoverFrom(Enemy->GetActorLocation());
 			const FStealthModeConfig& Stealth = StealthModeRules::GetConfig();
-			const float RangeScale = StealthModeRules::DetectionRangeScale(Operative->IsInStealthMode(), Stealth);
-			const float NoiseScale = StealthModeRules::FootstepNoiseScale(Operative->IsInStealthMode(), Stealth);
+			const bool bFastStealth = Operative->IsStealthFast();
+			const float RangeScale = StealthModeRules::DetectionRangeScale(Operative->IsInStealthMode(), bFastStealth, Stealth);
+			const float NoiseScale = StealthModeRules::FootstepNoiseScale(Operative->IsInStealthMode(), bFastStealth, Stealth);
 			bool bFacing = true;
 			if (Operative->IsInStealthMode())
 			{

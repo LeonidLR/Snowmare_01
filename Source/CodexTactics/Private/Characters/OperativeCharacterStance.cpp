@@ -79,6 +79,10 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 	{
 		bSprinting = false;
 	}
+	if (Stance != EOperativeStance::Crouching)
+	{
+		bStealthFast = false;
+	}
 
 	if (HealthComponent)
 	{

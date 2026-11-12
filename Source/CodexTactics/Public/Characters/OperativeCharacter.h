@@ -400,6 +400,7 @@ public:
 	/** Stealth v2: double-click fast crouched movement in stealth (does not stand up or break stealth). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Stealth")
 	bool IsStealthFast() const { return bStealthMode && bStealthFast; }
+	bool CanStealthFast() const;
 	void SetStealthFast(bool bFast);
 
 

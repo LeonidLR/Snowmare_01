@@ -137,6 +137,11 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	const float RiseDelay = GetMoveHoldSeconds();
 	if (OperativeMovementRules::ShouldDeferMove(RiseDelay) && GetWorld())
 	{
+		if ((!IsInStealthMode() || !bSprint) && bStealthFast)
+		{
+			bStealthFast = false;
+			ApplyMovementParams();
+		}
 		TWeakObjectPtr<AOperativeCharacter> WeakThis(this);
 		GetWorld()->GetTimerManager().SetTimer(PendingMoveTimer, FTimerDelegate::CreateLambda([WeakThis, Destination, bSprint]()
 		{
@@ -153,7 +158,7 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	if (IsInStealthMode())
 	{
 		// Stealth v2: single-click = Slow stealth, double-click = Fast stealth; never stands up or breaks stealth.
-		bStealthFast = bSprint && !bCarrying && !IsCriticallyWounded() && Stance == EOperativeStance::Crouching;
+		bStealthFast = bSprint && CanStealthFast();
 		bSprinting = false;
 	}
 	else if (bSprint && CanSprint())
@@ -495,10 +500,6 @@ void AOperativeCharacter::StopOperative()
 
 void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 {
-	if (!bNewSprinting)
-	{
-		bStealthFast = false;
-	}
 	if (bNewSprinting && IsInStealthMode() && !bCarrying && !IsCriticallyWounded()
 		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
 	{
@@ -611,7 +612,7 @@ bool AOperativeCharacter::CanSprint() const
 
 float AOperativeCharacter::GetMaxSpeed() const
 {
-	if (IsStealthFast() && Stance == EOperativeStance::Crouching && !IsWounded() && !bCarrying && !IsCriticallyWounded())
+	if (IsStealthFast() && CanStealthFast())
 	{
 		return FMath::Max(MovementConfig.CrouchSpeed, StealthModeRules::GetConfig().FastSpeedCm) * ColdSpeedMultiplier * GetWoundTierSpeedScale();
 	}

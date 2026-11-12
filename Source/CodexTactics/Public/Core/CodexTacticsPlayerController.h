@@ -915,9 +915,16 @@ private:
 	/** Rev 5c manual corner peek preview: its own ghost, the cursor, the last hover probe (cached while the cursor rests). */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> CornerPeekGhost;
-	/** Stealth v2: hover ghost for valid non-corner walls when hovering in stealth. */
+	/** Stealth v2: hover ghost for valid non-corner walls when hovering in stealth (cached while cursor rests). */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> StealthWallHoverGhost;
+	TWeakObjectPtr<AActor> StealthWallHoverActor;
+	TWeakObjectPtr<AOperativeCharacter> StealthWallHoverOperative;
+	FVector StealthWallHoverPoint = FVector(TNumericLimits<float>::Max());
+	FVector StealthWallHoverOperativeAt = FVector(TNumericLimits<float>::Max());
+	FCoverSlot StealthWallHoverSlot;
+	bool bStealthWallHoverInCover = false;
+	FVector StealthWallHoverOwnSlotLocation = FVector(TNumericLimits<float>::Max());
 	bool bCornerPeekCursor = false;
 	/** Rev 5e: the hand cursor over a spotted tripwire (or the ground right next to it). */
 	bool bTrapHoverCursor = false;

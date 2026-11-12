@@ -1630,7 +1630,7 @@ bool ACodexTacticsPlayerController::GetSquadMovePreviewPaths(TArray<TArray<FVect
 
 bool ACodexTacticsPlayerController::IsStealthWallHoverShown() const
 {
-	return StealthWallHoverGhost && StealthWallHoverGhost->IsShown();
+	return IsValid(StealthWallHoverGhost) && StealthWallHoverGhost->IsShown();
 }
 
 bool ACodexTacticsPlayerController::UpdateStealthWallHover(AOperativeCharacter* Operative, const FHitResult* Hit)
@@ -1639,44 +1639,77 @@ bool ACodexTacticsPlayerController::UpdateStealthWallHover(AOperativeCharacter* 
 	const bool bLocked = IsRealTimeOrderLocked() || bRelocateSelectMode || IsDialogueOpen()
 		|| (Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverPreview));
 	AActor* HitActor = Hit ? Hit->GetActor() : nullptr;
+	const bool bEligible = Operative && Operative->IsInStealthMode() && Operative->CanEnterStealthMode()
+		&& !bLocked && Hit && HitActor && !GetActiveTurnBased()
+		&& !HasCoverPreview() && !bCornerPeekCursor && !IsCoverSwitchHoverShown() && !IsCoverWrapHoverShown();
 	FCoverSlot HoverSlot;
-	if (Operative && Operative->IsInStealthMode() && !bLocked && Hit && HitActor && !GetActiveTurnBased()
-		&& !HasCoverPreview() && !bCornerPeekCursor && !IsCoverSwitchHoverShown() && !IsCoverWrapHoverShown())
+	if (bEligible)
 	{
-		const bool bVehicle = HitActor->IsA<AVehiclePawn>();
-		const bool bValidActor = !HitActor->IsA<AInteractableActor>()
-			&& !FindClickedMember(*Hit)
-			&& (!HitActor->IsA<APawn>() || bVehicle)
-			&& !HitActor->IsA<AEnemyGhostActor>()
-			&& !HitActor->IsA<ACoverGhostActor>()
-			&& !HitActor->ActorHasTag(FName(TEXT("Enemy")));
-		if (bValidActor)
+		const FVector OwnSlotLoc = Operative->bInCover ? Operative->GetCoverSlot().WorldLocation : FVector::ZeroVector;
+		const bool bCacheHit = HitActor == StealthWallHoverActor.Get()
+			&& Operative == StealthWallHoverOperative.Get()
+			&& bStealthWallHoverInCover == Operative->bInCover
+			&& FVector::DistSquared(Hit->ImpactPoint, StealthWallHoverPoint) <= FMath::Square(5.f)
+			&& FVector::DistSquared2D(Operative->GetActorLocation(), StealthWallHoverOperativeAt) <= FMath::Square(5.f)
+			&& (!Operative->bInCover || FVector::DistSquared(OwnSlotLoc, StealthWallHoverOwnSlotLocation) <= 1.f);
+		if (bCacheHit)
 		{
-			EWallClickSide WallSide = EWallClickSide::None;
-			const bool bSideSlot = !bVehicle && ResolveWallSideSlot(*Hit, HoverSlot, WallSide);
-			const bool bSlotOk = bSideSlot
-				|| ((bVehicle || FMath::Abs(Hit->ImpactNormal.Z) <= 0.3f) && FindCoverSlotForHit(*Hit, HoverSlot));
-			if (!bSlotOk || !HoverSlot.IsValid() || (Operative->bInCover && CoverTraceRules::IsSameWall(Operative->GetCoverSlot(), HoverSlot)))
-			{
-				HoverSlot = FCoverSlot();
-			}
+			HoverSlot = StealthWallHoverSlot;
 		}
+		else
+		{
+			const bool bVehicle = HitActor->IsA<AVehiclePawn>();
+			const bool bValidActor = !HitActor->IsA<AInteractableActor>()
+				&& !FindClickedMember(*Hit)
+				&& (!HitActor->IsA<APawn>() || bVehicle)
+				&& !HitActor->IsA<AEnemyGhostActor>()
+				&& !HitActor->IsA<ACoverGhostActor>()
+				&& !HitActor->ActorHasTag(FName(TEXT("Enemy")));
+			if (bValidActor)
+			{
+				EWallClickSide WallSide = EWallClickSide::None;
+				const bool bSideSlot = !bVehicle && ResolveWallSideSlot(*Hit, HoverSlot, WallSide);
+				const bool bSlotOk = bSideSlot
+					|| ((bVehicle || FMath::Abs(Hit->ImpactNormal.Z) <= 0.3f) && FindCoverSlotForHit(*Hit, HoverSlot));
+				if (!bSlotOk || !HoverSlot.IsValid() || (Operative->bInCover && CoverTraceRules::IsSameWall(Operative->GetCoverSlot(), HoverSlot)))
+				{
+					HoverSlot = FCoverSlot();
+				}
+			}
+			StealthWallHoverActor = HitActor;
+			StealthWallHoverOperative = Operative;
+			StealthWallHoverPoint = Hit->ImpactPoint;
+			StealthWallHoverOperativeAt = Operative->GetActorLocation();
+			bStealthWallHoverInCover = Operative->bInCover;
+			StealthWallHoverOwnSlotLocation = OwnSlotLoc;
+			StealthWallHoverSlot = HoverSlot;
+		}
+	}
+	else
+	{
+		StealthWallHoverActor.Reset();
+		StealthWallHoverOperative.Reset();
+		StealthWallHoverPoint = FVector(TNumericLimits<float>::Max());
+		StealthWallHoverOperativeAt = FVector(TNumericLimits<float>::Max());
+		bStealthWallHoverInCover = false;
+		StealthWallHoverOwnSlotLocation = FVector(TNumericLimits<float>::Max());
+		StealthWallHoverSlot = FCoverSlot();
 	}
 	if (!HoverSlot.IsValid() || !GetWorld())
 	{
-		if (StealthWallHoverGhost && StealthWallHoverGhost->IsShown())
+		if (IsValid(StealthWallHoverGhost) && StealthWallHoverGhost->IsShown())
 		{
 			StealthWallHoverGhost->Hide();
 		}
 		return false;
 	}
-	if (!StealthWallHoverGhost)
+	if (!IsValid(StealthWallHoverGhost))
 	{
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 		StealthWallHoverGhost = GetWorld()->SpawnActor<ACoverGhostActor>(HoverSlot.WorldLocation, FRotator::ZeroRotator, Params);
 	}
-	if (!StealthWallHoverGhost)
+	if (!IsValid(StealthWallHoverGhost))
 	{
 		return false;
 	}

@@ -300,7 +300,11 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		}
 	}
 	ClearIdleFacing();
-	bStealthFast = false;
+	if (bStealthFast)
+	{
+		bStealthFast = false;
+		ApplyMovementParams();
+	}
 	if (!bSameWall)
 	{
 		// High cover: standing (the wall covers him); low cover: crouched. Prone stays prone (hidden by the 60 cm rule).
@@ -417,6 +421,11 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 	{
 		bManualCornerPeek = false; // a move / another cover ends the manual corner peek (the open-shot step-off comes back to it)
 		bManualCornerPeekEventPending = false;
+	}
+	if (bHasPendingCover && CoverTraceRules::IsSameWall(CoverSlot, PendingCoverSlot))
+	{
+		bHasPendingCover = false; // leaving cover cancels any pending shimmy / same-wall snap before StopMovement fires HandleMoveFinished
+		bRunCornerPeekPending = false;
 	}
 	bInCover = false;
 	CoverLookSide.Reset(); // the wall group's side belongs to that slot

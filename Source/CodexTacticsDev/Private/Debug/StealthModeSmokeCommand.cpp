@@ -463,6 +463,7 @@ namespace StealthModeSmoke
 				if (Member != Op)
 				{
 					Member->SetActorLocation(State.Origin - State.Forward * (2500.f + 200.f * Park++));
+					Member->SetActorRotation((-State.Forward).Rotation());
 					Member->GetCharacterMovement()->DisableMovement(); // parked fixtures must not keep falling outside the floor
 					Member->SetActorTickEnabled(false);
 				}
@@ -811,7 +812,8 @@ namespace StealthModeSmoke
 			PC->UpdateStealthWallHover(nullptr, nullptr);
 			Check(State, PC->TryHandleCoverClick(WallHoverHit, nullptr) && PC->HasCoverPreview(), TEXT("section 4: click on wall opens stealth cover preview"));
 			PC->ConfirmCoverPreview(false);
-			Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && !Op->IsStealthFast() && Op->HasPendingCover(),
+			Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && !Op->IsStealthFast()
+				&& Op->HasPendingCover() && Op->GetCharacterMovement() && Op->GetCharacterMovement()->MaxWalkSpeed <= Op->MovementConfig.CrouchSpeed + 1.f,
 				TEXT("section 4: single-click cover confirm keeps crouched slow stealth during approach"));
 			Next(State, 65);
 			break;
@@ -828,7 +830,8 @@ namespace StealthModeSmoke
 				const FHitResult FastWallHit(State.Wall.Get(), State.Wall->GetStaticMeshComponent(), At(State, 585.f, 0.f, 90.f), -State.Forward);
 				Check(State, PC->TryHandleCoverClick(FastWallHit, nullptr) && PC->HasCoverPreview(), TEXT("section 4: second wall preview opens before fast confirm"));
 				PC->ConfirmCoverPreview(true);
-				Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && Op->IsStealthFast() && Op->HasPendingCover(),
+				Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && Op->IsStealthFast()
+					&& Op->HasPendingCover() && Op->GetCharacterMovement() && Op->GetCharacterMovement()->MaxWalkSpeed >= StealthModeRules::GetConfig().FastSpeedCm - 1.f,
 					TEXT("section 4: double-click cover confirm uses crouched fast stealth and keeps stealth"));
 			}
 			Next(State, 66);
@@ -844,7 +847,7 @@ namespace StealthModeSmoke
 			Next(State, 601);
 			break;
 		case 601:
-			if (State.StageTime < 0.2f) { return true; }
+			if (State.StageTime < 1.f) { return true; }
 			Check(State, Op->KnockdownComponent && Op->KnockdownComponent->ForceKnockDown(EKnockdownDirection::Back, EKnockdownCause::HeavyHit),
 				TEXT("real knockdown starts from stealth"));
 			Next(State, 61);

@@ -98,5 +98,7 @@ private:
 	FCoverSlot Slot;
 	bool bShown = false;
 	bool bCornerPeekPose = false;
+	bool bShownStealthMode = false;
+	bool bShownCrouched = false;
 	ECoverFacing ShownFacing = ECoverFacing::Right;
 };

@@ -35,7 +35,8 @@ namespace StealthModeRules
 	CODEXTACTICS_API float DetectionBuildupScale(bool bActive, const FStealthModeConfig& Config);
 	CODEXTACTICS_API float DetectionBuildupScale(bool bActive, bool bFast, const FStealthModeConfig& Config);
 	CODEXTACTICS_API float FootstepNoiseScale(bool bActive, const FStealthModeConfig& Config);
-	/** Optional JSON keys over Base; malformed values keep the base and multipliers/visuals are clamped to [0, 1]. */
+	CODEXTACTICS_API float FootstepNoiseScale(bool bActive, bool bFast, const FStealthModeConfig& Config);
+	/** Optional JSON keys over Base; malformed values keep Base; multipliers/visuals clamp to [0, 1], speeds to [0, 2000], and look-lock tuning to non-negative bounds. */
 	CODEXTACTICS_API FStealthModeConfig FromJson(const FJsonObject& Json, const FStealthModeConfig& Base = FStealthModeConfig());
 	/** Loads the project data once. A missing/invalid file keeps the documented defaults. */
 	CODEXTACTICS_API const FStealthModeConfig& GetConfig();
