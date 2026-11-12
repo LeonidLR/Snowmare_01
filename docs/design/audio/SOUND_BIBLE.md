@@ -12,7 +12,7 @@ Fields marked TBD are filled with the designer on Monday 2026-11-16.
 - **References:** TBD with the designer (what to take / what to avoid).
 
 ## 2. Music direction
-- Style: sparse cold ambient (drones, bowed metal, distant piano) for exploration; low percussion + drones + pulse for combat; no
+- Style (designer 2026-11-12: "darker and more tense"): dark cold ambient - low drones, metal creaks, wind, rare dissonant hits, no melody or bright tones - for exploration; heavy, oppressive low percussion + pulse + industrial noise for combat, no heroics; no
   epic orchestra.
 - Adaptive states (from game state, cross-fades on the Quartz bar grid, min 8 s per state):
 
