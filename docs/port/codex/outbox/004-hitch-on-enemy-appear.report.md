@@ -21,3 +21,18 @@ Designer logs play.log frame 614 (SKM_PmcOperator) and play2.log frame 835 (SK_C
 After the editor closes: build, run the cold probe, separate fixture failures from genuine >250 ms frames, and record trace/log timings. Then implement asynchronous full-roster preload/readiness, shared animation/ladder preparation and spawn scheduling in small commits, with cold/warm PIE versus -game evidence and touched-system regressions. No preload fix, introduction commit, packaged availability or hitch elimination is asserted yet.
 
 Main, source packs, maps, Config and assets are untouched by this checkpoint.
+
+## Source-history investigation (read-only; not a bisect result)
+
+Terra traced the existing load paths through git history. These are introduction points for suspect code/assets, NOT proof of the hitch's causal commit:
+
+| Path | Verified history | Implication |
+|---|---|---|
+| PMC body/gear synchronous load | 28650298 (2026-11-03), older SpawnOperative/body override e11e1a64 (2026-10-09); RPG additions 00eb12cc / 5299542d (2026-11-10) | The base SKM_PmcOperator cold-load path predates the reported regression window. |
+| Wave class / military-zombie variant | c79d300b (2026-09-30), 4739359e (2026-11-07) | Existing sync loading can first surface when a new roster entry appears. |
+| Cutter optimized mesh | bc84d81e / 478b09f7 (2026-10-21) | Binary addition/Blueprint history does not prove when editor DDC compilation first occurred. |
+| Three ladder clips per component | 8d412c33 (2026-10-22) | Old synchronous path; a shared cache still needs measurement and lifecycle validation. |
+| Animation initialization expansion | 7832f561 (2026-11-08), pistol c66dee37, launcher 66e7f543 / 9cbb2363 (11-09), prone 1875e6bf and injured 3023a233 / 632d61ec (11-10), stealth 90a6bf64 (11-11) | Growth agrees with the complaint interval but does not isolate the startup cost without a trace. |
+| Concurrent 30-second schedules | Pressure b385755c (11-01), PMC 2f05a0e9 (11-03) | Schedule overlap predates the report; do not call it a newly introduced scheduling regression. |
+
+Dates above follow commit-local timestamps; normalize against log timestamps before causal ordering. JSON clip-path leaf counts are not runtime-load counts (retarget/fallback/repeated references differ). No bisect, cold/warm timing, packaged test, or >250 ms gate has yet run for this checkpoint.
