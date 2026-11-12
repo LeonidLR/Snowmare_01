@@ -4,6 +4,7 @@
 **Date:** 2026-11-12  
 **Target:** Task #27+ (`pl-pmc-remaining`) — Завершение механик ЧВК: силуэты, слух, полоски здоровья, автономность/бот, лут с тел, гранаты, многораундовый бой  
 **Target Assignee:** Codex / Claude  
+**Status:** **Architecture Proposal / Planning Draft** (не подтверждённый runtime; новые классы/интерфейсы и численный баланс в разделе 3 являются `[Proposed / Pseudocode]` до сверки с governing docs)  
 **Governing Documents:** `docs/design/PMC_TRAINING_ANALYSIS.md`, `docs/systems/pmc-squad-ai.md`, `docs/port/TASK_BOARD.md` §27+
 
 ---
@@ -24,10 +25,10 @@ The PMC (Private Military Company) squad serves as the intelligent, humanoid adv
 
 ## 2. Technical Decomposition (7 Systems)
 
-### 2.1. System 1: Silhouettes & Outline Shader
-- **Engine Seam:** `OperativeCharacter.cpp` (hostile PMC instances), Post-Process Material `M_PostProcess_TacticalSilhouettes`.
-- **Implementation:**
-  - Set `Mesh->SetRenderCustomDepth(true)` and `Mesh->SetCustomDepthStencilValue(STENCIL_PMC_HOSTILE = 250)`.
+### 2.1. System 1: Silhouettes & Outline Shader [Proposed]
+- **Engine Seam:** `OperativeCharacter.cpp` (hostile PMC instances), Post-Process Material `M_PostProcess_TacticalSilhouettes` `[Proposed]`.
+- **Implementation [Proposed]:**
+  - Set `Mesh->SetRenderCustomDepth(true)` and `Mesh->SetCustomDepthStencilValue(2)` (`Bit 2 = Hostiles (2)`, aligned with the bitmask allocation in §4.3: Bit 1 Friendly = 1, Bit 2 Hostile = 2, Bit 7 Selected = 128).
   - When in direct line-of-sight: regular rendering.
   - When occluded by geometry (`SceneDepth > CustomDepth`): render a 2-pixel pulsing outline (Amber: Alerted, Red: Engaged, Gray: Last Known Acoustic Position).
   - When unspotted and silent: stencil rendering is disabled (pure stealth).
@@ -61,16 +62,15 @@ The PMC (Private Military Company) squad serves as the intelligent, humanoid adv
   - If target PMC is in full cover: Bot does NOT execute a direct charge across open ground.
   - Instead, Bot picks order `EPmcOrder::Flank` or designates an overwatch pin while a secondary operative bounds forward.
 
-### 2.5. System 5: Corpse Looting & Gear Retrieval
-- **Engine Seam:** `Source/CodexTactics/Private/Characters/CorpseSubsystem.cpp:80-160`.
-- **Implementation:**
-  - Implements `ICorpseBody` interface on PMC pawns.
-  - Upon death, `UCorpseSubsystem::RegisterBody` adds an interactable loot component `UCorpseLootComponent`.
-  - Loot Table (`Content/Data/Balance/loot_tables.json` under `"pmc_corpse"`):
+### 2.5. System 5: Corpse Looting & Gear Retrieval [Proposed]
+- **Verified Engine Seams:** `Source/CodexTactics/Public/Characters/CorpseBody.h` (`ICorpseBody`, `HoldsUnsearchedLoot`), `Source/CodexTactics/Public/Characters/CorpseRules.h` (`FCorpseConfig`, `CorpseRules`), `Source/CodexTactics/Private/Characters/CorpseSubsystem.cpp`.
+- **Implementation [Proposed / Pseudocode]:**
+  - Implement `ICorpseBody` on PMC pawns (note: `ICorpseBody` is already a native interface in `CorpseBody.h`); extend registration with an interactable loot container `[Proposed: UCorpseLootComponent]`.
+  - Loot Table `[Proposed]` (`Content/Data/Balance/loot_tables.json` under `"pmc_corpse"`):
     * 5.45x39 ammo: 30–60 rounds ($100\%$ probability).
     * Medkit / Bandage: 1 unit ($40\%$).
     * Frag Grenade: 1 unit ($25\%$).
-  - Cursor interaction: hovering over body displays gear search icon; pressing `E` transfers items to squad inventory drawer (`UInventoryDrawerWidget`).
+  - Cursor interaction `[Proposed]`: hovering over body displays gear search icon; pressing `E` transfers items to squad inventory `[Proposed UI hook]`.
 
 ### 2.6. System 6: Tactical Grenade Throws
 - **Engine Seam:** `Source/CodexTactics/Public/Combat/GrenadeProjectile.h`, `Private/Combat/GrenadeProjectile.cpp`.
@@ -92,9 +92,9 @@ The PMC (Private Military Company) squad serves as the intelligent, humanoid adv
 
 ---
 
-## 3. Data Keys & Tuning
+## 3. Data Keys & Tuning [Proposed — Pending Governing Docs Review]
 
-In `Content/Data/AI/pmc_combat_config.json`:
+> Note: Числовые параметры ниже не подтверждены текущим runtime и приведены как стартовое предложение для сверки с `PMC_TRAINING_ANALYSIS.md`. In `Content/Data/AI/pmc_combat_config.json` `[Proposed]`:
 
 ```json
 {

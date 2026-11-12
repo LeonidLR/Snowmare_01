@@ -4,6 +4,7 @@
 **Date:** 2026-11-12  
 **Target:** Task #18 (`pl-apc-depot`) — Бой на БТР, спавн на Depot, тактика «БТР + пехота снаружи»  
 **Target Assignee:** Codex / Claude  
+**Status:** **Architecture Proposal / Planning Draft** (не подтверждённый runtime; точные тюнинг-числа, новые классы и JSON-ключи помечены как `[Proposed]` до сверки с governing docs)  
 **Governing Documents:** `docs/vehicles/APC_00_DECISIONS.md`, `docs/vehicles/APC_01_TECHNICAL.md`, `docs/vehicles/APC_02_DESIGN.md`, `docs/port/TASK_BOARD.md` §18
 
 ---
@@ -40,9 +41,11 @@ The BTR-82 Armored Personnel Carrier (APC) represents the heavy fire support and
 | **`EnemyAIRules` & Targeting** | `Source/CodexTactics/Private/Characters/EnemyAIRules.cpp:1-80` | Target candidate scoring: `FEnemyTargetCandidate` with `EEnemyTargetKind::Vehicle`, prioritizes manned hull. |
 | **Dynamic Hull Cover** | `Source/CodexTactics/Private/Characters/SquadSubsystemGroupCover.cpp:120-250` | `USquadSubsystem` cover slot snapping adapts to dynamic moving bounds. |
 
-### 2.2. New Code Required (~15%)
+### 2.2. New Code Required [Proposed]
 
-1. **`VehicleEscortFormationRules` (Escort Formation):**
+> Note: Символы и структуры в этом подразделе и разделе 3 (`Data Keys & Tuning`) являются **предложением (proposed / pseudocode)** и требуют сверки с `docs/vehicles/APC_01_TECHNICAL.md` и реальными сигнатурами перед кодингом.
+
+1. **`VehicleEscortFormationRules` [Proposed] (Escort Formation):**
    - Files: `Source/CodexTactics/Public/Vehicles/VehicleEscortFormationRules.h`, `Private/Vehicles/VehicleEscortFormationRules.cpp`.
    - Computes 4 mobile infantry escort slots relative to the vehicle transform:
      * Slot 0 (Port Flank): $[-100, -220, 0]$ (relative to hull center).
@@ -50,9 +53,9 @@ The BTR-82 Armored Personnel Carrier (APC) represents the heavy fire support and
      * Slot 2 (Port Rear Quarter): $[-320, -200, 0]$.
      * Slot 3 (Starboard Rear Quarter): $[-320, +200, 0]$.
    - Dynamically clamps infantry movement speed to match APC speed ($\text{Speed}_{\text{escort}} = \min(\text{PawnSprint}, \text{ApcSpeed})$).
-2. **Depot Spawn Placement & Level Json Parser Seam:**
-   - File: `Source/CodexTactics/Private/Data/LevelJsonRules.cpp`.
-   - Reads `"vehicles": [ { "type": "btr82", "spawn": [X, Y, Z], "yaw": Yaw, "ammo_shells": 24, "fuel": 100 } ]` from Depot level definitions.
+2. **Depot Spawn Placement & Level Json Parser Seam `[Proposed]`:**
+   - Seam to check/extend: Level JSON loader (`Source/CodexTactics/Private/Data/` / `LevelJsonRules` `[Proposed — verify exact path before editing]`).
+   - `[Proposed]` Reads `"vehicles": [ { "type": "btr82", "spawn": [X, Y, Z], "yaw": Yaw, "ammo_shells": 24, "fuel": 100 } ]` from Depot level definitions.
    - Spawns `BP_APC_BTR82` at level load, initializes navmesh obstacle carving.
 3. **PMC Heavy Threat AI Behavior:**
    - File: `Source/CodexTactics/Private/AI/PmcCommanderRules.cpp`.
