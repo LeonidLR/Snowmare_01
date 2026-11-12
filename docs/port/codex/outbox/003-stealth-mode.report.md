@@ -1,6 +1,6 @@
 # 003 - Stealth mode: final interim verification
 
-**Status:** baseline verified; reopened for designer playtest feedback (six corrections, including pack-specific wall/peek animations). Work continues on `CodexTactics-interim`, branch `interim/2026-11-12`. Main remains frozen; no merge or push. Runtime baseline: Claude checkpoint `90a6bf64`. The runtime/material follow-up, expanded integration coverage, and pure rules are recorded at `4d15a54f`, `561a29ed`, and `8ff5d194`; the approved animation-copy commit is `1843f002`.
+**Status:** designer feedback fixes verified on `CodexTactics-interim` / `interim/2026-11-12`, ready for repeat designer playtest. Core fixes `558e4a8c`, independent Marksman/FOV fix `57fa466e`, visual evidence checkpoint `909e7c37`. No main changes, asset writes or push in this follow-up.
 
 ## Delivered behavior
 
@@ -77,3 +77,11 @@ Marksman remembered fire uses the observed aim point, existing aim/cooldown, wor
 - `MarksmanStealthSmoke` PASS 47.9 s and `StealthDetectionSmoke` PASS 46.4 s (`Saved/Logs/StealthMarksman-final-results.json`). New smoke checks normal/stealth acquisition, rear FOV, horde override, fixed point, actual fired rounds, hidden health unchanged, blocking, reacquisition, a freshly acquired cache and world-time expiry. An earlier expiry failure was caused by scripted hounds repeatedly knocking the fixture out of stealth; unrelated enemies are now parked with the existing helper. The assertion and gameplay memory duration were retained.
 - Focused automation **80/80 PASS** (`Saved/Logs/StealthMarksman-unit.log`), smoke impact coverage PASS. Ordinary MarksmanSmoke 66.2 s and MarksmanAdvanceSmoke 50.3 s passed before the final stealth-only FOV delta.
 - Routing `3 | gpt-6.1-terra | PASS after runtime fixture correction`, independently reviewed by the parent. Required broad regression batch is next before the final 003 handoff; no independent Marksman targeting bypass remains knowingly open.
+
+## Final feedback gate — 2026-11-12
+
+All eight final gameplay regressions PASS on the final committed runtime, with no automatic retries: InjuredLocomotion 71.0 s, ProneCrawl 64.3 s, CoverSwitch 58.3 s, FormationLab 109.0 s, SoloStart 46.4 s, StealthMode 51.5 s, Marksman 43.6 s and MarksmanAdvance 42.3 s. Batch wall time 264.6 s, evidence `Saved/Logs/StealthResume-regressions-final-results.json`. The independent PMC/Marksman stealth scenarios, 80 focused tests, impact-map coverage, female scenario and rendered evidence above are all PASS.
+
+The six requested feedback corrections are ready for a repeat playtest (STEALTH / key 7). Reported scope limitation remains: Marksman point rounds use tracer/suppression effects and do not resolve a different actor's direct hit at the remembered point. No requirement is represented by a clip-name-only assertion: wall/lean sampling checks evaluated bones, source pose, physical wall edge and exclusion of M4 montages.
+
+Final RU closure draft was produced by the local helper and verified: `2 | local codex-local | PASS` (22.5 s), `Saved/Orchestrator/stealth-final-summary-local-2026-11-12.txt`. Next queued implementation is 004; 005, C5/C6 and (d)-(f) remain open. Gemini 006 is review-only.
