@@ -155,6 +155,9 @@ namespace StealthModeSmoke
 	bool Finish(FState& State, bool bComplete)
 	{
 		FCoreDelegates::OnEndFrame.Remove(State.FrameHandle);
+		if (State.AnchorEnemy.IsValid()) { State.AnchorEnemy->Destroy(); }
+		if (State.AutoEnemyFar.IsValid()) { State.AutoEnemyFar->Destroy(); }
+		if (State.AutoEnemyNear.IsValid()) { State.AutoEnemyNear->Destroy(); }
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bComplete && State.Failures == 0 ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("StealthModeSmoke"));
 		return false;
@@ -1023,7 +1026,7 @@ namespace StealthModeSmoke
 			auto SpawnFrozenThreat = [World](const FVector& Pos, const FRotator& Rot) -> AEnemyCharacter*
 			{
 				UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
-				AEnemyCharacter*Threat = Waves ? Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, Pos, Rot) : nullptr;
+				AEnemyCharacter* Threat = Waves ? Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, Pos, Rot) : nullptr;
 				if (Threat)
 				{
 					Threat->SetActorTickEnabled(false);
@@ -1084,6 +1087,8 @@ namespace StealthModeSmoke
 				State.AutoEnemyNear->SetActorLocation(State.Origin + State.Right * 320.f, false, nullptr, ETeleportType::TeleportPhysics);
 				Sight->Refresh();
 				Op->UpdateStealthLookLock(0.05f);
+				for (int32 StepFrame = 0; StepFrame < 10; ++StepFrame) { Anim(Op)->NativeUpdateAnimation(0.05f); }
+				Check(State, FMath::Abs(Anim(Op)->GetStealthLookYawDeg()) > 5.f, TEXT("section 1: anim instance reflects torso/head look twist toward threat"));
 				// Shift+LMB manual anchor overrides auto threat lock cleanly.
 				const FVector ManualTarget = State.Origin - State.Right * 320.f;
 				PC->SetSimulatedShiftModifier(true);

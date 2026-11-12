@@ -130,15 +130,16 @@ void AOperativeCharacter::ClearStealthAutoLookTarget()
 
 void AOperativeCharacter::UpdateStealthLookLock(float DeltaSeconds)
 {
-	if (!bStealthMode || !GetWorld() || !HealthComponent || !HealthComponent->IsAlive() || IsKilledInAction())
+	if (!bStealthMode || !GetWorld() || !HealthComponent || !HealthComponent->IsAlive() || IsKilledInAction() || bInCover)
 	{
 		ClearStealthAutoLookTarget();
 		return;
 	}
 	const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>();
 	const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld());
-	TArray<StealthModeRules::FStealthLookLockCandidate> Candidates;
-	TMap<uint32, AActor*> CandidateActors;
+	TArray<StealthModeRules::FStealthLookLockCandidate, TInlineAllocator<16>> Candidates;
+	TMap<uint32, AActor*, TInlineSetAllocator<16>> CandidateActors;
+	const FVector Eye = UTacticalSightSubsystem::EyePoint(*this);
 	for (AActor* Target : OperativeCharacterInternal::GatherTargetsFor(*this))
 	{
 		if (!IsValid(Target))
@@ -153,23 +154,28 @@ void AOperativeCharacter::UpdateStealthLookLock(float DeltaSeconds)
 		{
 			continue;
 		}
-		const bool bVisible = !Target->IsHidden()
+		const bool bVisibleToSquad = !Target->IsHidden()
 			&& (!Sight || (OtherOp ? !Sight->IsHostileOperativeConcealed(OtherOp) : Sight->IsVisibleToSquad(Target)))
 			&& (!OtherOp || !Pmc || Pmc->IsVisibleToTeam(TeamId, OtherOp));
+		const bool bHasClearLine = !Sight || Sight->HasClearSight(Eye, Target->GetActorLocation());
+		const bool bVisible = bVisibleToSquad && bHasClearLine;
 		const uint32 Id = Target->GetUniqueID();
 		Candidates.Add({ Id, Target->GetActorLocation(), bVisible });
 		CandidateActors.Add(Id, Target);
 	}
-	if (StealthAutoLookTargetId != 0 && (!StealthAutoLookActor.IsValid() || !CandidateActors.Contains(StealthAutoLookTargetId)))
+	if (StealthAutoLookTargetId != 0)
 	{
-		ClearStealthAutoLookTarget();
+		AActor* CurrentActor = CandidateActors.FindRef(StealthAutoLookTargetId);
+		if (!CurrentActor || StealthAutoLookActor.Get() != CurrentActor)
+		{
+			ClearStealthAutoLookTarget();
+		}
 	}
 	StealthModeRules::FStealthLookLockState LockState;
 	LockState.TargetId = StealthAutoLookTargetId;
 	LockState.LastKnownLocation = StealthAutoLookLocation;
 	LockState.TimeSinceSeenSeconds = StealthAutoLookLostSeconds;
-	const bool bMoving = GetVelocity().SizeSquared2D() > 10.f * 10.f;
-	const float HeadingYaw = bMoving ? static_cast<float>(GetVelocity().Rotation().Yaw) : static_cast<float>(GetActorRotation().Yaw);
+	const float HeadingYaw = static_cast<float>(GetSightFacing().Rotation().Yaw);
 	StealthModeRules::UpdateLookLock(LockState, GetActorLocation(), HeadingYaw, Candidates, DeltaSeconds, StealthModeRules::GetConfig(), 50.f);
 	StealthAutoLookTargetId = LockState.TargetId;
 	StealthAutoLookLocation = LockState.LastKnownLocation;

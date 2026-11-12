@@ -178,14 +178,13 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	}
 
 	int32 Next = 0;
-	auto Add = [this, &Next, bWall](UAnimSequence* Clip, float Weight, float Time)
+	auto Add = [this, &Next](UAnimSequence* Clip, float Weight, float Time)
 	{
 		if (Clip && Weight > OperativeStealthLayer::StealthMinWeight && Next < StealthClips.Num())
 		{
-			const float YawOffset = bWall
-				? (Clip->GetName().StartsWith(TEXT("Stealth_LeftWall_")) ? -90.f
-					: Clip->GetName().StartsWith(TEXT("Stealth_RightWall_")) ? 90.f : 0.f)
-				: 0.f;
+			const FString ClipName = Clip->GetName();
+			const float YawOffset = ClipName.StartsWith(TEXT("Stealth_LeftWall_")) ? -90.f
+				: ClipName.StartsWith(TEXT("Stealth_RightWall_")) ? 90.f : 0.f;
 			StealthClips[Next++] = { Clip, Time, Weight, YawOffset };
 		}
 	};
@@ -320,16 +319,16 @@ void FOperativeAnimInstanceProxy::BlendStealthLayer(FPoseContext& Output) const
 	}
 	if (FMath::Abs(StealthLookYawDeg) > 0.5f && Weight > OperativeStealthLayer::StealthMinWeight)
 	{
-		struct FStealthLookBone { const TCHAR* Name; float Share; };
-		static constexpr FStealthLookBone LookChain[] = {
-			{ TEXT("spine_02"), 0.20f },
-			{ TEXT("spine_03"), 0.25f },
-			{ TEXT("neck_01"), 0.25f },
-			{ TEXT("head"), 0.30f }
+		struct FStealthLookBone { FName Name; float Share; };
+		static const FStealthLookBone LookChain[] = {
+			{ FName(TEXT("spine_02")), 0.20f },
+			{ FName(TEXT("spine_03")), 0.25f },
+			{ FName(TEXT("neck_01")), 0.25f },
+			{ FName(TEXT("head")), 0.30f }
 		};
 		for (const FStealthLookBone& Entry : LookChain)
 		{
-			const int32 MeshIndex = Bones.GetPoseBoneIndexForBoneName(FName(Entry.Name));
+			const int32 MeshIndex = Bones.GetPoseBoneIndexForBoneName(Entry.Name);
 			if (MeshIndex == INDEX_NONE)
 			{
 				continue;

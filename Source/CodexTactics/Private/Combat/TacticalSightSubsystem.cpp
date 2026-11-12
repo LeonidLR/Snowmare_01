@@ -114,7 +114,7 @@ float UTacticalSightSubsystem::GetOperativeFovDeg(const AOperativeCharacter& Ope
 	float Deg = GetFovDeg(Operative.GetStance());
 	if (Operative.IsInStealthMode() && IsFovRuleActive())
 	{
-		Deg = FMath::Max(Deg, StealthModeRules::GetConfig().LookLockFovDeg * 2.f);
+		Deg = FMath::Clamp(FMath::Max(Deg, StealthModeRules::GetConfig().LookLockFovDeg * 2.f), 0.f, 360.f);
 	}
 	return Deg;
 }

@@ -183,8 +183,29 @@ bool FStealthLookLockTest::RunTest(const FString&)
 	Candidates = { { 30u, FVector(240.f, 0.f, 0.f), false } };
 	UpdateLookLock(State, Origin, 0.f, Candidates, 1.5f, Config);
 	TestEqual(TEXT("Remembers lost target within keep window"), State.TargetId, 30u);
+
+	// A new visible target that is >30% closer than the lost target's last known distance (150 vs 240) switches during memory window.
+	Candidates.Add({ 40u, FVector(150.f, 0.f, 0.f), true });
+	UpdateLookLock(State, Origin, 0.f, Candidates, 0.1f, Config);
+	TestEqual(TEXT("Switches to closer candidate during memory window"), State.TargetId, 40u);
+
+	// When candidate moves behind observer (out of FOV), it is treated as lost and time accumulates.
+	Candidates = { { 40u, FVector(-200.f, 0.f, 0.f), true } };
+	UpdateLookLock(State, Origin, 0.f, Candidates, 1.5f, Config);
+	TestEqual(TEXT("Candidate out of FOV is treated as lost and held within keep window"), State.TargetId, 40u);
 	UpdateLookLock(State, Origin, 0.f, Candidates, 0.6f, Config);
-	TestEqual(TEXT("Drops lost target after keep window expires"), State.TargetId, 0u);
+	TestEqual(TEXT("Candidate out of FOV expires after keep window"), State.TargetId, 0u);
+
+	// Heading wrap: observer heading 170 deg, target at -170 deg (angular delta 20 deg <= 100 deg).
+	TestTrue(TEXT("Heading wrap across +-180 deg is inside FOV"), IsInLookLockFov(Origin, 170.f, FVector(-300.f, -50.f, 0.f), 100.f));
+
+	// Config disabled resets active lock.
+	Candidates = { { 50u, FVector(200.f, 0.f, 0.f), true } };
+	UpdateLookLock(State, Origin, 0.f, Candidates, 0.1f, Config);
+	TestEqual(TEXT("Locks on when enabled"), State.TargetId, 50u);
+	Config.bEnabled = false;
+	UpdateLookLock(State, Origin, 0.f, Candidates, 0.1f, Config);
+	TestEqual(TEXT("Disabling config immediately resets state"), State.TargetId, 0u);
 
 	return true;
 }

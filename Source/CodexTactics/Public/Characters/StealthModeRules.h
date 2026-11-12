@@ -62,7 +62,7 @@ namespace StealthModeRules
 		float FovDeg, float MinDistanceCm = 50.f);
 	/** Updates automatic stealth threat look-lock: keeps seen threat, remembers lost threat for LookLockKeepSeconds, switches only when closer than LookLockSwitchRatio. */
 	CODEXTACTICS_API void UpdateLookLock(FStealthLookLockState& State, const FVector& ObserverLocation, float HeadingYawDeg,
-		const TArray<FStealthLookLockCandidate>& Candidates, float DeltaSeconds, const FStealthModeConfig& Config,
+		TArrayView<const FStealthLookLockCandidate> Candidates, float DeltaSeconds, const FStealthModeConfig& Config,
 		float MinDistanceCm = 50.f);
 	/** Optional JSON keys over Base; malformed values keep Base; multipliers/visuals clamp to [0, 1], speeds to [0, 2000], and look-lock tuning to non-negative bounds. */
 	CODEXTACTICS_API FStealthModeConfig FromJson(const FJsonObject& Json, const FStealthModeConfig& Base = FStealthModeConfig());

@@ -411,7 +411,7 @@ public:
 	FVector GetStealthManualLookTarget() const { return StealthManualLookTarget; }
 	/** Stealth v2 §1: automatic threat look-lock (within LookLockFovDeg, remembered for LookLockKeepSeconds). */
 	bool HasStealthAutoLookTarget() const { return bStealthMode && StealthAutoLookTargetId != 0 && StealthAutoLookActor.IsValid(); }
-	FVector GetStealthAutoLookTarget() const { return StealthAutoLookLocation; }
+	FVector GetStealthAutoLookTarget() const { return HasStealthAutoLookTarget() ? StealthAutoLookLocation : FVector::ZeroVector; }
 	const AActor* GetStealthAutoLookActor() const { return HasStealthAutoLookTarget() ? StealthAutoLookActor.Get() : nullptr; }
 	void ClearStealthAutoLookTarget();
 	void UpdateStealthLookLock(float DeltaSeconds);

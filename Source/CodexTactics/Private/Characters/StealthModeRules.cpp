@@ -87,7 +87,7 @@ namespace StealthModeRules
 	}
 
 	void UpdateLookLock(FStealthLookLockState& State, const FVector& ObserverLocation, float HeadingYawDeg,
-		const TArray<FStealthLookLockCandidate>& Candidates, float DeltaSeconds, const FStealthModeConfig& Config,
+		TArrayView<const FStealthLookLockCandidate> Candidates, float DeltaSeconds, const FStealthModeConfig& Config,
 		float MinDistanceCm)
 	{
 		if (!Config.bEnabled)
