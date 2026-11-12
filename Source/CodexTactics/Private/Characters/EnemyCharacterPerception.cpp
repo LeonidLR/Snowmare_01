@@ -179,7 +179,7 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 	float SeenRange = 0.f;
 	const AActor* Seen = FindVisibleOperative(Params, SeenDistance, SeenRange);
 	const float Before = PatrolSuspicion;
-	const AOperativeCharacter* SeenOperative = Cast<AOperativeCharacter>(Seen);
+	AOperativeCharacter* SeenOperative = const_cast<AOperativeCharacter*>(Cast<AOperativeCharacter>(Seen));
 	const float BuildupScale = StealthModeRules::DetectionBuildupScale(SeenOperative && SeenOperative->IsInStealthMode(), StealthModeRules::GetConfig());
 	PatrolSuspicion = PerceptionRules::StepSuspicion(Params, PatrolSuspicion, Step * BuildupScale, Seen != nullptr, SeenDistance, SeenRange);
 	if (Seen && Before <= 0.f && PatrolSuspicion < 1.f && !bIsDying)
@@ -188,6 +188,10 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 	}
 	FPatrolAlertInput Input;
 	Input.bSeesOperative = Seen != nullptr && PatrolSuspicion >= 1.f;
+	if (Input.bSeesOperative && SeenOperative)
+	{
+		SeenOperative->SetStealthMode(false);
+	}
 
 	// Hearing (footsteps by gait): no line of sight needed. Smell (hounds) after it: ScentRules, a scent alerts first.
 	const AActor* Heard = nullptr;

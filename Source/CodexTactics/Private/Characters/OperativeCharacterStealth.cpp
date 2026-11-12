@@ -55,8 +55,6 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		StealthOriginalMaterials.Reset();
 		SetSprinting(false);
 		bStealthMode = true;
-		bHasPostureOverride = true;
-		PostureOverride = ESquadFirePosture::Passive;
 		if (Stance != EOperativeStance::Prone)
 		{
 			SetStance(EOperativeStance::Crouching);

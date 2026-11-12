@@ -55,6 +55,13 @@ namespace StealthModeSmoke
 		int32 WallReverseFrames = 0;
 		int32 WallWrongPhase = 0;
 		int32 WallWrongYaw = 0;
+		int32 WallCoverMontageFrames = 0;
+		FVector WallHeadRelative = FVector::ZeroVector;
+		FVector WallHeadFromMesh = FVector::ZeroVector;
+		FVector WallPelvisFromMesh = FVector::ZeroVector;
+		FVector WallHeadWorld = FVector::ZeroVector;
+		ECoverFacing WallIdleSide = ECoverFacing::Right;
+		int32 CoverClipsBeforeWall = 0;
 		float LastWallPhase = 0.f;
 		bool bWallPhaseValid = false;
 		int32 AmmoBefore = 0;
@@ -81,6 +88,52 @@ namespace StealthModeSmoke
 		FDelegateHandle FrameHandle;
 	};
 	static const TCHAR* const Directions[8] = { TEXT("F"), TEXT("FR"), TEXT("R"), TEXT("BR"), TEXT("B"), TEXT("BL"), TEXT("L"), TEXT("FL") };
+
+	// Sample the same skeleton-space pose as the stealth layer, replacing its root with
+	// the reference root just as BlendStealthLayer does. Also report the discarded root yaw.
+	bool SampleStealthHead(const UOperativeAnimInstance& Instance, FVector& OutHeadRelative, float& OutRootYaw, FVector& OutHead, FVector& OutPelvis)
+	{
+		const UAnimSequenceBase* Dominant = Instance.GetStealthDominantClip();
+		const UAnimSequence* Sequence = Cast<UAnimSequence>(Dominant);
+		const USkeleton* Skeleton = Sequence ? Sequence->GetSkeleton() : nullptr;
+		if (!Skeleton) { return false; }
+		const FOperativeClipState* Selected = nullptr;
+		for (const FOperativeClipState& Clip : Instance.GetStealthClips())
+		{
+			if (Clip.Sequence == Sequence && (!Selected || Clip.Weight > Selected->Weight)) { Selected = &Clip; }
+		}
+		if (!Selected) { return false; }
+		const FReferenceSkeleton& Ref = Skeleton->GetReferenceSkeleton();
+		const int32 Head = Ref.FindBoneIndex(TEXT("head"));
+		const int32 Pelvis = Ref.FindBoneIndex(TEXT("pelvis"));
+		if (Head == INDEX_NONE || Pelvis == INDEX_NONE) { return false; }
+		const FAnimExtractContext Context(static_cast<double>(Selected->Time), false);
+		FTransform Root;
+		Sequence->GetBoneTransform(Root, FSkeletonPoseBoneIndex(0), Context, false);
+		OutRootYaw = Root.Rotator().Yaw;
+		const FString ClipName = Sequence->GetName();
+		const float WallYaw = ClipName.StartsWith(TEXT("Stealth_LeftWall_")) ? -90.f : ClipName.StartsWith(TEXT("Stealth_RightWall_")) ? 90.f : 0.f;
+		auto ComponentPosition = [&Ref, Sequence, &Context, WallYaw](int32 Bone)
+		{
+			FTransform Component = FTransform::Identity;
+			for (int32 Chain = Bone; Chain != INDEX_NONE; Chain = Ref.GetParentIndex(Chain))
+			{
+				FTransform Local;
+				if (Chain == 0)
+				{
+					Local = Ref.GetRefBonePose()[0];
+					Local.SetRotation((FQuat(FVector::UpVector, FMath::DegreesToRadians(WallYaw)) * Local.GetRotation()).GetNormalized());
+				}
+				else { Sequence->GetBoneTransform(Local, FSkeletonPoseBoneIndex(Chain), Context, false); }
+				Component = Component * Local;
+			}
+			return Component.GetLocation();
+		};
+		OutHead = ComponentPosition(Head);
+		OutPelvis = ComponentPosition(Pelvis);
+		OutHeadRelative = OutHead - OutPelvis;
+		return true;
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -264,11 +317,16 @@ namespace StealthModeSmoke
 				if (ATacticalCameraPawn* Camera = Cast<ATacticalCameraPawn>(PC->GetPawn()))
 				{
 					// The real game camera, re-centred like portrait selection; hidden-window edge pan must not drift away.
-					Camera->SetFollowTarget(Op);
-					Camera->SnapToFollowTarget();
+					Camera->SnapFocusOnTarget(Op, 1400.f);
 					PC->SetViewTarget(Camera);
 				}
 			}
+		}
+		if ((State.Stage == 4 || State.Stage == 40 || State.Stage == 41 || State.Stage == 42 || State.Stage == 43 || State.Stage == 5) && Anim(Op))
+		{
+			FString Playing; float MontageWeight = 0.f; float SlotWeight = 0.f;
+			Anim(Op)->GetCoverPlayback(Playing, MontageWeight, SlotWeight);
+			if (MontageWeight > 0.01f && Playing.Contains(TEXT("cvr"), ESearchCase::IgnoreCase)) { ++State.WallCoverMontageFrames; }
 		}
 		if (State.Stage == 40 && Op->bShimmying && Op->GetVelocity().Size2D() > 3.f)
 		{
@@ -442,6 +500,8 @@ namespace StealthModeSmoke
 				}
 				Check(State, State.FemaleOffsets.Num() >= 16, TEXT("female measured phase offsets exist for both eight-direction gaits"));
 			}
+			Op->bHasPostureOverride = true;
+			Op->PostureOverride = ESquadFirePosture::Defensive;
 			Squad->SetSelectedGroup({ Op });
 			PC->ToggleStealthModeKey();
 			Next(State, 1);
@@ -464,6 +524,7 @@ namespace StealthModeSmoke
 					Check(State, Op->IsInStealthMode() && Mate->IsInStealthMode(), TEXT("mixed selected group enables stealth for both"));
 					PC->ToggleStealthModeKey();
 					Check(State, !Op->IsInStealthMode() && !Mate->IsInStealthMode(), TEXT("fully enabled group toggles off"));
+					Check(State, Op->GetFirePosture() == ESquadFirePosture::Defensive, TEXT("stealth exit restores the existing personal fire posture"));
 					Squad->SetSelectedGroup({ Op }, false);
 					PC->ToggleStealthModeKey();
 					break;
@@ -563,6 +624,7 @@ namespace StealthModeSmoke
 			Check(State, bSlot, TEXT("runtime wall has a cover slot"));
 			Op->bIgnoreCoverThreatForTesting = true;
 			Op->bCornerHoldAtEdge = false; // motion fixture: a visible reverse-shimmy threat must not auto-peek at the endpoint
+			State.CoverClipsBeforeWall = Anim(Op)->GetCoverClipsPlayed();
 			if (bSlot) { Op->EnterCover(Slot); }
 			Enemy->SetActorLocation(At(State, 1015.f, 350.f, Enemy->GetSimpleCollisionHalfHeight() + 2.f));
 			Next(State, 4);
@@ -573,6 +635,12 @@ namespace StealthModeSmoke
 			if (State.StageTime < 3.f) { return true; }
 			const UAnimSequenceBase* Clip = Anim(Op)->GetStealthDominantClip();
 			Check(State, Op->bInCover && Clip && Clip->GetName().Contains(TEXT("Wall_Idle")), TEXT("wall press uses stealth wall idle"));
+			FVector ExpectedIdle, SourceIdleHead, SourceIdlePelvis; float IdleRootYaw = 0.f;
+			const FVector ActualIdle = Op->GetMesh()->GetComponentTransform().InverseTransformPosition(Op->GetMesh()->GetBoneLocation(TEXT("head")))
+				- Op->GetMesh()->GetComponentTransform().InverseTransformPosition(Op->GetMesh()->GetBoneLocation(TEXT("pelvis")));
+			const bool bIdleSample = SampleStealthHead(*Anim(Op), ExpectedIdle, IdleRootYaw, SourceIdleHead, SourceIdlePelvis);
+			Check(State, bIdleSample && FVector::Dist(ActualIdle, ExpectedIdle) < 5.f, TEXT("evaluated wall idle matches approved clip head and pelvis"));
+			UE_LOG(LogCodexTactics, Display, TEXT("[StealthWallPose] idle actual=%s source=%s source-head=%s source-pelvis=%s source-root-yaw=%.1f"), *ActualIdle.ToString(), *ExpectedIdle.ToString(), *SourceIdleHead.ToString(), *SourceIdlePelvis.ToString(), IdleRootYaw);
 			Sight->Refresh();
 			Check(State, !Sight->IsVisibleToSquad(State.Enemy.Get()), TEXT("wall occludes enemy before peek"));
 			Shot(State, TEXT("wall"));
@@ -619,6 +687,32 @@ namespace StealthModeSmoke
 			const UAnimSequenceBase* Clip = Anim(Op)->GetStealthDominantClip();
 			Check(State, Clip && Clip->GetName().Contains(TEXT("Wall_Idle")) && Anim(Op)->GetStealthWeight() > 0.9f, TEXT("shimmy stop settles back into stealth wall idle"));
 			if (++State.WallLeg < 4) { Next(State, 41); break; }
+			// Face the physical clicked edge first, then wait for that side's idle to settle.
+			const FVector Click = At(State, 585.f, 180.f, 90.f);
+			const float EdgeAlong = FVector::DotProduct(Click - Op->GetCoverSlot().WorldLocation, Op->GetCoverSlot().RightTangent());
+			Op->bIgnoreCoverThreatForTesting = true;
+			Op->bHasCoverThreat = false;
+			Op->CoverFacing = EdgeAlong >= 0.f ? ECoverFacing::Right : ECoverFacing::Left;
+			Next(State, 43);
+			break;
+		}
+		case 43:
+		{
+			if (State.StageTime < 2.f) { return true; }
+			const UAnimSequenceBase* IdleClip = Anim(Op)->GetStealthDominantClip();
+			Check(State, IdleClip && IdleClip->GetName().Contains(TEXT("Wall_Idle")) && Anim(Op)->GetStealthWeight() > 0.9f,
+				TEXT("clicked corner side settles into stealth wall idle before peek"));
+			State.WallIdleSide = Op->CoverFacing;
+			State.WallHeadWorld = Op->GetMesh()->GetBoneLocation(TEXT("head"));
+			const FVector IdlePelvisWorld = Op->GetMesh()->GetBoneLocation(TEXT("pelvis"));
+			State.WallHeadRelative = State.WallHeadWorld - IdlePelvisWorld;
+			State.WallHeadFromMesh = State.WallHeadWorld - Op->GetMesh()->GetComponentLocation();
+			State.WallPelvisFromMesh = IdlePelvisWorld - Op->GetMesh()->GetComponentLocation();
+			FVector SameIdleRelative, SameIdleHead, SameIdlePelvis; float SameIdleRootYaw = 0.f;
+			const bool bSameIdleSample = SampleStealthHead(*Anim(Op), SameIdleRelative, SameIdleRootYaw, SameIdleHead, SameIdlePelvis);
+			UE_LOG(LogCodexTactics, Display, TEXT("[StealthWallPose] corner-idle side=%d head-world=%s head-from-mesh=%s pelvis-from-mesh=%s source-valid=%d source-head=%s source-pelvis=%s root-yaw=%.1f"),
+				static_cast<int32>(State.WallIdleSide), *State.WallHeadWorld.ToString(), *State.WallHeadFromMesh.ToString(), *State.WallPelvisFromMesh.ToString(), bSameIdleSample,
+				*SameIdleHead.ToString(), *SameIdlePelvis.ToString(), SameIdleRootYaw);
 			Op->bIgnoreCoverThreatForTesting = true;
 			Op->bHasCoverThreat = false;
 			State.Enemy->SetActorLocation(At(State, 1015.f, 350.f, State.Enemy->GetSimpleCollisionHalfHeight() + 2.f));
@@ -633,6 +727,30 @@ namespace StealthModeSmoke
 			if (State.StageTime < 4.f || (Op->bShimmying && State.StageTime < 15.f)) { return true; }
 			const UAnimSequenceBase* Clip = Anim(Op)->GetStealthDominantClip();
 			Check(State, Op->IsPeekingRoundCorner() && Clip && Clip->GetName().Contains(TEXT("Wall_Lean")), TEXT("corner peek uses stealth lean clip"));
+			const FVector Head = Op->GetMesh()->GetBoneLocation(TEXT("head"));
+			const FVector Pelvis = Op->GetMesh()->GetBoneLocation(TEXT("pelvis"));
+			const FVector PeekHeadRelative = Head - Pelvis;
+			const FVector HeadFromMesh = Head - Op->GetMesh()->GetComponentLocation();
+			const FVector PelvisFromMesh = Pelvis - Op->GetMesh()->GetComponentLocation();
+			const FVector TowardEdge = Op->GetCoverSlot().RightTangent() * (Op->GetManualCornerPeekSide() == ECoverFacing::Right ? 1.f : -1.f);
+			const FVector Edge = At(State, 585.f, 200.f, 90.f);
+			const float EdgeExtension = FVector::DotProduct(HeadFromMesh - State.WallHeadFromMesh, TowardEdge);
+			const float PelvisExtension = FVector::DotProduct(PelvisFromMesh - State.WallPelvisFromMesh, TowardEdge);
+			const float WorldHeadExtension = FVector::DotProduct(Head - State.WallHeadWorld, TowardEdge);
+			const float HeadPastEdge = FVector::DotProduct(Head - Edge, TowardEdge);
+			const FVector ActualLean = Op->GetMesh()->GetComponentTransform().InverseTransformVector(PeekHeadRelative);
+			FVector ExpectedLean, SourceLeanHead, SourceLeanPelvis; float LeanRootYaw = 0.f;
+			const bool bLeanSample = SampleStealthHead(*Anim(Op), ExpectedLean, LeanRootYaw, SourceLeanHead, SourceLeanPelvis);
+			Check(State, State.WallIdleSide == Op->CoverFacing && EdgeExtension > 3.f,
+				FString::Printf(TEXT("same-side evaluated head extends toward corner relative to mesh %.1f cm"), EdgeExtension));
+			Check(State, HeadPastEdge > 0.f, FString::Printf(TEXT("evaluated head is %.1f cm past the physical wall edge"), HeadPastEdge));
+			Check(State, bLeanSample && FVector::Dist(ActualLean, ExpectedLean) < 5.f, TEXT("evaluated lean matches approved clip head and pelvis"));
+			Check(State, State.WallCoverMontageFrames == 0 && Anim(Op)->GetCoverClipsPlayed() == State.CoverClipsBeforeWall,
+				FString::Printf(TEXT("no M4 cover montage started or played during wall and peek (%d frames)"), State.WallCoverMontageFrames));
+			UE_LOG(LogCodexTactics, Display, TEXT("[StealthWallPose] lean side=%d head=%s wall-edge=%s normal=%s head-extension=%.1f pelvis-extension=%.1f world-head-extension=%.1f head-past-edge=%.1f head-from-mesh=%s pelvis-from-mesh=%s actual-relative=%s source-relative=%s source-head=%s source-pelvis=%s source-root-yaw=%.1f"),
+				static_cast<int32>(Op->CoverFacing), *Head.ToString(), *At(State, 585.f, 200.f, 90.f).ToString(), *Op->GetCoverSlot().WallNormal.ToString(), EdgeExtension,
+				PelvisExtension, WorldHeadExtension, HeadPastEdge, *HeadFromMesh.ToString(), *PelvisFromMesh.ToString(), *ActualLean.ToString(), *ExpectedLean.ToString(),
+				*SourceLeanHead.ToString(), *SourceLeanPelvis.ToString(), LeanRootYaw);
 			Sight->Refresh();
 			Check(State, Sight->IsVisibleToSquad(State.Enemy.Get()) && !State.Enemy->IsHidden(), TEXT("peek reveals occluded enemy to squad / shared minimap sight"));
 			TArray<FSquadKnownEnemy> Known;

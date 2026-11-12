@@ -168,7 +168,7 @@ namespace PmcCommanderRules
 		case EPmcOrder::Suppress:
 			// Pin a seen threat so a mate can move; needs ammo and a reason (a mate moving), one suppressor at a time - and a line of fire that
 			// reaches it (2026-11-08: no rounds into the wall in front of him).
-			return W.Suppress * SeenNow * InRange * Step(F.bFireLine) * Step(F.AmmoFrac >= W.SuppressAmmoMin) * (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.5f)
+			return W.Suppress * (F.RunningOrder == EPmcOrder::Suppress && F.Threat.SecondsSince <= W.ContactMemorySeconds ? Step(F.bHasThreat) : SeenNow) * InRange * Step(F.bFireLine) * Step(F.AmmoFrac >= W.SuppressAmmoMin) * (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.5f)
 				* (S.MatesSuppressing == 0 ? 1.f : 0.4f) * StaticBand;
 		case EPmcOrder::FallBack:
 		{

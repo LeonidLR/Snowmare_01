@@ -894,11 +894,17 @@ void UTacticalSightSubsystem::Update()
 			const FStealthModeConfig& Stealth = StealthModeRules::GetConfig();
 			const float RangeScale = StealthModeRules::DetectionRangeScale(Operative->IsInStealthMode(), Stealth);
 			const float NoiseScale = StealthModeRules::FootstepNoiseScale(Operative->IsInStealthMode(), Stealth);
-			const bool bPerceives = IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance()) * NoiseScale
-				|| (!bCoverHidden && Distance <= EnemySightCm * RangeScale && HasClearSight(Eye, ProfilePoint(*Operative)));
+			const bool bVisual = !bCoverHidden && Distance <= EnemySightCm * RangeScale && HasClearSight(Eye, ProfilePoint(*Operative));
+			const bool bPerceives = bVisual || IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance()) * NoiseScale;
+			if (bVisual)
+			{
+				Operative->SetStealthMode(false);
+			}
 			if (bPerceives)
 			{
-				Known.Add(Operative, { Operative->GetActorLocation(), Now, -1.0, true });
+				FIntel* Existing = Known.Find(Operative);
+				const FVector ContactLocation = bVisual || !Existing ? Operative->GetActorLocation() : Existing->Location;
+				Known.Add(Operative, { ContactLocation, Now, -1.0, bVisual });
 				// Pack call: mates nearby learn where he is.
 				for (AEnemyCharacter* Mate : Enemies)
 				{
@@ -908,7 +914,7 @@ void UTacticalSightSubsystem::Update()
 						if (!MateIntel.bPerceived)
 						{
 							Stats.PackAlerts += MateIntel.Time < Now - 1.0 ? 1 : 0;
-							MateIntel.Location = Operative->GetActorLocation();
+							MateIntel.Location = ContactLocation;
 							MateIntel.Time = Now;
 							MateIntel.ArrivedTime = -1.0;
 						}

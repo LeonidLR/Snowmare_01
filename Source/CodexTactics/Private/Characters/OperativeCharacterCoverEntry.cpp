@@ -43,6 +43,10 @@ void AOperativeCharacter::TryEnterCoverFromRun()
 	}
 	// Wall-edge cover switch: the pack's run-in transition takes over the last metres. While it waits for its moment the ordinary run-in
 	// stays off; only when the switch gives up (no clip / no fit: bCoverSwitchPending cleared) does the ordinary run-in below go on.
+	if (IsInStealthMode())
+	{
+		bCoverSwitchPending = false; // keep the chosen destination and arrival facing, but skip the M4 clip probe
+	}
 	if (bCoverSwitchPending && (TryEnterCoverSwitchFromRun() || bCoverSwitchPending))
 	{
 		return;
@@ -52,9 +56,9 @@ void AOperativeCharacter::TryEnterCoverFromRun()
 		|| Stance == EOperativeStance::Crouching ? EOperativeStance::Crouching : EOperativeStance::Standing;
 	const bool bCrouchEntry = EntryStance == EOperativeStance::Crouching;
 	const TArray<TObjectPtr<UAnimSequenceBase>>* EnterClips = Anim ? (bCrouchEntry ? &Anim->CoverCrouchEnter : &Anim->CoverStandEnter) : nullptr;
-	const bool bHasEnterClip = Anim && Anim->bUseNativeCoverClips && EnterClips && EnterClips->ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; });
+	const bool bHasEnterClip = !IsInStealthMode() && Anim && Anim->bUseNativeCoverClips && EnterClips && EnterClips->ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; });
 	// The run-and-peek's arrival plays no enter clip (it goes straight into the peek stance, EnterCover): no clip start pose to enter at.
-	const bool bPeekStance = IsRunPeekStanceEnabled() && IsRunCornerPeekArrivalAt(PendingCoverSlot);
+	const bool bPeekStance = !IsInStealthMode() && IsRunPeekStanceEnabled() && IsRunCornerPeekArrivalAt(PendingCoverSlot);
 	const float ClipLead = bHasEnterClip && !bPeekStance ? (bCrouchEntry ? CoverEnterClipLeadCrouchCm : CoverEnterClipLeadStandCm) : 0.f;
 	const float Speed = static_cast<float>(GetVelocity().Size2D());
 	const float Glide = GetRunInGlideCm(Speed);

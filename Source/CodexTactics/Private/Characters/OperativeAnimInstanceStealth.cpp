@@ -243,6 +243,15 @@ void FOperativeAnimInstanceProxy::BlendStealthLayer(FPoseContext& Output) const
 		UE::Anim::FStackAttributeContainer& Attribute = Attributes.AddDefaulted_GetRef();
 		FAnimationPoseData PoseData(Pose, Curve, Attribute);
 		Clip.Sequence->GetAnimationPose(PoseData, FAnimExtractContext(static_cast<double>(Clip.Time), false));
+		// Stealth wall clips face along the wall; M4 clips encode that turn in their bones.
+		// Keep the capsule's normal-facing cover contract and rotate only this sampled pose.
+		const FString ClipName = Clip.Sequence->GetName();
+		const float WallYaw = ClipName.StartsWith(TEXT("Stealth_LeftWall_")) ? -90.f
+			: ClipName.StartsWith(TEXT("Stealth_RightWall_")) ? 90.f : 0.f;
+		const FCompactPoseBoneIndex RootIndex(0);
+		const FTransform& RootReference = Output.Pose.GetBoneContainer().GetRefPoseTransform(RootIndex);
+		Pose[RootIndex] = RootReference;
+		Pose[RootIndex].SetRotation((FQuat(FVector::UpVector, FMath::DegreesToRadians(WallYaw)) * RootReference.GetRotation()).GetNormalized());
 		Weights.Add(Clip.Weight);
 		Total += Clip.Weight;
 	}
@@ -261,7 +270,7 @@ void FOperativeAnimInstanceProxy::BlendStealthLayer(FPoseContext& Output) const
 	UE::Anim::FStackAttributeContainer LayerAttributes;
 	FAnimationPoseData LayerData(Layer, LayerCurve, LayerAttributes);
 	FAnimationRuntime::BlendPosesTogether(Poses, Curves, Attributes, Weights, LayerData);
-	// Full body with the reference root: the capsule owns world movement and wall-facing yaw.
+	// Full body with an in-place root: the capsule owns translation; wall clips supply their along-wall basis.
 	const float Weight = FMath::Min(1.f, StealthWeight);
 	const FBoneContainer& Bones = Output.Pose.GetBoneContainer();
 	for (const FCompactPoseBoneIndex Index : Output.Pose.ForEachBoneIndex())
@@ -269,7 +278,7 @@ void FOperativeAnimInstanceProxy::BlendStealthLayer(FPoseContext& Output) const
 		if (Index.IsRootBone())
 		{
 			const FTransform& Reference = Bones.GetRefPoseTransform(Index);
-			Output.Pose[Index].SetRotation(FQuat::Slerp(Output.Pose[Index].GetRotation(), Reference.GetRotation(), Weight).GetNormalized());
+			Output.Pose[Index].SetRotation(FQuat::Slerp(Output.Pose[Index].GetRotation(), Layer[Index].GetRotation(), Weight).GetNormalized());
 			Output.Pose[Index].SetTranslation(FMath::Lerp(Output.Pose[Index].GetTranslation(), Reference.GetTranslation(), Weight));
 			continue;
 		}

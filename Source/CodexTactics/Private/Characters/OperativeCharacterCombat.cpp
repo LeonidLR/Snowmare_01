@@ -545,6 +545,10 @@ FShootCandidate AOperativeCharacter::FindShootTarget(float DeltaTime, bool bAllo
 
 ESquadFirePosture AOperativeCharacter::GetFirePosture() const
 {
+	if (IsInStealthMode())
+	{
+		return ESquadFirePosture::Passive; // temporary effective posture; preserve the player's existing override
+	}
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	return Squad ? Squad->GetEffectivePosture(this)
 		: FirePostureRules::Resolve(FirePostureRules::DefaultPosture, bHasPostureOverride, PostureOverride);

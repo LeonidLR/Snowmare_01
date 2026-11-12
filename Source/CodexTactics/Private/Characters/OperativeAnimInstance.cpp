@@ -1871,7 +1871,7 @@ void UOperativeAnimInstance::FadeOutCoverMontages(float BlendIn)
 UAnimMontage* UOperativeAnimInstance::PlayCoverMontage(UAnimSequenceBase* Clip, const FAlphaBlendArgs& BlendIn, float BlendOut, float PlayRate, int32 LoopCount,
 	float StartSeconds)
 {
-	if (!Clip)
+	if (!Clip || (BoundOperative.IsValid() && BoundOperative->IsInStealthMode()))
 	{
 		return nullptr;
 	}
@@ -1903,6 +1903,30 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	if (bLeft || bIsDead)
 	{
 		ReleasePeekStanceYawLock(); // off the wall (another order) / dead: the peek stance's held facing lets go
+	}
+	// Stealth owns the full body at and approaching a wall. Stop only cover montages:
+	// firing, reloads and other independent full-body actions retain their normal ownership.
+	if (Operative.IsInStealthMode())
+	{
+		if (UAnimMontage* Loop = CoverLoopMontage.Get())
+		{
+			Montage_Stop(0.f, Loop);
+		}
+		if (UAnimMontage* OneShot = CoverOneShotMontage.Get())
+		{
+			Montage_Stop(0.f, OneShot);
+		}
+		CoverLoopMontage.Reset();
+		CoverLoopClip.Reset();
+		CoverOneShotMontage.Reset();
+		CoverPendingFireClip.Reset();
+		CoverPeekStanceMontage.Reset();
+		bCoverEnterPlaying = false;
+		bCoverPeekStanceEntry = false;
+		bCoverInFirePose = false;
+		ReleasePeekStanceYawLock();
+		ReleasePeekApproachYawLock();
+		return;
 	}
 	if (!bUseNativeCoverClips || bIsDead)
 	{
@@ -2335,7 +2359,7 @@ bool UOperativeAnimInstance::GetCoverSwitchTrack(bool bCrouch, ECoverSwitchAppro
 
 bool UOperativeAnimInstance::PlayCoverOneShot(UAnimSequenceBase* Clip, float BlendIn, float BlendOut)
 {
-	if (!Clip)
+	if (!Clip || (BoundOperative.IsValid() && BoundOperative->IsInStealthMode()))
 	{
 		return false;
 	}

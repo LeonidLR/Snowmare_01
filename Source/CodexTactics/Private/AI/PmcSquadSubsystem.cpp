@@ -18,6 +18,7 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/PeekSightRules.h"
 #include "Combat/SightRules.h"
+#include "Characters/StealthModeRules.h"
 #include "Combat/SuppressionRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
@@ -640,9 +641,19 @@ void UPmcSquadSubsystem::UpdateSight()
 				{
 					break;
 				}
-				// A monster coming at a mate is noticed all round (it is on him), a man only inside the eye rules.
-				bEye = SightRules::IsWithinTouchReveal(FVector::Dist2D(Observer->GetActorLocation(), Target->GetActorLocation()))
-					|| (bAllRound ? Sight->HasClearSight(UTacticalSightSubsystem::EyePoint(*Observer), Profile) : Sight->CanOperativeSee(*Observer, Profile));
+				// A stealth operative must be within the reduced range and visible from this observer.
+				AOperativeCharacter* TargetOperative = Cast<AOperativeCharacter>(Target);
+				const float Distance = FVector::Dist2D(Observer->GetActorLocation(), Target->GetActorLocation());
+				const bool bStealth = TargetOperative && TargetOperative->IsInStealthMode();
+				const float Range = Sight->GetSightRangeCm(*Observer) * StealthModeRules::DetectionRangeScale(bStealth, StealthModeRules::GetConfig());
+				const bool bHidden = TargetOperative && TargetOperative->IsHiddenInCoverFrom(Observer->GetActorLocation());
+				bEye = !bHidden && (!bStealth || Distance <= Range)
+					&& ((SightRules::IsWithinTouchReveal(Distance) && Sight->HasClearSight(UTacticalSightSubsystem::EyePoint(*Observer), Profile))
+						|| (bAllRound ? Sight->HasClearSight(UTacticalSightSubsystem::EyePoint(*Observer), Profile) : Sight->CanOperativeSee(*Observer, Profile)));
+				if (bEye && TargetOperative)
+				{
+					TargetOperative->SetStealthMode(false);
+				}
 			}
 			// Honest sight (fix/pmc-fire-through-wall 2026-11-08, the designer's prone fighter firing into the squad's wall): a heard shot / a
 			// flash is SEEN only with a clear line from one of their eyes to the shooter or his muzzle; else the team knows his spot (contact,
@@ -669,11 +680,21 @@ void UPmcSquadSubsystem::UpdateSight()
 				: (bEye || bHeard ? SightRules::EContact::Seen : SightRules::EContact::None);
 			if (Contact != SightRules::EContact::None)
 			{
+				FKnownTarget* Previous = Team.Known.Find(Target);
+				const FVector* Flash = Team.ShotRevealFlash.Find(Target);
+				const double* RevealUntil = Team.ShotRevealUntil.Find(Target);
+				const bool bNewFlash = Flash && RevealUntil && *RevealUntil > Now
+					&& (!Previous || *RevealUntil - SightRules::DemaskSeconds > Previous->LastSeenTime);
+				const FVector ContactLocation = bEye ? Target->GetActorLocation() : (bNewFlash ? *Flash : (Previous ? Previous->LastKnown : Target->GetActorLocation()));
 				FKnownTarget& Known = Team.Known.FindOrAdd(Target);
 				Known.Actor = Target;
-				Known.LastKnown = Target->GetActorLocation();
-				Known.LastSeenTime = Now;
-				Known.bSeenNow = Contact == SightRules::EContact::Seen;
+				Known.LastKnown = ContactLocation;
+				const AOperativeCharacter* TargetOperative = Cast<AOperativeCharacter>(Target);
+				Known.bSeenNow = bEye || (Contact == SightRules::EContact::Seen && (!TargetOperative || !TargetOperative->IsInStealthMode()));
+				if (Known.bSeenNow || !Previous)
+				{
+					Known.LastSeenTime = Now;
+				}
 				Team.LastContactTime = Now;
 				if (Known.bSeenNow)
 				{
@@ -715,6 +736,46 @@ void UPmcSquadSubsystem::UpdateSight()
 					{
 						Observe(Monster, UTacticalSightSubsystem::ProfilePoint(*Monster), true);
 					}
+				}
+			}
+		}
+		// Continue a recent automatic engagement at the last seen point, without following the hidden actor.
+		if (Pair.Key != PmcTeam::Player)
+		{
+			for (AOperativeCharacter* Observer : Observers)
+			{
+				FFighterState& FighterState = Team.Fighters.FindOrAdd(Observer);
+				if (FighterState.LostFireUntil >= 0.0)
+				{
+					AActor* Lost = FighterState.LostFireTarget.Get();
+					const FKnownTarget* Known = Lost ? Team.Known.Find(Lost) : nullptr;
+					const UHealthComponent* Health = Lost ? Lost->FindComponentByClass<UHealthComponent>() : nullptr;
+					const bool bOurOrder = Observer->HasSuppressOrder() && !Observer->GetSuppressTarget()
+						&& Observer->GetSuppressPoint().Equals(FighterState.LostFirePoint, 1.f);
+					if (!bOurOrder || !Lost || (Health && !Health->IsAlive()) || (Known && Known->bSeenNow) || Now >= FighterState.LostFireUntil)
+					{
+						if (bOurOrder) { Observer->CancelSuppressFire(TEXT("lost sight memory ended")); }
+						FighterState.LostFireTarget.Reset();
+						FighterState.LostFireUntil = -1.0;
+					}
+				}
+				AActor* Recent = FighterState.RecentFireTarget.Get();
+				const FKnownTarget* Known = Recent ? Team.Known.Find(Recent) : nullptr;
+				if (Known && !Known->bSeenNow && FighterState.LostFireUntil < 0.0)
+				{
+					const FVector Point = Known->LastKnown;
+					const bool bRecent = Now - Observer->GetLastShotTime() <= Team.Weights.ContactMemorySeconds
+						&& Now - Known->LastSeenTime <= Team.Weights.ContactMemorySeconds;
+					if (bRecent && !Observer->HasSuppressOrder()
+						&& Observer->HasUsefulFireLine(Point + FVector(0.f, 0.f, SuppressionRules::GetConfig().OrderAimHeightCm))
+						&& Observer->OrderSuppress(nullptr, Point))
+					{
+						FighterState.Order = EPmcOrder::Suppress;
+						FighterState.LostFireTarget = Recent;
+						FighterState.LostFirePoint = Point;
+						FighterState.LostFireUntil = Known->LastSeenTime + Team.Weights.ContactMemorySeconds;
+					}
+					FighterState.RecentFireTarget.Reset();
 				}
 			}
 		}
@@ -1088,7 +1149,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		}
 	}
 	// The line of fire to the threat's spot from his muzzle at his stance now (2026-11-08): no suppress order into a wall.
-	if (View.bHasThreat && OutThreatActor && View.Threat.bSeenNow)
+	if (View.bHasThreat && OutThreatActor)
 	{
 		View.bFireLine = Fighter.HasUsefulFireLine(View.Threat.Location + FVector(0.f, 0.f, SuppressionRules::GetConfig().OrderAimHeightCm));
 	}
@@ -1919,6 +1980,15 @@ void UPmcSquadSubsystem::HandleWeaponFired(AOperativeCharacter* Shooter, AActor*
 	}
 	if (Victim->TeamId != Shooter->TeamId)
 	{
+		// The native event names the actual target, avoiding guesses after target switching.
+		if (FTeam* ShooterTeam = Teams.Find(Shooter->TeamId))
+		{
+			const FKnownTarget* Known = ShooterTeam->Known.Find(Target);
+			if (Known && Known->bSeenNow && !Shooter->HasSuppressOrder())
+			{
+				ShooterTeam->Fighters.FindOrAdd(Shooter).RecentFireTarget = Target;
+			}
+		}
 		// A shot between two teams blows any ambush holding its fire on either side (target attention, 2026-11-07).
 		for (const int32 TeamId : { Shooter->TeamId, Victim->TeamId })
 		{
