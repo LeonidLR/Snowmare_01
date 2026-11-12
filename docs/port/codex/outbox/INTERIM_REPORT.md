@@ -78,3 +78,7 @@ Validation: 9 mocked tests PASS (all four allowed models, independent level, mal
 Read RESOURCES.md, README local-model rules, INTERIM_LEAD, chat #202/#210, Gemini 025 merge plan and board reconciliation. User queue controls: finish stealth -> 004 -> 005 -> C5 -> C6 -> #42 -> #4 -> #25/#35. 006 belongs to Gemini 020 (c438662c / 9ae763f8), review only. T11 is implemented at fa8299a0 awaiting integration, and AI Director #47 was cancelled; the older board labels are stale.
 
 Stealth core feedback build PASS 175.76 s, male wall/movement smoke PASS 141.2 s, PMC detection/real fixed-point fire smoke PASS 133.2 s. The wall pose now uses the pack's along-wall basis and physically exposes the head 27.4 cm beyond the edge. Effective Passive preserves the previous posture. No assets/main/push. Final focused tests 70/70 and impact-map coverage PASS. Female/rendered revalidation and independent Marksman bypass remain explicit follow-ups in the 003 report. Routing `3 | current Codex | PASS (core)`; small RU queue digest `1 (contextual fallback) | local qwen3-coder:30b | PASS`, reviewed. Local helper cache released after use to avoid build memory contention.
+
+### Gemini integration ledger — 2026-11-12
+
+- `gemini/016-3-implementation-maps` / `9d0cd4dc`: reviewed documentation-only merge, including corrected physics-asset/API map from review #196. Chat idle regression suite 8/8 PASS; Jev boundary audit PASS, risk 0. Markdown hard-break trailing spaces are intentional; no C++/assets changed by this merge.
