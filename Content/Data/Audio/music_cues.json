@@ -47,6 +47,39 @@
       "notes": "Blizzard / freezing weather exploration (variant 2)."
     },
     {
+      "id": "explore_cold_v3",
+      "cue_group": "explore_cold",
+      "variant": "v3",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore_cold",
+      "prompt": "Instrumental dark horror ambient only, no vocals, no melody, atonal loop, 60 BPM. Deep ominous sub-bass rumble, groaning frozen steel bulkhead creaks, howling arctic gale wind noise, rare distant dissonant metallic clangs and dull cold thuds. Strictly no bells, no chimes, no piano, no bright chords, bleak oppressive wasteland atmosphere.",
+      "notes": "Dark bleak freezing exploration - wind & stressed metal creaks (variant 3)."
+    },
+    {
+      "id": "explore_cold_v4",
+      "cue_group": "explore_cold",
+      "variant": "v4",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore_cold",
+      "prompt": "Instrumental dark industrial drone loop, no vocals, zero melody, zero light tones, 56 BPM. Heavy trembling sub-frequency drone, grinding rusted ice-bound iron scrapes, raw unfiltered polar wind hiss, sparse unsettling microtonal metallic knocks in cavernous reverberation. Cold suffocating dread, no synths chords or strings.",
+      "notes": "Dark bleak freezing exploration - sub-bass iron scrape & wind (variant 4)."
+    },
+    {
+      "id": "explore_cold_v5",
+      "cue_group": "explore_cold",
+      "variant": "v5",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore_cold",
+      "prompt": "Instrumental dark ambient drone loop, no vocals, atonal texture, 58 BPM. Low rumbling bass drone, hollow freezing wind gusts, creaking frozen steel beams, faint dissonant metallic strikes in sparse cold space. Dark bleak atmosphere, no melody, no bells, no bright chords.",
+      "notes": "Dark bleak freezing exploration - freezing wind draft & metal beams (variant 5)."
+    },
+    {
       "id": "tension_v1",
       "cue_group": "tension",
       "variant": "v1",
@@ -89,6 +122,39 @@
       "state": "combat",
       "prompt": "Instrumental only, no vocals, seamless driving rhythmic loop, 122 BPM. Punchy electronic kick and dry snare, muted gritty bassline, urgent cold synth arpeggio, sharp string pizzicato accents. Steady loop momentum, no brass fanfare.",
       "notes": "Active firefight / skirmish / standard wave combat (variant 2)."
+    },
+    {
+      "id": "combat_v3",
+      "cue_group": "combat",
+      "variant": "v3",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat",
+      "prompt": "Instrumental dark industrial percussion loop, no vocals, 114 BPM. Heavy muted low bass drums, relentless sub-bass pulse, rhythmic distorted machinery rumble, metallic clank accents, stark tense atmosphere. Steady loop drive, no orchestra, no brass, no heroic melody.",
+      "notes": "Oppressive heavy industrial combat - muffled low drums & pulse (variant 3)."
+    },
+    {
+      "id": "combat_v4",
+      "cue_group": "combat",
+      "variant": "v4",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat",
+      "prompt": "Instrumental grim rhythmic electronic loop, no singing, 120 BPM. Throbbing low distorted bass pulse, deep punchy frame drums and muffled metallic hits, filtered static industrial noise bed, tense dark ostinato without melody. No orchestral strings, no horns, no upbeat fanfare.",
+      "notes": "Oppressive heavy industrial combat - metallic hits & sub pulse (variant 4)."
+    },
+    {
+      "id": "combat_v5",
+      "cue_group": "combat",
+      "variant": "v5",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat",
+      "prompt": "Instrumental bleak tactical percussion loop, no vocals, 108 BPM. Heavy slow low tom stomp, pulsing sub-bass rumble, grinding dark modular noise texture, sharp dry industrial hits. Tight tense survival groove, no orchestra, no bright synths, no heroic chords.",
+      "notes": "Oppressive heavy industrial combat - slow stomp & dark noise (variant 5)."
     },
     {
       "id": "combat_heavy_v1",
