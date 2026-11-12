@@ -64,7 +64,7 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         self.assertEqual(len(loophole_sills), 31)  # 22 checkpoint + 7 bunker + 2 tower
         for s in loophole_sills:
             self.assertAlmostEqual(s["scale"][2] * 100.0, 120.0, places=1)
-        # Loophole lintels start at >= 175 cm (so Standing EyeHeight 160 passes unobstructed)
+        # Loophole lintels preserve exact JSON top_height (150 on B_bunker f=0 -> bottom Z 150.0, no hidden clamp)
         bunker_lintels = [
             s for s in specs
             if "opening_lintel" in s.get("tags", [])
@@ -74,7 +74,7 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         self.assertEqual(len(bunker_lintels), 7)  # B_bunker has 7 loopholes + 1 door
         for s in bunker_lintels:
             bottom_z = s["location"][2] - s["scale"][2] * 50.0
-            self.assertGreaterEqual(bottom_z, 175.0)
+            self.assertAlmostEqual(bottom_z, 150.0, places=1)
 
         # Free-standing tower hatch ladder: wall_bracket_count=-1, top_exit_standoff=110, 3-sided hatch rim
         ladders = {s["label"]: s for s in specs if s["kind"] == "ladder"}

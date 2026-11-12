@@ -34,6 +34,7 @@
 #include "Engine/World.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
+#include "Ladders/LadderClimbComponent.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
@@ -80,6 +81,7 @@ namespace LevelGenRouteSmoke
 		float Total = 0.f;
 		int32 Failures = 0;
 		int32 Teleports = 0;
+		bool bLegClimbed = false;
 		FVector LastOrder = FVector::ZeroVector;
 		EStage Stage = EStage::Walk;
 	};
@@ -309,21 +311,32 @@ namespace LevelGenRouteSmoke
 			++State.Leg;
 			State.LegTime = 0.f;
 			State.CarrotTime = CarrotSeconds;
+			State.bLegClimbed = false;
 			return true;
 		}
 
+		if (Leader->LadderClimb && Leader->LadderClimb->IsBusy())
+		{
+			State.bLegClimbed = true;
+		}
 		State.StillTime = Leader->IsMoving() ? 0.f : State.StillTime + Dt;
 		const double LegLength = FVector2D::Distance(Leg.From, Leg.To);
 		const double LegAlong = FVector2D::DotProduct(Here - Leg.From, (Leg.To - Leg.From).GetSafeNormal());
 		const bool bSameLevel = Leg.LevelFrom == Leg.LevelTo;
+		const bool bVerticalLevelOk = bSameLevel ? bLevelOk : (FMath::Abs(Here3.Z - Leader->GetSimpleCollisionHalfHeight() - TargetZ) <= 60.f);
 		const bool bCornerReached = bSameLevel && !bLast && (Dist <= CornerTurnCm || LegAlong >= LegLength - CornerTurnCm);
-		const bool bPointReached = Dist <= PointReachCm && bLevelOk && (bLast ? !Leader->IsMoving() : true);
+		const bool bPointReached = Dist <= PointReachCm && bVerticalLevelOk && (bLast || !bSameLevel ? !Leader->IsMoving() : true);
 		if (bCornerReached || bPointReached)
 		{
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: leg %d / %d done (%s, level %d) at %.0f s"), State.Leg + 1, State.Legs.Num(), *Leg.LayerTo, Leg.LevelTo, State.LegTime);
+			if (!bSameLevel && Leg.Via.StartsWith(TEXT("LAD_")))
+			{
+				Check(State, State.bLegClimbed, FString::Printf(TEXT("vertical leg %d (%s): traversed ladder via ALadderActor climb (via=%s)"), State.Leg + 1, *Leg.LayerTo, *Leg.Via));
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: leg %d / %d done (%s, level %d, climbed=%d) at %.0f s"), State.Leg + 1, State.Legs.Num(), *Leg.LayerTo, Leg.LevelTo, State.bLegClimbed ? 1 : 0, State.LegTime);
 			++State.Leg;
 			State.LegTime = 0.f;
 			State.CarrotTime = CarrotSeconds;
+			State.bLegClimbed = false;
 			return true;
 		}
 		// The carrot: a click 6 m ahead on the leg (the squad's own path follows the nav links); a level change aims at the end point itself.

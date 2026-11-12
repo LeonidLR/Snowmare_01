@@ -302,8 +302,6 @@ def _slice_wall_with_openings(label_prefix, folder, a, b, z0, thickness, floor_i
         if op_kind != "_ladder_exit" and c1 - c0 >= 2.0:
             sill_h = float(op.get("sill_height", 0.0 if op_kind == "door" else 90.0))
             top_h = float(op.get("top_height", 210.0))
-            if op_kind == "loophole":
-                top_h = max(top_h, 175.0)  # Standing EyeHeight (160 cm) passes unobstructed
             if sill_h >= 2.0:
                 if op_kind == "loophole":
                     sill_tags = ["building=" + building_id, "floor=%d" % floor_idx, "loophole_sill"]

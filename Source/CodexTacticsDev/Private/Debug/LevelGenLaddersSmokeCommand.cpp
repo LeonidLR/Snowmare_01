@@ -68,6 +68,7 @@ namespace LevelGenLaddersSmoke
 		int32 LevelTo = 0;
 		int32 Rungs = 0;
 		FString From;
+		bool bFreeStanding = false;
 	};
 
 	enum class ELegKind : uint8 { LadderUp, LadderDown, CutIn, CutOut, Bridge, SquadLadderOut, SquadLadderIn };
@@ -480,7 +481,14 @@ namespace LevelGenLaddersSmoke
 			Actor->GetRungCount(), L.Rungs));
 		Check(State, Facing > 0.9f, FString::Printf(TEXT("ladder %s: faces away from its wall (+X . (foot - pos) = %.2f; yaw %.0f)%s"), *L.Id, Facing,
 			Actor->GetActorRotation().Yaw, Facing < -0.9f ? TEXT(" - it FACES THE WALL: the hang line and the bottom link inside the wall, the top link off the edge") : TEXT("")));
-		Check(State, Actor->HasWall(), FString::Printf(TEXT("ladder %s: a wall behind the rungs (brackets reach it)"), *L.Id));
+		if (L.bFreeStanding)
+		{
+			Check(State, !Actor->HasWall(), FString::Printf(TEXT("hatch ladder %s: free-standing (no backing wall)"), *L.Id));
+		}
+		else
+		{
+			Check(State, Actor->HasWall(), FString::Printf(TEXT("ladder %s: a wall behind the rungs (brackets reach it)"), *L.Id));
+		}
 		Check(State, FMath::Abs(TopError) <= TopToleranceCm, FString::Printf(TEXT("ladder %s: tops out on level %d (%+.1f cm)"), *L.Id, L.LevelTo, TopError));
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 		FNavLocation Bottom, Top;
@@ -502,6 +510,27 @@ namespace LevelGenLaddersSmoke
 		}
 		State.LayoutName = Layout->GetStringField(TEXT("name"));
 		State.GroundZ = Layout->HasField(TEXT("ground_z")) ? static_cast<float>(Layout->GetNumberField(TEXT("ground_z"))) : 0.f;
+		TSet<FString> HatchLadders;
+		const TArray<TSharedPtr<FJsonValue>>* Buildings = nullptr;
+		if (Layout->TryGetArrayField(TEXT("buildings"), Buildings))
+		{
+			for (const TSharedPtr<FJsonValue>& BV : *Buildings)
+			{
+				const TSharedPtr<FJsonObject>& B = BV->AsObject();
+				const TArray<TSharedPtr<FJsonValue>>* Hatches = nullptr;
+				if (B.IsValid() && B->TryGetArrayField(TEXT("hatches"), Hatches))
+				{
+					for (const TSharedPtr<FJsonValue>& HV : *Hatches)
+					{
+						const TSharedPtr<FJsonObject>& H = HV->AsObject();
+						if (H.IsValid() && H->HasField(TEXT("ladder_id")))
+						{
+							HatchLadders.Add(H->GetStringField(TEXT("ladder_id")));
+						}
+					}
+				}
+			}
+		}
 		const TArray<TSharedPtr<FJsonValue>>* Ladders = nullptr;
 		if (Layout->TryGetArrayField(TEXT("ladders"), Ladders))
 		{
@@ -517,6 +546,7 @@ namespace LevelGenLaddersSmoke
 				L.LevelTo = static_cast<int32>(O->GetNumberField(TEXT("level_to")));
 				L.Rungs = static_cast<int32>(O->GetNumberField(TEXT("rungs")));
 				L.From = O->GetStringField(TEXT("from"));
+				L.bFreeStanding = HatchLadders.Contains(L.Id);
 				State.Ladders.Add(L);
 				State.Actors.Add(FindLadderActor(World, L, State.GroundZ));
 			}

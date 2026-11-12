@@ -36,7 +36,7 @@ FVector VaultRules::NavAreaExtent(const FBox& LocalBounds, const FVector& Scale,
 
 bool VaultRules::IsVaultableCoverKind(FName Kind)
 {
-	static const FName Kinds[] = { FName(TEXT("sandbag")), FName(TEXT("jersey")), FName(TEXT("barrel")), FName(TEXT("low_wall")) };
+	static const FName Kinds[] = { FName(TEXT("sandbag")), FName(TEXT("jersey")), FName(TEXT("barrel")), FName(TEXT("low_wall")), FName(TEXT("window_sill")) };
 	for (const FName& Each : Kinds)
 	{
 		if (Kind == Each)
