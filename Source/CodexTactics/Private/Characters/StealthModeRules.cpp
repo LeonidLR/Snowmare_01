@@ -13,6 +13,11 @@ namespace StealthModeRules
 		return SelectedCount > 0 && StealthedCount < SelectedCount;
 	}
 
+	bool IsBlockedByFormation(bool bSoloOrHolding, bool bFormationActive, bool bGuarding)
+	{
+		return !bSoloOrHolding && bFormationActive && !bGuarding;
+	}
+
 	bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, const FStealthModeConfig& Config)
 	{
 		return bActive && (bSprinting || (bFired && Config.bBreakOnFire));

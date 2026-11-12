@@ -231,6 +231,10 @@ void ACodexTacticsPlayerController::ToggleStealthModeKey()
 		}
 	}
 	const bool bEnable = StealthModeRules::EnableForSelection(Eligible, Stealthed);
+	if (Eligible == 0)
+	{
+		return;
+	}
 	for (AOperativeCharacter* Member : Selected)
 	{
 		const bool bWasEnabled = Member->IsInStealthMode();

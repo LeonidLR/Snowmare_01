@@ -27,6 +27,8 @@ namespace StealthModeRules
 {
 	/** Toggle a mixed selection on; toggle an entirely stealthed selection off. An empty selection never enables it. */
 	CODEXTACTICS_API bool EnableForSelection(int32 SelectedCount, int32 StealthedCount);
+	/** Formation blocks stealth: allowed only in SOLO mode, when guarding outside the formation, or when no active formation runs. */
+	CODEXTACTICS_API bool IsBlockedByFormation(bool bSoloOrHolding, bool bFormationActive, bool bGuarding);
 	/** Sprint always breaks stealth; a shot breaks it only when stealth_break_on_fire is enabled. */
 	CODEXTACTICS_API bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, const FStealthModeConfig& Config);
 	/** Multipliers relative to the existing stance/weather/perception rules; disabled/inactive = identity. */

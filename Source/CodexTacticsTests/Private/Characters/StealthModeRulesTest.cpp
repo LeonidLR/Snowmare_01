@@ -126,4 +126,16 @@ bool FStealthConfigTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStealthFormationRuleTest, "CodexTactics.Characters.StealthMode.FormationRule",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FStealthFormationRuleTest::RunTest(const FString&)
+{
+	using StealthModeRules::IsBlockedByFormation;
+	TestTrue(TEXT("Formation mode blocks stealth for non-guarding member"), IsBlockedByFormation(false, true, false));
+	TestFalse(TEXT("Guarding member outside formation may enter stealth"), IsBlockedByFormation(false, true, true));
+	TestFalse(TEXT("Solo mode allows stealth"), IsBlockedByFormation(true, true, false));
+	TestFalse(TEXT("Inactive formation does not block stealth"), IsBlockedByFormation(false, false, false));
+	return true;
+}
+
 #endif

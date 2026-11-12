@@ -40,6 +40,8 @@
 #include "Misc/Paths.h"
 #include "Tactics/CoverGhostActor.h"
 #include "Tactics/CoverTraceRules.h"
+#include "UI/ActionBarWidget.h"
+#include "UI/CodexTacticsHUD.h"
 #include "UnrealClient.h"
 
 namespace StealthModeSmoke
@@ -454,6 +456,38 @@ namespace StealthModeSmoke
 			State.Origin = SmokeUtils::FreeSpot(World, Arena.Origin, Op);
 			State.Forward = Arena.Forward;
 			State.Right = FVector::CrossProduct(FVector::UpVector, State.Forward);
+			// Designer rule (2026-11-12): no stealth in formation mode; stealth only in solo or outside formation.
+			{
+				Squad->ExitSoloMode();
+				Squad->SetFollowersHolding(false);
+				Squad->SetSelectedGroup({ Op }, false);
+				ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(PC->GetHUD());
+				UActionBarWidget* Bar = Hud ? Hud->GetActionBar() : nullptr;
+				if (Bar) { Bar->Refresh(); }
+				Check(State, !Squad->IsSoloMode() && !Op->CanEnterStealthMode(), TEXT("formation mode refuses stealth entry"));
+				PC->ToggleStealthModeKey();
+				Check(State, !Op->IsInStealthMode(), TEXT("key 7 toggle in formation makes no state change"));
+				if (Bar)
+				{
+					Check(State, !Bar->IsStealthModeButtonEnabled(), TEXT("STEALTH button disabled in formation mode"));
+					Check(State, Bar->GetStealthModeButtonToolTip().ToString().Contains(TEXT("Стелс - только в соло")),
+						TEXT("STEALTH button shows solo-only tooltip in formation mode"));
+				}
+				Squad->EnterSoloMode();
+				if (Bar) { Bar->Refresh(); }
+				Check(State, Squad->IsSoloMode() && Op->CanEnterStealthMode() && (!Bar || Bar->IsStealthModeButtonEnabled()),
+					TEXT("solo mode re-enables stealth entry and STEALTH button"));
+				PC->ToggleStealthModeKey();
+				Check(State, Op->IsInStealthMode(), TEXT("key 7 enters stealth in solo mode"));
+				Squad->ToggleSoloMode();
+				bool bAnyStillStealthed = false;
+				for (const AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					bAnyStillStealthed |= Member && Member->IsInStealthMode();
+				}
+				Check(State, !Squad->IsSoloMode() && !bAnyStillStealthed, TEXT("B gather into formation leaves nobody in stealth"));
+				Squad->EnterSoloMode();
+			}
 			int32 Park = 0;
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{

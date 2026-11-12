@@ -802,6 +802,16 @@ bool USquadSubsystem::UseFormationStart()
 		bSoloFromLevelStart = false;
 		SoloGuardCrouchWait.Reset();
 		SetFollowersHolding(false);
+		if (IsFormationActive())
+		{
+			for (AOperativeCharacter* Member : GetMembers())
+			{
+				if (Member && !Member->bGuarding && Member->IsInStealthMode())
+				{
+					Member->SetStealthMode(false);
+				}
+			}
+		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[Squad] formation start requested - the level start's Solo ends quietly"));
 	}
 	return !bIsSoloMode;
@@ -1057,6 +1067,11 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	const FText LeaderName = LeaderRef ? LeaderRef->DisplayName : LOCTEXT("SquadDefaultName", "Squad");
+	const bool bClearFormationStealth = !bFollowersHolding && IsFormationActive();
+	if (bClearFormationStealth && LeaderRef && LeaderRef->IsInStealthMode() && !LeaderRef->bGuarding)
+	{
+		LeaderRef->SetStealthMode(false);
+	}
 
 	// Followers sync stance to leader and resume formation
 	if (LeaderRef)
@@ -1071,6 +1086,10 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 				{
 					Tutorial->ReportPlaceLockRefusal(Operative);
 					continue;
+				}
+				if (bClearFormationStealth && Operative->IsInStealthMode())
+				{
+					Operative->SetStealthMode(false);
 				}
 				// Rev 5g: Regroup ends a follower's own move order - everybody comes back to the leader (a use / object task
 				// still finishes first, SquadOrderRules).
@@ -1434,6 +1453,10 @@ void USquadSubsystem::ToggleGuard(AOperativeCharacter* Operative)
 		return;
 	}
 	Operative->bGuarding = !Operative->bGuarding;
+	if (!Operative->bGuarding && Operative->IsInStealthMode() && !bIsSoloMode && !bFollowersHolding && IsFormationActive())
+	{
+		Operative->SetStealthMode(false);
+	}
 	const FText Name = Operative->DisplayName;
 	if (Operative->bGuarding)
 	{

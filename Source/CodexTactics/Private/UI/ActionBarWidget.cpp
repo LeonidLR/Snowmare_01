@@ -5,6 +5,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Characters/StealthModeRules.h"
 #include "Combat/HealthComponent.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
@@ -828,10 +829,14 @@ void UActionBarWidget::RefreshStealthButtons(const AOperativeCharacter& Leader)
 		const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
 		bool bAnyStealthed = false;
 		bool bAvailable = false;
+		bool bAnyBlockedByFormation = false;
 		for (const AOperativeCharacter* Member : Squad ? Squad->GetSelectedGroup() : TArray<AOperativeCharacter*>())
 		{
 			bAnyStealthed |= Member->IsInStealthMode();
-			bAvailable |= Member->IsInStealthMode() || Member->CanEnterStealthMode();
+			const bool bCan = Member->IsInStealthMode() || Member->CanEnterStealthMode();
+			bAvailable |= bCan;
+			bAnyBlockedByFormation |= !bCan && Squad && StealthModeRules::IsBlockedByFormation(Squad->IsSoloMode() || Squad->AreFollowersHolding(),
+				Squad->IsFormationActive(), Member->bGuarding);
 		}
 		ActionBarDirty::SetBackground(StealthModeButton, bAnyStealthed ? BarStealthActiveColor : BarStealthColor);
 		ActionBarDirty::SetText(StealthModeText, bAnyStealthed ? LOCTEXT("StealthModeOn", "STEALTH\nON [7]") : LOCTEXT("StealthMode", "STEALTH\n[7]"));
@@ -839,6 +844,9 @@ void UActionBarWidget::RefreshStealthButtons(const AOperativeCharacter& Leader)
 		{
 			StealthModeButton->SetIsEnabled(bAvailable);
 		}
+		SetToolTipIfChanged(StealthModeButton, !bAvailable && bAnyBlockedByFormation
+			? LOCTEXT("StealthSoloOnlyTip", "Стелс - только в соло")
+			: LOCTEXT("StealthModeTip", "Toggle stealth for the selected operatives [7]. Crouched movement; fire or sprint breaks it for that operative."));
 	}
 	UStealthLureSubsystem* Lure = GetWorld()->GetSubsystem<UStealthLureSubsystem>();
 	if (!Lure || !StealthWhistleButton || !StealthThrowButton)
@@ -895,6 +903,16 @@ bool UActionBarWidget::IsStealthButtonEnabled(bool bThrow) const
 {
 	const UButton* Button = bThrow ? StealthThrowButton.Get() : StealthWhistleButton.Get();
 	return Button && Button->GetIsEnabled();
+}
+
+bool UActionBarWidget::IsStealthModeButtonEnabled() const
+{
+	return StealthModeButton && StealthModeButton->GetIsEnabled();
+}
+
+FText UActionBarWidget::GetStealthModeButtonToolTip() const
+{
+	return StealthModeButton ? StealthModeButton->GetToolTipText() : FText::GetEmpty();
 }
 
 void UActionBarWidget::HandleStealthMode()

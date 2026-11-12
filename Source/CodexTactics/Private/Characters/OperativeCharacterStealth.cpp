@@ -3,6 +3,7 @@
 #include "Characters/OperativeCharacter.h"
 
 #include "Characters/StealthModeRules.h"
+#include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Components/MeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -13,6 +14,11 @@
 
 bool AOperativeCharacter::CanEnterStealthMode() const
 {
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (Squad && StealthModeRules::IsBlockedByFormation(Squad->IsSoloMode() || Squad->AreFollowersHolding(), Squad->IsFormationActive(), bGuarding))
+	{
+		return false;
+	}
 	return StealthModeRules::GetConfig().bEnabled && HealthComponent && HealthComponent->IsAlive() && !IsCriticallyWounded()
 		&& !IsKnockedDown() && !IsPanicking() && !IsRaging() && !bCarrying && !bVaulting && !IsClimbingLadder() && !VehicleQueries::IsMounted(this);
 }
@@ -162,7 +168,9 @@ void AOperativeCharacter::HandleStealthWeaponFired(AOperativeCharacter* Shooter,
 
 void AOperativeCharacter::UpdateStealthMode()
 {
-	if (bStealthMode && (!HealthComponent || !HealthComponent->IsAlive() || IsCriticallyWounded() || IsKnockedDown()
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	const bool bFormationBlocked = Squad && StealthModeRules::IsBlockedByFormation(Squad->IsSoloMode() || Squad->AreFollowersHolding(), Squad->IsFormationActive(), bGuarding);
+	if (bStealthMode && (bFormationBlocked || !HealthComponent || !HealthComponent->IsAlive() || IsCriticallyWounded() || IsKnockedDown()
 		|| IsPanicking() || IsRaging() || bCarrying || bVaulting || IsClimbingLadder() || VehicleQueries::IsMounted(this)
 		|| StealthModeRules::ShouldBreak(true, false, bSprinting, StealthModeRules::GetConfig())))
 	{
