@@ -1,0 +1,46 @@
+# 008 - Stealth v2: full 8-direction locomotion with a locked look, Fast stealth run, a real corner lean (designer 2026-11-12)
+
+Codex, on interim/2026-11-12, branch `codex/stealth-v2`. After 004 (hitch), before 005 (ragdoll) - the designer is play-testing
+stealth now. Rules: README.md (work rules 2026-11-11). Reuse your 003 native stealth layer; the pack is
+/Game/StealthLocomotion (your retargeted copies in /Game/Characters/Animations/Stealth/{Male,Female}); never modify the pack.
+
+## Clips available (InPlace, 62; RootMotion has the same set)
+- Slow: Stealth_Slow_{F,FL,FR,L,R,B,BL,BR}_IP + each *_Start_IP;  Fast: Stealth_Fast_{same 8} _IP + *_Start_IP
+- Stops: Stealth_Stop_{F,B,L,R}_IP;  turns: Stealth_Turn_90_{L,R}_IP, Stealth_Turn_180_IP;  Stealth_Idle_IP, Stealth_Crouch_IP,
+  Stealth_Uncrouch_IP
+- Wall: Stealth_{Left,Right}Wall_{Idle,Slow,Slow_Start,Fast,Fast_Start,Stop,Turn_180}_IP and _Lean_Start / _Lean / _Lean_Stop
+Use ALL of them where they fit (starts, stops, turns included) - no fallback to the M16 / formation clips while in stealth.
+
+## 1. 8-direction movement with a locked look ("look at the threat")
+- In stealth the body never just faces the move direction when there is a threat: if an enemy is VISIBLE TO US (on screen / revealed
+  by the squad's sight or a peek) and has NOT detected this operative, the operative locks his look (torso + head, then the whole
+  body yaw) on that enemy and moves relative to it: forward / back / strafe / diagonals -> the matching Slow (or Fast) 8-direction
+  clip, phase-matched direction blend, Start clips on movement start, Stop_{F,B,L,R} on stop, Turn_90 / Turn_180 for big yaw changes
+  in place.
+- Target choice (data, defaults): the nearest such enemy inside the operative's view sector (±100°); keep the lock while he stays
+  visible + 2 s after losing sight (`stealth.look_lock_keep_s` 2.0); switch only if another becomes >30 % closer.
+- No threat -> the look follows the move direction (Slow F + turns), as today.
+- If the enemy detects the operative (confirmed detection) -> stealth ends as already implemented.
+
+## 2. Fast stealth (run while sneaking)
+- In stealth the run / sprint input (the same key the player uses for sprint) switches Slow -> Fast stealth clips (8 directions,
+  Starts, Stops), speed from data (`stealth.fast_speed`, default between crouch-walk and normal run - say the value).
+- Detection while Fast is worse than Slow but better than normal: data `stealth.fast_detection_range_mult` default 0.6 (Slow 0.4),
+  `stealth.fast_buildup_mult` 0.75 (Slow 0.5); noise as a jog. Fast does NOT break stealth any more (replace the old "sprint breaks
+  stealth" rule; firing still breaks it).
+- Normal sprint only after leaving stealth (button / 7 again or a confirmed detection).
+
+## 3. A real corner peek (no weapon-aim ghost)
+- Today a stealth peek shows the weapon-aim ghost pose (the aiming peek). In stealth use the pack's lean instead:
+  Stealth_{Left,Right}Wall_Lean_Start -> Lean (hold) -> Lean_Stop, side from the corner side; the head really passes the edge
+  (keep your bone check), the weapon stays lowered; the reveal (enemies behind the corner shown to the squad + on the map) works as now.
+- The aim-ghost peek stays only outside stealth.
+
+## Checks (report docs/port/codex/outbox/008-stealth-v2.report.md)
+- Unit tests: target choice / lock keep / switch, Slow vs Fast multipliers, "Fast does not break stealth, fire does", lean side.
+- StealthModeSmoke extended: with a revealed non-detecting enemy the yaw stays on him while moving in all 8 directions (each
+  direction's clip plays: assert the clip name per direction), Start / Stop / Turn clips seen, Fast clips under the sprint input,
+  Fast detection range between Slow and normal, a stealth peek plays Lean_Start/Lean/Lean_Stop and NOT the aim pose; male + female.
+- Regression: InjuredLocomotionSmoke, ProneCrawlSmoke, the cover smokes, FormationLabSmoke, SoloStartSmoke.
+- Game-camera frames (strafe with locked look, Fast run, the lean) -> MAIN Saved/Orchestrator/stealth/v2/.
+Open questions -> the designer in the chat (Russian) with the defaults above; do not block on them.
