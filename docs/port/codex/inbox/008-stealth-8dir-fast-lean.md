@@ -56,3 +56,19 @@ double click), arrives into Stealth_{Left,Right}Wall_Idle via *Wall_Slow_Start /
 appears in stealth too (stealth wall pose ghost). Find where the cover order forces run / standing or triggers the
 "sprint breaks stealth" rule and route cover moves through the stealth movement. Add it to the StealthModeSmoke (cover order in
 stealth: stealth stays on, stance stays crouched, speed <= stealth speed, Wall clips play). Do this FIRST inside 008.
+
+## 5. Manual look anchor: Shift + left click (designer 2026-11-12, VERY important - the whole game is "watch your front")
+Today, when the designer spots an enemy in stealth and crawls / sneaks the other way, the operative turns to the move direction,
+stops watching the enemy and the enemy becomes invisible again. Wanted:
+- **Shift + LMB on the ground (in stealth)** fixes a LOOK POINT (a world position; "vector direction" = from the operative to that
+  point, re-aimed as he moves). From then on every stealth move (Slow / Fast, single / double click, cover orders) keeps the body /
+  torso / head facing that point and uses the 8-direction clips relative to it (strafe, back-pedal, diagonals) - so the seen enemies
+  stay in his view sector and stay visible.
+- Priority: manual anchor > the automatic threat lock (section 1) > the move direction.
+- Clear it with Shift + LMB on the operative himself (or Shift + RMB anywhere - say which you chose and that it does not clash),
+  and automatically on leaving stealth. Show it: a small eye / look marker at the point + a thin line from the operative (like the
+  formation look arrows), visible only for the selected operative(s); several selected operatives -> each gets the same point.
+- Check first what Shift + LMB already does (IsShiftModifierDown in CodexTacticsPlayerController.cpp:474; Orders.cpp:346 vehicle
+  path) - in stealth the anchor wins; outside stealth nothing changes unless the designer asks.
+- Smoke: set the anchor, order a move 90 deg to the side -> the yaw stays within 10 deg of the anchor all the way, the side-step
+  clip plays (not F), an enemy placed at the anchor stays visible to the squad during the move; clear -> back to section 1 / move dir.
