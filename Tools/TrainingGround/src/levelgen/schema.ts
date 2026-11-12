@@ -59,8 +59,123 @@ export function ladderForLevels(levels: number): { rungs: number; plinth_cm: num
   return { rungs, plinth_cm: Math.round((h - rungs * RUNG_PITCH) * 10) / 10 };
 }
 
-export const WALL_KINDS = ['wall', 'fence', 'curb', 'cut_wall', 'building', 'parapet', 'interior'] as const;
+export const WALL_KINDS = ['wall', 'fence', 'curb', 'cut_wall', 'building', 'parapet', 'interior', 'partition'] as const;
 export type WallKind = (typeof WALL_KINDS)[number];
+
+export const OPENING_KINDS = ['door', 'window', 'loophole'] as const;
+export type OpeningKind = (typeof OPENING_KINDS)[number];
+
+/**
+ * Opening dimensions (cm):
+ * - door: full opening from ground/floor, walk-through
+ * - window: standard window with sill ~90 cm, view and fire port
+ * - loophole: narrow fortified firing slit (width 20-40 cm, sill 110-140 cm, height 140-160 cm)
+ */
+export const OPENING_DEFAULTS: Record<OpeningKind, { width: number; sill: number; top: number }> = {
+  door: { width: 120, sill: 0, top: 210 },
+  window: { width: 120, sill: 90, top: 210 },
+  loophole: { width: 30, sill: 120, top: 150 },
+};
+
+export interface WallOpening {
+  id?: string;
+  kind: OpeningKind;
+  pos: Vec2;
+  floor: number;
+  /** Wall identifier the opening is cut into. */
+  wall?: string;
+  /** Opening width along wall face, cm (default per kind). */
+  width?: number;
+  /** Sill height above floor slab, cm (door: 0, window: 90, loophole: 120). */
+  sill_height?: number;
+  /** Top height above floor slab, cm (door: 210, window: 210, loophole: 150). */
+  top_height?: number;
+  /** Facing normal or sight yaw, degrees. */
+  yaw?: number;
+}
+
+export interface GenPartition {
+  id: string;
+  start: Vec2;
+  end: Vec2;
+  floor: number;
+  /** Wall height, cm. Default LEVEL_HEIGHT (300). */
+  height?: number;
+  /** Wall thickness, cm. Default 20 cm. */
+  thickness?: number;
+  /** Door or window openings along this partition wall. */
+  openings?: WallOpening[];
+}
+
+export interface FloorGap {
+  id?: string;
+  poly: Vec2[];
+  kind?: 'stairwell' | 'landing' | 'atrium' | 'balcony' | 'catwalk';
+}
+
+export interface BuildingFloor {
+  floor: number;
+  /** Elevation Z in cm = levelZ(floor). */
+  height_z?: number;
+  /** Openings / voids in this floor slab (open landings, catwalks, stairwells). */
+  gaps?: FloorGap[];
+  /** Sub-rooms on this floor. */
+  rooms?: GenRoom[];
+}
+
+export interface RoofHatch {
+  id: string;
+  pos: Vec2;
+  /** Floor level the hatch is accessed from (typically floors - 1) or roof level. */
+  floor: number;
+  /** Dimensions of hatch opening, cm (e.g. [100, 100]). */
+  size?: [number, number];
+  /** Ladder id linked to this hatch. */
+  ladder_id?: string;
+}
+
+export interface RoofParapet {
+  wall_id?: string;
+  start: Vec2;
+  end: Vec2;
+  /** Height above roof slab, cm (e.g. 100 cm chest-high cover). */
+  height_cm: number;
+  /** Thickness, cm (default 20 cm). */
+  thickness_cm?: number;
+}
+
+export const MANTLE_KINDS = ['window', 'fence', 'parapet', 'obstacle', 'crate', 'partition', 'ledge'] as const;
+export type MantleKind = (typeof MANTLE_KINDS)[number];
+
+export const MIN_MANTLE_HEIGHT_CM = 50;
+export const MAX_MANTLE_HEIGHT_CM = 150;
+export function isMantleable(height_cm: number): boolean {
+  return height_cm >= MIN_MANTLE_HEIGHT_CM && height_cm <= MAX_MANTLE_HEIGHT_CM;
+}
+
+export interface MantleEdge {
+  id: string;
+  start: Vec2;
+  end: Vec2;
+  floor: number;
+  /** Base Z coordinate in UE cm. */
+  base_z: number;
+  /** Height of edge above foot level, cm (must be 50..150 cm for mantling). */
+  height_cm: number;
+  /** Outward normal direction of vault/climb. */
+  normal: Vec2;
+  kind?: MantleKind;
+  building?: string;
+  wall?: string;
+}
+
+export interface GenRoom {
+  id: string;
+  floor: number;
+  bounds: { min: Vec2; max: Vec2 };
+  kind?: 'room' | 'corridor' | 'stairwell' | 'hall' | 'balcony';
+  door_ids?: string[];
+}
 
 /** The set-piece vocabulary of the grammar (docs/design/levelgen/LEVEL_GENERATOR.md section 3). */
 export const SET_PIECES = ['alley', 't_junction', 'facade', 'one_entry_compound', 'open_square', 'cut_crossing', 'ladder_overwatch',
@@ -106,6 +221,20 @@ export interface GenBuilding {
   enterable: boolean;
   roof_walkable: boolean;
   doors: Door[];
+  /** Unified wall openings (doors, windows, loopholes). Backward-compatible with `doors`. */
+  openings?: WallOpening[];
+  /** Interior partition walls (with door/window openings). */
+  partitions?: GenPartition[];
+  /** Storey floor slabs with gap areas (open landings, catwalks, stairwells). */
+  floors_detail?: BuildingFloor[];
+  /** Hatches providing roof access from upper storey. */
+  hatches?: RoofHatch[];
+  /** Parapet segments around walkable roof perimeter. */
+  parapets?: RoofParapet[];
+  /** Sub-rooms partitioned within this building. */
+  rooms?: GenRoom[];
+  /** Mantle edge markers on windows, parapets, and low obstacles (50-150 cm). */
+  mantle_edges?: MantleEdge[];
   stairs: Stair[];
   /** Holes in the roof (down onto the top floor) - the ruined factory. */
   roof_holes: Vec2[];
@@ -190,6 +319,8 @@ export interface GenLayout {
   spawn_points: SpawnPoint[];
   ambush_points: { id: string; pos: Vec2 }[];
   patrol_routes: PatrolRoute[];
+  /** Global mantle edge markers for vaulting/climbing (50-150 cm). */
+  mantle_edges?: MantleEdge[];
   /** The combat-lab style pressure block for the level JSON (COMBAT_LAB.md section 2). */
   pressure?: Record<string, unknown>;
 }
@@ -229,6 +360,42 @@ export function validateGenLayout(data: unknown): string[] {
     if (!isNum(b.floors) || b.floors < 1) e.push(`building ${b.id}: floors >= 1`);
     if (b.roof_walkable && isNum(b.floors) && b.height !== b.floors * LEVEL_HEIGHT) e.push(`building ${b.id}: a walkable roof sits on level ${b.floors} = ${b.floors * LEVEL_HEIGHT} cm, height is ${b.height}`);
     for (const s of b.stairs ?? []) if (s.to > b.floors) e.push(`building ${b.id}: stair ${s.id} leads to floor ${s.to} of ${b.floors}`);
+    for (const op of b.openings ?? []) {
+      if (!OPENING_KINDS.includes(op.kind)) e.push(`building ${b.id}: opening kind must be door/window/loophole (got "${op.kind}")`);
+      if (!isVec(op.pos)) e.push(`building ${b.id}: opening pos must be [x, y]`);
+      if (!isNum(op.floor) || op.floor < 0 || op.floor > b.floors) e.push(`building ${b.id}: opening floor out of range (${op.floor})`);
+      if (op.width !== undefined && (!isNum(op.width) || op.width <= 0)) e.push(`building ${b.id}: opening width must be > 0`);
+      if (op.kind === 'loophole' && op.width !== undefined && (op.width < 15 || op.width > 60)) {
+        e.push(`building ${b.id}: loophole width ${op.width} cm outside narrow slit range (20-40 cm)`);
+      }
+      if (op.sill_height !== undefined && (!isNum(op.sill_height) || op.sill_height < 0)) e.push(`building ${b.id}: opening sill_height must be >= 0`);
+      if (op.top_height !== undefined && (!isNum(op.top_height) || op.top_height <= (op.sill_height ?? 0))) e.push(`building ${b.id}: opening top_height must be above sill_height`);
+    }
+    for (const pt of b.partitions ?? []) {
+      if (!isVec(pt.start) || !isVec(pt.end)) e.push(`building ${b.id}: partition ${pt.id} start/end must be [x, y]`);
+      if (!isNum(pt.floor) || pt.floor < 0 || pt.floor >= b.floors) e.push(`building ${b.id}: partition ${pt.id} floor out of range`);
+      if (pt.thickness !== undefined && (!isNum(pt.thickness) || pt.thickness <= 0)) e.push(`building ${b.id}: partition ${pt.id} thickness must be > 0`);
+    }
+    for (const fd of b.floors_detail ?? []) {
+      if (!isNum(fd.floor) || fd.floor < 0 || fd.floor >= b.floors) e.push(`building ${b.id}: floor_detail floor out of range (${fd.floor})`);
+      for (const gap of fd.gaps ?? []) {
+        if (!Array.isArray(gap.poly) || gap.poly.length < 3 || !gap.poly.every(isVec)) {
+          e.push(`building ${b.id}: floor ${fd.floor} gap poly must be at least 3 points`);
+        }
+      }
+    }
+    for (const ht of b.hatches ?? []) {
+      if (!isVec(ht.pos)) e.push(`building ${b.id}: hatch pos must be [x, y]`);
+      if (!isNum(ht.floor) || ht.floor < 0) e.push(`building ${b.id}: hatch floor must be >= 0`);
+    }
+    for (const pr of b.parapets ?? []) {
+      if (!isVec(pr.start) || !isVec(pr.end)) e.push(`building ${b.id}: parapet start/end must be [x, y]`);
+      if (!isNum(pr.height_cm) || pr.height_cm <= 0) e.push(`building ${b.id}: parapet height_cm must be > 0`);
+    }
+    for (const me of b.mantle_edges ?? []) {
+      if (!isVec(me.start) || !isVec(me.end) || !isVec(me.normal)) e.push(`building ${b.id}: mantle_edge ${me.id} start/end/normal must be [x, y]`);
+      if (!isNum(me.height_cm) || !isMantleable(me.height_cm)) e.push(`building ${b.id}: mantle_edge ${me.id} height ${me.height_cm} cm must be 50..150 cm`);
+    }
     if (NEVER_CLIMBABLE.includes(b.set_piece)) {
       if (b.roof_walkable || b.enterable || (b.stairs ?? []).length) e.push(`building ${b.id}: a ${b.set_piece} is an obstacle - no walkable roof, no entry, no stairs`);
       if ((l.ladders ?? []).some((ld) => ld.to === `roof:${b.id}` || ld.from === `roof:${b.id}` || ld.to.startsWith(`floor:${b.id}:`))) e.push(`building ${b.id}: a ${b.set_piece} never gets a ladder`);
@@ -261,6 +428,10 @@ export function validateGenLayout(data: unknown): string[] {
     for (const k of r.links ?? []) if (k.at < 1 || k.at >= r.points.length) e.push(`route ${r.id}: link at ${k.at} out of range`);
     if (r.intent !== undefined && !(ROUTE_INTENTS as readonly string[]).includes(r.intent)) e.push(`route ${r.id}: unknown intent "${r.intent}"`);
     if (r.intent === 'kill_zone' && r.mandatory) e.push(`route ${r.id}: the mandatory route is never a kill zone (a variant the player chooses)`);
+  }
+  for (const me of l.mantle_edges ?? []) {
+    if (!isVec(me.start) || !isVec(me.end) || !isVec(me.normal)) e.push(`mantle_edge ${me.id}: start/end/normal must be [x, y]`);
+    if (!isNum(me.height_cm) || !isMantleable(me.height_cm)) e.push(`mantle_edge ${me.id}: height ${me.height_cm} cm must be 50..150 cm`);
   }
   return e;
 }
@@ -310,15 +481,39 @@ export function layerWalls(l: GenLayout, layer: string): LayoutWall[] {
   const walls: LayoutWall[] = [];
   const fp = rectPoly(b.footprint);
   if (m[1] === 'roof') {
-    // a parapet all round: nobody walks off the roof; the stair / ladder heads lie inside the footprint
-    fp.forEach((a, i) => walls.push({ id: `${b.id}_parapet_${i}`, a, b: fp[(i + 1) % 4], height: 100, thickness: 20 }));
+    if (b.parapets && b.parapets.length > 0) {
+      b.parapets.forEach((p, i) => walls.push({ id: p.wall_id ?? `${b.id}_parapet_${i}`, a: p.start, b: p.end, height: p.height_cm, thickness: p.thickness_cm ?? 20 }));
+    } else {
+      // a parapet all round: nobody walks off the roof; the stair / ladder heads lie inside the footprint
+      fp.forEach((a, i) => walls.push({ id: `${b.id}_parapet_${i}`, a, b: fp[(i + 1) % 4], height: 100, thickness: 20 }));
+    }
     return walls;
   }
   const floor = Number(m[3] ?? 1);
   if (b.hollow || floor >= b.floors) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
   fp.forEach((a, i) => walls.push({ id: `${b.id}_f${floor}_perimeter_${i}`, a, b: fp[(i + 1) % 4], height: LEVEL_HEIGHT, thickness: 30 }));
   for (const w of l.walls) if (w.building === b.id && (w.floor ?? 0) === floor) walls.push({ id: w.id, a: w.a, b: w.b, height: w.height, thickness: w.thickness });
+  for (const pt of b.partitions ?? []) {
+    if (pt.floor === floor) {
+      walls.push({ id: pt.id, a: pt.start, b: pt.end, height: pt.height ?? LEVEL_HEIGHT, thickness: pt.thickness ?? 20 });
+    }
+  }
   return walls;
+}
+
+/** Unify legacy `doors` and new `openings` into a single list of WallOpening. */
+export function unifyOpenings(b: GenBuilding): WallOpening[] {
+  if (b.openings && b.openings.length > 0) return b.openings;
+  return (b.doors ?? []).map((d, i) => ({
+    id: `door_${b.id}_${i}`,
+    kind: 'door' as const,
+    pos: d.pos,
+    floor: d.floor,
+    wall: d.wall,
+    width: OPENING_DEFAULTS.door.width,
+    sill_height: OPENING_DEFAULTS.door.sill,
+    top_height: OPENING_DEFAULTS.door.top,
+  }));
 }
 
 /** The lab-compatible zone kind of a generated zone (the audit / the sim classify by the lab kinds only). */
