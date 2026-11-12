@@ -1,13 +1,59 @@
 {
   "enabled": true,
-  "provider": "codex",
   "confidence_threshold": 0.6,
   "timeout_seconds": 4.0,
-  "reasoning_effort": null,
-  "models": {
-    "luna": "gpt-6-luna",
-    "sol": "gpt-6.1-sol",
-    "terra": "gpt-6.1-terra",
-    "astra": "gpt-6-astra"
-  }
+  "provider": "claude-code-subagents",
+  "provider_note": "Claude Code cannot switch the main session's model per prompt. Routing = the main session hands the task to a subagent (.claude/agents/ue-l*.md) whose frontmatter pins the model. External endpoints (OpenRouter etc.) need a proxy on ANTHROPIC_BASE_URL (e.g. claude-code-router) and switch the whole session, not a single task.",
+  "levels": {
+    "1": {
+      "name": "Мелочь",
+      "agent": "ue-l1-trivial",
+      "model": "haiku",
+      "model_name": "Claude Haiku 4.5 (claude-haiku-4-5-20251001)"
+    },
+    "2": {
+      "name": "Обычное",
+      "agent": "ue-l2-routine",
+      "model": "sonnet",
+      "model_name": "Claude Sonnet 5.5 (claude-sonnet-5-5)"
+    },
+    "3": {
+      "name": "Крупное",
+      "agent": "ue-l3-major",
+      "model": "opus",
+      "model_name": "Claude Opus 5.5 (claude-opus-5-5)"
+    },
+    "4": {
+      "name": "Сложнейшее",
+      "agent": "ue-l4-architect",
+      "model": "fable",
+      "model_name": "Claude Fable 5.1 (claude-fable-5-1)"
+    }
+  },
+  "estimate_assumptions_note": "Savings are ESTIMATES in relative units: tokens a task of the level typically costs x (flagship cost weight - routed model cost weight). Edit the weights to your real per-token prices; they are not official prices.",
+  "estimated_tokens_per_task": {
+    "1": 4000,
+    "2": 20000,
+    "3": 80000,
+    "4": 200000
+  },
+  "estimated_minutes_per_task": {
+    "1": 1.0,
+    "2": 4.0,
+    "3": 15.0,
+    "4": 40.0
+  },
+  "relative_cost_weight": {
+    "haiku": 0.2,
+    "sonnet": 0.6,
+    "opus": 1.0,
+    "fable": 1.0
+  },
+  "relative_time_weight": {
+    "haiku": 0.4,
+    "sonnet": 0.7,
+    "opus": 1.0,
+    "fable": 1.0
+  },
+  "flagship_model": "fable"
 }

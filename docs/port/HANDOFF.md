@@ -1,5 +1,7 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Codex designer queue (2026-11-12):** 004 hitch -> 008 stealth v2 (section4, then5, then1-3) -> Gemini028/030/031/022/029. Shared Claude router/config restored byte-identically from main; Codex maps Jev levels via model_routes.json (1Luna/2Sol/3Terra/4Astra), no local model. Earlier queue notes below are historical.
+
 **Purpose.** The short entry point for any agent (Claude, Gemini, ...): how to work in this repo, the traps, the current state and a map to the
 per-system docs. Detail lives in `docs/systems/*.md`, the history in `docs/port/CHANGELOG.md`. (Until 2026-10-19 this file held all of it, 668 KB;
 it was split verbatim, nothing was dropped - old `HANDOFF §N` references resolve through the table in section 6 and in `docs/systems/README.md`.)

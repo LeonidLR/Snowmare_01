@@ -5,7 +5,7 @@
     "codex": {
       "models": {"luna": "gpt-6-luna", "sol": "gpt-6.1-sol", "terra": "gpt-6.1-terra", "astra": "gpt-6-astra"},
       "levels": {"1": "luna", "2": "sol", "3": "terra", "4": "astra"},
-      "local_first_for_level_1": true
+      "local_first_for_level_1": false
     },
     "gemini": {
       "models": {"flash": "gemini-3.8-flash", "pro": "gemini-3.1-pro"},
