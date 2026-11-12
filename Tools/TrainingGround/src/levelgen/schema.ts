@@ -179,7 +179,8 @@ export interface GenRoom {
 
 /** The set-piece vocabulary of the grammar (docs/design/levelgen/LEVEL_GENERATOR.md section 3). */
 export const SET_PIECES = ['alley', 't_junction', 'facade', 'one_entry_compound', 'open_square', 'cut_crossing', 'ladder_overwatch',
-  'tower', 'chimney', 'ruined_two_level', 'dead_end', 'junkyard_field', 'marksman_lane', 'industrial_hall', 'warehouse', 'tank_farm', 'street'] as const;
+  'tower', 'chimney', 'ruined_two_level', 'dead_end', 'junkyard_field', 'marksman_lane', 'industrial_hall', 'warehouse', 'tank_farm', 'street',
+  'checkpoint', 'bunker'] as const;
 /**
  * Set-pieces that are obstacles only: never enterable, never a walkable roof, no ladder / stair onto them (a factory chimney -
  * game designer 2026-11-02: "chimneys are NOT ladder towers"). validateGenLayout enforces it.
@@ -492,10 +493,50 @@ export function layerWalls(l: GenLayout, layer: string): LayoutWall[] {
   const floor = Number(m[3] ?? 1);
   if (b.hollow || floor >= b.floors) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
   fp.forEach((a, i) => walls.push({ id: `${b.id}_f${floor}_perimeter_${i}`, a, b: fp[(i + 1) % 4], height: LEVEL_HEIGHT, thickness: 30 }));
-  for (const w of l.walls) if (w.building === b.id && (w.floor ?? 0) === floor) walls.push({ id: w.id, a: w.a, b: w.b, height: w.height, thickness: w.thickness });
-  for (const pt of b.partitions ?? []) {
-    if (pt.floor === floor) {
-      walls.push({ id: pt.id, a: pt.start, b: pt.end, height: pt.height ?? LEVEL_HEIGHT, thickness: pt.thickness ?? 20 });
+  const floorWalls = l.walls.filter((w) => w.building === b.id && (w.floor ?? 0) === floor);
+  for (const w of floorWalls) walls.push({ id: w.id, a: w.a, b: w.b, height: w.height, thickness: w.thickness });
+  if (!floorWalls.some((w) => w.kind === 'interior')) {
+    for (const pt of b.partitions ?? []) {
+      if (pt.floor !== floor) continue;
+      const h = pt.height ?? LEVEL_HEIGHT;
+      const th = pt.thickness ?? 20;
+      const doors = (pt.openings ?? []).filter((op) => op.kind === 'door');
+      if (doors.length === 0) {
+        walls.push({ id: pt.id, a: pt.start, b: pt.end, height: h, thickness: th });
+      } else {
+        const dx = pt.end[0] - pt.start[0], dy = pt.end[1] - pt.start[1];
+        const len = Math.hypot(dx, dy);
+        if (len > 1) {
+          const ux = dx / len, uy = dy / len;
+          const spans = doors.map((d) => {
+            const t = ((d.pos[0] - pt.start[0]) * ux + (d.pos[1] - pt.start[1]) * uy);
+            const hw = (d.width ?? OPENING_DEFAULTS.door.width) / 2;
+            return [Math.max(0, t - hw), Math.min(len, t + hw)] as [number, number];
+          }).sort((a, b) => a[0] - b[0]);
+          let cur = 0, idx = 0;
+          for (const [s0, s1] of spans) {
+            if (s0 - cur > 20) {
+              walls.push({
+                id: `${pt.id}_s${idx++}`,
+                a: [pt.start[0] + ux * cur, pt.start[1] + uy * cur],
+                b: [pt.start[0] + ux * s0, pt.start[1] + uy * s0],
+                height: h,
+                thickness: th,
+              });
+            }
+            cur = Math.max(cur, s1);
+          }
+          if (len - cur > 20) {
+            walls.push({
+              id: `${pt.id}_s${idx++}`,
+              a: [pt.start[0] + ux * cur, pt.start[1] + uy * cur],
+              b: pt.end,
+              height: h,
+              thickness: th,
+            });
+          }
+        }
+      }
     }
   }
   return walls;
