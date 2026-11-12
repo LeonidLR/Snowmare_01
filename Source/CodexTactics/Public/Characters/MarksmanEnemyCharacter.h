@@ -59,6 +59,9 @@ public:
 
 	/** Shots fired / hits landed (smokes, stats). */
 	int32 GetShotsFired() const { return ShotsFired; }
+	/** The last physically observed aim point, exposed for runtime diagnostics. */
+	FVector GetRememberedAimPoint() const { return RememberedAimPoint; }
+	bool HasRememberedTarget() const { return RememberedTarget.IsValid(); }
 
 	/** Sets the stance and the capsule height (prone = 1/3), keeping the feet on the ground. */
 	void SetMarksmanStance(EOperativeStance NewStance);
@@ -114,6 +117,9 @@ private:
 		FVector End = FVector::ZeroVector;
 	};
 	FMarksmanLine TraceLine(const AOperativeCharacter* Target) const;
+	/** Real sight of a stealth target, independent of omniscient horde knowledge. */
+	bool CanSeeStealthTarget(const AOperativeCharacter& Target) const;
+	bool TickRememberedFire(float DeltaTime);
 	bool HasLowCoverTowards(const AActor* Target) const;
 	FVector GetFeet() const;
 
@@ -176,4 +182,7 @@ private:
 	/** Capsule radius while standing (the prone capsule narrows to its half height). */
 	float StandRadius = 0.f;
 	int32 ShotsFired = 0;
+	TWeakObjectPtr<AOperativeCharacter> RememberedTarget;
+	FVector RememberedAimPoint = FVector::ZeroVector;
+	double RememberedSightTime = -1.0;
 };

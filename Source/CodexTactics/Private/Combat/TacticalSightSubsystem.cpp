@@ -1,5 +1,6 @@
 #include "Combat/TacticalSightSubsystem.h"
 #include "AI/PmcSquadSubsystem.h"
+#include "AI/PerceptionRules.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Survival/TacticalHeatSubsystem.h"
@@ -429,7 +430,9 @@ bool UTacticalSightSubsystem::GetBelief(const AEnemyCharacter* Enemy, const AAct
 	}
 	// A horde (UHordeSubsystem) knows where the squad is: always «perceived». Exploring (2026-10-19: the squad's sight runs there too)
 	// the enemies' side is the patrol perception: here they "know everything" as before.
-	if (!bWasActive || !bBeliefWasActive || !IsActive() || (Enemy && Enemy->bKnowsSquadPosition))
+	const AOperativeCharacter* OperativeCharacter = Cast<AOperativeCharacter>(Operative);
+	if ((!OperativeCharacter || !OperativeCharacter->IsInStealthMode())
+		&& (!bWasActive || !bBeliefWasActive || !IsActive() || (Enemy && Enemy->bKnowsSquadPosition)))
 	{
 		OutLocation = Operative->GetActorLocation();
 		if (bOutPerceived)
@@ -444,10 +447,25 @@ bool UTacticalSightSubsystem::GetBelief(const AEnemyCharacter* Enemy, const AAct
 	{
 		return false;
 	}
-	OutLocation = Entry->bPerceived ? Operative->GetActorLocation() : Entry->Location;
+	bool bActuallyPerceived = Entry->bPerceived;
+	if (OperativeCharacter && OperativeCharacter->IsInStealthMode())
+	{
+		const float RangeScale = StealthModeRules::DetectionRangeScale(true, StealthModeRules::GetConfig());
+		bActuallyPerceived = false;
+		if (Enemy)
+		{
+			const FEnemyPerceptionParams Params = Enemy->GetPerception();
+			const bool bFacing = FVector::Dist(Enemy->GetActorLocation(), OperativeCharacter->GetActorLocation()) <= Params.ProximityCm * RangeScale
+				|| PerceptionRules::IsInFieldOfView(Params, Enemy->GetActorLocation(), Enemy->GetActorForwardVector(), OperativeCharacter->GetActorLocation());
+			bActuallyPerceived = bFacing && !OperativeCharacter->IsHiddenInCoverFrom(Enemy->GetActorLocation())
+				&& FVector::Dist2D(Enemy->GetActorLocation(), OperativeCharacter->GetActorLocation()) <= GetSightRangeCm(*Enemy) * RangeScale
+				&& HasClearSight(EyePoint(*Enemy), ProfilePoint(*OperativeCharacter));
+		}
+	}
+	OutLocation = bActuallyPerceived ? Operative->GetActorLocation() : Entry->Location;
 	if (bOutPerceived)
 	{
-		*bOutPerceived = Entry->bPerceived;
+		*bOutPerceived = bActuallyPerceived;
 	}
 	return true;
 }
@@ -894,7 +912,14 @@ void UTacticalSightSubsystem::Update()
 			const FStealthModeConfig& Stealth = StealthModeRules::GetConfig();
 			const float RangeScale = StealthModeRules::DetectionRangeScale(Operative->IsInStealthMode(), Stealth);
 			const float NoiseScale = StealthModeRules::FootstepNoiseScale(Operative->IsInStealthMode(), Stealth);
-			const bool bVisual = !bCoverHidden && Distance <= EnemySightCm * RangeScale && HasClearSight(Eye, ProfilePoint(*Operative));
+			bool bFacing = true;
+			if (Operative->IsInStealthMode())
+			{
+				const FEnemyPerceptionParams Params = Enemy->GetPerception();
+				bFacing = FVector::Dist(Enemy->GetActorLocation(), Operative->GetActorLocation()) <= Params.ProximityCm * RangeScale
+					|| PerceptionRules::IsInFieldOfView(Params, Enemy->GetActorLocation(), Enemy->GetActorForwardVector(), Operative->GetActorLocation());
+			}
+			const bool bVisual = bFacing && !bCoverHidden && Distance <= EnemySightCm * RangeScale && HasClearSight(Eye, ProfilePoint(*Operative));
 			const bool bPerceives = bVisual || IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance()) * NoiseScale;
 			if (bVisual)
 			{

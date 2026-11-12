@@ -4,12 +4,15 @@
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "AI/PatrolRouteActor.h"
+#include "AI/PerceptionRules.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Data/WeaponTuning.h"
 
 #include "AIController.h"
 #include "Characters/EnemyAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/StealthModeRules.h"
+#include "Combat/SightRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/CombatFeedbackSubsystem.h"
@@ -428,7 +431,8 @@ FVector AMarksmanEnemyCharacter::GetSquadCentroid(const FVector& Fallback) const
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	for (const AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 	{
-		if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive())
+		if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive()
+			&& (!Member->IsInStealthMode() || CanSeeStealthTarget(*Member)))
 		{
 			Sum += Member->GetActorLocation();
 			++Count;
@@ -444,7 +448,8 @@ AOperativeCharacter* AMarksmanEnemyCharacter::FindClosestOperative(float& OutDis
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 	{
-		if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member))
+		if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member)
+			&& (!Member->IsInStealthMode() || CanSeeStealthTarget(*Member)))
 		{
 			const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
 			if (Distance < OutDistance)
@@ -455,6 +460,78 @@ AOperativeCharacter* AMarksmanEnemyCharacter::FindClosestOperative(float& OutDis
 		}
 	}
 	return Best;
+}
+
+bool AMarksmanEnemyCharacter::CanSeeStealthTarget(const AOperativeCharacter& Target) const
+{
+	const UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
+	if (!Sight || Target.IsHiddenInCoverFrom(GetActorLocation())) { return false; }
+	const float RangeScale = StealthModeRules::DetectionRangeScale(true, StealthModeRules::GetConfig());
+	const float Range = Sight->GetSightRangeCm(*this) * RangeScale;
+	const FEnemyPerceptionParams Params = GetPerception();
+	const bool bFacing = FVector::Dist(GetActorLocation(), Target.GetActorLocation()) <= Params.ProximityCm * RangeScale
+		|| PerceptionRules::IsInFieldOfView(Params, GetActorLocation(), GetActorForwardVector(), Target.GetActorLocation());
+	return bFacing && FVector::Dist2D(GetActorLocation(), Target.GetActorLocation()) <= Range
+		&& Sight->HasClearSight(UTacticalSightSubsystem::EyePoint(*this), UTacticalSightSubsystem::ProfilePoint(Target));
+}
+
+bool AMarksmanEnemyCharacter::TickRememberedFire(float DeltaTime)
+{
+	AOperativeCharacter* Target = RememberedTarget.Get();
+	UWorld* World = GetWorld();
+	if (!Target || !World || !Target->HealthComponent || !Target->HealthComponent->IsAlive())
+	{
+		RememberedTarget.Reset();
+		return false;
+	}
+	if (!Target->IsInStealthMode()) { return false; }
+	if (CanSeeStealthTarget(*Target))
+	{
+		Target->SetStealthMode(false);
+		RememberedTarget.Reset();
+		return false;
+	}
+	if (World->GetTimeSeconds() - RememberedSightTime >= SightRules::ForgetSeconds)
+	{
+		RememberedTarget.Reset();
+		CancelAim();
+		return false;
+	}
+	// Aim and fire only at the fixed observed point, never at the hidden actor.
+	CurrentTarget.Reset();
+	if (AAIController* AIC = Cast<AAIController>(GetController())) { AIC->StopMovement(); }
+	if (IsHeldBySuppression()) { CancelAim(); return true; }
+	FMarksmanLine Line;
+	const float Height = Stance == EOperativeStance::Prone ? 35.f : (Stance == EOperativeStance::Crouching ? 95.f : 150.f);
+	Line.Start = GetFeet() + FVector(0.f, 0.f, Height);
+	Line.End = RememberedAimPoint;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MarksmanRememberedLine), false, this);
+	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World)) { Params.AddIgnoredActor(Enemy); }
+	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
+	{
+		for (AOperativeCharacter* Member : Squad->GetMembers()) { Params.AddIgnoredActor(Member); }
+	}
+	FHitResult Hit;
+	if (World->LineTraceSingleByChannel(Hit, Line.Start, Line.End, ECC_Visibility, Params))
+	{
+		CancelAim();
+		return true;
+	}
+	const float Distance = FVector::Dist(Line.Start, Line.End);
+	if (!WeaponRangeRules::IsWithinReach(Distance, MarksmanConfig.MaxRangeCm)) { CancelAim(); return true; }
+	FaceYaw((Line.End - GetActorLocation()).Rotation().Yaw, DeltaTime, 6.f);
+	if (AttackTimer > 0.f) { return true; }
+	if (!bIsAimingAtTarget) { StartAim(); }
+	AimTimer += DeltaTime;
+	Line.bHasLos = true;
+	UpdateBeam(Line);
+	if (AimTimer >= MarksmanConfig.AimDuration)
+	{
+		Fire(nullptr, Line, Distance);
+		AttackTimer = MarksmanConfig.ShotCooldown;
+		CancelAim();
+	}
+	return true;
 }
 
 AMarksmanEnemyCharacter::FMarksmanLine AMarksmanEnemyCharacter::TraceLine(const AOperativeCharacter* Target) const
@@ -639,35 +716,39 @@ void AMarksmanEnemyCharacter::UpdateBeam(const FMarksmanLine& Line)
 void AMarksmanEnemyCharacter::Fire(AOperativeCharacter* Target, const FMarksmanLine& Line, float Distance)
 {
 	++ShotsFired;
-	NotifySquadAttacked(Target); // a shot from a placed marksman starts the fight (user bug 2026-10-11)
+	if (Target) { NotifySquadAttacked(Target); } // point fire has no live actor target
 	if (UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
 	{
 		Sight->NotifyFired(this); // the muzzle flash gives him away for 2 s (Sprint 08-E)
 	}
-	OnAttackStarted(Target);
+	if (Target) { OnAttackStarted(Target); }
 	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
 	{
 		Anim->NotifyAttack(); // the stance's fire clip (UMarksmanAnimInstance)
 	}
-	// Bug #39: past the rifle's effective range the chance falls steeply to its max reach (TickEngage never fires beyond it).
-	const float Chance = MarksmanAIRules::ComputeSniperHitChance(MarksmanConfig, Stance, Target->GetStance(), Line.Cover, Distance)
-		* WeaponRangeRules::HitMultiplier(Distance, MarksmanConfig.EffectiveRangeCm, MarksmanConfig.MaxRangeCm, WeaponRangeRules::GetFalloff())
-		* Target->GetIncomingHitChanceMultiplier(this); // leaned out of cover: -50 % (user decision 2026-11-07)
-	const bool bHit = FMath::FRand() < Chance;
+	float Chance = 0.f;
+	bool bHit = false;
 	FVector End = Line.End;
-	if (bHit)
+	if (Target)
 	{
-		const bool bCrit = FMath::FRand() < MarksmanConfig.CritChance;
-		Target->TakeHit(MarksmanConfig.ShotDamage * (bCrit ? MarksmanConfig.CritMultiplier : 1.f), EnemyDisplayName, bCrit, false, this,
-			bCrit ? MarksmanConfig.CritMultiplier : 1.f);
-	}
-	else
-	{
-		End += FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(0.f, 1.f)).GetSafeNormal() * 120.f;
-		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("MISS"), FLinearColor(0.8f, 0.8f, 0.8f));
+		Chance = MarksmanAIRules::ComputeSniperHitChance(MarksmanConfig, Stance, Target->GetStance(), Line.Cover, Distance)
+			* WeaponRangeRules::HitMultiplier(Distance, MarksmanConfig.EffectiveRangeCm, MarksmanConfig.MaxRangeCm, WeaponRangeRules::GetFalloff())
+			* Target->GetIncomingHitChanceMultiplier(this);
+		bHit = FMath::FRand() < Chance;
+		if (bHit)
+		{
+			const bool bCrit = FMath::FRand() < MarksmanConfig.CritChance;
+			Target->TakeHit(MarksmanConfig.ShotDamage * (bCrit ? MarksmanConfig.CritMultiplier : 1.f), EnemyDisplayName, bCrit, false, this,
+				bCrit ? MarksmanConfig.CritMultiplier : 1.f);
+		}
+		else
+		{
+			End += FVector(FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(-1.f, 1.f), FMath::FRandRange(0.f, 1.f)).GetSafeNormal() * 120.f;
+			UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("MISS"), FLinearColor(0.8f, 0.8f, 0.8f));
+		}
 	}
 	// One line per shot for the AI coach (Scripts/Tools/jev_ai_coach.py).
-	UE_LOG(LogCodexTactics, Display, TEXT("[Marksman] %s fires at %s: %.0f m, chance %.2f, %s"), *GetName(), *Target->DisplayName.ToString(),
+	UE_LOG(LogCodexTactics, Display, TEXT("[Marksman] %s fires at %s: %.0f m, chance %.2f, %s"), *GetName(), Target ? *Target->DisplayName.ToString() : TEXT("remembered point"),
 		Distance / 100.f, Chance, bHit ? TEXT("hit") : TEXT("miss"));
 	if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
 	{
@@ -732,6 +813,7 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 	}
 	StateTimer += DeltaTime;
 
+	if (AIState != EMarksmanAIState::Patrol && TickRememberedFire(DeltaTime)) { return; }
 	float Distance = 0.f;
 	AOperativeCharacter* Target = FindClosestOperative(Distance);
 	// The closest one behind a wall is no target while another stands in his line of fire (a squad split by the yard
@@ -745,6 +827,7 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 			{
 				const float MemberDistance = Member ? FVector::Dist(GetActorLocation(), Member->GetActorLocation()) : 0.f;
 				if (Member && Member != Target && Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member)
+					&& (!Member->IsInStealthMode() || CanSeeStealthTarget(*Member))
 					&& MemberDistance < BestDistance && TraceLine(Member).bHasLos)
 				{
 					BestDistance = MemberDistance;
@@ -757,11 +840,13 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 	// Sprint 06-G: for a while after being hit he answers the shooter, not the closest operative.
 	RetaliationTime -= DeltaTime;
 	AOperativeCharacter* Shooter = RetaliationTarget.Get();
-	if (RetaliationTime > 0.f && Shooter && Shooter->HealthComponent && Shooter->HealthComponent->IsAlive())
+	if (RetaliationTime > 0.f && Shooter && Shooter->HealthComponent && Shooter->HealthComponent->IsAlive()
+		&& (!Shooter->IsInStealthMode() || CanSeeStealthTarget(*Shooter)))
 	{
 		Target = Shooter;
 		Distance = FVector::Dist(GetActorLocation(), Shooter->GetActorLocation());
 	}
+	if (Target && Target->IsInStealthMode() && AIState != EMarksmanAIState::Patrol) { Target->SetStealthMode(false); }
 	CurrentTarget = Target;
 	// APC P4: the squad is aboard - he puts rifle rounds into the hull (x the hull's rifle factor) instead.
 	if (!Target && AIState != EMarksmanAIState::Patrol && AIState != EMarksmanAIState::Ambushed)
@@ -995,6 +1080,9 @@ void AMarksmanEnemyCharacter::TickEngage(float DeltaTime, AOperativeCharacter* T
 		CancelAim(); // the aim breaks on a lost line of fire
 		return;
 	}
+	RememberedTarget = Target;
+	RememberedAimPoint = AimLine.End;
+	RememberedSightTime = GetWorld()->GetTimeSeconds();
 	UpdateBeam(AimLine);
 	if (AimTimer >= MarksmanConfig.AimDuration)
 	{

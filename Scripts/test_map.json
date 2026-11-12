@@ -22,7 +22,7 @@
     "ClickRulesSmoke", "NarrativeSmoke", "HoldSphereSmoke", "ProgressionSmoke", "VictorySmoke", "TurnBasedCameraSmoke",
     "EventBusSmoke", "SilhouetteSmoke", "AttackModeSmoke", "GroupSelectSmoke", "GroupCoverSmoke", "TurnWalkSmoke", "TurnBlastDeathSmoke",
     "EnemyHuntSmoke", "VaultSmoke", "DepotVaultSmoke", "CornerExitSmoke", "BarricadeContactSmoke", "CombatMoveSmoke", "EnemyDeathSmoke", "TurnSelectSmoke",
-    "PanicSmoke", "FacingSmoke", "MarksmanSmoke", "EnemyHitLayerSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke",
+    "PanicSmoke", "FacingSmoke", "MarksmanSmoke", "MarksmanStealthSmoke", "EnemyHitLayerSmoke", "RecruitDeathSmoke", "HitFlashOverlaySmoke",
     "BotMarksmanSmoke", "BarricadeTurnContactSmoke", "MarksmanAdvanceSmoke", "BotRepairSmoke", "PatrolSmoke",
     "AmbushSmoke", "RealTimeControlSmoke", "PostureSmoke", "RealtimeSelectSmoke", "MarksmanCloseShotSmoke",
     "HordeSmoke", "CoverSmoke", "AimOffsetSmoke", "CommanderModeSmoke", "CornerEntrySmoke", "CornerHoldSmoke",
@@ -815,9 +815,9 @@
     },
     {
       "name": "marksman",
-      "globs": ["Source/**/Characters/Marksman*"],
+      "globs": ["Source/**/Characters/Marksman*", "Source/**/Debug/MarksmanStealthSmoke*", "Source/**/Combat/TacticalSightSubsystem*"],
       "tests": ["CodexTactics.Marksman"],
-      "smokes": ["MarksmanSmoke", "MarksmanAdvanceSmoke", "MarksmanCloseShotSmoke", "BotMarksmanSmoke", "PatrolAmbushSmoke"]
+      "smokes": ["MarksmanStealthSmoke", "MarksmanSmoke", "MarksmanAdvanceSmoke", "MarksmanCloseShotSmoke", "BotMarksmanSmoke", "PatrolAmbushSmoke"]
     },
     {
       "name": "operative-movement-squad",
