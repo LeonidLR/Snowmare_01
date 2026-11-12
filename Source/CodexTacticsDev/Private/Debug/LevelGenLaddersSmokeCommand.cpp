@@ -245,6 +245,13 @@ namespace LevelGenLaddersSmoke
 			{
 				const float Off = Offsets[FMath::Min(Slot++, 5)];
 				Spot = Leg.FollowerCentre + FVector(Leg.FollowerAxis.X * Off, Leg.FollowerAxis.Y * Off, 0.f);
+				UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+				FNavLocation SameFloor;
+				if (!Nav || !Nav->ProjectPointToNavigation(Spot, SameFloor, FVector(80.f, 80.f, 60.f))
+					|| FMath::Abs(SameFloor.Location.Z - Leg.LeaderSpot.Z) > 60.f)
+				{
+					Spot = Leg.LeaderSpot;
+				}
 			}
 			Spot = OnNav(World, Spot);
 			Member->TeleportTo(Spot + FVector(0.f, 0.f, Member->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), Member->GetActorRotation(), false, true);
@@ -294,7 +301,36 @@ namespace LevelGenLaddersSmoke
 				const FVector2D Along(-Out.Y, Out.X);
 				const float Low = Gz + L.LevelFrom * LevelHeightCm;
 				const float High = Gz + L.LevelTo * LevelHeightCm;
-				const FVector2D Below = L.Foot + Out * 150.0;
+				FVector2D Below = L.Foot + Out * 150.0;
+				FVector2D Wait = L.Foot + Out * 350.0;
+				if (L.bFreeStanding)
+				{
+					// Free-standing hatch ladders often stand near an interior corner/wall behind Foot: stay on the same floor inside.
+					UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+					const FVector2D BelowCands[] = { L.Foot - Along * 150.0, L.Foot + Along * 150.0, L.Pos - Out * 200.0, L.Foot + Out * 150.0 };
+					for (const FVector2D& Cand : BelowCands)
+					{
+						FNavLocation Projected;
+						if (Nav && Nav->ProjectPointToNavigation(FVector(Cand.X, Cand.Y, Low), Projected, FVector(30.f, 30.f, 60.f))
+							&& FMath::Abs(Projected.Location.Z - Low) <= 60.f)
+						{
+							Below = FVector2D(Projected.Location.X, Projected.Location.Y);
+							break;
+						}
+					}
+					const FVector2D WaitCands[] = { L.Pos - Out * 250.0, Below - Along * 150.0, Below + Along * 150.0, Below };
+					Wait = Below;
+					for (const FVector2D& Cand : WaitCands)
+					{
+						FNavLocation Projected;
+						if (Nav && Nav->ProjectPointToNavigation(FVector(Cand.X, Cand.Y, Low), Projected, FVector(30.f, 30.f, 60.f))
+							&& FMath::Abs(Projected.Location.Z - Low) <= 60.f)
+						{
+							Wait = FVector2D(Projected.Location.X, Projected.Location.Y);
+							break;
+						}
+					}
+				}
 				const FVector2D Above = L.Top - Out * 50.0;
 				FLeg Up;
 				Up.Kind = ELegKind::LadderUp;
@@ -302,7 +338,6 @@ namespace LevelGenLaddersSmoke
 				Up.Ladder = Index;
 				Up.bTeleport = true;
 				Up.LeaderSpot = FVector(Below.X, Below.Y, Low);
-				const FVector2D Wait = L.Foot + Out * 350.0;
 				Up.FollowerCentre = FVector(Wait.X, Wait.Y, Low);
 				Up.FollowerAxis = Along;
 				Up.Goal = FVector(Above.X, Above.Y, High + 50.f);

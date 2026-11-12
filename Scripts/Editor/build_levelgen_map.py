@@ -395,6 +395,24 @@ def _intersect_segment_to_edge(p0, p1, e0, e1, half_w):
     return None
 
 
+def _intersect_box_to_edge(x0, y0, x1, y1, e0, e1, margin=10.0, tag="stair_exit"):
+    """If axis-aligned edge e0->e1 crosses box [x0..x1]x[y0..y1] (expanded by margin), return cutout along e0->e1."""
+    ex, ey = e1[0] - e0[0], e1[1] - e0[1]
+    L = math.hypot(ex, ey)
+    if L < 1.0:
+        return None
+    if abs(ex) <= 1e-3 and (x0 - margin <= e0[0] <= x1 + margin):
+        sign = 1.0 if ey > 0.0 else -1.0
+        t_a, t_b = (y0 - margin - e0[1]) * sign, (y1 + margin - e0[1]) * sign
+    elif abs(ey) <= 1e-3 and (y0 - margin <= e0[1] <= y1 + margin):
+        sign = 1.0 if ex > 0.0 else -1.0
+        t_a, t_b = (x0 - margin - e0[0]) * sign, (x1 + margin - e0[0]) * sign
+    else:
+        return None
+    t0, t1 = max(0.0, min(t_a, t_b)), min(L, max(t_a, t_b))
+    return (t0, t1, tag) if t1 - t0 > 1.0 else None
+
+
 def _hatch_rim_specs(b, h, gz, roof_z, frames):
     """3-sided visual hatch curb leaving the ladder approach/exit side clear."""
     hx, hy = h["pos"]
@@ -596,8 +614,11 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
             for s in b.get("stairs", []):
                 if s.get("kind") == "external" and int(s.get("to", 0)) == floors:
                     approach = s.get("mid") or s["pos"]
+                    lrect = landing_rect(s["pos"], s["mid"], s["top"]) if s.get("mid") else None
                     for pw in p_walls:
                         hit = _intersect_segment_to_edge(approach, s["top"], pw["a"], pw["b"], STAIR_W * 0.5 + 15.0)
+                        if hit and lrect:
+                            hit = _intersect_box_to_edge(*lrect, pw["a"], pw["b"]) or hit
                         if hit:
                             p_gaps.setdefault(pw["id"], []).append(hit)
             for pw in levelgen_ladders.split_walls(p_walls, p_gaps):
@@ -684,6 +705,7 @@ def plan(layout):
         if extended and (ld["id"] in hatch_ladders or (f["backing"] is None and ld.get("top"))):
             dist_top = math.hypot(ld["top"][0] - f["pos"][0], ld["top"][1] - f["pos"][1]) if ld.get("top") else 40.0
             ld_spec["top_exit_standoff"] = max(40.0, dist_top)
+            ld_spec["top_standoff"] = max(49.1, dist_top)
         specs.append(ld_spec)
     # ---- covers
     mantle_cover_pts = [
@@ -894,11 +916,14 @@ class Placer:
             actor = self.spawn(unreal.LadderActor, spec, tags=tags)
             actor.set_editor_property("wall_bracket_count", int(spec.get("wall_bracket_count", 3)))
             actor.set_editor_property("wall_search_cm", 25.0)
+            if "top_standoff" in spec:
+                actor.set_editor_property("top_standoff", float(spec["top_standoff"]))
             if "top_exit_standoff" in spec:
                 actor.set_editor_property("top_exit_standoff", float(spec["top_exit_standoff"]))
             actor.set_editor_property("height", spec["rungs"] * PITCH)
-            report("  %s: %d rungs, climbable %s, wall %s, top_exit_standoff %.0f" % (
-                spec["label"], actor.get_rung_count(), actor.is_climbable(), actor.has_wall(), actor.get_editor_property("top_exit_standoff")))
+            report("  %s: %d rungs, climbable %s, wall %s, top_standoff %.0f, top_exit_standoff %.0f" % (
+                spec["label"], actor.get_rung_count(), actor.is_climbable(), actor.has_wall(),
+                actor.get_editor_property("top_standoff"), actor.get_editor_property("top_exit_standoff")))
         else:
             report("REVIEW: unknown spec kind %s" % kind)
 

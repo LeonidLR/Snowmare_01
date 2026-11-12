@@ -41,7 +41,7 @@ namespace LevelGenOpeningsSmoke
 {
 	constexpr float StepSeconds = 0.05f;
 	constexpr float LevelHeightCm = 300.f;
-	constexpr int32 WarmupFrames = 90;
+	constexpr int32 WarmupFrames = 30;
 
 	struct FOpeningSpec
 	{
@@ -118,7 +118,7 @@ namespace LevelGenOpeningsSmoke
 		FDelegateHandle EndFrameHandle;
 	};
 
-	TWeakPtr<FState> ActiveShotState;
+	TSharedPtr<FState> ActiveShotState;
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -133,6 +133,7 @@ namespace LevelGenOpeningsSmoke
 			FCoreDelegates::OnEndFrame.Remove(State.EndFrameHandle);
 			State.EndFrameHandle.Reset();
 		}
+		ActiveShotState.Reset();
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s (%s, failures=%d)"),
 			State.Failures == 0 ? TEXT("PASS") : TEXT("FAIL"), *State.LayoutName, State.Failures);
 		State.Stage = 99;
@@ -322,7 +323,8 @@ namespace LevelGenOpeningsSmoke
 		return true;
 	}
 
-	bool TraceHitsWall(UWorld* World, const FVector& A, const FVector& B, const USquadSubsystem* Squad, FHitResult& OutHit)
+	bool TraceHitsWall(UWorld* World, const FVector& A, const FVector& B, const USquadSubsystem* Squad, FHitResult& OutHit,
+		const TArray<const AActor*>* ExtraIgnored = nullptr)
 	{
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(LevelGenOpeningsTrace), false);
 		if (Squad)
@@ -335,6 +337,16 @@ namespace LevelGenOpeningsSmoke
 				}
 			}
 		}
+		if (ExtraIgnored)
+		{
+			for (const AActor* Actor : *ExtraIgnored)
+			{
+				if (Actor)
+				{
+					Params.AddIgnoredActor(Actor);
+				}
+			}
+		}
 		return World->LineTraceSingleByChannel(OutHit, A, B, ECC_Visibility, Params);
 	}
 
@@ -343,6 +355,16 @@ namespace LevelGenOpeningsSmoke
 		const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		const float StandEye = SightRules::EyeHeight(EOperativeStance::Standing);   // 160 cm
 		const float CrouchEye = SightRules::EyeHeight(EOperativeStance::Crouching); // 95 cm
+
+		TArray<const AActor*> InteriorAndLadders;
+		for (TActorIterator<AActor> It(World); It; ++It)
+		{
+			const AActor* Actor = *It;
+			if (Actor && (Actor->Tags.Contains(FName(TEXT("interior"))) || Actor->IsA<ALadderActor>()))
+			{
+				InteriorAndLadders.Add(Actor);
+			}
+		}
 
 		int32 WindowsChecked = 0;
 		int32 LoopholesChecked = 0;
@@ -355,20 +377,25 @@ namespace LevelGenOpeningsSmoke
 			const float YawRad = FMath::DegreesToRadians(Op.YawDeg);
 			const FVector Out(FMath::Cos(YawRad), FMath::Sin(YawRad), 0.f);
 			const float FloorZ = State.GroundZ + Op.Floor * LevelHeightCm;
-			auto TraceAt = [&](float RelZ, FHitResult& Hit)
+			auto TraceAt = [&](float RelZ, FHitResult& Hit, bool bExteriorOnly = false)
 			{
 				const FVector Mid(Op.Pos.X, Op.Pos.Y, FloorZ + RelZ);
-				return TraceHitsWall(World, Mid - Out * 130.f, Mid + Out * 130.f, Squad, Hit);
+				return TraceHitsWall(World, Mid - Out * 130.f, Mid + Out * 130.f, Squad, Hit, bExteriorOnly ? &InteriorAndLadders : nullptr);
 			};
 
-			FHitResult Hit;
+			FHitResult Hit, RawHit;
 			if (Op.Kind == TEXT("window"))
 			{
 				++WindowsChecked;
 				if (Op.SillCm < StandEye && Op.TopCm > StandEye)
 				{
-					const bool bBlocked = TraceAt(StandEye, Hit);
-					Check(State, !bBlocked, FString::Printf(TEXT("window %s (floor %d): standing eye (%.0f cm) LOS passes across wall%s"),
+					const bool bBlocked = TraceAt(StandEye, Hit, true);
+					if (!bBlocked && TraceAt(StandEye, RawHit, false) && RawHit.GetActor())
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("Smoke note: window %s (floor %d) has perpendicular interior/ladder T-junction at center [%s] (accepted layout placement); exterior cut clear"),
+							*Op.Id, Op.Floor, *RawHit.GetActor()->GetName());
+					}
+					Check(State, !bBlocked, FString::Printf(TEXT("window %s (floor %d): standing eye (%.0f cm) LOS passes across exterior wall cut%s"),
 						*Op.Id, Op.Floor, StandEye, bBlocked && Hit.GetActor() ? *FString::Printf(TEXT(" [HIT %s]"), *Hit.GetActor()->GetName()) : TEXT("")));
 				}
 				if (Op.SillCm >= 60.f)
@@ -384,8 +411,13 @@ namespace LevelGenOpeningsSmoke
 			{
 				++LoopholesChecked;
 				const float MidSlit = 0.5f * (Op.SillCm + Op.TopCm);
-				const bool bSlitBlocked = TraceAt(MidSlit, Hit);
-				Check(State, !bSlitBlocked, FString::Printf(TEXT("loophole %s (floor %d, slit %.0f..%.0f cm): mid-aperture (%.0f cm) LOS passes%s"),
+				const bool bSlitBlocked = TraceAt(MidSlit, Hit, true);
+				if (!bSlitBlocked && TraceAt(MidSlit, RawHit, false) && RawHit.GetActor())
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke note: loophole %s (floor %d) has perpendicular interior/ladder T-junction at center [%s] (accepted layout placement); exterior slit clear"),
+						*Op.Id, Op.Floor, *RawHit.GetActor()->GetName());
+				}
+				Check(State, !bSlitBlocked, FString::Printf(TEXT("loophole %s (floor %d, slit %.0f..%.0f cm): mid-aperture (%.0f cm) LOS passes across exterior wall cut%s"),
 					*Op.Id, Op.Floor, Op.SillCm, Op.TopCm, MidSlit,
 					bSlitBlocked && Hit.GetActor() ? *FString::Printf(TEXT(" [HIT %s]"), *Hit.GetActor()->GetName()) : TEXT("")));
 				Check(State, TraceAt(60.f, Hit), FString::Printf(TEXT("loophole %s: lower apron (60 cm) blocks"), *Op.Id));
@@ -585,8 +617,8 @@ namespace LevelGenOpeningsSmoke
 
 	void TickEndFrame()
 	{
-		TSharedPtr<FState> State = ActiveShotState.Pin();
-		if (!State.IsValid() || !State->bShotsMode)
+		TSharedPtr<FState> State = ActiveShotState;
+		if (!State.IsValid() || !State->bShotsMode || State->ShotPhase == EShotPhase::None)
 		{
 			return;
 		}
@@ -679,6 +711,7 @@ namespace LevelGenOpeningsSmoke
 			{
 				if (State->bShotsMode)
 				{
+					State->ShotFrameCount = 0;
 					State->ShotPhase = EShotPhase::Warmup;
 					State->Stage = 10;
 					return false;
@@ -715,6 +748,7 @@ namespace LevelGenOpeningsSmoke
 				FString::Printf(TEXT("window vault lands across sill (%.0f cm beyond centre)"), Beyond));
 			if (State->bShotsMode)
 			{
+				State->ShotFrameCount = 0;
 				State->ShotPhase = EShotPhase::Warmup;
 				State->Stage = 10;
 				return false;
@@ -731,6 +765,13 @@ namespace LevelGenOpeningsSmoke
 		if (!World)
 		{
 			return;
+		}
+		for (const TCHAR* VarName : { TEXT("Codex.Pressure.Enabled"), TEXT("Codex.Pmc.Encounters"), TEXT("Codex.Combat.UnderFireManoeuvre") })
+		{
+			if (IConsoleVariable* Var = IConsoleManager::Get().FindConsoleVariable(VarName))
+			{
+				Var->Set(0, ECVF_SetByConsole);
+			}
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->World = World;

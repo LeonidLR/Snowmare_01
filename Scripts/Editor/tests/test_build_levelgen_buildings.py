@@ -76,10 +76,12 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
             bottom_z = s["location"][2] - s["scale"][2] * 50.0
             self.assertAlmostEqual(bottom_z, 150.0, places=1)
 
-        # Free-standing tower hatch ladder: wall_bracket_count=-1, top_exit_standoff=110, 3-sided hatch rim
+        # Free-standing tower hatch ladder: wall_bracket_count=-1, top_standoff=110, top_exit_standoff=110, 3-sided hatch rim
         ladders = {s["label"]: s for s in specs if s["kind"] == "ladder"}
         self.assertEqual(ladders["LAD_B_tower_hatch"].get("wall_bracket_count"), -1)
+        self.assertAlmostEqual(ladders["LAD_B_tower_hatch"].get("top_standoff", 0.0), 110.0, places=1)
         self.assertAlmostEqual(ladders["LAD_B_tower_hatch"].get("top_exit_standoff", 0.0), 110.0, places=1)
+        self.assertNotIn("top_standoff", ladders["LAD_B_checkpoint"])
         self.assertNotIn("top_exit_standoff", ladders["LAD_B_checkpoint"])
 
         # Hatches NEVER produce DROP NavLinkProxy actors
@@ -108,16 +110,18 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         layout = self._load("L_Gen_Train_3")
         specs = builder.plan(layout)
 
-        # B_catwalk roof parapet S ([550, 1150]..[550, 2750]) must be cut around STAIR_catwalk_ext at y=2600
+        # B_catwalk roof parapet S ([550, 1150]..[550, 2750]) must leave the entire STAIR_catwalk_ext landing [2595..2750] clear
         cat_s_parapets = [s for s in specs if s["label"].startswith("B_catwalk_parapet_S")]
-        self.assertGreaterEqual(len(cat_s_parapets), 2)
+        self.assertGreaterEqual(len(cat_s_parapets), 1)
         for p in cat_s_parapets:
             ly = p["location"][1]
             sy = p["scale"][1] * 100.0
-            self.assertFalse(ly - sy * 0.5 < 2600.0 < ly + sy * 0.5, "External stair arrival on B_catwalk_parapet_S is blocked!")
+            y0, y1 = ly - sy * 0.5, ly + sy * 0.5
+            self.assertFalse(y0 < 2750.0 and y1 > 2595.0, f"Parapet {p['label']} [{y0}..{y1}] overlaps STAIR_catwalk_ext landing [2595..2750]!")
 
         # B_warehouse hatch [-...] -> 3-sided rim, 110 standoff, roof cutout, floor 1 cutout? (hatch floor=1 -> only roof floor=2 cut)
         ladders = {s["label"]: s for s in specs if s["kind"] == "ladder"}
+        self.assertAlmostEqual(ladders["LAD_B_warehouse_hatch"].get("top_standoff", 0.0), 110.0, places=1)
         self.assertAlmostEqual(ladders["LAD_B_warehouse_hatch"].get("top_exit_standoff", 0.0), 110.0, places=1)
         self.assertEqual(ladders["LAD_B_warehouse_hatch"].get("wall_bracket_count"), -1)
 
