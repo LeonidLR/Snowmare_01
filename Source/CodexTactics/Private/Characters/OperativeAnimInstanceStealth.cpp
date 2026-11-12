@@ -136,7 +136,7 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	{
 		if (bPeeking != bStealthWasPeeking)
 		{
-			BeginAction(Named(WallPrefix + (bPeeking ? TEXT("Lean_Start_IP") : TEXT("Lean_Stop_IP"))));
+			BeginAction(Named(StealthModeRules::GetWallLeanClipName(CoverFacing, bPeeking, !bPeeking).ToString()));
 		}
 		else if (bWall && bStealthWasAtWall && CoverFacing != StealthLastSide)
 		{
@@ -207,7 +207,7 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	const float Base = 1.f - ActionShare;
 	if (bPeeking)
 	{
-		UAnimSequence* Lean = Named(WallPrefix + TEXT("Lean_IP"));
+		UAnimSequence* Lean = Named(StealthModeRules::GetWallLeanClipName(CoverFacing).ToString());
 		StealthIdleTime = FMath::Fmod(StealthIdleTime + DeltaSeconds, Length(Lean));
 		Add(Lean, Base, StealthIdleTime);
 		return;

@@ -818,6 +818,13 @@ namespace StealthModeSmoke
 			if (State.StageTime < 4.f || (Op->bShimmying && State.StageTime < 15.f)) { return true; }
 			const UAnimSequenceBase* Clip = Anim(Op)->GetStealthDominantClip();
 			Check(State, Op->IsPeekingRoundCorner() && Clip && Clip->GetName().Contains(TEXT("Wall_Lean")), TEXT("corner peek uses stealth lean clip"));
+			if (const ACoverGhostActor* Ghost = PC->GetCornerPeekGhost())
+			{
+				if (const UAnimSequenceBase* GhostClip = Ghost->GetShownClip())
+				{
+					Check(State, GhostClip->GetName().Contains(TEXT("Wall_Lean")), TEXT("corner peek ghost in stealth uses stealth lean clip"));
+				}
+			}
 			const FVector Head = Op->GetMesh()->GetBoneLocation(TEXT("head"));
 			const FVector Pelvis = Op->GetMesh()->GetBoneLocation(TEXT("pelvis"));
 			const FVector PeekHeadRelative = Head - Pelvis;

@@ -4,6 +4,7 @@
 #include "Animation/AnimSequenceBase.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/StealthModeRules.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -96,13 +97,13 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 		{
 			if (bStealthMode)
 			{
-				const FName StealthClipName = Facing == ECoverFacing::Left
-					? (bFireIdle ? FName(TEXT("Stealth_LeftWall_Lean_IP")) : FName(TEXT("Stealth_LeftWall_Idle_IP")))
-					: (bFireIdle ? FName(TEXT("Stealth_RightWall_Lean_IP")) : FName(TEXT("Stealth_RightWall_Idle_IP")));
+				const FName StealthClipName = bFireIdle
+					? StealthModeRules::GetWallLeanClipName(Facing)
+					: (Facing == ECoverFacing::Left ? FName(TEXT("Stealth_LeftWall_Idle_IP")) : FName(TEXT("Stealth_RightWall_Idle_IP")));
 				Clip = Anim->GetStealthNamedClip(StealthClipName);
 				if (Clip)
 				{
-					WallYaw = Facing == ECoverFacing::Left ? -90.f : 90.f;
+					WallYaw = StealthModeRules::GetWallLeanYawOffset(Facing);
 				}
 			}
 			if (!Clip)

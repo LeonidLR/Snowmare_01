@@ -658,6 +658,7 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 	{
 		AOperativeCharacter* Peeker = SquadTarget->Peeker.Get();
 		if (!CornerPeekGhost->IsShown() || !CornerPeekGhost->IsCornerPeekPose() || CornerPeekGhost->GetOperative() != Peeker
+			|| CornerPeekGhost->GetShownFacing() != SquadTarget->Side
 			|| FVector::DistSquared2D(CornerPeekGhost->GetSlot().WorldLocation, SquadTarget->CornerSlot.WorldLocation) > 1.f)
 		{
 			CornerPeekGhost->ShowCornerPeekFor(*Peeker, SquadTarget->CornerSlot, SquadTarget->Side, SquadTarget->bCrouched);
@@ -677,6 +678,7 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 		Corner.WorldLocation += Shift;
 		Corner.WallPoint += Shift;
 		if (!CornerPeekGhost->IsShown() || !CornerPeekGhost->IsCornerPeekPose() || CornerPeekGhost->GetOperative() != Operative
+			|| CornerPeekGhost->GetShownFacing() != PeekHoverSide
 			|| FVector::DistSquared2D(CornerPeekGhost->GetSlot().WorldLocation, Corner.WorldLocation) > 1.f)
 		{
 			CornerPeekGhost->ShowCornerPeekFor(*Operative, Corner, PeekHoverSide);

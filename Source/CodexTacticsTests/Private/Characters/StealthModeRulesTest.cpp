@@ -5,6 +5,7 @@
 #include "Misc/FileHelper.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Tactics/CoverTypes.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -35,6 +36,27 @@ bool FStealthBreakTest::RunTest(const FString&)
 	Config.bBreakOnFire = false;
 	TestFalse(TEXT("Data can keep stealth on fire"), ShouldBreak(true, true, false, Config));
 	TestTrue(TEXT("Sprint still breaks when fire does not"), ShouldBreak(true, true, true, Config));
+	// Stealth v2 (008): fast stealth movement does not break stealth; firing during fast stealth still breaks it.
+	Config.bBreakOnFire = true;
+	TestFalse(TEXT("Fast stealth movement does not break mode"), ShouldBreak(true, false, true, true, Config));
+	TestTrue(TEXT("Firing breaks mode during fast stealth"), ShouldBreak(true, true, false, true, Config));
+	TestTrue(TEXT("Sprint without fast flag breaks mode"), ShouldBreak(true, false, true, false, Config));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStealthWallLeanTest, "CodexTactics.Characters.StealthMode.WallLean",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FStealthWallLeanTest::RunTest(const FString&)
+{
+	using namespace StealthModeRules;
+	TestEqual(TEXT("Left lean hold clip"), GetWallLeanClipName(ECoverFacing::Left), FName(TEXT("Stealth_LeftWall_Lean_IP")));
+	TestEqual(TEXT("Right lean hold clip"), GetWallLeanClipName(ECoverFacing::Right), FName(TEXT("Stealth_RightWall_Lean_IP")));
+	TestEqual(TEXT("Left lean start clip"), GetWallLeanClipName(ECoverFacing::Left, true, false), FName(TEXT("Stealth_LeftWall_Lean_Start_IP")));
+	TestEqual(TEXT("Right lean start clip"), GetWallLeanClipName(ECoverFacing::Right, true, false), FName(TEXT("Stealth_RightWall_Lean_Start_IP")));
+	TestEqual(TEXT("Left lean stop clip"), GetWallLeanClipName(ECoverFacing::Left, false, true), FName(TEXT("Stealth_LeftWall_Lean_Stop_IP")));
+	TestEqual(TEXT("Right lean stop clip"), GetWallLeanClipName(ECoverFacing::Right, false, true), FName(TEXT("Stealth_RightWall_Lean_Stop_IP")));
+	TestEqual(TEXT("Left lean yaw offset"), GetWallLeanYawOffset(ECoverFacing::Left), -90.f);
+	TestEqual(TEXT("Right lean yaw offset"), GetWallLeanYawOffset(ECoverFacing::Right), 90.f);
 	return true;
 }
 

@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 
 class FJsonObject;
+enum class ECoverFacing : uint8;
 
 /** Stealth mode tuning (designer task 003, UE-only; no Godot reference). Data: Data/AI/stealth_mode.json. */
 struct CODEXTACTICS_API FStealthModeConfig
@@ -50,6 +51,12 @@ namespace StealthModeRules
 	CODEXTACTICS_API FText GetFormationBlockedTooltip();
 	/** Sprint always breaks stealth; a shot breaks it only when stealth_break_on_fire is enabled. */
 	CODEXTACTICS_API bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, const FStealthModeConfig& Config);
+	/** Fast stealth never breaks stealth; sprint breaks it; firing breaks it when bBreakOnFire is true. */
+	CODEXTACTICS_API bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, bool bFast, const FStealthModeConfig& Config);
+	/** Pure helper for Stealth v2 §3: selects Lean_Start / Lean / Lean_Stop clip name by wall facing. */
+	CODEXTACTICS_API FName GetWallLeanClipName(ECoverFacing Facing, bool bStart = false, bool bStop = false);
+	/** Returns the yaw offset (-90 for Left, 90 for Right) matching the wall clip facing. */
+	CODEXTACTICS_API float GetWallLeanYawOffset(ECoverFacing Facing);
 	/** Multipliers relative to the existing stance/weather/perception rules; disabled/inactive = identity. */
 	CODEXTACTICS_API float DetectionRangeScale(bool bActive, const FStealthModeConfig& Config);
 	CODEXTACTICS_API float DetectionRangeScale(bool bActive, bool bFast, const FStealthModeConfig& Config);

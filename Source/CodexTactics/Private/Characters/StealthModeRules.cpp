@@ -5,6 +5,7 @@
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Tactics/CoverTypes.h"
 
 namespace StealthModeRules
 {
@@ -25,7 +26,31 @@ namespace StealthModeRules
 
 	bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, const FStealthModeConfig& Config)
 	{
-		return bActive && (bSprinting || (bFired && Config.bBreakOnFire));
+		return ShouldBreak(bActive, bFired, bSprinting, false, Config);
+	}
+
+	bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, bool bFast, const FStealthModeConfig& Config)
+	{
+		return bActive && ((bSprinting && !bFast) || (bFired && Config.bBreakOnFire));
+	}
+
+	FName GetWallLeanClipName(ECoverFacing Facing, bool bStart, bool bStop)
+	{
+		const bool bLeft = (Facing == ECoverFacing::Left);
+		if (bStart)
+		{
+			return bLeft ? FName(TEXT("Stealth_LeftWall_Lean_Start_IP")) : FName(TEXT("Stealth_RightWall_Lean_Start_IP"));
+		}
+		if (bStop)
+		{
+			return bLeft ? FName(TEXT("Stealth_LeftWall_Lean_Stop_IP")) : FName(TEXT("Stealth_RightWall_Lean_Stop_IP"));
+		}
+		return bLeft ? FName(TEXT("Stealth_LeftWall_Lean_IP")) : FName(TEXT("Stealth_RightWall_Lean_IP"));
+	}
+
+	float GetWallLeanYawOffset(ECoverFacing Facing)
+	{
+		return Facing == ECoverFacing::Left ? -90.f : 90.f;
 	}
 
 	float DetectionRangeScale(bool bActive, const FStealthModeConfig& Config)
