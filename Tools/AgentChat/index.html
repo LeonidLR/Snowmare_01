@@ -302,6 +302,261 @@
     ::-webkit-scrollbar-thumb:hover {
       background: #475569;
     }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 6px;
+      margin-left: 10px;
+    }
+    .tab-btn {
+      background: #0b1120;
+      color: var(--text-muted);
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      padding: 5px 12px;
+      font-size: 12px;
+      font-weight: 700;
+      cursor: pointer;
+      transition: all 0.15s ease;
+    }
+    .tab-btn.active {
+      background: #0284c7;
+      border-color: #38bdf8;
+      color: #ffffff;
+    }
+
+    /* Board view */
+    #board-view {
+      display: none;
+      flex: 1;
+      overflow-y: auto;
+      padding: 14px 16px;
+      flex-direction: column;
+      gap: 14px;
+    }
+    #board-view.visible {
+      display: flex;
+    }
+    #chat-view-wrapper {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+    }
+    #chat-view-wrapper.hidden {
+      display: none;
+    }
+
+    .now-strip {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 10px;
+    }
+    .now-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 12px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .now-card-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .owner-claude { color: var(--color-claude); }
+    .owner-gemini { color: var(--color-gemini); }
+    .owner-codex { color: var(--color-codex); }
+    .owner-designer { color: var(--color-designer); }
+
+    .idle-badge {
+      font-size: 11px;
+      color: var(--text-muted);
+      background: var(--bg-input);
+      padding: 2px 6px;
+      border-radius: 4px;
+      border: 1px solid var(--border-color);
+    }
+
+    .board-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      align-items: center;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px 12px;
+    }
+    .board-filters select, .board-filters input {
+      font-size: 12px;
+      padding: 5px 8px;
+    }
+    .refresh-btn {
+      background: #1e293b;
+      color: #e2e8f0;
+      border: 1px solid #475569;
+      border-radius: 6px;
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .refresh-btn:hover { background: #334155; }
+
+    .board-columns {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(270px, 1fr));
+      gap: 12px;
+      align-items: start;
+    }
+    .board-col {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      padding: 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+    }
+    .board-col-title {
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.4px;
+      color: #cbd5e1;
+      display: flex;
+      justify-content: space-between;
+      border-bottom: 1px solid var(--border-color);
+      padding-bottom: 6px;
+    }
+    .task-card {
+      background: var(--bg-base);
+      border: 1px solid var(--border-color);
+      border-radius: 8px;
+      padding: 9px 10px;
+      display: flex;
+      flex-direction: column;
+      gap: 5px;
+      font-size: 12px;
+    }
+    .task-card-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+    }
+    .task-id {
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-weight: 800;
+      color: #f8fafc;
+    }
+    .owner-pill {
+      font-size: 10.5px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 4px;
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+    }
+    .task-title {
+      font-weight: 600;
+      color: #e2e8f0;
+      line-height: 1.35;
+    }
+    .task-meta {
+      font-size: 11px;
+      color: var(--text-muted);
+      line-height: 1.35;
+    }
+    .task-chat-line {
+      font-size: 11px;
+      color: #94a3b8;
+      background: rgba(15, 23, 42, 0.8);
+      border-left: 2px solid #475569;
+      padding: 3px 6px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .task-links {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      margin-top: 2px;
+    }
+    .doc-link {
+      font-size: 11px;
+      color: #38bdf8;
+      background: none;
+      border: none;
+      padding: 0;
+      cursor: pointer;
+      text-decoration: underline;
+    }
+
+    /* Read-only doc modal */
+    #doc-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(2, 6, 23, 0.8);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+    }
+    #doc-modal.open { display: flex; }
+    .doc-modal-card {
+      background: var(--bg-surface);
+      border: 1px solid var(--border-color);
+      border-radius: 10px;
+      max-width: 780px;
+      width: 100%;
+      max-height: 85vh;
+      display: flex;
+      flex-direction: column;
+    }
+    .doc-modal-head {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 14px;
+      border-bottom: 1px solid var(--border-color);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .doc-modal-body {
+      padding: 14px;
+      overflow-y: auto;
+      white-space: pre-wrap;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 12px;
+      line-height: 1.45;
+      color: #e2e8f0;
+    }
+
+    @media (max-width: 720px) {
+      header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 8px;
+        padding: 8px 12px;
+      }
+      .presence-bar {
+        flex-wrap: wrap;
+        gap: 10px;
+      }
+      .board-columns {
+        grid-template-columns: 1fr;
+      }
+    }
   </style>
 </head>
 <body>
@@ -309,8 +564,12 @@
   <header>
     <div class="header-left">
       <div class="header-title">
-        <span>CodexTactics Agent Chat</span>
+        <span>CodexTactics</span>
         <span class="header-tag">Дизайнер</span>
+      </div>
+      <div class="tab-bar">
+        <button class="tab-btn active" id="tab-chat">Чат</button>
+        <button class="tab-btn" id="tab-board">Задачи</button>
       </div>
     </div>
     <div class="presence-bar">
@@ -329,6 +588,7 @@
     </div>
   </header>
 
+  <div id="chat-view-wrapper">
   <main id="messages-container">
     <!-- Messages injected by JS -->
   </main>
@@ -357,6 +617,46 @@
       <button id="send-btn">Отправить</button>
     </div>
   </footer>
+  </div>
+
+  <section id="board-view" aria-label="Живая доска задач">
+    <div class="now-strip" id="now-strip"></div>
+    <div class="board-filters">
+      <select id="filter-owner">
+        <option value="all">Все агенты</option>
+        <option value="codex">Codex</option>
+        <option value="gemini">Gemini</option>
+        <option value="claude">Claude</option>
+      </select>
+      <select id="filter-state">
+        <option value="all">Все статусы</option>
+        <option value="in_progress">В работе</option>
+        <option value="waiting">Ждёт ответа</option>
+        <option value="queued">В очереди</option>
+        <option value="done">Готово (ревью)</option>
+        <option value="in_interim">В interim</option>
+        <option value="in_main">В main</option>
+        <option value="not_started">Не начато (реестр)</option>
+      </select>
+      <select id="filter-area">
+        <option value="all">Все области</option>
+      </select>
+      <input type="text" id="filter-search" placeholder="Поиск (id / тема)..." />
+      <button class="refresh-btn" id="refresh-board-btn">Обновить</button>
+      <span class="idle-badge" id="board-updated-at">загрузка...</span>
+    </div>
+    <div class="board-columns" id="board-columns"></div>
+  </section>
+
+  <div id="doc-modal" role="dialog" aria-modal="true">
+    <div class="doc-modal-card">
+      <div class="doc-modal-head">
+        <span id="doc-modal-title">Документ</span>
+        <button class="refresh-btn" id="doc-modal-close">Закрыть</button>
+      </div>
+      <div class="doc-modal-body" id="doc-modal-body"></div>
+    </div>
+  </div>
 
   <script>
     (function () {
@@ -538,6 +838,268 @@
       fetchPresence();
       setInterval(fetchMessages, 2000);
       setInterval(fetchPresence, 2000);
+
+      // --- Живая доска задач (031) ---
+      const tabChat = document.getElementById('tab-chat');
+      const tabBoard = document.getElementById('tab-board');
+      const chatWrapper = document.getElementById('chat-view-wrapper');
+      const boardView = document.getElementById('board-view');
+      const nowStrip = document.getElementById('now-strip');
+      const boardCols = document.getElementById('board-columns');
+      const filterOwner = document.getElementById('filter-owner');
+      const filterState = document.getElementById('filter-state');
+      const filterArea = document.getElementById('filter-area');
+      const filterSearch = document.getElementById('filter-search');
+      const refreshBoardBtn = document.getElementById('refresh-board-btn');
+      const boardUpdatedAt = document.getElementById('board-updated-at');
+      const docModal = document.getElementById('doc-modal');
+      const docModalTitle = document.getElementById('doc-modal-title');
+      const docModalBody = document.getElementById('doc-modal-body');
+      const docModalClose = document.getElementById('doc-modal-close');
+
+      let boardData = null;
+
+      function switchTab(tabName) {
+        const isBoard = tabName === 'board';
+        tabChat.classList.toggle('active', !isBoard);
+        tabBoard.classList.toggle('active', isBoard);
+        chatWrapper.classList.toggle('hidden', isBoard);
+        boardView.classList.toggle('visible', isBoard);
+        if (isBoard && !boardData) {
+          fetchBoard(false);
+        }
+      }
+
+      tabChat.addEventListener('click', () => switchTab('chat'));
+      tabBoard.addEventListener('click', () => switchTab('board'));
+
+      async function openPortDoc(relPath) {
+        docModalTitle.textContent = relPath;
+        docModalBody.textContent = 'Загрузка...';
+        docModal.classList.add('open');
+        try {
+          const res = await fetch(`/api/port-doc?path=${encodeURIComponent(relPath)}`);
+          const data = await res.json();
+          docModalBody.textContent = res.ok ? data.content : (data.error || 'Не удалось загрузить файл');
+        } catch (err) {
+          docModalBody.textContent = `Ошибка: ${err.message}`;
+        }
+      }
+
+      docModalClose.addEventListener('click', () => docModal.classList.remove('open'));
+      docModal.addEventListener('click', (e) => {
+        if (e.target === docModal) docModal.classList.remove('open');
+      });
+
+      function renderBoard() {
+        if (!boardData) return;
+        boardUpdatedAt.textContent = `обновлено: ${formatTime(boardData.generated_at)}`;
+
+        // Areas dropdown
+        const prevArea = filterArea.value;
+        filterArea.innerHTML = '<option value="all">Все области</option>';
+        (boardData.areas || []).forEach(a => {
+          const opt = document.createElement('option');
+          opt.value = a;
+          opt.textContent = a;
+          filterArea.appendChild(opt);
+        });
+        if (prevArea && [...filterArea.options].some(o => o.value === prevArea)) {
+          filterArea.value = prevArea;
+        }
+
+        // Now strip
+        nowStrip.innerHTML = '';
+        ['codex', 'gemini', 'claude'].forEach(ag => {
+          const info = (boardData.now_strip || {})[ag] || { agent: ag, state: 'idle' };
+          const card = document.createElement('div');
+          card.className = 'now-card';
+
+          const head = document.createElement('div');
+          head.className = 'now-card-head';
+          const nameSpan = document.createElement('span');
+          nameSpan.className = `owner-${ag}`;
+          nameSpan.textContent = ag.toUpperCase();
+          const idleSpan = document.createElement('span');
+          idleSpan.className = 'idle-badge';
+          idleSpan.textContent = info.idle_min !== null && info.idle_min !== undefined
+            ? `idle for ${info.idle_min} min`
+            : 'нет данных';
+          head.appendChild(nameSpan);
+          head.appendChild(idleSpan);
+
+          const body = document.createElement('div');
+          body.className = 'task-meta';
+          body.textContent = info.task_id
+            ? `${info.task_id} (${info.state}): ${info.task_title || ''}`
+            : 'нет активной задачи';
+
+          card.appendChild(head);
+          card.appendChild(body);
+          nowStrip.appendChild(card);
+        });
+
+        const ownerVal = filterOwner.value;
+        const stateVal = filterState.value;
+        const areaVal = filterArea.value;
+        const q = filterSearch.value.trim().toLowerCase();
+
+        const columnsDef = [
+          ['in_progress', 'В работе'],
+          ['waiting', 'Ждёт ответа / блокер'],
+          ['queued', 'В очереди'],
+          ['done', 'Готово (ревью)'],
+          ['in_interim', 'В interim'],
+          ['in_main', 'В main'],
+        ];
+
+        boardCols.innerHTML = '';
+        if (stateVal !== 'not_started') {
+          columnsDef.forEach(([stKey, stLabel]) => {
+            if (stateVal !== 'all' && stateVal !== stKey) return;
+            const list = (boardData.tasks || []).filter(t => {
+              if (t.state !== stKey) return false;
+              if (ownerVal !== 'all' && t.owner !== ownerVal) return false;
+              if (areaVal !== 'all' && t.area !== areaVal) return false;
+              if (q && !(t.id + ' ' + t.title + ' ' + (t.title_ru || '') + ' ' + (t.branch || '')).toLowerCase().includes(q)) return false;
+              return true;
+            });
+
+            const col = document.createElement('div');
+            col.className = 'board-col';
+            const colHead = document.createElement('div');
+            colHead.className = 'board-col-title';
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = stLabel;
+            const countSpan = document.createElement('span');
+            countSpan.textContent = String(list.length);
+            colHead.appendChild(titleSpan);
+            colHead.appendChild(countSpan);
+            col.appendChild(colHead);
+
+            list.forEach(t => {
+              const card = document.createElement('div');
+              card.className = 'task-card';
+
+              const top = document.createElement('div');
+              top.className = 'task-card-top';
+              const idEl = document.createElement('span');
+              idEl.className = 'task-id';
+              idEl.textContent = t.id;
+              const ownerEl = document.createElement('span');
+              ownerEl.className = `owner-pill owner-${t.owner}`;
+              ownerEl.textContent = t.moved_note ? `${t.owner} (${t.moved_note})` : t.owner;
+              top.appendChild(idEl);
+              top.appendChild(ownerEl);
+              card.appendChild(top);
+
+              const titleEl = document.createElement('div');
+              titleEl.className = 'task-title';
+              titleEl.textContent = t.title_ru && t.title_ru !== t.title ? `${t.title_ru} · ${t.title}` : t.title;
+              card.appendChild(titleEl);
+
+              if (t.branch || t.idle_min !== null) {
+                const metaEl = document.createElement('div');
+                metaEl.className = 'task-meta';
+                const parts = [];
+                if (t.branch) parts.push(`${t.branch}${t.last_commit ? ' @ ' + t.last_commit : ''}`);
+                if (t.idle_min !== null) parts.push(`idle ${t.idle_min}m`);
+                metaEl.textContent = parts.join(' · ');
+                card.appendChild(metaEl);
+              }
+
+              if (t.last_chat_text) {
+                const chatEl = document.createElement('div');
+                chatEl.className = 'task-chat-line';
+                chatEl.textContent = t.last_chat_text;
+                card.appendChild(chatEl);
+              }
+
+              const linksEl = document.createElement('div');
+              linksEl.className = 'task-links';
+              const taskBtn = document.createElement('button');
+              taskBtn.className = 'doc-link';
+              taskBtn.textContent = 'Задача';
+              taskBtn.addEventListener('click', () => openPortDoc(t.task_file));
+              linksEl.appendChild(taskBtn);
+              if (t.report_file) {
+                const repBtn = document.createElement('button');
+                repBtn.className = 'doc-link';
+                repBtn.textContent = 'Отчёт';
+                repBtn.addEventListener('click', () => openPortDoc(t.report_file));
+                linksEl.appendChild(repBtn);
+              }
+              card.appendChild(linksEl);
+              col.appendChild(card);
+            });
+
+            boardCols.appendChild(col);
+          });
+        }
+
+        if (stateVal === 'all' || stateVal === 'not_started') {
+          const regList = (boardData.not_started_register || []).filter(r => {
+            if (areaVal !== 'all' && r.area !== areaVal) return false;
+            if (q && !(r.id + ' ' + r.name + ' ' + r.area).toLowerCase().includes(q)) return false;
+            return true;
+          }).slice(0, 40);
+          if (regList.length > 0) {
+            const col = document.createElement('div');
+            col.className = 'board-col';
+            const colHead = document.createElement('div');
+            colHead.className = 'board-col-title';
+            const titleSpan = document.createElement('span');
+            titleSpan.textContent = 'Реестр без задачи (not started)';
+            const countSpan = document.createElement('span');
+            countSpan.textContent = String((boardData.not_started_register || []).length);
+            colHead.appendChild(titleSpan);
+            colHead.appendChild(countSpan);
+            col.appendChild(colHead);
+
+            regList.forEach(r => {
+              const card = document.createElement('div');
+              card.className = 'task-card';
+              const top = document.createElement('div');
+              top.className = 'task-card-top';
+              const idEl = document.createElement('span');
+              idEl.className = 'task-id';
+              idEl.textContent = r.id;
+              const areaEl = document.createElement('span');
+              areaEl.className = 'idle-badge';
+              areaEl.textContent = r.area || '';
+              top.appendChild(idEl);
+              top.appendChild(areaEl);
+              const titleEl = document.createElement('div');
+              titleEl.className = 'task-title';
+              titleEl.textContent = r.name;
+              card.appendChild(top);
+              card.appendChild(titleEl);
+              col.appendChild(card);
+            });
+            boardCols.appendChild(col);
+          }
+        }
+      }
+
+      async function fetchBoard(forceRefresh) {
+        try {
+          const res = await fetch(`/api/task-board${forceRefresh ? '?refresh=1' : ''}`);
+          if (!res.ok) return;
+          boardData = await res.json();
+          renderBoard();
+        } catch (err) {
+          console.warn('Error fetching task board:', err);
+        }
+      }
+
+      [filterOwner, filterState, filterArea].forEach(el => el.addEventListener('change', renderBoard));
+      filterSearch.addEventListener('input', renderBoard);
+      refreshBoardBtn.addEventListener('click', () => fetchBoard(true));
+      setInterval(() => {
+        if (boardView.classList.contains('visible')) {
+          fetchBoard(false);
+        }
+      }, 30000);
     })();
   </script>
 </body>

@@ -22,7 +22,8 @@ C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics\Scripts\Tools\agen
      * Разрешено: ответы на вопросы по коду (read-only), ревью, архитектурные планы, исследования, аудит, правка TypeScript/HTML в Training Ground или Tools.
      * Запрещено НИКОГДА (без исключений, даже по просьбе в чате): трогать C++ / Source/**, Config/**, ветку main и файлы основной папки проекта (кроме своих отчётов в docs/port/gemini/outbox/), изменять Content/Maps/**, .uasset, Content/Data/LevelJson/L_Gen_Depot_1.json.
    - Сформируй ответ и отправь его в чат:
-     $env:CODEX_AGENT = "gemini"; python "C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics\Scripts\Tools\agent_chat.py" post --as gemini --to <отправитель|all> --topic "<тема>" --text "<твой ответ>"
+     $env:CODEX_AGENT = "gemini"; python "C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics\Scripts\Tools\agent_chat.py" post --as gemini --to <отправитель|all> --topic "<id-задачи>" --text "<твой ответ>"
+   - Правило живой доски задач: ВСЕГДА передавай `--topic <id-задачи>` (например `gemini-030`, `gemini-031`, `codex-008`) в каждом сообщении о задаче.
    - В чат пиши ТОЛЬКО результат с хешем коммита или настоящий вопрос; строки «принял» / «начинаю» не пиши (каждое сообщение будит Claude и тратит его токены).
    - Сразу после отправки ответа вернись на шаг 1 и снова вызови wait --as gemini.
 
