@@ -32,5 +32,5 @@ only - so work in SMALL steps and check after each one. Reply to the designer in
 ## Every task, the same way (template: docs/port/gemini/TASK_TEMPLATE.md)
 1. First commit = PLAN only: steps + the exact files you will touch -> one chat line; wait for Claude's OK if the task says so.
 2. Small commits, one working part each, build / tests after each.
-3. Before "done": run `Scripts/Tools/gemini_gate.ps1 -Task <NNN>` (build, -Smart tests, Jev, allowed paths, citation check) and paste its summary.
+3. Before "done": run `Scripts/Tools/gemini_gate.ps1 -Task <NNN>` (build, -Smart tests, Jev, allowed paths, citation check) and paste its summary. **Any C++ change: `-SonnetReview` is MANDATORY** (green tests are not quality); fix every HIGH and answer every MEDIUM (fixed / why not) in the report.
 4. Report in outbox with an evidence field for every claim. Chat: `--topic gemini-<NNN>`, only "N done <hash>" or a real question.
