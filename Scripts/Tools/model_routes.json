@@ -1,0 +1,18 @@
+{
+  "schema": "codex.model_routes/1",
+  "note": "Router level (1 trivial .. 4 hardest, from Scripts/Tools/model_router.py --classify via Jev) -> model per agent. The level is model-agnostic; each agent maps it to its own models. Claude's map lives in .claude/model_router.json (unchanged). Exact model ids are verified by each agent against its provider before use.",
+  "providers": {
+    "codex": {
+      "models": {"luna": "gpt-6-luna", "sol": "gpt-6.1-sol", "terra": "gpt-6.1-terra", "astra": "gpt-6-astra"},
+      "levels": {"1": "luna", "2": "sol", "3": "terra", "4": "astra"},
+      "local_first_for_level_1": true
+    },
+    "gemini": {
+      "models": {"flash": "gemini-3.8-flash", "pro": "gemini-3.1-pro"},
+      "levels": {"1": "flash", "2": "flash", "3": "pro", "4": "pro"},
+      "local_first_for_level_1": true,
+      "where": "Antigravity: pick the model per task in the UI; headless runs (gemini_agent.ps1 -Model, the dispatcher) pass it automatically"
+    },
+    "local": {"models": {"codex-local": "codex-local (qwen3-coder:30b via Ollama)"}, "levels": {"1": "codex-local"}}
+  }
+}
