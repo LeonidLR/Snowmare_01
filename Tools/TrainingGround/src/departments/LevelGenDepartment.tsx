@@ -7,7 +7,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle, XCircle, Play, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers } from 'lucide-react';
 import { LayoutView } from './LayoutView';
-import type { LayoutViewHandle } from './LayoutView';
+import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
 import { PropsPanel } from './PropsPanel';
 import type { FormationConfigFile } from '../movement/config';
 import { configValues } from '../movement/config';
@@ -37,6 +37,8 @@ export const LevelGenDepartment: React.FC = () => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [sel, setSel] = useState(0);
   const [layer, setLayer] = useState('all');
+  const [floorMode, setFloorMode] = useState<FloorViewMode>('all');
+  const [showFiringLines, setShowFiringLines] = useState(true);
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [budgetUsd, setBudgetUsd] = useState(2);
@@ -209,19 +211,38 @@ export const LevelGenDepartment: React.FC = () => {
           </section>
 
           <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 min-w-0">
-            <div className="flex flex-wrap items-center gap-3">
-              <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400">{cur ? cur.layout.name : 'Кандидат'}</h3>
-              <select value={layer} onChange={(e) => setLayer(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400 mr-1">{cur ? cur.layout.name : 'Кандидат'}</h3>
+              <div className="inline-flex rounded-lg bg-slate-950 border border-slate-700 p-0.5 text-[11px]">
+                {([['all', 'Все'], ['ground', 'Земля'], ['1', 'Этаж 1'], ['2', 'Этаж 2'], ['roof', 'Крыша']] as const).map(([mode, label]) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    onClick={() => { setFloorMode(mode); setLayer('all'); }}
+                    className={`px-2 py-0.5 rounded ${layer === 'all' && floorMode === mode ? 'bg-cyan-700 text-white' : 'text-slate-300 hover:text-white'}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+              <select value={layer} onChange={(e) => { setLayer(e.target.value); if (e.target.value !== 'all') setFloorMode('all'); }} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
                 {layers.map((l) => <option key={l} value={l}>{l === 'all' ? 'все слои' : l}</option>)}
               </select>
+              <button
+                type="button"
+                onClick={() => setShowFiringLines((v) => !v)}
+                className={`px-2.5 py-1 rounded-lg border text-xs ${showFiringLines ? 'bg-rose-900/60 border-rose-500 text-rose-200' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}
+              >
+                Линии огня
+              </button>
               <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
               <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
               <button onClick={reject} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-800 text-xs text-white hover:bg-rose-700 disabled:opacity-50"><ThumbsDown size={13} />Отклонить</button>
             </div>
             <div className="grid gap-3 lg:grid-cols-2">
               <div>
-                <p className="text-[11px] text-slate-500 mb-1">Кандидат (сверху; синий — обязательный маршрут, голубой — варианты, жёлтый — лестницы, зелёная рамка — крыша проходима)</p>
-                <LayoutView ref={view} layout={cur?.layout ?? null} layer={layer} height={520} marks={marks} />
+                <p className="text-[11px] text-slate-500 mb-1">Кандидат (сверху; синий — маршрут, жёлтый — лестницы, голубой/янтарный — окна/бойницы, зелёный — крыша/парапет, фиол. — перелаз, пунктир — линии огня)</p>
+                <LayoutView ref={view} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} />
               </div>
               <div>
                 <p className="text-[11px] text-slate-500 mb-1">Эталон (карта дизайнера, развёрнутая сверху; синее — его маршрут, жёлтое — лестницы, зелёный круг — старт)</p>
@@ -251,6 +272,9 @@ export const LevelGenDepartment: React.FC = () => {
                   <tr><td className="pr-2 text-slate-500">Обзор</td><td className="font-mono">p50 {cur.ev.sightlines.p50_m} м, p90 {cur.ev.sightlines.p90_m} м, макс {cur.ev.sightlines.max_m} м, короткие {pct(cur.ev.sightlines.short_share)}, коридоры ≥ 80 м: {cur.ev.sightlines.lanes_over_80m}</td></tr>
                   <tr><td className="pr-2 text-slate-500">Вид с крыш</td><td className="font-mono">{(cur.ev.roofViews ?? []).map((r) => `${r.id} +${r.level}: ср. ${r.mean_m} м, макс ${r.longest_m} м`).join('; ') || '—'}</td></tr>
                   <tr><td className="pr-2 text-slate-500">Засады</td><td className="font-mono">{cur.ev.ambush.concealed} / {cur.ev.ambush.points} скрытых точек ({cur.ev.ambush.per100m} на 100 м), скоординированная возможна на {pct(cur.ev.ambush.coordinatedShare)} маршрута</td></tr>
+                  {cur.ev.tactical && (
+                    <tr><td className="pr-2 text-slate-500">Тактика зданий</td><td className="font-mono">оценка {cur.ev.tactical.score}, комнаты {cur.ev.tactical.roomsReachable}/{cur.ev.tactical.roomsTotal}, заблок. окна {cur.ev.tactical.blockedWindows.length}, линии огня {cur.ev.tactical.firingLines.count} ({cur.ev.tactical.firingLines.minLength_m}–{cur.ev.tactical.firingLines.maxLength_m} м), укрытия {pct(cur.ev.tactical.routeCover.share)}, перелазы {cur.ev.tactical.mantle.valid}</td></tr>
+                  )}
                 </tbody>
               </table>
               <details className="text-xs text-slate-300"><summary className="cursor-pointer text-slate-400">Сходство с эталоном по метрикам</summary>
