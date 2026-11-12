@@ -6,7 +6,7 @@ Why: the designer cannot judge the game without sound. Source: Google Cloud bonu
 ## 1. Generation tool (Gemini - Python)
 `Scripts/Tools/audio_gen.py` (+ tests): `music` (Lyria) and `voice` (Gemini TTS) commands; prompts come from manifests
 `Content/Data/Audio/music_cues.json` and `Content/Data/Audio/voice_lines.json`; output WAV into `Saved/AudioGen/<kind>/<id>.wav` + a
-manifest entry (prompt, model, seed, duration, cost). Credentials from the designer's user environment only (never printed / logged);
+manifest entry (prompt, model, seed, duration, cost). Credentials: the SAME Google key as before - GEMINI_API_KEY in the designer's user environment (the 300 $ bonus applies to it; designer 2026-11-12), loaded into the process only, never printed / logged. If a model (e.g. Lyria) is only offered through Vertex AI and the key does not work for it, stop and report what extra setup is needed;
 a spend ledger with a hard cap like `api_task.py` (default 40 $/week of the 300 $), dry-run mode. Model ids / prices are checked
 against Google's docs at implementation time (do not hard-code from memory). An editor-Python importer puts approved WAVs into
 `/Game/Audio/{Music,VO,SFX}` (new folders only, editor closed).
