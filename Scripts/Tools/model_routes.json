@@ -8,7 +8,7 @@
       "local_first_for_level_1": true
     },
     "gemini": {
-      "models": {"flash": "gemini-3.8-flash", "pro": "gemini-3.1-pro"},
+      "models": {"flash": "gemini-3.8-flash", "pro": "gemini-3.1-pro-preview"},
       "levels": {"1": "flash", "2": "flash", "3": "pro", "4": "pro"},
       "local_first_for_level_1": true,
       "where": "Antigravity: pick the model per task in the UI; headless runs (gemini_agent.ps1 -Model, the dispatcher) pass it automatically"
