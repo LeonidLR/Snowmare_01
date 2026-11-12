@@ -1,0 +1,3148 @@
+{
+ "schema": "codex.levelgen_layout/1",
+ "name": "L_Gen_Train_2",
+ "profile": "train_02_checkpoint",
+ "seed": 202,
+ "params": {
+  "size_m": [
+   65,
+   48
+  ],
+  "density": 1,
+  "variants": 2,
+  "verticality": 3
+ },
+ "comment": "Generated layout L_Gen_Train_2",
+ "bounds": {
+  "min": [
+   -2400,
+   -3250
+  ],
+  "max": [
+   2400,
+   3250
+  ]
+ },
+ "ground_z": 0,
+ "spawn": {
+  "pos": [
+   0,
+   -2950
+  ],
+  "yaw": 90
+ },
+ "end": [
+  0,
+  2950
+ ],
+ "walls": [
+  {
+   "id": "B_checkpoint_N_0",
+   "a": [
+    1800,
+    -1050
+   ],
+   "b": [
+    1800,
+    323
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_N_1",
+   "a": [
+    1800,
+    503
+   ],
+   "b": [
+    1800,
+    950
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_S_0",
+   "a": [
+    600,
+    -1050
+   ],
+   "b": [
+    600,
+    950
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_W_0",
+   "a": [
+    1800,
+    -1050
+   ],
+   "b": [
+    600,
+    -1050
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_E_0",
+   "a": [
+    1800,
+    950
+   ],
+   "b": [
+    1513,
+    950
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_E_1",
+   "a": [
+    1333,
+    950
+   ],
+   "b": [
+    600,
+    950
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f0_0_0",
+   "a": [
+    1800,
+    -50
+   ],
+   "b": [
+    1554,
+    -50
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f0_0_1",
+   "a": [
+    1374,
+    -50
+   ],
+   "b": [
+    600,
+    -50
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f0_1_0",
+   "a": [
+    1200,
+    -1050
+   ],
+   "b": [
+    1200,
+    -640
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f0_1_1",
+   "a": [
+    1200,
+    -460
+   ],
+   "b": [
+    1200,
+    -50
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f0_2_0",
+   "a": [
+    1200,
+    -50
+   ],
+   "b": [
+    1200,
+    360
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f0_2_1",
+   "a": [
+    1200,
+    540
+   ],
+   "b": [
+    1200,
+    950
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f1_0_0",
+   "a": [
+    1800,
+    -50
+   ],
+   "b": [
+    1554,
+    -50
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f1_0_1",
+   "a": [
+    1374,
+    -50
+   ],
+   "b": [
+    600,
+    -50
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f1_1_0",
+   "a": [
+    1200,
+    -1050
+   ],
+   "b": [
+    1200,
+    -640
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f1_1_1",
+   "a": [
+    1200,
+    -460
+   ],
+   "b": [
+    1200,
+    -50
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f1_2_0",
+   "a": [
+    1200,
+    -50
+   ],
+   "b": [
+    1200,
+    360
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_part_f1_2_1",
+   "a": [
+    1200,
+    540
+   ],
+   "b": [
+    1200,
+    950
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_bunker_N_0",
+   "a": [
+    -500,
+    1150
+   ],
+   "b": [
+    -500,
+    2450
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_S_0",
+   "a": [
+    -1500,
+    1150
+   ],
+   "b": [
+    -1500,
+    1707
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_S_1",
+   "a": [
+    -1500,
+    1887
+   ],
+   "b": [
+    -1500,
+    2450
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_W_0",
+   "a": [
+    -500,
+    1150
+   ],
+   "b": [
+    -1500,
+    1150
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_E_0",
+   "a": [
+    -500,
+    2450
+   ],
+   "b": [
+    -1500,
+    2450
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_part_f0_0_0",
+   "a": [
+    -500,
+    1605
+   ],
+   "b": [
+    -690,
+    1605
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_part_f0_0_1",
+   "a": [
+    -870,
+    1605
+   ],
+   "b": [
+    -1500,
+    1605
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_part_f0_1_0",
+   "a": [
+    -1000,
+    1150
+   ],
+   "b": [
+    -1000,
+    1288
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_part_f0_1_1",
+   "a": [
+    -1000,
+    1467
+   ],
+   "b": [
+    -1000,
+    1605
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_part_f0_2_0",
+   "a": [
+    -1000,
+    1605
+   ],
+   "b": [
+    -1000,
+    1938
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_bunker_part_f0_2_1",
+   "a": [
+    -1000,
+    2117
+   ],
+   "b": [
+    -1000,
+    2450
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_bunker"
+  },
+  {
+   "id": "B_tower_N_0",
+   "a": [
+    -600,
+    -2250
+   ],
+   "b": [
+    -600,
+    -1450
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tower"
+  },
+  {
+   "id": "B_tower_S_0",
+   "a": [
+    -1400,
+    -2250
+   ],
+   "b": [
+    -1400,
+    -1450
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tower"
+  },
+  {
+   "id": "B_tower_W_0",
+   "a": [
+    -600,
+    -2250
+   ],
+   "b": [
+    -1400,
+    -2250
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tower"
+  },
+  {
+   "id": "B_tower_E_0",
+   "a": [
+    -600,
+    -1450
+   ],
+   "b": [
+    -856,
+    -1450
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tower"
+  },
+  {
+   "id": "B_tower_E_1",
+   "a": [
+    -1036,
+    -1450
+   ],
+   "b": [
+    -1400,
+    -1450
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tower"
+  },
+  {
+   "id": "W_sb_barricade_n",
+   "a": [
+    420,
+    -850
+   ],
+   "b": [
+    420,
+    -450
+   ],
+   "height": 95,
+   "thickness": 25,
+   "kind": "wall"
+  },
+  {
+   "id": "W_sb_barricade_s",
+   "a": [
+    -400,
+    450
+   ],
+   "b": [
+    -400,
+    950
+   ],
+   "height": 95,
+   "thickness": 25,
+   "kind": "wall"
+  }
+ ],
+ "buildings": [
+  {
+   "id": "B_checkpoint",
+   "footprint": [
+    [
+     600,
+     -1050
+    ],
+    [
+     1800,
+     950
+    ]
+   ],
+   "height": 600,
+   "floors": 2,
+   "enterable": true,
+   "roof_walkable": true,
+   "doors": [
+    {
+     "pos": [
+      1423,
+      950
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_E"
+    },
+    {
+     "pos": [
+      1800,
+      413
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_N"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_checkpoint_door_east_1",
+     "kind": "door",
+     "pos": [
+      1423,
+      950
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_E",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_checkpoint_door_north_2",
+     "kind": "door",
+     "pos": [
+      1800,
+      413
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_N",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_checkpoint_win_east_f1_1",
+     "kind": "window",
+     "pos": [
+      1350,
+      950
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_checkpoint_win_east_f0_2",
+     "kind": "window",
+     "pos": [
+      1050,
+      950
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_checkpoint_win_east_f1_2",
+     "kind": "window",
+     "pos": [
+      1050,
+      950
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_checkpoint_lp_south_f0_1",
+     "kind": "loophole",
+     "pos": [
+      600,
+      -725
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f1_1",
+     "kind": "loophole",
+     "pos": [
+      600,
+      -725
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f0_2",
+     "kind": "loophole",
+     "pos": [
+      600,
+      -500
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f1_2",
+     "kind": "loophole",
+     "pos": [
+      600,
+      -500
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f0_3",
+     "kind": "loophole",
+     "pos": [
+      600,
+      -275
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f1_3",
+     "kind": "loophole",
+     "pos": [
+      600,
+      -275
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f0_4",
+     "kind": "loophole",
+     "pos": [
+      600,
+      -50
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f1_4",
+     "kind": "loophole",
+     "pos": [
+      600,
+      -50
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f0_5",
+     "kind": "loophole",
+     "pos": [
+      600,
+      175
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f1_5",
+     "kind": "loophole",
+     "pos": [
+      600,
+      175
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f0_6",
+     "kind": "loophole",
+     "pos": [
+      600,
+      400
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f1_6",
+     "kind": "loophole",
+     "pos": [
+      600,
+      400
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f0_7",
+     "kind": "loophole",
+     "pos": [
+      600,
+      625
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_south_f1_7",
+     "kind": "loophole",
+     "pos": [
+      600,
+      625
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_S",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 180
+    },
+    {
+     "id": "B_checkpoint_lp_west_f0_1",
+     "kind": "loophole",
+     "pos": [
+      1500,
+      -1050
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    },
+    {
+     "id": "B_checkpoint_lp_west_f1_1",
+     "kind": "loophole",
+     "pos": [
+      1500,
+      -1050
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    },
+    {
+     "id": "B_checkpoint_lp_west_f0_2",
+     "kind": "loophole",
+     "pos": [
+      1300,
+      -1050
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    },
+    {
+     "id": "B_checkpoint_lp_west_f1_2",
+     "kind": "loophole",
+     "pos": [
+      1300,
+      -1050
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    },
+    {
+     "id": "B_checkpoint_lp_west_f0_3",
+     "kind": "loophole",
+     "pos": [
+      1100,
+      -1050
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    },
+    {
+     "id": "B_checkpoint_lp_west_f1_3",
+     "kind": "loophole",
+     "pos": [
+      1100,
+      -1050
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    },
+    {
+     "id": "B_checkpoint_lp_west_f0_4",
+     "kind": "loophole",
+     "pos": [
+      900,
+      -1050
+     ],
+     "floor": 0,
+     "wall": "B_checkpoint_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    },
+    {
+     "id": "B_checkpoint_lp_west_f1_4",
+     "kind": "loophole",
+     "pos": [
+      900,
+      -1050
+     ],
+     "floor": 1,
+     "wall": "B_checkpoint_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    }
+   ],
+   "partitions": [
+    {
+     "id": "B_checkpoint_part_f0_0",
+     "start": [
+      1800,
+      -50
+     ],
+     "end": [
+      600,
+      -50
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_checkpoint_partdoor_f0_0",
+       "kind": "door",
+       "pos": [
+        1464,
+        -50
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_checkpoint_part_f0_1",
+     "start": [
+      1200,
+      -1050
+     ],
+     "end": [
+      1200,
+      -50
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_checkpoint_partdoor_f0_1",
+       "kind": "door",
+       "pos": [
+        1200,
+        -550
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_checkpoint_part_f0_2",
+     "start": [
+      1200,
+      -50
+     ],
+     "end": [
+      1200,
+      950
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_checkpoint_partdoor_f0_2",
+       "kind": "door",
+       "pos": [
+        1200,
+        450
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_checkpoint_part_f1_0",
+     "start": [
+      1800,
+      -50
+     ],
+     "end": [
+      600,
+      -50
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_checkpoint_partdoor_f1_0",
+       "kind": "door",
+       "pos": [
+        1464,
+        -50
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_checkpoint_part_f1_1",
+     "start": [
+      1200,
+      -1050
+     ],
+     "end": [
+      1200,
+      -50
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_checkpoint_partdoor_f1_1",
+       "kind": "door",
+       "pos": [
+        1200,
+        -550
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_checkpoint_part_f1_2",
+     "start": [
+      1200,
+      -50
+     ],
+     "end": [
+      1200,
+      950
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_checkpoint_partdoor_f1_2",
+       "kind": "door",
+       "pos": [
+        1200,
+        450
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    }
+   ],
+   "floors_detail": [
+    {
+     "floor": 1,
+     "height_z": 300,
+     "gaps": [
+      {
+       "id": "B_checkpoint_gap_stair_f1",
+       "poly": [
+        [
+         1690,
+         -970
+        ],
+        [
+         1690,
+         -461
+        ],
+        [
+         1610,
+         -461
+        ],
+        [
+         1610,
+         -970
+        ]
+       ],
+       "kind": "stairwell"
+      }
+     ],
+     "rooms": [
+      {
+       "id": "B_checkpoint_r_f1_0",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         1200,
+         -1050
+        ],
+        "max": [
+         1800,
+         -50
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_checkpoint_partdoor_f1_0",
+        "B_checkpoint_partdoor_f1_1"
+       ]
+      },
+      {
+       "id": "B_checkpoint_r_f1_1",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         600,
+         -1050
+        ],
+        "max": [
+         1200,
+         -50
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_checkpoint_partdoor_f1_1"
+       ]
+      },
+      {
+       "id": "B_checkpoint_r_f1_2",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         1200,
+         -50
+        ],
+        "max": [
+         1800,
+         950
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_checkpoint_partdoor_f1_0",
+        "B_checkpoint_partdoor_f1_2"
+       ]
+      },
+      {
+       "id": "B_checkpoint_r_f1_3",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         600,
+         -50
+        ],
+        "max": [
+         1200,
+         950
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_checkpoint_partdoor_f1_2"
+       ]
+      }
+     ]
+    }
+   ],
+   "hatches": [],
+   "parapets": [
+    {
+     "wall_id": "B_checkpoint_parapet_N",
+     "start": [
+      1800,
+      -1050
+     ],
+     "end": [
+      1800,
+      950
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_checkpoint_parapet_S",
+     "start": [
+      600,
+      -1050
+     ],
+     "end": [
+      600,
+      950
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_checkpoint_parapet_W",
+     "start": [
+      1800,
+      -1050
+     ],
+     "end": [
+      600,
+      -1050
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_checkpoint_parapet_E",
+     "start": [
+      1800,
+      950
+     ],
+     "end": [
+      600,
+      950
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    }
+   ],
+   "rooms": [
+    {
+     "id": "B_checkpoint_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       1200,
+       -1050
+      ],
+      "max": [
+       1800,
+       -50
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_checkpoint_partdoor_f0_0",
+      "B_checkpoint_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_checkpoint_r_f0_1",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       600,
+       -1050
+      ],
+      "max": [
+       1200,
+       -50
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_checkpoint_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_checkpoint_r_f0_2",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       1200,
+       -50
+      ],
+      "max": [
+       1800,
+       950
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_checkpoint_door_east_1",
+      "B_checkpoint_door_north_2",
+      "B_checkpoint_partdoor_f0_0",
+      "B_checkpoint_partdoor_f0_2"
+     ]
+    },
+    {
+     "id": "B_checkpoint_r_f0_3",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       600,
+       -50
+      ],
+      "max": [
+       1200,
+       950
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_checkpoint_partdoor_f0_2"
+     ]
+    },
+    {
+     "id": "B_checkpoint_r_f1_0",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       1200,
+       -1050
+      ],
+      "max": [
+       1800,
+       -50
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_checkpoint_partdoor_f1_0",
+      "B_checkpoint_partdoor_f1_1"
+     ]
+    },
+    {
+     "id": "B_checkpoint_r_f1_1",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       600,
+       -1050
+      ],
+      "max": [
+       1200,
+       -50
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_checkpoint_partdoor_f1_1"
+     ]
+    },
+    {
+     "id": "B_checkpoint_r_f1_2",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       1200,
+       -50
+      ],
+      "max": [
+       1800,
+       950
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_checkpoint_partdoor_f1_0",
+      "B_checkpoint_partdoor_f1_2"
+     ]
+    },
+    {
+     "id": "B_checkpoint_r_f1_3",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       600,
+       -50
+      ],
+      "max": [
+       1200,
+       950
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_checkpoint_partdoor_f1_2"
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_checkpoint_win_east_f1_1",
+     "start": [
+      1410,
+      950
+     ],
+     "end": [
+      1290,
+      950
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_checkpoint",
+     "wall": "B_checkpoint_E"
+    },
+    {
+     "id": "me_B_checkpoint_win_east_f0_2",
+     "start": [
+      1110,
+      950
+     ],
+     "end": [
+      990,
+      950
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_checkpoint",
+     "wall": "B_checkpoint_E"
+    },
+    {
+     "id": "me_B_checkpoint_win_east_f1_2",
+     "start": [
+      1110,
+      950
+     ],
+     "end": [
+      990,
+      950
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_checkpoint",
+     "wall": "B_checkpoint_E"
+    },
+    {
+     "id": "me_B_checkpoint_para_N",
+     "start": [
+      1800,
+      -1050
+     ],
+     "end": [
+      1800,
+      950
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_checkpoint"
+    },
+    {
+     "id": "me_B_checkpoint_para_S",
+     "start": [
+      600,
+      -1050
+     ],
+     "end": [
+      600,
+      950
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_checkpoint"
+    },
+    {
+     "id": "me_B_checkpoint_para_W",
+     "start": [
+      1800,
+      -1050
+     ],
+     "end": [
+      600,
+      -1050
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "parapet",
+     "building": "B_checkpoint"
+    },
+    {
+     "id": "me_B_checkpoint_para_E",
+     "start": [
+      1800,
+      950
+     ],
+     "end": [
+      600,
+      950
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "parapet",
+     "building": "B_checkpoint"
+    }
+   ],
+   "stairs": [
+    {
+     "id": "B_checkpoint_stair_0",
+     "pos": [
+      1650,
+      -930
+     ],
+     "from": 0,
+     "to": 1,
+     "kind": "stairwell",
+     "top": [
+      1650,
+      -501
+     ]
+    },
+    {
+     "id": "B_checkpoint_stair_1",
+     "pos": [
+      1450,
+      -930
+     ],
+     "from": 1,
+     "to": 2,
+     "kind": "stairwell",
+     "top": [
+      1450,
+      -501
+     ]
+    }
+   ],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "checkpoint"
+  },
+  {
+   "id": "B_bunker",
+   "footprint": [
+    [
+     -1500,
+     1150
+    ],
+    [
+     -500,
+     2450
+    ]
+   ],
+   "height": 300,
+   "floors": 1,
+   "enterable": true,
+   "roof_walkable": false,
+   "doors": [
+    {
+     "pos": [
+      -1500,
+      1797
+     ],
+     "floor": 0,
+     "wall": "B_bunker_S"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_bunker_door_south_1",
+     "kind": "door",
+     "pos": [
+      -1500,
+      1797
+     ],
+     "floor": 0,
+     "wall": "B_bunker_S",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_bunker_lp_north_f0_1",
+     "kind": "loophole",
+     "pos": [
+      -500,
+      1470
+     ],
+     "floor": 0,
+     "wall": "B_bunker_N",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 0
+    },
+    {
+     "id": "B_bunker_lp_north_f0_2",
+     "kind": "loophole",
+     "pos": [
+      -500,
+      1690
+     ],
+     "floor": 0,
+     "wall": "B_bunker_N",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 0
+    },
+    {
+     "id": "B_bunker_lp_north_f0_3",
+     "kind": "loophole",
+     "pos": [
+      -500,
+      1910
+     ],
+     "floor": 0,
+     "wall": "B_bunker_N",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 0
+    },
+    {
+     "id": "B_bunker_lp_north_f0_4",
+     "kind": "loophole",
+     "pos": [
+      -500,
+      2130
+     ],
+     "floor": 0,
+     "wall": "B_bunker_N",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 0
+    },
+    {
+     "id": "B_bunker_lp_west_f0_1",
+     "kind": "loophole",
+     "pos": [
+      -800,
+      1150
+     ],
+     "floor": 0,
+     "wall": "B_bunker_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    },
+    {
+     "id": "B_bunker_lp_west_f0_2",
+     "kind": "loophole",
+     "pos": [
+      -1000,
+      1150
+     ],
+     "floor": 0,
+     "wall": "B_bunker_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    },
+    {
+     "id": "B_bunker_lp_west_f0_3",
+     "kind": "loophole",
+     "pos": [
+      -1200,
+      1150
+     ],
+     "floor": 0,
+     "wall": "B_bunker_W",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 270
+    }
+   ],
+   "partitions": [
+    {
+     "id": "B_bunker_part_f0_0",
+     "start": [
+      -500,
+      1605
+     ],
+     "end": [
+      -1500,
+      1605
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_bunker_partdoor_f0_0",
+       "kind": "door",
+       "pos": [
+        -780,
+        1605
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_bunker_part_f0_1",
+     "start": [
+      -1000,
+      1150
+     ],
+     "end": [
+      -1000,
+      1605
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_bunker_partdoor_f0_1",
+       "kind": "door",
+       "pos": [
+        -1000,
+        1377
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_bunker_part_f0_2",
+     "start": [
+      -1000,
+      1605
+     ],
+     "end": [
+      -1000,
+      2450
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_bunker_partdoor_f0_2",
+       "kind": "door",
+       "pos": [
+        -1000,
+        2027
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    }
+   ],
+   "floors_detail": [],
+   "hatches": [],
+   "parapets": [],
+   "rooms": [
+    {
+     "id": "B_bunker_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1000,
+       1150
+      ],
+      "max": [
+       -500,
+       1605
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_bunker_partdoor_f0_0",
+      "B_bunker_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_bunker_r_f0_1",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1500,
+       1150
+      ],
+      "max": [
+       -1000,
+       1605
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_bunker_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_bunker_r_f0_2",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1000,
+       1605
+      ],
+      "max": [
+       -500,
+       2450
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_bunker_partdoor_f0_0",
+      "B_bunker_partdoor_f0_2"
+     ]
+    },
+    {
+     "id": "B_bunker_r_f0_3",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1500,
+       1605
+      ],
+      "max": [
+       -1000,
+       2450
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_bunker_door_south_1",
+      "B_bunker_partdoor_f0_2"
+     ]
+    }
+   ],
+   "mantle_edges": [],
+   "stairs": [],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "bunker"
+  },
+  {
+   "id": "B_tower",
+   "footprint": [
+    [
+     -1400,
+     -2250
+    ],
+    [
+     -600,
+     -1450
+    ]
+   ],
+   "height": 600,
+   "floors": 2,
+   "hollow": true,
+   "enterable": true,
+   "roof_walkable": true,
+   "doors": [
+    {
+     "pos": [
+      -946,
+      -1450
+     ],
+     "floor": 0,
+     "wall": "B_tower_E"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_tower_door_east_1",
+     "kind": "door",
+     "pos": [
+      -946,
+      -1450
+     ],
+     "floor": 0,
+     "wall": "B_tower_E",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_tower_lp_north_f0_1",
+     "kind": "loophole",
+     "pos": [
+      -600,
+      -1950
+     ],
+     "floor": 0,
+     "wall": "B_tower_N",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 0
+    },
+    {
+     "id": "B_tower_lp_north_f0_2",
+     "kind": "loophole",
+     "pos": [
+      -600,
+      -1750
+     ],
+     "floor": 0,
+     "wall": "B_tower_N",
+     "width": 30,
+     "sill_height": 120,
+     "top_height": 150,
+     "yaw": 0
+    }
+   ],
+   "partitions": [],
+   "floors_detail": [],
+   "hatches": [
+    {
+     "id": "B_tower_roof_hatch",
+     "pos": [
+      -1220,
+      -1630
+     ],
+     "floor": 0,
+     "size": [
+      100,
+      100
+     ],
+     "ladder_id": "LAD_B_tower_hatch"
+    }
+   ],
+   "parapets": [
+    {
+     "wall_id": "B_tower_parapet_N",
+     "start": [
+      -600,
+      -2250
+     ],
+     "end": [
+      -600,
+      -1450
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_tower_parapet_S",
+     "start": [
+      -1400,
+      -2250
+     ],
+     "end": [
+      -1400,
+      -1450
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_tower_parapet_W",
+     "start": [
+      -600,
+      -2250
+     ],
+     "end": [
+      -1400,
+      -2250
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_tower_parapet_E",
+     "start": [
+      -600,
+      -1450
+     ],
+     "end": [
+      -1400,
+      -1450
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    }
+   ],
+   "rooms": [
+    {
+     "id": "B_tower_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1400,
+       -2250
+      ],
+      "max": [
+       -600,
+       -1450
+      ]
+     },
+     "kind": "hall",
+     "door_ids": [
+      "B_tower_door_east_1"
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_tower_para_N",
+     "start": [
+      -600,
+      -2250
+     ],
+     "end": [
+      -600,
+      -1450
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_tower"
+    },
+    {
+     "id": "me_B_tower_para_S",
+     "start": [
+      -1400,
+      -2250
+     ],
+     "end": [
+      -1400,
+      -1450
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_tower"
+    },
+    {
+     "id": "me_B_tower_para_W",
+     "start": [
+      -600,
+      -2250
+     ],
+     "end": [
+      -1400,
+      -2250
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "parapet",
+     "building": "B_tower"
+    },
+    {
+     "id": "me_B_tower_para_E",
+     "start": [
+      -600,
+      -1450
+     ],
+     "end": [
+      -1400,
+      -1450
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "parapet",
+     "building": "B_tower"
+    }
+   ],
+   "stairs": [],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "tower"
+  }
+ ],
+ "ladders": [
+  {
+   "id": "LAD_B_checkpoint",
+   "pos": [
+    1335,
+    -1060
+   ],
+   "yaw": 270,
+   "rungs": 16,
+   "plinth_cm": 17.6,
+   "from": "ground",
+   "to": "roof:B_checkpoint",
+   "level_from": 0,
+   "level_to": 2,
+   "foot": [
+    1335,
+    -1160
+   ],
+   "top": [
+    1335,
+    -950
+   ]
+  },
+  {
+   "id": "LAD_B_tower_hatch",
+   "pos": [
+    -1230,
+    -1630
+   ],
+   "yaw": 180,
+   "rungs": 16,
+   "plinth_cm": 17.6,
+   "from": "ground",
+   "to": "roof:B_tower",
+   "level_from": 0,
+   "level_to": 2,
+   "foot": [
+    -1330,
+    -1630
+   ],
+   "top": [
+    -1120,
+    -1630
+   ]
+  }
+ ],
+ "covers": [
+  {
+   "id": "C_sb_w1",
+   "kind": "sandbag",
+   "pos": [
+    280,
+    -2050
+   ],
+   "size": [
+    260,
+    75,
+    90
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_sb_w2",
+   "kind": "sandbag",
+   "pos": [
+    -280,
+    -1650
+   ],
+   "size": [
+    260,
+    75,
+    90
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_sb_c1",
+   "kind": "sandbag",
+   "pos": [
+    250,
+    -350
+   ],
+   "size": [
+    260,
+    75,
+    90
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_sb_c2",
+   "kind": "sandbag",
+   "pos": [
+    -280,
+    50
+   ],
+   "size": [
+    260,
+    75,
+    90
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_j_e1",
+   "kind": "jersey",
+   "pos": [
+    300,
+    1550
+   ],
+   "size": [
+    280,
+    65,
+    95
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_cr_e2",
+   "kind": "crate",
+   "pos": [
+    -250,
+    2150
+   ],
+   "size": [
+    160,
+    120,
+    120
+   ],
+   "yaw": 90
+  }
+ ],
+ "zones": [
+  {
+   "id": "Z_road",
+   "kind": "corridor",
+   "set_piece": "street",
+   "poly": [
+    [
+     400,
+     -3250
+    ],
+    [
+     400,
+     3250
+    ],
+    [
+     -400,
+     3250
+    ],
+    [
+     -400,
+     -3250
+    ]
+   ]
+  },
+  {
+   "id": "Z_checkpoint",
+   "kind": "open",
+   "set_piece": "checkpoint",
+   "poly": [
+    [
+     2000,
+     -1450
+    ],
+    [
+     2000,
+     1350
+    ],
+    [
+     400,
+     1350
+    ],
+    [
+     400,
+     -1450
+    ]
+   ]
+  },
+  {
+   "id": "Z_tower_post",
+   "kind": "open",
+   "set_piece": "bunker",
+   "poly": [
+    [
+     -400,
+     -2450
+    ],
+    [
+     -400,
+     2750
+    ],
+    [
+     -2000,
+     2750
+    ],
+    [
+     -2000,
+     -2450
+    ]
+   ]
+  }
+ ],
+ "routes": [
+  {
+   "id": "R_main",
+   "pace": "walk",
+   "points": [
+    [
+     0,
+     -2950
+    ],
+    [
+     0,
+     -1750
+    ],
+    [
+     -300,
+     -1270
+    ],
+    [
+     -946,
+     -1270
+    ],
+    [
+     -946,
+     -1630
+    ],
+    [
+     -1330,
+     -1630
+    ],
+    [
+     -1120,
+     -1630
+    ],
+    [
+     -900,
+     -1950
+    ],
+    [
+     -1120,
+     -1630
+    ],
+    [
+     -1330,
+     -1630
+    ],
+    [
+     -946,
+     -1630
+    ],
+    [
+     -946,
+     -1270
+    ],
+    [
+     0,
+     -1050
+    ],
+    [
+     50,
+     1250
+    ],
+    [
+     600,
+     1130
+    ],
+    [
+     1423,
+     1130
+    ],
+    [
+     1423,
+     770
+    ],
+    [
+     1650,
+     -930
+    ],
+    [
+     1650,
+     -501
+    ],
+    [
+     1450,
+     -930
+    ],
+    [
+     1450,
+     -501
+    ],
+    [
+     1200,
+     -50
+    ],
+    [
+     1335,
+     -950
+    ],
+    [
+     1335,
+     -1160
+    ],
+    [
+     50,
+     -1350
+    ],
+    [
+     0,
+     1350
+    ],
+    [
+     0,
+     2950
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "roof:B_tower",
+    "roof:B_tower",
+    "roof:B_tower",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "floor:B_checkpoint:1",
+    "floor:B_checkpoint:1",
+    "roof:B_checkpoint",
+    "roof:B_checkpoint",
+    "roof:B_checkpoint",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [
+    {
+     "at": 6,
+     "via": "LAD_B_tower_hatch"
+    },
+    {
+     "at": 9,
+     "via": "LAD_B_tower_hatch"
+    },
+    {
+     "at": 18,
+     "via": "B_checkpoint_stair_0"
+    },
+    {
+     "at": 20,
+     "via": "B_checkpoint_stair_1"
+    },
+    {
+     "at": 23,
+     "via": "LAD_B_checkpoint"
+    }
+   ],
+   "mandatory": true
+  },
+  {
+   "id": "V1_bunker_breach",
+   "pace": "walk",
+   "points": [
+    [
+     0,
+     -2950
+    ],
+    [
+     0,
+     -1250
+    ],
+    [
+     -100,
+     850
+    ],
+    [
+     -1800,
+     850
+    ],
+    [
+     -1800,
+     1797
+    ],
+    [
+     -1680,
+     1797
+    ],
+    [
+     -1320,
+     1797
+    ],
+    [
+     -1680,
+     1797
+    ],
+    [
+     -1600,
+     2750
+    ],
+    [
+     0,
+     2950
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "bunker",
+    "street"
+   ]
+  },
+  {
+   "id": "V2_road_push",
+   "pace": "walk",
+   "points": [
+    [
+     0,
+     -2950
+    ],
+    [
+     0,
+     -1150
+    ],
+    [
+     0,
+     550
+    ],
+    [
+     0,
+     1950
+    ],
+    [
+     0,
+     2950
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "checkpoint",
+    "street"
+   ]
+  }
+ ],
+ "spawn_points": [
+  {
+   "id": "SP_west",
+   "pos": [
+    0,
+    -2950
+   ],
+   "kind": "edge"
+  }
+ ],
+ "ambush_points": [
+  {
+   "id": "AMB_cp_w",
+   "pos": [
+    1000,
+    -1250
+   ]
+  },
+  {
+   "id": "AMB_bunker_nw",
+   "pos": [
+    -500,
+    850
+   ]
+  },
+  {
+   "id": "AMB_tower_n",
+   "pos": [
+    -300,
+    -1850
+   ]
+  }
+ ],
+ "patrol_routes": [
+  {
+   "id": "PAT_checkpoint",
+   "points": [
+    [
+     100,
+     -1250
+    ],
+    [
+     100,
+     1350
+    ],
+    [
+     -200,
+     1350
+    ],
+    [
+     -200,
+     -1250
+    ]
+   ]
+  }
+ ],
+ "mantle_edges": [
+  {
+   "id": "me_C_sb_w1",
+   "start": [
+    280,
+    -2175
+   ],
+   "end": [
+    280,
+    -1925
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_sb_w2",
+   "start": [
+    -280,
+    -1775
+   ],
+   "end": [
+    -280,
+    -1525
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_sb_c1",
+   "start": [
+    250,
+    -475
+   ],
+   "end": [
+    250,
+    -225
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_sb_c2",
+   "start": [
+    -280,
+    -75
+   ],
+   "end": [
+    -280,
+    175
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_j_e1",
+   "start": [
+    300,
+    1416
+   ],
+   "end": [
+    300,
+    1684
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_cr_e2",
+   "start": [
+    -250,
+    2073
+   ],
+   "end": [
+    -250,
+    2227
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 120,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_W_sb_barricade_n",
+   "start": [
+    420,
+    -850
+   ],
+   "end": [
+    420,
+    -450
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_W_sb_barricade_s",
+   "start": [
+    -400,
+    450
+   ],
+   "end": [
+    -400,
+    950
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_B_checkpoint_win_east_f1_1",
+   "start": [
+    1410,
+    950
+   ],
+   "end": [
+    1290,
+    950
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_checkpoint",
+   "wall": "B_checkpoint_E"
+  },
+  {
+   "id": "me_B_checkpoint_win_east_f0_2",
+   "start": [
+    1110,
+    950
+   ],
+   "end": [
+    990,
+    950
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_checkpoint",
+   "wall": "B_checkpoint_E"
+  },
+  {
+   "id": "me_B_checkpoint_win_east_f1_2",
+   "start": [
+    1110,
+    950
+   ],
+   "end": [
+    990,
+    950
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_checkpoint",
+   "wall": "B_checkpoint_E"
+  },
+  {
+   "id": "me_B_checkpoint_para_N",
+   "start": [
+    1800,
+    -1050
+   ],
+   "end": [
+    1800,
+    950
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "me_B_checkpoint_para_S",
+   "start": [
+    600,
+    -1050
+   ],
+   "end": [
+    600,
+    950
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "me_B_checkpoint_para_W",
+   "start": [
+    1800,
+    -1050
+   ],
+   "end": [
+    600,
+    -1050
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "parapet",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "me_B_checkpoint_para_E",
+   "start": [
+    1800,
+    950
+   ],
+   "end": [
+    600,
+    950
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "parapet",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "me_B_tower_para_N",
+   "start": [
+    -600,
+    -2250
+   ],
+   "end": [
+    -600,
+    -1450
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_tower"
+  },
+  {
+   "id": "me_B_tower_para_S",
+   "start": [
+    -1400,
+    -2250
+   ],
+   "end": [
+    -1400,
+    -1450
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_tower"
+  },
+  {
+   "id": "me_B_tower_para_W",
+   "start": [
+    -600,
+    -2250
+   ],
+   "end": [
+    -1400,
+    -2250
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "parapet",
+   "building": "B_tower"
+  },
+  {
+   "id": "me_B_tower_para_E",
+   "start": [
+    -600,
+    -1450
+   ],
+   "end": [
+    -1400,
+    -1450
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "parapet",
+   "building": "B_tower"
+  }
+ ],
+ "pressure": {
+  "first_event_sec": 30,
+  "interval_sec": 90,
+  "group_min": 2,
+  "group_max": 4,
+  "max_alive": 8,
+  "patrol_share": 0.3,
+  "seed": 202,
+  "ambush": {
+   "points": [
+    [
+     1000,
+     -1250
+    ],
+    [
+     -500,
+     850
+    ],
+    [
+     -300,
+     -1850
+    ]
+   ],
+   "coordinated": {
+    "share": 0.5,
+    "max_alive": 8
+   }
+  }
+ }
+}

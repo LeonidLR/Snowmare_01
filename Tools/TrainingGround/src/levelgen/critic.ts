@@ -77,10 +77,22 @@ const SYSTEM = [
 /** The text part of the critic prompt (shared by the real call and the dry run). */
 export function criticPrompt(o: Pick<ClaudeCriticOptions, 'layoutName' | 'evaluation' | 'profile'>): string {
   const ev = o.evaluation;
+  const tac = ev.tactical;
   const brief = {
     layout: o.layoutName, score: ev.score, route: { completable: ev.route.completable, fail: ev.route.fail, length_m: ev.route.length_m, layers: ev.route.layers },
     variants: ev.variants.map((v) => ({ id: v.id, ok: v.completable, length_m: v.length_m, fail: v.fail, ...(v.intent ? { intent: v.intent, intended: true } : {}) })),
     mechanics: ev.mechanics, sightlines: ev.sightlines, roof_views: ev.roofViews, kill_zones_intended: ev.killZones, ambush: ev.ambush, counts: ev.counts, similarity: ev.similarity,
+    tactical: {
+      score: tac.score,
+      rooms: `${tac.roomsReachable}/${tac.roomsTotal}`,
+      unreachable_rooms: tac.unreachableRooms,
+      blocked_windows: tac.blockedWindows.map((w) => `${w.id}: ${w.reason}`),
+      firing_lines: { openingsTotal: tac.firingLines.openingsTotal, openingsWithLos: tac.firingLines.openingsWithLos, count: tac.firingLines.count, maxLength_m: tac.firingLines.maxLength_m },
+      route_cover: tac.routeCover,
+      multi_level_routes: tac.multiLevelRoutes,
+      mantle: tac.mantle,
+      buildings: tac.buildings.filter((b) => b.isCombatBuilding).map((b) => ({ id: b.id, score: b.score, rooms: `${b.roomsReachable}/${b.roomsTotal}`, roofReachable: b.roofReachable, blocked: b.blockedWindows.length })),
+    },
   };
   const ref = { id: o.profile.id, size_m: o.profile.bounds.max, targets: o.profile.targets, set_pieces: o.profile.set_pieces, densities: o.profile.densities.covers_per_100m2,
     sightlines: o.profile.sightlines.stats_m, route_m: o.profile.route.main.length_m, variants: o.profile.route.variants.length, ladders: o.profile.ladders.length };
@@ -175,7 +187,17 @@ export function jevState(ev: Evaluation, profile: Profile): Record<string, unkno
   return {
     candidate: { score: ev.score, route_completable: ev.route.completable, route_fail: ev.route.fail ?? null, route_length_m: ev.route.length_m, variants_ok: ev.variants.filter((v) => v.completable).length, variants: ev.variants.length,
       mechanics: ev.mechanics, sightlines: ev.sightlines, roof_views: ev.roofViews, intended_kill_zones: ev.killZones.map((k) => `${k.route}: ${k.in_zone_m} m, ${k.ways_out} ways out (intended)`),
-      ambush: ev.ambush, counts: ev.counts, similarity: ev.similarity.score, misses: ev.similarity.metrics.filter((m) => m.score < 1).map((m) => `${m.key} ${m.value} (target ${m.target?.join('..')})`) },
+      ambush: ev.ambush, counts: ev.counts, similarity: ev.similarity.score, misses: ev.similarity.metrics.filter((m) => m.score < 1).map((m) => `${m.key} ${m.value} (target ${m.target?.join('..')})`),
+      tactical: {
+        score: ev.tactical.score,
+        rooms_reachable: `${ev.tactical.roomsReachable}/${ev.tactical.roomsTotal}`,
+        unreachable_rooms: ev.tactical.unreachableRooms.length,
+        blocked_windows: ev.tactical.blockedWindows.length,
+        firing_lines: ev.tactical.firingLines.count,
+        route_cover_share: ev.tactical.routeCover.share,
+        multi_level_routes: ev.tactical.multiLevelRoutes.count,
+        mantle_edges: ev.tactical.mantle.valid,
+      } },
     reference: { id: profile.id, size_m: profile.bounds.max, targets: profile.targets, set_pieces: profile.set_pieces },
   };
 }
@@ -205,21 +227,33 @@ export async function jevCritic(o: { evaluation: Evaluation; profile: Profile; e
 
 // ---- mock / offline heuristic ---------------------------------------------------------------------------------------------
 
-/** Deterministic judgment from the evaluation alone: fits when the route completes and the similarity is >= 0.75. */
+/** Deterministic judgment from the evaluation alone: fits when the route completes, similarity >= 0.75, and combat buildings have no unreachable rooms/roofs or blocked windows. */
 export function mockCritic(ev: Evaluation): CriticVerdict {
   const misses = ev.similarity.metrics.filter((m) => m.score < 1);
-  const fits = ev.route.completable && ev.similarity.score >= 0.75 && ev.variants.every((v) => v.completable);
+  const tac = ev.tactical;
+  const roofUnreachable = tac.buildings.filter((b) => !b.roofReachable).map((b) => b.id);
+  const tacticalOk = tac.unreachableRooms.length === 0 && tac.blockedWindows.length === 0 && roofUnreachable.length === 0;
+  const fits = ev.route.completable && ev.similarity.score >= 0.75 && ev.variants.every((v) => v.completable) && tacticalOk;
   const reasons = [
     ev.route.completable ? `the mandatory route completes (${ev.route.length_m} m)` : `the mandatory route FAILS: ${ev.route.fail}`,
     ...ev.variants.filter((v) => !v.completable).map((v) => `variant ${v.id} fails: ${v.fail}`),
     ...ev.killZones.map((k) => `${k.route} is an intended kill zone (${k.in_zone_m} m, ${k.ways_out} ways out) - by design`),
+    ...(tac.unreachableRooms.length ? [`unreachable rooms: ${tac.unreachableRooms.slice(0, 3).join(', ')}`] : []),
+    ...(tac.blockedWindows.length ? [`${tac.blockedWindows.length} blocked window(s) opening into a wall`] : []),
+    ...(roofUnreachable.length ? [`unreachable roof(s): ${roofUnreachable.join(', ')}`] : []),
+    `tactical ${tac.score} (rooms ${tac.roomsReachable}/${tac.roomsTotal}, firing lines ${tac.firingLines.count} up to ${tac.firingLines.maxLength_m} m, cover ${Math.round(tac.routeCover.share * 100)}%, mantle ${tac.mantle.valid})`,
     `similarity ${ev.similarity.score}${misses.length ? `; off target: ${misses.map((m) => `${m.key} ${m.value}`).join(', ')}` : ''}`,
     `ambush ${ev.ambush.per100m} concealed spots / 100 m`, `sightlines p50 ${ev.sightlines.p50_m} m, lanes ${ev.sightlines.lanes_over_80m}`,
   ].slice(0, 6);
   const worst = [...misses].sort((a, b) => a.score - b.score)[0];
-  const quality = !ev.route.completable ? 1 : ev.similarity.score >= 0.9 && ev.ambush.per100m >= 2 ? 5 : ev.similarity.score >= 0.75 ? 4 : ev.similarity.score >= 0.5 ? 3 : 2;
+  const fixes: string[] = [];
+  if (tac.unreachableRooms.length) fixes.push(`connect unreachable rooms (${tac.unreachableRooms[0]}) via doors/stairs`);
+  if (tac.blockedWindows.length) fixes.push(`clear wall obstruction in front of ${tac.blockedWindows[0].id}`);
+  if (roofUnreachable.length) fixes.push(`add stair/ladder/hatch to roof of ${roofUnreachable[0]}`);
+  if (worst) fixes.push(`bring ${worst.key} (${worst.value}) into ${worst.target?.join('..')}`);
+  const quality = !ev.route.completable || !tacticalOk ? 1 : ev.similarity.score >= 0.9 && ev.ambush.per100m >= 2 ? 5 : ev.similarity.score >= 0.75 ? 4 : ev.similarity.score >= 0.5 ? 3 : 2;
   return { client: 'mock', model: 'mock', fits, confidence: ev.route.completable ? Math.min(1, 0.5 + ev.similarity.score / 2) : 0.1, quality, reasons,
-    fixes: worst ? [`bring ${worst.key} (${worst.value}) into ${worst.target?.join('..')}`] : [], weakest: worst?.key ?? null, costUsd: 0, usage: { input_tokens: 0, output_tokens: 0 }, offline: true, at: new Date().toISOString() };
+    fixes: fixes.slice(0, 4), weakest: fixes[0] ?? worst?.key ?? null, costUsd: 0, usage: { input_tokens: 0, output_tokens: 0 }, offline: true, at: new Date().toISOString() };
 }
 
 /** One line per verdict for the report. */
