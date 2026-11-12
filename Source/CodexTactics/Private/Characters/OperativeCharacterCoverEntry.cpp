@@ -194,7 +194,8 @@ EOperativeOrderResult AOperativeCharacter::OrderCoverSwitchResolved(const FCover
 	const ECoverFacing OldFacing = CoverFacing;
 	const bool bWasInCover = bInCover;
 	const FVector From = GetActorLocation();
-	const EOperativeOrderResult Result = OrderTakeCover(Slot, true);
+	const bool bDashFast = !IsInStealthMode() || IsStealthFast();
+	const EOperativeOrderResult Result = OrderTakeCover(Slot, bDashFast);
 	if (Result == EOperativeOrderResult::Accepted && bHasPendingCover)
 	{
 		bCoverSwitchPending = true;

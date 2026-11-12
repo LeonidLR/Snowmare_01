@@ -1240,7 +1240,8 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 			{
 				Member->SetPendingCoverWrap(*MemberWrap);
 			}
-			const FVector Planned = Squad->PlanMove(Member, MemberSlot.WorldLocation, true, Radius);
+			const bool bMemberSprint = Member->IsInStealthMode() ? bSprintOrder : true;
+			const FVector Planned = Squad->PlanMove(Member, MemberSlot.WorldLocation, bMemberSprint, Radius);
 			if (Feedback)
 			{
 				Feedback->SpawnWaypointMarker(Planned);
@@ -1274,7 +1275,8 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	auto SendProne = [&](AOperativeCharacter* Member, int32 SpotIndex)
 	{
 		FVector Destination;
-		if (!ProneSpots.IsValidIndex(SpotIndex) || !Squad->OrderGroupCoverProne(Member, ProneSpots[SpotIndex], FaceYaw, true, bPlan, Radius, Destination))
+		const bool bMemberSprint = Member->IsInStealthMode() ? bSprintOrder : true;
+		if (!ProneSpots.IsValidIndex(SpotIndex) || !Squad->OrderGroupCoverProne(Member, ProneSpots[SpotIndex], FaceYaw, bMemberSprint, bPlan, Radius, Destination))
 		{
 			return false;
 		}

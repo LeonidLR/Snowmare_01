@@ -931,7 +931,8 @@ void UTacticalSightSubsystem::Update()
 					|| PerceptionRules::IsInFieldOfView(Params, Enemy->GetActorLocation(), Enemy->GetActorForwardVector(), Operative->GetActorLocation());
 			}
 			const bool bVisual = bFacing && !bCoverHidden && Distance <= EnemySightCm * RangeScale && HasClearSight(Eye, ProfilePoint(*Operative));
-			const bool bPerceives = bVisual || IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance()) * NoiseScale;
+			const EOperativeStance NoiseStance = Operative->IsStealthFast() ? EOperativeStance::Standing : Operative->GetStance();
+			const bool bPerceives = bVisual || IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(NoiseStance) * NoiseScale;
 			if (bVisual)
 			{
 				Operative->SetStealthMode(false);

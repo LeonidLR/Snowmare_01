@@ -451,7 +451,8 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 			return true; // the second click of a double-click: the squad's wall order at that corner already runs
 		}
 		const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
-		if (OrderGroupCover(Operative, Face.Corner, false, Flow ? Flow->GetPauseOrderRadius() : 1200.f))
+		const bool bGroupSprint = Operative && Operative->IsInStealthMode() ? bDouble : false;
+		if (OrderGroupCover(Operative, Face.Corner, bGroupSprint, Flow ? Flow->GetPauseOrderRadius() : 1200.f))
 		{
 			bOrdered = true;
 			Result = EOperativeOrderResult::Accepted;
@@ -644,7 +645,8 @@ bool ACodexTacticsPlayerController::PlanRunCornerPeekClick(AOperativeCharacter* 
 	else if (Group == RunCornerPeekRules::EGroup::Formation)
 	{
 		// The squad's wall order there is planned (PlanFormationWall, ordered on the release); its carried peek starts then (TickSquadPeekCarry).
-		if (OrderGroupCover(Operative, Face.Corner, true, Radius))
+		const bool bGroupSprint = Operative && Operative->IsInStealthMode() ? bSprint : true;
+		if (OrderGroupCover(Operative, Face.Corner, bGroupSprint, Radius))
 		{
 			bPlanned = true;
 			if (Squad->HasPlannedFormationWall())

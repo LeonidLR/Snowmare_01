@@ -76,8 +76,8 @@ EOperativeOrderResult AOperativeCharacter::OrderCoverWrap(const FCoverWrapPlan& 
 	}
 	if (Stance == EOperativeStance::Prone)
 	{
-		// As the shimmy (rev 2026-10-19): no prone wrap - he gets up first (low cover crouched, high cover standing), then goes round.
-		const EOperativeStance Up = CurrentCoverHeight == ECoverHeight::LowCover ? EOperativeStance::Crouching : EOperativeStance::Standing;
+		// As the shimmy (rev 2026-10-19): no prone wrap - he gets up first (in stealth or low cover crouched, high cover standing), then goes round.
+		const EOperativeStance Up = (IsInStealthMode() || CurrentCoverHeight == ECoverHeight::LowCover) ? EOperativeStance::Crouching : EOperativeStance::Standing;
 		const float Rise = GetStanceChangeDelay(EOperativeStance::Prone, Up);
 		SetStance(Up);
 		if (Stance == EOperativeStance::Prone)
