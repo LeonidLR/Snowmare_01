@@ -267,7 +267,7 @@ void AOperativeCharacter::RefreshStealthVisuals()
 
 void AOperativeCharacter::HandleStealthWeaponFired(AOperativeCharacter* Shooter, AActor*, bool)
 {
-	if (Shooter == this && StealthModeRules::ShouldBreak(bStealthMode, true, false, StealthModeRules::GetConfig()))
+	if (Shooter == this && StealthModeRules::ShouldBreak(bStealthMode, true, false, IsStealthFast(), StealthModeRules::GetConfig()))
 	{
 		SetStealthMode(false);
 	}
@@ -279,7 +279,7 @@ void AOperativeCharacter::UpdateStealthMode()
 	const bool bFormationBlocked = Squad && Squad->IsStealthBlockedByFormation(*this);
 	if (bStealthMode && (bFormationBlocked || !HealthComponent || !HealthComponent->IsAlive() || IsCriticallyWounded() || IsKnockedDown()
 		|| IsPanicking() || IsRaging() || bCarrying || bVaulting || IsClimbingLadder() || VehicleQueries::IsMounted(this)
-		|| StealthModeRules::ShouldBreak(true, false, bSprinting, StealthModeRules::GetConfig())))
+		|| StealthModeRules::ShouldBreak(true, false, bSprinting, IsStealthFast(), StealthModeRules::GetConfig())))
 	{
 		SetStealthMode(false);
 	}

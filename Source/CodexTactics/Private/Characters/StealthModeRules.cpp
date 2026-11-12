@@ -34,23 +34,43 @@ namespace StealthModeRules
 		return bActive && ((bSprinting && !bFast) || (bFired && Config.bBreakOnFire));
 	}
 
-	FName GetWallLeanClipName(ECoverFacing Facing, bool bStart, bool bStop)
+	FName GetWallLeanClipName(ECoverFacing Facing, EStealthWallLeanPhase Phase)
 	{
-		const bool bLeft = (Facing == ECoverFacing::Left);
-		if (bStart)
+		switch (Facing)
 		{
-			return bLeft ? FName(TEXT("Stealth_LeftWall_Lean_Start_IP")) : FName(TEXT("Stealth_RightWall_Lean_Start_IP"));
+		case ECoverFacing::Left:
+			switch (Phase)
+			{
+			case EStealthWallLeanPhase::Start: return FName(TEXT("Stealth_LeftWall_Lean_Start_IP"));
+			case EStealthWallLeanPhase::Hold:  return FName(TEXT("Stealth_LeftWall_Lean_IP"));
+			case EStealthWallLeanPhase::Stop:  return FName(TEXT("Stealth_LeftWall_Lean_Stop_IP"));
+			}
+			break;
+		case ECoverFacing::Right:
+			switch (Phase)
+			{
+			case EStealthWallLeanPhase::Start: return FName(TEXT("Stealth_RightWall_Lean_Start_IP"));
+			case EStealthWallLeanPhase::Hold:  return FName(TEXT("Stealth_RightWall_Lean_IP"));
+			case EStealthWallLeanPhase::Stop:  return FName(TEXT("Stealth_RightWall_Lean_Stop_IP"));
+			}
+			break;
+		default:
+			break;
 		}
-		if (bStop)
-		{
-			return bLeft ? FName(TEXT("Stealth_LeftWall_Lean_Stop_IP")) : FName(TEXT("Stealth_RightWall_Lean_Stop_IP"));
-		}
-		return bLeft ? FName(TEXT("Stealth_LeftWall_Lean_IP")) : FName(TEXT("Stealth_RightWall_Lean_IP"));
+		return NAME_None;
 	}
 
 	float GetWallLeanYawOffset(ECoverFacing Facing)
 	{
-		return Facing == ECoverFacing::Left ? -90.f : 90.f;
+		switch (Facing)
+		{
+		case ECoverFacing::Left:
+			return -90.f;
+		case ECoverFacing::Right:
+			return 90.f;
+		default:
+			return 0.f;
+		}
 	}
 
 	float DetectionRangeScale(bool bActive, const FStealthModeConfig& Config)

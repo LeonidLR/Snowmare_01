@@ -809,6 +809,14 @@ namespace StealthModeSmoke
 			State.Enemy->SetActorLocation(At(State, 1015.f, 350.f, State.Enemy->GetSimpleCollisionHalfHeight() + 2.f));
 			Sight->Refresh();
 			const FHitResult Hit(State.Wall.Get(), State.Wall->GetStaticMeshComponent(), At(State, 585.f, 180.f, 90.f), -State.Forward);
+			const bool bHover = PC->UpdateCornerPeekHover(Op, &Hit);
+			const ACoverGhostActor* Ghost = PC->GetCornerPeekGhost();
+			Check(State, bHover && Ghost && Ghost->IsShown() && Ghost->IsCornerPeekPose(), TEXT("corner peek hover ghost is active"));
+			if (Ghost && Ghost->GetShownClip())
+			{
+				Check(State, Ghost->GetShownClip()->GetName().Contains(TEXT("Wall_Lean")), TEXT("corner peek ghost in stealth shows stealth lean clip"));
+				Check(State, !Ghost->GetShownClip()->GetName().Contains(TEXT("fire_idle")), TEXT("aim-ghost is suppressed in stealth (no fire_idle clip)"));
+			}
 			Check(State, PC->TryHandleCoverClick(Hit, nullptr) && Op->IsManualCornerPeek(), TEXT("real corner click orders manual peek"));
 			Next(State, 5);
 			break;

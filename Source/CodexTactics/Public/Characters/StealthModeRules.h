@@ -1,9 +1,16 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Tactics/CoverTypes.h"
 
 class FJsonObject;
-enum class ECoverFacing : uint8;
+
+enum class EStealthWallLeanPhase : uint8
+{
+	Start,
+	Hold,
+	Stop
+};
 
 /** Stealth mode tuning (designer task 003, UE-only; no Godot reference). Data: Data/AI/stealth_mode.json. */
 struct CODEXTACTICS_API FStealthModeConfig
@@ -49,13 +56,13 @@ namespace StealthModeRules
 	CODEXTACTICS_API bool IsBlockedByFormation(bool bSoloOrHolding, bool bFormationActive, bool bGuarding);
 	/** Localized tooltip/refusal shown when formation blocks stealth entry. */
 	CODEXTACTICS_API FText GetFormationBlockedTooltip();
-	/** Sprint always breaks stealth; a shot breaks it only when stealth_break_on_fire is enabled. */
+	/** Sprint always breaks stealth; a shot breaks it only when stealth_break_on_fire is enabled. Delegates to 5-arg ShouldBreak(..., false, Config). */
 	CODEXTACTICS_API bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, const FStealthModeConfig& Config);
-	/** Fast stealth never breaks stealth; sprint breaks it; firing breaks it when bBreakOnFire is true. */
+	/** Fast stealth movement does not break stealth; normal sprint (outside fast stealth) breaks it; firing breaks it when bBreakOnFire is true. */
 	CODEXTACTICS_API bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, bool bFast, const FStealthModeConfig& Config);
-	/** Pure helper for Stealth v2 §3: selects Lean_Start / Lean / Lean_Stop clip name by wall facing. */
-	CODEXTACTICS_API FName GetWallLeanClipName(ECoverFacing Facing, bool bStart = false, bool bStop = false);
-	/** Returns the yaw offset (-90 for Left, 90 for Right) matching the wall clip facing. */
+	/** Pure helper for Stealth v2 §3: selects Lean_Start / Lean / Lean_Stop clip name by wall facing and lean phase. Returns NAME_None on invalid facing. */
+	CODEXTACTICS_API FName GetWallLeanClipName(ECoverFacing Facing, EStealthWallLeanPhase Phase = EStealthWallLeanPhase::Hold);
+	/** Returns the yaw offset (-90 for Left, 90 for Right, 0 otherwise) matching the wall clip facing. */
 	CODEXTACTICS_API float GetWallLeanYawOffset(ECoverFacing Facing);
 	/** Multipliers relative to the existing stance/weather/perception rules; disabled/inactive = identity. */
 	CODEXTACTICS_API float DetectionRangeScale(bool bActive, const FStealthModeConfig& Config);

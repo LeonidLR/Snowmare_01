@@ -38,7 +38,8 @@ bool FStealthBreakTest::RunTest(const FString&)
 	TestTrue(TEXT("Sprint still breaks when fire does not"), ShouldBreak(true, true, true, Config));
 	// Stealth v2 (008): fast stealth movement does not break stealth; firing during fast stealth still breaks it.
 	Config.bBreakOnFire = true;
-	TestFalse(TEXT("Fast stealth movement does not break mode"), ShouldBreak(true, false, true, true, Config));
+	TestFalse(TEXT("Fast stealth movement without sprint flag does not break mode"), ShouldBreak(true, false, false, true, Config));
+	TestFalse(TEXT("Fast stealth movement with sprint flag does not break mode"), ShouldBreak(true, false, true, true, Config));
 	TestTrue(TEXT("Firing breaks mode during fast stealth"), ShouldBreak(true, true, false, true, Config));
 	TestTrue(TEXT("Sprint without fast flag breaks mode"), ShouldBreak(true, false, true, false, Config));
 	return true;
@@ -49,14 +50,16 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStealthWallLeanTest, "CodexTactics.Characters.
 bool FStealthWallLeanTest::RunTest(const FString&)
 {
 	using namespace StealthModeRules;
-	TestEqual(TEXT("Left lean hold clip"), GetWallLeanClipName(ECoverFacing::Left), FName(TEXT("Stealth_LeftWall_Lean_IP")));
-	TestEqual(TEXT("Right lean hold clip"), GetWallLeanClipName(ECoverFacing::Right), FName(TEXT("Stealth_RightWall_Lean_IP")));
-	TestEqual(TEXT("Left lean start clip"), GetWallLeanClipName(ECoverFacing::Left, true, false), FName(TEXT("Stealth_LeftWall_Lean_Start_IP")));
-	TestEqual(TEXT("Right lean start clip"), GetWallLeanClipName(ECoverFacing::Right, true, false), FName(TEXT("Stealth_RightWall_Lean_Start_IP")));
-	TestEqual(TEXT("Left lean stop clip"), GetWallLeanClipName(ECoverFacing::Left, false, true), FName(TEXT("Stealth_LeftWall_Lean_Stop_IP")));
-	TestEqual(TEXT("Right lean stop clip"), GetWallLeanClipName(ECoverFacing::Right, false, true), FName(TEXT("Stealth_RightWall_Lean_Stop_IP")));
+	TestEqual(TEXT("Left lean hold clip"), GetWallLeanClipName(ECoverFacing::Left, EStealthWallLeanPhase::Hold), FName(TEXT("Stealth_LeftWall_Lean_IP")));
+	TestEqual(TEXT("Right lean hold clip"), GetWallLeanClipName(ECoverFacing::Right, EStealthWallLeanPhase::Hold), FName(TEXT("Stealth_RightWall_Lean_IP")));
+	TestEqual(TEXT("Left lean start clip"), GetWallLeanClipName(ECoverFacing::Left, EStealthWallLeanPhase::Start), FName(TEXT("Stealth_LeftWall_Lean_Start_IP")));
+	TestEqual(TEXT("Right lean start clip"), GetWallLeanClipName(ECoverFacing::Right, EStealthWallLeanPhase::Start), FName(TEXT("Stealth_RightWall_Lean_Start_IP")));
+	TestEqual(TEXT("Left lean stop clip"), GetWallLeanClipName(ECoverFacing::Left, EStealthWallLeanPhase::Stop), FName(TEXT("Stealth_LeftWall_Lean_Stop_IP")));
+	TestEqual(TEXT("Right lean stop clip"), GetWallLeanClipName(ECoverFacing::Right, EStealthWallLeanPhase::Stop), FName(TEXT("Stealth_RightWall_Lean_Stop_IP")));
+	TestEqual(TEXT("Invalid facing returns NAME_None"), GetWallLeanClipName(static_cast<ECoverFacing>(255), EStealthWallLeanPhase::Hold), FName(NAME_None));
 	TestEqual(TEXT("Left lean yaw offset"), GetWallLeanYawOffset(ECoverFacing::Left), -90.f);
 	TestEqual(TEXT("Right lean yaw offset"), GetWallLeanYawOffset(ECoverFacing::Right), 90.f);
+	TestEqual(TEXT("Invalid facing returns 0 yaw offset"), GetWallLeanYawOffset(static_cast<ECoverFacing>(255)), 0.f);
 	return true;
 }
 
