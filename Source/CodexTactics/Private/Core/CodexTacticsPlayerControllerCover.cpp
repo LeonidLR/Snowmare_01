@@ -1240,7 +1240,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 			{
 				Member->SetPendingCoverWrap(*MemberWrap);
 			}
-			const bool bMemberSprint = Member->IsInStealthMode() ? bSprintOrder : true;
+			const bool bMemberSprint = !Member->IsInStealthMode() || bSprintOrder;
 			const FVector Planned = Squad->PlanMove(Member, MemberSlot.WorldLocation, bMemberSprint, Radius);
 			if (Feedback)
 			{
@@ -1257,7 +1257,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		}
 		else
 		{
-			const bool bMemberSprint = Member->IsInStealthMode() ? bSprintOrder : true;
+			const bool bMemberSprint = !Member->IsInStealthMode() || bSprintOrder;
 			const EOperativeOrderResult MemberResult = MemberWrap ? Member->OrderCoverWrap(*MemberWrap)
 				: bMemberSwitch ? Member->OrderCoverSwitchResolved(MemberSlot, Member->GetCoverSwitchArrivalFacing(MemberSlot)) : Member->OrderTakeCover(MemberSlot, bMemberSprint);
 			if (MemberResult != EOperativeOrderResult::Accepted)
@@ -1275,7 +1275,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	auto SendProne = [&](AOperativeCharacter* Member, int32 SpotIndex)
 	{
 		FVector Destination;
-		const bool bMemberSprint = Member->IsInStealthMode() ? bSprintOrder : true;
+		const bool bMemberSprint = !Member->IsInStealthMode() || bSprintOrder;
 		if (!ProneSpots.IsValidIndex(SpotIndex) || !Squad->OrderGroupCoverProne(Member, ProneSpots[SpotIndex], FaceYaw, bMemberSprint, bPlan, Radius, Destination))
 		{
 			return false;
