@@ -23,7 +23,8 @@ Use ALL of them where they fit (starts, stops, turns included) - no fallback to 
 - If the enemy detects the operative (confirmed detection) -> stealth ends as already implemented.
 
 ## 2. Fast stealth (run while sneaking)
-- In stealth the run / sprint input (the same key the player uses for sprint) switches Slow -> Fast stealth clips (8 directions,
+- Input (designer 2026-11-12): the existing sprint order = a DOUBLE CLICK on the move target, exactly as today. A double-click
+  move while in stealth = a Fast stealth move; a single click = Slow. No new key. It switches Slow -> Fast stealth clips (8 directions,
   Starts, Stops), speed from data (`stealth.fast_speed`, default between crouch-walk and normal run - say the value).
 - Detection while Fast is worse than Slow but better than normal: data `stealth.fast_detection_range_mult` default 0.6 (Slow 0.4),
   `stealth.fast_buildup_mult` 0.75 (Slow 0.5); noise as a jog. Fast does NOT break stealth any more (replace the old "sprint breaks
@@ -39,7 +40,7 @@ Use ALL of them where they fit (starts, stops, turns included) - no fallback to 
 ## Checks (report docs/port/codex/outbox/008-stealth-v2.report.md)
 - Unit tests: target choice / lock keep / switch, Slow vs Fast multipliers, "Fast does not break stealth, fire does", lean side.
 - StealthModeSmoke extended: with a revealed non-detecting enemy the yaw stays on him while moving in all 8 directions (each
-  direction's clip plays: assert the clip name per direction), Start / Stop / Turn clips seen, Fast clips under the sprint input,
+  direction's clip plays: assert the clip name per direction), Start / Stop / Turn clips seen, Fast clips on a double-click move order,
   Fast detection range between Slow and normal, a stealth peek plays Lean_Start/Lean/Lean_Stop and NOT the aim pose; male + female.
 - Regression: InjuredLocomotionSmoke, ProneCrawlSmoke, the cover smokes, FormationLabSmoke, SoloStartSmoke.
 - Game-camera frames (strafe with locked look, Fast run, the lean) -> MAIN Saved/Orchestrator/stealth/v2/.
