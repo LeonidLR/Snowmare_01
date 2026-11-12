@@ -49,6 +49,11 @@ PLACEHOLDER_EVIDENCE = {"", "-", "--", "---", "n/a", "na", "none", "tbd", "todo"
 KNOWN_REPO_ROOT_PREFIXES = ("source/", "scripts/", "content/", "docs/", "tools/", "config/")
 KNOWN_ROOT_FILES = {"gemini.md", "claude.md", "codextactics.uproject"}
 CPP_EXTENSIONS = (".h", ".hpp", ".hh", ".c", ".cpp", ".cc", ".cxx", ".inl")
+SONNET_MODEL = "claude-sonnet-5-5"
+OPUS_MODEL = "claude-opus-5-5"
+REVIEW_MAX_TOKENS = 8000
+LARGE_CPP_DIFF_LINES = 500
+SHARED_CORE_TOKENS = ("perception", "sight", "pmcsquad", "squad", "formation", "movement", "combat")
 
 
 @dataclass
@@ -667,7 +672,7 @@ def read_weekly_budget_cap(repo: str, default_cap: float = 64.61) -> float:
 
 
 def has_high_sonnet_findings(review_text: str) -> Tuple[bool, List[str]]:
-    """Return True only when Sonnet reports active findings marked HIGH severity."""
+    """Return True only when reviewer reports active findings marked HIGH severity."""
     findings: List[str] = []
     for line in review_text.splitlines():
         stripped = line.strip()
@@ -675,37 +680,62 @@ def has_high_sonnet_findings(review_text: str) -> Tuple[bool, List[str]]:
             continue
         if re.search(r"\b(no|zero|0)\s+high\b|\bhigh\s*[:=]\s*(none|0|no)\b", stripped, re.IGNORECASE):
             continue
-        if re.match(r"^(?:[-*]|\d+\.|#+)?\s*(?:\*\*|\[)?HIGH(?:\*\*|\])?(?:\s*[:\-\]]|\s+)", stripped):
+        if re.match(r"^(?:[-*]|\d+\.|#+)?\s*(?:\*\*|\[)?HIGH(?:\*\*|\])?(?:\s*[:\-\u2013\]]|\s+)", stripped):
             findings.append(stripped)
         elif re.search(r"(?:Severity|SEVERITY)\s*[:=]\s*(?:\*\*|\[)?HIGH\b", stripped):
             findings.append(stripped)
     return bool(findings), findings
 
 
-def run_sonnet_review(repo: str, task_id: str, base_branch: str, changed_files: Sequence[str],
-                      report_paths: Sequence[str]) -> CheckOutcome:
-    norm = normalize_task_id(task_id)
-    cpp_files = [f for f in changed_files if f.lower().startswith("source/") and f.lower().endswith(CPP_EXTENSIONS)]
-    if not cpp_files:
-        return CheckOutcome("Sonnet review", None, "Skipped (no C++ diff under Source/)", [])
+def has_verify_marker(review_text: str) -> bool:
+    """Detect '(verify)' / '[verify]' annotations or severity lines asking for Opus verification."""
+    return bool(
+        re.search(
+            r"(?:\b(?:high|medium|low)\b[^\n]*\bverify\b|\(\s*verify\s*\)|\[\s*verify\s*\])",
+            review_text,
+            re.IGNORECASE,
+        )
+    )
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        return CheckOutcome("Sonnet review", False, "ANTHROPIC_API_KEY is not set in environment", [])
 
-    rc, diff_committed, _ = _run_git(repo, ["diff", f"{base_branch}...HEAD", "--", *cpp_files])
-    rc2, diff_working, _ = _run_git(repo, ["diff", "HEAD", "--", *cpp_files])
-    combined_diff = "\n".join(x for x in (diff_committed, diff_working) if x).strip()
-    if not combined_diff:
-        return CheckOutcome("Sonnet review", None, "Skipped (empty C++ diff)", [])
+def touches_shared_core(cpp_files: Sequence[str]) -> List[str]:
+    """Return runtime Source/CodexTactics files touching shared core subsystems."""
+    hits: List[str] = []
+    for rel in cpp_files:
+        clean = norm_rel(rel).lower()
+        if not clean.startswith("source/codextactics/"):
+            continue
+        if any(tok in clean for tok in SHARED_CORE_TOKENS):
+            hits.append(norm_rel(rel))
+    return hits
 
-    budget_cap = read_weekly_budget_cap(repo)
-    if report_paths:
-        out_dir = os.path.dirname(report_paths[0])
-    else:
-        out_dir = os.path.join(repo, "docs", "port", "gemini", "outbox")
-    os.makedirs(out_dir, exist_ok=True)
-    review_out = os.path.join(out_dir, f"{norm}-sonnet-review.md")
 
+def count_diff_changed_lines(diff_text: str) -> int:
+    count = 0
+    for line in diff_text.splitlines():
+        if line.startswith(("+++", "---", "diff --git", "@@")):
+            continue
+        if line.startswith(("+", "-")):
+            count += 1
+    return count
+
+
+def select_review_tier(cpp_files: Sequence[str], diff_lines: int, force_opus: bool = False) -> Tuple[str, str]:
+    if force_opus:
+        return OPUS_MODEL, "-OpusReview requested"
+    core_hits = touches_shared_core(cpp_files)
+    if core_hits:
+        preview = ", ".join(os.path.basename(p) for p in core_hits[:3])
+        if len(core_hits) > 3:
+            preview += f" +{len(core_hits) - 3}"
+        return OPUS_MODEL, f"shared core diff ({preview})"
+    if diff_lines > LARGE_CPP_DIFF_LINES:
+        return OPUS_MODEL, f"large diff ({diff_lines} > {LARGE_CPP_DIFF_LINES} lines)"
+    return SONNET_MODEL, f"standard diff ({diff_lines} lines)"
+
+
+def _invoke_review_api(repo: str, norm: str, model: str, label_suffix: str, budget_cap: float,
+                       combined_diff: str, review_out: str) -> Tuple[int, List[str], str]:
     brief = (
         f"You are reviewing Gemini C++ task {norm} for CodexTactics (UE 5.8.2).\n"
         "Check strictly for correctness bugs, non-stealth regressions, UObject/GC lifetime bugs, null dereferences, "
@@ -719,14 +749,15 @@ def run_sonnet_review(repo: str, task_id: str, base_branch: str, changed_files: 
         with open(prompt_file, "w", encoding="utf-8") as f:
             f.write(brief)
         with open(diff_file, "w", encoding="utf-8") as f:
-            f.write(combined_diff[:120000])  # keep bounded
+            f.write(combined_diff[:160000])
 
         cmd = [
             sys.executable,
             os.path.join(repo, "Scripts", "Tools", "api_task.py"),
-            "--model", "claude-sonnet-5-5",
+            "--model", model,
             "--effort", "medium",
-            "--label", f"gemini-review-{norm}",
+            "--max-tokens", str(REVIEW_MAX_TOKENS),
+            "--label", f"gemini-{label_suffix}-{norm}",
             "--budget-usd", f"{budget_cap:.2f}",
             "--prompt-file", prompt_file,
             "--files", diff_file,
@@ -735,17 +766,66 @@ def run_sonnet_review(repo: str, task_id: str, base_branch: str, changed_files: 
         proc = subprocess.run(cmd, cwd=repo, capture_output=True, text=True, encoding="utf-8", errors="replace")
         if proc.returncode != 0:
             err_tail = (proc.stderr or proc.stdout).strip().splitlines()[-5:]
-            return CheckOutcome("Sonnet review", False, f"api_task.py failed (exit {proc.returncode})", err_tail)
+            return proc.returncode, err_tail, ""
 
     review_text = ""
     if os.path.isfile(review_out):
         with open(review_out, encoding="utf-8", errors="replace") as f:
             review_text = f.read()
+    return 0, [], review_text
+
+
+def run_sonnet_review(repo: str, task_id: str, base_branch: str, changed_files: Sequence[str],
+                      report_paths: Sequence[str], force_opus: bool = False) -> CheckOutcome:
+    norm = normalize_task_id(task_id)
+    cpp_files = [f for f in changed_files if f.lower().startswith("source/") and f.lower().endswith(CPP_EXTENSIONS)]
+    if not cpp_files:
+        return CheckOutcome("Sonnet / Opus review", None, "Skipped (no C++ diff under Source/)", [])
+
+    if not os.environ.get("ANTHROPIC_API_KEY"):
+        return CheckOutcome("Sonnet / Opus review", False, "ANTHROPIC_API_KEY is not set in environment", [])
+
+    _rc, diff_committed, _ = _run_git(repo, ["diff", f"{base_branch}...HEAD", "--", *cpp_files])
+    _rc2, diff_working, _ = _run_git(repo, ["diff", "HEAD", "--", *cpp_files])
+    combined_diff = "\n".join(x for x in (diff_committed, diff_working) if x).strip()
+    if not combined_diff:
+        return CheckOutcome("Sonnet / Opus review", None, "Skipped (empty C++ diff)", [])
+
+    diff_lines = count_diff_changed_lines(combined_diff)
+    model, reason = select_review_tier(cpp_files, diff_lines, force_opus=force_opus)
+    budget_cap = read_weekly_budget_cap(repo)
+    out_dir = os.path.dirname(report_paths[0]) if report_paths else os.path.join(repo, "docs", "port", "gemini", "outbox")
+    os.makedirs(out_dir, exist_ok=True)
+
+    is_opus = (model == OPUS_MODEL)
+    review_name = f"{norm}-opus-review.md" if is_opus else f"{norm}-sonnet-review.md"
+    review_out = os.path.join(out_dir, review_name)
+    rc, err_tail, review_text = _invoke_review_api(
+        repo, norm, model, "opus-review" if is_opus else "review", budget_cap, combined_diff, review_out
+    )
+    if rc != 0:
+        return CheckOutcome("Sonnet / Opus review", False, f"api_task.py ({model}) failed (exit {rc})", err_tail)
+
+    escalated_note = ""
+    if not is_opus and has_verify_marker(review_text):
+        opus_out = os.path.join(out_dir, f"{norm}-opus-review.md")
+        rc2, err_tail2, opus_text = _invoke_review_api(
+            repo, norm, OPUS_MODEL, "opus-review", budget_cap, combined_diff, opus_out
+        )
+        if rc2 != 0:
+            return CheckOutcome("Sonnet / Opus review", False, f"Opus escalation failed (exit {rc2})", err_tail2)
+        review_out = opus_out
+        review_text = opus_text
+        model = OPUS_MODEL
+        reason = f"{reason}; escalated on Sonnet 'verify'"
+        escalated_note = " (escalated from Sonnet)"
+
     has_high, highs = has_high_sonnet_findings(review_text)
     rel_review = norm_rel(os.path.relpath(review_out, repo))
+    tier_tag = "Opus" if model == OPUS_MODEL else "Sonnet"
     if has_high:
-        return CheckOutcome("Sonnet review", False, f"{len(highs)} HIGH finding(s) -> {rel_review}", highs[:10])
-    return CheckOutcome("Sonnet review", True, f"0 HIGH findings -> {rel_review}", [])
+        return CheckOutcome("Sonnet / Opus review", False, f"{tier_tag}{escalated_note}: {len(highs)} HIGH finding(s) -> {rel_review} ({reason})", highs[:10])
+    return CheckOutcome("Sonnet / Opus review", True, f"{tier_tag}{escalated_note}: 0 HIGH findings -> {rel_review} ({reason})", [])
 
 
 def format_gate_markdown(task_id: str, branch: str, base_branch: str, outcomes: Sequence[CheckOutcome]) -> str:
@@ -834,10 +914,10 @@ def cmd_post(args: argparse.Namespace) -> int:
     outcomes.append(check_citations(repo, report_files))
     outcomes.append(check_evidence(report_files))
 
-    if args.sonnet_review:
-        outcomes.append(run_sonnet_review(repo, norm, base, changed, report_files))
+    if args.sonnet_review or args.opus_review:
+        outcomes.append(run_sonnet_review(repo, norm, base, changed, report_files, force_opus=args.opus_review))
     else:
-        outcomes.append(CheckOutcome("Sonnet review", None, "Not requested (pass -SonnetReview to enable)", []))
+        outcomes.append(CheckOutcome("Sonnet / Opus review", None, "Not requested (pass -SonnetReview or -OpusReview to enable)", []))
 
     md = format_gate_markdown(norm, branch, base, outcomes)
     gate_dir = os.path.join(repo, "Saved", "Orchestrator", "gate")
@@ -862,6 +942,7 @@ def main() -> int:
     ap.add_argument("--json-out", default="")
     ap.add_argument("--results-json", default="")
     ap.add_argument("--sonnet-review", action="store_true")
+    ap.add_argument("--opus-review", action="store_true")
     args = ap.parse_args()
     if args.phase == "pre":
         return cmd_pre(args)

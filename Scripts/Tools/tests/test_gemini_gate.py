@@ -184,6 +184,34 @@ class GeminiGateTests(unittest.TestCase):
         self.assertTrue(has_high)
         self.assertEqual(len(list_high), 1)
 
+        has_md_high, _ = gemini_gate.has_high_sonnet_findings("1. **HIGH \u2013 `CoverGhostActor.cpp` hover ghost rebuilt every tick.**\n")
+        self.assertTrue(has_md_high)
+
+        self.assertTrue(gemini_gate.has_verify_marker("2. **HIGH (verify)"))
+        self.assertTrue(gemini_gate.has_verify_marker("- [MEDIUM] [verify] check caller"))
+        self.assertFalse(gemini_gate.has_verify_marker("No HIGH findings. Looks clean."))
+
+    def test_tiered_opus_selection_rules(self) -> None:
+        m1, _ = gemini_gate.select_review_tier(["Source/CodexTactics/Private/UI/ActionBarWidget.cpp"], 80)
+        self.assertEqual(m1, gemini_gate.SONNET_MODEL)
+
+        m2, reason2 = gemini_gate.select_review_tier(["Source/CodexTactics/Private/Characters/SquadSubsystem.cpp"], 20)
+        self.assertEqual(m2, gemini_gate.OPUS_MODEL)
+        self.assertIn("shared core", reason2)
+
+        m3, reason3 = gemini_gate.select_review_tier(["Source/CodexTactics/Private/Tactics/CoverGhostActor.cpp"], 550)
+        self.assertEqual(m3, gemini_gate.OPUS_MODEL)
+        self.assertIn("large diff", reason3)
+
+        m4, _ = gemini_gate.select_review_tier(["Source/CodexTactics/Private/UI/ActionBarWidget.cpp"], 20, force_opus=True)
+        self.assertEqual(m4, gemini_gate.OPUS_MODEL)
+
+        self.assertEqual(gemini_gate.touches_shared_core(["Source/CodexTacticsDev/Private/Debug/StealthModeSmokeCommand.cpp"]), [])
+        self.assertEqual(
+            gemini_gate.count_diff_changed_lines("diff --git a/x b/x\n--- a/x\n+++ b/x\n@@ -1 +1,2 @@\n+a\n+b\n-c\n unchanged\n"),
+            3,
+        )
+
 
 if __name__ == "__main__":
     unittest.main()

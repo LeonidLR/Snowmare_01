@@ -11,6 +11,7 @@ param(
     [string]$Worktree = "",
     [switch]$SkipBuild,
     [switch]$SonnetReview,
+    [switch]$OpusReview,
     [string]$Base = ""
 )
 
@@ -198,6 +199,9 @@ try {
     $postArgs = @($HelperPy, "--phase", "post", "--task", $Task, "--worktree", $Worktree, "--results-json", $resultsJson)
     if ($SonnetReview) {
         $postArgs += "--sonnet-review"
+    }
+    if ($OpusReview) {
+        $postArgs += "--opus-review"
     }
     & python @postArgs
     $finalCode = $LASTEXITCODE
