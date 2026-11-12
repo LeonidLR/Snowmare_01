@@ -45,3 +45,14 @@ Use ALL of them where they fit (starts, stops, turns included) - no fallback to 
 - Regression: InjuredLocomotionSmoke, ProneCrawlSmoke, the cover smokes, FormationLabSmoke, SoloStartSmoke.
 - Game-camera frames (strafe with locked look, Fast run, the lean) -> MAIN Saved/Orchestrator/stealth/v2/.
 Open questions -> the designer in the chat (Russian) with the defaults above; do not block on them.
+
+## 4. BUG (designer 2026-11-12, screenshots + log: MAIN Saved/Orchestrator/stealth/v2/bug-cover-exits-stealth/)
+In stealth the commander moves toward a building to press against it:
+- hovering the building shows NO cover ghost (outside stealth the hover ghost appears);
+- the 1st click shows the blue wall-hug ghost; the 2nd click (confirm) makes him LEAVE stealth, stand up and run to the wall
+  (log lines "Run to position!", "Take cover!", label CROUCHED -> STANDING) - loud and visible.
+Expected: the cover / wall-hug order keeps stealth - he moves there crouched with the Slow stealth clips (Fast if the order was a
+double click), arrives into Stealth_{Left,Right}Wall_Idle via *Wall_Slow_Start / Stop, and stays in stealth; the hover ghost
+appears in stealth too (stealth wall pose ghost). Find where the cover order forces run / standing or triggers the
+"sprint breaks stealth" rule and route cover moves through the stealth movement. Add it to the StealthModeSmoke (cover order in
+stealth: stealth stays on, stance stays crouched, speed <= stealth speed, Wall clips play). Do this FIRST inside 008.
