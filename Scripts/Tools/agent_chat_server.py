@@ -9,16 +9,26 @@ import argparse
 import http.server
 import json
 import os
+import re
 import sys
+import threading
+import time
 import urllib.parse
 
 # Import functions from agent_chat
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent_chat
+import task_board
+
+_PORT_DOC_RE = re.compile(
+    r"^docs/(?:port/(?:codex|gemini)/(?:inbox|outbox)/[A-Za-z0-9_.-]+\.md|systems/[A-Za-z0-9_.-]+\.md)$"
+)
+
 
 class AgentChatHandler(http.server.BaseHTTPRequestHandler):
     storage_dir = None
     html_path = None
+    project_root = None
 
     def log_message(self, format, *args):
         # Concise logging
@@ -89,6 +99,45 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
             self.send_json(200, pres)
             return
 
+        if path == "/api/task-board":
+            force_refresh = query.get("refresh", ["0"])[0] == "1"
+            board_path = os.path.join(self.storage_dir, "task_board.json")
+            root_dir = self.project_root or task_board.REPO_ROOT
+            use_cached = False
+            if not force_refresh and os.path.exists(board_path):
+                try:
+                    age = time.time() - os.path.getmtime(board_path)
+                    if age < 60.0:
+                        with open(board_path, "r", encoding="utf-8") as fh:
+                            data = json.load(fh)
+                        self.send_json(200, data)
+                        use_cached = True
+                except Exception:
+                    use_cached = False
+            if not use_cached:
+                data = task_board.build_and_save_board(
+                    repo_root=root_dir,
+                    storage_dir=self.storage_dir,
+                    chat_file=os.path.join(self.storage_dir, "chat.jsonl"),
+                )
+                self.send_json(200, data)
+            return
+
+        if path == "/api/port-doc":
+            rel = (query.get("path", [""])[0] or "").replace("\\", "/").lstrip("/")
+            if not _PORT_DOC_RE.match(rel) or ".." in rel:
+                self.send_json(400, {"error": "Invalid or disallowed doc path"})
+                return
+            root_dir = os.path.abspath(self.project_root or task_board.REPO_ROOT)
+            target = os.path.abspath(os.path.join(root_dir, rel))
+            if not target.startswith(root_dir + os.sep) or not os.path.exists(target):
+                self.send_json(404, {"error": "Document not found"})
+                return
+            with open(target, "r", encoding="utf-8", errors="replace") as fh:
+                content = fh.read()
+            self.send_json(200, {"path": rel, "content": content})
+            return
+
         self.send_error(404, "Endpoint not found")
 
     def do_POST(self):
@@ -140,6 +189,24 @@ def run_server(port=8765, root_override=None):
 
     AgentChatHandler.storage_dir = storage_dir
     AgentChatHandler.html_path = html_path
+    AgentChatHandler.project_root = project_root
+
+    stop_event = threading.Event()
+
+    def _board_refresh_loop():
+        while not stop_event.is_set():
+            try:
+                task_board.build_and_save_board(
+                    repo_root=project_root,
+                    storage_dir=storage_dir,
+                    chat_file=os.path.join(storage_dir, "chat.jsonl"),
+                )
+            except Exception as exc:
+                sys.stderr.write(f"[task_board] refresh error: {exc}\n")
+            stop_event.wait(60.0)
+
+    refresher = threading.Thread(target=_board_refresh_loop, daemon=True)
+    refresher.start()
 
     server_address = ("127.0.0.1", port)
     httpd = http.server.HTTPServer(server_address, AgentChatHandler)
@@ -151,6 +218,7 @@ def run_server(port=8765, root_override=None):
         httpd.serve_forever()
     except KeyboardInterrupt:
         print("\nShutting down server.")
+        stop_event.set()
         httpd.server_close()
 
 def main():

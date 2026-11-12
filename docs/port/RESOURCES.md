@@ -23,3 +23,4 @@ Six resources. Rule: the cheapest one that can do the job reliably; the expensiv
 - Claude wakes only for: designer messages, questions / blockers, merges. Watchers / the dispatcher filter the rest.
 - Big logs: never raw - Jev telemetry or a script.
 - Each agent commits after every working part; limits ending = commit + one chat line first.
+- Live task board (`Tools/AgentChat/index.html` tab `Задачи`): every chat message about a task MUST pass `--topic <task-id>` (e.g. `codex-008`, `codex-004`, `gemini-030`, `gemini-031`) so the board links chat activity automatically.
