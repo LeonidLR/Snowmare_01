@@ -75,6 +75,23 @@ Assertion failed: Target != nullptr [File:Source/CodexTactics/Private/Combat/Wea
         self.assertEqual(len(perf_clusters), 1)
         self.assertEqual(perf_clusters[0].count, 5)
 
+    def test_deduplication_keeps_max_severity_both_orders(self):
+        # Same fingerprint with different severities must keep max severity (HIGH) regardless of log order
+        med_line = "LogStreaming: Display: FlushAsyncLoading(100): 1 QueuedPackages took 0.50 s\n"
+        high_line = "LogStreaming: Display: FlushAsyncLoading(100): 1 QueuedPackages took 3.00 s\n"
+        for order_name, lines in [("med_then_high", [med_line, high_line]), ("high_then_med", [high_line, med_line])]:
+            with self.subTest(order=order_name):
+                reporter = qa.MorningQAReporter(root_dir=self.root, report_date="2026-11-12")
+                for idx, content in enumerate(lines):
+                    p = os.path.join(self.root, f"{order_name}_{idx}.log")
+                    with open(p, "w", encoding="utf-8") as f:
+                        f.write(content)
+                    reporter.parse_unreal_log(p)
+                perf_clusters = [c for c in reporter.clusters.values() if c.category == "PERF_HITCH"]
+                self.assertEqual(len(perf_clusters), 1)
+                self.assertEqual(perf_clusters[0].count, 2)
+                self.assertEqual(perf_clusters[0].severity, "HIGH")
+
     def test_parse_telemetry_jsonl(self):
         records = [
             {"run_id": "run_01", "map": "L_Gen_Depot_1", "outcome": {"status": "SUCCESS", "score": 0.85}},

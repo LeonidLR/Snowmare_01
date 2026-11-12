@@ -28,6 +28,9 @@ if hasattr(sys.stderr, "reconfigure"):
     sys.stderr.reconfigure(encoding="utf-8", errors="replace")
 
 
+SEVERITY_RANK: Dict[str, int] = {"BLOCKER": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
+
+
 class IssueCluster:
     def __init__(self, category: str, title: str, fingerprint: str, severity: str = "MEDIUM"):
         self.category = category
@@ -80,6 +83,10 @@ class MorningQAReporter:
         fp = self.make_fingerprint(category, title)
         if fp not in self.clusters:
             self.clusters[fp] = IssueCluster(category, title, fp, severity)
+        else:
+            existing = self.clusters[fp]
+            if SEVERITY_RANK.get(severity, 4) < SEVERITY_RANK.get(existing.severity, 4):
+                existing.severity = severity
         self.clusters[fp].add_occurrence(source, snippet, timestamp)
 
     def parse_unreal_log(self, file_path: str):
@@ -254,8 +261,7 @@ class MorningQAReporter:
             md.append("| :--- | :--- | :---: | :--- | :---: | :--- |")
             
             # Sort clusters: BLOCKER -> HIGH -> MEDIUM -> LOW, then count
-            sev_rank = {"BLOCKER": 0, "HIGH": 1, "MEDIUM": 2, "LOW": 3}
-            sorted_clusters = sorted(self.clusters.values(), key=lambda c: (sev_rank.get(c.severity, 4), -c.count))
+            sorted_clusters = sorted(self.clusters.values(), key=lambda c: (SEVERITY_RANK.get(c.severity, 4), -c.count))
 
             for idx, c in enumerate(sorted_clusters, start=1):
                 qa_id = f"QA-{self.date_str.replace('-', '')[-4:]}-{idx:02d}"
