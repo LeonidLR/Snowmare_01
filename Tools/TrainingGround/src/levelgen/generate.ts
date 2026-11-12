@@ -885,6 +885,9 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
         const extDoorXs = f === 0 ? [...perSide.north, ...perSide.south].map(([a, b]) => (a + b) / 2) : [];
         const extDoorYs = f === 0 ? [...perSide.west, ...perSide.east].map(([a, b]) => (a + b) / 2) : [];
 
+        const blockedXs = [...extDoorXs];
+        const blockedYs = [...extDoorYs];
+
         const leafBoxes: Rect[] = [];
         let partIdx = 0;
         const maxDepth = bw >= 12 && bd >= 9 ? 2 : 1;
@@ -894,7 +897,7 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
           for (const t of [0.5, 0.42, 0.58, 0.35, 0.65]) {
             const c = lo + (hi - lo) * t;
             if (c - lo < 3.0 || hi - c < 3.0) continue;
-            if (blockedCoords.some((bc) => Math.abs(c - bc) < 1.3)) continue;
+            if (blockedCoords.some((bc) => Math.abs(c - bc) < 1.8)) continue;
             if (stairRanges.some(([s0, s1]) => c >= s0 && c <= s1)) continue;
             return c;
           }
@@ -910,12 +913,12 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
           }
           const tryX = (): number | null => pickSplit(
             bx0, bx1,
-            extDoorXs,
+            blockedXs,
             stairBoxes.filter((sb) => sb[0][1] < by1 && sb[1][1] > by0).map((sb) => [sb[0][0], sb[1][0]]),
           );
           const tryY = (): number | null => pickSplit(
             by0, by1,
-            extDoorYs,
+            blockedYs,
             stairBoxes.filter((sb) => sb[0][0] < bx1 && sb[1][0] > bx0).map((sb) => [sb[0][1], sb[1][1]]),
           );
 
@@ -926,10 +929,11 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
           const px = splitX ?? fallbackX;
 
           if (px !== null) {
-            let doorY = by0 + rd * 0.5;
+            let doorY = by0 + rd * (depth === 0 && maxDepth > 1 ? 0.28 : 0.5);
             if (stairBoxes.some((sb) => px >= sb[0][0] && px <= sb[1][0] && doorY >= sb[0][1] - 0.5 && doorY <= sb[1][1] + 0.5)) {
               doorY = Math.abs(doorY - by0) < Math.abs(by1 - doorY) ? by1 - 1.5 : by0 + 1.5;
             }
+            blockedYs.push(doorY);
             const idx = partIdx++;
             const pDoorId = `${bid}_partdoor_f${f}_${idx}`;
             const pDoor: WallOpening = {
@@ -944,10 +948,11 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
             bsp([[px, by0], [bx1, by1]], depth + 1);
           } else if (splitY !== null) {
             const py = splitY;
-            let doorX = bx0 + rw * 0.5;
+            let doorX = bx0 + rw * (depth === 0 && maxDepth > 1 ? 0.28 : 0.5);
             if (stairBoxes.some((sb) => py >= sb[0][1] && py <= sb[1][1] && doorX >= sb[0][0] - 0.5 && doorX <= sb[1][0] + 0.5)) {
               doorX = Math.abs(doorX - bx0) < Math.abs(bx1 - doorX) ? bx1 - 1.5 : bx0 + 1.5;
             }
+            blockedXs.push(doorX);
             const idx = partIdx++;
             const pDoorId = `${bid}_partdoor_f${f}_${idx}`;
             const pDoor: WallOpening = {
