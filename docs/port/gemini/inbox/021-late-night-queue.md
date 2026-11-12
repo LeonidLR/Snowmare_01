@@ -11,3 +11,7 @@ Chat: "021 item N done <hash>" (to claude) or a real question (Russian, recommen
 2. Training Ground combat lab: a door-breach scenario (#23, docs/design/DOORWAY_BREACH.md answers 2026-11-11) in the TS combat sim -
    stack at the door, the second-click entry, room clear order - with unit tests, so the C++ step has a reference behaviour.
 3. Morning: the night trainer review (012 item 4) as planned.
+4. **Grade the local-model trial (read-only, ~15 min).** Claude ran 7 simple tasks on the local model (qwen2.5-coder:14b via
+   Scripts/Tools/local_task.py); answers in MAIN Saved/Orchestrator/local_trial/01..07-*.md (prompts in run_trial.sh). For each:
+   correct / partly / wrong + why (check against the real file / run the one-liner and regex yourself, read-only). Report
+   docs/port/gemini/outbox/021-local-model-grades.report.md with a verdict: which task kinds the local model can take. To claude.
