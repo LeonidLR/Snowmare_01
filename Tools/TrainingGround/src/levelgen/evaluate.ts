@@ -29,6 +29,10 @@ import type { Profile } from './profile.ts';
 import { targetScore } from './profile.ts';
 import type { GenLayout, GenRoute, RouteIntent } from './schema.ts';
 import { layerLevel, layersOf, levelsOf, levelZ, mandatoryRoute, NEVER_CLIMBABLE, rect, toFormationLayout } from './schema.ts';
+import type { BlockedOpening, BuildingTacticalReport, FiringLine, TacticalReport } from './tacticalEvaluate.ts';
+import { evaluateTactical } from './tacticalEvaluate.ts';
+
+export type { BlockedOpening, BuildingTacticalReport, FiringLine, TacticalReport };
 
 export interface LegReport { index: number; layer: string; ok: boolean; reason?: string; detour_cm?: number; link?: string }
 export interface RouteReport { id: string; mandatory: boolean; completable: boolean; legs: LegReport[]; length_m: number; fail?: string; layers: string[]; intent?: RouteIntent; intent_note?: string }
@@ -67,6 +71,7 @@ export interface Evaluation {
   ambush: { points: number; concealed: number; per100m: number; coordinatedSamples: number; coordinatedShare: number };
   counts: Record<string, number>;
   similarity: { score: number; metrics: { key: string; value: number; target?: [number, number]; score: number }[] };
+  tactical: TacticalReport;
   score: number;
   summary: string[];
 }
@@ -298,9 +303,10 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   const similarity = { score: round(metrics.reduce((s, m) => s + m.score, 0) / Math.max(1, metrics.length), 3), metrics };
 
   const terrainClasses = Object.values(mech.terrain).filter((v) => (v ?? 0) >= 0.05).length;
+  const tactical = evaluateTactical(l, samples, coverSegs, tops);
   const score = round(0.4 * (main.completable ? 1 : 0) + 0.2 * similarity.score + 0.2 * Math.min(1, terrainClasses / 5) + 0.2 * Math.min(1, ambush.per100m / 3), 3);
 
-  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, roofViews, killZones, ambush, counts, similarity, score, summary: [] };
+  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, roofViews, killZones, ambush, counts, similarity, tactical, score, summary: [] };
   ev.summary = renderSummary(ev);
   return ev;
 }
@@ -397,7 +403,10 @@ export function renderSummary(ev: Evaluation): string[] {
     `ambush: ${ev.ambush.concealed} / ${ev.ambush.points} spots concealed 14-30 m off the route (${ev.ambush.per100m} per 100 m), coordinated plan possible at ${pct(ev.ambush.coordinatedShare)} of the route`,
     `counts: ${Object.entries(ev.counts).map(([k, v]) => `${k} ${v}`).join(', ')}`,
     `similarity to the profile ${ev.similarity.score}: ${ev.similarity.metrics.map((m) => `${m.key} ${m.value}${m.target ? ` [${m.target[0]}..${m.target[1]}]` : ''}${m.score < 1 ? ` x${m.score}` : ''}`).join(', ')}`,
+    `tactical ${ev.tactical.score} | rooms ${ev.tactical.roomsReachable}/${ev.tactical.roomsTotal} reachable | blocked windows ${ev.tactical.blockedWindows.length} | firing lines ${ev.tactical.firingLines.count} (max ${ev.tactical.firingLines.maxLength_m} m, ${ev.tactical.firingLines.openingsWithLos}/${ev.tactical.firingLines.openingsTotal} apertures) | route cover ${pct(ev.tactical.routeCover.share)} | multi-level routes ${ev.tactical.multiLevelRoutes.count} | mantle ${ev.tactical.mantle.valid}`,
   ];
+  if (ev.tactical.unreachableRooms.length) lines.push(`  unreachable rooms: ${ev.tactical.unreachableRooms.slice(0, 6).join(', ')}`);
+  if (ev.tactical.blockedWindows.length) lines.push(`  blocked apertures: ${ev.tactical.blockedWindows.slice(0, 4).map((w) => `${w.id} (${w.reason})`).join('; ')}`);
   const bad = ev.route.legs.filter((x) => !x.ok).slice(0, 5);
   for (const x of bad) lines.push(`  leg ${x.index} (${x.layer}): ${x.reason}`);
   return lines.slice(0, 30);
