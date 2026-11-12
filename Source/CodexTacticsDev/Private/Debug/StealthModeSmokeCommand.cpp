@@ -92,6 +92,8 @@ namespace StealthModeSmoke
 		TWeakObjectPtr<AOperativeCharacter> Op;
 		TWeakObjectPtr<AEnemyCharacter> Enemy;
 		TWeakObjectPtr<AEnemyCharacter> AnchorEnemy;
+		TWeakObjectPtr<AEnemyCharacter> AutoEnemyFar;
+		TWeakObjectPtr<AEnemyCharacter> AutoEnemyNear;
 		TWeakObjectPtr<AStaticMeshActor> Wall;
 		TWeakObjectPtr<UMaterialInterface> OriginalMaterial;
 		TMap<FString, int32> Votes;
@@ -1008,6 +1010,100 @@ namespace StealthModeSmoke
 			Op->SetStealthMode(false);
 			Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: leaving stealth clears manual stealth look anchor"));
 			if (State.AnchorEnemy.IsValid()) { State.AnchorEnemy->Destroy(); }
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			Op->SetStealthMode(true);
+			Next(State, 613);
+			break;
+		}
+		case 613:
+		{
+			if (State.StageTime < 0.25f) { return true; }
+			auto SpawnFrozenThreat = [World](const FVector& Pos, const FRotator& Rot) -> AEnemyCharacter*
+			{
+				UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+				AEnemyCharacter*Threat = Waves ? Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, Pos, Rot) : nullptr;
+				if (Threat)
+				{
+					Threat->SetActorTickEnabled(false);
+					Threat->CustomTimeDilation = 0.f;
+					Threat->bOverridePerception = true;
+					Threat->PerceptionOverride.SightRangeCm = 0.f;
+					Threat->PerceptionOverride.ProximityCm = 0.f;
+					Threat->PerceptionOverride.SmellRadiusCm = 0.f;
+				}
+				return Threat;
+			};
+			// Behind operative (180 deg) must NOT trigger automatic threat lock (outside +-100 deg FOV).
+			State.AutoEnemyNear = SpawnFrozenThreat(State.Origin - State.Forward * 300.f, State.Forward.Rotation());
+			Sight->Refresh();
+			Op->UpdateStealthLookLock(0.05f);
+			Check(State, State.AutoEnemyNear.IsValid() && !Op->HasStealthAutoLookTarget(),
+				TEXT("section 1: visible threat behind operative (outside +-100 deg) does not auto-lock"));
+
+			// Threat at +90 deg inside +-100 deg locks on.
+			State.AutoEnemyFar = SpawnFrozenThreat(State.Origin + State.Right * 380.f, (-State.Right).Rotation());
+			Sight->Refresh();
+			Op->UpdateStealthLookLock(0.05f);
+			Check(State, State.AutoEnemyFar.IsValid() && Op->GetStealthAutoLookActor() == State.AutoEnemyFar.Get(),
+				TEXT("section 1: visible threat inside +-100 deg triggers automatic stealth look-lock"));
+
+			// Move second threat to -300 cm (only 21% closer than 380 cm): lock stays on AutoEnemyFar.
+			State.AutoEnemyNear->SetActorLocation(State.Origin - State.Right * 300.f, false, nullptr, ETeleportType::TeleportPhysics);
+			Sight->Refresh();
+			Op->UpdateStealthLookLock(0.05f);
+			Check(State, Op->GetStealthAutoLookActor() == State.AutoEnemyFar.Get(),
+				TEXT("section 1: auto lock keeps current threat when new threat is less than 30% closer"));
+
+			// Move second threat to +220 cm (>30% closer, 220 < 380 * 0.7): lock switches to AutoEnemyNear.
+			State.AutoEnemyNear->SetActorLocation(State.Origin + State.Forward * 220.f, false, nullptr, ETeleportType::TeleportPhysics);
+			Sight->Refresh();
+			Op->UpdateStealthLookLock(0.05f);
+			Check(State, Op->GetStealthAutoLookActor() == State.AutoEnemyNear.Get(),
+				TEXT("section 1: auto lock switches to closer threat beyond 30% switch threshold"));
+			Next(State, 614);
+			break;
+		}
+		case 614:
+		{
+			if (State.StageTime < 0.35f) { return true; }
+			// Rotate away briefly and verify torso/head look lead or alignment toward AutoEnemyNear.
+			if (State.AutoEnemyFar.IsValid()) { State.AutoEnemyFar->Destroy(); }
+			if (State.AutoEnemyNear.IsValid())
+			{
+				State.AutoEnemyNear->SetActorHiddenInGame(true);
+				Op->UpdateStealthLookLock(0.5f);
+				Check(State, Op->HasStealthAutoLookTarget() && Op->GetStealthAutoLookActor() == State.AutoEnemyNear.Get(),
+					TEXT("section 1: lost threat lock holds memory inside 2.0 s window"));
+				Op->UpdateStealthLookLock(1.7f);
+				Check(State, !Op->HasStealthAutoLookTarget(),
+					TEXT("section 1: lost threat lock expires cleanly after >2.0 s"));
+
+				State.AutoEnemyNear->SetActorHiddenInGame(false);
+				State.AutoEnemyNear->SetActorLocation(State.Origin + State.Right * 320.f, false, nullptr, ETeleportType::TeleportPhysics);
+				Sight->Refresh();
+				Op->UpdateStealthLookLock(0.05f);
+				// Shift+LMB manual anchor overrides auto threat lock cleanly.
+				const FVector ManualTarget = State.Origin - State.Right * 320.f;
+				PC->SetSimulatedShiftModifier(true);
+				FHitResult ManualHit(nullptr, nullptr, ManualTarget, FVector::UpVector);
+				ManualHit.bBlockingHit = true;
+				PC->HandleWorldHit(ManualHit);
+				PC->SetSimulatedShiftModifier(false);
+				FVector ActiveLook = FVector::ZeroVector;
+				Check(State, Op->HasStealthAutoLookTarget() && Op->HasStealthManualLookTarget() && Op->GetStealthLookPoint(ActiveLook)
+					&& FVector::Dist2D(ActiveLook, ManualTarget) < 5.f,
+					TEXT("section 1/5: manual Shift+LMB look anchor beats automatic threat lock"));
+				PC->SetSimulatedShiftModifier(true);
+				FHitResult SelfHitAgain(Op, nullptr, Op->GetActorLocation(), FVector::UpVector);
+				SelfHitAgain.bBlockingHit = true;
+				PC->HandleWorldHit(SelfHitAgain);
+				PC->SetSimulatedShiftModifier(false);
+				Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: manual anchor cleared before M-B check"));
+				State.AutoEnemyNear->Destroy();
+			}
+			Op->ClearStealthAutoLookTarget();
 			Op->StopOperative();
 			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
 			Op->SetActorRotation(State.Forward.Rotation());

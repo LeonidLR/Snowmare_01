@@ -25,6 +25,23 @@ struct CODEXTACTICS_API FStealthModeConfig
 
 namespace StealthModeRules
 {
+	struct CODEXTACTICS_API FStealthLookLockCandidate
+	{
+		uint32 TargetId = 0;
+		FVector Location = FVector::ZeroVector;
+		bool bVisible = false;
+	};
+
+	struct CODEXTACTICS_API FStealthLookLockState
+	{
+		uint32 TargetId = 0;
+		FVector LastKnownLocation = FVector::ZeroVector;
+		float TimeSinceSeenSeconds = 0.f;
+
+		bool IsActive() const { return TargetId != 0; }
+		void Reset() { *this = FStealthLookLockState(); }
+	};
+
 	/** Toggle a mixed selection on; toggle an entirely stealthed selection off. An empty selection never enables it. */
 	CODEXTACTICS_API bool EnableForSelection(int32 SelectedCount, int32 StealthedCount);
 	/** Formation blocks stealth: allowed only in SOLO mode or while followers hold position (`bSoloOrHolding`), when guarding outside the formation, or when no active formation runs. */
@@ -40,6 +57,13 @@ namespace StealthModeRules
 	CODEXTACTICS_API float DetectionBuildupScale(bool bActive, bool bFast, const FStealthModeConfig& Config);
 	CODEXTACTICS_API float FootstepNoiseScale(bool bActive, const FStealthModeConfig& Config);
 	CODEXTACTICS_API float FootstepNoiseScale(bool bActive, bool bFast, const FStealthModeConfig& Config);
+	/** True when CandidateLocation lies outside MinDistanceCm and within +-FovDeg of HeadingYawDeg in the XY plane. */
+	CODEXTACTICS_API bool IsInLookLockFov(const FVector& ObserverLocation, float HeadingYawDeg, const FVector& CandidateLocation,
+		float FovDeg, float MinDistanceCm = 50.f);
+	/** Updates automatic stealth threat look-lock: keeps seen threat, remembers lost threat for LookLockKeepSeconds, switches only when closer than LookLockSwitchRatio. */
+	CODEXTACTICS_API void UpdateLookLock(FStealthLookLockState& State, const FVector& ObserverLocation, float HeadingYawDeg,
+		const TArray<FStealthLookLockCandidate>& Candidates, float DeltaSeconds, const FStealthModeConfig& Config,
+		float MinDistanceCm = 50.f);
 	/** Optional JSON keys over Base; malformed values keep Base; multipliers/visuals clamp to [0, 1], speeds to [0, 2000], and look-lock tuning to non-negative bounds. */
 	CODEXTACTICS_API FStealthModeConfig FromJson(const FJsonObject& Json, const FStealthModeConfig& Base = FStealthModeConfig());
 	/** Loads the project data once. A missing/invalid file keeps the documented defaults. */

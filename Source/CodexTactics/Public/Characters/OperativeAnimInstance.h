@@ -158,6 +158,7 @@ struct FOperativeClipState
 	TObjectPtr<UAnimSequence> Sequence = nullptr;
 	float Time = 0.f;
 	float Weight = 0.f;
+	float YawOffset = 0.f;
 };
 
 /** Proxy that blends the clip snapshot when the instance has no graph (or native locomotion is forced). */
@@ -276,6 +277,7 @@ private:
 	void BlendStealthLayer(FPoseContext& Output) const;
 	TStaticArray<FOperativeClipState, 12> StealthClips;
 	float StealthWeight = 0.f;
+	float StealthLookYawDeg = 0.f;
 	void BlendProneCrawlLayer(FPoseContext& Output) const;
 	TStaticArray<FOperativeClipState, 6> CrawlClips;
 	float CrawlWeight = 0.f;
@@ -1376,6 +1378,7 @@ public:
 	/** Current native pose samples / shared phase / measured speed, for integration smokes. */
 	const TStaticArray<FOperativeClipState, 12>& GetStealthClips() const { return StealthClips; }
 	float GetStealthPhase() const { return StealthPhase; }
+	float GetStealthLookYawDeg() const { return StealthLookYawDeg; }
 	float GetStealthNominalSpeed(FName ClipName) const { return StealthSetData.ClipSpeeds.FindRef(ClipName); }
 	const UAnimSequenceBase* GetStealthDominantClip() const;
 	/** Named clip lookup from the retargeted stealth set (e.g. stealth cover ghosts). */
@@ -2098,6 +2101,7 @@ private:
 	TStaticArray<FOperativeClipState, 12> StealthClips;
 	FWeaponLayerDirectionState StealthDirection;
 	float StealthWeight = 0.f;
+	float StealthLookYawDeg = 0.f;
 	float StealthPhase = 0.f;
 	float StealthIdleTime = 0.f;
 	float StealthActionTime = 0.f;

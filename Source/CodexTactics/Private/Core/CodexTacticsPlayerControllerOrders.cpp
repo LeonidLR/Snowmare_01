@@ -391,9 +391,9 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 				if (bClearedAny)
 				{
 					UFloatingTextSubsystem::SpawnAboveOperative(ClickedSelf, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+					HideCoverPreview();
+					return;
 				}
-				HideCoverPreview();
-				return;
 			}
 			else if (StealthedSelected.Num() == SelectedGroup.Num() && Hit.bBlockingHit)
 			{

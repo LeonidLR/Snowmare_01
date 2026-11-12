@@ -409,6 +409,12 @@ public:
 	void ClearStealthManualLookTarget();
 	bool HasStealthManualLookTarget() const { return bStealthMode && bHasStealthManualLook; }
 	FVector GetStealthManualLookTarget() const { return StealthManualLookTarget; }
+	/** Stealth v2 §1: automatic threat look-lock (within LookLockFovDeg, remembered for LookLockKeepSeconds). */
+	bool HasStealthAutoLookTarget() const { return bStealthMode && StealthAutoLookTargetId != 0 && StealthAutoLookActor.IsValid(); }
+	FVector GetStealthAutoLookTarget() const { return StealthAutoLookLocation; }
+	const AActor* GetStealthAutoLookActor() const { return HasStealthAutoLookTarget() ? StealthAutoLookActor.Get() : nullptr; }
+	void ClearStealthAutoLookTarget();
+	void UpdateStealthLookLock(float DeltaSeconds);
 	/** Returns the active stealth look target point (priority: manual look anchor > automatic threat lock in §1). */
 	bool GetStealthLookPoint(FVector& OutPoint) const;
 
@@ -3215,6 +3221,12 @@ private:
 	bool bHasStealthManualLook = false;
 	UPROPERTY(Transient)
 	FVector StealthManualLookTarget = FVector::ZeroVector;
+	TWeakObjectPtr<AActor> StealthAutoLookActor;
+	uint32 StealthAutoLookTargetId = 0;
+	UPROPERTY(Transient)
+	FVector StealthAutoLookLocation = FVector::ZeroVector;
+	UPROPERTY(Transient)
+	float StealthAutoLookLostSeconds = 0.f;
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> StealthMaterial;
 	UPROPERTY(Transient)

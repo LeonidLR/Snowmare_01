@@ -109,6 +109,16 @@ float UTacticalSightSubsystem::GetFovDeg(EOperativeStance Stance) const
 	return IsFovRuleActive() ? SightRules::FieldOfViewDeg(GetFovConfig(), Stance) : 360.f;
 }
 
+float UTacticalSightSubsystem::GetOperativeFovDeg(const AOperativeCharacter& Operative) const
+{
+	float Deg = GetFovDeg(Operative.GetStance());
+	if (Operative.IsInStealthMode() && IsFovRuleActive())
+	{
+		Deg = FMath::Max(Deg, StealthModeRules::GetConfig().LookLockFovDeg * 2.f);
+	}
+	return Deg;
+}
+
 bool UTacticalSightSubsystem::IsSquadSightActive() const
 {
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
@@ -348,7 +358,7 @@ bool UTacticalSightSubsystem::CanOperativeSee(const AOperativeCharacter& Operati
 	// 2026-10-20: ... and only inside his field of view round his facing (stance FOV; the 2 m touch reveal is the caller's).
 	const FVector Eye = EyePoint(Operative);
 	// 2026-11-02: his range grows with his height level (GetSightRangeCm; walls still hide what they hide - the trace is 3D).
-	if (FVector::Dist(Eye, TargetPoint) <= GetSightRangeCm(Operative) && SightRules::IsInFieldOfView(Eye, Operative.GetSightFacing(), TargetPoint, GetFovDeg(Operative.GetStance()))
+	if (FVector::Dist(Eye, TargetPoint) <= GetSightRangeCm(Operative) && SightRules::IsInFieldOfView(Eye, Operative.GetSightFacing(), TargetPoint, GetOperativeFovDeg(Operative))
 		&& HasClearSight(Eye, TargetPoint))
 	{
 		return true;

@@ -93,6 +93,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// a sprint turns to the movement and stops the fire.
 	bFacingCombatTarget = false;
 	bFacingFormationSector = false;
+	UpdateStealthLookLock(DeltaTime);
 	if (bInCover)
 	{
 		// User design rule 2026-10-06: the back stays against the wall (actor yaw = wall normal); the threat side only picks the _L/_R clip

@@ -1,10 +1,12 @@
 // Per-operative stealth, designer task 003. UE-only; no Godot reference.
 // Reuses the existing formation ghost material at runtime; source materials and assets are never changed.
 #include "Characters/OperativeCharacter.h"
-
+#include "Characters/OperativeCharacterInternal.h"
+#include "AI/PmcSquadSubsystem.h"
 #include "Characters/StealthModeRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Components/MeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -67,6 +69,7 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		SetSprinting(false);
 		bStealthFast = false;
 		ClearStealthManualLookTarget();
+		ClearStealthAutoLookTarget();
 		bStealthMode = true;
 		if (Stance != EOperativeStance::Prone)
 		{
@@ -77,6 +80,7 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 	{
 		bStealthFast = false;
 		ClearStealthManualLookTarget();
+		ClearStealthAutoLookTarget();
 		bStealthMode = false;
 		ApplyMovementParams();
 	}
@@ -116,12 +120,74 @@ void AOperativeCharacter::ClearStealthManualLookTarget()
 	StealthManualLookTarget = FVector::ZeroVector;
 }
 
+void AOperativeCharacter::ClearStealthAutoLookTarget()
+{
+	StealthAutoLookActor.Reset();
+	StealthAutoLookTargetId = 0;
+	StealthAutoLookLocation = FVector::ZeroVector;
+	StealthAutoLookLostSeconds = 0.f;
+}
+
+void AOperativeCharacter::UpdateStealthLookLock(float DeltaSeconds)
+{
+	if (!bStealthMode || !GetWorld() || !HealthComponent || !HealthComponent->IsAlive() || IsKilledInAction())
+	{
+		ClearStealthAutoLookTarget();
+		return;
+	}
+	const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>();
+	const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld());
+	TArray<StealthModeRules::FStealthLookLockCandidate> Candidates;
+	TMap<uint32, AActor*> CandidateActors;
+	for (AActor* Target : OperativeCharacterInternal::GatherTargetsFor(*this))
+	{
+		if (!IsValid(Target))
+		{
+			continue;
+		}
+		const UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>();
+		const AOperativeCharacter* OtherOp = Cast<AOperativeCharacter>(Target);
+		const bool bLive = (!TargetHealth || TargetHealth->IsAlive())
+			&& (!OtherOp || (!OtherOp->IsKilledInAction() && OtherOp->TeamId != TeamId));
+		if (!bLive)
+		{
+			continue;
+		}
+		const bool bVisible = !Target->IsHidden()
+			&& (!Sight || (OtherOp ? !Sight->IsHostileOperativeConcealed(OtherOp) : Sight->IsVisibleToSquad(Target)))
+			&& (!OtherOp || !Pmc || Pmc->IsVisibleToTeam(TeamId, OtherOp));
+		const uint32 Id = Target->GetUniqueID();
+		Candidates.Add({ Id, Target->GetActorLocation(), bVisible });
+		CandidateActors.Add(Id, Target);
+	}
+	if (StealthAutoLookTargetId != 0 && (!StealthAutoLookActor.IsValid() || !CandidateActors.Contains(StealthAutoLookTargetId)))
+	{
+		ClearStealthAutoLookTarget();
+	}
+	StealthModeRules::FStealthLookLockState LockState;
+	LockState.TargetId = StealthAutoLookTargetId;
+	LockState.LastKnownLocation = StealthAutoLookLocation;
+	LockState.TimeSinceSeenSeconds = StealthAutoLookLostSeconds;
+	const bool bMoving = GetVelocity().SizeSquared2D() > 10.f * 10.f;
+	const float HeadingYaw = bMoving ? static_cast<float>(GetVelocity().Rotation().Yaw) : static_cast<float>(GetActorRotation().Yaw);
+	StealthModeRules::UpdateLookLock(LockState, GetActorLocation(), HeadingYaw, Candidates, DeltaSeconds, StealthModeRules::GetConfig(), 50.f);
+	StealthAutoLookTargetId = LockState.TargetId;
+	StealthAutoLookLocation = LockState.LastKnownLocation;
+	StealthAutoLookLostSeconds = LockState.TimeSinceSeenSeconds;
+	StealthAutoLookActor = StealthAutoLookTargetId != 0 ? CandidateActors.FindRef(StealthAutoLookTargetId) : nullptr;
+}
+
 bool AOperativeCharacter::GetStealthLookPoint(FVector& OutPoint) const
 {
 	constexpr float LookPointDeadRadiusSq = 50.f * 50.f;
 	if (HasStealthManualLookTarget() && FVector::DistSquared2D(GetActorLocation(), StealthManualLookTarget) > LookPointDeadRadiusSq)
 	{
 		OutPoint = StealthManualLookTarget;
+		return true;
+	}
+	if (HasStealthAutoLookTarget() && FVector::DistSquared2D(GetActorLocation(), StealthAutoLookLocation) > LookPointDeadRadiusSq)
+	{
+		OutPoint = StealthAutoLookLocation;
 		return true;
 	}
 	return false;

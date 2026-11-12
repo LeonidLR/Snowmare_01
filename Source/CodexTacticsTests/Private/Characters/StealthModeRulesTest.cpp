@@ -140,4 +140,53 @@ bool FStealthFormationRuleTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStealthLookLockTest, "CodexTactics.Characters.StealthMode.LookLock",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FStealthLookLockTest::RunTest(const FString&)
+{
+	using StealthModeRules::FStealthLookLockCandidate;
+	using StealthModeRules::FStealthLookLockState;
+	using StealthModeRules::IsInLookLockFov;
+	using StealthModeRules::UpdateLookLock;
+
+	FStealthModeConfig Config;
+	Config.bEnabled = true;
+	Config.LookLockFovDeg = 100.f;
+	Config.LookLockKeepSeconds = 2.0f;
+	Config.LookLockSwitchRatio = 0.7f;
+
+	const FVector Origin(0.f, 0.f, 0.f);
+	TestTrue(TEXT("90 deg right is inside +-100 deg FOV"), IsInLookLockFov(Origin, 0.f, FVector(0.f, 300.f, 0.f), 100.f));
+	TestFalse(TEXT("120 deg is outside +-100 deg FOV"), IsInLookLockFov(Origin, 0.f, FVector(-150.f, 260.f, 0.f), 100.f));
+	TestFalse(TEXT("Target within dead radius is ignored"), IsInLookLockFov(Origin, 0.f, FVector(30.f, 0.f, 0.f), 100.f, 50.f));
+
+	FStealthLookLockState State;
+	TArray<FStealthLookLockCandidate> Candidates = {
+		{ 10u, FVector(0.f, 400.f, 0.f), true },
+		{ 20u, FVector(-300.f, 0.f, 0.f), true } // 180 deg behind
+	};
+	UpdateLookLock(State, Origin, 0.f, Candidates, 0.1f, Config);
+	TestEqual(TEXT("Locks onto visible target inside +-100 deg"), State.TargetId, 10u);
+
+	// Second threat 20% closer (320 vs 400 = 0.8 >= 0.7) must NOT switch lock.
+	Candidates.Add({ 30u, FVector(320.f, 0.f, 0.f), true });
+	UpdateLookLock(State, Origin, 0.f, Candidates, 0.1f, Config);
+	TestEqual(TEXT("Does not switch to threat < 30% closer"), State.TargetId, 10u);
+
+	// Moving threat 40% closer (240 vs 400 = 0.6 < 0.7) switches lock.
+	Candidates[2].Location = FVector(240.f, 0.f, 0.f);
+	UpdateLookLock(State, Origin, 0.f, Candidates, 0.1f, Config);
+	TestEqual(TEXT("Switches to threat > 30% closer"), State.TargetId, 30u);
+
+	// Lost sight holds last known spot up to LookLockKeepSeconds (2.0 s), then clears.
+	Candidates = { { 30u, FVector(240.f, 0.f, 0.f), false } };
+	UpdateLookLock(State, Origin, 0.f, Candidates, 1.5f, Config);
+	TestEqual(TEXT("Remembers lost target within keep window"), State.TargetId, 30u);
+	UpdateLookLock(State, Origin, 0.f, Candidates, 0.6f, Config);
+	TestEqual(TEXT("Drops lost target after keep window expires"), State.TargetId, 0u);
+
+	return true;
+}
+
 #endif

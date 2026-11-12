@@ -1417,6 +1417,7 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	CrawlWeight = Instance->CrawlWeight;
 	StealthClips = Instance->StealthClips;
 	StealthWeight = Instance->StealthWeight;
+	StealthLookYawDeg = Instance->StealthLookYawDeg;
 	InjuredClips = Instance->InjuredClips;
 	InjuredWeight = Instance->InjuredWeight;
 	InjuredTorsoShare = Instance->InjuredTorsoShare;

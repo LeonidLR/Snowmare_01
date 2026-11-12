@@ -147,6 +147,7 @@ public:
 	 */
 	bool IsFovRuleActive() const;
 	float GetFovDeg(EOperativeStance Stance) const;
+	float GetOperativeFovDeg(const AOperativeCharacter& Operative) const;
 	static SightRules::FSightFovConfig GetFovConfig();
 
 	/**

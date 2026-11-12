@@ -72,6 +72,92 @@ namespace StealthModeRules
 		return FMath::Clamp(Config.FootstepNoiseMultiplier, 0.f, 1.f);
 	}
 
+	bool IsInLookLockFov(const FVector& ObserverLocation, float HeadingYawDeg, const FVector& CandidateLocation,
+		float FovDeg, float MinDistanceCm)
+	{
+		const FVector2D Delta(CandidateLocation.X - ObserverLocation.X, CandidateLocation.Y - ObserverLocation.Y);
+		const float MinDistSq = FMath::Square(FMath::Max(0.f, MinDistanceCm));
+		if (Delta.SizeSquared() <= MinDistSq)
+		{
+			return false;
+		}
+		const float TargetYaw = FMath::RadiansToDegrees(FMath::Atan2(Delta.Y, Delta.X));
+		const float AngleError = FMath::Abs(FRotator::NormalizeAxis(TargetYaw - HeadingYawDeg));
+		return AngleError <= FMath::Clamp(FovDeg, 0.f, 180.f);
+	}
+
+	void UpdateLookLock(FStealthLookLockState& State, const FVector& ObserverLocation, float HeadingYawDeg,
+		const TArray<FStealthLookLockCandidate>& Candidates, float DeltaSeconds, const FStealthModeConfig& Config,
+		float MinDistanceCm)
+	{
+		if (!Config.bEnabled)
+		{
+			State.Reset();
+			return;
+		}
+		const FStealthLookLockCandidate* Current = nullptr;
+		const FStealthLookLockCandidate* BestVisibleInFov = nullptr;
+		float BestVisibleDist = TNumericLimits<float>::Max();
+		for (const FStealthLookLockCandidate& Candidate : Candidates)
+		{
+			if (Candidate.TargetId == 0)
+			{
+				continue;
+			}
+			if (Candidate.TargetId == State.TargetId)
+			{
+				Current = &Candidate;
+			}
+			if (Candidate.bVisible && IsInLookLockFov(ObserverLocation, HeadingYawDeg, Candidate.Location, Config.LookLockFovDeg, MinDistanceCm))
+			{
+				const float Dist = FVector::Dist2D(ObserverLocation, Candidate.Location);
+				if (Dist < BestVisibleDist)
+				{
+					BestVisibleDist = Dist;
+					BestVisibleInFov = &Candidate;
+				}
+			}
+		}
+
+		const float SwitchRatio = FMath::Clamp(Config.LookLockSwitchRatio, 0.f, 1.f);
+		if (Current && Current->bVisible && IsInLookLockFov(ObserverLocation, HeadingYawDeg, Current->Location, Config.LookLockFovDeg, MinDistanceCm))
+		{
+			State.LastKnownLocation = Current->Location;
+			State.TimeSinceSeenSeconds = 0.f;
+			const float CurrentDist = FVector::Dist2D(ObserverLocation, Current->Location);
+			if (BestVisibleInFov && BestVisibleInFov->TargetId != State.TargetId && BestVisibleDist < CurrentDist * SwitchRatio)
+			{
+				State.TargetId = BestVisibleInFov->TargetId;
+				State.LastKnownLocation = BestVisibleInFov->Location;
+			}
+			return;
+		}
+
+		if (State.TargetId != 0)
+		{
+			State.TimeSinceSeenSeconds += FMath::Max(0.f, DeltaSeconds);
+			if (Current && State.TimeSinceSeenSeconds <= FMath::Max(0.f, Config.LookLockKeepSeconds))
+			{
+				const float LastKnownDist = FVector::Dist2D(ObserverLocation, State.LastKnownLocation);
+				if (BestVisibleInFov && BestVisibleInFov->TargetId != State.TargetId && BestVisibleDist < LastKnownDist * SwitchRatio)
+				{
+					State.TargetId = BestVisibleInFov->TargetId;
+					State.LastKnownLocation = BestVisibleInFov->Location;
+					State.TimeSinceSeenSeconds = 0.f;
+				}
+				return;
+			}
+			State.Reset();
+		}
+
+		if (BestVisibleInFov)
+		{
+			State.TargetId = BestVisibleInFov->TargetId;
+			State.LastKnownLocation = BestVisibleInFov->Location;
+			State.TimeSinceSeenSeconds = 0.f;
+		}
+	}
+
 	FStealthModeConfig FromJson(const FJsonObject& Json, const FStealthModeConfig& Base)
 	{
 		FStealthModeConfig Config = Base;
