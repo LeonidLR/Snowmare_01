@@ -114,6 +114,23 @@ class TestChatDispatcher(unittest.TestCase):
         self.assertEqual(cat, "status")
         self.assertEqual(src, "safety_guard")
 
+        # Default config uses deterministic rules only (no Ollama call)
+        real_cfg = chat_dispatcher.load_config()
+        self.assertEqual(real_cfg.get("classifier_mode"), "rules")
+        self.assertEqual(real_cfg.get("local_model"), "")
+        c_done, s_done = chat_dispatcher.classify_message(
+            {"from": "gemini", "to": "claude", "topic": "gemini-031", "text": "031 done 79b6020d"},
+            real_cfg,
+        )
+        self.assertEqual(c_done, "status")
+        self.assertEqual(s_done, "rules")
+        c_queue, s_queue = chat_dispatcher.classify_message(
+            {"from": "claude", "to": "gemini", "topic": "gemini-queue", "text": "Gemini, твоя очередь сейчас: ..."},
+            real_cfg,
+        )
+        self.assertEqual(c_queue, "task")
+        self.assertEqual(s_queue, "rules")
+
     def test_verbatim_forwarding_and_recipient_routing_and_no_wake_on_status(self) -> None:
         day_dt = dt.datetime(2026, 11, 12, 14, 0, 0, tzinfo=dt.timezone.utc)
         ts_str = day_dt.isoformat()

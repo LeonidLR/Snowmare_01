@@ -1,6 +1,7 @@
 {
   "poll_interval_sec": 10,
-  "local_model": "codex-local",
+  "classifier_mode": "rules",
+  "local_model": "",
   "local_model_timeout_sec": 20,
   "rate_limit_min": 10,
   "quiet_hours": {

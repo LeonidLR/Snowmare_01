@@ -2,9 +2,9 @@
 """Chat dispatcher daemon: classifies new chat messages and wakes recipients safely.
 
 Reads Saved/AgentChat/chat.jsonl via agent_chat.py storage rules, classifies messages
-using local Ollama (`local_task.py` / `codex-local`) with deterministic keyword
-fallback, enforces rate limits, quiet hours, spend caps, kill switch (STOP), and
-forwards messages VERBATIM with fixed attribution header. Standard library only.
+using deterministic rules by default (keywords, addressee, question/blocker),
+enforces rate limits, quiet hours, spend caps, kill switch (STOP), and forwards
+messages VERBATIM with fixed attribution header. Standard library only.
 """
 from __future__ import annotations
 
@@ -150,13 +150,18 @@ def is_unsafe_meta_instruction(msg: dict[str, Any]) -> bool:
 
 
 def classify_message_keywords(msg: dict[str, Any]) -> str:
-    """Deterministic keyword fallback classification into status|task|question|blocker|merge-request."""
+    """Deterministic rules classification into status|task|question|blocker|merge-request.
+
+    Uses keywords, addressee (`from`/`to`/`topic`), question markers, and blocker markers.
+    """
     if is_unsafe_meta_instruction(msg):
         return "status"
 
     text = str(msg.get("text") or "").strip()
     low = text.lower()
     topic = str(msg.get("topic") or "").lower()
+    sender = str(msg.get("from") or "").strip().lower()
+    recipient = str(msg.get("to") or "").strip().lower()
 
     # Check blockers first (only genuine urgency/breakage)
     blocker_patterns = (
@@ -170,7 +175,7 @@ def classify_message_keywords(msg: dict[str, Any]) -> str:
         r"опасн(?:ый|о)\s+баг",
         r"сломал(?:ось|и)?\b",
     )
-    if any(re.search(pat, low) for pat in blocker_patterns):
+    if any(re.search(pat, low) for pat in blocker_patterns) or "blocker" in topic:
         return "blocker"
 
     # Merge / branch review requests
@@ -195,7 +200,11 @@ def classify_message_keywords(msg: dict[str, Any]) -> str:
     ):
         return "question"
 
-    # Tasks vs status updates
+    # Pure concise done-reports ("N done <hash>") are status updates unless requesting merge/review
+    if re.match(r"^(?:[\w-]+\s+)?done\b(?:\s+[0-9a-f]{6,12})?\b", low) and "review" not in low:
+        return "status"
+
+    # Tasks vs status updates (taking addressee + task directives into account)
     task_patterns = (
         r"\bсделай\b",
         r"\bисправь\b",
@@ -206,6 +215,7 @@ def classify_message_keywords(msg: dict[str, Any]) -> str:
         r"\bзадача\b",
         r"теперь\s+обязательно",
         r"следующая:",
+        r"твоя\s+очередь",
         r"решение\s+дизайнера:",
         r"\bimplement\b",
         r"\bfix\b",
@@ -213,6 +223,8 @@ def classify_message_keywords(msg: dict[str, Any]) -> str:
         r"docs/port/(?:codex|gemini)/inbox/",
     )
     if any(re.search(pat, low) for pat in task_patterns):
+        return "task"
+    if sender in ("claude", "designer") and recipient in ("codex", "gemini") and "очередь" in low:
         return "task"
 
     return "status"
@@ -267,15 +279,16 @@ def classify_message(
     cfg: dict[str, Any],
     classifier_fn: Callable[[dict[str, Any]], str | None] | None = None,
 ) -> tuple[str, str]:
-    """Returns (category, source) where source is 'safety_guard' | 'local_model' | 'keyword_fallback'."""
+    """Returns (category, source) where source is 'safety_guard' | 'rules' | 'custom' | 'local_model'."""
     if is_unsafe_meta_instruction(msg):
         return "status", "safety_guard"
     if classifier_fn is not None:
         cat = classifier_fn(msg)
         if cat in VALID_CATEGORIES:
-            return cat, "local_model"
-    else:
-        model = str(cfg.get("local_model") or "codex-local")
+            return cat, "custom"
+    mode = str(cfg.get("classifier_mode") or "rules").strip().lower()
+    if mode == "local_model":
+        model = str(cfg.get("local_model") or "").strip()
         if model:
             cat = classify_message_local(
                 msg,
@@ -284,7 +297,7 @@ def classify_message(
             )
             if cat in VALID_CATEGORIES:
                 return cat, "local_model"
-    return classify_message_keywords(msg), "keyword_fallback"
+    return classify_message_keywords(msg), "rules"
 
 
 def format_forwarded_message(msg: dict[str, Any]) -> str:
