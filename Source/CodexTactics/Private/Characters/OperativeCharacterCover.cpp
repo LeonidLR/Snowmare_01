@@ -300,6 +300,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		}
 	}
 	ClearIdleFacing();
+	bStealthFast = false;
 	if (!bSameWall)
 	{
 		// High cover: standing (the wall covers him); low cover: crouched. Prone stays prone (hidden by the 60 cm rule).
@@ -518,6 +519,7 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	// Side-step at the crouch-walk pace along the wall, facing the threat side (UpdateCombatFacing holds the facing):
 	// forward towards it, backwards away from it (CoverFacingRules::IsShimmyForward).
 	TGuardValue<bool> CoverOrder(bCoverMoveOrder, true);
+	bStealthFast = false;
 	bSprinting = false;
 	ApplyMovementParams(OperativeMovementRules::ComputeMaxSpeed(MovementConfig, EOperativeStance::Crouching, false, IsWounded(), bCarrying) * ColdSpeedMultiplier);
 	const EOperativeOrderResult Result = RequestMove(Target.WorldLocation);

@@ -70,6 +70,9 @@ public:
 	/** The silhouette MID applied to the body (overlay and base slots). */
 	UMaterialInstanceDynamic* GetGhostMaterialInstance() const { return Material; }
 
+	/** The clip last selected by ShowPose (cover idle / corner lean; smokes). */
+	const UAnimSequenceBase* GetShownClip() const { return ShownClip.Get(); }
+
 private:
 	UMaterialInterface* ResolveBaseMaterial(const AOperativeCharacter& InOperative) const;
 	/** ShowFor / ShowCornerPeekFor: the ghost at Slot facing Facing, in the cover idle or (bFireIdle) the corner fire stance. */
@@ -87,6 +90,9 @@ private:
 
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> Material;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UAnimSequenceBase> ShownClip;
 
 	TWeakObjectPtr<AOperativeCharacter> Operative;
 	FCoverSlot Slot;

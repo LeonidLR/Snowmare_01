@@ -394,6 +394,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		if (!bFreezeCoverHoverForTesting)
 		{
 			UpdateSquadMoveHover(bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+			UpdateStealthWallHover(PeekTurnBased ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
 		}
 		// Rev 5g: an EXIT arrow under the cursor lights up and shows the hand too.
 		AInteriorExitArrowActor* HoveredExit = bCursorHit ? Cast<AInteriorExitArrowActor>(TrapHit.GetActor()) : nullptr;

@@ -1378,6 +1378,8 @@ public:
 	float GetStealthPhase() const { return StealthPhase; }
 	float GetStealthNominalSpeed(FName ClipName) const { return StealthSetData.ClipSpeeds.FindRef(ClipName); }
 	const UAnimSequenceBase* GetStealthDominantClip() const;
+	/** Named clip lookup from the retargeted stealth set (e.g. stealth cover ghosts). */
+	UAnimSequenceBase* GetStealthNamedClip(FName ClipName) const { return StealthSetData.NamedClips.FindRef(ClipName); }
 	/** Pack crouch entry, used by both the stance montage and its movement hold. */
 	UAnimSequenceBase* GetStealthCrouchClip() const;
 	/** The gait the layer plays this frame (smokes). */

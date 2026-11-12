@@ -14,6 +14,13 @@ struct CODEXTACTICS_API FStealthModeConfig
 	bool bBreakOnFire = true;
 	float VisualOpacity = 0.4f;
 	float VisualGray = 0.45f;
+	// Stealth v2 (008): fast crouched gait, fast perception multipliers, and threat look-lock tuning.
+	float FastSpeedCm = 300.f;
+	float FastDetectionRangeMultiplier = 0.6f;
+	float FastDetectionBuildupMultiplier = 0.75f;
+	float LookLockKeepSeconds = 2.0f;
+	float LookLockFovDeg = 100.0f;
+	float LookLockSwitchRatio = 0.7f;
 };
 
 namespace StealthModeRules
@@ -24,7 +31,9 @@ namespace StealthModeRules
 	CODEXTACTICS_API bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, const FStealthModeConfig& Config);
 	/** Multipliers relative to the existing stance/weather/perception rules; disabled/inactive = identity. */
 	CODEXTACTICS_API float DetectionRangeScale(bool bActive, const FStealthModeConfig& Config);
+	CODEXTACTICS_API float DetectionRangeScale(bool bActive, bool bFast, const FStealthModeConfig& Config);
 	CODEXTACTICS_API float DetectionBuildupScale(bool bActive, const FStealthModeConfig& Config);
+	CODEXTACTICS_API float DetectionBuildupScale(bool bActive, bool bFast, const FStealthModeConfig& Config);
 	CODEXTACTICS_API float FootstepNoiseScale(bool bActive, const FStealthModeConfig& Config);
 	/** Optional JSON keys over Base; malformed values keep the base and multipliers/visuals are clamped to [0, 1]. */
 	CODEXTACTICS_API FStealthModeConfig FromJson(const FJsonObject& Json, const FStealthModeConfig& Base = FStealthModeConfig());

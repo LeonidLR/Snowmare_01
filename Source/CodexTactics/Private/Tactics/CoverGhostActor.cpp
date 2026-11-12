@@ -109,22 +109,42 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 		UAnimSequenceBase* Clip = nullptr;
 		if (Anim)
 		{
-			// The corner peek preview: the corner fire stance (cvr_*_fire_idle, leaning out round the edge, rifle up).
-			const TArray<TObjectPtr<UAnimSequenceBase>>& Idles = bFireIdle ? (bCrouched ? Anim->CoverCrouchFireIdle : Anim->CoverStandFireIdle)
-				: (bCrouched ? Anim->CoverCrouchIdle : Anim->CoverStandIdle);
-			const int32 Wanted = CoverFacingRules::ClipIndex(Facing);
-			Clip = Idles.IsValidIndex(Wanted) && Idles[Wanted] ? Idles[Wanted].Get() : nullptr;
-			for (int32 Index = 0; !Clip && Index < Idles.Num(); ++Index)
+			if (InOperative.IsInStealthMode())
 			{
-				Clip = Idles[Index].Get();
+				const FName StealthClipName = Facing == ECoverFacing::Left
+					? (bFireIdle ? FName(TEXT("Stealth_LeftWall_Lean_IP")) : FName(TEXT("Stealth_LeftWall_Idle_IP")))
+					: (bFireIdle ? FName(TEXT("Stealth_RightWall_Lean_IP")) : FName(TEXT("Stealth_RightWall_Idle_IP")));
+				Clip = Anim->GetStealthNamedClip(StealthClipName);
 			}
 			if (!Clip)
 			{
-				Clip = bCrouched ? Anim->Animations.CrouchIdle.Get() : Anim->Animations.Idle.Get();
+				// The corner peek preview: the corner fire stance (cvr_*_fire_idle, leaning out round the edge, rifle up).
+				const TArray<TObjectPtr<UAnimSequenceBase>>& Idles = bFireIdle ? (bCrouched ? Anim->CoverCrouchFireIdle : Anim->CoverStandFireIdle)
+					: (bCrouched ? Anim->CoverCrouchIdle : Anim->CoverStandIdle);
+				const int32 Wanted = CoverFacingRules::ClipIndex(Facing);
+				Clip = Idles.IsValidIndex(Wanted) && Idles[Wanted] ? Idles[Wanted].Get() : nullptr;
+				for (int32 Index = 0; !Clip && Index < Idles.Num(); ++Index)
+				{
+					Clip = Idles[Index].Get();
+				}
+				if (!Clip)
+				{
+					Clip = bCrouched ? Anim->Animations.CrouchIdle.Get() : Anim->Animations.Idle.Get();
+				}
 			}
 		}
+	ShownClip = Clip;
 		if (Clip)
 		{
+			const FString ClipName = Clip->GetName();
+			const float WallYaw = ClipName.StartsWith(TEXT("Stealth_LeftWall_")) ? -90.f
+				: ClipName.StartsWith(TEXT("Stealth_RightWall_")) ? 90.f : 0.f;
+			if (!FMath::IsNearlyZero(WallYaw))
+			{
+				FTransform Adjusted = Source->GetRelativeTransform();
+				Adjusted.SetRotation((FQuat(FVector::UpVector, FMath::DegreesToRadians(WallYaw)) * Adjusted.GetRotation()).GetNormalized());
+				Body->SetRelativeTransform(Adjusted);
+			}
 			Body->SetAnimationMode(EAnimationMode::AnimationSingleNode);
 			Body->SetAnimation(Clip);
 			Body->Play(true);
@@ -149,6 +169,7 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 void ACoverGhostActor::Hide()
 {
 	bShown = false;
+	ShownClip = nullptr;
 	SetActorHiddenInGame(true);
 	if (Body)
 	{

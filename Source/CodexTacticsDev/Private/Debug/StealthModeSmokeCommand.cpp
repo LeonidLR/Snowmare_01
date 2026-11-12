@@ -38,6 +38,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CoreDelegates.h"
 #include "Misc/Paths.h"
+#include "Tactics/CoverGhostActor.h"
 #include "Tactics/CoverTraceRules.h"
 #include "UnrealClient.h"
 
@@ -793,10 +794,57 @@ namespace StealthModeSmoke
 			CheckFastBlend(State, Op);
 			CheckHearing(State, Op);
 			Op->HealthComponent->Heal(10000.f);
+			Next(State, 600);
+			break;
+		case 600:
+		{
+			if (State.StageTime < 1.f) { return true; } // allow any hearing-control attack flash to finish before section 4 UI cover check
+			Op->SetStealthMode(true);
+			Op->SetActorLocation(At(State, 320.f, 0.f, Op->GetSimpleCollisionHalfHeight() + 2.f), false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			const FHitResult WallHoverHit(State.Wall.Get(), State.Wall->GetStaticMeshComponent(), At(State, 585.f, 0.f, 90.f), -State.Forward);
+			const bool bHoverShown = PC->UpdateStealthWallHover(Op, &WallHoverHit);
+			const ACoverGhostActor* HoverGhost = PC->GetStealthWallHoverGhost();
+			const UAnimationAsset* HoverClip = HoverGhost ? HoverGhost->GetShownClip() : nullptr;
+			Check(State, bHoverShown && HoverGhost && !HoverGhost->IsCornerPeekPose() && HoverClip && HoverClip->GetName().Contains(TEXT("Wall_Idle")),
+				TEXT("section 4: hovering mid-wall in stealth shows Stealth_*Wall_Idle cover ghost"));
+			PC->UpdateStealthWallHover(nullptr, nullptr);
+			Check(State, PC->TryHandleCoverClick(WallHoverHit, nullptr) && PC->HasCoverPreview(), TEXT("section 4: click on wall opens stealth cover preview"));
+			PC->ConfirmCoverPreview(false);
+			Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && !Op->IsStealthFast() && Op->HasPendingCover(),
+				TEXT("section 4: single-click cover confirm keeps crouched slow stealth during approach"));
+			Next(State, 65);
+			break;
+		}
+		case 65:
+			if (!Op->bInCover && State.StageTime < 8.f) { return true; }
+			Check(State, Op->bInCover && Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && !Op->IsStealthFast(),
+				TEXT("section 4: single-click cover arrival enters cover crouched and stays in stealth"));
+			Op->LeaveCover(TEXT("section 4: test double-click fast stealth cover order"));
+			Op->StopOperative();
+			Op->SetActorLocation(At(State, 320.f, 0.f, Op->GetSimpleCollisionHalfHeight() + 2.f), false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			{
+				const FHitResult FastWallHit(State.Wall.Get(), State.Wall->GetStaticMeshComponent(), At(State, 585.f, 0.f, 90.f), -State.Forward);
+				Check(State, PC->TryHandleCoverClick(FastWallHit, nullptr) && PC->HasCoverPreview(), TEXT("section 4: second wall preview opens before fast confirm"));
+				PC->ConfirmCoverPreview(true);
+				Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && Op->IsStealthFast() && Op->HasPendingCover(),
+					TEXT("section 4: double-click cover confirm uses crouched fast stealth and keeps stealth"));
+			}
+			Next(State, 66);
+			break;
+		case 66:
+			if (!Op->bInCover && State.StageTime < 8.f) { return true; }
+			Check(State, Op->bInCover && Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && !Op->IsStealthFast(),
+				TEXT("section 4: fast stealth cover arrival enters wall cover in stealth without standing up"));
+			Op->LeaveCover(TEXT("section 4: reset before knockdown"));
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
 			Next(State, 601);
 			break;
 		case 601:
-			if (State.StageTime < 1.f) { return true; } // allow any legitimate hearing-control attack flash to finish
+			if (State.StageTime < 0.2f) { return true; }
 			Check(State, Op->KnockdownComponent && Op->KnockdownComponent->ForceKnockDown(EKnockdownDirection::Back, EKnockdownCause::HeavyHit),
 				TEXT("real knockdown starts from stealth"));
 			Next(State, 61);

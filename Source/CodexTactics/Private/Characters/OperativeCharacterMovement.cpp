@@ -10,6 +10,7 @@
 #include "Characters/OperativeAIController.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/SquadSubsystem.h"
+#include "Characters/StealthModeRules.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -149,7 +150,13 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		bOwnMoveOrder = true;
 		return EOperativeOrderResult::Accepted;
 	}
-	if (bSprint && CanSprint())
+	if (IsInStealthMode())
+	{
+		// Stealth v2: single-click = Slow stealth, double-click = Fast stealth; never stands up or breaks stealth.
+		bStealthFast = bSprint && !bCarrying && !IsCriticallyWounded() && Stance == EOperativeStance::Crouching;
+		bSprinting = false;
+	}
+	else if (bSprint && CanSprint())
 	{
 		// A sprint order stands a crouching operative up (Godot set_target).
 		if (Stance == EOperativeStance::Crouching)
@@ -157,10 +164,12 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 			Stance = EOperativeStance::Standing;
 			++StanceSerial; // his own order's stance
 		}
+		bStealthFast = false;
 		bSprinting = true;
 	}
 	else
 	{
+		bStealthFast = false;
 		bSprinting = false;
 	}
 	ApplyMovementParams();
@@ -475,6 +484,7 @@ void AOperativeCharacter::StopOperative()
 	bHasMoveOrder = false;
 	bOwnMoveOrder = false;
 	bSteeringOwnMove = false;
+	bStealthFast = false;
 	bSprinting = false;
 	if (UWorld* World = GetWorld())
 	{
@@ -485,6 +495,10 @@ void AOperativeCharacter::StopOperative()
 
 void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 {
+	if (!bNewSprinting)
+	{
+		bStealthFast = false;
+	}
 	if (bNewSprinting && IsInStealthMode() && !bCarrying && !IsCriticallyWounded()
 		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
 	{
@@ -514,6 +528,7 @@ void AOperativeCharacter::HandleMoveFinished()
 	bSteeringOwnMove = false;
 	bHasMoveOrder = false;
 	bOwnMoveOrder = false;
+	bStealthFast = false;
 	bSprinting = false;
 	ApplyMovementParams();
 
@@ -575,6 +590,7 @@ void AOperativeCharacter::SetCarrying(bool bNewCarrying)
 	bCarrying = bNewCarrying;
 	if (bCarrying)
 	{
+		bStealthFast = false;
 		bSprinting = false; // Godot can_sprint: no sprint while carrying
 	}
 	ApplyMovementParams();
@@ -595,6 +611,10 @@ bool AOperativeCharacter::CanSprint() const
 
 float AOperativeCharacter::GetMaxSpeed() const
 {
+	if (IsStealthFast() && Stance == EOperativeStance::Crouching && !IsWounded() && !bCarrying && !IsCriticallyWounded())
+	{
+		return FMath::Max(MovementConfig.CrouchSpeed, StealthModeRules::GetConfig().FastSpeedCm) * ColdSpeedMultiplier * GetWoundTierSpeedScale();
+	}
 	// The heavy wound tier walks slower than the light one (feat/injured-tiers-fullbody: Walk_Injured_Slow; standing only).
 	return OperativeMovementRules::ComputeMaxSpeed(MovementConfig, Stance, bSprinting, IsWounded(), bCarrying) * ColdSpeedMultiplier * GetWoundTierSpeedScale();
 }
@@ -609,6 +629,10 @@ void AOperativeCharacter::HandleHealthChanged(float NewHealth, float MaxHealth, 
 	if (bSprinting && !CanSprint())
 	{
 		bSprinting = false;
+	}
+	if (bStealthFast && (IsWounded() || IsCriticallyWounded()))
+	{
+		bStealthFast = false;
 	}
 	ApplyMovementParams(); // the wounded speed follows the health
 }

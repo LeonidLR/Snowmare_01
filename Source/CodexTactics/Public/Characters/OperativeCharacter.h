@@ -397,6 +397,10 @@ public:
 	/** Whether this operative is currently stealthed (fire/sprint require an explicit re-entry). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Stealth")
 	bool IsInStealthMode() const { return bStealthMode; }
+	/** Stealth v2: double-click fast crouched movement in stealth (does not stand up or break stealth). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Stealth")
+	bool IsStealthFast() const { return bStealthMode && bStealthFast; }
+	void SetStealthFast(bool bFast);
 
 
 	/** True while the operative has a move order in progress or still visibly moves. */
@@ -3195,6 +3199,8 @@ private:
 	// Stealth mode (UE-only, designer task 003). Material instances are runtime-only; no asset is saved.
 	UPROPERTY(Transient)
 	bool bStealthMode = false;
+	UPROPERTY(Transient)
+	bool bStealthFast = false;
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> StealthMaterial;
 	UPROPERTY(Transient)

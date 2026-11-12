@@ -91,7 +91,9 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	const int32 LeadIndex = static_cast<int32>(Dir.Alpha < 0.5f ? Dir.A : Dir.B);
 	const float SlowSpeed = BlendedNominalSpeed(Dir, Set.WalkSpeeds, Set.WalkSpeed);
 	const float FastSpeed = BlendedNominalSpeed(Dir, Set.JogSpeeds, Set.JogSpeed);
-	const float Fast = FMath::Clamp((LocomotionSpeed - SlowSpeed) / FMath::Max(1.f, FastSpeed - SlowSpeed), 0.f, 1.f);
+	const float Fast = (Operative->IsStealthFast() && bMoving)
+		? 1.f
+		: FMath::Clamp((LocomotionSpeed - SlowSpeed) / FMath::Max(1.f, FastSpeed - SlowSpeed), 0.f, 1.f);
 	auto BeginAction = [this](UAnimSequence* Clip)
 	{
 		StealthAction = Clip;
@@ -99,6 +101,11 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	};
 	const float Yaw = static_cast<float>(Operative->GetActorRotation().Yaw);
 	const float YawDelta = FMath::FindDeltaAngleDegrees(StealthLastYaw, Yaw);
+	if (bWall != bStealthWasAtWall)
+	{
+		// Drop any previous gait action before choosing the wall stop / departure transition.
+		StealthAction = nullptr;
+	}
 	if (bActive && !bBodyBusy)
 	{
 		if (bPeeking != bStealthWasPeeking)
@@ -130,9 +137,9 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 			BeginAction(Named(FMath::Abs(YawDelta) > 135.f ? TEXT("Stealth_Turn_180_IP") : YawDelta < 0.f ? TEXT("Stealth_Turn_90_L_IP") : TEXT("Stealth_Turn_90_R_IP")));
 		}
 	}
-	if (bWall != bStealthWasAtWall || (bMoving && bPeeking))
+	if (bMoving && bPeeking)
 	{
-		StealthAction = nullptr; // never carry a free locomotion start into a wall, or a lean into a walk
+		StealthAction = nullptr; // never carry a lean into a walk
 	}
 	if (!bBodyBusy)
 	{

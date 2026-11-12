@@ -54,6 +54,7 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		StealthMaterialCounts.Reset();
 		StealthOriginalMaterials.Reset();
 		SetSprinting(false);
+		bStealthFast = false;
 		bStealthMode = true;
 		if (Stance != EOperativeStance::Prone)
 		{
@@ -62,10 +63,22 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 	}
 	else
 	{
+		bStealthFast = false;
 		bStealthMode = false;
+		ApplyMovementParams();
 	}
 	RefreshStealthVisuals();
 	return true;
+}
+
+void AOperativeCharacter::SetStealthFast(bool bFast)
+{
+	const bool bAllowed = bFast && bStealthMode && !bCarrying && !IsCriticallyWounded() && Stance == EOperativeStance::Crouching;
+	if (bStealthFast != bAllowed)
+	{
+		bStealthFast = bAllowed;
+		ApplyMovementParams();
+	}
 }
 
 void AOperativeCharacter::RefreshStealthVisuals()

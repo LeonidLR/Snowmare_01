@@ -301,7 +301,7 @@ public:
 	 * then gives the single cover order). Not in turn-based combat (only the active unit moves there).
 	 */
 	bool OrderGroupCover(AOperativeCharacter* Direct, const FCoverSlot& Slot, bool bPlan, float Radius, bool bLeaderSwitch = false,
-		const FCoverWrapPlan* LeaderWrap = nullptr);
+		const FCoverWrapPlan* LeaderWrap = nullptr, bool bSprintOrder = true);
 
 	/**
 	 * Wall-following round the cover object (game designer 2026-10-20, CoverWrapRules): the leader in cover, a click at Point along the
@@ -404,6 +404,14 @@ public:
 	bool IsCornerPeekPreviewShown() const;
 	/** The corner peek preview ghost (smokes: whose silhouette, its pose and slot); null before the first hover. */
 	const class ACoverGhostActor* GetCornerPeekGhost() const { return CornerPeekGhost; }
+
+	/**
+	 * Stealth v2 (§4): hover any valid cover wall in stealth to preview Stealth_{Left,Right}Wall_Idle (or corner Lean via
+	 * UpdateCornerPeekHover at corners). Uses the same wall validity rules as TryHandleCoverClick. Null Hit = clear.
+	 */
+	bool UpdateStealthWallHover(AOperativeCharacter* Operative, const FHitResult* Hit);
+	bool IsStealthWallHoverShown() const;
+	const class ACoverGhostActor* GetStealthWallHoverGhost() const { return StealthWallHoverGhost; }
 
 	/**
 	 * The squad's corner peek (user bug report 2026-10-26: "solo the corner shows the peek silhouette and a click peeks; in formation it is
@@ -907,6 +915,9 @@ private:
 	/** Rev 5c manual corner peek preview: its own ghost, the cursor, the last hover probe (cached while the cursor rests). */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> CornerPeekGhost;
+	/** Stealth v2: hover ghost for valid non-corner walls when hovering in stealth. */
+	UPROPERTY(Transient)
+	TObjectPtr<class ACoverGhostActor> StealthWallHoverGhost;
 	bool bCornerPeekCursor = false;
 	/** Rev 5e: the hand cursor over a spotted tripwire (or the ground right next to it). */
 	bool bTrapHoverCursor = false;
