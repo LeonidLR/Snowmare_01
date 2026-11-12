@@ -9,7 +9,7 @@ Six resources. Rule: the cheapest one that can do the job reliably; the expensiv
 | **Gemini (Pro, Antigravity)** | Reader + TS / Python + reviewer | implementation maps, code reviews of Codex branches, Training Ground (TS), Python tooling, docs (RU guides), log / trainer analysis, merge plans; C++ only as approved trials on named paths | C++ outside an approved trial, main, push |
 | **Anthropic API** (designer's credit, ledger cap) | Second opinion + gap filler | Sonnet: independent reviews of risky diffs (~0.1-0.3 $), patch drafts when Codex is out of limit; Opus: rare design drafts. Always `--label`, `--budget-usd` | bulk reading, anything a subscription can do now |
 | **Jev (TypeSafe)** | Cheap judgment | boundary audits before merges, `test.ps1 -Smart`, telemetry digests, model-router classification, typed yes / no checks in tools | C++ / syntax / boilerplate |
-| **Local model** (codex-local = qwen3-coder:30b, trial until 2026-11-19) | Free helper + dispatcher | chat dispatcher (sort messages, wake Claude only for questions / blockers, nudge idle agents), Codex wake-up prompts, RU digests of reports, changelog drafts, JSON edits, one-liners, regex, translations, commit messages | C++, design decisions, reviewing others' code |
+| **Local model** | REMOVED 2026-11-12 (designer: 18 GB is too much for message sorting) | the dispatcher sorts messages by deterministic rules; a tiny model (1-2 GB) only if the rules prove too weak | - |
 | **Designer** | Decisions + feel | design choices, playtests, Animation Blueprints / shaders polish, logins / installs / admin prompts | - |
 
 ## Flow of a feature
