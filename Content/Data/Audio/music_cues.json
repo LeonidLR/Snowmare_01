@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "default_model": "lyria-3-clip-preview",
+  "cues": [
+    {
+      "id": "explore_calm",
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore",
+      "prompt": "Instrumental only, no vocals, seamless ambient loop, 66 BPM. Sparse cold arctic survival ambient for a tactical outpost at night. Subdued sub-bass drone, distant metallic wind chimes, faint crystalline synth pads, isolated muted felt piano notes. Minimalist, eerie stillness, desolate polar atmosphere, no orchestral brass or heavy drums.",
+      "notes": "Calm outpost exploration between waves."
+    },
+    {
+      "id": "tension",
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "tension",
+      "prompt": "Instrumental only, no vocals, seamless loop, 88 BPM. Tense arctic stealth tactical thriller underscore. Deep analog pulse bass, brittle metallic percussive clicks, trembling low cello sustains, cold sonar-like synth pings, rising atmospheric dread without epic orchestra.",
+      "notes": "Enemy sighted / stealth reconnaissance state."
+    },
+    {
+      "id": "combat",
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat",
+      "prompt": "Instrumental only, no vocals, driving tactical defense combat loop, 118 BPM. Gritty industrial electronics mixed with heavy low tom drums, distorted sub-bass riff, tight metallic percussion, icy analog arpeggio. Relentless dark urgency, grounded cold survival thriller, no heroic fanfare or orchestral choir.",
+      "notes": "Active firefight / wave defense state."
+    }
+  ]
+}

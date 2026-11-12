@@ -8,6 +8,7 @@ import { setupMovementApi } from './server/movementApi.ts'
 import { setupCombatLabApi } from './server/combatLabApi.ts'
 import { setupLevelgenApi } from './server/levelgenApi.ts'
 import { setupHudLabelsApi } from './server/hudLabelsApi.ts'
+import { setupAudioApi } from './server/audioApi.ts'
 import { buildLevelList, type RawLevelMeta, type CampaignConfig } from './src/utils/levelList.ts'
 import { sanitizeBotRunArgs } from './src/utils/botRunner.ts'
 import {
@@ -52,6 +53,8 @@ const setupApiMiddlewares = (middlewares: any) => {
   setupLevelgenApi((route, handler) => middlewares.use(route, handler))
   // Training Ground: HUD labels (Content/Data/UI/hud_labels.json)
   setupHudLabelsApi((route, handler) => middlewares.use(route, handler))
+  // Training Ground: Audio review (Saved/AudioGen + Content/Data/Audio)
+  setupAudioApi((route, handler) => middlewares.use(route, handler))
 
   // 0. Health check для индикатора подключения
   middlewares.use('/api/health', (req: any, res: any) => {
