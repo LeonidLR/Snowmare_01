@@ -4,6 +4,7 @@
 #include "Combat/KnockdownComponent.h"
 #include "Characters/HitReactionRules.h"
 #include "Misc/ScopeExit.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Characters/LeftHandIKRules.h"
 #include "Characters/AimOffsetRules.h"
 #include "Combat/SniperRules.h"
@@ -65,6 +66,16 @@ FAnimInstanceProxy* UOperativeAnimInstance::CreateAnimInstanceProxy()
 
 void UOperativeAnimInstance::NativeInitializeAnimation()
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Codex_OperativeAnimInitialize);
+	const double HitchStart = FPlatformTime::Seconds();
+	ON_SCOPE_EXIT
+	{
+		const double Ms = (FPlatformTime::Seconds() - HitchStart) * 1000.0;
+		if (Ms >= 5.0)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[HitchProbe] AnimInitialize %s %.2f ms"), *GetNameSafe(GetOwningActor()), Ms);
+		}
+	};
 	Super::NativeInitializeAnimation();
 	// The run-and-peek's peek stance: what the graph's layers add to the standing fire idles' drawn facing, as measured (learnt on from there).
 	// (The rifle slots 0 / 1 only: a shotgun's left hand is on the pump - no left-hand IK, no bias.)

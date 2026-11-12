@@ -12,7 +12,7 @@
     "smokes": ["MovementSmoke", "CombatFlowSmoke", "StanceSmoke", "MissionSmoke", "EventBusSmoke"]
   },
   "smokeRegistry": [
-    "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "CameraMinZoomSmoke", "CameraMinZoomDepotSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
+    "HitchProbeSmoke", "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "CameraMinZoomSmoke", "CameraMinZoomDepotSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
@@ -52,6 +52,7 @@
   },
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run; realTime = wall clock instead of the fixed step (smokeDefaults); fixedStepFps = this smoke's own fixed step; rendered = a real RHI offscreen (-RenderOffscreen -ResX=1280 -ResY=720) instead of -nullrhi; _why = the reason of an override",
+    "HitchProbeSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json -trace=cpu,loadtime,frame", "timeout": 300, "exclusive": true, "_why": "Cold first-use level-roster and simultaneous PMC spawn game-thread hitch probe" },
     "CommanderModeSmoke": { "extra": "-LevelJson=SmokeFixtures/commander_mode_smoke.json", "_why": "2026-11-02: the smoke pauses 16 s into wave 1 and needs the fight still running there; the user's level_01_outpost wave 1 (10 hounds since 2026-10-28) was cleared by the immortal squad in ~11 s ('pause freeze 0', failing since then), so the smoke runs on its own pinned waves (d4bca4a7: 45 hounds + 10 frostbitten)" },
     "HordeIntroSmoke": { "extra": "-LevelJson=SmokeFixtures/horde_intro_smoke.json", "_why": "2026-11-01 (merge check of main 88e6d386): the smoke's shot lists assume wave 1 = hounds + frostbitten and wave 3 = the new cutters + marksmen; level_01_outpost.json is the user's level, tuned in the Wave Editor (his working copy had wave 1 = hounds only), so the smoke runs on its own pinned copy (the waves of d4bca4a7)" },
     "ClimateSmoke": { "map": "/Game/Environment/Weather/Test/L_WeatherRainTest", "_why": "climate profiles 2026-10-26 (section 17): the temperate test map (its level JSON L_WeatherRainTest.json is read by map name)" },
@@ -175,6 +176,12 @@
   },
   "nonSmokeDebugCommands": ["PmcArena", "GiveWeapon", "MortarList", "MortarMan", "MortarFire", "MortarCease", "MortarCrewPmc", "ShotgunD1Shots", "ShotgunLoopShots", "RpgShots", "RecoilProbe", "CombatLabTowerSmokePIE", "LevelGenLaddersShots", "FallDropShots", "RampRoofShots", "StartLightingShots", "ClipRecorder", "ComplexityShot", "PackagedCheck", "FinishPrep", "HudShot", "MarksmanShot", "CoverLRShot", "EnemyStuckProbe", "RepathProbe", "PhoneShots", "KnockdownShots", "ProneDiveShots", "EncounterProbe", "VehicleTurretShot", "VehicleDisabledShot", "InteractionAnimShots", "EnemyPerfProbe", "MinimapRecapture", "LureProbe", "LakeLureProbe", "EnvironmentShots", "LadderClipShots", "BodyLineupShots", "MarksmanFeetProbe", "HoloMarkerShots", "StartFlickerShots", "PIEFlickerShots"],
   "rules": [
+    {
+      "name": "hitch-probe-2026-11-12",
+      "globs": ["Source/**/Debug/HitchProbeSmoke*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Characters/OperativeAnimInstance*", "Source/**/Ladders/LadderClimbComponent*", "Source/**/Combat/WaveSubsystem*", "Source/**/AI/PmcSquadSubsystem*"],
+      "tests": [],
+      "smokes": ["HitchProbeSmoke"]
+    },
     {
       "globs": [
         "Source/**/Characters/StealthModeRules*",

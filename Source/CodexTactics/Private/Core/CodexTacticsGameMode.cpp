@@ -23,6 +23,8 @@
 #include "Data/EnemyPerception.h"
 #include "Data/WeaponTuning.h"
 #include "Misc/CommandLine.h"
+#include "Misc/ScopeExit.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Misc/Parse.h"
 #include "Misc/PackageName.h"
 #include "Camera/TacticalCameraPawn.h"
@@ -112,6 +114,12 @@ ACodexTacticsGameMode::ACodexTacticsGameMode()
 
 void ACodexTacticsGameMode::StartPlay()
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Codex_StartPlay);
+	const double HitchStart = FPlatformTime::Seconds();
+	ON_SCOPE_EXIT
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[HitchProbe] StartPlay %.2f ms"), (FPlatformTime::Seconds() - HitchStart) * 1000.0);
+	};
 	AITuning::ApplyFile(AITuning::GetDefaultPath()); // before any actor's BeginPlay reads a Codex.* tunable
 	WeaponTuning::ApplyFile(WeaponTuning::GetDefaultPath()); // Wave Editor weapon power onto DA_Weapon_* (in memory)
 	SquadROE::ApplyFile(SquadROE::GetDefaultPath()); // Commander Mode tactical ROE (Wave Editor "Squad tactics")
@@ -279,6 +287,12 @@ namespace
 
 void ACodexTacticsGameMode::SpawnSquad()
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Codex_SpawnSquad);
+	const double HitchStart = FPlatformTime::Seconds();
+	ON_SCOPE_EXIT
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[HitchProbe] SpawnSquad %.2f ms"), (FPlatformTime::Seconds() - HitchStart) * 1000.0);
+	};
 	UWorld* World = GetWorld();
 	TSubclassOf<AOperativeCharacter> SpawnClass = OperativeBlueprint.IsNull() ? nullptr : OperativeBlueprint.LoadSynchronous();
 	if (!SpawnClass)

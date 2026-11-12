@@ -3,6 +3,8 @@
 #include "Ladders/LadderClimbComponent.h"
 
 #include "AIController.h"
+#include "Misc/ScopeExit.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Animation/AnimInstance.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequence.h"
@@ -207,10 +209,20 @@ float ULadderClimbComponent::RemoveClipLift(UAnimSequence* Clip, FRootTrack& Tra
 
 bool ULadderClimbComponent::LoadClips()
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Codex_LadderLoadClips);
 	if (bClipsLoaded)
 	{
 		return LoadedUpLoop && LoadedClimbOut && LoadedIntoFromTop;
 	}
+	const double HitchStart = FPlatformTime::Seconds();
+	ON_SCOPE_EXIT
+	{
+		const double Ms = (FPlatformTime::Seconds() - HitchStart) * 1000.0;
+		if (Ms >= 5.0)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[HitchProbe] LadderLoad %s %.2f ms"), *GetNameSafe(GetOwner()), Ms);
+		}
+	};
 	bClipsLoaded = true;
 	LoadedUpLoop = UpLoopClip.LoadSynchronous();
 	LoadedClimbOut = ClimbOutClip.LoadSynchronous();
