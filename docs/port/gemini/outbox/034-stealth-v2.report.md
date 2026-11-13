@@ -101,8 +101,19 @@ PlayRate is computed directly as $\text{PlayRate} = \frac{\text{MoveSpeed}}{\tex
 | **90°** (Lateral R Strafe)| 465.75 cm/s | **0.988x** | 450.49 cm/s | **1.021x** | PASS |
 
 ### 3. Root Cause Resolution
-1. **Uncapped PhaseRate**: In `Source/CodexTactics/Private/Characters/OperativeAnimInstanceStealth.cpp:252`, `LeadLength` now blends dynamically (`FMath::Lerp(WalkLength, JogLength, Fast)`), so during Fast stealth `LeadLength = 0.8s` (instead of walk 1.33s), raising the upper clamp limit to 2.0 cycles/s and eliminating artificial dragging.
+1. **Uncapped PhaseRate**: In `Source/CodexTactics/Private/Characters/OperativeAnimInstanceStealth.cpp`, `LeadLength` now uses frequency interpolation (`InvLen = Lerp(1/WalkLen, 1/JogLen, Fast)`), so during Fast stealth `LeadLength = 0.8s` (instead of walk 1.33s), raising the upper clamp limit to 2.0 cycles/s and eliminating artificial dragging.
 2. **Directional Speed Maps**: Added explicit `"walk_speeds"` and `"jog_speeds"` maps to `"stealth"` in `Content/Data/Weapons/weapon_anim_sets.json` so every angle has authored nominal speeds.
-3. **Pure Fast Stride Commitment**: In `Source/CodexTactics/Private/Characters/OperativeAnimInstanceStealth.cpp:119`, `Fast` is clamped to `1.0f` during fast-stealth movement orders (`IsStealthFast() && bMoving`), preventing slight speed drops during directional changes from poisoning the blend with slow-walk frames.
-4. **Smoke Verification**: Added automated 0°/20°/45°/90° directional angle checks with play rate bounds validation in `Source/CodexTacticsDev/Private/Debug/StealthModeSmokeCommand.cpp:250`. Verified: `StealthModeSmoke` **PASS**.
+3. **Smooth Fast Stride Ramp & Floor (Opus H1)**: Replaced discontinuous step function with smooth mapped floor `FastFloor = MappedRange(0.35 * FastCfg, 0.6 * FastCfg, 0.0, 1.0)` and `FInterpTo(10.f)`. During start/stop acceleration and deceleration, the character smoothly blends walk and jog without pose-popping or 0.05x jog strides. Once above mid-speed (0.6x FastConfigSpeed), it locks to pure jog, preventing slow-walk poisoning during directional steering and speed fluctuations.
+4. **Smoke Verification & Regression Coverage (Opus H2, M5, M6)**: Added automated 8-directional angle checks (0°, 20°, 45°, 90°, 135°, 180°, -45°, -90°) with 10-frame unwrapped phase integration, continuity check across acceleration ramp, strict regression guard (`PlayRate > 0.97` at +90° R strafe), and sprint break from full 460 cm/s fast stealth in `Source/CodexTacticsDev/Private/Debug/StealthModeSmokeCommand.cpp`. Verified: `StealthModeSmoke` **PASS**.
+
+---
+
+## Opus Review Resolution Summary (#323)
+- **H1 (Fast blend discontinuity at start/stop/toggles)**: Fixed via smooth mapped floor `FastFloor = MappedRange(0.35 * FastCfg, 0.6 * FastCfg, 0.0, 1.0)` smoothed by `StealthFastBlend = FMath::FInterpTo(..., 10.f)` and reset on stealth entry/stop.
+- **H2 (Smoke check strictness & 0.96 ceiling detection)**: Fixed via multi-frame unwrapped delta phase integration over 10 frames (0.5s), strict check `PlayRate > 0.97f` at +90° (Male R strafe = 0.988x), and 8-directional testing.
+- **M1 & M2 (LeadLength null safety & harmonic frequency cap)**: Fixed via safe null fallbacks and frequency interpolation `InvLen = Lerp(1/WalkLen, 1/JogLen, Fast)` with `Clamp(1/InvLen, 0.1f, 10.f)`.
+- **M5 (Asymmetric negative and backward angles)**: Verified across all 8 cardinal/intercardinal angles including -45°, -90°, 135°, 180°.
+- **M6 (Sprint cancellation from active fast-stealth)**: Added test asserting immediate stealth drop from 460 cm/s fast locomotion.
+- **L1 (ASCII in source)**: Cleaned non-ASCII characters in smoke command.
+
 

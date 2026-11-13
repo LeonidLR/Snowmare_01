@@ -248,20 +248,39 @@ namespace StealthModeSmoke
 			const bool bBlend = Speed < 150.f ? Slow > 0.9f && Fast < 0.1f : Speed < 350.f ? Slow > 0.15f && Fast > 0.15f : Fast > 0.7f;
 			Check(State, bBlend && FMath::IsNearlyEqual(Total, 1.f, 0.01f), FString::Printf(TEXT("speed %.0f: Slow %.3f Fast %.3f total %.3f"), Speed, Slow, Fast, Total));
 		}
-		// Designer task 034 fastspeed: verify fast stealth locomotion at 0°, 20°, 45°, 90°.
+		// Designer task 034 fastspeed: verify fast stealth locomotion across 8 angles.
 		// Legs must never drag/sluggishly cycle; PlayRate must equal Speed / BlendedNominalSpeed.
 		Op->SetStealthFast(true);
-		for (const float AngleDeg : { 0.f, 20.f, 45.f, 90.f })
+
+		// Continuity check (H1): gradual acceleration from rest
+		float PrevFast = Instance->GetStealthFastBlend();
+		for (float AccelSpeed = 30.f; AccelSpeed <= 460.f; AccelSpeed += 40.f)
+		{
+			Movement->Velocity = State.Forward * AccelSpeed;
+			Instance->NativeUpdateAnimation(0.05f);
+			const float CurrFast = Instance->GetStealthFastBlend();
+			Check(State, FMath::Abs(CurrFast - PrevFast) < 0.35f,
+				FString::Printf(TEXT("accel speed %.0f: FastBlend %.3f continuous (delta %.3f)"), AccelSpeed, CurrFast, FMath::Abs(CurrFast - PrevFast)));
+			PrevFast = CurrFast;
+		}
+
+		for (const float AngleDeg : { 0.f, 20.f, 45.f, 90.f, 135.f, 180.f, -45.f, -90.f })
 		{
 			const FVector Dir = State.Forward.RotateAngleAxis(AngleDeg, FVector::UpVector);
 			Movement->Velocity = Dir * 460.f;
-			for (int32 Frame = 0; Frame < 40; ++Frame) { Instance->NativeUpdateAnimation(0.05f); }
+			for (int32 Frame = 0; Frame < 30; ++Frame) { Instance->NativeUpdateAnimation(0.05f); }
 
-			const float PhaseBefore = Instance->GetStealthPhase();
-			Instance->NativeUpdateAnimation(0.05f);
-			const float PhaseAfter = Instance->GetStealthPhase();
-			const float DeltaPhase = FMath::Fmod(PhaseAfter - PhaseBefore + 1.f, 1.f);
-			const float Rate = DeltaPhase / 0.05f;
+			// Accumulate unwrapped delta phase over 10 frames (0.5s) for robust multi-frame rate (M8)
+			float AccDeltaPhase = 0.f;
+			float LastPhase = Instance->GetStealthPhase();
+			for (int32 Step = 0; Step < 10; ++Step)
+			{
+				Instance->NativeUpdateAnimation(0.05f);
+				const float CurrPhase = Instance->GetStealthPhase();
+				AccDeltaPhase += FMath::Fmod(CurrPhase - LastPhase + 1.f, 1.f);
+				LastPhase = CurrPhase;
+			}
+			const float Rate = AccDeltaPhase / 0.5f;
 			const float PlayRate = Rate * 0.8f;
 
 			float FastWeight = 0.f, SlowWeight = 0.f;
@@ -274,15 +293,25 @@ namespace StealthModeSmoke
 			UE_LOG(LogCodexTactics, Log, TEXT("Stealth fastspeed angle %.0f deg: PlayRate %.3f, FastWeight %.3f, SlowWeight %.3f"),
 				AngleDeg, PlayRate, FastWeight, SlowWeight);
 			Check(State, FastWeight > 0.95f && SlowWeight < 0.05f,
-				FString::Printf(TEXT("angle %.0f: purely fast stealth (Fast %.3f Slow %.3f)"), AngleDeg, FastWeight, SlowWeight));
-			Check(State, PlayRate >= 0.85f && PlayRate <= 1.25f,
-				FString::Printf(TEXT("angle %.0f: natural play rate %.3f (no dragging or sliding)"), AngleDeg, PlayRate));
+				FString::Printf(TEXT("angle %.0f deg: purely fast stealth (Fast %.3f Slow %.3f)"), AngleDeg, FastWeight, SlowWeight));
+			// Strict regression guard (H2): pre-fix build was clamped to 0.96x; +90 deg (R strafe, native 465.8 cm/s) must exceed 0.97x
+			if (FMath::IsNearlyEqual(AngleDeg, 90.f, 1.f))
+			{
+				Check(State, PlayRate > 0.97f,
+					FString::Printf(TEXT("angle %.0f deg: PlayRate %.3f uncapped above 0.96 ceiling"), AngleDeg, PlayRate));
+			}
+			Check(State, PlayRate >= 0.88f && PlayRate <= 1.25f,
+				FString::Printf(TEXT("angle %.0f deg: natural play rate %.3f (no dragging or sliding)"), AngleDeg, PlayRate));
 		}
+
+		// Sprint cancellation from active fast-stealth at full speed (M6)
+		Movement->Velocity = State.Forward * 460.f;
+		for (int32 Frame = 0; Frame < 10; ++Frame) { Instance->NativeUpdateAnimation(0.05f); }
+		Op->SetSprinting(true);
+		Check(State, !Op->IsInStealthMode(), TEXT("sprint from active fast-stealth at 460 cm/s immediately breaks stealth"));
+		Op->SetSprinting(false);
 		Op->SetStealthFast(false);
 		Movement->StopMovementImmediately();
-		Op->SetSprinting(true);
-		Check(State, !Op->IsInStealthMode(), TEXT("sprint still breaks stealth after fast non-sprint blend"));
-		Op->SetSprinting(false);
 		Op->SetStealthMode(true);
 	}
 	void CheckHearing(FState& State, AOperativeCharacter* Op)

@@ -1378,6 +1378,7 @@ public:
 	/** Current native pose samples / shared phase / measured speed, for integration smokes. */
 	const TStaticArray<FOperativeClipState, 12>& GetStealthClips() const { return StealthClips; }
 	float GetStealthPhase() const { return StealthPhase; }
+	float GetStealthFastBlend() const { return StealthFastBlend; }
 	float GetStealthLookYawDeg() const { return StealthLookYawDeg; }
 	float GetStealthNominalSpeed(FName ClipName) const { return StealthSetData.ClipSpeeds.FindRef(ClipName); }
 	const UAnimSequenceBase* GetStealthDominantClip() const;
@@ -2103,6 +2104,7 @@ private:
 	float StealthWeight = 0.f;
 	float StealthLookYawDeg = 0.f;
 	float StealthPhase = 0.f;
+	float StealthFastBlend = 0.f;
 	float StealthIdleTime = 0.f;
 	float StealthActionTime = 0.f;
 	float StealthFireBlockSeconds = 0.f;
