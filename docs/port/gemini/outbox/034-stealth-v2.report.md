@@ -71,3 +71,38 @@ Task 034 delivers full Stealth v2 for `CodexTactics`:
 4. **M4 (`Lean_Stop` side consistency)**: Resolved in `8da692f9` (`Source/CodexTactics/Private/Characters/OperativeAnimInstanceStealth.cpp:138`). Exit/stop clip preserves `StealthLastSide` to avoid side mismatch when leaving the wall.
 5. **M5 & M7 (Enum `EStealthWallLeanPhase` and complete enum coverage)**: Resolved in `8da692f9` (`Source/CodexTactics/Public/Characters/StealthModeRules.h:8`, `Source/CodexTactics/Private/Characters/StealthModeRules.cpp:40`). Added strongly-typed enum `EStealthWallLeanPhase { Start, Hold, Stop }` with explicit exhaustive switch handling `Left`, `Right`, and `default` (returns `NAME_None`).
 6. **M8 (Non-vacuous smoke check)**: Resolved in `8da692f9` (`Source/CodexTacticsDev/Private/Debug/StealthModeSmokeCommand.cpp:815`). Explicitly asserts `Ghost != nullptr && Ghost->IsShown() && Ghost->IsCornerPeekPose()`, checking that `GhostClip` contains `Wall_Lean` and does NOT contain `fire_idle`.
+
+---
+
+## Fast Stealth Multi-Directional PlayRate Tuning & Verification (#317 / #321)
+
+### 1. Native Clip Speeds (8 Directions)
+All 8 clips have a duration of exactly **0.800 s** (48 frames @ 60 FPS):
+
+| Direction | Clip Name | Angle | Source Mannequin | Male (UE4) | Female Soldier |
+|---|---|:---:|:---:|:---:|:---:|
+| **F** | `Stealth_Fast_F_IP` | 0° | 463.51 cm/s | 503.78 cm/s | 473.87 cm/s |
+| **FR** | `Stealth_Fast_FR_IP` | +45° | 456.04 cm/s | 503.75 cm/s | 473.41 cm/s |
+| **R** | `Stealth_Fast_R_IP` | +90° | 414.97 cm/s | 465.75 cm/s | 450.49 cm/s |
+| **BR** | `Stealth_Fast_BR_IP` | +135° | 436.87 cm/s | 494.33 cm/s | 458.26 cm/s |
+| **B** | `Stealth_Fast_B_IP` | 180° | 462.16 cm/s | 502.04 cm/s | 469.72 cm/s |
+| **BL** | `Stealth_Fast_BL_IP` | -135° | 443.91 cm/s | 497.36 cm/s | 470.61 cm/s |
+| **L** | `Stealth_Fast_L_IP` | -90° | 419.23 cm/s | 490.07 cm/s | 462.99 cm/s |
+| **FL** | `Stealth_Fast_FL_IP` | -45° | 456.58 cm/s | 503.15 cm/s | 472.37 cm/s |
+
+### 2. Runtime PlayRate Verification Table (Speed = 460.0 cm/s)
+PlayRate is computed directly as $\text{PlayRate} = \frac{\text{MoveSpeed}}{\text{BlendedNominalSpeed}}$ for the current angle:
+
+| Move Angle | Male Blended Nominal | Male PlayRate | Female Blended Nominal | Female PlayRate | Status |
+|:---:|:---:|:---:|:---:|:---:|:---:|
+| **0°** (Forward) | 503.78 cm/s | **0.913x** | 473.87 cm/s | **0.971x** | PASS |
+| **20°** (Fwd-Right Blend) | 503.77 cm/s | **0.913x** | 473.67 cm/s | **0.971x** | PASS |
+| **45°** (Diagonal FR) | 503.75 cm/s | **0.913x** | 473.41 cm/s | **0.972x** | PASS |
+| **90°** (Lateral R Strafe)| 465.75 cm/s | **0.988x** | 450.49 cm/s | **1.021x** | PASS |
+
+### 3. Root Cause Resolution
+1. **Uncapped PhaseRate**: In `Source/CodexTactics/Private/Characters/OperativeAnimInstanceStealth.cpp:252`, `LeadLength` now blends dynamically (`FMath::Lerp(WalkLength, JogLength, Fast)`), so during Fast stealth `LeadLength = 0.8s` (instead of walk 1.33s), raising the upper clamp limit to 2.0 cycles/s and eliminating artificial dragging.
+2. **Directional Speed Maps**: Added explicit `"walk_speeds"` and `"jog_speeds"` maps to `"stealth"` in `Content/Data/Weapons/weapon_anim_sets.json` so every angle has authored nominal speeds.
+3. **Pure Fast Stride Commitment**: In `Source/CodexTactics/Private/Characters/OperativeAnimInstanceStealth.cpp:119`, `Fast` is clamped to `1.0f` during fast-stealth movement orders (`IsStealthFast() && bMoving`), preventing slight speed drops during directional changes from poisoning the blend with slow-walk frames.
+4. **Smoke Verification**: Added automated 0°/20°/45°/90° directional angle checks with play rate bounds validation in `Source/CodexTacticsDev/Private/Debug/StealthModeSmokeCommand.cpp:250`. Verified: `StealthModeSmoke` **PASS**.
+

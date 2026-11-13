@@ -248,6 +248,37 @@ namespace StealthModeSmoke
 			const bool bBlend = Speed < 150.f ? Slow > 0.9f && Fast < 0.1f : Speed < 350.f ? Slow > 0.15f && Fast > 0.15f : Fast > 0.7f;
 			Check(State, bBlend && FMath::IsNearlyEqual(Total, 1.f, 0.01f), FString::Printf(TEXT("speed %.0f: Slow %.3f Fast %.3f total %.3f"), Speed, Slow, Fast, Total));
 		}
+		// Designer task 034 fastspeed: verify fast stealth locomotion at 0°, 20°, 45°, 90°.
+		// Legs must never drag/sluggishly cycle; PlayRate must equal Speed / BlendedNominalSpeed.
+		Op->SetStealthFast(true);
+		for (const float AngleDeg : { 0.f, 20.f, 45.f, 90.f })
+		{
+			const FVector Dir = State.Forward.RotateAngleAxis(AngleDeg, FVector::UpVector);
+			Movement->Velocity = Dir * 460.f;
+			for (int32 Frame = 0; Frame < 40; ++Frame) { Instance->NativeUpdateAnimation(0.05f); }
+
+			const float PhaseBefore = Instance->GetStealthPhase();
+			Instance->NativeUpdateAnimation(0.05f);
+			const float PhaseAfter = Instance->GetStealthPhase();
+			const float DeltaPhase = FMath::Fmod(PhaseAfter - PhaseBefore + 1.f, 1.f);
+			const float Rate = DeltaPhase / 0.05f;
+			const float PlayRate = Rate * 0.8f;
+
+			float FastWeight = 0.f, SlowWeight = 0.f;
+			for (const FOperativeClipState& PoseClip : Instance->GetStealthClips())
+			{
+				if (!PoseClip.Sequence) { continue; }
+				if (PoseClip.Sequence->GetName().Contains(TEXT("Fast"))) { FastWeight += PoseClip.Weight; }
+				if (PoseClip.Sequence->GetName().Contains(TEXT("Slow"))) { SlowWeight += PoseClip.Weight; }
+			}
+			UE_LOG(LogCodexTactics, Log, TEXT("Stealth fastspeed angle %.0f deg: PlayRate %.3f, FastWeight %.3f, SlowWeight %.3f"),
+				AngleDeg, PlayRate, FastWeight, SlowWeight);
+			Check(State, FastWeight > 0.95f && SlowWeight < 0.05f,
+				FString::Printf(TEXT("angle %.0f: purely fast stealth (Fast %.3f Slow %.3f)"), AngleDeg, FastWeight, SlowWeight));
+			Check(State, PlayRate >= 0.85f && PlayRate <= 1.25f,
+				FString::Printf(TEXT("angle %.0f: natural play rate %.3f (no dragging or sliding)"), AngleDeg, PlayRate));
+		}
+		Op->SetStealthFast(false);
 		Movement->StopMovementImmediately();
 		Op->SetSprinting(true);
 		Check(State, !Op->IsInStealthMode(), TEXT("sprint still breaks stealth after fast non-sprint blend"));

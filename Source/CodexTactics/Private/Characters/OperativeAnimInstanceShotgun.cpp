@@ -545,11 +545,19 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 		{
 			if (ShotgunSet.Walk[Index])
 			{
-				ShotgunSet.WalkSpeeds[Index] = ShotgunSet.ClipSpeeds.FindRef(ShotgunSet.Walk[Index]->GetFName());
+				const float SpeedValue = ShotgunSet.ClipSpeeds.FindRef(ShotgunSet.Walk[Index]->GetFName());
+				if (SpeedValue > 0.f)
+				{
+					ShotgunSet.WalkSpeeds[Index] = SpeedValue;
+				}
 			}
 			if (ShotgunSet.Jog[Index])
 			{
-				ShotgunSet.JogSpeeds[Index] = ShotgunSet.ClipSpeeds.FindRef(ShotgunSet.Jog[Index]->GetFName());
+				const float SpeedValue = ShotgunSet.ClipSpeeds.FindRef(ShotgunSet.Jog[Index]->GetFName());
+				if (SpeedValue > 0.f)
+				{
+					ShotgunSet.JogSpeeds[Index] = SpeedValue;
+				}
 			}
 		}
 	}

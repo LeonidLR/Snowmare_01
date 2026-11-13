@@ -116,9 +116,10 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	const float FastSpeed = BlendedNominalSpeed(Dir, Set.JogSpeeds, Set.JogSpeed);
 	const float SpeedBlend = FMath::Clamp((LocomotionSpeed - SlowSpeed) / FMath::Max(1.f, FastSpeed - SlowSpeed), 0.f, 1.f);
 	const float FastConfigSpeed = FMath::Max(1.f, StealthModeRules::GetConfig().FastSpeedCm);
+	// If the operative has a fast-stealth order and is moving, commit purely to the fast gait;
+	// never blend back in the 157 cm/s slow walk during directional steering or slight speed variations.
 	const float Fast = (Operative->IsStealthFast() && bMoving)
-		? FMath::Max(SpeedBlend, FMath::GetMappedRangeValueClamped(
-			FVector2D(FastConfigSpeed * 0.65f, FastConfigSpeed), FVector2D(SpeedBlend, 1.f), LocomotionSpeed))
+		? 1.f
 		: SpeedBlend;
 	auto BeginAction = [this](UAnimSequence* Clip)
 	{
@@ -249,7 +250,10 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 		return FMath::Lerp(Cycle(Set.Walk, Set.WalkSpeeds, Set.WalkSpeed), Cycle(Set.Jog, Set.JogSpeeds, Set.JogSpeed), Fast);
 	};
 	const float FromShare = 1.f - StealthDirection.Fade;
-	const float Rate = ProneCrawlRules::PhaseRate(MoveSpeed, CycleOf(Dir), CycleOf(FromDir), FromShare, Set.MaxPlayRate, Length(Set.Walk[LeadIndex]));
+	// Use the blended gait's actual lead clip length (0.8s for jog vs 1.33s for walk) so PhaseRate's
+	// upper bound (MaxPlayRate / Length) does not artificially choke fast-stealth playback to <= 0.96x.
+	const float LeadLength = FMath::Lerp(Length(Set.Walk[LeadIndex]), Length(Set.Jog[LeadIndex]), Fast);
+	const float Rate = ProneCrawlRules::PhaseRate(MoveSpeed, CycleOf(Dir), CycleOf(FromDir), FromShare, Set.MaxPlayRate, LeadLength);
 	StealthPhase = FMath::Fmod(StealthPhase + DeltaSeconds * Rate, 1.f);
 	auto AddPair = [&Add, &At](const TStaticArray<UAnimSequence*, 8>& Clips, const FWeaponLayerDirectionBlend& Blend, float Weight)
 	{
