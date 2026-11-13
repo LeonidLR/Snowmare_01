@@ -7,7 +7,7 @@
   "stealth_break_on_fire": true,
   "visual_opacity": 0.4,
   "visual_gray": 0.45,
-  "fast_speed": 300.0,
+  "fast_speed": 460.0,
   "fast_detection_range_mult": 0.6,
   "fast_buildup_mult": 0.75,
   "look_lock_keep_s": 2.0,
