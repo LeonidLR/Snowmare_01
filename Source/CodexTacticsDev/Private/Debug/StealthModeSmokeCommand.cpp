@@ -88,6 +88,12 @@ namespace StealthModeSmoke
 		int32 AnchorForwardClipSamples = 0;
 		int32 AnchorWrongYawFrames = 0;
 		int32 AnchorLostSightFrames = 0;
+		float LookDirArrivedYaw = 0.f;
+		float LookDirMoveStartTime = 0.f;
+		float LookDirAlignTime = 0.f;
+		float LookDirMaxStopDrift = 0.f;
+		bool bLookDirFastTurnChecked = false;
+		bool bLookDirMoveStarted = false;
 		float GroundZ = 0.f;
 		TWeakObjectPtr<AOperativeCharacter> Op;
 		TWeakObjectPtr<AEnemyCharacter> Enemy;
@@ -461,7 +467,7 @@ namespace StealthModeSmoke
 
 		if (State.Stage == 2)
 		{
-			Op->SetFormationLookYaw(static_cast<float>(State.Forward.Rotation().Yaw));
+			Op->SetStealthManualLookTarget(State.Origin + State.Forward * 10000.f);
 			const UOperativeAnimInstance* Instance = Anim(Op);
 			if (State.StageTime > 3.f && Instance && Instance->GetStealthWeight() > 0.9f && Op->GetVelocity().Size2D() > 20.f)
 			{
@@ -730,6 +736,7 @@ namespace StealthModeSmoke
 				Check(State, State.WrongSkeletonSamples == 0 && State.WrongFemalePhase == 0, TEXT("all female samples use female paths/skeleton and measured phase offsets"));
 				Check(State, State.MaxRootDrift <= 0.5f, FString::Printf(TEXT("female in-place root drift relative to mesh %.3f cm <= 0.5"), State.MaxRootDrift));
 			}
+			Op->ClearStealthManualLookTarget();
 			Op->StopOperative();
 			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
 			Op->SetStealthMode(false);
@@ -1184,6 +1191,207 @@ namespace StealthModeSmoke
 				State.AutoEnemyNear->Destroy();
 			}
 			Op->ClearStealthAutoLookTarget();
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			Op->SetStealthMode(true);
+			Next(State, 620);
+			break;
+		}
+		case 620:
+		{
+			// Bug #324 / Spec 008: enter stealth facing right -> double click Fast move Up (Forward).
+			// Prior idle facing / formation look to the right must NOT clamp or pull the body.
+			Op->ClearStealthAutoLookTarget();
+			Op->ClearStealthManualLookTarget();
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			const FRotator RightRot = State.Right.Rotation(); // Facing right (+90 deg)
+			Op->SetActorRotation(RightRot);
+			Op->SetStealthMode(true);
+			// Inject stale idle facing and formation look AFTER entering stealth to test consumer-side guards
+			Op->SetIdleFacingYaw(RightRot.Yaw);
+			Op->SetFormationLookYaw(RightRot.Yaw);
+			Check(State, Op->IsInStealthMode(), TEXT("034-lookdir: operative is in stealth mode"));
+			Check(State, !Op->HasStealthManualLookTarget() && !Op->HasStealthAutoLookTarget(),
+				TEXT("034-lookdir: no manual anchor or auto threat target"));
+
+			// Issue Fast move order Up (Forward, 0 deg)
+			const FVector TargetUp = State.Origin + State.Forward * 380.f;
+			Op->OrderMoveTo(TargetUp, /*bSprint*/ true);
+			Check(State, Op->IsStealthFast(), TEXT("034-lookdir: Fast stealth running active"));
+			State.bLookDirFastTurnChecked = false;
+			State.bLookDirMoveStarted = false;
+			State.LookDirMoveStartTime = 0.f;
+			State.LookDirAlignTime = 0.f;
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 621);
+			break;
+		}
+		case 621:
+		{
+			// Re-inject right formation look each frame to prove !IsInStealthMode() guard prevents formation hijack
+			Op->SetFormationLookYaw(State.Right.Rotation().Yaw);
+			const float TargetYaw = State.Forward.Rotation().Yaw; // 0 deg
+			const float CurrentYaw = Op->GetActorRotation().Yaw;
+			const float YawDelta = FMath::Abs(FRotator::NormalizeAxis(CurrentYaw - TargetYaw));
+
+			if (!State.bLookDirMoveStarted && Op->GetVelocity().Size2D() > 10.f)
+			{
+				State.bLookDirMoveStarted = true;
+				State.LookDirMoveStartTime = State.StageTime;
+			}
+
+			// From movement start, yaw must reach move direction within <= 0.30s
+			if (State.bLookDirMoveStarted && !State.bLookDirFastTurnChecked && YawDelta < 5.f)
+			{
+				State.bLookDirFastTurnChecked = true;
+				State.LookDirAlignTime = State.StageTime - State.LookDirMoveStartTime;
+				Check(State, State.LookDirAlignTime <= 0.30f,
+					FString::Printf(TEXT("034-lookdir: yaw reaches forward direction in %.3fs <= 0.30s from move start (cur=%.1f target=%.1f delta=%.1f)"),
+						State.LookDirAlignTime, CurrentYaw, TargetYaw, YawDelta));
+			}
+
+			// Wait until arrived at destination
+			const FVector TargetUp = State.Origin + State.Forward * 380.f;
+			const bool bArrived = (State.StageTime >= 0.4f && Op->GetVelocity().Size2D() <= 10.f && FVector::Dist2D(Op->GetActorLocation(), TargetUp) < 60.f);
+			if (!bArrived && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, State.StageTime < 8.f, TEXT("034-lookdir: reached forward destination before timeout"));
+			State.LookDirArrivedYaw = Op->GetActorRotation().Yaw;
+			Check(State, FMath::Abs(FRotator::NormalizeAxis(State.LookDirArrivedYaw - TargetYaw)) < 5.f,
+				TEXT("034-lookdir: arrived at forward destination facing forward along path"));
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 622);
+			break;
+		}
+		case 622:
+		{
+			// Hold still at destination for >= 1.0s: body must NOT rotate back to right
+			const float StillYaw = Op->GetActorRotation().Yaw;
+			const float Drift = FMath::Abs(FRotator::NormalizeAxis(StillYaw - State.LookDirArrivedYaw));
+			State.LookDirMaxStopDrift = FMath::Max(State.LookDirMaxStopDrift, Drift);
+			if (State.StageTime < 1.0f) { return true; }
+
+			Check(State, State.LookDirMaxStopDrift < 1.0f,
+				FString::Printf(TEXT("034-lookdir: yaw remains stable at destination across 1.0s (max drift=%.2f)"), State.LookDirMaxStopDrift));
+			const float RightYawDelta = FMath::Abs(FRotator::NormalizeAxis(StillYaw - State.Right.Rotation().Yaw));
+			Check(State, RightYawDelta > 45.f,
+				FString::Printf(TEXT("034-lookdir: body does NOT snap back to previous right-facing direction on stop (delta=%.1f)"), RightYawDelta));
+
+			// Second order: Fast move order Left (-90 deg from Forward)
+			const FVector TargetLeft = Op->GetActorLocation() - State.Right * 350.f;
+			Op->OrderMoveTo(TargetLeft, /*bSprint*/ true);
+			Check(State, Op->IsStealthFast(), TEXT("034-lookdir: second Fast stealth move order accepted"));
+			State.bLookDirFastTurnChecked = false;
+			State.bLookDirMoveStarted = false;
+			State.LookDirMoveStartTime = 0.f;
+			State.LookDirAlignTime = 0.f;
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 623);
+			break;
+		}
+		case 623:
+		{
+			const float TargetLeftYaw = (-State.Right).Rotation().Yaw; // -90 deg
+			const float CurrentYaw = Op->GetActorRotation().Yaw;
+			const float YawDelta = FMath::Abs(FRotator::NormalizeAxis(CurrentYaw - TargetLeftYaw));
+
+			if (!State.bLookDirMoveStarted && Op->GetVelocity().Size2D() > 10.f)
+			{
+				State.bLookDirMoveStarted = true;
+				State.LookDirMoveStartTime = State.StageTime;
+			}
+
+			if (State.bLookDirMoveStarted && !State.bLookDirFastTurnChecked && YawDelta < 5.f)
+			{
+				State.bLookDirFastTurnChecked = true;
+				State.LookDirAlignTime = State.StageTime - State.LookDirMoveStartTime;
+				Check(State, State.LookDirAlignTime <= 0.30f,
+					FString::Printf(TEXT("034-lookdir: second move turns to left direction in %.3fs <= 0.30s (cur=%.1f target=%.1f delta=%.1f)"),
+						State.LookDirAlignTime, CurrentYaw, TargetLeftYaw, YawDelta));
+			}
+
+			if ((State.StageTime < 0.4f || Op->GetVelocity().Size2D() > 10.f) && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			State.LookDirArrivedYaw = Op->GetActorRotation().Yaw;
+			Check(State, FMath::Abs(FRotator::NormalizeAxis(State.LookDirArrivedYaw - TargetLeftYaw)) < 5.f,
+				TEXT("034-lookdir: arrived at second destination facing left"));
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 624);
+			break;
+		}
+		case 624:
+		{
+			// Hold still at second destination for 1.0s: body must NOT change yaw
+			const float StillYaw = Op->GetActorRotation().Yaw;
+			const float Drift = FMath::Abs(FRotator::NormalizeAxis(StillYaw - State.LookDirArrivedYaw));
+			State.LookDirMaxStopDrift = FMath::Max(State.LookDirMaxStopDrift, Drift);
+			if (State.StageTime < 1.0f) { return true; }
+
+			Check(State, State.LookDirMaxStopDrift < 1.0f,
+				FString::Printf(TEXT("034-lookdir: second destination yaw remains stable across 1.0s (max drift=%.2f)"), State.LookDirMaxStopDrift));
+
+			// Third order: 180 deg reversal! Move Right (+90 deg, opposite to current -90 deg facing)
+			const FVector TargetRight = Op->GetActorLocation() + State.Right * 400.f;
+			Op->OrderMoveTo(TargetRight, /*bSprint*/ true);
+			Check(State, Op->IsStealthFast(), TEXT("034-lookdir: 180 deg reversal move order accepted"));
+			State.bLookDirFastTurnChecked = false;
+			State.bLookDirMoveStarted = false;
+			State.LookDirMoveStartTime = 0.f;
+			State.LookDirAlignTime = 0.f;
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 625);
+			break;
+		}
+		case 625:
+		{
+			const float TargetRightYaw = State.Right.Rotation().Yaw; // +90 deg
+			const float CurrentYaw = Op->GetActorRotation().Yaw;
+			const float YawDelta = FMath::Abs(FRotator::NormalizeAxis(CurrentYaw - TargetRightYaw));
+
+			if (!State.bLookDirMoveStarted && Op->GetVelocity().Size2D() > 10.f)
+			{
+				State.bLookDirMoveStarted = true;
+				State.LookDirMoveStartTime = State.StageTime;
+			}
+
+			if (State.bLookDirMoveStarted && !State.bLookDirFastTurnChecked && YawDelta < 5.f)
+			{
+				State.bLookDirFastTurnChecked = true;
+				State.LookDirAlignTime = State.StageTime - State.LookDirMoveStartTime;
+				Check(State, State.LookDirAlignTime <= 0.30f,
+					FString::Printf(TEXT("034-lookdir: 180 deg reversal turns to right direction in %.3fs <= 0.30s (cur=%.1f target=%.1f delta=%.1f)"),
+						State.LookDirAlignTime, CurrentYaw, TargetRightYaw, YawDelta));
+			}
+
+			if ((State.StageTime < 0.4f || Op->GetVelocity().Size2D() > 10.f) && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			State.LookDirArrivedYaw = Op->GetActorRotation().Yaw;
+			Check(State, FMath::Abs(FRotator::NormalizeAxis(State.LookDirArrivedYaw - TargetRightYaw)) < 5.f,
+				TEXT("034-lookdir: arrived at 180 deg reversal destination facing right"));
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 626);
+			break;
+		}
+		case 626:
+		{
+			// Hold still at 180 deg reversal destination for 1.0s: body must NOT change yaw
+			const float StillYaw = Op->GetActorRotation().Yaw;
+			const float Drift = FMath::Abs(FRotator::NormalizeAxis(StillYaw - State.LookDirArrivedYaw));
+			State.LookDirMaxStopDrift = FMath::Max(State.LookDirMaxStopDrift, Drift);
+			if (State.StageTime < 1.0f) { return true; }
+
+			Check(State, State.LookDirMaxStopDrift < 1.0f,
+				FString::Printf(TEXT("034-lookdir: 180 reversal destination yaw remains stable across 1.0s (max drift=%.2f)"), State.LookDirMaxStopDrift));
+
+			// Reset to origin for stage 601 knockdown/death fixture
 			Op->StopOperative();
 			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
 			Op->SetActorRotation(State.Forward.Rotation());

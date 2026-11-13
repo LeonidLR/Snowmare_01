@@ -1857,7 +1857,7 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		// Parked followers face where the leader faces (Godot _align_rotation_with_leader), turned every frame by the
 		// operative's facing (FacingRules). In the real-time fight (2026-10-26) not: his combat target / the threat he fought
 		// (ThreatFacingRules) turn him there.
-		if (!IsRealTimeFight())
+		if (!IsRealTimeFight() && !Operative->IsInStealthMode())
 		{
 			Operative->SetIdleFacingYaw(LeaderRef.GetActorRotation().Yaw);
 		}

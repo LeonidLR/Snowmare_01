@@ -336,6 +336,14 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	bSteeringOwnMove = false; // a new path request (a bypass steers again after it)
 	ClearIdleFacing();
 	bExplicitFacing = false; // a new move: no ordered facing any more (ThreatFacingRules may turn him after it)
+	if (IsInStealthMode())
+	{
+		SetFormationLookYaw(TOptional<float>());
+		if (SmoothedVelocity.IsNearlyZero() || FVector::DotProduct(SmoothedVelocity.GetSafeNormal2D(), (Destination - GetActorLocation()).GetSafeNormal2D()) < 0.5f)
+		{
+			SmoothedVelocity = FVector::ZeroVector;
+		}
+	}
 	AOperativeAIController* AIController = Cast<AOperativeAIController>(GetController());
 	if (!AIController)
 	{

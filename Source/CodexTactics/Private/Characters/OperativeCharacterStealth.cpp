@@ -70,6 +70,9 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		bStealthFast = false;
 		ClearStealthManualLookTarget();
 		ClearStealthAutoLookTarget();
+		ClearIdleFacing();
+		SetFormationLookYaw(TOptional<float>());
+		SmoothedVelocity = FVector::ZeroVector;
 		bStealthMode = true;
 		if (Stance != EOperativeStance::Prone)
 		{

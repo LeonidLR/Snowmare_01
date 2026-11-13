@@ -116,4 +116,56 @@ PlayRate is computed directly as $\text{PlayRate} = \frac{\text{MoveSpeed}}{\tex
 - **M6 (Sprint cancellation from active fast-stealth)**: Added test asserting immediate stealth drop from 460 cm/s fast locomotion.
 - **L1 (ASCII in source)**: Cleaned non-ASCII characters in smoke command.
 
+---
+
+## Bug #324 Resolution Summary (`gemini-034-lookdir`)
+
+### 1. Problem Description (Designer video `stelthrun_bug_0.avi`)
+1. Player walks operative Right -> enters stealth -> double-clicks another point (Up/Left).
+2. Operative initially ran sideways (боком), slowly turned during the run, and only then faced forward.
+3. Upon reaching the destination point and stopping, the operative turned back to the right.
+4. Next order: behavior repeated. No enemies, no manual look anchor.
+
+### 2. Root Cause Analysis
+1. **Formation Sector Hijack**: In `OperativeCharacterAim.cpp:245`, `bFacingFormationSector` lacked `!IsInStealthMode()`. In stealth mode `bSprinting` is false (`!bSprinting` is true), so whenever `FormationLookYaw` was set (e.g. flank sector or leader sector), `bFacingFormationSector` evaluated to `true`, actively overriding velocity facing during movement and locking the character's facing to the formation look sector (Right).
+2. **Parked Follower Snap-back**: In `OperativeCharacterAim.cpp:260`, `bHasIdleFacing` lacked `!IsInStealthMode()`. When stopping at the destination point, velocity dropped below 10 cm/s and `bHasIdleFacing` snapped the body back to `IdleFacingYaw` (Right).
+3. **Squad Subsystem Sector Assignments in Stealth**: `USquadSubsystem::ApplyFormationFrame()` in `SquadSubsystemFormation.cpp` lacked `!Operative->IsInStealthMode()`, continuing to assign formation sector looks to stealth operatives every frame. Furthermore, `SquadSubsystem.cpp:1860` set `IdleFacingYaw` on parked followers in stealth.
+4. **Turn Rate & Velocity Smoothing Lag**: In crouched stealth, `TurnRateCrouching = 430 deg/s` (7.5 rad/s) combined with `FacingRules::SmoothVelocity` filter rate (10 1/s) caused slow alignment (>0.6-1.0s) during high-speed (460 cm/s) fast stealth.
+
+### 3. Implementation
+1. `Source/CodexTactics/Private/Characters/OperativeCharacterAim.cpp`:
+   - Gated `bFacingFormationSector` on `!IsInStealthMode()`.
+   - Gated `bHasIdleFacing` stop turn on `!IsInStealthMode()`.
+   - Isolated `MoveTurnSpeed` for movement-direction alignment (`SmoothedVelocity`) during stealth without look target / fast stealth, using `FMath::Max(GetTurnRate(Standing), 1031.3f) / 57.2958f` (18.0 rad/s = 1031 deg/s), while keeping deliberate aiming / manual look anchors (`bStealthLook`) on controlled rate (Opus M1).
+   - Increased `SmoothedVelocity` smoothing rate to 20.0 1/s for fast stealth.
+2. `Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp`:
+   - In `RequestMove()`, cleared `FormationLookYaw` and reset `SmoothedVelocity` if direction change > 60° (Opus M4).
+3. `Source/CodexTactics/Private/Characters/OperativeCharacterStealth.cpp`:
+   - `SetStealthMode(true)` clears stale `IdleFacing`, `FormationLookYaw`, and `SmoothedVelocity`.
+4. `Source/CodexTactics/Private/Characters/SquadSubsystemFormation.cpp` & `SquadSubsystem.cpp`:
+   - Prevented squad subsystem from assigning formation look sectors or parked follower idle facing to operatives in stealth.
+5. `Source/CodexTactics/Public/Characters/FacingRules.h`:
+   - Added optional `Rate = 10.f` parameter to `SmoothVelocity` with updated docstring (Opus L4).
+6. `Source/CodexTacticsDev/Private/Debug/StealthModeSmokeCommand.cpp`:
+   - Stages 620-626: Added comprehensive verification reproducing designer flow:
+     - Enter stealth facing right (+90°), inject stale idle facing and formation look.
+     - Move Up (0°): body reaches movement direction in **0.200s** (<= 0.30s budget).
+     - Stop at destination: yaw remains stable across 1.0s (max drift = 0.23°), does NOT snap back to right (delta = 87.7°).
+     - Move Left (-90°): body reaches movement direction in **0.200s** (<= 0.30s).
+     - Stop at destination: yaw remains stable across 1.0s (max drift = 0.01°).
+     - 180° Reversal Move Right (+90°): body reaches reversed direction in **0.200s** (<= 0.30s).
+     - Stop at destination: yaw remains stable across 1.0s (max drift = 0.07°).
+   - Updated stage 2 to use explicit `SetStealthManualLookTarget` instead of hijacking formation look (Opus L6).
+
+### 4. Opus Review Resolution
+- Opus 5.5 ran on the diff: **Verdict: No HIGH findings**.
+- Implemented Opus recommendations M1 (isolated `MoveTurnSpeed`), M3 (clean exit path), M4 (conditional `SmoothedVelocity` reset on repath), M5 (injected formation look during active test to prove consumer-side guard), M7 (added 180° reversal, movement-start timing, 1.0s per-frame drift tracking, explicit arrival assertions), L4, L6.
+
+### 5. Verification
+- 7/7 `CodexTactics.Characters.StealthMode` unit tests **PASS**.
+- `CodexTactics.StealthModeSmoke` **PASS** (100% checks pass including 034-lookdir 90°/180° <=0.200s and 1.0s stability).
+- `CodexTactics.ShotgunCoverSmoke` **PASS** (10/10 stages pass).
+- `CodexTactics.StealthDetectionSmoke` **PASS**.
+
+
 
