@@ -102,6 +102,25 @@ namespace StealthModeSmoke
 		bool bReorderChecked = false;
 		bool bReorderClipChecked = false;
 		int32 ReorderWrongClipFrames = 0;
+		// Per-frame (Sample): gait starts begun after the re-order, the dominant clip's effective play rate, frames with a slow rate at speed.
+		int32 ReorderStartsBegun = 0;
+		bool bReorderStartFresh = false;
+		int32 ReorderSlowRateFrames = 0;
+		float ReorderMinSpeed = 0.f;
+		float ReorderMinRate = 0.f;
+		FName ReorderPrevClip;
+		float ReorderPrevClipTime = 0.f;
+		double ReorderPrevWorldTime = 0.0;
+		double ReorderWorldTime = -1.0;
+		// Whole leg (first order and re-order): Fast at full speed must play the Fast gait at ~1.0x (designer follow-up 2026-11-14).
+		double FastSinceWorld = -1.0;
+		int32 SlowClipAtFastFrames = 0;
+		int32 FastRateOffFrames = 0;
+		int32 FastRateFrames = 0;
+		FString FastRateWorst;
+		FName FastRatePrevClip;
+		float FastRatePrevTime = 0.f;
+		double FastRatePrevWorld = 0.0;
 		FVector ReorderDirection = FVector::ForwardVector;
 		float GroundZ = 0.f;
 		TWeakObjectPtr<AOperativeCharacter> Op;
@@ -417,6 +436,89 @@ namespace StealthModeSmoke
 			FString Playing; float MontageWeight = 0.f; float SlotWeight = 0.f;
 			Anim(Op)->GetCoverPlayback(Playing, MontageWeight, SlotWeight);
 			if (MontageWeight > 0.01f && Playing.Contains(TEXT("cvr"), ESearchCase::IgnoreCase)) { ++State.WallCoverMontageFrames; }
+		}
+		if (State.Stage == 628 && Anim(Op))
+		{
+			const double Now = Op->GetWorld()->GetTimeSeconds();
+			const bool bFastNow = Op->IsStealthFast();
+			State.FastSinceWorld = bFastNow ? (State.FastSinceWorld < 0.0 ? Now : State.FastSinceWorld) : -1.0;
+			const float FastFor = bFastNow ? static_cast<float>(Now - State.FastSinceWorld) : 0.f;
+			const float Speed = static_cast<float>(Op->GetVelocity().Size2D());
+			const float FastSpeed = StealthModeRules::GetConfig().FastSpeedCm;
+			const UAnimSequenceBase* DominantClip = Anim(Op)->GetStealthDominantClip();
+			const FOperativeClipState* Dominant = nullptr;
+			for (const FOperativeClipState& Clip : Anim(Op)->GetStealthClips())
+			{
+				if (Clip.Sequence && Clip.Sequence == DominantClip && (!Dominant || Clip.Weight > Dominant->Weight)) { Dominant = &Clip; }
+			}
+			if (bFastNow && FastFor >= 0.25f && Speed > 0.8f * FastSpeed && Dominant)
+			{
+				State.SlowClipAtFastFrames += Dominant->Sequence->GetName().StartsWith(TEXT("Stealth_Slow_")) ? 1 : 0;
+				if (Speed >= 0.95f * FastSpeed && Dominant->Sequence->GetFName() == State.FastRatePrevClip && Now > State.FastRatePrevWorld)
+				{
+					float Delta = Dominant->Time - State.FastRatePrevTime;
+					Delta += Delta < 0.f ? Dominant->Sequence->GetPlayLength() : 0.f;
+					const float Rate = Delta / static_cast<float>(Now - State.FastRatePrevWorld);
+					++State.FastRateFrames;
+					if (Rate < 0.85f || Rate > 1.15f)
+					{
+						++State.FastRateOffFrames;
+						State.FastRateWorst = FString::Printf(TEXT("%s %.2f"), *Dominant->Sequence->GetName(), Rate);
+					}
+				}
+			}
+			State.FastRatePrevClip = Dominant ? Dominant->Sequence->GetFName() : NAME_None;
+			State.FastRatePrevTime = Dominant ? Dominant->Time : 0.f;
+			State.FastRatePrevWorld = Now;
+		}
+		if (State.Stage == 628 && State.ReorderPhase == 2 && Anim(Op))
+		{
+			const double Now = Op->GetWorld()->GetTimeSeconds();
+			if (State.ReorderWorldTime < 0.0)
+			{
+				State.ReorderWorldTime = Now;
+				State.ReorderMinSpeed = TNumericLimits<float>::Max();
+				State.ReorderMinRate = TNumericLimits<float>::Max();
+			}
+			const float Since = static_cast<float>(Now - State.ReorderWorldTime);
+			const float Speed = static_cast<float>(Op->GetVelocity().Size2D());
+			const UOperativeAnimInstance* Instance = Anim(Op);
+			bool bFreshStart = false;
+			const FOperativeClipState* Dominant = nullptr;
+			for (const FOperativeClipState& Clip : Instance->GetStealthClips())
+			{
+				if (!Clip.Sequence || Clip.Weight < 0.01f) { continue; }
+				const FString Name = Clip.Sequence->GetName();
+				bFreshStart |= Name.Contains(TEXT("_Start_IP")) && !Name.Contains(TEXT("Wall")) && Clip.Time < 0.15f;
+				Dominant = !Dominant || Clip.Weight > Dominant->Weight ? &Clip : Dominant;
+			}
+			if (Since < 1.0f)
+			{
+				State.ReorderStartsBegun += bFreshStart && !State.bReorderStartFresh ? 1 : 0;
+				State.ReorderMinSpeed = FMath::Min(State.ReorderMinSpeed, Speed);
+			}
+			State.bReorderStartFresh = bFreshStart;
+			float Rate = -1.f;
+			if (Dominant && Dominant->Sequence->GetFName() == State.ReorderPrevClip && Now > State.ReorderPrevWorldTime)
+			{
+				float Delta = Dominant->Time - State.ReorderPrevClipTime;
+				Delta += Delta < 0.f ? Dominant->Sequence->GetPlayLength() : 0.f;
+				Rate = Delta / static_cast<float>(Now - State.ReorderPrevWorldTime);
+			}
+			const float FastSpeed = StealthModeRules::GetConfig().FastSpeedCm;
+			if (Rate >= 0.f && Since < 1.0f && Op->IsStealthFast() && Speed > 0.8f * FastSpeed)
+			{
+				State.ReorderMinRate = FMath::Min(State.ReorderMinRate, Rate);
+				State.ReorderSlowRateFrames += Rate < 0.5f ? 1 : 0;
+			}
+			if (Since < 0.7f)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke reorder frame leg %d since %.3f speed %.0f clip %s w %.2f t %.3f rate %.2f fresh %d"), State.ReorderLeg, Since, Speed,
+					Dominant ? *Dominant->Sequence->GetName() : TEXT("none"), Dominant ? Dominant->Weight : 0.f, Dominant ? Dominant->Time : 0.f, Rate, bFreshStart ? 1 : 0);
+			}
+			State.ReorderPrevClip = Dominant ? Dominant->Sequence->GetFName() : NAME_None;
+			State.ReorderPrevClipTime = Dominant ? Dominant->Time : 0.f;
+			State.ReorderPrevWorldTime = Now;
 		}
 		if (State.Stage == 40 && Op->bShimmying && Op->GetVelocity().Size2D() > 3.f)
 		{
@@ -1418,8 +1520,27 @@ namespace StealthModeSmoke
 				Op->SetStealthMode(true);
 				return true;
 			}
+			const FVector LegStart = State.Origin - State.Forward * 380.f;
+			if (FVector::Dist2D(Op->GetActorLocation(), LegStart) > 30.f && State.StageTime < 3.f)
+			{
+				// An earlier stage's pending move / rescue can carry him off the start spot: settle him there again.
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke reorder leg %d: re-settling %.0f cm off the start (forward yaw %.1f)"), State.ReorderLeg,
+					FVector::Dist2D(Op->GetActorLocation(), LegStart), State.Forward.Rotation().Yaw);
+				Op->StopOperative();
+				Op->SetActorLocation(FVector(LegStart.X, LegStart.Y, Op->GetActorLocation().Z), false, nullptr, ETeleportType::TeleportPhysics);
+				Op->SetActorRotation(State.Forward.Rotation());
+				return true;
+			}
 			if (State.StageTime < (State.ReorderLeg == 0 ? 2.f : 0.8f)) { return true; }
 			Op->OrderMoveTo(State.Origin + State.Forward * 380.f, /*bSprint*/ State.ReorderLeg > 0);
+			State.ReorderWorldTime = -1.0;
+			State.ReorderStartsBegun = 0;
+			State.ReorderSlowRateFrames = 0;
+			State.SlowClipAtFastFrames = 0;
+			State.FastRateOffFrames = 0;
+			State.FastRateFrames = 0;
+			State.FastRateWorst.Reset();
+			State.bReorderStartFresh = false;
 			State.ReorderPhase = 0;
 			State.ReorderTime = -1.f;
 			State.bReorderChecked = false;
@@ -1442,12 +1563,21 @@ namespace StealthModeSmoke
 				State.ReorderLeg, State.StageTime, Velocity.Size2D(), ActorYaw, VelocityYaw, Relative, *DominantName,
 				Op->GetStealthLookPoint(LookPoint) ? 1 : 0, Op->HasStealthManualLookTarget() ? 1 : 0, Op->HasStealthAutoLookTarget() ? 1 : 0, Op->IsStealthFast() ? 1 : 0);
 			const float ReorderAt = bFastLeg ? 0.5f : 1.0f;
-			if (State.ReorderPhase == 0 && State.StageTime >= ReorderAt)
+			// Re-order only once he really runs at his gait speed (in the full run a leg can start late behind earlier fixtures).
+			const bool bAtGaitSpeed = Velocity.Size2D() >= 0.8f * Op->GetMaxSpeed();
+			if (State.ReorderPhase == 0 && State.StageTime >= 3.f && !bAtGaitSpeed)
+			{
+				Check(State, false, FString::Printf(TEXT("034-reorder leg %d: moving at gait speed before the re-order (%.0f)"), State.ReorderLeg, Velocity.Size2D()));
+				return Finish(State, false);
+			}
+			if (State.ReorderPhase == 0 && State.StageTime >= ReorderAt && bAtGaitSpeed)
 			{
 				// 50 deg off the CURRENT travel (the first leg may bend round fixtures left by earlier stages).
 				const FVector Travel = Velocity.GetSafeNormal2D();
-				State.ReorderDirection = (Travel.IsNearlyZero() ? State.Forward : Travel).RotateAngleAxis(50.f, FVector::UpVector);
-				Op->OrderMoveTo(Op->GetActorLocation() + State.ReorderDirection * 420.f, /*bSprint*/ State.ReorderLeg == 1);
+				// Legs 3-5 (designer 2026-11-14 follow-up): a slight re-order at full Fast speed - 10 / 20 / 40 deg.
+				static const float ReorderAngles[6] = { 50.f, 50.f, 50.f, 10.f, 20.f, 40.f };
+				State.ReorderDirection = (Travel.IsNearlyZero() ? State.Forward : Travel).RotateAngleAxis(ReorderAngles[FMath::Clamp(State.ReorderLeg, 0, 5)], FVector::UpVector);
+				Op->OrderMoveTo(Op->GetActorLocation() + State.ReorderDirection * 420.f, /*bSprint*/ State.ReorderLeg == 1 || State.ReorderLeg >= 3);
 				State.ReorderTime = State.StageTime;
 				State.ReorderPhase = State.ReorderLeg == 2 ? 1 : 2;
 			}
@@ -1469,7 +1599,7 @@ namespace StealthModeSmoke
 			}
 			// From 0.4 s on (the body's 0.3 s turn + the legs' 0.12 s direction smoothing) the forward clips own the body: no sideways /
 			// backwards start clip outlives the turn (it played its whole ~1.5 s before the fix).
-			if (State.ReorderPhase == 2 && SinceFinalOrder >= 0.4f && SinceFinalOrder < 1.2f && Velocity.Size2D() > 50.f && !DominantName.Contains(TEXT("_F_")))
+			if (State.ReorderPhase == 2 && SinceFinalOrder >= 0.4f && SinceFinalOrder < 1.2f && Velocity.Size2D() > 50.f && Op->HasOwnMoveOrder() && !DominantName.Contains(TEXT("_F_")))
 			{
 				++State.ReorderWrongClipFrames;
 			}
@@ -1485,7 +1615,20 @@ namespace StealthModeSmoke
 				return true;
 			}
 			Check(State, State.bReorderChecked && State.bReorderClipChecked, FString::Printf(TEXT("034-reorder leg %d: both checks ran"), State.ReorderLeg));
-			if (++State.ReorderLeg < 3)
+			// A re-order while moving changes the cycle's direction only: no start-from-standstill one-shot, the gait keeps its rate.
+			Check(State, State.ReorderStartsBegun == 0, FString::Printf(TEXT("034-reorder leg %d: no gait start begins on a re-order while moving (%d, min speed %.0f)"),
+				State.ReorderLeg, State.ReorderStartsBegun, State.ReorderMinSpeed));
+			if (State.ReorderLeg >= 1)
+			{
+				Check(State, State.SlowClipAtFastFrames == 0, FString::Printf(TEXT("034-reorder leg %d: no slow stealth clip owns a Fast run at speed (%d frames)"),
+					State.ReorderLeg, State.SlowClipAtFastFrames));
+				Check(State, State.FastRateFrames > 0 && State.FastRateOffFrames == 0,
+					FString::Printf(TEXT("034-reorder leg %d: Fast at full speed plays at 1.0x +-15%% from 0.25 s (%d / %d off%s%s)"),
+						State.ReorderLeg, State.FastRateOffFrames, State.FastRateFrames, State.FastRateWorst.IsEmpty() ? TEXT("") : TEXT(", worst "), *State.FastRateWorst));
+				Check(State, State.ReorderSlowRateFrames == 0, FString::Printf(TEXT("034-reorder leg %d: no play rate < 0.5 above 80%% of the Fast speed (min %.2f)"),
+					State.ReorderLeg, State.ReorderMinRate));
+			}
+			if (++State.ReorderLeg < 6)
 			{
 				Next(State, 627);
 				break;

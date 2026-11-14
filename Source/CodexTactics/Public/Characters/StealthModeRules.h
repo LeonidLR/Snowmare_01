@@ -93,6 +93,23 @@ namespace StealthModeRules
 	 * the body into the forward start) it is kept for TurnGraceSeconds of real time.
 	 */
 	CODEXTACTICS_API bool ShouldEndGaitStart(bool bOffSector, bool bMatchedBefore, float ElapsedSeconds, float TurnGraceSeconds = 0.3f);
+	/**
+	 * Designer follow-up 2026-11-14 (034): the stealth gait still counts as moving - above StartSpeed, or a re-order's velocity dip
+	 * (he keeps a move order and the ABP's smoothed speed is still above FullSpeed), so a re-order never plays a stop + start.
+	 */
+	CODEXTACTICS_API bool IsGaitMoving(float Speed, float SmoothedSpeed, bool bWasMoving, bool bHasMoveOrder, float StartSpeed, float FullSpeed);
+	/**
+	 * A gait start clip (an acceleration from standstill) begins only from standstill / low speed: the smoothed speed below Share of
+	 * the gait's nominal speed. Faster (a re-order while running) the cycle only changes direction - no start, no reset.
+	 */
+	CODEXTACTICS_API bool ShouldBeginGaitStart(float SmoothedSpeed, float GaitNominalSpeed, float Share = 0.5f);
+	/**
+	 * Play rate of a gait start clip: it encodes its own acceleration from standstill, so it plays at the commanded (target) speed over
+	 * its gait's nominal speed - not the capsule's momentary speed, which near 0 slowed the start into a ~1 s warm-up.
+	 */
+	CODEXTACTICS_API float GaitStartPlayRate(float CommandedSpeed, float StartNominalSpeed, float MaxPlayRate);
+	/** Fast stealth's jog share floor by speed: 0 below 0.35x FastSpeedCm, 1 from 0.6x (Opus H1: no slow-motion jog strides while slow). */
+	CODEXTACTICS_API float FastGaitFloor(float Speed, float FastSpeedCm);
 	/** True when CandidateLocation lies outside MinDistanceCm and within +-FovDeg of HeadingYawDeg in the XY plane. */
 	CODEXTACTICS_API bool IsInLookLockFov(const FVector& ObserverLocation, float HeadingYawDeg, const FVector& CandidateLocation,
 		float FovDeg, float MinDistanceCm = 50.f);

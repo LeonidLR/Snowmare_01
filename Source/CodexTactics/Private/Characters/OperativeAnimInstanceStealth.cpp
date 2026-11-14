@@ -72,7 +72,12 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	}
 	const FVector Velocity = Operative->GetVelocity();
 	const float MoveSpeed = static_cast<float>(Velocity.Size2D());
-	const bool bMoving = MoveSpeed > Set.MoveStartSpeed;
+	// A re-order's momentary velocity dip is no stop (designer follow-up 2026-11-14, 034).
+	const bool bMoving = StealthModeRules::IsGaitMoving(MoveSpeed, LocomotionSpeed, bStealthWasMoving, Operative->IsMoving(), Set.MoveStartSpeed, Set.MoveFullSpeed);
+	const bool bWantFast = Operative->IsStealthFast();
+	// A start (acceleration from standstill) only from standstill / low speed; a re-order while running keeps the cycle going.
+	const bool bGaitStart = bMoving && !bStealthWasMoving
+		&& StealthModeRules::ShouldBeginGaitStart(LocomotionSpeed, bWantFast ? Set.JogSpeed : Set.WalkSpeed);
 	const bool bWall = bInCover;
 	const bool bPeeking = bWall && Operative->IsPeekingRoundCorner();
 	float TargetLookYawDeg = 0.f;
@@ -95,7 +100,7 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	if (bMoving)
 	{
 		// Start each walk cleanly from its actual initial heading instead of sweeping from 0 deg (F) or a prior walk.
-		if (!bStealthWasMoving)
+		if (bGaitStart)
 		{
 			StealthDirection = FWeaponLayerDirectionState();
 			StealthFastBlend = 0.f;
@@ -123,12 +128,17 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	// Smooth floor for fast stealth (Opus H1): at low speeds (accel/decel) follow natural SpeedBlend to avoid
 	// pose-popping or slow-motion jog strides; once above mid-speed (0.6x FastConfigSpeed), lock to pure jog
 	// so directional changes and minor speed dips never blend back the slow walk.
-	const float FastFloor = FMath::GetMappedRangeValueClamped(
-		FVector2D(FastConfigSpeed * 0.35f, FastConfigSpeed * 0.6f), FVector2D(0.f, 1.f), LocomotionSpeed);
+	const float FastFloor = StealthModeRules::FastGaitFloor(LocomotionSpeed, FastConfigSpeed);
 	const float FastTarget = (Operative->IsStealthFast() && bMoving)
 		? FMath::Max(SpeedBlend, FastFloor)
 		: SpeedBlend;
 	StealthFastBlend = FMath::FInterpTo(StealthFastBlend, FastTarget, DeltaSeconds, 10.f);
+	// Accelerating in Fast stealth the jog follows the capsule's own speed at once (designer follow-up 2026-11-14): the smoothed floor
+	// above lagged ~0.3 s, so the walk loops played at ~1.9x up to full speed. Dips (a re-order) still never blend the walk back.
+	if (bWantFast && bMoving)
+	{
+		StealthFastBlend = FMath::Max(StealthFastBlend, StealthModeRules::FastGaitFloor(MoveSpeed, FastConfigSpeed));
+	}
 	const float Fast = StealthFastBlend;
 	auto BeginAction = [this](UAnimSequence* Clip)
 	{
@@ -167,10 +177,15 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 			}
 			else if (bMoving)
 			{
-				// Designer bug 2026-11-14 (034): not the first frame's relative sector - the body turns to the travel ~0.2 s later.
-				const int32 StartSector = StealthModeRules::GetGaitStartSector(LeadIndex, bLookHoldsBody);
-				BeginAction(Named(FString::Printf(TEXT("Stealth_%s_%s_Start_IP"), Fast > 0.5f ? TEXT("Fast") : TEXT("Slow"), OperativeStealthLayer::DirectionNames[StartSector])));
-				StealthStartSector = StealthAction ? StartSector : INDEX_NONE;
+				if (bGaitStart)
+				{
+					// Designer bug 2026-11-14 (034): not the first frame's relative sector - the body turns to the travel ~0.2 s later.
+					const int32 StartSector = StealthModeRules::GetGaitStartSector(LeadIndex, bLookHoldsBody);
+					// The gait intent, not the blend: the blend restarts at 0 with every start, so a Fast order used to play the slow sneak start.
+					BeginAction(Named(FString::Printf(TEXT("Stealth_%s_%s_Start_IP"), bWantFast ? TEXT("Fast") : TEXT("Slow"), OperativeStealthLayer::DirectionNames[StartSector])));
+					StealthStartSector = StealthAction ? StartSector : INDEX_NONE;
+					bStealthStartFast = bWantFast;
+				}
 			}
 			else
 			{
@@ -220,14 +235,18 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 		{
 			StealthStartElapsed += DeltaSeconds;
 			const bool bOffSector = StealthModeRules::IsOffGaitStartSector(StealthStartSector, StealthDirection.Current);
-			bStealthActionEnding |= !bGaitAction || StealthModeRules::ShouldEndGaitStart(bOffSector, bStealthStartMatched, StealthStartElapsed);
+			bStealthActionEnding |= !bGaitAction || bStealthStartFast != bWantFast
+				|| StealthModeRules::ShouldEndGaitStart(bOffSector, bStealthStartMatched, StealthStartElapsed);
 			bStealthStartMatched |= !bOffSector;
 		}
 		if (bStealthActionEnding)
 		{
 			StealthActionFade = FMath::Max(0.f, StealthActionFade - DeltaSeconds / FMath::Max(0.01f, FadeSeconds));
 		}
-		StealthActionTime += DeltaSeconds * (bGaitAction ? FMath::Clamp(MoveSpeed / FMath::Lerp(SlowSpeed, FastSpeed, Fast), 0.2f, Set.MaxPlayRate) : 1.f);
+		const float GaitRate = StealthStartSector != INDEX_NONE
+			? StealthModeRules::GaitStartPlayRate(Operative->GetMaxSpeed(), bStealthStartFast ? Set.JogSpeed : Set.WalkSpeed, Set.MaxPlayRate)
+			: FMath::Clamp(MoveSpeed / FMath::Lerp(SlowSpeed, FastSpeed, Fast), 0.2f, Set.MaxPlayRate);
+		StealthActionTime += DeltaSeconds * (bGaitAction ? GaitRate : 1.f);
 		if (StealthActionTime >= ActionLength || StealthActionFade <= 0.f)
 		{
 			StealthAction = nullptr;

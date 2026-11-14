@@ -380,4 +380,80 @@ bool FStealthReorderFacingTest::RunTest(const FString&)
 }
 
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStealthFastReorderRateTest, "CodexTactics.Characters.StealthMode.FastReorderRate",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FStealthFastReorderRateTest::RunTest(const FString&)
+{
+	using namespace StealthModeRules;
+	// Designer follow-up 2026-11-14 (034): a slight re-order while running Fast played a slow start for ~1 s. Set data from the JSON.
+	FString Text;
+	TSharedPtr<FJsonObject> Root;
+	const TSharedPtr<FJsonObject>* Block = nullptr;
+	double JogSpeed = 0.0, WalkSpeed = 0.0, StartSpeed = 0.0, FullSpeed = 0.0;
+	const bool bRead = FFileHelper::LoadFileToString(Text, *(FPaths::ProjectContentDir() / TEXT("Data/Weapons/weapon_anim_sets.json")))
+		&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid()
+		&& Root->TryGetObjectField(TEXT("stealth"), Block) && (*Block)->TryGetNumberField(TEXT("jog_speed"), JogSpeed)
+		&& (*Block)->TryGetNumberField(TEXT("walk_speed"), WalkSpeed) && (*Block)->TryGetNumberField(TEXT("move_start_speed"), StartSpeed)
+		&& (*Block)->TryGetNumberField(TEXT("move_full_speed"), FullSpeed);
+	if (!TestTrue(TEXT("stealth gait speeds read from weapon_anim_sets.json"), bRead))
+	{
+		return false;
+	}
+	const float Jog = static_cast<float>(JogSpeed);
+	const float Walk = static_cast<float>(WalkSpeed);
+	const float FastSpeed = GetConfig().FastSpeedCm;
+	constexpr float MaxPlayRate = 1.6f; // FShotgunAnimSet default (the stealth block sets none)
+
+	TestTrue(TEXT("A re-order's velocity dip with the order kept is still moving"), IsGaitMoving(0.f, 400.f, true, true, StartSpeed, FullSpeed));
+	TestFalse(TEXT("No order: a real stop"), IsGaitMoving(0.f, 400.f, true, false, StartSpeed, FullSpeed));
+	TestFalse(TEXT("Slowed down to a stop with the order (traffic hold)"), IsGaitMoving(0.f, 10.f, true, true, StartSpeed, FullSpeed));
+	TestTrue(TEXT("Moving from standstill"), IsGaitMoving(30.f, 0.f, false, true, StartSpeed, FullSpeed));
+	TestTrue(TEXT("Start from standstill"), ShouldBeginGaitStart(0.f, Jog));
+	TestFalse(TEXT("No start at full Fast speed"), ShouldBeginGaitStart(FastSpeed, Jog));
+	TestFalse(TEXT("No walk start while walking"), ShouldBeginGaitStart(0.9f * Walk, Walk));
+
+	// Running Fast at full speed, re-order at 10 / 20 / 40 deg: the capsule dips (worst case: one frame at 0), the ABP's smoothed
+	// speed (FInterpTo 8, UOperativeAnimInstance) stays high - the gait keeps moving, no start begins, the cycle plays at ~1.0.
+	for (const float Turn : { 10.f, 20.f, 40.f })
+	{
+		constexpr float Dt = 1.f / 60.f;
+		float Loco = FastSpeed;
+		bool bWasMoving = true;
+		int32 StartsBegun = 0;
+		float LastRate = 0.f;
+		const float Dip[6] = { 0.f, 150.f, 250.f, 350.f, 420.f, FastSpeed };
+		for (int32 Step = 0; Step < 30; ++Step)
+		{
+			const float Speed = Step < 6 ? Dip[Step] : FastSpeed;
+			Loco = FMath::FInterpTo(Loco, Speed, Dt, 8.f);
+			const bool bMoving = IsGaitMoving(Speed, Loco, bWasMoving, true, StartSpeed, FullSpeed);
+			StartsBegun += bMoving && !bWasMoving && ShouldBeginGaitStart(Loco, Jog) ? 1 : 0;
+			TestTrue(FString::Printf(TEXT("%.0f deg re-order: still moving at step %d"), Turn, Step), bMoving);
+			bWasMoving = bMoving;
+			constexpr float Length = 1.f; // the clip time rate is independent of the loop's length
+			LastRate = ProneCrawlRules::PhaseRate(Speed, Jog * Length, Jog * Length, 0.f, MaxPlayRate, Length) * Length;
+			if (Speed > 0.8f * FastSpeed)
+			{
+				TestTrue(FString::Printf(TEXT("%.0f deg re-order: no sub-0.5 rate above 80%% of Fast (%.2f)"), Turn, LastRate), LastRate >= 0.5f);
+			}
+		}
+		TestEqual(FString::Printf(TEXT("%.0f deg re-order: no gait start begins"), Turn), StartsBegun, 0);
+		TestTrue(FString::Printf(TEXT("%.0f deg re-order: cycle at 1.0 +-10%% at full speed (%.2f)"), Turn, LastRate), FMath::Abs(LastRate - 1.f) <= 0.1f);
+	}
+	// A Fast order after a stop: the Fast start (chosen by the intent) plays at the commanded speed's rate from the first frame -
+	// not MoveSpeed / nominal (0.2 .. 0.5 while the capsule accelerates: the ~1 s warm-up).
+	const float StartRate = GaitStartPlayRate(FastSpeed, Jog, MaxPlayRate);
+	TestTrue(FString::Printf(TEXT("Fast start after a stop plays at 1.0 +-10%% (%.2f)"), StartRate), FMath::Abs(StartRate - 1.f) <= 0.1f);
+	TestTrue(TEXT("Start rate never below 0.5"), GaitStartPlayRate(0.f, Jog, MaxPlayRate) >= 0.5f);
+	// Accelerating gait (no start): the jog owns the body by the capsule's own speed (no smoothed lag) and its rate follows that speed.
+	TestEqual(TEXT("Slow: no jog floor"), FastGaitFloor(0.3f * FastSpeed, FastSpeed), 0.f);
+	for (const float Speed : { 0.8f * FastSpeed, 0.9f * FastSpeed, FastSpeed })
+	{
+		TestEqual(FString::Printf(TEXT("Jog owns the body at %.0f"), Speed), FastGaitFloor(Speed, FastSpeed), 1.f);
+		const float Rate = ProneCrawlRules::PhaseRate(Speed, Jog, Jog, 0.f, MaxPlayRate, 1.f);
+		TestTrue(FString::Printf(TEXT("Cycle rate tracks speed %.0f (%.2f)"), Speed, Rate), FMath::IsNearlyEqual(Rate, Speed / Jog, 0.01f) && Rate >= 0.5f);
+	}
+	return true;
+}
+
 #endif

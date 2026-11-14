@@ -139,6 +139,28 @@ namespace StealthModeRules
 		return bOffSector && (bMatchedBefore || ElapsedSeconds > FMath::Max(0.f, TurnGraceSeconds));
 	}
 
+	bool IsGaitMoving(float Speed, float SmoothedSpeed, bool bWasMoving, bool bHasMoveOrder, float StartSpeed, float FullSpeed)
+	{
+		return Speed > StartSpeed || (bWasMoving && bHasMoveOrder && SmoothedSpeed > FullSpeed);
+	}
+
+	bool ShouldBeginGaitStart(float SmoothedSpeed, float GaitNominalSpeed, float Share)
+	{
+		return SmoothedSpeed < FMath::Max(0.f, GaitNominalSpeed) * FMath::Clamp(Share, 0.f, 1.f);
+	}
+
+	float GaitStartPlayRate(float CommandedSpeed, float StartNominalSpeed, float MaxPlayRate)
+	{
+		const float Rate = StartNominalSpeed > 1.f ? CommandedSpeed / StartNominalSpeed : 1.f;
+		return FMath::Clamp(Rate, 0.5f, FMath::Max(0.5f, MaxPlayRate));
+	}
+
+	float FastGaitFloor(float Speed, float FastSpeedCm)
+	{
+		const float Fast = FMath::Max(1.f, FastSpeedCm);
+		return FMath::GetMappedRangeValueClamped(FVector2D(Fast * 0.35f, Fast * 0.6f), FVector2D(0.f, 1.f), Speed);
+	}
+
 	bool IsInLookLockFov(const FVector& ObserverLocation, float HeadingYawDeg, const FVector& CandidateLocation,
 		float FovDeg, float MinDistanceCm)
 	{

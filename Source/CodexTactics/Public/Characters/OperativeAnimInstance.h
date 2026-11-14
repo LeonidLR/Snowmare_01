@@ -2116,6 +2116,8 @@ private:
 	/** Real seconds since the gait start began; the legs were inside its sector once (StealthModeRules::ShouldEndGaitStart). */
 	float StealthStartElapsed = 0.f;
 	bool bStealthStartMatched = false;
+	/** The playing gait start is the Fast one (it ends when the gait intent changes, e.g. a double click's walk start then Fast). */
+	bool bStealthStartFast = false;
 	bool bStealthActionEnding = false;
 	bool bStealthWasActive = false;
 	bool bStealthWasMoving = false;
