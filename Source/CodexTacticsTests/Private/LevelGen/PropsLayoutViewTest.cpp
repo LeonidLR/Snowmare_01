@@ -726,4 +726,62 @@ bool FPropsLayoutConfigFromBalanceTest::RunTest(const FString&)
 	return true;
 }
 
+PROPS_LAYOUT_TEST(FPropsLayoutTrainBuildingsTest, "CombatBuildings.TrainArenasOpeningsAndExclusions")
+bool FPropsLayoutTrainBuildingsTest::RunTest(const FString&)
+{
+	using namespace PropsLayoutViewTestLocal;
+	for (const TCHAR* Path : {
+		TEXT("Data/LevelGen/accepted/L_Gen_Train_1.json"),
+		TEXT("Data/LevelGen/accepted/L_Gen_Train_2.json"),
+		TEXT("Data/LevelGen/accepted/L_Gen_Train_3.json") })
+	{
+		FPropsLayoutView View;
+		if (!LoadView(*this, Path, View))
+		{
+			return false;
+		}
+	}
+
+	// L_Gen_Train_1: GetSightBlockers("ground") splits window B_house_win_south_f0_1 at [450, -867]
+	FPropsLayoutView Train1;
+	if (!LoadView(*this, TEXT("Data/LevelGen/accepted/L_Gen_Train_1.json"), Train1))
+	{
+		return false;
+	}
+	TArray<FPropsSightSegment> GroundBlockers;
+	Train1.GetSightBlockers(TEXT("ground"), GroundBlockers);
+	TestFalse(TEXT("ground sight passes through window B_house_win_south_f0_1 [450,-867]"),
+		FPropsLayoutView::IsSightBlocked(FIntPoint(300, -867), FIntPoint(600, -867), GroundBlockers));
+	TestTrue(TEXT("solid wall pier near [450,-1150] blocks sight"),
+		FPropsLayoutView::IsSightBlocked(FIntPoint(300, -1150), FIntPoint(600, -1150), GroundBlockers));
+
+	TArray<FPropsSightSegment> Floor1Blockers;
+	Train1.GetSightBlockers(TEXT("floor:B_house:1"), Floor1Blockers);
+	TestFalse(TEXT("floor 1 sight passes through B_house_win_south_f1_1 [450,-867]"),
+		FPropsLayoutView::IsSightBlocked(FIntPoint(300, -867), FIntPoint(600, -867), Floor1Blockers));
+
+	// L_Gen_Train_2: B_tower hatch [-1220, -1630] excluded on roof:B_tower
+	FPropsLayoutView Train2;
+	if (!LoadView(*this, TEXT("Data/LevelGen/accepted/L_Gen_Train_2.json"), Train2))
+	{
+		return false;
+	}
+	FPropsExclusionParams Params;
+	Params.HoleRimCm = 50;
+	const TArray<FPropsExclusion> Ex2 = Train2.BuildExclusions(Params);
+	TestTrue(TEXT("B_tower hatch center excluded on roof:B_tower"),
+		FPropsLayoutView::IsExcluded(Ex2, FIntPoint(-1220, -1630), TEXT("roof:B_tower")));
+
+	// L_Gen_Train_3: B_catwalk floors_detail catwalk gap [1450..1800]x[2200..2550] excluded on floor:B_catwalk:1
+	FPropsLayoutView Train3;
+	if (!LoadView(*this, TEXT("Data/LevelGen/accepted/L_Gen_Train_3.json"), Train3))
+	{
+		return false;
+	}
+	const TArray<FPropsExclusion> Ex3 = Train3.BuildExclusions(Params);
+	TestTrue(TEXT("B_catwalk gap center excluded on floor:B_catwalk:1"),
+		FPropsLayoutView::IsExcluded(Ex3, FIntPoint(1625, 2375), TEXT("floor:B_catwalk:1")));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

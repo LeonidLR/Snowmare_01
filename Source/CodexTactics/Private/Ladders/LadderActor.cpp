@@ -121,7 +121,7 @@ void ALadderActor::BeginPlay()
 	{
 		// A loaded / PIE-copied ladder (bug 07, 2026-11-01): the construction pass did not run in this world - its derived state again.
 		bHasWall = WallBracketCount > 0 || DetectWall();
-		if (NavLink && NavLink->IsEnabled() != IsClimbable())
+		if (NavLink)
 		{
 			UpdateNavLink();
 		}

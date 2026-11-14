@@ -87,10 +87,10 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
 	float HangLateral = 7.f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Ladder", meta = (ExposeOnSpawn = "true"))
 	float TopStandoff = 49.1f;
 
-	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Ladder")
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Ladder", meta = (ExposeOnSpawn = "true"))
 	float TopExitStandoff = 40.f;
 
 	/** Re-runs the validation traces (editor; the result shows as the editor-only text and in the log). */

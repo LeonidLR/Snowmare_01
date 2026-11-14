@@ -407,6 +407,36 @@ private:
 		FIntPoint Pos = FIntPoint::ZeroValue;
 		int32 Floor = 0;
 	};
+	struct FBuildingOpening
+	{
+		FString Kind;
+		FIntPoint Pos = FIntPoint::ZeroValue;
+		int32 Floor = 0;
+		int32 WidthCm = 0;
+		int32 SillHeightCm = 0;
+		int32 TopHeightCm = 0;
+	};
+	struct FFloorGapRect
+	{
+		FString Id;
+		int32 Floor = 0;
+		FIntPoint Min = FIntPoint::ZeroValue;
+		FIntPoint Max = FIntPoint::ZeroValue;
+	};
+	struct FBuildingHatch
+	{
+		FString Id;
+		FIntPoint Pos = FIntPoint::ZeroValue;
+		int32 Floor = 0;
+		int32 SizeX = 100;
+		int32 SizeY = 100;
+	};
+	struct FBuildingParapet
+	{
+		FIntPoint Start = FIntPoint::ZeroValue;
+		FIntPoint End = FIntPoint::ZeroValue;
+		int32 ThicknessCm = 20;
+	};
 	struct FStair
 	{
 		FString Id;
@@ -428,6 +458,10 @@ private:
 		TArray<FStair> Stairs;
 		TArray<FIntPoint> RoofHoles;
 		TArray<FFloorHole> FloorHoles;
+		TArray<FBuildingOpening> Openings;
+		TArray<FFloorGapRect> FloorGaps;
+		TArray<FBuildingHatch> Hatches;
+		TArray<FBuildingParapet> Parapets;
 	};
 	struct FLadder
 	{
