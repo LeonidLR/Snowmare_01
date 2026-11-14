@@ -1,8 +1,12 @@
 // Designer task 003: stealth selection, break conditions and detection/noise tuning. UE-only.
 #include "Misc/AutomationTest.h"
+#include "Characters/FacingRules.h"
+#include "Characters/ProneCrawlRules.h"
 #include "Characters/StealthModeRules.h"
+#include "Characters/WeaponLayerHandoffRules.h"
 #include "Dom/JsonObject.h"
 #include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Tactics/CoverTypes.h"
@@ -234,5 +238,146 @@ bool FStealthLookLockTest::RunTest(const FString&)
 
 	return true;
 }
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStealthGaitStartTest, "CodexTactics.Characters.StealthMode.GaitStart",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FStealthGaitStartTest::RunTest(const FString&)
+{
+	using namespace StealthModeRules;
+	TestEqual(TEXT("Sector F"), GetDirectionSector(10.f), 0);
+	TestEqual(TEXT("Sector FR from 50 deg"), GetDirectionSector(50.f), 1);
+	TestEqual(TEXT("Sector R"), GetDirectionSector(90.f), 2);
+	TestEqual(TEXT("Sector B across +-180"), GetDirectionSector(-170.f), 4);
+	TestEqual(TEXT("Sector FL"), GetDirectionSector(-40.f), 7);
+	TestEqual(TEXT("Sector F near 0 (negative side)"), GetDirectionSector(-20.f), 0);
+	// Designer bug 2026-11-14 (034): no look point - the body turns to the travel, so the start is forward whatever the first frame says.
+	TestEqual(TEXT("No look: a 50 deg first frame starts forward"), GetGaitStartSector(1, false), 0);
+	TestEqual(TEXT("No look: a backwards first frame starts forward"), GetGaitStartSector(4, false), 0);
+	// An explicit look (manual anchor / auto lock) holds the body: the strafe start stays.
+	TestEqual(TEXT("Look: the strafe start is kept"), GetGaitStartSector(2, true), 2);
+	TestEqual(TEXT("Look: sector wraps"), GetGaitStartSector(-1, true), 7);
+	TestFalse(TEXT("Legs inside the forward start"), IsOffGaitStartSector(0, 20.f));
+	TestTrue(TEXT("Legs left the forward start"), IsOffGaitStartSector(0, 45.f));
+	TestFalse(TEXT("Strafe start held by a look"), IsOffGaitStartSector(2, 80.f));
+	TestFalse(TEXT("Backwards start across +-180"), IsOffGaitStartSector(4, -165.f));
+	TestFalse(TEXT("A fresh order turning into the start keeps it"), ShouldEndGaitStart(true, false, 0.1f));
+	TestTrue(TEXT("Never reached within the grace: it ends"), ShouldEndGaitStart(true, false, 0.35f));
+	TestTrue(TEXT("Matched before, now off (a re-order): it ends"), ShouldEndGaitStart(true, true, 0.05f));
+	TestFalse(TEXT("Inside the sector: it plays on"), ShouldEndGaitStart(false, true, 2.f));
+	return true;
+}
+
+namespace StealthReorderTest
+{
+	struct FResult
+	{
+		float BodyToVelocityDeg = 180.f;
+		int32 SelectedSector = INDEX_NONE;
+		bool bStartPlaying = false;
+	};
+
+	struct FTuning
+	{
+		float SmoothS = 0.f;
+		float DeadZoneDeg = 0.f;
+		float SnapDeg = 0.f;
+		float FadeS = 0.f;
+	};
+
+	/**
+	 * The re-order chain of a stealthed operative without a look: the capsule's velocity turns to the new travel (tau 0.05 s; measured in
+	 * StealthModeSmoke 034-reorder: ~0.15-0.2 s for 50 deg), UpdateCombatFacing's body (SmoothVelocity + StepYaw at the stealth floor turn
+	 * rate) and UpdateStealthLayer's legs (StepLayerDirection with the stealth set's tuning) plus its gait start bookkeeping.
+	 * bStopAndGo: the speed dipped to a stop at the re-order, so a new gait start is chosen from the first moving frame.
+	 */
+	FResult Simulate(bool bFast, float TurnDeg, bool bStopAndGo, float SimSeconds, const FTuning& Tuning, float SpeedCm)
+	{
+		constexpr float Dt = 1.f / 60.f;
+		FWeaponLayerDirectionState Legs;
+		WeaponLayerHandoffRules::StepLayerDirection(Legs, 0.f, Dt, Tuning.SmoothS, Tuning.DeadZoneDeg, Tuning.SnapDeg, Tuning.FadeS); // running straight ahead
+		FVector Smoothed(SpeedCm, 0.f, 0.f);
+		float BodyYaw = 0.f;
+		float VelocityYaw = bStopAndGo ? TurnDeg : 0.f; // stop-and-go: the capsule restarts straight along the new travel
+		// The first order's forward start, still playing (it lasts ~1.5 s), the legs inside it.
+		int32 StartSector = StealthModeRules::GetGaitStartSector(0, false);
+		bool bMatched = true;
+		bool bEnding = false;
+		float Elapsed = 1.f;
+		bool bFirstFrame = true;
+		const float TurnRate = StealthModeRules::MinMoveTurnRateDeg / 57.2958f;
+		const int32 Steps = FMath::RoundToInt(SimSeconds / Dt);
+		for (int32 Step = 0; Step < Steps; ++Step)
+		{
+			VelocityYaw += (TurnDeg - VelocityYaw) * (1.f - FMath::Exp(-Dt / 0.05f));
+			const FVector Velocity = FRotator(0.f, VelocityYaw, 0.f).Vector() * SpeedCm;
+			Smoothed = FacingRules::SmoothVelocity(Smoothed, Velocity, Dt, StealthModeRules::FacingVelocitySmoothRate(bFast));
+			BodyYaw = FacingRules::StepYaw(BodyYaw, static_cast<float>(Smoothed.Rotation().Yaw), TurnRate, Dt);
+			const float Raw = ProneCrawlRules::RelativeMoveDeg(BodyYaw, VelocityYaw);
+			if (bFirstFrame && bStopAndGo)
+			{
+				Legs = FWeaponLayerDirectionState(); // a new walk starts from its actual heading (UpdateStealthLayer)
+			}
+			WeaponLayerHandoffRules::StepLayerDirection(Legs, Raw, Dt, Tuning.SmoothS, Tuning.DeadZoneDeg, Tuning.SnapDeg, Tuning.FadeS);
+			if (bFirstFrame && bStopAndGo)
+			{
+				StartSector = StealthModeRules::GetGaitStartSector(StealthModeRules::GetDirectionSector(Legs.Current), false);
+				bMatched = false;
+				bEnding = false;
+				Elapsed = 0.f;
+			}
+			bFirstFrame = false;
+			Elapsed += Dt;
+			const bool bOff = StealthModeRules::IsOffGaitStartSector(StartSector, Legs.Current);
+			bEnding |= StealthModeRules::ShouldEndGaitStart(bOff, bMatched, Elapsed);
+			bMatched |= !bOff;
+		}
+		FResult Result;
+		Result.BodyToVelocityDeg = FMath::Abs(FMath::FindDeltaAngleDegrees(BodyYaw, VelocityYaw));
+		Result.bStartPlaying = !bEnding;
+		Result.SelectedSector = Result.bStartPlaying ? StartSector : StealthModeRules::GetDirectionSector(Legs.Current);
+		return Result;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStealthReorderFacingTest, "CodexTactics.Characters.StealthMode.ReorderFacing",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FStealthReorderFacingTest::RunTest(const FString&)
+{
+	// Designer bug 2026-11-14 (034): Walk / Fast re-order at 40-60 deg while moving. The stealth set's direction tuning is read from the data.
+	FString Text;
+	TSharedPtr<FJsonObject> Root;
+	const TSharedPtr<FJsonObject>* Block = nullptr;
+	double SmoothS = 0.0, DeadZone = 0.0, Snap = 0.0, Fade = 0.0;
+	const bool bRead = FFileHelper::LoadFileToString(Text, *(FPaths::ProjectContentDir() / TEXT("Data/Weapons/weapon_anim_sets.json")))
+		&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid()
+		&& Root->TryGetObjectField(TEXT("stealth"), Block) && (*Block)->TryGetNumberField(TEXT("direction_smooth_s"), SmoothS)
+		&& (*Block)->TryGetNumberField(TEXT("direction_dead_zone_deg"), DeadZone) && (*Block)->TryGetNumberField(TEXT("direction_snap_deg"), Snap)
+		&& (*Block)->TryGetNumberField(TEXT("direction_fade_s"), Fade);
+	if (!TestTrue(TEXT("stealth direction tuning read from weapon_anim_sets.json"), bRead))
+	{
+		return false;
+	}
+	const StealthReorderTest::FTuning Tuning{ static_cast<float>(SmoothS), static_cast<float>(DeadZone), static_cast<float>(Snap), static_cast<float>(Fade) };
+	const float FastSpeed = FMath::Max(150.f, StealthModeRules::GetConfig().FastSpeedCm);
+	for (const bool bFast : { false, true })
+	{
+		for (const float Turn : { 40.f, 50.f, 60.f, -50.f })
+		{
+			for (const bool bStopAndGo : { false, true })
+			{
+				const StealthReorderTest::FResult Result = StealthReorderTest::Simulate(bFast, Turn, bStopAndGo, 0.3f, Tuning, bFast ? FastSpeed : 125.f);
+				const FString Case = FString::Printf(TEXT("%s re-order %+.0f deg%s"), bFast ? TEXT("Fast") : TEXT("Walk"), Turn,
+					bStopAndGo ? TEXT(" (stop-and-go)") : TEXT(""));
+				TestTrue(FString::Printf(TEXT("%s: body within 15 deg of the velocity after 0.3 s (%.1f)"), *Case, Result.BodyToVelocityDeg),
+					Result.BodyToVelocityDeg <= 15.f);
+				TestEqual(FString::Printf(TEXT("%s: the forward clip is selected after 0.3 s"), *Case), Result.SelectedSector, 0);
+			}
+		}
+	}
+	// The old start choice (the first moving frame's own sector) was the sideways start that outlived the turn.
+	TestEqual(TEXT("Old choice for a 50 deg stop-and-go was FR"), StealthModeRules::GetDirectionSector(50.f), 1);
+	return true;
+}
+
 
 #endif

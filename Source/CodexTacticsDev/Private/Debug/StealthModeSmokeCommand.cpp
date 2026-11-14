@@ -94,6 +94,15 @@ namespace StealthModeSmoke
 		float LookDirMaxStopDrift = 0.f;
 		bool bLookDirFastTurnChecked = false;
 		bool bLookDirMoveStarted = false;
+		// Designer bug 2026-11-14 (034): a re-order while already moving in stealth sidestepped for seconds.
+		bool bReorderOnly = false;
+		int32 ReorderLeg = 0;
+		int32 ReorderPhase = 0;
+		float ReorderTime = -1.f;
+		bool bReorderChecked = false;
+		bool bReorderClipChecked = false;
+		int32 ReorderWrongClipFrames = 0;
+		FVector ReorderDirection = FVector::ForwardVector;
 		float GroundZ = 0.f;
 		TWeakObjectPtr<AOperativeCharacter> Op;
 		TWeakObjectPtr<AEnemyCharacter> Enemy;
@@ -661,7 +670,7 @@ namespace StealthModeSmoke
 			Op->PostureOverride = ESquadFirePosture::Defensive;
 			Squad->SetSelectedGroup({ Op });
 			PC->ToggleStealthModeKey();
-			Next(State, 1);
+			Next(State, State.bReorderOnly ? 627 : 1);
 			break;
 		}
 		case 1:
@@ -1391,6 +1400,100 @@ namespace StealthModeSmoke
 			Check(State, State.LookDirMaxStopDrift < 1.0f,
 				FString::Printf(TEXT("034-lookdir: 180 reversal destination yaw remains stable across 1.0s (max drift=%.2f)"), State.LookDirMaxStopDrift));
 
+			State.ReorderLeg = 0;
+			Next(State, 627);
+			break;
+		}
+		case 627:
+		{
+			// Designer bug 2026-11-14 (034): legs 0 Walk -> Walk, 1 Fast -> Fast, 2 Fast -> double click (Walk then Fast) re-order at 50 deg
+			// while already moving. Without a player look the body must face the new travel within 0.3 s and play the forward clip.
+			if (State.StageTime < 0.05f)
+			{
+				Op->ClearStealthManualLookTarget();
+				Op->ClearStealthAutoLookTarget();
+				Op->StopOperative();
+				Op->SetActorLocation(State.Origin - State.Forward * 380.f, false, nullptr, ETeleportType::TeleportPhysics);
+				Op->SetActorRotation(State.Forward.Rotation());
+				Op->SetStealthMode(true);
+				return true;
+			}
+			if (State.StageTime < (State.ReorderLeg == 0 ? 2.f : 0.8f)) { return true; }
+			Op->OrderMoveTo(State.Origin + State.Forward * 380.f, /*bSprint*/ State.ReorderLeg > 0);
+			State.ReorderPhase = 0;
+			State.ReorderTime = -1.f;
+			State.bReorderChecked = false;
+			State.bReorderClipChecked = false;
+			State.ReorderWrongClipFrames = 0;
+			Next(State, 628);
+			break;
+		}
+		case 628:
+		{
+			const bool bFastLeg = State.ReorderLeg > 0;
+			const FVector Velocity = Op->GetVelocity();
+			const float ActorYaw = static_cast<float>(Op->GetActorRotation().Yaw);
+			const float VelocityYaw = static_cast<float>(Velocity.Rotation().Yaw);
+			const float Relative = FRotator::NormalizeAxis(VelocityYaw - ActorYaw);
+			const UAnimSequenceBase* Dominant = Anim(Op)->GetStealthDominantClip();
+			const FString DominantName = Dominant ? Dominant->GetName() : TEXT("none");
+			FVector LookPoint = FVector::ZeroVector;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke reorder leg %d t %.2f speed %.0f yaw %.1f vel %.1f rel %.1f clip %s look %d manual %d auto %d fast %d"),
+				State.ReorderLeg, State.StageTime, Velocity.Size2D(), ActorYaw, VelocityYaw, Relative, *DominantName,
+				Op->GetStealthLookPoint(LookPoint) ? 1 : 0, Op->HasStealthManualLookTarget() ? 1 : 0, Op->HasStealthAutoLookTarget() ? 1 : 0, Op->IsStealthFast() ? 1 : 0);
+			const float ReorderAt = bFastLeg ? 0.5f : 1.0f;
+			if (State.ReorderPhase == 0 && State.StageTime >= ReorderAt)
+			{
+				// 50 deg off the CURRENT travel (the first leg may bend round fixtures left by earlier stages).
+				const FVector Travel = Velocity.GetSafeNormal2D();
+				State.ReorderDirection = (Travel.IsNearlyZero() ? State.Forward : Travel).RotateAngleAxis(50.f, FVector::UpVector);
+				Op->OrderMoveTo(Op->GetActorLocation() + State.ReorderDirection * 420.f, /*bSprint*/ State.ReorderLeg == 1);
+				State.ReorderTime = State.StageTime;
+				State.ReorderPhase = State.ReorderLeg == 2 ? 1 : 2;
+			}
+			else if (State.ReorderPhase == 1 && State.StageTime >= State.ReorderTime + 0.15f)
+			{
+				// The double click's second click: the same point, now Fast.
+				Op->OrderMoveTo(Op->GetLastMoveDestination(), /*bSprint*/ true);
+				State.ReorderPhase = 2;
+			}
+			const float SinceFinalOrder = State.StageTime - State.ReorderTime - (State.ReorderLeg == 2 ? 0.15f : 0.f);
+			if (State.ReorderPhase == 2 && !State.bReorderChecked && SinceFinalOrder >= 0.3f)
+			{
+				State.bReorderChecked = true;
+				const float TravelYaw = static_cast<float>(State.ReorderDirection.Rotation().Yaw);
+				Check(State, Velocity.Size2D() > 50.f && FMath::Abs(Relative) <= 15.f && FMath::Abs(FRotator::NormalizeAxis(ActorYaw - TravelYaw)) <= 20.f,
+					FString::Printf(TEXT("034-reorder leg %d: 0.3 s after the re-order the body faces the travel (rel %.1f, yaw %.1f, travel %.1f)"),
+						State.ReorderLeg, Relative, ActorYaw, TravelYaw));
+				State.ReorderWrongClipFrames = 0;
+			}
+			// From 0.4 s on (the body's 0.3 s turn + the legs' 0.12 s direction smoothing) the forward clips own the body: no sideways /
+			// backwards start clip outlives the turn (it played its whole ~1.5 s before the fix).
+			if (State.ReorderPhase == 2 && SinceFinalOrder >= 0.4f && SinceFinalOrder < 1.2f && Velocity.Size2D() > 50.f && !DominantName.Contains(TEXT("_F_")))
+			{
+				++State.ReorderWrongClipFrames;
+			}
+			if (State.ReorderPhase == 2 && SinceFinalOrder >= 1.2f && !State.bReorderClipChecked)
+			{
+				State.bReorderClipChecked = true;
+				Check(State, State.ReorderWrongClipFrames == 0,
+					FString::Printf(TEXT("034-reorder leg %d: forward stealth clip 0.4 .. 1.2 s after the re-order (%d off frames, now %s)"),
+						State.ReorderLeg, State.ReorderWrongClipFrames, *DominantName));
+			}
+			if (State.ReorderPhase < 2 || State.StageTime < State.ReorderTime + 1.5f)
+			{
+				return true;
+			}
+			Check(State, State.bReorderChecked && State.bReorderClipChecked, FString::Printf(TEXT("034-reorder leg %d: both checks ran"), State.ReorderLeg));
+			if (++State.ReorderLeg < 3)
+			{
+				Next(State, 627);
+				break;
+			}
+			if (State.bReorderOnly)
+			{
+				return Finish(State, true);
+			}
 			// Reset to origin for stage 601 knockdown/death fixture
 			Op->StopOperative();
 			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
@@ -1440,6 +1543,7 @@ namespace StealthModeSmoke
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->bShots = Args.Contains(TEXT("shots"));
 		State->bFemale = Args.Contains(TEXT("female"));
+		State->bReorderOnly = Args.Contains(TEXT("reorder"));
 		State->FrameHandle = FCoreDelegates::OnEndFrame.AddLambda([State]() { Sample(*State); });
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld = TWeakObjectPtr<UWorld>(World), State](float) { return Step(WeakWorld, *State); }), 0.05f);
 	}

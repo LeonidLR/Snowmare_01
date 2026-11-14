@@ -117,6 +117,28 @@ namespace StealthModeRules
 		return FMath::Clamp(Config.FootstepNoiseMultiplier, 0.f, 1.f);
 	}
 
+	int32 GetDirectionSector(float RelativeMoveDeg)
+	{
+		const float Wrapped = FMath::Fmod(FRotator::ClampAxis(RelativeMoveDeg) + 22.5f, 360.f);
+		return FMath::Clamp(FMath::FloorToInt(Wrapped / 45.f), 0, 7);
+	}
+
+	int32 GetGaitStartSector(int32 LeadSector, bool bBodyHeldByLook)
+	{
+		return bBodyHeldByLook ? ((LeadSector % 8) + 8) % 8 : 0;
+	}
+
+	bool IsOffGaitStartSector(int32 StartSector, float LegDirectionDeg, float ToleranceDeg)
+	{
+		const float StartDeg = static_cast<float>(((StartSector % 8) + 8) % 8) * 45.f;
+		return FMath::Abs(FMath::FindDeltaAngleDegrees(StartDeg, LegDirectionDeg)) > FMath::Max(0.f, ToleranceDeg);
+	}
+
+	bool ShouldEndGaitStart(bool bOffSector, bool bMatchedBefore, float ElapsedSeconds, float TurnGraceSeconds)
+	{
+		return bOffSector && (bMatchedBefore || ElapsedSeconds > FMath::Max(0.f, TurnGraceSeconds));
+	}
+
 	bool IsInLookLockFov(const FVector& ObserverLocation, float HeadingYawDeg, const FVector& CandidateLocation,
 		float FovDeg, float MinDistanceCm)
 	{

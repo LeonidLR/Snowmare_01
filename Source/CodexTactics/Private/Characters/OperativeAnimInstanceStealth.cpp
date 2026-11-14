@@ -77,7 +77,9 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	const bool bPeeking = bWall && Operative->IsPeekingRoundCorner();
 	float TargetLookYawDeg = 0.f;
 	FVector StealthLookPoint = FVector::ZeroVector;
-	if (bActive && !bBodyBusy && !bWall && Operative->GetStealthLookPoint(StealthLookPoint))
+	// A look point holds the body (UpdateCombatFacing's stealth look); without one the body turns to the travel.
+	const bool bLookHoldsBody = !bWall && Operative->GetStealthLookPoint(StealthLookPoint);
+	if (bActive && !bBodyBusy && bLookHoldsBody)
 	{
 		const float DesiredYaw = static_cast<float>((StealthLookPoint - Operative->GetActorLocation()).Rotation().Yaw);
 		TargetLookYawDeg = FMath::Clamp(FRotator::NormalizeAxis(DesiredYaw - static_cast<float>(Operative->GetActorRotation().Yaw)), -45.f, 45.f);
@@ -132,6 +134,11 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	{
 		StealthAction = Clip;
 		StealthActionTime = 0.f;
+		StealthStartSector = INDEX_NONE;
+		StealthActionFade = 1.f;
+		StealthStartElapsed = 0.f;
+		bStealthStartMatched = false;
+		bStealthActionEnding = false;
 	};
 	const float Yaw = static_cast<float>(Operative->GetActorRotation().Yaw);
 	const float YawDelta = FMath::FindDeltaAngleDegrees(StealthLastYaw, Yaw);
@@ -160,7 +167,10 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 			}
 			else if (bMoving)
 			{
-				BeginAction(Named(FString::Printf(TEXT("Stealth_%s_%s_Start_IP"), Fast > 0.5f ? TEXT("Fast") : TEXT("Slow"), OperativeStealthLayer::DirectionNames[LeadIndex])));
+				// Designer bug 2026-11-14 (034): not the first frame's relative sector - the body turns to the travel ~0.2 s later.
+				const int32 StartSector = StealthModeRules::GetGaitStartSector(LeadIndex, bLookHoldsBody);
+				BeginAction(Named(FString::Printf(TEXT("Stealth_%s_%s_Start_IP"), Fast > 0.5f ? TEXT("Fast") : TEXT("Slow"), OperativeStealthLayer::DirectionNames[StartSector])));
+				StealthStartSector = StealthAction ? StartSector : INDEX_NONE;
 			}
 			else
 			{
@@ -202,15 +212,30 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	if (StealthAction)
 	{
 		const float ActionLength = Length(StealthAction);
+		const float FadeSeconds = FMath::Min(0.12f, ActionLength * 0.25f);
 		const bool bGaitAction = bMoving && !bPeeking;
+		// A gait start whose sector the legs left (a re-order to another side, the body turning to the travel) fades out now
+		// instead of playing its ~1.5 s to the end over the directional gait (designer bug 2026-11-14, 034).
+		if (StealthStartSector != INDEX_NONE)
+		{
+			StealthStartElapsed += DeltaSeconds;
+			const bool bOffSector = StealthModeRules::IsOffGaitStartSector(StealthStartSector, StealthDirection.Current);
+			bStealthActionEnding |= !bGaitAction || StealthModeRules::ShouldEndGaitStart(bOffSector, bStealthStartMatched, StealthStartElapsed);
+			bStealthStartMatched |= !bOffSector;
+		}
+		if (bStealthActionEnding)
+		{
+			StealthActionFade = FMath::Max(0.f, StealthActionFade - DeltaSeconds / FMath::Max(0.01f, FadeSeconds));
+		}
 		StealthActionTime += DeltaSeconds * (bGaitAction ? FMath::Clamp(MoveSpeed / FMath::Lerp(SlowSpeed, FastSpeed, Fast), 0.2f, Set.MaxPlayRate) : 1.f);
-		if (StealthActionTime >= ActionLength)
+		if (StealthActionTime >= ActionLength || StealthActionFade <= 0.f)
 		{
 			StealthAction = nullptr;
+			StealthStartSector = INDEX_NONE;
 		}
 		else
 		{
-			ActionShare = FMath::Clamp(FMath::Min(StealthActionTime, ActionLength - StealthActionTime) / FMath::Min(0.12f, ActionLength * 0.25f), 0.f, 1.f);
+			ActionShare = StealthActionFade * FMath::Clamp(FMath::Min(StealthActionTime, ActionLength - StealthActionTime) / FadeSeconds, 0.f, 1.f);
 			Add(StealthAction, ActionShare, StealthActionTime);
 		}
 	}

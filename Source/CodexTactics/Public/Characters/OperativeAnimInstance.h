@@ -2109,6 +2109,14 @@ private:
 	float StealthActionTime = 0.f;
 	float StealthFireBlockSeconds = 0.f;
 	UAnimSequence* StealthAction = nullptr;
+	/** The sector of a playing gait start clip (StealthModeRules::GetGaitStartSector); INDEX_NONE for any other action. */
+	int32 StealthStartSector = INDEX_NONE;
+	/** 1 -> 0 while a gait start that no longer matches the legs fades out (StealthModeRules::ShouldEndGaitStart). */
+	float StealthActionFade = 1.f;
+	/** Real seconds since the gait start began; the legs were inside its sector once (StealthModeRules::ShouldEndGaitStart). */
+	float StealthStartElapsed = 0.f;
+	bool bStealthStartMatched = false;
+	bool bStealthActionEnding = false;
 	bool bStealthWasActive = false;
 	bool bStealthWasMoving = false;
 	bool bStealthWasPeeking = false;

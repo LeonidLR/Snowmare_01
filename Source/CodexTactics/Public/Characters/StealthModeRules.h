@@ -71,6 +71,28 @@ namespace StealthModeRules
 	CODEXTACTICS_API float DetectionBuildupScale(bool bActive, bool bFast, const FStealthModeConfig& Config);
 	CODEXTACTICS_API float FootstepNoiseScale(bool bActive, const FStealthModeConfig& Config);
 	CODEXTACTICS_API float FootstepNoiseScale(bool bActive, bool bFast, const FStealthModeConfig& Config);
+	/** Body turn rate floor while stealthed without a look point / in fast stealth, deg/s (~18 rad/s: the ~0.2 s turn of a fresh order). */
+	inline constexpr float MinMoveTurnRateDeg = 1031.3f;
+	/** FacingRules::SmoothVelocity rate of the body's movement facing: fast stealth follows the travel twice as tightly. */
+	inline float FacingVelocitySmoothRate(bool bStealthFast) { return bStealthFast ? 20.f : 10.f; }
+	/** The 8-direction sector (0..7 = F, FR, R, BR, B, BL, L, FL) nearest to a body-relative movement direction, deg. */
+	CODEXTACTICS_API int32 GetDirectionSector(float RelativeMoveDeg);
+	/**
+	 * Designer bug 2026-11-14 (034): the sector a stealth gait START clip plays. Without a look point holding the body (manual anchor /
+	 * auto lock), the body turns to the travel within ~0.2 s (UpdateCombatFacing), so the start is the forward one - a start picked
+	 * from the first moving frame's relative direction (before that turn; a re-order while moving, a stop-and-go) was a sideways /
+	 * backwards clip that kept the body for its whole ~1.5 s while he already ran forward. With a look point the body stays: the
+	 * travel's own sector (a strafe start) is right.
+	 */
+	CODEXTACTICS_API int32 GetGaitStartSector(int32 LeadSector, bool bBodyHeldByLook);
+	/** The legs' smoothed body-relative direction (deg) is more than ToleranceDeg off a gait start's sector centre. */
+	CODEXTACTICS_API bool IsOffGaitStartSector(int32 StartSector, float LegDirectionDeg, float ToleranceDeg = 30.f);
+	/**
+	 * A playing gait start no longer matches the legs (a re-order to another side, a look holding the body off the travel): it fades
+	 * out instead of playing to its end. bMatchedBefore = the legs were inside its sector once; until then (a fresh order turning
+	 * the body into the forward start) it is kept for TurnGraceSeconds of real time.
+	 */
+	CODEXTACTICS_API bool ShouldEndGaitStart(bool bOffSector, bool bMatchedBefore, float ElapsedSeconds, float TurnGraceSeconds = 0.3f);
 	/** True when CandidateLocation lies outside MinDistanceCm and within +-FovDeg of HeadingYawDeg in the XY plane. */
 	CODEXTACTICS_API bool IsInLookLockFov(const FVector& ObserverLocation, float HeadingYawDeg, const FVector& CandidateLocation,
 		float FovDeg, float MinDistanceCm = 50.f);

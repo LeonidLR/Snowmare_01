@@ -10,6 +10,7 @@
 #include "Characters/FireArcRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/ProneCrawlRules.h"
+#include "Characters/StealthModeRules.h"
 #include "Characters/ThreatFacingRules.h"
 #include "Combat/UnderFireRules.h"
 #include "Characters/EnemyCharacter.h"
@@ -182,7 +183,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	}
 	// Godot _face_movement_target / _safe_look_at: otherwise the body turns to the (smoothed) movement above 0.35 m/s
 	// with lerp_angle(turn_speed of the stance) and holds still below it — no trembling while braking at the goal.
-	const float SmoothRate = (IsInStealthMode() && IsStealthFast()) ? 20.f : 10.f;
+	const float SmoothRate = StealthModeRules::FacingVelocitySmoothRate(IsInStealthMode() && IsStealthFast());
 	SmoothedVelocity = FacingRules::SmoothVelocity(SmoothedVelocity, GetVelocity(), DeltaTime, SmoothRate);
 	// Turn-based: the grid owns the facing (a shot's FaceAimAt, a step's direction). The parked-follower idle facing from real
 	// time used to pull the body back to the leader's old yaw right after every grid shot (user report 2026-10-09).
@@ -218,7 +219,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// Stealth v2 (Spec 008 S1/S5): in stealth without look target / when fast stealth running, body aligns crisply with movement direction
 	// (fast turn <= 0.3 s like normal sprint/run) instead of being clamped by crouch turn rate.
 	const float MoveTurnSpeed = (IsInStealthMode() && (!bStealthLook || IsStealthFast()))
-		? FMath::Max(OperativeMovementRules::GetTurnRate(MovementConfig, EOperativeStance::Standing), 1031.3f) / 57.2958f // >= 18 rad/s
+		? FMath::Max(OperativeMovementRules::GetTurnRate(MovementConfig, EOperativeStance::Standing), StealthModeRules::MinMoveTurnRateDeg) / 57.2958f // >= 18 rad/s
 		: TurnSpeed;
 	// User request 2026-10-22: after the retreat at a run he does not stand with his back to the enemies chasing him - he turns to the one
 	// he was fighting (its last seen spot), or the nearest live enemy; the fire posture then picks targets as usual (decided here, applied
