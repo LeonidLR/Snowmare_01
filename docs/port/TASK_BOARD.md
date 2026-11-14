@@ -1,8 +1,23 @@
 # Доска задач CodexTactics
 
-Обновлено: 2026-11-09 (Claude). **Сверка 2026-11-11 (Gemini 79e28bf7): [board-reconcile.report.md](gemini/outbox/board-reconcile.report.md) — 52 строки: 27 сделано, 14 частично, 10 открыто, 1 устарело + 17 работ, которых нет на доске. Статусы ниже не переписаны — действует отчёт; полная перерисовка доски в субботу.** Статусы: ✅ сделано · 🔄 идёт · ⏳ в очереди · 📝 у Gemini (план `GEMINI_WEEKEND_2026-11.md`) · ❌ отменено.
+Обновлено: 2026-11-14 (Gemini, влитие пакета 664d78b2). **Сверка 2026-11-11 (Gemini 79e28bf7): [board-reconcile.report.md](gemini/outbox/board-reconcile.report.md) — 52 строки: 27 сделано, 14 частично, 10 открыто, 1 устарело + 17 работ, которых нет на доске. Влит субботний пакет 664d78b2 (задачи 027–033, 036, фикс 354a3143; Codex 004 WIP 50de2e98 исключён).** Статусы: ✅ сделано · 🔄 идёт · ⏳ в очереди · 📝 у Gemini (план `GEMINI_WEEKEND_2026-11.md`) · ❌ отменено.
 Исполнители: **Fable** = Claude Fable 5.1 (архитектура), **Opus** = Claude Opus 5.5, **Sonnet** = Claude Sonnet 5.5, **Gemini** = Google Antigravity, **Тренер** = ночной тренер (без моделей), **Вы** = пользователь.
 Gemini: отмечайте свои строки 📝 → ✅ с веткой `gemini/*` (в main вливает только Claude).
+
+## Сделано (2026-11-14, влитие пакета 664d78b2)
+
+| # | Задача | Кто | Коммит |
+|---|---|---|---|
+| 027 | Боевые здания и интерьерный левел-генератор (building generator preset, генерация комнат и коридоров) | Gemini | 664d78b2 |
+| 028 | Боевые здания на картах (L_Gen_Train_1..3, валидация в игре) | Gemini | 664d78b2 |
+| 029 | Аудио-конвейер v1 (пайплайн генерации звука, audio_gen.py, вкладка Audio в Training Ground) | Gemini | 664d78b2 |
+| 030 | Диспетчер чата агентов (chat_dispatcher.py, роутер задач) | Gemini | 664d78b2 |
+| 031 | Живая доска задач в AgentChat (Live Task Board /api/task-board, TASK_BOARD.live.json) | Gemini | 664d78b2 |
+| 032 | Пакет звука v1 (музыкальные темы Lyria v3-v5, реплики Gemini TTS) | Gemini | 664d78b2 |
+| 033 | Реестр аудио-событий EVENTS.md, нормализация громкости (audio_loudness.py), панель Audio в TG | Gemini | 664d78b2 |
+| 036 | Шлюз качества Gemini (gemini_gate.ps1 / .py, проверка перед done) | Gemini | 664d78b2 |
+| 042-fix | Исправление FrontendControlsTest (StealthMode в AllDeclaredIds, 94 команды) | Gemini | 354a3143 / 664d78b2 |
+| 004-WIP | Codex 004 (асинхронный предзагрузчик 50de2e98) — исключён из 664d78b2 (отложен на ветке) | Codex | (отложено) |
 
 ## Сделано (2026-11-02 … 11-04)
 
@@ -57,7 +72,11 @@ Gemini: отмечайте свои строки 📝 → ✅ с веткой `g
 
 | # | Задача | Кто |
 |---|---|---|
-| G | Проверка веток Gemini (план выходных + план 2) | Claude |
+| 034 | Stealth v2 — проверен на пакете 664d78b2 (ветка `gemini/043-034-on-pkg` 1383402b, 1337/1337 тестов, 7/7 смоков PASS), ждёт утреннего ревью Claude | Claude |
+| 044 | Обновление документации (HANDOFF.md, TASK_BOARD.md, mechanics_register.json) | Gemini |
+| 045 | Аудио-импортёр: Unreal Editor Python, только /Game/Audio/**, только --dry-run | Gemini |
+| 046 | Предложения по закрытию BLOCKING пробелов в docs/design/audio/EVENTS.md | Gemini |
+| 047 | Валидатор C5 реквизита по docs/design/levelgen/PROPS_LAYERS.md | Gemini |
 
 ## У Gemini на выходные
 
