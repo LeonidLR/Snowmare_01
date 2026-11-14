@@ -1,0 +1,3463 @@
+{
+ "schema": "codex.levelgen_layout/1",
+ "name": "L_Gen_Train_1",
+ "profile": "train_01_house_block",
+ "seed": 101,
+ "params": {
+  "size_m": [
+   60,
+   45
+  ],
+  "density": 1,
+  "variants": 2,
+  "verticality": 3
+ },
+ "comment": "Generated layout L_Gen_Train_1",
+ "bounds": {
+  "min": [
+   -2250,
+   -3000
+  ],
+  "max": [
+   2250,
+   3000
+  ]
+ },
+ "ground_z": 0,
+ "spawn": {
+  "pos": [
+   0,
+   -2700
+  ],
+  "yaw": 90
+ },
+ "end": [
+  0,
+  2700
+ ],
+ "walls": [
+  {
+   "id": "B_house_N_0",
+   "a": [
+    1650,
+    -1400
+   ],
+   "b": [
+    1650,
+    1200
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_S_0",
+   "a": [
+    450,
+    -1400
+   ],
+   "b": [
+    450,
+    -664
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_S_1",
+   "a": [
+    450,
+    -484
+   ],
+   "b": [
+    450,
+    1200
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_W_0",
+   "a": [
+    1650,
+    -1400
+   ],
+   "b": [
+    450,
+    -1400
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_E_0",
+   "a": [
+    1650,
+    1200
+   ],
+   "b": [
+    981,
+    1200
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_E_1",
+   "a": [
+    801,
+    1200
+   ],
+   "b": [
+    450,
+    1200
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f0_0_0",
+   "a": [
+    1650,
+    -100
+   ],
+   "b": [
+    1404,
+    -100
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f0_0_1",
+   "a": [
+    1224,
+    -100
+   ],
+   "b": [
+    450,
+    -100
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f0_1_0",
+   "a": [
+    1650,
+    550
+   ],
+   "b": [
+    1140,
+    550
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f0_1_1",
+   "a": [
+    960,
+    550
+   ],
+   "b": [
+    450,
+    550
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f1_0_0",
+   "a": [
+    1650,
+    -100
+   ],
+   "b": [
+    1404,
+    -100
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f1_0_1",
+   "a": [
+    1224,
+    -100
+   ],
+   "b": [
+    450,
+    -100
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f1_1_0",
+   "a": [
+    1650,
+    -750
+   ],
+   "b": [
+    1140,
+    -750
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f1_1_1",
+   "a": [
+    960,
+    -750
+   ],
+   "b": [
+    450,
+    -750
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f1_2_0",
+   "a": [
+    1650,
+    550
+   ],
+   "b": [
+    1140,
+    550
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_house_part_f1_2_1",
+   "a": [
+    960,
+    550
+   ],
+   "b": [
+    450,
+    550
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_house"
+  },
+  {
+   "id": "B_garage_N_0",
+   "a": [
+    -650,
+    -1000
+   ],
+   "b": [
+    -650,
+    -176
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_N_1",
+   "a": [
+    -650,
+    4
+   ],
+   "b": [
+    -650,
+    600
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_S_0",
+   "a": [
+    -1650,
+    -1000
+   ],
+   "b": [
+    -1650,
+    600
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_W_0",
+   "a": [
+    -650,
+    -1000
+   ],
+   "b": [
+    -1650,
+    -1000
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_E_0",
+   "a": [
+    -650,
+    600
+   ],
+   "b": [
+    -1650,
+    600
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_part_f0_0_0",
+   "a": [
+    -650,
+    -328
+   ],
+   "b": [
+    -840,
+    -328
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_part_f0_0_1",
+   "a": [
+    -1020,
+    -328
+   ],
+   "b": [
+    -1650,
+    -328
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_part_f0_1_0",
+   "a": [
+    -1150,
+    -1000
+   ],
+   "b": [
+    -1150,
+    -754
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_part_f0_1_1",
+   "a": [
+    -1150,
+    -574
+   ],
+   "b": [
+    -1150,
+    -328
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_part_f0_2_0",
+   "a": [
+    -1150,
+    -328
+   ],
+   "b": [
+    -1150,
+    46
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_part_f0_2_1",
+   "a": [
+    -1150,
+    226
+   ],
+   "b": [
+    -1150,
+    600
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_garage"
+  },
+  {
+   "id": "F_house_yard_N_0",
+   "a": [
+    2050,
+    -1700
+   ],
+   "b": [
+    2050,
+    1500
+   ],
+   "height": 250,
+   "thickness": 10,
+   "kind": "fence"
+  },
+  {
+   "id": "F_house_yard_S_0",
+   "a": [
+    200,
+    -1700
+   ],
+   "b": [
+    200,
+    -849
+   ],
+   "height": 250,
+   "thickness": 10,
+   "kind": "fence"
+  },
+  {
+   "id": "F_house_yard_S_1",
+   "a": [
+    200,
+    -299
+   ],
+   "b": [
+    200,
+    1500
+   ],
+   "height": 250,
+   "thickness": 10,
+   "kind": "fence"
+  },
+  {
+   "id": "F_house_yard_W_0",
+   "a": [
+    2050,
+    -1700
+   ],
+   "b": [
+    200,
+    -1700
+   ],
+   "height": 250,
+   "thickness": 10,
+   "kind": "fence"
+  },
+  {
+   "id": "F_house_yard_E_0",
+   "a": [
+    2050,
+    1500
+   ],
+   "b": [
+    1275,
+    1500
+   ],
+   "height": 250,
+   "thickness": 10,
+   "kind": "fence"
+  },
+  {
+   "id": "F_house_yard_E_1",
+   "a": [
+    825,
+    1500
+   ],
+   "b": [
+    200,
+    1500
+   ],
+   "height": 250,
+   "thickness": 10,
+   "kind": "fence"
+  },
+  {
+   "id": "W_garden_low",
+   "a": [
+    1050,
+    -2200
+   ],
+   "b": [
+    450,
+    -2200
+   ],
+   "height": 95,
+   "thickness": 25,
+   "kind": "fence"
+  }
+ ],
+ "buildings": [
+  {
+   "id": "B_house",
+   "footprint": [
+    [
+     450,
+     -1400
+    ],
+    [
+     1650,
+     1200
+    ]
+   ],
+   "height": 600,
+   "floors": 2,
+   "enterable": true,
+   "roof_walkable": true,
+   "doors": [
+    {
+     "pos": [
+      450,
+      -574
+     ],
+     "floor": 0,
+     "wall": "B_house_S"
+    },
+    {
+     "pos": [
+      891,
+      1200
+     ],
+     "floor": 0,
+     "wall": "B_house_E"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_house_door_south_1",
+     "kind": "door",
+     "pos": [
+      450,
+      -574
+     ],
+     "floor": 0,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_door_east_2",
+     "kind": "door",
+     "pos": [
+      891,
+      1200
+     ],
+     "floor": 0,
+     "wall": "B_house_E",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_house_win_south_f0_1",
+     "kind": "window",
+     "pos": [
+      450,
+      -867
+     ],
+     "floor": 0,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_win_south_f1_1",
+     "kind": "window",
+     "pos": [
+      450,
+      -867
+     ],
+     "floor": 1,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_win_south_f1_2",
+     "kind": "window",
+     "pos": [
+      450,
+      -483
+     ],
+     "floor": 1,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_win_south_f0_3",
+     "kind": "window",
+     "pos": [
+      450,
+      -100
+     ],
+     "floor": 0,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_win_south_f1_3",
+     "kind": "window",
+     "pos": [
+      450,
+      -100
+     ],
+     "floor": 1,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_win_south_f0_4",
+     "kind": "window",
+     "pos": [
+      450,
+      283
+     ],
+     "floor": 0,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_win_south_f1_4",
+     "kind": "window",
+     "pos": [
+      450,
+      283
+     ],
+     "floor": 1,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_win_south_f0_5",
+     "kind": "window",
+     "pos": [
+      450,
+      667
+     ],
+     "floor": 0,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_win_south_f1_5",
+     "kind": "window",
+     "pos": [
+      450,
+      667
+     ],
+     "floor": 1,
+     "wall": "B_house_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_house_win_west_f0_1",
+     "kind": "window",
+     "pos": [
+      1200,
+      -1400
+     ],
+     "floor": 0,
+     "wall": "B_house_W",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_house_win_west_f1_1",
+     "kind": "window",
+     "pos": [
+      1200,
+      -1400
+     ],
+     "floor": 1,
+     "wall": "B_house_W",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_house_win_west_f0_2",
+     "kind": "window",
+     "pos": [
+      900,
+      -1400
+     ],
+     "floor": 0,
+     "wall": "B_house_W",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_house_win_west_f1_2",
+     "kind": "window",
+     "pos": [
+      900,
+      -1400
+     ],
+     "floor": 1,
+     "wall": "B_house_W",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_house_win_north_f0_1",
+     "kind": "window",
+     "pos": [
+      1650,
+      -867
+     ],
+     "floor": 0,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_house_win_north_f1_1",
+     "kind": "window",
+     "pos": [
+      1650,
+      -867
+     ],
+     "floor": 1,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_house_win_north_f0_2",
+     "kind": "window",
+     "pos": [
+      1650,
+      -483
+     ],
+     "floor": 0,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_house_win_north_f1_2",
+     "kind": "window",
+     "pos": [
+      1650,
+      -483
+     ],
+     "floor": 1,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_house_win_north_f0_3",
+     "kind": "window",
+     "pos": [
+      1650,
+      -100
+     ],
+     "floor": 0,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_house_win_north_f1_3",
+     "kind": "window",
+     "pos": [
+      1650,
+      -100
+     ],
+     "floor": 1,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_house_win_north_f0_4",
+     "kind": "window",
+     "pos": [
+      1650,
+      283
+     ],
+     "floor": 0,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_house_win_north_f1_4",
+     "kind": "window",
+     "pos": [
+      1650,
+      283
+     ],
+     "floor": 1,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_house_win_north_f0_5",
+     "kind": "window",
+     "pos": [
+      1650,
+      667
+     ],
+     "floor": 0,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_house_win_north_f1_5",
+     "kind": "window",
+     "pos": [
+      1650,
+      667
+     ],
+     "floor": 1,
+     "wall": "B_house_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    }
+   ],
+   "partitions": [
+    {
+     "id": "B_house_part_f0_0",
+     "start": [
+      1650,
+      -100
+     ],
+     "end": [
+      450,
+      -100
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_house_partdoor_f0_0",
+       "kind": "door",
+       "pos": [
+        1314,
+        -100
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_house_part_f0_1",
+     "start": [
+      1650,
+      550
+     ],
+     "end": [
+      450,
+      550
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_house_partdoor_f0_1",
+       "kind": "door",
+       "pos": [
+        1050,
+        550
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_house_part_f1_0",
+     "start": [
+      1650,
+      -100
+     ],
+     "end": [
+      450,
+      -100
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_house_partdoor_f1_0",
+       "kind": "door",
+       "pos": [
+        1314,
+        -100
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_house_part_f1_1",
+     "start": [
+      1650,
+      -750
+     ],
+     "end": [
+      450,
+      -750
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_house_partdoor_f1_1",
+       "kind": "door",
+       "pos": [
+        1050,
+        -750
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_house_part_f1_2",
+     "start": [
+      1650,
+      550
+     ],
+     "end": [
+      450,
+      550
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_house_partdoor_f1_2",
+       "kind": "door",
+       "pos": [
+        1050,
+        550
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    }
+   ],
+   "floors_detail": [
+    {
+     "floor": 1,
+     "height_z": 300,
+     "gaps": [
+      {
+       "id": "B_house_gap_stair_f1",
+       "poly": [
+        [
+         1540,
+         -1320
+        ],
+        [
+         1540,
+         -811
+        ],
+        [
+         1460,
+         -811
+        ],
+        [
+         1460,
+         -1320
+        ]
+       ],
+       "kind": "stairwell"
+      }
+     ],
+     "rooms": [
+      {
+       "id": "B_house_r_f1_0",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         450,
+         -1400
+        ],
+        "max": [
+         1650,
+         -750
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_house_partdoor_f1_1"
+       ]
+      },
+      {
+       "id": "B_house_r_f1_1",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         450,
+         -750
+        ],
+        "max": [
+         1650,
+         -100
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_house_partdoor_f1_0",
+        "B_house_partdoor_f1_1"
+       ]
+      },
+      {
+       "id": "B_house_r_f1_2",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         450,
+         -100
+        ],
+        "max": [
+         1650,
+         550
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_house_partdoor_f1_0",
+        "B_house_partdoor_f1_2"
+       ]
+      },
+      {
+       "id": "B_house_r_f1_3",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         450,
+         550
+        ],
+        "max": [
+         1650,
+         1200
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_house_partdoor_f1_2"
+       ]
+      }
+     ]
+    }
+   ],
+   "hatches": [],
+   "parapets": [
+    {
+     "wall_id": "B_house_parapet_N",
+     "start": [
+      1650,
+      -1400
+     ],
+     "end": [
+      1650,
+      1200
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_house_parapet_S",
+     "start": [
+      450,
+      -1400
+     ],
+     "end": [
+      450,
+      1200
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_house_parapet_W",
+     "start": [
+      1650,
+      -1400
+     ],
+     "end": [
+      450,
+      -1400
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_house_parapet_E",
+     "start": [
+      1650,
+      1200
+     ],
+     "end": [
+      450,
+      1200
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    }
+   ],
+   "rooms": [
+    {
+     "id": "B_house_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       450,
+       -1400
+      ],
+      "max": [
+       1650,
+       -100
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_house_door_south_1",
+      "B_house_partdoor_f0_0"
+     ]
+    },
+    {
+     "id": "B_house_r_f0_1",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       450,
+       -100
+      ],
+      "max": [
+       1650,
+       550
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_house_partdoor_f0_0",
+      "B_house_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_house_r_f0_2",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       450,
+       550
+      ],
+      "max": [
+       1650,
+       1200
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_house_door_east_2",
+      "B_house_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_house_r_f1_0",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       450,
+       -1400
+      ],
+      "max": [
+       1650,
+       -750
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_house_partdoor_f1_1"
+     ]
+    },
+    {
+     "id": "B_house_r_f1_1",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       450,
+       -750
+      ],
+      "max": [
+       1650,
+       -100
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_house_partdoor_f1_0",
+      "B_house_partdoor_f1_1"
+     ]
+    },
+    {
+     "id": "B_house_r_f1_2",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       450,
+       -100
+      ],
+      "max": [
+       1650,
+       550
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_house_partdoor_f1_0",
+      "B_house_partdoor_f1_2"
+     ]
+    },
+    {
+     "id": "B_house_r_f1_3",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       450,
+       550
+      ],
+      "max": [
+       1650,
+       1200
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_house_partdoor_f1_2"
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_house_win_south_f0_1",
+     "start": [
+      450,
+      -927
+     ],
+     "end": [
+      450,
+      -807
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_S"
+    },
+    {
+     "id": "me_B_house_win_south_f1_1",
+     "start": [
+      450,
+      -927
+     ],
+     "end": [
+      450,
+      -807
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_S"
+    },
+    {
+     "id": "me_B_house_win_south_f1_2",
+     "start": [
+      450,
+      -543
+     ],
+     "end": [
+      450,
+      -423
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_S"
+    },
+    {
+     "id": "me_B_house_win_south_f0_3",
+     "start": [
+      450,
+      -160
+     ],
+     "end": [
+      450,
+      -40
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_S"
+    },
+    {
+     "id": "me_B_house_win_south_f1_3",
+     "start": [
+      450,
+      -160
+     ],
+     "end": [
+      450,
+      -40
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_S"
+    },
+    {
+     "id": "me_B_house_win_south_f0_4",
+     "start": [
+      450,
+      223
+     ],
+     "end": [
+      450,
+      343
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_S"
+    },
+    {
+     "id": "me_B_house_win_south_f1_4",
+     "start": [
+      450,
+      223
+     ],
+     "end": [
+      450,
+      343
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_S"
+    },
+    {
+     "id": "me_B_house_win_south_f0_5",
+     "start": [
+      450,
+      607
+     ],
+     "end": [
+      450,
+      727
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_S"
+    },
+    {
+     "id": "me_B_house_win_south_f1_5",
+     "start": [
+      450,
+      607
+     ],
+     "end": [
+      450,
+      727
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_S"
+    },
+    {
+     "id": "me_B_house_win_west_f0_1",
+     "start": [
+      1260,
+      -1400
+     ],
+     "end": [
+      1140,
+      -1400
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_W"
+    },
+    {
+     "id": "me_B_house_win_west_f1_1",
+     "start": [
+      1260,
+      -1400
+     ],
+     "end": [
+      1140,
+      -1400
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_W"
+    },
+    {
+     "id": "me_B_house_win_west_f0_2",
+     "start": [
+      960,
+      -1400
+     ],
+     "end": [
+      840,
+      -1400
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_W"
+    },
+    {
+     "id": "me_B_house_win_west_f1_2",
+     "start": [
+      960,
+      -1400
+     ],
+     "end": [
+      840,
+      -1400
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_W"
+    },
+    {
+     "id": "me_B_house_win_north_f0_1",
+     "start": [
+      1650,
+      -927
+     ],
+     "end": [
+      1650,
+      -807
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_win_north_f1_1",
+     "start": [
+      1650,
+      -927
+     ],
+     "end": [
+      1650,
+      -807
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_win_north_f0_2",
+     "start": [
+      1650,
+      -543
+     ],
+     "end": [
+      1650,
+      -423
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_win_north_f1_2",
+     "start": [
+      1650,
+      -543
+     ],
+     "end": [
+      1650,
+      -423
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_win_north_f0_3",
+     "start": [
+      1650,
+      -160
+     ],
+     "end": [
+      1650,
+      -40
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_win_north_f1_3",
+     "start": [
+      1650,
+      -160
+     ],
+     "end": [
+      1650,
+      -40
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_win_north_f0_4",
+     "start": [
+      1650,
+      223
+     ],
+     "end": [
+      1650,
+      343
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_win_north_f1_4",
+     "start": [
+      1650,
+      223
+     ],
+     "end": [
+      1650,
+      343
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_win_north_f0_5",
+     "start": [
+      1650,
+      607
+     ],
+     "end": [
+      1650,
+      727
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_win_north_f1_5",
+     "start": [
+      1650,
+      607
+     ],
+     "end": [
+      1650,
+      727
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_house",
+     "wall": "B_house_N"
+    },
+    {
+     "id": "me_B_house_para_N",
+     "start": [
+      1650,
+      -1400
+     ],
+     "end": [
+      1650,
+      1200
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_house"
+    },
+    {
+     "id": "me_B_house_para_S",
+     "start": [
+      450,
+      -1400
+     ],
+     "end": [
+      450,
+      1200
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_house"
+    },
+    {
+     "id": "me_B_house_para_W",
+     "start": [
+      1650,
+      -1400
+     ],
+     "end": [
+      450,
+      -1400
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "parapet",
+     "building": "B_house"
+    },
+    {
+     "id": "me_B_house_para_E",
+     "start": [
+      1650,
+      1200
+     ],
+     "end": [
+      450,
+      1200
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "parapet",
+     "building": "B_house"
+    }
+   ],
+   "stairs": [
+    {
+     "id": "B_house_stair_0",
+     "pos": [
+      1500,
+      -1280
+     ],
+     "from": 0,
+     "to": 1,
+     "kind": "stairwell",
+     "top": [
+      1500,
+      -851
+     ]
+    },
+    {
+     "id": "B_house_stair_1",
+     "pos": [
+      1300,
+      -1280
+     ],
+     "from": 1,
+     "to": 2,
+     "kind": "stairwell",
+     "top": [
+      1300,
+      -851
+     ]
+    }
+   ],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "facade"
+  },
+  {
+   "id": "B_garage",
+   "footprint": [
+    [
+     -1650,
+     -1000
+    ],
+    [
+     -650,
+     600
+    ]
+   ],
+   "height": 300,
+   "floors": 1,
+   "enterable": true,
+   "roof_walkable": false,
+   "doors": [
+    {
+     "pos": [
+      -650,
+      -86
+     ],
+     "floor": 0,
+     "wall": "B_garage_N"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_garage_door_north_1",
+     "kind": "door",
+     "pos": [
+      -650,
+      -86
+     ],
+     "floor": 0,
+     "wall": "B_garage_N",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_garage_win_north_f0_1",
+     "kind": "window",
+     "pos": [
+      -650,
+      -525
+     ],
+     "floor": 0,
+     "wall": "B_garage_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_garage_win_north_f0_3",
+     "kind": "window",
+     "pos": [
+      -650,
+      125
+     ],
+     "floor": 0,
+     "wall": "B_garage_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_garage_win_east_f0_1",
+     "kind": "window",
+     "pos": [
+      -1150,
+      600
+     ],
+     "floor": 0,
+     "wall": "B_garage_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    }
+   ],
+   "partitions": [
+    {
+     "id": "B_garage_part_f0_0",
+     "start": [
+      -650,
+      -328
+     ],
+     "end": [
+      -1650,
+      -328
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_garage_partdoor_f0_0",
+       "kind": "door",
+       "pos": [
+        -930,
+        -328
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_garage_part_f0_1",
+     "start": [
+      -1150,
+      -1000
+     ],
+     "end": [
+      -1150,
+      -328
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_garage_partdoor_f0_1",
+       "kind": "door",
+       "pos": [
+        -1150,
+        -664
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_garage_part_f0_2",
+     "start": [
+      -1150,
+      -328
+     ],
+     "end": [
+      -1150,
+      600
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_garage_partdoor_f0_2",
+       "kind": "door",
+       "pos": [
+        -1150,
+        136
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    }
+   ],
+   "floors_detail": [],
+   "hatches": [],
+   "parapets": [],
+   "rooms": [
+    {
+     "id": "B_garage_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1150,
+       -1000
+      ],
+      "max": [
+       -650,
+       -328
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_garage_partdoor_f0_0",
+      "B_garage_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_garage_r_f0_1",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1650,
+       -1000
+      ],
+      "max": [
+       -1150,
+       -328
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_garage_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_garage_r_f0_2",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1150,
+       -328
+      ],
+      "max": [
+       -650,
+       600
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_garage_door_north_1",
+      "B_garage_partdoor_f0_0",
+      "B_garage_partdoor_f0_2"
+     ]
+    },
+    {
+     "id": "B_garage_r_f0_3",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1650,
+       -328
+      ],
+      "max": [
+       -1150,
+       600
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_garage_partdoor_f0_2"
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_garage_win_north_f0_1",
+     "start": [
+      -650,
+      -585
+     ],
+     "end": [
+      -650,
+      -465
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_garage",
+     "wall": "B_garage_N"
+    },
+    {
+     "id": "me_B_garage_win_north_f0_3",
+     "start": [
+      -650,
+      65
+     ],
+     "end": [
+      -650,
+      185
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_garage",
+     "wall": "B_garage_N"
+    },
+    {
+     "id": "me_B_garage_win_east_f0_1",
+     "start": [
+      -1090,
+      600
+     ],
+     "end": [
+      -1210,
+      600
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_garage",
+     "wall": "B_garage_E"
+    }
+   ],
+   "stairs": [],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "one_entry_compound"
+  }
+ ],
+ "ladders": [
+  {
+   "id": "LAD_B_house",
+   "pos": [
+    1031,
+    1210
+   ],
+   "yaw": 90,
+   "rungs": 16,
+   "plinth_cm": 17.6,
+   "from": "ground",
+   "to": "roof:B_house",
+   "level_from": 0,
+   "level_to": 2,
+   "foot": [
+    1031,
+    1310
+   ],
+   "top": [
+    1031,
+    1100
+   ]
+  }
+ ],
+ "covers": [
+  {
+   "id": "C_st_j1",
+   "kind": "jersey",
+   "pos": [
+    50,
+    -1900
+   ],
+   "size": [
+    280,
+    65,
+    95
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_st_w1",
+   "kind": "wreck",
+   "pos": [
+    -350,
+    -800
+   ],
+   "size": [
+    380,
+    180,
+    140
+   ],
+   "yaw": 98
+  },
+  {
+   "id": "C_st_c1",
+   "kind": "crate",
+   "pos": [
+    70,
+    400
+   ],
+   "size": [
+    160,
+    120,
+    120
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_st_j2",
+   "kind": "jersey",
+   "pos": [
+    -300,
+    1600
+   ],
+   "size": [
+    280,
+    65,
+    95
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_st_b1",
+   "kind": "barrel",
+   "pos": [
+    130,
+    1900
+   ],
+   "size": [
+    90,
+    90,
+    110
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_gar_c",
+   "kind": "crate",
+   "pos": [
+    -1050,
+    1000
+   ],
+   "size": [
+    160,
+    120,
+    120
+   ],
+   "yaw": 180
+  }
+ ],
+ "zones": [
+  {
+   "id": "Z_street",
+   "kind": "corridor",
+   "set_piece": "street",
+   "poly": [
+    [
+     200,
+     -3000
+    ],
+    [
+     200,
+     3000
+    ],
+    [
+     -450,
+     3000
+    ],
+    [
+     -450,
+     -3000
+    ]
+   ]
+  },
+  {
+   "id": "Z_north_yard",
+   "kind": "open",
+   "set_piece": "facade",
+   "poly": [
+    [
+     2050,
+     -1700
+    ],
+    [
+     2050,
+     1500
+    ],
+    [
+     200,
+     1500
+    ],
+    [
+     200,
+     -1700
+    ]
+   ]
+  },
+  {
+   "id": "Z_south_yard",
+   "kind": "open",
+   "set_piece": "one_entry_compound",
+   "poly": [
+    [
+     -450,
+     -1400
+    ],
+    [
+     -450,
+     1200
+    ],
+    [
+     -1950,
+     1200
+    ],
+    [
+     -1950,
+     -1400
+    ]
+   ]
+  }
+ ],
+ "routes": [
+  {
+   "id": "R_main",
+   "pace": "walk",
+   "points": [
+    [
+     0,
+     -2700
+    ],
+    [
+     -100,
+     -1700
+    ],
+    [
+     -100,
+     -574
+    ],
+    [
+     330,
+     -574
+    ],
+    [
+     630,
+     -574
+    ],
+    [
+     1500,
+     -1280
+    ],
+    [
+     1500,
+     -851
+    ],
+    [
+     1300,
+     -1280
+    ],
+    [
+     1300,
+     -851
+    ],
+    [
+     1050,
+     -100
+    ],
+    [
+     1031,
+     1100
+    ],
+    [
+     1031,
+     1310
+    ],
+    [
+     -100,
+     1310
+    ],
+    [
+     0,
+     2700
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "floor:B_house:1",
+    "floor:B_house:1",
+    "roof:B_house",
+    "roof:B_house",
+    "roof:B_house",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [
+    {
+     "at": 6,
+     "via": "B_house_stair_0"
+    },
+    {
+     "at": 8,
+     "via": "B_house_stair_1"
+    },
+    {
+     "at": 11,
+     "via": "LAD_B_house"
+    }
+   ],
+   "mandatory": true
+  },
+  {
+   "id": "V1_south_garage",
+   "pace": "walk",
+   "points": [
+    [
+     0,
+     -2700
+    ],
+    [
+     -350,
+     -1600
+    ],
+    [
+     -450,
+     -86
+    ],
+    [
+     -470,
+     -86
+    ],
+    [
+     -830,
+     -86
+    ],
+    [
+     -830,
+     114
+    ],
+    [
+     -470,
+     -86
+    ],
+    [
+     -350,
+     1400
+    ],
+    [
+     0,
+     2700
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "street",
+    "one_entry_compound"
+   ]
+  },
+  {
+   "id": "V2_street_push",
+   "pace": "walk",
+   "points": [
+    [
+     0,
+     -2700
+    ],
+    [
+     0,
+     -1400
+    ],
+    [
+     50,
+     -100
+    ],
+    [
+     0,
+     1200
+    ],
+    [
+     0,
+     2700
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "street"
+   ]
+  }
+ ],
+ "spawn_points": [
+  {
+   "id": "SP_west",
+   "pos": [
+    0,
+    -2700
+   ],
+   "kind": "edge"
+  }
+ ],
+ "ambush_points": [
+  {
+   "id": "AMB_house_e",
+   "pos": [
+    650,
+    1400
+   ]
+  },
+  {
+   "id": "AMB_garage_e",
+   "pos": [
+    -750,
+    800
+   ]
+  },
+  {
+   "id": "AMB_street_n",
+   "pos": [
+    100,
+    -1900
+   ]
+  }
+ ],
+ "patrol_routes": [
+  {
+   "id": "PAT_street",
+   "points": [
+    [
+     50,
+     -1500
+    ],
+    [
+     50,
+     1400
+    ],
+    [
+     -350,
+     1400
+    ],
+    [
+     -350,
+     -1500
+    ]
+   ]
+  }
+ ],
+ "mantle_edges": [
+  {
+   "id": "me_C_st_j1",
+   "start": [
+    50,
+    -2034
+   ],
+   "end": [
+    50,
+    -1766
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_st_c1",
+   "start": [
+    70,
+    323
+   ],
+   "end": [
+    70,
+    477
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 120,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_st_j2",
+   "start": [
+    -300,
+    1466
+   ],
+   "end": [
+    -300,
+    1734
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_gar_c",
+   "start": [
+    -973,
+    1000
+   ],
+   "end": [
+    -1127,
+    1000
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 120,
+   "normal": [
+    -6.123233995736766e-17,
+    -1
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_W_garden_low",
+   "start": [
+    1050,
+    -2200
+   ],
+   "end": [
+    450,
+    -2200
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "fence"
+  },
+  {
+   "id": "me_B_house_win_south_f0_1",
+   "start": [
+    450,
+    -927
+   ],
+   "end": [
+    450,
+    -807
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_S"
+  },
+  {
+   "id": "me_B_house_win_south_f1_1",
+   "start": [
+    450,
+    -927
+   ],
+   "end": [
+    450,
+    -807
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_S"
+  },
+  {
+   "id": "me_B_house_win_south_f1_2",
+   "start": [
+    450,
+    -543
+   ],
+   "end": [
+    450,
+    -423
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_S"
+  },
+  {
+   "id": "me_B_house_win_south_f0_3",
+   "start": [
+    450,
+    -160
+   ],
+   "end": [
+    450,
+    -40
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_S"
+  },
+  {
+   "id": "me_B_house_win_south_f1_3",
+   "start": [
+    450,
+    -160
+   ],
+   "end": [
+    450,
+    -40
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_S"
+  },
+  {
+   "id": "me_B_house_win_south_f0_4",
+   "start": [
+    450,
+    223
+   ],
+   "end": [
+    450,
+    343
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_S"
+  },
+  {
+   "id": "me_B_house_win_south_f1_4",
+   "start": [
+    450,
+    223
+   ],
+   "end": [
+    450,
+    343
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_S"
+  },
+  {
+   "id": "me_B_house_win_south_f0_5",
+   "start": [
+    450,
+    607
+   ],
+   "end": [
+    450,
+    727
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_S"
+  },
+  {
+   "id": "me_B_house_win_south_f1_5",
+   "start": [
+    450,
+    607
+   ],
+   "end": [
+    450,
+    727
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_S"
+  },
+  {
+   "id": "me_B_house_win_west_f0_1",
+   "start": [
+    1260,
+    -1400
+   ],
+   "end": [
+    1140,
+    -1400
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_W"
+  },
+  {
+   "id": "me_B_house_win_west_f1_1",
+   "start": [
+    1260,
+    -1400
+   ],
+   "end": [
+    1140,
+    -1400
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_W"
+  },
+  {
+   "id": "me_B_house_win_west_f0_2",
+   "start": [
+    960,
+    -1400
+   ],
+   "end": [
+    840,
+    -1400
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_W"
+  },
+  {
+   "id": "me_B_house_win_west_f1_2",
+   "start": [
+    960,
+    -1400
+   ],
+   "end": [
+    840,
+    -1400
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_W"
+  },
+  {
+   "id": "me_B_house_win_north_f0_1",
+   "start": [
+    1650,
+    -927
+   ],
+   "end": [
+    1650,
+    -807
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_win_north_f1_1",
+   "start": [
+    1650,
+    -927
+   ],
+   "end": [
+    1650,
+    -807
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_win_north_f0_2",
+   "start": [
+    1650,
+    -543
+   ],
+   "end": [
+    1650,
+    -423
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_win_north_f1_2",
+   "start": [
+    1650,
+    -543
+   ],
+   "end": [
+    1650,
+    -423
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_win_north_f0_3",
+   "start": [
+    1650,
+    -160
+   ],
+   "end": [
+    1650,
+    -40
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_win_north_f1_3",
+   "start": [
+    1650,
+    -160
+   ],
+   "end": [
+    1650,
+    -40
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_win_north_f0_4",
+   "start": [
+    1650,
+    223
+   ],
+   "end": [
+    1650,
+    343
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_win_north_f1_4",
+   "start": [
+    1650,
+    223
+   ],
+   "end": [
+    1650,
+    343
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_win_north_f0_5",
+   "start": [
+    1650,
+    607
+   ],
+   "end": [
+    1650,
+    727
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_win_north_f1_5",
+   "start": [
+    1650,
+    607
+   ],
+   "end": [
+    1650,
+    727
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_house",
+   "wall": "B_house_N"
+  },
+  {
+   "id": "me_B_house_para_N",
+   "start": [
+    1650,
+    -1400
+   ],
+   "end": [
+    1650,
+    1200
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_house"
+  },
+  {
+   "id": "me_B_house_para_S",
+   "start": [
+    450,
+    -1400
+   ],
+   "end": [
+    450,
+    1200
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_house"
+  },
+  {
+   "id": "me_B_house_para_W",
+   "start": [
+    1650,
+    -1400
+   ],
+   "end": [
+    450,
+    -1400
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "parapet",
+   "building": "B_house"
+  },
+  {
+   "id": "me_B_house_para_E",
+   "start": [
+    1650,
+    1200
+   ],
+   "end": [
+    450,
+    1200
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "parapet",
+   "building": "B_house"
+  },
+  {
+   "id": "me_B_garage_win_north_f0_1",
+   "start": [
+    -650,
+    -585
+   ],
+   "end": [
+    -650,
+    -465
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_garage",
+   "wall": "B_garage_N"
+  },
+  {
+   "id": "me_B_garage_win_north_f0_3",
+   "start": [
+    -650,
+    65
+   ],
+   "end": [
+    -650,
+    185
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_garage",
+   "wall": "B_garage_N"
+  },
+  {
+   "id": "me_B_garage_win_east_f0_1",
+   "start": [
+    -1090,
+    600
+   ],
+   "end": [
+    -1210,
+    600
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_garage",
+   "wall": "B_garage_E"
+  }
+ ],
+ "pressure": {
+  "first_event_sec": 30,
+  "interval_sec": 90,
+  "group_min": 2,
+  "group_max": 4,
+  "max_alive": 8,
+  "patrol_share": 0.3,
+  "seed": 101,
+  "ambush": {
+   "points": [
+    [
+     650,
+     1400
+    ],
+    [
+     -750,
+     800
+    ],
+    [
+     100,
+     -1900
+    ]
+   ],
+   "coordinated": {
+    "share": 0.5,
+    "max_alive": 8
+   }
+  }
+ }
+}

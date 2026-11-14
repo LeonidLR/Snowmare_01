@@ -1,0 +1,5427 @@
+{
+ "schema": "codex.levelgen_layout/1",
+ "name": "L_Gen_Train_3",
+ "profile": "train_03_warehouse_yard",
+ "seed": 303,
+ "params": {
+  "size_m": [
+   75,
+   55
+  ],
+  "density": 1,
+  "variants": 2,
+  "verticality": 3
+ },
+ "comment": "Generated layout L_Gen_Train_3",
+ "bounds": {
+  "min": [
+   -2750,
+   -3750
+  ],
+  "max": [
+   2750,
+   3750
+  ]
+ },
+ "ground_z": 0,
+ "spawn": {
+  "pos": [
+   -350,
+   -3450
+  ],
+  "yaw": 90
+ },
+ "end": [
+  -350,
+  3450
+ ],
+ "walls": [
+  {
+   "id": "B_warehouse_N_0",
+   "a": [
+    2250,
+    -2350
+   ],
+   "b": [
+    2250,
+    650
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_S_0",
+   "a": [
+    650,
+    -2350
+   ],
+   "b": [
+    650,
+    -293
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_S_1",
+   "a": [
+    650,
+    -113
+   ],
+   "b": [
+    650,
+    650
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_W_0",
+   "a": [
+    2250,
+    -2350
+   ],
+   "b": [
+    1297,
+    -2350
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_W_1",
+   "a": [
+    1117,
+    -2350
+   ],
+   "b": [
+    650,
+    -2350
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_E_0",
+   "a": [
+    2250,
+    650
+   ],
+   "b": [
+    650,
+    650
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f0_0_0",
+   "a": [
+    2250,
+    -850
+   ],
+   "b": [
+    1892,
+    -850
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f0_0_1",
+   "a": [
+    1712,
+    -850
+   ],
+   "b": [
+    650,
+    -850
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f0_1_0",
+   "a": [
+    1450,
+    -2350
+   ],
+   "b": [
+    1450,
+    -1690
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f0_1_1",
+   "a": [
+    1450,
+    -1510
+   ],
+   "b": [
+    1450,
+    -850
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f0_2_0",
+   "a": [
+    1450,
+    -850
+   ],
+   "b": [
+    1450,
+    -190
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f0_2_1",
+   "a": [
+    1450,
+    -10
+   ],
+   "b": [
+    1450,
+    650
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f1_0_0",
+   "a": [
+    2250,
+    -850
+   ],
+   "b": [
+    1892,
+    -850
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f1_0_1",
+   "a": [
+    1712,
+    -850
+   ],
+   "b": [
+    650,
+    -850
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f1_1_0",
+   "a": [
+    1450,
+    -2350
+   ],
+   "b": [
+    1450,
+    -1690
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f1_1_1",
+   "a": [
+    1450,
+    -1510
+   ],
+   "b": [
+    1450,
+    -850
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f1_2_0",
+   "a": [
+    1450,
+    -850
+   ],
+   "b": [
+    1450,
+    -190
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_part_f1_2_1",
+   "a": [
+    1450,
+    -10
+   ],
+   "b": [
+    1450,
+    650
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_catwalk_N_0",
+   "a": [
+    2050,
+    1150
+   ],
+   "b": [
+    2050,
+    2750
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_S_0",
+   "a": [
+    550,
+    1150
+   ],
+   "b": [
+    550,
+    1869
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_S_1",
+   "a": [
+    550,
+    2049
+   ],
+   "b": [
+    550,
+    2750
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_W_0",
+   "a": [
+    2050,
+    1150
+   ],
+   "b": [
+    1497,
+    1150
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_W_1",
+   "a": [
+    1317,
+    1150
+   ],
+   "b": [
+    550,
+    1150
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_E_0",
+   "a": [
+    2050,
+    2750
+   ],
+   "b": [
+    550,
+    2750
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f0_0_0",
+   "a": [
+    2050,
+    1710
+   ],
+   "b": [
+    1720,
+    1710
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f0_0_1",
+   "a": [
+    1540,
+    1710
+   ],
+   "b": [
+    550,
+    1710
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f0_1_0",
+   "a": [
+    1180,
+    1150
+   ],
+   "b": [
+    1180,
+    1340
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f0_1_1",
+   "a": [
+    1180,
+    1520
+   ],
+   "b": [
+    1180,
+    1710
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f0_2_0",
+   "a": [
+    1180,
+    1710
+   ],
+   "b": [
+    1180,
+    2140
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f0_2_1",
+   "a": [
+    1180,
+    2320
+   ],
+   "b": [
+    1180,
+    2750
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f1_0_0",
+   "a": [
+    2050,
+    1950
+   ],
+   "b": [
+    1720,
+    1950
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f1_0_1",
+   "a": [
+    1540,
+    1950
+   ],
+   "b": [
+    550,
+    1950
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f1_1_0",
+   "a": [
+    1300,
+    1150
+   ],
+   "b": [
+    1300,
+    1460
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f1_1_1",
+   "a": [
+    1300,
+    1640
+   ],
+   "b": [
+    1300,
+    1950
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f1_2_0",
+   "a": [
+    1300,
+    1950
+   ],
+   "b": [
+    1300,
+    2260
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_catwalk_part_f1_2_1",
+   "a": [
+    1300,
+    2440
+   ],
+   "b": [
+    1300,
+    2750
+   ],
+   "height": 300,
+   "thickness": 20,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "B_yard_shed_N_0",
+   "a": [
+    -1150,
+    -1350
+   ],
+   "b": [
+    -1150,
+    -400
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_N_1",
+   "a": [
+    -1150,
+    -220
+   ],
+   "b": [
+    -1150,
+    450
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_S_0",
+   "a": [
+    -2150,
+    -1350
+   ],
+   "b": [
+    -2150,
+    450
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_W_0",
+   "a": [
+    -1150,
+    -1350
+   ],
+   "b": [
+    -2150,
+    -1350
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_E_0",
+   "a": [
+    -1150,
+    450
+   ],
+   "b": [
+    -2150,
+    450
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_part_f0_0_0",
+   "a": [
+    -1150,
+    -594
+   ],
+   "b": [
+    -1340,
+    -594
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_part_f0_0_1",
+   "a": [
+    -1520,
+    -594
+   ],
+   "b": [
+    -2150,
+    -594
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_part_f0_1_0",
+   "a": [
+    -1650,
+    -1350
+   ],
+   "b": [
+    -1650,
+    -1062
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_part_f0_1_1",
+   "a": [
+    -1650,
+    -882
+   ],
+   "b": [
+    -1650,
+    -594
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_part_f0_2_0",
+   "a": [
+    -1150,
+    -72
+   ],
+   "b": [
+    -1560,
+    -72
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_part_f0_2_1",
+   "a": [
+    -1740,
+    -72
+   ],
+   "b": [
+    -2150,
+    -72
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "interior",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "W_dock_parapet_1",
+   "a": [
+    200,
+    -2150
+   ],
+   "b": [
+    200,
+    -1550
+   ],
+   "height": 100,
+   "thickness": 25,
+   "kind": "wall"
+  },
+  {
+   "id": "W_dock_parapet_2",
+   "a": [
+    200,
+    -350
+   ],
+   "b": [
+    200,
+    250
+   ],
+   "height": 100,
+   "thickness": 25,
+   "kind": "wall"
+  }
+ ],
+ "buildings": [
+  {
+   "id": "B_warehouse",
+   "footprint": [
+    [
+     650,
+     -2350
+    ],
+    [
+     2250,
+     650
+    ]
+   ],
+   "height": 600,
+   "floors": 2,
+   "enterable": true,
+   "roof_walkable": true,
+   "doors": [
+    {
+     "pos": [
+      650,
+      -203
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_S"
+    },
+    {
+     "pos": [
+      1207,
+      -2350
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_W"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_warehouse_door_south_1",
+     "kind": "door",
+     "pos": [
+      650,
+      -203
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_door_west_2",
+     "kind": "door",
+     "pos": [
+      1207,
+      -2350
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_W",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_warehouse_win_south_f0_1",
+     "kind": "window",
+     "pos": [
+      650,
+      -1814
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f1_1",
+     "kind": "window",
+     "pos": [
+      650,
+      -1814
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f0_2",
+     "kind": "window",
+     "pos": [
+      650,
+      -1429
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f1_2",
+     "kind": "window",
+     "pos": [
+      650,
+      -1429
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f0_3",
+     "kind": "window",
+     "pos": [
+      650,
+      -1043
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f1_3",
+     "kind": "window",
+     "pos": [
+      650,
+      -1043
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f0_4",
+     "kind": "window",
+     "pos": [
+      650,
+      -657
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f1_4",
+     "kind": "window",
+     "pos": [
+      650,
+      -657
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f1_5",
+     "kind": "window",
+     "pos": [
+      650,
+      -271
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f0_6",
+     "kind": "window",
+     "pos": [
+      650,
+      114
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_south_f1_6",
+     "kind": "window",
+     "pos": [
+      650,
+      114
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_warehouse_win_east_f0_1",
+     "kind": "window",
+     "pos": [
+      1775,
+      650
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_warehouse_win_east_f1_1",
+     "kind": "window",
+     "pos": [
+      1775,
+      650
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_warehouse_win_east_f0_2",
+     "kind": "window",
+     "pos": [
+      1450,
+      650
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_warehouse_win_east_f1_2",
+     "kind": "window",
+     "pos": [
+      1450,
+      650
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_warehouse_win_east_f0_3",
+     "kind": "window",
+     "pos": [
+      1125,
+      650
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_warehouse_win_east_f1_3",
+     "kind": "window",
+     "pos": [
+      1125,
+      650
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_warehouse_win_north_f0_1",
+     "kind": "window",
+     "pos": [
+      2250,
+      -1814
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f1_1",
+     "kind": "window",
+     "pos": [
+      2250,
+      -1814
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f0_2",
+     "kind": "window",
+     "pos": [
+      2250,
+      -1429
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f1_2",
+     "kind": "window",
+     "pos": [
+      2250,
+      -1429
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f0_3",
+     "kind": "window",
+     "pos": [
+      2250,
+      -1043
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f1_3",
+     "kind": "window",
+     "pos": [
+      2250,
+      -1043
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f0_4",
+     "kind": "window",
+     "pos": [
+      2250,
+      -657
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f1_4",
+     "kind": "window",
+     "pos": [
+      2250,
+      -657
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f0_5",
+     "kind": "window",
+     "pos": [
+      2250,
+      -271
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f1_5",
+     "kind": "window",
+     "pos": [
+      2250,
+      -271
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f0_6",
+     "kind": "window",
+     "pos": [
+      2250,
+      114
+     ],
+     "floor": 0,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_warehouse_win_north_f1_6",
+     "kind": "window",
+     "pos": [
+      2250,
+      114
+     ],
+     "floor": 1,
+     "wall": "B_warehouse_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    }
+   ],
+   "partitions": [
+    {
+     "id": "B_warehouse_part_f0_0",
+     "start": [
+      2250,
+      -850
+     ],
+     "end": [
+      650,
+      -850
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_warehouse_partdoor_f0_0",
+       "kind": "door",
+       "pos": [
+        1802,
+        -850
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_warehouse_part_f0_1",
+     "start": [
+      1450,
+      -2350
+     ],
+     "end": [
+      1450,
+      -850
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_warehouse_partdoor_f0_1",
+       "kind": "door",
+       "pos": [
+        1450,
+        -1600
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_warehouse_part_f0_2",
+     "start": [
+      1450,
+      -850
+     ],
+     "end": [
+      1450,
+      650
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_warehouse_partdoor_f0_2",
+       "kind": "door",
+       "pos": [
+        1450,
+        -100
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_warehouse_part_f1_0",
+     "start": [
+      2250,
+      -850
+     ],
+     "end": [
+      650,
+      -850
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_warehouse_partdoor_f1_0",
+       "kind": "door",
+       "pos": [
+        1802,
+        -850
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_warehouse_part_f1_1",
+     "start": [
+      1450,
+      -2350
+     ],
+     "end": [
+      1450,
+      -850
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_warehouse_partdoor_f1_1",
+       "kind": "door",
+       "pos": [
+        1450,
+        -1600
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_warehouse_part_f1_2",
+     "start": [
+      1450,
+      -850
+     ],
+     "end": [
+      1450,
+      650
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_warehouse_partdoor_f1_2",
+       "kind": "door",
+       "pos": [
+        1450,
+        -100
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    }
+   ],
+   "floors_detail": [
+    {
+     "floor": 1,
+     "height_z": 300,
+     "gaps": [
+      {
+       "id": "B_warehouse_gap_stair_f1",
+       "poly": [
+        [
+         2140,
+         -2270
+        ],
+        [
+         2140,
+         -1761
+        ],
+        [
+         2060,
+         -1761
+        ],
+        [
+         2060,
+         -2270
+        ]
+       ],
+       "kind": "stairwell"
+      }
+     ],
+     "rooms": [
+      {
+       "id": "B_warehouse_r_f1_0",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         1450,
+         -2350
+        ],
+        "max": [
+         2250,
+         -850
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_warehouse_partdoor_f1_0",
+        "B_warehouse_partdoor_f1_1"
+       ]
+      },
+      {
+       "id": "B_warehouse_r_f1_1",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         650,
+         -2350
+        ],
+        "max": [
+         1450,
+         -850
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_warehouse_partdoor_f1_1"
+       ]
+      },
+      {
+       "id": "B_warehouse_r_f1_2",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         1450,
+         -850
+        ],
+        "max": [
+         2250,
+         650
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_warehouse_partdoor_f1_0",
+        "B_warehouse_partdoor_f1_2"
+       ]
+      },
+      {
+       "id": "B_warehouse_r_f1_3",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         650,
+         -850
+        ],
+        "max": [
+         1450,
+         650
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_warehouse_partdoor_f1_2"
+       ]
+      }
+     ]
+    }
+   ],
+   "hatches": [
+    {
+     "id": "B_warehouse_roof_hatch",
+     "pos": [
+      830,
+      470
+     ],
+     "floor": 1,
+     "size": [
+      100,
+      100
+     ],
+     "ladder_id": "LAD_B_warehouse_hatch"
+    }
+   ],
+   "parapets": [
+    {
+     "wall_id": "B_warehouse_parapet_N",
+     "start": [
+      2250,
+      -2350
+     ],
+     "end": [
+      2250,
+      650
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_warehouse_parapet_S",
+     "start": [
+      650,
+      -2350
+     ],
+     "end": [
+      650,
+      650
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_warehouse_parapet_W",
+     "start": [
+      2250,
+      -2350
+     ],
+     "end": [
+      650,
+      -2350
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_warehouse_parapet_E",
+     "start": [
+      2250,
+      650
+     ],
+     "end": [
+      650,
+      650
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    }
+   ],
+   "rooms": [
+    {
+     "id": "B_warehouse_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       1450,
+       -2350
+      ],
+      "max": [
+       2250,
+       -850
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_warehouse_partdoor_f0_0",
+      "B_warehouse_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_warehouse_r_f0_1",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       650,
+       -2350
+      ],
+      "max": [
+       1450,
+       -850
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_warehouse_door_west_2",
+      "B_warehouse_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_warehouse_r_f0_2",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       1450,
+       -850
+      ],
+      "max": [
+       2250,
+       650
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_warehouse_partdoor_f0_0",
+      "B_warehouse_partdoor_f0_2"
+     ]
+    },
+    {
+     "id": "B_warehouse_r_f0_3",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       650,
+       -850
+      ],
+      "max": [
+       1450,
+       650
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_warehouse_door_south_1",
+      "B_warehouse_partdoor_f0_2"
+     ]
+    },
+    {
+     "id": "B_warehouse_r_f1_0",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       1450,
+       -2350
+      ],
+      "max": [
+       2250,
+       -850
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_warehouse_partdoor_f1_0",
+      "B_warehouse_partdoor_f1_1"
+     ]
+    },
+    {
+     "id": "B_warehouse_r_f1_1",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       650,
+       -2350
+      ],
+      "max": [
+       1450,
+       -850
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_warehouse_partdoor_f1_1"
+     ]
+    },
+    {
+     "id": "B_warehouse_r_f1_2",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       1450,
+       -850
+      ],
+      "max": [
+       2250,
+       650
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_warehouse_partdoor_f1_0",
+      "B_warehouse_partdoor_f1_2"
+     ]
+    },
+    {
+     "id": "B_warehouse_r_f1_3",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       650,
+       -850
+      ],
+      "max": [
+       1450,
+       650
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_warehouse_partdoor_f1_2"
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_warehouse_win_south_f0_1",
+     "start": [
+      650,
+      -1874
+     ],
+     "end": [
+      650,
+      -1754
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f1_1",
+     "start": [
+      650,
+      -1874
+     ],
+     "end": [
+      650,
+      -1754
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f0_2",
+     "start": [
+      650,
+      -1489
+     ],
+     "end": [
+      650,
+      -1369
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f1_2",
+     "start": [
+      650,
+      -1489
+     ],
+     "end": [
+      650,
+      -1369
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f0_3",
+     "start": [
+      650,
+      -1103
+     ],
+     "end": [
+      650,
+      -983
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f1_3",
+     "start": [
+      650,
+      -1103
+     ],
+     "end": [
+      650,
+      -983
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f0_4",
+     "start": [
+      650,
+      -717
+     ],
+     "end": [
+      650,
+      -597
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f1_4",
+     "start": [
+      650,
+      -717
+     ],
+     "end": [
+      650,
+      -597
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f1_5",
+     "start": [
+      650,
+      -331
+     ],
+     "end": [
+      650,
+      -211
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f0_6",
+     "start": [
+      650,
+      54
+     ],
+     "end": [
+      650,
+      174
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_south_f1_6",
+     "start": [
+      650,
+      54
+     ],
+     "end": [
+      650,
+      174
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_S"
+    },
+    {
+     "id": "me_B_warehouse_win_east_f0_1",
+     "start": [
+      1835,
+      650
+     ],
+     "end": [
+      1715,
+      650
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_E"
+    },
+    {
+     "id": "me_B_warehouse_win_east_f1_1",
+     "start": [
+      1835,
+      650
+     ],
+     "end": [
+      1715,
+      650
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_E"
+    },
+    {
+     "id": "me_B_warehouse_win_east_f0_2",
+     "start": [
+      1510,
+      650
+     ],
+     "end": [
+      1390,
+      650
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_E"
+    },
+    {
+     "id": "me_B_warehouse_win_east_f1_2",
+     "start": [
+      1510,
+      650
+     ],
+     "end": [
+      1390,
+      650
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_E"
+    },
+    {
+     "id": "me_B_warehouse_win_east_f0_3",
+     "start": [
+      1185,
+      650
+     ],
+     "end": [
+      1065,
+      650
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_E"
+    },
+    {
+     "id": "me_B_warehouse_win_east_f1_3",
+     "start": [
+      1185,
+      650
+     ],
+     "end": [
+      1065,
+      650
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_E"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f0_1",
+     "start": [
+      2250,
+      -1874
+     ],
+     "end": [
+      2250,
+      -1754
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f1_1",
+     "start": [
+      2250,
+      -1874
+     ],
+     "end": [
+      2250,
+      -1754
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f0_2",
+     "start": [
+      2250,
+      -1489
+     ],
+     "end": [
+      2250,
+      -1369
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f1_2",
+     "start": [
+      2250,
+      -1489
+     ],
+     "end": [
+      2250,
+      -1369
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f0_3",
+     "start": [
+      2250,
+      -1103
+     ],
+     "end": [
+      2250,
+      -983
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f1_3",
+     "start": [
+      2250,
+      -1103
+     ],
+     "end": [
+      2250,
+      -983
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f0_4",
+     "start": [
+      2250,
+      -717
+     ],
+     "end": [
+      2250,
+      -597
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f1_4",
+     "start": [
+      2250,
+      -717
+     ],
+     "end": [
+      2250,
+      -597
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f0_5",
+     "start": [
+      2250,
+      -331
+     ],
+     "end": [
+      2250,
+      -211
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f1_5",
+     "start": [
+      2250,
+      -331
+     ],
+     "end": [
+      2250,
+      -211
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f0_6",
+     "start": [
+      2250,
+      54
+     ],
+     "end": [
+      2250,
+      174
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_win_north_f1_6",
+     "start": [
+      2250,
+      54
+     ],
+     "end": [
+      2250,
+      174
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_warehouse",
+     "wall": "B_warehouse_N"
+    },
+    {
+     "id": "me_B_warehouse_para_N",
+     "start": [
+      2250,
+      -2350
+     ],
+     "end": [
+      2250,
+      650
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_warehouse"
+    },
+    {
+     "id": "me_B_warehouse_para_S",
+     "start": [
+      650,
+      -2350
+     ],
+     "end": [
+      650,
+      650
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_warehouse"
+    },
+    {
+     "id": "me_B_warehouse_para_W",
+     "start": [
+      2250,
+      -2350
+     ],
+     "end": [
+      650,
+      -2350
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "parapet",
+     "building": "B_warehouse"
+    },
+    {
+     "id": "me_B_warehouse_para_E",
+     "start": [
+      2250,
+      650
+     ],
+     "end": [
+      650,
+      650
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "parapet",
+     "building": "B_warehouse"
+    }
+   ],
+   "stairs": [
+    {
+     "id": "B_warehouse_stair_0",
+     "pos": [
+      2100,
+      -2230
+     ],
+     "from": 0,
+     "to": 1,
+     "kind": "stairwell",
+     "top": [
+      2100,
+      -1801
+     ]
+    },
+    {
+     "id": "B_warehouse_stair_1",
+     "pos": [
+      1900,
+      -2230
+     ],
+     "from": 1,
+     "to": 2,
+     "kind": "stairwell",
+     "top": [
+      1900,
+      -1801
+     ]
+    }
+   ],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "warehouse"
+  },
+  {
+   "id": "B_catwalk",
+   "footprint": [
+    [
+     550,
+     1150
+    ],
+    [
+     2050,
+     2750
+    ]
+   ],
+   "height": 600,
+   "floors": 2,
+   "enterable": true,
+   "roof_walkable": true,
+   "doors": [
+    {
+     "pos": [
+      550,
+      1959
+     ],
+     "floor": 0,
+     "wall": "B_catwalk_S"
+    },
+    {
+     "pos": [
+      1407,
+      1150
+     ],
+     "floor": 0,
+     "wall": "B_catwalk_W"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_catwalk_door_south_1",
+     "kind": "door",
+     "pos": [
+      550,
+      1959
+     ],
+     "floor": 0,
+     "wall": "B_catwalk_S",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_catwalk_door_west_2",
+     "kind": "door",
+     "pos": [
+      1407,
+      1150
+     ],
+     "floor": 0,
+     "wall": "B_catwalk_W",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_catwalk_win_south_f0_1",
+     "kind": "window",
+     "pos": [
+      550,
+      1625
+     ],
+     "floor": 0,
+     "wall": "B_catwalk_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_catwalk_win_south_f1_1",
+     "kind": "window",
+     "pos": [
+      550,
+      1625
+     ],
+     "floor": 1,
+     "wall": "B_catwalk_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_catwalk_win_south_f1_2",
+     "kind": "window",
+     "pos": [
+      550,
+      1950
+     ],
+     "floor": 1,
+     "wall": "B_catwalk_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_catwalk_win_south_f0_3",
+     "kind": "window",
+     "pos": [
+      550,
+      2275
+     ],
+     "floor": 0,
+     "wall": "B_catwalk_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_catwalk_win_south_f1_3",
+     "kind": "window",
+     "pos": [
+      550,
+      2275
+     ],
+     "floor": 1,
+     "wall": "B_catwalk_S",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_catwalk_win_west_f1_1",
+     "kind": "window",
+     "pos": [
+      1600,
+      1150
+     ],
+     "floor": 1,
+     "wall": "B_catwalk_W",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_catwalk_win_west_f1_2",
+     "kind": "window",
+     "pos": [
+      1300,
+      1150
+     ],
+     "floor": 1,
+     "wall": "B_catwalk_W",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_catwalk_win_west_f0_3",
+     "kind": "window",
+     "pos": [
+      1000,
+      1150
+     ],
+     "floor": 0,
+     "wall": "B_catwalk_W",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_catwalk_win_west_f1_3",
+     "kind": "window",
+     "pos": [
+      1000,
+      1150
+     ],
+     "floor": 1,
+     "wall": "B_catwalk_W",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 270
+    }
+   ],
+   "partitions": [
+    {
+     "id": "B_catwalk_part_f0_0",
+     "start": [
+      2050,
+      1710
+     ],
+     "end": [
+      550,
+      1710
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_catwalk_partdoor_f0_0",
+       "kind": "door",
+       "pos": [
+        1630,
+        1710
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_catwalk_part_f0_1",
+     "start": [
+      1180,
+      1150
+     ],
+     "end": [
+      1180,
+      1710
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_catwalk_partdoor_f0_1",
+       "kind": "door",
+       "pos": [
+        1180,
+        1430
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_catwalk_part_f0_2",
+     "start": [
+      1180,
+      1710
+     ],
+     "end": [
+      1180,
+      2750
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_catwalk_partdoor_f0_2",
+       "kind": "door",
+       "pos": [
+        1180,
+        2230
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_catwalk_part_f1_0",
+     "start": [
+      2050,
+      1950
+     ],
+     "end": [
+      550,
+      1950
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_catwalk_partdoor_f1_0",
+       "kind": "door",
+       "pos": [
+        1630,
+        1950
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_catwalk_part_f1_1",
+     "start": [
+      1300,
+      1150
+     ],
+     "end": [
+      1300,
+      1950
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_catwalk_partdoor_f1_1",
+       "kind": "door",
+       "pos": [
+        1300,
+        1550
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_catwalk_part_f1_2",
+     "start": [
+      1300,
+      1950
+     ],
+     "end": [
+      1300,
+      2750
+     ],
+     "floor": 1,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_catwalk_partdoor_f1_2",
+       "kind": "door",
+       "pos": [
+        1300,
+        2350
+       ],
+       "floor": 1,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    }
+   ],
+   "floors_detail": [
+    {
+     "floor": 1,
+     "height_z": 300,
+     "gaps": [
+      {
+       "id": "B_catwalk_gap_floor0",
+       "poly": [
+        [
+         1070,
+         1350
+        ],
+        [
+         1070,
+         1590
+        ],
+        [
+         830,
+         1590
+        ],
+        [
+         830,
+         1350
+        ]
+       ],
+       "kind": "landing"
+      },
+      {
+       "id": "B_catwalk_gap_catwalk",
+       "poly": [
+        [
+         1800,
+         2200
+        ],
+        [
+         1800,
+         2550
+        ],
+        [
+         1450,
+         2550
+        ],
+        [
+         1450,
+         2200
+        ]
+       ],
+       "kind": "catwalk"
+      }
+     ],
+     "rooms": [
+      {
+       "id": "B_catwalk_r_f1_0",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         1300,
+         1150
+        ],
+        "max": [
+         2050,
+         1950
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_catwalk_partdoor_f1_0",
+        "B_catwalk_partdoor_f1_1"
+       ]
+      },
+      {
+       "id": "B_catwalk_r_f1_1",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         550,
+         1150
+        ],
+        "max": [
+         1300,
+         1950
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_catwalk_partdoor_f1_1"
+       ]
+      },
+      {
+       "id": "B_catwalk_r_f1_2",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         1300,
+         1950
+        ],
+        "max": [
+         2050,
+         2750
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_catwalk_partdoor_f1_0",
+        "B_catwalk_partdoor_f1_2"
+       ]
+      },
+      {
+       "id": "B_catwalk_r_f1_3",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         550,
+         1950
+        ],
+        "max": [
+         1300,
+         2750
+        ]
+       },
+       "kind": "room",
+       "door_ids": [
+        "B_catwalk_partdoor_f1_2"
+       ]
+      }
+     ]
+    }
+   ],
+   "hatches": [],
+   "parapets": [
+    {
+     "wall_id": "B_catwalk_parapet_N",
+     "start": [
+      2050,
+      1150
+     ],
+     "end": [
+      2050,
+      2750
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_catwalk_parapet_S",
+     "start": [
+      550,
+      1150
+     ],
+     "end": [
+      550,
+      2750
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_catwalk_parapet_W",
+     "start": [
+      2050,
+      1150
+     ],
+     "end": [
+      550,
+      1150
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_catwalk_parapet_E",
+     "start": [
+      2050,
+      2750
+     ],
+     "end": [
+      550,
+      2750
+     ],
+     "height_cm": 100,
+     "thickness_cm": 20
+    }
+   ],
+   "rooms": [
+    {
+     "id": "B_catwalk_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       1180,
+       1150
+      ],
+      "max": [
+       2050,
+       1710
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_catwalk_door_west_2",
+      "B_catwalk_partdoor_f0_0",
+      "B_catwalk_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_catwalk_r_f0_1",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       550,
+       1150
+      ],
+      "max": [
+       1180,
+       1710
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_catwalk_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_catwalk_r_f0_2",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       1180,
+       1710
+      ],
+      "max": [
+       2050,
+       2750
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_catwalk_partdoor_f0_0",
+      "B_catwalk_partdoor_f0_2"
+     ]
+    },
+    {
+     "id": "B_catwalk_r_f0_3",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       550,
+       1710
+      ],
+      "max": [
+       1180,
+       2750
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_catwalk_door_south_1",
+      "B_catwalk_partdoor_f0_2"
+     ]
+    },
+    {
+     "id": "B_catwalk_r_f1_0",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       1300,
+       1150
+      ],
+      "max": [
+       2050,
+       1950
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_catwalk_partdoor_f1_0",
+      "B_catwalk_partdoor_f1_1"
+     ]
+    },
+    {
+     "id": "B_catwalk_r_f1_1",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       550,
+       1150
+      ],
+      "max": [
+       1300,
+       1950
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_catwalk_partdoor_f1_1"
+     ]
+    },
+    {
+     "id": "B_catwalk_r_f1_2",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       1300,
+       1950
+      ],
+      "max": [
+       2050,
+       2750
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_catwalk_partdoor_f1_0",
+      "B_catwalk_partdoor_f1_2"
+     ]
+    },
+    {
+     "id": "B_catwalk_r_f1_3",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       550,
+       1950
+      ],
+      "max": [
+       1300,
+       2750
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_catwalk_partdoor_f1_2"
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_catwalk_win_south_f0_1",
+     "start": [
+      550,
+      1565
+     ],
+     "end": [
+      550,
+      1685
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_catwalk",
+     "wall": "B_catwalk_S"
+    },
+    {
+     "id": "me_B_catwalk_win_south_f1_1",
+     "start": [
+      550,
+      1565
+     ],
+     "end": [
+      550,
+      1685
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_catwalk",
+     "wall": "B_catwalk_S"
+    },
+    {
+     "id": "me_B_catwalk_win_south_f1_2",
+     "start": [
+      550,
+      1890
+     ],
+     "end": [
+      550,
+      2010
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_catwalk",
+     "wall": "B_catwalk_S"
+    },
+    {
+     "id": "me_B_catwalk_win_south_f0_3",
+     "start": [
+      550,
+      2215
+     ],
+     "end": [
+      550,
+      2335
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_catwalk",
+     "wall": "B_catwalk_S"
+    },
+    {
+     "id": "me_B_catwalk_win_south_f1_3",
+     "start": [
+      550,
+      2215
+     ],
+     "end": [
+      550,
+      2335
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_catwalk",
+     "wall": "B_catwalk_S"
+    },
+    {
+     "id": "me_B_catwalk_win_west_f1_1",
+     "start": [
+      1660,
+      1150
+     ],
+     "end": [
+      1540,
+      1150
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_catwalk",
+     "wall": "B_catwalk_W"
+    },
+    {
+     "id": "me_B_catwalk_win_west_f1_2",
+     "start": [
+      1360,
+      1150
+     ],
+     "end": [
+      1240,
+      1150
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_catwalk",
+     "wall": "B_catwalk_W"
+    },
+    {
+     "id": "me_B_catwalk_win_west_f0_3",
+     "start": [
+      1060,
+      1150
+     ],
+     "end": [
+      940,
+      1150
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_catwalk",
+     "wall": "B_catwalk_W"
+    },
+    {
+     "id": "me_B_catwalk_win_west_f1_3",
+     "start": [
+      1060,
+      1150
+     ],
+     "end": [
+      940,
+      1150
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 90,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_catwalk",
+     "wall": "B_catwalk_W"
+    },
+    {
+     "id": "me_B_catwalk_para_N",
+     "start": [
+      2050,
+      1150
+     ],
+     "end": [
+      2050,
+      2750
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_catwalk"
+    },
+    {
+     "id": "me_B_catwalk_para_S",
+     "start": [
+      550,
+      1150
+     ],
+     "end": [
+      550,
+      2750
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_catwalk"
+    },
+    {
+     "id": "me_B_catwalk_para_W",
+     "start": [
+      2050,
+      1150
+     ],
+     "end": [
+      550,
+      1150
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "parapet",
+     "building": "B_catwalk"
+    },
+    {
+     "id": "me_B_catwalk_para_E",
+     "start": [
+      2050,
+      2750
+     ],
+     "end": [
+      550,
+      2750
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 100,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "parapet",
+     "building": "B_catwalk"
+    }
+   ],
+   "stairs": [
+    {
+     "id": "STAIR_catwalk_ext",
+     "pos": [
+      420,
+      1742
+     ],
+     "mid": [
+      420,
+      2600
+     ],
+     "from": 0,
+     "to": 2,
+     "kind": "external",
+     "top": [
+      700,
+      2600
+     ]
+    }
+   ],
+   "roof_holes": [
+    [
+     1600,
+     1470
+    ]
+   ],
+   "floor_holes": [
+    {
+     "pos": [
+      950,
+      1470
+     ],
+     "floor": 1
+    }
+   ],
+   "set_piece": "ruined_two_level"
+  },
+  {
+   "id": "B_yard_shed",
+   "footprint": [
+    [
+     -2150,
+     -1350
+    ],
+    [
+     -1150,
+     450
+    ]
+   ],
+   "height": 300,
+   "floors": 1,
+   "enterable": true,
+   "roof_walkable": false,
+   "doors": [
+    {
+     "pos": [
+      -1150,
+      -310
+     ],
+     "floor": 0,
+     "wall": "B_yard_shed_N"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_yard_shed_door_north_1",
+     "kind": "door",
+     "pos": [
+      -1150,
+      -310
+     ],
+     "floor": 0,
+     "wall": "B_yard_shed_N",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_yard_shed_win_north_f0_1",
+     "kind": "window",
+     "pos": [
+      -1150,
+      -825
+     ],
+     "floor": 0,
+     "wall": "B_yard_shed_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_yard_shed_win_north_f0_3",
+     "kind": "window",
+     "pos": [
+      -1150,
+      -75
+     ],
+     "floor": 0,
+     "wall": "B_yard_shed_N",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_yard_shed_win_east_f0_1",
+     "kind": "window",
+     "pos": [
+      -1650,
+      450
+     ],
+     "floor": 0,
+     "wall": "B_yard_shed_E",
+     "width": 120,
+     "sill_height": 90,
+     "top_height": 210,
+     "yaw": 90
+    }
+   ],
+   "partitions": [
+    {
+     "id": "B_yard_shed_part_f0_0",
+     "start": [
+      -1150,
+      -594
+     ],
+     "end": [
+      -2150,
+      -594
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_yard_shed_partdoor_f0_0",
+       "kind": "door",
+       "pos": [
+        -1430,
+        -594
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_yard_shed_part_f0_1",
+     "start": [
+      -1650,
+      -1350
+     ],
+     "end": [
+      -1650,
+      -594
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_yard_shed_partdoor_f0_1",
+       "kind": "door",
+       "pos": [
+        -1650,
+        -972
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    },
+    {
+     "id": "B_yard_shed_part_f0_2",
+     "start": [
+      -1150,
+      -72
+     ],
+     "end": [
+      -2150,
+      -72
+     ],
+     "floor": 0,
+     "thickness": 20,
+     "openings": [
+      {
+       "id": "B_yard_shed_partdoor_f0_2",
+       "kind": "door",
+       "pos": [
+        -1650,
+        -72
+       ],
+       "floor": 0,
+       "width": 120,
+       "sill_height": 0,
+       "top_height": 210
+      }
+     ]
+    }
+   ],
+   "floors_detail": [],
+   "hatches": [],
+   "parapets": [],
+   "rooms": [
+    {
+     "id": "B_yard_shed_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1650,
+       -1350
+      ],
+      "max": [
+       -1150,
+       -594
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_yard_shed_partdoor_f0_0",
+      "B_yard_shed_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_yard_shed_r_f0_1",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -2150,
+       -1350
+      ],
+      "max": [
+       -1650,
+       -594
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_yard_shed_partdoor_f0_1"
+     ]
+    },
+    {
+     "id": "B_yard_shed_r_f0_2",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -2150,
+       -594
+      ],
+      "max": [
+       -1150,
+       -72
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_yard_shed_door_north_1",
+      "B_yard_shed_partdoor_f0_0",
+      "B_yard_shed_partdoor_f0_2"
+     ]
+    },
+    {
+     "id": "B_yard_shed_r_f0_3",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -2150,
+       -72
+      ],
+      "max": [
+       -1150,
+       450
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_yard_shed_partdoor_f0_2"
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_yard_shed_win_north_f0_1",
+     "start": [
+      -1150,
+      -885
+     ],
+     "end": [
+      -1150,
+      -765
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_yard_shed",
+     "wall": "B_yard_shed_N"
+    },
+    {
+     "id": "me_B_yard_shed_win_north_f0_3",
+     "start": [
+      -1150,
+      -135
+     ],
+     "end": [
+      -1150,
+      -15
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_yard_shed",
+     "wall": "B_yard_shed_N"
+    },
+    {
+     "id": "me_B_yard_shed_win_east_f0_1",
+     "start": [
+      -1590,
+      450
+     ],
+     "end": [
+      -1710,
+      450
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 90,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_yard_shed",
+     "wall": "B_yard_shed_E"
+    }
+   ],
+   "stairs": [],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "one_entry_compound"
+  }
+ ],
+ "ladders": [
+  {
+   "id": "LAD_B_warehouse_hatch",
+   "pos": [
+    820,
+    470
+   ],
+   "yaw": 180,
+   "rungs": 8,
+   "plinth_cm": 8.8,
+   "from": "floor:B_warehouse:1",
+   "to": "roof:B_warehouse",
+   "level_from": 1,
+   "level_to": 2,
+   "foot": [
+    720,
+    470
+   ],
+   "top": [
+    930,
+    470
+   ]
+  },
+  {
+   "id": "LAD_B_warehouse",
+   "pos": [
+    1548,
+    -2360
+   ],
+   "yaw": 270,
+   "rungs": 16,
+   "plinth_cm": 17.6,
+   "from": "ground",
+   "to": "roof:B_warehouse",
+   "level_from": 0,
+   "level_to": 2,
+   "foot": [
+    1548,
+    -2460
+   ],
+   "top": [
+    1548,
+    -2250
+   ]
+  }
+ ],
+ "covers": [
+  {
+   "id": "C_yard_cr1",
+   "kind": "crate",
+   "pos": [
+    -150,
+    -2550
+   ],
+   "size": [
+    160,
+    120,
+    120
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_yard_w1",
+   "kind": "wreck",
+   "pos": [
+    -550,
+    -1350
+   ],
+   "size": [
+    380,
+    180,
+    140
+   ],
+   "yaw": 100
+  },
+  {
+   "id": "C_yard_cr2",
+   "kind": "crate",
+   "pos": [
+    -150,
+    -50
+   ],
+   "size": [
+    160,
+    120,
+    120
+   ],
+   "yaw": 180
+  },
+  {
+   "id": "C_yard_j1",
+   "kind": "jersey",
+   "pos": [
+    -550,
+    1050
+   ],
+   "size": [
+    280,
+    65,
+    95
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_yard_b1",
+   "kind": "barrel",
+   "pos": [
+    -200,
+    2450
+   ],
+   "size": [
+    90,
+    90,
+    110
+   ],
+   "yaw": 90
+  }
+ ],
+ "zones": [
+  {
+   "id": "Z_freight_ave",
+   "kind": "corridor",
+   "set_piece": "street",
+   "poly": [
+    [
+     50,
+     -3750
+    ],
+    [
+     50,
+     3750
+    ],
+    [
+     -850,
+     3750
+    ],
+    [
+     -850,
+     -3750
+    ]
+   ]
+  },
+  {
+   "id": "Z_wh_yard",
+   "kind": "open",
+   "set_piece": "warehouse",
+   "poly": [
+    [
+     2550,
+     -2650
+    ],
+    [
+     2550,
+     3050
+    ],
+    [
+     150,
+     3050
+    ],
+    [
+     150,
+     -2650
+    ]
+   ]
+  },
+  {
+   "id": "Z_south_shed",
+   "kind": "open",
+   "set_piece": "one_entry_compound",
+   "poly": [
+    [
+     -950,
+     -1750
+    ],
+    [
+     -950,
+     850
+    ],
+    [
+     -2450,
+     850
+    ],
+    [
+     -2450,
+     -1750
+    ]
+   ]
+  }
+ ],
+ "routes": [
+  {
+   "id": "R_main",
+   "pace": "walk",
+   "points": [
+    [
+     -350,
+     -3450
+    ],
+    [
+     -350,
+     -2650
+    ],
+    [
+     -150,
+     -203
+    ],
+    [
+     470,
+     -203
+    ],
+    [
+     830,
+     -203
+    ],
+    [
+     2100,
+     -2230
+    ],
+    [
+     2100,
+     -1801
+    ],
+    [
+     720,
+     470
+    ],
+    [
+     930,
+     470
+    ],
+    [
+     1548,
+     -2250
+    ],
+    [
+     1548,
+     -2460
+    ],
+    [
+     250,
+     -2650
+    ],
+    [
+     50,
+     -850
+    ],
+    [
+     50,
+     750
+    ],
+    [
+     420,
+     1742
+    ],
+    [
+     700,
+     2600
+    ],
+    [
+     1600,
+     1290
+    ],
+    [
+     1420,
+     1470
+    ],
+    [
+     950,
+     1290
+    ],
+    [
+     770,
+     1470
+    ],
+    [
+     730,
+     1959
+    ],
+    [
+     370,
+     1959
+    ],
+    [
+     -350,
+     1750
+    ],
+    [
+     -350,
+     3450
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "floor:B_warehouse:1",
+    "floor:B_warehouse:1",
+    "roof:B_warehouse",
+    "roof:B_warehouse",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "roof:B_catwalk",
+    "roof:B_catwalk",
+    "floor:B_catwalk:1",
+    "floor:B_catwalk:1",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [
+    {
+     "at": 6,
+     "via": "B_warehouse_stair_0"
+    },
+    {
+     "at": 8,
+     "via": "LAD_B_warehouse_hatch"
+    },
+    {
+     "at": 10,
+     "via": "LAD_B_warehouse"
+    },
+    {
+     "at": 15,
+     "via": "STAIR_catwalk_ext"
+    },
+    {
+     "at": 17,
+     "via": "hole_roof_0"
+    },
+    {
+     "at": 19,
+     "via": "hole_floor_0"
+    }
+   ],
+   "mandatory": true
+  },
+  {
+   "id": "V1_courtyard_direct",
+   "pace": "walk",
+   "points": [
+    [
+     -350,
+     -3450
+    ],
+    [
+     -350,
+     -1950
+    ],
+    [
+     -350,
+     -250
+    ],
+    [
+     -350,
+     1650
+    ],
+    [
+     -350,
+     3450
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "street",
+    "warehouse"
+   ]
+  },
+  {
+   "id": "V2_shed_flank",
+   "pace": "walk",
+   "points": [
+    [
+     -350,
+     -3450
+    ],
+    [
+     -850,
+     -1950
+    ],
+    [
+     -950,
+     -310
+    ],
+    [
+     -970,
+     -310
+    ],
+    [
+     -1330,
+     -310
+    ],
+    [
+     -970,
+     -310
+    ],
+    [
+     -850,
+     1050
+    ],
+    [
+     -350,
+     3450
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "one_entry_compound",
+    "street"
+   ]
+  }
+ ],
+ "spawn_points": [
+  {
+   "id": "SP_west",
+   "pos": [
+    -350,
+    -3450
+   ],
+   "kind": "edge"
+  }
+ ],
+ "ambush_points": [
+  {
+   "id": "AMB_wh_se",
+   "pos": [
+    550,
+    750
+   ]
+  },
+  {
+   "id": "AMB_catwalk_w",
+   "pos": [
+    1250,
+    950
+   ]
+  },
+  {
+   "id": "AMB_shed_ne",
+   "pos": [
+    -1150,
+    650
+   ]
+  }
+ ],
+ "patrol_routes": [
+  {
+   "id": "PAT_yard",
+   "points": [
+    [
+     -250,
+     -2250
+    ],
+    [
+     -250,
+     2050
+    ],
+    [
+     -650,
+     2050
+    ],
+    [
+     -650,
+     -2250
+    ]
+   ]
+  }
+ ],
+ "mantle_edges": [
+  {
+   "id": "me_C_yard_cr1",
+   "start": [
+    -150,
+    -2627
+   ],
+   "end": [
+    -150,
+    -2473
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 120,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_yard_cr2",
+   "start": [
+    -73,
+    -50
+   ],
+   "end": [
+    -227,
+    -50
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 120,
+   "normal": [
+    -6.123233995736766e-17,
+    -1
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_yard_j1",
+   "start": [
+    -550,
+    916
+   ],
+   "end": [
+    -550,
+    1184
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_W_dock_parapet_1",
+   "start": [
+    200,
+    -2150
+   ],
+   "end": [
+    200,
+    -1550
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 100,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_W_dock_parapet_2",
+   "start": [
+    200,
+    -350
+   ],
+   "end": [
+    200,
+    250
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 100,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f0_1",
+   "start": [
+    650,
+    -1874
+   ],
+   "end": [
+    650,
+    -1754
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f1_1",
+   "start": [
+    650,
+    -1874
+   ],
+   "end": [
+    650,
+    -1754
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f0_2",
+   "start": [
+    650,
+    -1489
+   ],
+   "end": [
+    650,
+    -1369
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f1_2",
+   "start": [
+    650,
+    -1489
+   ],
+   "end": [
+    650,
+    -1369
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f0_3",
+   "start": [
+    650,
+    -1103
+   ],
+   "end": [
+    650,
+    -983
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f1_3",
+   "start": [
+    650,
+    -1103
+   ],
+   "end": [
+    650,
+    -983
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f0_4",
+   "start": [
+    650,
+    -717
+   ],
+   "end": [
+    650,
+    -597
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f1_4",
+   "start": [
+    650,
+    -717
+   ],
+   "end": [
+    650,
+    -597
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f1_5",
+   "start": [
+    650,
+    -331
+   ],
+   "end": [
+    650,
+    -211
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f0_6",
+   "start": [
+    650,
+    54
+   ],
+   "end": [
+    650,
+    174
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_south_f1_6",
+   "start": [
+    650,
+    54
+   ],
+   "end": [
+    650,
+    174
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_S"
+  },
+  {
+   "id": "me_B_warehouse_win_east_f0_1",
+   "start": [
+    1835,
+    650
+   ],
+   "end": [
+    1715,
+    650
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_E"
+  },
+  {
+   "id": "me_B_warehouse_win_east_f1_1",
+   "start": [
+    1835,
+    650
+   ],
+   "end": [
+    1715,
+    650
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_E"
+  },
+  {
+   "id": "me_B_warehouse_win_east_f0_2",
+   "start": [
+    1510,
+    650
+   ],
+   "end": [
+    1390,
+    650
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_E"
+  },
+  {
+   "id": "me_B_warehouse_win_east_f1_2",
+   "start": [
+    1510,
+    650
+   ],
+   "end": [
+    1390,
+    650
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_E"
+  },
+  {
+   "id": "me_B_warehouse_win_east_f0_3",
+   "start": [
+    1185,
+    650
+   ],
+   "end": [
+    1065,
+    650
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_E"
+  },
+  {
+   "id": "me_B_warehouse_win_east_f1_3",
+   "start": [
+    1185,
+    650
+   ],
+   "end": [
+    1065,
+    650
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_E"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f0_1",
+   "start": [
+    2250,
+    -1874
+   ],
+   "end": [
+    2250,
+    -1754
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f1_1",
+   "start": [
+    2250,
+    -1874
+   ],
+   "end": [
+    2250,
+    -1754
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f0_2",
+   "start": [
+    2250,
+    -1489
+   ],
+   "end": [
+    2250,
+    -1369
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f1_2",
+   "start": [
+    2250,
+    -1489
+   ],
+   "end": [
+    2250,
+    -1369
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f0_3",
+   "start": [
+    2250,
+    -1103
+   ],
+   "end": [
+    2250,
+    -983
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f1_3",
+   "start": [
+    2250,
+    -1103
+   ],
+   "end": [
+    2250,
+    -983
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f0_4",
+   "start": [
+    2250,
+    -717
+   ],
+   "end": [
+    2250,
+    -597
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f1_4",
+   "start": [
+    2250,
+    -717
+   ],
+   "end": [
+    2250,
+    -597
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f0_5",
+   "start": [
+    2250,
+    -331
+   ],
+   "end": [
+    2250,
+    -211
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f1_5",
+   "start": [
+    2250,
+    -331
+   ],
+   "end": [
+    2250,
+    -211
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f0_6",
+   "start": [
+    2250,
+    54
+   ],
+   "end": [
+    2250,
+    174
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_win_north_f1_6",
+   "start": [
+    2250,
+    54
+   ],
+   "end": [
+    2250,
+    174
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_warehouse",
+   "wall": "B_warehouse_N"
+  },
+  {
+   "id": "me_B_warehouse_para_N",
+   "start": [
+    2250,
+    -2350
+   ],
+   "end": [
+    2250,
+    650
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "me_B_warehouse_para_S",
+   "start": [
+    650,
+    -2350
+   ],
+   "end": [
+    650,
+    650
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "me_B_warehouse_para_W",
+   "start": [
+    2250,
+    -2350
+   ],
+   "end": [
+    650,
+    -2350
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "parapet",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "me_B_warehouse_para_E",
+   "start": [
+    2250,
+    650
+   ],
+   "end": [
+    650,
+    650
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "parapet",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "me_B_catwalk_win_south_f0_1",
+   "start": [
+    550,
+    1565
+   ],
+   "end": [
+    550,
+    1685
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_catwalk",
+   "wall": "B_catwalk_S"
+  },
+  {
+   "id": "me_B_catwalk_win_south_f1_1",
+   "start": [
+    550,
+    1565
+   ],
+   "end": [
+    550,
+    1685
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_catwalk",
+   "wall": "B_catwalk_S"
+  },
+  {
+   "id": "me_B_catwalk_win_south_f1_2",
+   "start": [
+    550,
+    1890
+   ],
+   "end": [
+    550,
+    2010
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_catwalk",
+   "wall": "B_catwalk_S"
+  },
+  {
+   "id": "me_B_catwalk_win_south_f0_3",
+   "start": [
+    550,
+    2215
+   ],
+   "end": [
+    550,
+    2335
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_catwalk",
+   "wall": "B_catwalk_S"
+  },
+  {
+   "id": "me_B_catwalk_win_south_f1_3",
+   "start": [
+    550,
+    2215
+   ],
+   "end": [
+    550,
+    2335
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_catwalk",
+   "wall": "B_catwalk_S"
+  },
+  {
+   "id": "me_B_catwalk_win_west_f1_1",
+   "start": [
+    1660,
+    1150
+   ],
+   "end": [
+    1540,
+    1150
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_catwalk",
+   "wall": "B_catwalk_W"
+  },
+  {
+   "id": "me_B_catwalk_win_west_f1_2",
+   "start": [
+    1360,
+    1150
+   ],
+   "end": [
+    1240,
+    1150
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_catwalk",
+   "wall": "B_catwalk_W"
+  },
+  {
+   "id": "me_B_catwalk_win_west_f0_3",
+   "start": [
+    1060,
+    1150
+   ],
+   "end": [
+    940,
+    1150
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_catwalk",
+   "wall": "B_catwalk_W"
+  },
+  {
+   "id": "me_B_catwalk_win_west_f1_3",
+   "start": [
+    1060,
+    1150
+   ],
+   "end": [
+    940,
+    1150
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 90,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_catwalk",
+   "wall": "B_catwalk_W"
+  },
+  {
+   "id": "me_B_catwalk_para_N",
+   "start": [
+    2050,
+    1150
+   ],
+   "end": [
+    2050,
+    2750
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "me_B_catwalk_para_S",
+   "start": [
+    550,
+    1150
+   ],
+   "end": [
+    550,
+    2750
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "me_B_catwalk_para_W",
+   "start": [
+    2050,
+    1150
+   ],
+   "end": [
+    550,
+    1150
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "parapet",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "me_B_catwalk_para_E",
+   "start": [
+    2050,
+    2750
+   ],
+   "end": [
+    550,
+    2750
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 100,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "parapet",
+   "building": "B_catwalk"
+  },
+  {
+   "id": "me_B_yard_shed_win_north_f0_1",
+   "start": [
+    -1150,
+    -885
+   ],
+   "end": [
+    -1150,
+    -765
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_yard_shed",
+   "wall": "B_yard_shed_N"
+  },
+  {
+   "id": "me_B_yard_shed_win_north_f0_3",
+   "start": [
+    -1150,
+    -135
+   ],
+   "end": [
+    -1150,
+    -15
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_yard_shed",
+   "wall": "B_yard_shed_N"
+  },
+  {
+   "id": "me_B_yard_shed_win_east_f0_1",
+   "start": [
+    -1590,
+    450
+   ],
+   "end": [
+    -1710,
+    450
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 90,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_yard_shed",
+   "wall": "B_yard_shed_E"
+  }
+ ],
+ "pressure": {
+  "first_event_sec": 30,
+  "interval_sec": 90,
+  "group_min": 2,
+  "group_max": 4,
+  "max_alive": 8,
+  "patrol_share": 0.3,
+  "seed": 303,
+  "ambush": {
+   "points": [
+    [
+     550,
+     750
+    ],
+    [
+     1250,
+     950
+    ],
+    [
+     -1150,
+     650
+    ]
+   ],
+   "coordinated": {
+    "share": 0.5,
+    "max_alive": 8
+   }
+  }
+ }
+}
