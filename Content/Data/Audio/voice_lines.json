@@ -5,18 +5,39 @@
   "speakers": {
     "commander": {
       "display_name": "Commander",
+      "gender": "male",
       "voice": "Charon",
-      "style": "Calm, steady tactical squad leader in freezing arctic wind, low radio grit, crisp authority under fire."
+      "style": "Calm, firm male tactical squad leader in freezing arctic wind, low radio grit, crisp authority under fire."
     },
     "engineer": {
       "display_name": "Engineer",
+      "gender": "male",
       "voice": "Puck",
-      "style": "Focused field engineer, tired and freezing, practical brisk cadence with quiet determination."
+      "style": "Dry, technical male field engineer, freezing and practical, steady matter-of-fact cadence."
     },
     "medic_sapper": {
       "display_name": "Medic-Sapper",
-      "voice": "Kore",
-      "style": "Alert tactical medic and sapper, controlled urgency in bitter cold, clear sharp articulation."
+      "gender": "male",
+      "voice": "Orus",
+      "style": "Tired, warm male tactical medic and sapper, controlled care and quiet grit in bitter cold."
+    },
+    "pmc_op_1": {
+      "display_name": "PMC Operator 1 (Kessler)",
+      "gender": "male",
+      "voice": "Fenrir",
+      "style": "Hardened male hostile PMC rifleman in freezing wind, terse gritty combat callout."
+    },
+    "pmc_op_2": {
+      "display_name": "PMC Operator 2 (Vance)",
+      "gender": "male",
+      "voice": "Alnilam",
+      "style": "Cold professional male PMC mercenary, firm clipped radio discipline."
+    },
+    "pmc_op_3": {
+      "display_name": "PMC Operator 3 (Petrov)",
+      "gender": "male",
+      "voice": "Iapetus",
+      "style": "Alert male PMC point man, clear urgent tactical warning."
     }
   },
   "lines": [
@@ -24,25 +45,25 @@
       "id": "cmd_contact",
       "speaker": "commander",
       "voice": "Charon",
-      "style": "Urgent, controlled, crisp warning callout on sight of hostiles.",
+      "style": "Calm, firm, crisp male warning callout on sight of hostiles.",
       "text": "Contact!",
-      "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:302",
+      "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:333",
       "category": "combat_alert"
     },
     {
       "id": "cmd_ambush",
       "speaker": "commander",
       "voice": "Charon",
-      "style": "Commanding, urgent tactical order under sudden threat.",
+      "style": "Calm, firm male tactical order under sudden ambush.",
       "text": "Ambush! Hostiles on the level - eliminate them!",
-      "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:333",
+      "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:302",
       "category": "combat_alert"
     },
     {
       "id": "cmd_wave_advancing",
       "speaker": "commander",
       "voice": "Charon",
-      "style": "Firm tactical warning over cold wind, bracing the squad.",
+      "style": "Firm male tactical warning over cold wind, bracing the squad.",
       "text": "Wave 1: enemies advancing!",
       "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:375",
       "category": "combat_wave"
@@ -51,25 +72,79 @@
       "id": "cmd_autonomy_on",
       "speaker": "commander",
       "voice": "Charon",
-      "style": "Measured, disciplined radio briefing tone.",
+      "style": "Measured, calm, disciplined male radio briefing tone.",
       "text": "Autonomy ON. Operatives hold positions within 7 m of the order point.",
       "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:638",
       "category": "squad_order"
     },
     {
+      "id": "cmd_autonomy_off",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Calm, firm male radio confirmation switching to manual lead.",
+      "text": "Autonomy OFF. Full manual control.",
+      "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:639",
+      "category": "squad_order"
+    },
+    {
+      "id": "cmd_orders_received",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Calm, crisp male squad acknowledgment releasing pause.",
+      "text": "Orders received! Moving out!",
+      "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerTime.cpp:87",
+      "category": "squad_order"
+    },
+    {
+      "id": "cmd_suppressive_fire",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Firm, authoritative male fire-control command over gunfire.",
+      "text": "Suppressive fire! Keep their heads down!",
+      "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp:1066",
+      "category": "combat_order"
+    },
+    {
       "id": "cmd_generator_starts",
       "speaker": "commander",
       "voice": "Charon",
-      "style": "Relieved, gritty determination as machinery finally turns over.",
+      "style": "Firm, relieved male grit as diesel machinery finally turns over.",
       "text": "Pouring in the diesel and pulling the starter... The generator roars to life!",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:74",
       "category": "quest_complete"
     },
     {
+      "id": "cmd_gate_exit_open",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Calm, firm male extraction order into radio.",
+      "text": "The blast door is wide open - that's our way out. Everybody through!",
+      "source": "Source/CodexTactics/Private/GameFlow/LevelExitSubsystem.cpp:222",
+      "category": "quest_complete"
+    },
+    {
+      "id": "cmd_solo_leash",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Firm, steady male callout pulling the squad back together.",
+      "text": "Solo range exceeded! Teammates, regroup!",
+      "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:1105",
+      "category": "squad_order"
+    },
+    {
+      "id": "cmd_panic_flee",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Urgent, strained male voice under heavy enemy pressure.",
+      "text": "Fall back, fall back! They'll overrun us!",
+      "source": "Source/CodexTactics/Private/Characters/PanicComponent.cpp:222",
+      "category": "combat_panic"
+    },
+    {
       "id": "eng_generator_restored",
       "speaker": "engineer",
       "voice": "Puck",
-      "style": "Relieved, breathless triumph in freezing air.",
+      "style": "Dry, technical male field engineer confirming power restoration in freezing air.",
       "text": "Generator restored! All turrets are powered!",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:69",
       "category": "quest_complete"
@@ -78,7 +153,7 @@
       "id": "eng_fortifications_dismantled",
       "speaker": "engineer",
       "voice": "Puck",
-      "style": "Matter-of-fact field report, tired and steady.",
+      "style": "Dry, matter-of-fact male field engineer report after a wave.",
       "text": "Surviving fortifications dismantled and returned to the gear.",
       "source": "Source/CodexTactics/Private/Combat/WaveVictorySubsystem.cpp:288",
       "category": "post_wave"
@@ -87,7 +162,7 @@
       "id": "eng_generator_dry",
       "speaker": "engineer",
       "voice": "Puck",
-      "style": "Dry observation after inspecting broken equipment in subzero cold.",
+      "style": "Dry, technical male diagnosis after inspecting broken equipment in subzero cold.",
       "text": "The backup generator is intact, but the tank is dry. It needs diesel fuel.",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:40",
       "category": "quest_inspect"
@@ -96,7 +171,7 @@
       "id": "eng_draining_diesel",
       "speaker": "engineer",
       "voice": "Puck",
-      "style": "Focused effort turning into quiet satisfaction.",
+      "style": "Dry, focused male technical update transferring fuel.",
       "text": "Draining the remaining diesel from the APC fuel system... canister is full!",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:50",
       "category": "quest_progress"
@@ -105,16 +180,115 @@
       "id": "eng_found_canister",
       "speaker": "engineer",
       "voice": "Puck",
-      "style": "Encouraged, practical scavenging callout.",
+      "style": "Dry, practical male scavenging callout.",
       "text": "Found an empty 20L Fuel Canister. Now we have something to drain the fuel into.",
       "source": "Source/CodexTactics/Private/World/InteractableActor.cpp:602",
       "category": "loot_pickup"
     },
     {
+      "id": "eng_corner_peek",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Dry, technical male combat check at wall edge.",
+      "text": "At the corner - covering it!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:326",
+      "category": "combat_cover"
+    },
+    {
+      "id": "eng_hugging_wall",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Steady, dry male tactical report from high cover.",
+      "text": "Hugging the wall, holding the corner!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
+      "category": "combat_cover"
+    },
+    {
+      "id": "eng_behind_cover",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Brief, dry male position callout behind low cover.",
+      "text": "Behind cover!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
+      "category": "combat_cover"
+    },
+    {
+      "id": "eng_take_cover",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Quick, practical male movement callout.",
+      "text": "Take cover!",
+      "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp:958",
+      "category": "combat_cover"
+    },
+    {
+      "id": "eng_dash_other_cover",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Focused, terse male callout crossing between cover walls.",
+      "text": "Dash to the other cover!",
+      "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp:958",
+      "category": "combat_cover"
+    },
+    {
+      "id": "eng_along_wall_corner",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Technical, calm male callout shimmying around a corner.",
+      "text": "Along the wall, round the corner.",
+      "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp:1501",
+      "category": "combat_cover"
+    },
+    {
+      "id": "eng_guard_on",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Dry, steady male confirmation holding sector.",
+      "text": "Guard point set! Holding the sector.",
+      "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:1444",
+      "category": "squad_order"
+    },
+    {
+      "id": "eng_guard_off",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Dry, brisk male acknowledgment rejoining formation.",
+      "text": "Off guard, regrouping!",
+      "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:1445",
+      "category": "squad_order"
+    },
+    {
+      "id": "eng_changing_mags",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Clipped, dry male warning while swapping shotgun/rifle mag.",
+      "text": "Mag empty! Cover the sector!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:277",
+      "category": "combat_callout"
+    },
+    {
+      "id": "eng_cover_group_stack",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Technical male squad callout stacking at wall corner.",
+      "text": "Covering the corner - the squad stacks up behind me.",
+      "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp:275",
+      "category": "combat_cover"
+    },
+    {
+      "id": "eng_rage_shout",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Fierce, gritty male adrenaline shout in combat.",
+      "text": "Hold the line! Tear through them!",
+      "source": "Source/CodexTactics/Private/Characters/RageComponent.cpp:126",
+      "category": "combat_rage"
+    },
+    {
       "id": "med_tripwire",
       "speaker": "medic_sapper",
-      "voice": "Kore",
-      "style": "Sharp, urgent warning, sudden stop signal to teammates.",
+      "voice": "Orus",
+      "style": "Tired, warm male tactical medic-sapper, controlled sharp warning to protect teammates.",
       "text": "Tripwire! Wire at shin height - everyone hold position!",
       "source": "Source/CodexTactics/Private/World/TripwireActor.cpp:355",
       "category": "hazard_alert"
@@ -122,8 +296,8 @@
     {
       "id": "med_apc_tank_needs_canister",
       "speaker": "medic_sapper",
-      "voice": "Kore",
-      "style": "Calm analytical report while checking an abandoned vehicle.",
+      "voice": "Orus",
+      "style": "Tired, warm male analytical field check on an abandoned vehicle.",
       "text": "The abandoned vehicle's tank still holds diesel, but there is nothing to drain it into.",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:58",
       "category": "quest_inspect"
@@ -131,29 +305,182 @@
     {
       "id": "med_reloading",
       "speaker": "medic_sapper",
-      "voice": "Kore",
-      "style": "Clipped, tense combat callout over gunfire.",
+      "voice": "Orus",
+      "style": "Tired, steady male combat callout over gunfire.",
       "text": "Reloading! Cover me!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:276",
       "category": "combat_callout"
     },
     {
+      "id": "med_watch_back",
+      "speaker": "medic_sapper",
+      "voice": "Orus",
+      "style": "Controlled, tired male callout swapping magazine.",
+      "text": "Reloading! Watch my back!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:279",
+      "category": "combat_callout"
+    },
+    {
       "id": "med_grenade_out",
       "speaker": "medic_sapper",
-      "voice": "Kore",
-      "style": "High urgency tactical shout warning allies to take cover.",
+      "voice": "Orus",
+      "style": "Warm protective urgency, tired male shout warning teammates to duck.",
       "text": "Grenade out! Get down!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:394",
       "category": "combat_callout"
     },
     {
+      "id": "med_grenade_away",
+      "speaker": "medic_sapper",
+      "voice": "Orus",
+      "style": "Low urgent male warning throwing explosive.",
+      "text": "Grenade away! Heads down!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:395",
+      "category": "combat_callout"
+    },
+    {
       "id": "med_in_cover",
       "speaker": "medic_sapper",
-      "voice": "Kore",
-      "style": "Controlled, low breath in cover, scanning the sector.",
+      "voice": "Orus",
+      "style": "Tired, calm warm male breath in cover, watching the sector.",
       "text": "In cover, holding the sector!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp:546",
       "category": "combat_cover"
+    },
+    {
+      "id": "med_barricade_cover",
+      "speaker": "medic_sapper",
+      "voice": "Orus",
+      "style": "Tired, steady warm male report behind sandbag barricade.",
+      "text": "Behind the barricade, ready to fight!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp:547",
+      "category": "combat_cover"
+    },
+    {
+      "id": "med_patched_up",
+      "speaker": "medic_sapper",
+      "voice": "Orus",
+      "style": "Tired, warm reassuring male medic report after field dressing.",
+      "text": "Patched up - ready to stand again.",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp:404",
+      "category": "medical"
+    },
+    {
+      "id": "med_thawed",
+      "speaker": "medic_sapper",
+      "voice": "Orus",
+      "style": "Exhausted, warm relieved male sigh recovering from frostbite.",
+      "text": "I can feel my legs again... I can move!",
+      "source": "Source/CodexTactics/Private/Survival/TacticalHeatSubsystem.cpp:183",
+      "category": "survival"
+    },
+    {
+      "id": "med_critically_down",
+      "speaker": "medic_sapper",
+      "voice": "Orus",
+      "style": "Wounded, tired, strained male call for field aid.",
+      "text": "Critically wounded - going down, need a patch!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp:390",
+      "category": "medical"
+    },
+    {
+      "id": "med_looted_crate",
+      "speaker": "medic_sapper",
+      "voice": "Orus",
+      "style": "Tired, appreciative warm male report scavenging supplies.",
+      "text": "Took supplies from the supply crate!",
+      "source": "Source/CodexTactics/Private/Interactables/InteractionSubsystem.cpp:552",
+      "category": "loot_pickup"
+    },
+    {
+      "id": "med_panic_grip",
+      "speaker": "medic_sapper",
+      "voice": "Orus",
+      "style": "Tired, warm steady male voice regaining composure.",
+      "text": "Got a grip! Back in formation!",
+      "source": "Source/CodexTactics/Private/Characters/PanicComponent.cpp:272",
+      "category": "combat_panic"
+    },
+    {
+      "id": "pmc1_behind_cover",
+      "speaker": "pmc_op_1",
+      "voice": "Fenrir",
+      "style": "Hardened male hostile PMC rifleman shouting from low cover.",
+      "text": "Behind cover!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
+      "category": "pmc_cover"
+    },
+    {
+      "id": "pmc1_hugging_wall",
+      "speaker": "pmc_op_1",
+      "voice": "Fenrir",
+      "style": "Gritty male PMC operator stacking on wall edge.",
+      "text": "Hugging the wall, holding the corner!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
+      "category": "pmc_cover"
+    },
+    {
+      "id": "pmc1_reloading",
+      "speaker": "pmc_op_1",
+      "voice": "Fenrir",
+      "style": "Terse male PMC rifleman under fire.",
+      "text": "Reloading! Cover me!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:276",
+      "category": "pmc_callout"
+    },
+    {
+      "id": "pmc2_behind_cover",
+      "speaker": "pmc_op_2",
+      "voice": "Alnilam",
+      "style": "Cold professional male PMC mercenary calling cover.",
+      "text": "Behind cover!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
+      "category": "pmc_cover"
+    },
+    {
+      "id": "pmc2_hugging_wall",
+      "speaker": "pmc_op_2",
+      "voice": "Alnilam",
+      "style": "Firm, cold male PMC operator holding high-wall corner.",
+      "text": "Hugging the wall, holding the corner!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
+      "category": "pmc_cover"
+    },
+    {
+      "id": "pmc2_changing_mags",
+      "speaker": "pmc_op_2",
+      "voice": "Alnilam",
+      "style": "Controlled cold male PMC callout swapping magazine.",
+      "text": "Changing mags, hold them off!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:278",
+      "category": "pmc_callout"
+    },
+    {
+      "id": "pmc3_at_corner",
+      "speaker": "pmc_op_3",
+      "voice": "Iapetus",
+      "style": "Sharp male PMC point man peeking corner.",
+      "text": "At the corner - covering it!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:326",
+      "category": "pmc_cover"
+    },
+    {
+      "id": "pmc3_in_cover_sector",
+      "speaker": "pmc_op_3",
+      "voice": "Iapetus",
+      "style": "Clear alert male PMC operator watching sector from cover.",
+      "text": "In cover, holding the sector!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp:546",
+      "category": "pmc_cover"
+    },
+    {
+      "id": "pmc3_grenade_out",
+      "speaker": "pmc_op_3",
+      "voice": "Iapetus",
+      "style": "Urgent male PMC throw warning.",
+      "text": "Grenade out! Get down!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:394",
+      "category": "pmc_callout"
     }
   ]
 }

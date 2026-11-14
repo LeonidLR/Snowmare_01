@@ -15,10 +15,12 @@ import base64
 import datetime as dt
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import time
 import urllib.error
 import urllib.request
 import wave
@@ -29,6 +31,9 @@ INTERACTIONS_URL = "https://generativelanguage.googleapis.com/v1beta/interaction
 API_REVISION = "2026-05-20"
 DEFAULT_WEEKLY_BUDGET_USD = 40.0
 DEFAULT_WINDOW_DAYS = 7
+DEFAULT_TTS_MIN_INTERVAL_SEC = 6.2
+MAX_HTTP_429_RETRIES = 4
+DEFAULT_429_RETRY_SEC = 25.0
 
 DEFAULT_VOICE_MANIFEST = Path("Content/Data/Audio/voice_lines.json")
 DEFAULT_MUSIC_MANIFEST = Path("Content/Data/Audio/music_cues.json")
@@ -302,27 +307,53 @@ def write_wav_file(raw_bytes: bytes, mime_type: str, dest_wav: Path, converter: 
         return round(w.getnframes() / float(rate), 3)
 
 
-def post_interaction(payload: dict[str, Any], api_key: str, url: str = INTERACTIONS_URL) -> dict[str, Any]:
+def _parse_retry_after_seconds(detail: str, headers: Any = None) -> float:
+    if headers is not None:
+        raw_hdr = headers.get("Retry-After") if hasattr(headers, "get") else None
+        if raw_hdr:
+            try:
+                return max(5.0, min(90.0, float(raw_hdr)))
+            except ValueError:
+                pass
+    match = re.search(r"retry\s+in\s+(\d+(?:\.\d+)?)\s*s", detail, re.IGNORECASE)
+    if match:
+        return max(5.0, min(90.0, float(match.group(1)) + 1.0))
+    return DEFAULT_429_RETRY_SEC
+
+
+def post_interaction(
+    payload: dict[str, Any],
+    api_key: str,
+    url: str = INTERACTIONS_URL,
+    max_retries: int = MAX_HTTP_429_RETRIES,
+    sleep_fn: Callable[[float], None] = time.sleep,
+) -> dict[str, Any]:
     data = json.dumps(payload).encode("utf-8")
-    req = urllib.request.Request(
-        url,
-        data=data,
-        method="POST",
-        headers={
-            "Content-Type": "application/json",
-            "x-goog-api-key": api_key,
-            "Api-Revision": API_REVISION,
-        },
-    )
-    try:
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            body = resp.read().decode("utf-8")
-            return json.loads(body)
-    except urllib.error.HTTPError as exc:
-        detail = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"HTTP {exc.code} from Interactions API: {_redact_secret(detail, api_key)}") from exc
-    except urllib.error.URLError as exc:
-        raise RuntimeError(f"Network error contacting Interactions API: {_redact_secret(str(exc), api_key)}") from exc
+    for attempt in range(max_retries + 1):
+        req = urllib.request.Request(
+            url,
+            data=data,
+            method="POST",
+            headers={
+                "Content-Type": "application/json",
+                "x-goog-api-key": api_key,
+                "Api-Revision": API_REVISION,
+            },
+        )
+        try:
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                body = resp.read().decode("utf-8")
+                return json.loads(body)
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")
+            if exc.code == 429 and attempt < max_retries:
+                wait_sec = _parse_retry_after_seconds(detail, getattr(exc, "headers", None))
+                sleep_fn(wait_sec)
+                continue
+            raise RuntimeError(f"HTTP {exc.code} from Interactions API: {_redact_secret(detail, api_key)}") from exc
+        except urllib.error.URLError as exc:
+            raise RuntimeError(f"Network error contacting Interactions API: {_redact_secret(str(exc), api_key)}") from exc
+    raise RuntimeError("Exceeded max 429 retries contacting Interactions API")
 
 
 def _filter_items(items: list[dict[str, Any]], selected_ids: list[str] | None) -> list[dict[str, Any]]:
@@ -357,6 +388,8 @@ def run_generation(
     transport: Callable[[dict[str, Any], str], dict[str, Any]] | None = None,
     converter: Callable[[Path, Path], None] | None = None,
     api_key: str | None = None,
+    min_interval_sec: float | None = None,
+    sleep_fn: Callable[[float], None] = time.sleep,
 ) -> dict[str, Any]:
     manifest = json.loads(manifest_path.read_text(encoding="utf-8"))
     if kind == "voice":
@@ -436,11 +469,20 @@ def run_generation(
         raise RuntimeError("GEMINI_API_KEY is not set in environment.")
 
     call_api = transport or post_interaction
+    if min_interval_sec is not None:
+        effective_interval = max(0.0, float(min_interval_sec))
+    elif transport is None and kind == "voice":
+        effective_interval = DEFAULT_TTS_MIN_INTERVAL_SEC
+    else:
+        effective_interval = 0.0
+
     catalog = load_catalog(catalog_path)
     generated: list[dict[str, Any]] = []
     run_spend = 0.0
 
-    for entry in planned:
+    for idx, entry in enumerate(planned):
+        if idx > 0 and effective_interval > 0.0:
+            sleep_fn(effective_interval)
         if spent_week + run_spend + entry["est_cost_usd"] > budget_usd:
             raise RuntimeError(
                 f"Budget cap reached mid-run: spent ${spent_week + run_spend:.4f} vs cap ${budget_usd:.2f}"
@@ -483,6 +525,11 @@ def run_generation(
             "voice": str(item.get("voice") or ""),
             "style": str(item.get("style") or ""),
             "state": str(item.get("state") or ""),
+            "cue_group": str(item.get("cue_group") or ""),
+            "variant": str(item.get("variant") or ""),
+            "loop": bool(item.get("loop", kind == "music")),
+            "source": str(item.get("source") or ""),
+            "category": str(item.get("category") or ""),
             "seed": seed if seed is not None else item.get("seed"),
             "duration_sec": duration_sec,
             "cost_usd": round(actual_usd, 6),

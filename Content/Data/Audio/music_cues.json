@@ -3,28 +3,246 @@
   "default_model": "lyria-3-clip-preview",
   "cues": [
     {
-      "id": "explore_calm",
+      "id": "explore_calm_v1",
+      "cue_group": "explore_calm",
+      "variant": "v1",
+      "loop": true,
       "model": "lyria-3-clip-preview",
       "target_duration_sec": 30,
-      "state": "explore",
-      "prompt": "Instrumental only, no vocals, seamless ambient loop, 66 BPM. Sparse cold arctic survival ambient for a tactical outpost at night. Subdued sub-bass drone, distant metallic wind chimes, faint crystalline synth pads, isolated muted felt piano notes. Minimalist, eerie stillness, desolate polar atmosphere, no orchestral brass or heavy drums.",
-      "notes": "Calm outpost exploration between waves."
+      "state": "explore_calm",
+      "prompt": "Instrumental only, no vocals, seamless ambient loop, 66 BPM. Sparse cold arctic survival ambient for a quiet tactical outpost at night. Subdued sub-bass drone, distant wind texture, faint crystalline synth pads, isolated muted felt piano notes. Clean continuous loop boundary, no orchestral brass or heavy drums.",
+      "notes": "Calm outpost exploration (variant 1)."
     },
     {
-      "id": "tension",
+      "id": "explore_calm_v2",
+      "cue_group": "explore_calm",
+      "variant": "v2",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore_calm",
+      "prompt": "Instrumental only, no vocals, seamless ambient loop, 64 BPM. Desolate frozen military depot exploration underscore. Soft analog tape hiss, deep low string sustain, cold glass bell harmonics, slow muted acoustic bass notes. Even continuous dynamics for clean looping, no drums.",
+      "notes": "Calm outpost exploration (variant 2)."
+    },
+    {
+      "id": "explore_cold_v1",
+      "cue_group": "explore_cold",
+      "variant": "v1",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore_cold",
+      "prompt": "Instrumental only, no vocals, seamless ambient loop, 70 BPM. Harsh arctic blizzard survival exploration underscore. Shivering frosted synth drones, howling wind-like filtered noise pads, brittle metallic ice chimes, slow numb sub-bass swell. Continuous loop texture, no bombastic horns or snare hits.",
+      "notes": "Blizzard / freezing weather exploration (variant 1)."
+    },
+    {
+      "id": "explore_cold_v2",
+      "cue_group": "explore_cold",
+      "variant": "v2",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore_cold",
+      "prompt": "Instrumental ambient music only, no singing, seamless 68 BPM loop. Minimalist cold electronic pads, soft sub-bass sustain, gentle bowed cello harmonics, faint high sine bell tones, filtered noise sweep. Flat calm dynamics for an empty frozen exterior.",
+      "notes": "Blizzard / freezing weather exploration (variant 2)."
+    },
+    {
+      "id": "explore_cold_v3",
+      "cue_group": "explore_cold",
+      "variant": "v3",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore_cold",
+      "prompt": "Instrumental dark horror ambient only, no vocals, no melody, atonal loop, 60 BPM. Deep ominous sub-bass rumble, groaning frozen steel bulkhead creaks, howling arctic gale wind noise, rare distant dissonant metallic clangs and dull cold thuds. Strictly no bells, no chimes, no piano, no bright chords, bleak oppressive wasteland atmosphere.",
+      "notes": "Dark bleak freezing exploration - wind & stressed metal creaks (variant 3)."
+    },
+    {
+      "id": "explore_cold_v4",
+      "cue_group": "explore_cold",
+      "variant": "v4",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore_cold",
+      "prompt": "Instrumental dark industrial drone loop, no vocals, zero melody, zero light tones, 56 BPM. Heavy trembling sub-frequency drone, grinding rusted ice-bound iron scrapes, raw unfiltered polar wind hiss, sparse unsettling microtonal metallic knocks in cavernous reverberation. Cold suffocating dread, no synths chords or strings.",
+      "notes": "Dark bleak freezing exploration - sub-bass iron scrape & wind (variant 4)."
+    },
+    {
+      "id": "explore_cold_v5",
+      "cue_group": "explore_cold",
+      "variant": "v5",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "explore_cold",
+      "prompt": "Instrumental dark ambient drone loop, no vocals, atonal texture, 58 BPM. Low rumbling bass drone, hollow freezing wind gusts, creaking frozen steel beams, faint dissonant metallic strikes in sparse cold space. Dark bleak atmosphere, no melody, no bells, no bright chords.",
+      "notes": "Dark bleak freezing exploration - freezing wind draft & metal beams (variant 5)."
+    },
+    {
+      "id": "tension_v1",
+      "cue_group": "tension",
+      "variant": "v1",
+      "loop": true,
       "model": "lyria-3-clip-preview",
       "target_duration_sec": 30,
       "state": "tension",
-      "prompt": "Instrumental only, no vocals, seamless loop, 88 BPM. Tense arctic stealth tactical thriller underscore. Deep analog pulse bass, brittle metallic percussive clicks, trembling low cello sustains, cold sonar-like synth pings, rising atmospheric dread without epic orchestra.",
-      "notes": "Enemy sighted / stealth reconnaissance state."
+      "prompt": "Instrumental only, no vocals, seamless tactical loop, 88 BPM. Tense arctic stealth reconnaissance underscore when hostiles patrol nearby. Deep muted analog bass pulse, brittle metallic percussive ticks, trembling low cello sustain, faint sonar synth pings. Steady loopable suspense.",
+      "notes": "Enemy sighted / stealth reconnaissance (variant 1)."
     },
     {
-      "id": "combat",
+      "id": "tension_v2",
+      "cue_group": "tension",
+      "variant": "v2",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "tension",
+      "prompt": "Instrumental only, no vocals, seamless 92 BPM stealth underscore loop. Tight muted synth bass ostinato, brushed dry percussion clicks, low contrabass swells, understated modular synth texture. Continuous suspense pulse without sudden loud drops.",
+      "notes": "Enemy sighted / stealth reconnaissance (variant 2)."
+    },
+    {
+      "id": "combat_v1",
+      "cue_group": "combat",
+      "variant": "v1",
+      "loop": true,
       "model": "lyria-3-clip-preview",
       "target_duration_sec": 30,
       "state": "combat",
-      "prompt": "Instrumental only, no vocals, driving tactical defense combat loop, 118 BPM. Gritty industrial electronics mixed with heavy low tom drums, distorted sub-bass riff, tight metallic percussion, icy analog arpeggio. Relentless dark urgency, grounded cold survival thriller, no heroic fanfare or orchestral choir.",
-      "notes": "Active firefight / wave defense state."
+      "prompt": "Instrumental only, no vocals, seamless driving tactical combat loop, 118 BPM. Heavy low tom drums, gritty analog sub-bass riff, tight metallic percussion, crisp staccato synth ostinato. Consistent high drive for continuous combat looping, no heroic fanfare.",
+      "notes": "Active firefight / skirmish / standard wave combat (variant 1)."
+    },
+    {
+      "id": "combat_v2",
+      "cue_group": "combat",
+      "variant": "v2",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat",
+      "prompt": "Instrumental only, no vocals, seamless driving rhythmic loop, 122 BPM. Punchy electronic kick and dry snare, muted gritty bassline, urgent cold synth arpeggio, sharp string pizzicato accents. Steady loop momentum, no brass fanfare.",
+      "notes": "Active firefight / skirmish / standard wave combat (variant 2)."
+    },
+    {
+      "id": "combat_v3",
+      "cue_group": "combat",
+      "variant": "v3",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat",
+      "prompt": "Instrumental dark industrial percussion loop, no vocals, 114 BPM. Heavy muted low bass drums, relentless sub-bass pulse, rhythmic distorted machinery rumble, metallic clank accents, stark tense atmosphere. Steady loop drive, no orchestra, no brass, no heroic melody.",
+      "notes": "Oppressive heavy industrial combat - muffled low drums & pulse (variant 3)."
+    },
+    {
+      "id": "combat_v4",
+      "cue_group": "combat",
+      "variant": "v4",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat",
+      "prompt": "Instrumental grim rhythmic electronic loop, no singing, 120 BPM. Throbbing low distorted bass pulse, deep punchy frame drums and muffled metallic hits, filtered static industrial noise bed, tense dark ostinato without melody. No orchestral strings, no horns, no upbeat fanfare.",
+      "notes": "Oppressive heavy industrial combat - metallic hits & sub pulse (variant 4)."
+    },
+    {
+      "id": "combat_v5",
+      "cue_group": "combat",
+      "variant": "v5",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat",
+      "prompt": "Instrumental bleak tactical percussion loop, no vocals, 108 BPM. Heavy slow low tom stomp, pulsing sub-bass rumble, grinding dark modular noise texture, sharp dry industrial hits. Tight tense survival groove, no orchestra, no bright synths, no heroic chords.",
+      "notes": "Oppressive heavy industrial combat - slow stomp & dark noise (variant 5)."
+    },
+    {
+      "id": "combat_heavy_v1",
+      "cue_group": "combat_heavy",
+      "variant": "v1",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat_heavy",
+      "prompt": "Instrumental only, no vocals, seamless intense siege rhythm loop, 132 BPM. Heavy industrial percussion, roaring distorted sub-bass, rapid mechanical pulse, tense dissonant low strings, urgent cold synth pattern. Steady relentless intensity, no choir.",
+      "notes": "Horde / heavy siege wave state (variant 1)."
+    },
+    {
+      "id": "combat_heavy_v2",
+      "cue_group": "combat_heavy",
+      "variant": "v2",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "combat_heavy",
+      "prompt": "Instrumental only, no vocals, seamless intense defense loop, 136 BPM. Driving deep frame drums and metallic hits, grinding modular bass, high muted electric guitar harmonics, fast dark synth ostinato. Continuous high tension.",
+      "notes": "Horde / heavy siege wave state (variant 2)."
+    },
+    {
+      "id": "victory_sting_v1",
+      "cue_group": "victory_sting",
+      "variant": "v1",
+      "loop": false,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "victory",
+      "prompt": "Instrumental only, no vocals, somber understated resolution cue with calm outro. Warm low brass and cello chord progression over fading ambient pads, soft drum decay, quiet felt piano notes settling to silence. Clear resolve and tail.",
+      "notes": "Wave cleared / mission victory cue (variant 1, non-looping)."
+    },
+    {
+      "id": "victory_sting_v2",
+      "cue_group": "victory_sting",
+      "variant": "v2",
+      "loop": false,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "victory",
+      "prompt": "Instrumental only, no vocals, grounded calm resolution piece. Resolute minor-to-major chord swell on warm cellos and analog synths, soft bell chime resonance, gentle settling bass note and ambient tail. Clear ending fade.",
+      "notes": "Wave cleared / mission victory cue (variant 2, non-looping)."
+    },
+    {
+      "id": "defeat_sting_v1",
+      "cue_group": "defeat_sting",
+      "variant": "v1",
+      "loop": false,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "defeat",
+      "prompt": "Instrumental only, no vocals, slow minor outro cue, 56 BPM. Sparse low strings, sustained sub-bass note, quiet single piano chords with long reverb, tapering down to quiet room ambience. Simple ending fade.",
+      "notes": "Squad fallen / game over cue (variant 1, non-looping)."
+    },
+    {
+      "id": "defeat_sting_v2",
+      "cue_group": "defeat_sting",
+      "variant": "v2",
+      "loop": false,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "defeat",
+      "prompt": "Instrumental only, no vocals, quiet low-register ending cue, 54 BPM. Solo cello phrases in minor key, warm low analog pad, soft filtered noise tail decaying smoothly to silence. Minimal arrangement, no percussion.",
+      "notes": "Squad fallen / game over cue (variant 2, non-looping)."
+    },
+    {
+      "id": "menu_v1",
+      "cue_group": "menu",
+      "variant": "v1",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "menu",
+      "prompt": "Instrumental only, no vocals, seamless atmospheric loop, 72 BPM. Warm analog synth bass, clean muted electric guitar notes with gentle tape delay, soft low pad, sparse deep frame-drum pulse. Balanced even loop.",
+      "notes": "Main menu / briefing screen (variant 1)."
+    },
+    {
+      "id": "menu_v2",
+      "cue_group": "menu",
+      "variant": "v2",
+      "loop": true,
+      "model": "lyria-3-clip-preview",
+      "target_duration_sec": 30,
+      "state": "menu",
+      "prompt": "Instrumental only, no vocals, seamless theme loop, 76 BPM. Moody electronic ambient groove with sustained analog synth pad, restrained low cello melody, soft pulse bassline, subtle metallic shimmer. Steady loopable mix.",
+      "notes": "Main menu / briefing screen (variant 2)."
     }
   ]
 }

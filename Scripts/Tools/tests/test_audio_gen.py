@@ -8,8 +8,10 @@ import json
 import sys
 import tempfile
 import unittest
+import urllib.error
 import wave
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 import audio_gen  # noqa: E402
@@ -243,6 +245,62 @@ class AudioGenTests(unittest.TestCase):
                 selected_ids=["does_not_exist"],
                 dry_run=True,
             )
+
+    def test_post_interaction_retries_429_and_paces_requests(self) -> None:
+        slept: list[float] = []
+        calls = {"n": 0}
+
+        class _OkResp:
+            def __enter__(self) -> "_OkResp":
+                return self
+
+            def __exit__(self, *args: object) -> None:
+                return None
+
+            def read(self) -> bytes:
+                return b'{"ok": true}'
+
+        def fake_urlopen(req: object, timeout: int = 180) -> _OkResp:
+            calls["n"] += 1
+            if calls["n"] == 1:
+                raise urllib.error.HTTPError(
+                    url="https://example.invalid",
+                    code=429,
+                    msg="Too Many Requests",
+                    hdrs={"Retry-After": "12"},
+                    fp=io.BytesIO(b'{"error": {"message": "Rate limit exceeded, retry in 9s"}}'),
+                )
+            return _OkResp()
+
+        with mock.patch("urllib.request.urlopen", side_effect=fake_urlopen):
+            out = audio_gen.post_interaction({"input": "x"}, api_key="k", sleep_fn=slept.append)
+        self.assertEqual(out, {"ok": True})
+        self.assertEqual(calls["n"], 2)
+        self.assertEqual(slept, [12.0])
+
+        run_slept: list[float] = []
+        wav_bytes = _make_pcm_wav_bytes(duration_sec=0.25)
+        fake_b64 = base64.b64encode(wav_bytes).decode("ascii")
+
+        def fake_transport(payload: dict, key: str) -> dict:
+            return {
+                "outputs": [{"content": [{"type": "audio", "mime_type": "audio/wav", "data": fake_b64}]}],
+                "usage": {"total_input_tokens": 10, "total_output_tokens": 6},
+            }
+
+        audio_gen.run_generation(
+            kind="voice",
+            manifest_path=self.voice_manifest,
+            out_dir=self.out_dir,
+            ledger_path=self.ledger,
+            catalog_path=self.catalog,
+            budget_usd=40.0,
+            transport=fake_transport,
+            api_key="dummy-key",
+            min_interval_sec=6.2,
+            sleep_fn=run_slept.append,
+        )
+        self.assertEqual(run_slept, [6.2])
 
 
 if __name__ == "__main__":
