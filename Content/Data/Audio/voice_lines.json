@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "model": "gemini-3.8-flash-tts",
+  "language": "en",
+  "speakers": {
+    "commander": {
+      "display_name": "Commander",
+      "voice": "Charon",
+      "style": "Calm, steady tactical squad leader in freezing arctic wind, low radio grit, crisp authority under fire."
+    },
+    "engineer": {
+      "display_name": "Engineer",
+      "voice": "Puck",
+      "style": "Focused field engineer, tired and freezing, practical brisk cadence with quiet determination."
+    },
+    "medic_sapper": {
+      "display_name": "Medic-Sapper",
+      "voice": "Kore",
+      "style": "Alert tactical medic and sapper, controlled urgency in bitter cold, clear sharp articulation."
+    }
+  },
+  "lines": [
+    {
+      "id": "cmd_contact",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Urgent, controlled, crisp warning callout on sight of hostiles.",
+      "text": "Contact!",
+      "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:302",
+      "category": "combat_alert"
+    },
+    {
+      "id": "cmd_ambush",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Commanding, urgent tactical order under sudden threat.",
+      "text": "Ambush! Hostiles on the level - eliminate them!",
+      "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:333",
+      "category": "combat_alert"
+    },
+    {
+      "id": "cmd_wave_advancing",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Firm tactical warning over cold wind, bracing the squad.",
+      "text": "Wave 1: enemies advancing!",
+      "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:375",
+      "category": "combat_wave"
+    },
+    {
+      "id": "cmd_autonomy_on",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Measured, disciplined radio briefing tone.",
+      "text": "Autonomy ON. Operatives hold positions within 7 m of the order point.",
+      "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:638",
+      "category": "squad_order"
+    },
+    {
+      "id": "cmd_generator_starts",
+      "speaker": "commander",
+      "voice": "Charon",
+      "style": "Relieved, gritty determination as machinery finally turns over.",
+      "text": "Pouring in the diesel and pulling the starter... The generator roars to life!",
+      "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:74",
+      "category": "quest_complete"
+    },
+    {
+      "id": "eng_generator_restored",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Relieved, breathless triumph in freezing air.",
+      "text": "Generator restored! All turrets are powered!",
+      "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:69",
+      "category": "quest_complete"
+    },
+    {
+      "id": "eng_fortifications_dismantled",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Matter-of-fact field report, tired and steady.",
+      "text": "Surviving fortifications dismantled and returned to the gear.",
+      "source": "Source/CodexTactics/Private/Combat/WaveVictorySubsystem.cpp:288",
+      "category": "post_wave"
+    },
+    {
+      "id": "eng_generator_dry",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Dry observation after inspecting broken equipment in subzero cold.",
+      "text": "The backup generator is intact, but the tank is dry. It needs diesel fuel.",
+      "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:40",
+      "category": "quest_inspect"
+    },
+    {
+      "id": "eng_draining_diesel",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Focused effort turning into quiet satisfaction.",
+      "text": "Draining the remaining diesel from the APC fuel system... canister is full!",
+      "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:50",
+      "category": "quest_progress"
+    },
+    {
+      "id": "eng_found_canister",
+      "speaker": "engineer",
+      "voice": "Puck",
+      "style": "Encouraged, practical scavenging callout.",
+      "text": "Found an empty 20L Fuel Canister. Now we have something to drain the fuel into.",
+      "source": "Source/CodexTactics/Private/World/InteractableActor.cpp:602",
+      "category": "loot_pickup"
+    },
+    {
+      "id": "med_tripwire",
+      "speaker": "medic_sapper",
+      "voice": "Kore",
+      "style": "Sharp, urgent warning, sudden stop signal to teammates.",
+      "text": "Tripwire! Wire at shin height - everyone hold position!",
+      "source": "Source/CodexTactics/Private/World/TripwireActor.cpp:355",
+      "category": "hazard_alert"
+    },
+    {
+      "id": "med_apc_tank_needs_canister",
+      "speaker": "medic_sapper",
+      "voice": "Kore",
+      "style": "Calm analytical report while checking an abandoned vehicle.",
+      "text": "The abandoned vehicle's tank still holds diesel, but there is nothing to drain it into.",
+      "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:58",
+      "category": "quest_inspect"
+    },
+    {
+      "id": "med_reloading",
+      "speaker": "medic_sapper",
+      "voice": "Kore",
+      "style": "Clipped, tense combat callout over gunfire.",
+      "text": "Reloading! Cover me!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:276",
+      "category": "combat_callout"
+    },
+    {
+      "id": "med_grenade_out",
+      "speaker": "medic_sapper",
+      "voice": "Kore",
+      "style": "High urgency tactical shout warning allies to take cover.",
+      "text": "Grenade out! Get down!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:394",
+      "category": "combat_callout"
+    },
+    {
+      "id": "med_in_cover",
+      "speaker": "medic_sapper",
+      "voice": "Kore",
+      "style": "Controlled, low breath in cover, scanning the sector.",
+      "text": "In cover, holding the sector!",
+      "source": "Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp:546",
+      "category": "combat_cover"
+    }
+  ]
+}

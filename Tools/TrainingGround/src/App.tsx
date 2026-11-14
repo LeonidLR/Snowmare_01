@@ -14,13 +14,14 @@ import { EnemyWeaponsPanel } from './components/EnemyWeaponsPanel';
 import { CommanderROEPanel } from './components/CommanderROEPanel';
 import { StealthCombatPanel } from './components/StealthCombatPanel';
 import { HudLabelsPanel } from './components/HudLabelsPanel';
+import { AudioReviewPanel } from './components/AudioReviewPanel';
 import { applyLevelEncounterPatch } from './utils/stealthCombat';
 import { BlastDoorPanel, DemoPanel, LevelColdPanel, LevelHordePanel, LevelEnvironmentPanel } from './components/LevelSettingsPanels';
 import { LevelOperativesPanel } from './components/LevelOperativesPanel';
 import { LevelItem, LEVEL_GROUPS, LEVEL_GROUP_LABELS } from './utils/levelList';
 import { validateLevelSettings } from './utils/levelSettings';
 import { Activity, Terminal, Loader2, Swords, Plus, Snowflake, X, Wifi, WifiOff } from 'lucide-react';
-import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2, Eye, Tag } from 'lucide-react';
+import { Save, Upload, RotateCcw, Layers, CheckCircle2, FileCode2, Eye, Tag, Volume2 } from 'lucide-react';
 
 const DEFAULT_LEVEL: LevelConfig = {
   $schema: "../../schemas/level_config.schema.json",
@@ -169,7 +170,7 @@ export const App: React.FC = () => {
   };
 
   const [selectedWaveIndex, setSelectedWaveIndex] = useState<number>(1);
-  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry' | 'weapons' | 'enemyWeapons' | 'squadRoe' | 'stealth' | 'hudLabels'>('waves');
+  const [activeTab, setActiveTab] = useState<'waves' | 'telemetry' | 'weapons' | 'enemyWeapons' | 'squadRoe' | 'stealth' | 'hudLabels' | 'audio'>('waves');
   const [saveStatus, setSaveStatus] = useState<string | null>(null);
   const [isServerConnected, setIsServerConnected] = useState<boolean | null>(null);
 
@@ -749,6 +750,17 @@ export const App: React.FC = () => {
               <Tag className="w-3.5 h-3.5" />
               Метки HUD
             </button>
+            <button
+              onClick={() => setActiveTab('audio')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'audio'
+                  ? 'bg-sky-400 text-slate-950 shadow-md shadow-sky-400/20'
+                  : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
+              }`}
+            >
+              <Volume2 className="w-3.5 h-3.5" />
+              Аудио
+            </button>
           </div>
 
           <div className="hidden sm:flex items-center gap-2 text-xs text-slate-400 font-mono">
@@ -775,6 +787,8 @@ export const App: React.FC = () => {
           />
         ) : activeTab === 'hudLabels' ? (
           <HudLabelsPanel />
+        ) : activeTab === 'audio' ? (
+          <AudioReviewPanel />
         ) : (
           <>
         <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
