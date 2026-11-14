@@ -11,49 +11,44 @@ import {
   isSameOriginOrLocal,
 } from './audioApi.ts';
 
-function makeTempProject(): { root: string; cleanup: () => void } {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-audio-api-'));
-  const audioData = path.join(root, 'Content', 'Data', 'Audio');
-  const voiceGen = path.join(root, 'Saved', 'AudioGen', 'voice');
-  const musicGen = path.join(root, 'Saved', 'AudioGen', 'music');
-  fs.mkdirSync(audioData, { recursive: true });
-  fs.mkdirSync(voiceGen, { recursive: true });
-  fs.mkdirSync(musicGen, { recursive: true });
+function makeTempV1CatalogProject(): { root: string; cleanup: () => void } {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'codex-audio-v1-'));
+  const v1Dir = path.join(root, 'Saved', 'Orchestrator', 'audio_v1');
+  fs.mkdirSync(path.join(v1Dir, 'voice'), { recursive: true });
+  fs.mkdirSync(path.join(v1Dir, 'music'), { recursive: true });
 
+  fs.writeFileSync(path.join(v1Dir, 'voice', 'cmd_contact.wav'), Buffer.from('RIFF0000WAVEfmt ', 'ascii'));
+  fs.writeFileSync(path.join(v1Dir, 'music', 'explore_calm_v1.wav'), Buffer.from('RIFF0000WAVEfmt ', 'ascii'));
   fs.writeFileSync(
-    path.join(audioData, 'voice_lines.json'),
-    JSON.stringify({
-      version: 1,
-      model: 'gemini-3.8-flash-tts',
-      lines: [
-        { id: 'cmd_contact', speaker: 'commander', voice: 'Charon', style: 'Urgent', text: 'Contact!' },
-      ],
-    }),
-    'utf-8'
-  );
-  fs.writeFileSync(
-    path.join(audioData, 'music_cues.json'),
-    JSON.stringify({
-      version: 1,
-      default_model: 'lyria-3-clip-preview',
-      cues: [{ id: 'explore_calm', model: 'lyria-3-clip-preview', state: 'explore', prompt: 'Cold drone' }],
-    }),
-    'utf-8'
-  );
-  fs.writeFileSync(path.join(voiceGen, 'cmd_contact.wav'), Buffer.from('RIFF0000WAVEfmt ', 'ascii'));
-  fs.writeFileSync(
-    path.join(root, 'Saved', 'AudioGen', 'catalog.json'),
+    path.join(v1Dir, 'catalog.json'),
     JSON.stringify({
       version: 1,
       items: {
-        'voice/cmd_contact': { id: 'cmd_contact', kind: 'voice', duration_sec: 1.08, cost_usd: 0.000244 },
+        'voice/cmd_contact': {
+          id: 'cmd_contact',
+          kind: 'voice',
+          speaker: 'commander',
+          voice: 'Charon',
+          text: 'Contact!',
+          prompt: 'Urgent',
+          model: 'gemini-3.8-flash-tts',
+          duration_sec: 1.08,
+          cost_usd: 0.000244,
+        },
+        'music/explore_calm_v1': {
+          id: 'explore_calm_v1',
+          kind: 'music',
+          state: 'explore_calm',
+          cue_group: 'explore_calm',
+          variant: 'v1',
+          loop: true,
+          prompt: 'Sparse arctic drone',
+          model: 'lyria-3-clip-preview',
+          duration_sec: 30.77,
+          cost_usd: 0.04,
+        },
       },
     }),
-    'utf-8'
-  );
-  fs.writeFileSync(
-    path.join(root, 'Saved', 'AudioGen', 'spend.jsonl'),
-    JSON.stringify({ when: '2026-11-12T09:34:22+00:00', usd: 0.000244 }) + '\n',
     'utf-8'
   );
 
@@ -73,16 +68,19 @@ test('audioApi: resolveSafeWavPath allows bare IDs inside fixed folder and block
   assert.equal(resolveSafeWavPath(paths.generatedDir, 'sfx' as any, 'cmd_contact'), null);
 });
 
-test('audioApi: buildAudioListResponse and applyAudioReview update audio_approvals.json atomically', () => {
-  const { root, cleanup } = makeTempProject();
+test('audioApi: loads standalone audio_v1/catalog.json and writes audio_approvals.json next to catalog', () => {
+  const { root, cleanup } = makeTempV1CatalogProject();
   try {
     const paths = resolveAudioPaths(root);
+    assert.ok(paths.generatedDir.endsWith(path.join('Saved', 'Orchestrator', 'audio_v1')));
+    assert.equal(path.dirname(paths.approvalsPath), path.dirname(paths.catalogPath));
+
     const listBefore = buildAudioListResponse(paths);
+    assert.equal(listBefore.catalogDir, 'Saved/Orchestrator/audio_v1');
     assert.equal(listBefore.items.length, 2);
     assert.equal(listBefore.items[0].wavExists, true);
-    assert.equal(listBefore.items[0].duration_sec, 1.08);
-    assert.equal(listBefore.items[1].wavExists, false);
-    assert.equal(listBefore.spendSummary.entries_count, 1);
+    assert.equal(listBefore.items[1].cue_group, 'explore_calm');
+    assert.equal(listBefore.items[1].wavExists, true);
 
     const badTraversal = applyAudioReview(
       { kind: 'voice', id: '../oops', status: 'approved', notes: '' },
@@ -91,20 +89,21 @@ test('audioApi: buildAudioListResponse and applyAudioReview update audio_approva
     assert.equal(badTraversal.status, 400);
 
     const unknownItem = applyAudioReview(
-      { kind: 'voice', id: 'not_in_manifest', status: 'approved', notes: '' },
+      { kind: 'voice', id: 'not_in_catalog', status: 'approved', notes: '' },
       paths
     );
     assert.equal(unknownItem.status, 404);
 
     const ok = applyAudioReview(
-      { kind: 'voice', id: 'cmd_contact', status: 'approved', notes: 'Works great in snow wind.' },
+      { kind: 'music', id: 'explore_calm_v1', status: 'rejected', notes: 'Too loud at 0:18.' },
       paths
     );
     assert.equal(ok.status, 200);
     assert.ok(fs.existsSync(paths.approvalsPath));
     const saved = JSON.parse(fs.readFileSync(paths.approvalsPath, 'utf-8'));
-    assert.equal(saved.approvals['voice/cmd_contact'].status, 'approved');
-    assert.equal(saved.approvals['voice/cmd_contact'].notes, 'Works great in snow wind.');
+    assert.equal(saved.approvals['music/explore_calm_v1'].status, 'rejected');
+    assert.equal(saved.approvals['music/explore_calm_v1'].cue_group, 'explore_calm');
+    assert.equal(saved.approvals['music/explore_calm_v1'].notes, 'Too loud at 0:18.');
   } finally {
     cleanup();
   }

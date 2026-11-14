@@ -53,7 +53,7 @@ const setupApiMiddlewares = (middlewares: any) => {
   setupLevelgenApi((route, handler) => middlewares.use(route, handler))
   // Training Ground: HUD labels (Content/Data/UI/hud_labels.json)
   setupHudLabelsApi((route, handler) => middlewares.use(route, handler))
-  // Training Ground: Audio review (Saved/AudioGen + Content/Data/Audio)
+  // Training Ground: Audio review (Saved/Orchestrator/audio_v1)
   setupAudioApi((route, handler) => middlewares.use(route, handler))
 
   // 0. Health check для индикатора подключения

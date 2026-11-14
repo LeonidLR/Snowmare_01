@@ -754,7 +754,7 @@ export const App: React.FC = () => {
               onClick={() => setActiveTab('audio')}
               className={`flex items-center gap-2 px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
                 activeTab === 'audio'
-                  ? 'bg-sky-400 text-slate-950 shadow-md shadow-sky-400/20'
+                  ? 'bg-cyan-400 text-slate-950 shadow-md shadow-cyan-400/20'
                   : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/60'
               }`}
             >

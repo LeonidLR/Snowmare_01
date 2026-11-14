@@ -1,63 +1,75 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import {
-  Volume2,
-  Mic,
-  Music,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  RefreshCw,
-  Loader2,
-  AlertTriangle,
-  DollarSign,
-} from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Volume2, Music, Mic, RefreshCw, Loader2, DollarSign } from 'lucide-react';
 import {
   type AudioApprovalDecision,
   type AudioApprovalsFile,
   type AudioItemEntry,
   type AudioListResponse,
+  extractFilterOptions,
+  filterAudioItems,
+  itemCueName,
   summarizeAudioCounts,
-} from '../utils/audioReview.ts';
+} from '../utils/audioReview';
 
 export const AudioReviewPanel: React.FC = () => {
   const [data, setData] = useState<AudioListResponse | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
-  const [savingKey, setSavingKey] = useState<string | null>(null);
-  const [statusMessage, setStatusMessage] = useState<{ kind: 'success' | 'error'; text: string } | null>(null);
+  const [error, setError] = useState<string | null>(null);
   const [kindFilter, setKindFilter] = useState<'all' | 'voice' | 'music'>('all');
-  const [stateFilter, setStateFilter] = useState<'all' | 'generated' | 'approved' | 'rejected' | 'pending'>('all');
+  const [statusFilter, setStatusFilter] = useState<'all' | AudioApprovalDecision>('all');
+  const [speakerFilter, setSpeakerFilter] = useState<string>('all');
+  const [cueFilter, setCueFilter] = useState<string>('all');
+  const [search, setSearch] = useState<string>('');
   const [noteDrafts, setNoteDrafts] = useState<Record<string, string>>({});
+  const [savingKey, setSavingKey] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
-  const loadData = async () => {
+  const loadAudioList = async () => {
     setLoading(true);
-    setStatusMessage(null);
+    setError(null);
     try {
       const res = await fetch('/api/audio/list');
       if (!res.ok) {
-        throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+        throw new Error(`HTTP ${res.status}`);
       }
-      const json: AudioListResponse = await res.json();
-      setData(json);
-      const nextNotes: Record<string, string> = {};
-      for (const item of json.items) {
-        nextNotes[item.key] = json.approvals?.approvals?.[item.key]?.notes ?? '';
+      const payload: AudioListResponse = await res.json();
+      setData(payload);
+      const drafts: Record<string, string> = {};
+      for (const item of payload.items) {
+        drafts[item.key] = payload.approvals.approvals[item.key]?.notes ?? '';
       }
-      setNoteDrafts(nextNotes);
+      setNoteDrafts(drafts);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setStatusMessage({ kind: 'error', text: `Не удалось загрузить /api/audio/list: ${msg}` });
+      setError(`Не удалось загрузить каталог аудио: ${String(err)}`);
     } finally {
       setLoading(false);
     }
   };
 
   useEffect(() => {
-    loadData();
+    loadAudioList();
   }, []);
+
+  const items = data?.items ?? [];
+  const approvals: AudioApprovalsFile = data?.approvals ?? { version: 1, approvals: {} };
+  const summary = useMemo(() => summarizeAudioCounts(items, approvals), [items, approvals]);
+  const filterOpts = useMemo(() => extractFilterOptions(items), [items]);
+
+  const visibleItems = useMemo(
+    () =>
+      filterAudioItems(items, approvals, {
+        kind: kindFilter,
+        status: statusFilter,
+        speaker: speakerFilter,
+        cue: cueFilter,
+        query: search,
+      }),
+    [items, approvals, kindFilter, statusFilter, speakerFilter, cueFilter, search]
+  );
 
   const submitReview = async (item: AudioItemEntry, status: AudioApprovalDecision) => {
     setSavingKey(item.key);
-    setStatusMessage(null);
+    setToast(null);
     try {
       const notes = noteDrafts[item.key] ?? '';
       const res = await fetch('/api/audio/review', {
@@ -70,96 +82,64 @@ export const AudioReviewPanel: React.FC = () => {
           notes,
         }),
       });
-      const json = await res.json();
+      const body = await res.json();
       if (!res.ok) {
-        throw new Error(json?.error || `HTTP ${res.status}`);
+        throw new Error(body.error || `HTTP ${res.status}`);
       }
-      const nextApprovals = json.approvals as AudioApprovalsFile;
-      setData((prev) => (prev ? { ...prev, approvals: nextApprovals } : prev));
-      setStatusMessage({
-        kind: 'success',
-        text: `Сохранено для ${item.key}: ${status}`,
-      });
+      setData((prev) => (prev ? { ...prev, approvals: body.approvals } : prev));
+      setToast(`${item.id}: ${status}`);
+      setTimeout(() => setToast(null), 2500);
     } catch (err: unknown) {
-      const msg = err instanceof Error ? err.message : String(err);
-      setStatusMessage({ kind: 'error', text: `Ошибка сохранения ${item.key}: ${msg}` });
+      setError(`Ошибка сохранения ревью (${item.id}): ${String(err)}`);
     } finally {
       setSavingKey(null);
     }
   };
 
-  const counts = useMemo(
-    () => (data ? summarizeAudioCounts(data.items, data.approvals) : null),
-    [data]
-  );
-
-  const visibleItems = useMemo(() => {
-    if (!data) return [];
-    const map = data.approvals?.approvals ?? {};
-    return data.items.filter((item) => {
-      if (kindFilter !== 'all' && item.kind !== kindFilter) return false;
-      const decision = map[item.key]?.status ?? 'pending';
-      if (stateFilter === 'generated') return item.wavExists;
-      if (stateFilter === 'approved' || stateFilter === 'rejected' || stateFilter === 'pending') {
-        return decision === stateFilter;
-      }
-      return true;
-    });
-  }, [data, kindFilter, stateFilter]);
-
   if (loading && !data) {
     return (
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-8 flex items-center justify-center gap-3 text-slate-400">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-8 flex items-center justify-center gap-3 text-slate-400">
         <Loader2 className="w-5 h-5 animate-spin text-sky-400" />
-        <span className="text-sm font-semibold">Загрузка аудио-манифестов и сгенерированных WAV...</span>
+        <span className="text-sm font-mono">Загрузка аудио-каталога...</span>
       </div>
     );
   }
 
   return (
-    <div className="space-y-4">
+    <div className="flex flex-col gap-4">
       {/* Header & Summary */}
-      <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-wrap items-center justify-between gap-4">
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-wrap items-center justify-between gap-4">
         <div className="flex items-center gap-3">
-          <div className="p-2.5 rounded-xl bg-sky-500/10 border border-sky-500/20">
-            <Volume2 className="w-6 h-6 text-sky-400" />
-          </div>
+          <Volume2 className="w-6 h-6 text-sky-400" />
           <div>
-            <h2 className="text-base font-black text-slate-100">Аудио v1 — Озвучка и Музыка</h2>
+            <h2 className="text-sm font-bold text-slate-100">Аудио-ревью (Gemini TTS + Lyria)</h2>
             <p className="text-xs text-slate-400">
-              Прослушивание <code className="text-slate-300">Saved/AudioGen/</code> и ревью перед импортом в UE (
-              <code className="text-slate-300">Content/Data/Audio/audio_approvals.json</code>)
+              Каталог: <code className="text-slate-300">{data?.catalogDir ?? 'Saved/Orchestrator/audio_v1'}/catalog.json</code>
+              {' · '}Одобрения: <code className="text-slate-300">{data?.approvalsFile ?? 'audio_approvals.json'}</code>
             </p>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
-          {counts && (
-            <>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-300">
-                Всего: <b>{counts.total}</b>
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-sky-800/60 text-xs text-sky-300">
-                WAV готово: <b>{counts.generated}</b>
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-emerald-800/60 text-xs text-emerald-300">
-                Одобрено: <b>{counts.approved}</b>
-              </span>
-              <span className="px-2.5 py-1 rounded-lg bg-slate-950 border border-rose-800/60 text-xs text-rose-300">
-                Отклонено: <b>{counts.rejected}</b>
-              </span>
-            </>
-          )}
-          {data?.spendSummary && (
-            <span className="px-2.5 py-1 rounded-lg bg-amber-950/30 border border-amber-700/40 text-xs text-amber-300 flex items-center gap-1">
-              <DollarSign className="w-3.5 h-3.5" />
-              Потрачено: <b>${data.spendSummary.total_usd.toFixed(4)}</b>
-            </span>
-          )}
+        <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
+          <span className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200">
+            WAV: {summary.generated}/{summary.total}
+          </span>
+          <span className="px-2.5 py-1 rounded bg-emerald-950/70 border border-emerald-700/50 text-emerald-300">
+            Одобрено: {summary.approved}
+          </span>
+          <span className="px-2.5 py-1 rounded bg-rose-950/70 border border-rose-700/50 text-rose-300">
+            Отклонено: {summary.rejected}
+          </span>
+          <span className="px-2.5 py-1 rounded bg-amber-950/60 border border-amber-700/40 text-amber-300">
+            Ожидают: {summary.pending}
+          </span>
+          <span className="px-2.5 py-1 rounded bg-slate-800 border border-slate-700 text-cyan-300 inline-flex items-center gap-1">
+            <DollarSign className="w-3.5 h-3.5" />
+            {(data?.spendSummary.total_usd ?? 0).toFixed(4)}
+          </span>
           <button
-            onClick={loadData}
-            disabled={loading}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-xs font-bold border border-slate-700 transition-colors"
+            onClick={loadAudioList}
+            className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 transition-colors"
           >
             <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
             Обновить
@@ -167,113 +147,131 @@ export const AudioReviewPanel: React.FC = () => {
         </div>
       </div>
 
-      {/* Status Banner */}
-      {statusMessage && (
-        <div
-          className={`rounded-xl px-4 py-2.5 border text-xs font-semibold flex items-center gap-2 ${
-            statusMessage.kind === 'success'
-              ? 'bg-emerald-950/40 border-emerald-700/50 text-emerald-300'
-              : 'bg-rose-950/40 border-rose-700/50 text-rose-300'
-          }`}
-        >
-          {statusMessage.kind === 'success' ? (
-            <CheckCircle2 className="w-4 h-4 shrink-0" />
-          ) : (
-            <AlertTriangle className="w-4 h-4 shrink-0" />
-          )}
-          <span>{statusMessage.text}</span>
+      {error && (
+        <div className="bg-rose-950/60 border border-rose-700/60 text-rose-200 text-xs rounded-xl px-4 py-3">
+          {error}
+        </div>
+      )}
+      {toast && (
+        <div className="bg-emerald-950/70 border border-emerald-700/60 text-emerald-200 text-xs rounded-xl px-4 py-2 font-mono">
+          Сохранено: {toast}
         </div>
       )}
 
       {/* Filters */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-slate-900/70 border border-slate-800 rounded-xl px-4 py-3">
-        <div className="flex items-center gap-1.5">
-          {(
-            [
-              ['all', 'Все'],
-              ['voice', 'Реплики (TTS)'],
-              ['music', 'Музыка (Lyria)'],
-            ] as const
-          ).map(([val, label]) => (
+      <div className="bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-wrap items-center gap-2">
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+          {(['all', 'voice', 'music'] as const).map((k) => (
             <button
-              key={val}
-              onClick={() => setKindFilter(val)}
-              className={`px-3 py-1 rounded-lg text-xs font-bold transition-colors ${
-                kindFilter === val
-                  ? 'bg-sky-500 text-slate-950'
-                  : 'bg-slate-800/80 text-slate-300 hover:bg-slate-800'
+              key={k}
+              onClick={() => setKindFilter(k)}
+              className={`px-2.5 py-1 rounded font-semibold transition-colors ${
+                kindFilter === k ? 'bg-sky-500 text-slate-950' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {label}
+              {k === 'all' ? 'Все' : k === 'voice' ? 'Речь (VO)' : 'Музыка'}
             </button>
           ))}
         </div>
 
-        <div className="flex items-center gap-1.5">
-          {(
-            [
-              ['all', 'Любой статус'],
-              ['generated', 'Только с WAV'],
-              ['pending', 'Ожидают'],
-              ['approved', 'Одобрены'],
-              ['rejected', 'Отклонены'],
-            ] as const
-          ).map(([val, label]) => (
+        <div className="flex items-center gap-1 bg-slate-950 p-1 rounded-lg border border-slate-800 text-xs">
+          {(['all', 'pending', 'approved', 'rejected'] as const).map((st) => (
             <button
-              key={val}
-              onClick={() => setStateFilter(val)}
-              className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors ${
-                stateFilter === val
-                  ? 'bg-amber-400 text-slate-950'
-                  : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-slate-200'
+              key={st}
+              onClick={() => setStatusFilter(st)}
+              className={`px-2.5 py-1 rounded font-semibold transition-colors ${
+                statusFilter === st ? 'bg-amber-400 text-slate-950' : 'text-slate-400 hover:text-slate-200'
               }`}
             >
-              {label}
+              {st === 'all'
+                ? 'Все статусы'
+                : st === 'pending'
+                  ? 'Ожидают'
+                  : st === 'approved'
+                    ? 'Одобрено'
+                    : 'Отклонено'}
             </button>
           ))}
         </div>
+
+        <select
+          aria-label="Фильтр по спикеру"
+          value={speakerFilter}
+          onChange={(e) => {
+            setSpeakerFilter(e.target.value);
+            if (e.target.value !== 'all') setCueFilter('all');
+          }}
+          className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+        >
+          <option value="all">Все спикеры ({filterOpts.speakers.length})</option>
+          {filterOpts.speakers.map((sp) => (
+            <option key={sp} value={sp}>
+              Спикер: {sp}
+            </option>
+          ))}
+        </select>
+
+        <select
+          aria-label="Фильтр по cue"
+          value={cueFilter}
+          onChange={(e) => {
+            setCueFilter(e.target.value);
+            if (e.target.value !== 'all') setSpeakerFilter('all');
+          }}
+          className="bg-slate-950 border border-slate-800 rounded-lg px-2.5 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-sky-500"
+        >
+          <option value="all">Все cues ({filterOpts.cues.length})</option>
+          {filterOpts.cues.map((cue) => (
+            <option key={cue} value={cue}>
+              Cue: {cue}
+            </option>
+          ))}
+        </select>
+
+        <input
+          type="text"
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Поиск (id, текст, спикер, cue, промпт)..."
+          className="flex-1 min-w-[200px] bg-slate-950 border border-slate-800 rounded-lg px-3 py-1.5 text-xs text-slate-200 placeholder:text-slate-500 focus:outline-none focus:border-sky-500"
+        />
       </div>
 
       {/* Items List */}
-      <div className="space-y-3">
+      <div className="flex flex-col gap-3">
         {visibleItems.map((item) => {
-          const rec = data?.approvals?.approvals?.[item.key];
+          const rec = approvals.approvals[item.key];
           const decision: AudioApprovalDecision = rec?.status ?? 'pending';
           const isSaving = savingKey === item.key;
+          const cueLabel = itemCueName(item);
 
           return (
             <div
               key={item.key}
-              className={`bg-slate-900 border rounded-xl p-4 space-y-3 transition-colors ${
-                decision === 'approved'
-                  ? 'border-emerald-700/60'
-                  : decision === 'rejected'
-                    ? 'border-rose-700/60'
-                    : 'border-slate-800'
-              }`}
+              className="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col gap-3"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="space-y-1">
+                <div className="flex flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     {item.kind === 'voice' ? (
-                      <Mic className="w-4 h-4 text-cyan-400" />
+                      <Mic className="w-4 h-4 text-sky-400" />
                     ) : (
                       <Music className="w-4 h-4 text-violet-400" />
                     )}
-                    <span className="text-sm font-black font-mono text-slate-100">{item.id}</span>
+                    <span className="font-mono text-sm font-bold text-slate-100">{item.id}</span>
+                    <span className="px-2 py-0.5 rounded bg-slate-800 text-[11px] font-mono text-slate-300">
+                      {item.model}
+                    </span>
                     {item.speaker && (
-                      <span className="px-2 py-0.5 rounded bg-cyan-950/60 border border-cyan-800/50 text-[11px] font-bold text-cyan-300">
+                      <span className="px-2 py-0.5 rounded bg-sky-950/70 border border-sky-800/60 text-[11px] font-mono text-sky-300">
                         {item.speaker} ({item.voice})
                       </span>
                     )}
-                    {item.state && (
-                      <span className="px-2 py-0.5 rounded bg-violet-950/60 border border-violet-800/50 text-[11px] font-bold text-violet-300">
-                        state: {item.state}
+                    {cueLabel && (
+                      <span className="px-2 py-0.5 rounded bg-violet-950/70 border border-violet-800/60 text-[11px] font-mono text-violet-300">
+                        cue: {cueLabel}{item.variant ? ` · ${item.variant}` : ''}
                       </span>
                     )}
-                    <span className="px-2 py-0.5 rounded bg-slate-950 border border-slate-800 text-[11px] font-mono text-slate-400">
-                      {item.model}
-                    </span>
                     {item.wavExists ? (
                       <span className="px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-700/50 text-[11px] font-bold text-emerald-300">
                         WAV готов {item.duration_sec !== null ? `· ${item.duration_sec.toFixed(2)}s` : ''}
@@ -313,7 +311,6 @@ export const AudioReviewPanel: React.FC = () => {
                 </div>
               </div>
 
-              {/* Player or CLI hint */}
               {item.wavExists ? (
                 <audio controls preload="none" src={item.streamUrl} className="w-full h-9" />
               ) : (
@@ -322,7 +319,6 @@ export const AudioReviewPanel: React.FC = () => {
                 </div>
               )}
 
-              {/* Notes + Actions */}
               <div className="flex flex-wrap items-center gap-2 pt-1">
                 <input
                   type="text"

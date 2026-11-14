@@ -1,8 +1,8 @@
-// Training Ground: dev-server endpoints for Audio review panel.
+// Training Ground: dev-server endpoints for Audio v1 review panel.
 // Endpoints:
-//   GET  /api/audio/list                  -> { items, approvals, spendSummary }
-//   GET  /api/audio/file?kind=...&id=...  -> streams WAV from fixed Saved/AudioGen/<kind>/<id>.wav
-//   POST /api/audio/review                -> atomically updates Content/Data/Audio/audio_approvals.json
+//   GET  /api/audio/list                  -> { catalogDir, approvalsFile, items, approvals, spendSummary }
+//   GET  /api/audio/file?kind=...&id=...  -> streams WAV from fixed <audioDir>/<kind>/<id>.wav
+//   POST /api/audio/review                -> atomically updates <audioDir>/audio_approvals.json next to catalog.json
 
 import fs from 'node:fs';
 import path from 'node:path';
@@ -36,15 +36,22 @@ export interface AudioPaths {
 
 export function resolveAudioPaths(rootDir: string = DEFAULT_ROOT): AudioPaths {
   const root = path.resolve(rootDir);
-  const generatedDir = path.join(root, 'Saved', 'AudioGen');
+  const v1Dir = path.join(root, 'Saved', 'Orchestrator', 'audio_v1');
+  const genDir = path.join(root, 'Saved', 'AudioGen');
+  // Prefer Saved/Orchestrator/audio_v1 when present (v1 bundle); fallback to Saved/AudioGen.
+  const useV1 = fs.existsSync(path.join(v1Dir, 'catalog.json')) || fs.existsSync(v1Dir);
+  const generatedDir = useV1 ? v1Dir : genDir;
+  const localLedger = path.join(generatedDir, 'spend.jsonl');
+  const spendLedgerPath = fs.existsSync(localLedger) ? localLedger : path.join(genDir, 'spend.jsonl');
+
   return {
     root,
     voiceManifestPath: path.join(root, 'Content', 'Data', 'Audio', 'voice_lines.json'),
     musicManifestPath: path.join(root, 'Content', 'Data', 'Audio', 'music_cues.json'),
-    approvalsPath: path.join(root, 'Content', 'Data', 'Audio', 'audio_approvals.json'),
+    approvalsPath: path.join(generatedDir, 'audio_approvals.json'),
     generatedDir,
     catalogPath: path.join(generatedDir, 'catalog.json'),
-    spendLedgerPath: path.join(generatedDir, 'spend.jsonl'),
+    spendLedgerPath,
   };
 }
 
@@ -145,52 +152,86 @@ export function resolveSafeWavPath(generatedDir: string, kind: AudioKind, id: st
 }
 
 export function buildAudioListResponse(paths: AudioPaths = resolveAudioPaths()): AudioListResponse {
+  const catalog = safeReadJson(paths.catalogPath);
+  const catalogItems =
+    catalog && catalog.items && typeof catalog.items === 'object'
+      ? (catalog.items as Record<string, Record<string, unknown>>)
+      : {};
   const voiceManifest = safeReadJson(paths.voiceManifestPath);
   const musicManifest = safeReadJson(paths.musicManifestPath);
-  const catalogRaw = safeReadJson(paths.catalogPath);
-  const catalogItems =
-    catalogRaw && catalogRaw.items && typeof catalogRaw.items === 'object'
-      ? (catalogRaw.items as Record<string, Record<string, unknown>>)
-      : {};
 
   const items: AudioItemEntry[] = [];
   const seenKeys = new Set<string>();
 
-  const pushEntry = (kind: AudioKind, rawItem: Record<string, unknown>, defaultModel: string) => {
-    const id = typeof rawItem.id === 'string' ? rawItem.id : '';
+  const buildEntry = (kind: AudioKind, id: string, raw: Record<string, unknown>, defaultModel: string): void => {
     if (!isValidAudioId(id)) return;
     const key = makeAudioKey(kind, id);
+    if (seenKeys.has(key)) return;
     seenKeys.add(key);
+
     const cat = catalogItems[key] ?? {};
     const wavPath = resolveSafeWavPath(paths.generatedDir, kind, id);
     const wavExists = Boolean(wavPath && fs.existsSync(wavPath));
+
+    const promptVal = cat.prompt ?? raw.prompt ?? raw.style ?? '';
+    const textVal = cat.text ?? raw.text ?? '';
+    const speakerVal = cat.speaker ?? raw.speaker ?? '';
+    const voiceVal = cat.voice ?? raw.voice ?? '';
+    const styleVal = cat.style ?? raw.style ?? '';
+    const stateVal = cat.state ?? raw.state ?? '';
+    const cueGroupVal = cat.cue_group ?? raw.cue_group ?? stateVal;
+    const variantVal = cat.variant ?? raw.variant ?? '';
+    const sourceVal = cat.source ?? raw.source;
+    const categoryVal = cat.category ?? raw.category;
+    const loopVal = typeof cat.loop === 'boolean' ? cat.loop : typeof raw.loop === 'boolean' ? raw.loop : undefined;
+
     items.push({
       key,
       id,
       kind,
       wavExists,
       streamUrl: `/api/audio/file?kind=${encodeURIComponent(kind)}&id=${encodeURIComponent(id)}`,
-      model: String(cat.model ?? rawItem.model ?? defaultModel),
-      prompt: String(cat.prompt ?? rawItem.prompt ?? rawItem.style ?? ''),
-      text: String(cat.text ?? rawItem.text ?? ''),
-      speaker: String(cat.speaker ?? rawItem.speaker ?? ''),
-      voice: String(cat.voice ?? rawItem.voice ?? ''),
-      style: String(cat.style ?? rawItem.style ?? ''),
-      state: String(cat.state ?? rawItem.state ?? ''),
-      source: typeof rawItem.source === 'string' ? rawItem.source : undefined,
-      category: typeof rawItem.category === 'string' ? rawItem.category : undefined,
-      seed: typeof cat.seed === 'number' ? cat.seed : typeof rawItem.seed === 'number' ? rawItem.seed : null,
+      model: String(cat.model ?? raw.model ?? defaultModel),
+      prompt: String(promptVal),
+      text: String(textVal),
+      speaker: String(speakerVal),
+      voice: String(voiceVal),
+      style: String(styleVal),
+      state: String(stateVal),
+      cue_group: cueGroupVal ? String(cueGroupVal) : undefined,
+      variant: variantVal ? String(variantVal) : undefined,
+      loop: loopVal,
+      source: typeof sourceVal === 'string' && sourceVal ? sourceVal : undefined,
+      category: typeof categoryVal === 'string' && categoryVal ? categoryVal : undefined,
+      seed: typeof cat.seed === 'number' ? cat.seed : null,
       duration_sec: typeof cat.duration_sec === 'number' ? cat.duration_sec : null,
       cost_usd: typeof cat.cost_usd === 'number' ? cat.cost_usd : null,
       generated_at: typeof cat.generated_at === 'string' ? cat.generated_at : null,
     });
   };
 
+  // 1. Primary source: catalog.json (works standalone with Saved/Orchestrator/audio_v1/catalog.json)
+  for (const [catKey, rawEntry] of Object.entries(catalogItems)) {
+    if (!rawEntry || typeof rawEntry !== 'object') continue;
+    const kind = isValidAudioKind(rawEntry.kind)
+      ? rawEntry.kind
+      : catKey.startsWith('music/')
+        ? 'music'
+        : catKey.startsWith('voice/')
+          ? 'voice'
+          : null;
+    const id = String(rawEntry.id ?? catKey.split('/')[1] ?? '');
+    if (!kind || !isValidAudioId(id)) continue;
+    buildEntry(kind, id, rawEntry, kind === 'voice' ? 'gemini-3.8-flash-tts' : 'lyria-3-clip-preview');
+  }
+
+  // 2. Append any un-generated items declared in Content/Data/Audio manifests (when present)
   const voiceModel = typeof voiceManifest?.model === 'string' ? voiceManifest.model : 'gemini-3.8-flash-tts';
   const voiceLines = Array.isArray(voiceManifest?.lines) ? voiceManifest.lines : [];
   for (const line of voiceLines) {
     if (line && typeof line === 'object') {
-      pushEntry('voice', line as Record<string, unknown>, voiceModel);
+      const rec = line as Record<string, unknown>;
+      buildEntry('voice', String(rec.id ?? ''), rec, voiceModel);
     }
   }
 
@@ -199,11 +240,14 @@ export function buildAudioListResponse(paths: AudioPaths = resolveAudioPaths()):
   const musicCues = Array.isArray(musicManifest?.cues) ? musicManifest.cues : [];
   for (const cue of musicCues) {
     if (cue && typeof cue === 'object') {
-      pushEntry('music', cue as Record<string, unknown>, musicModel);
+      const rec = cue as Record<string, unknown>;
+      buildEntry('music', String(rec.id ?? ''), rec, musicModel);
     }
   }
 
   return {
+    catalogDir: path.relative(paths.root, paths.generatedDir).replace(/\\/g, '/'),
+    approvalsFile: path.relative(paths.root, paths.approvalsPath).replace(/\\/g, '/'),
     items,
     approvals: readApprovalsFile(paths.approvalsPath),
     spendSummary: readSpendSummary(paths.spendLedgerPath),
@@ -222,7 +266,7 @@ export function applyAudioReview(
   const key = makeAudioKey(check.value.kind, check.value.id);
   const matched = listing.items.find((item) => item.key === key);
   if (!matched) {
-    return { status: 404, body: { error: `Unknown manifest audio item: ${key}` } };
+    return { status: 404, body: { error: `Unknown catalog/manifest audio item: ${key}` } };
   }
 
   fs.mkdirSync(path.dirname(paths.approvalsPath), { recursive: true });
@@ -231,6 +275,7 @@ export function applyAudioReview(
     ...check.value,
     model: matched.model,
     speaker: matched.speaker || undefined,
+    cue_group: matched.cue_group || matched.state || undefined,
     text: matched.text || undefined,
   });
   writeAtomic(paths.approvalsPath, JSON.stringify(next, null, 2) + '\n');
@@ -245,14 +290,14 @@ export function applyAudioReview(
   };
 }
 
-export function setupAudioApi(use: Use, paths: AudioPaths = resolveAudioPaths()): void {
+export function setupAudioApi(use: Use, resolvePathsFn: () => AudioPaths = () => resolveAudioPaths()): void {
   use('/api/audio/list', (req, res) => {
     if (req.method !== 'GET') {
       sendJson(res, 405, { error: 'Method Not Allowed' });
       return;
     }
     try {
-      sendJson(res, 200, buildAudioListResponse(paths));
+      sendJson(res, 200, buildAudioListResponse(resolvePathsFn()));
     } catch (err: unknown) {
       sendJson(res, 500, { error: String(err) });
     }
@@ -264,6 +309,7 @@ export function setupAudioApi(use: Use, paths: AudioPaths = resolveAudioPaths())
       return;
     }
     try {
+      const paths = resolvePathsFn();
       const parsedUrl = new URL(req.url || '/', 'http://localhost');
       const kindParam = parsedUrl.searchParams.get('kind');
       const idParam = parsedUrl.searchParams.get('id');
@@ -273,7 +319,7 @@ export function setupAudioApi(use: Use, paths: AudioPaths = resolveAudioPaths())
       }
       const wavPath = resolveSafeWavPath(paths.generatedDir, kindParam, idParam);
       if (!wavPath || !fs.existsSync(wavPath)) {
-        sendJson(res, 404, { error: 'Audio file not generated yet.' });
+        sendJson(res, 404, { error: 'Audio file not found in active catalog directory.' });
         return;
       }
       const buf = fs.readFileSync(wavPath);
@@ -312,7 +358,7 @@ export function setupAudioApi(use: Use, paths: AudioPaths = resolveAudioPaths())
     }
     try {
       const body = await readBody(req);
-      const result = applyAudioReview(body, paths);
+      const result = applyAudioReview(body, resolvePathsFn());
       sendJson(res, result.status, result.body);
     } catch (err: unknown) {
       sendJson(res, 400, { error: String(err) });
