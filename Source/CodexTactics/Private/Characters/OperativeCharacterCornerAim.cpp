@@ -502,7 +502,7 @@ float AOperativeCharacter::GetRunInGlideCm(float SpeedCmS) const
 
 bool AOperativeCharacter::WantsRunCornerPeekPreTurn()
 {
-	if (!bRunCornerPeekPending || !bHasPendingCover || bInCover || !IsRunPeekStanceEnabled())
+	if (!bRunCornerPeekPending || !bHasPendingCover || bInCover || IsInStealthMode() || !IsRunPeekStanceEnabled())
 	{
 		if (bRunCornerPeekPreTurnOn && !bInCover)
 		{

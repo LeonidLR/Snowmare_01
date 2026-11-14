@@ -107,6 +107,10 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 		LauncherSetData = FShotgunAnimSet();
 		CrawlSetData = FShotgunAnimSet();
 		InjuredSetData = FShotgunAnimSet();
+		StealthSetData = FShotgunAnimSet();
+		StealthAction = nullptr;
+		StealthWeight = 0.f;
+		bStealthWasActive = false;
 		InjuredCrawlSetData = FShotgunAnimSet();
 		bHasInjuredCrawl = false;
 		ShotgunClipRefs.Reset();
@@ -122,6 +126,7 @@ void UOperativeAnimInstance::LoadShotgunAnimSet()
 	LoadWeaponAnimSet(TEXT("pistol"), PistolSetData, PistolRetargetFolder);
 	LoadWeaponAnimSet(TEXT("launcher"), LauncherSetData, LauncherRetargetFolder);
 	LoadWeaponAnimSet(TEXT("prone_crawl"), CrawlSetData, CrawlRetargetFolder); // the prone crawl layer (OperativeAnimInstanceProneCrawl.cpp)
+	LoadWeaponAnimSet(TEXT("stealth"), StealthSetData, StealthRetargetFolder);
 	LoadInjuredAnimSet(); // the injured locomotion layer (OperativeAnimInstanceInjured.cpp; after the crawl set: its injured crawl is built on it)
 }
 
@@ -220,6 +225,18 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 			Value = static_cast<float>(Read);
 		}
 	};
+	const TSharedPtr<FJsonObject>* Named = nullptr;
+	if (Block->TryGetObjectField(TEXT("clips"), Named) && Named)
+	{
+		for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Named)->Values)
+		{
+			FString ClipPath;
+			if (Entry.Value.IsValid() && Entry.Value->TryGetString(ClipPath))
+			{
+				ShotgunSet.NamedClips.Add(FName(*Entry.Key), Cast<UAnimSequence>(Load(ClipPath)));
+			}
+		}
+	}
 	ShotgunSet.StandIdle = Sequence(TEXT("stand_idle"));
 	ShotgunSet.AimIdle = Sequence(TEXT("aim_idle"));
 	ShotgunSet.CrouchIdle = Sequence(TEXT("crouch_idle"));
@@ -499,6 +516,41 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 			ShotgunSet.AimWalkSpeeds[Index] *= Scale;
 			ShotgunSet.JogSpeeds[Index] *= Scale;
 			ShotgunSet.CrouchSpeeds[Index] *= Scale;
+		}
+	}
+	// Optional measured per-body timing (stealth): the retargeted feet can have a different strike phase per direction.
+	const TSharedPtr<FJsonObject>* MeasuredBodies = nullptr;
+	const TSharedPtr<FJsonObject>* Measured = nullptr;
+	if (BodySkeleton && Block->TryGetObjectField(TEXT("body_measurements"), MeasuredBodies) && MeasuredBodies
+		&& (*MeasuredBodies)->TryGetObjectField(BodySkeleton->GetName(), Measured) && Measured)
+	{
+		auto ReadMap = [&Measured](const TCHAR* Key, TMap<FName, float>& Out)
+		{
+			const TSharedPtr<FJsonObject>* Values = nullptr;
+			if ((*Measured)->TryGetObjectField(Key, Values) && Values)
+			{
+				for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Values)->Values)
+				{
+					double Value = 0.0;
+					if (Entry.Value.IsValid() && Entry.Value->TryGetNumber(Value) && FMath::IsFinite(Value))
+					{
+						Out.Add(FName(*Entry.Key), static_cast<float>(Value));
+					}
+				}
+			}
+		};
+		ReadMap(TEXT("phase_offsets"), ShotgunSet.PhaseOffsets);
+		ReadMap(TEXT("clip_speeds"), ShotgunSet.ClipSpeeds);
+		for (int32 Index = 0; Index < 8; ++Index)
+		{
+			if (ShotgunSet.Walk[Index])
+			{
+				ShotgunSet.WalkSpeeds[Index] = ShotgunSet.ClipSpeeds.FindRef(ShotgunSet.Walk[Index]->GetFName());
+			}
+			if (ShotgunSet.Jog[Index])
+			{
+				ShotgunSet.JogSpeeds[Index] = ShotgunSet.ClipSpeeds.FindRef(ShotgunSet.Jog[Index]->GetFName());
+			}
 		}
 	}
 	// The injured crawl's own stride on the copies ("crawl_stride_scale": a crawl's planted hands / knees scale unlike a walk's feet).

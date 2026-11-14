@@ -10,6 +10,7 @@
 #include "UI/FloatingTextSubsystem.h"
 #include "EngineUtils.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/StealthModeRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
@@ -92,10 +93,14 @@ AActor* AEnemyCharacter::FindVisibleOperative(const FEnemyPerceptionParams& Para
 			continue;
 		}
 		const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
+		FEnemyPerceptionParams TargetParams = Params;
+		const float StealthRange = StealthModeRules::DetectionRangeScale(Member->IsInStealthMode(), StealthModeRules::GetConfig());
+		TargetParams.SightRangeCm *= StealthRange;
+		TargetParams.ProximityCm *= StealthRange;
 		// Range by stance and the field of view first (cheap), the trace only for candidates. Sprint 12: a man behind a
 		// full wall (head down) is unseen from the wall's side.
 		if (Distance >= BestDistance || Member->IsHiddenInCoverFrom(GetActorLocation())
-			|| !PerceptionRules::CanSee(Params, GetActorLocation(), Forward, Member->GetActorLocation(), Member->GetStance(), /*bLineClear*/ true))
+			|| !PerceptionRules::CanSee(TargetParams, GetActorLocation(), Forward, Member->GetActorLocation(), Member->GetStance(), /*bLineClear*/ true))
 		{
 			continue;
 		}
@@ -108,7 +113,7 @@ AActor* AEnemyCharacter::FindVisibleOperative(const FEnemyPerceptionParams& Para
 			BestDistance = Distance;
 			Best = Member;
 			OutDistance = Distance;
-			OutRange = PerceptionRules::EffectiveSightRange(Params, Member->GetStance());
+			OutRange = PerceptionRules::EffectiveSightRange(TargetParams, Member->GetStance());
 		}
 	}
 	return Best;
@@ -174,13 +179,19 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 	float SeenRange = 0.f;
 	const AActor* Seen = FindVisibleOperative(Params, SeenDistance, SeenRange);
 	const float Before = PatrolSuspicion;
-	PatrolSuspicion = PerceptionRules::StepSuspicion(Params, PatrolSuspicion, Step, Seen != nullptr, SeenDistance, SeenRange);
+	AOperativeCharacter* SeenOperative = const_cast<AOperativeCharacter*>(Cast<AOperativeCharacter>(Seen));
+	const float BuildupScale = StealthModeRules::DetectionBuildupScale(SeenOperative && SeenOperative->IsInStealthMode(), StealthModeRules::GetConfig());
+	PatrolSuspicion = PerceptionRules::StepSuspicion(Params, PatrolSuspicion, Step * BuildupScale, Seen != nullptr, SeenDistance, SeenRange);
 	if (Seen && Before <= 0.f && PatrolSuspicion < 1.f && !bIsDying)
 	{
 		UFloatingTextSubsystem::SpawnAboveEnemy(this, TEXT("?"), FLinearColor(1.f, 0.85f, 0.3f));
 	}
 	FPatrolAlertInput Input;
 	Input.bSeesOperative = Seen != nullptr && PatrolSuspicion >= 1.f;
+	if (Input.bSeesOperative && SeenOperative)
+	{
+		SeenOperative->SetStealthMode(false);
+	}
 
 	// Hearing (footsteps by gait): no line of sight needed. Smell (hounds) after it: ScentRules, a scent alerts first.
 	const AActor* Heard = nullptr;
@@ -198,8 +209,10 @@ bool AEnemyCharacter::TickPatrolPerception(float DeltaTime)
 			const ESquadMovementNoise Noise = PerceptionRules::ClassifyMovement(Member->GetStance(), Member->GetVelocity().Size2D(), Member->IsSprinting());
 			// Walls between muffle the footsteps (x HearingOcclusionPerWall each; user report 2026-10-06): traced only when
 			// the open-air radius reaches him.
-			if (!Heard && PerceptionRules::HearsMovement(Params, Noise, Distance)
-				&& PerceptionRules::HearsMovementThroughWalls(Params, Noise, Distance, CountHearingWalls(*Member)))
+			const float NoiseScale = StealthModeRules::FootstepNoiseScale(Member->IsInStealthMode(), StealthModeRules::GetConfig());
+			const float NoiseDistance = NoiseScale > 0.f ? Distance / NoiseScale : TNumericLimits<float>::Max();
+			if (!Heard && PerceptionRules::HearsMovement(Params, Noise, NoiseDistance)
+				&& PerceptionRules::HearsMovementThroughWalls(Params, Noise, NoiseDistance, CountHearingWalls(*Member)))
 			{
 				Heard = Member;
 			}

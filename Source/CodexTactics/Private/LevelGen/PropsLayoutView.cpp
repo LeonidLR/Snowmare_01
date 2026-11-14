@@ -475,6 +475,79 @@ bool FPropsLayoutView::Build(const FJsonObject& Root, FPropsLayoutView& Out, TAr
 				B.FloorHoles.Add(Hole);
 			}
 		});
+		ForEachObject(BR, TEXT("openings"), [&](const FJsonObject& O, const FString& OCtx)
+		{
+			FFieldReader OR(O, OCtx, Errors);
+			FBuildingOpening Op;
+			OR.Str(TEXT("kind"), Op.Kind);
+			Need(OR, TEXT("pos"), OR.Point(TEXT("pos"), Op.Pos));
+			OR.Int(TEXT("floor"), Op.Floor);
+			OR.Int(TEXT("width"), Op.WidthCm);
+			OR.Int(TEXT("sill_height"), Op.SillHeightCm);
+			OR.Int(TEXT("top_height"), Op.TopHeightCm);
+			if (OR.bOk)
+			{
+				B.Openings.Add(MoveTemp(Op));
+			}
+		});
+		ForEachObject(BR, TEXT("floors_detail"), [&](const FJsonObject& FD, const FString& FDCtx)
+		{
+			FFieldReader FDR(FD, FDCtx, Errors);
+			int32 DetailFloor = 0;
+			FDR.Int(TEXT("floor"), DetailFloor);
+			ForEachObject(FDR, TEXT("gaps"), [&](const FJsonObject& G, const FString& GCtx)
+			{
+				FFieldReader GR(G, GCtx, Errors);
+				FFloorGapRect Gap;
+				Gap.Floor = DetailFloor;
+				GR.Str(TEXT("id"), Gap.Id);
+				TArray<FIntPoint> Poly;
+				if (ReadPoly(GR, TEXT("poly"), Poly) && Poly.Num() >= 2 && GR.bOk)
+				{
+					Gap.Min = Poly[0];
+					Gap.Max = Poly[0];
+					for (const FIntPoint& Pt : Poly)
+					{
+						Gap.Min.X = FMath::Min(Gap.Min.X, Pt.X);
+						Gap.Min.Y = FMath::Min(Gap.Min.Y, Pt.Y);
+						Gap.Max.X = FMath::Max(Gap.Max.X, Pt.X);
+						Gap.Max.Y = FMath::Max(Gap.Max.Y, Pt.Y);
+					}
+					B.FloorGaps.Add(MoveTemp(Gap));
+				}
+			});
+		});
+		ForEachObject(BR, TEXT("hatches"), [&](const FJsonObject& H, const FString& HCtx)
+		{
+			FFieldReader HR(H, HCtx, Errors);
+			FBuildingHatch Hatch;
+			HR.Str(TEXT("id"), Hatch.Id);
+			Need(HR, TEXT("pos"), HR.Point(TEXT("pos"), Hatch.Pos));
+			HR.Int(TEXT("floor"), Hatch.Floor);
+			FIntPoint Size(100, 100);
+			if (HR.Point(TEXT("size"), Size))
+			{
+				Hatch.SizeX = FMath::Max(10, Size.X);
+				Hatch.SizeY = FMath::Max(10, Size.Y);
+			}
+			if (HR.bOk)
+			{
+				B.Hatches.Add(MoveTemp(Hatch));
+			}
+		});
+		ForEachObject(BR, TEXT("parapets"), [&](const FJsonObject& P, const FString& PCtx)
+		{
+			FFieldReader PR(P, PCtx, Errors);
+			FBuildingParapet Parapet;
+			Need(PR, TEXT("start"), PR.Point(TEXT("start"), Parapet.Start));
+			Need(PR, TEXT("end"), PR.Point(TEXT("end"), Parapet.End));
+			Parapet.ThicknessCm = 20;
+			PR.Int(TEXT("thickness_cm"), Parapet.ThicknessCm);
+			if (PR.bOk)
+			{
+				B.Parapets.Add(Parapet);
+			}
+		});
 		if (BR.bOk)
 		{
 			Out.Buildings.Add(MoveTemp(B));
@@ -722,7 +795,18 @@ void FPropsLayoutView::BuildLayers()
 			L.Level = B.Floors;
 			L.BuildingIndex = Index;
 			L.ZCm = GroundZ + B.Floors * Config.LevelHeightCm;
-			AddRect(LayerWalls.AddDefaulted_GetRef(), B.Min, B.Max, Config.ParapetThicknessCm);
+			TArray<FLayerWall>& RoofWalls = LayerWalls.AddDefaulted_GetRef();
+			if (B.Parapets.Num() > 0)
+			{
+				for (const FBuildingParapet& P : B.Parapets)
+				{
+					RoofWalls.Add({ P.Start, P.End, P.ThicknessCm });
+				}
+			}
+			else
+			{
+				AddRect(RoofWalls, B.Min, B.Max, Config.ParapetThicknessCm);
+			}
 		}
 	}
 }
@@ -1190,6 +1274,15 @@ TArray<FPropsExclusion> FPropsLayoutView::BuildExclusions(const FPropsExclusionP
 	if (Params.HoleRimCm > 0)
 	{
 		const int32 Half = Config.HoleHalfSideCm + Params.HoleRimCm;
+		const auto RectPoly = [](FIntPoint MinPt, FIntPoint MaxPt, int32 Pad)
+		{
+			return TArray<FIntPoint>{
+				FIntPoint(MinPt.X - Pad, MinPt.Y - Pad),
+				FIntPoint(MaxPt.X + Pad, MinPt.Y - Pad),
+				FIntPoint(MaxPt.X + Pad, MaxPt.Y + Pad),
+				FIntPoint(MinPt.X - Pad, MaxPt.Y + Pad)
+			};
+		};
 		for (const FBuilding& B : Buildings)
 		{
 			for (int32 I = 0; I < B.RoofHoles.Num(); ++I)
@@ -1200,6 +1293,31 @@ TArray<FPropsExclusion> FPropsLayoutView::BuildExclusions(const FPropsExclusionP
 			{
 				Shape(EPropsExclusionKind::HoleRim, FString::Printf(TEXT("%s:floor_hole:%d"), *B.Id, I), LayerNameFor(B.Id, B.FloorHoles[I].Floor),
 					Square(B.FloorHoles[I].Pos, Half), 0, true);
+			}
+			for (int32 I = 0; I < B.FloorGaps.Num(); ++I)
+			{
+				const FFloorGapRect& Gap = B.FloorGaps[I];
+				Shape(EPropsExclusionKind::HoleRim, Gap.Id.IsEmpty() ? FString::Printf(TEXT("%s:gap:%d"), *B.Id, I) : Gap.Id,
+					LayerNameFor(B.Id, Gap.Floor), RectPoly(Gap.Min, Gap.Max, Params.HoleRimCm), 0, true);
+			}
+			for (int32 I = 0; I < B.Hatches.Num(); ++I)
+			{
+				const FBuildingHatch& Hatch = B.Hatches[I];
+				const FIntPoint HMin(Hatch.Pos.X - Hatch.SizeX / 2, Hatch.Pos.Y - Hatch.SizeY / 2);
+				const FIntPoint HMax(Hatch.Pos.X + Hatch.SizeX / 2, Hatch.Pos.Y + Hatch.SizeY / 2);
+				const TArray<FIntPoint> Poly = RectPoly(HMin, HMax, Params.HoleRimCm);
+				const FString HatchLabel = Hatch.Id.IsEmpty() ? FString::Printf(TEXT("%s:hatch:%d"), *B.Id, I) : Hatch.Id;
+				for (int32 Fl = Hatch.Floor + 1; Fl <= B.Floors; ++Fl)
+				{
+					if (Fl < B.Floors && !B.bHollow)
+					{
+						Shape(EPropsExclusionKind::HoleRim, HatchLabel, LayerNameFor(B.Id, Fl), Poly, 0, true);
+					}
+					else if (Fl == B.Floors && B.bRoofWalkable)
+					{
+						Shape(EPropsExclusionKind::HoleRim, HatchLabel, TEXT("roof:") + B.Id, Poly, 0, true);
+					}
+				}
 			}
 		}
 	}
@@ -1472,9 +1590,70 @@ void FPropsLayoutView::GetSightBlockers(const FString& EyeLayer, TArray<FPropsSi
 		}
 		return;
 	}
+	TArray<const FBuildingOpening*> Windows;
+	for (const FBuilding& B : Buildings)
+	{
+		if (!L.Building.IsEmpty() && B.Id != L.Building)
+		{
+			continue;
+		}
+		for (const FBuildingOpening& Op : B.Openings)
+		{
+			if (Op.Kind == TEXT("window") && Op.Floor == L.Level && Op.SillHeightCm < Config.EyeHeightCm && Op.TopHeightCm > Config.EyeHeightCm && Op.WidthCm > 0)
+			{
+				Windows.Add(&Op);
+			}
+		}
+	}
 	for (const FLayerWall& W : LayerWalls[LayerIndex])
 	{
-		AddWall(W.A, W.B);
+		const bool bAlongX = W.A.Y == W.B.Y && W.A.X != W.B.X;
+		const bool bAlongY = W.A.X == W.B.X && W.A.Y != W.B.Y;
+		if (Windows.IsEmpty() || (!bAlongX && !bAlongY))
+		{
+			AddWall(W.A, W.B);
+			continue;
+		}
+		const int32 Fixed = bAlongX ? W.A.Y : W.A.X;
+		const int32 Lo = bAlongX ? FMath::Min(W.A.X, W.B.X) : FMath::Min(W.A.Y, W.B.Y);
+		const int32 Hi = bAlongX ? FMath::Max(W.A.X, W.B.X) : FMath::Max(W.A.Y, W.B.Y);
+		struct FSpan { int32 A; int32 B; };
+		TArray<FSpan> Cuts;
+		for (const FBuildingOpening* Op : Windows)
+		{
+			const int32 OpFixed = bAlongX ? Op->Pos.Y : Op->Pos.X;
+			if (FMath::Abs(OpFixed - Fixed) > 20)
+			{
+				continue;
+			}
+			const int32 Center = bAlongX ? Op->Pos.X : Op->Pos.Y;
+			const int32 HalfW = Op->WidthCm / 2;
+			const int32 C0 = FMath::Max(Lo, Center - HalfW);
+			const int32 C1 = FMath::Min(Hi, Center + HalfW);
+			if (C1 > C0)
+			{
+				Cuts.Add({ C0, C1 });
+			}
+		}
+		if (Cuts.IsEmpty())
+		{
+			AddWall(W.A, W.B);
+			continue;
+		}
+		Cuts.Sort([](const FSpan& Lhs, const FSpan& Rhs) { return Lhs.A < Rhs.A; });
+		int32 Cur = Lo;
+		for (const FSpan& Cut : Cuts)
+		{
+			if (Cut.A > Cur)
+			{
+				AddWall(bAlongX ? FIntPoint(Cur, Fixed) : FIntPoint(Fixed, Cur), bAlongX ? FIntPoint(Cut.A, Fixed) : FIntPoint(Fixed, Cut.A));
+			}
+			Cur = FMath::Max(Cur, Cut.B);
+		}
+		if (Hi > Cur)
+		{
+			AddWall(bAlongX ? FIntPoint(Cur, Fixed) : FIntPoint(Fixed, Cur), bAlongX ? FIntPoint(Hi, Fixed) : FIntPoint(Fixed, Hi));
+		}
 	}
 	if (L.Kind == EPropsWalkLayerKind::Ground)
 	{

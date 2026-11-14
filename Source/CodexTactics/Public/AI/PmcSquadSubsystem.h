@@ -188,6 +188,12 @@ private:
 		double OrderSince = 0.0;
 		FVector Goal = FVector::ZeroVector;
 		TWeakObjectPtr<AActor> Target;
+		/** Recently fired-at visible target, retained until the next sight update. */
+		TWeakObjectPtr<AActor> RecentFireTarget;
+		/** Area suppression started automatically after losing that target. */
+		TWeakObjectPtr<AActor> LostFireTarget;
+		FVector LostFirePoint = FVector::ZeroVector;
+		double LostFireUntil = -1.0;
 		TWeakObjectPtr<AOperativeCharacter> Patient;
 		FCoverSlot Slot;
 		/** Where he stands and since when (exposure / stuck tracking). */

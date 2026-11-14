@@ -141,7 +141,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	// out): the corner it peeks round is known now, so the entry faces that corner from its first frame.
 	ECoverFacing PeekStanceSide = ECoverFacing::Right;
 	float PeekStanceEdgeAlong = 0.f;
-	const bool bPeekStanceArrival = IsRunPeekStanceEnabled() && !bQuietCoverEntryRequest && !bSameWall && Slot.Height != ECoverHeight::None
+	const bool bPeekStanceArrival = !IsInStealthMode() && IsRunPeekStanceEnabled() && !bQuietCoverEntryRequest && !bSameWall && Slot.Height != ECoverHeight::None
 		&& IsRunCornerPeekArrivalAt(Slot) && !IsRaging() && !IsPanicking() && USuppressionSubsystem::MayExposeNow(this);
 	if (bPeekStanceArrival)
 	{
@@ -221,7 +221,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		CoverEntryTurnDeg = FMath::Abs(FRotator::NormalizeAxis(OldYaw - GetActorRotation().Yaw));
 		const UOperativeAnimInstance* EntryAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 		const auto HasClip = [](const TArray<TObjectPtr<UAnimSequenceBase>>& Clips) { return Clips.ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; }); };
-		const bool bHasEnterClip = EntryAnim && EntryAnim->bUseNativeCoverClips && (HasClip(EntryAnim->CoverStandEnter) || HasClip(EntryAnim->CoverCrouchEnter));
+		const bool bHasEnterClip = !IsInStealthMode() && EntryAnim && EntryAnim->bUseNativeCoverClips && (HasClip(EntryAnim->CoverStandEnter) || HasClip(EntryAnim->CoverCrouchEnter));
 		// The squad corner peek bug (game designer 2026-11-01): walked in along the wall for a corner peek, the enter clip (its first frame
 		// faces the wall) spun him to the wall and back before the peek - that entry eases the turn and goes straight into the step-out.
 		const float NormalYaw = static_cast<float>(Slot.WallNormal.Rotation().Yaw);

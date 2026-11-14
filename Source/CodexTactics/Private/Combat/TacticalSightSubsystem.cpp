@@ -1,5 +1,6 @@
 #include "Combat/TacticalSightSubsystem.h"
 #include "AI/PmcSquadSubsystem.h"
+#include "AI/PerceptionRules.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Survival/TacticalHeatSubsystem.h"
@@ -7,6 +8,7 @@
 #include "Characters/EnemyCharacter.h"
 #include "Characters/MarksmanEnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/StealthModeRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/EnemyGhostActor.h"
@@ -428,7 +430,9 @@ bool UTacticalSightSubsystem::GetBelief(const AEnemyCharacter* Enemy, const AAct
 	}
 	// A horde (UHordeSubsystem) knows where the squad is: always «perceived». Exploring (2026-10-19: the squad's sight runs there too)
 	// the enemies' side is the patrol perception: here they "know everything" as before.
-	if (!bWasActive || !bBeliefWasActive || !IsActive() || (Enemy && Enemy->bKnowsSquadPosition))
+	const AOperativeCharacter* OperativeCharacter = Cast<AOperativeCharacter>(Operative);
+	if ((!OperativeCharacter || !OperativeCharacter->IsInStealthMode())
+		&& (!bWasActive || !bBeliefWasActive || !IsActive() || (Enemy && Enemy->bKnowsSquadPosition)))
 	{
 		OutLocation = Operative->GetActorLocation();
 		if (bOutPerceived)
@@ -443,10 +447,25 @@ bool UTacticalSightSubsystem::GetBelief(const AEnemyCharacter* Enemy, const AAct
 	{
 		return false;
 	}
-	OutLocation = Entry->bPerceived ? Operative->GetActorLocation() : Entry->Location;
+	bool bActuallyPerceived = Entry->bPerceived;
+	if (OperativeCharacter && OperativeCharacter->IsInStealthMode())
+	{
+		const float RangeScale = StealthModeRules::DetectionRangeScale(true, StealthModeRules::GetConfig());
+		bActuallyPerceived = false;
+		if (Enemy)
+		{
+			const FEnemyPerceptionParams Params = Enemy->GetPerception();
+			const bool bFacing = FVector::Dist(Enemy->GetActorLocation(), OperativeCharacter->GetActorLocation()) <= Params.ProximityCm * RangeScale
+				|| PerceptionRules::IsInFieldOfView(Params, Enemy->GetActorLocation(), Enemy->GetActorForwardVector(), OperativeCharacter->GetActorLocation());
+			bActuallyPerceived = bFacing && !OperativeCharacter->IsHiddenInCoverFrom(Enemy->GetActorLocation())
+				&& FVector::Dist2D(Enemy->GetActorLocation(), OperativeCharacter->GetActorLocation()) <= GetSightRangeCm(*Enemy) * RangeScale
+				&& HasClearSight(EyePoint(*Enemy), ProfilePoint(*OperativeCharacter));
+		}
+	}
+	OutLocation = bActuallyPerceived ? Operative->GetActorLocation() : Entry->Location;
 	if (bOutPerceived)
 	{
-		*bOutPerceived = Entry->bPerceived;
+		*bOutPerceived = bActuallyPerceived;
 	}
 	return true;
 }
@@ -890,11 +909,27 @@ void UTacticalSightSubsystem::Update()
 			const float Distance = FVector::Dist2D(Operative->GetActorLocation(), Enemy->GetActorLocation());
 			// Sprint 12-E: high cover with the head down hides him from everything behind the wall (firing demasks).
 			const bool bCoverHidden = Operative->IsHiddenInCoverFrom(Enemy->GetActorLocation());
-			const bool bPerceives = IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance())
-				|| (!bCoverHidden && Distance <= EnemySightCm && HasClearSight(Eye, ProfilePoint(*Operative)));
+			const FStealthModeConfig& Stealth = StealthModeRules::GetConfig();
+			const float RangeScale = StealthModeRules::DetectionRangeScale(Operative->IsInStealthMode(), Stealth);
+			const float NoiseScale = StealthModeRules::FootstepNoiseScale(Operative->IsInStealthMode(), Stealth);
+			bool bFacing = true;
+			if (Operative->IsInStealthMode())
+			{
+				const FEnemyPerceptionParams Params = Enemy->GetPerception();
+				bFacing = FVector::Dist(Enemy->GetActorLocation(), Operative->GetActorLocation()) <= Params.ProximityCm * RangeScale
+					|| PerceptionRules::IsInFieldOfView(Params, Enemy->GetActorLocation(), Enemy->GetActorForwardVector(), Operative->GetActorLocation());
+			}
+			const bool bVisual = bFacing && !bCoverHidden && Distance <= EnemySightCm * RangeScale && HasClearSight(Eye, ProfilePoint(*Operative));
+			const bool bPerceives = bVisual || IsDemasked(Operative) || Distance <= SightRules::EnemyHearingRadius(Operative->GetStance()) * NoiseScale;
+			if (bVisual)
+			{
+				Operative->SetStealthMode(false);
+			}
 			if (bPerceives)
 			{
-				Known.Add(Operative, { Operative->GetActorLocation(), Now, -1.0, true });
+				FIntel* Existing = Known.Find(Operative);
+				const FVector ContactLocation = bVisual || !Existing ? Operative->GetActorLocation() : Existing->Location;
+				Known.Add(Operative, { ContactLocation, Now, -1.0, bVisual });
 				// Pack call: mates nearby learn where he is.
 				for (AEnemyCharacter* Mate : Enemies)
 				{
@@ -904,7 +939,7 @@ void UTacticalSightSubsystem::Update()
 						if (!MateIntel.bPerceived)
 						{
 							Stats.PackAlerts += MateIntel.Time < Now - 1.0 ? 1 : 0;
-							MateIntel.Location = Operative->GetActorLocation();
+							MateIntel.Location = ContactLocation;
 							MateIntel.Time = Now;
 							MateIntel.ArrivedTime = -1.0;
 						}

@@ -182,6 +182,7 @@ namespace PlayerCommands
 	 * spot); reported when he whistled. Only exploring undetected; a tutorial lock target (Demo 01: locked until a later lesson).
 	 */
 	extern CODEXTACTICS_API const FName StealthWhistle;
+	extern CODEXTACTICS_API const FName StealthMode;
 	/** 6 / the action bar THROW: the stone throw aim starts ("Stealth.Throw" is reported when the stone is thrown). */
 	extern CODEXTACTICS_API const FName StealthThrow;
 

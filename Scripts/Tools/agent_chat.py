@@ -155,6 +155,71 @@ def get_presence_dict(storage_dir):
         result[who] = {"active": is_present, "waiting_since": waiting_since}
     return result
 
+def parse_iso_timestamp(ts_str):
+    if not ts_str:
+        return None
+    s = str(ts_str).strip()
+    if s.endswith("Z"):
+        s = s[:-1] + "+00:00"
+    try:
+        dt = datetime.datetime.fromisoformat(s)
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.timestamp()
+    except Exception:
+        return None
+
+def compute_idle_seconds(messages, participants=("gemini", "codex", "claude"), now=None):
+    """
+    For each participant in participants:
+    Calculate the oldest unanswered message (to == participant or to == 'all', from != participant)
+    that has NO later post by that participant.
+    Returns { participant: seconds_idle } where seconds_idle is an integer >= 0.
+    If there are no unanswered messages, seconds_idle is 0.
+    """
+    if now is None:
+        now = time.time()
+
+    # Find the last message index for each participant
+    last_post_idx = {p: -1 for p in participants}
+    for idx, m in enumerate(messages):
+        sender = (m.get("from") or "").strip().lower()
+        if sender in last_post_idx:
+            last_post_idx[sender] = idx
+
+    idle_result = {}
+    for p in participants:
+        p_last_idx = last_post_idx[p]
+        oldest_unanswered_ts = None
+
+        for idx, m in enumerate(messages):
+            if idx <= p_last_idx:
+                continue
+
+            sender = (m.get("from") or "").strip().lower()
+            if sender == p:
+                continue
+
+            recipient = (m.get("to") or "").strip().lower()
+            if recipient == p or recipient == "all":
+                m_ts = parse_iso_timestamp(m.get("ts"))
+                if m_ts is not None:
+                    if oldest_unanswered_ts is None or m_ts < oldest_unanswered_ts:
+                        oldest_unanswered_ts = m_ts
+
+        if oldest_unanswered_ts is not None:
+            idle_result[p] = max(0, int(now - oldest_unanswered_ts))
+        else:
+            idle_result[p] = 0
+
+    return idle_result
+
+def get_idle_dict(storage_dir, participants=("gemini", "codex", "claude"), now=None):
+    chat_file = os.path.join(storage_dir, "chat.jsonl")
+    messages = read_all_messages(chat_file)
+    return compute_idle_seconds(messages, participants, now)
+
+
 def check_topic_limit(messages, topic, sender, max_per_topic=10):
     if sender == "designer":
         return True

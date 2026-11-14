@@ -68,6 +68,7 @@ namespace LevelGenLaddersSmoke
 		int32 LevelTo = 0;
 		int32 Rungs = 0;
 		FString From;
+		bool bFreeStanding = false;
 	};
 
 	enum class ELegKind : uint8 { LadderUp, LadderDown, CutIn, CutOut, Bridge, SquadLadderOut, SquadLadderIn };
@@ -244,6 +245,13 @@ namespace LevelGenLaddersSmoke
 			{
 				const float Off = Offsets[FMath::Min(Slot++, 5)];
 				Spot = Leg.FollowerCentre + FVector(Leg.FollowerAxis.X * Off, Leg.FollowerAxis.Y * Off, 0.f);
+				UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+				FNavLocation SameFloor;
+				if (!Nav || !Nav->ProjectPointToNavigation(Spot, SameFloor, FVector(80.f, 80.f, 60.f))
+					|| FMath::Abs(SameFloor.Location.Z - Leg.LeaderSpot.Z) > 60.f)
+				{
+					Spot = Leg.LeaderSpot;
+				}
 			}
 			Spot = OnNav(World, Spot);
 			Member->TeleportTo(Spot + FVector(0.f, 0.f, Member->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), Member->GetActorRotation(), false, true);
@@ -293,7 +301,36 @@ namespace LevelGenLaddersSmoke
 				const FVector2D Along(-Out.Y, Out.X);
 				const float Low = Gz + L.LevelFrom * LevelHeightCm;
 				const float High = Gz + L.LevelTo * LevelHeightCm;
-				const FVector2D Below = L.Foot + Out * 150.0;
+				FVector2D Below = L.Foot + Out * 150.0;
+				FVector2D Wait = L.Foot + Out * 350.0;
+				if (L.bFreeStanding)
+				{
+					// Free-standing hatch ladders often stand near an interior corner/wall behind Foot: stay on the same floor inside.
+					UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+					const FVector2D BelowCands[] = { L.Foot - Along * 150.0, L.Foot + Along * 150.0, L.Pos - Out * 200.0, L.Foot + Out * 150.0 };
+					for (const FVector2D& Cand : BelowCands)
+					{
+						FNavLocation Projected;
+						if (Nav && Nav->ProjectPointToNavigation(FVector(Cand.X, Cand.Y, Low), Projected, FVector(30.f, 30.f, 60.f))
+							&& FMath::Abs(Projected.Location.Z - Low) <= 60.f)
+						{
+							Below = FVector2D(Projected.Location.X, Projected.Location.Y);
+							break;
+						}
+					}
+					const FVector2D WaitCands[] = { L.Pos - Out * 250.0, Below - Along * 150.0, Below + Along * 150.0, Below };
+					Wait = Below;
+					for (const FVector2D& Cand : WaitCands)
+					{
+						FNavLocation Projected;
+						if (Nav && Nav->ProjectPointToNavigation(FVector(Cand.X, Cand.Y, Low), Projected, FVector(30.f, 30.f, 60.f))
+							&& FMath::Abs(Projected.Location.Z - Low) <= 60.f)
+						{
+							Wait = FVector2D(Projected.Location.X, Projected.Location.Y);
+							break;
+						}
+					}
+				}
 				const FVector2D Above = L.Top - Out * 50.0;
 				FLeg Up;
 				Up.Kind = ELegKind::LadderUp;
@@ -301,7 +338,6 @@ namespace LevelGenLaddersSmoke
 				Up.Ladder = Index;
 				Up.bTeleport = true;
 				Up.LeaderSpot = FVector(Below.X, Below.Y, Low);
-				const FVector2D Wait = L.Foot + Out * 350.0;
 				Up.FollowerCentre = FVector(Wait.X, Wait.Y, Low);
 				Up.FollowerAxis = Along;
 				Up.Goal = FVector(Above.X, Above.Y, High + 50.f);
@@ -480,7 +516,14 @@ namespace LevelGenLaddersSmoke
 			Actor->GetRungCount(), L.Rungs));
 		Check(State, Facing > 0.9f, FString::Printf(TEXT("ladder %s: faces away from its wall (+X . (foot - pos) = %.2f; yaw %.0f)%s"), *L.Id, Facing,
 			Actor->GetActorRotation().Yaw, Facing < -0.9f ? TEXT(" - it FACES THE WALL: the hang line and the bottom link inside the wall, the top link off the edge") : TEXT("")));
-		Check(State, Actor->HasWall(), FString::Printf(TEXT("ladder %s: a wall behind the rungs (brackets reach it)"), *L.Id));
+		if (L.bFreeStanding)
+		{
+			Check(State, !Actor->HasWall(), FString::Printf(TEXT("hatch ladder %s: free-standing (no backing wall)"), *L.Id));
+		}
+		else
+		{
+			Check(State, Actor->HasWall(), FString::Printf(TEXT("ladder %s: a wall behind the rungs (brackets reach it)"), *L.Id));
+		}
 		Check(State, FMath::Abs(TopError) <= TopToleranceCm, FString::Printf(TEXT("ladder %s: tops out on level %d (%+.1f cm)"), *L.Id, L.LevelTo, TopError));
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 		FNavLocation Bottom, Top;
@@ -502,6 +545,27 @@ namespace LevelGenLaddersSmoke
 		}
 		State.LayoutName = Layout->GetStringField(TEXT("name"));
 		State.GroundZ = Layout->HasField(TEXT("ground_z")) ? static_cast<float>(Layout->GetNumberField(TEXT("ground_z"))) : 0.f;
+		TSet<FString> HatchLadders;
+		const TArray<TSharedPtr<FJsonValue>>* Buildings = nullptr;
+		if (Layout->TryGetArrayField(TEXT("buildings"), Buildings))
+		{
+			for (const TSharedPtr<FJsonValue>& BV : *Buildings)
+			{
+				const TSharedPtr<FJsonObject>& B = BV->AsObject();
+				const TArray<TSharedPtr<FJsonValue>>* Hatches = nullptr;
+				if (B.IsValid() && B->TryGetArrayField(TEXT("hatches"), Hatches))
+				{
+					for (const TSharedPtr<FJsonValue>& HV : *Hatches)
+					{
+						const TSharedPtr<FJsonObject>& H = HV->AsObject();
+						if (H.IsValid() && H->HasField(TEXT("ladder_id")))
+						{
+							HatchLadders.Add(H->GetStringField(TEXT("ladder_id")));
+						}
+					}
+				}
+			}
+		}
 		const TArray<TSharedPtr<FJsonValue>>* Ladders = nullptr;
 		if (Layout->TryGetArrayField(TEXT("ladders"), Ladders))
 		{
@@ -517,6 +581,7 @@ namespace LevelGenLaddersSmoke
 				L.LevelTo = static_cast<int32>(O->GetNumberField(TEXT("level_to")));
 				L.Rungs = static_cast<int32>(O->GetNumberField(TEXT("rungs")));
 				L.From = O->GetStringField(TEXT("from"));
+				L.bFreeStanding = HatchLadders.Contains(L.Id);
 				State.Ladders.Add(L);
 				State.Actors.Add(FindLadderActor(World, L, State.GroundZ));
 			}

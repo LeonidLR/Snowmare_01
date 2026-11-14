@@ -708,6 +708,10 @@ int32 USquadSubsystem::ApplyPostureOrder(ESquadFirePosture Posture, bool bSquadW
 
 ESquadFirePosture USquadSubsystem::GetEffectivePosture(const AOperativeCharacter* Operative) const
 {
+	if (Operative && Operative->IsInStealthMode())
+	{
+		return ESquadFirePosture::Passive;
+	}
 	return Operative ? FirePostureRules::Resolve(SquadPosture, Operative->bHasPostureOverride, Operative->PostureOverride) : SquadPosture;
 }
 

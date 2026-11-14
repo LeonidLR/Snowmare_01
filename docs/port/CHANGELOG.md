@@ -14,6 +14,8 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 
 | Commit | What |
 |---|---|
+| (`interim/2026-11-12`, stealth rules) | **feat(stealth): add configurable mode rules.** Task 003 leaf: mixed-selection toggle, per-operative fire/sprint break rules and data-driven range x0.4 / detection buildup x0.5 / footstep noise scales. Four new pure-rule tests PASS; standalone build and later 44 focused regressions PASS. Full runtime/animation feature still in progress. |
+| (`interim/2026-11-12`, pair rule) | **fix(formation): align saved pair lookup with runtime.** TS saved-shape lookup prefers exact entries; only a 2-member wedge/diamond falls back to pair/2, never column/line/echelons. Regression coverage + FORMATION_CONTRACT 19.2 updated. Shapes + shapesGolden 18/18 and complete typecheck PASS; golden unchanged. Interim only, no main change/push. |
 | (`codex/review-fixes`, 001 fix 4/4) | **fix(hud): skip operative labels without a capsule.** Review finding 6: skip members without a capsule. Task 001 complete: four isolated commits, four confirmed fixes; Depot smoke times the raise from opening fire (hold telemetry now follows aim refusals), M16 light / RPG-7 light / M16 heavy all 0.27 s. Build Succeeded, 47/47 focused tests, required 3/3 smokes and extra Depot smoke PASS. TypeSafe audit PASS. See `codex/outbox/001-review-fixes.report.md`. |
 | (`codex/review-fixes`, 001 fix 3/4) | **fix(squad): preserve critical wound stance on regroup.** Review finding 4: skip SetStance and MarkStanceFromSquad for critically wounded followers, preserving their prone stance. Verified: build Succeeded; Squad 32/32, CriticalWound 6/6, Animation.Injured 9/9; FastRegroupSmoke, InjuredLocomotionSmoke, SoloStartSmoke PASS without retries. |
 | (`codex/review-fixes`, 001 fix 2/4) | **fix(combat): count injured raise holds after fire refusals.** Review finding 3: keep DemandInjuredRaise before turning to preserve the 0.25 s raise, and evaluate the hold and its telemetry after crawl, sniper move and aim refusals. Verified: build Succeeded; Squad 32/32, CriticalWound 6/6, Animation.Injured 9/9; FastRegroupSmoke, InjuredLocomotionSmoke, SoloStartSmoke PASS without retries. |
@@ -538,3 +540,13 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 | `6a2d5aa` … `2b3b110` | Space input & pause planning, quests, camera, reference docs, movement, game flow, skeleton |
 
 - 2026-11-03 test(smokes): `Codex.Mine.Mishap` (1 default, 0 = a mine never goes off while placed); TutorialAmbushLakeMineSmoke sets 0 - the ~10 % cold slip risk made it flaky in the full registry run.
+
+2026-11-11 Codex interim: user-approved stealth retarget checkpoint, 62 male + 62 female copies, source hash verification PASS; native runtime integration / smoke pending.
+
+2026-11-11 Codex interim: Gemini four-item read-only queue 012 (stealth review, schema cross-check for C5, C6 integration map, existing trainer results). Designer requested chat attention indicator after stealth. Stealth native WIP: build / 44 tests / first end-to-end smoke PASS, regressions and rendered evidence pending.
+
+2026-11-11 Codex resumed interim: late stealth weapon components and null material-override restoration checkpoint; pistol/RPG swap assertions added. Full rebuild / smoke pending, not a completion claim.
+
+2026-11-11 Codex stealth 003: expanded male/female integration smokes, rendered game-camera evidence and 44 unit tests PASS; six Gemini gaps covered, late weapon materials fixed. Ready for designer testing in interim only.
+
+2026-11-11 Codex: 003 final report/handback finalized with source hashes 90a6bf64, 4d15a54f, 561a29ed and verified game-camera evidence. Doc routing level1/gpt-6-luna required primary corrections (date/stale queue); current queue 004,005,C5,C6.

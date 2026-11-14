@@ -193,6 +193,16 @@ void AOperativeCharacter::ApplyWeaponVisual()
 	{
 		return;
 	}
+	if (bStealthMode)
+	{
+		// Remove only our runtime overrides before replacing assets; null originals fall back to each new mesh's materials.
+		bStealthMode = false;
+		RefreshStealthVisuals();
+		bStealthMode = true;
+		StealthMeshes.Reset();
+		StealthMaterialCounts.Reset();
+		StealthOriginalMaterials.Reset();
+	}
 	UStaticMesh* HandAsset = DefaultWeaponMeshAsset;
 	FTransform Transform = DefaultWeaponMeshTransform;
 	USkeletalMesh* SkeletalAsset = CurrentWeapon && !CurrentWeapon->HandSkeletalMesh.IsNull() ? CurrentWeapon->HandSkeletalMesh.LoadSynchronous() : nullptr;
@@ -275,6 +285,10 @@ void AOperativeCharacter::ApplyWeaponVisual()
 	{
 		WeaponRoundMesh->SetStaticMesh(RoundMesh);
 		WeaponRoundMesh->SetVisibility(RoundMesh != nullptr);
+	}
+	if (bStealthMode)
+	{
+		RefreshStealthVisuals(); // includes the magazine / loaded round just registered above
 	}
 }
 

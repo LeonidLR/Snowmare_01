@@ -74,6 +74,27 @@ bool FPmcCommanderFlankVsFrontalTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderRememberedSuppressTest, "CodexTactics.AI.PmcCommander.RememberedSuppress",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcCommanderRememberedSuppressTest::RunTest(const FString&)
+{
+	using namespace PmcCommanderTestLocal;
+	const FPmcWeights W;
+	FPmcFighterView F = Fighter(1200.f, false);
+	F.bFireLine = true;
+	const FPmcSquadView S = Squad(3, 1, true);
+	TestEqual(TEXT("No new suppression order for a memory"), PmcCommanderRules::ScoreOrder(EPmcOrder::Suppress, F, S, W), 0.f);
+	F.RunningOrder = EPmcOrder::Suppress;
+	TestTrue(TEXT("Running suppression continues at a recent reachable point"), PmcCommanderRules::ScoreOrder(EPmcOrder::Suppress, F, S, W) > 0.f);
+	F.bFireLine = false;
+	TestEqual(TEXT("A wall blocks suppression of the point"), PmcCommanderRules::ScoreOrder(EPmcOrder::Suppress, F, S, W), 0.f);
+	F.bFireLine = true;
+	F.Threat.SecondsSince = W.ContactMemorySeconds + 1.f;
+	TestEqual(TEXT("Suppression memory expires"), PmcCommanderRules::ScoreOrder(EPmcOrder::Suppress, F, S, W), 0.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderSurvivalTest, "CodexTactics.AI.PmcCommander.Survival",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

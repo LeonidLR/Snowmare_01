@@ -42,7 +42,7 @@ namespace ControlsTest
 		PlayerCommands::VehicleBoard, PlayerCommands::VehicleDisembark, PlayerCommands::VehicleDrive, PlayerCommands::VehicleTurretFire,
 		PlayerCommands::VehicleRepair, PlayerCommands::InventoryOpen, PlayerCommands::GiveItem, PlayerCommands::ToggleVisionCones, PlayerCommands::ToggleSquadVisionCones,
 		PlayerCommands::DialogueNext, PlayerCommands::DialogueSkip, PlayerCommands::CameraInteriorView, PlayerCommands::ExitBuilding,
-		PlayerCommands::SkipTutorial, PlayerCommands::StealthWhistle, PlayerCommands::StealthThrow,
+		PlayerCommands::SkipTutorial, PlayerCommands::StealthMode, PlayerCommands::StealthWhistle, PlayerCommands::StealthThrow,
 		PlayerCommands::MapPanel, PlayerCommands::MapFull, PlayerCommands::MapCamera, PlayerCommands::MapMove, PlayerCommands::MapZoom,
 		PlayerCommands::QuickFire, PlayerCommands::Suppress,
 		};

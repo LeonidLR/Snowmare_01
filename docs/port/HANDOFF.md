@@ -1,5 +1,7 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Codex designer queue (2026-11-12):** 004 hitch -> 008 stealth v2 (section4, then5, then1-3) -> Gemini028/030/031/022/029. Shared Claude router/config restored byte-identically from main; Codex maps Jev levels via model_routes.json (1Luna/2Sol/3Terra/4Astra), no local model. Earlier queue notes below are historical.
+
 **Purpose.** The short entry point for any agent (Claude, Gemini, ...): how to work in this repo, the traps, the current state and a map to the
 per-system docs. Detail lives in `docs/systems/*.md`, the history in `docs/port/CHANGELOG.md`. (Until 2026-10-19 this file held all of it, 668 KB;
 it was split verbatim, nothing was dropped - old `HANDOFF §N` references resolve through the table in section 6 and in `docs/systems/README.md`.)
@@ -8,6 +10,8 @@ Last update: 2026-10-19 (split into an index + per-system docs + CHANGELOG; the 
 
 **Codex task 001 (`codex/review-fixes`, 2026-11-11):** all four review fixes ready for Claude review (world/capsule null guards, injured-raise telemetry with timing preserved, critical-wound stance on regroup). Build, 47 focused tests, three required smokes and Depot smoke PASS; report `docs/port/codex/outbox/001-review-fixes.report.md`. No merge or push.
 **Codex task 002 (`fix/wounded-follower-pace`, 2026-11-11):** verified wounded-follower pace, critical crawlers excluded; shipped data toggle included. Build, 48 focused tests, five required smokes and rendered smoke PASS. Two game-camera frames in main `Saved/Orchestrator/woundfollow/`; report `docs/port/codex/outbox/002-wounded-follower-finish.report.md`. Ready for Claude review.
+
+**Interim leadership (Codex, through Saturday 2026-11-14):** integration only in `CodexTactics-interim` / `interim/2026-11-12`, main frozen, no pushes. Pair rule verified at `c6a68eb4`; stealth 003 verified (124 approved retargeted copies at `1843f002`, expanded male/female and acoustic/knockdown coverage, rendered smoke and three inspected frames). Designer playtest reopened 003 with six corrections; passive/crawl, confirmed detection/PMC/last-seen fire and pack-specific wall/peek now pass core integration smokes (2026-11-12); female/rendered revalidation now PASS with fresh inspected interim-only frames; the independent Marksman targeting bypass is fixed (new smoke and 80 focused tests PASS); all eight final 003 regression smokes now PASS (558e4a8c / 57fa466e), ready for designer repeat playtest; next implementation is 004; Claude-relayed tasks 004 (hitch), 005 (dead enemies/ragdoll), then C5/C6 are next. Final evidence: `docs/port/codex/outbox/003-stealth-mode.report.md`; living hand-back: `docs/port/codex/outbox/INTERIM_REPORT.md`.
 
 **Project status report (non-technical, for planning): `docs/port/PROJECT_STATUS_2026-10-14.md`.**
 

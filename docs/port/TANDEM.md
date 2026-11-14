@@ -1004,6 +1004,12 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
 
 ## Log
 
+- 2026-11-11 (Codex, interim, task 003 leaf): stealth pure rules/data + four unit tests verified. Actor/HUD/perception runtime changes compile and 44 regressions pass, but remain uncommitted pending the full smoke/animation step. Source-only pack inspection: 62 clips, UE4 skeleton, source hashes unchanged; no assets generated.
+
+- 2026-11-11 (Codex, `interim/2026-11-12`, queue 2): verified and committed the small TS pair rule after supplying the patch to Gemini and clarifying crossed task messages; no actual Gemini branch commit was present at completion. Exact saved shapes win; pair only for 2-member wedge/diamond. Targeted TS tests 18/18 + typecheck PASS; baseline Unreal build and 25 animation/shape tests PASS. Own stealth work remains separate and uncommitted.
+
+- 2026-11-11 (Codex, interim lead): took over integration worktree `../CodexTactics-interim` on `interim/2026-11-12`; main frozen. Assigned Gemini the TS formation pair rule (chat 113), preparing stealth 003 next; no implementation or merges yet. Hand-back report initialized.
+
 - 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 4/4): HUD labels skip a member without a capsule; four fixes ready for Claude review. Build, 47 focused tests, the required three smokes and the extra Depot smoke passed. No assets changed.
 
 - 2026-11-11 (Codex, `codex/review-fixes`, `../CodexTactics-cxfix`, task 001 fix 3/4): fix(squad): preserve critical wound stance on regroup Review finding 4: skip SetStance and MarkStanceFromSquad for critically wounded followers, preserving their prone stance.
@@ -1457,3 +1463,13 @@ To maximize developer velocity, eliminate token waste, and maintain rock-solid a
   No night system exists, so "removes night accuracy penalties" has no hook. Design decisions listed in docs/port/OPEN_QUESTIONS.md for the user.
 - Tests `CodexTactics.Survival.TacticalHeat.*` (7) + smoke `CodexTactics.TacticalHeatSmoke` (registered in `Scripts/test_map.json`, rule
   `tactical-heat`); `SaveRoundTripSmoke` covers the new save keys. Visual placeholders only — request #15 to Gemini (Niagara slots by path).
+
+2026-11-11 Codex interim: explicit primary-chat approval covers only 124 new Stealth/{Male,Female} copies. Generated with editor closed / SCC disabled, source SHA-256 unchanged. Gemini accepted read-only C5 prep (#132).
+
+2026-11-11 Codex interim coordination: reviewed actual Gemini C5 prep 2f50e91a without merging. Gemini queue 012 is report-only; no C++/assets/main/push. Native stealth first smoke PASS; integration remains WIP.
+
+2026-11-11 Codex interim resumed: owns stealth leftovers in interim/2026-11-12. Working part 1 checkpoint (late weapon meshes / material overrides) saved while full MSVC rebuild runs. No main/push/assets writes.
+
+2026-11-11 Codex stealth checkpoint: male/female/rendered smokes and 44 tests PASS, 3 game-camera frames copied to main Saved/Orchestrator/stealth (explicit task exception). No main assets/push. Female fixture uses existing optimized female body in memory because movement-map roster overrides all bodies male.
+
+2026-11-11 Codex: stealth 003 final verification report complete, designer notified to test interim L_MovementTest / STEALTH or7. Source remains interim-only. New designer priority via Claude: 004 hitch then005 ragdoll beforeC5/C6.

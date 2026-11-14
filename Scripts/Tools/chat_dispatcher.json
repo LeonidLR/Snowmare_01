@@ -1,0 +1,25 @@
+{
+  "poll_interval_sec": 10,
+  "classifier_mode": "rules",
+  "local_model": "",
+  "local_model_timeout_sec": 20,
+  "rate_limit_min": 10,
+  "quiet_hours": {
+    "enabled": true,
+    "start": "23:00",
+    "end": "07:00"
+  },
+  "gemini_idle_min": 15,
+  "gemini_weekly_budget_usd": 20.0,
+  "estimated_gemini_wake_usd": 0.25,
+  "codex_process_names": ["codex", "Codex"],
+  "interim_branch": "interim/2026-11-12",
+  "interim_worktree": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-interim",
+  "gemini_worktree": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics-gemc5",
+  "main_checkout": "C:\\Users\\Zephyrus15Duo\\Documents\\Unreal Projects\\CodexTactics",
+  "stop_file": "Saved/Orchestrator/dispatcher/STOP",
+  "state_dir": "Saved/Orchestrator/dispatcher",
+  "wake_claude_file": "Saved/Orchestrator/dispatcher/wake_claude.jsonl",
+  "designer_inbox_file": "Saved/Orchestrator/dispatcher/designer_inbox.md",
+  "gemini_spend_file": "Saved/Orchestrator/dispatcher/gemini_spend.jsonl"
+}

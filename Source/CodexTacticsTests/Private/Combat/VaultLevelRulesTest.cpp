@@ -24,7 +24,11 @@ bool FVaultLevelGenCoversTest::RunTest(const FString&)
 	TestFalse(TEXT("a 'sandbag' 2 m deep: no landing past it"), VaultRules::IsVaultableLevelObject(TEXT("sandbag"), 100.f, 200.f));
 	TestFalse(TEXT("a 20 cm kerb: walked over, not vaulted"), VaultRules::IsVaultableLevelObject(TEXT("low_wall"), 20.f, 30.f));
 	TestFalse(TEXT("an untagged kind"), VaultRules::IsVaultableLevelObject(TEXT("cover"), 90.f, 60.f));
-	TestTrue(TEXT("the kinds"), VaultRules::IsVaultableCoverKind(TEXT("jersey")) && !VaultRules::IsVaultableCoverKind(TEXT("wall")) && !VaultRules::IsVaultableCoverKind(TEXT("fence")));
+	TestTrue(TEXT("a ground window sill (90 cm, 30 deep) is vaulted"), VaultRules::IsVaultableLevelObject(TEXT("window_sill"), 90.f, 30.f));
+	TestFalse(TEXT("an upper mantle sill is not auto-vaultable"), VaultRules::IsVaultableLevelObject(TEXT("mantle_sill"), 90.f, 30.f));
+	TestFalse(TEXT("a loophole sill (120 cm) is not vaultable"), VaultRules::IsVaultableLevelObject(TEXT("loophole_sill"), 120.f, 30.f));
+	TestFalse(TEXT("a roof parapet is not auto-vaultable"), VaultRules::IsVaultableLevelObject(TEXT("parapet"), 100.f, 20.f));
+	TestTrue(TEXT("the kinds"), VaultRules::IsVaultableCoverKind(TEXT("jersey")) && VaultRules::IsVaultableCoverKind(TEXT("window_sill")) && !VaultRules::IsVaultableCoverKind(TEXT("wall")) && !VaultRules::IsVaultableCoverKind(TEXT("fence")));
 	return true;
 }
 

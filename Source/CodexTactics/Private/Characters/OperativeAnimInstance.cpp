@@ -4,6 +4,7 @@
 #include "Combat/KnockdownComponent.h"
 #include "Characters/HitReactionRules.h"
 #include "Misc/ScopeExit.h"
+#include "ProfilingDebugging/CpuProfilerTrace.h"
 #include "Characters/LeftHandIKRules.h"
 #include "Characters/AimOffsetRules.h"
 #include "Combat/SniperRules.h"
@@ -65,6 +66,16 @@ FAnimInstanceProxy* UOperativeAnimInstance::CreateAnimInstanceProxy()
 
 void UOperativeAnimInstance::NativeInitializeAnimation()
 {
+	TRACE_CPUPROFILER_EVENT_SCOPE(Codex_OperativeAnimInitialize);
+	const double HitchStart = FPlatformTime::Seconds();
+	ON_SCOPE_EXIT
+	{
+		const double Ms = (FPlatformTime::Seconds() - HitchStart) * 1000.0;
+		if (Ms >= 5.0)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[HitchProbe] AnimInitialize %s %.2f ms"), *GetNameSafe(GetOwningActor()), Ms);
+		}
+	};
 	Super::NativeInitializeAnimation();
 	// The run-and-peek's peek stance: what the graph's layers add to the standing fire idles' drawn facing, as measured (learnt on from there).
 	// (The rifle slots 0 / 1 only: a shotgun's left hand is on the pump - no left-hand IK, no bias.)
@@ -204,6 +215,7 @@ void UOperativeAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 	UpdateNativeBlend(DeltaSeconds);
 	UpdateShotgunLayer(DeltaSeconds); // the D-1 shotgun set over the ABP (OperativeAnimInstanceShotgun.cpp)
 	UpdateInjuredLayer(DeltaSeconds); // the injured walk / slow walk on the legs; decides the injured crawl set (OperativeAnimInstanceInjured.cpp)
+	UpdateStealthLayer(DeltaSeconds);
 	UpdateProneCrawlLayer(DeltaSeconds); // the 8-direction prone crawl over the ABP's prone pose (OperativeAnimInstanceProneCrawl.cpp)
 	if (bUseRifle2Locomotion)
 	{
@@ -448,6 +460,8 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 	{
 		return; // Sprint 14: no fire clip over the knockdown (nor over the climb)
 	}
+	StealthWeight = 0.f; // the shot owns the pose immediately, including data-configured shots that keep stealth enabled
+	StealthFireBlockSeconds = 0.25f;
 	AimTimer = AimHoldAfterShot;
 	DemandInjuredRaise(); // wounded: the weapon stays up for lower_after_s after the shot (feat/injured-tiers-fullbody)
 	// Sniper rifle (user request 2026-10-09): the stance's shot + the bolt while rounds remain, full body.
@@ -645,6 +659,15 @@ void UOperativeAnimInstance::UpdateStanceTransition()
 		}
 	}
 	// Sniper rifle in hands, standing still (user request 2026-10-09): the pack's kneel / prone / rise clips.
+	if (!bInCover && BoundOperative->IsInStealthMode() && From == EOperativeStance::Standing && Stance == EOperativeStance::Crouching)
+	{
+		if (UAnimSequenceBase* StealthEntry = GetStealthCrouchClip())
+		{
+			StopSlotAnimation(StanceTransitionBlendTime, UpperBodySlot);
+			StanceTransitionMontage = PlaySlotAnimationAsDynamicMontage(StealthEntry, FullBodySlot, StanceTransitionBlendTime, StanceTransitionBlendTime, StanceTransitionPlayRate);
+			return;
+		}
+	}
 	if (UAnimSequenceBase* SniperClip = PickSniperTransition(From, Stance))
 	{
 		StopSlotAnimation(StanceTransitionBlendTime, UpperBodySlot);
@@ -1392,6 +1415,8 @@ void FOperativeAnimInstanceProxy::PreUpdate(UAnimInstance* InAnimInstance, float
 	WeaponClips = Instance->ShotgunClips;
 	CrawlClips = Instance->CrawlClips;
 	CrawlWeight = Instance->CrawlWeight;
+	StealthClips = Instance->StealthClips;
+	StealthWeight = Instance->StealthWeight;
 	InjuredClips = Instance->InjuredClips;
 	InjuredWeight = Instance->InjuredWeight;
 	InjuredTorsoShare = Instance->InjuredTorsoShare;
@@ -1478,7 +1503,11 @@ bool FOperativeAnimInstanceProxy::Evaluate(FPoseContext& Output)
 	}
 	FAnimationPoseData OutputData(Output);
 	FAnimationRuntime::BlendPosesTogether(Poses, Curves, Attributes, Weights, OutputData);
-	if (PeekLockAlpha > 0.f)
+	if (StealthWeight > MinSampleWeight)
+	{
+		BlendStealthLayer(Output);
+	}
+	if (PeekLockAlpha > 0.f && StealthWeight <= MinSampleWeight)
 	{
 		ApplyPeekStanceYawLock(Output);
 	}
@@ -1507,7 +1536,8 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	}
 	const bool bCrawlLayer = CrawlWeight > MinSampleWeight;
 	const bool bInjuredLayer = InjuredWeight > MinSampleWeight || !InjuredLimpAngles.IsNearlyZero(); // the cue alone crouched / in cover
-	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer && !bCrawlLayer && !bInjuredLayer) || InRootNode != GetRootNode())
+	const bool bStealthLayer = StealthWeight > MinSampleWeight;
+	if ((!LadderIK.bActive && !bPeekLock && !bWeaponLayer && !bCrawlLayer && !bInjuredLayer && !bStealthLayer) || InRootNode != GetRootNode())
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 		return false; // the graph alone
@@ -1534,6 +1564,10 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	{
 		BlendInjuredLayer(Output); // the injured body; the torso rises to the graph's / the weapon layer's when firing (InjuredLocomotionRules)
 	}
+	if (bStealthLayer)
+	{
+		BlendStealthLayer(Output);
+	}
 	if (LadderIK.bActive)
 	{
 		ApplyLadderIK(Output);
@@ -1542,7 +1576,7 @@ bool FOperativeAnimInstanceProxy::Evaluate_WithRoot(FPoseContext& Output, FAnimN
 	{
 		KneeIKOffset[0] = KneeIKOffset[1] = FVector::ZeroVector;
 	}
-	if (bPeekLock)
+	if (bPeekLock && StealthWeight <= MinSampleWeight)
 	{
 		ApplyPeekStanceYawLock(Output);
 	}
@@ -1848,7 +1882,7 @@ void UOperativeAnimInstance::FadeOutCoverMontages(float BlendIn)
 UAnimMontage* UOperativeAnimInstance::PlayCoverMontage(UAnimSequenceBase* Clip, const FAlphaBlendArgs& BlendIn, float BlendOut, float PlayRate, int32 LoopCount,
 	float StartSeconds)
 {
-	if (!Clip)
+	if (!Clip || (BoundOperative.IsValid() && BoundOperative->IsInStealthMode()))
 	{
 		return nullptr;
 	}
@@ -1880,6 +1914,30 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	if (bLeft || bIsDead)
 	{
 		ReleasePeekStanceYawLock(); // off the wall (another order) / dead: the peek stance's held facing lets go
+	}
+	// Stealth owns the full body at and approaching a wall. Stop only cover montages:
+	// firing, reloads and other independent full-body actions retain their normal ownership.
+	if (Operative.IsInStealthMode())
+	{
+		if (UAnimMontage* Loop = CoverLoopMontage.Get())
+		{
+			Montage_Stop(0.f, Loop);
+		}
+		if (UAnimMontage* OneShot = CoverOneShotMontage.Get())
+		{
+			Montage_Stop(0.f, OneShot);
+		}
+		CoverLoopMontage.Reset();
+		CoverLoopClip.Reset();
+		CoverOneShotMontage.Reset();
+		CoverPendingFireClip.Reset();
+		CoverPeekStanceMontage.Reset();
+		bCoverEnterPlaying = false;
+		bCoverPeekStanceEntry = false;
+		bCoverInFirePose = false;
+		ReleasePeekStanceYawLock();
+		ReleasePeekApproachYawLock();
+		return;
 	}
 	if (!bUseNativeCoverClips || bIsDead)
 	{
@@ -2312,7 +2370,7 @@ bool UOperativeAnimInstance::GetCoverSwitchTrack(bool bCrouch, ECoverSwitchAppro
 
 bool UOperativeAnimInstance::PlayCoverOneShot(UAnimSequenceBase* Clip, float BlendIn, float BlendOut)
 {
-	if (!Clip)
+	if (!Clip || (BoundOperative.IsValid() && BoundOperative->IsInStealthMode()))
 	{
 		return false;
 	}

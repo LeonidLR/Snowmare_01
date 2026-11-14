@@ -4,7 +4,8 @@
 // enemy archetype stats it fights with. Pure.
 
 import { fieldByPath, fieldValue, isJsonObject, typeWeights } from '../combatLab/pressureSettings.ts';
-import type { AmbushSpotParams, EnemyType, PlanParams, RelocateParams, TypeWeight, WatchParams } from './rules.ts';
+import type { AmbushSpotParams, EnemyType, PlanParams, RelocateParams, SightConditionsConfig, TypeWeight, WatchParams, WeaponsConfig } from './rules.ts';
+import { DEFAULT_SIGHT_CONDITIONS, DEFAULT_WEAPONS } from './rules.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 
 /** FCombatPressureConfig. */
@@ -243,6 +244,16 @@ export interface SimConstants {
   /** A melee enemy's blows come every cooldown x this (the attack animation, the re-positioning round the squad) and its first blow after a wind-up, s. */
   meleeCadence: number;
   meleeWindupSeconds: number;
+  /** T10: Sight conditions (weather / time of day). When true, sight range scales with weather & hour / sun elevation. */
+  useSightConditions?: boolean;
+  weather?: string;
+  sunElevationDeg?: number;
+  hour?: number;
+  sightConditions?: SightConditionsConfig;
+  /** T10: Weapon ranges & engagement bands. When true, weapon attack range, effective range and falloff are used. */
+  useWeaponRanges?: boolean;
+  weaponsConfig?: WeaponsConfig;
+  squadWeapons?: string[];
 }
 
 export const DEFAULT_SIM_CONSTANTS: SimConstants = {
@@ -292,6 +303,13 @@ export const DEFAULT_SIM_CONSTANTS: SimConstants = {
   enemyHpScale: 1.5, // the stand-in HP x 1.5 (calibration 2026-11-02: fights 0.8 x the Unreal length, rounds 1.0 x, knockdowns 0.9 x - at x 1 the fights were 0.44 x)
   meleeCadence: 2.5,
   meleeWindupSeconds: 1.0,
+  useSightConditions: false,
+  weather: 'clear',
+  hour: 12,
+  sightConditions: DEFAULT_SIGHT_CONDITIONS,
+  useWeaponRanges: false,
+  weaponsConfig: DEFAULT_WEAPONS,
+  squadWeapons: ['m16', 'shotgun', 'sniper_rifle'],
 };
 
 /** The fight-cover block of a level JSON "bot_route" (BotCoverRules params) applied over the constants. */
@@ -309,5 +327,15 @@ export function withBotRoute(constants: SimConstants, botRoute: unknown): SimCon
     if (typeof fc.min_facing_cos === 'number') out.coverMinFacingCos = fc.min_facing_cos;
     if (fc.enabled === false) out.coverSearchCm = 0;
   }
+  return out;
+}
+
+/** The environment block of a level JSON (weather, hour, sun elevation) applied over the constants. */
+export function withEnvironment(constants: SimConstants, environment: unknown): SimConstants {
+  if (!isJsonObject(environment)) return constants;
+  const out = { ...constants };
+  if (typeof environment.weather === 'string') out.weather = environment.weather;
+  if (typeof environment.hour === 'number') out.hour = environment.hour;
+  if (typeof environment.sun_elevation_deg === 'number') out.sunElevationDeg = environment.sun_elevation_deg;
   return out;
 }

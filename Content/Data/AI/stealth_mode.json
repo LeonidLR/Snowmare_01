@@ -1,0 +1,10 @@
+{
+  "_comment": "Designer task 003. Scales multiply the existing stance/weather sight and crouched footstep radii. Hound scent is unchanged. Fire breaks only its shooter; sprint always breaks. Stealth must be explicitly toggled on again.",
+  "enabled": true,
+  "detection_range_multiplier": 0.4,
+  "detection_buildup_multiplier": 0.5,
+  "footstep_noise_multiplier": 0.5,
+  "stealth_break_on_fire": true,
+  "visual_opacity": 0.4,
+  "visual_gray": 0.45
+}
