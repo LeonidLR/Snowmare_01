@@ -34,7 +34,7 @@ bool FDeathRagdollConfigLoadsTest::RunTest(const FString&)
 	TestTrue(TEXT("Contains Kinetic impulse scale"), Config.ImpulseScales.Contains(EDamageType::Kinetic));
 	TestTrue(TEXT("Contains Explosive impulse scale"), Config.ImpulseScales.Contains(EDamageType::Explosive));
 	TestTrue(TEXT("Spitter is in fallback archetypes"), Config.FallbackArchetypes.Contains(TEXT("Spitter")));
-	TestTrue(TEXT("CryoDrone is in fallback archetypes"), Config.FallbackArchetypes.Contains(TEXT("CryoDrone")));
+	TestTrue(TEXT("CRYO_DRONE is in fallback archetypes"), Config.FallbackArchetypes.Contains(TEXT("CRYO_DRONE")));
 
 	return true;
 }
@@ -110,7 +110,8 @@ bool FDeathRagdollFallbackArchetypesTest::RunTest(const FString&)
 	const FDeathRagdollConfig Config = FDeathRagdollRules::GetDefaultConfig();
 
 	TestTrue(TEXT("Spitter falls back to pose"), FDeathRagdollRules::ShouldFallbackToPose(TEXT("Spitter"), Config));
-	TestTrue(TEXT("CryoDrone falls back to pose"), FDeathRagdollRules::ShouldFallbackToPose(TEXT("CryoDrone"), Config));
+	TestTrue(TEXT("CRYO_DRONE falls back to pose"), FDeathRagdollRules::ShouldFallbackToPose(TEXT("CRYO_DRONE"), Config));
+	TestTrue(TEXT("CryoDrone alias falls back to pose"), FDeathRagdollRules::ShouldFallbackToPose(TEXT("CryoDrone"), Config));
 
 	TestFalse(TEXT("FrostHound does not fallback"), FDeathRagdollRules::ShouldFallbackToPose(TEXT("FrostHound"), Config));
 	TestFalse(TEXT("Brute does not fallback"), FDeathRagdollRules::ShouldFallbackToPose(TEXT("Brute"), Config));

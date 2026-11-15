@@ -22,7 +22,7 @@
       "bAllowRagdoll": false,
       "fallback_mode": "LayDown"
     },
-    "CryoDrone": {
+    "CRYO_DRONE": {
       "bAllowRagdoll": false,
       "fallback_mode": "ExplodeFX"
     }

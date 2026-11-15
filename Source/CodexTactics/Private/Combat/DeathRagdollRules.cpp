@@ -1,32 +1,48 @@
 #include "Combat/DeathRagdollRules.h"
 #include "Engine/SkeletalMesh.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/PhysicsConstraintTemplate.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
+static void SetBaseConfigDefaults(FDeathRagdollConfig& OutConfig)
+{
+	OutConfig.bEnabled = true;
+	OutConfig.MaxSimultaneousRagdolls = 4;
+	OutConfig.RagdollDelaySeconds = 0.0f;
+	OutConfig.MaxSettleTimeoutSeconds = 3.5f;
+	OutConfig.LinearSettleThresholdCmS = 15.0f;
+	OutConfig.AngularSettleThresholdRadS = 0.25f;
+	OutConfig.MaxImpulseMagnitude = 120000.0f;
+	OutConfig.AngularDamping = 1.5f;
+	OutConfig.LinearDamping = 0.5f;
+
+	OutConfig.ImpulseScales.Empty();
+	OutConfig.ImpulseScales.Add(EDamageType::Kinetic, 45000.0f);
+	OutConfig.ImpulseScales.Add(EDamageType::Melee, 25000.0f);
+	OutConfig.ImpulseScales.Add(EDamageType::Fire, 15000.0f);
+	OutConfig.ImpulseScales.Add(EDamageType::Cryo, 5000.0f);
+	OutConfig.ImpulseScales.Add(EDamageType::Energy, 30000.0f);
+	OutConfig.ImpulseScales.Add(EDamageType::Explosive, 100000.0f);
+
+	OutConfig.FallbackArchetypes.Empty();
+	OutConfig.FallbackArchetypes.Add(TEXT("Spitter"));
+	OutConfig.FallbackArchetypes.Add(TEXT("CRYO_DRONE"));
+}
+
 FDeathRagdollConfig FDeathRagdollRules::GetDefaultConfig()
 {
 	FDeathRagdollConfig Config;
-	Config.bEnabled = true;
-	Config.MaxSimultaneousRagdolls = 4;
-	Config.RagdollDelaySeconds = 0.0f;
-	Config.MaxSettleTimeoutSeconds = 3.5f;
-	Config.LinearSettleThresholdCmS = 15.0f;
-	Config.AngularSettleThresholdRadS = 0.25f;
-	Config.MaxImpulseMagnitude = 120000.0f;
-	Config.AngularDamping = 1.5f;
-	Config.LinearDamping = 0.5f;
+	SetBaseConfigDefaults(Config);
 
-	Config.ImpulseScales.Add(EDamageType::Kinetic, 45000.0f);
-	Config.ImpulseScales.Add(EDamageType::Melee, 25000.0f);
-	Config.ImpulseScales.Add(EDamageType::Fire, 15000.0f);
-	Config.ImpulseScales.Add(EDamageType::Cryo, 5000.0f);
-	Config.ImpulseScales.Add(EDamageType::Energy, 30000.0f);
-	Config.ImpulseScales.Add(EDamageType::Explosive, 100000.0f);
-
-	Config.FallbackArchetypes.Add(TEXT("Spitter"));
-	Config.FallbackArchetypes.Add(TEXT("CryoDrone"));
+	const FString ConfigPath = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Data/Combat/death_ragdoll.json"));
+	FString JsonContent;
+	if (FFileHelper::LoadFileToString(JsonContent, *ConfigPath))
+	{
+		LoadConfigFromJson(JsonContent, Config);
+	}
 
 	return Config;
 }
@@ -45,7 +61,7 @@ bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRa
 		return false;
 	}
 
-	OutConfig = GetDefaultConfig();
+	SetBaseConfigDefaults(OutConfig);
 
 	RootObject->TryGetBoolField(TEXT("enabled"), OutConfig.bEnabled);
 
@@ -107,6 +123,7 @@ bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRa
 	const TSharedPtr<FJsonObject>* OverridesObj = nullptr;
 	if (RootObject->TryGetObjectField(TEXT("per_archetype_overrides"), OverridesObj) && OverridesObj && OverridesObj->IsValid())
 	{
+		OutConfig.FallbackArchetypes.Empty();
 		for (const auto& Pair : (*OverridesObj)->Values)
 		{
 			const TSharedPtr<FJsonObject> ArchObj = Pair.Value->AsObject();
@@ -184,7 +201,32 @@ bool FDeathRagdollRules::ShouldFallbackToPose(FName ArchetypeId, const FDeathRag
 	{
 		return true;
 	}
-	return Config.FallbackArchetypes.Contains(ArchetypeId);
+	if (Config.FallbackArchetypes.Contains(ArchetypeId))
+	{
+		return true;
+	}
+	const FString QueryStr = ArchetypeId.ToString();
+	for (const FName& Fallback : Config.FallbackArchetypes)
+	{
+		if (Fallback.ToString().Equals(QueryStr, ESearchCase::IgnoreCase))
+		{
+			return true;
+		}
+	}
+	if (QueryStr.Equals(TEXT("CryoDrone"), ESearchCase::IgnoreCase) ||
+	    QueryStr.Equals(TEXT("CRYO_DRONE"), ESearchCase::IgnoreCase))
+	{
+		for (const FName& Fallback : Config.FallbackArchetypes)
+		{
+			const FString FbStr = Fallback.ToString();
+			if (FbStr.Equals(TEXT("CryoDrone"), ESearchCase::IgnoreCase) ||
+			    FbStr.Equals(TEXT("CRYO_DRONE"), ESearchCase::IgnoreCase))
+			{
+				return true;
+			}
+		}
+	}
+	return false;
 }
 
 FName FDeathRagdollRules::GetDefaultPelvisBoneName()
