@@ -44,6 +44,13 @@
       overflow: hidden;
     }
 
+    #editor-banner { flex: 0 0 auto; padding: 8px 16px; text-align: center; color: #fff; background: #475569; }
+    #editor-banner .eb-reason { font-size: 1.25rem; font-weight: 700; line-height: 1.25; }
+    #editor-banner .eb-detail { font-size: 0.72rem; opacity: 0.9; margin-top: 4px; word-break: break-word; }
+    #editor-banner.GREEN { background: #15803d; }
+    #editor-banner.YELLOW { background: #a16207; }
+    #editor-banner.RED { background: #b91c1c; }
+
     /* Top bar */
     header {
       background-color: var(--bg-surface);
@@ -593,6 +600,8 @@
   </style>
 </head>
 <body>
+
+  <div id="editor-banner"><div class="eb-reason">Статус редактора…</div><div class="eb-detail"></div></div>
 
   <header>
     <div class="header-left">
@@ -1165,6 +1174,26 @@
           fetchBoard(false);
         }
       }, 30000);
+    })();
+    (function () {
+      const banner = document.getElementById('editor-banner');
+      const reasonEl = banner.querySelector('.eb-reason');
+      const detailEl = banner.querySelector('.eb-detail');
+      async function pollEditor() {
+        try {
+          const r = await fetch('/api/editor-status');
+          const d = await r.json();
+          const v = d.verdict || {};
+          banner.className = v.level || '';
+          reasonEl.textContent = v.reason || 'Нет данных';
+          detailEl.textContent = (d.worktrees || []).map(w => w.name + ': ' + w.branch + ' ' + w.head + (w.editor_open ? ' [editor]' : '')).join(' | ');
+        } catch (e) {
+          banner.className = '';
+          reasonEl.textContent = 'Статус редактора недоступен';
+        }
+      }
+      pollEditor();
+      setInterval(pollEditor, 15000);
     })();
   </script>
 </body>

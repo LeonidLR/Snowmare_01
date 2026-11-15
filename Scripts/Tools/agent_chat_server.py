@@ -18,6 +18,7 @@ import urllib.parse
 # Import functions from agent_chat
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent_chat
+import editor_status
 import task_board
 
 _PORT_DOC_RE = re.compile(
@@ -27,6 +28,21 @@ _PORT_DOC_RE = re.compile(
 
 compute_idle_seconds = agent_chat.compute_idle_seconds
 get_idle_dict = agent_chat.get_idle_dict
+
+_EDITOR_CACHE = {"ts": 0.0, "data": None}
+_EDITOR_LOCK = threading.Lock()
+
+
+def get_editor_status_cached(ttl=10.0):
+    with _EDITOR_LOCK:
+        if _EDITOR_CACHE["data"] is None or time.time() - _EDITOR_CACHE["ts"] > ttl:
+            try:
+                _EDITOR_CACHE["data"] = editor_status.build_status()
+            except Exception as exc:
+                _EDITOR_CACHE["data"] = {"error": str(exc), "verdict": {"level": "YELLOW", "reason": "Статус редактора недоступен"}, "worktrees": []}
+            _EDITOR_CACHE["ts"] = time.time()
+        return _EDITOR_CACHE["data"]
+
 
 class AgentChatHandler(http.server.BaseHTTPRequestHandler):
     storage_dir = None
@@ -136,6 +152,10 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
                     chat_file=os.path.join(self.storage_dir, "chat.jsonl"),
                 )
                 self.send_json(200, data)
+            return
+
+        if path == "/api/editor-status":
+            self.send_json(200, get_editor_status_cached())
             return
 
         if path == "/api/port-doc":
