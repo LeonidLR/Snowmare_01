@@ -48,7 +48,9 @@
       "style": "Calm, firm, crisp male warning callout on sight of hostiles.",
       "text": "Contact!",
       "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:333",
-      "category": "combat_alert"
+      "category": "combat_alert",
+      "priority": 2.0,
+      "cooldown_seconds": 8.0
     },
     {
       "id": "cmd_ambush",
@@ -57,7 +59,9 @@
       "style": "Calm, firm male tactical order under sudden ambush.",
       "text": "Ambush! Hostiles on the level - eliminate them!",
       "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:302",
-      "category": "combat_alert"
+      "category": "combat_alert",
+      "priority": 1.0,
+      "cooldown_seconds": 15.0
     },
     {
       "id": "cmd_wave_advancing",
@@ -66,7 +70,9 @@
       "style": "Firm male tactical warning over cold wind, bracing the squad.",
       "text": "Wave 1: enemies advancing!",
       "source": "Source/CodexTactics/Private/Combat/WaveSubsystem.cpp:375",
-      "category": "combat_wave"
+      "category": "combat_wave",
+      "priority": 1.0,
+      "cooldown_seconds": 15.0
     },
     {
       "id": "cmd_autonomy_on",
@@ -75,7 +81,9 @@
       "style": "Measured, calm, disciplined male radio briefing tone.",
       "text": "Autonomy ON. Operatives hold positions within 7 m of the order point.",
       "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:638",
-      "category": "squad_order"
+      "category": "squad_order",
+      "priority": 2.0,
+      "cooldown_seconds": 6.0
     },
     {
       "id": "cmd_autonomy_off",
@@ -84,7 +92,9 @@
       "style": "Calm, firm male radio confirmation switching to manual lead.",
       "text": "Autonomy OFF. Full manual control.",
       "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:639",
-      "category": "squad_order"
+      "category": "squad_order",
+      "priority": 2.0,
+      "cooldown_seconds": 6.0
     },
     {
       "id": "cmd_orders_received",
@@ -93,7 +103,9 @@
       "style": "Calm, crisp male squad acknowledgment releasing pause.",
       "text": "Orders received! Moving out!",
       "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerTime.cpp:87",
-      "category": "squad_order"
+      "category": "squad_order",
+      "priority": 3.0,
+      "cooldown_seconds": 5.0
     },
     {
       "id": "cmd_suppressive_fire",
@@ -102,7 +114,9 @@
       "style": "Firm, authoritative male fire-control command over gunfire.",
       "text": "Suppressive fire! Keep their heads down!",
       "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp:1066",
-      "category": "combat_order"
+      "category": "combat_order",
+      "priority": 2.0,
+      "cooldown_seconds": 8.0
     },
     {
       "id": "cmd_generator_starts",
@@ -111,7 +125,9 @@
       "style": "Firm, relieved male grit as diesel machinery finally turns over.",
       "text": "Pouring in the diesel and pulling the starter... The generator roars to life!",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:74",
-      "category": "quest_complete"
+      "category": "quest_complete",
+      "priority": 2.0,
+      "cooldown_seconds": 15.0
     },
     {
       "id": "cmd_gate_exit_open",
@@ -120,7 +136,9 @@
       "style": "Calm, firm male extraction order into radio.",
       "text": "The blast door is wide open - that's our way out. Everybody through!",
       "source": "Source/CodexTactics/Private/GameFlow/LevelExitSubsystem.cpp:222",
-      "category": "quest_complete"
+      "category": "quest_complete",
+      "priority": 1.0,
+      "cooldown_seconds": 20.0
     },
     {
       "id": "cmd_solo_leash",
@@ -129,7 +147,9 @@
       "style": "Firm, steady male callout pulling the squad back together.",
       "text": "Solo range exceeded! Teammates, regroup!",
       "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:1105",
-      "category": "squad_order"
+      "category": "squad_order",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "cmd_panic_flee",
@@ -138,7 +158,9 @@
       "style": "Urgent, strained male voice under heavy enemy pressure.",
       "text": "Fall back, fall back! They'll overrun us!",
       "source": "Source/CodexTactics/Private/Characters/PanicComponent.cpp:222",
-      "category": "combat_panic"
+      "category": "combat_panic",
+      "priority": 1.0,
+      "cooldown_seconds": 10.0
     },
     {
       "id": "eng_generator_restored",
@@ -147,7 +169,9 @@
       "style": "Dry, technical male field engineer confirming power restoration in freezing air.",
       "text": "Generator restored! All turrets are powered!",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:69",
-      "category": "quest_complete"
+      "category": "quest_complete",
+      "priority": 2.0,
+      "cooldown_seconds": 15.0
     },
     {
       "id": "eng_fortifications_dismantled",
@@ -156,7 +180,9 @@
       "style": "Dry, matter-of-fact male field engineer report after a wave.",
       "text": "Surviving fortifications dismantled and returned to the gear.",
       "source": "Source/CodexTactics/Private/Combat/WaveVictorySubsystem.cpp:288",
-      "category": "post_wave"
+      "category": "post_wave",
+      "priority": 3.0,
+      "cooldown_seconds": 15.0
     },
     {
       "id": "eng_generator_dry",
@@ -165,7 +191,9 @@
       "style": "Dry, technical male diagnosis after inspecting broken equipment in subzero cold.",
       "text": "The backup generator is intact, but the tank is dry. It needs diesel fuel.",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:40",
-      "category": "quest_inspect"
+      "category": "quest_inspect",
+      "priority": 2.0,
+      "cooldown_seconds": 10.0
     },
     {
       "id": "eng_draining_diesel",
@@ -174,7 +202,9 @@
       "style": "Dry, focused male technical update transferring fuel.",
       "text": "Draining the remaining diesel from the APC fuel system... canister is full!",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:50",
-      "category": "quest_progress"
+      "category": "quest_progress",
+      "priority": 2.0,
+      "cooldown_seconds": 15.0
     },
     {
       "id": "eng_found_canister",
@@ -183,7 +213,9 @@
       "style": "Dry, practical male scavenging callout.",
       "text": "Found an empty 20L Fuel Canister. Now we have something to drain the fuel into.",
       "source": "Source/CodexTactics/Private/World/InteractableActor.cpp:602",
-      "category": "loot_pickup"
+      "category": "loot_pickup",
+      "priority": 2.0,
+      "cooldown_seconds": 15.0
     },
     {
       "id": "eng_corner_peek",
@@ -192,7 +224,9 @@
       "style": "Dry, technical male combat check at wall edge.",
       "text": "At the corner - covering it!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:326",
-      "category": "combat_cover"
+      "category": "combat_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "eng_hugging_wall",
@@ -201,7 +235,9 @@
       "style": "Steady, dry male tactical report from high cover.",
       "text": "Hugging the wall, holding the corner!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
-      "category": "combat_cover"
+      "category": "combat_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "eng_behind_cover",
@@ -210,7 +246,9 @@
       "style": "Brief, dry male position callout behind low cover.",
       "text": "Behind cover!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
-      "category": "combat_cover"
+      "category": "combat_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "eng_take_cover",
@@ -219,7 +257,9 @@
       "style": "Quick, practical male movement callout.",
       "text": "Take cover!",
       "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp:958",
-      "category": "combat_cover"
+      "category": "combat_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 8.0
     },
     {
       "id": "eng_dash_other_cover",
@@ -228,7 +268,9 @@
       "style": "Focused, terse male callout crossing between cover walls.",
       "text": "Dash to the other cover!",
       "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp:958",
-      "category": "combat_cover"
+      "category": "combat_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 10.0
     },
     {
       "id": "eng_along_wall_corner",
@@ -237,7 +279,9 @@
       "style": "Technical, calm male callout shimmying around a corner.",
       "text": "Along the wall, round the corner.",
       "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp:1501",
-      "category": "combat_cover"
+      "category": "combat_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "eng_guard_on",
@@ -246,7 +290,9 @@
       "style": "Dry, steady male confirmation holding sector.",
       "text": "Guard point set! Holding the sector.",
       "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:1444",
-      "category": "squad_order"
+      "category": "squad_order",
+      "priority": 2.0,
+      "cooldown_seconds": 6.0
     },
     {
       "id": "eng_guard_off",
@@ -255,7 +301,9 @@
       "style": "Dry, brisk male acknowledgment rejoining formation.",
       "text": "Off guard, regrouping!",
       "source": "Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:1445",
-      "category": "squad_order"
+      "category": "squad_order",
+      "priority": 2.0,
+      "cooldown_seconds": 6.0
     },
     {
       "id": "eng_changing_mags",
@@ -264,7 +312,9 @@
       "style": "Clipped, dry male warning while swapping shotgun/rifle mag.",
       "text": "Mag empty! Cover the sector!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:277",
-      "category": "combat_callout"
+      "category": "combat_callout",
+      "priority": 2.0,
+      "cooldown_seconds": 8.0
     },
     {
       "id": "eng_cover_group_stack",
@@ -273,7 +323,9 @@
       "style": "Technical male squad callout stacking at wall corner.",
       "text": "Covering the corner - the squad stacks up behind me.",
       "source": "Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerCover.cpp:275",
-      "category": "combat_cover"
+      "category": "combat_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "eng_rage_shout",
@@ -282,7 +334,9 @@
       "style": "Fierce, gritty male adrenaline shout in combat.",
       "text": "Hold the line! Tear through them!",
       "source": "Source/CodexTactics/Private/Characters/RageComponent.cpp:126",
-      "category": "combat_rage"
+      "category": "combat_rage",
+      "priority": 1.0,
+      "cooldown_seconds": 10.0
     },
     {
       "id": "med_tripwire",
@@ -291,7 +345,9 @@
       "style": "Tired, warm male tactical medic-sapper, controlled sharp warning to protect teammates.",
       "text": "Tripwire! Wire at shin height - everyone hold position!",
       "source": "Source/CodexTactics/Private/World/TripwireActor.cpp:355",
-      "category": "hazard_alert"
+      "category": "hazard_alert",
+      "priority": 1.0,
+      "cooldown_seconds": 10.0
     },
     {
       "id": "med_apc_tank_needs_canister",
@@ -300,7 +356,9 @@
       "style": "Tired, warm male analytical field check on an abandoned vehicle.",
       "text": "The abandoned vehicle's tank still holds diesel, but there is nothing to drain it into.",
       "source": "Source/CodexTactics/Private/Quests/QuestChain.cpp:58",
-      "category": "quest_inspect"
+      "category": "quest_inspect",
+      "priority": 2.0,
+      "cooldown_seconds": 15.0
     },
     {
       "id": "med_reloading",
@@ -309,7 +367,9 @@
       "style": "Tired, steady male combat callout over gunfire.",
       "text": "Reloading! Cover me!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:276",
-      "category": "combat_callout"
+      "category": "combat_callout",
+      "priority": 2.0,
+      "cooldown_seconds": 8.0
     },
     {
       "id": "med_watch_back",
@@ -318,7 +378,9 @@
       "style": "Controlled, tired male callout swapping magazine.",
       "text": "Reloading! Watch my back!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:279",
-      "category": "combat_callout"
+      "category": "combat_callout",
+      "priority": 2.0,
+      "cooldown_seconds": 10.0
     },
     {
       "id": "med_grenade_out",
@@ -327,7 +389,9 @@
       "style": "Warm protective urgency, tired male shout warning teammates to duck.",
       "text": "Grenade out! Get down!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:394",
-      "category": "combat_callout"
+      "category": "combat_callout",
+      "priority": 2.0,
+      "cooldown_seconds": 6.0
     },
     {
       "id": "med_grenade_away",
@@ -336,7 +400,9 @@
       "style": "Low urgent male warning throwing explosive.",
       "text": "Grenade away! Heads down!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:395",
-      "category": "combat_callout"
+      "category": "combat_callout",
+      "priority": 1.0,
+      "cooldown_seconds": 8.0
     },
     {
       "id": "med_in_cover",
@@ -345,7 +411,9 @@
       "style": "Tired, calm warm male breath in cover, watching the sector.",
       "text": "In cover, holding the sector!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp:546",
-      "category": "combat_cover"
+      "category": "combat_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "med_barricade_cover",
@@ -354,7 +422,9 @@
       "style": "Tired, steady warm male report behind sandbag barricade.",
       "text": "Behind the barricade, ready to fight!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp:547",
-      "category": "combat_cover"
+      "category": "combat_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "med_patched_up",
@@ -363,7 +433,9 @@
       "style": "Tired, warm reassuring male medic report after field dressing.",
       "text": "Patched up - ready to stand again.",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp:404",
-      "category": "medical"
+      "category": "medical",
+      "priority": 2.0,
+      "cooldown_seconds": 10.0
     },
     {
       "id": "med_thawed",
@@ -372,7 +444,9 @@
       "style": "Exhausted, warm relieved male sigh recovering from frostbite.",
       "text": "I can feel my legs again... I can move!",
       "source": "Source/CodexTactics/Private/Survival/TacticalHeatSubsystem.cpp:183",
-      "category": "survival"
+      "category": "survival",
+      "priority": 2.0,
+      "cooldown_seconds": 10.0
     },
     {
       "id": "med_critically_down",
@@ -381,7 +455,9 @@
       "style": "Wounded, tired, strained male call for field aid.",
       "text": "Critically wounded - going down, need a patch!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp:390",
-      "category": "medical"
+      "category": "medical",
+      "priority": 1.0,
+      "cooldown_seconds": 8.0
     },
     {
       "id": "med_looted_crate",
@@ -390,7 +466,9 @@
       "style": "Tired, appreciative warm male report scavenging supplies.",
       "text": "Took supplies from the supply crate!",
       "source": "Source/CodexTactics/Private/Interactables/InteractionSubsystem.cpp:552",
-      "category": "loot_pickup"
+      "category": "loot_pickup",
+      "priority": 3.0,
+      "cooldown_seconds": 15.0
     },
     {
       "id": "med_panic_grip",
@@ -399,7 +477,9 @@
       "style": "Tired, warm steady male voice regaining composure.",
       "text": "Got a grip! Back in formation!",
       "source": "Source/CodexTactics/Private/Characters/PanicComponent.cpp:272",
-      "category": "combat_panic"
+      "category": "combat_panic",
+      "priority": 1.0,
+      "cooldown_seconds": 10.0
     },
     {
       "id": "pmc1_behind_cover",
@@ -408,7 +488,9 @@
       "style": "Hardened male hostile PMC rifleman shouting from low cover.",
       "text": "Behind cover!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
-      "category": "pmc_cover"
+      "category": "pmc_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "pmc1_hugging_wall",
@@ -417,7 +499,9 @@
       "style": "Gritty male PMC operator stacking on wall edge.",
       "text": "Hugging the wall, holding the corner!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
-      "category": "pmc_cover"
+      "category": "pmc_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "pmc1_reloading",
@@ -426,7 +510,9 @@
       "style": "Terse male PMC rifleman under fire.",
       "text": "Reloading! Cover me!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:276",
-      "category": "pmc_callout"
+      "category": "pmc_callout",
+      "priority": 2.0,
+      "cooldown_seconds": 8.0
     },
     {
       "id": "pmc2_behind_cover",
@@ -435,7 +521,9 @@
       "style": "Cold professional male PMC mercenary calling cover.",
       "text": "Behind cover!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
-      "category": "pmc_cover"
+      "category": "pmc_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "pmc2_hugging_wall",
@@ -444,7 +532,9 @@
       "style": "Firm, cold male PMC operator holding high-wall corner.",
       "text": "Hugging the wall, holding the corner!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:327",
-      "category": "pmc_cover"
+      "category": "pmc_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "pmc2_changing_mags",
@@ -453,7 +543,9 @@
       "style": "Controlled cold male PMC callout swapping magazine.",
       "text": "Changing mags, hold them off!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:278",
-      "category": "pmc_callout"
+      "category": "pmc_callout",
+      "priority": 2.0,
+      "cooldown_seconds": 8.0
     },
     {
       "id": "pmc3_at_corner",
@@ -462,7 +554,9 @@
       "style": "Sharp male PMC point man peeking corner.",
       "text": "At the corner - covering it!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp:326",
-      "category": "pmc_cover"
+      "category": "pmc_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "pmc3_in_cover_sector",
@@ -471,7 +565,9 @@
       "style": "Clear alert male PMC operator watching sector from cover.",
       "text": "In cover, holding the sector!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterMovement.cpp:546",
-      "category": "pmc_cover"
+      "category": "pmc_cover",
+      "priority": 2.0,
+      "cooldown_seconds": 12.0
     },
     {
       "id": "pmc3_grenade_out",
@@ -480,7 +576,9 @@
       "style": "Urgent male PMC throw warning.",
       "text": "Grenade out! Get down!",
       "source": "Source/CodexTactics/Private/Characters/OperativeCharacterWeapons.cpp:394",
-      "category": "pmc_callout"
+      "category": "pmc_callout",
+      "priority": 2.0,
+      "cooldown_seconds": 6.0
     }
   ]
 }

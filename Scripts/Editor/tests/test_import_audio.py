@@ -91,6 +91,10 @@ class AudioImporterDryRunTest(unittest.TestCase):
             import_audio.validate_destination_path("/Engine/Audio")
         with self.assertRaises(ValueError):
             import_audio.validate_destination_path("/Game/UI/Audio")
+        with self.assertRaises(ValueError):
+            import_audio.validate_destination_path("/Game/Audio/../Maps/Audio")
+        with self.assertRaises(ValueError):
+            import_audio.validate_destination_path("/Game/Audio/Music/..")
 
     def test_plan_validation_clean(self):
         """Verifies that real manifests produce zero duplicate packages and zero naming errors."""
