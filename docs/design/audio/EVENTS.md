@@ -202,3 +202,134 @@ Prepared per `AUDIO_PROCESS.md` fields (`description`, `frequency character`, `d
 3. **`sfx_footstep_snow`:** Crisp packed-snow crunch (`250-900 Hz` granular squeak + `90 Hz` boot thump); `0.18-0.28s`; 6 variations walk, 6 sprint, 4 crouch (`±6%` pitch, round-robin).
 4. **`sfx_enemy_hound`:** Wet freezing canine nasal sniff + guttural throat growl (`120-700 Hz`); `0.4-0.9s`; 3 sniffs, 4 growls (`±8%` pitch).
 5. **`sfx_enemy_horde_warning`:** Deep distant industrial frost-horn + layered howling resonance (`65-240 Hz` fundamental); `2.8-3.5s`; 1 hero cue matching `UHordeSubsystem::WarningSound`.
+
+---
+
+## 5. Concrete Implementation Proposals for BLOCKING Accessibility Gaps (A11Y-BLK-01 .. A11Y-BLK-04)
+
+> **Mandate (Task 046 & `SOUND_BIBLE.md §7`):** Every gameplay-critical sound MUST have a paired visual cue. Below are concrete, production-ready proposals for resolving all four `BLOCKING` gaps in C++ without guessing. No C++ code edits are performed in this branch.
+
+### 5.1 A11Y-BLK-01: Proximity Mine Arming Whistle & Danger Ground Ring
+
+- **Problem:** Currently, `AProximityMineActor::Tick` calls `Detonate()` instantaneously upon an operative entering `<= TriggerRadius` (`ProximityMineActor.cpp:210`). Players who are deaf or playing with muted sound have zero opportunity to perceive the pre-blast fuse whistle (`sfx_trap_mine_whistle`) or scatter away from the blast radius.
+- **Audio Event & Cue:**
+  - **ID:** `sfx_trap_mine_whistle`
+  - **Cue Asset:** `USoundCue* MineWhistleCue` (or MetaSound Source) containing sharp mechanical primer strike (`0.08s`) followed by rising metallic spring whistle (`0.37s`, `2.2 kHz -> 3.8 kHz`).
+  - **Bus:** `SFX` (Priority `1`, 3D attenuation `att_warning_spot`, ducks `Music` by `-10 dB`, `Ambient` by `-6 dB`).
+- **Audio Trigger Location in C++:**
+  - `Source/CodexTactics/Private/Interactables/ProximityMineActor.cpp:208-212` in `AProximityMineActor::Tick()`.
+  - When `FVector::Dist2D(Location, Member->GetActorLocation()) <= TriggerRadius` and `!bArmed`:
+    Set `bArmed = true`, call `UGameplayStatics::PlaySoundAtLocation(this, MineWhistleCue, GetActorLocation(), ...);`.
+- **Required Visual Cue Proposal:**
+  - Spawn or activate a ground decal (`UDecalComponent`) using material `M_DangerRadius_Decal` projecting a pulsing circular red danger perimeter with radius equal to `BlastRadius` (from `FExplosionSpec::RadiusCm`), coupled with a flashing red LED beacon on the mine mesh (`RevealMesh` / `UPointLightComponent`).
+- **Visual Cue Trigger Location in C++:**
+  - `Source/CodexTactics/Private/Interactables/ProximityMineActor.cpp:209-211`.
+  - Introduce a fuse delay `PreDetonationFuseSeconds = 0.45f`.
+  - On trigger:
+    ```cpp
+    // Source/CodexTactics/Private/Interactables/ProximityMineActor.cpp:208
+    if (FVector::Dist2D(Location, Member->GetActorLocation()) <= TriggerRadius && !bFuseActive)
+    {
+        bFuseActive = true;
+        UGameplayStatics::PlaySoundAtLocation(this, MineWhistleSound, Location);
+        if (UCombatFeedbackSubsystem* Feedback = GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>())
+        {
+            Feedback->SpawnDangerRadiusRing(Location, ExplosionRadius, PreDetonationFuseSeconds);
+        }
+        GetWorld()->GetTimerManager().SetTimer(DetonationTimerHandle, this, &AProximityMineActor::Detonate, PreDetonationFuseSeconds, false);
+        return;
+    }
+    ```
+
+---
+
+### 5.2 A11Y-BLK-02: Off-Screen Incoming Fire & Suppression Indicator
+
+- **Problem:** When an operative takes fire or is suppressed by enemies located outside the current camera frustum (e.g. PMC snipers on high watchtowers or ambushing squads), the supersonic bullet whiz (`sfx_wpn_incoming_fire`) informs hearing players of the attack angle, but hearing-impaired players receive only a generic non-directional red flash (`SpawnDamageFlash` in `CombatFeedbackSubsystem.h:68`).
+- **Audio Event & Cue:**
+  - **ID:** `sfx_wpn_incoming_fire`
+  - **Cue Asset:** `sfx_wpn_bullet_whiz_01..05` (supersonic whip snap + low-pass air displacement, `0.15-0.25s`).
+  - **Bus:** `SFX` (Priority `1`, 3D attenuation `att_weapon_near`, ducks Ambient `-3 dB`).
+- **Audio Trigger Location in C++:**
+  - `Source/CodexTactics/Private/Combat/SuppressionSubsystem.cpp:386-390` in `USuppressionSubsystem::ReportRound()`.
+  - Evaluated when `!Round.bAtEnemies` and `Impact == ESuppressionImpact::NearMiss` or `CoverStrike` near any squad operative.
+- **Required Visual Cue Proposal:**
+  - Render a screen-edge directional arc / chevron (similar to modern tactical HUDs) indicating the 2D direction on the screen towards the shooter's world location. The chevron flashes bright amber for near-miss suppression and red for direct hits, fading over `0.6s`.
+- **Visual Cue Trigger Location in C++:**
+  - **For Near-Miss Suppression:** `Source/CodexTactics/Private/Combat/SuppressionSubsystem.cpp:389`:
+    ```cpp
+    // SuppressionSubsystem.cpp:389 inside Consider(AActor* Unit)
+    if (!Round.bAtEnemies && (Impact == ESuppressionImpact::NearMiss || Impact == ESuppressionImpact::CoverStrike))
+    {
+        if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+        {
+            Feedback->SpawnDirectionalIncomingFireIndicator(Round.Start, Unit->GetActorLocation(), /*bDirectHit=*/false);
+        }
+    }
+    ```
+  - **For Direct Damage Hits:** `Source/CodexTactics/Private/Characters/OperativeCharacterHealth.cpp:474`:
+    ```cpp
+    // OperativeCharacterHealth.cpp:474 inside TakeDamageInternal
+    if (UCombatFeedbackSubsystem* Feedback = GetWorld() ? GetWorld()->GetSubsystem<UCombatFeedbackSubsystem>() : nullptr)
+    {
+        Feedback->SpawnDamageFlash(this);
+        if (bHasLastHitSource)
+        {
+            Feedback->SpawnDirectionalIncomingFireIndicator(LastHitSource, GetActorLocation(), /*bDirectHit=*/true);
+        }
+    }
+    ```
+
+---
+
+### 5.3 A11Y-BLK-03: Plunging Mortar Flight Whistle & Landing Zone Warning Circle
+
+- **Problem:** Mortar shells fired from `AMortarNestActor` use high-angle parabolic trajectories (`EProjectileTrajectory::HighAngle` in `ProjectileRules.h`). The incoming whistle (`sfx_wpn_mortar_whistle`) drops in pitch 1.5s prior to impact. Without an accompanying visual cue, players with hearing impairments have no warning before catastrophic high-explosive impact.
+- **Audio Event & Cue:**
+  - **ID:** `sfx_wpn_mortar_whistle`
+  - **Cue Asset:** `sfx_wpn_mortar_whistle_01..02` (doppler descending high whistle `1.5s`, `3.5 kHz -> 800 Hz`).
+  - **Bus:** `SFX` (Priority `1`, 3D attenuation `att_weapon_far`, ducks Music `-4 dB`, Ambient `-4 dB`).
+- **Audio Trigger Location in C++:**
+  - `Source/CodexTactics/Private/Combat/ProjectileActor.cpp:145-160` in `AProjectileActor::Fly(float DeltaSeconds)`.
+  - Condition: `Flight.Trajectory == EProjectileTrajectory::HighAngle && (Flight.TotalTime - Flight.TimeInFlight <= 1.5f)` and whistle sound not yet triggered. Triggered on attached `UAudioComponent` following the projectile.
+- **Required Visual Cue Proposal:**
+  - A red pulsating ground impact decal / warning circle projected onto the landing zone (`Shot.Aim`) with radius equal to `Config.Round.Explosion.RadiusCm` (typically 300–450 cm). If the landing zone is off-screen, display an off-screen mortar chevron indicator via `UHordeArrowsWidget` or `UCombatFeedbackSubsystem`.
+- **Visual Cue Trigger Location in C++:**
+  - `Source/CodexTactics/Private/Combat/MortarNestActor.cpp:366` in `AMortarNestActor::FireRound()`:
+    The target point `Shot.Aim` and flight duration `Flight.TotalTime` are computed at launch.
+  - Hook into `OnRoundFired.Broadcast(this, Shot)` or directly in `AMortarNestActor::FireRound()`:
+    ```cpp
+    // Source/CodexTactics/Private/Combat/MortarNestActor.cpp:366
+    OnRoundFired.Broadcast(this, Shot);
+    if (UCombatFeedbackSubsystem* Feedback = World->GetSubsystem<UCombatFeedbackSubsystem>())
+    {
+        Feedback->SpawnMortarWarningZone(Shot.Aim, Config.Round.Explosion.RadiusCm, Config.IntervalSeconds);
+    }
+    ```
+
+---
+
+### 5.4 A11Y-BLK-04: Critical HP Bleedout Heartbeat & Persistent Squad Portrait Alert
+
+- **Problem:** When an operative falls into critical health / bleedout (`bCriticalWoundDown` in `OperativeCharacterStance.cpp:387`), the one-shot text `"🩸 CRITICALLY WOUNDED!"` appears once, but then vanishes. While hearing players hear the sustained low-health heartbeat loop (`sfx_ui_low_hp_heartbeat`), deaf players lose continuous awareness of the operative's dying state if their camera looks elsewhere.
+- **Audio Event & Cue:**
+  - **ID:** `sfx_ui_low_hp_heartbeat`
+  - **Cue Asset:** `sfx_ui_heartbeat_slow_loop` (muffled sub-bass pulse, `60-80 BPM`, `40-160 Hz`).
+  - **Bus:** `UI` (Priority `1`, 2D, gently low-passes non-critical high SFX).
+- **Audio Trigger Location in C++:**
+  - **Start Loop:** `Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp:387-397` upon entering `ECriticalWoundAction::Down`.
+  - **Stop Loop:** `Source/CodexTactics/Private/Characters/OperativeCharacterStance.cpp:402-411` upon entering `ECriticalWoundAction::MayStand` (when patched up) or upon death (`HealthComponent->IsAlive() == false`).
+- **Required Visual Cue Proposal:**
+  - Persistent flashing red pulse border on the operative's slot in the squad HUD portrait bar (`CodexTacticsHUD`), coupled with an animated red cross/bleeding icon on the portrait until stabilized above the critical threshold (`GetWoundConfig().CriticalFrom`).
+- **Visual Cue Trigger Location in C++:**
+  - `Source/CodexTactics/Private/UI/CodexTacticsHUD.cpp:1607-1620` in `ACodexTacticsHUD::DrawSquadStatus`:
+    ```cpp
+    // Source/CodexTactics/Private/UI/CodexTacticsHUD.cpp:1608
+    if (Member->IsCriticallyWounded())
+    {
+        Tier = CriticalWoundRules::EWoundTier::Critical;
+        // Continuous pulsing red border & overhead critical beacon
+        DrawCriticalPulseIndicator(SlotIndex, MemberLocation, DeltaSeconds);
+    }
+    ```
+
