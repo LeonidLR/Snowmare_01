@@ -11,6 +11,25 @@ class UMaterialInterface;
 class USkeletalMeshComponent;
 class UStaticMeshComponent;
 
+/** Visual components and dynamic material state for a breach ghost slot. */
+USTRUCT()
+struct FDoorwayBreachSlotVisual
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	TObjectPtr<USkeletalMeshComponent> Body = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UStaticMeshComponent> Placeholder = nullptr;
+
+	UPROPERTY()
+	TObjectPtr<UMaterialInstanceDynamic> Material = nullptr;
+
+	UPROPERTY()
+	bool bActive = false;
+};
+
 /**
  * Holographic preview actor displaying the 3-man (or 4-man) doorway breach triad.
  * Step 3 of Tactical Doorway Breach (docs/design/DOORWAY_BREACH.md).
@@ -59,29 +78,30 @@ public:
 	TObjectPtr<UMaterialInterface> GhostMaterial;
 
 private:
-	struct FSlotVisual
-	{
-		TObjectPtr<USkeletalMeshComponent> Body;
-		TObjectPtr<UStaticMeshComponent> Placeholder;
-		TObjectPtr<UMaterialInstanceDynamic> Material;
-		bool bActive = false;
-	};
+	using FSlotVisual = FDoorwayBreachSlotVisual;
 
-	void SetupSlotVisual(FSlotVisual& Visual, const FName& BodyName, const FName& PlaceholderName);
+	void SetupSlotVisual(FDoorwayBreachSlotVisual& Visual, const FName& BodyName, const FName& PlaceholderName);
 	void UpdateSlotVisual(
-		FSlotVisual& Visual,
+		FDoorwayBreachSlotVisual& Visual,
 		const FDoorwayBreachSlot& Slot,
 		const AOperativeCharacter* Operative,
 		const FLinearColor& Color);
-	void HideSlotVisual(FSlotVisual& Visual);
+	void HideSlotVisual(FDoorwayBreachSlotVisual& Visual);
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|DoorwayBreach")
 	TObjectPtr<USceneComponent> Root;
 
-	FSlotVisual LeftVisual;
-	FSlotVisual RightVisual;
-	FSlotVisual CenterVisual;
-	FSlotVisual RearVisual;
+	UPROPERTY()
+	FDoorwayBreachSlotVisual LeftVisual;
+
+	UPROPERTY()
+	FDoorwayBreachSlotVisual RightVisual;
+
+	UPROPERTY()
+	FDoorwayBreachSlotVisual CenterVisual;
+
+	UPROPERTY()
+	FDoorwayBreachSlotVisual RearVisual;
 
 	FDoorwayBreachTriad Triad;
 	bool bShown = false;

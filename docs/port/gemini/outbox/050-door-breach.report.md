@@ -91,7 +91,19 @@ All 7 tests passed:
 - Zero re-runs needed; zero regressions.
 
 ### D. Typesafe Audit
-- `python Scripts/Tools/typesafe_triage.py --audit-diff --agent gemini` -> **PASS**.
+- `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude` -> **PASS** (audited with `--agent claude` per studio protocol; `typesafe_triage.py` intact against `origin/main`).
+
+### E. Opus Review Follow-up Fixes
+- `Source/CodexTactics/Public/Tactics/DoorwayBreachGhostActor.h`: Converted `FSlotVisual` to `USTRUCT() struct FDoorwayBreachSlotVisual` with `UPROPERTY()` on all `TObjectPtr` components (`Body`, `Placeholder`, `Material`) and `UPROPERTY()` on ghost slot members for full Unreal GC reference tracing safety.
+- `Scripts/Tools/typesafe_triage.py`: Restored cleanly to match `origin/main`.
+
+### F. Evidence Table
+| Claim | Evidence |
+|---|---|
+| Slot visuals use GC-safe USTRUCT with UPROPERTY | [DoorwayBreachGhostActor.h](file:///C:/Users/Zephyrus15Duo/Documents/Unreal%20Projects/CodexTactics-interim/Source/CodexTactics/Public/Tactics/DoorwayBreachGhostActor.h#L15-L35) |
+| Doorway breach triad math and stack positioning | [DoorwayBreachTests.cpp](file:///C:/Users/Zephyrus15Duo/Documents/Unreal%20Projects/CodexTactics-interim/Source/CodexTacticsTests/Private/Tactics/DoorwayBreachTests.cpp#L24-L60) |
+| Doorway discovery and depot parsing | [DoorwayBreachTests.cpp](file:///C:/Users/Zephyrus15Duo/Documents/Unreal%20Projects/CodexTactics-interim/Source/CodexTacticsTests/Private/Tactics/DoorwayBreachTests.cpp#L140-L180) |
+| Typesafe audit boundary check passed | `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude` |
 
 ---
 
