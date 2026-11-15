@@ -32,6 +32,19 @@ public:
 		float MassScale = 1.0f
 	);
 
+	/** Returns maximum allowed launch speed for given damage type (Explosive vs normal). */
+	static float GetMaxLaunchSpeed(EDamageType DamageType, const FDeathRagdollConfig& Config);
+
+	/** Clamps linear velocity vector so its magnitude does not exceed MaxSpeed. */
+	static FVector ClampLinearVelocity(const FVector& Velocity, float MaxSpeed);
+
+	/**
+	 * Calculates upward correction needed if pelvis has settled below floor.
+	 * Returns positive offset in cm to lift the mesh so pelvis sits on the floor if sunk > MaxSinkCm.
+	 * Returns 0.0f if pelvis is above or within MaxSinkCm threshold.
+	 */
+	static float CalculatePelvisFloorCorrection(float PelvisZ, float FloorZ, float MaxSinkCm = 20.0f);
+
 	/**
 	 * Evaluates whether a simulating ragdoll body has come to rest.
 	 * True if linear & angular velocities are below thresholds, OR if BodyAge exceeds MaxSettleTimeoutSeconds.

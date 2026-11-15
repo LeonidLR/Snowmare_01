@@ -73,6 +73,14 @@ bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRa
 	{
 		OutConfig.MaxImpulseMagnitude = static_cast<float>(Val);
 	}
+	if (RootObject->TryGetNumberField(TEXT("max_launch_speed_cm_s"), Val))
+	{
+		OutConfig.MaxLaunchSpeedCmS = static_cast<float>(Val);
+	}
+	if (RootObject->TryGetNumberField(TEXT("max_launch_speed_explosive_cm_s"), Val))
+	{
+		OutConfig.MaxLaunchSpeedExplosiveCmS = static_cast<float>(Val);
+	}
 	if (RootObject->TryGetNumberField(TEXT("angular_damping"), Val))
 	{
 		OutConfig.AngularDamping = static_cast<float>(Val);
@@ -170,6 +178,34 @@ FVector FDeathRagdollRules::CalculateImpulse(
 	Magnitude = FMath::Clamp(Magnitude, 0.0f, Config.MaxImpulseMagnitude);
 
 	return Dir * Magnitude;
+}
+
+float FDeathRagdollRules::GetMaxLaunchSpeed(EDamageType DamageType, const FDeathRagdollConfig& Config)
+{
+	return (DamageType == EDamageType::Explosive) ? Config.MaxLaunchSpeedExplosiveCmS : Config.MaxLaunchSpeedCmS;
+}
+
+FVector FDeathRagdollRules::ClampLinearVelocity(const FVector& Velocity, float MaxSpeed)
+{
+	if (MaxSpeed > 0.0f)
+	{
+		const float SpeedSq = Velocity.SizeSquared();
+		if (SpeedSq > FMath::Square(MaxSpeed))
+		{
+			return Velocity.GetSafeNormal() * MaxSpeed;
+		}
+	}
+	return Velocity;
+}
+
+float FDeathRagdollRules::CalculatePelvisFloorCorrection(float PelvisZ, float FloorZ, float MaxSinkCm)
+{
+	const float SinkDepth = FloorZ - PelvisZ;
+	if (SinkDepth > MaxSinkCm)
+	{
+		return SinkDepth;
+	}
+	return 0.0f;
 }
 
 bool FDeathRagdollRules::HasBodySettled(

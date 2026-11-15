@@ -39,7 +39,15 @@ struct CODEXTACTICS_API FDeathRagdollConfig
 
 	/** Maximum kinetic impulse magnitude allowed (g*cm/s) to prevent physics explosion/jitter. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll", meta = (ClampMin = "1000.0"))
-	float MaxImpulseMagnitude = 120000.0f;
+	float MaxImpulseMagnitude = 60000.0f;
+
+	/** Maximum launch speed allowed after death impulse for normal damage (cm/s). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll", meta = (ClampMin = "100.0"))
+	float MaxLaunchSpeedCmS = 600.0f;
+
+	/** Maximum launch speed allowed after death impulse for Explosive damage (cm/s). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll", meta = (ClampMin = "100.0"))
+	float MaxLaunchSpeedExplosiveCmS = 900.0f;
 
 	/** Angular damping applied during simulation. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll")

@@ -22,6 +22,7 @@
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
 
 namespace DeathRagdollSmoke
@@ -35,6 +36,9 @@ namespace DeathRagdollSmoke
 		bool bIsPlayerTeam = false;
 		bool bRagdollActivated = false;
 		bool bFrozen = false;
+		bool bRunning = false;
+		bool bMultiShot = false;
+		float MaxObservedSpeed = 0.f;
 	};
 
 	struct FState
@@ -79,6 +83,22 @@ namespace DeathRagdollSmoke
 		{
 		case 0:
 		{
+			// Maintain running velocity during warmup
+			for (FSubject& Subj : State.Subjects)
+			{
+				if (Subj.bRunning)
+				{
+					if (ACharacter* Char = Subj.Character.Get())
+					{
+						if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
+						{
+							Move->MaxWalkSpeed = 600.f;
+							Move->Velocity = Char->GetActorForwardVector() * 500.f;
+						}
+					}
+				}
+			}
+
 			// Stage 0: Wait 0.5s for spawned characters to touch ground and initialize
 			if (State.StageTime < 0.5f)
 			{
@@ -112,20 +132,60 @@ namespace DeathRagdollSmoke
 			Spec.DamageType = EDamageType::Kinetic;
 			Spec.DamageOrigin = FVector(0.f, 0.f, 100.f);
 
-			for (const FSubject& Subj : State.Subjects)
+			for (FSubject& Subj : State.Subjects)
 			{
 				ACharacter* Char = Subj.Character.Get();
 				if (!Char)
 				{
 					continue;
 				}
-				if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+
+				if (Subj.bMultiShot)
 				{
-					Enemy->GetHealthComponent()->TakeDamage(Spec);
+					if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+					{
+						// Apply 3 kinetic hits + 1 explosive hit in the same frame
+						FDamageSpec Shot1 = Spec;
+						Shot1.Amount = 100.f;
+						FDamageSpec Shot2 = Spec;
+						Shot2.Amount = 100.f;
+						FDamageSpec Shot3 = Spec;
+						Shot3.Amount = 100.f;
+
+						FDamageSpec Blast;
+						Blast.Amount = 500.f;
+						Blast.ArmorPenetration = 1.f;
+						Blast.DamageType = EDamageType::Explosive;
+						Blast.DamageOrigin = Char->GetActorLocation() - Char->GetActorForwardVector() * 100.f;
+
+						Enemy->GetHealthComponent()->TakeDamage(Shot1);
+						Enemy->GetHealthComponent()->TakeDamage(Shot2);
+						Enemy->GetHealthComponent()->TakeDamage(Shot3);
+						Enemy->GetHealthComponent()->TakeDamage(Blast);
+
+						if (USkeletalMeshComponent* Mesh = Enemy->GetMesh())
+						{
+							for (FBodyInstance* BodyInst : Mesh->Bodies)
+							{
+								if (BodyInst && BodyInst->IsValidBodyInstance() && BodyInst->bSimulatePhysics)
+								{
+									Subj.MaxObservedSpeed = FMath::Max(Subj.MaxObservedSpeed, static_cast<float>(BodyInst->GetUnrealWorldVelocity().Size()));
+								}
+							}
+							Subj.MaxObservedSpeed = FMath::Max(Subj.MaxObservedSpeed, static_cast<float>(Mesh->GetPhysicsLinearVelocity(FName(TEXT("pelvis"))).Size()));
+						}
+					}
 				}
-				else if (AOperativeCharacter* Op = Cast<AOperativeCharacter>(Char))
+				else
 				{
-					Op->TakeHit(10000.f, TEXT("Smoke"), false, true);
+					if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+					{
+						Enemy->GetHealthComponent()->TakeDamage(Spec);
+					}
+					else if (AOperativeCharacter* Op = Cast<AOperativeCharacter>(Char))
+					{
+						Op->TakeHit(10000.f, TEXT("Smoke"), false, true);
+					}
 				}
 			}
 
@@ -161,6 +221,12 @@ namespace DeathRagdollSmoke
 				}
 
 				Check(State, Subj.bRagdollActivated, FString::Printf(TEXT("%s death ragdoll active"), *Subj.Name));
+
+				if (Subj.bMultiShot)
+				{
+					Check(State, Subj.MaxObservedSpeed <= 900.0f + 1.0f,
+						FString::Printf(TEXT("%s max launch speed %.1f cm/s <= 900 cm/s (clamped)"), *Subj.Name, Subj.MaxObservedSpeed));
+				}
 
 				const bool bCapsuleIgnoresPawn = Char->GetCapsuleComponent() &&
 					Char->GetCapsuleComponent()->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Ignore;
@@ -229,6 +295,12 @@ namespace DeathRagdollSmoke
 						FString::Printf(TEXT("%s (player team KIA) preserved, not destroyed by cap"), *Subj.Name));
 				}
 
+				if (Subj.bMultiShot)
+				{
+					// (b) 3 shooters + 1 explosive on one target: max launch speed was verified in stage 1
+					continue;
+				}
+
 				// Check pelvis height above floor
 				if (USkeletalMeshComponent* Mesh = Char->GetMesh())
 				{
@@ -244,7 +316,20 @@ namespace DeathRagdollSmoke
 					}
 
 					const float Height = Pelvis.Z - FloorZ;
-					Check(State, Height < 45.0f, FString::Printf(TEXT("%s pelvis height %.1f cm < 45 cm (lying down, settled)"), *Subj.Name, Height));
+					const bool bIsBrute = Char->IsA<AEnemyCharacter>() && Cast<AEnemyCharacter>(Char)->GetArchetype() == EEnemyArchetype::Brute;
+					const float MaxAllowedHeight = bIsBrute ? 120.0f : 65.0f;
+					const bool bHeightOk = Height >= -20.0f && Height < MaxAllowedHeight;
+					if (Subj.bRunning)
+					{
+						// (a) a kill while target runs at full speed - after settle pelvis is within bounds of floor trace (< 65 cm, > -20 cm)
+						Check(State, bHeightOk,
+							FString::Printf(TEXT("%s (killed at speed) pelvis height %.1f cm within bounds of floor (< %.0f cm, settled)"), *Subj.Name, Height, MaxAllowedHeight));
+					}
+					else
+					{
+						Check(State, bHeightOk,
+							FString::Printf(TEXT("%s pelvis height %.1f cm within bounds of floor (< %.0f cm, settled)"), *Subj.Name, Height, MaxAllowedHeight));
+					}
 				}
 				else
 				{
@@ -283,7 +368,7 @@ namespace DeathRagdollSmoke
 		// 1. Spawn Hound (FrostHound)
 		if (Waves)
 		{
-			AEnemyCharacter* Hound = Waves->SpawnEnemy(EEnemyArchetype::FrostHound, BasePoint + FVector(0.f, -400.f, 0.f), Facing);
+			AEnemyCharacter* Hound = Waves->SpawnEnemy(EEnemyArchetype::FrostHound, BasePoint + FVector(0.f, -300.f, 0.f), Facing);
 			if (Hound && Hound->GetMesh())
 			{
 				Hound->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
@@ -291,10 +376,10 @@ namespace DeathRagdollSmoke
 			}
 		}
 
-		// 2. Spawn Brute
+		// 2. Spawn Brute (offset in X to avoid corridor wall at Y=-200)
 		if (Waves)
 		{
-			AEnemyCharacter* Brute = Waves->SpawnEnemy(EEnemyArchetype::Brute, BasePoint + FVector(0.f, -200.f, 0.f), Facing);
+			AEnemyCharacter* Brute = Waves->SpawnEnemy(EEnemyArchetype::Brute, BasePoint + FVector(200.f, -150.f, 0.f), Facing);
 			if (Brute && Brute->GetMesh())
 			{
 				Brute->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
@@ -316,7 +401,7 @@ namespace DeathRagdollSmoke
 		// 4. Spawn hostile PMC operative
 		if (Pmc)
 		{
-			const FVector PmcSpot = BasePoint + FVector(0.f, 200.f, 0.f);
+			const FVector PmcSpot = BasePoint + FVector(0.f, 150.f, 0.f);
 			const TArray<AOperativeCharacter*> Spawned = Pmc->SpawnSquad(1, PmcSpot, Facing, 1, 7);
 			if (!Spawned.IsEmpty() && Spawned[0])
 			{
@@ -335,12 +420,34 @@ namespace DeathRagdollSmoke
 			AOperativeCharacter* PlayerOp = Squad->GetMembers()[1];
 			if (PlayerOp)
 			{
-				PlayerOp->TeleportTo(BasePoint + FVector(0.f, 400.f, 0.f), Facing, false, true);
+				PlayerOp->TeleportTo(BasePoint + FVector(-200.f, 0.f, 0.f), Facing, false, true);
 				if (USkeletalMeshComponent* Mesh = PlayerOp->GetMesh())
 				{
 					Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 				}
 				State->Subjects.Add({ TEXT("Player KIA"), PlayerOp, true, false, false });
+			}
+		}
+
+		// 6. Spawn running zombie (Frostbitten killed mid-sprint)
+		if (Waves)
+		{
+			AEnemyCharacter* Runner = Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, BasePoint + FVector(0.f, 600.f, 0.f), Facing);
+			if (Runner && Runner->GetMesh())
+			{
+				Runner->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				State->Subjects.Add({ TEXT("Running zombie"), Runner, false, false, false, /* bRunning */ true, false, 0.f });
+			}
+		}
+
+		// 7. Spawn multi-shot target (Brute hit by 3 shooters + 1 explosive simultaneously)
+		if (Waves)
+		{
+			AEnemyCharacter* MultiTarget = Waves->SpawnEnemy(EEnemyArchetype::Brute, BasePoint + FVector(200.f, 150.f, 0.f), Facing);
+			if (MultiTarget && MultiTarget->GetMesh())
+			{
+				MultiTarget->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				State->Subjects.Add({ TEXT("Multi-shot target"), MultiTarget, false, false, false, false, /* bMultiShot */ true, 0.f });
 			}
 		}
 

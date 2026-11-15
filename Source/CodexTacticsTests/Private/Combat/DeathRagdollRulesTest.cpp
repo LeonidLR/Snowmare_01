@@ -29,7 +29,9 @@ bool FDeathRagdollConfigLoadsTest::RunTest(const FString&)
 	TestEqual(TEXT("Max settle timeout is 3.5s"), Config.MaxSettleTimeoutSeconds, 3.5f);
 	TestEqual(TEXT("Linear settle threshold is 15 cm/s"), Config.LinearSettleThresholdCmS, 15.0f);
 	TestEqual(TEXT("Angular settle threshold is 0.25 rad/s"), Config.AngularSettleThresholdRadS, 0.25f);
-	TestEqual(TEXT("Max impulse magnitude is 120,000"), Config.MaxImpulseMagnitude, 120000.0f);
+	TestEqual(TEXT("Max impulse magnitude is 60,000"), Config.MaxImpulseMagnitude, 60000.0f);
+	TestEqual(TEXT("Max launch speed is 600 cm/s"), Config.MaxLaunchSpeedCmS, 600.0f);
+	TestEqual(TEXT("Max launch speed explosive is 900 cm/s"), Config.MaxLaunchSpeedExplosiveCmS, 900.0f);
 	TestEqual(TEXT("Upward impulse bias is 0.25"), Config.UpwardImpulseBias, 0.25f);
 	TestEqual(TEXT("Min damage factor is 0.5"), Config.MinDamageFactor, 0.5f);
 	TestEqual(TEXT("Max damage factor is 3.0"), Config.MaxDamageFactor, 3.0f);
@@ -132,6 +134,64 @@ bool FDeathRagdollPhysicsAssetValidationTest::RunTest(const FString&)
 	TestTrue(TEXT("Produces descriptive error"), ErrorMsg.Contains(TEXT("null")));
 
 	TestEqual(TEXT("Default pelvis bone name"), FDeathRagdollRules::GetDefaultPelvisBoneName(), FName(TEXT("pelvis")));
+
+	return true;
+}
+
+RAGDOLL_TEST(FDeathRagdollSpeedClampTest, "SpeedClamp")
+bool FDeathRagdollSpeedClampTest::RunTest(const FString&)
+{
+	const FDeathRagdollConfig Config = FDeathRagdollRules::GetDefaultConfig();
+
+	// 1. GetMaxLaunchSpeed
+	const float KineticMax = FDeathRagdollRules::GetMaxLaunchSpeed(EDamageType::Kinetic, Config);
+	TestEqual(TEXT("Kinetic max launch speed is 600 cm/s"), KineticMax, 600.0f);
+
+	const float ExplosiveMax = FDeathRagdollRules::GetMaxLaunchSpeed(EDamageType::Explosive, Config);
+	TestEqual(TEXT("Explosive max launch speed is 900 cm/s"), ExplosiveMax, 900.0f);
+
+	// 2. Velocity below threshold: unchanged
+	const FVector SubThresholdVel(300.0f, 0.0f, 0.0f);
+	const FVector ClampedSub = FDeathRagdollRules::ClampLinearVelocity(SubThresholdVel, 600.0f);
+	TestEqual(TEXT("Sub-threshold velocity unchanged"), ClampedSub, SubThresholdVel);
+
+	// 3. Velocity above threshold: clamped to max speed in same direction
+	const FVector ExcessiveVel(0.0f, 1200.0f, 0.0f);
+	const FVector ClampedExcess = FDeathRagdollRules::ClampLinearVelocity(ExcessiveVel, 600.0f);
+	TestNearlyEqual(TEXT("Excessive velocity clamped to 600 cm/s"), static_cast<float>(ClampedExcess.Size()), 600.0f, 0.1f);
+	TestTrue(TEXT("Clamped velocity preserves direction"), ClampedExcess.Y > 0.0f);
+
+	// 4. Zero velocity: unchanged
+	const FVector ZeroVel = FVector::ZeroVector;
+	TestEqual(TEXT("Zero velocity unchanged"), FDeathRagdollRules::ClampLinearVelocity(ZeroVel, 600.0f), ZeroVel);
+
+	return true;
+}
+
+RAGDOLL_TEST(FDeathRagdollPelvisFloorCorrectionTest, "PelvisFloorCorrection")
+bool FDeathRagdollPelvisFloorCorrectionTest::RunTest(const FString&)
+{
+	const float FloorZ = 100.0f;
+
+	// 1. Pelvis > 20 cm below floor (e.g. at Z = 70 cm, sink = 30 cm) -> lifts by 30 cm
+	const float SunkPelvisZ = 70.0f;
+	const float CorrectionSunk = FDeathRagdollRules::CalculatePelvisFloorCorrection(SunkPelvisZ, FloorZ, 20.0f);
+	TestEqual(TEXT("Pelvis 30 cm below floor corrected by +30 cm"), CorrectionSunk, 30.0f);
+
+	// 2. Pelvis <= 20 cm below floor (e.g. at Z = 85 cm, sink = 15 cm) -> no correction (returns 0.0f)
+	const float MinorSinkPelvisZ = 85.0f;
+	const float CorrectionMinor = FDeathRagdollRules::CalculatePelvisFloorCorrection(MinorSinkPelvisZ, FloorZ, 20.0f);
+	TestEqual(TEXT("Pelvis 15 cm below floor needs no correction"), CorrectionMinor, 0.0f);
+
+	// 3. Pelvis exactly 20 cm below floor -> boundary check (returns 0.0f)
+	const float BoundaryPelvisZ = 80.0f;
+	const float CorrectionBoundary = FDeathRagdollRules::CalculatePelvisFloorCorrection(BoundaryPelvisZ, FloorZ, 20.0f);
+	TestEqual(TEXT("Pelvis exactly 20 cm below floor needs no correction"), CorrectionBoundary, 0.0f);
+
+	// 4. Pelvis above floor -> no correction
+	const float AbovePelvisZ = 115.0f;
+	const float CorrectionAbove = FDeathRagdollRules::CalculatePelvisFloorCorrection(AbovePelvisZ, FloorZ, 20.0f);
+	TestEqual(TEXT("Pelvis above floor needs no correction"), CorrectionAbove, 0.0f);
 
 	return true;
 }
