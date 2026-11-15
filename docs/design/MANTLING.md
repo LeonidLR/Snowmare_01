@@ -384,3 +384,13 @@ Names below are exact inventory names; default-name clips are standing candidate
 - **Q3 — weapon/stance:** A retain §2.2 weapon/ready-time targets where compatible / B clip-driven sling/restore windows after preview? On top: retain prior legal stance / crouch by default? High-fence over uses a far-side landing, not a top hold.
 - **Q4 — review clips/contact:** for the four NEEDS_REVIEW clips above, A defer / B inspect authored phases and approve a separate action/height contract? What maximum contact/position warp is acceptable, particularly for the low-vault peaks outside 95±5?
 - **Q5 — squad/combat:** A keep §6 stagger/overwatch targets / B revise them after the one-person slice? Which hit/knockdown cancels the climb, and retain §7 noise values or tune them after contact/landing review?
+
+### 11.6 Designer answers 2026-11-15
+
+- **Q1 trigger = C:** a click on a reachable ledge top orders the climb, AND a path to a clicked point that runs over an eligible obstacle mantles by itself (like the vault).
+- **Q2 run-up = A:** insufficient run-up -> stop and use the standing clip; the system never starts a sprint by itself (run clips only when already running).
+- **Q3 weapon/stance:** clip-driven sling/raise windows; no fire during the climb; on top the operative goes to a **crouch**.
+- **Q4 review clips:** deferred (the four NEEDS_REVIEW clips stay out).
+- **Q5 squad/combat:** first slice = **one operative** (solo) end-to-end; formation queue + overwatch after the designer's test. A hit with knockdown / heavy hit cancels the climb (he drops to the base).
+- Order: mantling on the CURRENT L_Gen_Depot_1 (its obstacles reworked to the height classes) -> designer test -> generator v2 (board 066).
+- **L_Gen_Depot_1 obstacle rework (designer 2026-11-15; the uncommitted .umap had no manual edits - may be overwritten by the rebuild, backup first):** sandbags 100 -> 95 and jersey 90 -> 95 (low_vault); barrels 90 stay, NOT traversable (explosive); wrecks 150 -> 140 (high_mantle); cut (canal) walls 220 -> 230 (tall_ledge: climb out of the canal); **crates 110 -> mix of 85 and 140** (~half each); **fences 250 -> about a third lowered to 135** (high_fence_over, only where it does not break routes / devalue ambush fields), the rest raised to 330 (blocked); **one-storey roofs (300) climbable only at 1-2 marked mantle edges per building** (pipe / annex / crates next to it), other 300 walls are not mantle targets; **boilers 160 -> 140** (climbable).
