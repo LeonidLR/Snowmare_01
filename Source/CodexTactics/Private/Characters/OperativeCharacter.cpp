@@ -28,6 +28,7 @@
 #include "Falls/LedgeFallComponent.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "MotionWarpingComponent.h"
 #include "Survival/ColdSurvivalComponent.h"
 #include "UObject/ConstructorHelpers.h"
 #include "Vehicles/VehicleSubsystem.h"
@@ -114,6 +115,7 @@ AOperativeCharacter::AOperativeCharacter()
 	KnockdownComponent = CreateDefaultSubobject<UKnockdownComponent>(TEXT("KnockdownComponent")); // AM_* montages on FullBody
 	LadderClimb = CreateDefaultSubobject<ULadderClimbComponent>(TEXT("LadderClimb")); // docs/design/LADDERS.md
 	LedgeFall = CreateDefaultSubobject<ULedgeFallComponent>(TEXT("LedgeFall")); // falls and drops (2026-11-03)
+	MotionWarping = CreateDefaultSubobject<UMotionWarpingComponent>(TEXT("MotionWarping")); // the mantle clips (docs/design/MANTLING.md 11)
 	HealthComponent->MaxHealth = 100.0f;
 	HealthComponent->BaseArmorReduction = 0.10f;
 
@@ -293,6 +295,7 @@ void AOperativeCharacter::ApplyBodyColor()
 
 void AOperativeCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	CancelMantle(EMantleCancel::EndPlay); // mantling: everything released (OperativeCharacterMantle.cpp)
 	SetStealthMode(false);
 	if (SelectionRing)
 	{
@@ -336,6 +339,10 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	{
 		UpdateVault(DeltaTime);
 	}
+	else if (bMantling)
+	{
+		UpdateMantle(DeltaTime); // the root-motion climb moves him (OperativeCharacterMantle.cpp); no cover, facing or shooting
+	}
 	else if (IsClimbingLadder())
 	{
 		// on a ladder: ULadderClimbComponent moves and turns him; no cover, facing or shooting (LADDERS.md 7.2)
@@ -350,7 +357,11 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	}
 	else if (!IsKnockedDown() && !VehicleQueries::IsMounted(this)) // Sprint 14: lying on the ground — no cover, facing or shooting until he is up (APC P1: nor aboard)
 	{
-		UpdateVaultTrigger(DeltaTime);
+		UpdateMantleTrigger(DeltaTime); // mantling: a clicked top reached, a run clip ahead, a mantle link (OperativeCharacterMantle.cpp)
+		if (!bMantling && !bVaulting)
+		{
+			UpdateVaultTrigger(DeltaTime);
+		}
 		TryEnterCoverFromRun();
 		UpdateCover(DeltaTime);
 		UpdateCombatFacing(DeltaTime);

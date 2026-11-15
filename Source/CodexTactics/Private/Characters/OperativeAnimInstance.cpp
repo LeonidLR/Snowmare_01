@@ -781,7 +781,7 @@ void UOperativeAnimInstance::HandleHealthChanged(float NewHealth, float MaxHealt
 	Context.SecondsSinceLast = static_cast<float>(Now - LastHitReactionTime);
 	Context.bInCover = Operative->bInCover;
 	// Knocked down: the knockdown clip owns the body; a throw / reload / stance change keeps its clip.
-	Context.bBusy = Operative->IsKnockedDown() || IsThrowingGrenade() || Operative->bIsReloading || IsPlayingStanceTransition() || Operative->IsVaulting()
+	Context.bBusy = Operative->IsKnockedDown() || IsThrowingGrenade() || Operative->bIsReloading || IsPlayingStanceTransition() || Operative->IsVaulting() || Operative->IsMantling()
 		|| Operative->IsClimbingLadder(); // on a ladder: damage applies, no hit clip (LADDERS.md 7.7)
 	if (!HitReactionRules::ShouldReact(Settings, Context))
 	{
@@ -1160,7 +1160,10 @@ void UOperativeAnimInstance::UpdateState()
 	bFallLanding = FallPhase == FallRules::EFallAnimPhase::Landing;
 	bFallGrounded = FallPhase == FallRules::EFallAnimPhase::Grounded;
 	// A vault moves the actor directly too (Godot "Vault" state; the graph may play its own clip on bIsVaulting).
-	bIsVaulting = Operative->IsVaulting();
+	// Mantling slice 1 (OperativeCharacterMantle.cpp): the climb's root-motion montage owns the full body like a vault - every gate on
+	// bIsVaulting (aim offset, left-hand IK, the weapon layers, sniper / stealth / injured / interaction / warm clips) holds for it too.
+	bIsMantling = Operative->IsMantling();
+	bIsVaulting = Operative->IsVaulting() || bIsMantling;
 	if (bIsVaulting)
 	{
 		Speed = Operative->GetVaultSpeed();

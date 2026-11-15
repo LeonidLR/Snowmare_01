@@ -11,6 +11,7 @@
 #include "Characters/ProgressionRules.h"
 #include "Characters/SquadAutonomyRules.h"
 #include "Characters/FirePostureRules.h"
+#include "Characters/MantleRules.h"
 #include "Combat/TargetedShotRules.h"
 #include "Interactables/DeployableRules.h"
 #include "Interactables/TrapSpotRules.h"
@@ -442,6 +443,60 @@ public:
 
 	/** Length of the vault in progress, s (a step off an obstacle top is short: 0.5 s). */
 	float GetVaultDuration() const { return VaultDuration; }
+
+	// --- Mantling, slice 1 (docs/design/MANTLING.md 11, designer answers 11.6; cluster OperativeCharacterMantle.cpp) ---
+
+	/** Warps the mantle clips' root motion onto the real ledge top / far-side landing (engine Motion Warping plugin). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Mantle")
+	TObjectPtr<class UMotionWarpingComponent> MotionWarping;
+
+	/** Climbing onto / over an obstacle (the root-motion clip moves him): no fire, aim, cover, facing or stance change meanwhile. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Mantle")
+	bool IsMantling() const { return bMantling; }
+
+	/** Walking to a clicked ledge top; the climb starts at its face. */
+	bool HasMantleOrder() const { return bMantleOrderPending; }
+
+	/**
+	 * Trigger C, the click part (designer 2026-11-15): a click on a reachable ledge top orders the climb - he walks to the obstacle's face
+	 * nearest to him and climbs there (on top he crouches). bSprint: he runs there (the controller passes his current gait - the climb never
+	 * starts a sprint by itself, designer Q2). False (and OutReason) when the click is no climb (the caller treats it as before).
+	 */
+	bool OrderMantleTop(const FHitResult& TopHit, bool bSprint = false, FString* OutReason = nullptr);
+
+	/**
+	 * Measures the obstacle ahead along Dir and starts the climb right here when the rules allow it (the click order on arrival, smokes).
+	 * OutRefusal: why not. bStopAfter: he stays at the landing (crouched on a top) instead of walking on to his order's destination.
+	 */
+	bool TryStartMantle(const FVector& Dir, EMantleRefusal* OutRefusal = nullptr, bool bStopAfter = true);
+
+	/** A path reached a generated mantle link (UMantleSubsystem): the climb / hop starts on the next tick. False when he cannot take it. */
+	bool NotifyMantleLinkReached(int32 LinkIndex);
+
+	/**
+	 * Ends a running climb early, restoring his movement / collision / animation state exactly once: a knockdown or heavy hit drops him
+	 * back to the base he climbed from (designer Q5); death / EndPlay release everything where he is.
+	 */
+	void CancelMantle(EMantleCancel Reason);
+
+	/** A solo order of his own may path through the mantle links (Solo mode, the player's order; formation moves never). */
+	bool IsMantlePathAllowed() const { return bMantlePathAllowed; }
+
+	/** Smokes: climbs started / restored, the last climb's class / clip / gait / stop / refusal / landing error (cm) / cancel. */
+	int32 GetMantleCount() const { return MantleCount; }
+	int32 GetMantleRestoreCount() const { return MantleRestoreCount; }
+	FName GetLastMantleClass() const { return LastMantleClass; }
+	const FString& GetLastMantleClip() const { return LastMantleClip; }
+	EMantleGait GetLastMantleGait() const { return LastMantleGait; }
+	bool DidLastMantleStopFirst() const { return bLastMantleStopFirst; }
+	EMantleRefusal GetLastMantleRefusal() const { return LastMantleRefusal; }
+	float GetLastMantleLandingError() const { return LastMantleLandingError; }
+	EMantleCancel GetLastMantleCancel() const { return LastMantleCancel; }
+	/** The planned landing (feet) and the base (feet) of the climb in progress / the last one. */
+	const FVector& GetMantleLandingFeet() const { return MantleLandingFeet; }
+	const FVector& GetMantleBaseFeet() const { return MantleBaseFeet; }
+	/** The last climb ended on a top (else over: the far side). */
+	bool DidLastMantleEndOnTop() const { return bMantleOnTop; }
 
 	/** Position in the squad roster (0 = commander); selection keys 1..N map to it. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
@@ -2474,6 +2529,67 @@ private:
 	float ObstacleTopTime = 0.f;
 	/** Jumps down off an obstacle top after 0.3 s there; true while starting that jump. */
 	bool UpdateObstacleStepOff(float DeltaTime);
+
+	/** Mantling (OperativeCharacterMantle.cpp): the climb in progress, its trigger (a clicked top reached, a run clip ahead, a link). */
+	void UpdateMantle(float DeltaTime);
+	void UpdateMantleTrigger(float DeltaTime);
+	/** Starts the climb of a measured site (reserve -> snapshot -> montage + warp); false when it cannot start (nothing changed). */
+	bool StartMantle(const struct FMantleSite& Site, const FMantleDecision& Decision, bool bStopAfter, int32 LinkIndex);
+	/** The hop down a mantle down-link (the vault's arc, OperativeCharacterVault.cpp). */
+	bool StartMantleHop(const FVector& LandingFeet);
+	/** Standing on a low mantle top with no path off it (no navmesh / an island): the hop down towards Destination, then the order. */
+	bool TryMantleStepDown(const FVector& Destination);
+	/** A mantle link the crowd update reached (PendingMantleLink): the climb / hop, or the link switched off and a re-path. */
+	void HandleMantleLink(int32 LinkIndex);
+	void FinishMantle();
+	/** Puts back what StartMantle changed (once: the snapshot is consumed). */
+	void RestoreMantleState(bool bFalling);
+	/** The rules' probe of the obstacle ahead (traces from his feet). */
+	bool ProbeMantleAhead(const FVector& Dir, float ReachCm, struct FMantleSite& Out) const;
+	EMantleBody GetMantleBody() const;
+	/** Running for the run-up rule: above run_speed_fraction x his walk speed, or moving on a sprint order. */
+	bool IsRunningForMantle() const;
+	bool bMantling = false;
+	float MantleTimer = 0.f;
+	float MantleDuration = 0.f;
+	/** World time until which no new climb starts (mantle.json cooldown_s after the last one). */
+	float MantleCooldown = 0.f;
+	FVector MantleBaseFeet = FVector::ZeroVector;
+	FVector MantleLandingFeet = FVector::ZeroVector;
+	FVector MantleDir = FVector::ForwardVector;
+	bool bMantleOnTop = false;
+	bool bMantleStopAfter = true;
+	int32 MantleClipIndex = INDEX_NONE;
+	int32 MantleLinkIndex = INDEX_NONE;
+	TWeakObjectPtr<class UAnimMontage> MantleMontage;
+	bool bMantleResume = false;
+	bool bMantleResumeOwnOrder = false;
+	FVector MantleResumeTarget = FVector::ZeroVector;
+	/** The snapshot StartMantle took (RestoreMantleState consumes it). */
+	bool bMantleSnapshotValid = false;
+	uint8 MantleSavedMovementMode = 1;
+	bool bMantleSavedOrientToMovement = false;
+	bool bMantleSavedControllerRotation = false;
+	bool bMantleSavedWeaponVisible = true;
+	/** A clicked top: walk to its face, then climb. */
+	bool bMantleOrderPending = false;
+	FVector MantleOrderBase = FVector::ZeroVector;
+	FVector MantleOrderDir = FVector::ForwardVector;
+	float MantleOrderSeconds = 0.f;
+	/** A mantle link reached inside the crowd update: taken on the next tick. */
+	int32 PendingMantleLink = INDEX_NONE;
+	/** The running path's own order may take the mantle links (Solo, the player's order). */
+	bool bMantlePathAllowed = false;
+	int32 MantleCount = 0;
+	int32 MantleRestoreCount = 0;
+	int32 MantleRotation = 0;
+	FName LastMantleClass;
+	FString LastMantleClip;
+	EMantleGait LastMantleGait = EMantleGait::Standing;
+	bool bLastMantleStopFirst = false;
+	EMantleRefusal LastMantleRefusal = EMantleRefusal::None;
+	float LastMantleLandingError = 0.f;
+	EMantleCancel LastMantleCancel = EMantleCancel::None;
 
 	bool bGroupSelected = false;
 	bool bInMultiSelection = false;

@@ -24,7 +24,8 @@ public class CodexTactics : ModuleRules
 			"CommonUI",
 			"CommonInput",
 			"DeveloperSettings",
-			"ProceduralMeshComponent"
+			"ProceduralMeshComponent",
+			"MotionWarping" // the mantle climb (docs/design/MANTLING.md 11.3): root-motion clips warped onto the real ledge top
 		});
 
 		PrivateDependencyModuleNames.AddRange(new string[] { "Json", "RenderCore", "AnimationCore", "Navmesh" }); // RenderCore: GWhiteTexture for the minimap canvas triangles; AnimationCore: the ladder rung IK (TwoBoneIK); Navmesh: Detour's nav link directions (FDropLinkReach)

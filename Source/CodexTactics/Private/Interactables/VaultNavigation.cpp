@@ -7,6 +7,7 @@
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/InteractableActor.h"
 #include "Falls/DropLinkNavigation.h"
+#include "Interactables/MantleNavigation.h"
 #include "Ladders/LadderNavigation.h"
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
@@ -51,6 +52,8 @@ UNavFilter_NoVault::UNavFilter_NoVault()
 		Drop.AreaClass = DropArea;
 		Drop.bIsExcluded = true;
 	}
+	// Mantling slice 1 (2026-11-15): the mantle links (up / over and the hop down) are the squad's only - enemies never climb in this slice.
+	MantleNavigation::CloseMantleArea(Areas, /*bAlsoDown*/ true);
 }
 
 UNavFilter_NoVaultLadder::UNavFilter_NoVaultLadder()

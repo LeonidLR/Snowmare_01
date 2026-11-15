@@ -53,6 +53,11 @@ void AOperativeCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDama
 {
 	LastDamageType = Spec.DamageType;
 	LastDamageAmount = FinalDamage;
+	// Mantling (designer Q5, 2026-11-15): a heavy hit mid-climb drops him back to the base (a knockdown does it in UKnockdownComponent).
+	if (bMantling && MantleRules::IsHeavyHit(MantleRules::GetConfig(), FinalDamage))
+	{
+		CancelMantle(EMantleCancel::HeavyHit);
+	}
 }
 
 void AOperativeCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
@@ -177,12 +182,13 @@ void AOperativeCharacter::BecomeCorpse()
 		Grenades->CancelAim();
 	}
 
-	const bool bWasVaulting = bVaulting;
+	const bool bWasVaulting = bVaulting || bMantling; // killed mid-climb: the body falls like a vaulter's
 	if (bVaulting)
 	{
 		bVaulting = false;
 		SetActorEnableCollision(true);
 	}
+	CancelMantle(EMantleCancel::Death); // everything released where he is (OperativeCharacterMantle.cpp)
 	if (LadderClimb && LadderClimb->IsClimbing())
 	{
 		LadderClimb->AbortClimb(ELadderAbortReason::Death);

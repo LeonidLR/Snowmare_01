@@ -36,7 +36,8 @@ FVector VaultRules::NavAreaExtent(const FBox& LocalBounds, const FVector& Scale,
 
 bool VaultRules::IsVaultableCoverKind(FName Kind)
 {
-	static const FName Kinds[] = { FName(TEXT("sandbag")), FName(TEXT("jersey")), FName(TEXT("barrel")), FName(TEXT("low_wall")), FName(TEXT("window_sill")) };
+	// Barrels are NOT vaulted (game designer 2026-11-15, mantling slice 1: explosive) - they stay cover, 90 cm.
+	static const FName Kinds[] = { FName(TEXT("sandbag")), FName(TEXT("jersey")), FName(TEXT("low_wall")), FName(TEXT("window_sill")) };
 	for (const FName& Each : Kinds)
 	{
 		if (Kind == Each)

@@ -182,7 +182,7 @@ void USquadAutonomySubsystem::Decide(AOperativeCharacter& Operative, FOperativeS
 	const FSquadROE& ROE = SquadROE::Get();
 	State.MoveCooldown = FMath::Max(0.f, State.MoveCooldown - Elapsed);
 	State.StillSeconds = StepStillSeconds(Operative.IsMoving() || Operative.GetVelocity().Size2D() > 30.f, State.StillSeconds, Elapsed);
-	if (Operative.IsPanicking() || Operative.IsRaging() || Operative.bCarrying || Operative.IsVaulting() || Operative.IsClimbingLadder())
+	if (Operative.IsPanicking() || Operative.IsRaging() || Operative.bCarrying || Operative.IsVaulting() || Operative.IsMantling() || Operative.IsClimbingLadder())
 	{
 		return; // broken nerves or busy hands: the autonomy does not command him
 	}

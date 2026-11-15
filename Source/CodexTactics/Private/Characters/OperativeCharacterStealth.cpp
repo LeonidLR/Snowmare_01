@@ -17,7 +17,7 @@
 bool AOperativeCharacter::CanEnterStealthWithoutFormation() const
 {
 	return StealthModeRules::GetConfig().bEnabled && HealthComponent && HealthComponent->IsAlive() && !IsCriticallyWounded()
-		&& !IsKnockedDown() && !IsPanicking() && !IsRaging() && !bCarrying && !bVaulting && !IsClimbingLadder() && !VehicleQueries::IsMounted(this);
+		&& !IsKnockedDown() && !IsPanicking() && !IsRaging() && !bCarrying && !bVaulting && !bMantling && !IsClimbingLadder() && !VehicleQueries::IsMounted(this);
 }
 
 bool AOperativeCharacter::CanEnterStealthMode() const
@@ -281,7 +281,7 @@ void AOperativeCharacter::UpdateStealthMode()
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	const bool bFormationBlocked = Squad && Squad->IsStealthBlockedByFormation(*this);
 	if (bStealthMode && (bFormationBlocked || !HealthComponent || !HealthComponent->IsAlive() || IsCriticallyWounded() || IsKnockedDown()
-		|| IsPanicking() || IsRaging() || bCarrying || bVaulting || IsClimbingLadder() || VehicleQueries::IsMounted(this)
+		|| IsPanicking() || IsRaging() || bCarrying || bVaulting || bMantling || IsClimbingLadder() || VehicleQueries::IsMounted(this)
 		|| StealthModeRules::ShouldBreak(true, false, bSprinting, IsStealthFast(), StealthModeRules::GetConfig())))
 	{
 		SetStealthMode(false);

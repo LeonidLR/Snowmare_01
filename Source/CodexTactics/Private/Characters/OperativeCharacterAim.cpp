@@ -201,7 +201,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	}
 	FVector StealthLookPoint = FVector::ZeroVector;
 	const bool bStealthLook = !bFacingCombatTarget && !bPeekPreTurn && !bGridOwnsFacing && !bExplicitFacing && !bSuppressActive
-		&& !bQuickFireActive && !bSprinting && !bCarrying && !IsPanicking() && !bVaulting && !IsClimbingLadder()
+		&& !bQuickFireActive && !bSprinting && !bCarrying && !IsPanicking() && !bVaulting && !bMantling && !IsClimbingLadder()
 		&& IsInStealthMode() && GetStealthLookPoint(StealthLookPoint);
 	bool bFacingWall = false;
 	if (bPeekPreTurn)
