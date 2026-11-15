@@ -245,6 +245,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	EEnemyArchetype GetArchetype() const { return Archetype; }
 
+	/** True if death ragdoll physics is actively simulating */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
+	bool IsRagdollActive() const { return bIsRagdollActive; }
+
 	/** Name used in radio lines (Godot enemy_name). */
 	const FString& GetEnemyDisplayName() const { return EnemyDisplayName; }
 
@@ -1085,6 +1089,10 @@ protected:
 	TWeakObjectPtr<AActor> LoggedObstacleSkip;
 	/** Godot last_attacker_source (a turret hit pulls large enemies to turrets). */
 	FString LastAttackerSource;
+	EDamageType LastDamageType = EDamageType::Kinetic;
+	float LastDamageAmount = 50.f;
+	FVector LastHitDirection = FVector::ForwardVector;
+	bool bIsRagdollActive = false;
 	TWeakObjectPtr<AActor> CurrentTarget;
 
 	/** Targets it could not get closer to (no path): skipped until the time (world seconds). */

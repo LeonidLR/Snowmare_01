@@ -550,7 +550,7 @@ void AOperativeCharacter::UpdateCoverEntryBlend(float DeltaTime)
 void AOperativeCharacter::EnforceMeshBaseOffset()
 {
 	USkeletalMeshComponent* SkinMesh = GetMesh();
-	if (!SkinMesh || !bMeshBaseCaptured)
+	if (!SkinMesh || !bMeshBaseCaptured || bIsRagdollActive || bKilledInAction)
 	{
 		return;
 	}

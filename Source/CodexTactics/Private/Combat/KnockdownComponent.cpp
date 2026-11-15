@@ -63,6 +63,18 @@ void UKnockdownComponent::TickComponent(float DeltaTime, ELevelTick TickType, FA
 		}
 		return;
 	}
+
+	const AActor* OwnerActor = GetOwner();
+	const UHealthComponent* OwnerHealth = OwnerActor ? OwnerActor->FindComponentByClass<UHealthComponent>() : nullptr;
+	if (OwnerHealth && !OwnerHealth->IsAlive())
+	{
+		if (State.Phase != EKnockdownPhase::None)
+		{
+			State.Phase = EKnockdownPhase::None;
+		}
+		BufferedOrder = nullptr;
+		return;
+	}
 	KnockdownRules::SetTurnBased(State, IsTurnBasedNow());
 	const EKnockdownPhase Old = State.Phase;
 	const EKnockdownStep Step = KnockdownRules::Advance(State, DeltaTime, bFrozen);

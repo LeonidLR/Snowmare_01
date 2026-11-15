@@ -178,6 +178,7 @@ void AOperativeCharacter::BeginPlay()
 	if (HealthComponent)
 	{
 		HealthComponent->OnDied.AddDynamic(this, &AOperativeCharacter::HandleDied);
+		HealthComponent->OnDamaged.AddDynamic(this, &AOperativeCharacter::HandleDamaged);
 		HealthComponent->OnHealthChanged.AddDynamic(this, &AOperativeCharacter::HandleHealthChanged);
 	}
 	if (KnockdownComponent)

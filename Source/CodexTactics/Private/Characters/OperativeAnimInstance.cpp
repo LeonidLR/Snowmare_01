@@ -888,6 +888,11 @@ void UOperativeAnimInstance::HandleDied(AActor* Victim, const FString& AttackerS
 	{
 		return;
 	}
+	if (Operative->IsRagdollActive())
+	{
+		bDeathPlayed = true;
+		return;
+	}
 	bDeathPlayed = true;
 	UAnimSequenceBase* Clip = PickDeathClip(*Operative);
 	DeathPoseClip = Clip; // null: the knockdown fall below (UpdateDeathPose adopts it)
@@ -956,6 +961,10 @@ UAnimSequenceBase* UOperativeAnimInstance::PickDeathClip(const AOperativeCharact
 
 void UOperativeAnimInstance::UpdateDeathPose(const AOperativeCharacter& Operative, float DeltaSeconds)
 {
+	if (Operative.IsRagdollActive())
+	{
+		return;
+	}
 	if (!bIsDead)
 	{
 		DeathPoseClip.Reset();

@@ -1145,6 +1145,10 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
 	bool IsKilledInAction() const { return bKilledInAction; }
 
+	/** True if death ragdoll physics is actively simulating */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Squad")
+	bool IsRagdollActive() const { return bIsRagdollActive; }
+
 	/**
 	 * A body killed off the ground falls first (fix/corpse-falls-to-ground, game designer PIE 2026-11-08: a PMC fighter killed on a ladder hung
 	 * in the air in his death pose): BecomeCorpse leaves him to gravity when FallRules::ShouldCorpseFall (on a ladder - its own drop -, mid-vault,
@@ -2486,6 +2490,9 @@ private:
 	void HandleHealthChanged(float NewHealth, float MaxHealth, float Delta);
 
 	UFUNCTION()
+	void HandleDamaged(const FDamageSpec& Spec, float FinalDamage);
+
+	UFUNCTION()
 	void HandleDied(AActor* Victim, const FString& AttackerSource);
 	/** A dead body: no movement, no pawn / click collision, no selection, no orders (stays where he fell). */
 	void BecomeCorpse();
@@ -2505,6 +2512,9 @@ private:
 	bool TraceCorpseFloor(float& OutGapCm, float& OutFloorZ) const;
 	bool bHasLastHitSource = false;
 	FVector LastHitSource = FVector::ZeroVector;
+	bool bIsRagdollActive = false;
+	EDamageType LastDamageType = EDamageType::Kinetic;
+	float LastDamageAmount = 50.f;
 	/** Knockdown phase change: interrupts (aim, reload, move, cover), frees / restores the capsule and the movement. */
 	void HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase);
 	/** After a get-up: back to the cover slot a blast took him out of, by KnockdownRules::DecideCoverReturn (2026-10-18). */

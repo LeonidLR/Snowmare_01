@@ -1,4 +1,5 @@
 #include "Combat/DeathRagdollRules.h"
+#include "CodexTactics.h"
 #include "Engine/SkeletalMesh.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
@@ -7,48 +8,30 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
-static void SetBaseConfigDefaults(FDeathRagdollConfig& OutConfig)
-{
-	OutConfig.bEnabled = true;
-	OutConfig.MaxSimultaneousRagdolls = 4;
-	OutConfig.RagdollDelaySeconds = 0.0f;
-	OutConfig.MaxSettleTimeoutSeconds = 3.5f;
-	OutConfig.LinearSettleThresholdCmS = 15.0f;
-	OutConfig.AngularSettleThresholdRadS = 0.25f;
-	OutConfig.MaxImpulseMagnitude = 120000.0f;
-	OutConfig.AngularDamping = 1.5f;
-	OutConfig.LinearDamping = 0.5f;
-
-	OutConfig.ImpulseScales.Empty();
-	OutConfig.ImpulseScales.Add(EDamageType::Kinetic, 45000.0f);
-	OutConfig.ImpulseScales.Add(EDamageType::Melee, 25000.0f);
-	OutConfig.ImpulseScales.Add(EDamageType::Fire, 15000.0f);
-	OutConfig.ImpulseScales.Add(EDamageType::Cryo, 5000.0f);
-	OutConfig.ImpulseScales.Add(EDamageType::Energy, 30000.0f);
-	OutConfig.ImpulseScales.Add(EDamageType::Explosive, 100000.0f);
-
-	OutConfig.FallbackArchetypes.Empty();
-	OutConfig.FallbackArchetypes.Add(TEXT("Spitter"));
-	OutConfig.FallbackArchetypes.Add(TEXT("CRYO_DRONE"));
-}
-
 FDeathRagdollConfig FDeathRagdollRules::GetDefaultConfig()
 {
 	FDeathRagdollConfig Config;
-	SetBaseConfigDefaults(Config);
+	Config.bEnabled = false;
 
 	const FString ConfigPath = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Data/Combat/death_ragdoll.json"));
 	FString JsonContent;
 	if (FFileHelper::LoadFileToString(JsonContent, *ConfigPath))
 	{
-		LoadConfigFromJson(JsonContent, Config);
+		if (LoadConfigFromJson(JsonContent, Config))
+		{
+			return Config;
+		}
 	}
 
+	UE_LOG(LogCodexTactics, Error, TEXT("[DeathRagdoll] Failed to load '%s' - death ragdoll disabled, using LayCorpseDown fallback"), *ConfigPath);
 	return Config;
 }
 
 bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRagdollConfig& OutConfig)
 {
+	OutConfig = FDeathRagdollConfig();
+	OutConfig.bEnabled = false;
+
 	if (JsonContent.IsEmpty())
 	{
 		return false;
@@ -60,8 +43,6 @@ bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRa
 	{
 		return false;
 	}
-
-	SetBaseConfigDefaults(OutConfig);
 
 	RootObject->TryGetBoolField(TEXT("enabled"), OutConfig.bEnabled);
 
@@ -100,16 +81,29 @@ bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRa
 	{
 		OutConfig.LinearDamping = static_cast<float>(Val);
 	}
+	if (RootObject->TryGetNumberField(TEXT("upward_impulse_bias"), Val))
+	{
+		OutConfig.UpwardImpulseBias = static_cast<float>(Val);
+	}
+	if (RootObject->TryGetNumberField(TEXT("min_damage_factor"), Val))
+	{
+		OutConfig.MinDamageFactor = static_cast<float>(Val);
+	}
+	if (RootObject->TryGetNumberField(TEXT("max_damage_factor"), Val))
+	{
+		OutConfig.MaxDamageFactor = static_cast<float>(Val);
+	}
 
 	const TSharedPtr<FJsonObject>* ScalesObj = nullptr;
 	if (RootObject->TryGetObjectField(TEXT("impulse_scales"), ScalesObj) && ScalesObj && ScalesObj->IsValid())
 	{
+		OutConfig.ImpulseScales.Empty();
 		auto ReadScale = [&](const FString& Key, EDamageType Type)
 		{
 			double Scale = 0.0;
 			if ((*ScalesObj)->TryGetNumberField(Key, Scale))
 			{
-				OutConfig.ImpulseScales.FindOrAdd(Type) = static_cast<float>(Scale);
+				OutConfig.ImpulseScales.Add(Type, static_cast<float>(Scale));
 			}
 		};
 		ReadScale(TEXT("Kinetic"), EDamageType::Kinetic);
@@ -155,11 +149,13 @@ FVector FDeathRagdollRules::CalculateImpulse(
 	}
 	Dir.Normalize();
 
-	// Add slight upward bias (0.25) so corpses lift off ground cleanly rather than clipping through floor geometry
-	Dir = (Dir + FVector(0.f, 0.f, 0.25f)).GetSafeNormal();
+	// Add upward bias from JSON config (+0.25 by default) so corpses lift off ground cleanly rather than clipping through floor geometry
+	Dir = (Dir + FVector(0.f, 0.f, Config.UpwardImpulseBias)).GetSafeNormal();
 
 	const float BaseScale = Config.ImpulseScales.FindRef(DamageType);
-	const float DamageFactor = FMath::Clamp(DamageAmount / 25.0f, 0.5f, 3.0f);
+	const float MinFactor = (Config.MinDamageFactor > 0.f) ? Config.MinDamageFactor : 0.5f;
+	const float MaxFactor = (Config.MaxDamageFactor >= MinFactor) ? Config.MaxDamageFactor : 3.0f;
+	const float DamageFactor = FMath::Clamp(DamageAmount / 25.0f, MinFactor, MaxFactor);
 	float Magnitude = BaseScale * DamageFactor * FMath::Max(MassScale, 0.1f);
 
 	Magnitude = FMath::Clamp(Magnitude, 0.0f, Config.MaxImpulseMagnitude);

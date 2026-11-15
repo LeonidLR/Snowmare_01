@@ -76,6 +76,11 @@ void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
 	{
 		LastAttackerSource = Spec.AttackerSource;
 	}
+	LastDamageType = Spec.DamageType;
+	LastDamageAmount = FinalDamage;
+	const AActor* ClosestSquad = FindClosestSquadMember();
+	const FVector HitOrigin = ClosestSquad ? ClosestSquad->GetActorLocation() : GetActorLocation() - GetActorForwardVector() * 100.f;
+	LastHitDirection = (GetActorLocation() - HitOrigin).GetSafeNormal();
 	// User request 2026-10-06: the squad's direct attack (shot, blow, thrown grenade) reveals it — on an ambush level the
 	// fight starts now. A trap / placed charge (ApplyBlast inside FScopedTrapBlast) only sends a patrol searching.
 	const bool bTrapDamage = IsTrapBlastInProgress();
@@ -207,22 +212,35 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 	OnEnemyDiedNative.Broadcast(this);
 	OnDeath();
 
+	// Death ragdoll activation via UCorpseSubsystem
+	bool bRagdollActivated = false;
+	UCorpseSubsystem* Corpses = GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr;
+	if (Corpses)
+	{
+		const FName ArchetypeName = FName(*UEnum::GetValueAsString(Archetype));
+		bRagdollActivated = Corpses->TryActivateDeathRagdoll(this, LastHitDirection, LastDamageAmount, LastDamageType, ArchetypeName);
+	}
+	bIsRagdollActive = bRagdollActivated;
+
 	// Godot enemy_base.gd _die: with a death clip the body stays death_decay_delay seconds, otherwise it goes quickly.
 	float LifeSpan = 2.0f;
 	bool bDeathPose = false;
-	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	if (!bRagdollActivated)
 	{
-		Anim->NotifyDeath();
-		LifeSpan = Anim->HasDeathAnimation() ? Anim->DeathDecayDelay : LifeSpan;
-		bDeathPose = Anim->HasDeathAnimation() || bDownAtDeath;
+		if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+		{
+			Anim->NotifyDeath();
+			LifeSpan = Anim->HasDeathAnimation() ? Anim->DeathDecayDelay : LifeSpan;
+			bDeathPose = Anim->HasDeathAnimation() || bDownAtDeath;
+		}
+		bLayDownOnFreeze = !bDeathPose;
 	}
-	// Game designer 2026-11-08: every enemy body stays on the ground (UCorpseSubsystem freezes it once it has settled and lies on the floor;
-	// the level's corpse_cap, shared with the hostile PMC bodies, fades the oldest far one). 2026-11-09 (game designer: ALL enemies): a body
-	// without a death pose (the C++ placeholder - the Spitter has no Blueprint yet - or a Blueprint without a death clip) stays too and is
-	// laid on the ground when it is frozen (LayCorpseDown) until it gets a real model / clip. Codex.Corpse.Persist 0: the old decay.
-	bLayDownOnFreeze = !bDeathPose;
-	UCorpseSubsystem* Corpses = GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr;
-	if (!Corpses || !Corpses->RegisterCorpse(this))
+	else
+	{
+		bLayDownOnFreeze = false;
+	}
+
+	if (!Corpses || (!bRagdollActivated && !Corpses->RegisterCorpse(this)))
 	{
 		SetLifeSpan(LifeSpan);
 	}
@@ -270,6 +288,10 @@ bool AEnemyCharacter::IsCorpseFalling() const
 
 bool AEnemyCharacter::IsDeathPoseSettled() const
 {
+	if (bIsRagdollActive)
+	{
+		return true;
+	}
 	const UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 	return !Anim || Anim->IsDeathPoseSettled();
 }
@@ -282,9 +304,37 @@ void AEnemyCharacter::FreezeCorpse()
 	}
 	bCorpseFrozen = true;
 	bAirborneDeath = false;
-	if (bLayDownOnFreeze)
+	if (bIsRagdollActive)
 	{
-		LayCorpseDown(); // landed and still: no death pose to hold, so it lies down (2026-11-09)
+		if (USkeletalMeshComponent* Body = GetMesh())
+		{
+			Body->bPauseAnims = true;
+		}
+	}
+	else
+	{
+		bool bNeedsLayDown = bLayDownOnFreeze;
+		if (!bNeedsLayDown)
+		{
+			if (USkeletalMeshComponent* Body = GetMesh())
+			{
+				if (Body->GetSkeletalMeshAsset() && Body->GetBoneIndex(FName(TEXT("pelvis"))) != INDEX_NONE)
+				{
+					const FVector PelvisLoc = Body->GetBoneLocation(FName(TEXT("pelvis")));
+					const float CapsuleHalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.f;
+					const float CapsuleBottomZ = GetActorLocation().Z - CapsuleHalfHeight;
+					const float HeightAboveFloor = PelvisLoc.Z - CapsuleBottomZ;
+					if (HeightAboveFloor > 45.0f)
+					{
+						bNeedsLayDown = true;
+					}
+				}
+			}
+		}
+		if (bNeedsLayDown)
+		{
+			LayCorpseDown(); // landed and still: no death pose to hold, so it lies down (2026-11-09)
+		}
 	}
 	// No brain left: the AI controller goes (its path following, perception, state tree ticks with it).
 	if (AController* Brain = GetController())
