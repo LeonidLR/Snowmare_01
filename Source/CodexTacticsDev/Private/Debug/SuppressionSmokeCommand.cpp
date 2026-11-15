@@ -12,7 +12,11 @@
 //  C a squad turret fires at a (frozen) spitter: its MG rounds suppress it; a grenade blast next to it suppresses it too, but only briefly;
 //  F a SUPPRESS order on a spot opens a fear zone of dense fire; a hound pack charging through it splits round it (nobody crosses its core);
 //  D turn-based combat: every level cleared, a running SUPPRESS order ends, a round on the grid counts nothing, Shift + click refused;
-//  E Codex.Combat.Suppression 0: no tier, the order refused.
+//  E Codex.Combat.Suppression 0: no tier, the order refused;
+//  G bug 058 (the game designer's screenshot 2026-11-15): crouched at a low box, an enemy 7 m to his side (90 deg off the cover pose) gets the
+//    SUPPRESS order: he steps off the box and his aim is within AimConeDeg of the enemy before the first round (never a round from the cover
+//    pose facing away); suppressed himself, an order on a man in the open at his side is refused ("no line out of this cover"); suppressed,
+//    one over the box (inside its frontal arc) is still fired at blind from the cover pose.
 
 #include "CoreMinimal.h"
 
@@ -32,14 +36,18 @@
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
 #include "Core/PlayerCommands.h"
+#include "Components/StaticMeshComponent.h"
 #include "Data/WeaponDataAsset.h"
 #include "Debug/SmokeUtils.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Interactables/TurretActor.h"
 #include "Kismet/GameplayStatics.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "TimerManager.h"
 #include "UI/GameMessageSubsystem.h"
@@ -90,6 +98,16 @@ namespace SuppressionSmoke
 		int32 BlindBeforeRage = 0;
 		int32 PinnedShotsBeforeRage = 0;
 		FDelegateHandle FiredHandle;
+		/** G (bug 058): the low box, his slot at it, the side along the wall towards the arena, the first round of the order. */
+		TWeakObjectPtr<AActor> Box;
+		FCoverSlot Slot;
+		FVector Side = FVector::ZeroVector;
+		int32 RoundsAtOrder = 0;
+		bool bFirstRound = false;
+		float FirstRoundTime = -1.f;
+		float FirstRoundResidual = 180.f;
+		bool bFirstRoundInCover = false;
+		bool bLeftCoverMeanwhile = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -181,6 +199,38 @@ namespace SuppressionSmoke
 		const FLinearColor Ring = UDefenseMarkerSubsystem::GetRingColor(true);
 		return Markers->GetMarkers().ContainsByPredicate([](const FDefenseMarkerView& View) { return View.bSuppress && View.Color.R > View.Color.G; })
 			&& Ring.R > Ring.G;
+	}
+
+	/** G: a solid low box (the engine cube scaled to Size, BlockAll). */
+	AStaticMeshActor* SpawnBox(UWorld* World, const FVector& Centre, const FVector& Size, const FRotator& Rotation)
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		AStaticMeshActor* Box = World->SpawnActor<AStaticMeshActor>(Centre, Rotation, Params);
+		if (!Box)
+		{
+			return nullptr;
+		}
+		Box->SetMobility(EComponentMobility::Movable);
+		UStaticMeshComponent* Mesh = Box->GetStaticMeshComponent();
+		Mesh->SetStaticMesh(LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube")));
+		Mesh->SetCollisionProfileName(TEXT("BlockAll"));
+		Box->SetActorScale3D(Size / 100.f);
+		return Box;
+	}
+
+	/** G: the commander back at the box's slot, in cover (crouched: a low cover). */
+	bool PutInCover(AOperativeCharacter* Commander, const FCoverSlot& Slot)
+	{
+		Commander->CancelSuppressFire(TEXT("smoke"));
+		if (Commander->bInCover)
+		{
+			Commander->LeaveCover(TEXT("smoke"));
+		}
+		Commander->StopOperative();
+		Commander->TeleportTo(Slot.WorldLocation + FVector(0.f, 0.f, Commander->GetSimpleCollisionHalfHeight() + 5.f), Slot.WallNormal.Rotation(), false, true);
+		Commander->EnterCover(Slot);
+		return Commander->bInCover;
 	}
 
 	void Freeze(AEnemyCharacter* Enemy)
@@ -808,6 +858,145 @@ namespace SuppressionSmoke
 				Variable->Set(1, ECVF_SetByConsole);
 				Suppression->ClearAll();
 			}
+			GoTo(State, 60);
+			return true;
+		}
+		case 60: // G (bug 058): a low box, the commander crouched at it; the rest out of the way.
+		{
+			if (ATurretActor* Turret = State.Turret.Get())
+			{
+				Turret->Destroy();
+			}
+			Engineer->StopOperative();
+			Engineer->TeleportTo(SmokeUtils::FreeSpot(World, State.P + State.F * 1500.f + State.R * 600.f, Engineer), State.F.Rotation(), false, true);
+			Commander->CancelSuppressFire(TEXT("smoke"));
+			Commander->StopOperative();
+			Commander->CurrentClip = Commander->CurrentWeapon ? Commander->CurrentWeapon->Stats.Ammo.MagazineSize : 30;
+			Commander->ReserveAmmo = 200;
+			Suppression->SetLevelForTesting(Commander, 0.f);
+			// The box: 60 cm deep along F, 200 cm wide, 80 cm high (low cover), its face towards the commander's side (-F).
+			const FVector BoxCentre = State.P - State.F * 250.f - State.R * 500.f + FVector(0.f, 0.f, 40.f);
+			State.Box = SpawnBox(World, BoxCentre, FVector(60.f, 200.f, 80.f), State.F.Rotation());
+			Check(State, State.Box.IsValid(), TEXT("G: a low box"));
+			if (!State.Box.IsValid())
+			{
+				return Finish(State, false);
+			}
+			Next(State);
+			return true;
+		}
+		case 61: // G: in cover at the box, the spitter 7 m to his side, just past the box's face line (no over-the-top shot): SUPPRESS.
+		{
+			if (State.StageTime < 0.3f)
+			{
+				return true;
+			}
+			AEnemyCharacter* Spitter = State.Spitter.Get();
+			const FVector Face = State.P - State.F * 280.f - State.R * 500.f + FVector(0.f, 0.f, 40.f);
+			TArray<const AActor*> Ignore;
+			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Members)
+			{
+				Ignore.Add(Member.Get());
+			}
+			const bool bSlot = CoverTraceRules::FindCoverSlotAt(World, Face, State.F, State.Slot, FCoverTraceConfig(), Ignore);
+			Check(State, bSlot && State.Slot.Height == ECoverHeight::LowCover, FString::Printf(TEXT("G: a low cover slot at the box (found %d, height %d)"), bSlot ? 1 : 0,
+				static_cast<int32>(State.Slot.Height)));
+			if (!bSlot || !Spitter)
+			{
+				return Finish(State, false);
+			}
+			Check(State, PutInCover(Commander, State.Slot) && Commander->CurrentCoverHeight == ECoverHeight::LowCover, TEXT("G: the commander in cover at the box"));
+			State.Side = FVector::DotProduct(State.Slot.RightTangent(), State.R) >= 0.f ? State.Slot.RightTangent() : -State.Slot.RightTangent();
+			// 7 m along the box's face line, 20 cm behind its face plane: past the box's end - nothing to fire over, 90 deg off the cover pose.
+			const FVector Side = State.Slot.WallPoint - State.Slot.WallNormal.GetSafeNormal2D() * 20.f + State.Side * 700.f;
+			Spitter->TeleportTo(FVector(Side.X, Side.Y, State.P.Z + 100.f), (-State.Side).Rotation(), false, true);
+			const float Angle = FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(FVector::DotProduct(Commander->GetActorForwardVector().GetSafeNormal2D(),
+				(Spitter->GetActorLocation() - Commander->GetActorLocation()).GetSafeNormal2D())), -1.f, 1.f)));
+			Check(State, Angle >= 70.f && Angle <= 110.f, FString::Printf(TEXT("G: the spitter %.0f deg off his cover facing, 7 m to his side"), Angle));
+			State.RoundsAtOrder = Commander->GetSuppressRoundsFired();
+			State.bFirstRound = false;
+			State.bLeftCoverMeanwhile = false;
+			Check(State, Commander->OrderSuppress(Spitter, Spitter->GetActorLocation()) && Commander->HasSuppressOrder(), TEXT("G: SUPPRESS order on the man at his side"));
+			Next(State);
+			return true;
+		}
+		case 62: // G: he steps off the box and turns before the first round.
+		{
+			AEnemyCharacter* Spitter = State.Spitter.Get();
+			State.bLeftCoverMeanwhile |= !Commander->bInCover;
+			if (!State.bFirstRound && Spitter && Commander->GetSuppressRoundsFired() > State.RoundsAtOrder)
+			{
+				State.bFirstRound = true;
+				State.FirstRoundTime = State.StageTime;
+				State.FirstRoundResidual = Commander->GetShotAimResidualDeg(Spitter->GetActorLocation());
+				State.bFirstRoundInCover = Commander->bInCover;
+			}
+			if (!State.bFirstRound && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, State.bFirstRound && State.FirstRoundTime <= 2.f, FString::Printf(TEXT("G: the first round leaves within 2 s (%.2f s)"), State.FirstRoundTime));
+			Check(State, !State.bFirstRoundInCover && State.bLeftCoverMeanwhile, TEXT("G: ... after he stepped off the box (not from the cover pose)"));
+			Check(State, State.FirstRoundResidual <= Commander->AimConeDeg,
+				FString::Printf(TEXT("G: ... his aim within the %.0f deg cone of the man at his side (%.1f deg off)"), Commander->AimConeDeg, State.FirstRoundResidual));
+			Next(State);
+			return true;
+		}
+		case 63: // G: suppressed in cover, a man in the open at his side: the order is refused.
+		{
+			AEnemyCharacter* Spitter = State.Spitter.Get();
+			if (!Spitter || !PutInCover(Commander, State.Slot))
+			{
+				Check(State, false, TEXT("G: back in cover at the box"));
+				return Finish(State, false);
+			}
+			const FVector Open = State.Slot.WorldLocation + State.Slot.WallNormal.GetSafeNormal2D() * 150.f + State.Side * 700.f;
+			Spitter->TeleportTo(FVector(Open.X, Open.Y, State.P.Z + 100.f), (-State.Side).Rotation(), false, true);
+			Suppression->SetLevelForTesting(Commander, 0.6f);
+			Check(State, Suppression->GetTier(Commander) == ESuppressionTier::Suppressed && !USuppressionSubsystem::MayExposeNow(Commander),
+				TEXT("G: the commander is suppressed (head down)"));
+			State.RoundsAtOrder = Commander->GetSuppressRoundsFired();
+			Check(State, !Commander->OrderSuppress(Spitter, Spitter->GetActorLocation()) && !Commander->HasSuppressOrder(),
+				TEXT("G: suppressed, SUPPRESS on a man in the open at his side is refused (no blind fire from a pose facing away)"));
+			Next(State);
+			return true;
+		}
+		case 64: // G: ... no round leaves; then the same order on a man over the box (inside its frontal arc).
+		{
+			Suppression->SetLevelForTesting(Commander, 0.6f);
+			if (State.StageTime < 0.5f)
+			{
+				return true;
+			}
+			Check(State, Commander->GetSuppressRoundsFired() == State.RoundsAtOrder && Commander->bInCover, TEXT("G: ... no round, he stays at the box"));
+			AEnemyCharacter* Spitter = State.Spitter.Get();
+			if (!Spitter)
+			{
+				return Finish(State, false);
+			}
+			const FVector Over = State.Slot.WallPoint - State.Slot.WallNormal.GetSafeNormal2D() * 900.f + State.Side * 150.f;
+			Spitter->TeleportTo(FVector(Over.X, Over.Y, State.P.Z + 100.f), State.Slot.WallNormal.Rotation(), false, true);
+			Check(State, Commander->OrderSuppress(Spitter, Spitter->GetActorLocation()) && Commander->HasSuppressOrder(),
+				TEXT("G: suppressed, SUPPRESS on a man over the box is accepted"));
+			Next(State);
+			return true;
+		}
+		case 65: // G: ... fired blind from the cover pose.
+		{
+			Suppression->SetLevelForTesting(Commander, 0.6f);
+			if (Commander->GetSuppressRoundsFired() <= State.RoundsAtOrder && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, Commander->GetSuppressRoundsFired() > State.RoundsAtOrder && Commander->bInCover,
+				FString::Printf(TEXT("G: ... the rounds leave from the cover pose (%d round(s), in cover %d)"), Commander->GetSuppressRoundsFired() - State.RoundsAtOrder,
+					Commander->bInCover ? 1 : 0));
+			Commander->CancelSuppressFire(TEXT("smoke"));
+			Suppression->SetLevelForTesting(Commander, 0.f);
+			if (AActor* Box = State.Box.Get())
+			{
+				Box->Destroy();
+			}
 			return Finish(State, true);
 		}
 		default:
@@ -854,7 +1043,7 @@ namespace SuppressionSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.SuppressionSmoke"),
-		TEXT("Dev check (2026-10-26): suppressive fire - the Shift + click SUPPRESS order (red marker, toggle) holds a marksman's fire while a flanker moves, full-auto ammo use, an enemy's fire makes an operative fire blind then pins him (rage ignores it), a turret and a blast suppress, dense fire splits a hound pack, none in turn-based, the A/B switch; logs PASS/FAIL, then exits."),
+		TEXT("Dev check (2026-10-26): suppressive fire - the Shift + click SUPPRESS order (red marker, toggle) holds a marksman's fire while a flanker moves, full-auto ammo use, an enemy's fire makes an operative fire blind then pins him (rage ignores it), a turret and a blast suppress, dense fire splits a hound pack, none in turn-based, the A/B switch, bug 058 (in cover at a box: a man at his side - step out and turn first, refused while suppressed); logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

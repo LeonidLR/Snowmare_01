@@ -4,6 +4,7 @@
 
 #include "Misc/AutomationTest.h"
 #include "Tactics/CoverFacingRules.h"
+#include "Tactics/CoverRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -569,6 +570,92 @@ bool FCoverEntryTurnPeekStanceTest::RunTest(const FString&)
 	TestTrue(TEXT("an ordinary cover order head-on: the enter clip (the hug, unchanged)"),
 		DecideCoverEntryTurn(false, true, false, 90.f, Normal, Config, false) == ECoverEntryTurn::EnterClip);
 	TestTrue(TEXT("the default argument is no peek stance"), DecideCoverEntryTurn(false, true, false, 90.f, Normal, Config) == ECoverEntryTurn::EnterClip);
+	return true;
+}
+
+// Bug 058 (the game designer's screenshot 2026-11-15): crouched at a box, an enemy 90 deg to his side in the open, a SUPPRESS order (Shift +
+// click) - he fired from the cover pose without turning to it. DecideCoverFireAt: the cover pose fires only where it reaches (round the
+// corner, over the low wall inside its frontal arc); anywhere else he steps out and turns, or - suppressed - the order is refused.
+namespace CoverFacingTest
+{
+	using CoverFacingRules::ECoverFireAt;
+
+	/** The decision as the operative makes it: the corner-shot rule of the slot, its frontal arc (FCoverCombatConfig default 160 deg). */
+	ECoverFireAt FireAt(const FCoverSlot& Slot, const FVector& Target, bool bMayExpose)
+	{
+		const bool bOverTheTop = Slot.Height == ECoverHeight::LowCover;
+		return CoverFacingRules::DecideCoverFireAt(Slot, Target, CoverFacingRules::ShouldCornerShot(Slot, Target, FCoverFacingConfig()), bOverTheTop,
+			FCoverCombatConfig().FrontalArcDeg, bMayExpose);
+	}
+
+	/** A low box (barricade) at the slot: face at X = -45, his right end 80 cm away, the left end 80 cm away. */
+	FCoverSlot MakeLowBox()
+	{
+		FCoverSlot Slot = MakeSlot(true, 80.f, true, 80.f);
+		Slot.Height = ECoverHeight::LowCover;
+		return Slot;
+	}
+}
+
+COVER_FACING_TEST(FCoverFireAtFrontOverLowCoverTest, "FireAt.FrontOverLowCover")
+bool FCoverFireAtFrontOverLowCoverTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingTest;
+	const FCoverSlot Low = MakeLowBox();
+	TestEqual(TEXT("frontal arc default 160 deg (the cover's own arc, CoverRules)"), FCoverCombatConfig().FrontalArcDeg, 160.f);
+	TestEqual(TEXT("straight over the box: the cover pose"), FireAt(Low, FVector(-800.f, 100.f, 0.f), true), ECoverFireAt::CoverPose);
+	TestEqual(TEXT("... suppressed: still the cover pose (blind fire over the top stays)"), FireAt(Low, FVector(-800.f, 100.f, 0.f), false), ECoverFireAt::CoverPose);
+	TestEqual(TEXT("69 deg off into the wall, inside the 80 deg half arc: the cover pose"), FireAt(Low, FVector(-300.f, 800.f, 0.f), true), ECoverFireAt::CoverPose);
+	TestEqual(TEXT("... suppressed: blind fire allowed"), FireAt(Low, FVector(-300.f, 800.f, 0.f), false), ECoverFireAt::CoverPose);
+	return true;
+}
+
+COVER_FACING_TEST(FCoverFireAtRoundTheCornerTest, "FireAt.RoundTheCorner")
+bool FCoverFireAtRoundTheCornerTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingTest;
+	const FCoverSlot High = MakeSlot(false, 0.f, true, 80.f); // high wall, his right edge exposed 80 cm away
+	const FVector Corner(30.f, 400.f, 0.f); // beside the wall end, level with its line
+	TestEqual(TEXT("round the exposed corner: the corner shot from the cover pose"), FireAt(High, Corner, true), ECoverFireAt::CoverPose);
+	TestEqual(TEXT("... suppressed: blind fire round the corner"), FireAt(High, Corner, false), ECoverFireAt::CoverPose);
+	TestEqual(TEXT("just behind the face plane far along it: the lean reaches it"), FireAt(High, FVector(-50.f, 700.f, 0.f), false), ECoverFireAt::CoverPose);
+	// The corner hold spot's own rule (IsCornerHoldTarget) as bCornerTarget: what the stance cannot aim at is no cover-pose shot.
+	TestEqual(TEXT("corner hold: a flank rush in front of the wall is not reached -> step out"),
+		CoverFacingRules::DecideCoverFireAt(High, FVector(600.f, 300.f, 0.f), false, false, FCoverCombatConfig().FrontalArcDeg, true), ECoverFireAt::StepOut);
+	return true;
+}
+
+COVER_FACING_TEST(FCoverFireAtSideInTheOpenTest, "FireAt.SideInTheOpen")
+bool FCoverFireAtSideInTheOpenTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingTest;
+	const FCoverSlot Low = MakeLowBox();
+	// The screenshot: 7 m to his left in the open, in front of the box's face line.
+	const FVector Open(100.f, -700.f, 0.f);
+	TestEqual(TEXT("90 deg to his side in the open: he steps out and turns"), FireAt(Low, Open, true), ECoverFireAt::StepOut);
+	TestEqual(TEXT("... suppressed: refused (no blind fire from a pose facing away)"), FireAt(Low, Open, false), ECoverFireAt::Refuse);
+	// Barely behind the face plane but out past the box's end: the old corner-shot rule alone took it for an over-the-top shot.
+	const FVector Level(-50.f, -700.f, 0.f);
+	TestTrue(TEXT("(the corner-shot rule alone calls it a cover shot)"), CoverFacingRules::ShouldCornerShot(Low, Level, FCoverFacingConfig()));
+	TestEqual(TEXT("86 deg off into the wall, outside the frontal arc: he steps out and turns"), FireAt(Low, Level, true), ECoverFireAt::StepOut);
+	TestEqual(TEXT("... suppressed: refused"), FireAt(Low, Level, false), ECoverFireAt::Refuse);
+	TestEqual(TEXT("a zero arc: nothing over the top (7 deg off)"), CoverFacingRules::DecideCoverFireAt(Low, FVector(-800.f, 100.f, 0.f), true, true, 0.f, true),
+		ECoverFireAt::StepOut);
+	return true;
+}
+
+COVER_FACING_TEST(FCoverFireAtBehindTest, "FireAt.Behind")
+bool FCoverFireAtBehindTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingTest;
+	const FCoverSlot Low = MakeLowBox();
+	const FCoverSlot High = MakeSlot(false, 0.f, true, 80.f);
+	const FVector Back(800.f, 50.f, 0.f); // behind him, on his own side of the cover
+	TestEqual(TEXT("low cover, target at his back: he steps out and turns"), FireAt(Low, Back, true), ECoverFireAt::StepOut);
+	TestEqual(TEXT("... suppressed: refused"), FireAt(Low, Back, false), ECoverFireAt::Refuse);
+	TestEqual(TEXT("high cover, target at his back: he steps out and turns"), FireAt(High, Back, true), ECoverFireAt::StepOut);
+	TestEqual(TEXT("... suppressed: refused"), FireAt(High, Back, false), ECoverFireAt::Refuse);
+	TestEqual(TEXT("names for the log"), FString(CoverFacingRules::CoverFireAtName(ECoverFireAt::Refuse)).IsEmpty(), false);
 	return true;
 }
 

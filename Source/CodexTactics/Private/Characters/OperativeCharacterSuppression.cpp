@@ -59,6 +59,15 @@ namespace OperativeSuppressionLocal
 {
 	static TAutoConsoleVariable<int32> CVarHonestFire(TEXT("Codex.Combat.HonestFire"), 1,
 		TEXT("fix/pmc-fire-through-wall (designer 2026-11-08: a prone PMC fighter kept firing into the wall the squad stood behind): 1 (default) a PMC team sees a target only through a clear line (a heard shot / a flash without one makes it known, not seen), fire at a point needs a line of fire that reaches near it, a running suppress follows the target only while his side sees it; 0 = the old rules (A/B)."));
+
+	/** The "no line out of this cover" feedback of a refused / dropped SUPPRESS order (the player's men only). */
+	void ExplainNoLineOutOfCover(AOperativeCharacter& Operative)
+	{
+		if (Operative.IsPlayerTeam())
+		{
+			UFloatingTextSubsystem::SpawnAboveOperative(&Operative, TEXT("NO LINE OUT OF THIS COVER"), FLinearColor(1.f, 0.7f, 0.2f));
+		}
+	}
 }
 
 bool AOperativeCharacter::IsHonestFireOn()
@@ -147,6 +156,16 @@ bool AOperativeCharacter::OrderSuppress(AActor* Target, const FVector& Point)
 {
 	if (!CanTakeSuppress(true))
 	{
+		return false;
+	}
+	// Bug 058: in cover and suppressed himself (no stepping off the wall), a point his cover pose does not face is refused at once - he would
+	// fire blind from a pose that looks the other way. Not suppressed he steps out and turns to it (RunSuppressFire).
+	if (bInCover && DecideCoverFireAtPoint(Point + FVector(0.f, 0.f, SuppressionRules::GetConfig().OrderAimHeightCm), USuppressionSubsystem::MayExposeNow(this))
+		== CoverFacingRules::ECoverFireAt::Refuse)
+	{
+		OperativeSuppressionLocal::ExplainNoLineOutOfCover(*this);
+		UE_LOG(LogCodexTactics, Display, TEXT("[Suppress] %s: order refused - suppressed in cover, (%.0f, %.0f, %.0f) is outside the cover pose's reach"),
+			*DisplayName.ToString(), Point.X, Point.Y, Point.Z);
 		return false;
 	}
 	CancelQuickFire(); // one fire order at a time
@@ -285,15 +304,32 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 		return TEXT("suppress: done (no ammo)");
 	}
 
-	// Cover: a point round the corner / over a low wall is fired at from the cover pose; a point in front of the cover: he steps off the
-	// wall (the open shot) - not while suppressed himself (he keeps his head down and fires blind from the cover pose).
-	if (bInCover && !IsCornerShotTarget(AimAt) && USuppressionSubsystem::MayExposeNow(this))
+	// Cover: a point round the corner / over a low wall (inside its frontal arc) is fired at from the cover pose - suppressed himself he keeps
+	// his head down and fires blind from it; any other point (in front of the cover, out at his side, behind him): he steps off the wall
+	// (the open shot) and turns to it - suppressed, the order ends (bug 058: he fired from the cover pose at a man 90 deg to his side).
+	if (bInCover)
 	{
-		BeginOpenShotFromCover(Enemy);
+		// The order's own point, not this round's scatter (a spot order's walk over it must not flip the decision round by round).
+		switch (DecideCoverFireAtPoint(SuppressPoint + FVector(0.f, 0.f, Config.OrderAimHeightCm), USuppressionSubsystem::MayExposeNow(this)))
+		{
+		case CoverFacingRules::ECoverFireAt::StepOut:
+			if (!BeginOpenShotFromCover(Enemy))
+			{
+				return TEXT("suppress: waits to step off the wall (shimmying)"); // never a round from a pose that does not face the point
+			}
+			break;
+		case CoverFacingRules::ECoverFireAt::Refuse:
+			OperativeSuppressionLocal::ExplainNoLineOutOfCover(*this);
+			CancelSuppressFire(TEXT("no line out of this cover (suppressed, the point is outside the cover pose's reach)"));
+			return TEXT("suppress: dropped (no line out of this cover)");
+		default:
+			break;
+		}
 	}
 	const bool bFromCover = bInCover;
 	if (bFromCover && !CanFireFromCover() && IsCornerShotTarget(AimAt))
 	{
+		OperativeSuppressionLocal::ExplainNoLineOutOfCover(*this);
 		CancelSuppressFire(TEXT("no line out of this cover"));
 		return TEXT("suppress: dropped (no line out of this cover)");
 	}

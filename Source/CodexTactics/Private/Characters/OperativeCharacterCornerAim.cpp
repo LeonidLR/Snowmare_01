@@ -308,6 +308,18 @@ bool AOperativeCharacter::IsCornerShotTarget(const FVector& TargetLocation) cons
 	return CoverFacingRules::ShouldCornerShot(CoverSlot, TargetLocation, GetCoverFacingConfig());
 }
 
+CoverFacingRules::ECoverFireAt AOperativeCharacter::DecideCoverFireAtPoint(const FVector& TargetLocation, bool bMayExpose) const
+{
+	if (!bInCover)
+	{
+		return CoverFacingRules::ECoverFireAt::CoverPose; // nothing to step out of: the open stance turns to it
+	}
+	// Over the top: the same condition as GetCoverFireOrigin (a low cover, not the manual low-cover corner peek that fires round its end).
+	const bool bOverTheTop = CurrentCoverHeight != ECoverHeight::HighCover && !(bCornerAimActive && IsManualCornerPeekSpot());
+	return CoverFacingRules::DecideCoverFireAt(CoverSlot, TargetLocation, IsCornerShotTarget(TargetLocation), bOverTheTop,
+		CoverRules::GetConfig().FrontalArcDeg, bMayExpose);
+}
+
 bool AOperativeCharacter::IsCornerHoldSpot() const
 {
 	// Not while the walk to the corner stand-off is still due (bCoverSnapPending: set on entry, decided once the move order

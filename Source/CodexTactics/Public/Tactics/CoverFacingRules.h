@@ -188,6 +188,32 @@ namespace CoverFacingRules
 	 */
 	CODEXTACTICS_API bool ShouldCornerShot(const FCoverSlot& Slot, const FVector& Target, const FCoverFacingConfig& Config = FCoverFacingConfig());
 
+	/** What a fire order from cover does about a point (DecideCoverFireAt). */
+	enum class ECoverFireAt : uint8
+	{
+		/** The cover pose reaches it: the lean round the corner, the pop over the low wall, or - suppressed - blind fire from the pose. */
+		CoverPose,
+		/** The cover pose does not face it: he steps off the wall (the open shot) and turns to it before the first round. */
+		StepOut,
+		/** The cover pose does not face it and he may not expose himself (suppressed): no round - the order is refused / dropped. */
+		Refuse,
+	};
+
+	/**
+	 * Bug 058 (the game designer's screenshot 2026-11-15): crouched at a box, an enemy 90 deg to his side in the open, a SUPPRESS order - he fired
+	 * from the cover pose without ever turning to it. Can this cover pose fire at Target? bCornerTarget = the corner-shot rule in force
+	 * (ShouldCornerShot / IsCornerHoldTarget at a corner hold spot: behind the wall, round the corner). bOverTheTop: the pose fires over the top
+	 * of a low cover (no lean round an edge) - its reach is also bounded by the cover's frontal arc (FrontalArcDeg, full width, centred into the
+	 * wall, CoverRules::AngleFromWallDeg seen from the slot): a point barely behind the face plane but out at his side is no over-the-top shot.
+	 * Outside the pose's reach he steps out and turns (bMayExpose), else - suppressed, head down - the order is refused: blind fire from the
+	 * cover pose stays only for points the pose reaches. Tested in CodexTactics.Tactics.Cover.FireAt.*.
+	 */
+	CODEXTACTICS_API ECoverFireAt DecideCoverFireAt(const FCoverSlot& Slot, const FVector& Target, bool bCornerTarget, bool bOverTheTop, float FrontalArcDeg,
+		bool bMayExpose);
+
+	/** Display name of an ECoverFireAt (logs). */
+	CODEXTACTICS_API const TCHAR* CoverFireAtName(ECoverFireAt Decision);
+
 	/**
 	 * The fire-ready corner pose (cvr_*_fire_idle) is wanted: at the exposed edge on the facing side, not shimmying, and a
 	 * threat was seen / ordered / shot at no longer than HoldSeconds ago. Else the corner pose is the look-around idle.

@@ -1693,6 +1693,12 @@ public:
 	bool IsCornerShotTarget(const FVector& TargetLocation) const;
 
 	/**
+	 * Bug 058: can his cover pose fire at TargetLocation (CoverFacingRules::DecideCoverFireAt: the corner-shot rule, over the top of a low
+	 * cover only within the wall's frontal arc)? Else he steps out and turns (bMayExpose) or the order is refused. CoverPose out of cover.
+	 */
+	CoverFacingRules::ECoverFireAt DecideCoverFireAtPoint(const FVector& TargetLocation, bool bMayExpose) const;
+
+	/**
 	 * Steps off the wall for a normal shot at an open-side target: leaves the cover and remembers the slot to come back to
 	 * (bReturnToCoverAfterOpenShot). False (nothing done) while shimmying or out of cover.
 	 */

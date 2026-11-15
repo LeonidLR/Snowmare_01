@@ -1,5 +1,7 @@
 #include "Tactics/CoverFacingRules.h"
 
+#include "Tactics/CoverRules.h"
+
 namespace CoverFacingRules
 {
 	float ThreatAlongWall(const FCoverSlot& Slot, const FVector& Threat)
@@ -156,6 +158,33 @@ namespace CoverFacingRules
 		const ECoverFacing Side = Along >= 0.f ? ECoverFacing::Right : ECoverFacing::Left;
 		const float Edge = EdgeDistance(Slot, Side);
 		return Edge >= 0.f && FMath::Abs(Along) >= Edge;
+	}
+
+	ECoverFireAt DecideCoverFireAt(const FCoverSlot& Slot, const FVector& Target, bool bCornerTarget, bool bOverTheTop, float FrontalArcDeg,
+		bool bMayExpose)
+	{
+		bool bPoseReaches = bCornerTarget;
+		if (bPoseReaches && bOverTheTop)
+		{
+			// Over the low wall: only within its frontal arc (a point out at his side lies past the box's end - nothing to fire over).
+			bPoseReaches = CoverRules::AngleFromWallDeg(Slot.WallNormal, Slot.WorldLocation, Target) <= FMath::Max(FrontalArcDeg, 0.f) * 0.5f;
+		}
+		if (bPoseReaches)
+		{
+			return ECoverFireAt::CoverPose;
+		}
+		return bMayExpose ? ECoverFireAt::StepOut : ECoverFireAt::Refuse;
+	}
+
+	const TCHAR* CoverFireAtName(ECoverFireAt Decision)
+	{
+		switch (Decision)
+		{
+		case ECoverFireAt::CoverPose: return TEXT("from the cover pose");
+		case ECoverFireAt::StepOut: return TEXT("steps out and turns");
+		case ECoverFireAt::Refuse: return TEXT("refused (suppressed, the cover pose does not face it)");
+		}
+		return TEXT("?");
 	}
 
 	bool IsFireReady(bool bAtCorner, bool bShimmying, bool bHasThreat, float SecondsSinceThreat, float HoldSeconds)

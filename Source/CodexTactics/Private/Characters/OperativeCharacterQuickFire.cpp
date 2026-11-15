@@ -196,7 +196,9 @@ const TCHAR* AOperativeCharacter::RunQuickFire(float DeltaTime, AActor*& OutTarg
 	// Cover (as a Ctrl + click targeted shot, ShootAtObject): a point round the corner / over a low wall is fired at from the
 	// cover pose (lean out / pop up, or blind fire by the cover fire mode); a point in front of the cover: he steps off the
 	// wall (the open shot, user decision 2026-10-06) and walks back after it.
-	if (bInCover && !IsCornerShotTarget(AimAt))
+	// Bug 058: the same reach rule as the SUPPRESS order (over a low wall only inside its frontal arc); a quick fire order steps out whatever
+	// his suppression (as before).
+	if (bInCover && DecideCoverFireAtPoint(AimAt, /*bMayExpose*/ true) == CoverFacingRules::ECoverFireAt::StepOut)
 	{
 		BeginOpenShotFromCover(Enemy); // false while shimmying: he stays, the cover shot below
 	}
