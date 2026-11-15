@@ -96,7 +96,7 @@ int32 UCorpseSubsystem::GetActiveRagdollCount() const
 	return Count;
 }
 
-bool UCorpseSubsystem::RegisterRagdollCorpse(AActor* Body)
+bool UCorpseSubsystem::RegisterRagdollCorpse(AActor* Body, EDamageType DamageType)
 {
 	UWorld* World = GetWorld();
 	if (!World || !Body)
@@ -115,6 +115,7 @@ bool UCorpseSubsystem::RegisterRagdollCorpse(AActor* Body)
 		{
 			Kept.bIsRagdoll = true;
 			Kept.bPlayerTeam = bIsPlayer;
+			Kept.DamageType = DamageType;
 			return true;
 		}
 	}
@@ -123,6 +124,7 @@ bool UCorpseSubsystem::RegisterRagdollCorpse(AActor* Body)
 	Kept.DeathTime = World->GetTimeSeconds();
 	Kept.bIsRagdoll = true;
 	Kept.bPlayerTeam = bIsPlayer;
+	Kept.DamageType = DamageType;
 	return true;
 }
 
@@ -177,18 +179,18 @@ bool UCorpseSubsystem::TryActivateDeathRagdoll(
 		return false;
 	}
 
-	// Prevent duplicate impulse application if ragdoll is already simulating or character is already kept
-	if (Mesh->IsSimulatingPhysics())
+	// Prevent duplicate impulse application if ragdoll is already simulating or character is already kept as ragdoll
+	if (Mesh->IsSimulatingPhysics() && Mesh->GetCollisionProfileName() == FName(TEXT("Ragdoll")))
 	{
 		UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s mesh is already simulating physics - duplicate activation ignored"), *Character->GetName());
-		return false;
+		return true;
 	}
 	for (const FKeptCorpse& Kept : Corpses)
 	{
-		if (Kept.Body.Get() == Character)
+		if (Kept.Body.Get() == Character && Kept.bIsRagdoll)
 		{
-			UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s is already a kept corpse - duplicate activation ignored"), *Character->GetName());
-			return false;
+			UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s is already an active death ragdoll - duplicate activation ignored"), *Character->GetName());
+			return true;
 		}
 	}
 
@@ -226,34 +228,34 @@ bool UCorpseSubsystem::TryActivateDeathRagdoll(
 
 	// 7. Calculate and apply kinetic impulse to pelvis scaled by body mass
 	const float BodyMass = Mesh->GetMass();
+	const float EffectiveMass = BodyMass > 1.f ? BodyMass : 80.0f;
 	const float MassScale = BodyMass > 1.f ? (BodyMass / 80.0f) : 1.0f;
 	const FVector Impulse = FDeathRagdollRules::CalculateImpulse(HitDirection, DamageAmount, DamageType, RagdollConfig, MassScale);
-	const FName PelvisBone = FDeathRagdollRules::GetDefaultPelvisBoneName();
-	Mesh->AddImpulse(Impulse, PelvisBone, false);
-
-	// Clamp linear launch speed immediately after impulse application
 	const float MaxLaunchSpeed = FDeathRagdollRules::GetMaxLaunchSpeed(DamageType, RagdollConfig);
+
+	// Convert impulse to delta-V budget and clamp so launch speed cannot exceed MaxLaunchSpeed
+	// Root bone and all attached bodies get up to 75% of MaxLaunchSpeed to leave headroom for joint constraints / limb whip
+	const float RootSpeedLimit = MaxLaunchSpeed * 0.75f;
+	const FName PelvisBone = FDeathRagdollRules::GetDefaultPelvisBoneName();
+	const FVector InitialVel = Mesh->GetPhysicsLinearVelocity(PelvisBone);
+	FVector DeltaV = Impulse / EffectiveMass;
+	const FVector TargetVel = InitialVel + DeltaV;
+	const FVector ClampedTargetVel = FDeathRagdollRules::ClampLinearVelocity(TargetVel, RootSpeedLimit);
+	DeltaV = ClampedTargetVel - InitialVel;
+
+	// Cap angular velocity to prevent high-speed rotational limb whip
 	for (FBodyInstance* BodyInst : Mesh->Bodies)
 	{
 		if (BodyInst && BodyInst->IsValidBodyInstance() && BodyInst->bSimulatePhysics)
 		{
-			const FVector CurrentVel = BodyInst->GetUnrealWorldVelocity();
-			const FVector ClampedVel = FDeathRagdollRules::ClampLinearVelocity(CurrentVel, MaxLaunchSpeed);
-			if (ClampedVel != CurrentVel)
-			{
-				BodyInst->SetLinearVelocity(ClampedVel, false);
-			}
+			BodyInst->SetMaxAngularVelocityInRadians(10.0f, false);
 		}
 	}
-	const FVector PelvisVel = Mesh->GetPhysicsLinearVelocity(PelvisBone);
-	const FVector ClampedPelvisVel = FDeathRagdollRules::ClampLinearVelocity(PelvisVel, MaxLaunchSpeed);
-	if (ClampedPelvisVel != PelvisVel)
-	{
-		Mesh->SetPhysicsLinearVelocity(ClampedPelvisVel, false, PelvisBone);
-	}
+
+	Mesh->AddImpulseToAllBodiesBelow(DeltaV, PelvisBone, /*bVelChange*/ true, /*bIncludeSelf*/ true);
 
 	// 8. Register as active ragdoll corpse in subsystem
-	RegisterRagdollCorpse(Character);
+	RegisterRagdollCorpse(Character, DamageType);
 
 	UE_LOG(LogCodexTactics, Display, TEXT("[Corpse] %s activated death ragdoll (impulse magnitude: %.1f, max launch speed: %.1f)"),
 		*Character->GetName(), Impulse.Size(), MaxLaunchSpeed);
@@ -369,9 +371,26 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 			USkeletalMeshComponent* Mesh = Char ? Char->GetMesh() : nullptr;
 			if (Mesh && Mesh->IsSimulatingPhysics())
 			{
+				const float SinceDeath = static_cast<float>(Now - Kept.DeathTime);
+				// In early post-death frames (first 0.6s), clamp body velocities to prevent runaway launches
+				if (SinceDeath <= 0.6f)
+				{
+					const float MaxLaunchSpeed = FDeathRagdollRules::GetMaxLaunchSpeed(Kept.DamageType, RagdollConfig);
+					for (FBodyInstance* BodyInst : Mesh->Bodies)
+					{
+						if (BodyInst && BodyInst->IsValidBodyInstance() && BodyInst->bSimulatePhysics)
+						{
+							const FVector BodyVel = BodyInst->GetUnrealWorldVelocity();
+							if (BodyVel.SizeSquared() > MaxLaunchSpeed * MaxLaunchSpeed)
+							{
+								BodyInst->SetLinearVelocity(FDeathRagdollRules::ClampLinearVelocity(BodyVel, MaxLaunchSpeed), false);
+							}
+						}
+					}
+				}
+
 				const FVector LinVel = Mesh->GetPhysicsLinearVelocity();
 				const FVector AngVel = Mesh->GetPhysicsAngularVelocityInRadians();
-				const float SinceDeath = static_cast<float>(Now - Kept.DeathTime);
 				bSettled = FDeathRagdollRules::HasBodySettled(LinVel, AngVel, SinceDeath, RagdollConfig);
 			}
 			else
@@ -409,28 +428,26 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 
 					UWorld* World = GetWorld();
 					float FloorZ = PelvisBefore.Z;
-					FHitResult FloorHit;
+					TArray<FHitResult> FloorHits;
 					FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(CorpseFreezeFloorTrace), false, Char);
-					if (World && World->LineTraceSingleByChannel(FloorHit, PelvisBefore + FVector(0.f, 0.f, 100.f), PelvisBefore - FVector(0.f, 0.f, 500.f), ECC_WorldStatic, TraceParams))
+					// Trace down from 100 cm above pelvis down to 300 cm below pelvis
+					const FVector TraceStart = PelvisBefore + FVector(0.f, 0.f, 100.f);
+					const FVector TraceEnd = PelvisBefore - FVector(0.f, 0.f, 300.f);
+					if (World && World->LineTraceMultiByChannel(FloorHits, TraceStart, TraceEnd, ECC_WorldStatic, TraceParams))
 					{
-						FloorZ = static_cast<float>(FloorHit.ImpactPoint.Z);
+						for (const FHitResult& Hit : FloorHits)
+						{
+							// Surface must be upward-facing and reject overhead obstacles (> 40 cm above pelvis)
+							if (Hit.ImpactNormal.Z > 0.7f && Hit.ImpactPoint.Z <= PelvisBefore.Z + 40.f)
+							{
+								FloorZ = static_cast<float>(Hit.ImpactPoint.Z);
+								break;
+							}
+						}
 					}
 
 					UE_LOG(LogCodexTactics, Log, TEXT("[Corpse] %s freeze: PelvisBefore Z=%.1f, Floor Z=%.1f (diff=%.1f)"),
 						*Char->GetName(), PelvisBefore.Z, FloorZ, PelvisBefore.Z - FloorZ);
-
-					// FrostHound root alignment: if quadruped mesh root is floating above floor trace, align mesh Z to floor
-					if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
-					{
-						if (Enemy->GetArchetype() == EEnemyArchetype::FrostHound)
-						{
-							const FVector MeshLoc = Mesh->GetComponentLocation();
-							if (MeshLoc.Z > FloorZ + 15.0f)
-							{
-								Mesh->SetWorldLocation(FVector(MeshLoc.X, MeshLoc.Y, FloorZ + 5.0f), false, nullptr, ETeleportType::TeleportPhysics);
-							}
-						}
-					}
 
 					Mesh->SetAllUseCCD(false);
 					Mesh->bPauseAnims = true;
@@ -444,13 +461,14 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 					UE_LOG(LogCodexTactics, Log, TEXT("[Corpse] %s frozen: PelvisAfter Z=%.1f, Floor Z=%.1f (diff=%.1f)"),
 						*Char->GetName(), PelvisAfter.Z, FloorZ, PelvisAfter.Z - FloorZ);
 
-					// Safety net: if pelvis settled > 20 cm below floor, lift mesh so pelvis rests on the floor
+					// Safety net: if pelvis settled > 20 cm below floor, lift mesh so pelvis rests on the floor (capped at 40 cm)
 					const float LiftOffset = FDeathRagdollRules::CalculatePelvisFloorCorrection(PelvisAfter.Z, FloorZ, 20.0f);
 					if (LiftOffset > 0.0f)
 					{
-						Mesh->AddWorldOffset(FVector(0.f, 0.f, LiftOffset), false, nullptr, ETeleportType::TeleportPhysics);
-						UE_LOG(LogCodexTactics, Warning, TEXT("[Corpse] %s pelvis settled %.1f cm below floor (pelvis Z=%.1f vs floor Z=%.1f) - lifted mesh to floor"),
-							*Char->GetName(), LiftOffset, PelvisAfter.Z, FloorZ);
+						const float SafeLift = FMath::Min(LiftOffset, 40.0f);
+						Mesh->AddWorldOffset(FVector(0.f, 0.f, SafeLift), false, nullptr, ETeleportType::TeleportPhysics);
+						UE_LOG(LogCodexTactics, Warning, TEXT("[Corpse] %s pelvis settled %.1f cm below floor (pelvis Z=%.1f vs floor Z=%.1f) - lifted mesh by %.1f cm"),
+							*Char->GetName(), LiftOffset, PelvisAfter.Z, FloorZ, SafeLift);
 					}
 				}
 			}

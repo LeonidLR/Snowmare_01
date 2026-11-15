@@ -73,11 +73,11 @@ bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRa
 	{
 		OutConfig.MaxImpulseMagnitude = static_cast<float>(Val);
 	}
-	if (RootObject->TryGetNumberField(TEXT("max_launch_speed_cm_s"), Val))
+	if (RootObject->TryGetNumberField(TEXT("max_launch_speed_cm_s"), Val) && Val > 0.0)
 	{
 		OutConfig.MaxLaunchSpeedCmS = static_cast<float>(Val);
 	}
-	if (RootObject->TryGetNumberField(TEXT("max_launch_speed_explosive_cm_s"), Val))
+	if (RootObject->TryGetNumberField(TEXT("max_launch_speed_explosive_cm_s"), Val) && Val > 0.0)
 	{
 		OutConfig.MaxLaunchSpeedExplosiveCmS = static_cast<float>(Val);
 	}
@@ -189,8 +189,9 @@ FVector FDeathRagdollRules::ClampLinearVelocity(const FVector& Velocity, float M
 {
 	if (MaxSpeed > 0.0f)
 	{
-		const float SpeedSq = Velocity.SizeSquared();
-		if (SpeedSq > FMath::Square(MaxSpeed))
+		const double SpeedSq = Velocity.SizeSquared();
+		const double MaxSpeedSq = FMath::Square(static_cast<double>(MaxSpeed));
+		if (SpeedSq > MaxSpeedSq)
 		{
 			return Velocity.GetSafeNormal() * MaxSpeed;
 		}

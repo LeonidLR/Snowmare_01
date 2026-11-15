@@ -55,7 +55,7 @@ public:
 		FName ArchetypeId);
 
 	/** Registers an actor whose ragdoll is active */
-	bool RegisterRagdollCorpse(AActor* Body);
+	bool RegisterRagdollCorpse(AActor* Body, EDamageType DamageType = EDamageType::Kinetic);
 
 	/** The rules in force (Codex.Corpse.* over the level's corpse_cap). */
 	FCorpseConfig GetConfig() const;
@@ -109,6 +109,7 @@ private:
 		FVector BaseScale = FVector::OneVector;
 		bool bIsRagdoll = false;
 		bool bPlayerTeam = false;
+		EDamageType DamageType = EDamageType::Kinetic;
 	};
 
 	/** The body's corpse interface (null: gone / not one). */
