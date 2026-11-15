@@ -4,6 +4,12 @@
 Исполнители: **Fable** = Claude Fable 5.1 (архитектура), **Opus** = Claude Opus 5.5, **Sonnet** = Claude Sonnet 5.5, **Gemini** = Google Antigravity, **Тренер** = ночной тренер (без моделей), **Вы** = пользователь.
 Gemini: отмечайте свои строки 📝 → ✅ с веткой `gemini/*` (в main вливает только Claude).
 
+## Сделано (2026-11-15)
+
+- 034 Stealth v2 (c3c34af4, проверен дизайнером); 044 docs, 045 audio importer dry-run, 046 EVENTS proposals, 047 props validator; 049 ragdoll plan, 051 MANTLING spec.
+- 054 Box-select в формации → SOLO (a96e59c1, проверен дизайнером 11-15; Squad 39/39 тестов).
+- Следом: 055 фиксы 048/050/052/053 (Gemini); hitch при появлении врагов — по плану Вт 11-17 (004).
+
 ## Сделано (2026-11-14, влитие пакета 664d78b2)
 
 | # | Задача | Кто | Коммит |
@@ -72,11 +78,7 @@ Gemini: отмечайте свои строки 📝 → ✅ с веткой `g
 
 | # | Задача | Кто |
 |---|---|---|
-| 034 | Stealth v2 — проверен на пакете 664d78b2 (ветка `gemini/043-034-on-pkg` 1383402b, 1337/1337 тестов, 7/7 смоков PASS), ждёт утреннего ревью Claude | Claude |
-| 044 | Обновление документации (HANDOFF.md, TASK_BOARD.md, mechanics_register.json) | Gemini |
-| 045 | Аудио-импортёр: Unreal Editor Python, только /Game/Audio/**, только --dry-run | Gemini |
-| 046 | Предложения по закрытию BLOCKING пробелов в docs/design/audio/EVENTS.md | Gemini |
-| 047 | Валидатор C5 реквизита по docs/design/levelgen/PROPS_LAYERS.md | Gemini |
+| 055 | Фиксы по ревью 048/050/052/053 (убрать правку triage, props IsChildOf, FSlotVisual USTRUCT, аудио-компонент, CRYO_DRONE) | Gemini |
 
 ## У Gemini на выходные
 
