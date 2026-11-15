@@ -37,7 +37,7 @@
     "GroupCoverPrioritySmoke", "LadderQueueSmoke", "SnowTracksSmoke", "SnowIndoorSmoke", "StartLightingSmoke", "StartSnowSmoke", "FormationLabSmoke", "FormationMenuSmoke", "FormationCustomSmoke", "FormationShapesSmoke",
     "FormationWallGroupSmoke", "FormationSlideSmoke", "FormationBypassSmoke", "FormationFarSideSmoke",
     "FormationCornerPeekSmoke", "FormationWallSwitchSmoke", "FormationSquadPathPreviewSmoke", "FormationLeaderSwapSlideSmoke", "FormationSquadPeekSmoke", "FormationWallHugSmoke", "FallenGearSmoke", "ClimateSmoke", "ClimateArcticSmoke", "RainSmoke", "StartFlickerSmoke", "SquadCornerPeekSmoke", "FormationLabCombatSmoke", "CutterWallSmoke", "CombatLabTowerSmoke", "CombatLabAmbushSmoke", "SquadPeekNextWallSmoke", "CameraFreePanSmoke", "TowerVisionSmoke", "VisionHeightSmoke", "WallLeadershipSmoke", "CombatLabAmbushRelocateSmoke", "SquadHaltStanceSmoke", "LevelGenRouteSmoke", "LevelGenLaddersSmoke", "LevelGenOpeningsSmoke", "LevelGenRampSmoke", "RoofCutawayFocusSmoke", "FallDropSmoke", "DropSoftlockSmoke", "DropLinkReachSmoke", "WallSectorsSmoke", "GroupCoverNearbySmoke", "WallLeadershipSlideSmoke", "GroupCornerPeekSmoke", "RunCornerPeekSmoke", "TwoCornerHoldSmoke", "WallMoveNearestLeadsSmoke",
-    "PmcTeamSmoke", "PmcCommanderSmoke", "PmcArenaSmoke", "PmcArenaObjectiveSmoke", "PmcStalemateSmoke", "PmcEncounterSmoke", "PmcEncounterHuntSmoke", "PmcStandoffSmoke", "SightConditionsSmoke", "ConePerfSmoke", "WeaponReachSmoke", "PmcDeathPoseSmoke", "FireArcSmoke", "PmcUnderFireSmoke", "UnderFireManoeuvreSmoke", "SoloStanceSmoke", "LeaderSwitchMoveSmoke", "LeaderSwitchLadderSmoke", "PmcFireLineSmoke", "CornerStandoffSmoke", "HordeFirefightsSmoke", "DeathRagdollSmoke", "CorpsePersistSmoke", "CorpseCostSmoke", "ProneCrawlSmoke", "InjuredLocomotionSmoke", "StealthModeSmoke", "StealthDetectionSmoke", "SoloStartSmoke", "FastRegroupSmoke", "InjuredLocomotionDepotSmoke", "WoundedFollowerSmoke"
+    "PmcTeamSmoke", "PmcCommanderSmoke", "PmcArenaSmoke", "PmcArenaObjectiveSmoke", "PmcStalemateSmoke", "PmcEncounterSmoke", "PmcEncounterHuntSmoke", "PmcStandoffSmoke", "SightConditionsSmoke", "ConePerfSmoke", "WeaponReachSmoke", "PmcDeathPoseSmoke", "FireArcSmoke", "PmcUnderFireSmoke", "UnderFireManoeuvreSmoke", "SoloStanceSmoke", "LeaderSwitchMoveSmoke", "LeaderSwitchLadderSmoke", "PmcFireLineSmoke", "CornerStandoffSmoke", "HordeFirefightsSmoke", "DeathRagdollSmoke", "CorpsePersistSmoke", "CorpseCostSmoke", "ProneCrawlSmoke", "InjuredLocomotionSmoke", "StealthModeSmoke", "StealthDetectionSmoke", "SoloStartSmoke", "FastRegroupSmoke", "InjuredLocomotionDepotSmoke", "WoundedFollowerSmoke", "LookHoldSmoke"
   ],
   "smokeDefaults": {
     "_comment": "Clock of every smoke run by smoke_parallel.ps1 (cleanup day 2026-10-15): -UseFixedTimeStep -FPS=fixedStepFps (+ -FixedSeed): each frame advances the game by exactly 1/fps whatever the load (no frame-time dependent results with 3 games side by side) and, unthrottled, smokes run several times faster than real time. 60 fps: the smokes' step tickers (0.05 / 0.1 / 0.25 s, State.Time += step) land on whole frames, so their counters equal the game time (at 30 fps a 0.05 s ticker fires every 2 frames = 0.067 s and timed checks drift by 25 %: GrenadeAnimSmoke release times). 0 = wall clock. A smoke that needs the wall clock sets \"realTime\": true in smokeOptions; smoke_parallel -RealTime runs all of them on the wall clock.",
@@ -52,6 +52,7 @@
   },
   "smokeOptions": {
     "_comment": "exclusive = never alongside another game instance (shared Saved/ files); extra = additional UnrealEditor args; map = start map (default /Game/Maps/L_MovementTest); timeout in seconds; knownFail = reported but does not fail the run; realTime = wall clock instead of the fixed step (smokeDefaults); fixedStepFps = this smoke's own fixed step; rendered = a real RHI offscreen (-RenderOffscreen -ResX=1280 -ResY=720) instead of -nullrhi; _why = the reason of an override",
+    "LookHoldSmoke": { "map": "/Game/Maps/L_MovementTest", "squadStart": "level" },
     "HitchProbeSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json -trace=cpu,loadtime,frame", "timeout": 300, "exclusive": true, "_why": "Cold first-use level-roster and simultaneous PMC spawn game-thread hitch probe" },
     "CommanderModeSmoke": { "extra": "-LevelJson=SmokeFixtures/commander_mode_smoke.json", "_why": "2026-11-02: the smoke pauses 16 s into wave 1 and needs the fight still running there; the user's level_01_outpost wave 1 (10 hounds since 2026-10-28) was cleared by the immortal squad in ~11 s ('pause freeze 0', failing since then), so the smoke runs on its own pinned waves (d4bca4a7: 45 hounds + 10 frostbitten)" },
     "HordeIntroSmoke": { "extra": "-LevelJson=SmokeFixtures/horde_intro_smoke.json", "_why": "2026-11-01 (merge check of main 88e6d386): the smoke's shot lists assume wave 1 = hounds + frostbitten and wave 3 = the new cutters + marksmen; level_01_outpost.json is the user's level, tuned in the Wave Editor (his working copy had wave 1 = hounds only), so the smoke runs on its own pinned copy (the waves of d4bca4a7)" },
@@ -185,6 +186,22 @@
       "globs": ["Source/**/Core/GameplayPreload*", "Source/**/Debug/HitchProbeSmoke*", "Source/**/Core/CodexTacticsGameMode*", "Source/**/Characters/OperativeAnimInstance*", "Source/**/Ladders/LadderClimbComponent*", "Source/**/Combat/WaveSubsystem*", "Source/**/AI/PmcSquadSubsystem*"],
       "tests": ["CodexTactics.Core.GameplayPreload"],
       "smokes": ["HitchProbeSmoke"]
+    },
+    {
+      "name": "look-hold-solo-2026-11-15",
+      "globs": [
+        "Source/**/Tactics/LookHoldRules*",
+        "Source/**/Debug/LookHoldSmoke*"
+      ],
+      "tests": [
+        "CodexTactics.Tactics.LookHold"
+      ],
+      "smokes": [
+        "LookHoldSmoke",
+        "StealthModeSmoke",
+        "SoloStartSmoke",
+        "ProneCrawlSmoke"
+      ]
     },
     {
       "globs": [

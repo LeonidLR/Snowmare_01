@@ -1,4 +1,5 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
+#include "Tactics/LookHoldRules.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/SniperRules.h"
 #include "Tactics/TurnAttackTimeline.h"
@@ -141,6 +142,16 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		return;
 	}
 	++CombatId;
+	if (SquadSystem && LookHoldRules::ShouldClearOnTurnBased())
+	{
+		for (AOperativeCharacter* Member : SquadSystem->GetMembers())
+		{
+			if (Member)
+			{
+				Member->ClearManualLookPoint();
+			}
+		}
+	}
 	// Imported Godot balance (DA_Balance = resources/balance.tres).
 	if (const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>())
 	{

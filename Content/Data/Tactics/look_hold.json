@@ -1,0 +1,6 @@
+{
+  "_comment": "Look hold outside stealth (059, solo walk / jog / crouch / prone strafe). Docs: docs/design/LOOK_HOLD_SOLO.md",
+  "min_placement_distance_cm": 50.0,
+  "standing_max_twist_deg": 45.0,
+  "prone_max_twist_deg": 0.0
+}

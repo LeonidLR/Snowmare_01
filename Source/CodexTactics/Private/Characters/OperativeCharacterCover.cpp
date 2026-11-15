@@ -25,6 +25,7 @@
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverRules.h"
 #include "Tactics/CoverTraceRules.h"
+#include "Tactics/LookHoldRules.h"
 #include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
@@ -154,6 +155,10 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;
+	if (LookHoldRules::ShouldClearOnCover(bInCover))
+	{
+		ClearManualLookPoint();
+	}
 	CurrentCoverHeight = Slot.Height;
 	bShimmying = false;
 	ShimmyDirection = 0.f;

@@ -152,9 +152,9 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 			AOperativeCharacter* FirstCleared = nullptr;
 			for (AOperativeCharacter* Member : Squad->GetSelectedGroup())
 			{
-				if (Member && Member->HasStealthManualLookTarget())
+				if (Member && (Member->HasStealthManualLookTarget() || Member->HasManualLookPoint()))
 				{
-					Member->ClearStealthManualLookTarget();
+					Member->ClearManualLookPoint();
 					if (!FirstCleared)
 					{
 						FirstCleared = Member;
