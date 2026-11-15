@@ -14,7 +14,7 @@
 namespace CoverFacingTest
 {
 	/** A wall along Y at X = -45 cm; the slot at the origin facing out along +X: his Right = +Y. */
-	FCoverSlot MakeSlot(bool bLeftEdge = false, float LeftCm = 0.f, bool bRightEdge = false, float RightCm = 0.f)
+	FCoverSlot MakeCoverFacingSlot(bool bLeftEdge = false, float LeftCm = 0.f, bool bRightEdge = false, float RightCm = 0.f)
 	{
 		FCoverSlot Slot;
 		Slot.WorldLocation = FVector::ZeroVector;
@@ -33,7 +33,7 @@ COVER_FACING_TEST(FCoverShimmyFacesThreatTest, "ShimmyFacesThreat")
 bool FCoverShimmyFacesThreatTest::RunTest(const FString& Parameters)
 {
 	using namespace CoverFacingRules;
-	const FCoverSlot Slot = CoverFacingTest::MakeSlot();
+	const FCoverSlot Slot = CoverFacingTest::MakeCoverFacingSlot();
 	TestTrue(TEXT("right tangent = +Y"), Slot.RightTangent().Equals(FVector(0.f, 1.f, 0.f), 0.001f));
 
 	// Threat out in front, to his right (+Y): he faces right along the wall (+Y, yaw 90), not out of the wall (yaw 0).
@@ -115,7 +115,7 @@ COVER_FACING_TEST(FCoverThreatSideFlipHysteresisTest, "ThreatSideFlipHysteresis"
 bool FCoverThreatSideFlipHysteresisTest::RunTest(const FString& Parameters)
 {
 	using namespace CoverFacingRules;
-	const FCoverSlot Slot = CoverFacingTest::MakeSlot();
+	const FCoverSlot Slot = CoverFacingTest::MakeCoverFacingSlot();
 	const float Margin = FCoverFacingConfig().ThreatSideHysteresisCm;
 	// Facing right: a threat drifting just past the middle to the left does not flip him.
 	TestEqual(TEXT("right, threat 0.5 m to the left: keeps right"),
@@ -163,11 +163,11 @@ bool FCoverThreatPriorityTest::RunTest(const FString& Parameters)
 	TestEqual(TEXT("only heard: the nearest"), PickThreat(Heard), 1);
 
 	// None known: the nearest exposed edge; none exposed: unchanged.
-	TestEqual(TEXT("only the left edge exposed"), static_cast<int32>(DefaultSide(CoverFacingTest::MakeSlot(true, 120.f), ECoverFacing::Right)),
+	TestEqual(TEXT("only the left edge exposed"), static_cast<int32>(DefaultSide(CoverFacingTest::MakeCoverFacingSlot(true, 120.f), ECoverFacing::Right)),
 		static_cast<int32>(ECoverFacing::Left));
-	TestEqual(TEXT("both exposed: the nearer (right 80 cm)"), static_cast<int32>(DefaultSide(CoverFacingTest::MakeSlot(true, 160.f, true, 80.f), ECoverFacing::Left)),
+	TestEqual(TEXT("both exposed: the nearer (right 80 cm)"), static_cast<int32>(DefaultSide(CoverFacingTest::MakeCoverFacingSlot(true, 160.f, true, 80.f), ECoverFacing::Left)),
 		static_cast<int32>(ECoverFacing::Right));
-	TestEqual(TEXT("no edge: keeps the facing"), static_cast<int32>(DefaultSide(CoverFacingTest::MakeSlot(), ECoverFacing::Left)), static_cast<int32>(ECoverFacing::Left));
+	TestEqual(TEXT("no edge: keeps the facing"), static_cast<int32>(DefaultSide(CoverFacingTest::MakeCoverFacingSlot(), ECoverFacing::Left)), static_cast<int32>(ECoverFacing::Left));
 	return true;
 }
 
@@ -177,19 +177,19 @@ bool FCoverCornerPoseSnapTest::RunTest(const FString& Parameters)
 	using namespace CoverFacingRules;
 	const FCoverFacingConfig Config;
 	// Edge 70 cm away on the facing side (right: pack _L, stand-off 57 cm): at the corner, within the snap tolerance.
-	const FCoverSlot Near = CoverFacingTest::MakeSlot(false, 0.f, true, 70.f);
+	const FCoverSlot Near = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 70.f);
 	float Shift = -1.f;
 	TestTrue(TEXT("edge 0.7 m on the facing side: corner pose"), IsAtCorner(Near, ECoverFacing::Right, Config));
 	TestFalse(TEXT("... no snap needed (13 cm over the stand-off)"), ShouldSnapToCorner(Near, ECoverFacing::Right, Shift, Config));
 	TestFalse(TEXT("facing the other (closed) side: no corner pose"), IsAtCorner(Near, ECoverFacing::Left, Config));
 	// Edge 1.6 m away: walk towards it, stopping the pack _L stand-off (57 cm) short of the measured edge.
-	const FCoverSlot Mid = CoverFacingTest::MakeSlot(false, 0.f, true, 160.f);
+	const FCoverSlot Mid = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 160.f);
 	TestFalse(TEXT("edge 1.6 m away: not yet at the corner"), IsAtCorner(Mid, ECoverFacing::Right, Config));
 	TestTrue(TEXT("edge 1.6 m away: snap"), ShouldSnapToCorner(Mid, ECoverFacing::Right, Shift, Config));
 	TestEqual(TEXT("snap 1.03 m"), Shift, 160.f - Config.StandStandOffPackLCm, 0.01f);
 	// Too far / not exposed / the other side: no snap.
 	TestFalse(TEXT("no exposed edge on the facing side: no snap"), ShouldSnapToCorner(Mid, ECoverFacing::Left, Shift, Config));
-	const FCoverSlot Far = CoverFacingTest::MakeSlot(false, 0.f, true, 260.f);
+	const FCoverSlot Far = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 260.f);
 	TestFalse(TEXT("edge 2.6 m away: no snap"), ShouldSnapToCorner(Far, ECoverFacing::Right, Shift, Config));
 	TestEqual(TEXT("edge distance of a closed side"), EdgeDistance(Mid, ECoverFacing::Left), -1.f);
 	return true;
@@ -200,7 +200,7 @@ bool FCoverCornerPeekEdgeHitTest::RunTest(const FString& Parameters)
 {
 	// Manual corner peek by click (user request 2026-10-13, rev 5c): which clicks mean "the edge of my wall".
 	using namespace CoverFacingRules;
-	const FCoverSlot Slot = CoverFacingTest::MakeSlot(true, 150.f, true, 120.f); // left edge 1.5 m (-Y), right edge 1.2 m (+Y)
+	const FCoverSlot Slot = CoverFacingTest::MakeCoverFacingSlot(true, 150.f, true, 120.f); // left edge 1.5 m (-Y), right edge 1.2 m (+Y)
 	ECoverFacing Side = ECoverFacing::Left;
 	float Edge = 0.f;
 	TestTrue(TEXT("the wall face 20 cm in from the right edge"), FindPeekEdge(Slot, FVector(-45.f, 100.f, 90.f), nullptr, Side, Edge)
@@ -218,14 +218,14 @@ bool FCoverCornerPeekEdgeHitTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("2 m in front of the wall (a ground click)"), FindPeekEdge(Slot, FVector(155.f, 110.f, 0.f), nullptr, Side, Edge));
 	TestFalse(TEXT("far behind the wall"), FindPeekEdge(Slot, FVector(-400.f, 110.f, 90.f), nullptr, Side, Edge));
 	TestFalse(TEXT("a closed side (the wall goes on) has no edge to peek round"),
-		FindPeekEdge(CoverFacingTest::MakeSlot(), FVector(-45.f, 110.f, 90.f), nullptr, Side, Edge));
+		FindPeekEdge(CoverFacingTest::MakeCoverFacingSlot(), FVector(-45.f, 110.f, 90.f), nullptr, Side, Edge));
 	FCoverSlot Low = Slot;
 	Low.Height = ECoverHeight::LowCover;
 	TestTrue(TEXT("rev 5e: low cover peeks too (the crouched corner stance round its end)"), FindPeekEdge(Low, FVector(-45.f, 100.f, 90.f), nullptr, Side, Edge)
 		&& Side == ECoverFacing::Right);
 	// A long wall: the end lies beyond his slot's corner probes; a slot traced near the click knows it.
-	const FCoverSlot Long = CoverFacingTest::MakeSlot();
-	FCoverSlot Probe = CoverFacingTest::MakeSlot(false, 0.f, true, 30.f);
+	const FCoverSlot Long = CoverFacingTest::MakeCoverFacingSlot();
+	FCoverSlot Probe = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 30.f);
 	Probe.WorldLocation = FVector(0.f, 400.f, 0.f);
 	Probe.WallPoint = FVector(-45.f, 400.f, 90.f);
 	TestTrue(TEXT("long wall: the probed slot's edge 4.3 m along"), FindPeekEdge(Long, FVector(-45.f, 420.f, 90.f), &Probe, Side, Edge)
@@ -265,7 +265,7 @@ bool FCoverCornerPeekNearEdgeTest::RunTest(const FString& Parameters)
 		const float Edge = Case.Side == ECoverFacing::Right ? StandOff : -StandOff; // the slot (body at 0) sits at the stand-off
 		const float Stand = CornerPeekStandAlong(Case.Side, Edge, StandOff);
 		TestEqual(FString::Printf(TEXT("%s: the stand point is where he is"), Case.Name), Stand, 0.f, 0.01f);
-		const FCoverSlot Slot = CoverFacingTest::MakeSlot(Case.Side == ECoverFacing::Left, StandOff, Case.Side == ECoverFacing::Right, StandOff);
+		const FCoverSlot Slot = CoverFacingTest::MakeCoverFacingSlot(Case.Side == ECoverFacing::Left, StandOff, Case.Side == ECoverFacing::Right, StandOff);
 		const bool bAtCorner = IsAtCorner(Slot, Case.Side, Config);
 		TestTrue(FString::Printf(TEXT("%s: his slot is at that corner"), Case.Name), bAtCorner);
 		TestTrue(FString::Printf(TEXT("%s: real time -> pose in place"), Case.Name),
@@ -296,7 +296,7 @@ bool FCoverCornerPeekLowCoverTest::RunTest(const FString& Parameters)
 	// Rev 5e (game designer 2026-10-14): crouched behind a LOW wall / barricade, a click on its end = the crouched corner peek.
 	using namespace CoverFacingRules;
 	const FCoverFacingConfig Config;
-	FCoverSlot Low = CoverFacingTest::MakeSlot(true, 140.f, true, 110.f);
+	FCoverSlot Low = CoverFacingTest::MakeCoverFacingSlot(true, 140.f, true, 110.f);
 	Low.Height = ECoverHeight::LowCover;
 	Low.WallPoint.Z = 50.f;
 	ECoverFacing Side = ECoverFacing::Left;
@@ -308,8 +308,8 @@ bool FCoverCornerPeekLowCoverTest::RunTest(const FString& Parameters)
 	TestFalse(TEXT("the middle of the low wall: no peek (a shimmy / over the top)"), FindPeekEdge(Low, FVector(-45.f, 0.f, 50.f), nullptr, Side, Edge));
 	TestFalse(TEXT("a ground click in front of it: no peek"), FindPeekEdge(Low, FVector(160.f, 100.f, 0.f), nullptr, Side, Edge));
 	// A long low wall: a probe slot of the same height gives the far end; a high probe (another obstacle) is ignored.
-	const FCoverSlot LongLow = [] { FCoverSlot Slot = CoverFacingTest::MakeSlot(); Slot.Height = ECoverHeight::LowCover; return Slot; }();
-	FCoverSlot Probe = CoverFacingTest::MakeSlot(false, 0.f, true, 30.f);
+	const FCoverSlot LongLow = [] { FCoverSlot Slot = CoverFacingTest::MakeCoverFacingSlot(); Slot.Height = ECoverHeight::LowCover; return Slot; }();
+	FCoverSlot Probe = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 30.f);
 	Probe.Height = ECoverHeight::LowCover;
 	Probe.WorldLocation = FVector(0.f, 400.f, 0.f);
 	TestTrue(TEXT("long low wall: the low probe's edge"), FindPeekEdge(LongLow, FVector(-45.f, 420.f, 50.f), &Probe, Side, Edge)
@@ -321,7 +321,7 @@ bool FCoverCornerPeekLowCoverTest::RunTest(const FString& Parameters)
 	{
 		const float StandOff = CornerStandOff(End, true, Config);
 		TestEqual(TEXT("crouched stand-off"), StandOff, End == ECoverFacing::Right ? 65.f : 49.f, 0.01f);
-		FCoverSlot AtEnd = CoverFacingTest::MakeSlot(End == ECoverFacing::Left, StandOff, End == ECoverFacing::Right, StandOff);
+		FCoverSlot AtEnd = CoverFacingTest::MakeCoverFacingSlot(End == ECoverFacing::Left, StandOff, End == ECoverFacing::Right, StandOff);
 		AtEnd.Height = ECoverHeight::LowCover;
 		const float EdgeAlong = End == ECoverFacing::Right ? StandOff : -StandOff;
 		TestTrue(TEXT("crouched at the low wall's end: the near-edge click poses in place"),
@@ -350,7 +350,7 @@ bool FCoverCornerStandOffPerClipSideTest::RunTest(const FString& Parameters)
 
 	// The same edge 80 cm away on either side: the short-stepping _R side walks closer, the _L side stays.
 	float Shift = -1.f;
-	const FCoverSlot Both = CoverFacingTest::MakeSlot(true, 80.f, true, 80.f);
+	const FCoverSlot Both = CoverFacingTest::MakeCoverFacingSlot(true, 80.f, true, 80.f);
 	TestTrue(TEXT("right edge 0.8 m: steps 23 cm closer"), ShouldSnapToCorner(Both, ECoverFacing::Right, Shift, Config, false));
 	TestEqual(TEXT("... by edge - 57"), Shift, 23.f, 0.01f);
 	TestTrue(TEXT("left edge 0.8 m (stand-off 28): steps 52 cm closer"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, false));
@@ -358,7 +358,7 @@ bool FCoverCornerStandOffPerClipSideTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("left edge 0.8 m crouched (stand-off 49): 31 cm"), ShouldSnapToCorner(Both, ECoverFacing::Left, Shift, Config, true));
 	TestEqual(TEXT("... by edge - 49"), Shift, 31.f, 0.01f);
 	// Already nearer than the stand-off: never walks away from the edge.
-	const FCoverSlot Close = CoverFacingTest::MakeSlot(true, 40.f, true, 40.f);
+	const FCoverSlot Close = CoverFacingTest::MakeCoverFacingSlot(true, 40.f, true, 40.f);
 	TestFalse(TEXT("edge 0.4 m, stand-off 57: no walk away"), ShouldSnapToCorner(Close, ECoverFacing::Right, Shift, Config, false));
 	TestEqual(TEXT("... shift 0"), Shift, 0.f, 0.01f);
 	return true;
@@ -370,7 +370,7 @@ bool FCoverCornerShotOnlyBehindWallTest::RunTest(const FString& Parameters)
 	using namespace CoverFacingRules;
 	const FCoverFacingConfig Config;
 	// Wall face at X = -45 (normal +X), the slot at the origin, his right corner 80 cm away (+Y), the left side closed.
-	const FCoverSlot Slot = CoverFacingTest::MakeSlot(false, 0.f, true, 80.f);
+	const FCoverSlot Slot = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 80.f);
 	TestEqual(TEXT("depth of the slot itself: 45 cm in front of the face"), DepthInFrontOfWall(Slot, FVector::ZeroVector), 45.f, 0.01f);
 	TestTrue(TEXT("behind the wall, straight back: cover shot"), ShouldCornerShot(Slot, FVector(-600.f, 0.f, 0.f), Config));
 	TestTrue(TEXT("behind the wall, diagonally past the corner: cover shot"), ShouldCornerShot(Slot, FVector(-400.f, 500.f, 0.f), Config));
@@ -393,7 +393,7 @@ bool FCoverFacingKeepEngagedTest::RunTest(const FString& Parameters)
 	// User PIE video 2026-10-07: hounds swarming in front of the corner flipped the threat side every shot or two,
 	// so the fire stance jumped between fire_idle_L and fire_idle_R. While engaged the stance keeps its side.
 	using namespace CoverFacingRules;
-	const FCoverSlot Corner = CoverFacingTest::MakeSlot(false, 0.f, true, 30.f); // exposed edge on his Right only
+	const FCoverSlot Corner = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 30.f); // exposed edge on his Right only
 	TestEqual(TEXT("engaged at the exposed corner: the threat side flip is ignored"),
 		KeepEngagedFacing(Corner, ECoverFacing::Right, ECoverFacing::Left, true), ECoverFacing::Right);
 	TestEqual(TEXT("not engaged: he follows the threat"),
@@ -402,10 +402,10 @@ bool FCoverFacingKeepEngagedTest::RunTest(const FString& Parameters)
 		KeepEngagedFacing(Corner, ECoverFacing::Left, ECoverFacing::Right, true), ECoverFacing::Right);
 	TestEqual(TEXT("engaged, no change wanted: unchanged"),
 		KeepEngagedFacing(Corner, ECoverFacing::Right, ECoverFacing::Right, true), ECoverFacing::Right);
-	const FCoverSlot Flat = CoverFacingTest::MakeSlot();
+	const FCoverSlot Flat = CoverFacingTest::MakeCoverFacingSlot();
 	TestEqual(TEXT("engaged along a wall with no exposed edge: he keeps his side"),
 		KeepEngagedFacing(Flat, ECoverFacing::Left, ECoverFacing::Right, true), ECoverFacing::Left);
-	const FCoverSlot Both = CoverFacingTest::MakeSlot(true, 30.f, true, 30.f);
+	const FCoverSlot Both = CoverFacingTest::MakeCoverFacingSlot(true, 30.f, true, 30.f);
 	TestEqual(TEXT("engaged with both edges exposed: he keeps the edge he fights from"),
 		KeepEngagedFacing(Both, ECoverFacing::Left, ECoverFacing::Right, true), ECoverFacing::Left);
 	return true;
@@ -417,7 +417,7 @@ bool FCoverFacingCornerHoldTargetTest::RunTest(const FString& Parameters)
 	// User decision 2026-10-07 (PIE video CoverBug_02, 58 s): at the edge he holds the corner stance and fires from it only
 	// at what the stance can aim at; a flank rush in front of the wall is no corner shot.
 	using namespace CoverFacingRules;
-	const FCoverSlot Corner = CoverFacingTest::MakeSlot(false, 0.f, true, 30.f); // exposed edge on his Right (+Y)
+	const FCoverSlot Corner = CoverFacingTest::MakeCoverFacingSlot(false, 0.f, true, 30.f); // exposed edge on his Right (+Y)
 	const FVector Straight = CornerAimDirection(Corner, ECoverFacing::Right, 0.f);
 	TestTrue(TEXT("0 deg outward: along the wall to his right"), Straight.Equals(FVector(0.f, 1.f, 0.f), 0.001f));
 	const FVector Round = CornerAimDirection(Corner, ECoverFacing::Right, 45.f);
@@ -450,7 +450,7 @@ bool FCoverCornerHoldOnlyWhenEngagedTest::RunTest(const FString&)
 	TestTrue(TEXT("exploring with a fresh known threat: he holds the corner"), WantsCornerHold(true, false, true));
 	TestFalse(TEXT("away from the exposed edge: never"), WantsCornerHold(false, true, true));
 	// With no threat the corner pose is the look-around idle (2026-10-06 clip rule), never the fire-ready one.
-	const FCoverSlot Edge = CoverFacingTest::MakeSlot(true, 60.f, false, 0.f);
+	const FCoverSlot Edge = CoverFacingTest::MakeCoverFacingSlot(true, 60.f, false, 0.f);
 	TestTrue(TEXT("the edge 60 cm away is the corner"), IsAtCorner(Edge, ECoverFacing::Left));
 	TestFalse(TEXT("no threat: no fire-ready pose at the corner"), IsFireReady(true, false, false, 0.f));
 	// No threat known: a shimmy either way along the wall is a forward walk (never the backward clip).
@@ -483,7 +483,7 @@ bool FCoverWallSpanTest::RunTest(const FString&)
 {
 	using namespace CoverFacingRules;
 	// The wall along Y at X = -45; his Right = +Y. Left edge exposed 26 cm away, the right side closed.
-	const FCoverSlot Slot = CoverFacingTest::MakeSlot(true, 26.f, false, 0.f);
+	const FCoverSlot Slot = CoverFacingTest::MakeCoverFacingSlot(true, 26.f, false, 0.f);
 	TestTrue(TEXT("behind the slot: within the wall"), IsWithinWallSpan(Slot, FVector(-60.f, 0.f, 90.f)));
 	TestTrue(TEXT("20 cm to the left, before the edge: within"), IsWithinWallSpan(Slot, FVector(-60.f, -20.f, 90.f)));
 	TestFalse(TEXT("the corner fire stance's hand 60 cm past the left edge: no wall there (no push)"), IsWithinWallSpan(Slot, FVector(-60.f, -86.f, 90.f)));
@@ -591,7 +591,7 @@ namespace CoverFacingTest
 	/** A low box (barricade) at the slot: face at X = -45, his right end 80 cm away, the left end 80 cm away. */
 	FCoverSlot MakeLowBox()
 	{
-		FCoverSlot Slot = MakeSlot(true, 80.f, true, 80.f);
+		FCoverSlot Slot = MakeCoverFacingSlot(true, 80.f, true, 80.f);
 		Slot.Height = ECoverHeight::LowCover;
 		return Slot;
 	}
@@ -614,7 +614,7 @@ COVER_FACING_TEST(FCoverFireAtRoundTheCornerTest, "FireAt.RoundTheCorner")
 bool FCoverFireAtRoundTheCornerTest::RunTest(const FString& Parameters)
 {
 	using namespace CoverFacingTest;
-	const FCoverSlot High = MakeSlot(false, 0.f, true, 80.f); // high wall, his right edge exposed 80 cm away
+	const FCoverSlot High = MakeCoverFacingSlot(false, 0.f, true, 80.f); // high wall, his right edge exposed 80 cm away
 	const FVector Corner(30.f, 400.f, 0.f); // beside the wall end, level with its line
 	TestEqual(TEXT("round the exposed corner: the corner shot from the cover pose"), FireAt(High, Corner, true), ECoverFireAt::CoverPose);
 	TestEqual(TEXT("... suppressed: blind fire round the corner"), FireAt(High, Corner, false), ECoverFireAt::CoverPose);
@@ -649,7 +649,7 @@ bool FCoverFireAtBehindTest::RunTest(const FString& Parameters)
 {
 	using namespace CoverFacingTest;
 	const FCoverSlot Low = MakeLowBox();
-	const FCoverSlot High = MakeSlot(false, 0.f, true, 80.f);
+	const FCoverSlot High = MakeCoverFacingSlot(false, 0.f, true, 80.f);
 	const FVector Back(800.f, 50.f, 0.f); // behind him, on his own side of the cover
 	TestEqual(TEXT("low cover, target at his back: he steps out and turns"), FireAt(Low, Back, true), ECoverFireAt::StepOut);
 	TestEqual(TEXT("... suppressed: refused"), FireAt(Low, Back, false), ECoverFireAt::Refuse);

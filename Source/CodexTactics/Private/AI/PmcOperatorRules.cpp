@@ -22,7 +22,7 @@ namespace PmcOperatorRules
 			return H;
 		}
 
-		inline FPmcOperatorConfig Defaults()
+		inline FPmcOperatorConfig PmcOperatorDefaults()
 		{
 			FPmcOperatorConfig Config;
 			Config.Names = { TEXT("Operator Kessler"), TEXT("Operator Vance"), TEXT("Operator Roux"), TEXT("Operator Moreau"), TEXT("Operator Dahl"),
@@ -149,7 +149,7 @@ namespace PmcOperatorRules
 	bool Reload()
 	{
 		using namespace PmcOperatorLocal;
-		Cached = Defaults();
+		Cached = PmcOperatorDefaults();
 		bLoaded = true;
 		FString Text;
 		TSharedPtr<FJsonObject> Json;
