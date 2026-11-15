@@ -41,6 +41,7 @@ Read docs/port/codex/README.md in C:\Users\Zephyrus15Duo\Documents\Unreal Projec
   task in your report as `level | model | result (pass / redo)`. If the cheaper model's work has to be redone often, say so - we drop it.
 - **Chat:** post results with a commit hash and real questions only - no "accepted" / "starting" lines (each post wakes Claude).
 
+## Local model - REMOVED (designer, 2026-11-15): do not use local_task.py; the section below is history only.
 ## Local model (designer 2026-11-11, free)
 `python Scripts/Tools/local_task.py --prompt "..." --files <f...> [--out answer.md]` runs qwen3-coder:30b on the designer's RTX 3080
 (Ollama, ~25-33 tok/s warm, slower while the night trainer runs). Use it for model-router level 1 (and small level 2) before any paid

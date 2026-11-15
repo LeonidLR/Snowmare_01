@@ -14,5 +14,5 @@ Allowed paths: exactly those 4 files (you may change only 2 of them) + your repo
 Checks: build.ps1 (no unity-clash lines - paste the tail), `test.ps1 -Filter CodexTactics.Combat.PeekSight`,
 `test.ps1 -Filter CodexTactics.Tactics.CoverFacing`, `test.ps1 -Filter CodexTactics.AI.PmcOperator`, `test.ps1 -Filter CodexTactics.Core.HitchGate`
 (if a filter finds 0 tests, find the right prefix with a grep and say so), typesafe audit.
-Router level expected 1 -> local model / cheapest model.
+Router level expected 1 -> your cheapest model.
 Report: docs/port/codex/outbox/010-unity-clash-renames.report.md.
