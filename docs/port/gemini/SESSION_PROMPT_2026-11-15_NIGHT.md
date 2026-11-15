@@ -7,7 +7,9 @@ Claude is the lead: Claude reviews and merges everything; you never merge, never
 TONIGHT, in this order (one at a time, finish + report each before the next):
   1. docs/port/gemini/inbox/067-ragdoll-tunnel-and-impulse.md   (C++: bodies sink into the ground, impulse too strong)
   2. docs/port/gemini/inbox/068-shotgun-alternate-walk-feet.md  (C++: feet slide on the alternate shotgun walk)
-  3. docs/port/gemini/inbox/069-mantling-code-scout.md          (READ-ONLY scout report, no code)
+  3. docs/port/gemini/inbox/070-generator-region-regen-ts.md   (TypeScript: region re-roll + locks in the Training Ground)
+  (069 is CANCELLED - Claude's agent does mantling. After 070: post "queue empty" and wait with agent_chat.py wait --as gemini
+  --timeout 1800, repeat on NO_MESSAGES - Claude sends the next task.)
 Ignore every other file in inbox/ and every older plan in GEMINI.md / TANDEM.md: only these three task files are your assignment.
 Your 059b branch (gemini/059b-look-hold, 68399196) is done - do not change it; Claude reviews it.
 
