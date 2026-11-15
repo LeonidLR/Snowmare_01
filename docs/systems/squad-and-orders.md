@@ -1050,3 +1050,9 @@ Design and UX: `docs/design/FORMATION_SECTORS.md` "Custom formation"; data contr
   three-man Custom 2 confirmed in the menu with the 4th as the extra, the carry and save -> load; `shot` (rendered) writes
   `Saved/Screenshots/CustomGhosts/01_placement_ghosts.png`, `02_ghosts_three_placed.png` (close-up), `02_custom_shape_walking.png`.
 
+## Box selection disbands the formation (054, 2026-11-15)
+
+- A non-empty box selection in formation switches the squad to Solo (`SquadOrderRules::ShouldSwitchToSoloOnBoxSelect`, merge `a96e59c1`); an empty box does not change the mode.
+- `USquadSubsystem::DisbandFormationToSoloBox` keeps valid boxed members selected and updates the selected leader; it stops formation-driven movement before entering Solo.
+- Non-selected members hold their positions; their own move / interaction orders continue. Subsequent group orders affect the selected members rather than restarting the formation.
+- Source: `Characters/SquadOrderRules.cpp`, `SquadSubsystem.cpp`, controller selection; regression coverage: `SquadControlSmoke` and `SquadOrderRulesTest`.

@@ -627,3 +627,11 @@ hounds -> out; blast with a hound 2 m off -> out; blast + a move ordered while d
 - **Checks:** `CornerExitSmoke` (L_MovementTest arena: a squad man and a PMC fighter at a 2.5 m wall's end, the squad man crouched at a
   1.2 m wall's end, a seen threat past each corner; peek, hold the fire pose, then a shimmy back / out of the cover, 10 exits): the largest
   step per frame 3.2 - 4.5 cm (was 11 - 25.6 cm), <= 5 cm required.
+
+## Cover pose reach before firing (058, 2026-11-15)
+
+- `CoverFacingRules::DecideCoverFireAt` returns `CoverPose`, `StepOut` or `Refuse` (`9441d902`); `AOperativeCharacter::DecideCoverFireAtPoint` supplies the current cover geometry.
+- A reachable corner shot uses the cover pose; over-the-top fire must also fit the low cover's frontal arc. Otherwise the operative steps out and turns only when exposure is allowed.
+- Ordered suppression outside that reach is refused or cancelled while suppressed, with `NO LINE OUT OF THIS COVER`; suppression does not permit blind fire toward an arbitrary side target.
+- Quick fire uses the same decision for stepping out. Automatic fire is still an open follow-up (058b): its ordinary firing path must call this policy too.
+- Regression coverage: `SuppressionSmoke` stages 61-65 and `CoverFacingTest`; the ordered-fire checks do not establish automatic-fire coverage.

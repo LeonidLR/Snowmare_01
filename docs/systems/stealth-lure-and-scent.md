@@ -59,3 +59,8 @@ the last scent point (20 s, 3 m; `FPatrolSearchSpec::bScent`, save `patrol.scent
 fight is unchanged. Data: `FROST_HOUND` keys `smell_*` / `sniff_seconds` / `scent_*` (`FEnemyPerceptionParams`). Tests
 `CodexTactics.AI.Scent.*`; smoke `HoundScentSmoke` (L_PatrolTest). `GetLastPatrolBreakCause` / `HasBrokenPatrol` for smokes.
 
+## Stealth mode v2 validation (008, 2026-11-15)
+
+- Stealth mode v2 was verified by the game designer on 2026-11-15 (Claude's `codex-docs-1115` update); this records designer validation, not a new automated test run.
+- Its implementation is separate from whistle / stone lures: `Characters/OperativeCharacterStealth.cpp`, `OperativeAnimInstanceStealth.cpp` and `StealthModeRules` own the mode, look anchor and directional locomotion.
+- Extending look hold to ordinary Solo movement is a separate task (059); this validation does not claim that extension is implemented.

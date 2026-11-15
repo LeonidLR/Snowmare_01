@@ -177,3 +177,11 @@ a sniper aiming at him and a sniper rifle stay immediate. That crouch is the HOL
 a squad stance): his next own order (`OrderMoveTo`) or the formation's follow (`FollowTo`, the leader walking upright -
 `ShouldRiseFromHoldCrouch`) stands him up at once. Solo's guard crouch, the formation wall layout and the player's stance keys are unchanged.
 Smoke `SquadHaltStanceSmoke`.
+
+## Suppressive fire from a cover pose (058, 2026-11-15)
+
+- `OrderSuppress` and `RunSuppressFire` use `DecideCoverFireAtPoint` / `CoverFacingRules::DecideCoverFireAt` (`9441d902`): `CoverPose` fires within pose reach, `StepOut` leaves cover and turns, `Refuse` prevents the shot.
+- A suppressed operative may fire blind at a point reachable from the cover pose, including within the low cover's frontal arc; a side point outside that reach is refused with `NO LINE OUT OF THIS COVER`.
+- Quick fire shares the step-out decision; existing open-stance aim alignment still applies before the round.
+- Open follow-up 058b: apply the decision to ordinary automatic fire, including blind return-fire aim points; no automatic-fire fix is claimed by 058.
+- Source: `OperativeCharacterSuppression.cpp`, `OperativeCharacterQuickFire.cpp`, `OperativeCharacterCornerAim.cpp`; ordered regression: `SuppressionSmoke` stages 61-65.
