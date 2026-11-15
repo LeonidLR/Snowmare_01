@@ -1,5 +1,7 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**004 enemy-appear hitch (2026-11-15, Claude, uncommitted for review):** Codex WIP `50de2e98` (async world preload `UGameplayPreloadSubsystem`, deferred anim binding, ladder track cache, one automatic spawn per frame) ported onto main hunk by hunk (main-only stealth proxy / shotgun clip-speed fixes kept). Added: `Codex.Preload.Enabled` 1/0 (dev command line `-CodexPreload=0` for smokes, since -ExecCmds run after StartPlay); `EGameplayPreloadState` / `GetState`, `IsGameplayReady` now false on Failed (`IsGameplayReleased` = fail-open gate); post-Ready catalog gaps warn + load synchronously instead of returning null clips. Smokes: `SmokePreloadDeferral.cpp` holds queued `CodexTactics.*` -ExecCmds until the preload is released (HitchProbeSmoke exempt), `SmokeUtils::FPreloadGate` in ProneCrawl / InjuredLocomotion / ShotgunCover (ShotgunCover's test-start placement scheduled after the gate). HitchProbeSmoke: hard 250 ms + spawn-window gate (`HitchGateRules`, `Codex.HitchProbe.*` CVars: max frame within 10 frames of a spawn <= 50 ms, frames > 33 ms reported) + a scripted wave phase (`UWaveSubsystem::SpawnScriptedWaveNow`). Open: the preload costs ~10-18 s at level start (624 paths) - review its breadth; scripted waves still spawn the whole roster in one frame (34 enemies ~32 ms).
+
 **Mainline package merge (2026-11-14, `664d78b2`):** Saturday integration package merged into `main`: interim 2026-11-12 (without Codex 004 WIP `50de2e98`) + Gemini tasks 030 (chat dispatcher `2effc570`), 036 (gemini gate tool `4d30f8e1`), 029/032/033 (audio pipeline v1, Lyria v3-v5 cues, Gemini TTS voice lines, EVENTS.md registry, loudness normalization pass, Training Ground Audio tab `8961f559`), 028 (buildings in-game maps L_Gen_Train_1..3 `c762d386`), and FrontendControls unit test fix `354a3143` (StealthMode in AllDeclaredIds, 94 commands). Full test suite: 1332/1332 unit tests PASS (0 FAIL), 5/5 core smokes PASS (`FormationLabSmoke`, `SoloStartSmoke`, `ProneCrawlSmoke`, `InjuredLocomotionSmoke`, `ShotgunCoverSmoke`). Codex 004 WIP (`50de2e98` async preload) is excluded from main to avoid pawn spawn timing regression and deferred on its branch. Task 034 (Stealth v2) verified on top of package at `1383402b` (1337/1337 tests, 7/7 smokes PASS), awaiting morning review. Active night queue: 044 (docs) -> 045 (audio importer --dry-run) -> 046 (audio events BLOCKING proposals) -> 047 (props C5 validator).
 
 **Codex designer queue (2026-11-12):** 004 hitch -> 008 stealth v2 (section4, then5, then1-3) -> Gemini028/030/031/022/029. Shared Claude router/config restored byte-identically from main; Codex maps Jev levels via model_routes.json (1Luna/2Sol/3Terra/4Astra), no local model. Earlier queue notes below are historical.
@@ -321,6 +323,9 @@ The old §6 blocks (how the user places things, what the artist edits, ABP setup
 
 ## 7. Open user decisions / questions (condensed; the full text is in [OPEN_QUESTIONS.md](OPEN_QUESTIONS.md))
 
+- **2026-11-15 — first aid:** [FIRST_AID.draft.md](../design/FIRST_AID.draft.md) contains 18 questions for the designer; the feature remains a draft pending those decisions.
+- **2026-11-15 — traversal heights:** the animation packs are purchased; clip heights still need measurement. The provisional data-driven obstacle standard is saved in `codex/obstacle-heights`; measured targets and regenerated training-arena data are needed before merging it.
+
 - **The squad at walls (2026-11-03, `fix/squad-at-walls`) - defaults PENDING** (`Content/Data/AI/squad_walls.json`, `docs/systems/squad-and-orders.md`
   "The squad at walls"): an end man at an open corner looks 112 deg off the wall's outward normal (the look the right-end man had in the report);
   a follower searches another free cover within 6 m of the leader's slot whose face is within 60 deg of the leader's; on the wall-leadership
@@ -357,10 +362,9 @@ The old §6 blocks (how the user places things, what the artist edits, ABP setup
 
 ## 8. Next steps (old §8: [NEXT_STEPS.md](NEXT_STEPS.md))
 
-Waiting for the user: place / re-id the Demo 01 rev 5 volumes and actors (`docs/systems/demo01-lake.md`, beat sheet §10.1); run `Scripts/Editor/setup_apc_vehicle.py` (editor
-closed) and build `L_VehicleTest` (`docs/systems/vehicles.md`); confirm Sprint 15 heat, the sudden-horde flyover and the sniper model; approve or reject the bot's stealth proposal
-(`Saved/Coach/stealth_proposal.md`). Ahead: Demo 01 phases 2-3 (encounter groups, A4-A10 steps), APC P3 (turn-based) and P5 (tutorial beat V). Items 1-7 of the old list (loot crates, turrets, generator, targeted shots, UI shell,
-the turn-based manager, the Phase 2 data importers) are done; item 8 (content: level, VFX, cutscene; the "twisted" character look) stays open.
+**Status 2026-11-15.** Merged: stealth v2 (034), box selection switching formation to solo (054), props validator/spawner (047/048), doorway breach base (050), audio importer/event hookup (045/052; 046 trigger proposal), death-ragdoll configuration/rules (053), cover-fire facing fix (058), editor status banner and branch guard. Commit references: [CHANGELOG.md](CHANGELOG.md).
+
+In progress: **004 hitches** (Claude subagent); **056b ragdoll** and **059b look lock** (Gemini). Traversal sequence: purchased packs → measure clip heights → merge the obstacle-height standard (`codex/obstacle-heights`, with regenerated arenas) → retarget animations → C++ implementation. The next feature stage is first aid, after the designer resolves the 18 questions in [FIRST_AID.draft.md](../design/FIRST_AID.draft.md). Older Demo/APC/content backlog remains in [NEXT_STEPS.md](NEXT_STEPS.md).
 
 ## 9. Known gaps / tech debt (old §9: [KNOWN_GAPS.md](KNOWN_GAPS.md))
 
