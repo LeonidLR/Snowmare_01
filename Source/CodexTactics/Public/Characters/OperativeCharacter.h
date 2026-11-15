@@ -495,6 +495,8 @@ public:
 	/** The planned landing (feet) and the base (feet) of the climb in progress / the last one. */
 	const FVector& GetMantleLandingFeet() const { return MantleLandingFeet; }
 	const FVector& GetMantleBaseFeet() const { return MantleBaseFeet; }
+	/** Which retargeted clip set his body plays (the female soldier skeleton or the male one). */
+	EMantleBody GetMantleBody() const;
 	/** The last climb ended on a top (else over: the far side). */
 	bool DidLastMantleEndOnTop() const { return bMantleOnTop; }
 
@@ -2546,7 +2548,6 @@ private:
 	void RestoreMantleState(bool bFalling);
 	/** The rules' probe of the obstacle ahead (traces from his feet). */
 	bool ProbeMantleAhead(const FVector& Dir, float ReachCm, struct FMantleSite& Out) const;
-	EMantleBody GetMantleBody() const;
 	/** Running for the run-up rule: above run_speed_fraction x his walk speed, or moving on a sprint order. */
 	bool IsRunningForMantle() const;
 	bool bMantling = false;

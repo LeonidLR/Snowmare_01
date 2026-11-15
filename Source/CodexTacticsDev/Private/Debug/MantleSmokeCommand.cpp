@@ -712,8 +712,35 @@ namespace MantleSmoke
 				Climbed += Members[Index] && Members[Index]->GetMantleCount() > State->SquadCounts[Index] ? 1 : 0;
 			}
 			Check(*State, !State->bSawMantle && Climbed == 0, FString::Printf(TEXT("formation: nobody mantled (%d)"), Climbed));
-			return Finish(*State, true);
+			// l: a female body climbs with her own retargeted copies (the montage only plays on a matching skeleton).
+			State->Leader = nullptr;
+			for (AOperativeCharacter* Member : Members)
+			{
+				if (Member && Member->GetMantleBody() == EMantleBody::Female)
+				{
+					State->Leader = Member;
+					break;
+				}
+			}
+			if (!State->Leader.IsValid())
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[MantleSmoke] no female operative in this squad - the female case is skipped"));
+				return Finish(*State, true);
+			}
+			Squad->EnterSoloMode();
+			Squad->SetFollowersHolding(true);
+			State->Leader->bTacticalCeaseFire = true;
+			State->Site = FindSite(World, State->Leader.Get(), TEXT("wreck"), 140.f, 70.f, State->Leader->GetActorLocation(),
+				[](const FMantleSite&, const FMantleDecision& D) { return D.IsGo(); });
+			Next(*State, 15);
+			return true;
 		}
+		case 15:
+			if (ClimbCase(*State, TEXT("a female operative on a 140 cm wreck"), HighMantle, true))
+			{
+				return Finish(*State, true);
+			}
+			return true;
 		default:
 			return Finish(*State, false);
 		}

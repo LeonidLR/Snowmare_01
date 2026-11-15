@@ -533,8 +533,15 @@ int32 UMantleSubsystem::Generate()
 						++NoNav;
 						continue;
 					}
+					// Measured from the real floor under the link start (the navmesh lies a few cm above it: a 135 +- 5 fence would read short).
+					FVector ProbeFeet = Base;
+					FHitResult Floor;
+					if (MantleTraceFirst(*World, Base + FVector(0.f, 0.f, 50.f), Base - FVector(0.f, 0.f, 100.f), Params, Floor) && !Floor.bStartPenetrating)
+					{
+						ProbeFeet.Z = Floor.ImpactPoint.Z;
+					}
 					FMantleSite Site;
-					if (!MantleNavigation::ProbeSite(*World, Base, -Normal, MantleLinkBaseCm + 80.f, Radius, HalfHeight, Params, Config, Site)
+					if (!MantleNavigation::ProbeSite(*World, ProbeFeet, -Normal, MantleLinkBaseCm + 80.f, Radius, HalfHeight, Params, Config, Site)
 						|| Site.Obstacle.Get() != Obstacle)
 					{
 						++Refused[static_cast<int32>(EMantleRefusal::NoObstacle)];
@@ -626,6 +633,19 @@ int32 UMantleSubsystem::Generate()
 	{
 		Down += Link.bDown ? 1 : 0;
 	}
+	TMap<FName, int32> PerClass;
+	for (const FMantleLink& Link : Links)
+	{
+		if (!Link.bDown)
+		{
+			++PerClass.FindOrAdd(Link.ClassId);
+		}
+	}
+	FString Classes;
+	for (const TPair<FName, int32>& Pair : PerClass)
+	{
+		Classes += FString::Printf(TEXT("%s%s %d"), Classes.IsEmpty() ? TEXT("") : TEXT(", "), *Pair.Key.ToString(), Pair.Value);
+	}
 	FString Reasons;
 	for (int32 Index = 1; Index < static_cast<int32>(EMantleRefusal::Count); ++Index)
 	{
@@ -634,8 +654,8 @@ int32 UMantleSubsystem::Generate()
 			Reasons += FString::Printf(TEXT("%s%s %d"), Reasons.IsEmpty() ? TEXT("") : TEXT(", "), MantleRules::RefusalName(static_cast<EMantleRefusal>(Index)), Refused[Index]);
 		}
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: %d mantle links (%d up / over, %d down) from %d samples in %.0f ms - dead ends %d, no navmesh %d; refused: %s"),
-		*World->GetMapName(), Links.Num(), Links.Num() - Down, Down, Sampled, GenerationMs, DeadEnds, NoNav, Reasons.IsEmpty() ? TEXT("none") : *Reasons);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: %d mantle links (%d up / over [%s], %d down) from %d samples in %.0f ms - dead ends %d, no navmesh %d; refused: %s"),
+		*World->GetMapName(), Links.Num(), Links.Num() - Down, *Classes, Down, Sampled, GenerationMs, DeadEnds, NoNav, Reasons.IsEmpty() ? TEXT("none") : *Reasons);
 	return Links.Num();
 }
 
