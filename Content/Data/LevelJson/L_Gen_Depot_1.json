@@ -7,7 +7,7 @@
   "ambush_fight": "skirmish",
   "susanin_wave": 0,
   "horde_enabled": true,
-  "horde_after_firefights": 10,
+  "horde_after_firefights": 5,
   "prep_phase_duration": 60,
   "wave_rest_duration": 20,
   "cold_rate_mult": 0,
@@ -74,11 +74,11 @@
           "initial_delay_sec": 0
         },
         {
-          "enemy_type": "SPITTER",
-          "count": 1,
-          "spawn_lane": "EAST_FLANK",
-          "spawn_delay_sec": 1.2,
-          "initial_delay_sec": 1.5
+          "enemy_type": "FROSTBITTEN",
+          "count": 5,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
         }
       ],
       "wave_modifiers": {
@@ -109,7 +109,7 @@
         },
         {
           "enemy_type": "CUTTER",
-          "count": 5,
+          "count": 2,
           "spawn_lane": "ANY",
           "spawn_delay_sec": 1,
           "initial_delay_sec": 0
