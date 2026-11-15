@@ -2175,7 +2175,7 @@ void USaveGameSubsystem::RestoreEnemies(FSaveRestoreContext& Context)
 			// Rev 2026-10-19: out of the way first - a destroyed actor keeps its name until GC, and the respawn below would get a
 			// new one ("..._C_12"), which the next save stored and a later load (on a fresh level) no longer matched.
 			Enemy->Rename(*MakeUniqueObjectName(Enemy->GetOuter(), Enemy->GetClass(), TEXT("LoadDiscardedEnemy")).ToString(), nullptr,
-				REN_DontCreateRedirectors | REN_ForceNoResetLoaders | REN_NonTransactional);
+				REN_DontCreateRedirectors | REN_NonTransactional);
 			Enemy->Destroy();
 		}
 	}
