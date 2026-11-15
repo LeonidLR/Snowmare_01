@@ -12,6 +12,7 @@ class ACharacter;
 class UAnimMontage;
 class UAnimSequence;
 class UAnimInstance;
+struct FLadderPreparedClips;
 
 /** Per-frame rung IK data for the anim instance (LADDERS.md 6.2): world rung centres + alphas + the grip offsets. */
 struct FLadderIKFrame
@@ -231,6 +232,7 @@ public:
 	float GetAlignWalkSpeed() const { return AlignWalkSpeed; }
 
 private:
+	friend struct FLadderPreparedClips;
 	/** The clip's root track in the climber frame (X forward to the wall, Y right, Z up), from its first frame, at 30 Hz. */
 	struct FRootTrack
 	{
@@ -345,6 +347,7 @@ private:
 	FRootTrack ClimbOutTrack;
 	FRootTrack IntoFromTopTrack;
 	bool bClipsLoaded = false;
+	bool bClipsValid = false;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UAnimSequence> LoadedUpLoop;
@@ -421,4 +424,14 @@ private:
 	float LastFallDamage = 0.f;
 	ELadderRefusal LastRefusal = ELadderRefusal::None;
 	ELadderAbortReason LastAbort = ELadderAbortReason::None;
+};
+
+// Immutable extracted values shared by components with the same clips and mesh orientation.
+struct FLadderPreparedClips
+{
+	float LoopLength = 0.f;
+	TArray<float> LoopRise;
+	ULadderClimbComponent::FRootTrack ClimbOutTrack;
+	ULadderClimbComponent::FRootTrack IntoFromTopTrack;
+	bool bValid = false;
 };

@@ -44,17 +44,18 @@ namespace
 	}
 }
 
-void UOperativeAnimInstance::LoadDefaultBlizzardWalkClips()
+void UOperativeAnimInstance::LoadDefaultBlizzardWalkClips(TArray<FSoftObjectPath>* OutPaths)
 {
-	auto Fill = [](FWarmIdleClipSet& Set, const TCHAR* Folder, const TCHAR* Prefix)
+	auto Fill = [this, OutPaths](FWarmIdleClipSet& Set, const TCHAR* Folder, const TCHAR* Prefix)
 	{
-		auto Load = [Folder, Prefix](TObjectPtr<UAnimSequenceBase>& Field, const TCHAR* Tag)
+		auto Load = [this, Folder, Prefix, OutPaths](TObjectPtr<UAnimSequenceBase>& Field, const TCHAR* Tag)
 		{
-			if (!Field)
+			if (OutPaths || !Field)
 			{
 				const FString Name = FString::Printf(TEXT("AS_%s_Storm_1_%s"), Prefix, Tag);
-				Field = LoadObject<UAnimSequenceBase>(nullptr, *FString::Printf(TEXT("%s%s/%s.%s"), BlizzardClipDir, Folder, *Name, *Name), nullptr,
-					LOAD_NoWarn | LOAD_Quiet);
+				const FString Path = FString::Printf(TEXT("%s%s/%s.%s"), BlizzardClipDir, Folder, *Name, *Name);
+				if (OutPaths) { OutPaths->AddUnique(FSoftObjectPath(Path)); }
+				else { Field = ResolvePreparedAnimationAsset(Path); }
 			}
 		};
 		if (Set.LoopA)

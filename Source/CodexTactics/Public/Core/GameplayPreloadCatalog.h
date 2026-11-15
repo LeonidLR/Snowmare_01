@@ -16,6 +16,8 @@ struct CODEXTACTICS_API FGameplayPreloadPath
 /** Collects paths only; never loads assets or changes the active level. */
 namespace GameplayPreloadCatalog
 {
+	CODEXTACTICS_API const FSoftObjectPath& CutterTuningPath();
+
 	/** Runtime-configured class, body, weapon, PMC and ladder paths. Level and weapon tuning must already be applied. */
 	CODEXTACTICS_API void GatherInitial(const ACodexTacticsGameMode& Mode, TArray<FGameplayPreloadPath>& Out);
 

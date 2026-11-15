@@ -8,7 +8,10 @@
 
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
+#include "Core/GameplayPreloadSubsystem.h"
 #include "Engine/World.h"
+#include "HAL/PlatformTime.h"
 #include "EngineUtils.h"
 #include "Combat/EnemySpawnPoint.h"
 #include "Combat/HordeIntroSubsystem.h"
@@ -23,6 +26,62 @@
 
 namespace SmokeUtils
 {
+	/** Result of FPreloadGate::Poll. */
+	enum class EPreloadGate : uint8
+	{
+		/** The world is still preparing (UGameplayPreloadSubsystem): the smoke must not advance its clocks or sample anything. */
+		Waiting,
+		/** Preparation finished successfully, was switched off (Codex.Preload.Enabled 0) or does not apply to this world. */
+		Ready,
+		/** Preparation failed or did not finish within the real-time bound: a smoke failure (FailReason says which). */
+		Failed,
+	};
+
+	/**
+	 * Readiness gate of the smokes (004, 2026-11-15): the async world preload holds the squad spawn, the animation binding and the
+	 * operatives' ticks until its assets are resident, while the smokes run on the core ticker. Poll it at the top of a smoke step,
+	 * BEFORE State.Time / StageTime advance: Waiting -> return true (tick again), Failed -> fail the smoke, Ready -> run as before.
+	 * The bound is wall-clock (the preparation itself is real time), independent of the smoke's game-time budgets.
+	 */
+	struct FPreloadGate
+	{
+		double TimeoutSeconds = 180.0;
+		double StartSeconds = -1.0;
+		bool bPassed = false;
+		FString FailReason;
+
+		EPreloadGate Poll(const UWorld* World)
+		{
+			if (bPassed)
+			{
+				return EPreloadGate::Ready;
+			}
+			const double Now = FPlatformTime::Seconds();
+			if (StartSeconds < 0.0)
+			{
+				StartSeconds = Now;
+			}
+			switch (UGameplayPreloadSubsystem::GetState(World))
+			{
+			case EGameplayPreloadState::Preparing:
+				if (Now - StartSeconds <= TimeoutSeconds)
+				{
+					return EPreloadGate::Waiting;
+				}
+				FailReason = FString::Printf(TEXT("the world preload did not finish within %.0f s (real time)"), TimeoutSeconds);
+				return EPreloadGate::Failed;
+			case EGameplayPreloadState::Failed:
+				FailReason = TEXT("the world preload failed (see [GameplayPreload] in the log)");
+				return EPreloadGate::Failed;
+			default:
+				bPassed = true;
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: gameplay preload gate passed after %.2f s (state %s)"), Now - StartSeconds,
+					*UGameplayPreloadSubsystem::StateName(UGameplayPreloadSubsystem::GetState(World)));
+				return EPreloadGate::Ready;
+			}
+		}
+	};
+
 	/**
 	 * Transform of the L_MovementTest layout, from the checkpoint gate (else the "Floor" actor), created by
 	 * create_movement_test_map.py. The user may move / rotate the whole layout in the editor; smokes express their

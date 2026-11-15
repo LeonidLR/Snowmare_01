@@ -96,6 +96,8 @@ public:
 	ACodexTacticsGameMode();
 
 	virtual void StartPlay() override;
+	void ReleaseGameplayPreloadPause();
+	void CompleteGameplayPreloadSquadSpawn();
 
 	/** Fallback operative class, used when OperativeBlueprint is missing. */
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Squad")
@@ -234,6 +236,14 @@ public:
 
 private:
 	void SpawnSquad();
+	void HoldPreloadOperativeTicks();
+	TArray<TWeakObjectPtr<AOperativeCharacter>> HeldActorTicks;
+	TArray<TWeakObjectPtr<class UCharacterMovementComponent>> HeldMovementTicks;
+	bool bPreloadSquadPending = false;
+	void AcquireGameplayPreloadPause();
+	bool HoldGameplayPreloadPause();
+	FDelegateHandle PreloadPauseHandle;
+	TWeakObjectPtr<class APlayerState> PreloadPauser;
 
 	/** Hands LevelConfig to the wave subsystem and its durations / wave count to the game flow (before BeginPlay). */
 	void ApplyLevelConfig();

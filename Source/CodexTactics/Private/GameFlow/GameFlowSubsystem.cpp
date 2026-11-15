@@ -1,4 +1,5 @@
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Core/GameplayPreloadSubsystem.h"
 
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -47,6 +48,7 @@ bool UGameFlowSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) 
 void UGameFlowSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+	if (UGameplayPreloadSubsystem::IsPreparing(GetWorld())) { return; }
 	// DeltaTime is dilated by the world; flow timers must run on real time - but a hitch (the first frame after a map load
 	// reports the whole load, 3.6 s by now) must not eat the timers: the 4 s pre-combat cutscene ended in the first frame
 	// after a quick restart (MainMenuSmoke "quick restart: cutscene again", 2026-10-07).

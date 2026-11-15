@@ -1,6 +1,7 @@
 // PMC squads as a normal encounter (user request 2026-11-03; docs/systems/pmc-squad-ai.md 7). UE-only, no Godot reference.
 
 #include "AI/PmcEncounterSubsystem.h"
+#include "Core/GameplayPreloadSubsystem.h"
 
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeCharacter.h"
@@ -93,6 +94,10 @@ void UPmcEncounterSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
+	if (UGameplayPreloadSubsystem::IsPreparing(World))
+	{
+		return; // Keep scheduled clocks at their authored start while assets prepare, including no-PC worlds.
+	}
 	if (!bConfigRead)
 	{
 		ReadConfig();
@@ -117,6 +122,10 @@ void UPmcEncounterSubsystem::Tick(float DeltaTime)
 		if (Clock < Entry.DueAt)
 		{
 			continue;
+		}
+		if (UGameplayPreloadSubsystem* Preload = World->GetSubsystem<UGameplayPreloadSubsystem>(); Preload && !Preload->TryClaimAutomaticSpawn())
+		{
+			return; // One automatic dispatch per world frame; preserve this due entry and its retry state.
 		}
 		const int32 Seed = Entry.Spec.Seed != 0 ? Entry.Spec.Seed : 1000 + Entry.Index * 101 + Entry.Retries;
 		FString Why;

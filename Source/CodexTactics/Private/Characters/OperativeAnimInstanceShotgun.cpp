@@ -8,6 +8,7 @@
 // additives) - both before the torso is put on the ABP's pelvis, so the legs stay the ABP's.
 
 #include "Characters/OperativeAnimInstance.h"
+#include "Core/GameplayPreloadSubsystem.h"
 
 #include "Animation/AnimSequence.h"
 #include "AnimationRuntime.h"
@@ -93,6 +94,11 @@ namespace OperativeShotgunLayer
 
 void UOperativeAnimInstance::LoadShotgunAnimSet()
 {
+	const UGameplayPreloadSubsystem* Preload = GetWorld() ? GetWorld()->GetSubsystem<UGameplayPreloadSubsystem>() : nullptr;
+	if (Preload && UGameplayPreloadSubsystem::IsPreparing(GetWorld()) && !Preload->CanBindAnimationAssets())
+	{
+		return;
+	}
 	const USkeletalMeshComponent* BodyComponent = GetSkelMeshComponent();
 	const USkeleton* BodySkeleton = BodyComponent && BodyComponent->GetSkeletalMeshAsset() ? BodyComponent->GetSkeletalMeshAsset()->GetSkeleton() : nullptr;
 	if (bShotgunSetLoaded && LoadedSetsSkeleton.Get() == BodySkeleton)
@@ -188,7 +194,9 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 			return nullptr;
 		}
 		const FString Path = bCopy ? Copy : PackPath;
-		UAnimSequenceBase* Clip = LoadObject<UAnimSequenceBase>(nullptr, *Path);
+		const UGameplayPreloadSubsystem* Preload = GetWorld() ? GetWorld()->GetSubsystem<UGameplayPreloadSubsystem>() : nullptr;
+		if (Preload && Preload->IsKnownMissing(FSoftObjectPath(Path))) { return nullptr; }
+		UAnimSequenceBase* Clip = ResolvePreparedAnimationAsset(Path);
 		if (Clip)
 		{
 			ShotgunClipRefs.AddUnique(Clip);

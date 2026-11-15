@@ -152,6 +152,8 @@ namespace InjuredLocomotionSmoke
 
 	struct FState
 	{
+		/** 004: waits for the world preload before Time / StageTime advance (SmokeUtils::FPreloadGate). */
+		SmokeUtils::FPreloadGate PreloadGate;
 		float Time = 0.f;
 		float StageTime = 0.f;
 		EStage Stage = EStage::Setup;
@@ -583,13 +585,23 @@ namespace InjuredLocomotionSmoke
 	bool StepWound(TWeakObjectPtr<UWorld> WeakWorld, TSharedRef<FState> StateRef)
 	{
 		FState& State = *StateRef;
-		State.Time += StepSeconds;
-		State.StageTime += StepSeconds;
 		UWorld* World = WeakWorld.Get();
 		if (!World)
 		{
 			return false;
 		}
+		switch (State.PreloadGate.Poll(World))
+		{
+		case SmokeUtils::EPreloadGate::Waiting:
+			return true; // the world preload holds the squad / animation binding: no smoke clock runs yet
+		case SmokeUtils::EPreloadGate::Failed:
+			Check(State, false, State.PreloadGate.FailReason);
+			return Finish(State, false);
+		default:
+			break;
+		}
+		State.Time += StepSeconds;
+		State.StageTime += StepSeconds;
 		if (State.Time > 480.f)
 		{
 			Check(State, false, FString::Printf(TEXT("timeout in stage %d leg %d"), static_cast<int32>(State.Stage), State.Leg));

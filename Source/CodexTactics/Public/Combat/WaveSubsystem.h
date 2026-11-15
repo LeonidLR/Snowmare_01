@@ -60,6 +60,13 @@ public:
 	AEnemyCharacter* SpawnLevelEnemy(EEnemyArchetype Archetype, const FVector& Location, const FRotator& Rotation = FRotator::ZeroRotator,
 		FName Variant = NAME_None);
 
+	/**
+	 * Dev / probe (004 HitchProbeSmoke): spawns the level's scripted wave WaveIndex (1-based) now, through the same path a wave start takes
+	 * (ResolveRoster -> SpawnLevelWave: lanes, free spots, spawn entries), but outside the game flow (a skirmish level never starts one).
+	 * Returns the number of enemies spawned; 0 when the level has no such wave.
+	 */
+	int32 SpawnScriptedWaveNow(int32 WaveIndex);
+
 	/** Destroys all currently alive enemies immediately. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Wave")
 	void ClearAllEnemies();

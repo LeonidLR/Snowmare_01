@@ -8,6 +8,7 @@
 #if !UE_BUILD_SHIPPING
 
 #include "CodexTactics.h"
+#include "Core/GameplayPreloadSubsystem.h"
 #include "Engine/Engine.h"
 #include "Engine/World.h"
 #include "Kismet/GameplayStatics.h"
@@ -26,6 +27,16 @@ namespace FrontendSmokeUtils
 			}
 		}
 		return nullptr;
+	}
+
+	/**
+	 * 004 (2026-11-15): true while the game world prepares (UGameplayPreloadSubsystem: the paused world, the squad not spawned yet).
+	 * A smoke that travels into a level checks it at the top of its step and returns (ticks again) BEFORE advancing its clocks, so its
+	 * delays ("StageTime < 1.5") start when the level is playable. The preload's own 120 s timeout bounds the wait.
+	 */
+	inline bool IsGameWorldPreparing()
+	{
+		return UGameplayPreloadSubsystem::IsPreparing(FindGameWorld());
 	}
 
 	/** Opens the frontend map (title screen) unless the world already is it; true when it is. */

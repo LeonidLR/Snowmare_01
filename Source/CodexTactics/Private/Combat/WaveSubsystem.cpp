@@ -347,6 +347,19 @@ bool UWaveSubsystem::JoinSkirmish(AEnemyCharacter* Enemy)
 	return true;
 }
 
+int32 UWaveSubsystem::SpawnScriptedWaveNow(int32 WaveIndex)
+{
+	if (!LevelConfig || !LevelConfig->Config.Waves.IsValidIndex(WaveIndex - 1))
+	{
+		return 0;
+	}
+	FWaveDefinition Def = LevelConfig->Config.Waves[WaveIndex - 1];
+	Def.Spawns = ResolveRoster(Def.Spawns, WaveIndex);
+	const int32 Before = GetAliveEnemyCount();
+	SpawnLevelWave(Def);
+	return GetAliveEnemyCount() - Before;
+}
+
 void UWaveSubsystem::SpawnLevelWave(const FWaveDefinition& Def)
 {
 	const FWaveModifiers& Mods = Def.Modifiers;

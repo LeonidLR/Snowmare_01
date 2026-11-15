@@ -1,4 +1,5 @@
 #include "Characters/OperativeAnimInstance.h"
+#include "Core/GameplayPreloadSubsystem.h"
 #include "Ladders/LadderPoseIK.h"
 
 #include "Combat/KnockdownComponent.h"
@@ -81,7 +82,6 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 	// (The rifle slots 0 / 1 only: a shotgun's left hand is on the pump - no left-hand IK, no bias.)
 	PeekStanceBodyBias[CoverFacingRules::ClipIndex(ECoverFacing::Left)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
 	PeekStanceBodyBias[CoverFacingRules::ClipIndex(ECoverFacing::Right)] = RunCornerPeekRules::StandDrawnBiasSeedDeg;
-	LoadShotgunAnimSet(); // the D-1 set (weapon_anim_sets.json), once per instance
 	if (AOperativeCharacter* Operative = Cast<AOperativeCharacter>(TryGetPawnOwner()))
 	{
 		BoundOperative = Operative;
@@ -93,44 +93,89 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 			Health->OnDied.AddUniqueDynamic(this, &UOperativeAnimInstance::HandleDied);
 		}
 	}
+	bNativeAssetsPending = true;
+	UGameplayPreloadSubsystem* Preload = GetWorld() ? GetWorld()->GetSubsystem<UGameplayPreloadSubsystem>() : nullptr;
+	if (Preload && UGameplayPreloadSubsystem::IsPreparing(GetWorld()) && !Preload->CanBindAnimationAssets())
+	{
+		BoundPreload = Preload;
+		AssetsPreparedHandle = Preload->OnAssetsPrepared.AddUObject(this, &UOperativeAnimInstance::InitializePreparedAssets);
+	}
+	else
+	{
+		InitializePreparedAssets();
+	}
+}
+
+void UOperativeAnimInstance::InitializePreparedAssets()
+{
+	if (!bNativeAssetsPending) { return; }
+	TRACE_CPUPROFILER_EVENT_SCOPE(Codex_OperativeAnimBindAssets);
+	bNativeAssetsPending = false;
+	if (UGameplayPreloadSubsystem* Preload = BoundPreload.Get())
+	{
+		Preload->OnAssetsPrepared.Remove(AssetsPreparedHandle);
+	}
+	AssetsPreparedHandle.Reset();
+	BoundPreload.Reset();
+	LoadShotgunAnimSet();
+	ResolveNativeAnimationDefaults(nullptr);
+}
+
+void UOperativeAnimInstance::GatherDefaultAnimationPaths(TArray<FSoftObjectPath>& OutPaths)
+{
+	ResolveNativeAnimationDefaults(&OutPaths);
+}
+
+UAnimSequenceBase* UOperativeAnimInstance::ResolvePreparedAnimationAsset(const FString& Path)
+{
+	const FSoftObjectPath SoftPath(Path);
+	const UGameplayPreloadSubsystem* Preload = GetWorld() ? GetWorld()->GetSubsystem<UGameplayPreloadSubsystem>() : nullptr;
+	if (Preload && Preload->IsKnownMissing(SoftPath)) { return nullptr; }
+	if (UObject* Resident = SoftPath.ResolveObject()) { return Cast<UAnimSequenceBase>(Resident); }
+	if (Preload && Preload->IsReady())
+	{
+		// A catalog gap (GameplayPreloadCatalog misses this path): warn so it gets added, but still load it - a hitch once beats a
+		// missing clip for the rest of the level (004, 2026-11-15: do no harm while the catalog catches up with new sets).
+		UE_LOG(LogCodexTactics, Warning, TEXT("[GameplayPreload] unprepared animation after ready (synchronous load): %s"), *Path);
+	}
+	return LoadObject<UAnimSequenceBase>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+}
+
+void UOperativeAnimInstance::ResolveNativeAnimationDefaults(TArray<FSoftObjectPath>* OutPaths)
+{
+	auto Resolve = [this, OutPaths](TObjectPtr<UAnimSequenceBase>& Clip, const FString& Path)
+	{
+		if (OutPaths) { OutPaths->AddUnique(FSoftObjectPath(Path)); }
+		else if (!Clip) { Clip = ResolvePreparedAnimationAsset(Path); }
+	};
 	// Prone dives (rev 5e item 6, rev 5f): the root-motion copies of the crawl pack's transitions (Claude-owned, made by
 	// Scripts/Editor/create_prone_dive_root_motion_clips.py; same skeleton as the prone clips the ABP already plays). The pack's
 	// originals have no root motion: the dive would fall back to "stop, then lie down" (AOperativeCharacter::DropProne).
-	if (!WalkToProneAnimation)
-	{
-		WalkToProneAnimation = LoadObject<UAnimSequenceBase>(nullptr,
-			TEXT("/Game/Characters/Operatives/Anims/ProneDive/AS_Crawl_from_Walk_RM.AS_Crawl_from_Walk_RM"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-	}
-	if (!RunToProneAnimation)
-	{
-		RunToProneAnimation = LoadObject<UAnimSequenceBase>(nullptr,
-			TEXT("/Game/Characters/Operatives/Anims/ProneDive/AS_Crawl_from_Run_RM.AS_Crawl_from_Run_RM"), nullptr, LOAD_NoWarn | LOAD_Quiet);
-	}
+	Resolve(WalkToProneAnimation, TEXT("/Game/Characters/Operatives/Anims/ProneDive/AS_Crawl_from_Walk_RM.AS_Crawl_from_Walk_RM"));
+	Resolve(RunToProneAnimation, TEXT("/Game/Characters/Operatives/Anims/ProneDive/AS_Crawl_from_Run_RM.AS_Crawl_from_Run_RM"));
 	// The dive's root motion comes from a montage: an AnimBP set to ignore root motion would leave the capsule behind the body.
-	if (RootMotionMode == ERootMotionMode::NoRootMotionExtraction || RootMotionMode == ERootMotionMode::IgnoreRootMotion)
+	if (!OutPaths && (RootMotionMode == ERootMotionMode::NoRootMotionExtraction || RootMotionMode == ERootMotionMode::IgnoreRootMotion))
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("%s: root motion mode %d -> from montages only (the prone dive is root motion)"), *GetName(),
 			static_cast<int32>(RootMotionMode.GetValue()));
 		RootMotionMode = ERootMotionMode::RootMotionFromMontagesOnly;
 	}
 	// Interaction clips + the cold idle variant (game designer 2026-10-15): Claude-owned montages / the pack clip when unset.
-	LoadDefaultInteractionClips();
+	LoadDefaultInteractionClips(OutPaths);
 	// Blizzard walk (game designer 2026-10-22): the retargeted storm upper-body clips when the class defaults are empty.
-	LoadDefaultBlizzardWalkClips();
+	LoadDefaultBlizzardWalkClips(OutPaths);
 	// Corner-ready pose (user rule 2026-10-06): until setup_operative_cover_animation.py assigns it, take the M4 pack's
 	// look-at idles when the pack is in the project and the other cover clips come from it.
 	if (bUseNativeCoverClips && (CoverStandIdle.ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; })))
 	{
-		auto Fill = [](TArray<TObjectPtr<UAnimSequenceBase>>& Clips, const TCHAR* Left, const TCHAR* Right)
+		auto Fill = [&Resolve, OutPaths](TArray<TObjectPtr<UAnimSequenceBase>>& Clips, const TCHAR* Left, const TCHAR* Right)
 		{
-			Clips.SetNum(2);
+			if (!OutPaths) { Clips.SetNum(2); }
 			const TCHAR* Paths[2] = { Left, Right };
 			for (int32 Index = 0; Index < 2; ++Index)
 			{
-				if (!Clips[Index])
-				{
-					Clips[Index] = LoadObject<UAnimSequenceBase>(nullptr, Paths[Index], nullptr, LOAD_NoWarn | LOAD_Quiet);
-				}
+				if (OutPaths) { OutPaths->AddUnique(FSoftObjectPath(Paths[Index])); }
+				else { Resolve(Clips[Index], Paths[Index]); }
 			}
 		};
 		Fill(CoverStandCorner, TEXT("/Game/M4_Cover_Pack/Animations/stand/anim_M4_cvr_std_look_at_idle_L.anim_M4_cvr_std_look_at_idle_L"),
@@ -163,17 +208,18 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 			const bool bSprintSet = SetIndex >= 2;
 			TArray<TObjectPtr<UAnimSequenceBase>>& Clips = bSprintSet ? (CrouchIndex == 1 ? CoverCrouchSwitchSprintEnter : CoverStandSwitchSprintEnter)
 				: (CrouchIndex == 1 ? CoverCrouchSwitchEnter : CoverStandSwitchEnter);
-			Clips.SetNum(CoverSwitchRules::ClipCount);
+			if (!OutPaths) { Clips.SetNum(CoverSwitchRules::ClipCount); }
 			for (const ECoverSwitchApproach Approach : { ECoverSwitchApproach::Front, ECoverSwitchApproach::FromPackL, ECoverSwitchApproach::FromPackR })
 			{
 				for (const ECoverFacing End : { ECoverFacing::Right, ECoverFacing::Left })
 				{
 					const int32 Index = CoverSwitchRules::ClipArrayIndex(Approach, End);
-					if (!Clips[Index])
+					if (OutPaths || !Clips[Index])
 					{
 						const FString Name = CoverSwitchRules::ClipName(Approach, End, CrouchIndex == 1, bSprintSet);
 						const FString Path = FString::Printf(TEXT("/Game/M4_Cover_Pack/Animations/%s/%s.%s"), CrouchIndex == 1 ? TEXT("crouch") : TEXT("stand"), *Name, *Name);
-						Clips[Index] = LoadObject<UAnimSequenceBase>(nullptr, *Path, nullptr, LOAD_NoWarn | LOAD_Quiet);
+						if (OutPaths) { OutPaths->AddUnique(FSoftObjectPath(Path)); }
+						else { Resolve(Clips[Index], Path); }
 					}
 				}
 			}
@@ -183,6 +229,13 @@ void UOperativeAnimInstance::NativeInitializeAnimation()
 
 void UOperativeAnimInstance::NativeUninitializeAnimation()
 {
+	if (UGameplayPreloadSubsystem* Preload = BoundPreload.Get())
+	{
+		Preload->OnAssetsPrepared.Remove(AssetsPreparedHandle);
+	}
+	AssetsPreparedHandle.Reset();
+	BoundPreload.Reset();
+	bNativeAssetsPending = false;
 	if (AOperativeCharacter* Operative = BoundOperative.Get())
 	{
 		Operative->OnWeaponFiredNative.Remove(FiredHandle);

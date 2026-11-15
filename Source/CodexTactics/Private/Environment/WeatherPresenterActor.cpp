@@ -1,4 +1,5 @@
 #include "Environment/WeatherPresenterActor.h"
+#include "Core/GameplayPreloadSubsystem.h"
 
 #include "CodexTactics.h"
 #include "Camera/PlayerCameraManager.h"
@@ -464,6 +465,7 @@ void AWeatherPresenterActor::ShowStartCover()
 
 void AWeatherPresenterActor::TickStartCover()
 {
+	if (UGameplayPreloadSubsystem::IsPreparing(GetWorld())) { return; }
 	if (!bStartCoverOn)
 	{
 		return;

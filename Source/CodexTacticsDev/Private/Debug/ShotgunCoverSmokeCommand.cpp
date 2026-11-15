@@ -56,6 +56,9 @@ namespace ShotgunCoverSmoke
 
 	struct FState
 	{
+		/** 004: waits for the world preload before Time / StageTime advance and the squad is placed (SmokeUtils::FPreloadGate). */
+		SmokeUtils::FPreloadGate PreloadGate;
+		bool bPlacementScheduled = false;
 		int32 Stage = 0;
 		float StageTime = 0.f;
 		float Time = 0.f;
@@ -193,6 +196,27 @@ namespace ShotgunCoverSmoke
 		if (!World)
 		{
 			return false;
+		}
+		switch (State.PreloadGate.Poll(World))
+		{
+		case SmokeUtils::EPreloadGate::Waiting:
+			return true; // the world preload holds the squad / animation binding: no smoke clock runs yet
+		case SmokeUtils::EPreloadGate::Failed:
+			Check(State, false, State.PreloadGate.FailReason);
+			return Finish(State, false);
+		default:
+			break;
+		}
+		if (!State.bPlacementScheduled)
+		{
+			// The test-start placement, 0.5 s of world time after the gate (it used to be scheduled at the command, before the preload let the
+			// squad spawn and tick): stage 0 still starts 3 s in, after it.
+			State.bPlacementScheduled = true;
+			FTimerHandle PlaceHandle;
+			World->GetTimerManager().SetTimer(PlaceHandle, FTimerDelegate::CreateLambda([WeakWorld]()
+			{
+				SmokeUtils::PlaceSquadAtTestStart(WeakWorld.Get());
+			}), 0.5f, false);
 		}
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
@@ -464,12 +488,6 @@ namespace ShotgunCoverSmoke
 		{
 			return;
 		}
-		FTimerHandle PlaceHandle;
-		TWeakObjectPtr<UWorld> PlaceWorld(World);
-		World->GetTimerManager().SetTimer(PlaceHandle, FTimerDelegate::CreateLambda([PlaceWorld]()
-		{
-			SmokeUtils::PlaceSquadAtTestStart(PlaceWorld.Get());
-		}), 0.5f, false);
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->FrameHandle = FCoreDelegates::OnEndFrame.AddLambda([State]() { SampleFrame(*State); });

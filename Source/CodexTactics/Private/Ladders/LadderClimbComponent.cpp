@@ -12,6 +12,8 @@
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
+#include "Core/GameplayPreloadSubsystem.h"
+#include "Ladders/LadderPreparedClipsSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -212,7 +214,7 @@ bool ULadderClimbComponent::LoadClips()
 	TRACE_CPUPROFILER_EVENT_SCOPE(Codex_LadderLoadClips);
 	if (bClipsLoaded)
 	{
-		return LoadedUpLoop && LoadedClimbOut && LoadedIntoFromTop;
+		return bClipsValid;
 	}
 	const double HitchStart = FPlatformTime::Seconds();
 	ON_SCOPE_EXIT
@@ -223,15 +225,47 @@ bool ULadderClimbComponent::LoadClips()
 			UE_LOG(LogCodexTactics, Display, TEXT("[HitchProbe] LadderLoad %s %.2f ms"), *GetNameSafe(GetOwner()), Ms);
 		}
 	};
+	UGameplayPreloadSubsystem* Preload = GetWorld() ? GetWorld()->GetSubsystem<UGameplayPreloadSubsystem>() : nullptr;
+	if (Preload && UGameplayPreloadSubsystem::IsPreparing(GetWorld()) && !Preload->CanBindAnimationAssets())
+	{
+		return false; // Try again once the preload batch has finished.
+	}
+	const bool bPreparedWorld = Preload && (UGameplayPreloadSubsystem::IsPreparing(GetWorld()) || Preload->IsReady());
+	const auto Resolve = [Preload, bPreparedWorld](const TSoftObjectPtr<UAnimSequence>& Clip) -> UAnimSequence*
+	{
+		if (UAnimSequence* Resident = Clip.Get()) { return Resident; }
+		if (Clip.IsNull() || (Preload && Preload->IsKnownMissing(Clip.ToSoftObjectPath()))) { return nullptr; }
+		if (bPreparedWorld)
+		{
+			// A catalog gap: warn, but never leave the climber without clips for the whole level (004 do-no-harm, 2026-11-15).
+			UE_LOG(LogCodexTactics, Warning, TEXT("[GameplayPreload] unprepared ladder clip (synchronous load): %s"), *Clip.ToString());
+		}
+		return Clip.LoadSynchronous();
+	};
 	bClipsLoaded = true;
-	LoadedUpLoop = UpLoopClip.LoadSynchronous();
-	LoadedClimbOut = ClimbOutClip.LoadSynchronous();
-	LoadedIntoFromTop = IntoFromTopClip.LoadSynchronous();
+	LoadedUpLoop = Resolve(UpLoopClip);
+	LoadedClimbOut = Resolve(ClimbOutClip);
+	LoadedIntoFromTop = Resolve(IntoFromTopClip);
 	if (!LoadedUpLoop || !LoadedClimbOut || !LoadedIntoFromTop)
 	{
 		UE_LOG(LogCodexTactics, Warning, TEXT("[Ladder] %s: ladder clips missing (up %d, out %d, into %d) - cannot climb"), *GetNameSafe(GetOwner()),
 			LoadedUpLoop ? 1 : 0, LoadedClimbOut ? 1 : 0, LoadedIntoFromTop ? 1 : 0);
 		return false;
+	}
+	const ACharacter* Character = GetCharacter();
+	const FQuat Rotation = Character && Character->GetMesh() ? Character->GetMesh()->GetRelativeRotation().Quaternion() : FQuat::Identity;
+	ULadderPreparedClipsSubsystem* Cache = GetWorld() ? GetWorld()->GetSubsystem<ULadderPreparedClipsSubsystem>() : nullptr;
+	if (Cache)
+	{
+		if (TSharedPtr<const FLadderPreparedClips> Existing = Cache->Find(LoadedUpLoop, LoadedClimbOut, LoadedIntoFromTop, Rotation))
+		{
+			LoopLength = Existing->LoopLength;
+			LoopRise = Existing->LoopRise;
+			ClimbOutTrack = Existing->ClimbOutTrack;
+			IntoFromTopTrack = Existing->IntoFromTopTrack;
+			bClipsValid = Existing->bValid;
+			return bClipsValid;
+		}
 	}
 	const FRootTrack Loop = ExtractTrack(LoadedUpLoop);
 	LoopLength = Loop.Length;
@@ -248,7 +282,19 @@ bool ULadderClimbComponent::LoadClips()
 	IntoFromTopTrack = ExtractTrack(LoadedIntoFromTop);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Ladder] clips: up loop %.3f s rise %.1f cm; climb out %.3f s %s; into from top %.3f s %s (climber frame: X to the wall)"),
 		LoopLength, Rise, ClimbOutTrack.Length, *ClimbOutTrack.End().ToCompactString(), IntoFromTopTrack.Length, *IntoFromTopTrack.End().ToCompactString());
-	return LoopLength > 0.1f && Rise > 1.f;
+	const bool bValid = LoopLength > 0.1f && Rise > 1.f;
+	if (Cache)
+	{
+		TSharedRef<FLadderPreparedClips> Data = MakeShared<FLadderPreparedClips>();
+		Data->LoopLength = LoopLength;
+		Data->LoopRise = LoopRise;
+		Data->ClimbOutTrack = ClimbOutTrack;
+		Data->IntoFromTopTrack = IntoFromTopTrack;
+		Data->bValid = bValid;
+		Cache->Store(LoadedUpLoop, LoadedClimbOut, LoadedIntoFromTop, Rotation, Data);
+	}
+	bClipsValid = bValid;
+	return bClipsValid;
 }
 
 float ULadderClimbComponent::LoopFraction(float Time) const

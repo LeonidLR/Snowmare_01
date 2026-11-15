@@ -4,6 +4,7 @@
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Core/GameplayPreloadSubsystem.h"
 #include "Widgets/SWindow.h"
 #include "Engine/GameViewportClient.h"
 #include "Framework/Application/SlateApplication.h"
@@ -283,6 +284,7 @@ void ACodexTacticsPlayerController::SetupInputComponent()
 
 void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 {
+	if (UGameplayPreloadSubsystem::IsPreparing(GetWorld())) { return; }
 	Super::PlayerTick(DeltaTime);
 
 	// Enter held on a conversation: skip it all once the hold threshold is reached (real time, also in the tactical pause).

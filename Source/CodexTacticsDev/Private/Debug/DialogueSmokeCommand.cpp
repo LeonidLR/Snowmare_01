@@ -72,6 +72,10 @@ namespace DialogueSmoke
 
 	bool Step(FState& State)
 	{
+		if (FrontendSmokeUtils::IsGameWorldPreparing())
+		{
+			return true; // the level's world preload: no smoke clock runs yet
+		}
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
 		UWorld* World = FrontendSmokeUtils::FindGameWorld();

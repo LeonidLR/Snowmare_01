@@ -9,6 +9,8 @@
 #include "AIController.h"
 #include "Characters/EnemyAIController.h"
 #include "CodexTactics.h"
+#include "Core/GameplayPreloadSubsystem.h"
+#include "Engine/World.h"
 #include "Ladders/LadderClimbComponent.h"
 
 void AEnemyCharacter::InitLadderClimb()
@@ -16,6 +18,18 @@ void AEnemyCharacter::InitLadderClimb()
 	if (!LadderClimb)
 	{
 		return;
+	}
+	if (UWorld* World = GetWorld(); UGameplayPreloadSubsystem::IsPreparing(World))
+	{
+		UGameplayPreloadSubsystem* Preload = World->GetSubsystem<UGameplayPreloadSubsystem>();
+		if (Preload && !Preload->CanBindAnimationAssets())
+		{
+			if (!Preload->OnAssetsPrepared.IsBoundToObject(this))
+			{
+				Preload->OnAssetsPrepared.AddWeakLambda(this, [this]() { InitLadderClimb(); });
+			}
+			return;
+		}
 	}
 	bLadderClipsMissing = false;
 	if (bCanClimbLadders && !LadderClimb->EnsureClips())

@@ -79,6 +79,10 @@ namespace MainMenuSmoke
 	/** Runs on the core ticker, so it survives the level loads. */
 	bool Step(FState& State)
 	{
+		if (FrontendSmokeUtils::IsGameWorldPreparing())
+		{
+			return true; // the level's world preload: no smoke clock runs yet
+		}
 		State.Time += StepSeconds;
 		State.StageTime += StepSeconds;
 		if (State.Time > 120.f)

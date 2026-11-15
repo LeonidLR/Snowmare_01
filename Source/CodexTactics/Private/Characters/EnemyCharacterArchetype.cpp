@@ -4,6 +4,7 @@
 // Godot reference: Scenes/movements/enemy_*.gd _ready (per-archetype stats); placed archetype / knockdown UE-only.
 
 #include "Characters/EnemyCharacter.h"
+#include "Core/GameplayPreloadCatalog.h"
 #include "Combat/ArmorRules.h"
 #include "Combat/KnockdownComponent.h"
 #include "CodexTactics.h"
@@ -132,7 +133,7 @@ void AEnemyCharacter::ApplyArchetypeDefaults()
 		TintColor = FLinearColor(0.35f, 0.4f, 0.45f);
 		MeshScale = 0.85f;
 		Capsule = FVector2D(35.f, 60.f);
-		if (const UGodotBalanceAsset* Jump = LoadObject<UGodotBalanceAsset>(nullptr, TEXT("/Game/Data/Enemies/DA_EnemyAnim_cutter.DA_EnemyAnim_cutter")))
+		if (const UGodotBalanceAsset* Jump = LoadObject<UGodotBalanceAsset>(nullptr, *GameplayPreloadCatalog::CutterTuningPath().ToString()))
 		{
 			bJumpAttackEnabled = Jump->GetNumber(TEXT("enable_jump_attack"), 0.f) > 0.5f;
 			JumpAttackSpeed = Jump->GetNumber(TEXT("jump_attack_speed"), JumpAttackSpeed);

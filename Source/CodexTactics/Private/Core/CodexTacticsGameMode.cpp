@@ -1,4 +1,8 @@
 #include "Core/CodexTacticsGameMode.h"
+#include "Core/GameplayPreloadSubsystem.h"
+#include "GameFramework/WorldSettings.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "GameFramework/PlayerState.h"
 #include "Core/LoadoutRules.h"
 #include "Data/LevelJsonRules.h"
 #include "Data/LevelLoadoutRules.h"
@@ -128,8 +132,20 @@ void ACodexTacticsGameMode::StartPlay()
 	SuppressionRules::ReloadConfig(); // suppressive fire tunables (Content/Data/Combat/suppression.json, 2026-10-26)
 	UnderFireRules::ReloadConfig(); // the reaction / manoeuvre under fire (Content/Data/Combat/under_fire.json, #43 2026-11-07)
 	ApplyLevelConfig();
+	bPreloadSquadPending = true;
+	if (auto* Preload = GetWorld()->GetSubsystem<UGameplayPreloadSubsystem>())
+	{
+		Preload->StartPreparation(*this);
+	}
 	Super::StartPlay();
-	SpawnSquad();
+	if (UGameplayPreloadSubsystem::IsPreparing(GetWorld()))
+	{
+		HoldPreloadOperativeTicks();
+	}
+	else
+	{
+		CompleteGameplayPreloadSquadSpawn();
+	}
 	// #36 (user 2026-11-04, L_Gen_Depot_1): the generated maps' low covers carry their layout kind as a tag, never "Vault" - the ones a man
 	// climbs over (VaultRules::IsVaultableLevelObject: sandbags, jersey barriers, barrels, low walls of a vaultable size) are tagged now.
 	int32 GeneratedVaultable = 0;
@@ -166,6 +182,106 @@ void ACodexTacticsGameMode::StartPlay()
 			VaultNavigation::MakeVaultable(*It);
 		}
 	}
+	if (UGameplayPreloadSubsystem::IsPreparing(GetWorld()))
+	{
+		AcquireGameplayPreloadPause();
+	}
+}
+
+void ACodexTacticsGameMode::CompleteGameplayPreloadSquadSpawn()
+{
+	if (!bPreloadSquadPending || !GetWorld()->HasBegunPlay())
+	{
+		return;
+	}
+	bPreloadSquadPending = false;
+	SpawnSquad();
+	if (UGameplayPreloadSubsystem::IsPreparing(GetWorld()))
+	{
+		HoldPreloadOperativeTicks();
+	}
+}
+
+void ACodexTacticsGameMode::HoldPreloadOperativeTicks()
+{
+	for (TActorIterator<AOperativeCharacter> It(GetWorld()); It; ++It)
+	{
+		if (It->IsActorTickEnabled())
+		{
+			HeldActorTicks.AddUnique(*It);
+			It->SetActorTickEnabled(false);
+		}
+		UCharacterMovementComponent* Movement = It->GetCharacterMovement();
+		if (Movement && Movement->IsComponentTickEnabled())
+		{
+			HeldMovementTicks.AddUnique(Movement);
+			Movement->SetComponentTickEnabled(false);
+		}
+	}
+}
+
+bool ACodexTacticsGameMode::HoldGameplayPreloadPause()
+{
+	return false; // This delegate holds the pause until this mode removes its own entry.
+}
+
+void ACodexTacticsGameMode::AcquireGameplayPreloadPause()
+{
+	// Codex.Preload.WorldPause 0 (A/B): only the explicit tick / clock / input / AI gates hold the start; the level's own beats (tutorial,
+	// fades, quest timers) then run under the loading cover (2026-11-15: 15 smokes failed that way), so the pause is the default.
+	if (!UGameplayPreloadSubsystem::UsesWorldPause()) { return; }
+#if !UE_BUILD_SHIPPING
+	// Diagnostic coverage of the no-PC/foreign-pause fallback: explicit tick and clock gates must still hold.
+	if (FParse::Param(FCommandLine::Get(), TEXT("PreloadNoWorldPause"))) { return; }
+#endif
+	UWorld* World = GetWorld();
+	if (!World || World->GetNetMode() != NM_Standalone || World->IsPaused() || IsPaused() || PreloadPauseHandle.IsValid())
+	{
+		return;
+	}
+	APlayerController* Controller = World->GetFirstPlayerController();
+	if (!Controller || !Controller->PlayerState)
+	{
+		return;
+	}
+	FCanUnpause Hold = FCanUnpause::CreateUObject(this, &ThisClass::HoldGameplayPreloadPause);
+	if (SetPause(Controller, Hold))
+	{
+		PreloadPauseHandle = Hold.GetHandle();
+		PreloadPauser = Controller->PlayerState;
+	}
+}
+
+void ACodexTacticsGameMode::ReleaseGameplayPreloadPause()
+{
+	for (const auto& Held : HeldActorTicks)
+	{
+		if (AOperativeCharacter* Operative = Held.Get())
+		{
+			Operative->SetActorTickEnabled(true);
+		}
+	}
+	HeldActorTicks.Reset();
+	for (const auto& Held : HeldMovementTicks)
+	{
+		if (UCharacterMovementComponent* Movement = Held.Get())
+		{
+			Movement->SetComponentTickEnabled(true);
+		}
+	}
+	HeldMovementTicks.Reset();
+	if (!PreloadPauseHandle.IsValid())
+	{
+		return;
+	}
+	const int32 Removed = Pausers.RemoveAll([this](const FCanUnpause& Entry) { return Entry.GetHandle() == PreloadPauseHandle; });
+	AWorldSettings* Settings = GetWorldSettings();
+	if (Removed && Pausers.IsEmpty() && Settings && Settings->GetPauserPlayerState() == PreloadPauser.Get())
+	{
+		Settings->SetPauserPlayerState(nullptr);
+	}
+	PreloadPauseHandle.Reset();
+	PreloadPauser.Reset();
 }
 
 const ULevelConfigAsset* ACodexTacticsGameMode::PeekLevelConfig()

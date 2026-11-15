@@ -5,6 +5,7 @@
 // (CodexTactics.Combat.Pressure.*, CodexTactics.AI.AmbushWatch.*, CodexTactics.Combat.AmbushSpots.*, .AmbushPlan.*, .AmbushRelocate.*).
 
 #include "Combat/CombatPressureSubsystem.h"
+#include "Core/GameplayPreloadSubsystem.h"
 
 #include "AI/PatrolRouteActor.h"
 #include "AI/PerceptionRules.h"
@@ -232,6 +233,10 @@ void UCombatPressureSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
+	if (UGameplayPreloadSubsystem::IsPreparing(World))
+	{
+		return; // Keep scheduled clocks at their authored start while assets prepare, including no-PC worlds.
+	}
 	if (!bConfigRead)
 	{
 		ReadConfig();
@@ -286,6 +291,10 @@ void UCombatPressureSubsystem::Tick(float DeltaTime)
 		break;
 	case EPressureEventDecision::Spawn:
 	{
+		if (UGameplayPreloadSubsystem* Preload = World->GetSubsystem<UGameplayPreloadSubsystem>(); Preload && !Preload->TryClaimAutomaticSpawn())
+		{
+			break; // Retry next frame without changing DueAt, seed, or delay accounting.
+		}
 		bDelayLogged = false;
 		const TArray<AEnemyCharacter*> Spawned = TriggerEvent(TOptional<EPressureSpawnKind>(), 0, false);
 		// No valid spot this time (the squad in a tight corner): try again soon instead of a whole interval later.

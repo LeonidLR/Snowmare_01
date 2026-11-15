@@ -17,8 +17,10 @@
 #include "Tactics/CoverSwitchRules.h"
 #include "Tactics/CoverTypes.h"
 #include "UObject/ObjectKey.h"
+#include "UObject/SoftObjectPath.h"
 #include "OperativeAnimInstance.generated.h"
 
+class UGameplayPreloadSubsystem;
 class AActor;
 class AOperativeCharacter;
 class UAnimMontage;
@@ -312,6 +314,8 @@ class CODEXTACTICS_API UOperativeAnimInstance : public UAnimInstance
 	GENERATED_BODY()
 
 public:
+	/** Collects the same native default paths used for binding, without loading or changing clip fields. */
+	void GatherDefaultAnimationPaths(TArray<FSoftObjectPath>& OutPaths);
 	virtual void NativeInitializeAnimation() override;
 	virtual void NativeUninitializeAnimation() override;
 	virtual void NativeUpdateAnimation(float DeltaSeconds) override;
@@ -2034,6 +2038,12 @@ private:
 	FString LayerWeaponId;
 	int32 WeaponEquipClips = 0;
 	FString PistolRetargetFolder;
+	void InitializePreparedAssets();
+	UAnimSequenceBase* ResolvePreparedAnimationAsset(const FString& Path);
+	void ResolveNativeAnimationDefaults(TArray<FSoftObjectPath>* OutPaths);
+	bool bNativeAssetsPending = false;
+	FDelegateHandle AssetsPreparedHandle;
+	TWeakObjectPtr<UGameplayPreloadSubsystem> BoundPreload;
 	bool bShotgunSetLoaded = false;
 	/** The retargeted-copy folder for this mesh's skeleton (weapon_anim_sets.json "retargeted"); empty = the pack clips play. */
 	FString ShotgunRetargetFolder;
@@ -2407,7 +2417,7 @@ private:
 
 	// Interaction layer (OperativeAnimInstanceInteraction.cpp).
 	/** Loads the Claude-owned montages / the cold variant clip into empty fields (NativeInitializeAnimation). */
-	void LoadDefaultInteractionClips();
+	void LoadDefaultInteractionClips(TArray<FSoftObjectPath>* OutPaths = nullptr);
 	/** Cuts the clip on movement / another layer taking the body; resets the state once it ended. */
 	void UpdateInteractionLayer(const AOperativeCharacter& Operative);
 	const FOperativeInteractionClip* GetInteractionClip(EOperativeInteractionAnim Anim) const;
@@ -2429,7 +2439,7 @@ private:
 
 	// Blizzard walk layer (OperativeAnimInstanceBlizzardWalk.cpp).
 	/** Loads the Claude-owned storm copies into empty clip sets (NativeInitializeAnimation). */
-	void LoadDefaultBlizzardWalkClips();
+	void LoadDefaultBlizzardWalkClips(TArray<FSoftObjectPath>* OutPaths = nullptr);
 	void UpdateBlizzardWalkLayer(const AOperativeCharacter& Operative);
 	bool PlayBlizzardWalkClip(EWarmClipStep Step, float BlendIn);
 	void StopBlizzardWalk(float BlendOut);

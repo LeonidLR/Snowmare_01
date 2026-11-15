@@ -20,10 +20,9 @@ namespace
 	const TCHAR* const InteractionMontageDir = TEXT("/Game/Characters/Operatives/Anims/Interactions/");
 	const TCHAR* const ColdIdleVariantPath = TEXT("/Game/Polygonmaker/Animations/Interactions/UE4/Anim_Regular_idle_cold.Anim_Regular_idle_cold");
 
-	UAnimMontage* LoadInteractionMontage(const FString& Name)
+	FString InteractionMontagePath(const FString& Name)
 	{
-		return LoadObject<UAnimMontage>(nullptr, *FString::Printf(TEXT("%s%s.%s"), InteractionMontageDir, *Name, *Name), nullptr,
-			LOAD_NoWarn | LOAD_Quiet);
+		return FString::Printf(TEXT("%s%s.%s"), InteractionMontageDir, *Name, *Name);
 	}
 
 	const TCHAR* InteractionAnimName(EOperativeInteractionAnim Anim)
@@ -54,25 +53,25 @@ UOperativeAnimInstance* UOperativeAnimInstance::Of(const AActor* Actor)
 	return Character && Character->GetMesh() ? Cast<UOperativeAnimInstance>(Character->GetMesh()->GetAnimInstance()) : nullptr;
 }
 
-void UOperativeAnimInstance::LoadDefaultInteractionClips()
+void UOperativeAnimInstance::LoadDefaultInteractionClips(TArray<FSoftObjectPath>* OutPaths)
 {
-	auto Fill = [](FOperativeInteractionClip& Clip, const TCHAR* Name)
+	auto Fill = [this, OutPaths](FOperativeInteractionClip& Clip, const TCHAR* Name)
 	{
-		if (!Clip.FullBody)
+		auto Resolve = [this, OutPaths](TObjectPtr<UAnimMontage>& Field, const FString& Path)
 		{
-			Clip.FullBody = LoadInteractionMontage(FString::Printf(TEXT("AM_Interact_%s"), Name));
-		}
-		if (!Clip.UpperBody)
-		{
-			Clip.UpperBody = LoadInteractionMontage(FString::Printf(TEXT("AM_Interact_%s_Upper"), Name));
-		}
+			if (OutPaths) { OutPaths->AddUnique(FSoftObjectPath(Path)); }
+			else if (!Field) { Field = Cast<UAnimMontage>(ResolvePreparedAnimationAsset(Path)); }
+		};
+		Resolve(Clip.FullBody, InteractionMontagePath(FString::Printf(TEXT("AM_Interact_%s"), Name)));
+		Resolve(Clip.UpperBody, InteractionMontagePath(FString::Printf(TEXT("AM_Interact_%s_Upper"), Name)));
 	};
 	Fill(ChestOpenClip, TEXT("ChestOpen"));
 	Fill(ChestSearchClip, TEXT("ChestSearch"));
 	Fill(PickupGroundClip, TEXT("PickupGround"));
 	if (ColdIdleVariants.IsEmpty())
 	{
-		if (UAnimSequenceBase* Variant = LoadObject<UAnimSequenceBase>(nullptr, ColdIdleVariantPath, nullptr, LOAD_NoWarn | LOAD_Quiet))
+		if (OutPaths) { OutPaths->AddUnique(FSoftObjectPath(ColdIdleVariantPath)); }
+		else if (UAnimSequenceBase* Variant = ResolvePreparedAnimationAsset(ColdIdleVariantPath))
 		{
 			ColdIdleVariants.Add(Variant);
 		}

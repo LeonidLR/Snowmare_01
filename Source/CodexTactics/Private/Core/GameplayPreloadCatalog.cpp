@@ -2,6 +2,7 @@
 
 #include "AI/PmcOperatorRules.h"
 #include "Characters/WeaponAnimLayerRules.h"
+#include "Characters/OperativeCharacter.h"
 #include "CodexTactics.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/WaveConfigTypes.h"
@@ -79,22 +80,30 @@ namespace GameplayPreloadCatalogLocal
 	}
 }
 
+const FSoftObjectPath& GameplayPreloadCatalog::CutterTuningPath()
+{
+	static const FSoftObjectPath Path(TEXT("/Game/Data/Enemies/DA_EnemyAnim_cutter.DA_EnemyAnim_cutter"));
+	return Path;
+}
+
 void GameplayPreloadCatalog::GatherInitial(const ACodexTacticsGameMode& Mode, TArray<FGameplayPreloadPath>& Out)
 {
 	using namespace GameplayPreloadCatalogLocal;
-	AddSoft(Mode.OperativeBlueprint.ToSoftObjectPath(), true, Out);
+	AddSoft(Mode.OperativeBlueprint.ToSoftObjectPath(), !Mode.OperativeClass, Out);
+	AddSoft(Mode.GameBalanceConfig.ToSoftObjectPath(), false, Out);
+	AddSoft(CutterTuningPath(), false, Out);
 	for (const TPair<EEnemyArchetype, TSoftClassPtr<AEnemyCharacter>>& Entry : Mode.EnemyClasses)
 	{
-		AddSoft(Entry.Value.ToSoftObjectPath(), true, Out);
+		AddSoft(Entry.Value.ToSoftObjectPath(), false, Out);
 	}
 	for (const TPair<FName, TSoftClassPtr<AEnemyCharacter>>& Entry : Mode.EnemyVariantClasses)
 	{
-		AddSoft(Entry.Value.ToSoftObjectPath(), true, Out);
+		AddSoft(Entry.Value.ToSoftObjectPath(), false, Out);
 	}
 	for (const FSquadMemberSpawn& Member : Mode.SquadRoster)
 	{
-		AddSoft(Member.MemberBlueprint.ToSoftObjectPath(), true, Out);
-		AddSoft(Member.BodyMesh.ToSoftObjectPath(), true, Out);
+		AddSoft(Member.MemberBlueprint.ToSoftObjectPath(), false, Out);
+		AddSoft(Member.BodyMesh.ToSoftObjectPath(), false, Out);
 		for (const TSoftObjectPtr<UWeaponDataAsset>& Weapon : Member.ExtraWeapons) { AddSoft(Weapon.ToSoftObjectPath(), false, Out); }
 	}
 	for (const TSoftObjectPtr<UWeaponDataAsset>& Weapon : Mode.StartingArsenal) { AddSoft(Weapon.ToSoftObjectPath(), false, Out); }
@@ -116,7 +125,7 @@ void GameplayPreloadCatalog::GatherInitial(const ACodexTacticsGameMode& Mode, TA
 		}
 	}
 	const FPmcOperatorConfig& Pmc = PmcOperatorRules::Get();
-	Add(Pmc.BodyMesh, true, Out);
+	Add(Pmc.BodyMesh, false, Out);
 	for (const FPmcLook& Look : Pmc.Looks) { Add(Look.CoatMaterial, false, Out); }
 	for (const FPmcWeaponChoice& Weapon : Pmc.WeaponPool)
 	{

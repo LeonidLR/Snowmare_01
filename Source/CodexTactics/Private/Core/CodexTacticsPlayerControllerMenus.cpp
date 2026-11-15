@@ -4,6 +4,7 @@
 // Godot reference: Scenes/movements/main.gd (_input and the click / key handlers it dispatches to).
 
 #include "Core/CodexTacticsPlayerController.h"
+#include "Core/GameplayPreloadSubsystem.h"
 #include "Core/CodexTacticsPlayerControllerInternal.h"
 #include "Combat/HordeIntroSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
@@ -145,6 +146,7 @@ void ACodexTacticsPlayerController::TabPressed()
 
 void ACodexTacticsPlayerController::ControlsKey()
 {
+	if (UGameplayPreloadSubsystem::IsPreparing(GetWorld())) { return; }
 	if (UCodexUISubsystem* UI = UCodexUISubsystem::Get(this))
 	{
 		UI->ToggleControlsScreen();
@@ -200,6 +202,7 @@ void ACodexTacticsPlayerController::SquadVisionConesKey()
 
 void ACodexTacticsPlayerController::DialogueSkip()
 {
+	if (UGameplayPreloadSubsystem::IsPreparing(GetWorld())) { return; }
 	// The formation radial menu (hold B) first: Esc cancels it, the previous choice stays.
 	if (CancelFormationMenu())
 	{
