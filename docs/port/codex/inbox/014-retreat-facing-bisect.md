@@ -10,7 +10,8 @@ Do:
    find it from git log of test_map.json knownFail entry / HANDOFF change log; bad = main). Builds are slow but cost few tokens:
    paste only the result line per step.
 3. Report the culprit commit + the exact change that breaks it (file:line) and why.
-4. Fix on your branch IF the fix is small and inside the culprit's files (not FireArcRules / OperativeCharacterAim - those belong to
+TOKEN BUDGET: medium. Do not read whole files; read only the culprit diff hunks. Paste one line per bisect step.
+4. Fix on your branch ONLY if the fix is <= ~20 lines and inside the culprit's files; otherwise stop at the report (not FireArcRules / OperativeCharacterAim - those belong to
    Claude's 058c/061 work; if the cause is there, stop at the report). Remove the knownFail entry only when it passes 3 runs in a row.
 Allowed paths: the culprit's files (say which in the chat before editing), Scripts/test_map.json (only the RetreatFacingSmoke knownFail
 entry), RetreatFacingSmokeCommand.cpp, report.

@@ -6,6 +6,9 @@ Recent fixes to know: 9441d902 (058 suppress-from-cover facing), 0c73fdb6 (058c 
 Codex.Fire.BodyArcDeg = 30: a still shooter fires only once the body faces the target), 0175ae00 (058b autofire from cover).
 NO code changes. Branch codex/015-fire-facing-scout only for the report commit.
 
+TOKEN BUDGET: light-medium. Use grep to list call sites (FireWeapon / TryFire / FireShot / Suppress - find the real names), read only
+~30 lines around each hit; do not read whole files. If a question needs deep reading, write "needs deeper look: <where>" and move on -
+Claude finishes it.
 Answer with file:line for each:
 1. Every code path that fires a shot for an operative: auto-fire, quick fire, suppress (Shift-click), from cover / corner peek, prone,
    crouched, wounded, PMC operatives. For each: which facing / weapon-raised check it passes through before the shot (FireArcRules?

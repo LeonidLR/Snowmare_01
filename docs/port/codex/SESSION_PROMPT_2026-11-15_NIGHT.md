@@ -12,6 +12,10 @@ This is an ALL-NIGHT session. Work through this queue in order, one task at a ti
   4. docs/port/codex/inbox/014-retreat-facing-bisect.md    (bisect + fix; builds are slow, tokens are cheap here)
   5. docs/port/codex/inbox/015-fire-facing-scout.md        (read-only scout report)
   6. docs/port/codex/inbox/012-smoke-name-check.md         (Python tool)
+  7. docs/port/codex/inbox/016-knownfail-recheck.md        (smoke re-runs, report only - cheap tokens, long run)
+  8. docs/port/codex/inbox/017-build-warnings-cleanup.md   (mechanical warning fixes)
+All tasks are light-to-medium on purpose. If a task starts to need deep reading of many files, STOP that part, write
+"needs Claude: <what>" in the report and the chat, and go to the next task - do not burn the limit on it.
 Ignore older files 005-009 in inbox/ and task J - done or handled by others.
 After EACH task: commit, report, ONE chat line with the hash (--topic codex-<NNN>), then run
   python Scripts/Tools/agent_chat.py wait --as codex --timeout 600
