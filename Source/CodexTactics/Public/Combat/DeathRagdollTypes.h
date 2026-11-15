@@ -49,6 +49,26 @@ struct CODEXTACTICS_API FDeathRagdollConfig
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll")
 	float LinearDamping = 0.5f;
 
+	/** Upward directional bias added to hit impulse vector. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll")
+	float UpwardImpulseBias = 0.25f;
+
+	/** Minimum damage factor scaling clamp. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll")
+	float MinDamageFactor = 0.5f;
+
+	/** Maximum damage factor scaling clamp. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll")
+	float MaxDamageFactor = 3.0f;
+
+	/** Reference damage amount used as divisor for damage scaling factor. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll")
+	float ReferenceDamage = 25.0f;
+
+	/** Fraction of capsule half-height used as floor settle threshold for pelvis. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll")
+	float PelvisFloorThresholdFraction = 0.5f;
+
 	/** Base kinetic impulse scale per damage type. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Ragdoll")
 	TMap<EDamageType, float> ImpulseScales;

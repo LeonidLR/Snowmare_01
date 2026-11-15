@@ -167,8 +167,12 @@ void UEnemyAnimInstance::NotifyDeath()
 	}
 	bDeathPlayed = true;
 	bIsDead = true;
-	// Sprint 14: killed while knocked down -> Death_Back / Death_Front from the ground (UKnockdownComponent), held.
 	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
+	if (Owner && Owner->IsRagdollActive())
+	{
+		return;
+	}
+	// Sprint 14: killed while knocked down -> Death_Back / Death_Front from the ground (UKnockdownComponent), held.
 	if (UKnockdownComponent* Knockdown = Owner ? Owner->KnockdownComponent.Get() : nullptr; Knockdown && Knockdown->HandleDeath())
 	{
 		return;

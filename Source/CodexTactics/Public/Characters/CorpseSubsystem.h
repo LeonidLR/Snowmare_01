@@ -2,10 +2,13 @@
 
 #include "CoreMinimal.h"
 #include "Characters/CorpseRules.h"
+#include "Combat/DeathRagdollTypes.h"
+#include "Data/CombatTypes.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "CorpseSubsystem.generated.h"
 
 class AActor;
+class ACharacter;
 class ICorpseBody;
 
 /**
@@ -27,8 +30,32 @@ class CODEXTACTICS_API UCorpseSubsystem : public UTickableWorldSubsystem
 
 public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
+	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Tick(float DeltaTime) override;
 	virtual TStatId GetStatId() const override;
+
+	/** Loads death_ragdoll.json configuration once per world */
+	void LoadRagdollConfig();
+
+	/** Returns cached death ragdoll configuration */
+	const FDeathRagdollConfig& GetRagdollConfig() const { return RagdollConfig; }
+
+	/** True if ragdoll config loaded successfully and is enabled */
+	bool IsRagdollEnabled() const;
+
+	/** Number of currently simulating ragdoll corpses */
+	int32 GetActiveRagdollCount() const;
+
+	/** Attempts to activate death ragdoll on a dying character */
+	bool TryActivateDeathRagdoll(
+		ACharacter* Character,
+		const FVector& HitDirection,
+		float DamageAmount,
+		EDamageType DamageType,
+		FName ArchetypeId);
+
+	/** Registers an actor whose ragdoll is active */
+	bool RegisterRagdollCorpse(AActor* Body);
 
 	/** The rules in force (Codex.Corpse.* over the level's corpse_cap). */
 	FCorpseConfig GetConfig() const;
@@ -80,6 +107,8 @@ private:
 		/** World time the fade began (-1 = not fading); the mesh's scale then. */
 		double FadeStart = -1.0;
 		FVector BaseScale = FVector::OneVector;
+		bool bIsRagdoll = false;
+		bool bPlayerTeam = false;
 	};
 
 	/** The body's corpse interface (null: gone / not one). */
@@ -91,6 +120,9 @@ private:
 	void UpdateFades(double Now, const FCorpseConfig& Config);
 
 	TArray<FKeptCorpse> Corpses;
+	FDeathRagdollConfig RagdollConfig;
+	bool bRagdollConfigLoaded = false;
+	bool bRagdollConfigAttempted = false;
 	int32 FadedTotal = 0;
 	float CapTimer = 0.f;
 };

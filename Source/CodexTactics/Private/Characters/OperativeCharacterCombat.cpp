@@ -1199,6 +1199,7 @@ void AOperativeCharacter::ApplyRangedHit(AActor* Target, float Cover, int32 Dist
 	Spec.ArmorPenetration = CurrentWeapon ? CurrentWeapon->Stats.Damage.ArmorPenetration : 0.20f;
 	Spec.PenetrationClass = CurrentWeapon ? CurrentWeapon->Stats.Damage.PenetrationClass : EArmorClass::Vehicle; // decision 1 (no weapon: no class limit)
 	Spec.AttackerSource = DisplayName.ToString();
+	Spec.DamageOrigin = GetActorLocation();
 	if (CurrentWeapon)
 	{
 		Spec.StatusEffect = CurrentWeapon->Stats.Status.Effect;

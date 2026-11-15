@@ -217,6 +217,7 @@ void AProjectileActor::Finish(EProjectileEnd End, const FVector& Location, AActo
 			Hit.ArmorPenetration = Shot.ArmorPenetration;
 			Hit.PenetrationClass = Shot.PenetrationClass;
 			Hit.AttackerSource = Shot.SourceName;
+			Hit.DamageOrigin = GetActorLocation();
 			Health->TakeDamage(Hit);
 			Impact.DirectDamage = Shot.DirectDamage;
 			Struck = HitActor;

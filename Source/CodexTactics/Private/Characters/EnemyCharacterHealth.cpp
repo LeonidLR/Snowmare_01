@@ -76,6 +76,16 @@ void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
 	{
 		LastAttackerSource = Spec.AttackerSource;
 	}
+	LastDamageType = Spec.DamageType;
+	LastDamageAmount = FinalDamage;
+	if (!Spec.DamageOrigin.IsZero())
+	{
+		LastHitDirection = (GetActorLocation() - Spec.DamageOrigin).GetSafeNormal();
+	}
+	else
+	{
+		LastHitDirection = -GetActorForwardVector();
+	}
 	// User request 2026-10-06: the squad's direct attack (shot, blow, thrown grenade) reveals it — on an ambush level the
 	// fight starts now. A trap / placed charge (ApplyBlast inside FScopedTrapBlast) only sends a patrol searching.
 	const bool bTrapDamage = IsTrapBlastInProgress();
@@ -207,22 +217,36 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 	OnEnemyDiedNative.Broadcast(this);
 	OnDeath();
 
+	// Death ragdoll activation via UCorpseSubsystem
+	bool bRagdollActivated = false;
+	UCorpseSubsystem* Corpses = GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr;
+	if (Corpses && !bAirborneDeath && !IsLadderBusy())
+	{
+		const FName ArchetypeName = FName(*UEnum::GetValueAsString(Archetype));
+		bRagdollActivated = Corpses->TryActivateDeathRagdoll(this, LastHitDirection, LastDamageAmount, LastDamageType, ArchetypeName);
+	}
+	bIsRagdollActive = bRagdollActivated;
+
 	// Godot enemy_base.gd _die: with a death clip the body stays death_decay_delay seconds, otherwise it goes quickly.
 	float LifeSpan = 2.0f;
 	bool bDeathPose = false;
-	if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+	if (!bRagdollActivated)
 	{
-		Anim->NotifyDeath();
-		LifeSpan = Anim->HasDeathAnimation() ? Anim->DeathDecayDelay : LifeSpan;
-		bDeathPose = Anim->HasDeathAnimation() || bDownAtDeath;
+		if (UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr)
+		{
+			Anim->NotifyDeath();
+			LifeSpan = Anim->HasDeathAnimation() ? Anim->DeathDecayDelay : LifeSpan;
+			bDeathPose = Anim->HasDeathAnimation() || bDownAtDeath;
+		}
+		bLayDownOnFreeze = !bDeathPose;
 	}
-	// Game designer 2026-11-08: every enemy body stays on the ground (UCorpseSubsystem freezes it once it has settled and lies on the floor;
-	// the level's corpse_cap, shared with the hostile PMC bodies, fades the oldest far one). 2026-11-09 (game designer: ALL enemies): a body
-	// without a death pose (the C++ placeholder - the Spitter has no Blueprint yet - or a Blueprint without a death clip) stays too and is
-	// laid on the ground when it is frozen (LayCorpseDown) until it gets a real model / clip. Codex.Corpse.Persist 0: the old decay.
-	bLayDownOnFreeze = !bDeathPose;
-	UCorpseSubsystem* Corpses = GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr;
-	if (!Corpses || !Corpses->RegisterCorpse(this))
+	else
+	{
+		bLayDownOnFreeze = false;
+	}
+
+	const bool bRegistered = Corpses && (bRagdollActivated ? Corpses->IsKept(this) : Corpses->RegisterCorpse(this));
+	if (!bRegistered)
 	{
 		SetLifeSpan(LifeSpan);
 	}
@@ -270,19 +294,30 @@ bool AEnemyCharacter::IsCorpseFalling() const
 
 bool AEnemyCharacter::IsDeathPoseSettled() const
 {
+	if (bIsRagdollActive)
+	{
+		return true;
+	}
 	const UEnemyAnimInstance* Anim = GetMesh() ? Cast<UEnemyAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 	return !Anim || Anim->IsDeathPoseSettled();
 }
 
 void AEnemyCharacter::FreezeCorpse()
 {
-	if (bCorpseFrozen || !bIsDying)
+	if (bCorpseFrozen || !bIsDying || IsCorpseFalling() || IsLadderBusy())
 	{
 		return;
 	}
 	bCorpseFrozen = true;
 	bAirborneDeath = false;
-	if (bLayDownOnFreeze)
+	if (bIsRagdollActive)
+	{
+		if (USkeletalMeshComponent* Body = GetMesh())
+		{
+			Body->bPauseAnims = true;
+		}
+	}
+	else if (bLayDownOnFreeze)
 	{
 		LayCorpseDown(); // landed and still: no death pose to hold, so it lies down (2026-11-09)
 	}

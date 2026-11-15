@@ -124,6 +124,7 @@ namespace Explosions
 			FDamageSpec Hit;
 			Hit.Amount = Amount;
 			Hit.AttackerSource = Spec.SourceName;
+			Hit.DamageOrigin = Spec.Centre;
 			if (!bPlainKinetic)
 			{
 				Hit.DamageType = Spec.DamageType;

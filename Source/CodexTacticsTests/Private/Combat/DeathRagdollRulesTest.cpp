@@ -30,6 +30,9 @@ bool FDeathRagdollConfigLoadsTest::RunTest(const FString&)
 	TestEqual(TEXT("Linear settle threshold is 15 cm/s"), Config.LinearSettleThresholdCmS, 15.0f);
 	TestEqual(TEXT("Angular settle threshold is 0.25 rad/s"), Config.AngularSettleThresholdRadS, 0.25f);
 	TestEqual(TEXT("Max impulse magnitude is 120,000"), Config.MaxImpulseMagnitude, 120000.0f);
+	TestEqual(TEXT("Upward impulse bias is 0.25"), Config.UpwardImpulseBias, 0.25f);
+	TestEqual(TEXT("Min damage factor is 0.5"), Config.MinDamageFactor, 0.5f);
+	TestEqual(TEXT("Max damage factor is 3.0"), Config.MaxDamageFactor, 3.0f);
 
 	TestTrue(TEXT("Contains Kinetic impulse scale"), Config.ImpulseScales.Contains(EDamageType::Kinetic));
 	TestTrue(TEXT("Contains Explosive impulse scale"), Config.ImpulseScales.Contains(EDamageType::Explosive));

@@ -121,12 +121,20 @@ namespace EnemyDeathSmoke
 			bOk &= bHeld && bFate;
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bOk ? TEXT("PASS") : TEXT("FAIL"));
+		if (IConsoleVariable* RagdollVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.DeathRagdoll.Enabled")))
+		{
+			RagdollVar->Set(1, ECVF_SetByConsole);
+		}
 		FPlatformMisc::RequestExit(false, TEXT("EnemyDeathSmoke"));
 		return false;
 	}
 
 	void Start(UWorld* World)
 	{
+		if (IConsoleVariable* RagdollVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.DeathRagdoll.Enabled")))
+		{
+			RagdollVar->Set(0, ECVF_SetByConsole);
+		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		const FTransform Layout = SmokeUtils::LayoutTransform(World);
 		const EEnemyArchetype Types[] = { EEnemyArchetype::FrostHound, EEnemyArchetype::Frostbitten, EEnemyArchetype::Cutter, EEnemyArchetype::Brute };

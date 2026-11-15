@@ -1,15 +1,23 @@
 #include "Characters/CorpseSubsystem.h"
 
 #include "Characters/CorpseBody.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/DeathRagdollRules.h"
 #include "Combat/HealthComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/PrimitiveComponent.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/WaveConfigTypes.h"
 #include "Engine/World.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
 
 namespace CorpseTuning
 {
@@ -23,6 +31,10 @@ namespace CorpseTuning
 		TEXT("Kept bodies are frozen once settled (1); 0 = they keep ticking (cost A/B measurements only)"));
 	static TAutoConsoleVariable<int32> CVarOldestPool(TEXT("Codex.Corpse.OldestPool"), 10,
 		TEXT("The fading body is the farthest from the squad among this many oldest bodies"));
+	static TAutoConsoleVariable<int32> CVarRagdoll(TEXT("Codex.DeathRagdoll.Enabled"), 1,
+		TEXT("Enable death ragdoll simulation on fatal damage (1). 0 = fallback to animation montage / LayCorpseDown."));
+	static TAutoConsoleVariable<int32> CVarRagdollMax(TEXT("Codex.DeathRagdoll.MaxSimultaneous"), -1,
+		TEXT("Override max simultaneous ragdolls (-1 = from JSON config)"));
 
 	/** Seconds between two cap checks. */
 	constexpr float CapCheckSeconds = 0.5f;
@@ -33,6 +45,182 @@ namespace CorpseTuning
 bool UCorpseSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
+}
+
+void UCorpseSubsystem::OnWorldBeginPlay(UWorld& InWorld)
+{
+	Super::OnWorldBeginPlay(InWorld);
+	LoadRagdollConfig();
+}
+
+void UCorpseSubsystem::LoadRagdollConfig()
+{
+	bRagdollConfigAttempted = true;
+	const FString ConfigPath = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Data/Combat/death_ragdoll.json"));
+	FString JsonContent;
+	if (FFileHelper::LoadFileToString(JsonContent, *ConfigPath))
+	{
+		if (FDeathRagdollRules::LoadConfigFromJson(JsonContent, RagdollConfig))
+		{
+			bRagdollConfigLoaded = true;
+			UE_LOG(LogCodexTactics, Display, TEXT("[CorpseSubsystem] Loaded death_ragdoll.json (max=%d, timeout=%.1fs, upward=%.2f)"),
+				RagdollConfig.MaxSimultaneousRagdolls, RagdollConfig.MaxSettleTimeoutSeconds, RagdollConfig.UpwardImpulseBias);
+			return;
+		}
+	}
+
+	bRagdollConfigLoaded = false;
+	RagdollConfig.bEnabled = false;
+	UE_LOG(LogCodexTactics, Error, TEXT("[CorpseSubsystem] Failed to load death_ragdoll.json from '%s' - death ragdoll disabled, using LayCorpseDown fallback"), *ConfigPath);
+}
+
+bool UCorpseSubsystem::IsRagdollEnabled() const
+{
+	if (CorpseTuning::CVarRagdoll.GetValueOnGameThread() == 0)
+	{
+		return false;
+	}
+	return bRagdollConfigLoaded && RagdollConfig.bEnabled;
+}
+
+int32 UCorpseSubsystem::GetActiveRagdollCount() const
+{
+	int32 Count = 0;
+	for (const FKeptCorpse& Kept : Corpses)
+	{
+		if (Kept.bIsRagdoll && !Kept.bFrozen && Kept.Body.IsValid())
+		{
+			++Count;
+		}
+	}
+	return Count;
+}
+
+bool UCorpseSubsystem::RegisterRagdollCorpse(AActor* Body)
+{
+	UWorld* World = GetWorld();
+	if (!World || !Body)
+	{
+		return false;
+	}
+	const AOperativeCharacter* Op = Cast<AOperativeCharacter>(Body);
+	const bool bIsPlayer = Op && Op->IsPlayerTeam();
+	if (!bIsPlayer && !GetConfig().bPersist)
+	{
+		return false;
+	}
+	for (FKeptCorpse& Kept : Corpses)
+	{
+		if (Kept.Body.Get() == Body)
+		{
+			Kept.bIsRagdoll = true;
+			Kept.bPlayerTeam = bIsPlayer;
+			return true;
+		}
+	}
+	FKeptCorpse& Kept = Corpses.AddDefaulted_GetRef();
+	Kept.Body = Body;
+	Kept.DeathTime = World->GetTimeSeconds();
+	Kept.bIsRagdoll = true;
+	Kept.bPlayerTeam = bIsPlayer;
+	return true;
+}
+
+bool UCorpseSubsystem::TryActivateDeathRagdoll(
+	ACharacter* Character,
+	const FVector& HitDirection,
+	float DamageAmount,
+	EDamageType DamageType,
+	FName ArchetypeId)
+{
+	if (!Character)
+	{
+		return false;
+	}
+
+	if (!bRagdollConfigAttempted)
+	{
+		LoadRagdollConfig();
+	}
+
+	if (!IsRagdollEnabled())
+	{
+		return false;
+	}
+
+	// 1. Fallback archetype check (e.g. Spitter, CRYO_DRONE)
+	if (FDeathRagdollRules::ShouldFallbackToPose(ArchetypeId, RagdollConfig))
+	{
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s is fallback archetype '%s' - bypassing ragdoll"),
+			*Character->GetName(), *ArchetypeId.ToString());
+		return false;
+	}
+
+	// 2. Concurrency budget cap check
+	const int32 CVarMax = CorpseTuning::CVarRagdollMax.GetValueOnGameThread();
+	FDeathRagdollConfig EffectiveConfig = RagdollConfig;
+	if (CVarMax >= 0)
+	{
+		EffectiveConfig.MaxSimultaneousRagdolls = CVarMax;
+	}
+	if (!FDeathRagdollRules::CanSimulateRagdoll(GetActiveRagdollCount(), EffectiveConfig))
+	{
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s budget cap reached (%d active) - bypassing ragdoll"),
+			*Character->GetName(), GetActiveRagdollCount());
+		return false;
+	}
+
+	// 3. Mesh & Physics Asset validation
+	USkeletalMeshComponent* Mesh = Character->GetMesh();
+	if (!Mesh || !Mesh->GetSkeletalMeshAsset())
+	{
+		return false;
+	}
+
+	FString ErrorMsg;
+	if (!FDeathRagdollRules::ValidatePhysicsAssetSetup(Mesh->GetSkeletalMeshAsset(), ErrorMsg))
+	{
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s physics asset validation failed: %s"),
+			*Character->GetName(), *ErrorMsg);
+		return false;
+	}
+
+	// 4. Set capsule collision to QueryOnly with ECR_Ignore so traces work but pawns don't block
+	if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
+	{
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
+		Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
+	}
+
+	// 5. Stop and disable movement
+	if (UCharacterMovementComponent* Movement = Character->GetCharacterMovement())
+	{
+		Movement->StopMovementImmediately();
+		Movement->DisableMovement();
+	}
+
+	// 6. Configure Skeletal Mesh for ragdoll simulation
+	Mesh->SetCollisionProfileName(TEXT("Ragdoll"));
+	Mesh->SetCollisionEnabled(ECollisionEnabled::QueryAndPhysics);
+	Mesh->SetAllBodiesSimulatePhysics(true);
+	Mesh->WakeAllRigidBodies();
+	Mesh->bBlendPhysics = true;
+	Mesh->SetLinearDamping(RagdollConfig.LinearDamping);
+	Mesh->SetAngularDamping(RagdollConfig.AngularDamping);
+
+	// 7. Calculate and apply kinetic impulse to pelvis scaled by body mass
+	const float BodyMass = Mesh->GetMass();
+	const float MassScale = BodyMass > 1.f ? (BodyMass / 80.0f) : 1.0f;
+	const FVector Impulse = FDeathRagdollRules::CalculateImpulse(HitDirection, DamageAmount, DamageType, RagdollConfig, MassScale);
+	const FName PelvisBone = FDeathRagdollRules::GetDefaultPelvisBoneName();
+	Mesh->AddImpulse(Impulse, PelvisBone, false);
+
+	// 8. Register as active ragdoll corpse in subsystem
+	RegisterRagdollCorpse(Character);
+
+	UE_LOG(LogCodexTactics, Display, TEXT("[Corpse] %s activated death ragdoll (impulse magnitude: %.1f)"),
+		*Character->GetName(), Impulse.Size());
+	return true;
 }
 
 TStatId UCorpseSubsystem::GetStatId() const
@@ -69,6 +257,10 @@ bool UCorpseSubsystem::RegisterCorpse(AActor* Body)
 	if (!World || !AsCorpse(Body) || !GetConfig().bPersist)
 	{
 		return false;
+	}
+	if (const AOperativeCharacter* Op = Cast<AOperativeCharacter>(Body); Op && Op->IsPlayerTeam())
+	{
+		return false; // Player's own KIA never kept under corpse cap
 	}
 	if (!IsKept(Body))
 	{
@@ -132,7 +324,29 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 		{
 			continue;
 		}
-		const bool bSettled = Body->IsDeathPoseSettled();
+
+		bool bSettled = false;
+		if (Kept.bIsRagdoll)
+		{
+			ACharacter* Char = Cast<ACharacter>(Actor);
+			USkeletalMeshComponent* Mesh = Char ? Char->GetMesh() : nullptr;
+			if (Mesh && Mesh->IsSimulatingPhysics())
+			{
+				const FVector LinVel = Mesh->GetPhysicsLinearVelocity();
+				const FVector AngVel = Mesh->GetPhysicsAngularVelocityInRadians();
+				const float SinceDeath = static_cast<float>(Now - Kept.DeathTime);
+				bSettled = FDeathRagdollRules::HasBodySettled(LinVel, AngVel, SinceDeath, RagdollConfig);
+			}
+			else
+			{
+				bSettled = true;
+			}
+		}
+		else
+		{
+			bSettled = Body->IsDeathPoseSettled();
+		}
+
 		if (!bSettled)
 		{
 			Kept.SettledTime = -1.0;
@@ -141,14 +355,44 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 		{
 			Kept.SettledTime = Now;
 		}
+
 		const float SinceDeath = static_cast<float>(Now - Kept.DeathTime);
 		const float SinceSettled = Kept.SettledTime < 0.0 ? -1.f : static_cast<float>(Now - Kept.SettledTime);
-		if (CorpseRules::ShouldFreeze(SinceDeath, SinceSettled, Body->IsCorpseFalling(), Body->IsCorpseOnLadder(), Config))
+		const bool bTimeout = Kept.bIsRagdoll && (SinceDeath >= RagdollConfig.MaxSettleTimeoutSeconds);
+
+		if (CorpseRules::ShouldFreeze(SinceDeath, SinceSettled, Body->IsCorpseFalling(), Body->IsCorpseOnLadder(), Config) || bTimeout)
 		{
+			if (Kept.bIsRagdoll)
+			{
+				ACharacter* Char = Cast<ACharacter>(Actor);
+				if (USkeletalMeshComponent* Mesh = Char ? Char->GetMesh() : nullptr)
+				{
+					if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+					{
+						if (UCapsuleComponent* Capsule = Enemy->GetCapsuleComponent())
+						{
+							const float HalfHeight = Capsule->GetUnscaledCapsuleHalfHeight();
+							if (Mesh->GetRelativeLocation().Z > -HalfHeight * 0.5f)
+							{
+								Mesh->SetRelativeLocation(FVector(0.f, 0.f, -HalfHeight + 15.f));
+							}
+						}
+					}
+
+					Mesh->bPauseAnims = true;
+					Mesh->SetComponentTickEnabled(false);
+					Mesh->PutAllRigidBodiesToSleep();
+					Mesh->SetAllBodiesSimulatePhysics(false);
+					Mesh->SetCollisionProfileName(TEXT("NoCollision"));
+					Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+				}
+			}
 			Body->FreezeCorpse();
 			Kept.bFrozen = true;
-			UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s frozen %.2f s after its death (%s)"), *Actor->GetName(), SinceDeath,
-				SinceSettled >= 0.f ? TEXT("death pose settled") : TEXT("settle time out"));
+			UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s frozen %.2f s after death (%s, ragdoll=%d)"),
+				*Actor->GetName(), SinceDeath,
+				SinceSettled >= 0.f ? TEXT("death pose settled") : TEXT("settle time out"),
+				Kept.bIsRagdoll ? 1 : 0);
 		}
 	}
 }
@@ -170,6 +414,10 @@ void UCorpseSubsystem::ApplyCap(const FCorpseConfig& Config, double Now)
 	}
 	for (const FKeptCorpse& Kept : Corpses)
 	{
+		if (Kept.bPlayerTeam)
+		{
+			continue; // Player's own KIA never count towards corpse cap or fade out
+		}
 		FCorpseCandidate& Candidate = Candidates.AddDefaulted_GetRef();
 		const AActor* Body = Kept.Body.Get();
 		const ICorpseBody* Corpse = AsCorpse(Body);
@@ -218,7 +466,7 @@ void UCorpseSubsystem::UpdateFades(double Now, const FCorpseConfig& Config)
 			Corpses.RemoveAt(Index); // gone another way (level cleanup, a load, the arena's next round)
 			continue;
 		}
-		if (Kept.FadeStart < 0.0)
+		if (Kept.bPlayerTeam || Kept.FadeStart < 0.0)
 		{
 			continue;
 		}
