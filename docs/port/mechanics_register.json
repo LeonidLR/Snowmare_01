@@ -3816,13 +3816,13 @@
     {
       "id": "pl-058-suppress-facing",
       "name": "БАГ: подавление без поворота к цели",
-      "what": "Shift+клик подавление по врагу сбоку — боец в укрытии стреляет, не поворачиваясь. Чинится (058).",
+      "what": "Исправлено: в укрытии боец стреляет из позы укрытия только по углу и поверх укрытия в его секторе; цель сбоку - выходит из укрытия и доворачивается; если сам подавлен - отказ «NO LINE OUT OF THIS COVER». Автоогонь - 058b.",
       "how": "-",
       "off": "",
       "smoke": [],
       "since": "2026-11-15",
       "decision": "Дизайнер 2026-11-15",
-      "status": "branch",
+      "status": "main",
       "doc": "docs/port/TASK_BOARD.md",
       "group": "suppress"
     },
@@ -3864,6 +3864,19 @@
       "status": "planned",
       "doc": "docs/port/TASK_BOARD.md",
       "group": "levels"
+    },
+    {
+      "id": "pl-058b-autofire",
+      "name": "БАГ 058b: автоогонь из укрытия по цели сбоку",
+      "what": "Тот же класс бага в автоматическом огне (OperativeCharacterCombat.cpp:839): подавленный боец стреляет вслепую по цели сбоку.",
+      "how": "-",
+      "off": "",
+      "smoke": [],
+      "since": "2026-11-15",
+      "decision": "Найдено при фиксе 058",
+      "status": "planned",
+      "doc": "docs/port/TASK_BOARD.md",
+      "group": "suppress"
     }
   ],
   "plan": {
@@ -4648,9 +4661,9 @@
                 "ref": "docs/port/TASK_BOARD.md"
               },
               {
-                "status": "doing",
+                "status": "done",
                 "text": "Баг подавления без поворота (субагент Opus)",
-                "ref": "058"
+                "ref": "058 · 9441d902"
               },
               {
                 "status": "doing",
