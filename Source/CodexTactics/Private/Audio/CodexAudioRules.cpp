@@ -319,13 +319,25 @@ FString FCodexAudioRules::GetExpectedAssetPath(FName Id, bool bIsVoice)
 	if (bIsVoice)
 	{
 		FCodexVoiceLineDef Def;
-		if (FindVoiceLineDef(Id, Def) && !Def.Speaker.IsNone())
+		if (FindVoiceLineDef(Id, Def))
 		{
-			return FString::Printf(TEXT("/Game/Audio/Voice/%s/SW_%s"), *Def.Speaker.ToString(), *Id.ToString());
+			const FString SpeakerStr = (!Def.Speaker.IsNone() && !Def.Speaker.ToString().IsEmpty())
+				? Def.Speaker.ToString()
+				: TEXT("common");
+			return FString::Printf(TEXT("/Game/Audio/Voice/%s/SW_%s"), *SpeakerStr, *Id.ToString());
 		}
 		return FString::Printf(TEXT("/Game/Audio/Voice/common/SW_%s"), *Id.ToString());
 	}
-	return FString::Printf(TEXT("/Game/Audio/Music/%s"), *Id.ToString());
+
+	FCodexMusicCueDef CueDef;
+	if (FindMusicCueDef(Id, CueDef))
+	{
+		const FString GroupStr = (!CueDef.CueGroup.IsNone() && !CueDef.CueGroup.ToString().IsEmpty())
+			? CueDef.CueGroup.ToString()
+			: TEXT("misc");
+		return FString::Printf(TEXT("/Game/Audio/Music/%s/SW_%s"), *GroupStr, *Id.ToString());
+	}
+	return FString::Printf(TEXT("/Game/Audio/Music/misc/SW_%s"), *Id.ToString());
 }
 
 bool FCodexAudioRules::DoesSoundAssetExist(const FString& AssetPath)
@@ -373,7 +385,10 @@ bool FCodexAudioRules::LoadMusicCuesFromJson(const FString& JsonContent, TArray<
 		Def.State = StringToMusicState(CueObj->GetStringField(TEXT("state")));
 		Def.bLoop = CueObj->GetBoolField(TEXT("loop"));
 		Def.TargetDurationSec = static_cast<float>(CueObj->GetNumberField(TEXT("target_duration_sec")));
-		Def.AssetPath = GetExpectedAssetPath(Def.Id, false);
+		const FString GroupStr = (!Def.CueGroup.IsNone() && !Def.CueGroup.ToString().IsEmpty())
+			? Def.CueGroup.ToString()
+			: TEXT("misc");
+		Def.AssetPath = FString::Printf(TEXT("/Game/Audio/Music/%s/SW_%s"), *GroupStr, *Def.Id.ToString());
 
 		OutCues.Add(Def);
 	}
@@ -436,7 +451,10 @@ bool FCodexAudioRules::LoadVoiceLinesFromJson(const FString& JsonContent, TArray
 			Def.CooldownSeconds = 8.0f;
 		}
 
-		Def.AssetPath = FString::Printf(TEXT("/Game/Audio/Voice/%s/SW_%s"), *Def.Speaker.ToString(), *Def.Id.ToString());
+		const FString SpeakerStr = (!Def.Speaker.IsNone() && !Def.Speaker.ToString().IsEmpty())
+			? Def.Speaker.ToString()
+			: TEXT("common");
+		Def.AssetPath = FString::Printf(TEXT("/Game/Audio/Voice/%s/SW_%s"), *SpeakerStr, *Def.Id.ToString());
 
 		OutLines.Add(Def);
 	}

@@ -62,6 +62,7 @@ void UCodexAudioSubsystem::Deinitialize()
 	if (ActiveMusicComponent)
 	{
 		ActiveMusicComponent->Stop();
+		ActiveMusicComponent->DestroyComponent();
 		ActiveMusicComponent = nullptr;
 	}
 
@@ -106,6 +107,7 @@ void UCodexAudioSubsystem::OnWorldCleanup(UWorld* World, bool bSessionEnded, boo
 		if (ActiveMusicComponent)
 		{
 			ActiveMusicComponent->Stop();
+			ActiveMusicComponent->DestroyComponent();
 			ActiveMusicComponent = nullptr;
 		}
 		CurrentMusicState = ECodexMusicState::None;
@@ -177,6 +179,11 @@ bool UCodexAudioSubsystem::RequestMusicState(ECodexMusicState NewState, int32 Va
 		if (ActiveMusicComponent->IsPlaying())
 		{
 			ActiveMusicComponent->FadeOut(1.5f, 0.0f);
+		}
+		else
+		{
+			ActiveMusicComponent->Stop();
+			ActiveMusicComponent->DestroyComponent();
 		}
 		ActiveMusicComponent = nullptr;
 	}
@@ -263,7 +270,7 @@ bool UCodexAudioSubsystem::PlaySoundAssetQuiet(const FString& AssetPath, bool bI
 	{
 		if (bIsMusic)
 		{
-			ActiveMusicComponent = UGameplayStatics::SpawnSound2D(World, Sound, Volume, 1.0f, 0.0f, nullptr, false, false);
+			ActiveMusicComponent = UGameplayStatics::SpawnSound2D(World, Sound, Volume, 1.0f, 0.0f, nullptr, false, true);
 			return ActiveMusicComponent != nullptr;
 		}
 		else

@@ -261,7 +261,7 @@ bool FAudioMissingAssetSilentNoOpTest::RunTest(const FString&)
 	TestFalse(TEXT("Non-existent asset does not exist on disk"), FCodexAudioRules::DoesSoundAssetExist(FakePath));
 
 	const FString ExpectedMusicPath = FCodexAudioRules::GetExpectedAssetPath(TEXT("explore_calm_v1"), false);
-	TestEqual(TEXT("Expected music path format"), ExpectedMusicPath, TEXT("/Game/Audio/Music/explore_calm_v1"));
+	TestEqual(TEXT("Expected music path format"), ExpectedMusicPath, TEXT("/Game/Audio/Music/explore_calm/SW_explore_calm_v1"));
 
 	const FString ExpectedVoicePath = FCodexAudioRules::GetExpectedAssetPath(TEXT("cmd_contact"), true);
 	TestEqual(TEXT("Expected voice path format"), ExpectedVoicePath, TEXT("/Game/Audio/Voice/commander/SW_cmd_contact"));
