@@ -55,11 +55,11 @@ Task 054 restores and refines box selection behavior in accordance with the game
 
 | Claim | Evidence |
 |---|---|
-| Box selection allowed in both solo and formation mode outside turn-based combat | `Source/CodexTactics/Private/Characters/SquadOrderRules.cpp:10`; verified in `SquadOrderRulesTest.cpp:346` (`CodexTactics.Squad.Orders.BoxSelectionAllowed` PASS) |
-| Mode switch decision rule triggers only in formation when boxed count > 0 | `Source/CodexTactics/Private/Characters/SquadOrderRules.cpp:15`; verified in `SquadOrderRulesTest.cpp:357` (`CodexTactics.Squad.Orders.BoxSelectionAllowed` PASS) |
-| DisbandFormationToSoloBox switches squad to Solo, sets SelectedGroup, updates leader | `Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:780`; verified in `SquadControlSmokeCommand.cpp:260` (`SquadControlSmoke` PASS) |
-| Non-boxed operatives hold place without moving on subsequent group move orders | `Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:817`; verified in `SquadControlSmokeCommand.cpp:287` (`SquadControlSmoke` PASS) |
-| Re-forming via B returns to formation mode and restores single leader selection | `Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:880`; verified in `SquadControlSmokeCommand.cpp:305` (`SquadControlSmoke` PASS) |
+| Box selection allowed in both solo and formation mode outside turn-based combat | `Source/CodexTactics/Private/Characters/SquadOrderRules.cpp:10`; verified in `Source/CodexTacticsTests/Private/Characters/SquadOrderRulesTest.cpp:346` (`CodexTactics.Squad.Orders.BoxSelectionAllowed` PASS) |
+| Mode switch decision rule triggers only in formation when boxed count > 0 | `Source/CodexTactics/Private/Characters/SquadOrderRules.cpp:15`; verified in `Source/CodexTacticsTests/Private/Characters/SquadOrderRulesTest.cpp:357` (`CodexTactics.Squad.Orders.BoxSelectionAllowed` PASS) |
+| DisbandFormationToSoloBox switches squad to Solo, sets SelectedGroup, updates leader | `Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:780`; verified in `Source/CodexTacticsDev/Private/Debug/SquadControlSmokeCommand.cpp:260` (`SquadControlSmoke` PASS) |
+| Non-boxed operatives hold place without moving on subsequent group move orders | `Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:817`; verified in `Source/CodexTacticsDev/Private/Debug/SquadControlSmokeCommand.cpp:287` (`SquadControlSmoke` PASS) |
+| Re-forming via B returns to formation mode and restores single leader selection | `Source/CodexTactics/Private/Characters/SquadSubsystem.cpp:880`; verified in `Source/CodexTacticsDev/Private/Debug/SquadControlSmokeCommand.cpp:305` (`SquadControlSmoke` PASS) |
 | Compilation succeeds cleanly with zero errors | `powershell .\Scripts\build.ps1` exit code 0 (23.78s) |
 | Unit test suite: 12 squad order tests pass | `powershell .\Scripts\test.ps1 -Filter "CodexTactics.Squad.Orders"` -> 12 passed, 0 failed |
 | Parallel smokes: all 6 selection/squad smokes pass | `powershell .\Scripts\smoke_parallel.ps1 -Commands "GroupSelectSmoke,RealtimeSelectSmoke,SquadControlSmoke,FormationLabSmoke,SoloStartSmoke,FastRegroupSmoke"` -> 6 run, 0 failed |
