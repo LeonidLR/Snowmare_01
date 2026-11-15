@@ -23,8 +23,11 @@ Token economy (your limit runs out fast - make it last the whole night):
   git switch -c codex/<NNN>-<slug> main for each next task).
 - model_router.py --classify "<task>" first; level 1-2 -> your cheaper model, level 3-4 -> your main model. Log level | model | result.
 - Read only the files the task names + what grep points to; no broad exploration. Paste only the last ~15 lines of build / test output.
-- Commit after each working step. When your limit gets low: commit, update the report, post ONE line
-  --topic codex-limit "limit low: <state>, last commit <hash>, next <step>", and stop.
+- Commit after each working step.
+- LIMIT RULE (designer): at 10 % of your token limit LEFT - stop work. Commit, update the report, post ONE line
+  --topic codex-limit "limit 10%: <state>, last commit <hash>, next <step>, reset at <time>". Then only wait for the reset:
+  python Scripts/Tools/agent_chat.py wait --as codex --timeout 3600 (repeat on NO_MESSAGES, nothing else). After the full reset,
+  continue from that step. If the limit runs out completely you switch off and cannot come back by yourself - so stop at 10 %.
 
 Do NOT touch: mantle / vault / ladder / nav links / formation / PlayerControllerOrders / OperativeAnimInstance (Claude's mantling agent),
 CorpseSubsystem / ragdoll / shotgun (Gemini), FireArcRules / OperativeCharacterAim (Claude, 058c), Content/Maps/**, .uasset, Config/**,
