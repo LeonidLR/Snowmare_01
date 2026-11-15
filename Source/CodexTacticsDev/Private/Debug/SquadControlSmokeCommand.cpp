@@ -262,6 +262,11 @@ namespace SquadControlSmoke
 			Check(State, !Squad->IsSoloMode(), TEXT("054: initially in formation mode (solo off)"));
 
 			const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+			if (Members.Num() < 3 || !Members[0] || !Members[1] || !Members[2])
+			{
+				Check(State, false, TEXT("054: squad has fewer than 3 valid members"));
+				return Finish(State, false);
+			}
 			const TArray<AOperativeCharacter*> Boxed = { Members[0], Members[1] };
 
 			// Attempt box select in formation mode: in headless without viewport projection, fall back to DisbandFormationToSoloBox directly.
@@ -272,6 +277,8 @@ namespace SquadControlSmoke
 			}
 
 			Check(State, Squad->IsSoloMode(), TEXT("054: box select in formation switched squad to SOLO mode"));
+			Check(State, Squad->GetLeader() == Boxed[0] || Squad->GetLeader() == Boxed[1],
+				TEXT("054: leader after disband is one of the boxed operatives"));
 			Check(State, Squad->HasMultiSelection() && Squad->GetSelectedGroup().Num() == 2,
 				TEXT("054: boxed operatives became the active multi-selection group"));
 			Check(State, Squad->GetSelectedGroup().Contains(Members[0]) && Squad->GetSelectedGroup().Contains(Members[1]),

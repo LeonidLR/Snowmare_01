@@ -42,7 +42,7 @@ namespace SquadOrderRules
 	 * Box selection is allowed in solo mode and formation mode (outside turn-based combat).
 	 * A box selection in formation mode disbands the formation into solo mode (designer 2026-11-15).
 	 */
-	CODEXTACTICS_API bool IsBoxSelectionAllowed(bool bSoloMode, bool bTurnBasedCombat);
+	CODEXTACTICS_API bool IsBoxSelectionAllowed(bool /*bSoloMode*/, bool bTurnBasedCombat);
 
 	/**
 	 * A box selection made in formation mode switches the squad to Solo if at least one operative was selected.
