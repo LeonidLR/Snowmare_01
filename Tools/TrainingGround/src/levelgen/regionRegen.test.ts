@@ -111,7 +111,7 @@ test('regen re-roll: everything outside the zone stays byte-identical, the insid
   assert.equal(r.ok, true, r.message);
   assert.ok(r.replaced.includes('B_ruin') && r.added.length > 0);
   assert.equal(r.skeletonMatch, true);
-  const removed = new Set<object>(selectZone(base, ZONE_SE).inside.flatMap((g) => ARRS.flatMap((k) => (g.members[k] ?? []) as object[])));
+  const removed = new Set<object>(selectZone(base, ZONE_SE).inside.filter((g) => !r.restored.includes(g.id)).flatMap((g) => ARRS.flatMap((k) => (g.members[k] ?? []) as object[])));
   for (const k of ARRS) {
     const kept = (base[k] as object[]).filter((x) => !removed.has(x));
     assert.equal(JSON.stringify((r.layout[k] as object[]).slice(0, kept.length)), JSON.stringify(kept), `${k}: kept objects identical, in order`);
@@ -163,6 +163,23 @@ test('regen locks: a locked district survives a re-roll whose zone overlaps it; 
   assert.throws(() => addLock(base, [[0, 0], [10, 0], [10, 10]]));
 });
 
+test('regen restore: a building whose fresh twin cannot be placed (touches a lock) is kept, the route through it stays completable', () => {
+  // the TG page scenario (2026-11-16): re-roll the south-east, lock the steelworks with a polygon that clips the ruin, re-roll a
+  // larger zone. The fresh ruin overlaps the lock -> dropped -> the old ruin is RESTORED; the mandatory route (over the ruin's roof)
+  // falls back to its old points and passes.
+  const t = planTransform(base.bounds, 908, 518);
+  const W = (fx: number, fy: number) => toWorld(t, [fx * 910 - 1, fy * 520 - 1]);
+  const first = regenerateRegion({ layout: base, zone: rectZone(W(0.52, 0.55), W(0.97, 0.97)), seed: 1001, profile });
+  assert.equal(first.ok, true, first.message);
+  const locked = addLock(first.layout, [[0.62, 0.52], [0.86, 0.5], [0.88, 0.75], [0.7, 0.8], [0.6, 0.68]].map(([x, y]) => W(x, y)), 'Сталелитейный');
+  const r = regenerateRegion({ layout: locked, zone: rectZone(W(0.45, 0.45), W(0.97, 0.97)), seed: 1002, profile });
+  assert.equal(r.ok, true, `${r.message}: ${r.attempts.map((a) => a.reason).join(' | ')}`);
+  assert.ok(r.restored.includes('B_ruin'), `restored: ${r.restored.join(',')}`);
+  assert.equal(JSON.stringify(r.layout.buildings.find((b) => b.id === 'B_ruin')), JSON.stringify(locked.buildings.find((b) => b.id === 'B_ruin')));
+  assert.ok(r.routes.find((x) => x.mandatory)!.completable);
+  assert.ok(r.dropped.some((d) => d.id === 'B_ruin'));
+});
+
 test('regen schema: old files (no regen block) still load; a newer regen version is refused', () => {
   const accepted = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json'), 'utf8')) as GenLayout;
   assert.equal(accepted.regen, undefined);
@@ -177,11 +194,12 @@ test('regen schema: old files (no regen block) still load; a newer regen version
 });
 
 test('regen route gate: a broken route is rejected and retried with the next seed; all broken -> the map is unchanged', () => {
-  let calls = 0;
-  // the first call is the "before" check; the next two attempts break the mandatory route
+  // attempts are told apart by their covers array (the route fallback re-checks the same attempt): #0 = the input, #1 and #2 break
+  const seen: object[] = [];
   const flaky = (l: GenLayout): RouteReport[] => {
     const real = checkLayoutRoutes(l);
-    const n = calls++;
+    if (!seen.includes(l.covers)) seen.push(l.covers);
+    const n = seen.indexOf(l.covers);
     return n >= 1 && n <= 2 ? real.map((x) => (x.mandatory ? { ...x, completable: false, fail: 'stub break' } : x)) : real;
   };
   const r = regenerateRegion({ layout: base, zone: ZONE_SE, seed: 101, profile, checkRoutes: flaky });

@@ -311,6 +311,8 @@ export interface RegionRegenResult {
   replaced: string[];
   added: string[];
   dropped: DroppedGroup[];
+  /** Selected buildings kept as they were because their fresh twin could not be placed (routes through them stay valid). */
+  restored: string[];
   /** Groups inside the zone that a lock / the infrastructure kept. */
   locked: string[];
   fixed: string[];
@@ -326,7 +328,7 @@ export const DEFAULT_MAX_RETRIES = 6;
 
 const routeStatus = (r: RouteReport): RouteStatus => ({ id: r.id, mandatory: r.mandatory, completable: r.completable, ...(r.fail ? { fail: r.fail } : {}) });
 
-interface Merge { layout: GenLayout; replaced: string[]; added: string[]; dropped: DroppedGroup[]; snapped: number; skeletonMatch: boolean }
+interface Merge { layout: GenLayout; replaced: string[]; added: string[]; dropped: DroppedGroup[]; restored: string[]; snapped: number; skeletonMatch: boolean }
 
 function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelection, zone: Vec2[], locks: LockDistrict[], seed: number, profile: Profile): Merge {
   const fresh = generateLayout({ profile, seed, params: old.params, skeletonSeed: old.seed, name: old.name });
@@ -350,16 +352,46 @@ function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelectio
   const added: RegenGroup[] = [];
   const dropped: DroppedGroup[] = [];
   let snapped = 0;
+  const overlapsAny = (g: RegenGroup, polys: readonly Vec2[][]) => g.solid.some((s) => polys.some((o) => polygonsOverlap(s, o)));
+  const rejectReason = (g: RegenGroup): DropReason | undefined => {
+    const isTaken = (id: string) => (taken.get(g.category)?.has(id) ?? false) || memberIds.has(`${g.category}:${id}`);
+    const memberTaken = g.category === 'building' && [...(g.members.walls ?? []).map((w) => `wall:${w.id}`), ...(g.members.ladders ?? []).map((k) => `ladder:${k.id}`)].some((x) => memberIds.has(x));
+    if ((g.category === 'building' || g.category === 'zone') && (isTaken(g.id) || memberTaken)) return 'id_taken';
+    if (overlapsAny(g, locks.map((k) => k.poly))) return 'overlaps_lock';
+    if (overlapsAny(g, solids)) return 'overlaps_kept';
+    if (g.category === 'building' && overlapsAny(g, roads)) return 'blocks_road';
+    return undefined;
+  };
+  // BUILDINGS first. A selected old building that gets no fresh twin (same id) placed is RESTORED (kept as it was): the routes and
+  // the links through its roof / floors stay valid, and the re-roll never leaves a hole where a set-piece stood. A restored building
+  // wins over an overlapping fresh one (that one is dropped and its own old twin restored in turn).
+  const freshB = new Map<string, RegenGroup>();
   for (const g of freshGroups) {
-    if (g.fixed || !inZone(g.centre)) continue;
-    const drop = (reason: DropReason) => dropped.push({ id: g.id, category: g.category, reason });
+    if (g.category !== 'building' || g.fixed || !inZone(g.centre)) continue;
+    const reason = rejectReason(g);
+    if (reason) dropped.push({ id: g.id, category: g.category, reason }); else freshB.set(g.id, g);
+  }
+  const oldB = sel.inside.filter((g) => g.category === 'building');
+  const restored: RegenGroup[] = [];
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const o of oldB) {
+      if (restored.includes(o) || freshB.has(o.id)) continue;
+      restored.push(o); changed = true;
+      for (const [id, f] of freshB) if (overlapsAny(f, o.solid)) { freshB.delete(id); dropped.push({ id, category: 'building', reason: 'overlaps_kept' }); }
+    }
+  }
+  for (const o of restored) {
+    for (const k of ARRAYS) for (const x of o.members[k] ?? []) removed.delete(x);
+    take(o); solids.push(...o.solid);
+  }
+  for (const g of freshB.values()) { snapped += snapHeights(g.members); take(g); solids.push(...g.solid); added.push(g); }
+  for (const g of freshGroups) {
+    if (g.category === 'building' || g.fixed || !inZone(g.centre)) continue;
+    const reason = rejectReason(g);
+    if (reason) { dropped.push({ id: g.id, category: g.category, reason }); continue; }
     const isTaken = (id: string) => (taken.get(g.category)?.has(id) ?? false) || memberIds.has(`${g.category}:${id}`);
     const idTaken = isTaken(g.id);
-    const memberTaken = g.category === 'building' && [...(g.members.walls ?? []).map((w) => `wall:${w.id}`), ...(g.members.ladders ?? []).map((k) => `ladder:${k.id}`)].some((x) => memberIds.has(x));
-    if ((g.category === 'building' || g.category === 'zone') && (idTaken || memberTaken)) { drop('id_taken'); continue; }
-    if (g.solid.some((s) => locks.some((k) => polygonsOverlap(s, k.poly)))) { drop('overlaps_lock'); continue; }
-    if (g.solid.some((s) => solids.some((o) => polygonsOverlap(s, o)))) { drop('overlaps_kept'); continue; }
-    if (g.category === 'building' && g.solid.some((s) => roads.some((r) => polygonsOverlap(s, r)))) { drop('blocks_road'); continue; }
     if (idTaken) {
       // a counter id (COV_12, LAD_5, ...) that a kept object already has: suffix the re-roll seed (+ a counter if needed)
       let id = `${g.id}_r${seed}`, n = 1;
@@ -386,7 +418,17 @@ function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelectio
   if (!old.mantle_edges && !next.mantle_edges!.length) delete layout.mantle_edges;
   const skeletonMatch = JSON.stringify(fresh.cut ?? null) === JSON.stringify(old.cut ?? null)
     && JSON.stringify(fresh.zones.filter(isInfrastructureZone)) === JSON.stringify(old.zones.filter(isInfrastructureZone));
-  return { layout, replaced: sel.inside.map((g) => g.id), added: added.map((g) => g.id), dropped, snapped, skeletonMatch };
+  return { layout, replaced: sel.inside.filter((g) => !restored.includes(g)).map((g) => g.id), added: added.map((g) => g.id), dropped, restored: restored.map((g) => g.id), snapped, skeletonMatch };
+}
+
+/** Per route: the spliced version, or - when only the old one still passes on the merged map - the old route unchanged. */
+function pickRoutes(m: GenLayout, old: GenLayout, check: (l: GenLayout) => RouteReport[]): { layout: GenLayout; reports: RouteReport[] } {
+  const reports = check(m);
+  const fallback = m.routes.map((r, i) => (reports[i]?.completable || r === old.routes[i] ? r : old.routes[i]));
+  if (fallback.every((r, i) => r === m.routes[i])) return { layout: m, reports };
+  const alt = check({ ...m, routes: fallback });
+  const routes = m.routes.map((r, i) => (!reports[i]?.completable && alt[i]?.completable ? fallback[i] : r));
+  return { layout: { ...m, routes }, reports: reports.map((r, i) => (routes[i] !== m.routes[i] ? alt[i] : r)) };
 }
 
 /** Re-roll the zone (see the file header). Pure and deterministic. */
@@ -398,17 +440,21 @@ export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
   const check = o.checkRoutes ?? checkLayoutRoutes;
   const before = check(old);
   const base = { locked: sel.locked.map((g) => g.id), fixed: sel.fixed.map((g) => g.id) };
-  if (!isUsableZone(o.zone)) return { ok: false, layout: old, seed: o.seed, retries: 0, attempts: [], replaced: [], added: [], dropped: [], ...base, snappedHeights: 0, routes: before.map(routeStatus), skeletonMatch: true, message: 'зона слишком мала (нужно >= 3 точки и >= 1 м²)' };
+  if (!isUsableZone(o.zone)) return { ok: false, layout: old, seed: o.seed, retries: 0, attempts: [], replaced: [], added: [], dropped: [], restored: [], ...base, snappedHeights: 0, routes: before.map(routeStatus), skeletonMatch: true, message: 'зона слишком мала (нужно >= 3 точки и >= 1 м²)' };
   const maxRetries = Math.max(0, o.maxRetries ?? DEFAULT_MAX_RETRIES);
   const attempts: RegenAttempt[] = [];
   let lastRoutes = before;
+  let last: Merge | null = null;
   for (let k = 0; k <= maxRetries; k++) {
     const seed = o.seed + k * RETRY_SEED_STEP;
     const m = mergeAttempt(old, groups, sel, o.zone, state.locks, seed, o.profile);
+    last = m;
     if (!m.replaced.length && !m.added.length) {
-      return { ok: true, layout: old, seed, retries: k, attempts: [...attempts, { seed, ok: true, reason: 'nothing to re-roll' }], replaced: [], added: [], dropped: m.dropped, ...base, snappedHeights: 0, routes: before.map(routeStatus), skeletonMatch: m.skeletonMatch, message: 'в зоне нечего перегенерировать (всё закреплено, инфраструктура или пусто)' };
+      return { ok: true, layout: old, seed, retries: k, attempts: [...attempts, { seed, ok: true, reason: 'nothing to re-roll' }], replaced: [], added: [], dropped: m.dropped, restored: m.restored, ...base, snappedHeights: 0, routes: before.map(routeStatus), skeletonMatch: m.skeletonMatch, message: 'в зоне нечего перегенерировать (всё закреплено, инфраструктура или пусто)' };
     }
-    const after = check(m.layout);
+    const picked = pickRoutes(m.layout, old, check);
+    m.layout = picked.layout;
+    const after = picked.reports;
     lastRoutes = after;
     const broken = after.filter((r, i) => {
       const was = before[i]?.completable ?? false;
@@ -418,9 +464,10 @@ export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
     if (broken.length) { attempts.push({ seed, ok: false, reason: broken.map((r) => `${r.id}: ${r.fail ?? 'broken'}`).join('; ') }); continue; }
     attempts.push({ seed, ok: true });
     const layout: GenLayout = { ...m.layout, regen: { ...state, rerolls: [...state.rerolls, { seed, zone: o.zone.map((p) => [p[0], p[1]] as Vec2), replaced: m.replaced.length, added: m.added.length, retries: k }] } };
-    return { ok: true, layout, seed, retries: k, attempts, replaced: m.replaced, added: m.added, dropped: m.dropped, ...base, snappedHeights: m.snapped, routes: after.map(routeStatus), skeletonMatch: m.skeletonMatch,
-      message: `перегенерировано: убрано ${m.replaced.length}, добавлено ${m.added.length}, отброшено ${m.dropped.length}, повторов ${k}` };
+    return { ok: true, layout, seed, retries: k, attempts, replaced: m.replaced, added: m.added, dropped: m.dropped, restored: m.restored, ...base, snappedHeights: m.snapped, routes: after.map(routeStatus), skeletonMatch: m.skeletonMatch,
+      message: `перегенерировано: убрано ${m.replaced.length}, добавлено ${m.added.length}, отброшено ${m.dropped.length}${m.restored.length ? `, оставлено старыми зданий ${m.restored.length}` : ''}, повторов ${k}` };
   }
-  return { ok: false, layout: old, seed: o.seed + maxRetries * RETRY_SEED_STEP, retries: attempts.length, attempts, replaced: [], added: [], dropped: [], ...base, snappedHeights: 0, routes: lastRoutes.map(routeStatus), skeletonMatch: true,
+  // all rejected: the map is unchanged; the last attempt's drops are reported for the diagnosis
+  return { ok: false, layout: old, seed: o.seed + maxRetries * RETRY_SEED_STEP, retries: attempts.length, attempts, replaced: [], added: [], dropped: last?.dropped ?? [], restored: last?.restored ?? [], ...base, snappedHeights: 0, routes: lastRoutes.map(routeStatus), skeletonMatch: last?.skeletonMatch ?? true,
     message: `маршрут ломается во всех ${attempts.length} попытках - карта не изменена` };
 }
