@@ -28,7 +28,8 @@ namespace PropsC4TestLocal
 	const TCHAR* const GC4Fixtures = TEXT("Data/LevelGen/props/fixtures");
 	const TCHAR* const GC4SmallLayout = TEXT("fixture_small.layout.json");
 	const TCHAR* const GC4SmallInput = TEXT("golden_in_small_c4.props.json");
-	const TCHAR* const GC4DepotLayout = TEXT("../../accepted/gen_ref_01_02_depot_1.json");
+	// The frozen pre-mantling Depot layout (golden_cases.json: the goldens test the placement, not the live map reworked 2026-11-15).
+	const TCHAR* const GC4DepotLayout = TEXT("golden_depot.layout.json");
 	/** The C3 Depot output with crates (3 locked, 1 moved, 1 hand) + barrels; the C4 layers come from golden_in_depot_c4_layers. */
 	const TCHAR* const GC4DepotBase = TEXT("golden_depot_barrels_s1.json");
 	const TCHAR* const GC4DepotLayers = TEXT("golden_in_depot_c4_layers.props.json");
