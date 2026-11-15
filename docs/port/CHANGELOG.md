@@ -14,6 +14,7 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 
 | Commit | What |
 |---|---|
+| `feat/mantling-slice1` | **feat(mantle), 2026-11-15, mantling slice 1:** MantleRules + mantle.json, the root-motion climb with Motion Warping (one Solo operative: low / high mantle, tall ledge, fence over; crouch on top; knockdown / heavy hit back to the base), trigger C (Solo click on a top + path links), barrels no longer vaulted, the Depot reworked onto the height classes and rebuilt, MantleSmoke. `docs/port/MANTLING_SLICE1_REPORT.md`. |
 | `efec9a32` | **feat(tools), 2026-11-15:** agent branch guard checks protected paths, report evidence and change size. |
 | `57085001` | **feat(tools), 2026-11-15:** team chat editor status banner and desktop open-editor shortcut. |
 | `9441d902` | **fix(combat), 2026-11-15, 058:** suppressive fire from cover turns toward side targets or refuses the shot. |
