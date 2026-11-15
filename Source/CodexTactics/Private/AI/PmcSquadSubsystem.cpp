@@ -22,6 +22,7 @@
 #include "Combat/SuppressionRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
+#include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/CodexTacticsGameMode.h"
 #include "Data/WeaponDataAsset.h"
@@ -49,6 +50,29 @@ namespace PmcSquadLocal
 	constexpr float MonsterSightCm = 2500.f;
 	/** A demasked shooter (his own fire) is noticed by the teams with a man this close (planar). */
 	constexpr float GunfireHearingCm = 6000.f;
+
+	/** Scenario identity, never pointer/GetUniqueID/FName comparison-index order.
+	 * SpawnFighter passes 100 * TeamId + Index as SquadIndex; placed non-operatives use their object path. */
+	inline FString StableActorId(const AActor* Actor)
+	{
+		if (const AOperativeCharacter* Fighter = Cast<AOperativeCharacter>(Actor))
+		{
+			return FString::Printf(TEXT("operative:%d:%d"), Fighter->TeamId, Fighter->SquadIndex);
+		}
+		return Actor ? Actor->GetPathName() : FString();
+	}
+
+	/** A cover candidate is a slot, not a fighter: owner/component identity and exact geometry break score ties.
+	 * Lossless double formatting avoids merging distinct nearby slots via a quantization tolerance. */
+	inline FString StableCoverSlotId(const FCoverSlot& Slot, bool bElevated)
+	{
+		const UPrimitiveComponent* Component = Slot.WallComponent.Get();
+		return FString::Printf(TEXT("%s|%s|%.17g,%.17g,%.17g|%.17g,%.17g,%.17g|%.17g,%.17g,%.17g|%d|%d"),
+			*StableActorId(Slot.WallActor.Get()), Component ? *Component->GetPathName() : TEXT(""),
+			Slot.WorldLocation.X, Slot.WorldLocation.Y, Slot.WorldLocation.Z,
+			Slot.WallNormal.X, Slot.WallNormal.Y, Slot.WallNormal.Z,
+			Slot.WallPoint.X, Slot.WallPoint.Y, Slot.WallPoint.Z, static_cast<int32>(Slot.Height), bElevated ? 1 : 0);
+	}
 
 	inline bool IsLiveOperative(const AOperativeCharacter* Operative)
 	{
@@ -535,19 +559,27 @@ void UPmcSquadSubsystem::Tick(float DeltaTime)
 		SightTimer = SightInterval;
 		UpdateSight();
 	}
-	for (TPair<int32, FTeam>& Pair : Teams)
+	TArray<int32> TeamIds;
+	Teams.GetKeys(TeamIds);
+	TeamIds.Sort(); // team decisions must not inherit TMap registration/bucket order
+	for (const int32 TeamId : TeamIds)
 	{
-		UpdatePosture(Pair.Key, Pair.Value, DeltaTime);
-		if (!Pair.Value.bCommanded)
+		FTeam* Team = Teams.Find(TeamId);
+		if (!Team)
 		{
 			continue;
 		}
-		UpdateTeamRunning(Pair.Key, Pair.Value, DeltaTime);
-		Pair.Value.DecisionTimer -= DeltaTime;
-		if (Pair.Value.DecisionTimer <= 0.f)
+		UpdatePosture(TeamId, *Team, DeltaTime);
+		if (!Team->bCommanded)
 		{
-			Pair.Value.DecisionTimer = Pair.Value.Weights.DecisionInterval;
-			Decide(Pair.Key, Pair.Value);
+			continue;
+		}
+		UpdateTeamRunning(TeamId, *Team, DeltaTime);
+		Team->DecisionTimer -= DeltaTime;
+		if (Team->DecisionTimer <= 0.f)
+		{
+			Team->DecisionTimer = Team->Weights.DecisionInterval;
+			Decide(TeamId, *Team);
 		}
 	}
 }
@@ -1137,7 +1169,8 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			continue;
 		}
 		const float Distance = FVector::Dist2D(View.Location, Pair.Value.LastKnown);
-		if (Distance < BestDistance)
+		if (Distance < BestDistance || (Distance == BestDistance && OutThreatActor
+			&& PmcSquadLocal::StableActorId(Actor).Compare(PmcSquadLocal::StableActorId(OutThreatActor), ESearchCase::CaseSensitive) < 0))
 		{
 			BestDistance = Distance;
 			OutThreatActor = Actor;
@@ -1785,6 +1818,7 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		float Score = 0.f;
 		bool bElevated = false;
 		float BandFactor = 1.f;
+		FString StableId;
 	};
 	TArray<FCandidate, TInlineAllocator<24>> Candidates;
 	auto TryRay = [&](const FVector& Origin, const FVector& Direction, float Reach, bool bElevated)
@@ -1819,7 +1853,7 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)
 			* PmcCommanderRules::HighGroundFactor(Level, Weights) * FMath::Lerp(1.f, SlotBand, FMath::Clamp(Weights.BandPosition, 0.f, 1.f))
 			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f) * ObjectiveFactor;
-		Candidates.Add({ Slot, Quality, Score, bElevated, SlotBand });
+		Candidates.Add({ Slot, Quality, Score, bElevated, SlotBand, PmcSquadLocal::StableCoverSlotId(Slot, bElevated) });
 	};
 	for (int32 Index = 0; Index < 16; ++Index)
 	{
@@ -1851,7 +1885,11 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 			}
 		}
 	}
-	Candidates.StableSort([](const FCandidate& Left, const FCandidate& Right) { return Left.Score > Right.Score; });
+	Candidates.StableSort([](const FCandidate& Left, const FCandidate& Right)
+	{
+		return Left.Score != Right.Score ? Left.Score > Right.Score
+			: Left.StableId.Compare(Right.StableId, ESearchCase::CaseSensitive) < 0;
+	});
 	int32 PathChecks = 0;
 	for (const FCandidate& Candidate : Candidates)
 	{

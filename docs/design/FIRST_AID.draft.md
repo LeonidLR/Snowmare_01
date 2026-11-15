@@ -55,3 +55,11 @@
 ## 4. После решений, до реализации
 Согласовать ответы и отдельно просмотреть клипы/ретаргет, контакты двух тел и пропы; затем определить единый жизненный цикл действия, чтобы UI/автономия/приказ не лечили повторно.
 Проверяемые сценарии сформулировать по выбранным правилам: самолечение/товарищ, отмена/расход, Critical/нокдаун/KIA, смена стойки, пауза/ход; никаких новых врагов для этого этапа не требуется.
+
+## Decisions 2026-11-15 (designer) — critical wound / bleed-out (board #063)
+
+- A hit that would kill (or leaves 1–5% HP) puts the fighter into a **critical** state instead of death: prone (placeholder pose until the designer's clip), a bar over the head draining for **120 s**.
+- He cannot treat himself. A comrade with a **medkit** (consumed) brings him back; HP after the revive = that medkit's heal (basic now, an advanced medkit later).
+- No help within 120 s → permanent death (KIA).
+- Any further hit during the countdown = death; enemies may deliberately finish off a downed fighter.
+- Applies to the PMC too.

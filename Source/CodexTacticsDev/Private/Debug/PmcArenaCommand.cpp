@@ -2289,6 +2289,10 @@ namespace PmcArena
 	void LogSpawnReach(FState& State, UWorld* World)
 	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const ANavigationData* NavData = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
+		const FBox NavBounds = NavData ? NavData->GetBounds() : FBox(ForceInit);
+		const bool bNavBusy = UNavigationSystemV1::IsNavigationBeingBuiltOrLocked(World);
+		const int32 Seed = State.Options.Seed + State.Round - 1;
 		for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
 		{
 			const FVector Goal = State.bRoundObjective ? State.Objective : State.Sides[1 - SideIndex].Spawn;
@@ -2300,9 +2304,17 @@ namespace PmcArena
 					continue;
 				}
 				const FVector Spot = Operative->GetActorLocation();
-				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d side %s man %d at %s: path to the %s %.0f cm, straight %.0f cm"), State.Round,
-					*State.Sides[SideIndex].Label, Index, *Spot.ToCompactString(), State.bRoundObjective ? TEXT("objective") : TEXT("enemy spawn"),
-					NavPathLength(World, Nav, Spot, Goal), FVector::Dist(Spot, Goal));
+				const FVector Feet = Spot - FVector(0.f, 0.f, Operative->GetSimpleCollisionHalfHeight());
+				FNavLocation OnNav;
+				const bool bProjected = Nav && Nav->ProjectPointToNavigation(Feet, OnNav, FVector(200.f, 200.f, 300.f));
+				// Extend the existing per-fighter evidence line; do not add a second log stream.
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaSpawn] seed=%d round=%d side=%s team=%d fighter=%d centre=%s feet=%s yaw=%.3f nav=%s busy=%d building=%d locked=%d bounds=%d:%s..%s projected=%d point=%s node=%llu path_to=%s path_cm=%.0f straight_cm=%.0f"),
+					Seed, State.Round, *State.Sides[SideIndex].Label, Operative->TeamId, Operative->SquadIndex, *State.Sides[SideIndex].Spawn.ToString(), *Feet.ToString(), Operative->GetActorRotation().Yaw,
+					NavData ? *NavData->GetPathName() : TEXT("none"), bNavBusy ? 1 : 0,
+					Nav && Nav->IsNavigationBuildInProgress() ? 1 : 0, Nav && Nav->IsNavigationBuildingLocked() ? 1 : 0,
+					NavBounds.IsValid ? 1 : 0, *NavBounds.Min.ToString(), *NavBounds.Max.ToString(), bProjected ? 1 : 0,
+					bProjected ? *OnNav.Location.ToString() : TEXT("none"), bProjected ? static_cast<uint64>(OnNav.NodeRef) : 0ULL,
+					State.bRoundObjective ? TEXT("objective") : TEXT("enemy spawn"), NavPathLength(World, Nav, Spot, Goal), FVector::Dist(Spot, Goal));
 			}
 		}
 	}
@@ -2664,14 +2676,34 @@ namespace PmcArena
 			return false;
 		}
 		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+		// Initial placement AND each later seeded round wait for usable, idle navigation.
+		// Busy includes queued dirty areas as well as active generation/build locks (engine API).
+		if (State.Stage == 0 || State.Stage == 1)
+		{
+			constexpr float NavReadyTimeoutSeconds = 30.f;
+			UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+			const ANavigationData* NavData = Nav ? Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate) : nullptr;
+			const bool bBusy = UNavigationSystemV1::IsNavigationBeingBuiltOrLocked(World);
+			const bool bReady = NavData && NavData->GetBounds().IsValid && !bBusy;
+			if (!bReady)
+			{
+				if (State.StageTime < NavReadyTimeoutSeconds)
+				{
+					return true;
+				}
+				UE_LOG(LogCodexTactics, Error, TEXT("[PmcArenaNav] timeout stage=%d waited=%.1fs nav=%s busy=%d building=%d locked=%d bounds=%d"),
+					State.Stage, State.StageTime, NavData ? *NavData->GetPathName() : TEXT("none"), bBusy ? 1 : 0,
+					Nav && Nav->IsNavigationBuildInProgress() ? 1 : 0, Nav && Nav->IsNavigationBuildingLocked() ? 1 : 0,
+					NavData && NavData->GetBounds().IsValid ? 1 : 0);
+				Check(State, false, TEXT("navigation ready within bounded setup timeout"));
+				return Finish(State, World, false);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaNav] ready stage=%d waited=%.1fs nav=%s"), State.Stage, State.StageTime, *NavData->GetPathName());
+		}
 		switch (State.Stage)
 		{
-		case 0: // the level settled
+		case 0: // the navigation-readiness gate above replaces the fixed warm-up
 		{
-			if (State.StageTime < 2.f)
-			{
-				return true;
-			}
 			if (!Pmc)
 			{
 				Check(State, false, TEXT("UPmcSquadSubsystem present"));

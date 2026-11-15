@@ -32,6 +32,7 @@
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/SuppressionSubsystem.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
 #include "Containers/Ticker.h"
 #include "Core/CodexTacticsPlayerController.h"
@@ -108,6 +109,9 @@ namespace SuppressionSmoke
 		float FirstRoundResidual = 180.f;
 		bool bFirstRoundInCover = false;
 		bool bLeftCoverMeanwhile = false;
+		/** H (058b): deterministic visibility, restored even if a stage fails. */
+		bool bAutoRevealOwned = false;
+		bool bAutoRevealBefore = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -121,6 +125,16 @@ namespace SuppressionSmoke
 		if (AOperativeCharacter* Commander = State.Members.IsValidIndex(0) ? State.Members[0].Get() : nullptr)
 		{
 			Commander->OnWeaponFiredNative.Remove(State.FiredHandle);
+			if (State.bAutoRevealOwned)
+			{
+				if (UWorld* World = Commander->GetWorld())
+				{
+					if (UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>())
+					{
+						Sight->SetCinematicReveal(State.bAutoRevealBefore);
+					}
+				}
+			}
 		}
 		if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Combat.Suppression")))
 		{
@@ -993,6 +1007,119 @@ namespace SuppressionSmoke
 					Commander->bInCover ? 1 : 0));
 			Commander->CancelSuppressFire(TEXT("smoke"));
 			Suppression->SetLevelForTesting(Commander, 0.f);
+			Next(State); // keep the box for ordinary automatic-fire coverage (058b)
+			return true;
+		}
+		case 66: // H: no suppress/quick/manual order; one visible, frozen automatic target at his side.
+		{
+			if (!Marksman || !Marksman->GetHealthComponent()->IsAlive() || !PutInCover(Commander, State.Slot))
+			{
+				Check(State, false, TEXT("H: a live automatic target and the commander in cover"));
+				return Finish(State, false);
+			}
+			for (TActorIterator<AEnemyCharacter> It(World); It; ++It)
+			{
+				if (*It != Marksman)
+				{
+					SmokeUtils::ParkEnemyFarAway(*It);
+					Freeze(*It);
+				}
+			}
+			Freeze(Marksman);
+			Marksman->GetHealthComponent()->SetMaxHealth(100000.f);
+			Commander->CancelQuickFire();
+			Commander->AssignPriorityTarget(nullptr);
+			Commander->SetBlindFireTarget(nullptr);
+			Commander->SetAutonomyTarget(nullptr);
+			Commander->GrenadesCount = 0;
+			Commander->CurrentClip = Commander->CurrentWeapon ? Commander->CurrentWeapon->Stats.Ammo.MagazineSize : 30;
+			Commander->ReserveAmmo = 200;
+			Commander->bCoverHoldFire = false;
+			Commander->bHasPostureOverride = true;
+			Commander->PostureOverride = ESquadFirePosture::Aggressive;
+			Suppression->SetLevelForTesting(Commander, 0.6f);
+			if (UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>())
+			{
+				State.bAutoRevealBefore = Sight->IsCinematicReveal();
+				State.bAutoRevealOwned = true;
+				Sight->SetCinematicReveal(true); // isolate pose reach from fog-of-war acquisition
+			}
+			const FVector Side = State.Slot.WorldLocation + State.Slot.WallNormal.GetSafeNormal2D() * 150.f + State.Side * 700.f;
+			Marksman->TeleportTo(FVector(Side.X, Side.Y, State.P.Z + 100.f), (-State.Side).Rotation(), false, true);
+			State.CommanderShotsBefore = State.CommanderShots;
+			State.AmmoBefore = Ammo(Commander);
+			State.bLeftCoverMeanwhile = false;
+			Next(State);
+			return true;
+		}
+		case 67: // H: suppression permits blind fire, but this side target is outside the cover pose.
+		{
+			Suppression->SetLevelForTesting(Commander, 0.6f);
+			State.bLeftCoverMeanwhile |= !Commander->bInCover;
+			if (State.StageTime < 2.f)
+			{
+				return true;
+			}
+			Check(State, !Commander->HasSuppressOrder() && !Commander->HasQuickFireOrder() && !Commander->GetManualPriorityTarget()
+				&& !Commander->GetBlindFireTarget(), TEXT("H: ordinary auto acquisition, no explicit fire order"));
+			Check(State, Marksman && Commander->GetCurrentCombatTarget() == Marksman && Commander->CanHitEnemy(Marksman),
+				TEXT("H: the visible side target is acquired with a clear shot line (not a no-target false pass)"));
+			Check(State, Suppression->GetTier(Commander) == ESuppressionTier::Suppressed && USuppressionSubsystem::GetOperativeFireOf(Commander).bMayFire,
+				TEXT("H: suppressed, not pinned (an in-sector blind shot would be allowed)"));
+			Check(State, Commander->bInCover && !State.bLeftCoverMeanwhile && State.CommanderShots == State.CommanderShotsBefore && Ammo(Commander) == State.AmmoBefore,
+				TEXT("H: out-of-sector auto target: holds fire and ammo, stays in cover"));
+			if (!Marksman)
+			{
+				return Finish(State, false);
+			}
+			const FVector Over = State.Slot.WallPoint - State.Slot.WallNormal.GetSafeNormal2D() * 900.f + State.Side * 150.f;
+			Marksman->TeleportTo(FVector(Over.X, Over.Y, State.P.Z + 100.f), State.Slot.WallNormal.Rotation(), false, true);
+			State.CommanderShotsBefore = State.CommanderShots;
+			State.BlindBefore = Commander->GetSuppressedBlindShots();
+			State.AmmoBefore = Ammo(Commander);
+			Next(State);
+			return true;
+		}
+		case 68: // H: same suppression, now inside the box's frontal arc: ordinary blind auto-fire still works.
+		{
+			Suppression->SetLevelForTesting(Commander, 0.6f);
+			if (State.CommanderShots <= State.CommanderShotsBefore && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, Commander->GetCurrentCombatTarget() == Marksman && Commander->bInCover
+				&& State.CommanderShots > State.CommanderShotsBefore && Commander->GetSuppressedBlindShots() > State.BlindBefore
+				&& Ammo(Commander) < State.AmmoBefore, TEXT("H: in-sector automatic rounds fire blind from cover and consume ammo"));
+			Check(State, !Commander->HasSuppressOrder() && !Commander->GetManualPriorityTarget(), TEXT("H: still no attack/suppression order"));
+			if (!Marksman)
+			{
+				return Finish(State, false);
+			}
+			Suppression->SetLevelForTesting(Commander, 0.f);
+			const FVector Side = State.Slot.WorldLocation + State.Slot.WallNormal.GetSafeNormal2D() * 150.f + State.Side * 700.f;
+			Marksman->TeleportTo(FVector(Side.X, Side.Y, State.P.Z + 100.f), (-State.Side).Rotation(), false, true);
+			State.CommanderShotsBefore = State.CommanderShots;
+			State.bFirstRound = false;
+			State.bFirstRoundInCover = true;
+			State.FirstRoundResidual = 180.f;
+			Next(State);
+			return true;
+		}
+		case 69: // H: exposure allowed again: step out and align before the first ordinary side-target round.
+		{
+			Suppression->SetLevelForTesting(Commander, 0.f);
+			if (!State.bFirstRound && State.CommanderShots > State.CommanderShotsBefore && Marksman)
+			{
+				State.bFirstRound = true;
+				State.bFirstRoundInCover = Commander->bInCover;
+				State.FirstRoundResidual = Commander->GetShotAimResidualDeg(Marksman->GetActorLocation());
+			}
+			if (!State.bFirstRound && State.StageTime < 3.f)
+			{
+				return true;
+			}
+			Check(State, State.bFirstRound && !State.bFirstRoundInCover && State.FirstRoundResidual <= Commander->AimConeDeg,
+				FString::Printf(TEXT("H: first side-target auto shot after step-out, aim %.1f <= %.1f deg"), State.FirstRoundResidual, Commander->AimConeDeg));
 			if (AActor* Box = State.Box.Get())
 			{
 				Box->Destroy();

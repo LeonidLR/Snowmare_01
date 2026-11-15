@@ -833,16 +833,29 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		}
 	}
 
-	// User decision 2026-10-06: a target out on the open side (in front of the wall) is no corner shot: he steps off the
-	// wall and fires normally, then comes back to the slot (UpdateOpenShotReturn).
-	// Suppressed (2026-10-26): he does not step out - the blind shot from the cover pose below.
-	if (bInCover && bMayExpose && !IsCornerShotTarget(Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation()) && !BeginOpenShotFromCover(Target))
+	// 058b: use the same pose-reach policy as ordered suppression before the ordinary fire sink.
+	// A blind return round aims at the remembered flash, not the actor's current position.
+	const FVector AimAt = Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation();
+	if (bInCover)
 	{
-		return TEXT("open shot waits (shimmying)");
+		switch (DecideCoverFireAtPoint(AimAt, bMayExpose))
+		{
+		case CoverFacingRules::ECoverFireAt::CoverPose:
+			break; // existing lean / suppressed blind shot below
+		case CoverFacingRules::ECoverFireAt::StepOut:
+			if (!BeginOpenShotFromCover(Target))
+			{
+				return TEXT("open shot waits (shimmying)");
+			}
+			break; // normal open-stance turn / aim-cone check still runs before firing
+		case CoverFacingRules::ECoverFireAt::Refuse:
+			// Keep the target for threat memory; hold fire, with no order cancellation or floating text.
+			// ProcessCombatShooting feeds this reason to the existing TraceFireDecision logger.
+			return TEXT("cover: auto fire held (target outside pose reach, exposure forbidden)");
+		}
 	}
 
 	// Turn towards target smoothly (the barrel onto it, see UpdateCombatFacing); in cover the back stays to the wall.
-	const FVector AimAt = Shot.bBlind ? Shot.AimPoint : Target->GetActorLocation();
 	// The arms throw a grenade: no rifle shot until the throw clip is done (CornerHoldSmoke 2026-10-07 caught shots from
 	// the throw pose, the barrel 100+ deg off the target).
 	if (const UOperativeAnimInstance* ArmsAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;

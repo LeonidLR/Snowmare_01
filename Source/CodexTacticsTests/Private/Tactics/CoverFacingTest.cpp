@@ -659,6 +659,25 @@ bool FCoverFireAtBehindTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+COVER_FACING_TEST(FCoverAutoFirePoseReachTest, "FireAt.AutoFirePoseReach")
+bool FCoverAutoFirePoseReachTest::RunTest(const FString& Parameters)
+{
+	using namespace CoverFacingTest;
+	const FCoverSlot Low = MakeLowBox();
+	const FVector Front(-800.f, 100.f, 0.f);
+	const FVector Side(100.f, -700.f, 0.f);
+	TestEqual(TEXT("auto: suppressed side target holds fire"), FireAt(Low, Side, false), ECoverFireAt::Refuse);
+	TestEqual(TEXT("auto: suppressed frontal target retains blind cover-pose fire"), FireAt(Low, Front, false), ECoverFireAt::CoverPose);
+	TestEqual(TEXT("auto: suppression lifted, side target requires stepping out"), FireAt(Low, Side, true), ECoverFireAt::StepOut);
+	// A blind return round can remember a side flash while its actor has moved into the frontal arc.
+	// Policy must receive that shot's AimPoint; actor location would give the opposite decision.
+	const FVector RememberedFlash = Side;
+	const FVector MovedActor = Front;
+	TestEqual(TEXT("blind AimPoint outside sector is refused"), FireAt(Low, RememberedFlash, false), ECoverFireAt::Refuse);
+	TestEqual(TEXT("actor now frontal is not a substitute for the remembered AimPoint"), FireAt(Low, MovedActor, false), ECoverFireAt::CoverPose);
+	return true;
+}
+
 #undef COVER_FACING_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS
