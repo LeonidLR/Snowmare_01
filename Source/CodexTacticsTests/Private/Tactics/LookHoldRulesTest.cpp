@@ -95,6 +95,32 @@ bool FLookHoldValidityTest::RunTest(const FString&)
 	TestFalse(TEXT("Point 30 cm in XY but 500 cm in Z is still in deadzone"),
 		IsValidLookPoint(Origin + FVector(30.f, 0.f, 500.f), Origin, 50.f));
 
+	// Default distance from config
+	TestFalse(TEXT("Default config threshold: 30 cm invalid"), IsValidLookPoint(Origin + FVector(30.f, 0.f, 0.f), Origin));
+	TestTrue(TEXT("Default config threshold: 60 cm valid"), IsValidLookPoint(Origin + FVector(60.f, 0.f, 0.f), Origin));
+
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FLookHoldConfigTest, "CodexTactics.Tactics.LookHold.Config",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FLookHoldConfigTest::RunTest(const FString&)
+{
+	using namespace LookHoldRules;
+
+	const FLookHoldConfig& ActiveConfig = GetConfig();
+	TestEqual(TEXT("Config min distance defaults to 50"), ActiveConfig.MinPlacementDistanceCm, 50.f);
+	TestEqual(TEXT("Config standing twist defaults to 45"), ActiveConfig.StandingMaxTwistDeg, 45.f);
+	TestEqual(TEXT("Config prone twist defaults to 0"), ActiveConfig.ProneMaxTwistDeg, 0.f);
+
+	FLookHoldConfig Parsed;
+	const FString Json = TEXT("{\"min_placement_distance_cm\": 75.0, \"standing_max_twist_deg\": 30.0, \"prone_max_twist_deg\": 10.0}");
+	TestTrue(TEXT("Load valid JSON config"), LoadConfigFromJson(Json, Parsed));
+	TestEqual(TEXT("Parsed min distance"), Parsed.MinPlacementDistanceCm, 75.f);
+	TestEqual(TEXT("Parsed standing twist"), Parsed.StandingMaxTwistDeg, 30.f);
+	TestEqual(TEXT("Parsed prone twist"), Parsed.ProneMaxTwistDeg, 10.f);
+
 	return true;
 }
 
@@ -119,10 +145,10 @@ bool FLookHoldClearingMatrixTest::RunTest(const FString&)
 	// Incapacitated
 	TestTrue(TEXT("Death clears look hold"), ShouldClearOnIncapacitated(true, false, false, false, false, false));
 	TestTrue(TEXT("Knockdown clears look hold"), ShouldClearOnIncapacitated(false, true, false, false, false, false));
-	TestTrue(TEXT("Panic clears look hold"), ShouldClearOnIncapacitated(false, false, true, false, false, false));
-	TestTrue(TEXT("Ladder clears look hold"), ShouldClearOnIncapacitated(false, false, false, true, false, false));
-	TestTrue(TEXT("Vault clears look hold"), ShouldClearOnIncapacitated(false, false, false, false, true, false));
-	TestTrue(TEXT("Carry clears look hold"), ShouldClearOnIncapacitated(false, false, false, false, false, true));
+	TestFalse(TEXT("Panic does not erase look point (pauses)"), ShouldClearOnIncapacitated(false, false, true, false, false, false));
+	TestFalse(TEXT("Ladder does not erase look point (pauses)"), ShouldClearOnIncapacitated(false, false, false, true, false, false));
+	TestFalse(TEXT("Vault does not erase look point (pauses)"), ShouldClearOnIncapacitated(false, false, false, false, true, false));
+	TestFalse(TEXT("Carry does not erase look point (pauses)"), ShouldClearOnIncapacitated(false, false, false, false, false, true));
 	TestFalse(TEXT("Healthy mobile operative keeps look hold"), ShouldClearOnIncapacitated(false, false, false, false, false, false));
 
 	// Fire order does NOT clear look hold (real-time combat)
@@ -139,17 +165,16 @@ bool FLookHoldEligibilityTest::RunTest(const FString&)
 	using namespace LookHoldRules;
 
 	// Stealth mode: all members eligible
-	TestTrue(TEXT("Stealth mode member is eligible"), IsLookHoldEligible(true, false, false, false));
-	TestTrue(TEXT("Stealth mode follower is eligible"), IsLookHoldEligible(true, false, false, false));
+	TestTrue(TEXT("Stealth mode member is eligible"), IsLookHoldEligible(true, false, false));
+	TestTrue(TEXT("Stealth mode follower is eligible"), IsLookHoldEligible(true, false, false));
 
 	// Outside stealth: solo mode
-	TestTrue(TEXT("Solo mode: operative is eligible"), IsLookHoldEligible(false, true, false, false));
-	TestTrue(TEXT("Solo mode leader is eligible"), IsLookHoldEligible(false, true, true, false));
+	TestTrue(TEXT("Solo mode: operative is eligible"), IsLookHoldEligible(false, true, false));
+	TestTrue(TEXT("Solo mode leader is eligible"), IsLookHoldEligible(false, true, true));
 
-	// Outside stealth: formation mode
-	TestTrue(TEXT("Formation leader is eligible"), IsLookHoldEligible(false, false, true, false));
-	TestFalse(TEXT("Formation follower is not eligible"), IsLookHoldEligible(false, false, false, false));
-	TestTrue(TEXT("Formation follower guarding outside formation is eligible"), IsLookHoldEligible(false, false, false, true));
+	// Outside stealth: formation mode (leader only per spec)
+	TestTrue(TEXT("Formation leader is eligible"), IsLookHoldEligible(false, false, true));
+	TestFalse(TEXT("Formation follower is not eligible"), IsLookHoldEligible(false, false, false));
 
 	return true;
 }
@@ -161,15 +186,18 @@ bool FLookHoldTwistLimitsTest::RunTest(const FString&)
 {
 	using namespace LookHoldRules;
 
-	// Standing twist clamped to StandingMaxTwistDeg (45 deg)
-	TestEqual(TEXT("Standing twist 20 clamped to 20"), ClampResidualTwist(20.f, StandingMaxTwistDeg), 20.f);
-	TestEqual(TEXT("Standing twist -20 clamped to -20"), ClampResidualTwist(-20.f, StandingMaxTwistDeg), -20.f);
-	TestEqual(TEXT("Standing twist 60 clamped to 45"), ClampResidualTwist(60.f, StandingMaxTwistDeg), 45.f);
-	TestEqual(TEXT("Standing twist -60 clamped to -45"), ClampResidualTwist(-60.f, StandingMaxTwistDeg), -45.f);
+	// Standing twist clamped to 45 deg
+	TestEqual(TEXT("Standing twist 20 clamped to 20"), ClampResidualTwist(20.f, 45.f), 20.f);
+	TestEqual(TEXT("Standing twist -20 clamped to -20"), ClampResidualTwist(-20.f, 45.f), -20.f);
+	TestEqual(TEXT("Standing twist 60 clamped to 45"), ClampResidualTwist(60.f, 45.f), 45.f);
+	TestEqual(TEXT("Standing twist -60 clamped to -45"), ClampResidualTwist(-60.f, 45.f), -45.f);
 
-	// Prone twist clamped to ProneMaxTwistDeg (0 deg, body turns completely)
-	TestEqual(TEXT("Prone twist 30 clamped to 0"), ClampResidualTwist(30.f, ProneMaxTwistDeg), 0.f);
-	TestEqual(TEXT("Prone twist -30 clamped to 0"), ClampResidualTwist(-30.f, ProneMaxTwistDeg), 0.f);
+	// Prone twist clamped to 0 deg (body turns completely)
+	TestEqual(TEXT("Prone twist 30 clamped to 0"), ClampResidualTwist(30.f, 0.f), 0.f);
+	TestEqual(TEXT("Prone twist -30 clamped to 0"), ClampResidualTwist(-30.f, 0.f), 0.f);
+
+	// Default limit uses config (StandingMaxTwistDeg = 45.f)
+	TestEqual(TEXT("Default twist clamp 60 -> 45"), ClampResidualTwist(60.f), 45.f);
 
 	return true;
 }

@@ -1,14 +1,16 @@
 // Dev check for 059 look hold outside stealth (docs/design/LOOK_HOLD_SOLO.md) on L_MovementTest:
 //   powershell .\Scripts\smoke.ps1 -Command CodexTactics.LookHoldSmoke -TimeoutSeconds 300
 // Tests:
-//  1. Shift + click ground outside stealth sets ManualLookPoint; operative rotates onto look anchor;
-//  2. Walk forward 6 m: yaw stays on anchor, moving sideways (strafe);
-//  3. Jog 6 m: yaw stays on anchor, moving sideways;
-//  4. Prone crawl: body faces anchor while crawling sideways;
-//  5. Double-click sprint clears ManualLookPoint;
-//  6. Shift + click on self clears ManualLookPoint ("LOOK CLEARED");
-//  7. Shift + click on enemy issues Suppress order (suppress precedence preserved);
-//  8. Entering cover clears ManualLookPoint.
+//  1. 50 cm threshold: click < 50 cm ignored, click >= 50 cm sets ManualLookPoint outside stealth;
+//  2. Walk forward 6 m: yaw stays on anchor, velocity heading ~90 deg from body (strafe);
+//  3. Jog forward 6 m: real jog speed, yaw stays on anchor, velocity heading ~90 deg;
+//  4. Crouch walk: yaw stays on anchor while crouching and strafing;
+//  5. Prone crawl: body faces anchor while crawling sideways;
+//  6. In formation: leader holds look point, follower is not eligible (leader only outside stealth);
+//  7. Double-click sprint clears ManualLookPoint;
+//  8. Shift + click on self clears ManualLookPoint ("LOOK CLEARED");
+//  9. Shift + click on enemy issues Suppress order, look point preserved, returns to anchor on cancel;
+//  10. Entering cover clears ManualLookPoint.
 
 #include "CoreMinimal.h"
 
@@ -30,6 +32,7 @@
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
 #include "Tactics/LookHoldRules.h"
 
@@ -53,8 +56,17 @@ namespace LookHoldSmoke
 
 		int32 WalkSamples = 0;
 		int32 WalkWrongYaw = 0;
+		int32 WalkGoodHeading = 0;
+
 		int32 JogSamples = 0;
 		int32 JogWrongYaw = 0;
+		int32 JogGoodHeading = 0;
+		float JogMaxSpeed = 0.f;
+
+		int32 CrouchSamples = 0;
+		int32 CrouchWrongYaw = 0;
+		int32 CrouchGoodHeading = 0;
+
 		int32 CrawlSamples = 0;
 		int32 CrawlWrongYaw = 0;
 
@@ -131,8 +143,23 @@ namespace LookHoldSmoke
 			Next(State, 1);
 			break;
 		}
-		case 1: // Shift + click on ground to set look anchor
+		case 1: // Test 50 cm threshold & Shift + click on ground to set look anchor
 		{
+			// 1a: Test click within 50 cm (< 50 cm is rejected)
+			const FVector TooClose = Op->GetActorLocation() + State.Forward * 30.f;
+			Check(State, !LookHoldRules::IsValidLookPoint(TooClose, Op->GetActorLocation()),
+				TEXT("50 cm threshold: point 30 cm from operative is invalid"));
+
+			PC->SetSimulatedShiftModifier(true);
+			FHitResult TooCloseHit(nullptr, nullptr, TooClose, FVector::UpVector);
+			TooCloseHit.bBlockingHit = true;
+			PC->HandleWorldHit(TooCloseHit);
+			PC->SetSimulatedShiftModifier(false);
+
+			Check(State, !Op->HasManualLookPoint(),
+				TEXT("Shift + click within 50 cm does not set look anchor"));
+
+			// 1b: Valid anchor 600 cm away
 			PC->SetSimulatedShiftModifier(true);
 			FHitResult Hit(nullptr, nullptr, State.LookPoint, FVector::UpVector);
 			Hit.bBlockingHit = true;
@@ -156,7 +183,7 @@ namespace LookHoldSmoke
 
 			// Order move forward 6 m (walk)
 			State.MoveDest = State.Origin + State.Forward * 600.f;
-			State.WalkSamples = State.WalkWrongYaw = 0;
+			State.WalkSamples = State.WalkWrongYaw = State.WalkGoodHeading = 0;
 			Op->OrderMoveTo(State.MoveDest, false);
 
 			Next(State, 3);
@@ -164,7 +191,8 @@ namespace LookHoldSmoke
 		}
 		case 3: // Sample walking strafe while watching anchor
 		{
-			const float Speed = Op->GetVelocity().Size2D();
+			const FVector Vel = Op->GetVelocity();
+			const float Speed = Vel.Size2D();
 			if (Speed > 20.f)
 			{
 				++State.WalkSamples;
@@ -173,6 +201,11 @@ namespace LookHoldSmoke
 				if (DeltaYaw > 15.f)
 				{
 					++State.WalkWrongYaw;
+				}
+				const float RelHeading = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), Vel.Rotation().Yaw));
+				if (FMath::Abs(RelHeading - 90.f) <= 30.f)
+				{
+					++State.WalkGoodHeading;
 				}
 			}
 
@@ -184,18 +217,36 @@ namespace LookHoldSmoke
 			Check(State, State.WalkSamples > 3 && State.WalkWrongYaw == 0,
 				FString::Printf(TEXT("Walk strafe: yaw held within 15 deg of anchor (samples=%d wrong=%d)"),
 					State.WalkSamples, State.WalkWrongYaw));
+			Check(State, State.WalkGoodHeading > 0,
+				FString::Printf(TEXT("Walk strafe: velocity heading ~90 deg from body (good=%d/%d)"),
+					State.WalkGoodHeading, State.WalkSamples));
 
-			// Order jog back to origin
+			// Order jog back to origin (with real jog speed 400 cm/s)
 			State.MoveDest = State.Origin;
-			State.JogSamples = State.JogWrongYaw = 0;
+			State.JogSamples = State.JogWrongYaw = State.JogGoodHeading = 0;
+			State.JogMaxSpeed = 0.f;
 			Op->OrderMoveTo(State.MoveDest, false);
+			Op->ApplyMovementParams(400.f);
+			if (Op->GetCharacterMovement())
+			{
+				Op->GetCharacterMovement()->MaxWalkSpeed = 400.f;
+			}
 
 			Next(State, 4);
 			break;
 		}
 		case 4: // Sample jogging strafe while watching anchor
 		{
-			const float Speed = Op->GetVelocity().Size2D();
+			if (Op->GetCharacterMovement())
+			{
+				Op->GetCharacterMovement()->MaxWalkSpeed = 400.f;
+			}
+			const FVector Vel = Op->GetVelocity();
+			const float Speed = Vel.Size2D();
+			if (Speed > State.JogMaxSpeed)
+			{
+				State.JogMaxSpeed = Speed;
+			}
 			if (Speed > 20.f)
 			{
 				++State.JogSamples;
@@ -204,6 +255,11 @@ namespace LookHoldSmoke
 				if (DeltaYaw > 15.f)
 				{
 					++State.JogWrongYaw;
+				}
+				const float RelHeading = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), Vel.Rotation().Yaw));
+				if (FMath::Abs(RelHeading - 90.f) <= 30.f)
+				{
+					++State.JogGoodHeading;
 				}
 			}
 
@@ -215,13 +271,77 @@ namespace LookHoldSmoke
 			Check(State, State.JogSamples > 3 && State.JogWrongYaw == 0,
 				FString::Printf(TEXT("Jog strafe: yaw held within 15 deg of anchor (samples=%d wrong=%d)"),
 					State.JogSamples, State.JogWrongYaw));
+			Check(State, State.JogMaxSpeed > 250.f,
+				FString::Printf(TEXT("Jog strafe: real jog speed achieved (max=%.0f cm/s > 250)"), State.JogMaxSpeed));
+			Check(State, State.JogGoodHeading > 0,
+				FString::Printf(TEXT("Jog strafe: velocity heading ~90 deg from body (good=%d/%d)"),
+					State.JogGoodHeading, State.JogSamples));
 
-			// Transition to prone stance
-			Op->SetStance(EOperativeStance::Prone);
+			// Restore default movement params
+			Op->ApplyMovementParams();
+
+			// Transition to crouched stance
+			Op->SetStance(EOperativeStance::Crouching);
 			Next(State, 5);
 			break;
 		}
-		case 5: // Wait for prone stance and order crawl move
+		case 5: // Wait for crouched stance and order crouch-walk
+		{
+			UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
+			if (Op->GetStance() != EOperativeStance::Crouching || (Anim && Anim->IsPlayingStanceTransition()))
+			{
+				if (State.StageTime < 5.f) { return true; }
+			}
+
+			// Re-arm look point relative to current position (90 deg to right)
+			State.LookPoint = Op->GetActorLocation() + State.Right * 600.f;
+			Op->SetManualLookPoint(State.LookPoint);
+
+			State.MoveDest = Op->GetActorLocation() + State.Forward * 300.f;
+			State.CrouchSamples = State.CrouchWrongYaw = State.CrouchGoodHeading = 0;
+			Op->OrderMoveTo(State.MoveDest, false);
+
+			Next(State, 6);
+			break;
+		}
+		case 6: // Sample crouch-walk strafe while watching anchor
+		{
+			const FVector Vel = Op->GetVelocity();
+			const float Speed = Vel.Size2D();
+			if (Speed > 15.f)
+			{
+				++State.CrouchSamples;
+				const float ExpectedYaw = static_cast<float>((State.LookPoint - Op->GetActorLocation()).Rotation().Yaw);
+				const float DeltaYaw = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw));
+				if (DeltaYaw > 15.f)
+				{
+					++State.CrouchWrongYaw;
+				}
+				const float RelHeading = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), Vel.Rotation().Yaw));
+				if (FMath::Abs(RelHeading - 90.f) <= 35.f)
+				{
+					++State.CrouchGoodHeading;
+				}
+			}
+
+			if ((State.StageTime < 0.5f || Speed > 10.f) && State.StageTime < 8.f)
+			{
+				return true;
+			}
+
+			Check(State, State.CrouchSamples > 2 && State.CrouchWrongYaw == 0,
+				FString::Printf(TEXT("Crouch-walk strafe: yaw held within 15 deg of anchor (samples=%d wrong=%d)"),
+					State.CrouchSamples, State.CrouchWrongYaw));
+			Check(State, State.CrouchGoodHeading > 0,
+				FString::Printf(TEXT("Crouch-walk strafe: velocity heading ~90 deg from body (good=%d/%d)"),
+					State.CrouchGoodHeading, State.CrouchSamples));
+
+			// Transition to prone stance
+			Op->SetStance(EOperativeStance::Prone);
+			Next(State, 7);
+			break;
+		}
+		case 7: // Wait for prone stance and order crawl move
 		{
 			UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
 			if (Op->GetStance() != EOperativeStance::Prone || (Anim && Anim->IsPlayingStanceTransition()))
@@ -233,17 +353,17 @@ namespace LookHoldSmoke
 			State.LookPoint = Op->GetActorLocation() + State.Right * 600.f;
 			Op->SetManualLookPoint(State.LookPoint);
 
-			State.MoveDest = Op->GetActorLocation() + State.Forward * 400.f;
+			State.MoveDest = Op->GetActorLocation() + State.Forward * 300.f;
 			State.CrawlSamples = State.CrawlWrongYaw = 0;
 			Op->OrderMoveTo(State.MoveDest, false);
 
-			Next(State, 6);
+			Next(State, 8);
 			break;
 		}
-		case 6: // Sample prone crawl sideways while facing anchor
+		case 8: // Sample prone crawl sideways while facing anchor
 		{
 			const float Speed = Op->GetVelocity().Size2D();
-			if (Speed > 10.f)
+			if (Speed > 10.f && State.StageTime > 0.5f)
 			{
 				++State.CrawlSamples;
 				const float ExpectedYaw = static_cast<float>((State.LookPoint - Op->GetActorLocation()).Rotation().Yaw);
@@ -263,12 +383,12 @@ namespace LookHoldSmoke
 				FString::Printf(TEXT("Prone crawl strafe: body faces anchor while moving sideways (samples=%d wrong=%d)"),
 					State.CrawlSamples, State.CrawlWrongYaw));
 
-			// Stand up and test sprint clearing
+			// Stand up
 			Op->SetStance(EOperativeStance::Standing);
-			Next(State, 7);
+			Next(State, 9);
 			break;
 		}
-		case 7: // Test Sprint clearing manual look point
+		case 9: // In formation check: leader only holds look point, follower is not eligible
 		{
 			UOperativeAnimInstance* Anim = Op->GetMesh() ? Cast<UOperativeAnimInstance>(Op->GetMesh()->GetAnimInstance()) : nullptr;
 			if (Op->GetStance() != EOperativeStance::Standing || (Anim && Anim->IsPlayingStanceTransition()))
@@ -276,19 +396,66 @@ namespace LookHoldSmoke
 				if (State.StageTime < 5.f) { return true; }
 			}
 
+			// Switch to formation mode
+			Squad->ExitSoloMode();
+			Check(State, !Squad->IsSoloMode(), TEXT("Squad switched to formation mode"));
+
+			AOperativeCharacter* Leader = Squad->GetLeader();
+			AOperativeCharacter* Follower = nullptr;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member && Member != Leader)
+				{
+					Follower = Member;
+					break;
+				}
+			}
+
+			State.LookPoint = Leader->GetActorLocation() + State.Right * 600.f;
+			Leader->SetManualLookPoint(State.LookPoint);
+			FVector Dummy = FVector::ZeroVector;
+			Check(State, Leader->GetActiveLookPoint(Dummy),
+				TEXT("In formation: leader is eligible for look hold"));
+
+			if (Follower)
+			{
+				Follower->SetManualLookPoint(State.LookPoint);
+				Check(State, !Follower->GetActiveLookPoint(Dummy),
+					TEXT("In formation: follower is NOT eligible for look hold (leader only outside stealth)"));
+				Follower->ClearManualLookPoint();
+			}
+			Leader->ClearManualLookPoint();
+
+			// Return to solo mode
+			Squad->EnterSoloMode();
+			Check(State, Squad->IsSoloMode(), TEXT("Squad returned to solo mode"));
+
+			Next(State, 10);
+			break;
+		}
+		case 10: // Test double-click sprint via controller clears manual look point
+		{
+			if (State.StageTime < 0.3f) { return true; }
+
 			State.LookPoint = Op->GetActorLocation() + State.Right * 600.f;
 			Op->SetManualLookPoint(State.LookPoint);
 			Check(State, Op->HasManualLookPoint(), TEXT("Re-armed manual look point before sprint"));
 
-			// Order sprint
-			Op->OrderMoveTo(Op->GetActorLocation() + State.Forward * 500.f, true);
-			Check(State, !Op->HasManualLookPoint(), TEXT("Sprint order clears ManualLookPoint"));
+			// Double-click ahead through controller click path
+			const FVector SpotAhead = Op->GetActorLocation() + State.Forward * 600.f;
+			FHitResult GroundHit(nullptr, nullptr, SpotAhead, FVector::UpVector);
+			GroundHit.bBlockingHit = true;
+			PC->HandleWorldHit(GroundHit);
+			PC->HandleWorldHit(GroundHit);
+
+			Check(State, !Op->HasManualLookPoint(),
+				TEXT("Controller double-click sprint clears ManualLookPoint"));
 
 			Op->StopOperative();
-			Next(State, 8);
+			Next(State, 11);
 			break;
 		}
-		case 8: // Test Shift + click on self clears look point
+		case 11: // Test Shift + click on self clears look point
 		{
 			if (State.StageTime < 0.3f) { return true; }
 
@@ -303,12 +470,13 @@ namespace LookHoldSmoke
 			PC->HandleWorldHit(SelfHit);
 			PC->SetSimulatedShiftModifier(false);
 
-			Check(State, !Op->HasManualLookPoint(), TEXT("Shift + click on self clears ManualLookPoint outside stealth"));
+			Check(State, !Op->HasManualLookPoint(),
+				TEXT("Shift + click on self clears ManualLookPoint outside stealth"));
 
-			Next(State, 9);
+			Next(State, 12);
 			break;
 		}
-		case 9: // Test Shift + click on enemy issues Suppress order (precedence over look hold)
+		case 12: // Test Shift + click on enemy issues Suppress order (precedence over look hold)
 		{
 			if (State.StageTime < 0.2f) { return true; }
 
@@ -346,17 +514,32 @@ namespace LookHoldSmoke
 			PC->SetSimulatedShiftModifier(false);
 
 			Check(State, Op->HasSuppressOrder(), TEXT("Shift + click on enemy issues Suppress order (precedence preserved)"));
+			Check(State, Op->HasManualLookPoint(), TEXT("Manual look point preserved during suppress order"));
 
 			Op->CancelSuppressFire(TEXT("end of test"));
+			Next(State, 13);
+			break;
+		}
+		case 13: // Verify operative returns to look anchor after CancelSuppressFire
+		{
+			if (State.StageTime < 0.4f) { return true; }
+
+			Check(State, Op->HasManualLookPoint(), TEXT("Manual look point preserved after CancelSuppressFire"));
+
+			const float ExpectedYaw = static_cast<float>((State.LookPoint - Op->GetActorLocation()).Rotation().Yaw);
+			const float DeltaYaw = FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw));
+			Check(State, DeltaYaw <= 20.f,
+				FString::Printf(TEXT("Operative returned to look anchor after CancelSuppressFire (delta=%.1f deg)"), DeltaYaw));
+
 			if (State.TestEnemy.IsValid())
 			{
 				State.TestEnemy->Destroy();
 			}
 
-			Next(State, 10);
+			Next(State, 14);
 			break;
 		}
-		case 10: // Test entering cover clears look point
+		case 14: // Test entering cover clears look point
 		{
 			if (State.StageTime < 0.2f) { return true; }
 
@@ -401,7 +584,7 @@ namespace LookHoldSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.LookHoldSmoke"),
-		TEXT("Dev check for 059 look hold outside stealth on L_MovementTest: walk / jog / prone strafe, sprint clear, self clear, suppress precedence, cover clear. PASS/FAIL, then exits."),
+		TEXT("Dev check for 059 look hold outside stealth on L_MovementTest: walk / jog / crouch / prone strafe, sprint clear, self clear, suppress precedence, cover clear. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

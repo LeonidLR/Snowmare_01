@@ -367,48 +367,43 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	if (IsShiftModifierDown())
 	{
 		const TArray<AOperativeCharacter*> SelectedGroup = Squad->GetSelectedGroup();
-		AOperativeCharacter* ClickedSelf = FindClickedMember(Hit);
-		if (ClickedSelf && SelectedGroup.Contains(ClickedSelf))
+		AOperativeCharacter* ClickedMember = FindClickedMember(Hit);
+		if (ClickedMember && SelectedGroup.Contains(ClickedMember))
 		{
-			bool bClearedAny = false;
+			if (ClickedMember->HasManualLookPoint())
+			{
+				ClickedMember->ClearManualLookPoint();
+				UFloatingTextSubsystem::SpawnAboveOperative(ClickedMember, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+				HideCoverPreview();
+				return;
+			}
+		}
+		else
+		{
+			TArray<AOperativeCharacter*> StealthedSelected;
 			for (AOperativeCharacter* Member : SelectedGroup)
 			{
-				if (Member && Member->HasManualLookPoint())
+				if (Member && Member->IsInStealthMode())
 				{
-					bClearedAny = true;
-					Member->ClearManualLookPoint();
+					StealthedSelected.Add(Member);
 				}
 			}
-			if (bClearedAny)
+			if (!StealthedSelected.IsEmpty())
 			{
-				UFloatingTextSubsystem::SpawnAboveOperative(ClickedSelf, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
-				HideCoverPreview();
-				return;
-			}
-		}
-		TArray<AOperativeCharacter*> StealthedSelected;
-		for (AOperativeCharacter* Member : SelectedGroup)
-		{
-			if (Member && Member->IsInStealthMode())
-			{
-				StealthedSelected.Add(Member);
-			}
-		}
-		if (!StealthedSelected.IsEmpty())
-		{
-			if (ClickedSelf && !StealthedSelected.Contains(ClickedSelf))
-			{
-				// Allow normal Shift+click add/remove selection on unselected or non-stealthed operatives.
-			}
-			else if (StealthedSelected.Num() == SelectedGroup.Num() && Hit.bBlockingHit)
-			{
-				for (AOperativeCharacter* Member : StealthedSelected)
+				if (ClickedMember && !StealthedSelected.Contains(ClickedMember))
 				{
-					Member->SetStealthManualLookTarget(Hit.ImpactPoint);
+					// Allow normal Shift+click add/remove selection on unselected or non-stealthed operatives.
 				}
-				UFloatingTextSubsystem::SpawnAboveOperative(StealthedSelected[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
-				HideCoverPreview();
-				return;
+				else if (!ClickedMember && StealthedSelected.Num() == SelectedGroup.Num() && Hit.bBlockingHit)
+				{
+					for (AOperativeCharacter* Member : StealthedSelected)
+					{
+						Member->SetStealthManualLookTarget(Hit.ImpactPoint);
+					}
+					UFloatingTextSubsystem::SpawnAboveOperative(StealthedSelected[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+					HideCoverPreview();
+					return;
+				}
 			}
 		}
 	}
@@ -651,9 +646,9 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			{
 				Messages->PostMessage(Targets[0]->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), Targets[0]->DisplayName));
 			}
-			HideCoverPreview();
-			return;
 		}
+		HideCoverPreview();
+		return;
 	}
 	// RTS control (user request 2026-10-06): a ground click moves the squad at once in the real-time fight and is planned
 	// in the tactical pause; only the old lock (Codex.RealTimeOrders 0) keeps the Godot «moves only in the pause» rule.

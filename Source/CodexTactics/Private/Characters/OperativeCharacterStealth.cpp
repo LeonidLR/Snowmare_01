@@ -111,8 +111,6 @@ void AOperativeCharacter::SetManualLookPoint(const FVector& WorldPoint)
 {
 	bHasManualLookPoint = true;
 	ManualLookPoint = WorldPoint;
-	bHasStealthManualLook = bStealthMode;
-	StealthManualLookTarget = WorldPoint;
 	ClearIdleFacing();
 	bExplicitFacing = false;
 }
@@ -121,8 +119,6 @@ void AOperativeCharacter::ClearManualLookPoint()
 {
 	bHasManualLookPoint = false;
 	ManualLookPoint = FVector::ZeroVector;
-	bHasStealthManualLook = false;
-	StealthManualLookTarget = FVector::ZeroVector;
 }
 
 void AOperativeCharacter::SetStealthManualLookTarget(const FVector& WorldPoint)
@@ -132,7 +128,8 @@ void AOperativeCharacter::SetStealthManualLookTarget(const FVector& WorldPoint)
 		ClearManualLookPoint();
 		return;
 	}
-	SetManualLookPoint(WorldPoint);
+	bHasManualLookPoint = true;
+	ManualLookPoint = WorldPoint;
 }
 
 void AOperativeCharacter::ClearStealthManualLookTarget()
@@ -205,7 +202,7 @@ void AOperativeCharacter::UpdateStealthLookLock(float DeltaSeconds)
 
 bool AOperativeCharacter::GetManualLookPoint(FVector& OutPoint) const
 {
-	if (HasManualLookPoint() && LookHoldRules::IsValidLookPoint(ManualLookPoint, GetActorLocation(), 50.f))
+	if (HasManualLookPoint() && LookHoldRules::IsValidLookPoint(ManualLookPoint, GetActorLocation(), LookHoldRules::GetConfig().MinPlacementDistanceCm))
 	{
 		OutPoint = ManualLookPoint;
 		return true;
@@ -215,10 +212,14 @@ bool AOperativeCharacter::GetManualLookPoint(FVector& OutPoint) const
 
 bool AOperativeCharacter::IsLookHoldEligible() const
 {
+	if (bVaulting || IsClimbingLadder() || bCarrying || IsPanicking())
+	{
+		return false;
+	}
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	const bool bSolo = Squad && Squad->IsSoloMode();
 	const bool bLeader = Squad ? Squad->GetLeader() == this : true;
-	return LookHoldRules::IsLookHoldEligible(IsInStealthMode(), bSolo, bLeader, bGuarding);
+	return LookHoldRules::IsLookHoldEligible(IsInStealthMode(), bSolo, bLeader);
 }
 
 bool AOperativeCharacter::GetActiveLookPoint(FVector& OutPoint) const
@@ -227,7 +228,7 @@ bool AOperativeCharacter::GetActiveLookPoint(FVector& OutPoint) const
 	{
 		return true;
 	}
-	if (IsInStealthMode() && HasStealthAutoLookTarget() && LookHoldRules::IsValidLookPoint(StealthAutoLookLocation, GetActorLocation(), 50.f))
+	if (IsInStealthMode() && HasStealthAutoLookTarget() && LookHoldRules::IsValidLookPoint(StealthAutoLookLocation, GetActorLocation(), LookHoldRules::GetConfig().MinPlacementDistanceCm))
 	{
 		OutPoint = StealthAutoLookLocation;
 		return true;

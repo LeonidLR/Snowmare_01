@@ -9,6 +9,7 @@
 #include "Characters/ProneCrawlRules.h"
 #include "Characters/StealthModeRules.h"
 #include "Characters/WeaponLayerHandoffRules.h"
+#include "Tactics/LookHoldRules.h"
 
 namespace OperativeStealthLayer
 {
@@ -87,7 +88,7 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	if (bActive && !bBodyBusy && bLookHoldsBody)
 	{
 		const float DesiredYaw = static_cast<float>((StealthLookPoint - Operative->GetActorLocation()).Rotation().Yaw);
-		TargetLookYawDeg = FMath::Clamp(FRotator::NormalizeAxis(DesiredYaw - static_cast<float>(Operative->GetActorRotation().Yaw)), -45.f, 45.f);
+		TargetLookYawDeg = LookHoldRules::ClampResidualTwist(DesiredYaw - static_cast<float>(Operative->GetActorRotation().Yaw), LookHoldRules::GetConfig().StandingMaxTwistDeg);
 	}
 	StealthLookYawDeg = FMath::FInterpTo(StealthLookYawDeg, TargetLookYawDeg, DeltaSeconds, 10.f);
 	if (FMath::Abs(StealthLookYawDeg) < 0.05f && TargetLookYawDeg == 0.f)

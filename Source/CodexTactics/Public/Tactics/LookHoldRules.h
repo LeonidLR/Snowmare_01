@@ -9,6 +9,23 @@
  */
 namespace LookHoldRules
 {
+	/** Configuration loaded from Content/Data/Tactics/look_hold.json. */
+	struct CODEXTACTICS_API FLookHoldConfig
+	{
+		float MinPlacementDistanceCm = 50.f;
+		float StandingMaxTwistDeg = 45.f;
+		float ProneMaxTwistDeg = 0.f;
+	};
+
+	CODEXTACTICS_API const FLookHoldConfig& GetConfig();
+	CODEXTACTICS_API bool LoadConfigFromJson(const FString& JsonString, FLookHoldConfig& OutConfig);
+	CODEXTACTICS_API void ReloadConfig();
+
+	/** Default constants (fallback) */
+	inline constexpr float DefaultMinPlacementDistanceCm = 50.f;
+	inline constexpr float DefaultStandingMaxTwistDeg = 45.f;
+	inline constexpr float DefaultProneMaxTwistDeg = 0.f;
+
 	/** The 8-direction sector (0..7 = F, FR, R, BR, B, BL, L, FL) nearest to a body-relative movement direction, deg. */
 	CODEXTACTICS_API int32 GetDirectionSector(float RelativeMoveDeg);
 
@@ -22,8 +39,8 @@ namespace LookHoldRules
 	/** Returns true when the legs' direction is more than ToleranceDeg off the center of StartSector. */
 	CODEXTACTICS_API bool IsOffGaitStartSector(int32 StartSector, float LegDirectionDeg, float ToleranceDeg = 30.f);
 
-	/** Look point is valid if outside the deadzone radius (50 cm) in the XY plane. */
-	CODEXTACTICS_API bool IsValidLookPoint(const FVector& LookPoint, const FVector& OperativeLocation, float MinDistanceCm = 50.f);
+	/** Look point is valid if outside the deadzone radius in the XY plane. If MinDistanceCm < 0, uses config. */
+	CODEXTACTICS_API bool IsValidLookPoint(const FVector& LookPoint, const FVector& OperativeLocation, float MinDistanceCm = -1.f);
 
 	/** Sprint clears the look point (no strafe clips for sprint). */
 	inline bool ShouldClearOnSprint(bool bSprinting) { return bSprinting; }
@@ -34,7 +51,7 @@ namespace LookHoldRules
 	/** Turn-based combat clears the look point (the tactical grid owns facing). */
 	inline bool ShouldClearOnTurnBased() { return true; }
 
-	/** Incapacitated states clear the look point: dead, knocked down, panicking, ladder, vault, carry. */
+	/** Knockdown or death clears the look point; actions like vault/ladder pause facing rather than erase. */
 	CODEXTACTICS_API bool ShouldClearOnIncapacitated(bool bDead, bool bKnockedDown, bool bPanicking, bool bClimbingLadder, bool bVaulting, bool bCarrying);
 
 	/** Real-time combat / fire orders do NOT clear the look point (only temporarily turn to the target). */
@@ -44,15 +61,10 @@ namespace LookHoldRules
 	 * Look-hold eligibility:
 	 * In stealth mode: any stealthed operative is eligible.
 	 * Outside stealth: solo mode applies to any selected operative; formation applies to the leader only.
+	 * (Followers in formation keep formation facing; points from solo do not sleep on followers).
 	 */
-	CODEXTACTICS_API bool IsLookHoldEligible(bool bInStealthMode, bool bSoloMode, bool bIsLeader, bool bGuarding);
+	CODEXTACTICS_API bool IsLookHoldEligible(bool bInStealthMode, bool bSoloMode, bool bIsLeader);
 
-	/** Standing upper body twist limit (deg). */
-	inline constexpr float StandingMaxTwistDeg = 45.f;
-
-	/** Prone upper body twist limit (deg): crawl turns the whole body. */
-	inline constexpr float ProneMaxTwistDeg = 0.f;
-
-	/** Clamps residual twist angle to +/- LimitDeg. */
-	CODEXTACTICS_API float ClampResidualTwist(float TwistDeg, float LimitDeg = 45.f);
+	/** Clamps residual twist angle to +/- LimitDeg. If LimitDeg < 0, uses config StandingMaxTwistDeg. */
+	CODEXTACTICS_API float ClampResidualTwist(float TwistDeg, float LimitDeg = -1.f);
 }

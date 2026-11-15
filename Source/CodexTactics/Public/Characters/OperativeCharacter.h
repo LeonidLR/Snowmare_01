@@ -3245,10 +3245,6 @@ private:
 	bool bHasManualLookPoint = false;
 	UPROPERTY(Transient)
 	FVector ManualLookPoint = FVector::ZeroVector;
-	UPROPERTY(Transient)
-	bool bHasStealthManualLook = false;
-	UPROPERTY(Transient)
-	FVector StealthManualLookTarget = FVector::ZeroVector;
 	TWeakObjectPtr<AActor> StealthAutoLookActor;
 	uint32 StealthAutoLookTargetId = 0;
 	UPROPERTY(Transient)

@@ -215,7 +215,6 @@ void UPanicComponent::TriggerPanic(const FString& Reason, bool bForce)
 	CachedFleeDirection = FVector::ZeroVector;
 	// Drops the player's orders and the reload; stands up to run (Godot set_stance(STANDING, true)).
 	Operative->StopOperative();
-	Operative->ClearManualLookPoint();
 	Operative->SetStance(EOperativeStance::Standing);
 	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("😱 PANIC!"), PanicRed);
 	static const TCHAR* Phrases[] = {
