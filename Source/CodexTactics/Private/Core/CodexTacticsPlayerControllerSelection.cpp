@@ -225,8 +225,7 @@ void ACodexTacticsPlayerController::OnClickReleased()
 	const bool bDragged = FVector2D::Distance(BoxStart, BoxCurrent) > BoxSelectThreshold && !GetActiveTurnBased();
 	if (bDragged)
 	{
-		// In formation mode box selection is disabled; a drag on the ground does not start a selection
-		// rectangle, nor does it fire a world click/order on release (the selection stays the leader).
+		// A drag on the ground does not fire a world click/order on release.
 		return;
 	}
 	FHitResult Hit;
@@ -279,14 +278,21 @@ int32 ACodexTacticsPlayerController::SelectInBox(const FVector2D& Min, const FVe
 	{
 		return 0;
 	}
-	Squad->SetSelectedGroup(Selected);
-	ControllerCommands::Report(this, PlayerCommands::SelectBox);
-	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	if (SquadOrderRules::ShouldSwitchToSoloOnBoxSelect(bSoloMode, Selected.Num()))
 	{
-		Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), Selected.Num() == 1
-			? FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), Selected[0]->DisplayName)
-			: FText::Format(LOCTEXT("GroupSelected", "👥 Group selected: {0} operatives"), Selected.Num()));
+		Squad->DisbandFormationToSoloBox(Selected);
 	}
+	else
+	{
+		Squad->SetSelectedGroup(Selected);
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), Selected.Num() == 1
+				? FText::Format(LOCTEXT("UnitSelected", "👤 Operative selected: {0}"), Selected[0]->DisplayName)
+				: FText::Format(LOCTEXT("GroupSelected", "👥 Group selected: {0} operatives"), Selected.Num()));
+		}
+	}
+	ControllerCommands::Report(this, PlayerCommands::SelectBox);
 	return Selected.Num();
 }
 

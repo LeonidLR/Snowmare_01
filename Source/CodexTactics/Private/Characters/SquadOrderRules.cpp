@@ -7,9 +7,14 @@ namespace SquadOrderRules
 		return Facts.bOwnMoveOrder || Facts.bUseOrder || Facts.bObjectTask || Facts.bFireOrder;
 	}
 
-	bool IsBoxSelectionAllowed(bool bSoloMode, bool bTurnBasedCombat)
+	bool IsBoxSelectionAllowed(bool /*bSoloMode*/, bool bTurnBasedCombat)
 	{
-		return bSoloMode && !bTurnBasedCombat;
+		return !bTurnBasedCombat;
+	}
+
+	bool ShouldSwitchToSoloOnBoxSelect(bool bSoloMode, int32 BoxedCount)
+	{
+		return !bSoloMode && BoxedCount > 0;
 	}
 
 	bool ShouldStopOnBecomingLeader(bool bOnOwnOrder)

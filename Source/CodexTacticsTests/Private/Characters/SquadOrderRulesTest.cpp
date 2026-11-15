@@ -343,15 +343,21 @@ bool FSquadOrderLeaderSwitchKeepsMoveTest::RunTest(const FString&)
 	return true;
 }
 
-SQUAD_ORDER_TEST(FSquadOrderBoxSelectionTest, "BoxSelectionOnlyInSoloMode")
+SQUAD_ORDER_TEST(FSquadOrderBoxSelectionTest, "BoxSelectionAllowed")
 bool FSquadOrderBoxSelectionTest::RunTest(const FString&)
 {
 	using namespace SquadOrderRules;
-	// T6 addition: box selection is allowed only in solo mode and outside turn-based combat.
+	// Designer 2026-11-15: box selection is allowed in solo mode and formation mode outside turn-based combat.
 	TestTrue(TEXT("Solo mode, real-time: box selection allowed"), IsBoxSelectionAllowed(true, false));
-	TestFalse(TEXT("Formation mode: box selection disabled"), IsBoxSelectionAllowed(false, false));
+	TestTrue(TEXT("Formation mode, real-time: box selection allowed"), IsBoxSelectionAllowed(false, false));
 	TestFalse(TEXT("Turn-based combat in solo: box selection disabled"), IsBoxSelectionAllowed(true, true));
 	TestFalse(TEXT("Turn-based combat in formation: box selection disabled"), IsBoxSelectionAllowed(false, true));
+
+	// Transition decision rule: box select in formation switches squad to solo when operatives are boxed
+	TestTrue(TEXT("Formation with 2 boxed operatives switches to solo"), ShouldSwitchToSoloOnBoxSelect(false, 2));
+	TestTrue(TEXT("Formation with 1 boxed operative switches to solo"), ShouldSwitchToSoloOnBoxSelect(false, 1));
+	TestFalse(TEXT("Formation with 0 boxed operatives does not switch"), ShouldSwitchToSoloOnBoxSelect(false, 0));
+	TestFalse(TEXT("Already in solo mode with 2 boxed operatives does not switch mode"), ShouldSwitchToSoloOnBoxSelect(true, 2));
 	return true;
 }
 

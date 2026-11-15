@@ -16,3 +16,17 @@ Core/CodexTacticsPlayerControllerSelection*.cpp, the formation / solo switch in 
   formation -> mode SOLO, selected = boxed, a move order sends each to its own point), FormationLabSmoke, SoloStartSmoke,
   FastRegroupSmoke still PASS.
 - gemini_gate.ps1 -Task 054 with -SonnetReview (squad / formation = shared core -> Opus is auto-selected).
+
+## Allowed paths
+- Source/CodexTactics/Public/Characters/SquadOrderRules.h
+- Source/CodexTactics/Private/Characters/SquadOrderRules.cpp
+- Source/CodexTactics/Public/Characters/SquadSubsystem.h
+- Source/CodexTactics/Private/Characters/SquadSubsystem.cpp
+- Source/CodexTactics/Private/Core/CodexTacticsPlayerController.cpp
+- Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerSelection.cpp
+- Source/CodexTacticsDev/Private/Debug/SquadControlSmokeCommand.cpp
+- Source/CodexTacticsTests/Private/Characters/SquadOrderRulesTest.cpp
+- docs/port/gemini/inbox/054-box-select-formation-to-solo.md
+- docs/port/gemini/outbox/054-box-select-solo.plan.md
+- docs/port/gemini/outbox/054-box-select-solo.report.md
+- docs/port/gemini/outbox/054-opus-review.md
