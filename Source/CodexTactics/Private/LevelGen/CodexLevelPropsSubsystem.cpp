@@ -1,6 +1,9 @@
 #include "LevelGen/CodexLevelPropsSubsystem.h"
 #include "CodexTactics.h"
 
+#include "Components/MeshComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "Components/StaticMeshComponent.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Engine/World.h"
@@ -12,6 +15,7 @@
 #include "LevelGen/PropsLayoutView.h"
 #include "LevelGen/PropsValidator.h"
 #include "Misc/FileHelper.h"
+#include "Misc/PackageName.h"
 #include "Misc/Paths.h"
 #include "NavAreas/NavArea_Null.h"
 #include "NavMesh/RecastNavMesh.h"
@@ -21,6 +25,47 @@
 
 namespace CodexLevelPropsInternal
 {
+	static bool ActorHasVisualMesh(const AActor* Actor)
+	{
+		if (!Actor)
+		{
+			return false;
+		}
+
+		TArray<UMeshComponent*> MeshComponents;
+		Actor->GetComponents(MeshComponents);
+		for (const UMeshComponent* MeshComp : MeshComponents)
+		{
+			if (MeshComp && MeshComp->IsVisible())
+			{
+				if (const UStaticMeshComponent* StaticMeshComp = Cast<UStaticMeshComponent>(MeshComp))
+				{
+					if (StaticMeshComp->GetStaticMesh() != nullptr)
+					{
+						return true;
+					}
+				}
+				else if (const USkeletalMeshComponent* SkelMeshComp = Cast<USkeletalMeshComponent>(MeshComp))
+				{
+					if (SkelMeshComp->GetSkeletalMeshAsset() != nullptr)
+					{
+						return true;
+					}
+				}
+			}
+		}
+		return false;
+	}
+
+	static bool ClassHasVisualMesh(const UClass* Class)
+	{
+		if (!Class)
+		{
+			return false;
+		}
+		const AActor* CDO = Cast<AActor>(Class->GetDefaultObject());
+		return ActorHasVisualMesh(CDO);
+	}
 	static TAutoConsoleVariable<int32> CVarPropsEnabled(
 		TEXT("Codex.Props.Enabled"),
 		1,
@@ -97,7 +142,9 @@ void UCodexLevelPropsSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 		return;
 	}
 
-	SpawnPropsForMap(MapName);
+	// On live maps (e.g. L_Gen_Depot_1), only spawn props that have a valid visual mesh.
+	// Meshless/invisible props with NavArea_Null would puncture the navmesh and break pathfinding.
+	SpawnPropsForMap(MapName, nullptr, /*bRequireMesh=*/ true);
 }
 
 void UCodexLevelPropsSubsystem::Deinitialize()
@@ -106,7 +153,10 @@ void UCodexLevelPropsSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-int32 UCodexLevelPropsSubsystem::SpawnPropsForMap(const FString& MapName, const TSet<FString>* SkippedIds)
+int32 UCodexLevelPropsSubsystem::SpawnPropsForMap(
+	const FString& MapName,
+	const TSet<FString>* SkippedIds,
+	bool bRequireMesh)
 {
 	const FString PropsPath = GetDefaultPropsPathForMap(MapName);
 	if (!FPaths::FileExists(PropsPath))
@@ -115,13 +165,14 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsForMap(const FString& MapName, const 
 		return 0;
 	}
 
-	return SpawnPropsFromFile(PropsPath, FString(), SkippedIds);
+	return SpawnPropsFromFile(PropsPath, FString(), SkippedIds, bRequireMesh);
 }
 
 int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 	const FString& PropsFilePath,
 	const FString& LayoutFilePath,
-	const TSet<FString>* SkippedIds)
+	const TSet<FString>* SkippedIds,
+	bool bRequireMesh)
 {
 	if (!IsPropsEnabled())
 	{
@@ -292,9 +343,14 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		const FRotator SpawnRotation(0.f, static_cast<float>(Obj.Yaw), 0.f);
 
 		UClass* PropClass = ResolvePropClass(Obj.Variant);
-		if (!PropClass)
+		if (!PropClass || !PropClass->IsChildOf(ACodexPropActor::StaticClass()))
 		{
 			PropClass = ACodexPropActor::StaticClass();
+		}
+
+		if (bRequireMesh && !CodexLevelPropsInternal::ClassHasVisualMesh(PropClass))
+		{
+			continue;
 		}
 
 		FActorSpawnParameters SpawnParams;
@@ -307,10 +363,33 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 			continue;
 		}
 
+		if (bRequireMesh && !CodexLevelPropsInternal::ActorHasVisualMesh(PropActor))
+		{
+			PropActor->Destroy();
+			continue;
+		}
+
 		const bool bNav = VariantNavAffecting.FindRef(Obj.Variant);
 		const FVector Extent = VariantExtents.FindRef(Obj.Variant);
 
 		PropActor->InitProp(Obj.Id, ResObj.LayerId, Obj.Variant, Obj.WalkLayer, bNav, Extent);
+
+		// Apply balance properties from props_balance.json if present
+		if (const float* HPVal = VariantHP.Find(Obj.Variant))
+		{
+			if (ACodexPropCrate* Crate = Cast<ACodexPropCrate>(PropActor))
+			{
+				Crate->HP = *HPVal;
+			}
+			else if (ACodexPropBarrel* Barrel = Cast<ACodexPropBarrel>(PropActor))
+			{
+				Barrel->HP = *HPVal;
+			}
+			else if (ACodexPropTurret* Turret = Cast<ACodexPropTurret>(PropActor))
+			{
+				Turret->HP = *HPVal;
+			}
+		}
 
 		// Specialize actor based on subclass
 		if (ACodexPropCrate* Crate = Cast<ACodexPropCrate>(PropActor))
@@ -324,6 +403,14 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 				UCodexPropTrapComponent* Trap = Crate->EnsureTrapComponent();
 				if (Trap)
 				{
+					if (const float* BlastR = VariantBlastRadius.Find(TEXT("mine")))
+					{
+						Trap->BlastRadiusCm = *BlastR;
+					}
+					if (const float* BlastD = VariantBlastDamage.Find(TEXT("mine")))
+					{
+						Trap->BlastDamage = *BlastD;
+					}
 					Trap->Arm(TrapObj.Object.Id, AreMinesInert());
 				}
 			}
@@ -340,6 +427,14 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 			if (Obj.Variant.Equals(TEXT("barrel_explosive"), ESearchCase::IgnoreCase))
 			{
 				Barrel->bExplosive = true;
+				if (const float* ExpR = VariantExplosionRadius.Find(Obj.Variant))
+				{
+					Barrel->ExplosionRadiusCm = *ExpR;
+				}
+				if (const float* ExpD = VariantExplosionDamage.Find(Obj.Variant))
+				{
+					Barrel->ExplosionDamage = *ExpD;
+				}
 			}
 		}
 		else if (ACodexPropTurret* Turret = Cast<ACodexPropTurret>(PropActor))
@@ -357,12 +452,25 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		{
 			Mine->AttachedDoorId = Obj.Door;
 			Mine->bMinesInert = AreMinesInert();
+			if (const float* BlastR = VariantBlastRadius.Find(TEXT("mine")))
+			{
+				Mine->BlastRadiusCm = *BlastR;
+			}
+			if (const float* BlastD = VariantBlastDamage.Find(TEXT("mine")))
+			{
+				Mine->BlastDamage = *BlastD;
+			}
 			float Width = 180.f;
 			if (Obj.Extra.Contains(TEXT("width_cm")) && Obj.Extra[TEXT("width_cm")]->Type == EJson::Number)
 			{
 				Width = static_cast<float>(Obj.Extra[TEXT("width_cm")]->AsNumber());
 			}
-			Mine->SetupTrigger(Obj.Trigger, Width, 120.f);
+			float TriggerRadius = 120.f;
+			if (const float* TrigR = VariantTriggerRadius.Find(TEXT("mine")))
+			{
+				TriggerRadius = *TrigR;
+			}
+			Mine->SetupTrigger(Obj.Trigger, Width, TriggerRadius);
 		}
 		else if (ACodexPropLootPile* Loot = Cast<ACodexPropLootPile>(PropActor))
 		{
@@ -381,6 +489,14 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 			UCodexPropTrapComponent* Trap = (*CratePtr)->EnsureTrapComponent();
 			if (Trap)
 			{
+				if (const float* BlastR = VariantBlastRadius.Find(TEXT("mine")))
+				{
+					Trap->BlastRadiusCm = *BlastR;
+				}
+				if (const float* BlastD = VariantBlastDamage.Find(TEXT("mine")))
+				{
+					Trap->BlastDamage = *BlastD;
+				}
 				Trap->Arm(Pair.Value.Object.Id, AreMinesInert());
 			}
 		}
@@ -390,27 +506,6 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		if (ACodexPropCrate** CratePtr = SpawnedCratesById.Find(Pair.Key))
 		{
 			(*CratePtr)->LootTable = Pair.Value.Object.LootTable;
-		}
-	}
-
-	// DynamicModifiersOnly for generated maps with props (PROPS_LAYERS.md 3.1)
-	if (UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
-	{
-		for (ANavigationData* NavData : NavSys->NavDataSet)
-		{
-			if (ARecastNavMesh* RecastNav = Cast<ARecastNavMesh>(NavData))
-			{
-				if (RecastNav->GetRuntimeGenerationMode() == ERuntimeGenerationType::Static)
-				{
-					if (FProperty* Prop = ANavigationData::StaticClass()->FindPropertyByName(TEXT("RuntimeGeneration")))
-					{
-						if (uint8* ValuePtr = Prop->ContainerPtrToValuePtr<uint8>(RecastNav))
-						{
-							*ValuePtr = static_cast<uint8>(ERuntimeGenerationType::DynamicModifiersOnly);
-						}
-					}
-				}
-			}
 		}
 	}
 
@@ -443,6 +538,7 @@ void UCodexLevelPropsSubsystem::ClearSpawnedProps()
 	SpawnedProps.Reset();
 	PropsByLayer.Reset();
 	DroppedPropIds.Reset();
+	ResolvedClassCache.Reset();
 	bHasSpawned = false;
 	LastSpawnDurationMs = 0.0;
 }
@@ -507,44 +603,70 @@ int32 UCodexLevelPropsSubsystem::GetSpawnedCountForLayer(const FString& LayerId)
 
 UClass* UCodexLevelPropsSubsystem::ResolvePropClass(const FString& Variant) const
 {
+	if (const TSubclassOf<AActor>* CachedClass = ResolvedClassCache.Find(Variant))
+	{
+		return *CachedClass;
+	}
+
+	UClass* ResultClass = nullptr;
+
 	// 1. Check if class_map provided a soft class path
 	if (const FString* SoftPath = VariantClassMap.Find(Variant))
 	{
 		if (SoftPath->IsEmpty())
 		{
+			ResolvedClassCache.Add(Variant, nullptr);
 			return nullptr; // Explicitly no actor
 		}
 
-		UClass* LoadedClass = FSoftClassPath(*SoftPath).TryLoadClass<AActor>();
-		if (LoadedClass)
+		const FSoftClassPath SoftClassPath(*SoftPath);
+		// Check if package exists before TryLoadClass to avoid engine warning spam
+		if (SoftClassPath.IsValid() && FPackageName::DoesPackageExist(SoftClassPath.GetLongPackageName()))
 		{
-			return LoadedClass;
+			ResultClass = SoftClassPath.TryLoadClass<AActor>();
 		}
 	}
 
-	// 2. Native C++ fallback classes
-	if (Variant.StartsWith(TEXT("barrel")))
+	// 2. Validate IsChildOf or fallback
+	if (ResultClass && !ResultClass->IsChildOf(ACodexPropActor::StaticClass()))
 	{
-		return ACodexPropBarrel::StaticClass();
-	}
-	if (Variant.StartsWith(TEXT("crate")))
-	{
-		return ACodexPropCrate::StaticClass();
-	}
-	if (Variant.StartsWith(TEXT("turret")))
-	{
-		return ACodexPropTurret::StaticClass();
-	}
-	if (Variant.StartsWith(TEXT("mine")))
-	{
-		return ACodexPropMine::StaticClass();
-	}
-	if (Variant.StartsWith(TEXT("loot")))
-	{
-		return ACodexPropLootPile::StaticClass();
+		UE_LOG(LogCodexTactics, Warning,
+			TEXT("[Props] Class '%s' for variant '%s' is not child of ACodexPropActor, falling back"),
+			*ResultClass->GetName(), *Variant);
+		ResultClass = nullptr;
 	}
 
-	return ACodexPropActor::StaticClass();
+	// 3. Native C++ fallback classes
+	if (!ResultClass)
+	{
+		if (Variant.StartsWith(TEXT("barrel")))
+		{
+			ResultClass = ACodexPropBarrel::StaticClass();
+		}
+		else if (Variant.StartsWith(TEXT("crate")))
+		{
+			ResultClass = ACodexPropCrate::StaticClass();
+		}
+		else if (Variant.StartsWith(TEXT("turret")))
+		{
+			ResultClass = ACodexPropTurret::StaticClass();
+		}
+		else if (Variant.StartsWith(TEXT("mine")))
+		{
+			ResultClass = ACodexPropMine::StaticClass();
+		}
+		else if (Variant.StartsWith(TEXT("loot")))
+		{
+			ResultClass = ACodexPropLootPile::StaticClass();
+		}
+		else
+		{
+			ResultClass = ACodexPropActor::StaticClass();
+		}
+	}
+
+	ResolvedClassCache.Add(Variant, ResultClass);
+	return ResultClass;
 }
 
 void UCodexLevelPropsSubsystem::LoadBalanceFile()
@@ -633,6 +755,33 @@ void UCodexLevelPropsSubsystem::LoadBalanceFile()
 				Extent = FVector(Radius, Radius, Height * 0.5f);
 			}
 			VariantExtents.Add(VariantName, Extent);
+
+			// Stats from kinds in props_balance.json
+			double ValDouble = 0.0;
+			if (KindData->TryGetNumberField(TEXT("hp"), ValDouble))
+			{
+				VariantHP.Add(VariantName, static_cast<float>(ValDouble));
+			}
+			if (KindData->TryGetNumberField(TEXT("explosion_radius_cm"), ValDouble))
+			{
+				VariantExplosionRadius.Add(VariantName, static_cast<float>(ValDouble));
+			}
+			if (KindData->TryGetNumberField(TEXT("explosion_damage"), ValDouble))
+			{
+				VariantExplosionDamage.Add(VariantName, static_cast<float>(ValDouble));
+			}
+			if (KindData->TryGetNumberField(TEXT("blast_radius_cm"), ValDouble))
+			{
+				VariantBlastRadius.Add(VariantName, static_cast<float>(ValDouble));
+			}
+			if (KindData->TryGetNumberField(TEXT("blast_damage"), ValDouble))
+			{
+				VariantBlastDamage.Add(VariantName, static_cast<float>(ValDouble));
+			}
+			if (KindData->TryGetNumberField(TEXT("trigger_radius_cm"), ValDouble))
+			{
+				VariantTriggerRadius.Add(VariantName, static_cast<float>(ValDouble));
+			}
 		}
 	}
 

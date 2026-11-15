@@ -25,7 +25,10 @@ public:
 	virtual void Deinitialize() override;
 
 	/** Spawns props for the specified map name (e.g. "L_Gen_Depot_1") */
-	int32 SpawnPropsForMap(const FString& MapName, const TSet<FString>* SkippedIds = nullptr);
+	int32 SpawnPropsForMap(
+		const FString& MapName,
+		const TSet<FString>* SkippedIds = nullptr,
+		bool bRequireMesh = false);
 
 	/**
 	 * Spawns props from the given props JSON file and optional layout file.
@@ -34,7 +37,8 @@ public:
 	int32 SpawnPropsFromFile(
 		const FString& PropsFilePath,
 		const FString& LayoutFilePath = FString(),
-		const TSet<FString>* SkippedIds = nullptr);
+		const TSet<FString>* SkippedIds = nullptr,
+		bool bRequireMesh = false);
 
 	/** Destroys all spawned prop actors and resets layer counts */
 	void ClearSpawnedProps();
@@ -90,6 +94,13 @@ private:
 
 	TMap<FString, FVector> VariantExtents;
 	TMap<FString, bool> VariantNavAffecting;
+	TMap<FString, float> VariantHP;
+	TMap<FString, float> VariantExplosionRadius;
+	TMap<FString, float> VariantExplosionDamage;
+	TMap<FString, float> VariantBlastRadius;
+	TMap<FString, float> VariantBlastDamage;
+	TMap<FString, float> VariantTriggerRadius;
+	mutable TMap<FString, TSubclassOf<AActor>> ResolvedClassCache;
 	TMap<FString, TArray<TWeakObjectPtr<ACodexPropActor>>> PropsByLayer;
 	TArray<FString> DroppedPropIds;
 
