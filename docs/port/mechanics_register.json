@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-12",
+  "updated": "2026-11-14",
   "groups": [
     {
       "id": "squad",
@@ -3726,13 +3726,13 @@
       "id": "pl-audio-v1",
       "name": "Звук v1: музыка (Lyria), голоса (Gemini TTS), первые эффекты",
       "what": "Инструмент генерации с лимитом трат, музыкальные состояния (разведка / напряжение / бой), озвучка существующих реплик отряда и ЧВК, микшер; эффекты из отдельного источника.",
-      "how": "-",
+      "how": "Scripts/Audio/audio_gen.py, Tools/TrainingGround.",
       "off": "",
       "smoke": [],
-      "since": "2026-11-12",
-      "decision": "Дизайнер 2026-11-12: начать на неделе 16.11 (бонус Google 300 $)",
-      "status": "planned",
-      "doc": "docs/design/AUDIO_PIPELINE.md",
+      "since": "2026-11-14",
+      "decision": "Дизайнер 2026-11-12; пакет задач Gemini 029/032/033 влит в main 664d78b2",
+      "status": "main",
+      "doc": "docs/design/audio/EVENTS.md",
       "group": "ui"
     }
   ],
@@ -4379,9 +4379,54 @@
                 "ref": "435b8d10"
               },
               {
-                "status": "todo",
-                "text": "Резерв недели: баги из игры, обновление реестра, отчёт за неделю",
-                "ref": ""
+                "status": "done",
+                "text": "027: Боевые здания и интерьерный левел-генератор (генерация комнат, коридоров, building presets)",
+                "ref": "664d78b2"
+              },
+              {
+                "status": "done",
+                "text": "028: Боевые здания на картах (L_Gen_Train_1..3, валидация в игре)",
+                "ref": "664d78b2"
+              },
+              {
+                "status": "done",
+                "text": "029: Аудио-конвейер v1 (пайплайн генерации звука, audio_gen.py, вкладка Audio в Training Ground)",
+                "ref": "664d78b2"
+              },
+              {
+                "status": "done",
+                "text": "030: Диспетчер чата агентов (chat_dispatcher.py)",
+                "ref": "664d78b2"
+              },
+              {
+                "status": "done",
+                "text": "031: Живая доска задач в AgentChat (Live Task Board /api/task-board, TASK_BOARD.live.json)",
+                "ref": "664d78b2"
+              },
+              {
+                "status": "done",
+                "text": "032: Пакет звука v1 (Lyria cues v3-v5, Gemini TTS voice lines)",
+                "ref": "664d78b2"
+              },
+              {
+                "status": "done",
+                "text": "033: Реестр аудио-событий EVENTS.md, нормализация громкости (audio_loudness.py), панель Audio",
+                "ref": "664d78b2"
+              },
+              {
+                "status": "done",
+                "text": "036: Шлюз качества Gemini (gemini_gate.ps1 / .py, проверка перед done)",
+                "ref": "664d78b2"
+              },
+              {
+                "status": "moved",
+                "text": "004: Codex 004 WIP (асинхронный предзагрузчик 50de2e98) — исключён из влития 664d78b2, отложен на ветке",
+                "ref": "50de2e98"
+              },
+              {
+                "status": "done",
+                "text": "Резерв недели: влитие субботнего пакета (664d78b2), обновление реестра механик, доски задач и HANDOFF",
+                "ref": "664d78b2"
               },
               {
                 "status": "moved",
