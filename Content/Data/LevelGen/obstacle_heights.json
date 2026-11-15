@@ -1,0 +1,41 @@
+{
+  "schema": "codex.obstacle_heights/1",
+  "source": "docs/design/MANTLING.md section 2.1; provisional CaV targets, replace after clip measurement",
+  "classes": {
+    "step": {
+      "nominal_cm": 30,
+      "tolerance_cm": 5,
+      "min_cm": 0,
+      "max_cm": 35,
+      "measured": false
+    },
+    "low_vault": {
+      "nominal_cm": 100,
+      "tolerance_cm": 5,
+      "min_cm": 25,
+      "max_cm": 105,
+      "measured": false
+    },
+    "low_mantle": {
+      "nominal_cm": 120,
+      "tolerance_cm": 5,
+      "min_cm": 75,
+      "max_cm": 130,
+      "measured": false
+    },
+    "high_mantle": {
+      "nominal_cm": 200,
+      "tolerance_cm": 5,
+      "min_cm": 130,
+      "max_cm": 240,
+      "measured": false
+    },
+    "wall_no_traverse": {
+      "nominal_cm": 300,
+      "tolerance_cm": 5,
+      "min_cm": 240,
+      "max_cm": null,
+      "measured": false
+    }
+  }
+}

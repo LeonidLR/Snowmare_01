@@ -3,6 +3,7 @@
 //   - L_Gen_Train_2: fortified checkpoint with narrow loopholes, sandbags, bunker, watch tower with hatch & ladder
 //   - L_Gen_Train_3: warehouse yard with second-floor roof catwalk / gap landing, parapet mantle edges, courtyard obstacles
 
+import { obstacleHeight, standardObstacleHeight } from './obstacleHeights.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -27,13 +28,13 @@ export interface TrainingArenaBundle {
 }
 
 const COVER_SIZE_CM: Record<CoverKind, [number, number, number]> = {
-  crate: [160, 120, 120],
-  jersey: [280, 65, 95],
-  sandbag: [260, 75, 90],
-  barrel: [90, 90, 110],
-  wreck: [380, 180, 140],
+  crate: [160, 120, obstacleHeight('low_mantle')],
+  jersey: [280, 65, obstacleHeight('low_vault')],
+  sandbag: [260, 75, obstacleHeight('low_vault')],
+  barrel: [90, 90, obstacleHeight('low_vault')],
+  wreck: [380, 180, obstacleHeight('high_mantle')],
   silo: [500, 500, 1100],
-  boiler: [300, 180, 220],
+  boiler: [300, 180, obstacleHeight('high_mantle')],
 };
 
 function makeEmptyDraft(mainPoints: Vec2[]): Draft {
@@ -86,6 +87,7 @@ function addLowMantleWall(
   normal: Vec2,
   kind: 'fence' | 'obstacle' = 'obstacle',
 ): void {
+  heightCm = standardObstacleHeight(heightCm);
   addWall(d, id, a, b, heightCm, 25, kind === 'fence' ? 'fence' : 'wall');
   d.mantle_edges.push({
     id: `me_${id}`,

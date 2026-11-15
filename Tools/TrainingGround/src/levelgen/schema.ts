@@ -7,6 +7,7 @@
 // Units: UE cm, X forward (north = +X, drawn up), Y right (east = +Y). A reference profile's metres (x east, y south) map to
 // UE as X = -y * 100, Y = x * 100 (profile.ts).
 
+import { obstacleHeight } from './obstacleHeights.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
 import type { Layout, LayoutRoute, LayoutWall, LayoutZone, ZoneKind } from '../movement/layout.ts';
@@ -73,7 +74,7 @@ export type OpeningKind = (typeof OPENING_KINDS)[number];
  */
 export const OPENING_DEFAULTS: Record<OpeningKind, { width: number; sill: number; top: number }> = {
   door: { width: 120, sill: 0, top: 210 },
-  window: { width: 120, sill: 90, top: 210 },
+  window: { width: 120, sill: obstacleHeight('low_vault'), top: 210 },
   loophole: { width: 30, sill: 120, top: 150 },
 };
 

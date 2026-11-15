@@ -8,6 +8,8 @@
 // and converts to UE cm at the end (profile.ts toUE). Never a copy of the reference: proportions and densities come from it,
 // every position is jittered by the seed and every block is a greybox set-piece of ours.
 
+import { obstacleHeight, standardObstacleHeight } from './obstacleHeights.ts';
+import { runObstacleHeightGate } from './props/obstacleHeightGate.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { dist, rng } from '../movement/geometry.ts';
 import type { ZoneKind } from '../movement/layout.ts';
@@ -87,8 +89,8 @@ interface Draft {
   keepFree: Rect[];
 }
 
-const WALL_H = 300;        // cm, a greybox wall (the lab's)
-const FENCE_H = 250;
+const WALL_H = obstacleHeight('wall_no_traverse');        // cm, a greybox wall (the lab's)
+const FENCE_H = obstacleHeight('wall_no_traverse');
 const FENCE_T = 10;
 const BUILDING_T = 30;
 const DOOR_W = 1.8;        // m
@@ -97,7 +99,7 @@ const STREET_W = 9;        // m, curb to curb (scale B of the reference)
 const ALLEY_W = 5;         // m
 const CUT_W = 6;           // m, the trench
 const CUT_WALL_T = 1.5;    // m
-const CUT_WALL_H = 220;    // cm, the retaining wall's parapet + fence above the ground (the ground-layer obstacle)
+const CUT_WALL_H = obstacleHeight('high_mantle');    // cm, the retaining wall's parapet + fence above the ground (the ground-layer obstacle)
 
 export interface GenerateOptions { profile: Profile; seed: number; params?: Partial<GenParams>; name?: string }
 
@@ -536,6 +538,15 @@ export interface FinalizeMeta {
 
 /** Convert a Draft constructed in profile metres (x east, y south) to a GenLayout in UE cm. */
 export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta): GenLayout {
+  // Normalize new draft geometry before mapping coordinates; mirrors stay at the same target.
+  for (const wall of d.walls) wall.height = standardObstacleHeight(wall.height);
+  for (const cover of d.covers) cover.size = [cover.size[0], cover.size[1], standardObstacleHeight(cover.size[2])];
+  for (const edge of d.mantle_edges) edge.height_cm = standardObstacleHeight(edge.height_cm);
+  for (const building of d.buildings) {
+    for (const p of building.partitions) if (p.height !== undefined) p.height = standardObstacleHeight(p.height);
+    for (const p of building.parapets) p.height_cm = standardObstacleHeight(p.height_cm);
+    for (const edge of building.mantle_edges) edge.height_cm = standardObstacleHeight(edge.height_cm);
+  }
   const [w, h] = size;
   const U = (p: Vec2): Vec2 => toUE(p, size);
   const UR = (r: Rect): [Vec2, Vec2] => {
@@ -631,13 +642,15 @@ export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta):
       ambush: { points: d.ambush_points.map((a) => U(a.pos)), coordinated: { share: 0.5, max_alive: 8 } },
     },
   };
+  const heightGate = runObstacleHeightGate(layout);
+  if (heightGate.gate === 'fail') throw new Error(heightGate.errors.map((e) => e.reason).join('; '));
   return layout;
 }
 
 // ---- helpers (metres) -----------------------------------------------------------------------------------------------------
 
 const COVER_SIZE: Record<CoverKind, [number, number, number]> = {
-  jersey: [300, 60, 90], sandbag: [250, 80, 100], crate: [120, 120, 110], wreck: [420, 180, 150], barrel: [60, 60, 90], silo: [800, 800, 1200], boiler: [200, 120, 160],
+  jersey: [300, 60, obstacleHeight('low_vault')], sandbag: [250, 80, obstacleHeight('low_vault')], crate: [120, 120, obstacleHeight('low_mantle')], wreck: [420, 180, obstacleHeight('high_mantle')], barrel: [60, 60, obstacleHeight('low_vault')], silo: [800, 800, 1200], boiler: [200, 120, obstacleHeight('high_mantle')],
 };
 
 /**
@@ -1008,16 +1021,16 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   // 7. Parapets on flat roofs
   if (s.roof_walkable) {
     parapets.push(
-      { wall_id: `${bid}_parapet_N`, start: [x0, y0], end: [x1, y0], height_cm: 100, thickness_cm: 20 },
-      { wall_id: `${bid}_parapet_S`, start: [x0, y1], end: [x1, y1], height_cm: 100, thickness_cm: 20 },
-      { wall_id: `${bid}_parapet_W`, start: [x0, y0], end: [x0, y1], height_cm: 100, thickness_cm: 20 },
-      { wall_id: `${bid}_parapet_E`, start: [x1, y0], end: [x1, y1], height_cm: 100, thickness_cm: 20 },
+      { wall_id: `${bid}_parapet_N`, start: [x0, y0], end: [x1, y0], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
+      { wall_id: `${bid}_parapet_S`, start: [x0, y1], end: [x1, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
+      { wall_id: `${bid}_parapet_W`, start: [x0, y0], end: [x0, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
+      { wall_id: `${bid}_parapet_E`, start: [x1, y0], end: [x1, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
     );
     mantle_edges.push(
-      { id: `me_${bid}_para_N`, start: [x0, y0], end: [x1, y0], floor: s.floors, base_z: levelZ(s.floors), height_cm: 100, normal: [0, -1], kind: 'parapet', building: bid },
-      { id: `me_${bid}_para_S`, start: [x0, y1], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: 100, normal: [0, 1], kind: 'parapet', building: bid },
-      { id: `me_${bid}_para_W`, start: [x0, y0], end: [x0, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: 100, normal: [-1, 0], kind: 'parapet', building: bid },
-      { id: `me_${bid}_para_E`, start: [x1, y0], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: 100, normal: [1, 0], kind: 'parapet', building: bid },
+      { id: `me_${bid}_para_N`, start: [x0, y0], end: [x1, y0], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [0, -1], kind: 'parapet', building: bid },
+      { id: `me_${bid}_para_S`, start: [x0, y1], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [0, 1], kind: 'parapet', building: bid },
+      { id: `me_${bid}_para_W`, start: [x0, y0], end: [x0, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [-1, 0], kind: 'parapet', building: bid },
+      { id: `me_${bid}_para_E`, start: [x1, y0], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [1, 0], kind: 'parapet', building: bid },
     );
   }
 

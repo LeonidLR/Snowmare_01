@@ -4,6 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import { obstacleHeight } from './obstacleHeights.ts';
 import type { GenBuilding, GenLayout, WallOpening } from './schema.ts';
 import {
   isMantleable,
@@ -27,7 +28,7 @@ test('combat buildings schema: constants and defaults', () => {
 
   assert.deepEqual(OPENING_KINDS, ['door', 'window', 'loophole']);
   assert.equal(OPENING_DEFAULTS.door.sill, 0);
-  assert.equal(OPENING_DEFAULTS.window.sill, 90);
+  assert.equal(OPENING_DEFAULTS.window.sill, obstacleHeight('low_vault'));
   assert.equal(OPENING_DEFAULTS.window.top, 210);
 
   // Loophole narrow firing slit: width 20-40 cm, sill 110-140 cm
