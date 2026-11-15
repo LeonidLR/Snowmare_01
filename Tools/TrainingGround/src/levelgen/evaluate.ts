@@ -311,6 +311,21 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   return ev;
 }
 
+/**
+ * The route check alone (the same per-leg check evaluateLayout runs: layers, links, walls, nav-grid reachability), without the
+ * simulator, the sightlines or the tactics - the fast seam gate of a region re-roll (regionRegen.ts). One report per route.
+ */
+export function checkLayoutRoutes(l: GenLayout): RouteReport[] {
+  const layers = layersOf(l);
+  const nav = new Map<string, NavGrid>();
+  const layerNav = (layer: string): NavGrid => {
+    let g = nav.get(layer);
+    if (!g) { const f = toFormationLayout(l, layer); g = new NavGrid(wallSegments(f), f.bounds.min, f.bounds.max); nav.set(layer, g); }
+    return g;
+  };
+  return l.routes.map((r) => checkRoute(l, r, layers, layerNav));
+}
+
 /** Every leg of a route pathed on its layer; layer changes need a link the route touches at both ends. */
 function checkRoute(l: GenLayout, r: GenRoute, layers: string[], layerNav: (layer: string) => NavGrid): RouteReport {
   const lay = r.layers ?? r.points.map(() => 'ground');

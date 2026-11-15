@@ -325,7 +325,17 @@ export interface GenLayout {
   mantle_edges?: MantleEdge[];
   /** The combat-lab style pressure block for the level JSON (COMBAT_LAB.md section 2). */
   pressure?: Record<string, unknown>;
+  /** Region re-roll state (levelgen v2 stage 1, regionRegen.ts): locked districts + the re-roll log. Absent in older files. */
+  regen?: RegenState;
 }
+
+/** The version of the `regen` block; a file with a newer version is refused (validateGenLayout), an absent block = no locks. */
+export const REGEN_STATE_VERSION = 1;
+/** A LOCKED district: a polygon (UE cm); every object whose centre is inside it is never touched by a region re-roll. */
+export interface LockDistrict { id: string; name: string; poly: Vec2[] }
+/** One applied re-roll (reproducible: same map + zone + seed -> same result). */
+export interface RerollRecord { seed: number; zone: Vec2[]; replaced: number; added: number; retries: number }
+export interface RegenState { version: number; locks: LockDistrict[]; rerolls: RerollRecord[] }
 
 export interface GenParams {
   /** Map size, m (default: the profile's). */
@@ -435,6 +445,28 @@ export function validateGenLayout(data: unknown): string[] {
     if (!isVec(me.start) || !isVec(me.end) || !isVec(me.normal)) e.push(`mantle_edge ${me.id}: start/end/normal must be [x, y]`);
     if (!isNum(me.height_cm) || !isMantleable(me.height_cm)) e.push(`mantle_edge ${me.id}: height ${me.height_cm} cm must be 50..150 cm`);
   }
+  if (l.regen !== undefined) e.push(...validateRegenState(l.regen));
+  return e;
+}
+
+/** The `regen` block's own checks (empty = valid): a known version, locks with >= 3 points and unique ids. */
+export function validateRegenState(s: unknown): string[] {
+  if (!s || typeof s !== 'object') return ['regen: expected an object'];
+  const r = s as Partial<RegenState>;
+  const e: string[] = [];
+  if (!isNum(r.version) || r.version < 1) e.push('regen.version: expected a positive number');
+  else if (r.version > REGEN_STATE_VERSION) e.push(`regen.version ${r.version} is newer than this tool (${REGEN_STATE_VERSION})`);
+  if (!Array.isArray(r.locks)) e.push('regen.locks: expected an array');
+  else {
+    const ids = new Set<string>();
+    for (const k of r.locks) {
+      if (typeof k?.id !== 'string' || !k.id) { e.push('regen.locks: a lock without an id'); continue; }
+      if (ids.has(k.id)) e.push(`regen.locks: duplicate id "${k.id}"`);
+      ids.add(k.id);
+      if (!Array.isArray(k.poly) || k.poly.length < 3 || !k.poly.every(isVec)) e.push(`regen lock ${k.id}: poly needs >= 3 [x, y] points`);
+    }
+  }
+  if (r.rerolls !== undefined && !Array.isArray(r.rerolls)) e.push('regen.rerolls: expected an array');
   return e;
 }
 
