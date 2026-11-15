@@ -18,6 +18,7 @@ import argparse
 from dataclasses import asdict, dataclass
 import json
 import os
+import posixpath
 import re
 import sys
 from typing import Any, Dict, List, Optional
@@ -56,8 +57,14 @@ class AudioPlanItem:
 
 
 def validate_destination_path(path: str) -> None:
-    """Enforces that any destination path is strictly under /Game/Audio/**."""
-    if not (path == DEST_ROOT or path.startswith(f"{DEST_ROOT}/")):
+    """Enforces that any destination path is strictly under /Game/Audio/** without traversal."""
+    normalized = posixpath.normpath(path)
+    segments = [s for s in path.split("/") if s]
+    if ".." in segments or ".." in normalized.split("/"):
+        raise ValueError(
+            f"Security violation: Path traversal '..' is strictly forbidden in destination '{path}'."
+        )
+    if not (normalized == DEST_ROOT or normalized.startswith(f"{DEST_ROOT}/")):
         raise ValueError(
             f"Security violation: Target destination '{path}' is outside '{DEST_ROOT}/**'. "
             f"All audio assets must strictly target /Game/Audio/**."
@@ -94,6 +101,20 @@ def sanitize_asset_name(raw_name: str) -> str:
     return clean
 
 
+def get_expected_music_asset_path(cue_group: str, cue_id: str) -> str:
+    """Helper returning canonical package path for music cues: /Game/Audio/Music/<cue_group>/SW_<cue_id>."""
+    group = cue_group if cue_group else "misc"
+    asset_name = sanitize_asset_name(cue_id)
+    return f"{MUSIC_DEST_ROOT}/{group}/{asset_name}"
+
+
+def get_expected_voice_asset_path(speaker: str, line_id: str) -> str:
+    """Helper returning canonical package path for voice lines: /Game/Audio/Voice/<speaker>/SW_<line_id>."""
+    spk = speaker if speaker else "common"
+    asset_name = sanitize_asset_name(line_id)
+    return f"{VOICE_DEST_ROOT}/{spk}/{asset_name}"
+
+
 def build_audio_import_plan(
     audio_dir: str,
     music_manifest_path: str,
@@ -120,7 +141,7 @@ def build_audio_import_plan(
         validate_destination_path(dest_path)
 
         asset_name = sanitize_asset_name(cue_id)
-        full_package = f"{dest_path}/{asset_name}"
+        full_package = get_expected_music_asset_path(group, cue_id)
 
         candidates = [
             os.path.join("music", group, cue_id),
@@ -164,7 +185,7 @@ def build_audio_import_plan(
         validate_destination_path(dest_path)
 
         asset_name = sanitize_asset_name(line_id)
-        full_package = f"{dest_path}/{asset_name}"
+        full_package = get_expected_voice_asset_path(speaker, line_id)
 
         candidates = [
             os.path.join("voice", speaker, line_id),

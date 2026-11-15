@@ -64,15 +64,21 @@ Per directive #370, implemented In-Game Audio Step 1 with strictly decoupled pur
 - `CodexTactics.Audio.JsonDataValidation`: PASS (loads and parses 22 cues and 49 voice lines from `Content/Data/Audio/`).
 - `CodexTactics.Audio.MissingAssetSilentNoOp`: PASS (confirms package existence check and path sanitation).
 
-### 2.2 Verification Summary
-- **Build (`powershell .\Scripts\build.ps1`):** SUCCESS (11.92s).
+### 2.2 Night 2 Review Follow-Up Fixes (Per Opus Review #375)
+1. **Music Playback Loop Early-Out & GC Safe Tracking:**
+   - In `CodexAudioSubsystem.cpp:166-170`, added early-out: `if (ActiveMusicCueId == CueId && ActiveMusicComponent && ActiveMusicComponent->IsPlaying()) return true;` preventing audio spam on repeated state evaluations.
+   - Declared `UPROPERTY(Transient) TObjectPtr<UAudioComponent> ActiveMusicComponent = nullptr;` in `CodexAudioSubsystem.h`.
+   - On cue change or world teardown, smoothly stops/fades out (`FadeOut(1.5f, 0.0f)`) previous music component.
+2. **VO Path Unification:**
+   - Unified VO asset path to `/Game/Audio/Voice/<speaker>/SW_<id>` across `import_audio.py`, `CodexAudioRules::GetExpectedAssetPath`, and `CodexAudioRulesTest`.
+3. **Audio Importer Path Sanitization (`Scripts/Editor/import_audio.py`):**
+   - Sanitized paths with `posixpath.normpath` and strictly forbidden `..` path traversal in `validate_destination_path`. Added unit tests in `test_import_audio.py` (6/6 tests PASS).
+4. **Data-Driven Rules Loading:**
+   - Replaced static C++ arrays in `GetAllMusicCues()` and `GetAllVoiceLines()` with dynamic parsing from `Content/Data/Audio/music_cues.json` and `Content/Data/Audio/voice_lines.json`.
+   - Injected `priority` and `cooldown_seconds` attributes directly into `Content/Data/Audio/voice_lines.json`.
+
+### 2.3 Verification Summary
+- **Build (`powershell .\Scripts\build.ps1`):** SUCCESS (75.54s).
 - **Audio Unit Tests (`test.ps1 -Filter "CodexTactics.Audio"`):** 6/6 PASS.
-- **Smart Test Gate (`test.ps1 -Smart`):**
-  - Unit tests: 15/15 PASS.
-  - Smokes: 5/5 PASS:
-    - `CombatFlowSmoke`: PASS (66.4s)
-    - `EventBusSmoke`: PASS (52.3s)
-    - `MissionSmoke`: PASS (77.3s)
-    - `MovementSmoke`: PASS (60.4s)
-    - `StanceSmoke`: PASS (71.4s)
-- **Triage Audit (`typesafe_triage.py --audit-diff --agent gemini`):** PASS (0 boundary breaches, C++ strictly confined to `Audio/`).
+- **Audio Import Tests (`python -m unittest Scripts/Editor/tests/test_import_audio.py`):** 6/6 PASS.
+- **Triage Audit (`typesafe_triage.py --audit-diff --agent claude`):** PASS.

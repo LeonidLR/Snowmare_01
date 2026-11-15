@@ -8,6 +8,7 @@
 #include "Engine/Engine.h"
 #include "Engine/GameInstance.h"
 #include "Engine/World.h"
+#include "Components/AudioComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Sound/SoundBase.h"
 
@@ -58,6 +59,12 @@ void UCodexAudioSubsystem::Initialize(FSubsystemCollectionBase& Collection)
 
 void UCodexAudioSubsystem::Deinitialize()
 {
+	if (ActiveMusicComponent)
+	{
+		ActiveMusicComponent->Stop();
+		ActiveMusicComponent = nullptr;
+	}
+
 	if (PostWorldInitHandle.IsValid())
 	{
 		FWorldDelegates::OnPostWorldInitialization.Remove(PostWorldInitHandle);
@@ -96,6 +103,11 @@ void UCodexAudioSubsystem::OnWorldCleanup(UWorld* World, bool bSessionEnded, boo
 {
 	if (World && World->GetGameInstance() == GetGameInstance())
 	{
+		if (ActiveMusicComponent)
+		{
+			ActiveMusicComponent->Stop();
+			ActiveMusicComponent = nullptr;
+		}
 		CurrentMusicState = ECodexMusicState::None;
 		ActiveMusicCueId = NAME_None;
 		LastTriggeredVoiceLineId = NAME_None;
@@ -151,7 +163,23 @@ bool UCodexAudioSubsystem::RequestMusicState(ECodexMusicState NewState, int32 Va
 	CurrentMusicState = NewState;
 
 	const FName CueId = FCodexAudioRules::SelectMusicCueForState(NewState, VariantIndex);
+	if (ActiveMusicCueId == CueId && ActiveMusicComponent && ActiveMusicComponent->IsPlaying())
+	{
+		// Early-out: cue is already actively playing, avoid restarting playback loop
+		return true;
+	}
+
 	ActiveMusicCueId = CueId;
+
+	// Cue change: stop/fade out previous music loop
+	if (ActiveMusicComponent)
+	{
+		if (ActiveMusicComponent->IsPlaying())
+		{
+			ActiveMusicComponent->FadeOut(1.5f, 0.0f);
+		}
+		ActiveMusicComponent = nullptr;
+	}
 
 	FCodexMusicCueDef CueDef;
 	if (FCodexAudioRules::FindMusicCueDef(CueId, CueDef))
@@ -233,8 +261,16 @@ bool UCodexAudioSubsystem::PlaySoundAssetQuiet(const FString& AssetPath, bool bI
 	UWorld* World = GetGameInstance() ? GetGameInstance()->GetWorld() : nullptr;
 	if (World)
 	{
-		UGameplayStatics::PlaySound2D(World, Sound, Volume);
-		return true;
+		if (bIsMusic)
+		{
+			ActiveMusicComponent = UGameplayStatics::SpawnSound2D(World, Sound, Volume, 1.0f, 0.0f, nullptr, false, false);
+			return ActiveMusicComponent != nullptr;
+		}
+		else
+		{
+			UGameplayStatics::PlaySound2D(World, Sound, Volume);
+			return true;
+		}
 	}
 
 	return false;

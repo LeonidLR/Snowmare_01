@@ -1,5 +1,7 @@
 #include "Audio/CodexAudioRules.h"
+#include "Misc/FileHelper.h"
 #include "Misc/PackageName.h"
+#include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 
@@ -91,49 +93,12 @@ const TArray<FCodexMusicCueDef>& FCodexAudioRules::GetAllMusicCues()
 	static TArray<FCodexMusicCueDef> MasterCues;
 	if (MasterCues.Num() == 0)
 	{
-		auto AddCue = [](FName Id, ECodexMusicState State, FName Group, FName Variant, bool bLoop, float Duration)
+		const FString MusicPath = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Data/Audio/music_cues.json"));
+		FString JsonContent;
+		if (FFileHelper::LoadFileToString(JsonContent, *MusicPath))
 		{
-			FCodexMusicCueDef Def;
-			Def.Id = Id;
-			Def.State = State;
-			Def.CueGroup = Group;
-			Def.Variant = Variant;
-			Def.bLoop = bLoop;
-			Def.TargetDurationSec = Duration;
-			Def.AssetPath = GetExpectedAssetPath(Id, false);
-			MasterCues.Add(Def);
-		};
-
-		// 22 Cues defined in Content/Data/Audio/music_cues.json
-		AddCue(TEXT("explore_calm_v1"), ECodexMusicState::ExploreCalm, TEXT("explore_calm"), TEXT("v1"), true, 30.f);
-		AddCue(TEXT("explore_calm_v2"), ECodexMusicState::ExploreCalm, TEXT("explore_calm"), TEXT("v2"), true, 30.f);
-
-		AddCue(TEXT("explore_cold_v1"), ECodexMusicState::ExploreCold, TEXT("explore_cold"), TEXT("v1"), true, 30.f);
-		AddCue(TEXT("explore_cold_v2"), ECodexMusicState::ExploreCold, TEXT("explore_cold"), TEXT("v2"), true, 30.f);
-		AddCue(TEXT("explore_cold_v3"), ECodexMusicState::ExploreCold, TEXT("explore_cold"), TEXT("v3"), true, 30.f);
-		AddCue(TEXT("explore_cold_v4"), ECodexMusicState::ExploreCold, TEXT("explore_cold"), TEXT("v4"), true, 30.f);
-		AddCue(TEXT("explore_cold_v5"), ECodexMusicState::ExploreCold, TEXT("explore_cold"), TEXT("v5"), true, 30.f);
-
-		AddCue(TEXT("tension_v1"), ECodexMusicState::Tension, TEXT("tension"), TEXT("v1"), true, 30.f);
-		AddCue(TEXT("tension_v2"), ECodexMusicState::Tension, TEXT("tension"), TEXT("v2"), true, 30.f);
-
-		AddCue(TEXT("combat_v1"), ECodexMusicState::Combat, TEXT("combat"), TEXT("v1"), true, 30.f);
-		AddCue(TEXT("combat_v2"), ECodexMusicState::Combat, TEXT("combat"), TEXT("v2"), true, 30.f);
-		AddCue(TEXT("combat_v3"), ECodexMusicState::Combat, TEXT("combat"), TEXT("v3"), true, 30.f);
-		AddCue(TEXT("combat_v4"), ECodexMusicState::Combat, TEXT("combat"), TEXT("v4"), true, 30.f);
-		AddCue(TEXT("combat_v5"), ECodexMusicState::Combat, TEXT("combat"), TEXT("v5"), true, 30.f);
-
-		AddCue(TEXT("combat_heavy_v1"), ECodexMusicState::CombatHeavy, TEXT("combat_heavy"), TEXT("v1"), true, 30.f);
-		AddCue(TEXT("combat_heavy_v2"), ECodexMusicState::CombatHeavy, TEXT("combat_heavy"), TEXT("v2"), true, 30.f);
-
-		AddCue(TEXT("victory_sting_v1"), ECodexMusicState::Victory, TEXT("victory_sting"), TEXT("v1"), false, 8.f);
-		AddCue(TEXT("victory_sting_v2"), ECodexMusicState::Victory, TEXT("victory_sting"), TEXT("v2"), false, 8.f);
-
-		AddCue(TEXT("defeat_sting_v1"), ECodexMusicState::Defeat, TEXT("defeat_sting"), TEXT("v1"), false, 8.f);
-		AddCue(TEXT("defeat_sting_v2"), ECodexMusicState::Defeat, TEXT("defeat_sting"), TEXT("v2"), false, 8.f);
-
-		AddCue(TEXT("menu_v1"), ECodexMusicState::Menu, TEXT("menu"), TEXT("v1"), true, 30.f);
-		AddCue(TEXT("menu_v2"), ECodexMusicState::Menu, TEXT("menu"), TEXT("v2"), true, 30.f);
+			LoadMusicCuesFromJson(JsonContent, MasterCues);
+		}
 	}
 	return MasterCues;
 }
@@ -183,80 +148,12 @@ const TArray<FCodexVoiceLineDef>& FCodexAudioRules::GetAllVoiceLines()
 	static TArray<FCodexVoiceLineDef> MasterLines;
 	if (MasterLines.Num() == 0)
 	{
-		auto AddLine = [](FName Id, FName Speaker, FName Category, const FString& Text, float Priority, float Cooldown)
+		const FString VoicePath = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Data/Audio/voice_lines.json"));
+		FString JsonContent;
+		if (FFileHelper::LoadFileToString(JsonContent, *VoicePath))
 		{
-			FCodexVoiceLineDef Def;
-			Def.Id = Id;
-			Def.Speaker = Speaker;
-			Def.Category = Category;
-			Def.Text = Text;
-			Def.Priority = Priority;
-			Def.CooldownSeconds = Cooldown;
-			Def.AssetPath = GetExpectedAssetPath(Id, true);
-			MasterLines.Add(Def);
-		};
-
-		// 49 Voice lines defined in Content/Data/Audio/voice_lines.json & EVENTS.md
-		// Commander (11)
-		AddLine(TEXT("cmd_contact"), TEXT("commander"), TEXT("combat_alert"), TEXT("Contact!"), 2.0f, 8.0f);
-		AddLine(TEXT("cmd_ambush"), TEXT("commander"), TEXT("combat_alert"), TEXT("Ambush! Hostiles on the level - eliminate them!"), 1.0f, 15.0f);
-		AddLine(TEXT("cmd_wave_advancing"), TEXT("commander"), TEXT("combat_wave"), TEXT("Wave advancing! Form defensive perimeter!"), 1.0f, 15.0f);
-		AddLine(TEXT("cmd_autonomy_on"), TEXT("commander"), TEXT("squad_order"), TEXT("Free engagement. Hold your sectors."), 2.0f, 6.0f);
-		AddLine(TEXT("cmd_autonomy_off"), TEXT("commander"), TEXT("squad_order"), TEXT("Hold fire. Maintain position."), 2.0f, 6.0f);
-		AddLine(TEXT("cmd_orders_received"), TEXT("commander"), TEXT("squad_order"), TEXT("Order acknowledged."), 3.0f, 5.0f);
-		AddLine(TEXT("cmd_suppressive_fire"), TEXT("commander"), TEXT("combat_order"), TEXT("Suppress that corridor! Keep their heads down!"), 2.0f, 8.0f);
-		AddLine(TEXT("cmd_generator_starts"), TEXT("commander"), TEXT("quest_complete"), TEXT("Primary turbine online. Defence grid active."), 2.0f, 15.0f);
-		AddLine(TEXT("cmd_gate_exit_open"), TEXT("commander"), TEXT("quest_complete"), TEXT("Sector blast gate unlocked. Proceed to extraction."), 1.0f, 20.0f);
-		AddLine(TEXT("cmd_solo_leash"), TEXT("commander"), TEXT("squad_order"), TEXT("Operative out of squad formation. Regroup immediately."), 2.0f, 12.0f);
-		AddLine(TEXT("cmd_panic_flee"), TEXT("commander"), TEXT("combat_panic"), TEXT("Morale broken! Fall back to secondary cover!"), 1.0f, 10.0f);
-
-		// Engineer (16)
-		AddLine(TEXT("eng_generator_restored"), TEXT("engineer"), TEXT("quest_complete"), TEXT("Generator restarted! Circuit holding!"), 2.0f, 15.0f);
-		AddLine(TEXT("eng_fortifications_dismantled"), TEXT("engineer"), TEXT("post_wave"), TEXT("Barrier salvaged. Scrap secured for the team."), 3.0f, 15.0f);
-		AddLine(TEXT("eng_generator_dry"), TEXT("engineer"), TEXT("quest_inspect"), TEXT("Fuel cell dry. Need a diesel canister from the motor pool."), 2.0f, 10.0f);
-		AddLine(TEXT("eng_draining_diesel"), TEXT("engineer"), TEXT("quest_progress"), TEXT("Siphoning fuel from the APC tank... almost there."), 2.0f, 15.0f);
-		AddLine(TEXT("eng_found_canister"), TEXT("engineer"), TEXT("loot_pickup"), TEXT("Found an intact fuel canister. Heading to the generator."), 2.0f, 15.0f);
-		AddLine(TEXT("eng_corner_peek"), TEXT("engineer"), TEXT("combat_cover"), TEXT("Peeking the corner. Lane is hot."), 2.0f, 12.0f);
-		AddLine(TEXT("eng_hugging_wall"), TEXT("engineer"), TEXT("combat_cover"), TEXT("Covered by the wall. Eyes on the breach."), 2.0f, 12.0f);
-		AddLine(TEXT("eng_behind_cover"), TEXT("engineer"), TEXT("combat_cover"), TEXT("In low cover. Watching the lane."), 2.0f, 12.0f);
-		AddLine(TEXT("eng_take_cover"), TEXT("engineer"), TEXT("combat_cover"), TEXT("Taking cover!"), 2.0f, 8.0f);
-		AddLine(TEXT("eng_dash_other_cover"), TEXT("engineer"), TEXT("combat_cover"), TEXT("Shifting positions!"), 2.0f, 10.0f);
-		AddLine(TEXT("eng_along_wall_corner"), TEXT("engineer"), TEXT("combat_cover"), TEXT("Moving along the perimeter."), 2.0f, 12.0f);
-		AddLine(TEXT("eng_guard_on"), TEXT("engineer"), TEXT("squad_order"), TEXT("Guard stance set. Sector locked down."), 2.0f, 6.0f);
-		AddLine(TEXT("eng_guard_off"), TEXT("engineer"), TEXT("squad_order"), TEXT("Guard stance released. Moving on."), 2.0f, 6.0f);
-		AddLine(TEXT("eng_changing_mags"), TEXT("engineer"), TEXT("combat_callout"), TEXT("Changing mags! Cover me!"), 2.0f, 8.0f);
-		AddLine(TEXT("eng_cover_group_stack"), TEXT("engineer"), TEXT("combat_cover"), TEXT("Stacking behind the lead operative. Ready on entry."), 2.0f, 12.0f);
-		AddLine(TEXT("eng_rage_shout"), TEXT("engineer"), TEXT("combat_rage"), TEXT("Burn it all down! No retreat!"), 1.0f, 10.0f);
-
-		// Medic / Sapper (13)
-		AddLine(TEXT("med_tripwire"), TEXT("medic_sapper"), TEXT("hazard_alert"), TEXT("Trap detected! Hold up - disarming."), 1.0f, 10.0f);
-		AddLine(TEXT("med_apc_tank_needs_canister"), TEXT("medic_sapper"), TEXT("quest_inspect"), TEXT("Tank has fuel, but we need an empty canister to siphon it."), 2.0f, 15.0f);
-		AddLine(TEXT("med_reloading"), TEXT("medic_sapper"), TEXT("combat_callout"), TEXT("Reloading sidearm!"), 2.0f, 8.0f);
-		AddLine(TEXT("med_watch_back"), TEXT("medic_sapper"), TEXT("combat_callout"), TEXT("Check your six!"), 2.0f, 10.0f);
-		AddLine(TEXT("med_grenade_out"), TEXT("medic_sapper"), TEXT("combat_callout"), TEXT("Frag out! Heads down!"), 2.0f, 6.0f);
-		AddLine(TEXT("med_grenade_away"), TEXT("medic_sapper"), TEXT("combat_callout"), TEXT("Tossing smoke! Disengaging!"), 1.0f, 8.0f);
-		AddLine(TEXT("med_in_cover"), TEXT("medic_sapper"), TEXT("combat_cover"), TEXT("Secured behind the barricade."), 2.0f, 12.0f);
-		AddLine(TEXT("med_barricade_cover"), TEXT("medic_sapper"), TEXT("combat_cover"), TEXT("Holding behind the sandbags."), 2.0f, 12.0f);
-		AddLine(TEXT("med_patched_up"), TEXT("medic_sapper"), TEXT("medical"), TEXT("Tourniquet secured. You're stable - keep moving."), 2.0f, 10.0f);
-		AddLine(TEXT("med_thawed"), TEXT("medic_sapper"), TEXT("survival"), TEXT("Core temperature stabilized. Hypothermia halted."), 2.0f, 10.0f);
-		AddLine(TEXT("med_critically_down"), TEXT("medic_sapper"), TEXT("medical"), TEXT("Operative down! Need immediate triage!"), 1.0f, 8.0f);
-		AddLine(TEXT("med_looted_crate"), TEXT("medic_sapper"), TEXT("loot_pickup"), TEXT("Supply crate cracked. Bandages and rations inside."), 3.0f, 15.0f);
-		AddLine(TEXT("med_panic_grip"), TEXT("medic_sapper"), TEXT("combat_panic"), TEXT("Can't stop the shaking... weapons slipping!"), 1.0f, 10.0f);
-
-		// PMC Op 1 (3)
-		AddLine(TEXT("pmc1_behind_cover"), TEXT("pmc_op_1"), TEXT("pmc_cover"), TEXT("Hostile taking cover! Suppress!"), 2.0f, 12.0f);
-		AddLine(TEXT("pmc1_hugging_wall"), TEXT("pmc_op_1"), TEXT("pmc_cover"), TEXT("Target hugged to the east wall!"), 2.0f, 12.0f);
-		AddLine(TEXT("pmc1_reloading"), TEXT("pmc_op_1"), TEXT("pmc_callout"), TEXT("He's dry! Rush him!"), 2.0f, 8.0f);
-
-		// PMC Op 2 (3)
-		AddLine(TEXT("pmc2_behind_cover"), TEXT("pmc_op_2"), TEXT("pmc_cover"), TEXT("Target ducked behind the crates!"), 2.0f, 12.0f);
-		AddLine(TEXT("pmc2_hugging_wall"), TEXT("pmc_op_2"), TEXT("pmc_cover"), TEXT("Flanking along the concrete barrier!"), 2.0f, 12.0f);
-		AddLine(TEXT("pmc2_changing_mags"), TEXT("pmc_op_2"), TEXT("pmc_callout"), TEXT("Enemy reloading! Push up!"), 2.0f, 8.0f);
-
-		// PMC Op 3 (3)
-		AddLine(TEXT("pmc3_at_corner"), TEXT("pmc_op_3"), TEXT("pmc_cover"), TEXT("Hostile spotted at the corner!"), 2.0f, 12.0f);
-		AddLine(TEXT("pmc3_in_cover_sector"), TEXT("pmc_op_3"), TEXT("pmc_cover"), TEXT("Suppressing their vantage point!"), 2.0f, 12.0f);
-		AddLine(TEXT("pmc3_grenade_out"), TEXT("pmc_op_3"), TEXT("pmc_callout"), TEXT("Incoming ordnance! Scatter!"), 2.0f, 6.0f);
+			LoadVoiceLinesFromJson(JsonContent, MasterLines);
+		}
 	}
 	return MasterLines;
 }
@@ -421,7 +318,12 @@ FString FCodexAudioRules::GetExpectedAssetPath(FName Id, bool bIsVoice)
 {
 	if (bIsVoice)
 	{
-		return FString::Printf(TEXT("/Game/Audio/VO/%s"), *Id.ToString());
+		FCodexVoiceLineDef Def;
+		if (FindVoiceLineDef(Id, Def) && !Def.Speaker.IsNone())
+		{
+			return FString::Printf(TEXT("/Game/Audio/Voice/%s/SW_%s"), *Def.Speaker.ToString(), *Id.ToString());
+		}
+		return FString::Printf(TEXT("/Game/Audio/Voice/common/SW_%s"), *Id.ToString());
 	}
 	return FString::Printf(TEXT("/Game/Audio/Music/%s"), *Id.ToString());
 }
@@ -514,19 +416,27 @@ bool FCodexAudioRules::LoadVoiceLinesFromJson(const FString& JsonContent, TArray
 		Def.Category = FName(*LineObj->GetStringField(TEXT("category")));
 		Def.Text = LineObj->GetStringField(TEXT("text"));
 
-		// Lookup default priority / cooldown from master rules table if available
-		FCodexVoiceLineDef MasterDef;
-		if (FindVoiceLineDef(Def.Id, MasterDef))
+		double PriorityVal = 2.0;
+		if (LineObj->TryGetNumberField(TEXT("priority"), PriorityVal))
 		{
-			Def.Priority = MasterDef.Priority;
-			Def.CooldownSeconds = MasterDef.CooldownSeconds;
+			Def.Priority = static_cast<float>(PriorityVal);
 		}
 		else
 		{
 			Def.Priority = 2.0f;
+		}
+
+		double CooldownVal = 8.0;
+		if (LineObj->TryGetNumberField(TEXT("cooldown_seconds"), CooldownVal))
+		{
+			Def.CooldownSeconds = static_cast<float>(CooldownVal);
+		}
+		else
+		{
 			Def.CooldownSeconds = 8.0f;
 		}
-		Def.AssetPath = GetExpectedAssetPath(Def.Id, true);
+
+		Def.AssetPath = FString::Printf(TEXT("/Game/Audio/Voice/%s/SW_%s"), *Def.Speaker.ToString(), *Def.Id.ToString());
 
 		OutLines.Add(Def);
 	}

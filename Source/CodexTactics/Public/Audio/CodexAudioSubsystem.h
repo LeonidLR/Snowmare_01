@@ -127,6 +127,9 @@ private:
 	FName ActiveMusicCueId = NAME_None;
 
 	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> ActiveMusicComponent = nullptr;
+
+	UPROPERTY(Transient)
 	FName LastTriggeredVoiceLineId = NAME_None;
 
 	UPROPERTY(Transient)
