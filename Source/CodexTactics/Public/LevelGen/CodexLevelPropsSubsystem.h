@@ -11,7 +11,7 @@ class FJsonObject;
  * World subsystem for loading and spawning levelgen props (docs/design/levelgen/PROPS_LAYERS.md 3.1, task C6).
  * Runs at OnWorldBeginPlay. Reads <MapName>.props.json, validates against layout, snaps to slab Z,
  * spawns zero-ticking prop actors, applies tags (CodexProp, prop_layer=<layer>, prop_id=<id>),
- * registers UNavModifierComponent on nav-affecting props, and sets navmesh to DynamicModifiersOnly.
+ * and registers UNavModifierComponent on nav-affecting props (leaving navmesh runtime generation setting intact).
  * Zero ticking subsystem.
  */
 UCLASS()
@@ -65,7 +65,7 @@ public:
 	bool HasSpawned() const { return bHasSpawned; }
 
 	/** Resolves the UClass to spawn for a given variant name (using class_map or native fallback) */
-	UClass* ResolvePropClass(const FString& Variant) const;
+	UClass* ResolvePropClass(const FString& Variant);
 
 	/** True if Codex.Props.Enabled != 0 */
 	static bool IsPropsEnabled();
@@ -100,7 +100,8 @@ private:
 	TMap<FString, float> VariantBlastRadius;
 	TMap<FString, float> VariantBlastDamage;
 	TMap<FString, float> VariantTriggerRadius;
-	mutable TMap<FString, TSubclassOf<AActor>> ResolvedClassCache;
+	UPROPERTY(Transient)
+	TMap<FString, TSubclassOf<AActor>> ResolvedClassCache;
 	TMap<FString, TArray<TWeakObjectPtr<ACodexPropActor>>> PropsByLayer;
 	TArray<FString> DroppedPropIds;
 

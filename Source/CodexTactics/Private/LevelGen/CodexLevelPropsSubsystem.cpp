@@ -57,15 +57,6 @@ namespace CodexLevelPropsInternal
 		return false;
 	}
 
-	static bool ClassHasVisualMesh(const UClass* Class)
-	{
-		if (!Class)
-		{
-			return false;
-		}
-		const AActor* CDO = Cast<AActor>(Class->GetDefaultObject());
-		return ActorHasVisualMesh(CDO);
-	}
 	static TAutoConsoleVariable<int32> CVarPropsEnabled(
 		TEXT("Codex.Props.Enabled"),
 		1,
@@ -348,11 +339,6 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 			PropClass = ACodexPropActor::StaticClass();
 		}
 
-		if (bRequireMesh && !CodexLevelPropsInternal::ClassHasVisualMesh(PropClass))
-		{
-			continue;
-		}
-
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
 
@@ -363,13 +349,13 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 			continue;
 		}
 
-		if (bRequireMesh && !CodexLevelPropsInternal::ActorHasVisualMesh(PropActor))
+		const bool bNav = VariantNavAffecting.FindRef(Obj.Variant);
+		if (bRequireMesh && bNav && !CodexLevelPropsInternal::ActorHasVisualMesh(PropActor))
 		{
 			PropActor->Destroy();
 			continue;
 		}
 
-		const bool bNav = VariantNavAffecting.FindRef(Obj.Variant);
 		const FVector Extent = VariantExtents.FindRef(Obj.Variant);
 
 		PropActor->InitProp(Obj.Id, ResObj.LayerId, Obj.Variant, Obj.WalkLayer, bNav, Extent);
@@ -601,7 +587,7 @@ int32 UCodexLevelPropsSubsystem::GetSpawnedCountForLayer(const FString& LayerId)
 	return Count;
 }
 
-UClass* UCodexLevelPropsSubsystem::ResolvePropClass(const FString& Variant) const
+UClass* UCodexLevelPropsSubsystem::ResolvePropClass(const FString& Variant)
 {
 	if (const TSubclassOf<AActor>* CachedClass = ResolvedClassCache.Find(Variant))
 	{
