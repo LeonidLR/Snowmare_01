@@ -101,12 +101,24 @@ const CUT_W = 6;           // m, the trench
 const CUT_WALL_T = 1.5;    // m
 const CUT_WALL_H = obstacleHeight('high_mantle');    // cm, the retaining wall's parapet + fence above the ground (the ground-layer obstacle)
 
-export interface GenerateOptions { profile: Profile; seed: number; params?: Partial<GenParams>; name?: string }
+export interface GenerateOptions {
+  profile: Profile;
+  seed: number;
+  params?: Partial<GenParams>;
+  name?: string;
+  /**
+   * Region re-roll (levelgen v2 stage 1, regionRegen.ts): the seed of the SKELETON (sections 1-2: the streets, the cut, its
+   * crossings and ladders). When it differs from `seed`, the skeleton is drawn from `skeletonSeed` and the blocks / routes / covers
+   * (sections 3-5) from a fresh `seed` stream, so a re-rolled region keeps the map's roads and canal. Omitted (or equal to `seed`) =
+   * the classic single stream: every existing seed's layout is unchanged.
+   */
+  skeletonSeed?: number;
+}
 
 export function generateLayout(o: GenerateOptions): GenLayout {
   const params: GenParams = { ...DEFAULT_PARAMS, size_m: [o.profile.bounds.max[0], o.profile.bounds.max[1]], ...o.params };
   const [w, h] = params.size_m;
-  const random = rng(o.seed * 104729 + 7);
+  let random = rng((o.skeletonSeed ?? o.seed) * 104729 + 7);
   const jit = (amp: number) => (random() * 2 - 1) * amp;
   const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(random() * xs.length)];
   const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [] };
@@ -166,6 +178,7 @@ export function generateLayout(o: GenerateOptions): GenLayout {
   }
 
   // ---- 3. the blocks: set-pieces in the regions between the streets ----------------------------------------------------
+  if (o.skeletonSeed !== undefined && o.skeletonSeed !== o.seed) random = rng(o.seed * 104729 + 7);
   const sx = w / 177, sy = h / 124; // the reference's proportions
   const R = (x0: number, y0: number, x1: number, y1: number): Rect => [[x0 * sx, y0 * sy], [x1 * sx, y1 * sy]];
   const region = {

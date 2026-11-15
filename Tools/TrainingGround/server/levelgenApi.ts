@@ -6,6 +6,8 @@
 //   GET  /api/levelgen/ref-image?id=<id>        -> image/png: the reference's un-skewed annotated map, 1200 px (made on demand by
 //                                                  Scripts/Tools/levelgen_render.py from Saved/MapRefs; 404 when the refs are absent)
 //   GET  /api/levelgen/accepted                 -> { accepted: [{ name, seed, profile, at }] }   (Content/Data/LevelGen/accepted)
+//   GET  /api/levelgen/open-accepted?name=<n>   -> the accepted layout JSON, read-only (opened in the page for a region re-roll / locks;
+//                                                  saved back only by the designer's «Принять» = POST /api/levelgen/accept)
 //   GET  /api/levelgen/ledger                   -> the critic ledger { spentUsd, calls }
 //   POST /api/levelgen/critic   { name, layout, evaluation, candidatePng (base64), client: claude|jev|mock, budgetUsd, model }
 //                                               -> { verdict } (saved to Saved/TrainingGround/levelgen/<name>.verdicts.json; the ledger updated)
@@ -68,6 +70,17 @@ export function setupLevelgenApi(use: Use): void {
       return { name: l.name, seed: l.seed, profile: l.profile, at: meta.at ?? '' };
     });
     send(res, 200, { accepted });
+  });
+
+  use('/api/levelgen/open-accepted', (req, res) => {
+    const name = query(req, 'name');
+    if (!NAME_RE.test(name)) return send(res, 400, { error: 'bad layout name' });
+    const file = path.join(ACCEPTED_DIR, `${name}.json`);
+    if (!fs.existsSync(file)) return send(res, 404, { error: `accepted layout ${name} not found` });
+    try {
+      const layout = JSON.parse(fs.readFileSync(file, 'utf8')) as GenLayout;
+      send(res, 200, { layout, errors: validateGenLayout(layout) });
+    } catch (e) { send(res, 500, { error: e instanceof Error ? e.message : String(e) }); }
   });
 
   use('/api/levelgen/ledger', (_req, res) => send(res, 200, readLedger() ?? emptyLedger()));

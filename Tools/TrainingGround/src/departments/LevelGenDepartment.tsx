@@ -5,10 +5,16 @@
 // critics' verdicts (Jev - typed judgments; the Claude API - sees both images, USD-capped; the server holds the keys). The
 // designer accepts (-> Content/Data/LevelGen/accepted, what the UE builder reads) or rejects.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, Play, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Play, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser } from 'lucide-react';
 import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
 import { PropsPanel } from './PropsPanel';
+import { RegionOverlay } from './RegionOverlay';
+import type { RegionMode } from './RegionOverlay';
+import type { History } from '../levelgen/regenHistory';
+import { canRedo, canUndo, historyInit, historyPush, historyRedo, historyUndo } from '../levelgen/regenHistory';
+import type { RegionRegenResult } from '../levelgen/regionRegen';
+import { addLock, DEFAULT_MAX_RETRIES, regenerateRegion, regenStateOf, removeLock, selectZone } from '../levelgen/regionRegen';
 import type { FormationConfigFile } from '../movement/config';
 import { configValues } from '../movement/config';
 import type { Vec2 } from '../movement/geometry';
@@ -47,6 +53,14 @@ export const LevelGenDepartment: React.FC = () => {
   const [accepted, setAccepted] = useState<{ name: string; seed: number; profile: string; at: string }[]>([]);
   const [refOk, setRefOk] = useState(true);
   const view = useRef<LayoutViewHandle>(null);
+  // region re-roll + locked districts (levelgen v2 stage 1, task 070; docs/port/LEVELGEN_V2_STAGE1_REPORT.md)
+  const [regionMode, setRegionMode] = useState<RegionMode>('off');
+  const [zone, setZone] = useState<Vec2[] | null>(null);
+  const [rerollSeed, setRerollSeed] = useState(1001);
+  const [maxRetries, setMaxRetries] = useState(DEFAULT_MAX_RETRIES);
+  const [lockName, setLockName] = useState('');
+  const [regenReport, setRegenReport] = useState<RegionRegenResult | null>(null);
+  const [histories, setHistories] = useState<Record<string, History<GenLayout>>>({});
 
   useEffect(() => {
     fetch('/api/movement/config').then((r) => r.json()).then(setConfigFile).catch(() => setError('Нет связи с сервером Training Ground'));
@@ -79,6 +93,7 @@ export const LevelGenDepartment: React.FC = () => {
           out.push({ layout, ev: evaluateLayout({ layout, profile, config, noSim: true }), simmed: false, verdicts: [] });
         }
         setCandidates(out); setSel(0); setLayer('all');
+        setHistories({}); setZone(null); setRegenReport(null);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
     }, 20);
@@ -127,6 +142,77 @@ export const LevelGenDepartment: React.FC = () => {
     if (!cur) return;
     fetch('/api/levelgen/reject', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: cur.layout.name, seed: cur.layout.seed, profile: cur.layout.profile }) }).catch(() => {});
     setCandidates((cs) => cs.filter((_, i) => i !== sel)); setSel(0);
+  };
+
+  // ---- region re-roll + locks (task 070) -------------------------------------------------------------------------------
+  const curKey = cur?.layout.name ?? '';
+  const history = cur ? histories[curKey] ?? historyInit(cur.layout, 'исходная') : null;
+  const profileOk = !!cur && !!profile && profile.id === cur.layout.profile;
+  const locks = useMemo(() => { try { return cur ? regenStateOf(cur.layout).locks : []; } catch { return []; } }, [cur]);
+  const selection = useMemo(() => { try { return cur && zone ? selectZone(cur.layout, zone) : null; } catch { return null; } }, [cur, zone]);
+
+  /** Show a layout in the current candidate slot (re-evaluated without the simulator; old verdicts no longer apply). */
+  const showLayout = (layout: GenLayout) => {
+    if (!profile || !config) return;
+    const ev = evaluateLayout({ layout, profile, config, noSim: true });
+    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, layout, ev, simmed: false, verdicts: [] } : c)));
+  };
+  const pushStep = (layout: GenLayout, label: string) => {
+    if (!cur) return;
+    setHistories((hs) => ({ ...hs, [curKey]: historyPush(hs[curKey] ?? historyInit(cur.layout, 'исходная'), layout, label) }));
+    showLayout(layout);
+  };
+  const reroll = () => {
+    if (!cur || !zone || !profileOk || !profile) return;
+    setBusy('Перегенерация зоны...'); setError('');
+    setTimeout(() => {
+      try {
+        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries });
+        setRegenReport(r);
+        if (r.ok && r.layout !== cur.layout) pushStep(r.layout, `зона, seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`);
+        setRerollSeed((s) => s + 1);
+      } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+      setBusy('');
+    }, 20);
+  };
+  const stepHistory = (dir: 'undo' | 'redo') => {
+    if (!history || (dir === 'undo' ? !canUndo(history) : !canRedo(history))) return;
+    const h = dir === 'undo' ? historyUndo(history) : historyRedo(history);
+    setHistories((hs) => ({ ...hs, [curKey]: h }));
+    setRegenReport(null);
+    showLayout(h.present.state);
+  };
+  const lockZone = () => {
+    if (!cur || !zone) return;
+    try { pushStep(addLock(cur.layout, zone, lockName), `закреплён район ${lockName || ''}`.trim()); setLockName(''); setZone(null); }
+    catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
+  const unlock = (id: string) => { if (cur) pushStep(removeLock(cur.layout, id), `снято закрепление ${id}`); };
+  const openAccepted = async (name: string) => {
+    if (!config) return;
+    setBusy('Открываю принятую карту...'); setError('');
+    try {
+      const r = await fetch(`/api/levelgen/open-accepted?name=${encodeURIComponent(name)}`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? r.statusText);
+      const layout = d.layout as GenLayout;
+      const pr = await fetch(`/api/levelgen/profile?id=${encodeURIComponent(layout.profile)}`);
+      const p = await pr.json() as Profile;
+      if (!pr.ok) throw new Error(`эталон ${layout.profile} не найден`);
+      setProfileId(layout.profile); setProfile(p);
+      const ev = evaluateLayout({ layout, profile: p, config, noSim: true });
+      const rest = candidates.filter((c) => c.layout.name !== layout.name);
+      setCandidates([...rest, { layout, ev, simmed: false, verdicts: [] }]); setSel(rest.length); setLayer('all');
+      setHistories((hs) => { const keep = { ...hs }; delete keep[layout.name]; return keep; });
+      setZone(null); setRegenReport(null);
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    setBusy('');
+  };
+  const regionHint: Record<RegionMode, string> = {
+    off: 'Выберите способ выделения зоны: рамка, многоугольник или лассо.',
+    rect: 'Рамка: зажмите левую кнопку и протяните.',
+    poly: 'Многоугольник: щёлкайте углы; двойной щелчок или Enter — замкнуть; Esc или правая кнопка — отмена.',
+    lasso: 'Лассо: обведите зону, удерживая левую кнопку.',
   };
 
   const num = (label: string, value: number, set: (v: number) => void, step = 1, min = 0, max = 1000) => (
@@ -206,7 +292,10 @@ export const LevelGenDepartment: React.FC = () => {
             ))}
             <h4 className="text-[11px] font-bold tracking-widest uppercase text-slate-400 mt-2">Принятые (Content/Data/LevelGen/accepted)</h4>
             {accepted.length === 0 && <p className="text-xs text-slate-500">Пока нет.</p>}
-            {accepted.map((a) => <p key={a.name} className="text-xs font-mono text-emerald-300">{a.name}</p>)}
+            {accepted.map((a) => (
+              <button key={a.name} onClick={() => openAccepted(a.name)} disabled={!config || !!busy} title="Открыть для перегенерации зон и закрепления районов (сохранение — кнопкой «Принять»)"
+                className="text-left text-xs font-mono text-emerald-300 hover:text-emerald-200 inline-flex items-center gap-1.5 disabled:opacity-50"><FolderOpen size={12} />{a.name}</button>
+            ))}
             <p className="text-[11px] text-slate-500 mt-1">Сборка в UE: <span className="font-mono">Scripts/Editor/build_levelgen_map.py</span> (см. LEVEL_GENERATOR.md §7).</p>
           </section>
 
@@ -239,10 +328,67 @@ export const LevelGenDepartment: React.FC = () => {
               <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
               <button onClick={reject} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-800 text-xs text-white hover:bg-rose-700 disabled:opacity-50"><ThumbsDown size={13} />Отклонить</button>
             </div>
+            {cur && (
+              <div className="flex flex-col gap-1.5 bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Зона</span>
+                  <div className="inline-flex rounded-lg bg-slate-950 border border-slate-700 p-0.5 text-[11px]">
+                    {([['off', 'Просмотр'], ['rect', 'Рамка'], ['poly', 'Многоугольник'], ['lasso', 'Лассо']] as const).map(([m, label]) => (
+                      <button key={m} type="button" onClick={() => setRegionMode(m)} className={`px-2 py-0.5 rounded ${regionMode === m ? 'bg-amber-600 text-slate-950 font-semibold' : 'text-slate-300 hover:text-white'}`}>{label}</button>
+                    ))}
+                  </div>
+                  <button type="button" onClick={() => setZone(null)} disabled={!zone} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40"><Eraser size={12} />Сбросить</button>
+                  <label className="flex items-center gap-1 text-slate-400">seed
+                    <input type="number" value={rerollSeed} onChange={(e) => setRerollSeed(Math.max(0, Math.floor(Number(e.target.value) || 0)))} className="w-20 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" />
+                  </label>
+                  <label className="flex items-center gap-1 text-slate-400" title="Сколько раз повторить с новым seed, если маршрут ломается">повторов до
+                    <input type="number" value={maxRetries} min={0} max={20} onChange={(e) => setMaxRetries(Math.max(0, Math.min(20, Math.floor(Number(e.target.value) || 0))))} className="w-12 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" />
+                  </label>
+                  <button type="button" onClick={reroll} disabled={!zone || !profileOk || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold disabled:opacity-40"><Shuffle size={13} />Перегенерировать зону</button>
+                  <button type="button" onClick={() => stepHistory('undo')} disabled={!history || !canUndo(history) || !!busy} title={history && canUndo(history) ? `Отменить: ${history.present.label}` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Undo2 size={13} />Отменить ({history?.past.length ?? 0})</button>
+                  <button type="button" onClick={() => stepHistory('redo')} disabled={!history || !canRedo(history) || !!busy} title={history && canRedo(history) ? `Вернуть: ${history.future[0].label}` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Redo2 size={13} />Вернуть ({history?.future.length ?? 0})</button>
+                  <input value={lockName} onChange={(e) => setLockName(e.target.value)} placeholder="имя района" className="w-28 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" />
+                  <button type="button" onClick={lockZone} disabled={!zone || !!busy} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white disabled:opacity-40"><Lock size={12} />Закрепить район</button>
+                </div>
+                <p className="text-[11px] text-slate-500">{regionHint[regionMode]} Перегенерируются объекты, чей центр внутри зоны (здания целиком); дороги, канал и закреплённые районы не трогаются. Закрепления хранятся в JSON карты (блок regen) и сохраняются кнопкой «Принять».</p>
+                {!profileOk && <p className="text-amber-300">Для перегенерации нужен эталон {cur.layout.profile} — выберите его слева.</p>}
+                {selection && (
+                  <p className="text-slate-300">В зоне: перегенерируется <span className="text-cyan-300 font-mono">{selection.inside.length}</span> объектов (зданий {selection.inside.filter((g) => g.category === 'building').length}), закреплено <span className="text-emerald-300 font-mono">{selection.locked.length}</span>, дороги/канал <span className="font-mono">{selection.fixed.length}</span>.</p>
+                )}
+                {regenReport && (
+                  <p className={regenReport.ok ? 'text-emerald-300' : 'text-rose-300'}>
+                    {regenReport.ok ? <CheckCircle2 size={12} className="inline mr-1" /> : <XCircle size={12} className="inline mr-1" />}
+                    {regenReport.message}; seed {regenReport.seed}; основной маршрут {regenReport.routes.find((r) => r.mandatory)?.completable ? 'проходим' : 'НЕ проходим'}; высоты подогнаны к классам: {regenReport.snappedHeights}{regenReport.skeletonMatch ? '' : '; скелет карты отличается от генератора (правила наложения сохраняют целостность)'}
+                  </p>
+                )}
+                {regenReport && (regenReport.dropped.length > 0 || regenReport.attempts.some((a) => !a.ok)) && (
+                  <details className="text-[11px] text-slate-400"><summary className="cursor-pointer">Подробности: отброшено {regenReport.dropped.length}, неудачных попыток {regenReport.attempts.filter((a) => !a.ok).length}</summary>
+                    <ul className="mt-1 flex flex-col gap-0.5 font-mono">
+                      {regenReport.attempts.filter((a) => !a.ok).map((a) => <li key={a.seed} className="text-rose-300">seed {a.seed}: {a.reason}</li>)}
+                      {regenReport.dropped.map((d) => <li key={`${d.category}:${d.id}`}>{d.id} ({d.category}): {d.reason === 'overlaps_kept' ? 'пересекает сохранённый объект' : d.reason === 'overlaps_lock' ? 'залезает в закреплённый район' : d.reason === 'blocks_road' ? 'перекрывает дорогу/канал' : 'id занят сохранённым объектом'}</li>)}
+                    </ul>
+                  </details>
+                )}
+                {locks.length > 0 && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-slate-400">Закреплённые районы:</span>
+                    {locks.map((k) => (
+                      <span key={k.id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-950 border border-emerald-700 text-emerald-200">
+                        <Lock size={10} />{k.name}
+                        <button type="button" onClick={() => unlock(k.id)} disabled={!!busy} className="ml-1 text-emerald-400 hover:text-rose-300" title="Снять закрепление">×</button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
             <div className="grid gap-3 lg:grid-cols-2">
               <div>
                 <p className="text-[11px] text-slate-500 mb-1">Кандидат (сверху; синий — маршрут, жёлтый — лестницы, голубой/янтарный — окна/бойницы, зелёный — крыша/парапет, фиол. — перелаз, пунктир — линии огня)</p>
-                <LayoutView ref={view} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} />
+                <RegionOverlay bounds={cur?.layout.bounds ?? null} height={520} mode={regionMode} zone={zone} locks={locks}
+                  inside={selection?.inside.map((g) => g.centre)} locked={selection?.locked.map((g) => g.centre)} onZone={setZone}>
+                  <LayoutView ref={view} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} />
+                </RegionOverlay>
               </div>
               <div>
                 <p className="text-[11px] text-slate-500 mb-1">Эталон (карта дизайнера, развёрнутая сверху; синее — его маршрут, жёлтое — лестницы, зелёный круг — старт)</p>

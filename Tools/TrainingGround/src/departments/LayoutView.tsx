@@ -3,7 +3,7 @@
 // (green inner outline = walkable roof, orange squares = roof holes, green squares = stairs, white dots = doors), the cut with
 // its crossings, ladders, covers, the mandatory route (blue) and the variants (light blue), spawns / ambush points / patrols.
 // UE axes: X forward = up on screen, Y right = right. `layer` filters the walls / buildings to one floor layer.
-import React, { useEffect, useImperativeHandle, useRef } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import { dirOf, type Vec2 } from '../movement/geometry';
 import type { GenBuilding, GenLayout, MantleEdge } from '../levelgen/schema';
 import { unifyOpenings } from '../levelgen/schema';
@@ -37,6 +37,15 @@ interface Props {
 export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks }, ref) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   useImperativeHandle(ref, () => ({ toPngBase64: () => canvas.current ? canvas.current.toDataURL('image/png').replace(/^data:image\/png;base64,/, '') : null }), []);
+  // redraw on a size change (the region-select overlay over this canvas tracks its size: both must use the same transform)
+  const [boxW, setBoxW] = useState(0);
+  useEffect(() => {
+    const c = canvas.current;
+    if (!c) return;
+    const ro = new ResizeObserver(() => setBoxW(c.clientWidth));
+    ro.observe(c);
+    return () => ro.disconnect();
+  }, []);
 
   useEffect(() => {
     const c = canvas.current;
@@ -243,7 +252,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     for (const m of marks ?? []) { const q = P(m); g.strokeStyle = '#f97316'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.stroke(); }
     g.fillStyle = '#ffe600'; g.font = '11px ui-monospace, monospace'; g.textAlign = 'left';
     g.fillText(`${layout.name}  ${Math.round((maxY - minY) / 100)} x ${Math.round((maxX - minX) / 100)} m  seed ${layout.seed}  layer ${layer !== 'all' ? layer : floorMode}`, 8, h - 8);
-  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks]);
+  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW]);
 
   return <canvas ref={canvas} style={{ width: '100%', height }} className="rounded-xl border border-slate-800 block" />;
 });
