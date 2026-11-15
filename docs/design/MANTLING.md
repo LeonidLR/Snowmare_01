@@ -15,6 +15,8 @@ In tactical urban combat, the environment is rarely flat. Operatives encounter f
 2. **Ladder Climbing (`ALadderActor` / `LadderRules`):** An operative mounts a formal vertical ladder to ascend full-story structures ($> 250\text{ cm}$).
 
 ### 1.1 The "$110\text{ cm}$ Crate Paradox" on Generated Maps
+
+> **superseded by 2026-11-15 (§11):** 110 cm is a historical example, not the new universal crate target; generated obstacles use measured clip classes once approved.
 On `L_Gen_Depot_1` and `L_Gen_Train_*`, freight crates have a standardized height of **$110\text{ cm}$** (`golden_small_crates.json`, `PROPS_LAYERS.md`). Because the legacy Godot vault limit was hardcoded to $105\text{ cm}$ (`VaultRules::MaxHeight = 105.f`), every crate is exactly **$5\text{ cm}$ taller than the vault threshold**. Furthermore, crates, shipping containers, and train flatcars are wide volumes ($120 - 250\text{ cm}$ deep), not thin barriers:
 - The pathfinder refuses to vault because there is no ground immediately behind the front edge.
 - If an operative is forced onto a crate top, `UpdateObstacleStepOff` treats it as an error ("standing on obstacle top") and kicks them off after $0.3\text{ s}$.
@@ -43,6 +45,8 @@ On `L_Gen_Depot_1` and `L_Gen_Train_*`, freight crates have a standardized heigh
 
 ### 2.1 Height Classification Matrix
 
+> **superseded by 2026-11-15 (§11):** the continuous spans below are feasibility envelopes, not permission to generate arbitrary intermediate heights. The animation pool and actual ladder/fall movement modes are corrected in §11; existing clips remain available.
+
 | Tier | Category | Height Span | Obstacle Depth | Character Action | Animation Asset Reference | Movement Mode |
 | :---: | :--- | :---: | :---: | :--- | :--- | :--- |
 | **0** | **Step / Stride** | $0 - 35\text{ cm}$ | Any | Standard foot step-up / curb stride | Natural CMC step-up (`MaxStepHeight = 45 cm`) | `MOVE_Walking` |
@@ -53,6 +57,8 @@ On `L_Gen_Depot_1` and `L_Gen_Train_*`, freight crates have a standardized heigh
 | **5** | **Controlled Drop-Down** | $60 - 250\text{ cm}$ | Downward | Controlled hop off ledge, soft bent-knee landing | `Content/Polygonmaker/Animations/Interactions/UE5/Anim_Regular_jump_down.uasset`<br>`Anim_Regular_jump_down_inplace.uasset` | `MOVE_Custom` (`CMOVE_LedgeDrop`) |
 
 ### 2.2 Weapon Discipline & Ready Times
+
+> **2026-11-15 clarification (§11):** these timings and weapon poses remain design targets, not measured CaV clip properties; validate contacts/duration and confirm weapon policy before hookup.
 
 1. **Tier 2 (Low Mantle, $75 - 130\text{ cm}$):**
    - **One-Handed Retention:** The operative plants one hand (non-dominant) on the obstacle ledge while maintaining their primary weapon (rifle, SMG, shotgun) in their dominant hand at low-ready.
@@ -87,6 +93,8 @@ To achieve 100% deterministic, glitch-free mantling without phantom triggers or 
 ```
 
 ### 3.1 The 4-Stage Detection Filter (`MantleTraceRules`)
+
+> **superseded by 2026-11-15 (§11), height/action selection only:** use class ± tolerance plus depth, landing intent and clearance; a height inside a broad span alone does not authorize a clip. Existing low-vault limits remain unchanged.
 
 1. **Stage 1: Forward Obstacle Detection (Horizontal Line Trace)**
    - **Origin:** Operative root $+ (0, 0, \text{ChestZ})$ (typically $100\text{ cm}$ above feet).
@@ -125,6 +133,8 @@ To achieve 100% deterministic, glitch-free mantling without phantom triggers or 
 ## 4. Character Movement Component (CMC) & Root Motion Architecture
 
 ### 4.1 Custom Movement Mode (`MOVE_Custom`)
+
+> **superseded by 2026-11-15 (§11):** this is a proposal, not the current vault/ladder implementation. The new mantle plan uses a saved/restored flying lifecycle with one root-motion driver; no existing `CMOVE_Mantle` implementation is asserted.
 Mantling cannot be handled by simple `MOVE_Walking` (which sticks to ground primitives) or raw physics velocity (which causes jittery collisions against wall lips).
 
 Following the Unreal Engine Gameplay Framework standards:
@@ -143,6 +153,8 @@ Following the Unreal Engine Gameplay Framework standards:
     - NavMesh tracking resumed.
 
 ### 4.2 Motion Warping & Target Anchors
+
+> **2026-11-15 clarification (§11):** root warp targets do not by themselves guarantee hand/knee contact or sub-centimeter precision; validate retargeted contact poses, endpoints and sweeps.
 To allow the animations (`Anim_Regular_climb_up`, `Anim_Regular_jump_climb`) to scale dynamically across varying obstacle heights ($75 - 240\text{ cm}$):
 - Three warp targets are defined:
   1. `WarpTarget_Hands`: Located at $(P_{\text{top}}.X, P_{\text{top}}.Y, P_{\text{top}}.Z)$, aligned with ledge lip.
@@ -151,6 +163,8 @@ To allow the animations (`Anim_Regular_climb_up`, `Anim_Regular_jump_climb`) to 
 - Motion Warping smoothly transforms the root motion curves so hand grips and foot placements land with sub-centimeter visual precision on any crate, barrier, or ledge.
 
 ### 4.3 Fallback Interpolation (Sine-Smoothstep Arc)
+
+> **superseded by 2026-11-15 (§11):** do not combine this arc with consumed mantle root motion. The first mantle slice refuses safely if its clip/warp contract is unavailable; the existing vault retains its own manual arc.
 For builds or headless test environments where Motion Warping is uninitialized:
 - Use an exact, pure mathematical interpolation curve:
   $$\vec{X}(\alpha) = \text{SmoothStep}(\vec{X}_{\text{start}}, \vec{X}_{\text{land}}, \alpha)$$
@@ -169,6 +183,8 @@ In `CodexTactics`, levels generated by `build_levelgen_map.py` place crates, jer
    - `ARecastNavMesh` generates isolated navmesh islands on surfaces $\ge 60\text{ cm} \times 60\text{ cm}$.
 
 ### 5.2 Off-Mesh Mantle Links (`UNavLinkCustomComponent` / `FDropLinkReach`)
+
+> **superseded by 2026-11-15 (§11), link ownership/direction:** mantle-up needs a distinct custom-link callback/area; downward traversal stays with the fall system. `FDropLinkReach` supplies reachability checks, not an upward movement driver; costs remain tuning proposals.
 To connect the ground NavMesh to the elevated crate/container NavMesh:
 - At level start (or prop placement in `CodexLevelPropsSubsystem`), every mantleable prop generates bidirectional or directional off-mesh links:
   - **Mantle-Up Link:** Links ground approach spot to crate top landing. Cost modifier = $1.5\times$ normal travel (operatives prefer walking flat ground unless detour is $> 8\text{ m}$).
@@ -214,6 +230,8 @@ An operative who is pulling themselves up onto a ledge cannot return fire for $0
 - Once the leader arrives on top, they immediately crouch and assume high-ground overwatch, covering the followers as they ascend one by one.
 
 ### 6.3 Solo vs. Formation vs. Box Selection Modes
+
+> **superseded by 2026-11-15 (§11), input contract:** the elevated-click behavior below is an option pending designer choice. Preserve merged 054 box-selection → solo behavior and the selected subset; do not silently introduce a separate group mode.
 
 | Selection Mode | Action on Elevated Click | Climbing Operatives | Unselected Squad Behavior |
 | :--- | :--- | :--- | :--- |
@@ -273,6 +291,8 @@ To be executed via `powershell .\Scripts\test.ps1 -Smoke MantleSmoke`:
 
 ## 9. Implementation Roadmap & Milestones
 
+> **superseded by 2026-11-15 (§11):** retain this roadmap as history; use the measured CaV pool, motion ownership and implementation sequence below.
+
 | Phase | Milestone | Scope & Deliverables | Primary Files |
 | :---: | :--- | :--- | :--- |
 | **Phase 1** | **Pure Geometry & Rules** | `MantleRules` namespace: height classifications, shapecast math, clearance validation, disambiguation algorithms, and unit test suite. | `Public/Characters/MantleRules.h`<br>`Private/Characters/MantleRules.cpp`<br>`Tests/Characters/MantleRulesTest.cpp` |
@@ -284,7 +304,72 @@ To be executed via `powershell .\Scripts\test.ps1 -Smoke MantleSmoke`:
 
 ## 10. Summary of Architectural Guarantees
 
+> **2026-11-15 clarification (§11):** these are acceptance goals, not evidence that mantle, its queue or its smokes already exist. The old free-height examples in §8 must be rebuilt around measured classes.
+
 1. **Non-Regression:** The existing `VaultRules` ($25 - 105\text{ cm}$) and `LadderRules` ($> 240\text{ cm}$) remain 100% operational and undisturbed. Thin barricades and sandbags continue to be vaulted over seamlessly.
 2. **Zero Glitch Ingress:** The 4-stage shapecast filter eliminates phantom ledge grabs, clipping through solid geometry, or getting stuck inside crate meshes.
 3. **Deterministic Stagger:** Squad members never collide, push each other off ledges, or get softlocked in simultaneous animation montages.
 4. **Data-Driven Configuration:** All height bounds, clearance tolerances, and animation speed multipliers are exposed via `FMantleConfig` for designer tuning without C++ recompilation.
+
+## 11. 2026-11-15 implementation plan
+
+### 11.1 Decisions, evidence and height contract
+
+- Designer decision: DeadPixelLabs **Climbing and Vaulting Animations** is purchased: `Content/CaV_Anims/Animations/ThirdPerson_Anims`, 31 TPP root-motion clips, UE4 Mannequin source skeleton; retarget copies for our operatives. Source assets and all existing traversal clips stay.
+- Evidence: [mantle-scout](../port/codex/outbox/mantle-scout.report.md), [CaV inventory](../port/codex/outbox/cav-healing-inventory.report.md). Filenames identify candidates; authored obstacle heights/contact phases have not been measured.
+- ALL generated walls, fences and obstacles use a height class + tolerance. `codex/obstacle-heights` holds `Content/Data/LevelGen/obstacle_heights.json`: **step 30, low_vault 100, low_mantle 120, high_mantle 200, wall_no_traverse 300 cm**, currently **±5 cm, `measured=false` for every class**. These are provisional targets, not CaV measurements; the branch is not yet merged into main.
+- Run the read-only `Scripts/Editor/measure_anim_root_motion.py` on the CaV TPP folder: duration, root displacement/rise, skeleton and root-motion flags → `Saved/Measure/anim_root_motion.csv`. Root rise alone is not obstacle height: verify hand contact, takeoff/landing planes and approach distance in preview before replacing the JSON targets and marking them measured.
+- Generation emits nominal heights; validation reports the object ID for a miss between classes. Geometry must fit the approved clip contract; do not stretch animations to cover arbitrary heights. Existing walls above the 240 cm mantle ceiling classify as untraversable walls; a 300 cm target does not grant a tall-wall climb.
+
+### 11.2 Candidate action/clip table
+
+Names below are exact inventory names; default-name clips are standing candidates until preview confirms the start pose. Shared height class does not make distinct actions interchangeable. Land pairings marked **inspect** are not certified.
+
+| Height class / provisional target | Standing/default clip | Running/sprint clip | Destination | Land/exit clip |
+|---|---|---|---|---|
+| step / 30 cm | CMC step-up | CMC step-up | Next walkable surface | Ordinary locomotion |
+| low_vault / 100 cm, thin obstacle | Existing hurdle L/R + `LowVault` | Existing compatible pool + `RunLowVault` | Far-side ground | CaV: `LowVaultLand`; existing clips retain their exits |
+| low_mantle / 120 cm | `Low_Climb` | `RunLowClimb` | Top | Inspect embedded finish; no named LowClimbLand |
+| high_mantle / 200 cm | `HighClimb` | `RunHighClimb` | Top | `TallLand` candidate; inspect need/continuity |
+| high_mantle / 200 cm, jump-assisted | `JumpClimb`; `Standing_JumpClimbUpNEW` | `RunJumpClimb`; `RunJumpClimbNEW` | Top | Inspect embedded finish / `TallLand` |
+| high_mantle / 200 cm, ledge start | `TallLedge_ClimbUpNEW` | No named Run variant | Top | Inspect start/hang and embedded finish |
+| high_mantle / 200 cm, tall-wall candidate | `Standing_Tall_Wall_Climb` | `Sprint_Footplant_TallWallClimb` | Top, only if measured class fits | Sprint: `TallWall_LandSprintTransition`; default finish: inspect |
+| high_mantle / 200 cm, **high-fence over** action | `HighFenceVault`; `JumpFenceVault` | No named Run variants; inspect approach | Far side, not a standing fence top | `TallFence_Land`, inspect endpoint/velocity |
+| wall_no_traverse / 300 cm or above mantle ceiling | No eligible mantle by default | No eligible mantle by default | Blocked / existing ladder route | None; reassess a distinct class only after measurement + designer approval |
+| Downward action, separate fall-height rules | `JumpDown`; `JumpDownNoWait` | No named Run variant | Lower surface | Fall system chooses `Fall_SideRoll`, `FallHigh`, `Land_LowRoll` or suitable `TallLand` after inspection |
+
+- Wall run (`Wall_Run_Start/Loop/Lunge`) is **not used**. `JumpFenceClimb` needs visual classification; split `HI_Climb_*` phases need a separate hang/transition contract before activation.
+- Filter candidates by action, measured height/tolerance, depth, arrival gait, start pose, landing surface and clearance; then use deterministic per-operative round-robin among compatible clips. Preserve verified L/R foot alternation, skip missing/incompatible assets, avoid immediate repeats when alternatives exist; never fabricate a foot label from a filename.
+- Extend the current `Source/CodexTactics/Private/Characters/OperativeAnimInstance.cpp::UpdateVaultClip` L/R selection into a compatible pool containing the old clips and CaV low-vault variants. Running variants require a valid run-up; unavailable run clips fall back only to a verified compatible standing approach, otherwise refuse/replan.
+- Store clip/action/class/gait/foot tags, contact/landing times, destination type and motion policy as data. Missing assets or unmeasured contact contracts keep that candidate disabled; no random selection across climb, fence-over and fall actions.
+
+### 11.3 C++ ownership, motion and input
+
+- Own transient mantle phase, source/target transforms, saved movement/collision/animation settings and path destination on `AOperativeCharacter` (planned `OperativeCharacterMantle.cpp` + header fields); reuse vault/ladder lifecycle patterns. World-owned mantle anchors hold exclusive reservations; death, destruction, cancellation and EndPlay release them. No Blueprint gameplay pack is adopted.
+- **New mantle driver: clip root motion + the engine Motion Warping plugin.** Prototype a saved/restored `MOVE_Flying` lifecycle, verify XYZ motion and swept capsule movement; do not add the vault's smoothstep/sine translation. `OperativeCharacterVault.cpp` currently moves the capsule manually; CaV clips inserted into that existing vault path must ignore root translation while using its arc/timing, restoring the previous animation policy afterward.
+- `LadderClimbComponent.cpp` currently uses flying + `IgnoreRootMotion` with extracted-track warping; reuse its snapshots/anchor and path-resume discipline, not a claim that ladders already consume engine root motion. `LedgeFallComponent.cpp` owns falling/drop movement; upward mantle never reverses its ballistic path.
+- Validate feet-relative ledge height/depth/slope, approach corridor, top footprint and headroom before reservation; recheck the landing before committing. Warp only within the verified clip's contact limits. Use collision sweeps and scoped contact handling; occupied/moving/destroyed geometry causes bounded abort/replan or handoff to falls, with state restored exactly once.
+- **Trigger is OPEN for the designer:** A — automatic on a path using an eligible mantle link, like vault; B — explicit click on a reachable ledge top; C — top click grants mantle intent and path-following executes the link. Do not select an option in implementation before the answer.
+- Input seam: `Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp`, before generic cover/wrap/menu/ground consumption, preserving existing Alt/attack/tactical priority, ladder clicks and barricade menus. Route only the currently commanded operative/subset; preserve 054 solo behavior and unselected holds.
+
+### 11.4 Navigation and ordered implementation
+
+1. **Measure and approve:** inspect the CSV/contact poses, choose targets/tolerances in the height JSON, regenerate/validate arenas, then merge `codex/obstacle-heights`. Checkpoint: no between-class obstacle IDs; targets are measured, not inferred from clip names.
+2. **Retarget/data slice:** create operative retarget copies for one low-vault and one low-mantle pair first; compare contacts and exits before adding high/fence actions. Prepare the clip metadata above; declare Motion Warping dependencies in `CodexTactics.uproject` and `Source/CodexTactics/CodexTactics.Build.cs` when implementing, not in this documentation task.
+3. **Pure rules:** planned `Public/Characters/MantleRules.h`, `Private/Characters/MantleRules.cpp`, tests under `Source/CodexTacticsTests/Private/Characters/`; implement class/action selection, clearance result, compatible clip rotation and refusal reasons. Preserve existing `VaultRules.h/.cpp` 25–105 cm and thin-side limits.
+4. **One-person end-to-end:** planned `OperativeCharacterMantle.cpp` owns approach → reserve → climb → land → resume/abort; wire `OperativeCharacter.h`, `OperativeCharacterVault.cpp` and `OperativeAnimInstance.cpp`. Checkpoint: one 120 cm target, correct top landing and no double root displacement, restoration after missing clip/interruption.
+5. **Mantle nav links:** planned `Private/Interactables/MantleNavigation.cpp` and matching public declarations create directed **upward custom links with a distinct mantle area/callback**. Keep `Private/Interactables/VaultNavigation.cpp` cost-3 vault area and filtering unchanged; make mantle availability in path queries follow the chosen trigger policy.
+6. **Reachability/props:** connect link generation to `Private/LevelGen/CodexLevelPropsSubsystem.cpp` and the level builder after top collision/nav islands exist; one valid approach/landing slot per lease. Reuse `Ladders/LadderActor.cpp` custom-link callbacks and exclusive-queue pattern. Use `Falls/DropLinkReach.cpp` to reject isolated tops with no safe onward/return route; downward links remain `Falls/DropLinkSubsystem.cpp` → `LedgeFallComponent.cpp`. Revalidate/remove links when props move or are destroyed.
+7. **Input and squad:** implement only the chosen trigger in `CodexTacticsPlayerControllerOrders.cpp`; adapt `Private/Characters/SquadSubsystem.cpp` to selected-member reservations, bounded wait/replan, casualty cleanup and path continuation. Keep §6 queue/overwatch distances and timings as explicit design targets until tested/confirmed.
+8. **Broaden only after the slice passes:** add measured high-climb, jump/ledge, tall-wall and high-fence families with their exits; route JumpDown/rolls through the existing falls system. Weapon/stance ownership and audio timing must be validated per clip, not copied from the old fixed-duration examples.
+
+### 11.5 Acceptance tests and designer choices
+
+- Planned unit tests: nominal ± tolerance and just-outside boundaries, between-class rejection, tall wall refusal, thin-over vs deep-top intent, insufficient run-up, L/R/round-robin compatibility and missing-clip fallback; reservation contention, timeout/cancel/death and exactly-once restore.
+- Planned `MantleSmokeCommand.cpp`: low/high top landings, high fence far-side landing, no doubled motion, occupied/headroom-blocked landing, destroyed prop mid-climb, stay on top, safe exit/drop, sequential squad/subset and unselected holds. Verify male/female retarget contact and action→land continuity with measured fixtures.
+- Regression gates: existing `VaultSmoke`, `DepotVaultSmoke`, `BarricadeVaultBackSmoke`, `ClickRulesSmoke`, `FallDropSmoke`, `DropLinkReachSmoke`, `LevelGenRouteSmoke` and `LevelGenLaddersSmoke`; generator height gate + arena schema/simulation + props fastGate. These are future checks, not tests run by this spec update.
+- **Q1 — trigger:** A automatic path links / B explicit top click / C top-click intent + automatic link execution? For B/C, should ordinary cover clicks retain their current action or require a modifier to request mantle?
+- **Q2 — run-up:** A standing fallback after stopping / B refuse/replan when the run-up is insufficient? May the system initiate a sprint for a run clip, or only use an already commanded gait?
+- **Q3 — weapon/stance:** A retain §2.2 weapon/ready-time targets where compatible / B clip-driven sling/restore windows after preview? On top: retain prior legal stance / crouch by default? High-fence over uses a far-side landing, not a top hold.
+- **Q4 — measured reach:** if a tall-wall clip needs a height above the current ceiling, A defer it and keep wall_no_traverse / B approve a separate measured climb class? What maximum contact/position warp tolerance is acceptable?
+- **Q5 — squad/combat:** A keep §6 stagger/overwatch targets / B revise them after the one-person slice? Which hit/knockdown cancels the climb, and retain §7 noise values or tune them after contact/landing review?
