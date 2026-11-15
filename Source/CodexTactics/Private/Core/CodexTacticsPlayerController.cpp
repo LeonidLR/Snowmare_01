@@ -296,7 +296,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		}
 	}
 
-	// Selection box: LMB held and dragged past the threshold (only in solo mode; disabled in formation mode).
+	// Selection box: LMB held and dragged past the threshold (works in solo and formation mode, designer 2026-11-15).
 	if (bLmbDown)
 	{
 		GetMousePosition(BoxCurrent.X, BoxCurrent.Y);

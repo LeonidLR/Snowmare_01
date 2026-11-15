@@ -776,6 +776,48 @@ void USquadSubsystem::EnterSoloMode()
 	EnterSoloModeInternal(false);
 }
 
+void USquadSubsystem::DisbandFormationToSoloBox(const TArray<AOperativeCharacter*>& BoxedOperatives)
+{
+	if (BoxedOperatives.IsEmpty())
+	{
+		return;
+	}
+
+	// 1. If currently in formation, stop the old leader if moving a formation order
+	if (!bIsSoloMode)
+	{
+		if (AOperativeCharacter* OldLeader = Leader.Get())
+		{
+			OldLeader->StopOperative();
+		}
+	}
+
+	// 2. Disband formation and enter Solo mode
+	EnterSoloModeInternal(/*bForTrap*/ false, /*bAnnounce*/ false);
+
+	// 3. Set the boxed operatives as the active multi-selection and update leader if necessary
+	SetSelectedGroup(BoxedOperatives, /*bSwitchLeader*/ true);
+
+	// 4. Non-boxed operatives hold where they stand
+	for (AOperativeCharacter* Member : GetMembers())
+	{
+		if (Member && !BoxedOperatives.Contains(Member))
+		{
+			Member->StopOperative();
+		}
+	}
+
+	UE_LOG(LogCodexTactics, Display, TEXT("[Squad] Box select in formation disbanded squad to Solo mode (%d operatives selected)"),
+		BoxedOperatives.Num());
+
+	if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+	{
+		Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"),
+			FText::Format(LOCTEXT("SoloModeOnBox", "👤 [SOLO MODE: ON] Box selection disbanded formation into Solo mode ({0} operatives selected)."),
+				BoxedOperatives.Num()));
+	}
+}
+
 bool USquadSubsystem::IsSoloIndependent()
 {
 	return CVarSquadSoloIndependent.GetValueOnGameThread() != 0;

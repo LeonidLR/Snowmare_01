@@ -203,6 +203,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	void EnterSoloMode();
 
+	/**
+	 * Designer 2026-11-15 (Task 054): Disbands formation into Solo mode with the boxed operatives as the active multi-selection.
+	 * Non-boxed operatives hold where they stand as independent solo operatives.
+	 */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
+	void DisbandFormationToSoloBox(const TArray<AOperativeCharacter*>& BoxedOperatives);
+
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Squad")
 	void ExitSoloMode(bool bCausedByLeash = false, float Distance = 0.f);
 

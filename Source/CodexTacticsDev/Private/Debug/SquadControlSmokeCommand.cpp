@@ -257,35 +257,47 @@ namespace SquadControlSmoke
 		}
 		case 4:
 		{
-			// T6: In formation mode, box selection is disabled - a drag does not start a selection box, selection stays the leader.
-			Check(State, !Squad->IsSoloMode(), TEXT("T6: initially in formation mode (solo off)"));
-			const AOperativeCharacter* CurrentLeader = Squad->GetLeader();
+			// Task 054 (designer 2026-11-15): Box select in formation switches the squad to Solo mode.
+			// The boxed operatives become the active multi-selection; non-boxed operatives hold place as independent solo.
+			Check(State, !Squad->IsSoloMode(), TEXT("054: initially in formation mode (solo off)"));
 
-			// Attempt box select in formation mode: SelectInBox returns 0 and selection stays {leader}
+			const TArray<AOperativeCharacter*> Members = Squad->GetMembers();
+			const TArray<AOperativeCharacter*> Boxed = { Members[0], Members[1] };
+
+			// Attempt box select in formation mode: in headless without viewport projection, fall back to DisbandFormationToSoloBox directly.
 			const int32 FormationBoxed = PC->SelectInBox(FVector2D(-10000.f, -10000.f), FVector2D(10000.f, 10000.f));
-			Check(State, FormationBoxed == 0, TEXT("T6: formation mode: SelectInBox returns 0 (box select disabled)"));
-			Check(State, !Squad->HasMultiSelection() && Squad->GetSelectedGroup().Num() == 1 && Squad->GetSelectedGroup()[0] == CurrentLeader,
-				TEXT("T6: formation mode: selection remains the leader after box drag attempt"));
-
-			// Now switch to Solo mode (press B)
-			PC->ToggleSoloMode();
-			Check(State, Squad->IsSoloMode(), TEXT("T6: switched to solo mode (B pressed)"));
-
-			// In solo mode, box-select all three
-			int32 SoloBoxed = PC->SelectInBox(FVector2D(-10000.f, -10000.f), FVector2D(10000.f, 10000.f));
-			if (SoloBoxed <= 0)
+			if (FormationBoxed <= 0)
 			{
-				// In headless mode without viewport projection, directly set group selection to simulate box selection
-				Squad->SetSelectedGroup(Squad->GetMembers());
+				Squad->DisbandFormationToSoloBox(Boxed);
 			}
-			Check(State, Squad->HasMultiSelection() && Squad->GetSelectedGroup().Num() == Squad->GetMembers().Num(),
-				TEXT("T6: solo mode: all operatives multi-selected in group"));
 
-			// Switch Solo -> Formation (press B)
+			Check(State, Squad->IsSoloMode(), TEXT("054: box select in formation switched squad to SOLO mode"));
+			Check(State, Squad->HasMultiSelection() && Squad->GetSelectedGroup().Num() == 2,
+				TEXT("054: boxed operatives became the active multi-selection group"));
+			Check(State, Squad->GetSelectedGroup().Contains(Members[0]) && Squad->GetSelectedGroup().Contains(Members[1]),
+				TEXT("054: selected group contains boxed operatives"));
+			Check(State, !Squad->GetSelectedGroup().Contains(Members[2]),
+				TEXT("054: non-boxed operative is not in selected group"));
+
+			// Order group move: each selected operative gets its own move order, non-boxed holds position
+			const FVector MoveDest = SmokeUtils::ClearPoint(World, Members[0]->GetActorLocation(),
+				Members[0]->GetActorLocation() + Members[0]->GetActorForwardVector() * 500.f);
+			PC->OrderGroupMove(MoveDest, false, false);
+
+			Check(State, Members[0]->HasOwnMoveOrder() && Members[1]->HasOwnMoveOrder(),
+				TEXT("054: group move order dispatched to boxed operatives"));
+			Check(State, !Members[2]->HasOwnMoveOrder(),
+				TEXT("054: non-boxed operative holds in place with no move order"));
+
+			// Stop group movement before exiting solo mode
+			Members[0]->StopOperative();
+			Members[1]->StopOperative();
+
+			// Re-forming: press B (ToggleSoloMode) returns to formation mode and clears multi-selection back to leader
 			PC->ToggleSoloMode();
-			Check(State, !Squad->IsSoloMode(), TEXT("T6: switched back to formation mode (B pressed)"));
+			Check(State, !Squad->IsSoloMode(), TEXT("054: switched back to formation mode (B pressed)"));
 			Check(State, !Squad->HasMultiSelection() && Squad->GetSelectedGroup().Num() == 1 && Squad->GetSelectedGroup()[0] == Squad->GetLeader(),
-				TEXT("T6: solo -> formation switch cleared box selection: selection == {leader}"));
+				TEXT("054: solo -> formation switch cleared box selection: selection == {leader}"));
 
 			return Finish(State, true);
 		}
