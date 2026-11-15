@@ -12,6 +12,8 @@
   "upward_impulse_bias": 0.25,
   "min_damage_factor": 0.5,
   "max_damage_factor": 3.0,
+  "reference_damage": 25.0,
+  "pelvis_floor_threshold_fraction": 0.5,
   "impulse_scales": {
     "Kinetic": 45000.0,
     "Melee": 25000.0,

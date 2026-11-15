@@ -93,6 +93,14 @@ bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRa
 	{
 		OutConfig.MaxDamageFactor = static_cast<float>(Val);
 	}
+	if (RootObject->TryGetNumberField(TEXT("reference_damage"), Val))
+	{
+		OutConfig.ReferenceDamage = static_cast<float>(Val);
+	}
+	if (RootObject->TryGetNumberField(TEXT("pelvis_floor_threshold_fraction"), Val))
+	{
+		OutConfig.PelvisFloorThresholdFraction = static_cast<float>(Val);
+	}
 
 	const TSharedPtr<FJsonObject>* ScalesObj = nullptr;
 	if (RootObject->TryGetObjectField(TEXT("impulse_scales"), ScalesObj) && ScalesObj && ScalesObj->IsValid())
@@ -155,7 +163,8 @@ FVector FDeathRagdollRules::CalculateImpulse(
 	const float BaseScale = Config.ImpulseScales.FindRef(DamageType);
 	const float MinFactor = (Config.MinDamageFactor > 0.f) ? Config.MinDamageFactor : 0.5f;
 	const float MaxFactor = (Config.MaxDamageFactor >= MinFactor) ? Config.MaxDamageFactor : 3.0f;
-	const float DamageFactor = FMath::Clamp(DamageAmount / 25.0f, MinFactor, MaxFactor);
+	const float RefDamage = FMath::Max(Config.ReferenceDamage, 1.0f);
+	const float DamageFactor = FMath::Clamp(DamageAmount / RefDamage, MinFactor, MaxFactor);
 	float Magnitude = BaseScale * DamageFactor * FMath::Max(MassScale, 0.1f);
 
 	Magnitude = FMath::Clamp(Magnitude, 0.0f, Config.MaxImpulseMagnitude);

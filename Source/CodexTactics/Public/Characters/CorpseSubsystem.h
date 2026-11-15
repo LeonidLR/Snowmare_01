@@ -108,6 +108,7 @@ private:
 		double FadeStart = -1.0;
 		FVector BaseScale = FVector::OneVector;
 		bool bIsRagdoll = false;
+		bool bPlayerTeam = false;
 	};
 
 	/** The body's corpse interface (null: gone / not one). */
@@ -121,6 +122,7 @@ private:
 	TArray<FKeptCorpse> Corpses;
 	FDeathRagdollConfig RagdollConfig;
 	bool bRagdollConfigLoaded = false;
+	bool bRagdollConfigAttempted = false;
 	int32 FadedTotal = 0;
 	float CapTimer = 0.f;
 };

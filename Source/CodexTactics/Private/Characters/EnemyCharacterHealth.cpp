@@ -78,9 +78,14 @@ void AEnemyCharacter::HandleDamaged(const FDamageSpec& Spec, float FinalDamage)
 	}
 	LastDamageType = Spec.DamageType;
 	LastDamageAmount = FinalDamage;
-	const AActor* ClosestSquad = FindClosestSquadMember();
-	const FVector HitOrigin = ClosestSquad ? ClosestSquad->GetActorLocation() : GetActorLocation() - GetActorForwardVector() * 100.f;
-	LastHitDirection = (GetActorLocation() - HitOrigin).GetSafeNormal();
+	if (!Spec.DamageOrigin.IsZero())
+	{
+		LastHitDirection = (GetActorLocation() - Spec.DamageOrigin).GetSafeNormal();
+	}
+	else
+	{
+		LastHitDirection = -GetActorForwardVector();
+	}
 	// User request 2026-10-06: the squad's direct attack (shot, blow, thrown grenade) reveals it — on an ambush level the
 	// fight starts now. A trap / placed charge (ApplyBlast inside FScopedTrapBlast) only sends a patrol searching.
 	const bool bTrapDamage = IsTrapBlastInProgress();
@@ -215,7 +220,7 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 	// Death ragdoll activation via UCorpseSubsystem
 	bool bRagdollActivated = false;
 	UCorpseSubsystem* Corpses = GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr;
-	if (Corpses)
+	if (Corpses && !bAirborneDeath && !IsLadderBusy())
 	{
 		const FName ArchetypeName = FName(*UEnum::GetValueAsString(Archetype));
 		bRagdollActivated = Corpses->TryActivateDeathRagdoll(this, LastHitDirection, LastDamageAmount, LastDamageType, ArchetypeName);
@@ -240,7 +245,8 @@ void AEnemyCharacter::HandleDied(AActor* Victim, const FString& AttackerSource)
 		bLayDownOnFreeze = false;
 	}
 
-	if (!Corpses || (!bRagdollActivated && !Corpses->RegisterCorpse(this)))
+	const bool bRegistered = Corpses && (bRagdollActivated ? Corpses->IsKept(this) : Corpses->RegisterCorpse(this));
+	if (!bRegistered)
 	{
 		SetLifeSpan(LifeSpan);
 	}
@@ -298,7 +304,7 @@ bool AEnemyCharacter::IsDeathPoseSettled() const
 
 void AEnemyCharacter::FreezeCorpse()
 {
-	if (bCorpseFrozen || !bIsDying)
+	if (bCorpseFrozen || !bIsDying || IsCorpseFalling() || IsLadderBusy())
 	{
 		return;
 	}
@@ -311,30 +317,9 @@ void AEnemyCharacter::FreezeCorpse()
 			Body->bPauseAnims = true;
 		}
 	}
-	else
+	else if (bLayDownOnFreeze)
 	{
-		bool bNeedsLayDown = bLayDownOnFreeze;
-		if (!bNeedsLayDown)
-		{
-			if (USkeletalMeshComponent* Body = GetMesh())
-			{
-				if (Body->GetSkeletalMeshAsset() && Body->GetBoneIndex(FName(TEXT("pelvis"))) != INDEX_NONE)
-				{
-					const FVector PelvisLoc = Body->GetBoneLocation(FName(TEXT("pelvis")));
-					const float CapsuleHalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.f;
-					const float CapsuleBottomZ = GetActorLocation().Z - CapsuleHalfHeight;
-					const float HeightAboveFloor = PelvisLoc.Z - CapsuleBottomZ;
-					if (HeightAboveFloor > 45.0f)
-					{
-						bNeedsLayDown = true;
-					}
-				}
-			}
-		}
-		if (bNeedsLayDown)
-		{
-			LayCorpseDown(); // landed and still: no death pose to hold, so it lies down (2026-11-09)
-		}
+		LayCorpseDown(); // landed and still: no death pose to hold, so it lies down (2026-11-09)
 	}
 	// No brain left: the AI controller goes (its path following, perception, state tree ticks with it).
 	if (AController* Brain = GetController())

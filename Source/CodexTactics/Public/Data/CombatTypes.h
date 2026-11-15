@@ -167,6 +167,10 @@ struct CODEXTACTICS_API FDamageSpec
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage")
 	FString AttackerSource;
 
+	/** World location where the damage originated (shooter or explosion center), used for directional hit reactions/ragdoll. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage")
+	FVector DamageOrigin = FVector::ZeroVector;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Combat|Damage")
 	EStatusEffect StatusEffect = EStatusEffect::None;
 

@@ -2514,7 +2514,7 @@ private:
 	FVector LastHitSource = FVector::ZeroVector;
 	bool bIsRagdollActive = false;
 	EDamageType LastDamageType = EDamageType::Kinetic;
-	float LastDamageAmount = 50.f;
+	float LastDamageAmount = 0.f;
 	/** Knockdown phase change: interrupts (aim, reload, move, cover), frees / restores the capsule and the movement. */
 	void HandleKnockdownPhase(EKnockdownPhase NewPhase, EKnockdownPhase OldPhase);
 	/** After a get-up: back to the cover slot a blast took him out of, by KnockdownRules::DecideCoverReturn (2026-10-18). */

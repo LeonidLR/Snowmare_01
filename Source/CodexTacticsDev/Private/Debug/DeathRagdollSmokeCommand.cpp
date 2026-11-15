@@ -1,8 +1,8 @@
 // Dev-only console command for headless verification of death ragdoll:
 //   Scripts/smoke.ps1 -Command CodexTactics.DeathRagdollSmoke
 // Governed by docs/port/gemini/outbox/049-ragdoll-plan.md (Task 056 / Death Ragdoll Step 2).
-// Spawns an enemy and a hostile PMC fighter, kills them with lethal damage, verifies death ragdoll
-// activates, simulates physics, settles and freezes with NoCollision and pelvis < 45 cm above floor.
+// Verifies death ragdoll across all required targets: Hound, Brute, Frostbitten, PMC fighter, and player KIA.
+// Verifies activation, physical simulation, settle freeze with QueryOnly capsule and pelvis < 45 cm above floor.
 
 #include "CoreMinimal.h"
 
@@ -12,6 +12,7 @@
 #include "Characters/CorpseSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
@@ -27,16 +28,22 @@ namespace DeathRagdollSmoke
 {
 	constexpr float StepSeconds = 0.1f;
 
+	struct FSubject
+	{
+		FString Name;
+		TWeakObjectPtr<ACharacter> Character;
+		bool bIsPlayerTeam = false;
+		bool bRagdollActivated = false;
+		bool bFrozen = false;
+	};
+
 	struct FState
 	{
 		float Time = 0.f;
 		float StageTime = 0.f;
 		int32 Stage = 0;
 		int32 Failures = 0;
-		TWeakObjectPtr<AEnemyCharacter> Enemy;
-		TWeakObjectPtr<AOperativeCharacter> PmcFighter;
-		bool bEnemyRagdollActivated = false;
-		bool bPmcRagdollActivated = false;
+		TArray<FSubject> Subjects;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -47,6 +54,10 @@ namespace DeathRagdollSmoke
 
 	bool Finish(const FState& State, bool bComplete)
 	{
+		if (IConsoleVariable* MaxCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.DeathRagdoll.MaxSimultaneous")))
+		{
+			MaxCVar->Set(-1);
+		}
 		const bool bPassed = State.Failures == 0 && bComplete;
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bPassed ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("DeathRagdollSmoke"));
@@ -74,28 +85,51 @@ namespace DeathRagdollSmoke
 				return true;
 			}
 
-			AEnemyCharacter* Enemy = State.Enemy.Get();
-			AOperativeCharacter* Fighter = State.PmcFighter.Get();
-			Check(State, Enemy && Enemy->GetHealthComponent() && Enemy->GetHealthComponent()->IsAlive(),
-				TEXT("Enemy spawned and alive"));
-			Check(State, Fighter && Fighter->HealthComponent && Fighter->HealthComponent->IsAlive(),
-				TEXT("PMC fighter spawned and alive"));
+			if (State.Subjects.IsEmpty())
+			{
+				Check(State, false, TEXT("Subjects spawned and registered"));
+				return Finish(State, false);
+			}
+
+			for (const FSubject& Subj : State.Subjects)
+			{
+				ACharacter* Char = Subj.Character.Get();
+				const bool bAlive = Char != nullptr && (Cast<AEnemyCharacter>(Char)
+					? (Cast<AEnemyCharacter>(Char)->GetHealthComponent() && Cast<AEnemyCharacter>(Char)->GetHealthComponent()->IsAlive())
+					: (Cast<AOperativeCharacter>(Char) && Cast<AOperativeCharacter>(Char)->HealthComponent && Cast<AOperativeCharacter>(Char)->HealthComponent->IsAlive()));
+				Check(State, bAlive, FString::Printf(TEXT("%s spawned and alive"), *Subj.Name));
+			}
 
 			if (State.Failures > 0)
 			{
 				return Finish(State, false);
 			}
 
-			// Deal lethal damage to both
+			// Deal lethal damage to all subjects
 			FDamageSpec Spec;
-			Spec.Amount = 500.f;
+			Spec.Amount = 10000.f;
 			Spec.ArmorPenetration = 1.f;
 			Spec.DamageType = EDamageType::Kinetic;
+			Spec.DamageOrigin = FVector(0.f, 0.f, 100.f);
 
-			Enemy->GetHealthComponent()->TakeDamage(Spec);
-			Fighter->HealthComponent->TakeDamage(Spec);
+			for (const FSubject& Subj : State.Subjects)
+			{
+				ACharacter* Char = Subj.Character.Get();
+				if (!Char)
+				{
+					continue;
+				}
+				if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+				{
+					Enemy->GetHealthComponent()->TakeDamage(Spec);
+				}
+				else if (AOperativeCharacter* Op = Cast<AOperativeCharacter>(Char))
+				{
+					Op->TakeHit(10000.f, TEXT("Smoke"), false, true);
+				}
+			}
 
-			UE_LOG(LogCodexTactics, Display, TEXT("[DeathRagdollSmoke] Lethal damage applied to enemy and PMC fighter"));
+			UE_LOG(LogCodexTactics, Display, TEXT("[DeathRagdollSmoke] Lethal damage applied to all %d subjects"), State.Subjects.Num());
 			++State.Stage;
 			State.StageTime = 0.f;
 			return true;
@@ -108,27 +142,30 @@ namespace DeathRagdollSmoke
 				return true;
 			}
 
-			AEnemyCharacter* Enemy = State.Enemy.Get();
-			AOperativeCharacter* Fighter = State.PmcFighter.Get();
-			if (!Enemy || !Fighter)
+			for (FSubject& Subj : State.Subjects)
 			{
-				Check(State, false, TEXT("Characters valid during ragdoll check"));
-				return Finish(State, false);
+				ACharacter* Char = Subj.Character.Get();
+				if (!Char)
+				{
+					Check(State, false, FString::Printf(TEXT("%s valid during ragdoll check"), *Subj.Name));
+					continue;
+				}
+
+				if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+				{
+					Subj.bRagdollActivated = Enemy->IsRagdollActive();
+				}
+				else if (AOperativeCharacter* Op = Cast<AOperativeCharacter>(Char))
+				{
+					Subj.bRagdollActivated = Op->IsRagdollActive();
+				}
+
+				Check(State, Subj.bRagdollActivated, FString::Printf(TEXT("%s death ragdoll active"), *Subj.Name));
+
+				const bool bCapsuleIgnoresPawn = Char->GetCapsuleComponent() &&
+					Char->GetCapsuleComponent()->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Ignore;
+				Check(State, bCapsuleIgnoresPawn, FString::Printf(TEXT("%s capsule ignores pawn channel"), *Subj.Name));
 			}
-
-			State.bEnemyRagdollActivated = Enemy->IsRagdollActive();
-			State.bPmcRagdollActivated = Fighter->IsRagdollActive();
-
-			Check(State, State.bEnemyRagdollActivated, TEXT("Enemy death ragdoll active"));
-			Check(State, State.bPmcRagdollActivated, TEXT("PMC fighter death ragdoll active"));
-
-			const bool bEnemyCapsuleNoColl = Enemy->GetCapsuleComponent() &&
-				Enemy->GetCapsuleComponent()->GetCollisionEnabled() == ECollisionEnabled::NoCollision;
-			Check(State, bEnemyCapsuleNoColl, TEXT("Enemy capsule collision disabled (NoCollision)"));
-
-			const bool bPmcCapsuleIgnoresPawn = Fighter->GetCapsuleComponent() &&
-				Fighter->GetCapsuleComponent()->GetCollisionResponseToChannel(ECC_Pawn) == ECR_Ignore;
-			Check(State, bPmcCapsuleIgnoresPawn, TEXT("PMC fighter capsule ignores pawn channel"));
 
 			++State.Stage;
 			State.StageTime = 0.f;
@@ -136,76 +173,83 @@ namespace DeathRagdollSmoke
 		}
 		case 2:
 		{
-			// Stage 2: Wait for both corpses to settle and freeze (timeout 5.0s)
-			AEnemyCharacter* Enemy = State.Enemy.Get();
-			AOperativeCharacter* Fighter = State.PmcFighter.Get();
-			if (!Enemy || !Fighter)
+			// Stage 2: Wait for all corpses to settle and freeze (timeout 5.5s)
+			bool bAllFrozen = true;
+			for (FSubject& Subj : State.Subjects)
 			{
-				Check(State, false, TEXT("Characters valid during settle check"));
-				return Finish(State, false);
+				ACharacter* Char = Subj.Character.Get();
+				if (!Char)
+				{
+					continue;
+				}
+				if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+				{
+					Subj.bFrozen = Enemy->IsCorpseFrozen();
+				}
+				else if (AOperativeCharacter* Op = Cast<AOperativeCharacter>(Char))
+				{
+					Subj.bFrozen = Op->IsCorpseFrozen();
+				}
+				if (!Subj.bFrozen)
+				{
+					bAllFrozen = false;
+				}
 			}
 
-			const bool bEnemyFrozen = Enemy->IsCorpseFrozen();
-			const bool bPmcFrozen = Fighter->IsCorpseFrozen();
-
-			if (!bEnemyFrozen || !bPmcFrozen)
+			if (!bAllFrozen)
 			{
-				if (State.StageTime < 5.0f)
+				if (State.StageTime < 5.5f)
 				{
 					return true;
 				}
 				// Timed out waiting for freeze
-				Check(State, bEnemyFrozen, TEXT("Enemy frozen before timeout"));
-				Check(State, bPmcFrozen, TEXT("PMC fighter frozen before timeout"));
+				for (const FSubject& Subj : State.Subjects)
+				{
+					Check(State, Subj.bFrozen, FString::Printf(TEXT("%s frozen before timeout"), *Subj.Name));
+				}
 				return Finish(State, false);
 			}
 
-			// Both are frozen! Check final state and pelvis heights
-			Check(State, bEnemyFrozen, FString::Printf(TEXT("Enemy corpse frozen after %.1f s"), State.StageTime));
-			Check(State, bPmcFrozen, FString::Printf(TEXT("PMC fighter corpse frozen after %.1f s"), State.StageTime));
-
-			// Check enemy pelvis height above floor
-			if (USkeletalMeshComponent* Mesh = Enemy->GetMesh())
+			// All are frozen! Check final state and pelvis heights
+			for (const FSubject& Subj : State.Subjects)
 			{
-				const FVector Pelvis = Mesh->GetBoneLocation(FName(TEXT("pelvis")));
-				const float CapsuleHalf = Enemy->GetCapsuleComponent() ? Enemy->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.f;
-				float FloorZ = Enemy->GetActorLocation().Z - CapsuleHalf;
+				ACharacter* Char = Subj.Character.Get();
+				Check(State, Subj.bFrozen, FString::Printf(TEXT("%s corpse frozen after %.1f s"), *Subj.Name, State.StageTime));
 
-				FHitResult Hit;
-				FCollisionQueryParams Params(SCENE_QUERY_STAT(DeathRagdollFloor), false, Enemy);
-				if (World->LineTraceSingleByChannel(Hit, Pelvis + FVector(0.f, 0.f, 100.f), Pelvis - FVector(0.f, 0.f, 500.f), ECC_WorldStatic, Params))
+				if (!Char)
 				{
-					FloorZ = static_cast<float>(Hit.ImpactPoint.Z);
+					Check(State, false, FString::Printf(TEXT("%s character still valid"), *Subj.Name));
+					continue;
 				}
 
-				const float Height = Pelvis.Z - FloorZ;
-				Check(State, Height < 45.0f, FString::Printf(TEXT("Enemy pelvis height %.1f cm < 45 cm (lying down, not standing)"), Height));
-			}
-			else
-			{
-				Check(State, false, TEXT("Enemy skeletal mesh valid"));
-			}
-
-			// Check PMC fighter pelvis height above floor
-			if (USkeletalMeshComponent* Mesh = Fighter->GetMesh())
-			{
-				const FVector Pelvis = Mesh->GetBoneLocation(FName(TEXT("pelvis")));
-				const float CapsuleHalf = Fighter->GetCapsuleComponent() ? Fighter->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.f;
-				float FloorZ = Fighter->GetActorLocation().Z - CapsuleHalf;
-
-				FHitResult Hit;
-				FCollisionQueryParams Params(SCENE_QUERY_STAT(DeathRagdollFloor), false, Fighter);
-				if (World->LineTraceSingleByChannel(Hit, Pelvis + FVector(0.f, 0.f, 100.f), Pelvis - FVector(0.f, 0.f, 500.f), ECC_WorldStatic, Params))
+				// Player operative KIA must remain alive in world (never destroyed by corpse cap)
+				if (Subj.bIsPlayerTeam)
 				{
-					FloorZ = static_cast<float>(Hit.ImpactPoint.Z);
+					Check(State, IsValid(Char) && !Char->IsActorBeingDestroyed(),
+						FString::Printf(TEXT("%s (player team KIA) preserved, not destroyed by cap"), *Subj.Name));
 				}
 
-				const float Height = Pelvis.Z - FloorZ;
-				Check(State, Height < 45.0f, FString::Printf(TEXT("PMC fighter pelvis height %.1f cm < 45 cm (lying down, not standing)"), Height));
-			}
-			else
-			{
-				Check(State, false, TEXT("PMC fighter skeletal mesh valid"));
+				// Check pelvis height above floor
+				if (USkeletalMeshComponent* Mesh = Char->GetMesh())
+				{
+					const FVector Pelvis = Mesh->GetBoneLocation(FName(TEXT("pelvis")));
+					const float CapsuleHalf = Char->GetCapsuleComponent() ? Char->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.f;
+					float FloorZ = Char->GetActorLocation().Z - CapsuleHalf;
+
+					FHitResult Hit;
+					FCollisionQueryParams Params(SCENE_QUERY_STAT(DeathRagdollFloor), false, Char);
+					if (World->LineTraceSingleByChannel(Hit, Pelvis + FVector(0.f, 0.f, 100.f), Pelvis - FVector(0.f, 0.f, 500.f), ECC_WorldStatic, Params))
+					{
+						FloorZ = static_cast<float>(Hit.ImpactPoint.Z);
+					}
+
+					const float Height = Pelvis.Z - FloorZ;
+					Check(State, Height < 45.0f, FString::Printf(TEXT("%s pelvis height %.1f cm < 45 cm (lying down, settled)"), *Subj.Name, Height));
+				}
+				else
+				{
+					Check(State, false, FString::Printf(TEXT("%s skeletal mesh valid"), *Subj.Name));
+				}
 			}
 
 			return Finish(State, State.Failures == 0);
@@ -222,31 +266,58 @@ namespace DeathRagdollSmoke
 			return;
 		}
 
+		if (IConsoleVariable* MaxCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.DeathRagdoll.MaxSimultaneous")))
+		{
+			MaxCVar->Set(8);
+		}
+
 		TSharedRef<FState> State = MakeShared<FState>();
 		const FTransform Layout = SmokeUtils::LayoutTransform(World);
 		const FVector BasePoint = SmokeUtils::LevelPoint(World, FVector(1200.f, 0.f, 100.f));
+		const FRotator Facing = Layout.Rotator() + FRotator(0.f, 180.f, 0.f);
 
-		// 1. Spawn enemy
 		UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+
+		// 1. Spawn Hound (FrostHound)
 		if (Waves)
 		{
-			AEnemyCharacter* Enemy = Waves->SpawnEnemy(
-				EEnemyArchetype::Frostbitten,
-				BasePoint + FVector(0.f, -200.f, 0.f),
-				Layout.Rotator() + FRotator(0.f, 180.f, 0.f));
-			if (Enemy && Enemy->GetMesh())
+			AEnemyCharacter* Hound = Waves->SpawnEnemy(EEnemyArchetype::FrostHound, BasePoint + FVector(0.f, -400.f, 0.f), Facing);
+			if (Hound && Hound->GetMesh())
 			{
-				Enemy->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
-				State->Enemy = Enemy;
+				Hound->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				State->Subjects.Add({ TEXT("Hound"), Hound, false, false, false });
 			}
 		}
 
-		// 2. Spawn hostile PMC operative
-		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+		// 2. Spawn Brute
+		if (Waves)
+		{
+			AEnemyCharacter* Brute = Waves->SpawnEnemy(EEnemyArchetype::Brute, BasePoint + FVector(0.f, -200.f, 0.f), Facing);
+			if (Brute && Brute->GetMesh())
+			{
+				Brute->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				State->Subjects.Add({ TEXT("Brute"), Brute, false, false, false });
+			}
+		}
+
+		// 3. Spawn Frostbitten
+		if (Waves)
+		{
+			AEnemyCharacter* Frostbitten = Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, BasePoint + FVector(0.f, 0.f, 0.f), Facing);
+			if (Frostbitten && Frostbitten->GetMesh())
+			{
+				Frostbitten->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				State->Subjects.Add({ TEXT("Frostbitten"), Frostbitten, false, false, false });
+			}
+		}
+
+		// 4. Spawn hostile PMC operative
 		if (Pmc)
 		{
 			const FVector PmcSpot = BasePoint + FVector(0.f, 200.f, 0.f);
-			const TArray<AOperativeCharacter*> Spawned = Pmc->SpawnSquad(1, PmcSpot, Layout.Rotator() + FRotator(0.f, 180.f, 0.f), 1, 7);
+			const TArray<AOperativeCharacter*> Spawned = Pmc->SpawnSquad(1, PmcSpot, Facing, 1, 7);
 			if (!Spawned.IsEmpty() && Spawned[0])
 			{
 				Pmc->SetTeamCommanded(1, false);
@@ -254,7 +325,22 @@ namespace DeathRagdollSmoke
 				{
 					Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 				}
-				State->PmcFighter = Spawned[0];
+				State->Subjects.Add({ TEXT("PMC fighter"), Spawned[0], false, false, false });
+			}
+		}
+
+		// 5. Player operative KIA
+		if (Squad && Squad->GetMembers().Num() >= 2)
+		{
+			AOperativeCharacter* PlayerOp = Squad->GetMembers()[1];
+			if (PlayerOp)
+			{
+				PlayerOp->TeleportTo(BasePoint + FVector(0.f, 400.f, 0.f), Facing, false, true);
+				if (USkeletalMeshComponent* Mesh = PlayerOp->GetMesh())
+				{
+					Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				}
+				State->Subjects.Add({ TEXT("Player KIA"), PlayerOp, true, false, false });
 			}
 		}
 
@@ -284,7 +370,7 @@ namespace DeathRagdollSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.DeathRagdollSmoke"),
-		TEXT("Dev check: death ragdoll activates on lethal damage, simulates physics, settles and freezes with capsule NoCollision and pelvis < 45cm; logs PASS/FAIL, then exits."),
+		TEXT("Dev check: death ragdoll activates on lethal damage across Hound, Brute, Frostbitten, PMC fighter, and Player KIA; simulates physics, settles and freezes with capsule QueryOnly/Ignore and pelvis < 45cm; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

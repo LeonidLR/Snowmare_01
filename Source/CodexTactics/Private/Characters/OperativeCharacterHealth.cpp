@@ -177,59 +177,51 @@ void AOperativeCharacter::BecomeCorpse()
 		Grenades->CancelAim();
 	}
 
-	// Death ragdoll activation via UCorpseSubsystem
-	bool bRagdollActivated = false;
-	if (UCorpseSubsystem* Corpses = GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr)
+	const bool bWasVaulting = bVaulting;
+	if (bVaulting)
 	{
-		const FVector HitDir = bHasLastHitSource ? (GetActorLocation() - LastHitSource).GetSafeNormal() : -GetActorForwardVector();
-		bRagdollActivated = Corpses->TryActivateDeathRagdoll(this, HitDir, LastDamageAmount, LastDamageType, FName(TEXT("Operative")));
+		bVaulting = false;
+		SetActorEnableCollision(true);
 	}
-	bIsRagdollActive = bRagdollActivated;
-
-	if (!bRagdollActivated)
+	if (LadderClimb && LadderClimb->IsClimbing())
 	{
-		// fix/corpse-falls-to-ground (game designer PIE 2026-11-08, L_Gen_Depot_1: a PMC fighter killed on a ladder hung ~2 m up in his death pose):
-		// a body off the ground falls first - the ladder drops him (its death abort: off the hang line, gravity), a vault ends where he is, a
-		// ledge / a jump goes on falling - and is stopped once he lands (UpdateCorpseFall); the old DisableMovement froze him in the air.
-		const bool bWasVaulting = bVaulting;
-		if (bVaulting)
-		{
-			bVaulting = false;
-			SetActorEnableCollision(true);
-		}
-		if (LadderClimb && LadderClimb->IsClimbing())
-		{
-			LadderClimb->AbortClimb(ELadderAbortReason::Death);
-		}
+		LadderClimb->AbortClimb(ELadderAbortReason::Death);
+	}
+
+	float Gap = 0.f;
+	float FloorZ = 0.f;
+	const bool bFloor = TraceCorpseFloor(Gap, FloorZ);
+	const bool bLadderDrop = LadderClimb && LadderClimb->IsDropping();
+	if (!bCorpseFalling && FallRules::ShouldCorpseFall(bLadderDrop, bWasVaulting, bFloor, Gap))
+	{
+		bIsRagdollActive = false;
+		bCorpseFalling = true;
+		CorpseFallSeconds = 0.f;
+		CorpseFallStartFeetZ = static_cast<float>(GetActorLocation().Z) - GetSimpleCollisionHalfHeight();
 		if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 		{
-			float Gap = 0.f;
-			float FloorZ = 0.f;
-			const bool bFloor = TraceCorpseFloor(Gap, FloorZ);
-			const bool bLadderDrop = LadderClimb && LadderClimb->IsDropping();
-			if (!bCorpseFalling && FallRules::ShouldCorpseFall(bLadderDrop, bWasVaulting, bFloor, Gap))
+			Movement->Velocity = FVector(0.f, 0.f, FMath::Min(0.f, static_cast<float>(Movement->Velocity.Z))); // straight down
+			if (Movement->MovementMode != MOVE_Falling)
 			{
-				bCorpseFalling = true;
-				CorpseFallSeconds = 0.f;
-				CorpseFallStartFeetZ = static_cast<float>(GetActorLocation().Z) - GetSimpleCollisionHalfHeight();
-				Movement->Velocity = FVector(0.f, 0.f, FMath::Min(0.f, static_cast<float>(Movement->Velocity.Z))); // straight down
-				if (Movement->MovementMode != MOVE_Falling)
-				{
-					Movement->SetMovementMode(MOVE_Falling);
-				}
-				UE_LOG(LogCodexTactics, Display, TEXT("[Corpse] %s: killed %.0f cm over the floor%s - he falls first"), *DisplayName.ToString(), bFloor ? Gap : -1.f,
-					bLadderDrop ? TEXT(" (on a ladder)") : (bWasVaulting ? TEXT(" (vaulting)") : TEXT("")));
-			}
-			else if (!bCorpseFalling)
-			{
-				Movement->StopMovementImmediately();
-				Movement->DisableMovement();
+				Movement->SetMovementMode(MOVE_Falling);
 			}
 		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Corpse] %s: killed %.0f cm over the floor%s - he falls first"), *DisplayName.ToString(), bFloor ? Gap : -1.f,
+			bLadderDrop ? TEXT(" (on a ladder)") : (bWasVaulting ? TEXT(" (vaulting)") : TEXT("")));
 	}
 	else
 	{
 		bCorpseFalling = false;
+
+		// Death ragdoll activation via UCorpseSubsystem
+		bool bRagdollActivated = false;
+		if (UCorpseSubsystem* Corpses = GetWorld() ? GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr)
+		{
+			const FVector HitDir = bHasLastHitSource ? (GetActorLocation() - LastHitSource).GetSafeNormal() : -GetActorForwardVector();
+			bRagdollActivated = Corpses->TryActivateDeathRagdoll(this, HitDir, LastDamageAmount, LastDamageType, FName(TEXT("Operative")));
+		}
+		bIsRagdollActive = bRagdollActivated;
+
 		if (UCharacterMovementComponent* Movement = GetCharacterMovement())
 		{
 			Movement->StopMovementImmediately();
@@ -279,7 +271,7 @@ UPrimitiveComponent* AOperativeCharacter::GetCorpseVisual() const
 void AOperativeCharacter::FreezeCorpse()
 {
 	// Only a hostile PMC body under the corpse cap (2026-11-09); the player's own KIA keep their full actor (remains, save, death cam).
-	if (bCorpseFrozen || !bKilledInAction || IsPlayerTeam() || bCorpseFalling)
+	if (bCorpseFrozen || !bKilledInAction || (IsPlayerTeam() && !bIsRagdollActive) || bCorpseFalling)
 	{
 		return;
 	}
@@ -294,11 +286,14 @@ void AOperativeCharacter::FreezeCorpse()
 				const float CapsuleHalfHeight = GetCapsuleComponent() ? GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.f;
 				const float CapsuleBottomZ = GetActorLocation().Z - CapsuleHalfHeight;
 				const float HeightAboveFloor = PelvisLoc.Z - CapsuleBottomZ;
-				if (HeightAboveFloor > 45.0f && KnockdownComponent)
+				if (HeightAboveFloor > CapsuleHalfHeight * 0.5f)
 				{
-					FVector Source = GetActorLocation() + GetActorForwardVector() * 100.f;
-					GetLastHitSource(Source);
-					KnockdownComponent->PlayDeathFall(Source);
+					const float Radius = GetCapsuleComponent() ? GetCapsuleComponent()->GetUnscaledCapsuleRadius() : 35.f;
+					const FQuat Tip(FVector::RightVector, FMath::DegreesToRadians(-90.f));
+					Body->SetRelativeRotation(Tip * Body->GetRelativeRotation().Quaternion());
+					FVector Location = Body->GetRelativeLocation();
+					Location.Z = CorpseRules::LyingBodyCentreZ(CapsuleHalfHeight, Radius * 0.5f);
+					Body->SetRelativeLocation(Location);
 				}
 			}
 		}
@@ -317,6 +312,7 @@ void AOperativeCharacter::FreezeCorpse()
 	if (USkeletalMeshComponent* Body = GetMesh())
 	{
 		Body->bPauseAnims = true; // the death pose stays on screen
+		Body->SetComponentTickEnabled(false);
 	}
 	// Nothing on the body ticks any more; nothing collides with it (shots and clicks go through); still rendered, the weapon in his hands.
 	// The capsule keeps its (query) collision but ignores every channel: a capsule with collision OFF reports a zero simple-collision half

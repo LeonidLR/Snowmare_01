@@ -1,6 +1,7 @@
 #include "Characters/CorpseSubsystem.h"
 
 #include "Characters/CorpseBody.h"
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -32,6 +33,8 @@ namespace CorpseTuning
 		TEXT("The fading body is the farthest from the squad among this many oldest bodies"));
 	static TAutoConsoleVariable<int32> CVarRagdoll(TEXT("Codex.DeathRagdoll.Enabled"), 1,
 		TEXT("Enable death ragdoll simulation on fatal damage (1). 0 = fallback to animation montage / LayCorpseDown."));
+	static TAutoConsoleVariable<int32> CVarRagdollMax(TEXT("Codex.DeathRagdoll.MaxSimultaneous"), -1,
+		TEXT("Override max simultaneous ragdolls (-1 = from JSON config)"));
 
 	/** Seconds between two cap checks. */
 	constexpr float CapCheckSeconds = 0.5f;
@@ -52,6 +55,7 @@ void UCorpseSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 void UCorpseSubsystem::LoadRagdollConfig()
 {
+	bRagdollConfigAttempted = true;
 	const FString ConfigPath = FPaths::Combine(FPaths::ProjectContentDir(), TEXT("Data/Combat/death_ragdoll.json"));
 	FString JsonContent;
 	if (FFileHelper::LoadFileToString(JsonContent, *ConfigPath))
@@ -95,7 +99,13 @@ int32 UCorpseSubsystem::GetActiveRagdollCount() const
 bool UCorpseSubsystem::RegisterRagdollCorpse(AActor* Body)
 {
 	UWorld* World = GetWorld();
-	if (!World || !Body || !GetConfig().bPersist)
+	if (!World || !Body)
+	{
+		return false;
+	}
+	const AOperativeCharacter* Op = Cast<AOperativeCharacter>(Body);
+	const bool bIsPlayer = Op && Op->IsPlayerTeam();
+	if (!bIsPlayer && !GetConfig().bPersist)
 	{
 		return false;
 	}
@@ -104,6 +114,7 @@ bool UCorpseSubsystem::RegisterRagdollCorpse(AActor* Body)
 		if (Kept.Body.Get() == Body)
 		{
 			Kept.bIsRagdoll = true;
+			Kept.bPlayerTeam = bIsPlayer;
 			return true;
 		}
 	}
@@ -111,6 +122,7 @@ bool UCorpseSubsystem::RegisterRagdollCorpse(AActor* Body)
 	Kept.Body = Body;
 	Kept.DeathTime = World->GetTimeSeconds();
 	Kept.bIsRagdoll = true;
+	Kept.bPlayerTeam = bIsPlayer;
 	return true;
 }
 
@@ -126,7 +138,7 @@ bool UCorpseSubsystem::TryActivateDeathRagdoll(
 		return false;
 	}
 
-	if (!bRagdollConfigLoaded)
+	if (!bRagdollConfigAttempted)
 	{
 		LoadRagdollConfig();
 	}
@@ -145,7 +157,13 @@ bool UCorpseSubsystem::TryActivateDeathRagdoll(
 	}
 
 	// 2. Concurrency budget cap check
-	if (!FDeathRagdollRules::CanSimulateRagdoll(GetActiveRagdollCount(), RagdollConfig))
+	const int32 CVarMax = CorpseTuning::CVarRagdollMax.GetValueOnGameThread();
+	FDeathRagdollConfig EffectiveConfig = RagdollConfig;
+	if (CVarMax >= 0)
+	{
+		EffectiveConfig.MaxSimultaneousRagdolls = CVarMax;
+	}
+	if (!FDeathRagdollRules::CanSimulateRagdoll(GetActiveRagdollCount(), EffectiveConfig))
 	{
 		UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s budget cap reached (%d active) - bypassing ragdoll"),
 			*Character->GetName(), GetActiveRagdollCount());
@@ -167,10 +185,10 @@ bool UCorpseSubsystem::TryActivateDeathRagdoll(
 		return false;
 	}
 
-	// 4. Disable capsule collision completely so squad/enemies don't get blocked
+	// 4. Set capsule collision to QueryOnly with ECR_Ignore so traces work but pawns don't block
 	if (UCapsuleComponent* Capsule = Character->GetCapsuleComponent())
 	{
-		Capsule->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		Capsule->SetCollisionEnabled(ECollisionEnabled::QueryOnly);
 		Capsule->SetCollisionResponseToAllChannels(ECR_Ignore);
 	}
 
@@ -190,8 +208,10 @@ bool UCorpseSubsystem::TryActivateDeathRagdoll(
 	Mesh->SetLinearDamping(RagdollConfig.LinearDamping);
 	Mesh->SetAngularDamping(RagdollConfig.AngularDamping);
 
-	// 7. Calculate and apply kinetic impulse to pelvis
-	const FVector Impulse = FDeathRagdollRules::CalculateImpulse(HitDirection, DamageAmount, DamageType, RagdollConfig);
+	// 7. Calculate and apply kinetic impulse to pelvis scaled by body mass
+	const float BodyMass = Mesh->GetMass();
+	const float MassScale = BodyMass > 1.f ? (BodyMass / 80.0f) : 1.0f;
+	const FVector Impulse = FDeathRagdollRules::CalculateImpulse(HitDirection, DamageAmount, DamageType, RagdollConfig, MassScale);
 	const FName PelvisBone = FDeathRagdollRules::GetDefaultPelvisBoneName();
 	Mesh->AddImpulse(Impulse, PelvisBone, false);
 
@@ -237,6 +257,10 @@ bool UCorpseSubsystem::RegisterCorpse(AActor* Body)
 	if (!World || !AsCorpse(Body) || !GetConfig().bPersist)
 	{
 		return false;
+	}
+	if (const AOperativeCharacter* Op = Cast<AOperativeCharacter>(Body); Op && Op->IsPlayerTeam())
+	{
+		return false; // Player's own KIA never kept under corpse cap
 	}
 	if (!IsKept(Body))
 	{
@@ -343,6 +367,20 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 				ACharacter* Char = Cast<ACharacter>(Actor);
 				if (USkeletalMeshComponent* Mesh = Char ? Char->GetMesh() : nullptr)
 				{
+					if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+					{
+						if (UCapsuleComponent* Capsule = Enemy->GetCapsuleComponent())
+						{
+							const float HalfHeight = Capsule->GetUnscaledCapsuleHalfHeight();
+							if (Mesh->GetRelativeLocation().Z > -HalfHeight * 0.5f)
+							{
+								Mesh->SetRelativeLocation(FVector(0.f, 0.f, -HalfHeight + 15.f));
+							}
+						}
+					}
+
+					Mesh->bPauseAnims = true;
+					Mesh->SetComponentTickEnabled(false);
 					Mesh->PutAllRigidBodiesToSleep();
 					Mesh->SetAllBodiesSimulatePhysics(false);
 					Mesh->SetCollisionProfileName(TEXT("NoCollision"));
@@ -376,6 +414,10 @@ void UCorpseSubsystem::ApplyCap(const FCorpseConfig& Config, double Now)
 	}
 	for (const FKeptCorpse& Kept : Corpses)
 	{
+		if (Kept.bPlayerTeam)
+		{
+			continue; // Player's own KIA never count towards corpse cap or fade out
+		}
 		FCorpseCandidate& Candidate = Candidates.AddDefaulted_GetRef();
 		const AActor* Body = Kept.Body.Get();
 		const ICorpseBody* Corpse = AsCorpse(Body);
@@ -424,7 +466,7 @@ void UCorpseSubsystem::UpdateFades(double Now, const FCorpseConfig& Config)
 			Corpses.RemoveAt(Index); // gone another way (level cleanup, a load, the arena's next round)
 			continue;
 		}
-		if (Kept.FadeStart < 0.0)
+		if (Kept.bPlayerTeam || Kept.FadeStart < 0.0)
 		{
 			continue;
 		}

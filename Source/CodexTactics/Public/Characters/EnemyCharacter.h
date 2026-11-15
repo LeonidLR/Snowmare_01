@@ -1090,7 +1090,7 @@ protected:
 	/** Godot last_attacker_source (a turret hit pulls large enemies to turrets). */
 	FString LastAttackerSource;
 	EDamageType LastDamageType = EDamageType::Kinetic;
-	float LastDamageAmount = 50.f;
+	float LastDamageAmount = 0.f;
 	FVector LastHitDirection = FVector::ForwardVector;
 	bool bIsRagdollActive = false;
 	TWeakObjectPtr<AActor> CurrentTarget;
