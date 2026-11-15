@@ -145,8 +145,14 @@ public:
 	 * and - in the fight - Codex.Sight.FovFight 1. GetFovDeg = the stance's total FOV (Codex.Sight.Fov{Stand,Crouch,Prone}Deg: 140 / 140 / 110) or 360 when
 	 * the rule is off. The operatives' drawn vision cones use the same angle.
 	 */
+	/**
+	 * Field of view (game designer 2026-10-20: operatives see only round their facing): the rule is on while the squad's sight runs, Codex.Sight.Fov 1
+	 * and - in the fight - Codex.Sight.FovFight 1. GetFovDeg = the stance's total FOV (Codex.Sight.Fov{Stand,Crouch,Prone}Deg: 140 / 140 / 110) or 360 when
+	 * the rule is off. In stealth mode, peripheral awareness widens up to LookLockFovDeg * 2 (clamped to 360).
+	 */
 	bool IsFovRuleActive() const;
 	float GetFovDeg(EOperativeStance Stance) const;
+	float GetOperativeFovDeg(const AOperativeCharacter& Operative) const;
 	static SightRules::FSightFovConfig GetFovConfig();
 
 	/**

@@ -445,6 +445,26 @@
     },
     "walk_speed": 157.01,
     "jog_speed": 463.51,
+    "walk_speeds": {
+      "fwd": 157.01,
+      "fwd_right": 157.7,
+      "right": 138.37,
+      "bwd_right": 152.08,
+      "bwd": 157.62,
+      "bwd_left": 158.33,
+      "left": 152.93,
+      "fwd_left": 150.16
+    },
+    "jog_speeds": {
+      "fwd": 463.51,
+      "fwd_right": 456.04,
+      "right": 414.97,
+      "bwd_right": 436.87,
+      "bwd": 462.16,
+      "bwd_left": 443.91,
+      "left": 419.23,
+      "fwd_left": 456.58
+    },
     "move_start_speed": 3,
     "move_full_speed": 20,
     "blend_seconds": 0.15,

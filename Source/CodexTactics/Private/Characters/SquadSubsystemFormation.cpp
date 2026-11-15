@@ -128,6 +128,12 @@ void USquadSubsystem::ApplyFormationFrame()
 		{
 			continue;
 		}
+		if (Operative->IsInStealthMode())
+		{
+			Operative->SetFormationLookYaw(TOptional<float>());
+			LookFilters.Remove(Member);
+			continue;
+		}
 		const float* RawYaw = FrameLooks.Find(Member);
 		// One-frame flips between the two sides of a wall (ClearLook) never reach the body (FormationLookFilterRules).
 		const TOptional<float> Raw = RawYaw ? TOptional<float>(*RawYaw) : TOptional<float>();

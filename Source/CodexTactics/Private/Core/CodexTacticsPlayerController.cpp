@@ -17,6 +17,7 @@
 #include "Combat/GrenadeSubsystem.h"
 #include "Characters/SquadTransferSubsystem.h"
 #include "UI/DialogueRules.h"
+#include "Tactics/CoverGhostActor.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -95,6 +96,11 @@ namespace SquadKeys
 
 void ACodexTacticsPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (IsValid(StealthWallHoverGhost.Get()))
+	{
+		StealthWallHoverGhost->Destroy();
+	}
+	StealthWallHoverGhost = nullptr;
 	if (SquadKeyProcessor.IsValid() && FSlateApplication::IsInitialized())
 	{
 		FSlateApplication::Get().UnregisterInputPreProcessor(SquadKeyProcessor);
@@ -394,6 +400,7 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		if (!bFreezeCoverHoverForTesting)
 		{
 			UpdateSquadMoveHover(bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+			UpdateStealthWallHover(PeekTurnBased ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
 		}
 		// Rev 5g: an EXIT arrow under the cursor lights up and shows the hand too.
 		AInteriorExitArrowActor* HoveredExit = bCursorHit ? Cast<AInteriorExitArrowActor>(TrapHit.GetActor()) : nullptr;

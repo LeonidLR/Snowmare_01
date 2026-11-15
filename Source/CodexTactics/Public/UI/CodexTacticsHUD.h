@@ -323,6 +323,8 @@ private:
 	 * enemies inside the previewed hearing circle (stone aim / WHISTLE hovered; UStealthLureSubsystem::GetPreviewListeners).
 	 */
 	void DrawStealthLureMarkers();
+	/** Stealth v2 §5: thin look line + eye marker for selected operatives with a manual stealth look anchor. */
+	void DrawStealthLookMarkers();
 	/** Sprint 14: «[KNOCKED DOWN]» badge + recovery bar over every knocked-down unit (squad and enemies). */
 	void DrawKnockdownBars();
 	/** Suppressive fire (2026-10-26): "SUPPRESSED" (amber) / "PINNED" (red) over every suppressed unit, with its level bar. */

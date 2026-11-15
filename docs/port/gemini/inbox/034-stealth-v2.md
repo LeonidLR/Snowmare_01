@@ -1,5 +1,29 @@
 # 034 - Stealth v2 (was Codex 008) - now YOURS (designer 2026-11-12: Codex removed). C++ on the paths below.
 
+## Allowed paths
+- Source/CodexTactics/**/Characters/Operative*Stealth*
+- Source/CodexTactics/**/Characters/OperativeAnimInstance*.{h,cpp}
+- Source/CodexTactics/**/Characters/OperativeCharacter*.{h,cpp}
+- Source/CodexTactics/**/Characters/SquadSubsystem*.{h,cpp}
+- Source/CodexTactics/**/Characters/StealthModeRules*.{h,cpp}
+- Source/CodexTactics/**/Combat/TacticalSightSubsystem*.{h,cpp}
+- Source/CodexTactics/**/Combat/PerceptionRules*.{h,cpp}
+- Source/CodexTactics/**/AI/PmcSquadSubsystem*.{h,cpp}
+- Source/CodexTactics/**/Characters/EnemyCharacterPerception*.{h,cpp}
+- Source/CodexTactics/**/Characters/MarksmanEnemyCharacter*.{h,cpp}
+- Source/CodexTactics/**/Core/CodexTacticsPlayerController*.{h,cpp}
+- Source/CodexTactics/**/Core/PlayerCommands*.{h,cpp}
+- Source/CodexTactics/**/Tactics/CoverGhostActor*.{h,cpp}
+- Source/CodexTactics/**/UI/ActionBarWidget*.{h,cpp}
+- Source/CodexTactics/**/UI/CodexTacticsHUD*.{h,cpp}
+- Content/Data/AI/stealth_mode.json
+- Content/Data/Weapons/weapon_anim_sets.json
+- Source/CodexTacticsDev/Private/Debug/StealthModeSmokeCommand.cpp
+- Source/CodexTacticsTests/Private/Characters/StealthModeRulesTest.cpp
+- docs/port/gemini/inbox/034-*.md
+- docs/port/gemini/outbox/034-*.md
+
+## Spec / Description
 Spec = docs/port/codex/inbox/008-stealth-8dir-fast-lean.md (all 5 sections; do section 4 FIRST - the cover order must keep stealth,
 then 5 - Shift+LMB look anchor, then 1-3). Base: branch `gemini/034-stealth-v2` from `interim/2026-11-12` (Codex's stealth 003 code
 is there: OperativeCharacterStealth.cpp, OperativeAnimInstanceStealth.cpp, StealthModeSmokeCommand.cpp, StealthDetectionSmoke...).

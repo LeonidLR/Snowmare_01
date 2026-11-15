@@ -11,6 +11,7 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
+#include "UI/FloatingTextSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "Engine/World.h"
@@ -143,9 +144,29 @@ void ACodexTacticsPlayerController::CameraDragRotateStart()
 	{
 		return;
 	}
-	// Sprint 10: Shift + RMB assigns a defense line instead of the camera drag.
+	// Sprint 10: Shift + RMB assigns a defense line instead of the camera drag (or clears an active stealth manual look anchor first).
 	if (IsShiftModifierDown())
 	{
+		if (USquadSubsystem* Squad = GetSquad())
+		{
+			AOperativeCharacter* FirstCleared = nullptr;
+			for (AOperativeCharacter* Member : Squad->GetSelectedGroup())
+			{
+				if (Member && Member->HasStealthManualLookTarget())
+				{
+					Member->ClearStealthManualLookTarget();
+					if (!FirstCleared)
+					{
+						FirstCleared = Member;
+					}
+				}
+			}
+			if (FirstCleared)
+			{
+				UFloatingTextSubsystem::SpawnAboveOperative(FirstCleared, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+				return;
+			}
+		}
 		AssignDefenseUnderCursor(); // (on enemies: the SUPPRESS order, 2026-10-26)
 		return;
 	}

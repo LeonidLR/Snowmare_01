@@ -17,10 +17,10 @@ namespace FacingRules
 		return FRotator::NormalizeAxis(CurrentYaw + FRotator::NormalizeAxis(TargetYaw - CurrentYaw) * Alpha);
 	}
 
-	/** Low-pass of the planar velocity (time constant ~0.1 s) so a single-frame wobble does not turn the body. */
-	inline FVector SmoothVelocity(const FVector& Smoothed, const FVector& Velocity, float DeltaSeconds)
+	/** Low-pass of the planar velocity (time constant = 1/Rate, default 0.1 s) so a single-frame wobble does not turn the body. */
+	inline FVector SmoothVelocity(const FVector& Smoothed, const FVector& Velocity, float DeltaSeconds, float Rate = 10.f)
 	{
-		const float Alpha = 1.f - FMath::Exp(-10.f * DeltaSeconds);
+		const float Alpha = 1.f - FMath::Exp(-Rate * DeltaSeconds);
 		return FMath::Lerp(Smoothed, FVector(Velocity.X, Velocity.Y, 0.f), Alpha);
 	}
 }

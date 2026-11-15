@@ -394,9 +394,29 @@ public:
 	bool SetStealthMode(bool bEnabled);
 	/** Eligibility for the HUD and group toggle; critical, incapacitated, mounted and traversal states refuse entry. */
 	bool CanEnterStealthMode() const;
+	/** Personal eligibility checks ignoring squad formation mode (for formation-only UI tooltips/refusals). */
+	bool CanEnterStealthWithoutFormation() const;
 	/** Whether this operative is currently stealthed (fire/sprint require an explicit re-entry). */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Stealth")
 	bool IsInStealthMode() const { return bStealthMode; }
+	/** Stealth v2: double-click fast crouched movement in stealth (does not stand up or break stealth). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Stealth")
+	bool IsStealthFast() const { return bStealthMode && bStealthFast; }
+	bool CanStealthFast() const;
+	void SetStealthFast(bool bFast);
+	/** Stealth v2 §5: manual look anchor fixed by Shift + LMB while moving/holding in stealth; cleared on self Shift+LMB, Shift+RMB, or stealth exit. */
+	void SetStealthManualLookTarget(const FVector& WorldPoint);
+	void ClearStealthManualLookTarget();
+	bool HasStealthManualLookTarget() const { return bStealthMode && bHasStealthManualLook; }
+	FVector GetStealthManualLookTarget() const { return StealthManualLookTarget; }
+	/** Stealth v2 §1: automatic threat look-lock (within LookLockFovDeg, remembered for LookLockKeepSeconds). */
+	bool HasStealthAutoLookTarget() const { return bStealthMode && StealthAutoLookTargetId != 0 && StealthAutoLookActor.IsValid(); }
+	FVector GetStealthAutoLookTarget() const { return HasStealthAutoLookTarget() ? StealthAutoLookLocation : FVector::ZeroVector; }
+	const AActor* GetStealthAutoLookActor() const { return HasStealthAutoLookTarget() ? StealthAutoLookActor.Get() : nullptr; }
+	void ClearStealthAutoLookTarget();
+	void UpdateStealthLookLock(float DeltaSeconds);
+	/** Returns the active stealth look target point (priority: manual look anchor > automatic threat lock in §1). */
+	bool GetStealthLookPoint(FVector& OutPoint) const;
 
 
 	/** True while the operative has a move order in progress or still visibly moves. */
@@ -3195,6 +3215,18 @@ private:
 	// Stealth mode (UE-only, designer task 003). Material instances are runtime-only; no asset is saved.
 	UPROPERTY(Transient)
 	bool bStealthMode = false;
+	UPROPERTY(Transient)
+	bool bStealthFast = false;
+	UPROPERTY(Transient)
+	bool bHasStealthManualLook = false;
+	UPROPERTY(Transient)
+	FVector StealthManualLookTarget = FVector::ZeroVector;
+	TWeakObjectPtr<AActor> StealthAutoLookActor;
+	uint32 StealthAutoLookTargetId = 0;
+	UPROPERTY(Transient)
+	FVector StealthAutoLookLocation = FVector::ZeroVector;
+	UPROPERTY(Transient)
+	float StealthAutoLookLostSeconds = 0.f;
 	UPROPERTY(Transient)
 	TObjectPtr<UMaterialInstanceDynamic> StealthMaterial;
 	UPROPERTY(Transient)

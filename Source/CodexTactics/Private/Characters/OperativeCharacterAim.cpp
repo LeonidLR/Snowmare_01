@@ -10,6 +10,7 @@
 #include "Characters/FireArcRules.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/ProneCrawlRules.h"
+#include "Characters/StealthModeRules.h"
 #include "Characters/ThreatFacingRules.h"
 #include "Combat/UnderFireRules.h"
 #include "Characters/EnemyCharacter.h"
@@ -93,6 +94,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// a sprint turns to the movement and stops the fire.
 	bFacingCombatTarget = false;
 	bFacingFormationSector = false;
+	UpdateStealthLookLock(DeltaTime);
 	if (bInCover)
 	{
 		// User design rule 2026-10-06: the back stays against the wall (actor yaw = wall normal); the threat side only picks the _L/_R clip
@@ -167,7 +169,9 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	if (IsOrderedCrawl())
 	{
 		FVector CrawlThreat = FVector::ZeroVector;
-		const bool bRemembered = !bFacingCombatTarget && !bPeekPreTurn && bRealTimeFight && bFoughtThisFight && !bExplicitFacing && !bQuickFireActive
+		FVector UnusedStealthLook = FVector::ZeroVector;
+		const bool bStealthLookActive = IsInStealthMode() && GetStealthLookPoint(UnusedStealthLook);
+		const bool bRemembered = !bFacingCombatTarget && !bPeekPreTurn && !bStealthLookActive && bRealTimeFight && bFoughtThisFight && !bExplicitFacing && !bQuickFireActive
 			&& !bSuppressActive && !IsPanicking() && FindThreatPoint(CrawlThreat);
 		const ProneCrawlRules::ECrawlFacing Facing = ProneCrawlRules::ChooseFacing(true, bFacingCombatTarget && !bFacingUnderFire, bFacingUnderFire, bRemembered);
 		CrawlFacingKind = static_cast<uint8>(Facing);
@@ -179,7 +183,8 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	}
 	// Godot _face_movement_target / _safe_look_at: otherwise the body turns to the (smoothed) movement above 0.35 m/s
 	// with lerp_angle(turn_speed of the stance) and holds still below it — no trembling while braking at the goal.
-	SmoothedVelocity = FacingRules::SmoothVelocity(SmoothedVelocity, GetVelocity(), DeltaTime);
+	const float SmoothRate = StealthModeRules::FacingVelocitySmoothRate(IsInStealthMode() && IsStealthFast());
+	SmoothedVelocity = FacingRules::SmoothVelocity(SmoothedVelocity, GetVelocity(), DeltaTime, SmoothRate);
 	// Turn-based: the grid owns the facing (a shot's FaceAimAt, a step's direction). The parked-follower idle facing from real
 	// time used to pull the body back to the leader's old yaw right after every grid shot (user report 2026-10-09).
 	const UTurnBasedCombatSubsystem* FacingTurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
@@ -188,6 +193,10 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	{
 		ClearIdleFacing();
 	}
+	FVector StealthLookPoint = FVector::ZeroVector;
+	const bool bStealthLook = !bFacingCombatTarget && !bPeekPreTurn && !bGridOwnsFacing && !bExplicitFacing && !bSuppressActive
+		&& !bQuickFireActive && !bSprinting && !bCarrying && !IsPanicking() && !bVaulting && !IsClimbingLadder()
+		&& IsInStealthMode() && GetStealthLookPoint(StealthLookPoint);
 	bool bFacingWall = false;
 	if (bPeekPreTurn)
 	{
@@ -197,7 +206,8 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	}
 	// Running into cover (user report 2026-10-09: two pops on entry): the last metres turn the body to face the wall, the
 	// pose the enter clip starts in (UpdateCoverEntryBlend takes out what is left of the turn).
-	else if (!bFacingCombatTarget && bHasPendingCover && !bInCover && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f
+	// Manual stealth look (§5) / stealth lock keeps facing the look target all the way until cover entry attaches to the wall.
+	else if (!bStealthLook && !bFacingCombatTarget && bHasPendingCover && !bInCover && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f
 		&& FVector::Dist2D(GetActorLocation(), PendingCoverSlot.WorldLocation) < CoverApproachFaceWallCm
 		&& FVector::DotProduct(SmoothedVelocity.GetSafeNormal2D(), -PendingCoverSlot.WallNormal.GetSafeNormal2D()) >= 0.5f)
 	{
@@ -206,13 +216,18 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		bFacingWall = true; // the movement facing below stays out of it this frame
 	}
 	const float TurnSpeed = OperativeMovementRules::GetTurnRate(MovementConfig, Stance) / 57.2958f; // stored as deg/s, Godot rad/s
+	// Stealth v2 (Spec 008 S1/S5): in stealth without look target / when fast stealth running, body aligns crisply with movement direction
+	// (fast turn <= 0.3 s like normal sprint/run) instead of being clamped by crouch turn rate.
+	const float MoveTurnSpeed = (IsInStealthMode() && (!bStealthLook || IsStealthFast()))
+		? FMath::Max(OperativeMovementRules::GetTurnRate(MovementConfig, EOperativeStance::Standing), StealthModeRules::MinMoveTurnRateDeg) / 57.2958f // >= 18 rad/s
+		: TurnSpeed;
 	// User request 2026-10-22: after the retreat at a run he does not stand with his back to the enemies chasing him - he turns to the one
 	// he was fighting (its last seen spot), or the nearest live enemy; the fire posture then picks targets as usual (decided here, applied
 	// at the end of the chain). User decision 2026-10-26 (the squad stays in formation in the fight): this turn also wins over the formation
 	// look sector of a standing member (a formation member who fought keeps facing the threat, not his sector).
 	bool bTurnToThreat = false;
 	FVector Threat = FVector::ZeroVector;
-	if (!bFacingCombatTarget && !bFacingWall)
+	if (!bFacingCombatTarget && !bFacingWall && !bStealthLook)
 	{
 		ThreatFacingRules::FFacts Facts;
 		Facts.bRealTimeFight = bRealTimeFight;
@@ -225,22 +240,31 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		Facts.bHasThreat = Facts.bRealTimeFight && Facts.bFoughtThisFight && Facts.bStanding && FindThreatPoint(Threat);
 		bTurnToThreat = ThreatFacingRules::ShouldTurnToThreat(Facts);
 	}
+	if (bStealthLook)
+	{
+		const float StealthLookYaw = (StealthLookPoint - GetActorLocation()).Rotation().Yaw;
+		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, StealthLookYaw, TurnSpeed, DeltaTime), 0.f));
+	}
 	// Formation look sectors (Codex.Formation.Sectors; USquadSubsystem sets the yaw only with the console on): below the combat target, a
 	// facing order, the cover (returned above / the approach to a pending slot), an order's idle facing and (2026-10-26) the threat turn
 	// above; above the movement direction. He keeps walking his path - the 8-direction locomotion strafes / walks backwards (the rear man
-	// looks at 6).
-	bFacingFormationSector = !bFacingCombatTarget && !bFacingWall && FormationLookYaw.IsSet() && !bExplicitFacing && !bQuickFireActive
+	// looks at 6). In stealth mode (008), formation look sectors and parked follower idle facings are strictly disabled.
+	bFacingFormationSector = !IsInStealthMode() && !bStealthLook && !bFacingCombatTarget && !bFacingWall && FormationLookYaw.IsSet() && !bExplicitFacing && !bQuickFireActive
 		&& !bSuppressActive && !bGridOwnsFacing && !bHasIdleFacing && !bHasPendingCover && !bSprinting && !bCarrying && Stance != EOperativeStance::Prone
 		&& !IsPanicking() && !bTurnToThreat;
-	if (bFacingFormationSector)
+	if (bStealthLook)
+	{
+		// Already rotated toward StealthLookPoint above; keep lower priority facing branches from overriding it.
+	}
+	else if (bFacingFormationSector)
 	{
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, FormationLookYaw.GetValue(), TurnSpeed, DeltaTime), 0.f));
 	}
 	else if (!bFacingCombatTarget && !bFacingWall && SmoothedVelocity.SizeSquared2D() > 35.f * 35.f)
 	{
-		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, SmoothedVelocity.Rotation().Yaw, TurnSpeed, DeltaTime), 0.f));
+		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, SmoothedVelocity.Rotation().Yaw, MoveTurnSpeed, DeltaTime), 0.f));
 	}
-	else if (!bFacingCombatTarget && bHasIdleFacing && GetVelocity().SizeSquared2D() < 10.f * 10.f && !bGridOwnsFacing)
+	else if (!bFacingCombatTarget && bHasIdleFacing && GetVelocity().SizeSquared2D() < 10.f * 10.f && !bGridOwnsFacing && !IsInStealthMode())
 	{
 		// Every frame (it used to step only with the formation repath, every 0.2 s, and looked jerky).
 		SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, IdleFacingYaw, TurnSpeed, DeltaTime), 0.f));

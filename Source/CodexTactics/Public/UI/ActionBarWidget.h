@@ -101,6 +101,9 @@ public:
 	/** Stealth lure buttons (smokes): the WHISTLE / THROW label and whether it is enabled. */
 	FText GetStealthButtonText(bool bThrow) const;
 	bool IsStealthButtonEnabled(bool bThrow) const;
+	/** Stealth toggle button state/tooltip (smokes). */
+	bool IsStealthModeButtonEnabled() const;
+	FText GetStealthModeButtonToolTip() const;
 
 	/** Sprint 13: an inventory drag dropped on squad slot Index -> ACodexTacticsHUD::HandleTransferDropOnActor. */
 	ETransferRequestOutcome HandleTransferDropOnSlot(int32 Index, AOperativeCharacter* Sender, ETransferItem Item);

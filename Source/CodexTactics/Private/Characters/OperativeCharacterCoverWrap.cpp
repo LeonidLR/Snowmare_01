@@ -4,6 +4,7 @@
 // world plan).
 
 #include "Characters/OperativeCharacter.h"
+#include "Characters/StealthModeRules.h"
 
 #include "CodexTactics.h"
 #include "Engine/World.h"
@@ -76,8 +77,8 @@ EOperativeOrderResult AOperativeCharacter::OrderCoverWrap(const FCoverWrapPlan& 
 	}
 	if (Stance == EOperativeStance::Prone)
 	{
-		// As the shimmy (rev 2026-10-19): no prone wrap - he gets up first (low cover crouched, high cover standing), then goes round.
-		const EOperativeStance Up = CurrentCoverHeight == ECoverHeight::LowCover ? EOperativeStance::Crouching : EOperativeStance::Standing;
+		// Stealth v2 §2 (no standing up in stealth): crouches in stealth or low cover, high cover standing outside stealth.
+		const EOperativeStance Up = (IsInStealthMode() || CurrentCoverHeight == ECoverHeight::LowCover) ? EOperativeStance::Crouching : EOperativeStance::Standing;
 		const float Rise = GetStanceChangeDelay(EOperativeStance::Prone, Up);
 		SetStance(Up);
 		if (Stance == EOperativeStance::Prone)
@@ -136,7 +137,10 @@ EOperativeOrderResult AOperativeCharacter::OrderCoverWrap(const FCoverWrapPlan& 
 	bCoverAutoSnap = false;
 	bAtCoverCorner = false;
 	bSprinting = false;
-	ApplyMovementParams(OperativeMovementRules::ComputeMaxSpeed(MovementConfig, EOperativeStance::Crouching, false, IsWounded(), bCarrying) * ColdSpeedMultiplier);
+	const float BaseSpeed = (IsInStealthMode() && IsStealthFast())
+		? StealthModeRules::GetConfig().FastSpeedCm
+		: OperativeMovementRules::ComputeMaxSpeed(MovementConfig, EOperativeStance::Crouching, false, IsWounded(), bCarrying);
+	ApplyMovementParams(BaseSpeed * ColdSpeedMultiplier);
 	SetCoverWrapFace(Plan.WaypointSlot[0]);
 	UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: round the object - %.0f cm along its wall to the %s, %d corner(s) (%d outer, %d inner), ends %s facing %s"),
 		*DisplayName.ToString(), Plan.Path.LengthCm, Plan.Path.Direction > 0 ? TEXT("right") : TEXT("left"), Plan.Path.CornerCount(), Plan.Path.ConvexCorners,

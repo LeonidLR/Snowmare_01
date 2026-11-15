@@ -38,7 +38,10 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Misc/CoreDelegates.h"
 #include "Misc/Paths.h"
+#include "Tactics/CoverGhostActor.h"
 #include "Tactics/CoverTraceRules.h"
+#include "UI/ActionBarWidget.h"
+#include "UI/CodexTacticsHUD.h"
 #include "UnrealClient.h"
 
 namespace StealthModeSmoke
@@ -79,9 +82,52 @@ namespace StealthModeSmoke
 		FVector Forward = FVector::ForwardVector;
 		FVector Right = FVector::RightVector;
 		FVector WallOrigin = FVector::ZeroVector;
+		FVector AnchorPoint = FVector::ZeroVector;
+		int32 AnchorSamples = 0;
+		int32 AnchorSideClipSamples = 0;
+		int32 AnchorForwardClipSamples = 0;
+		int32 AnchorWrongYawFrames = 0;
+		int32 AnchorLostSightFrames = 0;
+		float LookDirArrivedYaw = 0.f;
+		float LookDirMoveStartTime = 0.f;
+		float LookDirAlignTime = 0.f;
+		float LookDirMaxStopDrift = 0.f;
+		bool bLookDirFastTurnChecked = false;
+		bool bLookDirMoveStarted = false;
+		// Designer bug 2026-11-14 (034): a re-order while already moving in stealth sidestepped for seconds.
+		bool bReorderOnly = false;
+		int32 ReorderLeg = 0;
+		int32 ReorderPhase = 0;
+		float ReorderTime = -1.f;
+		bool bReorderChecked = false;
+		bool bReorderClipChecked = false;
+		int32 ReorderWrongClipFrames = 0;
+		// Per-frame (Sample): gait starts begun after the re-order, the dominant clip's effective play rate, frames with a slow rate at speed.
+		int32 ReorderStartsBegun = 0;
+		bool bReorderStartFresh = false;
+		int32 ReorderSlowRateFrames = 0;
+		float ReorderMinSpeed = 0.f;
+		float ReorderMinRate = 0.f;
+		FName ReorderPrevClip;
+		float ReorderPrevClipTime = 0.f;
+		double ReorderPrevWorldTime = 0.0;
+		double ReorderWorldTime = -1.0;
+		// Whole leg (first order and re-order): Fast at full speed must play the Fast gait at ~1.0x (designer follow-up 2026-11-14).
+		double FastSinceWorld = -1.0;
+		int32 SlowClipAtFastFrames = 0;
+		int32 FastRateOffFrames = 0;
+		int32 FastRateFrames = 0;
+		FString FastRateWorst;
+		FName FastRatePrevClip;
+		float FastRatePrevTime = 0.f;
+		double FastRatePrevWorld = 0.0;
+		FVector ReorderDirection = FVector::ForwardVector;
 		float GroundZ = 0.f;
 		TWeakObjectPtr<AOperativeCharacter> Op;
 		TWeakObjectPtr<AEnemyCharacter> Enemy;
+		TWeakObjectPtr<AEnemyCharacter> AnchorEnemy;
+		TWeakObjectPtr<AEnemyCharacter> AutoEnemyFar;
+		TWeakObjectPtr<AEnemyCharacter> AutoEnemyNear;
 		TWeakObjectPtr<AStaticMeshActor> Wall;
 		TWeakObjectPtr<UMaterialInterface> OriginalMaterial;
 		TMap<FString, int32> Votes;
@@ -143,6 +189,9 @@ namespace StealthModeSmoke
 	bool Finish(FState& State, bool bComplete)
 	{
 		FCoreDelegates::OnEndFrame.Remove(State.FrameHandle);
+		if (State.AnchorEnemy.IsValid()) { State.AnchorEnemy->Destroy(); }
+		if (State.AutoEnemyFar.IsValid()) { State.AutoEnemyFar->Destroy(); }
+		if (State.AutoEnemyNear.IsValid()) { State.AutoEnemyNear->Destroy(); }
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bComplete && State.Failures == 0 ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("StealthModeSmoke"));
 		return false;
@@ -233,10 +282,70 @@ namespace StealthModeSmoke
 			const bool bBlend = Speed < 150.f ? Slow > 0.9f && Fast < 0.1f : Speed < 350.f ? Slow > 0.15f && Fast > 0.15f : Fast > 0.7f;
 			Check(State, bBlend && FMath::IsNearlyEqual(Total, 1.f, 0.01f), FString::Printf(TEXT("speed %.0f: Slow %.3f Fast %.3f total %.3f"), Speed, Slow, Fast, Total));
 		}
-		Movement->StopMovementImmediately();
+		// Designer task 034 fastspeed: verify fast stealth locomotion across 8 angles.
+		// Legs must never drag/sluggishly cycle; PlayRate must equal Speed / BlendedNominalSpeed.
+		Op->SetStealthFast(true);
+
+		// Continuity check (H1): gradual acceleration from rest
+		float PrevFast = Instance->GetStealthFastBlend();
+		for (float AccelSpeed = 30.f; AccelSpeed <= 460.f; AccelSpeed += 40.f)
+		{
+			Movement->Velocity = State.Forward * AccelSpeed;
+			Instance->NativeUpdateAnimation(0.05f);
+			const float CurrFast = Instance->GetStealthFastBlend();
+			Check(State, FMath::Abs(CurrFast - PrevFast) < 0.35f,
+				FString::Printf(TEXT("accel speed %.0f: FastBlend %.3f continuous (delta %.3f)"), AccelSpeed, CurrFast, FMath::Abs(CurrFast - PrevFast)));
+			PrevFast = CurrFast;
+		}
+
+		for (const float AngleDeg : { 0.f, 20.f, 45.f, 90.f, 135.f, 180.f, -45.f, -90.f })
+		{
+			const FVector Dir = State.Forward.RotateAngleAxis(AngleDeg, FVector::UpVector);
+			Movement->Velocity = Dir * 460.f;
+			for (int32 Frame = 0; Frame < 30; ++Frame) { Instance->NativeUpdateAnimation(0.05f); }
+
+			// Accumulate unwrapped delta phase over 10 frames (0.5s) for robust multi-frame rate (M8)
+			float AccDeltaPhase = 0.f;
+			float LastPhase = Instance->GetStealthPhase();
+			for (int32 Step = 0; Step < 10; ++Step)
+			{
+				Instance->NativeUpdateAnimation(0.05f);
+				const float CurrPhase = Instance->GetStealthPhase();
+				AccDeltaPhase += FMath::Fmod(CurrPhase - LastPhase + 1.f, 1.f);
+				LastPhase = CurrPhase;
+			}
+			const float Rate = AccDeltaPhase / 0.5f;
+			const float PlayRate = Rate * 0.8f;
+
+			float FastWeight = 0.f, SlowWeight = 0.f;
+			for (const FOperativeClipState& PoseClip : Instance->GetStealthClips())
+			{
+				if (!PoseClip.Sequence) { continue; }
+				if (PoseClip.Sequence->GetName().Contains(TEXT("Fast"))) { FastWeight += PoseClip.Weight; }
+				if (PoseClip.Sequence->GetName().Contains(TEXT("Slow"))) { SlowWeight += PoseClip.Weight; }
+			}
+			UE_LOG(LogCodexTactics, Log, TEXT("Stealth fastspeed angle %.0f deg: PlayRate %.3f, FastWeight %.3f, SlowWeight %.3f"),
+				AngleDeg, PlayRate, FastWeight, SlowWeight);
+			Check(State, FastWeight > 0.95f && SlowWeight < 0.05f,
+				FString::Printf(TEXT("angle %.0f deg: purely fast stealth (Fast %.3f Slow %.3f)"), AngleDeg, FastWeight, SlowWeight));
+			// Strict regression guard (H2): pre-fix build was clamped to 0.96x; +90 deg (R strafe, native 465.8 cm/s) must exceed 0.97x
+			if (FMath::IsNearlyEqual(AngleDeg, 90.f, 1.f))
+			{
+				Check(State, PlayRate > 0.97f,
+					FString::Printf(TEXT("angle %.0f deg: PlayRate %.3f uncapped above 0.96 ceiling"), AngleDeg, PlayRate));
+			}
+			Check(State, PlayRate >= 0.88f && PlayRate <= 1.25f,
+				FString::Printf(TEXT("angle %.0f deg: natural play rate %.3f (no dragging or sliding)"), AngleDeg, PlayRate));
+		}
+
+		// Sprint cancellation from active fast-stealth at full speed (M6)
+		Movement->Velocity = State.Forward * 460.f;
+		for (int32 Frame = 0; Frame < 10; ++Frame) { Instance->NativeUpdateAnimation(0.05f); }
 		Op->SetSprinting(true);
-		Check(State, !Op->IsInStealthMode(), TEXT("sprint still breaks stealth after fast non-sprint blend"));
+		Check(State, !Op->IsInStealthMode(), TEXT("sprint from active fast-stealth at 460 cm/s immediately breaks stealth"));
 		Op->SetSprinting(false);
+		Op->SetStealthFast(false);
+		Movement->StopMovementImmediately();
 		Op->SetStealthMode(true);
 	}
 	void CheckHearing(FState& State, AOperativeCharacter* Op)
@@ -328,6 +437,89 @@ namespace StealthModeSmoke
 			Anim(Op)->GetCoverPlayback(Playing, MontageWeight, SlotWeight);
 			if (MontageWeight > 0.01f && Playing.Contains(TEXT("cvr"), ESearchCase::IgnoreCase)) { ++State.WallCoverMontageFrames; }
 		}
+		if (State.Stage == 628 && Anim(Op))
+		{
+			const double Now = Op->GetWorld()->GetTimeSeconds();
+			const bool bFastNow = Op->IsStealthFast();
+			State.FastSinceWorld = bFastNow ? (State.FastSinceWorld < 0.0 ? Now : State.FastSinceWorld) : -1.0;
+			const float FastFor = bFastNow ? static_cast<float>(Now - State.FastSinceWorld) : 0.f;
+			const float Speed = static_cast<float>(Op->GetVelocity().Size2D());
+			const float FastSpeed = StealthModeRules::GetConfig().FastSpeedCm;
+			const UAnimSequenceBase* DominantClip = Anim(Op)->GetStealthDominantClip();
+			const FOperativeClipState* Dominant = nullptr;
+			for (const FOperativeClipState& Clip : Anim(Op)->GetStealthClips())
+			{
+				if (Clip.Sequence && Clip.Sequence == DominantClip && (!Dominant || Clip.Weight > Dominant->Weight)) { Dominant = &Clip; }
+			}
+			if (bFastNow && FastFor >= 0.25f && Speed > 0.8f * FastSpeed && Dominant)
+			{
+				State.SlowClipAtFastFrames += Dominant->Sequence->GetName().StartsWith(TEXT("Stealth_Slow_")) ? 1 : 0;
+				if (Speed >= 0.95f * FastSpeed && Dominant->Sequence->GetFName() == State.FastRatePrevClip && Now > State.FastRatePrevWorld)
+				{
+					float Delta = Dominant->Time - State.FastRatePrevTime;
+					Delta += Delta < 0.f ? Dominant->Sequence->GetPlayLength() : 0.f;
+					const float Rate = Delta / static_cast<float>(Now - State.FastRatePrevWorld);
+					++State.FastRateFrames;
+					if (Rate < 0.85f || Rate > 1.15f)
+					{
+						++State.FastRateOffFrames;
+						State.FastRateWorst = FString::Printf(TEXT("%s %.2f"), *Dominant->Sequence->GetName(), Rate);
+					}
+				}
+			}
+			State.FastRatePrevClip = Dominant ? Dominant->Sequence->GetFName() : NAME_None;
+			State.FastRatePrevTime = Dominant ? Dominant->Time : 0.f;
+			State.FastRatePrevWorld = Now;
+		}
+		if (State.Stage == 628 && State.ReorderPhase == 2 && Anim(Op))
+		{
+			const double Now = Op->GetWorld()->GetTimeSeconds();
+			if (State.ReorderWorldTime < 0.0)
+			{
+				State.ReorderWorldTime = Now;
+				State.ReorderMinSpeed = TNumericLimits<float>::Max();
+				State.ReorderMinRate = TNumericLimits<float>::Max();
+			}
+			const float Since = static_cast<float>(Now - State.ReorderWorldTime);
+			const float Speed = static_cast<float>(Op->GetVelocity().Size2D());
+			const UOperativeAnimInstance* Instance = Anim(Op);
+			bool bFreshStart = false;
+			const FOperativeClipState* Dominant = nullptr;
+			for (const FOperativeClipState& Clip : Instance->GetStealthClips())
+			{
+				if (!Clip.Sequence || Clip.Weight < 0.01f) { continue; }
+				const FString Name = Clip.Sequence->GetName();
+				bFreshStart |= Name.Contains(TEXT("_Start_IP")) && !Name.Contains(TEXT("Wall")) && Clip.Time < 0.15f;
+				Dominant = !Dominant || Clip.Weight > Dominant->Weight ? &Clip : Dominant;
+			}
+			if (Since < 1.0f)
+			{
+				State.ReorderStartsBegun += bFreshStart && !State.bReorderStartFresh ? 1 : 0;
+				State.ReorderMinSpeed = FMath::Min(State.ReorderMinSpeed, Speed);
+			}
+			State.bReorderStartFresh = bFreshStart;
+			float Rate = -1.f;
+			if (Dominant && Dominant->Sequence->GetFName() == State.ReorderPrevClip && Now > State.ReorderPrevWorldTime)
+			{
+				float Delta = Dominant->Time - State.ReorderPrevClipTime;
+				Delta += Delta < 0.f ? Dominant->Sequence->GetPlayLength() : 0.f;
+				Rate = Delta / static_cast<float>(Now - State.ReorderPrevWorldTime);
+			}
+			const float FastSpeed = StealthModeRules::GetConfig().FastSpeedCm;
+			if (Rate >= 0.f && Since < 1.0f && Op->IsStealthFast() && Speed > 0.8f * FastSpeed)
+			{
+				State.ReorderMinRate = FMath::Min(State.ReorderMinRate, Rate);
+				State.ReorderSlowRateFrames += Rate < 0.5f ? 1 : 0;
+			}
+			if (Since < 0.7f)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke reorder frame leg %d since %.3f speed %.0f clip %s w %.2f t %.3f rate %.2f fresh %d"), State.ReorderLeg, Since, Speed,
+					Dominant ? *Dominant->Sequence->GetName() : TEXT("none"), Dominant ? Dominant->Weight : 0.f, Dominant ? Dominant->Time : 0.f, Rate, bFreshStart ? 1 : 0);
+			}
+			State.ReorderPrevClip = Dominant ? Dominant->Sequence->GetFName() : NAME_None;
+			State.ReorderPrevClipTime = Dominant ? Dominant->Time : 0.f;
+			State.ReorderPrevWorldTime = Now;
+		}
 		if (State.Stage == 40 && Op->bShimmying && Op->GetVelocity().Size2D() > 3.f)
 		{
 			const UOperativeAnimInstance* Instance = Anim(Op);
@@ -351,9 +543,42 @@ namespace StealthModeSmoke
 			else { State.bWallPhaseValid = false; }
 		}
 
+		if (State.Stage == 612)
+		{
+			if (const UTacticalSightSubsystem* Sight = Op->GetWorld() ? Op->GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr)
+			{
+				if (State.AnchorEnemy.IsValid() && !Sight->IsVisibleToSquad(State.AnchorEnemy.Get()))
+				{
+					++State.AnchorLostSightFrames;
+				}
+			}
+			const float ExpectedYaw = static_cast<float>((State.AnchorPoint - Op->GetActorLocation()).Rotation().Yaw);
+			if (FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw)) > 10.f)
+			{
+				++State.AnchorWrongYawFrames;
+			}
+			const UOperativeAnimInstance* Instance = Anim(Op);
+			if (Instance && Instance->GetStealthWeight() > 0.9f && Op->GetVelocity().Size2D() > 20.f)
+			{
+				if (const UAnimSequenceBase* Clip = Instance->GetStealthDominantClip())
+				{
+					++State.AnchorSamples;
+					const FString Name = Clip->GetName();
+					if (Name.Contains(TEXT("_L_")) || Name.Contains(TEXT("_FL_")) || Name.Contains(TEXT("_BL_")))
+					{
+						++State.AnchorSideClipSamples;
+					}
+					else if (Name.Contains(TEXT("_F_")))
+					{
+						++State.AnchorForwardClipSamples;
+					}
+				}
+			}
+		}
+
 		if (State.Stage == 2)
 		{
-			Op->SetFormationLookYaw(static_cast<float>(State.Forward.Rotation().Yaw));
+			Op->SetStealthManualLookTarget(State.Origin + State.Forward * 10000.f);
 			const UOperativeAnimInstance* Instance = Anim(Op);
 			if (State.StageTime > 3.f && Instance && Instance->GetStealthWeight() > 0.9f && Op->GetVelocity().Size2D() > 20.f)
 			{
@@ -453,6 +678,48 @@ namespace StealthModeSmoke
 			State.Origin = SmokeUtils::FreeSpot(World, Arena.Origin, Op);
 			State.Forward = Arena.Forward;
 			State.Right = FVector::CrossProduct(FVector::UpVector, State.Forward);
+			// Designer rule (2026-11-12): no stealth in formation mode; stealth only in solo or outside formation.
+			{
+				Squad->ExitSoloMode();
+				Squad->SetFollowersHolding(false);
+				Squad->SetSelectedGroup({ Op }, false);
+				ACodexTacticsHUD* Hud = Cast<ACodexTacticsHUD>(PC->GetHUD());
+				UActionBarWidget* Bar = Hud ? Hud->GetActionBar() : nullptr;
+				if (Bar) { Bar->Refresh(); }
+				Check(State, !Squad->IsSoloMode() && !Op->CanEnterStealthMode(), TEXT("formation mode refuses stealth entry"));
+				PC->ToggleStealthModeKey();
+				Check(State, !Op->IsInStealthMode(), TEXT("key 7 toggle in formation makes no state change"));
+				if (Bar)
+				{
+					Check(State, !Bar->IsStealthModeButtonEnabled(), TEXT("STEALTH button disabled in formation mode"));
+					Check(State, Bar->GetStealthModeButtonToolTip().EqualTo(StealthModeRules::GetFormationBlockedTooltip()),
+						TEXT("STEALTH button shows solo-only tooltip in formation mode"));
+				}
+				Squad->ToggleGuard(Op);
+				Check(State, Op->bGuarding && Op->CanEnterStealthMode(), TEXT("guarding member in formation may stealth"));
+				PC->ToggleStealthModeKey();
+				Check(State, Op->IsInStealthMode(), TEXT("guarding member enters stealth via key 7"));
+				Squad->ToggleGuard(Op);
+				Check(State, !Op->bGuarding && !Op->IsInStealthMode(), TEXT("un-guarding in formation immediately exits stealth"));
+				Squad->SetFollowersHolding(true);
+				Check(State, Op->CanEnterStealthMode() && Op->SetStealthMode(true), TEXT("holding followers outside solo allows stealth"));
+				Squad->SetFollowersHolding(false);
+				Check(State, !Op->IsInStealthMode(), TEXT("hold -> follow in formation immediately exits stealth"));
+				Squad->EnterSoloMode();
+				if (Bar) { Bar->Refresh(); }
+				Check(State, Squad->IsSoloMode() && Op->CanEnterStealthMode() && (!Bar || Bar->IsStealthModeButtonEnabled()),
+					TEXT("solo mode re-enables stealth entry and STEALTH button"));
+				PC->ToggleStealthModeKey();
+				Check(State, Op->IsInStealthMode(), TEXT("key 7 enters stealth in solo mode"));
+				Squad->ToggleSoloMode();
+				bool bAnyStillStealthed = false;
+				for (const AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					bAnyStillStealthed |= Member && Member->IsInStealthMode();
+				}
+				Check(State, !Squad->IsSoloMode() && !bAnyStillStealthed, TEXT("B gather into formation leaves nobody in stealth"));
+				Squad->EnterSoloMode();
+			}
 			int32 Park = 0;
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
@@ -462,6 +729,7 @@ namespace StealthModeSmoke
 				if (Member != Op)
 				{
 					Member->SetActorLocation(State.Origin - State.Forward * (2500.f + 200.f * Park++));
+					Member->SetActorRotation((-State.Forward).Rotation());
 					Member->GetCharacterMovement()->DisableMovement(); // parked fixtures must not keep falling outside the floor
 					Member->SetActorTickEnabled(false);
 				}
@@ -504,7 +772,7 @@ namespace StealthModeSmoke
 			Op->PostureOverride = ESquadFirePosture::Defensive;
 			Squad->SetSelectedGroup({ Op });
 			PC->ToggleStealthModeKey();
-			Next(State, 1);
+			Next(State, State.bReorderOnly ? 627 : 1);
 			break;
 		}
 		case 1:
@@ -579,6 +847,7 @@ namespace StealthModeSmoke
 				Check(State, State.WrongSkeletonSamples == 0 && State.WrongFemalePhase == 0, TEXT("all female samples use female paths/skeleton and measured phase offsets"));
 				Check(State, State.MaxRootDrift <= 0.5f, FString::Printf(TEXT("female in-place root drift relative to mesh %.3f cm <= 0.5"), State.MaxRootDrift));
 			}
+			Op->ClearStealthManualLookTarget();
 			Op->StopOperative();
 			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
 			Op->SetStealthMode(false);
@@ -718,6 +987,14 @@ namespace StealthModeSmoke
 			State.Enemy->SetActorLocation(At(State, 1015.f, 350.f, State.Enemy->GetSimpleCollisionHalfHeight() + 2.f));
 			Sight->Refresh();
 			const FHitResult Hit(State.Wall.Get(), State.Wall->GetStaticMeshComponent(), At(State, 585.f, 180.f, 90.f), -State.Forward);
+			const bool bHover = PC->UpdateCornerPeekHover(Op, &Hit);
+			const ACoverGhostActor* Ghost = PC->GetCornerPeekGhost();
+			Check(State, bHover && Ghost && Ghost->IsShown() && Ghost->IsCornerPeekPose(), TEXT("corner peek hover ghost is active"));
+			if (Ghost && Ghost->GetShownClip())
+			{
+				Check(State, Ghost->GetShownClip()->GetName().Contains(TEXT("Wall_Lean")), TEXT("corner peek ghost in stealth shows stealth lean clip"));
+				Check(State, !Ghost->GetShownClip()->GetName().Contains(TEXT("fire_idle")), TEXT("aim-ghost is suppressed in stealth (no fire_idle clip)"));
+			}
 			Check(State, PC->TryHandleCoverClick(Hit, nullptr) && Op->IsManualCornerPeek(), TEXT("real corner click orders manual peek"));
 			Next(State, 5);
 			break;
@@ -727,6 +1004,13 @@ namespace StealthModeSmoke
 			if (State.StageTime < 4.f || (Op->bShimmying && State.StageTime < 15.f)) { return true; }
 			const UAnimSequenceBase* Clip = Anim(Op)->GetStealthDominantClip();
 			Check(State, Op->IsPeekingRoundCorner() && Clip && Clip->GetName().Contains(TEXT("Wall_Lean")), TEXT("corner peek uses stealth lean clip"));
+			if (const ACoverGhostActor* Ghost = PC->GetCornerPeekGhost())
+			{
+				if (const UAnimSequenceBase* GhostClip = Ghost->GetShownClip())
+				{
+					Check(State, GhostClip->GetName().Contains(TEXT("Wall_Lean")), TEXT("corner peek ghost in stealth uses stealth lean clip"));
+				}
+			}
 			const FVector Head = Op->GetMesh()->GetBoneLocation(TEXT("head"));
 			const FVector Pelvis = Op->GetMesh()->GetBoneLocation(TEXT("pelvis"));
 			const FVector PeekHeadRelative = Head - Pelvis;
@@ -793,10 +1077,576 @@ namespace StealthModeSmoke
 			CheckFastBlend(State, Op);
 			CheckHearing(State, Op);
 			Op->HealthComponent->Heal(10000.f);
+			Next(State, 600);
+			break;
+		case 600:
+		{
+			if (State.StageTime < 1.f) { return true; } // allow any hearing-control attack flash to finish before section 4 UI cover check
+			Op->SetStealthMode(true);
+			Op->SetActorLocation(At(State, 320.f, 0.f, Op->GetSimpleCollisionHalfHeight() + 2.f), false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			const FHitResult WallHoverHit(State.Wall.Get(), State.Wall->GetStaticMeshComponent(), At(State, 585.f, 0.f, 90.f), -State.Forward);
+			const bool bHoverShown = PC->UpdateStealthWallHover(Op, &WallHoverHit);
+			const ACoverGhostActor* HoverGhost = PC->GetStealthWallHoverGhost();
+			const UAnimationAsset* HoverClip = HoverGhost ? HoverGhost->GetShownClip() : nullptr;
+			Check(State, bHoverShown && HoverGhost && !HoverGhost->IsCornerPeekPose() && HoverClip && HoverClip->GetName().Contains(TEXT("Wall_Idle")),
+				TEXT("section 4: hovering mid-wall in stealth shows Stealth_*Wall_Idle cover ghost"));
+			PC->UpdateStealthWallHover(nullptr, nullptr);
+			Check(State, PC->TryHandleCoverClick(WallHoverHit, nullptr) && PC->HasCoverPreview(), TEXT("section 4: click on wall opens stealth cover preview"));
+			PC->ConfirmCoverPreview(false);
+			Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && !Op->IsStealthFast()
+				&& Op->HasPendingCover() && Op->GetCharacterMovement() && Op->GetCharacterMovement()->MaxWalkSpeed <= Op->MovementConfig.CrouchSpeed + 1.f,
+				TEXT("section 4: single-click cover confirm keeps crouched slow stealth during approach"));
+			Next(State, 65);
+			break;
+		}
+		case 65:
+			if (!Op->bInCover && State.StageTime < 8.f) { return true; }
+			Check(State, Op->bInCover && Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && !Op->IsStealthFast(),
+				TEXT("section 4: single-click cover arrival enters cover crouched and stays in stealth"));
+			Op->LeaveCover(TEXT("section 4: test double-click fast stealth cover order"));
+			Op->StopOperative();
+			Op->SetActorLocation(At(State, 320.f, 0.f, Op->GetSimpleCollisionHalfHeight() + 2.f), false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			{
+				const FHitResult FastWallHit(State.Wall.Get(), State.Wall->GetStaticMeshComponent(), At(State, 585.f, 0.f, 90.f), -State.Forward);
+				Check(State, PC->TryHandleCoverClick(FastWallHit, nullptr) && PC->HasCoverPreview(), TEXT("section 4: second wall preview opens before fast confirm"));
+				PC->ConfirmCoverPreview(true);
+				Check(State, Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && Op->IsStealthFast()
+					&& Op->HasPendingCover() && Op->GetCharacterMovement() && Op->GetCharacterMovement()->MaxWalkSpeed >= StealthModeRules::GetConfig().FastSpeedCm - 1.f,
+					TEXT("section 4: double-click cover confirm uses crouched fast stealth and keeps stealth"));
+			}
+			Next(State, 66);
+			break;
+		case 66:
+			if (!Op->bInCover && State.StageTime < 8.f) { return true; }
+			Check(State, Op->bInCover && Op->IsInStealthMode() && Op->GetStance() == EOperativeStance::Crouching && !Op->IsSprinting() && !Op->IsStealthFast(),
+				TEXT("section 4: fast stealth cover arrival enters wall cover in stealth without standing up"));
+			Op->LeaveCover(TEXT("section 4: reset before manual look anchor"));
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			Next(State, 610);
+			break;
+		case 610:
+		{
+			if (State.StageTime < 0.3f) { return true; }
+			Op->SetFormationLookYaw(TOptional<float>());
+			Op->SetStealthMode(true);
+			State.AnchorPoint = State.Origin + State.Right * 380.f;
+			if (UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>())
+			{
+				if (AEnemyCharacter* AnchorEnemy = Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, State.AnchorPoint, (-State.Right).Rotation()))
+				{
+					AnchorEnemy->SetActorTickEnabled(false);
+					AnchorEnemy->CustomTimeDilation = 0.f;
+					AnchorEnemy->bOverridePerception = true;
+					AnchorEnemy->PerceptionOverride.SightRangeCm = 0.f;
+					AnchorEnemy->PerceptionOverride.ProximityCm = 0.f;
+					AnchorEnemy->PerceptionOverride.SmellRadiusCm = 0.f;
+					State.AnchorEnemy = AnchorEnemy;
+				}
+			}
+			Sight->Refresh();
+			Check(State, State.AnchorEnemy.IsValid(), TEXT("section 5: anchor enemy fixture spawned"));
+			PC->SetSimulatedShiftModifier(true);
+			FHitResult AnchorHit(nullptr, nullptr, State.AnchorPoint, FVector::UpVector);
+			AnchorHit.bBlockingHit = true;
+			PC->HandleWorldHit(AnchorHit);
+			PC->SetSimulatedShiftModifier(false);
+			Check(State, Op->HasStealthManualLookTarget() && FVector::Dist2D(Op->GetStealthManualLookTarget(), State.AnchorPoint) < 5.f,
+				TEXT("section 5: Shift + LMB on ground fixes manual stealth look anchor"));
+			Next(State, 611);
+			break;
+		}
+		case 611:
+		{
+			if (State.StageTime < 0.35f) { return true; }
+			const float ExpectedYaw = static_cast<float>((State.AnchorPoint - Op->GetActorLocation()).Rotation().Yaw);
+			Check(State, FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(Op->GetActorRotation().Yaw), ExpectedYaw)) <= 10.f,
+				TEXT("section 5: operative rotates onto manual look anchor"));
+			Sight->Refresh();
+			Check(State, State.AnchorEnemy.IsValid() && Sight->IsVisibleToSquad(State.AnchorEnemy.Get()),
+				TEXT("section 5: enemy at manual anchor visible before orthogonal move"));
+			State.AnchorSamples = State.AnchorSideClipSamples = State.AnchorForwardClipSamples = 0;
+			State.AnchorWrongYawFrames = State.AnchorLostSightFrames = 0;
+			Op->OrderMoveTo(State.Origin + State.Forward * 380.f, false);
+			Next(State, 612);
+			break;
+		}
+		case 612:
+		{
+			if ((State.StageTime < 0.4f || Op->GetVelocity().Size2D() > 10.f) && State.StageTime < 8.f) { return true; }
+			Check(State, State.AnchorSamples > 0 && State.AnchorWrongYawFrames == 0,
+				TEXT("section 5: yaw stays within 10 deg of manual anchor throughout orthogonal move"));
+			Check(State, State.AnchorSideClipSamples > 0 && State.AnchorForwardClipSamples == 0,
+				FString::Printf(TEXT("section 5: lateral stealth clip plays instead of forward F clip while moving 90 deg off anchor (side=%d fwd=%d total=%d)"),
+					State.AnchorSideClipSamples, State.AnchorForwardClipSamples, State.AnchorSamples));
+			Check(State, State.AnchorLostSightFrames == 0 && State.AnchorEnemy.IsValid() && Sight->IsVisibleToSquad(State.AnchorEnemy.Get()),
+				TEXT("section 5: enemy at anchor stays visible to the squad during orthogonal stealth move"));
+			// Clear via Shift + LMB on self, then re-set and clear via Shift + RMB, then auto-clear on leaving stealth.
+			PC->SetSimulatedShiftModifier(true);
+			FHitResult SelfHit(Op, nullptr, Op->GetActorLocation(), FVector::UpVector);
+			SelfHit.bBlockingHit = true;
+			PC->HandleWorldHit(SelfHit);
+			PC->SetSimulatedShiftModifier(false);
+			Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: Shift + LMB on self clears manual stealth look anchor"));
+			PC->SetSimulatedShiftModifier(true);
+			FHitResult ResetHit(nullptr, nullptr, State.AnchorPoint, FVector::UpVector);
+			ResetHit.bBlockingHit = true;
+			PC->HandleWorldHit(ResetHit);
+			PC->RightMousePressed();
+			PC->RightMouseReleased();
+			PC->SetSimulatedShiftModifier(false);
+			Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: Shift + RMB clears manual stealth look anchor"));
+			PC->SetSimulatedShiftModifier(true);
+			PC->HandleWorldHit(ResetHit);
+			PC->SetSimulatedShiftModifier(false);
+			Check(State, Op->HasStealthManualLookTarget(), TEXT("section 5: manual anchor re-armed before stealth exit check"));
+			Op->SetStealthMode(false);
+			Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: leaving stealth clears manual stealth look anchor"));
+			if (State.AnchorEnemy.IsValid()) { State.AnchorEnemy->Destroy(); }
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			Op->SetStealthMode(true);
+			Next(State, 613);
+			break;
+		}
+		case 613:
+		{
+			if (State.StageTime < 0.25f) { return true; }
+			auto SpawnFrozenThreat = [World](const FVector& Pos, const FRotator& Rot) -> AEnemyCharacter*
+			{
+				UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+				AEnemyCharacter* Threat = Waves ? Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, Pos, Rot) : nullptr;
+				if (Threat)
+				{
+					Threat->SetActorTickEnabled(false);
+					Threat->CustomTimeDilation = 0.f;
+					Threat->bOverridePerception = true;
+					Threat->PerceptionOverride.SightRangeCm = 0.f;
+					Threat->PerceptionOverride.ProximityCm = 0.f;
+					Threat->PerceptionOverride.SmellRadiusCm = 0.f;
+				}
+				return Threat;
+			};
+			// Behind operative (180 deg) must NOT trigger automatic threat lock (outside +-100 deg FOV).
+			State.AutoEnemyNear = SpawnFrozenThreat(State.Origin - State.Forward * 300.f, State.Forward.Rotation());
+			Sight->Refresh();
+			Op->UpdateStealthLookLock(0.05f);
+			Check(State, State.AutoEnemyNear.IsValid() && !Op->HasStealthAutoLookTarget(),
+				TEXT("section 1: visible threat behind operative (outside +-100 deg) does not auto-lock"));
+
+			// Threat at +90 deg inside +-100 deg locks on.
+			State.AutoEnemyFar = SpawnFrozenThreat(State.Origin + State.Right * 380.f, (-State.Right).Rotation());
+			Sight->Refresh();
+			Op->UpdateStealthLookLock(0.05f);
+			Check(State, State.AutoEnemyFar.IsValid() && Op->GetStealthAutoLookActor() == State.AutoEnemyFar.Get(),
+				TEXT("section 1: visible threat inside +-100 deg triggers automatic stealth look-lock"));
+
+			// Move second threat to -300 cm (only 21% closer than 380 cm): lock stays on AutoEnemyFar.
+			State.AutoEnemyNear->SetActorLocation(State.Origin - State.Right * 300.f, false, nullptr, ETeleportType::TeleportPhysics);
+			Sight->Refresh();
+			Op->UpdateStealthLookLock(0.05f);
+			Check(State, Op->GetStealthAutoLookActor() == State.AutoEnemyFar.Get(),
+				TEXT("section 1: auto lock keeps current threat when new threat is less than 30% closer"));
+
+			// Move second threat to +220 cm (>30% closer, 220 < 380 * 0.7): lock switches to AutoEnemyNear.
+			State.AutoEnemyNear->SetActorLocation(State.Origin + State.Forward * 220.f, false, nullptr, ETeleportType::TeleportPhysics);
+			Sight->Refresh();
+			Op->UpdateStealthLookLock(0.05f);
+			Check(State, Op->GetStealthAutoLookActor() == State.AutoEnemyNear.Get(),
+				TEXT("section 1: auto lock switches to closer threat beyond 30% switch threshold"));
+			Next(State, 614);
+			break;
+		}
+		case 614:
+		{
+			if (State.StageTime < 0.35f) { return true; }
+			// Rotate away briefly and verify torso/head look lead or alignment toward AutoEnemyNear.
+			if (State.AutoEnemyFar.IsValid()) { State.AutoEnemyFar->Destroy(); }
+			if (State.AutoEnemyNear.IsValid())
+			{
+				State.AutoEnemyNear->SetActorHiddenInGame(true);
+				Op->UpdateStealthLookLock(0.5f);
+				Check(State, Op->HasStealthAutoLookTarget() && Op->GetStealthAutoLookActor() == State.AutoEnemyNear.Get(),
+					TEXT("section 1: lost threat lock holds memory inside 2.0 s window"));
+				Op->UpdateStealthLookLock(1.7f);
+				Check(State, !Op->HasStealthAutoLookTarget(),
+					TEXT("section 1: lost threat lock expires cleanly after >2.0 s"));
+
+				State.AutoEnemyNear->SetActorHiddenInGame(false);
+				State.AutoEnemyNear->SetActorLocation(State.Origin + State.Right * 320.f, false, nullptr, ETeleportType::TeleportPhysics);
+				Sight->Refresh();
+				Op->UpdateStealthLookLock(0.05f);
+				for (int32 StepFrame = 0; StepFrame < 10; ++StepFrame) { Anim(Op)->NativeUpdateAnimation(0.05f); }
+				Check(State, FMath::Abs(Anim(Op)->GetStealthLookYawDeg()) > 5.f, TEXT("section 1: anim instance reflects torso/head look twist toward threat"));
+				// Shift+LMB manual anchor overrides auto threat lock cleanly.
+				const FVector ManualTarget = State.Origin - State.Right * 320.f;
+				PC->SetSimulatedShiftModifier(true);
+				FHitResult ManualHit(nullptr, nullptr, ManualTarget, FVector::UpVector);
+				ManualHit.bBlockingHit = true;
+				PC->HandleWorldHit(ManualHit);
+				PC->SetSimulatedShiftModifier(false);
+				FVector ActiveLook = FVector::ZeroVector;
+				Check(State, Op->HasStealthAutoLookTarget() && Op->HasStealthManualLookTarget() && Op->GetStealthLookPoint(ActiveLook)
+					&& FVector::Dist2D(ActiveLook, ManualTarget) < 5.f,
+					TEXT("section 1/5: manual Shift+LMB look anchor beats automatic threat lock"));
+				PC->SetSimulatedShiftModifier(true);
+				FHitResult SelfHitAgain(Op, nullptr, Op->GetActorLocation(), FVector::UpVector);
+				SelfHitAgain.bBlockingHit = true;
+				PC->HandleWorldHit(SelfHitAgain);
+				PC->SetSimulatedShiftModifier(false);
+				Check(State, !Op->HasStealthManualLookTarget(), TEXT("section 5: manual anchor cleared before M-B check"));
+				State.AutoEnemyNear->Destroy();
+			}
+			Op->ClearStealthAutoLookTarget();
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			Op->SetStealthMode(true);
+			Next(State, 620);
+			break;
+		}
+		case 620:
+		{
+			// Bug #324 / Spec 008: enter stealth facing right -> double click Fast move Up (Forward).
+			// Prior idle facing / formation look to the right must NOT clamp or pull the body.
+			Op->ClearStealthAutoLookTarget();
+			Op->ClearStealthManualLookTarget();
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			const FRotator RightRot = State.Right.Rotation(); // Facing right (+90 deg)
+			Op->SetActorRotation(RightRot);
+			Op->SetStealthMode(true);
+			// Inject stale idle facing and formation look AFTER entering stealth to test consumer-side guards
+			Op->SetIdleFacingYaw(RightRot.Yaw);
+			Op->SetFormationLookYaw(RightRot.Yaw);
+			Check(State, Op->IsInStealthMode(), TEXT("034-lookdir: operative is in stealth mode"));
+			Check(State, !Op->HasStealthManualLookTarget() && !Op->HasStealthAutoLookTarget(),
+				TEXT("034-lookdir: no manual anchor or auto threat target"));
+
+			// Issue Fast move order Up (Forward, 0 deg)
+			const FVector TargetUp = State.Origin + State.Forward * 380.f;
+			Op->OrderMoveTo(TargetUp, /*bSprint*/ true);
+			Check(State, Op->IsStealthFast(), TEXT("034-lookdir: Fast stealth running active"));
+			State.bLookDirFastTurnChecked = false;
+			State.bLookDirMoveStarted = false;
+			State.LookDirMoveStartTime = 0.f;
+			State.LookDirAlignTime = 0.f;
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 621);
+			break;
+		}
+		case 621:
+		{
+			// Re-inject right formation look each frame to prove !IsInStealthMode() guard prevents formation hijack
+			Op->SetFormationLookYaw(State.Right.Rotation().Yaw);
+			const float TargetYaw = State.Forward.Rotation().Yaw; // 0 deg
+			const float CurrentYaw = Op->GetActorRotation().Yaw;
+			const float YawDelta = FMath::Abs(FRotator::NormalizeAxis(CurrentYaw - TargetYaw));
+
+			if (!State.bLookDirMoveStarted && Op->GetVelocity().Size2D() > 10.f)
+			{
+				State.bLookDirMoveStarted = true;
+				State.LookDirMoveStartTime = State.StageTime;
+			}
+
+			// From movement start, yaw must reach move direction within <= 0.30s
+			if (State.bLookDirMoveStarted && !State.bLookDirFastTurnChecked && YawDelta < 5.f)
+			{
+				State.bLookDirFastTurnChecked = true;
+				State.LookDirAlignTime = State.StageTime - State.LookDirMoveStartTime;
+				Check(State, State.LookDirAlignTime <= 0.30f,
+					FString::Printf(TEXT("034-lookdir: yaw reaches forward direction in %.3fs <= 0.30s from move start (cur=%.1f target=%.1f delta=%.1f)"),
+						State.LookDirAlignTime, CurrentYaw, TargetYaw, YawDelta));
+			}
+
+			// Wait until arrived at destination
+			const FVector TargetUp = State.Origin + State.Forward * 380.f;
+			const bool bArrived = (State.StageTime >= 0.4f && Op->GetVelocity().Size2D() <= 10.f && FVector::Dist2D(Op->GetActorLocation(), TargetUp) < 60.f);
+			if (!bArrived && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, State.StageTime < 8.f, TEXT("034-lookdir: reached forward destination before timeout"));
+			State.LookDirArrivedYaw = Op->GetActorRotation().Yaw;
+			Check(State, FMath::Abs(FRotator::NormalizeAxis(State.LookDirArrivedYaw - TargetYaw)) < 5.f,
+				TEXT("034-lookdir: arrived at forward destination facing forward along path"));
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 622);
+			break;
+		}
+		case 622:
+		{
+			// Hold still at destination for >= 1.0s: body must NOT rotate back to right
+			const float StillYaw = Op->GetActorRotation().Yaw;
+			const float Drift = FMath::Abs(FRotator::NormalizeAxis(StillYaw - State.LookDirArrivedYaw));
+			State.LookDirMaxStopDrift = FMath::Max(State.LookDirMaxStopDrift, Drift);
+			if (State.StageTime < 1.0f) { return true; }
+
+			Check(State, State.LookDirMaxStopDrift < 1.0f,
+				FString::Printf(TEXT("034-lookdir: yaw remains stable at destination across 1.0s (max drift=%.2f)"), State.LookDirMaxStopDrift));
+			const float RightYawDelta = FMath::Abs(FRotator::NormalizeAxis(StillYaw - State.Right.Rotation().Yaw));
+			Check(State, RightYawDelta > 45.f,
+				FString::Printf(TEXT("034-lookdir: body does NOT snap back to previous right-facing direction on stop (delta=%.1f)"), RightYawDelta));
+
+			// Second order: Fast move order Left (-90 deg from Forward)
+			const FVector TargetLeft = Op->GetActorLocation() - State.Right * 350.f;
+			Op->OrderMoveTo(TargetLeft, /*bSprint*/ true);
+			Check(State, Op->IsStealthFast(), TEXT("034-lookdir: second Fast stealth move order accepted"));
+			State.bLookDirFastTurnChecked = false;
+			State.bLookDirMoveStarted = false;
+			State.LookDirMoveStartTime = 0.f;
+			State.LookDirAlignTime = 0.f;
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 623);
+			break;
+		}
+		case 623:
+		{
+			const float TargetLeftYaw = (-State.Right).Rotation().Yaw; // -90 deg
+			const float CurrentYaw = Op->GetActorRotation().Yaw;
+			const float YawDelta = FMath::Abs(FRotator::NormalizeAxis(CurrentYaw - TargetLeftYaw));
+
+			if (!State.bLookDirMoveStarted && Op->GetVelocity().Size2D() > 10.f)
+			{
+				State.bLookDirMoveStarted = true;
+				State.LookDirMoveStartTime = State.StageTime;
+			}
+
+			if (State.bLookDirMoveStarted && !State.bLookDirFastTurnChecked && YawDelta < 5.f)
+			{
+				State.bLookDirFastTurnChecked = true;
+				State.LookDirAlignTime = State.StageTime - State.LookDirMoveStartTime;
+				Check(State, State.LookDirAlignTime <= 0.30f,
+					FString::Printf(TEXT("034-lookdir: second move turns to left direction in %.3fs <= 0.30s (cur=%.1f target=%.1f delta=%.1f)"),
+						State.LookDirAlignTime, CurrentYaw, TargetLeftYaw, YawDelta));
+			}
+
+			if ((State.StageTime < 0.4f || Op->GetVelocity().Size2D() > 10.f) && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			State.LookDirArrivedYaw = Op->GetActorRotation().Yaw;
+			Check(State, FMath::Abs(FRotator::NormalizeAxis(State.LookDirArrivedYaw - TargetLeftYaw)) < 5.f,
+				TEXT("034-lookdir: arrived at second destination facing left"));
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 624);
+			break;
+		}
+		case 624:
+		{
+			// Hold still at second destination for 1.0s: body must NOT change yaw
+			const float StillYaw = Op->GetActorRotation().Yaw;
+			const float Drift = FMath::Abs(FRotator::NormalizeAxis(StillYaw - State.LookDirArrivedYaw));
+			State.LookDirMaxStopDrift = FMath::Max(State.LookDirMaxStopDrift, Drift);
+			if (State.StageTime < 1.0f) { return true; }
+
+			Check(State, State.LookDirMaxStopDrift < 1.0f,
+				FString::Printf(TEXT("034-lookdir: second destination yaw remains stable across 1.0s (max drift=%.2f)"), State.LookDirMaxStopDrift));
+
+			// Third order: 180 deg reversal! Move Right (+90 deg, opposite to current -90 deg facing)
+			const FVector TargetRight = Op->GetActorLocation() + State.Right * 400.f;
+			Op->OrderMoveTo(TargetRight, /*bSprint*/ true);
+			Check(State, Op->IsStealthFast(), TEXT("034-lookdir: 180 deg reversal move order accepted"));
+			State.bLookDirFastTurnChecked = false;
+			State.bLookDirMoveStarted = false;
+			State.LookDirMoveStartTime = 0.f;
+			State.LookDirAlignTime = 0.f;
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 625);
+			break;
+		}
+		case 625:
+		{
+			const float TargetRightYaw = State.Right.Rotation().Yaw; // +90 deg
+			const float CurrentYaw = Op->GetActorRotation().Yaw;
+			const float YawDelta = FMath::Abs(FRotator::NormalizeAxis(CurrentYaw - TargetRightYaw));
+
+			if (!State.bLookDirMoveStarted && Op->GetVelocity().Size2D() > 10.f)
+			{
+				State.bLookDirMoveStarted = true;
+				State.LookDirMoveStartTime = State.StageTime;
+			}
+
+			if (State.bLookDirMoveStarted && !State.bLookDirFastTurnChecked && YawDelta < 5.f)
+			{
+				State.bLookDirFastTurnChecked = true;
+				State.LookDirAlignTime = State.StageTime - State.LookDirMoveStartTime;
+				Check(State, State.LookDirAlignTime <= 0.30f,
+					FString::Printf(TEXT("034-lookdir: 180 deg reversal turns to right direction in %.3fs <= 0.30s (cur=%.1f target=%.1f delta=%.1f)"),
+						State.LookDirAlignTime, CurrentYaw, TargetRightYaw, YawDelta));
+			}
+
+			if ((State.StageTime < 0.4f || Op->GetVelocity().Size2D() > 10.f) && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			State.LookDirArrivedYaw = Op->GetActorRotation().Yaw;
+			Check(State, FMath::Abs(FRotator::NormalizeAxis(State.LookDirArrivedYaw - TargetRightYaw)) < 5.f,
+				TEXT("034-lookdir: arrived at 180 deg reversal destination facing right"));
+			State.LookDirMaxStopDrift = 0.f;
+			Next(State, 626);
+			break;
+		}
+		case 626:
+		{
+			// Hold still at 180 deg reversal destination for 1.0s: body must NOT change yaw
+			const float StillYaw = Op->GetActorRotation().Yaw;
+			const float Drift = FMath::Abs(FRotator::NormalizeAxis(StillYaw - State.LookDirArrivedYaw));
+			State.LookDirMaxStopDrift = FMath::Max(State.LookDirMaxStopDrift, Drift);
+			if (State.StageTime < 1.0f) { return true; }
+
+			Check(State, State.LookDirMaxStopDrift < 1.0f,
+				FString::Printf(TEXT("034-lookdir: 180 reversal destination yaw remains stable across 1.0s (max drift=%.2f)"), State.LookDirMaxStopDrift));
+
+			State.ReorderLeg = 0;
+			Next(State, 627);
+			break;
+		}
+		case 627:
+		{
+			// Designer bug 2026-11-14 (034): legs 0 Walk -> Walk, 1 Fast -> Fast, 2 Fast -> double click (Walk then Fast) re-order at 50 deg
+			// while already moving. Without a player look the body must face the new travel within 0.3 s and play the forward clip.
+			if (State.StageTime < 0.05f)
+			{
+				Op->ClearStealthManualLookTarget();
+				Op->ClearStealthAutoLookTarget();
+				Op->StopOperative();
+				Op->SetActorLocation(State.Origin - State.Forward * 380.f, false, nullptr, ETeleportType::TeleportPhysics);
+				Op->SetActorRotation(State.Forward.Rotation());
+				Op->SetStealthMode(true);
+				return true;
+			}
+			const FVector LegStart = State.Origin - State.Forward * 380.f;
+			if (FVector::Dist2D(Op->GetActorLocation(), LegStart) > 30.f && State.StageTime < 3.f)
+			{
+				// An earlier stage's pending move / rescue can carry him off the start spot: settle him there again.
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke reorder leg %d: re-settling %.0f cm off the start (forward yaw %.1f)"), State.ReorderLeg,
+					FVector::Dist2D(Op->GetActorLocation(), LegStart), State.Forward.Rotation().Yaw);
+				Op->StopOperative();
+				Op->SetActorLocation(FVector(LegStart.X, LegStart.Y, Op->GetActorLocation().Z), false, nullptr, ETeleportType::TeleportPhysics);
+				Op->SetActorRotation(State.Forward.Rotation());
+				return true;
+			}
+			if (State.StageTime < (State.ReorderLeg == 0 ? 2.f : 0.8f)) { return true; }
+			Op->OrderMoveTo(State.Origin + State.Forward * 380.f, /*bSprint*/ State.ReorderLeg > 0);
+			State.ReorderWorldTime = -1.0;
+			State.ReorderStartsBegun = 0;
+			State.ReorderSlowRateFrames = 0;
+			State.SlowClipAtFastFrames = 0;
+			State.FastRateOffFrames = 0;
+			State.FastRateFrames = 0;
+			State.FastRateWorst.Reset();
+			State.bReorderStartFresh = false;
+			State.ReorderPhase = 0;
+			State.ReorderTime = -1.f;
+			State.bReorderChecked = false;
+			State.bReorderClipChecked = false;
+			State.ReorderWrongClipFrames = 0;
+			Next(State, 628);
+			break;
+		}
+		case 628:
+		{
+			const bool bFastLeg = State.ReorderLeg > 0;
+			const FVector Velocity = Op->GetVelocity();
+			const float ActorYaw = static_cast<float>(Op->GetActorRotation().Yaw);
+			const float VelocityYaw = static_cast<float>(Velocity.Rotation().Yaw);
+			const float Relative = FRotator::NormalizeAxis(VelocityYaw - ActorYaw);
+			const UAnimSequenceBase* Dominant = Anim(Op)->GetStealthDominantClip();
+			const FString DominantName = Dominant ? Dominant->GetName() : TEXT("none");
+			FVector LookPoint = FVector::ZeroVector;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke reorder leg %d t %.2f speed %.0f yaw %.1f vel %.1f rel %.1f clip %s look %d manual %d auto %d fast %d"),
+				State.ReorderLeg, State.StageTime, Velocity.Size2D(), ActorYaw, VelocityYaw, Relative, *DominantName,
+				Op->GetStealthLookPoint(LookPoint) ? 1 : 0, Op->HasStealthManualLookTarget() ? 1 : 0, Op->HasStealthAutoLookTarget() ? 1 : 0, Op->IsStealthFast() ? 1 : 0);
+			const float ReorderAt = bFastLeg ? 0.5f : 1.0f;
+			// Re-order only once he really runs at his gait speed (in the full run a leg can start late behind earlier fixtures).
+			const bool bAtGaitSpeed = Velocity.Size2D() >= 0.8f * Op->GetMaxSpeed();
+			if (State.ReorderPhase == 0 && State.StageTime >= 3.f && !bAtGaitSpeed)
+			{
+				Check(State, false, FString::Printf(TEXT("034-reorder leg %d: moving at gait speed before the re-order (%.0f)"), State.ReorderLeg, Velocity.Size2D()));
+				return Finish(State, false);
+			}
+			if (State.ReorderPhase == 0 && State.StageTime >= ReorderAt && bAtGaitSpeed)
+			{
+				// 50 deg off the CURRENT travel (the first leg may bend round fixtures left by earlier stages).
+				const FVector Travel = Velocity.GetSafeNormal2D();
+				// Legs 3-5 (designer 2026-11-14 follow-up): a slight re-order at full Fast speed - 10 / 20 / 40 deg.
+				static const float ReorderAngles[6] = { 50.f, 50.f, 50.f, 10.f, 20.f, 40.f };
+				State.ReorderDirection = (Travel.IsNearlyZero() ? State.Forward : Travel).RotateAngleAxis(ReorderAngles[FMath::Clamp(State.ReorderLeg, 0, 5)], FVector::UpVector);
+				Op->OrderMoveTo(Op->GetActorLocation() + State.ReorderDirection * 420.f, /*bSprint*/ State.ReorderLeg == 1 || State.ReorderLeg >= 3);
+				State.ReorderTime = State.StageTime;
+				State.ReorderPhase = State.ReorderLeg == 2 ? 1 : 2;
+			}
+			else if (State.ReorderPhase == 1 && State.StageTime >= State.ReorderTime + 0.15f)
+			{
+				// The double click's second click: the same point, now Fast.
+				Op->OrderMoveTo(Op->GetLastMoveDestination(), /*bSprint*/ true);
+				State.ReorderPhase = 2;
+			}
+			const float SinceFinalOrder = State.StageTime - State.ReorderTime - (State.ReorderLeg == 2 ? 0.15f : 0.f);
+			if (State.ReorderPhase == 2 && !State.bReorderChecked && SinceFinalOrder >= 0.3f)
+			{
+				State.bReorderChecked = true;
+				const float TravelYaw = static_cast<float>(State.ReorderDirection.Rotation().Yaw);
+				Check(State, Velocity.Size2D() > 50.f && FMath::Abs(Relative) <= 15.f && FMath::Abs(FRotator::NormalizeAxis(ActorYaw - TravelYaw)) <= 20.f,
+					FString::Printf(TEXT("034-reorder leg %d: 0.3 s after the re-order the body faces the travel (rel %.1f, yaw %.1f, travel %.1f)"),
+						State.ReorderLeg, Relative, ActorYaw, TravelYaw));
+				State.ReorderWrongClipFrames = 0;
+			}
+			// From 0.4 s on (the body's 0.3 s turn + the legs' 0.12 s direction smoothing) the forward clips own the body: no sideways /
+			// backwards start clip outlives the turn (it played its whole ~1.5 s before the fix).
+			if (State.ReorderPhase == 2 && SinceFinalOrder >= 0.4f && SinceFinalOrder < 1.2f && Velocity.Size2D() > 50.f && Op->HasOwnMoveOrder() && !DominantName.Contains(TEXT("_F_")))
+			{
+				++State.ReorderWrongClipFrames;
+			}
+			if (State.ReorderPhase == 2 && SinceFinalOrder >= 1.2f && !State.bReorderClipChecked)
+			{
+				State.bReorderClipChecked = true;
+				Check(State, State.ReorderWrongClipFrames == 0,
+					FString::Printf(TEXT("034-reorder leg %d: forward stealth clip 0.4 .. 1.2 s after the re-order (%d off frames, now %s)"),
+						State.ReorderLeg, State.ReorderWrongClipFrames, *DominantName));
+			}
+			if (State.ReorderPhase < 2 || State.StageTime < State.ReorderTime + 1.5f)
+			{
+				return true;
+			}
+			Check(State, State.bReorderChecked && State.bReorderClipChecked, FString::Printf(TEXT("034-reorder leg %d: both checks ran"), State.ReorderLeg));
+			// A re-order while moving changes the cycle's direction only: no start-from-standstill one-shot, the gait keeps its rate.
+			Check(State, State.ReorderStartsBegun == 0, FString::Printf(TEXT("034-reorder leg %d: no gait start begins on a re-order while moving (%d, min speed %.0f)"),
+				State.ReorderLeg, State.ReorderStartsBegun, State.ReorderMinSpeed));
+			if (State.ReorderLeg >= 1)
+			{
+				Check(State, State.SlowClipAtFastFrames == 0, FString::Printf(TEXT("034-reorder leg %d: no slow stealth clip owns a Fast run at speed (%d frames)"),
+					State.ReorderLeg, State.SlowClipAtFastFrames));
+				Check(State, State.FastRateFrames > 0 && State.FastRateOffFrames == 0,
+					FString::Printf(TEXT("034-reorder leg %d: Fast at full speed plays at 1.0x +-15%% from 0.25 s (%d / %d off%s%s)"),
+						State.ReorderLeg, State.FastRateOffFrames, State.FastRateFrames, State.FastRateWorst.IsEmpty() ? TEXT("") : TEXT(", worst "), *State.FastRateWorst));
+				Check(State, State.ReorderSlowRateFrames == 0, FString::Printf(TEXT("034-reorder leg %d: no play rate < 0.5 above 80%% of the Fast speed (min %.2f)"),
+					State.ReorderLeg, State.ReorderMinRate));
+			}
+			if (++State.ReorderLeg < 6)
+			{
+				Next(State, 627);
+				break;
+			}
+			if (State.bReorderOnly)
+			{
+				return Finish(State, true);
+			}
+			// Reset to origin for stage 601 knockdown/death fixture
+			Op->StopOperative();
+			Op->SetActorLocation(State.Origin, false, nullptr, ETeleportType::TeleportPhysics);
+			Op->SetActorRotation(State.Forward.Rotation());
+			Op->SetStealthMode(true);
 			Next(State, 601);
 			break;
+		}
 		case 601:
-			if (State.StageTime < 1.f) { return true; } // allow any legitimate hearing-control attack flash to finish
+			if (State.StageTime < 1.f) { return true; }
 			Check(State, Op->KnockdownComponent && Op->KnockdownComponent->ForceKnockDown(EKnockdownDirection::Back, EKnockdownCause::HeavyHit),
 				TEXT("real knockdown starts from stealth"));
 			Next(State, 61);
@@ -836,6 +1686,7 @@ namespace StealthModeSmoke
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->bShots = Args.Contains(TEXT("shots"));
 		State->bFemale = Args.Contains(TEXT("female"));
+		State->bReorderOnly = Args.Contains(TEXT("reorder"));
 		State->FrameHandle = FCoreDelegates::OnEndFrame.AddLambda([State]() { Sample(*State); });
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld = TWeakObjectPtr<UWorld>(World), State](float) { return Step(WeakWorld, *State); }), 0.05f);
 	}

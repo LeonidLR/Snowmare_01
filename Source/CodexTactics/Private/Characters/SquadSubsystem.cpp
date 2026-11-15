@@ -3,6 +3,7 @@
 #include "Tutorial/TutorialSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Characters/StealthModeRules.h"
 #include "Characters/SquadAutonomyRules.h"
 #include "Characters/SquadOrderRules.h"
 #include "Formation/FormationGuardRuntimeRules.h"
@@ -121,6 +122,7 @@ void USquadSubsystem::RegisterOperative(AOperativeCharacter* Operative)
 	{
 		RebuildFollowers();
 	}
+	EnforceFormationStealthRule();
 }
 
 void USquadSubsystem::UnregisterOperative(AOperativeCharacter* Operative)
@@ -610,6 +612,35 @@ void USquadSubsystem::SetFollowersHolding(bool bHold)
 		Follower.bParked = bHold;
 		Follower.RepathTimeRemaining = 0.f;
 	}
+	if (!bHold)
+	{
+		EnforceFormationStealthRule();
+	}
+}
+
+bool USquadSubsystem::IsStealthBlockedByFormation(const AOperativeCharacter& Operative) const
+{
+	const AOperativeCharacter* Target = &Operative;
+	const bool bIsMember = Members.ContainsByPredicate([Target](const TWeakObjectPtr<AOperativeCharacter>& Member)
+	{
+		return Member.Get() == Target;
+	});
+	if (!bIsMember || (Operative.HealthComponent && !Operative.HealthComponent->IsAlive()))
+	{
+		return false;
+	}
+	return StealthModeRules::IsBlockedByFormation(bIsSoloMode || bFollowersHolding, IsFormationActive(), Operative.bGuarding);
+}
+
+void USquadSubsystem::EnforceFormationStealthRule()
+{
+	for (AOperativeCharacter* Member : GetMembers())
+	{
+		if (Member && Member->IsInStealthMode() && IsStealthBlockedByFormation(*Member))
+		{
+			Member->SetStealthMode(false);
+		}
+	}
 }
 
 void USquadSubsystem::ToggleSoloMode()
@@ -801,7 +832,7 @@ bool USquadSubsystem::UseFormationStart()
 		bTrapSolo = false;
 		bSoloFromLevelStart = false;
 		SoloGuardCrouchWait.Reset();
-		SetFollowersHolding(false);
+		SetFollowersHolding(false); // EnforceFormationStealthRule() runs inside SetFollowersHolding(false) after bIsSoloMode is cleared
 		UE_LOG(LogCodexTactics, Display, TEXT("[Squad] formation start requested - the level start's Solo ends quietly"));
 	}
 	return !bIsSoloMode;
@@ -1057,6 +1088,7 @@ void USquadSubsystem::ExitSoloMode(bool bCausedByLeash, float Distance)
 
 	AOperativeCharacter* LeaderRef = Leader.Get();
 	const FText LeaderName = LeaderRef ? LeaderRef->DisplayName : LOCTEXT("SquadDefaultName", "Squad");
+	EnforceFormationStealthRule();
 
 	// Followers sync stance to leader and resume formation
 	if (LeaderRef)
@@ -1230,6 +1262,7 @@ void USquadSubsystem::HandleGameFlowChanged(ECodexGamePhase Phase, ECodexCombatM
 		UE_LOG(LogCodexTactics, Display, TEXT("Squad: the fight is over - the followers hold their spots until the leader moves"));
 	}
 	LastPhase = Phase;
+	EnforceFormationStealthRule();
 }
 
 void USquadSubsystem::HandleTacticalPauseReleased()
@@ -1434,6 +1467,7 @@ void USquadSubsystem::ToggleGuard(AOperativeCharacter* Operative)
 		return;
 	}
 	Operative->bGuarding = !Operative->bGuarding;
+	EnforceFormationStealthRule();
 	const FText Name = Operative->DisplayName;
 	if (Operative->bGuarding)
 	{
@@ -1823,7 +1857,7 @@ void USquadSubsystem::UpdateFollower(FFollowerState& Follower, AOperativeCharact
 		// Parked followers face where the leader faces (Godot _align_rotation_with_leader), turned every frame by the
 		// operative's facing (FacingRules). In the real-time fight (2026-10-26) not: his combat target / the threat he fought
 		// (ThreatFacingRules) turn him there.
-		if (!IsRealTimeFight())
+		if (!IsRealTimeFight() && !Operative->IsInStealthMode())
 		{
 			Operative->SetIdleFacingYaw(LeaderRef.GetActorRotation().Yaw);
 		}

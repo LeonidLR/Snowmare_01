@@ -300,6 +300,11 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		}
 	}
 	ClearIdleFacing();
+	if (bStealthFast)
+	{
+		bStealthFast = false;
+		ApplyMovementParams();
+	}
 	if (!bSameWall)
 	{
 		// High cover: standing (the wall covers him); low cover: crouched. Prone stays prone (hidden by the 60 cm rule).
@@ -417,6 +422,11 @@ void AOperativeCharacter::LeaveCover(const FString& Reason)
 		bManualCornerPeek = false; // a move / another cover ends the manual corner peek (the open-shot step-off comes back to it)
 		bManualCornerPeekEventPending = false;
 	}
+	if (bHasPendingCover && CoverTraceRules::IsSameWall(CoverSlot, PendingCoverSlot))
+	{
+		bHasPendingCover = false; // leaving cover cancels any pending shimmy / same-wall snap before StopMovement fires HandleMoveFinished
+		bRunCornerPeekPending = false;
+	}
 	bInCover = false;
 	CoverLookSide.Reset(); // the wall group's side belongs to that slot
 	CurrentCoverHeight = ECoverHeight::None;
@@ -518,6 +528,7 @@ EOperativeOrderResult AOperativeCharacter::OrderShimmyTo(const FCoverSlot& Targe
 	// Side-step at the crouch-walk pace along the wall, facing the threat side (UpdateCombatFacing holds the facing):
 	// forward towards it, backwards away from it (CoverFacingRules::IsShimmyForward).
 	TGuardValue<bool> CoverOrder(bCoverMoveOrder, true);
+	bStealthFast = false;
 	bSprinting = false;
 	ApplyMovementParams(OperativeMovementRules::ComputeMaxSpeed(MovementConfig, EOperativeStance::Crouching, false, IsWounded(), bCarrying) * ColdSpeedMultiplier);
 	const EOperativeOrderResult Result = RequestMove(Target.WorldLocation);

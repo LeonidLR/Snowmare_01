@@ -52,7 +52,7 @@ float AOperativeCharacter::GetVisionConeRange() const
 float AOperativeCharacter::GetVisionConeHalfAngle() const
 {
 	const UTacticalSightSubsystem* Sight = GetWorld() ? GetWorld()->GetSubsystem<UTacticalSightSubsystem>() : nullptr;
-	return Sight && Sight->IsFovRuleActive() ? Sight->GetFovDeg(Stance) * 0.5f : VisionConeHalfAngleDeg;
+	return Sight && Sight->IsFovRuleActive() ? Sight->GetOperativeFovDeg(*this) * 0.5f : VisionConeHalfAngleDeg;
 }
 
 FVector AOperativeCharacter::GetSightFacing() const

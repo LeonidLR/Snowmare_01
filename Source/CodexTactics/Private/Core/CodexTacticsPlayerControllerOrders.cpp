@@ -359,6 +359,55 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		return;
 	}
 
+	// Stealth v2 §5 (manual look anchor): Shift + LMB fixes a look point (or clears it when clicking a selected stealthed operative).
+	// Wins when the active selection is purely stealthed and not Shift-clicking an unselected/non-stealthed squad member;
+	// mixed selections and Shift+click squad select/suppress/watch-sector keep their normal behavior.
+	if (IsShiftModifierDown())
+	{
+		const TArray<AOperativeCharacter*> SelectedGroup = Squad->GetSelectedGroup();
+		TArray<AOperativeCharacter*> StealthedSelected;
+		for (AOperativeCharacter* Member : SelectedGroup)
+		{
+			if (Member && Member->IsInStealthMode())
+			{
+				StealthedSelected.Add(Member);
+			}
+		}
+		if (!StealthedSelected.IsEmpty())
+		{
+			AOperativeCharacter* ClickedSelf = FindClickedMember(Hit);
+			if (ClickedSelf && !StealthedSelected.Contains(ClickedSelf))
+			{
+				// Allow normal Shift+click add/remove selection on unselected or non-stealthed operatives.
+			}
+			else if (ClickedSelf)
+			{
+				bool bClearedAny = false;
+				for (AOperativeCharacter* Member : StealthedSelected)
+				{
+					bClearedAny |= Member->HasStealthManualLookTarget();
+					Member->ClearStealthManualLookTarget();
+				}
+				if (bClearedAny)
+				{
+					UFloatingTextSubsystem::SpawnAboveOperative(ClickedSelf, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+					HideCoverPreview();
+					return;
+				}
+			}
+			else if (StealthedSelected.Num() == SelectedGroup.Num() && Hit.bBlockingHit)
+			{
+				for (AOperativeCharacter* Member : StealthedSelected)
+				{
+					Member->SetStealthManualLookTarget(Hit.ImpactPoint);
+				}
+				UFloatingTextSubsystem::SpawnAboveOperative(StealthedSelected[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+				HideCoverPreview();
+				return;
+			}
+		}
+	}
+
 	// Suppressive fire (user decision 2026-10-26): Shift + click on enemies (an enemy, a silhouette, a point near known enemies) = the SUPPRESS
 	// order (red marker), on its red marker = cease it; anywhere else Shift + click keeps its meaning (watch sector below).
 	if (IsShiftModifierDown() && IssueSuppress(Hit))

@@ -1,9 +1,12 @@
 // Per-operative stealth, designer task 003. UE-only; no Godot reference.
 // Reuses the existing formation ghost material at runtime; source materials and assets are never changed.
 #include "Characters/OperativeCharacter.h"
-
+#include "Characters/OperativeCharacterInternal.h"
+#include "AI/PmcSquadSubsystem.h"
 #include "Characters/StealthModeRules.h"
+#include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Combat/TacticalSightSubsystem.h"
 #include "Components/MeshComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
@@ -11,10 +14,20 @@
 #include "Materials/MaterialInterface.h"
 #include "Vehicles/VehicleSubsystem.h"
 
-bool AOperativeCharacter::CanEnterStealthMode() const
+bool AOperativeCharacter::CanEnterStealthWithoutFormation() const
 {
 	return StealthModeRules::GetConfig().bEnabled && HealthComponent && HealthComponent->IsAlive() && !IsCriticallyWounded()
 		&& !IsKnockedDown() && !IsPanicking() && !IsRaging() && !bCarrying && !bVaulting && !IsClimbingLadder() && !VehicleQueries::IsMounted(this);
+}
+
+bool AOperativeCharacter::CanEnterStealthMode() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (Squad && Squad->IsStealthBlockedByFormation(*this))
+	{
+		return false;
+	}
+	return CanEnterStealthWithoutFormation();
 }
 
 bool AOperativeCharacter::SetStealthMode(bool bEnabled)
@@ -54,6 +67,12 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 		StealthMaterialCounts.Reset();
 		StealthOriginalMaterials.Reset();
 		SetSprinting(false);
+		bStealthFast = false;
+		ClearStealthManualLookTarget();
+		ClearStealthAutoLookTarget();
+		ClearIdleFacing();
+		SetFormationLookYaw(TOptional<float>());
+		SmoothedVelocity = FVector::ZeroVector;
 		bStealthMode = true;
 		if (Stance != EOperativeStance::Prone)
 		{
@@ -62,10 +81,125 @@ bool AOperativeCharacter::SetStealthMode(bool bEnabled)
 	}
 	else
 	{
+		bStealthFast = false;
+		ClearStealthManualLookTarget();
+		ClearStealthAutoLookTarget();
 		bStealthMode = false;
+		ApplyMovementParams();
 	}
 	RefreshStealthVisuals();
 	return true;
+}
+
+bool AOperativeCharacter::CanStealthFast() const
+{
+	return bStealthMode && !bCarrying && !IsWounded() && !IsCriticallyWounded() && Stance == EOperativeStance::Crouching;
+}
+
+void AOperativeCharacter::SetStealthFast(bool bFast)
+{
+	const bool bAllowed = bFast && CanStealthFast();
+	if (bStealthFast != bAllowed)
+	{
+		bStealthFast = bAllowed;
+		ApplyMovementParams();
+	}
+}
+
+void AOperativeCharacter::SetStealthManualLookTarget(const FVector& WorldPoint)
+{
+	if (!bStealthMode)
+	{
+		ClearStealthManualLookTarget();
+		return;
+	}
+	bHasStealthManualLook = true;
+	StealthManualLookTarget = WorldPoint;
+}
+
+void AOperativeCharacter::ClearStealthManualLookTarget()
+{
+	bHasStealthManualLook = false;
+	StealthManualLookTarget = FVector::ZeroVector;
+}
+
+void AOperativeCharacter::ClearStealthAutoLookTarget()
+{
+	StealthAutoLookActor.Reset();
+	StealthAutoLookTargetId = 0;
+	StealthAutoLookLocation = FVector::ZeroVector;
+	StealthAutoLookLostSeconds = 0.f;
+}
+
+void AOperativeCharacter::UpdateStealthLookLock(float DeltaSeconds)
+{
+	if (!bStealthMode || !GetWorld() || !HealthComponent || !HealthComponent->IsAlive() || IsKilledInAction() || bInCover)
+	{
+		ClearStealthAutoLookTarget();
+		return;
+	}
+	const UTacticalSightSubsystem* Sight = GetWorld()->GetSubsystem<UTacticalSightSubsystem>();
+	const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(GetWorld());
+	TArray<StealthModeRules::FStealthLookLockCandidate, TInlineAllocator<16>> Candidates;
+	TMap<uint32, AActor*, TInlineSetAllocator<16>> CandidateActors;
+	const FVector Eye = UTacticalSightSubsystem::EyePoint(*this);
+	for (AActor* Target : OperativeCharacterInternal::GatherTargetsFor(*this))
+	{
+		if (!IsValid(Target))
+		{
+			continue;
+		}
+		const UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>();
+		const AOperativeCharacter* OtherOp = Cast<AOperativeCharacter>(Target);
+		const bool bLive = (!TargetHealth || TargetHealth->IsAlive())
+			&& (!OtherOp || (!OtherOp->IsKilledInAction() && OtherOp->TeamId != TeamId));
+		if (!bLive)
+		{
+			continue;
+		}
+		const bool bVisibleToSquad = !Target->IsHidden()
+			&& (!Sight || (OtherOp ? !Sight->IsHostileOperativeConcealed(OtherOp) : Sight->IsVisibleToSquad(Target)))
+			&& (!OtherOp || !Pmc || Pmc->IsVisibleToTeam(TeamId, OtherOp));
+		const bool bHasClearLine = !Sight || Sight->HasClearSight(Eye, Target->GetActorLocation());
+		const bool bVisible = bVisibleToSquad && bHasClearLine;
+		const uint32 Id = Target->GetUniqueID();
+		Candidates.Add({ Id, Target->GetActorLocation(), bVisible });
+		CandidateActors.Add(Id, Target);
+	}
+	if (StealthAutoLookTargetId != 0)
+	{
+		AActor* CurrentActor = CandidateActors.FindRef(StealthAutoLookTargetId);
+		if (!CurrentActor || StealthAutoLookActor.Get() != CurrentActor)
+		{
+			ClearStealthAutoLookTarget();
+		}
+	}
+	StealthModeRules::FStealthLookLockState LockState;
+	LockState.TargetId = StealthAutoLookTargetId;
+	LockState.LastKnownLocation = StealthAutoLookLocation;
+	LockState.TimeSinceSeenSeconds = StealthAutoLookLostSeconds;
+	const float HeadingYaw = static_cast<float>(GetSightFacing().Rotation().Yaw);
+	StealthModeRules::UpdateLookLock(LockState, GetActorLocation(), HeadingYaw, Candidates, DeltaSeconds, StealthModeRules::GetConfig(), 50.f);
+	StealthAutoLookTargetId = LockState.TargetId;
+	StealthAutoLookLocation = LockState.LastKnownLocation;
+	StealthAutoLookLostSeconds = LockState.TimeSinceSeenSeconds;
+	StealthAutoLookActor = StealthAutoLookTargetId != 0 ? CandidateActors.FindRef(StealthAutoLookTargetId) : nullptr;
+}
+
+bool AOperativeCharacter::GetStealthLookPoint(FVector& OutPoint) const
+{
+	constexpr float LookPointDeadRadiusSq = 50.f * 50.f;
+	if (HasStealthManualLookTarget() && FVector::DistSquared2D(GetActorLocation(), StealthManualLookTarget) > LookPointDeadRadiusSq)
+	{
+		OutPoint = StealthManualLookTarget;
+		return true;
+	}
+	if (HasStealthAutoLookTarget() && FVector::DistSquared2D(GetActorLocation(), StealthAutoLookLocation) > LookPointDeadRadiusSq)
+	{
+		OutPoint = StealthAutoLookLocation;
+		return true;
+	}
+	return false;
 }
 
 void AOperativeCharacter::RefreshStealthVisuals()
@@ -136,7 +270,7 @@ void AOperativeCharacter::RefreshStealthVisuals()
 
 void AOperativeCharacter::HandleStealthWeaponFired(AOperativeCharacter* Shooter, AActor*, bool)
 {
-	if (Shooter == this && StealthModeRules::ShouldBreak(bStealthMode, true, false, StealthModeRules::GetConfig()))
+	if (Shooter == this && StealthModeRules::ShouldBreak(bStealthMode, true, false, IsStealthFast(), StealthModeRules::GetConfig()))
 	{
 		SetStealthMode(false);
 	}
@@ -144,9 +278,11 @@ void AOperativeCharacter::HandleStealthWeaponFired(AOperativeCharacter* Shooter,
 
 void AOperativeCharacter::UpdateStealthMode()
 {
-	if (bStealthMode && (!HealthComponent || !HealthComponent->IsAlive() || IsCriticallyWounded() || IsKnockedDown()
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	const bool bFormationBlocked = Squad && Squad->IsStealthBlockedByFormation(*this);
+	if (bStealthMode && (bFormationBlocked || !HealthComponent || !HealthComponent->IsAlive() || IsCriticallyWounded() || IsKnockedDown()
 		|| IsPanicking() || IsRaging() || bCarrying || bVaulting || IsClimbingLadder() || VehicleQueries::IsMounted(this)
-		|| StealthModeRules::ShouldBreak(true, false, bSprinting, StealthModeRules::GetConfig())))
+		|| StealthModeRules::ShouldBreak(true, false, bSprinting, IsStealthFast(), StealthModeRules::GetConfig())))
 	{
 		SetStealthMode(false);
 	}

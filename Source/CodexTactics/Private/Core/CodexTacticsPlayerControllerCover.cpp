@@ -658,6 +658,7 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 	{
 		AOperativeCharacter* Peeker = SquadTarget->Peeker.Get();
 		if (!CornerPeekGhost->IsShown() || !CornerPeekGhost->IsCornerPeekPose() || CornerPeekGhost->GetOperative() != Peeker
+			|| CornerPeekGhost->GetShownFacing() != SquadTarget->Side
 			|| FVector::DistSquared2D(CornerPeekGhost->GetSlot().WorldLocation, SquadTarget->CornerSlot.WorldLocation) > 1.f)
 		{
 			CornerPeekGhost->ShowCornerPeekFor(*Peeker, SquadTarget->CornerSlot, SquadTarget->Side, SquadTarget->bCrouched);
@@ -677,6 +678,7 @@ bool ACodexTacticsPlayerController::UpdateCornerPeekHover(AOperativeCharacter* O
 		Corner.WorldLocation += Shift;
 		Corner.WallPoint += Shift;
 		if (!CornerPeekGhost->IsShown() || !CornerPeekGhost->IsCornerPeekPose() || CornerPeekGhost->GetOperative() != Operative
+			|| CornerPeekGhost->GetShownFacing() != PeekHoverSide
 			|| FVector::DistSquared2D(CornerPeekGhost->GetSlot().WorldLocation, Corner.WorldLocation) > 1.f)
 		{
 			CornerPeekGhost->ShowCornerPeekFor(*Operative, Corner, PeekHoverSide);
@@ -724,6 +726,7 @@ void ACodexTacticsPlayerController::ShowCoverPreview(AOperativeCharacter* Operat
 			CoverGhost->ShowFor(*Operative, Slot);
 		}
 		UpdateCoverSwitchHover(nullptr, nullptr); // the click ghost replaces the hover one
+		UpdateStealthWallHover(nullptr, nullptr);
 	}
 	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
 	{
@@ -744,6 +747,7 @@ void ACodexTacticsPlayerController::HideCoverPreview()
 	{
 		CoverGhost->Hide();
 	}
+	UpdateStealthWallHover(nullptr, nullptr);
 	CoverPreviewOperative.Reset();
 	bCoverPreviewSwitchable = false;
 }
@@ -893,8 +897,9 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: double-click on another cover - %s -> %s"), *Operative->DisplayName.ToString(),
 			CoverSwitchRules::VerdictName(LastCoverSwitchVerdict), bSwitch ? TEXT("the cover switch") : TEXT("the ordinary cover order"));
 	}
+	const bool bCoverFast = Operative->IsInStealthMode() ? bDoubleClick : true;
 	// Game designer 2026-10-20: a box selection / group mode takes cover together (the others beside him or prone behind it).
-	if (OrderGroupCover(Operative, Target, Dispatch == ECombatOrderDispatch::Queue, Flow ? Flow->GetPauseOrderRadius() : 1200.f, bSwitch))
+	if (OrderGroupCover(Operative, Target, Dispatch == ECombatOrderDispatch::Queue, Flow ? Flow->GetPauseOrderRadius() : 1200.f, bSwitch, nullptr, bCoverFast))
 	{
 		return;
 	}
@@ -908,7 +913,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 		{
 			Operative->SetCoverArrivalFacing(Arrival);
 		}
-		const FVector Planned = GetSquad()->PlanMove(Operative, PlanSlot.WorldLocation, true, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
+		const FVector Planned = GetSquad()->PlanMove(Operative, PlanSlot.WorldLocation, bCoverFast, Flow ? Flow->GetPauseOrderRadius() : 1200.f);
 		if (Feedback)
 		{
 			Feedback->SpawnWaypointMarker(Planned);
@@ -933,7 +938,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 	{
 		Vehicles->CancelBoarding(Operative);
 	}
-	const EOperativeOrderResult Result = bSwitch ? Operative->OrderCoverSwitchResolved(Target, Arrival) : Operative->OrderTakeCover(Target, true);
+	const EOperativeOrderResult Result = bSwitch ? Operative->OrderCoverSwitchResolved(Target, Arrival) : Operative->OrderTakeCover(Target, bCoverFast);
 	if (Result == EOperativeOrderResult::Accepted && !bSwitch && bPreviewSwitchable)
 	{
 		Operative->SetCoverArrivalFacing(Arrival); // the slow confirm of a switch target: the ordinary run, the previewed pose
@@ -965,7 +970,7 @@ void ACodexTacticsPlayerController::ConfirmCoverPreview(bool bDoubleClick)
 }
 
 bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct, const FCoverSlot& Slot, bool bPlan, float Radius, bool bLeaderSwitch,
-	const FCoverWrapPlan* LeaderWrap)
+	const FCoverWrapPlan* LeaderWrap, bool bSprintOrder)
 {
 	USquadSubsystem* Squad = GetSquad();
 	UWorld* World = GetWorld();
@@ -986,7 +991,7 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	// crouched facing OUT, nobody looks through the wall. Else (or when no layout can be made) as before. User decision 2026-10-26: also in
 	// the fight (USquadSubsystem::IsGroupCoverFormation) - in the tactical pause the layout is planned and ordered on the release.
 	const bool bWallLayout = FormationRuntime::IsEnabled() && !bLeaderSwitch && !LeaderWrap && !Squad->HasMultiSelection() && !Squad->IsSoloMode()
-		&& Squad->IsGroupCoverFormation();
+		&& Squad->IsGroupCoverFormation() && !Direct->IsInStealthMode();
 	FVector PlannedWall = Slot.WorldLocation;
 	if (bWallLayout && bPlan && Squad->PlanFormationWall(Direct, Slot, Radius, PlannedWall))
 	{
@@ -1237,7 +1242,8 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 			{
 				Member->SetPendingCoverWrap(*MemberWrap);
 			}
-			const FVector Planned = Squad->PlanMove(Member, MemberSlot.WorldLocation, true, Radius);
+			const bool bMemberSprint = !Member->IsInStealthMode() || bSprintOrder;
+			const FVector Planned = Squad->PlanMove(Member, MemberSlot.WorldLocation, bMemberSprint, Radius);
 			if (Feedback)
 			{
 				Feedback->SpawnWaypointMarker(Planned);
@@ -1253,8 +1259,9 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		}
 		else
 		{
+			const bool bMemberSprint = !Member->IsInStealthMode() || bSprintOrder;
 			const EOperativeOrderResult MemberResult = MemberWrap ? Member->OrderCoverWrap(*MemberWrap)
-				: bMemberSwitch ? Member->OrderCoverSwitchResolved(MemberSlot, Member->GetCoverSwitchArrivalFacing(MemberSlot)) : Member->OrderTakeCover(MemberSlot, true);
+				: bMemberSwitch ? Member->OrderCoverSwitchResolved(MemberSlot, Member->GetCoverSwitchArrivalFacing(MemberSlot)) : Member->OrderTakeCover(MemberSlot, bMemberSprint);
 			if (MemberResult != EOperativeOrderResult::Accepted)
 			{
 				return false;
@@ -1270,7 +1277,8 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 	auto SendProne = [&](AOperativeCharacter* Member, int32 SpotIndex)
 	{
 		FVector Destination;
-		if (!ProneSpots.IsValidIndex(SpotIndex) || !Squad->OrderGroupCoverProne(Member, ProneSpots[SpotIndex], FaceYaw, true, bPlan, Radius, Destination))
+		const bool bMemberSprint = !Member->IsInStealthMode() || bSprintOrder;
+		if (!ProneSpots.IsValidIndex(SpotIndex) || !Squad->OrderGroupCoverProne(Member, ProneSpots[SpotIndex], FaceYaw, bMemberSprint, bPlan, Radius, Destination))
 		{
 			return false;
 		}
@@ -1622,6 +1630,95 @@ bool ACodexTacticsPlayerController::GetSquadMovePreviewPaths(TArray<TArray<FVect
 {
 	OutPaths = SquadMovePreviewPaths;
 	return bSquadMoveHoverShown && !OutPaths.IsEmpty();
+}
+
+bool ACodexTacticsPlayerController::IsStealthWallHoverShown() const
+{
+	return IsValid(StealthWallHoverGhost) && StealthWallHoverGhost->IsShown();
+}
+
+bool ACodexTacticsPlayerController::UpdateStealthWallHover(AOperativeCharacter* Operative, const FHitResult* Hit)
+{
+	const UTutorialSubsystem* Tutorial = GetWorld() ? GetWorld()->GetSubsystem<UTutorialSubsystem>() : nullptr;
+	const bool bLocked = IsRealTimeOrderLocked() || bRelocateSelectMode || IsDialogueOpen()
+		|| (Tutorial && Tutorial->IsCommandLocked(PlayerCommands::CoverPreview));
+	AActor* HitActor = Hit ? Hit->GetActor() : nullptr;
+	const bool bEligible = Operative && Operative->IsInStealthMode() && Operative->CanEnterStealthMode()
+		&& !bLocked && Hit && HitActor && !GetActiveTurnBased()
+		&& !HasCoverPreview() && !bCornerPeekCursor && !IsCoverSwitchHoverShown() && !IsCoverWrapHoverShown();
+	FCoverSlot HoverSlot;
+	if (bEligible)
+	{
+		const FVector OwnSlotLoc = Operative->bInCover ? Operative->GetCoverSlot().WorldLocation : FVector::ZeroVector;
+		const bool bCacheHit = HitActor == StealthWallHoverActor.Get()
+			&& Operative == StealthWallHoverOperative.Get()
+			&& bStealthWallHoverInCover == Operative->bInCover
+			&& FVector::DistSquared(Hit->ImpactPoint, StealthWallHoverPoint) <= FMath::Square(5.f)
+			&& FVector::DistSquared2D(Operative->GetActorLocation(), StealthWallHoverOperativeAt) <= FMath::Square(5.f)
+			&& (!Operative->bInCover || FVector::DistSquared(OwnSlotLoc, StealthWallHoverOwnSlotLocation) <= 1.f);
+		if (bCacheHit)
+		{
+			HoverSlot = StealthWallHoverSlot;
+		}
+		else
+		{
+			const bool bVehicle = HitActor->IsA<AVehiclePawn>();
+			const bool bValidActor = !HitActor->IsA<AInteractableActor>()
+				&& !FindClickedMember(*Hit)
+				&& (!HitActor->IsA<APawn>() || bVehicle)
+				&& !HitActor->IsA<AEnemyGhostActor>()
+				&& !HitActor->IsA<ACoverGhostActor>()
+				&& !HitActor->ActorHasTag(FName(TEXT("Enemy")));
+			if (bValidActor)
+			{
+				EWallClickSide WallSide = EWallClickSide::None;
+				const bool bSideSlot = !bVehicle && ResolveWallSideSlot(*Hit, HoverSlot, WallSide);
+				const bool bSlotOk = bSideSlot
+					|| ((bVehicle || FMath::Abs(Hit->ImpactNormal.Z) <= 0.3f) && FindCoverSlotForHit(*Hit, HoverSlot));
+				if (!bSlotOk || !HoverSlot.IsValid() || (Operative->bInCover && CoverTraceRules::IsSameWall(Operative->GetCoverSlot(), HoverSlot)))
+				{
+					HoverSlot = FCoverSlot();
+				}
+			}
+			StealthWallHoverActor = HitActor;
+			StealthWallHoverOperative = Operative;
+			StealthWallHoverPoint = Hit->ImpactPoint;
+			StealthWallHoverOperativeAt = Operative->GetActorLocation();
+			bStealthWallHoverInCover = Operative->bInCover;
+			StealthWallHoverOwnSlotLocation = OwnSlotLoc;
+			StealthWallHoverSlot = HoverSlot;
+		}
+	}
+	else
+	{
+		StealthWallHoverActor.Reset();
+		StealthWallHoverOperative.Reset();
+		StealthWallHoverPoint = FVector(TNumericLimits<float>::Max());
+		StealthWallHoverOperativeAt = FVector(TNumericLimits<float>::Max());
+		bStealthWallHoverInCover = false;
+		StealthWallHoverOwnSlotLocation = FVector(TNumericLimits<float>::Max());
+		StealthWallHoverSlot = FCoverSlot();
+	}
+	if (!HoverSlot.IsValid() || !GetWorld())
+	{
+		if (IsValid(StealthWallHoverGhost) && StealthWallHoverGhost->IsShown())
+		{
+			StealthWallHoverGhost->Hide();
+		}
+		return false;
+	}
+	if (!IsValid(StealthWallHoverGhost))
+	{
+		FActorSpawnParameters Params;
+		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		StealthWallHoverGhost = GetWorld()->SpawnActor<ACoverGhostActor>(HoverSlot.WorldLocation, FRotator::ZeroRotator, Params);
+	}
+	if (!IsValid(StealthWallHoverGhost))
+	{
+		return false;
+	}
+	StealthWallHoverGhost->ShowFor(*Operative, HoverSlot);
+	return StealthWallHoverGhost->IsShown();
 }
 
 void ACodexTacticsPlayerController::ToggleCoverFireModeKey()

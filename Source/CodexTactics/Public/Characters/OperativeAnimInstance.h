@@ -158,6 +158,7 @@ struct FOperativeClipState
 	TObjectPtr<UAnimSequence> Sequence = nullptr;
 	float Time = 0.f;
 	float Weight = 0.f;
+	float YawOffset = 0.f;
 };
 
 /** Proxy that blends the clip snapshot when the instance has no graph (or native locomotion is forced). */
@@ -276,6 +277,7 @@ private:
 	void BlendStealthLayer(FPoseContext& Output) const;
 	TStaticArray<FOperativeClipState, 12> StealthClips;
 	float StealthWeight = 0.f;
+	float StealthLookYawDeg = 0.f;
 	void BlendProneCrawlLayer(FPoseContext& Output) const;
 	TStaticArray<FOperativeClipState, 6> CrawlClips;
 	float CrawlWeight = 0.f;
@@ -1376,8 +1378,12 @@ public:
 	/** Current native pose samples / shared phase / measured speed, for integration smokes. */
 	const TStaticArray<FOperativeClipState, 12>& GetStealthClips() const { return StealthClips; }
 	float GetStealthPhase() const { return StealthPhase; }
+	float GetStealthFastBlend() const { return StealthFastBlend; }
+	float GetStealthLookYawDeg() const { return StealthLookYawDeg; }
 	float GetStealthNominalSpeed(FName ClipName) const { return StealthSetData.ClipSpeeds.FindRef(ClipName); }
 	const UAnimSequenceBase* GetStealthDominantClip() const;
+	/** Named clip lookup from the retargeted stealth set (e.g. stealth cover ghosts). */
+	UAnimSequenceBase* GetStealthNamedClip(FName ClipName) const { return StealthSetData.NamedClips.FindRef(ClipName); }
 	/** Pack crouch entry, used by both the stance montage and its movement hold. */
 	UAnimSequenceBase* GetStealthCrouchClip() const;
 	/** The gait the layer plays this frame (smokes). */
@@ -2096,11 +2102,23 @@ private:
 	TStaticArray<FOperativeClipState, 12> StealthClips;
 	FWeaponLayerDirectionState StealthDirection;
 	float StealthWeight = 0.f;
+	float StealthLookYawDeg = 0.f;
 	float StealthPhase = 0.f;
+	float StealthFastBlend = 0.f;
 	float StealthIdleTime = 0.f;
 	float StealthActionTime = 0.f;
 	float StealthFireBlockSeconds = 0.f;
 	UAnimSequence* StealthAction = nullptr;
+	/** The sector of a playing gait start clip (StealthModeRules::GetGaitStartSector); INDEX_NONE for any other action. */
+	int32 StealthStartSector = INDEX_NONE;
+	/** 1 -> 0 while a gait start that no longer matches the legs fades out (StealthModeRules::ShouldEndGaitStart). */
+	float StealthActionFade = 1.f;
+	/** Real seconds since the gait start began; the legs were inside its sector once (StealthModeRules::ShouldEndGaitStart). */
+	float StealthStartElapsed = 0.f;
+	bool bStealthStartMatched = false;
+	/** The playing gait start is the Fast one (it ends when the gait intent changes, e.g. a double click's walk start then Fast). */
+	bool bStealthStartFast = false;
+	bool bStealthActionEnding = false;
 	bool bStealthWasActive = false;
 	bool bStealthWasMoving = false;
 	bool bStealthWasPeeking = false;

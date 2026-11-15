@@ -7,6 +7,7 @@
 #include "AnimationRuntime.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/ProneCrawlRules.h"
+#include "Characters/StealthModeRules.h"
 #include "Characters/WeaponLayerHandoffRules.h"
 
 namespace OperativeStealthLayer
@@ -60,6 +61,8 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	{
 		bStealthWasActive = bStealthWasMoving = bStealthWasAtWall = bStealthWasPeeking = false;
 		StealthAction = nullptr;
+		StealthLookYawDeg = 0.f;
+		StealthFastBlend = 0.f;
 		StealthDirection = FWeaponLayerDirectionState();
 		return;
 	}
@@ -69,17 +72,46 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	}
 	const FVector Velocity = Operative->GetVelocity();
 	const float MoveSpeed = static_cast<float>(Velocity.Size2D());
-	const bool bMoving = MoveSpeed > Set.MoveStartSpeed;
+	// A re-order's momentary velocity dip is no stop (designer follow-up 2026-11-14, 034).
+	const bool bMoving = StealthModeRules::IsGaitMoving(MoveSpeed, LocomotionSpeed, bStealthWasMoving, Operative->IsMoving(), Set.MoveStartSpeed, Set.MoveFullSpeed);
+	const bool bWantFast = Operative->IsStealthFast();
+	// A start (acceleration from standstill) only from standstill / low speed; a re-order while running keeps the cycle going.
+	const bool bGaitStart = bMoving && !bStealthWasMoving
+		&& StealthModeRules::ShouldBeginGaitStart(LocomotionSpeed, bWantFast ? Set.JogSpeed : Set.WalkSpeed);
 	const bool bWall = bInCover;
 	const bool bPeeking = bWall && Operative->IsPeekingRoundCorner();
+	float TargetLookYawDeg = 0.f;
+	FVector StealthLookPoint = FVector::ZeroVector;
+	// A look point holds the body (UpdateCombatFacing's stealth look); without one the body turns to the travel.
+	const bool bLookHoldsBody = !bWall && Operative->GetStealthLookPoint(StealthLookPoint);
+	if (bActive && !bBodyBusy && bLookHoldsBody)
+	{
+		const float DesiredYaw = static_cast<float>((StealthLookPoint - Operative->GetActorLocation()).Rotation().Yaw);
+		TargetLookYawDeg = FMath::Clamp(FRotator::NormalizeAxis(DesiredYaw - static_cast<float>(Operative->GetActorRotation().Yaw)), -45.f, 45.f);
+	}
+	StealthLookYawDeg = FMath::FInterpTo(StealthLookYawDeg, TargetLookYawDeg, DeltaSeconds, 10.f);
+	if (FMath::Abs(StealthLookYawDeg) < 0.05f && TargetLookYawDeg == 0.f)
+	{
+		StealthLookYawDeg = 0.f;
+	}
 	const FString WallPrefix = CoverFacing == ECoverFacing::Left ? TEXT("Stealth_LeftWall_") : TEXT("Stealth_RightWall_");
 	auto Named = [&Set](const FString& Name) { return Set.NamedClips.FindRef(FName(*Name)); };
 	auto Length = [](const UAnimSequence* Clip) { return Clip ? FMath::Max(0.1f, Clip->GetPlayLength()) : 1.f; };
-	if (MoveSpeed > 3.f || !StealthDirection.bValid)
+	if (bMoving)
 	{
-		const float Raw = MoveSpeed > 3.f ? ProneCrawlRules::RelativeMoveDeg(static_cast<float>(Operative->GetActorRotation().Yaw), static_cast<float>(Velocity.Rotation().Yaw)) : 0.f;
+		// Start each walk cleanly from its actual initial heading instead of sweeping from 0 deg (F) or a prior walk.
+		if (bGaitStart)
+		{
+			StealthDirection = FWeaponLayerDirectionState();
+			StealthFastBlend = 0.f;
+		}
+		const float Raw = ProneCrawlRules::RelativeMoveDeg(static_cast<float>(Operative->GetActorRotation().Yaw), static_cast<float>(Velocity.Rotation().Yaw));
 		WeaponLayerHandoffRules::StepLayerDirection(StealthDirection, Raw, DeltaSeconds, Set.DirectionSmoothSeconds, Set.DirectionDeadZoneDeg,
 			Set.DirectionSnapDeg, Set.DirectionFadeSeconds);
+	}
+	else if (!bStealthWasMoving && !StealthAction)
+	{
+		StealthDirection = FWeaponLayerDirectionState();
 	}
 	TStaticArray<bool, 8> Available;
 	for (int32 Index = 0; Index < 8; ++Index)
@@ -91,19 +123,47 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	const int32 LeadIndex = static_cast<int32>(Dir.Alpha < 0.5f ? Dir.A : Dir.B);
 	const float SlowSpeed = BlendedNominalSpeed(Dir, Set.WalkSpeeds, Set.WalkSpeed);
 	const float FastSpeed = BlendedNominalSpeed(Dir, Set.JogSpeeds, Set.JogSpeed);
-	const float Fast = FMath::Clamp((LocomotionSpeed - SlowSpeed) / FMath::Max(1.f, FastSpeed - SlowSpeed), 0.f, 1.f);
+	const float SpeedBlend = FMath::Clamp((LocomotionSpeed - SlowSpeed) / FMath::Max(1.f, FastSpeed - SlowSpeed), 0.f, 1.f);
+	const float FastConfigSpeed = FMath::Max(1.f, StealthModeRules::GetConfig().FastSpeedCm);
+	// Smooth floor for fast stealth (Opus H1): at low speeds (accel/decel) follow natural SpeedBlend to avoid
+	// pose-popping or slow-motion jog strides; once above mid-speed (0.6x FastConfigSpeed), lock to pure jog
+	// so directional changes and minor speed dips never blend back the slow walk.
+	const float FastFloor = StealthModeRules::FastGaitFloor(LocomotionSpeed, FastConfigSpeed);
+	const float FastTarget = (Operative->IsStealthFast() && bMoving)
+		? FMath::Max(SpeedBlend, FastFloor)
+		: SpeedBlend;
+	StealthFastBlend = FMath::FInterpTo(StealthFastBlend, FastTarget, DeltaSeconds, 10.f);
+	// Accelerating in Fast stealth the jog follows the capsule's own speed at once (designer follow-up 2026-11-14): the smoothed floor
+	// above lagged ~0.3 s, so the walk loops played at ~1.9x up to full speed. Dips (a re-order) still never blend the walk back.
+	if (bWantFast && bMoving)
+	{
+		StealthFastBlend = FMath::Max(StealthFastBlend, StealthModeRules::FastGaitFloor(MoveSpeed, FastConfigSpeed));
+	}
+	const float Fast = StealthFastBlend;
 	auto BeginAction = [this](UAnimSequence* Clip)
 	{
 		StealthAction = Clip;
 		StealthActionTime = 0.f;
+		StealthStartSector = INDEX_NONE;
+		StealthActionFade = 1.f;
+		StealthStartElapsed = 0.f;
+		bStealthStartMatched = false;
+		bStealthActionEnding = false;
 	};
 	const float Yaw = static_cast<float>(Operative->GetActorRotation().Yaw);
 	const float YawDelta = FMath::FindDeltaAngleDegrees(StealthLastYaw, Yaw);
+	if (bWall != bStealthWasAtWall)
+	{
+		// Drop any previous gait action before choosing the wall stop / departure transition.
+		StealthAction = nullptr;
+	}
 	if (bActive && !bBodyBusy)
 	{
 		if (bPeeking != bStealthWasPeeking)
 		{
-			BeginAction(Named(WallPrefix + (bPeeking ? TEXT("Lean_Start_IP") : TEXT("Lean_Stop_IP"))));
+			const ECoverFacing LeanSide = bPeeking ? CoverFacing : StealthLastSide;
+			const EStealthWallLeanPhase LeanPhase = bPeeking ? EStealthWallLeanPhase::Start : EStealthWallLeanPhase::Stop;
+			BeginAction(Named(StealthModeRules::GetWallLeanClipName(LeanSide, LeanPhase).ToString()));
 		}
 		else if (bWall && bStealthWasAtWall && CoverFacing != StealthLastSide)
 		{
@@ -117,7 +177,15 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 			}
 			else if (bMoving)
 			{
-				BeginAction(Named(FString::Printf(TEXT("Stealth_%s_%s_Start_IP"), Fast > 0.5f ? TEXT("Fast") : TEXT("Slow"), OperativeStealthLayer::DirectionNames[LeadIndex])));
+				if (bGaitStart)
+				{
+					// Designer bug 2026-11-14 (034): not the first frame's relative sector - the body turns to the travel ~0.2 s later.
+					const int32 StartSector = StealthModeRules::GetGaitStartSector(LeadIndex, bLookHoldsBody);
+					// The gait intent, not the blend: the blend restarts at 0 with every start, so a Fast order used to play the slow sneak start.
+					BeginAction(Named(FString::Printf(TEXT("Stealth_%s_%s_Start_IP"), bWantFast ? TEXT("Fast") : TEXT("Slow"), OperativeStealthLayer::DirectionNames[StartSector])));
+					StealthStartSector = StealthAction ? StartSector : INDEX_NONE;
+					bStealthStartFast = bWantFast;
+				}
 			}
 			else
 			{
@@ -130,9 +198,9 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 			BeginAction(Named(FMath::Abs(YawDelta) > 135.f ? TEXT("Stealth_Turn_180_IP") : YawDelta < 0.f ? TEXT("Stealth_Turn_90_L_IP") : TEXT("Stealth_Turn_90_R_IP")));
 		}
 	}
-	if (bWall != bStealthWasAtWall || (bMoving && bPeeking))
+	if (bMoving && bPeeking)
 	{
-		StealthAction = nullptr; // never carry a free locomotion start into a wall, or a lean into a walk
+		StealthAction = nullptr; // never carry a lean into a walk
 	}
 	if (!bBodyBusy)
 	{
@@ -149,31 +217,57 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 	{
 		if (Clip && Weight > OperativeStealthLayer::StealthMinWeight && Next < StealthClips.Num())
 		{
-			StealthClips[Next++] = { Clip, Time, Weight };
+			const FString ClipName = Clip->GetName();
+			const float YawOffset = ClipName.StartsWith(TEXT("Stealth_LeftWall_")) ? -90.f
+				: ClipName.StartsWith(TEXT("Stealth_RightWall_")) ? 90.f : 0.f;
+			StealthClips[Next++] = { Clip, Time, Weight, YawOffset };
 		}
 	};
 	float ActionShare = 0.f;
 	if (StealthAction)
 	{
 		const float ActionLength = Length(StealthAction);
+		const float FadeSeconds = FMath::Min(0.12f, ActionLength * 0.25f);
 		const bool bGaitAction = bMoving && !bPeeking;
-		StealthActionTime += DeltaSeconds * (bGaitAction ? FMath::Clamp(MoveSpeed / FMath::Lerp(SlowSpeed, FastSpeed, Fast), 0.2f, Set.MaxPlayRate) : 1.f);
-		if (StealthActionTime >= ActionLength)
+		// A gait start whose sector the legs left (a re-order to another side, the body turning to the travel) fades out now
+		// instead of playing its ~1.5 s to the end over the directional gait (designer bug 2026-11-14, 034).
+		if (StealthStartSector != INDEX_NONE)
+		{
+			StealthStartElapsed += DeltaSeconds;
+			const bool bOffSector = StealthModeRules::IsOffGaitStartSector(StealthStartSector, StealthDirection.Current);
+			bStealthActionEnding |= !bGaitAction || bStealthStartFast != bWantFast
+				|| StealthModeRules::ShouldEndGaitStart(bOffSector, bStealthStartMatched, StealthStartElapsed);
+			bStealthStartMatched |= !bOffSector;
+		}
+		if (bStealthActionEnding)
+		{
+			StealthActionFade = FMath::Max(0.f, StealthActionFade - DeltaSeconds / FMath::Max(0.01f, FadeSeconds));
+		}
+		const float GaitRate = StealthStartSector != INDEX_NONE
+			? StealthModeRules::GaitStartPlayRate(Operative->GetMaxSpeed(), bStealthStartFast ? Set.JogSpeed : Set.WalkSpeed, Set.MaxPlayRate)
+			: FMath::Clamp(MoveSpeed / FMath::Lerp(SlowSpeed, FastSpeed, Fast), 0.2f, Set.MaxPlayRate);
+		StealthActionTime += DeltaSeconds * (bGaitAction ? GaitRate : 1.f);
+		if (StealthActionTime >= ActionLength || StealthActionFade <= 0.f)
 		{
 			StealthAction = nullptr;
+			StealthStartSector = INDEX_NONE;
 		}
 		else
 		{
-			ActionShare = FMath::Clamp(FMath::Min(StealthActionTime, ActionLength - StealthActionTime) / FMath::Min(0.12f, ActionLength * 0.25f), 0.f, 1.f);
+			ActionShare = StealthActionFade * FMath::Clamp(FMath::Min(StealthActionTime, ActionLength - StealthActionTime) / FadeSeconds, 0.f, 1.f);
 			Add(StealthAction, ActionShare, StealthActionTime);
 		}
 	}
 	const float Base = 1.f - ActionShare;
 	if (bPeeking)
 	{
-		UAnimSequence* Lean = Named(WallPrefix + TEXT("Lean_IP"));
-		StealthIdleTime = FMath::Fmod(StealthIdleTime + DeltaSeconds, Length(Lean));
-		Add(Lean, Base, StealthIdleTime);
+		UAnimSequence* Lean = Named(StealthModeRules::GetWallLeanClipName(CoverFacing, EStealthWallLeanPhase::Hold).ToString());
+		if (Lean)
+		{
+			const float LeanLength = Length(Lean);
+			StealthIdleTime = FMath::Fmod(StealthIdleTime + DeltaSeconds, LeanLength);
+			Add(Lean, Base, StealthIdleTime);
+		}
 		return;
 	}
 	UAnimSequence* Idle = bWall ? Named(WallPrefix + TEXT("Idle_IP")) : Set.StandIdle;
@@ -207,7 +301,13 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 		return FMath::Lerp(Cycle(Set.Walk, Set.WalkSpeeds, Set.WalkSpeed), Cycle(Set.Jog, Set.JogSpeeds, Set.JogSpeed), Fast);
 	};
 	const float FromShare = 1.f - StealthDirection.Fade;
-	const float Rate = ProneCrawlRules::PhaseRate(MoveSpeed, CycleOf(Dir), CycleOf(FromDir), FromShare, Set.MaxPlayRate, Length(Set.Walk[LeadIndex]));
+	const float WalkLen = Length(Set.Walk[LeadIndex]);
+	const float JogLen = Set.Jog[LeadIndex] ? Length(Set.Jog[LeadIndex]) : WalkLen;
+	// Compute effective lead length from harmonic mean (interpolated frequencies) so the upper bound
+	// cap (MaxPlayRate / LeadLength) is linear in frequency across the blend region (M1, M2).
+	const float InvLen = FMath::Lerp(1.f / FMath::Max(WalkLen, 0.1f), 1.f / FMath::Max(JogLen, 0.1f), Fast);
+	const float LeadLength = FMath::Clamp(1.f / FMath::Max(InvLen, 1e-4f), 0.1f, 10.f);
+	const float Rate = ProneCrawlRules::PhaseRate(MoveSpeed, CycleOf(Dir), CycleOf(FromDir), FromShare, Set.MaxPlayRate, LeadLength);
 	StealthPhase = FMath::Fmod(StealthPhase + DeltaSeconds * Rate, 1.f);
 	auto AddPair = [&Add, &At](const TStaticArray<UAnimSequence*, 8>& Clips, const FWeaponLayerDirectionBlend& Blend, float Weight)
 	{
@@ -245,13 +345,10 @@ void FOperativeAnimInstanceProxy::BlendStealthLayer(FPoseContext& Output) const
 		Clip.Sequence->GetAnimationPose(PoseData, FAnimExtractContext(static_cast<double>(Clip.Time), false));
 		// Stealth wall clips face along the wall; M4 clips encode that turn in their bones.
 		// Keep the capsule's normal-facing cover contract and rotate only this sampled pose.
-		const FString ClipName = Clip.Sequence->GetName();
-		const float WallYaw = ClipName.StartsWith(TEXT("Stealth_LeftWall_")) ? -90.f
-			: ClipName.StartsWith(TEXT("Stealth_RightWall_")) ? 90.f : 0.f;
 		const FCompactPoseBoneIndex RootIndex(0);
 		const FTransform& RootReference = Output.Pose.GetBoneContainer().GetRefPoseTransform(RootIndex);
 		Pose[RootIndex] = RootReference;
-		Pose[RootIndex].SetRotation((FQuat(FVector::UpVector, FMath::DegreesToRadians(WallYaw)) * RootReference.GetRotation()).GetNormalized());
+		Pose[RootIndex].SetRotation((FQuat(FVector::UpVector, FMath::DegreesToRadians(Clip.YawOffset)) * RootReference.GetRotation()).GetNormalized());
 		Weights.Add(Clip.Weight);
 		Total += Clip.Weight;
 	}
@@ -283,6 +380,36 @@ void FOperativeAnimInstanceProxy::BlendStealthLayer(FPoseContext& Output) const
 			continue;
 		}
 		Output.Pose[Index].BlendWith(Layer[Index], Weight);
+	}
+	if (FMath::Abs(StealthLookYawDeg) > 0.5f && Weight > OperativeStealthLayer::StealthMinWeight)
+	{
+		struct FStealthLookBone { FName Name; float Share; };
+		static const FStealthLookBone LookChain[] = {
+			{ FName(TEXT("spine_02")), 0.20f },
+			{ FName(TEXT("spine_03")), 0.25f },
+			{ FName(TEXT("neck_01")), 0.25f },
+			{ FName(TEXT("head")), 0.30f }
+		};
+		for (const FStealthLookBone& Entry : LookChain)
+		{
+			const int32 MeshIndex = Bones.GetPoseBoneIndexForBoneName(Entry.Name);
+			if (MeshIndex == INDEX_NONE)
+			{
+				continue;
+			}
+			const FCompactPoseBoneIndex BoneIndex = Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
+			if (BoneIndex.GetInt() == INDEX_NONE)
+			{
+				continue;
+			}
+			FQuat Parent = FQuat::Identity;
+			for (FCompactPoseBoneIndex Ancestor = Output.Pose.GetParentBoneIndex(BoneIndex); Ancestor.GetInt() != INDEX_NONE; Ancestor = Output.Pose.GetParentBoneIndex(Ancestor))
+			{
+				Parent = Output.Pose[Ancestor].GetRotation() * Parent;
+			}
+			const FQuat Twist(FVector::UpVector, FMath::DegreesToRadians(StealthLookYawDeg * Weight * Entry.Share));
+			Output.Pose[BoneIndex].SetRotation((Parent.Inverse() * Twist * Parent * Output.Pose[BoneIndex].GetRotation()).GetNormalized());
+		}
 	}
 }
 
