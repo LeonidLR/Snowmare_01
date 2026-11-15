@@ -21,4 +21,13 @@ namespace FireArcRules
 	{
 		return bProne ? FMath::Max(AimResidualDeg, FMath::Abs(BodyErrorDeg)) : AimResidualDeg;
 	}
+
+	float BodyArcResidualDeg(float AimResidualDeg, float BodyErrorDeg, float BodyArcDeg)
+	{
+		if (BodyArcDeg >= 180.f)
+		{
+			return AimResidualDeg;
+		}
+		return FMath::Max(AimResidualDeg, FMath::Max(FMath::Abs(BodyErrorDeg) - FMath::Max(BodyArcDeg, 0.f), 0.f));
+	}
 }

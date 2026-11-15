@@ -51,6 +51,14 @@ bool FFireArcResidualTest::RunTest(const FString&)
 	TestEqual(TEXT("prone: the body 50 deg off - no round whatever the rifle pose says"), ShotResidualDeg(10.f, 50.f, true), 50.f);
 	TestEqual(TEXT("prone: a signed body error counts by its size"), ShotResidualDeg(5.f, -40.f, true), 40.f);
 	TestEqual(TEXT("prone: on target, the rifle's residual"), ShotResidualDeg(12.f, 3.f, true), 12.f);
+
+	// Bug 058c / 061 (2026-11-15): still standing / crouched, the twist alone does not carry a round - the body faces the target first.
+	TestEqual(TEXT("still: body 80 deg off (facing the wall), rifle twisted on target -> 50 deg past the 30 deg arc"),
+		BodyArcResidualDeg(2.f, 80.f, 30.f), 50.f);
+	TestEqual(TEXT("still: body inside the arc -> the rifle's residual"), BodyArcResidualDeg(4.f, -25.f, 30.f), 4.f);
+	TestEqual(TEXT("still: a signed body error counts by its size"), BodyArcResidualDeg(0.f, -100.f, 30.f), 70.f);
+	TestEqual(TEXT("walking (arc 180): the twist keeps firing"), BodyArcResidualDeg(3.f, 120.f, 180.f), 3.f);
+	TestEqual(TEXT("arc 0: the body's whole error"), BodyArcResidualDeg(1.f, 12.f, 0.f), 12.f);
 	return true;
 }
 

@@ -25,4 +25,15 @@ namespace FireArcRules
 
 	/** The aim error a round is judged by, deg: prone the larger of the rifle's and the body's, else the rifle's / stance's. */
 	CODEXTACTICS_API float ShotResidualDeg(float AimResidualDeg, float BodyErrorDeg, bool bProne);
+
+	/**
+	 * Bug 058c / 061 (game designer 2026-11-15: "he faces the wall and his rounds fly at the enemy"; "they fire first and turn after - it
+	 * must be turn, raise, then the shot"): standing / crouched and STILL, the upper-body twist alone must not carry the round - the body
+	 * has to face the target within BodyArcDeg first. The residual is the larger of the rifle's error and the body's error beyond the arc.
+	 * Walking fire keeps the twist (BodyArcDeg >= 180 disables the gate).
+	 */
+	CODEXTACTICS_API float BodyArcResidualDeg(float AimResidualDeg, float BodyErrorDeg, float BodyArcDeg);
+
+	/** Default half-width of the standing / crouched still-fire body arc, deg (CVar Codex.Fire.BodyArcDeg). */
+	constexpr float DefaultStillBodyArcDeg = 30.f;
 }

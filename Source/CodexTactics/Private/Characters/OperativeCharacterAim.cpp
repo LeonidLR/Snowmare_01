@@ -27,6 +27,12 @@
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
+namespace OperativeAimLocal
+{
+	static TAutoConsoleVariable<float> CVarStillBodyArcDeg(TEXT("Codex.Fire.BodyArcDeg"), FireArcRules::DefaultStillBodyArcDeg,
+		TEXT("Bug 058c / 061 (2026-11-15): half-width of the body arc a STILL standing / crouched shooter must face the target within before a round leaves (the twist alone no longer fires at a wall); >= 180 disables the gate"));
+}
+
 FVector AOperativeCharacter::GetMuzzleLocation() const
 {
 	const float Height = Stance == EOperativeStance::Prone ? 25.f : (Stance == EOperativeStance::Crouching ? 85.f : 140.f);
@@ -354,8 +360,21 @@ float AOperativeCharacter::GetShotAimResidualDeg(const FVector& TargetLocation) 
 	// Bug #33 (FireArcRules): prone there is no upper-body twist - the body's own arc limits the round too (a rifle pose a few degrees off
 	// the body must not let a round leave sideways).
 	const bool bProneArc = Stance == EOperativeStance::Prone && !bInCover;
-	return FireArcRules::ShotResidualDeg(Pose, bProneArc ? AimOffsetRules::YawToTarget(GetMuzzleLocation(), GetActorForwardVector(), TargetLocation, 180.f) : 0.f,
+	const float Residual = FireArcRules::ShotResidualDeg(Pose, bProneArc ? AimOffsetRules::YawToTarget(GetMuzzleLocation(), GetActorForwardVector(), TargetLocation, 180.f) : 0.f,
 		bProneArc);
+	if (bProneArc || bInCover)
+	{
+		return Residual; // the cover poses have their own facing gates (IsFacingAligned, corner hold)
+	}
+	// Bug 058c / 061 (game designer 2026-11-15): standing / crouched and still, the body faces the target first (turn -> raise -> shot);
+	// the twist alone no longer carries a round fired at the wall. Walking fire keeps the twist. The body's aim line is the actor's yaw
+	// plus the rifle's barrel offset (TurnAimTowards turns the actor to the target minus that offset).
+	const bool bMoving = GetVelocity().SizeSquared2D() > FMath::Square(30.f);
+	const float Arc = bMoving ? 180.f : OperativeAimLocal::CVarStillBodyArcDeg.GetValueOnGameThread();
+	const FVector ToTarget = TargetLocation - GetActorLocation();
+	const float BodyError = ToTarget.SizeSquared2D() < 1.f ? 0.f
+		: FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw + BarrelYawOffset, ToTarget.Rotation().Yaw);
+	return FireArcRules::BodyArcResidualDeg(Residual, BodyError, Arc);
 }
 
 void AOperativeCharacter::TurnAimTowards(const FVector& AimAt, float DeltaTime)
