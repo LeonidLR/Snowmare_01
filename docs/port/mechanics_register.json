@@ -1,5 +1,5 @@
 {
-  "updated": "2026-11-14",
+  "updated": "2026-11-15",
   "groups": [
     {
       "id": "squad",
@@ -8,7 +8,7 @@
         {
           "id": "squad-select",
           "name": "Выбор бойца и группы",
-          "what": "Выбранный боец получает приказы; рамкой можно выбрать нескольких.",
+          "what": "Выбранный боец получает приказы; рамкой можно выбрать нескольких. Рамка в формации переводит отряд в СОЛО: выбранные — группа соло-бойцов, остальные стоят.",
           "how": "Клавиши 1-4 или клик по бойцу; рамка мышью.",
           "off": "",
           "smoke": [
@@ -17,7 +17,7 @@
             "SquadControlSmoke"
           ],
           "since": "2026-09-29",
-          "decision": "",
+          "decision": "Дизайнер 2026-11-15: рамка работает и в формации, и на ходу; B снова собирает формацию (054, a96e59c1)",
           "status": "main",
           "doc": "docs/systems/squad-and-orders.md"
         },
@@ -1082,6 +1082,18 @@
           "decision": "#55 Q3: решение 2026-11-08 (реализуется сейчас)",
           "status": "main",
           "doc": "docs/port/TASK_BOARD.md"
+        },
+        {
+          "id": "cover-door-breach-base",
+          "name": "Штурм двери: основа (шаги 1–3)",
+          "what": "Расчёт позиций у проёма (косяки Л/П, центр 2,2 м, тыл 3,5 м), поиск дверей на карте, призраки тройки. В игре ещё не подключено.",
+          "how": "-",
+          "off": "",
+          "smoke": [],
+          "since": "2026-11-15",
+          "decision": "050 (Gemini), ревью Opus 11-15; подключение к курсору и приказ — следующие шаги",
+          "status": "main",
+          "doc": "docs/design/DOORWAY_BREACH.md"
         }
       ]
     },
@@ -1324,6 +1336,18 @@
           "decision": "Пользователь 2026-11-08: 5 решений по броне и дробовику; оружие — только его список",
           "status": "main",
           "doc": "docs/design/WEAPONS_FRAMEWORK.md"
+        },
+        {
+          "id": "combat-ragdoll-cfg",
+          "name": "Рэгдолл: шаг 1 (настройки)",
+          "what": "Правила и настройки рэгдолла по типам врагов в death_ragdoll.json. Физика при смерти — шаг 2 (056, Gemini).",
+          "how": "-",
+          "off": "",
+          "smoke": [],
+          "since": "2026-11-15",
+          "decision": "053 (Gemini), ревью Opus 11-15",
+          "status": "main",
+          "doc": "docs/port/gemini/outbox/049-ragdoll-plan.report.md"
         }
       ]
     },
@@ -1856,6 +1880,20 @@
           "decision": "",
           "status": "main",
           "doc": "docs/systems/enemy-ai-and-perception.md"
+        },
+        {
+          "id": "stealth-mode",
+          "name": "Режим скрытности v2",
+          "what": "Присед-шаг, быстрый шаг, фиксация взгляда (Shift+клик — якорь), движение боком, старт по направлению.",
+          "how": "Кнопка STEALTH / клавиша 7; Shift+клик — точка взгляда, Shift+клик по себе — снять.",
+          "off": "",
+          "smoke": [
+            "StealthModeSmoke"
+          ],
+          "since": "2026-11-15",
+          "decision": "Дизайнер 2026-11-15: работает как надо; тихое убийство — позже",
+          "status": "main",
+          "doc": "docs/design/STEALTH.md"
         }
       ]
     },
@@ -2051,6 +2089,20 @@
           "decision": "Решение 2026-10-22 (щит левой рукой - в планах)",
           "status": "main",
           "doc": "docs/systems/animation-setup.md"
+        },
+        {
+          "id": "audio-hookup",
+          "name": "Звук в игре: музыка и голоса",
+          "what": "Подсистема звука слушает события игры: состояния музыки (кроссфейд), реплики бойцов с приоритетом и кулдауном. Нет файла — тишина без ошибок.",
+          "how": "-",
+          "off": "",
+          "smoke": [
+            "Audio tests 6/6"
+          ],
+          "since": "2026-11-15",
+          "decision": "045 импортёр + 052 подключение (Gemini), ревью Opus 11-15",
+          "status": "main",
+          "doc": "docs/design/audio/EVENTS.md"
         }
       ]
     },
@@ -2873,6 +2925,20 @@
           "decision": "Решение 2026-10-02",
           "status": "main",
           "doc": "docs/systems/tools-bot-waveeditor.md"
+        },
+        {
+          "id": "lvl-props",
+          "name": "Реквизит на картах (C5 + C6)",
+          "what": "Бочки, ящики, мины из файла карты <карта>.props.json: проверка файла, спавн, навигация вокруг, баланс в props_balance.json.",
+          "how": "Codex.Props.Enabled 1/0",
+          "off": "",
+          "smoke": [
+            "LevelGen tests 61/61"
+          ],
+          "since": "2026-11-15",
+          "decision": "047 + 048 (Gemini), ревью Opus 11-15",
+          "status": "main",
+          "doc": "docs/design/levelgen/PROPS_LAYERS.md"
         }
       ]
     },
@@ -3047,6 +3113,18 @@
           "decision": "Jev (TypeSafe)",
           "status": "main",
           "doc": "docs/systems/build-test-smokes.md"
+        },
+        {
+          "id": "tool-editor-status",
+          "name": "Можно ли открывать редактор",
+          "what": "Плашка вверху чата (зелёная/жёлтая/красная) и ярлык «CodexTactics Editor» на рабочем столе: какую копию открывать и почему.",
+          "how": "Ярлык на рабочем столе; плашка в чате",
+          "off": "",
+          "smoke": [],
+          "since": "2026-11-15",
+          "decision": "Дизайнер 2026-11-15",
+          "status": "main",
+          "doc": "Scripts/Tools/editor_status.py"
         }
       ]
     }
@@ -3638,7 +3716,7 @@
       ],
       "since": "2026-11-11",
       "decision": "Задача дизайнера 003 (2026-11-11), значения Codex #123",
-      "status": "branch",
+      "status": "main",
       "doc": "docs/port/codex/inbox/003-stealth-mode.md",
       "group": "stealth"
     },
@@ -3664,7 +3742,7 @@
       "smoke": [],
       "since": "2026-11-11",
       "decision": "PROPS_LAYERS 5 C5",
-      "status": "planned",
+      "status": "main",
       "doc": "docs/design/levelgen/PROPS_LAYERS.md",
       "group": "levels"
     },
@@ -3679,7 +3757,7 @@
       ],
       "since": "2026-11-11",
       "decision": "PROPS_LAYERS 3, 5 C6",
-      "status": "planned",
+      "status": "main",
       "doc": "docs/design/levelgen/PROPS_LAYERS.md",
       "group": "levels"
     },
@@ -3734,6 +3812,58 @@
       "status": "main",
       "doc": "docs/design/audio/EVENTS.md",
       "group": "ui"
+    },
+    {
+      "id": "pl-058-suppress-facing",
+      "name": "БАГ: подавление без поворота к цели",
+      "what": "Shift+клик подавление по врагу сбоку — боец в укрытии стреляет, не поворачиваясь. Чинится (058).",
+      "how": "-",
+      "off": "",
+      "smoke": [],
+      "since": "2026-11-15",
+      "decision": "Дизайнер 2026-11-15",
+      "status": "branch",
+      "doc": "docs/port/TASK_BOARD.md",
+      "group": "suppress"
+    },
+    {
+      "id": "pl-059-lookhold-solo",
+      "name": "Фиксация взгляда в соло и ползком",
+      "what": "Shift+клик по земле = точка взгляда (вместо сектора): идёт/ползёт боком и спиной; бег можно, спринт снимает.",
+      "how": "-",
+      "off": "",
+      "smoke": [],
+      "since": "2026-11-15",
+      "decision": "Дизайнер 2026-11-15",
+      "status": "planned",
+      "doc": "docs/port/TASK_BOARD.md",
+      "group": "move"
+    },
+    {
+      "id": "pl-056-ragdoll-step2",
+      "name": "Рэгдолл шаг 2: физика при смерти",
+      "what": "Тело падает физикой, трупы не стоят; максимум 4 одновременно, засыпание через 3,5 с.",
+      "how": "-",
+      "off": "",
+      "smoke": [],
+      "since": "2026-11-15",
+      "decision": "Дизайнер 2026-11-15",
+      "status": "planned",
+      "doc": "docs/port/TASK_BOARD.md",
+      "group": "combat"
+    },
+    {
+      "id": "pl-004-hitch",
+      "name": "Подвисания при появлении врагов",
+      "what": "Асинхронная предзагрузка врагов + бюджет спавна на кадр; смоук подвисаний строже 250 мс.",
+      "how": "-",
+      "off": "",
+      "smoke": [],
+      "since": "2026-11-15",
+      "decision": "Дизайнер 2026-11-15",
+      "status": "planned",
+      "doc": "docs/port/TASK_BOARD.md",
+      "group": "levels"
     }
   ],
   "plan": {
@@ -4453,6 +4583,46 @@
             "date": "2026-11-15",
             "items": [
               {
+                "status": "done",
+                "text": "Спека: фиксация взгляда в соло",
+                "ref": "059 · 95e8a565"
+              },
+              {
+                "status": "done",
+                "text": "Плашка «можно ли открывать редактор» + ярлык",
+                "ref": "57085001"
+              },
+              {
+                "status": "done",
+                "text": "Рэгдолл шаг 1: настройки",
+                "ref": "053"
+              },
+              {
+                "status": "done",
+                "text": "Звук: импортёр + подключение",
+                "ref": "045/052 · 42d5df5a"
+              },
+              {
+                "status": "done",
+                "text": "Штурм двери: основа (шаги 1–3)",
+                "ref": "050"
+              },
+              {
+                "status": "done",
+                "text": "Реквизит C5 + C6 в игре",
+                "ref": "047/048 · 2b5d00a1"
+              },
+              {
+                "status": "done",
+                "text": "Рамка в формации → СОЛО",
+                "ref": "054 · a96e59c1"
+              },
+              {
+                "status": "done",
+                "text": "Стелс v2 проверен дизайнером и влит",
+                "ref": "034 · c3c34af4"
+              },
+              {
                 "status": "todo",
                 "text": "Генератор уровней, этап 1 — проект готов и согласован (docs/design/levelgen/PROPS_LAYERS.md): мелочь в отдельном файле карты, слои с перегенерацией и замком, ручные правки не теряются; бочки — цилиндры, ящики синие (лут) / красные (опасные), мины запрещены на обязательном маршруте, метка с 3 м, подрыв выстрелом, РАЗМИНИРОВАНИЕ, цепные взрывы, заморозка готовой карты. 9 шагов C++ (Claude) + 6 шагов страницы (Gemini)",
                 "ref": "docs/design/levelgen/PROPS_LAYERS.md"
@@ -4476,6 +4646,21 @@
                 "status": "todo",
                 "text": "Из списка задач (TASK_BOARD, в очереди): переход от стены к стене под прикрытием (#4); разворот на лестнице и пандусе, застревание на пандусе, бег по пандусу (#17, #16c); БТР на Depot (#18); буран и холод — точность (#25)",
                 "ref": "docs/port/TASK_BOARD.md"
+              },
+              {
+                "status": "doing",
+                "text": "Баг подавления без поворота (субагент Opus)",
+                "ref": "058"
+              },
+              {
+                "status": "doing",
+                "text": "Подвисания при появлении врагов — начато раньше вторника",
+                "ref": "004"
+              },
+              {
+                "status": "doing",
+                "text": "Рэгдолл шаг 2 (Gemini)",
+                "ref": "056"
               }
             ]
           }
