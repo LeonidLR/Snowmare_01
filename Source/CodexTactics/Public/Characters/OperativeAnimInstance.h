@@ -1893,6 +1893,8 @@ private:
 		 * "upper" set) - blended by those gaits' clip weight (WeaponAnimLayerRules::LegsAbpWeight; the RPG-7, the designer 2026-11-10). None = the
 		 * set's own legs in every gait. */
 		WeaponAnimLayerRules::FWeaponLegsAbpGaits LegsAbp;
+		/** "legs_abp_walk": "alternate" = the walk's legs alternate between the carriers of this set (WeaponAnimLayerRules::AlternateWalkUsesAbpLegs). */
+		bool bLegsAbpWalkAlternate = false;
 		/** "legs_abp_forward_cone_deg": "walk_forward" counts fully within this many deg of straight ahead (WeaponAnimLayerRules::ForwardConeAngle). */
 		float LegsAbpForwardConeDeg = 0.f;
 		/** "legs_abp_run_speeds": [start, full] cm/s - the legs' own walk -> run band for "run" (unset = the clips' jog share: jog_blend_speeds). */
@@ -2053,6 +2055,9 @@ private:
 	float ShotgunLowerWeight = 0.f;
 	/** The share of a full set's lower body handed to the ABP's legs ("legs_abp"; WeaponAnimLayerRules::LegsAbpWeight eased over blend_seconds). */
 	float ShotgunLegsAbpWeight = 0.f;
+	/** "legs_abp_walk": "alternate" - this operative's walk on the ABP legs (refreshed every WalkVariantRefreshSeconds on the game thread). */
+	bool bShotgunWalkOnAbpLegs = true;
+	float ShotgunWalkVariantTimer = 0.f;
 	/** Turn in place of a full-body set: the clip, its share, its time, the body's yaw last frame. */
 	UAnimSequence* LayerTurnClip = nullptr;
 	float LayerTurnShare = 0.f;

@@ -230,6 +230,14 @@ namespace WeaponAnimLayerRules
 
 	CODEXTACTICS_API FWeaponLegsAbpGaits ParseLegsAbpGaits(const TArray<FString>& Names, TArray<FString>* OutUnknown = nullptr);
 
+	/**
+	 * "legs_abp_walk": "alternate" (the game designer 2026-11-15: two operatives with the shotgun must not walk like twins): the carriers of the
+	 * set in one team, ordered by squad index, alternate their WALK legs - rank 0 (and a lone carrier) the ABP's M16 legs (the designer's first
+	 * ask: the pack walk looked bad with torso turns), rank 1 the set's own walk clips, rank 2 the M16 legs again... Run / sprint unchanged.
+	 * CarrierSquadIndices = every carrier's index, self included or not. Returns true = this one walks on the ABP legs.
+	 */
+	CODEXTACTICS_API bool AlternateWalkUsesAbpLegs(int32 SelfSquadIndex, const TArray<int32>& CarrierSquadIndices);
+
 	/** The layer's clip shares this frame (UOperativeAnimInstance::UpdateShotgunLayer), each 0..1. */
 	struct CODEXTACTICS_API FWeaponLegsAbpShares
 	{

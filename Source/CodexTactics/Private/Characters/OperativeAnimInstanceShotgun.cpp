@@ -20,6 +20,7 @@
 #include "Data/WeaponDataAsset.h"
 #include "Dom/JsonObject.h"
 #include "Engine/SkeletalMesh.h"
+#include "EngineUtils.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/FileHelper.h"
@@ -339,6 +340,9 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 		ShotgunSet.LegsAbpRunStartSpeed = static_cast<float>((*LegsRun)[0]->AsNumber());
 		ShotgunSet.LegsAbpRunFullSpeed = static_cast<float>((*LegsRun)[1]->AsNumber());
 	}
+	FString LegsWalkMode;
+	ShotgunSet.bLegsAbpWalkAlternate = Block->TryGetStringField(TEXT("legs_abp_walk"), LegsWalkMode)
+		&& LegsWalkMode.Equals(TEXT("alternate"), ESearchCase::IgnoreCase);
 	TArray<FString> LegsAbpNames;
 	if (Block->TryGetStringArrayField(TEXT("legs_abp"), LegsAbpNames))
 	{
@@ -609,6 +613,27 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 		: EWeaponHandling::Standard;
 	bShotgunWeapon = LayerHandling != EWeaponHandling::Standard;
 	const FShotgunAnimSet& ShotgunSet = ActiveWeaponSet();
+	// "legs_abp_walk": "alternate" (the designer 2026-11-15): which carrier of this weapon handling walks on the M16 legs - teammates by squad
+	// index, refreshed once a second (game thread: NativeUpdateAnimation).
+	ShotgunWalkVariantTimer -= DeltaSeconds;
+	if (ShotgunSet.bLegsAbpWalkAlternate && Operative && ShotgunWalkVariantTimer <= 0.f)
+	{
+		ShotgunWalkVariantTimer = 1.f;
+		TArray<int32> Carriers;
+		if (const UWorld* World = Operative->GetWorld())
+		{
+			for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+			{
+				const AOperativeCharacter* Mate = *It;
+				if (Mate && Mate != Operative && Mate->TeamId == Operative->TeamId && !Mate->IsKilledInAction() && Mate->CurrentWeapon
+					&& Mate->CurrentWeapon->Stats.Handling == LayerHandling)
+				{
+					Carriers.Add(Mate->SquadIndex);
+				}
+			}
+		}
+		bShotgunWalkOnAbpLegs = AlternateWalkUsesAbpLegs(Operative->SquadIndex, Carriers);
+	}
 	if (WeaponFireAdditiveTime >= 0.f)
 	{
 		WeaponFireAdditiveTime += DeltaSeconds;
@@ -905,7 +930,12 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 			? JogWeight(WeightSpeed, ShotgunSet.LegsAbpRunStartSpeed, ShotgunSet.LegsAbpRunFullSpeed) : JogShare;
 		Shares.WalkForward = Forward(ShotgunSet.Walk, WalkDir);
 		Shares.AimWalkForward = Forward(ShotgunSet.AimWalk, AimDir);
-		LegsAbpTarget = LegsAbpWeight(ShotgunSet.LegsAbp, Shares);
+		FWeaponLegsAbpGaits Gaits = ShotgunSet.LegsAbp;
+		if (ShotgunSet.bLegsAbpWalkAlternate)
+		{
+			Gaits.bWalk = bShotgunWalkOnAbpLegs; // the walk's legs alternate between the carriers (run / sprint as listed)
+		}
+		LegsAbpTarget = LegsAbpWeight(Gaits, Shares);
 	}
 	// The torso reference (StabilizeWeaponTorso): the upright gait's forward clip at the shared phase; the sprint runs forward only.
 	if (ShotgunSet.bFullBody && ShotgunSet.bTorsoForward)

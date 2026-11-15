@@ -503,6 +503,9 @@ bool FWeaponLayerLegsAbpDataTest::RunTest(const FString&)
 			// The designer 2026-11-10: the shotgun WALKS on the pack and RUNS / SPRINTS on the M16 (ABP) legs, no walk_forward.
 			const WeaponAnimLayerRules::FWeaponLegsAbpGaits Gaits = WeaponAnimLayerRules::ParseLegsAbpGaits(Names, nullptr);
 			TestTrue(TEXT("the shotgun: legs_abp run + sprint only"), bHas && Gaits.bRun && Gaits.bSprint && !Gaits.bWalkForward);
+			// The designer 2026-11-15: the walk alternates between the shotgun carriers (not twins).
+			FString WalkMode;
+			TestTrue(TEXT("the shotgun: legs_abp_walk alternate"), (*Block)->TryGetStringField(TEXT("legs_abp_walk"), WalkMode) && WalkMode == TEXT("alternate"));
 		}
 		else
 		{
@@ -514,3 +517,19 @@ bool FWeaponLayerLegsAbpDataTest::RunTest(const FString&)
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS
+
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FWeaponLayerAlternateWalkTest, "CodexTactics.Animation.WeaponLayer.AlternateWalk",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FWeaponLayerAlternateWalkTest::RunTest(const FString&)
+{
+	using namespace WeaponAnimLayerRules;
+	// The designer 2026-11-15: two shotgun carriers must not walk like twins - by squad index rank 0 the M16 legs, rank 1 the pack walk.
+	TestTrue(TEXT("a lone carrier walks on the M16 legs"), AlternateWalkUsesAbpLegs(2, {}));
+	TestTrue(TEXT("the lower index of two: M16 legs"), AlternateWalkUsesAbpLegs(0, { 2 }));
+	TestFalse(TEXT("the higher index of two: the pack walk"), AlternateWalkUsesAbpLegs(2, { 0 }));
+	TestTrue(TEXT("third of three: M16 legs again"), AlternateWalkUsesAbpLegs(2, { 0, 1 }));
+	TestTrue(TEXT("self in the list does not count against itself"), AlternateWalkUsesAbpLegs(1, { 1, 2 }));
+	return true;
+}
