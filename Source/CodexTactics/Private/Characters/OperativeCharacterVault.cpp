@@ -151,6 +151,7 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	}
 	bHasPendingCover = false;
 	bVaulting = true;
+	ClearManualLookPoint();
 	VaultTimer = 0.f;
 	VaultDuration = VaultRules::Duration(bRunning);
 	VaultHeight = FMath::Max(30.f, Height);
@@ -186,6 +187,7 @@ bool AOperativeCharacter::UpdateObstacleStepOff(float DeltaTime)
 	}
 	bHasPendingCover = false;
 	bVaulting = true;
+	ClearManualLookPoint();
 	VaultTimer = 0.f;
 	VaultDuration = 0.5f;
 	VaultHeight = 30.f;

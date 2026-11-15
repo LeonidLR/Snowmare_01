@@ -172,6 +172,7 @@ void AOperativeCharacter::BecomeCorpse()
 	bIsReloading = false;
 	ReloadTimer = 0.f;
 	SetSprinting(false);
+	ClearManualLookPoint();
 	if (UGrenadeSubsystem* Grenades = GetWorld()->GetSubsystem<UGrenadeSubsystem>(); Grenades && Grenades->GetThrower() == this)
 	{
 		Grenades->CancelAim();

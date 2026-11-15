@@ -141,6 +141,16 @@ void UTurnBasedCombatSubsystem::StartCombat()
 		return;
 	}
 	++CombatId;
+	if (SquadSystem)
+	{
+		for (AOperativeCharacter* Member : SquadSystem->GetMembers())
+		{
+			if (Member)
+			{
+				Member->ClearManualLookPoint();
+			}
+		}
+	}
 	// Imported Godot balance (DA_Balance = resources/balance.tres).
 	if (const ACodexTacticsGameMode* GameMode = World->GetAuthGameMode<ACodexTacticsGameMode>())
 	{

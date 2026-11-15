@@ -404,11 +404,19 @@ public:
 	bool IsStealthFast() const { return bStealthMode && bStealthFast; }
 	bool CanStealthFast() const;
 	void SetStealthFast(bool bFast);
-	/** Stealth v2 §5: manual look anchor fixed by Shift + LMB while moving/holding in stealth; cleared on self Shift+LMB, Shift+RMB, or stealth exit. */
+	/** Look hold outside stealth (059, solo walk / jog / crouch / prone strafe). */
+	void SetManualLookPoint(const FVector& WorldPoint);
+	void ClearManualLookPoint();
+	bool HasManualLookPoint() const { return bHasManualLookPoint; }
+	bool GetManualLookPoint(FVector& OutPoint) const;
+	bool GetActiveLookPoint(FVector& OutPoint) const;
+	bool IsLookHoldEligible() const;
+
+	/** Stealth v2 §5: manual look anchor (delegates to unified manual look point for compatibility). */
 	void SetStealthManualLookTarget(const FVector& WorldPoint);
 	void ClearStealthManualLookTarget();
-	bool HasStealthManualLookTarget() const { return bStealthMode && bHasStealthManualLook; }
-	FVector GetStealthManualLookTarget() const { return StealthManualLookTarget; }
+	bool HasStealthManualLookTarget() const { return bStealthMode && bHasManualLookPoint; }
+	FVector GetStealthManualLookTarget() const { return ManualLookPoint; }
 	/** Stealth v2 §1: automatic threat look-lock (within LookLockFovDeg, remembered for LookLockKeepSeconds). */
 	bool HasStealthAutoLookTarget() const { return bStealthMode && StealthAutoLookTargetId != 0 && StealthAutoLookActor.IsValid(); }
 	FVector GetStealthAutoLookTarget() const { return HasStealthAutoLookTarget() ? StealthAutoLookLocation : FVector::ZeroVector; }
@@ -3233,6 +3241,10 @@ private:
 	bool bStealthMode = false;
 	UPROPERTY(Transient)
 	bool bStealthFast = false;
+	UPROPERTY(Transient)
+	bool bHasManualLookPoint = false;
+	UPROPERTY(Transient)
+	FVector ManualLookPoint = FVector::ZeroVector;
 	UPROPERTY(Transient)
 	bool bHasStealthManualLook = false;
 	UPROPERTY(Transient)

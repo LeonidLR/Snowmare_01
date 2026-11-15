@@ -686,6 +686,7 @@ void ULadderClimbComponent::StartEntry()
 		if (Operative)
 		{
 			Operative->StopOperative();
+			Operative->ClearManualLookPoint();
 		}
 		else if (Character->GetController())
 		{

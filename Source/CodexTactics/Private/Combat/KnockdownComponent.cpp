@@ -243,6 +243,10 @@ bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdo
 	}
 	++KnockdownCount;
 	BufferedOrder = nullptr;
+	if (AOperativeCharacter* Op = Cast<AOperativeCharacter>(GetOwner()))
+	{
+		Op->ClearManualLookPoint();
+	}
 	SetPhase(EKnockdownPhase::Falling, Old); // the owner interrupts its actions first (stops the upper-body montages)
 	PlayPhaseClip();
 	static const TCHAR* Causes[] = { TEXT("knocked down"), TEXT("knocked down by a pounce"), TEXT("knocked down by a heavy blow"),

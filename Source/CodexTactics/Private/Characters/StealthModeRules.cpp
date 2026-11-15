@@ -6,6 +6,7 @@
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
 #include "Tactics/CoverTypes.h"
+#include "Tactics/LookHoldRules.h"
 
 namespace StealthModeRules
 {
@@ -119,19 +120,17 @@ namespace StealthModeRules
 
 	int32 GetDirectionSector(float RelativeMoveDeg)
 	{
-		const float Wrapped = FMath::Fmod(FRotator::ClampAxis(RelativeMoveDeg) + 22.5f, 360.f);
-		return FMath::Clamp(FMath::FloorToInt(Wrapped / 45.f), 0, 7);
+		return LookHoldRules::GetDirectionSector(RelativeMoveDeg);
 	}
 
 	int32 GetGaitStartSector(int32 LeadSector, bool bBodyHeldByLook)
 	{
-		return bBodyHeldByLook ? ((LeadSector % 8) + 8) % 8 : 0;
+		return LookHoldRules::GetGaitStartSector(LeadSector, bBodyHeldByLook);
 	}
 
 	bool IsOffGaitStartSector(int32 StartSector, float LegDirectionDeg, float ToleranceDeg)
 	{
-		const float StartDeg = static_cast<float>(((StartSector % 8) + 8) % 8) * 45.f;
-		return FMath::Abs(FMath::FindDeltaAngleDegrees(StartDeg, LegDirectionDeg)) > FMath::Max(0.f, ToleranceDeg);
+		return LookHoldRules::IsOffGaitStartSector(StartSector, LegDirectionDeg, ToleranceDeg);
 	}
 
 	bool ShouldEndGaitStart(bool bOffSector, bool bMatchedBefore, float ElapsedSeconds, float TurnGraceSeconds)

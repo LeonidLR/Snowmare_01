@@ -163,6 +163,11 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	}
 	else if (bSprint && CanSprint())
 	{
+		if (HasManualLookPoint())
+		{
+			ClearManualLookPoint();
+			UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+		}
 		// A sprint order stands a crouching operative up (Godot set_target).
 		if (Stance == EOperativeStance::Crouching)
 		{
@@ -508,6 +513,11 @@ void AOperativeCharacter::StopOperative()
 
 void AOperativeCharacter::SetSprinting(bool bNewSprinting)
 {
+	if (bNewSprinting && HasManualLookPoint())
+	{
+		ClearManualLookPoint();
+		UFloatingTextSubsystem::SpawnAboveOperative(this, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+	}
 	if (bNewSprinting && IsInStealthMode() && !bCarrying && !IsCriticallyWounded()
 		&& OperativeMovementRules::CanSprint(MovementConfig, EOperativeStance::Standing, ColdLevel, IsWounded()))
 	{
@@ -601,6 +611,7 @@ void AOperativeCharacter::SetCarrying(bool bNewCarrying)
 	{
 		bStealthFast = false;
 		bSprinting = false; // Godot can_sprint: no sprint while carrying
+		ClearManualLookPoint();
 	}
 	ApplyMovementParams();
 }

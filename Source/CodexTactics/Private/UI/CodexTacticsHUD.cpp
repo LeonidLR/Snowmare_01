@@ -1080,11 +1080,15 @@ void ACodexTacticsHUD::DrawStealthLookMarkers()
 	TArray<FVector> DrawnEyes;
 	for (const AOperativeCharacter* Member : Squad->GetSelectedGroup())
 	{
-		if (!Member || !Member->HasStealthManualLookTarget())
+		if (!Member || (!Member->HasStealthManualLookTarget() && !Member->HasManualLookPoint()))
 		{
 			continue;
 		}
-		const FVector Anchor = Member->GetStealthManualLookTarget();
+		FVector Anchor = FVector::ZeroVector;
+		if (!Member->GetManualLookPoint(Anchor))
+		{
+			continue;
+		}
 		const FVector Start = Member->GetActorLocation() - FVector(0.f, 0.f, Member->GetSimpleCollisionHalfHeight() - 8.f);
 		const FVector ScreenStart = Project(Start, true);
 		const FVector ScreenEnd = Project(Anchor + FVector(0.f, 0.f, 8.f), true);

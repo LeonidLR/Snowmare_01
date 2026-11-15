@@ -23,6 +23,7 @@
 #include "Combat/QuickFireRules.h"
 #include "Combat/SuppressionSubsystem.h"
 #include "Core/PlayerCommands.h"
+#include "Tactics/LookHoldRules.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "Interactables/LootCrateActor.h"
@@ -359,12 +360,32 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		return;
 	}
 
-	// Stealth v2 §5 (manual look anchor): Shift + LMB fixes a look point (or clears it when clicking a selected stealthed operative).
+	// Stealth v2 §5 / Look hold 059: Shift + LMB fixes a look point (or clears it when clicking a selected operative).
 	// Wins when the active selection is purely stealthed and not Shift-clicking an unselected/non-stealthed squad member;
+	// Shift + click on self clears the look point (both stealth and non-stealth);
 	// mixed selections and Shift+click squad select/suppress/watch-sector keep their normal behavior.
 	if (IsShiftModifierDown())
 	{
 		const TArray<AOperativeCharacter*> SelectedGroup = Squad->GetSelectedGroup();
+		AOperativeCharacter* ClickedSelf = FindClickedMember(Hit);
+		if (ClickedSelf && SelectedGroup.Contains(ClickedSelf))
+		{
+			bool bClearedAny = false;
+			for (AOperativeCharacter* Member : SelectedGroup)
+			{
+				if (Member && Member->HasManualLookPoint())
+				{
+					bClearedAny = true;
+					Member->ClearManualLookPoint();
+				}
+			}
+			if (bClearedAny)
+			{
+				UFloatingTextSubsystem::SpawnAboveOperative(ClickedSelf, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
+				HideCoverPreview();
+				return;
+			}
+		}
 		TArray<AOperativeCharacter*> StealthedSelected;
 		for (AOperativeCharacter* Member : SelectedGroup)
 		{
@@ -375,25 +396,9 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		}
 		if (!StealthedSelected.IsEmpty())
 		{
-			AOperativeCharacter* ClickedSelf = FindClickedMember(Hit);
 			if (ClickedSelf && !StealthedSelected.Contains(ClickedSelf))
 			{
 				// Allow normal Shift+click add/remove selection on unselected or non-stealthed operatives.
-			}
-			else if (ClickedSelf)
-			{
-				bool bClearedAny = false;
-				for (AOperativeCharacter* Member : StealthedSelected)
-				{
-					bClearedAny |= Member->HasStealthManualLookTarget();
-					Member->ClearStealthManualLookTarget();
-				}
-				if (bClearedAny)
-				{
-					UFloatingTextSubsystem::SpawnAboveOperative(ClickedSelf, TEXT("LOOK CLEARED"), FLinearColor(0.75f, 0.85f, 0.95f));
-					HideCoverPreview();
-					return;
-				}
 			}
 			else if (StealthedSelected.Num() == SelectedGroup.Num() && Hit.bBlockingHit)
 			{
@@ -613,21 +618,42 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		// Grid combat handles clicks itself (turn-based step).
 		return;
 	}
-	// Godot Shift + click on the ground: turn the leader and fix the observation sector (on enemies: the SUPPRESS order above).
+	// Shift + click on the ground outside stealth: set look hold anchor (059, merges watch sector with 8-direction look hold).
 	if (IsShiftModifierDown())
 	{
 		if (RefuseIfLocked(PlayerCommands::WatchSector))
 		{
 			return;
 		}
-		Leader->SetFacingPoint(Hit.ImpactPoint);
-		ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, Leader, Hit.ImpactPoint);
-		UFloatingTextSubsystem::SpawnAboveOperative(Leader, TEXT("👁️ WATCH SECTOR"), FLinearColor(0.2f, 0.9f, 1.f));
-		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		TArray<AOperativeCharacter*> Targets;
+		if (Squad && Squad->IsSoloMode())
 		{
-			Messages->PostMessage(Leader->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), Leader->DisplayName));
+			Targets = Squad->GetSelectedGroup();
 		}
-		return;
+		else if (Leader)
+		{
+			Targets.Add(Leader);
+		}
+		bool bSetAny = false;
+		for (AOperativeCharacter* Op : Targets)
+		{
+			if (Op && LookHoldRules::IsValidLookPoint(Hit.ImpactPoint, Op->GetActorLocation()))
+			{
+				Op->SetManualLookPoint(Hit.ImpactPoint);
+				bSetAny = true;
+			}
+		}
+		if (bSetAny && !Targets.IsEmpty())
+		{
+			ControllerCommands::Report(this, PlayerCommands::WatchSector, nullptr, false, false, Targets[0], Hit.ImpactPoint);
+			UFloatingTextSubsystem::SpawnAboveOperative(Targets[0], TEXT("LOOK ANCHOR"), FLinearColor(0.25f, 0.92f, 1.f));
+			if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+			{
+				Messages->PostMessage(Targets[0]->DisplayName, FText::Format(LOCTEXT("Sector", "👁️ [{0}]: Watch sector locked!"), Targets[0]->DisplayName));
+			}
+			HideCoverPreview();
+			return;
+		}
 	}
 	// RTS control (user request 2026-10-06): a ground click moves the squad at once in the real-time fight and is planned
 	// in the tactical pause; only the old lock (Codex.RealTimeOrders 0) keeps the Godot «moves only in the pause» rule.

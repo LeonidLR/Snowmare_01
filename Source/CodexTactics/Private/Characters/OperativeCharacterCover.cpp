@@ -154,6 +154,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	StopOperative();
 	CoverSlot = Slot;
 	bInCover = true;
+	ClearManualLookPoint();
 	CurrentCoverHeight = Slot.Height;
 	bShimmying = false;
 	ShimmyDirection = 0.f;

@@ -12,6 +12,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInstanceDynamic.h"
 #include "Materials/MaterialInterface.h"
+#include "Tactics/LookHoldRules.h"
 #include "Vehicles/VehicleSubsystem.h"
 
 bool AOperativeCharacter::CanEnterStealthWithoutFormation() const
@@ -106,21 +107,37 @@ void AOperativeCharacter::SetStealthFast(bool bFast)
 	}
 }
 
+void AOperativeCharacter::SetManualLookPoint(const FVector& WorldPoint)
+{
+	bHasManualLookPoint = true;
+	ManualLookPoint = WorldPoint;
+	bHasStealthManualLook = bStealthMode;
+	StealthManualLookTarget = WorldPoint;
+	ClearIdleFacing();
+	bExplicitFacing = false;
+}
+
+void AOperativeCharacter::ClearManualLookPoint()
+{
+	bHasManualLookPoint = false;
+	ManualLookPoint = FVector::ZeroVector;
+	bHasStealthManualLook = false;
+	StealthManualLookTarget = FVector::ZeroVector;
+}
+
 void AOperativeCharacter::SetStealthManualLookTarget(const FVector& WorldPoint)
 {
 	if (!bStealthMode)
 	{
-		ClearStealthManualLookTarget();
+		ClearManualLookPoint();
 		return;
 	}
-	bHasStealthManualLook = true;
-	StealthManualLookTarget = WorldPoint;
+	SetManualLookPoint(WorldPoint);
 }
 
 void AOperativeCharacter::ClearStealthManualLookTarget()
 {
-	bHasStealthManualLook = false;
-	StealthManualLookTarget = FVector::ZeroVector;
+	ClearManualLookPoint();
 }
 
 void AOperativeCharacter::ClearStealthAutoLookTarget()
@@ -186,20 +203,45 @@ void AOperativeCharacter::UpdateStealthLookLock(float DeltaSeconds)
 	StealthAutoLookActor = StealthAutoLookTargetId != 0 ? CandidateActors.FindRef(StealthAutoLookTargetId) : nullptr;
 }
 
-bool AOperativeCharacter::GetStealthLookPoint(FVector& OutPoint) const
+bool AOperativeCharacter::GetManualLookPoint(FVector& OutPoint) const
 {
-	constexpr float LookPointDeadRadiusSq = 50.f * 50.f;
-	if (HasStealthManualLookTarget() && FVector::DistSquared2D(GetActorLocation(), StealthManualLookTarget) > LookPointDeadRadiusSq)
+	if (HasManualLookPoint() && LookHoldRules::IsValidLookPoint(ManualLookPoint, GetActorLocation(), 50.f))
 	{
-		OutPoint = StealthManualLookTarget;
+		OutPoint = ManualLookPoint;
 		return true;
 	}
-	if (HasStealthAutoLookTarget() && FVector::DistSquared2D(GetActorLocation(), StealthAutoLookLocation) > LookPointDeadRadiusSq)
+	return false;
+}
+
+bool AOperativeCharacter::IsLookHoldEligible() const
+{
+	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	const bool bSolo = Squad && Squad->IsSoloMode();
+	const bool bLeader = Squad ? Squad->GetLeader() == this : true;
+	return LookHoldRules::IsLookHoldEligible(IsInStealthMode(), bSolo, bLeader, bGuarding);
+}
+
+bool AOperativeCharacter::GetActiveLookPoint(FVector& OutPoint) const
+{
+	if (IsLookHoldEligible() && GetManualLookPoint(OutPoint))
+	{
+		return true;
+	}
+	if (IsInStealthMode() && HasStealthAutoLookTarget() && LookHoldRules::IsValidLookPoint(StealthAutoLookLocation, GetActorLocation(), 50.f))
 	{
 		OutPoint = StealthAutoLookLocation;
 		return true;
 	}
 	return false;
+}
+
+bool AOperativeCharacter::GetStealthLookPoint(FVector& OutPoint) const
+{
+	if (!IsInStealthMode())
+	{
+		return false;
+	}
+	return GetActiveLookPoint(OutPoint);
 }
 
 void AOperativeCharacter::RefreshStealthVisuals()
