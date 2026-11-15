@@ -457,6 +457,27 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		return;
 	}
 
+	// Mantling slice 1 (game designer 2026-11-15, trigger C; docs/design/MANTLING.md 11.6): in Solo a plain click on a reachable ledge top
+	// (a crate / wreck / boiler / the cut's parapet / a 135 cm fence's top is no top - its far side is reached by a path) orders the climb: the
+	// selected operative walks to the obstacle's face nearest to him and climbs, crouching on top. Before the cover click (a crate's top
+	// would otherwise be its cover); Alt (cover on any object), Shift, Ctrl (above), ladders and objects (above / below) keep their meaning;
+	// only the real-time order dispatch (the pause plans moves: no climb), never on the grid, not for a multi-selection (054).
+	if (!IsSquadWideModifierDown() && !IsShiftModifierDown() && Squad->IsSoloMode() && !Squad->HasMultiSelection() && !IsRealTimeOrderLocked()
+		&& !bRelocateSelectMode && !Cast<AInteractableActor>(Hit.GetActor()) && !Cast<APawn>(Hit.GetActor()))
+	{
+		const UGameFlowSubsystem* MantleFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		const ECodexCombatMode MantleMode = MantleFlow ? MantleFlow->GetCombatMode() : ECodexCombatMode::None;
+		const ECombatOrderDispatch MantleDispatch = MantleFlow ? FCombatTimeModeRules::GetOrderDispatch(MantleFlow->GetPhase(), MantleMode,
+			OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
+		if (MantleMode != ECodexCombatMode::TurnBased && MantleDispatch == ECombatOrderDispatch::Execute
+			&& !UTutorialSubsystem::FilterCommand(this, PlayerCommands::Move).IsNone() && Leader->OrderMantleTop(Hit, Leader->IsSprinting()))
+		{
+			HideCoverPreview();
+			ControllerCommands::Report(this, PlayerCommands::Move, nullptr, false, false, Leader, Hit.ImpactPoint);
+			UE_LOG(LogCodexTactics, Display, TEXT("Click on the top of %s: %s climbs it"), *GetNameSafe(Hit.GetActor()), *Leader->DisplayName.ToString());
+			return;
+		}
+	}
 	// Sprint 12: a click on a wall (Alt + click on a barricade / any object) = cover preview / confirm / shimmy; every
 	// other click drops a pending preview and goes on as before (a ground order also leaves the cover: OrderMoveTo).
 	if (TryHandleCoverClick(Hit, nullptr))

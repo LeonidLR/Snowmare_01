@@ -202,7 +202,7 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		ClearManualLookPoint();
 	}
 	const bool bIncapacitated = LookHoldRules::ShouldClearOnIncapacitated(!HealthComponent || !HealthComponent->IsAlive() || IsKilledInAction(),
-		IsKnockedDown(), IsPanicking(), IsClimbingLadder(), bVaulting, bCarrying);
+		IsKnockedDown(), IsPanicking(), IsClimbingLadder(), bVaulting || bMantling, bCarrying);
 	if (bIncapacitated && HasManualLookPoint())
 	{
 		ClearManualLookPoint();

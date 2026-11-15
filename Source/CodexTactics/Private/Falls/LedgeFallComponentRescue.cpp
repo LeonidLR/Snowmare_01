@@ -66,7 +66,7 @@ bool ULedgeFallComponent::CanBeRescued() const
 	}
 	const UHealthComponent* Health = Operative->FindComponentByClass<UHealthComponent>();
 	const ULadderClimbComponent* Ladder = Operative->FindComponentByClass<ULadderClimbComponent>();
-	return (!Health || Health->IsAlive()) && !Operative->IsKnockedDown() && !Operative->IsVaulting() && !(Ladder && Ladder->IsBusy())
+	return (!Health || Health->IsAlive()) && !Operative->IsKnockedDown() && !Operative->IsVaulting() && !Operative->IsMantling() && !(Ladder && Ladder->IsBusy())
 		&& !VehicleQueries::IsMounted(Operative);
 }
 

@@ -32,7 +32,8 @@ namespace PropsPlacementTestLocal
 	const TCHAR* const GFixtures = TEXT("Data/LevelGen/props/fixtures");
 	const TCHAR* const GSmallLayout = TEXT("fixture_small.layout.json");
 	const TCHAR* const GSmallInput = TEXT("golden_in_small.props.json");
-	const TCHAR* const GDepotLayout = TEXT("../../accepted/gen_ref_01_02_depot_1.json");
+	// The frozen pre-mantling Depot layout (golden_cases.json: the goldens test the placement, not the live map reworked 2026-11-15).
+	const TCHAR* const GDepotLayout = TEXT("golden_depot.layout.json");
 	const TCHAR* const GDepotInput = TEXT("golden_in_depot.props.json");
 
 	FString FixturePath(const FString& Relative)

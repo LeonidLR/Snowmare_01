@@ -35,7 +35,7 @@ namespace VaultRules
 	/**
 	 * #36 (user 2026-11-04, L_Gen_Depot_1: "the operatives do not vault over the low obstacles"): the level generator's covers (Scripts/Editor/
 	 * build_levelgen_map.py: cubes tagged with their layout "kind") were never tagged "Vault", so nothing on a generated map was vaultable.
-	 * The low kinds a man climbs over - sandbags, jersey barriers, barrels, low walls - are made vaultable at the start of play
+	 * The low kinds a man climbs over - sandbags, jersey barriers, low walls (barrels no more: explosive, designer 2026-11-15) - are made vaultable at the start of play
 	 * (ACodexTacticsGameMode::StartPlay) when the object fits the vault: MinHeight .. MaxHeight tall and its thinner side at most
 	 * MaxVaultableDepthCm (he lands past it). Crates (110 cm) and wrecks / boilers stay cover: taller than MaxHeight (Godot's 105).
 	 */

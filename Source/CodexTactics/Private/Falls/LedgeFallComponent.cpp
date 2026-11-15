@@ -793,7 +793,7 @@ void ULedgeFallComponent::HandleMovementModeChanged(ACharacter* Character, EMove
 	const ULadderClimbComponent* Ladder = Character->FindComponentByClass<ULadderClimbComponent>();
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Character);
 	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Character);
-	const bool bIgnored = (Ladder && Ladder->IsOnLadder()) || (Operative && Operative->IsVaulting()) || (Enemy && Enemy->IsJumpAttacking())
+	const bool bIgnored = (Ladder && Ladder->IsOnLadder()) || (Operative && (Operative->IsVaulting() || Operative->IsMantling())) || (Enemy && Enemy->IsJumpAttacking())
 		|| VehicleQueries::IsMounted(Character);
 	if (Movement->IsFalling() && bWasGround && !bIgnored)
 	{
@@ -837,7 +837,7 @@ void ULedgeFallComponent::UpdateAnimPhase(float DeltaTime)
 	const ULadderClimbComponent* Ladder = Character->FindComponentByClass<ULadderClimbComponent>();
 	const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Character);
 	const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Character);
-	const bool bOwnAnimation = (Ladder && Ladder->IsBusy()) || (Operative && Operative->IsVaulting()) || (Enemy && Enemy->IsJumpAttacking())
+	const bool bOwnAnimation = (Ladder && Ladder->IsBusy()) || (Operative && (Operative->IsVaulting() || Operative->IsMantling())) || (Enemy && Enemy->IsJumpAttacking())
 		|| VehicleQueries::IsMounted(Character);
 	const bool bDropAirborne = State == ELedgeFallState::Airborne && !bOwnAnimation;
 	FallingSeconds = Movement->IsFalling() && !bOwnAnimation ? FallingSeconds + DeltaTime : 0.f;

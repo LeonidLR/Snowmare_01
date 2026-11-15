@@ -680,9 +680,16 @@ public:
 	/** How far the rung IK moved the left (0) / right (1) knee in the last evaluated pose, cm, component space (smokes). */
 	FVector GetLadderKneeIKOffset(int32 Side) const;
 
-	/** Vaulting over an obstacle (Godot "Vault" state). */
+	/** Vaulting over an obstacle (Godot "Vault" state); also true while mantling (the climb owns the full body the same way). */
 	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
 	bool bIsVaulting = false;
+
+	/**
+	 * Mantling (docs/design/MANTLING.md 11): the root-motion climb plays as a montage on FullBodySlot (AOperativeCharacter::StartMantle);
+	 * the ABP needs nothing for it (the slot is there). Exposed for the designer's polish (e.g. a weapon-layer blend).
+	 */
+	UPROPERTY(Transient, BlueprintReadOnly, Category = "CodexTactics|State")
+	bool bIsMantling = false;
 
 	/**
 	 * The ABP's "FallStates" state machine (2026-11-03, Scripts/Editor/setup_operative_fall_animation.py): exactly one is set from

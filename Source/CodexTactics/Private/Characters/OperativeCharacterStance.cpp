@@ -109,7 +109,7 @@ void AOperativeCharacter::SetStance(EOperativeStance NewStance)
 EProneEntry AOperativeCharacter::DropProne()
 {
 	const float Speed = static_cast<float>(GetVelocity().Size2D());
-	const bool bBlocked = bInCover || bHasPendingCover || bCarrying || bVaulting || IsKnockedDown() || IsClimbingLadder() || VehicleQueries::IsMounted(this);
+	const bool bBlocked = bInCover || bHasPendingCover || bCarrying || bVaulting || bMantling || IsKnockedDown() || IsClimbingLadder() || VehicleQueries::IsMounted(this);
 	EProneEntry Entry = OperativeMovementRules::DecideProneEntry(MovementConfig, Stance, Speed, bSprinting, bHasMoveOrder, bBlocked);
 	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
 	const EProneDive Dive = Entry == EProneEntry::DiveFromRun ? EProneDive::FromRun : Entry == EProneEntry::DiveFromWalk ? EProneDive::FromWalk : EProneDive::None;
@@ -367,7 +367,7 @@ void AOperativeCharacter::UpdateCriticalWound()
 	const bool bAlive = HealthComponent && HealthComponent->IsAlive();
 	const bool bCritical = bAlive && IsCriticallyWounded();
 	// Busy: he cannot lie down this tick - he goes down as soon as he is free (off the ladder, up from the knockdown, landed, out of the vault).
-	const bool bBusy = !bAlive || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge() || bVaulting || IsProneDiving()
+	const bool bBusy = !bAlive || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge() || bVaulting || bMantling || IsProneDiving()
 		|| VehicleQueries::IsMounted(this);
 	switch (StepWound(bCriticalWoundDown, bCritical, Stance == EOperativeStance::Prone, bBusy))
 	{

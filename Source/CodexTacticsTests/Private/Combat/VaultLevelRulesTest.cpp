@@ -15,7 +15,7 @@ bool FVaultLevelGenCoversTest::RunTest(const FString&)
 {
 	TestTrue(TEXT("a sandbag wall (100 cm, 80 deep) is vaulted"), VaultRules::IsVaultableLevelObject(TEXT("sandbag"), 100.f, 80.f));
 	TestTrue(TEXT("a jersey barrier (90 cm, 60 deep)"), VaultRules::IsVaultableLevelObject(TEXT("jersey"), 90.f, 60.f));
-	TestTrue(TEXT("a barrel (90 cm, 60 wide)"), VaultRules::IsVaultableLevelObject(TEXT("barrel"), 90.f, 60.f));
+	TestFalse(TEXT("a barrel (90 cm, 60 wide) is NOT vaulted: explosive (designer 2026-11-15)"), VaultRules::IsVaultableLevelObject(TEXT("barrel"), 90.f, 60.f));
 	TestTrue(TEXT("a low wall (60 cm, 30 deep)"), VaultRules::IsVaultableLevelObject(TEXT("low_wall"), 60.f, 30.f));
 	TestFalse(TEXT("a crate (110 cm) is cover: over the 105 cm vault"), VaultRules::IsVaultableLevelObject(TEXT("crate"), 110.f, 120.f));
 	TestFalse(TEXT("a wreck (150 cm) is cover"), VaultRules::IsVaultableLevelObject(TEXT("wreck"), 150.f, 180.f));

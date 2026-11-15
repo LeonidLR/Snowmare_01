@@ -25,7 +25,8 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         self.assertEqual(builder.map_name_for(depot), "/Game/Maps/Generated/L_Gen_Depot_1")
         self.assertEqual(len(specs), 545)
         sha = hashlib.sha256(json.dumps(specs, sort_keys=True).encode()).hexdigest()[:16]
-        self.assertEqual(sha, "9a37162a0b7bc284")
+        # 2026-11-15 mantling slice 1: the designer's obstacle height rework (Scripts/Tools/apply_depot_height_classes.py) - was 9a37162a0b7bc284
+        self.assertEqual(sha, "a93f43a8e33e0250")
 
     def test_train_1_openings_partitions_no_doubles_and_parapets(self):
         layout = self._load("L_Gen_Train_1")

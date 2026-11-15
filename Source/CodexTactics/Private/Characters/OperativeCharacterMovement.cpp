@@ -19,6 +19,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/MantleNavigation.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TripwireRules.h"
 #include "Falls/LedgeFallComponent.h"
@@ -52,6 +53,13 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 	if (!bPendingMoveReplay)
 	{
 		++MoveOrderSerial; // every real order (player, interaction, relocation, bot) - the weather idle pose of THIS operative ends
+	}
+	// Mantling slice 1 (designer 2026-11-15, trigger C): only the operative the player commands in Solo paths over the mantle links (a
+	// formation move / follow never does); a new order replaces a walk to a clicked ledge top (OrderMantleTop sets it again after this).
+	bMantleOrderPending = false;
+	{
+		const USquadSubsystem* MantleSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+		bMantlePathAllowed = !bAutonomousOrder && MantleSquad && MantleSquad->IsSoloMode();
 	}
 	if (IsRaging())
 	{
@@ -288,6 +296,22 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	{
 		return EOperativeOrderResult::Refused; // APC P1: aboard he rides (Y gets him out)
 	}
+	if (bFormationMove)
+	{
+		bMantlePathAllowed = false; // formation moves keep today's paths (no mantle links)
+		bMantleOrderPending = false;
+	}
+	// Mantling (OperativeCharacterMantle.cpp): a new order mid-climb is walked to from the landing (like the ladder / the drop).
+	if (bMantling)
+	{
+		MantleResumeTarget = InDestination;
+		bMantleResume = true;
+		bMantleStopAfter = false;
+		bMantleResumeOwnOrder = !bFormationMove;
+		LastMoveDestination = InDestination;
+		bHasMoveOrder = true;
+		return EOperativeOrderResult::Accepted;
+	}
 	// Ladders (LADDERS.md 7.1): a new order mid-climb - he walks there after the climb (turning round at the next rung when the goal
 	// lies behind him, 2026-10-23); queued at a busy ladder: the
 	// new order replaces the wait.
@@ -358,6 +382,11 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
 		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
 		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, ChooseMoveFilter());
+	// Mantling: on a low mantle top (a crate / wreck without a way off on the navmesh) he hops down towards the goal and walks on from there.
+	if (Result == EPathFollowingRequestResult::Failed && TryMantleStepDown(Destination))
+	{
+		return EOperativeOrderResult::Accepted;
+	}
 	// The soft-lock safety net (user bug 2026-11-03): no path starts where he stands off the navmesh (every order "unreachable") - he is put on
 	// the nearest navmesh point that reaches the main area and the order is asked again.
 	if (Result == EPathFollowingRequestResult::Failed && LedgeFall && LedgeFall->RescueIfOffNavmesh(TEXT("an order could not start"), /*bResumeOrder*/ false))
@@ -414,13 +443,16 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	// Known traps (rev 5e, game designer 2026-10-14): only the squad AUTO mode (Ctrl+T) paths round a spotted / own wire or mine;
 	// a player's order is literal - through the wire if that is the way (TripwireRules::ChooseOperativeMoveFilter).
 	const USquadSubsystem* MoveSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	TSubclassOf<UNavigationQueryFilter> Filter = nullptr;
 	switch (TripwireRules::ChooseOperativeMoveFilter(Stance == EOperativeStance::Prone, MoveSquad && MoveSquad->IsAutonomousSquadCombat()))
 	{
-	case TripwireRules::EOperativeMoveFilter::NoCrawl: return UNavFilter_NoCrawl::StaticClass();
-	case TripwireRules::EOperativeMoveFilter::TrapLiteral: return UNavFilter_TrapLiteral::StaticClass();
-	case TripwireRules::EOperativeMoveFilter::NoCrawlTrapLiteral: return UNavFilter_NoCrawlTrapLiteral::StaticClass();
-	default: return nullptr;
+	case TripwireRules::EOperativeMoveFilter::NoCrawl: Filter = UNavFilter_NoCrawl::StaticClass(); break;
+	case TripwireRules::EOperativeMoveFilter::TrapLiteral: Filter = UNavFilter_TrapLiteral::StaticClass(); break;
+	case TripwireRules::EOperativeMoveFilter::NoCrawlTrapLiteral: Filter = UNavFilter_NoCrawlTrapLiteral::StaticClass(); break;
+	default: break;
 	}
+	// Mantling slice 1: the mantle links (UNavArea_Mantle) are open only for the operative the player commands in Solo (bMantlePathAllowed).
+	return bMantlePathAllowed ? Filter : MantleNavigation::NoMantleVariant(Filter);
 }
 
 bool AOperativeCharacter::SteerOwnMoveVia(const FVector& Via)

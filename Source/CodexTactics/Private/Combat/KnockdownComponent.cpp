@@ -217,6 +217,11 @@ bool UKnockdownComponent::StartKnockdown(EKnockdownDirection Direction, EKnockdo
 {
 	const FKnockdownConfig& Config = KnockdownRules::GetConfig();
 	const EKnockdownDirection Side = Direction == EKnockdownDirection::None ? EKnockdownDirection::Back : Direction;
+	// Mantling (designer Q5, 2026-11-15): knocked down mid-climb he drops back to the base first; the knockdown then plays there.
+	if (AOperativeCharacter* Climber = Cast<AOperativeCharacter>(GetOwner()); Climber && Climber->IsMantling())
+	{
+		Climber->CancelMantle(EMantleCancel::Knockdown);
+	}
 	// Knocked down on a ladder (user decision 2026-10-22): he falls to the bottom; this knockdown plays on landing, with fall damage.
 	if (ULadderClimbComponent* Ladder = GetOwner() ? GetOwner()->FindComponentByClass<ULadderClimbComponent>() : nullptr; Ladder && Ladder->IsClimbing())
 	{
