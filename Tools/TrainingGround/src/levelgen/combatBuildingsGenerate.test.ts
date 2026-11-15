@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { obstacleHeight } from './obstacleHeights.ts';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
@@ -44,7 +45,7 @@ test('generated depot layouts include windows, rooms, partitions, parapets, hatc
   for (const b of l.buildings.filter((x) => x.roof_walkable)) {
     assert.equal(b.parapets?.length, 4, `${b.id}: 4 roof parapet segments`);
     for (const p of b.parapets ?? []) {
-      assert.equal(p.height_cm, 100);
+      assert.equal(p.height_cm, obstacleHeight('low_vault'));
     }
     const paraMantles = (b.mantle_edges ?? []).filter((me) => me.kind === 'parapet');
     assert.equal(paraMantles.length, 4, `${b.id}: 4 parapet mantle edges`);

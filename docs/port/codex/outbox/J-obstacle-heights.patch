@@ -1,0 +1,783 @@
+diff --git a/Tools/TrainingGround/src/levelgen/generate.ts b/Tools/TrainingGround/src/levelgen/generate.ts
+--- a/Tools/TrainingGround/src/levelgen/generate.ts
++++ b/Tools/TrainingGround/src/levelgen/generate.ts
+@@ -8,6 +8,8 @@
+ // and converts to UE cm at the end (profile.ts toUE). Never a copy of the reference: proportions and densities come from it,
+ // every position is jittered by the seed and every block is a greybox set-piece of ours.
+ 
++import { obstacleHeight, standardObstacleHeight } from './obstacleHeights.ts';
++import { runObstacleHeightGate } from './props/obstacleHeightGate.ts';
+ import type { Vec2 } from '../movement/geometry.ts';
+ import { dist, rng } from '../movement/geometry.ts';
+ import type { ZoneKind } from '../movement/layout.ts';
+@@ -87,8 +89,8 @@
+   keepFree: Rect[];
+ }
+ 
+-const WALL_H = 300;        // cm, a greybox wall (the lab's)
+-const FENCE_H = 250;
++const WALL_H = obstacleHeight('wall_no_traverse');        // cm, a greybox wall (the lab's)
++const FENCE_H = obstacleHeight('high_fence_over');
+ const FENCE_T = 10;
+ const BUILDING_T = 30;
+ const DOOR_W = 1.8;        // m
+@@ -97,7 +99,7 @@
+ const ALLEY_W = 5;         // m
+ const CUT_W = 6;           // m, the trench
+ const CUT_WALL_T = 1.5;    // m
+-const CUT_WALL_H = 220;    // cm, the retaining wall's parapet + fence above the ground (the ground-layer obstacle)
++const CUT_WALL_H = obstacleHeight('high_mantle');    // cm, the retaining wall's parapet + fence above the ground (the ground-layer obstacle)
+ 
+ export interface GenerateOptions { profile: Profile; seed: number; params?: Partial<GenParams>; name?: string }
+ 
+@@ -536,6 +538,15 @@
+ 
+ /** Convert a Draft constructed in profile metres (x east, y south) to a GenLayout in UE cm. */
+ export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta): GenLayout {
++  // Normalize new draft geometry before mapping coordinates; mirrors stay at the same target.
++  for (const wall of d.walls) wall.height = standardObstacleHeight(wall.height);
++  for (const cover of d.covers) cover.size = [cover.size[0], cover.size[1], standardObstacleHeight(cover.size[2])];
++  for (const edge of d.mantle_edges) edge.height_cm = standardObstacleHeight(edge.height_cm);
++  for (const building of d.buildings) {
++    for (const p of building.partitions) if (p.height !== undefined) p.height = standardObstacleHeight(p.height);
++    for (const p of building.parapets) p.height_cm = standardObstacleHeight(p.height_cm);
++    for (const edge of building.mantle_edges) edge.height_cm = standardObstacleHeight(edge.height_cm);
++  }
+   const [w, h] = size;
+   const U = (p: Vec2): Vec2 => toUE(p, size);
+   const UR = (r: Rect): [Vec2, Vec2] => {
+@@ -631,13 +642,15 @@
+       ambush: { points: d.ambush_points.map((a) => U(a.pos)), coordinated: { share: 0.5, max_alive: 8 } },
+     },
+   };
++  const heightGate = runObstacleHeightGate(layout);
++  if (heightGate.gate === 'fail') throw new Error(heightGate.errors.map((e) => e.reason).join('; '));
+   return layout;
+ }
+ 
+ // ---- helpers (metres) -----------------------------------------------------------------------------------------------------
+ 
+ const COVER_SIZE: Record<CoverKind, [number, number, number]> = {
+-  jersey: [300, 60, 90], sandbag: [250, 80, 100], crate: [120, 120, 110], wreck: [420, 180, 150], barrel: [60, 60, 90], silo: [800, 800, 1200], boiler: [200, 120, 160],
++  jersey: [300, 60, obstacleHeight('low_vault')], sandbag: [250, 80, obstacleHeight('low_vault')], crate: [120, 120, obstacleHeight('low_mantle')], wreck: [420, 180, obstacleHeight('high_mantle')], barrel: [60, 60, obstacleHeight('low_vault')], silo: [800, 800, 1200], boiler: [200, 120, obstacleHeight('high_mantle')],
+ };
+ 
+ /**
+@@ -1008,16 +1021,16 @@
+   // 7. Parapets on flat roofs
+   if (s.roof_walkable) {
+     parapets.push(
+-      { wall_id: `${bid}_parapet_N`, start: [x0, y0], end: [x1, y0], height_cm: 100, thickness_cm: 20 },
+-      { wall_id: `${bid}_parapet_S`, start: [x0, y1], end: [x1, y1], height_cm: 100, thickness_cm: 20 },
+-      { wall_id: `${bid}_parapet_W`, start: [x0, y0], end: [x0, y1], height_cm: 100, thickness_cm: 20 },
+-      { wall_id: `${bid}_parapet_E`, start: [x1, y0], end: [x1, y1], height_cm: 100, thickness_cm: 20 },
++      { wall_id: `${bid}_parapet_N`, start: [x0, y0], end: [x1, y0], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
++      { wall_id: `${bid}_parapet_S`, start: [x0, y1], end: [x1, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
++      { wall_id: `${bid}_parapet_W`, start: [x0, y0], end: [x0, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
++      { wall_id: `${bid}_parapet_E`, start: [x1, y0], end: [x1, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
+     );
+     mantle_edges.push(
+-      { id: `me_${bid}_para_N`, start: [x0, y0], end: [x1, y0], floor: s.floors, base_z: levelZ(s.floors), height_cm: 100, normal: [0, -1], kind: 'parapet', building: bid },
+-      { id: `me_${bid}_para_S`, start: [x0, y1], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: 100, normal: [0, 1], kind: 'parapet', building: bid },
+-      { id: `me_${bid}_para_W`, start: [x0, y0], end: [x0, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: 100, normal: [-1, 0], kind: 'parapet', building: bid },
+-      { id: `me_${bid}_para_E`, start: [x1, y0], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: 100, normal: [1, 0], kind: 'parapet', building: bid },
++      { id: `me_${bid}_para_N`, start: [x0, y0], end: [x1, y0], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [0, -1], kind: 'parapet', building: bid },
++      { id: `me_${bid}_para_S`, start: [x0, y1], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [0, 1], kind: 'parapet', building: bid },
++      { id: `me_${bid}_para_W`, start: [x0, y0], end: [x0, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [-1, 0], kind: 'parapet', building: bid },
++      { id: `me_${bid}_para_E`, start: [x1, y0], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [1, 0], kind: 'parapet', building: bid },
+     );
+   }
+ 
+diff --git a/Tools/TrainingGround/src/levelgen/trainingArenas.ts b/Tools/TrainingGround/src/levelgen/trainingArenas.ts
+--- a/Tools/TrainingGround/src/levelgen/trainingArenas.ts
++++ b/Tools/TrainingGround/src/levelgen/trainingArenas.ts
+@@ -3,6 +3,7 @@
+ //   - L_Gen_Train_2: fortified checkpoint with narrow loopholes, sandbags, bunker, watch tower with hatch & ladder
+ //   - L_Gen_Train_3: warehouse yard with second-floor roof catwalk / gap landing, parapet mantle edges, courtyard obstacles
+ 
++import { obstacleHeight } from './obstacleHeights.ts';
+ import fs from 'node:fs';
+ import path from 'node:path';
+ import { fileURLToPath, pathToFileURL } from 'node:url';
+@@ -27,13 +28,13 @@
+ }
+ 
+ const COVER_SIZE_CM: Record<CoverKind, [number, number, number]> = {
+-  crate: [160, 120, 120],
+-  jersey: [280, 65, 95],
+-  sandbag: [260, 75, 90],
+-  barrel: [90, 90, 110],
+-  wreck: [380, 180, 140],
++  crate: [160, 120, obstacleHeight('low_mantle')],
++  jersey: [280, 65, obstacleHeight('low_vault')],
++  sandbag: [260, 75, obstacleHeight('low_vault')],
++  barrel: [90, 90, obstacleHeight('low_vault')],
++  wreck: [380, 180, obstacleHeight('high_mantle')],
+   silo: [500, 500, 1100],
+-  boiler: [300, 180, 220],
++  boiler: [300, 180, obstacleHeight('high_mantle')],
+ };
+ 
+ function makeEmptyDraft(mainPoints: Vec2[]): Draft {
+@@ -86,6 +87,7 @@
+   normal: Vec2,
+   kind: 'fence' | 'obstacle' = 'obstacle',
+ ): void {
++  heightCm = obstacleHeight('low_mantle');
+   addWall(d, id, a, b, heightCm, 25, kind === 'fence' ? 'fence' : 'wall');
+   d.mantle_edges.push({
+     id: `me_${id}`,
+diff --git a/Tools/TrainingGround/src/levelgen/schema.ts b/Tools/TrainingGround/src/levelgen/schema.ts
+--- a/Tools/TrainingGround/src/levelgen/schema.ts
++++ b/Tools/TrainingGround/src/levelgen/schema.ts
+@@ -7,6 +7,7 @@
+ // Units: UE cm, X forward (north = +X, drawn up), Y right (east = +Y). A reference profile's metres (x east, y south) map to
+ // UE as X = -y * 100, Y = x * 100 (profile.ts).
+ 
++import { obstacleHeight } from './obstacleHeights.ts';
+ import type { Vec2 } from '../movement/geometry.ts';
+ import { pointInPoly } from '../movement/geometry.ts';
+ import type { Layout, LayoutRoute, LayoutWall, LayoutZone, ZoneKind } from '../movement/layout.ts';
+@@ -73,7 +74,7 @@
+  */
+ export const OPENING_DEFAULTS: Record<OpeningKind, { width: number; sill: number; top: number }> = {
+   door: { width: 120, sill: 0, top: 210 },
+-  window: { width: 120, sill: 90, top: 210 },
++  window: { width: 120, sill: obstacleHeight('low_vault'), top: 210 },
+   loophole: { width: 30, sill: 120, top: 150 },
+ };
+ 
+diff --git a/Tools/TrainingGround/src/levelgen/combatBuildingsSchema.test.ts b/Tools/TrainingGround/src/levelgen/combatBuildingsSchema.test.ts
+--- a/Tools/TrainingGround/src/levelgen/combatBuildingsSchema.test.ts
++++ b/Tools/TrainingGround/src/levelgen/combatBuildingsSchema.test.ts
+@@ -4,6 +4,7 @@
+ import path from 'node:path';
+ import { test } from 'node:test';
+ import { fileURLToPath } from 'node:url';
++import { obstacleHeight } from './obstacleHeights.ts';
+ import type { GenBuilding, GenLayout, WallOpening } from './schema.ts';
+ import {
+   isMantleable,
+@@ -27,7 +28,7 @@
+ 
+   assert.deepEqual(OPENING_KINDS, ['door', 'window', 'loophole']);
+   assert.equal(OPENING_DEFAULTS.door.sill, 0);
+-  assert.equal(OPENING_DEFAULTS.window.sill, 90);
++  assert.equal(OPENING_DEFAULTS.window.sill, obstacleHeight('low_vault'));
+   assert.equal(OPENING_DEFAULTS.window.top, 210);
+ 
+   // Loophole narrow firing slit: width 20-40 cm, sill 110-140 cm
+diff --git a/Tools/TrainingGround/src/levelgen/obstacleHeights.ts b/Tools/TrainingGround/src/levelgen/obstacleHeights.ts
+new file mode 100644
+--- /dev/null
++++ b/Tools/TrainingGround/src/levelgen/obstacleHeights.ts
+@@ -0,0 +1,39 @@
++// Measured source-root proxies; geometry/action eligibility remains separate from height matching.
++import config from '../../../../Content/Data/LevelGen/obstacle_heights.json' with { type: 'json' };
++
++export const OBSTACLE_HEIGHTS = config.classes;
++export type ObstacleHeightClass = keyof typeof OBSTACLE_HEIGHTS;
++type TraversableClass = Exclude<ObstacleHeightClass, 'wall_no_traverse'>;
++const traversable = (Object.keys(OBSTACLE_HEIGHTS) as ObstacleHeightClass[])
++  .filter((key): key is TraversableClass => key !== 'wall_no_traverse');
++const traversalCeiling = Math.max(...traversable.map(key => OBSTACLE_HEIGHTS[key].nominal_cm + OBSTACLE_HEIGHTS[key].tolerance_cm));
++const wallThreshold = Math.max(OBSTACLE_HEIGHTS.wall_no_traverse.min_cm, traversalCeiling);
++
++/** Height bands overlap: depth/landing intent chooses the action. An explicit class disambiguates it. */
++export function matchesObstacleHeight(height: number, kind: ObstacleHeightClass): boolean {
++  if (!Number.isFinite(height) || height <= 0) return false;
++  if (kind === 'wall_no_traverse') return height > wallThreshold;
++  const c = OBSTACLE_HEIGHTS[kind];
++  return height >= c.min_cm && height <= c.max_cm && Math.abs(height - c.nominal_cm) <= c.tolerance_cm;
++}
++
++export function obstacleHeight(kind: ObstacleHeightClass): number {
++  return OBSTACLE_HEIGHTS[kind].nominal_cm;
++}
++
++export function classifyObstacleHeight(height: number, preferredClass?: ObstacleHeightClass): ObstacleHeightClass | undefined {
++  if (preferredClass) return matchesObstacleHeight(height, preferredClass) ? preferredClass : undefined;
++  const candidates = traversable.filter(key => matchesObstacleHeight(height, key));
++  if (candidates.length) return candidates.reduce((a, b) =>
++    Math.abs(height - obstacleHeight(a)) <= Math.abs(height - obstacleHeight(b)) ? a : b);
++  return matchesObstacleHeight(height, 'wall_no_traverse') ? 'wall_no_traverse' : undefined;
++}
++
++/** Preserve already-valid heights (including 300 cm storeys); normalize only new invalid draft geometry. */
++export function standardObstacleHeight(height: number): number {
++  if (!Number.isFinite(height) || height <= 0) throw new Error(`Invalid obstacle height: ${height}`);
++  if (classifyObstacleHeight(height)) return height;
++  const nearest = traversable.reduce((a, b) =>
++    Math.abs(height - obstacleHeight(a)) <= Math.abs(height - obstacleHeight(b)) ? a : b);
++  return obstacleHeight(nearest);
++}
+diff --git a/Tools/TrainingGround/src/levelgen/props/obstacleHeightGate.ts b/Tools/TrainingGround/src/levelgen/props/obstacleHeightGate.ts
+new file mode 100644
+--- /dev/null
++++ b/Tools/TrainingGround/src/levelgen/props/obstacleHeightGate.ts
+@@ -0,0 +1,38 @@
++// Height gate, independent of nav pathfinding so geometry errors keep their object IDs.
++import type { GenLayout } from '../schema.ts';
++import type { LevelPropsFile } from './schema.ts';
++import { classifyObstacleHeight } from '../obstacleHeights.ts';
++
++export interface ObstacleHeightError { id: string; height_cm: number; reason: string }
++
++export function runObstacleHeightGate(
++  layout: GenLayout,
++  props?: LevelPropsFile,
++  kinds: Record<string, Record<string, unknown>> = {},
++): { gate: 'pass' | 'fail'; errors: ObstacleHeightError[] } {
++  const errors: ObstacleHeightError[] = [];
++  const check = (id: string, height: number) => {
++    if (!classifyObstacleHeight(height)) errors.push({ id, height_cm: height, reason: `obstacle ${id}: height ${height} cm is outside standard classes` });
++  };
++  for (const w of layout.walls) check(w.id, w.height);
++  for (const c of layout.covers) check(c.id, c.size[2]);
++  for (const edge of layout.mantle_edges ?? []) check(edge.id, edge.height_cm);
++  for (const b of layout.buildings) {
++    check(b.id, b.height);
++    for (const p of b.partitions ?? []) check(p.id, p.height ?? 300);
++    for (const [i, p] of (b.parapets ?? []).entries()) check(p.wall_id ?? `${b.id}:parapet:${i}`, p.height_cm);
++    for (const edge of b.mantle_edges ?? []) check(edge.id, edge.height_cm);
++  }
++  for (const layer of props?.layers ?? []) {
++    if (layer.enabled === false) continue;
++    for (const p of layer.objects) {
++      const k = kinds[p.variant] ?? {};
++      // Layer props inherit their physical size from balance, not their placement record.
++      if (!p.variant.startsWith('crate') && !p.variant.startsWith('barrel')) continue;
++      const size = k.size_cm;
++      const height = typeof k.height_cm === 'number' ? k.height_cm : Array.isArray(size) ? Number(size[2]) : NaN;
++      check(p.id, height);
++    }
++  }
++  return { gate: errors.length ? 'fail' : 'pass', errors };
++}
+diff --git a/Tools/TrainingGround/src/levelgen/props/obstacleHeightGate.test.ts b/Tools/TrainingGround/src/levelgen/props/obstacleHeightGate.test.ts
+new file mode 100644
+--- /dev/null
++++ b/Tools/TrainingGround/src/levelgen/props/obstacleHeightGate.test.ts
+@@ -0,0 +1,61 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import { OBSTACLE_HEIGHTS, classifyObstacleHeight, matchesObstacleHeight, obstacleHeight } from '../obstacleHeights.ts';
++import { runObstacleHeightGate } from './obstacleHeightGate.ts';
++import type { LevelPropsFile } from './schema.ts';
++import { buildTrainingArena } from '../trainingArenas.ts';
++
++for (const [key, c] of Object.entries(OBSTACLE_HEIGHTS)) {
++  test(`obstacle heights: ${key} target and tolerance boundaries`, () => {
++    assert.equal(classifyObstacleHeight(c.nominal_cm), key);
++    assert.equal(matchesObstacleHeight(c.nominal_cm - c.tolerance_cm, key as keyof typeof OBSTACLE_HEIGHTS), true);
++    assert.equal(matchesObstacleHeight(c.nominal_cm + c.tolerance_cm, key as keyof typeof OBSTACLE_HEIGHTS), true);
++    assert.equal(c.measured, key !== 'step' && key !== 'wall_no_traverse');
++  });
++}
++
++test('obstacle heights: gaps and malformed heights are rejected; taller walls remain walls', () => {
++  for (const h of [60, 110, 175, 270, 0, -10, NaN, Infinity]) assert.equal(classifyObstacleHeight(h), undefined);
++  assert.equal(classifyObstacleHeight(310), 'very_tall');
++  assert.equal(classifyObstacleHeight(320), 'very_tall');
++  assert.equal(classifyObstacleHeight(321), 'wall_no_traverse');
++  assert.equal(classifyObstacleHeight(1200), 'wall_no_traverse');
++});
++
++test('obstacle height gate: generated arenas pass, including all nested obstacles', () => {
++  for (const id of [1, 2, 3] as const) {
++    const result = runObstacleHeightGate(buildTrainingArena(id).layout);
++    assert.deepEqual(result, { gate: 'pass', errors: [] });
++  }
++});
++
++test('obstacle height gate: errors retain the offending cover, wall and nested IDs', () => {
++  const layout = buildTrainingArena(1).layout;
++  layout.covers[0].size[2] = 110;
++  layout.walls[0].height = 175;
++  const b = layout.buildings.find((x) => x.parapets?.length)!;
++  b.parapets![0].height_cm = 60;
++  const result = runObstacleHeightGate(layout);
++  assert.equal(result.gate, 'fail');
++  assert.ok(result.errors.some((e) => e.id === layout.covers[0].id));
++  assert.ok(result.errors.some((e) => e.id === layout.walls[0].id));
++  assert.ok(result.errors.some((e) => e.id === b.parapets![0].wall_id));
++});
++
++test('obstacle height gate: enabled layer crate/barrel heights use physical balance dimensions', () => {
++  const layout = buildTrainingArena(1).layout;
++  const props: LevelPropsFile = { schema: 'codex.levelgen_props/1', map: 'test', layout: 'test', layout_hash: '', revision: 0, frozen: false, layers: [{ id: 'crates', kind: 'crates', enabled: true, seed: 1, locked: false, rules: {}, objects: [{ id: 'bad_crate', variant: 'crate_l', pos: [0, 0], walk_layer: 'ground' }] }] };
++  const result = runObstacleHeightGate(layout, props, { crate_l: { size_cm: [160, 160, 110] } });
++  assert.equal(result.gate, 'fail');
++  assert.equal(result.errors[0].id, 'bad_crate');
++  assert.equal(runObstacleHeightGate(layout, props, { crate_l: { size_cm: [160, 160, obstacleHeight('low_mantle')] } }).gate, 'pass');
++});
++
++// Same height can support different actions; explicit class matching must preserve both possibilities.
++test('measured height bands: overlaps do not erase explicit classes', () => {
++  assert.equal(matchesObstacleHeight(95, 'low_mantle'), true);
++  assert.equal(matchesObstacleHeight(95, 'low_vault'), true);
++  assert.equal(classifyObstacleHeight(95, 'low_mantle'), 'low_mantle');
++  assert.equal(classifyObstacleHeight(135, 'high_fence_over'), 'high_fence_over');
++  assert.equal(classifyObstacleHeight(135, 'high_mantle'), 'high_mantle');
++});
+diff --git a/Content/Data/LevelGen/obstacle_heights.json b/Content/Data/LevelGen/obstacle_heights.json
+new file mode 100644
+--- /dev/null
++++ b/Content/Data/LevelGen/obstacle_heights.json
+@@ -0,0 +1,330 @@
++{
++  "schema": "codex.obstacle_heights/1",
++  "source": "Measured source-root proxies + explicit approved targets from team-chat #465; contact/landing preview still required",
++  "classes": {
++    "step": {
++      "nominal_cm": 30,
++      "tolerance_cm": 5,
++      "min_cm": 0,
++      "max_cm": 35,
++      "measured": false
++    },
++    "low_vault": {
++      "nominal_cm": 95,
++      "tolerance_cm": 5,
++      "min_cm": 25,
++      "max_cm": 105,
++      "measured": true,
++      "source_clips": [
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/LowVault.LowVault",
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/RunLowVault.RunLowVault"
++      ],
++      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
++      "measurement_basis": "source_root_motion_proxy",
++      "source_measurements": [
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/LowVault.LowVault",
++          "rise_cm": 100.06101989746094,
++          "metric": "max_root_rise_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        },
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/RunLowVault.RunLowVault",
++          "rise_cm": 88.46942901611328,
++          "metric": "max_root_rise_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        }
++      ],
++      "approved_by": "team-chat #465 (2026-11-15)",
++      "measurement_flags": [
++        "WARN RM_FLAG_OFF",
++        "SPREAD_EXCEEDS_TOLERANCE"
++      ],
++      "measurement_spread_cm": 11.591590881347656,
++      "source_outside_approved_tolerance": [
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/LowVault.LowVault",
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/RunLowVault.RunLowVault"
++      ]
++    },
++    "low_mantle": {
++      "nominal_cm": 85,
++      "tolerance_cm": 10,
++      "min_cm": 75,
++      "max_cm": 130,
++      "measured": true,
++      "source_clips": [
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowClimb/Low_Climb.Low_Climb",
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowClimb/RunLowClimb.RunLowClimb"
++      ],
++      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
++      "measurement_basis": "source_root_motion_proxy",
++      "source_measurements": [
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowClimb/Low_Climb.Low_Climb",
++          "rise_cm": 77.13849639892578,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        },
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowClimb/RunLowClimb.RunLowClimb",
++          "rise_cm": 90.91159057617188,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        }
++      ],
++      "approved_by": "team-chat #465 (2026-11-15)",
++      "measurement_flags": [
++        "WARN RM_FLAG_OFF",
++        "SPREAD_EXCEEDS_TOLERANCE"
++      ],
++      "measurement_spread_cm": 13.773094177246094,
++      "source_outside_approved_tolerance": []
++    },
++    "high_mantle": {
++      "nominal_cm": 140,
++      "tolerance_cm": 10,
++      "min_cm": 130,
++      "max_cm": 240,
++      "measured": true,
++      "source_clips": [
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/HighClimb.HighClimb",
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/RunHighClimb.RunHighClimb",
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/Split/HI_Climb_Climb_Up.HI_Climb_Climb_Up"
++      ],
++      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
++      "measurement_basis": "source_root_motion_proxy",
++      "source_measurements": [
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/HighClimb.HighClimb",
++          "rise_cm": 131.5603790283203,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        },
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/RunHighClimb.RunHighClimb",
++          "rise_cm": 142.41571044921875,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        },
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/Split/HI_Climb_Climb_Up.HI_Climb_Climb_Up",
++          "rise_cm": 138.8713836669922,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        }
++      ],
++      "approved_by": "team-chat #465 (2026-11-15)",
++      "measurement_flags": [
++        "WARN RM_FLAG_OFF",
++        "SPREAD_EXCEEDS_TOLERANCE"
++      ],
++      "measurement_spread_cm": 10.855331420898438,
++      "source_outside_approved_tolerance": []
++    },
++    "wall_no_traverse": {
++      "nominal_cm": 330,
++      "tolerance_cm": 5,
++      "min_cm": 320,
++      "max_cm": null,
++      "measured": false,
++      "source": "Unmeasured blocked-wall placeholder above measured traversal ceiling 320 cm; no clip assigned"
++    },
++    "tall_ledge": {
++      "min_cm": 220,
++      "max_cm": 240,
++      "nominal_cm": 230,
++      "tolerance_cm": 10,
++      "measured": true,
++      "source_clips": [
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/Standing_JumpClimbUpNEW.Standing_JumpClimbUpNEW",
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/TallLedge_ClimbUpNEW.TallLedge_ClimbUpNEW",
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/RunJumpClimbNEW.RunJumpClimbNEW"
++      ],
++      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
++      "measurement_basis": "source_root_motion_proxy",
++      "source_measurements": [
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/Standing_JumpClimbUpNEW.Standing_JumpClimbUpNEW",
++          "rise_cm": 229.21648189425468,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        },
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/TallLedge_ClimbUpNEW.TallLedge_ClimbUpNEW",
++          "rise_cm": 231.04572078585625,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        },
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/RunJumpClimbNEW.RunJumpClimbNEW",
++          "rise_cm": 238.79710388183594,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        }
++      ],
++      "approved_by": "team-chat #465 (2026-11-15)",
++      "measurement_flags": [
++        "NEW_CLASS",
++        "WARN RM_FLAG_OFF"
++      ],
++      "measurement_spread_cm": 9.580621987581253,
++      "source_outside_approved_tolerance": []
++    },
++    "very_tall": {
++      "min_cm": 300,
++      "max_cm": 320,
++      "nominal_cm": 310,
++      "tolerance_cm": 10,
++      "measured": true,
++      "source_clips": [
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/JumpClimb.JumpClimb",
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/RunJumpClimb.RunJumpClimb"
++      ],
++      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
++      "measurement_basis": "source_root_motion_proxy",
++      "source_measurements": [
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/JumpClimb.JumpClimb",
++          "rise_cm": 308.5517578125,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        },
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/RunJumpClimb.RunJumpClimb",
++          "rise_cm": 308.2533264160156,
++          "metric": "dz_up_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        }
++      ],
++      "approved_by": "team-chat #465 (2026-11-15)",
++      "measurement_flags": [
++        "NEW_CLASS",
++        "WARN RM_FLAG_OFF"
++      ],
++      "measurement_spread_cm": 0.298431396484375,
++      "source_outside_approved_tolerance": []
++    },
++    "high_fence_over": {
++      "min_cm": 130,
++      "max_cm": 140,
++      "nominal_cm": 135,
++      "tolerance_cm": 5,
++      "measured": true,
++      "source_clips": [
++        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/HighFenceVault.HighFenceVault"
++      ],
++      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
++      "measurement_basis": "source_root_motion_proxy",
++      "source_measurements": [
++        {
++          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/HighFenceVault.HighFenceVault",
++          "rise_cm": 137.21205139160156,
++          "metric": "max_root_rise_cm",
++          "status": "ok",
++          "root_motion_enabled": false,
++          "warnings": [
++            "WARN RM_FLAG_OFF"
++          ]
++        }
++      ],
++      "approved_by": "team-chat #465 (2026-11-15)",
++      "measurement_flags": [
++        "NEW_CLASS",
++        "WARN RM_FLAG_OFF"
++      ],
++      "measurement_spread_cm": 0.0,
++      "source_outside_approved_tolerance": []
++    }
++  },
++  "review_clips": [
++    {
++      "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/JumpFenceClimb.JumpFenceClimb",
++      "dz_up_cm": "-0.27338626980781555",
++      "max_root_rise_cm": "268.3526306152344",
++      "status": "ok",
++      "flags": [
++        "NEEDS_REVIEW",
++        "WARN RM_FLAG_OFF"
++      ]
++    },
++    {
++      "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/JumpFenceVault.JumpFenceVault",
++      "dz_up_cm": "-0.27338626980781555",
++      "max_root_rise_cm": "188.93753051757812",
++      "status": "ok",
++      "flags": [
++        "NEEDS_REVIEW",
++        "WARN RM_FLAG_OFF"
++      ]
++    },
++    {
++      "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/Sprint_Footplant_TallWallClimb.Sprint_Footplant_TallWallClimb",
++      "dz_up_cm": "0.0",
++      "max_root_rise_cm": "0.0",
++      "status": "ok",
++      "flags": [
++        "NEEDS_REVIEW",
++        "WARN RM_FLAG_OFF"
++      ]
++    },
++    {
++      "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/Standing_Tall_Wall_Climb.Standing_Tall_Wall_Climb",
++      "dz_up_cm": "-0.27338626980781555",
++      "max_root_rise_cm": "230.65394592285156",
++      "status": "ok",
++      "flags": [
++        "NEEDS_REVIEW",
++        "WARN RM_FLAG_OFF"
++      ]
++    }
++  ],
++  "measurement_source": "Saved/Measure/anim_root_motion.csv"
++}
+diff --git a/Tools/TrainingGround/src/levelgen/combatBuildingsGenerate.test.ts b/Tools/TrainingGround/src/levelgen/combatBuildingsGenerate.test.ts
+--- a/Tools/TrainingGround/src/levelgen/combatBuildingsGenerate.test.ts
++++ b/Tools/TrainingGround/src/levelgen/combatBuildingsGenerate.test.ts
+@@ -1,4 +1,5 @@
+ import assert from 'node:assert/strict';
++import { obstacleHeight } from './obstacleHeights.ts';
+ import fs from 'node:fs';
+ import path from 'node:path';
+ import { test } from 'node:test';
+@@ -44,7 +45,7 @@
+   for (const b of l.buildings.filter((x) => x.roof_walkable)) {
+     assert.equal(b.parapets?.length, 4, `${b.id}: 4 roof parapet segments`);
+     for (const p of b.parapets ?? []) {
+-      assert.equal(p.height_cm, 100);
++      assert.equal(p.height_cm, obstacleHeight('low_vault'));
+     }
+     const paraMantles = (b.mantle_edges ?? []).filter((me) => me.kind === 'parapet');
+     assert.equal(paraMantles.length, 4, `${b.id}: 4 parapet mantle edges`);
+diff --git a/docs/design/MANTLING.md b/docs/design/MANTLING.md
+--- a/docs/design/MANTLING.md
++++ b/docs/design/MANTLING.md
+@@ -315,61 +315,72 @@
+ 
+ ### 11.1 Decisions, evidence and height contract
+ 
+-- Designer decision: DeadPixelLabs **Climbing and Vaulting Animations** is purchased: `Content/CaV_Anims/Animations/ThirdPerson_Anims`, 31 TPP root-motion clips, UE4 Mannequin source skeleton; retarget copies for our operatives. Source assets and all existing traversal clips stay.
++- Designer decision: DeadPixelLabs **Climbing and Vaulting Animations** is purchased: Content/CaV_Anims/Animations/ThirdPerson_Anims, 31 TPP root-motion clips, UE4 Mannequin source skeleton; retarget copies for our operatives. Source assets and all existing traversal clips stay.
+ - Evidence: [mantle-scout](../port/codex/outbox/mantle-scout.report.md), [CaV inventory](../port/codex/outbox/cav-healing-inventory.report.md). Filenames identify candidates; authored obstacle heights/contact phases have not been measured.
+-- ALL generated walls, fences and obstacles use a height class + tolerance. `codex/obstacle-heights` holds `Content/Data/LevelGen/obstacle_heights.json`: **step 30, low_vault 100, low_mantle 120, high_mantle 200, wall_no_traverse 300 cm**, currently **±5 cm, `measured=false` for every class**. These are provisional targets, not CaV measurements; the branch is not yet merged into main.
+-- Run the read-only `Scripts/Editor/measure_anim_root_motion.py` on the CaV TPP folder: duration, root displacement/rise, skeleton and root-motion flags → `Saved/Measure/anim_root_motion.csv`. Root rise alone is not obstacle height: verify hand contact, takeoff/landing planes and approach distance in preview before replacing the JSON targets and marking them measured.
+-- Generation emits nominal heights; validation reports the object ID for a miss between classes. Geometry must fit the approved clip contract; do not stretch animations to cover arbitrary heights. Existing walls above the 240 cm mantle ceiling classify as untraversable walls; a 300 cm target does not grant a tall-wall climb.
++- ALL generated walls, fences and obstacles use a height class + tolerance. Approved targets (team-chat #465, from the 31-clip CSV): **low_mantle 85±10, high_mantle 140±10, tall_ledge 230±10, very_tall 310±10, low_vault 95±5, high_fence_over 135±5 cm**. Animated classes carry measured source-root provenance; step remains 30±5, unmeasured.
++- Source: read-only Scripts/Editor/measure_anim_root_motion.py → Saved/Measure/anim_root_motion.csv; Scripts/Tools/apply_measured_heights.py uses endpoint dz for ON TOP and peak rise for OVER. Asset root-motion enable flags are False in this pack, but root tracks exist: retain measurements with WARN RM_FLAG_OFF; configure runtime root-motion policy only after retarget/contact inspection.
++- Explicit approved targets supersede the provisional 100/120/200 cm targets. Raw source-root rise is a proxy, not authored obstacle/contact geometry: low-vault source peaks 88.4694/100.061 cm exceed the approved 95±5 band, and the original classes report spread conflicts against their old ±5 limits. Keep these flags/outliers in provenance; do not silently widen the approved tolerances or certify contact alignment.
++- Generation/validation read every JSON class, including tall_ledge/very_tall/high_fence_over. Bands overlap; geometry, landing intent and an explicit class decide action. Valid structural heights such as 300 cm remain valid within very_tall's band. No map is regenerated by this data/code update.
++- The traversal ceiling is 320 cm (310+10); above it, classification falls back to wall_no_traverse. Its unmeasured nominal placeholder is 330±5 cm, replacing 300 cm to avoid the 300..320 very_tall band. It has no source clip and grants no traversal action. This data update does not implement new C++ climb movement.
++
+ 
+ ### 11.2 Candidate action/clip table
+ 
+ Names below are exact inventory names; default-name clips are standing candidates until preview confirms the start pose. Shared height class does not make distinct actions interchangeable. Land pairings marked **inspect** are not certified.
+ 
+-| Height class / provisional target | Standing/default clip | Running/sprint clip | Destination | Land/exit clip |
++| Height class / approved target | Standing/default clip | Running/sprint clip | Destination | Land/exit clip |
+ |---|---|---|---|---|
+-| step / 30 cm | CMC step-up | CMC step-up | Next walkable surface | Ordinary locomotion |
+-| low_vault / 100 cm, thin obstacle | Existing hurdle L/R + `LowVault` | Existing compatible pool + `RunLowVault` | Far-side ground | CaV: `LowVaultLand`; existing clips retain their exits |
+-| low_mantle / 120 cm | `Low_Climb` | `RunLowClimb` | Top | Inspect embedded finish; no named LowClimbLand |
+-| high_mantle / 200 cm | `HighClimb` | `RunHighClimb` | Top | `TallLand` candidate; inspect need/continuity |
+-| high_mantle / 200 cm, jump-assisted | `JumpClimb`; `Standing_JumpClimbUpNEW` | `RunJumpClimb`; `RunJumpClimbNEW` | Top | Inspect embedded finish / `TallLand` |
+-| high_mantle / 200 cm, ledge start | `TallLedge_ClimbUpNEW` | No named Run variant | Top | Inspect start/hang and embedded finish |
+-| high_mantle / 200 cm, tall-wall candidate | `Standing_Tall_Wall_Climb` | `Sprint_Footplant_TallWallClimb` | Top, only if measured class fits | Sprint: `TallWall_LandSprintTransition`; default finish: inspect |
+-| high_mantle / 200 cm, **high-fence over** action | `HighFenceVault`; `JumpFenceVault` | No named Run variants; inspect approach | Far side, not a standing fence top | `TallFence_Land`, inspect endpoint/velocity |
+-| wall_no_traverse / 300 cm or above mantle ceiling | No eligible mantle by default | No eligible mantle by default | Blocked / existing ladder route | None; reassess a distinct class only after measurement + designer approval |
+-| Downward action, separate fall-height rules | `JumpDown`; `JumpDownNoWait` | No named Run variant | Lower surface | Fall system chooses `Fall_SideRoll`, `FallHigh`, `Land_LowRoll` or suitable `TallLand` after inspection |
+-
+-- Wall run (`Wall_Run_Start/Loop/Lunge`) is **not used**. `JumpFenceClimb` needs visual classification; split `HI_Climb_*` phases need a separate hang/transition contract before activation.
++| step / 30±5 cm (unmeasured) | CMC step-up | CMC step-up | Next walkable surface | Ordinary locomotion |
++| low_vault / 95±5 cm | Existing compatible hurdle L/R + LowVault | RunLowVault | Far-side ground | LowVaultLand after contact review; old exits retained |
++| low_mantle / 85±10 cm | Low_Climb (dz 77.1385) | RunLowClimb (dz 90.9116) | Top | Inspect embedded finish |
++| high_mantle / 140±10 cm | HighClimb (131.560); HI_Climb_Climb_Up (138.871, hang start) | RunHighClimb (142.416) | Top | Inspect start/finish; hang clip is not a standing substitute |
++| tall_ledge / 230±10 cm | Standing_JumpClimbUpNEW (229.216); TallLedge_ClimbUpNEW (231.046) | RunJumpClimbNEW (238.797) | Top | Inspect embedded finish / TallLand |
++| very_tall / 310±10 cm | JumpClimb (308.552) | RunJumpClimb (308.253) | Top | Inspect contact/landing; runtime support remains planned |
++| high_fence_over / 135±5 cm | HighFenceVault (peak 137.212) | No verified Run variant | Far side | TallFence_Land candidate; inspect |
++| wall_no_traverse / 330±5 cm placeholder, above 320 cm ceiling | None | None | Blocked / existing ladder route | None |
++| Downward action / existing fall rules | JumpDown; JumpDownNoWait | No named Run variant | Lower surface | Fall_SideRoll / FallHigh / Land_LowRoll / suitable TallLand after inspection |
++
++**На просмотр дизайнеру — NEEDS_REVIEW, excluded from all height-class clip pools:**
++
++| Clip | Endpoint dz cm | Peak rise cm | Review reason |
++|---|---|---|---|
++| JumpFenceVault | -0.273386 | 188.937531 | Returns to ground; inspect traversal phases/contact |
++| JumpFenceClimb | -0.273386 | 268.352631 | Returns to ground; inspect action and peak vs obstacle height |
++| Standing_Tall_Wall_Climb | -0.273386 | 230.653946 | No final rise; inspect phases/landing |
++| Sprint_Footplant_TallWallClimb | 0 | 0 | Static root; do not substitute pelvis motion for root measurement |
++
++- Wall run is **not used**. HI_Climb_Climb_Up is measured in high_mantle but still needs its hang-start contract; the other split hang phases remain outside the action pool.
+ - Filter candidates by action, measured height/tolerance, depth, arrival gait, start pose, landing surface and clearance; then use deterministic per-operative round-robin among compatible clips. Preserve verified L/R foot alternation, skip missing/incompatible assets, avoid immediate repeats when alternatives exist; never fabricate a foot label from a filename.
+-- Extend the current `Source/CodexTactics/Private/Characters/OperativeAnimInstance.cpp::UpdateVaultClip` L/R selection into a compatible pool containing the old clips and CaV low-vault variants. Running variants require a valid run-up; unavailable run clips fall back only to a verified compatible standing approach, otherwise refuse/replan.
++- Extend the current Source/CodexTactics/Private/Characters/OperativeAnimInstance.cpp::UpdateVaultClip L/R selection into a compatible pool containing the old clips and CaV low-vault variants. Running variants require a valid run-up; unavailable run clips fall back only to a verified compatible standing approach, otherwise refuse/replan.
+ - Store clip/action/class/gait/foot tags, contact/landing times, destination type and motion policy as data. Missing assets or unmeasured contact contracts keep that candidate disabled; no random selection across climb, fence-over and fall actions.
+ 
+ ### 11.3 C++ ownership, motion and input
+ 
+-- Own transient mantle phase, source/target transforms, saved movement/collision/animation settings and path destination on `AOperativeCharacter` (planned `OperativeCharacterMantle.cpp` + header fields); reuse vault/ladder lifecycle patterns. World-owned mantle anchors hold exclusive reservations; death, destruction, cancellation and EndPlay release them. No Blueprint gameplay pack is adopted.
+-- **New mantle driver: clip root motion + the engine Motion Warping plugin.** Prototype a saved/restored `MOVE_Flying` lifecycle, verify XYZ motion and swept capsule movement; do not add the vault's smoothstep/sine translation. `OperativeCharacterVault.cpp` currently moves the capsule manually; CaV clips inserted into that existing vault path must ignore root translation while using its arc/timing, restoring the previous animation policy afterward.
+-- `LadderClimbComponent.cpp` currently uses flying + `IgnoreRootMotion` with extracted-track warping; reuse its snapshots/anchor and path-resume discipline, not a claim that ladders already consume engine root motion. `LedgeFallComponent.cpp` owns falling/drop movement; upward mantle never reverses its ballistic path.
++- Own transient mantle phase, source/target transforms, saved movement/collision/animation settings and path destination on AOperativeCharacter (planned OperativeCharacterMantle.cpp + header fields); reuse vault/ladder lifecycle patterns. World-owned mantle anchors hold exclusive reservations; death, destruction, cancellation and EndPlay release them. No Blueprint gameplay pack is adopted.
++- **New mantle driver: clip root motion + the engine Motion Warping plugin.** Prototype a saved/restored MOVE_Flying lifecycle, verify XYZ motion and swept capsule movement; do not add the vault's smoothstep/sine translation. OperativeCharacterVault.cpp currently moves the capsule manually; CaV clips inserted into that existing vault path must ignore root translation while using its arc/timing, restoring the previous animation policy afterward.
++- LadderClimbComponent.cpp currently uses flying + IgnoreRootMotion with extracted-track warping; reuse its snapshots/anchor and path-resume discipline, not a claim that ladders already consume engine root motion. LedgeFallComponent.cpp owns falling/drop movement; upward mantle never reverses its ballistic path.
+ - Validate feet-relative ledge height/depth/slope, approach corridor, top footprint and headroom before reservation; recheck the landing before committing. Warp only within the verified clip's contact limits. Use collision sweeps and scoped contact handling; occupied/moving/destroyed geometry causes bounded abort/replan or handoff to falls, with state restored exactly once.
+ - **Trigger is OPEN for the designer:** A — automatic on a path using an eligible mantle link, like vault; B — explicit click on a reachable ledge top; C — top click grants mantle intent and path-following executes the link. Do not select an option in implementation before the answer.
+-- Input seam: `Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp`, before generic cover/wrap/menu/ground consumption, preserving existing Alt/attack/tactical priority, ladder clicks and barricade menus. Route only the currently commanded operative/subset; preserve 054 solo behavior and unselected holds.
++- Input seam: Source/CodexTactics/Private/Core/CodexTacticsPlayerControllerOrders.cpp, before generic cover/wrap/menu/ground consumption, preserving existing Alt/attack/tactical priority, ladder clicks and barricade menus. Route only the currently commanded operative/subset; preserve 054 solo behavior and unselected holds.
+ 
+ ### 11.4 Navigation and ordered implementation
+ 
+-1. **Measure and approve:** inspect the CSV/contact poses, choose targets/tolerances in the height JSON, regenerate/validate arenas, then merge `codex/obstacle-heights`. Checkpoint: no between-class obstacle IDs; targets are measured, not inferred from clip names.
+-2. **Retarget/data slice:** create operative retarget copies for one low-vault and one low-mantle pair first; compare contacts and exits before adding high/fence actions. Prepare the clip metadata above; declare Motion Warping dependencies in `CodexTactics.uproject` and `Source/CodexTactics/CodexTactics.Build.cs` when implementing, not in this documentation task.
+-3. **Pure rules:** planned `Public/Characters/MantleRules.h`, `Private/Characters/MantleRules.cpp`, tests under `Source/CodexTacticsTests/Private/Characters/`; implement class/action selection, clearance result, compatible clip rotation and refusal reasons. Preserve existing `VaultRules.h/.cpp` 25–105 cm and thin-side limits.
+-4. **One-person end-to-end:** planned `OperativeCharacterMantle.cpp` owns approach → reserve → climb → land → resume/abort; wire `OperativeCharacter.h`, `OperativeCharacterVault.cpp` and `OperativeAnimInstance.cpp`. Checkpoint: one 120 cm target, correct top landing and no double root displacement, restoration after missing clip/interruption.
+-5. **Mantle nav links:** planned `Private/Interactables/MantleNavigation.cpp` and matching public declarations create directed **upward custom links with a distinct mantle area/callback**. Keep `Private/Interactables/VaultNavigation.cpp` cost-3 vault area and filtering unchanged; make mantle availability in path queries follow the chosen trigger policy.
+-6. **Reachability/props:** connect link generation to `Private/LevelGen/CodexLevelPropsSubsystem.cpp` and the level builder after top collision/nav islands exist; one valid approach/landing slot per lease. Reuse `Ladders/LadderActor.cpp` custom-link callbacks and exclusive-queue pattern. Use `Falls/DropLinkReach.cpp` to reject isolated tops with no safe onward/return route; downward links remain `Falls/DropLinkSubsystem.cpp` → `LedgeFallComponent.cpp`. Revalidate/remove links when props move or are destroyed.
+-7. **Input and squad:** implement only the chosen trigger in `CodexTacticsPlayerControllerOrders.cpp`; adapt `Private/Characters/SquadSubsystem.cpp` to selected-member reservations, bounded wait/replan, casualty cleanup and path continuation. Keep §6 queue/overwatch distances and timings as explicit design targets until tested/confirmed.
++1. **Data then contact review:** use the approved targets and retained raw measurements above; preview hands/feet and action→land transitions before enabling clips. Map regeneration is a separate lead-owned step; this task changes no accepted maps, .umap or .uasset files.
++2. **Retarget/data slice:** create operative retarget copies for one low-vault and one low-mantle pair first; compare contacts and exits before adding high/fence actions. Prepare the clip metadata above; declare Motion Warping dependencies in CodexTactics.uproject and Source/CodexTactics/CodexTactics.Build.cs when implementing, not in this documentation task.
++3. **Pure rules:** planned Public/Characters/MantleRules.h, Private/Characters/MantleRules.cpp, tests under Source/CodexTacticsTests/Private/Characters/; implement class/action selection, clearance result, compatible clip rotation and refusal reasons. Preserve existing VaultRules.h/.cpp 25–105 cm and thin-side limits.
++4. **One-person end-to-end:** planned OperativeCharacterMantle.cpp owns approach → reserve → climb → land → resume/abort; wire OperativeCharacter.h, OperativeCharacterVault.cpp and OperativeAnimInstance.cpp. Checkpoint: one 120 cm target, correct top landing and no double root displacement, restoration after missing clip/interruption.
++5. **Mantle nav links:** planned Private/Interactables/MantleNavigation.cpp and matching public declarations create directed **upward custom links with a distinct mantle area/callback**. Keep Private/Interactables/VaultNavigation.cpp cost-3 vault area and filtering unchanged; make mantle availability in path queries follow the chosen trigger policy.
++6. **Reachability/props:** connect link generation to Private/LevelGen/CodexLevelPropsSubsystem.cpp and the level builder after top collision/nav islands exist; one valid approach/landing slot per lease. Reuse Ladders/LadderActor.cpp custom-link callbacks and exclusive-queue pattern. Use Falls/DropLinkReach.cpp to reject isolated tops with no safe onward/return route; downward links remain Falls/DropLinkSubsystem.cpp → LedgeFallComponent.cpp. Revalidate/remove links when props move or are destroyed.
++7. **Input and squad:** implement only the chosen trigger in CodexTacticsPlayerControllerOrders.cpp; adapt Private/Characters/SquadSubsystem.cpp to selected-member reservations, bounded wait/replan, casualty cleanup and path continuation. Keep §6 queue/overwatch distances and timings as explicit design targets until tested/confirmed.
+ 8. **Broaden only after the slice passes:** add measured high-climb, jump/ledge, tall-wall and high-fence families with their exits; route JumpDown/rolls through the existing falls system. Weapon/stance ownership and audio timing must be validated per clip, not copied from the old fixed-duration examples.
+ 
+ ### 11.5 Acceptance tests and designer choices
+ 
+ - Planned unit tests: nominal ± tolerance and just-outside boundaries, between-class rejection, tall wall refusal, thin-over vs deep-top intent, insufficient run-up, L/R/round-robin compatibility and missing-clip fallback; reservation contention, timeout/cancel/death and exactly-once restore.
+-- Planned `MantleSmokeCommand.cpp`: low/high top landings, high fence far-side landing, no doubled motion, occupied/headroom-blocked landing, destroyed prop mid-climb, stay on top, safe exit/drop, sequential squad/subset and unselected holds. Verify male/female retarget contact and action→land continuity with measured fixtures.
+-- Regression gates: existing `VaultSmoke`, `DepotVaultSmoke`, `BarricadeVaultBackSmoke`, `ClickRulesSmoke`, `FallDropSmoke`, `DropLinkReachSmoke`, `LevelGenRouteSmoke` and `LevelGenLaddersSmoke`; generator height gate + arena schema/simulation + props fastGate. These are future checks, not tests run by this spec update.
++- Planned MantleSmokeCommand.cpp: low/high top landings, high fence far-side landing, no doubled motion, occupied/headroom-blocked landing, destroyed prop mid-climb, stay on top, safe exit/drop, sequential squad/subset and unselected holds. Verify male/female retarget contact and action→land continuity with measured fixtures.
++- Regression gates: existing VaultSmoke, DepotVaultSmoke, BarricadeVaultBackSmoke, ClickRulesSmoke, FallDropSmoke, DropLinkReachSmoke, LevelGenRouteSmoke and LevelGenLaddersSmoke; generator height gate + arena schema/simulation + props fastGate. These are future checks, not tests run by this spec update.
+ - **Q1 — trigger:** A automatic path links / B explicit top click / C top-click intent + automatic link execution? For B/C, should ordinary cover clicks retain their current action or require a modifier to request mantle?
+ - **Q2 — run-up:** A standing fallback after stopping / B refuse/replan when the run-up is insufficient? May the system initiate a sprint for a run clip, or only use an already commanded gait?
+ - **Q3 — weapon/stance:** A retain §2.2 weapon/ready-time targets where compatible / B clip-driven sling/restore windows after preview? On top: retain prior legal stance / crouch by default? High-fence over uses a far-side landing, not a top hold.
+-- **Q4 — measured reach:** if a tall-wall clip needs a height above the current ceiling, A defer it and keep wall_no_traverse / B approve a separate measured climb class? What maximum contact/position warp tolerance is acceptable?
++- **Q4 — review clips/contact:** for the four NEEDS_REVIEW clips above, A defer / B inspect authored phases and approve a separate action/height contract? What maximum contact/position warp is acceptable, particularly for the low-vault peaks outside 95±5?
+ - **Q5 — squad/combat:** A keep §6 stagger/overwatch targets / B revise them after the one-person slice? Which hit/knockdown cancels the climb, and retain §7 noise values or tune them after contact/landing review?

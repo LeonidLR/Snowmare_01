@@ -28,7 +28,8 @@ def row(name, dz, peak):
 
 
 def measurements():
-    return [row("LowVault", 0, 100), row("Low_Climb", 120, 150), row("HighClimb", 200, 220)]
+    return [row("LowVault", 0, 100), row("Low_Climb", 120, 150), row("HighClimb", 200, 220),
+            row("TallLedge_ClimbUpNEW", 230, 250), row("JumpClimb", 310, 330), row("HighFenceVault", 0, 140)]
 
 
 class ApplyMeasuredHeightsTests(unittest.TestCase):
@@ -118,7 +119,7 @@ class ApplyMeasuredHeightsTests(unittest.TestCase):
         self.assertIn("DUPLICATE_CLIP:HighClimb", high["flags"])
 
     def test_bad_measurements_are_flagged(self):
-        for changes in ({"status": "error"}, {"root_motion_enabled": "False"},
+        for changes in ({"status": "error"},
                         {"dz_up_cm": "nan", "max_root_rise_cm": "nan"},
                         {"dz_up_cm": "0", "max_root_rise_cm": "0"},
                         {"dz_up_cm": "inf", "max_root_rise_cm": "inf"}):
@@ -135,11 +136,12 @@ class ApplyMeasuredHeightsTests(unittest.TestCase):
         result = heights.apply_proposals(config(), heights.propose_heights(config(), rows), self.csv_path)
         self.assertEqual(result["classes"]["high_mantle"]["source_measurements"][0]["status"], "fallback")
 
-    def test_explicit_metric_and_auto_peak_fallback(self):
+    def test_class_metric_has_no_auto_peak_fallback(self):
         rows = measurements()
         rows[2] = row("HighClimb", 0, 200)
         p = next(x for x in heights.propose_heights(config(), rows) if x["class"] == "high_mantle")
-        self.assertEqual(p["nominal_cm"], 200)
+        self.assertIsNone(p["nominal_cm"])
+        self.assertTrue(p["blocking"])
         p = next(x for x in heights.propose_heights(config(), measurements(), "max-rise") if x["class"] == "high_mantle")
         self.assertEqual(p["nominal_cm"], 220)
         p = next(x for x in heights.propose_heights(config(), measurements(), "dz") if x["class"] == "low_vault")
@@ -199,6 +201,55 @@ class ApplyMeasuredHeightsTests(unittest.TestCase):
         self.assertEqual(code, 2)
         self.assertIn("NO_CLIP_MEASUREMENT", text)
         self.assertEqual(self.output.read_text(encoding="utf-8"), "preserve")
+
+    def test_rm_flag_off_warns_but_retains_source_root_measurement(self):
+        rows = measurements()
+        for item in rows:
+            item["root_motion_enabled"] = "False"
+        proposals = heights.propose_heights(config(), rows)
+        self.assertFalse(any(p["blocking"] for p in proposals))
+        high = next(p for p in proposals if p["class"] == "high_mantle")
+        self.assertIn("WARN RM_FLAG_OFF", high["flags"])
+        self.assertEqual(high["nominal_cm"], 200)
+        result = heights.apply_proposals(config(), proposals, self.csv_path)
+        measured = result["classes"]["high_mantle"]
+        self.assertTrue(measured["measured"])
+        self.assertFalse(measured["source_measurements"][0]["root_motion_enabled"])
+
+    def test_refined_class_mapping_and_new_classes(self):
+        rows = measurements() + [row("HI_Climb_Climb_Up", 200, 280),
+                                 row("Standing_JumpClimbUpNEW", 230, 260),
+                                 row("RunJumpClimbNEW", 230, 270), row("RunJumpClimb", 310, 350)]
+        proposals = heights.propose_heights(config(), rows)
+        result = heights.apply_proposals(config(), proposals, self.csv_path)
+        for key, nominal in [("tall_ledge", 230), ("very_tall", 310), ("high_fence_over", 140)]:
+            p = next(p for p in proposals if p["class"] == key)
+            self.assertIn("NEW_CLASS", p["flags"])
+            self.assertIsNone(p["old_nominal_cm"])
+            self.assertEqual(result["classes"][key]["nominal_cm"], nominal)
+            self.assertTrue(result["classes"][key]["measured"])
+        high = result["classes"]["high_mantle"]
+        self.assertTrue(any("HI_Climb_Climb_Up" in clip for clip in high["source_clips"]))
+        self.assertFalse(any("JumpClimb.JumpClimb" in clip or "HighFenceVault" in clip for clip in high["source_clips"]))
+        self.assertEqual(result["classes"]["high_fence_over"]["source_measurements"][0]["metric"], "max_root_rise_cm")
+
+    def test_review_actions_are_reported_separately_and_never_written_as_classes(self):
+        rows = measurements() + [row("JumpFenceVault", -0.27, 189), row("JumpFenceClimb", -0.27, 268),
+                                 row("Standing_Tall_Wall_Climb", -0.27, 231), row("Sprint_Footplant_TallWallClimb", 0, 0)]
+        for item in rows:
+            item["root_motion_enabled"] = "False"
+        reviews = heights.review_measurements(rows)
+        self.assertEqual(len(reviews), 4)
+        self.assertTrue(all("NEEDS_REVIEW" in r["flags"] for r in reviews))
+        proposals = heights.propose_heights(config(), rows)
+        result = heights.apply_proposals(config(), proposals, self.csv_path)
+        all_sources = [clip for c in result["classes"].values() for clip in c.get("source_clips", [])]
+        self.assertFalse(any(heights.clip_name(clip) in heights.REVIEW_CLIPS for clip in all_sources))
+        self.write_csv(rows)
+        code, text = self.cli()
+        self.assertEqual(code, 0, text)
+        self.assertIn("review clip | endpoint dz cm | peak rise cm", text)
+        self.assertIn("NEEDS_REVIEW", text)
 
     def test_csv_headers_and_bom(self):
         self.csv_path.write_text("asset_path,status\nfoo,ok\n", encoding="utf-8")

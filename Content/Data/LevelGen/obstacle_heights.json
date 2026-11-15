@@ -1,0 +1,330 @@
+{
+  "schema": "codex.obstacle_heights/1",
+  "source": "Measured source-root proxies + explicit approved targets from team-chat #465; contact/landing preview still required",
+  "classes": {
+    "step": {
+      "nominal_cm": 30,
+      "tolerance_cm": 5,
+      "min_cm": 0,
+      "max_cm": 35,
+      "measured": false
+    },
+    "low_vault": {
+      "nominal_cm": 95,
+      "tolerance_cm": 5,
+      "min_cm": 25,
+      "max_cm": 105,
+      "measured": true,
+      "source_clips": [
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/LowVault.LowVault",
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/RunLowVault.RunLowVault"
+      ],
+      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
+      "measurement_basis": "source_root_motion_proxy",
+      "source_measurements": [
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/LowVault.LowVault",
+          "rise_cm": 100.06101989746094,
+          "metric": "max_root_rise_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        },
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/RunLowVault.RunLowVault",
+          "rise_cm": 88.46942901611328,
+          "metric": "max_root_rise_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        }
+      ],
+      "approved_by": "team-chat #465 (2026-11-15)",
+      "measurement_flags": [
+        "WARN RM_FLAG_OFF",
+        "SPREAD_EXCEEDS_TOLERANCE"
+      ],
+      "measurement_spread_cm": 11.591590881347656,
+      "source_outside_approved_tolerance": [
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/LowVault.LowVault",
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowVault/RunLowVault.RunLowVault"
+      ]
+    },
+    "low_mantle": {
+      "nominal_cm": 85,
+      "tolerance_cm": 10,
+      "min_cm": 75,
+      "max_cm": 130,
+      "measured": true,
+      "source_clips": [
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowClimb/Low_Climb.Low_Climb",
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowClimb/RunLowClimb.RunLowClimb"
+      ],
+      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
+      "measurement_basis": "source_root_motion_proxy",
+      "source_measurements": [
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowClimb/Low_Climb.Low_Climb",
+          "rise_cm": 77.13849639892578,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        },
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/LowClimb/RunLowClimb.RunLowClimb",
+          "rise_cm": 90.91159057617188,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        }
+      ],
+      "approved_by": "team-chat #465 (2026-11-15)",
+      "measurement_flags": [
+        "WARN RM_FLAG_OFF",
+        "SPREAD_EXCEEDS_TOLERANCE"
+      ],
+      "measurement_spread_cm": 13.773094177246094,
+      "source_outside_approved_tolerance": []
+    },
+    "high_mantle": {
+      "nominal_cm": 140,
+      "tolerance_cm": 10,
+      "min_cm": 130,
+      "max_cm": 240,
+      "measured": true,
+      "source_clips": [
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/HighClimb.HighClimb",
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/RunHighClimb.RunHighClimb",
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/Split/HI_Climb_Climb_Up.HI_Climb_Climb_Up"
+      ],
+      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
+      "measurement_basis": "source_root_motion_proxy",
+      "source_measurements": [
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/HighClimb.HighClimb",
+          "rise_cm": 131.5603790283203,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        },
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/RunHighClimb.RunHighClimb",
+          "rise_cm": 142.41571044921875,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        },
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/Split/HI_Climb_Climb_Up.HI_Climb_Climb_Up",
+          "rise_cm": 138.8713836669922,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        }
+      ],
+      "approved_by": "team-chat #465 (2026-11-15)",
+      "measurement_flags": [
+        "WARN RM_FLAG_OFF",
+        "SPREAD_EXCEEDS_TOLERANCE"
+      ],
+      "measurement_spread_cm": 10.855331420898438,
+      "source_outside_approved_tolerance": []
+    },
+    "wall_no_traverse": {
+      "nominal_cm": 330,
+      "tolerance_cm": 5,
+      "min_cm": 320,
+      "max_cm": null,
+      "measured": false,
+      "source": "Unmeasured blocked-wall placeholder above measured traversal ceiling 320 cm; no clip assigned"
+    },
+    "tall_ledge": {
+      "min_cm": 220,
+      "max_cm": 240,
+      "nominal_cm": 230,
+      "tolerance_cm": 10,
+      "measured": true,
+      "source_clips": [
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/Standing_JumpClimbUpNEW.Standing_JumpClimbUpNEW",
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/TallLedge_ClimbUpNEW.TallLedge_ClimbUpNEW",
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/RunJumpClimbNEW.RunJumpClimbNEW"
+      ],
+      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
+      "measurement_basis": "source_root_motion_proxy",
+      "source_measurements": [
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/Standing_JumpClimbUpNEW.Standing_JumpClimbUpNEW",
+          "rise_cm": 229.21648189425468,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        },
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/TallLedge_ClimbUpNEW.TallLedge_ClimbUpNEW",
+          "rise_cm": 231.04572078585625,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        },
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/RunJumpClimbNEW.RunJumpClimbNEW",
+          "rise_cm": 238.79710388183594,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        }
+      ],
+      "approved_by": "team-chat #465 (2026-11-15)",
+      "measurement_flags": [
+        "NEW_CLASS",
+        "WARN RM_FLAG_OFF"
+      ],
+      "measurement_spread_cm": 9.580621987581253,
+      "source_outside_approved_tolerance": []
+    },
+    "very_tall": {
+      "min_cm": 300,
+      "max_cm": 320,
+      "nominal_cm": 310,
+      "tolerance_cm": 10,
+      "measured": true,
+      "source_clips": [
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/JumpClimb.JumpClimb",
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/RunJumpClimb.RunJumpClimb"
+      ],
+      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
+      "measurement_basis": "source_root_motion_proxy",
+      "source_measurements": [
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/JumpClimb.JumpClimb",
+          "rise_cm": 308.5517578125,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        },
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/RunJumpClimb.RunJumpClimb",
+          "rise_cm": 308.2533264160156,
+          "metric": "dz_up_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        }
+      ],
+      "approved_by": "team-chat #465 (2026-11-15)",
+      "measurement_flags": [
+        "NEW_CLASS",
+        "WARN RM_FLAG_OFF"
+      ],
+      "measurement_spread_cm": 0.298431396484375,
+      "source_outside_approved_tolerance": []
+    },
+    "high_fence_over": {
+      "min_cm": 130,
+      "max_cm": 140,
+      "nominal_cm": 135,
+      "tolerance_cm": 5,
+      "measured": true,
+      "source_clips": [
+        "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/HighFenceVault.HighFenceVault"
+      ],
+      "measurement_source": "Saved\\Measure\\anim_root_motion.csv",
+      "measurement_basis": "source_root_motion_proxy",
+      "source_measurements": [
+        {
+          "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/HighClimb/HighFenceVault.HighFenceVault",
+          "rise_cm": 137.21205139160156,
+          "metric": "max_root_rise_cm",
+          "status": "ok",
+          "root_motion_enabled": false,
+          "warnings": [
+            "WARN RM_FLAG_OFF"
+          ]
+        }
+      ],
+      "approved_by": "team-chat #465 (2026-11-15)",
+      "measurement_flags": [
+        "NEW_CLASS",
+        "WARN RM_FLAG_OFF"
+      ],
+      "measurement_spread_cm": 0.0,
+      "source_outside_approved_tolerance": []
+    }
+  },
+  "review_clips": [
+    {
+      "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Climbing/JumpClimb/JumpFenceClimb.JumpFenceClimb",
+      "dz_up_cm": "-0.27338626980781555",
+      "max_root_rise_cm": "268.3526306152344",
+      "status": "ok",
+      "flags": [
+        "NEEDS_REVIEW",
+        "WARN RM_FLAG_OFF"
+      ]
+    },
+    {
+      "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/JumpSmall/JumpFenceVault.JumpFenceVault",
+      "dz_up_cm": "-0.27338626980781555",
+      "max_root_rise_cm": "188.93753051757812",
+      "status": "ok",
+      "flags": [
+        "NEEDS_REVIEW",
+        "WARN RM_FLAG_OFF"
+      ]
+    },
+    {
+      "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/Sprint_Footplant_TallWallClimb.Sprint_Footplant_TallWallClimb",
+      "dz_up_cm": "0.0",
+      "max_root_rise_cm": "0.0",
+      "status": "ok",
+      "flags": [
+        "NEEDS_REVIEW",
+        "WARN RM_FLAG_OFF"
+      ]
+    },
+    {
+      "clip": "/Game/CaV_Anims/Animations/ThirdPerson_Anims/Extras/Standing_Tall_Wall_Climb.Standing_Tall_Wall_Climb",
+      "dz_up_cm": "-0.27338626980781555",
+      "max_root_rise_cm": "230.65394592285156",
+      "status": "ok",
+      "flags": [
+        "NEEDS_REVIEW",
+        "WARN RM_FLAG_OFF"
+      ]
+    }
+  ],
+  "measurement_source": "Saved/Measure/anim_root_motion.csv"
+}

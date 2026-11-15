@@ -562,7 +562,7 @@
     420,
     -450
    ],
-   "height": 95,
+   "height": 85,
    "thickness": 25,
    "kind": "wall"
   },
@@ -576,7 +576,7 @@
     -400,
     950
    ],
-   "height": 95,
+   "height": 85,
    "thickness": 25,
    "kind": "wall"
   }
@@ -655,7 +655,7 @@
      "floor": 1,
      "wall": "B_checkpoint_E",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 90
     },
@@ -669,7 +669,7 @@
      "floor": 0,
      "wall": "B_checkpoint_E",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 90
     },
@@ -683,7 +683,7 @@
      "floor": 1,
      "wall": "B_checkpoint_E",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 90
     },
@@ -1278,7 +1278,7 @@
       1800,
       950
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     },
     {
@@ -1291,7 +1291,7 @@
       600,
       950
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     },
     {
@@ -1304,7 +1304,7 @@
       600,
       -1050
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     },
     {
@@ -1317,7 +1317,7 @@
       600,
       950
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     }
    ],
@@ -1486,7 +1486,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       0,
       1
@@ -1507,7 +1507,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       0,
       1
@@ -1528,7 +1528,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       0,
       1
@@ -1549,7 +1549,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1569,7 +1569,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1589,7 +1589,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       0,
       -1
@@ -1609,7 +1609,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       0,
       1
@@ -2060,7 +2060,7 @@
       -600,
       -1450
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     },
     {
@@ -2073,7 +2073,7 @@
       -1400,
       -1450
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     },
     {
@@ -2086,7 +2086,7 @@
       -1400,
       -2250
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     },
     {
@@ -2099,7 +2099,7 @@
       -1400,
       -1450
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     }
    ],
@@ -2136,7 +2136,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -2156,7 +2156,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -2176,7 +2176,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       0,
       -1
@@ -2196,7 +2196,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       0,
       1
@@ -2268,7 +2268,7 @@
    "size": [
     260,
     75,
-    90
+    95
    ],
    "yaw": 90
   },
@@ -2282,7 +2282,7 @@
    "size": [
     260,
     75,
-    90
+    95
    ],
    "yaw": 90
   },
@@ -2296,7 +2296,7 @@
    "size": [
     260,
     75,
-    90
+    95
    ],
    "yaw": 90
   },
@@ -2310,7 +2310,7 @@
    "size": [
     260,
     75,
-    90
+    95
    ],
    "yaw": 90
   },
@@ -2338,7 +2338,7 @@
    "size": [
     160,
     120,
-    120
+    85
    ],
    "yaw": 90
   }
@@ -2752,7 +2752,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2771,7 +2771,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2790,7 +2790,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2809,7 +2809,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2847,7 +2847,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 120,
+   "height_cm": 85,
    "normal": [
     -1,
     0
@@ -2866,7 +2866,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 95,
+   "height_cm": 85,
    "normal": [
     -1,
     0
@@ -2885,7 +2885,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 95,
+   "height_cm": 85,
    "normal": [
     1,
     0
@@ -2904,7 +2904,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     0,
     1
@@ -2925,7 +2925,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     0,
     1
@@ -2946,7 +2946,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     0,
     1
@@ -2967,7 +2967,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -2987,7 +2987,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -3007,7 +3007,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     0,
     -1
@@ -3027,7 +3027,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     0,
     1
@@ -3047,7 +3047,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3067,7 +3067,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -3087,7 +3087,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     0,
     -1
@@ -3107,7 +3107,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     0,
     1

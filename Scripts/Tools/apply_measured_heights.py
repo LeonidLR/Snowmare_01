@@ -16,23 +16,27 @@ from statistics import median
 
 ROOT = Path(__file__).resolve().parents[2]
 CAV_PREFIX = "/Game/CaV_Anims/Animations/ThirdPerson_Anims/"
-# MANTLING.md section 11.2: upward clips only, grouped by provisional height class.
-# High-fence OVER actions share the high class, but retain their own action at runtime.
-# Step/blocked walls intentionally have no authored climb clip; never mark them measured.
-# Land/roll/drop, Wall_Run, ambiguous JumpFenceClimb and split hang phases are excluded.
+# Refined by team-chat #452 after the 31-clip measurement (2026-11-15).
+# ON TOP uses endpoint dz; OVER uses peak root rise. Asset enable_root_motion=False
+# does not remove the source root track: retain the measurement and emit a warning.
+# Step/blocked walls have no authored upward clip and remain unmeasured.
 CLASS_CLIPS = {
     "step": (),
     "low_vault": ("LowVault", "RunLowVault"),
     "low_mantle": ("Low_Climb", "RunLowClimb"),
-    "high_mantle": (
-        "HighClimb", "RunHighClimb", "JumpClimb", "RunJumpClimb",
-        "Standing_JumpClimbUpNEW", "RunJumpClimbNEW", "TallLedge_ClimbUpNEW",
-        "Standing_Tall_Wall_Climb", "Sprint_Footplant_TallWallClimb",
-        "HighFenceVault", "JumpFenceVault",
-    ),
+    "high_mantle": ("HighClimb", "RunHighClimb", "HI_Climb_Climb_Up"),
+    "tall_ledge": ("Standing_JumpClimbUpNEW", "TallLedge_ClimbUpNEW", "RunJumpClimbNEW"),
+    "very_tall": ("JumpClimb", "RunJumpClimb"),
+    "high_fence_over": ("HighFenceVault",),
     "wall_no_traverse": (),
 }
-OVER_CLIPS = {"LowVault", "RunLowVault", "HighFenceVault", "JumpFenceVault"}
+NEW_CLASSES = ("tall_ledge", "very_tall", "high_fence_over")
+CLASS_METRICS = {key: "max-rise" if key in {"low_vault", "high_fence_over"} else "dz"
+                 for key in CLASS_CLIPS}
+CLIP_METRICS = {name: CLASS_METRICS[key] for key, names in CLASS_CLIPS.items() for name in names}
+# These actions return to their starting level, have no upward root track, or need
+# phase/contact inspection. Show raw dz AND peak, but never fold them into a class.
+REVIEW_CLIPS = ("JumpFenceVault", "JumpFenceClimb", "Standing_Tall_Wall_Climb", "Sprint_Footplant_TallWallClimb")
 
 
 def nearest_five(value):
@@ -59,22 +63,8 @@ def clip_name(asset_path):
 def measured_rise(row, name, metric):
     if row["status"].strip().lower() not in {"ok", "fallback"}:
         raise ValueError("measurement status=" + row["status"])
-    if row["root_motion_enabled"].strip().lower() not in {"true", "1"}:
-        raise ValueError("root motion disabled or unknown")
     keys = {"dz": "dz_up_cm", "max-rise": "max_root_rise_cm"}
-    if metric == "auto":
-        # OVER returns to the far-side ground: its endpoint dz can legitimately be zero.
-        # ON TOP prefers net positive dz; use peak rise when that endpoint is not usable.
-        selected = "max_root_rise_cm" if name in OVER_CLIPS else "dz_up_cm"
-        if selected == "dz_up_cm":
-            try:
-                net = float(row[selected])
-            except (TypeError, ValueError):
-                net = math.nan
-            if not math.isfinite(net) or net <= 0:
-                selected = "max_root_rise_cm"
-    else:
-        selected = keys[metric]
+    selected = keys[CLIP_METRICS[name] if metric == "auto" else metric]
     value = float(row[selected])
     if not math.isfinite(value) or value <= 0:
         raise ValueError(f"{selected} must be finite and positive")
@@ -92,16 +82,21 @@ def propose_heights(document, rows, metric="auto"):
         if name:
             indexed.setdefault(name, []).append(row)
     proposals = []
-    for key, original in document["classes"].items():
+    keys = list(document["classes"]) + [k for k in NEW_CLASSES if k not in document["classes"]]
+    order = {key: index for index, key in enumerate(CLASS_CLIPS)}
+    keys.sort(key=lambda key: order.get(key, len(order)))
+    for key in keys:
+        is_new = key not in document["classes"]
+        original = document["classes"].get(key, {})
         nominal, tolerance = original.get("nominal_cm"), original.get("tolerance_cm")
-        if (not isinstance(nominal, (int, float)) or isinstance(nominal, bool) or
+        if not is_new and (not isinstance(nominal, (int, float)) or isinstance(nominal, bool) or
                 not isinstance(tolerance, (int, float)) or isinstance(tolerance, bool) or
                 not math.isfinite(nominal) or not math.isfinite(tolerance) or nominal <= 0 or tolerance < 0):
             raise ValueError(f"Invalid nominal/tolerance: {key}")
         names = CLASS_CLIPS.get(key)
         proposal = {"class": key, "old_nominal_cm": nominal, "old_tolerance_cm": tolerance,
                     "nominal_cm": None, "tolerance_cm": None, "spread_cm": None,
-                    "measurements": [], "flags": [], "blocking": False}
+                    "measurements": [], "flags": ["NEW_CLASS"] if is_new else [], "blocking": False}
         if not names:
             proposal["flags"].append("NO_CLIP" if names is not None else "NO_MAPPING")
             proposal["blocking"] = names is None
@@ -121,8 +116,13 @@ def propose_heights(document, rows, metric="auto"):
                 proposal["flags"].append(f"INVALID_CLIP:{name}:{error}")
                 proposal["blocking"] = True
                 continue
+            rm_enabled = matches[0]["root_motion_enabled"].strip().lower() in {"true", "1"}
+            warnings = [] if rm_enabled else ["WARN RM_FLAG_OFF"]
+            if warnings and "WARN RM_FLAG_OFF" not in proposal["flags"]:
+                proposal["flags"].append("WARN RM_FLAG_OFF")
             proposal["measurements"].append({"clip": matches[0]["asset_path"], "rise_cm": value,
-                                               "metric": selected, "status": matches[0]["status"]})
+                                           "metric": selected, "status": matches[0]["status"],
+                                           "root_motion_enabled": rm_enabled, "warnings": warnings})
         values = [m["rise_cm"] for m in proposal["measurements"]]
         if not values:
             proposal["flags"].append("NO_CLIP_MEASUREMENT")
@@ -132,9 +132,9 @@ def propose_heights(document, rows, metric="auto"):
             proposed_tolerance = max(5, int(math.ceil(max(abs(v - target) for v in values) / 5) * 5))
             spread = max(values) - min(values)
             proposal.update(nominal_cm=target, tolerance_cm=proposed_tolerance, spread_cm=spread)
-            # Compare against the EXISTING allowed spread; expanding the suggested tolerance
-            # must not silently hide inconsistent clip families in one class.
-            if spread > tolerance:
+            # Existing classes keep their approved conflict threshold. A new class has
+            # no previous tolerance; compare its spread with the proposed tolerance.
+            if spread > (proposed_tolerance if tolerance is None else tolerance):
                 proposal["flags"].append("SPREAD_EXCEEDS_TOLERANCE")
                 proposal["blocking"] = True
             lo, hi = original.get("min_cm"), original.get("max_cm")
@@ -145,6 +145,20 @@ def propose_heights(document, rows, metric="auto"):
     return proposals
 
 
+def review_measurements(rows):
+    """Unassigned actions remain evidence for manual review, never measured classes."""
+    result = []
+    for row in rows:
+        if clip_name(row["asset_path"]) not in REVIEW_CLIPS:
+            continue
+        flags = ["NEEDS_REVIEW"]
+        if row["root_motion_enabled"].strip().lower() not in {"true", "1"}:
+            flags.append("WARN RM_FLAG_OFF")
+        result.append({"clip": row["asset_path"], "dz_up_cm": row["dz_up_cm"],
+                       "max_root_rise_cm": row["max_root_rise_cm"], "status": row["status"], "flags": flags})
+    return result
+
+
 def apply_proposals(document, proposals, csv_path):
     conflicts = [p["class"] for p in proposals if p["blocking"]]
     if conflicts:
@@ -153,7 +167,10 @@ def apply_proposals(document, proposals, csv_path):
     for proposal in proposals:
         if proposal["nominal_cm"] is None:
             continue  # Step/wall remain unchanged and unmeasured.
-        entry = result["classes"][proposal["class"]]
+        entry = result["classes"].setdefault(proposal["class"], {})
+        if proposal["old_nominal_cm"] is None:
+            entry.update(min_cm=proposal["nominal_cm"] - proposal["tolerance_cm"],
+                         max_cm=proposal["nominal_cm"] + proposal["tolerance_cm"])
         entry.update(nominal_cm=proposal["nominal_cm"], tolerance_cm=proposal["tolerance_cm"],
                      measured=True, source_clips=[m["clip"] for m in proposal["measurements"]],
                      measurement_source=str(csv_path), measurement_basis="source_root_motion_proxy",
@@ -164,7 +181,7 @@ def apply_proposals(document, proposals, csv_path):
 def print_proposals(proposals):
     print("class | before cm/tol | proposed cm/tol | clips (rise cm) | spread cm | flags")
     for p in proposals:
-        before = f"{p['old_nominal_cm']:g} +/-{p['old_tolerance_cm']:g}"
+        before = "new" if p["old_nominal_cm"] is None else f"{p['old_nominal_cm']:g} +/-{p['old_tolerance_cm']:g}"
         after = "unchanged" if p["nominal_cm"] is None else f"{p['nominal_cm']} +/-{p['tolerance_cm']}"
         clips = ", ".join(f"{clip_name(m['clip'])}:{m['rise_cm']:g}" for m in p["measurements"]) or "none"
         spread = "n/a" if p["spread_cm"] is None else f"{p['spread_cm']:g}"
@@ -176,7 +193,7 @@ def main(argv=None):
     parser.add_argument("--csv", type=Path, default=ROOT / "Saved/Measure/anim_root_motion.csv")
     parser.add_argument("--heights", type=Path, default=ROOT / "Content/Data/LevelGen/obstacle_heights.json")
     parser.add_argument("--metric", choices=("auto", "dz", "max-rise"), default="auto",
-                        help="auto: OVER uses peak rise; ON TOP uses positive dz, otherwise peak")
+                        help="auto: class metric; mantle uses endpoint dz, over uses peak rise (no dz-to-peak fallback)")
     parser.add_argument("--write", action="store_true")
     parser.add_argument("--output", type=Path, help="exact JSON destination, required with --write")
     args = parser.parse_args(argv)
@@ -186,8 +203,14 @@ def main(argv=None):
         parser.error("--output must be a JSON path different from the CSV input")
     try:
         document = json.loads(args.heights.read_text(encoding="utf-8-sig"))
-        proposals = propose_heights(document, read_measurements(args.csv), args.metric)
+        rows = read_measurements(args.csv)
+        proposals = propose_heights(document, rows, args.metric)
         print_proposals(proposals)
+        reviews = review_measurements(rows)
+        if reviews:
+            print("review clip | endpoint dz cm | peak rise cm | status | flags")
+            for review in reviews:
+                print(f"{clip_name(review['clip'])} | {review['dz_up_cm']} | {review['max_root_rise_cm']} | {review['status']} | {','.join(review['flags'])}")
         print("Root-motion proposals require the contact/landing review in MANTLING section 11.")
         if args.write:
             result = apply_proposals(document, proposals, args.csv)

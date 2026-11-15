@@ -457,7 +457,7 @@
     2050,
     1500
    ],
-   "height": 250,
+   "height": 135,
    "thickness": 10,
    "kind": "fence"
   },
@@ -471,7 +471,7 @@
     200,
     -849
    ],
-   "height": 250,
+   "height": 135,
    "thickness": 10,
    "kind": "fence"
   },
@@ -485,7 +485,7 @@
     200,
     1500
    ],
-   "height": 250,
+   "height": 135,
    "thickness": 10,
    "kind": "fence"
   },
@@ -499,7 +499,7 @@
     200,
     -1700
    ],
-   "height": 250,
+   "height": 135,
    "thickness": 10,
    "kind": "fence"
   },
@@ -513,7 +513,7 @@
     1275,
     1500
    ],
-   "height": 250,
+   "height": 135,
    "thickness": 10,
    "kind": "fence"
   },
@@ -527,7 +527,7 @@
     200,
     1500
    ],
-   "height": 250,
+   "height": 135,
    "thickness": 10,
    "kind": "fence"
   },
@@ -541,7 +541,7 @@
     450,
     -2200
    ],
-   "height": 95,
+   "height": 85,
    "thickness": 25,
    "kind": "fence"
   }
@@ -620,7 +620,7 @@
      "floor": 0,
      "wall": "B_house_S",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 180
     },
@@ -634,7 +634,7 @@
      "floor": 1,
      "wall": "B_house_S",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 180
     },
@@ -648,7 +648,7 @@
      "floor": 1,
      "wall": "B_house_S",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 180
     },
@@ -662,7 +662,7 @@
      "floor": 0,
      "wall": "B_house_S",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 180
     },
@@ -676,7 +676,7 @@
      "floor": 1,
      "wall": "B_house_S",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 180
     },
@@ -690,7 +690,7 @@
      "floor": 0,
      "wall": "B_house_S",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 180
     },
@@ -704,7 +704,7 @@
      "floor": 1,
      "wall": "B_house_S",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 180
     },
@@ -718,7 +718,7 @@
      "floor": 0,
      "wall": "B_house_S",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 180
     },
@@ -732,7 +732,7 @@
      "floor": 1,
      "wall": "B_house_S",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 180
     },
@@ -746,7 +746,7 @@
      "floor": 0,
      "wall": "B_house_W",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 270
     },
@@ -760,7 +760,7 @@
      "floor": 1,
      "wall": "B_house_W",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 270
     },
@@ -774,7 +774,7 @@
      "floor": 0,
      "wall": "B_house_W",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 270
     },
@@ -788,7 +788,7 @@
      "floor": 1,
      "wall": "B_house_W",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 270
     },
@@ -802,7 +802,7 @@
      "floor": 0,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -816,7 +816,7 @@
      "floor": 1,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -830,7 +830,7 @@
      "floor": 0,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -844,7 +844,7 @@
      "floor": 1,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -858,7 +858,7 @@
      "floor": 0,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -872,7 +872,7 @@
      "floor": 1,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -886,7 +886,7 @@
      "floor": 0,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -900,7 +900,7 @@
      "floor": 1,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -914,7 +914,7 @@
      "floor": 0,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -928,7 +928,7 @@
      "floor": 1,
      "wall": "B_house_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     }
@@ -1188,7 +1188,7 @@
       1650,
       1200
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     },
     {
@@ -1201,7 +1201,7 @@
       450,
       1200
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     },
     {
@@ -1214,7 +1214,7 @@
       450,
       -1400
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     },
     {
@@ -1227,7 +1227,7 @@
       450,
       1200
      ],
-     "height_cm": 100,
+     "height_cm": 95,
      "thickness_cm": 20
     }
    ],
@@ -1377,7 +1377,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1398,7 +1398,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1419,7 +1419,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1440,7 +1440,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1461,7 +1461,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1482,7 +1482,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1503,7 +1503,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1524,7 +1524,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1545,7 +1545,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1566,7 +1566,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       0,
       -1
@@ -1587,7 +1587,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       0,
       -1
@@ -1608,7 +1608,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       0,
       -1
@@ -1629,7 +1629,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       0,
       -1
@@ -1650,7 +1650,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1671,7 +1671,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1692,7 +1692,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1713,7 +1713,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1734,7 +1734,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1755,7 +1755,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1776,7 +1776,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1797,7 +1797,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1818,7 +1818,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1839,7 +1839,7 @@
      ],
      "floor": 1,
      "base_z": 300,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1860,7 +1860,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -1880,7 +1880,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       -1,
       0
@@ -1900,7 +1900,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       0,
       -1
@@ -1920,7 +1920,7 @@
      ],
      "floor": 2,
      "base_z": 600,
-     "height_cm": 100,
+     "height_cm": 95,
      "normal": [
       0,
       1
@@ -2014,7 +2014,7 @@
      "floor": 0,
      "wall": "B_garage_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -2028,7 +2028,7 @@
      "floor": 0,
      "wall": "B_garage_N",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 0
     },
@@ -2042,7 +2042,7 @@
      "floor": 0,
      "wall": "B_garage_E",
      "width": 120,
-     "sill_height": 90,
+     "sill_height": 95,
      "top_height": 210,
      "yaw": 90
     }
@@ -2223,7 +2223,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -2244,7 +2244,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       1,
       0
@@ -2265,7 +2265,7 @@
      ],
      "floor": 0,
      "base_z": 0,
-     "height_cm": 90,
+     "height_cm": 95,
      "normal": [
       0,
       1
@@ -2344,7 +2344,7 @@
    "size": [
     160,
     120,
-    120
+    85
    ],
    "yaw": 90
   },
@@ -2372,7 +2372,7 @@
    "size": [
     90,
     90,
-    110
+    95
    ],
    "yaw": 90
   },
@@ -2386,7 +2386,7 @@
    "size": [
     160,
     120,
-    120
+    85
    ],
    "yaw": 180
   }
@@ -2740,7 +2740,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 120,
+   "height_cm": 85,
    "normal": [
     -1,
     0
@@ -2778,7 +2778,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 120,
+   "height_cm": 85,
    "normal": [
     -6.123233995736766e-17,
     -1
@@ -2797,7 +2797,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 95,
+   "height_cm": 85,
    "normal": [
     0,
     1
@@ -2816,7 +2816,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2837,7 +2837,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2858,7 +2858,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2879,7 +2879,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2900,7 +2900,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2921,7 +2921,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2942,7 +2942,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2963,7 +2963,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -2984,7 +2984,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -3005,7 +3005,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     0,
     -1
@@ -3026,7 +3026,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     0,
     -1
@@ -3047,7 +3047,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     0,
     -1
@@ -3068,7 +3068,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     0,
     -1
@@ -3089,7 +3089,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3110,7 +3110,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3131,7 +3131,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3152,7 +3152,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3173,7 +3173,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3194,7 +3194,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3215,7 +3215,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3236,7 +3236,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3257,7 +3257,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3278,7 +3278,7 @@
    ],
    "floor": 1,
    "base_z": 300,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3299,7 +3299,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3319,7 +3319,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     -1,
     0
@@ -3339,7 +3339,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     0,
     -1
@@ -3359,7 +3359,7 @@
    ],
    "floor": 2,
    "base_z": 600,
-   "height_cm": 100,
+   "height_cm": 95,
    "normal": [
     0,
     1
@@ -3379,7 +3379,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3400,7 +3400,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     1,
     0
@@ -3421,7 +3421,7 @@
    ],
    "floor": 0,
    "base_z": 0,
-   "height_cm": 90,
+   "height_cm": 95,
    "normal": [
     0,
     1
