@@ -514,6 +514,10 @@ def run_selftest():
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 def main():
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     parser = argparse.ArgumentParser(description="CodexTactics Agent Chat")
     parser.add_argument("--root", help="Custom storage root directory (defaults to main checkout)")
     subparsers = parser.add_subparsers(dest="command")

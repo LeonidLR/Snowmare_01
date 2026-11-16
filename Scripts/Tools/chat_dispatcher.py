@@ -887,6 +887,10 @@ def run_once(
 
 
 def main(argv: list[str] | None = None) -> int:
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8", errors="replace")
+
     ap = argparse.ArgumentParser(description="CodexTactics Chat Dispatcher")
     ap.add_argument("--config", default=DEFAULT_CONFIG_PATH)
     ap.add_argument("--chat-file", default=None)
