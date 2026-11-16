@@ -75,6 +75,7 @@
 #include "UI/HordeArrowsWidget.h"
 #include "UI/TutorialOverlayWidget.h"
 #include "Tutorial/TutorialSubsystem.h"
+#include "Survival/FirstAidSubsystem.h"
 #include "Core/PlayerCommands.h"
 #include "HAL/IConsoleManager.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -1819,6 +1820,27 @@ ETransferRequestOutcome ACodexTacticsHUD::HandleTransferDropOnActor(AOperativeCh
 	}
 	if (AOperativeCharacter* Recipient = Transfer->ResolveDropRecipient(Sender, TargetActor, Point))
 	{
+		// First aid (the game designer 2026-11-16, UFirstAidSubsystem): a medkit / medical bag dropped on a heavily wounded mate (first_aid.json
+		// treat_on_drop_tiers) - the sender walks up and treats him; Shift held hands it over instead (like the heat pack). Turn-based: a hand-over.
+		UFirstAidSubsystem* FirstAid = UFirstAidSubsystem::Get(this);
+		const UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+		if ((Item == ETransferItem::Medkit || Item == ETransferItem::MedicalBag) && FirstAid && !(TurnBased && TurnBased->IsActive())
+			&& FirstAid->ShouldTreatOnDrop(Recipient, IsHandOverModifierDown()))
+		{
+			ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(GetOwningPlayerController());
+			if ((PC && PC->BlockRealTimeOrder()) || UTutorialSubsystem::CheckCommandLocked(this, PlayerCommands::UseItem))
+			{
+				return ETransferRequestOutcome::Failed;
+			}
+			const EFirstAidItem AidItem = Item == ETransferItem::MedicalBag ? EFirstAidItem::MedicalBag : EFirstAidItem::Medkit;
+			if (FirstAid->RequestAid(Sender, Recipient, AidItem) != FirstAidRules::ERefusal::None)
+			{
+				return ETransferRequestOutcome::Failed;
+			}
+			PlayerCommands::ReportBy(this, PlayerCommands::UseItem, Sender, Recipient);
+			return FirstAid->FindRunning(Sender) && FirstAid->FindRunning(Sender)->bApproached ? ETransferRequestOutcome::Approaching
+				: ETransferRequestOutcome::Transferred;
+		}
 		// Rev 5d (designer request 2026-10-14): Shift held on the drop hands a heat pack over even to a cold mate (kept for later).
 		FTransferRequest Give = FTransferRequest::MakeGive(Sender, Recipient, Item);
 		Give.bHandOverOnly = IsHandOverModifierDown();

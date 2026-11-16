@@ -20,6 +20,7 @@
 #include "HAL/IConsoleManager.h"
 #include "Interactables/RelocationSubsystem.h"
 #include "Kismet/GameplayStatics.h"
+#include "Survival/FirstAidRules.h"
 #include "TimerManager.h"
 #include "UI/ActionBarWidget.h"
 #include "UI/CodexTacticsHUD.h"
@@ -85,7 +86,12 @@ namespace InventorySmoke
 		const int32 Medkits = Leader->MedkitsCount;
 		Leader->HealthComponent->ApplyDirectHealthLoss(100.f, TEXT("Smoke"));
 		const float Hurt = Leader->HealthComponent->GetCurrentHealth();
-		PC->UseSquadItem(EPersonalItem::Medkit); // H
+		// First aid (2026-11-16) made the medkit a timed treatment (FirstAidSmoke checks it); this check pins the instant fallback (enabled false).
+		{
+			FirstAidRules::FFirstAidConfig InstantMedkit = FirstAidRules::GetConfig(); InstantMedkit.bEnabled = false; FirstAidRules::SetConfig(InstantMedkit);
+			PC->UseSquadItem(EPersonalItem::Medkit); // H
+			FirstAidRules::ResetConfig();
+		}
 		Check(State, Leader->MedkitsCount == Medkits - 1 && FMath::IsNearlyEqual(Leader->HealthComponent->GetCurrentHealth(), Hurt + 80.f),
 			FString::Printf(TEXT("H: medkit +80 HP (%.0f -> %.0f)"), Hurt, Leader->HealthComponent->GetCurrentHealth()));
 		Leader->CannedFoodCount = FMath::Max(1, Leader->CannedFoodCount);

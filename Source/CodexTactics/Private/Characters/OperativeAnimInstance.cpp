@@ -1,4 +1,5 @@
 #include "Characters/OperativeAnimInstance.h"
+#include "Survival/FirstAidSubsystem.h"
 #include "Core/GameplayPreloadSubsystem.h"
 #include "Ladders/LadderPoseIK.h"
 
@@ -165,6 +166,11 @@ void UOperativeAnimInstance::ResolveNativeAnimationDefaults(TArray<FSoftObjectPa
 	LoadDefaultInteractionClips(OutPaths);
 	// Blizzard walk (game designer 2026-10-22): the retargeted storm upper-body clips when the class defaults are empty.
 	LoadDefaultBlizzardWalkClips(OutPaths);
+	// First aid (the game designer 2026-11-16): the retargeted healing clips first_aid.json names, into the preload catalog (played on demand).
+	if (OutPaths)
+	{
+		UFirstAidSubsystem::GatherClipPaths(*OutPaths);
+	}
 	// Corner-ready pose (user rule 2026-10-06): until setup_operative_cover_animation.py assigns it, take the M4 pack's
 	// look-at idles when the pack is in the project and the other cover clips come from it.
 	if (bUseNativeCoverClips && (CoverStandIdle.ContainsByPredicate([](const TObjectPtr<UAnimSequenceBase>& Clip) { return Clip != nullptr; })))

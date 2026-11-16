@@ -203,6 +203,10 @@ struct CODEXTACTICS_API FLevelOperativeKit
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Kit")
 	int32 HeatPacks = -1;
 
+	/** "medical_bags": medical bags carried (clamped to first_aid.json items.medical_bag.max_carried; the designer 2026-11-16); -1 = keep. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Kit")
+	int32 MedicalBags = -1;
+
 	/** "ammo": {"<weapon_id>": reserve} - the reserve rounds of a carried weapon (lower-case id, >= 0); a weapon not listed keeps its reserve. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Level|Kit")
 	TMap<FString, int32> AmmoReserve;

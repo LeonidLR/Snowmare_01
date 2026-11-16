@@ -22,6 +22,7 @@ namespace CampaignCarryLocal
 		{ TEXT("barricades_count"), &AOperativeCharacter::BarricadesCount },
 		{ TEXT("mines_count"), &AOperativeCharacter::MinesCount },
 		{ TEXT("medkits_count"), &AOperativeCharacter::MedkitsCount },
+		{ TEXT("medical_bags_count"), &AOperativeCharacter::MedicalBagsCount },
 		{ TEXT("canned_food_count"), &AOperativeCharacter::CannedFoodCount },
 		{ TEXT("bread_count"), &AOperativeCharacter::BreadCount },
 		{ TEXT("chocolate_count"), &AOperativeCharacter::ChocolateCount },

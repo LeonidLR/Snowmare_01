@@ -23,7 +23,8 @@ namespace
 		}
 		switch (Item)
 		{
-		case ETransferItem::Medkit: return FColor(210, 40, 40);
+		case ETransferItem::Medkit:
+		case ETransferItem::MedicalBag: return FColor(210, 40, 40);
 		case ETransferItem::Turret:
 		case ETransferItem::Barricade:
 		case ETransferItem::Mine: return FColor(120, 125, 130);

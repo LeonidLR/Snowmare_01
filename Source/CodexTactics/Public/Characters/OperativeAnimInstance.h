@@ -1674,6 +1674,28 @@ public:
 	/** Smokes: "<clip>@<layer>" of every interaction clip started (capped). */
 	const TArray<FString>& GetInteractionClipLog() const { return InteractionClipLog; }
 
+	// --- First aid (the game designer 2026-11-16; Survival/FirstAidRules, UFirstAidSubsystem, OperativeAnimInstanceFirstAid.cpp). The healing pack's
+	// retargeted clips play on FullBodySlot (no graph change): the play rate fitted to the treatment's length, looped when the clip is shorter.
+
+	/**
+	 * Plays Clip on FullBodySlot for Seconds (rate = clip / Seconds within [MinRate, MaxRate], looped to cover Seconds) from StartSeconds into it;
+	 * no left-hand IK / aim while it plays, the weapon hidden when bHideWeapon. Returns false (nothing plays) without a clip or when dead.
+	 */
+	bool PlayFirstAidClip(UAnimSequenceBase* Clip, float Seconds, float MinRate, float MaxRate, float BlendIn, float BlendOut, float StartSeconds,
+		bool bHideWeapon);
+
+	/** Stops the first-aid clip (blend out) and shows the weapon again if it hid it. */
+	void StopFirstAidClip(float BlendOut);
+
+	/** A first-aid clip plays on FullBodySlot now. */
+	bool IsFirstAidClipActive() const;
+
+	/** The first-aid clip's sequence name now (empty when none; smokes). */
+	FString GetFirstAidClipName() const;
+
+	/** The play rate the last first-aid clip started with (smokes). */
+	float GetFirstAidPlayRate() const { return FirstAidPlayRate; }
+
 	/** The operative anim instance of Actor's mesh, or nullptr. */
 	static UOperativeAnimInstance* Of(const AActor* Actor);
 
@@ -2455,6 +2477,11 @@ private:
 	void ResetInteractionState();
 	TWeakObjectPtr<UAnimMontage> InteractionMontage;
 	TArray<FString> InteractionClipLog;
+	/** First aid (PlayFirstAidClip): the montage, its clip, the rate, the weapon it hid. */
+	TWeakObjectPtr<UAnimMontage> FirstAidMontage;
+	TWeakObjectPtr<UAnimSequenceBase> FirstAidClip;
+	float FirstAidPlayRate = 1.f;
+	bool bFirstAidWeaponHidden = false;
 	EWarmExitReason WarmExitReason = EWarmExitReason::NoLongerWanted;
 	/** The pose whose set plays (stays set through its End clip). */
 	EWarmIdlePose WarmActivePose = EWarmIdlePose::None;

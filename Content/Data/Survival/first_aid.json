@@ -1,0 +1,111 @@
+{
+  "comment": "FIRST AID BY WOUND TIER (the game designer 2026-11-16, feat/first-aid; docs/port/FIRST_AID_REPORT.md). Read by FirstAidRules::GetConfig (Source/CodexTactics/Public/Survival/FirstAidRules.h) at game start; the code defaults mirror these values (test CodexTactics.Survival.FirstAid.DataFile). The medkit / medical bag is a TIMED TREATMENT: a clip of the healing pack plays on the ABP's FullBody slot and the heal lands at 'apply_at' of the treatment's length (the item is used up there). TIERS (the designer's words): light = wounded (under 50 % HP, critical_wound.json heavy_from 35 % and above) -> he treats HIMSELF STANDING; medium = critical_wound.json 'heavy' tier (35..20 %, holds his side, limps) -> himself KNEELING / SITTING; heavy = critical (under 20 %, lying / crawling) -> he CANNOT treat himself: a mate drags the medkit / bag onto him (his model or portrait) and treats him; none = hurt but not wounded -> like light. Prone (not heavy): the self_lying clips.",
+  "enabled": true,
+  "consume_on_cancel": false,
+  "consume_comment": "consume_on_cancel false: a treatment interrupted BEFORE the apply moment keeps the item; after it the item was used (the heal landed).",
+  "cancel_min_damage": 1.0,
+  "cancel_on_damage_while_approaching": false,
+  "cancel_comment": "Interruptions: damage >= cancel_min_damage HP in one tick (the cold's per-frame loss stays under it) to the helper or the patient, a move / stance order for either, either body displaced > move_tolerance_cm from his spot, the helper > reach_cm (+ tolerance) from the patient, the helper dead / knocked down, the patient dead, the helper's walk over failed / took > approach_timeout_s.",
+  "reach_cm": 160,
+  "approach_stop_cm": 85,
+  "approach_timeout_s": 25,
+  "move_tolerance_cm": 45,
+  "treat_on_drop_tiers": [
+    "heavy"
+  ],
+  "drop_comment": "A medkit / medical bag dragged from the drawer onto a mate of these tiers TREATS him (he walks up first); any other tier = a hand-over. Shift held on the drop always hands it over.",
+  "helper_may_be_medium": true,
+  "min_play_rate": 0.6,
+  "max_play_rate": 1.6,
+  "blend_in_s": 0.25,
+  "blend_out_s": 0.35,
+  "hide_weapon": true,
+  "start_medical_bags": {
+    "MedicSapper": 1
+  },
+  "items": {
+    "medkit": {
+      "heal": 80,
+      "tier_steps": 1,
+      "self_seconds": {
+        "none": 3.5,
+        "light": 4.0,
+        "medium": 5.5
+      },
+      "aid_seconds": {
+        "none": 4.0,
+        "light": 4.0,
+        "medium": 5.0,
+        "heavy": 6.0
+      },
+      "apply_at": 0.8,
+      "max_carried": 0,
+      "weight_kg": 0.5,
+      "items_comment": "heal: HP added; tier_steps: the wound improves at least this many tiers (the health is raised to that tier's floor + 0.5 HP); self_seconds / aid_seconds: the treatment's length per tier (a tier left out = not allowed that way); apply_at: the share of the treatment when the heal lands; max_carried 0 = no limit; weight_kg: data only (the inventory has no weight limit yet). clips: the healing pack's clip names (/Game/HealingAnimations/Animations), played from the retargeted copies /Game/Characters/Animations/FirstAid/{Male,Female}/<name> - after adding a name run Scripts/Editor/setup_first_aid_animation.py. One clip is picked at random per treatment (not the same one twice in a row).",
+      "clips": {
+        "self_standing": [
+          "AS_BandageTreatment",
+          "AS_BandageTreatment2",
+          "AS_InjectionInTheHand",
+          "AS_InjectionInTheShoulder"
+        ],
+        "self_kneeling": [
+          "AS_BandageTreatmentOnKnee",
+          "AS_BandageTreatmentOnKnee2",
+          "AS_InjectionInLegSquating",
+          "AS_HandInjectionSquating"
+        ],
+        "self_lying": [
+          "AS_InjectionInArmSitting",
+          "AS_HealingBandageSitting"
+        ],
+        "helper": [
+          "AS_BanadageHealingFriendFast"
+        ],
+        "patient": [
+          "AS_WoundedGetInjection"
+        ]
+      }
+    },
+    "medical_bag": {
+      "heal": 140,
+      "tier_steps": 2,
+      "self_seconds": {
+        "none": 6.0,
+        "light": 7.0,
+        "medium": 9.0
+      },
+      "aid_seconds": {
+        "none": 7.0,
+        "light": 7.0,
+        "medium": 9.0,
+        "heavy": 11.0
+      },
+      "apply_at": 0.85,
+      "max_carried": 1,
+      "weight_kg": 3.0,
+      "clips": {
+        "self_standing": [
+          "AS_BandageTreatment",
+          "AS_InjectionInTheLeg"
+        ],
+        "self_kneeling": [
+          "AS_SquatLegBandage",
+          "AS_BandageArmSitting"
+        ],
+        "self_lying": [
+          "AS_HealingBandageSitting",
+          "AS_InjectionInArmSitting"
+        ],
+        "helper": [
+          "AS_BandageHealingFriend",
+          "AS_InjectionHealingFriend"
+        ],
+        "patient": [
+          "AS_WoundedGetInjection",
+          "AS_WoundedLying"
+        ]
+      }
+    }
+  }
+}

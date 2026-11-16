@@ -9,6 +9,7 @@
 #include "Combat/GrenadeSubsystem.h"
 #include "Data/TacticalHeatTuning.h"
 #include "Survival/TacticalHeatSubsystem.h"
+#include "Survival/FirstAidSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "Core/PlayerCommands.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
@@ -123,6 +124,13 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 		}
 		return;
 	}
+	// First aid (the game designer 2026-11-16): the medkit is a timed treatment with a clip by wound tier (turn-based: the instant medkit below).
+	const UTurnBasedCombatSubsystem* TurnBasedNow = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+	if (Item == EPersonalItem::Medkit && FirstAidRules::GetConfig().bEnabled && !(TurnBasedNow && TurnBasedNow->IsActive()))
+	{
+		UseFirstAidItem(EFirstAidItem::Medkit);
+		return;
+	}
 	if (Leader->UsePersonalItem(Item))
 	{
 		ControllerCommands::Report(this, PlayerCommands::UseItem);
@@ -145,6 +153,35 @@ void ACodexTacticsPlayerController::UseSquadItem(EPersonalItem Item)
 	else
 	{
 		Messages->PostMessage(Leader->DisplayName, LOCTEXT("ItemFull", "Operative's health and warmth are already 100%!"));
+	}
+}
+
+void ACodexTacticsPlayerController::UseFirstAidItem(EFirstAidItem Item)
+{
+	USquadSubsystem* Squad = GetSquad();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	UFirstAidSubsystem* FirstAid = UFirstAidSubsystem::Get(this);
+	if (!Leader || !FirstAid || BlockRealTimeOrder() || UTutorialSubsystem::CheckCommandLocked(this, PlayerCommands::UseItem))
+	{
+		return;
+	}
+	const UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
+	if (Item == EFirstAidItem::Medkit && (!FirstAidRules::GetConfig().bEnabled || (TurnBased && TurnBased->IsActive())))
+	{
+		UseSquadItem(EPersonalItem::Medkit); // the instant medkit (it ends the turn in turn-based combat)
+		return;
+	}
+	if (TurnBased && TurnBased->IsActive())
+	{
+		if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+		{
+			Messages->PostMessage(Leader->DisplayName, LOCTEXT("BagNotTurnBased", "The medical bag takes too long for a turn - use it outside turn-based combat."));
+		}
+		return;
+	}
+	if (FirstAid->RequestSelf(Leader, Item) == FirstAidRules::ERefusal::None)
+	{
+		ControllerCommands::Report(this, PlayerCommands::UseItem);
 	}
 }
 

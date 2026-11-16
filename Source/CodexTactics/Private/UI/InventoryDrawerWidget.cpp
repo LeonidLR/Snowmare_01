@@ -20,6 +20,7 @@
 #include "Engine/World.h"
 #include "Data/TacticalHeatTuning.h"
 #include "UI/CodexTacticsHUD.h"
+#include "Survival/FirstAidRules.h"
 
 #define LOCTEXT_NAMESPACE "InventoryDrawerWidget"
 
@@ -115,7 +116,8 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 	const TCHAR* Names[] = { TEXT("BtnInvTurret"), TEXT("BtnInvBarricade"), TEXT("BtnInvMine"), TEXT("BtnInvMedkit"),
 		TEXT("BtnInvCan"), TEXT("BtnInvBread"), TEXT("BtnInvChoco"), TEXT("BtnInvMatch"), TEXT("BtnInvTripwire"),
 		TEXT("BtnInvAmmoM16"), TEXT("BtnInvAmmoPistol"), TEXT("BtnInvAmmoShotgun"), TEXT("BtnInvAmmoFuel"), TEXT("BtnInvAmmoCryo"),
-		TEXT("BtnInvAmmoPlasma"), TEXT("BtnInvHeatPack"), TEXT("BtnInvFirewood"), TEXT("BtnInvFlare"), TEXT("BtnInvStove"), TEXT("BtnInvCampfire") };
+		TEXT("BtnInvAmmoPlasma"), TEXT("BtnInvHeatPack"), TEXT("BtnInvFirewood"), TEXT("BtnInvFlare"), TEXT("BtnInvStove"), TEXT("BtnInvCampfire"),
+		TEXT("BtnInvMedicalBag") };
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Names); ++Index)
 	{
 		UTextBlock* Text = nullptr;
@@ -135,7 +137,7 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 	HintText->SetFont(HintFont);
 	HintText->SetColorAndOpacity(FSlateColor(DrawerTitle * 0.85f));
 	HintText->SetJustification(ETextJustify::Center);
-	HintText->SetText(LOCTEXT("DragHint", "Drag a row onto an operative or portrait to hand it over (beyond 2 m he walks up)"));
+	HintText->SetText(LOCTEXT("DragHint", "Drag a row onto an operative or portrait to hand it over (beyond 2 m he walks up); a medkit / medical bag on a badly wounded mate treats him"));
 	Column->AddChildToVerticalBox(HintText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	UTextBlock* CloseText = nullptr;
@@ -156,6 +158,7 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 	SlotButtons[static_cast<int32>(EInventoryDrawerSlot::Flare)]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleFlare);
 	SlotButtons[static_cast<int32>(EInventoryDrawerSlot::PortableStove)]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleStove);
 	SlotButtons[static_cast<int32>(EInventoryDrawerSlot::Campfire)]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleCampfire);
+	SlotButtons[static_cast<int32>(EInventoryDrawerSlot::MedicalBag)]->OnClicked.AddDynamic(this, &UInventoryDrawerWidget::HandleMedicalBag);
 }
 
 void UInventoryDrawerWidget::NativeOnInitialized()
@@ -266,6 +269,12 @@ FText UInventoryDrawerWidget::GetSlotText(EInventoryDrawerSlot Line) const
 		}
 		return DrawerClean(FString::Printf(TEXT("🔵 Gas stove%s: 0 (%d in squad)"), Active, DrawerSquadCount(GetWorld(), EDeployableType::PortableStove)));
 	}
+	case EInventoryDrawerSlot::MedicalBag:
+	{
+		const int32 Max = FirstAidRules::GetConfig().MedicalBag.MaxCarried;
+		return Max > 0 ? DrawerClean(FString::Printf(TEXT("🩹 Medical bag: x%d/%d"), Leader->MedicalBagsCount, Max))
+			: DrawerClean(FString::Printf(TEXT("🩹 Medical bag: x%d"), Leader->MedicalBagsCount));
+	}
 	case EInventoryDrawerSlot::Campfire:
 	{
 		const TCHAR* Active = Leader->SelectedDeployType == EDeployableType::Campfire ? TEXT(" [F]") : TEXT("");
@@ -300,6 +309,7 @@ bool UInventoryDrawerWidget::IsSlotEnabled(EInventoryDrawerSlot Line) const
 	case EInventoryDrawerSlot::Flare: return Leader->FlaresCount > 0;
 	case EInventoryDrawerSlot::PortableStove: return DrawerSquadCount(GetWorld(), EDeployableType::PortableStove) > 0;
 	case EInventoryDrawerSlot::Campfire: return DrawerSquadCount(GetWorld(), EDeployableType::Campfire) > 0;
+	case EInventoryDrawerSlot::MedicalBag: return Leader->MedicalBagsCount > 0;
 	default:
 	{
 		// Matches and ammo: information lines, enabled while there is something to drag over.
@@ -344,6 +354,7 @@ bool UInventoryDrawerWidget::GetTransferItem(EInventoryDrawerSlot Line, ETransfe
 	case EInventoryDrawerSlot::HeatPack: OutItem = ETransferItem::HeatPack; return true;
 	case EInventoryDrawerSlot::Firewood: OutItem = ETransferItem::Firewood; return true;
 	case EInventoryDrawerSlot::Flare: OutItem = ETransferItem::Flare; return true;
+	case EInventoryDrawerSlot::MedicalBag: OutItem = ETransferItem::MedicalBag; return true;
 	default: return false;
 	}
 }
@@ -520,6 +531,7 @@ void UInventoryDrawerWidget::Activate(EInventoryDrawerSlot Line)
 			: (Line == EInventoryDrawerSlot::Barricade ? EDeployableType::Barricade : EDeployableType::Mine));
 		break;
 	case EInventoryDrawerSlot::Medkit: PC->UseSquadItem(EPersonalItem::Medkit); break;
+	case EInventoryDrawerSlot::MedicalBag: PC->UseFirstAidItem(EFirstAidItem::MedicalBag); break;
 	case EInventoryDrawerSlot::CannedFood: PC->UseSquadItem(EPersonalItem::CannedFood); break;
 	case EInventoryDrawerSlot::Bread: PC->UseSquadItem(EPersonalItem::Bread); break;
 	case EInventoryDrawerSlot::Chocolate: PC->UseSquadItem(EPersonalItem::Chocolate); break;
@@ -555,6 +567,7 @@ void UInventoryDrawerWidget::HandleHeatPack() { Activate(EInventoryDrawerSlot::H
 void UInventoryDrawerWidget::HandleFlare() { Activate(EInventoryDrawerSlot::Flare); }
 void UInventoryDrawerWidget::HandleStove() { Activate(EInventoryDrawerSlot::PortableStove); }
 void UInventoryDrawerWidget::HandleCampfire() { Activate(EInventoryDrawerSlot::Campfire); }
+void UInventoryDrawerWidget::HandleMedicalBag() { Activate(EInventoryDrawerSlot::MedicalBag); }
 void UInventoryDrawerWidget::HandleClose() { Close(); }
 
 #undef LOCTEXT_NAMESPACE

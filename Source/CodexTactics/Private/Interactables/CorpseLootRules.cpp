@@ -78,6 +78,7 @@ bool CorpseLootRules::IsRemainsItem(ETransferItem Item)
 	switch (Item)
 	{
 	case ETransferItem::Medkit:
+	case ETransferItem::MedicalBag:
 	case ETransferItem::CannedFood:
 	case ETransferItem::Bread:
 	case ETransferItem::Chocolate:

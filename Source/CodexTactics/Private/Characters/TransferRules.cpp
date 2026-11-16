@@ -4,6 +4,7 @@
 #include "Interactables/ItemStashComponent.h"
 #include "Data/TacticalHeatTuning.h"
 #include "Data/WeaponRoster.h"
+#include "Survival/FirstAidRules.h"
 
 namespace
 {
@@ -19,6 +20,7 @@ namespace
 		case ETransferItem::HeatPack: return &Operative.HeatPacksCount;
 		case ETransferItem::Firewood: return &Operative.FirewoodCount;
 		case ETransferItem::Flare: return &Operative.FlaresCount;
+		case ETransferItem::MedicalBag: return &Operative.MedicalBagsCount;
 		default: return nullptr;
 		}
 	}
@@ -54,6 +56,7 @@ namespace
 		case ETransferItem::HeatPack: return TEXT("Heat pack");
 		case ETransferItem::Firewood: return TEXT("Firewood");
 		case ETransferItem::Flare: return TEXT("Signal flare");
+		case ETransferItem::MedicalBag: return TEXT("Medical bag");
 		default: return TEXT("Plasma");
 		}
 	}
@@ -235,6 +238,10 @@ int32 TransferRules::GetRecipientCapacity(const AOperativeCharacter& Recipient, 
 	if (Item == ETransferItem::Flare)
 	{
 		return FMath::Max(0, TacticalHeatTuning::Get().FlareMaxCarried - Recipient.FlaresCount);
+	}
+	if (Item == ETransferItem::MedicalBag)
+	{
+		return FirstAidRules::RoomFor(FirstAidRules::GetConfig(), EFirstAidItem::MedicalBag, Recipient.MedicalBagsCount);
 	}
 	return MAX_int32;
 }

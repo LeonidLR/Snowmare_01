@@ -39,7 +39,12 @@ enum class EInventoryDrawerSlot : uint8
 	/** Click: set up the squad's stove (F placement). */
 	PortableStove,
 	/** Click: build a campfire from matches + firewood (F placement). */
-	Campfire
+	Campfire,
+	/**
+	 * The medical bag (the game designer 2026-11-16, Survival/FirstAidRules): click = the leader treats himself (light / medium wound), drag onto a
+	 * heavily wounded mate = he treats him (UFirstAidSubsystem).
+	 */
+	MedicalBag
 };
 
 /**
@@ -127,6 +132,7 @@ private:
 	UFUNCTION() void HandleFlare();
 	UFUNCTION() void HandleStove();
 	UFUNCTION() void HandleCampfire();
+	UFUNCTION() void HandleMedicalBag();
 	UFUNCTION() void HandleClose();
 
 	UPROPERTY()

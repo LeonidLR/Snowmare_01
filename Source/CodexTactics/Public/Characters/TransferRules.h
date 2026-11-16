@@ -29,11 +29,13 @@ enum class ETransferItem : uint8
 	/** Sprint 15: firewood for a campfire. */
 	Firewood,
 	/** Sprint 15: signal flare. */
-	Flare
+	Flare,
+	/** The medical bag (the game designer 2026-11-16, Survival/FirstAidRules): dropped on a heavily wounded mate it treats him. */
+	MedicalBag
 };
 
 /** Last ETransferItem value (loops over every item). */
-inline constexpr ETransferItem LastTransferItem = ETransferItem::Flare;
+inline constexpr ETransferItem LastTransferItem = ETransferItem::MedicalBag;
 
 /** Outcome of a hand-over. */
 struct CODEXTACTICS_API FTransferResult
