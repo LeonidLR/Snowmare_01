@@ -47,7 +47,7 @@ foreach ($Raw in ($Tasks -join ",").Split(",")) {
     $Log = Get-ChildItem $RunDir -Filter "*-night-$Id.txt" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     $Mins = [int]((Get-Date) - $Started).TotalMinutes
     $Head = (git -C $Tree log --oneline -1 2>$null)
-    $Fatal = $Log -and (Select-String -Path $Log.FullName -Pattern 'RESOURCE_EXHAUSTED|quota|API key not valid|PERMISSION_DENIED|IneligibleTier|429' -Quiet)
+    $Fatal = $Log -and (Select-String -Path $Log.FullName -Pattern 'RESOURCE_EXHAUSTED|quota|API key not valid|PERMISSION_DENIED|IneligibleTier|429|"code": 402|code\\": 402|402' -Quiet)
     # Did Gemini itself post its FINISH message since the task started? If not (crash / quota / timeout), the runner reports for it.
     $Since = $Started.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
     $Recent = (& python $Chat read --last 15 2>$null) -join "`n"
@@ -61,6 +61,9 @@ foreach ($Raw in ($Tasks -join ",").Split(",")) {
         " | Gemini FINISH message: " + $(if ($SaidFinish) { "yes" } else { "MISSING - treat as unfinished" }) +
         " | branch: $Branch | commits: $Commits | report: " + $(if ($Report) { $Report.Name } else { "MISSING" }) +
         " | last errors in log: $Errors | log: Saved/Orchestrator/gemini_runs/$($Log.Name)"
+    # error text from the API carries quotes / backslashes / newlines that break the argument - keep it plain
+    $Text = ($Text -replace '[\\"`]', ' ' -replace '\s+', ' ')
+    if ($Text.Length -gt 1500) { $Text = $Text.Substring(0, 1500) + " ..." }
     & python $Chat post --as gemini --to claude --topic "gemini-cli" --text $Text | Out-Null
     Write-Host "[gemini-night] $Text"
     if ($Fatal) { break }
