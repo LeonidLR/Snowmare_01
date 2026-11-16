@@ -18,6 +18,7 @@ import urllib.parse
 # Import functions from agent_chat
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import agent_chat
+import importlib
 import editor_status
 import task_board
 
@@ -37,6 +38,7 @@ def get_editor_status_cached(ttl=10.0):
     with _EDITOR_LOCK:
         if _EDITOR_CACHE["data"] is None or time.time() - _EDITOR_CACHE["ts"] > ttl:
             try:
+                importlib.reload(editor_status)  # pick up editor_status.py fixes without restarting the server (2026-11-16)
                 _EDITOR_CACHE["data"] = editor_status.build_status()
             except Exception as exc:
                 _EDITOR_CACHE["data"] = {"error": str(exc), "verdict": {"level": "YELLOW", "reason": "Статус редактора недоступен"}, "worktrees": []}
