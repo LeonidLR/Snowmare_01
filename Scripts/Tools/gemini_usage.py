@@ -13,8 +13,8 @@ import os
 import sys
 
 REPO = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-LEDGER = os.path.join(REPO, "Saved", "Orchestrator", "gemini_budget.json")
-PRICES = os.path.join(REPO, "Scripts", "gemini_prices.json")
+LEDGER = os.environ.get("GEMINI_USAGE_LEDGER") or os.path.join(REPO, "Saved", "Orchestrator", "gemini_budget.json")
+PRICES = os.environ.get("GEMINI_USAGE_PRICES") or os.path.join(REPO, "Scripts", "gemini_prices.json")
 
 
 def last_stats(text):
