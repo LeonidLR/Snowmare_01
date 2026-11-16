@@ -2,7 +2,11 @@
 //   Scripts/smoke.ps1 -Command CodexTactics.DeathRagdollSmoke
 // Governed by docs/port/gemini/outbox/049-ragdoll-plan.md (Task 056 / Death Ragdoll Step 2).
 // Verifies death ragdoll across all required targets: Hound, Brute, Frostbitten, PMC fighter, and player KIA.
-// Verifies activation, physical simulation, settle freeze with QueryOnly capsule and pelvis < 45 cm above floor.
+// Verifies activation, physical simulation, settle freeze with QueryOnly capsule and, for every subject, the same pelvis limits:
+// pelvis bone < 45 cm above the floor in the skeleton's own centimetres (bone height / mesh world scale: 1.0 for every humanoid,
+// 4.9 for the Brute) and the pelvis COLLISION BODY bottom between -max_pelvis_sink_cm (not sunk) and +45 cm (resting on the floor).
+// Task 067: a target killed mid-sprint, and 3 shots + 1 blast in one frame whose fastest body over the WHOLE flight (sampled every
+// frame from the lethal hit until the freeze) stays <= max_launch_speed_explosive_cm_s.
 
 #include "CoreMinimal.h"
 
@@ -14,6 +18,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/DeathRagdollRules.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/WaveSubsystem.h"
 #include "Components/CapsuleComponent.h"
@@ -22,11 +27,15 @@
 #include "Debug/SmokeUtils.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "PhysicsEngine/BodySetup.h"
 
 namespace DeathRagdollSmoke
 {
 	constexpr float StepSeconds = 0.1f;
+	/** Acceptance: a lying pelvis bone is under this height above the floor (skeleton cm) and its body bottom under it (cm). */
+	constexpr float LyingPelvisLimitCm = 45.0f;
 
 	struct FSubject
 	{
@@ -35,6 +44,12 @@ namespace DeathRagdollSmoke
 		bool bIsPlayerTeam = false;
 		bool bRagdollActivated = false;
 		bool bFrozen = false;
+		bool bRunning = false;
+		bool bMultiShot = false;
+		float MaxObservedSpeed = 0.f;
+		float MaxSpeedAfterHitS = 0.f;
+		FName MaxSpeedBone;
+		float MaxPelvisSpeed = 0.f;
 	};
 
 	struct FState
@@ -43,6 +58,8 @@ namespace DeathRagdollSmoke
 		float StageTime = 0.f;
 		int32 Stage = 0;
 		int32 Failures = 0;
+		bool bFinished = false;
+		double HitWorldTime = -1.0;
 		TArray<FSubject> Subjects;
 	};
 
@@ -52,8 +69,9 @@ namespace DeathRagdollSmoke
 		State.Failures += bOk ? 0 : 1;
 	}
 
-	bool Finish(const FState& State, bool bComplete)
+	bool Finish(FState& State, bool bComplete)
 	{
+		State.bFinished = true;
 		if (IConsoleVariable* MaxCVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.DeathRagdoll.MaxSimultaneous")))
 		{
 			MaxCVar->Set(-1);
@@ -62,6 +80,45 @@ namespace DeathRagdollSmoke
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), bPassed ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("DeathRagdollSmoke"));
 		return false;
+	}
+
+	/** Every frame from the lethal hit until each body freezes: the fastest simulated body of every subject (the whole flight). */
+	bool SampleSpeeds(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
+	{
+		UWorld* World = WeakWorld.Get();
+		if (!World || State.bFinished)
+		{
+			return false;
+		}
+		if (State.HitWorldTime < 0.0)
+		{
+			return true;
+		}
+		const float SinceHit = static_cast<float>(World->GetTimeSeconds() - State.HitWorldTime);
+		for (FSubject& Subj : State.Subjects)
+		{
+			ACharacter* Char = Subj.Character.Get();
+			USkeletalMeshComponent* Mesh = Char ? Char->GetMesh() : nullptr;
+			if (!Mesh || !Mesh->IsSimulatingPhysics())
+			{
+				continue; // not (or no longer) a ragdoll: frozen bodies have no flight left
+			}
+			Subj.MaxPelvisSpeed = FMath::Max(Subj.MaxPelvisSpeed, static_cast<float>(Mesh->GetPhysicsLinearVelocity(UCorpseSubsystem::ResolvePelvisBone(Mesh)).Size()));
+			for (FBodyInstance* BodyInst : Mesh->Bodies)
+			{
+				if (BodyInst && BodyInst->IsValidBodyInstance() && BodyInst->bSimulatePhysics)
+				{
+					const float BodySpeed = static_cast<float>(BodyInst->GetUnrealWorldVelocity().Size());
+					if (BodySpeed > Subj.MaxObservedSpeed)
+					{
+						Subj.MaxObservedSpeed = BodySpeed;
+						Subj.MaxSpeedAfterHitS = SinceHit;
+						Subj.MaxSpeedBone = BodyInst->BodySetup.IsValid() ? BodyInst->BodySetup->BoneName : NAME_None;
+					}
+				}
+			}
+		}
+		return true;
 	}
 
 	bool Step(TWeakObjectPtr<UWorld> WeakWorld, FState& State)
@@ -79,6 +136,22 @@ namespace DeathRagdollSmoke
 		{
 		case 0:
 		{
+			// Maintain running velocity during warmup
+			for (FSubject& Subj : State.Subjects)
+			{
+				if (Subj.bRunning)
+				{
+					if (ACharacter* Char = Subj.Character.Get())
+					{
+						if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
+						{
+							Move->MaxWalkSpeed = 600.f;
+							Move->Velocity = Char->GetActorForwardVector() * 500.f;
+						}
+					}
+				}
+			}
+
 			// Stage 0: Wait 0.5s for spawned characters to touch ground and initialize
 			if (State.StageTime < 0.5f)
 			{
@@ -112,23 +185,59 @@ namespace DeathRagdollSmoke
 			Spec.DamageType = EDamageType::Kinetic;
 			Spec.DamageOrigin = FVector(0.f, 0.f, 100.f);
 
-			for (const FSubject& Subj : State.Subjects)
+			for (FSubject& Subj : State.Subjects)
 			{
 				ACharacter* Char = Subj.Character.Get();
 				if (!Char)
 				{
 					continue;
 				}
-				if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+
+				if (Subj.bMultiShot)
 				{
-					Enemy->GetHealthComponent()->TakeDamage(Spec);
+					if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+					{
+						// Apply 3 kinetic hits + 1 explosive hit in the same frame (lethal hit is explosive)
+						FDamageSpec Shot1 = Spec;
+						Shot1.Amount = 15.f;
+						FDamageSpec Shot2 = Spec;
+						Shot2.Amount = 15.f;
+						FDamageSpec Shot3 = Spec;
+						Shot3.Amount = 15.f;
+
+						FDamageSpec Blast;
+						Blast.Amount = 500.f;
+						Blast.ArmorPenetration = 1.f;
+						Blast.DamageType = EDamageType::Explosive;
+						Blast.DamageOrigin = Char->GetActorLocation() - Char->GetActorForwardVector() * 100.f;
+
+						Enemy->GetHealthComponent()->TakeDamage(Shot1);
+						Enemy->GetHealthComponent()->TakeDamage(Shot2);
+						Enemy->GetHealthComponent()->TakeDamage(Shot3);
+						Enemy->GetHealthComponent()->TakeDamage(Blast);
+					}
 				}
-				else if (AOperativeCharacter* Op = Cast<AOperativeCharacter>(Char))
+				else
 				{
-					Op->TakeHit(10000.f, TEXT("Smoke"), false, true);
+					if (Subj.bRunning)
+					{
+						if (UCharacterMovementComponent* Move = Char->GetCharacterMovement())
+						{
+							Move->Velocity = Char->GetActorForwardVector() * 500.f;
+						}
+					}
+					if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Char))
+					{
+						Enemy->GetHealthComponent()->TakeDamage(Spec);
+					}
+					else if (AOperativeCharacter* Op = Cast<AOperativeCharacter>(Char))
+					{
+						Op->TakeHit(10000.f, TEXT("Smoke"), false, true);
+					}
 				}
 			}
 
+			State.HitWorldTime = World->GetTimeSeconds();
 			UE_LOG(LogCodexTactics, Display, TEXT("[DeathRagdollSmoke] Lethal damage applied to all %d subjects"), State.Subjects.Num());
 			++State.Stage;
 			State.StageTime = 0.f;
@@ -173,7 +282,8 @@ namespace DeathRagdollSmoke
 		}
 		case 2:
 		{
-			// Stage 2: Wait for all corpses to settle and freeze (timeout 5.5s)
+			// Stage 2: Wait for all corpses to settle and freeze (timeout 9 s: a body still falling at the 3.5 s ragdoll timeout
+			// waits, FCorpseConfig::MaxSettleSeconds = 8 s after death freezes it in the end)
 			bool bAllFrozen = true;
 			for (FSubject& Subj : State.Subjects)
 			{
@@ -198,7 +308,7 @@ namespace DeathRagdollSmoke
 
 			if (!bAllFrozen)
 			{
-				if (State.StageTime < 5.5f)
+				if (State.StageTime < 9.0f)
 				{
 					return true;
 				}
@@ -229,22 +339,42 @@ namespace DeathRagdollSmoke
 						FString::Printf(TEXT("%s (player team KIA) preserved, not destroyed by cap"), *Subj.Name));
 				}
 
-				// Check pelvis height above floor
+				const UCorpseSubsystem* Corpses = World->GetSubsystem<UCorpseSubsystem>();
+				const FDeathRagdollConfig RagdollConfig = Corpses ? Corpses->GetRagdollConfig() : FDeathRagdollRules::GetDefaultConfig();
+				UE_LOG(LogCodexTactics, Display, TEXT("[DeathRagdollSmoke] %s fastest body over the flight: %.1f cm/s ('%s', %.2f s after the hit), fastest pelvis %.1f cm/s"),
+					*Subj.Name, Subj.MaxObservedSpeed, *Subj.MaxSpeedBone.ToString(), Subj.MaxSpeedAfterHitS, Subj.MaxPelvisSpeed);
+				if (Subj.bMultiShot)
+				{
+					// (b) 3 shooters + 1 explosive on one target: the fastest body (3D) from the hit until the freeze <= the explosive clamp
+					const float Limit = RagdollConfig.MaxLaunchSpeedExplosiveCmS;
+					Check(State, Subj.MaxObservedSpeed > 10.0f && Subj.MaxObservedSpeed <= Limit,
+						FString::Printf(TEXT("%s fastest body %.1f cm/s from the hit until the freeze in (10, %.0f] cm/s (clamped)"), *Subj.Name, Subj.MaxObservedSpeed, Limit));
+				}
+
+				// Pelvis: the same limits for every subject
 				if (USkeletalMeshComponent* Mesh = Char->GetMesh())
 				{
-					const FVector Pelvis = Mesh->GetBoneLocation(FName(TEXT("pelvis")));
-					const float CapsuleHalf = Char->GetCapsuleComponent() ? Char->GetCapsuleComponent()->GetUnscaledCapsuleHalfHeight() : 90.f;
-					float FloorZ = Char->GetActorLocation().Z - CapsuleHalf;
+					const FName PelvisBone = UCorpseSubsystem::ResolvePelvisBone(Mesh);
+					Check(State, PelvisBone != NAME_None && Mesh->GetBoneIndex(PelvisBone) != INDEX_NONE,
+						FString::Printf(TEXT("%s pelvis bone resolved ('%s')"), *Subj.Name, *PelvisBone.ToString()));
+					const FVector Pelvis = Mesh->GetBoneLocation(PelvisBone);
+					float FloorZ = 0.f;
+					const bool bFloor = UCorpseSubsystem::TraceCorpseFloorZ(World, Pelvis, Char, RagdollConfig, FloorZ);
+					Check(State, bFloor, FString::Printf(TEXT("%s floor found under the pelvis (Z=%.1f)"), *Subj.Name, FloorZ));
 
-					FHitResult Hit;
-					FCollisionQueryParams Params(SCENE_QUERY_STAT(DeathRagdollFloor), false, Char);
-					if (World->LineTraceSingleByChannel(Hit, Pelvis + FVector(0.f, 0.f, 100.f), Pelvis - FVector(0.f, 0.f, 500.f), ECC_WorldStatic, Params))
-					{
-						FloorZ = static_cast<float>(Hit.ImpactPoint.Z);
-					}
+					const float Scale = FMath::Max(static_cast<float>(Mesh->GetComponentScale().Z), KINDA_SMALL_NUMBER);
+					const float Height = static_cast<float>(Pelvis.Z) - FloorZ;
+					const float SkeletonHeight = Height / Scale;
+					Check(State, SkeletonHeight < LyingPelvisLimitCm,
+						FString::Printf(TEXT("%s%s pelvis height %.1f cm (%.1f skeleton cm at mesh scale %.2f) < %.0f (lying down, settled)"),
+							*Subj.Name, Subj.bRunning ? TEXT(" (killed at speed)") : TEXT(""), Height, SkeletonHeight, Scale, LyingPelvisLimitCm));
 
-					const float Height = Pelvis.Z - FloorZ;
-					Check(State, Height < 45.0f, FString::Printf(TEXT("%s pelvis height %.1f cm < 45 cm (lying down, settled)"), *Subj.Name, Height));
+					float BottomZ = 0.f;
+					const bool bBody = UCorpseSubsystem::GetPelvisBodyBottomZ(Mesh, PelvisBone, BottomZ);
+					const float Gap = BottomZ - FloorZ;
+					Check(State, bBody && Gap >= -RagdollConfig.MaxPelvisSinkCm && Gap < LyingPelvisLimitCm,
+						FString::Printf(TEXT("%s pelvis body bottom %.1f cm from the floor in [-%.0f, %.0f) (not sunk, resting on it)"),
+							*Subj.Name, Gap, RagdollConfig.MaxPelvisSinkCm, LyingPelvisLimitCm));
 				}
 				else
 				{
@@ -273,7 +403,7 @@ namespace DeathRagdollSmoke
 
 		TSharedRef<FState> State = MakeShared<FState>();
 		const FTransform Layout = SmokeUtils::LayoutTransform(World);
-		const FVector BasePoint = SmokeUtils::LevelPoint(World, FVector(1200.f, 0.f, 100.f));
+		const FVector BasePoint = SmokeUtils::LevelPoint(World, FVector(600.f, 0.f, 100.f));
 		const FRotator Facing = Layout.Rotator() + FRotator(0.f, 180.f, 0.f);
 
 		UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
@@ -294,7 +424,9 @@ namespace DeathRagdollSmoke
 		// 2. Spawn Brute
 		if (Waves)
 		{
-			AEnemyCharacter* Brute = Waves->SpawnEnemy(EEnemyArchetype::Brute, BasePoint + FVector(0.f, -200.f, 0.f), Facing);
+			// The Brute is a 4.9x skeleton (~6.5 m standing) that topples away from the hit origin (world 0,0): 200 cm beside the
+			// others it fell onto the Player KIA (pelvis body 27.7 cm up on the Brute's arm, 067 gate run). Its own corner, upstream.
+			AEnemyCharacter* Brute = Waves->SpawnEnemy(EEnemyArchetype::Brute, BasePoint + FVector(-800.f, 770.f, 0.f), Facing);
 			if (Brute && Brute->GetMesh())
 			{
 				Brute->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
@@ -335,7 +467,7 @@ namespace DeathRagdollSmoke
 			AOperativeCharacter* PlayerOp = Squad->GetMembers()[1];
 			if (PlayerOp)
 			{
-				PlayerOp->TeleportTo(BasePoint + FVector(0.f, 400.f, 0.f), Facing, false, true);
+				PlayerOp->TeleportTo(BasePoint + FVector(-200.f, 0.f, 0.f), Facing, false, true);
 				if (USkeletalMeshComponent* Mesh = PlayerOp->GetMesh())
 				{
 					Mesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
@@ -344,11 +476,37 @@ namespace DeathRagdollSmoke
 			}
 		}
 
+		// 6. Spawn running zombie (Frostbitten killed mid-sprint)
+		if (Waves)
+		{
+			AEnemyCharacter* Runner = Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, BasePoint + FVector(0.f, 400.f, 0.f), Facing);
+			if (Runner && Runner->GetMesh())
+			{
+				Runner->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				State->Subjects.Add({ TEXT("Running zombie"), Runner, false, false, false, /* bRunning */ true, false, 0.f });
+			}
+		}
+
+		// 7. Spawn multi-shot target (Frostbitten hit by 3 shooters + 1 explosive simultaneously)
+		if (Waves)
+		{
+			AEnemyCharacter* MultiTarget = Waves->SpawnEnemy(EEnemyArchetype::Frostbitten, BasePoint + FVector(200.f, 0.f, 0.f), Facing);
+			if (MultiTarget && MultiTarget->GetMesh())
+			{
+				MultiTarget->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+				State->Subjects.Add({ TEXT("Multi-shot target"), MultiTarget, false, false, false, false, /* bMultiShot */ true, 0.f });
+			}
+		}
+
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
 		{
 			return Step(WeakWorld, *State);
 		}), StepSeconds);
+		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)
+		{
+			return SampleSpeeds(WeakWorld, *State);
+		}), 0.f);
 	}
 
 	void Run(const TArray<FString>& Args, UWorld* World)
@@ -370,7 +528,7 @@ namespace DeathRagdollSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.DeathRagdollSmoke"),
-		TEXT("Dev check: death ragdoll activates on lethal damage across Hound, Brute, Frostbitten, PMC fighter, and Player KIA; simulates physics, settles and freezes with capsule QueryOnly/Ignore and pelvis < 45cm; logs PASS/FAIL, then exits."),
+		TEXT("Dev check: death ragdoll activates on lethal damage across Hound, Brute, Frostbitten, PMC fighter, and Player KIA; simulates physics, settles and freezes with capsule QueryOnly/Ignore, pelvis < 45 skeleton cm and its body not sunk; a mid-sprint kill and a 3 shots + blast target under the launch speed clamp over the whole flight; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

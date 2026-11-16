@@ -73,6 +73,43 @@ bool FDeathRagdollRules::LoadConfigFromJson(const FString& JsonContent, FDeathRa
 	{
 		OutConfig.MaxImpulseMagnitude = static_cast<float>(Val);
 	}
+	if (RootObject->TryGetNumberField(TEXT("max_launch_speed_cm_s"), Val) && Val > 0.0)
+	{
+		OutConfig.MaxLaunchSpeedCmS = static_cast<float>(Val);
+	}
+	if (RootObject->TryGetNumberField(TEXT("max_launch_speed_explosive_cm_s"), Val) && Val > 0.0)
+	{
+		OutConfig.MaxLaunchSpeedExplosiveCmS = static_cast<float>(Val);
+	}
+	auto ReadPositive = [&RootObject](const TCHAR* Key, float& Out)
+	{
+		double Number = 0.0;
+		if (RootObject->TryGetNumberField(Key, Number) && Number > 0.0)
+		{
+			Out = static_cast<float>(Number);
+		}
+	};
+	auto ReadNonNegative = [&RootObject](const TCHAR* Key, float& Out)
+	{
+		double Number = 0.0;
+		if (RootObject->TryGetNumberField(Key, Number) && Number >= 0.0)
+		{
+			Out = static_cast<float>(Number);
+		}
+	};
+	ReadNonNegative(TEXT("timeout_freeze_max_speed_cm_s"), OutConfig.TimeoutFreezeMaxSpeedCmS);
+	ReadPositive(TEXT("root_launch_speed_fraction"), OutConfig.RootLaunchSpeedFraction);
+	OutConfig.RootLaunchSpeedFraction = FMath::Min(OutConfig.RootLaunchSpeedFraction, 1.0f);
+	ReadNonNegative(TEXT("launch_clamp_window_s"), OutConfig.LaunchClampWindowSeconds);
+	ReadPositive(TEXT("max_angular_speed_rad_s"), OutConfig.MaxAngularSpeedRadS);
+	ReadPositive(TEXT("reference_body_mass_kg"), OutConfig.ReferenceBodyMassKg);
+	ReadNonNegative(TEXT("max_pelvis_sink_cm"), OutConfig.MaxPelvisSinkCm);
+	ReadNonNegative(TEXT("max_floor_lift_cm"), OutConfig.MaxFloorLiftCm);
+	ReadNonNegative(TEXT("floor_trace_up_cm"), OutConfig.FloorTraceUpCm);
+	ReadPositive(TEXT("floor_trace_down_cm"), OutConfig.FloorTraceDownCm);
+	ReadNonNegative(TEXT("floor_min_normal_z"), OutConfig.FloorMinNormalZ);
+	OutConfig.FloorMinNormalZ = FMath::Min(OutConfig.FloorMinNormalZ, 1.0f);
+	ReadNonNegative(TEXT("floor_max_above_pelvis_cm"), OutConfig.FloorMaxAbovePelvisCm);
 	if (RootObject->TryGetNumberField(TEXT("angular_damping"), Val))
 	{
 		OutConfig.AngularDamping = static_cast<float>(Val);
@@ -172,23 +209,67 @@ FVector FDeathRagdollRules::CalculateImpulse(
 	return Dir * Magnitude;
 }
 
+float FDeathRagdollRules::GetMaxLaunchSpeed(EDamageType DamageType, const FDeathRagdollConfig& Config)
+{
+	return (DamageType == EDamageType::Explosive) ? Config.MaxLaunchSpeedExplosiveCmS : Config.MaxLaunchSpeedCmS;
+}
+
+FVector FDeathRagdollRules::ClampLinearVelocity(const FVector& Velocity, float MaxSpeed)
+{
+	if (MaxSpeed > 0.0f)
+	{
+		const double SpeedSq = Velocity.SizeSquared();
+		const double MaxSpeedSq = FMath::Square(static_cast<double>(MaxSpeed));
+		if (SpeedSq > MaxSpeedSq)
+		{
+			return Velocity.GetSafeNormal() * MaxSpeed;
+		}
+	}
+	return Velocity;
+}
+
+FVector FDeathRagdollRules::ClampLaunchVelocityChange(const FVector& InitialVelocity, const FVector& VelocityChange, float MaxSpeed)
+{
+	return ClampLinearVelocity(InitialVelocity + VelocityChange, MaxSpeed) - InitialVelocity;
+}
+
+bool FDeathRagdollRules::IsCorpseFloorHit(float ImpactZ, float ImpactNormalZ, float PelvisZ, const FDeathRagdollConfig& Config)
+{
+	return ImpactNormalZ >= Config.FloorMinNormalZ && ImpactZ <= PelvisZ + Config.FloorMaxAbovePelvisCm;
+}
+
+float FDeathRagdollRules::CalculatePelvisFloorCorrection(float PelvisBottomZ, float FloorZ, float MaxSinkCm, float MaxLiftCm)
+{
+	const float SinkDepth = FloorZ - PelvisBottomZ;
+	if (SinkDepth > MaxSinkCm)
+	{
+		return FMath::Min(SinkDepth, FMath::Max(MaxLiftCm, 0.0f));
+	}
+	return 0.0f;
+}
+
 bool FDeathRagdollRules::HasBodySettled(
 	const FVector& LinearVelocity,
 	const FVector& AngularVelocity,
 	float BodyAge,
 	const FDeathRagdollConfig& Config)
 {
-	// Forced timeout fallback
-	if (BodyAge >= Config.MaxSettleTimeoutSeconds)
+	const float LinSpeed = LinearVelocity.Size();
+	const float AngSpeed = AngularVelocity.Size();
+
+	// Forced timeout fallback - never for a body still falling (it would freeze in mid-air)
+	if (IsRagdollTimeoutFreeze(BodyAge, LinSpeed, Config))
 	{
 		return true;
 	}
 
-	const float LinSpeed = LinearVelocity.Size();
-	const float AngSpeed = AngularVelocity.Size();
-
 	return (LinSpeed < Config.LinearSettleThresholdCmS) &&
 	       (AngSpeed < Config.AngularSettleThresholdRadS);
+}
+
+bool FDeathRagdollRules::IsRagdollTimeoutFreeze(float BodyAge, float RootSpeedCmS, const FDeathRagdollConfig& Config)
+{
+	return BodyAge >= Config.MaxSettleTimeoutSeconds && RootSpeedCmS <= Config.TimeoutFreezeMaxSpeedCmS;
 }
 
 bool FDeathRagdollRules::CanSimulateRagdoll(int32 CurrentActiveRagdolls, const FDeathRagdollConfig& Config)
