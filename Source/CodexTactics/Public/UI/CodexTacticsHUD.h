@@ -29,6 +29,8 @@ class UHordeArrowsWidget;
 class UTutorialOverlayWidget;
 class ALootCrateActor;
 class UFont;
+class SWidget;
+class UGameViewportClient;
 
 /**
  * Baseline canvas HUD until the UMG interface is ported: objective banner «OBJECTIVE: …» (top left, Godot ObjectivePanel),
@@ -47,6 +49,7 @@ public:
 	ACodexTacticsHUD();
 
 	virtual void BeginPlay() override;
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void DrawHUD() override;
 
 	/** Action menu widget class (a Widget Blueprint subclass can restyle it). */
@@ -217,6 +220,9 @@ public:
 	static FString StripUnsupportedGlyphs(const FString& Text);
 
 private:
+	TSharedPtr<SWidget> LoadingOverlay;
+	TWeakObjectPtr<UGameViewportClient> LoadingOverlayViewport;
+
 	UFUNCTION()
 	void HandleActionMenuChanged(bool bOpen, const FActionMenuSpec& Menu);
 
