@@ -5,7 +5,7 @@
 // critics' verdicts (Jev - typed judgments; the Claude API - sees both images, USD-capped; the server holds the keys). The
 // designer accepts (-> Content/Data/LevelGen/accepted, what the UE builder reads) or rejects.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, Play, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus } from 'lucide-react';
 import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
 import { PropsPanel } from './PropsPanel';
@@ -22,6 +22,8 @@ import type { PlaceObjectivesResult } from '../levelgen/objectives';
 import { addGoal, checkObjectives, defaultGoalCount, groundNav, moveObjective, placeObjectives, removeGoal, START_ID } from '../levelgen/objectives';
 import { V2 } from '../levelgen/blockTemplates';
 import { FULL } from '../levelgen/fullReroll';
+import type { SquadTrack } from '../levelgen/playback';
+import { advanceClock, clockLabel, PLAYBACK, positionsAt, summarizeTrack, trailAt } from '../levelgen/playback';
 import { addLock, DEFAULT_MAX_RETRIES, regenerateRegion, regenStateOf, removeLock, selectRegion } from '../levelgen/regionRegen';
 import type { FormationConfigFile } from '../movement/config';
 import { configValues } from '../movement/config';
@@ -35,7 +37,7 @@ import type { GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
 
 /** `key` = the slot's history key (the first layout name: an expansion renames the map to <name>_x<N>). */
-interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string }
+interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string; /** The squad playback of the last simulator walk (task 072; never sent to the server). */ track?: SquadTrack }
 type ProfileRow = { id: string; title: string; size_m: [number, number] };
 
 const pct = (v?: number) => `${Math.round((v ?? 0) * 100)} %`;
@@ -130,8 +132,9 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('Отряд идёт по маршруту (симулятор)...');
     setTimeout(() => {
       try {
-        const ev = evaluateLayout({ layout: cur.layout, profile, config });
-        setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, ev, simmed: true } : c)));
+        const { track, ...ev } = evaluateLayout({ layout: cur.layout, profile, config, track: true });
+        setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, ev, simmed: true, track } : c)));
+        setPlayT(0); setPlaying(!!track);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
     }, 20);
@@ -182,7 +185,7 @@ export const LevelGenDepartment: React.FC = () => {
   const showLayout = (layout: GenLayout) => {
     if (!profile || !config) return;
     const ev = evaluateLayout({ layout, profile, config, noSim: true });
-    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, key: c.key ?? c.layout.name, layout, ev, simmed: false, verdicts: [] } : c)));
+    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, key: c.key ?? c.layout.name, layout, ev, simmed: false, verdicts: [], track: undefined } : c)));
   };
   const pushStep = (layout: GenLayout, label: string) => {
     if (!cur) return;
@@ -248,7 +251,32 @@ export const LevelGenDepartment: React.FC = () => {
   };
   const zoomBy = (f: number) => setView((v) => zoomAt(v, [planBox.current ? planBox.current.clientWidth / 2 : 0, 260], f));
   const planBox = useRef<HTMLDivElement>(null);
-  const squadNow = null as { members: Vec2[]; trail: Vec2[] } | null; // playback: item 5
+  // the squad playback (task 072): a clock driven by requestAnimationFrame at x1..x8, a scrubber; dots + the leader's trail
+  const [playT, setPlayT] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const playRef = useRef(0);
+  playRef.current = playT;
+  const [speed, setSpeed] = useState<number>(PLAYBACK.speeds[1] ?? 2);
+  const track = cur?.track ?? null;
+  useEffect(() => {
+    if (!playing || !track) return;
+    let raf = 0, last = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - last) / 1000; last = now;
+      const r = advanceClock(playRef.current, dt, speed, track.duration_s);
+      playRef.current = r.t; setPlayT(r.t);
+      if (r.ended) { setPlaying(false); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, speed, track]);
+  const squadNow = useMemo(() => {
+    if (!track) return null;
+    const p = positionsAt(track, playT);
+    return p ? { members: p.members, trail: trailAt(track, playT), leg: p.leg, formation: p.formation } : null;
+  }, [track, playT]);
+  const trackSummary = useMemo(() => (track ? summarizeTrack(track) : null), [track]);
   const expandNow = () => {
     if (!cur || !profileOk || !profile) return;
     setBusy(`Расширяю карту x${expandFactor}...`); setError('');
@@ -564,6 +592,20 @@ export const LevelGenDepartment: React.FC = () => {
                   <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives />
                 </RegionOverlay>
                 </div>
+                {cur && (track ? (
+                  <div className="mt-1.5 flex flex-col gap-1 bg-slate-950/60 border border-pink-900/60 rounded-lg p-2 text-[11px]" data-player>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => { if (playT >= track.duration_s) setPlayT(0); setPlaying((v) => !v); }} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-pink-600 hover:bg-pink-500 text-white font-semibold" data-play>{playing ? <Pause size={12} /> : <Play size={12} />}{playing ? 'Пауза' : 'Играть'}</button>
+                      <div className="inline-flex rounded bg-slate-950 border border-slate-700 p-0.5">
+                        {PLAYBACK.speeds.map((x) => <button key={x} type="button" onClick={() => setSpeed(x)} className={`px-1.5 rounded ${speed === x ? 'bg-pink-700 text-white' : 'text-slate-300 hover:text-white'}`}>x{x}</button>)}
+                      </div>
+                      <input type="range" min={0} max={track.duration_s} step={0.1} value={playT} onChange={(e) => { setPlayT(Number(e.target.value)); }} className="flex-1 min-w-[120px] accent-pink-500" data-scrub />
+                      <span className="font-mono text-slate-200">{clockLabel(playT)} / {clockLabel(track.duration_s)}</span>
+                      {squadNow && <span className="text-slate-400">участок {squadNow.leg + 1}/{track.legs.length}, строй {squadNow.formation}</span>}
+                    </div>
+                    {trackSummary && <p className="text-slate-400">Прогон: {trackSummary.members} бойца, {trackSummary.duration_s} с, лидер прошёл {trackSummary.leader_m} м по {trackSummary.legs} наземным участкам (крыши / лестницы симулятор пропускает — точки перескакивают); строи: {Object.entries(trackSummary.formations).map(([k, v]) => `${k} ${pct(v)}`).join(', ')}; углы {cur.ev.mechanics.cornerWatches}, раскладок у стены {cur.ev.mechanics.wallLayouts}.</p>}
+                  </div>
+                ) : cur.simmed ? <p className="mt-1 text-[11px] text-slate-500">Симулятор не прошёл маршрут (основной маршрут не проходим) — воспроизводить нечего.</p> : <p className="mt-1 text-[11px] text-slate-500">«Прогнать отряд (симулятор)» — после прогона здесь появится проигрыватель: отряд идёт по маршруту на плане.</p>)}
               </div>
               <div>
                 <p className="text-[11px] text-slate-500 mb-1">Эталон (карта дизайнера, развёрнутая сверху; синее — его маршрут, жёлтое — лестницы, зелёный круг — старт)</p>

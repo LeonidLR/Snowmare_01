@@ -25,6 +25,8 @@ import { wallSegments } from '../movement/layout.ts';
 import { AGENT_RADIUS, NavGrid } from '../movement/nav.ts';
 import type { TerrainClass } from '../movement/rules.ts';
 import { simulate } from '../movement/sim.ts';
+import type { SquadTrack } from './playback.ts';
+import { createTrackRecorder } from './playback.ts';
 import type { Profile } from './profile.ts';
 import { targetScore } from './profile.ts';
 import type { GenLayout, GenRoute, RouteIntent } from './schema.ts';
@@ -71,6 +73,8 @@ export interface Evaluation {
   ambush: { points: number; concealed: number; per100m: number; coordinatedSamples: number; coordinatedShare: number };
   counts: Record<string, number>;
   similarity: { score: number; metrics: { key: string; value: number; target?: [number, number]; score: number }[] };
+  /** The sampled squad trajectory (only with EvaluateOptions.track and a simulator walk). */
+  track?: SquadTrack;
   tactical: TacticalReport;
   score: number;
   summary: string[];
@@ -85,6 +89,8 @@ export interface EvaluateOptions {
   simSeed?: number;
   /** Skip the simulator walk (fast structural checks only). */
   noSim?: boolean;
+  /** Record the squad's trajectory of the simulator walk (playback.ts; the page's playback, task 072): true = sample_hz, or a rate. */
+  track?: boolean | number;
 }
 
 const SHORT_LOS_M = 40;
@@ -145,16 +151,20 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   const mlevels = mlayers.map((x) => (layers.includes(x) ? layerLevel(l, x) : 0));
   mech.levels = [...new Set(mlevels)].sort((a, b) => a - b);
   for (const lv of mlevels) mech.levelShare[String(lv)] = round((mech.levelShare[String(lv)] ?? 0) + 1 / mlevels.length, 3);
+  let trackOut: SquadTrack | undefined;
   if (!o.noSim && main.completable) {
     const ground = layerLayout('ground');
     const legs = ground.routes.filter((r) => r.id === mandatory.id || r.id.startsWith(`${mandatory.id}_L`));
     const terrainT = new Map<string, number>(), formT = new Map<string, number>();
     let total = 0, prevCorner = new Set<string>(), prevWall = false;
+    const rec = o.track ? createTrackRecorder(typeof o.track === 'number' ? o.track : undefined) : null;
     for (const leg of legs) {
       const route: LayoutRoute = { ...leg, pace: 'walk' };
-      mech.simSeconds += simulate({
+      rec?.beginLeg(leg.id);
+      const legSeconds = simulate({
         layout: ground, route, memberCount: o.members ?? 4, config: o.config, seed: o.simSeed ?? 1, nav: layerNav('ground'), haltSeconds: 1,
         onFrame: (f) => {
+          rec?.frame(f);
           total += 1;
           terrainT.set(f.terrain, (terrainT.get(f.terrain) ?? 0) + 1);
           formT.set(f.formation, (formT.get(f.formation) ?? 0) + 1);
@@ -166,7 +176,10 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
           prevWall = wall;
         },
       });
+      mech.simSeconds += legSeconds;
+      rec?.endLeg(legSeconds);
     }
+    if (rec) trackOut = rec.track();
     for (const [k, v] of terrainT) mech.terrain[k as TerrainClass] = round(v / Math.max(1, total), 3);
     for (const [k, v] of formT) mech.formation[k as Formation] = round(v / Math.max(1, total), 3);
   }
@@ -306,7 +319,7 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   const tactical = evaluateTactical(l, samples, coverSegs, tops);
   const score = round(0.4 * (main.completable ? 1 : 0) + 0.2 * similarity.score + 0.2 * Math.min(1, terrainClasses / 5) + 0.2 * Math.min(1, ambush.per100m / 3), 3);
 
-  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, roofViews, killZones, ambush, counts, similarity, tactical, score, summary: [] };
+  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, roofViews, killZones, ambush, counts, similarity, tactical, score, summary: [], ...(trackOut ? { track: trackOut } : {}) };
   ev.summary = renderSummary(ev);
   return ev;
 }

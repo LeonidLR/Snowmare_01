@@ -1,5 +1,6 @@
 // Training Ground / level generator v2 - designer UX round (task 072): the plan's ZOOM + PAN math (planView.ts) and the MANUAL
-// START + GOALS edits (objectives.ts moveObjective / addGoal / removeGoal + the per-point errors and warnings). `npm test`.
+// START + GOALS edits (objectives.ts), the FULL region re-roll (fullReroll.ts + regionRegen.ts 'full') and the squad PLAYBACK
+// (playback.ts + evaluate.ts track). `npm test`.
 // Inputs: the Depot reference profile + generateLayout(seed 1) (pure, nothing written).
 import assert from 'node:assert/strict';
 import crypto from 'node:crypto';
@@ -10,7 +11,9 @@ import { fileURLToPath } from 'node:url';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
 import { frameOf, lotsOf, rectCentre, rectFromUE, streetRectsM, V2 } from './blockTemplates.ts';
-import { checkLayoutRoutes } from './evaluate.ts';
+import { checkLayoutRoutes, evaluateLayout } from './evaluate.ts';
+import { configValues } from '../movement/config.ts';
+import { advanceClock, clockLabel, createTrackRecorder, PLAYBACK, positionsAt, summarizeTrack, trailAt } from './playback.ts';
 import { FULL, streetSides, subdivideBlock, touchingSides, unionRect } from './fullReroll.ts';
 import { runObstacleHeightGate } from './props/obstacleHeightGate.ts';
 import { addLock, layoutGroups, polygonsOverlap, regenerateRegion, selectRegion, shapePolygon } from './regionRegen.ts';
@@ -294,4 +297,75 @@ test('ux full re-roll: a second full re-roll re-plans the parcels of a block tog
   const reloaded = JSON.parse(JSON.stringify(second.layout)) as GenLayout;
   assert.deepEqual(lotsOf(reloaded, profile), second.layout.regen!.blocks);
   assert.ok(rectCentre(second.layout.regen!.blocks![0].rect).every(Number.isFinite));
+});
+
+// ---- 5. squad playback ------------------------------------------------------------------------------------------------------
+
+test('ux playback: the recorder samples at hz per leg on one clock; interpolation never crosses a leg; trail, clock, summary', () => {
+  const rec = createTrackRecorder(5);
+  const step = 1 / 30;
+  // leg A: 2 s walking east 150 cm/s with 2 men; leg B: 1 s somewhere else
+  rec.beginLeg('R_main');
+  let n = 0;
+  for (let t = 0; t < 2 - 1e-9; t += step, n++) rec.frame({ t, formation: 'column', members: [{ pos: [0, t * 150] }, { pos: [-200, t * 150] }] });
+  rec.endLeg(n * step);
+  rec.beginLeg('R_main_L2');
+  let m = 0;
+  for (let t = 0; t < 1 - 1e-9; t += step, m++) rec.frame({ t, formation: 'wedge', members: [{ pos: [5000, 5000 + t * 100] }, { pos: [4800, 5000 + t * 100] }] });
+  rec.endLeg(m * step);
+  const tr = rec.track();
+  assert.equal(tr.schema, 'codex.levelgen_track/1');
+  assert.equal(tr.members, 2);
+  assert.equal(tr.legs.length, 2);
+  assert.ok(Math.abs(tr.duration_s - 3) < 0.05, `duration ${tr.duration_s}`);
+  assert.ok(Math.abs(tr.legs[1].start_s - tr.legs[0].end_s) < 1e-9, 'legs back to back');
+  // ~hz samples per second (+ each leg's last frame)
+  assert.ok(tr.frames.length >= 15 && tr.frames.length <= 17, `frames ${tr.frames.length}`);
+  for (let i = 1; i < tr.frames.length; i++) assert.ok(tr.frames[i].t > tr.frames[i - 1].t, 'time increases');
+  // interpolation inside a leg
+  const mid = positionsAt(tr, 1.1)!;
+  assert.equal(mid.leg, 0);
+  assert.ok(Math.abs(mid.members[0][1] - 165) < 1.5, `leader at 1.1 s: ${mid.members[0][1]}`);
+  // never across the jump between legs: right before leg B the squad is still at the end of leg A
+  const before = positionsAt(tr, tr.legs[1].start_s - 0.001)!;
+  assert.equal(before.leg, 0);
+  assert.ok(before.members[0][0] < 100, 'no sliding across the jump');
+  assert.equal(positionsAt(tr, tr.legs[1].start_s + 0.05)!.leg, 1);
+  // clamped
+  assert.deepEqual(positionsAt(tr, -5)!.members, tr.frames[0].pos);
+  assert.deepEqual(positionsAt(tr, 99)!.members, tr.frames.at(-1)!.pos);
+  // the trail: the leader's last seconds within the leg, ending at the leader
+  const trail = trailAt(tr, 1.9, 1);
+  assert.ok(trail.length >= 5);
+  assert.deepEqual(trail.at(-1), positionsAt(tr, 1.9)!.members[0]);
+  assert.ok(trail.every((p) => p[0] === 0), 'the trail stays in leg A');
+  // the clock: x8 runs 8 times as fast, stops at the end
+  assert.deepEqual(advanceClock(0, 0.25, 8, tr.duration_s), { t: 2, ended: false });
+  assert.equal(advanceClock(2.5, 1, 4, tr.duration_s).ended, true);
+  assert.equal(advanceClock(2.5, 1, 4, tr.duration_s).t, tr.duration_s);
+  assert.deepEqual(PLAYBACK.speeds, [1, 2, 4, 8]);
+  // the summary
+  const sum = summarizeTrack(tr);
+  assert.equal(sum.legs, 2);
+  assert.ok(Math.abs(sum.leader_m - 3.9) < 0.3, `leader ${sum.leader_m} m (3 m + 0.9 m, the jump not counted)`);
+  assert.ok(sum.formations.column > sum.formations.wedge);
+  assert.equal(clockLabel(75.4), '1:15');
+});
+
+test('ux playback: «Прогнать отряд» returns the sampled trajectories of the simulator walk (Depot), deterministic', () => {
+  const config = configValues(JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/FormationLab/formation_config.json'), 'utf8')));
+  const ev = evaluateLayout({ layout: base, profile, config, track: true });
+  assert.ok(ev.route.completable);
+  const tr = ev.track!;
+  assert.ok(tr, 'a track');
+  assert.equal(tr.members, 4);
+  assert.ok(Math.abs(tr.duration_s - ev.mechanics.simSeconds) < 0.05, `duration ${tr.duration_s} = sim ${ev.mechanics.simSeconds}`);
+  assert.ok(tr.frames.length >= tr.duration_s * PLAYBACK.sample_hz * 0.9, `~${PLAYBACK.sample_hz} Hz: ${tr.frames.length} frames over ${tr.duration_s} s`);
+  const b = base.bounds;
+  for (const f of tr.frames) for (const p of f.pos) assert.ok(p[0] >= b.min[0] - 100 && p[0] <= b.max[0] + 100 && p[1] >= b.min[1] - 100 && p[1] <= b.max[1] + 100, 'on the map');
+  // the leader walks the mandatory route: it starts at the spawn and gets near the end of the last ground leg
+  assert.ok(Math.hypot(tr.frames[0].pos[0][0] - base.spawn.pos[0], tr.frames[0].pos[0][1] - base.spawn.pos[1]) < 300, 'starts at the spawn');
+  const again = evaluateLayout({ layout: base, profile, config, track: true }).track!;
+  assert.equal(hash(again), hash(tr), 'deterministic');
+  assert.equal(evaluateLayout({ layout: base, profile, config }).track, undefined, 'no track unless asked (the accepted meta stays small)');
 });
