@@ -130,6 +130,36 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         mantle_covers = [s for s in specs if s["folder"] == "Covers" and "CodexMantleEdge" in s.get("tags", [])]
         self.assertGreater(len(mantle_covers), 0)
 
+    def test_player_start_follows_objectives_start(self):
+        """Designer bug 2026-11-16: the start dragged in Training Ground (objectives.start, source manual) drives the PlayerStart;
+        a layout without objectives keeps the old spawn. In-memory copies only: no accepted file is written."""
+        depot = self._load("gen_ref_01_02_depot_1")
+        self.assertNotIn("objectives", depot)
+        gz = float(depot.get("ground_z", 0.0))
+
+        def player_start(layout):
+            starts = [s for s in builder.plan(layout) if s["kind"] == "player_start"]
+            self.assertEqual(len(starts), 1)
+            return starts[0]
+
+        old = player_start(depot)
+        self.assertEqual(old["location"][:2], depot["spawn"]["pos"])
+        self.assertEqual(old["yaw"], float(depot["spawn"]["yaw"]))
+        self.assertAlmostEqual(old["location"][2], gz + builder.START_Z)
+        moved = json.loads(json.dumps(depot))
+        moved["objectives"] = {"version": 1, "seed": 0, "order": "free", "goals": [],
+                               "start": {"pos": [2477, -6184], "yaw": 180, "layer": "ground", "source": "manual"}}
+        ps = player_start(moved)
+        self.assertEqual(ps["location"][:2], [2477, -6184])
+        self.assertEqual(ps["yaw"], 180.0)
+        self.assertAlmostEqual(ps["location"][2], gz + builder.START_Z)
+        self.assertEqual(builder.start_of(moved), (2477, -6184, 180.0, 0))
+        # a start without a yaw keeps the spawn's facing; an empty objectives block falls back to the spawn
+        moved["objectives"]["start"].pop("yaw")
+        self.assertEqual(builder.start_of(moved)[2], float(depot["spawn"]["yaw"]))
+        moved["objectives"] = None
+        self.assertEqual(player_start(moved)["location"], old["location"])
+
 
 if __name__ == "__main__":
     unittest.main()

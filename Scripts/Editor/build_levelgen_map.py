@@ -23,7 +23,8 @@ with the world grid material, TargetPoints, ALadderActor, PlayerStart, NavMeshBo
     from the geometry (+X from `pos` towards the layout's `foot`: the older layouts carry a mirrored yaw), its rung plane stands 10 cm
     off the OUTER face of the wall behind it (the builder's walls are centred on the generator's lines), and a wall on the upper level
     that the top exit crosses (the cut's retaining wall) gets a 2 m opening; tag "ladder=<id>";
-  - covers: cubes (silos: cylinders) at pos / yaw / size; PlayerStart at the spawn; the end as a TargetPoint "LevelGenEnd";
+  - covers: cubes (silos: cylinders) at pos / yaw / size; PlayerStart at the START (objectives.start when the layout has
+    one - the designer's dragged / placed start, 2026-11-16 - else the spawn; start_of); the end as a TargetPoint "LevelGenEnd";
   - route TargetPoints per route point (label "<route>_<n>", tags LevelGen + LevelGenRoute + the route id + "layer=<layer>"),
     spawn / patrol / ambush TargetPoints (ambush points tagged CodexAmbushPoint for UCombatPressureSubsystem), zone labels;
   - NavMeshBoundsVolume over the bounds from a level below the cut to 3 m above the highest walkable level (+3 -> 12 m; a chimney's
@@ -135,6 +136,21 @@ TARGET_MAP = os.environ.get("CODEX_LEVELGEN_TARGET", "")
 
 def z_of(level):
     return level * LEVEL_HEIGHT
+
+
+def start_of(layout):
+    """Where the squad spawns (the PlayerStart; ACodexTacticsGameMode::SpawnSquad spawns the roster round it, facing its yaw):
+    the layout's objectives.start (the start the designer placed / dragged in Training Ground, or the auto placement) when it has
+    one, else the layout's spawn (older layouts). -> (x, y, yaw, level). Designer bug 2026-11-16: the dragged start "did not stick"
+    - it was saved in objectives.start, but the builder read only layout["spawn"]."""
+    start = (layout.get("objectives") or {}).get("start") or {}
+    pos = start.get("pos")
+    if isinstance(pos, (list, tuple)) and len(pos) == 2:
+        yaw = start.get("yaw", layout["spawn"].get("yaw", 0.0))
+        return pos[0], pos[1], float(yaw), layer_level(layout, start.get("layer") or "ground")
+    # the JSON numbers as they are (the legacy plans stay byte-identical)
+    sx, sy = layout["spawn"]["pos"]
+    return sx, sy, float(layout["spawn"]["yaw"]), 0
 
 
 def cube(label, folder, center, size, yaw=0.0, tags=None, pitch=0.0):
@@ -721,8 +737,8 @@ def plan(layout):
         specs.append({"kind": kind, "label": c["id"], "folder": "Covers", "location": [c["pos"][0], c["pos"][1], gz + size[2] / 2.0], "yaw": float(c.get("yaw", 0.0)), "pitch": 0.0,
                       "scale": [size[0] / 100.0, size[1] / 100.0, size[2] / 100.0], "tags": c_tags})
     # ---- start, end, routes, spawns, ambush points, patrols, zones
-    sx, sy = layout["spawn"]["pos"]
-    specs.append({"kind": "player_start", "label": "LevelGen_PlayerStart", "folder": "Base", "location": [sx, sy, gz + START_Z], "yaw": float(layout["spawn"]["yaw"])})
+    sx, sy, syaw, slevel = start_of(layout)
+    specs.append({"kind": "player_start", "label": "LevelGen_PlayerStart", "folder": "Base", "location": [sx, sy, gz + z_of(slevel) + START_Z], "yaw": syaw})
     specs.append({"kind": "target_point", "label": "LevelGenEnd", "folder": "Base", "location": [layout["end"][0], layout["end"][1], gz + 50.0], "yaw": 0.0, "tags": ["LevelGenEnd"]})
     for r in layout["routes"]:
         layers = r.get("layers") or ["ground"] * len(r["points"])
