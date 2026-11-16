@@ -395,6 +395,16 @@ namespace WeaponAnimLayerRules
 		return Gaits;
 	}
 
+	bool AlternateWalkUsesAbpLegs(int32 SelfSquadIndex, const TArray<int32>& CarrierSquadIndices)
+	{
+		int32 Rank = 0;
+		for (const int32 Index : CarrierSquadIndices)
+		{
+			Rank += Index < SelfSquadIndex ? 1 : 0;
+		}
+		return Rank % 2 == 0;
+	}
+
 	float LegsAbpWeight(const FWeaponLegsAbpGaits& Gaits, const FWeaponLegsAbpShares& Shares)
 	{
 		if (!Gaits.Any())
