@@ -442,6 +442,23 @@ public:
 	/** Smokes (rendered stills): the corner peek hover set by the smoke stays up (PlayerTick does not follow the real cursor for it). */
 	bool bFreezeCornerPeekHoverForTesting = false;
 
+	/**
+	 * The mantle hover (batch 2 item 4, docs/port/MANTLING_BATCH2_REPORT.md): the cursor over an obstacle the selected operative can climb by
+	 * a click here (its top; its side face - the double click) shows the corner-peek ghost's hologram at the climb's landing in the pose he ends
+	 * in (AOperativeCharacter::PlanMantleClick decides, the same rules as the click; ACoverGhostActor::ShowMantleFor). Only where the click
+	 * itself would order the climb (Solo, one operative, real time, no modifier). Null Hit = clear. True while shown.
+	 */
+	bool UpdateMantleHover(AOperativeCharacter* Operative, const FHitResult* Hit);
+	/** The mantle hover ghost is up (smokes). */
+	bool IsMantleHoverShown() const;
+	/** The mantle hover ghost (smokes); null before the first hover. */
+	const class ACoverGhostActor* GetMantleHoverGhost() const { return MantleGhost; }
+	/** Smokes: the mantle hover set by the smoke stays up (PlayerTick does not follow the real cursor for it). */
+	bool bFreezeMantleHoverForTesting = false;
+	/** A click on Hit may order a climb now (Solo, one operative selected, real-time dispatch, no Alt / Shift / Ctrl, no relocation pick, the
+	 *  tutorial allows a move, not an object or a body) - the click and the hover share it. */
+	bool CanOrderMantleClick(const FHitResult& Hit) const;
+
 	/** Bug_04 A: a corner peek carried over to the next wall waits for the squad to reach it (smokes). */
 	bool IsSquadPeekCarryPending() const { return PeekCarry.bActive; }
 	/** Carried corner peeks ordered since the level began (smokes). */
@@ -915,6 +932,18 @@ private:
 	/** Rev 5c manual corner peek preview: its own ghost, the cursor, the last hover probe (cached while the cursor rests). */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> CornerPeekGhost;
+	/** Batch 2: the mantle hover ghost (its own actor: the cover / corner ghosts keep theirs) and the last hovered spot (re-planned when the
+	 *  cursor moves or the hover ages). */
+	UPROPERTY(Transient)
+	TObjectPtr<class ACoverGhostActor> MantleGhost;
+	TWeakObjectPtr<AActor> MantleHoverActor;
+	FVector MantleHoverPoint = FVector(TNumericLimits<float>::Max());
+	double MantleHoverPlannedAt = -1.0;
+	bool bMantleHoverPlanned = false;
+	/** Batch 2 item 3: the last click on an obstacle's side face (a second one within the double-click time on the same obstacle climbs it). */
+	double MantleFaceClickTime = -1.0;
+	FVector2D MantleFaceClickPosition = FVector2D::ZeroVector;
+	TWeakObjectPtr<AActor> MantleFaceClickActor;
 	/** Stealth v2: hover ghost for valid non-corner walls when hovering in stealth (cached while cursor rests). */
 	UPROPERTY(Transient)
 	TObjectPtr<class ACoverGhostActor> StealthWallHoverGhost;

@@ -54,6 +54,16 @@ public:
 	/** The ghost shows a corner peek pose (ShowCornerPeekFor) rather than a cover entry. */
 	bool IsCornerPeekPose() const { return bShown && bCornerPeekPose; }
 
+	/**
+	 * The mantle preview (batch 2, docs/port/MANTLING_BATCH2_REPORT.md: hovering a climbable obstacle the selected operative can climb): the
+	 * same hologram at the climb's landing (feet), facing Yaw (the climb's direction), in the pose he ends in there - his crouch idle on a top,
+	 * his idle past a fence. Slot.WorldLocation = the landing.
+	 */
+	void ShowMantleFor(const AOperativeCharacter& Operative, const FVector& LandingFeet, float Yaw, bool bCrouched);
+
+	/** The ghost shows a mantle landing (ShowMantleFor). */
+	bool IsMantlePose() const { return bShown && bMantlePose; }
+
 	void Hide();
 
 	bool IsShown() const { return bShown; }
@@ -78,6 +88,8 @@ private:
 	/** ShowFor / ShowCornerPeekFor: the ghost at Slot facing Facing, in the cover idle or (bFireIdle) the corner fire stance. */
 	void ShowPose(const AOperativeCharacter& InOperative, const FCoverSlot& InSlot, ECoverFacing Facing, bool bFireIdle,
 		TOptional<bool> CrouchedOverride = TOptional<bool>());
+	/** The hologram's body: the operative's mesh with the silhouette MID playing Clip (WallYaw turns it), else the placeholder cylinder. */
+	void ApplyGhostBody(const AOperativeCharacter& InOperative, class USkeletalMesh* Asset, UAnimSequenceBase* Clip, float WallYaw, bool bCrouchedPlaceholder);
 
 	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|Cover")
 	TObjectPtr<USceneComponent> Root;
@@ -98,6 +110,7 @@ private:
 	FCoverSlot Slot;
 	bool bShown = false;
 	bool bCornerPeekPose = false;
+	bool bMantlePose = false;
 	bool bShownStealthMode = false;
 	bool bShownCrouched = false;
 	ECoverFacing ShownFacing = ECoverFacing::Right;

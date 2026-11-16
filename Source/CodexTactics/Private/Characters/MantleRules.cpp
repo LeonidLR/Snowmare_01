@@ -48,6 +48,7 @@ namespace MantleRulesInternal
 		{ TEXT("links.entering_cost_cm"), &FMantleConfig::LinkEnteringCostCm },
 		{ TEXT("links.down_below_cm"), &FMantleConfig::LinkDownBelowCm },
 		{ TEXT("order.max_distance_cm"), &FMantleConfig::OrderMaxDistanceCm },
+		{ TEXT("order.face_inset_cm"), &FMantleConfig::OrderFaceInsetCm },
 		{ TEXT("reserve.radius_cm"), &FMantleConfig::ReserveRadiusCm },
 		{ TEXT("align.sample_hz"), &FMantleConfig::AlignSampleHz },
 		{ TEXT("align.hand_edge_tolerance_cm"), &FMantleConfig::AlignHandEdgeToleranceCm },
@@ -61,6 +62,21 @@ namespace MantleRulesInternal
 		{ TEXT("align.exit_root_cm"), &FMantleConfig::AlignExitRootCm },
 		{ TEXT("align.grip_forward_cm"), &FMantleConfig::AlignGripForwardCm },
 		{ TEXT("align.grip_up_cm"), &FMantleConfig::AlignGripUpCm },
+		{ TEXT("align.exit_pose_cm"), &FMantleConfig::AlignExitPoseCm },
+		{ TEXT("align.guard_gap_cm"), &FMantleConfig::AlignGuardGapCm },
+		{ TEXT("align.min_body_gap_cm"), &FMantleConfig::AlignMinBodyGapCm },
+		{ TEXT("align.gap_above_margin_cm"), &FMantleConfig::AlignGapAboveMarginCm },
+		{ TEXT("align.settle_pelvis_cm"), &FMantleConfig::AlignSettlePelvisCm },
+		{ TEXT("align.handoff_limit_s"), &FMantleConfig::AlignHandoffLimitSeconds },
+		{ TEXT("descent.arrive_limit_s"), &FMantleConfig::DescentArriveLimitSeconds },
+		{ TEXT("descent.arrive_radius_cm"), &FMantleConfig::DescentArriveRadiusCm },
+		{ TEXT("descent.max_speed_cm_s"), &FMantleConfig::DescentMaxSpeedCmPerSecond },
+		{ TEXT("descent.land_out_cm"), &FMantleConfig::DescentLandOutCm },
+		{ TEXT("descent.min_drop_cm"), &FMantleConfig::DescentMinDropCm },
+		{ TEXT("descent.max_drop_cm"), &FMantleConfig::DescentMaxDropCm },
+		{ TEXT("descent.stand_up_max_s"), &FMantleConfig::DescentStandUpMaxSeconds },
+		{ TEXT("descent.walk_timeout_s"), &FMantleConfig::DescentWalkTimeoutSeconds },
+		{ TEXT("descent.prefer_margin_cm"), &FMantleConfig::DescentPreferMarginCm },
 	};
 
 	static FMantleConfig& MantleConfigInForce()
@@ -717,11 +733,30 @@ FMantleClipContact MantleRules::AnalyseClipTrack(const FMantleConfig& Config, co
 		Out.HandPoint = (*PlantHand)[Plant];
 		Out.RootAtContact = Track.Root[Plant];
 	}
-	// 2. The exit: after the plant, the root at its last spot and every bone still (the rest of the clip is an idle tail).
-	const FVector RootEnd = Track.Root.Last();
-	for (int32 Index = FMath::Max(1, Plant); Index < Num - 1; ++Index)
+	// 2. The exit (batch 2, MantlingProblem_04 "hangs ~0.5 s in a strange pose"): after the plant, the first sample from which every bone
+	// (root, pelvis, hands, feet) stays within align.exit_pose_cm of its final pose to the clip's end - what is left is a slow settle or an
+	// idle tail, which the blend-out absorbs (the earlier rule waited for every bone to be still: the tall ledges' 0.5-0.6 s settle stood in it).
+	const int32 From = FMath::Max(1, Plant);
+	int32 Exit = Num - 1;
+	for (int32 Index = Num - 1; Index >= From; --Index)
 	{
-		if (FVector::Dist(Track.Root[Index], RootEnd) > Config.AlignExitRootCm)
+		float Off = 0.f;
+		for (const TArray<FVector>* Bone : { &Track.Root, &Track.Pelvis, &Track.HandL, &Track.HandR, &Track.FootL, &Track.FootR })
+		{
+			Off = FMath::Max(Off, static_cast<float>(FVector::Dist((*Bone)[Index], Bone->Last())));
+		}
+		if (Off > Config.AlignExitPoseCm)
+		{
+			break;
+		}
+		Exit = Index;
+	}
+	Out.ExitSeconds = Track.TimeAt(Exit);
+	// The rule before batch 2 (Codex.Mantle.Batch2 0): the root at its last spot and every bone still.
+	Out.StillExitSeconds = Track.TimeAt(Num - 1);
+	for (int32 Index = From; Index < Num - 1; ++Index)
+	{
+		if (FVector::Dist(Track.Root[Index], Track.Root.Last()) > Config.AlignExitRootCm)
 		{
 			continue;
 		}
@@ -732,7 +767,7 @@ FMantleClipContact MantleRules::AnalyseClipTrack(const FMantleConfig& Config, co
 		}
 		if (Fastest <= Config.AlignStillSpeedCmPerSecond)
 		{
-			Out.ExitSeconds = Track.TimeAt(Index);
+			Out.StillExitSeconds = Track.TimeAt(Index);
 			break;
 		}
 	}
@@ -784,4 +819,50 @@ TArray<float> MantleRules::LinkOffsets(const FMantleConfig& Config, float FaceLe
 		Offsets.Add(-Usable * 0.5f + Step * Index);
 	}
 	return Offsets;
+}
+
+int32 MantleRules::ChooseDescent(const TArray<FMantleDescentOption>& Options)
+{
+	int32 Best = INDEX_NONE;
+	for (int32 Index = 0; Index < Options.Num(); ++Index)
+	{
+		const FMantleDescentOption& Option = Options[Index];
+		if (!Option.bValid)
+		{
+			continue;
+		}
+		if (Best == INDEX_NONE)
+		{
+			Best = Index;
+			continue;
+		}
+		const FMantleDescentOption& Held = Options[Best];
+		if (Option.bPathComplete != Held.bPathComplete)
+		{
+			Best = Option.bPathComplete ? Index : Best;
+			continue;
+		}
+		if (Option.WalkCm + Option.PathCm < Held.WalkCm + Held.PathCm)
+		{
+			Best = Index;
+		}
+	}
+	return Best;
+}
+
+FVector MantleRules::DescentExitOnFace(const FVector& A, const FVector& B, const FVector& Goal, float MarginCm)
+{
+	const FVector2D From(A);
+	const FVector2D Along = FVector2D(B) - From;
+	const float Length = static_cast<float>(Along.Size());
+	if (Length <= KINDA_SMALL_NUMBER)
+	{
+		return A;
+	}
+	const FVector2D Unit = Along / Length;
+	const float Margin = FMath::Max(0.f, MarginCm);
+	const float At = Length <= 2.f * Margin ? Length * 0.5f
+		: FMath::Clamp(static_cast<float>(FVector2D::DotProduct(FVector2D(Goal) - From, Unit)), Margin, Length - Margin);
+	const FVector2D Point = From + Unit * At;
+	return FVector(Point.X, Point.Y, A.Z);
 }

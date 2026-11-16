@@ -8,7 +8,11 @@
 //   pop     on a top, neither the lowest foot (beyond the clip's own authored step) nor the capsule rises more than
 //           align.pop_tolerance_cm over the final standing height ("thrown upward, then drops down sharply");
 //   freeze  from the climb's last motion to moving again he never stands still longer than align.freeze_limit_s ("freezes for about
-//           a second"); a bone slower than align.still_speed_cm_s is still.
+//           a second"); a bone slower than align.still_speed_cm_s is still;
+//   clip    (batch 2, MantlingProblem_03 / 04) the torso joints (pelvis, spine_03, head) below the top stay align.min_body_gap_cm outside the
+//           obstacle's footprint ("sinks into the obstacle");
+//   handoff (batch 2, MantlingProblem_04) the pelvis settles at its final height within align.handoff_limit_s of the climb's end ("hangs
+//           ~0.5 s in a strange pose").
 // The clip's own motion (GetMantleClipTrack) and the runtime trace are logged for the report. Enemies are parked far away.
 
 #include "CoreMinimal.h"
@@ -28,6 +32,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "Debug/MantleSmokeSites.h"
 #include "Interactables/MantleNavigation.h"
 #include "NavigationSystem.h"
 
@@ -36,8 +41,8 @@ namespace MantleAlignSmoke
 	constexpr float StepSeconds = 0.05f;
 	/** The click order's base point lies this far out from the face (MantleNavigation's MantleClickBaseCm). */
 	constexpr float ClickBaseCm = 80.f;
-	/** Sampled this long after the climb ended (the handoff to the stance / locomotion). */
-	constexpr float AfterSeconds = 1.f;
+	/** Sampled this long after the climb ended (the handoff to the stance / locomotion: a late stance change shows in it). */
+	constexpr float AfterSeconds = 2.5f;
 	/** Bone speeds for the freeze measure are taken over this window, s. */
 	constexpr float SpeedWindowSeconds = 0.1f;
 
@@ -69,17 +74,12 @@ namespace MantleAlignSmoke
 		FVector FootR = FVector::ZeroVector;
 		FVector Pelvis = FVector::ZeroVector;
 		FVector Head = FVector::ZeroVector;
+		/** The torso joints (pelvis, spine_03, head): their gap to the obstacle's footprint is the clipping measure. */
+		TArray<FVector> Torso;
 		bool bMantling = false;
 	};
 
-	struct FSite
-	{
-		TWeakObjectPtr<AActor> Actor;
-		FVector Feet = FVector::ZeroVector;
-		FVector Dir = FVector::ForwardVector;
-		FMantleSite Probe;
-		bool bFound = false;
-	};
+	using FSite = MantleSmokeSites::FSite;
 
 	struct FState
 	{
@@ -121,86 +121,9 @@ namespace MantleAlignSmoke
 		State.StageTime = 0.f;
 	}
 
-	float TopOf(const AActor& Actor)
-	{
-		FVector Origin;
-		FVector Extent;
-		Actor.GetActorBounds(false, Origin, Extent);
-		return static_cast<float>(Origin.Z + Extent.Z);
-	}
-
-	/** A face of an obstacle of Kind (+-6 cm of HeightCm) with free navmesh ground StandOffCm out where the probe says go; nearest to Near. */
 	FSite FindSite(UWorld* World, AOperativeCharacter* Leader, const TCHAR* Kind, float HeightCm, float StandOffCm, const FVector& Near, const TSet<const AActor*>& Used)
 	{
-		FSite Best;
-		float BestDist = TNumericLimits<float>::Max();
-		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
-		const float Radius = Leader->GetCapsuleComponent()->GetScaledCapsuleRadius();
-		const float HalfHeight = Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-		const FMantleConfig& Config = MantleRules::GetConfig();
-		FCollisionQueryParams Params(SCENE_QUERY_STAT(MantleAlignSmoke), false, Leader);
-		const FName KindName(Kind);
-		for (TActorIterator<AActor> It(World); It; ++It)
-		{
-			if (!It->Tags.Contains(KindName) || Used.Contains(*It))
-			{
-				continue;
-			}
-			const FBox Local = It->CalculateComponentsBoundingBoxInLocalSpace(false);
-			if (!Local.IsValid)
-			{
-				continue;
-			}
-			const FTransform Transform = It->GetActorTransform();
-			const float Bottom = static_cast<float>(Transform.TransformPosition(FVector(Local.GetCenter().X, Local.GetCenter().Y, Local.Min.Z)).Z);
-			if (FMath::Abs(TopOf(**It) - Bottom - HeightCm) > 6.f)
-			{
-				continue;
-			}
-			for (int32 Face = 0; Face < 4; ++Face)
-			{
-				const int32 Axis = Face % 2;
-				const float Sign = Face < 2 ? 1.f : -1.f;
-				FVector LocalFace = Local.GetCenter();
-				LocalFace[Axis] = Sign > 0.f ? Local.Max[Axis] : Local.Min[Axis];
-				FVector LocalNormal = FVector::ZeroVector;
-				LocalNormal[Axis] = Sign;
-				const int32 TangentAxis = 1 - Axis;
-				if ((Local.Max[TangentAxis] - Local.Min[TangentAxis]) * Transform.GetScale3D().GetAbs()[TangentAxis] < 2.f * Radius + 20.f)
-				{
-					continue; // an end face: no square climb there
-				}
-				const FVector Normal = Transform.TransformVectorNoScale(LocalNormal).GetSafeNormal2D();
-				FVector FaceWorld = Transform.TransformPosition(LocalFace);
-				FaceWorld.Z = Bottom;
-				const FVector Spot = FaceWorld + Normal * StandOffCm;
-				const float Dist = static_cast<float>(FVector::Dist2D(Spot, Near));
-				if (Dist >= BestDist)
-				{
-					continue;
-				}
-				FNavLocation OnNav;
-				if (!Nav || !Nav->ProjectPointToNavigation(Spot, OnNav, FVector(50.f, 50.f, 100.f)) || FMath::Abs(OnNav.Location.Z - Bottom) > 30.f
-					|| World->OverlapAnyTestByChannel(Spot + FVector(0.f, 0.f, HalfHeight + 6.f), FQuat::Identity, ECC_Pawn,
-						FCollisionShape::MakeCapsule(Radius, HalfHeight), Params))
-				{
-					continue;
-				}
-				FMantleSite Probe;
-				if (!MantleNavigation::ProbeSite(*World, Spot, -Normal, StandOffCm + 100.f, Radius, HalfHeight, Params, Config, Probe)
-					|| Probe.Obstacle.Get() != *It || !MantleRules::Decide(Config, Probe.Probe).IsGo())
-				{
-					continue;
-				}
-				BestDist = Dist;
-				Best.Actor = *It;
-				Best.Feet = Spot;
-				Best.Dir = -Normal;
-				Best.Probe = Probe;
-				Best.bFound = true;
-			}
-		}
-		return Best;
+		return MantleSmokeSites::FindSite(World, Leader, Kind, HeightCm, StandOffCm, Near, Used);
 	}
 
 	/** Every frame while sampling: his feet and bones (world). */
@@ -222,6 +145,7 @@ namespace MantleAlignSmoke
 		Each.FootR = Body->GetSocketLocation(TEXT("foot_r"));
 		Each.Pelvis = Body->GetSocketLocation(TEXT("pelvis"));
 		Each.Head = Body->GetSocketLocation(TEXT("head"));
+		Each.Torso = MantleSmokeSites::TorsoJoints(*Body);
 		Each.bMantling = Leader->IsMantling();
 		State->Samples.Add(Each);
 		return true;
@@ -243,12 +167,12 @@ namespace MantleAlignSmoke
 			return;
 		}
 		const int32 Every = FMath::Max(1, FMath::RoundToInt(0.1f / Track->SampleSeconds));
-		UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke] clip %s track (t root.x root.z | pelvis.x pelvis.z | handL.x handL.z | handR.x handR.z | footL.z footR.z):"),
+		UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke] clip %s track (t root.x root.y root.z | pelvis.x pelvis.z | handL.x handL.z | handR.x handR.z | footL.z footR.z):"),
 			*Leader.GetLastMantleClip());
 		for (int32 Index = 0; Index < Track->Num(); Index += Every)
 		{
-			UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke]   %.2f %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f"), Track->TimeAt(Index),
-				Track->Root[Index].X, Track->Root[Index].Z, Track->Pelvis[Index].X, Track->Pelvis[Index].Z, Track->HandL[Index].X, Track->HandL[Index].Z,
+			UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke]   %.2f %6.1f %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f"), Track->TimeAt(Index),
+				Track->Root[Index].X, Track->Root[Index].Y, Track->Root[Index].Z, Track->Pelvis[Index].X, Track->Pelvis[Index].Z, Track->HandL[Index].X, Track->HandL[Index].Z,
 				Track->HandR[Index].X, Track->HandR[Index].Z, Track->FootL[Index].Z, Track->FootR[Index].Z);
 		}
 		const FMantleConfig& Config = MantleRules::GetConfig();
@@ -274,14 +198,15 @@ namespace MantleAlignSmoke
 		}
 		// The runtime trace (every 6th frame): t, feet (forward of the face, z over the top), hands / lowest foot / pelvis the same way.
 		auto Forward = [&Site](const FVector& Point) { return static_cast<float>(FVector::DotProduct(Point - Site.FacePoint, Site.Dir)); };
-		UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke] %s trace (t m | feet fwd z | handL fwd z | handR fwd z | lowfoot z | pelvis z), z over the top %.0f:"),
+		UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke] %s trace (t m | feet fwd z | handL fwd z | handR fwd z | lowfoot z | pelvis fwd z | spine fwd | head fwd z), z over the top %.0f:"),
 			Case.Label, Site.TopZ);
 		for (int32 Index = 0; Index < Samples.Num(); Index += 6)
 		{
 			const FSample& S = Samples[Index];
-			UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke]   %.2f %d | %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f | %6.1f | %6.1f"), S.Time, S.bMantling ? 1 : 0,
-				Forward(S.Feet), S.Feet.Z - Site.TopZ, Forward(S.HandL), S.HandL.Z - Site.TopZ, Forward(S.HandR), S.HandR.Z - Site.TopZ,
-				FMath::Min(S.FootL.Z, S.FootR.Z) - Site.TopZ, S.Pelvis.Z - Site.TopZ);
+			const FVector Spine = S.Torso.Num() == 3 ? S.Torso[1] : S.Pelvis;
+			UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke]   %.2f %d | %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f | %6.1f | %6.1f %6.1f | %6.1f | %6.1f %6.1f"), S.Time,
+				S.bMantling ? 1 : 0, Forward(S.Feet), S.Feet.Z - Site.TopZ, Forward(S.HandL), S.HandL.Z - Site.TopZ, Forward(S.HandR), S.HandR.Z - Site.TopZ,
+				FMath::Min(S.FootL.Z, S.FootR.Z) - Site.TopZ, Forward(S.Pelvis), S.Pelvis.Z - Site.TopZ, Forward(Spine), Forward(S.Head), S.Head.Z - Site.TopZ);
 		}
 		// 1. Hands to the lip: in front of the face the distance to the lip line, over the top the height over it.
 		float BestGap = TNumericLimits<float>::Max();
@@ -404,6 +329,78 @@ namespace MantleAlignSmoke
 		Check(State, Longest <= Config.AlignFreezeLimitSeconds, FString::Printf(
 			TEXT("%s: no freeze at the handoff - longest still stretch %.2f s (ending %.2f s; the climb ended at %.2f s; limit %.2f)"), Case.Label, Longest,
 			LongestAt, ClipEnd, Config.AlignFreezeLimitSeconds));
+		// 4. No clipping (designer bug 2026-11-16, MantlingProblem_03 / 04): while a torso joint is below the top (align.gap_above_margin_cm), it
+		// stays at least align.min_body_gap_cm outside the obstacle's footprint.
+		if (const AActor* Obstacle = State.Site.Actor.Get())
+		{
+			float WorstGap = TNumericLimits<float>::Max();
+			float WorstAt = 0.f;
+			float WorstZ = 0.f;
+			for (const FSample& S : Samples)
+			{
+				if (!S.bMantling)
+				{
+					continue;
+				}
+				for (const FVector& Joint : S.Torso)
+				{
+					const float Gap = MantleSmokeSites::FootprintGap(*Obstacle, Joint, Config.AlignGapAboveMarginCm);
+					if (Gap < WorstGap)
+					{
+						WorstGap = Gap;
+						WorstAt = S.Time;
+						WorstZ = static_cast<float>(Joint.Z) - Site.TopZ;
+					}
+				}
+			}
+			Check(State, WorstGap >= Config.AlignMinBodyGapCm, FString::Printf(
+				TEXT("%s: no clipping into the obstacle - the torso's smallest gap to its footprint below the top %.1f cm (at %.2f s, %.0f cm under the top; minimum %.0f)"),
+				Case.Label, WorstGap >= TNumericLimits<float>::Max() ? 999.f : WorstGap, WorstAt, -WorstZ, Config.AlignMinBodyGapCm));
+		}
+		// 6. The held pose (MantlingProblem_04 "hangs ~0.5 s in a strange pose": the clip's own slow settle before the handoff): how long before
+		// the climb hands over the body (the torso joints: pelvis, spine, head - what the top-down camera reads as his pose) already stays within
+		// align.exit_pose_cm of where it is at the handoff.
+		if (EndIndex > 0)
+		{
+			const FSample& Last = Samples[EndIndex - 1];
+			float QuietFrom = Last.Time;
+			for (int32 Index = EndIndex - 1; Index >= 0; --Index)
+			{
+				const FSample& S = Samples[Index];
+				float Off = 0.f;
+				for (int32 Joint = 0; Joint < FMath::Min(S.Torso.Num(), Last.Torso.Num()); ++Joint)
+				{
+					Off = FMath::Max(Off, static_cast<float>(FVector::Dist(S.Torso[Joint], Last.Torso[Joint])));
+				}
+				if (Off > Config.AlignExitPoseCm)
+				{
+					break;
+				}
+				QuietFrom = S.Time;
+			}
+			const float Quiet = Last.Time - QuietFrom;
+			Check(State, Quiet <= Config.AlignFreezeLimitSeconds, FString::Printf(
+				TEXT("%s: no held end pose before the handoff - the torso is already within %.0f cm of its handoff pose %.2f s before the climb ends (from %.2f s; limit %.2f)"),
+				Case.Label, Config.AlignExitPoseCm, Quiet, QuietFrom, Config.AlignFreezeLimitSeconds));
+		}
+		// 5. The handoff (MantlingProblem_04: "hangs ~0.5 s in a strange pose" after the climb): from the climb's end until the pelvis has settled
+		// at its final height over the feet (the stance he goes on in) within align.settle_pelvis_cm.
+		{
+			const float Final = static_cast<float>(Samples.Last().Pelvis.Z - Samples.Last().Feet.Z);
+			float SettledAt = ClipEnd;
+			for (int32 Index = Samples.Num() - 1; Index >= EndIndex; --Index)
+			{
+				if (FMath::Abs(static_cast<float>(Samples[Index].Pelvis.Z - Samples[Index].Feet.Z) - Final) > Config.AlignSettlePelvisCm)
+				{
+					SettledAt = Index + 1 < Samples.Num() ? Samples[Index + 1].Time : Samples[Index].Time;
+					break;
+				}
+			}
+			const float Handoff = FMath::Max(0.f, SettledAt - ClipEnd);
+			Check(State, Handoff <= Config.AlignHandoffLimitSeconds, FString::Printf(
+				TEXT("%s: the handoff to the stance - the pelvis settles %.2f s after the climb's end (at %.2f s, final %.0f cm over the feet, stance %s; limit %.2f)"),
+				Case.Label, Handoff, SettledAt, Final, *UEnum::GetValueAsString(Leader.GetStance()), Config.AlignHandoffLimitSeconds));
+		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke] %s: %s, face %.0f cm off at the start, climb %.2f s, landing error %.1f cm"), Case.Label,
 			*Leader.GetLastMantleClip(), State.Site.Probe.Probe.FaceDistanceCm, ClipEnd, Leader.GetLastMantleLandingError());
 	}

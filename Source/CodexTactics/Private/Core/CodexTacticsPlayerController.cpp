@@ -398,6 +398,11 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		// Rev 5e: a spotted tripwire (or the ground right next to it) under the cursor: the hand cursor - a click opens its menu.
 		FHitResult TrapHit;
 		const bool bCursorHit = !bCornerPeekCursor && !IsDialogueOpen() && !bOverMinimap && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit);
+		// Batch 2 item 4: over an obstacle the selected operative can climb, the mantle ghost at its landing (not while a corner peek is hovered).
+		if (!bFreezeMantleHoverForTesting)
+		{
+			UpdateMantleHover(PeekTurnBased || bCornerPeekCursor ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+		}
 		// Bug C 2026-10-26: the squad in the formation wall layout - its guide lines along / round its wall under the cursor.
 		if (!bFreezeCoverHoverForTesting)
 		{

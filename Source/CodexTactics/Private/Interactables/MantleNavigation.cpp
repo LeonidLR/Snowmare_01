@@ -28,6 +28,11 @@
 
 namespace MantleNavInternal
 {
+	static TAutoConsoleVariable<int32> CVarMantleBatch2(TEXT("Codex.Mantle.Batch2"), 1,
+		TEXT("Mantling batch 2 (designer report 2026-11-16, docs/port/MANTLING_BATCH2_REPORT.md): 1 (default) = the wall guard, the clip exit at its ")
+		TEXT("settled pose, the walk-off descent over the face nearest the goal, the double click on an obstacle face and the hover ghost; 0 = the ")
+		TEXT("behaviour before it (A/B)."));
+
 	static TAutoConsoleVariable<int32> CVarMantleLinks(TEXT("Codex.Mantle.Links"), 1,
 		TEXT("Mantling slice 1: 1 (default) = generated path links over the eligible obstacles (an order path over one mantles by itself, Solo's ")
 		TEXT("commanded operative only); 0 = none (the click on a ledge top still orders the climb)."));
@@ -348,6 +353,39 @@ bool MantleNavigation::PlanTopClick(UWorld& World, const FHitResult& TopHit, con
 	}
 	OutBaseFeet = FVector(FaceWorld.X, FaceWorld.Y, FromFeet.Z) + NormalWorld * MantleNavInternal::MantleClickBaseCm;
 	OutDir = -NormalWorld;
+	return true;
+}
+
+bool MantleNavigation::IsBatch2Enabled()
+{
+	return MantleNavInternal::CVarMantleBatch2.GetValueOnGameThread() != 0;
+}
+
+bool MantleNavigation::TopHitFromFace(UWorld& World, const FHitResult& FaceHit, FHitResult& OutTopHit)
+{
+	AActor* Obstacle = FaceHit.GetActor();
+	bool bMarked = false;
+	if (!Obstacle || FMath::Abs(FaceHit.ImpactNormal.Z) >= 0.3f || VaultNavigation::IsVaultable(Obstacle) || !MantleRules::IsEligibleTags(Obstacle->Tags, bMarked))
+	{
+		return false;
+	}
+	const FVector Out = FVector(FaceHit.ImpactNormal.X, FaceHit.ImpactNormal.Y, 0.f).GetSafeNormal();
+	if (Out.IsNearlyZero())
+	{
+		return false;
+	}
+	FVector Origin;
+	FVector Extent;
+	Obstacle->GetActorBounds(false, Origin, Extent);
+	const FVector Inside = FaceHit.ImpactPoint - Out * MantleRules::GetConfig().OrderFaceInsetCm;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MantleFaceToTop), false);
+	FHitResult Top;
+	if (!World.LineTraceSingleByChannel(Top, FVector(Inside.X, Inside.Y, Origin.Z + Extent.Z + 50.f), FVector(Inside.X, Inside.Y, FaceHit.ImpactPoint.Z),
+		ECC_Visibility, Params) || Top.GetActor() != Obstacle || Top.ImpactNormal.Z < 0.7f)
+	{
+		return false;
+	}
+	OutTopHit = Top;
 	return true;
 }
 

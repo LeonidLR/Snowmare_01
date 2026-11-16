@@ -312,6 +312,16 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 		bHasMoveOrder = true;
 		return EOperativeOrderResult::Accepted;
 	}
+	// Coming down off a mantle top (batch 2): a new order is walked to after the landing.
+	if (IsMantleDescending())
+	{
+		MantleDescentGoal = InDestination;
+		bMantleDescentResume = true;
+		bMantleDescentResumeOwn = !bFormationMove;
+		LastMoveDestination = InDestination;
+		bHasMoveOrder = true;
+		return EOperativeOrderResult::Accepted;
+	}
 	// Ladders (LADDERS.md 7.1): a new order mid-climb - he walks there after the climb (turning round at the next rung when the goal
 	// lies behind him, 2026-10-23); queued at a busy ladder: the
 	// new order replaces the wait.
@@ -382,8 +392,35 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 	EPathFollowingRequestResult::Type Result = AIController->MoveToLocation(
 		Destination, MovementConfig.AcceptanceRadius, /*bStopOnOverlap*/ false, /*bUsePathfinding*/ true,
 		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, ChooseMoveFilter());
-	// Mantling: on a low mantle top (a crate / wreck without a way off on the navmesh) he hops down towards the goal and walks on from there.
-	if (Result == EPathFollowingRequestResult::Failed && TryMantleStepDown(Destination))
+	// Mantling: on a mantle top whose path off it does not start (no navmesh on the top) or ends short of the goal (an island, a partial
+	// path: MantlingProblem_06 "stuck on top"), he comes down over the face nearest the goal and walks on from there (batch 2).
+	const AActor* MantleTop = MantleNavigation::IsBatch2Enabled() && !bFormationMove && Result != EPathFollowingRequestResult::AlreadyAtGoal
+		? GetMantleTopUnderFeet() : nullptr;
+	if (MantleTop)
+	{
+		const UPathFollowingComponent* TopFollowing = AIController->GetPathFollowingComponent();
+		const FNavPathSharedPtr TopPath = TopFollowing ? TopFollowing->GetPath() : nullptr;
+		const bool bStuckOnTop = Result == EPathFollowingRequestResult::Failed || !TopPath.IsValid() || TopPath->IsPartial();
+		if (bStuckOnTop && TryMantleStepDown(Destination))
+		{
+			return EOperativeOrderResult::Accepted;
+		}
+		// MantlingProblem_03 ("always jumps down on the side he climbed from"): the path's way down may be the climbed face's down link only;
+		// a walk-off over another face that is descent.prefer_margin_cm shorter to the goal is taken instead.
+		FVector Landing;
+		float DescentCm = 0.f;
+		if (!bStuckOnTop && TopPath.IsValid() && FindMantleDescent(*MantleTop, Destination, Landing, &DescentCm)
+			&& DescentCm + MantleRules::GetConfig().DescentPreferMarginCm < TopPath->GetLength())
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: the walk-off (%.0f cm) beats the path off the top (%.0f cm)"), *DisplayName.ToString(), DescentCm,
+				TopPath->GetLength());
+			if (StartMantleDescent(Landing, Destination, true, !bAutonomousOrder))
+			{
+				return EOperativeOrderResult::Accepted;
+			}
+		}
+	}
+	else if (Result == EPathFollowingRequestResult::Failed && TryMantleStepDown(Destination))
 	{
 		return EOperativeOrderResult::Accepted;
 	}

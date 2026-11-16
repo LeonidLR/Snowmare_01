@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Engine/HitResult.h"
 
 /**
  * Mantling (climbing onto / over obstacles), slice 1 (docs/design/MANTLING.md section 11, designer answers 11.6): the pure rules - which
@@ -176,6 +177,8 @@ struct FMantleConfig
 	float LinkDownBelowCm = 150.f;
 	/** Click order: the clicked top must lie within this distance of the operative to be taken as a climb order, cm. "order.max_distance_cm" */
 	float OrderMaxDistanceCm = 3000.f;
+	/** Click order on an obstacle's side face (batch 2): the top is looked for this far inside the clicked face, cm. "order.face_inset_cm" */
+	float OrderFaceInsetCm = 15.f;
 	/** A second climb onto a landing another man holds must be at least this far from it, cm. "reserve.radius_cm" */
 	float ReserveRadiusCm = 150.f;
 	/** A clip's authored motion is sampled at this rate for the contact alignment (GetMantleClipTrack), Hz. "align.sample_hz" */
@@ -196,12 +199,48 @@ struct FMantleConfig
 	float AlignPlantMinRiseFraction = 0.6f;
 	/** ... staying planted at least this long, s. "align.plant_hold_s" */
 	float AlignPlantHoldSeconds = 0.1f;
-	/** The clip's motion is over once its root is within this distance of its last spot and every bone is still, cm. "align.exit_root_cm" */
+	/** A hand resting once the root is within this distance of its last spot is the end pose, not a plant, cm. "align.exit_root_cm" */
 	float AlignExitRootCm = 3.f;
 	/** A planted wrist sits this far past the lip and this high over the top (the hand's point is put there, not on the lip), cm.
 	 *  "align.grip_forward_cm" / "align.grip_up_cm" */
 	float AlignGripForwardCm = 8.f;
 	float AlignGripUpCm = 6.f;
+	/** Acceptance (batch 2, MantlingProblem_03 / 05): a torso joint (pelvis, spine, head) below the top stays at least this far outside the
+	 *  obstacle's footprint while he climbs up or comes down (no clipping into the mesh), cm. "align.min_body_gap_cm" */
+	float AlignMinBodyGapCm = 10.f;
+	/** ... a joint higher than this under the top is over it (the body comes over the lip there), cm. "align.gap_above_margin_cm" */
+	float AlignGapAboveMarginCm = 20.f;
+	/** The climb hands over once every bone of the clip (root, pelvis, hands, feet) stays within this of its final pose to the end (the rest
+	 *  is a slow settle the blend-out absorbs; MantlingProblem_04 "hangs ~0.5 s in a strange pose"); the acceptance's quiet-tail measure, cm.
+	 *  "align.exit_pose_cm" */
+	float AlignExitPoseCm = 8.f;
+	/** The wall guard: while a torso joint (pelvis, spine, head) is below the top it is kept at least this far in front of the face (the
+	 *  capsule is pushed back by the deficit; MantlingProblem_03 / 04 "sinks into the obstacle"), cm. "align.guard_gap_cm" */
+	float AlignGuardGapCm = 14.f;
+	/** Acceptance (MantlingProblem_04): the pelvis settles at its final height over the feet within this of its last height, cm. "align.settle_pelvis_cm" */
+	float AlignSettlePelvisCm = 5.f;
+	/** ... at most this long after the climb ended (the montage blend-out + the stance change; no hold in the clip's pose), s. "align.handoff_limit_s" */
+	float AlignHandoffLimitSeconds = 0.6f;
+	/** Acceptance (MantleDescentSmoke): a move order from a top reaches its ground goal within this long, s. "descent.arrive_limit_s" */
+	float DescentArriveLimitSeconds = 15.f;
+	/** ... within this distance of the goal (2D), cm. "descent.arrive_radius_cm" */
+	float DescentArriveRadiusCm = 120.f;
+	/** ... and the capsule never moves faster than this between two frames (a teleport would), cm/s. "descent.max_speed_cm_s" */
+	float DescentMaxSpeedCmPerSecond = 1500.f;
+	/** The way down off a top (batch 2): he walks off its edge and falls (the fall states play); the landing he aims at lies this far past
+	 *  the face beyond his capsule radius (clear of the face all the way down), cm. "descent.land_out_cm" */
+	float DescentLandOutCm = 40.f;
+	/** A face counts as a way down when the ground past it lies at least this far below the top ... cm. "descent.min_drop_cm" */
+	float DescentMinDropCm = 30.f;
+	/** ... and at most this far (a harmless fall: falls.json damage.safe_height_cm is 320), cm. "descent.max_drop_cm" */
+	float DescentMaxDropCm = 250.f;
+	/** Prone / crouched on a top: he stands up first, waiting for the stance clip at most this long, s. "descent.stand_up_max_s" */
+	float DescentStandUpMaxSeconds = 1.5f;
+	/** He has to be off the top this long after the walk to the edge started, else the old hop takes him down (logged), s. "descent.walk_timeout_s" */
+	float DescentWalkTimeoutSeconds = 3.f;
+	/** On a top with a navmesh path down, the walk-off over another face is taken when its way to the goal is at least this much shorter
+	 *  (MantlingProblem_03: the path's only down link was on the climbed face), cm. "descent.prefer_margin_cm" */
+	float DescentPreferMarginCm = 100.f;
 };
 
 /**
@@ -235,8 +274,10 @@ struct FMantleClipContact
 	FVector RootAtContact = FVector::ZeroVector;
 	/** The root at frame 0 (the mesh draws the root there for the whole clip: root lock = the first frame). */
 	FVector RootStart = FVector::ZeroVector;
-	/** The motion is over (the root at its end spot, every bone still): the climb hands over to the locomotion here. */
+	/** The motion is over (every bone within align.exit_pose_cm of its final pose from here on): the climb hands over to the locomotion here. */
 	float ExitSeconds = 0.f;
+	/** The exit before batch 2 (the root at its last spot and every bone slower than align.still_speed_cm_s; Codex.Mantle.Batch2 0). */
+	float StillExitSeconds = 0.f;
 };
 
 /** What the traces measured at one obstacle (the runtime fills it; the rules never trace). */
@@ -285,6 +326,46 @@ struct FMantleDecision
 	float ForwardWarp = 1.f;
 
 	bool IsGo() const { return Refusal == EMantleRefusal::None; }
+};
+
+/** A click / hover planned as a climb (AOperativeCharacter::PlanMantleClick, batch 2). */
+struct FMantleClickPlan
+{
+	/** The base point he walks to (feet) and the climb's direction (into the obstacle). */
+	FVector Base = FVector::ZeroVector;
+	FVector Dir = FVector::ForwardVector;
+	/** The climb's landing (feet): on the top, or past a fence. */
+	FVector Landing = FVector::ZeroVector;
+	bool bTop = true;
+	float HeightCm = 0.f;
+	/** The obstacle's top as clicked (a face click: the top just inside the face). */
+	FHitResult TopHit;
+	const class AActor* Obstacle = nullptr;
+};
+
+/** The walk-off descent off a mantle top (AOperativeCharacter::StartMantleDescent): standing up, walking off the edge, in the air. */
+enum class EMantleDescentPhase : uint8
+{
+	None,
+	StandUp,
+	Walk,
+	Air,
+};
+
+/** One way down off a mantle top (AOperativeCharacter::TryMantleStepDown, batch 2): over one face of the top onto the ground past it. */
+struct FMantleDescentOption
+{
+	/** Where he walks off (on the face, his feet's height) and where he comes down (feet on the ground past the face). */
+	FVector Exit = FVector::ZeroVector;
+	FVector Landing = FVector::ZeroVector;
+	/** His walk on the top to the exit, cm. */
+	float WalkCm = 0.f;
+	/** The navmesh path from the landing to the goal (a partial one: to its end), cm. */
+	float PathCm = 0.f;
+	/** The path from the landing reaches the goal (not partial). */
+	bool bPathComplete = false;
+	/** Ground within descent.min/max_drop_cm, navmesh and a free capsule at the landing, a path from it. */
+	bool bValid = false;
 };
 
 namespace MantleRules
@@ -360,9 +441,9 @@ namespace MantleRules
 	/**
 	 * A clip's contact and exit from its sampled motion: the first hand that reached out (align.plant_reach_cm from its frame-0 spot), rose to
 	 * align.plant_min_rise_fraction x RiseCm over the frame-0 feet and then rests (slower than align.plant_speed_cm_s for align.plant_hold_s)
-	 * while the root is still on its way is the plant; the exit is the first moment after the plant when the root is within
-	 * align.exit_root_cm of its last spot and every bone is slower than align.still_speed_cm_s (the clip's idle tail is skipped). bValid false
-	 * without a plant; ExitSeconds = the clip's end without a settled moment.
+	 * while the root is still on its way (farther than align.exit_root_cm from its last spot) is the plant; the exit is the first moment after
+	 * the plant from which every bone stays within align.exit_pose_cm of its final pose (the clip's slow settle and idle tail are skipped,
+	 * batch 2). bValid false without a plant; ExitSeconds = the clip's last sample when even that moves more.
 	 */
 	CODEXTACTICS_API FMantleClipContact AnalyseClipTrack(const FMantleConfig& Config, const FMantleClipTrack& Track, float RiseCm);
 
@@ -384,4 +465,17 @@ namespace MantleRules
 
 	/** Sample offsets (cm from the face's middle, along it) of the path links of a face FaceLengthCm long, keeping MarginCm off its ends. */
 	CODEXTACTICS_API TArray<float> LinkOffsets(const FMantleConfig& Config, float FaceLengthCm, float MarginCm);
+
+	/**
+	 * The way down to take (batch 2, item 5 "always jumps down on the side he climbed from"): the valid option with the shortest total (the
+	 * walk on the top to its exit + the path from its landing to the goal); one whose path reaches the goal beats every partial one.
+	 * INDEX_NONE when none is valid.
+	 */
+	CODEXTACTICS_API int32 ChooseDescent(const TArray<FMantleDescentOption>& Options);
+
+	/**
+	 * The exit point on one face of a top (2D; the face runs from A to B, Z kept from A): the goal's projection onto the face, MarginCm off its
+	 * ends (a face shorter than 2 x MarginCm: its middle).
+	 */
+	CODEXTACTICS_API FVector DescentExitOnFace(const FVector& A, const FVector& B, const FVector& Goal, float MarginCm);
 }

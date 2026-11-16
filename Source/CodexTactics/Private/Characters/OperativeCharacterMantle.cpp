@@ -29,6 +29,8 @@
 #include "Interactables/VaultNavigation.h"
 #include "MotionWarpingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
+#include "NavigationPath.h"
+#include "NavigationSystem.h"
 #include "RootMotionModifier_SkewWarp.h"
 #include "Survival/WarmIdleRules.h"
 
@@ -57,6 +59,8 @@ namespace OperativeMantleInternal
 	constexpr float MantleHopSeconds = 0.6f;
 	/** A run clip starts once the face is no farther than its own run-up (forward warp <= this; never stretched to start early). */
 	constexpr float MantleRunStartWarp = 1.05f;
+	/** The torso joints the wall guard keeps off the face (hands and feet may touch the edge / the wall). */
+	static const FName MantleTorsoBones[] = { FName(TEXT("pelvis")), FName(TEXT("spine_03")), FName(TEXT("head")) };
 }
 
 const FMantleClipTrack* AOperativeCharacter::GetMantleClipTrack(int32 ClipIndex)
@@ -319,7 +323,7 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 		{
 			const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, *Track, ClipData.RiseCm);
 			// The climb ends when the clip's motion is over: its idle tail would be the "freeze" before the locomotion takes him on.
-			ExitSeconds = FMath::Clamp(Contact.ExitSeconds, Track->SampleSeconds, PlayLength);
+			ExitSeconds = FMath::Clamp(MantleNavigation::IsBatch2Enabled() ? Contact.ExitSeconds : Contact.StillExitSeconds, Track->SampleSeconds, PlayLength);
 			// Root lock = the first frame: the mesh draws the body offset by the root's frame-0 position for the whole clip (HighClimb: 163 cm
 			// up = the "thrown up, then drops" pop; the tall ledges: 36 cm back off the wall). The mesh is shifted back by it, weighted by the
 			// montage's blend (UpdateMantleMeshShift): the body is drawn root-relative, where the root motion carries the capsule.
@@ -356,6 +360,10 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 	MantleBaseFeet = Site.Feet;
 	MantleLandingFeet = Landing;
 	MantleDir = Site.Dir;
+	MantleFacePoint = Site.FacePoint;
+	MantleTopZ = Site.TopZ;
+	MantleDepthCm = Site.Probe.DepthCm;
+	MantleGuardPushCm = 0.f;
 	bMantleOnTop = bTop;
 	++MantleCount;
 	++MantleRotation;
@@ -371,8 +379,9 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 		Site.Probe.FaceDistanceCm, *LastMantleClip, Decision.Gait == EMantleGait::Running ? TEXT("running") : TEXT("standing"),
 		Decision.bStopFirst ? TEXT(", stopped: no run-up") : TEXT(""), Decision.VerticalWarp, Decision.ForwardWarp, bTop ? TEXT("on top") : TEXT("over"),
 		*Landing.ToCompactString());
-	if (!MantleRootLock.IsNearlyZero(1.f) && !MantleShiftHandle.IsValid())
+	if (!MantleShiftHandle.IsValid())
 	{
+		// Also the wall guard's: it reads the torso when this frame's pose is final (the root motion of this frame applied).
 		// The shift follows this frame's blend weight: updated when the pose is final (and in Tick, for a mesh whose pose is not refreshed).
 		MantleShiftHandle = GetMesh()->RegisterOnBoneTransformsFinalizedDelegate(
 			FOnBoneTransformsFinalizedMultiCast::FDelegate::CreateUObject(this, &AOperativeCharacter::UpdateMantleMeshShift));
@@ -387,6 +396,10 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 
 void AOperativeCharacter::UpdateMantleMeshShift()
 {
+	if (bMantling)
+	{
+		ApplyMantleWallGuard(); // batch 2 item 1 (Tick and the bone-finalized callback: the pose of this frame)
+	}
 	USkeletalMeshComponent* Body = GetMesh();
 	if (!Body || (MantleRootLock.IsZero() && MantleMeshShift.IsZero() && !MantleShiftHandle.IsValid()))
 	{
@@ -418,6 +431,40 @@ void AOperativeCharacter::UpdateMantleMeshShift()
 	}
 }
 
+void AOperativeCharacter::ApplyMantleWallGuard()
+{
+	// Batch 2 item 1 (MantlingProblem_03 / 04, "sinks into the obstacle"): while a torso joint is below the top it is kept align.guard_gap_cm
+	// in front of the face - the capsule (collision off for the climb) is pushed back by the deficit; the warp brings the climb onto the
+	// landing from wherever he is (it re-targets every frame), once the torso is over the top.
+	USkeletalMeshComponent* Body = GetMesh();
+	if (!Body || OperativeMantleInternal::CVarMantleAlign.GetValueOnGameThread() == 0 || !MantleNavigation::IsBatch2Enabled())
+	{
+		return;
+	}
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	float Deficit = 0.f;
+	for (const FName& Bone : OperativeMantleInternal::MantleTorsoBones)
+	{
+		if (Body->GetBoneIndex(Bone) == INDEX_NONE)
+		{
+			continue;
+		}
+		const FVector Joint = Body->GetSocketLocation(Bone);
+		const float Fwd = static_cast<float>(FVector::DotProduct(Joint - MantleFacePoint, MantleDir));
+		// Over the top (or past the middle of a thin fence: crossed) a joint is no clipping.
+		if (Joint.Z > MantleTopZ - Config.AlignGapAboveMarginCm || Fwd > MantleDepthCm * 0.5f)
+		{
+			continue;
+		}
+		Deficit = FMath::Max(Deficit, Fwd + Config.AlignGuardGapCm);
+	}
+	if (Deficit > KINDA_SMALL_NUMBER)
+	{
+		AddActorWorldOffset(-MantleDir * Deficit);
+		MantleGuardPushCm += Deficit;
+	}
+}
+
 void AOperativeCharacter::UpdateMantle(float DeltaTime)
 {
 	MantleTimer += DeltaTime;
@@ -435,6 +482,7 @@ void AOperativeCharacter::UpdateMantle(float DeltaTime)
 		FinishMantle();
 		return;
 	}
+	ApplyMantleWallGuard();
 	if (MantleTimer > MantleDuration + MantleRules::GetConfig().TimeoutPadSeconds)
 	{
 		CancelMantle(EMantleCancel::Interrupted);
@@ -560,7 +608,7 @@ void AOperativeCharacter::CancelMantle(EMantleCancel Reason)
 		bToBase ? TEXT(" - dropped back to the base") : TEXT(""));
 }
 
-bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint, FString* OutReason)
+bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPlan& Out, FString* OutReason) const
 {
 	auto Fail = [OutReason](const TCHAR* Why)
 	{
@@ -571,17 +619,22 @@ bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint,
 		return false;
 	};
 	UWorld* World = GetWorld();
-	if (!World || !HealthComponent || !HealthComponent->IsAlive() || bMantling || bVaulting || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge()
-		|| bCarrying || Stance == EOperativeStance::Prone)
+	if (!World || !HealthComponent || !HealthComponent->IsAlive() || bMantling || bVaulting || IsMantleDescending() || IsKnockedDown() || IsClimbingLadder()
+		|| IsDroppingOffLedge() || bCarrying || Stance == EOperativeStance::Prone)
 	{
 		return Fail(TEXT("busy"));
+	}
+	const bool bBatch2 = MantleNavigation::IsBatch2Enabled();
+	// Batch 2 item 3: a click on the obstacle's side face (what the isometric camera shows) means its top just inside that face.
+	FHitResult TopHit = Hit;
+	if (Hit.ImpactNormal.Z < 0.7f && !(bBatch2 && MantleNavigation::TopHitFromFace(*World, Hit, TopHit)))
+	{
+		return Fail(TEXT("not a climbable top"));
 	}
 	const FMantleConfig& Config = MantleRules::GetConfig();
 	const float HalfHeight = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, HalfHeight);
-	FVector Base;
-	FVector Dir;
-	if (!MantleNavigation::PlanTopClick(*World, TopHit, Feet, GetCapsuleComponent()->GetScaledCapsuleRadius(), Base, Dir))
+	if (!MantleNavigation::PlanTopClick(*World, TopHit, Feet, GetCapsuleComponent()->GetScaledCapsuleRadius(), Out.Base, Out.Dir))
 	{
 		return Fail(TEXT("not a climbable top"));
 	}
@@ -590,24 +643,72 @@ bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint,
 	const float Height = static_cast<float>(TopHit.ImpactPoint.Z - Feet.Z);
 	const int32 Class = MantleRules::ClassifyHeight(Config, Height, EMantleDestination::Top, ClassRefusal);
 	if (Class == INDEX_NONE || !Config.Classes[Class].bEnabled || (Config.Classes[Class].bMarkedEdgeOnly && !TopHit.GetActor()->Tags.Contains(MantleRules::MarkedEdgeTag))
-		|| FVector::Dist2D(Feet, Base) > Config.OrderMaxDistanceCm)
+		|| FVector::Dist2D(Feet, Out.Base) > Config.OrderMaxDistanceCm)
 	{
 		return Fail(MantleRules::RefusalName(Class == INDEX_NONE ? ClassRefusal : EMantleRefusal::NotMarked));
 	}
-	if (FVector::Dist2D(Feet, Base) <= OperativeMantleInternal::MantleOrderArriveCm + 40.f && TryStartMantle(Dir, nullptr, true))
+	Out.TopHit = TopHit;
+	Out.Obstacle = TopHit.GetActor();
+	Out.HeightCm = Height;
+	Out.Landing = TopHit.ImpactPoint;
+	if (!bBatch2)
+	{
+		return true; // before batch 2 the face's rules were checked on arrival only
+	}
+	// Batch 2 (the hover ghost shows exactly what the click does): the climb measured from the base he walks to - the landing, the headroom,
+	// the warp limits, a reserved landing; no ghost and no order when it would be refused on arrival.
+	const AOperativeCharacter* Default = GetClass()->GetDefaultObject<AOperativeCharacter>();
+	const float StandingHalf = Default && Default->GetCapsuleComponent() ? Default->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() : HalfHeight;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(OperativeMantlePlan), false, this);
+	FMantleSite Site;
+	if (!MantleNavigation::ProbeSite(*World, Out.Base, Out.Dir, OperativeMantleInternal::MantleStandingReachCm, GetCapsuleComponent()->GetScaledCapsuleRadius(),
+		StandingHalf, Params, Config, Site) || !Site.bValid || Site.Obstacle.Get() != TopHit.GetActor())
+	{
+		return Fail(TEXT("no face to climb from the base"));
+	}
+	Site.Probe.Body = GetMantleBody();
+	Site.Probe.Rotation = MantleRotation;
+	if (const UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>(); Mantle && Mantle->IsReservedByOther(Site.Landing, this))
+	{
+		Site.Probe.bLandingFree = false;
+	}
+	UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>();
+	const FMantleDecision Decision = MantleRules::Decide(Config, Site.Probe, [Mantle](int32 Index) { return Mantle && Mantle->GetClip(Index) != nullptr; });
+	if (!Decision.IsGo())
+	{
+		return Fail(MantleRules::RefusalName(Decision.Refusal));
+	}
+	Out.Landing = Site.Landing;
+	Out.bTop = Site.Destination == EMantleDestination::Top;
+	return true;
+}
+
+bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint, FString* OutReason)
+{
+	FMantleClickPlan Plan;
+	if (!PlanMantleClick(TopHit, Plan, OutReason))
+	{
+		return false;
+	}
+	if (FVector::Dist2D(GetActorLocation() - FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight()), Plan.Base)
+		<= OperativeMantleInternal::MantleOrderArriveCm + 40.f && TryStartMantle(Plan.Dir, nullptr, true))
 	{
 		return true; // already at the face
 	}
-	if (OrderMoveTo(Base, bSprint) != EOperativeOrderResult::Accepted)
+	if (OrderMoveTo(Plan.Base, bSprint) != EOperativeOrderResult::Accepted)
 	{
-		return Fail(TEXT("unreachable"));
+		if (OutReason)
+		{
+			*OutReason = TEXT("unreachable");
+		}
+		return false;
 	}
 	bMantleOrderPending = true;
-	MantleOrderBase = Base;
-	MantleOrderDir = Dir;
+	MantleOrderBase = Plan.Base;
+	MantleOrderDir = Plan.Dir;
 	MantleOrderSeconds = 0.f;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: climb order onto %s (%.0f cm) - walking to its face"), *DisplayName.ToString(),
-		*GetNameSafe(TopHit.GetActor()), Height);
+		*GetNameSafe(Plan.Obstacle), Plan.HeightCm);
 	return true;
 }
 
@@ -638,8 +739,11 @@ void AOperativeCharacter::HandleMantleLink(int32 LinkIndex)
 	}
 	if (Link->bDown)
 	{
-		if (StartMantleHop(Link->End))
+		// Batch 2 (MantlingProblem_05): the walk off the edge and the fall - no vault-over arc through the top's corner.
+		if (MantleNavigation::IsBatch2Enabled() ? StartMantleDescent(Link->End, MantleResumeTarget, bMantleResume, bMantleResumeOwnOrder)
+			: StartMantleHop(Link->End))
 		{
+			bMantleResume = false;
 			return;
 		}
 	}
@@ -702,8 +806,128 @@ bool AOperativeCharacter::StartMantleHop(const FVector& LandingFeet)
 	return true;
 }
 
+const AActor* AOperativeCharacter::GetMantleTopUnderFeet() const
+{
+	const UCharacterMovementComponent* Movement = GetCharacterMovement();
+	const AActor* Floor = Movement && Movement->IsMovingOnGround() ? Movement->CurrentFloor.HitResult.GetActor() : nullptr;
+	bool bMarked = false;
+	return Floor && !Cast<APawn>(Floor) && !VaultNavigation::IsVaultable(Floor) && MantleRules::IsEligibleTags(Floor->Tags, bMarked) ? Floor : nullptr;
+}
+
+bool AOperativeCharacter::FindMantleDescent(const AActor& Top, const FVector& Goal, FVector& OutLanding, float* OutTotalCm) const
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	const UCapsuleComponent* Capsule = GetCapsuleComponent();
+	const FBox Local = Top.CalculateComponentsBoundingBoxInLocalSpace(false);
+	if (!Nav || !Capsule || !Local.IsValid)
+	{
+		return false;
+	}
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	const AOperativeCharacter* Default = GetClass()->GetDefaultObject<AOperativeCharacter>();
+	const float Radius = Capsule->GetScaledCapsuleRadius();
+	const float StandingHalf = Default && Default->GetCapsuleComponent() ? Default->GetCapsuleComponent()->GetScaledCapsuleHalfHeight()
+		: Capsule->GetScaledCapsuleHalfHeight();
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, Capsule->GetScaledCapsuleHalfHeight());
+	const FTransform Transform = Top.GetActorTransform();
+	const FVector Centre = Local.GetCenter();
+	const FVector Extent = Local.GetExtent();
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(OperativeMantleDescent), false, this);
+	TArray<FMantleDescentOption> Options;
+	bool bMarkedGround = false; // the landing's ground must be the ground, not the next crate's top
+	for (int32 Axis = 0; Axis < 2; ++Axis)
+	{
+		for (const float Sign : { 1.f, -1.f })
+		{
+			const int32 Tangent = 1 - Axis;
+			FVector ALocal = Centre;
+			ALocal[Axis] += Sign * Extent[Axis];
+			FVector BLocal = ALocal;
+			ALocal[Tangent] -= Extent[Tangent];
+			BLocal[Tangent] += Extent[Tangent];
+			FVector NormalLocal = FVector::ZeroVector;
+			NormalLocal[Axis] = Sign;
+			const FVector Normal = Transform.TransformVectorNoScale(NormalLocal).GetSafeNormal2D();
+			FVector A = Transform.TransformPosition(ALocal);
+			FVector B = Transform.TransformPosition(BLocal);
+			A.Z = Feet.Z;
+			B.Z = Feet.Z;
+			FMantleDescentOption& Option = Options.AddDefaulted_GetRef();
+			Option.Exit = MantleRules::DescentExitOnFace(A, B, Goal, Radius + 5.f);
+			Option.Landing = Option.Exit + Normal * (Radius + Config.DescentLandOutCm);
+			Option.WalkCm = static_cast<float>(FVector::Dist2D(Feet, Option.Exit));
+			// The ground past the face: a drop of descent.min_drop_cm .. max_drop_cm onto the navmesh, room for a standing capsule.
+			FHitResult Ground;
+			const FVector Over(Option.Landing.X, Option.Landing.Y, Feet.Z + 50.f);
+			if (!World->LineTraceSingleByChannel(Ground, Over, Over - FVector(0.f, 0.f, Config.DescentMaxDropCm + 100.f), ECC_Visibility, Params)
+				|| Ground.bStartPenetrating || Ground.GetActor() == &Top || Cast<APawn>(Ground.GetActor())
+				|| (Ground.GetActor() && MantleRules::IsEligibleTags(Ground.GetActor()->Tags, bMarkedGround)))
+			{
+				continue;
+			}
+			const float Drop = static_cast<float>(Feet.Z - Ground.ImpactPoint.Z);
+			FNavLocation OnNav;
+			const float Reach = Radius + Config.DescentLandOutCm;
+			if (Drop < Config.DescentMinDropCm || Drop > Config.DescentMaxDropCm
+				|| !Nav->ProjectPointToNavigation(Ground.ImpactPoint, OnNav, FVector(Reach, Reach, 60.f))
+				|| FMath::Abs(OnNav.Location.Z - Ground.ImpactPoint.Z) > 40.f
+				|| World->OverlapAnyTestByChannel(Ground.ImpactPoint + FVector(0.f, 0.f, StandingHalf + 4.f), FQuat::Identity, ECC_Pawn,
+					FCollisionShape::MakeCapsule(Radius, StandingHalf), Params))
+			{
+				continue;
+			}
+			Option.Landing.Z = Ground.ImpactPoint.Z;
+			const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, OnNav.Location, Goal, const_cast<AOperativeCharacter*>(this),
+				ChooseMoveFilter());
+			if (Path && Path->IsValid())
+			{
+				Option.bValid = true;
+				Option.bPathComplete = !Path->IsPartial();
+				Option.PathCm = static_cast<float>(Path->GetPathLength());
+			}
+		}
+	}
+	const int32 Best = MantleRules::ChooseDescent(Options);
+	if (Best == INDEX_NONE)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: no way down off %s towards %s (no face with free navmesh ground %.0f..%.0f cm below)"),
+			*DisplayName.ToString(), *GetNameSafe(&Top), *Goal.ToCompactString(), Config.DescentMinDropCm, Config.DescentMaxDropCm);
+		return false;
+	}
+	OutLanding = Options[Best].Landing;
+	if (OutTotalCm)
+	{
+		*OutTotalCm = Options[Best].WalkCm + Options[Best].PathCm;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: the way down off %s over face %d of %d (walk %.0f + path %.0f cm%s) to %s"), *DisplayName.ToString(),
+		*GetNameSafe(&Top), Best, Options.Num(), Options[Best].WalkCm, Options[Best].PathCm, Options[Best].bPathComplete ? TEXT("") : TEXT(", partial"),
+		*OutLanding.ToCompactString());
+	return true;
+}
+
 bool AOperativeCharacter::TryMantleStepDown(const FVector& Destination)
 {
+	if (!MantleNavigation::IsBatch2Enabled())
+	{
+		return TryMantleHopDownLegacy(Destination);
+	}
+	const AActor* Top = GetMantleTopUnderFeet();
+	if (!Top || bMantling || bVaulting || IsMantleDescending())
+	{
+		return false;
+	}
+	FVector Landing;
+	if (!FindMantleDescent(*Top, Destination, Landing))
+	{
+		return false;
+	}
+	return StartMantleDescent(Landing, Destination, true, !bAutonomousOrder);
+}
+
+bool AOperativeCharacter::TryMantleHopDownLegacy(const FVector& Destination)
+{
+	// Before batch 2 (Codex.Mantle.Batch2 0): the vault's arc to the first free spot round him, starting in the goal's direction.
 	const UCharacterMovementComponent* Movement = GetCharacterMovement();
 	const AActor* Floor = Movement && Movement->IsMovingOnGround() ? Movement->CurrentFloor.HitResult.GetActor() : nullptr;
 	bool bMarked = false;
@@ -711,7 +935,6 @@ bool AOperativeCharacter::TryMantleStepDown(const FVector& Destination)
 	{
 		return false;
 	}
-	// Facing the destination: the step-off search starts in his facing (VaultNavigation::FindStepOffSpot).
 	const FVector ToGoal = (Destination - GetActorLocation()).GetSafeNormal2D();
 	const FRotator Saved = GetActorRotation();
 	if (!ToGoal.IsNearlyZero())
@@ -731,6 +954,137 @@ bool AOperativeCharacter::TryMantleStepDown(const FVector& Destination)
 	LastMoveDestination = Destination;
 	bHasMoveOrder = true;
 	return StartMantleHop(Spot - FVector(0.f, 0.f, HalfHeight));
+}
+
+bool AOperativeCharacter::StartMantleDescent(const FVector& LandingFeet, const FVector& Goal, bool bResume, bool bResumeOwnOrder)
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (!Movement || bMantling || bVaulting || IsMantleDescending() || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge()
+		|| !HealthComponent || !HealthComponent->IsAlive())
+	{
+		return false;
+	}
+	if (AController* OwnerController = GetController())
+	{
+		OwnerController->StopMovement();
+	}
+	Movement->StopMovementImmediately();
+	if (bInCover)
+	{
+		LeaveCover(TEXT("mantle descent"));
+	}
+	bHasPendingCover = false;
+	bMantleOrderPending = false;
+	MantleDescentLanding = LandingFeet;
+	MantleDescentGoal = Goal;
+	bMantleDescentResume = bResume;
+	bMantleDescentResumeOwn = bResumeOwnOrder;
+	MantleDescentTopZ = static_cast<float>(GetActorLocation().Z - GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	MantleDescentTimer = 0.f;
+	LastMoveDestination = Goal;
+	bHasMoveOrder = true;
+	++MantleDescentCount;
+	// Item 8 (MantlingProblem_07): prone / crouched he gets up first (the stance clip plays), then walks off.
+	const bool bStandUp = Stance != EOperativeStance::Standing;
+	if (bStandUp)
+	{
+		SetStance(EOperativeStance::Standing);
+	}
+	MantleDescentPhase = bStandUp ? EMantleDescentPhase::StandUp : EMantleDescentPhase::Walk;
+	bMantleDescentSavedOrient = Movement->bOrientRotationToMovement;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s comes down off the top: %swalks off the edge towards %s, then on to %s"), *DisplayName.ToString(),
+		bStandUp ? TEXT("stands up, ") : TEXT(""), *LandingFeet.ToCompactString(), *Goal.ToCompactString());
+	return true;
+}
+
+void AOperativeCharacter::UpdateMantleDescent(float DeltaTime)
+{
+	UCharacterMovementComponent* Movement = GetCharacterMovement();
+	if (!Movement || IsKnockedDown() || IsClimbingLadder() || !HealthComponent || !HealthComponent->IsAlive())
+	{
+		EndMantleDescent(false);
+		return;
+	}
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	MantleDescentTimer += DeltaTime;
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	switch (MantleDescentPhase)
+	{
+	case EMantleDescentPhase::StandUp:
+		// The stance clip roots him (GetMoveHoldSeconds); at most descent.stand_up_max_s.
+		if ((MantleDescentTimer > DeltaTime && GetMoveHoldSeconds() <= 0.f) || MantleDescentTimer >= Config.DescentStandUpMaxSeconds)
+		{
+			MantleDescentPhase = EMantleDescentPhase::Walk;
+			MantleDescentTimer = 0.f;
+		}
+		return;
+	case EMantleDescentPhase::Walk:
+	{
+		if (Movement->IsFalling())
+		{
+			MantleDescentPhase = EMantleDescentPhase::Air; // walked off the edge: the fall (the ABP's fall states)
+			return;
+		}
+		if (Feet.Z < MantleDescentTopZ - Config.DescentMinDropCm)
+		{
+			EndMantleDescent(true); // stepped down without a fall (a low drop)
+			return;
+		}
+		if (MantleDescentTimer > Config.DescentWalkTimeoutSeconds)
+		{
+			// Something holds him on the top (a man in the way): the old hop takes him down - logged, never a silent soft-lock.
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Mantle] %s: still on the top %.1f s after the walk to its edge started - the hop down instead"),
+				*DisplayName.ToString(), MantleDescentTimer);
+			const FVector Landing = MantleDescentLanding;
+			bMantleResume = bMantleDescentResume;
+			MantleResumeTarget = MantleDescentGoal;
+			bMantleResumeOwnOrder = bMantleDescentResumeOwn;
+			MantleDescentPhase = EMantleDescentPhase::None;
+			Movement->bOrientRotationToMovement = bMantleDescentSavedOrient;
+			++MantleDescentHopFallbacks;
+			StartMantleHop(Landing);
+			return;
+		}
+		const FVector Dir = (MantleDescentLanding - Feet).GetSafeNormal2D();
+		Movement->bOrientRotationToMovement = true; // he faces where he walks off (restored at the end)
+		ApplyMovementParams();
+		AddMovementInput(Dir.IsNearlyZero() ? GetActorForwardVector() : Dir, 1.f);
+		return;
+	}
+	case EMantleDescentPhase::Air:
+		if (Movement->IsMovingOnGround())
+		{
+			EndMantleDescent(true);
+		}
+		return;
+	default:
+		return;
+	}
+}
+
+void AOperativeCharacter::EndMantleDescent(bool bResume)
+{
+	if (MantleDescentPhase == EMantleDescentPhase::None)
+	{
+		return;
+	}
+	MantleDescentPhase = EMantleDescentPhase::None;
+	if (UCharacterMovementComponent* Movement = GetCharacterMovement())
+	{
+		Movement->bOrientRotationToMovement = bMantleDescentSavedOrient;
+	}
+	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s is down off the top at %s (%.0f cm off the aimed landing)"), *DisplayName.ToString(), *Feet.ToCompactString(),
+		FVector::Dist2D(Feet, MantleDescentLanding));
+	if (bResume && bMantleDescentResume && FVector::Dist2D(Feet, MantleDescentGoal) > 60.f)
+	{
+		RequestMove(MantleDescentGoal);
+		bOwnMoveOrder = bMantleDescentResumeOwn && bHasMoveOrder;
+	}
+	else
+	{
+		bHasMoveOrder = false;
+	}
 }
 
 void AOperativeCharacter::UpdateMantleTrigger(float DeltaTime)

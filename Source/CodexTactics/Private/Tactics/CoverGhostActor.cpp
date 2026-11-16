@@ -125,7 +125,7 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 		}
 	}
 
-	if (bShown && Operative.Get() == &InOperative && AreSlotsEquivalent(Slot, InSlot)
+	if (bShown && !bMantlePose && Operative.Get() == &InOperative && AreSlotsEquivalent(Slot, InSlot)
 		&& ShownFacing == Facing && bCornerPeekPose == bFireIdle
 		&& bShownStealthMode == bStealthMode && bShownCrouched == bCrouched
 		&& ShownClip == Clip)
@@ -137,9 +137,44 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 	Slot = InSlot;
 	bShown = true;
 	bCornerPeekPose = bFireIdle;
+	bMantlePose = false;
 	bShownStealthMode = bStealthMode;
 	bShownCrouched = bCrouched;
 	ShownFacing = Facing;
+	// Back to the wall (actor yaw = wall normal); the side he would face only picks the _L/_R idle clip (CoverFacingRules).
+	const float HalfHeight = InOperative.GetSimpleCollisionHalfHeight();
+	SetActorLocationAndRotation(InSlot.WorldLocation + FVector(0.f, 0.f, HalfHeight), FRotator(0.f, CoverFacingRules::FacingYaw(InSlot, Facing), 0.f));
+	ApplyGhostBody(InOperative, Asset, Clip, WallYaw, CoverRules::DefaultStanceFor(InSlot.Height) == EOperativeStance::Crouching);
+}
+
+void ACoverGhostActor::ShowMantleFor(const AOperativeCharacter& InOperative, const FVector& LandingFeet, float Yaw, bool bCrouched)
+{
+	const USkeletalMeshComponent* Source = InOperative.GetMesh();
+	USkeletalMesh* Asset = Source ? Cast<USkeletalMesh>(Source->GetSkinnedAsset()) : nullptr;
+	const UOperativeAnimInstance* Anim = Source ? Cast<UOperativeAnimInstance>(Source->GetAnimInstance()) : nullptr;
+	// The pose he ends the climb in: crouched on a top (designer Q3), standing past a fence - his own locomotion idles.
+	UAnimSequenceBase* Clip = Anim ? (bCrouched ? Anim->Animations.CrouchIdle.Get() : Anim->Animations.Idle.Get()) : nullptr;
+	if (bShown && bMantlePose && Operative.Get() == &InOperative && bShownCrouched == bCrouched && ShownClip == Clip
+		&& FVector::DistSquared(Slot.WorldLocation, LandingFeet) <= 1.f && FMath::IsNearlyEqual(static_cast<float>(GetActorRotation().Yaw), Yaw, 1.f))
+	{
+		return;
+	}
+	Operative = const_cast<AOperativeCharacter*>(&InOperative);
+	Slot = FCoverSlot();
+	Slot.WorldLocation = LandingFeet;
+	bShown = true;
+	bCornerPeekPose = false;
+	bMantlePose = true;
+	bShownStealthMode = InOperative.IsInStealthMode();
+	bShownCrouched = bCrouched;
+	// His standing capsule's half height over the landing (the mesh's relative transform below is the same pair as his own).
+	SetActorLocationAndRotation(LandingFeet + FVector(0.f, 0.f, InOperative.GetSimpleCollisionHalfHeight()), FRotator(0.f, Yaw, 0.f));
+	ApplyGhostBody(InOperative, Asset, Clip, 0.f, bCrouched);
+}
+
+void ACoverGhostActor::ApplyGhostBody(const AOperativeCharacter& InOperative, USkeletalMesh* Asset, UAnimSequenceBase* Clip, float WallYaw, bool bCrouchedPlaceholder)
+{
+	const USkeletalMeshComponent* Source = InOperative.GetMesh();
 	UMaterialInterface* Base = ResolveBaseMaterial(InOperative);
 	if (Base && (!Material || Material->Parent != Base))
 	{
@@ -150,11 +185,7 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 		// The operative's silhouette colour (leader cyan 0.55) — the same look as his see-through outline.
 		Material->SetVectorParameterValue(TEXT("Color"), InOperative.GetSilhouetteColor());
 	}
-	// Back to the wall (actor yaw = wall normal); the side he would face only picks the _L/_R idle clip (CoverFacingRules).
-	const float HalfHeight = InOperative.GetSimpleCollisionHalfHeight();
-	SetActorLocationAndRotation(InSlot.WorldLocation + FVector(0.f, 0.f, HalfHeight), FRotator(0.f, CoverFacingRules::FacingYaw(InSlot, Facing), 0.f));
-
-	if (Asset)
+	if (Asset && Source)
 	{
 		Body->SetSkeletalMesh(Asset);
 		Body->SetRelativeTransform(Source->GetRelativeTransform());
@@ -184,8 +215,7 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 		ShownClip = nullptr;
 		Body->SetVisibility(false);
 		Placeholder->SetVisibility(true);
-		const bool bCrouchedBody = CoverRules::DefaultStanceFor(InSlot.Height) == EOperativeStance::Crouching;
-		Placeholder->SetRelativeScale3D(FVector(0.7f, 0.7f, bCrouchedBody ? 1.2f : 1.8f));
+		Placeholder->SetRelativeScale3D(FVector(0.7f, 0.7f, bCrouchedPlaceholder ? 1.2f : 1.8f));
 		Placeholder->SetRelativeLocation(FVector(0.f, 0.f, 0.f));
 		if (Material)
 		{
@@ -199,6 +229,7 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 void ACoverGhostActor::Hide()
 {
 	bShown = false;
+	bMantlePose = false;
 	bShownStealthMode = false;
 	bShownCrouched = false;
 	ShownClip = nullptr;
