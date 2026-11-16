@@ -213,9 +213,8 @@ void UPanicComponent::TriggerPanic(const FString& Reason, bool bForce)
 	WarmthTimer = 0.f;
 	PanicOrigin = Operative->GetActorLocation();
 	CachedFleeDirection = FVector::ZeroVector;
-	// Drops the player's orders and the reload; stands up to run (Godot set_stance(STANDING, true)).
+	// Drops the player's orders and reload; preserves current stance (Task 071: prone crawls, crouch crouches).
 	Operative->StopOperative();
-	Operative->SetStance(EOperativeStance::Standing);
 	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("😱 PANIC!"), PanicRed);
 	static const TCHAR* Phrases[] = {
 		TEXT("😱 I can't take it! They're everywhere!"),
@@ -241,7 +240,10 @@ void UPanicComponent::TransitionToCowering()
 	}
 	Phase = EPanicPhase::Cowering;
 	Operative->StopOperative();
-	Operative->SetStance(EOperativeStance::Crouching);
+	if (Operative->GetStance() != EOperativeStance::Prone)
+	{
+		Operative->SetStance(EOperativeStance::Crouching);
+	}
 	UFloatingTextSubsystem::SpawnAboveOperative(Operative, TEXT("🧎 COWERING"), FLinearColor(1.f, 0.4f, 0.4f));
 }
 
@@ -296,12 +298,17 @@ void UPanicComponent::ProcessPanicState(float DeltaSeconds)
 	UCharacterMovementComponent* Movement = Operative->GetCharacterMovement();
 	if (Phase == EPanicPhase::Fleeing)
 	{
-		// Godot _process_panic_movement: run upright at the flee speed in the flee direction.
+		// Task 071: flee speed respects stance, wound tier and cold.
 		FleePhaseTimer += DeltaSeconds;
 		const FVector Direction = GetFleeDirection();
 		if (Movement)
 		{
-			Movement->MaxWalkSpeed = Config.FleeSpeed > 0.f ? Config.FleeSpeed * 100.f : Movement->MaxWalkSpeed * Config.SpeedMultiplier;
+			Movement->MaxWalkSpeed = PanicRules::PanicFleeSpeed(
+				Operative->GetStance(),
+				Operative->GetWoundTier(),
+				Operative->MovementConfig,
+				CriticalWoundRules::GetWoundConfig(),
+				Operative->GetColdSpeedMultiplier());
 		}
 		Operative->AddMovementInput(Direction);
 		if (FVector::Dist2D(Operative->GetActorLocation(), PanicOrigin) >= Config.FleeDistance * 100.f || FleePhaseTimer >= Config.FleeMaxTime)

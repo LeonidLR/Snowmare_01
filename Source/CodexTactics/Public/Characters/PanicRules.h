@@ -1,6 +1,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Characters/CriticalWoundRules.h"
+#include "Characters/OperativeMovementRules.h"
 
 class UGodotBalanceAsset;
 
@@ -84,4 +86,14 @@ namespace PanicRules
 	};
 
 	CODEXTACTICS_API ETriggerVerdict GetTriggerVerdict(const FPanicConfig& Config, int32 PanickedNow, bool bIsLeader);
+
+	/**
+	 * Designer 2026-11-15 (board 062 / Task 071): Panic flight speed equals the normal speed of the operative's
+	 * CURRENT state (prone = crawl speed, crouched = crouch speed, injured-tier multipliers applied), never above it.
+	 * Panic picks the fastest gait that state allows (e.g. standing healthy -> run, not sprint unless normal rules
+	 * allow sprint for him), but never a speed the same state would not have outside panic.
+	 */
+	CODEXTACTICS_API float PanicFleeSpeed(EOperativeStance Stance, CriticalWoundRules::EWoundTier WoundTier,
+		const FOperativeMovementConfig& MovementConfig, const CriticalWoundRules::FCriticalWoundConfig& WoundConfig = CriticalWoundRules::FCriticalWoundConfig(),
+		float ColdMultiplier = 1.f);
 }
