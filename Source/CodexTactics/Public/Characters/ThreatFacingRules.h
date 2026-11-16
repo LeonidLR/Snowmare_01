@@ -41,6 +41,14 @@ namespace ThreatFacingRules
 	CODEXTACTICS_API bool ShouldTurnToThreat(const FFacts& Facts);
 
 	/**
+	 * A facing order of the player (SetFacingPoint) against a combat target (074, 2026-11-16): a target within his weapon's reach still turns
+	 * him (bug #39 2026-11-07: "a target in reach wins over a facing order"); one beyond the reach does not - the order holds. Without an order
+	 * of his own any live target turns him (unchanged). A stale target (kept while he reloads, not yet out of the squad's sight) that has left
+	 * the reach turned the ordered body 65 deg in two frames, and nothing turns it back (RetreatFacingSmoke 2026-11-16).
+	 */
+	CODEXTACTICS_API bool MayCombatTargetTurnHim(bool bHasOwnFacing, float TargetDistanceCm, float WeaponReachCm);
+
+	/**
 	 * Which point: the last combat target while it lives (bLastTargetAlive), else the nearest live enemy (bHasNearest), else none.
 	 * Returns false when there is nothing to face.
 	 */
