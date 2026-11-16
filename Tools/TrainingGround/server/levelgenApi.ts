@@ -15,12 +15,18 @@
 //   POST /api/levelgen/reject   { name, seed, profile, reason }    -> appended to Saved/TrainingGround/levelgen/rejected.jsonl
 //   POST /api/levelgen/save-locks { layout }  -> { target: accepted|draft, file, locks }: the locked districts (polygons) into the map
 //                                               JSON - the accepted map's regen.locks only, else the page layout as a draft (stage 2)
+//   GET  /api/levelgen/build-target?name=<n>  -> the map «Собрать в Unreal» would write (L_Gen_<Name>), whether it exists / needs a confirm
+//   POST /api/levelgen/build-map { name, confirm } -> starts build + route smoke in the background (src/levelgen/node/buildPipeline.ts;
+//                                               409 busy / needsConfirm / a foreign map, 404 not accepted)
+//   GET  /api/levelgen/build-status           -> { stage idle|build|smoke|done|failed, elapsed_s, build, smoke, result, message }
 import fs from 'node:fs';
 import path from 'node:path';
 import { claudeCritic, emptyLedger, jevCritic, mockCritic } from '../src/levelgen/critic.ts';
 import type { CriticClient, CriticVerdict } from '../src/levelgen/critic.ts';
 import type { Evaluation } from '../src/levelgen/evaluate.ts';
 import { saveLocks } from '../src/levelgen/node/locksFile.ts';
+import { createBuildPipeline } from '../src/levelgen/node/buildPipeline.ts';
+import { ROOT } from '../src/movement/cli/paths.ts';
 import { ACCEPTED_DIR, ensureReferencePng, LEVELGEN_OUT, listProfiles, NAME_RE, readLedger, readProfileById, writeLedger } from '../src/levelgen/node/files.ts';
 import type { GenLayout } from '../src/levelgen/schema.ts';
 import { validateGenLayout } from '../src/levelgen/schema.ts';
@@ -44,6 +50,21 @@ const query = (req: Req, key: string) => new URL(req.url ?? '', 'http://x').sear
 
 export function setupLevelgenApi(use: Use): void {
   setupPropsApi(use);
+  // «Собрать в Unreal» (task 072): the scripts of THIS checkout (ROOT), powershell.exe spawned directly, one build at a time
+  const pipeline = createBuildPipeline({ root: ROOT });
+
+  use('/api/levelgen/build-target', (req, res) => {
+    const name = query(req, 'name');
+    if (!NAME_RE.test(name)) return send(res, 400, { error: 'bad layout name' });
+    send(res, 200, pipeline.target(name));
+  });
+  use('/api/levelgen/build-status', (_req, res) => send(res, 200, pipeline.status()));
+  use('/api/levelgen/build-map', async (req, res, next) => {
+    if (req.method !== 'POST') return next ? next() : send(res, 405, { error: 'POST only' });
+    const b = await readBody(req);
+    const r = pipeline.start(String(b.name ?? ''), b.confirm === true);
+    send(res, r.status, r.body);
+  });
 
   use('/api/levelgen/profiles', (_req, res) => {
     try { send(res, 200, { profiles: listProfiles() }); } catch (e) { send(res, 500, { error: String(e) }); }

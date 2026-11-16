@@ -5,7 +5,7 @@
 // critics' verdicts (Jev - typed judgments; the Claude API - sees both images, USD-capped; the server holds the keys). The
 // designer accepts (-> Content/Data/LevelGen/accepted, what the UE builder reads) or rejects.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Hammer, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus } from 'lucide-react';
 import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
 import { PropsPanel } from './PropsPanel';
@@ -163,8 +163,46 @@ export const LevelGenDepartment: React.FC = () => {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? r.statusText);
       setAccepted((a) => [...a.filter((x) => x.name !== cur.layout.name), { name: cur.layout.name, seed: cur.layout.seed, profile: cur.layout.profile, at: new Date().toISOString() }]);
+      setAcceptedSnap((m) => ({ ...m, [cur.layout.name]: JSON.stringify(cur.layout) }));
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
+  };
+
+  // «Собрать в Unreal» (task 072): the server builds the ACCEPTED file (accepted/<name>.json) + runs the route smoke, one at a time
+  type BuildTarget = { name: string; leaf: string; map: string; file: string; exists: boolean; builtFrom: string; canBuild: boolean; needsConfirm: boolean; reason: string };
+  type BuildState = { stage: 'idle' | 'build' | 'smoke' | 'done' | 'failed'; name: string; map: string; file: string; elapsed_s: number; stage_elapsed_s: number; message: string;
+    result: { built: boolean; actors?: number; nav_tiles?: string; route?: string; route_summary?: string; reason?: string } };
+  const [acceptedSnap, setAcceptedSnap] = useState<Record<string, string>>({});
+  const [buildAsk, setBuildAsk] = useState<BuildTarget | null>(null);
+  const [buildTarget, setBuildTarget] = useState<BuildTarget | null>(null);
+  const [buildState, setBuildState] = useState<BuildState | null>(null);
+  const [buildErr, setBuildErr] = useState('');
+  const isAccepted = !!cur && accepted.some((a) => a.name === cur.layout.name);
+  const acceptedDirty = useMemo(() => !!cur && acceptedSnap[cur.layout.name] !== undefined && acceptedSnap[cur.layout.name] !== JSON.stringify(cur.layout), [cur, acceptedSnap]);
+  const building = buildState?.stage === 'build' || buildState?.stage === 'smoke';
+  const pollBuild = async () => { try { const r = await fetch('/api/levelgen/build-status'); if (r.ok) setBuildState(await r.json()); } catch { /* the dev server restarts */ } };
+  useEffect(() => { pollBuild(); }, []);
+  useEffect(() => {
+    if (!building) return;
+    const id = setInterval(pollBuild, V2.build.poll_s * 1000);
+    return () => clearInterval(id);
+  }, [building]);
+  const curName = cur?.layout.name;
+  useEffect(() => {
+    setBuildAsk(null); setBuildErr('');
+    if (!isAccepted || !curName) { setBuildTarget(null); return; }
+    fetch(`/api/levelgen/build-target?name=${encodeURIComponent(curName)}`).then((r) => r.json()).then(setBuildTarget).catch(() => setBuildTarget(null));
+  }, [isAccepted, curName, buildState?.stage]);
+  const buildNow = async (confirm: boolean) => {
+    if (!cur) return;
+    setBuildErr(''); setBuildAsk(null);
+    try {
+      const r = await fetch('/api/levelgen/build-map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: cur.layout.name, confirm }) });
+      const d = await r.json();
+      if (r.status === 409 && d.needsConfirm) { setBuildAsk(d.target); return; }
+      if (!r.ok) throw new Error(d.error ?? r.statusText);
+      await pollBuild();
+    } catch (e) { setBuildErr(e instanceof Error ? e.message : String(e)); }
   };
 
   const reject = async () => {
@@ -336,6 +374,7 @@ export const LevelGenDepartment: React.FC = () => {
       setCandidates([...rest, { layout, ev, simmed: false, verdicts: [] }]); setSel(rest.length); setLayer('all');
       setHistories((hs) => { const keep = { ...hs }; delete keep[layout.name]; return keep; });
       setZone(null); setRegenReport(null);
+      setAcceptedSnap((m) => ({ ...m, [layout.name]: JSON.stringify(layout) }));
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
   };
@@ -457,8 +496,43 @@ export const LevelGenDepartment: React.FC = () => {
               </button>
               <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
               <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
+              <button onClick={() => buildNow(false)} disabled={!cur || !!busy || !isAccepted || building || (buildTarget !== null && !buildTarget.canBuild)} data-build
+                title={!isAccepted ? 'Сначала «Принять»: собирается принятая карта (Content/Data/LevelGen/accepted)' : buildTarget && !buildTarget.canBuild ? buildTarget.reason : `Собрать ${buildTarget?.map ?? ''} и проверить маршрут ботом (фоном, ~5-15 мин)`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-700 text-xs text-white hover:bg-orange-600 disabled:opacity-50"><Hammer size={13} />Собрать в Unreal</button>
               <button onClick={reject} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-800 text-xs text-white hover:bg-rose-700 disabled:opacity-50"><ThumbsDown size={13} />Отклонить</button>
             </div>
+            {cur && (isAccepted || (buildState && buildState.stage !== 'idle')) && (
+              <div className="flex flex-col gap-1 bg-orange-950/30 border border-orange-900/70 rounded-xl p-2.5 text-xs" data-build-panel>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-bold tracking-widest uppercase text-orange-300">Сборка в Unreal</span>
+                  {buildTarget && <span className="text-slate-300">карта <span className="font-mono text-orange-200">{buildTarget.map}</span>{buildTarget.exists ? ' (уже есть)' : ' (новая)'}</span>}
+                  <span className="text-[11px] text-slate-500" title={`levelgen_v2.json build.strip_prefix = ${V2.build.strip_prefix}`}>имя: L_Gen_ + имя раскладки без «gen_ref_NN_NN_», слова с заглавной (gen_ref_01_02_depot_1_x4 → L_Gen_Depot_1_X4)</span>
+                </div>
+                {isAccepted && acceptedDirty && <p className="text-amber-300">Карта на странице изменена после «Принять»: собирается ПРИНЯТАЯ версия (accepted/{cur.layout.name}.json) — нажмите «Принять», чтобы собрать текущую.</p>}
+                {buildTarget && !buildTarget.canBuild && <p className="text-rose-300"><XCircle size={12} className="inline mr-1" />{buildTarget.reason}</p>}
+                {buildAsk && (
+                  <div className="flex flex-wrap items-center gap-2 text-amber-200" data-build-confirm>
+                    <AlertTriangle size={13} />Карта {buildAsk.map} уже собрана из этой раскладки ({buildAsk.file}). Заменить её?
+                    <button type="button" onClick={() => buildNow(true)} className="px-2 py-0.5 rounded bg-orange-600 hover:bg-orange-500 text-white font-semibold">Заменить</button>
+                    <button type="button" onClick={() => setBuildAsk(null)} className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-200">Отмена</button>
+                  </div>
+                )}
+                {buildErr && <p className="text-rose-300">{buildErr}</p>}
+                {buildState && buildState.stage !== 'idle' && (
+                  <div className="flex flex-col gap-0.5" data-build-state={buildState.stage}>
+                    <p className={buildState.stage === 'failed' ? 'text-rose-300' : buildState.stage === 'done' ? 'text-emerald-300' : 'text-orange-200'}>
+                      {buildState.stage === 'done' ? <CheckCircle2 size={12} className="inline mr-1" /> : buildState.stage === 'failed' ? <XCircle size={12} className="inline mr-1" /> : <Hammer size={12} className="inline mr-1 animate-pulse" />}
+                      {buildState.name} → {buildState.map}: {buildState.stage === 'build' ? `1/2 сборка карты (${buildState.stage_elapsed_s} с)` : buildState.stage === 'smoke' ? `2/2 проверка маршрута ботом (${buildState.stage_elapsed_s} с)` : buildState.stage === 'done' ? 'готово' : 'ошибка'}; всего {Math.floor(buildState.elapsed_s / 60)} мин {buildState.elapsed_s % 60} с — {buildState.message}
+                    </p>
+                    {(buildState.result.built || buildState.stage === 'done' || buildState.stage === 'failed') && (
+                      <p className="text-slate-300">Собрана: {buildState.result.built ? `да${buildState.result.actors ? ` (${buildState.result.actors} акторов)` : ''}` : 'нет'}; навигация: {buildState.result.nav_tiles || '—'}; маршрут: {buildState.result.route ? <span className={buildState.result.route === 'PASS' ? 'text-emerald-300 font-semibold' : 'text-rose-300 font-semibold'}>{buildState.result.route}</span> : '—'}{buildState.result.route_summary ? ` — ${buildState.result.route_summary}` : ''}{buildState.result.reason ? `; причина: ${buildState.result.reason}` : ''}</p>
+                    )}
+                    {buildState.result.built && <p className="text-slate-400">Открыть: в Unreal Content Browser → <span className="font-mono">{buildState.map}</span> (файл <span className="font-mono">{buildState.file}</span>); бой на ней — «Боевая лаборатория», карта {buildState.map.split('/').pop()}.</p>}
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-500">Фоном: Scripts/levelgen_build_map.ps1 (карта + навигация, ~4-6 мин) → Scripts/levelgen_route_smoke.ps1 (бот проходит маршрут, ~6-8 мин для x4). Редактор этого checkout должен быть закрыт; одна сборка за раз; чужие карты не перезаписываются.</p>
+              </div>
+            )}
             {cur && (
               <div className="flex flex-col gap-1.5 bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
