@@ -18,6 +18,20 @@
 
 $script:AgentLockFile = Join-Path (Split-Path $PSScriptRoot -Parent) "Saved\agent.lock"
 
+# Explicit admission guard only: levelgen's own Enter-AgentLock must never wait on itself.
+# Does not preempt running jobs or close the check-to-launch race; standard locks stay in force.
+function Wait-DesignerPriority {
+    if ($env:CODEX_IGNORE_DESIGNER -eq "1") { return }
+    $Helper = Join-Path $PSScriptRoot "Tools\designer_busy.py"
+    try {
+        if (-not (Get-Command python -ErrorAction SilentlyContinue)) { throw "python unavailable" }
+        & python $Helper --config (Join-Path $PSScriptRoot "agent_priority.json") | ForEach-Object { Write-Host $_ }
+        if ($LASTEXITCODE -ne 0) { throw "helper exited $LASTEXITCODE" }
+    } catch {
+        Write-Warning "[agent-priority] designer check could not start/finish; continuing: $_"
+    }
+}
+
 function Get-AgentLock {
     if (-not (Test-Path $script:AgentLockFile)) { return $null }
     try { return Get-Content $script:AgentLockFile -Raw | ConvertFrom-Json } catch { return $null }

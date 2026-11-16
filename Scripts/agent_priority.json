@@ -1,0 +1,5 @@
+{
+  "startup_grace_minutes": 15,
+  "max_wait_minutes": 30,
+  "poll_seconds": 20
+}
