@@ -327,15 +327,47 @@ export interface GenLayout {
   pressure?: Record<string, unknown>;
   /** Region re-roll state (levelgen v2 stage 1, regionRegen.ts): locked districts + the re-roll log. Absent in older files. */
   regen?: RegenState;
+  /** Map expansion (levelgen v2 stage 2, expand.ts): the canvas grew by area round the old map, which kept its coordinates. */
+  expansion?: ExpansionState;
+  /** Start + goals visited in any order (levelgen v2 stage 2, objectives.ts). Absent = the classic spawn -> end only. */
+  objectives?: ObjectiveSet;
 }
 
-/** The version of the `regen` block; a file with a newer version is refused (validateGenLayout), an absent block = no locks. */
-export const REGEN_STATE_VERSION = 1;
+/**
+ * The version of the `regen` block; a file with a newer version is refused (validateGenLayout), an absent block = no locks.
+ * 2 (stage 2): + `blocks` (the block type of every lot, so a re-roll can give a block another type). A version-1 block still loads.
+ */
+export const REGEN_STATE_VERSION = 2;
 /** A LOCKED district: a polygon (UE cm); every object whose centre is inside it is never touched by a region re-roll. */
 export interface LockDistrict { id: string; name: string; poly: Vec2[] }
 /** One applied re-roll (reproducible: same map + zone + seed -> same result). */
 export interface RerollRecord { seed: number; zone: Vec2[]; replaced: number; added: number; retries: number }
-export interface RegenState { version: number; locks: LockDistrict[]; rerolls: RerollRecord[] }
+/** A block (lot) of the map and its current type (blockTemplates.ts): `rect` is [min, max] UE cm. */
+export interface BlockRecord { id: string; rect: [Vec2, Vec2]; template: string }
+export interface RegenState { version: number; locks: LockDistrict[]; rerolls: RerollRecord[]; blocks?: BlockRecord[] }
+
+/** One expansion step: the factor by area relative to the base map, the seed of its street plan, the canvas after it (m). */
+export interface ExpansionStep { factor: number; seed: number; size_m: [number, number] }
+export const EXPANSION_STATE_VERSION = 1;
+export interface ExpansionState {
+  version: number;
+  /** The generator's map size (layout.params.size_m) - the frame of the core the re-roll regenerates. */
+  base_size_m: [number, number];
+  steps: ExpansionStep[];
+  /** The old map's rectangle of every step (UE cm [min, max]): drawn as the seam on the plan. */
+  seams: [Vec2, Vec2][];
+}
+
+export const OBJECTIVES_VERSION = 1;
+export interface ObjectiveGoal { id: string; pos: Vec2; layer: string; kind: 'room' | 'yard' | 'street'; building?: string; zone?: string }
+export interface ObjectiveSet {
+  version: number;
+  seed: number;
+  /** Goals may be visited in any order. */
+  order: 'free';
+  start: { pos: Vec2; yaw: number; layer: string; source: 'spawn' | 'edge' };
+  goals: ObjectiveGoal[];
+}
 
 export interface GenParams {
   /** Map size, m (default: the profile's). */
@@ -446,6 +478,44 @@ export function validateGenLayout(data: unknown): string[] {
     if (!isNum(me.height_cm) || !isMantleable(me.height_cm)) e.push(`mantle_edge ${me.id}: height ${me.height_cm} cm must be 50..150 cm`);
   }
   if (l.regen !== undefined) e.push(...validateRegenState(l.regen));
+  if (l.expansion !== undefined) e.push(...validateExpansionState(l.expansion));
+  if (l.objectives !== undefined) e.push(...validateObjectives(l.objectives, l.bounds));
+  return e;
+}
+
+/** The `expansion` block's own checks (empty = valid). */
+export function validateExpansionState(s: unknown): string[] {
+  if (!s || typeof s !== 'object') return ['expansion: expected an object'];
+  const x = s as Partial<ExpansionState>;
+  const e: string[] = [];
+  if (!isNum(x.version) || x.version < 1) e.push('expansion.version: expected a positive number');
+  else if (x.version > EXPANSION_STATE_VERSION) e.push(`expansion.version ${x.version} is newer than this tool (${EXPANSION_STATE_VERSION})`);
+  if (!isVec(x.base_size_m)) e.push('expansion.base_size_m: expected [w, h]');
+  if (!Array.isArray(x.steps) || !x.steps.length) e.push('expansion.steps: expected at least one step');
+  else for (const st of x.steps) if (!isNum(st?.factor) || st.factor <= 1 || !isNum(st.seed) || !isVec(st.size_m)) e.push('expansion.steps: { factor > 1, seed, size_m: [w, h] }');
+  if (!Array.isArray(x.seams)) e.push('expansion.seams: expected an array');
+  return e;
+}
+
+/** The `objectives` block's own checks (empty = valid): 2-4 goals with unique ids inside the bounds. */
+export function validateObjectives(s: unknown, bounds?: { min: Vec2; max: Vec2 }): string[] {
+  if (!s || typeof s !== 'object') return ['objectives: expected an object'];
+  const o = s as Partial<ObjectiveSet>;
+  const e: string[] = [];
+  if (!isNum(o.version) || o.version < 1) e.push('objectives.version: expected a positive number');
+  else if (o.version > OBJECTIVES_VERSION) e.push(`objectives.version ${o.version} is newer than this tool (${OBJECTIVES_VERSION})`);
+  if (o.order !== 'free') e.push('objectives.order: expected "free"');
+  if (!o.start || !isVec(o.start.pos)) e.push('objectives.start.pos: expected [x, y]');
+  if (!Array.isArray(o.goals) || o.goals.length < 2 || o.goals.length > 4) e.push('objectives.goals: expected 2-4 goals');
+  else {
+    const ids = new Set<string>();
+    for (const g of o.goals) {
+      if (typeof g?.id !== 'string' || !g.id || ids.has(g.id)) e.push('objectives.goals: ids must be unique non-empty strings');
+      else ids.add(g.id);
+      if (!isVec(g?.pos)) e.push(`objectives goal ${g?.id}: pos must be [x, y]`);
+      else if (bounds && (g.pos[0] < bounds.min[0] || g.pos[0] > bounds.max[0] || g.pos[1] < bounds.min[1] || g.pos[1] > bounds.max[1])) e.push(`objectives goal ${g.id}: outside the bounds`);
+    }
+  }
   return e;
 }
 

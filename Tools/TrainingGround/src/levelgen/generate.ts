@@ -115,7 +115,19 @@ export interface GenerateOptions {
   skeletonSeed?: number;
 }
 
+/** A block of the classic grammar (section 3): its region key and its fitted rectangle (profile metres, x east / y south). */
+export interface GenLot { key: string; rect_m: Rect }
+export interface GenerateWithLots { layout: GenLayout; lots: GenLot[]; /** The street rectangles + the cut band (metres): nothing may be built in them. */ keepFree_m: Rect[]; size_m: Vec2 }
+
 export function generateLayout(o: GenerateOptions): GenLayout {
+  return generateLayoutWithLots(o).layout;
+}
+
+/**
+ * generateLayout plus the blocks it filled (levelgen v2 stage 2, blockTemplates.ts): the same layout, byte for byte, and the lots a
+ * region re-roll may give another block type. The east yard (fenced along the street) is not a lot.
+ */
+export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
   const params: GenParams = { ...DEFAULT_PARAMS, size_m: [o.profile.bounds.max[0], o.profile.bounds.max[1]], ...o.params };
   const [w, h] = params.size_m;
   let random = rng((o.skeletonSeed ?? o.seed) * 104729 + 7);
@@ -526,7 +538,8 @@ export function generateLayout(o: GenerateOptions): GenLayout {
   }
 
   // ---- 6. to UE cm ------------------------------------------------------------------------------------------------------
-  return finalizeDraftToLayout(d, [w, h], {
+  const lots: GenLot[] = (Object.keys(region) as (keyof typeof region)[]).filter((k) => k !== 'eastYard').map((k) => ({ key: k, rect_m: fit(region[k]) }));
+  const layout = finalizeDraftToLayout(d, [w, h], {
     name: o.name ?? `gen_${o.profile.id}_${o.seed}`,
     profile: o.profile.id,
     seed: o.seed,
@@ -536,6 +549,7 @@ export function generateLayout(o: GenerateOptions): GenLayout {
     end,
     yaw: 90,
   });
+  return { layout, lots, keepFree_m: d.keepFree.map((r) => [[r[0][0], r[0][1]], [r[1][0], r[1][1]]] as Rect), size_m: [w, h] };
 }
 
 export interface FinalizeMeta {
@@ -662,7 +676,7 @@ export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta):
 
 // ---- helpers (metres) -----------------------------------------------------------------------------------------------------
 
-const COVER_SIZE: Record<CoverKind, [number, number, number]> = {
+export const COVER_SIZE: Record<CoverKind, [number, number, number]> = {
   jersey: [300, 60, obstacleHeight('low_vault')], sandbag: [250, 80, obstacleHeight('low_vault')], crate: [120, 120, obstacleHeight('low_mantle')], wreck: [420, 180, obstacleHeight('high_mantle')], barrel: [60, 60, obstacleHeight('low_vault')], silo: [800, 800, 1200], boiler: [200, 120, obstacleHeight('high_mantle')],
 };
 
@@ -760,8 +774,8 @@ export interface BuildingSpec {
   roofHatch?: boolean;
 }
 
-export { addWall, fenceRect, addBuilding, addLadderAt };
-export type { Draft, DraftBuilding, Side };
+export { addWall, fenceRect, addBuilding, addLadderAt, splitWall };
+export type { Draft, DraftBuilding, Side, Rect };
 
 /** A rectangular building: perimeter walls, openings (doors, windows, loopholes), partitions, rooms, roof parapets and hatches. */
 function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): DraftBuilding {

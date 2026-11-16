@@ -107,7 +107,7 @@ test('regen generateLayout: no skeletonSeed = the classic layout; a skeletonSeed
 });
 
 test('regen re-roll: everything outside the zone stays byte-identical, the inside changes, routes still completable', () => {
-  const r = regenerateRegion({ layout: base, zone: ZONE_SE, seed: 101, profile });
+  const r = regenerateRegion({ layout: base, zone: ZONE_SE, seed: 101, profile, blocks: 'jitter' });
   assert.equal(r.ok, true, r.message);
   assert.ok(r.replaced.includes('B_ruin') && r.added.length > 0);
   assert.equal(r.skeletonMatch, true);
@@ -169,10 +169,10 @@ test('regen restore: a building whose fresh twin cannot be placed (touches a loc
   // falls back to its old points and passes.
   const t = planTransform(base.bounds, 908, 518);
   const W = (fx: number, fy: number) => toWorld(t, [fx * 910 - 1, fy * 520 - 1]);
-  const first = regenerateRegion({ layout: base, zone: rectZone(W(0.52, 0.55), W(0.97, 0.97)), seed: 1001, profile });
+  const first = regenerateRegion({ layout: base, zone: rectZone(W(0.52, 0.55), W(0.97, 0.97)), seed: 1001, profile, blocks: 'jitter' });
   assert.equal(first.ok, true, first.message);
   const locked = addLock(first.layout, [[0.62, 0.52], [0.86, 0.5], [0.88, 0.75], [0.7, 0.8], [0.6, 0.68]].map(([x, y]) => W(x, y)), 'Сталелитейный');
-  const r = regenerateRegion({ layout: locked, zone: rectZone(W(0.45, 0.45), W(0.97, 0.97)), seed: 1002, profile });
+  const r = regenerateRegion({ layout: locked, zone: rectZone(W(0.45, 0.45), W(0.97, 0.97)), seed: 1002, profile, blocks: 'jitter' });
   assert.equal(r.ok, true, `${r.message}: ${r.attempts.map((a) => a.reason).join(' | ')}`);
   assert.ok(r.restored.includes('B_ruin'), `restored: ${r.restored.join(',')}`);
   assert.equal(JSON.stringify(r.layout.buildings.find((b) => b.id === 'B_ruin')), JSON.stringify(locked.buildings.find((b) => b.id === 'B_ruin')));

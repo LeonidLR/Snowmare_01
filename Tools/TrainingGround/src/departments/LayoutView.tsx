@@ -249,6 +249,26 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
       g.restore();
     }
 
+    // the expansion seams (levelgen v2 stage 2): the old map of every step, white dashed
+    for (const seam of layout.expansion?.seams ?? []) {
+      g.save(); g.strokeStyle = 'rgba(255, 255, 255, 0.75)'; g.lineWidth = 1.5; g.setLineDash([8, 5]);
+      poly(rectPts(seam)); g.stroke(); g.restore();
+    }
+    // the start + goals (free order): the start a green ring with S, the goals gold discs with their number
+    if (layout.objectives) {
+      const ob = layout.objectives;
+      const st = P(ob.start.pos);
+      g.save();
+      g.strokeStyle = '#22c55e'; g.lineWidth = 3; g.beginPath(); g.arc(st[0], st[1], 11, 0, Math.PI * 2); g.stroke();
+      g.fillStyle = '#22c55e'; g.font = 'bold 11px ui-monospace, monospace'; g.textAlign = 'center'; g.fillText('S', st[0], st[1] + 4);
+      ob.goals.forEach((gl, i) => {
+        const q = P(gl.pos);
+        g.fillStyle = '#facc15'; g.strokeStyle = '#000'; g.lineWidth = 1.5;
+        g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.fill(); g.stroke();
+        g.fillStyle = '#111'; g.font = 'bold 11px ui-monospace, monospace'; g.fillText(String(i + 1), q[0], q[1] + 4);
+      });
+      g.restore();
+    }
     for (const m of marks ?? []) { const q = P(m); g.strokeStyle = '#f97316'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.stroke(); }
     g.fillStyle = '#ffe600'; g.font = '11px ui-monospace, monospace'; g.textAlign = 'left';
     g.fillText(`${layout.name}  ${Math.round((maxY - minY) / 100)} x ${Math.round((maxX - minX) / 100)} m  seed ${layout.seed}  layer ${layer !== 'all' ? layer : floorMode}`, 8, h - 8);

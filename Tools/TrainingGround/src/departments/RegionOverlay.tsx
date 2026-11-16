@@ -19,6 +19,8 @@ interface Props {
   /** Centres of the groups the re-roll would replace / that a lock keeps. */
   inside?: Vec2[];
   locked?: Vec2[];
+  /** The blocks the re-roll gives another type (stage 2), [min, max] UE cm: drawn cyan dashed. */
+  blocks?: [Vec2, Vec2][];
   onZone: (zone: Vec2[] | null) => void;
   children: React.ReactNode;
 }
@@ -27,7 +29,7 @@ interface Props {
 const LASSO_STEP_CM = 150;
 const BORDER_PX = 1;
 
-export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, locks, inside = [], locked = [], onZone, children }) => {
+export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, locks, inside = [], locked = [], blocks = [], onZone, children }) => {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<[number, number]>([0, height]);
   const [draft, setDraft] = useState<Vec2[]>([]);
@@ -114,6 +116,7 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
             </g>
           );
         })}
+        {t && blocks.map((b, i) => <polygon key={`b${i}`} points={pts([[b[0][0], b[0][1]], [b[1][0], b[0][1]], [b[1][0], b[1][1]], [b[0][0], b[1][1]]])} fill="rgba(34, 211, 238, 0.07)" stroke="#22d3ee" strokeWidth={1.5} strokeDasharray="3 3" />)}
         {t && zone && <polygon points={pts(zone)} fill="rgba(250, 204, 21, 0.12)" stroke="#facc15" strokeWidth={2} strokeDasharray="6 4" />}
         {t && inside.map((p, i) => { const q = scr(p); return <circle key={`i${i}`} cx={q[0]} cy={q[1]} r={3} fill="#22d3ee" />; })}
         {t && locked.map((p, i) => { const q = scr(p); return <rect key={`l${i}`} x={q[0] - 3} y={q[1] - 3} width={6} height={6} fill="#10b981" />; })}
