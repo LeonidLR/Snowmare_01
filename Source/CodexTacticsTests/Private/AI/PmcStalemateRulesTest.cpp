@@ -73,17 +73,49 @@ bool FPmcCommitmentTest::RunTest(const FString&)
 	// A failed order sits out its cooldown (5 s): the pmc-v3 flank re-decided twice a second.
 	C = FPmcCommitment();
 	C.Current = EPmcOrder::Flank;
-	C.Failed = EPmcOrder::Flank;
-	C.FailedAgeSeconds = 1.f;
+	C.FailedUntil.Add(EPmcOrder::Flank, W.FailedOrderCooldownSeconds);
+	C.NowSeconds = 1.0;
 	const TArray<FPmcOrderScore> FlankBest = Scores({ { EPmcOrder::Flank, 0.9f }, { EPmcOrder::Suppress, 0.4f } });
 	TestEqual(TEXT("the failed flank cools down: the next best order"), PmcCommanderRules::PickCommitted(FlankBest, C, W), EPmcOrder::Suppress);
-	C.FailedAgeSeconds = 6.f;
+	C.NowSeconds = 6.0;
 	TestEqual(TEXT("after the cooldown the flank may come back"), PmcCommanderRules::PickCommitted(FlankBest, C, W), EPmcOrder::Flank);
-	C.FailedAgeSeconds = 1.f;
+	C.NowSeconds = 1.0;
 	const TArray<FPmcOrderScore> OnlyFlank = Scores({ { EPmcOrder::Flank, 0.9f } });
 	TestEqual(TEXT("nothing else scores: Hold"), PmcCommanderRules::PickCommitted(OnlyFlank, C, W), EPmcOrder::Hold);
 	TestTrue(TEXT("static orders"), PmcCommanderRules::IsStaticOrder(EPmcOrder::Hold) && PmcCommanderRules::IsStaticOrder(EPmcOrder::Ambush)
 		&& PmcCommanderRules::IsStaticOrder(EPmcOrder::Crouch) && !PmcCommanderRules::IsStaticOrder(EPmcOrder::Suppress));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcFailureRetentionTest, "CodexTactics.AI.PmcCommander.FailureRetention",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcFailureRetentionTest::RunTest(const FString&)
+{
+	using namespace PmcStalemateTestLocal;
+	const FPmcWeights W;
+	// Both failed walks must survive a refused FallBack in the same decision's retry loop.
+	for (const EPmcOrder Walk : { EPmcOrder::Objective, EPmcOrder::Flank })
+	{
+		FPmcCommitment C;
+		C.Current = Walk;
+		const double WalkFailedAt = 0.0;
+		const double FallBackFailedAt = W.FailedOrderCooldownSeconds / 2.0;
+		const double WalkExpiry = WalkFailedAt + W.FailedOrderCooldownSeconds;
+		const double FallBackExpiry = FallBackFailedAt + W.FailedOrderCooldownSeconds;
+		const TArray<FPmcOrderScore> Candidates = Scores({ { EPmcOrder::FallBack, 1.2f }, { Walk, 1.f }, { EPmcOrder::Hold, 0.2f } });
+		C.FailedUntil.Add(Walk, WalkExpiry);
+		C.NowSeconds = FallBackFailedAt;
+		TestEqual(TEXT("failed walk excluded: try FallBack"), PmcCommanderRules::PickCommitted(Candidates, C, W), EPmcOrder::FallBack);
+		C.FailedUntil.Add(EPmcOrder::FallBack, FallBackExpiry);
+		TestEqual(TEXT("refused FallBack retains both exclusions"), PmcCommanderRules::PickCommitted(Candidates, C, W), EPmcOrder::Hold);
+		C.NowSeconds = (FallBackFailedAt + WalkExpiry) / 2.0;
+		TestEqual(TEXT("next decision: both cooldowns still active"), PmcCommanderRules::PickCommitted(Candidates, C, W), EPmcOrder::Hold);
+		C.NowSeconds = WalkExpiry;
+		TestEqual(TEXT("walk expires independently while FallBack stays excluded"), PmcCommanderRules::PickCommitted(Candidates, C, W), Walk);
+		C.NowSeconds = FallBackExpiry;
+		TestEqual(TEXT("FallBack eligible at its own expiry"), PmcCommanderRules::PickCommitted(Candidates, C, W), EPmcOrder::FallBack);
+	}
 	return true;
 }
 

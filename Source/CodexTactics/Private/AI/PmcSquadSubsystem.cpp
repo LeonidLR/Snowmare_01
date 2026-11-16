@@ -1083,8 +1083,7 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 		if (State.bStrikePending && !IsOrderRunning(*Fighter, State))
 		{
 			State.bStrikePending = false;
-			State.FailedOrder = EPmcOrder::RpgStrike;
-			State.FailedAt = Now;
+			State.FailedUntil.Add(EPmcOrder::RpgStrike, Now + Team.Weights.FailedOrderCooldownSeconds);
 		}
 		// A walk that ended short of its goal (no path / dropped on the way): failed - not re-decided twice a second (pmc-v3 2026-11-08).
 		if (State.bWalkPending && !IsOrderRunning(*Fighter, State))
@@ -1393,8 +1392,8 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		Commitment.Current = State.Order;
 		Commitment.bRunning = bRunning;
 		Commitment.AgeSeconds = static_cast<float>(Now - State.OrderSince);
-		Commitment.Failed = State.FailedOrder;
-		Commitment.FailedAgeSeconds = static_cast<float>(Now - State.FailedAt);
+		Commitment.FailedUntil = State.FailedUntil;
+		Commitment.NowSeconds = Now;
 		EPmcPickReason Reason = EPmcPickReason::Best;
 		EPmcOrder Pick = PmcCommanderRules::PickCommitted(Scored, Commitment, Team.Weights, &Reason);
 		if (Pick == State.Order && bRunning)
@@ -1410,8 +1409,7 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		for (int32 Retry = 0; !bTaken && Retry < 2 && !PmcCommanderRules::IsStaticOrder(Pick); ++Retry)
 		{
 			MarkFailed(TeamId, Team, *Fighter, State, Pick, TEXT("could not be taken"));
-			Commitment.Failed = Pick;
-			Commitment.FailedAgeSeconds = 0.f;
+			Commitment.FailedUntil = State.FailedUntil;
 			Commitment.bRunning = false;
 			Pick = PmcCommanderRules::PickCommitted(Scored, Commitment, Team.Weights, &Reason);
 			if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick))
@@ -1989,8 +1987,7 @@ bool UPmcSquadSubsystem::TryDetour(AOperativeCharacter& Fighter, const FFighterS
 void UPmcSquadSubsystem::MarkFailed(int32 TeamId, FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State, EPmcOrder Order, const TCHAR* Why)
 {
 	const double Now = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
-	State.FailedOrder = Order;
-	State.FailedAt = Now;
+	State.FailedUntil.Add(Order, Now + Team.Weights.FailedOrderCooldownSeconds);
 	State.bWalkPending = false;
 	++Team.Stats.OrdersFailed;
 	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s's %s failed (%s) - not again for %.0f s"), TeamId, *Fighter.DisplayName.ToString(),

@@ -220,9 +220,8 @@ private:
 		 */
 		int32 DetourAttempts = 0;
 		int32 DetourSide = 0;
-		/** The last failed order and when (PickCommitted's cooldown). */
-		EPmcOrder FailedOrder = EPmcOrder::Count;
-		double FailedAt = -1e9;
+		/** Per-order world-clock expiries (PickCommitted's cooldown). */
+		TMap<EPmcOrder, double> FailedUntil;
 	};
 
 	struct FTeam
