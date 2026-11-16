@@ -155,7 +155,9 @@ def collect():
                     smokes += 1
                 else:
                     editor_open = True
-            elif key in cmd and ("unrealbuildtool" in cmd or "build.bat" in cmd):
+            # match the .uproject path, not the folder prefix: "codextactics" is a prefix of "codextactics-claude" (2026-11-16)
+            # the editor itself spawns "Build.bat -Mode=ValidatePlatforms" on start - an SDK check, not a build
+            elif uproj in cmd and ("unrealbuildtool" in cmd or "build.bat" in cmd) and "validateplatforms" not in cmd:
                 build = True
         head, subj = git_head(wt["path"])
         result.append({
