@@ -5,20 +5,25 @@
 // critics' verdicts (Jev - typed judgments; the Claude API - sees both images, USD-capped; the server holds the keys). The
 // designer accepts (-> Content/Data/LevelGen/accepted, what the UE builder reads) or rejects.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, Play, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Hammer, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus } from 'lucide-react';
 import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
 import { PropsPanel } from './PropsPanel';
 import { RegionOverlay } from './RegionOverlay';
-import type { RegionMode } from './RegionOverlay';
+import type { ObjectiveAction, RegionMode } from './RegionOverlay';
+import type { PlanView } from '../levelgen/planView';
+import { FIT_VIEW, PLAN_VIEW, zoomAt } from '../levelgen/planView';
 import type { History } from '../levelgen/regenHistory';
 import { canRedo, canUndo, historyInit, historyPush, historyRedo, historyUndo } from '../levelgen/regenHistory';
 import type { BlockMode, RegionRegenResult } from '../levelgen/regionRegen';
 import type { ExpandResult, SeamCheck } from '../levelgen/expand';
 import { checkSeams, expandLayout, expansionSize } from '../levelgen/expand';
 import type { PlaceObjectivesResult } from '../levelgen/objectives';
-import { checkObjectives, defaultGoalCount, placeObjectives } from '../levelgen/objectives';
+import { addGoal, checkObjectives, defaultGoalCount, groundNav, moveObjective, placeObjectives, removeGoal, START_ID } from '../levelgen/objectives';
 import { V2 } from '../levelgen/blockTemplates';
+import { FULL } from '../levelgen/fullReroll';
+import type { SquadTrack } from '../levelgen/playback';
+import { advanceClock, clockLabel, PLAYBACK, positionsAt, summarizeTrack, trailAt } from '../levelgen/playback';
 import { addLock, DEFAULT_MAX_RETRIES, regenerateRegion, regenStateOf, removeLock, selectRegion } from '../levelgen/regionRegen';
 import type { FormationConfigFile } from '../movement/config';
 import { configValues } from '../movement/config';
@@ -32,7 +37,7 @@ import type { GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
 
 /** `key` = the slot's history key (the first layout name: an expansion renames the map to <name>_x<N>). */
-interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string }
+interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string; /** The squad playback of the last simulator walk (task 072; never sent to the server). */ track?: SquadTrack }
 type ProfileRow = { id: string; title: string; size_m: [number, number] };
 
 const pct = (v?: number) => `${Math.round((v ?? 0) * 100)} %`;
@@ -44,6 +49,8 @@ const BLOCK_LABEL: Record<string, string> = {
   steel_works: 'сталелитейный цех', racks: 'стеллажи',
 };
 const blockLabel = (t: string) => BLOCK_LABEL[t] ?? t;
+/** 'a + b + c' (the parcels of a 'full' re-roll) -> the labels. */
+const blockLabels = (t: string) => t.split(' + ').filter(Boolean).map(blockLabel).join(' + ');
 
 export const LevelGenDepartment: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'generator' | 'props'>('props');
@@ -66,7 +73,7 @@ export const LevelGenDepartment: React.FC = () => {
   const [ledger, setLedger] = useState<{ spentUsd: number; calls: unknown[] }>({ spentUsd: 0, calls: [] });
   const [accepted, setAccepted] = useState<{ name: string; seed: number; profile: string; at: string }[]>([]);
   const [refOk, setRefOk] = useState(true);
-  const view = useRef<LayoutViewHandle>(null);
+  const view0 = useRef<LayoutViewHandle>(null);
   // region re-roll + locked districts (levelgen v2 stage 1, task 070; docs/port/LEVELGEN_V2_STAGE1_REPORT.md)
   const [regionMode, setRegionMode] = useState<RegionMode>('off');
   const [zone, setZone] = useState<Vec2[] | null>(null);
@@ -75,7 +82,13 @@ export const LevelGenDepartment: React.FC = () => {
   const [lockName, setLockName] = useState('');
   const [regenReport, setRegenReport] = useState<RegionRegenResult | null>(null);
   const [histories, setHistories] = useState<Record<string, History<GenLayout>>>({});
-  const [blockMode, setBlockMode] = useState<BlockMode>('types');
+  // task 072: the default is the full re-plan (the designer expected the buildings to change, not only the points)
+  const [blockMode, setBlockMode] = useState<BlockMode>('full');
+  const [chaos, setChaos] = useState<number>(FULL.default_chaos);
+  // zoom + pan on the plan (UX round, task 072): reset to "fit" when another map (other bounds) is shown
+  const [view, setView] = useState<PlanView>(FIT_VIEW);
+  const [goalTool, setGoalTool] = useState(false);
+  const [objMsg, setObjMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     fetch('/api/movement/config').then((r) => r.json()).then(setConfigFile).catch(() => setError('Нет связи с сервером Training Ground'));
@@ -119,8 +132,9 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('Отряд идёт по маршруту (симулятор)...');
     setTimeout(() => {
       try {
-        const ev = evaluateLayout({ layout: cur.layout, profile, config });
-        setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, ev, simmed: true } : c)));
+        const { track, ...ev } = evaluateLayout({ layout: cur.layout, profile, config, track: true });
+        setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, ev, simmed: true, track } : c)));
+        setPlayT(0); setPlaying(!!track);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
     }, 20);
@@ -130,7 +144,7 @@ export const LevelGenDepartment: React.FC = () => {
     if (!cur) return;
     setBusy(client === 'claude' ? `Критик Claude (${model}, бюджет $${budgetUsd})...` : client === 'jev' ? 'Jev оценивает...' : 'Эвристика...'); setError('');
     try {
-      const candidatePng = client === 'claude' ? view.current?.toPngBase64() ?? '' : '';
+      const candidatePng = client === 'claude' ? view0.current?.toPngBase64() ?? '' : '';
       const r = await fetch('/api/levelgen/critic', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: cur.layout.name, profile: cur.layout.profile, layout: cur.layout, evaluation: cur.ev, candidatePng, client, budgetUsd, model }) });
       const d = await r.json();
@@ -149,8 +163,51 @@ export const LevelGenDepartment: React.FC = () => {
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? r.statusText);
       setAccepted((a) => [...a.filter((x) => x.name !== cur.layout.name), { name: cur.layout.name, seed: cur.layout.seed, profile: cur.layout.profile, at: new Date().toISOString() }]);
+      setAcceptedSnap((m) => ({ ...m, [cur.layout.name]: JSON.stringify(cur.layout) }));
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
+  };
+
+  // «Собрать в Unreal» (task 072): the server builds the ACCEPTED file (accepted/<name>.json) + runs the route smoke, one at a time
+  type BuildTarget = { name: string; leaf: string; map: string; file: string; exists: boolean; builtFrom: string; canBuild: boolean; needsConfirm: boolean; reason: string };
+  type BuildState = { stage: 'idle' | 'build' | 'smoke' | 'done' | 'failed'; name: string; map: string; file: string; elapsed_s: number; stage_elapsed_s: number; message: string;
+    result: { built: boolean; actors?: number; nav_tiles?: string; route?: string; route_summary?: string; reason?: string } };
+  const [acceptedSnap, setAcceptedSnap] = useState<Record<string, string>>({});
+  const [buildAsk, setBuildAsk] = useState<BuildTarget | null>(null);
+  const [buildTarget, setBuildTarget] = useState<BuildTarget | null>(null);
+  const [buildState, setBuildState] = useState<BuildState | null>(null);
+  const [buildErr, setBuildErr] = useState('');
+  const isAccepted = !!cur && accepted.some((a) => a.name === cur.layout.name);
+  /** 'same' = the page shows the accepted file; 'changed' = edited after «Принять»; 'unknown' = a candidate with an accepted name. */
+  const acceptedSync = useMemo<'same' | 'changed' | 'unknown'>(() => {
+    if (!cur) return 'unknown';
+    const snap = acceptedSnap[cur.layout.name];
+    return snap === undefined ? 'unknown' : snap === JSON.stringify(cur.layout) ? 'same' : 'changed';
+  }, [cur, acceptedSnap]);
+  const building = buildState?.stage === 'build' || buildState?.stage === 'smoke';
+  const pollBuild = async () => { try { const r = await fetch('/api/levelgen/build-status'); if (r.ok) setBuildState(await r.json()); } catch { /* the dev server restarts */ } };
+  useEffect(() => { pollBuild(); }, []);
+  useEffect(() => {
+    if (!building) return;
+    const id = setInterval(pollBuild, V2.build.poll_s * 1000);
+    return () => clearInterval(id);
+  }, [building]);
+  const curName = cur?.layout.name;
+  useEffect(() => {
+    setBuildAsk(null); setBuildErr('');
+    if (!isAccepted || !curName) { setBuildTarget(null); return; }
+    fetch(`/api/levelgen/build-target?name=${encodeURIComponent(curName)}`).then((r) => r.json()).then(setBuildTarget).catch(() => setBuildTarget(null));
+  }, [isAccepted, curName, buildState?.stage]);
+  const buildNow = async (confirm: boolean) => {
+    if (!cur) return;
+    setBuildErr(''); setBuildAsk(null);
+    try {
+      const r = await fetch('/api/levelgen/build-map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: cur.layout.name, confirm }) });
+      const d = await r.json();
+      if (r.status === 409 && d.needsConfirm) { setBuildAsk(d.target); return; }
+      if (!r.ok) throw new Error(d.error ?? r.statusText);
+      await pollBuild();
+    } catch (e) { setBuildErr(e instanceof Error ? e.message : String(e)); }
   };
 
   const reject = async () => {
@@ -171,7 +228,7 @@ export const LevelGenDepartment: React.FC = () => {
   const showLayout = (layout: GenLayout) => {
     if (!profile || !config) return;
     const ev = evaluateLayout({ layout, profile, config, noSim: true });
-    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, key: c.key ?? c.layout.name, layout, ev, simmed: false, verdicts: [] } : c)));
+    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, key: c.key ?? c.layout.name, layout, ev, simmed: false, verdicts: [], track: undefined } : c)));
   };
   const pushStep = (layout: GenLayout, label: string) => {
     if (!cur) return;
@@ -183,9 +240,9 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('Перегенерация зоны...'); setError('');
     setTimeout(() => {
       try {
-        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode });
+        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos });
         setRegenReport(r);
-        if (r.ok && r.layout !== cur.layout) pushStep(r.layout, `зона, seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`);
+        if (r.ok && r.layout !== cur.layout) pushStep(r.layout, `зона (${blockMode === 'full' ? `полностью, хаос ${chaos}` : blockMode === 'types' ? 'типы' : 'наполнение'}), seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`);
         setRerollSeed((s) => s + 1);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
@@ -213,7 +270,57 @@ export const LevelGenDepartment: React.FC = () => {
   const [goalStart, setGoalStart] = useState<'spawn' | 'edge'>('spawn');
   const [goalSeed, setGoalSeed] = useState(1);
   const [goalReport, setGoalReport] = useState<PlaceObjectivesResult | null>(null);
-  const objCheck = useMemo(() => { try { return cur?.layout.objectives ? checkObjectives(cur.layout) : null; } catch { return null; } }, [cur]);
+  // the ground nav of the shown map: built once per geometry (an objectives edit keeps the arrays, so it is reused)
+  const curLayout = cur?.layout;
+  const nav = useMemo(() => { try { return curLayout ? groundNav(curLayout) : null; } catch { return null; } },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [curLayout?.walls, curLayout?.buildings, curLayout?.covers, curLayout?.zones, curLayout?.cut, curLayout?.bounds]);
+  const objCheck = useMemo(() => { try { return cur?.layout.objectives ? checkObjectives(cur.layout, nav ?? undefined) : null; } catch { return null; } }, [cur, nav]);
+  const objErrors = useMemo(() => {
+    const e: Record<string, string> = {};
+    if (objCheck?.start.error) e[START_ID] = objCheck.start.error;
+    for (const g of objCheck?.goals ?? []) if (g.error) e[g.id] = g.error;
+    return e;
+  }, [objCheck]);
+  const objWarnings = useMemo(() => Object.fromEntries((objCheck?.goals ?? []).filter((g) => g.warnings.length).map((g) => [g.id, g.warnings.join(', ')])), [objCheck]);
+  // another map in the plan (another slot, an opened accepted map, an expansion): back to "fit", the last edit message cleared
+  const viewKey = cur ? `${sel}:${cur.key ?? cur.layout.name}:${JSON.stringify(cur.layout.bounds)}` : '';
+  useEffect(() => { setView(FIT_VIEW); setObjMsg(null); }, [viewKey]);
+  /** A start / goal edit on the plan: applied, re-walked, one undo step (an invalid spot stays where it was dropped, marked red). */
+  const onObjective = (a: ObjectiveAction) => {
+    if (!cur || busy) return;
+    const r = a.kind === 'add' ? addGoal(cur.layout, a.pos, nav ?? undefined) : a.kind === 'move' ? moveObjective(cur.layout, a.id, a.pos, nav ?? undefined) : removeGoal(cur.layout, a.id, nav ?? undefined);
+    setObjMsg({ ok: r.ok && !!r.check?.ok, text: r.message });
+    if (r.ok) { pushStep(r.layout, r.message.split(';')[0]); setGoalReport(null); }
+  };
+  const zoomBy = (f: number) => setView((v) => zoomAt(v, [planBox.current ? planBox.current.clientWidth / 2 : 0, 260], f));
+  const planBox = useRef<HTMLDivElement>(null);
+  // the squad playback (task 072): a clock driven by requestAnimationFrame at x1..x8, a scrubber; dots + the leader's trail
+  const [playT, setPlayT] = useState(0);
+  const [playing, setPlaying] = useState(false);
+  const playRef = useRef(0);
+  playRef.current = playT;
+  const [speed, setSpeed] = useState<number>(PLAYBACK.speeds[1] ?? 2);
+  const track = cur?.track ?? null;
+  useEffect(() => {
+    if (!playing || !track) return;
+    let raf = 0, last = performance.now();
+    const tick = (now: number) => {
+      const dt = (now - last) / 1000; last = now;
+      const r = advanceClock(playRef.current, dt, speed, track.duration_s);
+      playRef.current = r.t; setPlayT(r.t);
+      if (r.ended) { setPlaying(false); return; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing, speed, track]);
+  const squadNow = useMemo(() => {
+    if (!track) return null;
+    const p = positionsAt(track, playT);
+    return p ? { members: p.members, trail: trailAt(track, playT), leg: p.leg, formation: p.formation } : null;
+  }, [track, playT]);
+  const trackSummary = useMemo(() => (track ? summarizeTrack(track) : null), [track]);
   const expandNow = () => {
     if (!cur || !profileOk || !profile) return;
     setBusy(`Расширяю карту x${expandFactor}...`); setError('');
@@ -273,6 +380,7 @@ export const LevelGenDepartment: React.FC = () => {
       setCandidates([...rest, { layout, ev, simmed: false, verdicts: [] }]); setSel(rest.length); setLayer('all');
       setHistories((hs) => { const keep = { ...hs }; delete keep[layout.name]; return keep; });
       setZone(null); setRegenReport(null);
+      setAcceptedSnap((m) => ({ ...m, [layout.name]: JSON.stringify(layout) }));
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
   };
@@ -393,16 +501,52 @@ export const LevelGenDepartment: React.FC = () => {
                 Линии огня
               </button>
               <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
-              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
+              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
+              <button onClick={() => buildNow(false)} disabled={!cur || !!busy || !isAccepted || building || (buildTarget !== null && !buildTarget.canBuild)} data-build
+                title={!isAccepted ? 'Сначала «Принять»: собирается принятая карта (Content/Data/LevelGen/accepted)' : buildTarget && !buildTarget.canBuild ? buildTarget.reason : `Собрать ${buildTarget?.map ?? ''} и проверить маршрут ботом (фоном, ~5-15 мин)`}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-700 text-xs text-white hover:bg-orange-600 disabled:opacity-50"><Hammer size={13} />Собрать в Unreal</button>
               <button onClick={reject} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-800 text-xs text-white hover:bg-rose-700 disabled:opacity-50"><ThumbsDown size={13} />Отклонить</button>
             </div>
+            {cur && (isAccepted || (buildState && buildState.stage !== 'idle')) && (
+              <div className="flex flex-col gap-1 bg-orange-950/30 border border-orange-900/70 rounded-xl p-2.5 text-xs" data-build-panel>
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-bold tracking-widest uppercase text-orange-300">Сборка в Unreal</span>
+                  {buildTarget && <span className="text-slate-300">карта <span className="font-mono text-orange-200">{buildTarget.map}</span>{buildTarget.exists ? ' (уже есть)' : ' (новая)'}</span>}
+                  <span className="text-[11px] text-slate-500" title={`levelgen_v2.json build.strip_prefix = ${V2.build.strip_prefix}`}>имя: L_Gen_ + имя раскладки без «gen_ref_NN_NN_», слова с заглавной (gen_ref_01_02_depot_1_x4 → L_Gen_Depot_1_X4)</span>
+                </div>
+                {isAccepted && acceptedSync === 'changed' && <p className="text-amber-300">Карта на странице изменена после «Принять»: собирается ПРИНЯТАЯ версия (accepted/{cur.layout.name}.json) — нажмите «Принять», чтобы собрать текущую.</p>}
+                {isAccepted && acceptedSync === 'unknown' && <p className="text-amber-300">Собирается принятый файл accepted/{cur.layout.name}.json — на странице может быть другая версия с тем же именем (откройте её в «Принятые» или нажмите «Принять»).</p>}
+                {buildTarget && !buildTarget.canBuild && <p className="text-rose-300"><XCircle size={12} className="inline mr-1" />{buildTarget.reason}</p>}
+                {buildAsk && (
+                  <div className="flex flex-wrap items-center gap-2 text-amber-200" data-build-confirm>
+                    <AlertTriangle size={13} />Карта {buildAsk.map} уже собрана из этой раскладки ({buildAsk.file}). Заменить её?
+                    <button type="button" onClick={() => buildNow(true)} className="px-2 py-0.5 rounded bg-orange-600 hover:bg-orange-500 text-white font-semibold">Заменить</button>
+                    <button type="button" onClick={() => setBuildAsk(null)} className="px-2 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-200">Отмена</button>
+                  </div>
+                )}
+                {buildErr && <p className="text-rose-300">{buildErr}</p>}
+                {buildState && buildState.stage !== 'idle' && (
+                  <div className="flex flex-col gap-0.5" data-build-state={buildState.stage}>
+                    <p className={buildState.stage === 'failed' ? 'text-rose-300' : buildState.stage === 'done' ? 'text-emerald-300' : 'text-orange-200'}>
+                      {buildState.stage === 'done' ? <CheckCircle2 size={12} className="inline mr-1" /> : buildState.stage === 'failed' ? <XCircle size={12} className="inline mr-1" /> : <Hammer size={12} className="inline mr-1 animate-pulse" />}
+                      {buildState.name} → {buildState.map}: {buildState.stage === 'build' ? `1/2 сборка карты (${buildState.stage_elapsed_s} с)` : buildState.stage === 'smoke' ? `2/2 проверка маршрута ботом (${buildState.stage_elapsed_s} с)` : buildState.stage === 'done' ? 'готово' : 'ошибка'}; всего {Math.floor(buildState.elapsed_s / 60)} мин {buildState.elapsed_s % 60} с — {buildState.message}
+                    </p>
+                    {(buildState.result.built || buildState.stage === 'done' || buildState.stage === 'failed') && (
+                      <p className="text-slate-300">Собрана: {buildState.result.built ? `да${buildState.result.actors ? ` (${buildState.result.actors} акторов)` : ''}` : 'нет'}; навигация: {buildState.result.nav_tiles || '—'}; маршрут: {buildState.result.route ? <span className={buildState.result.route === 'PASS' ? 'text-emerald-300 font-semibold' : 'text-rose-300 font-semibold'}>{buildState.result.route}</span> : '—'}{buildState.result.route_summary ? ` — ${buildState.result.route_summary}` : ''}{buildState.result.reason ? `; причина: ${buildState.result.reason}` : ''}</p>
+                    )}
+                    {buildState.result.built && <p className="text-slate-400">Открыть: в Unreal Content Browser → <span className="font-mono">{buildState.map}</span> (файл <span className="font-mono">{buildState.file}</span>); бой на ней — «Боевая лаборатория», карта {buildState.map.split('/').pop()}.</p>}
+                  </div>
+                )}
+                <p className="text-[11px] text-slate-500">Фоном: Scripts/levelgen_build_map.ps1 (карта + навигация, ~4-6 мин) → Scripts/levelgen_route_smoke.ps1 (бот проходит маршрут, ~6-8 мин для x4). Редактор этого checkout должен быть закрыт; одна сборка за раз; чужие карты не перезаписываются.</p>
+              </div>
+            )}
             {cur && (
               <div className="flex flex-col gap-1.5 bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 text-xs">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Зона</span>
                   <div className="inline-flex rounded-lg bg-slate-950 border border-slate-700 p-0.5 text-[11px]">
                     {([['off', 'Просмотр'], ['rect', 'Рамка'], ['poly', 'Многоугольник'], ['lasso', 'Лассо']] as const).map(([m, label]) => (
-                      <button key={m} type="button" onClick={() => setRegionMode(m)} className={`px-2 py-0.5 rounded ${regionMode === m ? 'bg-amber-600 text-slate-950 font-semibold' : 'text-slate-300 hover:text-white'}`}>{label}</button>
+                      <button key={m} type="button" onClick={() => { setRegionMode(m); setGoalTool(false); }} className={`px-2 py-0.5 rounded ${regionMode === m ? 'bg-amber-600 text-slate-950 font-semibold' : 'text-slate-300 hover:text-white'}`}>{label}</button>
                     ))}
                   </div>
                   <button type="button" onClick={() => setZone(null)} disabled={!zone} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40"><Eraser size={12} />Сбросить</button>
@@ -412,9 +556,21 @@ export const LevelGenDepartment: React.FC = () => {
                   <label className="flex items-center gap-1 text-slate-400" title="Сколько раз повторить с новым seed, если маршрут ломается">повторов до
                     <input type="number" value={maxRetries} min={0} max={20} onChange={(e) => setMaxRetries(Math.max(0, Math.min(20, Math.floor(Number(e.target.value) || 0))))} className="w-12 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" />
                   </label>
-                  <label className="flex items-center gap-1 text-slate-400" title="Кварталы, чей центр внутри зоны, получают ДРУГОЙ тип (цех -> двор, свалка -> двухэтажка...) и меняются целиком; иначе — только перестановка внутри тех же типов (этап 1)">
-                    <input type="checkbox" checked={blockMode === 'types'} onChange={(e) => setBlockMode(e.target.checked ? 'types' : 'jitter')} />новые типы кварталов
+                  <label className="flex items-center gap-1 text-slate-400" title="Полностью: квартал заново делится на участки, у каждого свой тип, здания другой формы, размера, отступа и ориентации (по хаосу). Тип квартала: квартал получает другой тип, но здания стоят на тех же местах. Только наполнение: те же здания, новые укрытия, точки, проёмы.">Что менять
+                    <select value={blockMode} onChange={(e) => setBlockMode(e.target.value as BlockMode)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" data-blockmode>
+                      <option value="full">Полностью (форма и расстановка)</option>
+                      <option value="types">Тип квартала (здания на тех же местах)</option>
+                      <option value="jitter">Только наполнение (укрытия, точки)</option>
+                    </select>
                   </label>
+                  {blockMode === 'full' && (
+                    <label className="flex items-center gap-1 text-slate-400" title="0 — ровная сетка: участки поровну, здания вровень с улицей; 1 — неровно: разные участки, отступы, промежутки, угловые участки могут смотреть на другую улицу">хаос
+                      <span className="text-[10px] text-slate-500">ровно</span>
+                      <input type="range" min={0} max={1} step={0.1} value={chaos} onChange={(e) => setChaos(Number(e.target.value))} className="w-24 accent-amber-500" data-chaos />
+                      <span className="text-[10px] text-slate-500">хаотично</span>
+                      <span className="font-mono text-slate-200 w-6">{chaos.toFixed(1)}</span>
+                    </label>
+                  )}
                   <button type="button" onClick={reroll} disabled={!zone || !profileOk || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold disabled:opacity-40"><Shuffle size={13} />Перегенерировать зону</button>
                   <button type="button" onClick={() => stepHistory('undo')} disabled={!history || !canUndo(history) || !!busy} title={history && canUndo(history) ? `Отменить: ${history.present.label}` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Undo2 size={13} />Отменить ({history?.past.length ?? 0})</button>
                   <button type="button" onClick={() => stepHistory('redo')} disabled={!history || !canRedo(history) || !!busy} title={history && canRedo(history) ? `Вернуть: ${history.future[0].label}` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Redo2 size={13} />Вернуть ({history?.future.length ?? 0})</button>
@@ -422,11 +578,11 @@ export const LevelGenDepartment: React.FC = () => {
                   <button type="button" onClick={lockZone} disabled={!zone || !!busy} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white disabled:opacity-40"><Lock size={12} />Закрепить район</button>
                   <button type="button" onClick={saveLocksNow} disabled={!!busy} title="Записать закреплённые районы (многоугольники) в JSON карты: в принятую карту (только блок regen.locks), иначе — черновик Saved/TrainingGround/levelgen" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 border border-emerald-700 text-emerald-200 hover:bg-slate-700 disabled:opacity-40"><Save size={12} />Сохранить замки</button>
                 </div>
-                <p className="text-[11px] text-slate-500">{regionHint[regionMode]} Перегенерируются объекты, чей центр внутри зоны (здания целиком); дороги, канал и закреплённые районы не трогаются. Закрепления хранятся в JSON карты (блок regen): кнопка «Сохранить замки» пишет только их, «Принять» — всю карту.</p>
+                <p className="text-[11px] text-slate-500">{regionHint[regionMode]} Кварталы выбираются по ЦЕНТРУ (голубой пунктир — что изменится); «Полностью» делит квартал заново на участки. Перегенерируются объекты, чей центр внутри зоны (здания целиком); дороги, канал и закреплённые районы не трогаются. Закрепления хранятся в JSON карты (блок regen): кнопка «Сохранить замки» пишет только их, «Принять» — всю карту.</p>
                 {locksSaved && <p className="text-[11px] text-emerald-300">{locksSaved}</p>}
                 {!profileOk && <p className="text-amber-300">Для перегенерации нужен эталон {cur.layout.profile} — выберите его слева.</p>}
                 {selection && (
-                  <p className="text-slate-300">В зоне: перегенерируется <span className="text-cyan-300 font-mono">{selection.inside.length}</span> объектов (зданий {selection.inside.filter((g) => g.category === 'building').length}{region && region.plan.selLots.length ? `, кварталов с новым типом ${region.plan.selLots.length}` : ''}), закреплено <span className="text-emerald-300 font-mono">{selection.locked.length}</span>, дороги/канал <span className="font-mono">{selection.fixed.length}</span>{region?.plan.anchored.length ? `; квартал старта/финиша сохраняет тип: ${region.plan.anchored.join(', ')}` : ''}.</p>
+                  <p className="text-slate-300">В зоне: перегенерируется <span className="text-cyan-300 font-mono">{selection.inside.length}</span> объектов (зданий {selection.inside.filter((g) => g.category === 'building').length}{region && region.plan.selLots.length ? (blockMode === 'full' ? `, кварталов переразбить ${region.plan.groups.length}` : `, кварталов с новым типом ${region.plan.selLots.length}`) : ''}), закреплено <span className="text-emerald-300 font-mono">{selection.locked.length}</span>, дороги/канал <span className="font-mono">{selection.fixed.length}</span>{region?.plan.anchored.length ? `; квартал старта/финиша сохраняет тип: ${region.plan.anchored.join(', ')}` : ''}.</p>
                 )}
                 {regenReport && (
                   <p className={regenReport.ok ? 'text-emerald-300' : 'text-rose-300'}>
@@ -435,7 +591,7 @@ export const LevelGenDepartment: React.FC = () => {
                   </p>
                 )}
                 {regenReport && regenReport.retemplated.length > 0 && (
-                  <p className="text-[11px] text-cyan-200">Новые типы кварталов: {regenReport.retemplated.map((x) => `${x.id.replace(/^LOT_/, '')}: ${blockLabel(x.from)} → ${blockLabel(x.to)}`).join('; ')}{regenReport.templateFailed.length ? `; без нового типа (не помещается): ${regenReport.templateFailed.map((x) => x.replace(/^LOT_/, '')).join(', ')}` : ''}{regenReport.removedRoutes.length ? `; убраны варианты маршрута: ${regenReport.removedRoutes.join(', ')}` : ''}</p>
+                  <p className="text-[11px] text-cyan-200">{regenReport.retemplated.some((x) => x.to.includes(' + ')) ? 'Кварталы заново (участки по типам): ' : 'Новые типы кварталов: '}{regenReport.retemplated.map((x) => `${x.id.replace(/^LOT_/, '')}: ${blockLabels(x.from)} → ${blockLabels(x.to) || 'пусто'}`).join('; ')}{regenReport.templateFailed.length ? `; без нового типа (не помещается): ${regenReport.templateFailed.map((x) => x.replace(/^LOT_/, '')).join(', ')}` : ''}{regenReport.removedRoutes.length ? `; убраны варианты маршрута: ${regenReport.removedRoutes.join(', ')}` : ''}</p>
                 )}
                 {regenReport && (regenReport.dropped.length > 0 || regenReport.attempts.some((a) => !a.ok)) && (
                   <details className="text-[11px] text-slate-400"><summary className="cursor-pointer">Подробности: отброшено {regenReport.dropped.length}, неудачных попыток {regenReport.attempts.filter((a) => !a.ok).length}</summary>
@@ -490,19 +646,47 @@ export const LevelGenDepartment: React.FC = () => {
                 {cur.layout.objectives && objCheck && (
                   <p className={objCheck.ok ? 'text-yellow-200' : 'text-rose-300'}>
                     {objCheck.ok ? <CheckCircle2 size={12} className="inline mr-1" /> : <XCircle size={12} className="inline mr-1" />}
-                    Старт ({cur.layout.objectives.start.source === 'spawn' ? 'точка появления' : 'край карты'}) → цели в любом порядке: {objCheck.goals.map((g) => `${g.id.replace('GOAL_', '№')} ${g.reachable ? `${g.length_m} м` : 'НЕДОСТИЖИМА'}`).join(', ')}; кратчайший обход {objCheck.bestOrder.order.map((x) => x.replace('GOAL_', '№')).join(' → ')} = {objCheck.bestOrder.length_m} м; мин. расстояние между целями {objCheck.minSpacing_m} м{objCheck.ok ? '' : ' — расставьте цели заново'}
+                    Старт ({cur.layout.objectives.start.source === 'spawn' ? 'точка появления' : cur.layout.objectives.start.source === 'edge' ? 'край карты' : 'вручную'}) → цели в любом порядке: {objCheck.goals.map((g) => `${g.id.replace('GOAL_', '№')} ${g.error ? `ОШИБКА (${g.error})` : g.reachable ? `${g.length_m} м` : 'НЕДОСТИЖИМА'}`).join(', ')}; кратчайший обход {objCheck.bestOrder.order.length ? `${objCheck.bestOrder.order.map((x) => x.replace('GOAL_', '№')).join(' → ')} = ${objCheck.bestOrder.length_m} м` : '—'}{objCheck.goals.length > 1 ? `; мин. расстояние между целями ${objCheck.minSpacing_m} м` : ''}{objCheck.ok ? '' : ` — ${objCheck.errors.join('; ')}`}
                   </p>
                 )}
+                {objCheck && Object.keys(objWarnings).length > 0 && <p className="text-orange-300 text-[11px]">Внимание (правила расстановки): {Object.entries(objWarnings).map(([id, w]) => `${id.replace('GOAL_', '№')}: ${w}`).join('; ')}</p>}
+                {objMsg && <p className={`text-[11px] ${objMsg.ok ? 'text-yellow-200' : 'text-rose-300'}`}>{objMsg.text}</p>}
+                <p className="text-[11px] text-slate-500">Цели вручную: «+ цель» над планом, затем щелчок по плану — новая цель; старт (зелёный S) и цели перетаскиваются в режиме «Просмотр»; правая кнопка или × — удалить цель (от {V2.objectives.manual_count_min} до {V2.objectives.count_max}). Красное — недопустимое место (причина рядом), точку никто не двигает за вас; «Принять» ждёт, пока ошибок не будет.</p>
                 <p className="text-[11px] text-slate-500">Расширение: старая карта остаётся в центре без изменений (кроме проёма в заборе, если он перегораживает продолжение дороги), кварталы вокруг — из каталога levelgen_v2.json; их тоже можно перегенерировать зоной. Цели — на земле, достижимы со старта, разнесены, не в закреплённых зданиях; хранятся в JSON карты (блок objectives).</p>
               </div>
             )}
             <div className="grid gap-3 lg:grid-cols-2">
               <div>
-                <p className="text-[11px] text-slate-500 mb-1">Кандидат (сверху; синий — маршрут, жёлтый — лестницы, голубой/янтарный — окна/бойницы, зелёный — крыша/парапет, фиол. — перелаз, пунктир — линии огня)</p>
-                <RegionOverlay bounds={cur?.layout.bounds ?? null} height={520} mode={regionMode} zone={zone} locks={locks} blocks={region?.plan.selLots.map((k) => k.rect)}
-                  inside={selection?.inside.map((g) => g.centre)} locked={selection?.locked.map((g) => g.centre)} onZone={setZone}>
-                  <LayoutView ref={view} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} />
+                <div className="flex flex-wrap items-center gap-1.5 mb-1 text-[11px]">
+                  <button type="button" onClick={() => zoomBy(1 / PLAN_VIEW.button_step)} disabled={!cur} title="Отдалить" className="p-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><ZoomOut size={13} /></button>
+                  <span className="font-mono text-slate-300 w-12 text-center" data-zoom>{Math.round(view.zoom * 100)} %</span>
+                  <button type="button" onClick={() => zoomBy(PLAN_VIEW.button_step)} disabled={!cur} title="Приблизить" className="p-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><ZoomIn size={13} /></button>
+                  <button type="button" onClick={() => setView(FIT_VIEW)} disabled={!cur} title="Вписать карту целиком" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Maximize2 size={12} />Вписать</button>
+                  <button type="button" onClick={() => { setGoalTool((v) => !v); setRegionMode('off'); }} disabled={!cur} title="Щелчок по плану добавляет цель" className={`inline-flex items-center gap-1 px-2 py-1 rounded border disabled:opacity-40 ${goalTool ? 'bg-yellow-500 border-yellow-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-yellow-200 hover:bg-slate-700'}`}><MapPinPlus size={12} />+ цель</button>
+                  <span className="text-slate-500">колесо — масштаб у курсора; сдвиг — средняя кнопка или пробел + перетаскивание (в «Просмотре» — левой)</span>
+                </div>
+                <div ref={planBox}>
+                <RegionOverlay bounds={cur?.layout.bounds ?? null} height={520} mode={goalTool ? 'off' : regionMode} zone={zone} locks={locks} blocks={region?.plan.selLots.map((k) => k.rect)}
+                  inside={selection?.inside.map((g) => g.centre)} locked={selection?.locked.map((g) => g.centre)} onZone={setZone}
+                  view={view} onView={setView} objectives={cur?.layout.objectives ?? null} objErrors={objErrors} objWarnings={objWarnings} bestPath={objCheck?.bestPath}
+                  addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null}>
+                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives />
                 </RegionOverlay>
+                </div>
+                {cur && (track ? (
+                  <div className="mt-1.5 flex flex-col gap-1 bg-slate-950/60 border border-pink-900/60 rounded-lg p-2 text-[11px]" data-player>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <button type="button" onClick={() => { if (playT >= track.duration_s) setPlayT(0); setPlaying((v) => !v); }} className="inline-flex items-center gap-1 px-2 py-1 rounded bg-pink-600 hover:bg-pink-500 text-white font-semibold" data-play>{playing ? <Pause size={12} /> : <Play size={12} />}{playing ? 'Пауза' : 'Играть'}</button>
+                      <div className="inline-flex rounded bg-slate-950 border border-slate-700 p-0.5">
+                        {PLAYBACK.speeds.map((x) => <button key={x} type="button" onClick={() => setSpeed(x)} className={`px-1.5 rounded ${speed === x ? 'bg-pink-700 text-white' : 'text-slate-300 hover:text-white'}`}>x{x}</button>)}
+                      </div>
+                      <input type="range" min={0} max={track.duration_s} step={0.1} value={playT} onChange={(e) => { setPlayT(Number(e.target.value)); }} className="flex-1 min-w-[120px] accent-pink-500" data-scrub />
+                      <span className="font-mono text-slate-200">{clockLabel(playT)} / {clockLabel(track.duration_s)}</span>
+                      {squadNow && <span className="text-slate-400">участок {squadNow.leg + 1}/{track.legs.length}, строй {squadNow.formation}</span>}
+                    </div>
+                    {trackSummary && <p className="text-slate-400">Прогон: {trackSummary.members} бойца, {trackSummary.duration_s} с, лидер прошёл {trackSummary.leader_m} м по {trackSummary.legs} наземным участкам (крыши / лестницы симулятор пропускает — точки перескакивают); строи: {Object.entries(trackSummary.formations).map(([k, v]) => `${k} ${pct(v)}`).join(', ')}; углы {cur.ev.mechanics.cornerWatches}, раскладок у стены {cur.ev.mechanics.wallLayouts}.</p>}
+                  </div>
+                ) : cur.simmed ? <p className="mt-1 text-[11px] text-slate-500">Симулятор не прошёл маршрут (основной маршрут не проходим) — воспроизводить нечего.</p> : <p className="mt-1 text-[11px] text-slate-500">«Прогнать отряд (симулятор)» — после прогона здесь появится проигрыватель: отряд идёт по маршруту на плане.</p>)}
               </div>
               <div>
                 <p className="text-[11px] text-slate-500 mb-1">Эталон (карта дизайнера, развёрнутая сверху; синее — его маршрут, жёлтое — лестницы, зелёный круг — старт)</p>

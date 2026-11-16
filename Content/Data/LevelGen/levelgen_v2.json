@@ -59,6 +59,45 @@
     "edge_margin_m": 4,
     "start_edge_inset_m": 3,
     "allow_in_locked": false,
-    "candidate_jitter": 0.15
+    "candidate_jitter": 0.15,
+    "manual_count_min": 1,
+    "manual_comment": "Manual goals (UX round, task 072): the designer adds / drags / deletes goals on the plan; manual_count_min..count_max goals. A spot in a wall, outside the map, in the canal, in a locked building or unreachable from the start is an ERROR (red, the reason shown, the goal is not moved); closer than min_from_start_m / min_spacing_m is a WARNING."
+  },
+  "full_reroll": {
+    "comment": "Region re-roll mode 'full' (UX round, task 072): inside the zone the selected blocks are cut into new parcels (lot subdivision), each parcel gets a catalog type, and the parcel the template fills is shrunk / shifted / turned (the street side) by the chaos 0..1. chaos 0 = tidy: even cuts, parcels flush with the street, the same setback; chaos 1 = irregular: uneven cuts, random setbacks and side gaps, corner parcels may face the other street. Every cut leaves both parts on a street (doors and gates face streets). Sibling parcels of one block re-roll together when all of them are in the zone.",
+    "max_depth": 3,
+    "min_parcel_m": [9, 7],
+    "split_min_m": 18,
+    "split_ratio_tidy": 0.5,
+    "split_ratio_spread": 0.3,
+    "gap_m": 1.0,
+    "gap_chaos_m": 4.0,
+    "setback_chaos_m": 5.0,
+    "shrink_chaos": 0.3,
+    "street_touch_m": 1.5,
+    "street_reach_m": 8,
+    "turn_chance": 0.5,
+    "split_chance_tidy": 0.6,
+    "split_chance_chaos": 0.95,
+    "default_chaos": 0.5
+  },
+  "plan_view": {
+    "comment": "The 2D plan's zoom + pan (UX round, task 072): zoom limits relative to the fitted view, the wheel step per notch, the +/- buttons' step.",
+    "zoom_min": 0.5,
+    "zoom_max": 40,
+    "wheel_step": 1.2,
+    "button_step": 1.5
+  },
+  "playback": {
+    "comment": "The squad playback after «Прогнать отряд» (UX round, task 072): the simulator's frames sampled at sample_hz, the speeds offered, the leader's trail length.",
+    "sample_hz": 5,
+    "speeds": [1, 2, 4, 8],
+    "trail_s": 8
+  },
+  "build": {
+    "comment": "«Собрать в Unreal» (UX round, task 072): the target map is /Game/Maps/Generated/L_Gen_<Name>, Name = the accepted layout name without the prefix strip_prefix (regex), each '_' word capitalised (gen_ref_01_02_depot_1_x4 -> L_Gen_Depot_1_X4). poll_s = the page's status poll.",
+    "strip_prefix": "^(gen_)?(ref_[0-9]+_[0-9]+_)?",
+    "map_dir": "/Game/Maps/Generated",
+    "poll_s": 3
   }
 }

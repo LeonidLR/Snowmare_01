@@ -401,13 +401,16 @@ const emptyDraft = (): Draft => ({ walls: [], buildings: [], ladders: [], covers
 /** The id tag of a lot's template objects: unique per lot and seed (B_<tag>_hall, F_<tag>_N_0, COV_<tag>_3 ...). */
 export const templateTag = (lotId: string, seed: number) => `${lotId.replace(/^LOT_/, '')}_t${seed}`;
 
-/** Fill a lot with a template (UE content + the visit). Deterministic for (template, lot, ctx.seed). */
-export function buildTemplate(template: TemplateId, lot: BlockRecord, ctx: TemplateContext): BuiltTemplate {
-  const outer = rectFromUE(lot.rect, ctx.frame);
+/**
+ * Fill a lot with a template (UE content + the visit). Deterministic for (template, lot, ctx.seed). `place` (the 'full' re-roll,
+ * fullReroll.ts): the template's rectangle inside the lot (metres; the inset still applies) and the street side it faces.
+ */
+export function buildTemplate(template: TemplateId, lot: BlockRecord, ctx: TemplateContext, place?: { side: Side; inner_m: Rect }): BuiltTemplate {
+  const outer = place?.inner_m ?? rectFromUE(lot.rect, ctx.frame);
   const inset = TC.inset_m;
   const r: Rect = [[outer[0][0] + inset, outer[0][1] + inset], [outer[1][0] - inset, outer[1][1] - inset]];
   const d = emptyDraft();
-  const c: Ctx = { d, r, s: streetSide(r, ctx.streets_m), random: rng(lotSeed(ctx.seed, `${lot.id}:${template}`)), tag: templateTag(lot.id, ctx.seed),
+  const c: Ctx = { d, r, s: place?.side ?? streetSide(r, ctx.streets_m), random: rng(lotSeed(ctx.seed, `${lot.id}:${template}`)), tag: templateTag(lot.id, ctx.seed),
     V: ctx.verticality, density: ctx.density, spec: TC.catalog[template] };
   const vm = BUILD[template](c);
   const l = finalizeDraftToLayout(d, ctx.frame, { name: 'template', profile: 'template', seed: ctx.seed, params: DEFAULT_PARAMS, start: rect.centre(r), end: rect.centre(r) });
