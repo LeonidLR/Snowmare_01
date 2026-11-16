@@ -4,9 +4,9 @@ Frozen base: `aba810f1e5d29a6268cf8b88f58801aa9a6c94ab` on `codex/035-nightly-sw
 
 Build: PASS (exit 0; UBT 2.18 s). Evidence: `Saved/Orchestrator/035/build-wrapper.log`, `build-engine.log`.
 
-Router: 2.62 | gpt-6.1-sol | pass (execution/reporting; no local model).
+Router: level 2, confidence 0.62 | gpt-6.1-sol | pass (execution/reporting; no local model).
 
-Progress: 48/284 initial runs; 46 final PASS; 2 final FAIL; 2 failed twice. Updated 2026-11-16T19:11:37.622099+00:00.
+Progress: 56/284 initial runs; 54 final PASS; 2 final FAIL; 2 failed twice. Updated 2026-11-16T19:15:08.280289+00:00.
 
 Initial batches <=8, script default Jobs=4 (16 CPUs), `-NoRetry -ExtraArgs -Multiprocess`; each initial FAIL rerun exactly once alone with `-Jobs 1`. Engine `Smoke RESULT` controls PASS/FAIL, including wrapper KNOWN-FAIL. Seconds are wrapper process wall times. Missing result/timeout is infrastructure FAIL, never an invented assertion. Shared locks and designer priority remain active.
 
@@ -62,6 +62,14 @@ Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, 
 | FlankBreachSmoke | PASS | 55.5 |  | — | — |
 | SusaninSmoke | PASS | 55.4 |  | — | — |
 | FloatingTextSmoke | PASS | 39.5 |  | — | — |
+| SquadFireSmoke | PASS | 48.7 |  | — | — |
+| RageSmoke | PASS | 50.6 |  | — | — |
+| SquadControlSmoke | PASS | 51.2 |  | — | — |
+| AIGrenadeSmoke | PASS | 49.8 |  | — | — |
+| EnemyAISmoke | PASS | 49.2 |  | — | — |
+| CutterSmoke | PASS | 49.2 |  | — | — |
+| ClickRulesSmoke | PASS | 48.9 |  | — | — |
+| NarrativeSmoke | PASS | 48.5 |  | — | — |
 
 ## Failed twice
 
@@ -69,5 +77,7 @@ Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, 
   History: `Source/CodexTacticsDev/Private/Debug/MilitaryZombieSmokeCommand.cpp`: 6b584fbe feat(characters): operatives, Military Zombie, Hound and Frostbitten Blueprints use the optimized single-slot bodies (user 2026-10-21); `Source/CodexTactics/Private/Characters/EnemyCharacter.cpp`: 632d61ec feat(animation): wound tiers, the full-body injured clips with the raise to fire; feat(ui): a switch per HUD label
 - **OptimizedCharacterSmoke**: [2026.11.16-19.00.59:179][ 51]LogCodexTactics: Display: OptimizedCharacterSmoke FAIL: [Marksman] death: both bodies still there (original 1, optimized 1), dying, optimized anim dead 1, death clip NOT playing Rerun: [2026.11.16-19.02.53:391][497]LogCodexTactics: Display: OptimizedCharacterSmoke FAIL: [Marksman] death: both bodies still there (original 1, optimized 1), dying, optimized anim dead 1, death clip NOT playing
   History: `Source/CodexTacticsDev/Private/Debug/OptimizedCharacterSmokeCommand.cpp`: 28650298 feat(ai): PMC squads on the operative body - teams, the shared order catalog, the utility commander, the self-play arena; `Source/CodexTactics/Private/Characters/MarksmanEnemyCharacter.cpp`: 5d26c121 gemini-034: fix 034a HIGH findings (fast perception scales, hover ghost cache/yaw, leave cover pending clear)
+
+Partial sweep. Resume: run `python Saved/Orchestrator/035/sweep.py` in the agents worktree; next batch 8, 228 initial runs remaining. Machine-readable pending state is in progress.json. Latest path commits above are history references, not proven regression culprits.
 
 Only tracked output: this report. Ignored Saved evidence is local. Existing untracked packs/config/cache remain outside this task. No source investigation beyond failure lines and path identification.
