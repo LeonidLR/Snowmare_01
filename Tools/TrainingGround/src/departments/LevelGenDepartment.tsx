@@ -178,7 +178,12 @@ export const LevelGenDepartment: React.FC = () => {
   const [buildState, setBuildState] = useState<BuildState | null>(null);
   const [buildErr, setBuildErr] = useState('');
   const isAccepted = !!cur && accepted.some((a) => a.name === cur.layout.name);
-  const acceptedDirty = useMemo(() => !!cur && acceptedSnap[cur.layout.name] !== undefined && acceptedSnap[cur.layout.name] !== JSON.stringify(cur.layout), [cur, acceptedSnap]);
+  /** 'same' = the page shows the accepted file; 'changed' = edited after «Принять»; 'unknown' = a candidate with an accepted name. */
+  const acceptedSync = useMemo<'same' | 'changed' | 'unknown'>(() => {
+    if (!cur) return 'unknown';
+    const snap = acceptedSnap[cur.layout.name];
+    return snap === undefined ? 'unknown' : snap === JSON.stringify(cur.layout) ? 'same' : 'changed';
+  }, [cur, acceptedSnap]);
   const building = buildState?.stage === 'build' || buildState?.stage === 'smoke';
   const pollBuild = async () => { try { const r = await fetch('/api/levelgen/build-status'); if (r.ok) setBuildState(await r.json()); } catch { /* the dev server restarts */ } };
   useEffect(() => { pollBuild(); }, []);
@@ -278,8 +283,9 @@ export const LevelGenDepartment: React.FC = () => {
     return e;
   }, [objCheck]);
   const objWarnings = useMemo(() => Object.fromEntries((objCheck?.goals ?? []).filter((g) => g.warnings.length).map((g) => [g.id, g.warnings.join(', ')])), [objCheck]);
-  const boundsKey = cur ? JSON.stringify(cur.layout.bounds) : '';
-  useEffect(() => { setView(FIT_VIEW); }, [boundsKey]);
+  // another map in the plan (another slot, an opened accepted map, an expansion): back to "fit", the last edit message cleared
+  const viewKey = cur ? `${sel}:${cur.key ?? cur.layout.name}:${JSON.stringify(cur.layout.bounds)}` : '';
+  useEffect(() => { setView(FIT_VIEW); setObjMsg(null); }, [viewKey]);
   /** A start / goal edit on the plan: applied, re-walked, one undo step (an invalid spot stays where it was dropped, marked red). */
   const onObjective = (a: ObjectiveAction) => {
     if (!cur || busy) return;
@@ -508,7 +514,8 @@ export const LevelGenDepartment: React.FC = () => {
                   {buildTarget && <span className="text-slate-300">карта <span className="font-mono text-orange-200">{buildTarget.map}</span>{buildTarget.exists ? ' (уже есть)' : ' (новая)'}</span>}
                   <span className="text-[11px] text-slate-500" title={`levelgen_v2.json build.strip_prefix = ${V2.build.strip_prefix}`}>имя: L_Gen_ + имя раскладки без «gen_ref_NN_NN_», слова с заглавной (gen_ref_01_02_depot_1_x4 → L_Gen_Depot_1_X4)</span>
                 </div>
-                {isAccepted && acceptedDirty && <p className="text-amber-300">Карта на странице изменена после «Принять»: собирается ПРИНЯТАЯ версия (accepted/{cur.layout.name}.json) — нажмите «Принять», чтобы собрать текущую.</p>}
+                {isAccepted && acceptedSync === 'changed' && <p className="text-amber-300">Карта на странице изменена после «Принять»: собирается ПРИНЯТАЯ версия (accepted/{cur.layout.name}.json) — нажмите «Принять», чтобы собрать текущую.</p>}
+                {isAccepted && acceptedSync === 'unknown' && <p className="text-amber-300">Собирается принятый файл accepted/{cur.layout.name}.json — на странице может быть другая версия с тем же именем (откройте её в «Принятые» или нажмите «Принять»).</p>}
                 {buildTarget && !buildTarget.canBuild && <p className="text-rose-300"><XCircle size={12} className="inline mr-1" />{buildTarget.reason}</p>}
                 {buildAsk && (
                   <div className="flex flex-wrap items-center gap-2 text-amber-200" data-build-confirm>

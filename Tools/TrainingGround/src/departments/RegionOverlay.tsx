@@ -236,18 +236,20 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
               </g>
               {objectives.goals.map((gl, i) => {
                 const q = scr(posOf(gl.id, gl.pos));
+                // the number the page's text uses (GOAL_3 = №3, also after №1 was deleted)
+                const num = /^GOAL_\d+$/.test(gl.id) ? gl.id.slice(5) : String(i + 1);
                 const err = objErrors[gl.id], warn = objWarnings[gl.id];
                 return (
                   <g key={gl.id} data-marker={gl.id}>
                     <g onPointerDown={markerDown(gl.id)} onContextMenu={markerMenu(gl.id)} style={{ cursor: editable ? 'move' : 'default' }}>
-                      <title>{`Цель №${i + 1}${err ? ` — ОШИБКА: ${err}` : ''}${warn ? ` — внимание: ${warn}` : ''}${editable ? ' (перетащите; правая кнопка — удалить)' : ''}`}</title>
+                      <title>{`Цель №${num}${err ? ` — ОШИБКА: ${err}` : ''}${warn ? ` — внимание: ${warn}` : ''}${editable ? ' (перетащите; правая кнопка — удалить)' : ''}`}</title>
                       <circle cx={q[0]} cy={q[1]} r={10} fill={err ? '#ef4444' : '#facc15'} stroke={warn && !err ? '#f97316' : '#000'} strokeWidth={warn && !err ? 3 : 1.5} />
-                      <text x={q[0]} y={q[1] + 4} textAnchor="middle" fill="#111" fontSize={11} fontWeight="bold" fontFamily="ui-monospace, monospace" style={{ pointerEvents: 'none' }}>{i + 1}</text>
+                      <text x={q[0]} y={q[1] + 4} textAnchor="middle" fill="#111" fontSize={11} fontWeight="bold" fontFamily="ui-monospace, monospace" style={{ pointerEvents: 'none' }}>{num}</text>
                     </g>
                     {err && !drag && <text x={q[0] + 14} y={q[1] + 15} fill="#fca5a5" fontSize={10} fontFamily="ui-monospace, monospace" style={{ pointerEvents: 'none', paintOrder: 'stroke', stroke: '#111827', strokeWidth: 3 }}>{err}</text>}
                     {editable && !drag && (
                       <g onPointerDown={(e) => { e.stopPropagation(); }} onClick={(e) => { e.stopPropagation(); onObjective?.({ kind: 'remove', id: gl.id }); }} style={{ cursor: 'pointer' }} data-remove={gl.id}>
-                        <title>{`Удалить цель №${i + 1}`}</title>
+                        <title>{`Удалить цель №${num}`}</title>
                         <circle cx={q[0] + 10} cy={q[1] - 10} r={5.5} fill="#1f2937" stroke="#f87171" strokeWidth={1} />
                         <text x={q[0] + 10} y={q[1] - 7} textAnchor="middle" fill="#fca5a5" fontSize={9} fontWeight="bold" style={{ pointerEvents: 'none' }}>×</text>
                       </g>

@@ -271,7 +271,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
         const q = P(gl.pos);
         g.fillStyle = '#facc15'; g.strokeStyle = '#000'; g.lineWidth = 1.5;
         g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.fill(); g.stroke();
-        g.fillStyle = '#111'; g.font = 'bold 11px ui-monospace, monospace'; g.fillText(String(i + 1), q[0], q[1] + 4);
+        g.fillStyle = '#111'; g.font = 'bold 11px ui-monospace, monospace'; g.fillText(/^GOAL_\d+$/.test(gl.id) ? gl.id.slice(5) : String(i + 1), q[0], q[1] + 4);
       });
       g.restore();
     }
