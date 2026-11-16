@@ -1,0 +1,6 @@
+{
+  "comment": "The arrival on a cover slot (AOperativeCharacter::EnterCover, 075 2026-11-16). Read by CoverArrivalRules::GetConfig (Source/CodexTactics/Public/Tactics/CoverArrivalRules.h) at game start; FCoverArrivalConfig's defaults mirror these values (test CodexTactics.Tactics.Cover.ArrivalTuningFileMirrorsDefaults). The capsule goes onto the slot with a swept move; when a squadmate who is not in cover himself stopped that sweep more than pass_squadmate_min_gap_cm short of the slot, the sweep is repeated with him ignored (the slot is the arriving man's; the squadmate is pushed off by his next step). cm.",
+  "params": {
+    "pass_squadmate_min_gap_cm": 2
+  }
+}
