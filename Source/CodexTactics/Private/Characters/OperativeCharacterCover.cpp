@@ -16,11 +16,13 @@
 #include "Combat/HealthComponent.h"
 #include "Combat/KnockdownComponent.h"
 #include "Combat/SuppressionSubsystem.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/PlayerCommands.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Survival/ColdSurvivalComponent.h"
+#include "Tactics/CoverArrivalRules.h"
 #include "Tactics/CoverDecisionRules.h"
 #include "Tactics/CoverFacingRules.h"
 #include "Tactics/CoverRules.h"
@@ -195,7 +197,23 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	// Back to the wall, on the slot (the feet keep their ground height), facing along the wall towards the threat side.
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
 	const FVector BeforeSnap = GetActorLocation();
-	SetActorLocation(FVector(Slot.WorldLocation.X, Slot.WorldLocation.Y, Feet.Z + GetSimpleCollisionHalfHeight()), true);
+	const FVector OnSlot(Slot.WorldLocation.X, Slot.WorldLocation.Y, Feet.Z + GetSimpleCollisionHalfHeight());
+	FHitResult SnapHit;
+	SetActorLocation(OnSlot, true, &SnapHit);
+	// 075 (CoverSmoke 2026-11-16): a squadmate on his way through the slot (the formation's corner-watch spot 11 cm from the corner
+	// stand-off) stopped the sweep short for good - 49 / 54 / 72 cm from the wall end instead of 28. The slot is his: past that squadmate.
+	AOperativeCharacter* SlotMate = Cast<AOperativeCharacter>(SnapHit.GetActor());
+	const bool bSlotMate = SlotMate && SlotMate != this && SlotMate->TeamId == TeamId;
+	const float SnapGapCm = static_cast<float>(FVector::Dist2D(GetActorLocation(), OnSlot));
+	if (CoverArrivalRules::ShouldPassSquadmate(SnapHit.bBlockingHit, bSlotMate, bSlotMate && SlotMate->bInCover, SnapGapCm, CoverArrivalRules::GetConfig())
+		&& GetCapsuleComponent())
+	{
+		GetCapsuleComponent()->IgnoreActorWhenMoving(SlotMate, true);
+		SetActorLocation(OnSlot, true);
+		GetCapsuleComponent()->IgnoreActorWhenMoving(SlotMate, false);
+		UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: onto the slot past %s (the sweep stopped %.0f cm short, now %.0f cm off)"), *DisplayName.ToString(),
+			*SlotMate->DisplayName.ToString(), SnapGapCm, FVector::Dist2D(GetActorLocation(), OnSlot));
+	}
 	if (bSameWall && CoverEntryBlendTime < 0.f)
 	{
 		// A shimmy's arrival (fix/corner-exit-jerk: the capsule stopped within the move's acceptance radius, then jumped up to 25 cm onto the
