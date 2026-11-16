@@ -3,9 +3,11 @@
 A smoke name with no matching "CodexTactics.<Name>" console command silently times out in
 Scripts/smoke_parallel.ps1 (which runs "CodexTactics.<Name>"). This tool catches that before a run.
 
-  python Scripts/Tools/check_smoke_names.py [--repo <path>]
+  python Scripts/Tools/check_smoke_names.py [--repo <path>] [--reverse]
 
-Exit code 0 = all names registered, 1 = at least one unknown name (printed with its JSON section).
+Default: exit 1 for unknown map names (printed with their JSON section).
+Reverse: list registered CodexTactics.*Smoke commands missing from smokeRegistry and,
+separately, impact-map smokes lists; exit 1 only for missing registry entries.
 """
 from __future__ import annotations
 
@@ -21,13 +23,15 @@ REGISTRATION = re.compile(
 PREFIX = "CodexTactics."
 
 
-def registered_commands(repo: Path) -> set[str]:
+def registered_commands(repo: Path, *, smokes_only: bool = False) -> set[str]:
     """Short names (without the CodexTactics. prefix) of commands registered in Source/**/Debug/*.cpp."""
     names: set[str] = set()
     for cpp in (repo / "Source").glob("**/Debug/*.cpp"):
         text = cpp.read_text(encoding="utf-8", errors="replace")
         for match in REGISTRATION.finditer(text):
             name = match.group(1)
+            if smokes_only and not (name.startswith(PREFIX) and name.endswith("Smoke")):
+                continue
             names.add(name[len(PREFIX):] if name.startswith(PREFIX) else name)
     return names
 
@@ -75,10 +79,31 @@ def check(repo: Path) -> list[tuple[str, str]]:
     return unknown
 
 
+def check_reverse(repo: Path) -> tuple[list[str], list[str]]:
+    """Registered smoke commands absent from the registry and impact lists, respectively."""
+    test_map = json.loads((repo / "Scripts" / "test_map.json").read_text(encoding="utf-8"))
+    known = registered_commands(repo, smokes_only=True)
+    registry = {_strip(n) for n in test_map.get("smokeRegistry", []) if isinstance(n, str)}
+    impact: list[tuple[str, str]] = []
+    _walk_smokes(test_map, "", impact)
+    return sorted(known - registry), sorted(known - {name for name, _ in impact})
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
     parser.add_argument("--repo", type=Path, default=Path(__file__).resolve().parents[2])
+    parser.add_argument("--reverse", action="store_true", help="Find registered smokes absent from the map")
     args = parser.parse_args(argv)
+    if args.reverse:
+        missing_registry, missing_impact = check_reverse(args.repo.resolve())
+        for name in missing_registry:
+            print(f"MISSING smokeRegistry: {name}")
+        for name in missing_impact:
+            print(f"MISSING impact-map smokes: {name}")
+        status = "FAIL" if missing_registry else "OK"
+        print(f"{status}: {len(missing_registry)} registered smoke(s) missing from smokeRegistry; "
+              f"{len(missing_impact)} missing from impact-map smokes lists")
+        return int(bool(missing_registry))
     unknown = check(args.repo.resolve())
     if not unknown:
         print("OK: every smoke name in Scripts/test_map.json has a registered console command")
