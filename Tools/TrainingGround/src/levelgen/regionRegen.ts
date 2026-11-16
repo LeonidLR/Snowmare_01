@@ -27,6 +27,7 @@ import { generateLayout } from './generate.ts';
 import { classifyObstacleHeight, standardObstacleHeight } from './obstacleHeights.ts';
 import type { Profile } from './profile.ts';
 import type { BuiltTemplate, TemplateContent, Visit } from './blockTemplates.ts';
+import { footprintPoly, inFootprint, ROTATION } from './rotation.ts';
 import { buildTemplate, isAnchorLot, lotAt, lotsOf, pickTemplates, rectCentre, rectFromUE, rectToUE, templateContext } from './blockTemplates.ts';
 import type { TemplateId } from './blockTemplates.ts';
 import { FULL, subdivideBlock, unionRect } from './fullReroll.ts';
@@ -196,7 +197,7 @@ export function layoutGroups(l: GenLayout): RegenGroup[] {
   const out: RegenGroup[] = [];
   const byBuilding = new Map<string, RegenGroup>();
   for (const b of l.buildings) {
-    const g: RegenGroup = { key: `building:${b.id}`, category: 'building', id: b.id, centre: centroid(rectPoly(b.footprint)), solid: [shrink(rectPoly(b.footprint), TOUCH_CM)], fixed: false,
+    const g: RegenGroup = { key: `building:${b.id}`, category: 'building', id: b.id, centre: centroid(footprintPoly(b)), solid: [shrink(footprintPoly(b), TOUCH_CM)], fixed: false,
       members: { buildings: [b], walls: [], ladders: [], mantle_edges: [] } };
     byBuilding.set(b.id, g); out.push(g);
   }
@@ -348,6 +349,12 @@ export interface RegionRegenOptions {
   blocks?: BlockMode;
   /** The 'full' mode's chaos 0 (tidy grid) .. 1 (irregular); default levelgen_v2.json full_reroll.default_chaos. */
   chaos?: number;
+  /**
+   * «Макс. угол поворота зданий» (rotation.ts), degrees: the new templates stand rotated within +-it ('full': x chaos). Absent = the
+   * layout's params.max_rotation_deg (else levelgen_v2.json rotation.max_deg_default = 0). A value > 0 (or a change) is stored in
+   * the re-rolled layout's params, so later re-rolls / expansions of the map keep it.
+   */
+  maxRotationDeg?: number;
 }
 
 export interface RegionRegenResult {
@@ -528,11 +535,10 @@ function applyTemplates(fresh: GenLayout, built: BuiltTemplate[], lots: readonly
   }
   next.patrol_routes = fresh.patrol_routes.filter((x) => !drop.has(x));
   next.mantle_edges = [...(fresh.mantle_edges ?? []).filter((x) => !drop.has(x)), ...built.flatMap((b) => b.content.mantle_edges)];
-  next.spawn_points = fresh.spawn_points.filter((s) => !newB.some((b) => rectContainsPt(b.footprint, s.pos, 100)));
+  next.spawn_points = fresh.spawn_points.filter((s) => !newB.some((b) => inFootprint(b, s.pos, 100)));
   next.routes = fresh.routes.map((r) => rerouteThroughBlocks(r, inBlock, removedB, visitOf)).filter((r): r is GenRoute => !!r);
   return next;
 }
-const rectContainsPt = (r: [Vec2, Vec2], p: Vec2, margin: number) => p[0] >= r[0][0] - margin && p[0] <= r[1][0] + margin && p[1] >= r[0][1] - margin && p[1] <= r[1][1] + margin;
 
 interface Merge {
   layout: GenLayout; replaced: string[]; added: string[]; dropped: DroppedGroup[]; restored: string[]; snapped: number; skeletonMatch: boolean;
@@ -570,7 +576,7 @@ function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelectio
   if (plan.mode === 'full' && plan.groups.length) {
     // 1'. 'full' (task 072): every group is cut into parcels; each parcel takes the first seeded catalog type that clears the rest
     //     (an open square - covers only - is the last resort, so a parcel is never left as a hole)
-    const ctx = templateContext(old, seed);
+    const ctx = { ...templateContext(old, seed), rotationScale: ROTATION.chaos_scales ? chaos : 1 };
     const placed: Vec2[][] = [];
     const visitsOf = new Map<string, { centre: Vec2; visit: Visit }[]>();
     for (const grp of plan.groups) {
@@ -750,7 +756,10 @@ function pickRoutes(m: GenLayout, old: GenLayout, check: (l: GenLayout) => Route
 
 /** Re-roll the zone (see the file header). Pure and deterministic. */
 export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
-  const old = o.layout;
+  const given = o.layout;
+  // the rotation setting rides in the params (absent and 0 = the layout untouched: the old maps stay byte-identical)
+  const maxRot = o.maxRotationDeg === undefined ? undefined : Math.max(0, Math.min(ROTATION.max_deg_limit, o.maxRotationDeg));
+  const old = maxRot === undefined || maxRot === (given.params.max_rotation_deg ?? 0) ? given : { ...given, params: { ...given.params, max_rotation_deg: maxRot } };
   const state = regenStateOf(old);
   const mode: BlockMode = o.blocks ?? 'types';
   const groups = layoutGroups(old);
@@ -763,7 +772,7 @@ export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
   const beforeById = new Map(before.map((r) => [r.id, r]));
   const base = { locked: sel.locked.map((g) => g.id), fixed: sel.fixed.map((g) => g.id), anchored: plan.anchored };
   const none = { retemplated: [], templateFailed: [], removedRoutes: [] };
-  if (!isUsableZone(o.zone)) return { ok: false, layout: old, seed: o.seed, retries: 0, attempts: [], replaced: [], added: [], dropped: [], restored: [], ...base, ...none, snappedHeights: 0, routes: before.map(routeStatus), skeletonMatch: true, message: 'зона слишком мала (нужно >= 3 точки и >= 1 м²)' };
+  if (!isUsableZone(o.zone)) return { ok: false, layout: given, seed: o.seed, retries: 0, attempts: [], replaced: [], added: [], dropped: [], restored: [], ...base, ...none, snappedHeights: 0, routes: before.map(routeStatus), skeletonMatch: true, message: 'зона слишком мала (нужно >= 3 точки и >= 1 м²)' };
   const maxRetries = Math.max(0, o.maxRetries ?? DEFAULT_MAX_RETRIES);
   const attempts: RegenAttempt[] = [];
   let lastRoutes = before;
@@ -773,7 +782,7 @@ export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
     const m = mergeAttempt(old, groups, sel, plan, seed, o.profile, chaos);
     last = m;
     if (!m.replaced.length && !m.added.length) {
-      return { ok: true, layout: old, seed, retries: k, attempts: [...attempts, { seed, ok: true, reason: 'nothing to re-roll' }], replaced: [], added: [], dropped: m.dropped, restored: m.restored, ...base, ...none, snappedHeights: 0, routes: before.map(routeStatus), skeletonMatch: m.skeletonMatch, message: 'в зоне нечего перегенерировать (всё закреплено, инфраструктура или пусто)' };
+      return { ok: true, layout: given, seed, retries: k, attempts: [...attempts, { seed, ok: true, reason: 'nothing to re-roll' }], replaced: [], added: [], dropped: m.dropped, restored: m.restored, ...base, ...none, snappedHeights: 0, routes: before.map(routeStatus), skeletonMatch: m.skeletonMatch, message: 'в зоне нечего перегенерировать (всё закреплено, инфраструктура или пусто)' };
     }
     const picked = pickRoutes(m.layout, old, check);
     m.layout = picked.layout;
@@ -798,6 +807,6 @@ export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
       message: `перегенерировано: убрано ${m.replaced.length}, добавлено ${m.added.length}, отброшено ${m.dropped.length}${typed}${m.restored.length ? `, оставлено старыми зданий ${m.restored.length}` : ''}, повторов ${k}` };
   }
   // all rejected: the map is unchanged; the last attempt's drops are reported for the diagnosis
-  return { ok: false, layout: old, seed: o.seed + maxRetries * RETRY_SEED_STEP, retries: attempts.length, attempts, replaced: [], added: [], dropped: last?.dropped ?? [], restored: last?.restored ?? [], ...base, ...none, snappedHeights: 0, routes: lastRoutes.map(routeStatus), skeletonMatch: last?.skeletonMatch ?? true,
+  return { ok: false, layout: given, seed: o.seed + maxRetries * RETRY_SEED_STEP, retries: attempts.length, attempts, replaced: [], added: [], dropped: last?.dropped ?? [], restored: last?.restored ?? [], ...base, ...none, snappedHeights: 0, routes: lastRoutes.map(routeStatus), skeletonMatch: last?.skeletonMatch ?? true,
     message: `маршрут ломается во всех ${attempts.length} попытках - карта не изменена` };
 }

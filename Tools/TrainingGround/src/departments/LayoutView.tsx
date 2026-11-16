@@ -9,6 +9,7 @@ import type { GenBuilding, GenLayout, MantleEdge } from '../levelgen/schema';
 import { unifyOpenings } from '../levelgen/schema';
 import type { FiringLine } from '../levelgen/tacticalEvaluate';
 import type { PlanView } from '../levelgen/planView';
+import { buildingRectPoly, footprintPoly, rotationOf, rotVec, toBuildingFrame } from '../levelgen/rotation';
 import { FIT_VIEW, planTransform, viewTransform } from '../levelgen/planView';
 
 const SET_TINT: Record<string, string> = {
@@ -111,12 +112,13 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     // buildings
     for (const b of layout.buildings) {
       if (!showBuilding(b)) continue;
-      const pts = rectPts(b.footprint);
+      const pts = footprintPoly(b); // rotated buildings (rotation.ts)
       g.fillStyle = b.set_piece === 'chimney' ? '#46464e' : b.set_piece === 'tower' ? '#646e82' : b.height >= 600 ? '#967864' : '#aa9678'; g.strokeStyle = '#ffffff'; g.lineWidth = 1.2;
       poly(pts); g.fill(); g.stroke();
       if (b.roof_walkable && roofActive(b.id)) {
-        g.strokeStyle = '#50dc78'; g.lineWidth = 1.5; const q = P(b.footprint[0]), r = P(b.footprint[1]);
-        g.strokeRect(Math.min(q[0], r[0]) + 3, Math.min(q[1], r[1]) + 3, Math.abs(r[0] - q[0]) - 6, Math.abs(r[1] - q[1]) - 6);
+        // the walkable-roof mark: the footprint 50 cm inside its edges (turned with the building)
+        const [[fx0, fy0], [fx1, fy1]] = b.footprint, ins = Math.min(50, (fx1 - fx0) / 4, (fy1 - fy0) / 4);
+        g.strokeStyle = '#50dc78'; g.lineWidth = 1.5; poly(buildingRectPoly(b, [[fx0 + ins, fy0 + ins], [fx1 - ins, fy1 - ins]])); g.stroke();
         for (const par of b.parapets ?? []) {
           const pA = P(par.start), pB = P(par.end);
           g.strokeStyle = '#34d399'; g.lineWidth = 2.2; g.beginPath(); g.moveTo(pA[0], pA[1]); g.lineTo(pB[0], pB[1]); g.stroke();
@@ -125,12 +127,11 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
       // Interior rooms (subtle boundary & id)
       for (const rm of b.rooms ?? []) {
         if (!floorActive(rm.floor, b.id)) continue;
-        const rA = P(rm.bounds.min), rB = P(rm.bounds.max);
-        const rx = Math.min(rA[0], rB[0]), ry = Math.min(rA[1], rB[1]), rw = Math.abs(rB[0] - rA[0]), rh = Math.abs(rB[1] - rA[1]);
-        g.save(); g.strokeStyle = 'rgba(226, 232, 240, 0.35)'; g.lineWidth = 0.8; g.setLineDash([2, 2]); g.strokeRect(rx + 1, ry + 1, Math.max(2, rw - 2), Math.max(2, rh - 2)); g.restore();
+        g.save(); g.strokeStyle = 'rgba(226, 232, 240, 0.35)'; g.lineWidth = 0.8; g.setLineDash([2, 2]); poly(buildingRectPoly(b, [rm.bounds.min, rm.bounds.max])); g.stroke(); g.restore();
         if (floorMode !== 'all' || layer !== 'all') {
           g.fillStyle = 'rgba(226, 232, 240, 0.7)'; g.font = '8px ui-monospace, monospace'; g.textAlign = 'center';
-          g.fillText(rm.id, rx + rw / 2, ry + rh / 2 + 3);
+          const lc = P(buildingRectPoly(b, [rm.bounds.min, rm.bounds.max]).reduce((acc, p) => [acc[0] + p[0] / 4, acc[1] + p[1] / 4] as Vec2, [0, 0] as Vec2));
+          g.fillText(rm.id, lc[0], lc[1] + 3);
         }
       }
       // Upper floor slab details & floor gaps (stairwell / hole voids)
@@ -161,10 +162,10 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
           const q = P(op.pos); g.fillStyle = '#fff'; g.beginPath(); g.arc(q[0], q[1], 2.5, 0, Math.PI * 2); g.fill();
         } else {
           const dir = typeof op.yaw === 'number' ? dirOf(op.yaw) : (() => {
-            const [[x0, y0], [x1, y1]] = b.footprint;
-            const dW = Math.abs(op.pos[0] - x0), dE = Math.abs(op.pos[0] - x1), dN = Math.abs(op.pos[1] - y0), dS = Math.abs(op.pos[1] - y1);
+            const [[x0, y0], [x1, y1]] = b.footprint, q = toBuildingFrame(b, op.pos);
+            const dW = Math.abs(q[0] - x0), dE = Math.abs(q[0] - x1), dN = Math.abs(q[1] - y0), dS = Math.abs(q[1] - y1);
             const m = Math.min(dW, dE, dN, dS);
-            return m === dW ? [-1, 0] as Vec2 : m === dE ? [1, 0] as Vec2 : m === dN ? [0, -1] as Vec2 : [0, 1] as Vec2;
+            return rotVec(m === dW ? [-1, 0] : m === dE ? [1, 0] : m === dN ? [0, -1] : [0, 1], rotationOf(b));
           })();
           const tan: Vec2 = [-dir[1], dir[0]];
           const half = Math.max(40, (op.width ?? (op.kind === 'window' ? 120 : 60)) / 2);

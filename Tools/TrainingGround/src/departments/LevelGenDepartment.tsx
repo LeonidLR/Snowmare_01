@@ -22,6 +22,7 @@ import type { PlaceObjectivesResult } from '../levelgen/objectives';
 import { addGoal, checkObjectives, defaultGoalCount, groundNav, moveObjective, placeObjectives, removeGoal, START_ID } from '../levelgen/objectives';
 import { V2 } from '../levelgen/blockTemplates';
 import { FULL } from '../levelgen/fullReroll';
+import { ROTATION } from '../levelgen/rotation';
 import type { SquadTrack } from '../levelgen/playback';
 import { advanceClock, clockLabel, PLAYBACK, positionsAt, summarizeTrack, trailAt } from '../levelgen/playback';
 import { addLock, DEFAULT_MAX_RETRIES, regenerateRegion, regenStateOf, removeLock, selectRegion } from '../levelgen/regionRegen';
@@ -85,6 +86,8 @@ export const LevelGenDepartment: React.FC = () => {
   // task 072: the default is the full re-plan (the designer expected the buildings to change, not only the points)
   const [blockMode, setBlockMode] = useState<BlockMode>('full');
   const [chaos, setChaos] = useState<number>(FULL.default_chaos);
+  // «Макс. угол поворота зданий» (rotation.ts): 0 = axis-aligned; follows the shown map's stored value
+  const [maxRot, setMaxRot] = useState<number>(ROTATION.max_deg_default);
   // zoom + pan on the plan (UX round, task 072): reset to "fit" when another map (other bounds) is shown
   const [view, setView] = useState<PlanView>(FIT_VIEW);
   const [goalTool, setGoalTool] = useState(false);
@@ -171,7 +174,8 @@ export const LevelGenDepartment: React.FC = () => {
   // «Собрать в Unreal» (task 072): the server builds the ACCEPTED file (accepted/<name>.json) + runs the route smoke, one at a time
   type BuildTarget = { name: string; leaf: string; map: string; file: string; exists: boolean; builtFrom: string; canBuild: boolean; needsConfirm: boolean; reason: string };
   type BuildState = { stage: 'idle' | 'build' | 'smoke' | 'done' | 'failed'; name: string; map: string; file: string; elapsed_s: number; stage_elapsed_s: number; message: string;
-    result: { built: boolean; actors?: number; nav_tiles?: string; route?: string; route_summary?: string; reason?: string } };
+    result: { built: boolean; actors?: number; nav_tiles?: string; route?: string; route_summary?: string; reason?: string };
+    /** The scripts' latest output lines (they run hidden, no window: bug 2026-11-16 evening). */ log?: string[] };
   const [acceptedSnap, setAcceptedSnap] = useState<Record<string, string>>({});
   const [buildAsk, setBuildAsk] = useState<BuildTarget | null>(null);
   const [buildTarget, setBuildTarget] = useState<BuildTarget | null>(null);
@@ -185,6 +189,10 @@ export const LevelGenDepartment: React.FC = () => {
     return snap === undefined ? 'unknown' : snap === JSON.stringify(cur.layout) ? 'same' : 'changed';
   }, [cur, acceptedSnap]);
   const building = buildState?.stage === 'build' || buildState?.stage === 'smoke';
+  // the build log panel follows the newest line
+  const buildLogRef = useRef<HTMLPreElement>(null);
+  const buildLogLast = buildState?.log?.at(-1) ?? '';
+  useEffect(() => { const el = buildLogRef.current; if (el) el.scrollTop = el.scrollHeight; }, [buildLogLast, buildState?.log?.length]);
   const pollBuild = async () => { try { const r = await fetch('/api/levelgen/build-status'); if (r.ok) setBuildState(await r.json()); } catch { /* the dev server restarts */ } };
   useEffect(() => { pollBuild(); }, []);
   useEffect(() => {
@@ -240,7 +248,7 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('Перегенерация зоны...'); setError('');
     setTimeout(() => {
       try {
-        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos });
+        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos, maxRotationDeg: maxRot });
         setRegenReport(r);
         if (r.ok && r.layout !== cur.layout) pushStep(r.layout, `зона (${blockMode === 'full' ? `полностью, хаос ${chaos}` : blockMode === 'types' ? 'типы' : 'наполнение'}), seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`);
         setRerollSeed((s) => s + 1);
@@ -286,6 +294,8 @@ export const LevelGenDepartment: React.FC = () => {
   // another map in the plan (another slot, an opened accepted map, an expansion): back to "fit", the last edit message cleared
   const viewKey = cur ? `${sel}:${cur.key ?? cur.layout.name}:${JSON.stringify(cur.layout.bounds)}` : '';
   useEffect(() => { setView(FIT_VIEW); setObjMsg(null); }, [viewKey]);
+  const storedRot = cur?.layout.params.max_rotation_deg;
+  useEffect(() => { setMaxRot(storedRot ?? ROTATION.max_deg_default); }, [viewKey, storedRot]);
   /** A start / goal edit on the plan: applied, re-walked, one undo step (an invalid spot stays where it was dropped, marked red). */
   const onObjective = (a: ObjectiveAction) => {
     if (!cur || busy) return;
@@ -318,7 +328,7 @@ export const LevelGenDepartment: React.FC = () => {
   const squadNow = useMemo(() => {
     if (!track) return null;
     const p = positionsAt(track, playT);
-    return p ? { members: p.members, trail: trailAt(track, playT), leg: p.leg, formation: p.formation } : null;
+    return p ? { members: p.members, trail: trailAt(track, playT), trails: p.members.map((_, m) => trailAt(track, playT, PLAYBACK.trail_s, m)), leg: p.leg, formation: p.formation } : null;
   }, [track, playT]);
   const trackSummary = useMemo(() => (track ? summarizeTrack(track) : null), [track]);
   const expandNow = () => {
@@ -326,7 +336,9 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy(`Расширяю карту x${expandFactor}...`); setError('');
     setTimeout(() => {
       try {
-        const r = expandLayout({ layout: cur.layout, factor: expandFactor, seed: expandSeed, profile });
+        // the rotation setting rides in the map's params (absent / unchanged = the map as it is: byte-identical expansions)
+        const src = maxRot === (cur.layout.params.max_rotation_deg ?? 0) ? cur.layout : { ...cur.layout, params: { ...cur.layout.params, max_rotation_deg: maxRot } };
+        const r = expandLayout({ layout: src, factor: expandFactor, seed: expandSeed, profile });
         setExpandReport({ ...r, seamChecks: r.ok ? checkSeams(r.layout, r.roads) : [] });
         if (r.ok) { pushStep(r.layout, `расширение x${expandFactor}, seed ${r.seed}`); setZone(null); setRegenReport(null); setExpandSeed((s) => s + 1); }
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -535,9 +547,15 @@ export const LevelGenDepartment: React.FC = () => {
                       <p className="text-slate-300">Собрана: {buildState.result.built ? `да${buildState.result.actors ? ` (${buildState.result.actors} акторов)` : ''}` : 'нет'}; навигация: {buildState.result.nav_tiles || '—'}; маршрут: {buildState.result.route ? <span className={buildState.result.route === 'PASS' ? 'text-emerald-300 font-semibold' : 'text-rose-300 font-semibold'}>{buildState.result.route}</span> : '—'}{buildState.result.route_summary ? ` — ${buildState.result.route_summary}` : ''}{buildState.result.reason ? `; причина: ${buildState.result.reason}` : ''}</p>
                     )}
                     {buildState.result.built && <p className="text-slate-400">Открыть: в Unreal Content Browser → <span className="font-mono">{buildState.map}</span> (файл <span className="font-mono">{buildState.file}</span>); бой на ней — «Боевая лаборатория», карта {buildState.map.split('/').pop()}.</p>}
+                    {!!buildState.log?.length && (
+                      <details open={building} className="mt-1" data-build-log>
+                        <summary className="cursor-pointer text-slate-400 select-none">Журнал сборки ({buildState.log.length} последних строк; скрипты идут без окон, полный журнал — Saved/LevelGen/build_{buildState.map.split('/').pop()}.log и route_….log)</summary>
+                        <pre ref={buildLogRef} className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all bg-black/50 border border-slate-800 rounded p-1.5 text-[10px] leading-snug text-slate-300 font-mono">{buildState.log.join('\n')}</pre>
+                      </details>
+                    )}
                   </div>
                 )}
-                <p className="text-[11px] text-slate-500">Фоном: Scripts/levelgen_build_map.ps1 (карта + навигация, ~4-6 мин) → Scripts/levelgen_route_smoke.ps1 (бот проходит маршрут, ~6-8 мин для x4). Редактор этого checkout должен быть закрыт; одна сборка за раз; чужие карты не перезаписываются.</p>
+                <p className="text-[11px] text-slate-500">Фоном, без окон: Scripts/levelgen_build_map.ps1 (карта + навигация, ~4-6 мин) → Scripts/levelgen_route_smoke.ps1 (бот проходит маршрут, ~6-8 мин для x4). Редактор этого checkout должен быть закрыт; одна сборка за раз; чужие карты не перезаписываются.</p>
               </div>
             )}
             {cur && (
@@ -569,6 +587,11 @@ export const LevelGenDepartment: React.FC = () => {
                       <input type="range" min={0} max={1} step={0.1} value={chaos} onChange={(e) => setChaos(Number(e.target.value))} className="w-24 accent-amber-500" data-chaos />
                       <span className="text-[10px] text-slate-500">хаотично</span>
                       <span className="font-mono text-slate-200 w-6">{chaos.toFixed(1)}</span>
+                    </label>
+                  )}
+                  {blockMode !== 'jitter' && (
+                    <label className="flex items-center gap-1 text-slate-400" title={`Макс. угол поворота зданий: каждый новый квартал (его здания, заборы, укрытия, лестницы) встаёт повёрнутым на случайный угол в пределах ±этого числа (в «Полностью» — ещё × хаос). 0 — всё по осям, как сейчас (промзона). Хранится в карте и действует и на «Расширить карту».`}>Макс. угол поворота зданий
+                      <input type="number" min={0} max={ROTATION.max_deg_limit} step={5} value={maxRot} onChange={(e) => setMaxRot(Math.max(0, Math.min(ROTATION.max_deg_limit, Number(e.target.value) || 0)))} className="w-14 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-slate-100 font-mono" data-maxrot />°
                     </label>
                   )}
                   <button type="button" onClick={reroll} disabled={!zone || !profileOk || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold disabled:opacity-40"><Shuffle size={13} />Перегенерировать зону</button>
@@ -669,7 +692,7 @@ export const LevelGenDepartment: React.FC = () => {
                 <RegionOverlay bounds={cur?.layout.bounds ?? null} height={520} mode={goalTool ? 'off' : regionMode} zone={zone} locks={locks} blocks={region?.plan.selLots.map((k) => k.rect)}
                   inside={selection?.inside.map((g) => g.centre)} locked={selection?.locked.map((g) => g.centre)} onZone={setZone}
                   view={view} onView={setView} objectives={cur?.layout.objectives ?? null} objErrors={objErrors} objWarnings={objWarnings} bestPath={objCheck?.bestPath}
-                  addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null}>
+                  addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null} trails={squadNow?.trails ?? null}>
                   <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives />
                 </RegionOverlay>
                 </div>

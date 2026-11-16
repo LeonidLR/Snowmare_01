@@ -13,6 +13,7 @@
 //   4. the routes are re-checked (evaluate.ts checkLayoutRoutes): a previously completable route must stay so, else the next seed.
 // Pure and deterministic: same map + factor + seeds -> the same JSON. Constants: levelgen_v2.json `expansion`.
 
+import { ROTATION } from './rotation.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly, rng } from '../movement/geometry.ts';
 import { wallSegments } from '../movement/layout.ts';
@@ -261,7 +262,7 @@ function buildExpansion(old: GenLayout, o: ExpandOptions, size: [number, number]
     }
   }
   const newLots: Lot[] = cells.map((c, i) => ({ id: `LOT_${tag}_${i + 1}`, rect: rectToUE(c, frame), template: '' }));
-  const ctx = { seed, frame, streets_m: [...streetRectsM(old).map((r) => M(rectToUE(r, frameOf(old)))), ...streets.map((s) => s.r)], verticality: old.params.verticality, density: old.params.density };
+  const ctx = { seed, frame, streets_m: [...streetRectsM(old).map((r) => M(rectToUE(r, frameOf(old)))), ...streets.map((s) => s.r)], verticality: old.params.verticality, density: old.params.density, maxRotationDeg: old.params.max_rotation_deg ?? ROTATION.max_deg_default };
   const content = { walls: [] as GenWall[], buildings: [] as GenLayout['buildings'], ladders: [] as GenLayout['ladders'], covers: [] as GenCover[], zones: [] as GenLayout['zones'], ambush_points: [] as GenLayout['ambush_points'], mantle_edges: [] as NonNullable<GenLayout['mantle_edges']> };
   for (const lot of newLots) {
     const t = pickTemplates(lot, '', seed, frame)[0];

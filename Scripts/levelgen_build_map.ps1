@@ -27,6 +27,7 @@ if (-not $StatusFile) { $StatusFile = Join-Path $ProjectDir "Saved\LevelGen\buil
 
 . (Join-Path $PSScriptRoot "agent_lock.ps1")
 . (Join-Path $PSScriptRoot "job_status.ps1")
+. (Join-Path $PSScriptRoot "hidden_process.ps1")
 $Job = New-JobStatus $StatusFile "build_map" $LogFile
 Set-JobStatus $Job @{ layout = $Layout; target = $Target }
 
@@ -57,7 +58,7 @@ try {
     $CmdArgs = "`"$Project`" -run=pythonscript -script=`"$Script`" -unattended -nullrhi -nosplash -nosound -NoTelemetry `"-abslog=$LogFile`""
     Write-Host "levelgen: building the map from $($env:CODEX_LEVELGEN_LAYOUT) ..."
     Set-JobStatus $Job @{} "running" "building the map (editor commandlet)"
-    $Proc = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $CmdArgs -WindowStyle Hidden -PassThru
+    $Proc = Start-HiddenProcess "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $CmdArgs
     $null = $Proc.Handle
     if (-not $Proc.WaitForExit($TimeoutSeconds * 1000)) {
         Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue
@@ -87,7 +88,7 @@ try {
 if (-not $NoBake) {
     $Leaf = ($Map -split '/')[-1]
     Set-JobStatus $Job @{ navbake_log = (Join-Path $ProjectDir "Saved\Logs\NavBake-$Leaf.log") } "running" "baking the navmesh"
-    & powershell -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "bake_navmesh.ps1") -Map $Map
+    & powershell -NoProfile -NonInteractive -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot "bake_navmesh.ps1") -Map $Map
     if ($LASTEXITCODE -ne 0) {
         Write-Host "levelgen: navmesh bake failed for $Leaf" -ForegroundColor Red
         Complete-JobStatus $Job "failed" 5 "the navmesh bake failed for $Leaf (exit $LASTEXITCODE)" "navmesh"

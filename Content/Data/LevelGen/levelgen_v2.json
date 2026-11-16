@@ -94,10 +94,25 @@
     "speeds": [1, 2, 4, 8],
     "trail_s": 8
   },
+  "rotation": {
+    "comment": "Rotated buildings (designer 2026-11-16, item 4): «Макс. угол поворота зданий». max_deg_default 0 = every building axis-aligned (the industrial look, all current maps); > 0 = each block template (its buildings, fences, covers, ladders, the route's visit into it) stands rotated by a seeded angle within +-max about the template's centre, shrunk to fit its lot (a template whose rotated fit is below its minimum size stays square). In the full re-roll the angle is also scaled by the chaos (chaos 0 = square). max_deg_limit = the UI's upper bound. min_deg: smaller drawn angles are rounded to 0.",
+    "max_deg_default": 0,
+    "max_deg_limit": 90,
+    "min_deg": 0.5,
+    "chaos_scales": true
+  },
+  "sim_nav": {
+    "comment": "The squad simulator's walkability («Прогнать отряд», evaluate.ts; bug 2026-11-16 evening): the ground walls PLUS every cover at least cover_min_height_cm tall (a cover is its four edges + a spine along its long side, so its whole rectangle is solid - the UE navmesh is carved by them the same way). A route point that falls inside an obstacle is moved to the nearest walkable spot within snap_max_m before the walk.",
+    "cover_min_height_cm": 0,
+    "snap_max_m": 4
+  },
   "build": {
     "comment": "«Собрать в Unreal» (UX round, task 072): the target map is /Game/Maps/Generated/L_Gen_<Name>, Name = the accepted layout name without the prefix strip_prefix (regex), each '_' word capitalised (gen_ref_01_02_depot_1_x4 -> L_Gen_Depot_1_X4). poll_s = the page's status poll.",
     "strip_prefix": "^(gen_)?(ref_[0-9]+_[0-9]+_)?",
     "map_dir": "/Game/Maps/Generated",
-    "poll_s": 3
+    "poll_s": 3,
+    "log_lines": 400,
+    "log_tail": 80,
+    "log_comment": "The scripts run hidden (no window); their output goes to the page's log panel: the server keeps the last log_lines lines (also Saved/LevelGen/<build|route>_<map>.log), the status poll sends the last log_tail."
   }
 }

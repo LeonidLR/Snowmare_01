@@ -7,9 +7,9 @@ import os from 'node:os';
 import path from 'node:path';
 import { test } from 'node:test';
 import type { ProcessRunner } from './buildPipeline.ts';
-import { createBuildPipeline, mapNameFor, navTilesOf } from './buildPipeline.ts';
+import { createBuildPipeline, HIDDEN_SPAWN, hiddenPowershellArgs, mapNameFor, navTilesOf, powershellRunner } from './buildPipeline.ts';
 
-interface Call { exe: string; args: string[]; cwd: string; agent?: string; finish: (code: number) => void }
+interface Call { exe: string; args: string[]; cwd: string; agent?: string; finish: (code: number) => void; say: (line: string) => void }
 
 function fixture() {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'tg-build-'));
@@ -28,7 +28,7 @@ function fixture() {
   const runner: ProcessRunner = (exe, args, opts) => {
     let finish!: (code: number) => void;
     const done = new Promise<number>((r) => { finish = r; });
-    calls.push({ exe, args, cwd: opts.cwd, agent: opts.env.CODEX_AGENT, finish });
+    calls.push({ exe, args, cwd: opts.cwd, agent: opts.env.CODEX_AGENT, finish, say: (line) => opts.onLine?.(line) });
     return { pid: 4242, done };
   };
   let clock = Date.parse('2026-11-16T10:00:00Z');
@@ -80,7 +80,7 @@ test('ux build: build -> route smoke through powershell.exe directly, progress +
   assert.equal(calls.length, 1);
   const b = calls[0];
   assert.equal(b.exe, 'powershell.exe', 'never Git Bash');
-  assert.deepEqual(b.args.slice(0, 5), ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'Scripts', 'levelgen_build_map.ps1')]);
+  assert.deepEqual(b.args.slice(0, 8), ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', path.join(root, 'Scripts', 'levelgen_build_map.ps1')]);
   assert.equal(arg(b, '-Layout'), 'gen_ref_01_02_depot_2');
   assert.equal(arg(b, '-Target'), '/Game/Maps/Generated/L_Gen_Depot_2');
   assert.equal(arg(b, '-StatusFile'), path.join(root, 'Saved/LevelGen/build_L_Gen_Depot_2.json'));
@@ -104,7 +104,7 @@ test('ux build: build -> route smoke through powershell.exe directly, progress +
   assert.equal(calls.length, 2, 'the route smoke starts after a good build');
   const sm = calls[1];
   assert.equal(sm.exe, 'powershell.exe');
-  assert.equal(sm.args[4], path.join(root, 'Scripts', 'levelgen_route_smoke.ps1'));
+  assert.equal(arg(sm, '-File'), path.join(root, 'Scripts', 'levelgen_route_smoke.ps1'));
   assert.equal(arg(sm, '-Map'), '/Game/Maps/Generated/L_Gen_Depot_2');
   assert.equal(arg(sm, '-StatusFile'), path.join(root, 'Saved/LevelGen/route_L_Gen_Depot_2.json'));
   tick(10);
@@ -149,4 +149,46 @@ test('ux build: a refused / failed build stops before the smoke with the reason;
   assert.equal(s.result.route, 'FAIL');
   assert.equal(s.result.built, true);
   assert.match(s.result.reason ?? '', /smoke_failed/);
+});
+
+test('build hidden (bug 2026-11-16 evening): no window - hidden powershell args, no shell / console inherited; the scripts output streams into the page log', async () => {
+  // the spawn options: windowsHide, no shell (`start` / cmd), no detached console, NO inherited stdio (libuv then adds CREATE_NO_WINDOW)
+  assert.equal(HIDDEN_SPAWN.windowsHide, true);
+  assert.equal(HIDDEN_SPAWN.shell, false);
+  assert.equal(HIDDEN_SPAWN.detached, false);
+  assert.deepEqual([...HIDDEN_SPAWN.stdio], ['ignore', 'pipe', 'pipe']);
+  assert.deepEqual(hiddenPowershellArgs('C:/x.ps1', ['-A', '1']), ['-NoProfile', '-NonInteractive', '-WindowStyle', 'Hidden', '-ExecutionPolicy', 'Bypass', '-File', 'C:/x.ps1', '-A', '1']);
+  const { p, calls, root, w } = fixture();
+  p.start('gen_ref_01_02_depot_1_x4', false);
+  calls[0].say('levelgen: building the map from x4 ...');
+  calls[0].say('placed 3872 actors');
+  let s = p.status();
+  assert.deepEqual(s.log, ['[1/2] levelgen: building the map from x4 ...', '[1/2] placed 3872 actors']);
+  assert.match(fs.readFileSync(path.join(root, 'Saved/LevelGen/build_L_Gen_Depot_1_X4.log'), 'utf8'), /placed 3872 actors/);
+  w('Saved/LevelGen/build_L_Gen_Depot_1_X4.json', { state: 'done', result: { actors: 3872 } });
+  calls[0].finish(0);
+  await flush();
+  calls[1].say('Smoke RESULT: PASS');
+  s = p.status();
+  assert.equal(s.log.at(-1), '[2/2] Smoke RESULT: PASS');
+  assert.ok(fs.existsSync(path.join(root, 'Saved/LevelGen/route_L_Gen_Depot_1_X4.log')));
+  // the page gets the tail only; the server keeps log_lines
+  for (let i = 0; i < 1000; i++) calls[1].say(`line ${i}`);
+  s = p.status();
+  assert.ok(s.log.length > 0 && s.log.length <= 400, `tail ${s.log.length}`);
+  assert.equal(s.log.at(-1), '[2/2] line 999');
+  calls[1].finish(0);
+  await flush();
+  // a new run starts with an empty log (and fresh log files)
+  p.start('gen_ref_01_02_depot_1_x4', false);
+  assert.deepEqual(p.status().log, []);
+  assert.equal(fs.existsSync(path.join(root, 'Saved/LevelGen/route_L_Gen_Depot_1_X4.log')), false);
+});
+
+test('build hidden: the real runner streams a child stdout + stderr lines and its exit code (node itself, no powershell)', async () => {
+  const lines: string[] = [];
+  const h = powershellRunner(process.execPath, ['-e', 'console.log("one"); console.error("two"); console.log("three  "); process.exit(3)'], { cwd: process.cwd(), env: process.env, onLine: (l) => lines.push(l) });
+  assert.equal(await h.done, 3);
+  await flush();
+  assert.deepEqual([...lines].sort(), ['one', 'three', 'two']);
 });

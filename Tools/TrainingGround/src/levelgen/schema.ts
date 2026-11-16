@@ -9,6 +9,7 @@
 
 import v2cfg from '../../../../Content/Data/LevelGen/levelgen_v2.json' with { type: 'json' };
 import { obstacleHeight } from './obstacleHeights.ts';
+import { footprintBBox, footprintPoly } from './rotation.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
 import type { Layout, LayoutRoute, LayoutWall, LayoutZone, ZoneKind } from '../movement/layout.ts';
@@ -216,8 +217,13 @@ export const STAIR_RUN_PER_RISE = 1.43;
 
 export interface GenBuilding {
   id: string;
-  /** Axis-aligned rectangle corners [min, max] (cm). */
+  /**
+   * Rectangle corners [min, max] (cm) of the UNROTATED footprint; with `rotation` the building stands rotated about its centre
+   * (rotation.ts: footprintPoly / inFootprint). Its other points (doors, openings, stairs, holes, ...) are world coordinates.
+   */
   footprint: [Vec2, Vec2];
+  /** Degrees about the footprint centre (UE yaw sense); absent = 0 = axis-aligned (designer 2026-11-16, item 4). */
+  rotation?: number;
   /** Total height, cm = floors * LEVEL_HEIGHT (the roof sits on level `floors`). */
   height: number;
   /** Interior floors counting the ground floor: floor n (1 <= n < floors) sits on level n; the roof on level `floors`. */
@@ -385,6 +391,8 @@ export interface GenParams {
   variants: number;
   /** 0 = flat; 1 = ladders + roofs; 2 = + stairwells / floors; 3 = + the ruin's holes. */
   verticality: 0 | 1 | 2 | 3;
+  /** «Макс. угол поворота зданий», degrees (absent = levelgen_v2.json rotation.max_deg_default = 0): re-rolls / expansions rotate templates within +-it. */
+  max_rotation_deg?: number;
 }
 
 export const DEFAULT_PARAMS: GenParams = { size_m: [177, 124], density: 1, variants: 3, verticality: 3 };
@@ -408,6 +416,7 @@ export function validateGenLayout(data: unknown): string[] {
     if (ids.has(b.id)) e.push(`buildings: duplicate id "${b.id}"`); ids.add(b.id);
     if (!Array.isArray(b.footprint) || b.footprint.length !== 2 || !isVec(b.footprint[0]) || !isVec(b.footprint[1])) e.push(`building ${b.id}: footprint must be [min, max]`);
     else if (b.footprint[0][0] >= b.footprint[1][0] || b.footprint[0][1] >= b.footprint[1][1]) e.push(`building ${b.id}: footprint min must be below max`);
+    if (b.rotation !== undefined && (!isNum(b.rotation) || Math.abs(b.rotation) > 180)) e.push(`building ${b.id}: rotation must be a number of degrees in -180..180`);
     if (!isNum(b.floors) || b.floors < 1) e.push(`building ${b.id}: floors >= 1`);
     if (b.roof_walkable && isNum(b.floors) && b.height !== b.floors * LEVEL_HEIGHT) e.push(`building ${b.id}: a walkable roof sits on level ${b.floors} = ${b.floors * LEVEL_HEIGHT} cm, height is ${b.height}`);
     for (const s of b.stairs ?? []) if (s.to > b.floors) e.push(`building ${b.id}: stair ${s.id} leads to floor ${s.to} of ${b.floors}`);
@@ -467,8 +476,8 @@ export function validateGenLayout(data: unknown): string[] {
     const xs = l.cut.poly.map((p) => p[0]), ys = l.cut.poly.map((p) => p[1]);
     const x0 = Math.min(...xs) - reach, x1 = Math.max(...xs) + reach, y0 = Math.min(...ys) - reach, y1 = Math.max(...ys) + reach;
     for (const b of l.buildings ?? []) {
-      const f = b.footprint;
-      if (!Array.isArray(f) || f.length !== 2 || !isVec(f[0]) || !isVec(f[1])) continue;
+      if (!Array.isArray(b.footprint) || b.footprint.length !== 2 || !isVec(b.footprint[0]) || !isVec(b.footprint[1])) continue;
+      const f = footprintBBox(b);
       if (f[0][0] < x1 && f[1][0] > x0 && f[0][1] < y1 && f[1][1] > y0) e.push(`building ${b.id}: footprint overlaps the cut wall (wall ${t} cm + margin ${CUT_BUILDING_MARGIN_CM} cm around the cut; no building on the cut walls)`);
     }
   }
@@ -590,7 +599,7 @@ export function layerWalls(l: GenLayout, layer: string): LayoutWall[] {
   const b = l.buildings.find((x) => x.id === m[2]);
   if (!b) throw new Error(`layer "${layer}": no building "${m[2]}"`);
   const walls: LayoutWall[] = [];
-  const fp = rectPoly(b.footprint);
+  const fp = footprintPoly(b);
   if (m[1] === 'roof') {
     if (b.parapets && b.parapets.length > 0) {
       b.parapets.forEach((p, i) => walls.push({ id: p.wall_id ?? `${b.id}_parapet_${i}`, a: p.start, b: p.end, height: p.height_cm, thickness: p.thickness_cm ?? 20 }));

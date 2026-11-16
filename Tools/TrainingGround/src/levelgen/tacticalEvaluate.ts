@@ -4,6 +4,7 @@
 //   - Firing lines from windows & loopholes onto the mandatory route (count + min/mean/max length + segments for UI)
 //   - Cover share along routes, multi-level route verification, mantle edge validation, per-building and per-level scores
 
+import { inFootprint, rotationOf, rotVec, toBuildingFrame } from './rotation.ts';
 import type { Segment, Vec2 } from '../movement/geometry.ts';
 import { dirOf, dist, distToWall, segmentBlocked, sub } from '../movement/geometry.ts';
 import { wallSegments } from '../movement/layout.ts';
@@ -114,16 +115,16 @@ const round = (v: number, digits = 0) => {
 /** Outward unit normal for an opening along a building's perimeter. */
 export function openingOutwardDir(b: GenBuilding, op: WallOpening): Vec2 {
   if (typeof op.yaw === 'number' && Number.isFinite(op.yaw)) return dirOf(op.yaw);
+  // the nearest side in the building's own frame, turned back with the building (rotation.ts)
   const [[x0, y0], [x1, y1]] = b.footprint;
-  const dW = Math.abs(op.pos[0] - x0);
-  const dE = Math.abs(op.pos[0] - x1);
-  const dN = Math.abs(op.pos[1] - y0);
-  const dS = Math.abs(op.pos[1] - y1);
+  const q = toBuildingFrame(b, op.pos);
+  const dW = Math.abs(q[0] - x0);
+  const dE = Math.abs(q[0] - x1);
+  const dN = Math.abs(q[1] - y0);
+  const dS = Math.abs(q[1] - y1);
   const m = Math.min(dW, dE, dN, dS);
-  if (m === dW) return [-1, 0];
-  if (m === dE) return [1, 0];
-  if (m === dN) return [0, -1];
-  return [0, 1];
+  const local: Vec2 = m === dW ? [-1, 0] : m === dE ? [1, 0] : m === dN ? [0, -1] : [0, 1];
+  return rotVec(local, rotationOf(b));
 }
 
 function pointInBounds(p: Vec2, bounds: { min: Vec2; max: Vec2 }, tol = ROOM_TOUCH_TOL_CM): boolean {
@@ -174,7 +175,8 @@ function checkBuildingReachability(l: GenLayout, b: GenBuilding): {
 
   const roomsAt = (floor: number, pos: Vec2, fallbackSingle = false): GenRoom[] => {
     const onFloor = rooms.filter((rm) => rm.floor === floor);
-    const hits = onFloor.filter((rm) => pointInBounds(pos, rm.bounds, ROOM_TOUCH_TOL_CM));
+    const local = toBuildingFrame(b, pos); // room bounds are in the building's own frame (rotation.ts)
+    const hits = onFloor.filter((rm) => pointInBounds(local, rm.bounds, ROOM_TOUCH_TOL_CM));
     if (hits.length > 0) return hits;
     if (fallbackSingle && onFloor.length === 1) return onFloor;
     return [];
@@ -186,7 +188,7 @@ function checkBuildingReachability(l: GenLayout, b: GenBuilding): {
     for (const op of openings) {
       if (op.kind !== 'door') continue;
       const hits = rooms.filter(
-        (rm) => rm.floor === op.floor && ((op.id && rm.door_ids?.includes(op.id)) || pointInBounds(op.pos, rm.bounds, ROOM_TOUCH_TOL_CM)),
+        (rm) => rm.floor === op.floor && ((op.id && rm.door_ids?.includes(op.id)) || pointInBounds(toBuildingFrame(b, op.pos), rm.bounds, ROOM_TOUCH_TOL_CM)),
       );
       if (op.floor === 0) {
         for (const rm of hits) addEdge(streetNode, rm.id);
@@ -200,7 +202,7 @@ function checkBuildingReachability(l: GenLayout, b: GenBuilding): {
       for (const op of pt.openings ?? []) {
         if (op.kind !== 'door') continue;
         const hits = rooms.filter(
-          (rm) => rm.floor === pt.floor && ((op.id && rm.door_ids?.includes(op.id)) || pointInBounds(op.pos, rm.bounds, ROOM_TOUCH_TOL_CM)),
+          (rm) => rm.floor === pt.floor && ((op.id && rm.door_ids?.includes(op.id)) || pointInBounds(toBuildingFrame(b, op.pos), rm.bounds, ROOM_TOUCH_TOL_CM)),
         );
         for (let i = 1; i < hits.length; i++) addEdge(hits[0].id, hits[i].id);
       }
@@ -383,11 +385,7 @@ export function evaluateTactical(
         for (const other of l.buildings) {
           if (other.id === b.id) continue;
           if (other.height <= opBotZ) continue;
-          const [[ox0, oy0], [ox1, oy1]] = other.footprint;
-          if (
-            (probeStart[0] >= ox0 - 20 && probeStart[0] <= ox1 + 20 && probeStart[1] >= oy0 - 20 && probeStart[1] <= oy1 + 20) ||
-            (probeEnd[0] >= ox0 && probeEnd[0] <= ox1 && probeEnd[1] >= oy0 && probeEnd[1] <= oy1)
-          ) {
+          if (inFootprint(other, probeStart, 20) || inFootprint(other, probeEnd)) {
             blockReason = `opens directly into building ${other.id}`;
             break;
           }
