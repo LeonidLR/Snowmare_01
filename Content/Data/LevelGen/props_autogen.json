@@ -1,0 +1,65 @@
+{
+  "$schema": "./props_autogen.schema.json",
+  "schema": "codex.levelgen_props_autogen/1",
+  "comment": "Default props autogen configuration for generated maps (task 076). Densities per 10 000 m2 mirror the Depot reference (L_Gen_Depot_1, 21 948 m2).",
+  "unit_area_m2": 10000,
+  "reference": {
+    "map": "L_Gen_Depot_1",
+    "layout": "gen_ref_01_02_depot_1",
+    "area_m2": 21948
+  },
+  "layers": {
+    "crates": {
+      "preset": "crates_default",
+      "count_mode": "density",
+      "per_100m2": 0.25,
+      "base_max": 80,
+      "min_count": 8,
+      "max_count": 300,
+      "where": {
+        "near": [
+          { "max_cm": 150, "weight": 3, "what": "wall" },
+          { "max_cm": 200, "weight": 2, "what": "cover" }
+        ],
+        "walk_layers": ["ground", "floor:*"]
+      }
+    },
+    "barrels": {
+      "preset": "barrels_default",
+      "per_10000m2": 3.64,
+      "min_count": 4,
+      "max_count": 80,
+      "where": {
+        "near": [
+          { "max_cm": 120, "weight": 2, "what": "wall" }
+        ]
+      }
+    },
+    "turrets": {
+      "preset": "turrets_default",
+      "per_10000m2": 0.91,
+      "min_count": 1,
+      "max_count": 12
+    },
+    "mines": {
+      "preset": "mines_default",
+      "field_per_10000m2": 1.82,
+      "min_field_count": 2,
+      "max_field_count": 30,
+      "doorway_percent": 25,
+      "crate_percent": 10
+    },
+    "loot": {
+      "preset": "loot_default",
+      "budget_per_10000m2": 273.0,
+      "min_budget": 300,
+      "max_budget": 3600
+    }
+  },
+  "zone_multipliers": {
+    "industrial": 1.0,
+    "yard": 1.0,
+    "open": 0.8,
+    "street": 0.6
+  }
+}
