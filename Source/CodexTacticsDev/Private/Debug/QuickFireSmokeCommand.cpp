@@ -9,7 +9,8 @@
 //  C an RMB click (press, 0.1 s, release) only drives the camera drag: nothing fires;
 //  D Ctrl + click 0.9 m beside a visible (frozen) brute, then on the brute: the targeted shot as before (his priority target),
 //    no quick fire;
-//  E Ctrl + click on a barrel / a trapped mine / a trapped crate: the targeted shot as before - each goes off at once, one round
+//  E Ctrl + click on a barrel / a trapped mine / a trapped crate: the targeted shot as before - each goes off (since the fire gate 2026-11-16,
+//    bugs 058c / 061: once he faced it with the weapon raised, within ObjectShotWaitSeconds of the click, not in the click's frame), one round
 //    each, no quick fire;
 //  S the Medic-Sapper alone with the sniper rifle, standing: Ctrl + click on the ground - she kneels by herself, then one round;
 //  K the commander in cover at the right end of a 3 m wall: Ctrl + click on a point round the corner - he fires from the cover
@@ -63,6 +64,9 @@ namespace QuickFireSmoke
 	constexpr float StepSeconds = 0.05f;
 	constexpr float Timeout = 180.f;
 
+	/** E: a targeted object shot resolves within this after the click (the fire gate: a turn of up to 180 deg + the raise), s. */
+	constexpr float ObjectShotWaitSeconds = 4.f;
+
 	struct FState
 	{
 		int32 Stage = 0;
@@ -76,6 +80,8 @@ namespace QuickFireSmoke
 		TArray<int32> RoundsBefore;
 		int32 Burst = 3;
 		int32 FireLines = 0;
+		/** E: the targeted object shot was clicked at this stage time (-1 = not yet): the fire gate resolves it after the turn / raise. */
+		float ObjectClickTime = -1.f;
 		int32 Pings = 0;
 		int32 Markers = 0;
 		int32 Refusals = 0;
@@ -485,11 +491,21 @@ namespace QuickFireSmoke
 				Check(State, false, TEXT("E: a barrel spawned"));
 				return Finish(State, false);
 			}
-			Snapshot(World, State);
-			State.ClipBefore = Commander->CurrentClip;
-			CtrlClick(PC, HitOn(Barrel));
+			if (State.ObjectClickTime < 0.f)
+			{
+				Snapshot(World, State);
+				State.ClipBefore = Commander->CurrentClip;
+				CtrlClick(PC, HitOn(Barrel));
+				State.ObjectClickTime = State.StageTime;
+				return true;
+			}
+			if (Commander->IsObjectShotPending() && State.StageTime - State.ObjectClickTime < ObjectShotWaitSeconds)
+			{
+				return true; // the fire gate: he turns / raises the weapon first
+			}
+			State.ObjectClickTime = -1.f;
 			Check(State, Barrel->IsBurning() && Commander->CurrentClip == State.ClipBefore - 1 && !AnyQuickFireOrder(State),
-				TEXT("E: Ctrl + click on a barrel - it explodes at once, one round, no quick fire"));
+				TEXT("E: Ctrl + click on a barrel - it explodes (after the fire gate's turn / raise), one round, no quick fire"));
 			// A trapped mine far from the barrel's fire.
 			if (AProximityMineActor* Mine = SpawnObject<AProximityMineActor>(World, State.P + State.F * 400.f + State.R * 550.f + FVector(0.f, 0.f, 20.f)))
 			{
@@ -506,15 +522,25 @@ namespace QuickFireSmoke
 				return true; // the shot cadence
 			}
 			AActor* Mine = State.Object.Get();
-			if (!Mine)
+			if (!Mine && State.ObjectClickTime < 0.f)
 			{
 				Check(State, false, TEXT("E: a mine spawned"));
 				return Finish(State, false);
 			}
-			State.ClipBefore = Commander->CurrentClip;
-			CtrlClick(PC, HitOn(Mine));
+			if (State.ObjectClickTime < 0.f)
+			{
+				State.ClipBefore = Commander->CurrentClip;
+				CtrlClick(PC, HitOn(Mine));
+				State.ObjectClickTime = State.StageTime;
+				return true;
+			}
+			if (Commander->IsObjectShotPending() && State.StageTime - State.ObjectClickTime < ObjectShotWaitSeconds)
+			{
+				return true;
+			}
+			State.ObjectClickTime = -1.f;
 			Check(State, !IsValid(Mine) && Commander->CurrentClip == State.ClipBefore - 1 && !AnyQuickFireOrder(State),
-				TEXT("E: Ctrl + click on a mine - it goes off at once, one round, no quick fire"));
+				TEXT("E: Ctrl + click on a mine - it goes off (after the fire gate's turn / raise), one round, no quick fire"));
 			if (ALootCrateActor* Crate = SpawnObject<ALootCrateActor>(World, State.P + State.F * 1300.f + State.R * 550.f + FVector(0.f, 0.f, 40.f)))
 			{
 				Crate->bTrapped = true;
@@ -530,15 +556,25 @@ namespace QuickFireSmoke
 				return true;
 			}
 			ALootCrateActor* Crate = Cast<ALootCrateActor>(State.Object.Get());
-			if (!Crate)
+			if (!Crate && State.ObjectClickTime < 0.f)
 			{
 				Check(State, false, TEXT("E: a crate spawned"));
 				return Finish(State, false);
 			}
-			State.ClipBefore = Commander->CurrentClip;
-			CtrlClick(PC, HitOn(Crate));
-			Check(State, Crate->IsDestroyed() && !Crate->bTrapped && Commander->CurrentClip == State.ClipBefore - 1 && !AnyQuickFireOrder(State),
-				TEXT("E: Ctrl + click on a trapped crate - blown up at once, one round, no quick fire"));
+			if (State.ObjectClickTime < 0.f)
+			{
+				State.ClipBefore = Commander->CurrentClip;
+				CtrlClick(PC, HitOn(Crate));
+				State.ObjectClickTime = State.StageTime;
+				return true;
+			}
+			if (Commander->IsObjectShotPending() && State.StageTime - State.ObjectClickTime < ObjectShotWaitSeconds)
+			{
+				return true;
+			}
+			State.ObjectClickTime = -1.f;
+			Check(State, Crate && Crate->IsDestroyed() && !Crate->bTrapped && Commander->CurrentClip == State.ClipBefore - 1 && !AnyQuickFireOrder(State),
+				TEXT("E: Ctrl + click on a trapped crate - blown up (after the fire gate's turn / raise), one round, no quick fire"));
 			Check(State, NewRounds(State, 0) == 0 && CountMessages(World, TEXT("Fire!")) == State.FireLines, TEXT("E: no quick fire round, no 'Fire!'"));
 			GoTo(State, 40);
 			return true;
