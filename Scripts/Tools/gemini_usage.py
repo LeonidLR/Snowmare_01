@@ -49,13 +49,18 @@ def last_stats(text):
 
 
 def tokens_of(stats):
-    tin = tout = total = 0
+    """(fresh input, cached input, output incl. thoughts, requests). "prompt" = every request's whole context; "cached" of it is
+    billed at the cache price, "input" is the fresh part."""
+    fresh = cached = out = req = 0
     for _name, m in (stats.get("models") or {}).items():
         t = m.get("tokens") or {}
-        tin += int(t.get("prompt") or t.get("input") or 0)
-        tout += int(t.get("candidates") or t.get("output") or 0)
-        total += int(t.get("total") or 0)
-    return tin, tout, total or (tin + tout)
+        prompt = int(t.get("prompt") or 0)
+        c = int(t.get("cached") or 0)
+        cached += c
+        fresh += int(t.get("input") if t.get("input") is not None else max(prompt - c, 0))
+        out += int(t.get("candidates") or 0) + int(t.get("thoughts") or 0)
+        req += int((m.get("api") or {}).get("totalRequests") or 0)
+    return fresh, cached, out, req
 
 
 def main():
@@ -73,7 +78,8 @@ def main():
     if not obj:
         print("tokens n/a (no JSON stats in the log - run ended early?)")
         return 0
-    tin, tout, total = tokens_of(obj["stats"])
+    fresh, cached, tout, req = tokens_of(obj["stats"])
+    tin, total = fresh, fresh + cached + tout
     prices = {}
     if os.path.exists(PRICES):
         try:
@@ -83,14 +89,15 @@ def main():
     p = prices.get(a.model) or {}
     cost = None
     if p.get("input_per_1m") is not None and p.get("output_per_1m") is not None:
-        cost = tin / 1e6 * float(p["input_per_1m"]) + tout / 1e6 * float(p["output_per_1m"])
+        cost = (fresh / 1e6 * float(p["input_per_1m"]) + tout / 1e6 * float(p["output_per_1m"])
+                + cached / 1e6 * float(p.get("cached_per_1m") if p.get("cached_per_1m") is not None else p["input_per_1m"]))
     ledger = {"runs": []}
     if os.path.exists(LEDGER):
         try:
             ledger = json.load(open(LEDGER, encoding="utf-8"))
         except ValueError:
             pass
-    ledger.setdefault("runs", []).append({"task": a.task, "model": a.model, "in": tin, "out": tout, "total": total,
+    ledger.setdefault("runs", []).append({"task": a.task, "model": a.model, "in": fresh, "cached": cached, "out": tout, "requests": req, "total": total,
                                           "cost": cost, "at": datetime.datetime.now().isoformat(timespec="seconds")})
     os.makedirs(os.path.dirname(LEDGER), exist_ok=True)
     json.dump(ledger, open(LEDGER, "w", encoding="utf-8"), indent=1)
@@ -99,7 +106,8 @@ def main():
     day_tokens = sum(int(r.get("total") or 0) for r in day)
     day_cost = sum(float(r["cost"]) for r in day if r.get("cost") is not None)
     c = "cost n/a (set the price in Scripts/gemini_prices.json)" if cost is None else "cost ${:.2f}".format(cost)
-    print("tokens in {:,} / out {:,} / total {:,}; {} (today: {:,} tokens, ${:.2f})".format(tin, tout, total, c, day_tokens, day_cost))
+    print("tokens: fresh in {:,} + cached {:,} + out {:,} ({} requests); {} (today: {:,} tokens, ${:.2f})".format(
+        fresh, cached, tout, req, c, day_tokens, day_cost))
     return 0
 
 

@@ -33,14 +33,16 @@ foreach ($Raw in ($Tasks -join ",").Split(",")) {
     Write-Host "[gemini-night] $Id started $($Started.ToString('HH:mm'))"
     $Job = Start-Job -ScriptBlock {
         param($Script, $Tree, $Prompt, $Model, $Id)
-        $a = @{ Worktree = $Tree; PromptFile = $Prompt; Mode = "yolo"; Label = "night-$Id"; Json = $true }
-        if ($Model) { $a.Model = $Model }
-        & powershell -ExecutionPolicy Bypass -File $Script @a
+        # plain argument list: a hashtable splat turns the -Json switch into "-Json:True", which powershell -File rejects
+        $a = @("-ExecutionPolicy", "Bypass", "-File", $Script, "-Worktree", $Tree, "-PromptFile", $Prompt, "-Mode", "yolo", "-Label", "night-$Id", "-Json")
+        if ($Model) { $a += @("-Model", $Model) }
+        & powershell @a 2>&1
     } -ArgumentList (Join-Path $PSScriptRoot "gemini_agent.ps1"), $Tree, $Prompt, $Model, $Id
     if (-not (Wait-Job $Job -Timeout ($MaxMinutes * 60 + 600))) {
         Stop-Job $Job
         Write-Host "[gemini-night] $Id TIMEOUT after $MaxMinutes min"
     }
+    $JobOut = (Receive-Job $Job -ErrorAction SilentlyContinue | Select-Object -Last 5) -join " / "
     Remove-Job $Job -Force
     $Log = Get-ChildItem $RunDir -Filter "*-night-$Id.txt" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     $Mins = [int]((Get-Date) - $Started).TotalMinutes
@@ -53,7 +55,7 @@ foreach ($Raw in ($Tasks -join ",").Split(",")) {
     $Branch = (git -C $Tree branch --show-current 2>$null)
     $Commits = ((git -C $Tree log --oneline main..HEAD 2>$null) | Select-Object -First 8) -join "; "
     $Report = Get-ChildItem (Join-Path $Tree "docs\port\gemini\outbox") -Filter "$Id-*.report.md" -ErrorAction SilentlyContinue | Select-Object -First 1
-    $Errors = if ($Log) { ((Select-String -Path $Log.FullName -Pattern 'Error|error:|FAIL' | Select-Object -Last 3).Line -join " / ") } else { "no log" }
+    $Errors = if ($Log) { ((Select-String -Path $Log.FullName -Pattern 'Error|error:|FAIL' | Select-Object -Last 3).Line -join " / ") } else { "no log; runner output: $JobOut" }
     $Usage = if ($Log) { (& python (Join-Path $PSScriptRoot "gemini_usage.py") $Log.FullName --task $Id --model $Model) -join " " } else { "tokens n/a" }
     $Text = "gemini-cli $Id ended after $Mins min | $Usage" + $(if ($Fatal) { " - QUOTA/AUTH ERROR, queue STOPPED, Claude must take over the rest" } else { "" }) +
         " | Gemini FINISH message: " + $(if ($SaidFinish) { "yes" } else { "MISSING - treat as unfinished" }) +
