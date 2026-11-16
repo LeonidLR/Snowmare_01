@@ -1,0 +1,143 @@
+{
+  "schema": "codex.levelgen_chokepoints/1",
+  "comment": "CHOKEPOINT / danger analysis of a generated layout (designer 2026-11-16; Tools/TrainingGround/src/levelgen/chokepoints.ts; docs/port/LEVELGEN_LAYERS_REPORT.md). The ground free space (walls + buildings + covers + the canal, as the squad simulator walks it) is sampled along the routes' nav paths, the start -> goals path and the street centre lines. A PLACE is a stretch that is narrow, cluttered, under a drop ambush or beside a hiding spot (tier 1), or strongly exposed to window fire / roof marksmen (tier 2). Its score 0..1 = min(1, sum of weights x values). Every threshold is here; the enemies' own numbers (drop heights, weapon ranges, sight, stealth) are READ from the game configs named in threats.*.source - only what those files do not hold has a default here (keys ending _default).",
+  "sampling": {
+    "comment": "step_m: the geometric sample step along a line. threat_step_m: every how many metres a sample is tested against windows / roofs / hiding spots. max_probe_m: farther than this to the nearest obstacle = open ground. skip_building_margin_cm: samples inside a building (+ this margin round it) are skipped - doors and rooms are not street chokepoints. edge_margin_cm: samples this close to the map edge are skipped (a street that ends at the edge is not a passage).",
+    "step_m": 0.5,
+    "threat_step_m": 2,
+    "max_probe_m": 40,
+    "skip_building_margin_cm": 60,
+    "edge_margin_cm": 100,
+    "routes": true,
+    "objectives": true,
+    "streets": true
+  },
+  "narrow": {
+    "comment": "Narrow passage: the structural corridor width (walls / buildings / large covers / the canal edge / a bridge's sides: nearest obstacle + the obstacle opposite it) below width_m. Value 0 at width_m .. 1 at full_width_m and less. fan_deg: the opposite side is probed with rays +- this angle (robust to a gate post seen at a slant).",
+    "width_m": 6,
+    "full_width_m": 2,
+    "fan_deg": 15
+  },
+  "clutter": {
+    "comment": "Cluttered street (a jam): within window_m of street, in a band half_band_m either side, at least min_obstacles covers AND at least blocked_fraction of the band's area under them; value 1 at full_obstacles / full_blocked_fraction. Or a squeezed lane: the free passage between covers (or a cover and a wall) under lane_width_m for lane_min_length_m and more.",
+    "window_m": 10,
+    "half_band_m": 4,
+    "min_obstacles": 4,
+    "blocked_fraction": 0.12,
+    "full_obstacles": 10,
+    "full_blocked_fraction": 0.35,
+    "lane_width_m": 2.5,
+    "lane_full_width_m": 1.0,
+    "lane_min_length_m": 3
+  },
+  "canyon": {
+    "comment": "Canyon: both sides lined by tall objects (height >= tall_min_height_cm: buildings, 330 cm walls, silos) no farther than side_max_m each, on at least min_share of the stretch.",
+    "tall_min_height_cm": 230,
+    "side_max_m": 8,
+    "min_share": 0.6
+  },
+  "redundancy": {
+    "comment": "No alternative route: the stretch is blocked (block_radius_m round its samples) and the way from probe_m before it to probe_m after it is searched again on the nav grid inside a box search_margin_m round the two points. No way = the only path (value 1); else value = detour / detour_critical_m (capped at 1). The place is CALLED «единственный путь» from tag_min_value (0.75 = a detour of 30 m and more).",
+    "probe_m": 12,
+    "block_radius_m": 3,
+    "detour_critical_m": 40,
+    "tag_min_value": 0.75,
+    "search_margin_m": 70
+  },
+  "places": {
+    "comment": "merge_gap_m: flagged samples closer than this join into one stretch; pad_m: a stretch is grown by this at both ends; max_length_m: a longer stretch is cut into equal pieces no longer than this; dedupe_m: two stretches (a route and the street it follows) nearer than this are one place; exposure_min: the least window / marksman value for a tier-2 place; min_score / max_items: what the list and the saved analysis keep.",
+    "merge_gap_m": 2,
+    "pad_m": 1,
+    "max_length_m": 40,
+    "dedupe_m": 5,
+    "exposure_min": 0.6,
+    "min_score": 0.25,
+    "max_items": 60
+  },
+  "threats": {
+    "conditions": {
+      "comment": "The weather / time of day the sight ranges are computed for (enemy_perception.json sight_conditions multipliers): clear | overcast | snowfall | blizzard and day | twilight | night. The page can switch them.",
+      "weather": "clear",
+      "time_of_day": "day"
+    },
+    "drop_ambush": {
+      "comment": "1) DROP-DOWN AMBUSH («засада сверху»): the jumpers (falls.json enemy_drops.<archetype> = 2) pounce from a walkable roof or a thick wall top whose height is within the drop-link band onto a street point no farther from the edge than the link gap + the strike reach.",
+      "source": "Content/Data/Movement/falls.json params: link.min_drop_cm, link.max_drop_cm, link.max_gap_cm, enemy_drops.* (2 = jumper)",
+      "strike_reach_cm_default": 150,
+      "strike_reach_comment": "DEFAULT (not in the game configs): how far from the landing point the jumper still reaches a man at once.",
+      "wall_top_min_thickness_cm_default": 60,
+      "wall_top_comment": "DEFAULT: a wall at least this thick has a top an enemy can stand on (the 150 cm canal walls).",
+      "ladder_only_factor_default": 0.5,
+      "jumper_names": { "cutter": "каттеры", "frost_hound": "гончие" },
+      "ladder_only_comment": "DEFAULT: a roof reached by a ladder only (the jumpers do not climb ladders - they must be placed there) counts this much.",
+      "max_spots": 120
+    },
+    "window_fire": {
+      "comment": "2) WINDOW FIRE («огонь из окон»): a PMC fighter at a window / loophole of an ENTERABLE building, the squad's rifle. Value by distance: 1 up to effective_range_m, down to range_falloff.floor_multiplier at attack_range_m.",
+      "source": "Content/Data/Weapons/weapons_tuning.json weapons.<weapon>: effective_range_m, attack_range_m; range_falloff: floor_multiplier, exponent",
+      "weapon": "m16",
+      "half_fov_deg_default": 75,
+      "half_fov_comment": "DEFAULT: the field of fire either side of the window's outward normal (the fire-line overlay uses the same).",
+      "target_height_cm_default": 150,
+      "target_height_comment": "DEFAULT: a standing man's profile (C++ SightRules::ProfileHeight, not in a JSON).",
+      "require_enterable": true,
+      "full_windows": 3
+    },
+    "overwatch": {
+      "comment": "3) MARKSMEN ON ROOFS («снайпер на крыше»): a walkable roof a human can reach (ladder / stairs / hatch). Range = min(the marksman rifle's attack range, his sight: MARKSMAN sight_range_m x human_enemy_range_multiplier x the height bonus x weather x time). A roof is an overwatch position when its best spot sees at least min_covered_m of the lines beyond the rifle's preferred_min_range_m.",
+      "source": "weapons_tuning.json enemy_weapons.<weapon>: effective_range_m, attack_range_m, preferred_min_range_m; enemy_perception.json archetypes.<archetype>.sight_range_m, sight_conditions.human_enemy_range_multiplier, height_sight.*",
+      "weapon": "marksman_rifle",
+      "archetype": "MARKSMAN",
+      "eye_height_cm_default": 160,
+      "eye_height_comment": "DEFAULT: a standing man's eye (C++ SightRules::EyeHeight standing 160, not in a JSON).",
+      "edge_inset_m": 1,
+      "spot_step_m": 6,
+      "spots_per_roof": 2,
+      "min_covered_m": 10,
+      "max_roofs": 40
+    },
+    "hiding": {
+      "comment": "4) HIDDEN ENEMIES («укрытие для засады / скрытый противник»): a spot within rush_max_m of walking from a line, beside something to hide behind (within adjacent_m of an obstacle at least min_concealment_cm tall), that the squad walking that line does not see until close: the REVEAL distance = the farthest point of the line within approach_window_m (a route: the part BEFORE the spot - the squad comes from the start; a street / the goals path: either way) with a clear sight line from a standing eye to a crouched enemy. Kept when reveal <= reveal_close_m; a STEALTH fighter is seen from sight range x stealth_mode.json detection_range_multiplier at most - where that cuts the reveal to stealth_reveal_threshold_m or less the spot is kept as stealth-only and scores stealth_score.",
+      "source": "enemy_perception.json sight_conditions.squad_base_range_m (x weather x time); stealth_mode.json detection_range_multiplier",
+      "eye_height_cm_default": 160,
+      "enemy_profile_cm_default": 90,
+      "profile_comment": "DEFAULT: a crouched man's profile (C++ SightRules::ProfileHeight crouching 90, not in a JSON).",
+      "rush_max_m": 8,
+      "min_offset_m": 1.5,
+      "adjacent_m": 1.5,
+      "min_concealment_cm": 90,
+      "approach_window_m": 60,
+      "reveal_close_m": 12,
+      "stealth_reveal_threshold_m": 25,
+      "stealth_score": 0.5,
+      "candidate_step_m": 0.5,
+      "spot_spacing_m": 5,
+      "threat_span_m": 3,
+      "full_spots": 2,
+      "max_spots": 150
+    }
+  },
+  "weights": {
+    "comment": "score = min(1, sum of weight x value). on_route: the mandatory route 1, a variant / the goals path 0.7, a street only 0.",
+    "narrow": 0.25,
+    "clutter": 0.2,
+    "canyon": 0.15,
+    "only_way": 0.2,
+    "on_route": 0.05,
+    "drop_ambush": 0.25,
+    "window_fire": 0.1,
+    "sniper": 0.1,
+    "hiding": 0.1
+  },
+  "kind_priority": ["only_way", "drop_ambush", "canyon", "clutter", "narrow", "hiding", "window_fire", "sniper"],
+  "kind_names": {
+    "narrow": "узкий проход",
+    "clutter": "завал",
+    "canyon": "каньон с высотами",
+    "only_way": "единственный путь",
+    "drop_ambush": "засада сверху (спрыгивание)",
+    "window_fire": "огонь из окон",
+    "sniper": "снайпер на крыше",
+    "hiding": "укрытие для засады / скрытый противник"
+  }
+}

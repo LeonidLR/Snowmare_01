@@ -10,6 +10,7 @@
 import v2cfg from '../../../../Content/Data/LevelGen/levelgen_v2.json' with { type: 'json' };
 import { obstacleHeight } from './obstacleHeights.ts';
 import { footprintBBox, footprintPoly } from './rotation.ts';
+import type { LayoutAnalysis } from './chokepoints.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
 import type { Layout, LayoutRoute, LayoutWall, LayoutZone, ZoneKind } from '../movement/layout.ts';
@@ -341,7 +342,16 @@ export interface GenLayout {
   expansion?: ExpansionState;
   /** Start + goals visited in any order (levelgen v2 stage 2, objectives.ts). Absent = the classic spawn -> end only. */
   objectives?: ObjectiveSet;
+  /**
+   * The chokepoint / threat analysis (chokepoints.ts analyzeLayout), written by «Принять» for the game / the PMC AI: chokepoints,
+   * dropAmbushSpots, windowsCovering, overwatchRoofs, hidingSpots. Absent in older files. Stale when its geometry_hash differs
+   * from geometryHash(layout) (the map was edited after it).
+   */
+  analysis?: LayoutAnalysis;
 }
+
+/** The version of the `analysis` block; a file with a newer one is refused, an absent block = not analysed (old files load). */
+export const ANALYSIS_VERSION = 1;
 
 /**
  * The version of the `regen` block; a file with a newer version is refused (validateGenLayout), an absent block = no locks.
@@ -496,6 +506,19 @@ export function validateGenLayout(data: unknown): string[] {
   if (l.regen !== undefined) e.push(...validateRegenState(l.regen));
   if (l.expansion !== undefined) e.push(...validateExpansionState(l.expansion));
   if (l.objectives !== undefined) e.push(...validateObjectives(l.objectives, l.bounds));
+  if (l.analysis !== undefined) e.push(...validateAnalysis(l.analysis));
+  return e;
+}
+
+/** The `analysis` block's own checks (empty = valid): a known version and the five lists. */
+export function validateAnalysis(a: unknown): string[] {
+  if (!a || typeof a !== 'object') return ['analysis: expected an object'];
+  const x = a as Partial<LayoutAnalysis>;
+  const e: string[] = [];
+  if (!isNum(x.version) || x.version < 1) e.push('analysis.version: expected a positive number');
+  else if (x.version > ANALYSIS_VERSION) e.push(`analysis.version ${x.version} is newer than this tool (${ANALYSIS_VERSION})`);
+  for (const k of ['chokepoints', 'dropAmbushSpots', 'windowsCovering', 'overwatchRoofs', 'hidingSpots'] as const) if (!Array.isArray(x[k])) e.push(`analysis.${k}: expected an array`);
+  for (const cp of Array.isArray(x.chokepoints) ? x.chokepoints : []) if (typeof cp?.id !== 'string' || !(cp.score >= 0 && cp.score <= 1) || !Array.isArray(cp.poly)) { e.push('analysis.chokepoints: { id, score 0..1, poly }'); break; }
   return e;
 }
 
