@@ -6,11 +6,11 @@ Build: PASS (exit 0; UBT 2.18 s). Resume verification after limit reset: DLL mti
 
 Router: level 2, confidence 0.62 | gpt-6.1-sol | pass (execution/reporting; no local model).
 
-Progress: 256/284 initial runs; 248 final PASS; 8 final FAIL; 8 failed twice. Updated 2026-11-16T22:26:17.755636+00:00.
+Complete: 284/284 initial runs; 274 final PASS; 10 final FAIL; 10 failed twice. Updated 2026-11-16T22:37:28.883199+00:00.
 
 Initial batches <=8, script default Jobs=4 (16 CPUs), `-NoRetry -ExtraArgs -Multiprocess`; each initial FAIL rerun exactly once alone with `-Jobs 1`. Engine `Smoke RESULT` controls PASS/FAIL, including wrapper KNOWN-FAIL. Seconds are wrapper process wall times. Missing result/timeout is infrastructure FAIL, never an invented assertion. Shared locks and designer priority remain active.
 
-Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, `progress.json`, `sweep.py`. Each batch has preserved wrapper output/result JSON and copied engine logs before reruns. Unrun names remain in frozen registry.
+Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, `progress.json`, `sweep.py`. Each batch has preserved wrapper output/result JSON and copied engine logs before reruns. All frozen names are accounted for; no unrun names remain.
 
 | Smoke | Final | Initial seconds | First FAIL / infrastructure | Rerun | Rerun seconds |
 |---|---|---:|---|---|---:|
@@ -270,26 +270,70 @@ Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, 
 | SightConditionsSmoke | PASS | 48.4 |  | — | — |
 | ConePerfSmoke | PASS | 68.2 |  | — | — |
 | WeaponReachSmoke | PASS | 57.8 |  | — | — |
+| PmcDeathPoseSmoke | PASS | 50.3 |  | — | — |
+| FireArcSmoke | PASS | 49.4 |  | — | — |
+| PmcUnderFireSmoke | PASS | 46.4 |  | — | — |
+| UnderFireManoeuvreSmoke | PASS | 53.7 |  | — | — |
+| SoloStanceSmoke | PASS | 47.2 |  | — | — |
+| LeaderSwitchMoveSmoke | PASS | 47.4 |  | — | — |
+| LeaderSwitchLadderSmoke | PASS | 48.8 |  | — | — |
+| PmcFireLineSmoke | PASS | 48.4 |  | — | — |
+| CornerStandoffSmoke | PASS | 51 |  | — | — |
+| HordeFirefightsSmoke | PASS | 59.4 |  | — | — |
+| DeathRagdollSmoke | PASS | 47 |  | — | — |
+| CorpsePersistSmoke | PASS | 48.4 |  | — | — |
+| CorpseCostSmoke | PASS | 121.4 |  | — | — |
+| ProneCrawlSmoke | PASS | 59.8 |  | — | — |
+| InjuredLocomotionSmoke | PASS | 77.8 |  | — | — |
+| StealthModeSmoke | FAIL | 77.6 | [2026.11.16-22.30.24:069][588]LogCodexTactics: Display: Smoke FAIL: actual fired round breaks the shooter's stealth | FAIL | 53.4 |
+| StealthDetectionSmoke | PASS | 45.6 |  | — | — |
+| SoloStartSmoke | PASS | 50.4 |  | — | — |
+| FastRegroupSmoke | PASS | 49.8 |  | — | — |
+| InjuredLocomotionDepotSmoke | PASS | 53.8 |  | — | — |
+| WoundedFollowerSmoke | PASS | 58.9 |  | — | — |
+| LookHoldSmoke | PASS | 47 |  | — | — |
+| MantleSmoke | PASS | 49.7 |  | — | — |
+| MantleAlignSmoke | PASS | 53.9 |  | — | — |
+| MantleDescentSmoke | FAIL | 55.2 | [2026.11.16-22.35.17:024][814]LogCodexTactics: Display: Smoke FAIL: 140 cm wreck, an island top (its links off): the descent plays the fall states (NOT seen), not the vault-over clip (1 played) | FAIL | 46.1 |
+| MantleClickSmoke | PASS | 52.2 | [2026.11.16-22.35.15:032][814]LogCodexTactics: Display: Smoke FAIL: e: hovering StaticMeshActor_328 (b: double click on the 140 cm wreck's face) shows the mantle ghost at the landing (NO ghost) | PASS | 42.9 |
+| MantleFenceRouteSmoke | PASS | 45.5 |  | — | — |
+| FireGateSmoke | PASS | 49.7 |  | — | — |
 
 ## Failed twice
 
 - **MilitaryZombieSmoke**: [2026.11.16-18.55.15:331][916]LogCodexTactics: Display: Smoke FAIL: died standing: death clip held (one-shot weight 0.00, ) Rerun: [2026.11.16-18.56.53:284][891]LogCodexTactics: Display: Smoke FAIL: died standing: death clip held (one-shot weight 1.00, anim_hit(DefaultSlot 1.00))
   History: `Source/CodexTacticsDev/Private/Debug/MilitaryZombieSmokeCommand.cpp`: 6b584fbe feat(characters): operatives, Military Zombie, Hound and Frostbitten Blueprints use the optimized single-slot bodies (user 2026-10-21); `Source/CodexTactics/Private/Characters/EnemyCharacter.cpp`: 632d61ec feat(animation): wound tiers, the full-body injured clips with the raise to fire; feat(ui): a switch per HUD label
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `8cf11fca` / `63922ad6`. These are history references, not identified regression culprits.
 - **OptimizedCharacterSmoke**: [2026.11.16-19.00.59:179][ 51]LogCodexTactics: Display: OptimizedCharacterSmoke FAIL: [Marksman] death: both bodies still there (original 1, optimized 1), dying, optimized anim dead 1, death clip NOT playing Rerun: [2026.11.16-19.02.53:391][497]LogCodexTactics: Display: OptimizedCharacterSmoke FAIL: [Marksman] death: both bodies still there (original 1, optimized 1), dying, optimized anim dead 1, death clip NOT playing
   History: `Source/CodexTacticsDev/Private/Debug/OptimizedCharacterSmokeCommand.cpp`: 28650298 feat(ai): PMC squads on the operative body - teams, the shared order catalog, the utility commander, the self-play arena; `Source/CodexTactics/Private/Characters/MarksmanEnemyCharacter.cpp`: 5d26c121 gemini-034: fix 034a HIGH findings (fast perception scales, hover ghost cache/yaw, leave cover pending clear)
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `416f64ce` / `c3c34af4`. These are history references, not identified regression culprits.
 - **CoverHugSmoke**: [2026.11.16-21.31.34:143][870]LogCodexTactics: Display: Smoke FAIL: shimmy back to the edge ordered Rerun: [2026.11.16-21.32.15:593][820]LogCodexTactics: Display: Smoke FAIL: shimmy back to the edge ordered
   History: `Source/CodexTacticsDev/Private/Debug/CoverHugSmokeCommand.cpp`: d1a6958a refactor(build): move the dev console commands into the CodexTacticsDev module; `Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp`: 571894f4 fix(combat): one fire gate on every operative fire path - turn, raise, then the round (058c / 061)
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `158b9af3` / `a48e7540`. These are history references, not identified regression culprits.
 - **FormationJitterSmoke**: [2026.11.16-21.38.31:138][468]LogCodexTactics: Display: Smoke FAIL: the other follower is no worse with the D-1 man in the squad (hips 27.2 / shoulders 24.0 deg/s; all-M16 17.0 / 12.6) Rerun: [2026.11.16-21.40.18:154][376]LogCodexTactics: Display: Smoke FAIL: the other follower is no worse with the D-1 man in the squad (hips 27.2 / shoulders 24.0 deg/s; all-M16 17.0 / 12.6)
   History: `Source/CodexTacticsDev/Private/Debug/FormationJitterSmokeCommand.cpp`: c81585ae fix(animation): D-1 crouch and cover on the ABP, formation followers stop twitching; `Source/CodexTactics/Private/Characters/SquadSubsystemFormation.cpp`: f65f3325 gemini-034: fix stealth look-direction lock and stopping snap-back (bug #324)
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `3f66fba7` / `c3c34af4`. These are history references, not identified regression culprits.
 - **RpgPmcSmoke**: [2026.11.16-21.41.35:234][944]LogCodexTactics: Display: Smoke FAIL: 2: Codex.Combat.LauncherAI 0 - the commander's RpgStrike order (2 orders) fires the rocket (0 strike shots; ordered rocket strike at BP_Operative_C_0) Rerun: [2026.11.16-21.43.23:352][879]LogCodexTactics: Display: Smoke FAIL: 2: Codex.Combat.LauncherAI 0 - the commander's RpgStrike order (2 orders) fires the rocket (0 strike shots; ordered rocket strike at BP_Operative_C_0)
   History: `Source/CodexTacticsDev/Private/Debug/RpgPmcSmokeCommand.cpp`: 00eb12cc feat(weapons): the AI fires the RPG-7 - shared launcher rule, blast suppression, PMC RPG gunner; `Source/CodexTactics/Private/Characters/OperativeCharacterLauncherAI.cpp`: 00eb12cc feat(weapons): the AI fires the RPG-7 - shared launcher rule, blast suppression, PMC RPG gunner
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `c6756283` / `c6756283`. These are history references, not identified regression culprits.
 - **RetreatFacingSmoke**: [2026.11.16-22.00.17:362][516]LogCodexTactics: Display: Smoke FAIL: a facing order of the player is kept: no turn to the pack (65 deg off the ordered facing, 115 deg off the pack, turning to the threat 0) Rerun: [2026.11.16-22.02.01:395][409]LogCodexTactics: Display: Smoke FAIL: a facing order of the player is kept: no turn to the pack (65 deg off the ordered facing, 115 deg off the pack, turning to the threat 0)
   History: `Source/CodexTacticsDev/Private/Debug/RetreatFacingSmokeCommand.cpp`: 77804b34 wip(codex): save retreat smoke rifle fixture before limit stop; `Source/CodexTactics/Private/Characters/OperativeCharacter.cpp`: 90b60f9f fix(mantle): batch 2 - wall guard, settled exit, walk-off descent, face double click, hover ghost
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `5e8d69c2` / `c35a4df1`. These are history references, not identified regression culprits.
 - **LevelGenRampSmoke**: [2026.11.16-22.18.22:574][263]LogCodexTactics: Display: Smoke FAIL: STAIR_in_8 group (all three box-selected, sprint): STUCK after 17 s (top level z 300): | Commander (leader) at X=-2191.981 Y=1368.172 feet 8, speed 0, still 4.1 s, order own -> X=-2879.000 Y=1400.000, path complete, 4 points, ends 0 cm from the goal at z 310 | Engineer at X=-2388.436 Y=1346.603 feet 145, speed 15, still 10.0 s, order own -> X=-2780.683 Y=1229.314, path complete, 3 points, ends 0 cm from the goal at z 310 | Medic-Sapper at X=-2511.048 Y=1355.094 feet 231, speed 22, still 6.4 s, order none/formation -> X=-2114.033 Y=1541.158, path complete, 3 points, ends 0 cm from the goal at z 310 Rerun: [2026.11.16-22.20.04:641][193]LogCodexTactics: Display: Smoke FAIL: STAIR_in_8 group (all three box-selected, sprint): STUCK after 17 s (top level z 300): | Commander (leader) at X=-2191.981 Y=1368.172 feet 8, speed 0, still 4.1 s, order own -> X=-2879.000 Y=1400.000, path complete, 4 points, ends 0 cm from the goal at z 310 | Engineer at X=-2388.436 Y=1346.603 feet 145, speed 15, still 10.0 s, order own -> X=-2780.683 Y=1229.314, path complete, 3 points, ends 0 cm from the goal at z 310 | Medic-Sapper at X=-2511.048 Y=1355.094 feet 231, speed 22, still 6.4 s, order none/formation -> X=-2114.033 Y=1541.158, path complete, 3 points, ends 0 cm from the goal at z 310
   History: `Source/CodexTacticsDev/Private/Debug/LevelGenRampSmokeCommand.cpp`: 64eeac93 test(smokes): fix the 7 night-bar failures of 2026-11-10 (smoke-side, no game regression); `Source/CodexTactics/Private/Characters/SquadSubsystemRampFile.cpp`: 21dba8eb fix(build): rename the ramp-file FeetZ helper to RampFeetZ (unity clash with MinimapSubsystem.cpp)
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `498ffa32` / `c7439c35`. These are history references, not identified regression culprits.
 - **PmcEncounterHuntSmoke**: [2026.11.16-22.23.49:253][310]LogCodexTactics: Display: Smoke FAIL: the hunters close in by themselves (56 -> 56 m, 90 s) Rerun: [2026.11.16-22.25.48:915][228]LogCodexTactics: Display: Smoke FAIL: the hunters close in by themselves (56 -> 56 m, 90 s)
   History: `Source/CodexTacticsDev/Private/Debug/PmcEncounterSmokeCommand.cpp`: 64eeac93 test(smokes): fix the 7 night-bar failures of 2026-11-10 (smoke-side, no game regression); `Source/CodexTactics/Private/AI/PmcEncounterSubsystem.cpp`: 4cf88e74 feat(perf): 004 async gameplay preload + smoke readiness gate + stricter HitchProbe
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `498ffa32` / `d79296b0`. These are history references, not identified regression culprits.
+- **StealthModeSmoke**: [2026.11.16-22.30.24:069][588]LogCodexTactics: Display: Smoke FAIL: actual fired round breaks the shooter's stealth Rerun: [2026.11.16-22.31.55:642][215]LogCodexTactics: Display: Smoke FAIL: actual fired round breaks the shooter's stealth
+  History: `Source/CodexTacticsDev/Private/Debug/StealthModeSmokeCommand.cpp`: ca7c3d63 fix(stealth): play the Fast gait at full rate on Fast runs and re-orders; `Source/CodexTactics/Private/Characters/StealthModeRules.cpp`: 4860eb8d feat(tactics): 059 look hold outside stealth (solo walk / jog / crouch / prone strafe)
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `c3c34af4` / `79908d3d`. These are history references, not identified regression culprits.
+- **MantleDescentSmoke**: [2026.11.16-22.35.17:024][814]LogCodexTactics: Display: Smoke FAIL: 140 cm wreck, an island top (its links off): the descent plays the fall states (NOT seen), not the vault-over clip (1 played) Rerun: [2026.11.16-22.36.01:963][  8]LogCodexTactics: Display: Smoke FAIL: 230 cm parapet, back down: on the top before the order (feet 228 cm under it, stance EOperativeStance::Standing)
+  History: `Source/CodexTacticsDev/Private/Debug/MantleDescentSmokeCommand.cpp`: 90b60f9f fix(mantle): batch 2 - wall guard, settled exit, walk-off descent, face double click, hover ghost; `Source/CodexTactics/Private/Characters/OperativeCharacterMantle.cpp`: d6d3d99e fix(mantle): link cap from config (generated maps), guard scope, player team only
+  Latest first-parent merges affecting those paths at the frozen base (command / runtime): `c35a4df1` / `c35a4df1`. These are history references, not identified regression culprits.
 
-Partial sweep. Resume: run `python Saved/Orchestrator/035/sweep.py` in the agents worktree; next batch 33, 28 initial runs remaining. Machine-readable pending state is in progress.json. Latest path commits above are history references, not proven regression culprits.
+Completed sweep: all 284 frozen registry names ran once initially; every initial FAIL ran exactly once alone. No pending runs. Machine-readable state and preserved logs remain in Saved/Orchestrator/035. Latest path commits above are history references, not proven regression culprits.
 
 Only tracked output: this report. Ignored Saved evidence is local. Existing untracked packs/config/cache remain outside this task. No source investigation beyond failure lines and path identification.
+
+Parent verification: 284 unique names in frozen registry order; 270 initial PASS / 14 initial FAIL; exactly 14 standalone reruns, all and only for initial FAILs; no pending runs. Four recovered alone: CoverSmoke, PauseBarrelOrderSmoke, SuppressionSmoke, MantleClickSmoke. Final 274 PASS / 10 failed twice. All 284 table rows have valid escaped Markdown columns. Execution paused at the 10% limit checkpoint and resumed only after full reset. Required final staged audit and whitespace check performed before the final report commit.
