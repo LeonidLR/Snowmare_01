@@ -18,6 +18,13 @@ export type RegionMode = 'off' | 'rect' | 'poly' | 'lasso';
 /** One edit of the start / goals on the plan (the page applies it with objectives.ts). */
 export type ObjectiveAction = { kind: 'move'; id: string; pos: Vec2 } | { kind: 'add'; pos: Vec2 } | { kind: 'remove'; id: string };
 
+/** The layer tools (levelgen/layers.ts): 'select' = click selects an entity of the active layer, a drag moves it; 'add' = a click places one. */
+export type LayerToolMode = 'off' | 'select' | 'add';
+/** One layer-tool gesture on the plan (the page applies it with layers.ts editLayout / editProps). */
+export type LayerAction = { kind: 'select'; key: string | null } | { kind: 'move'; key: string; delta: Vec2 } | { kind: 'add'; pos: Vec2 };
+/** What the page's extra overlay gets to draw in plan coordinates. */
+export interface OverlayHelpers { scr: (p: Vec2) => [number, number]; pts: (poly: Vec2[]) => string; /** px per cm. */ scale: number; size: [number, number] }
+
 interface Props {
   bounds: { min: Vec2; max: Vec2 } | null;
   height: number;
@@ -50,6 +57,17 @@ interface Props {
   trail?: Vec2[] | null;
   /** Every member's recent trail (the leader first): the followers' are drawn faint. */
   trails?: Vec2[][] | null;
+  /** The start / goals may be edited now (false: another layer is active - they are shown, not touched). Default true. */
+  objectivesEditable?: boolean;
+  /** Draw the start / goals at all (false: the layer «Цели» is hidden). Default true. */
+  showObjectives?: boolean;
+  /** The layer tool: 'select' picks / drags an entity of the active layer, 'add' places one by click. */
+  layerTool?: LayerToolMode;
+  /** The entity of the active layer at a plan point (tolerance in cm). */
+  pickLayer?: (p: Vec2, tolCm: number) => { key: string; movable: boolean } | null;
+  onLayerAction?: (a: LayerAction) => void;
+  /** Extra SVG drawn under the start / goals (chokepoints, props, the selection), in the plan's transform. */
+  overlay?: (h: OverlayHelpers) => React.ReactNode;
   children: React.ReactNode;
 }
 
@@ -60,7 +78,7 @@ const BORDER_PX = 1;
 const CLICK_PX = 4;
 const START_ID = 'START';
 
-export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, locks, inside = [], locked = [], blocks = [], onZone, view, onView, objectives, objErrors = {}, objWarnings = {}, bestPath, addGoal = false, onObjective, squad, trail, trails, children }) => {
+export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, locks, inside = [], locked = [], blocks = [], onZone, view, onView, objectives, objErrors = {}, objWarnings = {}, bestPath, addGoal = false, onObjective, squad, trail, trails, objectivesEditable = true, showObjectives = true, layerTool = 'off', pickLayer, onLayerAction, overlay, children }) => {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<[number, number]>([0, height]);
   const [draft, setDraft] = useState<Vec2[]>([]);
@@ -69,6 +87,8 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
   const pan = useRef<{ x: number; y: number; view: PlanView; moved: boolean; click: boolean } | null>(null);
   const [panning, setPanning] = useState(false);
   const [drag, setDrag] = useState<{ id: string; pos: Vec2 } | null>(null);
+  // the layer tool's drag: a ghost line follows the cursor; the move is applied on release
+  const [layerDrag, setLayerDrag] = useState<{ key: string; from: Vec2; to: Vec2; movable: boolean } | null>(null);
   const space = useRef(false);
   const [spaceDown, setSpaceDown] = useState(false);
   const viewRef = useRef(view);
@@ -119,13 +139,24 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
     return toWorld(t, [e.clientX - r.left - BORDER_PX, e.clientY - r.top - BORDER_PX]);
   };
   const pts = (poly: Vec2[]) => (t ? poly.map((p) => scr(p).map((v) => v.toFixed(1)).join(',')).join(' ') : '');
-  const editable = !!onObjective && (mode === 'off' || addGoal);
+  const editable = !!onObjective && objectivesEditable && (mode === 'off' || addGoal);
 
   const down = (e: React.PointerEvent) => {
     const p = world(e);
     if (!p) return;
     // pan: the middle button or Space + left in every tool; a plain left drag in «Просмотр» / «+ цель» (a short press = a click)
     const panTool = e.button === 1 || (e.button === 0 && (space.current || mode === 'off'));
+    // the layer tool first: a press on an entity of the active layer selects it (and starts its drag); elsewhere it is a pan / a click
+    if (e.button === 0 && !space.current && mode === 'off' && layerTool === 'select' && pickLayer && t) {
+      const hit = pickLayer(p, 8 / t.s);
+      if (hit) {
+        e.preventDefault();
+        (e.target as Element).setPointerCapture?.(e.pointerId);
+        onLayerAction?.({ kind: 'select', key: hit.key });
+        setLayerDrag({ key: hit.key, from: p, to: p, movable: hit.movable });
+        return;
+      }
+    }
     if (panTool) {
       e.preventDefault();
       (e.target as Element).setPointerCapture?.(e.pointerId);
@@ -149,6 +180,7 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
     }
     const p = world(e);
     if (!p) return;
+    if (layerDrag) { if (layerDrag.movable) setLayerDrag({ ...layerDrag, to: p }); return; }
     if (drag) { setDrag({ id: drag.id, pos: p }); return; }
     setHover(p);
     if (!dragging.current) return;
@@ -160,6 +192,14 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
     if (pn) {
       pan.current = null; setPanning(false);
       if (!pn.moved && pn.click && addGoal && onObjective) { const p = world(e); if (p) onObjective({ kind: 'add', pos: p }); }
+      else if (!pn.moved && pn.click && layerTool === 'add' && onLayerAction) { const p = world(e); if (p) onLayerAction({ kind: 'add', pos: p }); }
+      else if (!pn.moved && pn.click && layerTool === 'select' && onLayerAction) onLayerAction({ kind: 'select', key: null });
+      return;
+    }
+    if (layerDrag) {
+      const d: Vec2 = [layerDrag.to[0] - layerDrag.from[0], layerDrag.to[1] - layerDrag.from[1]];
+      if (layerDrag.movable && t && Math.hypot(d[0], d[1]) * t.s >= CLICK_PX) onLayerAction?.({ kind: 'move', key: layerDrag.key, delta: d });
+      setLayerDrag(null);
       return;
     }
     if (drag) { onObjective?.({ kind: 'move', id: drag.id, pos: drag.pos }); setDrag(null); return; }
@@ -192,7 +232,7 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
     onObjective?.({ kind: 'remove', id });
   };
   const posOf = (id: string, p: Vec2): Vec2 => (drag && drag.id === id ? drag.pos : p);
-  const cursor = panning || drag ? 'grabbing' : spaceDown ? 'grab' : addGoal ? 'copy' : mode === 'off' ? 'grab' : 'crosshair';
+  const cursor = panning || drag || layerDrag ? 'grabbing' : spaceDown ? 'grab' : addGoal || layerTool === 'add' ? 'copy' : layerTool === 'select' ? 'default' : mode === 'off' ? 'grab' : 'crosshair';
 
   return (
     <div ref={box} className="relative overflow-hidden rounded-xl" style={{ height }}>
@@ -220,13 +260,16 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
         {t && draftPoly.length > 1 && <polyline points={pts(mode === 'poly' ? draftPoly : [...draftPoly, draftPoly[0]])} fill="rgba(250, 204, 21, 0.08)" stroke="#fde047" strokeWidth={1.5} />}
         {t && mode === 'poly' && draft.map((p, i) => { const q = scr(p); return <circle key={`d${i}`} cx={q[0]} cy={q[1]} r={3.5} fill="#fde047" />; })}
         {/* the shortest visiting order (hidden while a point is dragged: it belongs to the old position) */}
-        {t && bestPath && bestPath.length > 1 && !drag && <polyline points={pts(bestPath)} fill="none" stroke="#facc15" strokeOpacity={0.75} strokeWidth={2} strokeDasharray="7 5" style={{ pointerEvents: 'none' }} />}
+        {t && bestPath && bestPath.length > 1 && !drag && showObjectives && <polyline points={pts(bestPath)} fill="none" stroke="#facc15" strokeOpacity={0.75} strokeWidth={2} strokeDasharray="7 5" style={{ pointerEvents: 'none' }} />}
         {/* the squad playback */}
         {t && trails && trails.slice(1).map((tr, i) => (tr.length > 1 ? <polyline key={`st${i}`} points={pts(tr)} fill="none" stroke="#fbcfe8" strokeWidth={1.5} strokeOpacity={0.55} style={{ pointerEvents: 'none' }} /> : null))}
         {t && trail && trail.length > 1 && <polyline points={pts(trail)} fill="none" stroke="#f472b6" strokeWidth={2.5} strokeOpacity={0.7} style={{ pointerEvents: 'none' }} />}
         {t && squad && squad.map((p, i) => { const q = scr(p); return <circle key={`sq${i}`} cx={q[0]} cy={q[1]} r={i === 0 ? 6 : 4.5} fill={i === 0 ? '#f472b6' : '#fbcfe8'} stroke="#111827" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />; })}
+        {/* the page's layers overlay: chokepoints, threat spots, props, the selection */}
+        {t && overlay && overlay({ scr, pts, scale: t.s, size })}
+        {t && layerDrag && layerDrag.movable && (() => { const a = scr(layerDrag.from), b = scr(layerDrag.to); return <g style={{ pointerEvents: 'none' }}><line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#f8fafc" strokeWidth={1.5} strokeDasharray="4 3" /><circle cx={b[0]} cy={b[1]} r={6} fill="none" stroke="#f8fafc" strokeWidth={2} /></g>; })()}
         {/* the start + goals */}
-        {t && objectives && (() => {
+        {t && objectives && showObjectives && (() => {
           const sp = scr(posOf(START_ID, objectives.start.pos));
           const sErr = objErrors[START_ID];
           return (

@@ -10,9 +10,15 @@ import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
 import { PropsPanel } from './PropsPanel';
 import { RegionOverlay } from './RegionOverlay';
-import type { ObjectiveAction, RegionMode } from './RegionOverlay';
+import type { LayerAction, ObjectiveAction, RegionMode } from './RegionOverlay';
+import { LayersOverlay, LayersPanel } from './LayersPanel';
 import type { PlanView } from '../levelgen/planView';
-import { FIT_VIEW, PLAN_VIEW, zoomAt } from '../levelgen/planView';
+import { FIT_VIEW, PLAN_VIEW, planTransform, viewOfRect, zoomAt } from '../levelgen/planView';
+import type { Conditions, LayoutAnalysis } from '../levelgen/chokepoints';
+import { analyzeLayout, CHOKE, geometryHash, threatNumbers, withoutStaleAnalysis } from '../levelgen/chokepoints';
+import type { LayerVisibility } from '../levelgen/layers';
+import { assignMap, defaultVisibility, editLayout, editProps, hiddenKeys, layerById, layerCounts, LAYERS, layerTints, mergeLayerReroll, pickEntity, resolveProps } from '../levelgen/layers';
+import type { LevelPropsFile } from '../levelgen/props/schema';
 import type { History } from '../levelgen/regenHistory';
 import { canRedo, canUndo, historyInit, historyPush, historyRedo, historyUndo } from '../levelgen/regenHistory';
 import type { BlockMode, RegionRegenResult } from '../levelgen/regionRegen';
@@ -38,7 +44,11 @@ import type { GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
 
 /** `key` = the slot's history key (the first layout name: an expansion renames the map to <name>_x<N>). */
-interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string; /** The squad playback of the last simulator walk (task 072; never sent to the server). */ track?: SquadTrack }
+interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string; /** The squad playback of the last simulator walk (task 072; never sent to the server). */ track?: SquadTrack;
+  /** The chokepoint / threat analysis of `layout` (chokepoints.ts); «Принять» writes it into the layout JSON. */ analysis?: LayoutAnalysis }
+/** The threat sub-layers start hidden (hundreds of marks on a big map); the designer turns them on in the panel. */
+const HIDDEN_AT_START = ['threat_drop', 'threat_windows', 'threat_overwatch', 'threat_hiding'];
+const sameConditions = (a: Conditions, b: Conditions) => a.weather === b.weather && a.time_of_day === b.time_of_day;
 type ProfileRow = { id: string; title: string; size_m: [number, number] };
 
 const pct = (v?: number) => `${Math.round((v ?? 0) * 100)} %`;
@@ -66,7 +76,24 @@ export const LevelGenDepartment: React.FC = () => {
   const [sel, setSel] = useState(0);
   const [layer, setLayer] = useState('all');
   const [floorMode, setFloorMode] = useState<FloorViewMode>('all');
-  const [showFiringLines, setShowFiringLines] = useState(true);
+  // the LAYER system (levelgen/layers.ts, Content/Data/LevelGen/layers.json): visibility, the active layer and its tools
+  const [vis, setVis] = useState<LayerVisibility>(() => defaultVisibility(LAYERS, HIDDEN_AT_START));
+  const [activeLayer, setActiveLayer] = useState<string | null>(null);
+  const [layerTool, setLayerTool] = useState<'select' | 'add'>('select');
+  const [addIdx, setAddIdx] = useState(0);
+  const [selKey, setSelKey] = useState<string | null>(null);
+  const [tintOn, setTintOn] = useState(true);
+  const [layerMsg, setLayerMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  // the map's props file (mines, loot, special items): read through the props API, hand edits are written as its overrides
+  const [propsState, setPropsState] = useState<{ map: string; path: string; file: LevelPropsFile; dirty: boolean } | null>(null);
+  const NO_PROPS = 'У этой карты ещё нет файла пропсов — пропсы появятся после задачи 076 (автоматические пропсы для сгенерированных карт).';
+  // the chokepoint / threat analysis (levelgen/chokepoints.ts)
+  const [conditions, setConditions] = useState<Conditions>(CHOKE.threats.conditions);
+  const [analysisBusy, setAnalysisBusy] = useState(false);
+  const [selChoke, setSelChoke] = useState<string | null>(null);
+  // the reference image beside the plan can be folded away: the plan then takes the whole width (big maps, the layers)
+  const [showRef, setShowRef] = useState(true);
+  const showFiringLines = vis.fire_lines !== false;
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
   const [budgetUsd, setBudgetUsd] = useState(2);
@@ -162,11 +189,15 @@ export const LevelGenDepartment: React.FC = () => {
     if (!cur) return;
     setBusy('Сохраняю...');
     try {
-      const r = await fetch('/api/levelgen/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout: cur.layout, evaluation: cur.ev, verdicts: cur.verdicts }) });
+      // the chokepoint / threat analysis is saved with the map (block `analysis`): the shown one, else computed now
+      const an = analysis ?? analyzeLayout(cur.layout, { conditions });
+      const layout: GenLayout = { ...cur.layout, analysis: an };
+      const r = await fetch('/api/levelgen/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout, evaluation: cur.ev, verdicts: cur.verdicts }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? r.statusText);
       setAccepted((a) => [...a.filter((x) => x.name !== cur.layout.name), { name: cur.layout.name, seed: cur.layout.seed, profile: cur.layout.profile, at: new Date().toISOString() }]);
-      setAcceptedSnap((m) => ({ ...m, [cur.layout.name]: JSON.stringify(cur.layout) }));
+      setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, layout, analysis: an } : c)));
+      setAcceptedSnap((m) => ({ ...m, [cur.layout.name]: JSON.stringify(layout) }));
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
   };
@@ -233,10 +264,11 @@ export const LevelGenDepartment: React.FC = () => {
   const selection = region?.selection ?? null;
 
   /** Show a layout in the current candidate slot (re-evaluated without the simulator; old verdicts no longer apply). */
-  const showLayout = (layout: GenLayout) => {
+  const showLayout = (shown: GenLayout) => {
     if (!profile || !config) return;
+    const layout = withoutStaleAnalysis(shown); // an edited map: the stored analysis no longer describes it
     const ev = evaluateLayout({ layout, profile, config, noSim: true });
-    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, key: c.key ?? c.layout.name, layout, ev, simmed: false, verdicts: [], track: undefined } : c)));
+    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, key: c.key ?? c.layout.name, layout, ev, simmed: false, verdicts: [], track: undefined, analysis: undefined } : c)));
   };
   const pushStep = (layout: GenLayout, label: string) => {
     if (!cur) return;
@@ -260,7 +292,7 @@ export const LevelGenDepartment: React.FC = () => {
     if (!history || (dir === 'undo' ? !canUndo(history) : !canRedo(history))) return;
     const h = dir === 'undo' ? historyUndo(history) : historyRedo(history);
     setHistories((hs) => ({ ...hs, [curKey]: h }));
-    setRegenReport(null);
+    setRegenReport(null); setObjMsg(null); setLayerMsg(null);
     showLayout(h.present.state);
   };
   const lockZone = () => {
@@ -396,6 +428,153 @@ export const LevelGenDepartment: React.FC = () => {
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
   };
+  // ---- layers: assignment, visibility, the active layer's tools, the props file, the chokepoint analysis -------------------------
+  const propsFile = propsState?.file ?? null;
+  const assignment = useMemo(() => (curLayout ? assignMap(curLayout, propsFile) : null), [curLayout, propsFile]);
+  const geoHash = useMemo(() => (curLayout ? geometryHash(curLayout) : ''), [curLayout]);
+  const analysis = useMemo<LayoutAnalysis | null>(() => {
+    if (!cur) return null;
+    for (const a of [cur.analysis, cur.layout.analysis]) if (a && a.geometry_hash === geoHash && sameConditions(a.conditions, conditions)) return a;
+    return null;
+  }, [cur, geoHash, conditions]);
+  const analysisWanted = ['chokepoints', ...HIDDEN_AT_START].some((id) => vis[id] !== false);
+  const runAnalysis = (layout: GenLayout, slot: number) => {
+    setAnalysisBusy(true);
+    return window.setTimeout(() => {
+      try { const a = analyzeLayout(layout, { conditions }); setCandidates((cs) => cs.map((c, i) => (i === slot && c.layout === layout ? { ...c, analysis: a } : c))); }
+      catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+      setAnalysisBusy(false);
+    }, 200);
+  };
+  const hasAnalysis = !!analysis;
+  useEffect(() => {
+    if (!curLayout || hasAnalysis || !analysisWanted) return;
+    const id = runAnalysis(curLayout, sel);
+    return () => { window.clearTimeout(id); setAnalysisBusy(false); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [curLayout, hasAnalysis, analysisWanted, conditions, sel]);
+  const threat = useMemo(() => threatNumbers(CHOKE, conditions), [conditions]);
+  const hidden = useMemo(() => (assignment ? hiddenKeys(assignment, vis) : undefined), [assignment, vis]);
+  const tints = useMemo(() => (assignment && tintOn ? layerTints(assignment) : undefined), [assignment, tintOn]);
+  const layerCountsNow = useMemo(() => (assignment ? layerCounts(assignment, { fire_line: cur?.ev.tactical?.firingLines.lines.length ?? 0, chokepoint: analysis?.chokepoints.length ?? 0, drop_spot: analysis?.dropAmbushSpots.length ?? 0,
+    window: analysis?.windowsCovering.length ?? 0, overwatch: analysis?.overwatchRoofs.length ?? 0, hiding: analysis?.hidingSpots.length ?? 0 }) : {}), [assignment, cur, analysis]);
+  const selectedEntity = useMemo(() => (assignment && selKey ? Object.values(assignment.byLayer).flat().find((e) => e.key === selKey) ?? null : null), [assignment, selKey]);
+  const propsOnMap = useMemo(() => (assignment ? resolveProps(propsFile).map((prop) => ({ layer: assignment.layerOf[`prop:${prop.object.id}`] ?? 'special', prop })) : []), [assignment, propsFile]);
+  const activeDef = activeLayer ? layerById(activeLayer) ?? null : null;
+  // the active layer's entities are outlined when the layer is small enough to read (roads, buildings, bridges)
+  const activeEntities = useMemo(() => { const list = assignment && activeLayer ? assignment.byLayer[activeLayer] ?? [] : []; return list.length <= 160 ? list.filter((e) => e.shape.kind !== 'point' || e.shape.r > 0) : []; }, [assignment, activeLayer]);
+  useEffect(() => { setSelKey(null); setLayerMsg(null); setLayerTool('select'); setAddIdx(0); }, [activeLayer]);
+  // the props file of the shown map (by its `layout` name); none yet for the generated / expanded maps (task 076 adds them)
+  const curLayoutName = cur?.layout.name;
+  useEffect(() => {
+    setPropsState(null);
+    if (!curLayoutName) return;
+    let dead = false;
+    fetch('/api/levelgen/props-list').then((r) => r.json()).then(async (d: { files?: { id: string; layout: string; isFixture: boolean }[] }) => {
+      const f = (d.files ?? []).find((x) => !x.isFixture && x.layout === curLayoutName);
+      if (!f || dead) return;
+      const r = await fetch(`/api/levelgen/props?map=${encodeURIComponent(f.id)}`);
+      const p = await r.json() as { props?: LevelPropsFile; filePath?: string };
+      if (r.ok && p.props && !dead) setPropsState({ map: f.id, path: p.filePath ?? f.id, file: p.props, dirty: false });
+    }).catch(() => {});
+    return () => { dead = true; };
+  }, [curLayoutName]);
+  const saveProps = async () => {
+    if (!propsState) return;
+    setBusy('Сохраняю пропсы...'); setError('');
+    try {
+      const r = await fetch(`/api/levelgen/props?map=${encodeURIComponent(propsState.map)}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ base_revision: propsState.file.revision, layers: propsState.file.layers, overrides: propsState.file.overrides ?? [] }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error ?? r.statusText);
+      setPropsState({ ...propsState, file: d.props as LevelPropsFile, dirty: false });
+      setLayerMsg({ ok: true, text: `пропсы сохранены: ${propsState.path}, ревизия ${d.revision}` });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+    setBusy('');
+  };
+  /** Whether the last layer edit was applied (deleteSelected reads it right after the call). */
+  const layerMsgOk = useRef(false);
+  /** A props edit of the active layer (an override in the props file; saved by «Сохранить пропсы»). */
+  const applyProps = (edit: Parameters<typeof editProps>[2]): string | undefined => {
+    if (!propsState || !activeLayer) { setLayerMsg({ ok: false, text: NO_PROPS }); return undefined; }
+    const r = editProps(propsState.file, activeLayer, edit);
+    layerMsgOk.current = r.ok;
+    setLayerMsg({ ok: r.ok, text: r.message });
+    if (r.ok) setPropsState({ ...propsState, file: r.props, dirty: true });
+    return r.ok ? r.id : undefined;
+  };
+  /** A layout edit of the active layer: one undo step. */
+  const applyLayout = (edit: Parameters<typeof editLayout>[2]): string | undefined => {
+    if (!cur || !activeLayer) return undefined;
+    const r = editLayout(cur.layout, activeLayer, edit);
+    layerMsgOk.current = r.ok;
+    setLayerMsg({ ok: r.ok, text: r.message });
+    if (r.ok) pushStep(r.layout, `${activeDef?.name ?? activeLayer}: ${r.message}`);
+    return r.ok ? r.key : undefined;
+  };
+  const pickLayer = (p: Vec2, tol: number) => {
+    if (!assignment || !activeDef) return null;
+    const e = pickEntity(assignment, activeDef.id, p, tol);
+    return e ? { key: e.key, movable: activeDef.edit.includes('move') && (e.type === 'cover' || e.type === 'wall' || e.type === 'prop') } : null;
+  };
+  const onLayerAction = (a: LayerAction) => {
+    if (!cur || !activeDef || busy) return;
+    if (a.kind === 'select') { setSelKey(a.key); return; }
+    if (a.kind === 'move') {
+      if (a.key.startsWith('prop:')) {
+        const id = a.key.slice(5), o = resolveProps(propsFile).find((x) => x.object.id === id)?.object;
+        if (o) applyProps({ op: 'move', id, pos: [o.pos[0] + a.delta[0], o.pos[1] + a.delta[1]] });
+      } else applyLayout({ op: 'move', key: a.key, delta: a.delta });
+      return;
+    }
+    const t = activeDef.add?.[addIdx];
+    if (!t) return;
+    if (t.prop) { const id = applyProps({ op: 'add', template: t, pos: a.pos }); if (id) setSelKey(`prop:${id}`); }
+    else { const key = applyLayout({ op: 'add', template: t, pos: a.pos }); if (key) setSelKey(key); }
+  };
+  const deleteSelected = () => {
+    if (!selKey || !activeDef || busy) return;
+    const was = layerMsgOk.current;
+    layerMsgOk.current = false;
+    if (selKey.startsWith('prop:')) applyProps({ op: 'delete', id: selKey.slice(5) }); else applyLayout({ op: 'delete', key: selKey });
+    if (layerMsgOk.current) setSelKey(null);
+    layerMsgOk.current = was;
+  };
+  const deleteRef = useRef(deleteSelected);
+  deleteRef.current = deleteSelected;
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      const el = e.target;
+      if (e.key !== 'Delete' || (el instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName))) return;
+      deleteRef.current();
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, []);
+  /** Re-roll ONLY the active obstacle layer inside the zone: the zone is re-dealt (jitter) and only that layer's covers are taken. */
+  const rerollLayer = () => {
+    if (!cur || !zone || !profileOk || !profile || !activeDef) return;
+    setBusy(`Перегенерация слоя «${activeDef.name}»...`); setError('');
+    setTimeout(() => {
+      try {
+        const fresh = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: 'jitter' });
+        const r = mergeLayerReroll(cur.layout, fresh.layout, zone, [activeDef.id]);
+        setLayerMsg({ ok: r.ok, text: `${r.message}; seed ${rerollSeed}` });
+        if (r.ok) pushStep(r.layout, `слой «${activeDef.name}» в зоне, seed ${rerollSeed}`);
+        setRerollSeed((x) => x + 1);
+      } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+      setBusy('');
+    }, 20);
+  };
+  /** Click in the list: select the place and zoom the plan to it. */
+  const zoomToChoke = (id: string) => {
+    setSelChoke(id);
+    const cp = analysis?.chokepoints.find((c) => c.id === id), el = planBox.current;
+    if (!cp || !cur || !el) return;
+    setVis((v) => (v.chokepoints === false ? { ...v, chokepoints: true } : v));
+    const xs = cp.poly.map((q) => q[0]), ys = cp.poly.map((q) => q[1]), pad = 1500, w = el.clientWidth - 2, h = 518;
+    setView(viewOfRect(planTransform(cur.layout.bounds, w, h), [Math.min(...xs) - pad, Math.min(...ys) - pad], [Math.max(...xs) + pad, Math.max(...ys) + pad], w, h));
+  };
   const regionHint: Record<RegionMode, string> = {
     off: 'Выберите способ выделения зоны: рамка, многоугольник или лассо.',
     rect: 'Рамка: зажмите левую кнопку и протяните.',
@@ -507,7 +686,8 @@ export const LevelGenDepartment: React.FC = () => {
               </select>
               <button
                 type="button"
-                onClick={() => setShowFiringLines((v) => !v)}
+                onClick={() => setVis((v) => ({ ...v, fire_lines: v.fire_lines === false }))}
+                title="Слой «Линия огня» (то же, что галочка в панели слоёв)"
                 className={`px-2.5 py-1 rounded-lg border text-xs ${showFiringLines ? 'bg-rose-900/60 border-rose-500 text-rose-200' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}
               >
                 Линии огня
@@ -678,7 +858,7 @@ export const LevelGenDepartment: React.FC = () => {
                 <p className="text-[11px] text-slate-500">Расширение: старая карта остаётся в центре без изменений (кроме проёма в заборе, если он перегораживает продолжение дороги), кварталы вокруг — из каталога levelgen_v2.json; их тоже можно перегенерировать зоной. Цели — на земле, достижимы со старта, разнесены, не в закреплённых зданиях; хранятся в JSON карты (блок objectives).</p>
               </div>
             )}
-            <div className="grid gap-3 lg:grid-cols-2">
+            <div className={`grid gap-3 ${showRef ? 'lg:grid-cols-2' : ''}`}>
               <div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1 text-[11px]">
                   <button type="button" onClick={() => zoomBy(1 / PLAN_VIEW.button_step)} disabled={!cur} title="Отдалить" className="p-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><ZoomOut size={13} /></button>
@@ -686,14 +866,18 @@ export const LevelGenDepartment: React.FC = () => {
                   <button type="button" onClick={() => zoomBy(PLAN_VIEW.button_step)} disabled={!cur} title="Приблизить" className="p-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><ZoomIn size={13} /></button>
                   <button type="button" onClick={() => setView(FIT_VIEW)} disabled={!cur} title="Вписать карту целиком" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Maximize2 size={12} />Вписать</button>
                   <button type="button" onClick={() => { setGoalTool((v) => !v); setRegionMode('off'); }} disabled={!cur} title="Щелчок по плану добавляет цель" className={`inline-flex items-center gap-1 px-2 py-1 rounded border disabled:opacity-40 ${goalTool ? 'bg-yellow-500 border-yellow-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-yellow-200 hover:bg-slate-700'}`}><MapPinPlus size={12} />+ цель</button>
+                  <button type="button" onClick={() => setShowRef((v) => !v)} title="Показать / скрыть эталонную картинку справа от плана (без неё план занимает всю ширину)" className="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700" data-ref-toggle>{showRef ? 'скрыть эталон' : 'показать эталон'}</button>
                   <span className="text-slate-500">колесо — масштаб у курсора; сдвиг — средняя кнопка или пробел + перетаскивание (в «Просмотре» — левой)</span>
                 </div>
                 <div ref={planBox}>
                 <RegionOverlay bounds={cur?.layout.bounds ?? null} height={520} mode={goalTool ? 'off' : regionMode} zone={zone} locks={locks} blocks={region?.plan.selLots.map((k) => k.rect)}
                   inside={selection?.inside.map((g) => g.centre)} locked={selection?.locked.map((g) => g.centre)} onZone={setZone}
                   view={view} onView={setView} objectives={cur?.layout.objectives ?? null} objErrors={objErrors} objWarnings={objWarnings} bestPath={objCheck?.bestPath}
-                  addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null} trails={squadNow?.trails ?? null}>
-                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives />
+                  addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null} trails={squadNow?.trails ?? null}
+                  objectivesEditable={!activeLayer || activeLayer === 'objectives'} showObjectives={vis.objectives !== false}
+                  layerTool={activeDef && activeDef.id !== 'objectives' && !goalTool ? layerTool : 'off'} pickLayer={pickLayer} onLayerAction={onLayerAction}
+                  overlay={(h) => <LayersOverlay h={h} vis={vis} analysis={analysis} selChoke={selChoke} onSelChoke={setSelChoke} props={propsOnMap} selected={selectedEntity} activeEntities={activeEntities} />}>
+                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives hidden={hidden} tints={tints} />
                 </RegionOverlay>
                 </div>
                 {cur && (track ? (
@@ -711,14 +895,25 @@ export const LevelGenDepartment: React.FC = () => {
                   </div>
                 ) : cur.simmed ? <p className="mt-1 text-[11px] text-slate-500">Симулятор не прошёл маршрут (основной маршрут не проходим) — воспроизводить нечего.</p> : <p className="mt-1 text-[11px] text-slate-500">«Прогнать отряд (симулятор)» — после прогона здесь появится проигрыватель: отряд идёт по маршруту на плане.</p>)}
               </div>
-              <div>
+              {showRef && (<div>
                 <p className="text-[11px] text-slate-500 mb-1">Эталон (карта дизайнера, развёрнутая сверху; синее — его маршрут, жёлтое — лестницы, зелёный круг — старт)</p>
                 {refOk ? <img src="/api/levelgen/ref-image" alt="reference" onError={() => setRefOk(false)} className="rounded-xl border border-slate-800 w-full" style={{ maxHeight: 520, objectFit: 'contain', background: '#191c22' }} />
                   : <p className="text-xs text-amber-300">Эталонная картинка недоступна (Saved/MapRefs или python/PIL).</p>}
-              </div>
+              </div>)}
             </div>
           </section>
 
+          <div className="flex flex-col gap-6 min-w-0">
+          {cur && assignment && (
+            <LayersPanel counts={layerCountsNow} vis={vis} onVis={setVis} active={activeLayer} onActive={(id) => { setActiveLayer(id); if (id) { setRegionMode('off'); setGoalTool(false); } }}
+              tool={layerTool} onTool={setLayerTool} addIdx={addIdx} onAddIdx={setAddIdx} tintOn={tintOn} onTint={setTintOn} selected={selectedEntity} onDelete={deleteSelected}
+              onRotate={(deg) => { if (selKey && !selKey.startsWith('prop:')) applyLayout({ op: 'rotate', key: selKey, deg }); }}
+              onRerollLayer={zone && profileOk && activeDef?.size_class ? rerollLayer : null} message={layerMsg}
+              propsInfo={propsState ? { map: propsState.map, path: propsState.path, revision: propsState.file.revision, frozen: propsState.file.frozen, dirty: propsState.dirty } : null} propsNote={NO_PROPS} onSaveProps={saveProps} busy={!!busy}
+              analysis={analysis} analysisBusy={analysisBusy} conditions={conditions} onConditions={setConditions}
+              onAnalyze={() => { if (cur) { setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, analysis: undefined } : c))); runAnalysis(cur.layout, sel); } }}
+              selChoke={selChoke} onZoomChoke={zoomToChoke} threat={threat} config={CHOKE} />
+          )}
           <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 min-w-0">
             <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400">Оценка</h3>
             {!cur && <p className="text-sm text-slate-500">Сгенерируйте кандидатов.</p>}
@@ -772,6 +967,7 @@ export const LevelGenDepartment: React.FC = () => {
               <details className="text-[11px] text-slate-400"><summary className="cursor-pointer">Отчёт (≤ 30 строк)</summary><pre className="whitespace-pre-wrap bg-slate-950 border border-slate-800 rounded-lg p-2 mt-1 text-slate-300">{cur.ev.summary.join('\n')}</pre></details>
             </>)}
           </section>
+          </div>
         </div>
       )}
     </div>
