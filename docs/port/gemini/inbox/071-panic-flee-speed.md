@@ -2,7 +2,7 @@
 Суть: паникующий боец больше не «уползает как одержимый»: лёжа ползёт со скоростью ползания, раненый — с поправкой на ранение.
 Реестр: panic
 Base: codex/013-panic-speed (51ef0afb, Codex's diagnosis checkpoint, no gameplay edits yet); your branch gemini/071-panic-speed
-(`git switch -c gemini/071-panic-speed codex/013-panic-speed` in CodexTactics-interim). Do it AFTER 068, BEFORE 070.
+(`git switch -c gemini/071-panic-speed codex/013-panic-speed` in YOUR worktree - CodexTactics-gemcli for Gemini CLI). 070 is done by Claude; 068 is taken by Claude.
 
 Read first: the full task docs/port/codex/inbox/013-panic-flee-speed.md (goal, allowed paths, checks - they apply to you unchanged)
 and Codex's diagnosis in docs/port/codex/outbox/013-panic-flee-speed.report.md ON THAT BRANCH
