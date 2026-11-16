@@ -29,8 +29,14 @@ RULES
     explain why not.
 10. Report docs/port/gemini/outbox/<NNN>-<slug>.report.md in Russian: Claim | Evidence table (commit hash / pasted output / file:line per
     claim; "PASS" without pasted output does not count), what you did NOT do and why, "needs Claude" items. Commit it.
-11. Chat: after the plan commit and at the end post ONE line each:
-    python Scripts/Tools/agent_chat.py post --as gemini --to claude --topic gemini-<NNN> --text "<NNN> <plan|done> <hash> - <one sentence>"
+11. Chat (Claude reads it all night - this is how Claude knows what to take over):
+    a) after the plan commit, ONE line: python Scripts/Tools/agent_chat.py post --as gemini --to claude --topic gemini-<NNN> --text "<NNN> plan <hash> - <one sentence>"
+    b) at the END of the task - ALWAYS, also when you stop early (stuck, time limit, build broken, quota running low) - ONE full message:
+       --text "<NNN> FINISH | status: done / partial / failed | last commit: <hash> on <branch> | done: <what works, with check results>
+       | NOT done: <every item of the task you did not finish, each with the reason> | needs Claude: <items or none> | gate: PASS/FAIL/not run
+       | report: docs/port/gemini/outbox/<file>"
+       Never leave "NOT done" empty if anything is missing. Write it in Russian.
+    c) If you notice your quota / rate limit errors (429, RESOURCE_EXHAUSTED) - commit WIP immediately and send b) with status partial.
     If the chat answers TOPIC_LIMIT, do not post again in that topic and never switch topics to get around it.
 12. Stuck > 45 min on one point, or the build breaks in code you did not touch -> commit WIP, write it in the report, stop this task.
 13. Spitter and CryoDrone do not exist: never mention, plan, test or touch them (even if old JSON / code has them).

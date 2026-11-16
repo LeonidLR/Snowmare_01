@@ -44,8 +44,19 @@ foreach ($Raw in ($Tasks -join ",").Split(",")) {
     $Log = Get-ChildItem $RunDir -Filter "*-night-$Id.txt" | Sort-Object LastWriteTime -Descending | Select-Object -First 1
     $Mins = [int]((Get-Date) - $Started).TotalMinutes
     $Head = (git -C $Tree log --oneline -1 2>$null)
-    $Fatal = $Log -and (Select-String -Path $Log.FullName -Pattern 'RESOURCE_EXHAUSTED|quota|API key not valid|PERMISSION_DENIED|IneligibleTier' -Quiet)
-    $Text = "gemini-cli $Id finished in $Mins min; worktree HEAD: $Head; log: Saved/Orchestrator/gemini_runs/$($Log.Name)" + $(if ($Fatal) { " - QUOTA/AUTH ERROR, queue stopped" } else { "" })
+    $Fatal = $Log -and (Select-String -Path $Log.FullName -Pattern 'RESOURCE_EXHAUSTED|quota|API key not valid|PERMISSION_DENIED|IneligibleTier|429' -Quiet)
+    # Did Gemini itself post its FINISH message since the task started? If not (crash / quota / timeout), the runner reports for it.
+    $Since = $Started.ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss")
+    $Recent = (& python $Chat read --last 15 2>$null) -join "`n"
+    $SaidFinish = $Recent -match "\[gemini-$Id\] gemini -> claude:\s*\r?\n\s*$Id FINISH"
+    $Branch = (git -C $Tree branch --show-current 2>$null)
+    $Commits = ((git -C $Tree log --oneline main..HEAD 2>$null) | Select-Object -First 8) -join "; "
+    $Report = Get-ChildItem (Join-Path $Tree "docs\port\gemini\outbox") -Filter "$Id-*.report.md" -ErrorAction SilentlyContinue | Select-Object -First 1
+    $Errors = if ($Log) { ((Select-String -Path $Log.FullName -Pattern 'Error|error:|FAIL' | Select-Object -Last 3).Line -join " / ") } else { "no log" }
+    $Text = "gemini-cli $Id ended after $Mins min" + $(if ($Fatal) { " - QUOTA/AUTH ERROR, queue STOPPED, Claude must take over the rest" } else { "" }) +
+        " | Gemini FINISH message: " + $(if ($SaidFinish) { "yes" } else { "MISSING - treat as unfinished" }) +
+        " | branch: $Branch | commits: $Commits | report: " + $(if ($Report) { $Report.Name } else { "MISSING" }) +
+        " | last errors in log: $Errors | log: Saved/Orchestrator/gemini_runs/$($Log.Name)"
     & python $Chat post --as gemini --to claude --topic "gemini-cli" --text $Text | Out-Null
     Write-Host "[gemini-night] $Text"
     if ($Fatal) { break }
