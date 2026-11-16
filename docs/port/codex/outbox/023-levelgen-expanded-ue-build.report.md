@@ -1,6 +1,6 @@
-# Task 023 — ×2 data prepared; UE build pending
+# Task 023 — validated ×2 fixture; UE build handed to Claude
 
-Status: PREPARED / NOT COMPLETE. No Unreal editor, builder, bake, or route command has run. The direct standing prohibition on Content/Maps/** and .uasset writes requires an explicit scoped user exception before a new generated map can be built. The later inbox's new-map allowance does not override that rule.
+Status: CODEX PREPARATION COMPLETE / UE VALIDATION NOT RUN. The designer explicitly selected "Do not create the map; hand the build to Claude" when asked about the protected-map rule. No Unreal editor, builder, bake, or route command has run; no new map/assets were created. Claude owns the remaining build and route validation. This report does not claim the full UE task passed.
 
 ## Prepared data
 
@@ -26,7 +26,7 @@ node --test Tools/TrainingGround/src/levelgen/levelgenV2Expand.test.ts
 
 Both exit 0. Focused stage-2 suite: tests 8, pass 8, fail 0. During preparation the roundtrip assertion initially distinguished JavaScript -0 from JSON 0; comparing canonical JSON resolved this verification-only issue without changing generator output.
 
-## Concrete pending pipeline — DO NOT RUN until exception
+## Concrete handoff pipeline — Claude only; Codex must not run
 
 Run from this agents worktree with the project editor closed. Do not use -Fresh: the new target must not already exist.
 
@@ -42,10 +42,12 @@ powershell -ExecutionPolicy Bypass -File Scripts/levelgen_route_smoke.ps1 -Map '
 
 Input is deliberately separate from runtime output: the builder writes Content/Data/LevelJson/<target leaf>.json. Using that path as layout input would overwrite the expanded layout with a different runtime format. No builder refactor needed.
 
-Expected outputs after permission: Content/Maps/Generated/L_Gen_Test_X2.umap; Content/Data/LevelJson/L_Gen_Test_X2.json; Saved/Logs/LevelGenBuildMap.log; Saved/Logs/Gen_Test_X2Layout.txt (builder strips L_ in flush_report); Saved/Logs/NavBake-L_Gen_Test_X2.log; Saved/Logs/LevelGenRouteSmoke-L_Gen_Test_X2.log; the two explicit Saved/LevelGen status files. Header/argument inspection does not establish a complete generated .uasset/sidecar manifest; inspect any generated packages before staging. No asset output currently exists.
+Expected outputs if Claude executes the handed-off pipeline: Content/Maps/Generated/L_Gen_Test_X2.umap; Content/Data/LevelJson/L_Gen_Test_X2.json; Saved/Logs/LevelGenBuildMap.log; Saved/Logs/Gen_Test_X2Layout.txt (builder strips L_ in flush_report); Saved/Logs/NavBake-L_Gen_Test_X2.log; Saved/Logs/LevelGenRouteSmoke-L_Gen_Test_X2.log; the two explicit Saved/LevelGen status files. Header/argument inspection does not establish a complete generated .uasset/sidecar manifest; inspect any generated packages before staging. No asset output currently exists.
 
 ## Pending evidence
 
 Ground-plane / NavMeshBounds sizing, UE canal and bridge geometry, nav bake, bot route, final builder lines, and route result remain UNTESTED. The builder header says ground and nav use bounds, trench uses cut.poly/crossings, and nav extends from below cut to 3 m above highest walkable level. These are declared behavior, not observed success. Report section LEVELGEN_V2_STAGE2_REPORT.md:78–81 identifies this exact UE validation gap. If execution requires C++ or broad investigation: needs Claude, no C++ changes.
 
-Routing: `2 | gpt-6.1-sol | pass (preparation)`; router confidence .60. UE execution remains pending a scoped exception to the direct protected-map rule. No local model used.
+Routing: `2 | gpt-6.1-sol | pass (preparation)`; router confidence .60. UE execution is handed to Claude per the designer's explicit answer; no Codex map exception was granted. No local model used.
+
+Final handoff: prepared artifacts are committed at `ff5f1e0b`. The designer declined Codex map creation and requested transfer of the build to Claude. needs Claude: build the new test map and validate ground/nav/canal/bridges/route using the exact commands above. Existing maps and Depot remain untouched.
