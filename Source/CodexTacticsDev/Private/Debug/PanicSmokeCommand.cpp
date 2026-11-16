@@ -40,6 +40,9 @@ namespace PanicSmoke
 		FVector PanicStart = FVector::ZeroVector;
 		float StartEnemyDistance = 0.f;
 		bool bSawFleeing = false;
+		float MaxProneFleeSpeed = 0.f;
+		int32 ProneFleeSamples = 0;
+		bool bSawProneFleeing = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -177,7 +180,82 @@ namespace PanicSmoke
 			Check(State, Susanin && !SusaninPanic->IsPanicking() && Susanin->GetStance() == EOperativeStance::Standing
 				&& Susanin->CanShoot() && !SusaninPanic->IsAuraShown(),
 				FString::Printf(TEXT("recovered after %.1f s: standing, can shoot (stress %.0f)"), State.StageTime, SusaninPanic ? SusaninPanic->GetStress() : -1.f));
+			NextStage(State);
+			return true;
+		case 4:
+		{
+			// Step 4 of Task 071: a prone, badly wounded operative panics -> measured speed <= crawl speed * 1.05.
+			if (!Susanin || !SusaninPanic || !State.Hound.IsValid())
+			{
+				Check(State, false, TEXT("Susanin or hound invalid for prone panic stage"));
+				return Finish(State, false);
+			}
+			// Position Susanin 6 m from the hound with room to flee.
+			const FVector HoundLoc = State.Hound->GetActorLocation();
+			const FVector SafeSpot = HoundLoc + FVector(600.f, 0.f, 0.f);
+			Susanin->TeleportTo(SafeSpot, Susanin->GetActorRotation());
+
+			Susanin->SetStance(EOperativeStance::Prone);
+			if (Susanin->HealthComponent)
+			{
+				Susanin->HealthComponent->RestoreHealth(30.f, 100.f); // 30% HP -> Heavy tier (badly wounded)
+			}
+			Check(State, Susanin->GetStance() == EOperativeStance::Prone
+				&& Susanin->GetWoundTier() == CriticalWoundRules::EWoundTier::Heavy,
+				TEXT("Susanin is prone and badly wounded (Heavy tier 30% HP)"));
+
+			SusaninPanic->SetStressForTesting(99.f);
+			SusaninPanic->OnDamageTaken(10.f);
+			Check(State, SusaninPanic->IsPanicking() && SusaninPanic->GetPhase() == EPanicPhase::Fleeing,
+				TEXT("Susanin panics while prone and begins fleeing"));
+			Check(State, Susanin->GetStance() == EOperativeStance::Prone,
+				TEXT("Susanin stays prone on panic trigger (not stood up)"));
+
+			State.PanicStart = Susanin->GetActorLocation();
+			State.MaxProneFleeSpeed = 0.f;
+			State.ProneFleeSamples = 0;
+			State.bSawProneFleeing = false;
+			NextStage(State);
+			return true;
+		}
+		case 5:
+		{
+			if (SusaninPanic && SusaninPanic->GetPhase() == EPanicPhase::Fleeing)
+			{
+				State.bSawProneFleeing = true;
+				if (Susanin)
+				{
+					const float Speed = Susanin->GetVelocity().Size2D();
+					State.MaxProneFleeSpeed = FMath::Max(State.MaxProneFleeSpeed, Speed);
+					if (Speed > 5.f)
+					{
+						++State.ProneFleeSamples;
+					}
+					if (Susanin->GetStance() != EOperativeStance::Prone)
+					{
+						Check(State, false, TEXT("left prone stance during panic flee"));
+					}
+				}
+				return true;
+			}
+			if (!Susanin || !SusaninPanic)
+			{
+				return Finish(State, false);
+			}
+			{
+				const float CrawlSpeed = OperativeMovementRules::ComputeMaxSpeed(
+					Susanin->MovementConfig, EOperativeStance::Prone, false, Susanin->IsWounded(), false);
+				const float AllowedCeiling = CrawlSpeed * 1.05f;
+				const float Crawled = FVector::Dist2D(Susanin->GetActorLocation(), State.PanicStart);
+				Check(State, State.bSawProneFleeing && (Crawled > 10.f || State.ProneFleeSamples > 0),
+					FString::Printf(TEXT("prone flight moved (crawled %.1f cm, top measured speed %.1f cm/s)"), Crawled, State.MaxProneFleeSpeed));
+				Check(State, State.MaxProneFleeSpeed <= AllowedCeiling,
+					FString::Printf(TEXT("prone flight speed <= crawl speed * 1.05 (measured %.1f vs cap %.1f cm/s)"), State.MaxProneFleeSpeed, AllowedCeiling));
+				Check(State, Susanin->GetStance() == EOperativeStance::Prone,
+					TEXT("remained prone during flight and cowering"));
+			}
 			return Finish(State, true);
+		}
 		default:
 			return Finish(State, true);
 		}

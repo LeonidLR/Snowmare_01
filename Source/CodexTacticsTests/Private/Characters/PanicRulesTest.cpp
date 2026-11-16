@@ -69,4 +69,53 @@ bool FPanicBalanceRulesTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPanicFleeSpeedRulesTest, "CodexTactics.Panic.FleeSpeed",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPanicFleeSpeedRulesTest::RunTest(const FString&)
+{
+	using namespace CriticalWoundRules;
+
+	const FOperativeMovementConfig Movement; // WalkSpeed 220, RunSpeed 725, CrouchSpeed 125, ProneSpeedMultiplier 0.28, WoundedSpeedMultiplier 0.65
+	const FCriticalWoundConfig Wound;        // HeavySpeedMultiplier 0.45
+
+	const float NormalCrawl = Movement.WalkSpeed * Movement.ProneSpeedMultiplier; // 61.6 cm/s
+	const float NormalCrouch = Movement.CrouchSpeed;                              // 125.0 cm/s
+	const float WoundedRun = Movement.RunSpeed * Movement.WoundedSpeedMultiplier; // 471.25 cm/s
+
+	// 1. Prone wounded <= crawl (crawl speed * 0.65 = 40.04 <= 61.6)
+	const float ProneLight = PanicRules::PanicFleeSpeed(EOperativeStance::Prone, EWoundTier::Light, Movement, Wound);
+	const float ProneHeavy = PanicRules::PanicFleeSpeed(EOperativeStance::Prone, EWoundTier::Heavy, Movement, Wound);
+	TestTrue(TEXT("Prone light wounded <= crawl"), ProneLight <= NormalCrawl);
+	TestEqual(TEXT("Prone light wounded exact"), ProneLight, NormalCrawl * Movement.WoundedSpeedMultiplier, 0.01f);
+	TestTrue(TEXT("Prone heavy wounded <= crawl"), ProneHeavy <= NormalCrawl);
+
+	// 2. Crouch <= crouch
+	const float CrouchHealthy = PanicRules::PanicFleeSpeed(EOperativeStance::Crouching, EWoundTier::None, Movement, Wound);
+	const float CrouchLight = PanicRules::PanicFleeSpeed(EOperativeStance::Crouching, EWoundTier::Light, Movement, Wound);
+	TestTrue(TEXT("Crouch healthy <= crouch"), CrouchHealthy <= NormalCrouch);
+	TestEqual(TEXT("Crouch healthy exact"), CrouchHealthy, NormalCrouch, 0.01f);
+	TestTrue(TEXT("Crouch wounded <= crouch"), CrouchLight <= NormalCrouch);
+	TestEqual(TEXT("Crouch wounded exact"), CrouchLight, NormalCrouch * Movement.WoundedSpeedMultiplier, 0.01f);
+
+	// 3. Standing healthy = run
+	const float StandingHealthy = PanicRules::PanicFleeSpeed(EOperativeStance::Standing, EWoundTier::None, Movement, Wound);
+	TestEqual(TEXT("Standing healthy = run"), StandingHealthy, Movement.RunSpeed, 0.01f);
+
+	// 4. Badly wounded standing <= wounded run
+	const float StandingHeavy = PanicRules::PanicFleeSpeed(EOperativeStance::Standing, EWoundTier::Heavy, Movement, Wound);
+	TestTrue(TEXT("Badly wounded standing <= wounded run"), StandingHeavy <= WoundedRun);
+	TestEqual(TEXT("Badly wounded standing = heavy walk (99 cm/s)"), StandingHeavy, Movement.WalkSpeed * Wound.HeavySpeedMultiplier, 0.01f);
+
+	// Cold multiplier scale
+	const float ColdProne = PanicRules::PanicFleeSpeed(EOperativeStance::Prone, EWoundTier::Light, Movement, Wound, 0.8f);
+	TestEqual(TEXT("Cold scaling"), ColdProne, ProneLight * 0.8f, 0.01f);
+
+	// Critical wound is crawl only
+	const float CriticalSpeed = PanicRules::PanicFleeSpeed(EOperativeStance::Standing, EWoundTier::Critical, Movement, Wound);
+	TestEqual(TEXT("Critical wound = crawl"), CriticalSpeed, NormalCrawl * Movement.WoundedSpeedMultiplier, 0.01f);
+
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

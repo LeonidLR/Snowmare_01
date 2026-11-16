@@ -111,4 +111,50 @@ namespace PanicRules
 		}
 		return ETriggerVerdict::Panic;
 	}
+
+	float PanicFleeSpeed(EOperativeStance Stance, CriticalWoundRules::EWoundTier WoundTier,
+		const FOperativeMovementConfig& MovementConfig, const CriticalWoundRules::FCriticalWoundConfig& WoundConfig,
+		float ColdMultiplier)
+	{
+		const float Cold = FMath::Max(ColdMultiplier, 0.f);
+		const bool bWounded = (WoundTier != CriticalWoundRules::EWoundTier::None);
+		const float WoundedMultiplier = FMath::Clamp(MovementConfig.WoundedSpeedMultiplier, 0.f, 1.f);
+
+		// Critical wound forces crawl speed regardless of stance.
+		if (WoundTier == CriticalWoundRules::EWoundTier::Critical)
+		{
+			const float BaseCrawl = MovementConfig.WalkSpeed * MovementConfig.ProneSpeedMultiplier;
+			return BaseCrawl * WoundedMultiplier * Cold;
+		}
+
+		switch (Stance)
+		{
+		case EOperativeStance::Prone:
+		{
+			const float BaseCrawl = MovementConfig.WalkSpeed * MovementConfig.ProneSpeedMultiplier;
+			return BaseCrawl * (bWounded ? WoundedMultiplier : 1.f) * Cold;
+		}
+		case EOperativeStance::Crouching:
+		{
+			return MovementConfig.CrouchSpeed * (bWounded ? WoundedMultiplier : 1.f) * Cold;
+		}
+		case EOperativeStance::Standing:
+		default:
+		{
+			if (WoundTier == CriticalWoundRules::EWoundTier::Heavy)
+			{
+				// Heavy wound: no run; standing walks with heavy speed multiplier.
+				const float HeavyMultiplier = FMath::Clamp(WoundConfig.HeavySpeedMultiplier, 0.f, 1.f);
+				return MovementConfig.WalkSpeed * HeavyMultiplier * Cold;
+			}
+			if (WoundTier == CriticalWoundRules::EWoundTier::Light)
+			{
+				// Light wound: wounded run pace.
+				return MovementConfig.RunSpeed * WoundedMultiplier * Cold;
+			}
+			// Healthy standing: run pace.
+			return MovementConfig.RunSpeed * Cold;
+		}
+		}
+	}
 }
