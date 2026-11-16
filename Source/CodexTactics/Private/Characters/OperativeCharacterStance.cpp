@@ -301,7 +301,7 @@ void AOperativeCharacter::ApplyStanceCapsule()
 	if (bMeshBaseCaptured)
 	{
 		FVector MeshLocation = GetMesh()->GetRelativeLocation();
-		MeshLocation.Z = MeshBaseZ + (StandingShape.CapsuleHalfHeight - NewHalf);
+		MeshLocation.Z = MeshBaseZ + (StandingShape.CapsuleHalfHeight - NewHalf) + MantleMeshShift.Z; // a mantle clip's root-lock shift still blending out
 		GetMesh()->SetRelativeLocation(MeshLocation);
 	}
 }

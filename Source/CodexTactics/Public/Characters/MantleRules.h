@@ -178,6 +178,65 @@ struct FMantleConfig
 	float OrderMaxDistanceCm = 3000.f;
 	/** A second climb onto a landing another man holds must be at least this far from it, cm. "reserve.radius_cm" */
 	float ReserveRadiusCm = 150.f;
+	/** A clip's authored motion is sampled at this rate for the contact alignment (GetMantleClipTrack), Hz. "align.sample_hz" */
+	float AlignSampleHz = 30.f;
+	/** Acceptance (MantleAlignSmoke): the nearer hand comes at least this close to the ledge's lip during the climb, cm. "align.hand_edge_tolerance_cm" */
+	float AlignHandEdgeToleranceCm = 15.f;
+	/** Acceptance: the body (lowest foot / capsule) never rises more than this over the final standing height (no pop), cm. "align.pop_tolerance_cm" */
+	float AlignPopToleranceCm = 15.f;
+	/** Acceptance: the body stands still at most this long between the climb and moving on (no freeze at the handoff), s. "align.freeze_limit_s" */
+	float AlignFreezeLimitSeconds = 0.35f;
+	/** A bone slower than this counts as still (the freeze measure and the clip's settle time), cm/s. "align.still_speed_cm_s" */
+	float AlignStillSpeedCmPerSecond = 20.f;
+	/** A hand slower than this in the clip's own space (it rests on something fixed) is planted, cm/s. "align.plant_speed_cm_s" */
+	float AlignPlantSpeedCmPerSecond = 80.f;
+	/** ... after it reached out at least this far from where it hung at frame 0 (not the idle arm), cm. "align.plant_reach_cm" */
+	float AlignPlantReachCm = 25.f;
+	/** ... and at least this high over the frame-0 feet as a fraction of the clip's rise (on the ledge, not on a knee). "align.plant_min_rise_fraction" */
+	float AlignPlantMinRiseFraction = 0.6f;
+	/** ... staying planted at least this long, s. "align.plant_hold_s" */
+	float AlignPlantHoldSeconds = 0.1f;
+	/** The clip's motion is over once its root is within this distance of its last spot and every bone is still, cm. "align.exit_root_cm" */
+	float AlignExitRootCm = 3.f;
+	/** A planted wrist sits this far past the lip and this high over the top (the hand's point is put there, not on the lip), cm.
+	 *  "align.grip_forward_cm" / "align.grip_up_cm" */
+	float AlignGripForwardCm = 8.f;
+	float AlignGripUpCm = 6.f;
+};
+
+/**
+ * One clip's authored motion as a body plays it (AOperativeCharacter::GetMantleClipTrack): bones sampled every SampleSeconds in the clip's
+ * own space - the component space with the root's track left in (the clip's origin is fixed in the world while it plays), turned so that
+ * X = the climb's forward and Z = up; cm.
+ */
+struct FMantleClipTrack
+{
+	float SampleSeconds = 0.f;
+	TArray<FVector> Root;
+	TArray<FVector> Pelvis;
+	TArray<FVector> HandL;
+	TArray<FVector> HandR;
+	TArray<FVector> FootL;
+	TArray<FVector> FootR;
+
+	int32 Num() const { return Root.Num(); }
+	float TimeAt(int32 Index) const { return SampleSeconds * static_cast<float>(Index); }
+};
+
+/** Where and when a clip's hands take the ledge and when its motion is over (MantleRules::AnalyseClipTrack; clip space, cm, s). */
+struct FMantleClipContact
+{
+	/** A hand plant was found (else the climb keeps one warp window over the whole clip). */
+	bool bValid = false;
+	/** The first hand plant: its time and the wrist's position then. */
+	float ContactSeconds = 0.f;
+	FVector HandPoint = FVector::ZeroVector;
+	/** The root at the plant (the warp's first window ends there). */
+	FVector RootAtContact = FVector::ZeroVector;
+	/** The root at frame 0 (the mesh draws the root there for the whole clip: root lock = the first frame). */
+	FVector RootStart = FVector::ZeroVector;
+	/** The motion is over (the root at its end spot, every bone still): the climb hands over to the locomotion here. */
+	float ExitSeconds = 0.f;
 };
 
 /** What the traces measured at one obstacle (the runtime fills it; the rules never trace). */
@@ -297,6 +356,22 @@ namespace MantleRules
 	CODEXTACTICS_API FMantleDecision Decide(const FMantleConfig& Config, const FMantleProbe& Probe, TFunctionRef<bool(int32)> IsAvailable);
 	/** Decide with every clip available. */
 	CODEXTACTICS_API FMantleDecision Decide(const FMantleConfig& Config, const FMantleProbe& Probe);
+
+	/**
+	 * A clip's contact and exit from its sampled motion: the first hand that reached out (align.plant_reach_cm from its frame-0 spot), rose to
+	 * align.plant_min_rise_fraction x RiseCm over the frame-0 feet and then rests (slower than align.plant_speed_cm_s for align.plant_hold_s)
+	 * while the root is still on its way is the plant; the exit is the first moment after the plant when the root is within
+	 * align.exit_root_cm of its last spot and every bone is slower than align.still_speed_cm_s (the clip's idle tail is skipped). bValid false
+	 * without a plant; ExitSeconds = the clip's end without a settled moment.
+	 */
+	CODEXTACTICS_API FMantleClipContact AnalyseClipTrack(const FMantleConfig& Config, const FMantleClipTrack& Track, float RiseCm);
+
+	/**
+	 * The face distance (capsule centre, cm) a standing climb starts at so that the clip's planted wrist lands on the lip + align.grip_forward_cm
+	 * without any forward warp (the mesh drawn root-relative: the wrist is HandPoint - RootStart ahead of his start), never under
+	 * min_face_gap_cm. Negative without a plant.
+	 */
+	CODEXTACTICS_API float ContactStartCm(const FMantleConfig& Config, const FMantleClipContact& Contact);
 
 	/** A heavy hit (FinalDamage >= HeavyHitDamage) cancels a running climb. */
 	CODEXTACTICS_API bool IsHeavyHit(const FMantleConfig& Config, float FinalDamage);

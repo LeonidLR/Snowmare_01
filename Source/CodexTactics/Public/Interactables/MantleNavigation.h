@@ -171,6 +171,10 @@ public:
 	/** The clip of the config's table (loaded once; null when missing). */
 	UAnimSequenceBase* GetClip(int32 ClipIndex);
 
+	/** A clip's sampled motion (AOperativeCharacter::GetMantleClipTrack fills it once per clip: each clip plays on one body only). */
+	const FMantleClipTrack* FindClipTrack(int32 ClipIndex) const { return ClipTracks.Find(ClipIndex); }
+	void StoreClipTrack(int32 ClipIndex, FMantleClipTrack&& Track) { ClipTracks.Add(ClipIndex, MoveTemp(Track)); }
+
 	/** Generation stats (logs / smokes). */
 	int32 GetSampledCount() const { return Sampled; }
 	double GetGenerationMs() const { return GenerationMs; }
@@ -191,6 +195,7 @@ private:
 	UPROPERTY(Transient)
 	TMap<int32, TObjectPtr<UAnimSequenceBase>> ClipCache;
 	TSet<int32> MissingClips;
+	TMap<int32, FMantleClipTrack> ClipTracks;
 	FTimerHandle PollTimer;
 	float WaitedSeconds = 0.f;
 	bool bGenerated = false;
