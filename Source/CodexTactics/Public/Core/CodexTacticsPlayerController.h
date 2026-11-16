@@ -4,6 +4,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Characters/PersonalItemRules.h"
+#include "Survival/FirstAidRules.h"
 #include "Interactables/DeployableRules.h"
 #include "Combat/SpaceInput.h"
 #include "GameFlow/GameFlowTypes.h"
@@ -705,6 +706,13 @@ public:
 	 * drawer = a heat pack on the leader (UTacticalHeatSubsystem::UseHeatPack; 1 AP in turn-based combat).
 	 */
 	void UseSquadItem(EPersonalItem Item);
+
+	/**
+	 * First aid (the game designer 2026-11-16, UFirstAidSubsystem): the leader treats himself with Item - H / the drawer's medkit line (through
+	 * UseSquadItem) or the drawer's medical-bag line. Light wound = a standing clip, medium = kneeling, heavy = refused (a mate must treat him:
+	 * drag the item onto him). Turn-based combat / first_aid.json "enabled": false keep the instant medkit.
+	 */
+	void UseFirstAidItem(EFirstAidItem Item);
 
 	/** Sprint 15: Shift + G / the selector / drawer flare line — the leader's signal flare aim (again: cancel). */
 	void StartFlareAim();

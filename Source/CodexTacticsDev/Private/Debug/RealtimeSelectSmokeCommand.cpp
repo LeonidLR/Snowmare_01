@@ -26,6 +26,7 @@
 #include "HAL/IConsoleManager.h"
 #include "InputKeyEventArgs.h"
 #include "Kismet/GameplayStatics.h"
+#include "Survival/FirstAidRules.h"
 
 namespace RealtimeSelectSmoke
 {
@@ -193,7 +194,12 @@ namespace RealtimeSelectSmoke
 			Leader->MedkitsCount = 2;
 			Leader->HealthComponent->ApplyDirectHealthLoss(50000.f, TEXT("smoke"));
 			const float Before = Leader->HealthComponent->GetCurrentHealth();
-			CodexPC->UseSquadItem(EPersonalItem::Medkit);
+			{
+				// First aid (2026-11-16) made the medkit a timed treatment (FirstAidSmoke checks it); this check pins the instant fallback (enabled false).
+				FirstAidRules::FFirstAidConfig InstantMedkit = FirstAidRules::GetConfig(); InstantMedkit.bEnabled = false; FirstAidRules::SetConfig(InstantMedkit);
+				CodexPC->UseSquadItem(EPersonalItem::Medkit);
+				FirstAidRules::ResetConfig();
+			}
 			const bool bRefused = Leader->MedkitsCount == 1 && Leader->HealthComponent->GetCurrentHealth() > Before; // used at once
 			const bool bWasAuto = Squad->IsAutonomousSquadCombat();
 			CodexPC->ToggleAutonomy();
@@ -206,7 +212,11 @@ namespace RealtimeSelectSmoke
 		if (Step == 12 + 4 * 5 && CodexPC && Leader && Flow->GetCombatMode() == ECodexCombatMode::TacticalPause)
 		{
 			const int32 Medkits = Leader->MedkitsCount;
-			CodexPC->UseSquadItem(EPersonalItem::Medkit);
+			{
+				FirstAidRules::FFirstAidConfig InstantMedkit = FirstAidRules::GetConfig(); InstantMedkit.bEnabled = false; FirstAidRules::SetConfig(InstantMedkit);
+				CodexPC->UseSquadItem(EPersonalItem::Medkit);
+				FirstAidRules::ResetConfig();
+			}
 			const bool bUsed = Leader->MedkitsCount == Medkits - 1;
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke %s: pause: medkit used %d"), bUsed ? TEXT("ok  ") : TEXT("FAIL"), bUsed ? 1 : 0);
 			State.Failures += bUsed ? 0 : 1;

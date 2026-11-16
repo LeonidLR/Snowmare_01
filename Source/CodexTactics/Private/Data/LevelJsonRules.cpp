@@ -287,6 +287,7 @@ void LevelJsonRules::ParseKits(const FJsonObject& Kit, TMap<FString, FLevelOpera
 		Parsed.Grenades = Count(**Object, TEXT("grenades"));
 		Parsed.Medkits = Count(**Object, TEXT("medkits"));
 		Parsed.HeatPacks = Count(**Object, TEXT("heat_packs"));
+		Parsed.MedicalBags = Count(**Object, TEXT("medical_bags"));
 		const TSharedPtr<FJsonObject>* Ammo = nullptr;
 		if ((*Object)->TryGetObjectField(TEXT("ammo"), Ammo) && Ammo && Ammo->IsValid())
 		{

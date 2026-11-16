@@ -333,6 +333,7 @@ namespace
 		Soldier->SetNumberField(TEXT("barricades_count"), Member->BarricadesCount);
 		Soldier->SetNumberField(TEXT("mines_count"), Member->MinesCount);
 		Soldier->SetNumberField(TEXT("medkits_count"), Member->MedkitsCount);
+		Soldier->SetNumberField(TEXT("medical_bags_count"), Member->MedicalBagsCount); // first aid 2026-11-16 (older saves keep the spawn kit)
 		Soldier->SetNumberField(TEXT("canned_food_count"), Member->CannedFoodCount);
 		Soldier->SetNumberField(TEXT("bread_count"), Member->BreadCount);
 		Soldier->SetNumberField(TEXT("chocolate_count"), Member->ChocolateCount);
@@ -440,6 +441,7 @@ namespace
 		Member->BarricadesCount = SaveInt(Info, TEXT("barricades_count"), Member->BarricadesCount);
 		Member->MinesCount = SaveInt(Info, TEXT("mines_count"), Member->MinesCount);
 		Member->MedkitsCount = SaveInt(Info, TEXT("medkits_count"), Member->MedkitsCount);
+		Member->MedicalBagsCount = SaveInt(Info, TEXT("medical_bags_count"), Member->MedicalBagsCount);
 		Member->CannedFoodCount = SaveInt(Info, TEXT("canned_food_count"), Member->CannedFoodCount);
 		Member->BreadCount = SaveInt(Info, TEXT("bread_count"), Member->BreadCount);
 		Member->ChocolateCount = SaveInt(Info, TEXT("chocolate_count"), Member->ChocolateCount);

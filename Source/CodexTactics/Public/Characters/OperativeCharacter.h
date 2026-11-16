@@ -844,6 +844,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
 	int32 BreadCount = 0;
 
+	/**
+	 * Medical bags (the designer's "medical bag" item, the game designer 2026-11-16, Survival/FirstAidRules): a longer treatment than the medkit that heals more
+	 * HP and more wound tiers (Content/Data/Survival/first_aid.json "items.medical_bag"; the role's start count "start_medical_bags").
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 MedicalBagsCount = 0;
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Inventory")
 	int32 GetItemCount(EPersonalItem Item) const;
 

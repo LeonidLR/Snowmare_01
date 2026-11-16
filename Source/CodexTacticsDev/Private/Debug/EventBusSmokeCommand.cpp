@@ -55,6 +55,7 @@ void UEventBusProbe::Listen(UCodexEventBus* Bus)
 #include "UI/DialogueSubsystem.h"
 #include "UI/GameMessageSubsystem.h"
 #include "UI/InventoryDrawerWidget.h"
+#include "Survival/FirstAidRules.h"
 #include "UI/ProfileDialogWidget.h"
 #include "UObject/StrongObjectPtr.h"
 
@@ -116,7 +117,12 @@ namespace EventBusSmoke
 		Check(State, Probe->Count(TEXT("stats")) == 1, TEXT("soldier_stats_updated on a stat point"));
 
 		Members[0]->HealthComponent->ApplyDirectHealthLoss(30.f, TEXT("Smoke"));
-		Hud->GetInventoryDrawer()->Activate(EInventoryDrawerSlot::Medkit);
+		// First aid (2026-11-16) made the medkit a timed treatment (FirstAidSmoke checks it); this check pins the instant fallback (enabled false).
+		{
+			FirstAidRules::FFirstAidConfig InstantMedkit = FirstAidRules::GetConfig(); InstantMedkit.bEnabled = false; FirstAidRules::SetConfig(InstantMedkit);
+			Hud->GetInventoryDrawer()->Activate(EInventoryDrawerSlot::Medkit);
+			FirstAidRules::ResetConfig();
+		}
 		Check(State, Probe->Count(TEXT("item")) == 1 && Probe->LastItem == TEXT("MEDKIT"), TEXT("item_used «MEDKIT» from the drawer"));
 
 		const int32 Lines = Probe->Count(TEXT("line"));

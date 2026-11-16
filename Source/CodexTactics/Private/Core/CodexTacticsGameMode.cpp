@@ -53,6 +53,7 @@
 #include "Data/TacticalHeatTuning.h"
 #include "Data/WeaponLoadoutRules.h"
 #include "Interactables/VaultNavigation.h"
+#include "Survival/FirstAidRules.h"
 #include "UI/CodexTacticsHUD.h"
 
 #include "Characters/SquadSubsystem.h"
@@ -373,6 +374,10 @@ namespace
 		Operative.GrenadesCount = LevelLoadoutRules::ApplyKitCount(Operative.GrenadesCount, Kit->Grenades, Operative.MaxGrenades);
 		Operative.MedkitsCount = LevelLoadoutRules::ApplyKitCount(Operative.MedkitsCount, Kit->Medkits, MAX_int32);
 		Operative.HeatPacksCount = LevelLoadoutRules::ApplyKitCount(Operative.HeatPacksCount, Kit->HeatPacks, TacticalHeatTuning::Get().HeatPackMaxStack);
+		{
+			const int32 BagMax = FirstAidRules::GetConfig().MedicalBag.MaxCarried;
+			Operative.MedicalBagsCount = LevelLoadoutRules::ApplyKitCount(Operative.MedicalBagsCount, Kit->MedicalBags, BagMax > 0 ? BagMax : MAX_int32);
+		}
 		for (const TPair<FString, int32>& Ammo : Kit->AmmoReserve)
 		{
 			if (FWeaponAmmoState* State = Operative.AmmoInventory.Find(Ammo.Key))
@@ -504,6 +509,12 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 		Operative->BodyColor = Entry.Color;
 		Operative->ColdSurvival->Fortitude = Entry.Fortitude;
 		Operative->SquadRole = Entry.Role;
+		// First aid (the game designer 2026-11-16): the role's medical bags (first_aid.json "start_medical_bags"; a level kit / the carry / a save override).
+		if (const UEnum* RoleEnum = StaticEnum<EOperativeRole>())
+		{
+			Operative->MedicalBagsCount = FMath::Max(Operative->MedicalBagsCount,
+				FirstAidRules::StartMedicalBags(FirstAidRules::GetConfig(), RoleEnum->GetNameStringByValue(static_cast<int64>(Entry.Role))));
+		}
 		Operative->Luck = Entry.Luck;
 		Operative->Accuracy = Entry.Accuracy;
 		// Godot apply_balance_config: health, speeds, matches... from game_balance_config.tres (before BeginPlay).

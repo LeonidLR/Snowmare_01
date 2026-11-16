@@ -30,7 +30,9 @@ enum class ELootItem : uint8
 	/** Sprint 15: signal flare. */
 	Flare,
 	/** 2026-10-26: frag grenades (a fallen operative's remains, Godot get_items_list "grenades"). */
-	Grenade
+	Grenade,
+	/** The medical bag (the game designer 2026-11-16, Survival/FirstAidRules). */
+	MedicalBag
 };
 
 /** One line of the loot dialog. */
@@ -124,6 +126,10 @@ struct CODEXTACTICS_API FLootContents
 	/** Frag grenades (2026-10-26: a fallen operative's remains; supply crates hold none by default). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapons", meta = (ClampMin = "0"))
 	int32 Grenades = 0;
+
+	/** Medical bags (the game designer 2026-11-16; none by default). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Medical", meta = (ClampMin = "0"))
+	int32 MedicalBags = 0;
 
 	/** Extra weapon id (e.g. "plasma_carbine"), empty for none. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Special")
