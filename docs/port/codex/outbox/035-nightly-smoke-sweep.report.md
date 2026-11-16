@@ -2,11 +2,11 @@
 
 Frozen base: `aba810f1e5d29a6268cf8b88f58801aa9a6c94ab` on `codex/035-nightly-sweep`; registry: 284 names in original order. Includes main 034/036. No code or flag changes.
 
-Build: PASS (exit 0; UBT 2.18 s). Evidence: `Saved/Orchestrator/035/build-wrapper.log`, `build-engine.log`.
+Build: PASS (exit 0; UBT 2.18 s). Resume verification after limit reset: DLL mtimes precede original 18:52:13 UTC build; engine binary unchanged (2026-10-22), Build.log identical to preserved evidence; no rebuild needed. Evidence: `Saved/Orchestrator/035/build-wrapper.log`, `build-engine.log`.
 
 Router: level 2, confidence 0.62 | gpt-6.1-sol | pass (execution/reporting; no local model).
 
-Progress: 56/284 initial runs; 54 final PASS; 2 final FAIL; 2 failed twice. Updated 2026-11-16T19:15:08.280289+00:00.
+Progress: 128/284 initial runs; 124 final PASS; 4 final FAIL; 4 failed twice. Updated 2026-11-16T21:40:44.811578+00:00.
 
 Initial batches <=8, script default Jobs=4 (16 CPUs), `-NoRetry -ExtraArgs -Multiprocess`; each initial FAIL rerun exactly once alone with `-Jobs 1`. Engine `Smoke RESULT` controls PASS/FAIL, including wrapper KNOWN-FAIL. Seconds are wrapper process wall times. Missing result/timeout is infrastructure FAIL, never an invented assertion. Shared locks and designer priority remain active.
 
@@ -70,6 +70,78 @@ Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, 
 | CutterSmoke | PASS | 49.2 |  | — | — |
 | ClickRulesSmoke | PASS | 48.9 |  | — | — |
 | NarrativeSmoke | PASS | 48.5 |  | — | — |
+| HoldSphereSmoke | PASS | 52.3 |  | — | — |
+| ProgressionSmoke | PASS | 51.7 |  | — | — |
+| VictorySmoke | PASS | 54.6 |  | — | — |
+| TurnBasedCameraSmoke | PASS | 49.7 |  | — | — |
+| EventBusSmoke | PASS | 38.3 |  | — | — |
+| SilhouetteSmoke | PASS | 43.8 |  | — | — |
+| AttackModeSmoke | PASS | 43.8 |  | — | — |
+| GroupSelectSmoke | PASS | 44.4 |  | — | — |
+| GroupCoverSmoke | PASS | 53.2 |  | — | — |
+| TurnWalkSmoke | PASS | 45.9 |  | — | — |
+| TurnBlastDeathSmoke | PASS | 46.6 |  | — | — |
+| EnemyHuntSmoke | PASS | 45.7 |  | — | — |
+| VaultSmoke | PASS | 46.6 |  | — | — |
+| DepotVaultSmoke | PASS | 46.3 |  | — | — |
+| CornerExitSmoke | PASS | 57.3 |  | — | — |
+| BarricadeContactSmoke | PASS | 45.4 |  | — | — |
+| CombatMoveSmoke | PASS | 47.7 |  | — | — |
+| EnemyDeathSmoke | PASS | 47.2 |  | — | — |
+| TurnSelectSmoke | PASS | 46.5 |  | — | — |
+| PanicSmoke | PASS | 49.3 |  | — | — |
+| FacingSmoke | PASS | 46.2 |  | — | — |
+| MarksmanSmoke | PASS | 45.7 |  | — | — |
+| MarksmanStealthSmoke | PASS | 48.5 |  | — | — |
+| EnemyHitLayerSmoke | PASS | 45 |  | — | — |
+| RecruitDeathSmoke | PASS | 44.7 |  | — | — |
+| HitFlashOverlaySmoke | PASS | 45.6 |  | — | — |
+| BotMarksmanSmoke | PASS | 44.7 |  | — | — |
+| BarricadeTurnContactSmoke | PASS | 46.1 |  | — | — |
+| MarksmanAdvanceSmoke | PASS | 49 |  | — | — |
+| BotRepairSmoke | PASS | 49.1 |  | — | — |
+| PatrolSmoke | PASS | 48.2 |  | — | — |
+| AmbushSmoke | PASS | 46.9 |  | — | — |
+| RealTimeControlSmoke | PASS | 47.1 |  | — | — |
+| PostureSmoke | PASS | 46.6 |  | — | — |
+| RealtimeSelectSmoke | PASS | 49.7 |  | — | — |
+| MarksmanCloseShotSmoke | PASS | 45.1 |  | — | — |
+| HordeSmoke | PASS | 46.6 |  | — | — |
+| CoverSmoke | PASS | 49.2 | [2026.11.16-21.28.25:356][603]LogCodexTactics: Display: Smoke FAIL: ... standing the _R stand-off from the real wall end (81 cm, stand-off 28; the clip leans 40 cm out) | PASS | 42.4 |
+| AimOffsetSmoke | PASS | 44.9 |  | — | — |
+| CommanderModeSmoke | PASS | 52.3 |  | — | — |
+| CornerEntrySmoke | PASS | 68.6 |  | — | — |
+| CornerHoldSmoke | PASS | 76 |  | — | — |
+| CoverCrouchSmoke | PASS | 48.5 |  | — | — |
+| CoverMoveSmoke | PASS | 51.9 |  | — | — |
+| CoverReverseSmoke | PASS | 45.6 |  | — | — |
+| CoverWallSmoke | PASS | 47.2 |  | — | — |
+| CoverWallMedicSmoke | PASS | 45.8 |  | — | — |
+| CoverHugSmoke | FAIL | 43.4 | [2026.11.16-21.31.34:143][870]LogCodexTactics: Display: Smoke FAIL: shimmy back to the edge ordered | FAIL | 39.6 |
+| CoverHugMedicSmoke | PASS | 47.8 |  | — | — |
+| DefendSmoke | PASS | 48.5 |  | — | — |
+| EnemyTacticsSmoke | PASS | 49 |  | — | — |
+| GrenadeAnimSmoke | PASS | 49.5 |  | — | — |
+| LeftHandIKSmoke | PASS | 49.9 |  | — | — |
+| PrepDeploySmoke | PASS | 44.9 |  | — | — |
+| SightSmoke | PASS | 49.4 |  | — | — |
+| TripwireSmoke | PASS | 46.5 |  | — | — |
+| TurnRulesSmoke | PASS | 43.7 |  | — | — |
+| BotStealthSmoke | PASS | 49 |  | — | — |
+| PauseBarrelOrderSmoke | PASS | 48.2 | [2026.11.16-21.35.10:930][891]LogCodexTactics: Display: Smoke FAIL: real time: the Ctrl + click shot at barrel 5 is taken at once (fired, or turning / raising first) | PASS | 41.3 |
+| TurnBasedAimSmoke | PASS | 61.9 |  | — | — |
+| KnockdownSmoke | PASS | 46 |  | — | — |
+| DeathCamSmoke | PASS | 47.3 |  | — | — |
+| CameraZoneModeSmoke | PASS | 45.7 |  | — | — |
+| FrontendSmoke | PASS | 56.9 |  | — | — |
+| SniperSmoke | PASS | 62.1 |  | — | — |
+| ShotgunSmoke | PASS | 52.1 |  | — | — |
+| ShotgunCoverSmoke | PASS | 48.9 |  | — | — |
+| FormationJitterSmoke | FAIL | 67.3 | [2026.11.16-21.38.31:138][468]LogCodexTactics: Display: Smoke FAIL: the other follower is no worse with the D-1 man in the squad (hips 27.2 / shoulders 24.0 deg/s; all-M16 17.0 / 12.6) | FAIL | 55.1 |
+| PistolSmoke | PASS | 46.3 |  | — | — |
+| ProjectileSmoke | PASS | 46 |  | — | — |
+| RpgSmoke | PASS | 44.7 |  | — | — |
+| RpgAnimSmoke | PASS | 48.2 |  | — | — |
 
 ## Failed twice
 
@@ -77,7 +149,11 @@ Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, 
   History: `Source/CodexTacticsDev/Private/Debug/MilitaryZombieSmokeCommand.cpp`: 6b584fbe feat(characters): operatives, Military Zombie, Hound and Frostbitten Blueprints use the optimized single-slot bodies (user 2026-10-21); `Source/CodexTactics/Private/Characters/EnemyCharacter.cpp`: 632d61ec feat(animation): wound tiers, the full-body injured clips with the raise to fire; feat(ui): a switch per HUD label
 - **OptimizedCharacterSmoke**: [2026.11.16-19.00.59:179][ 51]LogCodexTactics: Display: OptimizedCharacterSmoke FAIL: [Marksman] death: both bodies still there (original 1, optimized 1), dying, optimized anim dead 1, death clip NOT playing Rerun: [2026.11.16-19.02.53:391][497]LogCodexTactics: Display: OptimizedCharacterSmoke FAIL: [Marksman] death: both bodies still there (original 1, optimized 1), dying, optimized anim dead 1, death clip NOT playing
   History: `Source/CodexTacticsDev/Private/Debug/OptimizedCharacterSmokeCommand.cpp`: 28650298 feat(ai): PMC squads on the operative body - teams, the shared order catalog, the utility commander, the self-play arena; `Source/CodexTactics/Private/Characters/MarksmanEnemyCharacter.cpp`: 5d26c121 gemini-034: fix 034a HIGH findings (fast perception scales, hover ghost cache/yaw, leave cover pending clear)
+- **CoverHugSmoke**: [2026.11.16-21.31.34:143][870]LogCodexTactics: Display: Smoke FAIL: shimmy back to the edge ordered Rerun: [2026.11.16-21.32.15:593][820]LogCodexTactics: Display: Smoke FAIL: shimmy back to the edge ordered
+  History: `Source/CodexTacticsDev/Private/Debug/CoverHugSmokeCommand.cpp`: d1a6958a refactor(build): move the dev console commands into the CodexTacticsDev module; `Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp`: 571894f4 fix(combat): one fire gate on every operative fire path - turn, raise, then the round (058c / 061)
+- **FormationJitterSmoke**: [2026.11.16-21.38.31:138][468]LogCodexTactics: Display: Smoke FAIL: the other follower is no worse with the D-1 man in the squad (hips 27.2 / shoulders 24.0 deg/s; all-M16 17.0 / 12.6) Rerun: [2026.11.16-21.40.18:154][376]LogCodexTactics: Display: Smoke FAIL: the other follower is no worse with the D-1 man in the squad (hips 27.2 / shoulders 24.0 deg/s; all-M16 17.0 / 12.6)
+  History: `Source/CodexTacticsDev/Private/Debug/FormationJitterSmokeCommand.cpp`: c81585ae fix(animation): D-1 crouch and cover on the ABP, formation followers stop twitching; `Source/CodexTactics/Private/Characters/SquadSubsystemFormation.cpp`: f65f3325 gemini-034: fix stealth look-direction lock and stopping snap-back (bug #324)
 
-Partial sweep. Resume: run `python Saved/Orchestrator/035/sweep.py` in the agents worktree; next batch 8, 228 initial runs remaining. Machine-readable pending state is in progress.json. Latest path commits above are history references, not proven regression culprits.
+Partial sweep. Resume: run `python Saved/Orchestrator/035/sweep.py` in the agents worktree; next batch 17, 156 initial runs remaining. Machine-readable pending state is in progress.json. Latest path commits above are history references, not proven regression culprits.
 
 Only tracked output: this report. Ignored Saved evidence is local. Existing untracked packs/config/cache remain outside this task. No source investigation beyond failure lines and path identification.
