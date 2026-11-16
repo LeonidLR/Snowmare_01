@@ -208,5 +208,10 @@ test('v2 objectives: never inside a locked building unless allowed; an edge star
   const sealed = checkObjectives({ ...e.layout, walls: [...e.layout.walls, ...box] });
   assert.equal(sealed.ok, false);
   assert.equal(sealed.goals[0].reachable, false);
-  assert.ok(validateObjectives({ version: 1, seed: 1, order: 'free', start: { pos: [0, 0], yaw: 0, layer: 'ground', source: 'spawn' }, goals: [{ id: 'A', pos: [0, 0], layer: 'ground', kind: 'yard' }] }).length > 0, 'one goal is refused');
+  // UX round (task 072): manual_count_min (1) .. count_max (4) goals are valid; none or more than count_max are refused
+  const st = { pos: [0, 0] as Vec2, yaw: 0, layer: 'ground', source: 'spawn' as const };
+  const goal = (id: string) => ({ id, pos: [0, 0] as Vec2, layer: 'ground', kind: 'yard' as const });
+  assert.deepEqual(validateObjectives({ version: 1, seed: 1, order: 'free', start: st, goals: [goal('A')] }), [], 'one goal is valid');
+  assert.ok(validateObjectives({ version: 1, seed: 1, order: 'free', start: st, goals: [] }).length > 0, 'no goal is refused');
+  assert.ok(validateObjectives({ version: 1, seed: 1, order: 'free', start: st, goals: ['A', 'B', 'C', 'D', 'E'].map(goal) }).length > 0, 'five goals are refused');
 });

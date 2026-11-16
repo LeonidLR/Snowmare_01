@@ -7,11 +7,15 @@
 // Units: UE cm, X forward (north = +X, drawn up), Y right (east = +Y). A reference profile's metres (x east, y south) map to
 // UE as X = -y * 100, Y = x * 100 (profile.ts).
 
+import v2cfg from '../../../../Content/Data/LevelGen/levelgen_v2.json' with { type: 'json' };
 import { obstacleHeight } from './obstacleHeights.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
 import type { Layout, LayoutRoute, LayoutWall, LayoutZone, ZoneKind } from '../movement/layout.ts';
 import { LAYOUT_SCHEMA, validateLayout, ZONE_KINDS } from '../movement/layout.ts';
+
+/** levelgen_v2.json objectives: the goal-count limits validateObjectives checks (manual_count_min..count_max). */
+const OBJ_CFG = v2cfg.objectives;
 
 export const LEVELGEN_SCHEMA = 'codex.levelgen_layout/1';
 /**
@@ -365,7 +369,7 @@ export interface ObjectiveSet {
   seed: number;
   /** Goals may be visited in any order. */
   order: 'free';
-  start: { pos: Vec2; yaw: number; layer: string; source: 'spawn' | 'edge' };
+  start: { pos: Vec2; yaw: number; layer: string; source: 'spawn' | 'edge' | 'manual' };
   goals: ObjectiveGoal[];
 }
 
@@ -497,7 +501,7 @@ export function validateExpansionState(s: unknown): string[] {
   return e;
 }
 
-/** The `objectives` block's own checks (empty = valid): 2-4 goals with unique ids inside the bounds. */
+/** The `objectives` block's own checks (empty = valid): manual_count_min..count_max goals (levelgen_v2.json) with unique ids inside the bounds. */
 export function validateObjectives(s: unknown, bounds?: { min: Vec2; max: Vec2 }): string[] {
   if (!s || typeof s !== 'object') return ['objectives: expected an object'];
   const o = s as Partial<ObjectiveSet>;
@@ -506,7 +510,7 @@ export function validateObjectives(s: unknown, bounds?: { min: Vec2; max: Vec2 }
   else if (o.version > OBJECTIVES_VERSION) e.push(`objectives.version ${o.version} is newer than this tool (${OBJECTIVES_VERSION})`);
   if (o.order !== 'free') e.push('objectives.order: expected "free"');
   if (!o.start || !isVec(o.start.pos)) e.push('objectives.start.pos: expected [x, y]');
-  if (!Array.isArray(o.goals) || o.goals.length < 2 || o.goals.length > 4) e.push('objectives.goals: expected 2-4 goals');
+  if (!Array.isArray(o.goals) || o.goals.length < OBJ_CFG.manual_count_min || o.goals.length > OBJ_CFG.count_max) e.push(`objectives.goals: expected ${OBJ_CFG.manual_count_min}-${OBJ_CFG.count_max} goals`);
   else {
     const ids = new Set<string>();
     for (const g of o.goals) {

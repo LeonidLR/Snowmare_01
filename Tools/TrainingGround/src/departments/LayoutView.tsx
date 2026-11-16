@@ -8,6 +8,8 @@ import { dirOf, type Vec2 } from '../movement/geometry';
 import type { GenBuilding, GenLayout, MantleEdge } from '../levelgen/schema';
 import { unifyOpenings } from '../levelgen/schema';
 import type { FiringLine } from '../levelgen/tacticalEvaluate';
+import type { PlanView } from '../levelgen/planView';
+import { FIT_VIEW, planTransform, viewTransform } from '../levelgen/planView';
 
 const SET_TINT: Record<string, string> = {
   street: '#787882', marksman_lane: '#8a7070', t_junction: '#8c8c5a', alley: '#969664', facade: '#5a463c', one_entry_compound: '#966e3c',
@@ -32,9 +34,13 @@ interface Props {
   height?: number;
   /** Highlighted points (failing route legs). */
   marks?: Vec2[];
+  /** Zoom + pan on top of the fitted plan (planView.ts; default: fit). */
+  view?: PlanView;
+  /** The start + goals are drawn by the interactive overlay instead (RegionOverlay): skip them here. */
+  hideObjectives?: boolean;
 }
 
-export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks }, ref) => {
+export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks, view = FIT_VIEW, hideObjectives = false }, ref) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   useImperativeHandle(ref, () => ({ toPngBase64: () => canvas.current ? canvas.current.toDataURL('image/png').replace(/^data:image\/png;base64,/, '') : null }), []);
   // redraw on a size change (the region-select overlay over this canvas tracks its size: both must use the same transform)
@@ -59,9 +65,9 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     g.fillStyle = '#191c22'; g.fillRect(0, 0, w, h);
     if (!layout) return;
     const [minX, minY] = layout.bounds.min, [maxX, maxY] = layout.bounds.max;
-    const pad = 10;
-    const s = Math.min((w - 2 * pad) / (maxY - minY), (h - 2 * pad) / (maxX - minX));
-    const ox = (w - (maxY - minY) * s) / 2, oy = (h - (maxX - minX) * s) / 2;
+    // the fitted plan (planView.ts, the overlay's transform) with the designer's zoom + pan on top
+    const t = viewTransform(planTransform(layout.bounds, w, h), view);
+    const { s, ox, oy } = t;
     const P = (p: Vec2): [number, number] => [ox + (p[1] - minY) * s, oy + (maxX - p[0]) * s];
     const poly = (pts: Vec2[]) => { g.beginPath(); pts.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.closePath(); };
     const rectPts = ([a, b]: [Vec2, Vec2]): Vec2[] => [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]];
@@ -255,7 +261,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
       poly(rectPts(seam)); g.stroke(); g.restore();
     }
     // the start + goals (free order): the start a green ring with S, the goals gold discs with their number
-    if (layout.objectives) {
+    if (layout.objectives && !hideObjectives) {
       const ob = layout.objectives;
       const st = P(ob.start.pos);
       g.save();
@@ -272,7 +278,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     for (const m of marks ?? []) { const q = P(m); g.strokeStyle = '#f97316'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.stroke(); }
     g.fillStyle = '#ffe600'; g.font = '11px ui-monospace, monospace'; g.textAlign = 'left';
     g.fillText(`${layout.name}  ${Math.round((maxY - minY) / 100)} x ${Math.round((maxX - minX) / 100)} m  seed ${layout.seed}  layer ${layer !== 'all' ? layer : floorMode}`, 8, h - 8);
-  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW]);
+  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW, view, hideObjectives]);
 
   return <canvas ref={canvas} style={{ width: '100%', height }} className="rounded-xl border border-slate-800 block" />;
 });

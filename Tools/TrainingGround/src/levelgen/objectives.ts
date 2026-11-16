@@ -5,6 +5,8 @@
 // buildings (kind room), the open block zones (yard), the street centres (street). The start is the map's spawn or (option) an edge
 // street end. Saved in the map JSON as `objectives` (schema.ts ObjectiveSet), drawn on the 2D plan; checkObjectives walks the start
 // to every goal and every goal to every other (any order works) and finds the shortest visiting order. Pure and deterministic.
+// UX round (task 072): the designer drags the start, adds / drags / deletes goals on the plan (moveObjective / addGoal / removeGoal,
+// manual_count_min..count_max goals); every change re-walks the routes; an invalid spot is reported with its reason, never moved.
 
 import type { Vec2 } from '../movement/geometry.ts';
 import { dist, pointInPoly, rng } from '../movement/geometry.ts';
@@ -30,10 +32,18 @@ export interface PlaceObjectivesOptions {
   allowLocked?: boolean;
 }
 
-export interface GoalReport { id: string; reachable: boolean; length_m: number }
+/** A point's problems: an error (red on the plan, the map is not ready) and warnings (amber: the placement rules). */
+export interface PointIssue { error?: string; warnings: string[] }
+export interface GoalReport { id: string; reachable: boolean; length_m: number; error?: string; warnings: string[] }
 export interface ObjectivesCheck {
   ok: boolean;
+  /** The start's own problems (in a wall, outside the map, in the canal). */
+  start: PointIssue;
   goals: GoalReport[];
+  /** Every error as one line each ("№2: в стене"), empty = valid. */
+  errors: string[];
+  /** The nav path of the shortest order (start -> goals), UE cm: the plan draws it. */
+  bestPath: Vec2[];
   /** Every goal reaches every other one (free order). */
   pairwise: boolean;
   /** The shortest order start -> all goals (ids) and its length. */
@@ -188,19 +198,53 @@ export function placeObjectives(o: PlaceObjectivesOptions): PlaceObjectivesResul
     message: `старт (${start.source === 'spawn' ? 'точка появления' : 'край карты'}) + целей ${chosen.length}${short}; кратчайший обход ${check.bestOrder.order.join(' → ')} = ${check.bestOrder.length_m} м` };
 }
 
-/** Walk the start to every goal and every goal to every other; the shortest free-order visit. `nav` = a prebuilt ground grid. */
+/** The id the start uses in the edit functions and the issue maps. */
+export const START_ID = 'START';
+
+/** The structural problem of a spot (no reachability): outside the map, in the canal, in a wall, in a closed / locked building. */
+export function spotError(l: GenLayout, g: NavGrid, pos: Vec2, role: 'start' | 'goal', allowLocked = C.allow_in_locked): string | undefined {
+  const b = l.bounds;
+  if (!(pos[0] >= b.min[0] && pos[0] <= b.max[0] && pos[1] >= b.min[1] && pos[1] <= b.max[1])) return 'за краем карты';
+  if (l.cut && pointInPoly(pos, l.cut.poly) && !l.cut.crossings.some((x) => pointInPoly(pos, x.poly))) return 'в канале';
+  const inB = l.buildings.find((x) => rect.contains(x.footprint, pos));
+  if (inB && !inB.enterable) return `внутри здания без входа (${inB.id})`;
+  if (!g.walkable(pos)) return 'в стене / в препятствии';
+  if (role === 'goal' && inB && !allowLocked && (l.regen?.locks ?? []).some((k) => pointInPoly(rect.centre(inB.footprint), k.poly))) return `в закреплённом здании (${inB.id})`;
+  return undefined;
+}
+
+const goalLabel = (id: string) => id.replace('GOAL_', '№');
+
+/**
+ * Walk the start to every goal and every goal to every other; the shortest free-order visit; every point's errors (a spot in a
+ * wall / outside / in the canal / in a closed or locked building, a goal unreachable from the start) and warnings (closer than
+ * min_from_start_m to the start or min_spacing_m to another goal). `nav` = a prebuilt ground grid.
+ */
 export function checkObjectives(l: GenLayout, nav?: NavGrid): ObjectivesCheck {
   const ob = l.objectives;
-  if (!ob) return { ok: false, goals: [], pairwise: false, bestOrder: { order: [], length_m: 0 }, minSpacing_m: 0 };
+  if (!ob) return { ok: false, start: { warnings: [] }, goals: [], errors: ['нет старта и целей'], bestPath: [], pairwise: false, bestOrder: { order: [], length_m: 0 }, minSpacing_m: 0 };
   const g = nav ?? groundNav(l);
   const pts = [ob.start.pos, ...ob.goals.map((x) => x.pos)];
   const n = pts.length;
   const D: number[][] = Array.from({ length: n }, () => Array(n).fill(0));
   for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) { const d = pathLength(g, pts[i], pts[j]); D[i][j] = d; D[j][i] = d; }
-  const goals = ob.goals.map((x, i) => ({ id: x.id, reachable: Number.isFinite(D[0][i + 1]), length_m: Math.round(D[0][i + 1] / 10) / 10 }));
+  const start: PointIssue = { warnings: [] };
+  const se = spotError(l, g, ob.start.pos, 'start');
+  if (se) start.error = se;
+  const minStart = C.min_from_start_m * 100, minGap = C.min_spacing_m * 100;
+  const goals: GoalReport[] = ob.goals.map((x, i) => {
+    const reachable = Number.isFinite(D[0][i + 1]);
+    const r: GoalReport = { id: x.id, reachable, length_m: Math.round(D[0][i + 1] / 10) / 10, warnings: [] };
+    const e = spotError(l, g, x.pos, 'goal');
+    if (e) r.error = e;
+    else if (!reachable) r.error = start.error ? 'старт в недопустимом месте' : 'недостижима со старта';
+    if (dist(x.pos, ob.start.pos) < minStart) r.warnings.push(`ближе ${C.min_from_start_m} м к старту`);
+    ob.goals.forEach((y, j) => { if (j !== i && dist(x.pos, y.pos) < minGap) r.warnings.push(`ближе ${C.min_spacing_m} м к ${goalLabel(y.id)}`); });
+    return r;
+  });
   let pairwise = true;
   for (let i = 1; i < n; i++) for (let j = i + 1; j < n; j++) if (!Number.isFinite(D[i][j])) pairwise = false;
-  // the shortest visiting order (<= 4 goals: 24 permutations)
+  // the shortest visiting order (<= count_max goals: <= 24 permutations)
   let best = { order: [] as number[], len: Infinity };
   const perm = (rest: number[], cur: number[], at: number, len: number) => {
     if (len >= best.len) return;
@@ -208,13 +252,90 @@ export function checkObjectives(l: GenLayout, nav?: NavGrid): ObjectivesCheck {
     for (const k of rest) perm(rest.filter((x) => x !== k), [...cur, k], k, len + D[at][k]);
   };
   perm(ob.goals.map((_, i) => i + 1), [], 0, 0);
+  const bestPath: Vec2[] = [];
+  if (Number.isFinite(best.len)) {
+    let at = 0;
+    for (const k of best.order) {
+      const p = g.path(pts[at], pts[k]) ?? [pts[at], pts[k]];
+      bestPath.push(...(bestPath.length ? p.slice(1) : p));
+      at = k;
+    }
+  }
   let minSpacing = Infinity;
   for (let i = 1; i < n; i++) for (let j = i + 1; j < n; j++) minSpacing = Math.min(minSpacing, dist(pts[i], pts[j]));
+  const errors = [...(start.error ? [`старт: ${start.error}`] : []), ...goals.filter((x) => x.error).map((x) => `${goalLabel(x.id)}: ${x.error}`)];
+  if (ob.goals.length < C.manual_count_min) errors.push(`нужна хотя бы ${C.manual_count_min} цель`);
+  if (!pairwise && !errors.length) errors.push('не все цели достижимы друг из друга');
   return {
-    ok: goals.every((x) => x.reachable) && pairwise,
+    ok: !errors.length && goals.every((x) => x.reachable) && pairwise,
+    start,
     goals,
+    errors,
+    bestPath,
     pairwise,
     bestOrder: { order: best.order.map((k) => ob.goals[k - 1].id), length_m: Number.isFinite(best.len) ? Math.round(best.len / 10) / 10 : Infinity },
     minSpacing_m: Number.isFinite(minSpacing) ? Math.round(minSpacing / 10) / 10 : 0,
   };
+}
+
+// ---- manual editing (UX round, task 072): drag the start, add / drag / delete goals ------------------------------------------
+
+export interface ObjectiveEdit { ok: boolean; layout: GenLayout; message: string; check: ObjectivesCheck | null }
+
+const roundPos = (p: Vec2): Vec2 => [Math.round(p[0]), Math.round(p[1])];
+
+/** What a goal at `pos` is (a room of an enterable building, a street, a yard) - the `kind` / `building` / `zone` fields. */
+export function classifyGoalSpot(l: GenLayout, pos: Vec2): Pick<ObjectiveGoal, 'kind' | 'building' | 'zone'> {
+  const b = l.buildings.find((x) => x.enterable && rect.contains(x.footprint, pos));
+  if (b) return { kind: 'room', building: b.id };
+  const st = l.zones.find((z) => z.id.startsWith('Z_ST_') && pointInPoly(pos, z.poly));
+  if (st) return { kind: 'street', zone: st.id };
+  const z = l.zones.find((x) => !x.id.startsWith('Z_ST_') && x.id !== 'Z_cut' && pointInPoly(pos, x.poly));
+  return z ? { kind: 'yard', zone: z.id } : { kind: 'yard' };
+}
+
+const edited = (l: GenLayout, ob: ObjectiveSet, message: string, nav?: NavGrid): ObjectiveEdit => {
+  const layout: GenLayout = { ...l, objectives: ob };
+  const check = checkObjectives(layout, nav);
+  return { ok: true, layout, message: check.errors.length ? `${message}; ошибки: ${check.errors.join('; ')}` : message, check };
+};
+const refused = (l: GenLayout, message: string): ObjectiveEdit => ({ ok: false, layout: l, message, check: l.objectives ? checkObjectives(l) : null });
+
+/**
+ * Move the start (id START_ID) or a goal to `pos`. The point is moved where the designer dropped it even when the spot is invalid:
+ * the check marks it red with the reason (never silently moved elsewhere). Routes and the shortest order are re-walked.
+ */
+export function moveObjective(l: GenLayout, id: string, pos: Vec2, nav?: NavGrid): ObjectiveEdit {
+  const ob = l.objectives;
+  if (!ob) return refused(l, 'на карте нет старта и целей');
+  const p = roundPos(pos);
+  if (id === START_ID) return edited(l, { ...ob, start: { ...ob.start, pos: p, layer: 'ground', source: 'manual' } }, 'старт перенесён', nav);
+  const k = ob.goals.findIndex((x) => x.id === id);
+  if (k < 0) return refused(l, `нет цели ${id}`);
+  const goals = ob.goals.map((x, i) => {
+    if (i !== k) return x;
+    const { building: _b, zone: _z, ...rest } = x;
+    return { ...rest, pos: p, layer: 'ground', ...classifyGoalSpot(l, p) };
+  });
+  return edited(l, { ...ob, goals }, `${goalLabel(id)} перенесена`, nav);
+}
+
+/** Add a goal at `pos` (up to count_max). A map without objectives gets them: the start = the map's spawn. */
+export function addGoal(l: GenLayout, pos: Vec2, nav?: NavGrid): ObjectiveEdit {
+  const ob: ObjectiveSet = l.objectives ?? { version: OBJECTIVES_VERSION, seed: 0, order: 'free', start: { pos: l.spawn.pos, yaw: l.spawn.yaw, layer: 'ground', source: 'spawn' }, goals: [] };
+  if (ob.goals.length >= C.count_max) return refused(l, `не больше ${C.count_max} целей`);
+  let n = 1;
+  while (ob.goals.some((x) => x.id === `GOAL_${n}`)) n++;
+  const p = roundPos(pos);
+  const goal: ObjectiveGoal = { id: `GOAL_${n}`, pos: p, layer: 'ground', ...classifyGoalSpot(l, p) };
+  return edited(l, { ...ob, goals: [...ob.goals, goal] }, `добавлена цель №${n}`, nav);
+}
+
+/** Delete a goal (never below manual_count_min; «Убрать цели» removes the whole block). */
+export function removeGoal(l: GenLayout, id: string, nav?: NavGrid): ObjectiveEdit {
+  const ob = l.objectives;
+  if (!ob) return refused(l, 'на карте нет старта и целей');
+  if (!ob.goals.some((x) => x.id === id)) return refused(l, `нет цели ${id}`);
+  if (ob.goals.length <= C.manual_count_min) return refused(l, `нужна хотя бы ${C.manual_count_min} цель (все цели убирает «Убрать цели»)`);
+  return edited(l, { ...ob, goals: ob.goals.filter((x) => x.id !== id) }, `${goalLabel(id)} удалена`, nav);
 }

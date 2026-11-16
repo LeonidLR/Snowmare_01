@@ -5,19 +5,21 @@
 // critics' verdicts (Jev - typed judgments; the Claude API - sees both images, USD-capped; the server holds the keys). The
 // designer accepts (-> Content/Data/LevelGen/accepted, what the UE builder reads) or rejects.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, Play, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Play, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus } from 'lucide-react';
 import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
 import { PropsPanel } from './PropsPanel';
 import { RegionOverlay } from './RegionOverlay';
-import type { RegionMode } from './RegionOverlay';
+import type { ObjectiveAction, RegionMode } from './RegionOverlay';
+import type { PlanView } from '../levelgen/planView';
+import { FIT_VIEW, PLAN_VIEW, zoomAt } from '../levelgen/planView';
 import type { History } from '../levelgen/regenHistory';
 import { canRedo, canUndo, historyInit, historyPush, historyRedo, historyUndo } from '../levelgen/regenHistory';
 import type { BlockMode, RegionRegenResult } from '../levelgen/regionRegen';
 import type { ExpandResult, SeamCheck } from '../levelgen/expand';
 import { checkSeams, expandLayout, expansionSize } from '../levelgen/expand';
 import type { PlaceObjectivesResult } from '../levelgen/objectives';
-import { checkObjectives, defaultGoalCount, placeObjectives } from '../levelgen/objectives';
+import { addGoal, checkObjectives, defaultGoalCount, groundNav, moveObjective, placeObjectives, removeGoal, START_ID } from '../levelgen/objectives';
 import { V2 } from '../levelgen/blockTemplates';
 import { addLock, DEFAULT_MAX_RETRIES, regenerateRegion, regenStateOf, removeLock, selectRegion } from '../levelgen/regionRegen';
 import type { FormationConfigFile } from '../movement/config';
@@ -66,7 +68,7 @@ export const LevelGenDepartment: React.FC = () => {
   const [ledger, setLedger] = useState<{ spentUsd: number; calls: unknown[] }>({ spentUsd: 0, calls: [] });
   const [accepted, setAccepted] = useState<{ name: string; seed: number; profile: string; at: string }[]>([]);
   const [refOk, setRefOk] = useState(true);
-  const view = useRef<LayoutViewHandle>(null);
+  const view0 = useRef<LayoutViewHandle>(null);
   // region re-roll + locked districts (levelgen v2 stage 1, task 070; docs/port/LEVELGEN_V2_STAGE1_REPORT.md)
   const [regionMode, setRegionMode] = useState<RegionMode>('off');
   const [zone, setZone] = useState<Vec2[] | null>(null);
@@ -76,6 +78,10 @@ export const LevelGenDepartment: React.FC = () => {
   const [regenReport, setRegenReport] = useState<RegionRegenResult | null>(null);
   const [histories, setHistories] = useState<Record<string, History<GenLayout>>>({});
   const [blockMode, setBlockMode] = useState<BlockMode>('types');
+  // zoom + pan on the plan (UX round, task 072): reset to "fit" when another map (other bounds) is shown
+  const [view, setView] = useState<PlanView>(FIT_VIEW);
+  const [goalTool, setGoalTool] = useState(false);
+  const [objMsg, setObjMsg] = useState<{ ok: boolean; text: string } | null>(null);
 
   useEffect(() => {
     fetch('/api/movement/config').then((r) => r.json()).then(setConfigFile).catch(() => setError('Нет связи с сервером Training Ground'));
@@ -130,7 +136,7 @@ export const LevelGenDepartment: React.FC = () => {
     if (!cur) return;
     setBusy(client === 'claude' ? `Критик Claude (${model}, бюджет $${budgetUsd})...` : client === 'jev' ? 'Jev оценивает...' : 'Эвристика...'); setError('');
     try {
-      const candidatePng = client === 'claude' ? view.current?.toPngBase64() ?? '' : '';
+      const candidatePng = client === 'claude' ? view0.current?.toPngBase64() ?? '' : '';
       const r = await fetch('/api/levelgen/critic', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ name: cur.layout.name, profile: cur.layout.profile, layout: cur.layout, evaluation: cur.ev, candidatePng, client, budgetUsd, model }) });
       const d = await r.json();
@@ -213,7 +219,31 @@ export const LevelGenDepartment: React.FC = () => {
   const [goalStart, setGoalStart] = useState<'spawn' | 'edge'>('spawn');
   const [goalSeed, setGoalSeed] = useState(1);
   const [goalReport, setGoalReport] = useState<PlaceObjectivesResult | null>(null);
-  const objCheck = useMemo(() => { try { return cur?.layout.objectives ? checkObjectives(cur.layout) : null; } catch { return null; } }, [cur]);
+  // the ground nav of the shown map: built once per geometry (an objectives edit keeps the arrays, so it is reused)
+  const curLayout = cur?.layout;
+  const nav = useMemo(() => { try { return curLayout ? groundNav(curLayout) : null; } catch { return null; } },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [curLayout?.walls, curLayout?.buildings, curLayout?.covers, curLayout?.zones, curLayout?.cut, curLayout?.bounds]);
+  const objCheck = useMemo(() => { try { return cur?.layout.objectives ? checkObjectives(cur.layout, nav ?? undefined) : null; } catch { return null; } }, [cur, nav]);
+  const objErrors = useMemo(() => {
+    const e: Record<string, string> = {};
+    if (objCheck?.start.error) e[START_ID] = objCheck.start.error;
+    for (const g of objCheck?.goals ?? []) if (g.error) e[g.id] = g.error;
+    return e;
+  }, [objCheck]);
+  const objWarnings = useMemo(() => Object.fromEntries((objCheck?.goals ?? []).filter((g) => g.warnings.length).map((g) => [g.id, g.warnings.join(', ')])), [objCheck]);
+  const boundsKey = cur ? JSON.stringify(cur.layout.bounds) : '';
+  useEffect(() => { setView(FIT_VIEW); }, [boundsKey]);
+  /** A start / goal edit on the plan: applied, re-walked, one undo step (an invalid spot stays where it was dropped, marked red). */
+  const onObjective = (a: ObjectiveAction) => {
+    if (!cur || busy) return;
+    const r = a.kind === 'add' ? addGoal(cur.layout, a.pos, nav ?? undefined) : a.kind === 'move' ? moveObjective(cur.layout, a.id, a.pos, nav ?? undefined) : removeGoal(cur.layout, a.id, nav ?? undefined);
+    setObjMsg({ ok: r.ok && !!r.check?.ok, text: r.message });
+    if (r.ok) { pushStep(r.layout, r.message.split(';')[0]); setGoalReport(null); }
+  };
+  const zoomBy = (f: number) => setView((v) => zoomAt(v, [planBox.current ? planBox.current.clientWidth / 2 : 0, 260], f));
+  const planBox = useRef<HTMLDivElement>(null);
+  const squadNow = null as { members: Vec2[]; trail: Vec2[] } | null; // playback: item 5
   const expandNow = () => {
     if (!cur || !profileOk || !profile) return;
     setBusy(`Расширяю карту x${expandFactor}...`); setError('');
@@ -393,7 +423,7 @@ export const LevelGenDepartment: React.FC = () => {
                 Линии огня
               </button>
               <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
-              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
+              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
               <button onClick={reject} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-800 text-xs text-white hover:bg-rose-700 disabled:opacity-50"><ThumbsDown size={13} />Отклонить</button>
             </div>
             {cur && (
@@ -402,7 +432,7 @@ export const LevelGenDepartment: React.FC = () => {
                   <span className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Зона</span>
                   <div className="inline-flex rounded-lg bg-slate-950 border border-slate-700 p-0.5 text-[11px]">
                     {([['off', 'Просмотр'], ['rect', 'Рамка'], ['poly', 'Многоугольник'], ['lasso', 'Лассо']] as const).map(([m, label]) => (
-                      <button key={m} type="button" onClick={() => setRegionMode(m)} className={`px-2 py-0.5 rounded ${regionMode === m ? 'bg-amber-600 text-slate-950 font-semibold' : 'text-slate-300 hover:text-white'}`}>{label}</button>
+                      <button key={m} type="button" onClick={() => { setRegionMode(m); setGoalTool(false); }} className={`px-2 py-0.5 rounded ${regionMode === m ? 'bg-amber-600 text-slate-950 font-semibold' : 'text-slate-300 hover:text-white'}`}>{label}</button>
                     ))}
                   </div>
                   <button type="button" onClick={() => setZone(null)} disabled={!zone} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40"><Eraser size={12} />Сбросить</button>
@@ -490,19 +520,33 @@ export const LevelGenDepartment: React.FC = () => {
                 {cur.layout.objectives && objCheck && (
                   <p className={objCheck.ok ? 'text-yellow-200' : 'text-rose-300'}>
                     {objCheck.ok ? <CheckCircle2 size={12} className="inline mr-1" /> : <XCircle size={12} className="inline mr-1" />}
-                    Старт ({cur.layout.objectives.start.source === 'spawn' ? 'точка появления' : 'край карты'}) → цели в любом порядке: {objCheck.goals.map((g) => `${g.id.replace('GOAL_', '№')} ${g.reachable ? `${g.length_m} м` : 'НЕДОСТИЖИМА'}`).join(', ')}; кратчайший обход {objCheck.bestOrder.order.map((x) => x.replace('GOAL_', '№')).join(' → ')} = {objCheck.bestOrder.length_m} м; мин. расстояние между целями {objCheck.minSpacing_m} м{objCheck.ok ? '' : ' — расставьте цели заново'}
+                    Старт ({cur.layout.objectives.start.source === 'spawn' ? 'точка появления' : cur.layout.objectives.start.source === 'edge' ? 'край карты' : 'вручную'}) → цели в любом порядке: {objCheck.goals.map((g) => `${g.id.replace('GOAL_', '№')} ${g.error ? `ОШИБКА (${g.error})` : g.reachable ? `${g.length_m} м` : 'НЕДОСТИЖИМА'}`).join(', ')}; кратчайший обход {objCheck.bestOrder.order.length ? `${objCheck.bestOrder.order.map((x) => x.replace('GOAL_', '№')).join(' → ')} = ${objCheck.bestOrder.length_m} м` : '—'}{objCheck.goals.length > 1 ? `; мин. расстояние между целями ${objCheck.minSpacing_m} м` : ''}{objCheck.ok ? '' : ` — ${objCheck.errors.join('; ')}`}
                   </p>
                 )}
+                {objCheck && Object.keys(objWarnings).length > 0 && <p className="text-orange-300 text-[11px]">Внимание (правила расстановки): {Object.entries(objWarnings).map(([id, w]) => `${id.replace('GOAL_', '№')}: ${w}`).join('; ')}</p>}
+                {objMsg && <p className={`text-[11px] ${objMsg.ok ? 'text-yellow-200' : 'text-rose-300'}`}>{objMsg.text}</p>}
+                <p className="text-[11px] text-slate-500">Цели вручную: «+ цель» над планом, затем щелчок по плану — новая цель; старт (зелёный S) и цели перетаскиваются в режиме «Просмотр»; правая кнопка или × — удалить цель (от {V2.objectives.manual_count_min} до {V2.objectives.count_max}). Красное — недопустимое место (причина рядом), точку никто не двигает за вас; «Принять» ждёт, пока ошибок не будет.</p>
                 <p className="text-[11px] text-slate-500">Расширение: старая карта остаётся в центре без изменений (кроме проёма в заборе, если он перегораживает продолжение дороги), кварталы вокруг — из каталога levelgen_v2.json; их тоже можно перегенерировать зоной. Цели — на земле, достижимы со старта, разнесены, не в закреплённых зданиях; хранятся в JSON карты (блок objectives).</p>
               </div>
             )}
             <div className="grid gap-3 lg:grid-cols-2">
               <div>
-                <p className="text-[11px] text-slate-500 mb-1">Кандидат (сверху; синий — маршрут, жёлтый — лестницы, голубой/янтарный — окна/бойницы, зелёный — крыша/парапет, фиол. — перелаз, пунктир — линии огня)</p>
-                <RegionOverlay bounds={cur?.layout.bounds ?? null} height={520} mode={regionMode} zone={zone} locks={locks} blocks={region?.plan.selLots.map((k) => k.rect)}
-                  inside={selection?.inside.map((g) => g.centre)} locked={selection?.locked.map((g) => g.centre)} onZone={setZone}>
-                  <LayoutView ref={view} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} />
+                <div className="flex flex-wrap items-center gap-1.5 mb-1 text-[11px]">
+                  <button type="button" onClick={() => zoomBy(1 / PLAN_VIEW.button_step)} disabled={!cur} title="Отдалить" className="p-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><ZoomOut size={13} /></button>
+                  <span className="font-mono text-slate-300 w-12 text-center" data-zoom>{Math.round(view.zoom * 100)} %</span>
+                  <button type="button" onClick={() => zoomBy(PLAN_VIEW.button_step)} disabled={!cur} title="Приблизить" className="p-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><ZoomIn size={13} /></button>
+                  <button type="button" onClick={() => setView(FIT_VIEW)} disabled={!cur} title="Вписать карту целиком" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Maximize2 size={12} />Вписать</button>
+                  <button type="button" onClick={() => { setGoalTool((v) => !v); setRegionMode('off'); }} disabled={!cur} title="Щелчок по плану добавляет цель" className={`inline-flex items-center gap-1 px-2 py-1 rounded border disabled:opacity-40 ${goalTool ? 'bg-yellow-500 border-yellow-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-yellow-200 hover:bg-slate-700'}`}><MapPinPlus size={12} />+ цель</button>
+                  <span className="text-slate-500">колесо — масштаб у курсора; сдвиг — средняя кнопка или пробел + перетаскивание (в «Просмотре» — левой)</span>
+                </div>
+                <div ref={planBox}>
+                <RegionOverlay bounds={cur?.layout.bounds ?? null} height={520} mode={goalTool ? 'off' : regionMode} zone={zone} locks={locks} blocks={region?.plan.selLots.map((k) => k.rect)}
+                  inside={selection?.inside.map((g) => g.centre)} locked={selection?.locked.map((g) => g.centre)} onZone={setZone}
+                  view={view} onView={setView} objectives={cur?.layout.objectives ?? null} objErrors={objErrors} objWarnings={objWarnings} bestPath={objCheck?.bestPath}
+                  addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null}>
+                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives />
                 </RegionOverlay>
+                </div>
               </div>
               <div>
                 <p className="text-[11px] text-slate-500 mb-1">Эталон (карта дизайнера, развёрнутая сверху; синее — его маршрут, жёлтое — лестницы, зелёный круг — старт)</p>
