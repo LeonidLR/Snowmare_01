@@ -8,6 +8,11 @@ namespace ThreatFacingRules
 			&& !Facts.bGridOwnsFacing && Facts.bFoughtThisFight && Facts.bHasThreat;
 	}
 
+	bool MayCombatTargetTurnHim(bool bHasOwnFacing, float TargetDistanceCm, float WeaponReachCm)
+	{
+		return !bHasOwnFacing || TargetDistanceCm <= WeaponReachCm;
+	}
+
 	bool PickThreatPoint(bool bLastTargetAlive, const FVector& LastTargetLocation, bool bHasNearest, const FVector& NearestLocation, FVector& OutPoint)
 	{
 		if (bLastTargetAlive)

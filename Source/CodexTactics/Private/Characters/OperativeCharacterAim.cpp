@@ -131,7 +131,10 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		bFacingCombatTarget = true;
 		TurnAimTowards(ObjectShot->GetActorLocation(), DeltaTime);
 	}
-	if (!bFacingCombatTarget && !bPeekPreTurn && bRealTimeFight && !bQuickFireActive && !bSuppressActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
+	// 074: over a facing order of the player only a target within the weapon's reach turns him (ThreatFacingRules::MayCombatTargetTurnHim).
+	const float TargetReachCm = CurrentWeapon ? CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
+	if (!bFacingCombatTarget && !bPeekPreTurn && bRealTimeFight && !bQuickFireActive && !bSuppressActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive()
+		&& ThreatFacingRules::MayCombatTargetTurnHim(bExplicitFacing, static_cast<float>(FVector::Dist(GetActorLocation(), Target->GetActorLocation())), TargetReachCm))
 	{
 		bFacingCombatTarget = true;
 		LastThreat = Target;
