@@ -97,6 +97,33 @@ EGameplayPreloadState UGameplayPreloadSubsystem::GetState(const UWorld* World)
 	}
 }
 
+FGameplayPreloadProgress UGameplayPreloadSubsystem::GetProgress(const UWorld* World)
+{
+	FGameplayPreloadProgress Progress;
+	Progress.State = GetState(World);
+	// Include the interval before StartPreparation without changing the startup gates' state semantics.
+	if (Progress.IsVisible() && !IsPreloadEnabled()) { Progress.State = EGameplayPreloadState::Disabled; }
+	const auto* Preload = World ? World->GetSubsystem<UGameplayPreloadSubsystem>() : nullptr;
+	if (!Preload) { return Progress; }
+	for (const auto& Handle : Preload->Handles)
+	{
+		if (!Handle.IsValid()) { continue; }
+		int32 Completed = 0, Total = 0;
+		Handle->GetLoadedCount(Completed, Total); // Failed requests count as completed, as in the engine API.
+		Progress.TotalPaths += FMath::Max(Total, 0);
+		Progress.CompletedPaths += FMath::Clamp(Completed, 0, FMath::Max(Total, 0));
+	}
+	switch (Preload->Phase)
+	{
+	case EPhase::Initial: Progress.PhaseLabel = TEXT("Основные ресурсы"); break;
+	case EPhase::Dependencies: Progress.PhaseLabel = TEXT("Ресурсы уровня"); break;
+	case EPhase::Compiling: Progress.PhaseLabel = TEXT("Подготовка ресурсов"); break;
+	case EPhase::Binding: Progress.PhaseLabel = TEXT("Подготовка уровня"); break;
+	default: Progress.PhaseLabel = TEXT("Подготовка загрузки"); break;
+	}
+	return Progress;
+}
+
 FString UGameplayPreloadSubsystem::StateName(EGameplayPreloadState State)
 {
 	switch (State)

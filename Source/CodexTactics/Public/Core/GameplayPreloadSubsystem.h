@@ -26,6 +26,24 @@ enum class EGameplayPreloadState : uint8
 	Failed,
 };
 
+/** Read-only path completion, not an estimate of remaining preparation time. */
+struct CODEXTACTICS_API FGameplayPreloadProgress
+{
+	EGameplayPreloadState State = EGameplayPreloadState::NotApplicable;
+	int64 CompletedPaths = 0;
+	int64 TotalPaths = 0;
+	FString PhaseLabel;
+
+	/** Only active preparation needs a loading cover; all released states hide it. */
+	bool IsVisible() const { return State == EGameplayPreloadState::Preparing; }
+	/** Bounded completed/requested percentage; empty or invalid totals report zero. */
+	int32 GetPercent() const
+	{
+		if (TotalPaths <= 0) { return 0; }
+		return FMath::Clamp(FMath::FloorToInt(100.0 * double(FMath::Clamp<int64>(CompletedPaths, 0, TotalPaths)) / double(TotalPaths)), 0, 100);
+	}
+};
+
 /** Asynchronously prepares one game world before clocks, movement and the start cover resume. UE-only. */
 UCLASS()
 class CODEXTACTICS_API UGameplayPreloadSubsystem : public UTickableWorldSubsystem
@@ -35,6 +53,8 @@ class CODEXTACTICS_API UGameplayPreloadSubsystem : public UTickableWorldSubsyste
 public:
 	/** The preload state of World (NotApplicable for a null world or one without the subsystem). */
 	static EGameplayPreloadState GetState(const UWorld* World);
+	/** Counts completed requests across retained batches; discovering dependencies can increase the total. */
+	static FGameplayPreloadProgress GetProgress(const UWorld* World);
 	/** "not-applicable" / "disabled" / "preparing" / "ready" / "failed" (logs, smokes). */
 	static FString StateName(EGameplayPreloadState State);
 	/** True when preparation succeeded, was disabled or does not apply. False while preparing AND after a failure. */

@@ -1,4 +1,10 @@
 #include "UI/CodexTacticsHUD.h"
+#include "Core/GameplayPreloadSubsystem.h"
+#include "Engine/GameViewportClient.h"
+#include "Styling/CoreStyle.h"
+#include "Widgets/Layout/SBorder.h"
+#include "Widgets/SBoxPanel.h"
+#include "Widgets/Text/STextBlock.h"
 #include "AI/StealthLureSubsystem.h"
 #include "Camera/CameraZoneVolume.h"
 #include "Camera/InteriorExitSubsystem.h"
@@ -199,6 +205,47 @@ bool ACodexTacticsHUD::ShouldDrawStatus() const
 void ACodexTacticsHUD::BeginPlay()
 {
 	Super::BeginPlay();
+	if (UGameViewportClient* Viewport = GetWorld()->GetGameViewport())
+	{
+		const TWeakObjectPtr<ACodexTacticsHUD> WeakHUD(this);
+		LoadingOverlay = SNew(SBorder)
+			.BorderImage(FCoreStyle::Get().GetBrush("WhiteBrush"))
+			.BorderBackgroundColor(FLinearColor(0.015f, 0.02f, 0.03f, 1.f))
+			.HAlign(HAlign_Center).VAlign(VAlign_Center)
+			.Visibility_Lambda([WeakHUD]()
+			{
+				return WeakHUD.IsValid() && UGameplayPreloadSubsystem::GetProgress(WeakHUD->GetWorld()).IsVisible()
+					? EVisibility::HitTestInvisible : EVisibility::Collapsed;
+			})
+			[
+				SNew(SVerticalBox)
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center)
+				[
+					SNew(STextBlock)
+					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 28))
+					.ColorAndOpacity(FLinearColor::White)
+					.Text_Lambda([WeakHUD]()
+					{
+						if (!WeakHUD.IsValid()) { return FText::GetEmpty(); }
+						return FText::FromString(FString::Printf(TEXT("Загрузка уровня… %d %%"),
+							UGameplayPreloadSubsystem::GetProgress(WeakHUD->GetWorld()).GetPercent()));
+					})
+				]
+				+ SVerticalBox::Slot().AutoHeight().HAlign(HAlign_Center).Padding(0.f, 14.f)
+				[
+					SNew(STextBlock)
+					.Font(FCoreStyle::GetDefaultFontStyle("Regular", 18))
+					.ColorAndOpacity(FLinearColor(0.7f, 0.75f, 0.82f))
+					.Text_Lambda([WeakHUD]()
+					{
+						return WeakHUD.IsValid() ? FText::FromString(UGameplayPreloadSubsystem::GetProgress(WeakHUD->GetWorld()).PhaseLabel) : FText::GetEmpty();
+					})
+				]
+			];
+		// Above canvas, UMG and the frontend layout; neither this border nor its children participate in hit testing.
+		LoadingOverlayViewport = Viewport;
+		Viewport->AddViewportWidgetContent(LoadingOverlay.ToSharedRef(), 10000);
+	}
 	// The label switches (Content/Data/UI/hud_labels.json): read at each level start; DrawHUD re-reads them when the file changes (dev builds).
 	HudLabelRules::ReloadConfig();
 	FrameLabels = HudLabelRules::GetConfig();
@@ -416,6 +463,17 @@ void ACodexTacticsHUD::HandleActionMenuChanged(bool bOpen, const FActionMenuSpec
 	{
 		ActionMenu->HideMenu();
 	}
+}
+
+void ACodexTacticsHUD::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+	if (LoadingOverlay.IsValid() && LoadingOverlayViewport.IsValid())
+	{
+		LoadingOverlayViewport->RemoveViewportWidgetContent(LoadingOverlay.ToSharedRef());
+	}
+	LoadingOverlay.Reset();
+	LoadingOverlayViewport.Reset();
+	Super::EndPlay(EndPlayReason);
 }
 
 void ACodexTacticsHUD::DrawHUD()
