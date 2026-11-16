@@ -173,6 +173,18 @@ namespace RetreatFacingSmoke
 				Member->TeleportTo(FVector(Free.X, Free.Y, Free.Z + 4.f), State.F.Rotation(), false, true);
 				if (Index < 2)
 				{
+					// Keep the 14 m approach / 26 m retreat about facing, independent of role loadouts.
+					UWeaponDataAsset* Rifle = LoadObject<UWeaponDataAsset>(nullptr, TEXT("/Game/Data/Weapons/DA_Weapon_m16.DA_Weapon_m16"));
+					if (Rifle)
+					{
+						Member->AddArsenalWeapon(Rifle);
+					}
+					const bool bRifleEquipped = Rifle && Member->SwitchToWeaponById(TEXT("m16")) && Member->CurrentWeapon == Rifle;
+					Check(State, bRifleEquipped, FString::Printf(TEXT("%s: M16 equipped for the retreat-facing fixture"), *Member->DisplayName.ToString()));
+					if (!bRifleEquipped)
+					{
+						return Finish(State, false);
+					}
 					State.Pair.Add(Member);
 				}
 				else
