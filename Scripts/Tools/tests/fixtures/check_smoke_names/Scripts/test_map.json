@@ -1,0 +1,6 @@
+{
+  "smokeRegistry": ["FooSmoke", "BarSmoke"],
+  "smokeOptions": {"_comment": "x", "FooSmoke": {"exclusive": true}},
+  "knownFlaky": {"_comment": "x", "BarSmoke": "flaky"},
+  "rules": [{"name": "r", "smokes": ["FooSmoke", "BarSmoke"]}]
+}
