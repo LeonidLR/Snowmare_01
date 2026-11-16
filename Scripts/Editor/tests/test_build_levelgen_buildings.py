@@ -43,9 +43,9 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         self.assertGreater(len(window_sills), 0)
         self.assertGreater(len(mantle_sills), 0)
         self.assertEqual(len(lintels), 25 + 4 + 8)  # 25 house + 4 garage + 8 partition doors
-        # Window sills: height 90 cm (<= 105 VaultRules::MaxHeight) + CodexMantleEdge tag
+        # Window sills: measured low_vault target 95 cm (MANTLING.md 11, 58a7e34e) + CodexMantleEdge tag
         for s in window_sills:
-            self.assertAlmostEqual(s["scale"][2] * 100.0, 90.0, places=1)
+            self.assertAlmostEqual(s["scale"][2] * 100.0, 95.0, places=1)
             self.assertIn("CodexMantleEdge", s["tags"])
         # No parapet may carry "Vault" tag
         for p in parapets:
