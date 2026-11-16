@@ -1,6 +1,6 @@
 # 027 - Designer build admission priority
 
-Status: implemented; focused unit validation passed. Real idle-designer build is pending parent review/checkpoint.
+Status: WIP limit stop. Implementation and 11 focused unit tests passed; source/test checkpoint182db232. Real-build completion remains PENDING.
 
 ## Changed paths
 
@@ -27,8 +27,12 @@ Busy detection polls every20 seconds, printing the requested waiting message at 
 
 PowerShell syntax validation: 4/4 PASS. Actual read-only preflight: main checkout resolution succeeded; CIM returned 636 processes; busy reason was None (idle). No process command lines were printed, no wait/override was invoked, and main remained read-only.
 
-Real build intentionally not started: parent requested a review/checkpoint first. Its acceptance check remains one build.ps1 run while the designer is idle, with no added priority output.
+After parent review and checkpoint182db232, the actual build.ps1 run started while the real probe reported designer idle. No added priority output was observed; UBT reached20/35 actions. At the designer10%-remaining threshold, only the owned agents-project build process tree was stopped. This is NOT a successful full-build result. Re-run the real build after full reset and verify exit0 / no priority messages before marking this task done.
 
 ## Limits
 
 Admission polling cannot preempt already-running UBT/editor jobs or guarantee hard priority across the check-to-launch race or UE's global mutex. A designer starting mid-smoke batch pauses subsequent process admission; already-running smokes continue. Stale running status with a reused live PID may wait until the configured deadline. Unknown detection can delay admission until that deadline, then continues. No central Enter-AgentLock auto-priority: Training Ground levelgen must not wait on its own running record.
+
+## Limit checkpoint
+
+Stopped at10% remaining; no further work until the full reset at2026-11-16 18:08 Asia/Jerusalem (16:08 UTC). Source/helper/config/tests saved at182db232; 11/11 Python tests and4/4 PowerShell parse checks passed. The one real build was interrupted before completion; Saved/Logs/codex027-real-build.txt and Build.log retain partial evidence. Next: rebuild/finish027, then028 and029 in order. Standard locks and designer files remain untouched; a dead owned build lock, if present, is handled by existing stale-lock logic. No CODEX_IGNORE_DESIGNER override was used.
