@@ -124,3 +124,16 @@ typesafe_triage --audit-diff --agent claude: ÑÐ¼. Ð¸Ñ‚Ð¾Ð³ Ð² Ñ
 4. Ctrl+ÐºÐ»Ð¸Ðº Ð¿Ð¾ Ð±Ð¾Ñ‡ÐºÐµ Ð·Ð° ÑÐ¿Ð¸Ð½Ð¾Ð¹: Ñ€Ð°Ð·Ð²Ð¾Ñ€Ð¾Ñ‚ Ð±ÐµÐ· snap, Ð·Ð°Ñ‚ÐµÐ¼ Ð²Ñ‹ÑÑ‚Ñ€ÐµÐ» (Ð¾Ð´Ð½Ð° Ð¿ÑƒÐ»Ñ).
 5. ÐŸÑ€Ð¸Ð±Ð»Ð¸Ð¶Ð°ÑŽÑ‰Ð¸Ð¹ÑÑ Ð²Ñ€Ð°Ð³ (Ð·Ð´Ð¾Ñ€Ð¾Ð²Ñ‹Ð¹ Ð±Ð¾ÐµÑ†): Ð²Ð¸Ð´Ð¸Ð¼Ñ‹Ð¹ Ð¿Ð¾Ð´ÑŠÑ‘Ð¼ (~0.2 Ñ) Ð¿ÐµÑ€ÐµÐ´ Ð¿ÐµÑ€Ð²Ð¾Ð¹ Ð¾Ñ‡ÐµÑ€ÐµÐ´ÑŒÑŽ; Ð½Ðµ ÑÐ»Ð¸ÑˆÐºÐ¾Ð¼ Ð»Ð¸ Ð¼ÐµÐ´Ð»ÐµÐ½Ð½Ð¾ â€” ÐºÑ€ÑƒÑ‚Ð¸Ñ‚ÑŒ
    `raise_seconds` / `cover_raise_seconds` Ð² `Content/Data/Combat/fire_gate.json`, A/B â€” `Codex.Fire.Gate 0`.
+
+## Ревью 2026-11-16: CoverSmoke / CornerHoldSmoke
+
+- **CoverSmoke «_R stand-off (72/81 cm)»** — не регрессия гейта. На этом этапе у командира `bTacticalCeaseFire` (смоук держит огонь до
+  `bAllowLeaderFire`), `RunCombatShooting` выходит до любого пути огня, гейт не вызывается. Под тяжёлой нагрузкой (`-Jobs 6`) тот же FAIL:
+  с `Codex.Fire.Gate 0` — 1 из 3 (80 cm), и на базе без гейта `e40370ab` — 2 из 4 (74 cm, 82 cm). Механизм: шимми к углу заканчивается
+  на ~30 см пути (`HandleMoveFinished` -> `EnterCover` у слота), проверка попадает до доводки к слоту; зависит от нагрузки. Смоук не менял.
+- **CornerHoldSmoke «flank rush: 0 open shots»** — найдена настоящая причина: `GetBarrelAxisOnModel` для пистолета брал ось винтовочной
+  заглушки (+Z), а модель пистолета смотрит +X — живая поза читала вынутый пистолет как «не прицелен» (180°), и гейт (как и старый конус)
+  держал все выстрелы после перехода на пистолет. Исправлено (`OperativeCharacterAim.cpp`, `GetBarrelAxisOnModel`): любая статическая
+  hand mesh — ось её `muzzle_offset`, как в `GetWeaponMuzzleLocation`.
+- Прогоны после фикса: CoverSmoke 3/3 PASS подряд без перезапуска; FireGateSmoke, CornerHoldSmoke (2 раза), CornerEntrySmoke,
+  CornerStandoffSmoke, TwoCornerHoldSmoke, CoverCrouchSmoke, PistolSmoke, RpgPmcSmoke, SquadFireSmoke — PASS.

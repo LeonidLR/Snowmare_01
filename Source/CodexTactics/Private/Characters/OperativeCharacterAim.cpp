@@ -445,6 +445,14 @@ FVector AOperativeCharacter::GetBarrelAxisOnModel() const
 	{
 		return CurrentWeapon->HandMeshMuzzleOffset.GetSafeNormal();
 	}
+	// Fire gate review 2026-11-16 (CornerHoldSmoke flank rush): any other static hand mesh in its own frame too (the pistol: muzzle +X,
+	// weapons_tuning.json muzzle_offset [14.6, 0, 6.4]) - the same rule as GetWeaponMuzzleLocation. The rifle stand-in's +Z axis on the pistol
+	// pointed up: a live pose read the drawn pistol as "not aimed" (180 deg), so the gate (and the open-stance cone before it) held every
+	// sidearm round. The bore's height above the grip only tilts this axis; the gate judges its yaw.
+	if (CurrentWeapon && !CurrentWeapon->HandMesh.IsNull() && !CurrentWeapon->HandMeshMuzzleOffset.IsNearlyZero())
+	{
+		return CurrentWeapon->HandMeshMuzzleOffset.GetSafeNormal();
+	}
 	return MuzzleOffset.GetSafeNormal();
 }
 
