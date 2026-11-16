@@ -429,9 +429,9 @@ struct CODEXTACTICS_API FPmcCommitment
 	bool bRunning = false;
 	/** Seconds since the order was given. */
 	float AgeSeconds = 0.f;
-	/** The last order that failed (ended short of its goal; Count = none) and how long ago. */
-	EPmcOrder Failed = EPmcOrder::Count;
-	float FailedAgeSeconds = 0.f;
+	/** Each failed order stays excluded until its own world-clock expiry. */
+	TMap<EPmcOrder, double> FailedUntil;
+	double NowSeconds = 0.0;
 };
 
 /** Why PickCommitted chose its order. */

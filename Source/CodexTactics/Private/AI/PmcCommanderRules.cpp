@@ -284,13 +284,13 @@ namespace PmcCommanderRules
 	EPmcOrder PickCommitted(const TArray<FPmcOrderScore>& Scored, const FPmcCommitment& C, const FPmcWeights& W, EPmcPickReason* OutReason)
 	{
 		EPmcPickReason Reason = EPmcPickReason::Best;
-		const bool bCooling = C.Failed != EPmcOrder::Count && C.FailedAgeSeconds < W.FailedOrderCooldownSeconds;
 		EPmcOrder Best = EPmcOrder::Hold;
 		float BestScore = 0.f;
 		float CurrentScore = 0.f;
 		for (const FPmcOrderScore& Entry : Scored)
 		{
-			const float Score = bCooling && Entry.Order == C.Failed ? 0.f : Entry.Score;
+			const double* FailedUntil = C.FailedUntil.Find(Entry.Order);
+			const float Score = FailedUntil && C.NowSeconds < *FailedUntil ? 0.f : Entry.Score;
 			if (Score > BestScore)
 			{
 				BestScore = Score;
