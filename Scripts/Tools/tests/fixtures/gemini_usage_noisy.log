@@ -1,0 +1,21 @@
+Starting Gemini CLI...
+warning: retrying {not JSON}
+{"stats":{"models":{"old":{"tokens":{"input":99999999}}}}}
+Tool response: {"status":"ok"}
+Final response follows:
+{
+  "response": "Completed the task",
+  "stats": {
+    "models": {
+      "gemini-test": {
+        "tokens": {"prompt":1600000,"cached":500000,"input":1000000,"candidates":200000,"thoughts":50000},
+        "api": {"totalRequests":3}
+      },
+      "gemini-test-fallback": {
+        "tokens": {"prompt":750000,"cached":250000,"candidates":40000,"thoughts":10000},
+        "api": {"totalRequests":2}
+      }
+    }
+  }
+}
+Run finished.
