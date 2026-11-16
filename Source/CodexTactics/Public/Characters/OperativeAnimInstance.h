@@ -1452,6 +1452,9 @@ public:
 	/** The share of that lower body given to the ABP's own legs while moving in a "legs_abp" gait (0 = the set's legs; the RPG-7 running / walking
 	 * forward, the designer 2026-11-10). */
 	float GetWeaponLayerLegsAbpWeight() const { return ShotgunLegsAbpWeight; }
+	float GetLocomotionSpeed() const { return LocomotionSpeed; }
+	bool DoesShotgunWalkUseAbpLegs() const;
+	void InvalidateShotgunWalkVariant();
 	/** The set in hands drives the whole body ("body": "full" in weapon_anim_sets.json). */
 	bool IsWeaponLayerFullBody() const { return bShotgunWeapon && ActiveWeaponSet().bFullBody && !(bIsCrouching && ActiveWeaponSet().bCrouchUpper); }
 	/** The layer's clips this frame (sequence, time, weight) and its shared loop phase 0..1 (smokes / diagnostics). */
@@ -1895,6 +1898,7 @@ private:
 		WeaponAnimLayerRules::FWeaponLegsAbpGaits LegsAbp;
 		/** "legs_abp_walk": "alternate" = the walk's legs alternate between the carriers of this set (WeaponAnimLayerRules::AlternateWalkUsesAbpLegs). */
 		bool bLegsAbpWalkAlternate = false;
+		float LegsAbpWalkSpeed = 0.f;
 		/** "legs_abp_forward_cone_deg": "walk_forward" counts fully within this many deg of straight ahead (WeaponAnimLayerRules::ForwardConeAngle). */
 		float LegsAbpForwardConeDeg = 0.f;
 		/** "legs_abp_run_speeds": [start, full] cm/s - the legs' own walk -> run band for "run" (unset = the clips' jog share: jog_blend_speeds). */

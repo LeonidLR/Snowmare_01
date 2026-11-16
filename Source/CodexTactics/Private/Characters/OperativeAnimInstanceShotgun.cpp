@@ -343,6 +343,7 @@ void UOperativeAnimInstance::LoadWeaponAnimSet(const TCHAR* BlockKey, FShotgunAn
 	FString LegsWalkMode;
 	ShotgunSet.bLegsAbpWalkAlternate = Block->TryGetStringField(TEXT("legs_abp_walk"), LegsWalkMode)
 		&& LegsWalkMode.Equals(TEXT("alternate"), ESearchCase::IgnoreCase);
+	Number(TEXT("legs_abp_walk_speed"), ShotgunSet.LegsAbpWalkSpeed);
 	TArray<FString> LegsAbpNames;
 	if (Block->TryGetStringArrayField(TEXT("legs_abp"), LegsAbpNames))
 	{
@@ -599,6 +600,16 @@ const UAnimSequenceBase* UOperativeAnimInstance::GetShotgunDominantClip() const
 		Best = Clip.Sequence && (!Best || Clip.Weight > Best->Weight) ? &Clip : Best;
 	}
 	return Best && ShotgunMask != EWeaponLayerMask::Off ? Best->Sequence.Get() : nullptr;
+}
+
+bool UOperativeAnimInstance::DoesShotgunWalkUseAbpLegs() const
+{
+	return bShotgunWalkOnAbpLegs;
+}
+
+void UOperativeAnimInstance::InvalidateShotgunWalkVariant()
+{
+	ShotgunWalkVariantTimer = 0.f;
 }
 
 void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
@@ -936,6 +947,17 @@ void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
 			Gaits.bWalk = bShotgunWalkOnAbpLegs; // the walk's legs alternate between the carriers (run / sprint as listed)
 		}
 		LegsAbpTarget = LegsAbpWeight(Gaits, Shares);
+	}
+	// Speed-match ABP legs when walking: below run speeds, keep the blend space on pure walk (no jog mix) and scale rate to match capsule speed.
+	if (bShotgunWeapon && ShotgunSet.bFullBody && ShotgunLegsAbpWeight > 0.5f && !bIsSprinting && !bIsCrouching && !bIsProne && bLocomotionMoving)
+	{
+		const float TargetWalkSpeed = ShotgunSet.LegsAbpWalkSpeed > 0.f ? ShotgunSet.LegsAbpWalkSpeed : WalkSampleSpeed;
+		const float RunSpeed = ShotgunSet.LegsAbpRunStartSpeed > 0.f ? ShotgunSet.LegsAbpRunStartSpeed : 280.f;
+		if (TargetWalkSpeed > 0.f && LocomotionSpeed >= TargetWalkSpeed && LocomotionSpeed < RunSpeed)
+		{
+			StandBlendSpeed = TargetWalkSpeed;
+			StandPlayRate = FMath::Clamp(LocomotionSpeed / TargetWalkSpeed, 0.4f, 2.5f);
+		}
 	}
 	// The torso reference (StabilizeWeaponTorso): the upright gait's forward clip at the shared phase; the sprint runs forward only.
 	if (ShotgunSet.bFullBody && ShotgunSet.bTorsoForward)
