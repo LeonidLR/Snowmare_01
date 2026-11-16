@@ -144,7 +144,10 @@ bool UOperativeAnimInstance::IsInjuredRaisePending() const
 	{
 		return false; // the animation does not tick (off screen, no body): never hold a shot for a pose nobody sees
 	}
-	return InjuredLocomotionRules::HoldsShotForRaise(FMath::Max(InjuredUpperShare, bCriticalCrawlIdle ? CrawlWeight : 0.f));
+	// Crouched / in cover (the cue-only hunch; the standing layer's torso share is 0 there): the raise state itself - the round waits until the
+	// weapon is up out of the hunch (game designer 2026-11-15: badly wounded, crouched at a cube, the rounds left before the rifle came up).
+	const float CueOnlyShare = bInjuredCueOnlyPose ? 1.f - FMath::Clamp(InjuredRaise, 0.f, 1.f) : 0.f;
+	return InjuredLocomotionRules::HoldsShotForRaise(FMath::Max3(InjuredUpperShare, bCriticalCrawlIdle ? CrawlWeight : 0.f, CueOnlyShare));
 }
 
 void UOperativeAnimInstance::StepInjuredIdle(FInjuredIdleCycle& Cycle, int32 SetId, const TArray<UAnimSequence*>& Clips, float DeltaSeconds, bool bRandom,
@@ -210,6 +213,7 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 		InjuredWeight = 0.f;
 		InjuredGait = EInjuredGait::None;
 		bInjuredCrawlActive = false;
+		bInjuredCueOnlyPose = false;
 		InjuredRaise = InjuredUpperShare = InjuredCueOnly = 0.f;
 		return;
 	}
@@ -257,6 +261,8 @@ void UOperativeAnimInstance::UpdateInjuredLayer(float DeltaSeconds)
 	const bool bWound = bLayerOn && IsWoundGait(InjuredGait);
 	const bool bCueOnlyPose = bWound && !bIsProne && !bIsDead && !bKnockedDown && !bIsClimbing && !bIsVaulting && !bFullBodyClip && (bInCover || bIsCrouching);
 	const float CueOnlyTarget = bCueOnlyPose ? (bInCover ? Set.LimpCue.CoverScale : Set.LimpCue.CrouchScale) * (1.f - InjuredRaise) : 0.f;
+	// The fire gate (058c / 061): a wounded man crouched / in cover raises the weapon out of the hunch before the round (IsInjuredRaisePending).
+	bInjuredCueOnlyPose = bCueOnlyPose && Set.LimpCue.bEnabled;
 	InjuredCueOnly = Set.LimpCue.bEnabled ? FMath::FInterpConstantTo(InjuredCueOnly, CueOnlyTarget, DeltaSeconds, 1.f / FMath::Max(0.01f, Set.BlendSeconds)) : 0.f;
 	InjuredRunShare = 0.f;
 	if (InjuredSinceRun >= 0.f)

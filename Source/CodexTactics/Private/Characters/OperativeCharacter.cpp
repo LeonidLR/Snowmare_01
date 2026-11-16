@@ -367,6 +367,10 @@ void AOperativeCharacter::Tick(float DeltaTime)
 		UpdateCombatFacing(DeltaTime);
 		ProcessCombatShooting(DeltaTime);
 		UpdateSniperPendingShot(DeltaTime);
+		if (IsObjectShotPending())
+		{
+			RunPendingObjectShot(DeltaTime); // the fire gate's targeted object shot (058c / 061): turn, raise, then the round
+		}
 		UpdateUnderFireManoeuvre(DeltaTime); // #43: cover / a step for a line / prone under fire
 	}
 	LimitCornerLeaveTurn(TickYawBefore, DeltaTime); // fix/corner-exit-jerk: no swing of the leaned-out body round the capsule

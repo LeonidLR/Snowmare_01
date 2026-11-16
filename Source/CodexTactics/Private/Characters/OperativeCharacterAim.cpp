@@ -125,7 +125,13 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 	// where the peek looks and the run blends straight into the peek stance (no turn to the wall, no wall hug, no turn back out). It wins over
 	// the combat target / the under-fire turn for those last ~0.6 s (the peek itself aims round the corner).
 	const bool bPeekPreTurn = WantsRunCornerPeekPreTurn();
-	if (!bPeekPreTurn && bRealTimeFight && !bQuickFireActive && !bSuppressActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
+	// The fire gate (058c / 061): a targeted shot at an object (ShootAtObject) waits until he faces it - the order turns him to it (no snap).
+	if (const AActor* ObjectShot = PendingObjectShot.Get(); ObjectShot && !bPeekPreTurn && !bSprinting && !bCarrying && HealthComponent && HealthComponent->IsAlive())
+	{
+		bFacingCombatTarget = true;
+		TurnAimTowards(ObjectShot->GetActorLocation(), DeltaTime);
+	}
+	if (!bFacingCombatTarget && !bPeekPreTurn && bRealTimeFight && !bQuickFireActive && !bSuppressActive && !bSprinting && !bCarrying && !IsPanicking() && Target && OperativeCharacterInternal::IsLiveEnemy(Target) && HealthComponent && HealthComponent->IsAlive())
 	{
 		bFacingCombatTarget = true;
 		LastThreat = Target;
@@ -376,13 +382,21 @@ float AOperativeCharacter::GetShotAimResidualDeg(const FVector& TargetLocation) 
 	}
 	// Bug 058c / 061 (game designer 2026-11-15): standing / crouched and still, the body faces the target first (turn -> raise -> shot);
 	// the twist alone no longer carries a round fired at the wall. Walking fire keeps the twist. The body's aim line is the actor's yaw
-	// plus the rifle's barrel offset (TurnAimTowards turns the actor to the target minus that offset).
+	// plus the rifle's barrel offset (TurnAimTowards turns the actor to the target minus that offset). The fire gate (CanFireAt) also asks
+	// the body itself to be inside the arc (FireGateRules::IsBodyInArc): this residual alone let a body 60 deg off fire (arc + cone).
+	return FireArcRules::BodyArcResidualDeg(Residual, GetBodyAimErrorDeg(TargetLocation), GetBodyArcDeg());
+}
+
+float AOperativeCharacter::GetBodyAimErrorDeg(const FVector& AimAt) const
+{
+	const FVector ToTarget = AimAt - GetActorLocation();
+	return ToTarget.SizeSquared2D() < 1.f ? 0.f : FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw + BarrelYawOffset, ToTarget.Rotation().Yaw);
+}
+
+float AOperativeCharacter::GetBodyArcDeg() const
+{
 	const bool bMoving = GetVelocity().SizeSquared2D() > FMath::Square(30.f);
-	const float Arc = bMoving ? 180.f : OperativeAimLocal::CVarStillBodyArcDeg.GetValueOnGameThread();
-	const FVector ToTarget = TargetLocation - GetActorLocation();
-	const float BodyError = ToTarget.SizeSquared2D() < 1.f ? 0.f
-		: FMath::FindDeltaAngleDegrees(GetActorRotation().Yaw + BarrelYawOffset, ToTarget.Rotation().Yaw);
-	return FireArcRules::BodyArcResidualDeg(Residual, BodyError, Arc);
+	return bMoving ? 180.f : OperativeAimLocal::CVarStillBodyArcDeg.GetValueOnGameThread();
 }
 
 void AOperativeCharacter::TurnAimTowards(const FVector& AimAt, float DeltaTime)

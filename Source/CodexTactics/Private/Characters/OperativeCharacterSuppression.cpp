@@ -342,7 +342,40 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 	{
 		return TEXT("suppress: throwing a grenade");
 	}
-	if (bFromCover)
+	if (IsFireGateOn())
+	{
+		// The fire gate (bugs 058c / 061, game designer 2026-11-15): turn -> raise -> only then the round, from cover too (the cover pose's own
+		// barrel on the point; suppressed he fires blind from it - his back to the wall counts). A cover pose that cannot reach the point: he
+		// steps off the wall when he may expose himself, else no round from a pose that does not face it (the order's budget ends it).
+		if (bFromCover)
+		{
+			CoverShotTarget = Enemy;
+			UpdateCoverFacing(/*bAllowSnap*/ false);
+		}
+		else
+		{
+			TurnAimTowards(AimAt, DeltaTime); // eased, never slower than AimTurnRateDegPerSec; prone at the prone turn rate (bug #33)
+		}
+		const TCHAR* GateReason = nullptr;
+		EFireGateBlock GateBlock = EFireGateBlock::None;
+		if (!CanFireAt(AimAt, GateReason, &GateBlock))
+		{
+			if (bFromCover && GateBlock == EFireGateBlock::CoverPoseOutOfReach && USuppressionSubsystem::MayExposeNow(this))
+			{
+				BeginOpenShotFromCover(Enemy);
+			}
+			return GateReason;
+		}
+		if (ShootTimer > 0.f || MisfireCooldownTimer > 0.f)
+		{
+			return TEXT("cooldown");
+		}
+		if (bFromCover)
+		{
+			BeginCoverShot();
+		}
+	}
+	else if (bFromCover)
 	{
 		CoverShotTarget = Enemy;
 		UpdateCoverFacing(/*bAllowSnap*/ false);

@@ -702,6 +702,12 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 	{
 		return RunSuppressFire(DeltaTime, OutTarget);
 	}
+	// A targeted shot at an object waits for the fire gate (RunPendingObjectShot, 058c / 061): the explicit order owns the body meanwhile.
+	if (IsObjectShotPending())
+	{
+		OutTarget = GetPendingObjectShot();
+		return TEXT("targeted object shot: turning / raising");
+	}
 
 	// Only auto-shoot when in WaveCombat real-time mode (or if no game flow subsystem exists, e.g. standalone test).
 	// Exception (user request 2026-10-06): an Aggressive operative on an ambush level still exploring opens fire on an
@@ -868,8 +874,9 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 		// Eased, but never slower than AimTurnRateDegPerSec (a quick, visible turn to a flank rush); prone the whole body pivots on the
 		// ground at the prone turn rate (bug #33, FireArcRules).
 		TurnAimTowards(AimAt, DeltaTime);
-		// User rule 2026-10-07: no shot where he does not aim - first the turn, then the shot.
-		if (GetShotAimResidualDeg(AimAt) > AimConeDeg)
+		// User rule 2026-10-07: no shot where he does not aim - first the turn, then the shot. With the fire gate on (058c / 061) the gate
+		// below judges it (and raises the weapon while he turns).
+		if (!IsFireGateOn() && GetShotAimResidualDeg(AimAt) > AimConeDeg)
 		{
 			return TEXT("open stance: turning, outside the aim cone");
 		}
@@ -909,8 +916,24 @@ const TCHAR* AOperativeCharacter::RunCombatShooting(float DeltaTime, AActor*& Ou
 			return bCornerAimActive ? TEXT("corner hold: outside the aim cone") : TEXT("corner hold: aim not active");
 		}
 	}
+	// The fire gate (bugs 058c / 061, game designer 2026-11-15: turn -> raise -> only then the round): the barrel (open: and the body) on the
+	// target, the weapon / the cover fire stance raised, a wounded torso up - in the open, from cover and at a corner alike (the cover pose's
+	// own barrel, not the wall slot). A cover pose that cannot bring its barrel round steps off the wall (never at a corner hold).
+	if (IsFireGateOn())
+	{
+		const TCHAR* GateReason = nullptr;
+		EFireGateBlock GateBlock = EFireGateBlock::None;
+		if (!CanFireAt(AimAt, GateReason, &GateBlock))
+		{
+			if (bInCover && GateBlock == EFireGateBlock::CoverPoseOutOfReach && bMayExpose && !IsCornerHoldSpot() && BeginOpenShotFromCover(Target))
+			{
+				return TEXT("cover: the pose does not reach the target - steps off the wall");
+			}
+			return GateReason;
+		}
+	}
 	// Count a raise hold only when the other fire refusals above have cleared.
-	if (HoldShotForInjuredRaise())
+	else if (HoldShotForInjuredRaise())
 	{
 		return TEXT("wounded: raising the weapon");
 	}
