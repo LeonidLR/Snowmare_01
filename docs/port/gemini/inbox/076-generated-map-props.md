@@ -27,3 +27,9 @@ Whole TG suite + typecheck + build green. No C++ (if the runtime needs a change,
 Allowed paths: Tools/TrainingGround/src/levelgen/props/**, src/departments/PropsPanel.tsx, src/departments/LevelGenDepartment.tsx
 (props toggle only), server/levelgenApi.ts (save hook only), a new CLI script under Tools/TrainingGround/scripts/,
 Content/Data/LevelGen/props_autogen.json, the 3 new props files, report.
+
+UPDATE 2026-11-16 evening (Claude): the layers system is merged (docs/port/LEVELGEN_LAYERS_REPORT.md) - layers 7/8/9 (mines / loot /
+special items: turrets + ALL barrels) already SHOW and EDIT props (manual place / move / delete into the props file "overrides").
+Your job is only the AUTOMATIC generation of the props + writing the props files (items 2-4); reuse the layers' props read/write code,
+do not duplicate it. BUDGET IS SMALL: hard limit 45 minutes - do items 2 and 4 first (auto props + the 3 files), item 3 hooks only if time
+is left; list everything not done in your FINISH message.
