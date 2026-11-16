@@ -6,7 +6,7 @@ Build: PASS (exit 0; UBT 2.18 s). Resume verification after limit reset: DLL mti
 
 Router: level 2, confidence 0.62 | gpt-6.1-sol | pass (execution/reporting; no local model).
 
-Progress: 192/284 initial runs; 186 final PASS; 6 final FAIL; 6 failed twice. Updated 2026-11-16T22:04:34.077220+00:00.
+Progress: 256/284 initial runs; 248 final PASS; 8 final FAIL; 8 failed twice. Updated 2026-11-16T22:26:17.755636+00:00.
 
 Initial batches <=8, script default Jobs=4 (16 CPUs), `-NoRetry -ExtraArgs -Multiprocess`; each initial FAIL rerun exactly once alone with `-Jobs 1`. Engine `Smoke RESULT` controls PASS/FAIL, including wrapper KNOWN-FAIL. Seconds are wrapper process wall times. Missing result/timeout is infrastructure FAIL, never an invented assertion. Shared locks and designer priority remain active.
 
@@ -206,6 +206,70 @@ Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, 
 | BlizzardWalkSmoke | PASS | 46.2 |  | — | — |
 | RegroupAfterLossesSmoke | PASS | 47.6 |  | — | — |
 | GateExitLakeKiaSmoke | PASS | 56.7 |  | — | — |
+| GateExitLakeKiaNoPointsSmoke | PASS | 70.2 |  | — | — |
+| GroupCoverPrioritySmoke | PASS | 48.6 |  | — | — |
+| LadderQueueSmoke | PASS | 54.8 |  | — | — |
+| SnowTracksSmoke | PASS | 65.5 |  | — | — |
+| SnowIndoorSmoke | PASS | 74.9 |  | — | — |
+| StartLightingSmoke | PASS | 51.3 |  | — | — |
+| StartSnowSmoke | PASS | 59.6 |  | — | — |
+| FormationLabSmoke | PASS | 119.6 |  | — | — |
+| FormationMenuSmoke | PASS | 44.8 |  | — | — |
+| FormationCustomSmoke | PASS | 55.4 |  | — | — |
+| FormationShapesSmoke | PASS | 46.5 |  | — | — |
+| FormationWallGroupSmoke | PASS | 50.3 |  | — | — |
+| FormationSlideSmoke | PASS | 45.8 |  | — | — |
+| FormationBypassSmoke | PASS | 56.5 |  | — | — |
+| FormationFarSideSmoke | PASS | 48.5 |  | — | — |
+| FormationCornerPeekSmoke | PASS | 49.6 |  | — | — |
+| FormationWallSwitchSmoke | PASS | 66.7 |  | — | — |
+| FormationSquadPathPreviewSmoke | PASS | 46.9 |  | — | — |
+| FormationLeaderSwapSlideSmoke | PASS | 52.6 |  | — | — |
+| FormationSquadPeekSmoke | PASS | 49.9 |  | — | — |
+| FormationWallHugSmoke | PASS | 60.2 |  | — | — |
+| FallenGearSmoke | PASS | 48.7 |  | — | — |
+| ClimateSmoke | PASS | 46.5 |  | — | — |
+| ClimateArcticSmoke | PASS | 44.6 |  | — | — |
+| RainSmoke | PASS | 68.3 |  | — | — |
+| StartFlickerSmoke | PASS | 101.5 |  | — | — |
+| SquadCornerPeekSmoke | PASS | 64 |  | — | — |
+| FormationLabCombatSmoke | PASS | 70 |  | — | — |
+| CutterWallSmoke | PASS | 47.1 |  | — | — |
+| CombatLabTowerSmoke | PASS | 49.8 |  | — | — |
+| CombatLabAmbushSmoke | PASS | 52.2 |  | — | — |
+| SquadPeekNextWallSmoke | PASS | 45 |  | — | — |
+| CameraFreePanSmoke | PASS | 47 |  | — | — |
+| TowerVisionSmoke | PASS | 46.5 |  | — | — |
+| VisionHeightSmoke | PASS | 48.6 |  | — | — |
+| WallLeadershipSmoke | PASS | 53.3 |  | — | — |
+| CombatLabAmbushRelocateSmoke | PASS | 63.3 |  | — | — |
+| SquadHaltStanceSmoke | PASS | 47.8 |  | — | — |
+| LevelGenRouteSmoke | PASS | 78.3 |  | — | — |
+| LevelGenLaddersSmoke | PASS | 62.3 |  | — | — |
+| LevelGenOpeningsSmoke | PASS | 46.5 |  | — | — |
+| LevelGenRampSmoke | FAIL | 63.7 | [2026.11.16-22.18.22:574][263]LogCodexTactics: Display: Smoke FAIL: STAIR_in_8 group (all three box-selected, sprint): STUCK after 17 s (top level z 300): \| Commander (leader) at X=-2191.981 Y=1368.172 feet 8, speed 0, still 4.1 s, order own -> X=-2879.000 Y=1400.000, path complete, 4 points, ends 0 cm from the goal at z 310 \| Engineer at X=-2388.436 Y=1346.603 feet 145, speed 15, still 10.0 s, order own -> X=-2780.683 Y=1229.314, path complete, 3 points, ends 0 cm from the goal at z 310 \| Medic-Sapper at X=-2511.048 Y=1355.094 feet 231, speed 22, still 6.4 s, order none/formation -> X=-2114.033 Y=1541.158, path complete, 3 points, ends 0 cm from the goal at z 310 | FAIL | 52.2 |
+| RoofCutawayFocusSmoke | PASS | 46.5 |  | — | — |
+| FallDropSmoke | PASS | 53.2 |  | — | — |
+| DropSoftlockSmoke | PASS | 61.7 |  | — | — |
+| DropLinkReachSmoke | PASS | 45.7 |  | — | — |
+| WallSectorsSmoke | PASS | 47.1 |  | — | — |
+| GroupCoverNearbySmoke | PASS | 45.7 |  | — | — |
+| WallLeadershipSlideSmoke | PASS | 52 |  | — | — |
+| GroupCornerPeekSmoke | PASS | 49 |  | — | — |
+| RunCornerPeekSmoke | PASS | 59.3 |  | — | — |
+| TwoCornerHoldSmoke | PASS | 54 |  | — | — |
+| WallMoveNearestLeadsSmoke | PASS | 54.9 |  | — | — |
+| PmcTeamSmoke | PASS | 45.5 |  | — | — |
+| PmcCommanderSmoke | PASS | 48.7 |  | — | — |
+| PmcArenaSmoke | PASS | 54 |  | — | — |
+| PmcArenaObjectiveSmoke | PASS | 47.8 |  | — | — |
+| PmcStalemateSmoke | PASS | 53.9 |  | — | — |
+| PmcEncounterSmoke | PASS | 58.7 |  | — | — |
+| PmcEncounterHuntSmoke | FAIL | 61.1 | [2026.11.16-22.23.49:253][310]LogCodexTactics: Display: Smoke FAIL: the hunters close in by themselves (56 -> 56 m, 90 s) | FAIL | 50.2 |
+| PmcStandoffSmoke | PASS | 48.6 |  | — | — |
+| SightConditionsSmoke | PASS | 48.4 |  | — | — |
+| ConePerfSmoke | PASS | 68.2 |  | — | — |
+| WeaponReachSmoke | PASS | 57.8 |  | — | — |
 
 ## Failed twice
 
@@ -218,10 +282,14 @@ Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, 
 - **FormationJitterSmoke**: [2026.11.16-21.38.31:138][468]LogCodexTactics: Display: Smoke FAIL: the other follower is no worse with the D-1 man in the squad (hips 27.2 / shoulders 24.0 deg/s; all-M16 17.0 / 12.6) Rerun: [2026.11.16-21.40.18:154][376]LogCodexTactics: Display: Smoke FAIL: the other follower is no worse with the D-1 man in the squad (hips 27.2 / shoulders 24.0 deg/s; all-M16 17.0 / 12.6)
   History: `Source/CodexTacticsDev/Private/Debug/FormationJitterSmokeCommand.cpp`: c81585ae fix(animation): D-1 crouch and cover on the ABP, formation followers stop twitching; `Source/CodexTactics/Private/Characters/SquadSubsystemFormation.cpp`: f65f3325 gemini-034: fix stealth look-direction lock and stopping snap-back (bug #324)
 - **RpgPmcSmoke**: [2026.11.16-21.41.35:234][944]LogCodexTactics: Display: Smoke FAIL: 2: Codex.Combat.LauncherAI 0 - the commander's RpgStrike order (2 orders) fires the rocket (0 strike shots; ordered rocket strike at BP_Operative_C_0) Rerun: [2026.11.16-21.43.23:352][879]LogCodexTactics: Display: Smoke FAIL: 2: Codex.Combat.LauncherAI 0 - the commander's RpgStrike order (2 orders) fires the rocket (0 strike shots; ordered rocket strike at BP_Operative_C_0)
-  History: `Source/CodexTacticsDev/Private/Debug/PmcCombatBugsSmokeCommand.cpp`: 64eeac93 test(smokes): fix the 7 night-bar failures of 2026-11-10 (smoke-side, no game regression); `Source/CodexTacticsDev/Private/Debug/RpgPmcSmokeCommand.cpp`: 00eb12cc feat(weapons): the AI fires the RPG-7 - shared launcher rule, blast suppression, PMC RPG gunner; `Source/CodexTacticsDev/Private/Debug/UnderFireManoeuvreSmokeCommand.cpp`: 64eeac93 test(smokes): fix the 7 night-bar failures of 2026-11-10 (smoke-side, no game regression); `Source/CodexTactics/Private/Characters/OperativeCharacterLauncherAI.cpp`: 00eb12cc feat(weapons): the AI fires the RPG-7 - shared launcher rule, blast suppression, PMC RPG gunner
+  History: `Source/CodexTacticsDev/Private/Debug/RpgPmcSmokeCommand.cpp`: 00eb12cc feat(weapons): the AI fires the RPG-7 - shared launcher rule, blast suppression, PMC RPG gunner; `Source/CodexTactics/Private/Characters/OperativeCharacterLauncherAI.cpp`: 00eb12cc feat(weapons): the AI fires the RPG-7 - shared launcher rule, blast suppression, PMC RPG gunner
 - **RetreatFacingSmoke**: [2026.11.16-22.00.17:362][516]LogCodexTactics: Display: Smoke FAIL: a facing order of the player is kept: no turn to the pack (65 deg off the ordered facing, 115 deg off the pack, turning to the threat 0) Rerun: [2026.11.16-22.02.01:395][409]LogCodexTactics: Display: Smoke FAIL: a facing order of the player is kept: no turn to the pack (65 deg off the ordered facing, 115 deg off the pack, turning to the threat 0)
   History: `Source/CodexTacticsDev/Private/Debug/RetreatFacingSmokeCommand.cpp`: 77804b34 wip(codex): save retreat smoke rifle fixture before limit stop; `Source/CodexTactics/Private/Characters/OperativeCharacter.cpp`: 90b60f9f fix(mantle): batch 2 - wall guard, settled exit, walk-off descent, face double click, hover ghost
+- **LevelGenRampSmoke**: [2026.11.16-22.18.22:574][263]LogCodexTactics: Display: Smoke FAIL: STAIR_in_8 group (all three box-selected, sprint): STUCK after 17 s (top level z 300): | Commander (leader) at X=-2191.981 Y=1368.172 feet 8, speed 0, still 4.1 s, order own -> X=-2879.000 Y=1400.000, path complete, 4 points, ends 0 cm from the goal at z 310 | Engineer at X=-2388.436 Y=1346.603 feet 145, speed 15, still 10.0 s, order own -> X=-2780.683 Y=1229.314, path complete, 3 points, ends 0 cm from the goal at z 310 | Medic-Sapper at X=-2511.048 Y=1355.094 feet 231, speed 22, still 6.4 s, order none/formation -> X=-2114.033 Y=1541.158, path complete, 3 points, ends 0 cm from the goal at z 310 Rerun: [2026.11.16-22.20.04:641][193]LogCodexTactics: Display: Smoke FAIL: STAIR_in_8 group (all three box-selected, sprint): STUCK after 17 s (top level z 300): | Commander (leader) at X=-2191.981 Y=1368.172 feet 8, speed 0, still 4.1 s, order own -> X=-2879.000 Y=1400.000, path complete, 4 points, ends 0 cm from the goal at z 310 | Engineer at X=-2388.436 Y=1346.603 feet 145, speed 15, still 10.0 s, order own -> X=-2780.683 Y=1229.314, path complete, 3 points, ends 0 cm from the goal at z 310 | Medic-Sapper at X=-2511.048 Y=1355.094 feet 231, speed 22, still 6.4 s, order none/formation -> X=-2114.033 Y=1541.158, path complete, 3 points, ends 0 cm from the goal at z 310
+  History: `Source/CodexTacticsDev/Private/Debug/LevelGenRampSmokeCommand.cpp`: 64eeac93 test(smokes): fix the 7 night-bar failures of 2026-11-10 (smoke-side, no game regression); `Source/CodexTactics/Private/Characters/SquadSubsystemRampFile.cpp`: 21dba8eb fix(build): rename the ramp-file FeetZ helper to RampFeetZ (unity clash with MinimapSubsystem.cpp)
+- **PmcEncounterHuntSmoke**: [2026.11.16-22.23.49:253][310]LogCodexTactics: Display: Smoke FAIL: the hunters close in by themselves (56 -> 56 m, 90 s) Rerun: [2026.11.16-22.25.48:915][228]LogCodexTactics: Display: Smoke FAIL: the hunters close in by themselves (56 -> 56 m, 90 s)
+  History: `Source/CodexTacticsDev/Private/Debug/PmcEncounterSmokeCommand.cpp`: 64eeac93 test(smokes): fix the 7 night-bar failures of 2026-11-10 (smoke-side, no game regression); `Source/CodexTactics/Private/AI/PmcEncounterSubsystem.cpp`: 4cf88e74 feat(perf): 004 async gameplay preload + smoke readiness gate + stricter HitchProbe
 
-Partial sweep. Resume: run `python Saved/Orchestrator/035/sweep.py` in the agents worktree; next batch 25, 92 initial runs remaining. Machine-readable pending state is in progress.json. Latest path commits above are history references, not proven regression culprits.
+Partial sweep. Resume: run `python Saved/Orchestrator/035/sweep.py` in the agents worktree; next batch 33, 28 initial runs remaining. Machine-readable pending state is in progress.json. Latest path commits above are history references, not proven regression culprits.
 
 Only tracked output: this report. Ignored Saved evidence is local. Existing untracked packs/config/cache remain outside this task. No source investigation beyond failure lines and path identification.
