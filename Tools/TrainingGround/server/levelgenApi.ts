@@ -13,11 +13,14 @@
 //                                               -> { verdict } (saved to Saved/TrainingGround/levelgen/<name>.verdicts.json; the ledger updated)
 //   POST /api/levelgen/accept   { layout, evaluation, verdicts }  -> { file }  (Content/Data/LevelGen/accepted/<name>.json + <name>.meta.json)
 //   POST /api/levelgen/reject   { name, seed, profile, reason }    -> appended to Saved/TrainingGround/levelgen/rejected.jsonl
+//   POST /api/levelgen/save-locks { layout }  -> { target: accepted|draft, file, locks }: the locked districts (polygons) into the map
+//                                               JSON - the accepted map's regen.locks only, else the page layout as a draft (stage 2)
 import fs from 'node:fs';
 import path from 'node:path';
 import { claudeCritic, emptyLedger, jevCritic, mockCritic } from '../src/levelgen/critic.ts';
 import type { CriticClient, CriticVerdict } from '../src/levelgen/critic.ts';
 import type { Evaluation } from '../src/levelgen/evaluate.ts';
+import { saveLocks } from '../src/levelgen/node/locksFile.ts';
 import { ACCEPTED_DIR, ensureReferencePng, LEVELGEN_OUT, listProfiles, NAME_RE, readLedger, readProfileById, writeLedger } from '../src/levelgen/node/files.ts';
 import type { GenLayout } from '../src/levelgen/schema.ts';
 import { validateGenLayout } from '../src/levelgen/schema.ts';
@@ -136,6 +139,17 @@ export function setupLevelgenApi(use: Use): void {
     const ev = b.evaluation as Evaluation | undefined;
     fs.writeFileSync(path.join(ACCEPTED_DIR, `${layout!.name}.meta.json`), JSON.stringify({ at: new Date().toISOString(), score: ev?.score, summary: ev?.summary, verdicts: b.verdicts ?? [] }, null, 1) + '\n');
     send(res, 200, { file: path.relative(path.resolve(ACCEPTED_DIR, '../../../..'), file).split(path.sep).join('/') });
+  });
+
+  use('/api/levelgen/save-locks', async (req, res, next) => {
+    if (req.method !== 'POST') return next ? next() : send(res, 405, { error: 'POST only' });
+    const b = await readBody(req);
+    const layout = b.layout as GenLayout | undefined;
+    if (!layout || typeof layout !== 'object' || typeof layout.name !== 'string') return send(res, 400, { error: 'layout missing' });
+    try {
+      const r = saveLocks(layout, { accepted: ACCEPTED_DIR, drafts: LEVELGEN_OUT });
+      send(res, 200, { ...r, file: path.relative(path.resolve(ACCEPTED_DIR, '../../../..'), r.file).split(path.sep).join('/') });
+    } catch (e) { send(res, 400, { error: e instanceof Error ? e.message : String(e) }); }
   });
 
   use('/api/levelgen/reject', async (req, res, next) => {

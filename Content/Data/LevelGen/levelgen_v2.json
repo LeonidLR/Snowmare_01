@@ -1,0 +1,63 @@
+{
+  "schema": "codex.levelgen_v2_config/1",
+  "comment": "Level generator v2 (board 066, stage 2): the block-template catalog a region re-roll and a map expansion draw from, the expansion street plan, the start + goals rules. Read by Tools/TrainingGround/src/levelgen/v2Config.ts. Metres unless named _cm. Stage 3 (reference map -> style profile) will add a 'style' block that re-weights templates.catalog.*.weight.",
+  "templates": {
+    "comment": "force_change: a re-rolled block always gets another type than it had. candidates_per_lot: how many types a lot tries (seeded weighted order) before keeping its old content. inset_m: the margin a template keeps inside its lot.",
+    "force_change": true,
+    "candidates_per_lot": 5,
+    "inset_m": 1.0,
+    "cover_factor": 0.6,
+    "cover_spacing_m": 2.4,
+    "visit_inside_m": 2.0,
+    "visit_outside_m": 1.8,
+    "gate_w_m": 3.0,
+    "catalog": {
+      "open_square":        { "weight": 0.8, "min_m": [6, 6],   "density": 1.0, "covers": ["crate", "wreck", "jersey"] },
+      "junkyard_field":     { "weight": 1.0, "min_m": [14, 10], "density": 5.0, "covers": ["wreck", "crate", "barrel"] },
+      "one_entry_compound": { "weight": 1.2, "min_m": [18, 12], "density": 2.5, "covers": ["crate", "barrel", "wreck"], "shed_m": [14, 9] },
+      "industrial_hall":    { "weight": 1.0, "min_m": [16, 12], "density": 1.0, "covers": ["crate"], "shrink": 0.12 },
+      "warehouse":          { "weight": 1.0, "min_m": [16, 16], "density": 1.5, "covers": ["crate", "barrel"], "building_share": 0.62 },
+      "small_office":       { "weight": 1.2, "min_m": [9, 7],   "density": 1.0, "covers": ["crate", "barrel"], "max_m": [18, 12] },
+      "facade":             { "weight": 0.6, "min_m": [6, 5],   "density": 0.0, "covers": ["crate"], "height_cm": 900, "floors": 3 },
+      "ladder_overwatch":   { "weight": 0.9, "min_m": [12, 10], "density": 2.5, "covers": ["crate", "barrel", "boiler"], "max_m": [14, 10] },
+      "tank_farm":          { "weight": 0.7, "min_m": [24, 18], "density": 2.0, "covers": ["barrel", "crate", "boiler"], "pump_m": [12, 9] },
+      "fenced_lot":         { "weight": 0.8, "min_m": [8, 5],   "density": 2.0, "covers": ["crate", "barrel"] },
+      "two_storey":         { "weight": 1.1, "min_m": [12, 10], "density": 1.0, "covers": ["crate", "sandbag"], "max_m": [20, 14] },
+      "boiler_yard":        { "weight": 0.8, "min_m": [10, 8],  "density": 3.0, "covers": ["boiler", "barrel"] }
+    },
+    "classic": {
+      "comment": "The type each block of the classic Depot grammar (generate.ts section 3) has, by its region key. A classic-only type is not in the catalog: a re-roll replaces it by a catalog type.",
+      "offices": "facade", "pipeYard": "ladder_overwatch", "compound": "one_entry_compound", "sawtooth": "industrial_hall",
+      "boilerYard": "boiler_yard", "office": "small_office", "warehouse": "warehouse", "warehouseLot": "fenced_lot",
+      "junkyard": "junkyard_field", "tanks": "tank_farm", "swOpen": "dead_end_square", "ruin": "ruined_two_level",
+      "ruinAnnex": "ruin_annex", "steel": "steel_works", "steelAnnex": "racks"
+    }
+  },
+  "expansion": {
+    "comment": "Canvas = the map's size x sqrt(factor) (x2 ~ 250 x 175, x4 ~ 354 x 248, x6 ~ 434 x 304 for the 177 x 124 Depot), the old map stays centred (its UE coordinates do not change). New area: a ring street round the old map, the old edge roads and the canal extended to the new edge, local streets every grid_step_m, the blocks between filled from templates.catalog.",
+    "factors": [2, 4, 6],
+    "street_w_m": 9,
+    "min_block_m": 8,
+    "grid_step_m": 46,
+    "grid_jitter_m": 5,
+    "crossing_w_m": 5,
+    "edge_touch_m": 1.5,
+    "seam_gate_reach_m": 2.5,
+    "cut_wall_t_m": 1.5,
+    "spawn_inset_m": 3,
+    "max_retries": 4,
+    "retry_seed_step": 7919
+  },
+  "objectives": {
+    "comment": "Start + 2-4 goals visited in any order. default_count by expansion factor (1 = not expanded). Distances in metres on the plan; reachability is the ground nav (evaluate.ts NavGrid).",
+    "count_min": 2,
+    "count_max": 4,
+    "default_count": { "1": 2, "2": 2, "4": 3, "6": 4 },
+    "min_from_start_m": 50,
+    "min_spacing_m": 40,
+    "edge_margin_m": 4,
+    "start_edge_inset_m": 3,
+    "allow_in_locked": false,
+    "candidate_jitter": 0.15
+  }
+}
