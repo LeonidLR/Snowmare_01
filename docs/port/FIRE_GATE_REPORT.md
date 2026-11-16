@@ -137,3 +137,13 @@ typesafe_triage --audit-diff --agent claude: ÑÐ¼. Ð¸Ñ‚Ð¾Ð³ Ð² Ñ
   hand mesh — ось её `muzzle_offset`, как в `GetWeaponMuzzleLocation`.
 - Прогоны после фикса: CoverSmoke 3/3 PASS подряд без перезапуска; FireGateSmoke, CornerHoldSmoke (2 раза), CornerEntrySmoke,
   CornerStandoffSmoke, TwoCornerHoldSmoke, CoverCrouchSmoke, PistolSmoke, RpgPmcSmoke, SquadFireSmoke — PASS.
+
+## Ревью 2026-11-16 (2): SuppressionSmoke G
+
+- Причина не в оси пистолета (G стреляет из M16): приказ SUPPRESS кончался «target down, 0 rounds» в первом же кадре — цель только что
+  телепортирована к боку командира и ещё скрыта туманом (`IsLiveTargetOf` = false для hidden), `[Sight]` раскрывает её кадром позже
+  (`Smoke-SuppressionSmoke-r1.log`: order -> «suppressive fire ends (target down)» -> «[Sight] hidden 30 ...»). Воспроизведено у меня 1 из 4.
+- Исправлено в `OperativeCharacterSuppression.cpp`: живой, но скрытый враг — не «down», приказ бьёт по последней точке (как и задумано
+  комментарием там же), `OutTarget` для скрытого — null (огонь по точке).
+- После: SuppressionSmoke 3/3 PASS подряд; FireGateSmoke, CornerHoldSmoke, QuickFireSmoke, TargetedShotSmoke, PistolSmoke, CoverSmoke,
+  FireArcSmoke, PmcFireLineSmoke PASS; `CodexTactics.Combat` 184 tests, 0 failed. Флейк B (0.26 vs 0.25) у меня не воспроизвёлся, не трогал.

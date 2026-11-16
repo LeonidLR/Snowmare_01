@@ -262,7 +262,11 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 	AActor* Enemy = SuppressTarget.Get();
 	const UHealthComponent* EnemyHealth = Enemy ? Enemy->FindComponentByClass<UHealthComponent>() : nullptr;
 	// Teams (2026-11-03): a hostile fighter's target is a man of another team, not an "Enemy"-tagged actor (IsLiveTargetOf).
-	const bool bEnemyAlive = OperativeCharacterInternal::IsLiveTargetOf(*this, Enemy) && (!EnemyHealth || EnemyHealth->IsAlive());
+	// Fire gate review 2026-11-16 (SuppressionSmoke G, 2 of 4 runs): an enemy only HIDDEN by the fog (IsLiveTargetOf is false for a hidden
+	// actor) is not down - the order keeps hammering his last spot (see below). It used to end "target down" with 0 rounds when the order's
+	// first frame came before the sight refresh revealed him (the smoke teleports him to the commander's side).
+	const bool bHiddenAlive = IsValid(Enemy) && Enemy->IsHidden() && EnemyHealth && EnemyHealth->IsAlive();
+	const bool bEnemyAlive = (OperativeCharacterInternal::IsLiveTargetOf(*this, Enemy) || bHiddenAlive) && (!EnemyHealth || EnemyHealth->IsAlive());
 	const ESuppressOrderStop Stop = SuppressionRules::CheckOrder(Config, bSuppressAtTarget, bEnemyAlive, UsesAmmo(), CurrentClip, ReserveAmmo);
 	if (Stop != ESuppressOrderStop::None)
 	{
@@ -287,7 +291,7 @@ const TCHAR* AOperativeCharacter::RunSuppressFire(float DeltaTime, AActor*& OutT
 		const FVector2D Scatter = FMath::RandPointInCircle(Config.OrderSpotScatterCm);
 		AimAt += FVector(Scatter.X, Scatter.Y, 0.f);
 	}
-	OutTarget = bEnemyAlive ? Enemy : nullptr;
+	OutTarget = bEnemyAlive && !Enemy->IsHidden() ? Enemy : nullptr; // hidden: fire at his last spot, not at him
 	NoteShotAim(OutTarget, AimAt, OutTarget == nullptr); // the aim offset holds the point / target while he turns
 
 	// Ammo: an empty magazine reloads first (the order waits; the budget above keeps the last rounds).
