@@ -394,7 +394,8 @@ EOperativeOrderResult AOperativeCharacter::RequestMove(const FVector& InDestinat
 		/*bProjectDestinationToNavigation*/ true, /*bCanStrafe*/ false, ChooseMoveFilter());
 	// Mantling: on a mantle top whose path off it does not start (no navmesh on the top) or ends short of the goal (an island, a partial
 	// path: MantlingProblem_06 "stuck on top"), he comes down over the face nearest the goal and walks on from there (batch 2).
-	const AActor* MantleTop = MantleNavigation::IsBatch2Enabled() && !bFormationMove && Result != EPathFollowingRequestResult::AlreadyAtGoal
+	// (The player's operatives only: the PMC's own operatives keep their paths - their AI is not touched by batch 2.)
+	const AActor* MantleTop = MantleNavigation::IsBatch2Enabled() && IsPlayerTeam() && !bFormationMove && Result != EPathFollowingRequestResult::AlreadyAtGoal
 		? GetMantleTopUnderFeet() : nullptr;
 	if (MantleTop)
 	{

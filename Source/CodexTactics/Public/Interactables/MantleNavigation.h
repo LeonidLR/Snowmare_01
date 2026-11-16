@@ -152,6 +152,8 @@ public:
 	int32 Generate();
 	void ClearLinks();
 	bool HasGenerated() const { return bGenerated; }
+	/** The last generation stopped at the link cap (links.max_total): obstacles after it got no links (smokes, batch 2 item 9). */
+	bool WasLinkCapReached() const { return bLinkCapReached; }
 
 	const TArray<FMantleLink>& GetLinks() const { return Links; }
 	const FMantleLink* GetLink(int32 Index) const { return Links.IsValidIndex(Index) ? &Links[Index] : nullptr; }
@@ -199,6 +201,7 @@ private:
 	FTimerHandle PollTimer;
 	float WaitedSeconds = 0.f;
 	bool bGenerated = false;
+	bool bLinkCapReached = false;
 	int32 Sampled = 0;
 	double GenerationMs = 0.0;
 };

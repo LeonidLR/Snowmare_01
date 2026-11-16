@@ -361,6 +361,7 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 	MantleLandingFeet = Landing;
 	MantleDir = Site.Dir;
 	MantleFacePoint = Site.FacePoint;
+	MantleObstacle = Site.Obstacle;
 	MantleTopZ = Site.TopZ;
 	MantleDepthCm = Site.Probe.DepthCm;
 	MantleGuardPushCm = 0.f;
@@ -437,11 +438,14 @@ void AOperativeCharacter::ApplyMantleWallGuard()
 	// in front of the face - the capsule (collision off for the climb) is pushed back by the deficit; the warp brings the climb onto the
 	// landing from wherever he is (it re-targets every frame), once the torso is over the top.
 	USkeletalMeshComponent* Body = GetMesh();
-	if (!Body || OperativeMantleInternal::CVarMantleAlign.GetValueOnGameThread() == 0 || !MantleNavigation::IsBatch2Enabled())
+	// Top climbs only: over a fence the clip's torso passes under the fence's top by design of the clip (HighFenceVault, see the batch-2 report) -
+	// a guard there only holds him back until its cap.
+	if (!Body || !bMantleOnTop || OperativeMantleInternal::CVarMantleAlign.GetValueOnGameThread() == 0 || !MantleNavigation::IsBatch2Enabled())
 	{
 		return;
 	}
 	const FMantleConfig& Config = MantleRules::GetConfig();
+	const AActor* Obstacle = MantleObstacle.Get();
 	float Deficit = 0.f;
 	for (const FName& Bone : OperativeMantleInternal::MantleTorsoBones)
 	{
@@ -452,16 +456,38 @@ void AOperativeCharacter::ApplyMantleWallGuard()
 		const FVector Joint = Body->GetSocketLocation(Bone);
 		const float Fwd = static_cast<float>(FVector::DotProduct(Joint - MantleFacePoint, MantleDir));
 		// Over the top (or past the middle of a thin fence: crossed) a joint is no clipping.
-		if (Joint.Z > MantleTopZ - Config.AlignGapAboveMarginCm || Fwd > MantleDepthCm * 0.5f)
+		if (Joint.Z > MantleTopZ - Config.AlignGapAboveMarginCm || Fwd > MantleDepthCm * 0.5f || Fwd + Config.AlignGuardGapCm <= 0.f)
+		{
+			continue;
+		}
+		// The face was measured at knee height: a sloped / stepped obstacle (a car wreck's hood) lies farther in at the torso's height - only the
+		// real collision close to the joint counts (no collision data: the face's plane).
+		FVector Closest;
+		const float Distance = Obstacle ? Obstacle->ActorGetDistanceToCollision(Joint, ECC_Pawn, Closest) : -1.f;
+		if (Distance >= Config.AlignGuardGapCm)
 		{
 			continue;
 		}
 		Deficit = FMath::Max(Deficit, Fwd + Config.AlignGuardGapCm);
 	}
-	if (Deficit > KINDA_SMALL_NUMBER)
+	if (Deficit <= KINDA_SMALL_NUMBER)
 	{
-		AddActorWorldOffset(-MantleDir * Deficit);
-		MantleGuardPushCm += Deficit;
+		return;
+	}
+	// The pushes add up while the warp keeps re-targeting forward; past align.guard_max_push_cm the clip is let go (a body that far "in" is
+	// an obstacle the face probe misread - a sloped wreck - and a capped guard never snaps him far at the landing).
+	const float Allowed = FMath::Max(0.f, Config.AlignGuardMaxPushCm - MantleGuardPushCm);
+	if (Allowed <= KINDA_SMALL_NUMBER)
+	{
+		return;
+	}
+	const float Push = FMath::Min(Deficit, Allowed);
+	AddActorWorldOffset(-MantleDir * Push);
+	MantleGuardPushCm += Push;
+	if (MantleGuardPushCm >= Config.AlignGuardMaxPushCm)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Mantle] %s: the wall guard reached its %.0f cm cap on %s - the clip runs unguarded from here"),
+			*DisplayName.ToString(), Config.AlignGuardMaxPushCm, *LastMantleClip);
 	}
 }
 
@@ -522,8 +548,8 @@ void AOperativeCharacter::FinishMantle()
 	{
 		Mantle->Release(this);
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s landed %s (%.0f cm off the plan)"), *DisplayName.ToString(), bMantleOnTop ? TEXT("on top") : TEXT("over"),
-		LastMantleLandingError);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s landed %s (%.0f cm off the plan; the wall guard pushed %.0f cm)"), *DisplayName.ToString(),
+		bMantleOnTop ? TEXT("on top") : TEXT("over"), LastMantleLandingError, MantleGuardPushCm);
 	const FVector ToTarget = MantleResumeTarget - MantleLandingFeet;
 	if (bMantleResume && !bMantleStopAfter && ToTarget.Size2D() > 60.f)
 	{

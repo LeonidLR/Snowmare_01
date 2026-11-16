@@ -59,7 +59,7 @@ namespace MantleNavInternal
 	constexpr float MantleLinkDedupCm = 60.f;
 	/** Click order: the base point in front of the face, cm. */
 	constexpr float MantleClickBaseCm = 80.f;
-	/** At most this many links on a map (a runaway layout). */
+	/** At most this many links on a map before batch 2 (Codex.Mantle.Batch2 0); batch 2: mantle.json links.max_total. */
 	constexpr int32 MantleMaxLinks = 900;
 
 	static bool MantleTraceFirst(const UWorld& World, const FVector& From, const FVector& To, const FCollisionQueryParams& Params, FHitResult& Out)
@@ -526,7 +526,10 @@ int32 UMantleSubsystem::Generate()
 			return FVector::Dist(Link.Start, Start) < MantleLinkDedupCm && FVector::Dist(Link.End, End) < MantleLinkDedupCm;
 		});
 	};
-	for (TActorIterator<AActor> It(World); It && Candidates.Num() < MantleMaxLinks; ++It)
+	// Batch 2 item 9: the slice-1 cap of 900 stopped the actor scan on every map bigger than the Depot (L_Gen_Depot_X4 / _1_X6: links over the
+	// first ~900 faces only - "at a low fence they run around it").
+	const int32 MaxLinks = MantleNavigation::IsBatch2Enabled() ? FMath::Max(1, FMath::RoundToInt(Config.LinkMaxTotal)) : MantleMaxLinks;
+	for (TActorIterator<AActor> It(World); It && Candidates.Num() < MaxLinks; ++It)
 	{
 		AActor* Obstacle = *It;
 		bool bMarked = false;
@@ -622,6 +625,12 @@ int32 UMantleSubsystem::Generate()
 				}
 			}
 		}
+	}
+	bLinkCapReached = Candidates.Num() >= MaxLinks;
+	if (bLinkCapReached)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Mantle] %s: the link cap (%d) is reached - the obstacles after it get no mantle links (mantle.json links.max_total)"),
+			*World->GetMapName(), MaxLinks);
 	}
 	// No climb onto a top that has no way back to the main area (FDropLinkReach over the navmesh, its ladders / drop links and the kept links).
 	int32 DeadEnds = 0;

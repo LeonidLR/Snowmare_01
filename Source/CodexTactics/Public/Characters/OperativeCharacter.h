@@ -2650,6 +2650,7 @@ private:
 	void ApplyMantleWallGuard();
 	/** The climbed face (a point on it; MantleDir points into the obstacle), the top's height and depth along the climb. */
 	FVector MantleFacePoint = FVector::ZeroVector;
+	TWeakObjectPtr<AActor> MantleObstacle;
 	float MantleTopZ = 0.f;
 	float MantleDepthCm = 0.f;
 	float MantleGuardPushCm = 0.f;

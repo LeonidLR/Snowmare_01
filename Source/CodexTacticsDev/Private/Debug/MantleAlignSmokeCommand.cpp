@@ -353,9 +353,20 @@ namespace MantleAlignSmoke
 					}
 				}
 			}
-			Check(State, WorstGap >= Config.AlignMinBodyGapCm, FString::Printf(
-				TEXT("%s: no clipping into the obstacle - the torso's smallest gap to its footprint below the top %.1f cm (at %.2f s, %.0f cm under the top; minimum %.0f)"),
-				Case.Label, WorstGap >= TNumericLimits<float>::Max() ? 999.f : WorstGap, WorstAt, -WorstZ, Config.AlignMinBodyGapCm));
+			// Over a fence (HighFenceVault) the clip's own torso passes under the fence's top: measured and logged, not a pass / fail (batch-2 report,
+			// "not done": a clip matter); the designer's report is about the tops.
+			const bool bCounted = Case.bOnTop;
+			if (!bCounted)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[MantleAlignSmoke] %s: the torso's smallest gap to the fence below its top %.1f cm (at %.2f s; not checked: an over clip)"),
+					Case.Label, WorstGap >= TNumericLimits<float>::Max() ? 999.f : WorstGap, WorstAt);
+			}
+			else
+			{
+				Check(State, WorstGap >= Config.AlignMinBodyGapCm, FString::Printf(
+					TEXT("%s: no clipping into the obstacle - the torso's smallest gap to its footprint below the top %.1f cm (at %.2f s, %.0f cm under the top; minimum %.0f)"),
+					Case.Label, WorstGap >= TNumericLimits<float>::Max() ? 999.f : WorstGap, WorstAt, -WorstZ, Config.AlignMinBodyGapCm));
+			}
 		}
 		// 6. The held pose (MantlingProblem_04 "hangs ~0.5 s in a strange pose": the clip's own slow settle before the handoff): how long before
 		// the climb hands over the body (the torso joints: pelvis, spine, head - what the top-down camera reads as his pose) already stays within

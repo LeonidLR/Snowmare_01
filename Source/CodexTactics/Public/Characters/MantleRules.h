@@ -173,6 +173,9 @@ struct FMantleConfig
 	float LinkMaxPerFace = 4.f;
 	/** Path links: the mantle area's entering cost (cm of walking it is worth) - only a real short cut climbs. "links.entering_cost_cm" */
 	float LinkEnteringCostCm = 600.f;
+	/** Path links: at most this many on a map (a runaway layout); slice 1 had a fixed 900, which a Depot already filled - the generated X4 / X6
+	 *  maps then had links over a corner of the map only (batch 2 item 9). "links.max_total" */
+	float LinkMaxTotal = 12000.f;
 	/** Path links: a top under this height also gets a link back down (the drop links start at falls.json link.min_drop_cm), cm. "links.down_below_cm" */
 	float LinkDownBelowCm = 150.f;
 	/** Click order: the clicked top must lie within this distance of the operative to be taken as a climb order, cm. "order.max_distance_cm" */
@@ -217,6 +220,9 @@ struct FMantleConfig
 	/** The wall guard: while a torso joint (pelvis, spine, head) is below the top it is kept at least this far in front of the face (the
 	 *  capsule is pushed back by the deficit; MantlingProblem_03 / 04 "sinks into the obstacle"), cm. "align.guard_gap_cm" */
 	float AlignGuardGapCm = 14.f;
+	/** ... pushing him back at most this much in all per climb (then the clip runs unguarded: no far snap at the landing), cm.
+	 *  "align.guard_max_push_cm" */
+	float AlignGuardMaxPushCm = 30.f;
 	/** Acceptance (MantlingProblem_04): the pelvis settles at its final height over the feet within this of its last height, cm. "align.settle_pelvis_cm" */
 	float AlignSettlePelvisCm = 5.f;
 	/** ... at most this long after the climb ended (the montage blend-out + the stance change; no hold in the clip's pose), s. "align.handoff_limit_s" */
