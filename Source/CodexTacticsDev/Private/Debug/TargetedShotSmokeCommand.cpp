@@ -4,6 +4,9 @@
 // 1. barrel explodes (tracer + target flash); 2. mine shot while prone detonates it; 3. trapped crate is blown up,
 // an untrapped one is only pierced; 4. trapped barricade is detonated (each shot costs one round); 5. an enemy becomes the priority target over a nearer one; 6. during a
 // tactical pause a barrel shot is only planned (with a marker), and fires when the pause is released.
+// The fire gate (bugs 058c / 061, 2026-11-16): a targeted shot is no snap and no instant round any more - he turns to the object, raises
+// the weapon, then the round leaves (ShootAtObject keeps the order pending). Each shot is therefore checked once it resolved (at most
+// ShotWaitSeconds after the click), and with his body on the object at the round.
 
 #include "CoreMinimal.h"
 
@@ -36,6 +39,8 @@ namespace TargetedShotSmoke
 	constexpr float StepSeconds = 0.25f;
 	constexpr float Timeout = 40.f;
 	constexpr float TargetDistance = 900.f;
+	/** The fire gate's turn (up to 180 deg, prone at the prone turn rate) + the raise / stance clip: a targeted shot resolves within this, s. */
+	constexpr float ShotWaitSeconds = 4.f;
 
 	struct FState
 	{
@@ -52,6 +57,9 @@ namespace TargetedShotSmoke
 		TWeakObjectPtr<AEnemyCharacter> FarEnemy;
 		TWeakObjectPtr<ABarrelActor> PauseBarrel;
 		int32 Failures = 0;
+		/** The fire gate: the body's error to the object at each targeted round (OnWeaponFiredNative), the worst one. */
+		float WorstBodyErrorDeg = 0.f;
+		int32 ObjectRounds = 0;
 	};
 
 	void Check(FState& State, bool bOk, const TCHAR* What)
@@ -62,7 +70,7 @@ namespace TargetedShotSmoke
 
 	void Finish(const FState& State)
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && State.Stage >= 9 ? TEXT("PASS") : TEXT("FAIL"));
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && State.Stage >= 13 ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("TargetedShotSmoke"));
 	}
 
@@ -117,39 +125,71 @@ namespace TargetedShotSmoke
 
 		switch (State.Stage)
 		{
-		case 0: // Barrel: explodes at once.
+		case 0: // Barrel ahead: the shot (the fire gate: he raises the weapon first).
 			Squad->SetLeader(Commander);
 			State.ClipBefore = Commander->CurrentClip;
 			PC->IssueTargetedShot(State.Barrel.Get());
+			Next(State);
+			break;
+		case 1: // ... it explodes.
+			if (Commander->IsObjectShotPending() && State.StageTime < ShotWaitSeconds)
+			{
+				break;
+			}
 			Check(State, State.Barrel.IsValid() && State.Barrel->IsBurning(), TEXT("barrel exploded"));
 			Check(State, Commander->CurrentClip == State.ClipBefore - 1, TEXT("barrel shot used one round"));
 			Check(State, CountFeedback(World) >= 2, TEXT("tracer and target flash spawned"));
 			Commander->SetStance(EOperativeStance::Prone);
 			Next(State);
 			break;
-		case 1: // Mine: prone at 9 m -> 95 %; forced hit keeps the check deterministic.
+		case 2: // Mine: prone at 9 m -> 95 %; forced hit keeps the check deterministic (held until the round left).
 			Commander->bForceHitForTesting = true;
 			PC->IssueTargetedShot(State.Mine.Get());
+			Next(State);
+			break;
+		case 3:
+			if (Commander->IsObjectShotPending() && State.StageTime < ShotWaitSeconds)
+			{
+				break;
+			}
 			Commander->bForceHitForTesting = false;
 			Check(State, !IsValid(State.Mine.Get()), TEXT("mine detonated by the shot"));
+			PC->IssueTargetedShot(State.Crate.Get());
 			Next(State);
 			break;
-		case 2: // Trapped crate: remote detonation destroys it.
-			PC->IssueTargetedShot(State.Crate.Get());
+		case 4: // Trapped crate: remote detonation destroys it.
+			if (Commander->IsObjectShotPending() && State.StageTime < ShotWaitSeconds)
+			{
+				break;
+			}
 			Check(State, State.Crate.IsValid() && State.Crate->IsDestroyed() && !State.Crate->bTrapped, TEXT("trapped crate blown up"));
 			PC->IssueTargetedShot(State.PlainCrate.Get());
-			Check(State, State.PlainCrate.IsValid() && !State.PlainCrate->IsDestroyed(), TEXT("untrapped crate only pierced"));
 			Next(State);
 			break;
-		case 3: // Trapped barricade: trap detonated, barricade stays.
+		case 5:
+			if (Commander->IsObjectShotPending() && State.StageTime < ShotWaitSeconds)
+			{
+				break;
+			}
+			Check(State, State.PlainCrate.IsValid() && !State.PlainCrate->IsDestroyed(), TEXT("untrapped crate only pierced"));
 			PC->IssueTargetedShot(State.Barricade.Get());
+			Next(State);
+			break;
+		case 6: // Trapped barricade: trap detonated, barricade stays.
+			if (Commander->IsObjectShotPending() && State.StageTime < ShotWaitSeconds)
+			{
+				break;
+			}
 			Check(State, State.Barricade.IsValid() && !State.Barricade->bTrapped, TEXT("barricade trap detonated"));
 			Check(State, Commander->CurrentClip == State.ClipBefore - 5, TEXT("five object shots used five rounds"));
+			Check(State, State.ObjectRounds == 5 && State.WorstBodyErrorDeg <= Commander->GetBodyArcDeg() + 3.f,
+				*FString::Printf(TEXT("the fire gate: every object round with his body on the object (%d rounds, worst %.0f deg, arc %.0f)"), State.ObjectRounds,
+					State.WorstBodyErrorDeg, Commander->GetBodyArcDeg()));
 			PC->IssueTargetedShot(nullptr); // ground: hint only
 			Commander->SetStance(EOperativeStance::Standing);
 			Next(State);
 			break;
-		case 4: // Priority target: the far enemy wins over the nearer one.
+		case 7: // Priority target: the far enemy wins over the nearer one.
 			if (State.StageTime >= 0.5f)
 			{
 				Check(State, Commander->FindBestCombatTarget() == State.NearEnemy.Get(), TEXT("nearest enemy chosen without a priority"));
@@ -164,7 +204,7 @@ namespace TargetedShotSmoke
 				Next(State);
 			}
 			break;
-		case 5:
+		case 8:
 			PC->SpaceReleased();
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::TacticalPause, TEXT("tactical pause started"));
 			State.PauseBarrel = SpawnAt<ABarrelActor>(World, Commander, Forward - Right, TargetDistance, 60.f);
@@ -174,19 +214,26 @@ namespace TargetedShotSmoke
 			Check(State, World->GetSubsystem<UCombatFeedbackSubsystem>()->GetPlannedMarkerCount() == 1, TEXT("plan marker shown"));
 			Next(State);
 			break;
-		case 6:
+		case 9:
 			if (State.StageTime >= 0.5f)
 			{
 				PC->SpacePressed();
 				Next(State);
 			}
 			break;
-		case 7:
+		case 10:
 			PC->SpaceReleased();
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("pause released"));
 			Next(State);
 			break;
-		case 8:
+		case 11: // the planned shot resolves (the fire gate: turn / raise first)
+			if (Commander->IsObjectShotPending() && State.StageTime < ShotWaitSeconds)
+			{
+				break;
+			}
+			Next(State);
+			break;
+		case 12:
 			Check(State, State.PauseBarrel.IsValid() && State.PauseBarrel->IsBurning(), TEXT("planned barrel shot fired on release"));
 			Check(State, Commander->GetPlannedTargetedShotCount() == 0, TEXT("plan consumed"));
 			Check(State, World->GetSubsystem<UCombatFeedbackSubsystem>()->GetPlannedMarkerCount() == 0, TEXT("plan markers cleared"));
@@ -232,6 +279,20 @@ namespace TargetedShotSmoke
 		const FVector Back = Feet(Commander) - Forward * 100.f + FVector(0.f, 0.f, 100.f);
 		State->NearEnemy = Waves->SpawnEnemy(EEnemyArchetype::Brute, Back - Forward * 500.f);
 		State->FarEnemy = Waves->SpawnEnemy(EEnemyArchetype::Brute, Back - Forward * 1000.f - Right * 150.f);
+		// The fire gate (058c / 061): the body's aim line (the actor yaw + the barrel's pose offset) at every targeted object round.
+		Commander->OnWeaponFiredNative.AddLambda([State](AOperativeCharacter* Who, AActor* At, bool)
+		{
+			if (!Who || !At || At->IsA<AEnemyCharacter>())
+			{
+				return;
+			}
+			const FVector Line = FRotator(0.f, Who->GetActorRotation().Yaw + Who->GetBarrelYawOffset(), 0.f).Vector();
+			const FVector To = (At->GetActorLocation() - Who->GetActorLocation()).GetSafeNormal2D();
+			const float Error = To.IsNearlyZero() ? 0.f : FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(static_cast<float>(FVector::DotProduct(Line, To)), -1.f, 1.f)));
+			State->WorstBodyErrorDeg = FMath::Max(State->WorstBodyErrorDeg, Error);
+			++State->ObjectRounds;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: targeted round at %s, body %.0f deg off it (stance %d)"), *At->GetName(), Error, static_cast<int32>(Who->GetStance()));
+		});
 
 		TWeakObjectPtr<UWorld> WeakWorld(World);
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakWorld, State](float)

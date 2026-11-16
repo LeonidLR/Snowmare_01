@@ -1,0 +1,13 @@
+{
+  "comment": "The fire gate (bugs 058c / 061, game designer 2026-11-15: turn -> raise the weapon -> only then the round, on EVERY operative fire path: auto fire open / cover / corner, quick fire, suppress, targeted object shots, squad and PMC fighters). Read by FireGateRules::GetConfig (Source/CodexTactics/Public/Combat/FireGateRules.h) at game start; the FFireGateConfig defaults mirror these values (test CodexTactics.Combat.FireGate.TuningFileMirrorsDefaults). A round leaves only when the barrel is within the aim cone of the point (AOperativeCharacter::AimConeDeg) and, still in the open, the body within Codex.Fire.BodyArcDeg of it; the aim pose has been up raise_seconds (open) / the cover fire stance cover_raise_seconds (cover); no stance clip plays; a wounded man's torso / hunch is up (InjuredRaise, crouched and in cover too); and the barrel has stayed on the point settle_seconds after a turn. No attempt for eval_gap_seconds = settle again. An anim instance that did not update for anim_stale_seconds holds nothing but the aim. From cover a stance up cover_reach_seconds whose barrel still misses = out of the pose's reach: he steps off the wall (when he may expose himself). A targeted object shot waits at most object_shot_timeout_seconds. enabled 0 = off (CVar Codex.Fire.Gate 0 too). Times s.",
+  "params": {
+    "enabled": 1,
+    "raise_seconds": 0.2,
+    "cover_raise_seconds": 0.25,
+    "settle_seconds": 0.1,
+    "eval_gap_seconds": 0.3,
+    "anim_stale_seconds": 0.25,
+    "cover_reach_seconds": 0.6,
+    "object_shot_timeout_seconds": 4
+  }
+}

@@ -9,6 +9,7 @@
 #include "Characters/LeftHandIKRules.h"
 #include "Characters/AimOffsetRules.h"
 #include "Combat/SniperRules.h"
+#include "Combat/FireGateRules.h"
 #include "DrawDebugHelpers.h"
 #include "HAL/IConsoleManager.h"
 
@@ -605,6 +606,18 @@ float UOperativeAnimInstance::GetStanceTransitionPosition(const UAnimSequenceBas
 	return Montage_GetPosition(Montage);
 }
 
+float UOperativeAnimInstance::GetAimPoseUpSeconds() const
+{
+	const UWorld* World = GetWorld();
+	return World ? FireGateRules::SecondsSince(AimPoseUpSince, World->GetTimeSeconds()) : -1.f;
+}
+
+bool UOperativeAnimInstance::IsUpperBodyUpdateFresh(float MaxAgeSeconds) const
+{
+	const UWorld* World = GetWorld();
+	return World && LastUpperBodyUpdateTime >= 0.0 && World->GetTimeSeconds() - LastUpperBodyUpdateTime <= FMath::Max(MaxAgeSeconds, 0.f);
+}
+
 bool UOperativeAnimInstance::IsPlayingStanceTransition() const
 {
 	const UAnimMontage* Montage = StanceTransitionMontage.Get();
@@ -1059,6 +1072,12 @@ void UOperativeAnimInstance::UpdateUpperBody(float DeltaSeconds)
 		AimTimer = 0.f;
 	}
 	bIsAiming = !bIsDead && !bKnockedDown && !bIsSprinting && (bAttackMode || AimTimer > 0.f);
+	// The fire gate (058c / 061, FireGateRules): when the aim pose came up - the first round waits raise_seconds for it.
+	if (const UWorld* AimWorld = GetWorld())
+	{
+		LastUpperBodyUpdateTime = AimWorld->GetTimeSeconds();
+		AimPoseUpSince = FireGateRules::StepSince(AimPoseUpSince, bIsAiming, LastUpperBodyUpdateTime);
+	}
 
 	// Blend-space axes (user report 2026-10-01: legs and arms trembled while slowing down). The speed is smoothed and
 	// has a dead zone with hysteresis (formation followers stop / restart and creep at 10-25 cm/s, and the raw speed

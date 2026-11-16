@@ -1371,6 +1371,13 @@ public:
 	 * so no first round would ever leave; ProneCrawlSmoke 2026-11-10).
 	 */
 	void HoldAimPose() { AimTimer = FMath::Max(AimTimer, AimHoldAfterShot); }
+	/**
+	 * The fire gate (058c / 061, FireGateRules): how long the aim pose (bIsAiming) has been up, s; -1 while it is down. A fire attempt raises it
+	 * (HoldAimPose) and the round waits raise_seconds for it.
+	 */
+	float GetAimPoseUpSeconds() const;
+	/** The upper body (the aim pose) was updated within MaxAgeSeconds: the pose is evaluated, a raise hold makes sense. */
+	bool IsUpperBodyUpdateFresh(float MaxAgeSeconds) const;
 	/** Prone fire clips cut short because a crawl order started (crawl first; smokes). */
 	int32 GetCrawlFireClipsStopped() const { return CrawlFireClipsStopped; }
 
@@ -2196,6 +2203,11 @@ private:
 	double LastInjuredDemandTime = -1.0;
 	/** The world time of the last UpdateInjuredLayer (a shot is never held by an animation that does not tick). */
 	double LastInjuredUpdateTime = -1.0;
+	/**
+	 * The fire gate (058c / 061): crouched / in cover and wounded the pose is the cue-only hunch (no pack clip crouches or hugs a wall) - the
+	 * round waits for the raise (InjuredRaise) there too, not only under the standing layer's torso share.
+	 */
+	bool bInjuredCueOnlyPose = false;
 	float InjuredUpperShare = 0.f;
 	float InjuredRunShare = 0.f;
 	/** Seconds since the last run (-1 = never ran). */
@@ -2371,6 +2383,9 @@ private:
 	int32 VaultClipsPlayed = 0;
 	TWeakObjectPtr<UAnimMontage> VaultMontage;
 	float AimTimer = 0.f;
+	/** The fire gate (058c / 061): the world time the aim pose (bIsAiming) came up (-1 = down) and of the last UpdateUpperBody (-1 = none). */
+	double AimPoseUpSince = -1.0;
+	double LastUpperBodyUpdateTime = -1.0;
 	bool bWasReloading = false;
 	/** Stance seen last update (transitions start on a change); unset until the first update. */
 	TOptional<EOperativeStance> PreviousStance;

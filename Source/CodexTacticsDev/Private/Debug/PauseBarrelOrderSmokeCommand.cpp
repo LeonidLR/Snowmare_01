@@ -258,7 +258,8 @@ namespace PauseBarrelOrderSmoke
 			PC->SpaceReleased();
 			Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime, TEXT("second tap: real time"));
 			Check(State, Relocation->GetActiveTaskCount() == 1, TEXT("release: the push task started"));
-			Check(State, Squad->GetDeferredShotCount() == 1 || State.ShotBarrel->IsBurning(), TEXT("release: the shot fired or waits for the reload"));
+			Check(State, Squad->GetDeferredShotCount() == 1 || State.ShotBarrel->IsBurning() || Shooter->IsObjectShotPending(),
+				TEXT("release: the shot fired, waits for the reload or turns / raises first (the fire gate, 058c / 061)"));
 			Check(State, Interactions->GetActiveUseOrderCount() == 1 || State.MatchBarrel->IsBurning(), TEXT("release: C walks up to light barrel 3"));
 			NextStage(State);
 			break;
@@ -335,11 +336,13 @@ namespace PauseBarrelOrderSmoke
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: barrel 4 lit after %.2f s"), State.StageTime);
 				Check(State, State.LiveMatchBarrel->IsBurning() && Lighter->MatchesCount == State.MatchesBefore - 1,
 					TEXT("real time: \"Ignite\" ran, barrel 4 burns, one match spent"));
-				// Real time without a pause: the Ctrl + click shot ignites at once.
+				// Real time without a pause: the Ctrl + click shot is taken at once - it ignites the barrel once he faces it with the weapon raised
+				// (the fire gate, 058c / 061: checked when the barricade move below is done).
 				Squad->SetLeader(Shooter);
 				Shooter->CurrentClip = FMath::Max(Shooter->CurrentClip, 5);
 				PC->IssueTargetedShot(State.LiveShotBarrel.Get());
-				Check(State, State.LiveShotBarrel->IsBurning(), TEXT("real time: the Ctrl + click shot ignites barrel 5 at once"));
+				Check(State, State.LiveShotBarrel->IsBurning() || Shooter->IsObjectShotPending(),
+					TEXT("real time: the Ctrl + click shot at barrel 5 is taken at once (fired, or turning / raising first)"));
 				// User decision 2026-10-26: B moves the barricade in the REAL-TIME fight through its menu.
 				Squad->SetLeader(Carrier);
 				ClickActor(*PC, State.Barricade.Get());
@@ -361,6 +364,7 @@ namespace PauseBarrelOrderSmoke
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke diag: real-time barricade move %.2f s, %.0f cm from the spot"), State.StageTime, Error);
 				Check(State, Flow->GetCombatMode() == ECodexCombatMode::RealTime && Relocation->GetActiveTaskCount() == 0 && Error < PlaceTolerance
 					&& !Carrier->bCarrying, TEXT("real time: the fight did not drop the move - the barricade stands on the spot"));
+				Check(State, State.LiveShotBarrel->IsBurning() && !Shooter->IsObjectShotPending(), TEXT("real time: the Ctrl + click shot ignited barrel 5"));
 				return Finish(State, true);
 			}
 			break;

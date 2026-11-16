@@ -27,6 +27,7 @@
 #include "Combat/SniperRules.h"
 #include "Combat/PeekSightRules.h"
 #include "Combat/SuppressionRules.h"
+#include "Combat/FireGateRules.h"
 #include "OperativeCharacter.generated.h"
 
 class UMaterialInterface;
@@ -370,6 +371,35 @@ public:
 	/** Fire attempts the raise held (smokes) and the world time of the last one (-1 = none). */
 	int32 InjuredRaiseHolds = 0;
 	double LastInjuredRaiseHoldTime = -1.0;
+
+	/**
+	 * The fire gate (bugs 058c / 061, game designer 2026-11-15: turn -> raise -> only then the round; FireGateRules, OperativeCharacterFireGate.cpp).
+	 * Every operative fire path (auto fire open / cover / corner, quick fire, suppress, ShootAtObject; the squad and the PMC fighters) asks it
+	 * right before a round. True = the barrel is on AimAt and the weapon is raised. False = OutReason (a FireGateRules::BlockName string) and
+	 * OutBlock say why. A held attempt asks for the raise itself (the aim pose, the cover fire stance, the wounded torso), so the weapon comes
+	 * up while he turns. Off with fire_gate.json "enabled" 0 / Codex.Fire.Gate 0.
+	 */
+	bool CanFireAt(const FVector& AimAt, const TCHAR*& OutReason, EFireGateBlock* OutBlock = nullptr);
+	/**
+	 * The aim error the gate judges, deg: open = GetShotAimResidualDeg (the barrel / stance, prone the body); from cover = the cover pose's own
+	 * aim (the real barrel when the pose is evaluated, else the lean / pop-up stance's aim direction) - never the wall slot; 0 for a blind shot.
+	 */
+	float GetFireGateResidualDeg(const FVector& AimAt) const;
+	/** The body's aim line (actor yaw + the barrel's pose offset) to AimAt, deg, signed. */
+	float GetBodyAimErrorDeg(const FVector& AimAt) const;
+	/** The arc the body must face AimAt within (open, standing / crouched): Codex.Fire.BodyArcDeg still, 180 walking. */
+	float GetBodyArcDeg() const;
+	/** He shoots from cover blind now (the blind fire mode, or suppressed: head down) - the cover round is not aimed. */
+	bool IsCoverShotBlind() const;
+	/** Rounds the gate held, per verdict (smokes / logs). */
+	int32 GetFireGateHolds(EFireGateBlock Block) const { return FireGateHolds[FMath::Clamp(static_cast<int32>(Block), 0, static_cast<int32>(EFireGateBlock::Count) - 1)]; }
+	/** The last verdict of the gate and when (-1 = never). */
+	EFireGateBlock GetLastFireGateBlock() const { return LastFireGateBlock; }
+	/** A targeted shot at an object (ShootAtObject) waits for the gate (turning / raising). */
+	bool IsObjectShotPending() const { return PendingObjectShot.IsValid(); }
+	AActor* GetPendingObjectShot() const { return PendingObjectShot.Get(); }
+	/** Targeted object shots that left (smokes). */
+	int32 GetObjectShotsFired() const { return ObjectShotsFired; }
 
 	/** The critical wound holds him down right now (UpdateCriticalWound's state: set when he went down, cleared when healed). */
 	bool IsHeldDownByCriticalWound() const { return bCriticalWoundDown; }
@@ -3207,6 +3237,28 @@ private:
 	/** Sniper: an object shot (Ctrl + click) waiting for the kneel, retried every frame until it fires or times out. */
 	void UpdateSniperPendingShot(float DeltaTime);
 	TWeakObjectPtr<AActor> SniperPendingObject;
+	/**
+	 * The fire gate's targeted object shot (ShootAtObject): an explicit order like the quick fire - he turns / raises, the round leaves when the
+	 * gate opens (RunPendingObjectShot inside RunCombatShooting), dropped after object_shot_timeout_seconds.
+	 */
+	const TCHAR* RunPendingObjectShot(float DeltaTime);
+	/** The targeted object round itself (the tracer, the detonation / the miss line, the ammo): the gate already passed. */
+	bool FireObjectShotNow(AActor* Target, ETargetedShotKind Kind);
+	/** The fire gate is on (fire_gate.json "enabled" and Codex.Fire.Gate). */
+	static bool IsFireGateOn();
+	TWeakObjectPtr<AActor> PendingObjectShot;
+	float PendingObjectShotTimer = 0.f;
+	int32 ObjectShotsFired = 0;
+	/** The fire gate's state: the barrel on target since / the last attempt (world time, -1 = none), the cover fire stance up since. */
+	double FireGateOnTargetSince = -1.0;
+	double FireGateLastEvalTime = -1.0;
+	double CoverStanceUpSince = -1.0;
+	int32 FireGateHolds[static_cast<int32>(EFireGateBlock::Count)] = {};
+	EFireGateBlock LastFireGateBlock = EFireGateBlock::None;
+	/** The cover fire stance up (lean out / pop up / blind fire) for a shot from cover - BeginCoverShot without the shot's time stamp. */
+	void RaiseCoverFireStance();
+	/** Keeps CoverStanceUpSince (UpdateCover, every frame in cover). */
+	void TrackCoverFireStance();
 	float SniperPendingTimer = 0.f;
 	double SniperHoldUntil = -1.0;
 	/** When she last knelt for a shot (the shot waits SniperKneelSettleSeconds after it). */

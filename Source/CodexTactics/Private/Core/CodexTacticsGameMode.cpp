@@ -14,6 +14,7 @@
 #include "Characters/OperativeBalance.h"
 #include "CodexTactics.h"
 #include "Combat/SuppressionRules.h"
+#include "Combat/FireGateRules.h"
 #include "Combat/UnderFireRules.h"
 #include "Combat/WaveSubsystem.h"
 #include "Core/LevelFlowRules.h"
@@ -131,6 +132,7 @@ void ACodexTacticsGameMode::StartPlay()
 	TacticalHeatTuning::ApplyFile(TacticalHeatTuning::GetDefaultPath()); // Sprint 15 heat sources + their starting loadout
 	SuppressionRules::ReloadConfig(); // suppressive fire tunables (Content/Data/Combat/suppression.json, 2026-10-26)
 	UnderFireRules::ReloadConfig(); // the reaction / manoeuvre under fire (Content/Data/Combat/under_fire.json, #43 2026-11-07)
+	FireGateRules::ReloadConfig(); // turn -> raise -> fire on every operative fire path (Content/Data/Combat/fire_gate.json, 058c / 061 2026-11-16)
 	ApplyLevelConfig();
 	bPreloadSquadPending = true;
 	if (auto* Preload = GetWorld()->GetSubsystem<UGameplayPreloadSubsystem>())

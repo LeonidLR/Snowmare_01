@@ -7,7 +7,10 @@
 #include "Combat/EncounterQueries.h"
 
 #include "Characters/EnemyCharacter.h"
+#include "Characters/OperativeAnimInstance.h"
 #include "Characters/SquadSubsystem.h"
+#include "CodexTactics.h"
+#include "Components/SkeletalMeshComponent.h"
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
@@ -115,6 +118,24 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 			SniperPendingObject.Reset();
 		}
 	}
+	if (IsFireGateOn())
+	{
+		// The fire gate (bugs 058c / 061, game designer 2026-11-15: turn -> raise -> only then the round): no snap round to the object and an
+		// instant round - the order is kept, he turns (UpdateCombatFacing) / leans out and raises the weapon, and the round leaves when the gate
+		// opens (RunPendingObjectShot, every frame; at once when it is open already). True = the order is taken (fired or pending).
+		if (PendingObjectShot.Get() != Target)
+		{
+			PendingObjectShot = Target;
+			PendingObjectShotTimer = FireGateRules::GetConfig().ObjectShotTimeoutSeconds;
+			if (!bInCover)
+			{
+				SetSprinting(false);
+				StopOperative();
+			}
+		}
+		RunPendingObjectShot(0.f);
+		return true;
+	}
 	if (bInCover && !IsCornerShotTarget(Target->GetActorLocation()))
 	{
 		BeginOpenShotFromCover(Target); // out on the open side: a normal shot off the wall (user decision 2026-10-06)
@@ -134,7 +155,79 @@ bool AOperativeCharacter::ShootAtObject(AActor* Target)
 	{
 		StopAndFace(Target->GetActorLocation());
 	}
+	return FireObjectShotNow(Target, Kind);
+}
 
+const TCHAR* AOperativeCharacter::RunPendingObjectShot(float DeltaTime)
+{
+	AActor* Target = PendingObjectShot.Get();
+	if (!Target)
+	{
+		PendingObjectShot.Reset();
+		return TEXT("object shot: none");
+	}
+	const ETargetedShotKind Kind = ClassifyShotTarget(Target);
+	PendingObjectShotTimer -= DeltaTime;
+	if (Kind == ETargetedShotKind::None || Kind == ETargetedShotKind::Enemy || PendingObjectShotTimer <= 0.f || !HealthComponent
+		|| !HealthComponent->IsAlive() || IsRaging() || IsPanicking())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[TargetedShot] %s: the shot at %s dropped (%s)"), *DisplayName.ToString(), *Target->GetName(),
+			PendingObjectShotTimer <= 0.f ? TEXT("the fire gate never opened in time") : TEXT("target gone / he cannot fire"));
+		PendingObjectShot.Reset();
+		return TEXT("object shot: dropped");
+	}
+	if (!CanBeginWeaponShot())
+	{
+		return TEXT("object shot: waits (reload / misfire / frozen)");
+	}
+	if (IsSniperWeaponEquipped() && PrepareSniperShot(/*bDirectOrder*/ true) != ESniperFireStep::Ready)
+	{
+		return TEXT("object shot: sniper gets ready");
+	}
+	if (const UOperativeAnimInstance* ArmsAnim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
+		ArmsAnim && ArmsAnim->IsThrowingGrenade())
+	{
+		return TEXT("object shot: throwing a grenade");
+	}
+	const FVector AimAt = Target->GetActorLocation();
+	NoteShotAim(Target, AimAt, false); // the aim offset holds the object while he turns
+	if (bInCover && !IsCornerShotTarget(AimAt))
+	{
+		BeginOpenShotFromCover(Target); // out on the open side: a normal shot off the wall (user decision 2026-10-06; false while shimmying)
+	}
+	if (bInCover)
+	{
+		// From cover the targeted shot goes round the corner / over the top like any cover shot (user rule 2026-10-06).
+		if (!CanFireFromCover())
+		{
+			PendingObjectShot.Reset();
+			return TEXT("object shot: dropped (no line out of this cover)");
+		}
+		CoverShotTarget = Target;
+		UpdateCoverFacing(/*bAllowSnap*/ false);
+	}
+	const TCHAR* GateReason = nullptr;
+	EFireGateBlock Block = EFireGateBlock::None;
+	if (!CanFireAt(AimAt, GateReason, &Block))
+	{
+		if (bInCover && Block == EFireGateBlock::CoverPoseOutOfReach)
+		{
+			BeginOpenShotFromCover(Target); // the cover pose cannot bring the barrel onto it: off the wall, the open turn
+		}
+		return GateReason;
+	}
+	if (bInCover)
+	{
+		BeginCoverShot();
+	}
+	PendingObjectShot.Reset();
+	FireObjectShotNow(Target, Kind);
+	return TEXT("fired");
+}
+
+bool AOperativeCharacter::FireObjectShotNow(AActor* Target, ETargetedShotKind Kind)
+{
+	++ObjectShotsFired;
 	bool bHit = true;
 	FMineShotChance MineShot;
 	float DistanceM = 0.f;
@@ -265,7 +358,9 @@ bool AOperativeCharacter::ExecutePlannedTargetedShots()
 	for (const ETargetedShotKind Kind : { ETargetedShotKind::Barrel, ETargetedShotKind::Mine, ETargetedShotKind::Crate, ETargetedShotKind::TrappedObject })
 	{
 		const TWeakObjectPtr<AActor>* Target = Plans.Find(Kind);
-		if (Target && Target->IsValid() && !ShootAtObject(Target->Get()) && ClassifyShotTarget(Target->Get()) == Kind)
+		// The fire gate: one targeted shot at a time - while one turns / raises (pending), the next stays planned (the squad retries it).
+		const bool bBusy = Target && Target->IsValid() && IsObjectShotPending() && GetPendingObjectShot() != Target->Get();
+		if (Target && Target->IsValid() && (bBusy || !ShootAtObject(Target->Get())) && ClassifyShotTarget(Target->Get()) == Kind)
 		{
 			PlannedShots.Add(Kind, *Target); // could not fire yet: the squad retries it (USquadSubsystem::RetryPlannedShots)
 		}

@@ -617,6 +617,20 @@ float AOperativeCharacter::GetIncomingHitChanceMultiplier(const AActor* Shooter)
 void AOperativeCharacter::BeginCoverShot()
 {
 	CoverLastShotTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	RaiseCoverFireStance();
+}
+
+void AOperativeCharacter::TrackCoverFireStance()
+{
+	// The fire gate (058c / 061): how long the cover fire stance has been up (a lean / the corner aim / blind fire) - the round waits
+	// cover_raise_seconds for it.
+	const UWorld* World = GetWorld();
+	CoverStanceUpSince = World ? FireGateRules::StepSince(CoverStanceUpSince, bInCover && (bIsCornerLeaning || bIsBlindFiring || bCornerAimActive),
+		World->GetTimeSeconds()) : -1.0;
+}
+
+void AOperativeCharacter::RaiseCoverFireStance()
+{
 	const FCoverCombatConfig& Config = CoverRules::GetConfig();
 	// Suppressed (game designer decision 2026-10-26): head down - blind fire whatever the fire mode, no lean out.
 	if (CoverFireMode == ECoverFireMode::BlindFire || !USuppressionSubsystem::MayExposeNow(this))
@@ -657,6 +671,7 @@ void AOperativeCharacter::UpdateCover(float DeltaTime)
 	UpdateCoverEnteredEvent(DeltaTime);
 	UpdateCoverWrap(DeltaTime);
 	UpdateCornerAim(DeltaTime);
+	TrackCoverFireStance();
 	// Corner hold (user decision 2026-10-07): at the exposed edge he steps out into the fire stance at once - also right
 	// after a reload - and holds it; only in a fight / with a known threat (2026-10-11: exploring he hugs the wall).
 	// Suppressed (2026-10-26): no stepping out into the fire stance.

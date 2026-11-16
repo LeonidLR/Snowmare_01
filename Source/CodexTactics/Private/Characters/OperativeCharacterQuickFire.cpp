@@ -223,7 +223,41 @@ const TCHAR* AOperativeCharacter::RunQuickFire(float DeltaTime, AActor*& OutTarg
 	}
 
 	float Residual = 0.f;
-	if (bFromCover)
+	if (IsFireGateOn())
+	{
+		// The fire gate (bugs 058c / 061, game designer 2026-11-15): turn -> raise -> only then the round, from cover too (the cover pose's
+		// own barrel must be on the point - it used to fire from the wall at once). A cover pose that cannot reach it: off the wall (an
+		// order steps out whatever his suppression, as above).
+		if (bFromCover)
+		{
+			CoverShotTarget = Enemy; // the point is the threat side (GatherCoverThreat): the back stays to the wall, the cover pose takes the shot
+			UpdateCoverFacing(/*bAllowSnap*/ false);
+		}
+		else
+		{
+			TurnAimTowards(AimAt, DeltaTime); // eased, never slower than AimTurnRateDegPerSec; prone at the prone turn rate (bug #33)
+		}
+		const TCHAR* GateReason = nullptr;
+		EFireGateBlock GateBlock = EFireGateBlock::None;
+		if (!CanFireAt(AimAt, GateReason, &GateBlock))
+		{
+			if (bFromCover && GateBlock == EFireGateBlock::CoverPoseOutOfReach)
+			{
+				BeginOpenShotFromCover(Enemy);
+			}
+			return GateReason;
+		}
+		Residual = bFromCover ? GetFireGateResidualDeg(AimAt) : GetShotAimResidualDeg(AimAt);
+		if (ShootTimer > 0.f || MisfireCooldownTimer > 0.f)
+		{
+			return bFromCover ? TEXT("quick fire: cooldown (cover)") : TEXT("quick fire: cooldown");
+		}
+		if (bFromCover)
+		{
+			BeginCoverShot();
+		}
+	}
+	else if (bFromCover)
 	{
 		// The back stays to the wall: the point is the threat side (GatherCoverThreat), the cover pose takes the shot.
 		CoverShotTarget = Enemy;
