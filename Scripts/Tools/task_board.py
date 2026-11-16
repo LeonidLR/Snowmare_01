@@ -436,8 +436,6 @@ def compute_task_state(
 
     if in_main:
         return "in_main", last_activity_ts, idle_min
-    if in_interim:
-        return "in_interim", last_activity_ts, idle_min
     if has_report:
         return "done", last_activity_ts, idle_min
     if asked_question or blocked:

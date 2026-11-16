@@ -206,7 +206,8 @@ class TaskBoardTests(unittest.TestCase):
         self.assertEqual(by_id["codex-008"]["state"], "in_progress")
         self.assertEqual(by_id["codex-009"]["state"], "waiting")
         self.assertTrue(by_id["codex-009"]["asked_question"])
-        self.assertEqual(by_id["codex-010"]["state"], "in_interim")
+        # The interim branch is gone (2026-11-16): a branch merged only into interim shows as done (review), not a separate column.
+        self.assertEqual(by_id["codex-010"]["state"], "done")
         self.assertEqual(by_id["gemini-030"]["state"], "in_main")
         self.assertEqual(by_id["gemini-031"]["state"], "in_progress")
         self.assertEqual(by_id["gemini-032"]["state"], "queued")
