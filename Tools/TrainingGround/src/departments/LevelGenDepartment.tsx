@@ -21,6 +21,7 @@ import { checkSeams, expandLayout, expansionSize } from '../levelgen/expand';
 import type { PlaceObjectivesResult } from '../levelgen/objectives';
 import { addGoal, checkObjectives, defaultGoalCount, groundNav, moveObjective, placeObjectives, removeGoal, START_ID } from '../levelgen/objectives';
 import { V2 } from '../levelgen/blockTemplates';
+import { FULL } from '../levelgen/fullReroll';
 import { addLock, DEFAULT_MAX_RETRIES, regenerateRegion, regenStateOf, removeLock, selectRegion } from '../levelgen/regionRegen';
 import type { FormationConfigFile } from '../movement/config';
 import { configValues } from '../movement/config';
@@ -46,6 +47,8 @@ const BLOCK_LABEL: Record<string, string> = {
   steel_works: 'сталелитейный цех', racks: 'стеллажи',
 };
 const blockLabel = (t: string) => BLOCK_LABEL[t] ?? t;
+/** 'a + b + c' (the parcels of a 'full' re-roll) -> the labels. */
+const blockLabels = (t: string) => t.split(' + ').filter(Boolean).map(blockLabel).join(' + ');
 
 export const LevelGenDepartment: React.FC = () => {
   const [activeTab, setActiveTab] = useState<'generator' | 'props'>('props');
@@ -77,7 +80,9 @@ export const LevelGenDepartment: React.FC = () => {
   const [lockName, setLockName] = useState('');
   const [regenReport, setRegenReport] = useState<RegionRegenResult | null>(null);
   const [histories, setHistories] = useState<Record<string, History<GenLayout>>>({});
-  const [blockMode, setBlockMode] = useState<BlockMode>('types');
+  // task 072: the default is the full re-plan (the designer expected the buildings to change, not only the points)
+  const [blockMode, setBlockMode] = useState<BlockMode>('full');
+  const [chaos, setChaos] = useState<number>(FULL.default_chaos);
   // zoom + pan on the plan (UX round, task 072): reset to "fit" when another map (other bounds) is shown
   const [view, setView] = useState<PlanView>(FIT_VIEW);
   const [goalTool, setGoalTool] = useState(false);
@@ -189,9 +194,9 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('Перегенерация зоны...'); setError('');
     setTimeout(() => {
       try {
-        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode });
+        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos });
         setRegenReport(r);
-        if (r.ok && r.layout !== cur.layout) pushStep(r.layout, `зона, seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`);
+        if (r.ok && r.layout !== cur.layout) pushStep(r.layout, `зона (${blockMode === 'full' ? `полностью, хаос ${chaos}` : blockMode === 'types' ? 'типы' : 'наполнение'}), seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`);
         setRerollSeed((s) => s + 1);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
@@ -442,9 +447,21 @@ export const LevelGenDepartment: React.FC = () => {
                   <label className="flex items-center gap-1 text-slate-400" title="Сколько раз повторить с новым seed, если маршрут ломается">повторов до
                     <input type="number" value={maxRetries} min={0} max={20} onChange={(e) => setMaxRetries(Math.max(0, Math.min(20, Math.floor(Number(e.target.value) || 0))))} className="w-12 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" />
                   </label>
-                  <label className="flex items-center gap-1 text-slate-400" title="Кварталы, чей центр внутри зоны, получают ДРУГОЙ тип (цех -> двор, свалка -> двухэтажка...) и меняются целиком; иначе — только перестановка внутри тех же типов (этап 1)">
-                    <input type="checkbox" checked={blockMode === 'types'} onChange={(e) => setBlockMode(e.target.checked ? 'types' : 'jitter')} />новые типы кварталов
+                  <label className="flex items-center gap-1 text-slate-400" title="Полностью: квартал заново делится на участки, у каждого свой тип, здания другой формы, размера, отступа и ориентации (по хаосу). Тип квартала: квартал получает другой тип, но здания стоят на тех же местах. Только наполнение: те же здания, новые укрытия, точки, проёмы.">Что менять
+                    <select value={blockMode} onChange={(e) => setBlockMode(e.target.value as BlockMode)} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" data-blockmode>
+                      <option value="full">Полностью (форма и расстановка)</option>
+                      <option value="types">Тип квартала (здания на тех же местах)</option>
+                      <option value="jitter">Только наполнение (укрытия, точки)</option>
+                    </select>
                   </label>
+                  {blockMode === 'full' && (
+                    <label className="flex items-center gap-1 text-slate-400" title="0 — ровная сетка: участки поровну, здания вровень с улицей; 1 — неровно: разные участки, отступы, промежутки, угловые участки могут смотреть на другую улицу">хаос
+                      <span className="text-[10px] text-slate-500">ровно</span>
+                      <input type="range" min={0} max={1} step={0.1} value={chaos} onChange={(e) => setChaos(Number(e.target.value))} className="w-24 accent-amber-500" data-chaos />
+                      <span className="text-[10px] text-slate-500">хаотично</span>
+                      <span className="font-mono text-slate-200 w-6">{chaos.toFixed(1)}</span>
+                    </label>
+                  )}
                   <button type="button" onClick={reroll} disabled={!zone || !profileOk || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold disabled:opacity-40"><Shuffle size={13} />Перегенерировать зону</button>
                   <button type="button" onClick={() => stepHistory('undo')} disabled={!history || !canUndo(history) || !!busy} title={history && canUndo(history) ? `Отменить: ${history.present.label}` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Undo2 size={13} />Отменить ({history?.past.length ?? 0})</button>
                   <button type="button" onClick={() => stepHistory('redo')} disabled={!history || !canRedo(history) || !!busy} title={history && canRedo(history) ? `Вернуть: ${history.future[0].label}` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Redo2 size={13} />Вернуть ({history?.future.length ?? 0})</button>
@@ -452,11 +469,11 @@ export const LevelGenDepartment: React.FC = () => {
                   <button type="button" onClick={lockZone} disabled={!zone || !!busy} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white disabled:opacity-40"><Lock size={12} />Закрепить район</button>
                   <button type="button" onClick={saveLocksNow} disabled={!!busy} title="Записать закреплённые районы (многоугольники) в JSON карты: в принятую карту (только блок regen.locks), иначе — черновик Saved/TrainingGround/levelgen" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 border border-emerald-700 text-emerald-200 hover:bg-slate-700 disabled:opacity-40"><Save size={12} />Сохранить замки</button>
                 </div>
-                <p className="text-[11px] text-slate-500">{regionHint[regionMode]} Перегенерируются объекты, чей центр внутри зоны (здания целиком); дороги, канал и закреплённые районы не трогаются. Закрепления хранятся в JSON карты (блок regen): кнопка «Сохранить замки» пишет только их, «Принять» — всю карту.</p>
+                <p className="text-[11px] text-slate-500">{regionHint[regionMode]} Кварталы выбираются по ЦЕНТРУ (голубой пунктир — что изменится); «Полностью» делит квартал заново на участки. Перегенерируются объекты, чей центр внутри зоны (здания целиком); дороги, канал и закреплённые районы не трогаются. Закрепления хранятся в JSON карты (блок regen): кнопка «Сохранить замки» пишет только их, «Принять» — всю карту.</p>
                 {locksSaved && <p className="text-[11px] text-emerald-300">{locksSaved}</p>}
                 {!profileOk && <p className="text-amber-300">Для перегенерации нужен эталон {cur.layout.profile} — выберите его слева.</p>}
                 {selection && (
-                  <p className="text-slate-300">В зоне: перегенерируется <span className="text-cyan-300 font-mono">{selection.inside.length}</span> объектов (зданий {selection.inside.filter((g) => g.category === 'building').length}{region && region.plan.selLots.length ? `, кварталов с новым типом ${region.plan.selLots.length}` : ''}), закреплено <span className="text-emerald-300 font-mono">{selection.locked.length}</span>, дороги/канал <span className="font-mono">{selection.fixed.length}</span>{region?.plan.anchored.length ? `; квартал старта/финиша сохраняет тип: ${region.plan.anchored.join(', ')}` : ''}.</p>
+                  <p className="text-slate-300">В зоне: перегенерируется <span className="text-cyan-300 font-mono">{selection.inside.length}</span> объектов (зданий {selection.inside.filter((g) => g.category === 'building').length}{region && region.plan.selLots.length ? (blockMode === 'full' ? `, кварталов переразбить ${region.plan.groups.length}` : `, кварталов с новым типом ${region.plan.selLots.length}`) : ''}), закреплено <span className="text-emerald-300 font-mono">{selection.locked.length}</span>, дороги/канал <span className="font-mono">{selection.fixed.length}</span>{region?.plan.anchored.length ? `; квартал старта/финиша сохраняет тип: ${region.plan.anchored.join(', ')}` : ''}.</p>
                 )}
                 {regenReport && (
                   <p className={regenReport.ok ? 'text-emerald-300' : 'text-rose-300'}>
@@ -465,7 +482,7 @@ export const LevelGenDepartment: React.FC = () => {
                   </p>
                 )}
                 {regenReport && regenReport.retemplated.length > 0 && (
-                  <p className="text-[11px] text-cyan-200">Новые типы кварталов: {regenReport.retemplated.map((x) => `${x.id.replace(/^LOT_/, '')}: ${blockLabel(x.from)} → ${blockLabel(x.to)}`).join('; ')}{regenReport.templateFailed.length ? `; без нового типа (не помещается): ${regenReport.templateFailed.map((x) => x.replace(/^LOT_/, '')).join(', ')}` : ''}{regenReport.removedRoutes.length ? `; убраны варианты маршрута: ${regenReport.removedRoutes.join(', ')}` : ''}</p>
+                  <p className="text-[11px] text-cyan-200">{regenReport.retemplated.some((x) => x.to.includes(' + ')) ? 'Кварталы заново (участки по типам): ' : 'Новые типы кварталов: '}{regenReport.retemplated.map((x) => `${x.id.replace(/^LOT_/, '')}: ${blockLabels(x.from)} → ${blockLabels(x.to) || 'пусто'}`).join('; ')}{regenReport.templateFailed.length ? `; без нового типа (не помещается): ${regenReport.templateFailed.map((x) => x.replace(/^LOT_/, '')).join(', ')}` : ''}{regenReport.removedRoutes.length ? `; убраны варианты маршрута: ${regenReport.removedRoutes.join(', ')}` : ''}</p>
                 )}
                 {regenReport && (regenReport.dropped.length > 0 || regenReport.attempts.some((a) => !a.ok)) && (
                   <details className="text-[11px] text-slate-400"><summary className="cursor-pointer">Подробности: отброшено {regenReport.dropped.length}, неудачных попыток {regenReport.attempts.filter((a) => !a.ok).length}</summary>

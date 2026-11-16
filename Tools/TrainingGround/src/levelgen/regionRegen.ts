@@ -27,7 +27,9 @@ import { generateLayout } from './generate.ts';
 import { classifyObstacleHeight, standardObstacleHeight } from './obstacleHeights.ts';
 import type { Profile } from './profile.ts';
 import type { BuiltTemplate, TemplateContent, Visit } from './blockTemplates.ts';
-import { buildTemplate, isAnchorLot, lotAt, lotsOf, pickTemplates, rectCentre, templateContext } from './blockTemplates.ts';
+import { buildTemplate, isAnchorLot, lotAt, lotsOf, pickTemplates, rectCentre, rectFromUE, rectToUE, templateContext } from './blockTemplates.ts';
+import type { TemplateId } from './blockTemplates.ts';
+import { FULL, subdivideBlock, unionRect } from './fullReroll.ts';
 import type { BlockRecord, GenBuilding, GenCover, GenLadder, GenLayout, GenRoute, GenWall, LockDistrict, MantleEdge, PatrolRoute, RegenState, SpawnPoint } from './schema.ts';
 import { REGEN_STATE_VERSION } from './schema.ts';
 
@@ -323,8 +325,10 @@ export interface Retemplated { id: string; from: string; to: string }
  * 'types' (default, stage 2): every block (lot, blockTemplates.ts) whose centre is inside the zone is replaced WHOLE by another
  * block type drawn with the seed; the objects outside the blocks (street covers, fences along the streets) by their centre.
  * 'jitter': the stage-1 re-roll only (the same set-pieces re-drawn with the new seed).
+ * 'full' (UX round, task 072, fullReroll.ts): the selected blocks are cut into new parcels, each parcel gets a catalog type, the
+ * footprints / setbacks / spacing / facing vary with `chaos` - the shapes, positions and order of the buildings change.
  */
-export type BlockMode = 'types' | 'jitter';
+export type BlockMode = 'types' | 'jitter' | 'full';
 
 export interface RegionRegenOptions {
   layout: GenLayout;
@@ -342,6 +346,8 @@ export interface RegionRegenOptions {
   checkRoutes?: (l: GenLayout) => RouteReport[];
   /** Block mode (default 'types'). */
   blocks?: BlockMode;
+  /** The 'full' mode's chaos 0 (tidy grid) .. 1 (irregular); default levelgen_v2.json full_reroll.default_chaos. */
+  chaos?: number;
 }
 
 export interface RegionRegenResult {
@@ -392,6 +398,11 @@ export interface RegionPlan {
   lots: BlockRecord[];
   /** Blocks re-typed (centre in the zone, not locked, not an anchor). */
   selLots: BlockRecord[];
+  /**
+   * 'full' mode: the blocks re-planned whole - a parent block when every parcel an earlier 'full' re-roll cut from it is selected,
+   * else each selected block on its own. `rect` = the union of its lots (UE cm).
+   */
+  groups: { id: string; lots: BlockRecord[]; rect: [Vec2, Vec2] }[];
   anchored: string[];
   /** Is this point (a group centre / a route point) re-rolled? */
   selected: (p: Vec2, category?: RegenCategory) => boolean;
@@ -402,7 +413,7 @@ export interface RegionPlan {
 export function planRegion(l: GenLayout, zone: Vec2[], lots: BlockRecord[], mode: BlockMode = 'types'): RegionPlan {
   const locks = regenStateOf(l).locks;
   const inZone = (p: Vec2) => pointInPoly(p, zone);
-  const hit = mode === 'types' ? lots.filter((k) => inZone(rectCentre(k.rect))) : [];
+  const hit = mode !== 'jitter' ? lots.filter((k) => inZone(rectCentre(k.rect))) : [];
   const anchored = hit.filter((k) => isAnchorLot(l, k));
   const selLots = hit.filter((k) => !isAnchorLot(l, k) && !isLockedAt(rectCentre(k.rect), locks));
   const selIds = new Set(selLots.map((k) => k.id));
@@ -413,7 +424,19 @@ export function planRegion(l: GenLayout, zone: Vec2[], lots: BlockRecord[], mode
     const lot = lotAt(lots, p);
     return lot && !anchorIds.has(lot.id) ? selIds.has(lot.id) : inZone(p);
   };
-  return { zone, locks, mode, lots, selLots, anchored: anchored.map((k) => k.id), inScope, selected: (p, c) => inScope(p, c) && !isLockedAt(p, locks) };
+  const groups: RegionPlan['groups'] = [];
+  if (mode === 'full') {
+    const done = new Set<string>();
+    for (const k of selLots) {
+      if (done.has(k.id)) continue;
+      const sib = k.parent ? lots.filter((x) => x.parent === k.parent) : [];
+      if (sib.length > 1 && sib.every((x) => selIds.has(x.id))) {
+        sib.forEach((x) => done.add(x.id));
+        groups.push({ id: k.parent!, lots: sib, rect: unionRect(sib.map((x) => x.rect)) });
+      } else { done.add(k.id); groups.push({ id: k.id, lots: [k], rect: k.rect }); }
+    }
+  }
+  return { zone, locks, mode, lots, selLots, groups, anchored: anchored.map((k) => k.id), inScope, selected: (p, c) => inScope(p, c) && !isLockedAt(p, locks) };
 }
 
 /** The selection of a plan: groups in its scope, split into re-rolled / locked / infrastructure. */
@@ -430,7 +453,7 @@ export function selectPlan(groups: readonly RegenGroup[], plan: RegionPlan): Zon
 
 /** The UI's preview: what a 'types' re-roll of this zone would replace (blocks whole), with the blocks it re-types. */
 export function selectRegion(l: GenLayout, zone: Vec2[], profile: Profile | null, mode: BlockMode = 'types'): { selection: ZoneSelection; plan: RegionPlan } {
-  const lots = mode === 'types' && profile ? lotsOf(l, profile) : [];
+  const lots = mode !== 'jitter' && profile ? lotsOf(l, profile) : [];
   const plan = planRegion(l, zone, lots, mode);
   return { selection: selectPlan(layoutGroups(l), plan), plan };
 }
@@ -485,9 +508,11 @@ export function rerouteThroughBlocks(r: GenRoute, inBlock: (p: Vec2) => string |
   return out;
 }
 
-/** The fresh layout with the re-typed blocks' content replaced by their templates (and its routes taken through them). */
-function applyTemplates(fresh: GenLayout, built: BuiltTemplate[], lots: readonly BlockRecord[]): GenLayout {
-  const acc = new Set(built.map((b) => b.lot));
+/**
+ * The fresh layout with the re-typed blocks' content replaced by their templates (and its routes taken through them). `acc` = the
+ * old blocks whose content goes ('full': every block of a re-planned group); `visitOf` = the visit that replaces an old block's.
+ */
+function applyTemplates(fresh: GenLayout, built: BuiltTemplate[], lots: readonly BlockRecord[], acc: ReadonlySet<string>, visitOf: (lot: string) => Visit | null): GenLayout {
   const inBlock = (p: Vec2): string | undefined => { const k = lotAt(lots, p); return k && acc.has(k.id) ? k.id : undefined; };
   const drop = new Set<object>();
   const removedB = new Set<string>();
@@ -504,8 +529,7 @@ function applyTemplates(fresh: GenLayout, built: BuiltTemplate[], lots: readonly
   next.patrol_routes = fresh.patrol_routes.filter((x) => !drop.has(x));
   next.mantle_edges = [...(fresh.mantle_edges ?? []).filter((x) => !drop.has(x)), ...built.flatMap((b) => b.content.mantle_edges)];
   next.spawn_points = fresh.spawn_points.filter((s) => !newB.some((b) => rectContainsPt(b.footprint, s.pos, 100)));
-  const visits = new Map(built.map((b) => [b.lot, b.visit]));
-  next.routes = fresh.routes.map((r) => rerouteThroughBlocks(r, inBlock, removedB, (lot) => visits.get(lot) ?? null)).filter((r): r is GenRoute => !!r);
+  next.routes = fresh.routes.map((r) => rerouteThroughBlocks(r, inBlock, removedB, visitOf)).filter((r): r is GenRoute => !!r);
   return next;
 }
 const rectContainsPt = (r: [Vec2, Vec2], p: Vec2, margin: number) => p[0] >= r[0][0] - margin && p[0] <= r[1][0] + margin && p[1] >= r[0][1] - margin && p[1] <= r[1][1] + margin;
@@ -515,7 +539,7 @@ interface Merge {
   retemplated: Retemplated[]; templateFailed: string[]; blocks: BlockRecord[];
 }
 
-function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelection, plan: RegionPlan, seed: number, profile: Profile): Merge {
+function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelection, plan: RegionPlan, seed: number, profile: Profile, chaos: number): Merge {
   const locks = plan.locks;
   let fresh = freshLayout(old, profile, seed);
   const removed = new Set<object>();
@@ -534,7 +558,54 @@ function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelectio
   const retemplated: Retemplated[] = [];
   const templateFailed: string[] = [];
   const built: BuiltTemplate[] = [];
-  if (plan.selLots.length) {
+  /** A template's buildings + fences clear the locks, the kept objects, the roads and what is placed already. */
+  const fits = (b: BuiltTemplate, placed: Vec2[][]): Vec2[][] | null => {
+    const gs = layoutGroups(contentLayout(b.content)).filter((g) => g.category === 'building' || g.category === 'wall');
+    const bad = gs.some((g) => overlapsAny(g, lockPolys) || overlapsAny(g, solids) || overlapsAny(g, placed) || (g.category === 'building' && (overlapsAny(g, roads) || overlapsAny(g, coverSolids))));
+    return bad ? null : gs.flatMap((g) => g.solid);
+  };
+  let acc = new Set<string>();
+  let visitOf: (lot: string) => Visit | null = () => null;
+  const parcels: BlockRecord[] = [];
+  if (plan.mode === 'full' && plan.groups.length) {
+    // 1'. 'full' (task 072): every group is cut into parcels; each parcel takes the first seeded catalog type that clears the rest
+    //     (an open square - covers only - is the last resort, so a parcel is never left as a hole)
+    const ctx = templateContext(old, seed);
+    const placed: Vec2[][] = [];
+    const visitsOf = new Map<string, { centre: Vec2; visit: Visit }[]>();
+    for (const grp of plan.groups) {
+      const cut = subdivideBlock(rectFromUE(grp.rect, ctx.frame), ctx.streets_m, seed, grp.id, chaos);
+      const types: string[] = [];
+      const vs: { centre: Vec2; visit: Visit }[] = [];
+      cut.forEach((pc, k) => {
+        const rec: BlockRecord = { id: `${grp.id}_${k + 1}`, rect: rectToUE(pc.rect, ctx.frame), template: '', parent: grp.id };
+        const order: TemplateId[] = pickTemplates(rec, '', seed, ctx.frame);
+        if (!order.includes('open_square')) order.push('open_square');
+        for (const t of order) {
+          const b = buildTemplate(t, rec, ctx, { side: pc.side, inner_m: pc.inner });
+          const solid = fits(b, placed);
+          if (!solid) continue;
+          built.push(b); placed.push(...solid); rec.template = t; types.push(t);
+          if (b.visit) vs.push({ centre: rectCentre(rec.rect), visit: b.visit });
+          break;
+        }
+        if (!rec.template) { rec.template = 'open_square'; templateFailed.push(rec.id); }
+        parcels.push(rec);
+      });
+      for (const k of grp.lots) acc.add(k.id);
+      for (const k of grp.lots) visitsOf.set(k.id, vs);
+      retemplated.push({ id: grp.id, from: [...new Set(grp.lots.map((k) => k.template))].join(' + '), to: types.join(' + ') });
+    }
+    // an old block's route visit becomes the visit of the parcel nearest to that block's centre
+    visitOf = (lot) => {
+      const vs = visitsOf.get(lot);
+      const k = plan.lots.find((x) => x.id === lot);
+      if (!vs?.length || !k) return null;
+      const c = rectCentre(k.rect);
+      return vs.reduce((a, b) => (Math.hypot(b.centre[0] - c[0], b.centre[1] - c[1]) < Math.hypot(a.centre[0] - c[0], a.centre[1] - c[1]) ? b : a)).visit;
+    };
+    fresh = applyTemplates(fresh, built, plan.lots, acc, visitOf);
+  } else if (plan.selLots.length) {
     const ctx = templateContext(old, seed);
     const placed: Vec2[][] = [];
     for (const lot of plan.selLots) {
@@ -542,15 +613,17 @@ function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelectio
       let okSolids: Vec2[][] = [];
       for (const t of pickTemplates(lot, lot.template, seed, ctx.frame)) {
         const b = buildTemplate(t, lot, ctx);
-        const gs = layoutGroups(contentLayout(b.content)).filter((g) => g.category === 'building' || g.category === 'wall');
-        const bad = gs.some((g) => overlapsAny(g, lockPolys) || overlapsAny(g, solids) || overlapsAny(g, placed) || (g.category === 'building' && (overlapsAny(g, roads) || overlapsAny(g, coverSolids))));
-        if (!bad) { ok = b; okSolids = gs.flatMap((g) => g.solid); break; }
+        const solid = fits(b, placed);
+        if (solid) { ok = b; okSolids = solid; break; }
       }
       if (ok) { built.push(ok); placed.push(...okSolids); retemplated.push({ id: lot.id, from: lot.template, to: ok.template }); } else templateFailed.push(lot.id);
     }
-    if (built.length) fresh = applyTemplates(fresh, built, plan.lots);
+    acc = new Set(built.map((b) => b.lot));
+    const visits = new Map(built.map((b) => [b.lot, b.visit]));
+    visitOf = (lot) => visits.get(lot) ?? null;
+    if (built.length) fresh = applyTemplates(fresh, built, plan.lots, acc, visitOf);
   }
-  const accLots = new Set(built.map((b) => b.lot));
+  const accLots = acc;
   const inAccLot = (p: Vec2) => { const k = lotAt(plan.lots, p); return !!k && accLots.has(k.id); };
   const freshGroups = layoutGroups(fresh);
   const taken = new Map<RegenCategory, Set<string>>();
@@ -657,7 +730,9 @@ function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelectio
   const skeletonMatch = JSON.stringify(fresh.cut ?? null) === JSON.stringify(old.cut ?? null)
     && JSON.stringify(fresh.zones.filter(isInfrastructureZone)) === JSON.stringify(old.zones.filter(isInfrastructureZone));
   const types = new Map(retemplated.map((x) => [x.id, x.to]));
-  const blocks = plan.lots.map((k) => (types.has(k.id) ? { ...k, template: types.get(k.id)! } : k));
+  const blocks = plan.mode === 'full'
+    ? [...plan.lots.filter((k) => !acc.has(k.id)), ...parcels]
+    : plan.lots.map((k) => (types.has(k.id) ? { ...k, template: types.get(k.id)! } : k));
   return { layout, replaced: sel.inside.filter((g) => !restored.includes(g)).map((g) => g.id), added: added.map((g) => g.id), dropped, restored: restored.map((g) => g.id), snapped, skeletonMatch,
     retemplated, templateFailed, blocks };
 }
@@ -679,8 +754,9 @@ export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
   const state = regenStateOf(old);
   const mode: BlockMode = o.blocks ?? 'types';
   const groups = layoutGroups(old);
-  const lots = mode === 'types' ? lotsOf(old, o.profile) : [];
+  const lots = mode !== 'jitter' ? lotsOf(old, o.profile) : [];
   const plan = planRegion(old, o.zone, lots, mode);
+  const chaos = Math.max(0, Math.min(1, o.chaos ?? FULL.default_chaos));
   const sel = selectPlan(groups, plan);
   const check = o.checkRoutes ?? checkLayoutRoutes;
   const before = check(old);
@@ -694,7 +770,7 @@ export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
   let last: Merge | null = null;
   for (let k = 0; k <= maxRetries; k++) {
     const seed = o.seed + k * RETRY_SEED_STEP;
-    const m = mergeAttempt(old, groups, sel, plan, seed, o.profile);
+    const m = mergeAttempt(old, groups, sel, plan, seed, o.profile, chaos);
     last = m;
     if (!m.replaced.length && !m.added.length) {
       return { ok: true, layout: old, seed, retries: k, attempts: [...attempts, { seed, ok: true, reason: 'nothing to re-roll' }], replaced: [], added: [], dropped: m.dropped, restored: m.restored, ...base, ...none, snappedHeights: 0, routes: before.map(routeStatus), skeletonMatch: m.skeletonMatch, message: 'в зоне нечего перегенерировать (всё закреплено, инфраструктура или пусто)' };
@@ -712,11 +788,11 @@ export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
     });
     if (broken.length) { attempts.push({ seed, ok: false, reason: broken.map((r) => `${r.id}: ${r.fail ?? 'broken'}`).join('; ') }); continue; }
     attempts.push({ seed, ok: true });
-    const regen: RegenState = { ...state, rerolls: [...state.rerolls, { seed, zone: o.zone.map((p) => [p[0], p[1]] as Vec2), replaced: m.replaced.length, added: m.added.length, retries: k }] };
-    if (mode === 'types' && m.blocks.length) regen.blocks = m.blocks;
+    const regen: RegenState = { ...state, rerolls: [...state.rerolls, { seed, zone: o.zone.map((p) => [p[0], p[1]] as Vec2), replaced: m.replaced.length, added: m.added.length, retries: k, mode, ...(mode === 'full' ? { chaos } : {}) }] };
+    if (mode !== 'jitter' && m.blocks.length) regen.blocks = m.blocks;
     const layout: GenLayout = { ...m.layout, regen };
     const objectives = layout.objectives ? checkObjectives(layout) : undefined;
-    const typed = m.retemplated.length ? `, кварталов с новым типом ${m.retemplated.length}` : '';
+    const typed = m.retemplated.length ? (mode === 'full' ? `, кварталов переразбито ${m.retemplated.length} (участков ${m.blocks.filter((b) => b.parent && m.retemplated.some((x) => x.id === b.parent)).length}, хаос ${chaos})` : `, кварталов с новым типом ${m.retemplated.length}`) : '';
     return { ok: true, layout, seed, retries: k, attempts, replaced: m.replaced, added: m.added, dropped: m.dropped, restored: m.restored, ...base, snappedHeights: m.snapped, routes: after.map(routeStatus), skeletonMatch: m.skeletonMatch,
       retemplated: m.retemplated, templateFailed: m.templateFailed, removedRoutes, ...(objectives ? { objectives } : {}),
       message: `перегенерировано: убрано ${m.replaced.length}, добавлено ${m.added.length}, отброшено ${m.dropped.length}${typed}${m.restored.length ? `, оставлено старыми зданий ${m.restored.length}` : ''}, повторов ${k}` };

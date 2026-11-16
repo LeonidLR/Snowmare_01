@@ -345,9 +345,12 @@ export const REGEN_STATE_VERSION = 2;
 /** A LOCKED district: a polygon (UE cm); every object whose centre is inside it is never touched by a region re-roll. */
 export interface LockDistrict { id: string; name: string; poly: Vec2[] }
 /** One applied re-roll (reproducible: same map + zone + seed -> same result). */
-export interface RerollRecord { seed: number; zone: Vec2[]; replaced: number; added: number; retries: number }
-/** A block (lot) of the map and its current type (blockTemplates.ts): `rect` is [min, max] UE cm. */
-export interface BlockRecord { id: string; rect: [Vec2, Vec2]; template: string }
+export interface RerollRecord { seed: number; zone: Vec2[]; replaced: number; added: number; retries: number; /** 'jitter' | 'types' | 'full' (absent = before task 072). */ mode?: string; /** The 'full' mode's chaos 0..1. */ chaos?: number }
+/**
+ * A block (lot) of the map and its current type (blockTemplates.ts): `rect` is [min, max] UE cm. `parent`: the block a 'full'
+ * re-roll cut this parcel from (fullReroll.ts) - its parcels re-roll together when all of them are in the zone.
+ */
+export interface BlockRecord { id: string; rect: [Vec2, Vec2]; template: string; parent?: string }
 export interface RegenState { version: number; locks: LockDistrict[]; rerolls: RerollRecord[]; blocks?: BlockRecord[] }
 
 /** One expansion step: the factor by area relative to the base map, the seed of its street plan, the canvas after it (m). */

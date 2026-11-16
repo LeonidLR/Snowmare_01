@@ -2,13 +2,18 @@
 // START + GOALS edits (objectives.ts moveObjective / addGoal / removeGoal + the per-point errors and warnings). `npm test`.
 // Inputs: the Depot reference profile + generateLayout(seed 1) (pure, nothing written).
 import assert from 'node:assert/strict';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
-import { V2 } from './blockTemplates.ts';
+import { frameOf, lotsOf, rectCentre, rectFromUE, streetRectsM, V2 } from './blockTemplates.ts';
+import { checkLayoutRoutes } from './evaluate.ts';
+import { FULL, streetSides, subdivideBlock, touchingSides, unionRect } from './fullReroll.ts';
+import { runObstacleHeightGate } from './props/obstacleHeightGate.ts';
+import { addLock, layoutGroups, polygonsOverlap, regenerateRegion, selectRegion, shapePolygon } from './regionRegen.ts';
 import { generateLayout } from './generate.ts';
 import { addGoal, checkObjectives, groundNav, moveObjective, placeObjectives, removeGoal, START_ID } from './objectives.ts';
 import { FIT_VIEW, PLAN_VIEW, clampZoom, panBy, planTransform, toScreen, toWorld, viewOfRect, viewTransform, wheelFactor, zoomAt } from './planView.ts';
@@ -173,4 +178,120 @@ test('ux goals: add by click (up to count_max), drag, delete (down to manual_cou
   assert.equal(fresh.layout.objectives!.goals.length, 1);
   assert.deepEqual(newErrors(fresh.layout), []);
   assert.deepEqual(JSON.parse(JSON.stringify(fresh.layout)).objectives, fresh.layout.objectives, 'saved in the JSON as before');
+});
+
+// ---- 4. full re-roll (lot subdivision + footprints + placement) ---------------------------------------------------------------
+
+const hash = (l: unknown) => crypto.createHash('sha256').update(JSON.stringify(l)).digest('hex');
+const rectZone = (a: Vec2, b: Vec2) => shapePolygon({ kind: 'rect', a, b });
+/** The north-west quarter (stage 2's test zone): the facades, the pipe yard, the compound, the sawtooth hall, the boiler yard, the office. */
+const ZONE_NW = rectZone([500, -9000], [6200, 0]);
+const overlapM = (a: [Vec2, Vec2], b: [Vec2, Vec2]) => Math.min(a[1][0], b[1][0]) - Math.max(a[0][0], b[0][0]) > 0.01 && Math.min(a[1][1], b[1][1]) - Math.max(a[0][1], b[0][1]) > 0.01;
+
+test('ux full re-roll: the subdivision - parcels tile the block, never overlap, every parcel faces a street; chaos 0 tidy, 1 irregular', () => {
+  const frame = frameOf(base), streets = streetRectsM(base);
+  const lots = lotsOf(base, profile);
+  let tidyInnerSame = 0, chaosInnerMoved = 0, parcelsTotal = 0, cuts = 0;
+  for (const lot of lots) {
+    const blockM = rectFromUE(lot.rect, frame);
+    const sides = streetSides(blockM, streets);
+    for (const chaos of [0, 1]) for (const seed of [1, 2, 3]) {
+      const ps = subdivideBlock(blockM, streets, seed, lot.id, chaos);
+      assert.deepEqual(subdivideBlock(blockM, streets, seed, lot.id, chaos), ps, 'deterministic');
+      parcelsTotal += ps.length; if (ps.length > 1) cuts++;
+      const u = unionRect(ps.map((p) => p.rect));
+      assert.ok(near(u.flat(), blockM.flat(), 1e-6), `${lot.id}: the parcels span the block`);
+      ps.forEach((p, i) => {
+        assert.ok(touchingSides(p.rect, blockM, sides).length > 0 || ps.length === 1, `${lot.id} #${i}: on a street side`);
+        assert.ok(sides.includes(p.side), `${lot.id} #${i}: faces a street side (${p.side})`);
+        assert.ok(p.inner[0][0] >= p.rect[0][0] - 1e-9 && p.inner[0][1] >= p.rect[0][1] - 1e-9 && p.inner[1][0] <= p.rect[1][0] + 1e-9 && p.inner[1][1] <= p.rect[1][1] + 1e-9, 'inner inside the parcel');
+        for (const q of ps.slice(i + 1)) assert.ok(!overlapM(p.rect, q.rect), `${lot.id}: parcels never overlap`);
+        if (chaos === 0 && near(p.inner.flat(), p.rect.flat())) tidyInnerSame++;
+        if (chaos === 1 && !near(p.inner.flat(), p.rect.flat(), 0.05)) chaosInnerMoved++;
+      });
+      if (chaos === 0 && ps.length === 2) {
+        // a tidy single cut halves the block (minus the gap)
+        const a = ps[0].rect, b = ps[1].rect;
+        const da = Math.abs((a[1][0] - a[0][0]) - (b[1][0] - b[0][0])), db = Math.abs((a[1][1] - a[0][1]) - (b[1][1] - b[0][1]));
+        assert.ok(Math.min(da, db) < 1e-6, `${lot.id}: an even cut`);
+      }
+    }
+  }
+  assert.ok(cuts > 20, `big blocks are cut (${cuts})`);
+  assert.ok(tidyInnerSame > 0 && chaosInnerMoved > parcelsTotal / 8, `chaos 0 = flush parcels (${tidyInnerSame}), chaos 1 = shifted / shrunk (${chaosInnerMoved})`);
+});
+
+test('ux full re-roll: footprints and positions change over N seeds, locks byte-identical, routes valid, deterministic, chaos matters', () => {
+  const lots = lotsOf(base, profile);
+  // lock the sawtooth hall block: it must survive every full re-roll byte for byte
+  const saw = lots.find((k) => k.id === 'LOT_sawtooth')!;
+  const lockPoly = rectZone([saw.rect[0][0] - 100, saw.rect[0][1] - 100], [saw.rect[1][0] + 100, saw.rect[1][1] + 100]);
+  const locked = addLock(base, lockPoly, 'Цех');
+  const inLock = (p: Vec2) => pointInPoly(p, lockPoly);
+  const lockedJson = (l: GenLayout) => layoutGroups(l).filter((g) => inLock(g.centre)).map((g) => JSON.stringify(g.members)).sort();
+  const lockedBefore = lockedJson(locked);
+  assert.ok(lockedBefore.some((j) => j.includes('B_hall_n')), 'the lock holds the hall (with its walls, ladders, mantle edges)');
+  const plan = selectRegion(locked, ZONE_NW, profile, 'full').plan;
+  assert.ok(plan.groups.length >= 4, `blocks re-planned: ${plan.groups.map((g) => g.id).join(',')}`);
+  assert.ok(!plan.groups.some((g) => g.id === 'LOT_sawtooth'), 'the locked block is not re-planned');
+  const oldIn = (l: GenLayout) => l.buildings.filter((b) => plan.groups.some((g) => pointInPoly(rect.centre(b.footprint), rectZone(g.rect[0], g.rect[1]))));
+  const oldFootprints = new Set(oldIn(locked).map((b) => JSON.stringify(b.footprint)));
+  const seeds = [101, 202, 303, 404, 505, 606];
+  const roads = [...base.zones.filter((z) => z.id.startsWith('Z_ST_')).map((z) => z.poly), base.cut!.poly];
+  const shrunk = (f: [Vec2, Vec2]) => rectZone([f[0][0] + 20, f[0][1] + 20], [f[1][0] - 20, f[1][1] - 20]);
+  const counts = new Set<number>();
+  for (const seed of seeds) {
+    for (const chaos of [0, 1]) {
+      const r = regenerateRegion({ layout: locked, zone: ZONE_NW, seed, profile, blocks: 'full', chaos });
+      assert.equal(r.ok, true, `seed ${seed} chaos ${chaos}: ${r.message}`);
+      const now = oldIn(r.layout);
+      counts.add(now.length);
+      // the shapes / positions really change: no old footprint survives in a re-planned block
+      for (const b of now) assert.ok(!oldFootprints.has(JSON.stringify(b.footprint)), `seed ${seed} chaos ${chaos}: ${b.id} is a new footprint`);
+      // locks byte-identical
+      assert.deepEqual(lockedJson(r.layout), lockedBefore, `seed ${seed} chaos ${chaos}: the lock is untouched`);
+      assert.deepEqual(r.layout.regen!.locks, locked.regen!.locks);
+      // the route through the region stays valid; roads / canal untouched; heights measured; ids unique
+      assert.ok(checkLayoutRoutes(r.layout).find((x) => x.mandatory)!.completable, `seed ${seed} chaos ${chaos}: mandatory route`);
+      assert.deepEqual(r.layout.cut, base.cut);
+      assert.deepEqual(r.layout.zones.filter((z) => z.id.startsWith('Z_ST_')), base.zones.filter((z) => z.id.startsWith('Z_ST_')));
+      const added = new Set(r.added);
+      for (const b of r.layout.buildings.filter((x) => added.has(x.id))) assert.ok(roads.every((p) => !polygonsOverlap(shrunk(b.footprint), p)), `${b.id} blocks no road`);
+      const fresh: GenLayout = { ...r.layout, walls: r.layout.walls.filter((w) => added.has(w.id) || (w.building !== undefined && added.has(w.building)) || [...added].some((a) => w.id.startsWith(`${a}_`))), covers: r.layout.covers.filter((c) => added.has(c.id)), buildings: r.layout.buildings.filter((b) => added.has(b.id)), mantle_edges: [] };
+      assert.deepEqual(runObstacleHeightGate(fresh).errors, [], 'heights are measured classes');
+      for (const k of ['buildings', 'walls', 'ladders', 'covers', 'zones'] as const) assert.equal(new Set((r.layout[k] as { id: string }[]).map((x) => x.id)).size, r.layout[k].length, `${k} ids unique`);
+      assert.deepEqual(newErrors(r.layout), [], 'no new schema errors');
+      // the parcels are stored with their parent; the record says full + chaos
+      const blocks = r.layout.regen!.blocks!;
+      for (const g of plan.groups) assert.ok(blocks.some((k) => k.parent === g.id), `${g.id}: parcels stored`);
+      assert.ok(!blocks.some((k) => plan.groups.some((g) => g.id === k.id)), 'the old blocks are replaced by their parcels');
+      assert.equal(r.layout.regen!.rerolls.at(-1)!.mode, 'full');
+      assert.equal(r.layout.regen!.rerolls.at(-1)!.chaos, chaos);
+      // deterministic per seed
+      assert.equal(hash(regenerateRegion({ layout: locked, zone: ZONE_NW, seed, profile, blocks: 'full', chaos }).layout), hash(r.layout), 'deterministic');
+    }
+    assert.notEqual(hash(regenerateRegion({ layout: locked, zone: ZONE_NW, seed, profile, blocks: 'full', chaos: 0 }).layout), hash(regenerateRegion({ layout: locked, zone: ZONE_NW, seed, profile, blocks: 'full', chaos: 1 }).layout), 'chaos changes the result');
+  }
+  assert.ok(counts.size >= 2, `the building count varies with the seed (${[...counts].join(',')})`);
+});
+
+test('ux full re-roll: a second full re-roll re-plans the parcels of a block together (by parent); the default chaos comes from the config', () => {
+  const first = regenerateRegion({ layout: base, zone: ZONE_NW, seed: 11, profile, blocks: 'full' });
+  assert.equal(first.ok, true, first.message);
+  assert.equal(first.layout.regen!.rerolls.at(-1)!.chaos, FULL.default_chaos);
+  const plan = selectRegion(first.layout, ZONE_NW, profile, 'full').plan;
+  const parents = new Set(first.layout.regen!.blocks!.filter((k) => k.parent).map((k) => k.parent));
+  assert.ok(plan.groups.some((g) => parents.has(g.id) && g.lots.length > 1), 'siblings grouped under their parent');
+  for (const g of plan.groups.filter((x) => x.lots.length > 1)) {
+    const parent = lotsOf(base, profile).find((k) => k.id === g.id)!;
+    assert.ok(near(g.rect.flat(), parent.rect.flat(), 1e-6), `${g.id}: the parent block whole`);
+  }
+  const second = regenerateRegion({ layout: first.layout, zone: ZONE_NW, seed: 12, profile, blocks: 'full', chaos: 1 });
+  assert.equal(second.ok, true, second.message);
+  assert.ok(checkLayoutRoutes(second.layout).find((x) => x.mandatory)!.completable);
+  assert.deepEqual(newErrors(second.layout), []);
+  // a JSON round trip keeps the parcels (reload from the accepted file)
+  const reloaded = JSON.parse(JSON.stringify(second.layout)) as GenLayout;
+  assert.deepEqual(lotsOf(reloaded, profile), second.layout.regen!.blocks);
+  assert.ok(rectCentre(second.layout.regen!.blocks![0].rect).every(Number.isFinite));
 });
