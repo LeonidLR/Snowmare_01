@@ -1,0 +1,6 @@
+{
+  "_comment": "USD per 1M tokens for Gemini API models used by Gemini CLI (gemini_usage.py). Fill in from the Google AI Studio pricing page; null = unknown (the report then says cost n/a).",
+  "gemini-3.8-flash": { "input_per_1m": null, "output_per_1m": null },
+  "gemini-3.1-pro-preview": { "input_per_1m": null, "output_per_1m": null },
+  "gemini-2.5-flash": { "input_per_1m": null, "output_per_1m": null }
+}

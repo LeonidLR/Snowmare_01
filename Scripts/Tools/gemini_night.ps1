@@ -20,6 +20,7 @@ New-Item -ItemType Directory -Force $RunDir | Out-Null
 
 foreach ($Raw in ($Tasks -join ",").Split(",")) {
     $Id = $Raw.Trim()
+    if ($Id -match '^\d+$') { $Id = $Id.PadLeft(3, "0") }  # "071" arrives as 71 through -Tasks 071,074
     if (-not $Id) { continue }
     $TaskFile = Get-ChildItem (Join-Path $Repo "docs\port\gemini\inbox") -Filter "$Id-*.md" | Select-Object -First 1
     if (-not $TaskFile) { Write-Host "[gemini-night] no task file for $Id - skipped"; continue }
@@ -32,7 +33,7 @@ foreach ($Raw in ($Tasks -join ",").Split(",")) {
     Write-Host "[gemini-night] $Id started $($Started.ToString('HH:mm'))"
     $Job = Start-Job -ScriptBlock {
         param($Script, $Tree, $Prompt, $Model, $Id)
-        $a = @{ Worktree = $Tree; PromptFile = $Prompt; Mode = "yolo"; Label = "night-$Id" }
+        $a = @{ Worktree = $Tree; PromptFile = $Prompt; Mode = "yolo"; Label = "night-$Id"; Json = $true }
         if ($Model) { $a.Model = $Model }
         & powershell -ExecutionPolicy Bypass -File $Script @a
     } -ArgumentList (Join-Path $PSScriptRoot "gemini_agent.ps1"), $Tree, $Prompt, $Model, $Id
@@ -53,7 +54,8 @@ foreach ($Raw in ($Tasks -join ",").Split(",")) {
     $Commits = ((git -C $Tree log --oneline main..HEAD 2>$null) | Select-Object -First 8) -join "; "
     $Report = Get-ChildItem (Join-Path $Tree "docs\port\gemini\outbox") -Filter "$Id-*.report.md" -ErrorAction SilentlyContinue | Select-Object -First 1
     $Errors = if ($Log) { ((Select-String -Path $Log.FullName -Pattern 'Error|error:|FAIL' | Select-Object -Last 3).Line -join " / ") } else { "no log" }
-    $Text = "gemini-cli $Id ended after $Mins min" + $(if ($Fatal) { " - QUOTA/AUTH ERROR, queue STOPPED, Claude must take over the rest" } else { "" }) +
+    $Usage = if ($Log) { (& python (Join-Path $PSScriptRoot "gemini_usage.py") $Log.FullName --task $Id --model $Model) -join " " } else { "tokens n/a" }
+    $Text = "gemini-cli $Id ended after $Mins min | $Usage" + $(if ($Fatal) { " - QUOTA/AUTH ERROR, queue STOPPED, Claude must take over the rest" } else { "" }) +
         " | Gemini FINISH message: " + $(if ($SaidFinish) { "yes" } else { "MISSING - treat as unfinished" }) +
         " | branch: $Branch | commits: $Commits | report: " + $(if ($Report) { $Report.Name } else { "MISSING" }) +
         " | last errors in log: $Errors | log: Saved/Orchestrator/gemini_runs/$($Log.Name)"

@@ -9,7 +9,8 @@ param(
     [Parameter(Mandatory)][string]$PromptFile,
     [ValidateSet("plan", "yolo")][string]$Mode = "plan",
     [string]$Model = "",
-    [string]$Label = "gemini"
+    [string]$Label = "gemini",
+    [switch]$Json  # -o json: the run ends with a JSON object incl. stats.models.*.tokens (gemini_usage.py reads it)
 )
 $ErrorActionPreference = "Stop"
 $env:GEMINI_API_KEY = [Environment]::GetEnvironmentVariable('GEMINI_API_KEY', 'User')
@@ -34,6 +35,7 @@ try {
     Copy-Item $PromptFile $Task -Force
     $Line = "Your ONLY task is in the file .gemini/task.md - read it now and do exactly that. Ignore any other plans, roles or requests in GEMINI.md, TANDEM.md or older documents."
     $ArgsList = @("--approval-mode", $Mode, "-p", $Line)
+    if ($Json) { $ArgsList = @("-o", "json") + $ArgsList }
     if ($Model) { $ArgsList = @("-m", $Model) + $ArgsList }
     $ErrorActionPreference = "Continue"  # node writes a colour warning to stderr; under Stop PowerShell 5.1 would abort on it
     & gemini @ArgsList 2>&1 | Where-Object { "$_" -notmatch '256-color support|NativeCommandError' } | Out-File -Encoding utf8 $Out
