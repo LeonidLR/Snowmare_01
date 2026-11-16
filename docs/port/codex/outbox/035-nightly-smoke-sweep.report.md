@@ -6,7 +6,7 @@ Build: PASS (exit 0; UBT 2.18 s). Resume verification after limit reset: DLL mti
 
 Router: level 2, confidence 0.62 | gpt-6.1-sol | pass (execution/reporting; no local model).
 
-Progress: 128/284 initial runs; 124 final PASS; 4 final FAIL; 4 failed twice. Updated 2026-11-16T21:40:44.811578+00:00.
+Progress: 192/284 initial runs; 186 final PASS; 6 final FAIL; 6 failed twice. Updated 2026-11-16T22:04:34.077220+00:00.
 
 Initial batches <=8, script default Jobs=4 (16 CPUs), `-NoRetry -ExtraArgs -Multiprocess`; each initial FAIL rerun exactly once alone with `-Jobs 1`. Engine `Smoke RESULT` controls PASS/FAIL, including wrapper KNOWN-FAIL. Seconds are wrapper process wall times. Missing result/timeout is infrastructure FAIL, never an invented assertion. Shared locks and designer priority remain active.
 
@@ -142,6 +142,70 @@ Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, 
 | ProjectileSmoke | PASS | 46 |  | — | — |
 | RpgSmoke | PASS | 44.7 |  | — | — |
 | RpgAnimSmoke | PASS | 48.2 |  | — | — |
+| RpgAiSmoke | PASS | 52 |  | — | — |
+| RpgPmcSmoke | FAIL | 48 | [2026.11.16-21.41.35:234][944]LogCodexTactics: Display: Smoke FAIL: 2: Codex.Combat.LauncherAI 0 - the commander's RpgStrike order (2 orders) fires the rocket (0 strike shots; ordered rocket strike at BP_Operative_C_0) | FAIL | 39.6 |
+| MortarSmoke | PASS | 47.3 |  | — | — |
+| HordeIntroSmoke | PASS | 66.7 |  | — | — |
+| SoloRejoinSmoke | PASS | 55.4 |  | — | — |
+| CombatFormationSmoke | PASS | 49.7 |  | — | — |
+| PatrolAmbushSmoke | PASS | 45.5 |  | — | — |
+| VisionConeSmoke | PASS | 44.4 |  | — | — |
+| GateGeneratorSmoke | PASS | 64.9 |  | — | — |
+| TutorialSmoke | PASS | 153.3 |  | — | — |
+| TutorialSaveSmoke | PASS | 78.7 |  | — | — |
+| ControlsScreenSmoke | PASS | 37.9 |  | — | — |
+| InteriorExitSmoke | PASS | 46.7 |  | — | — |
+| PMCTripwireSmoke | PASS | 40.3 |  | — | — |
+| CoverEventSmoke | PASS | 47.9 |  | — | — |
+| WarmIdleSmoke | PASS | 50.5 |  | — | — |
+| BridgeFenceSmoke | PASS | 47.9 |  | — | — |
+| TrapSoloSmoke | PASS | 47.5 |  | — | — |
+| PeekMinesSmoke | PASS | 49.2 |  | — | — |
+| RoofCutawaySmoke | PASS | 48.3 |  | — | — |
+| StealthLureSmoke | PASS | 54.8 |  | — | — |
+| KnockdownCoverSmoke | PASS | 47.1 |  | — | — |
+| HoundScentSmoke | PASS | 50.8 |  | — | — |
+| MinimapSmoke | PASS | 49.3 |  | — | — |
+| QuickFireSmoke | PASS | 46.4 |  | — | — |
+| SuppressionSmoke | PASS | 50.3 | [2026.11.16-21.51.49:846][470]LogCodexTactics: Display: Smoke FAIL: A: ... while the marksman is still free (level 0.30) | PASS | 42 |
+| PeekSightSmoke | PASS | 47.4 |  | — | — |
+| LeanPoseSmoke | PASS | 51.3 |  | — | — |
+| CoverSwitchSmoke | PASS | 53.9 |  | — | — |
+| CoverWrapSmoke | PASS | 47 |  | — | — |
+| CoverSwitchLakeSmoke | PASS | 44.3 |  | — | — |
+| SaveCoverageSmoke | PASS | 44.8 |  | — | — |
+| SaveCoverageLakeSmoke | PASS | 46.9 |  | — | — |
+| TutorialAmbushLakeSmoke | PASS | 61.8 |  | — | — |
+| TutorialAmbushLakeSpottedSmoke | PASS | 59 |  | — | — |
+| TutorialAmbushLakeLureSpottedSmoke | PASS | 49.9 |  | — | — |
+| TutorialAmbushLakeEarlyKillSmoke | PASS | 50.9 |  | — | — |
+| TutorialAmbushLakeMineSmoke | PASS | 60.1 |  | — | — |
+| DisarmCoverSmoke | PASS | 47.1 |  | — | — |
+| LowCoverMoveSmoke | PASS | 53 |  | — | — |
+| LowCoverMoveLakeSmoke | PASS | 59 |  | — | — |
+| LakeQuestSmoke | PASS | 60 |  | — | — |
+| LakePauseOrdersSmoke | PASS | 60.4 |  | — | — |
+| HordeArrowsSmoke | PASS | 53 |  | — | — |
+| BarricadeVaultBackSmoke | PASS | 50.4 |  | — | — |
+| HeatFearWallSmoke | PASS | 47.8 |  | — | — |
+| TurnArenaLakeSmoke | PASS | 49.6 |  | — | — |
+| TurnArenaYardSmoke | PASS | 48.4 |  | — | — |
+| RetreatFacingSmoke | FAIL | 48.5 | [2026.11.16-22.00.17:362][516]LogCodexTactics: Display: Smoke FAIL: a facing order of the player is kept: no turn to the pack (65 deg off the ordered facing, 115 deg off the pack, turning to the threat 0) | FAIL | 38.4 |
+| EnvironmentSmoke | PASS | 46 |  | — | — |
+| EnvironmentLakeSmoke | PASS | 46.7 |  | — | — |
+| EnvironmentRosterSmoke | PASS | 45.8 |  | — | — |
+| GateExitLakeSmoke | PASS | 60.8 |  | — | — |
+| GateExitLakeNoPointsSmoke | PASS | 60.6 |  | — | — |
+| FrozenFactoryStartSmoke | PASS | 46.3 |  | — | — |
+| DepotCampaignStartSmoke | PASS | 54.8 |  | — | — |
+| WeatherSmoke | PASS | 47 |  | — | — |
+| WeatherLakeSmoke | PASS | 44.1 |  | — | — |
+| LadderClimbSmoke | PASS | 56.8 |  | — | — |
+| LadderEnemySmoke | PASS | 54.4 |  | — | — |
+| CorpseFallSmoke | PASS | 46.9 |  | — | — |
+| BlizzardWalkSmoke | PASS | 46.2 |  | — | — |
+| RegroupAfterLossesSmoke | PASS | 47.6 |  | — | — |
+| GateExitLakeKiaSmoke | PASS | 56.7 |  | — | — |
 
 ## Failed twice
 
@@ -153,7 +217,11 @@ Frozen registry and resumable progress: `Saved/Orchestrator/035/registry.json`, 
   History: `Source/CodexTacticsDev/Private/Debug/CoverHugSmokeCommand.cpp`: d1a6958a refactor(build): move the dev console commands into the CodexTacticsDev module; `Source/CodexTactics/Private/Characters/OperativeCharacterCover.cpp`: 571894f4 fix(combat): one fire gate on every operative fire path - turn, raise, then the round (058c / 061)
 - **FormationJitterSmoke**: [2026.11.16-21.38.31:138][468]LogCodexTactics: Display: Smoke FAIL: the other follower is no worse with the D-1 man in the squad (hips 27.2 / shoulders 24.0 deg/s; all-M16 17.0 / 12.6) Rerun: [2026.11.16-21.40.18:154][376]LogCodexTactics: Display: Smoke FAIL: the other follower is no worse with the D-1 man in the squad (hips 27.2 / shoulders 24.0 deg/s; all-M16 17.0 / 12.6)
   History: `Source/CodexTacticsDev/Private/Debug/FormationJitterSmokeCommand.cpp`: c81585ae fix(animation): D-1 crouch and cover on the ABP, formation followers stop twitching; `Source/CodexTactics/Private/Characters/SquadSubsystemFormation.cpp`: f65f3325 gemini-034: fix stealth look-direction lock and stopping snap-back (bug #324)
+- **RpgPmcSmoke**: [2026.11.16-21.41.35:234][944]LogCodexTactics: Display: Smoke FAIL: 2: Codex.Combat.LauncherAI 0 - the commander's RpgStrike order (2 orders) fires the rocket (0 strike shots; ordered rocket strike at BP_Operative_C_0) Rerun: [2026.11.16-21.43.23:352][879]LogCodexTactics: Display: Smoke FAIL: 2: Codex.Combat.LauncherAI 0 - the commander's RpgStrike order (2 orders) fires the rocket (0 strike shots; ordered rocket strike at BP_Operative_C_0)
+  History: `Source/CodexTacticsDev/Private/Debug/PmcCombatBugsSmokeCommand.cpp`: 64eeac93 test(smokes): fix the 7 night-bar failures of 2026-11-10 (smoke-side, no game regression); `Source/CodexTacticsDev/Private/Debug/RpgPmcSmokeCommand.cpp`: 00eb12cc feat(weapons): the AI fires the RPG-7 - shared launcher rule, blast suppression, PMC RPG gunner; `Source/CodexTacticsDev/Private/Debug/UnderFireManoeuvreSmokeCommand.cpp`: 64eeac93 test(smokes): fix the 7 night-bar failures of 2026-11-10 (smoke-side, no game regression); `Source/CodexTactics/Private/Characters/OperativeCharacterLauncherAI.cpp`: 00eb12cc feat(weapons): the AI fires the RPG-7 - shared launcher rule, blast suppression, PMC RPG gunner
+- **RetreatFacingSmoke**: [2026.11.16-22.00.17:362][516]LogCodexTactics: Display: Smoke FAIL: a facing order of the player is kept: no turn to the pack (65 deg off the ordered facing, 115 deg off the pack, turning to the threat 0) Rerun: [2026.11.16-22.02.01:395][409]LogCodexTactics: Display: Smoke FAIL: a facing order of the player is kept: no turn to the pack (65 deg off the ordered facing, 115 deg off the pack, turning to the threat 0)
+  History: `Source/CodexTacticsDev/Private/Debug/RetreatFacingSmokeCommand.cpp`: 77804b34 wip(codex): save retreat smoke rifle fixture before limit stop; `Source/CodexTactics/Private/Characters/OperativeCharacter.cpp`: 90b60f9f fix(mantle): batch 2 - wall guard, settled exit, walk-off descent, face double click, hover ghost
 
-Partial sweep. Resume: run `python Saved/Orchestrator/035/sweep.py` in the agents worktree; next batch 17, 156 initial runs remaining. Machine-readable pending state is in progress.json. Latest path commits above are history references, not proven regression culprits.
+Partial sweep. Resume: run `python Saved/Orchestrator/035/sweep.py` in the agents worktree; next batch 25, 92 initial runs remaining. Machine-readable pending state is in progress.json. Latest path commits above are history references, not proven regression culprits.
 
 Only tracked output: this report. Ignored Saved evidence is local. Existing untracked packs/config/cache remain outside this task. No source investigation beyond failure lines and path identification.
