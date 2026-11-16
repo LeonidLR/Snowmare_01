@@ -102,6 +102,20 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
             self.wfile.write(content)
             return
 
+        if path in ("/agent_chat.ico", "/favicon.ico"):
+            ico_path = os.path.join(os.path.dirname(self.html_path), "agent_chat.ico")
+            if not os.path.exists(ico_path):
+                self.send_error(404, "Icon not found")
+                return
+            with open(ico_path, "rb") as f:
+                content = f.read()
+            self.send_response(200)
+            self.send_header("Content-Type", "image/x-icon")
+            self.send_header("Content-Length", str(len(content)))
+            self.end_headers()
+            self.wfile.write(content)
+            return
+
         if path == "/api/messages":
             chat_file = os.path.join(self.storage_dir, "chat.jsonl")
             all_messages = agent_chat.read_all_messages(chat_file)
