@@ -189,6 +189,7 @@ namespace ShotgunSmoke
 		if (AOperativeCharacter* Commander = State.Commander.Get())
 		{
 			Commander->SwitchToWeaponById(TEXT("m16"));
+			Commander->AvailableWeapons.RemoveAll([](const UWeaponDataAsset* Weapon) { return Weapon && Weapon->WeaponId == TEXT("shotgun"); });
 			if (UOperativeAnimInstance* CmdAnim = AnimOf(Commander))
 			{
 				CmdAnim->InvalidateShotgunWalkVariant();
@@ -417,24 +418,22 @@ namespace ShotgunSmoke
 		const float Height = static_cast<float>(Feet[Lower].Z) - Ground;
 		if (bSteady)
 		{
-			if (State.LastLower != Lower)
-			{
-				State.LowerFrames = 0;
-				State.MinFootZ[Lower] = Height;
-			}
-			else
-			{
-				++State.LowerFrames;
-				State.MinFootZ[Lower] = FMath::Min(State.MinFootZ[Lower], Height);
-			}
+			State.MinFootZ[Lower] = FMath::Min(State.MinFootZ[Lower], Height);
+			State.LowerFrames = State.LastLower == Lower ? State.LowerFrames + 1 : 0;
 
 			const UOperativeAnimInstance* Anim = AnimOf(Who);
 			const bool bSettled = !Anim || Anim->GetWeaponLayerLegsAbpWeight() > 0.85f || Anim->GetWeaponLayerLegsAbpWeight() < 0.15f;
-			// Mid-stance: the lower foot for 3-9 frames (past initial strike roll, before toe-off/swing), still near ground.
-			const bool bMidStance = State.LowerFrames >= 3 && State.LowerFrames <= 9;
 			const bool bNearGround = Height < State.MinFootZ[Lower] + 2.5f;
 
-			if (State.bFeetValid && bSettled && bMidStance && Dt > KINDA_SMALL_NUMBER && bNearGround)
+			// Physical foot-contact stance phase (Claude #530: based on contact phase / foot speed, not frame numbers):
+			// During stance, the foot is grounded and moving backward relative to the capsule forward direction.
+			const FVector FootDelta = Feet[Lower] - State.LastFoot[Lower];
+			const FVector BodyDir = Who->GetVelocity().GetSafeNormal2D();
+			const float FootRelForward = FVector::DotProduct(FootDelta - Who->GetVelocity() * Dt, BodyDir);
+			const float FootSpeed = static_cast<float>(FVector::Dist2D(Feet[Lower], State.LastFoot[Lower])) / Dt;
+			const bool bContactPhase = bNearGround && FootRelForward < 0.f && FootSpeed < Speed * 0.85f;
+
+			if (State.bFeetValid && bSettled && bContactPhase && Dt > KINDA_SMALL_NUMBER)
 			{
 				const float Step = static_cast<float>(FVector::Dist2D(Feet[Lower], State.LastFoot[Lower]));
 				State.PlantDriftCm += Step;
@@ -442,7 +441,7 @@ namespace ShotgunSmoke
 				State.PlantSpeeds.Add(Step / Dt);
 				if (Anim)
 				{
-					UE_LOG(LogCodexTactics, Display, TEXT("ShotgunSmoke: SampleFeet frame: Stg=%d Lower=%d Spd=%.1f Drift=%.1f (%.0f%%) StandBlend=%.1f Rate=%.2f Loco=%.1f LegsAbp=%.2f Ht=%.1f MinZ=%.1f"),
+					UE_LOG(LogCodexTactics, Verbose, TEXT("ShotgunSmoke: SampleFeet frame: Stg=%d Lower=%d Spd=%.1f Drift=%.1f (%.0f%%) StandBlend=%.1f Rate=%.2f Loco=%.1f LegsAbp=%.2f Ht=%.1f MinZ=%.1f"),
 						State.Stage, Lower, Speed, Step / Dt, Speed > 1.f ? (Step / Dt) / Speed * 100.f : 0.f, Anim->StandBlendSpeed, Anim->StandPlayRate, Anim->GetLocomotionSpeed(),
 						Anim->GetWeaponLayerLegsAbpWeight(), Height, State.MinFootZ[Lower]);
 				}
@@ -681,7 +680,7 @@ namespace ShotgunSmoke
 			// Until he stops (or steady strides sampled): the foot-plant check needs steady strides.
 			const bool bMoving = Engineer->GetVelocity().Size2D() > 80.f;
 			if ((!State.bSawMoveClip && State.StageTime < 5.f)
-				|| ((State.MoveSamples < 30 || State.PlantSpeeds.Num() < 8 || bMoving) && State.StageTime < 6.f && (State.MoveSamples < 8 || bMoving)))
+				|| ((State.MoveSamples < 30 || State.PlantSpeeds.Num() < 15 || State.PlantSeconds < 0.5f || bMoving) && State.StageTime < 8.f && (State.MoveSamples < 8 || bMoving)))
 			{
 				return true;
 			}
@@ -708,6 +707,11 @@ namespace ShotgunSmoke
 			UE_LOG(LogCodexTactics, Display, TEXT("ShotgunSmoke: foot plant %s: planted foot drift median %.1f cm/s / mean %.1f cm/s (%.0f %% / %.0f %% of %.0f cm/s) over %.2f s mid-stance (%d frames)"),
 				bSprintLeg ? TEXT("sprinting") : TEXT("walking"), PlantSpeed, MeanPlantSpeed, BodySpeed > 1.f ? PlantSpeed / BodySpeed * 100.f : 0.f,
 				BodySpeed > 1.f ? MeanPlantSpeed / BodySpeed * 100.f : 0.f, BodySpeed, State.PlantSeconds, State.PlantSpeeds.Num());
+
+			// Mid-stance duration and frame count validation (#530: >= ~0.5 s and >= 15 frames, otherwise FAIL)
+			Check(State, State.PlantSeconds >= 0.45f && State.PlantSpeeds.Num() >= 15,
+				FString::Printf(TEXT("2b: %s stance window sufficient: %.2f s mid-stance over %d frames (min 0.5 s, min 15 frames)"),
+					bSprintLeg ? TEXT("sprinting") : TEXT("walking"), State.PlantSeconds, State.PlantSpeeds.Num()));
 			if (bFull)
 			{
 				// The designer 2026-11-10: the shotgun RUNS / SPRINTS on the M16 (ABP) legs ("legs_abp"). Those legs slide like the M16's own
@@ -725,7 +729,7 @@ namespace ShotgunSmoke
 				State.MoveMaxLower = State.MoveMaxUpper = State.MoveMaxSpeed = 0.f;
 				State.MoveSamples = 0;
 				State.bSawMoveClip = false;
-				Engineer->OrderMoveTo(SmokeUtils::ClearPoint(World, Engineer->GetActorLocation(), Engineer->GetActorLocation() + Engineer->GetActorForwardVector() * 1500.f), true);
+				Engineer->OrderMoveTo(SmokeUtils::ClearPoint(World, Engineer->GetActorLocation(), Engineer->GetActorLocation() + Engineer->GetActorForwardVector() * 2500.f), true);
 				GoTo(State, 16);
 				return true;
 			}
@@ -802,7 +806,7 @@ namespace ShotgunSmoke
 			}
 			const bool bMoving = Engineer->GetVelocity().Size2D() > 80.f;
 			if ((!State.bSawMoveClip && State.StageTime < 5.f)
-				|| ((State.MoveSamples < 30 || State.PlantSpeeds.Num() < 8 || bMoving) && State.StageTime < 6.f && (State.MoveSamples < 8 || bMoving)))
+				|| ((State.MoveSamples < 30 || State.PlantSpeeds.Num() < 15 || State.PlantSeconds < 0.5f || bMoving) && State.StageTime < 7.f && (State.MoveSamples < 8 || bMoving)))
 			{
 				return true;
 			}
@@ -818,8 +822,13 @@ namespace ShotgunSmoke
 			State.PlantSpeeds.Sort();
 			const float PlantSpeed = State.PlantSpeeds.Num() > 0 ? State.PlantSpeeds[State.PlantSpeeds.Num() / 2] : -1.f;
 			const float BodySpeed = State.FootBodySamples > 0 ? static_cast<float>(State.FootBodySpeedSum / State.FootBodySamples) : 0.f;
-			UE_LOG(LogCodexTactics, Display, TEXT("ShotgunSmoke: rank 1 carrier foot plant walking: planted foot drift median %.1f cm/s / mean %.1f cm/s (%.0f %% of %.0f cm/s) over %d frames"),
-				PlantSpeed, MeanPlantSpeed, BodySpeed > 1.f ? PlantSpeed / BodySpeed * 100.f : 0.f, BodySpeed, State.PlantSpeeds.Num());
+			UE_LOG(LogCodexTactics, Display, TEXT("ShotgunSmoke: rank 1 carrier foot plant walking: planted foot drift median %.1f cm/s / mean %.1f cm/s (%.0f %% of %.0f cm/s) over %.2f s mid-stance (%d frames)"),
+				PlantSpeed, MeanPlantSpeed, BodySpeed > 1.f ? PlantSpeed / BodySpeed * 100.f : 0.f, BodySpeed, State.PlantSeconds, State.PlantSpeeds.Num());
+
+			// Mid-stance duration and frame count validation (#530: >= ~0.5 s and >= 15 frames, otherwise FAIL)
+			Check(State, State.PlantSeconds >= 0.45f && State.PlantSpeeds.Num() >= 15,
+				FString::Printf(TEXT("2b: rank 1 walking stance window sufficient: %.2f s mid-stance over %d frames (min 0.5 s, min 15 frames)"),
+					State.PlantSeconds, State.PlantSpeeds.Num()));
 
 			const float SlideShare = 0.20f; // pack legs limit 20%
 			Check(State, PlantSpeed >= 0.f && PlantSpeed < FMath::Max(25.f, BodySpeed * SlideShare),
@@ -828,19 +837,7 @@ namespace ShotgunSmoke
 
 			ResetFeet(State);
 			Engineer->StopOperative();
-			// Revert Commander back to M16 so rest of smoke runs with original loadout
-			if (AOperativeCharacter* Commander = State.Commander.Get())
-			{
-				Commander->SwitchToWeaponById(TEXT("m16"));
-				if (UOperativeAnimInstance* CmdAnim = AnimOf(Commander))
-				{
-					CmdAnim->InvalidateShotgunWalkVariant();
-				}
-			}
-			if (UOperativeAnimInstance* EngAnim = AnimOf(Engineer))
-			{
-				EngAnim->InvalidateShotgunWalkVariant();
-			}
+			RestoreSquad(State);
 			State.bFootSampling = false;
 			GoTo(State, 17); // proceed to crouch stage
 			return true;

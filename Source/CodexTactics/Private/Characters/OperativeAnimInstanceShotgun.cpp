@@ -609,7 +609,7 @@ bool UOperativeAnimInstance::DoesShotgunWalkUseAbpLegs() const
 
 void UOperativeAnimInstance::InvalidateShotgunWalkVariant()
 {
-	ShotgunWalkVariantTimer = 0.f;
+	ShotgunWalkVariantTimer = -1.f;
 }
 
 void UOperativeAnimInstance::UpdateShotgunLayer(float DeltaSeconds)
