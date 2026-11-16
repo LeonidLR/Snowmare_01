@@ -55,7 +55,7 @@ $Owned = Wait-JobLock $Job "levelgen build map $Layout" $LockWaitMinutes
 $Map = ""
 $Report = $null
 try {
-    $CmdArgs = "`"$Project`" -run=pythonscript -script=`"$Script`" -unattended -nullrhi -nosplash -nosound -NoTelemetry `"-abslog=$LogFile`""
+    $CmdArgs = "`"$Project`" -run=pythonscript -script=`"$Script`" -unattended -Multiprocess -nullrhi -nosplash -nosound -NoTelemetry `"-abslog=$LogFile`""
     Write-Host "levelgen: building the map from $($env:CODEX_LEVELGEN_LAYOUT) ..."
     Set-JobStatus $Job @{} "running" "building the map (editor commandlet)"
     $Proc = Start-HiddenProcess "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $CmdArgs

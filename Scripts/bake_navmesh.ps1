@@ -32,7 +32,7 @@ try {
         $Leaf = ($Name -split '/')[-1]
         $LogFile = Join-Path $ProjectDir "Saved\Logs\NavBake-$Leaf.log"
         $Extra = $(if ($NoSave) { "-NoSave" } else { "" })
-        $CmdArgs = "`"$Project`" -run=CodexTacticsEditor.CodexBuildNav -Map=$Name -MinTiles=$MinTiles $Extra -unattended -nullrhi -nosplash -nosound -NoTelemetry `"-abslog=$LogFile`""
+        $CmdArgs = "`"$Project`" -run=CodexTacticsEditor.CodexBuildNav -Map=$Name -MinTiles=$MinTiles $Extra -unattended -Multiprocess -nullrhi -nosplash -nosound -NoTelemetry `"-abslog=$LogFile`""
         $Proc = Start-HiddenProcess "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $CmdArgs
         $null = $Proc.Handle # without a cached handle ExitCode stays $null after WaitForExit
         if (-not $Proc.WaitForExit($TimeoutSeconds * 1000)) {
