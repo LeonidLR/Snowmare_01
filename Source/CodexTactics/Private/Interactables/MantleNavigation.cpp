@@ -28,6 +28,11 @@
 
 namespace MantleNavInternal
 {
+	static TAutoConsoleVariable<int32> CVarMantleBatch2(TEXT("Codex.Mantle.Batch2"), 1,
+		TEXT("Mantling batch 2 (designer report 2026-11-16, docs/port/MANTLING_BATCH2_REPORT.md): 1 (default) = the wall guard, the clip exit at its ")
+		TEXT("settled pose, the walk-off descent over the face nearest the goal, the double click on an obstacle face and the hover ghost; 0 = the ")
+		TEXT("behaviour before it (A/B)."));
+
 	static TAutoConsoleVariable<int32> CVarMantleLinks(TEXT("Codex.Mantle.Links"), 1,
 		TEXT("Mantling slice 1: 1 (default) = generated path links over the eligible obstacles (an order path over one mantles by itself, Solo's ")
 		TEXT("commanded operative only); 0 = none (the click on a ledge top still orders the climb)."));
@@ -54,7 +59,7 @@ namespace MantleNavInternal
 	constexpr float MantleLinkDedupCm = 60.f;
 	/** Click order: the base point in front of the face, cm. */
 	constexpr float MantleClickBaseCm = 80.f;
-	/** At most this many links on a map (a runaway layout). */
+	/** At most this many links on a map before batch 2 (Codex.Mantle.Batch2 0); batch 2: mantle.json links.max_total. */
 	constexpr int32 MantleMaxLinks = 900;
 
 	static bool MantleTraceFirst(const UWorld& World, const FVector& From, const FVector& To, const FCollisionQueryParams& Params, FHitResult& Out)
@@ -351,6 +356,39 @@ bool MantleNavigation::PlanTopClick(UWorld& World, const FHitResult& TopHit, con
 	return true;
 }
 
+bool MantleNavigation::IsBatch2Enabled()
+{
+	return MantleNavInternal::CVarMantleBatch2.GetValueOnGameThread() != 0;
+}
+
+bool MantleNavigation::TopHitFromFace(UWorld& World, const FHitResult& FaceHit, FHitResult& OutTopHit)
+{
+	AActor* Obstacle = FaceHit.GetActor();
+	bool bMarked = false;
+	if (!Obstacle || FMath::Abs(FaceHit.ImpactNormal.Z) >= 0.3f || VaultNavigation::IsVaultable(Obstacle) || !MantleRules::IsEligibleTags(Obstacle->Tags, bMarked))
+	{
+		return false;
+	}
+	const FVector Out = FVector(FaceHit.ImpactNormal.X, FaceHit.ImpactNormal.Y, 0.f).GetSafeNormal();
+	if (Out.IsNearlyZero())
+	{
+		return false;
+	}
+	FVector Origin;
+	FVector Extent;
+	Obstacle->GetActorBounds(false, Origin, Extent);
+	const FVector Inside = FaceHit.ImpactPoint - Out * MantleRules::GetConfig().OrderFaceInsetCm;
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(MantleFaceToTop), false);
+	FHitResult Top;
+	if (!World.LineTraceSingleByChannel(Top, FVector(Inside.X, Inside.Y, Origin.Z + Extent.Z + 50.f), FVector(Inside.X, Inside.Y, FaceHit.ImpactPoint.Z),
+		ECC_Visibility, Params) || Top.GetActor() != Obstacle || Top.ImpactNormal.Z < 0.7f)
+	{
+		return false;
+	}
+	OutTopHit = Top;
+	return true;
+}
+
 // --- The link holder --------------------------------------------------------------------------------------------------------------
 
 AMantleLinkActor::AMantleLinkActor()
@@ -488,7 +526,10 @@ int32 UMantleSubsystem::Generate()
 			return FVector::Dist(Link.Start, Start) < MantleLinkDedupCm && FVector::Dist(Link.End, End) < MantleLinkDedupCm;
 		});
 	};
-	for (TActorIterator<AActor> It(World); It && Candidates.Num() < MantleMaxLinks; ++It)
+	// Batch 2 item 9: the slice-1 cap of 900 stopped the actor scan on every map bigger than the Depot (L_Gen_Depot_X4 / _1_X6: links over the
+	// first ~900 faces only - "at a low fence they run around it").
+	const int32 MaxLinks = MantleNavigation::IsBatch2Enabled() ? FMath::Max(1, FMath::RoundToInt(Config.LinkMaxTotal)) : MantleMaxLinks;
+	for (TActorIterator<AActor> It(World); It && Candidates.Num() < MaxLinks; ++It)
 	{
 		AActor* Obstacle = *It;
 		bool bMarked = false;
@@ -584,6 +625,12 @@ int32 UMantleSubsystem::Generate()
 				}
 			}
 		}
+	}
+	bLinkCapReached = Candidates.Num() >= MaxLinks;
+	if (bLinkCapReached)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Mantle] %s: the link cap (%d) is reached - the obstacles after it get no mantle links (mantle.json links.max_total)"),
+			*World->GetMapName(), MaxLinks);
 	}
 	// No climb onto a top that has no way back to the main area (FDropLinkReach over the navmesh, its ladders / drop links and the kept links).
 	int32 DeadEnds = 0;

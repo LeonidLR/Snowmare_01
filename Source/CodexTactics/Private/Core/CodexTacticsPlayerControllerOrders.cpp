@@ -35,7 +35,9 @@
 #include "Interactables/TripwireActor.h"
 #include "Ladders/LadderActor.h"
 #include "Components/BoxComponent.h"
+#include "Interactables/MantleNavigation.h"
 #include "Misc/App.h"
+#include "Tactics/CoverGhostActor.h"
 #include "UI/GameMessageSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
@@ -462,20 +464,37 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	// selected operative walks to the obstacle's face nearest to him and climbs, crouching on top. Before the cover click (a crate's top
 	// would otherwise be its cover); Alt (cover on any object), Shift, Ctrl (above), ladders and objects (above / below) keep their meaning;
 	// only the real-time order dispatch (the pause plans moves: no climb), never on the grid, not for a multi-selection (054).
-	if (!IsSquadWideModifierDown() && !IsShiftModifierDown() && Squad->IsSoloMode() && !Squad->HasMultiSelection() && !IsRealTimeOrderLocked()
-		&& !bRelocateSelectMode && !Cast<AInteractableActor>(Hit.GetActor()) && !Cast<APawn>(Hit.GetActor()))
+	if (CanOrderMantleClick(Hit))
 	{
-		const UGameFlowSubsystem* MantleFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
-		const ECodexCombatMode MantleMode = MantleFlow ? MantleFlow->GetCombatMode() : ECodexCombatMode::None;
-		const ECombatOrderDispatch MantleDispatch = MantleFlow ? FCombatTimeModeRules::GetOrderDispatch(MantleFlow->GetPhase(), MantleMode,
-			OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
-		if (MantleMode != ECodexCombatMode::TurnBased && MantleDispatch == ECombatOrderDispatch::Execute
-			&& !UTutorialSubsystem::FilterCommand(this, PlayerCommands::Move).IsNone() && Leader->OrderMantleTop(Hit, Leader->IsSprinting()))
+		// Batch 2 item 3 (MantlingProblem_03: "clicking, even double-clicking, on an obstacle does nothing"): the camera shows the obstacle's side
+		// faces, where a single click keeps its cover preview - a DOUBLE click on a climbable obstacle's face orders the climb (not in cover:
+		// there the double click is the cover switch). Its top: a single click, as before.
+		const bool bFaceClick = FMath::Abs(Hit.ImpactNormal.Z) < 0.3f;
+		bool bClimbClick = !bFaceClick;
+		if (bFaceClick && MantleNavigation::IsBatch2Enabled())
+		{
+			FVector2D FaceMouse = FVector2D::ZeroVector; // stays zero without a viewport (headless smokes)
+			GetMousePosition(FaceMouse.X, FaceMouse.Y);
+			const double FaceNow = FApp::GetCurrentTime();
+			bClimbClick = MantleFaceClickTime >= 0.0 && FaceNow - MantleFaceClickTime <= DoubleClickSeconds
+				&& FVector2D::Distance(FaceMouse, MantleFaceClickPosition) <= DoubleClickPixels && MantleFaceClickActor.Get() == Hit.GetActor() && !Leader->bInCover;
+			MantleFaceClickTime = bClimbClick ? -1.0 : FaceNow;
+			MantleFaceClickPosition = FaceMouse;
+			MantleFaceClickActor = Hit.GetActor();
+		}
+		FString MantleWhy;
+		if (bClimbClick && Leader->OrderMantleTop(Hit, Leader->IsSprinting(), &MantleWhy))
 		{
 			HideCoverPreview();
+			UpdateMantleHover(nullptr, nullptr);
 			ControllerCommands::Report(this, PlayerCommands::Move, nullptr, false, false, Leader, Hit.ImpactPoint);
-			UE_LOG(LogCodexTactics, Display, TEXT("Click on the top of %s: %s climbs it"), *GetNameSafe(Hit.GetActor()), *Leader->DisplayName.ToString());
+			UE_LOG(LogCodexTactics, Display, TEXT("Click on the %s of %s: %s climbs it"), bFaceClick ? TEXT("face") : TEXT("top"), *GetNameSafe(Hit.GetActor()),
+				*Leader->DisplayName.ToString());
 			return;
+		}
+		if (bClimbClick && bFaceClick)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Double click on the face of %s: no climb (%s)"), *GetNameSafe(Hit.GetActor()), *MantleWhy);
 		}
 	}
 	// Sprint 12: a click on a wall (Alt + click on a barricade / any object) = cover preview / confirm / shimmy; every
@@ -720,6 +739,72 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	OrderGroupMove(Hit.ImpactPoint, bSprint, Dispatch == ECombatOrderDispatch::Queue);
 	ControllerCommands::Report(this, bSprint ? PlayerCommands::Sprint : PlayerCommands::Move, nullptr, Dispatch == ECombatOrderDispatch::Queue,
 		Squad->HasMultiSelection(), Leader, Hit.ImpactPoint);
+}
+
+bool ACodexTacticsPlayerController::CanOrderMantleClick(const FHitResult& Hit) const
+{
+	const USquadSubsystem* Squad = GetSquad();
+	if (!Squad || !Squad->GetLeader() || IsSquadWideModifierDown() || IsShiftModifierDown() || IsAttackModifierDown() || !Squad->IsSoloMode()
+		|| Squad->HasMultiSelection() || IsRealTimeOrderLocked() || bRelocateSelectMode || Cast<AInteractableActor>(Hit.GetActor()) || Cast<APawn>(Hit.GetActor()))
+	{
+		return false;
+	}
+	const UGameFlowSubsystem* MantleFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+	const ECodexCombatMode MantleMode = MantleFlow ? MantleFlow->GetCombatMode() : ECodexCombatMode::None;
+	const ECombatOrderDispatch MantleDispatch = MantleFlow ? FCombatTimeModeRules::GetOrderDispatch(MantleFlow->GetPhase(), MantleMode,
+		OrderLock::CVarRealTimeOrders.GetValueOnGameThread() != 0) : ECombatOrderDispatch::Execute;
+	return MantleMode != ECodexCombatMode::TurnBased && MantleDispatch == ECombatOrderDispatch::Execute
+		&& !UTutorialSubsystem::FilterCommand(const_cast<ACodexTacticsPlayerController*>(this), PlayerCommands::Move).IsNone();
+}
+
+bool ACodexTacticsPlayerController::UpdateMantleHover(AOperativeCharacter* Operative, const FHitResult* Hit)
+{
+	// Batch 2 item 4: the hover ghost at the climb's landing - shown only where a click here climbs (CanOrderMantleClick + PlanMantleClick).
+	const bool bWanted = Operative && Hit && Hit->bBlockingHit && MantleNavigation::IsBatch2Enabled() && CanOrderMantleClick(*Hit);
+	if (!bWanted)
+	{
+		bMantleHoverPlanned = false;
+		MantleHoverActor.Reset();
+		if (MantleGhost && MantleGhost->IsShown())
+		{
+			MantleGhost->Hide();
+		}
+		return false;
+	}
+	const double Now = GetWorld()->GetTimeSeconds();
+	const bool bSameSpot = MantleHoverActor.Get() == Hit->GetActor() && FVector::DistSquared(MantleHoverPoint, Hit->ImpactPoint) < FMath::Square(20.f)
+		&& Now - MantleHoverPlannedAt < 0.25;
+	if (!bSameSpot)
+	{
+		MantleHoverActor = Hit->GetActor();
+		MantleHoverPoint = Hit->ImpactPoint;
+		MantleHoverPlannedAt = Now;
+		FMantleClickPlan Plan;
+		bMantleHoverPlanned = Operative->PlanMantleClick(*Hit, Plan);
+		if (bMantleHoverPlanned)
+		{
+			if (!MantleGhost)
+			{
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				MantleGhost = GetWorld()->SpawnActor<ACoverGhostActor>(Plan.Landing, FRotator::ZeroRotator, Params);
+			}
+			if (MantleGhost)
+			{
+				MantleGhost->ShowMantleFor(*Operative, Plan.Landing, static_cast<float>(Plan.Dir.Rotation().Yaw), Plan.bTop);
+			}
+		}
+		else if (MantleGhost && MantleGhost->IsShown())
+		{
+			MantleGhost->Hide();
+		}
+	}
+	return bMantleHoverPlanned && MantleGhost && MantleGhost->IsShown();
+}
+
+bool ACodexTacticsPlayerController::IsMantleHoverShown() const
+{
+	return MantleGhost && MantleGhost->IsShown() && MantleGhost->IsMantlePose();
 }
 
 void ACodexTacticsPlayerController::AssignDefenseUnderCursor()

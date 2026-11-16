@@ -503,6 +503,13 @@ public:
 	bool OrderMantleTop(const FHitResult& TopHit, bool bSprint = false, FString* OutReason = nullptr);
 
 	/**
+	 * What a click on Hit would order (batch 2: the click and the hover ghost share it): a top hit, or (Codex.Mantle.Batch2) an eligible
+	 * obstacle's side face taken as its top just inside it; the face nearest to him, the base point he walks to, the height class, and the
+	 * climb measured from that base (landing, headroom, warp limits). False (OutReason) when the click is no climb.
+	 */
+	bool PlanMantleClick(const FHitResult& Hit, FMantleClickPlan& Out, FString* OutReason = nullptr) const;
+
+	/**
 	 * Measures the obstacle ahead along Dir and starts the climb right here when the rules allow it (the click order on arrival, smokes).
 	 * OutRefusal: why not. bStopAfter: he stays at the landing (crouched on a top) instead of walking on to his order's destination.
 	 */
@@ -544,6 +551,22 @@ public:
 	 * cached per clip in UMantleSubsystem). Null when the clip, his anim instance or a bone is missing.
 	 */
 	const FMantleClipTrack* GetMantleClipTrack(int32 ClipIndex);
+
+	/**
+	 * Coming down off a mantle top (batch 2, docs/port/MANTLING_BATCH2_REPORT.md): he stands up first (prone / crouched), walks off the edge of
+	 * the chosen face and falls to the ground past it (the CharacterMovement fall: the ABP's fall states play, collision on - the body stays
+	 * outside the obstacle), then walks on to his order. No teleport, no vault clip.
+	 */
+	bool IsMantleDescending() const { return MantleDescentPhase != EMantleDescentPhase::None; }
+	/** He stands on the top of a mantle obstacle (a legitimate spot off the navmesh: the small tops carry none). */
+	bool IsStandingOnMantleTop() const { return GetMantleTopUnderFeet() != nullptr; }
+	/** Smokes: descents started, and how many fell back to the old hop (the edge was not left in time). */
+	int32 GetMantleDescentCount() const { return MantleDescentCount; }
+	int32 GetMantleDescentHopFallbacks() const { return MantleDescentHopFallbacks; }
+	/** Smokes: how far the wall guard pushed him back in the last climb (the torso kept off the face; batch 2 item 1), cm. */
+	float GetLastMantleGuardPushCm() const { return MantleGuardPushCm; }
+	/** Smokes: the landing (feet) the last descent aimed at. */
+	const FVector& GetMantleDescentLanding() const { return MantleDescentLanding; }
 
 	/** Position in the squad roster (0 = commander); selection keys 1..N map to it. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
@@ -2584,8 +2607,21 @@ private:
 	bool StartMantle(const struct FMantleSite& Site, const FMantleDecision& Decision, bool bStopAfter, int32 LinkIndex);
 	/** The hop down a mantle down-link (the vault's arc, OperativeCharacterVault.cpp). */
 	bool StartMantleHop(const FVector& LandingFeet);
-	/** Standing on a low mantle top with no path off it (no navmesh / an island): the hop down towards Destination, then the order. */
+	/**
+	 * Standing on a mantle top whose path off it does not start or ends short (no navmesh on the top / an island): the way down over the face
+	 * that gives the shortest total way to Destination (MantleRules::ChooseDescent), then the order (batch 2 items 5 / 7).
+	 */
 	bool TryMantleStepDown(const FVector& Destination);
+	/** The faces of Top as ways down towards Goal: the best landing (feet). False when no face has free ground within descent.*_drop_cm. */
+	bool FindMantleDescent(const AActor& Top, const FVector& Goal, FVector& OutLanding, float* OutTotalCm = nullptr) const;
+	/** Codex.Mantle.Batch2 0: the hop down of before (the vault's arc to the first free spot round him). */
+	bool TryMantleHopDownLegacy(const FVector& Destination);
+	/** Starts the walk-off descent towards LandingFeet (StandUp -> Walk -> Air); bResume: walks on to Goal after the landing. */
+	bool StartMantleDescent(const FVector& LandingFeet, const FVector& Goal, bool bResume, bool bResumeOwnOrder);
+	void UpdateMantleDescent(float DeltaTime);
+	void EndMantleDescent(bool bResume);
+	/** The mantle top he stands on (the floor's actor, an eligible obstacle) or null. */
+	const AActor* GetMantleTopUnderFeet() const;
 	/** A mantle link the crowd update reached (PendingMantleLink): the climb / hop, or the link switched off and a re-path. */
 	void HandleMantleLink(int32 LinkIndex);
 	void FinishMantle();
@@ -2610,6 +2646,14 @@ private:
 	FDelegateHandle MantleShiftHandle;
 	/** Keeps the mesh shift equal to -MantleRootLock x the mantle montage's weight (blend in / out, a cancel); zero once it has blended out. */
 	void UpdateMantleMeshShift();
+	/** The wall guard (batch 2 item 1): a torso joint below the top is kept align.guard_gap_cm in front of the face (the capsule pushed back). */
+	void ApplyMantleWallGuard();
+	/** The climbed face (a point on it; MantleDir points into the obstacle), the top's height and depth along the climb. */
+	FVector MantleFacePoint = FVector::ZeroVector;
+	TWeakObjectPtr<AActor> MantleObstacle;
+	float MantleTopZ = 0.f;
+	float MantleDepthCm = 0.f;
+	float MantleGuardPushCm = 0.f;
 	/** World time until which no new climb starts (mantle.json cooldown_s after the last one). */
 	float MantleCooldown = 0.f;
 	FVector MantleBaseFeet = FVector::ZeroVector;
@@ -2648,6 +2692,17 @@ private:
 	EMantleRefusal LastMantleRefusal = EMantleRefusal::None;
 	float LastMantleLandingError = 0.f;
 	EMantleCancel LastMantleCancel = EMantleCancel::None;
+	/** The walk-off descent (StartMantleDescent). */
+	EMantleDescentPhase MantleDescentPhase = EMantleDescentPhase::None;
+	float MantleDescentTimer = 0.f;
+	FVector MantleDescentLanding = FVector::ZeroVector;
+	FVector MantleDescentGoal = FVector::ZeroVector;
+	float MantleDescentTopZ = 0.f;
+	bool bMantleDescentResume = false;
+	bool bMantleDescentResumeOwn = false;
+	bool bMantleDescentSavedOrient = false;
+	int32 MantleDescentCount = 0;
+	int32 MantleDescentHopFallbacks = 0;
 
 	bool bGroupSelected = false;
 	bool bInMultiSelection = false;

@@ -387,6 +387,40 @@ bool FMantleRulesClipContactTest::RunTest(const FString&)
 	return true;
 }
 
+MANTLE_RULES_TEST(FMantleRulesDescentTest, "Descent")
+bool FMantleRulesDescentTest::RunTest(const FString&)
+{
+	// Batch 2 item 5 (MantlingProblem_03: "always jumps down on the side he climbed from"): a top whose +X face lies at x 100, the goal 250 cm
+	// past it.
+	const FVector Goal(350.f, 10.f, 0.f);
+	// The exit on a face: the goal's projection, kept the margin off the ends; a face shorter than two margins: its middle.
+	TestTrue(TEXT("exit: the goal's projection on the face"), MantleRules::DescentExitOnFace(FVector(100.f, -60.f, 140.f), FVector(100.f, 60.f, 140.f), Goal, 40.f)
+		.Equals(FVector(100.f, 10.f, 140.f), 0.01f));
+	TestTrue(TEXT("exit: clamped the margin off the face's end"), MantleRules::DescentExitOnFace(FVector(100.f, -60.f, 140.f), FVector(100.f, 60.f, 140.f),
+		FVector(350.f, 500.f, 0.f), 40.f).Equals(FVector(100.f, 20.f, 140.f), 0.01f));
+	TestTrue(TEXT("exit: a short face's middle"), MantleRules::DescentExitOnFace(FVector(0.f, 0.f, 0.f), FVector(0.f, 60.f, 0.f), Goal, 40.f)
+		.Equals(FVector(0.f, 30.f, 0.f), 0.01f));
+	// The choice: the far face (a walk across the top + a short path) beats the climbed face (no walk, a long path round the top).
+	auto Option = [](float Walk, float Path, bool bComplete, bool bValid)
+	{
+		FMantleDescentOption Each;
+		Each.WalkCm = Walk;
+		Each.PathCm = Path;
+		Each.bPathComplete = bComplete;
+		Each.bValid = bValid;
+		return Each;
+	};
+	TArray<FMantleDescentOption> Options = { Option(10.f, 560.f, true, true), Option(190.f, 250.f, true, true), Option(70.f, 420.f, true, true) };
+	TestEqual(TEXT("the shortest total wins (the far face)"), MantleRules::ChooseDescent(Options), 1);
+	Options[1].bValid = false; // no free ground past the far face
+	TestEqual(TEXT("an invalid face is never taken"), MantleRules::ChooseDescent(Options), 2);
+	Options[2].bPathComplete = false; // its path ends short of the goal
+	TestEqual(TEXT("a path that reaches the goal beats a shorter partial one"), MantleRules::ChooseDescent(Options), 0);
+	TestEqual(TEXT("no valid face: none"), MantleRules::ChooseDescent({ Option(0.f, 0.f, true, false) }), static_cast<int32>(INDEX_NONE));
+	TestEqual(TEXT("only partial paths: the shortest of them"), MantleRules::ChooseDescent({ Option(0.f, 500.f, false, true), Option(0.f, 300.f, false, true) }), 1);
+	return true;
+}
+
 #undef MANTLE_RULES_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

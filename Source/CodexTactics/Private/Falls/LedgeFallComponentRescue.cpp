@@ -7,6 +7,7 @@
 
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
+#include "Interactables/MantleNavigation.h"
 #include "CodexTactics.h"
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -133,9 +134,12 @@ void ULedgeFallComponent::TickRescueWatch(float DeltaTime)
 		return;
 	}
 	RescueCheckClock = LedgeFallRescueInternal::CheckIntervalSeconds;
-	if (!CanBeRescued())
+	// Mantling batch 2 (MantlingProblem_07 / MantleDescentSmoke: a fall within rescue.watch_s before a climb onto a top without navmesh put him
+	// back on the ground after rescue.after_s - "teleported"): a mantle top is a spot he chose; his next order comes down off it by itself.
+	const AOperativeCharacter* WatchedOperative = Cast<AOperativeCharacter>(GetOwner());
+	if (!CanBeRescued() || (WatchedOperative && MantleNavigation::IsBatch2Enabled() && WatchedOperative->IsPlayerTeam() && WatchedOperative->IsStandingOnMantleTop()))
 	{
-		RescueBadSeconds = 0.f; // a knockdown / a ladder / a vehicle owns him meanwhile
+		RescueBadSeconds = 0.f; // a knockdown / a ladder / a vehicle / a mantle top owns him meanwhile
 		return;
 	}
 	const FallRules::ENavStanding Standing = EvaluateStanding(bRescueDeadEndCleared);

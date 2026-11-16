@@ -344,6 +344,10 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	{
 		UpdateMantle(DeltaTime); // the root-motion climb moves him (OperativeCharacterMantle.cpp); no cover, facing or shooting
 	}
+	else if (IsMantleDescending())
+	{
+		UpdateMantleDescent(DeltaTime); // off a mantle top: stand up, walk off the edge, fall, walk on (OperativeCharacterMantle.cpp)
+	}
 	else if (IsClimbingLadder())
 	{
 		// on a ladder: ULadderClimbComponent moves and turns him; no cover, facing or shooting (LADDERS.md 7.2)

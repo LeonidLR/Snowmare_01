@@ -152,6 +152,8 @@ public:
 	int32 Generate();
 	void ClearLinks();
 	bool HasGenerated() const { return bGenerated; }
+	/** The last generation stopped at the link cap (links.max_total): obstacles after it got no links (smokes, batch 2 item 9). */
+	bool WasLinkCapReached() const { return bLinkCapReached; }
 
 	const TArray<FMantleLink>& GetLinks() const { return Links; }
 	const FMantleLink* GetLink(int32 Index) const { return Links.IsValidIndex(Index) ? &Links[Index] : nullptr; }
@@ -199,6 +201,7 @@ private:
 	FTimerHandle PollTimer;
 	float WaitedSeconds = 0.f;
 	bool bGenerated = false;
+	bool bLinkCapReached = false;
 	int32 Sampled = 0;
 	double GenerationMs = 0.0;
 };
@@ -227,4 +230,17 @@ namespace MantleNavigation
 	 * bounds) - the base point in front of it (on his level) and the climb direction. False when the hit is no eligible top.
 	 */
 	CODEXTACTICS_API bool PlanTopClick(UWorld& World, const FHitResult& TopHit, const FVector& FromFeet, float CapsuleRadius, FVector& OutBaseFeet, FVector& OutDir);
+
+	/**
+	 * A click on an eligible obstacle's SIDE face (|normal z| < 0.3; batch 2 item 3 - the isometric camera shows the faces): the top point just
+	 * inside that face (order.face_inset_cm) as a top hit on the same obstacle. False when it is no such face or the top is not under it.
+	 */
+	CODEXTACTICS_API bool TopHitFromFace(UWorld& World, const FHitResult& FaceHit, FHitResult& OutTopHit);
+
+	/**
+	 * Batch 2 (docs/port/MANTLING_BATCH2_REPORT.md; console Codex.Mantle.Batch2): 1 (default) = the wall guard, the clip's exit at its settled
+	 * pose, the walk-off descent over the face nearest the goal, the face double click and the hover ghost; 0 = the behaviour before it (A/B for
+	 * the designer and the smokes' "before" runs).
+	 */
+	CODEXTACTICS_API bool IsBatch2Enabled();
 }
