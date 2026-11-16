@@ -27,7 +27,7 @@
       "name": "Сложнейшее",
       "agent": "ue-l4-architect",
       "model": "fable",
-      "model_name": "Claude Fable 5.1 (claude-fable-5-1)"
+      "model_name": "Claude Fable 5.2 (claude-fable-5-2)"
     }
   },
   "estimate_assumptions_note": "Savings are ESTIMATES in relative units: tokens a task of the level typically costs x (flagship cost weight - routed model cost weight). Edit the weights to your real per-token prices; they are not official prices.",

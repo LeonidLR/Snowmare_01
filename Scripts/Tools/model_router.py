@@ -6,7 +6,7 @@ Claude Code cannot switch the main session's model per prompt. The closest nativ
      probabilities) — plus whether it is a short follow-up only understandable in the dialogue;
   3. when the level's probability >= the threshold (0.6) and it is not a follow-up, the hook adds a note telling the
      main session to hand the task to the level's subagent (.claude/agents/ue-l{1..4}-*.md, each pinned to a model:
-     Haiku 4.5 / Sonnet 5.5 / Opus 5.5 / Fable 5.1); otherwise nothing is added and the main session does it itself.
+     Haiku 4.5 / Sonnet 5.5 / Opus 5.5 / Fable 5.2); otherwise nothing is added and the main session does it itself.
 Never blocking: disabled -> exits at once; any error / timeout -> exits 0 without output (the prompt runs as if the
 router did not exist).
 
