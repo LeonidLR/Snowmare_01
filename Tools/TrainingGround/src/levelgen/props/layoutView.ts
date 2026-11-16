@@ -456,6 +456,7 @@ export class PropsLayoutView {
   groundZ = 0;
   spawnPos: [number, number] = [0, 0];
   endPos: [number, number] = [0, 0];
+  goals: Array<{ id: string; pos: [number, number] }> = [];
 
   layers: PropsWalkLayer[] = [];
   layerWalls: InternalLayerWall[][] = [];
@@ -522,6 +523,19 @@ export class PropsLayoutView {
     }
     if (Array.isArray(root.end)) {
       view.endPos = [Math.floor(root.end[0]), Math.floor(root.end[1])];
+    }
+    const objs = root.objectives as Record<string, unknown> | undefined;
+    if (objs && typeof objs === 'object') {
+      if (Array.isArray(objs.start) && objs.start.length >= 2) {
+        view.spawnPos = [Math.floor(objs.start[0]), Math.floor(objs.start[1])];
+      }
+      if (Array.isArray(objs.goals)) {
+        for (const g of objs.goals) {
+          if (g && typeof g === 'object' && Array.isArray(g.pos) && g.pos.length >= 2) {
+            view.goals.push({ id: String(g.id ?? 'goal'), pos: [Math.floor(g.pos[0]), Math.floor(g.pos[1])] });
+          }
+        }
+      }
     }
 
     if (Array.isArray(root.walls)) {
@@ -1235,9 +1249,17 @@ export class PropsLayoutView {
 
     if ((params.spawnCm ?? 0) > 0) {
       shape('spawn', 'spawn', '', [this.spawnPos], params.spawnCm!, false);
+      for (const g of this.goals) {
+        shape('spawn', g.id, '', [g.pos], params.spawnCm!, false);
+      }
     }
     if ((params.endCm ?? 0) > 0) {
-      shape('end', 'end', '', [this.endPos], params.endCm!, false);
+      if (this.endPos[0] !== 0 || this.endPos[1] !== 0) {
+        shape('end', 'end', '', [this.endPos], params.endCm!, false);
+      }
+      for (const g of this.goals) {
+        shape('end', g.id, '', [g.pos], params.endCm!, false);
+      }
     }
     if ((params.ladderCm ?? 0) > 0) {
       for (const l of this.ladders) {
