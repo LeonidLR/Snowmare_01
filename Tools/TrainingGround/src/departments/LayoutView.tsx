@@ -39,9 +39,13 @@ interface Props {
   view?: PlanView;
   /** The start + goals are drawn by the interactive overlay instead (RegionOverlay): skip them here. */
   hideObjectives?: boolean;
+  /** The entity keys of the HIDDEN layers (levelgen/layers.ts hiddenKeys: "wall:<id>", "cover:<id>", "zone:<id>", ...): not drawn. */
+  hidden?: ReadonlySet<string>;
+  /** Plan colours by entity key («цвета слоёв»: the obstacle size classes; layers.ts layerTints). */
+  tints?: ReadonlyMap<string, string>;
 }
 
-export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks, view = FIT_VIEW, hideObjectives = false }, ref) => {
+export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks, view = FIT_VIEW, hideObjectives = false, hidden, tints }, ref) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   useImperativeHandle(ref, () => ({ toPngBase64: () => canvas.current ? canvas.current.toDataURL('image/png').replace(/^data:image\/png;base64,/, '') : null }), []);
   // redraw on a size change (the region-select overlay over this canvas tracks its size: both must use the same transform)
@@ -72,6 +76,8 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     const P = (p: Vec2): [number, number] => [ox + (p[1] - minY) * s, oy + (maxX - p[0]) * s];
     const poly = (pts: Vec2[]) => { g.beginPath(); pts.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.closePath(); };
     const rectPts = ([a, b]: [Vec2, Vec2]): Vec2[] => [[a[0], a[1]], [b[0], a[1]], [b[0], b[1]], [a[0], b[1]]];
+    // the layer system: an entity of a hidden layer is not drawn
+    const shown = (key: string): boolean => !hidden || !hidden.has(key);
     const floorNum = floorMode === 'ground' ? 0 : floorMode === '1' ? 1 : floorMode === '2' ? 2 : null;
     const floorActive = (fl: number, bid?: string): boolean => {
       if (layer !== 'all') {
@@ -100,18 +106,19 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     for (let y = Math.ceil(minY / 1000) * 1000; y <= maxY; y += 1000) { const a = P([minX, y]), b = P([maxX, y]); g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke(); }
     // zones
     for (const z of layout.zones) {
+      if (!shown(`zone:${z.id}`)) continue;
       const tint = SET_TINT[z.set_piece ?? ''] ?? '#808080';
       g.fillStyle = tint + '40'; g.strokeStyle = tint + 'b0'; g.lineWidth = 1;
       poly(z.poly); g.fill(); g.stroke();
     }
     // the cut
     if (layout.cut && (layer === 'all' || layer === 'ground' || layer === 'cut')) {
-      g.fillStyle = '#1e2850'; g.strokeStyle = '#465aa0'; poly(layout.cut.poly); g.fill(); g.stroke();
-      for (const x of layout.cut.crossings) { g.fillStyle = '#c8c8be'; poly(x.poly); g.fill(); }
+      if (shown('cut:cut')) { g.fillStyle = '#1e2850'; g.strokeStyle = '#465aa0'; poly(layout.cut.poly); g.fill(); g.stroke(); }
+      for (const x of layout.cut.crossings) { if (!shown(`crossing:${x.id}`)) continue; g.fillStyle = '#c8c8be'; poly(x.poly); g.fill(); }
     }
     // buildings
     for (const b of layout.buildings) {
-      if (!showBuilding(b)) continue;
+      if (!showBuilding(b) || !shown(`building:${b.id}`)) continue;
       const pts = footprintPoly(b); // rotated buildings (rotation.ts)
       g.fillStyle = b.set_piece === 'chimney' ? '#46464e' : b.set_piece === 'tower' ? '#646e82' : b.height >= 600 ? '#967864' : '#aa9678'; g.strokeStyle = '#ffffff'; g.lineWidth = 1.2;
       poly(pts); g.fill(); g.stroke();
@@ -191,35 +198,39 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     }
     // walls
     for (const wl of layout.walls) {
-      if (!onLayer(wl.floor ?? 0, wl.building)) continue;
+      if (!onLayer(wl.floor ?? 0, wl.building) || !shown(`wall:${wl.id}`)) continue;
       const a = P(wl.a), b = P(wl.b);
-      g.strokeStyle = wl.kind === 'fence' ? '#e6e678' : wl.kind === 'cut_wall' ? '#465aa0' : '#c8c8d2'; g.lineCap = 'butt';
-      g.lineWidth = Math.max(1, wl.thickness * s);
+      const wTint = tints?.get(`wall:${wl.id}`);
+      g.strokeStyle = wTint ?? (wl.kind === 'fence' ? '#e6e678' : wl.kind === 'cut_wall' ? '#465aa0' : '#c8c8d2'); g.lineCap = 'butt';
+      g.lineWidth = Math.max(wTint ? 1.6 : 1, wl.thickness * s);
       g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     }
     // covers
     if (layer === 'all' || layer === 'ground') for (const cv of layout.covers) {
+      if (!shown(`cover:${cv.id}`)) continue;
       const q = P(cv.pos), rx = Math.max(1.5, cv.size[0] / 2 * s), ry = Math.max(1.5, cv.size[1] / 2 * s);
       g.save(); g.translate(q[0], q[1]); g.rotate(-cv.yaw * Math.PI / 180);
-      g.fillStyle = cv.size[2] >= 140 ? '#8c7c62' : '#6e645a'; g.strokeStyle = '#c8be a0'.replace(' ', ''); g.lineWidth = 0.8;
+      const cTint = tints?.get(`cover:${cv.id}`);
+      g.fillStyle = cTint ? `${cTint}b8` : cv.size[2] >= 140 ? '#8c7c62' : '#6e645a'; g.strokeStyle = cTint ?? '#c8bea0'; g.lineWidth = 0.8;
       if (cv.kind === 'silo') { g.beginPath(); g.arc(0, 0, rx, 0, Math.PI * 2); g.fill(); g.stroke(); } else { g.fillRect(-ry, -rx, ry * 2, rx * 2); g.strokeRect(-ry, -rx, ry * 2, rx * 2); }
       g.restore();
     }
     // ladders
-    for (const l of layout.ladders) { const q = P(l.pos); g.fillStyle = '#ffe600'; g.strokeStyle = '#000'; g.lineWidth = 1; g.fillRect(q[0] - 3.5, q[1] - 6, 7, 12); g.strokeRect(q[0] - 3.5, q[1] - 6, 7, 12); }
+    for (const l of layout.ladders) { if (!shown(`ladder:${l.id}`)) continue; const q = P(l.pos); g.fillStyle = '#ffe600'; g.strokeStyle = '#000'; g.lineWidth = 1; g.fillRect(q[0] - 3.5, q[1] - 6, 7, 12); g.strokeRect(q[0] - 3.5, q[1] - 6, 7, 12); }
     // routes
     for (const r of layout.routes) {
+      if (!shown(`route:${r.id}`)) continue;
       const main = !!r.mandatory;
       g.strokeStyle = main ? '#008cff' : '#5ac8ff'; g.lineWidth = main ? 4 : 1.5; g.setLineDash(main ? [] : [5, 4]);
       g.beginPath(); r.points.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.stroke(); g.setLineDash([]);
       if (main) r.points.forEach((p, i) => { const q = P(p); g.fillStyle = '#008cff'; g.beginPath(); g.arc(q[0], q[1], 3.5, 0, Math.PI * 2); g.fill(); g.fillStyle = '#c8e6ff'; g.font = '9px ui-monospace, monospace'; g.fillText(String(i), q[0] + 5, q[1] - 4); });
       if (!main) { const p = r.points[Math.floor(r.points.length / 2)]; const q = P(p); g.fillStyle = r.intent === 'kill_zone' ? '#ff6464' : '#5ac8ff'; g.font = '9px ui-monospace, monospace'; g.fillText(r.intent === 'kill_zone' ? `${r.id} (kill zone, intended)` : r.id, q[0] + 4, q[1] + 10); }
     }
-    for (const sp of layout.spawn_points) { const q = P(sp.pos); g.fillStyle = '#ff5050'; g.beginPath(); g.moveTo(q[0], q[1] - 5); g.lineTo(q[0] + 5, q[1] + 4); g.lineTo(q[0] - 5, q[1] + 4); g.closePath(); g.fill(); }
-    for (const ap of layout.ambush_points) { const q = P(ap.pos); g.strokeStyle = '#ffa03c'; g.lineWidth = 1.5; g.beginPath(); g.arc(q[0], q[1], 3.5, 0, Math.PI * 2); g.stroke(); }
-    for (const pr of layout.patrol_routes) { g.strokeStyle = '#ff6464'; g.lineWidth = 1; g.beginPath(); pr.points.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.closePath(); g.stroke(); }
-    const sq = P(layout.spawn.pos); g.strokeStyle = '#00e65a'; g.lineWidth = 3; g.beginPath(); g.arc(sq[0], sq[1], 9, 0, Math.PI * 2); g.stroke();
-    const eq = P(layout.end); g.strokeStyle = '#ff5050'; g.lineWidth = 3; g.strokeRect(eq[0] - 8, eq[1] - 8, 16, 16);
+    for (const sp of layout.spawn_points) { if (!shown(`point:${sp.id}`)) continue; const q = P(sp.pos); g.fillStyle = '#ff5050'; g.beginPath(); g.moveTo(q[0], q[1] - 5); g.lineTo(q[0] + 5, q[1] + 4); g.lineTo(q[0] - 5, q[1] + 4); g.closePath(); g.fill(); }
+    for (const ap of layout.ambush_points) { if (!shown(`point:${ap.id}`)) continue; const q = P(ap.pos); g.strokeStyle = '#ffa03c'; g.lineWidth = 1.5; g.beginPath(); g.arc(q[0], q[1], 3.5, 0, Math.PI * 2); g.stroke(); }
+    for (const pr of layout.patrol_routes) { if (!shown(`point:${pr.id}`)) continue; g.strokeStyle = '#ff6464'; g.lineWidth = 1; g.beginPath(); pr.points.forEach((p, i) => { const q = P(p); if (i) g.lineTo(q[0], q[1]); else g.moveTo(q[0], q[1]); }); g.closePath(); g.stroke(); }
+    if (shown('point:spawn')) { const sq = P(layout.spawn.pos); g.strokeStyle = '#00e65a'; g.lineWidth = 3; g.beginPath(); g.arc(sq[0], sq[1], 9, 0, Math.PI * 2); g.stroke(); }
+    if (shown('point:end')) { const eq = P(layout.end); g.strokeStyle = '#ff5050'; g.lineWidth = 3; g.strokeRect(eq[0] - 8, eq[1] - 8, 16, 16); }
     // subtle mantleable edges (window sills, parapets, low covers)
     const mantleMap = new Map<string, MantleEdge>();
     for (const me of layout.mantle_edges ?? []) mantleMap.set(me.id, me);
@@ -229,6 +240,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     g.lineWidth = 1.6;
     g.setLineDash([3, 3]);
     for (const me of mantleMap.values()) {
+      if (!shown(`mantle_edge:${me.id}`)) continue;
       const mFloor = me.floor ?? 0;
       const showM = me.kind === 'parapet'
         ? (floorMode === 'all' || floorMode === 'roof' || layer.startsWith('roof:'))
@@ -279,7 +291,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     for (const m of marks ?? []) { const q = P(m); g.strokeStyle = '#f97316'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.stroke(); }
     g.fillStyle = '#ffe600'; g.font = '11px ui-monospace, monospace'; g.textAlign = 'left';
     g.fillText(`${layout.name}  ${Math.round((maxY - minY) / 100)} x ${Math.round((maxX - minX) / 100)} m  seed ${layout.seed}  layer ${layer !== 'all' ? layer : floorMode}`, 8, h - 8);
-  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW, view, hideObjectives]);
+  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW, view, hideObjectives, hidden, tints]);
 
   return <canvas ref={canvas} style={{ width: '100%', height }} className="rounded-xl border border-slate-800 block" />;
 });
