@@ -6,6 +6,11 @@ Two Gemini roles from now on:
 - **Gemini Desktop** = consultant: reads the code on GitHub, answers questions, reviews ideas, analyses logs, drafts alternatives.
   It never claims anything is built, tested or done. Claude verifies and applies everything.
 
+**Checked 2026-11-16 (Gemini's own answers): Gemini Desktop has NO GitHub connection, NO MCP, NO file saving, NO Drive/Docs writing,
+NO workspace instructions.** So: paste the block below as the FIRST message of every new Gemini Desktop chat, attach / paste the files
+it needs, and carry its answers to Claude by hand. Use it only for occasional second opinions - it is not part of the pipeline.
+(The setup steps below about GitHub / workspace instructions do not apply to the current app version.)
+
 ## Setup (designer, once)
 1. In Gemini Desktop create a task / workspace "CodexTactics".
 2. Connect GitHub: repository **LeonidLR/Snowmare_01**, branch **main**, read-only (only this repository).
