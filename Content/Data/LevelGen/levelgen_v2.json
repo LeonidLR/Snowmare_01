@@ -45,6 +45,7 @@
     "seam_gate_reach_m": 2.5,
     "cut_wall_t_m": 1.5,
     "spawn_inset_m": 3,
+    "street_cover_density": 0.35,
     "max_retries": 4,
     "retry_seed_step": 7919
   },

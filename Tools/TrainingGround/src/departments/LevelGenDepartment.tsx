@@ -14,6 +14,11 @@ import type { RegionMode } from './RegionOverlay';
 import type { History } from '../levelgen/regenHistory';
 import { canRedo, canUndo, historyInit, historyPush, historyRedo, historyUndo } from '../levelgen/regenHistory';
 import type { BlockMode, RegionRegenResult } from '../levelgen/regionRegen';
+import type { ExpandResult, SeamCheck } from '../levelgen/expand';
+import { checkSeams, expandLayout, expansionSize } from '../levelgen/expand';
+import type { PlaceObjectivesResult } from '../levelgen/objectives';
+import { checkObjectives, defaultGoalCount, placeObjectives } from '../levelgen/objectives';
+import { V2 } from '../levelgen/blockTemplates';
 import { addLock, DEFAULT_MAX_RETRIES, regenerateRegion, regenStateOf, removeLock, selectRegion } from '../levelgen/regionRegen';
 import type { FormationConfigFile } from '../movement/config';
 import { configValues } from '../movement/config';
@@ -26,7 +31,8 @@ import type { Profile } from '../levelgen/profile';
 import type { GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
 
-interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[] }
+/** `key` = the slot's history key (the first layout name: an expansion renames the map to <name>_x<N>). */
+interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string }
 type ProfileRow = { id: string; title: string; size_m: [number, number] };
 
 const pct = (v?: number) => `${Math.round((v ?? 0) * 100)} %`;
@@ -154,7 +160,7 @@ export const LevelGenDepartment: React.FC = () => {
   };
 
   // ---- region re-roll + locks (task 070) -------------------------------------------------------------------------------
-  const curKey = cur?.layout.name ?? '';
+  const curKey = cur?.key ?? cur?.layout.name ?? '';
   const history = cur ? histories[curKey] ?? historyInit(cur.layout, 'исходная') : null;
   const profileOk = !!cur && !!profile && profile.id === cur.layout.profile;
   const locks = useMemo(() => { try { return cur ? regenStateOf(cur.layout).locks : []; } catch { return []; } }, [cur]);
@@ -165,7 +171,7 @@ export const LevelGenDepartment: React.FC = () => {
   const showLayout = (layout: GenLayout) => {
     if (!profile || !config) return;
     const ev = evaluateLayout({ layout, profile, config, noSim: true });
-    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, layout, ev, simmed: false, verdicts: [] } : c)));
+    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, key: c.key ?? c.layout.name, layout, ev, simmed: false, verdicts: [] } : c)));
   };
   const pushStep = (layout: GenLayout, label: string) => {
     if (!cur) return;
@@ -199,6 +205,46 @@ export const LevelGenDepartment: React.FC = () => {
   };
   const unlock = (id: string) => { if (cur) pushStep(removeLock(cur.layout, id), `снято закрепление ${id}`); };
   const [locksSaved, setLocksSaved] = useState('');
+  // map expansion x2 / x4 / x6 + start and goals (levelgen v2 stage 2)
+  const [expandFactor, setExpandFactor] = useState(4);
+  const [expandSeed, setExpandSeed] = useState(7);
+  const [expandReport, setExpandReport] = useState<(ExpandResult & { seamChecks: SeamCheck[] }) | null>(null);
+  const [goalCount, setGoalCount] = useState(0);
+  const [goalStart, setGoalStart] = useState<'spawn' | 'edge'>('spawn');
+  const [goalSeed, setGoalSeed] = useState(1);
+  const [goalReport, setGoalReport] = useState<PlaceObjectivesResult | null>(null);
+  const objCheck = useMemo(() => { try { return cur?.layout.objectives ? checkObjectives(cur.layout) : null; } catch { return null; } }, [cur]);
+  const expandNow = () => {
+    if (!cur || !profileOk || !profile) return;
+    setBusy(`Расширяю карту x${expandFactor}...`); setError('');
+    setTimeout(() => {
+      try {
+        const r = expandLayout({ layout: cur.layout, factor: expandFactor, seed: expandSeed, profile });
+        setExpandReport({ ...r, seamChecks: r.ok ? checkSeams(r.layout, r.roads) : [] });
+        if (r.ok) { pushStep(r.layout, `расширение x${expandFactor}, seed ${r.seed}`); setZone(null); setRegenReport(null); setExpandSeed((s) => s + 1); }
+      } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+      setBusy('');
+    }, 20);
+  };
+  const placeGoals = () => {
+    if (!cur) return;
+    setBusy('Расставляю старт и цели...'); setError('');
+    setTimeout(() => {
+      try {
+        const r = placeObjectives({ layout: cur.layout, seed: goalSeed, count: goalCount || undefined, start: goalStart });
+        setGoalReport(r);
+        if (r.ok) pushStep(r.layout, `старт + цели, seed ${goalSeed}`);
+        setGoalSeed((s) => s + 1);
+      } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+      setBusy('');
+    }, 20);
+  };
+  const clearGoals = () => {
+    if (!cur?.layout.objectives) return;
+    const next = { ...cur.layout };
+    delete next.objectives;
+    pushStep(next, 'цели убраны'); setGoalReport(null);
+  };
   const saveLocksNow = async () => {
     if (!cur) return;
     setBusy('Сохраняю закрепления...'); setError(''); setLocksSaved('');
@@ -410,6 +456,44 @@ export const LevelGenDepartment: React.FC = () => {
                     ))}
                   </div>
                 )}
+              </div>
+            )}
+            {cur && (
+              <div className="flex flex-col gap-1.5 bg-slate-950/60 border border-slate-800 rounded-xl p-2.5 text-xs">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Расширение</span>
+                  <select value={expandFactor} onChange={(e) => setExpandFactor(Number(e.target.value))} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100">
+                    {V2.expansion.factors.map((f) => { const sz = expansionSize(cur.layout.expansion?.base_size_m ?? cur.layout.params.size_m, f); return <option key={f} value={f}>x{f} по площади ({sz[0]} x {sz[1]} м)</option>; })}
+                  </select>
+                  <label className="flex items-center gap-1 text-slate-400">seed
+                    <input type="number" value={expandSeed} onChange={(e) => setExpandSeed(Math.max(0, Math.floor(Number(e.target.value) || 0)))} className="w-16 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" />
+                  </label>
+                  <button type="button" onClick={expandNow} disabled={!profileOk || !!busy} title="Старая карта и закреплённые районы остаются на месте; вокруг — кольцевая улица, продолжения дорог и канала, новые кварталы из каталога типов" className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-semibold disabled:opacity-40"><Boxes size={13} />Расширить карту</button>
+                  <span className="text-slate-600">|</span>
+                  <span className="text-[11px] font-bold tracking-widest uppercase text-slate-400">Старт и цели</span>
+                  <select value={goalCount} onChange={(e) => setGoalCount(Number(e.target.value))} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100">
+                    <option value={0}>авто ({defaultGoalCount(cur.layout)})</option><option value={2}>2 цели</option><option value={3}>3 цели</option><option value={4}>4 цели</option>
+                  </select>
+                  <select value={goalStart} onChange={(e) => setGoalStart(e.target.value as 'spawn' | 'edge')} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100">
+                    <option value="spawn">старт: точка появления</option><option value="edge">старт: край карты</option>
+                  </select>
+                  <label className="flex items-center gap-1 text-slate-400">seed
+                    <input type="number" value={goalSeed} onChange={(e) => setGoalSeed(Math.max(0, Math.floor(Number(e.target.value) || 0)))} className="w-14 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" />
+                  </label>
+                  <button type="button" onClick={placeGoals} disabled={!!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-yellow-500 hover:bg-yellow-400 text-slate-950 font-semibold disabled:opacity-40"><Footprints size={13} />Расставить старт и цели</button>
+                  <button type="button" onClick={clearGoals} disabled={!cur.layout.objectives || !!busy} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700 disabled:opacity-40"><Eraser size={12} />Убрать цели</button>
+                </div>
+                {expandReport && (
+                  <p className={expandReport.ok ? 'text-indigo-200' : 'text-rose-300'}>{expandReport.ok ? <CheckCircle2 size={12} className="inline mr-1" /> : <XCircle size={12} className="inline mr-1" />}{expandReport.message}{expandReport.ok ? `; швы: ${expandReport.seamChecks.map((x) => `${x.kind === 'canal' ? 'канал' : x.id.replace(/^Z_/, '')} (${x.side}) ${x.connected ? 'продолжается' : 'ОБРЫВ'}`).join(', ')}; маршруты ${expandReport.routes.every((x) => x.completable) ? 'проходимы' : 'НЕ проходимы: ' + expandReport.routes.filter((x) => !x.completable).map((x) => x.id).join(', ')}` : ''}</p>
+                )}
+                {goalReport && !goalReport.ok && <p className="text-rose-300"><XCircle size={12} className="inline mr-1" />{goalReport.message}</p>}
+                {cur.layout.objectives && objCheck && (
+                  <p className={objCheck.ok ? 'text-yellow-200' : 'text-rose-300'}>
+                    {objCheck.ok ? <CheckCircle2 size={12} className="inline mr-1" /> : <XCircle size={12} className="inline mr-1" />}
+                    Старт ({cur.layout.objectives.start.source === 'spawn' ? 'точка появления' : 'край карты'}) → цели в любом порядке: {objCheck.goals.map((g) => `${g.id.replace('GOAL_', '№')} ${g.reachable ? `${g.length_m} м` : 'НЕДОСТИЖИМА'}`).join(', ')}; кратчайший обход {objCheck.bestOrder.order.map((x) => x.replace('GOAL_', '№')).join(' → ')} = {objCheck.bestOrder.length_m} м; мин. расстояние между целями {objCheck.minSpacing_m} м{objCheck.ok ? '' : ' — расставьте цели заново'}
+                  </p>
+                )}
+                <p className="text-[11px] text-slate-500">Расширение: старая карта остаётся в центре без изменений (кроме проёма в заборе, если он перегораживает продолжение дороги), кварталы вокруг — из каталога levelgen_v2.json; их тоже можно перегенерировать зоной. Цели — на земле, достижимы со старта, разнесены, не в закреплённых зданиях; хранятся в JSON карты (блок objectives).</p>
               </div>
             )}
             <div className="grid gap-3 lg:grid-cols-2">

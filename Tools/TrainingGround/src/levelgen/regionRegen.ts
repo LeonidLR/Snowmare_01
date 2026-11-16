@@ -20,6 +20,9 @@ import type { Vec2 } from '../movement/geometry.ts';
 import { dirOf, pointInPoly, segSegDist } from '../movement/geometry.ts';
 import type { RouteReport } from './evaluate.ts';
 import { checkLayoutRoutes } from './evaluate.ts';
+import { expandLayout } from './expand.ts';
+import type { ObjectivesCheck } from './objectives.ts';
+import { checkObjectives } from './objectives.ts';
 import { generateLayout } from './generate.ts';
 import { classifyObstacleHeight, standardObstacleHeight } from './obstacleHeights.ts';
 import type { Profile } from './profile.ts';
@@ -371,6 +374,8 @@ export interface RegionRegenResult {
   anchored: string[];
   /** Variant routes dropped (fewer than 2 points left once their blocks got other types). */
   removedRoutes: string[];
+  /** The start + goals re-walked on the result (a map with `objectives` only): a goal in a re-typed block may need placing again. */
+  objectives?: ObjectivesCheck;
   message: string;
 }
 
@@ -433,7 +438,10 @@ export function selectRegion(l: GenLayout, zone: Vec2[], profile: Profile | null
 /** The fresh layout of a re-roll attempt: the generator with the map's skeleton and the attempt's seed, + its expansions replayed. */
 export function freshLayout(old: GenLayout, profile: Profile, seed: number): GenLayout {
   const base = old.expansion?.base_size_m ?? old.params.size_m;
-  return generateLayout({ profile, seed, params: { ...old.params, size_m: base }, skeletonSeed: old.seed, name: old.name });
+  let fresh = generateLayout({ profile, seed, params: { ...old.params, size_m: base }, skeletonSeed: old.seed, name: old.name });
+  // an expanded map: its expansions replayed on the fresh core - the same street plan (each step's skeleton seed), new blocks
+  for (const step of old.expansion?.steps ?? []) fresh = expandLayout({ layout: fresh, factor: step.factor, seed, skeletonSeed: step.seed, profile, gate: false, lots: [] }).layout;
+  return fresh;
 }
 
 const contentLayout = (c: TemplateContent): GenLayout => ({ buildings: c.buildings, walls: c.walls, ladders: c.ladders, covers: c.covers, zones: c.zones, spawn_points: [],
@@ -707,9 +715,10 @@ export function regenerateRegion(o: RegionRegenOptions): RegionRegenResult {
     const regen: RegenState = { ...state, rerolls: [...state.rerolls, { seed, zone: o.zone.map((p) => [p[0], p[1]] as Vec2), replaced: m.replaced.length, added: m.added.length, retries: k }] };
     if (mode === 'types' && m.blocks.length) regen.blocks = m.blocks;
     const layout: GenLayout = { ...m.layout, regen };
+    const objectives = layout.objectives ? checkObjectives(layout) : undefined;
     const typed = m.retemplated.length ? `, кварталов с новым типом ${m.retemplated.length}` : '';
     return { ok: true, layout, seed, retries: k, attempts, replaced: m.replaced, added: m.added, dropped: m.dropped, restored: m.restored, ...base, snappedHeights: m.snapped, routes: after.map(routeStatus), skeletonMatch: m.skeletonMatch,
-      retemplated: m.retemplated, templateFailed: m.templateFailed, removedRoutes,
+      retemplated: m.retemplated, templateFailed: m.templateFailed, removedRoutes, ...(objectives ? { objectives } : {}),
       message: `перегенерировано: убрано ${m.replaced.length}, добавлено ${m.added.length}, отброшено ${m.dropped.length}${typed}${m.restored.length ? `, оставлено старыми зданий ${m.restored.length}` : ''}, повторов ${k}` };
   }
   // all rejected: the map is unchanged; the last attempt's drops are reported for the diagnosis
