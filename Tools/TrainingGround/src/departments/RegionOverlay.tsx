@@ -48,6 +48,8 @@ interface Props {
   /** The squad playback: member positions (the leader first) and the leader's recent trail. */
   squad?: Vec2[] | null;
   trail?: Vec2[] | null;
+  /** Every member's recent trail (the leader first): the followers' are drawn faint. */
+  trails?: Vec2[][] | null;
   children: React.ReactNode;
 }
 
@@ -58,7 +60,7 @@ const BORDER_PX = 1;
 const CLICK_PX = 4;
 const START_ID = 'START';
 
-export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, locks, inside = [], locked = [], blocks = [], onZone, view, onView, objectives, objErrors = {}, objWarnings = {}, bestPath, addGoal = false, onObjective, squad, trail, children }) => {
+export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, locks, inside = [], locked = [], blocks = [], onZone, view, onView, objectives, objErrors = {}, objWarnings = {}, bestPath, addGoal = false, onObjective, squad, trail, trails, children }) => {
   const box = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState<[number, number]>([0, height]);
   const [draft, setDraft] = useState<Vec2[]>([]);
@@ -220,6 +222,7 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
         {/* the shortest visiting order (hidden while a point is dragged: it belongs to the old position) */}
         {t && bestPath && bestPath.length > 1 && !drag && <polyline points={pts(bestPath)} fill="none" stroke="#facc15" strokeOpacity={0.75} strokeWidth={2} strokeDasharray="7 5" style={{ pointerEvents: 'none' }} />}
         {/* the squad playback */}
+        {t && trails && trails.slice(1).map((tr, i) => (tr.length > 1 ? <polyline key={`st${i}`} points={pts(tr)} fill="none" stroke="#fbcfe8" strokeWidth={1.5} strokeOpacity={0.55} style={{ pointerEvents: 'none' }} /> : null))}
         {t && trail && trail.length > 1 && <polyline points={pts(trail)} fill="none" stroke="#f472b6" strokeWidth={2.5} strokeOpacity={0.7} style={{ pointerEvents: 'none' }} />}
         {t && squad && squad.map((p, i) => { const q = scr(p); return <circle key={`sq${i}`} cx={q[0]} cy={q[1]} r={i === 0 ? 6 : 4.5} fill={i === 0 ? '#f472b6' : '#fbcfe8'} stroke="#111827" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />; })}
         {/* the start + goals */}

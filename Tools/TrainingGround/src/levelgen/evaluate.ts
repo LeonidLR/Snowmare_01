@@ -33,6 +33,7 @@ import type { GenLayout, GenRoute, RouteIntent } from './schema.ts';
 import { layerLevel, layersOf, levelsOf, levelZ, mandatoryRoute, NEVER_CLIMBABLE, rect, toFormationLayout } from './schema.ts';
 import type { BlockedOpening, BuildingTacticalReport, FiringLine, TacticalReport } from './tacticalEvaluate.ts';
 import { evaluateTactical } from './tacticalEvaluate.ts';
+import { buildSimNav, prepareSimLeg } from './simNav.ts';
 
 export type { BlockedOpening, BuildingTacticalReport, FiringLine, TacticalReport };
 
@@ -64,6 +65,9 @@ export interface Evaluation {
     levels: number[];
     levelShare: Record<string, number>;
     simSeconds: number;
+    /** Simulator walk (simNav.ts): route points moved out of an obstacle (a cover) / point pairs the covers cut apart (walked over). */
+    simSnapped: number;
+    simVaults: number;
   };
   sightlines: { p50_m: number; p90_m: number; max_m: number; short_share: number; lanes_over_80m: number; samples: number; open_p50_m: number };
   /** The view from every walkable roof, best first (the elevated-vision check of the raised hall roofs). */
@@ -146,7 +150,7 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   const mandatory = mandatoryRoute(l);
 
   // ---- mechanics: the simulator on the ground legs of the mandatory route (the lab's rules, 4 men) -----------------------
-  const mech: Evaluation['mechanics'] = { terrain: {}, formation: {}, cornerWatches: 0, wallLayouts: 0, doorways: 0, ladderUses: 0, stairUses: 0, holeUses: 0, roofs: 0, floors: 0, levels: [], levelShare: {}, simSeconds: 0 };
+  const mech: Evaluation['mechanics'] = { terrain: {}, formation: {}, cornerWatches: 0, wallLayouts: 0, doorways: 0, ladderUses: 0, stairUses: 0, holeUses: 0, roofs: 0, floors: 0, levels: [], levelShare: {}, simSeconds: 0, simSnapped: 0, simVaults: 0 };
   const mlayers = mandatory.layers ?? mandatory.points.map(() => 'ground');
   const mlevels = mlayers.map((x) => (layers.includes(x) ? layerLevel(l, x) : 0));
   mech.levels = [...new Set(mlevels)].sort((a, b) => a - b);
@@ -158,11 +162,17 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
     const terrainT = new Map<string, number>(), formT = new Map<string, number>();
     let total = 0, prevCorner = new Set<string>(), prevWall = false;
     const rec = o.track ? createTrackRecorder(typeof o.track === 'number' ? o.track : undefined) : null;
+    // the simulator walks on the ground walls + the covers (simNav.ts; bug 2026-11-16 evening: the walls-only grid let the squad walk
+    // through every cover), rebuilt from THIS layout on every walk; route points inside an obstacle are snapped out first
+    const simNav = buildSimNav(l);
     for (const leg of legs) {
-      const route: LayoutRoute = { ...leg, pace: 'walk' };
+      const prepared = prepareSimLeg(simNav, leg.points, layerNav('ground'));
+      mech.simSnapped += prepared.snapped; mech.simVaults += prepared.vaults;
+      if (prepared.points.length < 2) continue;
+      const route: LayoutRoute = { ...leg, points: prepared.points, pace: 'walk' };
       rec?.beginLeg(leg.id);
       const legSeconds = simulate({
-        layout: ground, route, memberCount: o.members ?? 4, config: o.config, seed: o.simSeed ?? 1, nav: layerNav('ground'), haltSeconds: 1,
+        layout: ground, route, memberCount: o.members ?? 4, config: o.config, seed: o.simSeed ?? 1, nav: simNav, haltSeconds: 1,
         onFrame: (f) => {
           rec?.frame(f);
           total += 1;

@@ -70,8 +70,11 @@ export function positionsAt(track: SquadTrack, time: number): { members: Vec2[];
   return { members: a.pos.map((p, m) => { const q = b.pos[m] ?? p; return [p[0] + (q[0] - p[0]) * k, p[1] + (q[1] - p[1]) * k] as Vec2; }), leg: a.leg, formation: a.formation, t };
 }
 
-/** The leader's positions over the last `seconds` before `time`, within the current leg (the trail on the plan). */
-export function trailAt(track: SquadTrack, time: number, seconds = PLAYBACK.trail_s): Vec2[] {
+/**
+ * A member's positions over the last `seconds` before `time`, within the current leg (the trail on the plan; member 0 = the leader,
+ * the followers' faint trails show how each one went round the walls and covers - bug 2026-11-16 evening).
+ */
+export function trailAt(track: SquadTrack, time: number, seconds = PLAYBACK.trail_s, member = 0): Vec2[] {
   const now = positionsAt(track, time);
   if (!now) return [];
   const i = frameIndex(track, now.t);
@@ -79,9 +82,9 @@ export function trailAt(track: SquadTrack, time: number, seconds = PLAYBACK.trai
   for (let k = Math.max(0, i); k >= 0; k--) {
     const f = track.frames[k];
     if (f.leg !== now.leg || f.t < now.t - seconds) break;
-    out.unshift(f.pos[0]);
+    if (f.pos[member]) out.unshift(f.pos[member]);
   }
-  out.push(now.members[0]);
+  if (now.members[member]) out.push(now.members[member]);
   return out;
 }
 

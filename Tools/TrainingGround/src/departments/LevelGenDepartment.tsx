@@ -171,7 +171,8 @@ export const LevelGenDepartment: React.FC = () => {
   // «Собрать в Unreal» (task 072): the server builds the ACCEPTED file (accepted/<name>.json) + runs the route smoke, one at a time
   type BuildTarget = { name: string; leaf: string; map: string; file: string; exists: boolean; builtFrom: string; canBuild: boolean; needsConfirm: boolean; reason: string };
   type BuildState = { stage: 'idle' | 'build' | 'smoke' | 'done' | 'failed'; name: string; map: string; file: string; elapsed_s: number; stage_elapsed_s: number; message: string;
-    result: { built: boolean; actors?: number; nav_tiles?: string; route?: string; route_summary?: string; reason?: string } };
+    result: { built: boolean; actors?: number; nav_tiles?: string; route?: string; route_summary?: string; reason?: string };
+    /** The scripts' latest output lines (they run hidden, no window: bug 2026-11-16 evening). */ log?: string[] };
   const [acceptedSnap, setAcceptedSnap] = useState<Record<string, string>>({});
   const [buildAsk, setBuildAsk] = useState<BuildTarget | null>(null);
   const [buildTarget, setBuildTarget] = useState<BuildTarget | null>(null);
@@ -185,6 +186,10 @@ export const LevelGenDepartment: React.FC = () => {
     return snap === undefined ? 'unknown' : snap === JSON.stringify(cur.layout) ? 'same' : 'changed';
   }, [cur, acceptedSnap]);
   const building = buildState?.stage === 'build' || buildState?.stage === 'smoke';
+  // the build log panel follows the newest line
+  const buildLogRef = useRef<HTMLPreElement>(null);
+  const buildLogLast = buildState?.log?.at(-1) ?? '';
+  useEffect(() => { const el = buildLogRef.current; if (el) el.scrollTop = el.scrollHeight; }, [buildLogLast, buildState?.log?.length]);
   const pollBuild = async () => { try { const r = await fetch('/api/levelgen/build-status'); if (r.ok) setBuildState(await r.json()); } catch { /* the dev server restarts */ } };
   useEffect(() => { pollBuild(); }, []);
   useEffect(() => {
@@ -318,7 +323,7 @@ export const LevelGenDepartment: React.FC = () => {
   const squadNow = useMemo(() => {
     if (!track) return null;
     const p = positionsAt(track, playT);
-    return p ? { members: p.members, trail: trailAt(track, playT), leg: p.leg, formation: p.formation } : null;
+    return p ? { members: p.members, trail: trailAt(track, playT), trails: p.members.map((_, m) => trailAt(track, playT, PLAYBACK.trail_s, m)), leg: p.leg, formation: p.formation } : null;
   }, [track, playT]);
   const trackSummary = useMemo(() => (track ? summarizeTrack(track) : null), [track]);
   const expandNow = () => {
@@ -535,9 +540,15 @@ export const LevelGenDepartment: React.FC = () => {
                       <p className="text-slate-300">Собрана: {buildState.result.built ? `да${buildState.result.actors ? ` (${buildState.result.actors} акторов)` : ''}` : 'нет'}; навигация: {buildState.result.nav_tiles || '—'}; маршрут: {buildState.result.route ? <span className={buildState.result.route === 'PASS' ? 'text-emerald-300 font-semibold' : 'text-rose-300 font-semibold'}>{buildState.result.route}</span> : '—'}{buildState.result.route_summary ? ` — ${buildState.result.route_summary}` : ''}{buildState.result.reason ? `; причина: ${buildState.result.reason}` : ''}</p>
                     )}
                     {buildState.result.built && <p className="text-slate-400">Открыть: в Unreal Content Browser → <span className="font-mono">{buildState.map}</span> (файл <span className="font-mono">{buildState.file}</span>); бой на ней — «Боевая лаборатория», карта {buildState.map.split('/').pop()}.</p>}
+                    {!!buildState.log?.length && (
+                      <details open={building} className="mt-1" data-build-log>
+                        <summary className="cursor-pointer text-slate-400 select-none">Журнал сборки ({buildState.log.length} последних строк; скрипты идут без окон, полный журнал — Saved/LevelGen/build_{buildState.map.split('/').pop()}.log и route_….log)</summary>
+                        <pre ref={buildLogRef} className="mt-1 max-h-48 overflow-auto whitespace-pre-wrap break-all bg-black/50 border border-slate-800 rounded p-1.5 text-[10px] leading-snug text-slate-300 font-mono">{buildState.log.join('\n')}</pre>
+                      </details>
+                    )}
                   </div>
                 )}
-                <p className="text-[11px] text-slate-500">Фоном: Scripts/levelgen_build_map.ps1 (карта + навигация, ~4-6 мин) → Scripts/levelgen_route_smoke.ps1 (бот проходит маршрут, ~6-8 мин для x4). Редактор этого checkout должен быть закрыт; одна сборка за раз; чужие карты не перезаписываются.</p>
+                <p className="text-[11px] text-slate-500">Фоном, без окон: Scripts/levelgen_build_map.ps1 (карта + навигация, ~4-6 мин) → Scripts/levelgen_route_smoke.ps1 (бот проходит маршрут, ~6-8 мин для x4). Редактор этого checkout должен быть закрыт; одна сборка за раз; чужие карты не перезаписываются.</p>
               </div>
             )}
             {cur && (
@@ -669,7 +680,7 @@ export const LevelGenDepartment: React.FC = () => {
                 <RegionOverlay bounds={cur?.layout.bounds ?? null} height={520} mode={goalTool ? 'off' : regionMode} zone={zone} locks={locks} blocks={region?.plan.selLots.map((k) => k.rect)}
                   inside={selection?.inside.map((g) => g.centre)} locked={selection?.locked.map((g) => g.centre)} onZone={setZone}
                   view={view} onView={setView} objectives={cur?.layout.objectives ?? null} objErrors={objErrors} objWarnings={objWarnings} bestPath={objCheck?.bestPath}
-                  addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null}>
+                  addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null} trails={squadNow?.trails ?? null}>
                   <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives />
                 </RegionOverlay>
                 </div>

@@ -24,6 +24,7 @@ if (Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor.exe'" | Where
 }
 
 . (Join-Path $PSScriptRoot "agent_lock.ps1")
+. (Join-Path $PSScriptRoot "hidden_process.ps1")
 $Owned = Enter-AgentLock "bake navmesh $Map"
 $Failed = @()
 try {
@@ -32,7 +33,7 @@ try {
         $LogFile = Join-Path $ProjectDir "Saved\Logs\NavBake-$Leaf.log"
         $Extra = $(if ($NoSave) { "-NoSave" } else { "" })
         $CmdArgs = "`"$Project`" -run=CodexTacticsEditor.CodexBuildNav -Map=$Name -MinTiles=$MinTiles $Extra -unattended -nullrhi -nosplash -nosound -NoTelemetry `"-abslog=$LogFile`""
-        $Proc = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $CmdArgs -WindowStyle Hidden -PassThru
+        $Proc = Start-HiddenProcess "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $CmdArgs
         $null = $Proc.Handle # without a cached handle ExitCode stays $null after WaitForExit
         if (-not $Proc.WaitForExit($TimeoutSeconds * 1000)) {
             Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue

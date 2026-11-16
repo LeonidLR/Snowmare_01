@@ -26,6 +26,7 @@ if (-not $StatusFile) { $StatusFile = Join-Path $ProjectDir "Saved\LevelGen\rout
 
 . (Join-Path $PSScriptRoot "agent_lock.ps1")
 . (Join-Path $PSScriptRoot "job_status.ps1")
+. (Join-Path $PSScriptRoot "hidden_process.ps1")
 $Job = New-JobStatus $StatusFile "route_smoke" $Log
 Set-JobStatus $Job @{ map = $Map; level_json = $LevelJson; result = "" }
 if (-not (Test-Path $LevelJson)) {
@@ -40,7 +41,7 @@ try {
     $GameArgs = "`"$Project`" $Map -game -nullrhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry -Multiprocess -UseFixedTimeStep -FPS=60 -FixedSeed " +
         "`"-ExecCmds=$Cmd`" `"-abslog=$Log`" -LevelJson=$Leaf.json"
     Write-Host "route smoke: $Map ($Cmd)"
-    $Proc = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $GameArgs -WindowStyle Hidden -PassThru
+    $Proc = Start-HiddenProcess "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $GameArgs
     $null = $Proc.Handle
     if (-not $Proc.WaitForExit($TimeoutSeconds * 1000)) {
         Stop-Process -Id $Proc.Id -Force -ErrorAction SilentlyContinue
