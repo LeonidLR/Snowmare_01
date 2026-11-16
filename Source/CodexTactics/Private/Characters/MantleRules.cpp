@@ -49,6 +49,18 @@ namespace MantleRulesInternal
 		{ TEXT("links.down_below_cm"), &FMantleConfig::LinkDownBelowCm },
 		{ TEXT("order.max_distance_cm"), &FMantleConfig::OrderMaxDistanceCm },
 		{ TEXT("reserve.radius_cm"), &FMantleConfig::ReserveRadiusCm },
+		{ TEXT("align.sample_hz"), &FMantleConfig::AlignSampleHz },
+		{ TEXT("align.hand_edge_tolerance_cm"), &FMantleConfig::AlignHandEdgeToleranceCm },
+		{ TEXT("align.pop_tolerance_cm"), &FMantleConfig::AlignPopToleranceCm },
+		{ TEXT("align.freeze_limit_s"), &FMantleConfig::AlignFreezeLimitSeconds },
+		{ TEXT("align.still_speed_cm_s"), &FMantleConfig::AlignStillSpeedCmPerSecond },
+		{ TEXT("align.plant_speed_cm_s"), &FMantleConfig::AlignPlantSpeedCmPerSecond },
+		{ TEXT("align.plant_reach_cm"), &FMantleConfig::AlignPlantReachCm },
+		{ TEXT("align.plant_min_rise_fraction"), &FMantleConfig::AlignPlantMinRiseFraction },
+		{ TEXT("align.plant_hold_s"), &FMantleConfig::AlignPlantHoldSeconds },
+		{ TEXT("align.exit_root_cm"), &FMantleConfig::AlignExitRootCm },
+		{ TEXT("align.grip_forward_cm"), &FMantleConfig::AlignGripForwardCm },
+		{ TEXT("align.grip_up_cm"), &FMantleConfig::AlignGripUpCm },
 	};
 
 	static FMantleConfig& MantleConfigInForce()
@@ -648,6 +660,92 @@ FMantleDecision MantleRules::Decide(const FMantleConfig& Config, const FMantlePr
 FMantleDecision MantleRules::Decide(const FMantleConfig& Config, const FMantleProbe& Probe)
 {
 	return Decide(Config, Probe, [](int32) { return true; });
+}
+
+FMantleClipContact MantleRules::AnalyseClipTrack(const FMantleConfig& Config, const FMantleClipTrack& Track, float RiseCm)
+{
+	FMantleClipContact Out;
+	const int32 Num = Track.Num();
+	if (Num < 3 || Track.SampleSeconds <= 0.f || Track.HandL.Num() != Num || Track.HandR.Num() != Num || Track.Pelvis.Num() != Num
+		|| Track.FootL.Num() != Num || Track.FootR.Num() != Num)
+	{
+		return Out;
+	}
+	const float Dt = Track.SampleSeconds;
+	Out.RootStart = Track.Root[0];
+	Out.ExitSeconds = Track.TimeAt(Num - 1);
+	const float Ground = static_cast<float>(FMath::Min(Track.FootL[0].Z, Track.FootR[0].Z));
+	const float MinPlantZ = Ground + Config.AlignPlantMinRiseFraction * FMath::Max(0.f, RiseCm);
+	const int32 Hold = FMath::Max(1, FMath::CeilToInt(Config.AlignPlantHoldSeconds / Dt - KINDA_SMALL_NUMBER));
+	auto SpeedAt = [Dt](const TArray<FVector>& Bone, int32 Index)
+	{
+		const int32 A = FMath::Max(0, Index - 1);
+		const int32 B = FMath::Min(Bone.Num() - 1, Index + 1);
+		return B > A ? static_cast<float>(FVector::Dist(Bone[A], Bone[B])) / (Dt * static_cast<float>(B - A)) : 0.f;
+	};
+	// 1. The plant: per hand the first resting stretch after it reached out and up; the earlier hand wins.
+	int32 Plant = INDEX_NONE;
+	const TArray<FVector>* PlantHand = nullptr;
+	for (const TArray<FVector>* Hand : { &Track.HandL, &Track.HandR })
+	{
+		bool bReached = false;
+		for (int32 Index = 1; Index + Hold <= Num - 1 && (Plant == INDEX_NONE || Index < Plant); ++Index)
+		{
+			bReached |= FVector::Dist((*Hand)[Index], (*Hand)[0]) >= Config.AlignPlantReachCm;
+			// A plant holds the body's climb: the root still on its way (a hand resting after the climb is the end pose, not a plant).
+			if (!bReached || (*Hand)[Index].Z < MinPlantZ || FVector::Dist(Track.Root[Index], Track.Root.Last()) <= Config.AlignExitRootCm)
+			{
+				continue;
+			}
+			bool bRests = true;
+			for (int32 Each = Index; Each < Index + Hold && bRests; ++Each)
+			{
+				bRests = SpeedAt(*Hand, Each) <= Config.AlignPlantSpeedCmPerSecond;
+			}
+			if (bRests)
+			{
+				Plant = Index;
+				PlantHand = Hand;
+				break;
+			}
+		}
+	}
+	if (Plant != INDEX_NONE)
+	{
+		Out.bValid = true;
+		Out.ContactSeconds = Track.TimeAt(Plant);
+		Out.HandPoint = (*PlantHand)[Plant];
+		Out.RootAtContact = Track.Root[Plant];
+	}
+	// 2. The exit: after the plant, the root at its last spot and every bone still (the rest of the clip is an idle tail).
+	const FVector RootEnd = Track.Root.Last();
+	for (int32 Index = FMath::Max(1, Plant); Index < Num - 1; ++Index)
+	{
+		if (FVector::Dist(Track.Root[Index], RootEnd) > Config.AlignExitRootCm)
+		{
+			continue;
+		}
+		float Fastest = 0.f;
+		for (const TArray<FVector>* Bone : { &Track.Pelvis, &Track.HandL, &Track.HandR, &Track.FootL, &Track.FootR })
+		{
+			Fastest = FMath::Max(Fastest, SpeedAt(*Bone, Index));
+		}
+		if (Fastest <= Config.AlignStillSpeedCmPerSecond)
+		{
+			Out.ExitSeconds = Track.TimeAt(Index);
+			break;
+		}
+	}
+	return Out;
+}
+
+float MantleRules::ContactStartCm(const FMantleConfig& Config, const FMantleClipContact& Contact)
+{
+	if (!Contact.bValid)
+	{
+		return -1.f;
+	}
+	return FMath::Max(Config.MinFaceGapCm, static_cast<float>(Contact.HandPoint.X - Contact.RootStart.X) - Config.AlignGripForwardCm);
 }
 
 bool MantleRules::IsHeavyHit(const FMantleConfig& Config, float FinalDamage)

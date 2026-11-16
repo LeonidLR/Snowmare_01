@@ -554,7 +554,7 @@ void AOperativeCharacter::EnforceMeshBaseOffset()
 	{
 		return;
 	}
-	const FVector Tracked = CoverEntryAppliedOffset + CoverWallPushAppliedLocal;
+	const FVector Tracked = CoverEntryAppliedOffset + CoverWallPushAppliedLocal + MantleMeshShift; // + a mantle clip's root-lock shift (OperativeCharacterMantle.cpp)
 	const FVector Location = SkinMesh->GetRelativeLocation();
 	const FVector2D Expected = MeshBaseXY + FVector2D(Tracked);
 	const float ExpectedYaw = MeshBaseYaw + CoverEntryAppliedYaw;

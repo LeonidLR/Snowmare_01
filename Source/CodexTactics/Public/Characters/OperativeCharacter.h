@@ -537,6 +537,13 @@ public:
 	EMantleBody GetMantleBody() const;
 	/** The last climb ended on a top (else over: the far side). */
 	bool DidLastMantleEndOnTop() const { return bMantleOnTop; }
+	/** The config clip index of the climb in progress / the last one (INDEX_NONE before the first). */
+	int32 GetLastMantleClipIndex() const { return MantleClipIndex; }
+	/**
+	 * A mantle clip's authored motion as his body plays it (root, pelvis, hands, feet sampled at align.sample_hz in the clip's own space;
+	 * cached per clip in UMantleSubsystem). Null when the clip, his anim instance or a bone is missing.
+	 */
+	const FMantleClipTrack* GetMantleClipTrack(int32 ClipIndex);
 
 	/** Position in the squad roster (0 = commander); selection keys 1..N map to it. */
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "CodexTactics|Operative")
@@ -2591,6 +2598,18 @@ private:
 	bool bMantling = false;
 	float MantleTimer = 0.f;
 	float MantleDuration = 0.f;
+	/** The clip's position where the climb hands over to the locomotion (its motion is over: AnalyseClipTrack's exit; else its end). */
+	float MantleExitSeconds = 0.f;
+	/**
+	 * The clip's root at frame 0 in his local frame (root lock = the first frame: the mesh draws the whole body offset by it - HighClimb's
+	 * root sits 163 cm up) and the mesh shift applied against it (-root x the montage's blend weight, UpdateMantleMeshShift).
+	 */
+	FVector MantleRootLock = FVector::ZeroVector;
+	FVector MantleMeshShift = FVector::ZeroVector;
+	/** The mesh's bone-finalized callback that keeps the shift in step with this frame's pose (registered while a shift is active). */
+	FDelegateHandle MantleShiftHandle;
+	/** Keeps the mesh shift equal to -MantleRootLock x the mantle montage's weight (blend in / out, a cancel); zero once it has blended out. */
+	void UpdateMantleMeshShift();
 	/** World time until which no new climb starts (mantle.json cooldown_s after the last one). */
 	float MantleCooldown = 0.f;
 	FVector MantleBaseFeet = FVector::ZeroVector;

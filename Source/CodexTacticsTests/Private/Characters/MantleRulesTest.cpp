@@ -328,6 +328,65 @@ bool FMantleRulesTuningTest::RunTest(const FString&)
 	return true;
 }
 
+namespace MantleRulesTestUtil
+{
+	/**
+	 * A synthetic 140 cm climb at 30 Hz, 2 s: the root waits until 0.5 s, rises / moves to (100, 0, 140) by 1.2 s and rests (an idle tail
+	 * to 2 s). The left hand hangs at (0, -20, 90), reaches up to the ledge (60, -20, 150) by 0.4 s and rests there; the right one does
+	 * the same 0.2 s later. bReach false: the hands just hang (no plant).
+	 */
+	static FMantleClipTrack MantleSyntheticTrack(bool bReach)
+	{
+		FMantleClipTrack Track;
+		Track.SampleSeconds = 1.f / 30.f;
+		for (int32 Index = 0; Index <= 60; ++Index)
+		{
+			const float T = Track.TimeAt(Index);
+			const float Rise = FMath::Clamp((T - 0.5f) / 0.7f, 0.f, 1.f);
+			const FVector Root = FVector(100.f, 0.f, 140.f) * Rise;
+			auto HandAt = [bReach, T, &Root](float Start, float Side)
+			{
+				const FVector Hang(0.f, Side, 90.f);
+				const FVector Ledge(60.f, Side, 150.f);
+				return bReach ? FMath::Lerp(Hang, Ledge, FMath::Clamp((T - Start) / 0.4f, 0.f, 1.f)) : Root + Hang;
+			};
+			Track.Root.Add(Root);
+			Track.Pelvis.Add(Root + FVector(0.f, 0.f, 95.f));
+			Track.HandL.Add(HandAt(0.f, -20.f));
+			Track.HandR.Add(HandAt(0.2f, 20.f));
+			Track.FootL.Add(Root + FVector(0.f, -12.f, 8.f));
+			Track.FootR.Add(Root + FVector(0.f, 12.f, 8.f));
+		}
+		return Track;
+	}
+}
+
+MANTLE_RULES_TEST(FMantleRulesClipContactTest, "ClipContact")
+bool FMantleRulesClipContactTest::RunTest(const FString&)
+{
+	using namespace MantleRulesTestUtil;
+	const FMantleConfig Config = MantleRules::MakeDefaultConfig();
+	// The plant: the left hand comes to rest on the ledge just after 0.4 s (the first sample whose neighbours both rest).
+	const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, MantleSyntheticTrack(true), 140.f);
+	TestTrue(TEXT("a plant is found"), Contact.bValid);
+	TestTrue(FString::Printf(TEXT("the plant at 0.40 - 0.50 s (%.3f)"), Contact.ContactSeconds), Contact.ContactSeconds >= 0.4f && Contact.ContactSeconds <= 0.5f);
+	TestTrue(FString::Printf(TEXT("the left hand's ledge point (%s)"), *Contact.HandPoint.ToCompactString()),
+		Contact.HandPoint.Equals(FVector(60.f, -20.f, 150.f), 0.5f));
+	TestTrue(TEXT("the root has not moved yet at the plant"), Contact.RootAtContact.IsNearlyZero(0.5f));
+	TestTrue(TEXT("the root's frame-0 spot"), Contact.RootStart.IsNearlyZero(0.01f));
+	// The exit: the root reaches its last spot at 1.2 s and everything rests from there - the idle tail to 2 s is skipped.
+	TestTrue(FString::Printf(TEXT("the exit at 1.20 - 1.30 s, not the clip's 2 s end (%.3f)"), Contact.ExitSeconds), Contact.ExitSeconds >= 1.2f && Contact.ExitSeconds <= 1.3f);
+	// Hands that never reach out (an idle arm at hip height) are no plant; the exit is still found.
+	const FMantleClipContact Hanging = MantleRules::AnalyseClipTrack(Config, MantleSyntheticTrack(false), 140.f);
+	TestFalse(TEXT("hanging hands: no plant"), Hanging.bValid);
+	TestTrue(FString::Printf(TEXT("hanging hands: the exit still found (%.3f)"), Hanging.ExitSeconds), Hanging.ExitSeconds >= 1.2f && Hanging.ExitSeconds <= 1.3f);
+	// A plant below align.plant_min_rise_fraction x the rise (a hand on a knee) does not count.
+	TestFalse(TEXT("a ledge point under 0.6 x a 300 cm rise: no plant"), MantleRules::AnalyseClipTrack(Config, MantleSyntheticTrack(true), 300.f).bValid);
+	// Too few samples: nothing.
+	TestFalse(TEXT("an empty track: no plant"), MantleRules::AnalyseClipTrack(Config, FMantleClipTrack(), 140.f).bValid);
+	return true;
+}
+
 #undef MANTLE_RULES_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS

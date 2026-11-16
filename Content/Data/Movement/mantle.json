@@ -26,7 +26,19 @@
     "links.entering_cost_cm": 600,
     "links.down_below_cm": 150,
     "order.max_distance_cm": 3000,
-    "reserve.radius_cm": 150
+    "reserve.radius_cm": 150,
+    "align.sample_hz": 30,
+    "align.hand_edge_tolerance_cm": 15,
+    "align.pop_tolerance_cm": 15,
+    "align.freeze_limit_s": 0.35,
+    "align.still_speed_cm_s": 20,
+    "align.plant_speed_cm_s": 80,
+    "align.plant_reach_cm": 25,
+    "align.plant_min_rise_fraction": 0.6,
+    "align.plant_hold_s": 0.1,
+    "align.exit_root_cm": 3,
+    "align.grip_forward_cm": 8,
+    "align.grip_up_cm": 6
   },
   "classes": {
     "low_vault": { "destination": "over", "handled_by": "vault" },

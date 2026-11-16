@@ -14,6 +14,7 @@ Last update: 2026-09-29 by Claude, after commit `2ca14b0`.
 
 | Commit | What |
 |---|---|
+| `fix/mantle-align` | **fix(mantle), 2026-11-16, designer bug report:** the clips' frame-0 root offset (HighClimb 163.5 cm up, tall ledges 36 cm back) shifted out of the mesh by the montage weight (no pop), two warp windows - the clip's hand plant onto the lip, then the landing - and the climb ends when the clip's motion is over (no idle-tail freeze); clip contact measured from the animation (`MantleRules::AnalyseClipTrack`, mantle.json `align.*`), CVar `Codex.Mantle.Align`, MantleAlignSmoke, test Mantle.ClipContact. `docs/port/MANTLING_ALIGN_REPORT.md`. |
 | `feat/mantling-slice1` | **feat(mantle), 2026-11-15, mantling slice 1:** MantleRules + mantle.json, the root-motion climb with Motion Warping (one Solo operative: low / high mantle, tall ledge, fence over; crouch on top; knockdown / heavy hit back to the base), trigger C (Solo click on a top + path links), barrels no longer vaulted, the Depot reworked onto the height classes and rebuilt, MantleSmoke. `docs/port/MANTLING_SLICE1_REPORT.md`. |
 | `efec9a32` | **feat(tools), 2026-11-15:** agent branch guard checks protected paths, report evidence and change size. |
 | `57085001` | **feat(tools), 2026-11-15:** team chat editor status banner and desktop open-editor shortcut. |

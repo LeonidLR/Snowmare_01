@@ -9,6 +9,7 @@
 
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequenceBase.h"
+#include "BonePose.h"
 #include "Characters/MantleRules.h"
 #include "Characters/OperativeAIController.h"
 #include "Characters/OperativeAnimInstance.h"
@@ -22,7 +23,9 @@
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "HAL/IConsoleManager.h"
 #include "Interactables/MantleNavigation.h"
+#include "Misc/MemStack.h"
 #include "Interactables/VaultNavigation.h"
 #include "MotionWarpingComponent.h"
 #include "Navigation/PathFollowingComponent.h"
@@ -33,6 +36,16 @@ namespace OperativeMantleInternal
 {
 	/** The Motion Warping target of every mantle clip (the landing: feet, facing the climb). */
 	const FName MantleWarpTarget(TEXT("MantleLanding"));
+	/** The first window's target (MantleAlign): where his feet must be at the clip's hand plant so the planted wrist sits on the lip. */
+	const FName MantleContactTarget(TEXT("MantleContact"));
+
+	/**
+	 * The contact alignment (designer bug report 2026-11-16, docs/port/MANTLING_ALIGN_REPORT.md): 1 = the clip's hand plant is warped onto
+	 * the ledge's lip (two warp windows: start -> plant, plant -> landing) and the climb hands over to the locomotion when the clip's motion
+	 * is over (its idle tail is skipped); 0 = slice 1's single window over the whole clip (A/B for the designer and the smokes).
+	 */
+	static TAutoConsoleVariable<int32> CVarMantleAlign(TEXT("Codex.Mantle.Align"), 1,
+		TEXT("Mantling: 1 (default) = the hands warped onto the ledge's lip and the climb ends when the clip's motion is over; 0 = slice 1's single warp over the whole clip."));
 	/** The face is looked for this far ahead when a climb is ordered / reached (the run clips look further). */
 	constexpr float MantleStandingReachCm = 220.f;
 	constexpr float MantleRunReachCm = 560.f;
@@ -44,6 +57,61 @@ namespace OperativeMantleInternal
 	constexpr float MantleHopSeconds = 0.6f;
 	/** A run clip starts once the face is no farther than its own run-up (forward warp <= this; never stretched to start early). */
 	constexpr float MantleRunStartWarp = 1.05f;
+}
+
+const FMantleClipTrack* AOperativeCharacter::GetMantleClipTrack(int32 ClipIndex)
+{
+	UWorld* World = GetWorld();
+	UMantleSubsystem* Mantle = World ? World->GetSubsystem<UMantleSubsystem>() : nullptr;
+	if (!Mantle)
+	{
+		return nullptr;
+	}
+	if (const FMantleClipTrack* Cached = Mantle->FindClipTrack(ClipIndex))
+	{
+		return Cached;
+	}
+	const UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	const UAnimSequenceBase* Clip = Mantle->GetClip(ClipIndex);
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	if (!Anim || !Clip || Config.AlignSampleHz <= 0.f)
+	{
+		return nullptr;
+	}
+	const FBoneContainer& Bones = Anim->GetRequiredBones();
+	static const FName BoneNames[] = { TEXT("root"), TEXT("pelvis"), TEXT("hand_l"), TEXT("hand_r"), TEXT("foot_l"), TEXT("foot_r") };
+	FCompactPoseBoneIndex Indices[UE_ARRAY_COUNT(BoneNames)] = { FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE),
+		FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE), FCompactPoseBoneIndex(INDEX_NONE) };
+	for (int32 Each = 0; Each < UE_ARRAY_COUNT(BoneNames); ++Each)
+	{
+		const int32 MeshIndex = Bones.GetPoseBoneIndexForBoneName(BoneNames[Each]);
+		Indices[Each] = MeshIndex == INDEX_NONE ? FCompactPoseBoneIndex(INDEX_NONE) : Bones.MakeCompactPoseIndex(FMeshPoseBoneIndex(MeshIndex));
+		if (!Indices[Each].IsValid())
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Mantle] %s: no bone %s on %s - no contact alignment"), *DisplayName.ToString(), *BoneNames[Each].ToString(),
+				*Clip->GetName());
+			return nullptr;
+		}
+	}
+	// The mesh's own turn (the skeleton's +Y forward onto the actor's +X, the mesh's relative yaw -90): the samples in the actor's frame.
+	const FQuat Turn = GetBaseRotationOffset();
+	FMantleClipTrack Track;
+	Track.SampleSeconds = 1.f / Config.AlignSampleHz;
+	TArray<FVector>* Out[] = { &Track.Root, &Track.Pelvis, &Track.HandL, &Track.HandR, &Track.FootL, &Track.FootR };
+	const float Length = Clip->GetPlayLength();
+	const int32 Count = FMath::Max(2, FMath::CeilToInt(Length / Track.SampleSeconds) + 1);
+	for (int32 Sample = 0; Sample < Count; ++Sample)
+	{
+		FMemMark Mark(FMemStack::Get());
+		FCSPose<FCompactPose> Pose;
+		UMotionWarpingUtilities::ExtractComponentSpacePose(Clip, Bones, FMath::Min(Track.TimeAt(Sample), Length), /*bExtractRootMotion*/ false, Pose);
+		for (int32 Each = 0; Each < UE_ARRAY_COUNT(BoneNames); ++Each)
+		{
+			Out[Each]->Add(Turn.RotateVector(Pose.GetComponentSpaceTransform(Indices[Each]).GetLocation()));
+		}
+	}
+	Mantle->StoreClipTrack(ClipIndex, MoveTemp(Track));
+	return Mantle->FindClipTrack(ClipIndex);
 }
 
 EMantleBody AOperativeCharacter::GetMantleBody() const
@@ -115,8 +183,23 @@ bool AOperativeCharacter::TryStartMantle(const FVector& Dir, EMantleRefusal* Out
 		return Refuse(EMantleRefusal::NoObstacle);
 	}
 	UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>();
-	const FMantleDecision Decision = MantleRules::Decide(MantleRules::GetConfig(), Site.Probe,
-		[Mantle](int32 Index) { return Mantle && Mantle->GetClip(Index) != nullptr; });
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	FMantleDecision Decision = MantleRules::Decide(Config, Site.Probe, [Mantle](int32 Index) { return Mantle && Mantle->GetClip(Index) != nullptr; });
+	if (Decision.IsGo() && Decision.Gait == EMantleGait::Standing && Site.Destination == EMantleDestination::Top
+		&& OperativeMantleInternal::CVarMantleAlign.GetValueOnGameThread() != 0 && Config.Clips.IsValidIndex(Decision.ClipIndex))
+	{
+		// The standing clip's own start: where its planted wrist meets the lip with no forward warp (the clip's rise / forward travel
+		// says nothing about where its hands are); farther than that + standing_slack_cm he walks closer first.
+		if (const FMantleClipTrack* Track = GetMantleClipTrack(Decision.ClipIndex))
+		{
+			const float Start = MantleRules::ContactStartCm(Config, MantleRules::AnalyseClipTrack(Config, *Track, Config.Clips[Decision.ClipIndex].RiseCm));
+			if (Start > 0.f)
+			{
+				Decision.ApproachCm = Start;
+				Decision.bApproachFirst = Site.Probe.FaceDistanceCm > Start + Config.StandingSlackCm;
+			}
+		}
+	}
 	if (!Decision.IsGo())
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: no climb at %s (%.0f cm high, %.0f deep, %.0f cm off): %s"), *DisplayName.ToString(),
@@ -225,11 +308,48 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 	}
 	Instance->bEnableAutoBlendOut = false; // held on its last frame until FinishMantle (the warp window ends exactly at the landing)
 	MotionWarping->AddOrUpdateWarpTargetFromLocationAndRotation(MantleWarpTarget, Landing, Site.Dir.Rotation());
-	URootMotionModifier_SkewWarp::AddRootMotionModifierSkewWarp(MotionWarping, Montage, 0.f, Montage->GetPlayLength(), MantleWarpTarget,
+	const float PlayLength = Montage->GetPlayLength();
+	float ExitSeconds = PlayLength;
+	float ContactSeconds = 0.f;
+	FVector ContactFeet = FVector::ZeroVector;
+	MantleRootLock = FVector::ZeroVector;
+	if (CVarMantleAlign.GetValueOnGameThread() != 0)
+	{
+		if (const FMantleClipTrack* Track = GetMantleClipTrack(Decision.ClipIndex))
+		{
+			const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, *Track, ClipData.RiseCm);
+			// The climb ends when the clip's motion is over: its idle tail would be the "freeze" before the locomotion takes him on.
+			ExitSeconds = FMath::Clamp(Contact.ExitSeconds, Track->SampleSeconds, PlayLength);
+			// Root lock = the first frame: the mesh draws the body offset by the root's frame-0 position for the whole clip (HighClimb: 163 cm
+			// up = the "thrown up, then drops" pop; the tall ledges: 36 cm back off the wall). The mesh is shifted back by it, weighted by the
+			// montage's blend (UpdateMantleMeshShift): the body is drawn root-relative, where the root motion carries the capsule.
+			MantleRootLock = Contact.RootStart;
+			if (bTop && Contact.bValid && Contact.ContactSeconds > Track->SampleSeconds && Contact.ContactSeconds < ExitSeconds - Track->SampleSeconds)
+			{
+				// Window 1 (start -> the plant): his feet (the mesh origin, as the warp counts them) go where the planted wrist lands on the
+				// lip (+ the grip offsets); drawn root-relative, the wrist sits HandPoint - RootAtContact from the origin at the plant.
+				// Only forward and height are aligned; sideways the clip keeps its own drift.
+				const FRotator Facing(0.f, Site.Dir.Rotation().Yaw, 0.f);
+				const FVector Origin = GetMesh()->GetComponentLocation();
+				const FVector Wrist = Site.EdgeTop + Site.Dir * Config.AlignGripForwardCm + FVector(0.f, 0.f, Config.AlignGripUpCm);
+				ContactFeet = Wrist - Facing.RotateVector(Contact.HandPoint - Contact.RootAtContact);
+				const FVector Natural = Origin + Facing.RotateVector(Contact.RootAtContact - Contact.RootStart);
+				const FVector Across = FVector::CrossProduct(FVector::UpVector, Site.Dir).GetSafeNormal();
+				ContactFeet += Across * FVector::DotProduct(Natural - ContactFeet, Across);
+				ContactSeconds = Contact.ContactSeconds;
+				MotionWarping->AddOrUpdateWarpTargetFromLocationAndRotation(MantleContactTarget, ContactFeet, Facing);
+				URootMotionModifier_SkewWarp::AddRootMotionModifierSkewWarp(MotionWarping, Montage, 0.f, ContactSeconds, MantleContactTarget,
+					EWarpPointAnimProvider::None, FTransform::Identity, NAME_None, /*bWarpTranslation*/ true, /*bIgnoreZAxis*/ false, /*bWarpRotation*/ true);
+			}
+		}
+	}
+	// The (last) window onto the landing: from the plant (or the start) to where the climb hands over.
+	URootMotionModifier_SkewWarp::AddRootMotionModifierSkewWarp(MotionWarping, Montage, ContactSeconds, ExitSeconds, MantleWarpTarget,
 		EWarpPointAnimProvider::None, FTransform::Identity, NAME_None, /*bWarpTranslation*/ true, /*bIgnoreZAxis*/ false, /*bWarpRotation*/ true);
 	bMantling = true;
 	MantleTimer = 0.f;
-	MantleDuration = Montage->GetPlayLength();
+	MantleDuration = PlayLength;
+	MantleExitSeconds = ExitSeconds;
 	MantleMontage = Montage;
 	MantleClipIndex = Decision.ClipIndex;
 	MantleLinkIndex = LinkIndex;
@@ -251,7 +371,51 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 		Site.Probe.FaceDistanceCm, *LastMantleClip, Decision.Gait == EMantleGait::Running ? TEXT("running") : TEXT("standing"),
 		Decision.bStopFirst ? TEXT(", stopped: no run-up") : TEXT(""), Decision.VerticalWarp, Decision.ForwardWarp, bTop ? TEXT("on top") : TEXT("over"),
 		*Landing.ToCompactString());
+	if (!MantleRootLock.IsNearlyZero(1.f) && !MantleShiftHandle.IsValid())
+	{
+		// The shift follows this frame's blend weight: updated when the pose is final (and in Tick, for a mesh whose pose is not refreshed).
+		MantleShiftHandle = GetMesh()->RegisterOnBoneTransformsFinalizedDelegate(
+			FOnBoneTransformsFinalizedMultiCast::FDelegate::CreateUObject(this, &AOperativeCharacter::UpdateMantleMeshShift));
+	}
+	if (ContactSeconds > 0.f || ExitSeconds < PlayLength || !MantleRootLock.IsNearlyZero(1.f))
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: hands on the lip at %.2f s (feet then %s), hands over at %.2f s of %.2f, root lock %s shifted out"),
+			*DisplayName.ToString(), ContactSeconds, *ContactFeet.ToCompactString(), ExitSeconds, PlayLength, *MantleRootLock.ToCompactString());
+	}
 	return true;
+}
+
+void AOperativeCharacter::UpdateMantleMeshShift()
+{
+	USkeletalMeshComponent* Body = GetMesh();
+	if (!Body || (MantleRootLock.IsZero() && MantleMeshShift.IsZero() && !MantleShiftHandle.IsValid()))
+	{
+		return;
+	}
+	float Weight = 0.f;
+	const UAnimInstance* Anim = Body->GetAnimInstance();
+	if (const UAnimMontage* Montage = MantleMontage.Get(); Anim && Montage)
+	{
+		if (const FAnimMontageInstance* Instance = Anim->GetInstanceForMontage(Montage))
+		{
+			Weight = Instance->GetWeight(); // blending in / out, a cancel's quick blend; gone = 0
+		}
+	}
+	const FVector Shift = -MantleRootLock * Weight;
+	if (!Shift.Equals(MantleMeshShift, 0.01f))
+	{
+		Body->SetRelativeLocation(Body->GetRelativeLocation() - MantleMeshShift + Shift);
+		MantleMeshShift = Shift;
+	}
+	if (Weight <= 0.f && !bMantling)
+	{
+		MantleRootLock = FVector::ZeroVector;
+		if (MantleShiftHandle.IsValid())
+		{
+			Body->UnregisterOnBoneTransformsFinalizedDelegate(MantleShiftHandle);
+			MantleShiftHandle.Reset();
+		}
+	}
 }
 
 void AOperativeCharacter::UpdateMantle(float DeltaTime)
@@ -266,7 +430,7 @@ void AOperativeCharacter::UpdateMantle(float DeltaTime)
 		CancelMantle(EMantleCancel::Interrupted);
 		return;
 	}
-	if (Instance->GetPosition() >= MantleDuration - KINDA_SMALL_NUMBER)
+	if (Instance->GetPosition() >= FMath::Min(MantleExitSeconds, MantleDuration) - KINDA_SMALL_NUMBER)
 	{
 		FinishMantle();
 		return;
@@ -292,6 +456,7 @@ void AOperativeCharacter::FinishMantle()
 	if (MotionWarping)
 	{
 		MotionWarping->RemoveWarpTarget(OperativeMantleInternal::MantleWarpTarget);
+		MotionWarping->RemoveWarpTarget(OperativeMantleInternal::MantleContactTarget);
 	}
 	const float HalfHeight = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, HalfHeight);
@@ -376,6 +541,7 @@ void AOperativeCharacter::CancelMantle(EMantleCancel Reason)
 	if (MotionWarping)
 	{
 		MotionWarping->RemoveWarpTarget(OperativeMantleInternal::MantleWarpTarget);
+		MotionWarping->RemoveWarpTarget(OperativeMantleInternal::MantleContactTarget);
 	}
 	if (UMantleSubsystem* Mantle = GetWorld() ? GetWorld()->GetSubsystem<UMantleSubsystem>() : nullptr)
 	{

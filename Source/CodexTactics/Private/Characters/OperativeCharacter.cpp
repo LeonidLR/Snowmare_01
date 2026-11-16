@@ -335,6 +335,7 @@ void AOperativeCharacter::Tick(float DeltaTime)
 	UpdateCorpseFall(DeltaTime); // fix/corpse-falls-to-ground: a body killed off the ground lands before it lies still
 	UpdatePlaceholderPose(1.f - FMath::Exp(-StanceBlendSpeed * DeltaTime));
 	UpdateProneDive(DeltaTime);
+	UpdateMantleMeshShift(); // the mantle clip's root-lock shift follows the montage's blend (also through its blend-out after the climb)
 	if (bVaulting)
 	{
 		UpdateVault(DeltaTime);
