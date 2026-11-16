@@ -1678,10 +1678,11 @@ public:
 	// retargeted clips play on FullBodySlot (no graph change): the play rate fitted to the treatment's length, looped when the clip is shorter.
 
 	/**
-	 * Plays Clip on FullBodySlot for Seconds (rate = clip / Seconds within [MinRate, MaxRate], looped to cover Seconds) from StartSeconds into it;
+	 * Plays Clip on FullBodySlot for Seconds (rate = its montage length / Seconds within [MinRate, MaxRate], looped to cover Seconds), ElapsedSeconds
+	 * of the treatment already gone (a restart picks up there);
 	 * no left-hand IK / aim while it plays, the weapon hidden when bHideWeapon. Returns false (nothing plays) without a clip or when dead.
 	 */
-	bool PlayFirstAidClip(UAnimSequenceBase* Clip, float Seconds, float MinRate, float MaxRate, float BlendIn, float BlendOut, float StartSeconds,
+	bool PlayFirstAidClip(UAnimSequenceBase* Clip, float Seconds, float MinRate, float MaxRate, float BlendIn, float BlendOut, float ElapsedSeconds,
 		bool bHideWeapon);
 
 	/** Stops the first-aid clip (blend out) and shows the weapon again if it hid it. */

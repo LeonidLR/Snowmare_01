@@ -15,29 +15,35 @@
 #include "Survival/FirstAidRules.h"
 
 bool UOperativeAnimInstance::PlayFirstAidClip(UAnimSequenceBase* Clip, float Seconds, float MinRate, float MaxRate, float BlendIn, float BlendOut,
-	float StartSeconds, bool bHideWeapon)
+	float ElapsedSeconds, bool bHideWeapon)
 {
 	AOperativeCharacter* Operative = BoundOperative.Get();
 	if (!Clip || bIsDead || !Operative)
 	{
 		return false;
 	}
-	const float Length = Clip->GetPlayLength();
-	const float Rate = FirstAidRules::FitPlayRate(Length, Seconds, MinRate, MaxRate);
-	const int32 Loops = FirstAidRules::LoopCount(Length, Seconds, Rate);
 	if (UAnimMontage* Previous = FirstAidMontage.Get(); Previous && Montage_IsPlaying(Previous))
 	{
 		Montage_Stop(BlendIn, Previous);
 	}
 	const FMontageBlendSettings In(FMath::Max(0.f, BlendIn));
-	UAnimMontage* Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage_WithBlendSettings(Clip, FullBodySlot, In,
-		FMontageBlendSettings(FMath::Max(0.f, BlendOut)), Rate, Loops);
+	const FMontageBlendSettings Out(FMath::Max(0.f, BlendOut));
+	// The montage's own length (a clip with a RateScale of its own plays shorter / longer than its raw length): the rate and the loops are fitted
+	// to it. RateScale of the montage stays 1 - the play call sets the rate (both would multiply).
+	UAnimMontage* Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage_WithBlendSettings(Clip, FullBodySlot, In, Out, 1.f, 1);
+	const float Length = Montage ? Montage->GetPlayLength() : 0.f;
+	const float Rate = FirstAidRules::FitPlayRate(Length, Seconds, MinRate, MaxRate);
+	const int32 Loops = FirstAidRules::LoopCount(Length, Seconds, Rate);
+	if (Montage && Loops > 1)
+	{
+		Montage = UAnimMontage::CreateSlotAnimationAsDynamicMontage_WithBlendSettings(Clip, FullBodySlot, In, Out, 1.f, Loops);
+	}
 	if (!Montage)
 	{
 		return false;
 	}
 	FadeOutCoverMontages(In.Blend.BlendTime); // a weather pose / stance clip / interaction hands over smoothly
-	const float Start = FMath::Clamp(StartSeconds, 0.f, FMath::Max(0.f, Montage->GetPlayLength() - 0.05f));
+	const float Start = FMath::Clamp(FMath::Max(0.f, ElapsedSeconds) * Rate, 0.f, FMath::Max(0.f, Montage->GetPlayLength() - 0.05f));
 	if (Montage_PlayWithBlendSettings(Montage, In, Rate, EMontagePlayReturnType::MontageLength, Start, /*bStopAllMontages*/ false) <= 0.f)
 	{
 		UE_LOG(LogCodexTactics, Warning, TEXT("[FirstAid] %s: %s failed to start on %s"), *Operative->DisplayName.ToString(), *Clip->GetName(),
@@ -47,14 +53,14 @@ bool UOperativeAnimInstance::PlayFirstAidClip(UAnimSequenceBase* Clip, float Sec
 	FirstAidMontage = Montage;
 	FirstAidClip = Clip;
 	FirstAidPlayRate = Rate;
-	LeftHandIKBlockSeconds = FMath::Max(LeftHandIKBlockSeconds, FMath::Max(0.f, Seconds - Start / Rate)); // both hands work: no rifle IK / aim
+	LeftHandIKBlockSeconds = FMath::Max(LeftHandIKBlockSeconds, FMath::Max(0.f, Seconds - ElapsedSeconds)); // both hands work: no rifle IK / aim
 	if (bHideWeapon && !bFirstAidWeaponHidden && Operative->WeaponMesh && Operative->WeaponMesh->IsVisible())
 	{
 		Operative->WeaponMesh->SetVisibility(false, true);
 		bFirstAidWeaponHidden = true;
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[FirstAid] %s: %s on %s, %.2f s clip x%d at %.2f (%.1f s) from %.2f s"), *Operative->DisplayName.ToString(),
-		*Clip->GetName(), *FullBodySlot.ToString(), Length, Loops, Rate, Seconds, Start);
+	UE_LOG(LogCodexTactics, Display, TEXT("[FirstAid] %s: %s on %s, %.2f s montage (clip %.2f s) x%d at %.2f (%.1f s) from %.2f s"),
+		*Operative->DisplayName.ToString(), *Clip->GetName(), *FullBodySlot.ToString(), Length, Clip->GetPlayLength(), Loops, Rate, Seconds, Start);
 	return true;
 }
 

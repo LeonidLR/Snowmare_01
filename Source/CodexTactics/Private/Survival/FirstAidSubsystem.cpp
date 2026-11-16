@@ -378,12 +378,9 @@ void UFirstAidSubsystem::PlayClips(FTreatment& Treatment, bool bRestart, bool bH
 				return;
 			}
 		}
-		UAnimSequenceBase* Sequence = Clip.Get();
-		const float Length = Sequence->GetPlayLength();
-		const float Rate = FirstAidRules::FitPlayRate(Length, Treatment.Clock.Seconds, Config.MinPlayRate, Config.MaxPlayRate);
-		const float Start = bRestart && Length > 0.f ? FMath::Fmod(Treatment.Clock.Elapsed * Rate, Length) : 0.f;
-		Anim->PlayFirstAidClip(Sequence, FMath::Max(0.1f, Treatment.Clock.Seconds - (bRestart ? Treatment.Clock.Elapsed : 0.f)), Config.MinPlayRate,
-			Config.MaxPlayRate, Config.BlendInSeconds, Config.BlendOutSeconds, Start, Config.bHideWeapon);
+		// A restart picks up where the treatment is (the same rate / loops, fitted to the whole treatment).
+		Anim->PlayFirstAidClip(Clip.Get(), Treatment.Clock.Seconds, Config.MinPlayRate, Config.MaxPlayRate, Config.BlendInSeconds, Config.BlendOutSeconds,
+			bRestart ? Treatment.Clock.Elapsed : 0.f, Config.bHideWeapon);
 	};
 	AOperativeCharacter* Helper = Treatment.Helper.Get();
 	AOperativeCharacter* Patient = Treatment.Patient.Get();
