@@ -25,7 +25,10 @@ import { claudeCritic, emptyLedger, jevCritic, mockCritic } from '../src/levelge
 import type { CriticClient, CriticVerdict } from '../src/levelgen/critic.ts';
 import type { Evaluation } from '../src/levelgen/evaluate.ts';
 import { saveLocks } from '../src/levelgen/node/locksFile.ts';
-import { createBuildPipeline } from '../src/levelgen/node/buildPipeline.ts';
+import { createBuildPipeline, mapNameFor } from '../src/levelgen/node/buildPipeline.ts';
+import { generatePropsForLayout, canOverwritePropsFile } from '../src/levelgen/props/autogen.ts';
+import { formatPropsCanonical } from '../src/levelgen/props/canonical.ts';
+import type { LevelPropsFile } from '../src/levelgen/props/schema.ts';
 import { ROOT } from '../src/movement/cli/paths.ts';
 import { ACCEPTED_DIR, ensureReferencePng, LEVELGEN_OUT, listProfiles, NAME_RE, readLedger, readProfileById, writeLedger } from '../src/levelgen/node/files.ts';
 import type { GenLayout } from '../src/levelgen/schema.ts';
@@ -159,6 +162,39 @@ export function setupLevelgenApi(use: Use): void {
     fs.writeFileSync(file, JSON.stringify(layout, null, 1) + '\n');
     const ev = b.evaluation as Evaluation | undefined;
     fs.writeFileSync(path.join(ACCEPTED_DIR, `${layout!.name}.meta.json`), JSON.stringify({ at: new Date().toISOString(), score: ev?.score, summary: ev?.summary, verdicts: b.verdicts ?? [] }, null, 1) + '\n');
+
+    // Task 076: automatic props for accepted layout
+    try {
+      const targetMap = mapNameFor(layout!.name);
+      const propsDir = path.join(ACCEPTED_DIR, '..', 'props');
+      fs.mkdirSync(propsDir, { recursive: true });
+      const propsPath = path.join(propsDir, `${targetMap}.props.json`);
+      let canWrite = true;
+      if (fs.existsSync(propsPath)) {
+        const existing = JSON.parse(fs.readFileSync(propsPath, 'utf8')) as LevelPropsFile;
+        canWrite = canOverwritePropsFile(existing);
+      }
+      if (canWrite) {
+        let sourceProps: LevelPropsFile | null = null;
+        if (layout!.expansion) {
+          const spPath = path.join(propsDir, 'L_Gen_Depot_1.props.json');
+          if (fs.existsSync(spPath)) {
+            sourceProps = JSON.parse(fs.readFileSync(spPath, 'utf8')) as LevelPropsFile;
+          }
+        }
+        const resProps = generatePropsForLayout({
+          layout: layout!,
+          sourceProps,
+          mapName: targetMap,
+          layoutName: layout!.name,
+          projectRoot: ROOT,
+        });
+        fs.writeFileSync(propsPath, formatPropsCanonical(resProps.props), 'utf8');
+      }
+    } catch {
+      // Non-blocking for accept
+    }
+
     send(res, 200, { file: path.relative(path.resolve(ACCEPTED_DIR, '../../../..'), file).split(path.sep).join('/') });
   });
 
