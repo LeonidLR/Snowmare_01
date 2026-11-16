@@ -82,6 +82,7 @@ function Start-SmokeProcess([string]$Name, [string]$Suffix) {
     # Start-Process takes one argument string: quote the paths (the project path has a space).
     $exec = $(if ($PreCmds) { "$PreCmds,CodexTactics.$Name" } else { "CodexTactics.$Name" })
     $gameArgs = "`"$Project`" $map -game $rhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=$exec`" `"-abslog=$log`" $extra"
+    Wait-DesignerPriority
     $proc = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $gameArgs -WindowStyle Hidden -PassThru
     return [pscustomobject]@{ Name = $Name; Suffix = $Suffix; Proc = $proc; Log = $log; Started = Get-Date; Timeout = [int](Get-Option $Name "timeout" $TimeoutSeconds) }
 }

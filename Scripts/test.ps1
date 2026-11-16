@@ -72,6 +72,7 @@ $exitCode = 0
 $unitWatch = [System.Diagnostics.Stopwatch]::StartNew()
 try {
     if ((-not $Changed -or ($Filter -and -not $SkipUnit))) {
+        Wait-DesignerPriority
         & "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" $Project `
             "-ExecCmds=Automation RunTests $Filter" `
             "-TestExit=Automation Test Queue Empty" `

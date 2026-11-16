@@ -75,6 +75,7 @@ if ($NoUnity) {
 . (Join-Path $PSScriptRoot "agent_lock.ps1")
 $Owned = Enter-AgentLock "build $Target"
 try {
+    Wait-DesignerPriority
     & "$EngineRoot\Engine\Build\BatchFiles\Build.bat" $Target Win64 $Config "-Project=$Project" -WaitMutex -NoHotReloadFromIDE @UbtExtra *> $LogFile
     $code = $LASTEXITCODE
 } finally {
