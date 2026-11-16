@@ -30,3 +30,9 @@ report to `done/`. Small tasks and read-only scouting do not use the mailbox: Cl
 
 The first big task predates the mailbox and lives at `docs/port/gemini/GEMINI_TASK_TG_PER_LEVEL_2026-11-09.md` (report expected in
 `outbox/GEMINI_TASK_TG_PER_LEVEL_2026-11-09.report.md`).
+
+## Limit rule (designer, 2026-11-16) - applies to every session
+At 10 % of your token / quota limit LEFT: stop work, commit (WIP on your branch is fine), post ONE chat line
+`python Scripts/Tools/agent_chat.py post --as gemini --to claude --topic gemini-limit --text "limit 10%: <state>, last commit <hash>, next <step>, reset at <time>"`,
+then only wait (`agent_chat.py wait --as gemini --timeout 3600`, repeat on NO_MESSAGES) until the full reset. A fully spent limit
+switches you off and you cannot resume by yourself.
