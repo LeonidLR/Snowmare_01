@@ -10,6 +10,7 @@
 class AActor;
 class ACharacter;
 class ICorpseBody;
+class USkeletalMeshComponent;
 
 /**
  * Corpses stay (game designer 2026-11-08: "corpses of ALL enemies, not only PMC, must stay on the ground"; 2026-11-09: "every enemy body
@@ -53,6 +54,25 @@ public:
 		float DamageAmount,
 		EDamageType DamageType,
 		FName ArchetypeId);
+
+	/**
+	 * The ragdoll's pelvis bone: 'pelvis' when the skeleton has it, else the physics-asset body nearest the root (the hound's
+	 * skeleton has no 'pelvis'). NAME_None without a physics asset body.
+	 */
+	static FName ResolvePelvisBone(const USkeletalMeshComponent* Mesh);
+
+	/**
+	 * World Z of the lowest point of the pelvis collision body (physics-asset shapes at the bone's current transform, so it also
+	 * works on a frozen corpse whose bodies are gone). False without that body.
+	 */
+	static bool GetPelvisBodyBottomZ(const USkeletalMeshComponent* Mesh, FName PelvisBone, float& OutBottomZ);
+
+	/**
+	 * Floor under a corpse point: the first WorldStatic / WorldDynamic surface a ragdoll can rest on (physics collision, blocks
+	 * PhysicsBody; never a pawn capsule, another ragdoll or an overlap volume) that FDeathRagdollRules::IsCorpseFloorHit accepts,
+	 * traced FloorTraceUpCm above to FloorTraceDownCm below From.
+	 */
+	static bool TraceCorpseFloorZ(const UWorld* World, const FVector& From, const AActor* Ignore, const FDeathRagdollConfig& Config, float& OutFloorZ);
 
 	/** Registers an actor whose ragdoll is active */
 	bool RegisterRagdollCorpse(AActor* Body, EDamageType DamageType = EDamageType::Kinetic);

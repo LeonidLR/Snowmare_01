@@ -39,15 +39,34 @@ public:
 	static FVector ClampLinearVelocity(const FVector& Velocity, float MaxSpeed);
 
 	/**
-	 * Calculates upward correction needed if pelvis has settled below floor.
-	 * Returns positive offset in cm to lift the mesh so pelvis sits on the floor if sunk > MaxSinkCm.
-	 * Returns 0.0f if pelvis is above or within MaxSinkCm threshold.
+	 * Velocity change for the death impulse so that InitialVelocity + result never exceeds MaxSpeed
+	 * (a body already moving faster - killed mid-sprint - is slowed to MaxSpeed along the combined direction).
 	 */
-	static float CalculatePelvisFloorCorrection(float PelvisZ, float FloorZ, float MaxSinkCm = 20.0f);
+	static FVector ClampLaunchVelocityChange(const FVector& InitialVelocity, const FVector& VelocityChange, float MaxSpeed);
+
+	/**
+	 * True when a floor-trace hit under a corpse is the floor: it faces up (normal Z >= FloorMinNormalZ) and is not an
+	 * overhead obstacle (no higher than FloorMaxAbovePelvisCm above the pelvis bone).
+	 */
+	static bool IsCorpseFloorHit(float ImpactZ, float ImpactNormalZ, float PelvisZ, const FDeathRagdollConfig& Config);
+
+	/**
+	 * Upward correction (cm) for a frozen corpse whose pelvis COLLISION BODY bottom settled more than MaxSinkCm below the floor:
+	 * the sink depth, capped at MaxLiftCm; 0 when it rests on / above the floor or within MaxSinkCm.
+	 * The body bottom, not the pelvis bone: the 4.9x scaled Brute's bone sits 99 cm above its own body bottom, so a bone test
+	 * misses a 1 m sink.
+	 */
+	static float CalculatePelvisFloorCorrection(float PelvisBottomZ, float FloorZ, float MaxSinkCm, float MaxLiftCm);
+
+	/**
+	 * The forced settle timeout: BodyAge reached MaxSettleTimeoutSeconds and the root body is no faster than
+	 * TimeoutFreezeMaxSpeedCmS (a body still falling waits; FCorpseConfig::MaxSettleSeconds freezes it in the end).
+	 */
+	static bool IsRagdollTimeoutFreeze(float BodyAge, float RootSpeedCmS, const FDeathRagdollConfig& Config);
 
 	/**
 	 * Evaluates whether a simulating ragdoll body has come to rest.
-	 * True if linear & angular velocities are below thresholds, OR if BodyAge exceeds MaxSettleTimeoutSeconds.
+	 * True if linear & angular velocities are below thresholds, OR on the forced timeout (IsRagdollTimeoutFreeze).
 	 */
 	static bool HasBodySettled(
 		const FVector& LinearVelocity,
@@ -62,7 +81,7 @@ public:
 	/** Checks whether archetype is flagged to bypass ragdoll and use animation fallback (e.g. Spitter). */
 	static bool ShouldFallbackToPose(FName ArchetypeId, const FDeathRagdollConfig& Config);
 
-	/** Returns default root physics bone name ('pelvis'). */
+	/** Returns default root physics bone name ('pelvis'); UCorpseSubsystem::ResolvePelvisBone falls back for skeletons without it. */
 	static FName GetDefaultPelvisBoneName();
 
 	/**
