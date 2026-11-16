@@ -34,6 +34,7 @@ import { layerLevel, layersOf, levelsOf, levelZ, mandatoryRoute, NEVER_CLIMBABLE
 import type { BlockedOpening, BuildingTacticalReport, FiringLine, TacticalReport } from './tacticalEvaluate.ts';
 import { evaluateTactical } from './tacticalEvaluate.ts';
 import { buildSimNav, prepareSimLeg } from './simNav.ts';
+import { inFootprint, rotationOf, rotPoint } from './rotation.ts';
 
 export type { BlockedOpening, BuildingTacticalReport, FiringLine, TacticalReport };
 
@@ -249,7 +250,8 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
     const walls = blockersAbove(levelZ(level) + EYE_CM);
     const [[x0, y0], [x1, y1]] = b.footprint;
     const inset = Math.min(150, (x1 - x0) / 4, (y1 - y0) / 4);
-    const pts: Vec2[] = [rect.centre(b.footprint), [x0 + inset, y0 + inset], [x1 - inset, y0 + inset], [x0 + inset, y1 - inset], [x1 - inset, y1 - inset]];
+    const c = rect.centre(b.footprint), rot = rotationOf(b);
+    const pts: Vec2[] = ([c, [x0 + inset, y0 + inset], [x1 - inset, y0 + inset], [x0 + inset, y1 - inset], [x1 - inset, y1 - inset]] as Vec2[]).map((p) => rotPoint(p, c, rot));
     const all = pts.flatMap((p) => rays(p, walls));
     return { id: b.id, level, longest_m: round(Math.max(...all) / 100, 1), mean_m: round(all.reduce((a, v) => a + v, 0) / all.length / 100, 1),
       open_share: round(all.filter((v) => v >= ROOF_OPEN_M * 100).length / all.length, 3) };
@@ -451,5 +453,5 @@ export function renderSummary(ev: Evaluation): string[] {
 }
 
 /** True when a point lies inside any building footprint (for tests / the UI). */
-export const insideBuilding = (l: GenLayout, p: Vec2) => l.buildings.some((b) => rect.contains(b.footprint, p));
+export const insideBuilding = (l: GenLayout, p: Vec2) => l.buildings.some((b) => inFootprint(b, p));
 export { AGENT_RADIUS };

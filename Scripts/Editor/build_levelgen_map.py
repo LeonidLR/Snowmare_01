@@ -651,6 +651,95 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
     return specs
 
 
+# ---- rotated buildings (levelgen v2, designer 2026-11-16 item 4; Training Ground src/levelgen/rotation.ts) -------------------------
+# A building with "rotation" (degrees, UE yaw sense) stands turned about its footprint centre: "footprint" / room bounds are the
+# UNROTATED rectangles, every other point of it (doors, openings, stairs, holes, hatches, parapets, partitions) and its walls /
+# ladders are world coordinates. The builder plans such a building in its own frame (the points turned back, so the slab / hole /
+# landing / rim code stays axis-aligned) and turns the resulting actors back: location about the centre, yaw + rotation.
+
+def _rot_xy(p, c, deg):
+    """The point p (x, y[, ...]) turned by deg about c; extra coordinates are kept."""
+    if not deg:
+        return list(p)
+    r = math.radians(deg)
+    dx, dy = p[0] - c[0], p[1] - c[1]
+    return [c[0] + dx * math.cos(r) - dy * math.sin(r), c[1] + dx * math.sin(r) + dy * math.cos(r)] + list(p[2:])
+
+
+def building_rotation(b):
+    """The building's rotation in degrees (0 when absent: every older layout)."""
+    return float(b.get("rotation") or 0.0)
+
+
+def _building_local(layout, b):
+    """(local layout, centre, deg): the building, its walls and the ladders onto it turned back into its own frame (deg = rotation)."""
+    deg = building_rotation(b)
+    (x0, y0), (x1, y1) = b["footprint"]
+    c = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+    P = lambda q: [round(v, 4) for v in _rot_xy(q, c, -deg)]  # noqa: E731  (rounded: an integer layout turns back exactly)
+    lb = json.loads(json.dumps(b))
+    lb.pop("rotation", None)
+    for d in lb.get("doors", []):
+        d["pos"] = P(d["pos"])
+    for st in lb.get("stairs", []):
+        for k in ("pos", "mid", "top"):
+            if st.get(k):
+                st[k] = P(st[k])
+    lb["roof_holes"] = [P(h) for h in lb.get("roof_holes", [])]
+    for h in lb.get("floor_holes", []):
+        h["pos"] = P(h["pos"])
+    for op in lb.get("openings", []) + [o for pt in lb.get("partitions", []) for o in pt.get("openings", [])]:
+        op["pos"] = P(op["pos"])
+        if isinstance(op.get("yaw"), (int, float)):
+            op["yaw"] = float(op["yaw"]) - deg
+    for pt in lb.get("partitions", []):
+        pt["start"], pt["end"] = P(pt["start"]), P(pt["end"])
+    for pp in lb.get("parapets", []):
+        pp["start"], pp["end"] = P(pp["start"]), P(pp["end"])
+    for h in lb.get("hatches", []):
+        h["pos"] = P(h["pos"])
+    for fd in lb.get("floors_detail", []):
+        for g in fd.get("gaps", []):
+            g["poly"] = [P(q) for q in g["poly"]]
+    for m in lb.get("mantle_edges", []):
+        m["start"], m["end"] = P(m["start"]), P(m["end"])
+        m["normal"] = _rot_xy(m["normal"], (0.0, 0.0), -deg)
+    walls = [dict(w, a=P(w["a"]), b=P(w["b"])) for w in layout["walls"] if w.get("building") == b["id"]]
+    mine = ("roof:%s" % b["id"], "floor:%s:" % b["id"])
+    ladders = [dict(ld, pos=P(ld["pos"]), foot=P(ld["foot"]), top=P(ld["top"]), yaw=float(ld.get("yaw", 0.0)) - deg)
+               for ld in layout.get("ladders", []) if any(str(ld.get(k, "")).startswith(mine) for k in ("from", "to"))]
+    return dict(layout, buildings=[lb], walls=walls, ladders=ladders), c, deg
+
+
+def _globalize_specs(specs, c, deg):
+    """Actor specs planned in a building's own frame turned back into the world: location about c, yaw + deg."""
+    out = []
+    for sp in specs:
+        sp = dict(sp)
+        sp["location"] = _rot_xy(sp["location"], c, deg)
+        sp["yaw"] = float(sp.get("yaw", 0.0)) + deg
+        out.append(sp)
+    return out
+
+
+def _walls_and_buildings_rotated(layout, gz, chimneys, frames, gaps, walls_and_buildings):
+    """walls_and_buildings (legacy / extended) for the layout; every rotated building planned in its own frame (_building_local) and
+    turned back (_globalize_specs). Without rotated buildings: the plain call, byte for byte."""
+    rotated = [b for b in layout["buildings"] if building_rotation(b)]
+    if not rotated:
+        return walls_and_buildings(layout, gz, chimneys, frames, gaps)
+    ids = {b["id"] for b in rotated}
+    rest = dict(layout, buildings=[b for b in layout["buildings"] if b["id"] not in ids], walls=[w for w in layout["walls"] if w.get("building") not in ids])
+    specs = walls_and_buildings(rest, gz, chimneys, frames, gaps)
+    for b in rotated:
+        local, c, deg = _building_local(layout, b)
+        lframes = {f["id"]: f for f in levelgen_ladders.ladder_frames(local)}
+        lgaps = levelgen_ladders.exit_gaps(local, list(lframes.values()))
+        specs.extend(_globalize_specs(walls_and_buildings(local, gz, chimneys, lframes, lgaps), c, deg))
+        report("rotated building %s: %.1f deg about (%.0f, %.0f)" % (b["id"], deg, c[0], c[1]))
+    return specs
+
+
 def plan(layout):
     """The actors to place (pure dicts; cm; UE yaw = atan2(dy, dx))."""
     gz = float(layout.get("ground_z", 0.0))
@@ -697,10 +786,8 @@ def plan(layout):
     for wid, cuts in sorted(gaps.items()):
         report("ladder exit opening in %s: %s" % (wid, ", ".join("%s %.0f..%.0f cm" % (lid, t0, t1) for t0, t1, lid in cuts)))
     extended = _has_combat_building_features(layout)
-    if extended:
-        specs.extend(_walls_and_buildings_extended(layout, gz, chimneys, frames, gaps))
-    else:
-        specs.extend(_walls_and_buildings_legacy(layout, gz, chimneys, frames, gaps))
+    walls_and_buildings = _walls_and_buildings_extended if extended else _walls_and_buildings_legacy
+    specs.extend(_walls_and_buildings_rotated(layout, gz, chimneys, frames, gaps, walls_and_buildings))
     # ---- ladders with their plinths, in their real frame (levelgen_ladders.ladder_frame: the yaw from pos -> foot, 10 cm off the outer face)
     hatch_ladders = {h.get("ladder_id") for b in layout["buildings"] for h in b.get("hatches", []) if h.get("ladder_id")}
     for ld in layout["ladders"]:

@@ -78,7 +78,7 @@ export function acceptedLayoutPath(level: unknown): string | null {
 
 type V2 = [number, number];
 export interface PreviewWall { id: string; a: V2; b: V2; thickness?: number }
-export interface PreviewBuilding { id: string; min: V2; max: V2; floors?: number }
+export interface PreviewBuilding { id: string; min: V2; max: V2; floors?: number; /** Degrees about the rectangle's centre (rotated levelgen buildings). */ rotation?: number }
 export interface PreviewLadder { id: string; pos: V2 }
 export interface LayoutPreview {
   bounds: { min: V2; max: V2 } | null;
@@ -107,7 +107,7 @@ export function layoutToPreview(layout: unknown): LayoutPreview {
     if (!isJsonObject(bd) || !Array.isArray(bd.footprint) || !isV2(bd.footprint[0]) || !isV2(bd.footprint[1])) continue;
     const [p, q] = bd.footprint as [V2, V2];
     buildings.push({ id: typeof bd.id === 'string' ? bd.id : `building_${i}`, min: [Math.min(p[0], q[0]), Math.min(p[1], q[1])], max: [Math.max(p[0], q[0]), Math.max(p[1], q[1])],
-      ...(typeof bd.floors === 'number' ? { floors: bd.floors } : {}) });
+      ...(typeof bd.floors === 'number' ? { floors: bd.floors } : {}), ...(typeof bd.rotation === 'number' && bd.rotation ? { rotation: bd.rotation } : {}) });
   }
   const ladders: PreviewLadder[] = [];
   for (const [i, ld] of (Array.isArray(l.ladders) ? l.ladders : []).entries()) {

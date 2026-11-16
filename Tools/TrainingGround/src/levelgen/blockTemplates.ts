@@ -15,6 +15,7 @@ import type { ZoneKind } from '../movement/layout.ts';
 import type { Draft, DraftBuilding, Rect, Side } from './generate.ts';
 import { COVER_SIZE, addBuilding, addLadderAt, fenceRect, finalizeDraftToLayout, generateLayoutWithLots, splitWall } from './generate.ts';
 import { obstacleHeight } from './obstacleHeights.ts';
+import { drawAngle, fitScale, ROTATION, rotateContent, rotPoint } from './rotation.ts';
 import type { Profile } from './profile.ts';
 import { fromUE, toUE } from './profile.ts';
 import type { BlockRecord, CoverKind, GenLayout, SetPiece } from './schema.ts';
@@ -122,11 +123,15 @@ export interface TemplateContext {
   streets_m: Rect[];
   verticality: number;
   density: number;
+  /** «Макс. угол поворота зданий» (rotation.ts): each template stands rotated within +-this (0 / absent = axis-aligned). */
+  maxRotationDeg?: number;
+  /** Scales the angle (the full re-roll's chaos when rotation.chaos_scales; default 1). */
+  rotationScale?: number;
 }
 
 export type TemplateContent = Pick<GenLayout, 'walls' | 'buildings' | 'ladders' | 'covers' | 'zones' | 'ambush_points'> & { mantle_edges: NonNullable<GenLayout['mantle_edges']> };
 
-export interface BuiltTemplate { template: TemplateId; lot: string; content: TemplateContent; visit: Visit | null }
+export interface BuiltTemplate { template: TemplateId; lot: string; content: TemplateContent; visit: Visit | null; /** Degrees the template stands rotated (0 = axis-aligned). */ rotation: number }
 
 /** The street rectangles of a layout in its plan frame (the infrastructure zones Z_ST_*). */
 export function streetRectsM(l: GenLayout): Rect[] {
@@ -406,7 +411,18 @@ export const templateTag = (lotId: string, seed: number) => `${lotId.replace(/^L
  * fullReroll.ts): the template's rectangle inside the lot (metres; the inset still applies) and the street side it faces.
  */
 export function buildTemplate(template: TemplateId, lot: BlockRecord, ctx: TemplateContext, place?: { side: Side; inner_m: Rect }): BuiltTemplate {
-  const outer = place?.inner_m ?? rectFromUE(lot.rect, ctx.frame);
+  const outer0 = place?.inner_m ?? rectFromUE(lot.rect, ctx.frame);
+  // rotated buildings (rotation.ts): a seeded angle per (lot, template, seed) - its own random stream, drawn only when the max is > 0;
+  // the template is built axis-aligned in its rectangle shrunk so the rotated rectangle fits, then turned about the centre
+  let angle = drawAngle(rng(lotSeed(ctx.seed, `${lot.id}:${template}:rot`)), ctx.maxRotationDeg ?? 0, ctx.rotationScale ?? 1);
+  let outer: Rect = outer0;
+  // a template too big to turn that far in its lot turns less (half the angle, a quarter...) and below rotation.min_deg stays square
+  const w0 = outer0[1][0] - outer0[0][0], h0 = outer0[1][1] - outer0[0][1];
+  while (angle && !templateFits(template, [w0 * fitScale(w0, h0, angle), h0 * fitScale(w0, h0, angle)])) angle = Math.abs(angle / 2) < ROTATION.min_deg ? 0 : Math.round(angle * 5) / 10;
+  if (angle) {
+    const k = fitScale(w0, h0, angle), cx = (outer0[0][0] + outer0[1][0]) / 2, cy = (outer0[0][1] + outer0[1][1]) / 2;
+    outer = [[cx - (w0 * k) / 2, cy - (h0 * k) / 2], [cx + (w0 * k) / 2, cy + (h0 * k) / 2]];
+  }
   const inset = TC.inset_m;
   const r: Rect = [[outer[0][0] + inset, outer[0][1] + inset], [outer[1][0] - inset, outer[1][1] - inset]];
   const d = emptyDraft();
@@ -414,16 +430,19 @@ export function buildTemplate(template: TemplateId, lot: BlockRecord, ctx: Templ
     V: ctx.verticality, density: ctx.density, spec: TC.catalog[template] };
   const vm = BUILD[template](c);
   const l = finalizeDraftToLayout(d, ctx.frame, { name: 'template', profile: 'template', seed: ctx.seed, params: DEFAULT_PARAMS, start: rect.centre(r), end: rect.centre(r) });
-  const U = (p: Vec2) => toUE(p, ctx.frame);
+  const pivot = toUE(rect.centre(r), ctx.frame);
+  const U = (p: Vec2): Vec2 => { const q = toUE(p, ctx.frame); return angle ? rotPoint(q, pivot, angle).map((v) => Math.round(v * 100) / 100) as Vec2 : q; };
+  const content: TemplateContent = { walls: l.walls, buildings: l.buildings, ladders: l.ladders, covers: l.covers, zones: l.zones, ambush_points: l.ambush_points, mantle_edges: l.mantle_edges ?? [] };
   return {
     template,
     lot: lot.id,
-    content: { walls: l.walls, buildings: l.buildings, ladders: l.ladders, covers: l.covers, zones: l.zones, ambush_points: l.ambush_points, mantle_edges: l.mantle_edges ?? [] },
+    content: rotateContent(content, pivot, angle),
     visit: vm ? { points: vm.points.map(U), layers: vm.layers, links: vm.links } : null,
+    rotation: angle,
   };
 }
 
 /** The layout's block-template context (frame, streets, the generation params). */
 export function templateContext(l: GenLayout, seed: number): TemplateContext {
-  return { seed, frame: frameOf(l), streets_m: streetRectsM(l), verticality: l.params.verticality, density: l.params.density };
+  return { seed, frame: frameOf(l), streets_m: streetRectsM(l), verticality: l.params.verticality, density: l.params.density, maxRotationDeg: l.params.max_rotation_deg ?? ROTATION.max_deg_default };
 }

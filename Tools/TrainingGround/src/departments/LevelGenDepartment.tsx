@@ -22,6 +22,7 @@ import type { PlaceObjectivesResult } from '../levelgen/objectives';
 import { addGoal, checkObjectives, defaultGoalCount, groundNav, moveObjective, placeObjectives, removeGoal, START_ID } from '../levelgen/objectives';
 import { V2 } from '../levelgen/blockTemplates';
 import { FULL } from '../levelgen/fullReroll';
+import { ROTATION } from '../levelgen/rotation';
 import type { SquadTrack } from '../levelgen/playback';
 import { advanceClock, clockLabel, PLAYBACK, positionsAt, summarizeTrack, trailAt } from '../levelgen/playback';
 import { addLock, DEFAULT_MAX_RETRIES, regenerateRegion, regenStateOf, removeLock, selectRegion } from '../levelgen/regionRegen';
@@ -85,6 +86,8 @@ export const LevelGenDepartment: React.FC = () => {
   // task 072: the default is the full re-plan (the designer expected the buildings to change, not only the points)
   const [blockMode, setBlockMode] = useState<BlockMode>('full');
   const [chaos, setChaos] = useState<number>(FULL.default_chaos);
+  // «Макс. угол поворота зданий» (rotation.ts): 0 = axis-aligned; follows the shown map's stored value
+  const [maxRot, setMaxRot] = useState<number>(ROTATION.max_deg_default);
   // zoom + pan on the plan (UX round, task 072): reset to "fit" when another map (other bounds) is shown
   const [view, setView] = useState<PlanView>(FIT_VIEW);
   const [goalTool, setGoalTool] = useState(false);
@@ -245,7 +248,7 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('Перегенерация зоны...'); setError('');
     setTimeout(() => {
       try {
-        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos });
+        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos, maxRotationDeg: maxRot });
         setRegenReport(r);
         if (r.ok && r.layout !== cur.layout) pushStep(r.layout, `зона (${blockMode === 'full' ? `полностью, хаос ${chaos}` : blockMode === 'types' ? 'типы' : 'наполнение'}), seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`);
         setRerollSeed((s) => s + 1);
@@ -291,6 +294,8 @@ export const LevelGenDepartment: React.FC = () => {
   // another map in the plan (another slot, an opened accepted map, an expansion): back to "fit", the last edit message cleared
   const viewKey = cur ? `${sel}:${cur.key ?? cur.layout.name}:${JSON.stringify(cur.layout.bounds)}` : '';
   useEffect(() => { setView(FIT_VIEW); setObjMsg(null); }, [viewKey]);
+  const storedRot = cur?.layout.params.max_rotation_deg;
+  useEffect(() => { setMaxRot(storedRot ?? ROTATION.max_deg_default); }, [viewKey, storedRot]);
   /** A start / goal edit on the plan: applied, re-walked, one undo step (an invalid spot stays where it was dropped, marked red). */
   const onObjective = (a: ObjectiveAction) => {
     if (!cur || busy) return;
@@ -331,7 +336,9 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy(`Расширяю карту x${expandFactor}...`); setError('');
     setTimeout(() => {
       try {
-        const r = expandLayout({ layout: cur.layout, factor: expandFactor, seed: expandSeed, profile });
+        // the rotation setting rides in the map's params (absent / unchanged = the map as it is: byte-identical expansions)
+        const src = maxRot === (cur.layout.params.max_rotation_deg ?? 0) ? cur.layout : { ...cur.layout, params: { ...cur.layout.params, max_rotation_deg: maxRot } };
+        const r = expandLayout({ layout: src, factor: expandFactor, seed: expandSeed, profile });
         setExpandReport({ ...r, seamChecks: r.ok ? checkSeams(r.layout, r.roads) : [] });
         if (r.ok) { pushStep(r.layout, `расширение x${expandFactor}, seed ${r.seed}`); setZone(null); setRegenReport(null); setExpandSeed((s) => s + 1); }
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
@@ -580,6 +587,11 @@ export const LevelGenDepartment: React.FC = () => {
                       <input type="range" min={0} max={1} step={0.1} value={chaos} onChange={(e) => setChaos(Number(e.target.value))} className="w-24 accent-amber-500" data-chaos />
                       <span className="text-[10px] text-slate-500">хаотично</span>
                       <span className="font-mono text-slate-200 w-6">{chaos.toFixed(1)}</span>
+                    </label>
+                  )}
+                  {blockMode !== 'jitter' && (
+                    <label className="flex items-center gap-1 text-slate-400" title={`Макс. угол поворота зданий: каждый новый квартал (его здания, заборы, укрытия, лестницы) встаёт повёрнутым на случайный угол в пределах ±этого числа (в «Полностью» — ещё × хаос). 0 — всё по осям, как сейчас (промзона). Хранится в карте и действует и на «Расширить карту».`}>Макс. угол поворота зданий
+                      <input type="number" min={0} max={ROTATION.max_deg_limit} step={5} value={maxRot} onChange={(e) => setMaxRot(Math.max(0, Math.min(ROTATION.max_deg_limit, Number(e.target.value) || 0)))} className="w-14 bg-slate-950 border border-slate-700 rounded px-1 py-0.5 text-slate-100 font-mono" data-maxrot />°
                     </label>
                   )}
                   <button type="button" onClick={reroll} disabled={!zone || !profileOk || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold disabled:opacity-40"><Shuffle size={13} />Перегенерировать зону</button>

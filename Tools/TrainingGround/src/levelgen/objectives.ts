@@ -8,6 +8,7 @@
 // UX round (task 072): the designer drags the start, adds / drags / deletes goals on the plan (moveObjective / addGoal / removeGoal,
 // manual_count_min..count_max goals); every change re-walks the routes; an invalid spot is reported with its reason, never moved.
 
+import { inFootprint, rotationOf, rotPoint } from './rotation.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { dist, pointInPoly, rng } from '../movement/geometry.ts';
 import { wallSegments } from '../movement/layout.ts';
@@ -112,7 +113,7 @@ interface Candidate { pos: Vec2; kind: ObjectiveGoal['kind']; building?: string;
 /** Goal candidates on the ground layer (rooms, yards, streets), before the distance / reachability rules. */
 export function goalCandidates(l: GenLayout, allowLocked: boolean): Candidate[] {
   const locks = l.regen?.locks ?? [];
-  const inBuilding = (p: Vec2) => l.buildings.find((b) => rect.contains(b.footprint, p));
+  const inBuilding = (p: Vec2) => l.buildings.find((b) => inFootprint(b, p));
   const edge = C.edge_margin_m * 100;
   const inBounds = (p: Vec2) => p[0] > l.bounds.min[0] + edge && p[0] < l.bounds.max[0] - edge && p[1] > l.bounds.min[1] + edge && p[1] < l.bounds.max[1] - edge;
   const inCut = (p: Vec2) => !!l.cut && pointInPoly(p, l.cut.poly);
@@ -122,7 +123,8 @@ export function goalCandidates(l: GenLayout, allowLocked: boolean): Candidate[] 
     if (!allowLocked && locks.some((k) => pointInPoly(rect.centre(b.footprint), k.poly))) continue;
     const rooms = (b.rooms ?? []).filter((r) => r.floor === 0);
     for (const r of rooms.length ? rooms : [{ bounds: { min: b.footprint[0], max: b.footprint[1] } }]) {
-      out.push({ pos: [(r.bounds.min[0] + r.bounds.max[0]) / 2, (r.bounds.min[1] + r.bounds.max[1]) / 2], kind: 'room', building: b.id });
+      // room bounds are in the building's own frame (rotation.ts): its centre turned with the building
+      out.push({ pos: rotPoint([(r.bounds.min[0] + r.bounds.max[0]) / 2, (r.bounds.min[1] + r.bounds.max[1]) / 2], rect.centre(b.footprint), rotationOf(b)), kind: 'room', building: b.id });
     }
   }
   for (const z of l.zones) {
@@ -206,7 +208,7 @@ export function spotError(l: GenLayout, g: NavGrid, pos: Vec2, role: 'start' | '
   const b = l.bounds;
   if (!(pos[0] >= b.min[0] && pos[0] <= b.max[0] && pos[1] >= b.min[1] && pos[1] <= b.max[1])) return 'за краем карты';
   if (l.cut && pointInPoly(pos, l.cut.poly) && !l.cut.crossings.some((x) => pointInPoly(pos, x.poly))) return 'в канале';
-  const inB = l.buildings.find((x) => rect.contains(x.footprint, pos));
+  const inB = l.buildings.find((x) => inFootprint(x, pos));
   if (inB && !inB.enterable) return `внутри здания без входа (${inB.id})`;
   if (!g.walkable(pos)) return 'в стене / в препятствии';
   if (role === 'goal' && inB && !allowLocked && (l.regen?.locks ?? []).some((k) => pointInPoly(rect.centre(inB.footprint), k.poly))) return `в закреплённом здании (${inB.id})`;
@@ -286,7 +288,7 @@ const roundPos = (p: Vec2): Vec2 => [Math.round(p[0]), Math.round(p[1])];
 
 /** What a goal at `pos` is (a room of an enterable building, a street, a yard) - the `kind` / `building` / `zone` fields. */
 export function classifyGoalSpot(l: GenLayout, pos: Vec2): Pick<ObjectiveGoal, 'kind' | 'building' | 'zone'> {
-  const b = l.buildings.find((x) => x.enterable && rect.contains(x.footprint, pos));
+  const b = l.buildings.find((x) => x.enterable && inFootprint(x, pos));
   if (b) return { kind: 'room', building: b.id };
   const st = l.zones.find((z) => z.id.startsWith('Z_ST_') && pointInPoly(pos, z.poly));
   if (st) return { kind: 'street', zone: st.id };

@@ -5,7 +5,7 @@ import React, { useEffect, useRef } from 'react';
 
 export interface LabWall { id: string; a: [number, number]; b: [number, number]; thickness?: number }
 export interface LabTower { id: string; center: [number, number]; size: [number, number] }
-export interface LabBuilding { id: string; min: [number, number]; max: [number, number]; floors?: number }
+export interface LabBuilding { id: string; min: [number, number]; max: [number, number]; floors?: number; rotation?: number }
 export interface LabLadder { id: string; pos: [number, number] }
 export interface LabLayout {
   bounds: { min: [number, number]; max: [number, number] } | null; walls: LabWall[]; towers: LabTower[]; spawn?: { pos: [number, number] } | null;
@@ -74,9 +74,11 @@ export const CombatLabMap: React.FC<Props> = ({ layout, route = [], loop = true,
     g.lineWidth = 1;
     g.font = '10px sans-serif';
     for (const b of layout.buildings ?? []) {
-      const x0 = sx([b.min[0], b.max[1]]), y0 = sy([b.min[0], b.max[1]]);
-      g.fillRect(x0, y0, (b.max[0] - b.min[0]) * scale, (b.max[1] - b.min[1]) * scale);
-      g.strokeRect(x0, y0, (b.max[0] - b.min[0]) * scale, (b.max[1] - b.min[1]) * scale);
+      // a rotated levelgen building: its rectangle turned about the centre
+      const cx = (b.min[0] + b.max[0]) / 2, cy = (b.min[1] + b.max[1]) / 2, a = ((b.rotation ?? 0) * Math.PI) / 180, c = Math.cos(a), s = Math.sin(a);
+      const corners = ([[b.min[0], b.min[1]], [b.max[0], b.min[1]], [b.max[0], b.max[1]], [b.min[0], b.max[1]]] as [number, number][])
+        .map(([x, y]): [number, number] => [cx + (x - cx) * c - (y - cy) * s, cy + (x - cx) * s + (y - cy) * c]);
+      g.beginPath(); corners.forEach((p, i) => (i ? g.lineTo(sx(p), sy(p)) : g.moveTo(sx(p), sy(p)))); g.closePath(); g.fill(); g.stroke();
     }
     g.fillStyle = '#475569';
     g.strokeStyle = '#cbd5e1';

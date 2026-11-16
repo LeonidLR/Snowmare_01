@@ -160,6 +160,88 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         moved["objectives"] = None
         self.assertEqual(player_start(moved)["location"], old["location"])
 
+    # ---- rotated buildings (designer 2026-11-16 item 4) -------------------------------------------------------------------------
+
+    @staticmethod
+    def _rotate_building(layout, bid, deg):
+        """The layout with building `bid` turned by deg about its footprint centre the way Training Ground stores it (rotation.ts):
+        "rotation" set, footprint / room bounds unchanged, every other point of it, its walls and its ladders turned."""
+        out = json.loads(json.dumps(layout))
+        b = next(x for x in out["buildings"] if x["id"] == bid)
+        (x0, y0), (x1, y1) = b["footprint"]
+        c = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
+        P = lambda q: builder._rot_xy(q, c, deg)  # noqa: E731
+        b["rotation"] = deg
+        for d in b.get("doors", []):
+            d["pos"] = P(d["pos"])
+        for st in b.get("stairs", []):
+            for k in ("pos", "mid", "top"):
+                if st.get(k):
+                    st[k] = P(st[k])
+        b["roof_holes"] = [P(h) for h in b.get("roof_holes", [])]
+        for h in b.get("floor_holes", []):
+            h["pos"] = P(h["pos"])
+        for op in b.get("openings", []) + [o for pt in b.get("partitions", []) for o in pt.get("openings", [])]:
+            op["pos"] = P(op["pos"])
+            if isinstance(op.get("yaw"), (int, float)):
+                op["yaw"] = op["yaw"] + deg
+        for pt in b.get("partitions", []):
+            pt["start"], pt["end"] = P(pt["start"]), P(pt["end"])
+        for pp in b.get("parapets", []):
+            pp["start"], pp["end"] = P(pp["start"]), P(pp["end"])
+        for h in b.get("hatches", []):
+            h["pos"] = P(h["pos"])
+        for fd in b.get("floors_detail", []):
+            for g in fd.get("gaps", []):
+                g["poly"] = [P(q) for q in g["poly"]]
+        for w in out["walls"]:
+            if w.get("building") == bid:
+                w["a"], w["b"] = P(w["a"]), P(w["b"])
+        for ld in out["ladders"]:
+            if bid in ld["from"] + ld["to"]:
+                ld["pos"], ld["foot"], ld["top"], ld["yaw"] = P(ld["pos"]), P(ld["foot"]), P(ld["top"]), ld["yaw"] + deg
+        return out, c
+
+    def _assert_rotated_plan(self, layout, bid, deg):
+        flat = builder.plan(layout)
+        turned, c = self._rotate_building(layout, bid, deg)
+        rot = builder.plan(turned)
+        wall_ids = tuple(w["id"] for w in layout["walls"] if w.get("building") == bid)  # legacy: its walls go to Walls/L<n>
+        mine = lambda s: s.get("folder", "") == "Buildings/%s" % bid or s.get("folder", "").startswith("Buildings/%s/" % bid) or "building=%s" % bid in s.get("tags", []) or s["label"].startswith(wall_ids)  # noqa: E731
+        flat_b = {s["label"]: s for s in flat if mine(s)}
+        rot_b = {s["label"]: s for s in rot if mine(s)}
+        self.assertGreaterEqual(len(flat_b), 1)
+        self.assertEqual(sorted(flat_b), sorted(rot_b), "the same actors, only turned")
+        for label, s in flat_b.items():
+            r = rot_b[label]
+            want = builder._rot_xy(s["location"], c, deg)
+            for k in range(3):
+                self.assertAlmostEqual(r["location"][k], want[k], places=3, msg="%s location" % label)
+            dyaw = (r["yaw"] - s["yaw"] - deg + 180.0) % 360.0 - 180.0
+            self.assertAlmostEqual(dyaw, 0.0, places=3, msg="%s: actor yaw = layout rotation" % label)
+            self.assertEqual(r["scale"] if "scale" in r else None, s["scale"] if "scale" in s else None, label)
+        # everything else stays where it was (its ladders and the drop links through its holes move with it: world points)
+        other = lambda s: not mine(s) and s["kind"] not in ("ladder", "nav_link") and not s["label"].endswith("_plinth")  # noqa: E731
+        others_flat = sorted(json.dumps(s, sort_keys=True) for s in flat if other(s))
+        others_rot = sorted(json.dumps(s, sort_keys=True) for s in rot if other(s))
+        self.assertEqual(others_flat, others_rot)
+        return rot
+
+    def test_rotated_building_legacy_actors_turned_with_it(self):
+        depot = self._load("gen_ref_01_02_depot_1")
+        self.assertTrue(all(builder.building_rotation(b) == 0.0 for b in depot["buildings"]), "old files load as 0")
+        for bid in ("B_warehouse", "B_ruin", "B_chimney_0"):
+            self._assert_rotated_plan(depot, bid, 30.0)
+        self._assert_rotated_plan(depot, "B_hall_n", -45.0)
+
+    def test_rotated_building_extended_actors_turned_with_it(self):
+        train = self._load("L_Gen_Train_1")
+        rot = self._assert_rotated_plan(train, "B_house", 30.0)
+        # its ladder (placed from the world frame) turns with the house: yaw = the unrotated yaw + 30
+        flat_ld = next(s for s in builder.plan(train) if s["kind"] == "ladder" and s["label"] == "LAD_B_house")
+        rot_ld = next(s for s in rot if s["kind"] == "ladder" and s["label"] == "LAD_B_house")
+        self.assertAlmostEqual((rot_ld["yaw"] - flat_ld["yaw"] - 30.0 + 180.0) % 360.0 - 180.0, 0.0, places=2)
+
 
 if __name__ == "__main__":
     unittest.main()
