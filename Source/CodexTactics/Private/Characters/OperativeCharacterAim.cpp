@@ -263,6 +263,13 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 		Facts.bHasThreat = Facts.bRealTimeFight && Facts.bFoughtThisFight && Facts.bStanding && FindThreatPoint(Threat);
 		bTurnToThreat = ThreatFacingRules::ShouldTurnToThreat(Facts);
 	}
+	// Designer's decision 2026-11-17 (option A): after the fight he turns back to the player's facing order, 3 s after anything last turned
+	// him to fight (a new enemy in reach turns him again and restarts the wait).
+	const bool bTurnedToFight = bFacingCombatTarget || bPeekPreTurn || bQuickFireActive || bSuppressActive;
+	FightTurnQuietSeconds = bTurnedToFight ? 0.f : FightTurnQuietSeconds + DeltaTime;
+	bReturningToOrderedFacing = !bTurnToThreat && !bLookHold && !bFacingWall && !bGridOwnsFacing && !bIncapacitated
+		&& ThreatFacingRules::ShouldReturnToOrderedFacing(bExplicitFacing, GetVelocity().SizeSquared2D() < 10.f * 10.f && !bHasMoveOrder,
+			bInCover || bHasPendingCover, bTurnedToFight, FightTurnQuietSeconds);
 	if (bLookHold)
 	{
 		const float LookYaw = (ActiveLookPoint - GetActorLocation()).Rotation().Yaw;
@@ -299,6 +306,10 @@ void AOperativeCharacter::UpdateCombatFacing(float DeltaTime)
 			bTurningToThreat = true;
 			const float ThreatYaw = (Threat - GetActorLocation()).Rotation().Yaw;
 			SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, ThreatYaw, TurnSpeed, DeltaTime), 0.f));
+		}
+		else if (bReturningToOrderedFacing)
+		{
+			SetActorRotation(FRotator(0.f, FacingRules::StepYaw(GetActorRotation().Yaw, OrderedFacingYaw, TurnSpeed, DeltaTime), 0.f));
 		}
 	}
 

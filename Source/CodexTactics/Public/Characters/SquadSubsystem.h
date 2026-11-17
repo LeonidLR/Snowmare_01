@@ -13,6 +13,7 @@
 #include "Formation/FormationCoverRules.h"
 #include "Formation/FormationCustomRules.h"
 #include "Formation/FormationGuardRules.h"
+#include "Formation/FormationLeaderCornerRules.h"
 #include "Formation/FormationLookFilterRules.h"
 #include "Formation/FormationMenuRules.h"
 #include "Formation/FormationTerrainRules.h"
@@ -1116,6 +1117,12 @@ private:
 		/** Slicing the pie (FormationCornerRules::Watch). */
 		FFormationCornerState Corner;
 		TArray<FFormationCornerLook> CornerLooks;
+		/**
+		 * F-2 (game designer 2026-11-17, option B): the free wall end the leader's cover slot (pending or held) claims this frame - its corner
+		 * watch is his, no follower's place at it (FormationLeaderCornerRules); unset: none. How many places it moved this frame (the log).
+		 */
+		TOptional<FFormationLeaderCorner> LeaderCorner;
+		int32 LeaderCornerMoved = 0;
 		/** The hold-B menu's choice (unset = Auto) and its "All forward". */
 		TOptional<EFormationMenuItem> MenuChoice;
 		/** The custom formation (contract 17): the slot 1..3 of the menu's custom choice in force (0 = none). */
@@ -1341,6 +1348,10 @@ private:
 	void BuildTrailFrameSlots(const FVector2D& LeaderPos, int32 Count);
 	/** Slicing the pie: FormationCornerRules::Watch on this frame's places; the watchers' looks replace their slot yaws (walk mode). */
 	void ApplyFormationCornerWatch(const FVector2D& LeaderPos);
+	/** F-2 (2026-11-17): Sectors.LeaderCorner from the leader's pending / held cover slot (Codex.Formation.LeaderCorner; logs a change). */
+	void UpdateFormationLeaderCorner(const AOperativeCharacter& LeaderRef);
+	/** F-2: this frame's follower places kept off the claimed corner (FormationLeaderCornerRules::KeepSlotsBehind on Sectors.FrameSlots). */
+	void ApplyFormationLeaderCorner();
 	/** v2.1.1 (user "6A"): Look through FormationSectorRules::ClearLook unless the member is exempt (FormationGuardRuntime::ShouldClearLook). */
 	float ClearFormationLook(const AOperativeCharacter& Member, EFormationRole Role, bool bLeader, float Look);
 	/**
