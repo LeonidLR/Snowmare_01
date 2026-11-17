@@ -13,6 +13,15 @@
 #include "LevelGen/CodexPropActors.h"
 #include "LevelGen/LevelPropsFile.h"
 #include "LevelGen/PropsGreybox.h"
+#include "Characters/TransferRules.h"
+#include "Components/BoxComponent.h"
+#include "Containers/Ticker.h"
+#include "Interactables/DroppedItemActor.h"
+#include "Interactables/InteractableActor.h"
+#include "Interactables/LootCrateActor.h"
+#include "Interactables/ProximityMineActor.h"
+#include "Interactables/TripwireActor.h"
+#include "LevelGen/PropsGameplayRules.h"
 #include "LevelGen/PropsLayoutView.h"
 #include "LevelGen/PropsValidator.h"
 #include "Misc/FileHelper.h"
@@ -68,6 +77,13 @@ namespace CodexLevelPropsInternal
 		TEXT("Codex.Props.MinesInert"),
 		0,
 		TEXT("When 1, mines and trapped crates are armed but inert (no damage/explosion; for smokes). Default 0."),
+		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarPropsReal(
+		TEXT("Codex.Props.Real"),
+		1,
+		TEXT("Live maps (G003b): 1 (default) the props spawn as the game's real objects (props_balance.json gameplay.classes: barrels, loot ")
+		TEXT("crates / piles, mines, PMC wires, turrets), the greybox only for a kind without one; 0 greybox props only."),
 		ECVF_Default);
 
 	static TAutoConsoleVariable<int32> CVarPropsGreybox(
@@ -160,6 +176,7 @@ void UCodexLevelPropsSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 	// On live maps (e.g. L_Gen_Depot_1), only spawn props that have a valid visual mesh.
 	// Meshless/invisible props with NavArea_Null would puncture the navmesh and break pathfinding.
+	bLiveSpawn = true;
 	SpawnPropsForMap(MapName, nullptr, /*bRequireMesh=*/ true);
 }
 
@@ -183,6 +200,31 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsForMap(
 
 	return SpawnPropsFromFile(PropsPath, FString(), SkippedIds, bRequireMesh);
 }
+
+/** One spawn of a props file: what is left to spawn and what the objects need from each other (G003b: spread over frames). */
+struct UCodexLevelPropsSubsystem::FPropsSpawnSession
+{
+	FString PropsFilePath;
+	TArray<FLevelPropsResolvedObject> Objects;
+	int32 Next = 0;
+	bool bHasLayout = false;
+	TMap<FString, int32> LayerZ;
+	/** Layer id -> layer kind (crates / barrels / turrets / mines / loot). */
+	TMap<FString, FString> KindOfLayer;
+	TMap<FString, FLevelPropsResolvedObject> AttachedTraps;
+	TMap<FString, FLevelPropsResolvedObject> AttachedLoot;
+	TSet<FString> Skipped;
+	bool bGreybox = false;
+	bool bGameplay = false;
+	bool bRequireMesh = false;
+	TMap<FString, TWeakObjectPtr<ACodexPropCrate>> CratesById;
+	/** Every actor spawned so far: the slab snap ignores them. */
+	TArray<TWeakObjectPtr<AActor>> ForTrace;
+	double PrepareMs = 0.0;
+	double SpawnMs = 0.0;
+	double MaxFrameMs = 0.0;
+	int32 Frames = 0;
+};
 
 int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 	const FString& PropsFilePath,
@@ -223,18 +265,30 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 
 	// Load balance configuration
 	LoadBalanceFile();
-	const bool bGreybox = CodexLevelPropsInternal::UsesGreybox(File);
 	GreyboxCount = 0;
+
+	TSharedRef<FPropsSpawnSession> NewSession = MakeShared<FPropsSpawnSession>();
+	FPropsSpawnSession& S = *NewSession;
+	S.PropsFilePath = PropsFilePath;
+	S.bRequireMesh = bRequireMesh;
+	// G003b: a live map spawns the real game objects (barrels, loot crates / piles, mines, wires, turrets); the greybox look is the
+	// fallback of a kind with no gameplay class (plain crates = cover) - on a live map for every props file, else autogen files only.
+	S.bGameplay = bLiveSpawn && CodexLevelPropsInternal::CVarPropsReal.GetValueOnGameThread() != 0;
+	S.bGreybox = S.bGameplay || CodexLevelPropsInternal::UsesGreybox(File);
+	for (const FLevelPropsLayer& Layer : File.Layers)
+	{
+		S.KindOfLayer.Add(Layer.Id, Layer.Kind);
+	}
+	if (SkippedIds)
+	{
+		S.Skipped = *SkippedIds;
+	}
 
 	// Resolve layout and validate if layout exists
 	const FString PropsDir = FPaths::GetPath(PropsFilePath);
 	const FString ResolvedLayoutPath = LayoutFilePath.IsEmpty()
 		? ResolveLayoutPath(File.Layout, PropsDir)
 		: LayoutFilePath;
-
-	TArray<FLevelPropsResolvedObject> ObjectsToSpawn;
-	FPropsLayoutView LayoutView;
-	bool bHasLayout = false;
 
 	if (FPaths::FileExists(ResolvedLayoutPath))
 	{
@@ -243,28 +297,23 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		{
 			TArray<FString> LayoutErrors;
 			FPropsLayoutConfig LayoutConfig;
-
-			// Read config from balance file if available
-			FString BalanceJsonString;
-			const FString BalancePath = FPaths::ConvertRelativePathToFull(
-				FPaths::ProjectContentDir() / TEXT("Data/Balance/props_balance.json"));
-			TSharedPtr<FJsonObject> BalanceJsonRoot;
-			if (FFileHelper::LoadFileToString(BalanceJsonString, *BalancePath))
+			if (BalanceRoot.IsValid())
 			{
-				FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(BalanceJsonString), BalanceJsonRoot);
-				if (BalanceJsonRoot.IsValid())
-				{
-					FPropsLayoutView::ReadConfig(*BalanceJsonRoot, LayoutConfig, LayoutErrors);
-				}
+				FPropsLayoutView::ReadConfig(*BalanceRoot, LayoutConfig, LayoutErrors);
 			}
 
+			FPropsLayoutView LayoutView;
 			if (FPropsLayoutView::Build(LayoutJson, LayoutView, LayoutErrors, LayoutConfig))
 			{
-				bHasLayout = true;
+				S.bHasLayout = true;
+				for (const FPropsWalkLayer& Layer : LayoutView.GetLayers())
+				{
+					S.LayerZ.Add(Layer.Name, Layer.ZCm);
+				}
 				FPropsValidationResult ValResult;
-				FPropsValidator::ValidateResolved(LayoutView, Resolved, ValResult, BalanceJsonRoot.Get());
+				FPropsValidator::ValidateResolved(LayoutView, Resolved, ValResult, BalanceRoot.Get());
 
-				ObjectsToSpawn = MoveTemp(ValResult.ValidObjects);
+				S.Objects = MoveTemp(ValResult.ValidObjects);
 				for (const FLevelPropsResolvedObject& Dropped : ValResult.DroppedObjects)
 				{
 					DroppedPropIds.Add(Dropped.Object.Id);
@@ -280,241 +329,97 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		}
 	}
 
-	if (!bHasLayout)
+	if (!S.bHasLayout)
 	{
 		// No layout file available: spawn all resolved objects directly
-		ObjectsToSpawn = Resolved.Objects;
+		S.Objects = Resolved.Objects;
 	}
 
 	// Collect crate attachments (mined crates and loot crates)
-	TMap<FString, FLevelPropsResolvedObject> AttachedTraps;
-	TMap<FString, FLevelPropsResolvedObject> AttachedLoot;
-	for (const FLevelPropsResolvedObject& ResObj : ObjectsToSpawn)
+	for (const FLevelPropsResolvedObject& ResObj : S.Objects)
 	{
 		if (!ResObj.Object.Attach.IsEmpty())
 		{
 			if (ResObj.Object.Variant.Equals(TEXT("mine_crate"), ESearchCase::IgnoreCase)
 				|| ResObj.Object.Trigger.Equals(TEXT("crate_open"), ESearchCase::IgnoreCase))
 			{
-				AttachedTraps.Add(ResObj.Object.Attach, ResObj);
+				S.AttachedTraps.Add(ResObj.Object.Attach, ResObj);
 			}
 			else if (ResObj.Object.Variant.Equals(TEXT("loot_crate"), ESearchCase::IgnoreCase)
 				|| !ResObj.Object.LootTable.IsEmpty())
 			{
-				AttachedLoot.Add(ResObj.Object.Attach, ResObj);
+				S.AttachedLoot.Add(ResObj.Object.Attach, ResObj);
 			}
 		}
 	}
 
-	UWorld* World = GetWorld();
-	if (!World)
+	S.PrepareMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
+	if (!GetWorld())
 	{
 		return 0;
 	}
+	Session = NewSession;
 
-	TMap<FString, ACodexPropCrate*> SpawnedCratesById;
-	// The slab snap must not land on a prop spawned a moment earlier (a greybox body blocks WorldStatic).
-	TArray<AActor*> SpawnedForTrace;
-
-	for (const FLevelPropsResolvedObject& ResObj : ObjectsToSpawn)
+	// A live map spreads the spawn over frames (gameplay.spawn_frame_budget_ms); a direct call (tests, tools) spawns everything now.
+	const double FrameBudgetMs = bLiveSpawn ? PropsGameplayRules::SpawnFrameBudgetMs(BalanceRoot.Get()) : 0.0;
+	if (ProcessSession(FrameBudgetMs > 0.0 ? FMath::Max(FrameBudgetMs - S.PrepareMs, 1.0) : 0.0))
 	{
-		const FLevelPropsObject& Obj = ResObj.Object;
-
-		// Check save state / skipped IDs
-		if (SkippedIds && SkippedIds->Contains(Obj.Id))
+		TWeakObjectPtr<UCodexLevelPropsSubsystem> WeakThis(this);
+		SpawnTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis, FrameBudgetMs](float)
 		{
-			continue;
-		}
-
-		// Objects with empty class_map path (e.g. mine_crate, loot_crate) do not spawn an actor
-		if (VariantClassMap.Contains(Obj.Variant) && VariantClassMap[Obj.Variant].IsEmpty())
-		{
-			continue;
-		}
-
-		// Calculate location
-		float BaseZ = 0.f;
-		if (bHasLayout)
-		{
-			if (const FPropsWalkLayer* Layer = LayoutView.FindLayer(Obj.WalkLayer))
+			UCodexLevelPropsSubsystem* Self = WeakThis.Get();
+			if (!Self || !Self->GetWorld() || !Self->Session.IsValid())
 			{
-				BaseZ = static_cast<float>(Layer->ZCm);
+				return false;
 			}
-		}
-		const float ComputedZ = BaseZ + static_cast<float>(ResObj.ZOffsetCm);
-
-		// Downward trace +-30 cm to snap to slab (PROPS_LAYERS.md 3.1)
-		float FinalZ = ComputedZ;
-		const FVector TraceStart(Obj.Pos.X, Obj.Pos.Y, ComputedZ + 30.f);
-		const FVector TraceEnd(Obj.Pos.X, Obj.Pos.Y, ComputedZ - 30.f);
-		FHitResult HitResult;
-		FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(PropsSnapZ), false);
-		TraceParams.AddIgnoredActors(SpawnedForTrace);
-		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_WorldStatic, TraceParams))
-		{
-			FinalZ = HitResult.ImpactPoint.Z;
-		}
-		else
-		{
-			UE_LOG(LogCodexTactics, Verbose, TEXT("[Props] snap Z trace missed for %s at (%d, %d, %.1f), using computed Z"),
-				*Obj.Id, Obj.Pos.X, Obj.Pos.Y, ComputedZ);
-		}
-
-		const FVector SpawnLocation(Obj.Pos.X, Obj.Pos.Y, FinalZ);
-		const FRotator SpawnRotation(0.f, static_cast<float>(Obj.Yaw), 0.f);
-
-		UClass* PropClass = ResolvePropClass(Obj.Variant);
-		if (!PropClass || !PropClass->IsChildOf(ACodexPropActor::StaticClass()))
-		{
-			PropClass = ACodexPropActor::StaticClass();
-		}
-
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
-
-		ACodexPropActor* PropActor = World->SpawnActor<ACodexPropActor>(PropClass, SpawnLocation, SpawnRotation, SpawnParams);
-		if (!PropActor)
-		{
-			UE_LOG(LogCodexTactics, Warning, TEXT("[Props] failed to spawn actor for prop %s (%s)"), *Obj.Id, *Obj.Variant);
-			continue;
-		}
-
-		const bool bNav = VariantNavAffecting.FindRef(Obj.Variant);
-		if (bGreybox && !CodexLevelPropsInternal::ActorHasVisualMesh(PropActor))
-		{
-			float WidthCm = 180.f;
-			if (Obj.Extra.Contains(TEXT("width_cm")) && Obj.Extra[TEXT("width_cm")]->Type == EJson::Number)
+			const bool bMore = Self->ProcessSession(FrameBudgetMs);
+			if (!bMore)
 			{
-				WidthCm = static_cast<float>(Obj.Extra[TEXT("width_cm")]->AsNumber());
+				Self->SpawnTicker.Reset();
 			}
-			const bool bDangerous = AttachedTraps.Contains(Obj.Id);
-			PropActor->ApplyGreybox(PropsGreybox::Resolve(BalanceRoot.Get(), Obj.Variant, bDangerous, Obj.Trigger, WidthCm));
-			GreyboxCount += CodexLevelPropsInternal::ActorHasVisualMesh(PropActor) ? 1 : 0;
-		}
-		if (bRequireMesh && bNav && !CodexLevelPropsInternal::ActorHasVisualMesh(PropActor))
-		{
-			PropActor->Destroy();
-			continue;
-		}
-
-		const FVector Extent = VariantExtents.FindRef(Obj.Variant);
-
-		PropActor->InitProp(Obj.Id, ResObj.LayerId, Obj.Variant, Obj.WalkLayer, bNav, Extent);
-
-		// Apply balance properties from props_balance.json if present
-		if (const float* HPVal = VariantHP.Find(Obj.Variant))
-		{
-			if (ACodexPropCrate* Crate = Cast<ACodexPropCrate>(PropActor))
-			{
-				Crate->HP = *HPVal;
-			}
-			else if (ACodexPropBarrel* Barrel = Cast<ACodexPropBarrel>(PropActor))
-			{
-				Barrel->HP = *HPVal;
-			}
-			else if (ACodexPropTurret* Turret = Cast<ACodexPropTurret>(PropActor))
-			{
-				Turret->HP = *HPVal;
-			}
-		}
-
-		// Specialize actor based on subclass
-		if (ACodexPropCrate* Crate = Cast<ACodexPropCrate>(PropActor))
-		{
-			SpawnedCratesById.Add(Obj.Id, Crate);
-
-			// Attach trap if this crate is mined
-			if (AttachedTraps.Contains(Obj.Id))
-			{
-				const FLevelPropsResolvedObject& TrapObj = AttachedTraps[Obj.Id];
-				UCodexPropTrapComponent* Trap = Crate->EnsureTrapComponent();
-				if (Trap)
-				{
-					if (const float* BlastR = VariantBlastRadius.Find(TEXT("mine")))
-					{
-						Trap->BlastRadiusCm = *BlastR;
-					}
-					if (const float* BlastD = VariantBlastDamage.Find(TEXT("mine")))
-					{
-						Trap->BlastDamage = *BlastD;
-					}
-					Trap->Arm(TrapObj.Object.Id, AreMinesInert());
-				}
-			}
-
-			// Attach loot if this crate holds loot
-			if (AttachedLoot.Contains(Obj.Id))
-			{
-				const FLevelPropsResolvedObject& LootObj = AttachedLoot[Obj.Id];
-				Crate->LootTable = LootObj.Object.LootTable;
-			}
-		}
-		else if (ACodexPropBarrel* Barrel = Cast<ACodexPropBarrel>(PropActor))
-		{
-			if (Obj.Variant.Equals(TEXT("barrel_explosive"), ESearchCase::IgnoreCase))
-			{
-				Barrel->bExplosive = true;
-				if (const float* ExpR = VariantExplosionRadius.Find(Obj.Variant))
-				{
-					Barrel->ExplosionRadiusCm = *ExpR;
-				}
-				if (const float* ExpD = VariantExplosionDamage.Find(Obj.Variant))
-				{
-					Barrel->ExplosionDamage = *ExpD;
-				}
-			}
-		}
-		else if (ACodexPropTurret* Turret = Cast<ACodexPropTurret>(PropActor))
-		{
-			if (Obj.Arc.IsSet())
-			{
-				Turret->ArcDeg = static_cast<float>(Obj.Arc.GetValue());
-			}
-			if (Obj.Extra.Contains(TEXT("covered_m")) && Obj.Extra[TEXT("covered_m")]->Type == EJson::Number)
-			{
-				Turret->CoveredM = static_cast<int32>(Obj.Extra[TEXT("covered_m")]->AsNumber());
-			}
-		}
-		else if (ACodexPropMine* Mine = Cast<ACodexPropMine>(PropActor))
-		{
-			Mine->AttachedDoorId = Obj.Door;
-			Mine->bMinesInert = AreMinesInert();
-			if (const float* BlastR = VariantBlastRadius.Find(TEXT("mine")))
-			{
-				Mine->BlastRadiusCm = *BlastR;
-			}
-			if (const float* BlastD = VariantBlastDamage.Find(TEXT("mine")))
-			{
-				Mine->BlastDamage = *BlastD;
-			}
-			float Width = 180.f;
-			if (Obj.Extra.Contains(TEXT("width_cm")) && Obj.Extra[TEXT("width_cm")]->Type == EJson::Number)
-			{
-				Width = static_cast<float>(Obj.Extra[TEXT("width_cm")]->AsNumber());
-			}
-			float TriggerRadius = 120.f;
-			if (const float* TrigR = VariantTriggerRadius.Find(TEXT("mine")))
-			{
-				TriggerRadius = *TrigR;
-			}
-			Mine->SetupTrigger(Obj.Trigger, Width, TriggerRadius);
-		}
-		else if (ACodexPropLootPile* Loot = Cast<ACodexPropLootPile>(PropActor))
-		{
-			Loot->LootTable = Obj.LootTable;
-		}
-
-		SpawnedProps.Add(PropActor);
-		SpawnedForTrace.Add(PropActor);
-		PropsByLayer.FindOrAdd(ResObj.LayerId).Add(PropActor);
+			return bMore;
+		}), 0.f);
 	}
+	return GetSpawnedCount();
+}
 
-	// In case crate was spawned after the trap/loot attachment was processed
-	for (const auto& Pair : AttachedTraps)
+bool UCodexLevelPropsSubsystem::ProcessSession(double BudgetMs)
+{
+	if (!Session.IsValid())
 	{
-		if (ACodexPropCrate** CratePtr = SpawnedCratesById.Find(Pair.Key))
+		return false;
+	}
+	FPropsSpawnSession& S = *Session;
+	const double FrameStart = FPlatformTime::Seconds();
+	while (S.Next < S.Objects.Num())
+	{
+		SpawnOne(S, S.Objects[S.Next++]);
+		if (BudgetMs > 0.0 && (FPlatformTime::Seconds() - FrameStart) * 1000.0 >= BudgetMs && S.Next < S.Objects.Num())
 		{
-			UCodexPropTrapComponent* Trap = (*CratePtr)->EnsureTrapComponent();
+			break;
+		}
+	}
+	const double FrameMs = (FPlatformTime::Seconds() - FrameStart) * 1000.0;
+	S.SpawnMs += FrameMs;
+	S.MaxFrameMs = FMath::Max(S.MaxFrameMs, FrameMs + (S.Frames == 0 ? S.PrepareMs : 0.0));
+	++S.Frames;
+	if (S.Next < S.Objects.Num())
+	{
+		return true;
+	}
+	FinishSession();
+	return false;
+}
+
+void UCodexLevelPropsSubsystem::FinishSession()
+{
+	FPropsSpawnSession& S = *Session;
+	// In case crate was spawned after the trap/loot attachment was processed
+	for (const auto& Pair : S.AttachedTraps)
+	{
+		if (ACodexPropCrate* Crate = S.CratesById.FindRef(Pair.Key).Get())
+		{
+			UCodexPropTrapComponent* Trap = Crate->EnsureTrapComponent();
 			if (Trap)
 			{
 				if (const float* BlastR = VariantBlastRadius.Find(TEXT("mine")))
@@ -529,33 +434,404 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 			}
 		}
 	}
-	for (const auto& Pair : AttachedLoot)
+	for (const auto& Pair : S.AttachedLoot)
 	{
-		if (ACodexPropCrate** CratePtr = SpawnedCratesById.Find(Pair.Key))
+		if (ACodexPropCrate* Crate = S.CratesById.FindRef(Pair.Key).Get())
 		{
-			(*CratePtr)->LootTable = Pair.Value.Object.LootTable;
+			Crate->LootTable = Pair.Value.Object.LootTable;
 		}
 	}
 
-	LastSpawnDurationMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
+	LastPrepareMs = S.PrepareMs;
+	LastMaxFrameMs = S.MaxFrameMs;
+	LastSpawnFrames = S.Frames;
+	LastSpawnDurationMs = S.PrepareMs + S.SpawnMs;
 	bHasSpawned = true;
 
-	UE_LOG(LogCodexTactics, Display, TEXT("[Props] spawned %d props in %.2f ms (dropped: %d, greybox: %d, layout: %s) from %s"),
-		SpawnedProps.Num(), LastSpawnDurationMs, DroppedPropIds.Num(), GreyboxCount, bHasLayout ? TEXT("yes") : TEXT("NO - flat Z"), *PropsFilePath);
+	UE_LOG(LogCodexTactics, Display,
+		TEXT("[Props] spawned %d props (%d game objects, greybox: %d) in %.2f ms over %d frame(s), max frame %.2f ms (prepare %.2f ms) (dropped: %d, layout: %s, real: %s) from %s"),
+		GetSpawnedCount(), GetSpawnedGameplayCount(), GreyboxCount, LastSpawnDurationMs, LastSpawnFrames, LastMaxFrameMs, LastPrepareMs,
+		DroppedPropIds.Num(), S.bHasLayout ? TEXT("yes") : TEXT("NO - flat Z"), S.bGameplay ? TEXT("yes") : TEXT("no"), *S.PropsFilePath);
 
 	constexpr double WarnBudgetMs = 60.0;
-	if (LastSpawnDurationMs > WarnBudgetMs)
+	if (LastMaxFrameMs > WarnBudgetMs)
 	{
 		UE_LOG(LogCodexTactics, Warning,
-			TEXT("[Props] spawn duration %.2f ms exceeded performance budget %.0f ms (PROPS_LAYERS.md 3.3)"),
-			LastSpawnDurationMs, WarnBudgetMs);
+			TEXT("[Props] spawn frame %.2f ms exceeded performance budget %.0f ms (PROPS_LAYERS.md 3.3)"),
+			LastMaxFrameMs, WarnBudgetMs);
+	}
+	Session.Reset();
+}
+
+void UCodexLevelPropsSubsystem::TagProp(AActor* Actor, const FString& LayerId, const FString& PropId)
+{
+	if (!Actor)
+	{
+		return;
+	}
+	Actor->Tags.AddUnique(FName(TEXT("CodexProp")));
+	if (!LayerId.IsEmpty())
+	{
+		Actor->Tags.AddUnique(FName(*FString::Printf(TEXT("prop_layer=%s"), *LayerId)));
+	}
+	if (!PropId.IsEmpty())
+	{
+		Actor->Tags.AddUnique(FName(*FString::Printf(TEXT("prop_id=%s"), *PropId)));
+	}
+}
+
+bool UCodexLevelPropsSubsystem::SpawnGameplayActor(FPropsSpawnSession& S, const FLevelPropsResolvedObject& ResObj, const FVector& Ground,
+	const FRotator& Rotation)
+{
+	const FLevelPropsObject& Obj = ResObj.Object;
+	const FString Kind = S.KindOfLayer.FindRef(ResObj.LayerId);
+	const bool bMined = S.AttachedTraps.Contains(Obj.Id);
+	const FLevelPropsResolvedObject* Loot = S.AttachedLoot.Find(Obj.Id);
+	const bool bCrate = Obj.Variant.StartsWith(TEXT("crate"));
+	const FString Key = PropsGameplayRules::ClassKeyFor(Kind, Obj, bCrate && (bMined || Loot != nullptr));
+	if (Key.StartsWith(TEXT("mine")) && AreMinesInert())
+	{
+		return false; // Codex.Props.MinesInert: the inert greybox mine instead of a live one
+	}
+	const FString Path = PropsGameplayRules::ClassPathFor(BalanceRoot.Get(), Key);
+	if (Path.IsEmpty())
+	{
+		return false;
+	}
+	UClass* Class = nullptr;
+	const FString CacheKey = TEXT("gameplay:") + Key;
+	if (const TSubclassOf<AActor>* Cached = ResolvedClassCache.Find(CacheKey))
+	{
+		Class = *Cached;
+	}
+	else
+	{
+		Class = FSoftClassPath(Path).TryLoadClass<AActor>();
+		ResolvedClassCache.Add(CacheKey, Class);
+		if (!Class)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Props] gameplay class '%s' for '%s' not found: greybox instead"), *Path, *Key);
+		}
+	}
+	if (!Class || Class->IsChildOf(ACodexPropActor::StaticClass()))
+	{
+		return false;
+	}
+	UWorld* World = GetWorld();
+	const float Reveal = PropsGameplayRules::RevealCm(BalanceRoot.Get());
+
+	// A loose pile: the game's ground pile (ADroppedItemActor) with the rolled items.
+	if (Class->IsChildOf(ADroppedItemActor::StaticClass()))
+	{
+		const TMap<FString, int32> Items = PropsGameplayRules::RollLoot(BalanceRoot.Get(), Obj.LootTable, Obj.Id, /*bPile=*/ true);
+		const UEnum* ItemEnum = StaticEnum<ETransferItem>();
+		ADroppedItemActor* Pile = nullptr;
+		for (const TPair<FString, int32>& Item : Items)
+		{
+			int64 Value = ItemEnum ? ItemEnum->GetValueByNameString(Item.Key) : INDEX_NONE;
+			if (Value == INDEX_NONE && ItemEnum)
+			{
+				Value = ItemEnum->GetValueByNameString(TEXT("ETransferItem::") + Item.Key);
+			}
+			if (Value == INDEX_NONE)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("[Props] loot item '%s' is not a ground item (ETransferItem)"), *Item.Key);
+				continue;
+			}
+			Pile = ADroppedItemActor::SpawnOrMerge(World, Ground, static_cast<ETransferItem>(Value), Item.Value);
+		}
+		if (!Pile)
+		{
+			return false;
+		}
+		TagProp(Pile, ResObj.LayerId, Obj.Id);
+		SpawnedGameplay.AddUnique(Pile);
+		GameplayByLayer.FindOrAdd(ResObj.LayerId).AddUnique(Pile);
+		S.ForTrace.AddUnique(Pile);
+		return true;
 	}
 
-	return SpawnedProps.Num();
+	FTransform Transform(Rotation, Ground);
+	AActor* Actor = World->SpawnActorDeferred<AActor>(Class, Transform, nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
+	if (!Actor)
+	{
+		return false;
+	}
+	if (const AInteractableActor* Interactable = Cast<AInteractableActor>(Actor))
+	{
+		// An interactable stands on its box's centre: lift the box onto the slab.
+		if (Interactable->Box)
+		{
+			Transform.AddToTranslation(FVector(0.0, 0.0, Interactable->Box->GetUnscaledBoxExtent().Z));
+		}
+	}
+	if (ALootCrateActor* Crate = Cast<ALootCrateActor>(Actor))
+	{
+		const FString Table = Loot ? Loot->Object.LootTable : PropsGameplayRules::MinedCrateTable(BalanceRoot.Get());
+		const TArray<FString> Unknown = PropsGameplayRules::ApplyToContents(
+			PropsGameplayRules::RollLoot(BalanceRoot.Get(), Table, Obj.Id, /*bPile=*/ false), Crate->Contents);
+		for (const FString& Field : Unknown)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Props] loot field '%s' is not in FLootContents"), *Field);
+		}
+		Crate->bTrapped = bMined;
+	}
+	else if (AProximityMineActor* Mine = Cast<AProximityMineActor>(Actor))
+	{
+		Mine->DetectionRange = Reveal;
+	}
+	else if (ATripwireActor* Wire = Cast<ATripwireActor>(Actor))
+	{
+		float WidthCm = 180.f;
+		if (Obj.Extra.Contains(TEXT("width_cm")) && Obj.Extra[TEXT("width_cm")]->Type == EJson::Number)
+		{
+			WidthCm = static_cast<float>(Obj.Extra[TEXT("width_cm")]->AsNumber());
+		}
+		// Across the doorway along the object's y (as the props tripwire box, ACodexPropMine::SetupTrigger). Each peg stops 10 cm short of
+		// the jamb: a peg inside the wall makes the wire's ground trace start in it (G003b: 5 X6 wires hung at 90 cm).
+		const FVector Right = Rotation.RotateVector(FVector::RightVector);
+		FCollisionQueryParams JambParams(SCENE_QUERY_STAT(PropsTripwireJamb), false);
+		const auto HalfSpan = [&](float Sign)
+		{
+			const FVector From = Ground + FVector(0.0, 0.0, 50.0);
+			FHitResult Hit;
+			float Half = WidthCm * 0.5f;
+			if (World->LineTraceSingleByChannel(Hit, From, From + Right * (Sign * (Half + 10.f)), ECC_WorldStatic, JambParams) && !Hit.bStartPenetrating)
+			{
+				Half = FMath::Min(Half, static_cast<float>(Hit.Distance) - 10.f);
+			}
+			return FMath::Max(Half, 50.f);
+		};
+		Wire->AnchorA = FVector(0.f, -HalfSpan(-1.f), 0.f);
+		Wire->AnchorB = FVector(0.f, HalfSpan(1.f), 0.f);
+		Wire->SpotRangeCm = Reveal;
+	}
+	Actor->FinishSpawning(Transform);
+	TagProp(Actor, ResObj.LayerId, Obj.Id);
+	// The crate's mine / loot objects are this actor (the TG shows them as markers on it).
+	if (bCrate && bMined)
+	{
+		const FLevelPropsResolvedObject& Trap = S.AttachedTraps[Obj.Id];
+		TagProp(Actor, Trap.LayerId, Trap.Object.Id);
+	}
+	if (bCrate && Loot)
+	{
+		TagProp(Actor, Loot->LayerId, Loot->Object.Id);
+	}
+	SpawnedGameplay.Add(Actor);
+	GameplayByLayer.FindOrAdd(ResObj.LayerId).Add(Actor);
+	S.ForTrace.Add(Actor);
+	return true;
+}
+
+void UCodexLevelPropsSubsystem::SpawnOne(FPropsSpawnSession& S, const FLevelPropsResolvedObject& ResObj)
+{
+	UWorld* World = GetWorld();
+	const FLevelPropsObject& Obj = ResObj.Object;
+
+	// Check save state / skipped IDs
+	if (S.Skipped.Contains(Obj.Id))
+	{
+		return;
+	}
+
+	// Objects with empty class_map path (e.g. mine_crate, loot_crate) do not spawn an actor
+	if (VariantClassMap.Contains(Obj.Variant) && VariantClassMap[Obj.Variant].IsEmpty())
+	{
+		return;
+	}
+
+	// Calculate location
+	float BaseZ = 0.f;
+	if (const int32* LayerZ = S.LayerZ.Find(Obj.WalkLayer))
+	{
+		BaseZ = static_cast<float>(*LayerZ);
+	}
+	const float ComputedZ = BaseZ + static_cast<float>(ResObj.ZOffsetCm);
+
+	// Downward trace +-30 cm to snap to slab (PROPS_LAYERS.md 3.1); the props spawned before are ignored
+	float FinalZ = ComputedZ;
+	const FVector TraceStart(Obj.Pos.X, Obj.Pos.Y, ComputedZ + 30.f);
+	const FVector TraceEnd(Obj.Pos.X, Obj.Pos.Y, ComputedZ - 30.f);
+	FHitResult HitResult;
+	FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(PropsSnapZ), false);
+	for (const TWeakObjectPtr<AActor>& Spawned : S.ForTrace)
+	{
+		if (const AActor* Ignored = Spawned.Get())
+		{
+			TraceParams.AddIgnoredActor(Ignored);
+		}
+	}
+	if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_WorldStatic, TraceParams))
+	{
+		FinalZ = HitResult.ImpactPoint.Z;
+	}
+	else
+	{
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[Props] snap Z trace missed for %s at (%d, %d, %.1f), using computed Z"),
+			*Obj.Id, Obj.Pos.X, Obj.Pos.Y, ComputedZ);
+	}
+
+	const FVector SpawnLocation(Obj.Pos.X, Obj.Pos.Y, FinalZ);
+	const FRotator SpawnRotation(0.f, static_cast<float>(Obj.Yaw), 0.f);
+
+	if (S.bGameplay && SpawnGameplayActor(S, ResObj, SpawnLocation, SpawnRotation))
+	{
+		return;
+	}
+
+	UClass* PropClass = ResolvePropClass(Obj.Variant);
+	if (!PropClass || !PropClass->IsChildOf(ACodexPropActor::StaticClass()))
+	{
+		PropClass = ACodexPropActor::StaticClass();
+	}
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	ACodexPropActor* PropActor = World->SpawnActor<ACodexPropActor>(PropClass, SpawnLocation, SpawnRotation, SpawnParams);
+	if (!PropActor)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Props] failed to spawn actor for prop %s (%s)"), *Obj.Id, *Obj.Variant);
+		return;
+	}
+
+	const bool bNav = VariantNavAffecting.FindRef(Obj.Variant);
+	if (S.bGreybox && !CodexLevelPropsInternal::ActorHasVisualMesh(PropActor))
+	{
+		float WidthCm = 180.f;
+		if (Obj.Extra.Contains(TEXT("width_cm")) && Obj.Extra[TEXT("width_cm")]->Type == EJson::Number)
+		{
+			WidthCm = static_cast<float>(Obj.Extra[TEXT("width_cm")]->AsNumber());
+		}
+		const bool bDangerous = S.AttachedTraps.Contains(Obj.Id);
+		PropActor->ApplyGreybox(PropsGreybox::Resolve(BalanceRoot.Get(), Obj.Variant, bDangerous, Obj.Trigger, WidthCm));
+		GreyboxCount += CodexLevelPropsInternal::ActorHasVisualMesh(PropActor) ? 1 : 0;
+	}
+	if (S.bRequireMesh && bNav && !CodexLevelPropsInternal::ActorHasVisualMesh(PropActor))
+	{
+		PropActor->Destroy();
+		return;
+	}
+
+	const FVector Extent = VariantExtents.FindRef(Obj.Variant);
+
+	PropActor->InitProp(Obj.Id, ResObj.LayerId, Obj.Variant, Obj.WalkLayer, bNav, Extent);
+
+	// Apply balance properties from props_balance.json if present
+	if (const float* HPVal = VariantHP.Find(Obj.Variant))
+	{
+		if (ACodexPropCrate* Crate = Cast<ACodexPropCrate>(PropActor))
+		{
+			Crate->HP = *HPVal;
+		}
+		else if (ACodexPropBarrel* Barrel = Cast<ACodexPropBarrel>(PropActor))
+		{
+			Barrel->HP = *HPVal;
+		}
+		else if (ACodexPropTurret* Turret = Cast<ACodexPropTurret>(PropActor))
+		{
+			Turret->HP = *HPVal;
+		}
+	}
+
+	// Specialize actor based on subclass
+	if (ACodexPropCrate* Crate = Cast<ACodexPropCrate>(PropActor))
+	{
+		S.CratesById.Add(Obj.Id, Crate);
+
+		// Attach trap if this crate is mined
+		if (const FLevelPropsResolvedObject* TrapObj = S.AttachedTraps.Find(Obj.Id))
+		{
+			UCodexPropTrapComponent* Trap = Crate->EnsureTrapComponent();
+			if (Trap)
+			{
+				if (const float* BlastR = VariantBlastRadius.Find(TEXT("mine")))
+				{
+					Trap->BlastRadiusCm = *BlastR;
+				}
+				if (const float* BlastD = VariantBlastDamage.Find(TEXT("mine")))
+				{
+					Trap->BlastDamage = *BlastD;
+				}
+				Trap->Arm(TrapObj->Object.Id, AreMinesInert());
+			}
+		}
+
+		// Attach loot if this crate holds loot
+		if (const FLevelPropsResolvedObject* LootObj = S.AttachedLoot.Find(Obj.Id))
+		{
+			Crate->LootTable = LootObj->Object.LootTable;
+		}
+	}
+	else if (ACodexPropBarrel* Barrel = Cast<ACodexPropBarrel>(PropActor))
+	{
+		if (Obj.Variant.Equals(TEXT("barrel_explosive"), ESearchCase::IgnoreCase))
+		{
+			Barrel->bExplosive = true;
+			if (const float* ExpR = VariantExplosionRadius.Find(Obj.Variant))
+			{
+				Barrel->ExplosionRadiusCm = *ExpR;
+			}
+			if (const float* ExpD = VariantExplosionDamage.Find(Obj.Variant))
+			{
+				Barrel->ExplosionDamage = *ExpD;
+			}
+		}
+	}
+	else if (ACodexPropTurret* Turret = Cast<ACodexPropTurret>(PropActor))
+	{
+		if (Obj.Arc.IsSet())
+		{
+			Turret->ArcDeg = static_cast<float>(Obj.Arc.GetValue());
+		}
+		if (Obj.Extra.Contains(TEXT("covered_m")) && Obj.Extra[TEXT("covered_m")]->Type == EJson::Number)
+		{
+			Turret->CoveredM = static_cast<int32>(Obj.Extra[TEXT("covered_m")]->AsNumber());
+		}
+	}
+	else if (ACodexPropMine* Mine = Cast<ACodexPropMine>(PropActor))
+	{
+		Mine->AttachedDoorId = Obj.Door;
+		Mine->bMinesInert = AreMinesInert();
+		if (const float* BlastR = VariantBlastRadius.Find(TEXT("mine")))
+		{
+			Mine->BlastRadiusCm = *BlastR;
+		}
+		if (const float* BlastD = VariantBlastDamage.Find(TEXT("mine")))
+		{
+			Mine->BlastDamage = *BlastD;
+		}
+		float Width = 180.f;
+		if (Obj.Extra.Contains(TEXT("width_cm")) && Obj.Extra[TEXT("width_cm")]->Type == EJson::Number)
+		{
+			Width = static_cast<float>(Obj.Extra[TEXT("width_cm")]->AsNumber());
+		}
+		float TriggerRadius = 120.f;
+		if (const float* TrigR = VariantTriggerRadius.Find(TEXT("mine")))
+		{
+			TriggerRadius = *TrigR;
+		}
+		Mine->SetupTrigger(Obj.Trigger, Width, TriggerRadius);
+	}
+	else if (ACodexPropLootPile* LootPile = Cast<ACodexPropLootPile>(PropActor))
+	{
+		LootPile->LootTable = Obj.LootTable;
+	}
+
+	SpawnedProps.Add(PropActor);
+	S.ForTrace.Add(PropActor);
+	PropsByLayer.FindOrAdd(ResObj.LayerId).Add(PropActor);
 }
 
 void UCodexLevelPropsSubsystem::ClearSpawnedProps()
 {
+	if (SpawnTicker.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(SpawnTicker);
+		SpawnTicker.Reset();
+	}
+	Session.Reset();
 	for (TWeakObjectPtr<ACodexPropActor>& PropPtr : SpawnedProps)
 	{
 		if (ACodexPropActor* Prop = PropPtr.Get())
@@ -563,7 +839,16 @@ void UCodexLevelPropsSubsystem::ClearSpawnedProps()
 			Prop->Destroy();
 		}
 	}
+	for (TWeakObjectPtr<AActor>& ActorPtr : SpawnedGameplay)
+	{
+		if (AActor* Actor = ActorPtr.Get())
+		{
+			Actor->Destroy();
+		}
+	}
 	SpawnedProps.Reset();
+	SpawnedGameplay.Reset();
+	GameplayByLayer.Reset();
 	PropsByLayer.Reset();
 	DroppedPropIds.Reset();
 	ResolvedClassCache.Reset();
@@ -590,6 +875,15 @@ void UCodexLevelPropsSubsystem::DumpProps() const
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("  Layer '%s': %d props"), *Pair.Key, AliveInLayer);
 	}
+	for (const auto& Pair : GameplayByLayer)
+	{
+		int32 Alive = 0;
+		for (const TWeakObjectPtr<AActor>& ActorPtr : Pair.Value)
+		{
+			Alive += ActorPtr.IsValid() ? 1 : 0;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("  Layer '%s': %d game objects"), *Pair.Key, Alive);
+	}
 
 	UE_LOG(LogCodexTactics, Display, TEXT("Dropped IDs (%d):"), DroppedPropIds.Num());
 	for (const FString& DroppedId : DroppedPropIds)
@@ -609,22 +903,34 @@ int32 UCodexLevelPropsSubsystem::GetSpawnedCount() const
 			Count++;
 		}
 	}
+	return Count + GetSpawnedGameplayCount();
+}
+
+int32 UCodexLevelPropsSubsystem::GetSpawnedGameplayCount() const
+{
+	int32 Count = 0;
+	for (const TWeakObjectPtr<AActor>& ActorPtr : SpawnedGameplay)
+	{
+		Count += ActorPtr.IsValid() ? 1 : 0;
+	}
 	return Count;
 }
 
 int32 UCodexLevelPropsSubsystem::GetSpawnedCountForLayer(const FString& LayerId) const
 {
-	const TArray<TWeakObjectPtr<ACodexPropActor>>* LayerList = PropsByLayer.Find(LayerId);
-	if (!LayerList)
-	{
-		return 0;
-	}
 	int32 Count = 0;
-	for (const TWeakObjectPtr<ACodexPropActor>& PropPtr : *LayerList)
+	if (const TArray<TWeakObjectPtr<ACodexPropActor>>* LayerList = PropsByLayer.Find(LayerId))
 	{
-		if (PropPtr.IsValid())
+		for (const TWeakObjectPtr<ACodexPropActor>& PropPtr : *LayerList)
 		{
-			Count++;
+			Count += PropPtr.IsValid() ? 1 : 0;
+		}
+	}
+	if (const TArray<TWeakObjectPtr<AActor>>* GameplayList = GameplayByLayer.Find(LayerId))
+	{
+		for (const TWeakObjectPtr<AActor>& ActorPtr : *GameplayList)
+		{
+			Count += ActorPtr.IsValid() ? 1 : 0;
 		}
 	}
 	return Count;

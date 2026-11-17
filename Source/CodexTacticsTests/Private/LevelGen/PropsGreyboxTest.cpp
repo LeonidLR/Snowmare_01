@@ -169,7 +169,6 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPropsExpandedKeepsAllTest, "CodexTactics.Level
 bool FPropsExpandedKeepsAllTest::RunTest(const FString&)
 {
 	using namespace PropsGreyboxTestLocal;
-	AddExpectedMessage(TEXT("Props validator:"), ELogVerbosity::Warning, EAutomationExpectedMessageFlags::Contains, 0, false);
 	const TSharedPtr<FJsonObject> B = Balance(*this);
 	FPropsLayoutConfig Config;
 	TArray<FString> ConfigErrors;
@@ -209,9 +208,9 @@ bool FPropsExpandedKeepsAllTest::RunTest(const FString&)
 		const FLevelPropsResolved Resolved = LevelPropsFile::ApplyOverrides(File);
 		FPropsValidationResult Result;
 		FPropsValidator::ValidateResolved(View, Resolved, Result, B.Get());
-		// The validator still drops a few genuinely invalid objects (G003 finding, 7 of 242 / 275 on X4 / X6): crates / a barrel the
-		// autogen kept from L_Gen_Depot_1.props.json that now overlap the Depot covers (the mantling rework moved them), and mines in a
-		// stair keep-out disk / doorway corridor the TS placement does not check. The contract is the count per kind within 5 %.
+		// G003 found 7 per expanded map the game dropped (Depot crates / a barrel kept from L_Gen_Depot_1.props.json over the Depot
+		// covers, mines in a stair keep-out disk / doorway corridor); since G003b the TG autogen runs the same validator (validator.ts)
+		// and leaves them out, so nothing is dropped and every kind is kept in full.
 		TMap<FString, int32> Want;
 		TMap<FString, int32> Kept;
 		for (const FLevelPropsResolvedObject& Obj : Resolved.Objects)
@@ -226,14 +225,13 @@ bool FPropsExpandedKeepsAllTest::RunTest(const FString&)
 		{
 			if (Issue.bDropped)
 			{
-				AddInfo(FString::Printf(TEXT("%s drops %s (%s): %s"), Map, *Issue.ObjectId, *Issue.LayerId, *Issue.Reason));
+				AddError(FString::Printf(TEXT("%s drops %s (%s): %s"), Map, *Issue.ObjectId, *Issue.LayerId, *Issue.Reason));
 			}
 		}
 		for (const TPair<FString, int32>& Layer : Want)
 		{
 			const int32 Got = Kept.FindRef(Layer.Key);
-			TestTrue(FString::Printf(TEXT("%s %s: %d of %d Training Ground objects kept (>= 95 %%)"), Map, *Layer.Key, Got, Layer.Value),
-				Layer.Value - Got <= 0.05 * Layer.Value);
+			TestEqual(FString::Printf(TEXT("%s %s: every Training Ground object kept"), Map, *Layer.Key), Got, Layer.Value);
 		}
 		int32 UnknownLayer = 0;
 		for (const FLevelPropsResolvedObject& Obj : Resolved.Objects)

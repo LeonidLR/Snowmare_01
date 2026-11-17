@@ -1,11 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Containers/Ticker.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "CodexLevelPropsSubsystem.generated.h"
 
 class ACodexPropActor;
 class FJsonObject;
+struct FLevelPropsResolvedObject;
 
 /**
  * World subsystem for loading and spawning levelgen props (docs/design/levelgen/PROPS_LAYERS.md 3.1, task C6).
@@ -67,6 +69,30 @@ public:
 	/** Props of the last spawn that got the greybox look (Codex.Props.Greybox, G003). */
 	int32 GetGreyboxCount() const { return GreyboxCount; }
 
+	/**
+	 * A live map (set by OnWorldBeginPlay, G003b): the props spawn as the game's real objects (Codex.Props.Real) and the spawn is spread
+	 * over frames (props_balance.json gameplay.spawn_frame_budget_ms). Off for a direct SpawnPropsFromFile (tests): everything at once.
+	 */
+	bool bLiveSpawn = false;
+
+	/** A live spawn still has props to place on the next frames. */
+	bool IsSpawnPending() const { return Session.IsValid(); }
+
+	/** The real game objects of the last spawn (barrels, loot crates / piles, mines, wires, turrets), tagged like the props. */
+	const TArray<TWeakObjectPtr<AActor>>& GetSpawnedGameplayActors() const { return SpawnedGameplay; }
+
+	/** Live count of GetSpawnedGameplayActors. */
+	int32 GetSpawnedGameplayCount() const;
+
+	/** The longest frame of the last spawn (ms; the first frame includes the file / layout / validation work). */
+	double GetLastMaxFrameMs() const { return LastMaxFrameMs; }
+
+	/** Frames the last spawn took. */
+	int32 GetLastSpawnFrames() const { return LastSpawnFrames; }
+
+	/** File + layout + validation time of the last spawn (ms). */
+	double GetLastPrepareMs() const { return LastPrepareMs; }
+
 	/** Resolves the UClass to spawn for a given variant name (using class_map or native fallback) */
 	UClass* ResolvePropClass(const FString& Variant);
 
@@ -83,6 +109,25 @@ public:
 	static FString GetDefaultLayoutPathForMap(const FString& LayoutName);
 
 private:
+	struct FPropsSpawnSession;
+
+	/** Spawns the session's next objects until BudgetMs is spent (0 = all); true when some are left for the next frame. */
+	bool ProcessSession(double BudgetMs);
+	/** The attach pass, the timings and the log line; ends the session. */
+	void FinishSession();
+	void SpawnOne(FPropsSpawnSession& S, const FLevelPropsResolvedObject& ResObj);
+	/** The real game object of a prop (gameplay.classes); false = none (the ACodexProp* actor / greybox then). */
+	bool SpawnGameplayActor(FPropsSpawnSession& S, const FLevelPropsResolvedObject& ResObj, const FVector& Ground, const FRotator& Rotation);
+	static void TagProp(AActor* Actor, const FString& LayerId, const FString& PropId);
+
+	TSharedPtr<FPropsSpawnSession> Session;
+	FTSTicker::FDelegateHandle SpawnTicker;
+	TArray<TWeakObjectPtr<AActor>> SpawnedGameplay;
+	TMap<FString, TArray<TWeakObjectPtr<AActor>>> GameplayByLayer;
+	double LastMaxFrameMs = 0.0;
+	double LastPrepareMs = 0.0;
+	int32 LastSpawnFrames = 0;
+
 	/** Loads balance file (kinds, class_map, budgets) */
 	void LoadBalanceFile();
 

@@ -287,6 +287,48 @@
 		}
 	},
 
+	"gameplay": {
+		"comment": "G003b (2026-11-17): on a live map (PIE / game) the props spawn as the game's REAL objects (PropsGameplayRules, UCodexLevelPropsSubsystem): class key -> native class path. Class keys: the variant, except a crate holding a loot table or a crate-mine = 'crate_container', a mines object by its trigger = 'mine_tripwire' / 'mine_proximity'. A key with no entry (plain crates: no gameplay crate class exists, they are cover) keeps the greybox ACodexProp* actor. Each actor keeps its own tuning (damage, radii, timings); only the numbers below are set by the props pipeline. Codex.Props.Real 0 = greybox only.",
+		"classes": {
+			"barrel": "/Script/CodexTactics.BarrelActor",
+			"barrel_comment": "Fuel barrel: a shot / a blast / a trap explodes it (fire blast), a match lights it.",
+			"barrel_explosive": "/Script/CodexTactics.BarrelActor",
+			"crate_container": "/Script/CodexTactics.LootCrateActor",
+			"crate_container_comment": "A crate with loot (blue, opened by clicking) or a mined crate (red: the crate's tripwire charge, defuse first).",
+			"turret_mg": "/Script/CodexTactics.TurretActor",
+			"turret_mg_comment": "The game's automated turret: fires at the nearest enemy (the squad's side), can be repaired / picked up.",
+			"mine_proximity": "/Script/CodexTactics.ProximityMineActor",
+			"mine_proximity_comment": "Level mine: hidden under the snow until an operative comes within reveal_cm, blows up on contact.",
+			"mine_tripwire": "/Script/CodexTactics.PMCTripwireActor",
+			"mine_tripwire_comment": "Hostile PMC wire across the doorway (the object's width_cm), armed at level start, hidden until spotted.",
+			"loot_pile": "/Script/CodexTactics.DroppedItemActor",
+			"loot_pile_comment": "A pile of items on the ground (click: the leader walks up and picks up what he can carry)."
+		},
+		"reveal_cm": 300,
+		"reveal_cm_comment": "Designer 2026-11-10 #4: a mine / wire becomes visible when an operative is within 3 m (the mine actor's DetectionRange, the wire's SpotRangeCm; the Medic-Sapper keeps his bonus).",
+		"spawn_frame_budget_ms": 20,
+		"spawn_frame_budget_ms_comment": "Props spawned per frame until this much time is spent; the rest go on the next frames (the 60 ms budget is per frame).",
+		"loot": {
+			"crate_rolls": 2,
+			"crate_rolls_comment": "PLACEHOLDER. Draws from the crate's loot table (weighted, seeded by the object id).",
+			"pile_rolls": 1,
+			"pile_rolls_comment": "PLACEHOLDER. Draws from a pile's table (only entries a pile can hold).",
+			"mined_crate_table": "ammo_common",
+			"mined_crate_table_comment": "PLACEHOLDER. A mined crate's contents (the reward for defusing it).",
+			"items": {
+				"comment": "Loot-table item id -> what it puts in a crate (FLootContents field: count) and on a pile (ETransferItem: count). An item with no 'pile' entry is never drawn for a pile.",
+				"ammo_pack": { "crate": { "RifleAmmo": 30 }, "pile": { "RifleAmmo": 30 } },
+				"ammo_box": { "crate": { "RifleAmmo": 60, "PistolAmmo": 12, "ShotgunAmmo": 8 }, "pile": { "RifleAmmo": 60 } },
+				"medkit": { "crate": { "Medkits": 1 }, "pile": { "Medkit": 1 } },
+				"bandage": { "crate": { "Medkits": 1 }, "pile": { "Medkit": 1 } },
+				"bandage_comment": "PLACEHOLDER. The game has no bandage item yet: a medkit.",
+				"heat_pack": { "crate": { "HeatPacks": 1 }, "pile": { "HeatPack": 1 } },
+				"grenade": { "crate": { "Grenades": 1 } },
+				"grenade_comment": "Grenades are not a ground item (ETransferItem): crates only."
+			}
+		}
+	},
+
 	"class_map": {
 		"comment": "variant -> soft class path. PLACEHOLDER paths: the real classes arrive with C6; nothing is hardcoded in C++. Keys 'comment' / '*_comment' are not variants.",
 		"barrel": "/Game/Props/BP_PropBarrel.BP_PropBarrel_C",
