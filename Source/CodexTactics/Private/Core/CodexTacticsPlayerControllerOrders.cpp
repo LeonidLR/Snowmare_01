@@ -469,27 +469,32 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		// Batch 2 item 3 (MantlingProblem_03: "clicking, even double-clicking, on an obstacle does nothing"): the camera shows the obstacle's side
 		// faces, where a single click keeps its cover preview - a DOUBLE click on a climbable obstacle's face orders the climb (not in cover:
 		// there the double click is the cover switch). Its top: a single click, as before.
+		// Designer's decision 2026-11-17 (TASK_BOARD F-3, option B): a single click on the TOP = he WALKS to it and climbs; a double click on the top
+		// or the face = he RUNS to it and climbs; a single click on the face keeps the cover preview.
 		const bool bFaceClick = FMath::Abs(Hit.ImpactNormal.Z) < 0.3f;
 		bool bClimbClick = !bFaceClick;
-		if (bFaceClick && MantleNavigation::IsBatch2Enabled())
+		bool bRunClimb = Leader->IsSprinting(); // batch 2 off: his current gait, as before
+		if (MantleNavigation::IsBatch2Enabled())
 		{
-			FVector2D FaceMouse = FVector2D::ZeroVector; // stays zero without a viewport (headless smokes)
-			GetMousePosition(FaceMouse.X, FaceMouse.Y);
-			const double FaceNow = FApp::GetCurrentTime();
-			bClimbClick = MantleFaceClickTime >= 0.0 && FaceNow - MantleFaceClickTime <= DoubleClickSeconds
-				&& FVector2D::Distance(FaceMouse, MantleFaceClickPosition) <= DoubleClickPixels && MantleFaceClickActor.Get() == Hit.GetActor() && !Leader->bInCover;
-			MantleFaceClickTime = bClimbClick ? -1.0 : FaceNow;
-			MantleFaceClickPosition = FaceMouse;
+			FVector2D ClickMouse = FVector2D::ZeroVector; // stays zero without a viewport (headless smokes)
+			GetMousePosition(ClickMouse.X, ClickMouse.Y);
+			const double ClickNow = FApp::GetCurrentTime();
+			const bool bDoubleClick = MantleFaceClickTime >= 0.0 && ClickNow - MantleFaceClickTime <= DoubleClickSeconds
+				&& FVector2D::Distance(ClickMouse, MantleFaceClickPosition) <= DoubleClickPixels && MantleFaceClickActor.Get() == Hit.GetActor() && !Leader->bInCover;
+			MantleFaceClickTime = bDoubleClick ? -1.0 : ClickNow;
+			MantleFaceClickPosition = ClickMouse;
 			MantleFaceClickActor = Hit.GetActor();
+			bClimbClick = !bFaceClick || bDoubleClick;
+			bRunClimb = bDoubleClick;
 		}
 		FString MantleWhy;
-		if (bClimbClick && Leader->OrderMantleTop(Hit, Leader->IsSprinting(), &MantleWhy))
+		if (bClimbClick && Leader->OrderMantleTop(Hit, bRunClimb, &MantleWhy))
 		{
 			HideCoverPreview();
 			UpdateMantleHover(nullptr, nullptr);
 			ControllerCommands::Report(this, PlayerCommands::Move, nullptr, false, false, Leader, Hit.ImpactPoint);
-			UE_LOG(LogCodexTactics, Display, TEXT("Click on the %s of %s: %s climbs it"), bFaceClick ? TEXT("face") : TEXT("top"), *GetNameSafe(Hit.GetActor()),
-				*Leader->DisplayName.ToString());
+			UE_LOG(LogCodexTactics, Display, TEXT("Click on the %s of %s: %s %s to it and climbs it"), bFaceClick ? TEXT("face") : TEXT("top"), *GetNameSafe(Hit.GetActor()),
+				*Leader->DisplayName.ToString(), bRunClimb ? TEXT("runs") : TEXT("walks"));
 			return;
 		}
 		if (bClimbClick && bFaceClick)

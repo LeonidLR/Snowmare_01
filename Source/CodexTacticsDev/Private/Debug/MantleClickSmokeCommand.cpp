@@ -5,6 +5,7 @@
 // The clicks take the REAL input path: the cursor's ray from the player's camera (ECC_Visibility, as GetHitResultUnderCursor) through a point of
 // the obstacle, the hit handed to ACodexTacticsPlayerController::HandleWorldHit (the left click's dispatcher). Cases (one Solo operative, 4 m off):
 //   a  click on the 140 cm wreck's top            -> he walks to it and climbs it (on top);
+//   a2 double click on the 140 cm wreck's top     -> he RUNS to it and climbs it (designer 2026-11-17, F-3; b / c run too);
 //   b  double click on the 140 cm wreck's face    -> he climbs it (the face the camera sees is the obstacle too);
 //   b2 single click on the 140 cm wreck's face    -> no climb: the cover preview, as before (decision for the designer);
 //   c  double click on the 230 cm parapet's face  -> he climbs it;
@@ -56,14 +57,17 @@ namespace MantleClickSmoke
 		bool bClimbable;
 		/** The click climbs it (a single click on a face keeps the cover preview: no climb). */
 		bool bClickClimbs;
+		/** Designer's decision 2026-11-17 (F-3): a climbing single click walks there, a double click runs (-1: not checked). */
+		int32 Run;
 	};
 
 	static const FCase Cases[] = {
-		{ TEXT("a: click on the 140 cm wreck's top"), TEXT("wreck"), 140.f, EAim::Top, 1, true, true },
-		{ TEXT("b: double click on the 140 cm wreck's face"), TEXT("wreck"), 140.f, EAim::Face, 2, true, true },
-		{ TEXT("b2: single click on the 140 cm wreck's face"), TEXT("wreck"), 140.f, EAim::Face, 1, true, false },
-		{ TEXT("c: double click on the 230 cm parapet's face"), TEXT("cut_wall"), 230.f, EAim::Face, 2, true, true },
-		{ TEXT("d: click on a 330 cm fence"), TEXT("fence"), 330.f, EAim::Face, 1, false, false },
+		{ TEXT("a: click on the 140 cm wreck's top"), TEXT("wreck"), 140.f, EAim::Top, 1, true, true, 0 },
+		{ TEXT("a2: double click on the 140 cm wreck's top"), TEXT("wreck"), 140.f, EAim::Top, 2, true, true, 1 },
+		{ TEXT("b: double click on the 140 cm wreck's face"), TEXT("wreck"), 140.f, EAim::Face, 2, true, true, 1 },
+		{ TEXT("b2: single click on the 140 cm wreck's face"), TEXT("wreck"), 140.f, EAim::Face, 1, true, false, -1 },
+		{ TEXT("c: double click on the 230 cm parapet's face"), TEXT("cut_wall"), 230.f, EAim::Face, 2, true, true, 1 },
+		{ TEXT("d: click on a 330 cm fence"), TEXT("fence"), 330.f, EAim::Face, 1, false, false, -1 },
 	};
 
 	struct FState
@@ -78,6 +82,8 @@ namespace MantleClickSmoke
 		int32 Failures = 0;
 		int32 MantlesBefore = 0;
 		bool bHover = false;
+		/** He ran on the way to the obstacle (stage 3). */
+		bool bSawSprint = false;
 		MantleSmokeSites::FSite Site;
 		FHitResult Hit;
 		TSet<const AActor*> Used;
@@ -286,6 +292,7 @@ namespace MantleClickSmoke
 			{
 				PC->HandleWorldHit(State->Hit);
 			}
+			State->bSawSprint = false;
 			Next(*State, 3);
 			return true;
 		}
@@ -293,9 +300,15 @@ namespace MantleClickSmoke
 		{
 			const FCase& Case = Cases[State->Case % UE_ARRAY_COUNT(Cases)];
 			const bool bClimbed = Leader->GetMantleCount() > State->MantlesBefore;
+			State->bSawSprint |= !bClimbed && Leader->IsSprinting();
 			if (!bClimbed && State->StageTime < ClimbStartLimitSeconds)
 			{
 				return true;
+			}
+			if (Case.Run >= 0 && bClimbed)
+			{
+				Check(*State, State->bSawSprint == (Case.Run == 1), FString::Printf(TEXT("%s: he %s to it (designer 2026-11-17: click walks, double click runs; ran %d)"),
+					Case.Label, Case.Run == 1 ? TEXT("runs") : TEXT("walks"), State->bSawSprint ? 1 : 0));
 			}
 			if (Case.bClickClimbs)
 			{
