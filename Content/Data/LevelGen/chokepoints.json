@@ -67,9 +67,9 @@
       "strike_reach_comment": "DEFAULT (not in the game configs): how far from the landing point the jumper still reaches a man at once.",
       "wall_top_min_thickness_cm_default": 60,
       "wall_top_comment": "DEFAULT: a wall at least this thick has a top an enemy can stand on (the 150 cm canal walls).",
-      "ladder_only_factor_default": 0.5,
+      "ladder_only_factor_default": 0.65,
       "jumper_names": { "cutter": "каттеры", "frost_hound": "гончие" },
-      "ladder_only_comment": "DEFAULT: a roof reached by a ladder only (the jumpers do not climb ladders - they must be placed there) counts this much.",
+      "ladder_only_comment": "Designer 2026-11-17: 0.65 (was 0.5) - a roof reached by a ladder only is a real danger: climbing up you never know what waits on top. The jumpers do not climb ladders, so enemies must be PLACED there - automatically too (TASK_BOARD F-4 b).",
       "max_spots": 120
     },
     "window_fire": {

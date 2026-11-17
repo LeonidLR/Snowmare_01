@@ -261,6 +261,20 @@ void ULevelExitSubsystem::UpdateCrossings(const FGateExitConfig& InConfig)
 	}
 }
 
+void ULevelExitSubsystem::CompleteLevel(const FString& Reason)
+{
+	UWorld* World = GetWorld();
+	const UMissionSubsystem* Mission = World ? World->GetSubsystem<UMissionSubsystem>() : nullptr;
+	if (bExiting || !World || (Mission && (Mission->IsMissionFailed() || Mission->IsMissionComplete())))
+	{
+		return;
+	}
+	// The fade / title / leave timings of the level's gate exit (defaults when the level has none); the gate itself is not needed.
+	ArmedConfig = GetConfig();
+	UE_LOG(LogCodexTactics, Display, TEXT("[LevelExit] level won: %s"), *Reason);
+	BeginExit();
+}
+
 void ULevelExitSubsystem::BeginExit()
 {
 	if (bExiting)
@@ -278,7 +292,8 @@ void ULevelExitSubsystem::BeginExit()
 		NextLevelTitle = Next->Title;
 	}
 	ExitLevelTitle = GetCurrentLevelTitle();
-	UE_LOG(LogCodexTactics, Display, TEXT("[LevelExit] all %d living operatives are out: fade to black (%.1f s), mission complete; next: %s"), RequiredCount,
+	UE_LOG(LogCodexTactics, Display, TEXT("[LevelExit] %s: fade to black (%.1f s), mission complete; next: %s"),
+		*(bArmed ? FString::Printf(TEXT("all %d living operatives are out"), RequiredCount) : FString(TEXT("the level is won"))),
 		ArmedConfig.FadeSeconds, NextLevelMap.IsEmpty() ? TEXT("the main menu") : *NextLevelMap);
 	if (UMissionSubsystem* Mission = World->GetSubsystem<UMissionSubsystem>())
 	{

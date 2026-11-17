@@ -47,6 +47,14 @@ public:
 	/** Smokes: a headless check leaves the black screen like a real game (points screen / next level / menu). */
 	void SetLeaveInHeadless(bool bInLeave) { bLeaveInHeadless = bInLeave; }
 
+	/**
+	 * F-4 «а» (designer 2026-11-17): the level is won by another rule than the gate - every mission goal of a generated map reached
+	 * (UMissionGoalsSubsystem). Runs the same end as the gate exit: UMissionSubsystem::CompleteMission, the fade to black with
+	 * "MISSION COMPLETE", then the points screen / next campaign level / main menu, with the level's gate_exit timings (GetConfig;
+	 * its bEnabled is not needed). Nothing when the level is already exiting, failed or complete. Reason is logged.
+	 */
+	void CompleteLevel(const FString& Reason);
+
 	/** The gate is fully open and the exit counts. */
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|LevelExit")
 	bool IsArmed() const { return bArmed; }

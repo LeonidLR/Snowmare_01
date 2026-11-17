@@ -39,6 +39,7 @@
 #include "Engine/Engine.h"
 #include "Engine/Font.h"
 #include "Core/MissionSubsystem.h"
+#include "LevelGen/MissionGoalsSubsystem.h"
 #include "Engine/World.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "Interactables/InteractionSubsystem.h"
@@ -552,7 +553,7 @@ void ACodexTacticsHUD::DrawHUD()
 		DrawMinimapPanel();
 	}
 	DrawMinimapHeader();
-	const float ObjectiveBottom = DrawObjectiveBanner();
+	const float ObjectiveBottom = DrawMissionGoalsLine(DrawObjectiveBanner());
 	if (ShouldDrawStatus() && ShowsLabel(EHudLabel::SquadStatusPanel))
 	{
 		DrawSquadPanel(ObjectiveBottom + Margin * 0.5f);
@@ -1618,6 +1619,29 @@ float ACodexTacticsHUD::DrawObjectiveBanner()
 	DrawRect(ObjectivePanelColor, Left, Top, Width, Height);
 	DrawText(Text, ObjectiveTextColor, Left + 12.f, Top + 8.f, Font, Scale);
 	return Top + Height + 2.f;
+}
+
+float ACodexTacticsHUD::DrawMissionGoalsLine(float Top)
+{
+	const UMissionGoalsSubsystem* Goals = GetWorld()->GetSubsystem<UMissionGoalsSubsystem>();
+	const FString Text = Goals ? Goals->GetHudLine() : FString();
+	if (Text.IsEmpty())
+	{
+		return Top;
+	}
+	// The objective banner's look (gold frame, dark panel), one line under it; green once every goal is reached.
+	UFont* Font = GEngine->GetMediumFont();
+	float W = 0.f;
+	float H = 0.f;
+	Canvas->StrLen(Font, Text, W, H);
+	const float Left = 20.f;
+	const float LineTop = FMath::Max(Top, Margin) + 4.f;
+	const float Width = W + 24.f;
+	const float Height = H + 12.f;
+	DrawRect(ObjectiveFrameColor, Left - 2.f, LineTop - 2.f, Width + 4.f, Height + 4.f);
+	DrawRect(ObjectivePanelColor, Left, LineTop, Width, Height);
+	DrawText(Text, Goals->AreAllReached() ? FLinearColor(0.45f, 1.f, 0.5f) : ObjectiveTextColor, Left + 12.f, LineTop + 6.f, Font, 1.f);
+	return LineTop + Height + 2.f;
 }
 
 void ACodexTacticsHUD::DrawSquadPanel(float Top)
