@@ -421,3 +421,6 @@ confirm with a 20-cable perf check in T5. The owner is a team id, so a second PM
 
 Numbers that are NOT questions (tuned in the arena, section 10): share of running generators, hostile / neutral mix, tank and can
 size, burn, reach and arc, lock-on, counts per map.
+
+## 15. Designer decisions (2026-11-17)
+All six open questions in section 14 are answered by the designer: every recommendation is ACCEPTED as written (portable squad turrets also need a generator within 40 m; PMC do not capture generators at first - defend theirs, break ours; neutral networks can be captured; a running generator is noisy; one jerrycan per operative, no movement penalty; no generator actions in turn-based for now). Ready to split into implementation tasks (section 13).
