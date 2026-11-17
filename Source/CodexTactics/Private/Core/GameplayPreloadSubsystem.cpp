@@ -115,11 +115,11 @@ FGameplayPreloadProgress UGameplayPreloadSubsystem::GetProgress(const UWorld* Wo
 	}
 	switch (Preload->Phase)
 	{
-	case EPhase::Initial: Progress.PhaseLabel = TEXT("Основные ресурсы"); break;
-	case EPhase::Dependencies: Progress.PhaseLabel = TEXT("Ресурсы уровня"); break;
-	case EPhase::Compiling: Progress.PhaseLabel = TEXT("Подготовка ресурсов"); break;
-	case EPhase::Binding: Progress.PhaseLabel = TEXT("Подготовка уровня"); break;
-	default: Progress.PhaseLabel = TEXT("Подготовка загрузки"); break;
+	case EPhase::Initial: Progress.PhaseLabel = TEXT("Core assets"); break;
+	case EPhase::Dependencies: Progress.PhaseLabel = TEXT("Level assets"); break;
+	case EPhase::Compiling: Progress.PhaseLabel = TEXT("Preparing assets"); break;
+	case EPhase::Binding: Progress.PhaseLabel = TEXT("Preparing level"); break;
+	default: Progress.PhaseLabel = TEXT("Preparing to load"); break;
 	}
 	return Progress;
 }
