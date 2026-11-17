@@ -2183,6 +2183,12 @@ namespace TutorialSmoke
 			for (AOperativeCharacter* Member : Squad->GetMembers())
 			{
 				Member->HealthComponent->Heal(10000.f);
+				// 2026-11-16 first aid: an operative in cover is busy (FirstAidSubsystem::IsBusy refuses the medkit); the cover lesson above left
+				// them at the wall, so they step out before the medkit lesson.
+				if (Member->bInCover)
+				{
+					Member->LeaveCover(TEXT("Smoke: medkit lesson"));
+				}
 				bEveryoneHasMedkit &= Member->MedkitsCount >= 1;
 				if (Member->SquadRole == EOperativeRole::Engineer)
 				{
@@ -2262,6 +2268,11 @@ namespace TutorialSmoke
 			{
 				return true;
 			}
+			// 2026-11-16 first aid: a knocked-down operative cannot treat himself (the mine blast knocks the engineer down) - H waits until he is up.
+			if (const AOperativeCharacter* Downed = State.Focus.Get(); Downed && Downed->IsKnockedDown() && State.StageTime < 20.f)
+			{
+				return true;
+			}
 			Check(State, Tutorial->GetStepState(TEXT("X_medkit")) == ETutorialStepState::Active, TEXT("medkit lesson: a medkit on a mate does not complete it"));
 			AOperativeCharacter* Engineer = State.Focus.Get();
 			State.HeatPacksBeforeLoot = Engineer ? Engineer->MedkitsCount : 0; // reused: his medkits before H
@@ -2277,7 +2288,9 @@ namespace TutorialSmoke
 		}
 		case 85:
 		{
-			if (Tutorial->GetStepState(TEXT("X_medkit")) == ETutorialStepState::Active && State.StageTime < 2.f)
+			// 2026-11-17: H starts a timed first-aid treatment (FirstAidSubsystem, first_aid.json: self medkit 3.5 - 5.5 s, the heal lands at 80 %),
+			// no longer an instant heal - wait for it (up to 10 s) instead of 2 s; the card completes when the heal has landed.
+			if (Tutorial->GetStepState(TEXT("X_medkit")) == ETutorialStepState::Active && State.StageTime < 10.f)
 			{
 				return true;
 			}
