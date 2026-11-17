@@ -8,6 +8,8 @@
     "eval_gap_seconds": 0.3,
     "anim_stale_seconds": 0.25,
     "cover_reach_seconds": 0.6,
-    "object_shot_timeout_seconds": 4
+    "object_shot_timeout_seconds": 4,
+    "stealth_shot_hold_seconds": 0.5,
+    "crouch_corner_aim_outward_deg": 64
   }
 }

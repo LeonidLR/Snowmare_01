@@ -643,10 +643,11 @@ void AOperativeCharacter::TrackCoverFireStance()
 	// The fire gate (058c / 061): how long the cover fire stance has been up (a lean / the corner aim / blind fire) - the round waits
 	// cover_raise_seconds for it.
 	// Stealthed, the stealth wall pose owns the body (no cover fire clip plays) until a shot is wanted; the hand-off then plays the idle -> fire
-	// transition from the wall pose (StealthModeSmoke: the crouched one still turned the barrel at 0.6 s) - the stance is up once it has played.
+	// transition from the wall pose (StealthModeSmoke: the crouched one still turned the barrel at 0.6 s) - the stance is up only once the
+	// anim shows the cover fire pose (that transition played; without one - no clip / it did not start - not before the pose itself shows).
 	const UWorld* World = GetWorld();
 	const UOperativeAnimInstance* Anim = GetMesh() ? Cast<UOperativeAnimInstance>(GetMesh()->GetAnimInstance()) : nullptr;
-	const bool bStealthStanceDown = IsInStealthMode() && (!IsStealthCoverShotWanted() || (Anim && Anim->IsCoverFireEnterPlaying()));
+	const bool bStealthStanceDown = IsInStealthMode() && (!IsStealthCoverShotWanted() || !Anim || !Anim->IsCoverFirePoseReached());
 	CoverStanceUpSince = World ? FireGateRules::StepSince(CoverStanceUpSince,
 		bInCover && !bStealthStanceDown && (bIsCornerLeaning || bIsBlindFiring || bCornerAimActive), World->GetTimeSeconds()) : -1.0;
 }

@@ -397,6 +397,11 @@ public:
 	 * gate judged the cover pose out of reach and the step off the wall lost the line). Off again eval_gap_seconds after the last attempt.
 	 */
 	bool IsStealthCoverShotWanted() const;
+	/**
+	 * How far past the along-wall line his corner fire stance aims now, deg: CornerAimOutwardDeg standing; crouched at a high wall the
+	 * crouched clip's own measured angle (fire_gate.json crouch_corner_aim_outward_deg).
+	 */
+	float GetCornerAimOutwardDeg() const;
 	/** Rounds the gate held, per verdict (smokes / logs). */
 	int32 GetFireGateHolds(EFireGateBlock Block) const { return FireGateHolds[FMath::Clamp(static_cast<int32>(Block), 0, static_cast<int32>(EFireGateBlock::Count) - 1)]; }
 	/** The last verdict of the gate and when (-1 = never). */

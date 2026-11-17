@@ -302,7 +302,7 @@ bool AOperativeCharacter::IsCornerShotTarget(const FVector& TargetLocation) cons
 	// shot hounds at his side from the corner pose without turning to them.
 	if (IsCornerHoldSpot())
 	{
-		return CoverFacingRules::IsCornerHoldTarget(CoverSlot, CoverFacing, GetCoverFireOrigin(), TargetLocation, CornerAimOutwardDeg,
+		return CoverFacingRules::IsCornerHoldTarget(CoverSlot, CoverFacing, GetCoverFireOrigin(), TargetLocation, GetCornerAimOutwardDeg(),
 			GetCornerHoldReachDeg());
 	}
 	return CoverFacingRules::ShouldCornerShot(CoverSlot, TargetLocation, GetCoverFacingConfig());

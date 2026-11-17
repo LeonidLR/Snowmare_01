@@ -6,7 +6,7 @@
 //   c the cut's 230 cm parapet from the ground (the "canal" climb): the tall ledge on top;
 //   d a 135 cm fence: over it, landing on the far side's ground;
 //   d2 R17-2 (designer 2026-11-17): in stealth the 140 cm wreck and the 135 cm fence again - stealth (crouched) is still on after landing;
-//   e a sandbag: no mantle - the vault still takes it (R17-2: vaulted in stealth, stealth still on after it);
+//   e a sandbag: no mantle - the vault still takes it; e2 (R17-2) the same vault in stealth keeps stealth;
 //   f no run-up: sprinting right at a wreck -> he stops, the standing clip;
 //   g a sprint from far off with a click on the wreck's top: the run clip;
 //   h a 330 cm fence: refused (a wall); a beam over a crate's top: refused (no headroom);
@@ -403,12 +403,10 @@ namespace MantleSmoke
 				if (State->Site.bFound)
 				{
 					PlaceAt(Leader, State->Site.Feet, State->Site.Dir);
-					Check(*State, Leader->SetStealthMode(true) && Leader->IsInStealthMode(), TEXT("stealth: on at the sandbag (Solo)"));
 				}
-				State->StealthDropFrames = 0;
 				return true;
 			}
-			if (State->StageTime < 1.5f)
+			if (State->StageTime < 0.6f)
 			{
 				return true;
 			}
@@ -421,13 +419,44 @@ namespace MantleSmoke
 			return true;
 		}
 		case 60: // the vault over the sandbag ends first
-			State->StealthDropFrames += Leader->IsInStealthMode() ? 0 : 1;
 			if (Leader->IsVaulting() && State->StageTime < 5.f)
 			{
 				return true;
 			}
-			Check(*State, State->StealthDropFrames == 0 && Leader->IsInStealthMode() && Leader->GetStance() == EOperativeStance::Crouching,
-				FString::Printf(TEXT("stealth: still in stealth, crouched, after the sandbag vault (stealth off for %d frames)"), State->StealthDropFrames));
+			Next(*State, 61);
+			return true;
+		case 61: // e2 (R17-2): the sandbag vault again, in stealth
+		{
+			if (State->StageTime < StepSeconds * 1.5f)
+			{
+				State->Site = FindSite(World, Leader, TEXT("sandbag"), 95.f, 70.f, Near(), [](const FMantleSite&, const FMantleDecision&) { return true; });
+				State->StealthDropFrames = 0;
+				if (State->Site.bFound)
+				{
+					PlaceAt(Leader, State->Site.Feet, State->Site.Dir);
+					Check(*State, Leader->SetStealthMode(true) && Leader->IsInStealthMode(), TEXT("stealth: on at the sandbag (Solo)"));
+				}
+				return true;
+			}
+			if (State->StageTime < 1.5f) // the crouch entry clip settles first
+			{
+				return true;
+			}
+			Check(*State, State->Site.bFound && (Leader->IsVaulting() || Leader->TryVault(State->Site.Dir, true)), TEXT("stealth: the vault takes the sandbag"));
+			Next(*State, 62);
+			return true;
+		}
+		case 62: // the stealth vault ends; stealth (crouched) still on
+			if (State->Site.bFound)
+			{
+				State->StealthDropFrames += Leader->IsInStealthMode() ? 0 : 1;
+				if (Leader->IsVaulting() && State->StageTime < 5.f)
+				{
+					return true;
+				}
+				Check(*State, State->StealthDropFrames == 0 && Leader->IsInStealthMode() && Leader->GetStance() == EOperativeStance::Crouching,
+					FString::Printf(TEXT("stealth: still in stealth, crouched, after the sandbag vault (stealth off for %d frames)"), State->StealthDropFrames));
+			}
 			Leader->SetStealthMode(false);
 			Next(*State, 7);
 			return true;

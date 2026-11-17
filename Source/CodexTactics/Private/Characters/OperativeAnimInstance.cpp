@@ -2012,14 +2012,17 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	// A shot wanted from this cover (IsStealthCoverShotWanted) hands the body to the cover fire stance: its barrel must reach the target.
 	if (Operative.IsInStealthMode() && !Operative.IsStealthCoverShotWanted())
 	{
+		// Back from a hand-off (a shot that kept stealth, stealth_break_on_fire false): the fire pose fades into the wall pose, no snap.
+		const float StopBlend = bCoverInFirePose ? FMath::Max(CoverFireLeaveBlendSeconds, 0.25f) : 0.f;
 		if (UAnimMontage* Loop = CoverLoopMontage.Get())
 		{
-			Montage_Stop(0.f, Loop);
+			Montage_Stop(StopBlend, Loop);
 		}
 		if (UAnimMontage* OneShot = CoverOneShotMontage.Get())
 		{
-			Montage_Stop(0.f, OneShot);
+			Montage_Stop(StopBlend, OneShot);
 		}
+		CoverFireEnterMontage.Reset();
 		CoverLoopMontage.Reset();
 		CoverLoopClip.Reset();
 		CoverOneShotMontage.Reset();

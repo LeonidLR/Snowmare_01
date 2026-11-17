@@ -1234,6 +1234,17 @@ public:
 		const UAnimMontage* Enter = CoverFireEnterMontage.Get();
 		return Enter && Enter == CoverOneShotMontage.Get() && Montage_IsPlaying(Enter);
 	}
+	/** The cover fire pose shows: the fire idle loop (or a cover shot clip) plays after any idle -> fire transition (stealth hand-off). */
+	bool IsCoverFirePoseReached() const
+	{
+		if (!bCoverInFirePose || IsCoverFireEnterPlaying())
+		{
+			return false;
+		}
+		const UAnimMontage* Loop = CoverLoopMontage.Get();
+		const UAnimMontage* OneShot = CoverOneShotMontage.Get();
+		return (Loop && Montage_IsPlaying(Loop)) || (OneShot && Montage_IsPlaying(OneShot));
+	}
 	/** Names of the cover clips played (loops, one-shots) in order, newest last, capped (smokes). */
 	const TArray<FString>& GetCoverClipLog() const { return CoverClipLog; }
 
