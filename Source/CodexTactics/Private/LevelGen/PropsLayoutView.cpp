@@ -204,6 +204,62 @@ namespace PropsLayoutViewLocal
 		return false;
 	}
 
+	int64 Gcd(int64 A, int64 B)
+	{
+		A = A < 0 ? -A : A;
+		B = B < 0 ? -B : B;
+		while (B != 0)
+		{
+			const int64 T = A % B;
+			A = B;
+			B = T;
+		}
+		return A;
+	}
+
+	/**
+	 * Splits A -> B into consecutive pieces no longer than MaxSegmentCm, so the exact int64 distance tests stay in range for a long
+	 * edge (G003: the expanded maps' cut rectangle has 354 / 434 m edges). The split points are the segment's own lattice points, so
+	 * the union of the pieces is exactly the segment (same distances, same blocked test). Only when the segment has no lattice point
+	 * closer than MaxSegmentCm (|d| / gcd(dx, dy) > the limit, never in a generated layout) are the points rounded (<= 1 cm off).
+	 */
+	void SplitSegment(FIntPoint A, FIntPoint B, TArray<TPair<FIntPoint, FIntPoint>>& Out)
+	{
+		if (!SegmentTooLong(A, B))
+		{
+			Out.Emplace(A, B);
+			return;
+		}
+		const int64 Dx = static_cast<int64>(B.X) - A.X;
+		const int64 Dy = static_cast<int64>(B.Y) - A.Y;
+		const int64 G = Gcd(Dx, Dy);
+		const double Length = FMath::Sqrt(static_cast<double>(Dx) * Dx + static_cast<double>(Dy) * Dy);
+		const double UnitLength = Length / static_cast<double>(G);
+		const int64 StepsPerPiece = static_cast<int64>(FMath::FloorToDouble(FPropsLayoutView::MaxSegmentCm / UnitLength));
+		if (StepsPerPiece >= 1)
+		{
+			const int64 Ux = Dx / G;
+			const int64 Uy = Dy / G;
+			for (int64 Step = 0; Step < G; Step += StepsPerPiece)
+			{
+				const int64 Next = FMath::Min(G, Step + StepsPerPiece);
+				Out.Emplace(FIntPoint(static_cast<int32>(A.X + Ux * Step), static_cast<int32>(A.Y + Uy * Step)),
+					FIntPoint(static_cast<int32>(A.X + Ux * Next), static_cast<int32>(A.Y + Uy * Next)));
+			}
+			return;
+		}
+		const int64 Pieces = static_cast<int64>(FMath::CeilToDouble(Length / FPropsLayoutView::MaxSegmentCm)) + 1;
+		FIntPoint Prev = A;
+		for (int64 I = 1; I <= Pieces; ++I)
+		{
+			const FIntPoint P = I == Pieces ? B
+				: FIntPoint(static_cast<int32>(A.X + FMath::RoundToDouble(static_cast<double>(Dx) * I / Pieces)),
+					static_cast<int32>(A.Y + FMath::RoundToDouble(static_cast<double>(Dy) * I / Pieces)));
+			Out.Emplace(Prev, P);
+			Prev = P;
+		}
+	}
+
 	/** Wall id without the trailing "_<digits>": F_compound_N_0 -> F_compound_N; W_deadend_w and F_south stay as they are. */
 	FString StripIndex(const FString& Id)
 	{
@@ -558,12 +614,9 @@ bool FPropsLayoutView::Build(const FJsonObject& Root, FPropsLayoutView& Out, TAr
 	{
 		FFieldReader CR(*Cut, TEXT("layout.cut"), Errors);
 		Out.bHasCut = true;
+		// A long cut edge is accepted (G003, the expanded maps): the point-in-polygon test is exact at any length, the cut walls are
+		// split into pieces <= MaxSegmentCm below (SplitSegment).
 		ReadPoly(CR, TEXT("poly"), Out.CutPoly);
-		if (PolyTooLong(Out.CutPoly, true))
-		{
-			CR.Fail(FString::Printf(TEXT("'poly' edge longer than %d cm (exact geometry limit)"), MaxSegmentCm));
-			Out.CutPoly.Reset();
-		}
 		CR.Int(TEXT("level"), Out.CutLevel);
 		Out.bHasCutFloorZ = CR.Int(TEXT("floor_z"), Out.CutFloorZ);
 		ForEachObject(CR, TEXT("crossings"), [&](const FJsonObject& J, const FString& Ctx)
@@ -754,9 +807,15 @@ void FPropsLayoutView::BuildLayers()
 		TArray<FLayerWall>& CutWalls = LayerWalls.AddDefaulted_GetRef();
 		if (CutPoly.Num() >= 3)
 		{
+			TArray<TPair<FIntPoint, FIntPoint>> Pieces;
 			for (int32 I = 0; I < CutPoly.Num(); ++I)
 			{
-				CutWalls.Add({ CutPoly[I], CutPoly[(I + 1) % CutPoly.Num()], Config.CutEdgeThicknessCm });
+				Pieces.Reset();
+				PropsLayoutViewLocal::SplitSegment(CutPoly[I], CutPoly[(I + 1) % CutPoly.Num()], Pieces);
+				for (const TPair<FIntPoint, FIntPoint>& Piece : Pieces)
+				{
+					CutWalls.Add({ Piece.Key, Piece.Value, Config.CutEdgeThicknessCm });
+				}
 			}
 		}
 	}

@@ -262,7 +262,10 @@ struct CODEXTACTICS_API FPropsExclusion
 class CODEXTACTICS_API FPropsLayoutView
 {
 public:
-	/** Longest wall / route leg the exact int64 geometry supports (300 m); longer ones are refused by Build. */
+	/**
+	 * Longest wall / route leg the exact int64 geometry supports (300 m); longer ones are refused by Build. A longer cut-polygon edge is
+	 * accepted: its cut walls are split into exact pieces of at most this length (G003, the expanded maps' trench).
+	 */
 	static constexpr int32 MaxSegmentCm = 30000;
 	/** Largest radius / clearance (100 m); larger values are clamped. */
 	static constexpr int32 MaxRadiusCm = 10000;
