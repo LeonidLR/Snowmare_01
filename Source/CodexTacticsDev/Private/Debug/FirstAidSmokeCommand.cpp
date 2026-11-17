@@ -399,17 +399,19 @@ namespace FirstAidSmoke
 			Place(World, A, B->GetActorLocation() - State.Forward * 120.f, State.Forward);
 			Squad->SetLeader(A);
 			Hud->bForceHandOverModifierForTesting = true;
-			const int32 HelperBefore = A->MedkitsCount;
+			// A stack opens the quantity dialog (the old hand-over). One medkit changes hands at once.
+			const int32 HelperStock = A->MedkitsCount;
 			const int32 PatientBefore = B->MedkitsCount;
+			A->MedkitsCount = 1;
 			UInventoryDragDropOperation* Drag = Drawer->CreateDragOperation(EInventoryDrawerSlot::Medkit);
 			const ETransferRequestOutcome Outcome = Drag
 				? Hud->HandleTransferDropOnActor(A, ETransferItem::Medkit, B, B->GetActorLocation())
 				: ETransferRequestOutcome::Failed;
 			Check(State, Drag && !FirstAid->IsInTreatment(A) && !FirstAid->IsInTreatment(B) && Outcome == ETransferRequestOutcome::Transferred
-				&& A->MedkitsCount == HelperBefore - 1 && B->MedkitsCount == PatientBefore + 1,
-				FString::Printf(TEXT("[shift-drag] Shift hands the medkit over (outcome %d, helper %d -> %d, patient %d -> %d)"),
-					static_cast<int32>(Outcome), HelperBefore, A->MedkitsCount, PatientBefore, B->MedkitsCount));
-			A->MedkitsCount = HelperBefore;
+				&& A->MedkitsCount == 0 && B->MedkitsCount == PatientBefore + 1,
+				FString::Printf(TEXT("[shift-drag] Shift hands the medkit over (outcome %d, helper 1 -> %d, patient %d -> %d)"),
+					static_cast<int32>(Outcome), A->MedkitsCount, PatientBefore, B->MedkitsCount));
+			A->MedkitsCount = HelperStock;
 			B->MedkitsCount = PatientBefore;
 			Hud->bForceHandOverModifierForTesting = false;
 			Place(World, A, State.Spot, State.Forward);
