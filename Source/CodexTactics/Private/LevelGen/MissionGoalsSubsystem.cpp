@@ -6,6 +6,9 @@
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/MissionSubsystem.h"
+#include "Core/MissionSessionSubsystem.h"
+#include "Core/SaveGameSubsystem.h"
+#include "Engine/GameInstance.h"
 #include "Core/PlayerCommands.h"
 #include "Engine/World.h"
 #include "GameFlow/LevelExitSubsystem.h"
@@ -129,6 +132,22 @@ bool UMissionGoalsSubsystem::LoadFromFile(const FString& Path)
 	return true;
 }
 
+void UMissionGoalsSubsystem::RestoreReachedGoals(const TArray<FString>& GoalIds)
+{
+	Reached.Init(false, File.Goals.Num());
+	for (int32 Index = 0; Index < File.Goals.Num(); ++Index)
+	{
+		Reached[Index] = GoalIds.Contains(File.Goals[Index].Id);
+		if (AMissionGoalMarkerActor* Marker = GetMarker(Index))
+		{
+			Marker->SetGoalShown(!Reached[Index]);
+		}
+	}
+	// Loading state is not reaching a goal: no events, messages or CompleteLevel call.
+	bCompleted = bActive && MissionGoalsRules::AreAllReached(Reached);
+	EvaluateIn = 0.f;
+}
+
 void UMissionGoalsSubsystem::ClearGoals()
 {
 	for (AMissionGoalMarkerActor* Marker : Markers)
@@ -210,6 +229,13 @@ void UMissionGoalsSubsystem::EvaluateNow()
 	if (!bActive || bCompleted || !World || !World->HasBegunPlay())
 	{
 		return;
+	}
+	const UGameInstance* GameInstance = World->GetGameInstance();
+	const UMissionSessionSubsystem* Session = GameInstance ? GameInstance->GetSubsystem<UMissionSessionSubsystem>() : nullptr;
+	const USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>();
+	if ((Session && Session->HasPendingLoad()) || (Saves && Saves->IsApplyingSave()))
+	{
+		return; // reopened worlds must not reach goals from their default spawn before the save is applied
 	}
 	const UMissionSubsystem* Mission = World->GetSubsystem<UMissionSubsystem>();
 	if (Mission && (Mission->IsMissionFailed() || Mission->IsMissionComplete()))
