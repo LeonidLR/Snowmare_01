@@ -12,7 +12,8 @@
 //   POST /api/levelgen/critic   { name, layout, evaluation, candidatePng (base64), client: claude|jev|mock, budgetUsd, model }
 //                                               -> { verdict } (saved to Saved/TrainingGround/levelgen/<name>.verdicts.json; the ledger updated)
 //   POST /api/levelgen/accept   { layout, evaluation, verdicts }  -> { file }  (Content/Data/LevelGen/accepted/<name>.json + <name>.meta.json;
-//                                               also props/<Map>.props.json and objectives/<Map>.objectives.json - the in-game goals)
+//                                               also props/<Map>.props.json, objectives/<Map>.objectives.json - the in-game goals - and
+//                                               tactical/<Map>.tactical.json - the tactical map, TACTICAL_MAP.md P1)
 //   POST /api/levelgen/reject   { name, seed, profile, reason }    -> appended to Saved/TrainingGround/levelgen/rejected.jsonl
 //   POST /api/levelgen/save-locks { layout }  -> { target: accepted|draft, file, locks }: the locked districts (polygons) into the map
 //                                               JSON - the accepted map's regen.locks only, else the page layout as a draft (stage 2)
@@ -29,7 +30,7 @@ import { saveLocks } from '../src/levelgen/node/locksFile.ts';
 import { createBuildPipeline, mapNameFor } from '../src/levelgen/node/buildPipeline.ts';
 import { generatePropsForLayout, canOverwritePropsFile } from '../src/levelgen/props/autogen.ts';
 import { formatPropsCanonical } from '../src/levelgen/props/canonical.ts';
-import { writeMissionGoalsFile } from '../src/levelgen/missionGoals.ts';
+import { runtimeDirsFor, writeRuntimeFiles } from '../src/levelgen/node/runtimeFiles.ts';
 import type { LevelPropsFile } from '../src/levelgen/props/schema.ts';
 import { ROOT } from '../src/movement/cli/paths.ts';
 import { ACCEPTED_DIR, ensureReferencePng, LEVELGEN_OUT, listProfiles, NAME_RE, readLedger, readProfileById, writeLedger } from '../src/levelgen/node/files.ts';
@@ -51,8 +52,8 @@ const readBody = (req: Req): Promise<Record<string, unknown>> => new Promise((re
   req.on('data', (c) => { body += String(c); });
   req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); } });
 });
-/** Content/Data/LevelGen/objectives: the in-game mission goals per map (src/levelgen/missionGoals.ts). */
-const MISSION_GOALS_DIR = path.join(ACCEPTED_DIR, '..', 'objectives');
+/** Content/Data/LevelGen/objectives + tactical: the in-game mission goals and tactical map per map (src/levelgen/node/runtimeFiles.ts). */
+const RUNTIME_DIRS = runtimeDirsFor(ACCEPTED_DIR);
 const query = (req: Req, key: string) => new URL(req.url ?? '', 'http://x').searchParams.get(key) ?? '';
 
 export function setupLevelgenApi(use: Use): void {
@@ -70,13 +71,13 @@ export function setupLevelgenApi(use: Use): void {
     if (req.method !== 'POST') return next ? next() : send(res, 405, { error: 'POST only' });
     const b = await readBody(req);
     const name = String(b.name ?? '');
-    // F-4 «а» (2026-11-17): the map's in-game goals file is refreshed from the accepted layout before every build (also for maps
-    // accepted before «Принять» wrote it); a layout without objectives writes nothing.
+    // F-4 «а» + TACTICAL_MAP P1 (2026-11-17): the map's in-game goals and tactical map files are refreshed from the accepted layout
+    // before every build (also for maps accepted before «Принять» wrote them); a layout without objectives writes no goals file.
     if (NAME_RE.test(name)) {
       try {
         const acceptedFile = path.join(ACCEPTED_DIR, `${name}.json`);
         if (fs.existsSync(acceptedFile)) {
-          writeMissionGoalsFile(JSON.parse(fs.readFileSync(acceptedFile, 'utf8')) as GenLayout, MISSION_GOALS_DIR, mapNameFor(name), name);
+          writeRuntimeFiles(JSON.parse(fs.readFileSync(acceptedFile, 'utf8').replace(/^\uFEFF/, '')) as GenLayout, RUNTIME_DIRS, mapNameFor(name), name);
         }
       } catch {
         // non-blocking for the build
@@ -212,13 +213,10 @@ export function setupLevelgenApi(use: Use): void {
       // Non-blocking for accept
     }
 
-    // F-4 «а» (designer 2026-11-17): the layout's objectives become the map's in-game mission goals
-    // (Content/Data/LevelGen/objectives/<Map>.objectives.json, read by UMissionGoalsSubsystem); no objectives = no file written.
-    try {
-      writeMissionGoalsFile(layout!, MISSION_GOALS_DIR, mapNameFor(layout!.name), layout!.name);
-    } catch {
-      // Non-blocking for accept
-    }
+    // F-4 «а» + TACTICAL_MAP P1 (designer 2026-11-17): the layout's objectives become the map's in-game mission goals
+    // (Content/Data/LevelGen/objectives/<Map>.objectives.json, UMissionGoalsSubsystem; no objectives = no file) and its danger analysis
+    // the tactical map (Content/Data/LevelGen/tactical/<Map>.tactical.json, UTacticalMapSubsystem). Non-blocking for accept.
+    writeRuntimeFiles(layout!, RUNTIME_DIRS, mapNameFor(layout!.name), layout!.name);
 
     send(res, 200, { file: path.relative(path.resolve(ACCEPTED_DIR, '../../../..'), file).split(path.sep).join('/') });
   });
