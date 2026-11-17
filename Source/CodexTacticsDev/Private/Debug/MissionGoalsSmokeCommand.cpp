@@ -22,6 +22,7 @@
 #include "GameFlow/LevelExitSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "LevelGen/MissionGoalMarkerActor.h"
+#include "Components/TextRenderComponent.h"
 #include "LevelGen/MissionGoalsSubsystem.h"
 #include "Misc/Paths.h"
 #include "Subsystems/CodexEventBus.h"
@@ -103,6 +104,20 @@ namespace MissionGoalsSmoke
 		return Count;
 	}
 
+	void CheckGoalLabels(FState& State, const UMissionGoalsSubsystem* Goals)
+	{
+		for (int32 Index = 0; Index < Goals->GetGoalCount(); ++Index)
+		{
+			const AMissionGoalMarkerActor* Marker = Goals->GetMarker(Index);
+			const UTextRenderComponent* Text = Marker ? Marker->GetGoalText() : nullptr;
+			const FString Expected = FString::Printf(TEXT("GOAL %d"), Index + 1);
+			const bool bReached = Goals->IsGoalReached(Index);
+			const bool bVisibility = Text && (bReached ? !Text->IsVisible() : Text->IsVisible() && Marker->IsMarkerShown() && !Marker->IsHidden());
+			Check(State, Text && Text->Text.ToString() == Expected && bVisibility,
+				FString::Printf(TEXT("%s label has its text and is %s"), *Expected, bReached ? TEXT("hidden after reaching") : TEXT("visible while unreached")));
+		}
+	}
+
 	bool IsVictory(const UWorld* World)
 	{
 		const UMissionSubsystem* Mission = World->GetSubsystem<UMissionSubsystem>();
@@ -165,6 +180,7 @@ namespace MissionGoalsSmoke
 				return Finish(State, false);
 			}
 			Check(State, Goals->GetReachedCount() == 0, TEXT("none reached at the start"));
+			CheckGoalLabels(State, Goals);
 			Check(State, ShownMarkers(Goals) == Total, FString::Printf(TEXT("a world marker shown per goal (%d/%d)"), ShownMarkers(Goals), Total));
 			Check(State, Goals->GetHudLine() == MissionGoalsRules::FormatHudLine(0, Total), FString::Printf(TEXT("HUD line '%s'"), *Goals->GetHudLine()));
 			const int32 Icons = MinimapGoalIcons(World);
@@ -206,6 +222,7 @@ namespace MissionGoalsSmoke
 			Check(State, Goals->GetHudLine() == MissionGoalsRules::FormatHudLine(State.Goal + 1, Total), FString::Printf(TEXT("HUD line '%s'"), *Goals->GetHudLine()));
 			const AMissionGoalMarkerActor* Marker = Goals->GetMarker(State.Goal);
 			Check(State, Marker && !Marker->IsMarkerShown(), FString::Printf(TEXT("%s marker hidden"), *Goal.Id));
+			CheckGoalLabels(State, Goals);
 			Check(State, ShownMarkers(Goals) == Total - State.Goal - 1, FString::Printf(TEXT("%d markers left"), ShownMarkers(Goals)));
 			const int32 Heard = State.Probe ? State.Probe->CountEvent(GameplayEvents::MissionGoalReached) : 0;
 			Check(State, Heard == State.Goal + 1, FString::Printf(TEXT("MissionGoalReached on the event bus (%d)"), Heard));

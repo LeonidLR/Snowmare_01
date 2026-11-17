@@ -153,8 +153,9 @@ void UMissionGoalsSubsystem::SpawnMarkers()
 	{
 		return;
 	}
-	for (const FMissionGoal& Goal : File.Goals)
+	for (int32 Index = 0; Index < File.Goals.Num(); ++Index)
 	{
+		const FMissionGoal& Goal = File.Goals[Index];
 		AMissionGoalMarkerActor* Marker = World->SpawnActorDeferred<AMissionGoalMarkerActor>(AMissionGoalMarkerActor::StaticClass(),
 			FTransform(Goal.Location), nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 		if (Marker)
@@ -168,7 +169,7 @@ void UMissionGoalsSubsystem::SpawnMarkers()
 				Ring = FMath::Min(Ring, static_cast<float>(FMath::Min(Box.GetSize().X, Box.GetSize().Y) * 0.5 - 30.0));
 			}
 			Marker->RingRadiusCm = FMath::Max(60.f, Ring);
-			Marker->Label = FText::FromString(Goal.Id);
+			Marker->SetGoalNumber(Index + 1, File);
 			Marker->FinishSpawning(FTransform(Goal.Location));
 			Marker->SetGoalShown(true);
 		}

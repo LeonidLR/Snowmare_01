@@ -52,6 +52,9 @@ struct CODEXTACTICS_API FMissionGoalsFile
 	float DefaultRadiusCm = 300.f;
 	/** The feet of an operative must be within this of the goal's floor, cm (same floor). */
 	float FloorToleranceCm = 150.f;
+	/** World-space label height (above the goal's floor) and font size, cm. */
+	float LabelHeightCm = 550.f;
+	float LabelWorldSizeCm = 80.f;
 	TArray<FMissionGoal> Goals;
 };
 
