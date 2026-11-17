@@ -31,11 +31,13 @@
 #include "Core/CodexTacticsPlayerController.h"
 #include "Dom/JsonObject.h"
 #include "Engine/World.h"
+#include "Formation/RampFileRules.h"
 #include "GameFlow/LevelExitSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
+#include "Navigation/PathFollowingComponent.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
 #include "Serialization/JsonReader.h"
@@ -99,6 +101,8 @@ namespace LevelGenRampSmoke
 		bool bStrictNav = false;
 		bool bTrace = false;
 		float TraceClock = 0.f;
+		/** Own-order bit last sample, so a trace run can name the moment it drops. */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, bool> TraceHadOwn;
 		TSet<FString> LegFilter;
 	};
 
@@ -163,6 +167,66 @@ namespace LevelGenRampSmoke
 	float FeetZ(const AOperativeCharacter& Operative)
 	{
 		return static_cast<float>(Operative.GetActorLocation().Z) - Operative.GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	}
+
+	const UPathFollowingComponent* PathFollow(const AOperativeCharacter& Member)
+	{
+		const AAIController* AI = Cast<AAIController>(Member.GetController());
+		return AI ? AI->GetPathFollowingComponent() : nullptr;
+	}
+
+	const TCHAR* FollowStatusName(const AOperativeCharacter& Member)
+	{
+		const UPathFollowingComponent* Follow = PathFollow(Member);
+		if (!Follow)
+		{
+			return TEXT("none");
+		}
+		switch (Follow->GetStatus())
+		{
+		case EPathFollowingStatus::Idle: return TEXT("Idle");
+		case EPathFollowingStatus::Waiting: return TEXT("Waiting");
+		case EPathFollowingStatus::Paused: return TEXT("Paused");
+		case EPathFollowingStatus::Moving: return TEXT("Moving");
+		default: return TEXT("?");
+		}
+	}
+
+	/** The ramp file's travel direction for him this frame (+1 up, -1 down, 0 none). A hold keeps the direction from the frame it started. */
+	int32 TraceFileDirection(const USquadSubsystem& Squad, const AOperativeCharacter& Member)
+	{
+		FVector2D Uphill = FVector2D::ZeroVector;
+		const bool bOnRamp = Squad.IsOperativeOnRamp(Member, &Uphill);
+		const RampFileRules::FRampFileConfig Tune;
+		const float UphillSpeed = static_cast<float>(FVector2D::DotProduct(FVector2D(Member.GetVelocity()), Uphill));
+		const UPathFollowingComponent* Follow = PathFollow(Member);
+		const bool bHasWalk = Squad.IsRampHeld(&Member) || (Follow && Follow->GetStatus() != EPathFollowingStatus::Idle);
+		return RampFileRules::TravelDirection(FeetZ(Member), static_cast<float>(Member.GetLastMoveDestination().Z), bHasWalk, Tune.LevelChangeCm,
+			bOnRamp, UphillSpeed, Tune.ProgressSpeed);
+	}
+
+	void NoteTraceOrders(FState& State, USquadSubsystem& Squad)
+	{
+		if (!State.bTrace)
+		{
+			return;
+		}
+		for (AOperativeCharacter* Member : Squad.GetMembers())
+		{
+			if (!Member)
+			{
+				continue;
+			}
+			const bool bOwn = Member->HasOwnMoveOrder();
+			if (const bool* WasOwn = State.TraceHadOwn.Find(Member); WasOwn && *WasOwn && !bOwn)
+			{
+				const FVector Dest = Member->GetLastMoveDestination();
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke trace ORDER LOST %.2f s: %s follow %s hold %d traffic %d form dest (%.0f, %.0f, %.0f) feet %.0f dz %.0f dir %d"),
+					State.PhaseTime, *Member->DisplayName.ToString(), FollowStatusName(*Member), Squad.IsRampHeld(Member) ? 1 : 0,
+					Member->IsTrafficHeld() ? 1 : 0, Dest.X, Dest.Y, Dest.Z, FeetZ(*Member), Dest.Z - FeetZ(*Member), TraceFileDirection(Squad, *Member));
+			}
+			State.TraceHadOwn.Add(Member, bOwn);
+		}
 	}
 
 	FVector OnNav(UWorld* World, const FVector& P)
@@ -448,6 +512,7 @@ namespace LevelGenRampSmoke
 		State.OrderedUpFor = 0.f;
 		State.StillFor.Reset();
 		State.LastPos.Reset();
+		State.TraceHadOwn.Reset();
 		State.Phase = EPhase::Order;
 	}
 
@@ -575,18 +640,25 @@ namespace LevelGenRampSmoke
 				bStuck |= bCounts && !bUp && Still >= StillFailSeconds;
 			}
 			State.TraceClock += Dt;
+			NoteTraceOrders(State, *Squad);
 			if (State.bTrace && State.TraceClock >= 0.5f)
 			{
 				State.TraceClock = 0.f;
 				FString Line;
 				for (AOperativeCharacter* Member : Squad->GetMembers())
 				{
-					if (Member)
+					if (!Member)
 					{
-						Line += FString::Printf(TEXT(" | %s%s (%.0f, %.0f) feet %.0f v %.0f%s %s"), *Member->DisplayName.ToString(), Member == Squad->GetLeader() ? TEXT("*") : TEXT(""),
-							Member->GetActorLocation().X, Member->GetActorLocation().Y, FeetZ(*Member), Member->GetVelocity().Size2D(),
-							Member->HasOwnMoveOrder() ? TEXT(" own") : TEXT(""), Member->GetStance() == EOperativeStance::Standing ? TEXT("std") : TEXT("low"));
+						continue;
 					}
+					const bool bOnRamp = Squad->IsOperativeOnRamp(*Member);
+					const FVector Dest = Member->GetLastMoveDestination();
+					Line += FString::Printf(TEXT(" | %s%s (%.0f, %.0f) feet %.0f v %.0f follow %s hold %d traffic %d %s destZ %.0f dz %.0f dir %d onramp %d %s"),
+						*Member->DisplayName.ToString(), Member == Squad->GetLeader() ? TEXT("*") : TEXT(""), Member->GetActorLocation().X,
+						Member->GetActorLocation().Y, FeetZ(*Member), Member->GetVelocity().Size2D(), FollowStatusName(*Member),
+						Squad->IsRampHeld(Member) ? 1 : 0, Member->IsTrafficHeld() ? 1 : 0, Member->HasOwnMoveOrder() ? TEXT("own") : TEXT("form"),
+						Dest.Z, Dest.Z - FeetZ(*Member), TraceFileDirection(*Squad, *Member), bOnRamp ? 1 : 0,
+						Member->GetStance() == EOperativeStance::Standing ? TEXT("std") : TEXT("low"));
 				}
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke trace %.1f s:%s"), State.PhaseTime, *Line);
 			}

@@ -475,12 +475,57 @@ void USquadSubsystem::UpdateRampFile(float DeltaTime)
 		for (int32 Index = 0; Index < Walkers.Num(); ++Index)
 		{
 			const int32 Behind = RampFileRules::FindWaitBehind(Index, Walkers, Tune, IsRampHeld(Who[Index]->Operative));
-			if (Behind != INDEX_NONE)
+			if (Behind == INDEX_NONE)
 			{
-				Wait.Add(Who[Index]->Operative);
-				WaitWhy.Add(Who[Index]->Operative, FString::Printf(TEXT("%s is %.0f cm ahead of him %s the ramp"), *Who[Behind]->Operative->DisplayName.ToString(),
-					(Walkers[Behind].Along - Walkers[Index].Along) * static_cast<float>(Walkers[Index].Direction), Walkers[Index].Direction > 0 ? TEXT("up") : TEXT("down")));
+				continue;
 			}
+			// Side by side: FindWaitBehind counts the earlier priority as ahead even when he is level or behind (Ahead <= 0).
+			// G001 trace, STAIR_in_8 group: that paused the Engineer on "Commander is -2 cm ahead" every frame. A man who is
+			// not actually ahead does not hold the file.
+			const float AheadCm = (Walkers[Behind].Along - Walkers[Index].Along) * static_cast<float>(Walkers[Index].Direction);
+			if (AheadCm <= 0.f)
+			{
+				continue;
+			}
+			Wait.Add(Who[Index]->Operative);
+			WaitWhy.Add(Who[Index]->Operative, FString::Printf(TEXT("%s is %.0f cm ahead of him %s the ramp"), *Who[Behind]->Operative->DisplayName.ToString(),
+				AheadCm, Walkers[Index].Direction > 0 ? TEXT("up") : TEXT("down")));
+		}
+	}
+	// G001 trace: at 1.90 s the Medic is already on the roof (feet 302), his own order has ended, and the formation slot on the
+	// leader's floor (dest z 93) walks him back down the stair the others are still climbing. He waits while a climber is on that floor.
+	TSet<AOperativeCharacter*> BlockDescent;
+	for (const FCandidate& Down : Candidates)
+	{
+		if (!Down.Operative)
+		{
+			continue;
+		}
+		const FVector Dest = Down.Operative->GetLastMoveDestination();
+		const float Feet = RampFeetZ(*Down.Operative);
+		if (Dest.Z - Feet >= -Tune.LevelChangeCm)
+		{
+			continue;
+		}
+		for (const FCandidate& Climber : Candidates)
+		{
+			if (!Climber.Operative || Climber.Operative == Down.Operative || Climber.Direction <= 0)
+			{
+				continue;
+			}
+			const float ClimberFeet = RampFeetZ(*Climber.Operative);
+			if (FMath::Abs(ClimberFeet - static_cast<float>(Dest.Z)) > Tune.LevelChangeCm)
+			{
+				continue;
+			}
+			if (FVector::Dist2D(Climber.Operative->GetActorLocation(), Dest) > Tune.MouthCm)
+			{
+				continue;
+			}
+			BlockDescent.Add(Down.Operative);
+			Wait.Add(Down.Operative);
+			WaitWhy.Add(Down.Operative, FString::Printf(TEXT("%s is still climbing to the floor he would walk down to"), *Climber.Operative->DisplayName.ToString()));
+			break;
 		}
 	}
 	for (const FCandidate& Candidate : Candidates)
@@ -490,19 +535,27 @@ void USquadSubsystem::UpdateRampFile(float DeltaTime)
 		{
 			Hold.HeldSeconds += DeltaTime;
 		}
-		const bool bWait = Wait.Contains(Candidate.Operative) && Hold.CooldownSeconds <= 0.f;
-		if (Hold.bHeld && RampFileRules::HoldExpired(Hold.HeldSeconds, Tune))
+		const bool bDescent = BlockDescent.Contains(Candidate.Operative);
+		const bool bWait = Wait.Contains(Candidate.Operative) && (bDescent || Hold.CooldownSeconds <= 0.f);
+		if (Hold.bHeld && !bDescent && RampFileRules::HoldExpired(Hold.HeldSeconds, Tune))
 		{
 			SetRampHold(*Candidate.Operative, false, 0, TEXT("waited too long - the man ahead does not move on"));
 			Hold.CooldownSeconds = Tune.RetryAfterSeconds;
+			Hold.bBlockDescent = false;
 		}
 		else if (bWait && !Hold.bHeld)
 		{
 			SetRampHold(*Candidate.Operative, true, Candidate.Direction, *WaitWhy.FindRef(Candidate.Operative));
+			Hold.bBlockDescent = bDescent;
 		}
 		else if (!bWait && Hold.bHeld)
 		{
 			SetRampHold(*Candidate.Operative, false, 0, TEXT("the way is free"));
+			Hold.bBlockDescent = false;
+		}
+		else
+		{
+			Hold.bBlockDescent = bDescent && Hold.bHeld;
 		}
 	}
 	for (auto It = RampHolds.CreateIterator(); It; ++It)
