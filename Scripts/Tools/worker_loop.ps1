@@ -2,8 +2,8 @@
 # Runs ON the worker as the scheduled task "CodexTactics Worker Loop" (S4U, at startup + a daily watchdog trigger).
 # Day plan (designer, 2026-11-17):
 #   TEST FARM  -FarmFrom (08:00) .. -TrainerAt (16:30): the worker serves smoke batches sent from the main PC
-#              (smoke_parallel.ps1 -Remote auto -> worker_sync.ps1); the loop itself only waits (optional own batch:
-#              -SmokeCommands, once per day at the start of the window; off by default - 289 smokes would fill the window).
+#              (smoke_parallel.ps1 -Remote auto, build.ps1 -Remote worker -> worker_sync.ps1). The loop itself runs one daily
+#              subset at 08:00 (Scripts\Tools\worker_daily_smokes.json, ~30-40 min; -SmokeCommands overrides), then waits.
 #   TRAINER    -TrainerAt .. next -FarmFrom: waits for the evening freeze (worker_sync.ps1 -Frozen -> Saved\Worker\FROZEN,
 #              at most -FreezeWaitMinutes after -TrainerAt), then ONE window run_night_trainer.ps1 -RunId <RunId>
 #              -UntilTime <FarmFrom> (the run resumes; clips + report.html at the end of the window).
@@ -24,7 +24,7 @@ param(
     [string]$FarmFrom = "08:00",              # end of the trainer window = morning report time = start of the test farm
     [string]$TrainerAt = "16:30",             # end of the test farm, the lead posts the frozen commit (chat trainer-night)
     [int]$FreezeWaitMinutes = 90,             # no FROZEN by TrainerAt + this: train on the current code (logged)
-    [string]$SmokeCommands = "",              # own batch at the start of the farm window ("" = none)
+    [string]$SmokeCommands = "",              # own batch at 08:00 ("" = the list in Scripts\Tools\worker_daily_smokes.json)
     [int]$SmokeJobs = 2,
     [string]$SmokeExtraArgs = "-Multiprocess",
     [double]$SyncStaleHours = 3,
@@ -194,8 +194,15 @@ try {
             # ---- test farm ----
             $state = Get-State
             $last = $(if ($state.last_smokes) { [datetime]$state.last_smokes } else { [datetime]::MinValue })
-            if ($SmokeCommands -and $last -lt $farmStart) {
+            $daily = $SmokeCommands
+            $cfg = Join-Path $Repo "Scripts\Tools\worker_daily_smokes.json"
+            if (-not $daily -and (Test-Path $cfg)) {
+                try { $c = Get-Content $cfg -Raw | ConvertFrom-Json; $daily = @($c.smokes) -join ","; if ($c.jobs) { $script:SmokeJobs = [int]$c.jobs } } catch { Say "bad $cfg : $_" }
+            }
+            if ($daily -and $last -lt $farmStart) {
+                $script:SmokeCommands = $daily
                 Invoke-Smokes
+                $script:SmokeCommands = $(if ($PSBoundParameters.ContainsKey("SmokeCommands")) { $SmokeCommands } else { "" })
                 $state | Add-Member -Force NoteProperty last_smokes (Get-Date).ToString("s")
                 $state | ConvertTo-Json | Set-Content -Encoding UTF8 $StateFile
                 continue

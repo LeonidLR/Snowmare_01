@@ -83,10 +83,12 @@ Designer 2026-11-17: agents' smoke batches run on the worker by day, on the main
 has `-Remote auto | on | off` (default: env `CODEX_SMOKE_REMOTE`, else `auto`); `auto` calls
 `Scripts/Tools/smoke_remote.ps1`, which sends the batch to the worker when **all** of these hold, otherwise the batch runs
 locally as before (one `[smoke_remote] local run: <why>` line):
-- the time is 08:00-16:30 (outside it: silently local - trainer time);
+- the time is 08:00-16:30, or inside a one-off window listed in `%LOCALAPPDATA%\CodexTacticsarm_windows.json`
+  (`[{"from": "2026-11-17T19:00", "to": "2026-11-18T00:00"}]`; outside: silently local - trainer time);
 - not on the worker itself;
-- no uncommitted tracked changes under `Source`, `Content`, `Config`, `Plugins`, `Scripts/test_map.json` in the calling
-  checkout (the worker gets its HEAD; commit first to use the farm);
+- the worker already holds this checkout's build (`build.ps1 -Remote worker`, matching tree token) - then smokes only;
+  otherwise no uncommitted tracked changes under `Source`, `Content`, `Config`, `Plugins`, `Scripts/test_map.json` in the
+  calling checkout (the worker gets its HEAD + this checkout's DLLs);
 - `Binaries\Win64` exists and `codex-worker` answers SSH within 6 s;
 - the worker is free within 20 min (another farm batch / sync), and the sync works.
 
@@ -97,6 +99,41 @@ logs come back to `Saved\Logs\Smoke-<Name>[-alone].log` and the result JSON to `
 The worker side ignores the designer-priority wait (no designer there); a local run keeps it. No console windows: ssh / scp
 / git run inside the caller's (hidden) console. `-Remote on` = worker or exit 2; `-Remote off` = always local.
 
+## Remote build (second compile slot) - `build.ps1 -Remote worker`
+
+Lead / designer 2026-11-17: agents should not wait 10-30 min in the main PC's single UBT queue. The worker has
+**VS Build Tools 2026** (MSVC 14.51.36231 + Windows SDK 10.0.26100 - the same toolchain as the main PC - plus the .NET
+Framework 4.8 SDK, which UBT needs for SwarmInterface; installed with `winget install Microsoft.VisualStudio.BuildTools` and
+`setup.exe modify --add Microsoft.Net.Component.4.8.SDK`).
+
+```
+powershell -ExecutionPolicy Bypass -File Scripts/build.ps1 -Remote worker           # from any checkout / agent worktree
+powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Commands X     # then: smokes run on that very build
+```
+
+`Scripts/Tools/build_remote.ps1` (via `worker_sync.ps1 -Build -FetchBinaries`, same lock / handshake as above):
+1. ships the checkout's HEAD (unpushed commits as a git bundle), its **uncommitted** tracked changes (`git diff HEAD
+   --binary` patch) and its untracked files under `Source` / `Config` (zip); untracked `Source` leftovers of an earlier
+   tree are removed on the worker, so the worker's tree equals the caller's;
+2. runs the checkout's own `Scripts/build.ps1` on the worker (UBT, 4 parallel actions on the i7-6700K);
+3. copies the changed `Binaries\Win64` files back (no `*.pdb`; `build_remote.ps1 -WithPdb` adds them) and the log to
+   `Saved\Logs\Build.log` - the same place and summary lines as a local build;
+4. writes `Saved\Worker\tree.json` (tree token = HEAD + hash of the uncommitted part, `Scripts/Tools/tree_token.ps1`).
+   `smoke_parallel` (-Remote auto / on) compares it with the calling checkout: same tree -> smokes only, no sync and no
+   binaries upload; uncommitted work is fine then.
+
+Exit code: 0 built + DLLs here, 1 compile failed, 2 worker / sync / copy error (nothing changed locally: build here).
+Timing: `Saved\Logs\RemoteBuilds.jsonl` (caller, door to door) and `Saved\Worker\builds.jsonl` (worker, UBT).
+One worker = one extra slot: a second caller waits for the worker lock (30 min) - then build locally.
+
+Measured 2026-11-17 (wired LAN, Development Editor, `CodexTacticsEditor`):
+
+| | worker UBT | door to door (sync + compile + DLLs back) | main PC (lead's figures) |
+|---|---|---|---|
+| clean (empty Intermediate) | 7.2 min | 8.1 min (214 MB DLLs back) | 8-11 min |
+| incremental, one .cpp changed (uncommitted, as a patch) | 35 s | 1.2 min (15 MB back) | 2-5 min |
+| smoke on that build (`MovementSmoke`) | 42 s | 0.9 min, no sync | - |
+
 ## Continuous loop (test farm + trainer) - `worker_loop.ps1`
 
 One Windows scheduled task on the worker runs `Scripts/Tools/worker_loop.ps1`; nothing on it is started by hand.
@@ -104,7 +141,7 @@ One Windows scheduled task on the worker runs `Scripts/Tools/worker_loop.ps1`; n
 | | |
 |---|---|
 | Task | `CodexTactics Worker Loop` - S4U as `codex-worker\user`, Highest, no time limit, triggers: at startup (+2 min) and daily 08:10 (watchdog; `IgnoreNew` while it runs), 3 restarts on failure |
-| 08:00-16:30 test farm | the loop waits (status `farm`) while main-PC batches come in. Optional own batch `-SmokeCommands` at 08:00 (off: the 289-smoke registry would fill the window) |
+| 08:00-16:30 test farm | at 08:00 the loop runs the daily subset `Scripts/Tools/worker_daily_smokes.json` (one smoke per core system, ~30-40 min, lead-editable; `-SmokeCommands` overrides), results `Saved\Worker\smokes\`; then it waits (status `farm`) while main-PC builds / smoke batches come in. The worker session posts the subset result in agent-chat `worker-ops` (`--status`; a FAIL as a normal post to claude) |
 | 16:30 freeze | the lead posts the frozen commit in agent-chat topic `trainer-night`; the worker session runs `worker_sync.ps1 -Ref <commit> -SkipSmoke -Frozen` (binaries: the main checkout, built from that commit). The loop waits for `Saved\Worker\FROZEN` until 18:00 (`-FreezeWaitMinutes 90`), then trains on the current code anyway (`NO FREEZE` in loop.log) |
 | 16:30-08:00 trainer | ONE window `run_night_trainer.ps1 -RunId <RunId> -Parallel 2 -UntilTime 08:00` (the run resumes; clips + `report.html` at the end, so the clips are ready at ~08:15) |
 | Files (worker, `C:\Work\CodexTactics\Saved\Worker\`) | `loop.log`, `loop.status.json` (phase), `sync_points.log`, `FROZEN`, `trainer-window.log`, `smokes\` (own batch); trainer: `Saved\Trainer\scheduler.log`, `Saved\Trainer\<RunId>\` |
