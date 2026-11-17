@@ -6,9 +6,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/DeathRagdollRules.h"
-#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
-#include "Particles/ParticleSystemComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -18,15 +16,10 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
-#include "HAL/PlatformTime.h"
-#include "Misc/App.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "PhysicsEngine/PhysicsAsset.h"
 #include "PhysicsEngine/SkeletalBodySetup.h"
-#include "ProceduralMeshComponent.h"
-#include "Rendering/SkeletalMeshRenderData.h"
-#include "SkeletalRenderPublic.h"
 
 namespace CorpseTuning
 {
@@ -44,249 +37,9 @@ namespace CorpseTuning
 		TEXT("Enable death ragdoll simulation on fatal damage (1). 0 = fallback to animation montage / LayCorpseDown."));
 	static TAutoConsoleVariable<int32> CVarRagdollMax(TEXT("Codex.DeathRagdoll.MaxSimultaneous"), -1,
 		TEXT("Override max simultaneous ragdolls (-1 = from JSON config)"));
-	static TAutoConsoleVariable<int32> CVarReleaseFrozenPhysics(TEXT("Codex.Corpse.ReleaseFrozenPhysics"), 1,
-		TEXT("After a ragdoll corpse freezes, unregister its EndPhysics tick and destroy its physics state (1). 0 leaves the bodies (cost A/B only). The posed mesh is kept."));
-	static TAutoConsoleVariable<int32> CVarPoseSnapshot(TEXT("Codex.Corpse.PoseSnapshot"), 1,
-		TEXT("1 = copy the settled ragdoll into a procedural mesh and stop the skeletal mesh drawing (it stays visible). 0 keeps skinning it (cost A/B)."));
-	static TAutoConsoleVariable<int32> CVarCostTrace(TEXT("Codex.Corpse.CostTrace"), 0,
-		TEXT("1 = once a second, log UCorpseSubsystem tick time and how many frozen ragdolls still simulate, blend physics, tick, or own a physics state"));
 
 	/** Seconds between two cap checks. */
 	constexpr float CapCheckSeconds = 0.5f;
-
-	/**
-	 * SetAllBodiesSimulatePhysics(false) runs while bBlendPhysics is still true and collision still has physics, so
-	 * UpdateEndPhysicsTickRegisteredState keeps the EndPhysics tick. NoCollision does not destroy those bodies.
-	 * Clearing the blend weight unregisters the tick. RecreatePhysicsState then drops the bodies; with NoCollision,
-	 * ShouldCreatePhysicsState is false and they are not built again. Component-space bone transforms are left as the
-	 * last ragdoll pose (bPauseAnims already holds it).
-	 */
-	static void ReleaseFrozenRagdollPhysics(USkeletalMeshComponent* Mesh)
-	{
-		if (!Mesh || CVarReleaseFrozenPhysics.GetValueOnGameThread() == 0)
-		{
-			return;
-		}
-		// SetAllBodiesSimulatePhysics(false) leaves the root BodyInstance set to simulate, so a later recreate
-		// builds the ragdoll again and the mesh tick comes back. Clear the root and the collision first.
-		Mesh->SetSimulatePhysics(false);
-		Mesh->SetAllBodiesSimulatePhysics(false);
-		Mesh->bBlendPhysics = false;
-		Mesh->SetAllBodiesPhysicsBlendWeight(0.f);
-		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Mesh->KinematicBonesUpdateType = EKinematicBonesUpdateToPhysics::SkipAllBones;
-		if (Mesh->IsPhysicsStateCreated())
-		{
-			Mesh->RecreatePhysicsState();
-		}
-		// A frozen pose does not move. Auto shadow-cache invalidation treats every skinned mesh as deformable and
-		// rebuilds virtual shadow pages for it every frame it draws.
-		Mesh->bPerBoneMotionBlur = false;
-		Mesh->ShadowCacheInvalidationBehavior = EShadowCacheInvalidationBehavior::Static;
-		UE_LOG(LogCodexTactics, Log, TEXT("[Corpse] %s frozen physics released (physics state %d)"),
-			*GetNameSafe(Mesh->GetOwner()), Mesh->IsPhysicsStateCreated() ? 1 : 0);
-	}
-
-	/**
-	 * One CPU skin of the current component-space pose (the ragdoll, not the anim graph) into a procedural mesh,
-	 * then stop the skeletal mesh drawing. SetRenderStatic is not used: it binds the reference-pose vertex buffers.
-	 * bEnableAnimation is cleared first so GetCPUSkinnedVertices' RefreshBoneTransforms does not evaluate the anim
-	 * graph over the settled pose. The skeletal mesh stays bVisible so persist and GetBoneLocation still see it.
-	 * Returns null (and leaves the skeletal mesh drawing) when the snapshot cannot be built.
-	 */
-	static UProceduralMeshComponent* SnapshotFrozenPose(ACharacter* Owner, USkeletalMeshComponent* Mesh)
-	{
-		if (!Owner || !Mesh || !Mesh->GetSkeletalMeshAsset() || !FApp::CanEverRender())
-		{
-			return nullptr;
-		}
-		const bool bWasAnimationEnabled = Mesh->bEnableAnimation != 0;
-		Mesh->bEnableAnimation = false;
-		Mesh->bNoSkeletonUpdate = true;
-		Mesh->bPauseAnims = true;
-
-		const int32 NumLODs = Mesh->GetNumLODs();
-		if (NumLODs <= 0)
-		{
-			Mesh->bEnableAnimation = bWasAnimationEnabled;
-			Mesh->bNoSkeletonUpdate = false;
-			return nullptr;
-		}
-		const int32 LODIndex = FMath::Clamp(Mesh->GetPredictedLODLevel(), 0, NumLODs - 1);
-		TArray<FFinalSkinVertex> Skinned;
-		Mesh->GetCPUSkinnedVertices(Skinned, LODIndex);
-		const FSkeletalMeshRenderData* RenderData = Mesh->GetSkeletalMeshRenderData();
-		if (!RenderData || !RenderData->LODRenderData.IsValidIndex(LODIndex) || Skinned.Num() == 0
-			|| Skinned.Num() != RenderData->LODRenderData[LODIndex].GetNumVertices()
-			|| !RenderData->LODRenderData[LODIndex].MultiSizeIndexContainer.IsIndexBufferValid())
-		{
-			Mesh->bEnableAnimation = bWasAnimationEnabled;
-			Mesh->bNoSkeletonUpdate = false;
-			UE_LOG(LogCodexTactics, Warning, TEXT("[Corpse] %s frozen pose snapshot skipped (lod %d, verts %d)"),
-				*GetNameSafe(Owner), LODIndex, Skinned.Num());
-			return nullptr;
-		}
-		const FSkeletalMeshLODRenderData& LOD = RenderData->LODRenderData[LODIndex];
-		TArray<uint32> Indices;
-		LOD.MultiSizeIndexContainer.GetIndexBuffer(Indices);
-
-		UProceduralMeshComponent* Pose = NewObject<UProceduralMeshComponent>(Owner, NAME_None, RF_Transient);
-		Pose->SetMobility(Mesh->Mobility);
-		Pose->SetupAttachment(Mesh);
-		Pose->SetRelativeTransform(FTransform::Identity);
-		Pose->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-		Pose->SetCanEverAffectNavigation(false);
-		Pose->SetCastShadow(Mesh->CastShadow);
-		Pose->ShadowCacheInvalidationBehavior = EShadowCacheInvalidationBehavior::Static;
-		Pose->SetVisibleInRayTracing(false);
-		Pose->bReceivesDecals = Mesh->bReceivesDecals;
-		Pose->SetLightingChannels(Mesh->LightingChannels.bChannel0, Mesh->LightingChannels.bChannel1, Mesh->LightingChannels.bChannel2);
-		Pose->RegisterComponent();
-
-		int32 SectionsBuilt = 0;
-		for (int32 SectionIndex = 0; SectionIndex < LOD.RenderSections.Num(); ++SectionIndex)
-		{
-			const FSkelMeshRenderSection& Section = LOD.RenderSections[SectionIndex];
-			const uint32 IndexCount = Section.NumTriangles * 3;
-			if (Section.NumTriangles == 0 || Section.BaseIndex + IndexCount > static_cast<uint32>(Indices.Num()))
-			{
-				continue;
-			}
-			TArray<int32> Remap;
-			Remap.Init(INDEX_NONE, Skinned.Num());
-			TArray<FVector> Vertices;
-			TArray<FVector> Normals;
-			TArray<FVector2D> UVs;
-			TArray<FProcMeshTangent> Tangents;
-			TArray<int32> Triangles;
-			Vertices.Reserve(Section.NumVertices);
-			Normals.Reserve(Section.NumVertices);
-			UVs.Reserve(Section.NumVertices);
-			Tangents.Reserve(Section.NumVertices);
-			Triangles.Reserve(IndexCount);
-			bool bIndicesFit = true;
-			for (uint32 Index = 0; Index < IndexCount; ++Index)
-			{
-				const uint32 Source = Indices[Section.BaseIndex + Index];
-				if (Source >= static_cast<uint32>(Skinned.Num()))
-				{
-					bIndicesFit = false;
-					break;
-				}
-				int32& Dest = Remap[Source];
-				if (Dest == INDEX_NONE)
-				{
-					const FFinalSkinVertex& Vertex = Skinned[Source];
-					const FVector Normal(Vertex.TangentZ.ToFVector());
-					const FVector TangentX(Vertex.TangentX.ToFVector());
-					const FVector TangentY(Vertex.GetTangentY());
-					const bool bFlip = FVector::DotProduct(FVector::CrossProduct(Normal, TangentX), TangentY) < 0.0;
-					Dest = Vertices.Num();
-					Vertices.Add(FVector(Vertex.Position));
-					Normals.Add(Normal);
-					UVs.Add(FVector2D(Vertex.TextureCoordinates[0]));
-					Tangents.Add(FProcMeshTangent(TangentX, bFlip));
-				}
-				Triangles.Add(Dest);
-			}
-			if (!bIndicesFit || Triangles.Num() != static_cast<int32>(IndexCount))
-			{
-				continue;
-			}
-			Pose->CreateMeshSection(SectionsBuilt, Vertices, Triangles, Normals, UVs, TArray<FColor>(), Tangents, false);
-			if (UMaterialInterface* Material = Mesh->GetMaterial(Section.MaterialIndex))
-			{
-				Pose->SetMaterial(SectionsBuilt, Material);
-			}
-			++SectionsBuilt;
-		}
-		if (SectionsBuilt == 0)
-		{
-			Pose->DestroyComponent();
-			Mesh->bEnableAnimation = bWasAnimationEnabled;
-			Mesh->bNoSkeletonUpdate = false;
-			UE_LOG(LogCodexTactics, Warning, TEXT("[Corpse] %s frozen pose snapshot skipped (no sections)"), *GetNameSafe(Owner));
-			return nullptr;
-		}
-		Pose->SetComponentTickEnabled(false);
-
-		// Queued before bNeverNeedsRenderUpdate, so this frame still applies "do not draw". Later bone uploads do not.
-		Mesh->SetRenderInMainPass(false);
-		Mesh->SetRenderInDepthPass(false);
-		Mesh->SetCastShadow(false);
-		Mesh->SetVisibleInRayTracing(false);
-		Mesh->SetRenderCustomDepth(false);
-		Mesh->bNeverNeedsRenderUpdate = true;
-		Mesh->SetComponentTickEnabled(false);
-		UE_LOG(LogCodexTactics, Log, TEXT("[Corpse] %s frozen pose snapshot lod %d, %d verts, %d sections (skeletal draw off)"),
-			*GetNameSafe(Owner), LODIndex, Skinned.Num(), SectionsBuilt);
-		return Pose;
-	}
-
-	/**
-	 * FreezeCorpse refuses while the body still reports a fall or a ladder, and a released ragdoll can rebuild a physics
-	 * state afterwards. Either one leaves a body the subsystem already counts as frozen still ticking. Stop the same
-	 * work FreezeCorpse stops. Returns true when something was still live.
-	 */
-	static bool QuietFrozenBody(AActor* Actor)
-	{
-		if (!Actor)
-		{
-			return false;
-		}
-		APawn* Pawn = Cast<APawn>(Actor);
-		ACharacter* Char = Cast<ACharacter>(Actor);
-		USkeletalMeshComponent* Mesh = Char ? Char->GetMesh() : nullptr;
-		// Physics state alone is not enough: a settled anim corpse keeps a kinematic state with the tick already off.
-		// Recreating that every frame would cost more than the leak. The leak is a tick that came back.
-		const bool bMeshLive = Mesh && (Mesh->IsComponentTickEnabled() || Mesh->IsSimulatingPhysics() || Mesh->bBlendPhysics);
-		if (!Actor->IsActorTickEnabled() && !bMeshLive && !(Pawn && Pawn->GetController()))
-		{
-			return false;
-		}
-		if (Pawn)
-		{
-			if (AController* Brain = Pawn->GetController())
-			{
-				Brain->UnPossess();
-				Brain->Destroy();
-			}
-		}
-		if (UCharacterMovementComponent* Move = Char ? Char->GetCharacterMovement() : nullptr)
-		{
-			Move->StopMovementImmediately();
-			Move->DisableMovement();
-		}
-		if (Mesh)
-		{
-			Mesh->bPauseAnims = true;
-			Mesh->bNoSkeletonUpdate = true;
-			Mesh->bEnableAnimation = false;
-			ReleaseFrozenRagdollPhysics(Mesh);
-			Mesh->SetComponentTickEnabled(false);
-		}
-		Actor->ForEachComponent<UActorComponent>(false, [](UActorComponent* Component)
-		{
-			Component->SetComponentTickEnabled(false);
-			if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Component))
-			{
-				Primitive->SetCollisionEnabled(ECollisionEnabled::NoCollision);
-			}
-			if (UFXSystemComponent* Effect = Cast<UFXSystemComponent>(Component))
-			{
-				Effect->Deactivate();
-			}
-		});
-		Actor->SetActorTickEnabled(false);
-		if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Actor))
-		{
-			if (UEnemyRegistrySubsystem* Registry = Actor->GetWorld() ? Actor->GetWorld()->GetSubsystem<UEnemyRegistrySubsystem>() : nullptr)
-			{
-				Registry->UnregisterEnemy(Enemy);
-			}
-		}
-		return true;
-	}
 
 	/** Every simulating body of the ragdoll faster than MaxSpeed (cm/s) slowed to it (3D: also the animation's downward bone speed). */
 	static void ClampRagdollBodySpeeds(USkeletalMeshComponent* Mesh, float MaxSpeed)
@@ -792,24 +545,9 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 								*Char->GetName(), FloorZ - BottomAfter, BottomAfter, FloorZ, Lift);
 						}
 					}
-					CorpseTuning::ReleaseFrozenRagdollPhysics(Mesh);
 				}
 			}
 			Body->FreezeCorpse();
-			if (Kept.bIsRagdoll)
-			{
-				ACharacter* FrozenChar = Cast<ACharacter>(Actor);
-				if (USkeletalMeshComponent* Mesh = FrozenChar ? FrozenChar->GetMesh() : nullptr)
-				{
-					// FreezeCorpse only disables the component tick. A physics state rebuilt there is dropped again,
-					// then the settled pose is copied so the skeletal mesh can stop skinning.
-					CorpseTuning::ReleaseFrozenRagdollPhysics(Mesh);
-					if (CorpseTuning::CVarPoseSnapshot.GetValueOnGameThread() != 0)
-					{
-						Kept.PoseMesh = CorpseTuning::SnapshotFrozenPose(FrozenChar, Mesh);
-					}
-				}
-			}
 			Kept.bFrozen = true;
 			UE_LOG(LogCodexTactics, Verbose, TEXT("[Corpse] %s frozen %.2f s after death (%s, ragdoll=%d)"),
 				*Actor->GetName(), SinceDeath,
@@ -914,113 +652,17 @@ void UCorpseSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
-	// The cap treats the skeletal mesh as the visual. A pose snapshot draws a child instead, so copy its render time
-	// across or an on-screen corpse looks out of view and can be the one faded.
-	for (const FKeptCorpse& Kept : Corpses)
-	{
-		const UProceduralMeshComponent* Pose = Kept.PoseMesh.Get();
-		if (!Pose)
-		{
-			continue;
-		}
-		ACharacter* Stamped = Cast<ACharacter>(Kept.Body.Get());
-		USkeletalMeshComponent* Skel = Stamped ? Stamped->GetMesh() : nullptr;
-		if (Skel && Pose->GetLastRenderTime() > Skel->GetLastRenderTime())
-		{
-			Skel->SetLastRenderTime(Pose->GetLastRenderTime());
-		}
-	}
-	const bool bTrace = CorpseTuning::CVarCostTrace.GetValueOnGameThread() != 0;
-	const double TraceStart = bTrace ? FPlatformTime::Seconds() : 0.0;
 	Corpses.RemoveAll([](const FKeptCorpse& Kept) { return !Kept.Body.IsValid() || Kept.Body->IsActorBeingDestroyed(); });
 	const FCorpseConfig Config = GetConfig();
 	const double Now = World->GetTimeSeconds();
-	const double SettleStart = bTrace ? FPlatformTime::Seconds() : 0.0;
 	UpdateSettling(Now, Config);
-	// A settle that FreezeCorpse declined, or a ragdoll whose physics state came back, is still in this list as frozen.
-	for (const FKeptCorpse& Kept : Corpses)
-	{
-		if (!Kept.bFrozen)
-		{
-			continue;
-		}
-		AActor* Actor = Kept.Body.Get();
-		if (!Actor || !CorpseTuning::QuietFrozenBody(Actor))
-		{
-			continue;
-		}
-		const ICorpseBody* Declined = AsCorpse(Actor);
-		UE_LOG(LogCodexTactics, Log, TEXT("[Corpse] %s frozen tick came back; stopped again (FreezeCorpse %s)"),
-			*Actor->GetName(), Declined && Declined->IsCorpseFrozen() ? TEXT("had run") : TEXT("declined"));
-	}
-	const double SettleMs = bTrace ? (FPlatformTime::Seconds() - SettleStart) * 1000.0 : 0.0;
 	CapTimer -= DeltaTime;
-	double CapMs = 0.0;
 	if (CapTimer <= 0.f || Corpses.Num() > Config.Cap + 8)
 	{
 		CapTimer = CorpseTuning::CapCheckSeconds;
-		const double CapStart = bTrace ? FPlatformTime::Seconds() : 0.0;
 		ApplyCap(Config, Now);
-		CapMs = bTrace ? (FPlatformTime::Seconds() - CapStart) * 1000.0 : 0.0;
 	}
-	const double FadeStart = bTrace ? FPlatformTime::Seconds() : 0.0;
 	UpdateFades(Now, Config);
-	if (!bTrace)
-	{
-		return;
-	}
-	const double FadeMs = (FPlatformTime::Seconds() - FadeStart) * 1000.0;
-	const double TickMs = (FPlatformTime::Seconds() - TraceStart) * 1000.0;
-	static double WindowSeconds = 0.0;
-	static double SumTickMs = 0.0;
-	static double SumSettleMs = 0.0;
-	static double SumCapMs = 0.0;
-	static double SumFadeMs = 0.0;
-	static int32 Frames = 0;
-	WindowSeconds += DeltaTime;
-	SumTickMs += TickMs;
-	SumSettleMs += SettleMs;
-	SumCapMs += CapMs;
-	SumFadeMs += FadeMs;
-	++Frames;
-	if (WindowSeconds < 1.0)
-	{
-		return;
-	}
-	int32 Frozen = 0;
-	int32 Simulating = 0;
-	int32 Blend = 0;
-	int32 Physics = 0;
-	int32 Ticking = 0;
-	int32 Posed = 0;
-	for (const FKeptCorpse& Kept : Corpses)
-	{
-		if (!Kept.bFrozen)
-		{
-			continue;
-		}
-		++Frozen;
-		Posed += Kept.PoseMesh.IsValid() ? 1 : 0;
-		const ACharacter* Char = Cast<ACharacter>(Kept.Body.Get());
-		const USkeletalMeshComponent* Mesh = Char ? Char->GetMesh() : nullptr;
-		if (!Mesh)
-		{
-			continue;
-		}
-		Simulating += Mesh->IsSimulatingPhysics() ? 1 : 0;
-		Blend += Mesh->bBlendPhysics ? 1 : 0;
-		Physics += Mesh->IsPhysicsStateCreated() ? 1 : 0;
-		Ticking += Mesh->IsComponentTickEnabled() ? 1 : 0;
-	}
-	const double N = FMath::Max(Frames, 1);
-	UE_LOG(LogCodexTactics, Display, TEXT("[CorpseCostTrace] tick %.3f ms (settling %.3f, cap %.3f, fades %.3f) over %d frames; frozen %d, simulating %d, blend %d, physics state %d, mesh tick %d, pose %d"),
-		SumTickMs / N, SumSettleMs / N, SumCapMs / N, SumFadeMs / N, Frames, Frozen, Simulating, Blend, Physics, Ticking, Posed);
-	WindowSeconds = 0.0;
-	SumTickMs = 0.0;
-	SumSettleMs = 0.0;
-	SumCapMs = 0.0;
-	SumFadeMs = 0.0;
-	Frames = 0;
 }
 
 namespace CorpseCommands

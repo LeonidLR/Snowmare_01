@@ -10,7 +10,6 @@
 class AActor;
 class ACharacter;
 class ICorpseBody;
-class UProceduralMeshComponent;
 class USkeletalMeshComponent;
 
 /**
@@ -131,11 +130,6 @@ private:
 		bool bIsRagdoll = false;
 		bool bPlayerTeam = false;
 		EDamageType DamageType = EDamageType::Kinetic;
-		/**
-		 * Settled ragdoll pose copied once into a procedural mesh. The skeletal mesh stays registered and visible
-		 * (persist / pelvis queries) but stops drawing, so the game thread does not skin it every frame.
-		 */
-		TWeakObjectPtr<UProceduralMeshComponent> PoseMesh;
 	};
 
 	/** The body's corpse interface (null: gone / not one). */
