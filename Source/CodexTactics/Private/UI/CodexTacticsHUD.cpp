@@ -1844,8 +1844,9 @@ ETransferRequestOutcome ACodexTacticsHUD::HandleTransferDropOnActor(AOperativeCh
 	}
 	if (AOperativeCharacter* Recipient = Transfer->ResolveDropRecipient(Sender, TargetActor, Point))
 	{
-		// First aid (the game designer 2026-11-16, UFirstAidSubsystem): a medkit / medical bag dropped on a heavily wounded mate (first_aid.json
-		// treat_on_drop_tiers) - the sender walks up and treats him; Shift held hands it over instead (like the heat pack). Turn-based: a hand-over.
+		// First aid (the game designer 2026-11-16, widened 2026-11-17): a medkit / medical bag dropped on a mate whose HP is below max
+		// (first_aid.json treat_on_drop_tiers) - the sender walks up and treats him; Shift held, or a mate at full HP, hands it over.
+		// Turn-based: a hand-over.
 		UFirstAidSubsystem* FirstAid = UFirstAidSubsystem::Get(this);
 		const UTurnBasedCombatSubsystem* TurnBased = GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>();
 		if ((Item == ETransferItem::Medkit || Item == ETransferItem::MedicalBag) && FirstAid && !(TurnBased && TurnBased->IsActive())
