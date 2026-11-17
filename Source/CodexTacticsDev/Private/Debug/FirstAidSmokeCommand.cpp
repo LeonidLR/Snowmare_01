@@ -14,6 +14,12 @@
 //     (consume_on_cancel false), the clips stopped.
 //  7. G006 (designer 2026-11-17): at level start the Medic-Sapper's drawer lists the medical bag (start_medical_bags, not a smoke assignment);
 //     a medkit dragged onto a LIGHT-wounded mate starts aid (not a transfer); the same drop with Shift hands the medkit over.
+//  8. R17-6 (designer 2026-11-17, the lying patient): the heavy patient lies on all fours (pose "crawl"); the medkit aid and the bag aid run with
+//     two pick seeds (UFirstAidSubsystem::SetPickSeed) chosen so they pick DIFFERENT variants of the crawl set (a crawl idle / the lie-down onto the
+//     side), each the seed's predicted pick; through the whole transition (blend-in, treatment, blend-out) the patient's VISIBLE body - the long axis
+//     pelvis -> head from the mesh bones - turns slower than patient.max_body_turn_deg_s (0.2 s windows; the old 0.25 s blend into the side-lying
+//     clip swung it ~150 deg = ~600 deg/s); the helper kneels at his SIDE (not at his head / feet) facing his chest; after the completed aid the
+//     patient gets up (patient.poses.crawl.end "stand") once his clip has blended out.
 // Before the copies exist (Scripts/Editor/setup_first_aid_animation.py) the clip checks fail with "no clip"; the rules still run.
 // Nothing is saved. Godot reference: none (UE-only; Godot's medkit was instant, player.gd heal_with_item).
 
@@ -89,6 +95,9 @@ namespace FirstAidSmoke
 		FString PatientClip;
 		float MaxHelperSlot = 0.f;
 		float MaxPatientSlot = 0.f;
+		/** R17-6: the patient's visible body heading (the long axis pelvis -> head, mesh bones) and his capsule yaw, (time s, yaw deg). */
+		TArray<FVector2D> BodyYaw;
+		TArray<FVector2D> CapsuleYaw;
 	};
 
 	struct FState
@@ -108,6 +117,16 @@ namespace FirstAidSmoke
 		float HealthBefore = 0.f;
 		float MedkitGain = 0.f;
 		float MedkitSeconds = 0.f;
+		/** R17-6: the record of the aid under test was checked; now its blend-out / stand-up is watched. */
+		bool bRecordChecked = false;
+		FString AidPatientClip;
+		FString MedkitPatientClip;
+		int32 StandUpsBefore = 0;
+		float PatientYaw0 = 0.f;
+		int32 MedkitSeed = 0;
+		int32 BagSeed = 0;
+		FString MedkitPredicted;
+		FString BagPredicted;
 		FRunSamples Samples;
 		TArray<FString> Report;
 	};
@@ -181,6 +200,58 @@ namespace FirstAidSmoke
 		}
 		const AOperativeCharacter* A = State.A.Get();
 		State.Samples.WeaponHiddenFrames += A && A->WeaponMesh && !A->WeaponMesh->IsVisible() ? 1 : 0;
+	}
+
+	/** R17-6: the patient's visible body heading (the long axis from the mesh bones, when he lies) and his capsule yaw. */
+	void SamplePatientBody(FState& State)
+	{
+		const AOperativeCharacter* B = State.B.Get();
+		const USkeletalMeshComponent* Mesh = B ? B->GetMesh() : nullptr;
+		if (!Mesh)
+		{
+			return;
+		}
+		const FVector Axis = Mesh->GetSocketLocation(TEXT("head")) - Mesh->GetSocketLocation(TEXT("pelvis"));
+		if (Axis.Size2D() > 25.f)
+		{
+			State.Samples.BodyYaw.Add(FVector2D(State.Time, Axis.Rotation().Yaw));
+		}
+		State.Samples.CapsuleYaw.Add(FVector2D(State.Time, B->GetActorRotation().Yaw));
+	}
+
+	/** The patient clip a seed picks first in the crawl set (UFirstAidSubsystem::SetPickSeed: the patient's first draw of FRandomStream(Seed)). */
+	FString PredictedPatientClip(const TArray<FString>& Set, int32 Seed)
+	{
+		FRandomStream Stream(Seed);
+		const int32 Index = PickClipIndex(Set.Num(), Stream.FRand(), INDEX_NONE);
+		return Set.IsValidIndex(Index) ? Set[Index] : FString();
+	}
+
+	/** Two seeds for the two aids: the medkit's picks a crawl idle (no turn), the bag's the most-turning clip (the lie-down), else any other one. */
+	void ChooseSeeds(FState& State, const FFirstAidConfig& Config)
+	{
+		const TArray<FString>& Set = PatientClipSet(Config, Config.Medkit, EPatientPose::Crawl);
+		auto Turn = [&Config](const FString& Clip) { return FMath::Abs(PatientClipPlay(Config, EPatientPose::Crawl, Clip).LongAxisDeg); };
+		float MostTurn = 0.f;
+		for (const FString& Clip : Set)
+		{
+			MostTurn = FMath::Max(MostTurn, Turn(Clip));
+		}
+		State.MedkitSeed = State.BagSeed = 0;
+		for (int32 Seed = 1; Seed < 500 && (State.MedkitSeed == 0 || State.BagSeed == 0); ++Seed)
+		{
+			const FString Clip = PredictedPatientClip(Set, Seed);
+			if (State.MedkitSeed == 0 && Turn(Clip) < 1.f)
+			{
+				State.MedkitSeed = Seed;
+				State.MedkitPredicted = Clip;
+			}
+			else if (State.MedkitSeed != 0 && State.BagSeed == 0 && Clip != State.MedkitPredicted && (Turn(Clip) >= MostTurn || MostTurn < 1.f))
+			{
+				State.BagSeed = Seed;
+				State.BagPredicted = Clip;
+			}
+		}
 	}
 
 	/** Starts a stage's treatment bookkeeping. */
@@ -513,12 +584,32 @@ namespace FirstAidSmoke
 		case EStage::BagAidStart:
 		case EStage::CancelStart:
 		{
-			if (State.StageTime < 1.f)
+			// The patient down again (the previous aid stood him up): prone, on all fours, the stance clip over.
+			SetHealthShare(B, HeavyPct);
+			if (State.StageTime < 1.f || B->GetStance() != EOperativeStance::Prone || (State.Stage != EStage::MedkitAidStart && State.StageTime < 3.f))
 			{
+				if (State.StageTime > 15.f)
+				{
+					Check(State, false, TEXT("[aid] the wounded never went down again"));
+					return Finish(State, false);
+				}
 				return true;
 			}
 			const bool bBag = State.Stage == EStage::BagAidStart;
 			const EFirstAidItem Item = bBag ? EFirstAidItem::MedicalBag : EFirstAidItem::Medkit;
+			if (State.Stage == EStage::MedkitAidStart)
+			{
+				ChooseSeeds(State, Config);
+				Check(State, State.MedkitSeed != 0 && State.BagSeed != 0, FString::Printf(TEXT("[variants] seeds %d / %d pick '%s' / '%s' of the crawl set"),
+					State.MedkitSeed, State.BagSeed, *State.MedkitPredicted, *State.BagPredicted));
+			}
+			if (State.Stage != EStage::CancelStart)
+			{
+				FirstAid->SetPickSeed(bBag ? State.BagSeed : State.MedkitSeed);
+			}
+			State.bRecordChecked = false;
+			State.StandUpsBefore = FirstAid->GetStandUps();
+			State.PatientYaw0 = static_cast<float>(B->GetActorRotation().Yaw);
 			if (bBag)
 			{
 				// The helper in this smoke is the commander. His bag is the treatment under test, not the medic's start kit.
@@ -570,6 +661,7 @@ namespace FirstAidSmoke
 				if (Running && Running->Frames > 0)
 				{
 					Sample(State);
+					SamplePatientBody(State);
 				}
 				SetHealthShare(A, 1.f);
 				if (State.StageTime > StageLimit)
@@ -579,6 +671,33 @@ namespace FirstAidSmoke
 				}
 				return true;
 			}
+			if (State.bRecordChecked)
+			{
+				// R17-6: the patient's clip blends out (his capsule turns back), then he gets up.
+				if (FirstAid->IsSettling(B) && State.StageTime < StageLimit + 8.f)
+				{
+					SamplePatientBody(State);
+					return true;
+				}
+				const float BodyRate = MaxTurnRate(State.Samples.BodyYaw, 0.2f);
+				const float CapsuleRate = MaxTurnRate(State.Samples.CapsuleYaw, 0.2f);
+				const float BodyEnd = State.Samples.BodyYaw.IsEmpty() ? 0.f
+					: FMath::Abs(FRotator3f::NormalizeAxis(static_cast<float>(State.Samples.BodyYaw.Last().Y - State.Samples.BodyYaw[0].Y)));
+				Check(State, State.Samples.BodyYaw.Num() > 30 && BodyRate < Config.Patient.MaxBodyTurnDegPerSecond,
+					FString::Printf(TEXT("[%s] the patient's body never spins: its long axis turns at most %.0f deg/s (< %.0f; %d samples, %.0f deg start -> end; his capsule %.0f deg/s under it, clip '%s')"),
+						ItemKey(Item), BodyRate, Config.Patient.MaxBodyTurnDegPerSecond, State.Samples.BodyYaw.Num(), BodyEnd, CapsuleRate, *State.AidPatientClip));
+				Check(State, FMath::Abs(FRotator3f::NormalizeAxis(static_cast<float>(B->GetActorRotation().Yaw) - State.PatientYaw0)) < 5.f,
+					FString::Printf(TEXT("[%s] his capsule back on its yaw after the blend-out (%.0f -> %.0f)"), ItemKey(Item), State.PatientYaw0, B->GetActorRotation().Yaw));
+				Check(State, B->GetStance() == EOperativeStance::Standing && FirstAid->GetStandUps() == State.StandUpsBefore + 1,
+					FString::Printf(TEXT("[%s] the patched-up patient gets up after the aid (crawl end 'stand': stance %d, stand-ups %d -> %d)"), ItemKey(Item),
+						static_cast<int32>(B->GetStance()), State.StandUpsBefore, FirstAid->GetStandUps()));
+				State.Report.Add(FString::Printf(TEXT("%s aid: patient body %.0f deg/s max (capsule %.0f deg/s), clip %s"), ItemKey(Item), BodyRate, CapsuleRate,
+					*State.AidPatientClip));
+				Next(State, bBag ? EStage::CancelStart : EStage::BagAidStart);
+				return true;
+			}
+			State.bRecordChecked = true;
+			State.AidPatientClip = Record->PatientClip;
 			const float Gain = Record->HealthAfter - Record->HealthBefore;
 			Check(State, Record->bCompleted && Record->bApplied && Record->bApproached,
 				FString::Printf(TEXT("[%s] walked over and completed (%.1f / %.1f s, interrupt %s)"), ItemKey(Item), Record->Elapsed, Record->Seconds,
@@ -586,9 +705,33 @@ namespace FirstAidSmoke
 			Check(State, Data.HelperClips.Contains(Record->HelperClip) && State.Samples.HelperClipFrames >= State.Samples.Frames * 8 / 10 && State.Samples.MaxHelperSlot > 0.9f,
 				FString::Printf(TEXT("[%s] the helper's clip '%s' (the %s set) on the FullBody slot %d / %d frames"), ItemKey(Item), *Record->HelperClip, ItemKey(Item),
 					State.Samples.HelperClipFrames, State.Samples.Frames));
-			Check(State, Data.PatientClips.Contains(Record->PatientClip) && State.Samples.PatientClipFrames >= State.Samples.Frames * 8 / 10,
-				FString::Printf(TEXT("[%s] the wounded's lying clip '%s' %d / %d frames"), ItemKey(Item), *Record->PatientClip, State.Samples.PatientClipFrames,
-					State.Samples.Frames));
+			Check(State, Record->PatientPose == EPatientPose::Crawl && PatientClipSet(Config, Data, Record->PatientPose).Contains(Record->PatientClip)
+				&& State.Samples.PatientClipFrames >= State.Samples.Frames * 8 / 10,
+				FString::Printf(TEXT("[%s] the wounded (pose '%s') plays '%s' of the crawl set %d / %d frames"), ItemKey(Item), PatientPoseKey(Record->PatientPose),
+					*Record->PatientClip, State.Samples.PatientClipFrames, State.Samples.Frames));
+			Check(State, Record->PatientClip == (bBag ? State.BagPredicted : State.MedkitPredicted),
+				FString::Printf(TEXT("[%s] seed %d picked its predicted variant ('%s')"), ItemKey(Item), bBag ? State.BagSeed : State.MedkitSeed,
+					bBag ? *State.BagPredicted : *State.MedkitPredicted));
+			if (bBag)
+			{
+				Check(State, Record->PatientClip != State.MedkitPatientClip,
+					FString::Printf(TEXT("[variants] two seeds, two variants: '%s' / '%s'"), *State.MedkitPatientClip, *Record->PatientClip));
+			}
+			else
+			{
+				State.MedkitPatientClip = Record->PatientClip;
+			}
+			{
+				// Beside him (not at his head / feet), facing his chest (helper_beside_lying, helper_chest_cm), on his lying line (PatientYaw0).
+				const FVector Forward0 = FRotator(0.f, State.PatientYaw0, 0.f).Vector();
+				const FVector Right0 = FRotator(0.f, State.PatientYaw0 + 90.f, 0.f).Vector();
+				const FVector Offset = A->GetActorLocation() - B->GetActorLocation();
+				const FVector Chest = B->GetActorLocation() + Forward0 * Config.Patient.HelperChestCm;
+				const float FaceError = FMath::Abs(FRotator3f::NormalizeAxis(static_cast<float>(A->GetActorRotation().Yaw - (Chest - A->GetActorLocation()).Rotation().Yaw)));
+				Check(State, FMath::Abs(FVector::DotProduct(Offset, Right0)) > FMath::Abs(FVector::DotProduct(Offset, Forward0)) && FaceError < 25.f,
+					FString::Printf(TEXT("[%s] the helper kneels at his side (%.0f cm across, %.0f along his body) facing his chest (%.0f deg off)"), ItemKey(Item),
+						FVector::DotProduct(Offset, Right0), FVector::DotProduct(Offset, Forward0), FaceError));
+			}
 			Check(State, FVector::Dist2D(A->GetActorLocation(), B->GetActorLocation()) <= Config.ReachCm + 30.f,
 				FString::Printf(TEXT("[%s] the helper beside the wounded (%.0f cm)"), ItemKey(Item), FVector::Dist2D(A->GetActorLocation(), B->GetActorLocation())));
 			Check(State, Gain > 1.f && static_cast<int32>(Record->TierAfter) < static_cast<int32>(Record->TierBefore),
@@ -609,9 +752,8 @@ namespace FirstAidSmoke
 				State.MedkitSeconds = Record->Seconds;
 				Check(State, Record->HelperClip.Contains(TEXT("Fast")), FString::Printf(TEXT("[medkit] the FAST helper variant (%s)"), *Record->HelperClip));
 			}
-			State.Report.Add(FString::Printf(TEXT("%s aid: helper %s, patient %s, %.1f s, %.0f -> %.0f HP"), ItemKey(Item), *Record->HelperClip, *Record->PatientClip,
-				Record->Seconds, Record->HealthBefore, Record->HealthAfter));
-			Next(State, bBag ? EStage::CancelStart : EStage::BagAidStart);
+			State.Report.Add(FString::Printf(TEXT("%s aid: helper %s, patient %s (%s), %.1f s, %.0f -> %.0f HP"), ItemKey(Item), *Record->HelperClip, *Record->PatientClip,
+				PatientPoseKey(Record->PatientPose), Record->Seconds, Record->HealthBefore, Record->HealthAfter));
 			return true;
 		}
 		case EStage::CancelRun:
@@ -687,7 +829,8 @@ namespace FirstAidSmoke
 		TEXT("CodexTactics.FirstAidSmoke"),
 		TEXT("Dev check (the game designer 2026-11-16, L_MovementTest): first aid by wound tier through the drawer / drag input - light = standing self clip, ")
 		TEXT("medium = kneeling, heavy = refused on himself, a mate treats him (medkit fast via the portrait, the medical bag longer + stronger via the model), ")
-		TEXT("a move order cancels before the apply moment (the medkit kept). Logs PASS/FAIL, then exits."),
+		TEXT("a move order cancels before the apply moment (the medkit kept); R17-6: two seeds pick two crawl variants, the lying patient's body never spins, ")
+		TEXT("the helper kneels at his side, the patient gets up after the aid. Logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 

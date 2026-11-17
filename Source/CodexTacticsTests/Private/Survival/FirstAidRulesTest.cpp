@@ -389,6 +389,222 @@ bool FFirstAidDataFileTest::RunTest(const FString&)
 	TestTrue(TEXT("data: bag on a heavy wound takes longer"), File.MedicalBag.AidSeconds[3] > File.Medkit.AidSeconds[3]);
 	TestTrue(TEXT("data: the medkit's helper clip is the fast one"), File.Medkit.HelperClips.Contains(TEXT("AS_BanadageHealingFriendFast")));
 	TestEqual(TEXT("the medic-sapper starts with a bag"), StartMedicalBags(File, TEXT("MedicSapper")), 1);
+	// The lying patient (R17-6).
+	const FPatientConfig& FP = File.Patient;
+	const FPatientConfig& CP = Code.Patient;
+	TestEqual(TEXT("hold_body_heading mirrors"), FP.bHoldBodyHeading, CP.bHoldBodyHeading);
+	TestEqual(TEXT("counter_turn_max_deg_s mirrors"), FP.CounterTurnMaxDegPerSecond, CP.CounterTurnMaxDegPerSecond);
+	TestEqual(TEXT("max_body_turn_deg_s mirrors"), FP.MaxBodyTurnDegPerSecond, CP.MaxBodyTurnDegPerSecond);
+	TestEqual(TEXT("helper_beside_lying mirrors"), FP.bHelperBesideLying, CP.bHelperBesideLying);
+	TestEqual(TEXT("helper_chest_cm mirrors"), FP.HelperChestCm, CP.HelperChestCm);
+	TestEqual(TEXT("helper_turn_deg_s mirrors"), FP.HelperTurnDegPerSecond, CP.HelperTurnDegPerSecond);
+	for (int32 Index = 0; Index < PatientPoseCount; ++Index)
+	{
+		const FString Key = PatientPoseKey(static_cast<EPatientPose>(Index));
+		const FPatientPoseConfig& F = FP.Poses[Index];
+		const FPatientPoseConfig& C = CP.Poses[Index];
+		TestTrue(Key + TEXT(" clips mirror"), F.Clips == C.Clips);
+		TestEqual(Key + TEXT(" blend_in_s mirrors"), F.BlendInSeconds, C.BlendInSeconds);
+		TestEqual(Key + TEXT(" blend_out_s mirrors"), F.BlendOutSeconds, C.BlendOutSeconds);
+		TestEqual(Key + TEXT(" fit_rate mirrors"), F.bFitRate, C.bFitRate);
+		TestTrue(Key + TEXT(" end mirrors"), F.End == C.End);
+	}
+	TestEqual(TEXT("clip_data entries mirror"), FP.ClipData.Num(), CP.ClipData.Num());
+	for (const TPair<FString, FPatientClipData>& Pair : CP.ClipData)
+	{
+		const FPatientClipData* F = FP.ClipData.Find(Pair.Key);
+		if (TestNotNull(Pair.Key + TEXT(" clip_data in the file"), F))
+		{
+			TestEqual(Pair.Key + TEXT(" long_axis_deg mirrors"), F->LongAxisDeg, Pair.Value.LongAxisDeg);
+			TestTrue(Pair.Key + TEXT(" long_axis_curve mirrors"), F->LongAxisCurve == Pair.Value.LongAxisCurve);
+			TestTrue(Pair.Key + TEXT(" data: the curve starts at 0 and ends near the long axis"), F->LongAxisCurve.IsEmpty()
+				|| (FMath::IsNearlyZero(F->LongAxisCurve[0], 0.5f) && FMath::Abs(F->LongAxisCurve.Last() - F->LongAxisDeg) < 10.f));
+			TestEqual(Pair.Key + TEXT(" blend_in_s mirrors"), F->BlendInSeconds, Pair.Value.BlendInSeconds);
+			TestEqual(Pair.Key + TEXT(" blend_out_s mirrors"), F->BlendOutSeconds, Pair.Value.BlendOutSeconds);
+			TestEqual(Pair.Key + TEXT(" fit_rate mirrors"), F->FitRate, Pair.Value.FitRate);
+		}
+	}
+	// The designer: several variants per pose, the heavily wounded one (on all fours) stands up after the aid, no lie-down faster than 1 s.
+	TestTrue(TEXT("data: the crawl pose has 2+ variants"), FP.Pose(EPatientPose::Crawl).Clips.Num() >= 2);
+	TestTrue(TEXT("data: the prone pose has 2+ variants"), FP.Pose(EPatientPose::Prone).Clips.Num() >= 2);
+	TestTrue(TEXT("data: the crawl patient gets up after a completed aid"), FP.Pose(EPatientPose::Crawl).End == EPatientEnd::Stand);
+	for (const EPatientPose Pose : { EPatientPose::Crawl, EPatientPose::Prone, EPatientPose::Sitting })
+	{
+		for (const FString& Clip : FP.Pose(Pose).Clips)
+		{
+			const FPatientClipPlay Play = PatientClipPlay(File, Pose, Clip);
+			TestTrue(FString::Printf(TEXT("data: %s / %s - a clip that turns the body more than 45 deg blends in 1 s or slower, and is counter-turned"),
+				PatientPoseKey(Pose), *Clip), FMath::Abs(Play.LongAxisDeg) <= 45.f || (Play.BlendInSeconds >= 1.f && Play.BlendOutSeconds >= 1.f && FP.bHoldBodyHeading));
+			TestTrue(FString::Printf(TEXT("data: %s / %s - the counter-turn keeps up with the blend-in"), PatientPoseKey(Pose), *Clip),
+				FMath::Abs(Play.LongAxisDeg) <= FP.CounterTurnMaxDegPerSecond * FMath::Max(0.05f, Play.BlendInSeconds));
+		}
+	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFirstAidPatientPoseTest, "CodexTactics.Survival.FirstAid.PatientPose",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FFirstAidPatientPoseTest::RunTest(const FString&)
+{
+	using namespace FirstAidRules;
+	// The pose (bKnockedDown, bProne, bOnAllFours, bCrouching).
+	TestTrue(TEXT("knocked down first"), ChoosePatientPose(true, true, true, false) == EPatientPose::Knockdown);
+	TestTrue(TEXT("prone on all fours = crawl"), ChoosePatientPose(false, true, true, false) == EPatientPose::Crawl);
+	TestTrue(TEXT("prone flat = prone"), ChoosePatientPose(false, true, false, false) == EPatientPose::Prone);
+	TestTrue(TEXT("crouching = sitting"), ChoosePatientPose(false, false, false, true) == EPatientPose::Sitting);
+	TestTrue(TEXT("standing = none"), ChoosePatientPose(false, false, false, false) == EPatientPose::None);
+	TestTrue(TEXT("all fours only counts prone"), ChoosePatientPose(false, false, true, false) == EPatientPose::None);
+	for (int32 Index = 0; Index < PatientPoseCount; ++Index)
+	{
+		EPatientPose Parsed = EPatientPose::None;
+		const EPatientPose Pose = static_cast<EPatientPose>(Index);
+		TestTrue(FString::Printf(TEXT("key '%s' round-trips"), PatientPoseKey(Pose)), ParsePatientPoseKey(FString(PatientPoseKey(Pose)).ToUpper(), Parsed) && Parsed == Pose);
+	}
+	EPatientPose Bad = EPatientPose::Crawl;
+	TestFalse(TEXT("an unknown key"), ParsePatientPoseKey(TEXT("lying"), Bad));
+	TestTrue(TEXT("lying poses"), IsLyingPose(EPatientPose::Crawl) && IsLyingPose(EPatientPose::Prone) && !IsLyingPose(EPatientPose::Sitting)
+		&& !IsLyingPose(EPatientPose::None) && !IsLyingPose(EPatientPose::Knockdown));
+	// The sets: the pose's list, else the item's patient list for a lying pose.
+	FFirstAidConfig Config;
+	Config.MinPlayRate = 0.6f;
+	Config.MaxPlayRate = 1.6f;
+	FItemConfig Item;
+	Item.PatientClips = { TEXT("Fallback") };
+	Config.Patient.Pose(EPatientPose::Crawl).Clips = { TEXT("Injured/Idle_A"), TEXT("Side") };
+	Config.Patient.Pose(EPatientPose::Prone).Clips.Reset();
+	Config.Patient.Pose(EPatientPose::Sitting).Clips.Reset();
+	TestEqual(TEXT("crawl: its own list"), PatientClipSet(Config, Item, EPatientPose::Crawl).Num(), 2);
+	TestEqual(TEXT("prone without a list: the item's patient list"), PatientClipSet(Config, Item, EPatientPose::Prone)[0], FString(TEXT("Fallback")));
+	TestEqual(TEXT("sitting without a list: nothing (no lying clip for a crouching man)"), PatientClipSet(Config, Item, EPatientPose::Sitting).Num(), 0);
+	TestEqual(TEXT("standing: nothing"), PatientClipSet(Config, Item, EPatientPose::None).Num(), 0);
+	TestEqual(TEXT("knockdown: nothing (the aid waits)"), PatientClipSet(Config, Item, EPatientPose::Knockdown).Num(), 0);
+	// How a clip plays: the pose's settings, the clip's overrides.
+	FPatientPoseConfig& Crawl = Config.Patient.Pose(EPatientPose::Crawl);
+	Crawl.BlendInSeconds = 0.6f;
+	Crawl.BlendOutSeconds = 0.5f;
+	Crawl.bFitRate = false;
+	FPatientClipData Side;
+	Side.LongAxisDeg = -153.f;
+	Side.BlendInSeconds = 1.8f;
+	Side.FitRate = 1;
+	Config.Patient.ClipData.Add(TEXT("Side"), Side);
+	const FPatientClipPlay Idle = PatientClipPlay(Config, EPatientPose::Crawl, TEXT("Injured/Idle_A"));
+	TestEqual(TEXT("idle: the pose's blend-in"), Idle.BlendInSeconds, 0.6f);
+	TestEqual(TEXT("idle: own speed (rate 1..1)"), Idle.MinRate + Idle.MaxRate, 2.f);
+	TestEqual(TEXT("idle: no long axis"), Idle.LongAxisDeg, 0.f);
+	const FPatientClipPlay Lie = PatientClipPlay(Config, EPatientPose::Crawl, TEXT("Side"));
+	TestEqual(TEXT("side: its own blend-in"), Lie.BlendInSeconds, 1.8f);
+	TestEqual(TEXT("side: the pose's blend-out (not overridden)"), Lie.BlendOutSeconds, 0.5f);
+	TestEqual(TEXT("side: fitted rate range"), Lie.MaxRate, 1.6f);
+	TestEqual(TEXT("side: the measured long axis"), Lie.LongAxisDeg, -153.f);
+	// The end.
+	Crawl.End = EPatientEnd::Stand;
+	TestTrue(TEXT("a completed aid, able to stand: he gets up"), StandsAfter(Config, EPatientPose::Crawl, true, true));
+	TestFalse(TEXT("interrupted: he stays down"), StandsAfter(Config, EPatientPose::Crawl, false, true));
+	TestFalse(TEXT("still critical: he stays down"), StandsAfter(Config, EPatientPose::Crawl, true, false));
+	TestFalse(TEXT("a 'stay' pose stays"), StandsAfter(Config, EPatientPose::Prone, true, true));
+	// The "patient" block parses (a listed pose replaces its clips, unlisted poses keep the defaults).
+	FFirstAidConfig Parsed;
+	const FString Text = TEXT("{\"patient\": {\"hold_body_heading\": false, \"counter_turn_max_deg_s\": 90, \"helper_turn_deg_s\": 0, \"helper_chest_cm\": 35,")
+		TEXT("\"poses\": {\"Crawl\": {\"clips\": [\"A\", \" B \", \"A\"], \"blend_in_s\": 2.5, \"fit_rate\": true, \"end\": \"STAND\"}, \"bogus\": {\"clips\": [\"Z\"]}},")
+		TEXT("\"clip_data\": {\"B\": {\"long_axis_deg\": 200, \"long_axis_curve\": [0, -80, -160], \"blend_out_s\": 1.25}}}}");
+	TestTrue(TEXT("parses"), ParseConfig(Text, Parsed));
+	TestFalse(TEXT("hold_body_heading"), Parsed.Patient.bHoldBodyHeading);
+	TestEqual(TEXT("counter_turn_max_deg_s"), Parsed.Patient.CounterTurnMaxDegPerSecond, 90.f);
+	TestEqual(TEXT("helper_turn_deg_s 0 = at once"), Parsed.Patient.HelperTurnDegPerSecond, 0.f);
+	TestEqual(TEXT("helper_chest_cm"), Parsed.Patient.HelperChestCm, 35.f);
+	const FPatientPoseConfig& PCrawl = Parsed.Patient.Pose(EPatientPose::Crawl);
+	TestEqual(TEXT("crawl clips trimmed, unique"), PCrawl.Clips.Num(), 2);
+	TestEqual(TEXT("crawl blend_in_s"), PCrawl.BlendInSeconds, 2.5f);
+	TestTrue(TEXT("crawl fit_rate"), PCrawl.bFitRate);
+	TestTrue(TEXT("crawl end (case-insensitive)"), PCrawl.End == EPatientEnd::Stand);
+	TestTrue(TEXT("an unlisted pose keeps its defaults"), Parsed.Patient.Pose(EPatientPose::Prone).Clips == FFirstAidConfig().Patient.Pose(EPatientPose::Prone).Clips);
+	const FPatientClipData* PB = Parsed.Patient.ClipData.Find(TEXT("B"));
+	TestTrue(TEXT("clip_data replaces the table, long axis normalized (200 -> -160), blend-in unset"),
+		Parsed.Patient.ClipData.Num() == 1 && PB && FMath::IsNearlyEqual(PB->LongAxisDeg, -160.f, 0.01f) && PB->BlendInSeconds < 0.f
+			&& FMath::IsNearlyEqual(PB->BlendOutSeconds, 1.25f) && PB->LongAxisCurve.Num() == 3 && FMath::IsNearlyEqual(PB->LongAxisCurve[1], -80.f));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFirstAidPatientHeadingTest, "CodexTactics.Survival.FirstAid.PatientHeading",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FFirstAidPatientHeadingTest::RunTest(const FString&)
+{
+	using namespace FirstAidRules;
+	// The counter-turn: the clip's body lies -153 deg off his forward -> his capsule turns +153 x the clip's weight.
+	TestEqual(TEXT("weight 0: the base yaw"), CompensatedYaw(10.f, -153.f, 0.f), 10.f, 0.01f);
+	TestEqual(TEXT("weight 1: base + 153"), CompensatedYaw(10.f, -153.f, 1.f), 163.f, 0.01f);
+	TestEqual(TEXT("weight 0.5: half"), CompensatedYaw(10.f, -153.f, 0.5f), 86.5f, 0.01f);
+	TestEqual(TEXT("wraps to (-180, 180]"), CompensatedYaw(170.f, -153.f, 1.f), -37.f, 0.01f);
+	TestEqual(TEXT("a weight over 1 is clamped"), CompensatedYaw(0.f, 90.f, 3.f), -90.f, 0.01f);
+	TestEqual(TEXT("a bad weight = 0"), CompensatedYaw(5.f, 90.f, std::numeric_limits<float>::quiet_NaN()), 5.f, 0.01f);
+	// World body heading = capsule yaw + axis x weight: constant through the blend.
+	for (float Weight = 0.f; Weight <= 1.f; Weight += 0.25f)
+	{
+		TestEqual(FString::Printf(TEXT("body heading held at weight %.2f"), Weight),
+			FRotator3f::NormalizeAxis(CompensatedYaw(40.f, -153.f, Weight) + -153.f * Weight), 40.f, 0.01f);
+	}
+	// The measured turn curve (S-shaped) vs the linear fallback.
+	const TArray<float> Curve = { 0.f, -10.f, -40.f, -100.f, -150.f };
+	TestEqual(TEXT("curve: weight 0"), BodyTurnAt(Curve, -150.f, 0.f), 0.f, 0.01f);
+	TestEqual(TEXT("curve: a sample (0.5 -> -40)"), BodyTurnAt(Curve, -150.f, 0.5f), -40.f, 0.01f);
+	TestEqual(TEXT("curve: between samples (0.625 -> -70)"), BodyTurnAt(Curve, -150.f, 0.625f), -70.f, 0.01f);
+	TestEqual(TEXT("curve: weight 1"), BodyTurnAt(Curve, -150.f, 1.f), -150.f, 0.01f);
+	TestEqual(TEXT("curve: clamped above 1"), BodyTurnAt(Curve, -150.f, 2.f), -150.f, 0.01f);
+	TestEqual(TEXT("no curve: linear"), BodyTurnAt(TArray<float>(), -150.f, 0.5f), -75.f, 0.01f);
+	TestEqual(TEXT("a one-sample curve: linear"), BodyTurnAt(TArray<float>{ 5.f }, -150.f, 0.5f), -75.f, 0.01f);
+	TestEqual(TEXT("the capsule counter-turns the curve"), CompensatedYaw(20.f, BodyTurnAt(Curve, -150.f, 0.75f), 1.f), 120.f, 0.01f);
+	// The turn.
+	TestEqual(TEXT("limited by the rate"), TurnToward(0.f, 90.f, 180.f, 0.1f), 18.f, 0.01f);
+	TestEqual(TEXT("arrives without overshoot"), TurnToward(80.f, 90.f, 180.f, 0.1f), 90.f, 0.01f);
+	TestEqual(TEXT("the short way across 180"), TurnToward(170.f, -170.f, 100.f, 0.05f), 175.f, 0.01f);
+	TestEqual(TEXT("rate 0: at once"), TurnToward(0.f, 135.f, 0.f, 0.016f), 135.f, 0.01f);
+	// The smoke's measure: the fastest turn over 0.2 s windows.
+	TArray<FVector2D> Slow;
+	for (int32 Step = 0; Step <= 60; ++Step)
+	{
+		Slow.Add(FVector2D(Step / 60.0, 170.0 + 30.0 * Step / 60.0)); // 30 deg/s, across +-180
+	}
+	TestEqual(TEXT("30 deg/s across the wrap"), MaxTurnRate(Slow, 0.2f), 30.f, 0.5f);
+	TArray<FVector2D> Spin;
+	for (int32 Step = 0; Step <= 60; ++Step)
+	{
+		const double T = Step / 60.0;
+		Spin.Add(FVector2D(T, T < 0.5 ? 0.0 : (T < 0.75 ? -150.0 * (T - 0.5) / 0.25 : -150.0))); // the old 0.25 s blend: 150 deg
+	}
+	TestTrue(TEXT("the old spin: ~600 deg/s"), MaxTurnRate(Spin, 0.2f) > 500.f);
+	TestEqual(TEXT("one sample: 0"), MaxTurnRate(TArray<FVector2D>{ FVector2D(0.0, 5.0) }, 0.2f), 0.f);
+	TestEqual(TEXT("a series shorter than the window: one span"), MaxTurnRate(TArray<FVector2D>{ FVector2D(0.0, 0.0), FVector2D(0.1, 3.0) }, 0.2f), 30.f, 0.01f);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFirstAidHelperSpotTest, "CodexTactics.Survival.FirstAid.HelperSpot",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FFirstAidHelperSpotTest::RunTest(const FString&)
+{
+	using namespace FirstAidRules;
+	FFirstAidConfig Config;
+	Config.ApproachStopCm = 85.f;
+	Config.Patient.HelperChestCm = 20.f;
+	Config.Patient.bHelperBesideLying = true;
+	const FVector Patient(0.f, 0.f, 10.f);
+	const FVector Forward(1.f, 0.f, 0.f); // he lies along +X (head forward), his right is +Y
+	TestTrue(TEXT("lying, the helper behind-right: his right side, level with the chest"),
+		HelperGoal(Config, true, Patient, Forward, FVector(-600.f, 100.f, 0.f)).Equals(FVector(20.f, 85.f, 10.f), 0.01f));
+	TestTrue(TEXT("lying, the helper behind-left: his left side"),
+		HelperGoal(Config, true, Patient, Forward, FVector(-600.f, -100.f, 0.f)).Equals(FVector(20.f, -85.f, 10.f), 0.01f));
+	TestTrue(TEXT("lying, the helper straight behind: the right side (a side, never his feet)"),
+		HelperGoal(Config, true, Patient, Forward, FVector(-600.f, 0.f, 0.f)).Equals(FVector(20.f, 85.f, 10.f), 0.01f));
+	TestTrue(TEXT("not lying: on the helper's side, approach_stop_cm away (the old spot)"),
+		HelperGoal(Config, false, Patient, Forward, FVector(-600.f, 0.f, 10.f)).Equals(FVector(-85.f, 0.f, 10.f), 0.01f));
+	Config.Patient.bHelperBesideLying = false;
+	TestTrue(TEXT("helper_beside_lying off: the old spot for a lying patient too"),
+		HelperGoal(Config, true, Patient, Forward, FVector(-600.f, 100.f, 10.f)).Equals(Patient + FVector(-600.f, 100.f, 0.f).GetSafeNormal2D() * 85.f, 0.01f));
+	TestTrue(TEXT("the face point: his chest"), HelperFacePoint(Config, true, Patient, Forward).Equals(FVector(20.f, 0.f, 10.f), 0.01f));
+	TestTrue(TEXT("the face point of a sitting patient: himself"), HelperFacePoint(Config, false, Patient, Forward).Equals(Patient, 0.01f));
 	return true;
 }
 

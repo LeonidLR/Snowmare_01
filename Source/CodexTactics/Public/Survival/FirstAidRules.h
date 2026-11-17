@@ -131,6 +131,97 @@ namespace FirstAidRules
 		TArray<FString> PatientClips;
 	};
 
+	/**
+	 * The pose the PATIENT of a mate's aid is in when the clips start (the game designer 2026-11-17, R17-6: the patient's clip set by his pose -
+	 * first_aid.json "patient" -> "poses").
+	 */
+	enum class EPatientPose : uint8
+	{
+		/** Standing: no patient clip (he keeps his own pose). */
+		None,
+		/** On all fours: wounded and prone (the injured crawl idle; the critical wound). */
+		Crawl,
+		/** Flat on the belly: prone, not wounded (the prone crawl idle). */
+		Prone,
+		/** Crouching: he sits down on the ground for it. */
+		Sitting,
+		/** Knocked down: the knockdown owns the FullBody slot - the aid waits until he is up / lying still, then reads the pose again. */
+		Knockdown
+	};
+
+	constexpr int32 PatientPoseCount = 5;
+
+	/** What the patient does after the aid ("end"). */
+	enum class EPatientEnd : uint8
+	{
+		/** He keeps his stance. */
+		Stay,
+		/** A completed aid that left him able to stand: he gets up once the patient clip has blended out. */
+		Stand
+	};
+
+	/** One pose's patient clips ("patient" -> "poses" -> "<pose>"). */
+	struct FPatientPoseConfig
+	{
+		/** "clips": plain names = healing-pack copies (FirstAid/), "Folder/Name" = /Game/Characters/Animations/<Folder>/{Male,Female}/<Name>. */
+		TArray<FString> Clips;
+		/** "blend_in_s" / "blend_out_s": the patient clip's FullBody blends (a clip's clip_data overrides them). */
+		float BlendInSeconds = 0.6f;
+		float BlendOutSeconds = 0.6f;
+		/** "fit_rate": the clip's rate is fitted to the treatment (min / max_play_rate); false = its own speed, looped. */
+		bool bFitRate = false;
+		/** "end". */
+		EPatientEnd End = EPatientEnd::Stay;
+	};
+
+	/** One clip's own data ("patient" -> "clip_data" -> "<clip name>"; < 0 / unset = the pose's). */
+	struct FPatientClipData
+	{
+		/** "long_axis_deg": the clip's lying body (pelvis -> head) as an actor yaw from the body's forward, clockwise (measured by the setup script). */
+		float LongAxisDeg = 0.f;
+		/**
+		 * "long_axis_curve": the visible body's turn (deg, from weight 0) at blend weights 0, 1/(N-1) .. 1 over the pose the clip is listed in - the
+		 * slot blends local bone rotations, so the turn is not linear in the weight (measured by the setup script); empty = LongAxisDeg x weight.
+		 */
+		TArray<float> LongAxisCurve;
+		float BlendInSeconds = -1.f;
+		float BlendOutSeconds = -1.f;
+		/** "fit_rate": -1 = the pose's, 0 = no, 1 = yes. */
+		int8 FitRate = -1;
+	};
+
+	/** How one patient clip plays (the pose's settings with the clip's overrides; PatientClipPlay). */
+	struct FPatientClipPlay
+	{
+		float BlendInSeconds = 0.6f;
+		float BlendOutSeconds = 0.6f;
+		float MinRate = 1.f;
+		float MaxRate = 1.f;
+		float LongAxisDeg = 0.f;
+		TArray<float> LongAxisCurve;
+	};
+
+	/** first_aid.json "patient": the lying patient of a mate's aid (R17-6). */
+	struct FPatientConfig
+	{
+		FPatientPoseConfig Poses[PatientPoseCount];
+		TMap<FString, FPatientClipData> ClipData;
+		/** "hold_body_heading": his capsule counter-turns by the clip's long axis x its blend weight, so the lying body keeps its line (no spin). */
+		bool bHoldBodyHeading = true;
+		/** "counter_turn_max_deg_s": the fastest that counter-turn may go. */
+		float CounterTurnMaxDegPerSecond = 240.f;
+		/** "max_body_turn_deg_s": the bound FirstAidSmoke checks on the patient's visible body (its long axis) through the transition. */
+		float MaxBodyTurnDegPerSecond = 60.f;
+		/** "helper_beside_lying": the helper walks to a lying patient's side (approach_stop_cm out, helper_chest_cm toward his head). */
+		bool bHelperBesideLying = true;
+		float HelperChestCm = 20.f;
+		/** "helper_turn_deg_s": the helper turns to face the patient at this rate (0 = at once). */
+		float HelperTurnDegPerSecond = 180.f;
+
+		const FPatientPoseConfig& Pose(EPatientPose Which) const { return Poses[FMath::Clamp(static_cast<int32>(Which), 0, PatientPoseCount - 1)]; }
+		FPatientPoseConfig& Pose(EPatientPose Which) { return Poses[FMath::Clamp(static_cast<int32>(Which), 0, PatientPoseCount - 1)]; }
+	};
+
 	/** Content/Data/Survival/first_aid.json. */
 	struct CODEXTACTICS_API FFirstAidConfig
 	{
@@ -164,6 +255,8 @@ namespace FirstAidRules
 		bool bHideWeapon = true;
 		/** "start_medical_bags": medical bags an operative of this role starts with (role names: Commander, Engineer, MedicSapper, Recruit). */
 		TMap<FString, int32> StartMedicalBags;
+		/** "patient": the lying patient's clips by pose, blends, the counter-turn, the helper's spot (R17-6). */
+		FPatientConfig Patient;
 		FItemConfig Medkit;
 		FItemConfig MedicalBag;
 
@@ -241,6 +334,56 @@ namespace FirstAidRules
 
 	/** The clip set of a treatment role: the self sets by mode; the aid's helper / patient sets. */
 	CODEXTACTICS_API const TArray<FString>& ClipSet(const FItemConfig& Item, EMode Mode, bool bPatient);
+
+	/** The patient's pose (knocked down first, then prone on all fours / flat, crouching; standing = None). */
+	CODEXTACTICS_API EPatientPose ChoosePatientPose(bool bKnockedDown, bool bProne, bool bOnAllFours, bool bCrouching);
+
+	/** "none" / "crawl" / "prone" / "sitting" / "knockdown" (the JSON keys). */
+	CODEXTACTICS_API const TCHAR* PatientPoseKey(EPatientPose Pose);
+
+	/** A JSON pose key (case-insensitive) -> pose; false for anything else. */
+	CODEXTACTICS_API bool ParsePatientPoseKey(const FString& Key, EPatientPose& Out);
+
+	/** He lies on the ground (crawl / prone): the helper kneels at his side. */
+	CODEXTACTICS_API bool IsLyingPose(EPatientPose Pose);
+
+	/** The patient's clip set: the pose's list; empty -> the item's "patient" list for a lying pose; none for standing / knockdown. */
+	CODEXTACTICS_API const TArray<FString>& PatientClipSet(const FFirstAidConfig& Config, const FItemConfig& Item, EPatientPose Pose);
+
+	/** How Clip plays for this pose: the pose's blends / fit_rate with the clip's clip_data on top (the rate range 1..1 without fit_rate). */
+	CODEXTACTICS_API FPatientClipPlay PatientClipPlay(const FFirstAidConfig& Config, EPatientPose Pose, const FString& Clip);
+
+	/**
+	 * The patient's capsule yaw that keeps a lying clip's body on the line it lay on: BaseYaw - LongAxisDeg x Weight (the montage's blend weight,
+	 * clamped to [0, 1]), normalized to (-180, 180].
+	 */
+	CODEXTACTICS_API float CompensatedYaw(float BaseYaw, float LongAxisDeg, float Weight);
+
+	/** The visible body's turn at blend Weight: the measured curve (piecewise linear over its samples), else LongAxisDeg x Weight; Weight clamped to [0, 1]. */
+	CODEXTACTICS_API float BodyTurnAt(const TArray<float>& Curve, float LongAxisDeg, float Weight);
+
+	/** CurrentYaw turned toward TargetYaw by at most MaxDegPerSecond x DeltaSeconds the short way (<= 0 rate: TargetYaw at once); normalized. */
+	CODEXTACTICS_API float TurnToward(float CurrentYaw, float TargetYaw, float MaxDegPerSecond, float DeltaSeconds);
+
+	/** He gets up after the aid: the pose's end is Stand, the aid completed and he may stand now (not critical any more). */
+	CODEXTACTICS_API bool StandsAfter(const FFirstAidConfig& Config, EPatientPose Pose, bool bCompleted, bool bMayStand);
+
+	/**
+	 * Where the helper walks to: beside a LYING patient (helper_beside_lying) - approach_stop_cm out to the side the helper comes from, helper_chest_cm
+	 * toward the patient's head (his forward); otherwise approach_stop_cm from him toward the helper (the old spot). Z = the patient's.
+	 */
+	CODEXTACTICS_API FVector HelperGoal(const FFirstAidConfig& Config, bool bLying, const FVector& PatientLocation, const FVector& PatientForward,
+		const FVector& HelperLocation);
+
+	/** The point the helper faces: a lying patient's chest (helper_chest_cm along his forward), else his location. */
+	CODEXTACTICS_API FVector HelperFacePoint(const FFirstAidConfig& Config, bool bLying, const FVector& PatientLocation, const FVector& PatientForward);
+
+	/**
+	 * The fastest turn in a series of (time s, yaw deg) samples: the largest |yaw change| over any WindowSeconds span (the short way, unwound), divided
+	 * by that span (deg/s; each span runs from a sample back to the last sample at least WindowSeconds earlier); a series shorter than the window is
+	 * one span; 0 with fewer than two samples.
+	 */
+	CODEXTACTICS_API float MaxTurnRate(const TArray<FVector2D>& TimeYaw, float WindowSeconds);
 
 	/** A random clip index among Count (Random01 in [0, 1)); avoids Previous when there is a choice; INDEX_NONE when Count <= 0. */
 	CODEXTACTICS_API int32 PickClipIndex(int32 Count, float Random01, int32 Previous = INDEX_NONE);

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Math/RandomStream.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Survival/FirstAidRules.h"
 #include "FirstAidSubsystem.generated.h"
@@ -35,6 +36,10 @@ struct CODEXTACTICS_API FFirstAidRecord
 	int32 HelperClipFrames = 0;
 	int32 PatientClipFrames = 0;
 	int32 Frames = 0;
+	/** The patient's pose when his clip started (R17-6; None: standing / self-treatment). */
+	FirstAidRules::EPatientPose PatientPose = FirstAidRules::EPatientPose::None;
+	/** The aid waited for the patient's knockdown to end before the clips started. */
+	bool bWaitedForKnockdown = false;
 };
 
 /**
@@ -42,7 +47,9 @@ struct CODEXTACTICS_API FFirstAidRecord
  * - SELF (H / the inventory's medkit or medical-bag line -> ACodexTacticsPlayerController::UseFirstAidItem): light / none = a standing clip,
  *   medium = a kneeling / sitting clip, heavy = refused ("he cannot treat himself").
  * - AID (a medkit / bag dragged from the drawer onto a HEAVY-wounded mate's model or portrait -> ACodexTacticsHUD::HandleTransferDropOnActor):
- *   the helper walks up (OrderMoveTo), faces him, the helper plays the squat / sitting help clip, the patient the lying clip.
+ *   the helper walks up (OrderMoveTo; beside a lying patient, level with his chest), turns to face him, the helper plays the squat / sitting help
+ *   clip, the patient a clip of the set for the pose he is in (crawl / prone / sitting; a knocked-down patient is waited for - R17-6), his capsule
+ *   counter-turning by the clip's measured long axis so the lying body never spins; a completed aid may stand him up after the clip blends out.
  * The clip plays on the ABP's FullBody slot (UOperativeAnimInstance::PlayFirstAidClip), the heal lands at the item's apply moment, the item is used
  * up there; damage / an order / displacement / a death / the helper knocked down or out of reach stop it (FirstAidRules::CheckInterrupt).
  * Turn-based combat keeps the old instant medkit (it ends the turn). The squad AI medic (autonomy HealAlly) is unchanged.
@@ -54,6 +61,7 @@ class CODEXTACTICS_API UFirstAidSubsystem : public UTickableWorldSubsystem
 
 public:
 	virtual bool DoesSupportWorldType(const EWorldType::Type WorldType) const override;
+	virtual void Initialize(FSubsystemCollectionBase& Collection) override;
 	virtual void Deinitialize() override;
 	virtual TStatId GetStatId() const override;
 	virtual void Tick(float DeltaTime) override;
@@ -97,6 +105,18 @@ public:
 	/** The running treatment's record of Operative (null when none). */
 	const FFirstAidRecord* FindRunning(const AOperativeCharacter* Operative) const;
 
+	/**
+	 * Seeds the clip picks (smokes: two seeds -> two variants; the patient's pick is the first draw of FRandomStream(Seed)) and forgets the last
+	 * clips (no "not the same twice" carry-over). Without a call the picks are random.
+	 */
+	void SetPickSeed(int32 Seed);
+
+	/** After an aid the patient's clip still blends out (his capsule turns back) and he may still get up (R17-6). */
+	bool IsSettling(const AOperativeCharacter* Operative) const;
+
+	/** Patients that got up after an aid so far (smokes). */
+	int32 GetStandUps() const { return StandUps; }
+
 private:
 	struct FTreatment
 	{
@@ -107,6 +127,9 @@ private:
 		FirstAidRules::ETier Tier = FirstAidRules::ETier::None;
 		bool bApproaching = false;
 		float ApproachSeconds = 0.f;
+		/** The spot the helper walks to (HelperGoal); arrival is measured there. */
+		bool bHasApproachGoal = false;
+		FVector ApproachGoal = FVector::ZeroVector;
 		FirstAidRules::FClock Clock;
 		FVector HelperSpot = FVector::ZeroVector;
 		FVector PatientSpot = FVector::ZeroVector;
@@ -120,7 +143,25 @@ private:
 		TWeakObjectPtr<UAnimSequenceBase> PatientClip;
 		int32 HelperRestarts = 0;
 		int32 PatientRestarts = 0;
+		/** R17-6: the patient's pose, how his clip plays, his capsule's yaw when it started (the counter-turn's base), the helper's facing goal. */
+		FirstAidRules::EPatientPose PatientPose = FirstAidRules::EPatientPose::None;
+		FirstAidRules::FPatientClipPlay PatientPlay;
+		float PatientBaseYaw = 0.f;
+		float HelperFaceYaw = 0.f;
+		bool bHelperFacing = false;
 		FFirstAidRecord Record;
+	};
+
+	/** A patient whose clip blends out after the aid: the capsule turns back with it, then he may get up (R17-6). */
+	struct FSettle
+	{
+		TWeakObjectPtr<AOperativeCharacter> Patient;
+		float BaseYaw = 0.f;
+		FirstAidRules::FPatientClipPlay Play;
+		float SecondsLeft = 0.f;
+		bool bStand = false;
+		uint32 OrderSerial = 0;
+		uint8 Stance = 0;
 	};
 
 	FirstAidRules::ERefusal Refuse(AOperativeCharacter* Who, FirstAidRules::ERefusal Reason, const AOperativeCharacter* Patient, EFirstAidItem Item,
@@ -131,9 +172,19 @@ private:
 	void ApplyEffect(FTreatment& Treatment);
 	void Finish(int32 Index, FirstAidRules::EInterrupt Reason);
 	void Post(const AOperativeCharacter* Speaker, const FString& Text) const;
+	/** The pose the patient of an aid is in now (FirstAidRules::ChoosePatientPose). */
+	static FirstAidRules::EPatientPose PoseOf(const AOperativeCharacter& Patient);
+	/** The patient's capsule counter-turn for this tick (hold_body_heading). */
+	static void HoldBodyHeading(AOperativeCharacter& Patient, float BaseYaw, const FirstAidRules::FPatientClipPlay& Play, float DeltaTime);
+	void TickSettles(float DeltaTime);
 
 	TArray<FTreatment> Treatments;
 	TArray<FFirstAidRecord> Records;
+	TArray<FSettle> Settles;
 	/** The last clip index per (set pointer) so a repeat picks another clip. */
 	TMap<const void*, int32> LastClipIndex;
+	/** The clip picks: the helper's / the patient's (SetPickSeed). */
+	FRandomStream HelperStream;
+	FRandomStream PatientStream;
+	int32 StandUps = 0;
 };

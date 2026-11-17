@@ -90,6 +90,83 @@ namespace FirstAidRules
 				ReadClips(*Clips, TEXT("patient"), Out.PatientClips);
 			}
 		}
+
+		void ReadPatient(const TSharedPtr<FJsonObject>& Root, FPatientConfig& Out)
+		{
+			const TSharedPtr<FJsonObject>* Object = nullptr;
+			if (!Root->TryGetObjectField(TEXT("patient"), Object) || !Object || !Object->IsValid())
+			{
+				return;
+			}
+			const TSharedPtr<FJsonObject>& Patient = *Object;
+			bool bFlag = false;
+			double Value = 0.0;
+			if (Patient->TryGetBoolField(TEXT("hold_body_heading"), bFlag)) { Out.bHoldBodyHeading = bFlag; }
+			if (Patient->TryGetBoolField(TEXT("helper_beside_lying"), bFlag)) { Out.bHelperBesideLying = bFlag; }
+			auto Number = [&Patient, &Value](const TCHAR* Field, float& Target, float Min, float Max)
+			{
+				if (Patient->TryGetNumberField(Field, Value) && FMath::IsFinite(Value))
+				{
+					Target = FMath::Clamp(static_cast<float>(Value), Min, Max);
+				}
+			};
+			Number(TEXT("counter_turn_max_deg_s"), Out.CounterTurnMaxDegPerSecond, 0.f, 3600.f);
+			Number(TEXT("max_body_turn_deg_s"), Out.MaxBodyTurnDegPerSecond, 1.f, 3600.f);
+			Number(TEXT("helper_chest_cm"), Out.HelperChestCm, -200.f, 200.f);
+			Number(TEXT("helper_turn_deg_s"), Out.HelperTurnDegPerSecond, 0.f, 3600.f);
+			const TSharedPtr<FJsonObject>* Poses = nullptr;
+			if (Patient->TryGetObjectField(TEXT("poses"), Poses) && Poses && Poses->IsValid())
+			{
+				for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Poses)->Values)
+				{
+					EPatientPose Pose = EPatientPose::None;
+					const TSharedPtr<FJsonObject>* Entry = nullptr;
+					if (!ParsePatientPoseKey(Pair.Key, Pose) || !Pair.Value.IsValid() || !Pair.Value->TryGetObject(Entry) || !Entry || !Entry->IsValid())
+					{
+						continue;
+					}
+					FPatientPoseConfig& Target = Out.Pose(Pose);
+					ReadClips(*Entry, TEXT("clips"), Target.Clips);
+					if ((*Entry)->TryGetNumberField(TEXT("blend_in_s"), Value) && FMath::IsFinite(Value)) { Target.BlendInSeconds = FMath::Clamp(static_cast<float>(Value), 0.f, 5.f); }
+					if ((*Entry)->TryGetNumberField(TEXT("blend_out_s"), Value) && FMath::IsFinite(Value)) { Target.BlendOutSeconds = FMath::Clamp(static_cast<float>(Value), 0.f, 5.f); }
+					if ((*Entry)->TryGetBoolField(TEXT("fit_rate"), bFlag)) { Target.bFitRate = bFlag; }
+					FString End;
+					if ((*Entry)->TryGetStringField(TEXT("end"), End))
+					{
+						Target.End = End.TrimStartAndEnd().Equals(TEXT("stand"), ESearchCase::IgnoreCase) ? EPatientEnd::Stand : EPatientEnd::Stay;
+					}
+				}
+			}
+			const TSharedPtr<FJsonObject>* Clips = nullptr;
+			if (Patient->TryGetObjectField(TEXT("clip_data"), Clips) && Clips && Clips->IsValid())
+			{
+				Out.ClipData.Reset();
+				for (const TPair<FString, TSharedPtr<FJsonValue>>& Pair : (*Clips)->Values)
+				{
+					const TSharedPtr<FJsonObject>* Entry = nullptr;
+					const FString Name = Pair.Key.TrimStartAndEnd();
+					if (Name.IsEmpty() || !Pair.Value.IsValid() || !Pair.Value->TryGetObject(Entry) || !Entry || !Entry->IsValid())
+					{
+						continue;
+					}
+					FPatientClipData Data;
+					if ((*Entry)->TryGetNumberField(TEXT("long_axis_deg"), Value) && FMath::IsFinite(Value)) { Data.LongAxisDeg = FRotator3f::NormalizeAxis(static_cast<float>(Value)); }
+					const TArray<TSharedPtr<FJsonValue>>* Curve = nullptr;
+					if ((*Entry)->TryGetArrayField(TEXT("long_axis_curve"), Curve) && Curve && Curve->Num() >= 2)
+					{
+						for (const TSharedPtr<FJsonValue>& Sample : *Curve)
+						{
+							double Deg = 0.0;
+							Data.LongAxisCurve.Add(Sample.IsValid() && Sample->TryGetNumber(Deg) && FMath::IsFinite(Deg) ? FMath::Clamp(static_cast<float>(Deg), -360.f, 360.f) : 0.f);
+						}
+					}
+					if ((*Entry)->TryGetNumberField(TEXT("blend_in_s"), Value) && FMath::IsFinite(Value)) { Data.BlendInSeconds = FMath::Clamp(static_cast<float>(Value), 0.f, 5.f); }
+					if ((*Entry)->TryGetNumberField(TEXT("blend_out_s"), Value) && FMath::IsFinite(Value)) { Data.BlendOutSeconds = FMath::Clamp(static_cast<float>(Value), 0.f, 5.f); }
+					if ((*Entry)->TryGetBoolField(TEXT("fit_rate"), bFlag)) { Data.FitRate = bFlag ? 1 : 0; }
+					Out.ClipData.Add(Name, Data);
+				}
+			}
+		}
 	}
 
 	FFirstAidConfig::FFirstAidConfig()
@@ -126,6 +203,39 @@ namespace FirstAidRules
 		MedicalBag.PatientClips = { TEXT("AS_WoundedGetInjection"), TEXT("AS_WoundedLying") };
 
 		StartMedicalBags.Add(TEXT("MedicSapper"), 1);
+
+		// The lying patient (R17-6; "patient" in first_aid.json).
+		FPatientPoseConfig& Crawl = Patient.Pose(EPatientPose::Crawl);
+		Crawl.Clips = { TEXT("Injured/Idle_Crawl_Injured1"), TEXT("Injured/Idle_Crawl_Injured2"), TEXT("AS_WoundedGetInjection") };
+		Crawl.BlendInSeconds = 0.6f;
+		Crawl.BlendOutSeconds = 0.6f;
+		Crawl.bFitRate = false;
+		Crawl.End = EPatientEnd::Stand;
+		FPatientPoseConfig& Prone = Patient.Pose(EPatientPose::Prone);
+		Prone.Clips = { TEXT("Crawl/Crawl_Idle01"), TEXT("Injured/Idle_Crawl_Injured1"), TEXT("AS_WoundedLying") };
+		Prone.BlendInSeconds = 1.2f;
+		Prone.BlendOutSeconds = 1.f;
+		Prone.bFitRate = false;
+		Prone.End = EPatientEnd::Stay;
+		FPatientPoseConfig& Sitting = Patient.Pose(EPatientPose::Sitting);
+		Sitting.Clips = { TEXT("AS_WoundedSitting") };
+		Sitting.BlendInSeconds = 1.f;
+		Sitting.BlendOutSeconds = 1.f;
+		Sitting.bFitRate = true;
+		Sitting.End = EPatientEnd::Stay;
+		for (const TCHAR* LyingOnTheSide : { TEXT("AS_WoundedGetInjection"), TEXT("AS_WoundedLying") })
+		{
+			FPatientClipData Data;
+			Data.LongAxisDeg = -153.f; // measured: -152 male / -155 female copies (head back-left, on the left side)
+			// The turn at blend weights 0, 0.1 .. 1 over the pose's base clip (setup_first_aid_animation.py "blend curves", both bodies averaged).
+			Data.LongAxisCurve = FCString::Strcmp(LyingOnTheSide, TEXT("AS_WoundedGetInjection")) == 0
+				? TArray<float>{ 0.f, -8.7f, -20.5f, -36.5f, -56.7f, -79.f, -99.8f, -117.f, -131.f, -142.8f, -153.2f }
+				: TArray<float>{ 0.f, -10.f, -22.4f, -38.1f, -58.1f, -81.7f, -105.1f, -124.4f, -138.8f, -149.2f, -156.7f };
+			Data.BlendInSeconds = 1.8f;
+			Data.BlendOutSeconds = 1.6f;
+			Data.FitRate = 1;
+			Patient.ClipData.Add(LyingOnTheSide, Data);
+		}
 	}
 
 	ETier FromWoundTier(CriticalWoundRules::EWoundTier Tier)
@@ -313,6 +423,180 @@ namespace FirstAidRules
 		case EMode::Aid: return bPatient ? Item.PatientClips : Item.HelperClips;
 		default: return Empty;
 		}
+	}
+
+	EPatientPose ChoosePatientPose(bool bKnockedDown, bool bProne, bool bOnAllFours, bool bCrouching)
+	{
+		if (bKnockedDown)
+		{
+			return EPatientPose::Knockdown;
+		}
+		if (bProne)
+		{
+			return bOnAllFours ? EPatientPose::Crawl : EPatientPose::Prone;
+		}
+		return bCrouching ? EPatientPose::Sitting : EPatientPose::None;
+	}
+
+	const TCHAR* PatientPoseKey(EPatientPose Pose)
+	{
+		switch (Pose)
+		{
+		case EPatientPose::Crawl: return TEXT("crawl");
+		case EPatientPose::Prone: return TEXT("prone");
+		case EPatientPose::Sitting: return TEXT("sitting");
+		case EPatientPose::Knockdown: return TEXT("knockdown");
+		default: return TEXT("none");
+		}
+	}
+
+	bool ParsePatientPoseKey(const FString& Key, EPatientPose& Out)
+	{
+		const FString Clean = Key.TrimStartAndEnd();
+		for (int32 Index = 0; Index < PatientPoseCount; ++Index)
+		{
+			const EPatientPose Pose = static_cast<EPatientPose>(Index);
+			if (Clean.Equals(PatientPoseKey(Pose), ESearchCase::IgnoreCase))
+			{
+				Out = Pose;
+				return true;
+			}
+		}
+		return false;
+	}
+
+	bool IsLyingPose(EPatientPose Pose)
+	{
+		return Pose == EPatientPose::Crawl || Pose == EPatientPose::Prone;
+	}
+
+	const TArray<FString>& PatientClipSet(const FFirstAidConfig& Config, const FItemConfig& Item, EPatientPose Pose)
+	{
+		static const TArray<FString> Empty;
+		if (Pose == EPatientPose::None || Pose == EPatientPose::Knockdown)
+		{
+			return Empty;
+		}
+		const TArray<FString>& Own = Config.Patient.Pose(Pose).Clips;
+		if (!Own.IsEmpty())
+		{
+			return Own;
+		}
+		return IsLyingPose(Pose) ? Item.PatientClips : Empty;
+	}
+
+	FPatientClipPlay PatientClipPlay(const FFirstAidConfig& Config, EPatientPose Pose, const FString& Clip)
+	{
+		const FPatientPoseConfig& Settings = Config.Patient.Pose(Pose);
+		FPatientClipPlay Play;
+		Play.BlendInSeconds = Settings.BlendInSeconds;
+		Play.BlendOutSeconds = Settings.BlendOutSeconds;
+		bool bFit = Settings.bFitRate;
+		if (const FPatientClipData* Data = Config.Patient.ClipData.Find(Clip))
+		{
+			Play.LongAxisDeg = Data->LongAxisDeg;
+			Play.LongAxisCurve = Data->LongAxisCurve;
+			Play.BlendInSeconds = Data->BlendInSeconds >= 0.f ? Data->BlendInSeconds : Play.BlendInSeconds;
+			Play.BlendOutSeconds = Data->BlendOutSeconds >= 0.f ? Data->BlendOutSeconds : Play.BlendOutSeconds;
+			bFit = Data->FitRate < 0 ? bFit : Data->FitRate > 0;
+		}
+		Play.MinRate = bFit ? Config.MinPlayRate : 1.f;
+		Play.MaxRate = bFit ? Config.MaxPlayRate : 1.f;
+		return Play;
+	}
+
+	float CompensatedYaw(float BaseYaw, float LongAxisDeg, float Weight)
+	{
+		const float Share = FMath::IsFinite(Weight) ? FMath::Clamp(Weight, 0.f, 1.f) : 0.f;
+		return FRotator3f::NormalizeAxis(BaseYaw - FRotator3f::NormalizeAxis(LongAxisDeg) * Share);
+	}
+
+	float BodyTurnAt(const TArray<float>& Curve, float LongAxisDeg, float Weight)
+	{
+		const float Share = FMath::IsFinite(Weight) ? FMath::Clamp(Weight, 0.f, 1.f) : 0.f;
+		if (Curve.Num() < 2)
+		{
+			return FRotator3f::NormalizeAxis(LongAxisDeg) * Share;
+		}
+		const float Position = Share * static_cast<float>(Curve.Num() - 1);
+		const int32 Low = FMath::Clamp(FMath::FloorToInt(Position), 0, Curve.Num() - 2);
+		return FMath::Lerp(Curve[Low], Curve[Low + 1], FMath::Clamp(Position - static_cast<float>(Low), 0.f, 1.f));
+	}
+
+	float TurnToward(float CurrentYaw, float TargetYaw, float MaxDegPerSecond, float DeltaSeconds)
+	{
+		const float Delta = FRotator3f::NormalizeAxis(TargetYaw - CurrentYaw);
+		if (!(MaxDegPerSecond > 0.f))
+		{
+			return FRotator3f::NormalizeAxis(TargetYaw);
+		}
+		const float Step = MaxDegPerSecond * FMath::Max(0.f, DeltaSeconds);
+		return FRotator3f::NormalizeAxis(CurrentYaw + FMath::Clamp(Delta, -Step, Step));
+	}
+
+	bool StandsAfter(const FFirstAidConfig& Config, EPatientPose Pose, bool bCompleted, bool bMayStand)
+	{
+		return bCompleted && bMayStand && Pose != EPatientPose::None && Config.Patient.Pose(Pose).End == EPatientEnd::Stand;
+	}
+
+	FVector HelperGoal(const FFirstAidConfig& Config, bool bLying, const FVector& PatientLocation, const FVector& PatientForward, const FVector& HelperLocation)
+	{
+		const FVector Away = (HelperLocation - PatientLocation).GetSafeNormal2D();
+		const FVector Forward = PatientForward.GetSafeNormal2D();
+		if (!bLying || !Config.Patient.bHelperBesideLying || Forward.IsNearlyZero())
+		{
+			const FVector Right = Forward.IsNearlyZero() ? FVector::RightVector : FVector(-Forward.Y, Forward.X, 0.f);
+			return PatientLocation + (Away.IsNearlyZero() ? Right : Away) * Config.ApproachStopCm;
+		}
+		const FVector Right(-Forward.Y, Forward.X, 0.f); // his right (UE: yaw + 90)
+		const float Side = FVector::DotProduct(HelperLocation - PatientLocation, Right) >= 0.f ? 1.f : -1.f;
+		return PatientLocation + Right * (Side * Config.ApproachStopCm) + Forward * Config.Patient.HelperChestCm;
+	}
+
+	FVector HelperFacePoint(const FFirstAidConfig& Config, bool bLying, const FVector& PatientLocation, const FVector& PatientForward)
+	{
+		return bLying ? PatientLocation + PatientForward.GetSafeNormal2D() * Config.Patient.HelperChestCm : PatientLocation;
+	}
+
+	float MaxTurnRate(const TArray<FVector2D>& TimeYaw, float WindowSeconds)
+	{
+		if (TimeYaw.Num() < 2)
+		{
+			return 0.f;
+		}
+		// Unwound: each step the short way.
+		TArray<double> Yaw;
+		Yaw.Reserve(TimeYaw.Num());
+		Yaw.Add(TimeYaw[0].Y);
+		for (int32 Index = 1; Index < TimeYaw.Num(); ++Index)
+		{
+			Yaw.Add(Yaw.Last() + FRotator3f::NormalizeAxis(static_cast<float>(TimeYaw[Index].Y - TimeYaw[Index - 1].Y)));
+		}
+		const double Window = FMath::Max(1.e-3, static_cast<double>(WindowSeconds));
+		const double Total = TimeYaw.Last().X - TimeYaw[0].X;
+		if (Total < Window)
+		{
+			return Total > 1.e-6 ? static_cast<float>(FMath::Abs(Yaw.Last() - Yaw[0]) / Total) : 0.f;
+		}
+		double Best = 0.0;
+		int32 From = 0;
+		for (int32 Index = 1; Index < TimeYaw.Num(); ++Index)
+		{
+			if (TimeYaw[Index].X - TimeYaw[0].X < Window)
+			{
+				continue;
+			}
+			while (From + 1 < Index && TimeYaw[Index].X - TimeYaw[From + 1].X >= Window)
+			{
+				++From;
+			}
+			const double Span = TimeYaw[Index].X - TimeYaw[From].X;
+			if (Span > 1.e-6)
+			{
+				Best = FMath::Max(Best, FMath::Abs(Yaw[Index] - Yaw[From]) / Span);
+			}
+		}
+		return static_cast<float>(Best);
 	}
 
 	int32 PickClipIndex(int32 Count, float Random01, int32 Previous)
@@ -547,6 +831,7 @@ namespace FirstAidRules
 			ReadItem(*Items, TEXT("medkit"), Out.Medkit);
 			ReadItem(*Items, TEXT("medical_bag"), Out.MedicalBag);
 		}
+		ReadPatient(Root, Out.Patient);
 		return true;
 	}
 
