@@ -7,6 +7,9 @@ enforces rate limits, quiet hours, spend caps, kill switch (STOP), and forwards
 messages VERBATIM with fixed attribution header. Standard library only.
 """
 from __future__ import annotations
+import os as _os_nc, sys as _sys_nc
+_sys_nc.path.insert(0, _os_nc.path.dirname(_os_nc.path.abspath(__file__)))
+import no_console  # noqa: F401,E402 - no Terminal window per subprocess (2026-11-17)
 
 import argparse
 import datetime as dt
