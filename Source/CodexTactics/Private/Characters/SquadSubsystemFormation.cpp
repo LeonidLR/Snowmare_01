@@ -1685,6 +1685,69 @@ bool USquadSubsystem::OrderFormationWall(AOperativeCharacter* Direct, const TArr
 	return true;
 }
 
+bool USquadSubsystem::PreviewFormationWall(AOperativeCharacter* Direct, const TArray<AOperativeCharacter*>& Others, const FCoverSlot& Slot,
+	TArray<TPair<AOperativeCharacter*, FFormationSlot>>& OutPlaces)
+{
+	using namespace SquadSubsystemFormationLocal;
+	OutPlaces.Reset();
+	// OrderFormationWall's own refusals (the lead hand-over aside: the preview is for the leader the click would order).
+	if (!FormationRuntime::IsEnabled() || !Direct || Others.IsEmpty() || Others.Num() > 3 || !Slot.IsValid())
+	{
+		return false;
+	}
+	for (const AOperativeCharacter* Other : Others)
+	{
+		if (!Other || !Followers.ContainsByPredicate([Other](const FFollowerState& F) { return F.Operative.Get() == Other; }))
+		{
+			return false;
+		}
+	}
+	const int32 Count = 1 + Others.Num();
+	FVector Origin = Slot.WorldLocation;
+	Origin.Z = FormationFeetZ(*Direct) + WallOrderProbeHeightCm;
+	const FVector2D Clicked(Slot.WorldLocation);
+	const FFollowerState* Fourth = Count >= 4 ? Followers.FindByPredicate([](const FFollowerState& F) { return F.Slot == 2; }) : nullptr;
+	// The layout is computed into the formation's state (ComputeWallLayout); the state is put back as it was - a preview changes nothing.
+	const FFormationSectorState Saved = Sectors;
+	const bool bLaid = ComputeWallLayout(Origin, -FVector2D(Slot.WallNormal), 250.f, Clicked, Count, Fourth ? Fourth->Operative.Get() : nullptr);
+	const TArray<FFormationSlot> Places = Sectors.WallSlots;
+	Sectors = Saved;
+	if (!bLaid)
+	{
+		return false;
+	}
+	TArray<FVector2D> From;
+	TArray<FVector2D> To;
+	TArray<const FFormationSlot*> ToPlaces;
+	for (const AOperativeCharacter* Other : Others)
+	{
+		From.Add(FVector2D(Other->GetActorLocation()));
+	}
+	for (const FFormationSlot& Each : Places)
+	{
+		if (Each.Role != EFormationRole::Commander)
+		{
+			To.Add(Each.Position);
+			ToPlaces.Add(&Each);
+		}
+	}
+	const TArray<int32> Assignment = FormationRuntime::AssignByTravel(From, To);
+	const FFormationSlot* Lead = Places.FindByPredicate([](const FFormationSlot& Each) { return Each.Role == EFormationRole::Commander; });
+	if (Assignment.Num() != Others.Num() || !Lead)
+	{
+		return false;
+	}
+	OutPlaces.Add(TPair<AOperativeCharacter*, FFormationSlot>(Direct, *Lead));
+	for (int32 Index = 0; Index < Others.Num(); ++Index)
+	{
+		if (ToPlaces.IsValidIndex(Assignment[Index]))
+		{
+			OutPlaces.Add(TPair<AOperativeCharacter*, FFormationSlot>(Others[Index], *ToPlaces[Assignment[Index]]));
+		}
+	}
+	return true;
+}
+
 void USquadSubsystem::ResetFormationState(const FVector& Forward)
 {
 	EndFormationWallOrder(TEXT("reset"));

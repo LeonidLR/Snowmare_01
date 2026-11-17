@@ -768,7 +768,7 @@ void ACodexTacticsPlayerController::ShowCoverPreview(AOperativeCharacter* Operat
 		UpdateCoverSwitchHover(nullptr, nullptr); // the click ghost replaces the hover one
 		UpdateStealthWallHover(nullptr, nullptr);
 	}
-	if (UGameMessageSubsystem* Messages = GetWorld()->GetSubsystem<UGameMessageSubsystem>())
+	if (UGameMessageSubsystem* Messages = bQuietCoverPreview ? nullptr : GetWorld()->GetSubsystem<UGameMessageSubsystem>()) // R17-3: the feed line on the arming click only
 	{
 		const FText Kind = Slot.Height == ECoverHeight::HighCover ? LOCTEXT("CoverHigh", "wall") : LOCTEXT("CoverLow", "low cover");
 		const FText Corners = Slot.HasExposedEdge() ? LOCTEXT("CoverCorner", ", corner to fire from") : FText::GetEmpty();
@@ -1086,156 +1086,19 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		return true;
 	}
 	const FGroupCoverConfig Config;
-	// The direct order's slot: the clicked one. On a high wall the corner he would walk to by himself right after entering
-	// (TrySnapToCoverCorner) is taken at once - the corner is his, and nobody is placed on that walk.
-	FCoverSlot DirectSlot = Slot;
-	if (LeaderWrap || bLeaderSwitch)
-	{
-		// The wrap round his object / the switch (2026-10-20): the caller's slot is exact (the plan's goal / the previewed resolved corner).
-	}
-	else if (Slot.Height == ECoverHeight::HighCover)
-	{
-		const ECoverFacing Facing = Direct->PredictCoverFacing(Slot);
-		float Shift = 0.f;
-		FCoverSlot Corner;
-		if (CoverFacingRules::ShouldSnapToCorner(Slot, Facing, Shift, Direct->GetCoverFacingConfig(), false)
-			&& CoverTraceRules::FindShimmySlot(World, Slot, Slot.WallPoint + CoverFacingRules::AlongWallDirection(Slot, Facing) * Shift, Corner)
-			&& (!Slot.WallActor.IsValid() || Corner.WallActor == Slot.WallActor))
-		{
-			DirectSlot = Corner;
-		}
-	}
-	TArray<const AActor*> GroupActors{ Direct };
-	for (const AOperativeCharacter* Other : Others)
-	{
-		GroupActors.Add(Other);
-	}
-	// A slot / spot is taken by any other body standing there (an operative outside the order, an enemy) or by another
-	// operative's cover slot.
-	auto IsTaken = [World, &GroupActors, &Config](const FVector& Point)
-	{
-		for (TActorIterator<APawn> It(World); It; ++It)
-		{
-			if (GroupActors.Contains(*It) || It->IsA<AVehiclePawn>() || It->IsHidden())
-			{
-				continue;
-			}
-			if (FVector::Dist2D(It->GetActorLocation(), Point) < Config.OccupiedRadiusCm && FMath::Abs(It->GetActorLocation().Z - Point.Z) < 250.f)
-			{
-				return true;
-			}
-			if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(*It);
-				Operative && Operative->bInCover && FVector::Dist2D(Operative->GetCoverSlot().WorldLocation, Point) < Config.OccupiedRadiusCm)
-			{
-				return true;
-			}
-		}
-		return false;
-	};
-	// Probes along the same wall, both sides, outward from his slot, a slot spacing apart.
-	const FVector Tangent = DirectSlot.RightTangent();
-	const int32 Probes = GroupCoverRules::ProbesPerSide(Others.Num(), Config);
-	// A leader going round the object along its wall (2026-10-20) comes along the destination face from one side: nobody is placed there
-	// (they would stand in his way); the others take the far side, else prone behind the cover.
-	int32 WrapApproachSide = 0;
-	if (LeaderWrap && LeaderWrap->Waypoints.Num() >= 2)
-	{
-		WrapApproachSide = CoverTraceRules::AlongWallDistance(DirectSlot, LeaderWrap->Waypoints[LeaderWrap->Waypoints.Num() - 2]) < 0.f ? -1 : 1;
-	}
-	TArray<EGroupCoverProbe> SideProbes[2];
-	TMap<int32, FCoverSlot> ProbeSlots; // key: Side * 1000 + K
-	float FarthestWall[2] = { 0.f, 0.f };
-	for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
-	{
-		const int32 Side = SideIndex == 0 ? -1 : 1;
-		for (int32 K = 1; K <= Probes; ++K)
-		{
-			const float Offset = GroupCoverRules::ProbeOffsetCm(Side, K, Config);
-			FCoverSlot Probe;
-			const bool bFound = CoverTraceRules::FindShimmySlot(World, DirectSlot, DirectSlot.WallPoint + Tangent * Offset, Probe);
-			const bool bSameObject = bFound && (!DirectSlot.WallActor.IsValid() || Probe.WallActor == DirectSlot.WallActor);
-			const float AlongError = bFound ? CoverTraceRules::AlongWallDistance(DirectSlot, Probe.WorldLocation) - Offset : 0.f;
-			const bool bOuterExposed = Side < 0 ? Probe.bLeftEdgeExposed : Probe.bRightEdgeExposed;
-			const float OuterEdge = Side < 0 ? Probe.LeftEdgeDistanceCm : Probe.RightEdgeDistanceCm;
-			const EGroupCoverProbe Result = Side == WrapApproachSide ? EGroupCoverProbe::NoWall
-				: GroupCoverRules::ClassifyProbe(bFound, bSameObject, AlongError, bOuterExposed, OuterEdge, bFound && IsTaken(Probe.WorldLocation), Config);
-			SideProbes[SideIndex].Add(Result);
-			if (Result == EGroupCoverProbe::NoWall)
-			{
-				break;
-			}
-			FarthestWall[SideIndex] = Offset;
-			ProbeSlots.Add(Side * 1000 + K, Probe);
-		}
-	}
-	const TArray<float> Free = GroupCoverRules::CollectFreeOffsets(SideProbes[0], SideProbes[1], Config);
-	float MeanAlong = 0.f;
-	TArray<FVector2D> MemberPoints;
-	for (const AOperativeCharacter* Other : Others)
-	{
-		MeanAlong += CoverTraceRules::AlongWallDistance(DirectSlot, Other->GetActorLocation()) / Others.Num();
-		MemberPoints.Add(FVector2D(Other->GetActorLocation()));
-	}
-	const TArray<float> Chosen = GroupCoverRules::ChooseNearestOffsets(Free, Others.Num(), MeanAlong);
-	TArray<FCoverSlot> ChosenSlots;
-	TArray<FVector2D> SlotPoints;
-	for (const float Offset : Chosen)
-	{
-		const int32 Side = Offset < 0.f ? -1 : 1;
-		const int32 K = FMath::RoundToInt(FMath::Abs(Offset) / Config.SlotSpacingCm);
-		if (const FCoverSlot* Found = ProbeSlots.Find(Side * 1000 + K))
-		{
-			ChosenSlots.Add(*Found);
-			SlotPoints.Add(FVector2D(Found->WorldLocation));
-		}
-	}
-	// Item 3 (game designer bug report 2026-11-02, "prone behind him ONLY when there is NO cover nearby"): who has no slot at the leader's
-	// wall takes a free cover of another object nearby facing the same side (squad_walls.json follower_cover_radius_m / _side_deg).
-	int32 NearbyCount = 0;
-	if (Others.Num() > ChosenSlots.Num() && CVarGroupCoverNearbyCovers.GetValueOnGameThread() != 0)
-	{
-		const FSquadWallTuning& WallTuning = SquadWallTuning::Get();
-		TArray<FCoverSlot> Claimed = ChosenSlots;
-		Claimed.Add(DirectSlot);
-		for (const FCoverSlot& Nearby : ControllerGroupCover::FindNearbyGroupCoverSlots(World, DirectSlot, Claimed, Others.Num() - ChosenSlots.Num(), WallTuning.FollowerCoverRadiusCm,
-			WallTuning.FollowerCoverSideDeg, IsTaken))
-		{
-			ChosenSlots.Add(Nearby);
-			SlotPoints.Add(FVector2D(Nearby.WorldLocation));
-			++NearbyCount;
-		}
-	}
-	// Who does not fit: prone directly behind the cover (on the navmesh, free), facing it; spares for a refused slot order.
-	const int32 ProneNeeded = Others.Num() - ChosenSlots.Num();
-	const FVector2D Span = GroupCoverRules::ComputeCoverSpan(DirectSlot.bLeftEdgeExposed, DirectSlot.LeftEdgeDistanceCm, DirectSlot.bRightEdgeExposed,
-		DirectSlot.RightEdgeDistanceCm, FarthestWall[0], FarthestWall[1], Config);
-	const TArray<FVector2D> LocalSpots = GroupCoverRules::ComputeProneSpots(ProneNeeded, Span, Others.Num() + 2, Config);
-	const FVector Normal = DirectSlot.WallNormal.GetSafeNormal2D();
-	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
-	TArray<FVector> ProneSpots;
-	for (const FVector2D& Local : LocalSpots)
-	{
-		FVector Spot = FVector(DirectSlot.WallPoint.X, DirectSlot.WallPoint.Y, DirectSlot.WorldLocation.Z) + Tangent * Local.X + Normal * Local.Y;
-		if (Nav)
-		{
-			FNavLocation OnNav;
-			if (!Nav->ProjectPointToNavigation(Spot, OnNav, FVector(60.f, 60.f, 150.f)) || FVector::Dist2D(OnNav.Location, Spot) > 40.f)
-			{
-				continue;
-			}
-			Spot = OnNav.Location;
-		}
-		if (!IsTaken(Spot))
-		{
-			ProneSpots.Add(Spot);
-		}
-	}
-	TArray<FVector2D> PronePoints;
-	for (const FVector& Spot : ProneSpots)
-	{
-		PronePoints.Add(FVector2D(Spot));
-	}
-	const TArray<FGroupCoverAssignment> Plan = GroupCoverRules::PlanAssignments(MemberPoints, SlotPoints, PronePoints);
+	FGroupCoverPlacePlan Places;
+	PlanGroupCoverPlaces(Direct, Slot, Others, bLeaderSwitch, LeaderWrap, Places);
+	const FCoverSlot& DirectSlot = Places.DirectSlot;
+	const TArray<float>& Free = Places.Free;
+	const TArray<float>& Chosen = Places.Chosen;
+	const TMap<int32, FCoverSlot>& ProbeSlots = Places.ProbeSlots;
+	const TArray<FCoverSlot>& ChosenSlots = Places.ChosenSlots;
+	const TArray<FVector>& ProneSpots = Places.ProneSpots;
+	const TArray<FGroupCoverAssignment>& Plan = Places.Plan;
+	const int32 Probes = Places.Probes;
+	const int32 NearbyCount = Places.NearbyCount;
+	const FVector2D Span = Places.Span;
+	const FVector Normal = Places.Normal;
 	TArray<bool> ProneUsed;
 	ProneUsed.Init(false, ProneSpots.Num());
 	for (const FGroupCoverAssignment& Each : Plan)
@@ -1436,6 +1299,181 @@ bool ACodexTacticsPlayerController::OrderGroupCover(AOperativeCharacter* Direct,
 		Squad->ReallocateWallGroup(Direct, Others, bLeaderSwitch ? TEXT("the group cover order: the cover switch")
 			: LeaderWrap ? TEXT("the group cover order: the wrap round the object") : TEXT("the group cover order: the cover slots"));
 	}
+	return true;
+}
+
+bool ACodexTacticsPlayerController::PlanGroupCoverPlaces(AOperativeCharacter* Direct, const FCoverSlot& Slot, const TArray<AOperativeCharacter*>& Others,
+	bool bLeaderSwitch, const FCoverWrapPlan* LeaderWrap, FGroupCoverPlacePlan& Out) const
+{
+	// OrderGroupCover's placement, split out for the click ghost (R17-3: the group's silhouettes show the same places the order gives).
+	Out = FGroupCoverPlacePlan();
+	UWorld* World = GetWorld();
+	if (!World || !Direct || !Slot.IsValid() || Others.IsEmpty())
+	{
+		return false;
+	}
+	const FGroupCoverConfig Config;
+	// The direct order's slot: the clicked one. On a high wall the corner he would walk to by himself right after entering
+	// (TrySnapToCoverCorner) is taken at once - the corner is his, and nobody is placed on that walk.
+	FCoverSlot DirectSlot = Slot;
+	if (LeaderWrap || bLeaderSwitch)
+	{
+		// The wrap round his object / the switch (2026-10-20): the caller's slot is exact (the plan's goal / the previewed resolved corner).
+	}
+	else if (Slot.Height == ECoverHeight::HighCover)
+	{
+		const ECoverFacing Facing = Direct->PredictCoverFacing(Slot);
+		float Shift = 0.f;
+		FCoverSlot Corner;
+		if (CoverFacingRules::ShouldSnapToCorner(Slot, Facing, Shift, Direct->GetCoverFacingConfig(), false)
+			&& CoverTraceRules::FindShimmySlot(World, Slot, Slot.WallPoint + CoverFacingRules::AlongWallDirection(Slot, Facing) * Shift, Corner)
+			&& (!Slot.WallActor.IsValid() || Corner.WallActor == Slot.WallActor))
+		{
+			DirectSlot = Corner;
+		}
+	}
+	TArray<const AActor*> GroupActors{ Direct };
+	for (const AOperativeCharacter* Other : Others)
+	{
+		GroupActors.Add(Other);
+	}
+	// A slot / spot is taken by any other body standing there (an operative outside the order, an enemy) or by another
+	// operative's cover slot.
+	auto IsTaken = [World, &GroupActors, &Config](const FVector& Point)
+	{
+		for (TActorIterator<APawn> It(World); It; ++It)
+		{
+			if (GroupActors.Contains(*It) || It->IsA<AVehiclePawn>() || It->IsHidden())
+			{
+				continue;
+			}
+			if (FVector::Dist2D(It->GetActorLocation(), Point) < Config.OccupiedRadiusCm && FMath::Abs(It->GetActorLocation().Z - Point.Z) < 250.f)
+			{
+				return true;
+			}
+			if (const AOperativeCharacter* Operative = Cast<AOperativeCharacter>(*It);
+				Operative && Operative->bInCover && FVector::Dist2D(Operative->GetCoverSlot().WorldLocation, Point) < Config.OccupiedRadiusCm)
+			{
+				return true;
+			}
+		}
+		return false;
+	};
+	// Probes along the same wall, both sides, outward from his slot, a slot spacing apart.
+	const FVector Tangent = DirectSlot.RightTangent();
+	const int32 Probes = GroupCoverRules::ProbesPerSide(Others.Num(), Config);
+	// A leader going round the object along its wall (2026-10-20) comes along the destination face from one side: nobody is placed there
+	// (they would stand in his way); the others take the far side, else prone behind the cover.
+	int32 WrapApproachSide = 0;
+	if (LeaderWrap && LeaderWrap->Waypoints.Num() >= 2)
+	{
+		WrapApproachSide = CoverTraceRules::AlongWallDistance(DirectSlot, LeaderWrap->Waypoints[LeaderWrap->Waypoints.Num() - 2]) < 0.f ? -1 : 1;
+	}
+	TArray<EGroupCoverProbe> SideProbes[2];
+	TMap<int32, FCoverSlot> ProbeSlots; // key: Side * 1000 + K
+	float FarthestWall[2] = { 0.f, 0.f };
+	for (int32 SideIndex = 0; SideIndex < 2; ++SideIndex)
+	{
+		const int32 Side = SideIndex == 0 ? -1 : 1;
+		for (int32 K = 1; K <= Probes; ++K)
+		{
+			const float Offset = GroupCoverRules::ProbeOffsetCm(Side, K, Config);
+			FCoverSlot Probe;
+			const bool bFound = CoverTraceRules::FindShimmySlot(World, DirectSlot, DirectSlot.WallPoint + Tangent * Offset, Probe);
+			const bool bSameObject = bFound && (!DirectSlot.WallActor.IsValid() || Probe.WallActor == DirectSlot.WallActor);
+			const float AlongError = bFound ? CoverTraceRules::AlongWallDistance(DirectSlot, Probe.WorldLocation) - Offset : 0.f;
+			const bool bOuterExposed = Side < 0 ? Probe.bLeftEdgeExposed : Probe.bRightEdgeExposed;
+			const float OuterEdge = Side < 0 ? Probe.LeftEdgeDistanceCm : Probe.RightEdgeDistanceCm;
+			const EGroupCoverProbe Result = Side == WrapApproachSide ? EGroupCoverProbe::NoWall
+				: GroupCoverRules::ClassifyProbe(bFound, bSameObject, AlongError, bOuterExposed, OuterEdge, bFound && IsTaken(Probe.WorldLocation), Config);
+			SideProbes[SideIndex].Add(Result);
+			if (Result == EGroupCoverProbe::NoWall)
+			{
+				break;
+			}
+			FarthestWall[SideIndex] = Offset;
+			ProbeSlots.Add(Side * 1000 + K, Probe);
+		}
+	}
+	const TArray<float> Free = GroupCoverRules::CollectFreeOffsets(SideProbes[0], SideProbes[1], Config);
+	float MeanAlong = 0.f;
+	TArray<FVector2D> MemberPoints;
+	for (const AOperativeCharacter* Other : Others)
+	{
+		MeanAlong += CoverTraceRules::AlongWallDistance(DirectSlot, Other->GetActorLocation()) / Others.Num();
+		MemberPoints.Add(FVector2D(Other->GetActorLocation()));
+	}
+	const TArray<float> Chosen = GroupCoverRules::ChooseNearestOffsets(Free, Others.Num(), MeanAlong);
+	TArray<FCoverSlot> ChosenSlots;
+	TArray<FVector2D> SlotPoints;
+	for (const float Offset : Chosen)
+	{
+		const int32 Side = Offset < 0.f ? -1 : 1;
+		const int32 K = FMath::RoundToInt(FMath::Abs(Offset) / Config.SlotSpacingCm);
+		if (const FCoverSlot* Found = ProbeSlots.Find(Side * 1000 + K))
+		{
+			ChosenSlots.Add(*Found);
+			SlotPoints.Add(FVector2D(Found->WorldLocation));
+		}
+	}
+	// Item 3 (game designer bug report 2026-11-02, "prone behind him ONLY when there is NO cover nearby"): who has no slot at the leader's
+	// wall takes a free cover of another object nearby facing the same side (squad_walls.json follower_cover_radius_m / _side_deg).
+	int32 NearbyCount = 0;
+	if (Others.Num() > ChosenSlots.Num() && CVarGroupCoverNearbyCovers.GetValueOnGameThread() != 0)
+	{
+		const FSquadWallTuning& WallTuning = SquadWallTuning::Get();
+		TArray<FCoverSlot> Claimed = ChosenSlots;
+		Claimed.Add(DirectSlot);
+		for (const FCoverSlot& Nearby : ControllerGroupCover::FindNearbyGroupCoverSlots(World, DirectSlot, Claimed, Others.Num() - ChosenSlots.Num(), WallTuning.FollowerCoverRadiusCm,
+			WallTuning.FollowerCoverSideDeg, IsTaken))
+		{
+			ChosenSlots.Add(Nearby);
+			SlotPoints.Add(FVector2D(Nearby.WorldLocation));
+			++NearbyCount;
+		}
+	}
+	// Who does not fit: prone directly behind the cover (on the navmesh, free), facing it; spares for a refused slot order.
+	const int32 ProneNeeded = Others.Num() - ChosenSlots.Num();
+	const FVector2D Span = GroupCoverRules::ComputeCoverSpan(DirectSlot.bLeftEdgeExposed, DirectSlot.LeftEdgeDistanceCm, DirectSlot.bRightEdgeExposed,
+		DirectSlot.RightEdgeDistanceCm, FarthestWall[0], FarthestWall[1], Config);
+	const TArray<FVector2D> LocalSpots = GroupCoverRules::ComputeProneSpots(ProneNeeded, Span, Others.Num() + 2, Config);
+	const FVector Normal = DirectSlot.WallNormal.GetSafeNormal2D();
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	TArray<FVector> ProneSpots;
+	for (const FVector2D& Local : LocalSpots)
+	{
+		FVector Spot = FVector(DirectSlot.WallPoint.X, DirectSlot.WallPoint.Y, DirectSlot.WorldLocation.Z) + Tangent * Local.X + Normal * Local.Y;
+		if (Nav)
+		{
+			FNavLocation OnNav;
+			if (!Nav->ProjectPointToNavigation(Spot, OnNav, FVector(60.f, 60.f, 150.f)) || FVector::Dist2D(OnNav.Location, Spot) > 40.f)
+			{
+				continue;
+			}
+			Spot = OnNav.Location;
+		}
+		if (!IsTaken(Spot))
+		{
+			ProneSpots.Add(Spot);
+		}
+	}
+	TArray<FVector2D> PronePoints;
+	for (const FVector& Spot : ProneSpots)
+	{
+		PronePoints.Add(FVector2D(Spot));
+	}
+	const TArray<FGroupCoverAssignment> Plan = GroupCoverRules::PlanAssignments(MemberPoints, SlotPoints, PronePoints);
+	Out.DirectSlot = DirectSlot;
+	Out.Free = Free;
+	Out.Chosen = Chosen;
+	Out.ProbeSlots = ProbeSlots;
+	Out.ChosenSlots = ChosenSlots;
+	Out.ProneSpots = ProneSpots;
+	Out.Plan = Plan;
+	Out.Probes = Probes;
+	Out.NearbyCount = NearbyCount;
+	Out.Span = Span;
+	Out.Normal = Normal;
 	return true;
 }
 

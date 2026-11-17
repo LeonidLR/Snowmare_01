@@ -534,6 +534,14 @@ public:
 	bool OrderFormationWall(AOperativeCharacter* Direct, const TArray<AOperativeCharacter*>& Others, const FCoverSlot& Slot);
 
 	/**
+	 * R17-3 (designer 2026-11-17: "in formation the ghost shows the WHOLE group"): the wall layout OrderFormationWall(Direct, Others, Slot) would
+	 * make - the same FormationWallRules layout and the same minimal-travel roles - without ordering anything or changing the formation's state.
+	 * OutPlaces = every member's place (Direct, the Commander, first). False when OrderFormationWall would refuse.
+	 */
+	bool PreviewFormationWall(AOperativeCharacter* Direct, const TArray<AOperativeCharacter*>& Others, const FCoverSlot& Slot,
+		TArray<TPair<AOperativeCharacter*, FFormationSlot>>& OutPlaces);
+
+	/**
 	 * User decision 2026-10-26 (group cover in combat): the group-mode wall layout ordered in the TACTICAL PAUSE - Direct's walk to Slot is
 	 * planned (PlanMove within Radius, the cover slot pending: the fallback) and the wall order itself runs on the release
 	 * (ExecutePlannedFormationWall: OrderFormationWall with the followers then, the wall group). A new plan for Direct in this pause (PlanMove)
