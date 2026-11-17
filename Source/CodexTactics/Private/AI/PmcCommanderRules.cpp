@@ -339,6 +339,19 @@ namespace PmcCommanderRules
 			|| Order == EPmcOrder::Objective;
 	}
 
+	bool CanReissueOrderAt(EPmcOrder Order, const FVector& CurrentFeet, const FVector& TargetLocation, float ArrivalToleranceCm, float LevelToleranceCm)
+	{
+		if (IsStaticOrder(Order))
+		{
+			return true;
+		}
+		if (IsMoveOrder(Order))
+		{
+			return IsWalkShort(CurrentFeet, TargetLocation, ArrivalToleranceCm, LevelToleranceCm);
+		}
+		return true;
+	}
+
 	TMap<FString, FPmcEngagementBand> DefaultBands()
 	{
 		TMap<FString, FPmcEngagementBand> Out;
@@ -526,6 +539,7 @@ namespace PmcCommanderRules
 		// Order commitment and the push (fix/pmc-arena-stalemate 2026-11-10).
 		ReadNumber(Json, TEXT("order_min_hold_s"), Out.OrderMinHoldSeconds);
 		ReadNumber(Json, TEXT("failed_order_cooldown_s"), Out.FailedOrderCooldownSeconds);
+		ReadNumber(Json, TEXT("completed_order_cooldown_s"), Out.CompletedOrderCooldownSeconds);
 		ReadNumber(Json, TEXT("repath_after_s"), Out.RepathAfterSeconds);
 		ReadNumber(Json, TEXT("push_after_s"), Out.PushAfterSeconds);
 		ReadNumber(Json, TEXT("push"), Out.Push);

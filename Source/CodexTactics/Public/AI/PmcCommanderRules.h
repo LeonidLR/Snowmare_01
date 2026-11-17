@@ -216,6 +216,8 @@ struct CODEXTACTICS_API FPmcWeights
 	float OrderMinHoldSeconds = 3.f;
 	/** An order that ended without reaching its goal (no path, a dropped walk, a failed detour) sits out this long, s. */
 	float FailedOrderCooldownSeconds = 5.f;
+	/** A completed order (e.g. TakeCover in cover, or FallBack at standoff distance) sits out this long on the same spot, s. */
+	float CompletedOrderCooldownSeconds = 4.f;
 	/** A walk without StuckProgressCm of progress for this long takes the next detour step (NextDetourStep), then fails, s. */
 	float RepathAfterSeconds = 5.f;
 	/**
@@ -492,6 +494,12 @@ namespace PmcCommanderRules
 
 	/** The order is a walk the man commits to (advance / flank / fall back / relocate / take cover). */
 	CODEXTACTICS_API bool IsMoveOrder(EPmcOrder Order);
+
+	/**
+	 * Whether the commander should allow re-issuing Order to a fighter who already occupies the goal spot
+	 * within ArrivalToleranceCm (prevents rapid same-order repeats on the same spot).
+	 */
+	CODEXTACTICS_API bool CanReissueOrderAt(EPmcOrder Order, const FVector& CurrentFeet, const FVector& TargetLocation, float ArrivalToleranceCm, float LevelToleranceCm);
 
 	/** A team's mortar nest: the fire score at a seen cluster of ClusterCount enemies (0 unmanned / out of the band). */
 	CODEXTACTICS_API float ScoreMortarFire(int32 ClusterCount, bool bManned, bool bInRangeBand, const FPmcWeights& Weights);

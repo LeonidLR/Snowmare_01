@@ -1089,9 +1089,34 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 		if (State.bWalkPending && !IsOrderRunning(*Fighter, State))
 		{
 			State.bWalkPending = false;
-			if (bWalking && !State.Goal.IsNearlyZero() && PmcCommanderRules::IsWalkShort(Feet, State.Goal, PmcSquadLocal::FailShortCm, Team.Weights.LevelToleranceCm))
+			const bool bFailedShort = bWalking && !State.Goal.IsNearlyZero()
+				&& PmcCommanderRules::IsWalkShort(Feet, State.Goal, PmcSquadLocal::FailShortCm, Team.Weights.LevelToleranceCm);
+			if (bFailedShort)
 			{
 				MarkFailed(TeamId, Team, *Fighter, State, State.Order, TEXT("ended short of its goal"));
+			}
+			else
+			{
+				// Succeeded walk order: reported DONE to commander -> transition to Hold.
+				if (State.Order == EPmcOrder::TakeCover || State.Order == EPmcOrder::Relocate)
+				{
+					if (Fighter->bInCover)
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s completed %s in cover -> Hold"), TeamId,
+							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(State.Order));
+						State.Order = EPmcOrder::Hold;
+						State.OrderSince = Now;
+						State.FailedUntil.Add(EPmcOrder::TakeCover, Now + Team.Weights.CompletedOrderCooldownSeconds);
+					}
+				}
+				else if (State.Order == EPmcOrder::FallBack)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s completed FallBack at %s -> Hold"), TeamId,
+						*Fighter->DisplayName.ToString(), *State.Goal.ToCompactString());
+					State.Order = EPmcOrder::Hold;
+					State.OrderSince = Now;
+					State.FailedUntil.Add(EPmcOrder::FallBack, Now + Team.Weights.CompletedOrderCooldownSeconds);
+				}
 			}
 		}
 		// Exposure at one spot.
@@ -1359,6 +1384,13 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		float CoverQuality = 0.f;
 		AActor* ThreatActor = nullptr;
 		FPmcFighterView View = BuildFighterView(TeamId, Team, *Fighter, State, Mates, Cover, CoverQuality, ThreatActor);
+		if (ThreatActor && ThreatActor != State.LastThreat.Get())
+		{
+			// A new threat appeared: clear completed cooldowns for the previous threat so the fighter can react.
+			State.FailedUntil.Remove(EPmcOrder::TakeCover);
+			State.FailedUntil.Remove(EPmcOrder::FallBack);
+			State.LastThreat = ThreatActor;
+		}
 		const bool bRunning = IsOrderRunning(*Fighter, State);
 		View.RunningOrder = bRunning ? State.Order : EPmcOrder::Count;
 		// The mates' counters are about the OTHERS: his own running order is not a mate's.
@@ -1558,6 +1590,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		break;
 	case EPmcOrder::TakeCover:
 	case EPmcOrder::Relocate:
+		if (Fighter.bInCover && Fighter.GetCoverSlot().WorldLocation.Equals(Cover.WorldLocation, 50.f))
+		{
+			// Already in this exact cover slot on this spot
+			return false;
+		}
 		Context.Cover = Cover;
 		Context.bSprint = !View.Threat.bSeenNow;
 		bTaken = SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
@@ -1637,21 +1674,44 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			if (FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, nullptr, Team.Weights, BandCover, BandQuality, View.Band, &BandSlotFactor)
 				&& BandSlotFactor >= 0.95f)
 			{
-				Context.Cover = BandCover;
-				Context.bSprint = true;
-				bTaken = SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
-				Goal = BandCover.WorldLocation;
-				State.Slot = BandCover;
+				if (Fighter.bInCover && Fighter.GetCoverSlot().WorldLocation.Equals(BandCover.WorldLocation, 50.f))
+				{
+					bTaken = false;
+				}
+				else
+				{
+					Context.Cover = BandCover;
+					Context.bSprint = true;
+					bTaken = SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
+					Goal = BandCover.WorldLocation;
+					State.Slot = BandCover;
+				}
 			}
 			if (!bTaken)
 			{
-				bTaken = Walk(PmcCommanderRules::StandoffPoint(View.Location, View.Threat.Location, View.Band), true);
+				const FVector StandoffGoal = PmcCommanderRules::StandoffPoint(View.Location, View.Threat.Location, View.Band);
+				if (!PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, PmcSquadLocal::FeetOf(Fighter), StandoffGoal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+				{
+					bTaken = false;
+				}
+				else
+				{
+					bTaken = Walk(StandoffGoal, true);
+				}
 			}
 			Team.Stats.Standoffs += bTaken ? 1 : 0;
 		}
 		else
 		{
-			bTaken = View.bHasThreat && Walk(PmcCommanderRules::FallBackPoint(View.Location, View.Threat.Location), true);
+			const FVector FallBackGoal = PmcCommanderRules::FallBackPoint(View.Location, View.Threat.Location);
+			if (!PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, PmcSquadLocal::FeetOf(Fighter), FallBackGoal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+			{
+				bTaken = false;
+			}
+			else
+			{
+				bTaken = View.bHasThreat && Walk(FallBackGoal, true);
+			}
 		}
 		Team.Stats.Retreats += bTaken ? 1 : 0;
 		break;
