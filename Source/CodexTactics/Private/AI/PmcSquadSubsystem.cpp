@@ -1119,22 +1119,22 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 				// Succeeded walk order: reported DONE to commander -> transition to Hold.
 				if (State.Order == EPmcOrder::TakeCover || State.Order == EPmcOrder::Relocate)
 				{
+					const EPmcOrder CompletedOrder = State.Order;
 					if (Fighter->bInCover)
 					{
 						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s completed %s in cover -> Hold"), TeamId,
-							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(State.Order));
+							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(CompletedOrder));
 						State.Order = EPmcOrder::Hold;
 						State.OrderSince = Now;
-						State.FailedUntil.Add(State.Order, Now + Team.Weights.CompletedOrderCooldownSeconds);
+						State.FailedUntil.Add(CompletedOrder, Now + Team.Weights.CompletedOrderCooldownSeconds);
 					}
 					else
 					{
 						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s ended %s out of cover (interrupted approach) -> Hold with cooldown"), TeamId,
-							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(State.Order));
+							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(CompletedOrder));
 						State.Order = EPmcOrder::Hold;
 						State.OrderSince = Now;
-						State.FailedUntil.Add(State.Order, Now + Team.Weights.CoverInterruptedCooldownSeconds);
-						State.FailedUntil.Add(EPmcOrder::TakeCover, Now + Team.Weights.CoverInterruptedCooldownSeconds);
+						State.FailedUntil.Add(CompletedOrder, Now + Team.Weights.CoverInterruptedCooldownSeconds);
 					}
 				}
 				else if (State.Order == EPmcOrder::FallBack)
@@ -1148,7 +1148,8 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 				else if (State.Order == EPmcOrder::Heal)
 				{
 					const float Dist = State.Patient.IsValid() ? FVector::Dist2D(Feet, State.Patient->GetActorLocation()) : 99999.f;
-					if (Dist <= PmcSquadLocal::AidReachCm && Fighter->MedkitsCount > 0 && State.Patient.IsValid() && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f)
+					if (Dist <= PmcSquadLocal::AidReachCm && Fighter->MedkitsCount > 0 && State.Patient.IsValid()
+						&& PmcSquadLocal::IsLiveOperative(State.Patient.Get()) && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f)
 					{
 						FSquadOrderContext Context;
 						Context.Operative = Fighter;
@@ -1343,23 +1344,33 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		View.bCoverAvailable = FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, Exclude, Team.Weights, OutCover, OutCoverQuality,
 			View.Band, &View.CoverBandFactor) && OutCoverQuality > View.CoverQuality + 0.2f;
 	}
-	// The nearest wounded mate.
-	State.Patient.Reset();
-	for (AOperativeCharacter* Mate : Mates)
+	// The nearest wounded mate (preserve active patient if already executing a running Heal order).
+	const bool bKeepActivePatient = State.Order == EPmcOrder::Heal && State.Patient.IsValid()
+		&& PmcSquadLocal::IsLiveOperative(State.Patient.Get()) && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f;
+	if (bKeepActivePatient)
 	{
-		if (Mate == &Fighter || !PmcSquadLocal::IsLiveOperative(Mate))
+		View.WoundedMateDistanceCm = FVector::Dist2D(View.Location, State.Patient->GetActorLocation());
+		View.WoundedMateHealthFrac = PmcSquadLocal::HealthFractionOf(*State.Patient);
+	}
+	else
+	{
+		State.Patient.Reset();
+		for (AOperativeCharacter* Mate : Mates)
 		{
-			continue;
-		}
-		const float MateHealth = PmcSquadLocal::HealthFractionOf(*Mate);
-		if (MateHealth < Team.Weights.HealBelow)
-		{
-			const float Distance = FVector::Dist2D(View.Location, Mate->GetActorLocation());
-			if (View.WoundedMateDistanceCm < 0.f || Distance < View.WoundedMateDistanceCm)
+			if (Mate == &Fighter || !PmcSquadLocal::IsLiveOperative(Mate))
 			{
-				View.WoundedMateDistanceCm = Distance;
-				View.WoundedMateHealthFrac = MateHealth;
-				State.Patient = Mate;
+				continue;
+			}
+			const float MateHealth = PmcSquadLocal::HealthFractionOf(*Mate);
+			if (MateHealth < Team.Weights.HealBelow)
+			{
+				const float Distance = FVector::Dist2D(View.Location, Mate->GetActorLocation());
+				if (View.WoundedMateDistanceCm < 0.f || Distance < View.WoundedMateDistanceCm)
+				{
+					View.WoundedMateDistanceCm = Distance;
+					View.WoundedMateHealthFrac = MateHealth;
+					State.Patient = Mate;
+				}
 			}
 		}
 	}
