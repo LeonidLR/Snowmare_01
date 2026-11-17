@@ -395,6 +395,26 @@ namespace
 		}
 	}
 
+	/** first_aid.json "start_medical_bags" for a player operative (the JSON role name). A hostile PMC is not a medic. */
+	void ApplyStartMedicalBags(AOperativeCharacter& Operative)
+	{
+		if (Operative.TeamId != 0)
+		{
+			return;
+		}
+		const TCHAR* RoleName = TEXT("");
+		switch (Operative.SquadRole)
+		{
+		case EOperativeRole::Commander: RoleName = TEXT("Commander"); break;
+		case EOperativeRole::Engineer: RoleName = TEXT("Engineer"); break;
+		case EOperativeRole::MedicSapper: RoleName = TEXT("MedicSapper"); break;
+		case EOperativeRole::Recruit: RoleName = TEXT("Recruit"); break;
+		default: break;
+		}
+		Operative.MedicalBagsCount = FMath::Max(Operative.MedicalBagsCount,
+			FirstAidRules::StartMedicalBags(FirstAidRules::GetConfig(), RoleName));
+	}
+
 	/** Level loadout ids (Training Ground pass 1): a weapon is usable when it is in play (WeaponRoster) and its DA_Weapon_<id> asset exists. */
 	bool IsKnownLevelWeapon(const FString& Id)
 	{
@@ -436,7 +456,12 @@ void ACodexTacticsGameMode::SpawnSquad()
 	}
 	if (TActorIterator<AOperativeCharacter>(World))
 	{
-		// The level places its own squad: the carry goes onto the placed operatives.
+		// The level places its own squad: it never goes through SpawnOperative, so the role's medical bag is applied here.
+		// The carry runs after and wins (a bag already used stays used). The level kit runs last.
+		for (TActorIterator<AOperativeCharacter> It(World); It; ++It)
+		{
+			ApplyStartMedicalBags(**It);
+		}
 		for (TActorIterator<AOperativeCharacter> It(World); It && Carry; ++It)
 		{
 			if (const FCarriedOperative* Carried = It->bRecruited ? CampaignCarry::FindFor(*Carry, It->SquadRole, It->SquadIndex) : nullptr)
@@ -509,12 +534,8 @@ AOperativeCharacter* ACodexTacticsGameMode::SpawnOperative(const FSquadMemberSpa
 		Operative->BodyColor = Entry.Color;
 		Operative->ColdSurvival->Fortitude = Entry.Fortitude;
 		Operative->SquadRole = Entry.Role;
-		// First aid (the game designer 2026-11-16): the role's medical bags (first_aid.json "start_medical_bags"; a level kit / the carry / a save override).
-		if (const UEnum* RoleEnum = StaticEnum<EOperativeRole>())
-		{
-			Operative->MedicalBagsCount = FMath::Max(Operative->MedicalBagsCount,
-				FirstAidRules::StartMedicalBags(FirstAidRules::GetConfig(), RoleEnum->GetNameStringByValue(static_cast<int64>(Entry.Role))));
-		}
+		// First aid: the role's medical bags (first_aid.json "start_medical_bags"). A level kit / the carry / a save override this afterwards.
+		ApplyStartMedicalBags(*Operative);
 		Operative->Luck = Entry.Luck;
 		Operative->Accuracy = Entry.Accuracy;
 		// Godot apply_balance_config: health, speeds, matches... from game_balance_config.tres (before BeginPlay).

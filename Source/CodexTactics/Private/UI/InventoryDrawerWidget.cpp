@@ -137,7 +137,7 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 	HintText->SetFont(HintFont);
 	HintText->SetColorAndOpacity(FSlateColor(DrawerTitle * 0.85f));
 	HintText->SetJustification(ETextJustify::Center);
-	HintText->SetText(LOCTEXT("DragHint", "Drag a row onto an operative or portrait to hand it over (beyond 2 m he walks up); a medkit / medical bag on a badly wounded mate treats him"));
+	HintText->SetText(LOCTEXT("DragHint", "Drag a row onto an operative or portrait to hand it over (beyond 2 m he walks up); a medkit / medical bag on a wounded mate treats him (Shift hands it over)"));
 	Column->AddChildToVerticalBox(HintText)->SetPadding(FMargin(0.f, 0.f, 0.f, 6.f));
 
 	UTextBlock* CloseText = nullptr;
@@ -272,8 +272,23 @@ FText UInventoryDrawerWidget::GetSlotText(EInventoryDrawerSlot Line) const
 	case EInventoryDrawerSlot::MedicalBag:
 	{
 		const int32 Max = FirstAidRules::GetConfig().MedicalBag.MaxCarried;
-		return Max > 0 ? DrawerClean(FString::Printf(TEXT("🩹 Medical bag: x%d/%d"), Leader->MedicalBagsCount, Max))
-			: DrawerClean(FString::Printf(TEXT("🩹 Medical bag: x%d"), Leader->MedicalBagsCount));
+		const int32 Own = Leader->MedicalBagsCount;
+		int32 SquadBags = 0;
+		if (const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr)
+		{
+			for (const AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				SquadBags += Member ? Member->MedicalBagsCount : 0;
+			}
+		}
+		// The leader's drawer is the only inventory. A bag on the medic must still be readable while the commander is selected.
+		if (Own <= 0 && SquadBags > 0)
+		{
+			return Max > 0 ? DrawerClean(FString::Printf(TEXT("Medical bag: x%d/%d (%d in squad)"), Own, Max, SquadBags))
+				: DrawerClean(FString::Printf(TEXT("Medical bag: x%d (%d in squad)"), Own, SquadBags));
+		}
+		return Max > 0 ? DrawerClean(FString::Printf(TEXT("Medical bag: x%d/%d"), Own, Max))
+			: DrawerClean(FString::Printf(TEXT("Medical bag: x%d"), Own));
 	}
 	case EInventoryDrawerSlot::Campfire:
 	{
@@ -495,7 +510,8 @@ void UInventoryDrawerWidget::Refresh()
 	{
 		TitleText->SetText(GetTitleText());
 	}
-	int32 Visible = 0;
+	TArray<int32> Visible;
+	Visible.Reserve(SlotTexts.Num());
 	for (int32 Index = 0; Index < SlotTexts.Num(); ++Index)
 	{
 		const EInventoryDrawerSlot Line = static_cast<EInventoryDrawerSlot>(Index);
@@ -505,11 +521,32 @@ void UInventoryDrawerWidget::Refresh()
 		UWidget* Cell = SlotButtons[Index]->GetParent();
 		const bool bVisible = IsSlotVisible(Line);
 		Cell->SetVisibility(bVisible ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
-		if (UUniformGridSlot* GridSlot = Cast<UUniformGridSlot>(Cell->Slot); GridSlot && bVisible)
+		if (bVisible)
 		{
-			GridSlot->SetRow(Visible / 2);
-			GridSlot->SetColumn(Visible % 2);
-			++Visible;
+			Visible.Add(Index);
+		}
+	}
+	// The medical bag is the last enum slot, under the action bar on a full drawer. Keep it with the medkit, where the designer looks.
+	Visible.StableSort([](int32 Left, int32 Right)
+	{
+		auto Rank = [](int32 Index)
+		{
+			const EInventoryDrawerSlot Line = static_cast<EInventoryDrawerSlot>(Index);
+			if (Line == EInventoryDrawerSlot::MedicalBag)
+			{
+				return static_cast<int32>(EInventoryDrawerSlot::Medkit) * 2 + 1;
+			}
+			return static_cast<int32>(Line) * 2;
+		};
+		return Rank(Left) < Rank(Right);
+	});
+	for (int32 Place = 0; Place < Visible.Num(); ++Place)
+	{
+		UWidget* Cell = SlotButtons[Visible[Place]]->GetParent();
+		if (UUniformGridSlot* GridSlot = Cast<UUniformGridSlot>(Cell->Slot))
+		{
+			GridSlot->SetRow(Place / 2);
+			GridSlot->SetColumn(Place % 2);
 		}
 	}
 }

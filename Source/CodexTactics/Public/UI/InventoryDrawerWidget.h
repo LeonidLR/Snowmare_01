@@ -42,7 +42,7 @@ enum class EInventoryDrawerSlot : uint8
 	Campfire,
 	/**
 	 * The medical bag (the game designer 2026-11-16, Survival/FirstAidRules): click = the leader treats himself (light / medium wound), drag onto a
-	 * heavily wounded mate = he treats him (UFirstAidSubsystem).
+	 * wounded mate (HP below max) = he treats him (UFirstAidSubsystem); Shift hands the bag over.
 	 */
 	MedicalBag
 };
