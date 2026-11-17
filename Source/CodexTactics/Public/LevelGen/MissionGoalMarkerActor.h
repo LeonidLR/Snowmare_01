@@ -4,6 +4,9 @@
 #include "Tutorial/TutorialMarkerActor.h"
 #include "MissionGoalMarkerActor.generated.h"
 
+class UTextRenderComponent;
+struct FMissionGoalsFile;
+
 /**
  * The world marker of one mission goal of a generated map (F-4 «а», designer 2026-11-17): the tutorial's orange hologram ring + beacon
  * (ATutorialMarkerActor: engine shapes wearing MI_HoloMarker_Orange, no asset of its own), spawned by UMissionGoalsSubsystem at the
@@ -20,6 +23,13 @@ public:
 	AMissionGoalMarkerActor();
 
 	virtual void BeginPlay() override;
+	virtual void Tick(float DeltaSeconds) override;
+
+	/** Sets the sequential GOAL number and the objectives file's label style before FinishSpawning. */
+	void SetGoalNumber(int32 Number, const FMissionGoalsFile& Objectives);
+
+	/** The world label, for visibility/text checks alongside the marker. */
+	UTextRenderComponent* GetGoalText() const { return GoalText.Get(); }
 
 	/**
 	 * Shows / hides the marker. Remembered when called before BeginPlay (the subsystem spawns the markers in OnWorldBeginPlay, before the
@@ -32,5 +42,8 @@ public:
 	FString GoalId;
 
 private:
+	UPROPERTY(VisibleAnywhere, Category = "CodexTactics|MissionGoals")
+	TObjectPtr<UTextRenderComponent> GoalText;
+
 	bool bGoalShown = true;
 };

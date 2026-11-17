@@ -113,6 +113,14 @@ bool MissionGoalsRules::Parse(const FString& Json, FMissionGoalsFile& Out, TArra
 	{
 		Out.FloorToleranceCm = static_cast<float>(Number);
 	}
+	if (Root->TryGetNumberField(TEXT("label_height_cm"), Number) && FMath::IsFinite(Number) && Number >= 0.0 && Number <= TNumericLimits<float>::Max())
+	{
+		Out.LabelHeightCm = static_cast<float>(Number);
+	}
+	if (Root->TryGetNumberField(TEXT("label_world_size_cm"), Number) && FMath::IsFinite(Number) && Number > 0.0 && Number <= TNumericLimits<float>::Max())
+	{
+		Out.LabelWorldSizeCm = static_cast<float>(Number);
+	}
 	else
 	{
 		Out.FloorToleranceCm = DefaultFloorToleranceCm;
