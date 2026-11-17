@@ -116,8 +116,8 @@ namespace PmcTacticalRules
 	/**
 	 * The squad's posts on the tactical map: marksmen first on the best overwatch roof spots (one man per roof), then up to
 	 * Weights.LadderRoofMen men on the picked ladder-only roofs (the candidates are only the picked ones), a jumper archetype on the best
-	 * drop edge, the rest at windows (a seeded WindowShare of the riflemen, when window candidates exist) or ambush spots (best effective
-	 * score first); a post at least MinSpacingCm from every other one, one per group. A fighter with nothing left gets an invalid post
+	 * drop edge, the first of the rest on the best ambush spot (the squad's ambush at a chokepoint exit), the others at windows (a seeded
+	 * WindowShare, when window candidates exist) or ambush spots (best effective score first); a post at least MinSpacingCm from every other one, one per group. A fighter with nothing left gets an invalid post
 	 * (Kind None: the old line spawn). Deterministic for the same input + Seed. Empty candidates = every post invalid.
 	 */
 	CODEXTACTICS_API TArray<FPmcTacticalPost> PlanPlacement(const TArray<FPmcPlacementFighter>& Fighters, const TArray<FPmcPostCandidate>& Candidates,

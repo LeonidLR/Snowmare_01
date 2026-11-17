@@ -205,7 +205,8 @@ bool FPmcTacticalPlacementTest::RunTest(const FString&)
 	W.WindowShare = 1.f;
 	Candidates.Add(Candidate(EPmcPostKind::Window, FVector(800.f, 1500.f, 0.f), 0.4f, TEXT("B_shed:0")));
 	const TArray<FPmcTacticalPost> Windowed = PmcTacticalRules::PlanPlacement(Fighters, Candidates, W, 11);
-	TestTrue(TEXT("window_share 1: the first rifleman at the window"), Windowed[0].Kind == EPmcPostKind::Window);
+	TestTrue(TEXT("window_share 1: the squad's ambusher stays at the chokepoint exit"), Windowed[0].Kind == EPmcPostKind::Ambush && Windowed[0].Group == TEXT("HS_exit"));
+	TestTrue(TEXT("window_share 1: the next rifleman at the window"), Windowed[2].Kind == EPmcPostKind::Window);
 	// Ladder roof men 0: nobody goes up the ladder-only roof.
 	W.LadderRoofMen = 0;
 	for (const FPmcTacticalPost& Post : PmcTacticalRules::PlanPlacement(Fighters, Candidates, W, 11))

@@ -271,14 +271,17 @@ namespace PmcTacticalRules
 				++LadderMen;
 			}
 		}
-		// 4. The rest: a seeded share at windows, the others at the ambush spots (each falls back to the other kind, then any post).
+		// 4. The rest: the first of them always at the best ambush spot (the chokepoint exit: the squad's ambush), then a seeded share at
+		// windows, the others at ambush spots (each falls back to the other kind, then any post).
+		bool bAmbusherPlaced = false;
 		for (int32 Fighter = 0; Fighter < Fighters.Num(); ++Fighter)
 		{
 			if (Posts[Fighter].IsValid())
 			{
 				continue;
 			}
-			const bool bWindowFirst = PmcTacticalLocal::Roll(Seed, Fighter) < PmcTacticalLocal::Clamp01(Weights.WindowShare);
+			const bool bWindowFirst = bAmbusherPlaced && PmcTacticalLocal::Roll(Seed, Fighter) < PmcTacticalLocal::Clamp01(Weights.WindowShare);
+			bAmbusherPlaced = true;
 			const EPmcPostKind First = bWindowFirst ? EPmcPostKind::Window : EPmcPostKind::Ambush;
 			const EPmcPostKind Second = bWindowFirst ? EPmcPostKind::Ambush : EPmcPostKind::Window;
 			int32 Index = Best(First, Any);

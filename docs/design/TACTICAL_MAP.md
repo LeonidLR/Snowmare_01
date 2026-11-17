@@ -133,7 +133,7 @@ scenario pick is the old one (`PickScenarioOnMap(seed, false) == PickScenario(se
 `OverwatchSpots` of route samples every 15 m, windows = `WindowPositions` (stand + yaw), drops = `DropSpotsAbove` (edge, jumpers list),
 ladder roofs = `PickLadderOnlyRoofs(seed)` (the file's 0.65) near the route; each with its PMC danger. `PlanPlacement`: marksmen (sniper
 band, else the squad's longest reach) on the best overwatch roof (one per roof), a jumper archetype on a drop edge (the PMC operative is
-not in any drop spot's `jumpers` list - so never today), `ladder_roof_men` on a picked ladder-only roof, the rest at windows / ambush spots,
+not in any drop spot's `jumpers` list - so never today), `ladder_roof_men` on a picked ladder-only roof, the first of the rest on the best ambush spot (always), the others at windows / ambush spots,
 3 m apart. Used by `SpawnSquadTactical` (spawn ON the posts; line spawn without candidates), `AssignTacticalPosts` (the level encounter's
 Defend posture on a map with a tactical file: posts along the player's way, none closer than half `min_m`), the arena's tactical scenario.
 
