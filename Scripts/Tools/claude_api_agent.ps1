@@ -27,10 +27,16 @@ $Out = Join-Path $Log "$Stamp-$Label.json"
 
 Push-Location $Worktree
 try {
-    $Prompt = Get-Content $PromptFile -Raw
+    # Double quotes split native arguments in Windows PowerShell 5.1 (the 11-17 prompt arrived cut at the first quote).
+    $Prompt = (Get-Content $PromptFile -Raw).Replace('"', "'")
     $Tools = "Read,Edit,Write,Glob,Grep,Bash(git *),Bash(python *),Bash(powershell *),Bash(npm *),PowerShell"
-    claude --bare -p $Prompt --model $Model --max-budget-usd $BudgetUsd --permission-mode acceptEdits `
-        --allowedTools $Tools --output-format json 2>&1 | Out-File -Encoding utf8 $Out
+    # Hidden console (2026-11-17): every tool call of the CLI otherwise opened a new Windows Terminal window.
+    $Claude = (Get-Command claude.cmd -ErrorAction SilentlyContinue).Source   # npm installs claude.ps1 + claude.cmd; Start-Process needs the .cmd
+    if (-not $Claude) { $Claude = (Get-Command claude -ErrorAction Stop).Source }
+    $ArgLine = "--bare -p `"$Prompt`" --model $Model --max-budget-usd $BudgetUsd --permission-mode acceptEdits --allowedTools `"$Tools`" --output-format json"
+    $Err = "$Out.stderr.txt"
+    Start-Process -FilePath $Claude -ArgumentList $ArgLine -WindowStyle Hidden -Wait -RedirectStandardOutput $Out -RedirectStandardError $Err | Out-Null
+    if (-not (Get-Content $Out -Raw -ErrorAction SilentlyContinue)) { Copy-Item $Err $Out -Force }
 } finally { Pop-Location }
 
 $Raw = Get-Content $Out -Raw

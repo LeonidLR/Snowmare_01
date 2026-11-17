@@ -35,10 +35,20 @@ if ($Session) {
         $Hash = [Security.Cryptography.MD5]::Create().ComputeHash([Text.Encoding]::UTF8.GetBytes($Session))
         $Guid = [guid]::new($Hash)
     }
-    $ArgsList += @("-s", $Guid.ToString())
+    # -s creates a session; a later call must resume it with -r ("Session ... already in use" otherwise).
+    $Marker = Join-Path $Log ("session-" + $Guid.ToString() + ".txt")
+    if (Test-Path $Marker) { $ArgsList += @("-r", $Guid.ToString()) }
+    else { $ArgsList += @("-s", $Guid.ToString()); Set-Content -Path $Marker -Value $Session }
 }
-$Raw = & $Grok @ArgsList 2>&1 | Out-String
-[IO.File]::WriteAllText($Out, $Raw)
+# Hidden console (2026-11-17): grok.exe started from an agent shell got no console, so every tool call it made (powershell, the UE
+# smokes) opened a new Windows Terminal window. Started hidden, its children inherit the hidden console. Arguments are quoted for
+# Start-Process (one string); the prompt has no double quotes (replaced above).
+$Quote = { param($a) if ($a -match '[\s]') { '"' + $a + '"' } else { $a } }
+$ArgLine = ($ArgsList | ForEach-Object { & $Quote $_ }) -join " "
+$ErrFile = "$Out.stderr.txt"
+$P = Start-Process -FilePath $Grok -ArgumentList $ArgLine -WindowStyle Hidden -Wait -PassThru -RedirectStandardOutput $Out -RedirectStandardError $ErrFile
+$Raw = Get-Content $Out -Raw -Encoding utf8
+if (-not $Raw) { $Raw = Get-Content $ErrFile -Raw -Encoding utf8 }
 try {
     $J = $Raw | ConvertFrom-Json
     "done: $Out  cost $([math]::Round([double]$J.total_cost_usd, 3)) USD  turns $($J.num_turns)  stop $($J.stopReason)"
