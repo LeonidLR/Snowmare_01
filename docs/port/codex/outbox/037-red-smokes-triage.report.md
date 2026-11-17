@@ -1,6 +1,6 @@
 # 037 red smokes triage
 
-Status: IN PROGRESS. StealthModeSmoke needs Claude; CoverHugSmoke fixed df1db2f3 and gated. MantleDescentSmoke required merged-base recheck PASS (no local fix). Next FormationJitterSmoke, then LevelGenRampSmoke. PMC pair Gemini077; corpse cost Gemini078.
+Status: IN PROGRESS. StealthModeSmoke and FormationJitterSmoke need Claude; CoverHugSmoke fixed df1db2f3/gated; MantleDescentSmoke merged-base recheck PASS (no local fix). Next/final: LevelGenRampSmoke. PMC pair Gemini077; corpse cost Gemini078.
 
 ## Current summary
 
@@ -234,3 +234,14 @@ Resume: stay in agents worktree on codex/037-red-smokes; read this report and in
 - Router FormationJitter: level3/confidence0.49, primary main model. Read-only triage locates original failing comparison at FormationJitterSmokeCommand.cpp689: other M16 follower's hips/shoulders wobble in D-1 variant versus all-M16, unchanged factor1.25 plus5deg/s. ResetSquad, per-frame sampler and current formation-look path read; no threshold/expectation/source edits. Fresh result required before verdict.
 - Coordination question624 reported prolonged live compile queue. Claude625: four worktrees building, mutex is not fair; keep waiting, kill nothing, update report and read FormationJitter code read-only. If still not built at11:30 Jerusalem, post ONCE and Claude will hold his next agent build until ours runs. No designer priority override allowed/requested.
 - Next: collect existing Formation build/smoke outcome, diagnose/report; LevelGenRampSmoke follows. Do not start a replacement build while this chain is alive.
+
+
+## FormationJitterSmoke — needs Claude, unchanged comparative wobble failure
+
+- Required merged-base build finally completed before11:30 Jerusalem, PASS2.09s engine work (up to date; long wrapper wall was shared mutex waiting). Base33bfe619 merges main66318a6b docs only. No11:30 follow-up was needed; all other processes/designer priority left intact.
+- Single mandatory fresh baseline FAIL88.2s, Jobs1/NoRetry/Multiprocess/fixed60fps, actual engine RESULT: FAIL. Same numeric failure as both035 runs: other M16 follower Medic-Sapper hips27.2 / shoulders24.0deg/s beside D-1; all-M16 baseline17.0 /12.6. Limits remain26.25 /20.75 (factor1.25 +5), so both channels actually exceed acceptance.
+- Per-frame CSV A..E and full summaries preserved. Medic's capsule wobble23.9 versus12.2deg/s; speed199+-49 versus198+-49cm/s; slot jumps0.43/s in both; look jumps0.90 versus0.77/s. This is not merely a different clip on the D-1 actor: the other M16 actor's capsule/body signal changes. The D-1 added-wobble/clip-switch tests, leader comparison, filtered-versus-unfiltered bodies and formation-label comparison all PASS.
+- Read exact smoke sampler, ResetSquad/three-second settle and comparison; runtime SquadSubsystemFormation.cpp formation-look filter/bypass path; relevant bounded history: original smoke c81585ae, latest formation edits0e9c49e7 (F-2), f65f3325 (stealth-only look handling),0b038227 (wounded follower pace). No isolated causal regression commit is proven, and no stale assertion or demonstrably safe <40-line single-system fix was established. Verdict(c): unresolved runtime coupling needs Claude, rather than widening the designed whole-group criterion or claiming an identified root cause.
+- No local source/threshold/timing/config/asset/flag changes and no local-fix gate claimed. Router3/confidence0.49 | primary main session | diagnosis complete, needs Claude.
+- Evidence Saved/Logs/task037/formation/: base.txt, build-wrapper.log, build-engine.log, baseline-wrapper.log, baseline-engine.log, baseline-result.json, FormationJitter-A/B/C/D/E.csv.
+- Next/final original smoke: LevelGenRampSmoke. Same compiled base is usable (report-only changes); run once with required standalone flags, then read FAIL and relevant code. PMC pair remains skipped/Gemini077; corpse cost Gemini078.
