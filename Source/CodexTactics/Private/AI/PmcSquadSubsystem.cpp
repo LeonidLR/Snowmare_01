@@ -987,8 +987,16 @@ bool UPmcSquadSubsystem::IsOrderRunning(const AOperativeCharacter& Fighter, cons
 	case EPmcOrder::Suppress:
 		return Fighter.HasSuppressOrder();
 	case EPmcOrder::Heal:
-		return State.Patient.IsValid() && PmcSquadLocal::IsLiveOperative(State.Patient.Get()) && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f
-			&& Fighter.MedkitsCount > 0;
+	{
+		const bool bPatientValid = State.Patient.IsValid() && PmcSquadLocal::IsLiveOperative(State.Patient.Get())
+			&& PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f && Fighter.MedkitsCount > 0;
+		if (!bPatientValid)
+		{
+			return false;
+		}
+		// A heal approach is running only while moving towards the patient.
+		return Fighter.HasOwnMoveOrder() || PmcSquadLocal::IsTraversingLink(Fighter);
+	}
 	case EPmcOrder::Reload:
 		return Fighter.bIsReloading;
 	case EPmcOrder::RpgStrike:
@@ -1116,6 +1124,33 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 					State.Order = EPmcOrder::Hold;
 					State.OrderSince = Now;
 					State.FailedUntil.Add(EPmcOrder::FallBack, Now + Team.Weights.CompletedOrderCooldownSeconds);
+				}
+				else if (State.Order == EPmcOrder::Heal)
+				{
+					const float Dist = State.Patient.IsValid() ? FVector::Dist2D(Feet, State.Patient->GetActorLocation()) : 99999.f;
+					if (Dist <= PmcSquadLocal::AidReachCm && Fighter->MedkitsCount > 0 && State.Patient.IsValid() && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f)
+					{
+						FSquadOrderContext Context;
+						Context.Operative = Fighter;
+						Context.Patient = State.Patient.Get();
+						if (SquadOrderCatalog::Execute(ESquadOrder::Heal, Context))
+						{
+							Team.Stats.Heals += 1;
+							UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s arrived and healed %s -> Hold"), TeamId,
+								*Fighter->DisplayName.ToString(), *State.Patient->DisplayName.ToString());
+						}
+						State.Order = EPmcOrder::Hold;
+						State.OrderSince = Now;
+						State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.CompletedOrderCooldownSeconds);
+					}
+					else
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s heal approach ended: patient out of reach (%.0f cm > %.0f cm) -> cancel"), TeamId,
+							*Fighter->DisplayName.ToString(), Dist, PmcSquadLocal::AidReachCm);
+						State.Order = EPmcOrder::Hold;
+						State.OrderSince = Now;
+						State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.FailedOrderCooldownSeconds);
+					}
 				}
 			}
 		}
@@ -1727,6 +1762,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			Context.Patient = Patient;
 			bTaken = SquadOrderCatalog::Execute(ESquadOrder::Heal, Context);
 			Team.Stats.Heals += bTaken ? 1 : 0;
+			if (bTaken)
+			{
+				Order = EPmcOrder::Hold;
+				State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.CompletedOrderCooldownSeconds);
+			}
 		}
 		else
 		{
