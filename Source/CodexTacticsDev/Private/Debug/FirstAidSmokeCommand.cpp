@@ -12,6 +12,8 @@
 //     helper clip, a longer treatment, more HP than the medkit, the bag used;
 //  6. CANCEL: a medkit drop again, a move order for the helper mid-treatment -> interrupted (a new order), no heal, the medkit KEPT
 //     (consume_on_cancel false), the clips stopped.
+//  7. G006 (designer 2026-11-17): at level start the Medic-Sapper's drawer lists the medical bag (start_medical_bags, not a smoke assignment);
+//     a medkit dragged onto a LIGHT-wounded mate starts aid (not a transfer); the same drop with Shift hands the medkit over.
 // Before the copies exist (Scripts/Editor/setup_first_aid_animation.py) the clip checks fail with "no clip"; the rules still run.
 // Nothing is saved. Godot reference: none (UE-only; Godot's medkit was instant, player.gd heal_with_item).
 
@@ -58,6 +60,9 @@ namespace FirstAidSmoke
 	enum class EStage : uint8
 	{
 		Setup,
+		BagListed,
+		LightDrag,
+		ShiftDrag,
 		LightStart,
 		LightRun,
 		MediumStart,
@@ -316,10 +321,98 @@ namespace FirstAidSmoke
 			Place(World, A, State.Spot, State.Forward);
 			Place(World, B, State.Spot + State.Forward * HelperDistanceCm, -State.Forward);
 			A->MedkitsCount = 5;
-			A->MedicalBagsCount = 1;
 			B->MedkitsCount = 2;
 			UE_LOG(LogCodexTactics, Display, TEXT("FirstAidSmoke: %s (helper / self) and %s (the wounded), max HP %.0f / %.0f"), *A->DisplayName.ToString(),
 				*B->DisplayName.ToString(), A->HealthComponent->GetMaxHealth(), B->HealthComponent->GetMaxHealth());
+			Next(State, EStage::BagListed);
+			return true;
+		}
+		case EStage::BagListed:
+		{
+			AOperativeCharacter* Medic = nullptr;
+			for (AOperativeCharacter* Member : Squad->GetMembers())
+			{
+				if (Member && Member->SquadRole == EOperativeRole::MedicSapper)
+				{
+					Medic = Member;
+					break;
+				}
+			}
+			const int32 Expected = StartMedicalBags(Config, TEXT("MedicSapper"));
+			Check(State, Medic && Expected > 0 && Medic->MedicalBagsCount == Expected,
+				FString::Printf(TEXT("[bag] the medic-sapper starts with %d medical bag(s) (has %d)"), Expected, Medic ? Medic->MedicalBagsCount : -1));
+			if (!Drawer->IsOpen())
+			{
+				Hud->ToggleInventoryDrawer();
+			}
+			Drawer->Refresh();
+			if (A && A->SquadRole != EOperativeRole::MedicSapper && A->MedicalBagsCount <= 0 && Medic && Medic->MedicalBagsCount > 0)
+			{
+				const FString LeaderLine = Drawer->GetSlotText(EInventoryDrawerSlot::MedicalBag).ToString();
+				Check(State, LeaderLine.Contains(TEXT("Medical bag")) && LeaderLine.Contains(TEXT("in squad")),
+					FString::Printf(TEXT("[bag] the leader's inventory names the squad bag (%s)"), *LeaderLine));
+			}
+			if (Medic)
+			{
+				Squad->SetLeader(Medic);
+				Drawer->Refresh();
+				const FString Line = Drawer->GetSlotText(EInventoryDrawerSlot::MedicalBag).ToString();
+				Check(State, Drawer->IsSlotVisible(EInventoryDrawerSlot::MedicalBag) && Drawer->IsSlotEnabled(EInventoryDrawerSlot::MedicalBag)
+					&& Line.Contains(TEXT("Medical bag")) && Line.Contains(FString::Printf(TEXT("x%d"), Expected)),
+					FString::Printf(TEXT("[bag] the medic's inventory line lists the bag (%s)"), *Line));
+			}
+			if (Drawer->IsOpen())
+			{
+				Hud->ToggleInventoryDrawer();
+			}
+			Squad->SetLeader(A);
+			Next(State, EStage::LightDrag);
+			return true;
+		}
+		case EStage::LightDrag:
+		{
+			SetHealthShare(B, LightPct);
+			Squad->SetLeader(A);
+			Hud->bForceHandOverModifierForTesting = false;
+			Arm(State, FirstAid, A, EFirstAidItem::Medkit, B);
+			UInventoryDragDropOperation* Drag = Drawer->CreateDragOperation(EInventoryDrawerSlot::Medkit);
+			Check(State, Drag && Drag->Sender.Get() == A, TEXT("[light-drag] the medkit row drags from the helper"));
+			if (!Drag)
+			{
+				return Finish(State, false);
+			}
+			const ETransferRequestOutcome Outcome = Hud->HandleTransferDropOnActor(A, ETransferItem::Medkit, B, B->GetActorLocation());
+			const FFirstAidRecord* Running = FirstAid->FindRunning(A);
+			Check(State, Running && Running->Mode == EMode::Aid && FirstAid->IsInTreatment(B) && Outcome != ETransferRequestOutcome::Failed,
+				FString::Printf(TEXT("[light-drag] a LIGHT wound starts aid, not a transfer (outcome %d, %s)"), static_cast<int32>(Outcome),
+					Running ? (Running->bApproached ? TEXT("walking over") : TEXT("in reach")) : TEXT("no treatment")));
+			Check(State, A->MedkitsCount == State.CountBefore && B->MedkitsCount == 2,
+				FString::Printf(TEXT("[light-drag] not handed over (helper %d, patient %d)"), A->MedkitsCount, B->MedkitsCount));
+			FirstAid->Cancel(A, EInterrupt::Order);
+			Place(World, A, State.Spot, State.Forward);
+			Next(State, EStage::ShiftDrag);
+			return true;
+		}
+		case EStage::ShiftDrag:
+		{
+			SetHealthShare(B, LightPct);
+			Place(World, A, B->GetActorLocation() - State.Forward * 120.f, State.Forward);
+			Squad->SetLeader(A);
+			Hud->bForceHandOverModifierForTesting = true;
+			const int32 HelperBefore = A->MedkitsCount;
+			const int32 PatientBefore = B->MedkitsCount;
+			UInventoryDragDropOperation* Drag = Drawer->CreateDragOperation(EInventoryDrawerSlot::Medkit);
+			const ETransferRequestOutcome Outcome = Drag
+				? Hud->HandleTransferDropOnActor(A, ETransferItem::Medkit, B, B->GetActorLocation())
+				: ETransferRequestOutcome::Failed;
+			Check(State, Drag && !FirstAid->IsInTreatment(A) && !FirstAid->IsInTreatment(B) && Outcome == ETransferRequestOutcome::Transferred
+				&& A->MedkitsCount == HelperBefore - 1 && B->MedkitsCount == PatientBefore + 1,
+				FString::Printf(TEXT("[shift-drag] Shift hands the medkit over (outcome %d, helper %d -> %d, patient %d -> %d)"),
+					static_cast<int32>(Outcome), HelperBefore, A->MedkitsCount, PatientBefore, B->MedkitsCount));
+			A->MedkitsCount = HelperBefore;
+			B->MedkitsCount = PatientBefore;
+			Hud->bForceHandOverModifierForTesting = false;
+			Place(World, A, State.Spot, State.Forward);
 			Next(State, EStage::LightStart);
 			return true;
 		}
@@ -424,6 +517,11 @@ namespace FirstAidSmoke
 			}
 			const bool bBag = State.Stage == EStage::BagAidStart;
 			const EFirstAidItem Item = bBag ? EFirstAidItem::MedicalBag : EFirstAidItem::Medkit;
+			if (bBag)
+			{
+				// The helper in this smoke is the commander. His bag is the treatment under test, not the medic's start kit.
+				A->MedicalBagsCount = FMath::Max(1, A->MedicalBagsCount);
+			}
 			SetHealthShare(B, HeavyPct);
 			Squad->SetLeader(A);
 			// The helper back 6 m away (the cancel stage: within reach - the treatment starts at once).
