@@ -42,17 +42,26 @@
 //   decision churn per fighter is measured (the round's "flow" object).
 // CodexTactics.PmcArenaObjectiveSmoke = one round where the defenders are parked out of the fight: the attackers must walk onto the point
 //   and capture it (end_reason objective, the attacker wins, his objective_hold_s >= hold_s).
+// TACTICAL_MAP.md P3 (2026-11-17): every round gets a "behaviour" object per side (sides.<X>.behaviour; rounds[].behaviour = side A, the
+//   trainer's candidate) in Grok's G002 schema codex.pmc_arena_behaviour/1 (AI/PmcArenaBehaviourRules.h). On a generated map with a tactical
+//   file (L_Gen_Depot_X4 / L_Gen_Test_X2 / L_Gen_Depot_1_X6) scenario=tactical - and half the random rounds - put the attackers on the
+//   squad's route (the level start / a mission goal to another goal: Content/Data/LevelGen/objectives) and spawn the defenders ON their
+//   tactical posts along it (UPmcSquadSubsystem::SpawnSquadTactical); the round's "tactical" object lists the posts. Maps without a
+//   tactical file (L_Gen_Depot_1, the combat lab) play exactly as before.
+// CodexTactics.PmcArenaTacticalSmoke = one tactical round on L_Gen_Depot_X4: the defenders on posts, the behaviour blocks validated.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
 #include "AI/AmbushWatchRules.h"
+#include "AI/PmcArenaBehaviourRules.h"
 #include "AI/PmcArenaPlayArea.h"
 #include "AI/PmcArenaRoundRules.h"
 #include "AI/PmcArenaViewRules.h"
 #include "AI/PmcCommanderRules.h"
 #include "AI/PmcSquadSubsystem.h"
+#include "AI/PmcTacticalRules.h"
 #include "AI/SquadOrderCatalog.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Bot/PlaytestBotRules.h"
@@ -82,6 +91,8 @@
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "GameFramework/HUD.h"
 #include "GameFramework/PlayerStart.h"
+#include "LevelGen/MissionGoalsSubsystem.h"
+#include "LevelGen/TacticalMapSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "HAL/PlatformMisc.h"
 #include "Kismet/GameplayStatics.h"
@@ -141,6 +152,8 @@ namespace PmcArena
 		bool bSmokeCapture = false;
 		/** PmcStalemateSmoke: a real objective round, the fight flow checked (quiet spells, the point reached, order commitment). */
 		bool bSmokeStalemate = false;
+		/** PmcArenaTacticalSmoke (TACTICAL_MAP P3): one tactical round, the posts and the behaviour blocks checked. */
+		bool bSmokeTactical = false;
 		/**
 		 * Ammo=resupply|real (fix/pmc-arena-stalemate, default resupply): a fighter whose reserve runs dry gets his weapon's reserve back - an
 		 * arena-only training rule (the Depot tracks: empty rifles stood on the point next to each other for 3 minutes, unable to fight).
@@ -282,6 +295,14 @@ namespace PmcArena
 		/** The objective's reach at placement: a full navmesh path from the attackers' / the defenders' spawn to the point. */
 		bool bReachAttacker = true;
 		bool bReachDefender = true;
+		/** TACTICAL_MAP P3: per side the behaviour metrics (G002), whether the map had a tactical file. */
+		FPmcBehaviour Behaviour[2];
+		bool bTacticalMap = false;
+		/** The tactical scenario: the squad's route length, the defenders' posts (JSON), the ladder-only roofs the seed picked (-1: none asked). */
+		float RouteM = -1.f;
+		TArray<TSharedPtr<FJsonValue>> TacticalPosts;
+		int32 LadderRoofsPicked = -1;
+		int32 LadderRoofsTotal = 0;
 	};
 
 	/** The last hit a fighter took (the HP drops of the next samples are that shooter's damage). */
@@ -290,6 +311,21 @@ namespace PmcArena
 		int32 Side = -1;
 		bool bConcealed = false;
 		float Time = 0.f;
+		/** TACTICAL_MAP P3: the shooter stood at an overwatch roof spot (a kill from it is an overwatch kill). */
+		bool bOverwatch = false;
+	};
+
+	/** TACTICAL_MAP P3: one side's behaviour accumulators of the round (PmcArenaBehaviourRules). */
+	struct FSideBehaviour
+	{
+		float ChokeManSeconds = 0.f;
+		TSet<int32> Windows;
+		int32 Moves = 0;
+		int32 AmbushHits = 0;
+		int32 OverwatchKills = 0;
+		TArray<FPmcOrderEvent> Orders;
+		/** Victims already counted as ambush hits. */
+		TSet<TWeakObjectPtr<AOperativeCharacter>> AmbushVictims;
 	};
 
 	/**
@@ -341,6 +377,9 @@ namespace PmcArena
 		int32 RocketBurstsNear[2] = { 0, 0 };
 		TArray<float> RocketBurstTimes;
 		FDelegateHandle ProjectileHandle;
+		/** TACTICAL_MAP P3: per side the behaviour accumulators; each fighter's last order and where he took it (the position changes). */
+		FSideBehaviour Behaviour[2];
+		TMap<TWeakObjectPtr<AOperativeCharacter>, TPair<EPmcOrder, FVector>> MoveStart;
 	};
 	constexpr float TrackInterval = 0.2f;
 
@@ -393,6 +432,13 @@ namespace PmcArena
 		TSet<TWeakObjectPtr<AOperativeCharacter>> TeamDimmed;
 		/** Points the play area turned down this round (samples, offsets, squad slots; logged at the round start). */
 		mutable int32 AreaRejects = 0;
+		/** TACTICAL_MAP P3: the map has a tactical file (UPmcSquadSubsystem::GetTacticalMap); the level start (the route's default end). */
+		bool bTacticalMap = false;
+		FVector LevelStart = FVector::ZeroVector;
+		/** The tactical round's route (the attackers walk it) and its defenders' posts / ladder-roof picks. */
+		TArray<FVector> TacticalRoute;
+		TArray<FPmcTacticalPost> TacticalPosts;
+		TArray<int32> LadderRoofsPicked;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -992,6 +1038,73 @@ namespace PmcArena
 		return false;
 	}
 
+	/**
+	 * TACTICAL_MAP P3: the tactical round's route - the attackers walk it, the defenders spawn on their posts along it. Its ends are the
+	 * level start and the mission goals (Content/Data/LevelGen/objectives/<Map>.objectives.json): a seeded ordered pair on the navmesh,
+	 * inside the play area, 25 m or more apart, with a full path both ways (8 tries). Sets the attackers' spawn (the route's start), the
+	 * defenders' fallback spawn and the objective (its end) and State.TacticalRoute. False = no usable pair (a skirmish instead).
+	 */
+	bool PlaceTacticalScenario(FState& State, UWorld* World, int32 Seed, int32 AttackerIndex)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+		if (!Nav || !Pmc || !Pmc->GetTacticalMap())
+		{
+			return false;
+		}
+		TArray<FVector> Ends;
+		FNavLocation OnNav;
+		if (Nav->ProjectPointToNavigation(State.LevelStart, OnNav, FVector(300.f, 300.f, 300.f)) && InArea(State, OnNav.Location))
+		{
+			Ends.Add(OnNav.Location);
+		}
+		if (const UMissionGoalsSubsystem* Goals = World->GetSubsystem<UMissionGoalsSubsystem>())
+		{
+			for (const FMissionGoal& Goal : Goals->GetGoals())
+			{
+				if (Nav->ProjectPointToNavigation(Goal.Location, OnNav, FVector(300.f, 300.f, 200.f)) && FMath::Abs(OnNav.Location.Z - Goal.Location.Z) <= 150.f
+					&& InArea(State, OnNav.Location))
+				{
+					Ends.Add(OnNav.Location);
+				}
+			}
+		}
+		if (Ends.Num() < 2)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] seed %d: tactical scenario needs the level start + a mission goal (%d route ends found)"), Seed, Ends.Num());
+			return false;
+		}
+		FRandomStream Stream(Seed * 733 + 5);
+		for (int32 Try = 0; Try < 8; ++Try)
+		{
+			const int32 From = Stream.RandRange(0, Ends.Num() - 1);
+			const int32 To = (From + 1 + Stream.RandRange(0, Ends.Num() - 2)) % Ends.Num();
+			if (FVector::Dist2D(Ends[From], Ends[To]) < 2500.f || !HasNavPath(World, Nav, Ends[From], Ends[To]) || !HasNavPath(World, Nav, Ends[To], Ends[From]))
+			{
+				continue;
+			}
+			State.TacticalRoute = Pmc->RouteBetween(Ends[From], Ends[To]);
+			FSide& Atk = State.Sides[AttackerIndex];
+			FSide& Def = State.Sides[1 - AttackerIndex];
+			Atk.Spawn = Ends[From];
+			Def.Spawn = Ends[To];
+			const FVector FirstLeg = State.TacticalRoute.Num() >= 2 ? State.TacticalRoute[1] : Ends[To];
+			Atk.Facing = (FirstLeg - Ends[From]).GetSafeNormal2D().Rotation();
+			Def.Facing = (Ends[From] - Ends[To]).GetSafeNormal2D().Rotation();
+			State.Objective = Ends[To];
+			float Length = 0.f;
+			for (int32 Index = 1; Index < State.TacticalRoute.Num(); ++Index)
+			{
+				Length += static_cast<float>(FVector::Dist(State.TacticalRoute[Index - 1], State.TacticalRoute[Index]));
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] scenario tactical seed %d: the squad's route %s -> %s (%d points, %.0f m), the defenders on posts along it"),
+				Seed, *Ends[From].ToCompactString(), *Ends[To].ToCompactString(), State.TacticalRoute.Num(), Length / 100.f);
+			return true;
+		}
+		UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] seed %d: no tactical route between %d ends (25 m+, a full path both ways)"), Seed, Ends.Num());
+		return false;
+	}
+
 	const TCHAR* WeatherName(EWeatherState Weather)
 	{
 		switch (Weather)
@@ -1483,6 +1596,11 @@ namespace PmcArena
 		Track.Rockets[0] = Track.Rockets[1] = 0;
 		Track.RocketBurstsNear[0] = Track.RocketBurstsNear[1] = 0;
 		Track.RocketBurstTimes.Reset();
+		for (FSideBehaviour& SideBehaviour : Track.Behaviour)
+		{
+			SideBehaviour = FSideBehaviour();
+		}
+		Track.MoveStart.Reset();
 		FState* StatePtr = &State;
 		// fix/arena-rpg-contact-roof: an RPG-7 rocket's burst within launcher.radius_cm (suppression.json) of a live enemy of its shooter is
 		// contact (a round where only rockets flew was a no_contact draw, -3 in the trainer). Bound once for the run.
@@ -1578,7 +1696,21 @@ namespace PmcArena
 							{
 								ShotTrack.FirstStrikeSide = ShooterSide;
 							}
-							ShotTrack.LastHit.Add(const_cast<AOperativeCharacter*>(Victim), { ShooterSide, bConcealed, StatePtr->StageTime });
+							// TACTICAL_MAP P3: a hit from an overwatch roof spot (its kill is an overwatch kill), the first hit on a man from a
+							// chokepoint's hiding spot (an ambush success at its exit).
+							const UTacticalMapSubsystem* Map = StatePtr->bTacticalMap && Shooter->GetWorld() ? Shooter->GetWorld()->GetSubsystem<UTacticalMapSubsystem>() : nullptr;
+							const FVector ShooterFeet = FeetOf(*Shooter);
+							const bool bOverwatch = Map && PmcArenaBehaviourRules::IsAtOverwatchSpot(Map->GetFile(), Map->GetConfig(), ShooterFeet);
+							ShotTrack.LastHit.Add(const_cast<AOperativeCharacter*>(Victim), { ShooterSide, bConcealed, StatePtr->StageTime, bOverwatch });
+							FSideBehaviour& ShooterBehaviour = ShotTrack.Behaviour[ShooterSide];
+							if (Map && !ShooterBehaviour.AmbushVictims.Contains(Victim)
+								&& PmcArenaBehaviourRules::IsAmbushHit(Map->GetFile(), Map->GetConfig(), ShooterFeet, FeetOf(*Victim)))
+							{
+								ShooterBehaviour.AmbushVictims.Add(const_cast<AOperativeCharacter*>(Victim));
+								++ShooterBehaviour.AmbushHits;
+								Json->SetBoolField(TEXT("ambush"), true);
+							}
+							Json->SetBoolField(TEXT("overwatch"), bOverwatch);
 							// The first hit on him: was he looking away from the shooter (his facing > 45 deg off the bearing to him)?
 							if (!ShotTrack.StruckOnce.Contains(Victim))
 							{
@@ -1601,6 +1733,13 @@ namespace PmcArena
 						Json->SetStringField(TEXT("target"), Fallen ? Fallen->DisplayName.ToString() : (Victim ? Victim->GetName() : TEXT("?")));
 						Json->SetStringField(TEXT("side"), SideOf(*StatePtr, Fallen));
 						Json->SetStringField(TEXT("by"), AttackerSource);
+						// TACTICAL_MAP P3: killed by a hit from an overwatch roof spot (within the damage attribution's 3 s).
+						const FHitNote* Note = Fallen ? StatePtr->Track.LastHit.Find(const_cast<AOperativeCharacter*>(Fallen)) : nullptr;
+						if (Note && Note->bOverwatch && Note->Side != INDEX_NONE && StatePtr->StageTime - Note->Time <= 3.f)
+						{
+							++StatePtr->Track.Behaviour[Note->Side].OverwatchKills;
+							Json->SetBoolField(TEXT("overwatch"), true);
+						}
 						StatePtr->Track.Events.Add(MakeShared<FJsonValueObject>(Json));
 					});
 				}
@@ -1642,6 +1781,19 @@ namespace PmcArena
 				{
 					StatePtr->Track.Retreated.Add(Fighter);
 				}
+				// TACTICAL_MAP P3: the side's decisions (suppress-then-move, churn) and its position changes (a walk that took him >= 3 m).
+				const int32 OrderSide = SideIndexOf(*StatePtr, Fighter);
+				if (Fighter && OrderSide != INDEX_NONE)
+				{
+					FSideBehaviour& SideBehaviour = FlowTrack.Behaviour[OrderSide];
+					SideBehaviour.Orders.Add({ StatePtr->StageTime, FlowTrack.Fighters.IndexOfByKey(Fighter), Order });
+					const FVector Here = FeetOf(*Fighter);
+					if (const TPair<EPmcOrder, FVector>* Previous = FlowTrack.MoveStart.Find(Fighter))
+					{
+						SideBehaviour.Moves += PmcArenaBehaviourRules::IsCompletedMove(Previous->Key, Previous->Value, Here) ? 1 : 0;
+					}
+					FlowTrack.MoveStart.Add(Fighter, TPair<EPmcOrder, FVector>(Order, Here));
+				}
 			});
 		}
 	}
@@ -1679,6 +1831,25 @@ namespace PmcArena
 				continue;
 			}
 			const FVector Location = Operative->GetActorLocation();
+			// TACTICAL_MAP P3: time inside a chokepoint and the window positions used, per side.
+			if (State.bTacticalMap)
+			{
+				const UTacticalMapSubsystem* Map = World->GetSubsystem<UTacticalMapSubsystem>();
+				const int32 SideIndex = SideIndexOf(State, Operative);
+				if (Map && SideIndex != INDEX_NONE)
+				{
+					const FVector Feet = FeetOf(*Operative);
+					if (PmcArenaBehaviourRules::IsInChokepoint(Map->GetFile(), Map->GetConfig(), Feet))
+					{
+						Track.Behaviour[SideIndex].ChokeManSeconds += TrackInterval;
+					}
+					const int32 Window = PmcArenaBehaviourRules::WindowAt(Map->GetFile(), Map->GetConfig(), Feet);
+					if (Window != INDEX_NONE)
+					{
+						Track.Behaviour[SideIndex].Windows.Add(Window);
+					}
+				}
+			}
 			TArray<TSharedPtr<FJsonValue>> Point = { MakeShared<FJsonValueNumber>(FMath::RoundToFloat(Location.X)), MakeShared<FJsonValueNumber>(FMath::RoundToFloat(Location.Y)) };
 			Frame.Add(MakeShared<FJsonValueArray>(Point));
 			FString StateName = Operative->IsPlayerTeam() && !(Pmc && Pmc->IsTeamCommanded(PmcTeam::Player)) ? TEXT("player")
@@ -1952,6 +2123,8 @@ namespace PmcArena
 		Json->SetNumberField(TEXT("detours"), Stats.Detours);
 		Json->SetNumberField(TEXT("preempts"), Stats.Preempts);
 		Json->SetNumberField(TEXT("push_decisions"), Stats.PushDecisions);
+		Json->SetNumberField(TEXT("post_moves"), Stats.PostMoves);
+		Json->SetNumberField(TEXT("tactical_fall_backs"), Stats.TacticalFallBacks);
 		return Json;
 	}
 
@@ -2095,9 +2268,22 @@ namespace PmcArena
 				Side->SetNumberField(TEXT("rockets"), Result.Rockets[Index]);
 				Side->SetNumberField(TEXT("rocket_bursts_near"), Result.RocketBurstsNear[Index]);
 				Side->SetNumberField(TEXT("strikes_unobserved"), Result.StrikesUnobserved[Index]);
+				// TACTICAL_MAP P3: the side's behaviour (G002 codex.pmc_arena_behaviour/1).
+				Side->SetObjectField(TEXT("behaviour"), PmcArenaBehaviourRules::ToJson(Result.Behaviour[Index], Index == 0 ? TEXT("A") : TEXT("B"), Result.bTacticalMap));
 				Sides->SetObjectField(Index == 0 ? TEXT("A") : TEXT("B"), Side);
 			}
 			Round->SetObjectField(TEXT("sides"), Sides);
+			// G002: rounds[].behaviour = the candidate side's (A); it wins over sides.A.behaviour in the trainer (the same object here).
+			Round->SetObjectField(TEXT("behaviour"), PmcArenaBehaviourRules::ToJson(Result.Behaviour[0], TEXT("A"), Result.bTacticalMap));
+			if (Result.RouteM >= 0.f)
+			{
+				TSharedRef<FJsonObject> Tactical = MakeShared<FJsonObject>();
+				Tactical->SetNumberField(TEXT("route_m"), FMath::RoundToFloat(Result.RouteM * 10.f) / 10.f);
+				Tactical->SetArrayField(TEXT("posts"), Result.TacticalPosts);
+				Tactical->SetNumberField(TEXT("ladder_roofs_picked"), Result.LadderRoofsPicked);
+				Tactical->SetNumberField(TEXT("ladder_roofs_total"), Result.LadderRoofsTotal);
+				Round->SetObjectField(TEXT("tactical"), Tactical);
+			}
 			auto Pair = [&Result](auto Getter)
 			{
 				TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
@@ -2182,6 +2368,56 @@ namespace PmcArena
 				}
 				Check(State, bRoles && (*RoundSides)->GetObjectField(TEXT("A"))->HasField(TEXT("rockets")) && (*RoundSides)->GetObjectField(TEXT("B"))->HasField(TEXT("rocket_bursts_near")),
 					TEXT("sides.<X>.rockets / rocket_bursts_near recorded"));
+				// TACTICAL_MAP P3: the behaviour block per side and on the round (G002 codex.pmc_arena_behaviour/1, all 11 metrics).
+				{
+					auto IsBehaviour = [](const TSharedPtr<FJsonObject>& Object)
+					{
+						const TSharedPtr<FJsonObject>* Metrics = nullptr;
+						if (!Object.IsValid() || Object->GetStringField(TEXT("schema")) != PmcArenaBehaviourRules::Schema || !Object->TryGetObjectField(TEXT("metrics"), Metrics))
+						{
+							return false;
+						}
+						for (const FPmcBehaviourMetricSpec& Spec : PmcArenaBehaviourRules::Catalog())
+						{
+							const TSharedPtr<FJsonObject>* Metric = nullptr;
+							if (!(*Metrics)->TryGetObjectField(Spec.Key, Metric) || !(*Metric)->HasField(TEXT("value")))
+							{
+								return false;
+							}
+						}
+						return true;
+					};
+					const TSharedPtr<FJsonObject>* RoundBehaviour = nullptr;
+					const TSharedPtr<FJsonObject>* BehaviourA = nullptr;
+					const TSharedPtr<FJsonObject>* BehaviourB = nullptr;
+					const bool bBehaviour = bRoles && (*Round)->TryGetObjectField(TEXT("behaviour"), RoundBehaviour) && IsBehaviour(*RoundBehaviour)
+						&& (*RoundSides)->GetObjectField(TEXT("A"))->TryGetObjectField(TEXT("behaviour"), BehaviourA) && IsBehaviour(*BehaviourA)
+						&& (*RoundSides)->GetObjectField(TEXT("B"))->TryGetObjectField(TEXT("behaviour"), BehaviourB) && IsBehaviour(*BehaviourB);
+					Check(State, bBehaviour, TEXT("rounds[].behaviour + sides.A / B.behaviour (codex.pmc_arena_behaviour/1, the 11 G002 metrics)"));
+				}
+				if (State.Options.bSmokeTactical && !State.Results.IsEmpty())
+				{
+					// PmcArenaTacticalSmoke (TACTICAL_MAP P3): the tactical round on the generated map, its defenders on their posts.
+					const FRoundResult& Placed = State.Results.Last();
+					Check(State, (*Round)->GetStringField(TEXT("scenario")) == TEXT("tactical"), FString::Printf(TEXT("the round played the tactical scenario (%s)"),
+						*(*Round)->GetStringField(TEXT("scenario"))));
+					Check(State, Placed.bTacticalMap, TEXT("the map's tactical file is loaded"));
+					int32 Posted = 0;
+					TSet<FString> Kinds;
+					for (const TSharedPtr<FJsonValue>& Value : Placed.TacticalPosts)
+					{
+						const FString Kind = Value->AsObject()->GetStringField(TEXT("kind"));
+						Posted += Kind != TEXT("none") ? 1 : 0;
+						Kinds.Add(Kind);
+					}
+					Check(State, Posted >= 2, FString::Printf(TEXT("the defenders spawned on tactical posts (%d of %d; kinds %s)"), Posted, Placed.TacticalPosts.Num(),
+						*FString::Join(Kinds.Array(), TEXT(", "))));
+					Check(State, Kinds.Contains(TEXT("overwatch")), TEXT("the marksman on an overwatch roof post"));
+					Check(State, Placed.LadderRoofsPicked > 0 && Placed.LadderRoofsPicked < FMath::Max(1, Placed.LadderRoofsTotal) + 1,
+						FString::Printf(TEXT("the ladder-only roof picker ran (%d of %d picked)"), Placed.LadderRoofsPicked, Placed.LadderRoofsTotal));
+					Check(State, Placed.RouteM >= 25.f, FString::Printf(TEXT("the squad's route %.0f m (25 m or more)"), Placed.RouteM));
+					return;
+				}
 				if (State.Options.bSmokeStalemate && !State.Results.IsEmpty())
 				{
 					// PmcStalemateSmoke (the designer 2026-11-08): the fight does not freeze.
@@ -2346,14 +2582,28 @@ namespace PmcArena
 		EPmcScenario Scenario = EPmcScenario::Skirmish;
 		if (State.bRandomSpawns)
 		{
-			Scenario = State.Options.Scenario >= 0 ? static_cast<EPmcScenario>(State.Options.Scenario) : PmcCommanderRules::PickScenario(Seed);
+			// TACTICAL_MAP P3: on a map with a tactical file half the random rounds are tactical; elsewhere exactly the old pick.
+			Scenario = State.Options.Scenario >= 0 ? static_cast<EPmcScenario>(State.Options.Scenario) : PmcCommanderRules::PickScenarioOnMap(Seed, State.bTacticalMap);
 		}
 		else if (State.Options.Scenario == static_cast<int32>(EPmcScenario::Blizzard))
 		{
 			Scenario = EPmcScenario::Blizzard;
 		}
 		bool bSitePlaced = false;
-		if (Scenario == EPmcScenario::Chokepoint || Scenario == EPmcScenario::Street || Scenario == EPmcScenario::Roofs)
+		State.TacticalRoute.Reset();
+		State.TacticalPosts.Reset();
+		State.LadderRoofsPicked.Reset();
+		bool bTacticalRound = false;
+		if (Scenario == EPmcScenario::Tactical)
+		{
+			bSitePlaced = bTacticalRound = PlaceTacticalScenario(State, World, Seed, AttackerIndex);
+			if (!bSitePlaced)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] seed %d: no tactical route on this map (no tactical file / goals) - a skirmish instead"), Seed);
+				Scenario = EPmcScenario::Skirmish;
+			}
+		}
+		else if (Scenario == EPmcScenario::Chokepoint || Scenario == EPmcScenario::Street || Scenario == EPmcScenario::Roofs)
 		{
 			bSitePlaced = PlaceScenarioSite(State, World, Scenario, Seed, AttackerIndex);
 			if (!bSitePlaced)
@@ -2400,11 +2650,16 @@ namespace PmcArena
 		FSide& A = State.Sides[0];
 		// The personality before the spawn: its rpg_gunner_share decides the squad's RPG gunner (a trainer gene).
 		Pmc->SetTeamWeights(TeamA, State.WeightsA);
-		for (AOperativeCharacter* Fighter : Pmc->SpawnSquad(TeamA, A.Spawn, A.Facing, State.Options.Squad, Seed))
+		// TACTICAL_MAP P3: the tactical round's defenders spawn ON their posts along the squad's route (no squad line round a spawn spot).
+		const bool bTacticalA = bTacticalRound && !bAAttacks;
+		const TArray<AOperativeCharacter*> SpawnedA = bTacticalA
+			? Pmc->SpawnSquadTactical(TeamA, State.TacticalRoute, A.Spawn, A.Facing, State.Options.Squad, Seed, &State.TacticalPosts, &State.LadderRoofsPicked)
+			: Pmc->SpawnSquad(TeamA, A.Spawn, A.Facing, State.Options.Squad, Seed);
+		for (AOperativeCharacter* Fighter : SpawnedA)
 		{
 			A.Members.Add(Fighter);
 		}
-		if (bRandomPair)
+		if (bRandomPair && !bTacticalA)
 		{
 			PlaceAround(State, World, A, State.bRoundObjective ? State.Objective : State.Sides[1].Spawn);
 		}
@@ -2414,11 +2669,15 @@ namespace PmcArena
 		if (State.Options.Opponent == EOpponent::Pmc)
 		{
 			Pmc->SetTeamWeights(TeamB, State.WeightsB);
-			for (AOperativeCharacter* Fighter : Pmc->SpawnSquad(TeamB, B.Spawn, B.Facing, State.Options.Squad, Seed + 1000))
+			const bool bTacticalB = bTacticalRound && bAAttacks;
+			const TArray<AOperativeCharacter*> SpawnedB = bTacticalB
+				? Pmc->SpawnSquadTactical(TeamB, State.TacticalRoute, B.Spawn, B.Facing, State.Options.Squad, Seed + 1000, &State.TacticalPosts, &State.LadderRoofsPicked)
+				: Pmc->SpawnSquad(TeamB, B.Spawn, B.Facing, State.Options.Squad, Seed + 1000);
+			for (AOperativeCharacter* Fighter : SpawnedB)
 			{
 				B.Members.Add(Fighter);
 			}
-			if (bRandomPair)
+			if (bRandomPair && !bTacticalB)
 			{
 				PlaceAround(State, World, B, State.bRoundObjective ? State.Objective : State.Sides[0].Spawn);
 			}
@@ -2496,6 +2755,13 @@ namespace PmcArena
 			Pmc->SetTeamObjective(State.Sides[AttackerIndex].TeamId, EPmcRole::Attacker, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
 			Pmc->SetTeamObjective(State.Sides[1 - AttackerIndex].TeamId, EPmcRole::Defender, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
 		}
+		// TACTICAL_MAP P2/P3: on a map with a tactical file the defenders know the attackers' way to the point (cover slots facing it); the
+		// tactical round set it with their posts already.
+		const int32 DefenderTeam = State.Sides[1 - AttackerIndex].TeamId;
+		if (State.bTacticalMap && !bTacticalRound && DefenderTeam != PmcTeam::Player)
+		{
+			Pmc->SetTeamRoute(DefenderTeam, Pmc->RouteBetween(State.Sides[AttackerIndex].Spawn, State.bRoundObjective ? State.Objective : State.Sides[1 - AttackerIndex].Spawn));
+		}
 		// PmcArenaObjectiveSmoke: the defenders out of the fight (parked far away, alive, not commanded) - only the capture can end it.
 		if (State.Options.bSmokeCapture)
 		{
@@ -2528,6 +2794,36 @@ namespace PmcArena
 		Result.ObjectiveLocation = State.Objective;
 		Result.bReachAttacker = State.bReachAttacker;
 		Result.bReachDefender = State.bReachDefender;
+		Result.bTacticalMap = State.bTacticalMap;
+		if (bTacticalRound)
+		{
+			Result.RouteM = 0.f;
+			for (int32 Index = 1; Index < State.TacticalRoute.Num(); ++Index)
+			{
+				Result.RouteM += static_cast<float>(FVector::Dist(State.TacticalRoute[Index - 1], State.TacticalRoute[Index])) / 100.f;
+			}
+			const FSide& Defenders = State.Sides[1 - AttackerIndex];
+			for (int32 Index = 0; Index < State.TacticalPosts.Num(); ++Index)
+			{
+				const FPmcTacticalPost& Post = State.TacticalPosts[Index];
+				TSharedRef<FJsonObject> PostJson = MakeShared<FJsonObject>();
+				PostJson->SetStringField(TEXT("side"), Defenders.Label);
+				PostJson->SetStringField(TEXT("fighter"), Defenders.Members.IsValidIndex(Index) && Defenders.Members[Index].IsValid() ? Defenders.Members[Index]->DisplayName.ToString() : TEXT("?"));
+				PostJson->SetStringField(TEXT("kind"), PmcTacticalRules::PostKindName(Post.Kind));
+				PostJson->SetNumberField(TEXT("x"), FMath::RoundToFloat(Post.Location.X));
+				PostJson->SetNumberField(TEXT("y"), FMath::RoundToFloat(Post.Location.Y));
+				PostJson->SetNumberField(TEXT("z"), FMath::RoundToFloat(Post.Location.Z));
+				PostJson->SetNumberField(TEXT("score"), FMath::RoundToFloat(Post.Score * 100.f) / 100.f);
+				PostJson->SetNumberField(TEXT("danger"), FMath::RoundToFloat(Post.Danger * 100.f) / 100.f);
+				PostJson->SetStringField(TEXT("group"), Post.Group);
+				Result.TacticalPosts.Add(MakeShared<FJsonValueObject>(PostJson));
+			}
+			Result.LadderRoofsPicked = State.LadderRoofsPicked.Num();
+			if (const UTacticalMapSubsystem* Map = Pmc->GetTacticalMap())
+			{
+				Result.LadderRoofsTotal = Map->GetFile().LadderOnlyRoofs.Num();
+			}
+		}
 		for (int32 Index = 0; Index < 2; ++Index)
 		{
 			for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[Index].Members)
@@ -2617,6 +2913,43 @@ namespace PmcArena
 			Result.OrdersFailed = Result.Stats[0].OrdersFailed + Result.Stats[1].OrdersFailed;
 			Result.Detours = Result.Stats[0].Detours + Result.Stats[1].Detours;
 			Result.Resupplies = Track.Resupplies;
+		}
+		// TACTICAL_MAP P3: the behaviour per side (G002, PmcArenaBehaviourRules) - the open walks closed at the round's end first.
+		{
+			FTrack& Track = State.Track;
+			for (const TPair<TWeakObjectPtr<AOperativeCharacter>, TPair<EPmcOrder, FVector>>& Entry : Track.MoveStart)
+			{
+				const AOperativeCharacter* Operative = Entry.Key.Get();
+				const int32 SideIndex = SideIndexOf(State, Operative);
+				if (Operative && SideIndex != INDEX_NONE && PmcArenaBehaviourRules::IsCompletedMove(Entry.Value.Key, Entry.Value.Value, FeetOf(*Operative)))
+				{
+					++Track.Behaviour[SideIndex].Moves;
+				}
+			}
+			Track.MoveStart.Reset();
+			const TArray<float> Contacts = ContactTimesOf(State);
+			for (int32 Index = 0; Index < 2; ++Index)
+			{
+				const FSideBehaviour& Side = Track.Behaviour[Index];
+				FPmcBehaviour& Behaviour = Result.Behaviour[Index];
+				Behaviour.TimeInContactS = PmcArenaBehaviourRules::TimeInContact(Contacts, Result.Duration);
+				Behaviour.FlanksCompleted = Result.Stats[Index].FlanksSucceeded;
+				Behaviour.Moves = Side.Moves;
+				Behaviour.SuppressThenMove = PmcArenaBehaviourRules::SuppressThenMove(Side.Orders);
+				Behaviour.AmbushSuccess = Side.AmbushHits;
+				Behaviour.OverwatchKills = Side.OverwatchKills;
+				Behaviour.TimeInChokepointS = Side.ChokeManSeconds / FMath::Max(1, State.Sides[Index].Members.Num());
+				Behaviour.WindowPositionsUsed = Side.Windows.Num();
+				Behaviour.QuietSpells = PmcArenaBehaviourRules::QuietSpells(Contacts, Result.Duration);
+				Behaviour.OrderChurn = PmcArenaBehaviourRules::OrderChurn(Side.Orders);
+				Behaviour.StalemateShare = PmcArenaBehaviourRules::StalemateShare(Result.bContact, Result.Winner, Result.EndReason);
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d behaviour (tactical map %s): contact %.1f s, flanks A %d / B %d, moves A %d / B %d, suppress-then-move A %d / B %d, ambush hits A %d / B %d, overwatch kills A %d / B %d, in a chokepoint A %.1f / B %.1f s per man, windows A %d / B %d, quiet spells %d, churn A %d / B %d, stalemate %.0f"),
+				State.Round, State.bTacticalMap ? TEXT("yes") : TEXT("no"), Result.Behaviour[0].TimeInContactS, Result.Behaviour[0].FlanksCompleted, Result.Behaviour[1].FlanksCompleted,
+				Result.Behaviour[0].Moves, Result.Behaviour[1].Moves, Result.Behaviour[0].SuppressThenMove, Result.Behaviour[1].SuppressThenMove, Result.Behaviour[0].AmbushSuccess,
+				Result.Behaviour[1].AmbushSuccess, Result.Behaviour[0].OverwatchKills, Result.Behaviour[1].OverwatchKills, Result.Behaviour[0].TimeInChokepointS,
+				Result.Behaviour[1].TimeInChokepointS, Result.Behaviour[0].WindowPositionsUsed, Result.Behaviour[1].WindowPositionsUsed, Result.Behaviour[0].QuietSpells,
+				Result.Behaviour[0].OrderChurn, Result.Behaviour[1].OrderChurn, Result.Behaviour[0].StalemateShare);
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d contact: %s (%d moments: %d shots, rockets A %d / B %d, bursts near an enemy A %d / B %d, rocket contact %s), objective reach attackers %s / defenders %s"),
 			State.Round, Result.bContact ? TEXT("yes") : TEXT("no"), Result.ContactEvents, State.Track.ShotTimes.Num(), Result.Rockets[0], Result.Rockets[1],
@@ -2736,6 +3069,10 @@ namespace PmcArena
 				Check(State, false, TEXT("a far spot with a navmesh path from the start"));
 				return Finish(State, World, false);
 			}
+			// TACTICAL_MAP P3: the map's tactical file (the tactical scenario, the behaviour's place metrics) and the level start (a route end).
+			State.bTacticalMap = Pmc->GetTacticalMap() != nullptr;
+			State.LevelStart = Start;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] tactical map: %s"), State.bTacticalMap ? TEXT("loaded (scenario tactical available, place metrics on)") : TEXT("none (the old arena)"));
 			State.Sides[0].TeamId = TeamA;
 			State.Sides[0].Label = TEXT("A");
 			State.Sides[0].Spawn = Start;
@@ -2859,7 +3196,7 @@ namespace PmcArena
 		}
 	}
 
-	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false, bool bSmokeStalemate = false)
+	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false, bool bSmokeStalemate = false, bool bSmokeTactical = false)
 	{
 		if (!World)
 		{
@@ -2881,6 +3218,16 @@ namespace PmcArena
 			State->Options.bObjective = true;
 			State->Options.Squad = 3;
 			State->Options.TimeLimit = 180.f;
+		}
+		if (bSmokeTactical)
+		{
+			// One tactical round (random spawns: the generated map), the objective = the route's end, 120 s.
+			State->Options.bSmokeTactical = true;
+			State->Options.bObjective = true;
+			State->Options.SpawnMode = 2;
+			State->Options.Scenario = static_cast<int32>(EPmcScenario::Tactical);
+			State->Options.Squad = FMath::Max(State->Options.Squad, 3);
+			State->Options.TimeLimit = 120.f;
 		}
 		if (bSmokeCapture)
 		{
@@ -2935,9 +3282,14 @@ namespace PmcArena
 		RunWith(Args, World, true, false, true);
 	}
 
+	void RunTacticalSmoke(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, true, false, false, true);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
-		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard; writes Saved/Arena/<timestamp>.json, then exits."),
+		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 
 	static FAutoConsoleCommandWithWorldAndArgs SmokeCommand(
@@ -2949,6 +3301,11 @@ namespace PmcArena
 		TEXT("CodexTactics.PmcArenaObjectiveSmoke"),
 		TEXT("Dev check (task #53): one arena round with the defenders parked out of the fight - the attackers must walk onto the objective and capture it; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunObjectiveSmoke));
+
+	static FAutoConsoleCommandWithWorldAndArgs TacticalSmokeCommand(
+		TEXT("CodexTactics.PmcArenaTacticalSmoke"),
+		TEXT("Dev check (TACTICAL_MAP P3): one tactical arena round on a generated map with a tactical file (L_Gen_Depot_X4) - the defenders spawn on their posts along the squad's route, the result's behaviour blocks (codex.pmc_arena_behaviour/1) validated; logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunTacticalSmoke));
 
 	static FAutoConsoleCommandWithWorldAndArgs StalemateSmokeCommand(
 		TEXT("CodexTactics.PmcStalemateSmoke"),
