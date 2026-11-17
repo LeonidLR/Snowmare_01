@@ -3,6 +3,7 @@
 // C++ reference: Source/CodexTactics/Private/LevelGen/PropsPlacementRules.cpp and PropsPlacementC4.cpp
 
 import type { LevelPropsFile, PropLayer, PropObject, PropSubReport } from './schema.ts';
+import { toBuildingFrame } from '../rotation.ts';
 import {
   PropsLayoutView,
   sinQ,
@@ -1276,10 +1277,19 @@ function gatherAnchors(
           out.push({ pos: snappedCentre(extent.min, extent.max), layer });
           continue;
         }
-        // roof_edges
+        // roof_edges (a rotated roof: the edge distance measured in the building's own frame, task 082)
+        const roofLayer = view.findLayer(layer);
+        const rb = roofLayer ? view.getBuildings()[roofLayer.buildingIndex] : undefined;
+        const rframe = rb && rb.rotation ? { footprint: [rb.min, rb.max] as [[number, number], [number, number]], rotation: rb.rotation } : null;
         for (let y = ceilStep(extent.min[1]); y <= extent.max[1]; y += step) {
           for (let x = ceilStep(extent.min[0]); x <= extent.max[0]; x += step) {
-            const edge = Math.min(x - extent.min[0], extent.max[0] - x, y - extent.min[1], extent.max[1] - y);
+            let edge: number;
+            if (rframe && rb) {
+              const q = toBuildingFrame(rframe, [x, y]);
+              edge = Math.min(q[0] - rb.min[0], rb.max[0] - q[0], q[1] - rb.min[1], rb.max[1] - q[1]);
+            } else {
+              edge = Math.min(x - extent.min[0], extent.max[0] - x, y - extent.min[1], extent.max[1] - y);
+            }
             if (edge >= cfg.roofEdgeInsetCm && edge < cfg.roofEdgeInsetCm + step) {
               out.push({ pos: [x, y], layer });
             }
@@ -1498,13 +1508,19 @@ function minedIds(input: PropsPlacementInput): Set<string> {
 }
 
 function doorMinePos(w: PropsLayoutView['doorways'][0], insideCm: number): [number, number] {
+  // Math.round: a rotated building's door has a non-axis outward (task 082); integer for axis doors as before
   return [
-    w.pos[0] - w.outward[0] * insideCm,
-    w.pos[1] - w.outward[1] * insideCm,
+    Math.round(w.pos[0] - w.outward[0] * insideCm),
+    Math.round(w.pos[1] - w.outward[1] * insideCm),
   ];
 }
 
 function doorMineYaw(w: PropsLayoutView['doorways'][0]): number {
+  if (w.along[0] !== 0 && w.along[1] !== 0) {
+    // rotated building door: the outward axis in [0, 180) integer degrees (axis doors: 0 / 90 as below)
+    const deg = Math.round((Math.atan2(w.outward[1], w.outward[0]) * 180) / Math.PI);
+    return ((deg % 180) + 180) % 180;
+  }
   return w.along[0] !== 0 ? 90 : 0;
 }
 

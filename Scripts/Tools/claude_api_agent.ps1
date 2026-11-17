@@ -28,7 +28,8 @@ $Out = Join-Path $Log "$Stamp-$Label.json"
 Push-Location $Worktree
 try {
     # Double quotes split native arguments in Windows PowerShell 5.1 (the 11-17 prompt arrived cut at the first quote).
-    $Prompt = (Get-Content $PromptFile -Raw).Replace('"', "'")
+    # claude.cmd runs through cmd.exe: a newline ends the command line (the 11-17 prompts arrived as their first line only) - one line.
+    $Prompt = ((Get-Content $PromptFile -Raw).Replace('"', "'") -replace '\r?\n', ' ')
     $Tools = "Read,Edit,Write,Glob,Grep,Bash(git *),Bash(python *),Bash(powershell *),Bash(npm *),PowerShell"
     # Hidden console (2026-11-17): every tool call of the CLI otherwise opened a new Windows Terminal window.
     $Claude = (Get-Command claude.cmd -ErrorAction SilentlyContinue).Source   # npm installs claude.ps1 + claude.cmd; Start-Process needs the .cmd

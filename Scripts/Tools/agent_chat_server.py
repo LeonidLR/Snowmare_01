@@ -5,6 +5,9 @@ Serves on 127.0.0.1 only.
 Standard library only.
 """
 
+import os as _os_nc, sys as _sys_nc
+_sys_nc.path.insert(0, _os_nc.path.dirname(_os_nc.path.abspath(__file__)))
+import no_console  # noqa: F401,E402 - no Terminal window per subprocess (2026-11-17)
 import argparse
 import http.server
 import json

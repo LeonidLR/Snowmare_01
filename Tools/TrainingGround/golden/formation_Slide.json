@@ -72,6 +72,8 @@
   "look.narrow_penalty": 180,
   "look.over_shoulder_max_deg": 110,
   "look.anticipate_s": 0.5,
+  "look.big_jump_deg": 120,
+  "look.big_hold_s": 0.6,
   "classify.probe_side": 400,
   "classify.probe_ahead": 600,
   "classify.hold_distance": 500,

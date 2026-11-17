@@ -171,7 +171,7 @@ if ($Install) {
     $watch = New-ScheduledTaskTrigger -Daily -At ([datetime]::ParseExact($DailyAt, "HH:mm", $null).AddMinutes(10))
     $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -StartWhenAvailable `
         -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::Zero) -RestartCount 3 -RestartInterval (New-TimeSpan -Minutes 5)
-    $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType S4U -RunLevel Highest
+    $principal = New-ScheduledTaskPrincipal -UserId ([Security.Principal.WindowsIdentity]::GetCurrent().Name) -LogonType S4U -RunLevel Highest
     Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($boot, $watch) -Settings $settings -Principal $principal -Force | Out-Null
     # First morning after install: smokes are due at the next -DailyAt, not right now.
     if (-not (Test-Path $StateFile)) { Save-State ([pscustomobject]@{ last_smokes = (Get-Date).ToString("s") }) }

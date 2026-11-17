@@ -921,6 +921,8 @@ private:
 		uint32 PausedRequestId = 0;
 		/** The way he was going when held (+1 up, -1 down): a held man stays in the file. */
 		int32 Direction = 0;
+		/** Held so he does not walk down through a file that is still climbing. The 6 s cap does not release this. */
+		bool bBlockDescent = false;
 		float HeldSeconds = 0.f;
 		float CooldownSeconds = 0.f;
 		/** World time he last walked at RampFileRules::FRampFileConfig::ProgressSpeed+, s. */
