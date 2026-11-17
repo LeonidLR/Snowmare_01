@@ -915,3 +915,33 @@ shape, and a later edit of `formation_shapes.json` would no longer reach that sl
 - `CodexTactics.Formation.Shapes.{Parse, Reject, Find, Slots, Runtime}`; smoke `FormationShapesSmoke` (L_FormationLab: no file = the formula's
   diamond; a diamond-4 saved while running = its slots / looks / arcs, the flanker walks there; echelon right mirrored from a saved echelon left;
   custom_1 seeds an empty slot, the player's own wins; the file removed = the formula; a scratch copy in `Saved/`).
+
+## 20. F-2 - the leader takes the corner himself (game designer decision 2026-11-17, TASK_BOARD F-2 option B; runtime only, no TS / golden change)
+
+Designer decision 2026-11-17 (F-2, option B): **if the leader himself goes to the corner (his cover slot at or near a free wall end), the
+follower's corner watch of that end is cancelled and the leader looks round the corner; the followers keep their places behind him.**
+Root cause it removes: CoverSmoke's stand-off flake (Gemini report 075 point 2) - the leader in cover at a wall faces out along it, the formation
+heading follows his facing, so the column / echelon (guard level 2 "Echelon right -> Column (wall)") puts the point man ~70 cm "behind" him along
+the wall - towards the free end; the leader's automatic walk to the threat-side corner (TrySnapToCoverCorner) then swept into that man's
+capsule 11 cm from his corner slot and stood 49-72 cm off the end. (The corner watch itself is look-only; in those runs it was the leader's.)
+
+### 20.1 `FormationLeaderCornerRules` (pure, `Source/CodexTactics/Public/Formation/FormationLeaderCornerRules.h`)
+- `ClaimedEnd(walls, slot)`: the free end (`FormationCornerRules::IsFreeEnd`: no other wall within the two half thicknesses + 20 cm; probe-hit
+  pieces skipped) of a wall whose surface is within 120 cm of the cover slot, the slot from **150 cm** before the end (along the wall) to 60 cm
+  past it; the nearest such end. `ClaimedEndOf(pending, held)`: the pending slot (a cover order, a shimmy, the automatic corner walk) first.
+- `IsAtClaimedCorner(claim, place)`: the place lies ahead of `slot - 90 cm` along the wall (past the end included) and within 200 cm of the
+  wall's body (either side). The slot, not where the leader stands: a leader walking in from afar (the wall-leadership peek) must not send
+  the corner stack lined up behind his slot back along the whole wall (WallLeadershipSmoke: "no milling about").
+- `KeepBehind`: such a place is mirrored through the slot along the wall, at least 90 cm behind it, 45..200 cm off the wall on the leader's
+  side. `KeepSlotsBehind`: every follower place (not the Commander's); a moved place that would crowd another (closer than 90 cm; the
+  Commander's own place included - where he stands on the way to the corner) goes on back to 90 cm behind it, the nearest to the end first.
+  Looks unchanged.
+- `Watch(..., claim)`: `FormationCornerRules::Watch`, then a watch of the claimed end held by a follower goes to the leader (his look at the
+  corner); the other side's watch, if it was the leader's, is re-picked among the others. No claim = `Watch` itself.
+
+### 20.2 Integration (`USquadSubsystem`, `SquadSubsystemFormationGuard.cpp` / `SquadSubsystemFormation.cpp`)
+Each formation tick after the world walls (`UpdateFormationLeaderCorner`; `Codex.Formation.LeaderCorner` 1/0, needs `Codex.Formation.V21`):
+the claim of the leader's pending / held cover slot; `ApplyFormationCornerWatch` uses the claimed `Watch`; after this frame's slots and looks
+(any layout: shape, trail column, saved shape, custom, wall layout, slide, corner stack) `ApplyFormationLeaderCorner` keeps the follower places
+behind him; `UpdateSectorFollower` re-checks a stand-in for an unwalkable place. Logs `[Formation] leader corner: ... claims the free wall end`
+/ `... N follower place(s) at his corner kept behind him` / `released`. Tests `CodexTactics.Formation.LeaderCorner.*`; smoke `CoverSmoke`.

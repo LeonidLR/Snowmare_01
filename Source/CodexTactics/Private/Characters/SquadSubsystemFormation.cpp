@@ -755,6 +755,7 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		}
 		EndFormationCornerPeek(bIsSoloMode ? TEXT("Solo") : TEXT("no followers"));
 		Sectors.bSlide = false;
+		Sectors.LeaderCorner.Reset();
 		return;
 	}
 	const FFormationConfig& Config = FormationTuning::Get();
@@ -800,6 +801,8 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 	{
 		UpdateFormationTrailAndWalls(LeaderRef, DeltaTime);
 	}
+	// F-2 (game designer 2026-11-17, option B): the free wall end his cover slot claims (the corner he takes himself).
+	UpdateFormationLeaderCorner(LeaderRef);
 
 	// A new order of the leader's while the wall layout stands: rules v2.2 wall slide when its destination lies along the same wall.
 	const uint32 LeaderSerial = LeaderRef.GetMoveOrderSerial();
@@ -1029,6 +1032,9 @@ void USquadSubsystem::UpdateFormationSectors(AOperativeCharacter& LeaderRef, boo
 		}
 		Sectors.bSavedShape = bSaved;
 	}
+	// F-2 (2026-11-17): the leader takes the corner himself - no follower's place at it (any layout: the column / echelon behind his facing,
+	// the wall layout's end-side place, the corner stack's point); the looks were given for the places, the places go behind him.
+	ApplyFormationLeaderCorner();
 	if (!Sectors.bSavedShape)
 	{
 		Sectors.SavedShapeName.Reset();
@@ -1086,6 +1092,16 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	// Bug report 2026-11-02 item 7: never a slot ON a narrow ramp while the leader stands on a floor (the trail column behind a leader who
 	// stopped just past the ramp's top parked a man on it - the next man up pushed into him for good).
 	SlotLocation = KeepSlotOffRamp(LeaderRef, SlotLocation);
+	if (Sectors.LeaderCorner.IsSet())
+	{
+		// F-2 (2026-11-17): a stand-in for an unwalkable place may land at the corner the leader takes: behind him again.
+		const FVector2D Kept = FormationLeaderCornerRules::KeepBehind(Sectors.LeaderCorner.GetValue(), FVector2D(SlotLocation));
+		if (!Kept.Equals(FVector2D(SlotLocation), 1.0))
+		{
+			SlotLocation = KeepSlotOffRamp(LeaderRef, ResolveReachableSlot(LeaderRef, FVector(Kept.X, Kept.Y, LeaderFloorZ),
+				/*bLeaderSide*/ FormationGuardRuntime::IsEnabled(), Operative.GetActorLocation()));
+		}
+	}
 	FrameGivenByMember.Add(Follower.Operative, FVector2D(SlotLocation));
 	const FVector2D Here(Operative.GetActorLocation());
 	const FVector2D Target(SlotLocation);
