@@ -9,6 +9,7 @@
 
 #include "Characters/MantleRules.h"
 #include "Characters/OperativeCharacter.h"
+#include "CodexTactics.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Camera/PlayerCameraManager.h"
@@ -16,6 +17,7 @@
 #include "EngineUtils.h"
 #include "GameFramework/PlayerController.h"
 #include "Interactables/MantleNavigation.h"
+#include "Misc/Paths.h"
 #include "NavigationSystem.h"
 
 namespace MantleSmokeSites
@@ -182,6 +184,149 @@ namespace MantleSmokeSites
 			}
 		}
 		return Out;
+	}
+
+	/** One frame of a climb for the contact / penetration measures (world space; ClipSeconds = the montage position, -1 when not climbing). */
+	struct FClimbSample
+	{
+		float ClipSeconds = -1.f;
+		FVector Capsule = FVector::ZeroVector;
+		FVector HandL = FVector::ZeroVector;
+		FVector HandR = FVector::ZeroVector;
+		FVector Pelvis = FVector::ZeroVector;
+	};
+
+	inline FClimbSample SampleClimb(const AOperativeCharacter& Leader)
+	{
+		FClimbSample Out;
+		const USkeletalMeshComponent* Body = Leader.GetMesh();
+		Out.ClipSeconds = Leader.IsMantling() ? Leader.GetMantleClipSeconds() : -1.f;
+		Out.Capsule = Leader.GetActorLocation();
+		if (Body)
+		{
+			Out.HandL = Body->GetSocketLocation(TEXT("hand_l"));
+			Out.HandR = Body->GetSocketLocation(TEXT("hand_r"));
+			Out.Pelvis = Body->GetSocketLocation(TEXT("pelvis"));
+		}
+		return Out;
+	}
+
+	/** The clip's authored motion (clip space: X forward, Z up, cm) every 0.1 s and its analysed hand plant, for the report. */
+	inline void DumpClipTrack(AOperativeCharacter& Leader, int32 ClipIndex, const TCHAR* Prefix)
+	{
+		const FMantleConfig& Config = MantleRules::GetConfig();
+		const FMantleClipTrack* Track = Leader.GetMantleClipTrack(ClipIndex);
+		if (!Track || Track->Num() == 0 || !Config.Clips.IsValidIndex(ClipIndex))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[%s] clip %d: no track"), Prefix, ClipIndex);
+			return;
+		}
+		const FString Name = FPaths::GetBaseFilename(Config.Clips[ClipIndex].Path);
+		const int32 Every = FMath::Max(1, FMath::RoundToInt(0.1f / Track->SampleSeconds));
+		UE_LOG(LogCodexTactics, Display, TEXT("[%s] clip %s track (t root.x root.z | pelvis.x pelvis.z | handL.x handL.z | handR.x handR.z):"), Prefix, *Name);
+		for (int32 Index = 0; Index < Track->Num(); Index += Every)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[%s]   %.2f %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f | %6.1f %6.1f"), Prefix, Track->TimeAt(Index), Track->Root[Index].X,
+				Track->Root[Index].Z, Track->Pelvis[Index].X, Track->Pelvis[Index].Z, Track->HandL[Index].X, Track->HandL[Index].Z, Track->HandR[Index].X,
+				Track->HandR[Index].Z);
+		}
+		const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, *Track, Config.Clips[ClipIndex].RiseCm);
+		UE_LOG(LogCodexTactics, Display, TEXT("[%s] clip %s: plant %s at %.2f s, hand %s, root then %s, root at frame 0 %s, contact start %.1f cm, exit %.2f s"), Prefix, *Name,
+			Contact.bValid ? (Contact.bSlide ? TEXT("found (the hands slide: the slowest frame at the ledge)") : TEXT("found")) : TEXT("NOT found"), Contact.ContactSeconds, *Contact.HandPoint.ToCompactString(), *Contact.RootAtContact.ToCompactString(),
+			*Contact.RootStart.ToCompactString(), MantleRules::ContactStartCm(Config, Contact), Contact.ExitSeconds);
+	}
+
+	/** Where the body was at the climb's hand contact (forward = from the near face plane along the climb, up = over the top), cm. */
+	struct FContactMeasure
+	{
+		bool bValid = false;
+		/** The contact time came from the climb's own alignment window / the clip's analysed plant (else: the closest hand frame). */
+		bool bFromClip = false;
+		float Seconds = 0.f;
+		float HandFwdCm = 0.f;
+		float HandUpCm = 0.f;
+		/** The nearer hand's distance to the aimed grip (the lip + align.grip_forward_cm / grip_up_cm). */
+		float HandGapCm = TNumericLimits<float>::Max();
+		float PelvisFwdCm = 0.f;
+		float PelvisUpCm = 0.f;
+		/** The capsule's distance in front of the face when the climb started (> 0 = in front). */
+		float StartFaceCm = 0.f;
+		/** Before the contact: the farthest the pelvis / the capsule's centre came past the near face plane (> 0 = through it). */
+		float MaxPelvisFwdBeforeCm = -TNumericLimits<float>::Max();
+		float MaxCapsuleFwdBeforeCm = -TNumericLimits<float>::Max();
+	};
+
+	/** The contact measure of one climb's samples: at ContactSeconds of the clip (< 0: the frame whose nearer hand is closest to the grip). */
+	inline FContactMeasure MeasureContact(const TArray<FClimbSample>& Samples, const FVector& FacePoint, const FVector& Dir, float TopZ, float ContactSeconds)
+	{
+		const FMantleConfig& Config = MantleRules::GetConfig();
+		FContactMeasure Out;
+		auto Fwd = [&](const FVector& Point) { return static_cast<float>(FVector::DotProduct(Point - FacePoint, Dir)); };
+		auto Gap = [&](const FVector& Hand)
+		{
+			return FMath::Sqrt(FMath::Square(Fwd(Hand) - Config.AlignGripForwardCm) + FMath::Square(static_cast<float>(Hand.Z) - TopZ - Config.AlignGripUpCm));
+		};
+		int32 At = INDEX_NONE;
+		bool bStarted = false;
+		for (int32 Index = 0; Index < Samples.Num(); ++Index)
+		{
+			const FClimbSample& S = Samples[Index];
+			if (S.ClipSeconds < 0.f)
+			{
+				continue;
+			}
+			if (!bStarted)
+			{
+				bStarted = true;
+				Out.StartFaceCm = -Fwd(S.Capsule);
+			}
+			if (ContactSeconds >= 0.f)
+			{
+				if (S.ClipSeconds + KINDA_SMALL_NUMBER < ContactSeconds)
+				{
+					Out.MaxPelvisFwdBeforeCm = FMath::Max(Out.MaxPelvisFwdBeforeCm, Fwd(S.Pelvis));
+					Out.MaxCapsuleFwdBeforeCm = FMath::Max(Out.MaxCapsuleFwdBeforeCm, Fwd(S.Capsule));
+				}
+				else if (At == INDEX_NONE)
+				{
+					At = Index;
+				}
+			}
+			else if (FMath::Min(Gap(S.HandL), Gap(S.HandR)) < Out.HandGapCm)
+			{
+				Out.HandGapCm = FMath::Min(Gap(S.HandL), Gap(S.HandR));
+				At = Index;
+			}
+		}
+		if (At == INDEX_NONE)
+		{
+			return Out;
+		}
+		const FClimbSample& S = Samples[At];
+		const FVector& Hand = Gap(S.HandL) <= Gap(S.HandR) ? S.HandL : S.HandR;
+		Out.bValid = true;
+		Out.bFromClip = ContactSeconds >= 0.f;
+		Out.Seconds = S.ClipSeconds;
+		Out.HandGapCm = Gap(Hand);
+		Out.HandFwdCm = Fwd(Hand);
+		Out.HandUpCm = static_cast<float>(Hand.Z) - TopZ;
+		Out.PelvisFwdCm = Fwd(S.Pelvis);
+		Out.PelvisUpCm = static_cast<float>(S.Pelvis.Z) - TopZ;
+		return Out;
+	}
+
+	/** The clip time of a climb's hand contact: the alignment's first window (if it had one), else the clip's analysed plant; -1 = none. */
+	inline float ClimbContactSeconds(AOperativeCharacter& Leader)
+	{
+		if (Leader.GetLastMantleContactSeconds() > 0.f)
+		{
+			return Leader.GetLastMantleContactSeconds();
+		}
+		const FMantleConfig& Config = MantleRules::GetConfig();
+		const int32 ClipIndex = Leader.GetLastMantleClipIndex();
+		const FMantleClipTrack* Track = Config.Clips.IsValidIndex(ClipIndex) ? Leader.GetMantleClipTrack(ClipIndex) : nullptr;
+		const FMantleClipContact Contact = Track ? MantleRules::AnalyseClipTrack(Config, *Track, Config.Clips[ClipIndex].RiseCm) : FMantleClipContact();
+		return Contact.bValid ? Contact.ContactSeconds : -1.f;
 	}
 
 	/** The cursor's ray: from the player's camera through Point, on ECC_Visibility (GetHitResultUnderCursor's channel, simple collision). */

@@ -202,6 +202,14 @@ struct FMantleConfig
 	float AlignPlantMinRiseFraction = 0.6f;
 	/** ... staying planted at least this long, s. "align.plant_hold_s" */
 	float AlignPlantHoldSeconds = 0.1f;
+	/**
+	 * B17-3: a clip whose hands never rest on the ledge (the run clips: RunHighClimb's hands slide along the top at ~100-150 cm/s) takes its
+	 * slowest hand frame at the ledge's height (within align.hand_edge_tolerance_cm) as the contact, when that hand is no faster than this,
+	 * cm/s. "align.slide_speed_cm_s"
+	 */
+	float AlignSlideSpeedCmPerSecond = 250.f;
+	/** ... and no faster than this fraction of the pelvis then (the body climbs past the hand; a hand hanging on the body moves with it). "align.slide_body_ratio" */
+	float AlignSlideBodyRatio = 0.5f;
 	/** A hand resting once the root is within this distance of its last spot is the end pose, not a plant, cm. "align.exit_root_cm" */
 	float AlignExitRootCm = 3.f;
 	/** A planted wrist sits this far past the lip and this high over the top (the hand's point is put there, not on the lip), cm.
@@ -273,6 +281,8 @@ struct FMantleClipContact
 {
 	/** A hand plant was found (else the climb keeps one warp window over the whole clip). */
 	bool bValid = false;
+	/** B17-3: no hand rests on the ledge - the contact is the slowest hand frame at the ledge's height (align.slide_speed_cm_s). */
+	bool bSlide = false;
 	/** The first hand plant: its time and the wrist's position then. */
 	float ContactSeconds = 0.f;
 	FVector HandPoint = FVector::ZeroVector;

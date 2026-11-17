@@ -60,6 +60,8 @@ namespace MantleRulesInternal
 		{ TEXT("align.plant_reach_cm"), &FMantleConfig::AlignPlantReachCm },
 		{ TEXT("align.plant_min_rise_fraction"), &FMantleConfig::AlignPlantMinRiseFraction },
 		{ TEXT("align.plant_hold_s"), &FMantleConfig::AlignPlantHoldSeconds },
+		{ TEXT("align.slide_speed_cm_s"), &FMantleConfig::AlignSlideSpeedCmPerSecond },
+		{ TEXT("align.slide_body_ratio"), &FMantleConfig::AlignSlideBodyRatio },
 		{ TEXT("align.exit_root_cm"), &FMantleConfig::AlignExitRootCm },
 		{ TEXT("align.grip_forward_cm"), &FMantleConfig::AlignGripForwardCm },
 		{ TEXT("align.grip_up_cm"), &FMantleConfig::AlignGripUpCm },
@@ -727,6 +729,35 @@ FMantleClipContact MantleRules::AnalyseClipTrack(const FMantleConfig& Config, co
 				break;
 			}
 		}
+	}
+	if (Plant == INDEX_NONE)
+	{
+		// 1b. B17-3, no hand rests (a run clip's hands slide over the top): the slowest hand frame at the ledge's height (the root's rise over
+		// the frame-0 feet, within align.hand_edge_tolerance_cm), after it reached out, while the root is still below the ledge.
+		float Slowest = Config.AlignSlideSpeedCmPerSecond + KINDA_SMALL_NUMBER; // the earliest of equally slow frames
+		const float LedgeZ = Ground + FMath::Max(0.f, RiseCm);
+		for (const TArray<FVector>* Hand : { &Track.HandL, &Track.HandR })
+		{
+			bool bReached = false;
+			for (int32 Index = 1; Index < Num - 1; ++Index)
+			{
+				bReached |= FVector::Dist((*Hand)[Index], (*Hand)[0]) >= Config.AlignPlantReachCm;
+				// The body still below the ledge (the hands lead it; RunHighClimb's hands still press the top at 0.7 s when its root is over it).
+				if (!bReached || FMath::Abs(static_cast<float>((*Hand)[Index].Z) - LedgeZ) > Config.AlignHandEdgeToleranceCm
+					|| Track.Root[Index].Z - Track.Root[0].Z >= RiseCm || FVector::Dist(Track.Root[Index], Track.Root.Last()) <= Config.AlignExitRootCm)
+				{
+					continue;
+				}
+				const float Speed = SpeedAt(*Hand, Index);
+				if (Speed < Slowest && Speed <= Config.AlignSlideBodyRatio * SpeedAt(Track.Pelvis, Index))
+				{
+					Slowest = Speed;
+					Plant = Index;
+					PlantHand = Hand;
+				}
+			}
+		}
+		Out.bSlide = Plant != INDEX_NONE;
 	}
 	if (Plant != INDEX_NONE)
 	{

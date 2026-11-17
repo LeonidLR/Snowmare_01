@@ -57,7 +57,11 @@ namespace OperativeMantleInternal
 	constexpr float MantleOrderTimeoutSeconds = 30.f;
 	/** The hop down off a low top (the vault's arc), s. */
 	constexpr float MantleHopSeconds = 0.6f;
-	/** A run clip starts once the face is no farther than its own run-up (forward warp <= this; never stretched to start early). */
+	/**
+	 * A run clip starts once the face is no farther than its own run-up x this (never stretched to start early). The run-up: the face's distance
+	 * at the clip's hand contact (its track, B17-3 - the clip's root travel says nothing about where its hands meet the ledge); without a contact
+	 * the forward warp of its whole travel.
+	 */
 	constexpr float MantleRunStartWarp = 1.05f;
 	/** The torso joints the wall guard keeps off the face (hands and feet may touch the edge / the wall). */
 	static const FName MantleTorsoBones[] = { FName(TEXT("pelvis")), FName(TEXT("spine_03")), FName(TEXT("head")) };
@@ -118,6 +122,14 @@ const FMantleClipTrack* AOperativeCharacter::GetMantleClipTrack(int32 ClipIndex)
 	return Mantle->FindClipTrack(ClipIndex);
 }
 
+float AOperativeCharacter::GetMantleClipSeconds() const
+{
+	const UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	const UAnimMontage* Montage = MantleMontage.Get();
+	const FAnimMontageInstance* Instance = bMantling && Anim && Montage ? Anim->GetInstanceForMontage(Montage) : nullptr;
+	return Instance ? Instance->GetPosition() : -1.f;
+}
+
 EMantleBody AOperativeCharacter::GetMantleBody() const
 {
 	const USkeletalMesh* MantleBodyAsset = GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr;
@@ -153,6 +165,30 @@ bool AOperativeCharacter::ProbeMantleAhead(const FVector& Dir, float ReachCm, FM
 		Out.Probe.bLandingFree = false; // another man's climb lands there
 	}
 	return true;
+}
+
+bool AOperativeCharacter::IsMantleRunStartReached(const FMantleSite& Site, const FMantleDecision& Decision)
+{
+	using namespace OperativeMantleInternal;
+	if (!Decision.IsGo() || Decision.Gait != EMantleGait::Running)
+	{
+		return false;
+	}
+	// B17-3 (designer 2026-11-17: the double-click run climb started "far from the edge" - MantleClickSmoke: RunHighClimb 394 cm off the face, its
+	// hands 59 cm short of the lip at the contact): the clip starts at its own run-up, the face where its hands meet the ledge.
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	if (CVarMantleAlign.GetValueOnGameThread() != 0 && Config.Clips.IsValidIndex(Decision.ClipIndex))
+	{
+		if (const FMantleClipTrack* Track = GetMantleClipTrack(Decision.ClipIndex))
+		{
+			const float RunUp = MantleRules::ContactStartCm(Config, MantleRules::AnalyseClipTrack(Config, *Track, Config.Clips[Decision.ClipIndex].RiseCm));
+			if (RunUp > 0.f)
+			{
+				return Site.Probe.FaceDistanceCm <= RunUp * MantleRunStartWarp;
+			}
+		}
+	}
+	return Decision.ForwardWarp <= MantleRunStartWarp;
 }
 
 bool AOperativeCharacter::IsRunningForMantle() const
@@ -365,6 +401,7 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 	MantleTopZ = Site.TopZ;
 	MantleDepthCm = Site.Probe.DepthCm;
 	MantleGuardPushCm = 0.f;
+	MantleContactSeconds = ContactSeconds;
 	bMantleOnTop = bTop;
 	++MantleCount;
 	++MantleRotation;
@@ -1142,7 +1179,7 @@ void AOperativeCharacter::UpdateMantleTrigger(float DeltaTime)
 			if (ProbeMantleAhead(MantleOrderDir, MantleRunReachCm, Site) && Mantle)
 			{
 				const FMantleDecision Decision = MantleRules::Decide(Config, Site.Probe, [Mantle](int32 Index) { return Mantle->GetClip(Index) != nullptr; });
-				if (Decision.IsGo() && Decision.Gait == EMantleGait::Running && Decision.ForwardWarp <= MantleRunStartWarp && StartMantle(Site, Decision, true, INDEX_NONE))
+				if (IsMantleRunStartReached(Site, Decision) && StartMantle(Site, Decision, true, INDEX_NONE))
 				{
 					return;
 				}
@@ -1187,7 +1224,7 @@ void AOperativeCharacter::UpdateMantleTrigger(float DeltaTime)
 		if (ProbeMantleAhead(Link->Dir, MantleRunReachCm, Site) && Site.Obstacle.Get() == Link->Obstacle.Get())
 		{
 			const FMantleDecision Decision = MantleRules::Decide(Config, Site.Probe, [Mantle](int32 Clip) { return Mantle->GetClip(Clip) != nullptr; });
-			if (Decision.IsGo() && Decision.Gait == EMantleGait::Running && Decision.ForwardWarp <= MantleRunStartWarp)
+			if (IsMantleRunStartReached(Site, Decision))
 			{
 				StartMantle(Site, Decision, false, Index);
 			}

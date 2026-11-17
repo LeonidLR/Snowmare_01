@@ -12,6 +12,9 @@
 //   d  click on a 330 cm fence (a wall)           -> no climb (the click keeps its old meaning);
 //   e  hover over a climbable top / face          -> the mantle ghost shows at the landing (the corner-peek ghost's look, ACoverGhostActor);
 //   f  hover over the 330 cm fence                -> no mantle ghost.
+// B17-3 (designer 2026-11-17: the double-click run climb starts far from the edge, the click walk climb is right): every climb of a / a2 / b / c
+// is sampled each frame; at the clip's hand contact (its plant / slide, the alignment's first window) the nearer hand is within
+// align.hand_edge_tolerance_cm of the grip on the lip and the pelvis is not through the face below the top.
 // Enemies are parked far away.
 
 #include "CoreMinimal.h"
@@ -90,7 +93,51 @@ namespace MantleClickSmoke
 		/** Obstacles whose aimed face the camera cannot see (another obstacle in front): another one of the kind is taken. */
 		TSet<const AActor*> Hidden;
 		int32 Retries = 0;
+		/** B17-3: every frame of the climb (the hands / pelvis vs the face at the hand contact). */
+		bool bSampling = false;
+		TArray<MantleSmokeSites::FClimbSample> Samples;
+		TSet<int32> DumpedClips;
+		FTSTicker::FDelegateHandle SampleTicker;
 	};
+
+	void Check(FState& State, bool bOk, const FString& What);
+
+	/** Every frame while sampling (the smoke's own step is coarser than a frame). */
+	bool Sample(TSharedRef<FState> State)
+	{
+		if (const AOperativeCharacter* Leader = State->Leader.Get(); Leader && State->bSampling)
+		{
+			State->Samples.Add(MantleSmokeSites::SampleClimb(*Leader));
+		}
+		return true;
+	}
+
+	/**
+	 * B17-3 (designer 2026-11-17: the run climb starts "far from the edge"; the walk climb is right): at the climb's hand contact (the clip's own
+	 * hand plant, the frame the alignment warps onto the lip) the nearer hand is on the lip (within align.hand_edge_tolerance_cm of the aimed
+	 * grip) and the pelvis is not through the face below the top.
+	 */
+	void CheckContact(FState& State, const FCase& Case, AOperativeCharacter& Leader)
+	{
+		const FMantleConfig& Config = MantleRules::GetConfig();
+		const int32 ClipIndex = Leader.GetLastMantleClipIndex();
+		if (!State.DumpedClips.Contains(ClipIndex))
+		{
+			State.DumpedClips.Add(ClipIndex);
+			MantleSmokeSites::DumpClipTrack(Leader, ClipIndex, TEXT("MantleClickSmoke"));
+		}
+		const float Contact = MantleSmokeSites::ClimbContactSeconds(Leader);
+		const MantleSmokeSites::FContactMeasure M = MantleSmokeSites::MeasureContact(State.Samples, Leader.GetMantleFacePoint(), Leader.GetMantleDir(),
+			Leader.GetMantleTopZ(), Contact);
+		const bool bPelvisOut = M.PelvisFwdCm <= 0.f || M.PelvisUpCm >= -Config.AlignGapAboveMarginCm;
+		Check(State, M.bValid && M.bFromClip && M.HandGapCm <= Config.AlignHandEdgeToleranceCm && bPelvisOut, FString::Printf(
+			TEXT("%s (%s, %s): at the hand contact (%s %.2f s) the nearer hand is %.1f cm from the grip on the lip (%.1f cm %s the face, %.1f cm over the top; ")
+			TEXT("tolerance %.0f), the pelvis %.1f cm %s the face (%.1f cm over the top); the climb started %.0f cm off the face"),
+			Case.Label, *Leader.GetLastMantleClip(), Leader.GetLastMantleGait() == EMantleGait::Running ? TEXT("run") : TEXT("walk"),
+			M.bFromClip ? TEXT("the clip's plant at") : TEXT("NO plant in the clip - the closest frame"), M.Seconds, M.HandGapCm, FMath::Abs(M.HandFwdCm),
+			M.HandFwdCm < 0.f ? TEXT("in front of") : TEXT("past"), M.HandUpCm, Config.AlignHandEdgeToleranceCm, FMath::Abs(M.PelvisFwdCm),
+			M.PelvisFwdCm < 0.f ? TEXT("in front of") : TEXT("PAST"), M.PelvisUpCm, M.StartFaceCm));
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -100,6 +147,7 @@ namespace MantleClickSmoke
 
 	bool Finish(FState& State, bool bComplete)
 	{
+		FTSTicker::GetCoreTicker().RemoveTicker(State.SampleTicker);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("MantleClickSmoke"));
 		return false;
@@ -220,6 +268,9 @@ namespace MantleClickSmoke
 			Squad->EnterSoloMode();
 			Squad->SetFollowersHolding(true);
 			State->Leader->bTacticalCeaseFire = true;
+			// The pose ticks and the bones refresh as on screen (a headless game skips an unseen mesh's pose): the hands at the contact.
+			State->Leader->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			State->SampleTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float) { return Sample(State); }));
 			Next(*State, 1);
 			return true;
 		}
@@ -293,6 +344,8 @@ namespace MantleClickSmoke
 				PC->HandleWorldHit(State->Hit);
 			}
 			State->bSawSprint = false;
+			State->Samples.Reset();
+			State->bSampling = true;
 			Next(*State, 3);
 			return true;
 		}
@@ -331,6 +384,11 @@ namespace MantleClickSmoke
 			if (Leader->IsMantling() && State->StageTime < 12.f)
 			{
 				return true;
+			}
+			State->bSampling = false;
+			if (const FCase& Case = Cases[State->Case % UE_ARRAY_COUNT(Cases)]; Case.bClickClimbs && Leader->GetMantleCount() > State->MantlesBefore)
+			{
+				CheckContact(*State, Case, *Leader);
 			}
 			++State->Case;
 			Next(*State, 1);
