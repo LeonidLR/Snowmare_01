@@ -170,7 +170,7 @@ void UMissionGoalsSubsystem::SpawnMarkers()
 			Marker->RingRadiusCm = FMath::Max(60.f, Ring);
 			Marker->Label = FText::FromString(Goal.Id);
 			Marker->FinishSpawning(FTransform(Goal.Location));
-			Marker->SetMarkerShown(true);
+			Marker->SetGoalShown(true);
 		}
 		Markers.Add(Marker);
 	}
@@ -249,7 +249,7 @@ void UMissionGoalsSubsystem::HandleReached(int32 GoalIndex, AOperativeCharacter*
 	const int32 Count = GetReachedCount();
 	if (AMissionGoalMarkerActor* Marker = GetMarker(GoalIndex))
 	{
-		Marker->SetMarkerShown(false);
+		Marker->SetGoalShown(false);
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[MissionGoals] %s (%s) reached by %s: %d/%d"), *Goal.Id, MissionGoalsRules::KindToString(Goal.Kind),
 		Operative ? *Operative->DisplayName.ToString() : TEXT("?"), Count, GetGoalCount());

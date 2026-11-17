@@ -16,4 +16,14 @@ void AMissionGoalMarkerActor::BeginPlay()
 	{
 		Tutorial->UnregisterMarker(this); // ... which must not drive it: UMissionGoalsSubsystem shows / hides it
 	}
+	SetMarkerShown(bGoalShown); // the parent's BeginPlay hid it
+}
+
+void AMissionGoalMarkerActor::SetGoalShown(bool bShow)
+{
+	bGoalShown = bShow;
+	if (HasActorBegunPlay())
+	{
+		SetMarkerShown(bShow);
+	}
 }

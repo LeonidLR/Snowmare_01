@@ -21,7 +21,16 @@ public:
 
 	virtual void BeginPlay() override;
 
+	/**
+	 * Shows / hides the marker. Remembered when called before BeginPlay (the subsystem spawns the markers in OnWorldBeginPlay, before the
+	 * world dispatches BeginPlay - ATutorialMarkerActor::BeginPlay hides every marker), applied there.
+	 */
+	void SetGoalShown(bool bShow);
+
 	/** The goal id this marker stands for ("GOAL_1"). */
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|MissionGoals")
 	FString GoalId;
+
+private:
+	bool bGoalShown = true;
 };

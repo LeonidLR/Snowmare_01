@@ -292,7 +292,8 @@ void ULevelExitSubsystem::BeginExit()
 		NextLevelTitle = Next->Title;
 	}
 	ExitLevelTitle = GetCurrentLevelTitle();
-	UE_LOG(LogCodexTactics, Display, TEXT("[LevelExit] all %d living operatives are out: fade to black (%.1f s), mission complete; next: %s"), RequiredCount,
+	UE_LOG(LogCodexTactics, Display, TEXT("[LevelExit] %s: fade to black (%.1f s), mission complete; next: %s"),
+		*(bArmed ? FString::Printf(TEXT("all %d living operatives are out"), RequiredCount) : FString(TEXT("the level is won"))),
 		ArmedConfig.FadeSeconds, NextLevelMap.IsEmpty() ? TEXT("the main menu") : *NextLevelMap);
 	if (UMissionSubsystem* Mission = World->GetSubsystem<UMissionSubsystem>())
 	{
