@@ -1,0 +1,43 @@
+{
+ "at": "2026-11-02T06:30:58.260Z",
+ "score": 0.94,
+ "summary": [
+  "# Level generator - gen_ref_01_02_depot_1 (profile ref_01_02_depot, seed 1)",
+  "score 0.94 | route COMPLETABLE | 555 m, 24 legs, layers ground / roof:B_ruin / floor:B_ruin:1",
+  "variants: V1_gallery ok 23 m; V2_north_blocks ok 174 m; V3_cut ok 73 m [kill zone by design]",
+  "terrain: open 27 %, wall_right 27 %, corridor 14 %, wall_left 31 %, at_wall 1 %",
+  "formation: diamond 22 %, column 41 %, echelon_left 20 %, echelon_right 16 %, wall 1 %",
+  "mechanics: corner watches 12, wall layouts 2, doorways 1, ladders 0, stairs 1, holes 2, roofs 1, floors 1; height levels on the route 0 / +1 / +2 (0: 84 %, 1: 8 %, 2: 8 %)",
+  "sightlines (longest ray per route sample): p50 72 m, p90 112.4 m, max 168.2 m, short (< 40 m) 16 %, lanes >= 80 m: 2, openness (mean ray) p50 16.1 m",
+  "roof views (eye on the roof + 1.6 m, lower obstacles do not block): B_warehouse +3 mean 73.2 m / longest 156 m / open 63 %; B_hall_n +3 mean 70.3 m / longest 156 m / open 56 %; B_steelworks +3 mean 63.8 m / longest 184.2 m / open 40 %; B_ruin +2 mean 58.4 m / longest 137.4 m / open 40 %; B_gallery +1 mean 40.1 m / longest 172.9 m / open 23 %",
+  "kill zone (INTENDED, not a defect): V3_cut 68 m on the killing ground (85 % of it), 4 ways out - game designer 2026-11-02: the canal-floor variant is a deliberate kill zone - the trench floor is seen from both rims, the only ways out are the ramp and the ladders; a fast, risky shortcut, not a defect",
+  "ambush: 15 / 23 spots concealed 14-30 m off the route (2.7 per 100 m), coordinated plan possible at 2 % of the route",
+  "counts: buildings 10, towers 0, chimneys 2, enterable_buildings 8, roofs_walkable 5, stairwells 4, external_stairs 1, ladders 4, doorways_all_routes 2, covers 276, cover_per_100m2_mean 2.14, walls_m 1181, fences_m 771, route_length_m 555, variants 3, cut_crossings 2, height_levels 5, route_levels 3, long_lanes_over_80m 2, short_zone_share 0.155, ambush_points 23, patrol_routes 2, spawn_points 6, area_ha 2.19",
+  "similarity to the profile 1: route_length_m 555 [320..600], variants 3 [3..5], ladders 4 [4..7], roofs_walkable 5 [3..5], stairwells 4 [2..4], enterable_buildings 8 [6..10], cut_crossings 2 [2..3], long_lanes_over_80m 2 [2..3], short_zone_share 0.155 [0.1..0.3], cover_per_100m2_mean 2.14 [2..3.5], height_levels 5 [4..5], route_levels 3 [2..4]"
+ ],
+ "verdicts": [
+  {
+   "client": "jev",
+   "model": "jev-latest",
+   "fits": true,
+   "confidence": 0.82,
+   "quality": 3.6,
+   "weakest": "verticality",
+   "reasons": [
+    "Jev: fits with probability 0.82",
+    "quality 3.6 / 5",
+    "weakest aspect: verticality"
+   ],
+   "fixes": [
+    "improve verticality first"
+   ],
+   "costUsd": 0,
+   "usage": {
+    "input_tokens": 2008,
+    "output_tokens": 106
+   },
+   "offline": false,
+   "at": "2026-11-02T06:30:24.434Z"
+  }
+ ]
+}
