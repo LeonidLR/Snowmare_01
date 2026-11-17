@@ -1,0 +1,53 @@
+{
+  "schema": "codex.tactical_runtime/1",
+  "comment": "TACTICAL MAP runtime settings (docs/design/TACTICAL_MAP.md P1; C++ TacticalMapRules / UTacticalMapSubsystem). The map's own data (places, drop spots, windows, roofs, hiding spots, ladder-only roofs, the analysis thresholds incl. the 0.65 ladder-only factor) is in Content/Data/LevelGen/tactical/<Map>.tactical.json, exported by the Training Ground. This file only holds how the game QUERIES it. All distances cm unless named _m.",
+  "floor_tolerance_cm": 150,
+  "danger": {
+    "comment": "DangerAt(point, side). A place counts its score inside its outline, fading to 0 over zone_falloff_cm outside it. Squad side adds the threats (max per kind): a drop spot's landing point within the file's drop reach (x the ladder-only factor when its roof is ladder-only and scale_ladder_only_drops), a window's sector (+- window_half_fov_deg) within the file's window range (full to window_full_m, the m16 effective range), any marksman roof spot within its range, a hiding spot's threatened route point within hiding_threat_radius_cm (stealth-only spots x ambush.stealth_only_factor). danger = 1 - prod(1 - term) over place + the four kinds. Window sight lines are not traced at runtime (the analysis already kept only windows that see the lines).",
+    "zone_falloff_cm": 300,
+    "drop_weight": 0.6,
+    "window_weight": 0.35,
+    "sniper_weight": 0.1,
+    "hiding_weight": 0.4,
+    "scale_ladder_only_drops": true,
+    "window_full_m": 28,
+    "window_half_fov_deg": 75,
+    "hiding_threat_radius_cm": 300
+  },
+  "ambush": {
+    "comment": "BestAmbushSpots(route segment, n): hiding spots whose threatened point lies within segment_radius_cm of the segment. score = (reveal_weight x (1 - reveal / reveal_close) + exit_weight x the position along the segment (0 at its start, 1 at its end: the EXIT of a place, TACTICAL_MAP.md section 3) + place_weight x the score of the spot's place) x stealth_only_factor for stealth-only spots.",
+    "segment_radius_cm": 800,
+    "reveal_weight": 0.5,
+    "exit_weight": 0.3,
+    "place_weight": 0.2,
+    "stealth_only_factor": 0.5
+  },
+  "overwatch": {
+    "comment": "OverwatchSpots(target, radius, n): roof spots whose roof range reaches the target area. score = distance_weight x (1 - d / reach) + coverage_weight x min(1, covered_m / coverage_full_m).",
+    "distance_weight": 0.5,
+    "coverage_weight": 0.5,
+    "coverage_full_m": 1000
+  },
+  "path": {
+    "comment": "IsChokepoint(path) / SafeDetour(from, to): the path is sampled every sample_step_cm; a place counts from the file's min_score. SafeDetour recommends the way round when the place has one at most short_detour_m longer (the analysis' detour_critical_m is 40).",
+    "sample_step_cm": 100,
+    "short_detour_m": 40
+  },
+  "ladder_roofs": {
+    "comment": "PickLadderOnlyRoofs(seed): each ladder-only roof gets an enemy when a seeded roll of (seed, building id) is below the file's ladder_only_factor (designer 2026-11-17: 0.65); factor_fallback when a file carries none.",
+    "factor_fallback": 0.65
+  },
+  "draw": {
+    "comment": "Codex.TacticalMap.Draw 1: places (outline + line, red by score), drop spots (orange edge -> land), windows (cyan, look arrow), roof spots (magenta, look arrow), hiding spots (green, a thin line to the route = stealth-only), ladder-only roofs (yellow outline) within radius_cm of the view.",
+    "radius_cm": 9000,
+    "lift_cm": 20
+  },
+  "smoke": {
+    "comment": "CodexTactics.TacticalMapSmoke on L_Gen_Depot_X4: every spot projects onto the navmesh within project_extent_cm, or (roofs / wall tops / window sills) has a walkable surface within surface_tolerance_cm of its z; DangerAt inside the top place >= high_danger and on an open street (>= open_clearance_cm from every place) <= low_danger.",
+    "project_extent_cm": [150, 150, 250],
+    "surface_tolerance_cm": 120,
+    "high_danger": 0.6,
+    "low_danger": 0.35,
+    "open_clearance_cm": 2000
+  }
+}
