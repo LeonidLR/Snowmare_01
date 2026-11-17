@@ -13,7 +13,7 @@
   },
   "smokeRegistry": [
     "HitchProbeSmoke", "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "EnemyFacingJitterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "CameraMinZoomSmoke", "CameraMinZoomDepotSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
-    "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TargetedShotSmoke",
+    "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TurretPowerSmoke", "TargetedShotSmoke",
     "MissionSmoke", "MissionGoalsSmoke", "TacticalMapSmoke", "TacticalPmcSmoke", "PmcArenaTacticalSmoke", "GeneratedPropsSmoke", "GeneratedPropsX6Smoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
     "WeaponSelectorSmoke", "GrenadeSmoke", "GuardSmoke", "InventorySmoke", "TransferSmoke", "SaveLoadSmoke",
@@ -154,6 +154,7 @@
     "LevelGenRampSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 900, "_why": "game designer bug report 2026-11-02 item 7 (L_Gen_Depot_1): the squad bunched at a ramp's foot (the ruin's external stair, the 9 m hall stairwell) goes up when one man is sent onto the roof - squad mode: all three end on the roof, nobody stuck in the ramp mouth; all three box-selected (sprint): all up, no group target off the roof edge; Solo: only he goes up" },
     "MissionGoalsSmoke": { "map": "/Game/Maps/Generated/L_Gen_Test_X2", "extra": "-LevelJson=L_Gen_Test_X2.json", "timeout": 600, "_why": "F-4 option a (designer 2026-11-17): the generated map's mission goals (Content/Data/LevelGen/objectives/L_Gen_Test_X2.objectives.json, UMissionGoalsSubsystem) - a marker / minimap icon / HUD line per goal, the squad teleported to each goal in turn is counted, no victory before the last, the existing level end (ULevelExitSubsystem::CompleteLevel) after it" },
     "GeneratedPropsSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_X4", "extra": "-LevelJson=L_Gen_Depot_X4.json", "timeout": 600, "_why": "G003 (designer 2026-11-17: opened X4 and X6 - no barrels, no loot, nothing): the Training Ground autogen props file of the generated map spawned by UCodexLevelPropsSubsystem - count per kind = the TG within 5 % (a mined / loot crate counts as a mine / loot), every prop visible (greybox look), inside the layout bounds, within 30 cm of the surface under it, at most 5 % dropped by the validator" },
+    "TurretPowerSmoke": { "timeout": 300, "_why": "TURRET_POWER.md phase 1 (designer decisions 2026-11-17): on L_MovementTest, all spawned in an empty arena - a dry generator's two turrets are silent; the leader refuels (jerrycan) and starts it: the squad owns the network, the start noise sends a guard 20 m away investigating (not one 40 m away), after the 2 s spin-up the turrets shoot a monster and a PMC fighter, never the squad, the fuel burns; stopping it darkens them; a running hostile network's turret targets the squad not its own PMC, observing it 2 s reveals its owner, seizing it darkens it from second 1 and flips it to the squad's side; the other network is untouched" },
     "GeneratedPropsX6Smoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1_X6", "extra": "-LevelJson=L_Gen_Depot_1_X6.json", "timeout": 600, "_why": "G003: GeneratedPropsSmoke on L_Gen_Depot_1_X6 (the cut rectangle edge of 434 m used to refuse the whole layout: no walk-layer Z, no validation)" },
     "TacticalMapSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_X4", "extra": "-LevelJson=L_Gen_Depot_X4.json", "timeout": 600, "_why": "TACTICAL_MAP P1 (designer 2026-11-17, docs/design/TACTICAL_MAP.md): the generated map's tactical file (Content/Data/LevelGen/tactical/L_Gen_Depot_X4.tactical.json, UTacticalMapSubsystem + TacticalMapRules) - loaded at BeginPlay, counts = the JSON, every spot on the navmesh or a walkable surface, DangerAt high in the top chokepoint and low on an open street, the queries answer, the seeded ladder-only roof picker deterministic and ~0.65, a missing file = an empty map, Codex.TacticalMap.Draw / Dump run" },
     "TacticalPmcSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_X4", "extra": "-LevelJson=L_Gen_Depot_X4.json", "timeout": 600, "_why": "TACTICAL_MAP P2 (designer 2026-11-17: the dangerous places affect gameplay): a PMC squad spawned with the map's tactical file along the squad's way to a mission goal (UPmcSquadSubsystem::SpawnSquadTactical, PmcTacticalRules) - the marksman on an overwatch roof spot, an ambusher at a chokepoint exit (its hiding spot, outside the outline), the seeded ladder-only roof picker, the men hold their posts when commanded, their positions safer (DangerAt PMC side) than random points along the way, a fall-back round a chokepoint, no file = no posts" },
@@ -680,7 +681,7 @@
       "name": "deployables",
       "globs": ["Source/**/Interactables/Deployable*", "Source/**/Interactables/Barricade*", "Source/**/Interactables/Turret*", "Source/**/Interactables/ProximityMine*"],
       "tests": ["CodexTactics.Deployable"],
-      "smokes": ["DeployableSmoke", "TrapSoloSmoke", "TurretSmoke", "BarricadeContactSmoke", "TurnBasedDeploySmoke", "TurnBasedBarricadeSmoke", "PrepDeploySmoke", "BarricadeTurnContactSmoke"]
+      "smokes": ["DeployableSmoke", "TrapSoloSmoke", "TurretSmoke", "TurretPowerSmoke", "BarricadeContactSmoke", "TurnBasedDeploySmoke", "TurnBasedBarricadeSmoke", "PrepDeploySmoke", "BarricadeTurnContactSmoke"]
     },
     {
       "name": "interaction-clips",
@@ -1294,6 +1295,13 @@
       "globs": ["Source/**/AI/PmcTactical*", "Source/**/AI/PmcArenaBehaviour*", "Source/**/Debug/TacticalPmcSmoke*", "Source/CodexTacticsTests/Private/AI/PmcTacticalRulesTest*", "Source/CodexTacticsTests/Private/AI/PmcArenaBehaviourRulesTest*", "Content/Data/LevelJson/L_Gen_Depot_X4.json", "Content/Data/LevelJson/L_Gen_Test_X2.json"],
       "tests": ["CodexTactics.AI.PmcTactical", "CodexTactics.AI.PmcArena", "CodexTactics.AI.PmcCommander", "CodexTactics.LevelGen.TacticalMap"],
       "smokes": ["TacticalPmcSmoke", "PmcArenaTacticalSmoke", "TacticalMapSmoke", "PmcStalemateSmoke", "PmcEncounterSmoke"]
+    },
+    {
+      "name": "turret-power-2026-11-17",
+      "_comment": "TURRET_POWER.md phase 1: generators + fuel + network ownership (Power/*), the network turret, the jerrycan item, the props power layer (TS power.ts + validator) and the start noise.",
+      "globs": ["Source/**/Power/**", "Source/**/Debug/TurretPowerSmoke*", "Content/Data/Balance/turret_power.json", "Tools/TrainingGround/src/levelgen/props/power*", "Source/**/LevelGen/PropsPowerTest*"],
+      "tests": ["CodexTactics.Power", "CodexTactics.LevelGen.Props.Power", "CodexTactics.LevelGen.Props.Gameplay"],
+      "smokes": ["TurretPowerSmoke", "TurretSmoke", "GeneratedPropsSmoke", "GeneratedPropsX6Smoke", "StealthLureSmoke"]
     },
     {
       "name": "generated-props-2026-11-17",
