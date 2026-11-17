@@ -4,7 +4,7 @@
 Usage:
   python editor_status.py                  short human summary
   python editor_status.py --json           JSON
-  python editor_status.py set <worktree> --note "text"   (worktree: main | gemc5 | interim)
+  python editor_status.py set <worktree> --note "text"   (worktree: main | gemc5 | interim | claude | grok = CodexTactics-grok)
       writes <main>/Saved/AgentChat/editor_recommend.json
 
 Stdlib only, Windows. Process list comes from PowerShell Get-CimInstance (one call per run).

@@ -216,7 +216,7 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
             if not text:
                 self.send_json(400, {"error": "Field 'text' cannot be empty"})
                 return
-            if to not in ("claude", "gemini", "codex", "all"):
+            if to not in ("claude", "gemini", "codex", "grok", "all"):
                 self.send_json(400, {"error": f"Invalid recipient 'to': {to}"})
                 return
 

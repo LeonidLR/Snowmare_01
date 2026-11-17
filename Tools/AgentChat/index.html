@@ -22,6 +22,9 @@
       --color-gemini-bg: rgba(56, 189, 248, 0.12);
       --color-codex: #34d399;
       --color-codex-bg: rgba(52, 211, 153, 0.12);
+      --color-grok: #000000;
+      --color-grok-bg: rgba(255, 255, 255, 0.08);
+      --color-grok-outline: #ffffff;
       --color-designer: #c084fc;
       --color-designer-bg: rgba(192, 132, 252, 0.15);
       
@@ -170,6 +173,8 @@
     .from-gemini .msg-author { color: var(--color-gemini); }
     .message.from-codex { background-color: var(--color-codex-bg); }
     .from-codex .msg-author { color: var(--color-codex); }
+    .message.from-grok { background-color: var(--color-grok-bg); }
+    .from-grok .msg-author { color: #fff; background: var(--color-grok); border: 1px solid var(--color-grok-outline); border-radius: 4px; padding: 0 6px; }
     .from-designer .msg-author { color: var(--color-designer); }
 
     .msg-target {
@@ -413,6 +418,7 @@
     .owner-claude { color: var(--color-claude); }
     .owner-gemini { color: var(--color-gemini); }
     .owner-codex { color: var(--color-codex); }
+    .owner-grok { color: #fff; background: var(--color-grok); border: 1px solid var(--color-grok-outline); border-radius: 4px; padding: 0 4px; }
     .owner-designer { color: var(--color-designer); }
 
     .idle-badge {
@@ -628,6 +634,10 @@
         <span class="status-dot" id="dot-codex"></span>
         <span>Codex: <strong id="status-codex">офлайн</strong></span>
       </div>
+      <div class="presence-item" id="presence-grok" title="Grok (xAI)">
+        <span class="status-dot" id="dot-grok"></span>
+        <span>Grok: <strong id="status-grok">офлайн</strong></span>
+      </div>
     </div>
   </header>
 
@@ -647,6 +657,7 @@
           <option value="claude">Claude</option>
           <option value="gemini">Gemini</option>
           <option value="codex">Codex</option>
+          <option value="grok">Grok</option>
         </select>
       </div>
 
@@ -669,6 +680,7 @@
       <select id="filter-owner">
         <option value="all">Все агенты</option>
         <option value="codex">Codex</option>
+        <option value="grok">Grok</option>
         <option value="gemini">Gemini</option>
         <option value="claude">Claude</option>
       </select>
@@ -792,7 +804,8 @@
         const participants = [
           { key: 'claude', name: 'Claude' },
           { key: 'gemini', name: 'Gemini' },
-          { key: 'codex', name: 'Codex' }
+          { key: 'codex', name: 'Codex' },
+          { key: 'grok', name: 'Grok' }
         ];
 
         participants.forEach(({ key, name }) => {
@@ -862,6 +875,13 @@
             const codexOn = !!(pres.codex && pres.codex.active);
             dotCodex.className = codexOn ? 'status-dot active' : 'status-dot';
             statusCodex.textContent = codexOn ? 'слушает' : 'офлайн';
+          }
+          const dotGrok = document.getElementById('dot-grok');
+          const statusGrok = document.getElementById('status-grok');
+          if (dotGrok && statusGrok) {
+            const grokOn = !!(pres.grok && pres.grok.active);
+            dotGrok.className = grokOn ? 'status-dot active' : 'status-dot';
+            statusGrok.textContent = grokOn ? 'слушает' : 'офлайн';
           }
         } catch (e) {
           console.warn('Error fetching presence:', e);
@@ -984,7 +1004,7 @@
 
         // Now strip
         nowStrip.innerHTML = '';
-        ['codex', 'gemini', 'claude'].forEach(ag => {
+        ['codex', 'gemini', 'claude', 'grok'].forEach(ag => {
           const info = (boardData.now_strip || {})[ag] || { agent: ag, state: 'idle' };
           const card = document.createElement('div');
           card.className = 'now-card';

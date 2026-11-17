@@ -26,7 +26,7 @@ import agent_chat_server
 class TestComputeIdleSeconds(unittest.TestCase):
     def test_empty_messages(self):
         idle = agent_chat.compute_idle_seconds([], now=1000.0)
-        self.assertEqual(idle, {"gemini": 0, "codex": 0, "claude": 0})
+        self.assertEqual(idle, {"gemini": 0, "codex": 0, "claude": 0, "grok": 0})
 
     def test_single_direct_message(self):
         # Message to gemini at T=1000
