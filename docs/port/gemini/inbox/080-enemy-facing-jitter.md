@@ -9,6 +9,7 @@ Do:
    vs. aim facing, movement facing vs. aim, controller focus vs. SetActorRotation, AI focus + anim turn-in-place) - quote file:line.
 2. Fix the cause (one owner of the facing per frame, a hysteresis / minimum hold time on a target switch, a dead band) - numbers in the
    enemy / PMC JSON config. Add a smoke check: yaw sign flips per second under a limit for a marksman and a PMC rifleman that see the squad.
-Allowed paths: Source/CodexTactics/**/Pmc*, Source/CodexTactics/**/Enemy*.{h,cpp} (NOT EnemyAnimInstance / ABPs - ask), their JSON configs,
-tests, a smoke under Source/CodexTacticsDev/Private/Debug/ (new file or Pmc*Smoke checks), plan + report.
+Allowed paths: Source/CodexTactics/**/Pmc*, Source/CodexTactics/**/Enemy*.{h,cpp} (NOT EnemyAnimInstance / ABPs - ask),
+Source/CodexTactics/**/Marksman*, their JSON configs, tests, Source/CodexTacticsDev/Private/Debug/EnemyFacingJitterSmokeCommand.cpp,
+Source/CodexTacticsDev/Private/Debug/Pmc*Smoke*, Scripts/test_map.json, plan + report.
 Gate: the new check 3/3, PmcStalemateSmoke, PmcEncounterSmoke, EnemyArchetypeSmoke, EnemyPrioritySmoke, unit tests, gemini_gate PASS.
