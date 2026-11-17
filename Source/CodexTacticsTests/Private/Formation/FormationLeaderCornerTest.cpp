@@ -215,4 +215,50 @@ bool FLeaderCornerOtherSideTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+LEADER_CORNER_TEST(FLeaderCornerPeekEdgeTest, "PeekEdgeClaimsItsCorner")
+bool FLeaderCornerPeekEdgeTest::RunTest(const FString& Parameters)
+{
+	// Designer bug B17-1 (2026-11-17): the leader runs to the corner to peek round it himself; the wall layout round his corner place put the
+	// right-hand man at +1 m - past the end, in the open. The peek's own edge claims the corner whatever the world walls say (here: none).
+	using namespace FormationLeaderCornerRules;
+	using namespace LeaderCornerTestLocal;
+	const FVector2D Edge(0.0, 10.0);   // the edge on the wall's +Y face (20 cm thick wall ending at x 0)
+	const FVector2D FaceOut(0.0, 1.0);
+	const TOptional<FFormationLeaderCorner> Claim = ClaimedPeekEdge(CornerSlot, Edge, FaceOut);
+	if (!TestTrue(TEXT("his corner slot 28 cm short of the peek edge claims it"), Claim.IsSet()))
+	{
+		return false;
+	}
+	TestEqual(TEXT("... no world wall behind the claim"), Claim->Wall, static_cast<int32>(INDEX_NONE));
+	TestTrue(TEXT("... along the face towards the edge"), Claim->Along.Equals(FVector2D(1.0, 0.0), 1e-4));
+	TestTrue(TEXT("... out to his side"), Claim->Out.Equals(FaceOut, 1e-4));
+	TestTrue(TEXT("the left end mirrored: along -X"), ClaimedPeekEdge(FVector2D(-972.0, 45.0), FVector2D(-1000.0, 10.0), FaceOut).IsSet()
+		&& ClaimedPeekEdge(FVector2D(-972.0, 45.0), FVector2D(-1000.0, 10.0), FaceOut)->Along.Equals(FVector2D(-1.0, 0.0), 1e-4));
+	TestFalse(TEXT("a slot 3 m short of the edge does not claim it"), ClaimedPeekEdge(FVector2D(-300.0, 45.0), Edge, FaceOut).IsSet());
+	TestFalse(TEXT("a slot 2 m out from the face is not at it"), ClaimedPeekEdge(FVector2D(-28.0, 210.0), Edge, FaceOut).IsSet());
+	TestFalse(TEXT("a slot behind the face (the wall's far side) is not at it"), ClaimedPeekEdge(FVector2D(-28.0, -40.0), Edge, FaceOut).IsSet());
+	TestFalse(TEXT("a degenerate normal: no claim"), ClaimedPeekEdge(CornerSlot, Edge, FVector2D::ZeroVector).IsSet());
+	// The wall layout of three round his corner place (K at the slot, the right-hand man +1 m: past the end, the left-hand man -1 m).
+	TArray<FFormationSlot> Layout = { CornerMember(EFormationRole::Commander, CornerSlot), CornerMember(EFormationRole::Right, CornerSlot + FVector2D(100.0, 0.0)),
+		CornerMember(EFormationRole::Rear, CornerSlot - FVector2D(100.0, 0.0)) };
+	TestEqual(TEXT("the right-hand man's place past the corner moves"), KeepSlotsBehind(Claim.GetValue(), Layout), 1);
+	for (const FFormationSlot& Slot : Layout)
+	{
+		if (Slot.Role != EFormationRole::Commander)
+		{
+			TestTrue(FString::Printf(TEXT("%s >= 90 cm behind his slot along the wall (x %.0f)"), FormationNames::ToString(Slot.Role), Slot.Position.X),
+				Slot.Position.X <= CornerSlot.X - KeepBackCm + 0.01);
+			TestTrue(FString::Printf(TEXT("%s not past the end plane"), FormationNames::ToString(Slot.Role)), Slot.Position.X < Edge.X);
+			TestTrue(FString::Printf(TEXT("%s on his side of the wall"), FormationNames::ToString(Slot.Role)), Slot.Position.Y > Edge.Y);
+		}
+	}
+	TestTrue(TEXT("the two followers do not crowd each other"), FVector2D::Distance(Layout[1].Position, Layout[2].Position) >= KeepBackCm - 0.01);
+	TestTrue(TEXT("the moved place stands the slot offset off the face at least"), Layout[1].Position.Y >= Edge.Y + MinOutCm - 0.01);
+	// The wall-leadership stack behind the corner man (130 / 230 cm back) is left alone.
+	TArray<FFormationSlot> Stack = { CornerMember(EFormationRole::Commander, CornerSlot), CornerMember(EFormationRole::Right, CornerSlot - FVector2D(130.0, 0.0)),
+		CornerMember(EFormationRole::Rear, CornerSlot - FVector2D(230.0, 0.0)) };
+	TestEqual(TEXT("a stack already behind him: nothing moves"), KeepSlotsBehind(Claim.GetValue(), Stack), 0);
+	return true;
+}
+
 #endif

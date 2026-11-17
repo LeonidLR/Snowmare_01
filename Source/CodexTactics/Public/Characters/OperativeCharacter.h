@@ -1640,6 +1640,13 @@ public:
 	/** A run-and-peek is armed: his walk to the corner is running (OrderRunCornerPeek / ArmRunCornerPeek; smokes). */
 	bool IsRunCornerPeekPending() const { return bRunCornerPeekPending; }
 
+	/**
+	 * The corner he peeks round himself (designer bug B17-1, 2026-11-17; the squad's FormationLeaderCornerRules::ClaimedPeekEdge): his armed
+	 * run-and-peek (the corner slot he walks to and its edge), else his manual corner peek in cover (his slot and the exposed edge of the ordered
+	 * side). OutSlot = the slot's feet, OutEdgeOnFace = the edge on the wall face, OutFaceNormal = the face's outward normal. False: no such peek.
+	 */
+	bool GetOwnCornerPeek(FVector& OutSlot, FVector& OutEdgeOnFace, FVector& OutFaceNormal) const;
+
 	/** Run-and-peek arrivals whose corner peek order was accepted (smokes / stats). */
 	int32 GetRunCornerPeekCount() const { return RunCornerPeekCount; }
 

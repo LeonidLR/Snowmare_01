@@ -85,6 +85,34 @@ namespace FormationLeaderCornerRules
 		return CurrentSlot.IsSet() ? ClaimedEnd(Walls, CurrentSlot.GetValue(), ClaimDist) : TOptional<FFormationLeaderCorner>();
 	}
 
+	TOptional<FFormationLeaderCorner> ClaimedPeekEdge(const FVector2D& Slot, const FVector2D& EdgeOnFace, const FVector2D& FaceOut, float ClaimDist)
+	{
+		const FVector2D Out = FaceOut.GetSafeNormal();
+		if (Out.IsNearlyZero())
+		{
+			return TOptional<FFormationLeaderCorner>();
+		}
+		// Along the face towards the edge (the slot's side of it decides the sign).
+		const FVector2D Tangent(-Out.Y, Out.X);
+		const double Toward = FVector2D::DotProduct(EdgeOnFace - Slot, Tangent);
+		const FVector2D Along = Toward >= 0.0 ? Tangent : -Tangent;
+		const double T = FVector2D::DotProduct(Slot - EdgeOnFace, Along);
+		const double Off = FVector2D::DotProduct(Slot - EdgeOnFace, Out);
+		if (T < -static_cast<double>(ClaimDist) || T > static_cast<double>(ClaimPastCm) || Off < -1.0 || Off > static_cast<double>(SlotWallReachCm))
+		{
+			return TOptional<FFormationLeaderCorner>();
+		}
+		FFormationLeaderCorner Claim;
+		Claim.Wall = INDEX_NONE;
+		Claim.End = 0;
+		Claim.EndPoint = EdgeOnFace;
+		Claim.Along = Along;
+		Claim.Out = Out;
+		Claim.Thickness = 0.f;
+		Claim.Slot = Slot;
+		return Claim;
+	}
+
 	bool IsAtClaimedCorner(const FFormationLeaderCorner& Claim, const FVector2D& Place, float KeepBack)
 	{
 		const double Reference = ReferenceAlong(Claim);

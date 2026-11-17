@@ -945,3 +945,31 @@ the claim of the leader's pending / held cover slot; `ApplyFormationCornerWatch`
 (any layout: shape, trail column, saved shape, custom, wall layout, slide, corner stack) `ApplyFormationLeaderCorner` keeps the follower places
 behind him; `UpdateSectorFollower` re-checks a stand-in for an unwalkable place. Logs `[Formation] leader corner: ... claims the free wall end`
 / `... N follower place(s) at his corner kept behind him` / `released`. Tests `CodexTactics.Formation.LeaderCorner.*`; smoke `CoverSmoke`.
+
+## 21. B17-1 - one corner man per corner; the leader's own peek corner (designer bug 2026-11-17; FORMATION_SECTORS.md "B17-1"; runtime only, no TS / golden change)
+
+### 21.1 Who takes the corner of the squad's wall (`ACodexTacticsPlayerController::FindSquadCornerPeekForHit`)
+- The squad in the formation wall layout (group mode, the leader not in cover - or the wall-leadership / run-peek carry peeker), a hit on the
+  squad's wall - its component behind the leader, OR a face hit (|normal z| < 0.3) whose normal is within 0.9 of the wall's and whose point lies
+  within 5 cm of its face plane, the slot at the click (`CoverTraceRules::FindCoverSlotAt`) on the same wall (`IsSameWall`): another cube of it,
+  a cross wall's end at a building corner (the hit is then taken as the squad wall's own): the end is found by `FindCornerPeekForSlot` from the
+  slot behind the leader; when that misses, by the run-and-peek's face probe
+  (`FindRunCornerPeekForHit` with the leader): a face of the same wall (`CoverTraceRules::IsSameWall` and the face normals' dot >= 0.9) gives the
+  end (`EdgeAlong` = `AlongWallDistance(Base, Face.EdgeOnFace)`, its side). The man is then `PlanFormationCornerPeek`'s - with wall leadership
+  `FormationWallLeadership::PickCornerLeader`: the able member farthest along the wall towards that end (ties within 10 cm: the nearer to the
+  edge point). The hover (`UpdateCornerPeekHover`), the click (`TryHandleCoverClick`) and the carried peek (`TickSquadPeekCarry`) all call it,
+  so the ghost and the order are the same man. Only a hit that is not the squad's wall's end goes on to the leader's run-and-peek.
+- `Codex.Formation.SquadWallEndOneDetector` (1; 0 = before: such a hit was the leader's run-and-peek, A/B).
+
+### 21.2 The leader's own peek corner (`FormationLeaderCornerRules::ClaimedPeekEdge`, `UpdateFormationLeaderCorner`)
+- `AOperativeCharacter::GetOwnCornerPeek`: the armed run-and-peek (its corner slot and edge), else the manual corner peek held in cover (his slot,
+  the exposed edge of the ordered side); the face's outward normal.
+- `ClaimedPeekEdge(slot, edge, faceOut)`: the slot within 150 cm before the edge .. 60 cm past it along the face, 0..120 cm in front of it -> a
+  claim with EndPoint = the edge on the face, Along towards it, Out = faceOut, Thickness 0, Wall = INDEX_NONE (the corner watch is not
+  re-assigned by it: `Watch` matches a claim's wall index).
+- Each formation tick, when section 20's world-wall claim is unset (`Codex.Formation.LeaderCorner` 1 and `Codex.Formation.LeaderPeekCorner` 1),
+  the peek claim is the leader corner; `ApplyFormationLeaderCorner` / `UpdateSectorFollower` keep the follower places behind him (20.1
+  `KeepSlotsBehind`: >= 90 cm behind his slot along the wall, past the end included, 45..200 cm off the face on his side). Log `[Formation]
+  leader corner: ... claims the corner he peeks round (B17-1)`.
+- Tests `CodexTactics.Formation.LeaderCorner.PeekEdgeClaimsItsCorner`, `CodexTactics.Formation.WallLeadership.CornerPickStable`; smoke
+  `CornerPickSmoke`.

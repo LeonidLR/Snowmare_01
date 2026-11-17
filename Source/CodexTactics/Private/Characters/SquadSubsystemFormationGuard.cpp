@@ -31,6 +31,10 @@
 
 namespace SquadSubsystemFormationGuardLocal
 {
+	/** Designer bug B17-1 (2026-11-17): the corner the leader peeks round himself claims it too, world walls or not (1) / the walls only (0). */
+	TAutoConsoleVariable<int32> CVarFormationLeaderPeekCorner(TEXT("Codex.Formation.LeaderPeekCorner"), 1,
+		TEXT("1 = the corner the leader peeks round himself (his run-and-peek armed, his corner peek held) claims it like F-2's free wall end: no follower place at or past it, all behind his slot along the wall; 0 = F-2's world-wall free ends only (B17-1 A/B)."));
+
 	/** F-2 (game designer 2026-11-17, option B): the leader's cover slot at a free wall end claims that corner (1) / the plain rules (0). */
 	TAutoConsoleVariable<int32> CVarFormationLeaderCorner(TEXT("Codex.Formation.LeaderCorner"), 1,
 		TEXT("1 = the leader's cover slot (pending or held) within 1.5 m of a free wall end claims it: he takes its corner watch, followers keep behind him; 0 = off."));
@@ -335,6 +339,16 @@ void USquadSubsystem::UpdateFormationLeaderCorner(const AOperativeCharacter& Lea
 			? TOptional<FVector2D>(FVector2D(LeaderRef.GetCoverSlot().WorldLocation)) : TOptional<FVector2D>();
 		Sectors.LeaderCorner = FormationLeaderCornerRules::ClaimedEndOf(Sectors.WorldWalls, Pending, Held);
 	}
+	// B17-1: the corner he peeks round himself is his whatever the gathered walls say (no free end found there: an L joint, a wall the box
+	// gatherer misses, the walls of the order's first frame) - the followers keep behind him all the same.
+	FVector PeekSlot;
+	FVector PeekEdge;
+	FVector PeekNormal;
+	if (!Sectors.LeaderCorner.IsSet() && CVarFormationLeaderCorner.GetValueOnGameThread() != 0 && CVarFormationLeaderPeekCorner.GetValueOnGameThread() != 0
+		&& LeaderRef.GetOwnCornerPeek(PeekSlot, PeekEdge, PeekNormal))
+	{
+		Sectors.LeaderCorner = FormationLeaderCornerRules::ClaimedPeekEdge(FVector2D(PeekSlot), FVector2D(PeekEdge), FVector2D(PeekNormal));
+	}
 	const bool bChanged = Before.IsSet() != Sectors.LeaderCorner.IsSet()
 		|| (Before.IsSet() && !Before->EndPoint.Equals(Sectors.LeaderCorner->EndPoint, FormationWallEnd::SameStackEndCm));
 	if (bChanged)
@@ -342,8 +356,9 @@ void USquadSubsystem::UpdateFormationLeaderCorner(const AOperativeCharacter& Lea
 		Sectors.LeaderCornerMoved = 0;
 		if (Sectors.LeaderCorner.IsSet())
 		{
-			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] leader corner: %s's cover slot (%.0f, %.0f) claims the free wall end (%.0f, %.0f) - its corner watch is his, the followers keep behind him"),
-				*LeaderRef.DisplayName.ToString(), Sectors.LeaderCorner->Slot.X, Sectors.LeaderCorner->Slot.Y, Sectors.LeaderCorner->EndPoint.X,
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] leader corner: %s's cover slot (%.0f, %.0f) claims %s (%.0f, %.0f) - its corner watch is his, the followers keep behind him"),
+				*LeaderRef.DisplayName.ToString(), Sectors.LeaderCorner->Slot.X, Sectors.LeaderCorner->Slot.Y,
+				Sectors.LeaderCorner->Wall == INDEX_NONE ? TEXT("the corner he peeks round (B17-1)") : TEXT("the free wall end"), Sectors.LeaderCorner->EndPoint.X,
 				Sectors.LeaderCorner->EndPoint.Y);
 		}
 		else

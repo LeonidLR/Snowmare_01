@@ -65,6 +65,17 @@ namespace FormationLeaderCornerRules
 		const TOptional<FVector2D>& CurrentSlot, float ClaimDist = ClaimDistCm);
 
 	/**
+	 * Designer bug B17-1 (2026-11-17): the corner the leader PEEKS round himself (his run-and-peek armed on the way to it, or his corner peek
+	 * held there) claims that corner whatever the world walls say (a wall the box gatherer misses, an L joint the free-end test rejects, the
+	 * walls not gathered yet on the order's frame): the corner is the ordered peek edge EdgeOnFace on the face whose outward normal is FaceOut,
+	 * his slot Slot within ClaimDist before it .. ClaimPastCm past it and within SlotWallReachCm in front of the face. The claim's EndPoint is
+	 * the edge on the face, Thickness 0 (the zone is measured from the face), Wall INDEX_NONE (no world wall: the corner watch is not
+	 * re-assigned by it). Unset: the slot is not at that corner (or FaceOut is degenerate).
+	 */
+	CODEXTACTICS_API TOptional<FFormationLeaderCorner> ClaimedPeekEdge(const FVector2D& Slot, const FVector2D& EdgeOnFace, const FVector2D& FaceOut,
+		float ClaimDist = ClaimDistCm);
+
+	/**
 	 * Place lies at the claimed corner: ahead of the slot less KeepBack along the wall (past the end included), within ZoneOutCm of its body.
 	 * The slot, not where the leader stands: a leader walking in from afar (a wall-leadership peek) must not send the stack behind him back
 	 * along the whole wall, and a corner stack lined up behind his slot is left alone.
