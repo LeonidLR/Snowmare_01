@@ -126,14 +126,25 @@ bool FFirstAidAidCheckTest::RunTest(const FString&)
 	NoHeavy.Medkit.AidSeconds[static_cast<int32>(ETier::Heavy)] = 0.f;
 	TestTrue(TEXT("no aid time for the tier = not allowed"), CheckAid(NoHeavy, EFirstAidItem::Medkit, false, true, false, ETier::None, 1, false, true,
 		ETier::Heavy, 15.f, 100.f, false) == ERefusal::TierNotAllowed);
-	// The drop: a medkit / bag on a heavy-wounded mate treats him; lighter tiers / Shift = a hand-over.
-	TestTrue(TEXT("drop on a heavy wound treats"), TreatsOnDrop(Config, ETier::Heavy, false));
-	TestFalse(TEXT("drop on a medium wound hands it over"), TreatsOnDrop(Config, ETier::Medium, false));
-	TestFalse(TEXT("drop on a light wound hands it over"), TreatsOnDrop(Config, ETier::Light, false));
-	TestFalse(TEXT("Shift held: always a hand-over"), TreatsOnDrop(Config, ETier::Heavy, true));
+	// The drop (designer 2026-11-17): any listed tier with HP below max is buddy aid; Shift and full HP hand the item over.
+	TestTrue(TEXT("drop on a heavy wound treats"), TreatsOnDrop(Config, ETier::Heavy, false, 15.f, 100.f));
+	TestTrue(TEXT("drop on a medium wound treats"), TreatsOnDrop(Config, ETier::Medium, false, 28.f, 100.f));
+	TestTrue(TEXT("drop on a light wound treats"), TreatsOnDrop(Config, ETier::Light, false, 40.f, 100.f));
+	TestTrue(TEXT("a scratch (tier none, HP under max) treats"), TreatsOnDrop(Config, ETier::None, false, 90.f, 100.f));
+	TestFalse(TEXT("full HP is a hand-over"), TreatsOnDrop(Config, ETier::None, false, 100.f, 100.f));
+	TestFalse(TEXT("a dead mate is not treated"), TreatsOnDrop(Config, ETier::Heavy, false, 0.f, 100.f));
+	TestFalse(TEXT("Shift held: always a hand-over"), TreatsOnDrop(Config, ETier::Heavy, true, 15.f, 100.f));
+	FFirstAidConfig HeavyOnly = Config;
+	for (bool& bTier : HeavyOnly.TreatOnDropTiers)
+	{
+		bTier = false;
+	}
+	HeavyOnly.TreatOnDropTiers[static_cast<int32>(ETier::Heavy)] = true;
+	TestFalse(TEXT("a heavy-only list still hands a light wound over"), TreatsOnDrop(HeavyOnly, ETier::Light, false, 40.f, 100.f));
+	TestTrue(TEXT("a heavy-only list still treats the heavy wound"), TreatsOnDrop(HeavyOnly, ETier::Heavy, false, 15.f, 100.f));
 	FFirstAidConfig Off = Config;
 	Off.bEnabled = false;
-	TestFalse(TEXT("first aid off: a hand-over"), TreatsOnDrop(Off, ETier::Heavy, false));
+	TestFalse(TEXT("first aid off: a hand-over"), TreatsOnDrop(Off, ETier::Heavy, false, 15.f, 100.f));
 	return true;
 }
 

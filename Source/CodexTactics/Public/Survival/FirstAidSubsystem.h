@@ -67,7 +67,7 @@ public:
 	/** Helper treats Patient with Item (walks up first when farther than reach_cm; feed lines on refusal when bPostFeed). */
 	FirstAidRules::ERefusal RequestAid(AOperativeCharacter* Helper, AOperativeCharacter* Patient, EFirstAidItem Item, bool bPostFeed = true);
 
-	/** A medkit / bag dragged onto Patient treats him (his tier is in treat_on_drop_tiers and Shift is not held) instead of a hand-over. */
+	/** A medkit / bag dragged onto Patient treats him (tier listed, Shift not held, HP below max) instead of a hand-over. */
 	bool ShouldTreatOnDrop(const AOperativeCharacter* Patient, bool bHandOverOnly) const;
 
 	/** Stops the treatment Operative takes part in (helper or patient); false when there is none. */

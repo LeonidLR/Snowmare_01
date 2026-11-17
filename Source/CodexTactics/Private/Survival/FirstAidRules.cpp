@@ -261,9 +261,10 @@ namespace FirstAidRules
 		return bHelperBusy || bPatientBusy ? ERefusal::Busy : ERefusal::None;
 	}
 
-	bool TreatsOnDrop(const FFirstAidConfig& Config, ETier PatientTier, bool bHandOverOnly)
+	bool TreatsOnDrop(const FFirstAidConfig& Config, ETier PatientTier, bool bHandOverOnly, float PatientHealth, float PatientMaxHealth)
 	{
-		return Config.bEnabled && !bHandOverOnly && Config.TreatOnDropTiers[TierIndex(PatientTier)];
+		return Config.bEnabled && !bHandOverOnly && PatientMaxHealth > 0.f && PatientHealth > 0.f && PatientHealth < PatientMaxHealth
+			&& Config.TreatOnDropTiers[TierIndex(PatientTier)];
 	}
 
 	ETier TierAfter(ETier Tier, int32 Steps)

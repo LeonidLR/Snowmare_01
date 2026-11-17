@@ -297,7 +297,9 @@ FirstAidRules::ERefusal UFirstAidSubsystem::RequestAid(AOperativeCharacter* Help
 
 bool UFirstAidSubsystem::ShouldTreatOnDrop(const AOperativeCharacter* Patient, bool bHandOverOnly) const
 {
-	return Patient && FirstAidRules::TreatsOnDrop(FirstAidRules::GetConfig(), TierOf(*Patient), bHandOverOnly);
+	const UHealthComponent* Health = Patient ? Patient->HealthComponent.Get() : nullptr;
+	return Health && FirstAidRules::TreatsOnDrop(FirstAidRules::GetConfig(), TierOf(*Patient), bHandOverOnly, Health->GetCurrentHealth(),
+		Health->GetMaxHealth());
 }
 
 bool UFirstAidSubsystem::Cancel(const AOperativeCharacter* Operative, FirstAidRules::EInterrupt Reason)
