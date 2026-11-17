@@ -35,6 +35,11 @@ namespace StealthModeRules
 		return bActive && ((bSprinting && !bFast) || (bFired && Config.bBreakOnFire));
 	}
 
+	bool ShouldBreakOnClimb(bool bActive, bool bObstacleClimb, bool bLadderClimb, const FStealthModeConfig& Config)
+	{
+		return bActive && (bLadderClimb || (bObstacleClimb && !Config.bKeepThroughObstacleClimb));
+	}
+
 	FName GetWallLeanClipName(ECoverFacing Facing, EStealthWallLeanPhase Phase)
 	{
 		switch (Facing)
@@ -251,6 +256,7 @@ namespace StealthModeRules
 		FStealthModeConfig Config = Base;
 		Json.TryGetBoolField(TEXT("enabled"), Config.bEnabled);
 		Json.TryGetBoolField(TEXT("stealth_break_on_fire"), Config.bBreakOnFire);
+		Json.TryGetBoolField(TEXT("keep_through_obstacle_climb"), Config.bKeepThroughObstacleClimb);
 		const auto ReadClamped = [&Json](const TCHAR* Key, float& Value, float MinVal, float MaxVal)
 		{
 			double Read = 0.0;

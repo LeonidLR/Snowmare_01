@@ -49,6 +49,27 @@ bool FStealthBreakTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStealthClimbTest, "CodexTactics.Characters.StealthMode.Climb",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FStealthClimbTest::RunTest(const FString&)
+{
+	// Designer request R17-2 (2026-11-17): a quiet mantle / vault / fence climb keeps stealth; a ladder still ends it.
+	using StealthModeRules::ShouldBreakOnClimb;
+	FStealthModeConfig Config;
+	TestTrue(TEXT("Obstacle climbs keep stealth by default"), Config.bKeepThroughObstacleClimb);
+	TestFalse(TEXT("Mantle / vault keeps stealth"), ShouldBreakOnClimb(true, true, false, Config));
+	TestFalse(TEXT("No climb does not break"), ShouldBreakOnClimb(true, false, false, Config));
+	TestTrue(TEXT("Ladder still breaks"), ShouldBreakOnClimb(true, false, true, Config));
+	TestFalse(TEXT("Inactive stealth never breaks"), ShouldBreakOnClimb(false, true, true, Config));
+	Config.bKeepThroughObstacleClimb = false;
+	TestTrue(TEXT("Data can make obstacle climbs end stealth"), ShouldBreakOnClimb(true, true, false, Config));
+	TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+	Json->SetBoolField(TEXT("keep_through_obstacle_climb"), false);
+	TestFalse(TEXT("keep_through_obstacle_climb parsed"), StealthModeRules::FromJson(*Json).bKeepThroughObstacleClimb);
+	TestTrue(TEXT("Missing key keeps the base"), StealthModeRules::FromJson(*MakeShared<FJsonObject>()).bKeepThroughObstacleClimb);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FStealthWallLeanTest, "CodexTactics.Characters.StealthMode.WallLean",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 bool FStealthWallLeanTest::RunTest(const FString&)
