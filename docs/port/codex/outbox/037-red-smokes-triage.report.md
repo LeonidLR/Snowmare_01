@@ -1,6 +1,6 @@
 # 037 red smokes triage
 
-Status: STEP 0 COMPLETE; later triage has not started. 2026-11-17.
+Status: IN PROGRESS. Step 0 green; MilitaryZombieSmoke targeted fix passes, wider related gate has CorpsePersistSmoke FAIL. OptimizedCharacterSmoke is next. 2026-11-17.
 
 ## Scope and baseline
 
@@ -44,4 +44,37 @@ Both commands used `Scripts/smoke_parallel.ps1 -Commands CodexTactics.<Name> -Jo
 
 ## Next
 
-Next authorized triage pair: **MilitaryZombieSmoke + OptimizedCharacterSmoke** (check the suspected shared death-clip cause together). Neither has been run or investigated in this step 0 block. Root reviewed actual engine results, confirmed the empty source diff, and ran the required staged audit before this report-only checkpoint.
+Step 0 was committed as `8a3ecc24`. MilitaryZombieSmoke is now addressed below; OptimizedCharacterSmoke baseline is confirmed red but its source is untouched and its fix has not started.
+
+
+## MilitaryZombieSmoke — stale montage assertion; targeted fix, related gate blocked
+
+- Source commit: `11b04070` (`test(smoke): update MilitaryZombieSmoke for retained ragdoll death`). Only MilitaryZombieSmokeCommand.cpp changed: 18 insertions / 7 deletions including comments/include. No runtime, flags, timings, maps or assets changed.
+- Cause: Task 056 commit `918d95d3` deliberately makes EnemyAnimInstance skip death montage while IsRagdollActive; current `EnemyAnimInstance.cpp:171`, `EnemyCharacterHealth.cpp:226` activate/reflect that contract. Task005 specifies default immediate ragdoll, settling/freeze and retained bodies; 067 `d734045e` supplies current floor/settle semantics. Old smoke demanded Death_ montage and one-shot weight >0.9 after death. Baseline Military engine FAIL despite ragdoll activation/freeze in1.48s and pelvis body resting at floor.
+- Replacement positively requires dying + kept corpse + active ragdoll + simulating/frozen mesh + floor traced under resolved pelvis body, gap in [-configured max sink,45cm), matching the existing DeathRagdollSmoke body-bottom acceptance. Stage4.5s timing and every other assertion remain. This changes the expected death mechanism, not the game or assertion limits.
+- Public API/contract references: EnemyCharacter.h IsRagdollActive/IsDying/IsCorpseFrozen; CorpseSubsystem.h ResolvePelvisBone/GetPelvisBodyBottomZ/TraceCorpseFloorZ/IsKept; existing DeathRagdollSmokeCommand.cpp:357-377.
+- Baseline: MilitaryZombieSmoke FAIL46.4s; OptimizedCharacterSmoke FAIL63.5s (Marksman and Hound montage assertions after ragdoll activation). Preserved as Saved/Logs/task037/death/<Smoke>-baseline-*; no Optimized source edit yet.
+- Router pair: level2, confidence0.52 | gpt-6.1-sol bounded diagnosis and patch proposal; parent review/application/gates | targeted pass; related gate blocked. No local model.
+
+| Gate | Result / evidence |
+|---|---|
+| Incremental build | PASS31.09s, wrapper exit0; MilitaryZombie-fix-build-* |
+| Required standalone1/2/3 | PASS43.2s / PASS42.9s / PASS42.4s; Jobs1, NoRetry, Multiprocess; MilitaryZombie-fixed-N-* |
+| Smart plan | actual anim-enemy rule, EnemyAI+EnemyAnim+EnemyAssets, four mapped smokes; 4023 changed/untracked paths,4022 nonverification |
+| test.ps1 -Smart -Jobs1 | 18/18 unit tests PASS; MilitaryZombie41.6s, EnemyHitLayer37.5s, Marksman37.1s, EnemyDeath39.1s all PASS, no retry; MilitaryZombie-smart-* |
+| DeathRagdollSmoke | PASS, standalone Jobs1/NoRetry/Multiprocess; MilitaryZombie-related-DeathRagdollSmoke-* |
+| KnockdownSmoke | PASS42.5s, standalone Jobs1/NoRetry/Multiprocess; MilitaryZombie-related-KnockdownSmoke-* |
+| CorpsePersistSmoke | FAIL41.5s, standalone Jobs1/NoRetry/Multiprocess; related gate is NOT green; MilitaryZombie-related-CorpsePersistSmoke-* |
+| Staged source audit / whitespace | PASS, risk1.3/4; explicit single smoke path |
+
+All evidence prefixes above are under Saved/Logs/task037/death/. Full engine/wrapper/result files are retained, including Smart unit log and copied structured Smart test report. PASS is read from actual engine RESULT markers.
+
+CorpsePersistSmoke first failure:
+```text
+Smoke FAIL: hound (BP_Enemy_Hound_C): stays 30 s, frozen 1 (controller None, ticks actor 0 / mesh 0 / move 0), collision off 1, visible 1, out of the registry 1, on the ground (root 61 cm), death pose weight 0.00
+```
+**needs Claude: determine stale CorpsePersist expectation versus an actual corpse-pose regression; this related gate failed and the protected Corpse/ragdoll implementation was not changed or investigated further.** Military's specific target passes3/3 and Smart passes, but its broader related gate remains blocked. No retry was used to hide this failure.
+
+Execution/approval note: a worker source-edit/build request was denied before any execution for missing explicit task authorization. Parent supplied the original user's direct delegation of NEXT tasks from Claude and obtained approval for the narrow test-only edit and gates. One later review-service Bad Request executed no test; the three recorded standalone runs are the three actual invocations.
+
+Next: OptimizedCharacterSmoke (same suspected stale contract), after Military review. Other037 smokes remain untouched. Final report updates will preserve this related-gate failure until resolved by Claude.
