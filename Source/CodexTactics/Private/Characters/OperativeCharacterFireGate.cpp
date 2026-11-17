@@ -34,6 +34,13 @@ bool AOperativeCharacter::IsCoverShotBlind() const
 	return bInCover && (CoverFireMode == ECoverFireMode::BlindFire || !USuppressionSubsystem::MayExposeNow(this));
 }
 
+bool AOperativeCharacter::IsStealthCoverShotWanted() const
+{
+	const UWorld* World = GetWorld();
+	return bStealthMode && bInCover && World && FireGateLastEvalTime >= 0.0
+		&& World->GetTimeSeconds() - FireGateLastEvalTime <= FMath::Max(FireGateRules::GetConfig().EvalGapSeconds, 0.f);
+}
+
 float AOperativeCharacter::GetFireGateResidualDeg(const FVector& AimAt) const
 {
 	if (!bInCover)

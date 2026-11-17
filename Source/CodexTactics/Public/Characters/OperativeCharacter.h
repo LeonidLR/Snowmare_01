@@ -391,6 +391,12 @@ public:
 	float GetBodyArcDeg() const;
 	/** He shoots from cover blind now (the blind fire mode, or suppressed: head down) - the cover round is not aimed. */
 	bool IsCoverShotBlind() const;
+	/**
+	 * Stealthed at a wall and a shot from this cover is wanted (the fire gate was asked within eval_gap_seconds): the cover fire stance
+	 * takes the body from the stealth wall pose so its barrel can reach the target (StealthModeSmoke: the stealth lean never aimed, the
+	 * gate judged the cover pose out of reach and the step off the wall lost the line). Off again eval_gap_seconds after the last attempt.
+	 */
+	bool IsStealthCoverShotWanted() const;
 	/** Rounds the gate held, per verdict (smokes / logs). */
 	int32 GetFireGateHolds(EFireGateBlock Block) const { return FireGateHolds[FMath::Clamp(static_cast<int32>(Block), 0, static_cast<int32>(EFireGateBlock::Count) - 1)]; }
 	/** The last verdict of the gate and when (-1 = never). */
