@@ -7,7 +7,8 @@
 //  2. a sprint order 26 m back (away from the pack): they turn and run (backs to the pack while running), the pack falls behind out
 //     of their sight (the squad's sight does not see behind their backs);
 //  3. once they stand: both turn to face the pack (within 30 deg) and fire again;
-//  4. an explicit facing order (SetFacingPoint) is kept: no pull back to the pack.
+//  4. an explicit facing order (SetFacingPoint) is kept: no pull back to the pack;
+//  5. (designer 2026-11-17, option A) an enemy in reach turns him off the order; once it dies he turns back to the order after 3 s.
 
 #include "CoreMinimal.h"
 
@@ -48,7 +49,16 @@ namespace RetreatFacingSmoke
 		float MaxBackAngle = 0.f;
 		bool bSawThreatTurn = false;
 		float PackDistanceAtStop = 0.f;
+		/** Stage 6+: the pack is no longer healed (killed to end the fight). */
+		bool bPackMortal = false;
+		float TurnedOffOrderDeg = 0.f;
 	};
+
+	/** Angle between his facing and the ordered facing (-F), deg. */
+	float AngleOffOrder(const FState& State, const AOperativeCharacter& Operative)
+	{
+		return FMath::RadiansToDegrees(FMath::Acos(FMath::Clamp(FVector::DotProduct(Operative.GetActorForwardVector().GetSafeNormal2D(), -State.F), -1.f, 1.f)));
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -118,7 +128,7 @@ namespace RetreatFacingSmoke
 		// The pack must keep coming (and live): tough frostbitten.
 		for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Pack)
 		{
-			if (Enemy.IsValid() && Enemy->GetHealthComponent())
+			if (!State.bPackMortal && Enemy.IsValid() && Enemy->GetHealthComponent())
 			{
 				Enemy->GetHealthComponent()->Heal(100000.f);
 			}
@@ -333,6 +343,56 @@ namespace RetreatFacingSmoke
 			Check(State, Member && !Member->IsTurningToThreat() && ToPack > 120.f,
 				FString::Printf(TEXT("a facing order of the player is kept: no turn to the pack (%.0f deg off the ordered facing, %.0f deg off the pack, turning to the threat %d)"),
 					Away, ToPack, Member && Member->IsTurningToThreat() ? 1 : 0));
+			// 6. Designer's decision 2026-11-17 (option A): one of the pack steps in reach 45 deg off his ordered facing - he turns to it;
+			// it dies - 3 s later he turns back to the ordered facing.
+			if (Member && State.Pack.Num() > 0 && State.Pack[0].IsValid())
+			{
+				const FVector Spot = SmokeUtils::FreeSpot(World, Member->GetActorLocation() - State.F * 900.f + State.R * 900.f, nullptr);
+				State.Pack[0]->SetActorLocation(FVector(Spot.X, Spot.Y, Spot.Z + 100.f), false, nullptr, ETeleportType::TeleportPhysics);
+			}
+			Next(State);
+			return true;
+		}
+		case 6:
+		{
+			const AOperativeCharacter* Member = State.Pair[0].Get();
+			const bool bTurned = Member && Member->IsFacingCombatTarget() && AngleOffOrder(State, *Member) > 25.f;
+			if (!bTurned && State.StageTime < 10.f)
+			{
+				return true;
+			}
+			State.TurnedOffOrderDeg = Member ? AngleOffOrder(State, *Member) : 0.f;
+			Check(State, bTurned, FString::Printf(TEXT("an enemy in reach 45 deg off the ordered facing turns him to it (%.0f deg off the order, %.1f s)"),
+				State.TurnedOffOrderDeg, State.StageTime));
+			State.bPackMortal = true;
+			for (const TWeakObjectPtr<AEnemyCharacter>& Enemy : State.Pack)
+			{
+				if (Enemy.IsValid() && Enemy->GetHealthComponent())
+				{
+					Enemy->GetHealthComponent()->ApplyDirectHealthLoss(1000000.f, TEXT("RetreatFacingSmoke"));
+				}
+			}
+			Next(State);
+			return bTurned || Finish(State, false);
+		}
+		case 7:
+		{
+			const AOperativeCharacter* Member = State.Pair[0].Get();
+			if (State.StageTime < 1.5f)
+			{
+				return true;
+			}
+			if (State.StageTime < 1.55f)
+			{
+				Check(State, Member && !Member->IsReturningToOrderedFacing() && AngleOffOrder(State, *Member) > 20.f,
+					FString::Printf(TEXT("the fight just ended: no turn back yet within the 3 s (%.0f deg off the order)"), Member ? AngleOffOrder(State, *Member) : 0.f));
+			}
+			const float Off = Member ? AngleOffOrder(State, *Member) : 180.f;
+			if (Off > 10.f && State.StageTime < 8.f)
+			{
+				return true;
+			}
+			Check(State, Off <= 10.f, FString::Printf(TEXT("after the fight he turned back to the ordered facing (%.0f deg off it, %.1f s after the kill)"), Off, State.StageTime));
 			return Finish(State, true);
 		}
 		default:

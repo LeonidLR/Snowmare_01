@@ -673,6 +673,8 @@ void AOperativeCharacter::SetFacingPoint(const FVector& Point)
 	{
 		SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
 	}
+	OrderedFacingYaw = GetActorRotation().Yaw; // he returns to it after the fight (designer 2026-11-17)
+	FightTurnQuietSeconds = 0.f;
 }
 
 void AOperativeCharacter::SetCarrying(bool bNewCarrying)

@@ -13,6 +13,11 @@ namespace ThreatFacingRules
 		return !bHasOwnFacing || TargetDistanceCm <= WeaponReachCm;
 	}
 
+	bool ShouldReturnToOrderedFacing(bool bHasFacingOrder, bool bStanding, bool bInCover, bool bTurnedToFight, float QuietSeconds)
+	{
+		return bHasFacingOrder && bStanding && !bInCover && !bTurnedToFight && QuietSeconds >= ReturnToOrderedFacingDelaySeconds;
+	}
+
 	bool PickThreatPoint(bool bLastTargetAlive, const FVector& LastTargetLocation, bool bHasNearest, const FVector& NearestLocation, FVector& OutPoint)
 	{
 		if (bLastTargetAlive)

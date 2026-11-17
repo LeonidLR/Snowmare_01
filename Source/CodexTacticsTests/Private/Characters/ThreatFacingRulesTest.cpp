@@ -67,4 +67,20 @@ bool FThreatFacingOrderVsReachTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FThreatFacingReturnToOrderTest, "CodexTactics.Squad.ThreatFacing.ReturnsToFacingOrderAfterFight",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FThreatFacingReturnToOrderTest::RunTest(const FString&)
+{
+	using namespace ThreatFacingRules;
+	// Designer's decision 2026-11-17 (option A): back to the ordered facing 3 s after the fight.
+	TestTrue(TEXT("a facing order, standing, nothing to fight for 3 s: he turns back"), ShouldReturnToOrderedFacing(true, true, false, false, 3.f));
+	TestFalse(TEXT("... not before the 3 s"), ShouldReturnToOrderedFacing(true, true, false, false, 2.9f));
+	TestFalse(TEXT("no facing order (a move cleared it): no return"), ShouldReturnToOrderedFacing(false, true, false, false, 10.f));
+	TestFalse(TEXT("a target in reach still turns him: no return"), ShouldReturnToOrderedFacing(true, true, false, true, 10.f));
+	TestFalse(TEXT("moving: no return"), ShouldReturnToOrderedFacing(true, false, false, false, 10.f));
+	TestFalse(TEXT("in cover the back stays to the wall: no return"), ShouldReturnToOrderedFacing(true, true, true, false, 10.f));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

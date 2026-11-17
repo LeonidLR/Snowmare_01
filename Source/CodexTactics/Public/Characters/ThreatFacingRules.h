@@ -54,4 +54,18 @@ namespace ThreatFacingRules
 	 */
 	CODEXTACTICS_API bool PickThreatPoint(bool bLastTargetAlive, const FVector& LastTargetLocation, bool bHasNearest, const FVector& NearestLocation,
 		FVector& OutPoint);
+
+	/**
+	 * After the fight he returns to the player's facing order (game designer's decision 2026-11-17, option A): the order stays in force
+	 * until the player cancels it (a move clears it). A combat target in reach / the under-fire turn wins over it as before; once nothing
+	 * has turned him to fight for this long he turns back - at his stance turn rate - to the ordered facing. A new enemy within this time
+	 * turns him again and restarts the wait.
+	 */
+	constexpr float ReturnToOrderedFacingDelaySeconds = 3.f;
+
+	/**
+	 * He turns back to the ordered facing now: a facing order of the player, standing, not in cover, nothing turns him to fight this frame
+	 * (combat target / flash / object shot / fire order), and that has lasted ReturnToOrderedFacingDelaySeconds.
+	 */
+	CODEXTACTICS_API bool ShouldReturnToOrderedFacing(bool bHasFacingOrder, bool bStanding, bool bInCover, bool bTurnedToFight, float QuietSeconds);
 }
