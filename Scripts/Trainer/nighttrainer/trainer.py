@@ -9,7 +9,9 @@ Layout:
   gen_NNNN/jobs/*.arena.json|*.rounds.json|*.log   arena results (cached: a restart re-runs only missing jobs)
   gen_NNNN/generation.json     per-candidate fitness + stats, fresh-seed re-evaluation, promotion decision
   champion_weights.json + champion_meta.json + champions/<id>.json   current champion and the history
-  qd_archive.json          MAP-Elites cells when search.mode is qd (G002); gen_NNNN/league/ opponent weights
+  qd_archive.json          MAP-Elites cells when search.mode is qd (G002)
+  gen_NNNN/qd_archive.in.json  archive frozen on first entry; the league reads this, not the live file
+  gen_NNNN/league/         opponent weights drawn from that snapshot
   leaderboard.json / leaderboard.csv / report.html / trainer.log
 Every random choice is seeded from (run seed, generation), so a resumed run equals an uninterrupted one.
 """
@@ -174,6 +176,10 @@ class Trainer:
 
         # 1. evaluation. ga: config matches (today: champion self-play). qd: league = archive pool + bot.
         #    Seeds and opponent weights are shared by every candidate of the generation.
+        #    The league reads gen_NNNN/qd_archive.in.json, written once on first entry, so a resume that
+        #    already updated qd_archive.json cannot play this generation against its own elites.
+        if self.search_mode() == "qd":
+            self._snapshot_archive(gen_dir)
         jobs = []
         eval_plan = self.match_plan(gen, "eval", gen_dir, opponent_path)
         for c in cands:
@@ -322,7 +328,7 @@ class Trainer:
         return made
 
     def search_mode(self) -> str:
-        return str(self.cfg.get("search", {}).get("mode", "ga")).strip().lower()
+        return qd.search_mode_of(self.cfg)
 
     def archive_path(self) -> str:
         name = str(self.cfg.get("qd", {}).get("archive_file", "qd_archive.json"))
@@ -344,13 +350,24 @@ class Trainer:
                              "map": match.get("map")})
         return plan
 
+    def _archive_in_path(self, gen_dir: str) -> str:
+        return os.path.join(gen_dir, "qd_archive.in.json")
+
+    def _snapshot_archive(self, gen_dir: str) -> str:
+        """Freeze the live archive the first time this generation is entered. Later entries keep the file:
+        _update_archive saves qd_archive.json before generation_done, and a resume must not see those cells."""
+        path = self._archive_in_path(gen_dir)
+        if not os.path.exists(path):
+            qd.Archive.load(self.archive_path(), self.cfg.get("qd", {})).save(path)
+        return path
+
     def _league_plan(self, gen: int, stream: str, gen_dir: str, champion_path: str) -> list:
-        """Archive elites (current champion until a cell exists) plus the playtest bot. Reseeded per call so
-        every candidate of this generation faces the same weights."""
+        """Archive elites from this generation's entry snapshot (current champion until a cell exists) plus
+        the playtest bot. Reseeded per call so every candidate of this generation faces the same weights."""
         specs = self.cfg.get("league", {}).get("opponents") or [{"source": "archive", "jobs": 1},
                                                                 {"source": "bot", "jobs": 1}]
         rng = evolution.generation_rng(self.run_seed, gen, f"league-{stream}")
-        archive = qd.Archive.load(self.archive_path(), self.cfg.get("qd", {}))
+        archive = qd.Archive.load(self._archive_in_path(gen_dir), self.cfg.get("qd", {}))
         plan = []
         for spec in specs:
             if not isinstance(spec, dict):

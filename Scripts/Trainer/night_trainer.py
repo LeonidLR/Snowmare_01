@@ -6,7 +6,8 @@
 
 The same --run-id resumes (from the last finished generation; finished arena jobs of an unfinished generation are reused).
 Population / rounds / seed overrides only apply when the run is created (a resume keeps run.json's snapshot).
-search.mode in the config: qd (MAP-Elites archive, the default) or ga (the scalar tournament). A resume keeps the mode
+search.mode in the config: ga (the scalar tournament, the default) or qd (MAP-Elites archive). qd is a switch;
+leave it off until the arena writes behaviour, or a night run bins every candidate at zero. A resume keeps the mode
 it started with.
 Stop: create Saved/Trainer/<run_id>/STOP. Pause: create Saved/Trainer/<run_id>/PAUSE (or Saved/Trainer/PAUSE).
 Single instance (2026-11-06): a real (non --mock) run holds Saved/Trainer/night_trainer.lock (its PID); a second start

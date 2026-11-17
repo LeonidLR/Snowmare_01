@@ -3,6 +3,7 @@
 Run: python -m unittest discover -s Scripts/Trainer/tests
 """
 import copy
+import io
 import json
 import os
 import random
@@ -10,6 +11,7 @@ import shutil
 import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 TRAINER = os.path.dirname(HERE)
@@ -17,9 +19,9 @@ REPO = os.path.dirname(os.path.dirname(TRAINER))
 sys.path.insert(0, TRAINER)
 
 from nighttrainer import fitness, qd  # noqa: E402
-from nighttrainer.adapter import (ArenaAdapter, BEHAVIOUR_METRICS, behaviour_defaults,  # noqa: E402
+from nighttrainer.adapter import (ArenaAdapter, BEHAVIOUR_METRICS, _metric_value, behaviour_defaults,  # noqa: E402
                                   behaviour_document, parse_behaviour)
-from nighttrainer.genome import load_json  # noqa: E402
+from nighttrainer.genome import GeneSpec, load_json  # noqa: E402
 from nighttrainer.report import _archive_section  # noqa: E402
 from nighttrainer.trainer import Trainer  # noqa: E402
 
@@ -119,6 +121,15 @@ class BehaviourParseTests(unittest.TestCase):
         self.assertEqual(fitness.round_score(plain, CONFIG["fitness"]),
                          fitness.round_score(with_behaviour, CONFIG["fitness"]))
 
+    def test_non_finite_metric_is_missing(self):
+        for bad in (float("nan"), float("inf"), float("-inf")):
+            self.assertIsNone(_metric_value(bad))
+            self.assertIsNone(_metric_value({"value": bad, "unit": "s"}))
+            got = parse_behaviour({"time_in_contact_s": bad, "moves": 2})
+            self.assertEqual(got["time_in_contact_s"], 0.0)
+            self.assertEqual(got["moves"], 2.0)
+            qd.Archive(AXES).consider("n", {"/a": 1.0}, 1.0, got, 0)
+
 
 class ArchiveTests(unittest.TestCase):
     def test_insert_replace_and_tie(self):
@@ -177,6 +188,59 @@ class ArchiveTests(unittest.TestCase):
             self.assertEqual(loaded.cells["0,0,0"]["fitness"], 4.25)
             self.assertIn("highlight", loaded.cells["0,0,0"])
 
+    def test_load_drops_a_foreign_or_non_object_file(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "qd_archive.json")
+            arch = qd.Archive(AXES)
+            arch.consider("elite", {"/w": 3}, 4.25, _beh(time_in_contact_s=12), 1)
+            arch.save(path)
+            foreign = copy.deepcopy(AXES)
+            foreign["axes"][0] = dict(foreign["axes"][0], bins=9)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                dropped = qd.Archive.load(path, foreign)
+            self.assertEqual(dropped.cells, {})
+            self.assertIn("starting an empty archive", buf.getvalue())
+
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                json.dump([1, 2, 3], f)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                dropped = qd.Archive.load(path, AXES)
+            self.assertEqual(dropped.cells, {})
+            self.assertIn("not an object", buf.getvalue())
+
+            with open(path, "w", encoding="utf-8", newline="\n") as f:
+                json.dump({"cells": {"0,0,0": {"id": "stale", "genes": {"/w": 1}}}}, f)
+            buf = io.StringIO()
+            with redirect_stdout(buf):
+                dropped = qd.Archive.load(path, AXES)
+            self.assertEqual(dropped.cells, {})
+            self.assertIn("axes or bins", buf.getvalue())
+
+    def test_elitism_is_prepended_unmutated(self):
+        arch = qd.Archive(AXES)
+        low = {"/a": 10.0}
+        high = {"/a": 50.0}
+        arch.consider("low", low, 1.0, _beh(time_in_contact_s=1), 0)
+        arch.consider("high", high, 9.0, _beh(time_in_contact_s=80), 0)
+        specs = {"/a": GeneSpec(0.0, 100.0, 5.0, False, False)}
+        only = qd.next_population(arch, specs, random.Random(0), {"mutation_rate": 1.0}, 2)
+        self.assertEqual(only, [high, low])
+        kids = qd.next_population(arch, specs, random.Random(1),
+                                  {"elitism": 2, "crossover_rate": 0.0, "mutation_rate": 1.0}, 4)
+        self.assertEqual(kids[:2], [high, low])
+        self.assertEqual(len(kids), 4)
+        for kid in kids[2:]:
+            self.assertNotEqual(kid, high)
+            self.assertNotEqual(kid, low)
+        plain = qd.next_population(arch, specs, random.Random(2),
+                                   {"elitism": 0, "crossover_rate": 0.0, "mutation_rate": 1.0}, 3)
+        self.assertEqual(len(plain), 3)
+        for kid in plain:
+            self.assertNotEqual(kid, high)
+            self.assertNotEqual(kid, low)
+
 
 class ReportTests(unittest.TestCase):
     def test_section_lists_cells_and_ga_says_off(self):
@@ -202,7 +266,14 @@ class ReportTests(unittest.TestCase):
             bag.cfg = {"search": {"mode": "ga"}, "qd": {}}
             off = _archive_section(bag)
             self.assertIn("MAP-Elites is off", off)
+            self.assertIn("Search mode: ga", off)
             self.assertNotIn("Cells filled", off)
+            bag.cfg = {"qd": {}}
+            missing = _archive_section(bag)
+            self.assertIn("Search mode: ga", missing)
+            self.assertIn("MAP-Elites is off", missing)
+            self.assertEqual(qd.search_mode_of({}), "ga")
+            self.assertEqual(qd.search_mode_of({"search": {"mode": "QD"}}), "qd")
 
 
 def _repo(tmp, mode):
@@ -239,6 +310,12 @@ class LoopModeTests(unittest.TestCase):
             self.assertTrue(any("bot" in name for name in os.listdir(gen0)))
             self.assertTrue(any("archive" in name for name in os.listdir(gen1)))
             self.assertTrue(os.path.isdir(os.path.join(t.run_dir, "gen_0001", "league")))
+            snap0 = load_json(os.path.join(t.run_dir, "gen_0000", "qd_archive.in.json"))
+            snap1 = load_json(os.path.join(t.run_dir, "gen_0001", "qd_archive.in.json"))
+            self.assertEqual(snap0["cells"], {})
+            self.assertGreaterEqual(snap1["filled"], 1)
+            for cell in snap1["cells"].values():
+                self.assertEqual(cell["generation"], 0)
 
     def test_ga_mode_keeps_the_scalar_loop(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -246,11 +323,34 @@ class LoopModeTests(unittest.TestCase):
                         poll_s=0.01)
             self.assertEqual(t.run(), "finished")
             self.assertFalse(os.path.exists(os.path.join(t.run_dir, "qd_archive.json")))
+            self.assertFalse(os.path.exists(os.path.join(t.run_dir, "gen_0000", "qd_archive.in.json")))
             names = os.listdir(os.path.join(t.run_dir, "gen_0000", "jobs"))
             self.assertTrue(any("champion" in name for name in names))
             self.assertFalse(any("archive" in name or name.startswith("bot") for name in names))
             with open(os.path.join(t.run_dir, "report.html"), encoding="utf-8") as f:
                 self.assertIn("MAP-Elites is off", f.read())
+
+    def test_league_reads_the_entry_snapshot_not_the_live_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Trainer(_repo(tmp, "qd"), "snap", tmp, mock=True, log=lambda m: None, max_generations=1,
+                        parallel=1, poll_s=0.01)
+            pointer = "/utility/attack/weight"
+            entered = qd.Archive(t.cfg.get("qd", {}))
+            entered.consider("entered", {pointer: 1.25}, 2.0, _beh(time_in_contact_s=10), 0)
+            entered.save(t.archive_path())
+            gen_dir = os.path.join(t.run_dir, "gen_0003")
+            t._snapshot_archive(gen_dir)
+            later = qd.Archive(t.cfg.get("qd", {}))
+            later.consider("later", {pointer: 7.5}, 9.0, _beh(time_in_contact_s=90), 3)
+            later.save(t.archive_path())
+            t._snapshot_archive(gen_dir)
+            frozen = load_json(os.path.join(gen_dir, "qd_archive.in.json"))
+            self.assertEqual([c["id"] for c in frozen["cells"].values()], ["entered"])
+            plan = t._league_plan(3, "eval", gen_dir, t.baseline_path)
+            row = next(p for p in plan if p["opponent"] == "archive")
+            weights = load_json(row["weights_b"])
+            self.assertEqual(weights["utility"]["attack"]["weight"], 1.25)
+            self.assertEqual(load_json(t.archive_path())["cells"][list(later.cells)[0]]["id"], "later")
 
 
 if __name__ == "__main__":

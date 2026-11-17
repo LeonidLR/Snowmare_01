@@ -2,7 +2,9 @@
 
 Axes, bin counts and ranges come from trainer_config.json "qd". The behaviour descriptor is the mean of the
 candidate's non-crashed rounds. A missing metric is 0 (adapter.behaviour_defaults). Parents of the next
-population are drawn uniformly from filled cells. An empty archive leaves selection to the scalar GA.
+population are drawn uniformly from filled cells; the top evolution.elitism genes are copied unmutated.
+An empty archive leaves selection to the scalar GA. A file that is not an object, or whose axes or bins
+do not match the config, is discarded so an old grid cannot be reused under new keys.
 """
 from __future__ import annotations
 
@@ -13,6 +15,45 @@ from .adapter import behaviour_defaults
 from .genome import load_json, write_json
 
 ARCHIVE_SCHEMA = "codex.trainer_qd_archive/1"
+DEFAULT_SEARCH_MODE = "ga"
+
+
+def search_mode_of(cfg: dict | None) -> str:
+    """ga unless search.mode names another mode. qd is a config switch, not the default."""
+    raw = ((cfg or {}).get("search") or {}).get("mode", DEFAULT_SEARCH_MODE)
+    mode = str("" if raw is None else raw).strip().lower()
+    return mode or DEFAULT_SEARCH_MODE
+
+
+def _metric_names(axis: dict) -> tuple:
+    metrics = axis.get("metrics")
+    if isinstance(metrics, list) and metrics:
+        return tuple(str(item) for item in metrics)
+    if axis.get("metric"):
+        return (str(axis["metric"]),)
+    return ()
+
+
+def _axis_signature(axes) -> tuple | None:
+    """id, bin count, range, metrics. None when `axes` is not a list."""
+    if not isinstance(axes, list):
+        return None
+    out = []
+    for axis in axes:
+        if not isinstance(axis, dict) or not axis.get("id"):
+            continue
+        span = axis.get("range") or [0.0, 1.0]
+        try:
+            lo, hi = float(span[0]), float(span[1])
+            bins = int(axis.get("bins", 1))
+        except (TypeError, ValueError, IndexError):
+            return None
+        out.append((str(axis["id"]), bins, lo, hi, _metric_names(axis)))
+    return tuple(out)
+
+
+def _log_archive(msg: str) -> None:
+    print(f"[qd] {msg}", flush=True)
 
 
 def _axes(cfg: dict) -> list:
@@ -85,11 +126,20 @@ class Archive:
     @classmethod
     def load(cls, path: str, cfg: dict | None = None) -> "Archive":
         arch = cls(cfg)
-        if path and os.path.exists(path):
-            doc = load_json(path)
-            cells = doc.get("cells") or {}
-            if isinstance(cells, dict):
-                arch.cells = cells
+        if not path or not os.path.exists(path):
+            return arch
+        doc = load_json(path)
+        if not isinstance(doc, dict):
+            _log_archive(f"{path} is not an object; starting an empty archive")
+            return arch
+        if _axis_signature(doc.get("axes")) != _axis_signature(arch.axes):
+            _log_archive(f"{path} axes or bins differ from the config; starting an empty archive")
+            return arch
+        cells = doc.get("cells") or {}
+        if not isinstance(cells, dict):
+            _log_archive(f"{path} cells are not an object; starting an empty archive")
+            return arch
+        arch.cells = cells
         return arch
 
     def save(self, path: str) -> None:
@@ -148,17 +198,21 @@ class Archive:
 
 
 def next_population(archive: Archive, specs: dict, rng, evo_cfg: dict, size: int) -> list | None:
-    """Offspring of archive parents. None when the archive is empty (caller keeps the scalar GA)."""
+    """Offspring of archive parents. The best `evolution.elitism` genes are copied unmutated, then mutated
+    children fill the rest (same shape as evolution.next_generation). None when the archive is empty."""
     if size <= 0 or not archive.filled():
         return None
+    n_elite = max(0, min(int(evo_cfg.get("elitism", 2)), size))
+    ranked = sorted(archive.filled(), key=lambda cell: float(cell.get("fitness", 0.0)), reverse=True)
+    elites = [dict(cell["genes"]) for cell in ranked[:n_elite]]
     cross = float(evo_cfg.get("crossover_rate", 0.7))
     rate = float(evo_cfg.get("mutation_rate", 0.2))
     sigma = float(evo_cfg.get("sigma_scale", 1.0))
     children = []
-    while len(children) < size:
+    while len(elites) + len(children) < size:
         parents = archive.sample_genes(rng, 2)
         parent = parents[0]
         if len(parents) > 1 and rng.random() < cross:
             parent = evolution.crossover(parent, parents[1], rng)
         children.append(evolution.mutate(parent, specs, rng, rate, sigma))
-    return children
+    return elites + children

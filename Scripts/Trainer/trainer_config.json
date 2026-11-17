@@ -5,8 +5,8 @@
   "bounds": null,
   "runs_dir": "Saved/Trainer",
   "search": {
-    "_comment": "G002. qd = MAP-Elites (archive of behaviours, parents sampled from filled cells). ga = the scalar tournament. Snapshotted into run.json; a resume keeps the mode it started with.",
-    "mode": "qd"
+    "_comment": "G002. ga (default) = the scalar tournament. qd = MAP-Elites; switch it on only after the arena writes behaviour, or a night run bins every candidate at zero. Snapshotted into run.json; a resume keeps the mode it started with.",
+    "mode": "ga"
   },
   "qd": {
     "archive_file": "qd_archive.json",

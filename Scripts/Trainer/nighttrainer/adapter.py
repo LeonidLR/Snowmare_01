@@ -19,6 +19,7 @@ Canonical round (candidate's point of view), consumed by fitness.py:
 from __future__ import annotations
 
 import glob
+import math
 import os
 import sys
 
@@ -82,15 +83,26 @@ def behaviour_meta() -> dict:
             for key, name, unit, lo, hi, direction in BEHAVIOUR_METRICS}
 
 
+def _finite(value):
+    number = float(value)
+    if not math.isfinite(number):
+        return None
+    return number
+
+
 def _metric_value(node):
+    """A measurement, or None when the node is missing, non-numeric, or not finite.
+
+    NaN and Infinity must not reach bin_index: int(nan) raises, and a non-finite axis value has no bin.
+    """
     if isinstance(node, bool) or node is None:
         return None
     if isinstance(node, (int, float)):
-        return float(node)
+        return _finite(node)
     if isinstance(node, dict):
         value = node.get("value")
         if isinstance(value, (int, float)) and not isinstance(value, bool):
-            return float(value)
+            return _finite(value)
     return None
 
 

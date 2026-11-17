@@ -112,10 +112,11 @@ def _diff_table(trainer, state: dict) -> str:
 
 def _archive_section(trainer) -> str:
     """Morning view of the MAP-Elites grid: cells filled, the best weights, behaviour values, one highlight each."""
-    mode = str(trainer.cfg.get("search", {}).get("mode", "ga")).strip().lower()
+    mode = qd.search_mode_of(trainer.cfg)
     if mode != "qd":
-        return ("<section><h2>Quality-diversity archive</h2><p class='muted'>Search mode: ga. "
-                "MAP-Elites is off (scalar tournament). Switch search.mode to qd for the archive.</p></section>")
+        return ("<section><h2>Quality-diversity archive</h2><p class='muted'>Search mode: "
+                + html.escape(mode)
+                + ". MAP-Elites is off (scalar tournament). Switch search.mode to qd for the archive.</p></section>")
     path = os.path.join(trainer.run_dir, str(trainer.cfg.get("qd", {}).get("archive_file", "qd_archive.json")))
     archive = qd.Archive.load(path, trainer.cfg.get("qd", {}))
     filled, cap = len(archive.cells), archive.capacity()
