@@ -1023,3 +1023,11 @@ behind him; `UpdateSectorFollower` re-checks a stand-in for an unwalkable place.
   fight / a Solo <-> formation switch ends it.
 - `Codex.Mantle.Squad` (1; 0 = before R17-1: a Solo single only, formation moves never take the mantle links). Logs `[SquadMantle]`.
 - Tests `CodexTactics.Formation.MantleQueue.*`, `CodexTactics.Ladder.TraversalQueue.*`; smoke `FormationMantleSmoke` (L_Gen_Depot_1).
+
+## 23. R17-3 - the click ghost shows the whole group (designer 2026-11-17 evening; docs/design/CLICK_PREVIEW.md; runtime only, no TS / golden change)
+
+Hovering a wall shows nothing; the FIRST click on it shows the ghost, the SECOND click on the same building orders it. In group mode the ghost is
+every member's silhouette where the order puts him - `USquadSubsystem::PreviewFormationWall` runs `OrderFormationWall`'s own layout
+(`FormationWallRules::Layout` + `FitWallLayoutToWorld` + the minimal-travel roles) and puts the formation state back (a preview changes
+nothing); the squad's corner shows `PlanFormationCornerPeek`'s corner man (sections 20 / 21) and his v2.4 stack. The wall layout itself, the
+corner pick and the leader's corner are unchanged.

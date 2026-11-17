@@ -425,6 +425,13 @@ climbs; a single click on the FACE = the cover preview (unchanged); a DOUBLE cli
 double click is the run order, so the Q2 rule "the climb never starts a sprint by itself" still holds). Batch 2 off (`Codex.Mantle.Batch2 0`):
 the old behaviour (his current gait, the face not climbable by click). Check: MantleClickSmoke cases a / a2 / b / b2 / c.
 
+**Update 2026-11-17 evening (designer, R17-3 - one building click, docs/design/CLICK_PREVIEW.md):** hovering an obstacle shows NOTHING (the
+hover ghost of batch 2 item 4 is gone). The FIRST click on the obstacle's top shows the climb ghost (the B17-2 posed frame, hand on the lip) and
+orders nothing; a SECOND click on the same obstacle = he walks there and climbs; a DOUBLE click on the top or the face = he runs there and climbs
+at once. The first click on the face shows the cover ghost (face = hug it); its slow second click takes that cover. `Codex.Click.Preview 0`:
+the rules of the update above (the hover ghost, the single top click climbs). Check: MantleClickSmoke (a = click + slow second click, e = hover
+shows nothing / the first click's ghost), ClickPreviewSmoke g / h.
+
 - **Q1 trigger = C:** a click on a reachable ledge top orders the climb, AND a path to a clicked point that runs over an eligible obstacle mantles by itself (like the vault).
 - **Q2 run-up = A:** insufficient run-up -> stop and use the standing clip; the system never starts a sprint by itself (run clips only when already running).
 - **Q3 weapon/stance:** clip-driven sling/raise windows; no fire during the climb; on top the operative goes to a **crouch**.

@@ -150,8 +150,8 @@ namespace FirstAidRules
 		float ApproachTimeoutSeconds = 25.f;
 		/** "move_tolerance_cm": either body displaced more than this from its spot while treating = interrupted. */
 		float MoveToleranceCm = 45.f;
-		/** "treat_on_drop_tiers": a medkit / bag dragged onto a mate of these tiers treats him (else it is handed over; Shift = always hand over). */
-		bool TreatOnDropTiers[TierCount] = { false, false, false, true };
+		/** "treat_on_drop_tiers": a medkit / bag dragged onto a mate of these tiers treats him when his HP is below max (else, and on Shift, it is handed over). */
+		bool TreatOnDropTiers[TierCount] = { true, true, true, true };
 		/** "helper_may_be_medium": a helper with a MEDIUM wound may still treat a mate (a HEAVY one never can). */
 		bool bHelperMayBeMedium = true;
 		/** "min_play_rate" / "max_play_rate": the clip's play rate is fitted to the treatment's length within these (a short clip loops). */
@@ -220,8 +220,12 @@ namespace FirstAidRules
 		ETier HelperTier, int32 HelperItemCount, bool bHelperBusy, bool bPatientAlive, ETier PatientTier, float PatientHealth, float PatientMaxHealth,
 		bool bPatientBusy);
 
-	/** A medkit / bag dropped on a mate: a treatment (his tier is in treat_on_drop_tiers, no Shift) instead of a hand-over. */
-	CODEXTACTICS_API bool TreatsOnDrop(const FFirstAidConfig& Config, ETier PatientTier, bool bHandOverOnly);
+	/**
+	 * A medkit / bag dropped on a mate treats him: his tier is in treat_on_drop_tiers, Shift is not held, and 0 < HP < max.
+	 * Full HP and a dead mate are a hand-over (nothing to heal). A tier left out of the list is a hand-over too.
+	 */
+	CODEXTACTICS_API bool TreatsOnDrop(const FFirstAidConfig& Config, ETier PatientTier, bool bHandOverOnly, float PatientHealth,
+		float PatientMaxHealth);
 
 	/** The tier after Steps improvements (toward None). */
 	CODEXTACTICS_API ETier TierAfter(ETier Tier, int32 Steps);

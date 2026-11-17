@@ -390,6 +390,61 @@ bool USquadSubsystem::OrderSquadMantle(const TArray<AOperativeCharacter*>& Group
 	return true;
 }
 
+bool USquadSubsystem::PreviewSquadMantle(const TArray<AOperativeCharacter*>& Group, const FHitResult& Hit, TArray<FSquadMantlePreviewLane>& OutLanes)
+{
+	OutLanes.Reset();
+	AOperativeCharacter* First = Group.IsEmpty() ? nullptr : Group[0];
+	FMantleClickPlan Plan;
+	if (!First || Group.Num() < 2 || !IsSquadMantleEnabled() || !First->PlanMantleClick(Hit, Plan))
+	{
+		return false;
+	}
+	// OrderSquadMantle's set-up into the climb state (MakeSquadMantleLanes / SquadMantleLaneHit read it); the state is put back - a preview
+	// changes nothing, a running climb included.
+	const FSquadMantle Saved = SquadMantle;
+	FSquadMantle& Op = SquadMantle;
+	Op = FSquadMantle();
+	Op.Obstacle = Plan.Obstacle;
+	Op.Dir = Plan.Dir.GetSafeNormal2D();
+	Op.Tangent = FVector::CrossProduct(FVector::UpVector, Op.Dir).GetSafeNormal2D();
+	Op.Base = Plan.Base;
+	Op.bOver = !Plan.bTop;
+	Op.DepthCm = Plan.DepthCm;
+	Op.FacePoint = Plan.FacePoint.IsNearlyZero() ? Plan.Base + Op.Dir * SquadMantleLocal::BaseOffFaceCm : Plan.FacePoint;
+	Op.EdgeTop = Plan.EdgeTop.IsNearlyZero() ? FVector(Op.FacePoint.X, Op.FacePoint.Y, Plan.TopHit.ImpactPoint.Z) : Plan.EdgeTop;
+	const float Radius = First->GetCapsuleComponent() ? First->GetCapsuleComponent()->GetScaledCapsuleRadius() : 35.f;
+	TArray<FSquadMantleLane> Lanes = MakeSquadMantleLanes(Group.Num() + 2, Radius);
+	if (!Lanes.IsEmpty())
+	{
+		Lanes.RemoveAt(0); // the leader's (the clicked spot)
+	}
+	TArray<FVector> Taken{ Plan.Landing };
+	for (int32 Index = 1; Index < Group.Num(); ++Index)
+	{
+		AOperativeCharacter* Operative = Group[Index];
+		if (!Operative)
+		{
+			continue;
+		}
+		for (int32 Lane = 0; Lane < Lanes.Num(); ++Lane)
+		{
+			FVector Landing;
+			if (IsSquadMantleLaneFor(*Operative, Lanes[Lane], Taken, Landing))
+			{
+				FSquadMantlePreviewLane& Out = OutLanes.AddDefaulted_GetRef();
+				Out.Operative = Operative;
+				Out.LaneHit = SquadMantleLaneHit(Lanes[Lane]);
+				Out.Base = Lanes[Lane].Base;
+				Taken.Add(Landing);
+				Lanes.RemoveAt(Lane);
+				break;
+			}
+		}
+	}
+	SquadMantle = Saved;
+	return true;
+}
+
 bool USquadSubsystem::BeginSquadMantleFromPath(AOperativeCharacter& Climber, const FMantleSite& Site, const FVector& ResumeTarget)
 {
 	if (!IsSquadMantleEnabled() || SquadMantle.bActive || !Site.Obstacle.IsValid())

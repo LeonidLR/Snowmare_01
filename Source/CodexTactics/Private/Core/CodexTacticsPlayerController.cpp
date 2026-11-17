@@ -359,11 +359,17 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	// Bug_04 A (2026-11-01): a squad corner peek carried over to the next wall - ordered once the squad stands at it.
 	TickSquadPeekCarry(DeltaTime);
 
-	// Sprint 12: RMB / Esc drop the cover preview.
-	if (HasCoverPreview() && (WasInputKeyJustPressed(EKeys::RightMouseButton) || WasInputKeyJustPressed(EKeys::Escape)))
+	// Sprint 12: RMB / Esc drop the cover preview (R17-3: the click ghost, whatever it shows).
+	if ((HasCoverPreview() || IsClickPreviewArmed()) && (WasInputKeyJustPressed(EKeys::RightMouseButton) || WasInputKeyJustPressed(EKeys::Escape)))
 	{
 		HideCoverPreview();
+		CancelClickPreview(TEXT("RMB / Esc"));
 	}
+	// R17-5: the doorway breach session (the stack's arrival, the entry).
+	TickBreach(DeltaTime);
+	// R17-3 (review 2026-11-17): the click ghost goes as soon as its leader is not the leader / the turn-based fight starts - every frame,
+	// whatever the hover block below does.
+	TickClickPreviewValidity();
 
 	// Rev 5c manual corner peek: hovering the end of the leader's (turn-based: the active unit's) cover - high, or low since rev 5e -
 	// previews the peek.
@@ -382,14 +388,17 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		const bool bRunPeek = !PeekTurnBased && IsRunCornerPeekEnabled();
 		FHitResult PeekHit;
 		const bool bPeekHit = PeekOperative && (PeekOperative->IsInPeekableCover() || bSquadPeek || bRunPeek) && !IsDialogueOpen() && !bRelocateSelectMode && !bOverMinimap
-			&& GetHitResultUnderCursor(ECC_Visibility, false, PeekHit);
-		if (!bFreezeCornerPeekHoverForTesting)
+			&& CursorHitForHover(PeekHit);
+		// R17-3 (designer 2026-11-17): hovering a surface shows NOTHING - the corner peek / cover switch / wrap / climb / stealth wall ghosts
+		// come from the first click (TickClickPreview moves them with the cursor over that building). Codex.Click.Preview 0: the hover ghosts.
+		const bool bClickPreview = IsClickPreviewEnabled();
+		if (!bFreezeCornerPeekHoverForTesting && !bClickPreview)
 		{
 			UpdateCornerPeekHover(PeekOperative, bPeekHit ? &PeekHit : nullptr);
 		}
 		const bool bCoverPeekHit = bPeekHit && PeekOperative->IsInPeekableCover();
 		// 2026-10-20: from a wall edge, another cover under the cursor previews the cover switch (ghost + dash line; real time only).
-		if (!bFreezeCoverHoverForTesting)
+		if (!bFreezeCoverHoverForTesting && !bClickPreview)
 		{
 			UpdateCoverSwitchHover(PeekTurnBased ? nullptr : PeekOperative, bCoverPeekHit && !PeekTurnBased ? &PeekHit : nullptr);
 			// 2026-10-20: round his own cover object (another face, the ground next to it) previews the way along its wall (ghost + path).
@@ -397,9 +406,9 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		}
 		// Rev 5e: a spotted tripwire (or the ground right next to it) under the cursor: the hand cursor - a click opens its menu.
 		FHitResult TrapHit;
-		const bool bCursorHit = !bCornerPeekCursor && !IsDialogueOpen() && !bOverMinimap && GetHitResultUnderCursor(ECC_Visibility, false, TrapHit);
+		const bool bCursorHit = !bCornerPeekCursor && !IsDialogueOpen() && !bOverMinimap && CursorHitForHover(TrapHit);
 		// Batch 2 item 4: over an obstacle the selected operative can climb, the mantle ghost at its landing (not while a corner peek is hovered).
-		if (!bFreezeMantleHoverForTesting)
+		if (!bFreezeMantleHoverForTesting && !bClickPreview)
 		{
 			UpdateMantleHover(PeekTurnBased || bCornerPeekCursor ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
 		}
@@ -407,7 +416,17 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		if (!bFreezeCoverHoverForTesting)
 		{
 			UpdateSquadMoveHover(bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
-			UpdateStealthWallHover(PeekTurnBased ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+			if (!bClickPreview)
+			{
+				UpdateStealthWallHover(PeekTurnBased ? nullptr : PeekOperative, bCursorHit && !PeekTurnBased ? &TrapHit : nullptr);
+			}
+		}
+		// R17-3: the click ghost follows the cursor over its building (its own trace: the peek ghost's crosshair skips the one above).
+		if (bClickPreview && !bFreezeClickPreviewForTesting && IsClickPreviewArmed())
+		{
+			FHitResult PreviewHit;
+			const bool bPreviewHit = !IsDialogueOpen() && !bOverMinimap && CursorHitForHover(PreviewHit);
+			TickClickPreview(bPreviewHit ? &PreviewHit : nullptr);
 		}
 		// Rev 5g: an EXIT arrow under the cursor lights up and shows the hand too.
 		AInteriorExitArrowActor* HoveredExit = bCursorHit ? Cast<AInteriorExitArrowActor>(TrapHit.GetActor()) : nullptr;
@@ -478,6 +497,16 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 			Relocation->UpdatePreview(Point);
 		}
 	}
+}
+
+bool ACodexTacticsPlayerController::CursorHitForHover(FHitResult& OutHit) const
+{
+	if (bSimulateCursorForTesting)
+	{
+		OutHit = SimulatedCursorHitForTesting;
+		return OutHit.bBlockingHit;
+	}
+	return GetHitResultUnderCursor(ECC_Visibility, false, OutHit);
 }
 
 bool ACodexTacticsPlayerController::IsAttackModifierDown() const

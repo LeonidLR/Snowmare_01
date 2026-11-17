@@ -2,7 +2,8 @@
 // FORMATION mode too ... the same way as on ladders: one climbs, the others cover; he is up, the next climbs while the rest cover"; docs/design/
 // MANTLING.md 6.4, docs/design/FORMATION_CONTRACT.md 22) on L_Gen_Depot_1:
 //   Scripts/smoke_parallel.ps1 -NoRetry -ExtraArgs -Multiprocess -Commands FormationMantleSmoke
-// The clicks take the REAL input path (the camera's ray -> ACodexTacticsPlayerController::HandleWorldHit). Cases, a 3-man squad 4 m off the face:
+// The clicks take the REAL input path (the camera's ray -> ACodexTacticsPlayerController::HandlePlayerClick, R17-3: a single click = the group
+// climb ghost, then a slow second click climbs; a double click climbs at once). Cases, a 3-man squad 4 m off the face:
 //   a  formation: click on a 140 cm wreck's top            -> all on top;
 //   b  formation: double click on the 230 cm parapet's face -> all on top;
 //   c  formation: double click on a 135 cm fence's face     -> all over the fence (the fence vault);
@@ -527,10 +528,37 @@ namespace FormationMantleSmoke
 			State->ClimbsBefore = Squad->GetSquadMantleDoneCount();
 			UE_LOG(LogCodexTactics, Display, TEXT("[FormationMantleSmoke] %s: %d click(s) on %s at %s"), Case.Label, Case.Clicks, *GetNameSafe(State->Hit.GetActor()),
 				*State->Hit.ImpactPoint.ToCompactString());
-			for (int32 Click = 0; Click < Case.Clicks; ++Click)
+			// R17-3 click rules (HandlePlayerClick = OnClickReleased's entry): one click on the obstacle = the group climb ghost, the slow second
+			// click on it = the climb in turns; a double click (the same frame) = run and climb at once; a ground click (e) = the ordinary move.
+			PC->SimulatedCursorHitForTesting = State->Hit;
+			PC->HandlePlayerClick(State->Hit);
+			if (Case.Aim != EAim::PathBeyond && Case.Clicks == 1)
 			{
-				PC->HandleWorldHit(State->Hit);
+				Next(*State, 20);
+				return true;
 			}
+			if (Case.Clicks == 2)
+			{
+				PC->HandlePlayerClick(State->Hit);
+			}
+			Next(*State, 3);
+			return true;
+		}
+		case 20: // R17-3: the first click showed the group climb ghost (who climbs in which lane) and started nothing; the slow second click
+		{
+			if (State->StageTime < 0.6f)
+			{
+				return true;
+			}
+			const FCase& Case = Cases[State->Case];
+			// Every climber with a lane on that obstacle (a man without one holds at the base - no silhouette; the case then takes another obstacle).
+			const int32 Group = Leader ? Squad->GetSquadMantleGroup(*Leader).Num() : 0;
+			const int32 Ghosts = PC->GetClickPreviewGhostCount();
+			Check(*State, PC->GetClickPreviewKind() == EClickPreviewKind::Mantle && Ghosts >= 2 && Ghosts <= Group && !Squad->IsSquadMantleActive()
+				&& Squad->GetSquadMantleDoneCount() == State->ClimbsBefore, FString::Printf(
+				TEXT("%s: the first click shows the group climb ghost - %d silhouettes for %d men (kind %d), no climb yet (active %d)"), Case.Label,
+				PC->GetClickPreviewGhostCount(), Group, static_cast<int32>(PC->GetClickPreviewKind()), Squad->IsSquadMantleActive() ? 1 : 0));
+			PC->HandlePlayerClick(State->Hit);
 			Next(*State, 3);
 			return true;
 		}
@@ -601,6 +629,12 @@ namespace FormationMantleSmoke
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->World = World;
+		// The Depot's scheduled PMC squads (pmc_squads at 30 s / 120 s) open a firefight mid-case (the men go prone / take cover against the flash and
+		// leave their orders); this smoke checks the clicks, not a fight (as LevelGenRampSmoke, 2026-11-10).
+		if (IConsoleVariable* Encounters = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pmc.Encounters")))
+		{
+			Encounters->Set(0, ECVF_SetByConsole);
+		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)
 		{
 			return StepSmoke(State);

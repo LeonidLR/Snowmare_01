@@ -145,6 +145,14 @@ namespace SquadControlSmoke
 			const float Off = First ? FMath::Abs(FMath::FindDeltaAngleDegrees(static_cast<float>(First->GetActorRotation().Yaw), State.FirstLeaderYaw)) : 999.f;
 			const FString What = FString::Printf(TEXT("leader switched away and back: %.1f s later he looks forward again (facing %.0f, led facing %.0f, %.0f deg off)"),
 				World->GetTimeSeconds() - State.SwitchTime, First ? First->GetActorRotation().Yaw : 0.f, State.FirstLeaderYaw, Off);
+			if (First)
+			{
+				// What drives his facing now (a failure names the branch that held him).
+				const TOptional<float> SectorYaw = First->GetFormationLookYaw();
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s as the leader again - sector look %s (facing it %d), combat target %d, threat turn %d, ordered return %d, speed %.0f"),
+					*First->DisplayName.ToString(), SectorYaw.IsSet() ? *FString::Printf(TEXT("%.0f"), SectorYaw.GetValue()) : TEXT("-"), First->IsFacingFormationSector() ? 1 : 0,
+					First->IsFacingCombatTarget() ? 1 : 0, First->IsTurningToThreat() ? 1 : 0, First->IsReturningToOrderedFacing() ? 1 : 0, First->GetVelocity().Size2D());
+			}
 			static const IConsoleVariable* SectorsVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Formation.Sectors"));
 			if (SectorsVar && SectorsVar->GetInt() != 0)
 			{

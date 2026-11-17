@@ -242,3 +242,15 @@ No new wheels invented; this design maps directly to existing C++ systems:
 5. The centre man crouches at 2.2 m from the door.
 6. Enter / clear: once the triad is set, a click inside the room = the buttonhook entry (man 1 right corner, man 2 left, man 3 centre).
 Week 2, after level authoring stage 1 (6 steps in the plan, section 4).
+
+## In the game (R17-5, Claude 2026-11-17, with R17-3 - docs/design/CLICK_PREVIEW.md section 4)
+
+Steps 4+ are hooked up through the one building click (R17-3), not a hover (the designer's 11-17 decision "hovering shows nothing"; the Codex
+step-4 hover patch was therefore not applied): the FIRST click into the opening (the camera's ray through the portal plane, + 40 cm either
+side) shows the stack ghost (`AssignSlots`: Solo one man at the nearest jamb, a box selection the selected ones, formation the squad, up to four);
+the SECOND click orders it - the jamb men run-and-peek into the real wall's corner at their jamb (`OrderRunCornerPeek`: leaning in round the frame,
+feet outside), the centre / rear men walk to their spots, take the slot stance and look along their sectors, formation followers hold for the
+session. Stacked (or after 30 s): a click inside the room = the entry of section 7.2 (`DoorwayBreachEntryRules`: right-hand jamb man hooks right,
+the left one 0.3 s later left, the centre man 2.5 m in, crouched; rear security outside), then "Room clear! Hold sectors." Not done: section 3.2
+(no toggle - answer 4), 5.2 facade waypoints, 6.3 the 1.5 s trap-sweep promise beyond the jamb men's own peek sight, 8.4 / 8.5, >4 men.
+Smoke: DoorBreachSmoke.

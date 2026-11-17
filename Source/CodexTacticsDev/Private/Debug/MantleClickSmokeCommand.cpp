@@ -3,17 +3,19 @@
 // hover ghost, "the same way the game shows a ghost when hovering a building corner for peeking"; docs/port/MANTLING_BATCH2_REPORT.md):
 //   Scripts/smoke_parallel.ps1 -Commands MantleClickSmoke -ExtraArgs -Multiprocess
 // The clicks take the REAL input path: the cursor's ray from the player's camera (ECC_Visibility, as GetHitResultUnderCursor) through a point of
-// the obstacle, the hit handed to ACodexTacticsPlayerController::HandleWorldHit (the left click's dispatcher). Cases (one Solo operative, 4 m off):
+// the obstacle, the hit handed to ACodexTacticsPlayerController::HandlePlayerClick (the left click's entry, R17-3). Cases (one Solo operative, 4 m off):
 //   a  click on the 140 cm wreck's top            -> he walks to it and climbs it (on top);
 //   a2 double click on the 140 cm wreck's top     -> he RUNS to it and climbs it (designer 2026-11-17, F-3; b / c run too);
 //   b  double click on the 140 cm wreck's face    -> he climbs it (the face the camera sees is the obstacle too);
 //   b2 single click on the 140 cm wreck's face    -> no climb: the cover preview, as before (decision for the designer);
 //   c  double click on the 230 cm parapet's face  -> he climbs it;
 //   d  click on a 330 cm fence (a wall)           -> no climb (the click keeps its old meaning);
-//   e  hover over a climbable top / face          -> the mantle ghost shows at the face (the corner-peek ghost's look, ACoverGhostActor) in a
-//                                                    frame from the middle of the climb: posed (not the reference T-pose; B17-2, designer option A),
-//                                                    its nearer hand on the lip;
-//   f  hover over the 330 cm fence                -> no mantle ghost.
+//   e  R17-3 (designer 2026-11-17): hovering an obstacle shows NO ghost; the FIRST click on its top shows the mantle ghost at the face (the
+//      corner-peek ghost's look, ACoverGhostActor) in a frame from the middle of the climb: posed (not the reference T-pose; B17-2, designer
+//      option A), its nearer hand on the lip; the first click on its face shows the cover ghost (face = hug it), not the climb's;
+//   f  the first click on the 330 cm fence        -> no mantle ghost.
+// R17-3 click rules: every click goes through HandlePlayerClick (OnClickReleased's entry); a climbing order is the FIRST click (the ghost) and a
+// slow SECOND click on the same obstacle (a walk), or a double click (a run, at once).
 // B17-3 (designer 2026-11-17: the double-click run climb starts far from the edge, the click walk climb is right): every climb of a / a2 / b / c
 // is sampled each frame; at the clip's hand contact (its plant / slide, the alignment's first window) the nearer hand is within
 // align.hand_edge_tolerance_cm of the grip on the lip and the pelvis is not through the face below the top.
@@ -61,6 +63,7 @@ namespace MantleClickSmoke
 		const TCHAR* Kind;
 		float HeightCm;
 		EAim Aim;
+		/** 1: one (first) click, 2: a double click, 3: a click and a slow second click (R17-3: the ghost, then the order). */
 		int32 Clicks;
 		/** The obstacle is climbable: the hover shows the mantle ghost (else none). */
 		bool bClimbable;
@@ -71,12 +74,12 @@ namespace MantleClickSmoke
 	};
 
 	static const FCase Cases[] = {
-		{ TEXT("a: click on the 140 cm wreck's top"), TEXT("wreck"), 140.f, EAim::Top, 1, true, true, 0 },
+		{ TEXT("a: click + slow second click on the 140 cm wreck's top"), TEXT("wreck"), 140.f, EAim::Top, 3, true, true, 0 },
 		{ TEXT("a2: double click on the 140 cm wreck's top"), TEXT("wreck"), 140.f, EAim::Top, 2, true, true, 1 },
 		{ TEXT("b: double click on the 140 cm wreck's face"), TEXT("wreck"), 140.f, EAim::Face, 2, true, true, 1 },
-		{ TEXT("b2: single click on the 140 cm wreck's face"), TEXT("wreck"), 140.f, EAim::Face, 1, true, false, -1 },
+		{ TEXT("b2: single (first) click on the 140 cm wreck's face"), TEXT("wreck"), 140.f, EAim::Face, 1, true, false, -1 },
 		{ TEXT("c: double click on the 230 cm parapet's face"), TEXT("cut_wall"), 230.f, EAim::Face, 2, true, true, 1 },
-		{ TEXT("d: click on a 330 cm fence"), TEXT("fence"), 330.f, EAim::Face, 1, false, false, -1 },
+		{ TEXT("d: first click on a 330 cm fence"), TEXT("fence"), 330.f, EAim::Face, 1, false, false, -1 },
 	};
 
 	struct FState
@@ -220,11 +223,11 @@ namespace MantleClickSmoke
 		return nullptr;
 	}
 
-	/** The hover under the cursor (the controller's PlayerTick feeds the real cursor hit; here the smoke's ray). */
-	void Hover(ACodexTacticsPlayerController& PC, AOperativeCharacter& Leader, const FHitResult* Hit)
+	/** R17-3: the hover through PlayerTick's own hover block (the headless game has no cursor: the smoke's ray stands for it). */
+	void Hover(ACodexTacticsPlayerController& PC, const FHitResult* Hit)
 	{
-		PC.bFreezeMantleHoverForTesting = Hit != nullptr; // PlayerTick would feed the (absent) real cursor
-		PC.UpdateMantleHover(&Leader, Hit);
+		PC.bSimulateCursorForTesting = Hit != nullptr;
+		PC.SimulatedCursorHitForTesting = Hit ? *Hit : FHitResult();
 	}
 
 	bool Step(TSharedRef<FState> State)
@@ -341,14 +344,36 @@ namespace MantleClickSmoke
 			State->Retries = 0;
 			if (State->bHover)
 			{
-				Hover(*PC, *Leader, &State->Hit);
+				Hover(*PC, &State->Hit);
 				Next(*State, 4);
 				return true;
 			}
-			for (int32 Click = 0; Click < Case.Clicks; ++Click)
+			PC->HandlePlayerClick(State->Hit);
+			if (Case.Clicks == 2)
 			{
-				PC->HandleWorldHit(State->Hit);
+				PC->HandlePlayerClick(State->Hit); // the double click (the same frame)
 			}
+			else if (Case.Clicks == 3)
+			{
+				Next(*State, 20); // the slow second click
+				return true;
+			}
+			State->bSawSprint = false;
+			State->Samples.Reset();
+			State->bSampling = true;
+			Next(*State, 3);
+			return true;
+		}
+		case 20: // R17-3: the first click showed the ghost and climbed nothing; the slow second click on the same obstacle orders the climb
+		{
+			if (State->StageTime < 0.6f)
+			{
+				return true;
+			}
+			const FCase& Case = Cases[State->Case % UE_ARRAY_COUNT(Cases)];
+			Check(*State, Leader->GetMantleCount() == State->MantlesBefore && !Leader->IsMantling() && PC->GetClickPreviewKind() == EClickPreviewKind::Mantle, FString::Printf(
+				TEXT("%s: the first click alone climbs nothing - it shows the climb ghost (R17-3; kind %d)"), Case.Label, static_cast<int32>(PC->GetClickPreviewKind())));
+			PC->HandlePlayerClick(State->Hit);
 			State->bSawSprint = false;
 			State->Samples.Reset();
 			State->bSampling = true;
@@ -380,6 +405,7 @@ namespace MantleClickSmoke
 				Check(*State, !bClimbed, FString::Printf(TEXT("%s: no climb (%s; the cover preview %s)"), Case.Label, bClimbed ? TEXT("he climbed") : TEXT("none"),
 					PC->HasCoverPreview() ? TEXT("is up") : TEXT("is not up")));
 			}
+			PC->CancelClickPreview(TEXT("MantleClickSmoke: the next case"));
 			PC->HideCoverPreview();
 			// Let the climb end before the next case.
 			Next(*State, 30);
@@ -400,7 +426,36 @@ namespace MantleClickSmoke
 			Next(*State, 1);
 			return true;
 		}
-		case 4: // the hover's outcome (a few frames for the ghost)
+		case 4: // R17-3: the hover shows nothing (a few frames through PlayerTick); then the first click on the top (the face: also the cover ghost)
+		{
+			if (State->StageTime < 0.3f)
+			{
+				return true;
+			}
+			const FCase& Case = Cases[State->Case % UE_ARRAY_COUNT(Cases)];
+			Check(*State, FindMantleGhost(World, State->Site.Probe.EdgeTop) == nullptr && PC->GetClickPreviewGhostCount() == 0, FString::Printf(
+				TEXT("e: hovering %s (%s) shows no ghost (R17-3; %d silhouettes)"), *GetNameSafe(State->Site.Actor.Get()), Case.Label, PC->GetClickPreviewGhostCount()));
+			Hover(*PC, nullptr);
+			if (Case.Aim == EAim::Face && Case.bClimbable)
+			{
+				// The face: hug it - the cover ghost, not the climb's.
+				PC->HandlePlayerClick(State->Hit);
+				Check(*State, PC->GetClickPreviewKind() == EClickPreviewKind::Cover && PC->HasCoverPreview() && FindMantleGhost(World, State->Site.Probe.EdgeTop) == nullptr,
+					FString::Printf(TEXT("e: the first click on %s's face (%s) shows the cover ghost, no mantle ghost (kind %d)"), *GetNameSafe(State->Site.Actor.Get()), Case.Label,
+						static_cast<int32>(PC->GetClickPreviewKind())));
+				PC->CancelClickPreview(TEXT("MantleClickSmoke"));
+			}
+			// The climb ghost: the first click on the top (the fence: on its face - no climb ghost).
+			FHitResult TopHit = State->Hit;
+			if (Case.bClimbable && !MantleSmokeSites::CameraRayHit(World, AimPoint(World, State->Site, EAim::Top), TopHit))
+			{
+				TopHit = State->Hit;
+			}
+			PC->HandlePlayerClick(TopHit);
+			Next(*State, 5);
+			return true;
+		}
+		case 5: // the first click's ghost
 		{
 			if (State->StageTime < 0.3f)
 			{
@@ -414,7 +469,7 @@ namespace MantleClickSmoke
 			const ACoverGhostActor* Ghost = FindMantleGhost(World, Near);
 			if (Case.bClimbable)
 			{
-				Check(*State, Ghost != nullptr, FString::Printf(TEXT("e: hovering %s (%s) shows the mantle ghost at the face (%s)"), *GetNameSafe(State->Site.Actor.Get()),
+				Check(*State, Ghost != nullptr, FString::Printf(TEXT("e: the first click on %s's top (%s) shows the mantle ghost at the face (%s)"), *GetNameSafe(State->Site.Actor.Get()),
 					Case.Label, Ghost ? *FString::Printf(TEXT("%.0f cm off the face's lip"), FVector::Dist2D(Ghost->GetActorLocation(), Near)) : TEXT("NO ghost")));
 				if (const USkeletalMeshComponent* Body = Ghost ? Ghost->GetBody() : nullptr; Body && Body->GetSkinnedAsset())
 				{
@@ -450,10 +505,11 @@ namespace MantleClickSmoke
 			}
 			else
 			{
-				Check(*State, Ghost == nullptr, FString::Printf(TEXT("f: hovering %s (%s) shows no mantle ghost (%s)"), *GetNameSafe(State->Site.Actor.Get()), Case.Label,
+				Check(*State, Ghost == nullptr, FString::Printf(TEXT("f: the first click on %s (%s) shows no mantle ghost (%s)"), *GetNameSafe(State->Site.Actor.Get()), Case.Label,
 					Ghost ? TEXT("a ghost is up") : TEXT("none")));
 			}
-			Hover(*PC, *Leader, nullptr);
+			PC->CancelClickPreview(TEXT("MantleClickSmoke"));
+			PC->HideCoverPreview();
 			++State->Case;
 			Next(*State, 1);
 			return true;
@@ -479,8 +535,8 @@ namespace MantleClickSmoke
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.MantleClickSmoke"),
-		TEXT("Dev check (mantle click order + hover ghost, designer bug report 2026-11-16 batch 2, L_Gen_Depot_1): a click through the controller's path on a ")
-		TEXT("140 wreck's top / face and a double click on the 230 parapet climb them, a 330 fence does not; hovering a climbable obstacle shows the mantle ghost, ")
+		TEXT("Dev check (mantle click order + its ghost, batch 2 + R17-3, L_Gen_Depot_1): a click + a slow second click / a double click through the controller's path on a ")
+		TEXT("140 wreck's top / face and a double click on the 230 parapet climb them, a 330 fence does not; hovering shows no ghost, the first click on a climbable top the mantle ghost, ")
 		TEXT("a fence none; PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
