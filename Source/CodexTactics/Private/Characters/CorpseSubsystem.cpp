@@ -16,6 +16,7 @@
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "HAL/IConsoleManager.h"
+#include "HAL/PlatformTime.h"
 #include "Misc/FileHelper.h"
 #include "Misc/Paths.h"
 #include "PhysicsEngine/PhysicsAsset.h"
@@ -37,9 +38,37 @@ namespace CorpseTuning
 		TEXT("Enable death ragdoll simulation on fatal damage (1). 0 = fallback to animation montage / LayCorpseDown."));
 	static TAutoConsoleVariable<int32> CVarRagdollMax(TEXT("Codex.DeathRagdoll.MaxSimultaneous"), -1,
 		TEXT("Override max simultaneous ragdolls (-1 = from JSON config)"));
+	static TAutoConsoleVariable<int32> CVarReleaseFrozenPhysics(TEXT("Codex.Corpse.ReleaseFrozenPhysics"), 1,
+		TEXT("After a ragdoll corpse freezes, unregister its EndPhysics tick and destroy its physics state (1). 0 leaves the bodies (cost A/B only). The posed mesh is kept."));
+	static TAutoConsoleVariable<int32> CVarCostTrace(TEXT("Codex.Corpse.CostTrace"), 0,
+		TEXT("1 = once a second, log UCorpseSubsystem tick time and how many frozen ragdolls still simulate, blend physics, or own a physics state"));
 
 	/** Seconds between two cap checks. */
 	constexpr float CapCheckSeconds = 0.5f;
+
+	/**
+	 * SetAllBodiesSimulatePhysics(false) runs while bBlendPhysics is still true and collision still has physics, so
+	 * UpdateEndPhysicsTickRegisteredState keeps the EndPhysics tick. NoCollision does not destroy those bodies.
+	 * Clearing the blend weight unregisters the tick. RecreatePhysicsState then drops the bodies; with NoCollision,
+	 * ShouldCreatePhysicsState is false and they are not built again. Component-space bone transforms are left as the
+	 * last ragdoll pose (bPauseAnims already holds it).
+	 */
+	static void ReleaseFrozenRagdollPhysics(USkeletalMeshComponent* Mesh)
+	{
+		if (!Mesh || CVarReleaseFrozenPhysics.GetValueOnGameThread() == 0)
+		{
+			return;
+		}
+		Mesh->bBlendPhysics = false;
+		Mesh->SetAllBodiesPhysicsBlendWeight(0.f);
+		Mesh->KinematicBonesUpdateType = EKinematicBonesUpdateToPhysics::SkipAllBones;
+		if (Mesh->IsPhysicsStateCreated())
+		{
+			Mesh->RecreatePhysicsState();
+		}
+		UE_LOG(LogCodexTactics, Log, TEXT("[Corpse] %s frozen physics released (physics state %d)"),
+			*GetNameSafe(Mesh->GetOwner()), Mesh->IsPhysicsStateCreated() ? 1 : 0);
+	}
 
 	/** Every simulating body of the ragdoll faster than MaxSpeed (cm/s) slowed to it (3D: also the animation's downward bone speed). */
 	static void ClampRagdollBodySpeeds(USkeletalMeshComponent* Mesh, float MaxSpeed)
@@ -545,6 +574,7 @@ void UCorpseSubsystem::UpdateSettling(double Now, const FCorpseConfig& Config)
 								*Char->GetName(), FloorZ - BottomAfter, BottomAfter, FloorZ, Lift);
 						}
 					}
+					CorpseTuning::ReleaseFrozenRagdollPhysics(Mesh);
 				}
 			}
 			Body->FreezeCorpse();
@@ -652,17 +682,77 @@ void UCorpseSubsystem::Tick(float DeltaTime)
 	{
 		return;
 	}
+	const bool bTrace = CorpseTuning::CVarCostTrace.GetValueOnGameThread() != 0;
+	const double TraceStart = bTrace ? FPlatformTime::Seconds() : 0.0;
 	Corpses.RemoveAll([](const FKeptCorpse& Kept) { return !Kept.Body.IsValid() || Kept.Body->IsActorBeingDestroyed(); });
 	const FCorpseConfig Config = GetConfig();
 	const double Now = World->GetTimeSeconds();
+	const double SettleStart = bTrace ? FPlatformTime::Seconds() : 0.0;
 	UpdateSettling(Now, Config);
+	const double SettleMs = bTrace ? (FPlatformTime::Seconds() - SettleStart) * 1000.0 : 0.0;
 	CapTimer -= DeltaTime;
+	double CapMs = 0.0;
 	if (CapTimer <= 0.f || Corpses.Num() > Config.Cap + 8)
 	{
 		CapTimer = CorpseTuning::CapCheckSeconds;
+		const double CapStart = bTrace ? FPlatformTime::Seconds() : 0.0;
 		ApplyCap(Config, Now);
+		CapMs = bTrace ? (FPlatformTime::Seconds() - CapStart) * 1000.0 : 0.0;
 	}
+	const double FadeStart = bTrace ? FPlatformTime::Seconds() : 0.0;
 	UpdateFades(Now, Config);
+	if (!bTrace)
+	{
+		return;
+	}
+	const double FadeMs = (FPlatformTime::Seconds() - FadeStart) * 1000.0;
+	const double TickMs = (FPlatformTime::Seconds() - TraceStart) * 1000.0;
+	static double WindowSeconds = 0.0;
+	static double SumTickMs = 0.0;
+	static double SumSettleMs = 0.0;
+	static double SumCapMs = 0.0;
+	static double SumFadeMs = 0.0;
+	static int32 Frames = 0;
+	WindowSeconds += DeltaTime;
+	SumTickMs += TickMs;
+	SumSettleMs += SettleMs;
+	SumCapMs += CapMs;
+	SumFadeMs += FadeMs;
+	++Frames;
+	if (WindowSeconds < 1.0)
+	{
+		return;
+	}
+	int32 Frozen = 0;
+	int32 Simulating = 0;
+	int32 Blend = 0;
+	int32 Physics = 0;
+	for (const FKeptCorpse& Kept : Corpses)
+	{
+		if (!Kept.bFrozen)
+		{
+			continue;
+		}
+		++Frozen;
+		const ACharacter* Char = Cast<ACharacter>(Kept.Body.Get());
+		const USkeletalMeshComponent* Mesh = Char ? Char->GetMesh() : nullptr;
+		if (!Mesh)
+		{
+			continue;
+		}
+		Simulating += Mesh->IsSimulatingPhysics() ? 1 : 0;
+		Blend += Mesh->bBlendPhysics ? 1 : 0;
+		Physics += Mesh->IsPhysicsStateCreated() ? 1 : 0;
+	}
+	const double N = FMath::Max(Frames, 1);
+	UE_LOG(LogCodexTactics, Display, TEXT("[CorpseCostTrace] tick %.3f ms (settling %.3f, cap %.3f, fades %.3f) over %d frames; frozen %d, simulating %d, blend %d, physics state %d"),
+		SumTickMs / N, SumSettleMs / N, SumCapMs / N, SumFadeMs / N, Frames, Frozen, Simulating, Blend, Physics);
+	WindowSeconds = 0.0;
+	SumTickMs = 0.0;
+	SumSettleMs = 0.0;
+	SumCapMs = 0.0;
+	SumFadeMs = 0.0;
+	Frames = 0;
 }
 
 namespace CorpseCommands
