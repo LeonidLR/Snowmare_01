@@ -1,6 +1,11 @@
 // Training Ground / level generator: pure geometry view of one codex.levelgen_layout/1 layout.
 // Docs: docs/design/levelgen/PROPS_LAYERS.md section 2.1, task C2/T2.
 // C++ reference: Source/CodexTactics/Private/LevelGen/PropsLayoutView.cpp
+// Rotated buildings (task 082): a building's `rotation` (rotation.ts convention) is honoured by every footprint test here
+// (floor / roof walkability and holes, ground blocking, floor / roof perimeter walls, door sides, layer extents); a building
+// without rotation takes the original integer path byte for byte. NOTE: the C++ PropsLayoutView still treats footprints as AABBs.
+
+import { footprintPoly, inFootprint, rotVec, toBuildingFrame } from '../rotation.ts';
 
 export const MAX_SEGMENT_CM = 30000;
 export const MAX_RADIUS_CM = 10000;
@@ -114,8 +119,13 @@ export interface PropsCover {
 
 export interface PropsBuildingSummary {
   id: string;
+  /** The UNROTATED footprint rectangle (its centre is the world centre). */
   min: [number, number];
   max: [number, number];
+  /** Degrees about the footprint centre (rotation.ts convention); 0 = axis-aligned. */
+  rotation: number;
+  /** The footprint's four world corners (integer cm). */
+  poly: [number, number][];
   floors: number;
   bHollow: boolean;
   bEnterable: boolean;
@@ -328,6 +338,27 @@ export function rectWithin(
   return dx * dx + dy * dy <= rBig * rBig;
 }
 
+/** The building as rotation.ts sees it (unrotated footprint + rotation). */
+function buildingFrame(b: { min: [number, number]; max: [number, number]; rotation: number }): { footprint: [[number, number], [number, number]]; rotation: number } {
+  return { footprint: [b.min, b.max], rotation: b.rotation };
+}
+
+/** rectWithin for a rotated building: the point taken into the building's frame, the same rounded-corner clearance test. */
+function rotatedRectWithin(b: { min: [number, number]; max: [number, number]; rotation: number }, p: [number, number], r: number): boolean {
+  const q = toBuildingFrame(buildingFrame(b), p);
+  const dx = Math.max(b.min[0] - q[0], 0, q[0] - b.max[0]);
+  const dy = Math.max(b.min[1] - q[1], 0, q[1] - b.max[1]);
+  return dx * dx + dy * dy <= r * r;
+}
+
+/** A square hole (half side `half`, aligned with the rotated building) at world point h contains world point p. */
+function inBuildingHole(b: { min: [number, number]; max: [number, number]; rotation: number }, p: [number, number], h: [number, number], half: number): boolean {
+  const f = buildingFrame(b);
+  const q = toBuildingFrame(f, p);
+  const c = toBuildingFrame(f, h);
+  return Math.abs(q[0] - c[0]) <= half && Math.abs(q[1] - c[1]) <= half;
+}
+
 export function coverWithin(
   p: [number, number],
   center: [number, number],
@@ -408,6 +439,12 @@ interface InternalBuilding {
   id: string;
   min: [number, number];
   max: [number, number];
+  rotation: number;
+  /** World corners of the (rotated) footprint, integer cm. */
+  poly: [number, number][];
+  /** World AABB of `poly` (= min / max when not rotated). */
+  bboxMin: [number, number];
+  bboxMax: [number, number];
   floors: number;
   bHollow: boolean;
   bEnterable: boolean;
@@ -600,10 +637,20 @@ export class PropsLayoutView {
             }
           }
 
+          const rotation = typeof b.rotation === 'number' && Number.isFinite(b.rotation) ? b.rotation : 0;
+          const poly: [number, number][] = rotation
+            ? footprintPoly({ footprint: [min, max], rotation }).map((q): [number, number] => [Math.round(q[0]), Math.round(q[1])])
+            : [min, [max[0], min[1]], max, [min[0], max[1]]];
+          const bboxMin: [number, number] = [Math.min(...poly.map((q) => q[0])), Math.min(...poly.map((q) => q[1]))];
+          const bboxMax: [number, number] = [Math.max(...poly.map((q) => q[0])), Math.max(...poly.map((q) => q[1]))];
           view.buildings.push({
             id: String(b.id ?? ''),
             min,
             max,
+            rotation,
+            poly,
+            bboxMin,
+            bboxMax,
             floors: Math.max(1, typeof b.floors === 'number' ? Math.floor(b.floors) : 1),
             bHollow: Boolean(b.hollow),
             bEnterable: Boolean(b.enterable),
@@ -738,8 +785,8 @@ export class PropsLayoutView {
     this.layers = [];
     this.layerWalls = [];
 
-    const addRect = (out: InternalLayerWall[], min: [number, number], max: [number, number], thickness: number) => {
-      const c: [number, number][] = [min, [max[0], min[1]], max, [min[0], max[1]]];
+    const addRect = (out: InternalLayerWall[], b: InternalBuilding, thickness: number) => {
+      const c: [number, number][] = b.rotation ? b.poly : [b.min, [b.max[0], b.min[1]], b.max, [b.min[0], b.max[1]]];
       for (let i = 0; i < 4; i++) {
         out.push({ a: c[i], b: c[(i + 1) % 4], thickness });
       }
@@ -793,7 +840,7 @@ export class PropsLayoutView {
             zCm: this.groundZ + n * this.config.levelHeightCm,
           });
           const floorWalls: InternalLayerWall[] = [];
-          addRect(floorWalls, b.min, b.max, this.config.floorPerimeterThicknessCm);
+          addRect(floorWalls, b, this.config.floorPerimeterThicknessCm);
           for (const w of this.walls) {
             if (w.building === b.id && w.floor === n) {
               floorWalls.push({ a: w.a, b: w.b, thickness: w.thickness });
@@ -812,7 +859,7 @@ export class PropsLayoutView {
           zCm: this.groundZ + b.floors * this.config.levelHeightCm,
         });
         const roofWalls: InternalLayerWall[] = [];
-        addRect(roofWalls, b.min, b.max, this.config.parapetThicknessCm);
+        addRect(roofWalls, b, this.config.parapetThicknessCm);
         this.layerWalls.push(roofWalls);
       }
     }
@@ -880,20 +927,25 @@ export class PropsLayoutView {
         const id = `${b.id}#${index}`;
         const walkLayer = PropsLayoutView.layerNameFor(b.id, d.floor);
 
-        // side read from footprint
+        // side read from footprint (in the building's own frame when rotated; outward / along then turn with the building)
+        const dp = b.rotation ? toBuildingFrame(buildingFrame(b), d.pos) : d.pos;
         const dist = [
-          Math.abs(d.pos[0] - b.min[0]),
-          Math.abs(d.pos[0] - b.max[0]),
-          Math.abs(d.pos[1] - b.min[1]),
-          Math.abs(d.pos[1] - b.max[1]),
+          Math.abs(dp[0] - b.min[0]),
+          Math.abs(dp[0] - b.max[0]),
+          Math.abs(dp[1] - b.min[1]),
+          Math.abs(dp[1] - b.max[1]),
         ];
         const dir: [number, number][] = [[-1, 0], [1, 0], [0, -1], [0, 1]];
         let best = 0;
         for (let i = 1; i < 4; i++) {
           if (dist[i] < dist[best]) best = i;
         }
-        const outward = dir[best];
-        const along: [number, number] = outward[0] !== 0 ? [0, 1] : [1, 0];
+        let outward = dir[best];
+        let along: [number, number] = outward[0] !== 0 ? [0, 1] : [1, 0];
+        if (b.rotation) {
+          outward = rotVec(outward, b.rotation);
+          along = rotVec(along, b.rotation);
+        }
 
         let widthCm = 0;
         let wallGroup: string | undefined;
@@ -964,6 +1016,7 @@ export class PropsLayoutView {
         Math.floor((w.widthCm > 0 ? w.widthCm : this.config.doorFallbackWidthCm) / 2) +
         this.config.doorThroughSlackCm;
       const bLineAlongY = w.along[1] !== 0;
+      const bAxisLine = w.along[0] === 0 || w.along[1] === 0;
 
       for (const route of this.routes) {
         if (!route.bMandatory) continue;
@@ -971,7 +1024,19 @@ export class PropsLayoutView {
         for (let i = 0; i < n; i++) {
           const v = route.points[i];
           // Through check
-          if (i + 1 < n && route.layers[i] === w.walkLayer && route.layers[i + 1] === w.walkLayer) {
+          if (i + 1 < n && route.layers[i] === w.walkLayer && route.layers[i + 1] === w.walkLayer && !bAxisLine) {
+            // a rotated building's door: the same test in the door's own (outward, along) frame, floating point
+            const b = route.points[i + 1];
+            const s0 = (v[0] - w.pos[0]) * w.outward[0] + (v[1] - w.pos[1]) * w.outward[1];
+            const s1 = (b[0] - w.pos[0]) * w.outward[0] + (b[1] - w.pos[1]) * w.outward[1];
+            if (!((s0 > 0 && s1 > 0) || (s0 < 0 && s1 < 0) || (s0 === 0 && s1 === 0))) {
+              const l0 = (v[0] - w.pos[0]) * w.along[0] + (v[1] - w.pos[1]) * w.along[1];
+              const l1 = (b[0] - w.pos[0]) * w.along[0] + (b[1] - w.pos[1]) * w.along[1];
+              if (Math.abs(l0 * (s1 - s0) - s0 * (l1 - l0)) <= reach * Math.abs(s1 - s0)) {
+                w.bRouteThrough = true;
+              }
+            }
+          } else if (i + 1 < n && route.layers[i] === w.walkLayer && route.layers[i + 1] === w.walkLayer) {
             const b = route.points[i + 1];
             const s0 = bLineAlongY ? v[0] - w.pos[0] : v[1] - w.pos[1];
             const s1 = bLineAlongY ? b[0] - w.pos[0] : b[1] - w.pos[1];
@@ -1060,6 +1125,13 @@ export class PropsLayoutView {
       case 'roof': {
         const b = this.buildings[l.buildingIndex];
         const inset = this.config.roofInsetCm;
+        if (b.rotation) {
+          if (!inFootprint(buildingFrame(b), p, -inset)) return false;
+          for (const h of b.roofHoles) {
+            if (inBuildingHole(b, p, h, this.config.holeHalfSideCm)) return false;
+          }
+          return true;
+        }
         const min: [number, number] = [b.min[0] + inset, b.min[1] + inset];
         const max: [number, number] = [b.max[0] - inset, b.max[1] - inset];
         if (!inRect(p, min, max)) return false;
@@ -1072,6 +1144,13 @@ export class PropsLayoutView {
       }
       case 'floor': {
         const b = this.buildings[l.buildingIndex];
+        if (b.rotation) {
+          if (!inFootprint(buildingFrame(b), p)) return false;
+          for (const h of b.floorHoles) {
+            if (h.floor === l.level && inBuildingHole(b, p, h.pos, this.config.holeHalfSideCm)) return false;
+          }
+          return true;
+        }
         if (!inRect(p, b.min, b.max)) return false;
         for (const h of b.floorHoles) {
           if (
@@ -1104,7 +1183,7 @@ export class PropsLayoutView {
     }
 
     for (const b of this.buildings) {
-      if (!b.bEnterable && rectWithin(p, b.min, b.max, Number(clearance))) {
+      if (!b.bEnterable && (b.rotation ? rotatedRectWithin(b, p, Number(clearance)) : rectWithin(p, b.min, b.max, Number(clearance)))) {
         return true;
       }
     }
@@ -1144,7 +1223,7 @@ export class PropsLayoutView {
       }
       default: {
         const b = this.buildings[l.buildingIndex];
-        return { min: b.min, max: b.max };
+        return { min: b.bboxMin, max: b.bboxMax };
       }
     }
   }
@@ -1301,15 +1380,23 @@ export class PropsLayoutView {
     if ((params.holeRimCm ?? 0) > 0) {
       const half = this.config.holeHalfSideCm + params.holeRimCm!;
       for (const b of this.buildings) {
+        // a rotated building's holes turn with it (corners rounded to integer cm for the exact exclusion tests)
+        const sq = (c: [number, number], h: number): [number, number][] =>
+          b.rotation
+            ? square(c, h).map((q): [number, number] => {
+                const v = rotVec([q[0] - c[0], q[1] - c[1]], b.rotation);
+                return [Math.round(c[0] + v[0]), Math.round(c[1] + v[1])];
+              })
+            : square(c, h);
         for (let i = 0; i < b.roofHoles.length; i++) {
-          shape('hole_rim', `${b.id}:roof_hole:${i}`, `roof:${b.id}`, square(b.roofHoles[i], half), 0, true);
+          shape('hole_rim', `${b.id}:roof_hole:${i}`, `roof:${b.id}`, sq(b.roofHoles[i], half), 0, true);
         }
         for (let i = 0; i < b.floorHoles.length; i++) {
           shape(
             'hole_rim',
             `${b.id}:floor_hole:${i}`,
             PropsLayoutView.layerNameFor(b.id, b.floorHoles[i].floor),
-            square(b.floorHoles[i].pos, half),
+            sq(b.floorHoles[i].pos, half),
             0,
             true
           );
@@ -1352,6 +1439,8 @@ export class PropsLayoutView {
       id: b.id,
       min: b.min,
       max: b.max,
+      rotation: b.rotation,
+      poly: b.poly,
       floors: b.floors,
       bHollow: b.bHollow,
       bEnterable: b.bEnterable,
