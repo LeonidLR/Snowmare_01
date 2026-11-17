@@ -22,6 +22,7 @@
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TurretActor.h"
+#include "Power/PowerGeneratorActor.h"
 #include "LevelGen/PropsGameplayRules.h"
 #include "LevelGen/PropsLayoutView.h"
 #include "LevelGen/PropsValidator.h"
@@ -251,6 +252,11 @@ struct UCodexLevelPropsSubsystem::FPropsSpawnSession
 	/** gameplay.traps_faction: level mines / wires are the enemy's. */
 	bool bTrapsHostile = true;
 	int32 PoweredTurrets = 0;
+	/** TURRET_POWER.md phase 1: the spawned generators / turrets by object id and each generator's cable links (FinishSession links them). */
+	TMap<FString, TWeakObjectPtr<APowerGeneratorActor>> GeneratorsById;
+	TMap<FString, TWeakObjectPtr<ATurretActor>> TurretsById;
+	TMap<FString, TArray<FString>> GeneratorLinks;
+	int32 PowerWarnings = 0;
 	/** Every actor spawned so far: the slab snap ignores them. */
 	TArray<TWeakObjectPtr<AActor>> ForTrace;
 	double PrepareMs = 0.0;
@@ -401,6 +407,12 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 	}
 	S.TurretSetups = PropsGameplayRules::ResolveTurrets(BalanceRoot.Get(), PropsGameplayRules::TurretPoweredShare(BalanceRoot.Get(), &File.Extra),
 		Turrets);
+	// TURRET_POWER.md phase 1: the power network's links are checked (warnings only: a broken link leaves its turret dark).
+	for (const FPropsValidationIssue& Issue : FPropsValidator::ValidatePowerLinks(S.Objects, S.KindOfLayer, BalanceRoot.Get()))
+	{
+		++S.PowerWarnings;
+		UE_LOG(LogCodexTactics, Warning, TEXT("[Props] power: %s: %s"), *Issue.ObjectId, *Issue.Reason);
+	}
 
 	S.PrepareMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
 	if (!GetWorld())
@@ -501,6 +513,22 @@ void UCodexLevelPropsSubsystem::FinishSession()
 		{
 			Crate->LootTable = Pair.Value.Object.LootTable;
 		}
+	}
+	// TURRET_POWER.md phase 1: each generator links the turrets on its cable; their power and side follow its state from now on.
+	int32 LinkedTurrets = 0;
+	for (const TPair<FString, TArray<FString>>& Pair : S.GeneratorLinks)
+	{
+		APowerGeneratorActor* Generator = S.GeneratorsById.FindRef(Pair.Key).Get();
+		for (const FString& TurretId : Pair.Value)
+		{
+			ATurretActor* Turret = S.TurretsById.FindRef(TurretId).Get();
+			LinkedTurrets += Generator && Turret && Generator->LinkTurret(Turret) ? 1 : 0;
+		}
+	}
+	if (S.GeneratorsById.Num() > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Props] power: %d generator(s), %d turret(s) linked, %d warning(s)"), S.GeneratorsById.Num(),
+			LinkedTurrets, S.PowerWarnings);
 	}
 
 	LastPrepareMs = S.PrepareMs;
@@ -660,6 +688,16 @@ bool UCodexLevelPropsSubsystem::SpawnGameplayActor(FPropsSpawnSession& S, const 
 			: (Setup.Side == PropsGameplayRules::ETurretSide::Neutral ? ETurretFaction::Neutral : ETurretFaction::Hostile);
 		Turret->InitLevelTurret(Faction, Setup.bPowered);
 		S.PoweredTurrets += Setup.bPowered ? 1 : 0;
+		S.TurretsById.Add(Obj.Id, Turret);
+	}
+	else if (APowerGeneratorActor* Generator = Cast<APowerGeneratorActor>(Actor))
+	{
+		// A power layer generator: its start state now, its cable links once every turret is spawned (FinishSession).
+		const PropsGameplayRules::FGeneratorInput Input = PropsGameplayRules::GeneratorInputOf(Obj);
+		Generator->bAutoLinkTurrets = false;
+		Generator->InitLevelGenerator(Input.Start, Input.FuelL);
+		S.GeneratorsById.Add(Obj.Id, Generator);
+		S.GeneratorLinks.Add(Obj.Id, Input.Links);
 	}
 	else if (ATripwireActor* Wire = Cast<ATripwireActor>(Actor))
 	{

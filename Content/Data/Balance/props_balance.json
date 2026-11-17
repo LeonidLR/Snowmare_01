@@ -55,6 +55,14 @@
 			"nav_affecting": true,
 			"nav_affecting_comment": "Obstacle for the nav gate."
 		},
+		"generator_diesel": {
+			"size_cm": [140, 100, 120],
+			"size_cm_comment": "PLACEHOLDER. The power layer's diesel generator (TURRET_POWER.md phase 1): the APowerGeneratorActor box.",
+			"hp": 200,
+			"hp_comment": "turret_power.json generator.hp is the game's value.",
+			"nav_affecting": true,
+			"nav_affecting_comment": "Obstacle for the nav gate."
+		},
 		"mine": {
 			"marker_visible_cm": 300,
 			"marker_visible_cm_comment": "Designer 2026-11-10 #4: a visible marker within 3 m.",
@@ -200,6 +208,19 @@
 			"wall_gap_cm_comment": "PLACEHOLDER. A loose pile to walls / covers.",
 			"exclude": { "$preset": "standard" },
 			"exclude_comment": "The standard keep-outs for loose piles."
+		},
+		"power_default": {
+			"comment": "TURRET_POWER.md phase 1 (designer 2026-11-17, sections 6 / 10): the power layer of a generated map - diesel generators linked by cable to the map's turrets (Training Ground autogen, power.ts; validated by validatePowerLinks / FPropsValidator::ValidatePowerLinks). The game reads only the resulting objects (generator 'start' / 'fuel_l' / 'links', turret 'generator').",
+			"generators": { "variant": "generator_diesel", "max_count": 10, "min_spacing_cm": 1500, "min_gap_any_cm": 100, "spawn_cm": 4000,
+				"ring_cm": [800, 2400], "ring_step_cm": 200, "angle_step_deg": 15 },
+			"generators_comment": "One generator per network, on the ground layer, on a ring around its turrets' centre (ring_cm, steps), clear of every other prop (half sizes + min_gap_any_cm), of other generators (min_spacing_cm) and of the spawn (spawn_cm); max_count caps the networks.",
+			"links": { "turrets_per_generator": { "1": 3, "2": 4, "3": 2, "4": 1 }, "cable_cm": [800, 4000], "group_reach_cm": 4000 },
+			"links_comment": "Network size draw weights (mean 2.1); every cable (generator -> turret, straight on the ground in phase 1) within cable_cm; a network's other turrets lie within group_reach_cm of its first one. A turret no generator can reach stays unlinked (dark, a validator warning).",
+			"start_state": { "running_hostile": 0.15, "running_neutral": 0.10, "fuelled_off": 0.15, "dry": 0.40, "broken": 0.20,
+				"residual_l": [3, 8], "running_tank_frac": [0.5, 1.0], "broken_with_fuel_share": 0.5, "tank_l": 20, "no_hostile_within_spawn_cm": 6000 },
+			"start_state_comment": "Start mix of the generators (largest-remainder counts: ~75 % of the turrets dark); running ones get running_tank_frac x tank_l litres, fuelled ones residual_l, broken_with_fuel_share of the broken ones residual_l too. A running hostile network is never within no_hostile_within_spawn_cm of the spawn (it swaps with another).",
+			"fuel": { "jerrycans_per_generator": 0.4, "min": 1, "table": "fuel_rare", "far_from_route_cm": 1400 },
+			"fuel_comment": "round(jerrycans_per_generator x generators), at least min, loose loot piles of the loot layer get the table fuel_rare (one jerrycan each), those at least far_from_route_cm from the mandatory route first."
 		}
 	},
 
@@ -221,6 +242,12 @@
 			"value_comment": "PLACEHOLDER. A reward for climbing.",
 			"entries": { "heat_pack": 2, "grenade": 2, "medkit": 1 },
 			"entries_comment": "PLACEHOLDER."
+		},
+		"fuel_rare": {
+			"value": 200,
+			"value_comment": "TURRET_POWER.md 6: a diesel jerrycan (the power layer sets this table on ~0.4 piles per generator).",
+			"entries": { "jerrycan": 1 },
+			"entries_comment": "One jerrycan (10 L) per pile."
 		}
 	},
 
@@ -260,6 +287,8 @@
 			"mine_comment": "PLACEHOLDER. Bright red marker (designer 6.1 #4: a visible marker).",
 			"loot_pile": [0.1, 0.85, 0.3],
 			"loot_pile_comment": "PLACEHOLDER. Green.",
+			"generator_diesel": [0.75, 0.55, 0.1],
+			"generator_diesel_comment": "PLACEHOLDER. Ochre diesel generator.",
 			"default": [0.5, 0.5, 0.5],
 			"default_comment": "Any variant with no colour of its own."
 		},
@@ -302,14 +331,16 @@
 			"mine_tripwire": "/Script/CodexTactics.PMCTripwireActor",
 			"mine_tripwire_comment": "Hostile PMC wire across the doorway (the object's width_cm), armed at level start, hidden until spotted.",
 			"loot_pile": "/Script/CodexTactics.DroppedItemActor",
-			"loot_pile_comment": "A pile of items on the ground (click: the leader walks up and picks up what he can carry)."
+			"loot_pile_comment": "A pile of items on the ground (click: the leader walks up and picks up what he can carry).",
+			"generator_diesel": "/Script/CodexTactics.PowerGeneratorActor",
+			"generator_diesel_comment": "TURRET_POWER.md phase 1: the level diesel generator of a turret network (refuel / start / stop / seize / repair, its turrets live only while it runs)."
 		},
 		"reveal_cm": 300,
 		"reveal_cm_comment": "Designer 2026-11-10 #4: a mine / wire becomes visible when an operative is within 3 m (the mine actor's DetectionRange, the wire's SpotRangeCm; the Medic-Sapper keeps his bonus).",
 		"spawn_frame_budget_ms": 20,
 		"spawn_frame_budget_ms_comment": "Props spawned per frame until this much time is spent; the rest go on the next frames (the 60 ms budget is per frame).",
 		"turrets": {
-			"comment": "Designer 2026-11-17: level turrets on generated maps start INACTIVE (unpowered). A props turret object may state its own \"faction\" (hostile / neutral / friendly) and \"powered\" (bool); the rest follow these rules. The power mechanic (generator / fuel) is designed later and hooks into ATurretActor::SetPowered / SetFaction.",
+			"comment": "Designer 2026-11-17: level turrets on generated maps start INACTIVE (unpowered). A props turret object may state its own \"faction\" (hostile / neutral / friendly) and \"powered\" (bool); the rest follow these rules. A turret with a \"generator\" (TURRET_POWER.md phase 1) takes its power and side from that generator once the spawn links them; these rules then apply only to unlinked turrets.",
 			"powered_share": 0.25,
 			"powered_share_comment": "Share of a map's turrets that start powered (rounded; chosen by the object id hash). A props file may override it with a top-level \"turret_powered_share\".",
 			"powered_faction": "hostile",
@@ -335,7 +366,9 @@
 				"bandage_comment": "PLACEHOLDER. The game has no bandage item yet: a medkit.",
 				"heat_pack": { "crate": { "HeatPacks": 1 }, "pile": { "HeatPack": 1 } },
 				"grenade": { "crate": { "Grenades": 1 } },
-				"grenade_comment": "Grenades are not a ground item (ETransferItem): crates only."
+				"grenade_comment": "Grenades are not a ground item (ETransferItem): crates only.",
+				"jerrycan": { "crate": { "DieselCans": 1 }, "pile": { "Diesel": 1 } },
+				"jerrycan_comment": "TURRET_POWER.md phase 1: a 10 L diesel jerrycan (carry limit turret_power.json carry.jerrycans_per_operative)."
 			}
 		}
 	},
@@ -353,6 +386,8 @@
 		"loot_crate": "",
 		"loot_crate_comment": "No actor: loot inside a crate is the crate actor's loot table (section 3.2).",
 		"mine_crate_comment": "No actor: a mined crate = the crate actor + an armed UCodexPropTrapComponent (section 3.2); the mine object exists only in data.",
-		"loot_pile": "/Game/Props/BP_PropLootPile.BP_PropLootPile_C"
+		"loot_pile": "/Game/Props/BP_PropLootPile.BP_PropLootPile_C",
+		"generator_diesel": "",
+		"generator_diesel_comment": "No greybox class: the generic prop actor (the live map spawns gameplay.classes.generator_diesel)."
 	}
 }

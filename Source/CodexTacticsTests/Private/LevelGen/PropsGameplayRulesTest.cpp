@@ -17,6 +17,7 @@
 #include "Interactables/TurretActor.h"
 #include "LevelGen/LevelPropsTypes.h"
 #include "Misc/FileHelper.h"
+#include "Power/PowerGeneratorActor.h"
 #include "Misc/Paths.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
@@ -84,6 +85,7 @@ bool FPropsGameplayClassesTest::RunTest(const FString&)
 		{ TEXT("mine_proximity"), AProximityMineActor::StaticClass() },
 		{ TEXT("mine_tripwire"), APMCTripwireActor::StaticClass() },
 		{ TEXT("loot_pile"), ADroppedItemActor::StaticClass() },
+		{ TEXT("generator_diesel"), APowerGeneratorActor::StaticClass() },
 	};
 	for (const FCase& Case : Cases)
 	{

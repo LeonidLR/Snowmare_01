@@ -1480,7 +1480,10 @@
 					"yaw": 90,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 57
+					"covered_m": 57,
+					"faction": "neutral",
+					"generator": "power_00000001_4",
+					"powered": false
 				},
 				{
 					"id": "turrets_00000001_1",
@@ -1490,7 +1493,10 @@
 					"yaw": 285,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 61
+					"covered_m": 61,
+					"faction": "neutral",
+					"generator": "power_00000001_6",
+					"powered": false
 				},
 				{
 					"id": "turrets_00000001_2",
@@ -1500,7 +1506,10 @@
 					"yaw": 210,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 88
+					"covered_m": 88,
+					"faction": "neutral",
+					"generator": "power_00000001_5",
+					"powered": false
 				},
 				{
 					"id": "turrets_00000001_3",
@@ -1510,7 +1519,10 @@
 					"yaw": 345,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 46
+					"covered_m": 46,
+					"faction": "neutral",
+					"generator": "power_00000001_4",
+					"powered": false
 				},
 				{
 					"id": "turrets_00000001_4",
@@ -1520,7 +1532,10 @@
 					"yaw": 180,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 50
+					"covered_m": 50,
+					"faction": "neutral",
+					"generator": "power_00000001_1",
+					"powered": true
 				},
 				{
 					"id": "turrets_00000001_5",
@@ -1530,7 +1545,10 @@
 					"yaw": 30,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 25
+					"covered_m": 25,
+					"faction": "hostile",
+					"generator": "power_00000001_9",
+					"powered": true
 				},
 				{
 					"id": "turrets_00000001_6",
@@ -1540,7 +1558,10 @@
 					"yaw": 225,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 76
+					"covered_m": 76,
+					"faction": "neutral",
+					"generator": "power_00000001_8",
+					"powered": false
 				},
 				{
 					"id": "turrets_00000001_7",
@@ -1550,7 +1571,10 @@
 					"yaw": 210,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 30
+					"covered_m": 30,
+					"faction": "neutral",
+					"generator": "power_00000001_7",
+					"powered": false
 				},
 				{
 					"id": "turrets_00000001_8",
@@ -1560,7 +1584,10 @@
 					"yaw": 0,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 30
+					"covered_m": 30,
+					"faction": "neutral",
+					"generator": "power_00000001_3",
+					"powered": false
 				},
 				{
 					"id": "turrets_00000001_9",
@@ -1570,7 +1597,10 @@
 					"yaw": 0,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 25
+					"covered_m": 25,
+					"faction": "neutral",
+					"generator": "power_00000001_2",
+					"powered": false
 				},
 				{
 					"id": "turrets_00000001_10",
@@ -1580,7 +1610,10 @@
 					"yaw": 210,
 					"locked": false,
 					"arc": 90,
-					"covered_m": 59
+					"covered_m": 59,
+					"faction": "neutral",
+					"generator": "power_00000001_1",
+					"powered": true
 				}
 			],
 			"report": {
@@ -2376,7 +2409,7 @@
 					"walk_layer": "roof:B_x1_4_t7_hall",
 					"yaw": 0,
 					"locked": false,
-					"loot_table": "rare_roof"
+					"loot_table": "fuel_rare"
 				},
 				{
 					"id": "loot_00000001_29",
@@ -2385,7 +2418,7 @@
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
-					"loot_table": "ammo_common"
+					"loot_table": "fuel_rare"
 				},
 				{
 					"id": "loot_00000001_30",
@@ -2556,7 +2589,7 @@
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
-					"loot_table": "med_common"
+					"loot_table": "fuel_rare"
 				},
 				{
 					"id": "loot_00000001_49",
@@ -2565,7 +2598,7 @@
 					"walk_layer": "roof:B_x2_28_t8_store",
 					"yaw": 0,
 					"locked": false,
-					"loot_table": "rare_roof"
+					"loot_table": "fuel_rare"
 				},
 				{
 					"id": "loot_00000001_50",
@@ -2664,6 +2697,126 @@
 				"status": "ok",
 				"warnings": []
 			}
+		},
+		{
+			"id": "power",
+			"kind": "power",
+			"enabled": true,
+			"seed": 1,
+			"locked": false,
+			"preset": "power_default",
+			"rules": {},
+			"objects": [
+				{
+					"id": "power_00000001_1",
+					"variant": "generator_diesel",
+					"pos": [3225, 675],
+					"walk_layer": "ground",
+					"yaw": 90,
+					"locked": false,
+					"cable_cm": [878, 2476],
+					"fuel_l": 17,
+					"links": ["turrets_00000001_10", "turrets_00000001_4"],
+					"start": "running_neutral"
+				},
+				{
+					"id": "power_00000001_2",
+					"variant": "generator_diesel",
+					"pos": [-1333, -4115],
+					"walk_layer": "ground",
+					"yaw": 105,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 0,
+					"links": ["turrets_00000001_9"],
+					"start": "broken"
+				},
+				{
+					"id": "power_00000001_3",
+					"variant": "generator_diesel",
+					"pos": [-9993, 7750],
+					"walk_layer": "ground",
+					"yaw": 330,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 6,
+					"links": ["turrets_00000001_8"],
+					"start": "broken"
+				},
+				{
+					"id": "power_00000001_4",
+					"variant": "generator_diesel",
+					"pos": [-2150, 5575],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false,
+					"cable_cm": [2300, 805],
+					"fuel_l": 0,
+					"links": ["turrets_00000001_0", "turrets_00000001_3"],
+					"start": "dry"
+				},
+				{
+					"id": "power_00000001_5",
+					"variant": "generator_diesel",
+					"pos": [3693, -3923],
+					"walk_layer": "ground",
+					"yaw": 75,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 0,
+					"links": ["turrets_00000001_2"],
+					"start": "dry"
+				},
+				{
+					"id": "power_00000001_6",
+					"variant": "generator_diesel",
+					"pos": [-5007, 9377],
+					"walk_layer": "ground",
+					"yaw": 75,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 0,
+					"links": ["turrets_00000001_1"],
+					"start": "dry"
+				},
+				{
+					"id": "power_00000001_7",
+					"variant": "generator_diesel",
+					"pos": [2034, 10616],
+					"walk_layer": "ground",
+					"yaw": 315,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 0,
+					"links": ["turrets_00000001_7"],
+					"start": "dry"
+				},
+				{
+					"id": "power_00000001_8",
+					"variant": "generator_diesel",
+					"pos": [-3300, 2050],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 8,
+					"links": ["turrets_00000001_6"],
+					"start": "fuelled_off"
+				},
+				{
+					"id": "power_00000001_9",
+					"variant": "generator_diesel",
+					"pos": [-6900, -10050],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false,
+					"cable_cm": [800],
+					"fuel_l": 10,
+					"links": ["turrets_00000001_5"],
+					"owner": "hostile",
+					"start": "running_hostile"
+				}
+			]
 		}
 	],
 	"overrides": []

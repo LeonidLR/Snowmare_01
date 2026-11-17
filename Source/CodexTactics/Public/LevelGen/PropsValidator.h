@@ -145,4 +145,15 @@ public:
 	 * Resolves half footprint size in cm for a variant from props_balance.json kinds or built-in defaults.
 	 */
 	static int32 GetVariantHalfSize(const FString& Variant, const FJsonObject* Balance = nullptr);
+
+	/**
+	 * The power-network checks (TURRET_POWER.md phase 1; the Training Ground's validatePowerLinks, same reasons and order): a generator's
+	 * start state, its link count (max = the largest presets.power_default.links.turrets_per_generator key), every link a turret of the
+	 * map within the cable reach (links.cable_cm[1]), no turret on two generators, every turret's "generator" listing it back, an unlinked
+	 * turret on a map with generators ("no power line"), and with SpawnPos a running hostile network away from the spawn
+	 * (start_state.no_hostile_within_spawn_cm). Warnings only (bDropped false): a broken link leaves the turret dark.
+	 * KindOfLayer = layer id -> layer kind.
+	 */
+	static TArray<FPropsValidationIssue> ValidatePowerLinks(const TArray<FLevelPropsResolvedObject>& Objects, const TMap<FString, FString>& KindOfLayer,
+		const FJsonObject* Balance = nullptr, const FIntPoint* SpawnPos = nullptr);
 };
