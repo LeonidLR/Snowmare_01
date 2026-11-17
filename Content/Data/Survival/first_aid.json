@@ -26,6 +26,88 @@
   "start_medical_bags": {
     "MedicSapper": 1
   },
+  "patient": {
+    "comment": "THE LYING PATIENT of a mate's aid (the game designer 2026-11-17, R17-6: several variants; the old transition spun the body around). The patient's clip set is picked by the pose he is in when the treatment starts (FirstAidRules::ChoosePatientPose): crawl = on all fours (wounded + prone: the injured crawl idle, the critical wound), prone = flat on the belly (prone, not wounded: the prone crawl idle), sitting = crouching (he sits down on the ground), none = standing (no clip, he keeps his pose), knockdown = knocked down: the knockdown owns the FullBody slot, so the aid WAITS until he is up / lying still and reads the pose again. One clip of the pose's list at random (not the same one twice in a row; an empty / missing list -> the item's 'patient' list for a lying pose). A name with a folder ('Injured/Idle_Crawl_Injured1') is /Game/Characters/Animations/<Folder>/{Male,Female}/<Name> (the CON_Injured / crawl copies other setup scripts made); a plain name is a healing-pack copy in FirstAid/. The SPIN: measured (Scripts/Editor/setup_first_aid_animation.py, long axis = pelvis -> head as an actor yaw, clockwise from the body's forward) the crawl / prone idles lie along the body's forward (-3..+3 deg, belly down) but AS_WoundedGetInjection / AS_WoundedLying lie on the LEFT SIDE with the head back-left (-152 male / -155 female): blending into them in 0.25 s swung the body ~150 deg. Now the patient's capsule is never turned toward anybody: hold_body_heading counter-turns his capsule by the body's turn at the clip's blend weight (in and out): long_axis_curve = that turn at weights 0, 0.1 .. 1 over the pose's first clip (the slot blends LOCAL bone rotations, so it is S-shaped, not linear: a linear counter-turn left a 77 deg/s wobble - measured by setup_first_aid_animation.py 'blend curves', both bodies averaged; without a curve long_axis_deg x weight), so the lying body keeps the line it lay on (the head stays where it was, ~50 cm from the capsule both ways) - limited to counter_turn_max_deg_s; the HELPER walks to the lying patient's side instead (helper_beside_lying: approach_stop_cm out to the side he comes from, helper_chest_cm toward the patient's head) and turns to face that point at helper_turn_deg_s (0 = at once, the old snap). Blends: the pose's blend_in_s / blend_out_s, a clip's own in clip_data (the lie-down onto the side slow: 1.8 / 1.6 s); fit_rate false = the idle plays at its own speed and loops (true: fitted to the treatment like the other clips, min_play_rate..max_play_rate). end: 'stand' = after a COMPLETED aid that left him able to stand (no longer critical) he gets up once the patient clip has blended out (the stance clip prone -> stand, from the belly-down crawl pose it starts from); 'stay' = he keeps his stance. max_body_turn_deg_s: the bound FirstAidSmoke checks on the patient's visible body (the long axis, 0.2 s windows) through the whole transition.",
+    "hold_body_heading": true,
+    "counter_turn_max_deg_s": 240,
+    "max_body_turn_deg_s": 60,
+    "helper_beside_lying": true,
+    "helper_chest_cm": 20,
+    "helper_turn_deg_s": 180,
+    "poses": {
+      "crawl": {
+        "clips": [
+          "Injured/Idle_Crawl_Injured1",
+          "Injured/Idle_Crawl_Injured2",
+          "AS_WoundedGetInjection"
+        ],
+        "blend_in_s": 0.6,
+        "blend_out_s": 0.6,
+        "fit_rate": false,
+        "end": "stand"
+      },
+      "prone": {
+        "clips": [
+          "Crawl/Crawl_Idle01",
+          "Injured/Idle_Crawl_Injured1",
+          "AS_WoundedLying"
+        ],
+        "blend_in_s": 1.2,
+        "blend_out_s": 1.0,
+        "fit_rate": false,
+        "end": "stay"
+      },
+      "sitting": {
+        "clips": [
+          "AS_WoundedSitting"
+        ],
+        "blend_in_s": 1.0,
+        "blend_out_s": 1.0,
+        "fit_rate": true,
+        "end": "stay"
+      }
+    },
+    "clip_data": {
+      "AS_WoundedGetInjection": {
+        "long_axis_deg": -153,
+        "long_axis_curve": [
+          0.0,
+          -8.7,
+          -20.5,
+          -36.5,
+          -56.7,
+          -79.0,
+          -99.8,
+          -117.0,
+          -131.0,
+          -142.8,
+          -153.2
+        ],
+        "blend_in_s": 1.8,
+        "blend_out_s": 1.6,
+        "fit_rate": true
+      },
+      "AS_WoundedLying": {
+        "long_axis_deg": -153,
+        "long_axis_curve": [
+          0.0,
+          -10.0,
+          -22.4,
+          -38.1,
+          -58.1,
+          -81.7,
+          -105.1,
+          -124.4,
+          -138.8,
+          -149.2,
+          -156.7
+        ],
+        "blend_in_s": 1.8,
+        "blend_out_s": 1.6,
+        "fit_rate": true
+      }
+    }
+  },
   "items": {
     "medkit": {
       "heal": 80,
@@ -44,7 +126,7 @@
       "apply_at": 0.8,
       "max_carried": 0,
       "weight_kg": 0.5,
-      "items_comment": "heal: HP added; tier_steps: the wound improves at least this many tiers (the health is raised to that tier's floor + 0.5 HP); self_seconds / aid_seconds: the treatment's length per tier (a tier left out = not allowed that way); apply_at: the share of the treatment when the heal lands; max_carried 0 = no limit; weight_kg: data only (the inventory has no weight limit yet). clips: the healing pack's clip names (/Game/HealingAnimations/Animations), played from the retargeted copies /Game/Characters/Animations/FirstAid/{Male,Female}/<name> - after adding a name run Scripts/Editor/setup_first_aid_animation.py. One clip is picked at random per treatment (not the same one twice in a row).",
+      "items_comment": "heal: HP added; tier_steps: the wound improves at least this many tiers (the health is raised to that tier's floor + 0.5 HP); self_seconds / aid_seconds: the treatment's length per tier (a tier left out = not allowed that way); apply_at: the share of the treatment when the heal lands; max_carried 0 = no limit; weight_kg: data only (the inventory has no weight limit yet). clips: the healing pack's clip names (/Game/HealingAnimations/Animations), played from the retargeted copies /Game/Characters/Animations/FirstAid/{Male,Female}/<name> - after adding a name run Scripts/Editor/setup_first_aid_animation.py. One clip is picked at random per treatment (not the same one twice in a row). 'patient' = the fallback for a lying patient when the 'patient' block's pose list is empty / missing.",
       "clips": {
         "self_standing": [
           "AS_BandageTreatment",
