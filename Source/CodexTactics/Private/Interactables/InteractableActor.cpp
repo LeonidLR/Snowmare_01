@@ -105,7 +105,7 @@ void AInteractableActor::BeginPlay()
 	Super::BeginPlay();
 	GeneratorHealth = GeneratorMaxHealth;
 
-	if (ObjectType == EInteractableType::Generator)
+	if (IsQuestGenerator())
 	{
 		if (UQuestSubsystem* Quests = GetWorld()->GetSubsystem<UQuestSubsystem>())
 		{

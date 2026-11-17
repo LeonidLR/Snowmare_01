@@ -60,11 +60,13 @@ public:
 	/**
 	 * The lure noise of Kind at Location: every enemy that hears it (StealthLureRules::Hears; walls counted from its ear to the
 	 * point) investigates it. Source = the operative (log only). Returns how many enemies started / moved an investigation.
+	 * RadiusOverrideCm >= 0 replaces the kind's open-air radius (a machine noise: a generator start, TURRET_POWER.md 7); EventKind
+	 * (none = "Whistle" / "Throw") is the LureHeard event's Kind and the log name.
 	 */
-	int32 EmitNoise(const FVector& Location, EStealthLureKind Kind, const AActor* Source);
+	int32 EmitNoise(const FVector& Location, EStealthLureKind Kind, const AActor* Source, float RadiusOverrideCm = -1.f, FName EventKind = NAME_None);
 
-	/** The enemies that would hear a lure of Kind at Location now (no effect). */
-	TArray<AEnemyCharacter*> FindListeners(const FVector& Location, EStealthLureKind Kind) const;
+	/** The enemies that would hear a lure of Kind at Location now (no effect); RadiusOverrideCm as EmitNoise. */
+	TArray<AEnemyCharacter*> FindListeners(const FVector& Location, EStealthLureKind Kind, float RadiusOverrideCm = -1.f) const;
 
 	/** The enemies the last EmitNoise sent investigating (smokes). */
 	const TArray<TWeakObjectPtr<AEnemyCharacter>>& GetLastListeners() const { return LastListeners; }

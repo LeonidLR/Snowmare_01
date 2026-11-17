@@ -70,16 +70,28 @@ public:
 	UPROPERTY(VisibleInstanceOnly, BlueprintReadOnly, Category = "CodexTactics|Generator")
 	bool bGeneratorBroken = false;
 
-	/** Damage to a generator (enemies); at 0 it breaks down, heat and turret power go off. */
+	/** Damage to a generator (enemies); at 0 it breaks down, heat and turret power go off. A power-network generator overrides it. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Generator")
-	void TakeGeneratorDamage(float Amount);
+	virtual void TakeGeneratorDamage(float Amount);
+
+	/**
+	 * The checkpoint quest generator (ObjectType Generator): starts with the quest chain and powers the squad's turrets (legacy mode,
+	 * TURRET_POWER.md 11). False for a power-network generator (APowerGeneratorActor), which runs on its own fuel.
+	 */
+	virtual bool IsQuestGenerator() const { return ObjectType == EInteractableType::Generator; }
+
+	/** Monsters may attack this as a generator now (a quest generator: intact; a power generator: only while it runs). */
+	virtual bool IsAttackableGenerator() const
+	{
+		return ObjectType == EInteractableType::Generator && !bGeneratorBroken && GeneratorHealth > 0.f;
+	}
 
 	/** Full repair: heat and turret power back on. */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Generator")
 	void RepairGenerator();
 
 	/** Save-game load (after the quest chain): generator durability and breakdown; its heat follows (running and intact). */
-	void RestoreGeneratorState(float Health, bool bBroken);
+	virtual void RestoreGeneratorState(float Health, bool bBroken);
 
 	/** Menu (or feed line) for the leader standing at the object. */
 	virtual FActionMenuRequest BuildActionMenu(const AOperativeCharacter* Leader) const;

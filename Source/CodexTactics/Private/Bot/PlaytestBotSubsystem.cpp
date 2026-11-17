@@ -978,7 +978,7 @@ AInteractableActor* UPlaytestBotSubsystem::FindBrokenGenerator() const
 {
 	for (TActorIterator<AInteractableActor> It(GetWorld()); It; ++It)
 	{
-		if (It->ObjectType == EInteractableType::Generator && It->bGeneratorBroken)
+		if (It->ObjectType == EInteractableType::Generator && It->IsQuestGenerator() && It->bGeneratorBroken)
 		{
 			return *It;
 		}

@@ -4,7 +4,11 @@
 #include "Interactables/DeployableActor.h"
 #include "TurretActor.generated.h"
 
+class APowerGeneratorActor;
+class UAudioComponent;
 class UHealthComponent;
+class UPointLightComponent;
+class USoundBase;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnTurretFired, ATurretActor*, Turret, AActor*, Target, const FVector&, HitLocation);
 
@@ -28,6 +32,10 @@ enum class ETurretFaction : uint8
  * turret also warms operatives nearby (Godot heat_sources, 4.5 m). Can be picked up, moved, trapped.
  * G003b: Faction - the squad's turret (Friendly, default: monsters + PMC) or a level turret (Hostile: the squad + monsters; Neutral:
  * monsters only; no squad menu). A level turret's power is its own (SetPowered), the squad's generator powers only friendly turrets.
+ * TURRET_POWER.md phase 1: a level turret linked to an APowerGeneratorActor (SetPowerSource) is a NETWORK turret - powered only while its
+ * generator runs (spin-up 2 s, the gun drops at once when the power goes), its side is the generator owner's (PowerRules::MayTargetHuman:
+ * monsters always, humans of any team but the owner's; no owner = no humans), a status lamp shows it is live, the squad learns its owner
+ * by observing it (2 s, line of sight, 40 m, standing still) or by the generator's panel; the quest generator never touches it.
  * Godot reference: Scenes/movements/deployables/turret.gd, main.gd turret menu / `_execute_repair_object`.
  */
 UCLASS(Blueprintable)
@@ -94,6 +102,52 @@ public:
 	/** Save-game load: power and broken state (health is restored separately); the look follows. */
 	void RestoreSaved(bool bInPowered, bool bInBroken);
 
+	// --- Power network (TURRET_POWER.md phase 1) ---
+
+	/** Links the turret to a generator's network (null unlinks: it goes dark). Called by APowerGeneratorActor::LinkTurret. */
+	void SetPowerSource(APowerGeneratorActor* Generator);
+
+	/** The generator feeding it (null for the squad's turrets and the legacy level turrets). */
+	APowerGeneratorActor* GetPowerSource() const { return PowerSource.Get(); }
+
+	/** Fed by a generator network (its power and side are the generator's). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Turret")
+	bool IsNetworkLinked() const { return PowerSource.IsValid(); }
+
+	/** The network's power and owner (the generator pushes it on every change); the turret spins up / winds down. */
+	void ApplyNetworkState(bool bLive, int32 InOwnerTeam);
+
+	/** The team whose humans it never fires at (the network owner; PowerRules::NoOwner = it fires at no human). */
+	int32 GetOwnerTeam() const { return OwnerTeam; }
+
+	/** Powered, intact and spun up: it may fire now. */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Turret")
+	bool IsLive() const;
+
+	/** Would it fire at Target (side rule only: alive / range / line of fire are not checked). */
+	bool MayTarget(const AActor* Target) const;
+
+	/** Monsters treat it as a target: the squad's turrets always, a network turret only while powered (a dark one is scenery). */
+	bool IsMonsterTarget() const { return !IsNetworkLinked() || bPowered; }
+
+	/** The squad knows this network turret's owner (observed / the panel / it changed hands by the squad). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Turret")
+	bool IsOwnerKnown() const { return bOwnerKnown; }
+
+	/** Marks the owner known; bAnnounce posts the identification line. */
+	void RevealOwner(bool bAnnounce);
+
+	/** Seconds the squad has observed it without a break (smokes). */
+	float GetObserveSeconds() const { return ObserveSeconds; }
+
+	/** The status lamp (placeholder look of a live turret: amber, then the side's colour once identified). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Turret")
+	TObjectPtr<UPointLightComponent> StatusLamp;
+
+	/** Optional looping servo hum while a network turret is live (none by default: no audio asset is shipped for it yet). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Turret")
+	TObjectPtr<USoundBase> HumSound;
+
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "CodexTactics|Turret")
 	TObjectPtr<UHealthComponent> Health;
 
@@ -142,6 +196,11 @@ private:
 	UFUNCTION()
 	void HandleBroken(AActor* Victim, const FString& AttackerSource);
 
+	/** Network turrets: the squad's passive observation (5 Hz). */
+	void TickObservation(float DeltaSeconds);
+	/** Lamp and hum of a network turret. */
+	void UpdateNetworkLook();
+
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Turret")
 	bool bPowered = true;
 
@@ -150,6 +209,15 @@ private:
 	ETurretFaction Faction = ETurretFaction::Friendly;
 
 	bool bBroken = false;
+	TWeakObjectPtr<APowerGeneratorActor> PowerSource;
+	int32 OwnerTeam = -1;
+	/** World time the power came / went (spin-up, wind-down). */
+	double PowerChangedAt = -1000.0;
+	bool bOwnerKnown = false;
+	float ObserveSeconds = 0.f;
+	float ObserveTimer = 0.f;
+	UPROPERTY(Transient)
+	TObjectPtr<UAudioComponent> HumAudio;
 	float ShotCooldown = 0.f;
 	int32 ShotsFired = 0;
 	TWeakObjectPtr<AActor> LastTarget;

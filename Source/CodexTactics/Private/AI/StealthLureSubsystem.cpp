@@ -191,7 +191,7 @@ ALureStoneActor* UStealthLureSubsystem::ThrowAt(AOperativeCharacter* Operative, 
 	return Stone;
 }
 
-TArray<AEnemyCharacter*> UStealthLureSubsystem::FindListeners(const FVector& Location, EStealthLureKind Kind) const
+TArray<AEnemyCharacter*> UStealthLureSubsystem::FindListeners(const FVector& Location, EStealthLureKind Kind, float RadiusOverrideCm) const
 {
 	TArray<AEnemyCharacter*> Out;
 	const UWorld* World = GetWorld();
@@ -200,7 +200,7 @@ TArray<AEnemyCharacter*> UStealthLureSubsystem::FindListeners(const FVector& Loc
 		return Out;
 	}
 	const FStealthLureParams Params = GetParams();
-	const float Radius = StealthLureRules::GetRadius(Params, Kind);
+	const float Radius = RadiusOverrideCm >= 0.f ? RadiusOverrideCm : StealthLureRules::GetRadius(Params, Kind);
 	const float SearchMultiplier = EnemyPerception::GetSearch().PerceptionMultiplier;
 	const FVector NoisePoint = Location + FVector(0.f, 0.f, StealthLureInternal::NoiseHeightCm);
 	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
@@ -235,7 +235,7 @@ TArray<AEnemyCharacter*> UStealthLureSubsystem::FindListeners(const FVector& Loc
 	return Out;
 }
 
-int32 UStealthLureSubsystem::EmitNoise(const FVector& Location, EStealthLureKind Kind, const AActor* Source)
+int32 UStealthLureSubsystem::EmitNoise(const FVector& Location, EStealthLureKind Kind, const AActor* Source, float RadiusOverrideCm, FName EventKind)
 {
 	LastListeners.Reset();
 	UWorld* World = GetWorld();
@@ -251,9 +251,9 @@ int32 UStealthLureSubsystem::EmitNoise(const FVector& Location, EStealthLureKind
 	Spec.ApproachSpeedFraction = Params.ApproachSpeedFraction;
 	Spec.ListenSeconds = Params.ListenSeconds;
 	// EVERY enemy that hears it comes (user correction 2026-10-18: a horde in range = all of them).
-	const TArray<AEnemyCharacter*> Listeners = FindListeners(Location, Kind);
+	const TArray<AEnemyCharacter*> Listeners = FindListeners(Location, Kind, RadiusOverrideCm);
 	// Who was in open-air reach but did not hear it (walls): one line each, the first thing to read when "nobody came".
-	const float OpenRadius = StealthLureRules::GetRadius(Params, Kind);
+	const float OpenRadius = RadiusOverrideCm >= 0.f ? RadiusOverrideCm : StealthLureRules::GetRadius(Params, Kind);
 	const float SearchMultiplier = EnemyPerception::GetSearch().PerceptionMultiplier;
 	const FVector NoisePoint = Location + FVector(0.f, 0.f, StealthLureInternal::NoiseHeightCm);
 	for (AEnemyCharacter* Enemy : UEnemyRegistrySubsystem::GetEnemyCharacters(World))
@@ -296,15 +296,15 @@ int32 UStealthLureSubsystem::EmitNoise(const FVector& Location, EStealthLureKind
 				FGameplayEventContext Context;
 				Context.Subject = Enemy;
 				Context.Target = const_cast<AActor*>(Source);
-				Context.Kind = Kind == EStealthLureKind::Whistle ? FName(TEXT("Whistle")) : FName(TEXT("Throw"));
+				Context.Kind = !EventKind.IsNone() ? EventKind : (Kind == EStealthLureKind::Whistle ? FName(TEXT("Whistle")) : FName(TEXT("Throw")));
 				Context.Location = Location;
 				GameplayEvents::RaiseWithContext(this, GameplayEvents::LureHeard, Context);
 			}
 		}
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("[Stealth] lure %s at %s (radius %.0f m, by %s): %d enemies investigate"),
-		Kind == EStealthLureKind::Whistle ? TEXT("whistle") : TEXT("stone"), *Location.ToCompactString(),
-		StealthLureRules::GetRadius(Params, Kind) / 100.f, Source ? *Source->GetName() : TEXT("-"), LastListeners.Num());
+		!EventKind.IsNone() ? *EventKind.ToString() : (Kind == EStealthLureKind::Whistle ? TEXT("whistle") : TEXT("stone")), *Location.ToCompactString(),
+		OpenRadius / 100.f, Source ? *Source->GetName() : TEXT("-"), LastListeners.Num());
 	return LastListeners.Num();
 }
 
