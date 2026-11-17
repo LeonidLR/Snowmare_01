@@ -1125,7 +1125,16 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(State.Order));
 						State.Order = EPmcOrder::Hold;
 						State.OrderSince = Now;
-						State.FailedUntil.Add(EPmcOrder::TakeCover, Now + Team.Weights.CompletedOrderCooldownSeconds);
+						State.FailedUntil.Add(State.Order, Now + Team.Weights.CompletedOrderCooldownSeconds);
+					}
+					else
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s ended %s out of cover (interrupted approach) -> Hold with cooldown"), TeamId,
+							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(State.Order));
+						State.Order = EPmcOrder::Hold;
+						State.OrderSince = Now;
+						State.FailedUntil.Add(State.Order, Now + Team.Weights.CoverInterruptedCooldownSeconds);
+						State.FailedUntil.Add(EPmcOrder::TakeCover, Now + Team.Weights.CoverInterruptedCooldownSeconds);
 					}
 				}
 				else if (State.Order == EPmcOrder::FallBack)
@@ -1434,6 +1443,7 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		{
 			// A new threat appeared: clear completed cooldowns for the previous threat so the fighter can react.
 			State.FailedUntil.Remove(EPmcOrder::TakeCover);
+			State.FailedUntil.Remove(EPmcOrder::Relocate);
 			State.FailedUntil.Remove(EPmcOrder::FallBack);
 			State.LastThreat = ThreatActor;
 		}

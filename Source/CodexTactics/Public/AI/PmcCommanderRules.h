@@ -218,6 +218,8 @@ struct CODEXTACTICS_API FPmcWeights
 	float FailedOrderCooldownSeconds = 5.f;
 	/** A completed order (e.g. TakeCover in cover, or FallBack at standoff distance) sits out this long on the same spot, s. */
 	float CompletedOrderCooldownSeconds = 4.f;
+	/** A cover order that ended without the fighter being in cover (e.g. sniper stopped to shoot) sits out this long, s. */
+	float CoverInterruptedCooldownSeconds = 3.f;
 	/** A walk without StuckProgressCm of progress for this long takes the next detour step (NextDetourStep), then fails, s. */
 	float RepathAfterSeconds = 5.f;
 	/**

@@ -149,6 +149,7 @@
     "/order_min_hold_s": { "min": 2.0, "max": 5.0, "step": 0.5 },
     "/failed_order_cooldown_s": { "min": 3.0, "max": 8.0, "step": 1.0 },
     "/completed_order_cooldown_s": { "min": 2.0, "max": 6.0, "step": 0.5 },
+    "/cover_interrupted_cooldown_s": { "min": 1.5, "max": 5.0, "step": 0.5 },
     "/repath_after_s": { "min": 5.0, "max": 5.0, "step": 1.0, "frozen": true },
     "/detour_max": { "min": 3, "max": 3, "step": 1, "frozen": true },
     "/detour_side_cm": { "min": 600.0, "max": 600.0, "step": 50, "frozen": true },

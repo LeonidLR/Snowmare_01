@@ -540,6 +540,7 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("order_min_hold_s"), Out.OrderMinHoldSeconds);
 		ReadNumber(Json, TEXT("failed_order_cooldown_s"), Out.FailedOrderCooldownSeconds);
 		ReadNumber(Json, TEXT("completed_order_cooldown_s"), Out.CompletedOrderCooldownSeconds);
+		ReadNumber(Json, TEXT("cover_interrupted_cooldown_s"), Out.CoverInterruptedCooldownSeconds);
 		ReadNumber(Json, TEXT("repath_after_s"), Out.RepathAfterSeconds);
 		ReadNumber(Json, TEXT("push_after_s"), Out.PushAfterSeconds);
 		ReadNumber(Json, TEXT("push"), Out.Push);
