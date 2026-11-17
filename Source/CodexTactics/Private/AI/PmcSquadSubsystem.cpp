@@ -1598,6 +1598,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	FSquadOrderContext Context;
 	Context.Operative = &Fighter;
 	bool bTaken = false;
+	if (Order != EPmcOrder::Ambush)
+	{
+		// Another order interrupts a post walk: it did not "end short" (TACTICAL_MAP P2, the post's three-tries rule).
+		State.PostWalkFromCm = -1.f;
+	}
 	FVector Goal = FVector::ZeroVector;
 	// Why the walk was not taken (Codex.Debug.MoveTrace logs it; fix/pmc-onpoint-3d-detour).
 	const TCHAR* WalkRefusal = nullptr;
@@ -1895,6 +1900,14 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		// TACTICAL_MAP P2: a man with a post waits ON it - walks there first, then faces its look direction (crouched; standing at a
 		// window, where a crouch would hide him under the sill).
 		// A post he cannot reach (no path, three walks that ended short of it) is dropped: the plain ambush below.
+		// The previous post walk ended short only when it got him no closer (a walk that made progress is not a failure).
+		if (State.Post.IsValid() && GetTacticalMap()
+			&& !PmcTacticalRules::IsAtPost(PmcSquadLocal::FeetOf(Fighter), State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm)
+			&& PmcTacticalRules::PostWalkEndedShort(State.PostWalkFromCm, static_cast<float>(FVector::Dist(PmcSquadLocal::FeetOf(Fighter), State.Post.Location))))
+		{
+			++State.PostWalks;
+		}
+		State.PostWalkFromCm = -1.f;
 		if (State.Post.IsValid() && GetTacticalMap() && State.PostWalks >= 3
 			&& !PmcTacticalRules::IsAtPost(PmcSquadLocal::FeetOf(Fighter), State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm))
 		{
@@ -1907,12 +1920,14 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
 			if (!PmcTacticalRules::IsAtPost(Feet, State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm))
 			{
+				const float DistanceCm = static_cast<float>(FVector::Dist(Feet, State.Post.Location));
 				bKeepGoalLevel = true;
 				bTaken = Walk(State.Post.Location, false);
 				Team.Stats.PostMoves += bTaken ? 1 : 0;
 				State.bPostSettled = false;
 				// Not taken = unreachable now: counted like a walk that ended short.
-				++State.PostWalks;
+				State.PostWalks += bTaken ? 0 : 1;
+				State.PostWalkFromCm = bTaken ? DistanceCm : -1.f;
 				if (bTaken)
 				{
 					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s walks onto his %s post %s"), TeamId, *Fighter.DisplayName.ToString(),
@@ -2100,9 +2115,10 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		if (Route)
 		{
 			Facing = PmcTacticalRules::RouteFacing(Slot.WorldLocation, Slot.WallNormal, PmcTacticalRules::NearestOnRoute(*Route, Slot.WorldLocation));
-			for (const FTacticalHidingSpot& Spot : TacticalMap->GetFile().HidingSpots)
+			// Only the hiding spots near the route (cached with it, SetRouteOf): a slot farther out has none within 2.5 m anyway.
+			for (const FVector& Spot : OwnTeam->RouteCoverSpots)
 			{
-				if (FVector::Dist2D(Spot.Location, Slot.WorldLocation) <= 250.f && FMath::Abs(Spot.Location.Z - Slot.WorldLocation.Z) <= 150.f)
+				if (FVector::Dist2D(Spot, Slot.WorldLocation) <= 250.f && FMath::Abs(Spot.Z - Slot.WorldLocation.Z) <= 150.f)
 				{
 					bNearAnalysisCover = true;
 					break;
@@ -2296,6 +2312,59 @@ bool UPmcSquadSubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) c
 		return true;
 	}
 	return false;
+}
+
+bool UPmcSquadSubsystem::ProjectToNavAtLevel(const FVector& Point, FVector& OutPoint) const
+{
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	FNavLocation Projected;
+	if (Nav && Nav->ProjectPointToNavigation(Point, Projected, FVector(200.f, 200.f, 150.f)) && FMath::Abs(Projected.Location.Z - Point.Z) <= 150.f)
+	{
+		OutPoint = Projected.Location;
+		return true;
+	}
+	return false;
+}
+
+void UPmcSquadSubsystem::KeepCandidatesOnNav(TArray<FPmcPostCandidate>& Candidates) const
+{
+	const int32 Before = Candidates.Num();
+	for (int32 Index = Candidates.Num() - 1; Index >= 0; --Index)
+	{
+		FVector OnNav;
+		if (ProjectToNavAtLevel(Candidates[Index].Location, OnNav))
+		{
+			Candidates[Index].Location = OnNav;
+		}
+		else
+		{
+			Candidates.RemoveAt(Index);
+		}
+	}
+	if (Candidates.Num() < Before)
+	{
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[PmcAI] tactical posts: %d of %d candidates off the navmesh at their level dropped"), Before - Candidates.Num(), Before);
+	}
+}
+
+void UPmcSquadSubsystem::SetRouteOf(FTeam& Team, const TArray<FVector>& Route) const
+{
+	Team.Route = Route;
+	Team.RouteCoverSpots.Reset();
+	const UTacticalMapSubsystem* Map = GetTacticalMap();
+	if (!Map || Route.IsEmpty())
+	{
+		return;
+	}
+	// A slot can only count a spot within 2.5 m of itself, and the slot lies within the cover search of a man near the route.
+	const float Reach = FMath::Max(Team.Weights.TacticalReachCm, 100.f) + PmcSquadLocal::CoverSearchRadiusCm + 250.f;
+	for (const FTacticalHidingSpot& Spot : Map->GetFile().HidingSpots)
+	{
+		if (PmcTacticalRules::DistanceToRoute(Route, Spot.Location) <= Reach)
+		{
+			Team.RouteCoverSpots.Add(Spot.Location);
+		}
+	}
 }
 
 void UPmcSquadSubsystem::HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit)
@@ -2512,7 +2581,7 @@ TArray<FVector> UPmcSquadSubsystem::RouteBetween(const FVector& From, const FVec
 
 void UPmcSquadSubsystem::SetTeamRoute(int32 TeamId, const TArray<FVector>& Route)
 {
-	TeamOf(TeamId).Route = Route;
+	SetRouteOf(TeamOf(TeamId), Route);
 }
 
 const TArray<FVector>& UPmcSquadSubsystem::GetTeamRoute(int32 TeamId) const
@@ -2600,7 +2669,7 @@ TArray<FPmcPostCandidate> UPmcSquadSubsystem::GatherPostCandidates(const TArray<
 			Candidate.SourceIndex = Entry.Key;
 		}
 	}
-	// Overwatch roof spots reaching the route (by range, no distance filter), windows covering it, drop edges landing on it.
+	// Overwatch roof spots reaching the route, windows covering it, drop edges landing on it.
 	TMap<TPair<int32, int32>, float> Roofs;
 	TMap<int32, float> Windows;
 	TMap<int32, float> Drops;
@@ -2631,6 +2700,11 @@ TArray<FPmcPostCandidate> UPmcSquadSubsystem::GatherPostCandidates(const TArray<
 			continue;
 		}
 		const FTacticalOverwatchSpot& Spot = Roof.Spots[Entry.Key.Value];
+		// Within the reach of the route like every other post (roofs 1.5 x, as the ladder roofs: a roof sees farther) and away from its start.
+		if (!Near(Spot.Location, 1.5f))
+		{
+			continue;
+		}
 		FPmcPostCandidate& Candidate = Out.AddDefaulted_GetRef();
 		Candidate.Kind = EPmcPostKind::Overwatch;
 		Candidate.Location = Spot.Location;
@@ -2744,7 +2818,9 @@ TArray<AOperativeCharacter*> UPmcSquadSubsystem::SpawnSquadTactical(int32 TeamId
 {
 	const FTeam* Existing = FindTeam(TeamId);
 	const FPmcWeights Weights = Existing ? Existing->Weights : FPmcWeights();
-	const TArray<FPmcPostCandidate> Candidates = GatherPostCandidates(Route, Seed, Weights, 0.f, OutLadderRoofsPicked);
+	TArray<FPmcPostCandidate> Candidates = GatherPostCandidates(Route, Seed, Weights, 0.f, OutLadderRoofsPicked);
+	// A post off the navmesh at its own level would leave its man unable to move: such candidates are never planned.
+	KeepCandidatesOnNav(Candidates);
 	if (OutPosts)
 	{
 		OutPosts->Reset();
@@ -2764,18 +2840,20 @@ TArray<AOperativeCharacter*> UPmcSquadSubsystem::SpawnSquadTactical(int32 TeamId
 	const FVector Right = FRotator(0.f, Facing.Yaw, 0.f).RotateVector(FVector::RightVector);
 	for (int32 Index = 0; Index < Count; ++Index)
 	{
-		const FPmcTacticalPost& Post = Posts[Index];
+		FPmcTacticalPost Post = Posts.IsValidIndex(Index) ? Posts[Index] : FPmcTacticalPost();
 		FVector Spot;
 		FRotator Look = Facing;
+		// On the navmesh at the post's own level (a roof spot must not snap to the street under it); a post that fails it is no post.
+		FVector OnPostNav = Post.Location;
+		if (Post.IsValid() && !ProjectToNavAtLevel(Post.Location, OnPostNav))
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcAI] team %d: the %s post %s is off the navmesh at its level - fighter %d spawns on the line"), TeamId,
+				PmcTacticalRules::PostKindName(Post.Kind), *Post.Location.ToCompactString(), Index);
+			Post = FPmcTacticalPost();
+		}
 		if (Post.IsValid())
 		{
-			// On the navmesh at the post's own level (a roof spot must not snap to the street under it), else on its surface.
-			Spot = Post.Location;
-			FVector OnNav;
-			if (ProjectToNav(Post.Location, OnNav) && FMath::Abs(OnNav.Z - Post.Location.Z) <= 150.f)
-			{
-				Spot = OnNav;
-			}
+			Spot = OnPostNav;
 			Look = FRotator(0.f, Post.Yaw, 0.f);
 		}
 		else
@@ -2790,31 +2868,39 @@ TArray<AOperativeCharacter*> UPmcSquadSubsystem::SpawnSquadTactical(int32 TeamId
 		AOperativeCharacter* Fighter = SpawnFighter(TeamId, Spot + FVector(0.f, 0.f, 95.f), Look, Seed, Index);
 		if (!Fighter)
 		{
+			// Neither the fighter nor his post: OutPosts stays index-aligned with the result.
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcAI] team %d: fighter %d failed to spawn at %s (his %s post is left out)"), TeamId, Index,
+				*Spot.ToCompactString(), PmcTacticalRules::PostKindName(Post.Kind));
 			continue;
 		}
 		Out.Add(Fighter);
 		if (OutPosts)
 		{
 			OutPosts->Add(Post);
+			ensure(OutPosts->Num() == Out.Num());
 		}
 		if (Post.IsValid())
 		{
 			FFighterState& State = TeamOf(TeamId).Fighters.FindOrAdd(Fighter);
 			State.Post = Post;
+			State.bPostSettled = false;
+			State.PostWalks = 0;
+			State.PostWalkFromCm = -1.f;
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s placed on a %s post %s (yaw %.0f, score %.2f, danger %.2f, %s)"), TeamId,
 				*Fighter->DisplayName.ToString(), PmcTacticalRules::PostKindName(Post.Kind), *Post.Location.ToCompactString(), Post.Yaw, Post.Score, Post.Danger, *Post.Group);
 		}
 	}
-	TeamOf(TeamId).Route = Route;
+	SetRouteOf(TeamOf(TeamId), Route);
 	return Out;
 }
 
 int32 UPmcSquadSubsystem::AssignTacticalPosts(int32 TeamId, const TArray<FVector>& Route, int32 Seed, float MinFromStartCm)
 {
 	FTeam& Team = TeamOf(TeamId);
-	Team.Route = Route;
+	SetRouteOf(Team, Route);
 	const TArray<AOperativeCharacter*> Fighters = GetTeamMembers(TeamId);
-	const TArray<FPmcPostCandidate> Candidates = GatherPostCandidates(Route, Seed, Team.Weights, MinFromStartCm);
+	TArray<FPmcPostCandidate> Candidates = GatherPostCandidates(Route, Seed, Team.Weights, MinFromStartCm);
+	KeepCandidatesOnNav(Candidates);
 	if (Candidates.IsEmpty() || Fighters.IsEmpty())
 	{
 		return 0;
@@ -2827,6 +2913,7 @@ int32 UPmcSquadSubsystem::AssignTacticalPosts(int32 TeamId, const TArray<FVector
 		State.Post = Posts[Index];
 		State.bPostSettled = false;
 		State.PostWalks = 0;
+		State.PostWalkFromCm = -1.f;
 		if (Posts[Index].IsValid())
 		{
 			++Posted;

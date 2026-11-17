@@ -125,4 +125,13 @@ namespace PmcTacticalRules
 
 	/** The man stands on his post: within ArriveCm (planar) and on its level (|dz| <= LevelToleranceCm). */
 	CODEXTACTICS_API bool IsAtPost(const FVector& Feet, const FVector& Post, float ArriveCm, float LevelToleranceCm);
+
+	/** A post walk that gets him less than this much closer to his post ended short (it counts toward the three tries that drop it). */
+	constexpr float PostWalkMinProgressCm = 100.f;
+
+	/**
+	 * The post walk issued at WalkFromCm from the post ended short of it: he is not at least PostWalkMinProgressCm closer now (NowCm).
+	 * False without a walk (WalkFromCm < 0) - a walk that made progress, or one another order interrupted, is no failed try.
+	 */
+	CODEXTACTICS_API bool PostWalkEndedShort(float WalkFromCm, float NowCm);
 }

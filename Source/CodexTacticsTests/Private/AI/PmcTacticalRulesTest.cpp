@@ -286,4 +286,19 @@ bool FPmcTacticalScenarioTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcTacticalPostWalkTest, "CodexTactics.AI.PmcTactical.PostWalkEndedShort",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcTacticalPostWalkTest::RunTest(const FString&)
+{
+	// Only a walk that got him no closer counts toward the three tries that drop the post (API review 2026-11-17).
+	TestFalse(TEXT("no walk issued: nothing to count"), PmcTacticalRules::PostWalkEndedShort(-1.f, 3000.f));
+	TestFalse(TEXT("a walk that made progress (30 m -> 12 m) is no failed try"), PmcTacticalRules::PostWalkEndedShort(3000.f, 1200.f));
+	TestFalse(TEXT("exactly the minimum progress is progress"), PmcTacticalRules::PostWalkEndedShort(3000.f, 3000.f - PmcTacticalRules::PostWalkMinProgressCm));
+	TestTrue(TEXT("a walk that ended where it began ended short"), PmcTacticalRules::PostWalkEndedShort(3000.f, 3000.f));
+	TestTrue(TEXT("a few centimetres closer is still short"), PmcTacticalRules::PostWalkEndedShort(3000.f, 2950.f));
+	TestTrue(TEXT("pushed farther away is short"), PmcTacticalRules::PostWalkEndedShort(3000.f, 3400.f));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -438,6 +438,8 @@ namespace PmcArena
 		/** The tactical round's route (the attackers walk it) and its defenders' posts / ladder-roof picks. */
 		TArray<FVector> TacticalRoute;
 		TArray<FPmcTacticalPost> TacticalPosts;
+		/** TacticalPosts[i] is the post of TacticalFighters[i] (SpawnSquadTactical's result, index-aligned with OutPosts). */
+		TArray<TWeakObjectPtr<AOperativeCharacter>> TacticalFighters;
 		TArray<int32> LadderRoofsPicked;
 	};
 
@@ -1542,6 +1544,12 @@ namespace PmcArena
 		return INDEX_NONE;
 	}
 
+	/** A valid index into the two sides' arrays (Behaviour[2], ShotDistM[2], ...): 0 = A, 1 = B; INDEX_NONE (not in a side) is not. */
+	bool IsSideIndex(int32 Side)
+	{
+		return Side == 0 || Side == 1;
+	}
+
 	TSharedRef<FJsonObject> EventJson(const FState& State, const TCHAR* Type)
 	{
 		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
@@ -1614,7 +1622,7 @@ namespace PmcArena
 				}
 				const AOperativeCharacter* Shooter = Cast<AOperativeCharacter>(Impact.Instigator.Get());
 				const int32 ShooterSide = SideIndexOf(*StatePtr, Shooter);
-				if (ShooterSide == INDEX_NONE)
+				if (!IsSideIndex(ShooterSide))
 				{
 					return;
 				}
@@ -1675,12 +1683,12 @@ namespace PmcArena
 					const int32 VictimSide = SideIndexOf(*StatePtr, Victim);
 					// The RPG-7's launch (fix/arena-rpg-contact-roof): counted per side whatever its target; at an enemy it is a shot below, and its
 					// burst near an enemy is another contact moment (the projectile listener).
-					if (Shooter && ShooterSide != INDEX_NONE && Shooter->IsLauncherEquipped())
+					if (Shooter && IsSideIndex(ShooterSide) && Shooter->IsLauncherEquipped())
 					{
 						++StatePtr->Track.Rockets[ShooterSide];
 						Json->SetBoolField(TEXT("rocket"), true);
 					}
-					if (Shooter && Victim && ShooterSide != INDEX_NONE && VictimSide != INDEX_NONE && ShooterSide != VictimSide)
+					if (Shooter && Victim && IsSideIndex(ShooterSide) && IsSideIndex(VictimSide) && ShooterSide != VictimSide)
 					{
 						FTrack& ShotTrack = StatePtr->Track;
 						ShotTrack.ShotTimes.Add(StatePtr->StageTime);
@@ -1735,7 +1743,7 @@ namespace PmcArena
 						Json->SetStringField(TEXT("by"), AttackerSource);
 						// TACTICAL_MAP P3: killed by a hit from an overwatch roof spot (within the damage attribution's 3 s).
 						const FHitNote* Note = Fallen ? StatePtr->Track.LastHit.Find(const_cast<AOperativeCharacter*>(Fallen)) : nullptr;
-						if (Note && Note->bOverwatch && Note->Side != INDEX_NONE && StatePtr->StageTime - Note->Time <= 3.f)
+						if (Note && Note->bOverwatch && IsSideIndex(Note->Side) && StatePtr->StageTime - Note->Time <= 3.f)
 						{
 							++StatePtr->Track.Behaviour[Note->Side].OverwatchKills;
 							Json->SetBoolField(TEXT("overwatch"), true);
@@ -1783,7 +1791,7 @@ namespace PmcArena
 				}
 				// TACTICAL_MAP P3: the side's decisions (suppress-then-move, churn) and its position changes (a walk that took him >= 3 m).
 				const int32 OrderSide = SideIndexOf(*StatePtr, Fighter);
-				if (Fighter && OrderSide != INDEX_NONE)
+				if (Fighter && IsSideIndex(OrderSide))
 				{
 					FSideBehaviour& SideBehaviour = FlowTrack.Behaviour[OrderSide];
 					SideBehaviour.Orders.Add({ StatePtr->StageTime, FlowTrack.Fighters.IndexOfByKey(Fighter), Order });
@@ -1836,7 +1844,7 @@ namespace PmcArena
 			{
 				const UTacticalMapSubsystem* Map = World->GetSubsystem<UTacticalMapSubsystem>();
 				const int32 SideIndex = SideIndexOf(State, Operative);
-				if (Map && SideIndex != INDEX_NONE)
+				if (Map && IsSideIndex(SideIndex))
 				{
 					const FVector Feet = FeetOf(*Operative);
 					if (PmcArenaBehaviourRules::IsInChokepoint(Map->GetFile(), Map->GetConfig(), Feet))
@@ -1939,7 +1947,7 @@ namespace PmcArena
 			const float Drop = *Last - Hp;
 			*Last = Hp;
 			const FHitNote* Note = Drop > 0.01f ? Track.LastHit.Find(Fighter) : nullptr;
-			if (Note && Note->Side != INDEX_NONE && State.StageTime - Note->Time <= 3.f)
+			if (Note && IsSideIndex(Note->Side) && State.StageTime - Note->Time <= 3.f)
 			{
 				Track.Damage[Note->Side] += Drop;
 				Track.Concealed[Note->Side] += Note->bConcealed ? Drop : 0.f;
@@ -2592,6 +2600,7 @@ namespace PmcArena
 		bool bSitePlaced = false;
 		State.TacticalRoute.Reset();
 		State.TacticalPosts.Reset();
+		State.TacticalFighters.Reset();
 		State.LadderRoofsPicked.Reset();
 		bool bTacticalRound = false;
 		if (Scenario == EPmcScenario::Tactical)
@@ -2658,6 +2667,10 @@ namespace PmcArena
 		for (AOperativeCharacter* Fighter : SpawnedA)
 		{
 			A.Members.Add(Fighter);
+			if (bTacticalA)
+			{
+				State.TacticalFighters.Add(Fighter);
+			}
 		}
 		if (bRandomPair && !bTacticalA)
 		{
@@ -2676,6 +2689,10 @@ namespace PmcArena
 			for (AOperativeCharacter* Fighter : SpawnedB)
 			{
 				B.Members.Add(Fighter);
+				if (bTacticalB)
+				{
+					State.TacticalFighters.Add(Fighter);
+				}
 			}
 			if (bRandomPair && !bTacticalB)
 			{
@@ -2808,7 +2825,9 @@ namespace PmcArena
 				const FPmcTacticalPost& Post = State.TacticalPosts[Index];
 				TSharedRef<FJsonObject> PostJson = MakeShared<FJsonObject>();
 				PostJson->SetStringField(TEXT("side"), Defenders.Label);
-				PostJson->SetStringField(TEXT("fighter"), Defenders.Members.IsValidIndex(Index) && Defenders.Members[Index].IsValid() ? Defenders.Members[Index]->DisplayName.ToString() : TEXT("?"));
+				// By the spawn's own fighter list (index-aligned with the posts), not by the side's member order.
+				const AOperativeCharacter* PostFighter = State.TacticalFighters.IsValidIndex(Index) ? State.TacticalFighters[Index].Get() : nullptr;
+				PostJson->SetStringField(TEXT("fighter"), PostFighter ? PostFighter->DisplayName.ToString() : TEXT("?"));
 				PostJson->SetStringField(TEXT("kind"), PmcTacticalRules::PostKindName(Post.Kind));
 				PostJson->SetNumberField(TEXT("x"), FMath::RoundToFloat(Post.Location.X));
 				PostJson->SetNumberField(TEXT("y"), FMath::RoundToFloat(Post.Location.Y));
@@ -2921,7 +2940,7 @@ namespace PmcArena
 			{
 				const AOperativeCharacter* Operative = Entry.Key.Get();
 				const int32 SideIndex = SideIndexOf(State, Operative);
-				if (Operative && SideIndex != INDEX_NONE && PmcArenaBehaviourRules::IsCompletedMove(Entry.Value.Key, Entry.Value.Value, FeetOf(*Operative)))
+				if (Operative && IsSideIndex(SideIndex) && PmcArenaBehaviourRules::IsCompletedMove(Entry.Value.Key, Entry.Value.Value, FeetOf(*Operative)))
 				{
 					++Track.Behaviour[SideIndex].Moves;
 				}

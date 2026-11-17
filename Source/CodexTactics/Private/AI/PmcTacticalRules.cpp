@@ -305,4 +305,9 @@ namespace PmcTacticalRules
 	{
 		return FVector::Dist2D(Feet, Post) <= ArriveCm && (LevelToleranceCm <= 0.f || FMath::Abs(Feet.Z - Post.Z) <= LevelToleranceCm);
 	}
+
+	bool PostWalkEndedShort(float WalkFromCm, float NowCm)
+	{
+		return WalkFromCm >= 0.f && NowCm > WalkFromCm - PostWalkMinProgressCm;
+	}
 }

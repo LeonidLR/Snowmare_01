@@ -162,3 +162,13 @@ PmcStalemateSmoke (the Depot_1 arena), PmcEncounterSmoke, PmcEncounterHuntSmoke,
 (`CodexTactics.PmcArena rounds=1 seed=11 scenario=tactical` on L_Gen_Test_X2): a 200 m route, defenders on overwatch / ambush / ladder-roof
 posts (PMC danger 0), 2 of 3 ladder-only roofs picked, `rounds[0].sides.A/B.behaviour` + `rounds[0].behaviour` (= A) written with all
 11 metrics (A: contact 35 s, 1 ambush success, 2.3 s in a chokepoint vs B 7.7 s).
+
+**API review fixes (2026-11-17).** (1) Overwatch roof spots now pass the same reach / `MinFromStartCm` filter as the other posts (1.5 x
+reach, like ladder roofs) - no marksman at the player's start. (2) Only candidates on the navmesh AT THEIR OWN LEVEL (|dz| <= 150 cm,
+`KeepCandidatesOnNav` / `ProjectToNavAtLevel`) are planned; a planned post that still fails it is dropped and the man spawns on the line.
+(3) `SpawnSquadTactical`'s `OutPosts[i]` is the post of result fighter i (a failed spawn leaves out both); the arena attributes posts
+by that spawn list (`TacticalFighters`), not by the side's member order. (4) `FindCoverNear`'s route-cover term reads the hiding spots near
+the route cached once per route (`FTeam::RouteCoverSpots`, `SetRouteOf`), not every spot of the map per slot. (5) A post walk counts toward
+the three tries only when it ended short: refused, or not 1 m closer (`PmcTacticalRules::PostWalkEndedShort`, test
+`CodexTactics.AI.PmcTactical.PostWalkEndedShort`); an interrupting order resets it. (6) The arena's side-indexed tracks are guarded by
+`IsSideIndex` (0 / 1) everywhere.
