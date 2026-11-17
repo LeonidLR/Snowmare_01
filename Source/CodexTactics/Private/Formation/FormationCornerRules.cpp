@@ -36,6 +36,21 @@ namespace FormationCornerRules
 		{
 			return TOptional<float>();
 		}
+		if (!IsFreeEnd(Walls, WallIndex, End))
+		{
+			return TOptional<float>();
+		}
+		return static_cast<float>(S);
+	}
+
+	bool IsFreeEnd(const TArray<FFormationWall>& Walls, int32 WallIndex, int32 End)
+	{
+		if (!Walls.IsValidIndex(WallIndex))
+		{
+			return false;
+		}
+		const FFormationWall& Wall = Walls[WallIndex];
+		const FVector2D& E = CornerEndPoint(Wall, End);
 		for (int32 Other = 0; Other < Walls.Num(); ++Other)
 		{
 			if (Other == WallIndex)
@@ -46,10 +61,10 @@ namespace FormationCornerRules
 			const double Distance = FVector2D::Distance(E, FormationMath::ClosestOnSegment(E, OtherWall.A, OtherWall.B));
 			if (Distance <= 0.5 * OtherWall.Thickness + 0.5 * Wall.Thickness + CornerJoint)
 			{
-				return TOptional<float>();
+				return false;
 			}
 		}
-		return static_cast<float>(S);
+		return true;
 	}
 
 	FFormationCornerResult Watch(const TArray<FFormationWall>& Walls, const FVector2D& LeaderPos, float LeaderYaw, const TArray<FFormationSlot>& Members,

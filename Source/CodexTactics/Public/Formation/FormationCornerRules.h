@@ -56,6 +56,12 @@ namespace FormationCornerRules
 	inline constexpr double CornerJoint = 20.0;
 
 	/**
+	 * End End (0 = A, 1 = B) of Walls[WallIndex] is a free end: no other wall within the two thicknesses' halves + CornerJoint of it (else it
+	 * is a joint - a corner of a room / corridor, nothing to look round). False for an invalid index.
+	 */
+	CODEXTACTICS_API bool IsFreeEnd(const TArray<FFormationWall>& Walls, int32 WallIndex, int32 End);
+
+	/**
 	 * The leader's distance along his heading to the free end End of Walls[WallIndex] that the wall runs back from, unset when it is not
 	 * one: the wall across his heading (FormationTerrainRules::IsAcrossHeading), the end more than ClassifyProbeSide aside, the wall not
 	 * running back from it, or another wall within the thicknesses + CornerJoint (a joint).

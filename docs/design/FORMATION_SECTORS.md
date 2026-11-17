@@ -515,3 +515,12 @@ one with a known threat); a follower whose straight way to his wall slot is cut 
 new rule of the simulator (the sim has no group cover order); if the Training Ground models the wall order later, this is its spec. Details:
 `docs/systems/squad-and-orders.md` "The far side of a wall".
 
+
+## F-2 - the leader takes the corner himself (game designer decision 2026-11-17, TASK_BOARD F-2 option B; contract section 20)
+Designer decision 2026-11-17: if the leader himself goes to the corner (his cover slot within ~1.5 m of a free wall end, pending or held), the
+follower's corner watch of that end is cancelled - the leader looks round the corner - and no follower stands at that corner: the column /
+echelon / wall layout / corner-stack place that lay between him and the end (or round it) is mirrored to behind him along the wall
+(`Formation/FormationLeaderCornerRules`, `Codex.Formation.LeaderCorner`). The cause was the CoverSmoke flake (Gemini report 075 point 2): in cover
+the leader faces out along the wall, the formation's "behind" pointed at the end he was about to take, and his corner walk stopped on the point man.
+The corner stack (A above) is unchanged when a follower peeks; when the leader is the one at the end (bug_04 A: K the point man) the line was
+already behind him.

@@ -31,6 +31,10 @@
 
 namespace SquadSubsystemFormationGuardLocal
 {
+	/** F-2 (game designer 2026-11-17, option B): the leader's cover slot at a free wall end claims that corner (1) / the plain rules (0). */
+	TAutoConsoleVariable<int32> CVarFormationLeaderCorner(TEXT("Codex.Formation.LeaderCorner"), 1,
+		TEXT("1 = the leader's cover slot (pending or held) within 1.5 m of a free wall end claims it: he takes its corner watch, followers keep behind him; 0 = off."));
+
 	/** The world walls are gathered this far round the leader (the guard's lookahead + the column; the corner's probe side), cm. */
 	constexpr float WorldWallsReachCm = 1600.f;
 	/** ... again this often, s, or once the leader walked this far from where they were gathered, cm. */
@@ -293,8 +297,9 @@ void USquadSubsystem::ApplyFormationCornerWatch(const FVector2D& LeaderPos)
 		}
 	}
 	const FFormationCornerState Before = Sectors.Corner;
-	const FFormationCornerResult Watch = FormationCornerRules::Watch(Sectors.WorldWalls, LeaderPos, Sectors.HeadingYaw, Places, Sectors.Corner,
-		FormationTuning::Get());
+	// F-2 (2026-11-17): a corner the leader takes himself (his cover slot at that free end) is his to watch, not a follower's.
+	const FFormationCornerResult Watch = FormationLeaderCornerRules::Watch(Sectors.WorldWalls, LeaderPos, Sectors.HeadingYaw, Places, Sectors.Corner,
+		Sectors.LeaderCorner, FormationTuning::Get());
 	Sectors.Corner = Watch.State;
 	const auto Describe = [](const TOptional<FFormationCornerWatch>& Side) { return Side.IsSet() ? FormationNames::ToString(Side->Role) : TEXT("-"); };
 	if (Before.Left.IsSet() != Watch.State.Left.IsSet() || Before.Right.IsSet() != Watch.State.Right.IsSet())
@@ -313,6 +318,64 @@ void USquadSubsystem::ApplyFormationCornerWatch(const FVector2D& LeaderPos)
 			Slot->Yaw = Look.Yaw;
 			Sectors.CornerLooks.Add(Look);
 		}
+	}
+}
+
+void USquadSubsystem::UpdateFormationLeaderCorner(const AOperativeCharacter& LeaderRef)
+{
+	using namespace SquadSubsystemFormationGuardLocal;
+	const TOptional<FFormationLeaderCorner> Before = Sectors.LeaderCorner;
+	Sectors.LeaderCorner.Reset();
+	if (CVarFormationLeaderCorner.GetValueOnGameThread() != 0 && FormationGuardRuntime::IsEnabled() && Sectors.bWorldWallsValid)
+	{
+		// The slot he is on his way to (a cover order, a shimmy, the automatic walk to the threat-side corner) first, then the one he holds.
+		const TOptional<FVector2D> Pending = LeaderRef.HasPendingCover() && LeaderRef.GetPendingCoverSlot().IsValid()
+			? TOptional<FVector2D>(FVector2D(LeaderRef.GetPendingCoverSlot().WorldLocation)) : TOptional<FVector2D>();
+		const TOptional<FVector2D> Held = LeaderRef.bInCover && LeaderRef.GetCoverSlot().IsValid()
+			? TOptional<FVector2D>(FVector2D(LeaderRef.GetCoverSlot().WorldLocation)) : TOptional<FVector2D>();
+		Sectors.LeaderCorner = FormationLeaderCornerRules::ClaimedEndOf(Sectors.WorldWalls, Pending, Held);
+	}
+	const bool bChanged = Before.IsSet() != Sectors.LeaderCorner.IsSet()
+		|| (Before.IsSet() && !Before->EndPoint.Equals(Sectors.LeaderCorner->EndPoint, FormationWallEnd::SameStackEndCm));
+	if (bChanged)
+	{
+		Sectors.LeaderCornerMoved = 0;
+		if (Sectors.LeaderCorner.IsSet())
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] leader corner: %s's cover slot (%.0f, %.0f) claims the free wall end (%.0f, %.0f) - its corner watch is his, the followers keep behind him"),
+				*LeaderRef.DisplayName.ToString(), Sectors.LeaderCorner->Slot.X, Sectors.LeaderCorner->Slot.Y, Sectors.LeaderCorner->EndPoint.X,
+				Sectors.LeaderCorner->EndPoint.Y);
+		}
+		else
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] leader corner: released (end (%.0f, %.0f))"), Before->EndPoint.X, Before->EndPoint.Y);
+		}
+	}
+}
+
+void USquadSubsystem::ApplyFormationLeaderCorner()
+{
+	if (!Sectors.LeaderCorner.IsSet())
+	{
+		return;
+	}
+	const int32 Moved = FormationLeaderCornerRules::KeepSlotsBehind(Sectors.LeaderCorner.GetValue(), Sectors.FrameSlots);
+	if (Moved != Sectors.LeaderCornerMoved)
+	{
+		if (Moved > 0)
+		{
+			FString Line;
+			for (const FFormationSlot& Slot : Sectors.FrameSlots)
+			{
+				if (Slot.Role != EFormationRole::Commander)
+				{
+					Line += FString::Printf(TEXT(" %s (%.0f, %.0f);"), FormationNames::ToString(Slot.Role), Slot.Position.X, Slot.Position.Y);
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] leader corner: %d follower place(s) at his corner kept behind him (%s formation):%s"), Moved,
+				FormationNames::ToString(Sectors.Formation), *Line);
+		}
+		Sectors.LeaderCornerMoved = Moved;
 	}
 }
 
