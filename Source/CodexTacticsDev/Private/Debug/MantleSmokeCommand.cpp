@@ -5,7 +5,8 @@
 //   b 140 cm wreck: the high mantle on top;
 //   c the cut's 230 cm parapet from the ground (the "canal" climb): the tall ledge on top;
 //   d a 135 cm fence: over it, landing on the far side's ground;
-//   e a sandbag: no mantle - the vault still takes it;
+//   d2 R17-2 (designer 2026-11-17): in stealth the 140 cm wreck and the 135 cm fence again - stealth (crouched) is still on after landing;
+//   e a sandbag: no mantle - the vault still takes it (R17-2: vaulted in stealth, stealth still on after it);
 //   f no run-up: sprinting right at a wreck -> he stops, the standing clip;
 //   g a sprint from far off with a click on the wreck's top: the run clip;
 //   h a 330 cm fence: refused (a wall); a beam over a crate's top: refused (no headroom);
@@ -63,6 +64,7 @@ namespace MantleSmoke
 		int32 Failures = 0;
 		int32 Restores = 0;
 		int32 Count = 0;
+		int32 StealthDropFrames = 0;
 		bool bSawMantle = false;
 		FSite Site;
 		FVector Goal = FVector::ZeroVector;
@@ -201,8 +203,11 @@ namespace MantleSmoke
 
 	bool IsGo(const FMantleDecision& Decision) { return Decision.IsGo(); }
 
-	/** Climb case: place, TryStartMantle, wait out the clip, check the landing. Returns true when the case is over. */
-	bool ClimbCase(FState& State, const TCHAR* What, FName WantClass, bool bOnTop)
+	/**
+	 * Climb case: place, TryStartMantle, wait out the clip, check the landing. Returns true when the case is over.
+	 * bStealth (R17-2): he enters stealth at the site (crouched) and must still be in it, crouched, after landing; stealth is left again after the check.
+	 */
+	bool ClimbCase(FState& State, const TCHAR* What, FName WantClass, bool bOnTop, bool bStealth = false)
 	{
 		AOperativeCharacter* Leader = State.Leader.Get();
 		if (State.StageTime < StepSeconds * 1.5f)
@@ -215,11 +220,21 @@ namespace MantleSmoke
 			PlaceAt(Leader, State.Site.Feet, State.Site.Dir);
 			State.Restores = Leader->GetMantleRestoreCount();
 			State.Count = Leader->GetMantleCount();
+			State.StealthDropFrames = 0;
+			if (bStealth)
+			{
+				Check(State, Leader->SetStealthMode(true) && Leader->IsInStealthMode(), FString::Printf(TEXT("%s: stealth on at the site (Solo)"), What));
+			}
 			return false;
 		}
-		if (State.StageTime < 0.6f)
+		// Stealth: the crouch entry clip settles before the climb.
+		if (State.StageTime < (bStealth ? 1.5f : 0.6f))
 		{
 			return false;
+		}
+		if (bStealth && !Leader->IsInStealthMode())
+		{
+			++State.StealthDropFrames;
 		}
 		if (Leader->GetMantleCount() == State.Count)
 		{
@@ -252,6 +267,13 @@ namespace MantleSmoke
 			Leader->GetMantleRestoreCount() - State.Restores));
 		Check(State, Leader->GetActorEnableCollision() && Leader->GetCharacterMovement()->MovementMode != MOVE_Flying
 			&& Leader->WeaponMesh && Leader->WeaponMesh->IsVisible(), FString::Printf(TEXT("%s: collision, walking and the weapon back"), What));
+		if (bStealth)
+		{
+			Check(State, State.StealthDropFrames == 0 && Leader->IsInStealthMode() && Leader->GetStance() == EOperativeStance::Crouching,
+				FString::Printf(TEXT("%s: still in stealth, crouched, after landing (stealth off for %d frames, stance %d)"), What, State.StealthDropFrames,
+					static_cast<int32>(Leader->GetStance())));
+			Leader->SetStealthMode(false);
+		}
 		if (bOnTop)
 		{
 			Check(State, FMath::Abs(FeetZ(*Leader) - State.Site.Probe.TopZ) < 12.f, FString::Printf(TEXT("%s: on top (feet %.0f, top %.0f)"), What, FeetZ(*Leader),
@@ -356,6 +378,20 @@ namespace MantleSmoke
 		case 5: // d: the 135 cm fence
 			if (ClimbCase(*State, TEXT("a 135 cm fence"), FenceOver, false))
 			{
+				State->Site = FindSite(World, Leader, TEXT("wreck"), 140.f, 70.f, Near(), [](const FMantleSite&, const FMantleDecision& D) { return D.IsGo(); });
+				Next(*State, 51);
+			}
+			return true;
+		case 51: // d2 (R17-2): the 140 cm wreck in stealth
+			if (ClimbCase(*State, TEXT("stealth: a 140 cm wreck"), HighMantle, true, true))
+			{
+				State->Site = FindSite(World, Leader, TEXT("fence"), 135.f, 110.f, Near(), [](const FMantleSite&, const FMantleDecision& D) { return D.IsGo(); });
+				Next(*State, 52);
+			}
+			return true;
+		case 52: // d2 (R17-2): the 135 cm fence in stealth
+			if (ClimbCase(*State, TEXT("stealth: a 135 cm fence"), FenceOver, false, true))
+			{
 				Next(*State, 6);
 			}
 			return true;
@@ -367,10 +403,12 @@ namespace MantleSmoke
 				if (State->Site.bFound)
 				{
 					PlaceAt(Leader, State->Site.Feet, State->Site.Dir);
+					Check(*State, Leader->SetStealthMode(true) && Leader->IsInStealthMode(), TEXT("stealth: on at the sandbag (Solo)"));
 				}
+				State->StealthDropFrames = 0;
 				return true;
 			}
-			if (State->StageTime < 0.6f)
+			if (State->StageTime < 1.5f)
 			{
 				return true;
 			}
@@ -383,10 +421,14 @@ namespace MantleSmoke
 			return true;
 		}
 		case 60: // the vault over the sandbag ends first
+			State->StealthDropFrames += Leader->IsInStealthMode() ? 0 : 1;
 			if (Leader->IsVaulting() && State->StageTime < 5.f)
 			{
 				return true;
 			}
+			Check(*State, State->StealthDropFrames == 0 && Leader->IsInStealthMode() && Leader->GetStance() == EOperativeStance::Crouching,
+				FString::Printf(TEXT("stealth: still in stealth, crouched, after the sandbag vault (stealth off for %d frames)"), State->StealthDropFrames));
+			Leader->SetStealthMode(false);
 			Next(*State, 7);
 			return true;
 		case 7: // f: sprinting at a wreck, the click only 2 m off its face - no run-up for the run clip: he stops, the standing clip

@@ -1,10 +1,11 @@
 {
-  "_comment": "Designer task 003. Scales multiply the existing stance/weather sight and crouched footstep radii. Hound scent is unchanged. Fire breaks only its shooter; sprint always breaks. Stealth must be explicitly toggled on again.",
+  "_comment": "Designer task 003. Scales multiply the existing stance/weather sight and crouched footstep radii. Hound scent is unchanged. Fire breaks only its shooter; sprint always breaks. Stealth must be explicitly toggled on again. keep_through_obstacle_climb (R17-2): a mantle / vault / fence climb keeps stealth; a ladder ends it.",
   "enabled": true,
   "detection_range_multiplier": 0.4,
   "detection_buildup_multiplier": 0.5,
   "footstep_noise_multiplier": 0.5,
   "stealth_break_on_fire": true,
+  "keep_through_obstacle_climb": true,
   "visual_opacity": 0.4,
   "visual_gray": 0.45,
   "fast_speed": 460.0,
