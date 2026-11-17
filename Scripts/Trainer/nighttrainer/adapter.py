@@ -13,6 +13,8 @@ Canonical round (candidate's point of view), consumed by fitness.py:
   Task #53 (objective rounds): damage_from_concealment, first_strike, objective_hold_s, median_engagement_m (per side),
   role ("attacker" / "defender", a string), objective_win (1.0 = this side won the objective: captured it as the attacker,
   or held it to the time limit as the defender; derived from winner + end_reason + role).
+  G002: round["behaviour"] (codex.pmc_arena_behaviour/1) — see behaviour_defaults(). Missing -> zeros, so an old
+  arena build still parses. Bin ranges for MAP-Elites live in trainer_config.json "qd", not in this catalogue.
 """
 from __future__ import annotations
 
@@ -30,6 +32,23 @@ CANONICAL_SIDE_FIELDS = ("survivors", "squad_size", "hp_lost", "hp_max", "kills"
                          "damage_from_concealment", "first_strike", "objective_hold_s", "median_engagement_m",
                          # 2026-11-07 target attention: first hits on a target looking away from the shooter
                          "strikes_unobserved")
+
+# G002 contract (docs/port/grok/outbox/G002-arena-behaviour-schema.md). direction is descriptive
+# (higher / lower / context). It is not a fitness sign — fitness.py stays the scalar.
+BEHAVIOUR_SCHEMA = "codex.pmc_arena_behaviour/1"
+BEHAVIOUR_METRICS = (
+    ("time_in_contact_s", "Time in contact", "s", 0.0, 240.0, "higher"),
+    ("flanks_completed", "Flanks completed", "count", 0.0, 8.0, "higher"),
+    ("moves", "Position changes", "count", 0.0, 40.0, "higher"),
+    ("suppress_then_move", "Suppress-then-move", "count", 0.0, 8.0, "higher"),
+    ("ambush_success", "Ambush success at chokepoint exits", "count", 0.0, 4.0, "higher"),
+    ("overwatch_kills", "Overwatch kills", "count", 0.0, 8.0, "higher"),
+    ("time_in_chokepoint_s", "Time inside a chokepoint", "s", 0.0, 240.0, "lower"),
+    ("window_positions_used", "Window positions used", "count", 0.0, 6.0, "higher"),
+    ("quiet_spells", "Quiet spells", "count", 0.0, 8.0, "context"),
+    ("order_churn", "Order churn", "count", 0.0, 40.0, "lower"),
+    ("stalemate_share", "Stalemate share", "fraction", 0.0, 1.0, "lower"),
+)
 
 
 class ArenaResultError(ValueError):
@@ -51,6 +70,53 @@ def _dig(obj, dotted: str):
         else:
             return None
     return obj
+
+
+def behaviour_defaults() -> dict:
+    """Every canonical metric at 0. Zero means 'not reported or actually zero' — old arena builds stay valid."""
+    return {key: 0.0 for key, *_rest in BEHAVIOUR_METRICS}
+
+
+def behaviour_meta() -> dict:
+    return {key: {"name": name, "unit": unit, "range": [lo, hi], "direction": direction}
+            for key, name, unit, lo, hi, direction in BEHAVIOUR_METRICS}
+
+
+def _metric_value(node):
+    if isinstance(node, bool) or node is None:
+        return None
+    if isinstance(node, (int, float)):
+        return float(node)
+    if isinstance(node, dict):
+        value = node.get("value")
+        if isinstance(value, (int, float)) and not isinstance(value, bool):
+            return float(value)
+    return None
+
+
+def parse_behaviour(raw) -> dict:
+    """Full metric dict. Absent, partial, flat numbers, or {metrics: {key: {value, unit, range, direction}}}."""
+    out = behaviour_defaults()
+    if not isinstance(raw, dict):
+        return out
+    metrics = raw.get("metrics") if isinstance(raw.get("metrics"), dict) else raw
+    for key, *_rest in BEHAVIOUR_METRICS:
+        value = _metric_value(metrics.get(key)) if isinstance(metrics, dict) else None
+        if value is None and metrics is not raw:
+            value = _metric_value(raw.get(key))
+        if value is not None:
+            out[key] = value
+    return out
+
+
+def behaviour_document(values: dict | None) -> dict:
+    """Rich object the arena (and the mock) write. Missing keys are emitted as 0 with the catalogue metadata."""
+    parsed = parse_behaviour(values or {})
+    meta = behaviour_meta()
+    return {"schema": BEHAVIOUR_SCHEMA, "metrics": {
+        key: {"name": spec["name"], "unit": spec["unit"], "range": list(spec["range"]),
+              "direction": spec["direction"], "value": parsed[key]}
+        for key, spec in meta.items()}}
 
 
 class ArenaAdapter:
@@ -190,6 +256,11 @@ class ArenaAdapter:
             scenario = _dig(rnd, rc.get("scenario_key", "scenario"))
             if isinstance(scenario, str) and scenario:
                 row["scenario"] = scenario
+            # G002: candidate behaviour. Round key wins; else the candidate side's object. Missing -> zeros.
+            raw_behaviour = _dig(rnd, rc.get("behaviour_key", "behaviour"))
+            if raw_behaviour is None:
+                raw_behaviour = _dig(side, "behaviour")
+            row["behaviour"] = parse_behaviour(raw_behaviour)
             track = _dig(rnd, rc.get("track_key", "track"))
             if track and result_dir:
                 row["track"] = track if os.path.isabs(track) else os.path.normpath(os.path.join(result_dir, track))
