@@ -47,36 +47,70 @@ stops on a mismatch (then update the engine in the launcher on the older side).
 
 ```
 powershell -ExecutionPolicy Bypass -File Scripts/Tools/worker_sync.ps1                              # sync + MovementSmoke
-powershell -ExecutionPolicy Bypass -File Scripts/Tools/worker_sync.ps1 -Commands all -Jobs 2        # whole smoke registry
 powershell -ExecutionPolicy Bypass -File Scripts/Tools/worker_sync.ps1 -SkipSmoke                   # only update code + binaries
+powershell -ExecutionPolicy Bypass -File Scripts/Tools/worker_sync.ps1 -Ref <commit> -SkipSmoke -Frozen   # 16:30 trainer freeze
 powershell -ExecutionPolicy Bypass -File Scripts/Tools/worker_sync.ps1 -SkipSync -Commands CoverSmoke
+powershell -ExecutionPolicy Bypass -File Scripts/Tools/worker_sync.ps1 -SkipSmoke -WithPdb          # + symbols (wired link, crash analysis)
 ```
 
 What it does:
-1. **Code**: `git fetch` + `git reset --hard origin/main` (or `-Ref <commit>`) + `git lfs pull` in `C:\Work\CodexTactics`.
+1. **Code**: `git fetch` + `git reset --hard origin/main` (or `-Ref <commit>`; `-ShipHead` = the `-BinariesFrom`
+   checkout's HEAD, unpushed commits travel as a `git bundle` over SSH) + `git lfs pull` in `C:\Work\CodexTactics`.
    The designer's untracked packs are never touched (no `git clean`). Nobody edits files on the worker.
 2. **Binaries**: copies the changed files of `Binaries\Win64` from this checkout (or `-BinariesFrom <worktree>`) by a
-   size + mtime manifest. Build them from the same commit as `-Ref`; the script warns when the commits differ.
-   `-NoPdb` skips symbols.
+   size + mtime manifest, **without `*.pdb`** (default since 2026-11-17: ~30 MB per C++ update over Wi-Fi instead of
+   ~450 MB; `-WithPdb` adds them). Build them from the same commit as `-Ref`; the script warns when the commits differ.
 3. **Smokes**: runs `Scripts/smoke_parallel.ps1 -Jobs 2 -ExtraArgs -Multiprocess` on the worker with
-   `CODEX_AGENT=worker`, `CODEX_IGNORE_DESIGNER=1` (no designer on that machine).
-4. **Results**: `Saved/Logs/Worker/<timestamp>/SmokeParallel-worker.json` + the logs of failed smokes, here on the main PC.
+   `CODEX_AGENT=worker`, `CODEX_IGNORE_DESIGNER=1` (no designer on that machine), `CODEX_LOCK_HELD=1`.
+4. **Results**: `Saved/Logs/Worker/<timestamp>/SmokeParallel-worker.json` + the logs of failed smokes (`-AllLogs`: every
+   log, zipped over), here on the main PC.
 
-Exit code: 0 pass, 1 a smoke failed, 2 sync / connection error. Long batches: run it as a background command.
+Exit code: 0 pass, 1 a smoke failed, 2 sync / connection error / worker busy longer than `-WaitEngineMinutes`.
 
-## Continuous loop (trainer + smokes) - `worker_loop.ps1`
+**Handshake / lock** (any worker_sync run, so the loop, the trainer and several main-PC callers never collide): it writes
+`Saved\Worker\SYNC.<token>` and `Saved\Trainer\PAUSE` (text `worker_sync`) on the worker, waits until the running arena
+wave / smoke batch has finished, then creates `Saved\agent.lock` **atomically** (manual, agent `worker-sync`, purpose =
+token) and holds it for the whole run - git, binaries and its smokes; a second caller waits (`-WaitEngineMinutes`, 60;
+the farm uses 20) for it. It appends the change point to `Saved\Worker\sync_points.log` (old -> new HEAD, binaries
+commit, trainer generation / jobs; `FROZEN` marks the evening freeze), and at the end removes the lock, its SYNC and -
+when no other SYNC is left - the PAUSE. A paused trainer goes on with the next wave of the same generation: C++ / map /
+level data changes apply at once, `trainer_config.json` / `pmc_commander.json` only after a trainer restart (run STOP
+below). A SYNC older than 3 h (dead run, e.g. the SSH link dropped) is removed by the loop with its lock.
 
-The worker works around the clock (designer, 2026-11-17). One Windows scheduled task on the worker runs
-`Scripts/Tools/worker_loop.ps1`; nothing on it is started by hand any more.
+## Test farm 08:00-16:30 - `smoke_parallel.ps1 -Remote auto`
+
+Designer 2026-11-17: agents' smoke batches run on the worker by day, on the main PC otherwise. `Scripts/smoke_parallel.ps1`
+has `-Remote auto | on | off` (default: env `CODEX_SMOKE_REMOTE`, else `auto`); `auto` calls
+`Scripts/Tools/smoke_remote.ps1`, which sends the batch to the worker when **all** of these hold, otherwise the batch runs
+locally as before (one `[smoke_remote] local run: <why>` line):
+- the time is 08:00-16:30 (outside it: silently local - trainer time);
+- not on the worker itself;
+- no uncommitted tracked changes under `Source`, `Content`, `Config`, `Plugins`, `Scripts/test_map.json` in the calling
+  checkout (the worker gets its HEAD; commit first to use the farm);
+- `Binaries\Win64` exists and `codex-worker` answers SSH within 6 s;
+- the worker is free within 20 min (another farm batch / sync), and the sync works.
+
+Remote run: `worker_sync.ps1 -ShipHead -BinariesFrom <this checkout> -AllLogs` (HEAD + DLLs, never compiles there),
+jobs <= 2, `-Multiprocess` added; `-Map`, `-PreCmds`, `-RealTime`, `-NoRetry`, `-TimeoutSeconds` pass through. The
+logs come back to `Saved\Logs\Smoke-<Name>[-alone].log` and the result JSON to `-ResultJson` (default
+`Saved\Logs\SmokeParallel-last.json`, local log paths, plus a `worker` block) - callers see what a local run leaves.
+The worker side ignores the designer-priority wait (no designer there); a local run keeps it. No console windows: ssh / scp
+/ git run inside the caller's (hidden) console. `-Remote on` = worker or exit 2; `-Remote off` = always local.
+
+## Continuous loop (test farm + trainer) - `worker_loop.ps1`
+
+One Windows scheduled task on the worker runs `Scripts/Tools/worker_loop.ps1`; nothing on it is started by hand.
 
 | | |
 |---|---|
-| Task | `CodexTactics Worker Loop` - S4U as `codex-worker\user`, Highest, no time limit, triggers: at startup (+2 min) and daily `DailyAt`+10 min (watchdog; `IgnoreNew` while it runs), 3 restarts on failure |
-| Day cycle | smoke batch (`-SmokeCommands all`, jobs 2) once per day after `-DailyAt` (08:00) -> optional bot batch (`-BotArgs`) -> trainer window `run_night_trainer.ps1 -RunId <RunId> -Parallel 2 -UntilTime 08:00` (the run resumes; clips + `report.html` at the end of the window) -> again |
-| Files (worker, `C:\Work\CodexTactics\Saved\Worker\`) | `loop.log`, `loop.status.json` (phase), `loop.state.json` (last smoke batch), `smokes\<stamp>.json/.log`, `sync_points.log`, `trainer-window.log`; trainer: `Saved\Trainer\scheduler.log`, `Saved\Trainer\<RunId>\` |
+| Task | `CodexTactics Worker Loop` - S4U as `codex-worker\user`, Highest, no time limit, triggers: at startup (+2 min) and daily 08:10 (watchdog; `IgnoreNew` while it runs), 3 restarts on failure |
+| 08:00-16:30 test farm | the loop waits (status `farm`) while main-PC batches come in. Optional own batch `-SmokeCommands` at 08:00 (off: the 289-smoke registry would fill the window) |
+| 16:30 freeze | the lead posts the frozen commit in agent-chat topic `trainer-night`; the worker session runs `worker_sync.ps1 -Ref <commit> -SkipSmoke -Frozen` (binaries: the main checkout, built from that commit). The loop waits for `Saved\Worker\FROZEN` until 18:00 (`-FreezeWaitMinutes 90`), then trains on the current code anyway (`NO FREEZE` in loop.log) |
+| 16:30-08:00 trainer | ONE window `run_night_trainer.ps1 -RunId <RunId> -Parallel 2 -UntilTime 08:00` (the run resumes; clips + `report.html` at the end, so the clips are ready at ~08:15) |
+| Files (worker, `C:\Work\CodexTactics\Saved\Worker\`) | `loop.log`, `loop.status.json` (phase), `sync_points.log`, `FROZEN`, `trainer-window.log`, `smokes\` (own batch); trainer: `Saved\Trainer\scheduler.log`, `Saved\Trainer\<RunId>\` |
 | ffmpeg | 9.0.2 via `winget install Gyan.FFmpeg` (user PATH through `WinGet\Links`) - the trainer's highlight clips need it; a task started before the install does not see it (restart the task) |
 
-Install / change the run (on the worker; `-Force` re-registers):
+Install / change the run (on the worker; re-registers the task):
 ```
 ssh codex-worker "powershell -ExecutionPolicy Bypass -File C:\Work\CodexTactics\Scripts\Tools\worker_loop.ps1 -Install -RunId pmc-v5 -Start"
 ```
@@ -88,16 +122,7 @@ ssh codex-worker "New-Item C:\Work\CodexTactics\Saved\Trainer\pmc-v5\STOP"     #
 ssh codex-worker "New-Item C:\Work\CodexTactics\Saved\Worker\STOP; New-Item C:\Work\CodexTactics\Saved\Trainer\pmc-v5\STOP"   # end the loop
 ssh codex-worker "Start-ScheduledTask -TaskName 'CodexTactics Worker Loop'"   # start it again
 ```
-
-**Sync while it runs** (no stopping the task any more): `worker_sync.ps1` writes `Saved\Worker\SYNC` and
-`Saved\Trainer\PAUSE` (text `worker_sync`) on the worker, waits until the running arena wave / smoke batch has finished
-(`Saved\agent.lock` free, no engine process; `-WaitEngineMinutes`, default 60 - a full smoke batch takes longer, then it
-stops with exit 2 and cleans up), takes `agent.lock` itself (manual, agent `worker-sync`) for git + binaries, appends the
-change point to `sync_points.log` (old -> new HEAD, binaries commit, trainer generation / jobs), releases the lock, runs its
-own smokes while the trainer is still paused, then removes SYNC and its PAUSE. The paused trainer goes on with the next
-wave of the same generation: C++ / map / level data changes apply at once, `trainer_config.json` / `pmc_commander.json`
-only after a trainer restart (run STOP above). A SYNC older than 3 h (dead sync, e.g. the SSH link dropped) is removed by
-the loop. The old one-shot task `CodexTactics Worker Trainer` (run_night_trainer directly) is disabled.
+The old one-shot task `CodexTactics Worker Trainer` (run_night_trainer directly) is disabled.
 
 ## First setup (what was done, to repeat on a reinstall)
 
