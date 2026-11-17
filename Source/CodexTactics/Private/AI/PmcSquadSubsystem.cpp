@@ -789,6 +789,11 @@ void UPmcSquadSubsystem::UpdateSight()
 						if (bOurOrder) { Observer->CancelSuppressFire(TEXT("lost sight memory ended")); }
 						FighterState.LostFireTarget.Reset();
 						FighterState.LostFireUntil = -1.0;
+						if (FighterState.Order == EPmcOrder::Suppress)
+						{
+							FighterState.Order = EPmcOrder::Hold;
+							FighterState.OrderSince = Now;
+						}
 					}
 				}
 				AActor* Recent = FighterState.RecentFireTarget.Get();
@@ -803,9 +808,15 @@ void UPmcSquadSubsystem::UpdateSight()
 						&& Observer->OrderSuppress(nullptr, Point))
 					{
 						FighterState.Order = EPmcOrder::Suppress;
+						FighterState.OrderSince = Now;
+						FighterState.Goal = Point;
+						FighterState.bWalkPending = false;
 						FighterState.LostFireTarget = Recent;
 						FighterState.LostFirePoint = Point;
 						FighterState.LostFireUntil = Known->LastSeenTime + Team.Weights.ContactMemorySeconds;
+						OnFighterOrder.Broadcast(Pair.Key, Observer, EPmcOrder::Suppress, Team.Weights.Suppress, EPmcPickReason::Best);
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s -> Suppress (lost sight memory at %s)"), Pair.Key,
+							*Observer->DisplayName.ToString(), *Point.ToCompactString());
 					}
 					FighterState.RecentFireTarget.Reset();
 				}
