@@ -50,7 +50,14 @@ bool UOperativeAnimInstance::PlayFirstAidClip(UAnimSequenceBase* Clip, float Sec
 			*FullBodySlot.ToString());
 		return false;
 	}
+	// The montage holds its last frame instead of its own blend-out: the treatment ends it (StopFirstAidClip). A long blend-out (the lying patient's,
+	// R17-6) would otherwise start before the treatment's end and read as a cut clip (UFirstAidSubsystem restarts those).
+	if (FAnimMontageInstance* Instance = GetActiveInstanceForMontage(Montage))
+	{
+		Instance->bEnableAutoBlendOut = false;
+	}
 	FirstAidMontage = Montage;
+	FirstAidFadingMontage.Reset();
 	FirstAidClip = Clip;
 	FirstAidPlayRate = Rate;
 	LeftHandIKBlockSeconds = FMath::Max(LeftHandIKBlockSeconds, FMath::Max(0.f, Seconds - ElapsedSeconds)); // both hands work: no rifle IK / aim
@@ -69,6 +76,7 @@ void UOperativeAnimInstance::StopFirstAidClip(float BlendOut)
 	if (UAnimMontage* Montage = FirstAidMontage.Get(); Montage && Montage_IsPlaying(Montage))
 	{
 		Montage_Stop(FMath::Max(0.f, BlendOut), Montage);
+		FirstAidFadingMontage = Montage;
 	}
 	FirstAidMontage.Reset();
 	FirstAidClip.Reset();
@@ -85,6 +93,19 @@ bool UOperativeAnimInstance::IsFirstAidClipActive() const
 {
 	const UAnimMontage* Montage = FirstAidMontage.Get();
 	return Montage && Montage_IsPlaying(Montage);
+}
+
+float UOperativeAnimInstance::GetFirstAidClipWeight() const
+{
+	for (const UAnimMontage* Montage : { FirstAidMontage.Get(), FirstAidFadingMontage.Get() })
+	{
+		// GetInstanceForMontage: also an instance that blends out (GetActiveInstanceForMontage drops it at Montage_Stop).
+		if (const FAnimMontageInstance* Instance = Montage ? GetInstanceForMontage(Montage) : nullptr)
+		{
+			return FMath::Clamp(Instance->GetWeight(), 0.f, 1.f);
+		}
+	}
+	return 0.f;
 }
 
 FString UOperativeAnimInstance::GetFirstAidClipName() const

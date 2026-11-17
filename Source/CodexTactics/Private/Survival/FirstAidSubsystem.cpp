@@ -19,6 +19,8 @@ namespace FirstAidSubsystemLocal
 {
 
 	const TCHAR* const ClipRoot = TEXT("/Game/Characters/Animations/FirstAid");
+	/** "Folder/Name" clip names (R17-6: the CON_Injured / crawl copies other setup scripts made) live under this root. */
+	const TCHAR* const AnimRoot = TEXT("/Game/Characters/Animations");
 	constexpr int32 MaxClipRestarts = 3;
 	constexpr int32 MaxRecords = 64;
 	/** The helper counts as arrived once his own walk ended within reach (or he is this close). */
@@ -33,7 +35,14 @@ namespace FirstAidSubsystemLocal
 
 	FString ClipPath(bool bFemale, const FString& Name)
 	{
-		return FString::Printf(TEXT("%s/%s/%s.%s"), ClipRoot, bFemale ? TEXT("Female") : TEXT("Male"), *Name, *Name);
+		const TCHAR* const Body = bFemale ? TEXT("Female") : TEXT("Male");
+		FString Folder;
+		FString Clip;
+		if (Name.Split(TEXT("/"), &Folder, &Clip, ESearchCase::CaseSensitive, ESearchDir::FromEnd) && !Folder.IsEmpty() && !Clip.IsEmpty())
+		{
+			return FString::Printf(TEXT("%s/%s/%s/%s.%s"), AnimRoot, *Folder, Body, *Clip, *Clip);
+		}
+		return FString::Printf(TEXT("%s/%s/%s.%s"), ClipRoot, Body, *Name, *Name);
 	}
 
 	FString ItemName(EFirstAidItem Item)
@@ -57,11 +66,59 @@ bool UFirstAidSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) 
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
 }
 
+void UFirstAidSubsystem::Initialize(FSubsystemCollectionBase& Collection)
+{
+	Super::Initialize(Collection);
+	HelperStream.Initialize(FMath::Rand());
+	PatientStream.Initialize(FMath::Rand());
+}
+
 void UFirstAidSubsystem::Deinitialize()
 {
 	Treatments.Reset();
 	Records.Reset();
+	Settles.Reset();
 	Super::Deinitialize();
+}
+
+void UFirstAidSubsystem::SetPickSeed(int32 Seed)
+{
+	PatientStream.Initialize(Seed);
+	HelperStream.Initialize(static_cast<int32>(HashCombine(GetTypeHash(Seed), 0x9E3779B9u)));
+	LastClipIndex.Reset();
+}
+
+bool UFirstAidSubsystem::IsSettling(const AOperativeCharacter* Operative) const
+{
+	return Operative && Settles.ContainsByPredicate([Operative](const FSettle& Each) { return Each.Patient.Get() == Operative; });
+}
+
+FirstAidRules::EPatientPose UFirstAidSubsystem::PoseOf(const AOperativeCharacter& Patient)
+{
+	// On all fours: the critical wound always (it forces prone + the injured crawl), or the injured crawl layer drives him now (wounded, prone).
+	const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(&Patient);
+	const bool bOnAllFours = Patient.IsCriticallyWounded() || (Anim && (Anim->IsInjuredCrawlActive() || Anim->IsInjuredCrawlIdleActive()));
+	return FirstAidRules::ChoosePatientPose(Patient.IsKnockedDown(), Patient.GetStance() == EOperativeStance::Prone, bOnAllFours,
+		Patient.GetStance() == EOperativeStance::Crouching);
+}
+
+void UFirstAidSubsystem::HoldBodyHeading(AOperativeCharacter& Patient, float BaseYaw, const FirstAidRules::FPatientClipPlay& Play, float DeltaTime)
+{
+	const FirstAidRules::FFirstAidConfig& Config = FirstAidRules::GetConfig();
+	const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(&Patient);
+	if (!Config.Patient.bHoldBodyHeading || !Anim || FMath::IsNearlyZero(Play.LongAxisDeg, 0.5f))
+	{
+		return;
+	}
+	// The clip's lying body points LongAxisDeg off his forward: the capsule turns the other way by the body's turn at the clip's blend weight (the
+	// measured curve), so the body stays.
+	const float Now = static_cast<float>(Patient.GetActorRotation().Yaw);
+	const float Target = FirstAidRules::CompensatedYaw(BaseYaw, FirstAidRules::BodyTurnAt(Play.LongAxisCurve, Play.LongAxisDeg, Anim->GetFirstAidClipWeight()), 1.f);
+	const float Yaw = FirstAidRules::TurnToward(Now, Target, Config.Patient.CounterTurnMaxDegPerSecond, DeltaTime);
+	if (!FMath::IsNearlyZero(FRotator3f::NormalizeAxis(Yaw - Now), 0.01f))
+	{
+		Patient.SetActorRotation(FRotator(0.f, Yaw, 0.f));
+	}
 }
 
 TStatId UFirstAidSubsystem::GetStatId() const
@@ -121,6 +178,14 @@ void UFirstAidSubsystem::GatherClipPaths(TArray<FSoftObjectPath>& OutPaths)
 				OutPaths.AddUnique(FSoftObjectPath(FirstAidSubsystemLocal::ClipPath(false, Name)));
 				OutPaths.AddUnique(FSoftObjectPath(FirstAidSubsystemLocal::ClipPath(true, Name)));
 			}
+		}
+	}
+	for (const FirstAidRules::FPatientPoseConfig& Pose : Config.Patient.Poses)
+	{
+		for (const FString& Name : Pose.Clips)
+		{
+			OutPaths.AddUnique(FSoftObjectPath(FirstAidSubsystemLocal::ClipPath(false, Name)));
+			OutPaths.AddUnique(FSoftObjectPath(FirstAidSubsystemLocal::ClipPath(true, Name)));
 		}
 	}
 }
@@ -265,9 +330,9 @@ FirstAidRules::ERefusal UFirstAidSubsystem::RequestAid(AOperativeCharacter* Help
 	Treatment.PatientStance = static_cast<uint8>(Patient->GetStance());
 	if (Distance > Config.ReachCm)
 	{
-		// Walk up beside him (his side toward the helper), then treat.
-		const FVector Away = (Helper->GetActorLocation() - Patient->GetActorLocation()).GetSafeNormal2D();
-		const FVector Goal = Patient->GetActorLocation() + (Away.IsNearlyZero() ? Patient->GetActorRightVector() : Away) * Config.ApproachStopCm;
+		// Walk up beside him: a lying patient at his side level with his chest (the side the helper comes from), else on the helper's side.
+		const FVector Goal = FirstAidRules::HelperGoal(Config, FirstAidRules::IsLyingPose(PoseOf(*Patient)), Patient->GetActorLocation(),
+			Patient->GetActorForwardVector(), Helper->GetActorLocation());
 		if (Helper->OrderMoveTo(Goal, false) != EOperativeOrderResult::Accepted)
 		{
 			if (bPostFeed)
@@ -278,7 +343,19 @@ FirstAidRules::ERefusal UFirstAidSubsystem::RequestAid(AOperativeCharacter* Help
 			return FirstAidRules::ERefusal::Busy;
 		}
 		Treatment.bApproaching = true;
+		Treatment.bHasApproachGoal = true;
+		Treatment.ApproachGoal = Goal;
 		Treatment.Record.bApproached = true;
+		Treatment.HelperOrderSerial = Helper->GetMoveOrderSerial();
+		Treatment.HelperStance = static_cast<uint8>(Helper->GetStance());
+		Treatments.Add(MoveTemp(Treatment));
+	}
+	else if (Patient->IsKnockedDown())
+	{
+		// In reach, but he is still down in a knockdown (it owns the FullBody slot): wait until he lies still / is up (Tick), then treat.
+		Treatment.bApproaching = true;
+		Treatment.Record.bWaitedForKnockdown = true;
+		Helper->StopOperative();
 		Treatment.HelperOrderSerial = Helper->GetMoveOrderSerial();
 		Treatment.HelperStance = static_cast<uint8>(Helper->GetStance());
 		Treatments.Add(MoveTemp(Treatment));
@@ -324,14 +401,35 @@ void UFirstAidSubsystem::BeginTreating(FTreatment& Treatment)
 		return;
 	}
 	Treatment.bApproaching = false;
+	Settles.RemoveAll([Helper, Patient](const FSettle& Each) { return Each.Patient.Get() == Helper || Each.Patient.Get() == Patient; });
 	if (Helper == Patient)
 	{
 		Helper->StopOperative();
 	}
 	else
 	{
-		Helper->StopAndFace(Patient->GetActorLocation());
+		const FirstAidRules::FFirstAidConfig& Config = FirstAidRules::GetConfig();
 		Patient->StopOperative();
+		Treatment.PatientPose = PoseOf(*Patient);
+		Treatment.Record.PatientPose = Treatment.PatientPose;
+		Treatment.PatientBaseYaw = static_cast<float>(Patient->GetActorRotation().Yaw);
+		// He faces the lying patient's chest (else the patient): turned at helper_turn_deg_s in Tick (0 = at once, the old snap).
+		const FVector Face = FirstAidRules::HelperFacePoint(Config, FirstAidRules::IsLyingPose(Treatment.PatientPose), Patient->GetActorLocation(),
+			Patient->GetActorForwardVector());
+		if (Config.Patient.HelperTurnDegPerSecond > 0.f)
+		{
+			Helper->SetSprinting(false);
+			Helper->StopOperative();
+			const FVector Direction = (Face - Helper->GetActorLocation()).GetSafeNormal2D();
+			Treatment.bHelperFacing = !Direction.IsNearlyZero();
+			Treatment.HelperFaceYaw = Treatment.bHelperFacing ? static_cast<float>(Direction.Rotation().Yaw) : 0.f;
+		}
+		else
+		{
+			Helper->StopAndFace(Face);
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[FirstAid] %s: the patient lies '%s' (yaw %.0f), the helper turns to %.0f"), *Patient->DisplayName.ToString(),
+			FirstAidRules::PatientPoseKey(Treatment.PatientPose), Treatment.PatientBaseYaw, Treatment.HelperFaceYaw);
 	}
 	Treatment.HelperSpot = Helper->GetActorLocation();
 	Treatment.PatientSpot = Patient->GetActorLocation();
@@ -350,6 +448,9 @@ void UFirstAidSubsystem::PlayClips(FTreatment& Treatment, bool bRestart, bool bH
 	const FirstAidRules::FItemConfig& Data = Config.Item(Treatment.Item);
 	auto PlayOn = [this, &Treatment, &Config, &Data, bRestart](AOperativeCharacter* Who, bool bPatient, TWeakObjectPtr<UAnimSequenceBase>& Clip, FString& RecordName)
 	{
+		// The patient's set by the pose he lies in (R17-6), the helper's / self sets by mode.
+		const TArray<FString>& Set = bPatient ? FirstAidRules::PatientClipSet(Config, Data, Treatment.PatientPose) : FirstAidRules::ClipSet(Data, Treatment.Mode, false);
+		FRandomStream& Stream = bPatient ? PatientStream : HelperStream;
 		UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Who);
 		if (!Who || !Anim)
 		{
@@ -357,9 +458,8 @@ void UFirstAidSubsystem::PlayClips(FTreatment& Treatment, bool bRestart, bool bH
 		}
 		if (!bRestart || !Clip.IsValid())
 		{
-			const TArray<FString>& Set = FirstAidRules::ClipSet(Data, Treatment.Mode, bPatient);
 			int32& Last = LastClipIndex.FindOrAdd(&Set, INDEX_NONE);
-			const int32 First = FirstAidRules::PickClipIndex(Set.Num(), FMath::FRand(), Last);
+			const int32 First = FirstAidRules::PickClipIndex(Set.Num(), Stream.FRand(), Last);
 			Clip.Reset();
 			RecordName.Reset();
 			// The picked clip, else the next one that exists for this body (a copy not retargeted yet is skipped).
@@ -376,12 +476,19 @@ void UFirstAidSubsystem::PlayClips(FTreatment& Treatment, bool bRestart, bool bH
 			if (!Clip.IsValid())
 			{
 				UE_LOG(LogCodexTactics, Warning, TEXT("[FirstAid] %s: no %s clip for '%s' (%d names; run Scripts/Editor/setup_first_aid_animation.py)"),
-					*Who->DisplayName.ToString(), bPatient ? TEXT("patient") : TEXT("treatment"), FirstAidRules::ModeName(Treatment.Mode), Set.Num());
+					*Who->DisplayName.ToString(), bPatient ? TEXT("patient") : TEXT("treatment"),
+					bPatient ? FirstAidRules::PatientPoseKey(Treatment.PatientPose) : FirstAidRules::ModeName(Treatment.Mode), Set.Num());
 				return;
+			}
+			if (bPatient)
+			{
+				Treatment.PatientPlay = FirstAidRules::PatientClipPlay(Config, Treatment.PatientPose, RecordName);
 			}
 		}
 		// A restart picks up where the treatment is (the same rate / loops, fitted to the whole treatment).
-		Anim->PlayFirstAidClip(Clip.Get(), Treatment.Clock.Seconds, Config.MinPlayRate, Config.MaxPlayRate, Config.BlendInSeconds, Config.BlendOutSeconds,
+		const FirstAidRules::FPatientClipPlay& Lying = Treatment.PatientPlay;
+		Anim->PlayFirstAidClip(Clip.Get(), Treatment.Clock.Seconds, bPatient ? Lying.MinRate : Config.MinPlayRate, bPatient ? Lying.MaxRate : Config.MaxPlayRate,
+			bPatient ? Lying.BlendInSeconds : Config.BlendInSeconds, bPatient ? Lying.BlendOutSeconds : Config.BlendOutSeconds,
 			bRestart ? Treatment.Clock.Elapsed : 0.f, Config.bHideWeapon);
 	};
 	AOperativeCharacter* Helper = Treatment.Helper.Get();
@@ -390,8 +497,8 @@ void UFirstAidSubsystem::PlayClips(FTreatment& Treatment, bool bRestart, bool bH
 	{
 		PlayOn(Helper, false, Treatment.HelperClip, Treatment.Record.HelperClip);
 	}
-	// The patient's lying clip only for a mate's aid on a body that lies (a standing patient keeps his own pose).
-	if (bPatientSide && Treatment.Mode == FirstAidRules::EMode::Aid && Patient && Patient != Helper && Patient->GetStance() == EOperativeStance::Prone)
+	// The patient's clip only for a mate's aid on a body that lies / crouches (a standing patient keeps his own pose).
+	if (bPatientSide && Treatment.Mode == FirstAidRules::EMode::Aid && Patient && Patient != Helper && Treatment.PatientPose != FirstAidRules::EPatientPose::None)
 	{
 		PlayOn(Patient, true, Treatment.PatientClip, Treatment.Record.PatientClip);
 	}
@@ -456,12 +563,25 @@ void UFirstAidSubsystem::Finish(int32 Index, FirstAidRules::EInterrupt Reason)
 	const FirstAidRules::FFirstAidConfig& Config = FirstAidRules::GetConfig();
 	AOperativeCharacter* Helper = Treatment.Helper.Get();
 	AOperativeCharacter* Patient = Treatment.Patient.Get();
+	const bool bPatientClip = Treatment.PatientClip.IsValid() && Patient && Patient != Helper;
 	for (AOperativeCharacter* Who : { Helper, Patient })
 	{
 		if (UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Who))
 		{
-			Anim->StopFirstAidClip(Config.BlendOutSeconds);
+			Anim->StopFirstAidClip(Who == Patient && bPatientClip ? Treatment.PatientPlay.BlendOutSeconds : Config.BlendOutSeconds);
 		}
+	}
+	// The patient's clip blends out: his capsule turns back with it, then (a completed aid, able to stand) he gets up (R17-6).
+	if (bPatientClip && FirstAidSubsystemLocal::IsAliveOperative(Patient))
+	{
+		FSettle& Settle = Settles.AddDefaulted_GetRef();
+		Settle.Patient = Patient;
+		Settle.BaseYaw = Treatment.PatientBaseYaw;
+		Settle.Play = Treatment.PatientPlay;
+		Settle.SecondsLeft = Treatment.PatientPlay.BlendOutSeconds + 0.1f;
+		Settle.bStand = FirstAidRules::StandsAfter(Config, Treatment.PatientPose, Reason == FirstAidRules::EInterrupt::None, !Patient->IsCriticallyWounded());
+		Settle.OrderSerial = Patient->GetMoveOrderSerial();
+		Settle.Stance = static_cast<uint8>(Patient->GetStance());
 	}
 	Treatment.Record.Elapsed = Treatment.Clock.Elapsed;
 	Treatment.Record.Interrupt = Reason;
@@ -491,8 +611,46 @@ void UFirstAidSubsystem::Finish(int32 Index, FirstAidRules::EInterrupt Reason)
 	Records.Add(Treatment.Record);
 }
 
+void UFirstAidSubsystem::TickSettles(float DeltaTime)
+{
+	for (int32 Index = Settles.Num() - 1; Index >= 0; --Index)
+	{
+		FSettle& Settle = Settles[Index];
+		AOperativeCharacter* Patient = Settle.Patient.Get();
+		// A new order / stance / death: he is the player's again (no stand-up, no more turning).
+		if (!FirstAidSubsystemLocal::IsAliveOperative(Patient) || Patient->GetMoveOrderSerial() != Settle.OrderSerial
+			|| static_cast<uint8>(Patient->GetStance()) != Settle.Stance)
+		{
+			Settles.RemoveAt(Index);
+			continue;
+		}
+		HoldBodyHeading(*Patient, Settle.BaseYaw, Settle.Play, DeltaTime);
+		Settle.SecondsLeft -= DeltaTime;
+		const UOperativeAnimInstance* Anim = UOperativeAnimInstance::Of(Patient);
+		if (Settle.SecondsLeft > 0.f && Anim && Anim->GetFirstAidClipWeight() > 0.001f)
+		{
+			continue;
+		}
+		if (!FMath::IsNearlyZero(Settle.Play.LongAxisDeg, 0.5f) && FirstAidRules::GetConfig().Patient.bHoldBodyHeading)
+		{
+			Patient->SetActorRotation(FRotator(0.f, Settle.BaseYaw, 0.f)); // the clip is out: his capsule back where it lay
+		}
+		const bool bStand = Settle.bStand && !Patient->IsCriticallyWounded();
+		Settles.RemoveAt(Index);
+		if (bStand)
+		{
+			Patient->SetStance(EOperativeStance::Standing);
+			const bool bUp = Patient->GetStance() == EOperativeStance::Standing;
+			StandUps += bUp ? 1 : 0;
+			UE_LOG(LogCodexTactics, Display, TEXT("[FirstAid] %s: patched up - %s"), *Patient->DisplayName.ToString(),
+				bUp ? TEXT("gets up") : TEXT("cannot get up (stance refused)"));
+		}
+	}
+}
+
 void UFirstAidSubsystem::Tick(float DeltaTime)
 {
+	TickSettles(DeltaTime);
 	if (Treatments.IsEmpty())
 	{
 		return;
@@ -545,9 +703,17 @@ void UFirstAidSubsystem::Tick(float DeltaTime)
 		}
 		if (Treatment.bApproaching)
 		{
-			// Arrived: his walk ended within reach, or he is already at the stop distance (the walk may still brake).
-			const bool bArrived = Input.DistanceCm <= Config.ReachCm && (!Helper->HasOwnMoveOrder()
-				|| Input.DistanceCm <= Config.ApproachStopCm + FirstAidSubsystemLocal::ArrivedSlackCm);
+			// Arrived: his walk ended within reach, or he is already at his spot (the walk may still brake) - the goal beside a lying patient
+			// (R17-6: not the first point within the stop distance, which lies on the way in, at the patient's head or feet).
+			const bool bAtSpot = Treatment.bHasApproachGoal
+				? FVector::Dist2D(Helper->GetActorLocation(), Treatment.ApproachGoal) <= FirstAidSubsystemLocal::ArrivedSlackCm
+				: Input.DistanceCm <= Config.ApproachStopCm + FirstAidSubsystemLocal::ArrivedSlackCm;
+			const bool bArrived = Input.DistanceCm <= Config.ReachCm && (!Helper->HasOwnMoveOrder() || bAtSpot);
+			if (bArrived && Patient->IsKnockedDown())
+			{
+				Treatment.Record.bWaitedForKnockdown = true; // the knockdown owns his FullBody slot: treat once he lies still / is up
+				continue;
+			}
 			if (bArrived)
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("[FirstAid] %s reached %s after %.1f s (%.0f cm)"), *Helper->DisplayName.ToString(),
@@ -557,6 +723,17 @@ void UFirstAidSubsystem::Tick(float DeltaTime)
 			continue;
 		}
 		++Treatment.Record.Frames;
+		if (Treatment.bHelperFacing && Helper != Patient)
+		{
+			const float Yaw = FirstAidRules::TurnToward(static_cast<float>(Helper->GetActorRotation().Yaw), Treatment.HelperFaceYaw,
+				Config.Patient.HelperTurnDegPerSecond, DeltaTime);
+			Helper->SetActorRotation(FRotator(0.f, Yaw, 0.f));
+			Treatment.bHelperFacing = !FMath::IsNearlyZero(FRotator3f::NormalizeAxis(Yaw - Treatment.HelperFaceYaw), 0.5f);
+		}
+		if (Treatment.PatientClip.IsValid() && Patient != Helper)
+		{
+			HoldBodyHeading(*Patient, Treatment.PatientBaseYaw, Treatment.PatientPlay, DeltaTime);
+		}
 		const UOperativeAnimInstance* HelperAnim = UOperativeAnimInstance::Of(Helper);
 		const UOperativeAnimInstance* PatientAnim = Patient != Helper ? UOperativeAnimInstance::Of(Patient) : nullptr;
 		const bool bHelperClip = HelperAnim && HelperAnim->IsFirstAidClipActive();

@@ -1714,6 +1714,12 @@ public:
 	/** The play rate the last first-aid clip started with (smokes). */
 	float GetFirstAidPlayRate() const { return FirstAidPlayRate; }
 
+	/**
+	 * The first-aid clip's blend weight now (0..1): rising through its blend-in, 1 while it plays, falling through the blend-out after
+	 * StopFirstAidClip, 0 when none (R17-6: the patient's capsule counter-turn follows it).
+	 */
+	float GetFirstAidClipWeight() const;
+
 	/** The operative anim instance of Actor's mesh, or nullptr. */
 	static UOperativeAnimInstance* Of(const AActor* Actor);
 
@@ -2499,6 +2505,8 @@ private:
 	TArray<FString> InteractionClipLog;
 	/** First aid (PlayFirstAidClip): the montage, its clip, the rate, the weapon it hid. */
 	TWeakObjectPtr<UAnimMontage> FirstAidMontage;
+	/** The stopped first-aid montage while it blends out (GetFirstAidClipWeight). */
+	TWeakObjectPtr<UAnimMontage> FirstAidFadingMontage;
 	TWeakObjectPtr<UAnimSequenceBase> FirstAidClip;
 	float FirstAidPlayRate = 1.f;
 	bool bFirstAidWeaponHidden = false;
