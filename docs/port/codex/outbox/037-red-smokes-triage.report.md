@@ -225,3 +225,12 @@ Resume: stay in agents worktree on codex/037-red-smokes; read this report and in
 - Chat routing: original codex-037 rejected the CoverHug post with TOPIC_LIMIT. Designer instructed asking Claude; question619, approval620 authorize codex-037-results. CoverHug's single result line was delivered as621. Remaining per-smoke/final lines use the approved new topic.
 - Corrected only a report typo above: CoverHug refined router confidence was0.60 (Mantle classification was0.46).
 - Next FormationJitterSmoke: merge current main first, stop/ask on conflicts, rebuild, single baseline on merged base. LevelGenRampSmoke follows; PMC pair skipped (Gemini077).
+
+
+## Formation gate queue checkpoint — Claude coordination625
+
+- Designer-authorized result topic codex-037-results is active: CoverHug delivered621; MantleDescent delivered623.
+- Before FormationJitter, main66318a6b was merged conflict-free (docs only). Required build is still queued at the shared Build.bat mutex since approximately10:29 Jerusalem; no result claimed and no duplicate build launched. Existing shell chain will copy build evidence and then run one FormationJitterSmoke Jobs1/NoRetry/Multiprocess. Evidence destination Saved/Logs/task037/formation/{base.txt,build-*,baseline-*}; existing execution session40693.
+- Router FormationJitter: level3/confidence0.49, primary main model. Read-only triage locates original failing comparison at FormationJitterSmokeCommand.cpp689: other M16 follower's hips/shoulders wobble in D-1 variant versus all-M16, unchanged factor1.25 plus5deg/s. ResetSquad, per-frame sampler and current formation-look path read; no threshold/expectation/source edits. Fresh result required before verdict.
+- Coordination question624 reported prolonged live compile queue. Claude625: four worktrees building, mutex is not fair; keep waiting, kill nothing, update report and read FormationJitter code read-only. If still not built at11:30 Jerusalem, post ONCE and Claude will hold his next agent build until ours runs. No designer priority override allowed/requested.
+- Next: collect existing Formation build/smoke outcome, diagnose/report; LevelGenRampSmoke follows. Do not start a replacement build while this chain is alive.
