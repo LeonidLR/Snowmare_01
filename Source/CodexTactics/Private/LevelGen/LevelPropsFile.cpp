@@ -11,7 +11,7 @@
 
 namespace LevelPropsFileLocal
 {
-	const TCHAR* const GKinds[] = { TEXT("barrels"), TEXT("crates"), TEXT("turrets"), TEXT("mines"), TEXT("loot") };
+	const TCHAR* const GKinds[] = { TEXT("barrels"), TEXT("crates"), TEXT("turrets"), TEXT("mines"), TEXT("loot"), TEXT("power") };
 
 	const TCHAR* const GRootKeys[] = { TEXT("schema"), TEXT("map"), TEXT("layout"), TEXT("layout_hash"), TEXT("revision"), TEXT("frozen"),
 		TEXT("layers"), TEXT("overrides") };
@@ -171,7 +171,7 @@ namespace LevelPropsFileLocal
 		}
 		else if (R.Str(TEXT("kind"), L.Kind) && !LevelPropsFile::IsValidKind(L.Kind))
 		{
-			R.Fail(FString::Printf(TEXT("bad kind '%s' (barrels | crates | turrets | mines | loot)"), *L.Kind));
+			R.Fail(FString::Printf(TEXT("bad kind '%s' (barrels | crates | turrets | mines | loot | power)"), *L.Kind));
 		}
 		const TSharedPtr<FJsonValue> Seed = R.Get(TEXT("seed"));
 		const double SeedValue = Seed.IsValid() && Seed->Type == EJson::Number ? Seed->AsNumber() : -1.0;

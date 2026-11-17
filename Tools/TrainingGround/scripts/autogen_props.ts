@@ -104,6 +104,14 @@ export function runAutogenProps(projectRoot?: string, targets = DEFAULT_TARGETS)
     for (const issue of res.droppedByValidator) {
       console.log(`[autogen_props]   left out ${issue.objectId} (${issue.layerId}): ${issue.reason}`);
     }
+    if (res.power) {
+      const starts = res.power.networks.map((n) => String(n.generator.start)).join(', ');
+      const linked = res.power.networks.reduce((s, n) => s + n.turretIds.length, 0);
+      console.log(`[autogen_props]   power: ${res.power.networks.length} generator(s) [${starts}], linked turrets ${linked}, unlinked ${res.power.unlinked.length}, jerrycan piles ${res.power.fuelPileIds.length} (short ${res.power.fuelShortfall})`);
+    }
+    for (const issue of res.powerIssues) {
+      console.log(`[autogen_props]   power warning ${issue.objectId}: ${issue.reason}`);
+    }
   }
 }
 

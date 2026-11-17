@@ -79,6 +79,7 @@ bool CorpseLootRules::IsRemainsItem(ETransferItem Item)
 	{
 	case ETransferItem::Medkit:
 	case ETransferItem::MedicalBag:
+	case ETransferItem::Diesel: // TURRET_POWER.md 6: a fallen operative's jerrycan drops with him
 	case ETransferItem::CannedFood:
 	case ETransferItem::Bread:
 	case ETransferItem::Chocolate:

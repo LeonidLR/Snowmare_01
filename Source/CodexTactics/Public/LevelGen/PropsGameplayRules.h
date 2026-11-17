@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Misc/Optional.h"
+#include "Power/PowerRules.h"
 
 class FJsonObject;
 class FJsonValue;
@@ -93,4 +94,25 @@ namespace PropsGameplayRules
 
 	/** gameplay.traps_faction: true (default "hostile") = level mines / wires are the enemy's (hidden, trip on operatives); "squad" / "friendly" = false. */
 	CODEXTACTICS_API bool AreTrapsHostile(const FJsonObject* Balance);
+
+	/** A power layer generator object (TURRET_POWER.md phase 1): its start state, litres and cable links. */
+	struct FGeneratorInput
+	{
+		FString Id;
+		/** "start" (default Dry; an unknown value counts as Dry and is a validator warning). */
+		EGeneratorStart Start = EGeneratorStart::Dry;
+		/** "fuel_l" (unset = the start state's default, PowerRules::StartSetup). */
+		TOptional<float> FuelL;
+		/** "links": the turret ids it feeds, in file order. */
+		TArray<FString> Links;
+	};
+
+	/** The generator fields of a props object ("start", "fuel_l", "links"). */
+	CODEXTACTICS_API FGeneratorInput GeneratorInputOf(const FLevelPropsObject& Object);
+
+	/** A turret object's "generator" (the power layer id feeding it); empty = none. */
+	CODEXTACTICS_API FString TurretGeneratorOf(const FLevelPropsObject& Object);
+
+	/** A power-network generator object: a "power" layer object, or a variant starting with "generator". */
+	CODEXTACTICS_API bool IsGeneratorObject(const FString& LayerKind, const FLevelPropsObject& Object);
 }

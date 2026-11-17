@@ -585,14 +585,16 @@ AActor* AEnemyCharacter::FindTarget() const
 	{
 		const UHealthComponent* TurretHealth = It->FindComponentByClass<UHealthComponent>();
 		Actors.Add(*It);
-		Candidates.Add({ EEnemyTargetKind::Turret, GodotPosition(*It), !It->IsBroken() && TurretHealth && TurretHealth->IsAlive() });
+		// TURRET_POWER.md 5: a dark network turret is scenery (IsMonsterTarget); the squad's own turrets stay targets.
+		Candidates.Add({ EEnemyTargetKind::Turret, GodotPosition(*It), !It->IsBroken() && TurretHealth && TurretHealth->IsAlive() && It->IsMonsterTarget() });
 	}
 	for (TActorIterator<AInteractableActor> It(World); It; ++It)
 	{
 		if (It->ObjectType == EInteractableType::Generator)
 		{
 			Actors.Add(*It);
-			Candidates.Add({ EEnemyTargetKind::Generator, GodotPosition(*It), !It->bGeneratorBroken && It->GeneratorHealth > 0.f });
+			// TURRET_POWER.md 5: a stopped power-network generator is scenery (IsAttackableGenerator: only while it runs).
+			Candidates.Add({ EEnemyTargetKind::Generator, GodotPosition(*It), It->IsAttackableGenerator() });
 		}
 	}
 	// APC P4: a manned vehicle (the crew inside is the damage proxy's: the hull takes the blows), at its nearest hull point.

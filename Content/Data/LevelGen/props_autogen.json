@@ -54,6 +54,10 @@
       "budget_per_10000m2": 273.0,
       "min_budget": 300,
       "max_budget": 3600
+    },
+    "power": {
+      "preset": "power_default",
+      "comment": "TURRET_POWER.md phase 1: diesel generators linked by cable to the turrets, their start mix and the jerrycans in the loot (Tools/TrainingGround/src/levelgen/props/power.ts). Every number is in props_balance.json presets.power_default."
     }
   },
   "zone_multipliers": {

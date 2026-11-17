@@ -11,6 +11,7 @@ import { PropsLayoutView } from './layoutView.ts';
 import { applyOverrides, rerollAll } from './placement.ts';
 import { runFastGate, type FastGateResult } from './fastGate.ts';
 import { validateStatic, type PropsValidationIssue } from './validator.ts';
+import { buildPowerLayer, validatePowerLinks, type PowerBuildResult, type PowerLinkIssue } from './power.ts';
 import { mapNameFor } from '../node/buildPipeline.ts';
 
 export interface PropsAutogenLayerConfig {
@@ -46,6 +47,8 @@ export interface PropsAutogenConfig {
     turrets?: PropsAutogenLayerConfig;
     mines?: PropsAutogenLayerConfig;
     loot?: PropsAutogenLayerConfig;
+    /** TURRET_POWER.md phase 1: generators + links + jerrycans (power.ts; the preset holds every number). Absent = no power layer. */
+    power?: PropsAutogenLayerConfig;
   };
   zone_multipliers?: Record<string, number>;
 }
@@ -66,6 +69,10 @@ export interface AutogenPropsResult {
   fastGateResult: FastGateResult;
   /** Objects the static validator left out (the game would drop them at load: PropsValidator.cpp). */
   droppedByValidator: PropsValidationIssue[];
+  /** The power layer build (null when the config has no power layer). */
+  power: PowerBuildResult | null;
+  /** Power network warnings (validatePowerLinks; nothing dropped). */
+  powerIssues: PowerLinkIssue[];
   areaM2: number;
   areaFactor: number;
 }
@@ -121,6 +128,9 @@ export const DEFAULT_AUTOGEN_CONFIG: PropsAutogenConfig = {
       budget_per_10000m2: 273.0,
       min_budget: 300,
       max_budget: 3600,
+    },
+    power: {
+      preset: 'power_default',
     },
   },
   zone_multipliers: {
@@ -410,6 +420,15 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
     }
   }
 
+  // TURRET_POWER.md phase 1: generators linked to the turrets that survived the validator, their start states, jerrycans in the loot.
+  let power: PowerBuildResult | null = null;
+  let powerIssues: PowerLinkIssue[] = [];
+  if (cfg.layers?.power) {
+    power = buildPowerLayer(propsFile, view, balance, seed);
+    const kindOfLayer = new Map(propsFile.layers.map((l) => [l.id, l.kind as string]));
+    powerIssues = validatePowerLinks(applyOverrides(propsFile).objects, kindOfLayer, balance, view.spawnPos);
+  }
+
   // Validation passes
   const errs = validateProps(propsFile);
   if (errs.length > 0) {
@@ -422,6 +441,8 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
     props: propsFile,
     fastGateResult,
     droppedByValidator: staticCheck.issues,
+    power,
+    powerIssues,
     areaM2,
     areaFactor,
   };

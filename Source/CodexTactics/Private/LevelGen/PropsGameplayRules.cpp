@@ -231,6 +231,50 @@ bool PropsGameplayRules::ParseTurretSide(const FString& Text, ETurretSide& Out)
 	return false;
 }
 
+PropsGameplayRules::FGeneratorInput PropsGameplayRules::GeneratorInputOf(const FLevelPropsObject& Object)
+{
+	FGeneratorInput Input;
+	Input.Id = Object.Id;
+	FString Text;
+	if (const TSharedPtr<FJsonValue>* Start = Object.Extra.Find(TEXT("start")); Start && Start->IsValid() && (*Start)->TryGetString(Text))
+	{
+		PowerRules::ParseStart(Text, Input.Start);
+	}
+	double Litres = 0.0;
+	if (const TSharedPtr<FJsonValue>* Fuel = Object.Extra.Find(TEXT("fuel_l"));
+		Fuel && Fuel->IsValid() && (*Fuel)->Type == EJson::Number && (*Fuel)->TryGetNumber(Litres) && FMath::IsFinite(Litres))
+	{
+		Input.FuelL = FMath::Max(0.f, static_cast<float>(Litres));
+	}
+	if (const TSharedPtr<FJsonValue>* Links = Object.Extra.Find(TEXT("links")); Links && Links->IsValid() && (*Links)->Type == EJson::Array)
+	{
+		for (const TSharedPtr<FJsonValue>& Link : (*Links)->AsArray())
+		{
+			FString Id;
+			if (Link.IsValid() && Link->TryGetString(Id) && !Id.IsEmpty())
+			{
+				Input.Links.Add(Id);
+			}
+		}
+	}
+	return Input;
+}
+
+FString PropsGameplayRules::TurretGeneratorOf(const FLevelPropsObject& Object)
+{
+	FString Id;
+	if (const TSharedPtr<FJsonValue>* Generator = Object.Extra.Find(TEXT("generator")); Generator && Generator->IsValid())
+	{
+		(*Generator)->TryGetString(Id);
+	}
+	return Id;
+}
+
+bool PropsGameplayRules::IsGeneratorObject(const FString& LayerKind, const FLevelPropsObject& Object)
+{
+	return LayerKind == TEXT("power") || Object.Variant.StartsWith(TEXT("generator"));
+}
+
 PropsGameplayRules::FTurretInput PropsGameplayRules::TurretInputOf(const FLevelPropsObject& Object)
 {
 	FTurretInput Input;

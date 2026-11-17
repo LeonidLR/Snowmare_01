@@ -883,6 +883,13 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
 	int32 MedicalBagsCount = 0;
 
+	/**
+	 * Diesel jerrycans (TURRET_POWER.md phase 1, designer 2026-11-17 question 5: one per operative, no movement penalty): poured into a
+	 * level generator (APowerGeneratorActor). Carry limit turret_power.json carry.jerrycans_per_operative.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Inventory", meta = (ClampMin = "0"))
+	int32 DieselCansCount = 0;
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Inventory")
 	int32 GetItemCount(EPersonalItem Item) const;
 

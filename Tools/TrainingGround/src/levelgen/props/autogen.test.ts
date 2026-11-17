@@ -89,9 +89,10 @@ describe('autogen props placement (task 076)', () => {
       assert.equal(res.fastGateResult.gate, 'pass', `Fast gate failed on seed ${seed}: leg=${res.fastGateResult.gate_leg}`);
       assert.equal(res.props.source, 'auto');
 
-      // Check all 5 layers are present
+      // Check all 5 placement layers are present, then the power layer (TURRET_POWER.md phase 1)
       const layerKinds = res.props.layers.map((l) => l.kind);
-      assert.deepEqual(layerKinds, ['crates', 'barrels', 'turrets', 'mines', 'loot']);
+      assert.deepEqual(layerKinds, ['crates', 'barrels', 'turrets', 'mines', 'loot', 'power']);
+      assert.deepEqual(res.powerIssues, [], `power warnings on seed ${seed}`);
     }
   });
 

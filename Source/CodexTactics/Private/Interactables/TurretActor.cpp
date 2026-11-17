@@ -8,14 +8,20 @@
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/SuppressionSubsystem.h"
+#include "Components/AudioComponent.h"
 #include "Components/BoxComponent.h"
+#include "Components/PointLightComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Interactables/BarricadeActor.h"
 #include "Interactables/HeatSourceComponent.h"
+#include "Kismet/GameplayStatics.h"
 #include "Materials/MaterialInstanceDynamic.h"
+#include "Power/PowerGeneratorActor.h"
+#include "Power/PowerRules.h"
+#include "Core/PlayerCommands.h"
 #include "TimerManager.h"
 #include "UObject/ConstructorHelpers.h"
 
@@ -28,6 +34,24 @@ namespace
 	constexpr float AimHeight = 80.f;
 	/** Godot generic heat source radius 4.5 m (+0.5 m tolerance). */
 	constexpr float TurretWarmthRadius = 450.f;
+	/** Network turrets: observation / look refresh rate (TURRET_POWER.md 13: 5 Hz, not per frame). */
+	constexpr float NetworkTickSeconds = 0.2f;
+	/** An observer "stands still" below this speed, cm/s. */
+	constexpr float ObserverStillSpeed = 40.f;
+	/** Eye height of an observing operative above his capsule centre, cm. */
+	constexpr float ObserverEyeOffset = 60.f;
+	/** Plain "live" lamp before the side is known (TURRET_POWER.md 4: the colour is knowledge step 3). */
+	const FLinearColor LiveLampColor(1.f, 0.6f, 0.15f);
+
+	FLinearColor AllegianceColor(EPowerAllegiance Allegiance)
+	{
+		switch (Allegiance)
+		{
+		case EPowerAllegiance::Friendly: return FLinearColor(0.2f, 0.95f, 0.35f);
+		case EPowerAllegiance::Hostile: return FLinearColor(1.f, 0.2f, 0.15f);
+		default: return FLinearColor(0.9f, 0.92f, 1.f);
+		}
+	}
 }
 
 ATurretActor::ATurretActor()
@@ -69,6 +93,16 @@ ATurretActor::ATurretActor()
 
 	HeatSource->Radius = TurretWarmthRadius;
 	HeatSource->bHeatActive = true;
+
+	// TURRET_POWER.md 4 / 9: the "live" tell of a network turret (placeholder: an engine point light, no asset).
+	StatusLamp = CreateDefaultSubobject<UPointLightComponent>(TEXT("StatusLamp"));
+	StatusLamp->SetupAttachment(Head);
+	StatusLamp->SetRelativeLocation(FVector(0.f, 0.f, 120.f));
+	StatusLamp->SetIntensity(1200.f);
+	StatusLamp->SetAttenuationRadius(260.f);
+	StatusLamp->SetCastShadows(false);
+	StatusLamp->SetLightColor(LiveLampColor);
+	StatusLamp->SetVisibility(false);
 }
 
 void ATurretActor::BeginPlay()
@@ -81,11 +115,18 @@ void ATurretActor::BeginPlay()
 void ATurretActor::UpdateState()
 {
 	HeatSource->SetHeatActive(bPowered && !bBroken);
+	UpdateNetworkLook();
 	// Placeholder tint: green working, amber unpowered, red broken (Godot overhead label colours).
 	const FColor Tint = bBroken ? FColor(255, 64, 64) : (bPowered ? FColor(51, 230, 102) : FColor(255, 191, 51));
+	if (bTintSet && Tint == TintCache)
+	{
+		return; // nothing changed: no material work (RefreshNetwork calls this on every fuel change)
+	}
 	if (UMaterialInstanceDynamic* Material = Head->CreateAndSetMaterialInstanceDynamic(0))
 	{
 		Material->SetVectorParameterValue(TEXT("Color"), FLinearColor::FromSRGBColor(Tint));
+		TintCache = Tint;
+		bTintSet = true;
 	}
 }
 
@@ -99,8 +140,9 @@ void ATurretActor::SetAllPowered(UWorld* World, bool bNewPowered)
 {
 	for (TActorIterator<ATurretActor> It(World); It; ++It)
 	{
-		// G003b: the squad's generator powers the squad's turrets; a level turret's power is its own (the level power mechanic).
-		if (It->Faction == ETurretFaction::Friendly)
+		// G003b: the squad's generator powers the squad's turrets; a level turret's power is its own (the level power mechanic). A network
+		// turret (TURRET_POWER.md) answers only to its own generator, even when the squad owns it.
+		if (It->Faction == ETurretFaction::Friendly && !It->IsNetworkLinked())
 		{
 			It->SetPowered(bNewPowered);
 		}
@@ -117,13 +159,235 @@ void ATurretActor::InitLevelTurret(ETurretFaction InFaction, bool bInPowered)
 {
 	Faction = InFaction;
 	bPowered = bInPowered;
+	LevelFaction = InFaction;
+	bHasLevelFaction = true;
 }
 
 void ATurretActor::RestoreSaved(bool bInPowered, bool bInBroken)
 {
-	bPowered = bInPowered;
 	bBroken = bInBroken;
+	if (const APowerGeneratorActor* Generator = PowerSource.Get())
+	{
+		// A network turret's power and side are its generator's, never the saved flag (review 2026-11-17 #2).
+		ApplyNetworkState(Generator->IsRunning(), Generator->GetOwnerTeam());
+		return;
+	}
+	bPowered = bInPowered;
 	UpdateState();
+}
+
+void ATurretActor::SetPowerSource(APowerGeneratorActor* Generator)
+{
+	if (Generator)
+	{
+		if (!bHasLevelFaction)
+		{
+			LevelFaction = Faction;
+			bHasLevelFaction = true;
+		}
+		if (!bPreLinkFlagsStored)
+		{
+			bPreLinkDeployable = bDeployable;
+			bPreLinkRelocatable = bCanBeRelocated;
+			bPreLinkFlagsStored = true;
+		}
+		PowerSource = Generator;
+		// A fixed emplacement of the level (TURRET_POWER.md 10 turret_mg "pickup": false): no pick-up, no relocation.
+		bDeployable = false;
+		bCanBeRelocated = false;
+		return;
+	}
+	// Off the cable (review #6): dark, no owner, its level side and its own deploy flags back (a once-seized turret is not the squad's).
+	ApplyNetworkState(false, PowerRules::NoOwner);
+	PowerSource = nullptr;
+	LastLiveOwner = -2;
+	bOwnerKnown = false;
+	if (bHasLevelFaction)
+	{
+		Faction = LevelFaction;
+	}
+	if (bPreLinkFlagsStored)
+	{
+		bDeployable = bPreLinkDeployable;
+		bCanBeRelocated = bPreLinkRelocatable;
+	}
+	UpdateState();
+}
+
+void ATurretActor::ApplyNetworkState(bool bLive, int32 InOwnerTeam)
+{
+	if (bLive != bPowered)
+	{
+		PowerChangedAt = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	}
+	bPowered = bLive;
+	OwnerTeam = bLive ? InOwnerTeam : PowerRules::NoOwner;
+	if (bLive)
+	{
+		// Knowledge step 3 (review #5): a new owner that is not the squad must be read again.
+		if (InOwnerTeam != LastLiveOwner && InOwnerTeam != PowerRules::PlayerTeam)
+		{
+			bOwnerKnown = false;
+			ObserveSeconds = 0.f;
+		}
+		LastLiveOwner = InOwnerTeam;
+		const EPowerAllegiance Allegiance = PowerRules::AllegianceOf(OwnerTeam);
+		Faction = Allegiance == EPowerAllegiance::Friendly ? ETurretFaction::Friendly
+			: (Allegiance == EPowerAllegiance::Hostile ? ETurretFaction::Hostile : ETurretFaction::Neutral);
+	}
+	UpdateState();
+}
+
+bool ATurretActor::IsLive() const
+{
+	if (!bPowered || bBroken)
+	{
+		return false;
+	}
+	if (!IsNetworkLinked())
+	{
+		return true;
+	}
+	const UWorld* World = GetWorld();
+	return World && World->GetTimeSeconds() - PowerChangedAt >= PowerRules::GetTuning().SpinUpSeconds;
+}
+
+bool ATurretActor::MayTarget(const AActor* Target) const
+{
+	if (!Target || Target == this)
+	{
+		return false;
+	}
+	const AOperativeCharacter* Human = Cast<AOperativeCharacter>(Target);
+	if (IsNetworkLinked())
+	{
+		// TURRET_POWER.md rule 3: monsters always, humans of every team but the owner's (no owner = no humans).
+		return Human ? PowerRules::MayTargetHuman(OwnerTeam, Human->TeamId) : Target->ActorHasTag(CombatQueries::EnemyTag);
+	}
+	if (!Human)
+	{
+		return Target->ActorHasTag(CombatQueries::EnemyTag);
+	}
+	// G003b sides of an unlinked turret: Friendly also the PMC, Hostile also the squad, Neutral no humans.
+	return Faction == ETurretFaction::Friendly ? !Human->IsPlayerTeam() : (Faction == ETurretFaction::Hostile && Human->IsPlayerTeam());
+}
+
+void ATurretActor::RevealOwner(bool bAnnounce)
+{
+	if (bOwnerKnown)
+	{
+		return;
+	}
+	bOwnerKnown = true;
+	ObserveSeconds = 0.f;
+	UpdateNetworkLook();
+	// The whole network is read with it (review #4): the generator's label and the sibling turrets (they return early: known).
+	if (APowerGeneratorActor* Generator = PowerSource.Get(); Generator && !Generator->IsOwnerKnown())
+	{
+		Generator->RevealNetwork(false);
+	}
+	const FString Side = bPowered ? PowerRules::AllegianceName(PowerRules::AllegianceOf(OwnerTeam)) : FString(TEXT("DARK"));
+	if (bAnnounce)
+	{
+		PostLine(LOCTEXT("SquadSpeaker", "SQUAD"), FText::Format(bPowered
+			? LOCTEXT("TurretIdentified", "🎯 Turret identified: {0}. It answers to its generator.")
+			: LOCTEXT("TurretIdentifiedDark", "🎯 Turret identified: {0} - its generator is not running, it has no owner now."),
+			FText::FromString(Side)));
+	}
+	FGameplayEventContext Context;
+	Context.Target = this;
+	Context.Kind = FName(*Side);
+	GameplayEvents::RaiseWithContext(this, FName(TEXT("Power.TurretIdentified")), Context);
+}
+
+void ATurretActor::ForgetOwner()
+{
+	bOwnerKnown = false;
+	ObserveSeconds = 0.f;
+	UpdateNetworkLook();
+}
+
+void ATurretActor::TickObservation(float DeltaSeconds)
+{
+	if (bOwnerKnown)
+	{
+		ObserveSeconds = 0.f;
+		return;
+	}
+	// TURRET_POWER.md 4 step 3a: an operative of the squad standing still with a line of sight within 40 m for 2 s reads its owner.
+	const FPowerTuning& Tuning = PowerRules::GetTuning();
+	bool bWatching = false;
+	if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
+	{
+		const FVector Target = GetActorLocation() + FVector(0.f, 0.f, 30.f);
+		for (const AOperativeCharacter* Member : Squad->GetMembers())
+		{
+			const UHealthComponent* MemberHealth = Member ? Member->FindComponentByClass<UHealthComponent>() : nullptr;
+			if (!MemberHealth || !MemberHealth->IsAlive() || Member->IsKnockedDown() || Member->GetVelocity().Size2D() > ObserverStillSpeed
+				|| FVector::Dist(Member->GetActorLocation(), Target) > Tuning.ObserveCm)
+			{
+				continue;
+			}
+			FHitResult Hit;
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(TurretObserve), false, this);
+			Params.AddIgnoredActor(Member);
+			const FVector Eye = Member->GetActorLocation() + FVector(0.f, 0.f, ObserverEyeOffset);
+			if (!GetWorld()->LineTraceSingleByChannel(Hit, Eye, Target, ECC_Visibility, Params) || Hit.GetActor() == this)
+			{
+				bWatching = true;
+				break;
+			}
+		}
+	}
+	ObserveSeconds = PowerRules::ObserveStep(ObserveSeconds, DeltaSeconds, bWatching);
+	if (PowerRules::IsObserved(Tuning, ObserveSeconds))
+	{
+		RevealOwner(true);
+	}
+}
+
+void ATurretActor::UpdateNetworkLook()
+{
+	if (!StatusLamp)
+	{
+		return;
+	}
+	const UWorld* World = GetWorld();
+	const double Now = World ? World->GetTimeSeconds() : 0.0;
+	// A live network turret shows its lamp; it fades out over the wind-down when the power goes (the gun has dropped already).
+	const bool bWindingDown = !bPowered && Now - PowerChangedAt < PowerRules::GetTuning().WindDownSeconds;
+	const bool bLampOn = IsNetworkLinked() && !bBroken && (bPowered || bWindingDown);
+	// Review #7: the light's render state is touched only when something changed.
+	if (LampShownCache != static_cast<int8>(bLampOn))
+	{
+		StatusLamp->SetVisibility(bLampOn);
+		LampShownCache = static_cast<int8>(bLampOn);
+	}
+	if (bLampOn)
+	{
+		const FLinearColor Color = bOwnerKnown ? AllegianceColor(PowerRules::AllegianceOf(OwnerTeam)) : LiveLampColor;
+		const float Intensity = bWindingDown ? 400.f : 1200.f;
+		if (!Color.Equals(LampColorCache))
+		{
+			StatusLamp->SetLightColor(Color);
+			LampColorCache = Color;
+		}
+		if (Intensity != LampIntensityCache)
+		{
+			StatusLamp->SetIntensity(Intensity);
+			LampIntensityCache = Intensity;
+		}
+	}
+	const bool bHum = IsNetworkLinked() && bPowered && !bBroken && HumSound != nullptr;
+	if (bHum && !HumAudio)
+	{
+		HumAudio = UGameplayStatics::SpawnSoundAttached(HumSound, Head);
+	}
+	else if (!bHum && HumAudio)
+	{
+		HumAudio->Stop();
+		HumAudio = nullptr;
+	}
 }
 
 void ATurretActor::HandleBroken(AActor* Victim, const FString& AttackerSource)
@@ -167,7 +431,20 @@ void ATurretActor::Tick(float DeltaSeconds)
 	{
 		ShotCooldown -= DeltaSeconds;
 	}
-	if (!bPowered || bBroken)
+	if (IsNetworkLinked())
+	{
+		ObserveTimer += DeltaSeconds;
+		if (ObserveTimer >= NetworkTickSeconds)
+		{
+			TickObservation(ObserveTimer);
+			if (!bPowered && LampShownCache == 1)
+			{
+				UpdateNetworkLook(); // only the wind-down fade is time-driven; state changes update the look themselves
+			}
+			ObserveTimer = 0.f;
+		}
+	}
+	if (!IsLive())
 	{
 		return;
 	}
@@ -195,13 +472,13 @@ AActor* ATurretActor::FindTarget(float& OutCover, FVector& OutAim) const
 	TArray<AActor*> Candidates;
 	for (AActor* Candidate : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 	{
-		if (Candidate && Candidate->ActorHasTag(CombatQueries::EnemyTag)
-			&& (Faction == ETurretFaction::Friendly || !Candidate->IsA<AOperativeCharacter>()))
+		if (Candidate && Candidate->ActorHasTag(CombatQueries::EnemyTag) && MayTarget(Candidate))
 		{
 			Candidates.Add(Candidate);
 		}
 	}
-	if (Faction == ETurretFaction::Hostile)
+	// The squad's operatives are not tagged enemies: a hostile turret (or a network one owned by a PMC team) adds them.
+	if (IsNetworkLinked() ? PowerRules::MayTargetHuman(OwnerTeam, PowerRules::PlayerTeam) : Faction == ETurretFaction::Hostile)
 	{
 		if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 		{
@@ -275,7 +552,7 @@ void ATurretActor::Fire(AActor* Target, float Cover, const FVector& Aim)
 
 void ATurretActor::ExecuteAction(AOperativeCharacter* User)
 {
-	if (!User || Faction != ETurretFaction::Friendly)
+	if (!User || (Faction != ETurretFaction::Friendly && !IsNetworkLinked()))
 	{
 		return;
 	}
@@ -300,6 +577,20 @@ void ATurretActor::ExecuteAction(AOperativeCharacter* User)
 
 FActionMenuRequest ATurretActor::BuildActionMenu(const AOperativeCharacter* Leader) const
 {
+	if (const APowerGeneratorActor* Generator = PowerSource.Get())
+	{
+		// A network turret: repaired by the squad like any turret (it stays on its generator's side), otherwise it only reports.
+		if (bBroken || Health->GetCurrentHealth() < Health->GetMaxHealth())
+		{
+			return Super::BuildActionMenu(Leader);
+		}
+		const FString Side = !bPowered ? FString(TEXT("DARK"))
+			: (bOwnerKnown ? PowerRules::AllegianceName(PowerRules::AllegianceOf(OwnerTeam)) : FString(TEXT("LIVE, side unknown")));
+		return FActionMenuRequest::MakeMessage(LOCTEXT("SquadSpeaker", "SQUAD"), FText::Format(
+			LOCTEXT("NetworkTurret", "A perimeter turret on a generator cable ({0}). Its generator, {1} m away, decides who it fires at ({2})."),
+			FText::FromString(Side), FMath::RoundToInt(FVector::Dist(GetActorLocation(), Generator->GetActorLocation()) / 100.f),
+			FText::FromString(PowerRules::StateName(Generator->GetState()))));
+	}
 	if (Faction != ETurretFaction::Friendly)
 	{
 		// A level turret answers to its generator (TURRET_POWER.md): no pick-up / repair / defuse menu of the squad's turret.
@@ -413,6 +704,33 @@ bool ATurretActor::GetOverheadLabel(FOverheadLabel& OutLabel) const
 	const TCHAR* Trap = bTrapped ? TEXT(" [⚠️ TRAP]") : TEXT("");
 	const TCHAR* Side = Faction == ETurretFaction::Hostile ? TEXT(" [HOSTILE]") : (Faction == ETurretFaction::Neutral ? TEXT(" [NEUTRAL]") : TEXT(""));
 	OutLabel.HeightCm = 160.f;
+	if (IsNetworkLinked())
+	{
+		// TURRET_POWER.md 9: dark / live is visible from afar; the side only once identified.
+		if (bBroken || Current <= 0.f)
+		{
+			OutLabel.Text = FString::Printf(TEXT("Turret%s: BROKEN [0/%d HP]"), Trap, FMath::FloorToInt(Max));
+			OutLabel.Color = FLinearColor(1.f, 0.25f, 0.25f);
+		}
+		else if (!bPowered)
+		{
+			OutLabel.Text = FString::Printf(TEXT("Turret%s - DARK"), Trap);
+			OutLabel.Color = FLinearColor(0.6f, 0.62f, 0.66f);
+		}
+		else if (!bOwnerKnown)
+		{
+			OutLabel.Text = FString::Printf(TEXT("Turret%s - LIVE ?"), Trap);
+			OutLabel.Color = LiveLampColor;
+		}
+		else
+		{
+			const EPowerAllegiance Allegiance = PowerRules::AllegianceOf(OwnerTeam);
+			OutLabel.Text = FString::Printf(TEXT("Turret [%s]%s: %d/%d HP"), *PowerRules::AllegianceName(Allegiance), Trap,
+				FMath::FloorToInt(Current), FMath::FloorToInt(Max));
+			OutLabel.Color = AllegianceColor(Allegiance);
+		}
+		return true;
+	}
 	if (bBroken || Current <= 0.f)
 	{
 		OutLabel.Text = FString::Printf(TEXT("⚠️ Turret%s%s: BROKEN [0/%d HP]\n(Repair needed)"), Side, Trap, FMath::FloorToInt(Max));

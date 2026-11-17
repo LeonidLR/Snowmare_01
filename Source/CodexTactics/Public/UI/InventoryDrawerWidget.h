@@ -44,7 +44,9 @@ enum class EInventoryDrawerSlot : uint8
 	 * The medical bag (the game designer 2026-11-16, Survival/FirstAidRules): click = the leader treats himself (light / medium wound), drag onto a
 	 * wounded mate (HP below max) = he treats him (UFirstAidSubsystem); Shift hands the bag over.
 	 */
-	MedicalBag
+	MedicalBag,
+	/** Diesel jerrycan (TURRET_POWER.md phase 1): information line, shown only while carried; drag onto a mate to hand it over. */
+	Diesel
 };
 
 /**

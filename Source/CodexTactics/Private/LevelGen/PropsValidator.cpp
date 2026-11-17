@@ -4,6 +4,7 @@
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "LevelGen/LevelPropsFile.h"
+#include "LevelGen/PropsGameplayRules.h"
 
 namespace PropsValidatorLocal
 {
@@ -276,6 +277,174 @@ bool FPropsValidator::IsInLadderOrStairDisk(
 		}
 	}
 	return false;
+}
+
+TArray<FPropsValidationIssue> FPropsValidator::ValidatePowerLinks(const TArray<FLevelPropsResolvedObject>& Objects,
+	const TMap<FString, FString>& KindOfLayer, const FJsonObject* Balance, const FIntPoint* SpawnPos)
+{
+	// presets.power_default (the Training Ground's readPowerConfig defaults when absent).
+	double CableMaxCm = 4000.0;
+	int32 MaxTurrets = 4;
+	double NoHostileWithinSpawnCm = 6000.0;
+	const TSharedPtr<FJsonObject>* Presets = nullptr;
+	const TSharedPtr<FJsonObject>* Preset = nullptr;
+	if (Balance && Balance->TryGetObjectField(TEXT("presets"), Presets) && Presets && (*Presets)->TryGetObjectField(TEXT("power_default"), Preset) && Preset)
+	{
+		const TSharedPtr<FJsonObject>* Links = nullptr;
+		if ((*Preset)->TryGetObjectField(TEXT("links"), Links) && Links)
+		{
+			const TArray<TSharedPtr<FJsonValue>>* Cable = nullptr;
+			if ((*Links)->TryGetArrayField(TEXT("cable_cm"), Cable) && Cable && Cable->Num() >= 2 && (*Cable)[1].IsValid() && (*Cable)[1]->Type == EJson::Number)
+			{
+				CableMaxCm = (*Cable)[1]->AsNumber();
+			}
+			const TSharedPtr<FJsonObject>* Sizes = nullptr;
+			if ((*Links)->TryGetObjectField(TEXT("turrets_per_generator"), Sizes) && Sizes)
+			{
+				int32 Largest = 0;
+				for (const auto& Entry : (*Sizes)->Values)
+				{
+					double Weight = 0.0;
+					const int32 Size = FCString::Atoi(*Entry.Key);
+					if (Size >= 1 && Entry.Value.IsValid() && Entry.Value->TryGetNumber(Weight) && Weight > 0.0)
+					{
+						Largest = FMath::Max(Largest, Size);
+					}
+				}
+				MaxTurrets = Largest > 0 ? Largest : MaxTurrets;
+			}
+		}
+		const TSharedPtr<FJsonObject>* Start = nullptr;
+		double Value = 0.0;
+		if ((*Preset)->TryGetObjectField(TEXT("start_state"), Start) && Start && (*Start)->TryGetNumberField(TEXT("no_hostile_within_spawn_cm"), Value))
+		{
+			NoHostileWithinSpawnCm = Value;
+		}
+	}
+
+	TArray<FPropsValidationIssue> Issues;
+	const auto Add = [&Issues](const FLevelPropsResolvedObject& Object, const FString& Id, const FString& Reason)
+	{
+		FPropsValidationIssue& Issue = Issues.AddDefaulted_GetRef();
+		Issue.ObjectId = Id;
+		Issue.LayerId = Object.LayerId;
+		Issue.bLocked = Object.Object.bLocked;
+		Issue.bHand = Object.bHand || Object.bPinned;
+		Issue.Reason = Reason;
+		Issue.bDropped = false;
+	};
+	TMap<FString, const FLevelPropsResolvedObject*> ById;
+	for (const FLevelPropsResolvedObject& R : Objects)
+	{
+		ById.Add(R.Object.Id, &R);
+	}
+	const auto IsTurret = [&KindOfLayer](const FLevelPropsResolvedObject* R)
+	{
+		return R && (KindOfLayer.FindRef(R->LayerId) == TEXT("turrets") || R->Object.Variant.StartsWith(TEXT("turret")));
+	};
+	const auto Dist = [](const FIntPoint& A, const FIntPoint& B)
+	{
+		return FMath::Sqrt(FMath::Square(static_cast<double>(A.X - B.X)) + FMath::Square(static_cast<double>(A.Y - B.Y)));
+	};
+	const auto FindObject = [&ById](const FString& Id) -> const FLevelPropsResolvedObject*
+	{
+		const FLevelPropsResolvedObject* const* Found = ById.Find(Id);
+		return Found ? *Found : nullptr;
+	};
+
+	TArray<const FLevelPropsResolvedObject*> Generators;
+	for (const FLevelPropsResolvedObject& R : Objects)
+	{
+		if (PropsGameplayRules::IsGeneratorObject(KindOfLayer.FindRef(R.LayerId), R.Object))
+		{
+			Generators.Add(&R);
+		}
+	}
+	Generators.Sort([](const FLevelPropsResolvedObject& A, const FLevelPropsResolvedObject& B) { return A.Object.Id < B.Object.Id; });
+	TMap<FString, FString> LinkedBy;
+	for (const FLevelPropsResolvedObject* G : Generators)
+	{
+		const FLevelPropsObject& O = G->Object;
+		if (const TSharedPtr<FJsonValue>* StartValue = O.Extra.Find(TEXT("start")))
+		{
+			FString Text;
+			EGeneratorStart Parsed = EGeneratorStart::Dry;
+			const bool bText = StartValue->IsValid() && (*StartValue)->Type == EJson::String && (*StartValue)->TryGetString(Text);
+			// The Training Ground accepts the exact lower-case names only.
+			if (!bText || !Text.Equals(Text.ToLower().TrimStartAndEnd(), ESearchCase::CaseSensitive) || !PowerRules::ParseStart(Text, Parsed))
+			{
+				Add(*G, O.Id, FString::Printf(TEXT("unknown generator start '%s'"), bText ? *Text : TEXT("?")));
+			}
+		}
+		const PropsGameplayRules::FGeneratorInput Input = PropsGameplayRules::GeneratorInputOf(O);
+		if (Input.Links.Num() > MaxTurrets)
+		{
+			Add(*G, O.Id, FString::Printf(TEXT("feeds %d turrets (max %d)"), Input.Links.Num(), MaxTurrets));
+		}
+		for (const FString& Id : Input.Links)
+		{
+			const FLevelPropsResolvedObject* T = FindObject(Id);
+			if (!IsTurret(T))
+			{
+				Add(*G, O.Id, FString::Printf(TEXT("link '%s' is not a turret of the map"), *Id));
+				continue;
+			}
+			const int32 D = FMath::RoundToInt(Dist(O.Pos, T->Object.Pos));
+			if (D > CableMaxCm)
+			{
+				Add(*G, O.Id, FString::Printf(TEXT("cable to '%s' is %d cm (max %d)"), *Id, D, FMath::RoundToInt(CableMaxCm)));
+			}
+			if (const FString* Previous = LinkedBy.Find(Id))
+			{
+				Add(*T, Id, FString::Printf(TEXT("turret linked by '%s' and '%s'"), **Previous, *O.Id));
+			}
+			else
+			{
+				LinkedBy.Add(Id, O.Id);
+			}
+		}
+		if (SpawnPos && Input.Start == EGeneratorStart::RunningHostile)
+		{
+			bool bNear = Dist(O.Pos, *SpawnPos) < NoHostileWithinSpawnCm;
+			for (const FString& Id : Input.Links)
+			{
+				const FLevelPropsResolvedObject* T = FindObject(Id);
+				bNear = bNear || (T && Dist(T->Object.Pos, *SpawnPos) < NoHostileWithinSpawnCm);
+			}
+			if (bNear)
+			{
+				Add(*G, O.Id, FString::Printf(TEXT("running hostile network within %d cm of the spawn"), FMath::RoundToInt(NoHostileWithinSpawnCm)));
+			}
+		}
+	}
+	if (Generators.Num() > 0)
+	{
+		TArray<const FLevelPropsResolvedObject*> Turrets;
+		for (const FLevelPropsResolvedObject& R : Objects)
+		{
+			if (IsTurret(&R))
+			{
+				Turrets.Add(&R);
+			}
+		}
+		Turrets.Sort([](const FLevelPropsResolvedObject& A, const FLevelPropsResolvedObject& B) { return A.Object.Id < B.Object.Id; });
+		for (const FLevelPropsResolvedObject* T : Turrets)
+		{
+			const FString Generator = PropsGameplayRules::TurretGeneratorOf(T->Object);
+			if (!Generator.IsEmpty())
+			{
+				if (LinkedBy.FindRef(T->Object.Id) != Generator)
+				{
+					Add(*T, T->Object.Id, FString::Printf(TEXT("generator '%s' does not list this turret"), *Generator));
+				}
+			}
+			else if (!LinkedBy.Contains(T->Object.Id))
+			{
+				Add(*T, T->Object.Id, TEXT("no power line (no generator feeds it: dark for good)"));
+			}
+		}
+	}
+	return Issues;
 }
 
 int32 FPropsValidator::GetVariantHalfSize(const FString& Variant, const FJsonObject* Balance)

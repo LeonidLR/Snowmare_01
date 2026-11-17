@@ -51,6 +51,7 @@ namespace
 		case ELootItem::Flare: return FText::Format(LOCTEXT("TookFlare", "+{0} 🎆 Signal flare"), Count);
 		case ELootItem::Grenade: return FText::Format(LOCTEXT("TookGrenade", "+{0} 🧨 Frag grenade"), Count);
 		case ELootItem::MedicalBag: return FText::Format(LOCTEXT("TookMedicalBag", "+{0} 🩹 Medical bag"), Count);
+		case ELootItem::Diesel: return FText::Format(LOCTEXT("TookDiesel", "+{0} ⛽ Diesel jerrycan"), Count);
 		default: return FText::Format(LOCTEXT("TookClothing", "🧥 Gear: {0}"), FText::FromString(Id));
 		}
 	}
@@ -451,7 +452,7 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 		: (Item == ELootItem::BonusClothing ? Contents.BonusClothingId : FString());
 	ETransferItem Storable = ETransferItem::Medkit;
 	// Sprint 15: a heat-pack stack / flare pouch takes only what fits (the rest stays in the crate).
-	const bool bLimited = Item == ELootItem::HeatPack || Item == ELootItem::Flare || Item == ELootItem::MedicalBag;
+	const bool bLimited = Item == ELootItem::HeatPack || Item == ELootItem::Flare || Item == ELootItem::MedicalBag || Item == ELootItem::Diesel;
 	const int32 Room = bLimited && ItemStash::FromLootItem(Item, Storable) ? TransferRules::GetRecipientCapacity(*Collector, Storable) : MAX_int32;
 	const int32 Count = ItemStash::FromLootItem(Item, Storable) ? Stash->Take(Storable, Room) : Contents.Take(Item);
 	if (Count <= 0)
@@ -483,7 +484,8 @@ FText ALootCrateActor::TakeItem(ELootItem Item, AOperativeCharacter* Collector)
 	case ELootItem::HeatPack:
 	case ELootItem::Firewood:
 	case ELootItem::Flare:
-	case ELootItem::MedicalBag: TransferRules::AddToOperative(*Collector, Storable, Count); break;
+	case ELootItem::MedicalBag:
+	case ELootItem::Diesel: TransferRules::AddToOperative(*Collector, Storable, Count); break;
 	default: Collector->AddAmmo(AmmoKey(Item).ToString(), Count); break;
 	}
 	UpdateVisuals();

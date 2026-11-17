@@ -9,7 +9,7 @@ import fs from 'node:fs';
 export const PROPS_SCHEMA = 'codex.levelgen_props/1';
 
 /** Supported layer kinds in codex.levelgen_props/1. */
-export const PROP_LAYER_KINDS = ['barrels', 'crates', 'turrets', 'mines', 'loot'] as const;
+export const PROP_LAYER_KINDS = ['barrels', 'crates', 'turrets', 'mines', 'loot', 'power'] as const;
 export type PropLayerKind = (typeof PROP_LAYER_KINDS)[number];
 
 /** Supported hand override operations. */
@@ -37,6 +37,18 @@ export interface PropObject {
   faction?: TurretFaction;
   /** Level turret starts powered (active); unset = the map's powered share decides (default: inactive). */
   powered?: boolean;
+  /** TURRET_POWER.md phase 1: a turret's generator (the power layer object id that feeds it). */
+  generator?: string;
+  /** A power layer generator's start state (power.ts GENERATOR_STARTS). */
+  start?: string;
+  /** A generator's litres at level start. */
+  fuel_l?: number;
+  /** A running generator's owner at level start ("hostile"; absent = none). */
+  owner?: string;
+  /** A generator's turret ids (its cable network). */
+  links?: string[];
+  /** Straight cable lengths to its turrets, cm (the order of links). */
+  cable_cm?: number[];
   [key: string]: unknown; // unknown keys preserved
 }
 
