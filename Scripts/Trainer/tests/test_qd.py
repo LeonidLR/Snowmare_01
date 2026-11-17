@@ -72,6 +72,29 @@ class BehaviourParseTests(unittest.TestCase):
                 "A": {"behaviour": {"ambush_success": {"value": 2, "unit": "count"}}}, "B": {}}}]}
         self.assertEqual(adapter.parse_doc(side)[0]["behaviour"]["ambush_success"], 2.0)
 
+    def test_cpp_tojson_shape(self):
+        """claude/tactical-p2 PmcArenaBehaviourRules::ToJson: schema, side, tactical_map, metrics.*.value.
+        rounds[].behaviour is side A and wins over sides.A.behaviour."""
+        values = {"time_in_contact_s": 42.0, "flanks_completed": 1.0, "time_in_chokepoint_s": 3.3,
+                  "stalemate_share": 1.0}
+        metrics = {}
+        for key, name, unit, lo, hi, direction in BEHAVIOUR_METRICS:
+            metrics[key] = {"name": name, "unit": unit, "range": [lo, hi], "direction": direction,
+                            "value": values.get(key, 0.0)}
+        behaviour = {"schema": "codex.pmc_arena_behaviour/1", "side": "A", "tactical_map": True, "metrics": metrics}
+        doc = {"schema": "codex.pmc_arena/1", "rounds": [
+            {"winner": "A", "duration_s": 40, "behaviour": behaviour,
+             "sides": {"A": {"behaviour": dict(behaviour, side="A"), "survivors": 2},
+                       "B": {"behaviour": dict(behaviour, side="B", tactical_map=True), "survivors": 1}}}]}
+        row = ArenaAdapter(CONFIG["arena"], "C:/Repo").parse_doc(doc)[0]
+        self.assertEqual(row["behaviour"]["time_in_contact_s"], 42.0)
+        self.assertEqual(row["behaviour"]["flanks_completed"], 1.0)
+        self.assertEqual(row["behaviour"]["time_in_chokepoint_s"], 3.3)
+        self.assertEqual(row["behaviour"]["stalemate_share"], 1.0)
+        self.assertEqual(row["behaviour"]["overwatch_kills"], 0.0)
+        self.assertEqual(len(row["behaviour"]), len(BEHAVIOUR_METRICS))
+        self.assertEqual(row["survivors"], 2.0)
+
     def test_round_object_wins_over_the_side(self):
         doc = {"schema": "codex.pmc_arena/1", "rounds": [
             {"winner": "A", "duration_s": 1, "behaviour": {"moves": 4},
