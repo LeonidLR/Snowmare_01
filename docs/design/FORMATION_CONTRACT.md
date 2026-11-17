@@ -996,7 +996,8 @@ behind him; `UpdateSectorFollower` re-checks a stand-in for an unwalkable place.
 ### 22.3 Where they stand, where they look
 - Lanes: each man climbs his own lane of the same face (`SquadMantleRules::LaneOffsets`: candidates every half `squad.lane_spacing_cm` - 0, +50,
   -50, +100 ... cm - so an uneven top (a wreck's bonnet) refusing one lane can take its neighbour),
-  inside the face's room (the obstacle's box on the face's axis, the capsule + 10 cm off its ends), validated with his own clip from the lane's base
+  inside the face's room (the obstacle's box on the face's axis, the capsule + 10 cm off its ends), the group + 2 candidates per face; at the start
+  each man gets a tentative lane from its geometry only (no traces / path queries: no frame spike), at his turn it is checked with his own clip from the lane's base
   (`AOperativeCharacter::PlanMantleClick(.., FromFeet)`) and with landings >= `squad.min_landing_gap_cm` (70) apart: the man up never stands on the
   next one's landing. A top whose clicked face has no room left gives lanes on its other faces (nearest to the clicked base first, from each
   face's middle; `USquadSubsystem::MakeSquadMantleLanes`); a fence only its near face. His turn's climb order is planned from his lane's base
@@ -1013,8 +1014,9 @@ behind him; `UpdateSectorFollower` re-checks a stand-in for an unwalkable place.
 
 ### 22.4 The end
 - A clicked climb: everybody up -> they hold there (looks kept) until the leader's next order; then the formation follows again (a man on a top
-  comes down by the batch-2 step-down). A path climb: everybody over -> the leader walks on to his order's goal (box members to their own), the
-  formation follows.
+  comes down by the batch-2 step-down). A path climb: when it ends - all over, or for any other reason (out, nobody left, a mode switch, the
+  console) - the leader walks on to his order's goal (box members to their own) unless the player has given him another order since; not on the
+  turn-based grid; the formation follows. A turn is never timed out while its man is still in the clip (one climber at a time).
 - Out of it: down / dead; a member given another order (he leaves); the leader's next order ends the whole climb (climbs in progress finish, a
   walk to a face no longer climbs); a refused climb (asked twice) or a turn over `squad.turn_timeout_s` (30) leaves him at the base; the turn-based
   fight / a Solo <-> formation switch ends it.

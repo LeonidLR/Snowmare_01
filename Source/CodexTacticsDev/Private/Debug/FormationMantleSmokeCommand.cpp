@@ -541,7 +541,7 @@ namespace FormationMantleSmoke
 			const FSquadMantleView View = Squad->GetSquadMantleView();
 			// An obstacle with room for fewer lanes than men (one side against a wall: the third man rightly holds at the base) cannot show
 			// "all up": the same case on another obstacle of the kind.
-			if (View.bActive && State->StageTime < 0.2f && Case.Aim != EAim::PathBeyond
+			if (View.bActive && Case.Aim != EAim::PathBeyond
 				&& View.Members.ContainsByPredicate([](const FSquadMantleMemberView& M) { return M.State == ESquadMantleState::Hold; }) && State->RoomRetries < 6)
 			{
 				UE_LOG(LogCodexTactics, Display, TEXT("[FormationMantleSmoke] %s: %s has no lane for every man (one holds at the base) - another one"), Case.Label,

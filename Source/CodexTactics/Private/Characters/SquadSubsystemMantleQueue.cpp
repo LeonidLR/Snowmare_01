@@ -178,7 +178,7 @@ TArray<USquadSubsystem::FSquadMantleLane> USquadSubsystem::MakeSquadMantleLanes(
 		const FVector Tangent = FVector::CrossProduct(FVector::UpVector, Dir).GetSafeNormal2D();
 		// Candidates at half the lane spacing (an uneven top - a wreck's bonnet - may refuse a lane, its neighbour may do); the landing gap keeps
 		// the lanes given squad.min_landing_gap_cm apart.
-		for (const float Offset : SquadMantleRules::LaneOffsets(PerFace * 2, Config.SquadLaneSpacingCm * 0.5f, MinOffset, MaxOffset))
+		for (const float Offset : SquadMantleRules::LaneOffsets(PerFace, Config.SquadLaneSpacingCm * 0.5f, MinOffset, MaxOffset))
 		{
 			FSquadMantleLane& Lane = Lanes.AddDefaulted_GetRef();
 			Lane.Face = Face;
@@ -265,6 +265,19 @@ TArray<USquadSubsystem::FSquadMantleLane> USquadSubsystem::MakeSquadMantleLanes(
 bool USquadSubsystem::IsSquadMantleLaneFor(const AOperativeCharacter& Operative, const FSquadMantleLane& Lane, const TArray<FVector>& Taken, FVector& OutLanding,
 	FString* OutWhy) const
 {
+	const float Gap = MantleRules::GetConfig().SquadMinLandingGapCm;
+	const FVector Approx = ApproxSquadMantleLanding(Lane);
+	for (const FVector& Other : Taken)
+	{
+		if (FVector::Dist2D(Other, Approx) < Gap * 0.75f && FMath::Abs(Other.Z - Approx.Z) < 100.f)
+		{
+			if (OutWhy)
+			{
+				*OutWhy = FString::Printf(TEXT("its landing ~%.0f cm from a man / lane up there"), FVector::Dist2D(Other, Approx));
+			}
+			return false;
+		}
+	}
 	FMantleClickPlan Plan;
 	const FVector Base = Lane.Base;
 	FString Refusal;
@@ -277,7 +290,6 @@ bool USquadSubsystem::IsSquadMantleLaneFor(const AOperativeCharacter& Operative,
 		}
 		return false;
 	}
-	const float Gap = MantleRules::GetConfig().SquadMinLandingGapCm;
 	for (const FVector& Other : Taken)
 	{
 		if (FVector::Dist2D(Other, Plan.Landing) < Gap && FMath::Abs(Other.Z - Plan.Landing.Z) < 100.f)
@@ -299,6 +311,16 @@ bool USquadSubsystem::IsSquadMantleLaneFor(const AOperativeCharacter& Operative,
 	}
 	OutLanding = Plan.Landing;
 	return true;
+}
+
+FVector USquadSubsystem::ApproxSquadMantleLanding(const FSquadMantleLane& Lane) const
+{
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	if (SquadMantle.bOver)
+	{
+		return FVector(Lane.FacePoint.X, Lane.FacePoint.Y, Lane.Base.Z) + Lane.Dir * (Lane.DepthCm + 100.f);
+	}
+	return Lane.EdgeTop + Lane.Dir * FMath::Min(Config.TopInsetCm, FMath::Max(1.f, Lane.DepthCm * 0.5f));
 }
 
 TArray<FVector> USquadSubsystem::SquadMantleTakenLandings(const FSquadMantleMember* Except) const
@@ -359,7 +381,7 @@ bool USquadSubsystem::OrderSquadMantle(const TArray<AOperativeCharacter*>& Group
 	// Batch 2 off has no measured face: the click base's face (MantleNavigation's 80 cm) and the clicked top's height.
 	Op.FacePoint = Plan.FacePoint.IsNearlyZero() ? Plan.Base + Op.Dir * SquadMantleLocal::BaseOffFaceCm : Plan.FacePoint;
 	Op.EdgeTop = Plan.EdgeTop.IsNearlyZero() ? FVector(Op.FacePoint.X, Op.FacePoint.Y, Plan.TopHit.ImpactPoint.Z) : Plan.EdgeTop;
-	SetUpSquadMantle(Group, /*bFromPath*/ false, FVector::ZeroVector);
+	SetUpSquadMantle(Group, /*bFromPath*/ false, Plan.Landing);
 	FSquadMantleMember& Lead = Op.Members[0];
 	Lead.State = ESquadMantleState::Turn;
 	Lead.bOrdered = true;
@@ -388,7 +410,7 @@ bool USquadSubsystem::BeginSquadMantleFromPath(AOperativeCharacter& Climber, con
 	Op.DepthCm = Site.Probe.DepthCm;
 	Op.bOver = Site.Destination == EMantleDestination::Over;
 	Op.Base = FVector(Site.FacePoint.X, Site.FacePoint.Y, Site.Feet.Z) - Op.Dir * SquadMantleLocal::BaseOffFaceCm;
-	SetUpSquadMantle(Group, /*bFromPath*/ true, ResumeTarget);
+	SetUpSquadMantle(Group, /*bFromPath*/ true, Site.Landing);
 	FSquadMantleMember& Lead = Op.Members[0];
 	Lead.State = ESquadMantleState::Climbing;
 	Lead.bOrdered = true;
@@ -399,7 +421,7 @@ bool USquadSubsystem::BeginSquadMantleFromPath(AOperativeCharacter& Climber, con
 	return true;
 }
 
-void USquadSubsystem::SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group, bool bFromPath, const FVector& ResumeTarget)
+void USquadSubsystem::SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group, bool bFromPath, const FVector& FirstLanding)
 {
 	using namespace SquadMantleLocal;
 	FSquadMantle& Op = SquadMantle;
@@ -410,8 +432,9 @@ void USquadSubsystem::SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group
 	Op.Tangent = FVector::CrossProduct(FVector::UpVector, Op.Dir).GetSafeNormal2D();
 	const AOperativeCharacter* Any = Group.IsEmpty() ? nullptr : Group[0];
 	const float Radius = Any && Any->GetCapsuleComponent() ? Any->GetCapsuleComponent()->GetScaledCapsuleRadius() : 35.f;
-	// Candidate lanes: up to twice the group per face (a lane a man's clip cannot take is skipped for him).
-	TArray<FSquadMantleLane> Lanes = MakeSquadMantleLanes(Group.Num() * 2, Radius);
+	// Candidate lanes: the group + 2 per face. No traces / path queries here (a frame spike): each man's lane is tentative (its geometry keeps
+	// the landings apart) and is checked with his own clip and a path at his turn (StartSquadMantleTurn: else the first spare that is free).
+	TArray<FSquadMantleLane> Lanes = MakeSquadMantleLanes(Group.Num() + 2, Radius);
 	TArray<FVector> Landings;
 	FString Line;
 	for (int32 Index = 0; Index < Group.Num(); ++Index)
@@ -429,8 +452,7 @@ void USquadSubsystem::SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group
 		{
 			// The first lane is his (the clicked spot / the link he climbs).
 			Member.Lane = Lanes.IsEmpty() ? FSquadMantleLane() : Lanes[0];
-			FVector Landing;
-			Member.Lane.Landing = IsSquadMantleLaneFor(*Operative, Member.Lane, TArray<FVector>(), Landing) ? Landing : Op.EdgeTop + Op.Dir * Config.TopInsetCm;
+			Member.Lane.Landing = FirstLanding.IsNearlyZero() ? Op.EdgeTop + Op.Dir * Config.TopInsetCm : FirstLanding;
 			Landings.Add(Member.Lane.Landing);
 			if (!Lanes.IsEmpty())
 			{
@@ -440,18 +462,12 @@ void USquadSubsystem::SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group
 			Line += FString::Printf(TEXT("%s (lane 0)"), *Operative->DisplayName.ToString());
 			continue;
 		}
-		// His lane: the first candidate his own clip can climb from its base whose landing keeps clear of the lanes given before.
+		// His tentative lane: the first candidate whose estimated landing keeps clear of the lanes given before.
 		int32 Chosen = INDEX_NONE;
-		FString Refusals;
 		for (int32 Lane = 0; Lane < Lanes.Num() && Chosen == INDEX_NONE; ++Lane)
 		{
-			FVector Landing;
-			FString Why;
-			if (!IsSquadMantleLaneFor(*Operative, Lanes[Lane], Landings, Landing, &Why))
-			{
-				Refusals += FString::Printf(TEXT(" [face %d %+.0f: %s]"), Lanes[Lane].Face, Lanes[Lane].OffsetCm, *Why);
-			}
-			else
+			const FVector Landing = ApproxSquadMantleLanding(Lanes[Lane]);
+			if (!Landings.ContainsByPredicate([&](const FVector& Other) { return FVector::Dist2D(Other, Landing) < Config.SquadMinLandingGapCm; }))
 			{
 				Chosen = Lane;
 				Lanes[Lane].Landing = Landing;
@@ -463,7 +479,6 @@ void USquadSubsystem::SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group
 			Member.State = ESquadMantleState::Hold; // the obstacle has no lane left for him: he holds at the base, covering
 			Member.Lane = Op.Members[0].Lane;
 			Line += FString::Printf(TEXT(", %s (no lane: holds at the base)"), *Operative->DisplayName.ToString());
-			UE_LOG(LogCodexTactics, Display, TEXT("[SquadMantle] %s: no lane of %s for him:%s"), *Operative->DisplayName.ToString(), *GetNameSafe(Op.Obstacle.Get()), *Refusals);
 		}
 		else
 		{
@@ -504,7 +519,7 @@ void USquadSubsystem::StartSquadMantleTurn(FSquadMantleMember& Member)
 	{
 		return;
 	}
-	if (Member.Retries > 0 && Member.TurnSeconds < SquadMantleLocal::TurnRetrySeconds * Member.Retries)
+	if (Member.Retries > 0 && Member.SinceOrder < SquadMantleLocal::TurnRetrySeconds)
 	{
 		return;
 	}
@@ -539,8 +554,13 @@ void USquadSubsystem::StartSquadMantleTurn(FSquadMantleMember& Member)
 			}
 			if (!bSwapped)
 			{
-				UE_LOG(LogCodexTactics, Display, TEXT("[SquadMantle] %s: his lane (face %d %+.0f) is no good now (%s) and no spare lane is - he tries it anyway"),
+				// No lane of the obstacle is left for him: he holds at the base, covering (the next one goes).
+				UE_LOG(LogCodexTactics, Display, TEXT("[SquadMantle] %s: his lane (face %d %+.0f) is no good (%s) and no spare lane is - he holds at the base"),
 					*Operative->DisplayName.ToString(), Member.Lane.Face, Member.Lane.OffsetCm, *Why);
+				Member.State = ESquadMantleState::Hold;
+				Member.SpotPlace = INDEX_NONE;
+				SquadMantle.Queue.Release(Operative);
+				return;
 			}
 		}
 	}
@@ -556,6 +576,7 @@ void USquadSubsystem::StartSquadMantleTurn(FSquadMantleMember& Member)
 		return;
 	}
 	Member.bOrdered = true;
+	Member.SinceOrder = 0.f;
 	Member.MantlesAtTurn = Before;
 	Member.OrderSerial = Operative->GetMoveOrderSerial();
 	UE_LOG(LogCodexTactics, Display, TEXT("[SquadMantle] %s's turn: to his lane (face %d %+.0f cm) of %s"), *Operative->DisplayName.ToString(), Member.Lane.Face,
@@ -662,6 +683,7 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 		else
 		{
 			Member->TurnSeconds += DeltaTime;
+			Member->SinceOrder += DeltaTime;
 			if (Member->State == ESquadMantleState::Turn)
 			{
 				if (!Member->bOrdered)
@@ -677,13 +699,14 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 				{
 					MarkSquadMantleUp(*Member); // a short climb ended between two ticks
 				}
-				else if (!Holder->HasMantleOrder() && !Holder->IsMoving() && Member->TurnSeconds > TurnStallSeconds)
+				else if (!Holder->HasMantleOrder() && !Holder->IsMoving() && Member->SinceOrder > TurnStallSeconds)
 				{
-					// Refused at the face (or the walk ended short): asked once more, then he stays at the base.
+					// Refused at the face (or the walk ended short): asked once more (after TurnRetrySeconds from now), then he stays at the base.
 					if (Member->Retries < 1)
 					{
 						++Member->Retries;
 						Member->bOrdered = false;
+						Member->SinceOrder = 0.f;
 					}
 					else
 					{
@@ -703,7 +726,8 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 					MarkSquadMantleUp(*Member);
 				}
 			}
-			if ((Member->State == ESquadMantleState::Turn || Member->State == ESquadMantleState::Climbing) && Member->TurnSeconds > Config.SquadTurnTimeoutSeconds)
+			if ((Member->State == ESquadMantleState::Turn || Member->State == ESquadMantleState::Climbing) && !Holder->IsMantling()
+				&& Member->TurnSeconds > Config.SquadTurnTimeoutSeconds)
 			{
 				MarkSquadMantleOut(*Member, FString::Printf(TEXT("his turn took over %.0f s"), Config.SquadTurnTimeoutSeconds));
 			}
@@ -724,6 +748,7 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 			{
 				Member.State = ESquadMantleState::Turn;
 				Member.TurnSeconds = 0.f;
+				Member.SinceOrder = 0.f;
 				Member.bOrdered = false;
 				Member.Retries = 0;
 				Member.LookYaw.Reset();
@@ -750,10 +775,9 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 		}
 	}
 	const float ClimbYaw = static_cast<float>(Op.Dir.Rotation().Yaw);
-	const int32 WaitingCount = Op.Queue.Length(IsWaiting);
-	int32 HoldPlace = WaitingCount;
-	for (FSquadMantleMember& Member : Op.Members)
+	for (int32 MemberIndex = 0; MemberIndex < Op.Members.Num(); ++MemberIndex)
 	{
+		FSquadMantleMember& Member = Op.Members[MemberIndex];
 		AOperativeCharacter* Operative = Member.Operative.Get();
 		Member.LookYaw.Reset();
 		if (!Operative)
@@ -762,7 +786,7 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 		}
 		if (Member.State == ESquadMantleState::Waiting || Member.State == ESquadMantleState::Hold)
 		{
-			const int32 Place = Member.State == ESquadMantleState::Waiting ? Op.Queue.GetIndex(Operative, IsWaiting) : HoldPlace++;
+			const int32 Place = Member.State == ESquadMantleState::Waiting ? Op.Queue.GetIndex(Operative, IsWaiting) : MemberIndex;
 			if (Place != INDEX_NONE && Place != Member.SpotPlace && !Operative->IsKnockedDown())
 			{
 				Member.SpotPlace = Place;
@@ -834,31 +858,36 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 			*GetNameSafe(Op.Obstacle.Get()), Op.Seconds);
 		if (Op.bFromPath)
 		{
-			TArray<TPair<AOperativeCharacter*, FVector>> Resumes;
-			for (const FSquadMantleMember& Member : Op.Members)
-			{
-				if (Member.bResume && Member.State == ESquadMantleState::Up && Member.Operative.IsValid())
-				{
-					Resumes.Emplace(Member.Operative.Get(), Member.ResumeTarget);
-				}
-			}
 			EndSquadMantle(TEXT("all over: walking on"));
-			for (const TPair<AOperativeCharacter*, FVector>& Resume : Resumes)
-			{
-				Resume.Key->OrderMoveTo(Resume.Value, false);
-			}
 			return;
 		}
 		Op.bHolding = true;
 	}
 }
 
-void USquadSubsystem::EndSquadMantle(const TCHAR* Why)
+void USquadSubsystem::EndSquadMantle(const TCHAR* Why, bool bResumePath)
 {
 	FSquadMantle& Op = SquadMantle;
 	if (!Op.bActive)
 	{
 		return;
+	}
+	// A path climb: the men whose own walk it interrupted (the leader, box members) walk on to it whatever ended the climb (all over, out,
+	// nobody left, a mode switch, the console) - unless the player gave him another order since, or the turn-based grid owns the squad.
+	// Mid-clip the order is taken after the landing (AOperativeCharacter::RequestMove).
+	TArray<TPair<TWeakObjectPtr<AOperativeCharacter>, FVector>> Resumes;
+	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
+	if (bResumePath && Op.bFromPath && !(Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
+	{
+		for (const FSquadMantleMember& Member : Op.Members)
+		{
+			const AOperativeCharacter* Operative = Member.Operative.Get();
+			if (Member.bResume && Operative && Operative->HealthComponent && Operative->HealthComponent->IsAlive() && Operative->GetMoveOrderSerial() == Member.OrderSerial
+				&& FVector::Dist2D(SquadMantleLocal::FeetOf(*Operative), Member.ResumeTarget) > 60.f)
+			{
+				Resumes.Emplace(Member.Operative, Member.ResumeTarget);
+			}
+		}
 	}
 	for (FSquadMantleMember& Member : Op.Members)
 	{
@@ -868,15 +897,23 @@ void USquadSubsystem::EndSquadMantle(const TCHAR* Why)
 			Operative->CancelMantleOrder();
 		}
 	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[SquadMantle] the climb of %s ends after %.1f s: %s"), *GetNameSafe(Op.Obstacle.Get()), Op.Seconds, Why);
+	UE_LOG(LogCodexTactics, Display, TEXT("[SquadMantle] the climb of %s ends after %.1f s: %s%s"), *GetNameSafe(Op.Obstacle.Get()), Op.Seconds, Why,
+		Resumes.IsEmpty() ? TEXT("") : *FString::Printf(TEXT(" (%d walk on)"), Resumes.Num()));
 	Op.Queue.Reset();
 	Op.bActive = false;
 	Op.bHolding = false;
+	for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FVector>& Resume : Resumes)
+	{
+		if (AOperativeCharacter* Operative = Resume.Key.Get())
+		{
+			Operative->OrderMoveTo(Resume.Value, false);
+		}
+	}
 }
 
 void USquadSubsystem::CancelSquadMantle(const TCHAR* Why)
 {
-	EndSquadMantle(Why);
+	EndSquadMantle(Why, /*bResumePath*/ false);
 }
 
 bool USquadSubsystem::IsInSquadMantle(const AOperativeCharacter* Operative) const

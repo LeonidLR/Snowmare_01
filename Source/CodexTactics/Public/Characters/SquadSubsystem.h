@@ -462,7 +462,7 @@ public:
 
 	bool IsSquadMantleActive() const { return SquadMantle.bActive; }
 
-	/** Calls the squad's climb off (climbs in progress finish; the walks to the face stop climbing on arrival). */
+	/** Calls the squad's climb off (climbs in progress finish; the walks to the face stop climbing on arrival; nobody is walked on). */
 	void CancelSquadMantle(const TCHAR* Why);
 
 	/** The squad's climb now (smokes / debug). */
@@ -944,6 +944,8 @@ private:
 		/** His climbs before his turn (the climb's end = one more). */
 		int32 MantlesAtTurn = 0;
 		float TurnSeconds = 0.f;
+		/** Since his turn's climb order was given / re-armed (the stall check and the retry wait count from it), s. */
+		float SinceOrder = 0.f;
 		/** His turn's climb order is given (it waits while a stance clip roots him). */
 		bool bOrdered = false;
 		int32 Retries = 0;
@@ -992,7 +994,9 @@ private:
 	/** The squad's climb per tick (after the formation follow; its looks go into FrameLooks). */
 	void UpdateSquadMantle(float DeltaTime);
 	/** Builds the climb's lanes / line for Group behind Group[0] (already ordered / climbing). */
-	void SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group, bool bFromPath, const FVector& ResumeTarget);
+	void SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group, bool bFromPath, const FVector& FirstLanding);
+	/** A lane's landing estimated from its geometry (no traces): the cheap first test against the landings taken. */
+	FVector ApproxSquadMantleLanding(const FSquadMantleLane& Lane) const;
 	/** Gives Member his turn (the climb order onto his lane), when his stance lets him walk. */
 	void StartSquadMantleTurn(FSquadMantleMember& Member);
 	/** The lane's top hit (the click the squad gives him): over his lane, on the top. */
@@ -1005,7 +1009,8 @@ private:
 		FString* OutWhy = nullptr) const;
 	/** The landings now held or promised: the men up (their feet) and the lanes given to the others than Except. */
 	TArray<FVector> SquadMantleTakenLandings(const FSquadMantleMember* Except) const;
-	void EndSquadMantle(const TCHAR* Why);
+	/** Ends the climb. bResumePath: a path climb's men with a walk of their own (the leader, box members) walk on to it, whatever ended it. */
+	void EndSquadMantle(const TCHAR* Why, bool bResumePath = true);
 	/** He is out of the climb (Why logged): out of the line, his lease and his pending climb order dropped. */
 	void MarkSquadMantleOut(FSquadMantleMember& Member, const FString& Why);
 	/** He is up: the lease is free, the next one goes after squad.next_delay_s. */
