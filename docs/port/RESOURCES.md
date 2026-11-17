@@ -35,3 +35,6 @@ Syntax: `<owner> <task> -> <new owner>`, one per line. Designer re-plan 2026-11-
 - gemini 080 -> claude (review + merge)
 
 - grok G003 -> claude (designer 2026-11-17: generator testing tomorrow; Grok busy with G002)
+
+- codex 042 -> grok G006
+- codex 043 -> grok G007
