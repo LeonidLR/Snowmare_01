@@ -33,17 +33,32 @@ function Local([string]$why) { if ($Mode -eq "on") { Say "cannot run on the work
 
 # ---- may this batch go to the worker? ------------------------------------------------------------------------------------
 if ($env:COMPUTERNAME -eq "CODEX-WORKER" -or $env:CODEX_AGENT -eq "worker") { exit 99 }  # already on the worker: always local
-if ($Mode -eq "auto") {
+# One-off farm windows (e.g. the 2026-11-17 19:00-24:00 build-farm trial): %LOCALAPPDATA%\CodexTactics\farm_windows.json
+# [{ "from": "2026-11-17T19:00", "to": "2026-11-18T00:00" }, ...] - auto also sends batches to the worker inside them.
+$extraWindow = $false
+try {
+    $fw = Join-Path $env:LOCALAPPDATA "CodexTactics\farm_windows.json"
+    if (Test-Path $fw) { foreach ($w in @(Get-Content $fw -Raw | ConvertFrom-Json)) { if ((Get-Date) -ge [datetime]$w.from -and (Get-Date) -lt [datetime]$w.to) { $extraWindow = $true } } }
+} catch { }
+if ($Mode -eq "auto" -and -not $extraWindow) {
     $now = Get-Date
     $from = $now.Date + [TimeSpan]::Parse($WindowFrom); $to = $now.Date + [TimeSpan]::Parse($WindowTo)
     if ($now -lt $from -or $now -ge $to) { exit 99 }                                         # trainer time: quietly local
 }
-if (-not (Test-Path (Join-Path $ProjectDir "Binaries\Win64\UnrealEditor.modules"))) { Local "no Binaries\Win64 here" }
-# The worker gets HEAD: uncommitted changes to game files would be missing there (Source too: the binaries were built from them).
-$dirty = @(& git -C $ProjectDir status --porcelain --untracked-files=no -- Source Content Config Plugins Scripts/test_map.json 2>$null)
-if ($dirty.Count) { Local "uncommitted game files here ($($dirty.Count), e.g. $($dirty[0].Trim())) - commit them to use the farm" }
 & ssh -o ConnectTimeout=6 -o BatchMode=yes $Worker "exit 0" 2>$null
 if ($LASTEXITCODE -ne 0) { Local "$Worker unreachable" }
+# Same build: right after build.ps1 -Remote worker the worker's tree + binaries ARE this checkout's (uncommitted work included):
+# run the smokes there without any sync. Otherwise the worker gets HEAD + this checkout's DLLs.
+$myToken = @(& (Join-Path $PSScriptRoot "tree_token.ps1") -ProjectDir $ProjectDir)[-1]
+$tree = $null
+try { $tree = (& ssh -o ConnectTimeout=6 -o BatchMode=yes $Worker "Get-Content C:/Work/CodexTactics/Saved/Worker/tree.json -Raw" 2>$null | Out-String) | ConvertFrom-Json } catch { }
+$sameBuild = $tree -and $tree.token -eq $myToken -and $tree.binaries -eq "built-on-worker"
+if (-not $sameBuild) {
+    if (-not (Test-Path (Join-Path $ProjectDir "Binaries\Win64\UnrealEditor.modules"))) { Local "no Binaries\Win64 here" }
+    # The worker gets HEAD: uncommitted changes to game files would be missing there (Source too: the binaries were built from them).
+    $dirty = @(& git -C $ProjectDir status --porcelain --untracked-files=no -- Source Content Config Plugins Scripts/test_map.json 2>$null)
+    if ($dirty.Count) { Local "uncommitted game files here ($($dirty.Count), e.g. $($dirty[0].Trim())) - commit them or build with build.ps1 -Remote worker" }
+}
 
 # ---- run on the worker -----------------------------------------------------------------------------------------------------
 $width = $(if ($Serial) { 1 } elseif ($Jobs -gt 0) { [Math]::Min($Jobs, $MaxJobs) } else { $MaxJobs })
@@ -55,7 +70,9 @@ $engineArgs = (@($ExtraArgs -split '\s+' | Where-Object { $_ }) + "-Multiprocess
 $resultDir = Join-Path $LogDir ("Worker\farm-{0}-{1}" -f (Get-Date -Format "yyyyMMdd-HHmmss"), $PID)
 Say "batch -> $Worker (jobs $width): $($Commands -join ',')"
 $sync = Join-Path $PSScriptRoot "worker_sync.ps1"
-& $sync -Worker $Worker -ShipHead -BinariesFrom $ProjectDir -Commands $Commands -Jobs $width -TimeoutSeconds $TimeoutSeconds `
+$syncMode = $(if ($sameBuild) { @{ SkipSync = $true; SkipBinaries = $true } } else { @{ ShipHead = $true } })
+if ($sameBuild) { Say "worker already holds this checkout's build ($($myToken.Substring(0, 8))...): smokes only, no sync" }
+& $sync @syncMode -Worker $Worker -BinariesFrom $ProjectDir -Commands $Commands -Jobs $width -TimeoutSeconds $TimeoutSeconds `
     -ExtraArgs $engineArgs -SmokeExtra ($extra -join " ") -ResultDir $resultDir -AllLogs -NoRetry:$NoRetry -WaitEngineMinutes $WaitMinutes
 $code = $LASTEXITCODE
 $json = Join-Path $resultDir "SmokeParallel-worker.json"

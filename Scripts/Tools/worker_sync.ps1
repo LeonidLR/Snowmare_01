@@ -11,7 +11,8 @@
 #   powershell -ExecutionPolicy Bypass -File Scripts\Tools\worker_sync.ps1 -Ref <commit> -SkipSmoke -Frozen   (the 16:30 trainer freeze)
 #   powershell -ExecutionPolicy Bypass -File Scripts\Tools\worker_sync.ps1 -SkipSync -Commands CoverSmoke
 # Smokes from an agent worktree go through Scripts\smoke_parallel.ps1 -Remote auto (Scripts\Tools\smoke_remote.ps1), not here.
-# Exit code: 0 all smokes passed (or no smokes run), 1 a smoke failed, 2 sync / connection error / worker busy.
+# Remote compile: Scriptsuild.ps1 -Remote worker (Scripts\Toolsuild_remote.ps1: -Patch / -ExtraZip / -Build / -FetchBinaries).
+# Exit code: 0 all smokes passed (or no smokes run), 1 a smoke failed, 2 sync / connection error / worker busy, 3 worker build failed.
 param(
     [string]$Worker = "codex-worker",                       # ~/.ssh/config host (Tailscale MagicDNS name)
     [string]$RemoteRoot = "C:/Work/CodexTactics",
@@ -31,6 +32,13 @@ param(
     [switch]$NoPdb,                                         # obsolete: no PDB is the default now
     [switch]$Frozen,                                        # this sync is the evening trainer freeze: writes Saved\Worker\FROZEN
     [int]$WaitEngineMinutes = 60,                           # how long to wait for a running wave / batch on the worker
+    # Remote compile (Tools\build_remote.ps1 / build.ps1 -Remote worker): the caller's uncommitted work rides along.
+    [string]$Patch = "",                                    # `git diff HEAD --binary` file, applied on the worker after the reset
+    [string]$ExtraZip = "",                                 # zip of untracked source files (repo-relative), expanded after the patch
+    [string]$TreeToken = "",                                # identity of the shipped tree -> worker Saved\Worker\tree.json
+    [switch]$Build,                                         # compile on the worker (its Scripts\build.ps1) instead of copying binaries
+    [string]$BuildArgs = "",                                # e.g. "-Target CodexTacticsEditor -Config Development"
+    [switch]$FetchBinaries,                                 # copy the worker's changed Binaries\Win64 back to -BinariesFrom
     [switch]$SkipSync,
     [switch]$SkipBinaries,
     [switch]$SkipSmoke
@@ -148,12 +156,38 @@ git lfs pull 2>&1 | Select-Object -Last 1
 'HEAD ' + (git rev-parse --short HEAD) + ' ' + (git log -1 --format=%s)
 "@
         $git | ForEach-Object { Say "  $_" }
+        # Uncommitted work of the caller: tracked changes as a binary patch, new (untracked) source files as a zip.
+        # Files a previous patch / zip added stay as untracked leftovers (no git clean: the designer packs are untracked too);
+        # UBT only compiles what the module folders contain, so a leftover .cpp of another branch could break a build -
+        # the zip run therefore lists them and removes untracked files under Source/ that are not in this zip.
+        if ($Patch) {
+            & scp -q $Patch "${Worker}:$RemoteRoot/Saved/Worker/ship.patch"
+            if ($LASTEXITCODE -ne 0) { throw "scp of the patch failed" }
+            $ap = @(Invoke-Worker -AllowFail "Set-Location '$RemoteRoot'; git apply --binary --whitespace=nowarn 'Saved/Worker/ship.patch' 2>&1; 'APPLY ' + `$LASTEXITCODE")
+            if ($ap[-1] -ne "APPLY 0") { $ap | ForEach-Object { Write-Host "  $_" }; throw "git apply of the uncommitted changes failed on the worker" }
+            Say "  uncommitted tracked changes applied ($([Math]::Round((Get-Item $Patch).Length / 1KB)) KB patch)"
+        }
+        $keep = ""
+        if ($ExtraZip) {
+            & scp -q $ExtraZip "${Worker}:$RemoteRoot/Saved/Worker/ship-extra.zip"
+            if ($LASTEXITCODE -ne 0) { throw "scp of the untracked files failed" }
+            Invoke-Worker "Expand-Archive -Force '$RemoteRoot/Saved/Worker/ship-extra.zip' '$RemoteRoot'" | Out-Null
+            $keep = "Add-Type -AssemblyName System.IO.Compression.FileSystem; `$z = [IO.Compression.ZipFile]::OpenRead('$RemoteRoot/Saved/Worker/ship-extra.zip'); `$keep = @(`$z.Entries | ForEach-Object { `$_.FullName -replace '\\','/' }); `$z.Dispose()"
+            Say "  untracked source files added ($([Math]::Round((Get-Item $ExtraZip).Length / 1KB)) KB zip)"
+        }
+        $gone = @(Invoke-Worker @"
+Set-Location '$RemoteRoot'
+`$keep = @()
+$keep
+git ls-files --others --exclude-standard -- Source | Where-Object { `$_ -notin `$keep } | ForEach-Object { Remove-Item -LiteralPath `$_ -Force; 'removed ' + `$_ }
+"@)
+        $gone | Where-Object { $_ } | ForEach-Object { Say "  stale untracked: $_" "Yellow" }
     }
     $workerHead = @(Invoke-Worker "Set-Location '$RemoteRoot'; git rev-parse HEAD")[-1].Trim()
 
     # ---- 2. binaries ---------------------------------------------------------------------------------------------------
     $changed = @()
-    if (-not $SkipBinaries) {
+    if (-not $SkipBinaries -and -not $Build) {
         if (-not (Test-Path $LocalBin)) { throw "no $LocalBin - build first (Scripts\build.ps1)" }
         $binHead = (& git -C $BinariesFrom rev-parse HEAD).Trim()
         if ($binHead -ne $workerHead) {
@@ -189,7 +223,7 @@ if (Test-Path `$b) { Get-ChildItem `$b -Recurse -File | ForEach-Object { `$_.Ful
     }
     # Code change point for the trainer report: Saved\Worker\sync_points.log (time, old -> new HEAD, binaries, trainer generation).
     if (-not ($SkipSync -and $SkipBinaries)) {
-        $binNote = $(if ($SkipBinaries) { "binaries not copied" } else { "binaries $((& git -C $BinariesFrom rev-parse --short HEAD).Trim()), $($changed.Count) files" })
+        $binNote = $(if ($Build) { "build on the worker" } elseif ($SkipBinaries) { "binaries not copied" } else { "binaries $((& git -C $BinariesFrom rev-parse --short HEAD).Trim()), $($changed.Count) files" })
         $kind = $(if ($Frozen) { "FROZEN " } else { "" })
         $point = @(Invoke-Worker @"
 `$s = Get-ChildItem '$RemoteRoot/Saved/Trainer/*/status.json' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
@@ -205,6 +239,63 @@ if ('$kind') { Set-Content -Encoding UTF8 '$RemoteRoot/Saved/Worker/FROZEN' `$li
     Say "SYNC ERROR: $_" "Red"
     Exit-WorkerSync
     exit 2
+}
+
+# ---- 2b. compile on the worker + DLLs back (remote build) ------------------------------------------------------------------
+# tree.json on the worker says which tree its Binaries were built from / for: smoke_remote.ps1 skips the sync when it matches.
+function Set-WorkerTree([string]$Binaries) {
+    $tok = $(if ($TreeToken) { $TreeToken } else { "$workerHead|clean" })
+    Invoke-Worker -AllowFail "@{ token = '$tok'; binaries = '$Binaries'; head = '$workerHead'; from = '$env:COMPUTERNAME'; at = (Get-Date -Format s) } | ConvertTo-Json | Set-Content -Encoding UTF8 '$RemoteRoot/Saved/Worker/tree.json'" | Out-Null
+}
+$script:BuildSeconds = 0
+if ($Build) {
+    Say "build on the worker: Scripts/build.ps1 $BuildArgs"
+    $t0 = Get-Date
+    $b = @(Invoke-Worker -AllowFail @"
+Set-Location '$RemoteRoot'
+`$env:CODEX_AGENT = 'worker'; `$env:CODEX_IGNORE_DESIGNER = '1'; `$env:CODEX_LOCK_HELD = '1'
+& powershell -NoProfile -ExecutionPolicy Bypass -File Scripts/build.ps1 $BuildArgs *>&1 | ForEach-Object { "`$_" }
+exit `$LASTEXITCODE
+"@)
+    $buildExit = $script:LastWorkerExit
+    $script:BuildSeconds = [Math]::Round(((Get-Date) - $t0).TotalSeconds)
+    $b | ForEach-Object { Write-Host "  $_" }
+    $tot = ($b | Where-Object { $_ -match "Total execution time: ([\d.]+)" } | Select-Object -Last 1) -replace '.*Total execution time: ([\d.]+).*', '$1'
+    Invoke-Worker -AllowFail "Add-Content -Encoding UTF8 '$RemoteRoot/Saved/Worker/builds.jsonl' ((@{ at = (Get-Date -Format s); head = '$($workerHead.Substring(0,8))'; token = '$TreeToken'; args = '$BuildArgs'; exit = $buildExit; wall_s = $($script:BuildSeconds); ubt_s = '$tot'; from = '$env:COMPUTERNAME' } | ConvertTo-Json -Compress))" | Out-Null
+    New-Item -ItemType Directory -Force $OutDir | Out-Null
+    & scp -q "${Worker}:$RemoteRoot/Saved/Logs/Build.log" (Join-Path $OutDir "Build.log")
+    Say ("worker build exit {0} in {1:N1} min (log {2})" -f $buildExit, ($script:BuildSeconds / 60), (Join-Path $OutDir "Build.log")) $(if ($buildExit -eq 0) { "Green" } else { "Red" })
+    if ($buildExit -ne 0) { Set-WorkerTree "stale"; Exit-WorkerSync; exit 3 }
+    Set-WorkerTree "built-on-worker"
+    if ($FetchBinaries) {
+        try {
+            $remoteList = Invoke-Worker @"
+`$b = '$RemoteRoot/Binaries/Win64'
+Get-ChildItem `$b -Recurse -File | ForEach-Object { `$_.FullName.Substring((Resolve-Path `$b).Path.Length + 1) + '|' + `$_.Length + '|' + [int64](`$_.LastWriteTimeUtc - [DateTime]'1970-01-01').TotalSeconds }
+"@
+            $back = @()
+            foreach ($l in $remoteList) {
+                $p = $l -split '\|'
+                if ($p.Count -ne 3 -or (-not $WithPdb -and $p[0] -like "*.pdb")) { continue }
+                $lf = Join-Path $LocalBin $p[0]
+                $same = (Test-Path $lf) -and ("{0}|{1}" -f (Get-Item $lf).Length, [int64]((Get-Item $lf).LastWriteTimeUtc - [DateTime]'1970-01-01').TotalSeconds) -eq "$($p[1])|$($p[2])"
+                if (-not $same) { $back += [pscustomobject]@{ Rel = $p[0]; Bytes = [int64]$p[1] } }
+            }
+            Say ("DLLs back: {0} files ({1} MB{2})" -f $back.Count, [Math]::Round((($back | Measure-Object Bytes -Sum).Sum) / 1MB), $(if (-not $WithPdb) { ", no PDB" } else { "" }))
+            foreach ($f in $back) {
+                $dst = Join-Path $LocalBin $f.Rel
+                New-Item -ItemType Directory -Force (Split-Path $dst) | Out-Null
+                & scp -q -p "${Worker}:$RemoteRoot/Binaries/Win64/$($f.Rel -replace '\\', '/')" $dst
+                if ($LASTEXITCODE -ne 0) { throw "scp back failed for $($f.Rel) (a local editor / game of this checkout holding the DLL?)" }
+            }
+        } catch {
+            Say "FETCH ERROR: $_" "Red"
+            Exit-WorkerSync
+            exit 2
+        }
+    }
+} elseif (-not $SkipSync -or -not $SkipBinaries) {
+    Set-WorkerTree $(if ($SkipBinaries) { "stale" } else { "uploaded" })
 }
 
 # ---- 3. smokes on the worker (still under this run's lock: CODEX_LOCK_HELD=1) ----------------------------------------------
