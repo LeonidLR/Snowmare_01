@@ -1180,6 +1180,13 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 					State.OrderSince = Now;
 					State.FailedUntil.Add(EPmcOrder::Advance, Now + Team.Weights.CompletedOrderCooldownSeconds);
 				}
+				else if (State.Order == EPmcOrder::Objective)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s arrived at objective point -> Hold"), TeamId,
+						*Fighter->DisplayName.ToString());
+					State.Order = EPmcOrder::Hold;
+					State.OrderSince = Now;
+				}
 
 				// Re-engagement: after a move ends, re-target any known threat and restore Aggressive posture
 				if (AActor* Target = State.Target.Get())
@@ -1864,6 +1871,13 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			static_cast<float>(View.Objective.Location.Z), View.Objective.LevelToleranceCm)))
 		{
 			Spot = View.Objective.Location;
+		}
+		if (!PmcCommanderRules::IsWalkShort(PmcSquadLocal::FeetOf(Fighter), Spot, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+		{
+			// Already on his spot on the point: hold here (no walk needed, no failure).
+			Order = EPmcOrder::Hold;
+			bTaken = true;
+			break;
 		}
 		bKeepGoalLevel = true;
 		bTaken = Walk(Spot, !(View.bHasThreat && View.Threat.bSeenNow));

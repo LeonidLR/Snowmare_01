@@ -141,11 +141,15 @@ namespace PmcCommanderRules
 			// The baseline: the fighter keeps shooting from where he is; worth more in cover and in contact.
 			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere * PushDamp;
 		case EPmcOrder::TakeCover:
+		{
 			// Exposed and badly covered against a known threat, with somewhere to go (a slot at his band's distance preferred).
 			// Not from a stand-in (the assault / objective point with no enemy known): hiding from a point nobody holds flapped with the
 			// Objective walk 160 times a round (fix/pmc-arena-stalemate, the Depot chokepoint round).
+			// An attacker on the point does not abandon it for cover off the point during push or quiet.
+			const float OnPointDamp = (bObjective && O.Role == EPmcRole::Attacker && O.DistanceCm <= O.RadiusCm && (bPush || !S.bContact)) ? 0.f : 1.f;
 			return W.TakeCover * Step(F.bCoverAvailable && F.bHasThreat && !F.Threat.bStandIn) * (1.f - F.CoverQuality) * (0.4f + 0.6f * Contact) * (0.5f + 0.5f * Step(F.bExposed))
-				* Step(!F.bInCover || F.CoverQuality < 0.3f) * FMath::Lerp(1.f, Clamp01(F.CoverBandFactor), Clamp01(W.BandPosition)) * PushDamp;
+				* Step(!F.bInCover || F.CoverQuality < 0.3f) * FMath::Lerp(1.f, Clamp01(F.CoverBandFactor), Clamp01(W.BandPosition)) * PushDamp * OnPointDamp;
+		}
 		case EPmcOrder::Advance:
 		{
 			// Bounding overwatch: one man moves while the others hold; worth it with numbers, health, ammo, and a threat beyond his band (the
