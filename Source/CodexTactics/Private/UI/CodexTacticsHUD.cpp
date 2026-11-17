@@ -229,7 +229,7 @@ void ACodexTacticsHUD::BeginPlay()
 					.Text_Lambda([WeakHUD]()
 					{
 						if (!WeakHUD.IsValid()) { return FText::GetEmpty(); }
-						return FText::FromString(FString::Printf(TEXT("Загрузка уровня… %d %%"),
+						return FText::FromString(FString::Printf(TEXT("Loading level... %d %%"),
 							UGameplayPreloadSubsystem::GetProgress(WeakHUD->GetWorld()).GetPercent()));
 					})
 				]

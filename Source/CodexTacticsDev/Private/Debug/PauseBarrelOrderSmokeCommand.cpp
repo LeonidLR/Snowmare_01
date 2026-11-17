@@ -380,6 +380,13 @@ namespace PauseBarrelOrderSmoke
 		{
 			return;
 		}
+		// 2026-11-17: the Commander's RPG-7 (testing loadout) drawn by the launcher rule kills the parked wave 64 m away, the wave clears and the
+		// fight drops to None / Preparation - the real-time steps below then run in a different mode and the squad formation moves on its own.
+		// The launcher's own rule has RpgAiSmoke.
+		if (IConsoleVariable* LauncherAI = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Combat.LauncherAI")))
+		{
+			LauncherAI->Set(0, ECVF_SetByConsole);
+		}
 		{
 			FTimerHandle PlaceHandle;
 			TWeakObjectPtr<UWorld> PlaceWorld(World);
