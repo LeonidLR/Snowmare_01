@@ -15,6 +15,9 @@
 #include "Components/CapsuleComponent.h"
 #include "Containers/Ticker.h"
 #include "Core/MissionSubsystem.h"
+#include "Core/SaveGameSubsystem.h"
+#include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "Core/PlayerCommands.h"
 #include "Debug/EventBusProbe.h"
 #include "Debug/SmokeUtils.h"
@@ -25,6 +28,9 @@
 #include "Components/TextRenderComponent.h"
 #include "LevelGen/MissionGoalsSubsystem.h"
 #include "Misc/Paths.h"
+#include "Misc/FileHelper.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 #include "Subsystems/CodexEventBus.h"
 #include "TimerManager.h"
 #include "UI/MinimapSubsystem.h"
@@ -116,6 +122,69 @@ namespace MissionGoalsSmoke
 			Check(State, Text && Text->Text.ToString() == Expected && bVisibility,
 				FString::Printf(TEXT("%s label has its text and is %s"), *Expected, bReached ? TEXT("hidden after reaching") : TEXT("visible while unreached")));
 		}
+	}
+
+	bool CheckGoalSaveRoundTrip(UWorld* World, FState& State, UMissionGoalsSubsystem* Goals, bool bAllReached)
+	{
+		USaveGameSubsystem* Saves = World->GetSubsystem<USaveGameSubsystem>();
+		Check(State, Saves != nullptr, TEXT("save subsystem exists for the goals round trip"));
+		if (!Saves) { return false; }
+		TGuardValue<FString> Directory(Saves->SaveDirectoryOverride, FPaths::ProjectSavedDir() / TEXT("SmokeMissionGoals"));
+		const FString Slot = bAllReached ? TEXT("goals_all") : TEXT("goals_partial");
+		const int32 Expected = Goals->GetReachedCount();
+		const int32 ReachedEvents = State.Probe->CountEvent(GameplayEvents::MissionGoalReached);
+		const int32 CompleteEvents = State.Probe->CountEvent(GameplayEvents::MissionGoalsComplete);
+		const bool bSaved = Saves->SaveGame(Slot);
+		Check(State, bSaved, FString::Printf(TEXT("%s save written (%d goals)"), *Slot, Expected));
+		if (!bSaved) { return false; }
+		if (!bAllReached)
+		{
+			const TSharedRef<FJsonObject> Snapshot = Saves->CaptureWorldState();
+			const TSharedPtr<FJsonObject>* WorldState = nullptr;
+			if (!Snapshot->TryGetObjectField(TEXT("world_state"), WorldState) || !WorldState || !WorldState->IsValid())
+			{
+				Check(State, false, TEXT("goal save snapshot contains world_state"));
+				return false;
+			}
+			const auto WriteSnapshot = [&](const FString& Name)
+			{
+				FString Json;
+				return FJsonSerializer::Serialize(Snapshot, TJsonWriterFactory<>::Create(&Json))
+					&& FFileHelper::SaveStringToFile(Json, *(Saves->GetSaveDirectory() / (Name + TEXT(".json"))));
+			};
+			TSharedRef<FJsonObject> Foreign = MakeShared<FJsonObject>();
+			TArray<TSharedPtr<FJsonValue>> ForeignIds{ MakeShared<FJsonValueString>(Goals->GetGoals()[0].Id) };
+			Foreign->SetArrayField(TEXT("/Game/Maps/MissionGoalsSmokeOther"), ForeignIds);
+			(*WorldState)->SetObjectField(TEXT("mission_goals"), Foreign);
+			const bool bForeign = WriteSnapshot(TEXT("goals_foreign"));
+			(*WorldState)->RemoveField(TEXT("mission_goals"));
+			const bool bLegacy = WriteSnapshot(TEXT("goals_legacy"));
+			Check(State, bForeign && bLegacy, TEXT("map-scoping and legacy save fixtures written"));
+			if (!bForeign || !bLegacy) { return false; }
+		}
+		if (!bAllReached)
+		{
+			Check(State, Goals->GetReachedCount() == 1, TEXT("foreign-map load starts with reached progress"));
+			Check(State, Saves->LoadGame(TEXT("goals_foreign")) && Goals->GetReachedCount() == 0,
+				TEXT("another map's matching goal ID clears prior progress"));
+			Goals->RestoreReachedGoals({ Goals->GetGoals()[0].Id });
+			Check(State, Goals->GetReachedCount() == 1, TEXT("legacy load starts with reached progress"));
+			Check(State, Saves->LoadGame(TEXT("goals_legacy")) && Goals->GetReachedCount() == 0,
+				TEXT("legacy save without goals field clears prior progress"));
+		}
+		Goals->RestoreReachedGoals({});
+		Check(State, Goals->GetReachedCount() == 0, TEXT("progress cleared before loading (the save must restore it)"));
+		const bool bLoaded = Saves->LoadGame(Slot);
+		Check(State, bLoaded && Goals->GetReachedCount() == Expected,
+			FString::Printf(TEXT("%s restores %d/%d goals"), *Slot, Expected, Goals->GetGoalCount()));
+		Check(State, Goals->GetHudLine() == MissionGoalsRules::FormatHudLine(Expected, Goals->GetGoalCount()), TEXT("restored goals HUD count"));
+		Check(State, ShownMarkers(Goals) == Goals->GetGoalCount() - Expected, TEXT("restored marker visibility"));
+		CheckGoalLabels(State, Goals);
+		Goals->EvaluateNow();
+		Check(State, State.Probe->CountEvent(GameplayEvents::MissionGoalReached) == ReachedEvents
+			&& State.Probe->CountEvent(GameplayEvents::MissionGoalsComplete) == CompleteEvents,
+			TEXT("loading and evaluating goals replays no reach/completion events or level end"));
+		return bLoaded && Goals->GetReachedCount() == Expected;
 	}
 
 	bool IsVictory(const UWorld* World)
@@ -253,6 +322,10 @@ namespace MissionGoalsSmoke
 					Check(State, Icons == Total - State.Goal - 1, FString::Printf(TEXT("the minimap icon of %s gone (%d left)"), *Goals->GetGoals()[State.Goal].Id, Icons));
 				}
 				Check(State, !IsVictory(World), FString::Printf(TEXT("no victory with %d/%d goals"), State.Goal + 1, Total));
+				if (State.Goal == 0 && !CheckGoalSaveRoundTrip(World, State, Goals, false))
+				{
+					return Finish(State, false);
+				}
 				++State.Goal;
 				SetStage(EStage::Teleport);
 				return true;
@@ -274,6 +347,10 @@ namespace MissionGoalsSmoke
 			Check(State, Mission && !Mission->IsMissionFailed(), TEXT("not failed"));
 			const int32 Complete = State.Probe ? State.Probe->CountEvent(GameplayEvents::MissionGoalsComplete) : 0;
 			Check(State, Complete == 1, FString::Printf(TEXT("MissionGoalsComplete on the event bus once (%d)"), Complete));
+			if (!CheckGoalSaveRoundTrip(World, State, Goals, true))
+			{
+				return Finish(State, false);
+			}
 			return Finish(State, true);
 		}
 		default:

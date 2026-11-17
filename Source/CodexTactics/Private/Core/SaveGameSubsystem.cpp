@@ -1,4 +1,5 @@
 #include "Core/SaveGameSubsystem.h"
+#include "LevelGen/MissionGoalsSubsystem.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Vehicles/VehicleSubsystem.h"
@@ -1160,6 +1161,20 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 	QuestState->SetBoolField(TEXT("is_gate_open"), Gate && (Gate->IsOpen() || Gate->IsOpening()));
 
 	TSharedRef<FJsonObject> WorldState = MakeShared<FJsonObject>();
+	if (const UMissionGoalsSubsystem* Goals = World->GetSubsystem<UMissionGoalsSubsystem>(); Goals && Goals->IsActive())
+	{
+		TArray<TSharedPtr<FJsonValue>> ReachedGoalIds;
+		for (int32 Index = 0; Index < Goals->GetGoalCount(); ++Index)
+		{
+			if (Goals->IsGoalReached(Index))
+			{
+				ReachedGoalIds.Add(MakeShared<FJsonValueString>(Goals->GetGoals()[Index].Id));
+			}
+		}
+		TSharedRef<FJsonObject> ProgressByMap = MakeShared<FJsonObject>();
+		ProgressByMap->SetArrayField(UWorld::RemovePIEPrefix(World->GetOutermost()->GetName()), ReachedGoalIds);
+		WorldState->SetObjectField(TEXT("mission_goals"), ProgressByMap);
+	}
 	TSharedRef<FJsonObject> Crates = MakeShared<FJsonObject>();
 	for (TActorIterator<ALootCrateActor> It(World); It; ++It)
 	{
@@ -1887,6 +1902,25 @@ void USaveGameSubsystem::RestoreQuests(FSaveRestoreContext& Context)
 			Chain.bIsGatePowered = SaveBool(*QuestState, TEXT("is_gate_powered"), false) || SaveBool(*QuestState, TEXT("is_gate_open"), false);
 			Quests->RestoreState(Chain);
 		}
+	}
+	if (UMissionGoalsSubsystem* Goals = Context.World->GetSubsystem<UMissionGoalsSubsystem>())
+	{
+		TArray<FString> ReachedGoalIds; // an old save without this optional field starts with none reached
+		const TSharedPtr<FJsonObject>* ProgressByMap = nullptr;
+		const TArray<TSharedPtr<FJsonValue>>* SavedIds = nullptr;
+		const FString Map = UWorld::RemovePIEPrefix(Context.World->GetOutermost()->GetName());
+		if (Context.WorldState.IsValid() && Context.WorldState->TryGetObjectField(TEXT("mission_goals"), ProgressByMap)
+			&& ProgressByMap && ProgressByMap->IsValid() && (*ProgressByMap)->TryGetArrayField(Map, SavedIds) && SavedIds)
+		{
+			for (const TSharedPtr<FJsonValue>& Id : *SavedIds)
+			{
+				if (Id.IsValid() && Id->Type == EJson::String)
+				{
+					ReachedGoalIds.AddUnique(Id->AsString());
+				}
+			}
+		}
+		Goals->RestoreReachedGoals(ReachedGoalIds);
 	}
 }
 

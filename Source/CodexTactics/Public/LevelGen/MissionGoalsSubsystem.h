@@ -56,6 +56,9 @@ public:
 	const FMissionGoalsFile& GetFile() const { return File; }
 	const TArray<FMissionGoal>& GetGoals() const { return File.Goals; }
 
+	/** Restores saved IDs silently; unknown IDs are ignored and all-reached never replays level completion. */
+	void RestoreReachedGoals(const TArray<FString>& GoalIds);
+
 	/** The goal's world marker (null when it could not spawn). */
 	AMissionGoalMarkerActor* GetMarker(int32 Index) const;
 
