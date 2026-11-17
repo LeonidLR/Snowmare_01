@@ -1172,6 +1172,26 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 						State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.FailedOrderCooldownSeconds);
 					}
 				}
+
+				// Re-engagement: after a move ends, re-target any known threat and restore Aggressive posture
+				if (AActor* Target = State.Target.Get())
+				{
+					if (Fighter->GetManualPriorityTarget() != Target)
+					{
+						FSquadOrderContext TargetContext;
+						TargetContext.Operative = Fighter;
+						TargetContext.Target = Target;
+						SquadOrderCatalog::Execute(ESquadOrder::PriorityTarget, TargetContext);
+					}
+				}
+				if (State.bHoldingFire)
+				{
+					State.bHoldingFire = false;
+					FSquadOrderContext Discipline;
+					Discipline.Operative = Fighter;
+					Discipline.Posture = ESquadFirePosture::Aggressive;
+					SquadOrderCatalog::Execute(ESquadOrder::FirePosture, Discipline);
+				}
 			}
 		}
 		// Exposure at one spot.
@@ -1636,9 +1656,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		{
 			bTaken = true;
 		}
-		// 2026-11-04 ("fires from corners / over the cover, not blind"): holding in cover against a known threat, it becomes his priority -
-		// the cover pose faces it and the corner / low-wall fire stance leans out for it (GatherCoverThreat), so he looks and fires from cover.
-		if (Fighter.bInCover && ThreatActor && Fighter.GetManualPriorityTarget() != ThreatActor)
+		// When holding against a known threat (in cover or in the open), it becomes his priority target:
+		// in cover the pose faces it and leans out; in the open he faces it and opens fire.
+		if (ThreatActor && Fighter.GetManualPriorityTarget() != ThreatActor)
 		{
 			Context.Target = ThreatActor;
 			SquadOrderCatalog::Execute(ESquadOrder::PriorityTarget, Context);
