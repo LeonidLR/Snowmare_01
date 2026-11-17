@@ -109,6 +109,7 @@ bool AMarksmanEnemyCharacter::CanKite() const
 void AMarksmanEnemyCharacter::BeginPlay()
 {
 	Super::BeginPlay();
+	FacingDeadBandDeg = MarksmanConfig.FacingDeadBandDeg;
 	WeaponTuning::ApplyMarksmanRifle(MarksmanConfig); // Wave Editor "Enemy weapons"; the Codex.Marksman.* overrides win
 	ApplyTuningOverrides();
 	SpawnLocation = GetActorLocation();
@@ -446,18 +447,38 @@ AOperativeCharacter* AMarksmanEnemyCharacter::FindClosestOperative(float& OutDis
 	OutDistance = TNumericLimits<float>::Max();
 	AOperativeCharacter* Best = nullptr;
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
+	AOperativeCharacter* Current = Cast<AOperativeCharacter>(CurrentTarget.Get());
+	float CurrentDistance = TNumericLimits<float>::Max();
+	if (Current && Current->HealthComponent && Current->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Current)
+		&& (!Current->IsInStealthMode() || CanSeeStealthTarget(*Current)))
+	{
+		CurrentDistance = FVector::Dist(GetActorLocation(), Current->GetActorLocation());
+	}
+
 	for (AOperativeCharacter* Member : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
 	{
 		if (Member && Member->HealthComponent && Member->HealthComponent->IsAlive() && !VehicleQueries::IsMounted(Member)
 			&& (!Member->IsInStealthMode() || CanSeeStealthTarget(*Member)))
 		{
 			const float Distance = FVector::Dist(GetActorLocation(), Member->GetActorLocation());
-			if (Distance < OutDistance)
+			const bool bIsCurrent = (Member == Current);
+			const bool bCanSwitch = MarksmanAIRules::ShouldSwitchTarget(CurrentDistance, Distance,
+				TargetHoldTimer, MarksmanConfig.TargetMinHoldSeconds, MarksmanConfig.TargetSwitchHysteresisCm);
+
+			if (bIsCurrent || bCanSwitch)
 			{
-				OutDistance = Distance;
-				Best = Member;
+				if (Distance < OutDistance)
+				{
+					OutDistance = Distance;
+					Best = Member;
+				}
 			}
 		}
+	}
+	if (!Best && CurrentDistance < TNumericLimits<float>::Max())
+	{
+		OutDistance = CurrentDistance;
+		return Current;
 	}
 	return Best;
 }
@@ -847,6 +868,14 @@ void AMarksmanEnemyCharacter::TickBehavior(float DeltaTime)
 		Distance = FVector::Dist(GetActorLocation(), Shooter->GetActorLocation());
 	}
 	if (Target && Target->IsInStealthMode() && AIState != EMarksmanAIState::Patrol) { Target->SetStealthMode(false); }
+	if (Target && Target == CurrentTarget.Get())
+	{
+		TargetHoldTimer += DeltaTime;
+	}
+	else
+	{
+		TargetHoldTimer = 0.f;
+	}
 	CurrentTarget = Target;
 	// APC P4: the squad is aboard - he puts rifle rounds into the hull (x the hull's rifle factor) instead.
 	if (!Target && AIState != EMarksmanAIState::Patrol && AIState != EMarksmanAIState::Ambushed)

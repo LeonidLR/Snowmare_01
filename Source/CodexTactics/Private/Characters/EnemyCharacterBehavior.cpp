@@ -670,8 +670,9 @@ AActor* AEnemyCharacter::FindTarget() const
 	}
 	const bool bTurretHit = LastAttackerSource.Contains(TEXT("Турель")) || LastAttackerSource.Contains(TEXT("Turret")); // cyrillic-ok: legacy Russian data
 	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const int32 CurrentIndex = Actors.IndexOfByKey(CurrentTarget.Get());
 	const int32 Index = EnemyAIRules::SelectTarget(AIConfig, EnemyAIRules::IsSmallEnemy(Archetype), Feet, Candidates, bTurretHit,
-		bObjectDistractionAllowed);
+		bObjectDistractionAllowed, CurrentIndex);
 	if (Actors.IsValidIndex(Index))
 	{
 		// Sprint 14: a melee enemy goes for a knocked-down operative close by (he takes x1.33, cannot hit back); spitters keep their pick.

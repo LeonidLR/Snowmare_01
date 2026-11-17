@@ -104,7 +104,8 @@ FString EnemyAIRules::NormalizeKnockdownClipFolder(const FString& Folder)
 }
 
 int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy, const FVector& Enemy,
-	const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret, bool bObjectsAllowed)
+	const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret, bool bObjectsAllowed,
+	int32 CurrentTargetIndex)
 {
 	int32 Best = INDEX_NONE;
 	float MinDistance = 999900.f;
@@ -122,7 +123,11 @@ int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy,
 			const FEnemyTargetCandidate& Candidate = Candidates[Index];
 			if (Candidate.Kind == Kind && Candidate.bUsable)
 			{
-				const float Effective = FVector::Dist(Enemy, Candidate.Location) * Weight;
+				float Effective = FVector::Dist(Enemy, Candidate.Location) * Weight;
+				if (Index == CurrentTargetIndex && Config.TargetHysteresisFactor > 0.f)
+				{
+					Effective *= Config.TargetHysteresisFactor;
+				}
 				if (Effective < MinDistance)
 				{
 					MinDistance = Effective;
@@ -146,7 +151,11 @@ int32 EnemyAIRules::SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy,
 		const FEnemyTargetCandidate& Candidate = Candidates[Index];
 		if (Candidate.Kind == EEnemyTargetKind::Vehicle && Candidate.bUsable)
 		{
-			const float Effective = FVector::Dist(Enemy, Candidate.Location) * Candidate.Weight;
+			float Effective = FVector::Dist(Enemy, Candidate.Location) * Candidate.Weight;
+			if (Index == CurrentTargetIndex && Config.TargetHysteresisFactor > 0.f)
+			{
+				Effective *= Config.TargetHysteresisFactor;
+			}
 			if (Effective < MinDistance)
 			{
 				MinDistance = Effective;

@@ -124,6 +124,8 @@ private:
 	FVector GetFeet() const;
 
 	AOperativeCharacter* FindClosestOperative(float& OutDistance) const;
+	/** Seconds CurrentTarget has been continuously held without switching. */
+	float TargetHoldTimer = 0.f;
 	/** Centre of the living squad (Fallback without one). */
 	FVector GetSquadCentroid(const FVector& Fallback) const;
 	/** Seconds the advance has made no progress (a partial path ended at an obstacle): then he flanks round it. */
