@@ -154,3 +154,11 @@ when commanded, chosen positions safer than random ones along the way, fall-back
 `PmcArenaTacticalSmoke` (X4: one tactical round, posts, behaviour blocks), both in `Scripts/test_map.json` (rule `tactical-pmc-2026-11-17`).
 **Not done:** the trainer side (Grok: ingestion / MAP-Elites), X2 / X6 smokes (the scenario works on any map with a tactical file + goals),
 line-of-sight checks for posts (geometric only), PMC jumpers (no archetype allowed), the player-squad hints (P5).
+
+**Verified (2026-11-17, d1e749a6).** Build OK; the full `CodexTactics` automation suite 1465 tests, 1 failure outside this branch
+(`CodexTactics.Text.NoCyrillicInPlayerText`: Cyrillic loading strings in `GameplayPreloadSubsystem.cpp` / `CodexTacticsHUD.cpp` from main's
+preload commits); smokes on a fixed step, all PASS without re-runs: TacticalPmcSmoke, PmcArenaTacticalSmoke, TacticalMapSmoke,
+PmcStalemateSmoke (the Depot_1 arena), PmcEncounterSmoke, PmcEncounterHuntSmoke, RpgPmcSmoke, EnemyFacingJitterSmoke. Manual X2 round
+(`CodexTactics.PmcArena rounds=1 seed=11 scenario=tactical` on L_Gen_Test_X2): a 200 m route, defenders on overwatch / ambush / ladder-roof
+posts (PMC danger 0), 2 of 3 ladder-only roofs picked, `rounds[0].sides.A/B.behaviour` + `rounds[0].behaviour` (= A) written with all
+11 metrics (A: contact 35 s, 1 ambush success, 2.3 s in a chokepoint vs B 7.7 s).
