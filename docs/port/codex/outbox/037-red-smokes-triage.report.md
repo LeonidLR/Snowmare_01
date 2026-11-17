@@ -1,6 +1,6 @@
 # 037 red smokes triage
 
-Status: IN PROGRESS. Step0 green; MilitaryZombieSmoke, CorpsePersistSmoke and OptimizedCharacterSmoke fixed smoke-side. Independent CorpseCost performance red needs Claude. Next: StealthModeSmoke. 2026-11-17.
+Status: IN PROGRESS, resumed by designer after old-session stop. Previous fixes preserved. StealthModeSmoke needs Claude; next CoverHugSmoke after merge main/rebuild. PMC pair belongs to Gemini077; corpse cost to Gemini078.
 
 ## Current summary
 
@@ -162,3 +162,32 @@ All evidence: `Saved/Logs/task037/optimized/`: build-*, OptimizedCharacter-fixed
 Independent CorpseCost performance failures above remain needs Claude; no extra performance rerun or budget change was made during this smoke's gate.
 
 Next: **StealthModeSmoke**. Remaining original order after that: CoverHugSmoke, MantleDescentSmoke, FormationJitterSmoke, LevelGenRampSmoke; then diagnosis-only RpgPmcSmoke and PmcEncounterHuntSmoke. Protected runtime areas remain off limits. No push/merge/main checkout writes.
+
+
+## Designer stop / new-session handoff
+
+Designer explicitly requested all Codex processes stopped to continue in a new session. Codex chat listener stopped; owned pending diagnostic-build tree5816/57944/65380 stopped. Other agents/designer processes and the pre-existing Training Ground server were not targeted. No new wait loop or build is started after this handoff.
+
+Permanent smoke-only fixes remain on branch codex/037-red-smokes: MilitaryZombie11b04070, CorpsePersistb3fafd28, OptimizedCharacter4616ea40. Their gates and the independent CorpseCost0.92/1.70ms vs0.5ms needs-Claude finding are above. Last complete report before stop3cfe9463.
+
+### StealthModeSmoke partial findings (no fix)
+
+- Routerlevel3/confidence0.60, primary Codex. Current baseline once Jobs1/NoRetry/Multiprocess: FAIL96.0s. Evidence Saved/Logs/task037/stealth/baseline-*.
+- QuickFire order accepted at06:08:09.467UTC/frame344; at06:08:09.527/frame380 existing log says no line of fire and burst ends. The combined actual-fired/stealth assertion fails at06:08:10.077/frame724, followed by original-material assertion. No claim is made that stealth callback itself is faulty: the existing message does not distinguish ammo/state.
+- Bounded reads only: exact smoke phase50/6, StealthModeRules ShouldBreak, OperativeCharacterStealth HandleStealthWeaponFired. Protected QuickFire/Aim/Combat code untouched.
+- A temporary message-only diagnostic preserved the exact assertion and8s deadline, intending to print ammo/stealth/stage/enemy state. First diagnostic build failed44.54s because of my unverified IsInCover getter; its error logs were preserved. Removed that optional field. Second diagnostic build waited at the shared Build.bat lock and was stopped before compilation when designer requested stop. No diagnostic smoke run occurred.
+- Temporary source instrumentation has been restored exactly from HEAD; Source diff is empty. Temporary patch remains only in ignored Saved/Logs/task037/stealth/temporary-diagnostic.patch. Build1 failed before link, build2 was still waiting before compilation; last successful binaries remain the already-gated permanent fixes. No further rebuild was launched after stop.
+
+Resume: stay in agents worktree on codex/037-red-smokes; read this report and inbox037. Next decision is whether to finish the passive Stealth diagnostic or hand the no-line-of-fire precondition to Claude. Do not weaken assertions or change protected firing code. After Stealth: CoverHug, MantleDescent, FormationJitter, LevelGenRamp, then diagnosis-only RpgPmc/PmcEncounterHunt. Honor the original protected-file and10% rules. Do not merge/push/main-write.
+
+
+## Resumed session / StealthModeSmoke — needs Claude
+
+- Designer stopped the old chat and assigned this chat ownership; Claude confirmed in chat611. Preserved every earlier commit and the old session's staged handoff above. Saved the complete uncommitted diagnostic patch and original source snapshot in Saved/Logs/task037/resume/. Old session restored its diagnostic-only source before stopping; no source changes remain from it. Its failed diagnostic build used nonexistent IsInCover; that temporary variant is preserved in Saved/Logs/task037/stealth/temporary-diagnostic.patch, not committed as working code.
+- Router: level3, confidence0.53 | primary main session | diagnosis complete, no fix claimed. No local model.
+- Fresh unchanged-source recheck: actual FAIL103.5s, Jobs1/NoRetry/Multiprocess/fixed60fps, with diagnostic-only PreCmds Codex.Debug.FireTrace1. Full engine/wrapper/result: Saved/Logs/task037/stealth/resumed-baseline-*. Prior stopped-session baseline FAIL96s also retained.
+- Exact failure chain: quick-fire order accepted; CanFireAt reports cover pose out of reach; RunQuickFire steps off the wall; target becomes hidden behind the wall; HasUsefulFireLine rejects the shot; clip remains30; actual-fired-round/stealth-material assertions fail. No shot occurred, so this does not establish a failure of break-on-fire itself.
+- Relevant existing contract: 571894f4 introduced the universal fire gate in OperativeCharacterQuickFire.cpp / OperativeCharacterFireGate.cpp. CanFireAt judges the actual cover barrel and returns CoverPoseOutOfReach after the stance settles; the caller then BeginOpenShotFromCover. OperativeAnimInstance.cpp UpdateCoverLayer and PlayCoverMontage deliberately suppress regular cover clips while IsInStealthMode; OperativeAnimInstanceStealth.cpp UpdateStealthLayer yields to aiming only outside cover. This interaction needs a coordinated readiness/pose transition; do not bypass the gate, relocate the fixture to hide the blocked shot, or clear stealth before a real round to satisfy the assertion.
+- Verdict: needs Claude. No assertion/expectation/flag/runtime/config/asset change; no claimed three-green or fixed-code gate. No extra build required for this report-only diagnosis (old diagnostic build was cancelled by the stopped session).
+- Updated assignment: skip RpgPmcSmoke + PmcEncounterHuntSmoke entirely, Gemini077; independent CorpseCost belongs to Gemini078. The older pending/diagnosis-only wording above is historical.
+- Next: merge current main into codex/037-red-smokes, stop and ask in chat on ANY conflict, rebuild, then CoverHugSmoke once on merged base. Continue MantleDescentSmoke, FormationJitterSmoke, LevelGenRampSmoke in that order.
