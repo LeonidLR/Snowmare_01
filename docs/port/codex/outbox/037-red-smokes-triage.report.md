@@ -1,6 +1,6 @@
 # 037 red smokes triage
 
-Status: IN PROGRESS, resumed by designer after old-session stop. Previous fixes preserved. StealthModeSmoke needs Claude; next CoverHugSmoke after merge main/rebuild. PMC pair belongs to Gemini077; corpse cost to Gemini078.
+Status: STOPPED AT DESIGNER 10% LIMIT. Previous work preserved; StealthModeSmoke needs Claude (963485d2). Main merged conflict-free; merged build/CoverHug baseline chain launched, results not yet inspected. Next: collect merged build/baseline evidence, then CoverHugSmoke. PMC pair Gemini077; corpse cost Gemini078.
 
 ## Current summary
 
@@ -191,3 +191,13 @@ Resume: stay in agents worktree on codex/037-red-smokes; read this report and in
 - Verdict: needs Claude. No assertion/expectation/flag/runtime/config/asset change; no claimed three-green or fixed-code gate. No extra build required for this report-only diagnosis (old diagnostic build was cancelled by the stopped session).
 - Updated assignment: skip RpgPmcSmoke + PmcEncounterHuntSmoke entirely, Gemini077; independent CorpseCost belongs to Gemini078. The older pending/diagnosis-only wording above is historical.
 - Next: merge current main into codex/037-red-smokes, stop and ask in chat on ANY conflict, rebuild, then CoverHugSmoke once on merged base. Continue MantleDescentSmoke, FormationJitterSmoke, LevelGenRampSmoke in that order.
+
+
+## 10% limit checkpoint — designer ordered immediate stop
+
+- Earlier work and old-session handoff preserved in963485d2; complete pre-cleanup diagnostic patch/source snapshot in Saved/Logs/task037/resume/. Tracked source remained unchanged.
+- Merged main46e2f083 into codex/037-red-smokes without conflicts. No main checkout writes/push/merge into main.
+- Merged build + one CoverHug baseline are running as a serial shell chain (existing execution session; inspect process/logs rather than starting another build). Build logs Saved/Logs/task037/merged/build-wrapper.log and Build.log; on completion chain copies build-engine.log and runs CoverHugSmoke Jobs1/NoRetry/Multiprocess, preserving CoverHug-baseline-{engine.log,wrapper.log,result.json}. Last observation34/49 build actions; no success or smoke result claimed. Do not duplicate the chain; inspect its outcome next session.
+- CoverHug router initial routine classification2; narrowed runtime/nav-slot geometry diagnosis classified4 confidence0.60, primary main model. No implementation or fix gate yet. All assertions unchanged.
+- Next: collect build/baseline result; diagnose CoverHug, then MantleDescent, FormationJitter, LevelGenRamp, merging current main/rebuilding/rechecking as instructed. Skip PMC pair (Gemini077) and corpse performance (Gemini078).
+- Stop triggered by designer's explicit under10% warning. Reset time is not exposed by this session; unknown, do not invent a timestamp. Only agent_chat wait after this checkpoint.
