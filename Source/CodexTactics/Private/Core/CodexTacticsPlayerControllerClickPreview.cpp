@@ -224,6 +224,56 @@ void ACodexTacticsPlayerController::ShowGroupGhost(AOperativeCharacter& Member, 
 	}
 }
 
+void ACodexTacticsPlayerController::ShowGroupGhostsForMantle(AOperativeCharacter& Leader, const FHitResult& Hit)
+{
+	USquadSubsystem* Squad = GetSquad();
+	if (!Squad || !USquadSubsystem::IsSquadMantleEnabled())
+	{
+		return;
+	}
+	const TArray<AOperativeCharacter*> Group = Squad->GetSquadMantleGroup(Leader);
+	TArray<USquadSubsystem::FSquadMantlePreviewLane> Lanes;
+	if (Group.Num() < 2 || !Squad->PreviewSquadMantle(Group, Hit, Lanes))
+	{
+		return;
+	}
+	for (const USquadSubsystem::FSquadMantlePreviewLane& Lane : Lanes)
+	{
+		// His own climb from his lane's base, posed like the leader's ghost (B17-2: the clip's frame with the hand on the lip).
+		FMantleClickPlan Plan;
+		if (!Lane.Operative || !Lane.Operative->PlanMantleClick(Lane.LaneHit, Plan, nullptr, &Lane.Base))
+		{
+			continue;
+		}
+		if (!GroupPreviewGhosts.IsValidIndex(GroupPreviewShown))
+		{
+			FActorSpawnParameters Params;
+			Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			if (ACoverGhostActor* Spawned = GetWorld()->SpawnActor<ACoverGhostActor>(Plan.Landing, FRotator::ZeroRotator, Params))
+			{
+				GroupPreviewGhosts.Add(Spawned);
+			}
+			else
+			{
+				return;
+			}
+		}
+		ACoverGhostActor* Ghost = GroupPreviewGhosts[GroupPreviewShown++];
+		if (!Ghost)
+		{
+			continue;
+		}
+		UAnimSequenceBase* PoseClip = nullptr;
+		float PoseSeconds = 0.f;
+		FVector PoseLocation = FVector::ZeroVector;
+		FName AnchorBone = NAME_None;
+		FVector AnchorTarget = FVector::ZeroVector;
+		const bool bPosed = Lane.Operative->PlanMantleGhostPose(Plan, PoseClip, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
+		Ghost->ShowMantleFor(*Lane.Operative, Plan.Landing, static_cast<float>(Plan.Dir.Rotation().Yaw), Plan.bTop, bPosed ? PoseClip : nullptr, PoseSeconds,
+			PoseLocation, AnchorBone, AnchorTarget);
+	}
+}
+
 void ACodexTacticsPlayerController::HideGroupGhosts()
 {
 	for (ACoverGhostActor* Ghost : GroupPreviewGhosts)
@@ -477,12 +527,22 @@ EClickPreviewKind ACodexTacticsPlayerController::UpdateClickPreviewAt(const FHit
 	{
 		HideBreachGhost();
 	}
-	// The obstacle's top: the climb (Solo, one operative; CanOrderMantleClick / PlanMantleClick decide, as the click).
+	// The obstacle's top: the climb (CanOrderMantleClick / PlanMantleClick decide, as the click). R17-1 + R17-3: a formation / box selection climbs
+	// in turns - the ghost shows every man on his own lane (USquadSubsystem::PreviewSquadMantle, the lanes the climb order gives).
 	const bool bTop = FMath::Abs(Hit.ImpactNormal.Z) >= 0.3f;
 	if (Kind == EClickPreviewKind::None && Leader && !IsClickPreviewBypass(Hit) && bTop && MantleNavigation::IsBatch2Enabled() && CanOrderMantleClick(Hit)
 		&& UpdateMantleHover(Leader, &Hit))
 	{
 		Kind = EClickPreviewKind::Mantle;
+		if (GroupKindBefore == Kind && MantleGhost && FVector::Dist2D(MantleGhost->GetActorLocation(), GroupAtBefore) < ControllerClickPreviewLocal::GroupReplanCm)
+		{
+			GroupPreviewShown = GroupBefore; // the same lane: the group's lanes stay (their clips are planned per man)
+		}
+		else
+		{
+			ShowGroupGhostsForMantle(*Leader, Hit);
+			ClickPreviewGroupAt = MantleGhost ? MantleGhost->GetActorLocation() : FVector::ZeroVector;
+		}
 	}
 	else
 	{
@@ -750,13 +810,19 @@ void ACodexTacticsPlayerController::ExecuteClickPreview(const FHitResult& Hit, b
 	ClickPreviewLeader.Reset();
 	ClickPreviewArmTime = -1.0;
 	bBreachPreview = false;
+	// R17-1: a formation / box selection climbs in turns (the leader first; one man: his own climb) - the main click's own rule (HandleWorldHit).
+	auto OrderClimb = [Squad, Leader](const FHitResult& At, bool bRun, FString* OutWhy)
+	{
+		const TArray<AOperativeCharacter*> Group = Squad->GetSquadMantleGroup(*Leader);
+		return Group.Num() > 1 ? Squad->OrderSquadMantle(Group, At, bRun, OutWhy) : Leader->OrderMantleTop(At, bRun, OutWhy);
+	};
 	switch (Kind)
 	{
 	case EClickPreviewKind::Mantle:
 	{
 		HideCoverPreview();
 		FString Why;
-		if (Leader->OrderMantleTop(Use, bDoubleClick, &Why))
+		if (OrderClimb(Use, bDoubleClick, &Why))
 		{
 			ControllerCommands::Report(this, PlayerCommands::Move, nullptr, false, false, Leader, Use.ImpactPoint);
 			UE_LOG(LogCodexTactics, Display, TEXT("[ClickPreview] %s %s to %s and climbs it"), *Leader->DisplayName.ToString(), bDoubleClick ? TEXT("runs") : TEXT("walks"),
@@ -775,7 +841,7 @@ void ACodexTacticsPlayerController::ExecuteClickPreview(const FHitResult& Hit, b
 		if (bDoubleClick && !Leader->bInCover && MantleNavigation::IsBatch2Enabled() && CanOrderMantleClick(Use))
 		{
 			FString Why;
-			if (Leader->OrderMantleTop(Use, true, &Why))
+			if (OrderClimb(Use, true, &Why))
 			{
 				HideCoverPreview();
 				ControllerCommands::Report(this, PlayerCommands::Move, nullptr, false, false, Leader, Use.ImpactPoint);

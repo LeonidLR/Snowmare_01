@@ -1179,6 +1179,8 @@ private:
 	/** The silhouettes of the others going along with the shown ghost (formation wall layout, group cover, corner stack). */
 	void ShowGroupGhostsForCover(AOperativeCharacter& Leader, const FCoverSlot& Slot);
 	void ShowGroupGhostsForPeek(AOperativeCharacter& Leader, const FHitResult& Hit);
+	/** R17-1 + R17-3: the group climb ghost - every other climber posed on his own lane (USquadSubsystem::PreviewSquadMantle). */
+	void ShowGroupGhostsForMantle(AOperativeCharacter& Leader, const FHitResult& Hit);
 	/** Shows Member's silhouette at Slot (the pool's next ghost); bPeek: the corner-aim pose of Side. */
 	void ShowGroupGhost(AOperativeCharacter& Member, const FCoverSlot& Slot, bool bPeek = false, ECoverFacing Side = ECoverFacing::Right);
 	void HideGroupGhosts();

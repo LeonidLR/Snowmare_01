@@ -257,6 +257,32 @@ struct FMantleConfig
 	/** On a top with a navmesh path down, the walk-off over another face is taken when its way to the goal is at least this much shorter
 	 *  (MantlingProblem_03: the path's only down link was on the climbed face), cm. "descent.prefer_margin_cm" */
 	float DescentPreferMarginCm = 100.f;
+	/**
+	 * R17-1 (designer 2026-11-17, MANTLING.md 6.4): the squad climbs in turns - one climbs, the others wait at the base and cover. Each man climbs
+	 * his own lane of the face, this far from the next lane (no man up stands on the next one's landing), cm. "squad.lane_spacing_cm"
+	 */
+	float SquadLaneSpacingCm = 100.f;
+	/** Two lanes' landings at least this far apart (2D; two capsules of 34 cm + 2), cm. "squad.min_landing_gap_cm" */
+	float SquadMinLandingGapCm = 70.f;
+	/**
+	 * The waiters' spots: the ladder queue's rule (LADDERS.md 7.1, ULadderClimbComponent QueueFirstSpotCm / QueueSpacingCm, TTraversalQueue::
+	 * SpotDistanceCm) - the next one this far out from his lane's base, cm ... "squad.queue_first_cm"
+	 */
+	float SquadQueueFirstCm = 90.f;
+	/** ... each one after him this much further, cm. "squad.queue_spacing_cm" */
+	float SquadQueueSpacingCm = 75.f;
+	/** Acceptance (FormationMantleSmoke): a waiter stands within this of the climbed face while he waits, cm. "squad.base_radius_cm" */
+	float SquadBaseRadiusCm = 500.f;
+	/** Only members within this of the first climber join the squad's climb (the rest keep their orders), cm. "squad.join_radius_cm" */
+	float SquadJoinRadiusCm = 2500.f;
+	/** One man's turn (his walk to the base + the climb) gives up after this long: he stays at the base, the next one goes, s. "squad.turn_timeout_s" */
+	float SquadTurnTimeoutSeconds = 30.f;
+	/** The next man starts this long after the previous one is up (he has crouched and turned to cover), s. "squad.next_delay_s" */
+	float SquadNextDelaySeconds = 0.4f;
+	/** The waiters fan out from the outward look by this much per place (0 = straight out / at the threat, 1 = +fan, 2 = -fan ...), deg. "squad.wait_fan_deg" */
+	float SquadWaitFanDeg = 45.f;
+	/** ... never more than this off the outward look (nobody covers into the obstacle), deg. "squad.wait_max_off_deg" */
+	float SquadWaitMaxOffDeg = 80.f;
 };
 
 /**

@@ -202,7 +202,8 @@ bool FPmcArenaScenarioTest::RunTest(const FString&)
 		TestEqual(TEXT("deterministic"), static_cast<int32>(PmcCommanderRules::PickScenario(Seed)), static_cast<int32>(Scenario));
 		Seen.Add(static_cast<int32>(Scenario));
 	}
-	TestEqual(TEXT("all five scenarios over 60 seeds"), Seen.Num(), static_cast<int32>(EPmcScenario::Count));
+	TestEqual(TEXT("all five scenarios over 60 seeds"), Seen.Num(), PmcCommanderRules::RandomScenarioCount);
+	TestFalse(TEXT("random never picks tactical by itself"), Seen.Contains(static_cast<int32>(EPmcScenario::Tactical)));
 	EPmcScenario Parsed = EPmcScenario::Skirmish;
 	TestTrue(TEXT("parse chokepoint"), PmcCommanderRules::ParseScenario(TEXT("Chokepoint"), Parsed) && Parsed == EPmcScenario::Chokepoint);
 	TestTrue(TEXT("parse blizzard"), PmcCommanderRules::ParseScenario(TEXT("blizzard"), Parsed) && Parsed == EPmcScenario::Blizzard);

@@ -55,11 +55,14 @@ EOperativeOrderResult AOperativeCharacter::OrderMoveTo(const FVector& Destinatio
 		++MoveOrderSerial; // every real order (player, interaction, relocation, bot) - the weather idle pose of THIS operative ends
 	}
 	// Mantling slice 1 (designer 2026-11-15, trigger C): only the operative the player commands in Solo paths over the mantle links (a
-	// formation move / follow never does); a new order replaces a walk to a clicked ledge top (OrderMantleTop sets it again after this).
+	// formation follow never does); a new order replaces a walk to a clicked ledge top (OrderMantleTop sets it again after this).
+	// R17-1 (designer 2026-11-17): the formation leader's own order too - when his path climbs, his followers climb in turns behind him
+	// (USquadSubsystem::BeginSquadMantleFromPath; Codex.Mantle.Squad 0 = before R17-1).
 	bMantleOrderPending = false;
 	{
 		const USquadSubsystem* MantleSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
-		bMantlePathAllowed = !bAutonomousOrder && MantleSquad && MantleSquad->IsSoloMode();
+		bMantlePathAllowed = !bAutonomousOrder && MantleSquad && (MantleSquad->IsSoloMode()
+			|| (USquadSubsystem::IsSquadMantleEnabled() && MantleSquad->GetFormationLeader() == this));
 	}
 	if (IsRaging())
 	{
@@ -221,6 +224,10 @@ EOperativeOrderResult AOperativeCharacter::FollowTo(const FVector& Destination, 
 	if (LadderClimb && LadderClimb->IsBusy())
 	{
 		return EOperativeOrderResult::Refused; // on a ladder / waiting for one (LADDERS.md 7.1): the formation waits for him
+	}
+	if (const USquadSubsystem* MantleSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr; MantleSquad && MantleSquad->IsInSquadMantle(this))
+	{
+		return EOperativeOrderResult::Refused; // R17-1: in the squad's climb (waiting his turn, climbing, covering up there): the squad moves him
 	}
 	if (LedgeFall && LedgeFall->IsBusy())
 	{

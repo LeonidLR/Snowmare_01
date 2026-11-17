@@ -239,6 +239,39 @@ An operative who is pulling themselves up onto a ledge cannot return fire for $0
 | **Formation Mode** (`Solo == false`) | Squad Move / High Ground Order | **Entire squad in sequence** | Squad scales the ledge sequentially via Leader $\to$ Follower 1 $\to$ Follower 2 stagger. |
 | **Box Selection** | Group Mantle Order | **Box-selected operatives only** | Only selected operatives climb; unselected members maintain current holds. |
 
+### 6.4 R17-1 - the squad climbs in turns, like a ladder (designer 2026-11-17, implemented 2026-11-17)
+
+> **Supersedes 6.1-6.3 where they differ** (the 120 cm standoff, the "60 cm away from the lip" release and the re-route on timeout are not used).
+> Full contract: [FORMATION_CONTRACT.md section 22](FORMATION_CONTRACT.md).
+
+Designer request (TASK_BOARD R17-1): "make climbing onto obstacles work in FORMATION mode too. The characters climb onto obstacles and surfaces the
+same way as on ladders now: one climbs, the others cover; he is up, the next climbs while the rest cover; then the next, and so on."
+
+- **When:** formation mode - the leader's click on a climbable obstacle (top click = walk, double click on the top / face = run; the followers walk),
+  or the formation leader's own move over a mantle link (his own orders may path over the links since R17-1; formation follows never). Solo with a
+  box selection - a click on a climbable obstacle (and a selected man's path over a link). A Solo single climbs alone, as before.
+- **The queue is the ladder's** (`TTraversalQueue`, `Public/Ladders/TraversalQueue.h`; `ALadderActor` runs on it too): one man holds the obstacle,
+  the others wait in line, the next one goes when the one before him is up (+ `squad.next_delay_s`).
+- **Order rule:** the leader first, then the followers in formation order (their slots; a box selection: its order) - the ladder's "in the order
+  they came" for a group that arrives together.
+- **Lanes:** each man climbs his own lane of the same face (candidates every 50 cm, half `squad.lane_spacing_cm`), checked with his own clip
+  from the lane's base (and a full path to it);
+  landings at least `squad.min_landing_gap_cm` (70) apart. A top whose clicked face is too short (a wreck's end) gives lanes on its other faces;
+  no lane left at all: that man holds at the base, covering. A double click on a thin (5 cm) fence's face now finds its top (it was "not a
+  climbable top": `MantleNavigation::TopHitFromFace` looks 2 cm inside the face too).
+- **Waiting / cover:** each waiter stands at his lane's base, out from the face by the ladder queue's spot rule (`squad.queue_first_cm` 90 +
+  `squad.queue_spacing_cm` 75 x his place - the ladder's `QueueFirstSpotCm` / `QueueSpacingCm`), facing **away from the obstacle, the threat side
+  first** (the next man looks at a known threat on the open side, the others fan +-45 deg per place, at most 80 deg off outwards, never into a
+  wall: the formation's `ClearLook`).
+- **The first man up covers from the top:** crouched on the top (Q3), looking the climb's way (the far side nobody at the base sees) or at a
+  known threat; the next men up +90 / -90 / back over the base. **Fence vault:** the man over the fence covers the far side.
+- **End:** a clicked climb holds up there until the leader's next order (then the formation follows again). A path climb: when all are over the
+  leader walks on to his goal and the formation follows. A man re-ordered by the player leaves; the leader's next order ends the whole climb; a
+  refused climb or a turn over `squad.turn_timeout_s` (30 s) leaves that man at the base - nobody waits for ever.
+- Numbers: `Content/Data/Movement/mantle.json` `squad.*`. Console `Codex.Mantle.Squad 0` = before R17-1. Tests
+  `CodexTactics.Formation.MantleQueue.*`, `CodexTactics.Ladder.TraversalQueue.*`; smoke `FormationMantleSmoke` (L_Gen_Depot_1: the 140 cm wreck,
+  the 230 cm parapet, the 135 cm fence vault, a box-selected group, a formation path over a fence link).
+
 ---
 
 ## 7. Combat & Environmental Interactions
@@ -403,6 +436,6 @@ shows nothing / the first click's ghost), ClickPreviewSmoke g / h.
 - **Q2 run-up = A:** insufficient run-up -> stop and use the standing clip; the system never starts a sprint by itself (run clips only when already running).
 - **Q3 weapon/stance:** clip-driven sling/raise windows; no fire during the climb; on top the operative goes to a **crouch**.
 - **Q4 review clips:** deferred (the four NEEDS_REVIEW clips stay out).
-- **Q5 squad/combat:** first slice = **one operative** (solo) end-to-end; formation queue + overwatch after the designer's test. A hit with knockdown / heavy hit cancels the climb (he drops to the base).
+- **Q5 squad/combat:** first slice = **one operative** (solo) end-to-end; formation queue + overwatch after the designer's test. **Done 2026-11-17 (R17-1): section 6.4.** A hit with knockdown / heavy hit cancels the climb (he drops to the base).
 - Order: mantling on the CURRENT L_Gen_Depot_1 (its obstacles reworked to the height classes) -> designer test -> generator v2 (board 066).
 - **L_Gen_Depot_1 obstacle rework (designer 2026-11-15; the uncommitted .umap had no manual edits - may be overwritten by the rebuild, backup first):** sandbags 100 -> 95 and jersey 90 -> 95 (low_vault); barrels 90 stay, NOT traversable (explosive); wrecks 150 -> 140 (high_mantle); cut (canal) walls 220 -> 230 (tall_ledge: climb out of the canal); **crates 110 -> mix of 85 and 140** (~half each); **fences 250 -> about a third lowered to 135** (high_fence_over, only where it does not break routes / devalue ambush fields), the rest raised to 330 (blocked); **one-storey roofs (300) climbable only at 1-2 marked mantle edges per building** (pipe / annex / crates next to it), other 300 walls are not mantle targets; **boilers 160 -> 140** (climbable).

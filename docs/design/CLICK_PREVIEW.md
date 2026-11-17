@@ -13,11 +13,11 @@
 | hovers a wall / corner / obstacle / doorway | **nothing** (no hover ghost: cover, peek, cover switch, wrap, climb and stealth-wall hover ghosts are gone) |
 | FIRST click on a wall face | the cover ghost (hug the wall) - with every member who goes along |
 | FIRST click near a wall's end / a corner | the corner peek ghost (in cover there, the squad's corner, or the run-and-peek from the open) |
-| FIRST click on an obstacle's top (Solo) | the climb ghost (B17-2 posed frame, hand on the lip) |
+| FIRST click on an obstacle's top | the climb ghost (B17-2 posed frame, hand on the lip); formation / box selection: every climber posed on his own lane (R17-1) |
 | FIRST click into a doorway's opening (+40 cm either side) | the breach stack ghost (R17-5) |
 | the cursor moves over the SAME building | the ghost follows: slides along the wall, turns into the peek at the corner, back into cover in the middle |
 | the cursor leaves the building | the ghost stays where it was |
-| SECOND click on the same building (or on the ghost's feet, 60 cm) | carried out: cover / shimmy / wrap, the peek (run there and peek), the climb (walking), the breach stack |
+| SECOND click on the same building (or on the ghost's feet, 60 cm) | carried out: cover / shimmy / wrap, the peek (run there and peek), the climb (walking; a group: the squad's climb in turns, R17-1), the breach stack |
 | a DOUBLE click (0.35 s, 30 px) | the same at a run; on an obstacle (top or face) = run there and climb at once |
 | a click on the ground away from it | the ghost goes, the click is the ordinary move |
 | a click on another building | that building's ghost instead |
@@ -39,6 +39,9 @@ The ghost shows the placement the order itself makes (nothing new invented):
 - **Box selection in cover at the wall** - `PlanGroupCornerPeek`; **box selection from the open** - `PlanRunGroupCornerPeek`;
   **formation run-and-peek** - the wall layout at that corner.
 - **Doorway** - `DoorwayBreachRules::AssignSlots` (Gemini 050) on `ADoorwayBreachGhostActor`.
+- **An obstacle, formation / box selection (R17-1)** - `USquadSubsystem::PreviewSquadMantle`: `OrderSquadMantle`'s lanes (`MakeSquadMantleLanes`,
+  each checked with that man's own clip from its base, landings apart - `IsSquadMantleLaneFor`; the climb state is put back), each man posed on
+  his lane; the second click = `OrderSquadMantle` (the ladder-like queue, FORMATION_CONTRACT.md 22), a double click = the same at a run.
 
 ## 3. Why it worked on some buildings and not on others
 
@@ -83,7 +86,7 @@ slide along the wall gets the peek only once the operative is nearer. The smoke 
 
 ## 5. Not done
 
-- R17-1 (formation climbing) is separate: an obstacle top in formation / box selection is no climb (its face is cover).
+- A man with no lane left on the obstacle has no silhouette (he would hold at the base).
 - Breach: the Tab / wheel toggle (designer answer 4: none), locked doors, the threshold trap sweep promise (the jamb men peek; the trap spotting
   runs where the peek sight runs), the exterior-facade approach waypoints (5.2), the amber "enemy inside" warning, more than four men.
 - The members' silhouettes in the cover idle stand for "who stands where"; the prone spots are not shown prone.

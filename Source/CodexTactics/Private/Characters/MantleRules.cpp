@@ -82,6 +82,16 @@ namespace MantleRulesInternal
 		{ TEXT("descent.stand_up_max_s"), &FMantleConfig::DescentStandUpMaxSeconds },
 		{ TEXT("descent.walk_timeout_s"), &FMantleConfig::DescentWalkTimeoutSeconds },
 		{ TEXT("descent.prefer_margin_cm"), &FMantleConfig::DescentPreferMarginCm },
+		{ TEXT("squad.lane_spacing_cm"), &FMantleConfig::SquadLaneSpacingCm },
+		{ TEXT("squad.min_landing_gap_cm"), &FMantleConfig::SquadMinLandingGapCm },
+		{ TEXT("squad.queue_first_cm"), &FMantleConfig::SquadQueueFirstCm },
+		{ TEXT("squad.queue_spacing_cm"), &FMantleConfig::SquadQueueSpacingCm },
+		{ TEXT("squad.base_radius_cm"), &FMantleConfig::SquadBaseRadiusCm },
+		{ TEXT("squad.join_radius_cm"), &FMantleConfig::SquadJoinRadiusCm },
+		{ TEXT("squad.turn_timeout_s"), &FMantleConfig::SquadTurnTimeoutSeconds },
+		{ TEXT("squad.next_delay_s"), &FMantleConfig::SquadNextDelaySeconds },
+		{ TEXT("squad.wait_fan_deg"), &FMantleConfig::SquadWaitFanDeg },
+		{ TEXT("squad.wait_max_off_deg"), &FMantleConfig::SquadWaitMaxOffDeg },
 	};
 
 	static FMantleConfig& MantleConfigInForce()

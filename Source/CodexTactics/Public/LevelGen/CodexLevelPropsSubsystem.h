@@ -64,6 +64,9 @@ public:
 	/** True if props have been spawned in this world */
 	bool HasSpawned() const { return bHasSpawned; }
 
+	/** Props of the last spawn that got the greybox look (Codex.Props.Greybox, G003). */
+	int32 GetGreyboxCount() const { return GreyboxCount; }
+
 	/** Resolves the UClass to spawn for a given variant name (using class_map or native fallback) */
 	UClass* ResolvePropClass(const FString& Variant);
 
@@ -103,6 +106,9 @@ private:
 	UPROPERTY(Transient)
 	TMap<FString, TSubclassOf<AActor>> ResolvedClassCache;
 	TMap<FString, TArray<TWeakObjectPtr<ACodexPropActor>>> PropsByLayer;
+	/** The parsed props_balance.json (greybox look; null until LoadBalanceFile). */
+	TSharedPtr<FJsonObject> BalanceRoot;
+	int32 GreyboxCount = 0;
 	TArray<FString> DroppedPropIds;
 
 	double LastSpawnDurationMs = 0.0;

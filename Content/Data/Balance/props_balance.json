@@ -243,6 +243,50 @@
 		"nav_agent_radius_cm_comment": "Obstacles are widened by this in the nav gate (section 2.4)."
 	},
 
+	"greybox": {
+		"comment": "G003 (2026-11-17): the runtime look of a levelgen prop while class_map has no real class for it (PropsGreybox, ACodexPropActor::ApplyGreybox). Shapes and sizes come from 'kinds' above; the keys here only add what 'kinds' does not say. Colours are linear RGB 0..1. Used for Training Ground autogen props files (source auto); Codex.Props.Greybox 2 applies it to every props file, 0 turns it off.",
+		"colors": {
+			"blue": [0.04, 0.2, 0.85],
+			"blue_comment": "crate_colors.safe: an ordinary crate (loot).",
+			"red": [0.85, 0.04, 0.03],
+			"red_comment": "crate_colors.dangerous: a mined crate.",
+			"barrel": [0.25, 0.3, 0.2],
+			"barrel_comment": "PLACEHOLDER. A plain barrel (none are generated since every barrel is explosive).",
+			"barrel_explosive": [0.9, 0.3, 0.02],
+			"barrel_explosive_comment": "PLACEHOLDER. Orange-red: explosive.",
+			"turret_mg": [0.12, 0.12, 0.14],
+			"turret_mg_comment": "PLACEHOLDER. Dark grey.",
+			"mine": [1.0, 0.05, 0.03],
+			"mine_comment": "PLACEHOLDER. Bright red marker (designer 6.1 #4: a visible marker).",
+			"loot_pile": [0.1, 0.85, 0.3],
+			"loot_pile_comment": "PLACEHOLDER. Green.",
+			"default": [0.5, 0.5, 0.5],
+			"default_comment": "Any variant with no colour of its own."
+		},
+		"turret_mg": {
+			"height_cm": 110,
+			"height_cm_comment": "PLACEHOLDER. Height of the turret body (a cylinder of kinds.turret_mg.radius_cm).",
+			"muzzle_cm": [90, 12, 12],
+			"muzzle_cm_comment": "PLACEHOLDER. Gun bar on top, along the turret's yaw (the centre of its arc)."
+		},
+		"mine": {
+			"size_cm": [36, 36, 8],
+			"size_cm_comment": "PLACEHOLDER. The marker disc on the ground.",
+			"shape": "cylinder",
+			"shape_comment": "A disc.",
+			"wire_height_cm": 15,
+			"wire_height_cm_comment": "PLACEHOLDER. A tripwire's wire across the doorway (its width_cm) this high.",
+			"wire_thickness_cm": 2,
+			"wire_thickness_cm_comment": "PLACEHOLDER."
+		},
+		"loot_pile": {
+			"shape": "box",
+			"shape_comment": "A low box.",
+			"height_cm": 35,
+			"height_cm_comment": "PLACEHOLDER. Footprint = kinds.loot_pile.radius_cm x 2."
+		}
+	},
+
 	"class_map": {
 		"comment": "variant -> soft class path. PLACEHOLDER paths: the real classes arrive with C6; nothing is hardcoded in C++. Keys 'comment' / '*_comment' are not variants.",
 		"barrel": "/Game/Props/BP_PropBarrel.BP_PropBarrel_C",

@@ -4,6 +4,12 @@
 #include "Components/BoxComponent.h"
 #include "Components/SceneComponent.h"
 #include "Components/SphereComponent.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/CollisionProfile.h"
+#include "Engine/StaticMesh.h"
+#include "LevelGen/PropsGreybox.h"
+#include "Materials/MaterialInstanceDynamic.h"
+#include "Materials/MaterialInterface.h"
 #include "NavAreas/NavArea_Null.h"
 #include "NavModifierComponent.h"
 
@@ -100,6 +106,83 @@ void ACodexPropActor::InitProp(
 				NavModifierComponent->RegisterComponent();
 			}
 		}
+	}
+}
+
+namespace CodexPropActorsLocal
+{
+	const TCHAR* const PropCubeMeshPath = TEXT("/Engine/BasicShapes/Cube.Cube");
+	const TCHAR* const PropCylinderMeshPath = TEXT("/Engine/BasicShapes/Cylinder.Cylinder");
+	/** The engine shape material (opaque, vector parameter "Color"). */
+	const TCHAR* const PropShapeMaterialPath = TEXT("/Engine/BasicShapes/BasicShapeMaterial.BasicShapeMaterial");
+
+	/** A greybox part: an engine basic shape (100 cm, centred) scaled to SizeCm, centred at Location, coloured. */
+	UStaticMeshComponent* MakePart(AActor* Owner, USceneComponent* Parent, const TCHAR* Name, const TCHAR* MeshPath,
+		const FVector& SizeCm, const FVector& Location, const FLinearColor& Color, bool bBlocks)
+	{
+		UStaticMesh* Mesh = LoadObject<UStaticMesh>(nullptr, MeshPath);
+		if (!Mesh || !Parent)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[Props] greybox mesh %s missing for %s"), MeshPath, *GetNameSafe(Owner));
+			return nullptr;
+		}
+		UStaticMeshComponent* Part = NewObject<UStaticMeshComponent>(Owner, Name);
+		Part->SetupAttachment(Parent);
+		Part->SetStaticMesh(Mesh);
+		Part->SetRelativeLocation(Location);
+		Part->SetRelativeScale3D(SizeCm / 100.0);
+		// The nav modifier (InitProp) shapes the navmesh; the body itself never dirties it.
+		Part->SetCanEverAffectNavigation(false);
+		Part->SetGenerateOverlapEvents(false);
+		if (bBlocks)
+		{
+			Part->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+		}
+		else
+		{
+			Part->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+		}
+		if (UMaterialInterface* Material = LoadObject<UMaterialInterface>(nullptr, PropShapeMaterialPath))
+		{
+			if (UMaterialInstanceDynamic* Mid = UMaterialInstanceDynamic::Create(Material, Part))
+			{
+				Mid->SetVectorParameterValue(TEXT("Color"), Color);
+				Part->SetMaterial(0, Mid);
+			}
+		}
+		Part->RegisterComponent();
+		Owner->AddInstanceComponent(Part);
+		return Part;
+	}
+}
+
+void ACodexPropActor::ApplyGreybox(const FPropGreyboxSpec& Spec)
+{
+	using namespace CodexPropActorsLocal;
+	for (TObjectPtr<UStaticMeshComponent>* Old : { &GreyboxMesh, &GreyboxDetail })
+	{
+		if (*Old)
+		{
+			(*Old)->DestroyComponent();
+			*Old = nullptr;
+		}
+	}
+
+	const FVector Size = Spec.SizeCm;
+	GreyboxMesh = MakePart(this, RootComponent, TEXT("PropGreybox"),
+		Spec.Shape == EPropGreyboxShape::Cylinder ? PropCylinderMeshPath : PropCubeMeshPath, Size, FVector(0.0, 0.0, Size.Z * 0.5), Spec.Color, Spec.bBlocks);
+
+	if (!Spec.MuzzleCm.IsNearlyZero())
+	{
+		// The gun bar starts at the body's centre and points along +x (the actor's yaw = the centre of the turret's arc).
+		GreyboxDetail = MakePart(this, RootComponent, TEXT("PropGreyboxMuzzle"), PropCubeMeshPath, Spec.MuzzleCm,
+			FVector(Spec.MuzzleCm.X * 0.5, 0.0, FMath::Max(Size.Z - Spec.MuzzleCm.Z, Spec.MuzzleCm.Z * 0.5)), Spec.Color, Spec.bBlocks);
+	}
+	else if (Spec.WireLengthCm > 0.f)
+	{
+		// The tripwire across the doorway along the actor's y, as the trigger box (ACodexPropMine::SetupTrigger).
+		GreyboxDetail = MakePart(this, RootComponent, TEXT("PropGreyboxWire"), PropCubeMeshPath,
+			FVector(Spec.WireThicknessCm, Spec.WireLengthCm, Spec.WireThicknessCm), FVector(0.0, 0.0, Spec.WireHeightCm), Spec.Color, false);
 	}
 }
 

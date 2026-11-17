@@ -506,19 +506,23 @@ public:
 	/** Walking to a clicked ledge top; the climb starts at its face. */
 	bool HasMantleOrder() const { return bMantleOrderPending; }
 
+	/** R17-1: the squad's climb was called off before his turn's climb began - the walk to the face no longer climbs on arrival. */
+	void CancelMantleOrder() { bMantleOrderPending = false; }
+
 	/**
 	 * Trigger C, the click part (designer 2026-11-15): a click on a reachable ledge top orders the climb - he walks to the obstacle's face
 	 * nearest to him and climbs there (on top he crouches). bSprint: he runs there (the controller passes his current gait - the climb never
 	 * starts a sprint by itself, designer Q2). False (and OutReason) when the click is no climb (the caller treats it as before).
 	 */
-	bool OrderMantleTop(const FHitResult& TopHit, bool bSprint = false, FString* OutReason = nullptr);
+	bool OrderMantleTop(const FHitResult& TopHit, bool bSprint = false, FString* OutReason = nullptr, const FVector* FromFeet = nullptr);
 
 	/**
 	 * What a click on Hit would order (batch 2: the click and the hover ghost share it): a top hit, or (Codex.Mantle.Batch2) an eligible
 	 * obstacle's side face taken as its top just inside it; the face nearest to him, the base point he walks to, the height class, and the
 	 * climb measured from that base (landing, headroom, warp limits). False (OutReason) when the click is no climb.
+	 * FromFeet (R17-1, the squad's lanes): planned as if he stood there (his feet), whatever he is doing now (no "busy" refusal but death).
 	 */
-	bool PlanMantleClick(const FHitResult& Hit, FMantleClickPlan& Out, FString* OutReason = nullptr) const;
+	bool PlanMantleClick(const FHitResult& Hit, FMantleClickPlan& Out, FString* OutReason = nullptr, const FVector* FromFeet = nullptr) const;
 	/**
 	 * The hover ghost's pose for a planned click (B17-2, designer option A): the frame of the clip the click would play from the middle of its
 	 * hand hold on the lip (MantleRules::GhostPoseSample), the ghost actor's estimated location and the hand (OutAnchorBone) that must sit on
@@ -543,7 +547,8 @@ public:
 	 */
 	void CancelMantle(EMantleCancel Reason);
 
-	/** A solo order of his own may path through the mantle links (Solo mode, the player's order; formation moves never). */
+	/** An order of his own may path through the mantle links (Solo mode, the player's order; since R17-1 the formation leader's - his squad then
+	 *  climbs in turns behind him, USquadSubsystem::BeginSquadMantleFromPath; formation follows never). */
 	bool IsMantlePathAllowed() const { return bMantlePathAllowed; }
 
 	/** Smokes: climbs started / restored, the last climb's class / clip / gait / stop / refusal / landing error (cm) / cancel. */

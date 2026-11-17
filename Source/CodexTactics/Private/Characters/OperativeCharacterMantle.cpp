@@ -442,6 +442,17 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 		UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: hands on the lip at %.2f s (feet then %s), hands over at %.2f s of %.2f, root lock %s shifted out"),
 			*DisplayName.ToString(), ContactSeconds, *ContactFeet.ToCompactString(), ExitSeconds, PlayLength, *MantleRootLock.ToCompactString());
 	}
+	// R17-1 (designer 2026-11-17): a path climb by a group's man (the formation leader's own order, a box-selected man's) - the rest of his group
+	// climbs in turns behind him (USquadSubsystem's squad climb, the ladder queue's rules); he holds over there and covers until all are over,
+	// then the squad walks him on.
+	if (LinkIndex != INDEX_NONE && !bMantleStopAfter && bMantleResume)
+	{
+		if (USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>(); Squad && Squad->BeginSquadMantleFromPath(*this, Site, MantleResumeTarget))
+		{
+			bMantleStopAfter = true;
+			bMantleResume = false;
+		}
+	}
 	return true;
 }
 
@@ -684,7 +695,7 @@ void AOperativeCharacter::CancelMantle(EMantleCancel Reason)
 		bToBase ? TEXT(" - dropped back to the base") : TEXT(""));
 }
 
-bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPlan& Out, FString* OutReason) const
+bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPlan& Out, FString* OutReason, const FVector* FromFeet) const
 {
 	auto Fail = [OutReason](const TCHAR* Why)
 	{
@@ -695,8 +706,10 @@ bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPla
 		return false;
 	};
 	UWorld* World = GetWorld();
-	if (!World || !HealthComponent || !HealthComponent->IsAlive() || bMantling || bVaulting || IsMantleDescending() || IsKnockedDown() || IsClimbingLadder()
-		|| IsDroppingOffLedge() || bCarrying || Stance == EOperativeStance::Prone)
+	// R17-1: a plan from another spot (a squad member's lane, planned before his turn) ignores what he is doing now.
+	const bool bBusy = bMantling || bVaulting || IsMantleDescending() || IsKnockedDown() || IsClimbingLadder() || IsDroppingOffLedge() || bCarrying
+		|| Stance == EOperativeStance::Prone;
+	if (!World || !HealthComponent || !HealthComponent->IsAlive() || (!FromFeet && bBusy))
 	{
 		return Fail(TEXT("busy"));
 	}
@@ -709,7 +722,7 @@ bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPla
 	}
 	const FMantleConfig& Config = MantleRules::GetConfig();
 	const float HalfHeight = GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
-	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, HalfHeight);
+	const FVector Feet = FromFeet ? *FromFeet : GetActorLocation() - FVector(0.f, 0.f, HalfHeight);
 	if (!MantleNavigation::PlanTopClick(*World, TopHit, Feet, GetCapsuleComponent()->GetScaledCapsuleRadius(), Out.Base, Out.Dir))
 	{
 		return Fail(TEXT("not a climbable top"));
@@ -744,7 +757,8 @@ bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPla
 	}
 	Site.Probe.Body = GetMantleBody();
 	Site.Probe.Rotation = MantleRotation;
-	if (const UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>(); Mantle && Mantle->IsReservedByOther(Site.Landing, this))
+	// (A lane planned for later (FromFeet, R17-1) ignores the reservations: they are the climbs of now, his turn comes after them.)
+	if (const UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>(); !FromFeet && Mantle && Mantle->IsReservedByOther(Site.Landing, this))
 	{
 		Site.Probe.bLandingFree = false;
 	}
@@ -806,10 +820,11 @@ bool AOperativeCharacter::PlanMantleGhostPose(const FMantleClickPlan& Plan, UAni
 	return true;
 }
 
-bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint, FString* OutReason)
+bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint, FString* OutReason, const FVector* FromFeet)
 {
+	// FromFeet (R17-1): the squad's lane - the face is the one seen from the lane's base, not from where he waits.
 	FMantleClickPlan Plan;
-	if (!PlanMantleClick(TopHit, Plan, OutReason))
+	if (!PlanMantleClick(TopHit, Plan, OutReason, FromFeet))
 	{
 		return false;
 	}

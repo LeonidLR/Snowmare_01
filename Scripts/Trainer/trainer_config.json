@@ -4,6 +4,25 @@
   "baseline_weights": "Content/Data/AI/pmc_commander.json",
   "bounds": null,
   "runs_dir": "Saved/Trainer",
+  "search": {
+    "_comment": "G002. ga (default) = the scalar tournament. qd = MAP-Elites; switch it on only after the arena writes behaviour, or a night run bins every candidate at zero. Snapshotted into run.json; a resume keeps the mode it started with.",
+    "mode": "ga"
+  },
+  "qd": {
+    "archive_file": "qd_archive.json",
+    "axes": [
+      {"id": "aggression", "metric": "time_in_contact_s", "bins": 4, "range": [0, 180]},
+      {"id": "mobility", "metrics": ["flanks_completed", "moves"], "bins": 4, "range": [0, 12]},
+      {"id": "patience", "metric": "ambush_success", "bins": 3, "range": [0, 3]}
+    ]
+  },
+  "league": {
+    "_comment": "Only when search.mode is qd. archive = one cell's champion weights (the scalar champion until a cell exists). bot = the playtest bot squad.",
+    "opponents": [
+      {"source": "archive", "jobs": 1},
+      {"source": "bot", "jobs": 1}
+    ]
+  },
   "evolution": {
     "population": 8,
     "elitism": 2,
@@ -69,7 +88,7 @@
     "map": "/Game/Maps/Generated/L_Gen_Depot_1",
     "console_command": "CodexTactics.PmcArena",
     "arg_template": ["Map={map}", "Rounds={rounds}", "Seed={seed}", "WeightsA={weights_a}", "Opponent={opponent}", "WeightsB={weights_b}", "TimeLimit={time_limit_s}", "Out={out}", "Spawns=Random", "Objective=1", "Scenario=random"],
-    "opponent_names": {"bot": "Bot", "champion": "Pmc"},
+    "opponent_names": {"bot": "Bot", "champion": "Pmc", "archive": "Pmc"},
     "engine_args": ["-game", "-nullrhi", "-nosplash", "-nosound", "-unattended", "-windowed", "-FORCELOGFLUSH", "-NoTelemetry", "-UseFixedTimeStep", "-FPS=60", "-FixedSeed", "-Multiprocess", "-LevelJson=L_PmcArenaDepot.json"],
     "time_limit_s": 240,
     "output_dir": "Saved/Arena",

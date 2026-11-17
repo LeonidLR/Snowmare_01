@@ -488,7 +488,9 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			bRunClimb = bDoubleClick;
 		}
 		FString MantleWhy;
-		if (bClimbClick && Leader->OrderMantleTop(Hit, bRunClimb, &MantleWhy))
+		// R17-1: the formation (the leader + his followers) / the box selection climbs in turns, the leader first (one man: his own climb).
+		const TArray<AOperativeCharacter*> ClimbGroup = bClimbClick ? Squad->GetSquadMantleGroup(*Leader) : TArray<AOperativeCharacter*>();
+		if (bClimbClick && (ClimbGroup.Num() > 1 ? Squad->OrderSquadMantle(ClimbGroup, Hit, bRunClimb, &MantleWhy) : Leader->OrderMantleTop(Hit, bRunClimb, &MantleWhy)))
 		{
 			HideCoverPreview();
 			UpdateMantleHover(nullptr, nullptr);
@@ -749,8 +751,12 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 bool ACodexTacticsPlayerController::CanOrderMantleClick(const FHitResult& Hit) const
 {
 	const USquadSubsystem* Squad = GetSquad();
-	if (!Squad || !Squad->GetLeader() || IsSquadWideModifierDown() || IsShiftModifierDown() || IsAttackModifierDown() || !Squad->IsSoloMode()
-		|| Squad->HasMultiSelection() || IsRealTimeOrderLocked() || bRelocateSelectMode || Cast<AInteractableActor>(Hit.GetActor()) || Cast<APawn>(Hit.GetActor()))
+	// R17-1 (designer 2026-11-17): the formation and a Solo box selection climb too - in turns (USquadSubsystem::OrderSquadMantle);
+	// Codex.Mantle.Squad 0: a Solo single only, as before.
+	const bool bGroupClimb = USquadSubsystem::IsSquadMantleEnabled();
+	if (!Squad || !Squad->GetLeader() || IsSquadWideModifierDown() || IsShiftModifierDown() || IsAttackModifierDown()
+		|| (!bGroupClimb && (!Squad->IsSoloMode() || Squad->HasMultiSelection()))
+		|| IsRealTimeOrderLocked() || bRelocateSelectMode || Cast<AInteractableActor>(Hit.GetActor()) || Cast<APawn>(Hit.GetActor()))
 	{
 		return false;
 	}

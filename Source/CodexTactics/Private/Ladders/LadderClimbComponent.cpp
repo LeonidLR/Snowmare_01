@@ -822,7 +822,7 @@ void ULadderClimbComponent::TickQueue(float DeltaTime)
 		if (Index != QueueSpotIndex)
 		{
 			QueueSpotIndex = Index;
-			const float Out = QueueFirstSpotCm + QueueSpacingCm * Index;
+			const float Out = TTraversalQueue<AActor>::SpotDistanceCm(Index, QueueFirstSpotCm, QueueSpacingCm); // the shared spot rule
 			QueueSpot = bGoingUp ? Target->GetBottomLinkWorld() + Target->GetOutward() * Out : Target->GetTopLinkWorld() - Target->GetOutward() * Out;
 			if (FVector::Dist2D(Feet, QueueSpot) > 30.f)
 			{

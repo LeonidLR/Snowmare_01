@@ -390,6 +390,12 @@ namespace DoorBreachSmoke
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->World = World;
+		// The Depot's scheduled PMC squads (pmc_squads at 30 s / 120 s) open a firefight mid-case (the men go prone / take cover against the flash and
+		// leave their orders); this smoke checks the clicks, not a fight (as LevelGenRampSmoke, 2026-11-10).
+		if (IConsoleVariable* Encounters = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Pmc.Encounters")))
+		{
+			Encounters->Set(0, ECVF_SetByConsole);
+		}
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float)
 		{
 			return Step(State);

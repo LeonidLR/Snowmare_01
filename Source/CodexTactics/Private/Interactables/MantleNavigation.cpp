@@ -377,16 +377,21 @@ bool MantleNavigation::TopHitFromFace(UWorld& World, const FHitResult& FaceHit, 
 	FVector Origin;
 	FVector Extent;
 	Obstacle->GetActorBounds(false, Origin, Extent);
-	const FVector Inside = FaceHit.ImpactPoint - Out * MantleRules::GetConfig().OrderFaceInsetCm;
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(MantleFaceToTop), false);
-	FHitResult Top;
-	if (!World.LineTraceSingleByChannel(Top, FVector(Inside.X, Inside.Y, Origin.Z + Extent.Z + 50.f), FVector(Inside.X, Inside.Y, FaceHit.ImpactPoint.Z),
-		ECC_Visibility, Params) || Top.GetActor() != Obstacle || Top.ImpactNormal.Z < 0.7f)
+	// R17-1: a 5 cm fence's top lies closer than order.face_inset_cm behind its face (the trace there missed it: "not a climbable top" on the
+	// fence's face double click) - then just inside the face.
+	for (const float Inset : { MantleRules::GetConfig().OrderFaceInsetCm, 2.f })
 	{
-		return false;
+		const FVector Inside = FaceHit.ImpactPoint - Out * Inset;
+		FHitResult Top;
+		if (World.LineTraceSingleByChannel(Top, FVector(Inside.X, Inside.Y, Origin.Z + Extent.Z + 50.f), FVector(Inside.X, Inside.Y, FaceHit.ImpactPoint.Z),
+			ECC_Visibility, Params) && Top.GetActor() == Obstacle && Top.ImpactNormal.Z >= 0.7f)
+		{
+			OutTopHit = Top;
+			return true;
+		}
 	}
-	OutTopHit = Top;
-	return true;
+	return false;
 }
 
 // --- The link holder --------------------------------------------------------------------------------------------------------------
