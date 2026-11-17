@@ -32,6 +32,7 @@
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Ladders/LadderClimbComponent.h"
+#include "LevelGen/TacticalMapSubsystem.h"
 #include "Materials/MaterialInterface.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationPath.h"
@@ -962,6 +963,7 @@ void UPmcSquadSubsystem::ResetTeam(int32 TeamId)
 	Team.Objective.Reset();
 	Team.ObjectiveSetTime = -1e9;
 	Team.Posture.Reset();
+	Team.Route.Reset();
 }
 
 EPmcOrder UPmcSquadSubsystem::GetFighterOrder(const AOperativeCharacter* Fighter) const
@@ -1328,6 +1330,18 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		View.Threat.bSeenNow = false;
 		View.Threat.bStandIn = true;
 	}
+	// The tactical map (TACTICAL_MAP.md P2): the danger of his spot for the PMC (inside a chokepoint) and his post (0 / none without a file).
+	if (const UTacticalMapSubsystem* Map = GetTacticalMap())
+	{
+		const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+		View.DangerHere = Map->DangerAt(Feet, ETacticalSide::Pmc).Danger;
+		if (State.Post.IsValid())
+		{
+			View.PostKind = State.Post.Kind;
+			View.PostScore = State.Post.Score / PmcTacticalRules::PostKindFactor(State.Post.Kind, Team.Weights);
+			View.bAtPost = PmcTacticalRules::IsAtPost(Feet, State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm);
+		}
+	}
 	// The round objective (the arena, task #53): his distance to the point.
 	if (Team.Objective.IsSet())
 	{
@@ -1538,7 +1552,10 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		{
 			continue; // the running order keeps going
 		}
-		if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick))
+		// TACTICAL_MAP P2: an Ambush that walked him to his post settles on it (faces its look, crouches) once the walk ended.
+		const bool bSettlePost = Pick == EPmcOrder::Ambush && State.Order == EPmcOrder::Ambush && State.Post.IsValid() && !State.bPostSettled
+			&& !Fighter->HasOwnMoveOrder() && !PmcSquadLocal::IsTraversingLink(*Fighter);
+		if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick) && !bSettlePost)
 		{
 			continue; // nothing new to do
 		}
@@ -1581,12 +1598,19 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	FSquadOrderContext Context;
 	Context.Operative = &Fighter;
 	bool bTaken = false;
+	if (Order != EPmcOrder::Ambush)
+	{
+		// Another order interrupts a post walk: it did not "end short" (TACTICAL_MAP P2, the post's three-tries rule).
+		State.PostWalkFromCm = -1.f;
+	}
 	FVector Goal = FVector::ZeroVector;
 	// Why the walk was not taken (Codex.Debug.MoveTrace logs it; fix/pmc-onpoint-3d-detour).
 	const TCHAR* WalkRefusal = nullptr;
 	// The Objective walk keeps the point's level (fix/pmc-onpoint-3d-detour): no "same spot on the threat's level" retry (it sent an attacker
 	// of a roof point down into the Depot's cut where the threat was) and no reachable spot round it on another level (under the point).
 	bool bKeepGoalLevel = false;
+	// TACTICAL_MAP P2: the Ambush order's walk onto his post was refused this decision (the plain ambush instead).
+	bool bPostWalkRefused = false;
 	auto Walk = [&](const FVector& Point, bool bSprint)
 	{
 		// Levels (the Depot arena, 2026-11-03): a goal at the fighter's height can hang over a drop (a roof squad's advance point over
@@ -1811,7 +1835,32 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		}
 		else
 		{
-			const FVector FallBackGoal = PmcCommanderRules::FallBackPoint(View.Location, View.Threat.Location);
+			FVector FallBackGoal = PmcCommanderRules::FallBackPoint(View.Location, View.Threat.Location);
+			// TACTICAL_MAP P2: round the chokepoint, not into it - five directions off straight away, each goal's PMC-side danger
+			// (PmcTacticalRules::PickFallBack, chokepoint_avoid); straight away at equal danger. No tactical file: straight away.
+			if (const UTacticalMapSubsystem* Map = GetTacticalMap())
+			{
+				const TArray<float> Angles = PmcTacticalRules::FallBackAngles();
+				TArray<float> Dangers;
+				TArray<FVector> Goals;
+				for (const float Angle : Angles)
+				{
+					const FVector Candidate = View.Location + (FallBackGoal - View.Location).RotateAngleAxis(Angle, FVector::UpVector);
+					FVector OnNav;
+					const bool bOnNav = ProjectToNav(Candidate, OnNav);
+					Goals.Add(bOnNav ? OnNav : Candidate);
+					// Off the navmesh: no goal at all (the worst score).
+					Dangers.Add(bOnNav ? Map->DangerAt(OnNav, ETacticalSide::Pmc).Danger : 1.f);
+				}
+				const int32 Pick = PmcTacticalRules::PickFallBack(Angles, Dangers, Team.Weights);
+				if (Pick > 0)
+				{
+					FallBackGoal = Goals[Pick];
+					++Team.Stats.TacticalFallBacks;
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s falls back %+.0f deg off straight away (danger %.2f there, %.2f straight)"), TeamId,
+						*Fighter.DisplayName.ToString(), Angles[Pick], Dangers[Pick], Dangers[0]);
+				}
+			}
 			if (!PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, PmcSquadLocal::FeetOf(Fighter), FallBackGoal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
 			{
 				bTaken = false;
@@ -1848,6 +1897,58 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		break;
 	}
 	case EPmcOrder::Ambush:
+		// TACTICAL_MAP P2: a man with a post waits ON it - walks there first, then faces its look direction (crouched; standing at a
+		// window, where a crouch would hide him under the sill).
+		// A post he cannot reach (no path, three walks that ended short of it) is dropped: the plain ambush below.
+		// The previous post walk ended short only when it got him no closer (a walk that made progress is not a failure).
+		if (State.Post.IsValid() && GetTacticalMap()
+			&& !PmcTacticalRules::IsAtPost(PmcSquadLocal::FeetOf(Fighter), State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm)
+			&& PmcTacticalRules::PostWalkEndedShort(State.PostWalkFromCm, static_cast<float>(FVector::Dist(PmcSquadLocal::FeetOf(Fighter), State.Post.Location))))
+		{
+			++State.PostWalks;
+		}
+		State.PostWalkFromCm = -1.f;
+		if (State.Post.IsValid() && GetTacticalMap() && State.PostWalks >= 3
+			&& !PmcTacticalRules::IsAtPost(PmcSquadLocal::FeetOf(Fighter), State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s gives up his %s post %s (not reached)"), TeamId, *Fighter.DisplayName.ToString(),
+				PmcTacticalRules::PostKindName(State.Post.Kind), *State.Post.Location.ToCompactString());
+			State.Post = FPmcTacticalPost();
+		}
+		if (State.Post.IsValid() && GetTacticalMap())
+		{
+			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+			if (!PmcTacticalRules::IsAtPost(Feet, State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm))
+			{
+				const float DistanceCm = static_cast<float>(FVector::Dist(Feet, State.Post.Location));
+				bKeepGoalLevel = true;
+				bTaken = Walk(State.Post.Location, false);
+				Team.Stats.PostMoves += bTaken ? 1 : 0;
+				State.bPostSettled = false;
+				// Not taken = unreachable now: counted like a walk that ended short.
+				State.PostWalks += bTaken ? 0 : 1;
+				State.PostWalkFromCm = bTaken ? DistanceCm : -1.f;
+				if (bTaken)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s walks onto his %s post %s"), TeamId, *Fighter.DisplayName.ToString(),
+						PmcTacticalRules::PostKindName(State.Post.Kind), *State.Post.Location.ToCompactString());
+					break;
+				}
+				// Refused (no full path now): the plain ambush where he stands; the next decision tries again (three tries drop the post).
+				bPostWalkRefused = true;
+			}
+		}
+		if (State.Post.IsValid() && GetTacticalMap() && !bPostWalkRefused)
+		{
+			Context.Location = PmcSquadLocal::FeetOf(Fighter) + FRotator(0.f, State.Post.Yaw, 0.f).Vector() * 1500.f;
+			SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
+			Context.Stance = State.Post.Kind == EPmcPostKind::Window ? EOperativeStance::Standing : EOperativeStance::Crouching;
+			SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
+			bTaken = true;
+			Goal = State.Post.Location;
+			State.bPostSettled = true;
+			break;
+		}
 		Context.Stance = EOperativeStance::Crouching;
 		bTaken = SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
 		if (!Fighter.bInCover)
@@ -1989,6 +2090,9 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 	const float WeaponRangeCm = Fighter.CurrentWeapon ? Fighter.CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 	// #32 (2026-11-07): a corner is worth its bonus only when his peek round it reaches the threat (his sight range, the cover-and-peek rule).
 	const float PeekRangeCm = Fighter.GetPeekSightRangeCm();
+	// TACTICAL_MAP P2: a slot inside a chokepoint is worth less, one whose wall faces the squad's route more (near an analysis cover spot).
+	const UTacticalMapSubsystem* TacticalMap = GetTacticalMap();
+	const TArray<FVector>* Route = OwnTeam && !OwnTeam->Route.IsEmpty() ? &OwnTeam->Route : nullptr;
 	struct FCandidate
 	{
 		FCoverSlot Slot;
@@ -1999,6 +2103,30 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		FString StableId;
 	};
 	TArray<FCandidate, TInlineAllocator<24>> Candidates;
+	auto TerrainFactor = [&](const FCoverSlot& Slot)
+	{
+		if (!TacticalMap)
+		{
+			return 1.f;
+		}
+		const float Danger = TacticalMap->DangerAt(Slot.WorldLocation, ETacticalSide::Pmc).Danger;
+		float Facing = 0.f;
+		bool bNearAnalysisCover = false;
+		if (Route)
+		{
+			Facing = PmcTacticalRules::RouteFacing(Slot.WorldLocation, Slot.WallNormal, PmcTacticalRules::NearestOnRoute(*Route, Slot.WorldLocation));
+			// Only the hiding spots near the route (cached with it, SetRouteOf): a slot farther out has none within 2.5 m anyway.
+			for (const FVector& Spot : OwnTeam->RouteCoverSpots)
+			{
+				if (FVector::Dist2D(Spot, Slot.WorldLocation) <= 250.f && FMath::Abs(Spot.Z - Slot.WorldLocation.Z) <= 150.f)
+				{
+					bNearAnalysisCover = true;
+					break;
+				}
+			}
+		}
+		return PmcTacticalRules::SlotTerrainFactor(Danger, Facing, bNearAnalysisCover, Weights);
+	};
 	auto TryRay = [&](const FVector& Origin, const FVector& Direction, float Reach, bool bElevated)
 	{
 		FHitResult Hit;
@@ -2030,7 +2158,7 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		const float ObjectiveFactor = Objective ? PmcCommanderRules::ObjectivePositionFactor(Slot.WorldLocation, Feet, *Objective, Band, WeaponRangeCm, Weights) : 1.f;
 		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)
 			* PmcCommanderRules::HighGroundFactor(Level, Weights) * FMath::Lerp(1.f, SlotBand, FMath::Clamp(Weights.BandPosition, 0.f, 1.f))
-			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f) * ObjectiveFactor;
+			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f) * ObjectiveFactor * TerrainFactor(Slot);
 		Candidates.Add({ Slot, Quality, Score, bElevated, SlotBand, PmcSquadLocal::StableCoverSlotId(Slot, bElevated) });
 	};
 	for (int32 Index = 0; Index < 16; ++Index)
@@ -2184,6 +2312,59 @@ bool UPmcSquadSubsystem::ProjectToNav(const FVector& Point, FVector& OutPoint) c
 		return true;
 	}
 	return false;
+}
+
+bool UPmcSquadSubsystem::ProjectToNavAtLevel(const FVector& Point, FVector& OutPoint) const
+{
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+	FNavLocation Projected;
+	if (Nav && Nav->ProjectPointToNavigation(Point, Projected, FVector(200.f, 200.f, 150.f)) && FMath::Abs(Projected.Location.Z - Point.Z) <= 150.f)
+	{
+		OutPoint = Projected.Location;
+		return true;
+	}
+	return false;
+}
+
+void UPmcSquadSubsystem::KeepCandidatesOnNav(TArray<FPmcPostCandidate>& Candidates) const
+{
+	const int32 Before = Candidates.Num();
+	for (int32 Index = Candidates.Num() - 1; Index >= 0; --Index)
+	{
+		FVector OnNav;
+		if (ProjectToNavAtLevel(Candidates[Index].Location, OnNav))
+		{
+			Candidates[Index].Location = OnNav;
+		}
+		else
+		{
+			Candidates.RemoveAt(Index);
+		}
+	}
+	if (Candidates.Num() < Before)
+	{
+		UE_LOG(LogCodexTactics, Verbose, TEXT("[PmcAI] tactical posts: %d of %d candidates off the navmesh at their level dropped"), Before - Candidates.Num(), Before);
+	}
+}
+
+void UPmcSquadSubsystem::SetRouteOf(FTeam& Team, const TArray<FVector>& Route) const
+{
+	Team.Route = Route;
+	Team.RouteCoverSpots.Reset();
+	const UTacticalMapSubsystem* Map = GetTacticalMap();
+	if (!Map || Route.IsEmpty())
+	{
+		return;
+	}
+	// A slot can only count a spot within 2.5 m of itself, and the slot lies within the cover search of a man near the route.
+	const float Reach = FMath::Max(Team.Weights.TacticalReachCm, 100.f) + PmcSquadLocal::CoverSearchRadiusCm + 250.f;
+	for (const FTacticalHidingSpot& Spot : Map->GetFile().HidingSpots)
+	{
+		if (PmcTacticalRules::DistanceToRoute(Route, Spot.Location) <= Reach)
+		{
+			Team.RouteCoverSpots.Add(Spot.Location);
+		}
+	}
 }
 
 void UPmcSquadSubsystem::HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit)
@@ -2375,4 +2556,370 @@ void UPmcSquadSubsystem::DestroyTeam(int32 TeamId)
 		Team->Fighters.Reset();
 		Team->Known.Reset();
 	}
+}
+
+// --- The tactical map (docs/design/TACTICAL_MAP.md P2, designer 2026-11-17) ------------------------------------------------------------
+
+const UTacticalMapSubsystem* UPmcSquadSubsystem::GetTacticalMap() const
+{
+	const UWorld* World = GetWorld();
+	const UTacticalMapSubsystem* Map = World ? World->GetSubsystem<UTacticalMapSubsystem>() : nullptr;
+	return Map && Map->IsLoaded() && !Map->GetFile().IsEmpty() ? Map : nullptr;
+}
+
+TArray<FVector> UPmcSquadSubsystem::RouteBetween(const FVector& From, const FVector& To) const
+{
+	UWorld* World = GetWorld();
+	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, From, To) : nullptr;
+	if (Path && Path->IsValid() && !Path->IsPartial() && Path->PathPoints.Num() >= 2)
+	{
+		return Path->PathPoints;
+	}
+	return { From, To };
+}
+
+void UPmcSquadSubsystem::SetTeamRoute(int32 TeamId, const TArray<FVector>& Route)
+{
+	SetRouteOf(TeamOf(TeamId), Route);
+}
+
+const TArray<FVector>& UPmcSquadSubsystem::GetTeamRoute(int32 TeamId) const
+{
+	static const TArray<FVector> None;
+	const FTeam* Team = FindTeam(TeamId);
+	return Team ? Team->Route : None;
+}
+
+const FPmcTacticalPost* UPmcSquadSubsystem::GetFighterPost(const AOperativeCharacter* Fighter) const
+{
+	if (!Fighter)
+	{
+		return nullptr;
+	}
+	const FTeam* Team = FindTeam(Fighter->TeamId);
+	const FFighterState* State = Team ? Team->Fighters.Find(const_cast<AOperativeCharacter*>(Fighter)) : nullptr;
+	return State && State->Post.IsValid() ? &State->Post : nullptr;
+}
+
+TArray<FPmcPostCandidate> UPmcSquadSubsystem::GatherPostCandidates(const TArray<FVector>& Route, int32 Seed, const FPmcWeights& Weights, float MinFromStartCm,
+	TArray<int32>* OutLadderRoofsPicked) const
+{
+	TArray<FPmcPostCandidate> Out;
+	const UTacticalMapSubsystem* Map = GetTacticalMap();
+	if (OutLadderRoofsPicked)
+	{
+		OutLadderRoofsPicked->Reset();
+	}
+	if (!Map || Route.IsEmpty())
+	{
+		return Out;
+	}
+	const FTacticalMapFile& File = Map->GetFile();
+	const float Reach = FMath::Max(Weights.TacticalReachCm, 100.f);
+	auto Near = [&Route, Reach, MinFromStartCm](const FVector& Point, float Scale)
+	{
+		return PmcTacticalRules::DistanceToRoute(Route, Point) <= Reach * Scale
+			&& (MinFromStartCm <= 0.f || FVector::Dist2D(Route[0], Point) >= MinFromStartCm);
+	};
+	auto Danger = [Map](const FVector& Point) { return Map->DangerAt(Point, ETacticalSide::Pmc).Danger; };
+	auto YawToRoute = [&Route](const FVector& Point)
+	{
+		const FVector To = (PmcTacticalRules::NearestOnRoute(Route, Point) - Point).GetSafeNormal2D();
+		return To.IsNearlyZero() ? 0.f : static_cast<float>(To.Rotation().Yaw);
+	};
+	// The route sampled every 15 m (and its points): the targets of the overwatch / window / drop queries.
+	TArray<FVector> Samples;
+	for (int32 Index = 0; Index < Route.Num(); ++Index)
+	{
+		Samples.Add(Route[Index]);
+		if (Index + 1 < Route.Num())
+		{
+			const float Length = static_cast<float>(FVector::Dist(Route[Index], Route[Index + 1]));
+			for (float Along = 1500.f; Along < Length; Along += 1500.f)
+			{
+				Samples.Add(FMath::Lerp(Route[Index], Route[Index + 1], Along / Length));
+			}
+		}
+	}
+	// Ambush: the hiding spots biting each leg of the route (BestAmbushSpots: the EXIT of a place first).
+	TMap<int32, float> Ambush;
+	for (int32 Index = 0; Index < FMath::Max(1, Route.Num() - 1); ++Index)
+	{
+		const FVector& A = Route[Index];
+		const FVector& B = Route[FMath::Min(Index + 1, Route.Num() - 1)];
+		for (const FTacticalPick& Pick : Map->BestAmbushSpots(A, B, 8))
+		{
+			float& Best = Ambush.FindOrAdd(Pick.Index, 0.f);
+			Best = FMath::Max(Best, Pick.Score);
+		}
+	}
+	for (const TPair<int32, float>& Entry : Ambush)
+	{
+		const FTacticalHidingSpot& Spot = File.HidingSpots[Entry.Key];
+		if (Near(Spot.Location, 1.f))
+		{
+			FPmcPostCandidate& Candidate = Out.AddDefaulted_GetRef();
+			Candidate.Kind = EPmcPostKind::Ambush;
+			Candidate.Location = Spot.Location;
+			Candidate.Yaw = Spot.FacingYaw;
+			Candidate.Score = Entry.Value;
+			Candidate.Danger = Danger(Spot.Location);
+			Candidate.Group = Spot.Id;
+			Candidate.SourceIndex = Entry.Key;
+		}
+	}
+	// Overwatch roof spots reaching the route, windows covering it, drop edges landing on it.
+	TMap<TPair<int32, int32>, float> Roofs;
+	TMap<int32, float> Windows;
+	TMap<int32, float> Drops;
+	for (const FVector& Sample : Samples)
+	{
+		for (const FTacticalPick& Pick : Map->OverwatchSpots(Sample, 0.f, 4))
+		{
+			float& Best = Roofs.FindOrAdd(TPair<int32, int32>(Pick.Index, Pick.SpotIndex), 0.f);
+			Best = FMath::Max(Best, Pick.Score);
+		}
+		const TArray<FTacticalPick> WindowPicks = Map->WindowPositions(Sample, 600.f);
+		for (int32 Rank = 0; Rank < FMath::Min(4, WindowPicks.Num()); ++Rank)
+		{
+			float& Best = Windows.FindOrAdd(WindowPicks[Rank].Index, 0.f);
+			Best = FMath::Max(Best, WindowPicks[Rank].Score);
+		}
+		for (const FTacticalPick& Pick : Map->DropSpotsAbove(Sample, 800.f))
+		{
+			float& Best = Drops.FindOrAdd(Pick.Index, 0.f);
+			Best = FMath::Max(Best, Pick.Score);
+		}
+	}
+	for (const TPair<TPair<int32, int32>, float>& Entry : Roofs)
+	{
+		const FTacticalOverwatchRoof& Roof = File.OverwatchRoofs[Entry.Key.Key];
+		if (!Roof.Spots.IsValidIndex(Entry.Key.Value))
+		{
+			continue;
+		}
+		const FTacticalOverwatchSpot& Spot = Roof.Spots[Entry.Key.Value];
+		// Within the reach of the route like every other post (roofs 1.5 x, as the ladder roofs: a roof sees farther) and away from its start.
+		if (!Near(Spot.Location, 1.5f))
+		{
+			continue;
+		}
+		FPmcPostCandidate& Candidate = Out.AddDefaulted_GetRef();
+		Candidate.Kind = EPmcPostKind::Overwatch;
+		Candidate.Location = Spot.Location;
+		Candidate.Yaw = YawToRoute(Spot.Location);
+		Candidate.Score = Entry.Value;
+		Candidate.Danger = Danger(Spot.Location);
+		Candidate.Group = Roof.Building;
+		Candidate.SourceIndex = Entry.Key.Key;
+		Candidate.SpotIndex = Entry.Key.Value;
+	}
+	for (const TPair<int32, float>& Entry : Windows)
+	{
+		const FTacticalWindow& Window = File.Windows[Entry.Key];
+		if (!Near(Window.Stand, 1.f))
+		{
+			continue;
+		}
+		FPmcPostCandidate& Candidate = Out.AddDefaulted_GetRef();
+		Candidate.Kind = EPmcPostKind::Window;
+		Candidate.Location = Window.Stand;
+		Candidate.Yaw = Window.Yaw;
+		Candidate.Score = Entry.Value;
+		Candidate.Danger = Danger(Window.Stand);
+		Candidate.Group = Window.Id;
+		Candidate.SourceIndex = Entry.Key;
+	}
+	for (const TPair<int32, float>& Entry : Drops)
+	{
+		const FTacticalDropSpot& Drop = File.DropSpots[Entry.Key];
+		if (!Near(Drop.Land, 1.f))
+		{
+			continue;
+		}
+		FPmcPostCandidate& Candidate = Out.AddDefaulted_GetRef();
+		Candidate.Kind = EPmcPostKind::Drop;
+		Candidate.Location = Drop.Edge;
+		const FVector ToLand = (Drop.Land - Drop.Edge).GetSafeNormal2D();
+		Candidate.Yaw = ToLand.IsNearlyZero() ? 0.f : static_cast<float>(ToLand.Rotation().Yaw);
+		Candidate.Score = Entry.Value;
+		Candidate.Danger = Danger(Drop.Edge);
+		Candidate.Group = Drop.Id;
+		Candidate.Jumpers = Drop.Jumpers;
+		Candidate.SourceIndex = Entry.Key;
+	}
+	// The ladder-only roofs the seeded picker gives an enemy (PART of them: the file's 0.65), near enough to the route.
+	const TArray<int32> Picked = Map->PickLadderOnlyRoofs(Seed);
+	if (OutLadderRoofsPicked)
+	{
+		*OutLadderRoofsPicked = Picked;
+	}
+	for (const int32 Index : Picked)
+	{
+		const FTacticalLadderRoof& Roof = File.LadderOnlyRoofs[Index];
+		if (!Near(Roof.Center, 1.5f))
+		{
+			continue;
+		}
+		FPmcPostCandidate& Candidate = Out.AddDefaulted_GetRef();
+		Candidate.Kind = EPmcPostKind::LadderRoof;
+		Candidate.Location = Roof.Center;
+		Candidate.Yaw = YawToRoute(Roof.Center);
+		Candidate.Score = 1.f - FMath::Clamp(PmcTacticalRules::DistanceToRoute(Route, Roof.Center) / (1.5f * Reach), 0.f, 1.f);
+		Candidate.Danger = Danger(Roof.Center);
+		Candidate.Group = Roof.Building;
+		Candidate.SourceIndex = Index;
+	}
+	// A stable order whatever the maps hash to: kind, then source, then spot.
+	Out.StableSort([](const FPmcPostCandidate& Left, const FPmcPostCandidate& Right)
+	{
+		return Left.Kind != Right.Kind ? Left.Kind < Right.Kind : (Left.SourceIndex != Right.SourceIndex ? Left.SourceIndex < Right.SourceIndex : Left.SpotIndex < Right.SpotIndex);
+	});
+	return Out;
+}
+
+TArray<FPmcPlacementFighter> UPmcSquadSubsystem::PlacementRoles(int32 Count, int32 Seed, const FPmcWeights& Weights) const
+{
+	TArray<FPmcPlacementFighter> Roles;
+	const FPmcOperatorConfig& Config = PmcOperatorRules::Get();
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		FPmcPlacementFighter& Role = Roles.AddDefaulted_GetRef();
+		const FString WeaponId = PmcOperatorRules::PickWeaponId(Config, Seed, Index);
+		if (const FPmcEngagementBand* Band = Weights.Bands.Find(WeaponId))
+		{
+			Role.BandMaxCm = Band->MaxCm;
+			Role.bMarksman = Band->MinCm >= Weights.MarksmanBandMinCm;
+		}
+	}
+	PmcTacticalRules::MarkMarksmen(Roles);
+	return Roles;
+}
+
+TArray<FPmcPlacementFighter> UPmcSquadSubsystem::PlacementRoles(const TArray<AOperativeCharacter*>& Fighters, const FPmcWeights& Weights) const
+{
+	TArray<FPmcPlacementFighter> Roles;
+	for (const AOperativeCharacter* Fighter : Fighters)
+	{
+		FPmcPlacementFighter& Role = Roles.AddDefaulted_GetRef();
+		const FString WeaponId = Fighter && Fighter->CurrentWeapon ? Fighter->CurrentWeapon->WeaponId : FString();
+		const float Range = Fighter && Fighter->CurrentWeapon ? Fighter->CurrentWeapon->Stats.Range.MaxRangeCm : 0.f;
+		Role.BandMaxCm = PmcCommanderRules::ResolveBand(WeaponId, Range, Weights).MaxCm;
+		const FPmcEngagementBand* Row = Weights.Bands.Find(WeaponId);
+		Role.bMarksman = Row && Row->MinCm >= Weights.MarksmanBandMinCm;
+	}
+	PmcTacticalRules::MarkMarksmen(Roles);
+	return Roles;
+}
+
+TArray<AOperativeCharacter*> UPmcSquadSubsystem::SpawnSquadTactical(int32 TeamId, const TArray<FVector>& Route, const FVector& Fallback, const FRotator& Facing,
+	int32 Count, int32 Seed, TArray<FPmcTacticalPost>* OutPosts, TArray<int32>* OutLadderRoofsPicked)
+{
+	const FTeam* Existing = FindTeam(TeamId);
+	const FPmcWeights Weights = Existing ? Existing->Weights : FPmcWeights();
+	TArray<FPmcPostCandidate> Candidates = GatherPostCandidates(Route, Seed, Weights, 0.f, OutLadderRoofsPicked);
+	// A post off the navmesh at its own level would leave its man unable to move: such candidates are never planned.
+	KeepCandidatesOnNav(Candidates);
+	if (OutPosts)
+	{
+		OutPosts->Reset();
+	}
+	if (Candidates.IsEmpty())
+	{
+		// No tactical file (or nothing along this route): the old line spawn.
+		TArray<AOperativeCharacter*> Line = SpawnSquad(TeamId, Fallback, Facing, Count, Seed);
+		if (OutPosts)
+		{
+			OutPosts->SetNum(Line.Num());
+		}
+		return Line;
+	}
+	const TArray<FPmcTacticalPost> Posts = PmcTacticalRules::PlanPlacement(PlacementRoles(Count, Seed, Weights), Candidates, Weights, Seed);
+	TArray<AOperativeCharacter*> Out;
+	const FVector Right = FRotator(0.f, Facing.Yaw, 0.f).RotateVector(FVector::RightVector);
+	for (int32 Index = 0; Index < Count; ++Index)
+	{
+		FPmcTacticalPost Post = Posts.IsValidIndex(Index) ? Posts[Index] : FPmcTacticalPost();
+		FVector Spot;
+		FRotator Look = Facing;
+		// On the navmesh at the post's own level (a roof spot must not snap to the street under it); a post that fails it is no post.
+		FVector OnPostNav = Post.Location;
+		if (Post.IsValid() && !ProjectToNavAtLevel(Post.Location, OnPostNav))
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcAI] team %d: the %s post %s is off the navmesh at its level - fighter %d spawns on the line"), TeamId,
+				PmcTacticalRules::PostKindName(Post.Kind), *Post.Location.ToCompactString(), Index);
+			Post = FPmcTacticalPost();
+		}
+		if (Post.IsValid())
+		{
+			Spot = OnPostNav;
+			Look = FRotator(0.f, Post.Yaw, 0.f);
+		}
+		else
+		{
+			Spot = Fallback + Right * ((Index - (Count - 1) * 0.5f) * 150.f);
+			FVector OnNav;
+			if (ProjectToNav(Spot, OnNav))
+			{
+				Spot = OnNav;
+			}
+		}
+		AOperativeCharacter* Fighter = SpawnFighter(TeamId, Spot + FVector(0.f, 0.f, 95.f), Look, Seed, Index);
+		if (!Fighter)
+		{
+			// Neither the fighter nor his post: OutPosts stays index-aligned with the result.
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcAI] team %d: fighter %d failed to spawn at %s (his %s post is left out)"), TeamId, Index,
+				*Spot.ToCompactString(), PmcTacticalRules::PostKindName(Post.Kind));
+			continue;
+		}
+		Out.Add(Fighter);
+		if (OutPosts)
+		{
+			OutPosts->Add(Post);
+			ensure(OutPosts->Num() == Out.Num());
+		}
+		if (Post.IsValid())
+		{
+			FFighterState& State = TeamOf(TeamId).Fighters.FindOrAdd(Fighter);
+			State.Post = Post;
+			State.bPostSettled = false;
+			State.PostWalks = 0;
+			State.PostWalkFromCm = -1.f;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s placed on a %s post %s (yaw %.0f, score %.2f, danger %.2f, %s)"), TeamId,
+				*Fighter->DisplayName.ToString(), PmcTacticalRules::PostKindName(Post.Kind), *Post.Location.ToCompactString(), Post.Yaw, Post.Score, Post.Danger, *Post.Group);
+		}
+	}
+	SetRouteOf(TeamOf(TeamId), Route);
+	return Out;
+}
+
+int32 UPmcSquadSubsystem::AssignTacticalPosts(int32 TeamId, const TArray<FVector>& Route, int32 Seed, float MinFromStartCm)
+{
+	FTeam& Team = TeamOf(TeamId);
+	SetRouteOf(Team, Route);
+	const TArray<AOperativeCharacter*> Fighters = GetTeamMembers(TeamId);
+	TArray<FPmcPostCandidate> Candidates = GatherPostCandidates(Route, Seed, Team.Weights, MinFromStartCm);
+	KeepCandidatesOnNav(Candidates);
+	if (Candidates.IsEmpty() || Fighters.IsEmpty())
+	{
+		return 0;
+	}
+	const TArray<FPmcTacticalPost> Posts = PmcTacticalRules::PlanPlacement(PlacementRoles(Fighters, Team.Weights), Candidates, Team.Weights, Seed);
+	int32 Posted = 0;
+	for (int32 Index = 0; Index < Fighters.Num(); ++Index)
+	{
+		FFighterState& State = Team.Fighters.FindOrAdd(Fighters[Index]);
+		State.Post = Posts[Index];
+		State.bPostSettled = false;
+		State.PostWalks = 0;
+		State.PostWalkFromCm = -1.f;
+		if (Posts[Index].IsValid())
+		{
+			++Posted;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s gets a %s post %s (score %.2f, danger %.2f)"), TeamId, *Fighters[Index]->DisplayName.ToString(),
+				PmcTacticalRules::PostKindName(Posts[Index].Kind), *Posts[Index].Location.ToCompactString(), Posts[Index].Score, Posts[Index].Danger);
+		}
+	}
+	return Posted;
 }

@@ -1,6 +1,7 @@
 #include "AI/PmcCommanderRules.h"
 
 #include "AI/AmbushWatchRules.h"
+#include "AI/PmcTacticalRules.h"
 #include "Dom/JsonObject.h"
 #include "Math/RandomStream.h"
 #include "Misc/FileHelper.h"
@@ -126,6 +127,9 @@ namespace PmcCommanderRules
 		const bool bPush = IsPushing(F, S, W);
 		const float PushGain = FMath::Max(1.f, W.Push);
 		const float PushDamp = bPush && bOffPoint ? 1.f / PushGain : 1.f;
+		// The tactical map (TACTICAL_MAP.md P2): standing IN a chokepoint is bad - static orders lose, cover / relocation gains (1 at danger 0).
+		const float Here = PmcTacticalRules::PositionFactor(F.DangerHere, W);
+		const float Leave = PmcTacticalRules::LeaveFactor(F.DangerHere, W);
 		float HoldHere = 1.f;
 		if (bObjective && O.Role == EPmcRole::Attacker && O.DistanceCm <= O.RadiusCm)
 		{
@@ -139,7 +143,7 @@ namespace PmcCommanderRules
 		{
 		case EPmcOrder::Hold:
 			// The baseline: the fighter keeps shooting from where he is; worth more in cover and in contact.
-			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere * PushDamp;
+			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere * PushDamp * (F.bAtPost ? 1.f : Here);
 		case EPmcOrder::TakeCover:
 		{
 			// Exposed and badly covered against a known threat, with somewhere to go (a slot at his band's distance preferred).
@@ -148,7 +152,7 @@ namespace PmcCommanderRules
 			// An attacker on the point does not abandon it for cover off the point during push or quiet.
 			const float OnPointDamp = (bObjective && O.Role == EPmcRole::Attacker && O.DistanceCm <= O.RadiusCm && (bPush || !S.bContact)) ? 0.f : 1.f;
 			return W.TakeCover * Step(F.bCoverAvailable && F.bHasThreat && !F.Threat.bStandIn) * (1.f - F.CoverQuality) * (0.4f + 0.6f * Contact) * (0.5f + 0.5f * Step(F.bExposed))
-				* Step(!F.bInCover || F.CoverQuality < 0.3f) * FMath::Lerp(1.f, Clamp01(F.CoverBandFactor), Clamp01(W.BandPosition)) * PushDamp * OnPointDamp;
+				* Step(!F.bInCover || F.CoverQuality < 0.3f) * FMath::Lerp(1.f, Clamp01(F.CoverBandFactor), Clamp01(W.BandPosition)) * PushDamp * OnPointDamp * Leave;
 		}
 		case EPmcOrder::Advance:
 		{
@@ -174,7 +178,7 @@ namespace PmcCommanderRules
 			// Pin a seen threat so a mate can move; needs ammo and a reason (a mate moving), one suppressor at a time - and a line of fire that
 			// reaches it (2026-11-08: no rounds into the wall in front of him).
 			return W.Suppress * (F.RunningOrder == EPmcOrder::Suppress && F.Threat.SecondsSince <= W.ContactMemorySeconds ? Step(F.bHasThreat) : SeenNow) * InRange * Step(F.bFireLine) * Step(F.AmmoFrac >= W.SuppressAmmoMin) * (S.MatesFlanking + S.MatesAdvancing > 0 ? 1.f : 0.5f)
-				* (S.MatesSuppressing == 0 ? 1.f : 0.4f) * StaticBand;
+				* (S.MatesSuppressing == 0 ? 1.f : 0.4f) * StaticBand * (F.bAtPost ? 1.f : Here);
 		case EPmcOrder::FallBack:
 		{
 			// Losing: badly wounded or outnumbered in contact.
@@ -190,10 +194,15 @@ namespace PmcCommanderRules
 				* (S.EnemiesSeenNow == 0 ? 1.f : 0.3f) * (S.MatesHealing == 0 ? 1.f : 0.2f);
 		case EPmcOrder::Relocate:
 			// Spotted at this spot for too long: move to another cover.
-			return W.Relocate * Contact * Step(!F.Threat.bStandIn) * Step(F.bExposed && F.SecondsExposedHere >= W.RelocateAfterSeconds && F.bCoverAvailable) * PushDamp;
+			// TACTICAL_MAP P2: or standing in a chokepoint (danger >= choke_leave_danger) - he leaves it before he is spotted there.
+			return W.Relocate * Contact * Step(!F.Threat.bStandIn) * Step(F.bCoverAvailable)
+				* FMath::Max(Step(F.bExposed && F.SecondsExposedHere >= W.RelocateAfterSeconds), Step(F.DangerHere > 0.f && F.DangerHere >= W.ChokeLeaveDanger)) * PushDamp * Leave;
 		case EPmcOrder::Ambush:
 			// No contact yet in this fight: hold in cover, crouched, and let them come.
-			return W.Ambush * Step(!S.bEverContact) * (F.bInCover ? 1.f : 0.6f) * HoldHere * PushDamp;
+			// TACTICAL_MAP P2: a man with a tactical post (an ambush at a chokepoint exit, an overwatch roof, a window) waits ON it - worth
+			// x (1 + its kind's weight x its score) wherever he is (the order walks him there); without one the danger of his spot counts.
+			return W.Ambush * Step(!S.bEverContact) * (F.bInCover || F.bAtPost ? 1.f : 0.6f) * HoldHere * PushDamp
+				* (F.PostKind != EPmcPostKind::None ? 1.f + (PmcTacticalRules::PostKindFactor(F.PostKind, W) - 1.f) * Clamp01(F.PostScore) : Here);
 		case EPmcOrder::Reload:
 			// A low clip with rounds in reserve; best behind cover or out of contact.
 			return W.Reload * Step(F.ClipFrac < 0.3f && F.bHasReserve) * (F.bInCover || S.EnemiesSeenNow == 0 ? 1.f : 0.5f);
@@ -202,7 +211,7 @@ namespace PmcCommanderRules
 			return W.Sidearm * Step(F.bHasSidearm && F.ClipFrac <= 0.f && F.bHasThreat && F.Threat.DistanceCm < 400.f && F.Threat.bSeenNow);
 		case EPmcOrder::Crouch:
 			// In contact, standing still in the open: get low.
-			return W.Crouch * Contact * Step(!F.bMoving && !F.bInCover && F.Stance == EOperativeStance::Standing) * StaticBand * PushDamp;
+			return W.Crouch * Contact * Step(!F.bMoving && !F.bInCover && F.Stance == EOperativeStance::Standing) * StaticBand * PushDamp * (F.bAtPost ? 1.f : Here);
 		case EPmcOrder::Objective:
 		{
 			if (!bObjective)
@@ -597,6 +606,27 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("ambush_patience"), Out.AmbushPatience);
 		ReadNumber(Json, TEXT("kill_zone_frac"), Out.KillZoneFrac);
 		ReadNumber(Json, TEXT("ambush_max_hold_s"), Out.AmbushMaxHoldSeconds);
+		// The tactical map (TACTICAL_MAP.md P2, 2026-11-17).
+		ReadNumber(Json, TEXT("terrain_danger"), Out.TerrainDanger);
+		ReadNumber(Json, TEXT("ambush_exit"), Out.AmbushExit);
+		ReadNumber(Json, TEXT("overwatch_roof"), Out.OverwatchRoof);
+		ReadNumber(Json, TEXT("window_position"), Out.WindowPosition);
+		ReadNumber(Json, TEXT("route_cover"), Out.RouteCover);
+		ReadNumber(Json, TEXT("chokepoint_avoid"), Out.ChokepointAvoid);
+		ReadNumber(Json, TEXT("choke_leave_danger"), Out.ChokeLeaveDanger);
+		ReadNumber(Json, TEXT("window_share"), Out.WindowShare);
+		Out.TerrainDanger = FMath::Clamp(Out.TerrainDanger, 0.f, 1.f);
+		Out.ChokepointAvoid = FMath::Clamp(Out.ChokepointAvoid, 0.f, 1.f);
+		Out.WindowShare = FMath::Clamp(Out.WindowShare, 0.f, 1.f);
+		float ReachM = Out.TacticalReachCm / 100.f;
+		ReadNumber(Json, TEXT("tactical_reach_m"), ReachM);
+		Out.TacticalReachCm = FMath::Clamp(ReachM, 5.f, 200.f) * 100.f;
+		float MarksmanM = Out.MarksmanBandMinCm / 100.f;
+		ReadNumber(Json, TEXT("marksman_band_min_m"), MarksmanM);
+		Out.MarksmanBandMinCm = FMath::Max(MarksmanM, 0.f) * 100.f;
+		float LadderMen = static_cast<float>(Out.LadderRoofMen);
+		ReadNumber(Json, TEXT("ladder_roof_men"), LadderMen);
+		Out.LadderRoofMen = FMath::Clamp(FMath::RoundToInt(LadderMen), 0, 6);
 		const TSharedPtr<FJsonObject>* Bands = nullptr;
 		if (Json.TryGetObjectField(TEXT("engagement_bands"), Bands) && Bands && Bands->IsValid())
 		{
@@ -865,6 +895,7 @@ namespace PmcCommanderRules
 		case EPmcScenario::Street: return TEXT("street");
 		case EPmcScenario::Roofs: return TEXT("roofs");
 		case EPmcScenario::Blizzard: return TEXT("blizzard");
+		case EPmcScenario::Tactical: return TEXT("tactical");
 		default: return TEXT("skirmish");
 		}
 	}
@@ -885,7 +916,21 @@ namespace PmcCommanderRules
 	EPmcScenario PickScenario(int32 RoundSeed)
 	{
 		FRandomStream Stream(RoundSeed * 31 + 17);
-		return static_cast<EPmcScenario>(Stream.RandRange(0, static_cast<int32>(EPmcScenario::Count) - 1));
+		return static_cast<EPmcScenario>(Stream.RandRange(0, RandomScenarioCount - 1));
+	}
+
+	EPmcScenario PickScenarioOnMap(int32 RoundSeed, bool bTacticalMap)
+	{
+		if (bTacticalMap)
+		{
+			// Its own stream: PickScenario's draw for the other half stays the one the same seed gives off the tactical maps.
+			FRandomStream Stream(RoundSeed * 131 + 7);
+			if (Stream.FRand() < 0.5f)
+			{
+				return EPmcScenario::Tactical;
+			}
+		}
+		return PickScenario(RoundSeed);
 	}
 
 	bool IsPassage(const float Hits[8], const bool Tall[8], float MinWidthCm, float MaxWidthCm, int32& OutAxisIndex, float& OutWidthCm)
