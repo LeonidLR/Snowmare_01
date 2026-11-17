@@ -5,7 +5,9 @@
 #include "LevelGen/PropsGameplayRules.h"
 #include "Misc/AutomationTest.h"
 
+#include "Algo/Reverse.h"
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "Interactables/BarrelActor.h"
 #include "Interactables/DroppedItemActor.h"
 #include "Interactables/LootCrateActor.h"
@@ -134,6 +136,147 @@ bool FPropsGameplayLootTest::RunTest(const FString&)
 	TestEqual(TEXT("the Godot defaults are cleared (pistol ammo 24 -> 0)"), Contents.PistolAmmo, 0);
 	TestEqual(TEXT("the default food is cleared"), Contents.CannedFood, 0);
 	TestEqual(TEXT("an unknown field is reported"), Unknown, TArray<FString>{ TEXT("Bandages") });
+	return true;
+}
+
+namespace PropsGameplayRulesTestLocal
+{
+	TSharedPtr<FJsonObject> ParseJson(const TCHAR* Text)
+	{
+		TSharedPtr<FJsonObject> Root;
+		FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(FString(Text)), Root);
+		return Root;
+	}
+
+	TArray<PropsGameplayRules::FTurretInput> Turrets(int32 Count)
+	{
+		TArray<PropsGameplayRules::FTurretInput> Out;
+		for (int32 Index = 0; Index < Count; ++Index)
+		{
+			Out.AddDefaulted_GetRef().Id = FString::Printf(TEXT("turrets_0000abcd_%d"), Index);
+		}
+		return Out;
+	}
+
+	int32 CountPowered(const TMap<FString, PropsGameplayRules::FTurretSetup>& Setups)
+	{
+		int32 Count = 0;
+		for (const TPair<FString, PropsGameplayRules::FTurretSetup>& Pair : Setups)
+		{
+			Count += Pair.Value.bPowered ? 1 : 0;
+		}
+		return Count;
+	}
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPropsGameplayTurretFieldsTest, "CodexTactics.LevelGen.Props.Gameplay.TurretFields",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FPropsGameplayTurretFieldsTest::RunTest(const FString&)
+{
+	using namespace PropsGameplayRulesTestLocal;
+	using PropsGameplayRules::ETurretSide;
+	ETurretSide Side = ETurretSide::Neutral;
+	TestTrue(TEXT("'Hostile' parses (case-insensitive)"), PropsGameplayRules::ParseTurretSide(TEXT("Hostile"), Side) && Side == ETurretSide::Hostile);
+	TestTrue(TEXT("'friendly' parses"), PropsGameplayRules::ParseTurretSide(TEXT("friendly"), Side) && Side == ETurretSide::Friendly);
+	TestTrue(TEXT("'neutral' parses"), PropsGameplayRules::ParseTurretSide(TEXT("neutral"), Side) && Side == ETurretSide::Neutral);
+	TestFalse(TEXT("'pmc' is not a side (Out unchanged)"), PropsGameplayRules::ParseTurretSide(TEXT("pmc"), Side));
+	TestTrue(TEXT("Out unchanged after a bad value"), Side == ETurretSide::Neutral);
+
+	FLevelPropsObject Obj = MakeObject(TEXT("turret_mg"));
+	PropsGameplayRules::FTurretInput Input = PropsGameplayRules::TurretInputOf(Obj);
+	TestEqual(TEXT("the input keeps the id"), Input.Id, Obj.Id);
+	TestFalse(TEXT("no fields: faction unset"), Input.Side.IsSet());
+	TestFalse(TEXT("no fields: powered unset"), Input.bPowered.IsSet());
+
+	Obj.Extra.Add(TEXT("faction"), MakeShared<FJsonValueString>(TEXT("friendly")));
+	Obj.Extra.Add(TEXT("powered"), MakeShared<FJsonValueBoolean>(true));
+	Input = PropsGameplayRules::TurretInputOf(Obj);
+	TestTrue(TEXT("faction read"), Input.Side.IsSet() && Input.Side.GetValue() == ETurretSide::Friendly);
+	TestTrue(TEXT("powered read"), Input.bPowered.IsSet() && Input.bPowered.GetValue());
+
+	Obj.Extra.Add(TEXT("faction"), MakeShared<FJsonValueString>(TEXT("pmc")));
+	Obj.Extra.Add(TEXT("powered"), MakeShared<FJsonValueNumber>(1.0));
+	Input = PropsGameplayRules::TurretInputOf(Obj);
+	TestFalse(TEXT("a bad faction counts as unset"), Input.Side.IsSet());
+	TestFalse(TEXT("a non-bool powered counts as unset"), Input.bPowered.IsSet());
+
+	const TSharedPtr<FJsonObject> B = LoadGameplayBalance(*this);
+	TestEqual(TEXT("props_balance.json: a quarter of the turrets powered (designer 2026-11-17)"),
+		PropsGameplayRules::TurretPoweredShare(B.Get(), nullptr), 0.25);
+	TestEqual(TEXT("no balance: default share 0.25"), PropsGameplayRules::TurretPoweredShare(nullptr, nullptr), 0.25);
+	TMap<FString, TSharedPtr<FJsonValue>> FileExtra;
+	FileExtra.Add(TEXT("turret_powered_share"), MakeShared<FJsonValueNumber>(0.5));
+	TestEqual(TEXT("a props file's turret_powered_share wins"), PropsGameplayRules::TurretPoweredShare(B.Get(), &FileExtra), 0.5);
+	FileExtra.Add(TEXT("turret_powered_share"), MakeShared<FJsonValueNumber>(3.0));
+	TestEqual(TEXT("the share is clamped to 1"), PropsGameplayRules::TurretPoweredShare(B.Get(), &FileExtra), 1.0);
+	FileExtra.Add(TEXT("turret_powered_share"), MakeShared<FJsonValueString>(TEXT("half")));
+	TestEqual(TEXT("a non-number share is ignored"), PropsGameplayRules::TurretPoweredShare(B.Get(), &FileExtra), 0.25);
+
+	TestTrue(TEXT("props_balance.json: level mines / wires are hostile"), PropsGameplayRules::AreTrapsHostile(B.Get()));
+	TestTrue(TEXT("no balance: hostile"), PropsGameplayRules::AreTrapsHostile(nullptr));
+	TestFalse(TEXT("traps_faction squad"), PropsGameplayRules::AreTrapsHostile(ParseJson(TEXT("{\"gameplay\":{\"traps_faction\":\"squad\"}}")).Get()));
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPropsGameplayTurretResolveTest, "CodexTactics.LevelGen.Props.Gameplay.TurretPowerShare",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+bool FPropsGameplayTurretResolveTest::RunTest(const FString&)
+{
+	using namespace PropsGameplayRulesTestLocal;
+	using PropsGameplayRules::ETurretSide;
+	const TSharedPtr<FJsonObject> B = LoadGameplayBalance(*this);
+
+	// 8 turrets at 0.25: 2 powered + hostile, 6 inactive (hostile by default).
+	const TArray<PropsGameplayRules::FTurretInput> Eight = Turrets(8);
+	const TMap<FString, PropsGameplayRules::FTurretSetup> Setups = PropsGameplayRules::ResolveTurrets(B.Get(), 0.25, Eight);
+	TestEqual(TEXT("every turret has a setup"), Setups.Num(), 8);
+	TestEqual(TEXT("a quarter powered"), CountPowered(Setups), 2);
+	for (const TPair<FString, PropsGameplayRules::FTurretSetup>& Pair : Setups)
+	{
+		TestTrue(FString::Printf(TEXT("%s hostile (powered %d)"), *Pair.Key, Pair.Value.bPowered), Pair.Value.Side == ETurretSide::Hostile);
+	}
+
+	// The pick depends on the ids only, not on the order.
+	TArray<PropsGameplayRules::FTurretInput> Reversed = Eight;
+	Algo::Reverse(Reversed);
+	const TMap<FString, PropsGameplayRules::FTurretSetup> Again = PropsGameplayRules::ResolveTurrets(B.Get(), 0.25, Reversed);
+	bool bSame = Again.Num() == Setups.Num();
+	for (const TPair<FString, PropsGameplayRules::FTurretSetup>& Pair : Setups)
+	{
+		const PropsGameplayRules::FTurretSetup* Other = Again.Find(Pair.Key);
+		bSame &= Other && Other->bPowered == Pair.Value.bPowered && Other->Side == Pair.Value.Side;
+	}
+	TestTrue(TEXT("the same turrets powered whatever the input order"), bSame);
+
+	TestEqual(TEXT("share 0: none powered"), CountPowered(PropsGameplayRules::ResolveTurrets(B.Get(), 0.0, Eight)), 0);
+	TestEqual(TEXT("share 1: all powered"), CountPowered(PropsGameplayRules::ResolveTurrets(B.Get(), 1.0, Eight)), 8);
+	TestEqual(TEXT("1 turret at 0.25 rounds to none"), CountPowered(PropsGameplayRules::ResolveTurrets(B.Get(), 0.25, Turrets(1))), 0);
+	TestEqual(TEXT("no turrets: empty"), PropsGameplayRules::ResolveTurrets(B.Get(), 0.25, {}).Num(), 0);
+
+	// Explicit fields win and count toward the share.
+	TArray<PropsGameplayRules::FTurretInput> Mixed = Turrets(8);
+	Mixed[0].bPowered = true;
+	Mixed[0].Side = ETurretSide::Friendly;
+	Mixed[1].bPowered = false;
+	Mixed[2].Side = ETurretSide::Neutral;
+	const TMap<FString, PropsGameplayRules::FTurretSetup> MixedSetups = PropsGameplayRules::ResolveTurrets(B.Get(), 0.25, Mixed);
+	TestTrue(TEXT("an explicitly powered friendly turret stays so"), MixedSetups[Mixed[0].Id].bPowered && MixedSetups[Mixed[0].Id].Side == ETurretSide::Friendly);
+	TestFalse(TEXT("an explicitly unpowered turret stays off"), MixedSetups[Mixed[1].Id].bPowered);
+	TestTrue(TEXT("an explicit faction wins"), MixedSetups[Mixed[2].Id].Side == ETurretSide::Neutral);
+	TestEqual(TEXT("the explicit powered turret counts toward the 2 of 8"), CountPowered(MixedSetups), 2);
+
+	// Config sides.
+	const TSharedPtr<FJsonObject> Custom = ParseJson(TEXT("{\"gameplay\":{\"turrets\":{\"powered_faction\":\"neutral\",\"default_faction\":\"friendly\"}}}"));
+	const TMap<FString, PropsGameplayRules::FTurretSetup> CustomSetups = PropsGameplayRules::ResolveTurrets(Custom.Get(), 0.5, Turrets(4));
+	int32 PoweredNeutral = 0;
+	int32 OffFriendly = 0;
+	for (const TPair<FString, PropsGameplayRules::FTurretSetup>& Pair : CustomSetups)
+	{
+		PoweredNeutral += Pair.Value.bPowered && Pair.Value.Side == ETurretSide::Neutral ? 1 : 0;
+		OffFriendly += !Pair.Value.bPowered && Pair.Value.Side == ETurretSide::Friendly ? 1 : 0;
+	}
+	TestEqual(TEXT("powered_faction from the config"), PoweredNeutral, 2);
+	TestEqual(TEXT("default_faction from the config"), OffFriendly, 2);
 	return true;
 }
 

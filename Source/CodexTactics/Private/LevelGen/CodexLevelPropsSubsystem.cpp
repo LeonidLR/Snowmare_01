@@ -21,6 +21,7 @@
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TripwireActor.h"
+#include "Interactables/TurretActor.h"
 #include "LevelGen/PropsGameplayRules.h"
 #include "LevelGen/PropsLayoutView.h"
 #include "LevelGen/PropsValidator.h"
@@ -176,20 +177,47 @@ void UCodexLevelPropsSubsystem::OnWorldBeginPlay(UWorld& InWorld)
 
 	// On live maps (e.g. L_Gen_Depot_1), only spawn props that have a valid visual mesh.
 	// Meshless/invisible props with NavArea_Null would puncture the navmesh and break pathfinding.
-	bLiveSpawn = true;
-	SpawnPropsForMap(MapName, nullptr, /*bRequireMesh=*/ true);
+	SpawnPropsForMap(MapName, nullptr, /*bRequireMesh=*/ true, /*bLive=*/ true);
 }
 
 void UCodexLevelPropsSubsystem::Deinitialize()
 {
-	ClearSpawnedProps();
+	// The frame-slice ticker lives on the core ticker: it must not outlive the world.
+	StopSpawnTicker();
+	const UWorld* World = GetWorld();
+	if (World && World->bIsTearingDown)
+	{
+		// The world destroys its actors itself; only drop the bookkeeping.
+		SpawnedProps.Reset();
+		SpawnedGameplay.Reset();
+		GameplayByLayer.Reset();
+		PropsByLayer.Reset();
+		bHasSpawned = false;
+	}
+	else
+	{
+		ClearSpawnedProps();
+	}
+	OnPropsSpawned.Clear();
+	OnPropsSpawnedDynamic.Clear();
 	Super::Deinitialize();
+}
+
+void UCodexLevelPropsSubsystem::StopSpawnTicker()
+{
+	if (SpawnTicker.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(SpawnTicker);
+		SpawnTicker.Reset();
+	}
+	Session.Reset();
 }
 
 int32 UCodexLevelPropsSubsystem::SpawnPropsForMap(
 	const FString& MapName,
 	const TSet<FString>* SkippedIds,
-	bool bRequireMesh)
+	bool bRequireMesh,
+	bool bLive)
 {
 	const FString PropsPath = GetDefaultPropsPathForMap(MapName);
 	if (!FPaths::FileExists(PropsPath))
@@ -198,7 +226,7 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsForMap(
 		return 0;
 	}
 
-	return SpawnPropsFromFile(PropsPath, FString(), SkippedIds, bRequireMesh);
+	return SpawnPropsFromFile(PropsPath, FString(), SkippedIds, bRequireMesh, bLive);
 }
 
 /** One spawn of a props file: what is left to spawn and what the objects need from each other (G003b: spread over frames). */
@@ -218,6 +246,11 @@ struct UCodexLevelPropsSubsystem::FPropsSpawnSession
 	bool bGameplay = false;
 	bool bRequireMesh = false;
 	TMap<FString, TWeakObjectPtr<ACodexPropCrate>> CratesById;
+	/** Level turret start states by object id (PropsGameplayRules::ResolveTurrets). */
+	TMap<FString, PropsGameplayRules::FTurretSetup> TurretSetups;
+	/** gameplay.traps_faction: level mines / wires are the enemy's. */
+	bool bTrapsHostile = true;
+	int32 PoweredTurrets = 0;
 	/** Every actor spawned so far: the slab snap ignores them. */
 	TArray<TWeakObjectPtr<AActor>> ForTrace;
 	double PrepareMs = 0.0;
@@ -230,8 +263,11 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 	const FString& PropsFilePath,
 	const FString& LayoutFilePath,
 	const TSet<FString>* SkippedIds,
-	bool bRequireMesh)
+	bool bRequireMesh,
+	bool bLive)
 {
+	// A spawn still running (frame-sliced) is dropped first, so there is never a second ticker.
+	StopSpawnTicker();
 	if (!IsPropsEnabled())
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Props] spawning skipped (Codex.Props.Enabled 0)"));
@@ -273,7 +309,8 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 	S.bRequireMesh = bRequireMesh;
 	// G003b: a live map spawns the real game objects (barrels, loot crates / piles, mines, wires, turrets); the greybox look is the
 	// fallback of a kind with no gameplay class (plain crates = cover) - on a live map for every props file, else autogen files only.
-	S.bGameplay = bLiveSpawn && CodexLevelPropsInternal::CVarPropsReal.GetValueOnGameThread() != 0;
+	S.bGameplay = bLive && CodexLevelPropsInternal::CVarPropsReal.GetValueOnGameThread() != 0;
+	S.bTrapsHostile = PropsGameplayRules::AreTrapsHostile(BalanceRoot.Get());
 	S.bGreybox = S.bGameplay || CodexLevelPropsInternal::UsesGreybox(File);
 	for (const FLevelPropsLayer& Layer : File.Layers)
 	{
@@ -353,26 +390,50 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		}
 	}
 
+	// Level turrets (designer 2026-11-17): inactive by default, a share of them powered + hostile (PropsGameplayRules::ResolveTurrets).
+	TArray<PropsGameplayRules::FTurretInput> Turrets;
+	for (const FLevelPropsResolvedObject& ResObj : S.Objects)
+	{
+		if (S.KindOfLayer.FindRef(ResObj.LayerId) == TEXT("turrets") || ResObj.Object.Variant.StartsWith(TEXT("turret")))
+		{
+			Turrets.Add(PropsGameplayRules::TurretInputOf(ResObj.Object));
+		}
+	}
+	S.TurretSetups = PropsGameplayRules::ResolveTurrets(BalanceRoot.Get(), PropsGameplayRules::TurretPoweredShare(BalanceRoot.Get(), &File.Extra),
+		Turrets);
+
 	S.PrepareMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
 	if (!GetWorld())
 	{
 		return 0;
 	}
 	Session = NewSession;
+	const uint32 Generation = ++SpawnGeneration;
 
 	// A live map spreads the spawn over frames (gameplay.spawn_frame_budget_ms); a direct call (tests, tools) spawns everything now.
-	const double FrameBudgetMs = bLiveSpawn ? PropsGameplayRules::SpawnFrameBudgetMs(BalanceRoot.Get()) : 0.0;
+	const double FrameBudgetMs = bLive ? PropsGameplayRules::SpawnFrameBudgetMs(BalanceRoot.Get()) : 0.0;
 	if (ProcessSession(FrameBudgetMs > 0.0 ? FMath::Max(FrameBudgetMs - S.PrepareMs, 1.0) : 0.0))
 	{
 		TWeakObjectPtr<UCodexLevelPropsSubsystem> WeakThis(this);
-		SpawnTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis, FrameBudgetMs](float)
+		SpawnTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis, FrameBudgetMs, Generation](float)
 		{
 			UCodexLevelPropsSubsystem* Self = WeakThis.Get();
-			if (!Self || !Self->GetWorld() || !Self->Session.IsValid())
+			if (!Self || Self->SpawnGeneration != Generation)
 			{
+				return false; // gone, or a newer spawn replaced this one (and owns SpawnTicker now)
+			}
+			const UWorld* World = Self->GetWorld();
+			if (!World || World->bIsTearingDown || !World->HasBegunPlay() || !Self->Session.IsValid())
+			{
+				Self->SpawnTicker.Reset();
+				Self->Session.Reset();
 				return false;
 			}
 			const bool bMore = Self->ProcessSession(FrameBudgetMs);
+			if (Self->SpawnGeneration != Generation)
+			{
+				return false; // an OnPropsSpawned listener started a new spawn
+			}
 			if (!bMore)
 			{
 				Self->SpawnTicker.Reset();
@@ -449,8 +510,8 @@ void UCodexLevelPropsSubsystem::FinishSession()
 	bHasSpawned = true;
 
 	UE_LOG(LogCodexTactics, Display,
-		TEXT("[Props] spawned %d props (%d game objects, greybox: %d) in %.2f ms over %d frame(s), max frame %.2f ms (prepare %.2f ms) (dropped: %d, layout: %s, real: %s) from %s"),
-		GetSpawnedCount(), GetSpawnedGameplayCount(), GreyboxCount, LastSpawnDurationMs, LastSpawnFrames, LastMaxFrameMs, LastPrepareMs,
+		TEXT("[Props] spawned %d props (%d game objects, greybox: %d, powered turrets: %d) in %.2f ms over %d frame(s), max frame %.2f ms (prepare %.2f ms) (dropped: %d, layout: %s, real: %s) from %s"),
+		GetSpawnedCount(), GetSpawnedGameplayCount(), GreyboxCount, S.PoweredTurrets, LastSpawnDurationMs, LastSpawnFrames, LastMaxFrameMs, LastPrepareMs,
 		DroppedPropIds.Num(), S.bHasLayout ? TEXT("yes") : TEXT("NO - flat Z"), S.bGameplay ? TEXT("yes") : TEXT("no"), *S.PropsFilePath);
 
 	constexpr double WarnBudgetMs = 60.0;
@@ -461,6 +522,9 @@ void UCodexLevelPropsSubsystem::FinishSession()
 			LastMaxFrameMs, WarnBudgetMs);
 	}
 	Session.Reset();
+	// G003b: smokes / AI wait for the frame-sliced spawn to end.
+	OnPropsSpawned.Broadcast(this);
+	OnPropsSpawnedDynamic.Broadcast(GetSpawnedCount());
 }
 
 void UCodexLevelPropsSubsystem::TagProp(AActor* Actor, const FString& LayerId, const FString& PropId)
@@ -525,7 +589,7 @@ bool UCodexLevelPropsSubsystem::SpawnGameplayActor(FPropsSpawnSession& S, const 
 	{
 		const TMap<FString, int32> Items = PropsGameplayRules::RollLoot(BalanceRoot.Get(), Obj.LootTable, Obj.Id, /*bPile=*/ true);
 		const UEnum* ItemEnum = StaticEnum<ETransferItem>();
-		ADroppedItemActor* Pile = nullptr;
+		TArray<TPair<ETransferItem, int32>> Contents;
 		for (const TPair<FString, int32>& Item : Items)
 		{
 			int64 Value = ItemEnum ? ItemEnum->GetValueByNameString(Item.Key) : INDEX_NONE;
@@ -538,8 +602,10 @@ bool UCodexLevelPropsSubsystem::SpawnGameplayActor(FPropsSpawnSession& S, const 
 				UE_LOG(LogCodexTactics, Warning, TEXT("[Props] loot item '%s' is not a ground item (ETransferItem)"), *Item.Key);
 				continue;
 			}
-			Pile = ADroppedItemActor::SpawnOrMerge(World, Ground, static_cast<ETransferItem>(Value), Item.Value);
+			Contents.Emplace(static_cast<ETransferItem>(Value), Item.Value);
 		}
+		// A fresh pile of its own (never merged into a pile lying there, e.g. a player's drop): ClearSpawnedProps removes only this one.
+		ADroppedItemActor* Pile = ADroppedItemActor::SpawnFresh(World, Ground, Contents);
 		if (!Pile)
 		{
 			return false;
@@ -562,7 +628,7 @@ bool UCodexLevelPropsSubsystem::SpawnGameplayActor(FPropsSpawnSession& S, const 
 		// An interactable stands on its box's centre: lift the box onto the slab.
 		if (Interactable->Box)
 		{
-			Transform.AddToTranslation(FVector(0.0, 0.0, Interactable->Box->GetUnscaledBoxExtent().Z));
+			Transform.AddToTranslation(FVector(0.0, 0.0, Interactable->Box->GetScaledBoxExtent().Z));
 		}
 	}
 	if (ALootCrateActor* Crate = Cast<ALootCrateActor>(Actor))
@@ -574,11 +640,26 @@ bool UCodexLevelPropsSubsystem::SpawnGameplayActor(FPropsSpawnSession& S, const 
 		{
 			UE_LOG(LogCodexTactics, Warning, TEXT("[Props] loot field '%s' is not in FLootContents"), *Field);
 		}
-		Crate->bTrapped = bMined;
+		// Codex.Props.MinesInert: a mined crate is a safe crate (as the inert greybox trap).
+		Crate->bTrapped = bMined && !AreMinesInert();
 	}
 	else if (AProximityMineActor* Mine = Cast<AProximityMineActor>(Actor))
 	{
 		Mine->DetectionRange = Reveal;
+		// gameplay.traps_faction: a hostile level mine (hidden, trips on operatives) or the squad's own (made visible after the spawn).
+		Mine->bPlacedBySquad = !S.bTrapsHostile;
+	}
+	else if (ATurretActor* Turret = Cast<ATurretActor>(Actor))
+	{
+		PropsGameplayRules::FTurretSetup Setup;
+		if (const PropsGameplayRules::FTurretSetup* Found = S.TurretSetups.Find(Obj.Id))
+		{
+			Setup = *Found;
+		}
+		const ETurretFaction Faction = Setup.Side == PropsGameplayRules::ETurretSide::Friendly ? ETurretFaction::Friendly
+			: (Setup.Side == PropsGameplayRules::ETurretSide::Neutral ? ETurretFaction::Neutral : ETurretFaction::Hostile);
+		Turret->InitLevelTurret(Faction, Setup.bPowered);
+		S.PoweredTurrets += Setup.bPowered ? 1 : 0;
 	}
 	else if (ATripwireActor* Wire = Cast<ATripwireActor>(Actor))
 	{
@@ -605,8 +686,15 @@ bool UCodexLevelPropsSubsystem::SpawnGameplayActor(FPropsSpawnSession& S, const 
 		Wire->AnchorA = FVector(0.f, -HalfSpan(-1.f), 0.f);
 		Wire->AnchorB = FVector(0.f, HalfSpan(1.f), 0.f);
 		Wire->SpotRangeCm = Reveal;
+		// gameplay.traps_faction: the PMC's hidden wire (trips on operatives) or the squad's own; laid and armed at level start either way.
+		Wire->Faction = S.bTrapsHostile ? ETripwireFaction::PMC : ETripwireFaction::Squad;
+		Wire->bArmedAtLevelStart = true;
 	}
 	Actor->FinishSpawning(Transform);
+	if (AProximityMineActor* Mine = Cast<AProximityMineActor>(Actor); Mine && !S.bTrapsHostile)
+	{
+		Mine->RestoreSaved(/*bInPlacedBySquad=*/ true, /*bInTrapped=*/ true, /*bInRevealed=*/ true, /*InArmingTimeLeft=*/ 0.f);
+	}
 	TagProp(Actor, ResObj.LayerId, Obj.Id);
 	// The crate's mine / loot objects are this actor (the TG shows them as markers on it).
 	if (bCrate && bMined)
@@ -826,12 +914,7 @@ void UCodexLevelPropsSubsystem::SpawnOne(FPropsSpawnSession& S, const FLevelProp
 
 void UCodexLevelPropsSubsystem::ClearSpawnedProps()
 {
-	if (SpawnTicker.IsValid())
-	{
-		FTSTicker::GetCoreTicker().RemoveTicker(SpawnTicker);
-		SpawnTicker.Reset();
-	}
-	Session.Reset();
+	StopSpawnTicker();
 	for (TWeakObjectPtr<ACodexPropActor>& PropPtr : SpawnedProps)
 	{
 		if (ACodexPropActor* Prop = PropPtr.Get())

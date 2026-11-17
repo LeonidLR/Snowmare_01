@@ -9,10 +9,25 @@ class UHealthComponent;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnTurretFired, ATurretActor*, Turret, AActor*, Target, const FVector&, HitLocation);
 
 /**
+ * Whose side a turret is on (G003b, designer 2026-11-17: level turrets on generated maps). Friendly = the squad's turret (fires at
+ * enemies; the classic deployable). Hostile = a level turret that fires at the squad's operatives. Neutral = a level turret that holds
+ * fire (placeholder until the power / capture mechanic is designed).
+ */
+UENUM(BlueprintType)
+enum class ETurretFaction : uint8
+{
+	Friendly,
+	Neutral,
+	Hostile
+};
+
+/**
  * Automatic turret: fires at the nearest visible enemy within AttackRange (a barricade in the line of fire cuts
  * the damage to 60 %, walls block it) while powered and not broken. Powered by default; a generator breakdown cuts
  * the power of every turret, a repair restores it. At 0 HP it breaks (repair: engineer 2 s, others 4 s). A powered
  * turret also warms operatives nearby (Godot heat_sources, 4.5 m). Can be picked up, moved, trapped.
+ * G003b: Faction - the squad's turret (Friendly, default) or a level turret (Hostile: fires at the squad's operatives; Neutral:
+ * holds fire). A level turret's power is its own (SetPowered), the squad's generator powers only friendly turrets.
  * Godot reference: Scenes/movements/deployables/turret.gd, main.gd turret menu / `_execute_repair_object`.
  */
 UCLASS(Blueprintable)
@@ -50,8 +65,28 @@ public:
 	/** Repair time for Operative: engineer 2 s, others 4 s. */
 	float GetRepairSeconds(const AOperativeCharacter* Operative) const;
 
-	/** Sets every turret of the world on / off (generator breakdown / repair / start). */
+	/**
+	 * Sets every FRIENDLY turret of the world on / off (the squad's generator breakdown / repair / start). Hostile / neutral level turrets
+	 * keep their own power (SetPowered; the level power mechanic hooks in there).
+	 */
 	static void SetAllPowered(UWorld* World, bool bNewPowered);
+
+	/** Whose side the turret is on (who it fires at). */
+	UFUNCTION(BlueprintPure, Category = "CodexTactics|Turret")
+	ETurretFaction GetFaction() const { return Faction; }
+
+	/** Changes the side (e.g. a captured level turret); takes effect on the next target search. */
+	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Turret")
+	void SetFaction(ETurretFaction NewFaction);
+
+	/**
+	 * A level turret's start state, set by its spawner before FinishSpawning (UCodexLevelPropsSubsystem, G003b): the side and the power.
+	 * No visuals here (BeginPlay applies them).
+	 */
+	void InitLevelTurret(ETurretFaction InFaction, bool bInPowered);
+
+	/** Shots fired since spawn (smokes, telemetry). */
+	int32 GetShotsFired() const { return ShotsFired; }
 
 	/** Save-game load: power and broken state (health is restored separately); the look follows. */
 	void RestoreSaved(bool bInPowered, bool bInBroken);
@@ -107,6 +142,11 @@ private:
 	UPROPERTY(EditAnywhere, Category = "CodexTactics|Turret")
 	bool bPowered = true;
 
+	/** Friendly (default) = the squad's turret; Hostile / Neutral = a level turret (GetFaction). */
+	UPROPERTY(EditAnywhere, Category = "CodexTactics|Turret")
+	ETurretFaction Faction = ETurretFaction::Friendly;
+
 	bool bBroken = false;
 	float ShotCooldown = 0.f;
+	int32 ShotsFired = 0;
 };

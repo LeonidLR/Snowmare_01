@@ -1,8 +1,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Misc/Optional.h"
 
 class FJsonObject;
+class FJsonValue;
 struct FLevelPropsObject;
 struct FLootContents;
 
@@ -45,4 +47,50 @@ namespace PropsGameplayRules
 	 * names it did not know (left out).
 	 */
 	CODEXTACTICS_API TArray<FString> ApplyToContents(const TMap<FString, int32>& Fields, FLootContents& Contents);
+
+	/** A level turret's side (mirrors ETurretFaction; this header stays free of actor types). */
+	enum class ETurretSide : uint8
+	{
+		Hostile,
+		Neutral,
+		Friendly
+	};
+
+	/** "hostile" / "neutral" / "friendly" (case-insensitive); false for anything else (Out unchanged). */
+	CODEXTACTICS_API bool ParseTurretSide(const FString& Text, ETurretSide& Out);
+
+	/** One level turret of a map: its id and the fields its props object states (faction / powered; unset = the map's rule). */
+	struct FTurretInput
+	{
+		FString Id;
+		TOptional<ETurretSide> Side;
+		TOptional<bool> bPowered;
+	};
+
+	/** What a level turret starts as. */
+	struct FTurretSetup
+	{
+		ETurretSide Side = ETurretSide::Hostile;
+		bool bPowered = false;
+	};
+
+	/** The turret fields of a props object (Extra "faction" string, "powered" bool); a bad value counts as unset. */
+	CODEXTACTICS_API FTurretInput TurretInputOf(const FLevelPropsObject& Object);
+
+	/**
+	 * The share of a map's turrets that start powered (designer 2026-11-17, default 0.25): the props file's top-level
+	 * "turret_powered_share" if it is a number, else gameplay.turrets.powered_share, else 0.25; clamped to [0, 1].
+	 */
+	CODEXTACTICS_API double TurretPoweredShare(const FJsonObject* Balance, const TMap<FString, TSharedPtr<FJsonValue>>* FileExtra);
+
+	/**
+	 * Start state of every level turret of a map. A turret's own "powered" / "faction" win. Of the rest, the first
+	 * K = clamp(round(Share * Turrets.Num()) - explicitly powered, 0, unset) in (Fnv1a(id), id) order start powered with
+	 * gameplay.turrets.powered_faction (default hostile); the others stay unpowered (inactive) with gameplay.turrets.default_faction
+	 * (default hostile). Deterministic, independent of the input order. Keyed by id.
+	 */
+	CODEXTACTICS_API TMap<FString, FTurretSetup> ResolveTurrets(const FJsonObject* Balance, double Share, const TArray<FTurretInput>& Turrets);
+
+	/** gameplay.traps_faction: true (default "hostile") = level mines / wires are the enemy's (hidden, trip on operatives); "squad" / "friendly" = false. */
+	CODEXTACTICS_API bool AreTrapsHostile(const FJsonObject* Balance);
 }

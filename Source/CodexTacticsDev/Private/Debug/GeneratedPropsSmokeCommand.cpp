@@ -7,8 +7,10 @@
 // 1. every object the Training Ground shows is in the game (count per kind within 5 %; nothing dropped by the validator now that the
 //    TG autogen runs the same static validator), each a visible mesh or a hidden-until-spotted trap, inside the layout bounds, its
 //    bottom within 30 cm of the surface under it; the spawn's longest frame (ms) against the 60 ms budget;
-// 2. behaviour: a barrel explodes on a shot (the operative's targeted-shot path), a loot crate is emptied into an operative, a turret
-//    hits an enemy spawned in its range, a mine / wire goes off when an operative walks onto it.
+// 2. behaviour: a barrel explodes on a shot (the operative's targeted-shot path), a loot crate is emptied into an operative, a mine / wire
+//    goes off when an operative walks onto it;
+// 3. level turrets (designer 2026-11-17): inactive (unpowered) by default, round(0.25 x turrets) powered + hostile; a turret forced
+//    unpowered does not fire at an operative in its range, the same turret forced powered + hostile engages him.
 // GeneratedPropsSmoke = L_Gen_Depot_X4, GeneratedPropsX6Smoke = L_Gen_Depot_1_X6; [map=<L_Gen_...>] for another generated map.
 
 #include "CoreMinimal.h"
@@ -56,11 +58,14 @@ namespace GeneratedPropsSmoke
 	constexpr double SurfaceToleranceCm = 30.0;
 	/** Seconds a turret / a mine gets to react. */
 	constexpr float ReactSeconds = 6.f;
+	/** Seconds an unpowered turret is watched for (it must not fire). */
+	constexpr float SilentSeconds = 2.f;
 
 	enum class EStage : uint8
 	{
 		Begin,
-		Turret,
+		TurretOff,
+		TurretOn,
 		Mine,
 		Done
 	};
@@ -75,8 +80,12 @@ namespace GeneratedPropsSmoke
 		FString CommandName;
 		SmokeUtils::FPreloadGate PreloadGate;
 		TWeakObjectPtr<ATurretActor> Turret;
-		TWeakObjectPtr<AActor> Enemy;
-		float EnemyHealthBefore = 0.f;
+		/** The operative standing in the turret's range. */
+		TWeakObjectPtr<AOperativeCharacter> Target;
+		float TargetHealthBefore = 0.f;
+		/** Hits the immortal cheat (CombatCheats) absorbed on the target so far: a hit counts even when it costs no health. */
+		int32 TargetBlockedBefore = 0;
+		int32 ShotsBefore = 0;
 		TWeakObjectPtr<AActor> Mine;
 	};
 
@@ -316,6 +325,23 @@ namespace GeneratedPropsSmoke
 		Check(State, Real.FindRef(TEXT("BarrelActor")) > 0 && Real.FindRef(TEXT("LootCrateActor")) > 0 && Real.FindRef(TEXT("TurretActor")) > 0
 			&& Real.FindRef(TEXT("DroppedItemActor")) > 0 && (Real.FindRef(TEXT("ProximityMineActor")) + Real.FindRef(TEXT("PMCTripwireActor"))) > 0,
 			FString::Printf(TEXT("the props are the game's real objects: %s"), *Classes));
+		// Level turrets: inactive by default, a quarter powered + hostile (props_balance.json gameplay.turrets, no per-object fields in autogen files).
+		int32 TurretCount = 0;
+		int32 PoweredHostile = 0;
+		int32 PoweredOther = 0;
+		for (AActor* Actor : All)
+		{
+			if (const ATurretActor* Turret = Cast<ATurretActor>(Actor))
+			{
+				++TurretCount;
+				PoweredHostile += Turret->IsPowered() && Turret->GetFaction() == ETurretFaction::Hostile ? 1 : 0;
+				PoweredOther += Turret->IsPowered() && Turret->GetFaction() != ETurretFaction::Hostile ? 1 : 0;
+			}
+		}
+		const int32 WantPowered = FMath::RoundToInt(0.25 * TurretCount);
+		Check(State, PoweredHostile == WantPowered && PoweredOther == 0, FString::Printf(
+			TEXT("level turrets: %d of %d powered + hostile (want %d), %d powered otherwise, the rest inactive"), PoweredHostile, TurretCount,
+			WantPowered, PoweredOther));
 		Check(State, Invisible == 0, FString::Printf(TEXT("every prop has a visible mesh or is a hidden-until-spotted trap (%d without, %d hidden traps)"),
 			Invisible, HiddenTraps));
 		Check(State, Outside == 0, FString::Printf(TEXT("every prop inside the layout bounds (%d outside)"), Outside));
@@ -382,7 +408,7 @@ namespace GeneratedPropsSmoke
 		}
 	}
 
-	/** An enemy spot in the turret's range with a line of fire, on the turret's surface (a roof turret: on its roof). */
+	/** A spot in the turret's range with a line of fire, on the turret's surface (a roof turret: on its roof). */
 	bool TurretTargetSpot(UWorld* World, const ATurretActor* Turret, FVector& Out)
 	{
 		const FVector Base = Turret->GetActorLocation();
@@ -440,38 +466,79 @@ namespace GeneratedPropsSmoke
 				return true;
 			}
 			RunChecks(World, State);
-			UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
-			FVector Spot;
-			if (State.Turret.IsValid() && Waves && TurretTargetSpot(World, State.Turret.Get(), Spot))
+			// The map's powered hostile turrets are switched off for the behaviour checks (only the test turret fires, and only when told).
+			for (TActorIterator<ATurretActor> It(World); It; ++It)
 			{
-				AEnemyCharacter* Enemy = Waves->SpawnEnemy(EEnemyArchetype::Brute, Spot);
-				State.Enemy = Enemy;
-				const UHealthComponent* Health = Enemy ? Enemy->FindComponentByClass<UHealthComponent>() : nullptr;
-				State.EnemyHealthBefore = Health ? Health->GetCurrentHealth() : 0.f;
-				Check(State, Enemy != nullptr, FString::Printf(TEXT("an enemy spawned %.1f m from turret %s"),
-					Enemy ? FVector::Dist(Enemy->GetActorLocation(), State.Turret->GetActorLocation()) / 100.f : 0.f, *State.Turret->GetName()));
+				It->SetPowered(false);
+			}
+			// Turret: an operative in its range; first the turret forced unpowered (it must hold fire), then powered + hostile.
+			const TArray<AOperativeCharacter*> Squad = LivingOperatives(World);
+			FVector Spot;
+			if (State.Turret.IsValid() && !Squad.IsEmpty() && TurretTargetSpot(World, State.Turret.Get(), Spot))
+			{
+				ATurretActor* Turret = State.Turret.Get();
+				AOperativeCharacter* Target = Squad.Last();
+				Turret->SetFaction(ETurretFaction::Hostile);
+				Turret->SetPowered(false);
+				Target->StopOperative();
+				Target->SetActorLocation(Spot - FVector(0.0, 0.0, 100.0) + FVector(0.0, 0.0, Target->GetSimpleCollisionHalfHeight() + 2.0), false, nullptr,
+					ETeleportType::TeleportPhysics);
+				const UHealthComponent* Health = Target->FindComponentByClass<UHealthComponent>();
+				State.Target = Target;
+				State.TargetHealthBefore = Health ? Health->GetCurrentHealth() : 0.f;
+				State.ShotsBefore = Turret->GetShotsFired();
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s stands %.1f m from turret %s (unpowered)"), *Target->DisplayName.ToString(),
+					FVector::Dist(Target->GetActorLocation(), Turret->GetActorLocation()) / 100.f, *Turret->GetName());
 			}
 			else
 			{
-				Check(State, false, TEXT("a turret with an enemy spot in its range"));
+				Check(State, false, TEXT("a turret with a spot in its range and an operative to stand there"));
 			}
-			State.Stage = EStage::Turret;
+			State.Stage = EStage::TurretOff;
 			State.StageTime = 0.f;
 			return true;
 		}
-		case EStage::Turret:
+		case EStage::TurretOff:
 		{
-			const UHealthComponent* Health = State.Enemy.IsValid() ? State.Enemy->FindComponentByClass<UHealthComponent>() : nullptr;
-			const float Now = Health ? Health->GetCurrentHealth() : 0.f;
-			const bool bHit = State.Enemy.IsValid() && Now < State.EnemyHealthBefore;
-			if (!bHit && State.StageTime < ReactSeconds)
+			ATurretActor* Turret = State.Turret.Get();
+			if (Turret && State.Target.IsValid() && State.StageTime < SilentSeconds)
 			{
 				return true;
 			}
-			Check(State, bHit, FString::Printf(TEXT("the turret engages the enemy (health %.0f -> %.0f)"), State.EnemyHealthBefore, Now));
-			if (AActor* Enemy = State.Enemy.Get())
+			if (Turret && State.Target.IsValid())
 			{
-				Enemy->Destroy();
+				Check(State, Turret->GetShotsFired() == State.ShotsBefore,
+					FString::Printf(TEXT("an unpowered turret does not fire (%d shots in %.0f s)"), Turret->GetShotsFired() - State.ShotsBefore, SilentSeconds));
+				Turret->SetPowered(true);
+				State.ShotsBefore = Turret->GetShotsFired();
+				const UHealthComponent* Health = State.Target->FindComponentByClass<UHealthComponent>();
+				State.TargetHealthBefore = Health ? Health->GetCurrentHealth() : 0.f;
+				State.TargetBlockedBefore = Health ? Health->GetCheatBlockedHits() : 0;
+			}
+			State.Stage = EStage::TurretOn;
+			State.StageTime = 0.f;
+			return true;
+		}
+		case EStage::TurretOn:
+		{
+			ATurretActor* Turret = State.Turret.Get();
+			const UHealthComponent* Health = State.Target.IsValid() ? State.Target->FindComponentByClass<UHealthComponent>() : nullptr;
+			const float Now = Health ? Health->GetCurrentHealth() : 0.f;
+			const bool bFired = Turret && Turret->GetShotsFired() > State.ShotsBefore;
+			const int32 Blocked = Health ? Health->GetCheatBlockedHits() - State.TargetBlockedBefore : 0;
+			const bool bHit = bFired && Health && (Now < State.TargetHealthBefore || Blocked > 0);
+			if (Turret && State.Target.IsValid() && !bHit && State.StageTime < ReactSeconds)
+			{
+				return true;
+			}
+			if (Turret && State.Target.IsValid())
+			{
+				Check(State, bHit, FString::Printf(TEXT("a powered hostile turret engages the operative (%d shots, health %.0f -> %.0f, %d hits absorbed by the immortal cheat)"),
+					Turret->GetShotsFired() - State.ShotsBefore, State.TargetHealthBefore, Now, Blocked));
+			}
+			if (Turret)
+			{
+				Turret->SetPowered(false); // let the operative live for the mine check
 			}
 			// A mine / wire: the first living operative walks onto it.
 			const TArray<AOperativeCharacter*> Squad = LivingOperatives(World);
@@ -547,7 +614,8 @@ namespace GeneratedPropsSmoke
 		TEXT("CodexTactics.GeneratedPropsSmoke"),
 		TEXT("Dev check (G003 / G003b): the generated map's Training Ground autogen props as the game's real objects - count per kind = the TG's, ")
 		TEXT("visible (or a hidden trap), inside the bounds, on the surface, the longest spawn frame <= 60 ms; a barrel explodes on a shot, a loot ")
-		TEXT("crate is emptied, a turret hits an enemy, a mine / wire goes off under an operative. Run on L_Gen_Depot_X4. [map=<L_Gen_...>]. PASS/FAIL, then exits."),
+		TEXT("crate is emptied, level turrets inactive but a quarter powered + hostile, an unpowered turret holds fire and a powered hostile one engages an operative, ")
+		TEXT("a mine / wire goes off under an operative. Run on L_Gen_Depot_X4. [map=<L_Gen_...>]. PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateLambda([](const TArray<FString>& Args, UWorld* World)
 		{
 			Start(Args, World, TEXT("GeneratedPropsSmoke"));

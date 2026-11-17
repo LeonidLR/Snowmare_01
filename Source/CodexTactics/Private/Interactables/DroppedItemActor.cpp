@@ -175,15 +175,29 @@ ADroppedItemActor* ADroppedItemActor::SpawnOrMerge(UWorld* World, const FVector&
 			return *It;
 		}
 	}
-	FActorSpawnParameters Params;
-	Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+	return SpawnFresh(World, Point, { TPair<ETransferItem, int32>(Item, Count) });
+}
+
+ADroppedItemActor* ADroppedItemActor::SpawnFresh(UWorld* World, const FVector& Point, const TArray<TPair<ETransferItem, int32>>& Items)
+{
+	if (!World || !Items.ContainsByPredicate([](const TPair<ETransferItem, int32>& Entry) { return Entry.Value > 0; }))
+	{
+		return nullptr;
+	}
+	const FVector Ground = FindGroundPoint(World, Point);
 	ADroppedItemActor* Pile = World->SpawnActorDeferred<ADroppedItemActor>(ADroppedItemActor::StaticClass(), FTransform(Ground),
 		nullptr, nullptr, ESpawnActorCollisionHandlingMethod::AlwaysSpawn);
 	if (!Pile)
 	{
 		return nullptr;
 	}
-	Pile->Stash->Add(Item, Count, true);
+	for (const TPair<ETransferItem, int32>& Entry : Items)
+	{
+		if (Entry.Value > 0)
+		{
+			Pile->Stash->Add(Entry.Key, Entry.Value, true);
+		}
+	}
 	Pile->FinishSpawning(FTransform(Ground + FVector(0.f, 0.f, Pile->PileHalfSize)));
 	return Pile;
 }

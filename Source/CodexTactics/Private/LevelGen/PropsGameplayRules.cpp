@@ -210,3 +210,134 @@ TArray<FString> PropsGameplayRules::ApplyToContents(const TMap<FString, int32>& 
 	}
 	return Unknown;
 }
+
+bool PropsGameplayRules::ParseTurretSide(const FString& Text, ETurretSide& Out)
+{
+	if (Text.Equals(TEXT("hostile"), ESearchCase::IgnoreCase))
+	{
+		Out = ETurretSide::Hostile;
+		return true;
+	}
+	if (Text.Equals(TEXT("neutral"), ESearchCase::IgnoreCase))
+	{
+		Out = ETurretSide::Neutral;
+		return true;
+	}
+	if (Text.Equals(TEXT("friendly"), ESearchCase::IgnoreCase))
+	{
+		Out = ETurretSide::Friendly;
+		return true;
+	}
+	return false;
+}
+
+PropsGameplayRules::FTurretInput PropsGameplayRules::TurretInputOf(const FLevelPropsObject& Object)
+{
+	FTurretInput Input;
+	Input.Id = Object.Id;
+	if (const TSharedPtr<FJsonValue>* Faction = Object.Extra.Find(TEXT("faction")))
+	{
+		FString Text;
+		ETurretSide Side = ETurretSide::Hostile;
+		if (Faction->IsValid() && (*Faction)->TryGetString(Text) && ParseTurretSide(Text, Side))
+		{
+			Input.Side = Side;
+		}
+	}
+	if (const TSharedPtr<FJsonValue>* Powered = Object.Extra.Find(TEXT("powered")))
+	{
+		bool bValue = false;
+		if (Powered->IsValid() && (*Powered)->Type == EJson::Boolean && (*Powered)->TryGetBool(bValue))
+		{
+			Input.bPowered = bValue;
+		}
+	}
+	return Input;
+}
+
+namespace PropsGameplayRulesLocal
+{
+	PropsGameplayRules::ETurretSide TurretSideField(const FJsonObject* Turrets, const TCHAR* Key)
+	{
+		PropsGameplayRules::ETurretSide Side = PropsGameplayRules::ETurretSide::Hostile;
+		FString Text;
+		if (Turrets && Turrets->TryGetStringField(Key, Text))
+		{
+			PropsGameplayRules::ParseTurretSide(Text, Side);
+		}
+		return Side;
+	}
+}
+
+double PropsGameplayRules::TurretPoweredShare(const FJsonObject* Balance, const TMap<FString, TSharedPtr<FJsonValue>>* FileExtra)
+{
+	double Share = 0.25;
+	const TSharedPtr<FJsonObject> Turrets = PropsGameplayRulesLocal::GameplayChild(PropsGameplayRulesLocal::GameplayBlock(Balance).Get(), TEXT("turrets"));
+	if (Turrets.IsValid())
+	{
+		Turrets->TryGetNumberField(TEXT("powered_share"), Share);
+	}
+	if (FileExtra)
+	{
+		const TSharedPtr<FJsonValue>* MapShare = FileExtra->Find(TEXT("turret_powered_share"));
+		if (MapShare && MapShare->IsValid() && (*MapShare)->Type == EJson::Number)
+		{
+			Share = (*MapShare)->AsNumber();
+		}
+	}
+	return FMath::Clamp(Share, 0.0, 1.0);
+}
+
+TMap<FString, PropsGameplayRules::FTurretSetup> PropsGameplayRules::ResolveTurrets(const FJsonObject* Balance, double Share,
+	const TArray<FTurretInput>& Turrets)
+{
+	using namespace PropsGameplayRulesLocal;
+	const TSharedPtr<FJsonObject> Block = GameplayChild(GameplayBlock(Balance).Get(), TEXT("turrets"));
+	const ETurretSide PoweredSide = TurretSideField(Block.Get(), TEXT("powered_faction"));
+	const ETurretSide DefaultSide = TurretSideField(Block.Get(), TEXT("default_faction"));
+
+	TMap<FString, FTurretSetup> Result;
+	int32 ExplicitPowered = 0;
+	TArray<const FTurretInput*> Unset;
+	for (const FTurretInput& Turret : Turrets)
+	{
+		if (Turret.bPowered.IsSet())
+		{
+			ExplicitPowered += Turret.bPowered.GetValue() ? 1 : 0;
+		}
+		else
+		{
+			Unset.Add(&Turret);
+		}
+	}
+	Unset.Sort([](const FTurretInput& A, const FTurretInput& B)
+	{
+		const uint32 HashA = PropsRng::Fnv1a(A.Id);
+		const uint32 HashB = PropsRng::Fnv1a(B.Id);
+		return HashA != HashB ? HashA < HashB : A.Id < B.Id;
+	});
+	const int32 Wanted = FMath::RoundToInt(FMath::Clamp(Share, 0.0, 1.0) * Turrets.Num());
+	const int32 AutoPowered = FMath::Clamp(Wanted - ExplicitPowered, 0, Unset.Num());
+	TSet<FString> PoweredIds;
+	for (int32 Index = 0; Index < AutoPowered; ++Index)
+	{
+		PoweredIds.Add(Unset[Index]->Id);
+	}
+	for (const FTurretInput& Turret : Turrets)
+	{
+		FTurretSetup& Setup = Result.Add(Turret.Id);
+		Setup.bPowered = Turret.bPowered.IsSet() ? Turret.bPowered.GetValue() : PoweredIds.Contains(Turret.Id);
+		Setup.Side = Turret.Side.IsSet() ? Turret.Side.GetValue() : (Setup.bPowered ? PoweredSide : DefaultSide);
+	}
+	return Result;
+}
+
+bool PropsGameplayRules::AreTrapsHostile(const FJsonObject* Balance)
+{
+	FString Faction = TEXT("hostile");
+	if (const TSharedPtr<FJsonObject> Block = PropsGameplayRulesLocal::GameplayBlock(Balance))
+	{
+		Block->TryGetStringField(TEXT("traps_faction"), Faction);
+	}
+	return !Faction.Equals(TEXT("squad"), ESearchCase::IgnoreCase) && !Faction.Equals(TEXT("friendly"), ESearchCase::IgnoreCase);
+}

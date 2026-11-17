@@ -7,7 +7,13 @@
 
 class ACodexPropActor;
 class FJsonObject;
+class UCodexLevelPropsSubsystem;
 struct FLevelPropsResolvedObject;
+
+/** A props spawn finished (all its frames done): the subsystem (G003b; smokes / AI wait for it). */
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnLevelPropsSpawned, UCodexLevelPropsSubsystem*);
+/** Blueprint form of FOnLevelPropsSpawned: the live prop count (greybox props + game objects). */
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnLevelPropsSpawnedDynamic, int32, SpawnedCount);
 
 /**
  * World subsystem for loading and spawning levelgen props (docs/design/levelgen/PROPS_LAYERS.md 3.1, task C6).
@@ -26,21 +32,25 @@ public:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Deinitialize() override;
 
-	/** Spawns props for the specified map name (e.g. "L_Gen_Depot_1") */
+	/** Spawns props for the specified map name (e.g. "L_Gen_Depot_1"); bLive as SpawnPropsFromFile. */
 	int32 SpawnPropsForMap(
 		const FString& MapName,
 		const TSet<FString>* SkippedIds = nullptr,
-		bool bRequireMesh = false);
+		bool bRequireMesh = false,
+		bool bLive = false);
 
 	/**
-	 * Spawns props from the given props JSON file and optional layout file.
-	 * Returns the number of successfully spawned prop actors.
+	 * Spawns props from the given props JSON file and optional layout file. Any earlier spawn (and a pending one) is cleared first.
+	 * bLive (OnWorldBeginPlay, G003b): the props spawn as the game's real objects (Codex.Props.Real) and the spawn is spread over frames
+	 * (props_balance.json gameplay.spawn_frame_budget_ms); false (tests, tools): greybox props, everything at once.
+	 * Returns the number of live prop actors so far (a live spawn may still be pending: IsSpawnPending / OnPropsSpawned).
 	 */
 	int32 SpawnPropsFromFile(
 		const FString& PropsFilePath,
 		const FString& LayoutFilePath = FString(),
 		const TSet<FString>* SkippedIds = nullptr,
-		bool bRequireMesh = false);
+		bool bRequireMesh = false,
+		bool bLive = false);
 
 	/** Destroys all spawned prop actors and resets layer counts */
 	void ClearSpawnedProps();
@@ -63,17 +73,18 @@ public:
 	/** Execution time of the last spawn in milliseconds */
 	double GetLastSpawnDurationMs() const { return LastSpawnDurationMs; }
 
-	/** True if props have been spawned in this world */
+	/** True once the last spawn finished (every frame of a frame-sliced spawn done; reset by ClearSpawnedProps). */
 	bool HasSpawned() const { return bHasSpawned; }
+
+	/** Fired when a spawn finishes (after its last frame; at once for a direct spawn). */
+	FOnLevelPropsSpawned OnPropsSpawned;
+
+	/** Blueprint form of OnPropsSpawned. */
+	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|LevelGen")
+	FOnLevelPropsSpawnedDynamic OnPropsSpawnedDynamic;
 
 	/** Props of the last spawn that got the greybox look (Codex.Props.Greybox, G003). */
 	int32 GetGreyboxCount() const { return GreyboxCount; }
-
-	/**
-	 * A live map (set by OnWorldBeginPlay, G003b): the props spawn as the game's real objects (Codex.Props.Real) and the spawn is spread
-	 * over frames (props_balance.json gameplay.spawn_frame_budget_ms). Off for a direct SpawnPropsFromFile (tests): everything at once.
-	 */
-	bool bLiveSpawn = false;
 
 	/** A live spawn still has props to place on the next frames. */
 	bool IsSpawnPending() const { return Session.IsValid(); }
@@ -113,8 +124,10 @@ private:
 
 	/** Spawns the session's next objects until BudgetMs is spent (0 = all); true when some are left for the next frame. */
 	bool ProcessSession(double BudgetMs);
-	/** The attach pass, the timings and the log line; ends the session. */
+	/** The attach pass, the timings and the log line; ends the session and fires OnPropsSpawned. */
 	void FinishSession();
+	/** Removes the frame-slice ticker (if any) and drops the pending session. */
+	void StopSpawnTicker();
 	void SpawnOne(FPropsSpawnSession& S, const FLevelPropsResolvedObject& ResObj);
 	/** The real game object of a prop (gameplay.classes); false = none (the ACodexProp* actor / greybox then). */
 	bool SpawnGameplayActor(FPropsSpawnSession& S, const FLevelPropsResolvedObject& ResObj, const FVector& Ground, const FRotator& Rotation);
@@ -122,6 +135,8 @@ private:
 
 	TSharedPtr<FPropsSpawnSession> Session;
 	FTSTicker::FDelegateHandle SpawnTicker;
+	/** Bumped by every spawn: a ticker of an older spawn stops itself. */
+	uint32 SpawnGeneration = 0;
 	TArray<TWeakObjectPtr<AActor>> SpawnedGameplay;
 	TMap<FString, TArray<TWeakObjectPtr<AActor>>> GameplayByLayer;
 	double LastMaxFrameMs = 0.0;

@@ -308,6 +308,17 @@
 		"reveal_cm_comment": "Designer 2026-11-10 #4: a mine / wire becomes visible when an operative is within 3 m (the mine actor's DetectionRange, the wire's SpotRangeCm; the Medic-Sapper keeps his bonus).",
 		"spawn_frame_budget_ms": 20,
 		"spawn_frame_budget_ms_comment": "Props spawned per frame until this much time is spent; the rest go on the next frames (the 60 ms budget is per frame).",
+		"turrets": {
+			"comment": "Designer 2026-11-17: level turrets on generated maps start INACTIVE (unpowered). A props turret object may state its own \"faction\" (hostile / neutral / friendly) and \"powered\" (bool); the rest follow these rules. The power mechanic (generator / fuel) is designed later and hooks into ATurretActor::SetPowered / SetFaction.",
+			"powered_share": 0.25,
+			"powered_share_comment": "Share of a map's turrets that start powered (rounded; chosen by the object id hash). A props file may override it with a top-level \"turret_powered_share\".",
+			"powered_faction": "hostile",
+			"powered_faction_comment": "Side of the turrets powered by the share: they fire at the squad.",
+			"default_faction": "hostile",
+			"default_faction_comment": "Side of the unpowered turrets (inactive until the power mechanic switches them on)."
+		},
+		"traps_faction": "hostile",
+		"traps_faction_comment": "Side of the level mines / doorway wires: hostile (default: hidden until spotted, trip on operatives, PMC wire) or squad (the squad's own: visible, trip on everyone).",
 		"loot": {
 			"crate_rolls": 2,
 			"crate_rolls_comment": "PLACEHOLDER. Draws from the crate's loot table (weighted, seeded by the object id).",

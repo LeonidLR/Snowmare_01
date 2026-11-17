@@ -425,3 +425,42 @@ test('props T1: file helpers readPropsFile and writePropsFile work end to end', 
     }
   }
 });
+
+test('props G003b: level turret faction / powered and the map powered share validate', () => {
+  const doc = JSON.parse(fs.readFileSync(FIXTURE_PROPS_PATH, 'utf8')) as LevelPropsFile;
+  const turretDoc: LevelPropsFile = {
+    ...doc,
+    turret_powered_share: 0.25,
+    layers: [
+      {
+        id: 'turrets',
+        kind: 'turrets',
+        enabled: true,
+        seed: 7,
+        locked: false,
+        rules: {},
+        objects: [
+          { id: 'turrets_00000007_0', variant: 'turret_mg', pos: [0, 0], walk_layer: 'ground', faction: 'hostile', powered: true },
+          { id: 'turrets_00000007_1', variant: 'turret_mg', pos: [500, 0], walk_layer: 'ground', faction: 'neutral' },
+          { id: 'turrets_00000007_2', variant: 'turret_mg', pos: [1000, 0], walk_layer: 'ground' },
+        ],
+      },
+    ],
+    overrides: [],
+  };
+  assert.deepEqual(validateProps(turretDoc), [], 'faction / powered / turret_powered_share are valid');
+
+  const parsed = parsePropsJson(formatPropsJson(turretDoc));
+  assert.equal(parsed.turret_powered_share, 0.25, 'the map share survives a round-trip');
+  assert.equal(parsed.layers[0].objects[0].faction, 'hostile', 'the faction survives a round-trip');
+  assert.equal(parsed.layers[0].objects[0].powered, true, 'powered survives a round-trip');
+
+  const bad = JSON.parse(JSON.stringify(turretDoc));
+  bad.turret_powered_share = 1.5;
+  bad.layers[0].objects[0].faction = 'pmc';
+  bad.layers[0].objects[1].powered = 'yes';
+  const errors = validateProps(bad);
+  assert.ok(errors.some((e) => e.startsWith('turret_powered_share')), 'share outside [0, 1] rejected');
+  assert.ok(errors.some((e) => e.includes('faction must be one of')), 'unknown faction rejected');
+  assert.ok(errors.some((e) => e.includes('powered must be a boolean')), 'non-bool powered rejected');
+});
