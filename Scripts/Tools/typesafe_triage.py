@@ -237,6 +237,9 @@ PROTECTED_FOR = {
     # Codex (OpenAI, 2026-11-11 trial): C++ allowed on its own codex/* branch for Claude-briefed tasks; the designer's assets / maps /
     # configs are off limits like for Claude.
     "codex": ["Content/VFX/", "Shaders/", "Config/", "Content/Maps/", "CLAUDE.md", "Content/Data/LevelJson/L_Gen_Depot_1.json"],
+    # Grok (xAI, joined 2026-11-17 as the Codex successor): same limits as Codex, on its own grok/* branch.
+    "grok": ["Content/VFX/", "Shaders/", "Config/", "Content/Maps/", "CLAUDE.md", "Content/Data/LevelJson/L_Gen_Depot_1.json",
+             "Content/Data/LevelGen/props/L_Gen_Depot_1.props.json"],
 }
 
 
