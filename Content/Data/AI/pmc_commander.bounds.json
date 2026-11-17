@@ -165,6 +165,8 @@
     "/ambush_patience": { "min": 0.25, "max": 0.75, "step": 0.05 },
     "/kill_zone_frac": { "min": 0.3, "max": 0.9, "step": 0.06 },
     "/ambush_max_hold_s": { "min": 10, "max": 30, "step": 2 },
+    "/target_switch_hysteresis_cm": { "min": 50.0, "max": 500.0, "step": 25.0 },
+    "/facing_dead_band_deg": { "min": 0.5, "max": 5.0, "step": 0.5 },
     "/engagement_bands/m16/min_m": { "min": 12.5, "max": 37.5, "step": 2.5, "frozen": true },
     "/engagement_bands/m16/max_m": { "min": 30.0, "max": 90.0, "step": 6.0, "frozen": true },
     "/engagement_bands/sniper_rifle/min_m": { "min": 22.5, "max": 67.5, "step": 4.5, "frozen": true },

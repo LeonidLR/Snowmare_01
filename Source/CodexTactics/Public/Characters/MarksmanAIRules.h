@@ -83,6 +83,15 @@ struct CODEXTACTICS_API FMarksmanConfig
 	/** Other marksmen this close are alerted by an ambush hit. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
 	float AlertRadius = 1500.f;
+	/** Hysteresis to switch to a new target (cm): current target stays until another is closer by at least this much. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
+	float TargetSwitchHysteresisCm = 250.f;
+	/** Minimum hold time on a selected target (s) before normal distance re-pick can switch targets. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
+	float TargetMinHoldSeconds = 1.5f;
+	/** Angular dead band for facing (deg): turns smaller than this are ignored to stop sub-degree micro-jitter. */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Marksman")
+	float FacingDeadBandDeg = 1.5f;
 };
 
 /** What the marksman is doing (debug / anim / UI). */
@@ -140,4 +149,14 @@ namespace MarksmanAIRules
 
 	/** Capsule half height of a stance. */
 	CODEXTACTICS_API float GetHalfHeight(const FMarksmanConfig& Config, EOperativeStance Stance);
+
+	/**
+	 * Should the marksman switch from CurrentTarget to Candidate?
+	 * Keeps CurrentTarget unless Candidate is closer by at least HysteresisCm AND hold time >= MinHoldSeconds.
+	 */
+	CODEXTACTICS_API bool ShouldSwitchTarget(float CurrentDistanceCm, float CandidateDistanceCm,
+		float TargetHoldSeconds, float MinHoldSeconds, float HysteresisCm);
+
+	/** Check if angular difference exceeds dead band threshold (deg). */
+	CODEXTACTICS_API bool IsOutsideDeadBand(float CurrentYawDeg, float TargetYawDeg, float DeadBandDeg);
 }

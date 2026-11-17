@@ -84,3 +84,23 @@ float MarksmanAIRules::GetHalfHeight(const FMarksmanConfig& Config, EOperativeSt
 	default: return Config.StandHalfHeight;
 	}
 }
+
+bool MarksmanAIRules::ShouldSwitchTarget(float CurrentDistanceCm, float CandidateDistanceCm,
+	float TargetHoldSeconds, float MinHoldSeconds, float HysteresisCm)
+{
+	if (CurrentDistanceCm >= TNumericLimits<float>::Max())
+	{
+		return true;
+	}
+	if (TargetHoldSeconds < MinHoldSeconds)
+	{
+		return false;
+	}
+	return CandidateDistanceCm < (CurrentDistanceCm - HysteresisCm);
+}
+
+bool MarksmanAIRules::IsOutsideDeadBand(float CurrentYawDeg, float TargetYawDeg, float DeadBandDeg)
+{
+	const float DeltaDeg = FMath::Abs(FRotator::NormalizeAxis(TargetYawDeg - CurrentYawDeg));
+	return DeltaDeg >= DeadBandDeg;
+}

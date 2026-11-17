@@ -1185,6 +1185,8 @@ protected:
 	float TurnSpeed = 8.f;
 	FVector SmoothedVelocity = FVector::ZeroVector;
 	bool bFacedThisTick = false;
+	/** Angular dead band for facing (deg): turns smaller than this are ignored to stop sub-degree micro-jitter. */
+	float FacingDeadBandDeg = 1.5f;
 	/** Godot position of a target: operatives at their centre, objects at their base. */
 	static FVector GodotPosition(const AActor* Actor);
 

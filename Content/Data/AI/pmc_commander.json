@@ -69,6 +69,8 @@
   "ambush_patience": 0.5,
   "kill_zone_frac": 0.6,
   "ambush_max_hold_s": 20,
+  "target_switch_hysteresis_cm": 200,
+  "facing_dead_band_deg": 1.5,
   "engagement_bands": {
     "m16": { "min_m": 25, "max_m": 60 },
     "sniper_rifle": { "min_m": 45, "max_m": 110 },

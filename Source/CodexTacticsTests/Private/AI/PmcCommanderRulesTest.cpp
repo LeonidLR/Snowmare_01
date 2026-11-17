@@ -451,6 +451,8 @@ bool FPmcCommanderEngagementBandTest::RunTest(const FString&)
 	TestEqual(TEXT("... standoff weight"), Shipped.Standoff, 1.3f, 0.001f);
 	TestEqual(TEXT("... completed order cooldown"), Shipped.CompletedOrderCooldownSeconds, 4.f, 0.001f);
 	TestEqual(TEXT("... cover interrupted cooldown"), Shipped.CoverInterruptedCooldownSeconds, 3.f, 0.001f);
+	TestEqual(TEXT("... target switch hysteresis cm"), Shipped.TargetSwitchHysteresisCm, 200.f, 0.001f);
+	TestEqual(TEXT("... facing dead band deg"), Shipped.FacingDeadBandDeg, 1.5f, 0.001f);
 
 	// CanReissueOrderAt tests (Cause A: no same order on the same spot).
 	TestFalse(TEXT("Cannot reissue FallBack on the same spot (within 250 cm)"),
@@ -476,6 +478,36 @@ bool FPmcCommanderEngagementBandTest::RunTest(const FString&)
 		TestTrue(TEXT("a new weapon row added"), Parsed.Bands.Contains(TEXT("bow")) && Parsed.Bands.FindRef(TEXT("bow")).bCloseQuarters);
 		TestFalse(TEXT("the comment is no band"), Parsed.Bands.Contains(TEXT("_comment")));
 	}
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderThreatHysteresisTest, "CodexTactics.AI.PmcCommander.ThreatHysteresis",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcCommanderThreatHysteresisTest::RunTest(const FString&)
+{
+	const float HysteresisCm = 200.f;
+
+	// No current threat (distance = max float): any candidate is accepted.
+	TestTrue(TEXT("No current threat -> always switch"),
+		PmcCommanderRules::ShouldSwitchThreat(TNumericLimits<float>::Max(), 1000.f, HysteresisCm));
+
+	// Candidate at equal distance: hysteresis prevents flapping.
+	TestFalse(TEXT("Equal distance -> do not switch"),
+		PmcCommanderRules::ShouldSwitchThreat(1000.f, 1000.f, HysteresisCm));
+
+	// Candidate closer by less than hysteresis (50 cm closer vs 200 cm threshold): do not switch.
+	TestFalse(TEXT("Candidate only 50 cm closer -> do not switch (within 200 cm hysteresis)"),
+		PmcCommanderRules::ShouldSwitchThreat(1000.f, 950.f, HysteresisCm));
+
+	// Candidate exactly on threshold boundary (200 cm closer): do not switch (strictly less).
+	TestFalse(TEXT("Candidate exactly 200 cm closer -> do not switch"),
+		PmcCommanderRules::ShouldSwitchThreat(1000.f, 800.f, HysteresisCm));
+
+	// Candidate significantly closer (250 cm closer > 200 cm hysteresis): switch!
+	TestTrue(TEXT("Candidate 250 cm closer -> switch to closer threat"),
+		PmcCommanderRules::ShouldSwitchThreat(1000.f, 750.f, HysteresisCm));
+
 	return true;
 }
 

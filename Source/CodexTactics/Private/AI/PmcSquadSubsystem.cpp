@@ -1276,6 +1276,8 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 	// The nearest known threat.
 	OutThreatActor = nullptr;
 	float BestDistance = TNumericLimits<float>::Max();
+	const AActor* CurrentPriority = Fighter.GetManualPriorityTarget();
+	const float ThreatHysteresis = Team.Weights.TargetSwitchHysteresisCm > 0.f ? Team.Weights.TargetSwitchHysteresisCm : 200.f;
 	for (const TPair<TWeakObjectPtr<AActor>, FKnownTarget>& Pair : Team.Known)
 	{
 		AActor* Actor = Pair.Value.Actor.Get();
@@ -1283,15 +1285,16 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		{
 			continue;
 		}
-		const float Distance = FVector::Dist2D(View.Location, Pair.Value.LastKnown);
-		if (Distance < BestDistance || (Distance == BestDistance && OutThreatActor
+		const float RealDistance = FVector::Dist2D(View.Location, Pair.Value.LastKnown);
+		const float EffectiveDistance = (Actor == CurrentPriority) ? FMath::Max(0.f, RealDistance - ThreatHysteresis) : RealDistance;
+		if (EffectiveDistance < BestDistance || (EffectiveDistance == BestDistance && OutThreatActor
 			&& PmcSquadLocal::StableActorId(Actor).Compare(PmcSquadLocal::StableActorId(OutThreatActor), ESearchCase::CaseSensitive) < 0))
 		{
-			BestDistance = Distance;
+			BestDistance = EffectiveDistance;
 			OutThreatActor = Actor;
 			View.bHasThreat = true;
 			View.Threat.Location = Pair.Value.LastKnown;
-			View.Threat.DistanceCm = Distance;
+			View.Threat.DistanceCm = RealDistance;
 			View.Threat.SecondsSince = static_cast<float>(Now - Pair.Value.LastSeenTime);
 			View.Threat.bSeenNow = Pair.Value.bSeenNow;
 		}

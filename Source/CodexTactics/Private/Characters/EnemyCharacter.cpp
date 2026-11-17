@@ -136,6 +136,13 @@ void AEnemyCharacter::Tick(float DeltaTime)
 
 void AEnemyCharacter::FaceYaw(float Yaw, float DeltaTime, float InterpSpeed)
 {
+	const float CurrentYaw = GetActorRotation().Yaw;
+	const float DeltaDeg = FMath::Abs(FRotator::NormalizeAxis(Yaw - CurrentYaw));
+	if (DeltaDeg < FacingDeadBandDeg)
+	{
+		bFacedThisTick = true;
+		return;
+	}
 	SetActorRotation(FMath::RInterpTo(GetActorRotation(), FRotator(0.f, Yaw, 0.f), DeltaTime, InterpSpeed));
 	bFacedThisTick = true;
 }
