@@ -19,6 +19,8 @@ First, in this order:
    the gate, the report, the FINISH line. Then wait for Claude in the chat:
    python "...\Scripts\Tools\agent_chat.py" wait --as grok --timeout 1800   (repeat on NO_MESSAGES)
 
+Model router: before each task / sub-part run python Scripts/Tools/model_router.py --classify "<task>" - level 1-2 -> your cheaper model,
+level 3-4 -> your main model (README "Model router"); log level | model | result in the report.
 Language: Russian in the chat and reports, English in code / comments / commits.
 At 10 % of your limit left: stop, commit, post the limit line (README "Limit rule"), wait for the reset.
 ```

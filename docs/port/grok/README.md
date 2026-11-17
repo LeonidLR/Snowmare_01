@@ -62,6 +62,14 @@ for you): `C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics`. Read 
 6. Stuck > 45 min on one point, or the build breaks in code you did not touch -> commit WIP, write the problem in the report + chat,
    ask Claude. Do not rewrite other systems to get unstuck. If a rule or task looks wrong, say so in ONE chat line and continue.
 
+## Model router (designer 2026-11-17 - ALWAYS)
+Before each task and each sub-part run `python Scripts/Tools/model_router.py --classify "<one-line task>"`. It returns a level 1-4
+(model-agnostic; ignore the Claude model names it prints):
+- level 1-2 (trivial / routine: data / JSON edits, renames, docs, logs, test boilerplate, small helpers, reading logs) -> your CHEAPER / faster
+  model (e.g. grok-code-fast or a mini model - say which one);
+- level 3-4 (C++ logic, diagnosis across systems, AI / movement / animation code) -> your main / strongest model.
+Log every sub-part in your report as `level | model | result (pass / redo)`. If the cheaper model's work has to be redone often, say so.
+
 ## Limit rule (designer)
 At 10 % of your token / quota limit LEFT: stop, commit (WIP ok), update the report, post ONE line
 `--topic grok-limit "limit 10%: <state>, last commit <hash>, next <step>, reset at <time>"`, then only wait until the limit resets.
