@@ -63,6 +63,7 @@
 | Боец немедленно открывает огонь по видимым целям после завершения маневра | Коммит `8bc495bc`, метод `PmcSquadSubsystem::RestoreCombatPosture` восстанавливает наведение и стрельбу |
 | Охотники продвигаются к поисковым stand-in точкам без застревания на 56 м | Коммит `c2a31901`, `PmcCommanderRules::ScoreOrder` игнорирует `Band.MaxCm` для `bStandIn` точек, смоук `PmcEncounterHuntSmoke` проходит 3/3 |
 | Точка захвата стабильно удерживается без флаппирования в укрытие вне точки | Коммит `6ed81fa2`, демпфирование `OnPointDamp = 0.0f` при захвате, смоук `PmcStalemateSmoke` проходит 3/3 |
+| Устранены замечания Opus Review по кулдаунам укрытия и пациенту Heal | Коммит `9bf6b866`, кулдаун накладывается на завершенный приказ вместо Hold, пациент сохраняется во время движения |
 | Все 16 модульных тестов PmcCommander проходят успешно | Команда `test.ps1 -Filter CodexTactics.AI.PmcCommander`, результат: 16 passed, 0 failed |
 | Смоук-тесты PmcStalemateSmoke стабильно зеленые 3/3 | Прогоны 1: 115.9s PASS, 2: 92.2s PASS, 3: 72.5s PASS |
 | Смоук-тесты PmcEncounterHuntSmoke стабильно зеленые 3/3 | Прогоны 1: 116.2s PASS, 2: 100.0s PASS, 3: 104.0s PASS |
@@ -80,6 +81,7 @@
 | `RpgPmcSmoke` x3 | 3/3 PASS (78.3s, 68.4s, 66.0s) |
 | `Pmc*` suite (10 дополнительных смоуков) | 10/10 PASS |
 | `typesafe_triage.py --audit-diff --agent gemini` | PASS |
+| Opus Review (`docs/port/gemini/outbox/077-opus-review.md`) | PASS (исправлен HIGH: кулдаун перенесен с Hold на завершенный приказ; сохранен активный пациент) |
 
 ## Что НЕ было сделано и почему
 
