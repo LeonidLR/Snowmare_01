@@ -38,6 +38,13 @@ public:
 	 */
 	static ADroppedItemActor* SpawnOrMerge(UWorld* World, const FVector& Point, ETransferItem Item, int32 Count);
 
+	/**
+	 * Spawns a NEW pile at Point (ground / navmesh snapped as SpawnOrMerge) holding every item of Items (count <= 0 skipped), never
+	 * merging into a pile already there (G003b: a level pile owns its actor, so clearing the level props never takes anyone's items).
+	 * Returns null when nothing was spawned.
+	 */
+	static ADroppedItemActor* SpawnFresh(UWorld* World, const FVector& Point, const TArray<TPair<ETransferItem, int32>>& Items);
+
 	/** Ground / navmesh point a pile dropped at Point lands on. */
 	static FVector FindGroundPoint(UWorld* World, const FVector& Point);
 

@@ -100,7 +100,10 @@ export function runAutogenProps(projectRoot?: string, targets = DEFAULT_TARGETS)
     fs.writeFileSync(outPath, canonicalJson, 'utf8');
 
     const totalProps = res.props.layers.reduce((sum, l) => sum + l.objects.length, 0);
-    console.log(`[autogen_props] Saved ${outPath} (${totalProps} props across ${res.props.layers.length} layers, fast gate: ${res.fastGateResult.gate})`);
+    console.log(`[autogen_props] Saved ${outPath} (${totalProps} props across ${res.props.layers.length} layers, fast gate: ${res.fastGateResult.gate}, left out by the static validator: ${res.droppedByValidator.length})`);
+    for (const issue of res.droppedByValidator) {
+      console.log(`[autogen_props]   left out ${issue.objectId} (${issue.layerId}): ${issue.reason}`);
+    }
   }
 }
 

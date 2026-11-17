@@ -10,6 +10,7 @@ import { PROPS_SCHEMA, validateProps } from './schema.ts';
 import { PropsLayoutView } from './layoutView.ts';
 import { applyOverrides, rerollAll } from './placement.ts';
 import { runFastGate, type FastGateResult } from './fastGate.ts';
+import { validateStatic, type PropsValidationIssue } from './validator.ts';
 import { mapNameFor } from '../node/buildPipeline.ts';
 
 export interface PropsAutogenLayerConfig {
@@ -63,6 +64,8 @@ export interface GeneratePropsOptions {
 export interface AutogenPropsResult {
   props: LevelPropsFile;
   fastGateResult: FastGateResult;
+  /** Objects the static validator left out (the game would drop them at load: PropsValidator.cpp). */
+  droppedByValidator: PropsValidationIssue[];
   areaM2: number;
   areaFactor: number;
 }
@@ -395,6 +398,18 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
     }
   }
 
+  // G003b: leave out what the game's static validator (FPropsValidator) would drop at load - e.g. a Depot crate kept from the
+  // source props that now overlaps a Depot cover, a mine inside a stair keep-out disk / a doorway corridor - so the TG shows what
+  // the game spawns. A mines / loot object attached to a dropped crate goes with it (the validator's pass 2).
+  const resolvedForCheck = applyOverrides(propsFile);
+  const staticCheck = validateStatic(view, resolvedForCheck.objects, resolvedForCheck.keepOuts, balance);
+  const droppedIds = new Set(staticCheck.dropped.map((r) => r.object.id));
+  if (droppedIds.size > 0) {
+    for (const l of propsFile.layers) {
+      l.objects = l.objects.filter((o) => !droppedIds.has(o.id));
+    }
+  }
+
   // Validation passes
   const errs = validateProps(propsFile);
   if (errs.length > 0) {
@@ -406,6 +421,7 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
   return {
     props: propsFile,
     fastGateResult,
+    droppedByValidator: staticCheck.issues,
     areaM2,
     areaFactor,
   };

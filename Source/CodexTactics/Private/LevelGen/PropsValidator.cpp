@@ -65,6 +65,34 @@ bool FPropsValidator::ValidateObjects(
 
 	TArray<FLevelPropsResolvedObject> ProvisionallyValid;
 	TSet<FString> ProvisionallyValidIds;
+	// The ladder / stair keep-out shapes depend only on the half size: built once per size (G003b: rebuilt per object they were
+	// most of the expanded maps' spawn time).
+	TMap<int32, TArray<FPropsExclusion>> LadderStairShapesByHalfSize;
+	const auto InLadderOrStairDisk = [&LayoutView, &LadderStairShapesByHalfSize](const FLevelPropsObject& Object, int32 HalfSize, FString& OutId)
+	{
+		TArray<FPropsExclusion>* Shapes = LadderStairShapesByHalfSize.Find(HalfSize);
+		if (!Shapes)
+		{
+			FPropsExclusionParams Params;
+			Params.LadderCm = 100 + FMath::Max(0, HalfSize);
+			Params.StairCm = 100 + FMath::Max(0, HalfSize);
+			TArray<FPropsExclusion> Built = LayoutView.BuildExclusions(Params);
+			Built.RemoveAll([](const FPropsExclusion& Exc)
+			{
+				return Exc.Kind != EPropsExclusionKind::LadderFoot && Exc.Kind != EPropsExclusionKind::LadderTop && Exc.Kind != EPropsExclusionKind::Stair;
+			});
+			Shapes = &LadderStairShapesByHalfSize.Add(HalfSize, MoveTemp(Built));
+		}
+		for (const FPropsExclusion& Exc : *Shapes)
+		{
+			if (Exc.Contains(Object.Pos, Object.WalkLayer))
+			{
+				OutId = Exc.SourceId;
+				return true;
+			}
+		}
+		return false;
+	};
 
 	// Pass 1: Spatial & Geometry Validation
 	for (const FLevelPropsResolvedObject& ResolvedObj : Objects)
@@ -103,7 +131,7 @@ bool FPropsValidator::ValidateObjects(
 			else
 			{
 				FString BlockingLadderId;
-				if (IsInLadderOrStairDisk(LayoutView, Obj, HalfSize, &BlockingLadderId))
+				if (InLadderOrStairDisk(Obj, HalfSize, BlockingLadderId))
 				{
 					FailReason = FString::Printf(TEXT("inside 100 cm keep-out disk of ladder/stair '%s'"), *BlockingLadderId);
 				}

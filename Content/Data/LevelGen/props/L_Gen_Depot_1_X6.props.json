@@ -118,14 +118,6 @@
 					"locked": false
 				},
 				{
-					"id": "crates_00000001_12",
-					"variant": "crate_s",
-					"pos": [5650, 7800],
-					"walk_layer": "ground",
-					"yaw": 180,
-					"locked": false
-				},
-				{
 					"id": "crates_00000001_13",
 					"variant": "crate_s",
 					"pos": [-1550, 6900],
@@ -318,27 +310,11 @@
 					"locked": false
 				},
 				{
-					"id": "crates_00000001_37",
-					"variant": "crate_s",
-					"pos": [2350, 8500],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false
-				},
-				{
 					"id": "crates_00000001_38",
 					"variant": "crate_l",
 					"pos": [4700, -5250],
 					"walk_layer": "ground",
 					"yaw": 270,
-					"locked": false
-				},
-				{
-					"id": "crates_00000001_39",
-					"variant": "crate_s",
-					"pos": [-5300, 1300],
-					"walk_layer": "ground",
-					"yaw": 0,
 					"locked": false
 				},
 				{
@@ -379,14 +355,6 @@
 					"pos": [-2200, 650],
 					"walk_layer": "ground",
 					"yaw": 180,
-					"locked": false
-				},
-				{
-					"id": "crates_00000001_45",
-					"variant": "crate_s",
-					"pos": [1300, -4850],
-					"walk_layer": "ground",
-					"yaw": 90,
 					"locked": false
 				},
 				{
@@ -1081,15 +1049,6 @@
 					"cluster": "barrels_00000001_1"
 				},
 				{
-					"id": "barrels_00000001_4",
-					"variant": "barrel_explosive",
-					"pos": [-1250, 6700],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"cluster": "barrels_00000001_4"
-				},
-				{
 					"id": "barrels_00000001_5",
 					"variant": "barrel_explosive",
 					"pos": [-1200, 6600],
@@ -1759,17 +1718,6 @@
 					"width_cm": 300
 				},
 				{
-					"id": "mines_00000001_8",
-					"variant": "mine_tripwire",
-					"pos": [14504, -7647],
-					"walk_layer": "ground",
-					"yaw": 90,
-					"locked": false,
-					"door": "B_x2_4_t8_hall#0",
-					"trigger": "tripwire",
-					"width_cm": 180
-				},
-				{
 					"id": "mines_00000001_9",
 					"variant": "mine_tripwire",
 					"pos": [7387, -6927],
@@ -1909,17 +1857,6 @@
 					"yaw": 0,
 					"locked": false,
 					"door": "B_x1_16_t7_block#0",
-					"trigger": "tripwire",
-					"width_cm": 180
-				},
-				{
-					"id": "mines_00000001_22",
-					"variant": "mine_tripwire",
-					"pos": [9412, 5095],
-					"walk_layer": "ground",
-					"yaw": 90,
-					"locked": false,
-					"door": "B_x1_6_4_t1003_block#0",
 					"trigger": "tripwire",
 					"width_cm": 180
 				},

@@ -33,8 +33,16 @@ export interface PropObject {
   covered_m?: number;
   width_cm?: number;
   z_offset?: number;
+  /** Level turret side (G003b, designer 2026-11-17); unset = props_balance.json gameplay.turrets rules. */
+  faction?: TurretFaction;
+  /** Level turret starts powered (active); unset = the map's powered share decides (default: inactive). */
+  powered?: boolean;
   [key: string]: unknown; // unknown keys preserved
 }
+
+/** Sides a level turret can be on (C++ ETurretFaction / PropsGameplayRules::ETurretSide). */
+export const TURRET_FACTIONS = ['hostile', 'neutral', 'friendly'] as const;
+export type TurretFaction = (typeof TURRET_FACTIONS)[number];
 
 /** Override operation: moving an existing object (also pins it). */
 export interface MoveOverride {
@@ -212,6 +220,8 @@ export interface LevelPropsFile {
   frozen: boolean;
   layers: PropLayer[];
   overrides?: PropOverride[];
+  /** Share of the map's turrets that start powered + hostile, 0..1 (default: props_balance.json gameplay.turrets.powered_share, 0.25). */
+  turret_powered_share?: number;
   [key: string]: unknown;
 }
 
@@ -248,6 +258,12 @@ export function validateProps(data: unknown): string[] {
   }
   if (typeof doc.frozen !== 'boolean') {
     errs.push('frozen: expected a boolean');
+  }
+  if (
+    doc.turret_powered_share !== undefined &&
+    (typeof doc.turret_powered_share !== 'number' || doc.turret_powered_share < 0 || doc.turret_powered_share > 1)
+  ) {
+    errs.push('turret_powered_share: expected a number in [0, 1]');
   }
 
   const allObjectIds = new Set<string>();
@@ -319,6 +335,14 @@ export function validateProps(data: unknown): string[] {
           }
           if (o.locked !== undefined && typeof o.locked !== 'boolean') {
             errs.push(`layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": locked must be a boolean`);
+          }
+          if (o.faction !== undefined && !TURRET_FACTIONS.includes(o.faction as TurretFaction)) {
+            errs.push(
+              `layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": faction must be one of ${TURRET_FACTIONS.join(', ')}`
+            );
+          }
+          if (o.powered !== undefined && typeof o.powered !== 'boolean') {
+            errs.push(`layer "${String(l.id ?? i)}" object "${String(o.id ?? j)}": powered must be a boolean`);
           }
         }
       }
