@@ -6,6 +6,11 @@
 // Checks: the map got its mantle links (none dropped by the links.max_total cap); up to MaxFences 135 cm fences whose way round is longer than
 // the mantle area's entering cost by links.entering_cost_cm: the fence carries a link; a ground click beyond it (the controller's
 // HandleWorldHit) makes the Solo leader mantle over it (high_fence_over) and arrive within the time limit.
+// B17-4 (designer 2026-11-17: "his body passes THROUGH the fence first, only then the vault clip plays"): on that fence four ways over it -
+// the ground click beyond (the path's link, walking), a double ground click beyond (the link, running), a double click on the fence's face
+// (the run climb order) and a click on its top (the walk climb order; skipped when the camera cannot hit the 10 cm top) - each time, before
+// the clip's hand plant neither the pelvis nor the capsule's centre is past the fence's near face plane, and at the plant the nearer hand is on
+// the fence's top (within align.hand_edge_tolerance_cm of the grip).
 
 #include "CoreMinimal.h"
 
@@ -34,6 +39,8 @@ namespace MantleFenceRouteSmoke
 	/** He stands this far off the fence's face; the goal lies this far past its far face. */
 	constexpr float StandOffCm = 150.f;
 	constexpr float GoalOffCm = 200.f;
+	/** B17-4: each way over the fence starts this much farther out than StandOffCm when that ground is navmesh (a natural approach), cm. */
+	constexpr float ExtraRunUpCm = 150.f;
 	/** Fences tried (one that qualifies is enough). */
 	constexpr int32 MaxFences = 6;
 	/** A fence order is over after this long, s. */
@@ -56,7 +63,35 @@ namespace MantleFenceRouteSmoke
 		MantleSmokeSites::FSite Site;
 		FVector Goal = FVector::ZeroVector;
 		TSet<const AActor*> Used;
+		/** B17-4: the way over the qualifying fence (EVariant) and the climb's frames. */
+		int32 Variant = 0;
+		bool bSampling = false;
+		bool bDumped = false;
+		TArray<MantleSmokeSites::FClimbSample> Samples;
+		FTSTicker::FDelegateHandle SampleTicker;
 	};
+
+	/** B17-4: the ways over the fence (the path's link walking / running, the climb order running / walking). */
+	enum EVariant : int32 { PathWalk, PathRun, FaceDoubleClick, TopClick, VariantCount };
+	const TCHAR* VariantName(int32 Variant)
+	{
+		switch (Variant)
+		{
+		case PathWalk: return TEXT("path link, walking (a ground click beyond)");
+		case PathRun: return TEXT("path link, running (a double ground click beyond)");
+		case FaceDoubleClick: return TEXT("run climb order (a double click on its face)");
+		default: return TEXT("walk climb order (a click on its top)");
+		}
+	}
+
+	bool Sample(TSharedRef<FState> State)
+	{
+		if (const AOperativeCharacter* Leader = State->Leader.Get(); Leader && State->bSampling)
+		{
+			State->Samples.Add(MantleSmokeSites::SampleClimb(*Leader));
+		}
+		return true;
+	}
 
 	void Check(FState& State, bool bOk, const FString& What)
 	{
@@ -66,6 +101,7 @@ namespace MantleFenceRouteSmoke
 
 	bool Finish(FState& State, bool bComplete)
 	{
+		FTSTicker::GetCoreTicker().RemoveTicker(State.SampleTicker);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke RESULT: %s"), State.Failures == 0 && bComplete ? TEXT("PASS") : TEXT("FAIL"));
 		FPlatformMisc::RequestExit(false, TEXT("MantleFenceRouteSmoke"));
 		return false;
@@ -80,6 +116,27 @@ namespace MantleFenceRouteSmoke
 	FVector FeetOf(const AOperativeCharacter& Leader)
 	{
 		return Leader.GetActorLocation() - FVector(0.f, 0.f, Leader.GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+	}
+
+	/** B17-4: the body before the clip's hand plant stays on the near side of the fence; at the plant the hands are on its top. */
+	void CheckNoPenetration(FState& State, AOperativeCharacter& Leader)
+	{
+		const FMantleConfig& Config = MantleRules::GetConfig();
+		if (!State.bDumped)
+		{
+			State.bDumped = true;
+			MantleSmokeSites::DumpClipTrack(Leader, Leader.GetLastMantleClipIndex(), TEXT("MantleFenceRouteSmoke"));
+		}
+		const MantleSmokeSites::FContactMeasure M = MantleSmokeSites::MeasureContact(State.Samples, Leader.GetMantleFacePoint(), Leader.GetMantleDir(),
+			Leader.GetMantleTopZ(), MantleSmokeSites::ClimbContactSeconds(Leader));
+		const float Radius = Leader.GetCapsuleComponent()->GetScaledCapsuleRadius();
+		Check(State, M.bValid && M.bFromClip && M.MaxPelvisFwdBeforeCm < 0.f && M.MaxCapsuleFwdBeforeCm < 0.f && M.HandGapCm <= Config.AlignHandEdgeToleranceCm,
+			FString::Printf(TEXT("%s, %s (%s): before the hand plant (%s %.2f s) the pelvis reaches %+.1f cm and the capsule's centre %+.1f cm past the fence's near face ")
+				TEXT("(< 0 = still in front; the capsule's front %+.1f cm); at the plant the nearer hand is %.1f cm from the grip on its top (%+.1f cm past the face, %+.1f cm over the top; ")
+				TEXT("tolerance %.0f); the clip started %.0f cm off the face"),
+				*GetNameSafe(State.Site.Actor.Get()), VariantName(State.Variant), *Leader.GetLastMantleClip(), M.bFromClip ? TEXT("the clip's plant at") : TEXT("NO plant -"),
+				M.Seconds, M.MaxPelvisFwdBeforeCm, M.MaxCapsuleFwdBeforeCm, M.MaxCapsuleFwdBeforeCm + Radius, M.HandGapCm, M.HandFwdCm, M.HandUpCm,
+				Config.AlignHandEdgeToleranceCm, M.StartFaceCm));
 	}
 
 	bool Step(TSharedRef<FState> State)
@@ -131,6 +188,9 @@ namespace MantleFenceRouteSmoke
 			Squad->EnterSoloMode();
 			Squad->SetFollowersHolding(true);
 			State->Leader->bTacticalCeaseFire = true;
+			// The pose ticks and the bones refresh as on screen (a headless game skips an unseen mesh's pose): the pelvis / hands vs the fence.
+			State->Leader->GetMesh()->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			State->SampleTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float) { return Sample(State); }));
 			int32 FenceLinks = 0;
 			for (const FMantleLink& Link : Mantle->GetLinks())
 			{
@@ -183,43 +243,115 @@ namespace MantleFenceRouteSmoke
 			++State->Tried;
 			Check(*State, Links > 0, FString::Printf(TEXT("%s (135 cm fence, way round %.0f cm): it carries mantle links (%d)"), *GetNameSafe(State->Site.Actor.Get()),
 				RoundCm >= TNumericLimits<float>::Max() ? -1.f : RoundCm, Links));
+			State->Variant = PathWalk;
+			Next(*State, 20);
+			return true;
+		}
+		case 20: // (each variant) back in front of the fence
+		{
 			Leader->StopOperative();
 			Leader->SetStance(EOperativeStance::Standing);
-			Leader->TeleportTo(State->Site.Feet + FVector(0.f, 0.f, Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 4.f), State->Site.Dir.Rotation(), false, true);
+			// B17-4: the variants walk up from farther out when the ground allows it (the vault's own start lies ~182 cm off the face: he reaches it
+			// on his way, as in play), else from the site's spot.
+			FVector Start = State->Site.Feet;
+			FNavLocation Back;
+			if (Nav->ProjectPointToNavigation(State->Site.Feet - State->Site.Dir * ExtraRunUpCm, Back, FVector(40.f, 40.f, 60.f))
+				&& FMath::Abs(Back.Location.Z - State->Site.Feet.Z) < 30.f)
+			{
+				Start = FVector(Back.Location.X, Back.Location.Y, State->Site.Feet.Z);
+			}
+			Leader->TeleportTo(Start + FVector(0.f, 0.f, Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 4.f), State->Site.Dir.Rotation(), false, true);
 			Next(*State, 2);
 			return true;
 		}
-		case 2: // settled: the ground click beyond the fence
+		case 2: // settled: the click(s) of the variant
 		{
 			if (State->StageTime < 1.f)
 			{
 				return true;
 			}
 			State->MantlesBefore = Leader->GetMantleCount();
+			const FMantleSite& Probe = State->Site.Probe;
 			FHitResult Hit;
-			if (!World->LineTraceSingleByChannel(Hit, State->Goal + FVector(0.f, 0.f, 150.f), State->Goal - FVector(0.f, 0.f, 150.f), ECC_Visibility))
+			bool bHit = false;
+			int32 Clicks = 1;
+			if (State->Variant == PathWalk || State->Variant == PathRun)
 			{
-				Next(*State, 1);
+				bHit = World->LineTraceSingleByChannel(Hit, State->Goal + FVector(0.f, 0.f, 150.f), State->Goal - FVector(0.f, 0.f, 150.f), ECC_Visibility);
+				Clicks = State->Variant == PathRun ? 2 : 1;
+			}
+			else
+			{
+				// The camera's ray through the fence's face (half height) / the middle of its top.
+				const bool bTop = State->Variant == TopClick;
+				const FVector Aim = bTop ? FVector(Probe.EdgeTop.X, Probe.EdgeTop.Y, Probe.TopZ) + Probe.Dir * (Probe.Probe.DepthCm * 0.5f)
+					: FVector(Probe.FacePoint.X, Probe.FacePoint.Y, State->Site.Feet.Z + Probe.Probe.HeightCm * 0.5f) - Probe.Dir * 1.f;
+				bHit = MantleSmokeSites::CameraRayHit(World, Aim, Hit) && Hit.GetActor() == State->Site.Actor.Get()
+					&& (bTop ? Hit.ImpactNormal.Z >= 0.7f : FMath::Abs(Hit.ImpactNormal.Z) < 0.3f);
+				Clicks = bTop ? 1 : 2;
+			}
+			if (!bHit)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[MantleFenceRouteSmoke] %s, %s: the click cannot hit it from this camera - skipped"), *GetNameSafe(State->Site.Actor.Get()),
+					VariantName(State->Variant));
+				Next(*State, 4);
 				return true;
 			}
-			PC->HandleWorldHit(Hit);
+			for (int32 Click = 0; Click < Clicks; ++Click)
+			{
+				PC->HandleWorldHit(Hit);
+			}
+			State->Samples.Reset();
+			State->bSampling = true;
 			Next(*State, 3);
 			return true;
 		}
 		case 3:
 		{
 			const FVector Feet = FeetOf(*Leader);
-			const bool bThere = FVector::Dist2D(Feet, State->Goal) <= ArriveRadiusCm && !Leader->IsMantling();
+			const bool bMantled = Leader->GetMantleCount() > State->MantlesBefore;
+			const bool bPath = State->Variant == PathWalk || State->Variant == PathRun;
+			const bool bThere = bPath ? FVector::Dist2D(Feet, State->Goal) <= ArriveRadiusCm && !Leader->IsMantling() : bMantled && !Leader->IsMantling();
 			if (!bThere && State->StageTime < ArriveLimitSeconds)
 			{
 				return true;
 			}
-			const bool bMantled = Leader->GetMantleCount() > State->MantlesBefore;
-			Check(*State, bThere && bMantled, FString::Printf(TEXT("%s: the click beyond it - %s, %s in %.1f s (%.0f cm off the goal)"),
-				*GetNameSafe(State->Site.Actor.Get()), bMantled ? *FString::Printf(TEXT("mantled over it (%s)"), *Leader->GetLastMantleClass().ToString()) : TEXT("NO mantle"),
-				bThere ? TEXT("arrived") : TEXT("NOT arrived"), State->StageTime, FVector::Dist2D(Feet, State->Goal)));
-			State->Passed += bThere && bMantled ? 1 : 0;
-			Next(*State, 1);
+			State->bSampling = false;
+			if (bPath)
+			{
+				Check(*State, bThere && bMantled, FString::Printf(TEXT("%s: the click beyond it (%s) - %s, %s in %.1f s (%.0f cm off the goal)"),
+					*GetNameSafe(State->Site.Actor.Get()), VariantName(State->Variant),
+					bMantled ? *FString::Printf(TEXT("mantled over it (%s)"), *Leader->GetLastMantleClass().ToString()) : TEXT("NO mantle"),
+					bThere ? TEXT("arrived") : TEXT("NOT arrived"), State->StageTime, FVector::Dist2D(Feet, State->Goal)));
+				State->Passed += State->Variant == PathWalk && bThere && bMantled ? 1 : 0;
+			}
+			else if (State->Variant == TopClick && !bMantled)
+			{
+				// A fence's 10 cm top is no top to climb onto (the controller's comment): only measured when the click does climb it.
+				UE_LOG(LogCodexTactics, Display, TEXT("[MantleFenceRouteSmoke] %s, %s: no climb (not a click order for a fence) - nothing to measure"),
+					*GetNameSafe(State->Site.Actor.Get()), VariantName(State->Variant));
+			}
+			else
+			{
+				Check(*State, bMantled && Leader->GetLastMantleClass() == FName(TEXT("high_fence_over")), FString::Printf(TEXT("%s: the %s climbs over it (%s, %s)"),
+					*GetNameSafe(State->Site.Actor.Get()), VariantName(State->Variant), bMantled ? *Leader->GetLastMantleClip() : TEXT("NO climb"),
+					*Leader->GetLastMantleClass().ToString()));
+			}
+			if (bMantled && Leader->GetLastMantleClass() == FName(TEXT("high_fence_over")))
+			{
+				CheckNoPenetration(*State, *Leader);
+			}
+			Next(*State, 4);
+			return true;
+		}
+		case 4: // the next variant on the same fence (the first one failing: the next fence)
+		{
+			if (Leader->IsMantling() && State->StageTime < 6.f)
+			{
+				return true;
+			}
+			++State->Variant;
+			Next(*State, State->Variant < VariantCount && State->Passed > 0 ? 20 : 1);
 			return true;
 		}
 		default:

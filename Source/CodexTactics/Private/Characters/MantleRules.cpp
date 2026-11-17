@@ -166,7 +166,7 @@ FMantleConfig MantleRules::MakeDefaultConfig()
 		MakeMantleClip(TEXT("tall_ledge"), R, M, TEXT("RunJumpClimbNEW"), 2.2f, 258.8f, 493.5f),
 		MakeMantleClip(TEXT("very_tall"), S, M, TEXT("JumpClimb"), 6.533f, 334.4f, 69.1f),
 		MakeMantleClip(TEXT("very_tall"), R, M, TEXT("RunJumpClimb"), 3.083f, 334.1f, 432.2f),
-		MakeMantleClip(TEXT("high_fence_over"), S, M, TEXT("HighFenceVault"), 2.1f, 148.7f, 344.2f, 110.f),
+		MakeMantleClip(TEXT("high_fence_over"), S, M, TEXT("HighFenceVault"), 2.1f, 148.7f, 344.2f, 182.f),
 		MakeMantleClip(TEXT("low_mantle"), S, F, TEXT("Low_Climb"), 1.017f, 80.1f, 113.9f),
 		MakeMantleClip(TEXT("low_mantle"), R, F, TEXT("RunLowClimb"), 0.9f, 94.4f, 151.3f),
 		MakeMantleClip(TEXT("high_mantle"), S, F, TEXT("HighClimb"), 1.033f, 136.7f, 164.f),
@@ -176,7 +176,7 @@ FMantleConfig MantleRules::MakeDefaultConfig()
 		MakeMantleClip(TEXT("tall_ledge"), R, F, TEXT("RunJumpClimbNEW"), 2.2f, 248.1f, 473.f),
 		MakeMantleClip(TEXT("very_tall"), S, F, TEXT("JumpClimb"), 6.533f, 320.5f, 66.2f),
 		MakeMantleClip(TEXT("very_tall"), R, F, TEXT("RunJumpClimb"), 3.083f, 320.2f, 414.3f),
-		MakeMantleClip(TEXT("high_fence_over"), S, F, TEXT("HighFenceVault"), 2.1f, 142.5f, 329.9f, 110.f),
+		MakeMantleClip(TEXT("high_fence_over"), S, F, TEXT("HighFenceVault"), 2.1f, 142.5f, 329.9f, 174.f),
 	};
 	return Config;
 }

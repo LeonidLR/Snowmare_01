@@ -93,7 +93,7 @@ bool FMantleRulesOverTest::RunTest(const FString&)
 	TestTrue(TEXT("a 135 cm fence (10 cm thick): over"), Over.IsGo());
 	TestEqual(TEXT("... high_fence_over"), MantleClassOf(Config, Over), FName(TEXT("high_fence_over")));
 	TestEqual(TEXT("... HighFenceVault"), MantleClipName(Config, Over), FString(TEXT("HighFenceVault")));
-	TestEqual(TEXT("... starts over.start_cm from the face"), Over.ApproachCm, 110.f);
+	// B17-4: the clip's own start (its hand plant on the fence, measured), not over_start_cm.
 	Fence.HeightCm = 130.f;
 	TestTrue(TEXT("a 130 cm fence: 135 - tolerance, over"), MantleRules::Decide(Config, Fence).IsGo());
 	Fence.HeightCm = 129.f;

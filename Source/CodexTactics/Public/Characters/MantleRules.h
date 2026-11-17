@@ -354,6 +354,9 @@ struct FMantleClickPlan
 	FVector Landing = FVector::ZeroVector;
 	bool bTop = true;
 	float HeightCm = 0.f;
+	/** Batch 2: the climbed face (a point on it at knee height) and the clip's start distance from it (FMantleDecision::ApproachCm), cm. */
+	FVector FacePoint = FVector::ZeroVector;
+	float ApproachCm = 0.f;
 	/** The obstacle's top as clicked (a face click: the top just inside the face). */
 	FHitResult TopHit;
 	const class AActor* Obstacle = nullptr;
