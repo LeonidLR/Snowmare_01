@@ -1,4 +1,4 @@
-﻿# Доска задач CodexTactics
+# Доска задач CodexTactics
 
 Обновлено: 2026-11-16 (Codex 032, сверка main `4d069017`; 27 merge-коммитов после `2cbdecda`, поздние изменения исключены). **Сверка 2026-11-11 (Gemini 79e28bf7): [board-reconcile.report.md](gemini/outbox/board-reconcile.report.md) — 52 строки: 27 сделано, 14 частично, 10 открыто, 1 устарело + 17 работ, которых нет на доске. Влит субботний пакет 664d78b2 (задачи 027–033, 036, фикс 354a3143; Codex 004 WIP 50de2e98 исключён).** Статусы: ✅ сделано · 🔄 идёт · ⏳ в очереди · 📝 у Gemini (план `GEMINI_WEEKEND_2026-11.md`) · ❌ отменено.
 Исполнители: **Fable** = Claude Fable 5.1 (архитектура), **Opus** = Claude Opus 5.5, **Sonnet** = Claude Sonnet 5.5, **Gemini** = Google Antigravity, **Тренер** = ночной тренер (без моделей), **Вы** = пользователь.
