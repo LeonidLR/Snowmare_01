@@ -86,6 +86,8 @@ namespace FormationTuning
 		{ TEXT("look.narrow_penalty"), &FFormationConfig::LookNarrowPenalty },
 		{ TEXT("look.over_shoulder_max_deg"), &FFormationConfig::LookOverShoulderMaxDeg },
 		{ TEXT("look.anticipate_s"), &FFormationConfig::LookAnticipateS },
+		{ TEXT("look.big_jump_deg"), &FFormationConfig::LookBigJumpDeg },
+		{ TEXT("look.big_hold_s"), &FFormationConfig::LookBigHoldS },
 		{ TEXT("guard.clearance"), &FFormationConfig::GuardClearance },
 		{ TEXT("guard.lookahead"), &FFormationConfig::GuardLookahead },
 		{ TEXT("turn.fold_deg"), &FFormationConfig::TurnFoldDeg },

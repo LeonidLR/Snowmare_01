@@ -29,18 +29,75 @@ bool FFormationLookFilterTest::RunTest(const FString&)
 		Worst = FMath::Max(Worst, FMath::Abs(FMath::FindDeltaAngleDegrees(-59.f, Applied)));
 	}
 	TestTrue(FString::Printf(TEXT("a flip every frame never reaches the body (worst %.1f deg off)"), Worst), Worst <= DefaultJumpDeg);
-	// A real change (the formation turned round): taken once it has held 0.15 s.
+	// A medium change (89 deg, under the big-jump threshold): taken once it has held 0.15 s.
 	float Applied = 0.f;
 	int32 Frames = 0;
 	do
 	{
-		Applied = Step(Filter, TOptional<float>(150.f), Dt).Get(0.f);
+		Applied = Step(Filter, TOptional<float>(30.f), Dt).Get(0.f);
 		++Frames;
-	} while (!FMath::IsNearlyEqual(Applied, 150.f) && Frames < 100);
-	TestTrue(FString::Printf(TEXT("a lasting jump is taken after ~0.15 s (%d frames)"), Frames), Frames >= 8 && Frames <= 11);
+	} while (!FMath::IsNearlyEqual(Applied, 30.f) && Frames < 100);
+	TestTrue(FString::Printf(TEXT("a lasting medium jump is taken after ~0.15 s (%d frames)"), Frames), Frames >= 8 && Frames <= 11);
 	// The short way round +-180.
+	Filter = FFormationLookFilter();
+	Step(Filter, TOptional<float>(150.f), Dt);
 	TestEqual(TEXT("150 -> -178: 32 deg the short way round, at once"), Step(Filter, TOptional<float>(-178.f), Dt).Get(0.f), -178.f);
 	TestFalse(TEXT("the look cleared: none at once"), Step(Filter, TOptional<float>(), Dt).IsSet());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFormationLookFilterBigJumpTest, "CodexTactics.Formation.LookFilter.BigJump",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FFormationLookFilterBigJumpTest::RunTest(const FString&)
+{
+	using namespace FormationLookFilterRules;
+	constexpr float Dt = 1.f / 60.f;
+	{
+		// The recorded Medic limit cycle: ~95 <-> -130 deg every ~0.3 s is never taken.
+		FFormationLookFilter Filter;
+		Step(Filter, TOptional<float>(95.f), Dt);
+		float Worst = 0.f;
+		for (int32 Frame = 0; Frame < 600; ++Frame)
+		{
+			const bool bFar = (Frame / 18) % 2 == 0;
+			const float Applied = Step(Filter, TOptional<float>(bFar ? -130.f : 95.f), Dt).Get(0.f);
+			Worst = FMath::Max(Worst, FMath::Abs(FMath::FindDeltaAngleDegrees(95.f, Applied)));
+		}
+		TestTrue(FString::Printf(TEXT("a 0.3 s flip-flop never reaches the body (worst %.1f deg off)"), Worst), Worst < 1.f);
+	}
+	{
+		// A stable new look is taken after the big hold; a jump straight back right after is rejected.
+		FFormationLookFilter Filter;
+		Step(Filter, TOptional<float>(95.f), Dt);
+		float Applied = 95.f;
+		int32 Frames = 0;
+		while (!FMath::IsNearlyEqual(Applied, -130.f) && Frames < 200)
+		{
+			Applied = Step(Filter, TOptional<float>(-130.f), Dt).Get(0.f);
+			++Frames;
+		}
+		TestTrue(FString::Printf(TEXT("a stable big jump is taken after ~0.6 s (%d frames)"), Frames), Frames >= 35 && Frames <= 38);
+		for (int32 Frame = 0; Frame < 30; ++Frame)
+		{
+			Applied = Step(Filter, TOptional<float>(95.f), Dt).Get(0.f);
+		}
+		TestEqual(TEXT("a jump straight back within the hold is rejected"), Applied, -130.f);
+	}
+	{
+		// Small and medium changes are unchanged: 30 deg at once, 90 deg after 0.15 s.
+		FFormationLookFilter Filter;
+		Step(Filter, TOptional<float>(0.f), Dt);
+		TestEqual(TEXT("a 30 deg change passes at once"), Step(Filter, TOptional<float>(30.f), Dt).Get(0.f), 30.f);
+		int32 Frames = 0;
+		float Applied = 30.f;
+		while (!FMath::IsNearlyEqual(Applied, 120.f) && Frames < 200)
+		{
+			Applied = Step(Filter, TOptional<float>(120.f), Dt).Get(0.f);
+			++Frames;
+		}
+		TestTrue(FString::Printf(TEXT("a 90 deg change keeps the 0.15 s hold (%d frames)"), Frames), Frames >= 8 && Frames <= 11);
+	}
 	return true;
 }
 

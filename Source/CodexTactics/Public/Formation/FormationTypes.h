@@ -267,6 +267,10 @@ struct CODEXTACTICS_API FFormationConfig
 	float LookOverShoulderMaxDeg = 110.f;
 	/** [look.anticipate_s] v2.3 part 8 (user Q4 = b): ClearLook also sees the walls from where he will be this far ahead (0 = off), s. */
 	float LookAnticipateS = 0.5f;
+	/** [look.big_jump_deg] A formation look change of at least this is a big jump: held look.big_hold_s before the body takes it, deg. */
+	float LookBigJumpDeg = 120.f;
+	/** [look.big_hold_s] A big look jump must hold this long, and a jump straight back to the previous look within it is rejected, s. */
+	float LookBigHoldS = 0.6f;
 	/** [guard.clearance] v2.1: a slot is cut off when the leader -> slot / chain segment passes closer than this to a wall body, cm. */
 	float GuardClearance = 10.f;
 	/** [guard.lookahead] v2.1: the guard also checks the formation at the leader's pose this far ahead on his path (0 = only here), cm. */
