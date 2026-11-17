@@ -230,6 +230,7 @@ One line per trap; the full rows (with consequences and exact commands) are in [
 - **Holding a montage on its last frame:** clear `bEnableAutoBlendOut` on the running instance, not on the montage asset. [TRAPS.md](TRAPS.md), [animation-setup](../systems/animation-setup.md)
 - **Blend spaces made by script** need `ValidateSampleData` + `ResampleData`, else the player outputs the reference pose (T-pose) with no error. [TRAPS.md](TRAPS.md), [animation-setup](../systems/animation-setup.md)
 - **Two agents, one checkout:** set `$env:CODEX_AGENT` (claude / gemini); every build / test / smoke / verify_all takes `Saved/agent.lock` (`Scripts/agent_lock.ps1 -Status`). [TRAPS.md](TRAPS.md), `TANDEM.md`
+- **Second machine `codex-worker` (2026-11-17):** GTX 1080 / i7-6700K worker reached over Tailscale + SSH key (`ssh codex-worker`); never compiles - `Scripts/Tools/worker_sync.ps1` updates its checkout to `origin/main`, copies `Binaries/Win64` built here and runs a smoke batch there, results back in `Saved/Logs/Worker/`. Setup, traps, re-install steps: [SECOND_MACHINE.md](SECOND_MACHINE.md).
 
 ## 3. How to work, build, test, verify
 
