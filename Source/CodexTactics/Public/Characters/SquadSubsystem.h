@@ -451,6 +451,22 @@ public:
 	 */
 	bool OrderSquadMantle(const TArray<AOperativeCharacter*>& Group, const FHitResult& Hit, bool bRun, FString* OutWhy = nullptr);
 
+	/** R17-3: one follower's place in the group climb ghost - his lane's top click (for his own PlanMantleClick) and its base. */
+	struct FSquadMantlePreviewLane
+	{
+		AOperativeCharacter* Operative = nullptr;
+		FHitResult LaneHit;
+		FVector Base = FVector::ZeroVector;
+	};
+
+	/**
+	 * R17-3 (designer 2026-11-17: the first click on an obstacle shows the GROUP climb ghost - who climbs in which lane): the lanes
+	 * OrderSquadMantle(Group, Hit) would give Group[1..] (the same MakeSquadMantleLanes candidates, each checked with that man's own clip from
+	 * its base, landings apart - IsSquadMantleLaneFor), without ordering anything or touching a running climb. A man with no lane is left out
+	 * (he would hold at the base). False: no group climb there (fewer than two, the leader cannot climb it, Codex.Mantle.Squad 0).
+	 */
+	bool PreviewSquadMantle(const TArray<AOperativeCharacter*>& Group, const FHitResult& Hit, TArray<FSquadMantlePreviewLane>& OutLanes);
+
 	/**
 	 * A path climb (a mantle link on his own order's path) by Climber just started: his group (GetSquadMantleGroup) lines up behind him. True =
 	 * he holds over there (AOperativeCharacter::StartMantle keeps him at the landing); the squad walks him on to ResumeTarget when the climb ends (all over or
@@ -631,6 +647,14 @@ public:
 	 * again, standing up). False (nothing ordered) when the layout cannot be made (no wall behind the slot, more than 4 members).
 	 */
 	bool OrderFormationWall(AOperativeCharacter* Direct, const TArray<AOperativeCharacter*>& Others, const FCoverSlot& Slot);
+
+	/**
+	 * R17-3 (designer 2026-11-17: "in formation the ghost shows the WHOLE group"): the wall layout OrderFormationWall(Direct, Others, Slot) would
+	 * make - the same FormationWallRules layout and the same minimal-travel roles - without ordering anything or changing the formation's state.
+	 * OutPlaces = every member's place (Direct, the Commander, first). False when OrderFormationWall would refuse.
+	 */
+	bool PreviewFormationWall(AOperativeCharacter* Direct, const TArray<AOperativeCharacter*>& Others, const FCoverSlot& Slot,
+		TArray<TPair<AOperativeCharacter*, FFormationSlot>>& OutPlaces);
 
 	/**
 	 * User decision 2026-10-26 (group cover in combat): the group-mode wall layout ordered in the TACTICAL PAUSE - Direct's walk to Slot is

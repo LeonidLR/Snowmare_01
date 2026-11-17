@@ -13,6 +13,10 @@
 #include "Tactics/CoverTypes.h"
 #include "Tactics/RunCornerPeekRules.h"
 #include "Tactics/CoverWrapRules.h"
+#include "Tactics/ClickPreviewRules.h"
+#include "Tactics/DoorwayBreachEntryRules.h"
+#include "Tactics/DoorwayBreachRules.h"
+#include "Tactics/GroupCoverRules.h"
 #include "UI/FormationMenuInputRules.h"
 #include "UI/FormationPlacementRules.h"
 #include "CodexTacticsPlayerController.generated.h"
@@ -257,6 +261,80 @@ public:
 
 	/** Everything a left click on the world does once the modes above had their say (select, move, interact, ...). */
 	void HandleWorldHit(const FHitResult& InHit);
+
+	// --- R17-3 unified building click (designer 2026-11-17; ClickPreviewRules, CodexTacticsPlayerControllerClickPreview.cpp) ---
+
+	/**
+	 * The left click's entry (OnClickReleased; smokes call it with their own hit): in every mode (Solo, a box selection, Formation) the FIRST
+	 * click on a wall / corner / obstacle top / doorway opening shows the ghost that fits it (all the members who go along), the cursor moving
+	 * over the same building moves it (TickClickPreview), the SECOND click on that building carries it out, a click elsewhere drops it and is
+	 * the ordinary click (HandleWorldHit); a double click on an obstacle runs there and climbs. Codex.Click.Preview 0: HandleWorldHit at once.
+	 */
+	void HandlePlayerClick(const FHitResult& Hit);
+
+	/**
+	 * The cursor while a click ghost is up (PlayerTick feeds the real cursor; smokes their own hit with bFreezeClickPreviewForTesting): over the
+	 * previewed building the ghost follows it (along the wall; the corner's peek; the obstacle's top); elsewhere it stays. Null = no hit.
+	 */
+	void TickClickPreview(const FHitResult* CursorHit);
+
+	/** The click ghost is still valid (the leader it was armed for is the leader, no turn-based fight / dialogue); else it goes. False: no ghost. */
+	bool TickClickPreviewValidity();
+
+	/** Drops the click ghost (all its silhouettes) and its building. */
+	void CancelClickPreview(const TCHAR* Why);
+
+	/** Codex.Click.Preview is on (1, the default). */
+	static bool IsClickPreviewEnabled();
+
+	/** The click ghost is up and what it shows (smokes / HUD). */
+	bool IsClickPreviewArmed() const { return ClickPreviewKind != EClickPreviewKind::None; }
+	EClickPreviewKind GetClickPreviewKind() const { return ClickPreviewKind; }
+
+	/** Silhouettes the click ghost shows now: the leader's (cover / peek / climb ghost) + every other member's + the breach stack's (smokes). */
+	int32 GetClickPreviewGhostCount() const;
+
+	/** The other members' silhouettes of the click ghost (smokes: who stands where). */
+	TArray<const class ACoverGhostActor*> GetClickPreviewGroupGhosts() const;
+
+	/** The meaning a click on Hit would have now (smokes / the wall sweep: R17-3 "it works on some buildings only"), with why when none. */
+	EClickPreviewKind ClassifyClickPreview(const FHitResult& Hit, FString* OutWhy = nullptr);
+
+	/**
+	 * R17-3: a cursor hit high on a wall face (above the operative's chest; a tall / two-storey building seen from the camera) is the same face
+	 * at his chest height - traced again there (ClickPreviewRules::ShouldLowerWallHit / IsSameFaceLower). Every other hit stays as it is.
+	 */
+	FHitResult LowerBuildingHit(const FHitResult& Hit) const;
+
+	/** Smokes: PlayerTick does not feed the real cursor to the click ghost (the smoke calls TickClickPreview). */
+	bool bFreezeClickPreviewForTesting = false;
+	/**
+	 * Smokes (R17-3 "hovering shows nothing"): PlayerTick's hover block takes SimulatedCursorHitForTesting as the cursor's hit (the headless game
+	 * has no cursor) - the real hover path, not a direct call of a hover function.
+	 */
+	bool bSimulateCursorForTesting = false;
+	FHitResult SimulatedCursorHitForTesting;
+	/** The cursor's hit for PlayerTick's hover block (the simulated one in smokes). */
+	bool CursorHitForHover(FHitResult& OutHit) const;
+
+	// --- R17-5 doorway breach (designer 2026-11-17 with R17-3; DOORWAY_BREACH.md, CodexTacticsPlayerControllerBreach.cpp) ---
+
+	/** The breach session's phase: none, the stack walking to its slots, stacked (a click inside the room enters), entering, cleared. */
+	enum class EBreachPhase : uint8 { None, Stacking, Stacked, Entering, Cleared };
+	EBreachPhase GetBreachPhase() const { return Breach.Phase; }
+	/** The breach session's participants and how many stand at their slots / have finished their entry move (smokes). */
+	int32 GetBreachParticipantCount() const { return Breach.Members.Num(); }
+	/** Rooms cleared so far, and how many took part in the last one (the cleared room ends the session at once: smokes). */
+	int32 GetBreachClearedCount() const { return BreachClearedCount; }
+	int32 GetLastBreachParticipantCount() const { return LastBreachParticipantCount; }
+	int32 GetBreachArrivedCount() const;
+	int32 GetBreachEnteredCount() const;
+	/** The doorway of the session / the preview (smokes). */
+	const FString& GetBreachDoorwayId() const { return Breach.DoorwayId; }
+	/** The breach ghost (smokes): how many silhouettes it shows. */
+	int32 GetBreachGhostCount() const;
+	/** One tick of the breach session (PlayerTick). */
+	void TickBreach(float DeltaSeconds);
 
 	// --- Tactical cover (Sprint 12) ---
 
@@ -1070,6 +1148,143 @@ private:
 	double RunPeekClickTime = -1.0;
 	FVector2D RunPeekClickPosition = FVector2D::ZeroVector;
 	FVector RunPeekClickEdge = FVector::ZeroVector;
+	/** R17-3: the click ghost's second click was a double click - the run-and-peek runs at a sprint (TryHandleRunCornerPeekClick). */
+	bool bClickPreviewSprint = false;
+
+	// --- R17-3 click ghost state (CodexTacticsPlayerControllerClickPreview.cpp) ---
+
+	/** What the click ghost shows (None: no ghost). */
+	EClickPreviewKind ClickPreviewKind = EClickPreviewKind::None;
+	/** The building the ghost was shown on (its pieces). */
+	FClickPreviewStructure ClickPreviewStructure;
+	/** The hit the ghost shows now (the cursor's last hit on the building). */
+	FHitResult ClickPreviewHit;
+	/** The operative the ghost was armed for (another selection drops it). */
+	TWeakObjectPtr<AOperativeCharacter> ClickPreviewLeader;
+	/** The arming click (double click) and the last re-plan (real time). */
+	double ClickPreviewArmTime = -1.0;
+	FVector2D ClickPreviewArmMouse = FVector2D::ZeroVector;
+	double ClickPreviewTrackTime = -1.0;
+	/** The cursor spot last tried (a spot with nothing to show is not tried again while the cursor rests). */
+	FVector ClickPreviewTriedAt = FVector::ZeroVector;
+	/** Where / for what the members' silhouettes were last planned (re-planned once the leader's ghost moved on). */
+	FVector ClickPreviewGroupAt = FVector::ZeroVector;
+	EClickPreviewKind ClickPreviewGroupKind = EClickPreviewKind::None;
+	/** The cover ghost is the cover order's own preview (ConfirmCoverPreview); false: a shimmy / a wrap, carried out by HandleWorldHit. */
+	bool bClickPreviewCoverConfirm = false;
+	/** ShowCoverPreview's feed line only on the arming click (not for every step of the cursor). */
+	bool bQuietCoverPreview = false;
+	/** The other members' silhouettes (pooled). */
+	UPROPERTY(Transient)
+	TArray<TObjectPtr<class ACoverGhostActor>> GroupPreviewGhosts;
+	int32 GroupPreviewShown = 0;
+	/** Renders the ghost for Hit (classify + show); returns its kind (None: every ghost hidden). */
+	EClickPreviewKind UpdateClickPreviewAt(const FHitResult& Hit, FString* OutWhy = nullptr);
+	/** The cover slot a click on Hit previews (after the peeks), as TryHandleCoverClick finds it; bConfirm: the cover order's own preview. */
+	bool ResolveClickCoverSlot(AOperativeCharacter& Leader, const FHitResult& Hit, FCoverSlot& OutSlot, bool& bOutConfirm) const;
+	/** The silhouettes of the others going along with the shown ghost (formation wall layout, group cover, corner stack). */
+	void ShowGroupGhostsForCover(AOperativeCharacter& Leader, const FCoverSlot& Slot);
+	void ShowGroupGhostsForPeek(AOperativeCharacter& Leader, const FHitResult& Hit);
+	/** R17-1 + R17-3: the group climb ghost - every other climber posed on his own lane (USquadSubsystem::PreviewSquadMantle). */
+	void ShowGroupGhostsForMantle(AOperativeCharacter& Leader, const FHitResult& Hit);
+	/** Shows Member's silhouette at Slot (the pool's next ghost); bPeek: the corner-aim pose of Side. */
+	void ShowGroupGhost(AOperativeCharacter& Member, const FCoverSlot& Slot, bool bPeek = false, ECoverFacing Side = ECoverFacing::Right);
+	void HideGroupGhosts();
+	/** OrderGroupCover's places (split out for the click ghost): the direct order's slot, the probed / chosen slots, prone spots, who takes what. */
+	struct FGroupCoverPlacePlan
+	{
+		FCoverSlot DirectSlot;
+		TArray<float> Free;
+		TArray<float> Chosen;
+		TMap<int32, FCoverSlot> ProbeSlots;
+		TArray<FCoverSlot> ChosenSlots;
+		TArray<FVector> ProneSpots;
+		TArray<FGroupCoverAssignment> Plan;
+		int32 Probes = 0;
+		int32 NearbyCount = 0;
+		FVector2D Span = FVector2D::ZeroVector;
+		FVector Normal = FVector::ForwardVector;
+	};
+	/** The group cover order's placement for Direct at Slot with Others (no order given). */
+	bool PlanGroupCoverPlaces(AOperativeCharacter* Direct, const FCoverSlot& Slot, const TArray<AOperativeCharacter*>& Others, bool bLeaderSwitch,
+		const FCoverWrapPlan* LeaderWrap, FGroupCoverPlacePlan& Out) const;
+	/** The other members' places of the formation wall layout at Slot (USquadSubsystem::PreviewFormationWall), as cover slots on its face. */
+	bool GroupWallLayoutSlots(AOperativeCharacter& Leader, const TArray<AOperativeCharacter*>& Others, const FCoverSlot& Slot,
+		TArray<TPair<AOperativeCharacter*, FCoverSlot>>& OutPlaces, FCoverSlot* OutLeaderSlot) const;
+	/** Carries out the ghost (the second click). */
+	void ExecuteClickPreview(const FHitResult& Hit, bool bDoubleClick);
+	/** The piece of a structure under a hit. */
+	static FClickPreviewPiece MakeClickPiece(const FHitResult& Hit);
+	/** The click is one of the ordinary click's own cases (no building meaning: modifiers, turn-based, locks, a vehicle, UI picks). */
+	bool IsClickPreviewBypass(const FHitResult& Hit) const;
+	/** The shown leader ghost's feet (a click there = on the ghost). */
+	bool GetClickPreviewGhostFeet(FVector& OutFeet) const;
+
+	// --- R17-5 doorway breach (CodexTacticsPlayerControllerBreach.cpp) ---
+
+	/** The breach ghost / order for a hit: the doorway, its slots and who takes which. */
+	struct FBreachPlan
+	{
+		FString DoorwayId;
+		FVector Center = FVector::ZeroVector;
+		FVector Outward = FVector::ForwardVector;
+		FVector Tangent = FVector::RightVector;
+		float WidthCm = 0.f;
+		FDoorwayBreachTriad Triad;
+		TArray<AOperativeCharacter*> Members;
+		TArray<FDoorwaySlotAssignment> Assignments;
+	};
+	/** A click on Hit means a doorway's opening (FindDoorwayAtCursor / the cursor's ray through the portal): the plan for the current selection. */
+	bool FindBreachForHit(const FHitResult& Hit, FBreachPlan& OutPlan, const FBreachPlan* Cached = nullptr) const;
+	/** Shows / hides the breach stack ghost. */
+	void ShowBreachGhost(const FBreachPlan& Plan);
+	void HideBreachGhost();
+	/** The second click: the stack walks to its slots (jambs: the run-and-peek into the jamb's corner; centre / rear: a move, held there). */
+	bool OrderBreach(const FBreachPlan& Plan, bool bSprint);
+	/** A click inside the room of a stacked breach: the entry (DoorwayBreachEntryRules::PlanEntry). True when taken. */
+	bool TryBreachEntryClick(const FHitResult& Hit);
+	/** The hit a click on a stacked breach means: on a stack member's body (leaning into the frame) the same ray past the stack's bodies. */
+	FHitResult BreachEntryHit(const FHitResult& Hit) const;
+	/** Ends the breach session (hold restored). */
+	void EndBreach(const TCHAR* Why);
+	/** The preview's plan (the ghost shows it; the second click orders it). */
+	FBreachPlan BreachPreview;
+	bool bBreachPreview = false;
+	UPROPERTY(Transient)
+	TObjectPtr<class ADoorwayBreachGhostActor> BreachGhost;
+	/** The running breach. */
+	struct FBreachMember
+	{
+		TWeakObjectPtr<AOperativeCharacter> Operative;
+		FDoorwayBreachSlot Slot;
+		FVector Target = FVector::ZeroVector;
+		bool bArrived = false;
+		bool bEntryStarted = false;
+		bool bEntered = false;
+		FDoorwayBreachEntryMove Entry;
+	};
+	struct FBreachSession
+	{
+		EBreachPhase Phase = EBreachPhase::None;
+		FString DoorwayId;
+		FVector Center = FVector::ZeroVector;
+		FVector Outward = FVector::ForwardVector;
+		float WidthCm = 0.f;
+		/** The room behind the doorway, measured at the stack order (FDoorwayBreachRoom): an entry click must lie in it. */
+		FDoorwayBreachRoom Room;
+		/** Who led the session (another leader / a mode switch ends it). */
+		TWeakObjectPtr<AOperativeCharacter> Leader;
+		bool bSolo = false;
+		TArray<FBreachMember> Members;
+		float Seconds = 0.f;
+		float EntrySeconds = 0.f;
+		bool bHoldSet = false;
+		bool bHoldBefore = false;
+		bool bSprint = false;
+	};
+	FBreachSession Breach;
+	int32 BreachClearedCount = 0;
+	int32 LastBreachParticipantCount = 0;
 
 	/** Godot _set_squad_tactical_cease_fire. */
 	void SetSquadCeaseFire(bool bCease);

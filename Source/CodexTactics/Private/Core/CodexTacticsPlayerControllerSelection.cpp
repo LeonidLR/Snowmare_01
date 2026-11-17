@@ -231,7 +231,7 @@ void ACodexTacticsPlayerController::OnClickReleased()
 	FHitResult Hit;
 	if (GetSquad() && GetSquad()->GetLeader() && GetHitResultUnderCursor(ECC_Visibility, false, Hit))
 	{
-		HandleWorldHit(Hit);
+		HandlePlayerClick(Hit); // R17-3: the building click (first click = ghost, second = do it), else HandleWorldHit
 	}
 }
 

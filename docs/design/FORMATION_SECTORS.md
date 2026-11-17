@@ -555,3 +555,9 @@ the corner and the right-hand man stood to his right, past the corner, in the op
   leader's own formation run-and-peek from the open, every follower's place and body >= 90 cm behind the leader's corner slot and inside the
   end plane. With both switches 0 round 1 fails 9 checks (the flips above); with the fix all pass. Tests `CodexTactics.Formation.WallLeadership.CornerPickStable`,
   `CodexTactics.Formation.LeaderCorner.PeekEdgeClaimsItsCorner`.
+
+## R17-3 - one building click (designer 2026-11-17 evening)
+
+No ghost on hover any more: the first click on a wall / corner shows the ghost of the WHOLE group (the formation wall layout, the corner man
+and his stack - the same placement the order makes), the cursor along the same building moves it, the second click orders it, a ground click
+cancels. Details: docs/design/CLICK_PREVIEW.md, FORMATION_CONTRACT.md section 22.

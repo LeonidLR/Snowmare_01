@@ -392,7 +392,7 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 	GetMousePosition(Mouse.X, Mouse.Y);
 	const double Now = FApp::GetCurrentTime();
 	// Q4 (the game designer 2026-11-08, kept): the normal run; a sprint only on a double-click on the same corner.
-	const bool bDouble = RunCornerPeekRules::IsSprintClick(RunPeekClickTime >= 0.0 ? Now - RunPeekClickTime : -1.0, DoubleClickSeconds,
+	const bool bDouble = bClickPreviewSprint || RunCornerPeekRules::IsSprintClick(RunPeekClickTime >= 0.0 ? Now - RunPeekClickTime : -1.0, DoubleClickSeconds,
 		static_cast<float>(FVector2D::Distance(Mouse, RunPeekClickPosition)), DoubleClickPixels, static_cast<float>(FVector::Dist2D(Face.EdgeOnFace, RunPeekClickEdge)));
 	RunPeekClickTime = bDouble ? -1.0 : Now;
 	RunPeekClickPosition = Mouse;
@@ -446,13 +446,13 @@ bool ACodexTacticsPlayerController::TryHandleRunCornerPeekClick(AOperativeCharac
 	}
 	else if (Group == RunCornerPeekRules::EGroup::Formation)
 	{
-		if (bDouble && PeekCarry.bActive)
+		if (bDouble && !bClickPreviewSprint && PeekCarry.bActive)
 		{
 			return true; // the second click of a double-click: the squad's wall order at that corner already runs
 		}
 		const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
 		const bool bGroupSprint = bDouble;
-		if (OrderGroupCover(Operative, Face.Corner, bGroupSprint, Flow ? Flow->GetPauseOrderRadius() : 1200.f))
+		if (OrderGroupCover(Operative, Face.Corner, false, Flow ? Flow->GetPauseOrderRadius() : 1200.f, false, nullptr, bGroupSprint)) // R17-3: the sprint is the order's gait, never its planning
 		{
 			bOrdered = true;
 			Result = EOperativeOrderResult::Accepted;
@@ -646,7 +646,7 @@ bool ACodexTacticsPlayerController::PlanRunCornerPeekClick(AOperativeCharacter* 
 	{
 		// The squad's wall order there is planned (PlanFormationWall, ordered on the release); its carried peek starts then (TickSquadPeekCarry).
 		const bool bGroupSprint = bSprint;
-		if (OrderGroupCover(Operative, Face.Corner, bGroupSprint, Radius))
+		if (OrderGroupCover(Operative, Face.Corner, true, Radius, false, nullptr, bGroupSprint)) // R17-3: planned in the pause (was: bPlan = the sprint flag)
 		{
 			bPlanned = true;
 			if (Squad->HasPlannedFormationWall())
