@@ -23,6 +23,7 @@
 #include "Formation/FormationWallLeadershipRules.h"
 #include "Formation/FormationWallRules.h"
 #include "GameFlow/GameFlowTypes.h"
+#include "Ladders/TraversalQueue.h"
 #include "Tactics/CoverTypes.h"
 #include "SquadSubsystem.generated.h"
 
@@ -30,6 +31,63 @@ class AOperativeCharacter;
 class UPrimitiveComponent;
 struct FCollisionQueryParams;
 struct FHitResult;
+struct FMantleSite;
+
+/** R17-1: where one member is in the squad's turn-taking climb (USquadSubsystem, SquadSubsystemMantleQueue.cpp). */
+enum class ESquadMantleState : uint8
+{
+	/** In the line at the base: on his spot, covering outwards. */
+	Waiting,
+	/** His turn: walking to his lane's face (the climb starts there). */
+	Turn,
+	/** Climbing (the clip plays). */
+	Climbing,
+	/** Up on the top / over the fence: covering. */
+	Up,
+	/** No lane of the face for him (it is too short): he holds at the base, covering. */
+	Hold,
+	/** Out of it (refused at the face, his turn timed out, re-ordered by the player, down / dead). */
+	Out
+};
+
+/** R17-1: one member of the squad's climb, as the smokes read it. */
+struct FSquadMantleMemberView
+{
+	TWeakObjectPtr<AOperativeCharacter> Operative;
+	ESquadMantleState State = ESquadMantleState::Waiting;
+	/** His lane: the base he climbs from (feet, on the ground), its offset along its face from that face's first lane (cm), the face (a point on
+	 *  it) and the climb's direction there (into the obstacle; another face of a top when the clicked one has no room left). */
+	FVector LaneBase = FVector::ZeroVector;
+	float LaneOffsetCm = 0.f;
+	FVector LaneFacePoint = FVector::ZeroVector;
+	FVector LaneDir = FVector::ForwardVector;
+	/** His place in the line (0 = next; INDEX_NONE when not waiting) and the spot he waits on. */
+	int32 Place = INDEX_NONE;
+	FVector Spot = FVector::ZeroVector;
+	/** The order he came up (0 = first), INDEX_NONE while not up. */
+	int32 UpIndex = INDEX_NONE;
+	/** The look the squad gives him now (world yaw; unset = none). */
+	TOptional<float> LookYaw;
+	FString OutWhy;
+};
+
+/** R17-1: the squad's climb as the smokes read it. */
+struct FSquadMantleView
+{
+	bool bActive = false;
+	/** Started by a path over a mantle link (else by a click on the obstacle). */
+	bool bFromPath = false;
+	/** Everybody is up (or holds / is out): the clicked climb's group holds up there until the next order. */
+	bool bHolding = false;
+	bool bOver = false;
+	TWeakObjectPtr<const AActor> Obstacle;
+	/** The climbed face (a point on it), the climb's direction (into the obstacle) and the outward look (away from it), world yaw. */
+	FVector FacePoint = FVector::ZeroVector;
+	FVector Dir = FVector::ForwardVector;
+	float OutwardYaw = 0.f;
+	/** In climb order (the leader first). */
+	TArray<FSquadMantleMemberView> Members;
+};
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnSquadLeaderChanged, AOperativeCharacter*, NewLeader);
 
@@ -373,6 +431,47 @@ public:
 
 	/** Operatives whose planned targeted shot could not fire on the pause release and is being retried (smokes). */
 	int32 GetDeferredShotCount() const { return DeferredShots.Num(); }
+
+	// --- R17-1: the squad climbs an obstacle in turns (designer 2026-11-17; docs/design/MANTLING.md 6.4, FORMATION_CONTRACT.md 22) ---------
+
+	/** Codex.Mantle.Squad (1): group climbs go in turns; 0 = before R17-1 (only a Solo single climbs by click, formation moves never take mantle links). */
+	static bool IsSquadMantleEnabled();
+
+	/**
+	 * Who climbs with Climber in turns: in the formation his leader-led squad (Climber = the leader, then his followers in formation order); in
+	 * Solo the box selection he belongs to (Climber first, then the selection's order). Only members able to climb now and within
+	 * squad.join_radius_cm of him. Fewer than two = he climbs alone (empty).
+	 */
+	TArray<AOperativeCharacter*> GetSquadMantleGroup(AOperativeCharacter& Climber) const;
+
+	/**
+	 * A click on a climbable obstacle for a group (Group[0] = the leader; GetSquadMantleGroup): the leader's climb order now, the others in line
+	 * at the base on their own lanes of the face, each climbing when the one before him is up (the ladder queue, TTraversalQueue). False =
+	 * nothing ordered (OutWhy: the leader's refusal; the caller treats the click as before).
+	 */
+	bool OrderSquadMantle(const TArray<AOperativeCharacter*>& Group, const FHitResult& Hit, bool bRun, FString* OutWhy = nullptr);
+
+	/**
+	 * A path climb (a mantle link on his own order's path) by Climber just started: his group (GetSquadMantleGroup) lines up behind him. True =
+	 * he holds over there (AOperativeCharacter::StartMantle keeps him at the landing); the squad walks him on to ResumeTarget when the climb ends (all over or
+	 * any other end - EndSquadMantle; SquadMantleRules::ShouldWalkOn).
+	 */
+	bool BeginSquadMantleFromPath(AOperativeCharacter& Climber, const FMantleSite& Site, const FVector& ResumeTarget);
+
+	/** Operative is in the squad's running climb (waiting, his turn, climbing, up and covering, holding at the base): the formation leaves him alone. */
+	bool IsInSquadMantle(const AOperativeCharacter* Operative) const;
+
+	bool IsSquadMantleActive() const { return SquadMantle.bActive; }
+
+	/** Calls the squad's climb off (climbs in progress finish; the walks to the face stop climbing on arrival; nobody is walked on). */
+	void CancelSquadMantle(const TCHAR* Why);
+
+	/** The squad's climb now (smokes / debug). */
+	FSquadMantleView GetSquadMantleView() const;
+
+	/** Squad climbs started / completed with everybody up (smokes). */
+	int32 GetSquadMantleCount() const { return SquadMantleCount; }
+	int32 GetSquadMantleDoneCount() const { return SquadMantleDoneCount; }
 
 	/**
 	 * True while formation following is on: exploration, after the final fight (PostCombat, bug 2026-10-23) and - user decision
@@ -816,6 +915,109 @@ private:
 	static bool CanLeadFormation(const AOperativeCharacter& Operative);
 	/** He climbs a ladder or waits in its queue. */
 	static bool IsOnLadderOrQueued(const AOperativeCharacter& Operative);
+
+	/** R17-1: one climbing lane of the obstacle: a point of a face, the climb's direction there, its base and lip. */
+	struct FSquadMantleLane
+	{
+		/** The face (knee height), the climb's direction (into the obstacle) and the face's axis. */
+		FVector FacePoint = FVector::ZeroVector;
+		FVector Dir = FVector::ForwardVector;
+		FVector Tangent = FVector::RightVector;
+		/** The lip over FacePoint (the top's height) and the base he climbs from (feet, 80 cm off the face). */
+		FVector EdgeTop = FVector::ZeroVector;
+		FVector Base = FVector::ZeroVector;
+		/** The obstacle's depth along Dir, cm. */
+		float DepthCm = 0.f;
+		/** Along the face from its first lane (logs), cm; the face (0 = the clicked one). */
+		float OffsetCm = 0.f;
+		int32 Face = 0;
+		/** Where its climb lands (planned when it was given; the men up are kept clear of it). */
+		FVector Landing = FVector::ZeroVector;
+	};
+	/** R17-1: one member of the squad's climb. */
+	struct FSquadMantleMember
+	{
+		TWeakObjectPtr<AOperativeCharacter> Operative;
+		ESquadMantleState State = ESquadMantleState::Waiting;
+		FSquadMantleLane Lane;
+		/** His move-order serial after the squad's last order to him: another order since = the player's (he leaves the climb). */
+		uint32 OrderSerial = 0;
+		/** His climbs before his turn (the climb's end = one more). */
+		int32 MantlesAtTurn = 0;
+		float TurnSeconds = 0.f;
+		/** Since his turn's climb order was given / re-armed (the stall check and the retry wait count from it), s. */
+		float SinceOrder = 0.f;
+		/** His turn's climb order is given (it waits while a stance clip roots him). */
+		bool bOrdered = false;
+		int32 Retries = 0;
+		/** The place his spot was sent for (INDEX_NONE: not sent yet). */
+		int32 SpotPlace = INDEX_NONE;
+		FVector Spot = FVector::ZeroVector;
+		int32 UpIndex = INDEX_NONE;
+		/** Box-selected (Solo) with an order of his own: walked on to it once all are over (a path climb). */
+		bool bResume = false;
+		FVector ResumeTarget = FVector::ZeroVector;
+		TOptional<float> LookYaw;
+		FString OutWhy;
+	};
+	/** R17-1: the squad's turn-taking climb (one at a time). */
+	struct FSquadMantle
+	{
+		bool bActive = false;
+		bool bFromPath = false;
+		bool bHolding = false;
+		bool bOver = false;
+		/** The squad mode it started in (a switch calls it off). */
+		bool bSolo = false;
+		TWeakObjectPtr<const AActor> Obstacle;
+		FVector FacePoint = FVector::ZeroVector;
+		FVector Dir = FVector::ForwardVector;
+		/** Along the face (the lanes' axis; Dir turned +90 deg). */
+		FVector Tangent = FVector::RightVector;
+		FVector EdgeTop = FVector::ZeroVector;
+		/** The first climber's base (feet on the ground, order's click base off the face). */
+		FVector Base = FVector::ZeroVector;
+		float DepthCm = 0.f;
+		TArray<FSquadMantleMember> Members;
+		/** The lanes nobody has (a man whose lane is blocked by a man up takes the first free one). */
+		TArray<FSquadMantleLane> SpareLanes;
+		/** The ladder's lease + line (TTraversalQueue): one climbing at a time, the rest in climb order. */
+		TTraversalQueue<AOperativeCharacter> Queue;
+		float NextDelay = 0.f;
+		int32 UpCount = 0;
+		float Seconds = 0.f;
+		/** The world walls round the base (the waiters' looks never go into a wall: FormationSectorRules::ClearLook). */
+		TArray<FFormationWall> Walls;
+	};
+	FSquadMantle SquadMantle;
+	int32 SquadMantleCount = 0;
+	int32 SquadMantleDoneCount = 0;
+	/** The squad's climb per tick (after the formation follow; its looks go into FrameLooks). */
+	void UpdateSquadMantle(float DeltaTime);
+	/** Builds the climb's lanes / line for Group behind Group[0] (already ordered / climbing). */
+	void SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group, bool bFromPath, const FVector& FirstLanding);
+	/** A lane's landing estimated from its geometry (no traces): the cheap first test against the landings taken. */
+	FVector ApproxSquadMantleLanding(const FSquadMantleLane& Lane) const;
+	/** Gives Member his turn (the climb order onto his lane), when his stance lets him walk. */
+	void StartSquadMantleTurn(FSquadMantleMember& Member);
+	/** The lane's top hit (the click the squad gives him): over his lane, on the top. */
+	FHitResult SquadMantleLaneHit(const FSquadMantleLane& Lane) const;
+	/** Every lane of the obstacle in preference order: the clicked face's (0, +100, -100 ...), then (a top) its other faces, nearest first. */
+	TArray<FSquadMantleLane> MakeSquadMantleLanes(int32 PerFace, float CapsuleRadius) const;
+	/** Operative's own clip climbs Lane from its base (a full path to it from where he stands), landing at least squad.min_landing_gap_cm from
+	 *  Taken (OutLanding); OutWhy: why not (logs). */
+	bool IsSquadMantleLaneFor(const AOperativeCharacter& Operative, const FSquadMantleLane& Lane, const TArray<FVector>& Taken, FVector& OutLanding,
+		FString* OutWhy = nullptr) const;
+	/** The landings now held or promised: the men up (their feet) and the lanes given to the others than Except. */
+	TArray<FVector> SquadMantleTakenLandings(const FSquadMantleMember* Except) const;
+	/** Ends the climb. bResumePath: a path climb's men with a walk of their own (the leader, box members) walk on to it, whatever ended it. */
+	void EndSquadMantle(const TCHAR* Why, bool bResumePath = true);
+	/** He is out of the climb (Why logged): out of the line, his lease and his pending climb order dropped. */
+	void MarkSquadMantleOut(FSquadMantleMember& Member, const FString& Why);
+	/** He is up: the lease is free, the next one goes after squad.next_delay_s. */
+	void MarkSquadMantleUp(FSquadMantleMember& Member);
+	FSquadMantleMember* FindSquadMantleMember(const AOperativeCharacter* Operative);
+	const FSquadMantleMember* FindSquadMantleMember(const AOperativeCharacter* Operative) const;
 	/**
 	 * Hands the lead to the pending leader now. bEndOldOrder: the player's next order replaces the squad's running order (the old leader's
 	 * walk ends, SquadOrderRules::EndsOldLeaderOrder); bHisOrderRunning: the new leader's current move is his order (the formation reads it
