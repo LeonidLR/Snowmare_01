@@ -1,6 +1,6 @@
 # 037 red smokes triage
 
-Status: IN PROGRESS, designer resumed after limit checkpoint. StealthModeSmoke needs Claude; CoverHugSmoke fixed/gated. Next MantleDescentSmoke, then FormationJitterSmoke, LevelGenRampSmoke. PMC pair Gemini077; corpse cost Gemini078.
+Status: IN PROGRESS. StealthModeSmoke needs Claude; CoverHugSmoke fixed df1db2f3 and gated. MantleDescentSmoke required merged-base recheck PASS (no local fix). Next FormationJitterSmoke, then LevelGenRampSmoke. PMC pair Gemini077; corpse cost Gemini078.
 
 ## Current summary
 
@@ -207,9 +207,21 @@ Resume: stay in agents worktree on codex/037-red-smokes; read this report and in
 
 - Main46e2f083 was merged without conflicts as6b460de2. Required merged build PASS659.56s; fresh unchanged-source CoverHug baseline FAIL44.1s. The old035 failure (return order rejected) no longer occurs: after merged F-2 leader-corner reservation0e9c49e7, the return is accepted and reaches the correct corner. The remaining FAIL is the fixed0.8s animation snapshot: the short return has already completed and correctly plays look_at_idle with shimmy direction0.
 - Fix is smoke-only, CoverHugSmokeCommand.cpp11 insertions/3 deletions. Sample positively requires both actor and anim shimmy flags, forward shimmy direction and walk_fwd loop; reset per leg. The return assertion requires at least one such active-motion sample and zero backward clips throughout the leg. Existing order acceptance, mesh yaw, endpoint hug, no-fire pose, skin clipping, roof/eaves and all geometry thresholds remain unchanged. The changed timing expectation is justified by the baseline's actual successful arrival before its0.8s observation, not by relaxing the animation contract.
-- Router: preliminary routine-only classify2/confidence0.62; runtime/geometry triage classify4/confidence0.46 | primary main session | pass, no redo. No local model.
+- Router: preliminary routine-only classify2/confidence0.62; runtime/geometry triage classify4/confidence0.60 | primary main session | pass, no redo. No local model.
 - Build with final fix PASS46.44s. Three independent standalone Jobs1/NoRetry/Multiprocess/fixed60fps runs PASS52.7s /68.0s /67.6s. Each reports22 forward-moving samples,0 backward; observed return clip becomes look_at_idle after arrival. First fixed run is retained under CoverHug-diagnostic-* (diagnostic helper was removed before compilation; engine output proves final sample assertion executed).
 - Smart plan:4023 paths,4022 no-verification; only this smoke selected,0 unit tests selected. Actual test.ps1 -Smart -Jobs1 PASS65.7s, no retry. Process-local UE_SKIP_UBT_SDK_SETUP=1 used for Smart as in previous gates, no persistent config change.
 - Related standalone Jobs1/NoRetry/Multiprocess: CoverHugMedicSmoke PASS61.9s; CoverMoveSmoke PASS83.1s; CoverReverseSmoke PASS64.1s; CoverSmoke PASS68.2s. All actual engine RESULT markers verified, no knownFail/knownFlaky changes.
 - Evidence: Saved/Logs/task037/merged/build-*; CoverHug-baseline-*; CoverHug-diagnostic-build-* and CoverHug-diagnostic-*; CoverHug-fixed-2/3-*; CoverHug-smart-plan.log / smart-wrapper.log / smart-engine.log; CoverHug-related-<Smoke>-*. Standalone2 waited for designer editor startup; its753s wrapper wall time includes that priority wait (68s actual smoke). Never bypassed priority.
 - Source/report audit and whitespace check required before this commit. Only this smoke source and report are staged. Next: merge current main, rebuild, single MantleDescentSmoke baseline. RpgPmcSmoke/PmcEncounterHuntSmoke skipped per designer reassignment to Gemini077; CorpseCost remains Gemini078.
+
+
+## MantleDescentSmoke — green required merged-base recheck, no local fix
+
+- Mandatory current-main merge completed without conflicts: main0cc08c4b merged as cfd2cdf0. Build PASS802.61s, wrapper0. Normal shared Build.bat mutex queue respected; no process was interrupted.
+- Exact required single fresh recheck on that merged base: MantleDescentSmoke PASS89.9s; Jobs1/NoRetry/Multiprocess/fixed60fps; actual engine Smoke RESULT: PASS. Original 230cm parapet top-state and 140cm wreck island fall/no-vault assertions all pass in this run.
+- No local source, expectation, timing, configuration or asset changes for this smoke. This is one observed green recheck, not a claim that an intermittent failure was independently fixed or a three-run local-fix gate. Per designer instruction, one recheck was made after merge; no extra retries.
+- Router: level3/confidence0.46 | primary main session | green recheck, no fix.
+- Evidence Saved/Logs/task037/mantle/: base.txt, build-wrapper.log, build-engine.log, baseline-wrapper.log, baseline-engine.log, baseline-result.json. All preserved after completion.
+- Chat routing: original codex-037 rejected the CoverHug post with TOPIC_LIMIT. Designer instructed asking Claude; question619, approval620 authorize codex-037-results. CoverHug's single result line was delivered as621. Remaining per-smoke/final lines use the approved new topic.
+- Corrected only a report typo above: CoverHug refined router confidence was0.60 (Mantle classification was0.46).
+- Next FormationJitterSmoke: merge current main first, stop/ask on conflicts, rebuild, single baseline on merged base. LevelGenRampSmoke follows; PMC pair skipped (Gemini077).
