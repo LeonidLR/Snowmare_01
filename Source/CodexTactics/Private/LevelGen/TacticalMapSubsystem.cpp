@@ -61,6 +61,11 @@ TStatId UTacticalMapSubsystem::GetStatId() const
 	RETURN_QUICK_DECLARE_CYCLE_STAT(UTacticalMapSubsystem, STATGROUP_Tickables);
 }
 
+bool UTacticalMapSubsystem::IsTickable() const
+{
+	return bLoaded && IsDrawEnabled();
+}
+
 bool UTacticalMapSubsystem::IsDrawEnabled()
 {
 	return TacticalMapSubsystemLocal::CVarDraw.GetValueOnGameThread() != 0;
@@ -164,7 +169,7 @@ void UTacticalMapSubsystem::Dump() const
 	const APlayerController* PC = World ? World->GetFirstPlayerController() : nullptr;
 	if (const APawn* Pawn = PC ? PC->GetPawn() : nullptr)
 	{
-		const FTacticalDanger Danger = DangerAt(Pawn->GetActorLocation() - FVector(0.f, 0.f, 90.f), ETacticalSide::Squad);
+		const FTacticalDanger Danger = DangerAt(Pawn->GetNavAgentLocation(), ETacticalSide::Squad);
 		UE_LOG(LogCodexTactics, Display, TEXT("  danger at the pawn %s: %.2f (%s)"), *Pawn->GetActorLocation().ToCompactString(), Danger.Danger,
 			*TacticalMapRules::JoinKinds(Danger.Kinds));
 	}
@@ -173,7 +178,7 @@ void UTacticalMapSubsystem::Dump() const
 void UTacticalMapSubsystem::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
-	if (!bLoaded || !IsDrawEnabled())
+	if (!IsTickable())
 	{
 		return;
 	}
@@ -202,7 +207,10 @@ void UTacticalMapSubsystem::DrawDebug(const FVector& ViewLocation) const
 	const FVector Up(0.f, 0.f, Lift);
 	for (const FTacticalChokepoint& Zone : File.Chokepoints)
 	{
-		if (!Near(Zone.Location, ViewLocation, Radius))
+		const bool bVisible = Zone.Bounds.bIsValid
+			? Zone.Bounds.ComputeSquaredDistanceToPoint(FVector2D(ViewLocation.X, ViewLocation.Y)) <= FMath::Square(static_cast<double>(Radius))
+			: Near(Zone.Location, ViewLocation, Radius);
+		if (!bVisible)
 		{
 			continue;
 		}

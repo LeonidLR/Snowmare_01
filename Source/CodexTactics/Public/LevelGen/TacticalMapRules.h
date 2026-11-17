@@ -36,6 +36,8 @@ struct CODEXTACTICS_API FTacticalChokepoint
 	TArray<FVector> Line;
 	/** The outline on the place's floor (world XY at Location.Z). */
 	TArray<FVector2D> Poly;
+	/** The outline's 2D bounds (Parse / UpdateDerived; invalid without an outline): the cheap reject before InsidePolygon. */
+	FBox2D Bounds = FBox2D(ForceInit);
 	float LengthM = 0.f;
 	/** -1 = open ground (null in the file). */
 	float WidthM = -1.f;
@@ -133,6 +135,8 @@ struct CODEXTACTICS_API FTacticalHidingSpot
 	FString ThreatRoute;
 	FVector ThreatLocation = FVector::ZeroVector;
 	FString Place;
+	/** Place resolved to an index into FTacticalMapFile::Chokepoints (Parse / UpdateDerived; INDEX_NONE: none). */
+	int32 PlaceIndex = INDEX_NONE;
 };
 
 /** A walkable roof reached by ladder(s) only (the P2 placement puts enemies on PART of them). */
@@ -285,6 +289,9 @@ namespace TacticalMapRules
 	 * and the rest kept. An empty file (no items) parses fine.
 	 */
 	CODEXTACTICS_API bool Parse(const FString& Json, FTacticalMapFile& Out, TArray<FString>& OutErrors);
+
+	/** Fills the derived fields (the places' Bounds, the hiding spots' PlaceIndex); Parse calls it - call it after editing a file by hand. */
+	CODEXTACTICS_API void UpdateDerived(FTacticalMapFile& File);
 
 	/** Parses tactical_runtime.json over the defaults (missing keys keep their default). False on bad JSON / a wrong schema. */
 	CODEXTACTICS_API bool ParseConfig(const FString& Json, FTacticalRuntimeConfig& Out, TArray<FString>& OutErrors);

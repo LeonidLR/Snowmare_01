@@ -189,16 +189,19 @@ namespace TacticalMapRulesLocal
 	}
 
 	/** The point lies inside a place (same floor, inside its outline) whose score is at least MinScore. */
-	void ZonesContaining(const FTacticalMapFile& File, const FTacticalRuntimeConfig& Config, const FVector& Point, float MinScore, TArray<int32>& Out)
+	void ZonesContaining(const FTacticalMapFile& File, const FTacticalRuntimeConfig& Config, const FVector& Point, float MinScore, TArray<int32>& Out, TBitArray<>& Seen)
 	{
+		const FVector2D P2(Point.X, Point.Y);
 		for (int32 Index = 0; Index < File.Chokepoints.Num(); ++Index)
 		{
 			const FTacticalChokepoint& Zone = File.Chokepoints[Index];
-			if (Zone.Score >= MinScore && TacticalMapRules::IsSameFloor(Point.Z, Zone.Location.Z, Config.FloorToleranceCm)
-				&& InsidePolygon(FVector2D(Point.X, Point.Y), Zone.Poly))
+			if (Seen[Index] || Zone.Score < MinScore || !Zone.Bounds.bIsValid || !Zone.Bounds.IsInside(P2)
+				|| !TacticalMapRules::IsSameFloor(Point.Z, Zone.Location.Z, Config.FloorToleranceCm) || !InsidePolygon(P2, Zone.Poly))
 			{
-				Out.AddUnique(Index);
+				continue;
 			}
+			Seen[Index] = true;
+			Out.Add(Index);
 		}
 	}
 
@@ -451,7 +454,24 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 		Out.LadderOnlyRoofs.Add(MoveTemp(L));
 		return true;
 	});
+	UpdateDerived(Out);
 	return true;
+}
+
+void TacticalMapRules::UpdateDerived(FTacticalMapFile& File)
+{
+	TMap<FString, int32> PlaceIndex;
+	for (int32 Index = 0; Index < File.Chokepoints.Num(); ++Index)
+	{
+		FTacticalChokepoint& Zone = File.Chokepoints[Index];
+		Zone.Bounds = Zone.Poly.Num() >= 3 ? FBox2D(Zone.Poly) : FBox2D(ForceInit);
+		PlaceIndex.FindOrAdd(Zone.Id, Index);
+	}
+	for (FTacticalHidingSpot& Spot : File.HidingSpots)
+	{
+		const int32* Found = Spot.Place.IsEmpty() ? nullptr : PlaceIndex.Find(Spot.Place);
+		Spot.PlaceIndex = Found ? *Found : INDEX_NONE;
+	}
 }
 
 bool TacticalMapRules::ParseConfig(const FString& Json, FTacticalRuntimeConfig& Out, TArray<FString>& OutErrors)
@@ -606,7 +626,8 @@ FTacticalDanger TacticalMapRules::DangerAt(const FTacticalMapFile& File, const F
 	for (int32 Index = 0; Index < File.Chokepoints.Num(); ++Index)
 	{
 		const FTacticalChokepoint& Zone = File.Chokepoints[Index];
-		if (Zone.Poly.Num() < 3 || !IsSameFloor(Point.Z, Zone.Location.Z, Config.FloorToleranceCm))
+		if (Zone.Poly.Num() < 3 || !Zone.Bounds.bIsValid || !Zone.Bounds.ExpandBy(static_cast<double>(FMath::Max(0.f, Config.ZoneFalloffCm))).IsInside(P2)
+			|| !IsSameFloor(Point.Z, Zone.Location.Z, Config.FloorToleranceCm))
 		{
 			continue;
 		}
@@ -665,12 +686,18 @@ FTacticalDanger TacticalMapRules::DangerAt(const FTacticalMapFile& File, const F
 		float Sniper = 0.f;
 		for (const FTacticalOverwatchRoof& Roof : File.OverwatchRoofs)
 		{
+			const double Range2 = FMath::Square(static_cast<double>(Roof.RangeM) * 100.0);
 			for (const FTacticalOverwatchSpot& Spot : Roof.Spots)
 			{
-				if (Dist2D(Point, Spot.Location) <= Roof.RangeM * 100.f)
+				if (FVector::DistSquared2D(Point, Spot.Location) <= Range2)
 				{
 					Sniper = Config.SniperWeight;
+					break;
 				}
+			}
+			if (Sniper > 0.f)
+			{
+				break;
 			}
 		}
 		// a hidden enemy: next to the route point a hiding spot threatens
@@ -714,18 +741,7 @@ TArray<FTacticalPick> TacticalMapRules::BestAmbushSpots(const FTacticalMapFile& 
 			continue;
 		}
 		const float Reveal = Spot.bStealthOnly ? Spot.RevealStealthM : Spot.RevealNormalM;
-		float PlaceScore = 0.f;
-		if (!Spot.Place.IsEmpty())
-		{
-			for (const FTacticalChokepoint& Zone : File.Chokepoints)
-			{
-				if (Zone.Id == Spot.Place)
-				{
-					PlaceScore = Zone.Score;
-					break;
-				}
-			}
-		}
+		const float PlaceScore = File.Chokepoints.IsValidIndex(Spot.PlaceIndex) ? File.Chokepoints[Spot.PlaceIndex].Score : 0.f;
 		FTacticalPick Pick;
 		Pick.Index = Index;
 		Pick.DistanceCm = Distance;
@@ -831,9 +847,10 @@ TArray<FTacticalPick> TacticalMapRules::DropSpotsAbove(const FTacticalMapFile& F
 TArray<int32> TacticalMapRules::ChokepointsOnPath(const FTacticalMapFile& File, const FTacticalRuntimeConfig& Config, TConstArrayView<FVector> Path)
 {
 	TArray<int32> Out;
+	TBitArray<> Seen(false, File.Chokepoints.Num());
 	for (const FVector& Sample : TacticalMapRulesLocal::SamplePath(Path, Config.PathSampleStepCm))
 	{
-		TacticalMapRulesLocal::ZonesContaining(File, Config, Sample, File.Thresholds.MinScore, Out);
+		TacticalMapRulesLocal::ZonesContaining(File, Config, Sample, File.Thresholds.MinScore, Out, Seen);
 	}
 	return Out;
 }

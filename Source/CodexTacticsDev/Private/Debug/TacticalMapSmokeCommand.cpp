@@ -201,6 +201,10 @@ namespace TacticalMapSmoke
 			Check(State, InJson == Count.Value && InJson >= 0, FString::Printf(TEXT("%s: %d loaded = %d in the JSON"), Count.Key, Count.Value, InJson));
 		}
 		Check(State, !File.Chokepoints.IsEmpty() && !File.HidingSpots.IsEmpty() && !File.OverwatchRoofs.IsEmpty(), TEXT("the map has places, hiding spots and roofs"));
+		if (File.Chokepoints.IsEmpty())
+		{
+			return; // the checks below read the top place
+		}
 
 		// every spot projects onto the navmesh or a walkable surface
 		TArray<TPair<FString, FVector>> Places, DropLand, DropEdge, Windows, Roofs, Hiding, Threats, LadderRoofs;

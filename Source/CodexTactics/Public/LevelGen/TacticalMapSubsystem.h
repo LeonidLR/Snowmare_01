@@ -25,6 +25,8 @@ public:
 	virtual void OnWorldBeginPlay(UWorld& InWorld) override;
 	virtual void Deinitialize() override;
 	virtual void Tick(float DeltaTime) override;
+	/** Ticks only to draw: loaded and Codex.TacticalMap.Draw != 0. */
+	virtual bool IsTickable() const override;
 	virtual TStatId GetStatId() const override;
 
 	/** A tactical file is loaded (it may still hold no items). */

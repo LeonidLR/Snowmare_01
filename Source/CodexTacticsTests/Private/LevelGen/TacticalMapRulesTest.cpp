@@ -360,6 +360,10 @@ bool FTacticalMapCommittedFilesTest::RunTest(const FString&)
 			TestEqual(TEXT("x4 hiding spots"), File.HidingSpots.Num(), 150);
 			TestEqual(TEXT("x4 ladder-only roofs"), File.LadderOnlyRoofs.Num(), 7);
 			const FTacticalRuntimeConfig Config;
+			if (!TestTrue(TEXT("x4 has a top place"), File.Chokepoints.Num() > 0))
+			{
+				continue;
+			}
 			const FTacticalChokepoint& Top = File.Chokepoints[0];
 			TestTrue(TEXT("x4: danger at the top place >= its score"), TacticalMapRules::DangerAt(File, Config, Top.Location, ETacticalSide::Squad).Danger >= Top.Score);
 		}
