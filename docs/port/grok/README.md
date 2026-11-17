@@ -75,3 +75,17 @@ Log every sub-part in your report as `level | model | result (pass / redo)`. If 
 ## Limit rule (designer)
 At 10 % of your token / quota limit LEFT: stop, commit (WIP ok), update the report, post ONE line
 `--topic grok-limit "limit 10%: <state>, last commit <hash>, next <step>, reset at <time>"`, then only wait until the limit resets.
+
+- Progress lines (e.g. `G004 128/287`) -> `agent_chat.py post --as grok --status --topic <t> --text "..."`; progress lines -> --status.
+
+## Night queue (Claude only)
+`powershell -ExecutionPolicy Bypass -File Scripts/Tools/grok_queue.ps1 [-IdleMinutes 30] [-Model grok-4.7] [-DryRun]` - Claude calls it from the
+night loop; each call starts at most ONE task (grok_task.ps1 is synchronous, a lock file stops a second queue). Log:
+`Saved/Orchestrator/grok_runs/queue.log`.
+- Candidates: `inbox/G<NNN>-*.md` with no `outbox/G<NNN>-*.report.md` (main checkout or Grok worktree) and no `G<NNN> ... FINISH` in the last 40
+  chat messages, in numeric order. Only the FIRST candidate counts: if its session `grok-G<NNN>` already has a marker (a headless call was
+  made) it is "in progress" and the queue does nothing - it never resumes it and never jumps over it. Claude finishes / resumes it by hand.
+- Starts only when idle: no `grok.exe -p` process AND Grok's last FINISH / limit line in the chat is older than `-IdleMinutes`.
+- Starts with `grok-4.7`, session `grok-G<NNN>`, a standard prompt (task path + plan commit first, implement, report, FINISH, 10 % rule).
+- `-DryRun` only prints / logs what it would do. A task that should not run at night: do not leave its file in `inbox/` yet.
+- Launcher tests: `python -m unittest Scripts/Tools/tests/test_grok_task.py` (fake grok.exe, no real Grok run).

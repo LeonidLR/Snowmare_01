@@ -20,6 +20,10 @@ struct CODEXTACTICS_API FEnemyAIConfig
 	float SpitterPreferredRange = 1200.f;
 	/** Crouched behind a barricade: spitter damage cut (Godot crouch_barricade_cover_reduction). */
 	float CrouchCoverReduction = 0.35f;
+	/** Distance hysteresis factor for keeping current target (0.85 = candidate must be > 15% closer to switch). */
+	float TargetHysteresisFactor = 0.85f;
+	/** Angular dead band for enemy facing (deg). */
+	float FacingDeadBandDeg = 1.5f;
 };
 
 enum class EEnemyTargetKind : uint8
@@ -105,7 +109,8 @@ namespace EnemyAIRules
 	 * Returns the candidate index or INDEX_NONE.
 	 */
 	CODEXTACTICS_API int32 SelectTarget(const FEnemyAIConfig& Config, bool bSmallEnemy, const FVector& Enemy,
-		const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret, bool bObjectsAllowed = true);
+		const TArray<FEnemyTargetCandidate>& Candidates, bool bLastAttackerTurret, bool bObjectsAllowed = true,
+		int32 CurrentTargetIndex = INDEX_NONE);
 
 	/**
 	 * Operatives first (the game designer's rule 2026-10-25, after a lone tutorial zombie went for a barricade instead of the

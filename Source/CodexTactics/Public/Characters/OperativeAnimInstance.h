@@ -1228,6 +1228,23 @@ public:
 	/** The cover loop playing now (nullptr = none; smokes). */
 	UAnimSequenceBase* GetCoverLoopClip() const { return CoverLoopClip.Get(); }
 	int32 GetCoverClipsPlayed() const { return CoverClipsPlayed; }
+	/** The cover idle -> fire transition (fire enter) one-shot is playing: the fire stance is not reached yet (stealth hand-off, fire gate). */
+	bool IsCoverFireEnterPlaying() const
+	{
+		const UAnimMontage* Enter = CoverFireEnterMontage.Get();
+		return Enter && Enter == CoverOneShotMontage.Get() && Montage_IsPlaying(Enter);
+	}
+	/** The cover fire pose shows: the fire idle loop (or a cover shot clip) plays after any idle -> fire transition (stealth hand-off). */
+	bool IsCoverFirePoseReached() const
+	{
+		if (!bCoverInFirePose || IsCoverFireEnterPlaying())
+		{
+			return false;
+		}
+		const UAnimMontage* Loop = CoverLoopMontage.Get();
+		const UAnimMontage* OneShot = CoverOneShotMontage.Get();
+		return (Loop && Montage_IsPlaying(Loop)) || (OneShot && Montage_IsPlaying(OneShot));
+	}
 	/** Names of the cover clips played (loops, one-shots) in order, newest last, capped (smokes). */
 	const TArray<FString>& GetCoverClipLog() const { return CoverClipLog; }
 
@@ -2410,6 +2427,8 @@ private:
 	TWeakObjectPtr<UAnimSequenceBase> CoverLoopClip;
 	TWeakObjectPtr<UAnimMontage> CoverLoopMontage;
 	TWeakObjectPtr<UAnimMontage> CoverOneShotMontage;
+	/** The last fire enter (idle -> fire) one-shot (IsCoverFireEnterPlaying). */
+	TWeakObjectPtr<UAnimMontage> CoverFireEnterMontage;
 	int32 CoverClipsPlayed = 0;
 	bool bVaultLeftNext = true;
 	int32 VaultClipsPlayed = 0;

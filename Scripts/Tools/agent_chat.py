@@ -179,6 +179,7 @@ def compute_idle_seconds(messages, participants=("gemini", "codex", "claude", "g
     """
     if now is None:
         now = time.time()
+    messages = [m for m in messages if not is_status(m)]
 
     # Find the last message index for each participant
     last_post_idx = {p: -1 for p in participants}
@@ -220,8 +221,27 @@ def get_idle_dict(storage_dir, participants=("gemini", "codex", "claude", "grok"
     return compute_idle_seconds(messages, participants, now)
 
 
-def check_topic_limit(messages, topic, sender, max_per_topic=10):
-    if sender == "designer":
+DEFAULT_MAX_PER_TOPIC = 25
+TOPIC_RESET_SENDERS = ("designer", "claude")
+
+
+def is_status(msg):
+    return msg.get("kind") == "status"
+
+
+def latest_status_per_agent(messages):
+    """Latest status post per sender: { agent: message }."""
+    result = {}
+    for m in messages:
+        if is_status(m):
+            result[(m.get("from") or "").lower()] = m
+    return result
+
+
+def check_topic_limit(messages, topic, sender, max_per_topic=DEFAULT_MAX_PER_TOPIC):
+    """Agent messages since the last designer/claude message in the topic must stay below max_per_topic.
+    The designer and the lead (claude) are never limited; their reply resets the count. Status posts do not count."""
+    if sender in TOPIC_RESET_SENDERS:
         return True
     norm_topic = topic.strip().lower()
     count = 0
@@ -230,13 +250,15 @@ def check_topic_limit(messages, topic, sender, max_per_topic=10):
         if msg_topic != norm_topic:
             continue
         msg_from = msg.get("from", "").lower()
-        if msg_from == "designer":
+        if is_status(msg):
+            continue
+        if msg_from in TOPIC_RESET_SENDERS:
             break
-        if msg_from in ("claude", "gemini", "codex", "grok"):
+        if msg_from in ("gemini", "codex", "grok"):
             count += 1
     return count < max_per_topic
 
-def post_message(storage_dir, sender, to, topic, text, max_per_topic=10):
+def post_message(storage_dir, sender, to, topic, text, max_per_topic=DEFAULT_MAX_PER_TOPIC, status=False):
     sender = sender.strip().lower()
     to = to.strip().lower()
     if sender not in ("claude", "gemini", "codex", "grok", "designer"):
@@ -249,7 +271,7 @@ def post_message(storage_dir, sender, to, topic, text, max_per_topic=10):
 
     with file_lock(lock_file):
         messages = read_all_messages(chat_file)
-        if not check_topic_limit(messages, topic, sender, max_per_topic):
+        if not status and not check_topic_limit(messages, topic, sender, max_per_topic):
             print("TOPIC_LIMIT: ask the designer", file=sys.stderr)
             return None
 
@@ -263,6 +285,8 @@ def post_message(storage_dir, sender, to, topic, text, max_per_topic=10):
             "topic": topic.strip(),
             "text": text
         }
+        if status:
+            msg["kind"] = "status"
         with open(chat_file, "a", encoding="utf-8") as f:
             f.write(json.dumps(msg, ensure_ascii=False) + "\n")
         
@@ -278,6 +302,8 @@ def format_message(msg):
     if "T" in ts:
         ts = ts.split(".")[0].replace("T", " ")
     topic_str = f"[{msg.get('topic')}] " if msg.get("topic") else ""
+    if is_status(msg):
+        topic_str = "STATUS " + topic_str
     return f"[#{msg.get('id')} {ts}] {topic_str}{msg.get('from')} -> {msg.get('to')}:\n{msg.get('text')}"
 
 def cmd_post(args):
@@ -290,7 +316,12 @@ def cmd_post(args):
         print("Error: --text or --file is required", file=sys.stderr)
         return 1
 
-    msg_id = post_message(storage_dir, args.sender, args.to, args.topic or "", text, args.max_per_topic)
+    if args.to is None:
+        if not args.status:
+            print("Error: --to is required (optional only with --status)", file=sys.stderr)
+            return 1
+        args.to = "all"
+    msg_id = post_message(storage_dir, args.sender, args.to, args.topic or "", text, args.max_per_topic, status=args.status)
     if msg_id is None:
         return 1
     print(msg_id)
@@ -300,6 +331,9 @@ def cmd_read(args):
     storage_dir = get_storage_dir(args.root)
     chat_file = os.path.join(storage_dir, "chat.jsonl")
     messages = read_all_messages(chat_file)
+
+    if not args.with_status:
+        messages = [m for m in messages if not is_status(m)]
 
     since_id = args.since
     if since_id is None and args.sender:
@@ -347,6 +381,7 @@ def cmd_wait(args):
             new_msgs = [
                 m for m in messages
                 if m.get("id", 0) > last_seen
+                and not is_status(m)
                 and m.get("from", "").lower() != who
                 and m.get("to", "").lower() in (who, "all")
             ]
@@ -405,13 +440,13 @@ def run_selftest():
         # 2. Topic limit
         # Claude and Gemini exchange 9 more messages on "ТестКодировки" (total 10)
         for i in range(2, 11):
-            s = "claude" if i % 2 == 1 else "gemini"
-            t = "gemini" if s == "claude" else "claude"
-            mid = post_message(storage_dir, s, t, "ТестКодировки", f"Ping {i}")
+            s = "codex" if i % 2 == 1 else "gemini"
+            t = "gemini" if s == "codex" else "codex"
+            mid = post_message(storage_dir, s, t, "ТестКодировки", f"Ping {i}", max_per_topic=10)
             assert mid == i, f"Expected id {i}, got {mid}"
         
         # 11th message should fail topic limit
-        m11_id = post_message(storage_dir, "claude", "gemini", "ТестКодировки", "Overflow ping", max_per_topic=10)
+        m11_id = post_message(storage_dir, "codex", "gemini", "ТестКодировки", "Overflow ping", max_per_topic=9)
         assert m11_id is None, "Expected topic limit refusal"
         
         # Designer intervenes
@@ -419,7 +454,7 @@ def run_selftest():
         assert d_id == 11, f"Expected id 11, got {d_id}"
 
         # Now Claude can post again
-        m12_id = post_message(storage_dir, "claude", "gemini", "ТестКодировки", "Post-guidance ping", max_per_topic=10)
+        m12_id = post_message(storage_dir, "codex", "gemini", "ТестКодировки", "Post-guidance ping", max_per_topic=9)
         assert m12_id == 12, f"Expected id 12, got {m12_id}"
         print("  [OK] 2. Topic limit & designer reset")
 
@@ -525,11 +560,12 @@ def main():
     # post
     p_post = subparsers.add_parser("post", help="Post a message")
     p_post.add_argument("--as", dest="sender", required=True, choices=["claude", "gemini", "codex", "grok", "designer"])
-    p_post.add_argument("--to", required=True, choices=["claude", "gemini", "codex", "grok", "all"])
+    p_post.add_argument("--to", default=None, choices=["claude", "gemini", "codex", "grok", "all"])
     p_post.add_argument("--topic", default="")
     p_post.add_argument("--text")
     p_post.add_argument("--file")
-    p_post.add_argument("--max-per-topic", type=int, default=10)
+    p_post.add_argument("--max-per-topic", type=int, default=DEFAULT_MAX_PER_TOPIC)
+    p_post.add_argument("--status", action="store_true", help="progress-only line: shown in the STATUS strip, never wakes wait")
 
     # read
     p_read = subparsers.add_parser("read", help="Read messages")
@@ -537,6 +573,7 @@ def main():
     p_read.add_argument("--since", type=int)
     p_read.add_argument("--last", type=int)
     p_read.add_argument("--json", action="store_true")
+    p_read.add_argument("--with-status", action="store_true", help="include status posts")
 
     # wait
     p_wait = subparsers.add_parser("wait", help="Wait for incoming messages")

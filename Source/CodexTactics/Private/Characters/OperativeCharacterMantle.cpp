@@ -1132,11 +1132,13 @@ bool AOperativeCharacter::StartMantleDescent(const FVector& LandingFeet, const F
 	LastMoveDestination = Goal;
 	bHasMoveOrder = true;
 	++MantleDescentCount;
-	// Item 8 (MantlingProblem_07): prone / crouched he gets up first (the stance clip plays), then walks off.
-	const bool bStandUp = Stance != EOperativeStance::Standing;
+	// Item 8 (MantlingProblem_07): prone / crouched he gets up first (the stance clip plays), then walks off. R17-2: stealthed he stays
+	// crouched (prone: up to the crouch) and keeps stealth.
+	const EOperativeStance WalkStance = IsInStealthMode() ? EOperativeStance::Crouching : EOperativeStance::Standing;
+	const bool bStandUp = Stance != WalkStance;
 	if (bStandUp)
 	{
-		SetStance(EOperativeStance::Standing);
+		SetStance(WalkStance);
 	}
 	MantleDescentPhase = bStandUp ? EMantleDescentPhase::StandUp : EMantleDescentPhase::Walk;
 	bMantleDescentSavedOrient = Movement->bOrientRotationToMovement;

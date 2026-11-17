@@ -568,6 +568,8 @@ namespace PmcCommanderRules
 		float MaxLevels = static_cast<float>(Out.HighGroundMaxLevels);
 		ReadNumber(Json, TEXT("high_ground_max_levels"), MaxLevels);
 		Out.HighGroundMaxLevels = FMath::Max(0, FMath::RoundToInt(MaxLevels));
+		ReadNumber(Json, TEXT("target_switch_hysteresis_cm"), Out.TargetSwitchHysteresisCm);
+		ReadNumber(Json, TEXT("facing_dead_band_deg"), Out.FacingDeadBandDeg);
 		Out.DecisionInterval = FMath::Max(0.1f, Out.DecisionInterval);
 		// Engagement bands (2026-11-04).
 		bool bUseBands = Out.bUseBands;
@@ -986,5 +988,14 @@ namespace PmcCommanderRules
 			Out.Name = FPaths::GetBaseFilename(Path);
 		}
 		return true;
+	}
+
+	bool ShouldSwitchThreat(float CurrentThreatDistanceCm, float CandidateDistanceCm, float HysteresisCm)
+	{
+		if (CurrentThreatDistanceCm >= TNumericLimits<float>::Max())
+		{
+			return true;
+		}
+		return CandidateDistanceCm < (CurrentThreatDistanceCm - HysteresisCm);
 	}
 }

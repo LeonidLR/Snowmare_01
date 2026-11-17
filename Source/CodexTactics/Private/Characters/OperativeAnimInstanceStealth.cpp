@@ -49,7 +49,8 @@ void UOperativeAnimInstance::UpdateStealthLayer(float DeltaSeconds)
 		&& !(CoverOneShotMontage.IsValid() && Montage_IsPlaying(CoverOneShotMontage.Get()));
 	const bool bBodyBusy = IsPlayingStanceTransition() || bIsReloading || (GetSlotMontageGlobalWeight(FullBodySlot) > 0.01f && !bCoverLoop)
 		|| GetSlotMontageGlobalWeight(UpperBodySlot) > 0.01f || StealthFireBlockSeconds > 0.f
-		|| (!bInCover && bIsAiming && AimTimer > 0.f);
+		|| (!bInCover && bIsAiming && AimTimer > 0.f)
+		|| (bInCover && Operative && Operative->IsStealthCoverShotWanted()); // the cover fire stance takes the shot (fire gate)
 	if (!Operative || bIsDead || bKnockedDown || bIsProne || bIsClimbing || bIsVaulting)
 	{
 		StealthWeight = 0.f;

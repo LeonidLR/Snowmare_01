@@ -95,4 +95,40 @@ bool FMarksmanHitChanceTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FMarksmanTargetHysteresisTest, "CodexTactics.Characters.Marksman.TargetHysteresis",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FMarksmanTargetHysteresisTest::RunTest(const FString&)
+{
+	const FMarksmanConfig Config; // TargetSwitchHysteresisCm 250, TargetMinHoldSeconds 1.5, FacingDeadBandDeg 1.5
+
+	// 1. No current target -> can acquire candidate immediately
+	TestTrue(TEXT("No current target acquires immediately"),
+		MarksmanAIRules::ShouldSwitchTarget(TNumericLimits<float>::Max(), 2000.f, 0.f, Config.TargetMinHoldSeconds, Config.TargetSwitchHysteresisCm));
+
+	// 2. Candidate only 10 cm closer (2000 vs 1990 cm) -> rejected by hysteresis
+	TestFalse(TEXT("10 cm difference rejected by 250 cm hysteresis"),
+		MarksmanAIRules::ShouldSwitchTarget(2000.f, 1990.f, 2.0f, Config.TargetMinHoldSeconds, Config.TargetSwitchHysteresisCm));
+
+	// 3. Candidate is 300 cm closer, but minimum hold time not elapsed -> rejected
+	TestFalse(TEXT("Hold time 0.8s < 1.5s blocks switch"),
+		MarksmanAIRules::ShouldSwitchTarget(2000.f, 1600.f, 0.8f, Config.TargetMinHoldSeconds, Config.TargetSwitchHysteresisCm));
+
+	// 4. Candidate is 300 cm closer and hold time 2.0s >= 1.5s -> accepted
+	TestTrue(TEXT("300 cm closer and 2.0s hold switches target"),
+		MarksmanAIRules::ShouldSwitchTarget(2000.f, 1700.f, 2.0f, Config.TargetMinHoldSeconds, Config.TargetSwitchHysteresisCm));
+
+	// 5. Angular dead band
+	TestFalse(TEXT("0.8 deg diff within 1.5 deg dead band"),
+		MarksmanAIRules::IsOutsideDeadBand(45.0f, 45.8f, Config.FacingDeadBandDeg));
+	TestFalse(TEXT("-0.8 deg diff within 1.5 deg dead band"),
+		MarksmanAIRules::IsOutsideDeadBand(45.0f, 44.2f, Config.FacingDeadBandDeg));
+	TestTrue(TEXT("2.0 deg diff outside 1.5 deg dead band"),
+		MarksmanAIRules::IsOutsideDeadBand(45.0f, 47.0f, Config.FacingDeadBandDeg));
+	TestTrue(TEXT("Wrap-around 359 deg vs 2 deg (3 deg diff) outside dead band"),
+		MarksmanAIRules::IsOutsideDeadBand(359.0f, 2.0f, Config.FacingDeadBandDeg));
+
+	return true;
+}
+
 #endif

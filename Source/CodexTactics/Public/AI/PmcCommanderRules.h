@@ -246,6 +246,10 @@ struct CODEXTACTICS_API FPmcWeights
 	float HighGround = 0.2f;
 	/** The level count the high-ground bonus stops growing at. */
 	int32 HighGroundMaxLevels = 3;
+	/** Target switch distance hysteresis, cm: keep priority threat unless a candidate is closer by at least this. */
+	float TargetSwitchHysteresisCm = 200.f;
+	/** Facing angular dead band, deg: sub-degree turns ignored. */
+	float FacingDeadBandDeg = 1.5f;
 
 	// --- Engagement bands (user request 2026-11-04: riflemen keep their distance; docs/systems/pmc-squad-ai.md 4) ---
 
@@ -684,6 +688,9 @@ namespace PmcCommanderRules
 
 	/** Loads a weights file (absolute, or relative to Content/Data/AI); false (defaults) when missing / unreadable. */
 	CODEXTACTICS_API bool LoadWeightsFile(const FString& PathOrName, FPmcWeights& Out);
+
+	/** Check if candidate threat is sufficiently closer than current threat to switch (hysteresis). */
+	CODEXTACTICS_API bool ShouldSwitchThreat(float CurrentThreatDistanceCm, float CandidateDistanceCm, float HysteresisCm);
 
 	/** Content/Data/AI/pmc_commander.json. */
 	CODEXTACTICS_API FString DefaultWeightsPath();
