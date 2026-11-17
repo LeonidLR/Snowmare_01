@@ -125,7 +125,7 @@ scenario pick is the old one (`PickScenarioOnMap(seed, false) == PickScenario(se
   him onto the post (`bKeepGoalLevel`), then faces its look yaw, crouched (standing at a window); 3 walks without arriving drop the post.
 - `route_cover` 0.4 - a cover slot whose wall faces the squad's route (`SetTeamRoute`) x (1 + w x facing; half without an analysis hiding
   spot within 2.5 m).
-- `chokepoint_avoid` 0.8 - FallBack tries 0 / +-35 / +-70 deg off straight away, score (0.6 + 0.4 cos) x (1 - w x danger) (`PickFallBack`).
+- `chokepoint_avoid` 0.8 - FallBack tries 0 / +-35 / +-70 deg off straight away, score (0.5 + 0.5 cos) x (1 - w x danger) (`PickFallBack`).
 - `window_share` 0.5 - seeded share of riflemen the placement sends to windows. Frozen: `tactical_reach_m` 40, `marksman_band_min_m` 40,
   `ladder_roof_men` 1.
 

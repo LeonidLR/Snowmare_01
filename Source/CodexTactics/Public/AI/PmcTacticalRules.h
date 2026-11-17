@@ -102,7 +102,7 @@ namespace PmcTacticalRules
 	CODEXTACTICS_API TArray<float> FallBackAngles();
 
 	/**
-	 * The fall-back goal among candidates at AnglesDeg off straight away with the PMC-side danger Dangers: score = (0.6 + 0.4 cos angle) x
+	 * The fall-back goal among candidates at AnglesDeg off straight away with the PMC-side danger Dangers: score = (0.5 + 0.5 cos angle) x
 	 * (1 - ChokepointAvoid x danger); the best index (straight away wins ties and every candidate at danger 0). INDEX_NONE for none.
 	 */
 	CODEXTACTICS_API int32 PickFallBack(TConstArrayView<float> AnglesDeg, TConstArrayView<float> Dangers, const FPmcWeights& Weights);

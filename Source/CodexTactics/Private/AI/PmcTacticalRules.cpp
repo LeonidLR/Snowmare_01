@@ -123,7 +123,7 @@ namespace PmcTacticalRules
 		float BestScore = -1.f;
 		for (int32 Index = 0; Index < FMath::Min(AnglesDeg.Num(), Dangers.Num()); ++Index)
 		{
-			const float Away = 0.6f + 0.4f * FMath::Cos(FMath::DegreesToRadians(AnglesDeg[Index]));
+			const float Away = 0.5f + 0.5f * FMath::Cos(FMath::DegreesToRadians(AnglesDeg[Index]));
 			const float Score = Away * (1.f - PmcTacticalLocal::Clamp01(Weights.ChokepointAvoid) * PmcTacticalLocal::Clamp01(Dangers[Index]));
 			// Strictly better only: the earlier (straighter) candidate keeps a tie.
 			if (Score > BestScore + 1e-4f)
