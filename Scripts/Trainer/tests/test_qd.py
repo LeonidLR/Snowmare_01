@@ -1,0 +1,234 @@
+"""G002: behaviour metrics, MAP-Elites archive, league parents, morning-report section.
+
+Run: python -m unittest discover -s Scripts/Trainer/tests
+"""
+import copy
+import json
+import os
+import random
+import shutil
+import sys
+import tempfile
+import unittest
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+TRAINER = os.path.dirname(HERE)
+REPO = os.path.dirname(os.path.dirname(TRAINER))
+sys.path.insert(0, TRAINER)
+
+from nighttrainer import fitness, qd  # noqa: E402
+from nighttrainer.adapter import (ArenaAdapter, BEHAVIOUR_METRICS, behaviour_defaults,  # noqa: E402
+                                  behaviour_document, parse_behaviour)
+from nighttrainer.genome import load_json  # noqa: E402
+from nighttrainer.report import _archive_section  # noqa: E402
+from nighttrainer.trainer import Trainer  # noqa: E402
+
+with open(os.path.join(TRAINER, "trainer_config.json"), encoding="utf-8") as _f:
+    CONFIG = json.load(_f)
+
+AXES = {"axes": [
+    {"id": "aggression", "metric": "time_in_contact_s", "bins": 4, "range": [0, 100]},
+    {"id": "mobility", "metrics": ["flanks_completed", "moves"], "bins": 4, "range": [0, 10]},
+    {"id": "patience", "metric": "ambush_success", "bins": 3, "range": [0, 3]},
+]}
+
+
+def _beh(**kw):
+    out = behaviour_defaults()
+    out.update(kw)
+    return out
+
+
+class BehaviourParseTests(unittest.TestCase):
+    def test_missing_behaviour_is_zeros(self):
+        doc = {"schema": "codex.pmc_arena/1", "rounds": [
+            {"winner": "A", "duration_s": 10, "sides": {"A": {"survivors": 1}, "B": {"survivors": 0}}}]}
+        row = ArenaAdapter(CONFIG["arena"], "C:/Repo").parse_doc(doc)[0]
+        self.assertEqual(row["behaviour"], behaviour_defaults())
+        self.assertEqual(row["survivors"], 1.0)
+
+    def test_partial_flat_and_rich_and_side_fallback(self):
+        adapter = ArenaAdapter(CONFIG["arena"], "C:/Repo")
+        flat = {"schema": "codex.pmc_arena/1", "rounds": [
+            {"winner": "A", "duration_s": 10, "behaviour": {"time_in_contact_s": 40, "moves": True,
+                                                            "order_churn": "no"},
+             "sides": {"A": {}, "B": {}}}]}
+        row = adapter.parse_doc(flat)[0]["behaviour"]
+        self.assertEqual(row["time_in_contact_s"], 40.0)
+        self.assertEqual(row["moves"], 0.0)  # bool is not a measurement
+        self.assertEqual(row["order_churn"], 0.0)
+        self.assertEqual(row["ambush_success"], 0.0)
+
+        rich = {"schema": "codex.pmc_arena/1", "rounds": [
+            {"winner": "B", "duration_s": 10, "behaviour": behaviour_document({"quiet_spells": 3, "stalemate_share": 1}),
+             "sides": {"A": {}, "B": {}}}]}
+        got = adapter.parse_doc(rich)[0]["behaviour"]
+        self.assertEqual(got["quiet_spells"], 3.0)
+        self.assertEqual(got["stalemate_share"], 1.0)
+        self.assertEqual(got["flanks_completed"], 0.0)
+
+        side = {"schema": "codex.pmc_arena/1", "rounds": [
+            {"winner": "draw", "duration_s": 10, "sides": {
+                "A": {"behaviour": {"ambush_success": {"value": 2, "unit": "count"}}}, "B": {}}}]}
+        self.assertEqual(adapter.parse_doc(side)[0]["behaviour"]["ambush_success"], 2.0)
+
+    def test_round_object_wins_over_the_side(self):
+        doc = {"schema": "codex.pmc_arena/1", "rounds": [
+            {"winner": "A", "duration_s": 1, "behaviour": {"moves": 4},
+             "sides": {"A": {"behaviour": {"moves": 9}}, "B": {}}}]}
+        self.assertEqual(ArenaAdapter(CONFIG["arena"], "C:/Repo").parse_doc(doc)[0]["behaviour"]["moves"], 4.0)
+
+    def test_schema_doc_names_every_metric(self):
+        path = os.path.join(REPO, "docs", "port", "grok", "outbox", "G002-arena-behaviour-schema.md")
+        with open(path, encoding="utf-8") as f:
+            text = f.read()
+        for key, name, unit, _lo, _hi, direction in BEHAVIOUR_METRICS:
+            self.assertIn(key, text)
+            self.assertIn(name, text)
+            self.assertIn(direction, text)
+            self.assertIn(unit, text)
+        self.assertEqual(set(parse_behaviour(None)), {key for key, *_r in BEHAVIOUR_METRICS})
+
+    def test_behaviour_does_not_change_the_scalar(self):
+        plain = {"won": 1.0, "survivors": 2, "squad_size": 4, "hp_lost": 40, "hp_max": 400, "duration_s": 150,
+                 "kills": 1}
+        with_behaviour = dict(plain, behaviour=_beh(time_in_contact_s=99))
+        self.assertEqual(fitness.round_score(plain, CONFIG["fitness"]),
+                         fitness.round_score(with_behaviour, CONFIG["fitness"]))
+
+
+class ArchiveTests(unittest.TestCase):
+    def test_insert_replace_and_tie(self):
+        arch = qd.Archive(AXES)
+        genes_a = {"/a": 1.0}
+        genes_b = {"/a": 2.0}
+        beh = _beh(time_in_contact_s=10, flanks_completed=1, moves=1, ambush_success=0)
+        self.assertEqual(arch.consider("c0", genes_a, 1.0, beh, 0), "insert")
+        self.assertEqual(arch.consider("c1", genes_b, 1.0, beh, 1), "reject")
+        self.assertEqual(arch.cells["0,0,0"]["id"], "c0")
+        self.assertEqual(arch.consider("c2", genes_b, 1.5, beh, 2), "replace")
+        self.assertEqual(arch.cells["0,0,0"]["id"], "c2")
+        self.assertEqual(arch.cells["0,0,0"]["genes"], genes_b)
+        self.assertEqual(len(arch.cells), 1)
+
+    def test_bins_and_sum_axis(self):
+        arch = qd.Archive(AXES)
+        self.assertEqual(arch.key_for(_beh(time_in_contact_s=0, ambush_success=0)), (0, 0, 0))
+        self.assertEqual(arch.key_for(_beh(time_in_contact_s=100))[0], 3)  # right edge is the last bin
+        self.assertEqual(arch.key_for(_beh(time_in_contact_s=25))[0], 1)
+        self.assertEqual(arch.key_for(_beh(time_in_contact_s=-5))[0], 0)
+        # mobility = flanks + moves, bins of 2.5 over [0, 10]
+        self.assertEqual(arch.key_for(_beh(flanks_completed=2, moves=3))[1], 2)  # 5 -> bin 2
+        self.assertEqual(arch.key_for(_beh(ambush_success=3))[2], 2)
+        low = _beh(time_in_contact_s=1)
+        high = _beh(time_in_contact_s=90, ambush_success=2)
+        arch.consider("low", {"/a": 1}, 0.5, low, 0)
+        arch.consider("high", {"/a": 2}, 0.5, high, 0)
+        self.assertEqual(arch.capacity(), 4 * 4 * 3)
+        self.assertEqual(len(arch.cells), 2)
+
+    def test_selection_draws_only_from_filled_cells(self):
+        arch = qd.Archive(AXES)
+        self.assertEqual(arch.sample_genes(random.Random(1), 4), [])
+        self.assertIsNone(qd.next_population(arch, {}, random.Random(1), {}, 4))
+        arch.consider("a", {"/a": 1.0, "/b": 0.0}, 1.0, _beh(time_in_contact_s=1), 0)
+        arch.consider("b", {"/a": 9.0, "/b": 9.0}, 2.0, _beh(time_in_contact_s=80), 0)
+        rng = random.Random(3)
+        drawn = arch.sample_genes(rng, 30)
+        seen = {tuple(sorted(g.items())) for g in drawn}
+        self.assertEqual(seen, {(("/a", 1.0), ("/b", 0.0)), (("/a", 9.0), ("/b", 9.0))})
+        specs = {}  # no mutable genes: children equal a parent, still size-many
+        kids = qd.next_population(arch, specs, random.Random(4), {"crossover_rate": 0.0}, 5)
+        self.assertEqual(len(kids), 5)
+        for kid in kids:
+            self.assertIn(tuple(sorted(kid.items())), seen)
+
+    def test_save_roundtrip_keeps_the_elite(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            path = os.path.join(tmp, "qd_archive.json")
+            arch = qd.Archive(AXES)
+            arch.consider("elite", {"/w": 3}, 4.25, _beh(time_in_contact_s=12, moves=2), 1)
+            arch.save(path)
+            loaded = qd.Archive.load(path, AXES)
+            self.assertEqual(loaded.cells["0,0,0"]["id"], "elite")
+            self.assertEqual(loaded.cells["0,0,0"]["fitness"], 4.25)
+            self.assertIn("highlight", loaded.cells["0,0,0"])
+
+
+class ReportTests(unittest.TestCase):
+    def test_section_lists_cells_and_ga_says_off(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = {"search": {"mode": "qd"}, "qd": dict(AXES, archive_file="qd_archive.json")}
+            arch = qd.Archive(cfg["qd"])
+            arch.consider("g0000_c01", {"/w": 1}, 3.5, _beh(time_in_contact_s=80, flanks_completed=3, moves=4,
+                                                           ambush_success=2, suppress_then_move=2), 0)
+            arch.save(os.path.join(tmp, "qd_archive.json"))
+
+            class Bag:
+                pass
+
+            bag = Bag()
+            bag.cfg, bag.run_dir = cfg, tmp
+            page = _archive_section(bag)
+            self.assertIn("Cells filled", page)
+            self.assertIn("<b>1</b>", page)
+            self.assertIn("g0000_c01", page)
+            self.assertIn("time_in_contact_s=80.00", page)
+            self.assertTrue("aggressive flanker" in page or "patient ambusher" in page or "suppress-and-push" in page
+                            or "mixed" in page or "holder" in page)
+            bag.cfg = {"search": {"mode": "ga"}, "qd": {}}
+            off = _archive_section(bag)
+            self.assertIn("MAP-Elites is off", off)
+            self.assertNotIn("Cells filled", off)
+
+
+def _repo(tmp, mode):
+    os.makedirs(os.path.join(tmp, "fixtures"))
+    shutil.copy(os.path.join(TRAINER, "fixtures", "pmc_commander.sample.json"), os.path.join(tmp, "fixtures"))
+    cfg = copy.deepcopy(CONFIG)
+    cfg["baseline_weights"] = "missing/pmc_commander.json"
+    cfg["mock"]["baseline_weights"] = "fixtures/pmc_commander.sample.json"
+    cfg["mock"]["in_process"] = True
+    cfg["mock"]["tracks"] = False
+    cfg["mock"]["crash_rate"] = 0.0
+    cfg["evolution"]["population"] = 6
+    cfg["evaluation"]["rounds_per_job"] = 2
+    cfg["highlights"]["auto_clips"] = False
+    cfg["search"]["mode"] = mode
+    return cfg
+
+
+class LoopModeTests(unittest.TestCase):
+    def test_qd_run_fills_more_than_one_cell_and_then_plays_the_archive(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Trainer(_repo(tmp, "qd"), "qd", tmp, mock=True, log=lambda m: None, max_generations=2, parallel=2,
+                        poll_s=0.01)
+            self.assertEqual(t.run(), "finished")
+            arch = load_json(os.path.join(t.run_dir, "qd_archive.json"))
+            self.assertGreaterEqual(arch["filled"], 2)
+            self.assertEqual(arch["schema"], "codex.trainer_qd_archive/1")
+            with open(os.path.join(t.run_dir, "report.html"), encoding="utf-8") as f:
+                page = f.read()
+            self.assertIn("Cells filled", page)
+            self.assertIn("Highlight", page)
+            gen0 = os.path.join(t.run_dir, "gen_0000", "jobs")
+            gen1 = os.path.join(t.run_dir, "gen_0001", "jobs")
+            self.assertTrue(any("bot" in name for name in os.listdir(gen0)))
+            self.assertTrue(any("archive" in name for name in os.listdir(gen1)))
+            self.assertTrue(os.path.isdir(os.path.join(t.run_dir, "gen_0001", "league")))
+
+    def test_ga_mode_keeps_the_scalar_loop(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Trainer(_repo(tmp, "ga"), "ga", tmp, mock=True, log=lambda m: None, max_generations=1, parallel=2,
+                        poll_s=0.01)
+            self.assertEqual(t.run(), "finished")
+            self.assertFalse(os.path.exists(os.path.join(t.run_dir, "qd_archive.json")))
+            names = os.listdir(os.path.join(t.run_dir, "gen_0000", "jobs"))
+            self.assertTrue(any("champion" in name for name in names))
+            self.assertFalse(any("archive" in name or name.startswith("bot") for name in names))
+            with open(os.path.join(t.run_dir, "report.html"), encoding="utf-8") as f:
+                self.assertIn("MAP-Elites is off", f.read())
+
+
+if __name__ == "__main__":
+    unittest.main()
