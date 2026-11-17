@@ -6,7 +6,7 @@ import html
 import json
 import os
 
-from . import highlights
+from . import highlights, qd
 from .genome import diff_genes, write_json
 
 LEADER_COLUMNS = ("rank", "id", "champion", "generation", "fitness", "fresh_fitness", "win_rate", "win_rate_vs_bot",
@@ -110,6 +110,32 @@ def _diff_table(trainer, state: dict) -> str:
     return f"<table><tr><th>Weight (JSON pointer)</th><th>Baseline</th><th>Champion</th><th>Change</th></tr>{body}</table>"
 
 
+def _archive_section(trainer) -> str:
+    """Morning view of the MAP-Elites grid: cells filled, the best weights, behaviour values, one highlight each."""
+    mode = str(trainer.cfg.get("search", {}).get("mode", "ga")).strip().lower()
+    if mode != "qd":
+        return ("<section><h2>Quality-diversity archive</h2><p class='muted'>Search mode: ga. "
+                "MAP-Elites is off (scalar tournament). Switch search.mode to qd for the archive.</p></section>")
+    path = os.path.join(trainer.run_dir, str(trainer.cfg.get("qd", {}).get("archive_file", "qd_archive.json")))
+    archive = qd.Archive.load(path, trainer.cfg.get("qd", {}))
+    filled, cap = len(archive.cells), archive.capacity()
+    rows = []
+    for cell in sorted(archive.filled(), key=lambda c: float(c.get("fitness", 0.0)), reverse=True):
+        behaviour = cell.get("behaviour") or {}
+        shown = ", ".join(f"{key}={float(behaviour[key]):.2f}" for key in behaviour)
+        rows.append("<tr>"
+                    f"<td>{html.escape(str(cell.get('key')))}</td>"
+                    f"<td>{html.escape(str(cell.get('id', '')))}</td>"
+                    f"<td>{_fmt(cell.get('fitness'))}</td>"
+                    f"<td>{html.escape(str(cell.get('highlight', '')))}</td>"
+                    f"<td>{html.escape(shown)}</td></tr>")
+    body = "".join(rows) or "<tr><td colspan='5' class='muted'>No cell filled yet.</td></tr>"
+    return ("<section><h2>Quality-diversity archive</h2>"
+            f"<p>Cells filled: <b>{filled}</b> / {cap}.</p>"
+            "<table><tr><th>Cell</th><th>Best</th><th>Fitness</th><th>Highlight</th><th>Behaviour</th></tr>"
+            f"{body}</table></section>")
+
+
 def _highlights_section(trainer, state: dict) -> str:
     items = highlights.entries(state)
     if not items:
@@ -201,6 +227,7 @@ The trainer never edits the game file: to adopt the champion run <code>powershel
 </section>
 <section><h2>Fitness per generation</h2>{_chart(hist)}
 <p class="muted">Best / mean = this generation's evaluation (vs the champion of that generation and the bot squad), so the curve can dip when a stronger champion is promoted. The champion line is its re-evaluation on fresh seeds.</p></section>
+{_archive_section(trainer)}
 {_highlights_section(trainer, state)}
 <section><h2>Champion vs baseline (fresh-seed evaluations)</h2>{_stats_table(state.get('baseline_stats'), champ.get('stats'))}
 <p class="muted">"vs bot" = against the player squad driven by the playtest bot: the absolute yardstick (the self-play opponent changes over the run).</p></section>

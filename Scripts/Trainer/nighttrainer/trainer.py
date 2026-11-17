@@ -9,6 +9,7 @@ Layout:
   gen_NNNN/jobs/*.arena.json|*.rounds.json|*.log   arena results (cached: a restart re-runs only missing jobs)
   gen_NNNN/generation.json     per-candidate fitness + stats, fresh-seed re-evaluation, promotion decision
   champion_weights.json + champion_meta.json + champions/<id>.json   current champion and the history
+  qd_archive.json          MAP-Elites cells when search.mode is qd (G002); gen_NNNN/league/ opponent weights
   leaderboard.json / leaderboard.csv / report.html / trainer.log
 Every random choice is seeded from (run seed, generation), so a resumed run equals an uninterrupted one.
 """
@@ -19,7 +20,7 @@ import os
 import shutil
 import time
 
-from . import evolution, highlights, report
+from . import evolution, highlights, qd, report
 from .adapter import ArenaAdapter
 from .fitness import aggregate_by_opponent
 from .genome import (apply_genes, flatten_numeric, load_json, load_or_create_bounds, resolve_specs, write_json)
@@ -171,10 +172,12 @@ class Trainer:
                 write_json(path, apply_genes(self.baseline_doc, genes))
             cands.append({"id": cid, "genes": genes, "path": path})
 
-        # 1. evaluation vs the champion (self-play) and the bot-driven player squad, common seeds per generation
+        # 1. evaluation. ga: config matches (today: champion self-play). qd: league = archive pool + bot.
+        #    Seeds and opponent weights are shared by every candidate of the generation.
         jobs = []
+        eval_plan = self.match_plan(gen, "eval", gen_dir, opponent_path)
         for c in cands:
-            jobs += self.make_jobs(c["id"], c["path"], gen, "eval", gen_dir, opponent_path)
+            jobs += self.make_jobs(c["id"], c["path"], gen, "eval", gen_dir, eval_plan)
         self.set_status("running", generation=gen, phase="eval", jobs_total=len(jobs), jobs_done=0)
         results = self.runner.run_jobs(jobs, guard, self._job_done)
         if results is None:
@@ -188,9 +191,10 @@ class Trainer:
         ranked = sorted(cands, key=lambda c: c["fitness"], reverse=True)
         champ = state["champion"]
         contenders = [c for c in ranked if c["genes"] != champ["genes"]][: int(evo.get("fresh_top_k", 3))]
-        fresh_jobs = self.make_jobs("champion_" + f"g{gen:04d}", opponent_path, gen, "fresh", gen_dir, opponent_path)
+        fresh_plan = self.match_plan(gen, "fresh", gen_dir, opponent_path)
+        fresh_jobs = self.make_jobs("champion_" + f"g{gen:04d}", opponent_path, gen, "fresh", gen_dir, fresh_plan)
         for c in contenders:
-            fresh_jobs += self.make_jobs(c["id"], c["path"], gen, "fresh", gen_dir, opponent_path)
+            fresh_jobs += self.make_jobs(c["id"], c["path"], gen, "fresh", gen_dir, fresh_plan)
         self.set_status("running", generation=gen, phase="fresh", jobs_total=len(fresh_jobs), jobs_done=0)
         fresh = self.runner.run_jobs(fresh_jobs, guard, self._job_done)
         if fresh is None:
@@ -232,6 +236,9 @@ class Trainer:
                    "promoted": promoted, "champion_fresh": champ_fresh,
                    "candidates": [{"id": c["id"], "fitness": c["fitness"], "stats": c["agg"],
                                    "fresh": c.get("fresh")} for c in ranked]}
+        archive = self._update_archive(cands, gen) if self.search_mode() == "qd" else None
+        if archive is not None:
+            gen_doc["archive"] = {"filled": len(archive.cells), "capacity": archive.capacity()}
         write_json(os.path.join(gen_dir, "generation.json"), gen_doc)
         for c in ranked:
             a, bot = c["agg"]["all"], c["agg"].get("bot", {})
@@ -244,15 +251,24 @@ class Trainer:
         state["history"].append({"generation": gen, "best": max(fits), "mean": round(sum(fits) / len(fits), 4),
                                  "best_id": ranked[0]["id"], "champion": state["champion"]["id"],
                                  "champion_fresh": champ_fresh["all"]["fitness"], "promoted": promoted,
+                                 "archive_filled": len(archive.cells) if archive is not None else 0,
                                  "duration_s": gen_doc["duration_s"], "finished": gen_doc["finished"]})
-        state["population"] = evolution.next_generation([(c["genes"], c["fitness"]) for c in cands], self.specs,
-                                                        evolution.generation_rng(self.run_seed, gen, "evo"), evo)
+        evo_rng = evolution.generation_rng(self.run_seed, gen, "evo")
+        if archive is not None:
+            state["population"] = qd.next_population(archive, self.specs, evo_rng, evo, len(cands))
+        else:
+            state["population"] = None
+        if not state["population"]:
+            state["population"] = evolution.next_generation([(c["genes"], c["fitness"]) for c in cands], self.specs,
+                                                            evo_rng, evo)
+        state["archive_filled"] = len(archive.cells) if archive is not None else 0
         state["generation_done"] = gen
         self.save_state(state)
         self.write_champion(state)
         report.write_all(self, state)
+        arch_note = (f" archive {len(archive.cells)}/{archive.capacity()}" if archive is not None else "")
         self.log(f"gen {gen}: best {max(fits):.3f} ({ranked[0]['id']}) mean {state['history'][-1]['mean']:.3f} "
-                 f"champion {state['champion']['id']} ({gen_doc['duration_s']} s)")
+                 f"champion {state['champion']['id']} ({gen_doc['duration_s']} s){arch_note}")
         self.set_status("running", generation=gen + 1, generation_done=gen, best_fitness=max(fits),
                         champion=state["champion"]["id"], eta=self.eta(state))
         return True
@@ -305,20 +321,79 @@ class Trainer:
         report.write_all(self, state)
         return made
 
-    def make_jobs(self, cid: str, weights: str, gen: int, stream: str, gen_dir: str, opponent_path: str) -> list:
-        ev = self.cfg["evaluation"]
-        jobs, index = [], 0
-        for match in ev.get("matches", [{"opponent": "champion", "jobs": 1}, {"opponent": "bot", "jobs": 1}]):
+    def search_mode(self) -> str:
+        return str(self.cfg.get("search", {}).get("mode", "ga")).strip().lower()
+
+    def archive_path(self) -> str:
+        name = str(self.cfg.get("qd", {}).get("archive_file", "qd_archive.json"))
+        return name if os.path.isabs(name) else os.path.join(self.run_dir, name)
+
+    def match_plan(self, gen: int, stream: str, gen_dir: str, champion_path: str) -> list:
+        """Shared opponent list for every candidate. ga reads evaluation.matches; qd reads league."""
+        if self.search_mode() != "qd":
+            return self._ga_plan(champion_path)
+        return self._league_plan(gen, stream, gen_dir, champion_path)
+
+    def _ga_plan(self, champion_path: str) -> list:
+        plan = []
+        for match in self.cfg["evaluation"].get("matches", [{"opponent": "champion", "jobs": 1},
+                                                            {"opponent": "bot", "jobs": 1}]):
             for _ in range(int(match.get("jobs", 1))):
                 opp = match["opponent"]
-                jobs.append({"id": f"{cid}_{stream}_{opp}_{index}", "dir": os.path.join(gen_dir, "jobs"),
-                             "weights_a": weights, "opponent": opp,
-                             "weights_b": opponent_path if opp == "champion" else None,
-                             "rounds": int(ev.get("rounds_per_job", 4)),
-                             "seed": seed_for(self.run_seed, gen, stream, index),
-                             "map": match.get("map") or self.cfg["arena"].get("map"),
-                             "time_limit_s": self.cfg["arena"].get("time_limit_s", 300)})
-                index += 1
+                plan.append({"opponent": opp, "weights_b": champion_path if opp == "champion" else None,
+                             "map": match.get("map")})
+        return plan
+
+    def _league_plan(self, gen: int, stream: str, gen_dir: str, champion_path: str) -> list:
+        """Archive elites (current champion until a cell exists) plus the playtest bot. Reseeded per call so
+        every candidate of this generation faces the same weights."""
+        specs = self.cfg.get("league", {}).get("opponents") or [{"source": "archive", "jobs": 1},
+                                                                {"source": "bot", "jobs": 1}]
+        rng = evolution.generation_rng(self.run_seed, gen, f"league-{stream}")
+        archive = qd.Archive.load(self.archive_path(), self.cfg.get("qd", {}))
+        plan = []
+        for spec in specs:
+            if not isinstance(spec, dict):
+                continue
+            source = spec.get("source", "champion")
+            for _ in range(int(spec.get("jobs", 1))):
+                if source == "bot":
+                    plan.append({"opponent": "bot", "weights_b": None, "map": spec.get("map")})
+                    continue
+                if source == "archive":
+                    cell = archive.sample_cell(rng)
+                    if cell is not None:
+                        path = os.path.join(gen_dir, "league", f"{stream}_{len(plan)}.json")
+                        if not os.path.exists(path):
+                            write_json(path, apply_genes(self.baseline_doc, cell["genes"]))
+                        plan.append({"opponent": "archive", "weights_b": path, "map": spec.get("map"),
+                                     "cell": cell.get("key")})
+                        continue
+                plan.append({"opponent": "champion", "weights_b": champion_path, "map": spec.get("map")})
+        return plan
+
+    def _update_archive(self, cands: list, gen: int) -> qd.Archive:
+        archive = qd.Archive.load(self.archive_path(), self.cfg.get("qd", {}))
+        for cand in cands:
+            rounds = [r for rows in cand["by_opp"].values() for r in rows]
+            behaviour = qd.mean_behaviour(rounds)
+            if behaviour is None:
+                continue
+            archive.consider(cand["id"], cand["genes"], cand["fitness"], behaviour, gen)
+        archive.save(self.archive_path())
+        return archive
+
+    def make_jobs(self, cid: str, weights: str, gen: int, stream: str, gen_dir: str, plan: list) -> list:
+        ev = self.cfg["evaluation"]
+        jobs = []
+        for index, match in enumerate(plan):
+            jobs.append({"id": f"{cid}_{stream}_{match['opponent']}_{index}", "dir": os.path.join(gen_dir, "jobs"),
+                         "weights_a": weights, "opponent": match["opponent"],
+                         "weights_b": match.get("weights_b"),
+                         "rounds": int(ev.get("rounds_per_job", 4)),
+                         "seed": seed_for(self.run_seed, gen, stream, index),
+                         "map": match.get("map") or self.cfg["arena"].get("map"),
+                         "time_limit_s": self.cfg["arena"].get("time_limit_s", 300)})
         return jobs
 
     @staticmethod
