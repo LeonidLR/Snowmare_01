@@ -38,6 +38,7 @@
 namespace CorpsePersistSmoke
 {
 	constexpr float StepSeconds = 0.1f;
+	constexpr float LyingPelvisLimitCm = 45.f; // Same physical acceptance as DeathRagdollSmoke.
 
 	struct FBody
 	{
@@ -320,14 +321,35 @@ namespace CorpsePersistSmoke
 					&& Mesh->GetCollisionEnabled() == ECollisionEnabled::NoCollision;
 				const bool bVisible = Mesh->IsVisible() && !Enemy->IsHidden();
 				const float Ground = RootOverGround(World, *Enemy);
+				const bool bRagdoll = Enemy->IsRagdollActive();
+				bool bOnGround = FMath::Abs(Ground) < 60.f;
+				bool bPhysicsFloor = false;
+				float BodyGap = 0.f;
+				float SkeletonPelvisHeight = 0.f;
+				if (bRagdoll)
+				{
+					// 918d95d3/067: a settled ragdoll's mesh origin is not its floor contact.
+					const FName Pelvis = UCorpseSubsystem::ResolvePelvisBone(Mesh);
+					const FDeathRagdollConfig& Config = Corpses->GetRagdollConfig();
+					float BottomZ = 0.f;
+					float FloorZ = 0.f;
+					bPhysicsFloor = Pelvis != NAME_None && Mesh->GetBoneIndex(Pelvis) != INDEX_NONE
+						&& UCorpseSubsystem::GetPelvisBodyBottomZ(Mesh, Pelvis, BottomZ)
+						&& UCorpseSubsystem::TraceCorpseFloorZ(World, Mesh->GetBoneLocation(Pelvis), Enemy, Config, FloorZ);
+					BodyGap = BottomZ - FloorZ;
+					const float Scale = FMath::Max(static_cast<float>(Mesh->GetComponentScale().Z), KINDA_SMALL_NUMBER);
+					SkeletonPelvisHeight = bPhysicsFloor ? (static_cast<float>(Mesh->GetBoneLocation(Pelvis).Z) - FloorZ) / Scale : 0.f;
+					bOnGround = bPhysicsFloor && SkeletonPelvisHeight < LyingPelvisLimitCm
+						&& BodyGap >= -Config.MaxPelvisSinkCm && BodyGap < LyingPelvisLimitCm;
+				}
 				const UEnemyAnimInstance* Anim = Cast<UEnemyAnimInstance>(Mesh->GetAnimInstance());
 				const float PoseWeight = Anim ? Anim->GetSlotMontageGlobalWeight(Anim->OneShotSlot) : 0.f;
-				Check(State, bFrozen && bNoCollision && bVisible && !Registered.Contains(Enemy) && FMath::Abs(Ground) < 60.f,
+				Check(State, bFrozen && bNoCollision && bVisible && !Registered.Contains(Enemy) && bOnGround,
 					FString::Printf(TEXT("%s (%s): stays 30 s, frozen %d (controller %s, ticks actor %d / mesh %d / move %d), collision off %d, visible %d, "
-						"out of the registry %d, on the ground (root %.0f cm), death pose weight %.2f"), *Body.Label, *GetNameSafe(Enemy->GetClass()),
+						"out of the registry %d, on ground %d (ragdoll %d, mesh origin %.0f cm, physical floor %d, body gap %.1f cm, pelvis %.1f skeleton cm), death pose weight %.2f"), *Body.Label, *GetNameSafe(Enemy->GetClass()),
 						Enemy->IsCorpseFrozen() ? 1 : 0, *GetNameSafe(Enemy->GetController()), Enemy->IsActorTickEnabled() ? 1 : 0,
 						Mesh->IsComponentTickEnabled() ? 1 : 0, Move && Move->IsComponentTickEnabled() ? 1 : 0, bNoCollision ? 1 : 0, bVisible ? 1 : 0,
-						Registered.Contains(Enemy) ? 0 : 1, Ground, PoseWeight));
+						Registered.Contains(Enemy) ? 0 : 1, bOnGround ? 1 : 0, bRagdoll ? 1 : 0, Ground, bPhysicsFloor ? 1 : 0, BodyGap, SkeletonPelvisHeight, PoseWeight));
 				Body.DistanceCm = FVector::Dist(Enemy->GetActorLocation(), Leader->GetActorLocation());
 			}
 			int32 Brains = 0;
