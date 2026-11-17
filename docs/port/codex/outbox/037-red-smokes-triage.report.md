@@ -1,6 +1,19 @@
 # 037 red smokes triage
 
-Status: IN PROGRESS. Step0 green; MilitaryZombieSmoke fix accepted by Claude; CorpsePersistSmoke added separately and fixed smoke-side. Its target passes3/3 plus isolated recheck; broader Smart has infrastructure/performance failures recorded below. OptimizedCharacterSmoke is next. 2026-11-17.
+Status: IN PROGRESS. Step0 green; MilitaryZombieSmoke, CorpsePersistSmoke and OptimizedCharacterSmoke fixed smoke-side. Independent CorpseCost performance red needs Claude. Next: StealthModeSmoke. 2026-11-17.
+
+## Current summary
+
+| Smoke | Verdict / commit | Gate |
+|---|---|---|
+| RetreatFacingSmoke | Green latest-base recheck; report8a3ecc24 | once PASS39.6s; dropped, flags unchanged |
+| CoverSmoke | Green latest-base recheck; report8a3ecc24 | once PASS42.5s; dropped, flags unchanged |
+| MilitaryZombieSmoke | Stale montage test fixed11b04070; accepted Claude#604 | target3/3, Smart18units+4smokes PASS; initial Corpse finding addressed separately |
+| CorpsePersistSmoke | Stale mesh-origin proxy fixedb3fafd28 | baselineP/F/P, target3/3+isolated PASS; Smart5units+5smokes PASS, startup timeout recovered, separate CorpseCost FAIL |
+| OptimizedCharacterSmoke | Stale montage test fixed4616ea40 | target3/3, Smart1smoke(no units selected), four related smokes PASS |
+| CorpseCostSmoke | needs Claude; budget unchanged | two actual FAILs:0.92ms /1.70ms vs0.5ms |
+
+Pending original order: StealthModeSmoke, CoverHugSmoke, MantleDescentSmoke, FormationJitterSmoke, LevelGenRampSmoke, then diagnosis-only RpgPmcSmoke and PmcEncounterHuntSmoke.
 
 ## Scope and baseline
 
@@ -44,7 +57,7 @@ Both commands used `Scripts/smoke_parallel.ps1 -Commands CodexTactics.<Name> -Jo
 
 ## Next
 
-Step 0 was committed as `8a3ecc24`. MilitaryZombieSmoke is now addressed below; OptimizedCharacterSmoke baseline is confirmed red but its source is untouched and its fix has not started.
+Step0 was committed as `8a3ecc24`. Subsequent per-smoke results follow; current pending order is in the summary and at the end.
 
 
 ## MilitaryZombieSmoke — stale montage assertion; initial related-gate findings
@@ -77,7 +90,7 @@ Smoke FAIL: hound (BP_Enemy_Hound_C): stays 30 s, frozen 1 (controller None, tic
 
 Execution/approval note: a worker source-edit/build request was denied before any execution for missing explicit task authorization. Parent supplied the original user's direct delegation of NEXT tasks from Claude and obtained approval for the narrow test-only edit and gates. One later review-service Bad Request executed no test; the three recorded standalone runs are the three actual invocations.
 
-Claude review #604 accepted `11b04070`: another smoke cannot execute this test-only change, so CorpsePersist was added as a separate red rather than blocking Military. Its baseline comparison and fix follow. OptimizedCharacterSmoke remains next.
+Claude review #604 accepted `11b04070`: another smoke cannot execute this test-only change, so CorpsePersist was added as a separate red rather than blocking Military. Its baseline comparison and fix follow. OptimizedCharacterSmoke follow-up is recorded below.
 
 
 ## CorpsePersistSmoke — separate red from Claude review #604
@@ -119,4 +132,33 @@ Smoke FAIL: 100 more frozen bodies (50 -> 150) add 0.92 ms of game-thread time (
 ```
 Its one isolated recheck also failed: **1.70ms vs0.5ms**. **needs Claude: independent frozen-body game-thread cost investigation; do not widen the0.5ms budget.** CorpsePersist source is not executed by CorpseCost; protected Corpse/ragdoll runtime was not edited or investigated deeply.
 
-Next authorized item: **OptimizedCharacterSmoke**. Its baseline already reproduces stale montage assertions after ragdoll activation, but its source remains untouched. StealthMode, CoverHug, MantleDescent, FormationJitter, LevelGenRamp and the two diagnosis-only PMC items are still pending.
+At the Corpse checkpoint, OptimizedCharacterSmoke was the next authorized item. Its completed follow-up is below.
+
+
+## OptimizedCharacterSmoke — retained ragdoll replaces stale montage check
+
+Source commit: `4616ea40` (`test(smoke): recognize OptimizedCharacterSmoke retained ragdoll death`). Router: level3, confidence0.58 | primary Codex main session | pass, no redo. Only OptimizedCharacterSmokeCommand.cpp changed,16 insertions/7 deletions including comments/include.
+
+The unchanged baseline on01efefe9 already failed63.5s on Marksman and Hound death-montage expectations despite ragdoll activation (Saved/Logs/task037/death/OptimizedCharacterSmoke-baseline-*). Cause is the same deliberate918d95d3 contract: active ragdoll suppresses the montage. CheckDeath runs after the existing90-tick/frame delay; a body can still be simulating then, so requiring an already settled floor pose here would be a different stale timing assumption.
+
+For active ragdolls the optimized body's death visual must now be registered/kept by CorpseSubsystem and actually simulating physics or frozen. If ragdoll is inactive, the old HasDeathAnimation/montage fallback remains unchanged. Both bodies must still exist and be dying, optimized anim bIsDead stays required, and every later pose/bone, material, LOD, skeleton, physics-asset and variant assertion stays unchanged. No timing, gameplay/runtime, flags, assets or limit changes.
+
+Fixed-run evidence explicitly exercises both prior failures: Marksman and Hound report `death clip NOT playing`, `retained ragdoll1`, `simulating1`, `frozen0` and PASS. Thus the replacement checks actual physics rather than merely accepting the ragdoll flag or assuming frozen state.
+
+| Gate | Actual result |
+|---|---|
+| Build | PASS38.66s |
+| Required standalone1/2/3 | PASS74.7s / PASS76.0s / PASS71.5s; each Jobs1/NoRetry/Multiprocess |
+| Actual Smart plan | optimized-character rule; no unit filter; only OptimizedCharacterSmoke selected |
+| test.ps1 -Smart -Jobs1 | PASS56.2s, one smoke, no retry;0 units selected, not a unit-suite PASS claim |
+| Related EnemyDeathSmoke | PASS39.9s, once Jobs1/NoRetry/Multiprocess |
+| Related MilitaryZombieSmoke | PASS45.8s, same flags |
+| Related CorpsePersistSmoke | PASS43.7s, same flags |
+| Related DeathRagdollSmoke | PASS42.3s, same flags |
+| Staged source audit / whitespace | PASS, risk1.1/4; one explicit smoke path |
+
+All evidence: `Saved/Logs/task037/optimized/`: build-*, OptimizedCharacter-fixed-N-*, smart-plan.log, smart-wrapper.log, smart-result.json, smart-OptimizedCharacterSmoke-engine.log, related-<Smoke>-*. Engine RESULT markers verify each PASS. Smart's child launch alone used process-local UE_SKIP_UBT_SDK_SETUP=1 after the proven startup contention; no persistent configuration or designer-priority override. No stale unit report was copied because Smart selected no units.
+
+Independent CorpseCost performance failures above remain needs Claude; no extra performance rerun or budget change was made during this smoke's gate.
+
+Next: **StealthModeSmoke**. Remaining original order after that: CoverHugSmoke, MantleDescentSmoke, FormationJitterSmoke, LevelGenRampSmoke; then diagnosis-only RpgPmcSmoke and PmcEncounterHuntSmoke. Protected runtime areas remain off limits. No push/merge/main checkout writes.
