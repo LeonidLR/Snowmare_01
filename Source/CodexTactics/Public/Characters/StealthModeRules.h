@@ -20,6 +20,8 @@ struct CODEXTACTICS_API FStealthModeConfig
 	float DetectionBuildupMultiplier = 0.5f;
 	float FootstepNoiseMultiplier = 0.5f;
 	bool bBreakOnFire = true;
+	/** Designer request R17-2 (2026-11-17): a mantle / vault / fence or window climb keeps stealth ("climbed quietly - still in stealth"). */
+	bool bKeepThroughObstacleClimb = true;
 	float VisualOpacity = 0.4f;
 	float VisualGray = 0.45f;
 	// Stealth v2 (008): fast crouched gait, fast perception multipliers, and threat look-lock tuning.
@@ -60,6 +62,11 @@ namespace StealthModeRules
 	CODEXTACTICS_API bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, const FStealthModeConfig& Config);
 	/** Fast stealth movement does not break stealth; normal sprint (outside fast stealth) breaks it; firing breaks it when bBreakOnFire is true. */
 	CODEXTACTICS_API bool ShouldBreak(bool bActive, bool bFired, bool bSprinting, bool bFast, const FStealthModeConfig& Config);
+	/**
+	 * Designer request R17-2 (2026-11-17): a climb ends stealth only where the data says so. An obstacle climb (a mantle, a vault, a fence
+	 * or window climb) keeps it unless keep_through_obstacle_climb is false; a ladder still ends it (not part of R17-2).
+	 */
+	CODEXTACTICS_API bool ShouldBreakOnClimb(bool bActive, bool bObstacleClimb, bool bLadderClimb, const FStealthModeConfig& Config);
 	/** Pure helper for Stealth v2 §3: selects Lean_Start / Lean / Lean_Stop clip name by wall facing and lean phase. Returns NAME_None on invalid facing. */
 	CODEXTACTICS_API FName GetWallLeanClipName(ECoverFacing Facing, EStealthWallLeanPhase Phase = EStealthWallLeanPhase::Hold);
 	/** Returns the yaw offset (-90 for Left, 90 for Right, 0 otherwise) matching the wall clip facing. */

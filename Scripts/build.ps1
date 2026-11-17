@@ -7,6 +7,8 @@
 # Usage: powershell -ExecutionPolicy Bypass -File Scripts\build.ps1 [-Target CodexTacticsEditor] [-Config Development]
 #        [-NoUnity]     every .cpp compiled alone (UBT -DisableUnity): proves each file includes what it uses
 #        [-FullUnity]   unity blobs also for the files changed in git (UBT -DisableAdaptiveUnity): what main's build sees
+#        [-Remote worker]   compile on the second machine codex-worker instead of here (Scripts\Toolsuild_remote.ps1: this checkout's
+#                       HEAD + uncommitted changes go there, the DLLs come back; the main PC's UBT queue stays free; docs/port/SECOND_MACHINE.md)
 #        [-StaticAnalyzer Default|VisualCpp]   UBT static analysis of the project modules only (-StaticAnalyzerProjectOnly, MSVC /analyze):
 #                       log -> Saved\Logs\StaticAnalysis.log (used by Scripts\Tools\weekly_audit.ps1); the next normal build recompiles
 param(
@@ -15,7 +17,8 @@ param(
     [switch]$NoUnity,
     [switch]$FullUnity,
     [ValidateSet("None", "Default", "VisualCpp")][string]$StaticAnalyzer = "None",
-    [string]$ProjectDirOverride = ""
+    [string]$ProjectDirOverride = "",
+    [ValidateSet("", "worker")][string]$Remote = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -33,6 +36,12 @@ if (Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor.exe'" | Where
         $_.CommandLine -and ($_.CommandLine.Replace('/', '') -like "*$ProjectFull*") }) {
     Write-Host "Unreal Editor (CodexTactics) is running: close it first (it locks the DLLs)." -ForegroundColor Yellow
     exit 2
+}
+
+if ($Remote) {
+    if ($StaticAnalyzer -ne "None" -or $ProjectDirOverride) { Write-Host "-Remote does not support -StaticAnalyzer / -ProjectDirOverride" -ForegroundColor Yellow; exit 2 }
+    & (Join-Path (Join-Path $PSScriptRoot "Tools") "build_remote.ps1") -Target $Target -Config $Config -NoUnity:$NoUnity -FullUnity:$FullUnity
+    exit $LASTEXITCODE
 }
 
 # Unity-build name clashes (a few seconds, no compiler): warn, never block the build.

@@ -554,6 +554,7 @@ void UOperativeAnimInstance::HandleWeaponFired(AOperativeCharacter* Shooter, AAc
 				bCoverInFirePose = true;
 				if (Enter && PlayCoverOneShot(Enter, 0.1f, 0.05f))
 				{
+					CoverFireEnterMontage = CoverOneShotMontage;
 					CoverPendingFireClip = Clip;
 					return;
 				}
@@ -1973,7 +1974,7 @@ void UOperativeAnimInstance::FadeOutCoverMontages(float BlendIn)
 UAnimMontage* UOperativeAnimInstance::PlayCoverMontage(UAnimSequenceBase* Clip, const FAlphaBlendArgs& BlendIn, float BlendOut, float PlayRate, int32 LoopCount,
 	float StartSeconds)
 {
-	if (!Clip || (BoundOperative.IsValid() && BoundOperative->IsInStealthMode()))
+	if (!Clip || (BoundOperative.IsValid() && BoundOperative->IsInStealthMode() && !BoundOperative->IsStealthCoverShotWanted()))
 	{
 		return nullptr;
 	}
@@ -2008,16 +2009,20 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 	}
 	// Stealth owns the full body at and approaching a wall. Stop only cover montages:
 	// firing, reloads and other independent full-body actions retain their normal ownership.
-	if (Operative.IsInStealthMode())
+	// A shot wanted from this cover (IsStealthCoverShotWanted) hands the body to the cover fire stance: its barrel must reach the target.
+	if (Operative.IsInStealthMode() && !Operative.IsStealthCoverShotWanted())
 	{
+		// Back from a hand-off (a shot that kept stealth, stealth_break_on_fire false): the fire pose fades into the wall pose, no snap.
+		const float StopBlend = bCoverInFirePose ? FMath::Max(CoverFireLeaveBlendSeconds, 0.25f) : 0.f;
 		if (UAnimMontage* Loop = CoverLoopMontage.Get())
 		{
-			Montage_Stop(0.f, Loop);
+			Montage_Stop(StopBlend, Loop);
 		}
 		if (UAnimMontage* OneShot = CoverOneShotMontage.Get())
 		{
-			Montage_Stop(0.f, OneShot);
+			Montage_Stop(StopBlend, OneShot);
 		}
+		CoverFireEnterMontage.Reset();
 		CoverLoopMontage.Reset();
 		CoverLoopClip.Reset();
 		CoverOneShotMontage.Reset();
@@ -2245,6 +2250,7 @@ void UOperativeAnimInstance::UpdateCoverLayer(const AOperativeCharacter& Operati
 			// Blend out 0.2 like the loops blend in (the fire_idle that follows takes over without a dip).
 			if (PlayCoverOneShot(Enter, 0.2f, 0.2f))
 			{
+				CoverFireEnterMontage = CoverOneShotMontage;
 				return;
 			}
 		}
@@ -2461,7 +2467,7 @@ bool UOperativeAnimInstance::GetCoverSwitchTrack(bool bCrouch, ECoverSwitchAppro
 
 bool UOperativeAnimInstance::PlayCoverOneShot(UAnimSequenceBase* Clip, float BlendIn, float BlendOut)
 {
-	if (!Clip || (BoundOperative.IsValid() && BoundOperative->IsInStealthMode()))
+	if (!Clip || (BoundOperative.IsValid() && BoundOperative->IsInStealthMode() && !BoundOperative->IsStealthCoverShotWanted()))
 	{
 		return false;
 	}
