@@ -29,3 +29,22 @@ Log, per frame for the Medic in A vs C over t 21-22.5 s: `Wanted`, `Centers[]` (
 No source change, so no gate was run beyond the reproduction above (build OK; FormationJitterSmoke FAIL x5 incl. the two JSON experiments and one Debug-3 run, same assertion each time). `typesafe_triage` not applicable (empty diff).
 
 Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
+
+## Fix
+`FormationLookFilterRules::Step` now has a second, stricter tier for big look jumps (the Medic's limit cycle between about 95 and -130 deg):
+- A look change of at least `look.big_jump_deg` (default 120) from the applied look must hold `look.big_hold_s` (default 0.6 s) before it is taken. Changes of 35 to 120 deg keep the 0.15 s hold; changes of 35 deg or less pass at once, as before.
+- Hysteresis: after a big jump is accepted, a jump straight back to the previous look (within 35 deg of it) is rejected for the next `look.big_hold_s`. The filter keeps `Previous` and `SinceBigJumpSeconds` for this.
+- Both numbers are in `Content/Data/FormationLab/formation_config.json` next to `look.anticipate_s`. They are read through `FFormationConfig` (`LookBigJumpDeg`, `LookBigHoldS`) and `FormationTuning::Get()` in `SquadSubsystemFormation.cpp`. The key count in FormationTuningTest goes from 83 to 85.
+- Tests in `FormationLookFilterTest.cpp`:
+  - The existing test is adapted: its 150 deg "lasting jump" is now a medium one, 89 deg.
+  - New `CodexTactics.Formation.LookFilter.BigJump`: a 0.3 s flip-flop is rejected, a stable big jump is taken after about 0.6 s, an immediate return is rejected, and small and medium changes behave as before.
+- The TS golden files and the web page do not list the two new keys. `FromValues` falls back to the defaults, and the parity tests pass.
+
+## Gate (Fix)
+- `Scripts/build.ps1`: Succeeded.
+- FormationJitterSmoke x3 (`-Jobs 1`): PASS x3 (76 s, 70 s, 64 s). It was FAIL x5 before the fix, so this one smoke went from red to green.
+- The 34 smokes in smokeRegistry whose name contains Formation, Wall or Corner, other than FormationJitterSmoke (`-NoRetry -ExtraArgs -Multiprocess`): 34 run, 0 failed, 0 PASS*. None is red, so there is no main comparison to make. No smoke limit was loosened.
+- `Scripts/test.ps1 -Filter CodexTactics.Formation`: 213 tests, 0 failed.
+- `typesafe_triage.py --audit-diff --agent claude`: boundary PASS, risk 1.9 / 4.
+
+Co-Authored-By: Claude Sonnet 5.5 <noreply@anthropic.com>
