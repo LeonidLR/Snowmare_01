@@ -1,6 +1,6 @@
 # 037 red smokes triage
 
-Status: IN PROGRESS. StealthModeSmoke and FormationJitterSmoke need Claude; CoverHugSmoke fixed df1db2f3/gated; MantleDescentSmoke merged-base recheck PASS (no local fix). Next/final: LevelGenRampSmoke. PMC pair Gemini077; corpse cost Gemini078.
+Status: COMPLETE within 037 triage scope. All assigned smokes processed. Four local smoke-side fixes gated (three inherited, CoverHug added); MantleDescent merged-base recheck green; StealthMode, FormationJitter and LevelGenRamp need Claude. PMC pair skipped/Gemini077; corpse cost Gemini078. No gameplay fix claimed for unresolved reds.
 
 ## Current summary
 
@@ -11,9 +11,15 @@ Status: IN PROGRESS. StealthModeSmoke and FormationJitterSmoke need Claude; Cove
 | MilitaryZombieSmoke | Stale montage test fixed11b04070; accepted Claude#604 | target3/3, Smart18units+4smokes PASS; initial Corpse finding addressed separately |
 | CorpsePersistSmoke | Stale mesh-origin proxy fixedb3fafd28 | baselineP/F/P, target3/3+isolated PASS; Smart5units+5smokes PASS, startup timeout recovered, separate CorpseCost FAIL |
 | OptimizedCharacterSmoke | Stale montage test fixed4616ea40 | target3/3, Smart1smoke(no units selected), four related smokes PASS |
-| CorpseCostSmoke | needs Claude; budget unchanged | two actual FAILs:0.92ms /1.70ms vs0.5ms |
+| CorpseCostSmoke | Assigned Gemini078; budget unchanged | historical two actual FAILs:0.92ms /1.70ms vs0.5ms; not rerun here |
+| StealthModeSmoke | needs Claude;963485d2 | fresh FAIL103.5s; fire gate drops cover pose, wall blocks shot; no round/clip30 |
+| CoverHugSmoke | Smoke timing fix df1db2f3 | build+3/3+Smart(no units selected)+four related smokes PASS |
+| MantleDescentSmoke | Green merged-base recheck;1037ea93 | required single PASS89.9s on cfd2cdf0; original assertions unchanged, no local fix |
+| FormationJitterSmoke | needs Claude;1578587c | fresh FAIL88.2s on33bfe619; other follower27.2/24.0 vs17.0/12.6deg/s |
+| LevelGenRampSmoke | needs Claude; this final report commit | fresh FAIL77.0s;11 leg PASS/1 group FAIL; same STAIR_in_8 blockage |
+| RpgPmcSmoke / PmcEncounterHuntSmoke | Skipped; assigned Gemini077 by designer | no execution or code changes in resumed work |
 
-Pending original order: StealthModeSmoke, CoverHugSmoke, MantleDescentSmoke, FormationJitterSmoke, LevelGenRampSmoke, then diagnosis-only RpgPmcSmoke and PmcEncounterHuntSmoke.
+The per-step pending/stop notes below are historical checkpoints. The completed current disposition is the table above; no assigned 037 smoke remains untriaged.
 
 ## Scope and baseline
 
@@ -245,3 +251,20 @@ Resume: stay in agents worktree on codex/037-red-smokes; read this report and in
 - No local source/threshold/timing/config/asset/flag changes and no local-fix gate claimed. Router3/confidence0.49 | primary main session | diagnosis complete, needs Claude.
 - Evidence Saved/Logs/task037/formation/: base.txt, build-wrapper.log, build-engine.log, baseline-wrapper.log, baseline-engine.log, baseline-result.json, FormationJitter-A/B/C/D/E.csv.
 - Next/final original smoke: LevelGenRampSmoke. Same compiled base is usable (report-only changes); run once with required standalone flags, then read FAIL and relevant code. PMC pair remains skipped/Gemini077; corpse cost Gemini078.
+
+
+## LevelGenRampSmoke — needs Claude, deterministic group-only stair blockage
+
+- Router level4/confidence0.72 | primary main session | diagnosis complete, no fix. Used already-built merged runtime33bfe619 plus report-only commits; smoke recorded base1578587c. No source changes since the successful Formation precheck build.
+- Fresh standalone Jobs1/NoRetry/Multiprocess/fixed60fps: FAIL77.0s, actual engine RESULT: FAIL. Exactly reproduces both035 failures: STAIR_in_8 group/all-three box-selected/sprint stalls after17s, top level300cm. Commander feet8cm/speed0, Engineer feet145cm/speed15/still10s, Medic feet231cm/speed22. All three report complete paths ending0cm from their upper-level goal at z310; two retain own orders, Medic has returned to formation.
+- Same run:11 leg PASS,1 leg FAIL. STAIR_in_8 squad reaches the top in10.0s; Solo reaches it in8.6s with other men staying down. Other connected stairs' squad/group/solo legs pass. Separate B_hall_n_stair_0 navmesh discontinuity WARN is skipped by the existing default contract, not the cause of the STAIR_in_8 group failure; no strictnav or assertion settings were changed.
+- Bounded read: LevelGenRampSmoke group selection/double-click/arrival+stillness diagnostics; PlayerControllerOrders OrderGroupMove computes per-member targets via SquadFormation::ComputeGroupTargets and calls OrderMoveTo for each selected member; RequestMove/path completion and formation own-order/steering handling. Relevant source history: smoke64eeac93 (night-bar smoke-side fixes); latest controller9d299363 F-3,90b60f9f batch2,9d95c444 mantle slice1. The merged F-3 recheck still yields the exact same positional/path failure, so it does not resolve this issue.
+- Verdict(c): group movement/collision/formation coupling remains unresolved. Complete paths and passing squad/Solo routes do not justify guessing a navmesh/layout edit or a safe <40-line single-system runtime fix. No isolated causal regression commit established; needs Claude for deeper runtime diagnosis. No gameplay, timing, threshold, knownFail/knownFlaky, map, config, asset, protected Depot/PMC/corpse edit.
+- Full preserved evidence Saved/Logs/task037/ramp/: base.txt, baseline-wrapper.log, baseline-engine.log, baseline-result.json. The engine log includes every member/path state and all per-leg summaries. No retry or rerun used to hide the red.
+
+## Final hand-back
+
+- Original task037 is fully triaged within its authorized small-fix/needs-Claude scope. Added local source fix df1db2f3 (CoverHug smoke only), inherited11b04070/b3fafd28/4616ea40 preserved. Stealth963485d2, Formation1578587c and Ramp above remain genuine unresolved reds, not reported green.
+- MantleDescent's required merged-base single recheck is green, no local fix asserted. CoverHug full gate PASS, including female variant. All runtime/code/config/assets from other owners left to them; only our explicit smoke source and report were edited locally. Current-main merges were only INTO codex/037-red-smokes and conflict-free; no push/main checkout writes/merge into main.
+- Designer/Claude reassignment honored: RpgPmcSmoke + PmcEncounterHuntSmoke skipped (Gemini077); separate corpse cost left to Gemini078. Other new inbox tasks not assumed.
+- Report and all prior work preserved, including stopped-session diagnostic patch. Final staged audit/whitespace check must PASS before this commit; then post the Ramp result,037 done and queue empty in approved codex-037-results (Claude620), and enter agent_chat wait --as codex --timeout1800, repeating on NO_MESSAGES.
