@@ -54,6 +54,22 @@ enum class EPmcOrder : uint8
 	Count
 };
 
+/** A fighter's tactical post on the tactical map (TACTICAL_MAP.md P2; PmcTacticalRules::PlanPlacement). */
+enum class EPmcPostKind : uint8
+{
+	None,
+	/** A hiding spot whose fire bites the squad's route at a chokepoint's exit. */
+	Ambush,
+	/** A spot on an overwatch roof (the marksman's). */
+	Overwatch,
+	/** A window's stand point inside the building, facing out over the route. */
+	Window,
+	/** A ladder-only roof the seeded picker gave an enemy (its ladder top). */
+	LadderRoof,
+	/** A drop spot's edge (roof / wall top) for an archetype that jumps down. */
+	Drop
+};
+
 /** A side's role in an objective round (the arena, task #53): the attackers take the point, the defenders hold it. */
 enum class EPmcRole : uint8
 {
@@ -138,6 +154,12 @@ enum class EPmcScenario : uint8
 	Roofs,
 	/** A skirmish in a blizzard (the sight halved). */
 	Blizzard,
+	/**
+	 * TACTICAL_MAP.md P3 (2026-11-17): a generated map with a tactical file - the attackers walk the squad's route (the level start / a
+	 * mission goal to another goal, the objectives file) onto its end (the objective); the defenders spawn on their tactical posts along it
+	 * (ambushes at chokepoint exits, the marksman on an overwatch roof, a man on a picked ladder-only roof). Not part of the random five.
+	 */
+	Tactical,
 	Count
 };
 
@@ -298,6 +320,34 @@ struct CODEXTACTICS_API FPmcWeights
 	float KillZoneFrac = 0.6f;
 	/** ... and at most this long after the team's first contact, s (then it fires whatever he looks at). */
 	float AmbushMaxHoldSeconds = 20.f;
+
+	// --- The tactical map (TACTICAL_MAP.md P2, designer 2026-11-17; PmcTacticalRules; every term is 1 without a tactical file) ---
+
+	/**
+	 * "terrain_danger": the danger of his position (DangerAt(feet, Pmc): inside a chokepoint) - static orders (Hold / Crouch / Suppress /
+	 * Ambush off a post) x (1 - this x danger), TakeCover / Relocate x (1 + this x danger); a cover slot / post candidate x (1 - this x danger).
+	 */
+	float TerrainDanger = 0.6f;
+	/** "ambush_exit": an ambush post (a hiding spot at a chokepoint exit on the squad's route) x (1 + this x its score). */
+	float AmbushExit = 0.8f;
+	/** "overwatch_roof": an overwatch roof post (the marksman's) x (1 + this x its score). */
+	float OverwatchRoof = 0.6f;
+	/** "window_position": a window post covering the route x (1 + this x its score). */
+	float WindowPosition = 0.4f;
+	/** "route_cover": a cover slot whose wall faces the squad's route x (1 + this x facing; half away from an analysis cover spot). */
+	float RouteCover = 0.4f;
+	/** "chokepoint_avoid": a FallBack goal x (1 - this x its danger) - he falls back round the chokepoint, not into it. */
+	float ChokepointAvoid = 0.8f;
+	/** "choke_leave_danger": standing in contact at a danger >= this he relocates (cover available) even before he is spotted. */
+	float ChokeLeaveDanger = 0.5f;
+	/** "window_share": the seeded share of the riflemen the placement sends to windows (when windows cover the route). */
+	float WindowShare = 0.5f;
+	/** "tactical_reach_m" (frozen): posts farther than this from the squad's route are not used, cm. */
+	float TacticalReachCm = 4000.f;
+	/** "marksman_band_min_m" (frozen): a weapon band starting this far makes a marksman (the sniper rifle), cm. */
+	float MarksmanBandMinCm = 4000.f;
+	/** "ladder_roof_men" (frozen): at most this many men of a squad go onto the picked ladder-only roofs. */
+	int32 LadderRoofMen = 1;
 };
 
 /**
@@ -403,6 +453,12 @@ struct CODEXTACTICS_API FPmcFighterView
 	bool bHasLauncher = false;
 	/** The launcher rule's best target score among the targets his team sees (ordered_threshold, no veto; 0: none). */
 	float LauncherScore = 0.f;
+	/** TACTICAL_MAP P2: the danger of his spot for the PMC (DangerAt(feet, Pmc), 0..1: inside a chokepoint); 0 without a tactical file. */
+	float DangerHere = 0.f;
+	/** His tactical post (PmcTacticalRules::PlanPlacement): its kind (None: no post), its effective score and whether he stands on it. */
+	EPmcPostKind PostKind = EPmcPostKind::None;
+	float PostScore = 0.f;
+	bool bAtPost = false;
 };
 
 /** The squad as a whole. */
@@ -672,8 +728,15 @@ namespace PmcCommanderRules
 	CODEXTACTICS_API const TCHAR* ScenarioName(EPmcScenario Scenario);
 	/** Parses a scenario id; false for "random" or an unknown id. */
 	CODEXTACTICS_API bool ParseScenario(const FString& Name, EPmcScenario& Out);
+	/** The scenarios Scenario=random draws from (skirmish .. blizzard; Tactical is chosen by PickScenarioOnMap). */
+	inline constexpr int32 RandomScenarioCount = 5;
 	/** Scenario=random: the round's scenario from its seed (uniform over the five, deterministic). */
 	CODEXTACTICS_API EPmcScenario PickScenario(int32 RoundSeed);
+	/**
+	 * Scenario=random on a map: with a tactical map (TACTICAL_MAP.md P3) half the rounds (seeded) are Tactical, the rest PickScenario;
+	 * without one exactly PickScenario (the existing arenas unchanged).
+	 */
+	CODEXTACTICS_API EPmcScenario PickScenarioOnMap(int32 RoundSeed, bool bTacticalMap);
 
 	/**
 	 * A narrow passage at a probe point (the chokepoint scenario): Hits = the wall distances of 8 horizontal rays (45 deg apart, ray 0 =

@@ -973,3 +973,53 @@ behind him; `UpdateSectorFollower` re-checks a stand-in for an unwalkable place.
   leader corner: ... claims the corner he peeks round (B17-1)`.
 - Tests `CodexTactics.Formation.LeaderCorner.PeekEdgeClaimsItsCorner`, `CodexTactics.Formation.WallLeadership.CornerPickStable`; smoke
   `CornerPickSmoke`.
+
+## 22. R17-1 - the squad climbs an obstacle in turns, like a ladder (designer request 2026-11-17, TASK_BOARD R17-1; MANTLING.md 6.4; runtime only, no TS / golden change)
+
+### 22.1 When
+- Formation mode: the leader's click on a climbable obstacle (a top click = he walks to it, a double click on the top / face = he runs; the
+  followers walk), and the formation leader's own move whose path takes a mantle link (since R17-1 his own orders may path over the mantle links;
+  formation follows never do). Solo with a box selection: a click on a climbable obstacle (and a selected man's own path over a link). A Solo
+  single still climbs alone. Who: `USquadSubsystem::GetSquadMantleGroup` - the formation's leader + his followers / the box selection, alive, on
+  their feet, not on a ladder / in a vehicle / on guard / carrying, within `squad.join_radius_cm` (2500) of the first climber; fewer than two =
+  he climbs alone.
+
+### 22.2 The queue is the ladder's
+- `TTraversalQueue` (`Public/Ladders/TraversalQueue.h`): the lease (one holder) + the FIFO line (stale waiters skipped) + the spot rule
+  `SpotDistanceCm(place) = first + spacing x place`; `ALadderActor` runs on the same struct (refactored, no behaviour change). The mantle's numbers sit
+  next to the ladder's: `mantle.json` `squad.queue_first_cm` 90 / `squad.queue_spacing_cm` 75 = `ULadderClimbComponent` `QueueFirstSpotCm` /
+  `QueueSpacingCm`.
+- The order rule: **the leader first, then the followers in formation order (their slots; a box selection: its order)** - the ladder's "in the
+  order they came" for a group that arrives together (`SquadMantleRules::ClimbOrder`).
+- One at a time: the next one takes the lease when the one before him is up (his climb ended, `FinishMantle`) + `squad.next_delay_s` (0.4).
+
+### 22.3 Where they stand, where they look
+- Lanes: each man climbs his own lane of the same face (`SquadMantleRules::LaneOffsets`: candidates every half `squad.lane_spacing_cm` - 0, +50,
+  -50, +100 ... cm - so an uneven top (a wreck's bonnet) refusing one lane can take its neighbour),
+  inside the face's room (the obstacle's box on the face's axis, the capsule + 10 cm off its ends), the group + 2 lanes per face (`SquadMantleRules::LaneCandidateCount`: 2 x lanes + 1 half-step candidates; a taken lane's neighbour is
+  dropped by the cheap landing-gap test before any trace / path query); at the start
+  each man gets a tentative lane from its geometry only (no traces / path queries: no frame spike), at his turn it is checked with his own clip from the lane's base
+  (`AOperativeCharacter::PlanMantleClick(.., FromFeet)`) and with landings >= `squad.min_landing_gap_cm` (70) apart: the man up never stands on the
+  next one's landing. A top whose clicked face has no room left gives lanes on its other faces (nearest to the clicked base first, from each
+  face's middle; `USquadSubsystem::MakeSquadMantleLanes`); a fence only its near face. His turn's climb order is planned from his lane's base
+  (`OrderMantleTop(.., FromFeet)`), and a lane a man up now stands on (a run climb lands off its lane) is swapped for the first free spare lane.
+  No lane left = he holds at the base, covering.
+- Waiters: his lane's base + out from the face by the spot rule (place 0 = next). Look (`SquadMantleRules::WaitLookYaw`): away from the obstacle;
+  place 0 at a known threat on the open side (`GatherFormationThreats`, `bypass.threat_memory_s`), the others fanned +-`squad.wait_fan_deg` (45)
+  per place, never more than `squad.wait_max_off_deg` (80) off outwards; then `FormationSectorRules::ClearLook` (nobody looks into a wall).
+- The man up (crouched on a top, MANTLING Q3; standing past a fence): `SquadMantleRules::UpLookYaw` - the first up covers the climb's direction
+  (the far side nobody at the base sees; over a fence: the far side) or the known threat; the next +90 / -90 / back over the base, then the
+  diagonals.
+- Integration: `USquadSubsystem::UpdateSquadMantle` runs after the formation follow, before `ApplyFormationFrame`; its looks override the
+  frame's (`FrameLooks`); `AOperativeCharacter::FollowTo` is refused for a member (`IsInSquadMantle`) - the squad moves him with its own orders.
+
+### 22.4 The end
+- A clicked climb: everybody up -> they hold there (looks kept) until the leader's next order; then the formation follows again (a man on a top
+  comes down by the batch-2 step-down). A path climb: when it ends - all over, or for any other reason (out, nobody left, a mode switch, the
+  console) - the leader walks on to his order's goal (box members to their own) unless the player has given him another order since; not on the
+  turn-based grid; the formation follows. A turn is never timed out while its man is still in the clip (one climber at a time).
+- Out of it: down / dead; a member given another order (he leaves); the leader's next order ends the whole climb (climbs in progress finish, a
+  walk to a face no longer climbs); a refused climb (asked twice) or a turn over `squad.turn_timeout_s` (30) leaves him at the base; the turn-based
+  fight / a Solo <-> formation switch ends it.
+- `Codex.Mantle.Squad` (1; 0 = before R17-1: a Solo single only, formation moves never take the mantle links). Logs `[SquadMantle]`.
+- Tests `CodexTactics.Formation.MantleQueue.*`, `CodexTactics.Ladder.TraversalQueue.*`; smoke `FormationMantleSmoke` (L_Gen_Depot_1).

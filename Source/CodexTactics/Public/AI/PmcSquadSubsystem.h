@@ -3,12 +3,14 @@
 #include "CoreMinimal.h"
 #include "AI/PmcCommanderRules.h"
 #include "AI/PmcEncounterRules.h"
+#include "AI/PmcTacticalRules.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Tactics/CoverTypes.h"
 #include "PmcSquadSubsystem.generated.h"
 
 class AActor;
 class AOperativeCharacter;
+class UTacticalMapSubsystem;
 
 /** Team ids of the operatives (AOperativeCharacter::TeamId): 0 = the player's squad, 1.. = hostile PMC squads (hostile to every other id). */
 namespace PmcTeam
@@ -46,6 +48,9 @@ struct CODEXTACTICS_API FPmcTeamStats
 	int32 Detours = 0;
 	int32 Preempts = 0;
 	int32 PushDecisions = 0;
+	/** TACTICAL_MAP P2 (2026-11-17): walks onto a tactical post (the Ambush order), and fall-backs turned off a chokepoint (not straight away). */
+	int32 PostMoves = 0;
+	int32 TacticalFallBacks = 0;
 };
 
 /**
@@ -167,6 +172,43 @@ public:
 	/** Destroys every registered fighter of a team (an arena round's end). */
 	void DestroyTeam(int32 TeamId);
 
+	// --- The tactical map (docs/design/TACTICAL_MAP.md P2, designer 2026-11-17; PmcTacticalRules) ---
+	/** The world's tactical map when it is loaded with items (UTacticalMapSubsystem); nullptr = no tactical file: the old behaviour. */
+	const UTacticalMapSubsystem* GetTacticalMap() const;
+	/** The squad's route as a navmesh path From -> To (its points; just [From, To] without a full path). */
+	TArray<FVector> RouteBetween(const FVector& From, const FVector& To) const;
+	/**
+	 * The route the team's enemy walks (the player's squad / the arena's attackers): the posts, the cover slots facing it (route_cover) read
+	 * it. Empty clears. Used only with a tactical map.
+	 */
+	void SetTeamRoute(int32 TeamId, const TArray<FVector>& Route);
+	const TArray<FVector>& GetTeamRoute(int32 TeamId) const;
+	/**
+	 * The post candidates along Route from the tactical map (PmcTacticalRules): hiding spots biting the route (BestAmbushSpots per leg, the
+	 * EXIT first), overwatch roof spots reaching it, windows covering it, the ladder-only roofs PickLadderOnlyRoofs(Seed) gives an enemy (the
+	 * file's 0.65; OutLadderRoofsPicked = their indices), drop edges landing on it; each with its PMC-side danger. Ambush / window / drop /
+	 * ladder-roof / overwatch posts lie within Weights.TacticalReachCm of the route (ladder roofs and overwatch roof spots 1.5 x) and
+	 * MinFromStartCm or more from its start. Empty without a tactical map.
+	 */
+	TArray<FPmcPostCandidate> GatherPostCandidates(const TArray<FVector>& Route, int32 Seed, const FPmcWeights& Weights, float MinFromStartCm = 0.f,
+		TArray<int32>* OutLadderRoofsPicked = nullptr) const;
+	/**
+	 * Spawns Count fighters ON their tactical posts along Route (PmcTacticalRules::PlanPlacement over GatherPostCandidates: the marksman on
+	 * an overwatch roof, a man on a picked ladder-only roof, ambushers at chokepoint exits / riflemen at windows); a fighter without a post
+	 * spawns in a line at Fallback. Only candidates on the navmesh at their own level are planned (KeepCandidatesOnNav); a planned post that
+	 * still fails that projection is dropped (the man spawns on the line). The team's weights must be set first (SetTeamWeights). Without a
+	 * tactical map: SpawnSquad(Fallback). OutPosts[i] = the post of the returned fighter i (invalid: none) - always the same length as the
+	 * result: a fighter that fails to spawn leaves out both his entry and his post.
+	 */
+	TArray<AOperativeCharacter*> SpawnSquadTactical(int32 TeamId, const TArray<FVector>& Route, const FVector& Fallback, const FRotator& Facing, int32 Count,
+		int32 Seed, TArray<FPmcTacticalPost>* OutPosts = nullptr, TArray<int32>* OutLadderRoofsPicked = nullptr);
+	/** Gives the team's living fighters posts along Route (they walk there with the Ambush order before contact); the number posted. */
+	int32 AssignTacticalPosts(int32 TeamId, const TArray<FVector>& Route, int32 Seed, float MinFromStartCm = 0.f);
+	/** A fighter's tactical post (nullptr: none). */
+	const FPmcTacticalPost* GetFighterPost(const AOperativeCharacter* Fighter) const;
+	/** A man counts on his post within this (planar, his post's level). */
+	static constexpr float PostArriveCm = 200.f;
+
 	static constexpr float SightInterval = 0.2f;
 
 	/** A fighter took an order (team, fighter, the order, its score, why it was picked): the arena's track log. */
@@ -224,6 +266,14 @@ private:
 		int32 DetourSide = 0;
 		/** Per-order world-clock expiries (PickCommitted's cooldown). */
 		TMap<EPmcOrder, double> FailedUntil;
+		/** TACTICAL_MAP P2: his post (the placement's / AssignTacticalPosts'); the Ambush order waits on it. */
+		FPmcTacticalPost Post;
+		/** The Ambush order faced / crouched him on his post (false while he still walks there). */
+		bool bPostSettled = false;
+		/** Walks onto the post that ended short of it (refused, or no closer than PostWalkMinProgressCm; three drop the post). */
+		int32 PostWalks = 0;
+		/** His distance to the post when the running post walk was issued (-1: no post walk running). */
+		float PostWalkFromCm = -1.f;
 	};
 
 	struct FTeam
@@ -262,7 +312,26 @@ private:
 		int32 PostureSeed = 0;
 		int32 PostureLeg = 0;
 		float PostureTimer = 0.f;
+		/** TACTICAL_MAP P2: the route the team's enemy walks (SetTeamRoute; empty: none). */
+		TArray<FVector> Route;
+		/**
+		 * The analysis hiding spots near Route (within the tactical reach + the 2.5 m cover match), cached by SetRouteOf so FindCoverNear's
+		 * route-cover term does not scan every hiding spot of the map per slot.
+		 */
+		TArray<FVector> RouteCoverSpots;
 	};
+
+	/** Sets Team.Route and refreshes Team.RouteCoverSpots from the tactical map (every route assignment goes through here). */
+	void SetRouteOf(FTeam& Team, const TArray<FVector>& Route) const;
+
+	/**
+	 * Keeps the post candidates that stand on the navmesh AT THEIR OWN LEVEL (|dz| <= 150 cm, so a roof spot never snaps to the street under
+	 * it) and moves each onto that navmesh point; a candidate off the navmesh would leave its man unable to move.
+	 */
+	void KeepCandidatesOnNav(TArray<FPmcPostCandidate>& Candidates) const;
+
+	/** ProjectToNav with a small vertical extent: OutPoint on the navmesh within 150 cm of Point's own height (false: none there). */
+	bool ProjectToNavAtLevel(const FVector& Point, FVector& OutPoint) const;
 
 	FTeam& TeamOf(int32 TeamId);
 	const FTeam* FindTeam(int32 TeamId) const;
@@ -285,6 +354,9 @@ private:
 	bool FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
 		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr) const;
 	bool ProjectToNav(const FVector& Point, FVector& OutPoint) const;
+	/** The placement roles of a squad about to spawn (its pool weapons by seed) / of living fighters (their weapons). */
+	TArray<FPmcPlacementFighter> PlacementRoles(int32 Count, int32 Seed, const FPmcWeights& Weights) const;
+	TArray<FPmcPlacementFighter> PlacementRoles(const TArray<AOperativeCharacter*>& Fighters, const FPmcWeights& Weights) const;
 	/** A full (not partial) navmesh path From -> To. */
 	bool HasFullNavPath(const FVector& From, const FVector& To) const;
 	/**

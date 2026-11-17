@@ -20,9 +20,11 @@ import random
 import sys
 
 try:
+    from .adapter import behaviour_document
     from .genome import flatten_numeric, load_json
 except ImportError:  # run as a script
     sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from nighttrainer.adapter import behaviour_document
     from nighttrainer.genome import flatten_numeric, load_json
 
 SQUAD = 4
@@ -43,6 +45,47 @@ def strength(doc, reference) -> float:
         v = float(genes.get(p, b))
         total += ((v - hidden_factor(p) * b) / (abs(b) + 1.0)) ** 2
     return -total / len(ref)
+
+
+def _thirds(doc, reference) -> tuple:
+    """Three gene-thirds in [-1, 1]. Baseline is 0; a mutated third swings the behaviour axes apart."""
+    ref = flatten_numeric(reference)
+    genes = flatten_numeric(doc)
+    if not ref:
+        return 0.0, 0.0, 0.0
+    deltas = [(float(genes.get(p, b)) - float(b)) / (abs(float(b)) + 1.0) for p, b in ref.items()]
+    n = len(deltas)
+    cuts = (0, max(1, n // 3), max(2, 2 * n // 3), n)
+
+    def chunk(a, b):
+        sl = deltas[a:b]
+        return sum(sl) / len(sl) if sl else 0.0
+
+    return tuple(max(-1.0, min(1.0, 8.0 * chunk(cuts[i], cuts[i + 1]))) for i in range(3))
+
+
+def mock_behaviour(weights, reference, side: dict, winner: str, seed: int, index: int) -> dict:
+    """Rich behaviour object. Its own RNG, so the scalar fight (survivors, HP, winner) stays unchanged."""
+    agg, mob, pat = _thirds(weights, reference)
+    rng = random.Random(f"mock-behaviour:{seed}:{index}")
+    contact = min(180.0, max(0.0, 20.0 + 140.0 * (agg + 1.0) / 2.0 + rng.uniform(-4.0, 4.0)))
+    moves = min(20.0, max(0.0, 1.0 + 8.0 * (mob + 1.0) / 2.0 + rng.uniform(-0.4, 0.4)))
+    ambush = 0.0 if pat < -0.2 else (2.0 if pat > 0.2 else 1.0)
+    ambush = min(4.0, ambush + float(side.get("ambushes", 0)))
+    quiet = 1.0 if contact < 40.0 else 0.0
+    return behaviour_document({
+        "time_in_contact_s": round(contact, 2),
+        "flanks_completed": float(side.get("flanks_succeeded", 0)),
+        "moves": round(moves, 2),
+        "suppress_then_move": 1.0 if float(side.get("suppression_s", 0)) > 12.0 and moves > 3.0 else 0.0,
+        "ambush_success": ambush,
+        "overwatch_kills": float(min(int(side.get("kills", 0)), 2)) if pat > 0.0 else 0.0,
+        "time_in_chokepoint_s": round(max(0.0, 30.0 * (1.0 - agg) / 2.0), 2),
+        "window_positions_used": 1.0 if mob > 0.05 else 0.0,
+        "quiet_spells": quiet,
+        "order_churn": round(max(0.0, 4.0 + 6.0 * abs(agg)), 2),
+        "stalemate_share": 1.0 if winner == "draw" else 0.0,
+    })
 
 
 def simulate(weights_a, opponent: str, weights_b, reference, rounds: int, seed: int, bot_strength: float = -0.03,
@@ -93,6 +136,7 @@ def simulate(weights_a, opponent: str, weights_b, reference, rounds: int, seed: 
             with open(path, "w", encoding="utf-8") as f:
                 json.dump(fake_track(rnd, random.Random(f"track:{seed}:{i}")), f, separators=(",", ":"))
             rnd["track"] = os.path.basename(path)
+        rnd["behaviour"] = mock_behaviour(weights_a, reference, a, winner, seed, i)
         out_rounds.append(rnd)
     return {"schema": "codex.pmc_arena/1", "map": "mock", "seed": seed, "rounds_requested": rounds,
             "time_limit_s": time_limit_s, "opponent": opponent, "mock": True, "rounds": out_rounds}
