@@ -255,6 +255,19 @@ void USquadSubsystem::SwitchFormationLeader(AOperativeCharacter& NewLeaderRef)
 		LeaderFacingMemory.Add(OldLeader, { static_cast<float>(OldLeader->GetActorRotation().Yaw), Now }); // his own facing as the leader
 	}
 	Leader = NewLeader;
+	// SquadControlSmoke "leader switched away and back" (2026-11-17): a parked follower faces where his leader faces (the idle facing of
+	// UpdateFollower); made the leader he kept that stale idle facing, and it won over his new-leader halt look (OperativeCharacterAim's
+	// idle-facing branch, and the formation sector look needs no idle facing). Neither man keeps a follower's parked facing across the switch:
+	// the new leader takes his halt look below, the old one gets his follower facing anew once parked.
+	// Nor his look filter's history: the switch's 180 deg turn to the leader's halt look is a role change, not the look jitter the big-jump hold
+	// (FormationLookFilterRules, look.big_hold_s 0.6 s) is there for - it held the new leader on his follower look.
+	NewLeader->ClearIdleFacing();
+	LookFilters.Remove(NewLeader);
+	if (OldLeader && OldLeader != NewLeader)
+	{
+		OldLeader->ClearIdleFacing();
+		LookFilters.Remove(OldLeader);
+	}
 	// Drop the formation move the new leader was following; it now waits for player orders. Rev 5g (game designer
 	// 2026-10-14): an order of his own runs on (selecting him must not cancel it - SquadOrderRules).
 	if (SquadOrderRules::ShouldStopOnBecomingLeader(IsOnOwnOrder(NewLeader)))
