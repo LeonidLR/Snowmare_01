@@ -320,6 +320,14 @@ int32 UPmcEncounterSubsystem::SpawnEncounter(const FPmcEncounterSpec& Spec, int3
 		return Fail(TEXT("no fighter could spawn"));
 	}
 	Pmc->SetTeamPosture(TeamId, Spec.Posture, Spot, PlayerStart, Seed, Weights);
+	// TACTICAL_MAP.md P2 (2026-11-17): a defending squad on a generated map with a tactical file waits on its tactical posts along the
+	// player's way to it (ambushes at chokepoint exits, the marksman on an overwatch roof, a man on a picked ladder-only roof; the Ambush
+	// order walks them there) - none closer than half the encounter's minimum distance to the squad. No tactical file: unchanged.
+	if (Spec.Posture == EPmcPosture::Defend && Pmc->GetTacticalMap())
+	{
+		const int32 Posted = Pmc->AssignTacticalPosts(TeamId, Pmc->RouteBetween(PathFrom, Spot), Seed, 0.5f * Spec.MinCm);
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcEncounter] team %d: %d of %d fighter(s) on tactical posts along the squad's way"), TeamId, Posted, Count);
+	}
 	// Hidden at once: the team sight first (who sees whom), then the squad's sight hides what it does not see.
 	Pmc->RefreshSight();
 	if (UTacticalSightSubsystem* Sight = World->GetSubsystem<UTacticalSightSubsystem>())
