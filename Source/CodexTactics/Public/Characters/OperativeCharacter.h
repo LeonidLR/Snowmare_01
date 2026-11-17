@@ -2471,6 +2471,8 @@ public:
 	 * to the enemy he was fighting (or the nearest live one). True while that turn drives his facing.
 	 */
 	bool IsTurningToThreat() const { return bTurningToThreat; }
+	/** He turns back to the player's facing order after the fight (ThreatFacingRules::ShouldReturnToOrderedFacing, designer 2026-11-17). */
+	bool IsReturningToOrderedFacing() const { return bReturningToOrderedFacing; }
 	/** World time of his last shot (any target / point), s. */
 	double GetLastShotTime() const { return LastShotTime; }
 	void ClearIdleFacing() { bHasIdleFacing = false; }
@@ -2864,6 +2866,11 @@ private:
 	FVector LastThreatLocation = FVector::ZeroVector;
 	bool bFoughtThisFight = false;
 	bool bExplicitFacing = false;
+	/** The yaw of the player's facing order (SetFacingPoint) he returns to after the fight (ThreatFacingRules::ShouldReturnToOrderedFacing). */
+	float OrderedFacingYaw = 0.f;
+	/** Seconds since anything last turned him to fight (combat target / flash / object shot / fire order). */
+	float FightTurnQuietSeconds = 0.f;
+	bool bReturningToOrderedFacing = false;
 	bool bTurningToThreat = false;
 	/** The point ThreatFacingRules turns him to now; false: nothing to face. */
 	bool FindThreatPoint(FVector& OutPoint) const;
