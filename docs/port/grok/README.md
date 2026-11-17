@@ -66,8 +66,10 @@ for you): `C:\Users\Zephyrus15Duo\Documents\Unreal Projects\CodexTactics`. Read 
 Before each task and each sub-part run `python Scripts/Tools/model_router.py --classify "<one-line task>"`. It returns a level 1-4
 (model-agnostic; ignore the Claude model names it prints):
 - level 1-2 (trivial / routine: data / JSON edits, renames, docs, logs, test boilerplate, small helpers, reading logs) -> your CHEAPER / faster
-  model (e.g. grok-code-fast or a mini model - say which one);
-- level 3-4 (C++ logic, diagnosis across systems, AI / movement / animation code) -> your main / strongest model.
+  model `grok-4.7-build-fast`;
+- level 3-4 (C++ logic, diagnosis across systems, AI / movement / animation code) -> your main model `grok-4.7`.
+Claude usually drives you headless (`Scripts/Tools/grok_task.ps1 -PromptFile <f> -Session grok-G<NNN> -Model <model>`), one step per call,
+the same session resumed between calls - finish each call with a short status (what you did, last commit, what is next).
 Log every sub-part in your report as `level | model | result (pass / redo)`. If the cheaper model's work has to be redone often, say so.
 
 ## Limit rule (designer)
