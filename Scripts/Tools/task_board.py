@@ -2,9 +2,9 @@
 """Live task board builder for CodexTactics Agent Chat.
 
 Derives Saved/AgentChat/task_board.json read-only from:
-  1. Task files: docs/port/{codex,gemini}/inbox/*.md + handover moves in INTERIM_LEAD.md
-  2. Reports: docs/port/{codex,gemini}/outbox/*report*
-  3. Git branches & merges: codex/*, gemini/0NN-* -> interim / main
+  1. Task files: docs/port/{codex,gemini,grok}/inbox/*.md + handover moves in INTERIM_LEAD.md
+  2. Reports: docs/port/{codex,gemini,grok}/outbox/*report*
+  3. Git branches & merges: codex/*, gemini/0NN-*, grok/G0NN-* -> interim / main
   4. Chat history: Saved/AgentChat/chat.jsonl linked by --topic <task-id> or slug
   5. Mechanics register: docs/port/mechanics_register.json (linked + unmatched 'not started')
 
@@ -34,11 +34,18 @@ import agent_chat  # noqa: E402
 
 IN_PROGRESS_WINDOW_SEC = 2 * 3600  # 2 hours
 
-_TASK_FILENAME_RE = re.compile(r"^(\d+)-([a-zA-Z0-9_-]+)\.md$")
+_TASK_FILENAME_RE = re.compile(r"^([A-Za-z]?\d+)-([a-zA-Z0-9_-]+)\.md$")
 _MOVE_LINE_RE = re.compile(
     r"\b(\d{3})\b[^.\n]*?\bMOVED\s+to\s+(Gemini|Codex|Claude)\b(?:[^.\n]*?\btask\s+(\d{3}))?",
     re.IGNORECASE,
 )
+# Generic move: "gemini 081 -> codex" / "gemini-081 -> codex" / "grok G001 -> claude".
+_MOVE_ARROW_RE = re.compile(
+    r"\b(gemini|codex|grok|claude)[ -]([A-Za-z]?\d{3})\s*(?:->|\u2192)\s*(gemini|codex|grok|claude)(?:[ -]([A-Za-z]?\d{3}))?\b",
+    re.IGNORECASE,
+)
+_REPORT_NUM_RE = re.compile(r"^([A-Za-z]?\d+)-")
+TASK_OWNERS = ("codex", "gemini", "grok")
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _QUESTION_WORDS_RE = re.compile(r"(?:\bвопрос\b|\bquestion\b|подтверди|выбери вариант|нужно решение)", re.IGNORECASE)
 _BLOCKER_WORDS_RE = re.compile(r"(?:\bblocker\b|\bблокер\b|\bfatal\b|не собирается|build failed)", re.IGNORECASE)
@@ -111,6 +118,14 @@ def _extract_markdown_title(file_path: str, fallback: str) -> tuple[str, str]:
     return (title or fallback), "\n".join(lines)
 
 
+def _task_file_exists(repo_root: str, owner: str, num: str) -> bool:
+    inbox_dir = os.path.join(repo_root, "docs", "port", owner, "inbox")
+    if not os.path.isdir(inbox_dir):
+        return False
+    prefix = f"{num}-".lower()
+    return any(f.lower().startswith(prefix) and f.endswith(".md") for f in os.listdir(inbox_dir))
+
+
 def parse_lead_moves(repo_root: str) -> dict[str, dict[str, str]]:
     """Extracts task ownership moves from INTERIM_LEAD.md and RESOURCES.md."""
     moves: dict[str, dict[str, str]] = {}
@@ -132,13 +147,27 @@ def parse_lead_moves(repo_root: str) -> dict[str, dict[str, str]]:
                 "moved_to": f"{new_owner}-{target_num}" if target_num else new_owner,
                 "source_doc": rel,
             }
+        for match in _MOVE_ARROW_RE.finditer(text):
+            src_owner = match.group(1).lower()
+            src_num = match.group(2).upper()
+            new_owner = match.group(3).lower()
+            target_num = (match.group(4) or "").upper()
+            target_id = f"{new_owner}-{target_num}" if target_num else ""
+            has_target_file = bool(target_num) and _task_file_exists(repo_root, new_owner, target_num)
+            moves[f"{src_owner}-{src_num}"] = {
+                "owner": new_owner,
+                "moved_to": target_id or new_owner,
+                "source_doc": rel,
+                # The target task has its own inbox file: show it once, under the new owner.
+                "hide_source": "1" if has_target_file else "",
+            }
     return moves
 
 
 def scan_inbox_tasks(repo_root: str, moves: dict[str, dict[str, str]]) -> list[dict[str, Any]]:
     """Scans docs/port/{codex,gemini}/inbox/*.md for tasks."""
     tasks: list[dict[str, Any]] = []
-    for folder_owner in ("codex", "gemini"):
+    for folder_owner in TASK_OWNERS:
         inbox_dir = os.path.join(repo_root, "docs", "port", folder_owner, "inbox")
         if not os.path.isdir(inbox_dir):
             continue
@@ -148,13 +177,15 @@ def scan_inbox_tasks(repo_root: str, moves: dict[str, dict[str, str]]) -> list[d
             m = _TASK_FILENAME_RE.match(fname)
             if not m:
                 continue
-            num, slug = m.group(1), m.group(2)
+            num, slug = m.group(1).upper(), m.group(2)
             task_id = f"{folder_owner}-{num}"
             full_path = os.path.join(inbox_dir, fname)
             rel_path = f"docs/port/{folder_owner}/inbox/{fname}"
             title, preview = _extract_markdown_title(full_path, fallback=fname)
             owner = folder_owner
             moved_note = ""
+            if moves.get(task_id, {}).get("hide_source"):
+                continue
             if task_id in moves:
                 owner = moves[task_id]["owner"]
                 moved_note = f"moved -> {moves[task_id]['moved_to']}"
@@ -177,7 +208,7 @@ def scan_inbox_tasks(repo_root: str, moves: dict[str, dict[str, str]]) -> list[d
 def scan_outbox_reports(repo_root: str) -> dict[str, dict[str, str]]:
     """Indexes reports in docs/port/{codex,gemini}/outbox/ by owner+num and stem."""
     reports: dict[str, dict[str, str]] = {}
-    for folder_owner in ("codex", "gemini"):
+    for folder_owner in TASK_OWNERS:
         outbox_dir = os.path.join(repo_root, "docs", "port", folder_owner, "outbox")
         if not os.path.isdir(outbox_dir):
             continue
@@ -185,9 +216,9 @@ def scan_outbox_reports(repo_root: str) -> dict[str, dict[str, str]]:
             if not fname.endswith(".md") or "report" not in fname.lower():
                 continue
             rel_path = f"docs/port/{folder_owner}/outbox/{fname}"
-            num_m = re.match(r"^(\d+)-", fname)
+            num_m = _REPORT_NUM_RE.match(fname)
             if num_m:
-                num = num_m.group(1)
+                num = num_m.group(1).upper()
                 stem = fname[:-3]
                 if stem.endswith(".report"):
                     stem = stem[:-7]
@@ -280,7 +311,7 @@ def default_git_snapshot(repo_root: str) -> dict[str, Any]:
 def match_git_for_task(task: dict[str, Any], git_snap: dict[str, Any]) -> dict[str, Any]:
     task_id = task["id"].lower()
     folder_owner = task["folder_owner"].lower()
-    num = task["num"]
+    num = task["num"].lower()
     slug_tokens = [t for t in task["slug"].lower().split("-") if len(t) >= 3 and t not in _GENERIC_TOKENS]
 
     matched_branch = None
@@ -326,7 +357,7 @@ def _message_matches_task(msg: dict[str, Any], task: dict[str, Any]) -> bool:
     text = str(msg.get("text") or "").strip().lower()
     task_id = task["id"].lower()
     owner = task["folder_owner"].lower()
-    num = task["num"]
+    num = task["num"].lower()
     slug = task["slug"].lower()
 
     if task_id in topic:

@@ -239,6 +239,44 @@ class TaskBoardTests(unittest.TestCase):
         self.assertEqual(board["now_strip"]["codex"]["idle_min"], 10)
         self.assertEqual(board["now_strip"]["claude"]["state"], "idle")
 
+    def test_grok_tasks_and_generic_moves(self) -> None:
+        def w(owner: str, box: str, name: str, text: str) -> None:
+            _write_text(os.path.join(self.root, "docs", "port", owner, box, name), text)
+
+        w("grok", "inbox", "G001-ramp-stall.md", "# G001: Ramp\n")
+        w("grok", "inbox", "G002-metrics.md", "# G002: Metrics\n")
+        w("grok", "outbox", "G001-ramp-stall.report.md", "# R\n")
+        w("gemini", "inbox", "081-ramp-fight.md", "# 081\n")
+        w("gemini", "inbox", "080-jitter.md", "# 080\n")
+        w("codex", "inbox", "043-ramp-fight.md", "# 043\n")
+        _write_text(
+            os.path.join(self.root, "docs", "port", "RESOURCES.md"),
+            "- gemini 081 -> codex 043\n- gemini 080 -> claude (review)\n",
+        )
+
+        def fake_git(_root: str) -> dict:
+            return {
+                "branches": [{"name": "grok/G002-metrics", "commit": "abc1234", "ts": self.now_ts - 60, "subject": "x"}],
+                "merged_interim": set(),
+                "merged_main": set(),
+                "main_subjects": [],
+            }
+
+        board = task_board.build_task_board(
+            repo_root=self.root, chat_file=self.chat_file, now_ts=self.now_ts, git_provider=fake_git
+        )
+        by_id = {t["id"]: t for t in board["tasks"]}
+        self.assertEqual(by_id["grok-G001"]["owner"], "grok")
+        self.assertEqual(by_id["grok-G001"]["state"], "done")
+        self.assertTrue(by_id["grok-G001"]["report_file"].endswith("G001-ramp-stall.report.md"))
+        self.assertEqual(by_id["grok-G002"]["branch"], "grok/G002-metrics")
+        self.assertEqual(by_id["grok-G002"]["state"], "in_progress")
+        # 081 moved to codex 043: shown once, as the codex task.
+        self.assertNotIn("gemini-081", by_id)
+        self.assertEqual(by_id["codex-043"]["owner"], "codex")
+        # 080 moved to claude without a target file: the gemini task stays, owned by claude.
+        self.assertEqual(by_id["gemini-080"]["owner"], "claude")
+
     def test_http_endpoints_and_security_guards(self) -> None:
         # Prepare a minimal HTML file path & bind test handler to 127.0.0.1:0
         html_path = os.path.join(self.root, "index.html")

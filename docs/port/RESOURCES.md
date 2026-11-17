@@ -26,3 +26,10 @@ Six resources. Rule: the cheapest one that can do the job reliably; the expensiv
 - Big logs: never raw - Jev telemetry or a script.
 - Each agent commits after every working part; limits ending = commit + one chat line first.
 - Live task board (`Tools/AgentChat/index.html` tab `Задачи`): every chat message about a task MUST pass `--topic <task-id>` (e.g. `codex-008`, `codex-004`, `gemini-030`, `gemini-031`) so the board links chat activity automatically.
+
+## Task ownership moves (read by `Scripts/Tools/task_board.py`)
+Syntax: `<owner> <task> -> <new owner>`, one per line. Designer re-plan 2026-11-17:
+- gemini 081 -> codex 043 (docs/port/codex/inbox/043-ramp-fight.md)
+- gemini 078 -> grok G004
+- gemini 079 -> grok G005
+- gemini 080 -> claude (review + merge)
