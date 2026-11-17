@@ -57,6 +57,13 @@ namespace
 	/** A box-selected member within this of his place in the group's corner stack stays where he is (no side-step), cm. */
 	constexpr double GroupCornerPeekKeepCm = 30.0;
 
+	TAutoConsoleVariable<int32> CVarSquadWallEndOneDetector(TEXT("Codex.Formation.SquadWallEndOneDetector"), 1,
+		TEXT("Designer bug B17-1 (2026-11-17): 1 (default) = the squad in the wall layout, a hit on the end of ITS wall that only the run-and-peek face probe sees is still the squad's corner peek (the man nearest that end); 0 = before (such a pixel fell to the leader's own run-and-peek: the Commander ran to the corner, the right-hand man stood past it) - A/B."));
+
+	/** B17-1: the run-and-peek face counts as the squad's own wall when its normal is this close to the wall slot's behind the leader. */
+	constexpr float SquadWallFaceMinDot = 0.9f;
+	/** B17-1: a face hit this close to the squad wall's face plane lies in it (another piece of the same wall, a cross wall's end at a corner), cm. */
+	constexpr float SquadWallPlaneCm = 5.f;
 }
 
 namespace ControllerGroupCover
@@ -542,12 +549,45 @@ bool ACodexTacticsPlayerController::FindSquadCornerPeekForHit(const FHitResult& 
 		return false;
 	}
 	const FCoverSlot Base = SquadPeekBaseSlot;
-	const bool bSquadWall = Base.WallComponent.IsValid() ? Hit.GetComponent() == Base.WallComponent.Get() : HitActor == Base.WallActor.Get();
+	bool bSquadWall = Base.WallComponent.IsValid() ? Hit.GetComponent() == Base.WallComponent.Get() : HitActor == Base.WallActor.Get();
+	const bool bOneDetector = CVarSquadWallEndOneDetector.GetValueOnGameThread() != 0;
+	// Designer bug B17-1 (2026-11-17): the squad's wall is a face in the world, not one component. A building's corner is two cube walls
+	// meeting there (the level generator's walls): the cross wall's narrow end lies IN the squad wall's face plane over the last ~wall
+	// thickness, so a pixel at the corner hit either piece. The cross wall's piece was "another wall" here - the hit fell through to the
+	// leader's own run-and-peek (his ghost, his run to the corner, the wall layout round him with the right-hand man past the end). A face
+	// hit in the squad wall's plane on the same wall (CoverTraceRules::IsSameWall from the slot at the click) is the squad's wall.
+	FHitResult SquadHit = Hit;
+	if (!bSquadWall && bOneDetector && FMath::Abs(Hit.ImpactNormal.Z) < 0.3f
+		&& FVector::DotProduct(Hit.ImpactNormal.GetSafeNormal2D(), Base.WallNormal.GetSafeNormal2D()) >= SquadWallFaceMinDot
+		&& FMath::Abs(FVector::DotProduct(Hit.ImpactPoint - Base.WallPoint, Base.WallNormal.GetSafeNormal2D())) <= SquadWallPlaneCm)
+	{
+		FCoverSlot ClickSlot;
+		const FVector Out = Base.WallNormal.GetSafeNormal2D();
+		if (CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, -Out, ClickSlot) && CoverTraceRules::IsSameWall(Base, ClickSlot))
+		{
+			SquadHit = FHitResult(Base.WallActor.Get(), Base.WallComponent.Get(), Hit.ImpactPoint, Hit.ImpactNormal);
+			bSquadWall = true;
+		}
+	}
 	ECoverFacing Side = ECoverFacing::Right;
 	float EdgeAlong = 0.f;
-	if (!bSquadWall || !FindCornerPeekForSlot(Base, Hit, Side, EdgeAlong))
+	if (!bSquadWall || !FindCornerPeekForSlot(Base, SquadHit, Side, EdgeAlong))
 	{
-		return false; // not the end of the squad's own wall (another wall is a cover click there)
+		// B17-1: two detectors saw the end of the squad's wall - this one (the slot behind the leader + a probe at the click) and the
+		// run-and-peek's (the faces probed round the click). Where only the second one saw it the click fell through to the LEADER's own
+		// run-and-peek. One rule decides who takes the corner of the squad's own wall: the run face of that wall is this peek's end too, so
+		// the man is PlanFormationCornerPeek's (the nearest that end).
+		FSquadCornerPeekTarget RunTarget;
+		FRunCornerPeekFace RunFace;
+		const bool bRunFace = bOneDetector && FindRunCornerPeekForHit(Leader, Hit, RunTarget, &RunFace)
+			&& CoverTraceRules::IsSameWall(Base, RunFace.Base)
+			&& FVector::DotProduct(Base.WallNormal.GetSafeNormal2D(), RunFace.Base.WallNormal.GetSafeNormal2D()) >= SquadWallFaceMinDot;
+		if (!bRunFace)
+		{
+			return false; // not the end of the squad's own wall (another wall is a cover click there)
+		}
+		Side = RunFace.Side;
+		EdgeAlong = CoverTraceRules::AlongWallDistance(Base, RunFace.EdgeOnFace);
 	}
 	const FVector Right = Base.RightTangent();
 	const FVector EdgeOnFace = Base.WallPoint + Right * EdgeAlong;

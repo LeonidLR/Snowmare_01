@@ -524,3 +524,34 @@ echelon / wall layout / corner-stack place that lay between him and the end (or 
 the leader faces out along the wall, the formation's "behind" pointed at the end he was about to take, and his corner walk stopped on the point man.
 The corner stack (A above) is unchanged when a follower peeks; when the leader is the one at the end (bug_04 A: K the point man) the line was
 already behind him.
+
+## B17-1 - one corner man per corner, the leader's own corner keeps the line behind him (designer bug 2026-11-17, playtest of main 0cc08c4b; contract section 21)
+The report: the squad in the wall layout along a wall (the Commander in the middle, one man each side), the cursor near the wall's right free end -
+the corner ghost flipped from a 1 px cursor move between the right-hand man (Medic-Sapper) and the Commander; when it was the Commander he ran to
+the corner and the right-hand man stood to his right, past the corner, in the open.
+- **The cause** (reproduced by `CornerPickSmoke` round 1): a building's corner is two cube walls (the level generator's `wall_cube`), the cross
+  wall's narrow end lying IN the squad wall's face plane over the corner's last ~40 cm - a pixel there hits either cube. The squad's corner
+  peek (`FindSquadCornerPeekForHit`) took only the component behind the leader for "the squad's wall", so a hit on the cross wall's piece fell
+  through to the LEADER's own run-and-peek (`TryHandleRunCornerPeekClick`: his ghost, his run to the corner, a new wall order with the corner as
+  his place; the wall layout of three puts the right-hand man one spacing to K's right whatever the room, `FormationWallRules::Layout`: past the
+  end). F-2's claim did not catch it: it reads a FREE end of the gathered world walls, and the corner of two walls is a joint. Before the fix
+  the smoke's sweep showed 81 hits Medic-Sapper / 83 Commander, 15 flip pairs within 5 cm, the Medic's place 44-46 cm past the end plane.
+- **The rule (a) - who takes the corner**: the corner man is a property of where the squad stands, never of the cursor. At the end of the squad's
+  own wall the man is always the corner stack's point man (A above): the member nearest that end along the wall (`FormationWallLeadership::
+  PickCornerLeader`, a tie within 10 cm broken by the distance to the EDGE, not to the click). The squad's wall is a FACE, not a component: a
+  face hit within 5 cm of its plane (normals within 0.9) on the same wall (`CoverTraceRules::IsSameWall` from the slot at the click) is the
+  squad's wall whichever cube it hit; and a run-and-peek face of the same wall found under the cursor is the squad peek's end too
+  (`Codex.Formation.SquadWallEndOneDetector` 1; 0 = before, A/B). A deterministic rule, no hysteresis needed: the click point only
+  decides WHICH end (its side of the leader along the wall), the end's man is fixed by the squad's places; a cursor move can make the ghost
+  appear / disappear at the edge window's border, never change the man.
+- **The rule (b) - the leader at the corner himself**: when the leader peeks round a corner himself (his run-and-peek armed on his walk to the
+  corner slot, or his corner peek held in cover there), that corner is claimed exactly like F-2's free end, whatever the world walls say
+  (`FormationLeaderCornerRules::ClaimedPeekEdge`, `Codex.Formation.LeaderPeekCorner` 1; 0 = F-2's world-wall ends only): every follower place
+  ahead of his slot less 90 cm (or past the end) is mirrored behind him along the wall, at least 90 cm back, 45..200 cm off the face on his
+  side, never crowding another place. The wall-leadership stack (130 / 230 cm behind him) is untouched; a follower's peek (A) is unchanged.
+- Smoke `CornerPickSmoke` (L_FormationLab W_B_3; round 0 its free east end, round 1 a cross wall spawned there - the building corner): the hover
+  sweep over the east end (face hits at three heights and the game camera's view, every 2.5 cm), each hit evaluated afresh - every ghost the
+  east-end man, no two hits within 5 cm showing different men; the click orders him; with him (the new leader) at the corner, and with the
+  leader's own formation run-and-peek from the open, every follower's place and body >= 90 cm behind the leader's corner slot and inside the
+  end plane. With both switches 0 round 1 fails 9 checks (the flips above); with the fix all pass. Tests `CodexTactics.Formation.WallLeadership.CornerPickStable`,
+  `CodexTactics.Formation.LeaderCorner.PeekEdgeClaimsItsCorner`.

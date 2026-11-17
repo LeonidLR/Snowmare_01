@@ -294,4 +294,48 @@ bool FFormationWallMoveLeaderTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+FORMATION_WALL_LEADERSHIP_TEST(FFormationWallLeadershipCornerPickStableTest, "CornerPickStable")
+bool FFormationWallLeadershipCornerPickStableTest::RunTest(const FString&)
+{
+	// Designer bug B17-1 (2026-11-17): the corner man is a property of where the squad stands along the wall, not of the cursor - the edge
+	// point found anywhere round the east end (in from it, past it, out from the face) and the members a few cm off their places give the
+	// same man, the one nearest that end (FORMATION_SECTORS.md "A - the corner stack": the point man), and his stack behind him.
+	using namespace FormationWallLeadershipTestUtil;
+	int32 Cases = 0;
+	int32 Wrong = 0;
+	int32 Ahead = 0;
+	int32 Past = 0;
+	for (double EdgeX = 560.0; EdgeX <= 620.0 + 1e-6; EdgeX += 2.5)
+	{
+		for (double EdgeY = -40.0; EdgeY <= 0.0 + 1e-6; EdgeY += 20.0)
+		{
+			for (int32 Jitter = 0; Jitter < 9; ++Jitter)
+			{
+				TArray<FWallLeadershipMember> Three = LeadThree();
+				// Each man within 5 cm of his place (their bodies settle a few cm off the layout's places).
+				Three[0].Position += FVector2D(((Jitter % 3) - 1) * 5.0, ((Jitter / 3) - 1) * 5.0);
+				Three[1].Position += FVector2D(((Jitter / 3) - 1) * 5.0, ((Jitter % 3) - 1) * 5.0);
+				Three[2].Position += FVector2D(((Jitter % 3) - 1) * -5.0, 0.0);
+				const FWallLeadershipPlan Plan = FormationWallLeadership::Plan(LeadWalls(), LeadLineOrigin, LeadNormalYaw, FVector2D(EdgeX, EdgeY), Three);
+				++Cases;
+				Wrong += Plan.Leader == 2 ? 0 : 1;
+				const FFormationSlot* Lead = LeadSlotOf(Plan.StackSlots, EFormationRole::Commander);
+				for (const FFormationSlot& Slot : Plan.StackSlots)
+				{
+					if (Lead && Slot.Role != EFormationRole::Commander && Slot.Position.X > Lead->Position.X - 90.0 + 1e-6)
+					{
+						++Ahead;
+					}
+					Past += Slot.Position.X > LeadEastEdge.X + 1e-6 ? 1 : 0;
+				}
+			}
+		}
+	}
+	TestTrue(FString::Printf(TEXT("%d cases round the east end"), Cases), Cases > 100);
+	TestEqual(TEXT("Every case: the east-end man (Z) takes the corner - never the Commander"), Wrong, 0);
+	TestEqual(TEXT("Every follower's stack place >= 90 cm behind the corner man's along the wall"), Ahead, 0);
+	TestEqual(TEXT("No stack place past the wall's end plane"), Past, 0);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

@@ -477,6 +477,30 @@ EOperativeOrderResult AOperativeCharacter::OrderTakeCoverForPeek(const FCoverSlo
 	return OrderTakeCover(CornerSlot, bSprint);
 }
 
+bool AOperativeCharacter::GetOwnCornerPeek(FVector& OutSlot, FVector& OutEdgeOnFace, FVector& OutFaceNormal) const
+{
+	if (bRunCornerPeekPending && RunCornerPeekSlot.IsValid())
+	{
+		OutSlot = RunCornerPeekSlot.WorldLocation;
+		OutEdgeOnFace = RunCornerPeekEdge;
+		OutFaceNormal = RunCornerPeekSlot.WallNormal;
+		return true;
+	}
+	if (bManualCornerPeek && bInCover && CoverSlot.IsValid())
+	{
+		const bool bRight = ManualCornerPeekSide == ECoverFacing::Right;
+		if (!(bRight ? CoverSlot.bRightEdgeExposed : CoverSlot.bLeftEdgeExposed))
+		{
+			return false;
+		}
+		OutSlot = CoverSlot.WorldLocation;
+		OutEdgeOnFace = CoverSlot.WallPoint + CoverSlot.RightTangent() * (bRight ? CoverSlot.RightEdgeDistanceCm : -CoverSlot.LeftEdgeDistanceCm);
+		OutFaceNormal = CoverSlot.WallNormal;
+		return true;
+	}
+	return false;
+}
+
 bool AOperativeCharacter::IsRunPeekStanceEnabled()
 {
 	return CVarRunPeekStance.GetValueOnGameThread() != 0;
