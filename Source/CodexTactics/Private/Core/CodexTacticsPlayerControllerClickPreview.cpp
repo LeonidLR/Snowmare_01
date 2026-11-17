@@ -508,20 +508,26 @@ EClickPreviewKind ACodexTacticsPlayerController::UpdateClickPreviewAt(const FHit
 	const EClickPreviewKind GroupKindBefore = ClickPreviewGroupKind;
 	GroupPreviewShown = 0;
 	FBreachPlan Plan;
+	// The ordinary click's own cases, once per update (it scans the wires near the hit).
+	const bool bBypass = !Leader || IsClickPreviewBypass(Hit);
 	if (!Leader)
 	{
 		Why(TEXT("no operative selected"));
 	}
-	else if (IsClickPreviewBypass(Hit))
+	else if (bBypass)
 	{
 		Why(FString::Printf(TEXT("the ordinary click's own case (%s)"), *GetNameSafe(Hit.GetActor())));
 	}
-	else if (FindBreachForHit(Hit, Plan))
+	else if (FindBreachForHit(Hit, Plan, bBreachPreview ? &BreachPreview : nullptr))
 	{
 		Kind = EClickPreviewKind::Breach;
+		const bool bSameDoor = bBreachPreview && BreachPreview.DoorwayId == Plan.DoorwayId && GetBreachGhostCount() > 0;
 		BreachPreview = Plan;
 		bBreachPreview = true;
-		ShowBreachGhost(Plan);
+		if (!bSameDoor)
+		{
+			ShowBreachGhost(Plan); // the same doorway's stack is already shown
+		}
 	}
 	if (Kind != EClickPreviewKind::Breach)
 	{
@@ -530,7 +536,7 @@ EClickPreviewKind ACodexTacticsPlayerController::UpdateClickPreviewAt(const FHit
 	// The obstacle's top: the climb (CanOrderMantleClick / PlanMantleClick decide, as the click). R17-1 + R17-3: a formation / box selection climbs
 	// in turns - the ghost shows every man on his own lane (USquadSubsystem::PreviewSquadMantle, the lanes the climb order gives).
 	const bool bTop = FMath::Abs(Hit.ImpactNormal.Z) >= 0.3f;
-	if (Kind == EClickPreviewKind::None && Leader && !IsClickPreviewBypass(Hit) && bTop && MantleNavigation::IsBatch2Enabled() && CanOrderMantleClick(Hit)
+	if (Kind == EClickPreviewKind::None && Leader && !bBypass && bTop && MantleNavigation::IsBatch2Enabled() && CanOrderMantleClick(Hit)
 		&& UpdateMantleHover(Leader, &Hit))
 	{
 		Kind = EClickPreviewKind::Mantle;
@@ -549,7 +555,7 @@ EClickPreviewKind ACodexTacticsPlayerController::UpdateClickPreviewAt(const FHit
 		UpdateMantleHover(nullptr, nullptr);
 	}
 	// Near a wall's end: the peek round it (in cover there, the squad's corner, the run-and-peek).
-	if (Kind == EClickPreviewKind::None && Leader && !IsClickPreviewBypass(Hit) && UpdateCornerPeekHover(Leader, &Hit))
+	if (Kind == EClickPreviewKind::None && Leader && !bBypass && UpdateCornerPeekHover(Leader, &Hit))
 	{
 		Kind = EClickPreviewKind::CornerPeek;
 		if (GroupKindBefore == Kind && CornerPeekGhost && FVector::Dist2D(CornerPeekGhost->GetSlot().WorldLocation, GroupAtBefore) < ControllerClickPreviewLocal::GroupReplanCm)
@@ -569,7 +575,7 @@ EClickPreviewKind ACodexTacticsPlayerController::UpdateClickPreviewAt(const FHit
 	// A wall / obstacle face: hug it.
 	FCoverSlot Slot;
 	bool bConfirm = false;
-	if (Kind == EClickPreviewKind::None && Leader && !IsClickPreviewBypass(Hit) && ResolveClickCoverSlot(*Leader, Hit, Slot, bConfirm))
+	if (Kind == EClickPreviewKind::None && Leader && !bBypass && ResolveClickCoverSlot(*Leader, Hit, Slot, bConfirm))
 	{
 		Kind = EClickPreviewKind::Cover;
 		bClickPreviewCoverConfirm = bConfirm;
@@ -677,6 +683,8 @@ void ACodexTacticsPlayerController::HandlePlayerClick(const FHitResult& InHit)
 		HandleWorldHit(InHit);
 		return;
 	}
+	// A ghost armed for another operative (the selection / leader changed since): it goes before this click is read (review 2026-11-17).
+	TickClickPreviewValidity();
 	FVector2D Mouse = FVector2D::ZeroVector; // stays zero without a viewport (headless smokes)
 	GetMousePosition(Mouse.X, Mouse.Y);
 	const double Now = FApp::GetCurrentTime();
@@ -726,7 +734,7 @@ void ACodexTacticsPlayerController::HandlePlayerClick(const FHitResult& InHit)
 		ClickPreviewArmTime = Now;
 		ClickPreviewArmMouse = Mouse;
 		ClickPreviewTrackTime = Now;
-		ClickPreviewTriedAt = Hit.ImpactPoint;
+		ClickPreviewTriedAt = InHit.ImpactPoint; // the raw cursor point (TickClickPreview's throttle)
 		UE_LOG(LogCodexTactics, Display, TEXT("[ClickPreview] first click on %s at %s (normal z %.2f): the %s ghost (%d silhouettes) - a second click on it carries it out"),
 			*GetNameSafe(Hit.GetActor()), *Hit.ImpactPoint.ToCompactString(), Hit.ImpactNormal.Z,
 			NewKind == EClickPreviewKind::Cover ? TEXT("cover") : NewKind == EClickPreviewKind::CornerPeek ? TEXT("corner peek") : NewKind == EClickPreviewKind::Mantle ? TEXT("climb") : TEXT("breach"),
@@ -878,43 +886,56 @@ void ACodexTacticsPlayerController::ExecuteClickPreview(const FHitResult& Hit, b
 	}
 }
 
-void ACodexTacticsPlayerController::TickClickPreview(const FHitResult* CursorHit)
+bool ACodexTacticsPlayerController::TickClickPreviewValidity()
 {
 	if (!IsClickPreviewArmed())
 	{
-		return;
+		return false;
 	}
 	const USquadSubsystem* Squad = GetSquad();
 	if (!Squad || Squad->GetLeader() != ClickPreviewLeader.Get() || GetActiveTurnBased() || IsDialogueOpen())
 	{
 		CancelClickPreview(TEXT("the selection / mode changed"));
+		return false;
+	}
+	return true;
+}
+
+void ACodexTacticsPlayerController::TickClickPreview(const FHitResult* CursorHit)
+{
+	if (!TickClickPreviewValidity())
+	{
 		return;
 	}
 	if (!CursorHit || !CursorHit->bBlockingHit)
 	{
 		return; // the ghost stays
 	}
-	const FHitResult Hit = LowerBuildingHit(*CursorHit);
+	// Throttled on the RAW cursor point and the time before anything costly (LowerBuildingHit scans the pawns and traces).
 	const double Now = FApp::GetCurrentTime();
 	if (Now - ClickPreviewTrackTime < ClickPreviewRules::TrackIntervalSeconds
-		|| FVector::Dist(Hit.ImpactPoint, ClickPreviewTriedAt) < ClickPreviewRules::TrackMoveCm)
+		|| FVector::Dist(CursorHit->ImpactPoint, ClickPreviewTriedAt) < ClickPreviewRules::TrackMoveCm)
 	{
 		return;
 	}
+	ClickPreviewTrackTime = Now;
+	ClickPreviewTriedAt = CursorHit->ImpactPoint;
+	const FHitResult Hit = LowerBuildingHit(*CursorHit);
 	const FClickPreviewPiece Piece = MakeClickPiece(Hit);
 	if (!ClickPreviewRules::IsOnStructure(ClickPreviewStructure, Piece) || IsClickPreviewBypass(Hit))
 	{
 		return; // off the building: the ghost stays where it was
 	}
-	ClickPreviewTrackTime = Now;
-	ClickPreviewTriedAt = Hit.ImpactPoint;
 	bQuietCoverPreview = true;
 	const EClickPreviewKind Kind = UpdateClickPreviewAt(Hit);
-	if (Kind == EClickPreviewKind::None)
+	if (Kind == EClickPreviewKind::None && UpdateClickPreviewAt(ClickPreviewHit) == EClickPreviewKind::None)
 	{
-		UpdateClickPreviewAt(ClickPreviewHit); // nothing at this spot of the building: the last ghost again
+		// Nothing at this spot of the building, and the last ghost cannot be shown again either (the world changed): never armed with no ghost.
+		bQuietCoverPreview = false;
+		CancelClickPreview(TEXT("nothing to show any more"));
+		return;
 	}
-	else
+	if (Kind != EClickPreviewKind::None) // else: the last ghost again, as it was
 	{
 		if (Kind != ClickPreviewKind)
 		{

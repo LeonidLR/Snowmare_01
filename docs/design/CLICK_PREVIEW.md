@@ -69,18 +69,20 @@ slide along the wall gets the peek only once the operative is nearer. The smoke 
 
 ## 4. Doorway breach (R17-5)
 
-- First click into the opening (the camera's ray through the portal plane - `ClickPreviewRules::RayThroughPortal`: the room's floor behind it,
-  the threshold, a jamb face within 40 cm of the opening; a wall more than 40 cm off = ordinary wall cover, designer answer 4) -> the stack
+- First click ON the opening (review 2026-11-17: the hit at the portal plane - `ClickPreviewRules::IsAtPortalPlane` + `RayThroughPortal`: the
+  threshold, a jamb face within 40 cm of the opening; a ray THROUGH the opening onto the room's floor is a plain move through the doorway; a wall more than 40 cm off = ordinary wall cover, designer answer 4) -> the stack
   ghost. Who: Solo = the selected man alone at the nearest jamb; a box selection = the selected ones; Formation = the leader + his free
   followers (`GetGroupCoverMembers`), up to the four slots.
 - Second click -> the stack: each jamb man gets the run-and-peek into his jamb (the real wall's cover slot at the jamb stand point, the opening's
   edge as the peek edge: `OrderRunCornerPeek` - he leans in round the frame without crossing it); the centre / rear men walk to their spots, then
   take the slot's stance (centre crouched) and look along its sector (look hold point). In formation the followers hold
   (`SetFollowersHolding`) for the session and get it back after.
-- Once everyone is there (or after 30 s), a click INSIDE the room (its floor / roof over it, or a ray into the opening + 40 cm - from outside
+- Once everyone is there (or after 30 s), a click INSIDE the room (`DoorwayBreachEntryRules::IsInsideRoom`: the room measured at the stack order -
+  chest-high traces to its far / side walls, its storey only; not the yard behind the building), or into the opening + 40 cm at its plane - from outside
   the camera often sees only the jambs; a click on a stacked jamb man's body leaning into the frame counts as the room behind him) = the entry
   (`DoorwayBreachEntryRules::PlanEntry`, DOORWAY_BREACH.md 7.2): the right-hand jamb man hooks right, the left one 0.3 s later hooks left, the
-  centre man drives 2.5 m in and crouches; rear security stays outside. Then "Room clear! Hold sectors."; any other order ends the session.
+  centre man drives 2.5 m in and crouches; rear security stays outside. Then "Room clear! Hold sectors." and the session ends; any other order, another
+  leader, a Solo <-> formation switch or the turn-based fight ends it too - every end gives the followers' hold and the sector looks back.
 - The Codex step-4 patch (`breach-step4.patch`, 11-15) was a HOVER preview - against the 11-17 decision "hover shows nothing"; it was not
   applied. Its ideas (ray vs the portal plane, controller-owned ghost) are in the code above.
 

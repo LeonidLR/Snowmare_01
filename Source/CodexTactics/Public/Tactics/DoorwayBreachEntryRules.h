@@ -26,6 +26,21 @@ struct FDoorwayBreachEntryMove
 	bool bCrouch = false;
 };
 
+/**
+ * The room behind a stacked doorway (measured once at the stack order: traces from just inside the threshold to the room's far wall and its side
+ * walls), in the doorway's frame: entering = -Outward, right = the entering man's right hand.
+ */
+struct FDoorwayBreachRoom
+{
+	/** From the threshold to the far wall / to the side walls, cm. */
+	float DepthCm = 0.f;
+	float RightCm = 0.f;
+	float LeftCm = 0.f;
+	/** The threshold's floor height (the room is on this floor). */
+	float FloorZ = 0.f;
+	bool bValid = false;
+};
+
 namespace DoorwayBreachEntryRules
 {
 	/** The hooking jamb man ends this far inside the threshold, cm ... */
@@ -40,10 +55,18 @@ namespace DoorwayBreachEntryRules
 	inline constexpr float ArrivalCm = 80.f;
 	/** A click this deep inside the threshold (along -Outward) ... */
 	inline constexpr float InsideMinDepthCm = 40.f;
-	/** ... up to this deep ... */
-	inline constexpr float InsideMaxDepthCm = 1500.f;
-	/** ... and within this of the opening's axis, is a click inside the room, cm. */
-	inline constexpr float InsideHalfSpanCm = 1200.f;
+	/** The room is measured up to this deep ... */
+	inline constexpr float RoomMaxDepthCm = 1200.f;
+	/** ... and this far either side of the opening's axis; an unmeasured side (no wall within reach) counts this far, cm. */
+	inline constexpr float RoomMaxSideCm = 800.f;
+	/** The room is at least this big along each measure (a reveal next to the opening is no room wall), cm. */
+	inline constexpr float RoomMinCm = 100.f;
+	/** A hit on a room wall's own face still counts (this past the measured wall), cm ... */
+	inline constexpr float RoomWallSlackCm = 15.f;
+	/** ... from this under the threshold's floor ... */
+	inline constexpr float RoomBelowFloorCm = 30.f;
+	/** ... up to this over it (the same storey: its floor and walls, not the floor above or the yard below), cm. */
+	inline constexpr float RoomHeightCm = 280.f;
 
 	/** The entering direction (into the room, -Outward) and its right hand (Z up). */
 	CODEXTACTICS_API FVector EntryDirection(const FVector& Outward);
@@ -52,8 +75,14 @@ namespace DoorwayBreachEntryRules
 	/** Which side of the opening (seen entering) a man stands on: +1 right, -1 left (0 on the axis: right). */
 	CODEXTACTICS_API int32 SideOf(const FVector& Position, const FVector& Center, const FVector& Outward);
 
-	/** The point a click on the room's floor / its inner walls lies at counts as "inside the room" (InsideMinDepthCm .. InsideMaxDepthCm deep). */
-	CODEXTACTICS_API bool IsInsideRoom(const FVector& Point, const FVector& Center, const FVector& Outward);
+	/** The room from the measured wall distances (< 0: no wall within reach = RoomMaxDepthCm / RoomMaxSideCm), each at least RoomMinCm. */
+	CODEXTACTICS_API FDoorwayBreachRoom MakeRoom(float ForwardWallCm, float RightWallCm, float LeftWallCm, float FloorZ);
+
+	/**
+	 * The click point lies inside the stacked doorway's room: InsideMinDepthCm past the threshold up to its far wall, between its side walls
+	 * (+ RoomWallSlackCm), on the threshold's storey (-RoomBelowFloorCm .. RoomHeightCm over its floor). An invalid room: nothing is inside.
+	 */
+	CODEXTACTICS_API bool IsInsideRoom(const FVector& Point, const FVector& Center, const FVector& Outward, const FDoorwayBreachRoom& Room);
 
 	/**
 	 * The entry (section 7.2): the jamb men hook to their own side's interior corner - the right-hand one first, the left-hand one StaggerSeconds

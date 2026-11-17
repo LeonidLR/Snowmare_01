@@ -278,6 +278,9 @@ public:
 	 */
 	void TickClickPreview(const FHitResult* CursorHit);
 
+	/** The click ghost is still valid (the leader it was armed for is the leader, no turn-based fight / dialogue); else it goes. False: no ghost. */
+	bool TickClickPreviewValidity();
+
 	/** Drops the click ghost (all its silhouettes) and its building. */
 	void CancelClickPreview(const TCHAR* Why);
 
@@ -321,6 +324,9 @@ public:
 	EBreachPhase GetBreachPhase() const { return Breach.Phase; }
 	/** The breach session's participants and how many stand at their slots / have finished their entry move (smokes). */
 	int32 GetBreachParticipantCount() const { return Breach.Members.Num(); }
+	/** Rooms cleared so far, and how many took part in the last one (the cleared room ends the session at once: smokes). */
+	int32 GetBreachClearedCount() const { return BreachClearedCount; }
+	int32 GetLastBreachParticipantCount() const { return LastBreachParticipantCount; }
 	int32 GetBreachArrivedCount() const;
 	int32 GetBreachEnteredCount() const;
 	/** The doorway of the session / the preview (smokes). */
@@ -1229,7 +1235,7 @@ private:
 		TArray<FDoorwaySlotAssignment> Assignments;
 	};
 	/** A click on Hit means a doorway's opening (FindDoorwayAtCursor / the cursor's ray through the portal): the plan for the current selection. */
-	bool FindBreachForHit(const FHitResult& Hit, FBreachPlan& OutPlan) const;
+	bool FindBreachForHit(const FHitResult& Hit, FBreachPlan& OutPlan, const FBreachPlan* Cached = nullptr) const;
 	/** Shows / hides the breach stack ghost. */
 	void ShowBreachGhost(const FBreachPlan& Plan);
 	void HideBreachGhost();
@@ -1264,6 +1270,11 @@ private:
 		FVector Center = FVector::ZeroVector;
 		FVector Outward = FVector::ForwardVector;
 		float WidthCm = 0.f;
+		/** The room behind the doorway, measured at the stack order (FDoorwayBreachRoom): an entry click must lie in it. */
+		FDoorwayBreachRoom Room;
+		/** Who led the session (another leader / a mode switch ends it). */
+		TWeakObjectPtr<AOperativeCharacter> Leader;
+		bool bSolo = false;
 		TArray<FBreachMember> Members;
 		float Seconds = 0.f;
 		float EntrySeconds = 0.f;
@@ -1272,6 +1283,8 @@ private:
 		bool bSprint = false;
 	};
 	FBreachSession Breach;
+	int32 BreachClearedCount = 0;
+	int32 LastBreachParticipantCount = 0;
 
 	/** Godot _set_squad_tactical_cease_fire. */
 	void SetSquadCeaseFire(bool bCease);

@@ -148,4 +148,10 @@ namespace ClickPreviewRules
 	 */
 	CODEXTACTICS_API bool RayThroughPortal(const FVector& From, const FVector& To, const FVector& Center, const FVector& Tangent, const FVector& Outward,
 		float WidthCm, float HeightCm, float SlackCm, float DepthSlackCm, FVector& OutPoint);
+
+	/**
+	 * Review 2026-11-17: a click ARMS a doorway's breach only on the opening itself - a jamb face or the threshold, the hit within DepthSlackCm of
+	 * the portal plane. A ray through the opening onto the room's floor (or the yard beyond a gate) is a plain move through the doorway.
+	 */
+	CODEXTACTICS_API bool IsAtPortalPlane(const FVector& HitPoint, const FVector& Center, const FVector& Outward, float DepthSlackCm);
 }

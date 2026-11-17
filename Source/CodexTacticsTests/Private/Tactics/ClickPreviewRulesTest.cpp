@@ -159,6 +159,11 @@ bool FClickPreviewPortalTest::RunTest(const FString&)
 	TestFalse(TEXT("the lintel above the opening"), RayThroughPortal(Eye, FVector(0.f, 10.f, 260.f), Center, Tangent, Outward, 120.f, 210.f, 40.f, 50.f, Point));
 	TestFalse(TEXT("the ground in front of the door, 2 m out"), RayThroughPortal(Eye, FVector(0.f, 200.f, 0.f), Center, Tangent, Outward, 120.f, 210.f, 40.f, 50.f, Point));
 	TestFalse(TEXT("a far floor inside seen past the wall beside the door"), RayThroughPortal(Eye, FVector(600.f, -400.f, 0.f), Center, Tangent, Outward, 120.f, 210.f, 40.f, 50.f, Point));
+	// Review 2026-11-17 (finding 2): only the opening itself arms the breach - the plane, not a ray through it onto the floor beyond.
+	TestTrue(TEXT("arming: the threshold (10 cm out) is at the portal plane"), IsAtPortalPlane(FVector(30.f, 10.f, 0.f), Center, Outward, 50.f));
+	TestTrue(TEXT("arming: a jamb face is at the portal plane"), IsAtPortalPlane(FVector(90.f, 10.f, 100.f), Center, Outward, 50.f));
+	TestFalse(TEXT("arming: the room's floor 1 m in (a move through the doorway) is not"), IsAtPortalPlane(FVector(0.f, -100.f, 0.f), Center, Outward, 50.f));
+	TestFalse(TEXT("arming: the yard 2 m out is not"), IsAtPortalPlane(FVector(0.f, 200.f, 0.f), Center, Outward, 50.f));
 	return true;
 }
 
@@ -202,11 +207,22 @@ bool FBreachEntryInsideTest::RunTest(const FString&)
 	using namespace DoorwayBreachEntryRules;
 	const FVector Center(0.f, 0.f, 0.f);
 	const FVector Outward(0.f, 1.f, 0.f);
-	TestTrue(TEXT("3 m inside"), IsInsideRoom(FVector(0.f, -300.f, 0.f), Center, Outward));
-	TestTrue(TEXT("inside, off to a side"), IsInsideRoom(FVector(500.f, -200.f, 0.f), Center, Outward));
-	TestFalse(TEXT("on the threshold"), IsInsideRoom(FVector(0.f, -10.f, 0.f), Center, Outward));
-	TestFalse(TEXT("outside"), IsInsideRoom(FVector(0.f, 300.f, 0.f), Center, Outward));
-	TestFalse(TEXT("20 m deep: not this room"), IsInsideRoom(FVector(0.f, -2000.f, 0.f), Center, Outward));
+	// A 5 m deep room, its right-hand wall (+X, seen entering) 3 m off the axis, the left one 1.5 m (review 2026-11-17, finding 3: the room's
+	// own bounds, not a 15 x 24 m box).
+	const FDoorwayBreachRoom Room = MakeRoom(500.f, 300.f, 150.f, 0.f);
+	TestTrue(TEXT("3 m inside"), IsInsideRoom(FVector(0.f, -300.f, 0.f), Center, Outward, Room));
+	TestTrue(TEXT("inside, by the right-hand wall"), IsInsideRoom(FVector(290.f, -200.f, 0.f), Center, Outward, Room));
+	TestTrue(TEXT("the far wall's own face"), IsInsideRoom(FVector(0.f, -505.f, 120.f), Center, Outward, Room));
+	TestFalse(TEXT("on the threshold"), IsInsideRoom(FVector(0.f, -10.f, 0.f), Center, Outward, Room));
+	TestFalse(TEXT("outside"), IsInsideRoom(FVector(0.f, 300.f, 0.f), Center, Outward, Room));
+	TestFalse(TEXT("behind the far wall (the yard behind the building)"), IsInsideRoom(FVector(0.f, -700.f, 0.f), Center, Outward, Room));
+	TestFalse(TEXT("past the left-hand wall (the next room)"), IsInsideRoom(FVector(-400.f, -200.f, 0.f), Center, Outward, Room));
+	TestFalse(TEXT("the floor above (another storey)"), IsInsideRoom(FVector(0.f, -300.f, 320.f), Center, Outward, Room));
+	TestFalse(TEXT("a ground 1 m below the threshold"), IsInsideRoom(FVector(0.f, -300.f, -100.f), Center, Outward, Room));
+	TestFalse(TEXT("no measured room: nothing is inside"), IsInsideRoom(FVector(0.f, -300.f, 0.f), Center, Outward, FDoorwayBreachRoom()));
+	const FDoorwayBreachRoom Open = MakeRoom(-1.f, -1.f, 20.f, 0.f);
+	TestTrue(TEXT("no wall within reach: the maximum depth / side; a reveal is no wall (the minimum)"), Open.DepthCm == RoomMaxDepthCm && Open.RightCm == RoomMaxSideCm
+		&& Open.LeftCm == RoomMinCm);
 	TestEqual(TEXT("the side of a man at +X seen entering: right"), SideOf(FVector(90.f, 45.f, 0.f), Center, Outward), 1);
 	return true;
 }

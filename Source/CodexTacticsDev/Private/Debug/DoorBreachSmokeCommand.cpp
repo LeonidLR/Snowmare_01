@@ -51,6 +51,10 @@ namespace DoorBreachSmoke
 		FHitResult ClickHit;
 		bool bSolo = false;
 		int32 Retries = 0;
+		/** The cleared count before the entry, when it rose (stage time), the followers' hold before the stack order. */
+		int32 ClearedBefore = 0;
+		float ClearedAt = 0.f;
+		bool bHoldBefore = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -257,6 +261,31 @@ namespace DoorBreachSmoke
 				Next(*State, ++State->Retries > 8 ? 99 : 1);
 				return true;
 			}
+			// Review 2026-11-17 (finding 2): a click THROUGH the opening onto the room's floor is a plain move through the doorway, no breach ghost.
+			if (!State->bSolo)
+			{
+				FHitResult Floor;
+				const FVector In = -State->Outward;
+				// The camera seldom sees that floor from outside: the room's floor hit itself (straight down there) - the arming rule reads the hit point.
+				const FVector FloorPoint = State->Door.Center + In * 160.f;
+				FCollisionQueryParams FloorParams(SCENE_QUERY_STAT(DoorBreachSmokeFloor), false);
+				for (AOperativeCharacter* Member : Squad->GetMembers())
+				{
+					FloorParams.AddIgnoredActor(Member);
+				}
+				if (World->LineTraceSingleByChannel(Floor, FloorPoint + FVector(0.f, 0.f, 150.f), FloorPoint - FVector(0.f, 0.f, 150.f), ECC_Visibility, FloorParams)
+					&& FMath::Abs(Floor.ImpactNormal.Z) >= 0.7f && FVector::DotProduct(Floor.ImpactPoint - State->Door.Center, In) > 80.0)
+				{
+					const EClickPreviewKind FloorKind = PC->ClassifyClickPreview(Floor);
+					Check(*State, FloorKind != EClickPreviewKind::Breach, FString::Printf(TEXT("a: a click through doorway %s onto the room's floor (%.0f cm in) is no breach ghost (kind %d)"),
+						*State->Door.Id, FVector::DotProduct(Floor.ImpactPoint - State->Door.Center, In), static_cast<int32>(FloorKind)));
+				}
+				else
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[DoorBreachSmoke] the camera does not see doorway %s's room floor (hit %s) - the floor-click check is skipped"),
+						*State->Door.Id, *GetNameSafe(Floor.GetActor()));
+				}
+			}
 			PC->HandlePlayerClick(State->ClickHit);
 			Next(*State, 3);
 			return true;
@@ -276,6 +305,7 @@ namespace DoorBreachSmoke
 			Check(*State, PC->GetClickPreviewKind() == EClickPreviewKind::Breach && PC->GetBreachGhostCount() == Members && bStill, FString::Printf(
 				TEXT("%s: the first click into doorway %s (%s, %.0f cm wide) shows the breach ghost - %d silhouettes (%d expected), nobody moves (%d)"), State->bSolo ? TEXT("d") : TEXT("a"),
 				*State->Door.Id, *GetNameSafe(State->ClickHit.GetActor()), State->Door.WidthCm, PC->GetBreachGhostCount(), Members, bStill ? 1 : 0));
+			State->bHoldBefore = Squad->AreFollowersHolding();
 			PC->HandlePlayerClick(State->ClickHit);
 			Next(*State, 4);
 			return true;
@@ -314,6 +344,8 @@ namespace DoorBreachSmoke
 			}
 			// c: a click inside the room - where the camera sees its floor (through the opening; a roof's cutaway).
 			FHitResult Inside;
+			State->ClearedBefore = PC->GetBreachClearedCount();
+			State->ClearedAt = 0.f;
 			for (const float Depth : { 120.f, 200.f, 300.f, 80.f })
 			{
 				if (MantleSmokeSites::CameraRayHit(World, Door.Center - State->Outward * Depth + FVector(0.f, 0.f, 5.f), Inside))
@@ -334,11 +366,26 @@ namespace DoorBreachSmoke
 		}
 		case 5:
 		{
-			const bool bCleared = PC->GetBreachPhase() == ACodexTacticsPlayerController::EBreachPhase::Cleared;
+			// The cleared room ends the session at once (review 2026-11-17: it restores the holds / sector looks it set): the cleared count.
+			const bool bCleared = PC->GetBreachClearedCount() > State->ClearedBefore;
 			if (!bCleared && State->StageTime < 25.f)
 			{
 				return true;
 			}
+			if (bCleared)
+			{
+				if (State->ClearedAt <= 0.f)
+				{
+					State->ClearedAt = State->StageTime;
+				}
+				if (State->StageTime - State->ClearedAt < 0.3f)
+				{
+					return true; // a few frames for the end of the session
+				}
+			}
+			Check(*State, PC->GetBreachPhase() == ACodexTacticsPlayerController::EBreachPhase::None && Squad->AreFollowersHolding() == State->bHoldBefore,
+				FString::Printf(TEXT("c: the cleared room ends the session and restores the followers' hold (phase %d, holding %d, before %d)"),
+					static_cast<int32>(PC->GetBreachPhase()), Squad->AreFollowersHolding() ? 1 : 0, State->bHoldBefore ? 1 : 0));
 			int32 Inside = 0;
 			FString Line;
 			for (AOperativeCharacter* Member : Squad->GetMembers())
@@ -347,7 +394,7 @@ namespace DoorBreachSmoke
 				Inside += Out < -40.f ? 1 : 0;
 				Line += FString::Printf(TEXT(" %s %.0f cm %s;"), *Member->DisplayName.ToString(), FMath::Abs(Out), Out < 0.f ? TEXT("inside") : TEXT("outside"));
 			}
-			const int32 Expected = FMath::Min(PC->GetBreachParticipantCount(), 3);
+			const int32 Expected = FMath::Min(PC->GetLastBreachParticipantCount(), 3);
 			Check(*State, bCleared && Inside >= Expected, FString::Printf(TEXT("c: the entry - %d men past the threshold (%d expected; cleared %d after %.1f s):%s"), Inside, Expected,
 				bCleared ? 1 : 0, State->StageTime, *Line));
 			// d: Solo, one operative.

@@ -15,6 +15,8 @@
 #include "Combat/CombatFeedbackSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
+#include "EngineUtils.h"
+#include "GameFramework/Pawn.h"
 #include "Interactables/DoorwaySubsystem.h"
 #include "Interactables/InteractionSubsystem.h"
 #include "NavigationSystem.h"
@@ -47,6 +49,29 @@ namespace ControllerBreachLocal
 		return Operative.GetActorLocation() - FVector(0.f, 0.f, Operative.GetSimpleCollisionHalfHeight());
 	}
 
+	/** The room behind the doorway (review 2026-11-17: the entry click must lie in it): chest-high traces from just inside the threshold. */
+	FDoorwayBreachRoom MeasureRoom(UWorld* World, const FVector& Center, const FVector& Outward)
+	{
+		using namespace DoorwayBreachEntryRules;
+		const FVector In = EntryDirection(Outward);
+		const FVector Right = EntryRight(Outward);
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(BreachRoom), false);
+		for (TActorIterator<APawn> It(World); It; ++It)
+		{
+			Params.AddIgnoredActor(*It);
+		}
+		auto Reach = [World, &Params](const FVector& From, const FVector& Direction, float MaxCm)
+		{
+			FHitResult Hit;
+			return World->LineTraceSingleByChannel(Hit, From, From + Direction * MaxCm, ECC_Visibility, Params) && !Hit.bStartPenetrating
+				? static_cast<float>(Hit.Distance) : -1.f;
+		};
+		const FVector Chest = Center + FVector(0.f, 0.f, JambChestCm);
+		const float Forward = Reach(Chest + In * 60.f, In, RoomMaxDepthCm - 60.f);
+		const FVector Side = Chest + In * 100.f;
+		return MakeRoom(Forward < 0.f ? -1.f : Forward + 60.f, Reach(Side, Right, RoomMaxSideCm), Reach(Side, -Right, RoomMaxSideCm), static_cast<float>(Center.Z));
+	}
+
 	FVector OnNav(UWorld* World, const FVector& Point)
 	{
 		if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
@@ -61,7 +86,7 @@ namespace ControllerBreachLocal
 	}
 }
 
-bool ACodexTacticsPlayerController::FindBreachForHit(const FHitResult& Hit, FBreachPlan& OutPlan) const
+bool ACodexTacticsPlayerController::FindBreachForHit(const FHitResult& Hit, FBreachPlan& OutPlan, const FBreachPlan* Cached) const
 {
 	using namespace ControllerBreachLocal;
 	OutPlan = FBreachPlan();
@@ -94,8 +119,11 @@ bool ACodexTacticsPlayerController::FindBreachForHit(const FHitResult& Hit, FBre
 		{
 			Outward = -Outward; // a gate: its approach side is his
 		}
+		// Review 2026-11-17: only the opening itself (a jamb face, the threshold - the hit at the portal plane) arms the breach; a ray through the
+		// opening onto the room's floor / a wall inside is a plain move through the doorway.
 		FVector Point;
-		if (!ClickPreviewRules::RayThroughPortal(Eye, Hit.ImpactPoint, Door.Center, Door.WallTangent, Outward, Door.WidthCm, OpeningHeightCm, Config.PortalSlackCm,
+		if (!ClickPreviewRules::IsAtPortalPlane(Hit.ImpactPoint, Door.Center, Outward, Config.PortalDepthSlackCm)
+			|| !ClickPreviewRules::RayThroughPortal(Eye, Hit.ImpactPoint, Door.Center, Door.WallTangent, Outward, Door.WidthCm, OpeningHeightCm, Config.PortalSlackCm,
 			Config.PortalDepthSlackCm, Point))
 		{
 			continue;
@@ -132,6 +160,12 @@ bool ACodexTacticsPlayerController::FindBreachForHit(const FHitResult& Hit, FBre
 	if (Members.IsEmpty())
 	{
 		return false;
+	}
+	// The same doorway for the same men as the shown plan: it stands (the triad and the slot assignment are not re-planned per cursor step).
+	if (Cached && Cached->DoorwayId == Best->Id && Cached->Members == Members)
+	{
+		OutPlan = *Cached;
+		return true;
 	}
 	FRuntimeDoorway Door = *Best;
 	Door.OutwardNormal = BestOutward;
@@ -301,6 +335,9 @@ bool ACodexTacticsPlayerController::OrderBreach(const FBreachPlan& Plan, bool bS
 	Breach.Center = Plan.Center;
 	Breach.Outward = Plan.Outward;
 	Breach.WidthCm = Plan.WidthCm;
+	Breach.Room = MeasureRoom(World, Plan.Center, Plan.Outward);
+	Breach.Leader = Leader;
+	Breach.bSolo = Squad->IsSoloMode();
 	Breach.Seconds = 0.f;
 	Breach.bSprint = bSprint;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Breach] doorway %s: the stack goes to its slots (%s):%s"), *Plan.DoorwayId, bSprint ? TEXT("at a run") : TEXT("walking"), *Line);
@@ -355,11 +392,13 @@ bool ACodexTacticsPlayerController::TryBreachEntryClick(const FHitResult& Hit)
 	FVector Through;
 	const FDoorwayBreachConfig& Config = DoorwayBreachRules::GetConfig();
 	const FVector Tangent = FVector::CrossProduct(FVector::UpVector, Breach.Outward).GetSafeNormal();
-	// Inside the room, or into the stacked doorway itself (the same opening + 40 cm the first click used): from outside the camera often sees
-	// no floor through the opening, only the jambs the stack leans round - "go in" is a click into that doorway again.
-	const bool bInside = DoorwayBreachEntryRules::IsInsideRoom(Hit.ImpactPoint, Breach.Center, Breach.Outward)
-		|| ClickPreviewRules::RayThroughPortal(Eye, Hit.ImpactPoint, Breach.Center, Tangent, Breach.Outward, Breach.WidthCm, OpeningHeightCm, Config.PortalSlackCm,
-			Config.PortalDepthSlackCm, Through);
+	// Inside the measured room (its floor / walls on the threshold's storey - review 2026-11-17: not the yard behind the building), or into the
+	// stacked doorway itself (the opening + 40 cm at its plane, as the first click): from outside the camera often sees no floor through the
+	// opening, only the jambs the stack leans round - "go in" is a click into that doorway again.
+	const bool bInside = DoorwayBreachEntryRules::IsInsideRoom(Hit.ImpactPoint, Breach.Center, Breach.Outward, Breach.Room)
+		|| (ClickPreviewRules::IsAtPortalPlane(Hit.ImpactPoint, Breach.Center, Breach.Outward, Config.PortalDepthSlackCm)
+			&& ClickPreviewRules::RayThroughPortal(Eye, Hit.ImpactPoint, Breach.Center, Tangent, Breach.Outward, Breach.WidthCm, OpeningHeightCm, Config.PortalSlackCm,
+				Config.PortalDepthSlackCm, Through));
 	if (!bInside)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Breach] doorway %s: the click on %s at %s is not inside the room (%.0f cm in) - no entry"), *Breach.DoorwayId,
@@ -410,8 +449,21 @@ bool ACodexTacticsPlayerController::TryBreachEntryClick(const FHitResult& Hit)
 void ACodexTacticsPlayerController::TickBreach(float DeltaSeconds)
 {
 	using namespace ControllerBreachLocal;
-	if (Breach.Phase == EBreachPhase::None || Breach.Phase == EBreachPhase::Cleared)
+	if (Breach.Phase == EBreachPhase::None)
 	{
+		return;
+	}
+	// Review 2026-11-17: whatever ends the session restores what it set (the followers' hold, the sector look points) - another leader, a Solo <->
+	// formation switch, the turn-based fight, and the cleared room (the callout is made; the men are free again).
+	const USquadSubsystem* Squad = GetSquad();
+	if (!Squad || Squad->GetLeader() != Breach.Leader.Get() || Squad->IsSoloMode() != Breach.bSolo || GetActiveTurnBased())
+	{
+		EndBreach(TEXT("the leader / mode changed"));
+		return;
+	}
+	if (Breach.Phase == EBreachPhase::Cleared)
+	{
+		EndBreach(TEXT("the room is clear"));
 		return;
 	}
 	Breach.Members.RemoveAll([](const FBreachMember& Member) { return !Member.Operative.IsValid() || !Member.Operative->HealthComponent || !Member.Operative->HealthComponent->IsAlive(); });
@@ -492,6 +544,9 @@ void ACodexTacticsPlayerController::TickBreach(float DeltaSeconds)
 			{
 				Messages->PostMessage(LOCTEXT("SquadSender", "SQUAD"), LOCTEXT("BreachClear", "🚪 Room clear! Hold sectors."));
 			}
+			++BreachClearedCount;
+			LastBreachParticipantCount = Breach.Members.Num();
+			EndBreach(TEXT("the room is clear")); // the holds / sector looks it set are given back at once
 		}
 	}
 }
@@ -504,7 +559,7 @@ void ACodexTacticsPlayerController::EndBreach(const TCHAR* Why)
 	}
 	for (FBreachMember& Member : Breach.Members)
 	{
-		if (AOperativeCharacter* Operative = Member.Operative.Get(); Operative && (Member.bArrived || Member.bEntered))
+		if (AOperativeCharacter* Operative = Member.Operative.Get())
 		{
 			Operative->ClearManualLookPoint(); // the sector looks of the breach end with it
 		}

@@ -367,6 +367,9 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 	}
 	// R17-5: the doorway breach session (the stack's arrival, the entry).
 	TickBreach(DeltaTime);
+	// R17-3 (review 2026-11-17): the click ghost goes as soon as its leader is not the leader / the turn-based fight starts - every frame,
+	// whatever the hover block below does.
+	TickClickPreviewValidity();
 
 	// Rev 5c manual corner peek: hovering the end of the leader's (turn-based: the active unit's) cover - high, or low since rev 5e -
 	// previews the peek.

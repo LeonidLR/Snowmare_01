@@ -110,6 +110,12 @@ namespace ClickPreviewRules
 		return !High.IsNearlyZero() && !Low.IsNearlyZero() && FVector2D::DotProduct(High, Low) >= LowHitSameFaceDot;
 	}
 
+	bool IsAtPortalPlane(const FVector& HitPoint, const FVector& Center, const FVector& Outward, float DepthSlackCm)
+	{
+		const FVector Normal = FVector(Outward.X, Outward.Y, 0.f).GetSafeNormal();
+		return !Normal.IsNearlyZero() && FMath::Abs(FVector::DotProduct(HitPoint - Center, Normal)) <= DepthSlackCm;
+	}
+
 	bool RayThroughPortal(const FVector& From, const FVector& To, const FVector& Center, const FVector& Tangent, const FVector& Outward,
 		float WidthCm, float HeightCm, float SlackCm, float DepthSlackCm, FVector& OutPoint)
 	{

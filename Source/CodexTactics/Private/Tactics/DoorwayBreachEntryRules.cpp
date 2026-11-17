@@ -19,11 +19,28 @@ namespace DoorwayBreachEntryRules
 		return FVector::DotProduct(Position - Center, EntryRight(Outward)) < 0.0 ? -1 : 1;
 	}
 
-	bool IsInsideRoom(const FVector& Point, const FVector& Center, const FVector& Outward)
+	FDoorwayBreachRoom MakeRoom(float ForwardWallCm, float RightWallCm, float LeftWallCm, float FloorZ)
 	{
+		FDoorwayBreachRoom Room;
+		Room.DepthCm = FMath::Max(ForwardWallCm < 0.f ? RoomMaxDepthCm : FMath::Min(ForwardWallCm, RoomMaxDepthCm), RoomMinCm);
+		Room.RightCm = FMath::Max(RightWallCm < 0.f ? RoomMaxSideCm : FMath::Min(RightWallCm, RoomMaxSideCm), RoomMinCm);
+		Room.LeftCm = FMath::Max(LeftWallCm < 0.f ? RoomMaxSideCm : FMath::Min(LeftWallCm, RoomMaxSideCm), RoomMinCm);
+		Room.FloorZ = FloorZ;
+		Room.bValid = true;
+		return Room;
+	}
+
+	bool IsInsideRoom(const FVector& Point, const FVector& Center, const FVector& Outward, const FDoorwayBreachRoom& Room)
+	{
+		if (!Room.bValid)
+		{
+			return false;
+		}
 		const double Depth = FVector::DotProduct(Point - Center, EntryDirection(Outward));
-		const double Lateral = FMath::Abs(FVector::DotProduct(Point - Center, EntryRight(Outward)));
-		return Depth >= InsideMinDepthCm && Depth <= InsideMaxDepthCm && Lateral <= InsideHalfSpanCm;
+		const double Side = FVector::DotProduct(Point - Center, EntryRight(Outward));
+		const double Up = Point.Z - Room.FloorZ;
+		return Depth >= InsideMinDepthCm && Depth <= Room.DepthCm + RoomWallSlackCm && Side <= Room.RightCm + RoomWallSlackCm
+			&& -Side <= Room.LeftCm + RoomWallSlackCm && Up >= -RoomBelowFloorCm && Up <= RoomHeightCm;
 	}
 
 	TArray<FDoorwayBreachEntryMove> PlanEntry(const FVector& Center, const FVector& Outward, float WidthCm, const TArray<EDoorwayBreachSlotRole>& Roles,
