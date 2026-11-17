@@ -110,3 +110,47 @@ spots, 150 hiding spots + 150 threatened points, 14 ladder-roof points) on the n
 on the best open street, 65 % of the ladder-only roofs picked over 200 seeds; MissionGoalsSmoke and LevelGenRouteSmoke PASS;
 Training Ground typecheck OK, `npm test` 455 / 457 (the two failures - movement golden `formation_Slots.json` stale, a combatSim timing
 check under build load - are outside this change).
+
+## 7. P2 / P3 implemented (Claude, 2026-11-17, branch `claude/tactical-p2`) - PMC on the map + arena behaviour metrics
+**Rule: no tactical file = the old behaviour.** `UPmcSquadSubsystem::GetTacticalMap()` is null without a loaded, non-empty file; then the
+danger is 0, there are no post candidates, every new term is x1 (test `CodexTactics.AI.PmcTactical.NoMapUnchanged`), the arena's random
+scenario pick is the old one (`PickScenarioOnMap(seed, false) == PickScenario(seed)`). L_Gen_Depot_1 (no tactical file) is unchanged.
+
+**P2 - the commander (`AI/PmcTacticalRules.*`, `PmcCommanderRules::ScoreOrder`, `UPmcSquadSubsystem`).** View fields `DangerHere`
+(`DangerAt(feet, Pmc)`), `PostKind`, `PostScore`, `bAtPost`. Weights in `pmc_commander.json` (+ `.bounds.json`, trainer genes):
+- `terrain_danger` 0.6 - "danger of my position": Hold / Crouch / Suppress (off a post) and Ambush (without a post) x (1 - w x danger);
+  TakeCover / Relocate x (1 + w x danger); every cover slot (`FindCoverNear`) and post candidate x (1 - w x danger).
+- `choke_leave_danger` 0.5 - in contact at this danger he relocates (cover available) before he is spotted there.
+- `ambush_exit` 0.8 / `overwatch_roof` 0.6 / `window_position` 0.4 - the Ambush order with a post x (1 + w x post score); the order walks
+  him onto the post (`bKeepGoalLevel`), then faces its look yaw, crouched (standing at a window); 3 walks without arriving drop the post.
+- `route_cover` 0.4 - a cover slot whose wall faces the squad's route (`SetTeamRoute`) x (1 + w x facing; half without an analysis hiding
+  spot within 2.5 m).
+- `chokepoint_avoid` 0.8 - FallBack tries 0 / +-35 / +-70 deg off straight away, score (0.6 + 0.4 cos) x (1 - w x danger) (`PickFallBack`).
+- `window_share` 0.5 - seeded share of riflemen the placement sends to windows. Frozen: `tactical_reach_m` 40, `marksman_band_min_m` 40,
+  `ladder_roof_men` 1.
+
+**P2 - placement.** `GatherPostCandidates(route, seed)`: ambush = `BestAmbushSpots` per route leg (the EXIT first), overwatch =
+`OverwatchSpots` of route samples every 15 m, windows = `WindowPositions` (stand + yaw), drops = `DropSpotsAbove` (edge, jumpers list),
+ladder roofs = `PickLadderOnlyRoofs(seed)` (the file's 0.65) near the route; each with its PMC danger. `PlanPlacement`: marksmen (sniper
+band, else the squad's longest reach) on the best overwatch roof (one per roof), a jumper archetype on a drop edge (the PMC operative is
+not in any drop spot's `jumpers` list - so never today), `ladder_roof_men` on a picked ladder-only roof, the rest at windows / ambush spots,
+3 m apart. Used by `SpawnSquadTactical` (spawn ON the posts; line spawn without candidates), `AssignTacticalPosts` (the level encounter's
+Defend posture on a map with a tactical file: posts along the player's way, none closer than half `min_m`), the arena's tactical scenario.
+
+**P3 - arena (`CodexTactics.PmcArena`).** `scenario=tactical` (and half the random rounds on a map with a tactical file): the route = a
+seeded pair of the level start + the mission goals (`objectives/<Map>.objectives.json`), 25 m+, a full path both ways; the attackers spawn
+at its start, the objective is its end, the defenders spawn on their posts along it; the round gets a `tactical` object (`route_m`,
+`posts[]` kind / xyz / score / danger, `ladder_roofs_picked` / `_total`). On every map each round has `sides.A.behaviour`,
+`sides.B.behaviour` and `rounds[].behaviour` (= side A, the trainer's candidate) in Grok's G002 rich form (`AI/PmcArenaBehaviourRules.*`):
+`{schema: codex.pmc_arena_behaviour/1, side, tactical_map, metrics: {<key>: {name, unit, range, direction, value}}}` with the 11 keys
+`time_in_contact_s` (5 s per contact moment, union), `flanks_completed`, `moves` (walk orders that took him >= 3 m), `suppress_then_move`
+(a mate's walk under a running suppression, <= 8 s), `ambush_success` (first hits from a chokepoint's hiding spot on a man near its
+threatened point), `overwatch_kills` (kills by hits from an overwatch roof spot), `time_in_chokepoint_s` (seconds per man inside an
+outline), `window_positions_used`, `quiet_spells` (gaps >= 15 s after the first contact), `order_churn`, `stalemate_share`. Place metrics
+need the tactical file (0 without). Stats also carry `post_moves`, `tactical_fall_backs`.
+
+**Smokes.** `TacticalPmcSmoke` (X4: marksman on a roof spot, an ambusher at a chokepoint exit outside its outline, ladder picker, posts held
+when commanded, chosen positions safer than random ones along the way, fall-back round a chokepoint, no file = no candidates) and
+`PmcArenaTacticalSmoke` (X4: one tactical round, posts, behaviour blocks), both in `Scripts/test_map.json` (rule `tactical-pmc-2026-11-17`).
+**Not done:** the trainer side (Grok: ingestion / MAP-Elites), X2 / X6 smokes (the scenario works on any map with a tactical file + goals),
+line-of-sight checks for posts (geometric only), PMC jumpers (no archetype allowed), the player-squad hints (P5).
