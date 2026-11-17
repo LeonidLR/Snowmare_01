@@ -32,6 +32,7 @@ param(
     [switch]$NoPdb,                                         # obsolete: no PDB is the default now
     [switch]$Frozen,                                        # this sync is the evening trainer freeze: writes Saved\Worker\FROZEN
     [int]$WaitEngineMinutes = 60,                           # how long to wait for a running wave / batch on the worker
+    [double]$LockStaleHours = 3,                            # a sync older than this is dead whatever its host (= loop's -SyncStaleHours)
     # Remote compile (Tools\build_remote.ps1 / build.ps1 -Remote worker): the caller's uncommitted work rides along.
     [string]$Patch = "",                                    # `git diff HEAD --binary` file, applied on the worker after the reset
     [string]$ExtraZip = "",                                 # zip of untracked source files (repo-relative), expanded after the patch
@@ -41,7 +42,8 @@ param(
     [switch]$FetchBinaries,                                 # copy the worker's changed Binaries\Win64 back to -BinariesFrom
     [switch]$SkipSync,
     [switch]$SkipBinaries,
-    [switch]$SkipSmoke
+    [switch]$SkipSmoke,
+    [switch]$ReclaimStale                                   # only clear dead syncs / locks on the worker (logged), then exit
 )
 
 $ErrorActionPreference = "Stop"
@@ -68,9 +70,59 @@ function Invoke-Worker([string]$Script, [switch]$AllowFail) {
 # Saved\Worker\SYNC.<token> = the loop starts no new phase; Saved\Trainer\PAUSE (text "worker_sync") = a running trainer
 # waits between arena waves (no stop); Saved\agent.lock (manual, agent "worker-sync", purpose = token), created atomically,
 # is held for the WHOLE run (sync + smokes; the smokes run with CODEX_LOCK_HELD=1): two main-PC callers never mix their
-# code / binaries on the worker. The PAUSE goes when no other SYNC.* is left; a dead run is cleared by the loop.
+# code / binaries on the worker. The PAUSE goes when no other SYNC.* is left; a dead run is cleared by the next worker_sync
+# (Clear-StaleWorkerSyncs below; by hand: worker_sync.ps1 -ReclaimStale) or, after -SyncStaleHours, by the loop.
 $script:SyncHeld = $false
+
+# Dead runs (2026-11-17: a caller killed by its tool timeout skips Exit-WorkerSync and leaves its SYNC.<token> + the worker-sync
+# lock behind - every later sync then waits forever). A token <host>-<pid>-<stamp> is dead when its host is this PC and that
+# process is gone (or the PID was reused: started after the stamp), or when it is older than -LockStaleHours (any host).
+# Dead tokens lose their SYNC file, their lock and - when no SYNC.* is left - the trainer PAUSE; each reclaim is logged to the
+# worker's Saved\Worker\stale_locks.log.
+function Clear-StaleWorkerSyncs {
+    $seen = @(Invoke-Worker -AllowFail @"
+Get-ChildItem '$RemoteRoot/Saved/Worker/SYNC.*' -ErrorAction SilentlyContinue | ForEach-Object { 'SYNC ' + `$_.Name.Substring(5) }
+`$l = '$RemoteRoot/Saved/agent.lock'
+if (Test-Path `$l) { try { `$j = Get-Content `$l -Raw | ConvertFrom-Json; if (`$j.agent -eq 'worker-sync') { 'LOCK ' + `$j.purpose } } catch { } }
+"@)
+    $dead = @{}
+    foreach ($line in $seen) {
+        if ("$line" -notmatch '^(SYNC|LOCK) (.+)$') { continue }
+        $t = $Matches[2].Trim()
+        if ($t -eq $Token -or $dead.ContainsKey($t)) { continue }
+        if ($t -notmatch '^(.+)-(\d+)-(\d{8}-\d{6})$') { continue }
+        $tHost = $Matches[1]; $tPid = [int]$Matches[2]
+        $since = [datetime]::ParseExact($Matches[3], "yyyyMMdd-HHmmss", $null)
+        $why = $null
+        if (((Get-Date) - $since).TotalHours -gt $LockStaleHours) { $why = "older than $LockStaleHours h" }
+        elseif ($tHost -eq $env:COMPUTERNAME) {
+            $p = Get-Process -Id $tPid -ErrorAction SilentlyContinue
+            if (-not $p) { $why = "holder PID $tPid is gone" }
+            else { try { if ($p.StartTime -gt $since.AddSeconds(5)) { $why = "PID $tPid reused (started $($p.StartTime.ToString('s')))" } } catch { } }
+        }
+        if ($why) { $dead[$t] = $why }
+    }
+    if (-not $dead.Count) { return }
+    $list = ($dead.Keys | ForEach-Object { "'$_'" }) -join ","
+    $why = ($dead.Keys | ForEach-Object { "'$_' = '$($dead[$_])'" }) -join "; "
+    Invoke-Worker -AllowFail @"
+`$dead = @($list); `$why = @{ $why }
+`$log = '$RemoteRoot/Saved/Worker/stale_locks.log'
+`$l = '$RemoteRoot/Saved/agent.lock'
+foreach (`$t in `$dead) {
+    `$what = @()
+    if (Test-Path "$RemoteRoot/Saved/Worker/SYNC.`$t") { Remove-Item "$RemoteRoot/Saved/Worker/SYNC.`$t" -ErrorAction SilentlyContinue; `$what += 'SYNC' }
+    if ((Test-Path `$l) -and ((Get-Content `$l -Raw) -match [regex]::Escape(`$t))) { Remove-Item `$l -ErrorAction SilentlyContinue; `$what += 'lock' }
+    Add-Content -Encoding UTF8 `$log ('{0} reclaimed {1} of {2}: {3} (by $Token)' -f (Get-Date -Format s), (`$what -join '+'), `$t, `$why[`$t])
+}
+`$p = '$RemoteRoot/Saved/Trainer/PAUSE'
+if (-not (Get-ChildItem '$RemoteRoot/Saved/Worker/SYNC.*' -ErrorAction SilentlyContinue) -and (Test-Path `$p) -and ((Get-Content `$p -Raw) -match 'worker_sync')) { Remove-Item `$p; Add-Content -Encoding UTF8 `$log ('{0} removed trainer PAUSE (no sync left)' -f (Get-Date -Format s)) }
+"@ | Out-Null
+    foreach ($t in $dead.Keys) { Say "reclaimed dead sync $t ($($dead[$t])) - logged in Saved\Worker\stale_locks.log" "Yellow" }
+}
+
 function Enter-WorkerSync {
+    Clear-StaleWorkerSyncs
     $r = @(Invoke-Worker @"
 New-Item -ItemType Directory -Force '$RemoteRoot/Saved/Worker', '$RemoteRoot/Saved/Trainer' | Out-Null
 Set-Content -Encoding UTF8 '$RemoteRoot/Saved/Worker/SYNC.$Token' 'worker_sync $Token since $(Get-Date -Format s)'
@@ -102,6 +154,7 @@ try {
         if ((Get-Date) -gt $deadline) { throw "worker still busy after $WaitEngineMinutes min: $s" }
         Say "worker $s - waiting..." "Yellow"
         Start-Sleep -Seconds 30
+        if ($s -match 'worker-sync') { Clear-StaleWorkerSyncs }     # the holder may have died meanwhile
     }
     $script:LockHeld = $true
 }
@@ -117,6 +170,8 @@ if (-not (Get-ChildItem '$RemoteRoot/Saved/Worker/SYNC.*' -ErrorAction SilentlyC
     $script:SyncHeld = $false
     Say "handshake released (lock, SYNC.$Token, trainer PAUSE if no other sync)"
 }
+
+if ($ReclaimStale) { Clear-StaleWorkerSyncs; Say "stale check done"; exit 0 }
 
 try {
     Say "worker $Worker -> $RemoteRoot"

@@ -76,6 +76,10 @@ commit, trainer generation / jobs; `FROZEN` marks the evening freeze), and at th
 when no other SYNC is left - the PAUSE. A paused trainer goes on with the next wave of the same generation: C++ / map /
 level data changes apply at once, `trainer_config.json` / `pmc_commander.json` only after a trainer restart (run STOP
 below). A SYNC older than 3 h (dead run, e.g. the SSH link dropped) is removed by the loop with its lock.
+A caller killed mid-run (e.g. by an agent's tool timeout) leaves its SYNC + lock behind: every worker_sync first
+reclaims such dead runs - token `<host>-<pid>-<stamp>` whose host is this PC and whose PID is gone or reused, or any token older
+than `-LockStaleHours` (3) - and logs each one to the worker's `Saved\Worker\stale_locks.log`. By hand:
+`powershell -ExecutionPolicy Bypass -File Scripts/Tools/worker_sync.ps1 -ReclaimStale`.
 
 ## Test farm 08:00-16:30 - `smoke_parallel.ps1 -Remote auto`
 
