@@ -536,7 +536,7 @@ def build_task_board(
 
     # Per-agent "Сейчас" strip
     now_by_agent: dict[str, dict[str, Any]] = {}
-    for agent_name in ("codex", "gemini", "claude"):
+    for agent_name in ("codex", "gemini", "claude", "grok"):
         agent_chats = [
             parse_iso_timestamp(m.get("ts"))
             for m in messages

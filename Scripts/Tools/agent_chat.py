@@ -133,7 +133,7 @@ def set_presence(storage_dir, who, active=True):
 def get_presence_dict(storage_dir):
     result = {}
     now = time.time()
-    for who in ("claude", "gemini", "codex", "designer"):
+    for who in ("claude", "gemini", "codex", "grok", "designer"):
         path = os.path.join(storage_dir, f"presence_{who}.json")
         is_present = False
         waiting_since = None
@@ -169,7 +169,7 @@ def parse_iso_timestamp(ts_str):
     except Exception:
         return None
 
-def compute_idle_seconds(messages, participants=("gemini", "codex", "claude"), now=None):
+def compute_idle_seconds(messages, participants=("gemini", "codex", "claude", "grok"), now=None):
     """
     For each participant in participants:
     Calculate the oldest unanswered message (to == participant or to == 'all', from != participant)
@@ -214,7 +214,7 @@ def compute_idle_seconds(messages, participants=("gemini", "codex", "claude"), n
 
     return idle_result
 
-def get_idle_dict(storage_dir, participants=("gemini", "codex", "claude"), now=None):
+def get_idle_dict(storage_dir, participants=("gemini", "codex", "claude", "grok"), now=None):
     chat_file = os.path.join(storage_dir, "chat.jsonl")
     messages = read_all_messages(chat_file)
     return compute_idle_seconds(messages, participants, now)
@@ -232,17 +232,17 @@ def check_topic_limit(messages, topic, sender, max_per_topic=10):
         msg_from = msg.get("from", "").lower()
         if msg_from == "designer":
             break
-        if msg_from in ("claude", "gemini", "codex"):
+        if msg_from in ("claude", "gemini", "codex", "grok"):
             count += 1
     return count < max_per_topic
 
 def post_message(storage_dir, sender, to, topic, text, max_per_topic=10):
     sender = sender.strip().lower()
     to = to.strip().lower()
-    if sender not in ("claude", "gemini", "codex", "designer"):
-        raise ValueError(f"Invalid sender: {sender} (must be claude, gemini, or designer)")
-    if to not in ("claude", "gemini", "codex", "all"):
-        raise ValueError(f"Invalid recipient: {to} (must be claude, gemini, or all)")
+    if sender not in ("claude", "gemini", "codex", "grok", "designer"):
+        raise ValueError(f"Invalid sender: {sender} (must be claude, gemini, codex, grok, or designer)")
+    if to not in ("claude", "gemini", "codex", "grok", "all"):
+        raise ValueError(f"Invalid recipient: {to} (must be claude, gemini, codex, grok, or all)")
 
     lock_file = os.path.join(storage_dir, "chat.lock")
     chat_file = os.path.join(storage_dir, "chat.jsonl")
@@ -328,7 +328,7 @@ def cmd_read(args):
 def cmd_wait(args):
     storage_dir = get_storage_dir(args.root)
     who = args.sender.strip().lower()
-    if who not in ("claude", "gemini", "codex", "designer"):
+    if who not in ("claude", "gemini", "codex", "grok", "designer"):
         print(f"Error: Invalid participant: {who}", file=sys.stderr)
         return 1
 
@@ -524,8 +524,8 @@ def main():
 
     # post
     p_post = subparsers.add_parser("post", help="Post a message")
-    p_post.add_argument("--as", dest="sender", required=True, choices=["claude", "gemini", "codex", "designer"])
-    p_post.add_argument("--to", required=True, choices=["claude", "gemini", "codex", "all"])
+    p_post.add_argument("--as", dest="sender", required=True, choices=["claude", "gemini", "codex", "grok", "designer"])
+    p_post.add_argument("--to", required=True, choices=["claude", "gemini", "codex", "grok", "all"])
     p_post.add_argument("--topic", default="")
     p_post.add_argument("--text")
     p_post.add_argument("--file")
@@ -533,14 +533,14 @@ def main():
 
     # read
     p_read = subparsers.add_parser("read", help="Read messages")
-    p_read.add_argument("--as", dest="sender", choices=["claude", "gemini", "codex", "designer"])
+    p_read.add_argument("--as", dest="sender", choices=["claude", "gemini", "codex", "grok", "designer"])
     p_read.add_argument("--since", type=int)
     p_read.add_argument("--last", type=int)
     p_read.add_argument("--json", action="store_true")
 
     # wait
     p_wait = subparsers.add_parser("wait", help="Wait for incoming messages")
-    p_wait.add_argument("--as", dest="sender", required=True, choices=["claude", "gemini", "codex", "designer"])
+    p_wait.add_argument("--as", dest="sender", required=True, choices=["claude", "gemini", "codex", "grok", "designer"])
     p_wait.add_argument("--timeout", type=float, default=1800.0)
     p_wait.add_argument("--poll-interval", type=float, default=2.0)
     p_wait.add_argument("--json", action="store_true")
