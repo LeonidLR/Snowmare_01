@@ -522,6 +522,14 @@ namespace GameplayEvents
 	/** The blast gate's leaves started to slide fully open (Target = the gate): the instant terminal, the final wave cleared, «Start Battle». */
 	extern CODEXTACTICS_API const FName GateOpened;
 	/**
+	 * F-4 «а» (designer 2026-11-17): an operative reached a mission goal of a generated map (UMissionGoalsSubsystem). Subject = the
+	 * operative, TargetId = the goal id ("GOAL_2"), Kind = the goal kind ("room" / "yard" / "street"), Location = the goal point,
+	 * Radius = its reach radius. Also raised as "MissionGoalReached.<GoalId>" FIRST.
+	 */
+	extern CODEXTACTICS_API const FName MissionGoalReached;
+	/** Every mission goal of the map is reached: the level is won through ULevelExitSubsystem::CompleteLevel (Subject = the last one there). */
+	extern CODEXTACTICS_API const FName MissionGoalsComplete;
+	/**
 	 * "TacticalPauseStarted" (2026-10-22, the tutorial's pause lesson): the fight went into the tactical pause - Space, the free pause of a
 	 * sudden horde wave, the tutorial's lesson pause, the grid's own end (UGameFlowSubsystem). Also "TacticalPauseStarted.Free" FIRST when
 	 * the pause is a free one (no charge, no timer).

@@ -395,6 +395,30 @@ drop link must land where the player start is reachable (12 dead-end links of `L
 and beside ramps; the builder's hole links all pass the sweep); smoke `CodexTactics.DropSoftlockSmoke` ("The soft-lock" in
 `docs/systems/stances-and-movement.md`).
 
+### 8.7 Mission goals in the game (2026-11-17, F-4 option «а», branch `claude/f4-mission-goals`)
+
+The layout's `objectives.goals` (stage 2, `objectives.ts`) are the generated map's mission objectives in the game.
+
+- **Runtime file** `Content/Data/LevelGen/objectives/<Map>.objectives.json`, schema `codex.mission_goals/1`: `map`, `layout`, `order`
+  (`free` = any order, the generator's only order; `sequence` = only the next goal counts), `default_radius_cm` 300, `floor_tolerance_cm` 150,
+  `goals[]` = `id`, `kind` (room / yard / street), `layer`, `pos` [x, y, z] world cm (x, y = the layout's, z = `ground_z` + the layer's level x
+  300 - the builder's `z_of` / `layer_level`), `radius_cm`, `building` / `zone`, and for a room goal `area` = the room's floor polygon (the
+  building rotation applied; the whole footprint when the goal is in no room). The start is not a goal (it is already the PlayerStart).
+- **Written** by `src/levelgen/missionGoals.ts` (`writeMissionGoalsFile`): «Принять» (`POST /api/levelgen/accept`, next to the props file) and
+  «Собрать в Unreal» (`POST /api/levelgen/build-map`, from the accepted layout, before the build); a layout without objectives writes nothing.
+  Existing maps: `node scripts/export-mission-goals.ts [<layout.json> <Map> ...]` (a layout without objectives gets the automatic placement with its
+  own seed). Test `src/levelgen/missionGoals.test.ts`.
+- **Game** `UMissionGoalsSubsystem` (pure rules `LevelGen/MissionGoalsRules`, tests `CodexTactics.LevelGen.MissionGoals.*`): loads the current
+  map's file at BeginPlay (no file = no goals, nothing happens; `Codex.MissionGoals.Enabled 0` = off; `Codex.MissionGoals.Dump`). A goal is
+  reached when a living squad operative's feet stand within its radius in 2D on the same floor (|feet Z - goal Z| <= 150 cm); a room goal counts
+  anywhere inside its room polygon (not through the wall). Each unreached goal has a world marker (`AMissionGoalMarkerActor`, the tutorial's orange
+  hologram ring + 5 m beacon) and so a minimap objective icon; reached = both gone, an HQ line, `GameplayEvents::MissionGoalReached` (+
+  `.<GoalId>`) on the event bus. HUD: `GOALS: n/N` under the objective banner. The last goal raises `MissionGoalsComplete` and ends the level
+  through the existing gate-exit end `ULevelExitSubsystem::CompleteLevel` (mission complete, fade to black, the points screen / next campaign level
+  / main menu with the level's `gate_exit` timings).
+- **Smoke** `CodexTactics.MissionGoalsSmoke` on `L_Gen_Test_X2` (teleports the squad to each goal: counted, no victory before the last, the level
+  end after it). Pending the designer: the 300 cm radius, the marker look, the room rule.
+
 ## 9. Status
 
 | Phase | State |

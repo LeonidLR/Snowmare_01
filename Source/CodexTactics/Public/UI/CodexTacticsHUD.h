@@ -312,6 +312,8 @@ private:
 	TObjectPtr<class UFrostVignetteWidget> FrostVignette;
 	/** Draws the objective banner; returns its bottom edge (Y). */
 	float DrawObjectiveBanner();
+	/** F-4 «а»: "GOALS: n/N" of a generated map's mission goals (UMissionGoalsSubsystem) under the banner; returns the bottom (Top without goals). */
+	float DrawMissionGoalsLine(float Top);
 	void DrawSquadPanel(float Top);
 	void DrawOperativeLabels();
 	/** Floating combat texts (UFloatingTextSubsystem; Godot Label3D _spawn_floating_combat_text). */
