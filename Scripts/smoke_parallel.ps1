@@ -30,10 +30,20 @@ param(
     [string]$PreCmds = "",
     # Extra engine arguments for every smoke, e.g. "-Multiprocess": the engine then skips its start-up UBT -Mode=ValidatePlatforms call, which
     # waits on the machine-wide Build.bat lock while other worktrees build (a smoke stalled 25 min at "Launching UnrealBuildTool", 2026-10-26).
-    [string]$ExtraArgs = ""
+    [string]$ExtraArgs = "",
+    # Test farm (2026-11-17): auto = during 08:00-16:30 the batch runs on the second machine codex-worker (Tools\smoke_remote.ps1:
+    # this checkout's HEAD + binaries go there, logs + result JSON come back to the usual places), otherwise / when not possible here.
+    # on = worker or fail, off = always here. Default: env CODEX_SMOKE_REMOTE, else auto.
+    [ValidateSet("", "auto", "on", "off")][string]$Remote = ""
 )
 
 $ErrorActionPreference = "Stop"
+if (-not $Remote) { $Remote = $(if ($env:CODEX_SMOKE_REMOTE) { $env:CODEX_SMOKE_REMOTE } else { "auto" }) }
+if ($Remote -ne "off" -and @($Commands | Where-Object { $_ }).Count) {
+    & (Join-Path $PSScriptRoot "Tools\smoke_remote.ps1") -Mode $Remote -Commands $Commands -Jobs $Jobs -Map $Map -TimeoutSeconds $TimeoutSeconds `
+        -Serial:$Serial -NoRetry:$NoRetry -RealTime:$RealTime -ResultJson $ResultJson -PreCmds $PreCmds -ExtraArgs $ExtraArgs
+    if ($LASTEXITCODE -ne 99) { exit $LASTEXITCODE }
+}
 $EngineRoot = "C:\Program Files\Epic Games\UE_5.8"
 $ProjectDir = Split-Path $PSScriptRoot -Parent
 $Project = Join-Path $ProjectDir "CodexTactics.uproject"
