@@ -31,11 +31,13 @@ enum class ETransferItem : uint8
 	/** Sprint 15: signal flare. */
 	Flare,
 	/** The medical bag (the game designer 2026-11-16, Survival/FirstAidRules): dropped on a heavily wounded mate it treats him. */
-	MedicalBag
+	MedicalBag,
+	/** Diesel jerrycan (TURRET_POWER.md phase 1, designer 2026-11-17): poured into a level generator; one per operative. */
+	Diesel
 };
 
 /** Last ETransferItem value (loops over every item). */
-inline constexpr ETransferItem LastTransferItem = ETransferItem::MedicalBag;
+inline constexpr ETransferItem LastTransferItem = ETransferItem::Diesel;
 
 /** Outcome of a hand-over. */
 struct CODEXTACTICS_API FTransferResult

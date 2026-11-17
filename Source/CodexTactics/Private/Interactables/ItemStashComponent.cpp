@@ -116,6 +116,7 @@ ELootItem ItemStash::ToLootItem(ETransferItem Item)
 	case ETransferItem::Firewood: return ELootItem::Firewood;
 	case ETransferItem::Flare: return ELootItem::Flare;
 	case ETransferItem::MedicalBag: return ELootItem::MedicalBag;
+	case ETransferItem::Diesel: return ELootItem::Diesel;
 	default: return ELootItem::PlasmaAmmo;
 	}
 }
@@ -142,6 +143,7 @@ bool ItemStash::FromLootItem(ELootItem Loot, ETransferItem& OutItem)
 	case ELootItem::Firewood: OutItem = ETransferItem::Firewood; return true;
 	case ELootItem::Flare: OutItem = ETransferItem::Flare; return true;
 	case ELootItem::MedicalBag: OutItem = ETransferItem::MedicalBag; return true;
+	case ELootItem::Diesel: OutItem = ETransferItem::Diesel; return true;
 	default: return false;
 	}
 }

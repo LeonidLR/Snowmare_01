@@ -20,6 +20,7 @@
 #include "Engine/World.h"
 #include "Data/TacticalHeatTuning.h"
 #include "UI/CodexTacticsHUD.h"
+#include "Power/PowerRules.h"
 #include "Survival/FirstAidRules.h"
 
 #define LOCTEXT_NAMESPACE "InventoryDrawerWidget"
@@ -117,7 +118,7 @@ void UInventoryDrawerWidget::BuildDefaultLayout()
 		TEXT("BtnInvCan"), TEXT("BtnInvBread"), TEXT("BtnInvChoco"), TEXT("BtnInvMatch"), TEXT("BtnInvTripwire"),
 		TEXT("BtnInvAmmoM16"), TEXT("BtnInvAmmoPistol"), TEXT("BtnInvAmmoShotgun"), TEXT("BtnInvAmmoFuel"), TEXT("BtnInvAmmoCryo"),
 		TEXT("BtnInvAmmoPlasma"), TEXT("BtnInvHeatPack"), TEXT("BtnInvFirewood"), TEXT("BtnInvFlare"), TEXT("BtnInvStove"), TEXT("BtnInvCampfire"),
-		TEXT("BtnInvMedicalBag") };
+		TEXT("BtnInvMedicalBag"), TEXT("BtnInvDiesel") };
 	for (int32 Index = 0; Index < UE_ARRAY_COUNT(Names); ++Index)
 	{
 		UTextBlock* Text = nullptr;
@@ -275,6 +276,9 @@ FText UInventoryDrawerWidget::GetSlotText(EInventoryDrawerSlot Line) const
 		return Max > 0 ? DrawerClean(FString::Printf(TEXT("🩹 Medical bag: x%d/%d"), Leader->MedicalBagsCount, Max))
 			: DrawerClean(FString::Printf(TEXT("🩹 Medical bag: x%d"), Leader->MedicalBagsCount));
 	}
+	case EInventoryDrawerSlot::Diesel:
+		return DrawerClean(FString::Printf(TEXT("⛽ Diesel jerrycan: x%d/%d"), Leader->DieselCansCount,
+			PowerRules::GetTuning().JerrycansPerOperative));
 	case EInventoryDrawerSlot::Campfire:
 	{
 		const TCHAR* Active = Leader->SelectedDeployType == EDeployableType::Campfire ? TEXT(" [F]") : TEXT("");
@@ -327,7 +331,8 @@ bool UInventoryDrawerWidget::IsSlotVisible(EInventoryDrawerSlot Line) const
 	case EInventoryDrawerSlot::FlameFuel:
 	case EInventoryDrawerSlot::CryoAmmo:
 	case EInventoryDrawerSlot::PlasmaAmmo:
-		return IsSlotEnabled(Line); // Godot transfer_dialog.gd hid the special ammo the operative does not carry
+	case EInventoryDrawerSlot::Diesel:
+		return IsSlotEnabled(Line); // Godot transfer_dialog.gd hid the special ammo the operative does not carry (the jerrycan too)
 	default:
 		return true;
 	}
@@ -355,6 +360,7 @@ bool UInventoryDrawerWidget::GetTransferItem(EInventoryDrawerSlot Line, ETransfe
 	case EInventoryDrawerSlot::Firewood: OutItem = ETransferItem::Firewood; return true;
 	case EInventoryDrawerSlot::Flare: OutItem = ETransferItem::Flare; return true;
 	case EInventoryDrawerSlot::MedicalBag: OutItem = ETransferItem::MedicalBag; return true;
+	case EInventoryDrawerSlot::Diesel: OutItem = ETransferItem::Diesel; return true;
 	default: return false;
 	}
 }

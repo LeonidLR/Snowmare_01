@@ -32,7 +32,9 @@ enum class ELootItem : uint8
 	/** 2026-10-26: frag grenades (a fallen operative's remains, Godot get_items_list "grenades"). */
 	Grenade,
 	/** The medical bag (the game designer 2026-11-16, Survival/FirstAidRules). */
-	MedicalBag
+	MedicalBag,
+	/** Diesel jerrycan for a level generator (TURRET_POWER.md phase 1). */
+	Diesel
 };
 
 /** One line of the loot dialog. */
@@ -130,6 +132,10 @@ struct CODEXTACTICS_API FLootContents
 	/** Medical bags (the game designer 2026-11-16; none by default). */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Medical", meta = (ClampMin = "0"))
 	int32 MedicalBags = 0;
+
+	/** Diesel jerrycans (TURRET_POWER.md phase 1: the props loot table fuel_rare; none by default). */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Power", meta = (ClampMin = "0"))
+	int32 DieselCans = 0;
 
 	/** Extra weapon id (e.g. "plasma_carbine"), empty for none. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Special")

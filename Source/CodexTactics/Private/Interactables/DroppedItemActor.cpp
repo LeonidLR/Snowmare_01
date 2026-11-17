@@ -29,6 +29,7 @@ namespace
 		case ETransferItem::Barricade:
 		case ETransferItem::Mine: return FColor(120, 125, 130);
 		case ETransferItem::Matches: return FColor(235, 120, 30);
+		case ETransferItem::Diesel: return FColor(200, 40, 30); // a red jerrycan
 		default: return FColor(140, 95, 55);
 		}
 	}
