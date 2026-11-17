@@ -12,7 +12,7 @@
 //   h a 330 cm fence: refused (a wall); a beam over a crate's top: refused (no headroom);
 //   i a knockdown mid-climb (the tall ledge): he drops back to the base, the state restored exactly once, he gets up;
 //   j a path order across an obstacle with a mantle link: he mantles by himself on the way and arrives;
-//   k the same order in formation: no mantle (the formation path never takes the link).
+//   k the same order in formation: since R17-1 the leader's path takes the link and his squad climbs in turns (Codex.Mantle.Squad 0: no mantle).
 // Enemies are parked far away; the Depot JSON keeps the squad immortal.
 
 #include "CoreMinimal.h"
@@ -768,7 +768,10 @@ namespace MantleSmoke
 			if (State->StageTime < 0.6f + StepSeconds * 1.5f)
 			{
 				Leader->OrderMoveTo(State->Goal, false);
-				Check(*State, !Leader->IsMantlePathAllowed(), TEXT("formation: his order keeps the mantle links closed"));
+				// R17-1 (designer 2026-11-17): the formation leader's own order takes the links too - his squad then climbs in turns behind him
+				// (FormationMantleSmoke checks the turns); Codex.Mantle.Squad 0 = slice 1: the formation path never takes the link.
+				Check(*State, Leader->IsMantlePathAllowed() == USquadSubsystem::IsSquadMantleEnabled(), FString::Printf(TEXT("formation: his order %s the mantle links"),
+					USquadSubsystem::IsSquadMantleEnabled() ? TEXT("opens (R17-1)") : TEXT("keeps closed")));
 				return true;
 			}
 			State->bSawMantle |= Leader->IsMantling();
@@ -782,7 +785,15 @@ namespace MantleSmoke
 			{
 				Climbed += Members[Index] && Members[Index]->GetMantleCount() > State->SquadCounts[Index] ? 1 : 0;
 			}
-			Check(*State, !State->bSawMantle && Climbed == 0, FString::Printf(TEXT("formation: nobody mantled (%d)"), Climbed));
+			if (USquadSubsystem::IsSquadMantleEnabled())
+			{
+				Check(*State, State->bSawMantle && Climbed >= 1, FString::Printf(TEXT("formation (R17-1): the leader mantled on his path, the squad in turns (%d climbed)"), Climbed));
+				Squad->CancelSquadMantle(TEXT("MantleSmoke's next case"));
+			}
+			else
+			{
+				Check(*State, !State->bSawMantle && Climbed == 0, FString::Printf(TEXT("formation: nobody mantled (%d)"), Climbed));
+			}
 			// l: a female body climbs with her own retargeted copies (the montage only plays on a matching skeleton).
 			State->Leader = nullptr;
 			for (AOperativeCharacter* Member : Members)
@@ -834,7 +845,7 @@ namespace MantleSmoke
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.MantleSmoke"),
 		TEXT("Dev check (mantling slice 1, L_Gen_Depot_1): low / high mantle on top in a crouch, the cut's tall ledge, a fence over, the vault kept, ")
-		TEXT("the run-up rule, refusals (wall, headroom), a knockdown mid-climb, a path mantle in Solo, none in formation; logs PASS/FAIL, then exits."),
+		TEXT("the run-up rule, refusals (wall, headroom), a knockdown mid-climb, a path mantle in Solo and (R17-1) in formation; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
