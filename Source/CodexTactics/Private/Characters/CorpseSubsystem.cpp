@@ -6,7 +6,9 @@
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/DeathRagdollRules.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
+#include "Particles/ParticleSystemComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
@@ -65,8 +67,13 @@ namespace CorpseTuning
 		{
 			return;
 		}
+		// SetAllBodiesSimulatePhysics(false) leaves the root BodyInstance set to simulate, so a later recreate
+		// builds the ragdoll again and the mesh tick comes back. Clear the root and the collision first.
+		Mesh->SetSimulatePhysics(false);
+		Mesh->SetAllBodiesSimulatePhysics(false);
 		Mesh->bBlendPhysics = false;
 		Mesh->SetAllBodiesPhysicsBlendWeight(0.f);
+		Mesh->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 		Mesh->KinematicBonesUpdateType = EKinematicBonesUpdateToPhysics::SkipAllBones;
 		if (Mesh->IsPhysicsStateCreated())
 		{
@@ -214,6 +221,71 @@ namespace CorpseTuning
 		UE_LOG(LogCodexTactics, Log, TEXT("[Corpse] %s frozen pose snapshot lod %d, %d verts, %d sections (skeletal draw off)"),
 			*GetNameSafe(Owner), LODIndex, Skinned.Num(), SectionsBuilt);
 		return Pose;
+	}
+
+	/**
+	 * FreezeCorpse refuses while the body still reports a fall or a ladder, and a released ragdoll can rebuild a physics
+	 * state afterwards. Either one leaves a body the subsystem already counts as frozen still ticking. Stop the same
+	 * work FreezeCorpse stops. Returns true when something was still live.
+	 */
+	static bool QuietFrozenBody(AActor* Actor)
+	{
+		if (!Actor)
+		{
+			return false;
+		}
+		APawn* Pawn = Cast<APawn>(Actor);
+		ACharacter* Char = Cast<ACharacter>(Actor);
+		USkeletalMeshComponent* Mesh = Char ? Char->GetMesh() : nullptr;
+		// Physics state alone is not enough: a settled anim corpse keeps a kinematic state with the tick already off.
+		// Recreating that every frame would cost more than the leak. The leak is a tick that came back.
+		const bool bMeshLive = Mesh && (Mesh->IsComponentTickEnabled() || Mesh->IsSimulatingPhysics() || Mesh->bBlendPhysics);
+		if (!Actor->IsActorTickEnabled() && !bMeshLive && !(Pawn && Pawn->GetController()))
+		{
+			return false;
+		}
+		if (Pawn)
+		{
+			if (AController* Brain = Pawn->GetController())
+			{
+				Brain->UnPossess();
+				Brain->Destroy();
+			}
+		}
+		if (UCharacterMovementComponent* Move = Char ? Char->GetCharacterMovement() : nullptr)
+		{
+			Move->StopMovementImmediately();
+			Move->DisableMovement();
+		}
+		if (Mesh)
+		{
+			Mesh->bPauseAnims = true;
+			Mesh->bNoSkeletonUpdate = true;
+			Mesh->bEnableAnimation = false;
+			ReleaseFrozenRagdollPhysics(Mesh);
+			Mesh->SetComponentTickEnabled(false);
+		}
+		Actor->ForEachComponent<UActorComponent>(false, [](UActorComponent* Component)
+		{
+			Component->SetComponentTickEnabled(false);
+			if (UPrimitiveComponent* Primitive = Cast<UPrimitiveComponent>(Component))
+			{
+				Primitive->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			}
+			if (UFXSystemComponent* Effect = Cast<UFXSystemComponent>(Component))
+			{
+				Effect->Deactivate();
+			}
+		});
+		Actor->SetActorTickEnabled(false);
+		if (AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Actor))
+		{
+			if (UEnemyRegistrySubsystem* Registry = Actor->GetWorld() ? Actor->GetWorld()->GetSubsystem<UEnemyRegistrySubsystem>() : nullptr)
+			{
+				Registry->UnregisterEnemy(Enemy);
+			}
+		}
+		return true;
 	}
 
 	/** Every simulating body of the ragdoll faster than MaxSpeed (cm/s) slowed to it (3D: also the animation's downward bone speed). */
@@ -865,6 +937,22 @@ void UCorpseSubsystem::Tick(float DeltaTime)
 	const double Now = World->GetTimeSeconds();
 	const double SettleStart = bTrace ? FPlatformTime::Seconds() : 0.0;
 	UpdateSettling(Now, Config);
+	// A settle that FreezeCorpse declined, or a ragdoll whose physics state came back, is still in this list as frozen.
+	for (const FKeptCorpse& Kept : Corpses)
+	{
+		if (!Kept.bFrozen)
+		{
+			continue;
+		}
+		AActor* Actor = Kept.Body.Get();
+		if (!Actor || !CorpseTuning::QuietFrozenBody(Actor))
+		{
+			continue;
+		}
+		const ICorpseBody* Declined = AsCorpse(Actor);
+		UE_LOG(LogCodexTactics, Log, TEXT("[Corpse] %s frozen tick came back; stopped again (FreezeCorpse %s)"),
+			*Actor->GetName(), Declined && Declined->IsCorpseFrozen() ? TEXT("had run") : TEXT("declined"));
+	}
 	const double SettleMs = bTrace ? (FPlatformTime::Seconds() - SettleStart) * 1000.0 : 0.0;
 	CapTimer -= DeltaTime;
 	double CapMs = 0.0;
