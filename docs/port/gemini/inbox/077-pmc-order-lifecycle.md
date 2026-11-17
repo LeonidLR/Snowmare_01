@@ -15,7 +15,7 @@ Do:
    Numbers (ranges, timeouts) go to the PMC JSON config, not C++ literals.
 3. Unit tests for each pure rule (CodexTactics.Pmc.*). Smokes: PmcStalemateSmoke x3, PmcEncounterHuntSmoke x3, RpgPmcSmoke x3,
    plus PmcEncounterSmoke and the other Pmc* smokes once (find names in the smoke registry; full names).
-Allowed paths: Source/CodexTactics/**/Pmc*.{h,cpp} (AI folder), its JSON config under Content/Data/**/pmc*.json, Source/CodexTacticsTests/**/Pmc*,
+Allowed paths: Source/CodexTactics/**/Pmc*.{h,cpp} (AI folder), Content/Data/**/pmc*.json, Source/CodexTacticsTests/**/Pmc*,
 Source/CodexTacticsDev/Private/Debug/Pmc*Smoke*.cpp and RpgPmcSmokeCommand.cpp (only to read state / add checks - never loosen a limit),
 the plan + report. Anything else (OperativeCharacter*, Squad*, weapons) -> ask in the chat first.
 Done = the three smokes 3/3 green on your branch, all Pmc* smokes green, unit tests green, gemini_gate PASS, report with a before/after table.
