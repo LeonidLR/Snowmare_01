@@ -69,6 +69,7 @@ namespace CoverHugSmoke
 		float MinClearance = 1.0e9f;
 		float SecondsInside = 0.f;
 		bool bSawBackward = false;
+		int32 ForwardShimmySamples = 0;
 		bool bSawCornerAim = false;
 		bool bSawFirePose = false;
 		FString Clips;
@@ -169,6 +170,10 @@ namespace CoverHugSmoke
 		State.SecondsInside += Depth < 0.f ? DeltaTime : 0.f;
 		const FString Loop = LoopName(Anim);
 		State.bSawBackward |= Loop.Contains(TEXT("walk_bwd"));
+		if (Op.bShimmying && Anim && Anim->bShimmying && Op.IsShimmyForward() && Loop.Contains(TEXT("walk_fwd")))
+		{
+			++State.ForwardShimmySamples;
+		}
 		State.bSawCornerAim |= Op.IsCornerAimActive();
 		State.bSawFirePose |= Anim && Anim->IsInCoverFirePose();
 		if (!State.Clips.EndsWith(Loop))
@@ -241,6 +246,7 @@ namespace CoverHugSmoke
 		State.MinClearance = 1.0e9f;
 		State.SecondsInside = 0.f;
 		State.bSawBackward = false;
+		State.ForwardShimmySamples = 0;
 		State.bSawCornerAim = false;
 		State.bSawFirePose = false;
 		State.Clips.Reset();
@@ -464,9 +470,11 @@ namespace CoverHugSmoke
 			{
 				return true;
 			}
-			Check(State, LoopName(Anim).Contains(TEXT("walk_fwd")) && Op->IsShimmyForward(),
-				FString::Printf(TEXT("back to the edge: walks FORWARD (loop %s, facing %s, dir %.0f)"), *LoopName(Anim),
-					Op->CoverFacing == ECoverFacing::Left ? TEXT("left") : TEXT("right"), Op->ShimmyDirection));
+			// The short return can finish before 0.8 s (the idle is then correct). Require the
+			// forward clip while actually shimmying, and reject any backward clip throughout the leg.
+			Check(State, State.ForwardShimmySamples > 0 && !State.bSawBackward,
+				FString::Printf(TEXT("back to the edge: walks FORWARD (%d moving samples, backward %d, clips %s)"),
+					State.ForwardShimmySamples, State.bSawBackward ? 1 : 0, *State.Clips));
 			Check(State, FMath::Abs(MeshYawOff(*Op, State)) <= 2.f, FString::Printf(TEXT("back to the edge: the body faces along the wall, not turned round (mesh yaw %+.1f)"), MeshYawOff(*Op, State)));
 			State.Stage = 8;
 			State.StageTime = 0.f;

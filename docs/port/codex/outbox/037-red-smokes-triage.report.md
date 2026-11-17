@@ -1,6 +1,6 @@
 # 037 red smokes triage
 
-Status: STOPPED AT DESIGNER 10% LIMIT. Previous work preserved; StealthModeSmoke needs Claude (963485d2). Main merged conflict-free; merged build/CoverHug baseline chain launched, results not yet inspected. Next: collect merged build/baseline evidence, then CoverHugSmoke. PMC pair Gemini077; corpse cost Gemini078.
+Status: IN PROGRESS, designer resumed after limit checkpoint. StealthModeSmoke needs Claude; CoverHugSmoke fixed/gated. Next MantleDescentSmoke, then FormationJitterSmoke, LevelGenRampSmoke. PMC pair Gemini077; corpse cost Gemini078.
 
 ## Current summary
 
@@ -201,3 +201,15 @@ Resume: stay in agents worktree on codex/037-red-smokes; read this report and in
 - CoverHug router initial routine classification2; narrowed runtime/nav-slot geometry diagnosis classified4 confidence0.60, primary main model. No implementation or fix gate yet. All assertions unchanged.
 - Next: collect build/baseline result; diagnose CoverHug, then MantleDescent, FormationJitter, LevelGenRamp, merging current main/rebuilding/rechecking as instructed. Skip PMC pair (Gemini077) and corpse performance (Gemini078).
 - Stop triggered by designer's explicit under10% warning. Reset time is not exposed by this session; unknown, do not invent a timestamp. Only agent_chat wait after this checkpoint.
+
+
+## CoverHugSmoke — observe the return animation while the shimmy runs
+
+- Main46e2f083 was merged without conflicts as6b460de2. Required merged build PASS659.56s; fresh unchanged-source CoverHug baseline FAIL44.1s. The old035 failure (return order rejected) no longer occurs: after merged F-2 leader-corner reservation0e9c49e7, the return is accepted and reaches the correct corner. The remaining FAIL is the fixed0.8s animation snapshot: the short return has already completed and correctly plays look_at_idle with shimmy direction0.
+- Fix is smoke-only, CoverHugSmokeCommand.cpp11 insertions/3 deletions. Sample positively requires both actor and anim shimmy flags, forward shimmy direction and walk_fwd loop; reset per leg. The return assertion requires at least one such active-motion sample and zero backward clips throughout the leg. Existing order acceptance, mesh yaw, endpoint hug, no-fire pose, skin clipping, roof/eaves and all geometry thresholds remain unchanged. The changed timing expectation is justified by the baseline's actual successful arrival before its0.8s observation, not by relaxing the animation contract.
+- Router: preliminary routine-only classify2/confidence0.62; runtime/geometry triage classify4/confidence0.46 | primary main session | pass, no redo. No local model.
+- Build with final fix PASS46.44s. Three independent standalone Jobs1/NoRetry/Multiprocess/fixed60fps runs PASS52.7s /68.0s /67.6s. Each reports22 forward-moving samples,0 backward; observed return clip becomes look_at_idle after arrival. First fixed run is retained under CoverHug-diagnostic-* (diagnostic helper was removed before compilation; engine output proves final sample assertion executed).
+- Smart plan:4023 paths,4022 no-verification; only this smoke selected,0 unit tests selected. Actual test.ps1 -Smart -Jobs1 PASS65.7s, no retry. Process-local UE_SKIP_UBT_SDK_SETUP=1 used for Smart as in previous gates, no persistent config change.
+- Related standalone Jobs1/NoRetry/Multiprocess: CoverHugMedicSmoke PASS61.9s; CoverMoveSmoke PASS83.1s; CoverReverseSmoke PASS64.1s; CoverSmoke PASS68.2s. All actual engine RESULT markers verified, no knownFail/knownFlaky changes.
+- Evidence: Saved/Logs/task037/merged/build-*; CoverHug-baseline-*; CoverHug-diagnostic-build-* and CoverHug-diagnostic-*; CoverHug-fixed-2/3-*; CoverHug-smart-plan.log / smart-wrapper.log / smart-engine.log; CoverHug-related-<Smoke>-*. Standalone2 waited for designer editor startup; its753s wrapper wall time includes that priority wait (68s actual smoke). Never bypassed priority.
+- Source/report audit and whitespace check required before this commit. Only this smoke source and report are staged. Next: merge current main, rebuild, single MantleDescentSmoke baseline. RpgPmcSmoke/PmcEncounterHuntSmoke skipped per designer reassignment to Gemini077; CorpseCost remains Gemini078.
