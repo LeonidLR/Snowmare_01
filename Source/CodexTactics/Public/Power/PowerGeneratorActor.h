@@ -77,6 +77,9 @@ public:
 	/** Links Turret to this network (it leaves any other one); refused beyond MaxTurrets. Its power / side follow at once. */
 	bool LinkTurret(ATurretActor* Turret);
 
+	/** Takes Turret off this network (it goes dark and answers to SetPowered / SetFaction again); false when it was not linked here. */
+	bool UnlinkTurret(ATurretActor* Turret);
+
 	/** Links the nearest unlinked level turrets within the plug range (a hand-placed generator; generated maps link by the props file). */
 	int32 AutoLinkNearbyTurrets();
 

@@ -386,8 +386,6 @@
 		"loot_crate": "",
 		"loot_crate_comment": "No actor: loot inside a crate is the crate actor's loot table (section 3.2).",
 		"mine_crate_comment": "No actor: a mined crate = the crate actor + an armed UCodexPropTrapComponent (section 3.2); the mine object exists only in data.",
-		"loot_pile": "/Game/Props/BP_PropLootPile.BP_PropLootPile_C",
-		"generator_diesel": "",
-		"generator_diesel_comment": "No greybox class: the generic prop actor (the live map spawns gameplay.classes.generator_diesel)."
+		"loot_pile": "/Game/Props/BP_PropLootPile.BP_PropLootPile_C"
 	}
 }

@@ -252,6 +252,20 @@ bool APowerGeneratorActor::LinkTurret(ATurretActor* Turret)
 	return true;
 }
 
+bool APowerGeneratorActor::UnlinkTurret(ATurretActor* Turret)
+{
+	if (!Turret || !Linked.Contains(Turret))
+	{
+		return false;
+	}
+	Linked.Remove(Turret);
+	if (Turret->GetPowerSource() == this)
+	{
+		Turret->SetPowerSource(nullptr);
+	}
+	return true;
+}
+
 int32 APowerGeneratorActor::AutoLinkNearbyTurrets()
 {
 	// A hand-placed generator: the nearest unlinked LEVEL turrets (not the squad's own kit turrets - their plug-in rule is phase 2).

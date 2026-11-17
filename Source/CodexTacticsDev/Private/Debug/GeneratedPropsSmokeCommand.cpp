@@ -9,7 +9,8 @@
 //    bottom within 30 cm of the surface under it; the spawn's longest frame (ms) against the 60 ms budget;
 // 2. behaviour: a barrel explodes on a shot (the operative's targeted-shot path), a loot crate is emptied into an operative, a mine / wire
 //    goes off when an operative walks onto it;
-// 3. level turrets (designer 2026-11-17): inactive (unpowered) by default, round(0.25 x turrets) powered + hostile; a turret forced
+// 3. level turrets (TURRET_POWER.md phase 1): each on its power layer generator - powered exactly while it runs, its owner's side, about
+//    three quarters dark at start (the generator count = the TG power layer); a turret taken off its cable and forced
 //    unpowered does not fire at an operative in its range, the same turret forced powered + hostile engages him; switched to neutral
 //    (TURRET_POWER.md: monsters only) it shoots a monster spawned in its range and no longer the operative.
 // GeneratedPropsSmoke = L_Gen_Depot_X4, GeneratedPropsX6Smoke = L_Gen_Depot_1_X6; [map=<L_Gen_...>] for another generated map.
@@ -41,6 +42,7 @@
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TurretActor.h"
+#include "Power/PowerGeneratorActor.h"
 #include "LevelGen/CodexLevelPropsSubsystem.h"
 #include "LevelGen/CodexPropActors.h"
 #include "LevelGen/LevelPropsFile.h"
@@ -316,7 +318,7 @@ namespace GeneratedPropsSmoke
 		Check(State, Props->GetDroppedIds().Num() == 0,
 			FString::Printf(TEXT("validator dropped %d (the TG autogen runs the same validator now): %s"), Props->GetDroppedIds().Num(),
 				*FString::Join(Props->GetDroppedIds(), TEXT(", "))));
-		for (const TCHAR* Kind : { TEXT("crates"), TEXT("barrels"), TEXT("turrets"), TEXT("mines"), TEXT("loot") })
+		for (const TCHAR* Kind : { TEXT("crates"), TEXT("barrels"), TEXT("turrets"), TEXT("mines"), TEXT("loot"), TEXT("power") })
 		{
 			const int32 Want = Expected.FindRef(Kind);
 			const int32 Got = SpawnedIds.FindRef(Kind).Num();
@@ -331,23 +333,35 @@ namespace GeneratedPropsSmoke
 		Check(State, Real.FindRef(TEXT("BarrelActor")) > 0 && Real.FindRef(TEXT("LootCrateActor")) > 0 && Real.FindRef(TEXT("TurretActor")) > 0
 			&& Real.FindRef(TEXT("DroppedItemActor")) > 0 && (Real.FindRef(TEXT("ProximityMineActor")) + Real.FindRef(TEXT("PMCTripwireActor"))) > 0,
 			FString::Printf(TEXT("the props are the game's real objects: %s"), *Classes));
-		// Level turrets: inactive by default, a quarter powered + hostile (props_balance.json gameplay.turrets, no per-object fields in autogen files).
+		// Level turrets (TURRET_POWER.md phase 1): every turret of an autogen map hangs on a power layer generator; it is powered exactly
+		// while its generator runs, its side is the generator owner's, and about three quarters of them start dark.
 		int32 TurretCount = 0;
-		int32 PoweredHostile = 0;
-		int32 PoweredOther = 0;
+		int32 Powered = 0;
+		int32 Unlinked = 0;
+		int32 Mismatch = 0;
+		int32 Generators = 0;
 		for (AActor* Actor : All)
 		{
 			if (const ATurretActor* Turret = Cast<ATurretActor>(Actor))
 			{
 				++TurretCount;
-				PoweredHostile += Turret->IsPowered() && Turret->GetFaction() == ETurretFaction::Hostile ? 1 : 0;
-				PoweredOther += Turret->IsPowered() && Turret->GetFaction() != ETurretFaction::Hostile ? 1 : 0;
+				Powered += Turret->IsPowered() ? 1 : 0;
+				const APowerGeneratorActor* Generator = Turret->GetPowerSource();
+				if (!Generator)
+				{
+					++Unlinked;
+					continue;
+				}
+				const EPowerAllegiance Side = Generator->GetAllegiance();
+				const ETurretFaction Want = Side == EPowerAllegiance::Friendly ? ETurretFaction::Friendly
+					: (Side == EPowerAllegiance::Hostile ? ETurretFaction::Hostile : ETurretFaction::Neutral);
+				Mismatch += Turret->IsPowered() != Generator->IsRunning() || (Turret->IsPowered() && Turret->GetFaction() != Want) ? 1 : 0;
 			}
+			Generators += Actor && Actor->IsA<APowerGeneratorActor>() ? 1 : 0;
 		}
-		const int32 WantPowered = FMath::RoundToInt(0.25 * TurretCount);
-		Check(State, PoweredHostile == WantPowered && PoweredOther == 0, FString::Printf(
-			TEXT("level turrets: %d of %d powered + hostile (want %d), %d powered otherwise, the rest inactive"), PoweredHostile, TurretCount,
-			WantPowered, PoweredOther));
+		Check(State, Generators > 0 && Unlinked == 0 && Mismatch == 0 && Powered * 2 <= TurretCount, FString::Printf(
+			TEXT("level turrets: %d generator(s), %d of %d turrets powered (~75 %% dark), %d unlinked, %d not matching their generator"), Generators,
+			Powered, TurretCount, Unlinked, Mismatch));
 		Check(State, Invisible == 0, FString::Printf(TEXT("every prop has a visible mesh or is a hidden-until-spotted trap (%d without, %d hidden traps)"),
 			Invisible, HiddenTraps));
 		Check(State, Outside == 0, FString::Printf(TEXT("every prop inside the layout bounds (%d outside)"), Outside));
@@ -477,6 +491,10 @@ namespace GeneratedPropsSmoke
 			}
 			RunChecks(World, State);
 			// The map's powered hostile turrets are switched off for the behaviour checks (only the test turret fires, and only when told).
+			for (TActorIterator<APowerGeneratorActor> It(World); It; ++It)
+			{
+				It->StopEngine(nullptr, false);
+			}
 			for (TActorIterator<ATurretActor> It(World); It; ++It)
 			{
 				It->SetPowered(false);
@@ -488,6 +506,11 @@ namespace GeneratedPropsSmoke
 			{
 				ATurretActor* Turret = State.Turret.Get();
 				AOperativeCharacter* Target = Squad.Last();
+				// Off its generator's cable: the forced power / side below are the turret's own again (TURRET_POWER.md network turrets).
+				if (APowerGeneratorActor* Generator = Turret->GetPowerSource())
+				{
+					Generator->UnlinkTurret(Turret);
+				}
 				Turret->SetFaction(ETurretFaction::Hostile);
 				Turret->SetPowered(false);
 				Target->StopOperative();
