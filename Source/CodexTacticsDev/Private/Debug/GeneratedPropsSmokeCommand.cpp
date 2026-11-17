@@ -10,7 +10,8 @@
 // 2. behaviour: a barrel explodes on a shot (the operative's targeted-shot path), a loot crate is emptied into an operative, a mine / wire
 //    goes off when an operative walks onto it;
 // 3. level turrets (designer 2026-11-17): inactive (unpowered) by default, round(0.25 x turrets) powered + hostile; a turret forced
-//    unpowered does not fire at an operative in its range, the same turret forced powered + hostile engages him.
+//    unpowered does not fire at an operative in its range, the same turret forced powered + hostile engages him; switched to neutral
+//    (TURRET_POWER.md: monsters only) it shoots a monster spawned in its range and no longer the operative.
 // GeneratedPropsSmoke = L_Gen_Depot_X4, GeneratedPropsX6Smoke = L_Gen_Depot_1_X6; [map=<L_Gen_...>] for another generated map.
 
 #include "CoreMinimal.h"
@@ -66,6 +67,7 @@ namespace GeneratedPropsSmoke
 		Begin,
 		TurretOff,
 		TurretOn,
+		TurretNeutral,
 		Mine,
 		Done
 	};
@@ -86,6 +88,10 @@ namespace GeneratedPropsSmoke
 		/** Hits the immortal cheat (CombatCheats) absorbed on the target so far: a hit counts even when it costs no health. */
 		int32 TargetBlockedBefore = 0;
 		int32 ShotsBefore = 0;
+		TWeakObjectPtr<AActor> Monster;
+		float MonsterHealthBefore = 0.f;
+		/** The neutral turret aimed a shot at the operative. */
+		bool bNeutralShotOperative = false;
 		TWeakObjectPtr<AActor> Mine;
 	};
 
@@ -409,7 +415,7 @@ namespace GeneratedPropsSmoke
 	}
 
 	/** A spot in the turret's range with a line of fire, on the turret's surface (a roof turret: on its roof). */
-	bool TurretTargetSpot(UWorld* World, const ATurretActor* Turret, FVector& Out)
+	bool TurretTargetSpot(UWorld* World, const ATurretActor* Turret, FVector& Out, const FVector* Avoid = nullptr)
 	{
 		const FVector Base = Turret->GetActorLocation();
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(GeneratedPropsTurretSpot), false, Turret);
@@ -425,6 +431,10 @@ namespace GeneratedPropsSmoke
 						ECC_WorldStatic, Params)
 					&& FMath::Abs(Hit.ImpactPoint.Z - TurretFloor) <= 40.0)
 				{
+					if (Avoid && FVector::Dist2D(Hit.ImpactPoint, *Avoid) < 200.0)
+					{
+						continue;
+					}
 					FHitResult Sight;
 					if (!World->LineTraceSingleByChannel(Sight, Base + FVector(0.0, 0.0, 40.0), Hit.ImpactPoint + FVector(0.0, 0.0, 80.0), ECC_Visibility, Params))
 					{
@@ -535,6 +545,56 @@ namespace GeneratedPropsSmoke
 			{
 				Check(State, bHit, FString::Printf(TEXT("a powered hostile turret engages the operative (%d shots, health %.0f -> %.0f, %d hits absorbed by the immortal cheat)"),
 					Turret->GetShotsFired() - State.ShotsBefore, State.TargetHealthBefore, Now, Blocked));
+			}
+			// Neutral (monsters only): a monster in range is shot, the operative standing there is not.
+			UWaveSubsystem* Waves = World->GetSubsystem<UWaveSubsystem>();
+			FVector MonsterSpot;
+			const FVector TargetSpot = State.Target.IsValid() ? State.Target->GetActorLocation() : FVector::ZeroVector;
+			if (Turret && State.Target.IsValid() && Waves && TurretTargetSpot(World, Turret, MonsterSpot, &TargetSpot))
+			{
+				Turret->SetFaction(ETurretFaction::Neutral);
+				AEnemyCharacter* Monster = Waves->SpawnEnemy(EEnemyArchetype::Brute, MonsterSpot);
+				State.Monster = Monster;
+				const UHealthComponent* MonsterHealth = Monster ? Monster->FindComponentByClass<UHealthComponent>() : nullptr;
+				State.MonsterHealthBefore = MonsterHealth ? MonsterHealth->GetCurrentHealth() : 0.f;
+				const UHealthComponent* TargetHealth = State.Target->FindComponentByClass<UHealthComponent>();
+				State.TargetHealthBefore = TargetHealth ? TargetHealth->GetCurrentHealth() : 0.f;
+				State.TargetBlockedBefore = TargetHealth ? TargetHealth->GetCheatBlockedHits() : 0;
+				State.ShotsBefore = Turret->GetShotsFired();
+				State.bNeutralShotOperative = false;
+				Check(State, Monster != nullptr, FString::Printf(TEXT("a monster spawned %.1f m from the neutral turret"),
+					Monster ? FVector::Dist(Monster->GetActorLocation(), Turret->GetActorLocation()) / 100.f : 0.f));
+				State.Stage = EStage::TurretNeutral;
+				State.StageTime = 0.f;
+				return true;
+			}
+			Check(State, false, TEXT("a second spot in the turret's range for the neutral check"));
+			State.Stage = EStage::TurretNeutral;
+			State.StageTime = ReactSeconds;
+			return true;
+		}
+		case EStage::TurretNeutral:
+		{
+			ATurretActor* Turret = State.Turret.Get();
+			const UHealthComponent* MonsterHealth = State.Monster.IsValid() ? State.Monster->FindComponentByClass<UHealthComponent>() : nullptr;
+			const float MonsterNow = MonsterHealth ? MonsterHealth->GetCurrentHealth() : 0.f;
+			const bool bShotMonster = Turret && Turret->GetShotsFired() > State.ShotsBefore && Turret->GetLastTarget() == State.Monster.Get();
+			State.bNeutralShotOperative |= Turret && Turret->GetShotsFired() > State.ShotsBefore && Turret->GetLastTarget() == State.Target.Get();
+			const bool bMonsterHit = bShotMonster && MonsterHealth && MonsterNow < State.MonsterHealthBefore;
+			if (State.Monster.IsValid() && !bMonsterHit && State.StageTime < ReactSeconds)
+			{
+				return true;
+			}
+			if (State.Monster.IsValid() && State.Target.IsValid())
+			{
+				Check(State, bMonsterHit, FString::Printf(TEXT("a powered neutral turret shoots the monster (health %.0f -> %.0f)"),
+					State.MonsterHealthBefore, MonsterNow));
+				Check(State, !State.bNeutralShotOperative, FString::Printf(TEXT("a neutral turret does not shoot the operative (%d shots, last at %s)"),
+					Turret ? Turret->GetShotsFired() - State.ShotsBefore : 0, Turret ? *GetNameSafe(Turret->GetLastTarget()) : TEXT("-")));
+			}
+			if (AActor* Monster = State.Monster.Get())
+			{
+				Monster->Destroy();
 			}
 			if (Turret)
 			{

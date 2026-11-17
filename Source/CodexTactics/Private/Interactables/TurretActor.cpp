@@ -190,19 +190,18 @@ AActor* ATurretActor::FindTarget(float& OutCover, FVector& OutAim) const
 	const FVector Start = GetActorLocation() + FVector(0.f, 0.f, MuzzleHeight - Box->GetScaledBoxExtent().Z);
 	float Best = AttackRange;
 	AActor* BestTarget = nullptr;
-	// Friendly: the enemies; Hostile (a level turret, G003b): the squad's operatives; Neutral: nobody.
+	// docs/design/TURRET_POWER.md rule 3: monsters always; Friendly also the PMC (tagged enemies that are operatives), Hostile also the
+	// squad's operatives, Neutral (no owner) no humans.
 	TArray<AActor*> Candidates;
-	if (Faction == ETurretFaction::Friendly)
+	for (AActor* Candidate : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 	{
-		for (AActor* Candidate : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
+		if (Candidate && Candidate->ActorHasTag(CombatQueries::EnemyTag)
+			&& (Faction == ETurretFaction::Friendly || !Candidate->IsA<AOperativeCharacter>()))
 		{
-			if (Candidate && Candidate->ActorHasTag(CombatQueries::EnemyTag))
-			{
-				Candidates.Add(Candidate);
-			}
+			Candidates.Add(Candidate);
 		}
 	}
-	else if (Faction == ETurretFaction::Hostile)
+	if (Faction == ETurretFaction::Hostile)
 	{
 		if (const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>())
 		{
@@ -244,6 +243,7 @@ AActor* ATurretActor::FindTarget(float& OutCover, FVector& OutAim) const
 void ATurretActor::Fire(AActor* Target, float Cover, const FVector& Aim)
 {
 	++ShotsFired;
+	LastTarget = Target;
 	if (UHealthComponent* TargetHealth = Target->FindComponentByClass<UHealthComponent>())
 	{
 		FDamageSpec Spec;
@@ -261,7 +261,8 @@ void ATurretActor::Fire(AActor* Target, float Cover, const FVector& Aim)
 	// Suppressive fire (user decision 2026-10-26: turrets suppress, MG weighting): the burst pins its target and whoever it passes.
 	FSuppressionRound Round;
 	Round.Shooter = this;
-	Round.bAtEnemies = Faction != ETurretFaction::Hostile;
+	const AOperativeCharacter* TargetOperative = Cast<AOperativeCharacter>(Target);
+	Round.bAtEnemies = !(TargetOperative && TargetOperative->IsPlayerTeam());
 	Round.Start = GetActorLocation() + FVector(0.f, 0.f, 70.f);
 	Round.End = Aim;
 	Round.Target = Target;
@@ -274,7 +275,7 @@ void ATurretActor::Fire(AActor* Target, float Cover, const FVector& Aim)
 
 void ATurretActor::ExecuteAction(AOperativeCharacter* User)
 {
-	if (!User)
+	if (!User || Faction != ETurretFaction::Friendly)
 	{
 		return;
 	}
@@ -299,6 +300,13 @@ void ATurretActor::ExecuteAction(AOperativeCharacter* User)
 
 FActionMenuRequest ATurretActor::BuildActionMenu(const AOperativeCharacter* Leader) const
 {
+	if (Faction != ETurretFaction::Friendly)
+	{
+		// A level turret answers to its generator (TURRET_POWER.md): no pick-up / repair / defuse menu of the squad's turret.
+		return FActionMenuRequest::MakeMessage(LOCTEXT("SquadSpeaker", "SQUAD"), Faction == ETurretFaction::Hostile
+			? LOCTEXT("HostileTurret", "A hostile turret - not ours. Its generator decides who it fires at.")
+			: LOCTEXT("NeutralTurret", "An old perimeter turret - it answers to its generator, not to us."));
+	}
 	FActionMenuRequest Request = Super::BuildActionMenu(Leader);
 	if (Request.bOpenMenu && !bBroken && !bPowered && Health->GetCurrentHealth() >= Health->GetMaxHealth())
 	{

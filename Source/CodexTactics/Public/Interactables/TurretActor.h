@@ -9,9 +9,9 @@ class UHealthComponent;
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_ThreeParams(FOnTurretFired, ATurretActor*, Turret, AActor*, Target, const FVector&, HitLocation);
 
 /**
- * Whose side a turret is on (G003b, designer 2026-11-17: level turrets on generated maps). Friendly = the squad's turret (fires at
- * enemies; the classic deployable). Hostile = a level turret that fires at the squad's operatives. Neutral = a level turret that holds
- * fire (placeholder until the power / capture mechanic is designed).
+ * Whose side a turret is on (G003b; docs/design/TURRET_POWER.md rule 3: monsters always, plus the humans hostile to its owner).
+ * Friendly = the squad's (fires at monsters and the PMC). Hostile = a PMC turret (fires at the squad and at monsters). Neutral = no owner
+ * (fires at monsters only).
  */
 UENUM(BlueprintType)
 enum class ETurretFaction : uint8
@@ -26,8 +26,8 @@ enum class ETurretFaction : uint8
  * the damage to 60 %, walls block it) while powered and not broken. Powered by default; a generator breakdown cuts
  * the power of every turret, a repair restores it. At 0 HP it breaks (repair: engineer 2 s, others 4 s). A powered
  * turret also warms operatives nearby (Godot heat_sources, 4.5 m). Can be picked up, moved, trapped.
- * G003b: Faction - the squad's turret (Friendly, default) or a level turret (Hostile: fires at the squad's operatives; Neutral:
- * holds fire). A level turret's power is its own (SetPowered), the squad's generator powers only friendly turrets.
+ * G003b: Faction - the squad's turret (Friendly, default: monsters + PMC) or a level turret (Hostile: the squad + monsters; Neutral:
+ * monsters only; no squad menu). A level turret's power is its own (SetPowered), the squad's generator powers only friendly turrets.
  * Godot reference: Scenes/movements/deployables/turret.gd, main.gd turret menu / `_execute_repair_object`.
  */
 UCLASS(Blueprintable)
@@ -87,6 +87,9 @@ public:
 
 	/** Shots fired since spawn (smokes, telemetry). */
 	int32 GetShotsFired() const { return ShotsFired; }
+
+	/** What the last shot was fired at (null before the first / when it is gone). */
+	AActor* GetLastTarget() const { return LastTarget.Get(); }
 
 	/** Save-game load: power and broken state (health is restored separately); the look follows. */
 	void RestoreSaved(bool bInPowered, bool bInBroken);
@@ -149,4 +152,5 @@ private:
 	bool bBroken = false;
 	float ShotCooldown = 0.f;
 	int32 ShotsFired = 0;
+	TWeakObjectPtr<AActor> LastTarget;
 };
