@@ -7,6 +7,7 @@
 
 class AOperativeCharacter;
 class ATurretActor;
+class FJsonObject;
 class UPointLightComponent;
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_TwoParams(FOnPowerGeneratorChanged, APowerGeneratorActor*, Generator, EGeneratorState, NewState);
@@ -39,6 +40,8 @@ public:
 	virtual bool IsAttackableGenerator() const override;
 	virtual void TakeGeneratorDamage(float Amount) override;
 	virtual void RestoreGeneratorState(float Health, bool bBroken) override;
+	/** The legacy repair entry (scripts, the bot, Blueprints): the network repair (RepairNow), never the quest generator's. */
+	virtual void RepairGenerator() override { RepairNow(nullptr); }
 	virtual bool HandleDirectInteraction(AOperativeCharacter* Leader) override;
 	virtual FActionMenuRequest BuildActionMenu(const AOperativeCharacter* Leader) const override;
 	virtual void PerformAction(AOperativeCharacter* User) override;
@@ -115,6 +118,15 @@ public:
 	/** Squad contact flag (a pre-powered generator burns only after it). */
 	bool HasContact() const { return bContact; }
 
+	/** The save key: the props object id (tag prop_id=...) of a generated map, else the actor name. */
+	FString GetSaveKey() const;
+
+	/** Save: health, broken, fuel, switch, owner, contact, owner knowledge, the next low-fuel warning. */
+	TSharedRef<FJsonObject> CaptureSave() const;
+
+	/** Load (CaptureSave): the state as saved, pushed to the linked turrets (their power, side and knowledge follow). */
+	void RestoreSave(const FJsonObject& Json);
+
 	/** State changes (Blueprint visuals / sound). */
 	UPROPERTY(BlueprintAssignable, Category = "CodexTactics|Power")
 	FOnPowerGeneratorChanged OnPowerStateChanged;
@@ -151,6 +163,8 @@ private:
 	float FuelL = 0.f;
 	bool bSwitchOn = false;
 	int32 OwnerTeam = PowerRules::NoOwner;
+	/** The owner of the last run (-2 = never ran): a start by another team than the squad hides the owner again. */
+	int32 LastRunOwner = -2;
 	bool bContact = true;
 	bool bOwnerKnown = false;
 	bool bInitialised = false;

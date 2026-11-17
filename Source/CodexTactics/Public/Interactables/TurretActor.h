@@ -134,8 +134,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Turret")
 	bool IsOwnerKnown() const { return bOwnerKnown; }
 
-	/** Marks the owner known; bAnnounce posts the identification line. */
+	/** Marks the owner known (and its whole network: the generator reveals its other turrets); bAnnounce posts the identification line. */
 	void RevealOwner(bool bAnnounce);
+
+	/** The owner is unknown again (a save load before the network knowledge is re-applied). */
+	void ForgetOwner();
 
 	/** Seconds the squad has observed it without a break (smokes). */
 	float GetObserveSeconds() const { return ObserveSeconds; }
@@ -211,6 +214,21 @@ private:
 	bool bBroken = false;
 	TWeakObjectPtr<APowerGeneratorActor> PowerSource;
 	int32 OwnerTeam = -1;
+	/** The owner while last live (-2 = never live): a new owner that is not the squad hides the side again (knowledge step 3). */
+	int32 LastLiveOwner = -2;
+	/** The level's own side (InitLevelTurret, or the side when first linked): restored when the turret leaves its cable. */
+	ETurretFaction LevelFaction = ETurretFaction::Friendly;
+	bool bHasLevelFaction = false;
+	/** Deploy / relocate flags before the first link (a network turret is a fixed emplacement). */
+	bool bPreLinkDeployable = true;
+	bool bPreLinkRelocatable = false;
+	bool bPreLinkFlagsStored = false;
+	/** Last values handed to the lamp / the head tint (render state only touched on a change). */
+	int8 LampShownCache = -1;
+	FLinearColor LampColorCache = FLinearColor::Black;
+	float LampIntensityCache = -1.f;
+	FColor TintCache = FColor::Transparent;
+	bool bTintSet = false;
 	/** World time the power came / went (spin-up, wind-down). */
 	double PowerChangedAt = -1000.0;
 	bool bOwnerKnown = false;

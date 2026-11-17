@@ -86,9 +86,9 @@ public:
 		return ObjectType == EInteractableType::Generator && !bGeneratorBroken && GeneratorHealth > 0.f;
 	}
 
-	/** Full repair: heat and turret power back on. */
+	/** Full repair: heat and turret power back on. A power-network generator overrides it (APowerGeneratorActor::RepairNow). */
 	UFUNCTION(BlueprintCallable, Category = "CodexTactics|Generator")
-	void RepairGenerator();
+	virtual void RepairGenerator();
 
 	/** Save-game load (after the quest chain): generator durability and breakdown; its heat follows (running and intact). */
 	virtual void RestoreGeneratorState(float Health, bool bBroken);

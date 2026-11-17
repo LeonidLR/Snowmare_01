@@ -118,9 +118,15 @@ void ATurretActor::UpdateState()
 	UpdateNetworkLook();
 	// Placeholder tint: green working, amber unpowered, red broken (Godot overhead label colours).
 	const FColor Tint = bBroken ? FColor(255, 64, 64) : (bPowered ? FColor(51, 230, 102) : FColor(255, 191, 51));
+	if (bTintSet && Tint == TintCache)
+	{
+		return; // nothing changed: no material work (RefreshNetwork calls this on every fuel change)
+	}
 	if (UMaterialInstanceDynamic* Material = Head->CreateAndSetMaterialInstanceDynamic(0))
 	{
 		Material->SetVectorParameterValue(TEXT("Color"), FLinearColor::FromSRGBColor(Tint));
+		TintCache = Tint;
+		bTintSet = true;
 	}
 }
 
@@ -153,28 +159,59 @@ void ATurretActor::InitLevelTurret(ETurretFaction InFaction, bool bInPowered)
 {
 	Faction = InFaction;
 	bPowered = bInPowered;
+	LevelFaction = InFaction;
+	bHasLevelFaction = true;
 }
 
 void ATurretActor::RestoreSaved(bool bInPowered, bool bInBroken)
 {
-	bPowered = bInPowered;
 	bBroken = bInBroken;
+	if (const APowerGeneratorActor* Generator = PowerSource.Get())
+	{
+		// A network turret's power and side are its generator's, never the saved flag (review 2026-11-17 #2).
+		ApplyNetworkState(Generator->IsRunning(), Generator->GetOwnerTeam());
+		return;
+	}
+	bPowered = bInPowered;
 	UpdateState();
 }
 
 void ATurretActor::SetPowerSource(APowerGeneratorActor* Generator)
 {
-	PowerSource = Generator;
 	if (Generator)
 	{
+		if (!bHasLevelFaction)
+		{
+			LevelFaction = Faction;
+			bHasLevelFaction = true;
+		}
+		if (!bPreLinkFlagsStored)
+		{
+			bPreLinkDeployable = bDeployable;
+			bPreLinkRelocatable = bCanBeRelocated;
+			bPreLinkFlagsStored = true;
+		}
+		PowerSource = Generator;
 		// A fixed emplacement of the level (TURRET_POWER.md 10 turret_mg "pickup": false): no pick-up, no relocation.
 		bDeployable = false;
 		bCanBeRelocated = false;
+		return;
 	}
-	else
+	// Off the cable (review #6): dark, no owner, its level side and its own deploy flags back (a once-seized turret is not the squad's).
+	ApplyNetworkState(false, PowerRules::NoOwner);
+	PowerSource = nullptr;
+	LastLiveOwner = -2;
+	bOwnerKnown = false;
+	if (bHasLevelFaction)
 	{
-		ApplyNetworkState(false, PowerRules::NoOwner);
+		Faction = LevelFaction;
 	}
+	if (bPreLinkFlagsStored)
+	{
+		bDeployable = bPreLinkDeployable;
+		bCanBeRelocated = bPreLinkRelocatable;
+	}
+	UpdateState();
 }
 
 void ATurretActor::ApplyNetworkState(bool bLive, int32 InOwnerTeam)
@@ -187,6 +224,13 @@ void ATurretActor::ApplyNetworkState(bool bLive, int32 InOwnerTeam)
 	OwnerTeam = bLive ? InOwnerTeam : PowerRules::NoOwner;
 	if (bLive)
 	{
+		// Knowledge step 3 (review #5): a new owner that is not the squad must be read again.
+		if (InOwnerTeam != LastLiveOwner && InOwnerTeam != PowerRules::PlayerTeam)
+		{
+			bOwnerKnown = false;
+			ObserveSeconds = 0.f;
+		}
+		LastLiveOwner = InOwnerTeam;
 		const EPowerAllegiance Allegiance = PowerRules::AllegianceOf(OwnerTeam);
 		Faction = Allegiance == EPowerAllegiance::Friendly ? ETurretFaction::Friendly
 			: (Allegiance == EPowerAllegiance::Hostile ? ETurretFaction::Hostile : ETurretFaction::Neutral);
@@ -237,6 +281,11 @@ void ATurretActor::RevealOwner(bool bAnnounce)
 	bOwnerKnown = true;
 	ObserveSeconds = 0.f;
 	UpdateNetworkLook();
+	// The whole network is read with it (review #4): the generator's label and the sibling turrets (they return early: known).
+	if (APowerGeneratorActor* Generator = PowerSource.Get(); Generator && !Generator->IsOwnerKnown())
+	{
+		Generator->RevealNetwork(false);
+	}
 	const FString Side = bPowered ? PowerRules::AllegianceName(PowerRules::AllegianceOf(OwnerTeam)) : FString(TEXT("DARK"));
 	if (bAnnounce)
 	{
@@ -249,6 +298,13 @@ void ATurretActor::RevealOwner(bool bAnnounce)
 	Context.Target = this;
 	Context.Kind = FName(*Side);
 	GameplayEvents::RaiseWithContext(this, FName(TEXT("Power.TurretIdentified")), Context);
+}
+
+void ATurretActor::ForgetOwner()
+{
+	bOwnerKnown = false;
+	ObserveSeconds = 0.f;
+	UpdateNetworkLook();
 }
 
 void ATurretActor::TickObservation(float DeltaSeconds)
@@ -301,11 +357,26 @@ void ATurretActor::UpdateNetworkLook()
 	// A live network turret shows its lamp; it fades out over the wind-down when the power goes (the gun has dropped already).
 	const bool bWindingDown = !bPowered && Now - PowerChangedAt < PowerRules::GetTuning().WindDownSeconds;
 	const bool bLampOn = IsNetworkLinked() && !bBroken && (bPowered || bWindingDown);
-	StatusLamp->SetVisibility(bLampOn);
+	// Review #7: the light's render state is touched only when something changed.
+	if (LampShownCache != static_cast<int8>(bLampOn))
+	{
+		StatusLamp->SetVisibility(bLampOn);
+		LampShownCache = static_cast<int8>(bLampOn);
+	}
 	if (bLampOn)
 	{
-		StatusLamp->SetLightColor(bOwnerKnown ? AllegianceColor(PowerRules::AllegianceOf(OwnerTeam)) : LiveLampColor);
-		StatusLamp->SetIntensity(bWindingDown ? 400.f : 1200.f);
+		const FLinearColor Color = bOwnerKnown ? AllegianceColor(PowerRules::AllegianceOf(OwnerTeam)) : LiveLampColor;
+		const float Intensity = bWindingDown ? 400.f : 1200.f;
+		if (!Color.Equals(LampColorCache))
+		{
+			StatusLamp->SetLightColor(Color);
+			LampColorCache = Color;
+		}
+		if (Intensity != LampIntensityCache)
+		{
+			StatusLamp->SetIntensity(Intensity);
+			LampIntensityCache = Intensity;
+		}
 	}
 	const bool bHum = IsNetworkLinked() && bPowered && !bBroken && HumSound != nullptr;
 	if (bHum && !HumAudio)
@@ -366,7 +437,10 @@ void ATurretActor::Tick(float DeltaSeconds)
 		if (ObserveTimer >= NetworkTickSeconds)
 		{
 			TickObservation(ObserveTimer);
-			UpdateNetworkLook();
+			if (!bPowered && LampShownCache == 1)
+			{
+				UpdateNetworkLook(); // only the wind-down fade is time-driven; state changes update the look themselves
+			}
 			ObserveTimer = 0.f;
 		}
 	}

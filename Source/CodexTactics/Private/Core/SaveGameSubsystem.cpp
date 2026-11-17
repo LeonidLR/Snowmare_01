@@ -53,6 +53,8 @@
 #include "Interactables/RelocationSubsystem.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TurretActor.h"
+#include "LevelGen/CodexLevelPropsSubsystem.h"
+#include "Power/PowerGeneratorActor.h"
 #include "Kismet/GameplayStatics.h"
 #include "Misc/CommandLine.h"
 #include "Misc/DateTime.h"
@@ -283,6 +285,10 @@ namespace
 		if (!IsValid(Actor) || Actor->IsActorBeingDestroyed() || Actor->IsA<ALootCrateActor>() || Actor->IsA<ADroppedItemActor>())
 		{
 			return false;
+		}
+		if (Actor->IsA<APowerGeneratorActor>())
+		{
+			return false; // its own block "power_generators", keyed by the props id (SavePowerGenerators)
 		}
 		if (const ATripwireActor* Wire = Cast<ATripwireActor>(Actor))
 		{
@@ -619,7 +625,7 @@ namespace
 			Entry->SetNumberField(TEXT("trap_damage"), Object->TrapDamage);
 			Entry->SetNumberField(TEXT("trap_radius"), Object->TrapRadius);
 		}
-		if (Object->ObjectType == EInteractableType::Generator)
+		if (Object->ObjectType == EInteractableType::Generator && Object->IsQuestGenerator())
 		{
 			Entry->SetNumberField(TEXT("generator_health"), Object->GeneratorHealth);
 			Entry->SetBoolField(TEXT("generator_broken"), Object->bGeneratorBroken);
@@ -701,7 +707,7 @@ namespace
 		Object->bDefusalWarned = SaveBool(Entry, TEXT("defusal_warned"), Object->bDefusalWarned);
 		Object->TrapDamage = SaveFloat(Entry, TEXT("trap_damage"), Object->TrapDamage);
 		Object->TrapRadius = SaveFloat(Entry, TEXT("trap_radius"), Object->TrapRadius);
-		if (Object->ObjectType == EInteractableType::Generator)
+		if (Object->ObjectType == EInteractableType::Generator && Object->IsQuestGenerator())
 		{
 			Object->RestoreGeneratorState(SaveFloat(Entry, TEXT("generator_health"), Object->GeneratorHealth),
 				SaveBool(Entry, TEXT("generator_broken"), Object->bGeneratorBroken));
@@ -752,6 +758,67 @@ namespace
 				Stove->RestoreHeatState(bBurning, bBurntOut, TimeLeft, RoundSeconds);
 			}
 		}
+	}
+
+	// --- Power network generators (TURRET_POWER.md phase 1; review 2026-11-17 #1) ---
+
+	/** { "<props id or actor name>": APowerGeneratorActor::CaptureSave } */
+	TSharedRef<FJsonObject> SavePowerGenerators(UWorld* World)
+	{
+		TSharedRef<FJsonObject> Out = MakeShared<FJsonObject>();
+		for (TActorIterator<APowerGeneratorActor> It(World); It; ++It)
+		{
+			if (IsValid(*It) && !It->IsActorBeingDestroyed())
+			{
+				Out->SetObjectField(It->GetSaveKey(), It->CaptureSave());
+			}
+		}
+		return Out;
+	}
+
+	/** Applies the saved state to every generator of the world that has an entry; returns how many. */
+	int32 ApplyPowerGenerators(UWorld* World, const FJsonObject& Saved)
+	{
+		int32 Applied = 0;
+		for (TActorIterator<APowerGeneratorActor> It(World); It; ++It)
+		{
+			const TSharedPtr<FJsonObject>* Entry = nullptr;
+			if (Saved.TryGetObjectField(It->GetSaveKey(), Entry) && Entry && Entry->IsValid())
+			{
+				It->RestoreSave(**Entry);
+				++Applied;
+			}
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Save] power: %d generator(s) restored of %d saved"), Applied, Saved.Values.Num());
+		return Applied;
+	}
+
+	/** Restores the generators now, or once the props spawn of a generated map has finished (they are spawned over frames). */
+	void RestorePowerGenerators(UWorld* World, const TSharedPtr<FJsonObject>& Saved)
+	{
+		if (!World || !Saved.IsValid() || Saved->Values.IsEmpty())
+		{
+			return;
+		}
+		UCodexLevelPropsSubsystem* Props = World->GetSubsystem<UCodexLevelPropsSubsystem>();
+		if (Props && Props->IsSpawnPending())
+		{
+			TSharedRef<FDelegateHandle> Handle = MakeShared<FDelegateHandle>();
+			TWeakObjectPtr<UWorld> WeakWorld(World);
+			*Handle = Props->OnPropsSpawned.AddLambda([WeakWorld, Saved, Handle](UCodexLevelPropsSubsystem* Spawner)
+			{
+				if (UWorld* W = WeakWorld.Get())
+				{
+					ApplyPowerGenerators(W, *Saved);
+				}
+				if (Spawner)
+				{
+					Spawner->OnPropsSpawned.Remove(*Handle);
+				}
+			});
+			return;
+		}
+		ApplyPowerGenerators(World, *Saved);
 	}
 
 	// --- Patrol routes and enemies (version 2) ---
@@ -1249,6 +1316,7 @@ TSharedRef<FJsonObject> USaveGameSubsystem::BuildSaveData(const FString& SlotNam
 		}
 	}
 	WorldState->SetObjectField(TEXT("objects"), Objects);
+	WorldState->SetObjectField(TEXT("power_generators"), SavePowerGenerators(World));
 	TSharedRef<FJsonObject> Gates = MakeShared<FJsonObject>();
 	for (TActorIterator<AGateActor> It(World); It; ++It)
 	{
@@ -2130,6 +2198,12 @@ void USaveGameSubsystem::RestoreWorld(FSaveRestoreContext& Context)
 				ApplyObject(Spawned, Entry);
 			}
 		}
+	}
+	// TURRET_POWER.md phase 1: the generators after the objects (their RefreshNetwork re-pushes power / side to the restored turrets).
+	const TSharedPtr<FJsonObject>* PowerGenerators = nullptr;
+	if (WorldState->TryGetObjectField(TEXT("power_generators"), PowerGenerators) && PowerGenerators)
+	{
+		RestorePowerGenerators(World, *PowerGenerators);
 	}
 }
 

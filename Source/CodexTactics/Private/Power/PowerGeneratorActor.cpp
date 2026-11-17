@@ -9,6 +9,7 @@
 #include "Components/BoxComponent.h"
 #include "Components/PointLightComponent.h"
 #include "Core/PlayerCommands.h"
+#include "Dom/JsonObject.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -209,6 +210,7 @@ void APowerGeneratorActor::InitLevelGenerator(EGeneratorStart Start, TOptional<f
 	FuelL = Setup.FuelL;
 	bSwitchOn = Setup.bSwitchOn;
 	OwnerTeam = Setup.OwnerTeam;
+	LastRunOwner = Setup.bSwitchOn ? Setup.OwnerTeam : -2;
 	bContact = Setup.bContact;
 	NextWarning = 0;
 	bInitialised = true;
@@ -351,6 +353,12 @@ bool APowerGeneratorActor::StartBy(int32 Team, const AActor* Starter)
 	const FPowerTuning& Tuning = PowerRules::GetTuning();
 	bSwitchOn = true;
 	OwnerTeam = Team;
+	// Knowledge step 3: a network another team (not the squad) took over is unknown again until read anew.
+	if (Team != PowerRules::PlayerTeam && Team != LastRunOwner)
+	{
+		bOwnerKnown = false;
+	}
+	LastRunOwner = Team;
 	bContact = true;
 	++StartCount;
 	// The warnings already behind the time left are skipped for this run.
@@ -474,6 +482,97 @@ void APowerGeneratorActor::Tick(float DeltaSeconds)
 		Context.Target = this;
 		GameplayEvents::RaiseWithContext(this, PowerGeneratorInternal::GeneratorDryEvent, Context);
 		GameplayEvents::RaiseWithContext(this, PowerGeneratorInternal::PowerDryEvent, Context);
+	}
+}
+
+FString APowerGeneratorActor::GetSaveKey() const
+{
+	// A generated map's props get auto actor names; the props id is stable across spawns (UCodexLevelPropsSubsystem::TagProp).
+	static const FString Prefix(TEXT("prop_id="));
+	for (const FName& Tag : Tags)
+	{
+		const FString Text = Tag.ToString();
+		if (Text.StartsWith(Prefix))
+		{
+			return Text.RightChop(Prefix.Len());
+		}
+	}
+	return GetName();
+}
+
+TSharedRef<FJsonObject> APowerGeneratorActor::CaptureSave() const
+{
+	TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+	Json->SetNumberField(TEXT("health"), GeneratorHealth);
+	Json->SetBoolField(TEXT("broken"), bGeneratorBroken);
+	Json->SetNumberField(TEXT("fuel_l"), FuelL);
+	Json->SetBoolField(TEXT("switch_on"), bSwitchOn);
+	Json->SetNumberField(TEXT("owner_team"), OwnerTeam);
+	Json->SetNumberField(TEXT("last_run_owner"), LastRunOwner);
+	Json->SetBoolField(TEXT("contact"), bContact);
+	Json->SetBoolField(TEXT("owner_known"), bOwnerKnown);
+	Json->SetNumberField(TEXT("next_warning"), NextWarning);
+	return Json;
+}
+
+void APowerGeneratorActor::RestoreSave(const FJsonObject& Json)
+{
+	if (ActionInProgress != EGeneratorAction::None)
+	{
+		GetWorldTimerManager().ClearTimer(ActionTimer);
+		ActionInProgress = EGeneratorAction::None;
+		Worker.Reset();
+	}
+	double Number = 0.0;
+	bool bFlag = false;
+	if (Json.TryGetNumberField(TEXT("health"), Number))
+	{
+		GeneratorHealth = FMath::Clamp(static_cast<float>(Number), 0.f, GeneratorMaxHealth);
+	}
+	if (Json.TryGetBoolField(TEXT("broken"), bFlag))
+	{
+		bGeneratorBroken = bFlag;
+	}
+	if (Json.TryGetNumberField(TEXT("fuel_l"), Number))
+	{
+		FuelL = FMath::Clamp(static_cast<float>(Number), 0.f, PowerRules::GetTuning().TankL);
+	}
+	if (Json.TryGetBoolField(TEXT("switch_on"), bFlag))
+	{
+		bSwitchOn = bFlag && !bGeneratorBroken;
+	}
+	if (Json.TryGetNumberField(TEXT("owner_team"), Number))
+	{
+		OwnerTeam = FMath::RoundToInt(Number);
+	}
+	if (Json.TryGetNumberField(TEXT("last_run_owner"), Number))
+	{
+		LastRunOwner = FMath::RoundToInt(Number);
+	}
+	if (Json.TryGetBoolField(TEXT("contact"), bFlag))
+	{
+		bContact = bFlag;
+	}
+	if (Json.TryGetNumberField(TEXT("next_warning"), Number))
+	{
+		NextWarning = FMath::Max(0, FMath::RoundToInt(Number));
+	}
+	bool bKnown = false;
+	Json.TryGetBoolField(TEXT("owner_known"), bKnown);
+	bInitialised = true;
+	// The network as saved: power and side first, then the knowledge (a turret's own flag follows the network's).
+	bOwnerKnown = false;
+	for (const TWeakObjectPtr<ATurretActor>& Turret : Linked)
+	{
+		if (Turret.IsValid())
+		{
+			Turret->ForgetOwner();
+		}
+	}
+	RefreshNetwork();
+	if (bKnown)
+	{
+		RevealNetwork(false);
 	}
 }
 

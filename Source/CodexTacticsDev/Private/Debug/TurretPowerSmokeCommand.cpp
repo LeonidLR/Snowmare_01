@@ -26,6 +26,7 @@
 #include "Combat/WaveSubsystem.h"
 #include "Components/BoxComponent.h"
 #include "Debug/SmokeUtils.h"
+#include "Dom/JsonObject.h"
 #include "Engine/World.h"
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "HAL/IConsoleManager.h"
@@ -365,6 +366,7 @@ namespace TurretPowerSmoke
 			{
 				const float ToT3 = FVector::Dist(Leader->GetActorLocation(), T3->GetActorLocation());
 				Check(State, T3->IsOwnerKnown(), FString::Printf(TEXT("observing T3 for 2 s from %.1f m reveals its owner"), ToT3 / 100.f));
+				Check(State, H->IsOwnerKnown(), TEXT("an observed turret reveals its whole network (the generator knows its owner too)"));
 				H->PerformAction(Leader);
 				Check(State, H->GetActionInProgress() == EGeneratorAction::Seize, TEXT("the leader seizes the hostile network (4 s)"));
 				Enter(State, EPhase::Seize);
@@ -385,6 +387,32 @@ namespace TurretPowerSmoke
 				Check(State, T3->IsPowered() && T3->GetFaction() == ETurretFaction::Friendly && T3->MayTarget(State.P1.Get()) && !T3->MayTarget(Leader),
 					TEXT("capturing a hostile network flips its turret: it now fires at the PMC, not the squad"));
 				Check(State, G->GetState() == EGeneratorState::Fuelled && !T1->IsPowered(), TEXT("the other network is untouched"));
+
+				// Review 2026-11-17 fixes, in the same world:
+				// #1 a save round trip of a generator restores the state exactly (fuel, switch, owner, knowledge) and re-pushes its turret.
+				const TSharedRef<FJsonObject> Saved = H->CaptureSave();
+				const float SavedFuel = H->GetFuelL();
+				H->StopEngine(nullptr, false);
+				H->RestoreSave(*Saved);
+				Check(State, H->IsRunning() && H->GetOwnerTeam() == PowerRules::PlayerTeam && FMath::IsNearlyEqual(H->GetFuelL(), SavedFuel)
+					&& H->IsOwnerKnown() && T3->IsPowered() && T3->GetFaction() == ETurretFaction::Friendly && T3->IsOwnerKnown(),
+					TEXT("save round trip: the seized network comes back running, ours, known, its turret live"));
+				// #2 a network turret's saved power flag never overrides its generator.
+				T3->RestoreSaved(/*bInPowered=*/ false, /*bInBroken=*/ false);
+				Check(State, T3->IsPowered() && T3->GetOwnerTeam() == PowerRules::PlayerTeam, TEXT("a restored network turret takes its generator's state"));
+				// #5 a PMC takes the network over: its side is unknown again.
+				H->StopEngine(nullptr, false);
+				H->StartBy(1, nullptr);
+				Check(State, !H->IsOwnerKnown() && !T3->IsOwnerKnown() && T3->GetFaction() == ETurretFaction::Hostile,
+					TEXT("a network re-seized by a PMC team hides its new side again"));
+				// #6 a turret taken off its cable gets its level side and deploy flags back (not the squad's turret).
+				G->UnlinkTurret(T2);
+				Check(State, !T2->IsNetworkLinked() && T2->GetFaction() == ETurretFaction::Neutral && !T2->IsPowered(),
+					TEXT("an unlinked turret is dark with its level side (neutral), not the squad's"));
+				// #3 the legacy repair entry on a power generator is the network repair: intact and off, no owner.
+				H->RepairGenerator();
+				Check(State, H->GetState() == EGeneratorState::Fuelled && H->GetOwnerTeam() == PowerRules::NoOwner && !T3->IsPowered(),
+					TEXT("RepairGenerator on a power generator = RepairNow (off, no owner, its turret dark)"));
 				return Finish(State);
 			}
 			return true;
