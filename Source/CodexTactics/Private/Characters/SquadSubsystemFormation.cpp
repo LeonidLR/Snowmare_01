@@ -141,7 +141,9 @@ void USquadSubsystem::ApplyFormationFrame()
 		// him at once (a held-back look there broke the shimmy to the threat's corner - CoverSmoke / CoverHugSmoke).
 		const bool bFilter = SquadSubsystemFormationLocal::CVarFormationLookFilter.GetValueOnGameThread() != 0 && !Operative->bInCover
 			&& !Operative->HasPendingCover() && !Operative->IsInFormationWallPose();
-		const TOptional<float> Filtered = bFilter ? FormationLookFilterRules::Step(LookFilters.FindOrAdd(Member), Raw, GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.f) : Raw;
+		const FFormationConfig& FilterConfig = FormationTuning::Get();
+		const TOptional<float> Filtered = bFilter ? FormationLookFilterRules::Step(LookFilters.FindOrAdd(Member), Raw, GetWorld() ? GetWorld()->GetDeltaSeconds() : 0.f,
+			FormationLookFilterRules::DefaultJumpDeg, FormationLookFilterRules::DefaultHoldSeconds, FilterConfig.LookBigJumpDeg, FilterConfig.LookBigHoldS) : Raw;
 		if (!bFilter)
 		{
 			LookFilters.Remove(Member);

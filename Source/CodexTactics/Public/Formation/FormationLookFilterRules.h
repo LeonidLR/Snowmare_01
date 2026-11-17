@@ -20,6 +20,9 @@ struct CODEXTACTICS_API FFormationLookFilter
 	/** A far jump waiting to prove it holds, and how long it has. */
 	TOptional<float> Pending;
 	float PendingSeconds = 0.f;
+	/** The look before the last big jump (hysteresis: a jump straight back to it is rejected for a while), and the time since that jump. */
+	TOptional<float> Previous;
+	float SinceBigJumpSeconds = 0.f;
 };
 
 namespace FormationLookFilterRules
@@ -29,10 +32,16 @@ namespace FormationLookFilterRules
 	/** A further jump is taken after holding this long, s (0.3 kept a man facing a wall 0.3 s: FormationLabSmoke's wall-facing gate). */
 	inline constexpr float DefaultHoldSeconds = 0.15f;
 
+	/** A jump of at least this is a big one (held BigHoldSeconds, no quick return), deg. [look.big_jump_deg] */
+	inline constexpr float DefaultBigJumpDeg = 120.f;
+	/** A big jump is taken after holding this long, s; a jump straight back to the previous look within it is rejected. [look.big_hold_s] */
+	inline constexpr float DefaultBigHoldSeconds = 0.6f;
+
 	/**
 	 * One frame: the new raw look (unset = the formation gives no look: cleared at once) -> the look applied. Angles in deg, compared the short
 	 * way round.
 	 */
 	CODEXTACTICS_API TOptional<float> Step(FFormationLookFilter& Filter, const TOptional<float>& Raw, float DeltaSeconds, float JumpDeg = DefaultJumpDeg,
-		float HoldSeconds = DefaultHoldSeconds);
+		float HoldSeconds = DefaultHoldSeconds,
+		float BigJumpDeg = DefaultBigJumpDeg, float BigHoldSeconds = DefaultBigHoldSeconds);
 }

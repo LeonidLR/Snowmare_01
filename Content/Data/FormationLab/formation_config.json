@@ -457,6 +457,20 @@
       "unit": "s",
       "doc": "v2.3 part 8 (user decision 2026-10-26, Q4 = b): ClearLook also sees the walls from where the man will be this long ahead (his position + velocity x this), so passing a wall end within ~1 m he does not stare at it while its direction swings round. 0 = off."
     },
+    "look.big_jump_deg": {
+      "value": 120,
+      "min": 60,
+      "max": 180,
+      "unit": "deg",
+      "doc": "Look filter: a formation look change of at least this is a big jump (a wall-side flip) - held look.big_hold_s before the body turns to it. Smaller changes keep the 0.15 s hold."
+    },
+    "look.big_hold_s": {
+      "value": 0.6,
+      "min": 0.15,
+      "max": 2,
+      "unit": "s",
+      "doc": "Look filter: a big look jump must hold this long, and a jump straight back to the previous look within it is rejected (hysteresis against the ~0.3 s limit cycle of FormationJitterSmoke)."
+    },
     "classify.probe_side": {
       "value": 400,
       "min": 200,
