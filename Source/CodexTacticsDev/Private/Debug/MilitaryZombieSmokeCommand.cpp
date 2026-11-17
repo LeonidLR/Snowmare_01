@@ -9,7 +9,7 @@
 //   idle clip and with the devour activity; walks a search (a walk variant); BreakPatrol -> the rage roar standing still facing the
 //   alarm, then runs (a run variant) to the leader and attacks (an attack clip, the leader loses HP); hit clip, Manny knockdown,
 //   death from the ground; a wave spawn (UWaveSubsystem::SpawnEnemy with the class mapping pointed at the zombie for the run) plays
-//   the transformation entrance standing, then hunts; it dies standing (anim_Dying held). No "missing bones" / ensure lines.
+//   the transformation entrance standing, then hunts; it dies standing (a retained ragdoll lying on the floor). No "missing bones" / ensure lines.
 //   Codex.Knockdown.Chance is forced to 1 for the run.
 
 #include "CoreMinimal.h"
@@ -22,6 +22,7 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "Characters/CorpseSubsystem.h"
 #include "Characters/EnemyAnimInstance.h"
 #include "Characters/EnemyAnimRules.h"
 #include "Characters/EnemyCharacter.h"
@@ -858,7 +859,7 @@ namespace MilitaryZombieSmoke
 			}
 			return true;
 		}
-		case 10: // dies standing: anim_Dying held
+		case 10: // dies standing: retained death ragdoll
 		{
 			if (State.StageTime < 1.f)
 			{
@@ -879,11 +880,21 @@ namespace MilitaryZombieSmoke
 			{
 				return true;
 			}
-			const float Weight = Anim->GetSlotMontageGlobalWeight(Anim->OneShotSlot);
-			const UKnockdownComponent* Knock = Spawned->FindComponentByClass<UKnockdownComponent>();
-			const UAnimSequenceBase* FallClip = Knock ? Knock->GetPlayingClip() : nullptr;
-			const bool bDeathClip = SawClipFrom(State, Anim->DeathAnimations) || (FallClip && FallClip->GetName().StartsWith(TEXT("Death_")));
-			Check(State, bDeathClip && Weight > 0.9f, FString::Printf(TEXT("died standing: death clip held (one-shot weight %.2f, %s)"), Weight, *ActiveClips(Spawned)));
+			// Task 056 (918d95d3): active death ragdoll intentionally replaces the held death montage.
+			const UCorpseSubsystem* Corpses = World->GetSubsystem<UCorpseSubsystem>();
+			const USkeletalMeshComponent* Body = Spawned->GetMesh();
+			const FName Pelvis = UCorpseSubsystem::ResolvePelvisBone(Body);
+			float BottomZ = 0.f;
+			float FloorZ = 0.f;
+			const bool bFloor = Corpses && Body && UCorpseSubsystem::GetPelvisBodyBottomZ(Body, Pelvis, BottomZ)
+				&& UCorpseSubsystem::TraceCorpseFloorZ(World, Body->GetSocketLocation(Pelvis), Spawned, Corpses->GetRagdollConfig(), FloorZ);
+			const float Gap = BottomZ - FloorZ;
+			const bool bLying = bFloor && Gap >= -Corpses->GetRagdollConfig().MaxPelvisSinkCm && Gap < 45.f;
+			const bool bRetained = Corpses && Body && Corpses->IsKept(Spawned) && Spawned->IsRagdollActive()
+				&& (Spawned->IsCorpseFrozen() || Body->IsSimulatingPhysics());
+			Check(State, Spawned->IsDying() && bRetained && bLying,
+				FString::Printf(TEXT("died standing: retained death ragdoll %d, frozen %d, pelvis body floor found %d, gap %.1f cm in [-sink, 45)"),
+					bRetained, Spawned->IsCorpseFrozen(), bFloor, Gap));
 			Shot(State, World, Spawned, TEXT("death"));
 			Next();
 			return true;

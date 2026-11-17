@@ -14,7 +14,7 @@
 //  Enemies: two enemies of the case Blueprint placed as deaf guards (they idle), the right one keeps the original body (for a look
 //   variant: the variant's source materials from the pipeline's material_sets.json), the left one gets the optimized body + the variant's MI; idle, move (a search walk),
 //   attack (AttackTarget on an operative put in front), hit (a damage spec), death (both bodies still there, dying, the optimized one
-//   in its death clip; the scripted hit starts the level's ambush fight, so a frozen keeper holds that fight open - its end would sweep
+//   in a retained ragdoll or legacy death clip; the scripted hit starts the level's ambush fight, so a frozen keeper holds that fight open - its end would sweep
 //   the corpses away). Further look variants: an idle still each.
 // Asserts per case: one material slot (an MI of M_CharacterMaster with its four textures, one MI per look variant), LOD0 within
 // the triangle budget, >= 3 LODs, same skeleton and physics asset as the original, bounds within 10 %, no load warnings about
@@ -28,6 +28,7 @@
 #include "AIController.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
+#include "Characters/CorpseSubsystem.h"
 #include "Characters/EnemyAnimInstance.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -1139,17 +1140,25 @@ namespace OptimizedCharacterSmoke
 		return 60;
 	}
 
-	/** Both guards still stand in the world, dead, and the optimized one plays its death clip (the pose check follows). */
+	/** Both guards remain dead; the optimized body has a retained ragdoll or legacy death clip (pose check follows). */
 	void CheckDeath()
 	{
 		const AEnemyCharacter* A = EnA();
 		const AEnemyCharacter* B = EnB();
-		const UEnemyAnimInstance* Anim = B ? Cast<UEnemyAnimInstance>(B->GetMesh()->GetAnimInstance()) : nullptr;
+		const USkeletalMeshComponent* Body = B ? B->GetMesh() : nullptr;
+		const UEnemyAnimInstance* Anim = Body ? Cast<UEnemyAnimInstance>(Body->GetAnimInstance()) : nullptr;
 		const bool bClip = Anim && (!Anim->HasDeathAnimation() || Anim->IsAnyMontagePlaying());
-		Check(A && B && A->IsDying() && B->IsDying() && Anim && Anim->bIsDead && bClip,
-			FString::Printf(TEXT("death: both bodies still there (original %d, optimized %d), dying, optimized anim dead %d, death clip %s"),
-				A ? 1 : 0, B ? 1 : 0, Anim && Anim->bIsDead ? 1 : 0,
-				!Anim ? TEXT("-") : !Anim->HasDeathAnimation() ? TEXT("none set") : Anim->IsAnyMontagePlaying() ? TEXT("playing") : TEXT("NOT playing")));
+		// 918d95d3 skips death montages for active ragdolls; at 90 frames they may still be settling.
+		const bool bRagdoll = B && B->IsRagdollActive();
+		const UCorpseSubsystem* Corpses = B && B->GetWorld() ? B->GetWorld()->GetSubsystem<UCorpseSubsystem>() : nullptr;
+		const bool bRetainedPhysics = bRagdoll && Body && Corpses && Corpses->IsKept(B)
+			&& (B->IsCorpseFrozen() || Body->IsSimulatingPhysics());
+		const bool bDeathVisual = bRagdoll ? bRetainedPhysics : bClip;
+		Check(A && B && A->IsDying() && B->IsDying() && Anim && Anim->bIsDead && bDeathVisual,
+			FString::Printf(TEXT("death: both bodies still there (original %d, optimized %d), dying, optimized anim dead %d, representation %s, death clip %s, retained ragdoll %d (simulating %d, frozen %d)"),
+				A ? 1 : 0, B ? 1 : 0, Anim && Anim->bIsDead ? 1 : 0, bRagdoll ? TEXT("ragdoll") : TEXT("montage/fallback"),
+				!Anim ? TEXT("-") : !Anim->HasDeathAnimation() ? TEXT("none set") : Anim->IsAnyMontagePlaying() ? TEXT("playing") : TEXT("NOT playing"),
+				bRetainedPhysics ? 1 : 0, Body && Body->IsSimulatingPhysics() ? 1 : 0, B && B->IsCorpseFrozen() ? 1 : 0));
 	}
 
 	void AddEnemySteps(TArray<FStep>& S, int32 /*Unused*/)
