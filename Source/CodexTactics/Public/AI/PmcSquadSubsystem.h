@@ -188,6 +188,8 @@ private:
 		double OrderSince = 0.0;
 		FVector Goal = FVector::ZeroVector;
 		TWeakObjectPtr<AActor> Target;
+		/** The threat actor this fighter was reacting to when deciding orders (a new threat resets completed cooldowns). */
+		TWeakObjectPtr<AActor> LastThreat;
 		/** Recently fired-at visible target, retained until the next sight update. */
 		TWeakObjectPtr<AActor> RecentFireTarget;
 		/** Area suppression started automatically after losing that target. */

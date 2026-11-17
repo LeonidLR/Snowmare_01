@@ -141,20 +141,25 @@ namespace PmcCommanderRules
 			// The baseline: the fighter keeps shooting from where he is; worth more in cover and in contact.
 			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere * PushDamp;
 		case EPmcOrder::TakeCover:
+		{
 			// Exposed and badly covered against a known threat, with somewhere to go (a slot at his band's distance preferred).
 			// Not from a stand-in (the assault / objective point with no enemy known): hiding from a point nobody holds flapped with the
 			// Objective walk 160 times a round (fix/pmc-arena-stalemate, the Depot chokepoint round).
+			// An attacker on the point does not abandon it for cover off the point during push or quiet.
+			const float OnPointDamp = (bObjective && O.Role == EPmcRole::Attacker && O.DistanceCm <= O.RadiusCm && (bPush || !S.bContact)) ? 0.f : 1.f;
 			return W.TakeCover * Step(F.bCoverAvailable && F.bHasThreat && !F.Threat.bStandIn) * (1.f - F.CoverQuality) * (0.4f + 0.6f * Contact) * (0.5f + 0.5f * Step(F.bExposed))
-				* Step(!F.bInCover || F.CoverQuality < 0.3f) * FMath::Lerp(1.f, Clamp01(F.CoverBandFactor), Clamp01(W.BandPosition)) * PushDamp;
+				* Step(!F.bInCover || F.CoverQuality < 0.3f) * FMath::Lerp(1.f, Clamp01(F.CoverBandFactor), Clamp01(W.BandPosition)) * PushDamp * OnPointDamp;
+		}
 		case EPmcOrder::Advance:
 		{
 			// Bounding overwatch: one man moves while the others hold; worth it with numbers, health, ammo, and a threat beyond his band (the
 			// stop: AdvanceStopCm). A close-quarters weapon (the shotgun) closes in harder (CloseIn) and less afraid of the numbers.
 			const float Numbers = F.Band.bCloseQuarters ? FMath::Max(0.5f, NumbersFactor(S.Alive, S.EnemiesKnown)) : NumbersFactor(S.Alive, S.EnemiesKnown);
+			const bool bUseBandMax = bBand && !F.Band.bCloseQuarters && !F.Threat.bStandIn;
 			return W.Advance * (F.Band.bCloseQuarters ? FMath::Max(W.CloseIn, 0.f) : 1.f) * Step(F.bHasThreat) * (S.bContact ? 1.f : 0.4f) * Numbers * F.HealthFrac
 				* Step(F.AmmoFrac > 0.2f)
 				// A band's advance needs a real step (a shotgunner 4.4 m off a 4.2 m stop re-issued a 20 cm walk every decision, Depot arena).
-				* Step(F.Threat.DistanceCm > (bBand && !F.Band.bCloseQuarters ? F.Band.MaxCm : AdvanceStopCm(F.WeaponRangeCm, F.Band, W) + (bBand ? MinAdvanceStepCm : 0.f)))
+				* Step(F.Threat.DistanceCm > (bUseBandMax ? F.Band.MaxCm : (F.Threat.bStandIn ? MinAdvanceStepCm : AdvanceStopCm(F.WeaponRangeCm, F.Band, W) + (bBand ? MinAdvanceStepCm : 0.f))))
 				* (S.MatesAdvancing == 0 || S.Alive == 1 ? 1.f : 0.15f)
 				// Target attention (2026-11-07): a rifleman's bound waits for the moment they look away; a shotgunner rushes in regardless
 				// (his close-in is the job - PmcStandoffSmoke's shotgunners stalled at 8.9 m under the squad's eyes with it).
@@ -203,6 +208,10 @@ namespace PmcCommanderRules
 			if (!bObjective)
 			{
 				return 0.f;
+			}
+			if (F.RunningOrder == EPmcOrder::Objective)
+			{
+				return FMath::Max(W.Objective, 0.f) * (bPush ? PushGain : 1.f);
 			}
 			if (O.Role == EPmcRole::Attacker)
 			{
@@ -337,6 +346,19 @@ namespace PmcCommanderRules
 	{
 		return Order == EPmcOrder::Advance || Order == EPmcOrder::Flank || Order == EPmcOrder::FallBack || Order == EPmcOrder::Relocate || Order == EPmcOrder::TakeCover
 			|| Order == EPmcOrder::Objective;
+	}
+
+	bool CanReissueOrderAt(EPmcOrder Order, const FVector& CurrentFeet, const FVector& TargetLocation, float ArrivalToleranceCm, float LevelToleranceCm)
+	{
+		if (IsStaticOrder(Order))
+		{
+			return true;
+		}
+		if (IsMoveOrder(Order))
+		{
+			return IsWalkShort(CurrentFeet, TargetLocation, ArrivalToleranceCm, LevelToleranceCm);
+		}
+		return true;
 	}
 
 	TMap<FString, FPmcEngagementBand> DefaultBands()
@@ -526,6 +548,8 @@ namespace PmcCommanderRules
 		// Order commitment and the push (fix/pmc-arena-stalemate 2026-11-10).
 		ReadNumber(Json, TEXT("order_min_hold_s"), Out.OrderMinHoldSeconds);
 		ReadNumber(Json, TEXT("failed_order_cooldown_s"), Out.FailedOrderCooldownSeconds);
+		ReadNumber(Json, TEXT("completed_order_cooldown_s"), Out.CompletedOrderCooldownSeconds);
+		ReadNumber(Json, TEXT("cover_interrupted_cooldown_s"), Out.CoverInterruptedCooldownSeconds);
 		ReadNumber(Json, TEXT("repath_after_s"), Out.RepathAfterSeconds);
 		ReadNumber(Json, TEXT("push_after_s"), Out.PushAfterSeconds);
 		ReadNumber(Json, TEXT("push"), Out.Push);

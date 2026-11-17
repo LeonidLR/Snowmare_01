@@ -789,6 +789,11 @@ void UPmcSquadSubsystem::UpdateSight()
 						if (bOurOrder) { Observer->CancelSuppressFire(TEXT("lost sight memory ended")); }
 						FighterState.LostFireTarget.Reset();
 						FighterState.LostFireUntil = -1.0;
+						if (FighterState.Order == EPmcOrder::Suppress)
+						{
+							FighterState.Order = EPmcOrder::Hold;
+							FighterState.OrderSince = Now;
+						}
 					}
 				}
 				AActor* Recent = FighterState.RecentFireTarget.Get();
@@ -803,9 +808,15 @@ void UPmcSquadSubsystem::UpdateSight()
 						&& Observer->OrderSuppress(nullptr, Point))
 					{
 						FighterState.Order = EPmcOrder::Suppress;
+						FighterState.OrderSince = Now;
+						FighterState.Goal = Point;
+						FighterState.bWalkPending = false;
 						FighterState.LostFireTarget = Recent;
 						FighterState.LostFirePoint = Point;
 						FighterState.LostFireUntil = Known->LastSeenTime + Team.Weights.ContactMemorySeconds;
+						OnFighterOrder.Broadcast(Pair.Key, Observer, EPmcOrder::Suppress, Team.Weights.Suppress, EPmcPickReason::Best);
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s -> Suppress (lost sight memory at %s)"), Pair.Key,
+							*Observer->DisplayName.ToString(), *Point.ToCompactString());
 					}
 					FighterState.RecentFireTarget.Reset();
 				}
@@ -987,8 +998,16 @@ bool UPmcSquadSubsystem::IsOrderRunning(const AOperativeCharacter& Fighter, cons
 	case EPmcOrder::Suppress:
 		return Fighter.HasSuppressOrder();
 	case EPmcOrder::Heal:
-		return State.Patient.IsValid() && PmcSquadLocal::IsLiveOperative(State.Patient.Get()) && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f
-			&& Fighter.MedkitsCount > 0;
+	{
+		const bool bPatientValid = State.Patient.IsValid() && PmcSquadLocal::IsLiveOperative(State.Patient.Get())
+			&& PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f && Fighter.MedkitsCount > 0;
+		if (!bPatientValid)
+		{
+			return false;
+		}
+		// A heal approach is running only while moving towards the patient.
+		return Fighter.HasOwnMoveOrder() || PmcSquadLocal::IsTraversingLink(Fighter);
+	}
 	case EPmcOrder::Reload:
 		return Fighter.bIsReloading;
 	case EPmcOrder::RpgStrike:
@@ -1089,9 +1108,106 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 		if (State.bWalkPending && !IsOrderRunning(*Fighter, State))
 		{
 			State.bWalkPending = false;
-			if (bWalking && !State.Goal.IsNearlyZero() && PmcCommanderRules::IsWalkShort(Feet, State.Goal, PmcSquadLocal::FailShortCm, Team.Weights.LevelToleranceCm))
+			const bool bFailedShort = bWalking && !State.Goal.IsNearlyZero()
+				&& PmcCommanderRules::IsWalkShort(Feet, State.Goal, PmcSquadLocal::FailShortCm, Team.Weights.LevelToleranceCm);
+			if (bFailedShort)
 			{
 				MarkFailed(TeamId, Team, *Fighter, State, State.Order, TEXT("ended short of its goal"));
+			}
+			else
+			{
+				// Succeeded walk order: reported DONE to commander -> transition to Hold.
+				if (State.Order == EPmcOrder::TakeCover || State.Order == EPmcOrder::Relocate)
+				{
+					const EPmcOrder CompletedOrder = State.Order;
+					if (Fighter->bInCover)
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s completed %s in cover -> Hold"), TeamId,
+							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(CompletedOrder));
+						State.Order = EPmcOrder::Hold;
+						State.OrderSince = Now;
+						State.FailedUntil.Add(CompletedOrder, Now + Team.Weights.CompletedOrderCooldownSeconds);
+					}
+					else
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s ended %s out of cover (interrupted approach) -> Hold with cooldown"), TeamId,
+							*Fighter->DisplayName.ToString(), PmcCommanderRules::OrderName(CompletedOrder));
+						State.Order = EPmcOrder::Hold;
+						State.OrderSince = Now;
+						State.FailedUntil.Add(CompletedOrder, Now + Team.Weights.CoverInterruptedCooldownSeconds);
+					}
+				}
+				else if (State.Order == EPmcOrder::FallBack)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s completed FallBack at %s -> Hold"), TeamId,
+						*Fighter->DisplayName.ToString(), *State.Goal.ToCompactString());
+					State.Order = EPmcOrder::Hold;
+					State.OrderSince = Now;
+					State.FailedUntil.Add(EPmcOrder::FallBack, Now + Team.Weights.CompletedOrderCooldownSeconds);
+				}
+				else if (State.Order == EPmcOrder::Heal)
+				{
+					const float Dist = State.Patient.IsValid() ? FVector::Dist2D(Feet, State.Patient->GetActorLocation()) : 99999.f;
+					if (Dist <= PmcSquadLocal::AidReachCm && Fighter->MedkitsCount > 0 && State.Patient.IsValid()
+						&& PmcSquadLocal::IsLiveOperative(State.Patient.Get()) && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f)
+					{
+						FSquadOrderContext Context;
+						Context.Operative = Fighter;
+						Context.Patient = State.Patient.Get();
+						if (SquadOrderCatalog::Execute(ESquadOrder::Heal, Context))
+						{
+							Team.Stats.Heals += 1;
+							UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s arrived and healed %s -> Hold"), TeamId,
+								*Fighter->DisplayName.ToString(), *State.Patient->DisplayName.ToString());
+						}
+						State.Order = EPmcOrder::Hold;
+						State.OrderSince = Now;
+						State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.CompletedOrderCooldownSeconds);
+					}
+					else
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s heal approach ended: patient out of reach (%.0f cm > %.0f cm) -> cancel"), TeamId,
+							*Fighter->DisplayName.ToString(), Dist, PmcSquadLocal::AidReachCm);
+						State.Order = EPmcOrder::Hold;
+						State.OrderSince = Now;
+						State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.FailedOrderCooldownSeconds);
+					}
+				}
+				else if (State.Order == EPmcOrder::Advance)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s completed Advance at %s -> Hold"), TeamId,
+						*Fighter->DisplayName.ToString(), *State.Goal.ToCompactString());
+					State.Order = EPmcOrder::Hold;
+					State.OrderSince = Now;
+					State.FailedUntil.Add(EPmcOrder::Advance, Now + Team.Weights.CompletedOrderCooldownSeconds);
+				}
+				else if (State.Order == EPmcOrder::Objective)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s arrived at objective point -> Hold"), TeamId,
+						*Fighter->DisplayName.ToString());
+					State.Order = EPmcOrder::Hold;
+					State.OrderSince = Now;
+				}
+
+				// Re-engagement: after a move ends, re-target any known threat and restore Aggressive posture
+				if (AActor* Target = State.Target.Get())
+				{
+					if (Fighter->GetManualPriorityTarget() != Target)
+					{
+						FSquadOrderContext TargetContext;
+						TargetContext.Operative = Fighter;
+						TargetContext.Target = Target;
+						SquadOrderCatalog::Execute(ESquadOrder::PriorityTarget, TargetContext);
+					}
+				}
+				if (State.bHoldingFire)
+				{
+					State.bHoldingFire = false;
+					FSquadOrderContext Discipline;
+					Discipline.Operative = Fighter;
+					Discipline.Posture = ESquadFirePosture::Aggressive;
+					SquadOrderCatalog::Execute(ESquadOrder::FirePosture, Discipline);
+				}
 			}
 		}
 		// Exposure at one spot.
@@ -1228,22 +1344,33 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		View.bCoverAvailable = FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, Exclude, Team.Weights, OutCover, OutCoverQuality,
 			View.Band, &View.CoverBandFactor) && OutCoverQuality > View.CoverQuality + 0.2f;
 	}
-	// The nearest wounded mate.
-	for (AOperativeCharacter* Mate : Mates)
+	// The nearest wounded mate (preserve active patient if already executing a running Heal order).
+	const bool bKeepActivePatient = State.Order == EPmcOrder::Heal && State.Patient.IsValid()
+		&& PmcSquadLocal::IsLiveOperative(State.Patient.Get()) && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f;
+	if (bKeepActivePatient)
 	{
-		if (Mate == &Fighter || !PmcSquadLocal::IsLiveOperative(Mate))
+		View.WoundedMateDistanceCm = FVector::Dist2D(View.Location, State.Patient->GetActorLocation());
+		View.WoundedMateHealthFrac = PmcSquadLocal::HealthFractionOf(*State.Patient);
+	}
+	else
+	{
+		State.Patient.Reset();
+		for (AOperativeCharacter* Mate : Mates)
 		{
-			continue;
-		}
-		const float MateHealth = PmcSquadLocal::HealthFractionOf(*Mate);
-		if (MateHealth < Team.Weights.HealBelow)
-		{
-			const float Distance = FVector::Dist2D(View.Location, Mate->GetActorLocation());
-			if (View.WoundedMateDistanceCm < 0.f || Distance < View.WoundedMateDistanceCm)
+			if (Mate == &Fighter || !PmcSquadLocal::IsLiveOperative(Mate))
 			{
-				View.WoundedMateDistanceCm = Distance;
-				View.WoundedMateHealthFrac = MateHealth;
-				State.Patient = Mate;
+				continue;
+			}
+			const float MateHealth = PmcSquadLocal::HealthFractionOf(*Mate);
+			if (MateHealth < Team.Weights.HealBelow)
+			{
+				const float Distance = FVector::Dist2D(View.Location, Mate->GetActorLocation());
+				if (View.WoundedMateDistanceCm < 0.f || Distance < View.WoundedMateDistanceCm)
+				{
+					View.WoundedMateDistanceCm = Distance;
+					View.WoundedMateHealthFrac = MateHealth;
+					State.Patient = Mate;
+				}
 			}
 		}
 	}
@@ -1359,6 +1486,14 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		float CoverQuality = 0.f;
 		AActor* ThreatActor = nullptr;
 		FPmcFighterView View = BuildFighterView(TeamId, Team, *Fighter, State, Mates, Cover, CoverQuality, ThreatActor);
+		if (ThreatActor && ThreatActor != State.LastThreat.Get())
+		{
+			// A new threat appeared: clear completed cooldowns for the previous threat so the fighter can react.
+			State.FailedUntil.Remove(EPmcOrder::TakeCover);
+			State.FailedUntil.Remove(EPmcOrder::Relocate);
+			State.FailedUntil.Remove(EPmcOrder::FallBack);
+			State.LastThreat = ThreatActor;
+		}
 		const bool bRunning = IsOrderRunning(*Fighter, State);
 		View.RunningOrder = bRunning ? State.Order : EPmcOrder::Count;
 		// The mates' counters are about the OTHERS: his own running order is not a mate's.
@@ -1548,9 +1683,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		{
 			bTaken = true;
 		}
-		// 2026-11-04 ("fires from corners / over the cover, not blind"): holding in cover against a known threat, it becomes his priority -
-		// the cover pose faces it and the corner / low-wall fire stance leans out for it (GatherCoverThreat), so he looks and fires from cover.
-		if (Fighter.bInCover && ThreatActor && Fighter.GetManualPriorityTarget() != ThreatActor)
+		// When holding against a known threat (in cover or in the open), it becomes his priority target:
+		// in cover the pose faces it and leans out; in the open he faces it and opens fire.
+		if (ThreatActor && Fighter.GetManualPriorityTarget() != ThreatActor)
 		{
 			Context.Target = ThreatActor;
 			SquadOrderCatalog::Execute(ESquadOrder::PriorityTarget, Context);
@@ -1558,6 +1693,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		break;
 	case EPmcOrder::TakeCover:
 	case EPmcOrder::Relocate:
+		if (Fighter.bInCover && Fighter.GetCoverSlot().WorldLocation.Equals(Cover.WorldLocation, 50.f))
+		{
+			// Already in this exact cover slot on this spot
+			return false;
+		}
 		Context.Cover = Cover;
 		Context.bSprint = !View.Threat.bSeenNow;
 		bTaken = SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
@@ -1573,7 +1713,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		// AdvancePoint is planar: a threat on another level (a roof above him, the street below) within the stop range in plan would
 		// leave him standing under it - he goes for the threat's own spot instead (up / down through the normal pathing).
 		// 2026-11-04: he stops at his weapon's band (a rifleman ~20 m short, a shotgunner ~4 m), not at a fixed fraction of the reach.
-		FVector AdvanceGoal = PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights, View.Band);
+		// A stand-in threat (hunt search point / assault point): walk to the search point itself.
+		FVector AdvanceGoal = View.Threat.bStandIn ? View.Threat.Location
+			: PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights, View.Band);
 		if (FMath::Abs(View.Threat.Location.Z - View.Location.Z) > 250.f && FVector::Dist2D(AdvanceGoal, View.Location) < 100.f)
 		{
 			AdvanceGoal = View.Threat.Location;
@@ -1637,21 +1779,44 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			if (FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, nullptr, Team.Weights, BandCover, BandQuality, View.Band, &BandSlotFactor)
 				&& BandSlotFactor >= 0.95f)
 			{
-				Context.Cover = BandCover;
-				Context.bSprint = true;
-				bTaken = SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
-				Goal = BandCover.WorldLocation;
-				State.Slot = BandCover;
+				if (Fighter.bInCover && Fighter.GetCoverSlot().WorldLocation.Equals(BandCover.WorldLocation, 50.f))
+				{
+					bTaken = false;
+				}
+				else
+				{
+					Context.Cover = BandCover;
+					Context.bSprint = true;
+					bTaken = SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
+					Goal = BandCover.WorldLocation;
+					State.Slot = BandCover;
+				}
 			}
 			if (!bTaken)
 			{
-				bTaken = Walk(PmcCommanderRules::StandoffPoint(View.Location, View.Threat.Location, View.Band), true);
+				const FVector StandoffGoal = PmcCommanderRules::StandoffPoint(View.Location, View.Threat.Location, View.Band);
+				if (!PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, PmcSquadLocal::FeetOf(Fighter), StandoffGoal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+				{
+					bTaken = false;
+				}
+				else
+				{
+					bTaken = Walk(StandoffGoal, true);
+				}
 			}
 			Team.Stats.Standoffs += bTaken ? 1 : 0;
 		}
 		else
 		{
-			bTaken = View.bHasThreat && Walk(PmcCommanderRules::FallBackPoint(View.Location, View.Threat.Location), true);
+			const FVector FallBackGoal = PmcCommanderRules::FallBackPoint(View.Location, View.Threat.Location);
+			if (!PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, PmcSquadLocal::FeetOf(Fighter), FallBackGoal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+			{
+				bTaken = false;
+			}
+			else
+			{
+				bTaken = View.bHasThreat && Walk(FallBackGoal, true);
+			}
 		}
 		Team.Stats.Retreats += bTaken ? 1 : 0;
 		break;
@@ -1667,6 +1832,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			Context.Patient = Patient;
 			bTaken = SquadOrderCatalog::Execute(ESquadOrder::Heal, Context);
 			Team.Stats.Heals += bTaken ? 1 : 0;
+			if (bTaken)
+			{
+				Order = EPmcOrder::Hold;
+				State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.CompletedOrderCooldownSeconds);
+			}
 		}
 		else
 		{
@@ -1712,6 +1882,13 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			static_cast<float>(View.Objective.Location.Z), View.Objective.LevelToleranceCm)))
 		{
 			Spot = View.Objective.Location;
+		}
+		if (!PmcCommanderRules::IsWalkShort(PmcSquadLocal::FeetOf(Fighter), Spot, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+		{
+			// Already on his spot on the point: hold here (no walk needed, no failure).
+			Order = EPmcOrder::Hold;
+			bTaken = true;
+			break;
 		}
 		bKeepGoalLevel = true;
 		bTaken = Walk(Spot, !(View.bHasThreat && View.Threat.bSeenNow));

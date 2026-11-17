@@ -449,13 +449,28 @@ bool FPmcCommanderEngagementBandTest::RunTest(const FString&)
 	TestTrue(TEXT("... shotgun close quarters"), Shipped.Bands.FindRef(TEXT("shotgun")).bCloseQuarters);
 	TestEqual(TEXT("... pistol band 10 m"), Shipped.Bands.FindRef(TEXT("pistol")).MinCm, 1000.f, 0.5f);
 	TestEqual(TEXT("... standoff weight"), Shipped.Standoff, 1.3f, 0.001f);
-	const TSharedPtr<FJsonObject> Json = PmcParseJson(TEXT("{\"use_engagement_bands\":false,\"standoff\":2,\"engagement_bands\":{\"_comment\":\"x\",\"m16\":{\"min_m\":30},\"bow\":{\"min_m\":5,\"max_m\":12,\"close_quarters\":true}}}"));
+	TestEqual(TEXT("... completed order cooldown"), Shipped.CompletedOrderCooldownSeconds, 4.f, 0.001f);
+	TestEqual(TEXT("... cover interrupted cooldown"), Shipped.CoverInterruptedCooldownSeconds, 3.f, 0.001f);
+
+	// CanReissueOrderAt tests (Cause A: no same order on the same spot).
+	TestFalse(TEXT("Cannot reissue FallBack on the same spot (within 250 cm)"),
+		PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, FVector(100.f, 0.f, 0.f), FVector::ZeroVector, 250.f, 150.f));
+	TestTrue(TEXT("Can reissue FallBack if farther than 250 cm"),
+		PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, FVector(500.f, 0.f, 0.f), FVector::ZeroVector, 250.f, 150.f));
+	TestFalse(TEXT("Cannot reissue TakeCover if already at cover slot"),
+		PmcCommanderRules::CanReissueOrderAt(EPmcOrder::TakeCover, FVector(50.f, 0.f, 0.f), FVector::ZeroVector, 250.f, 150.f));
+	TestTrue(TEXT("Static orders like Hold can always be re-issued"),
+		PmcCommanderRules::CanReissueOrderAt(EPmcOrder::Hold, FVector::ZeroVector, FVector::ZeroVector, 250.f, 150.f));
+
+	const TSharedPtr<FJsonObject> Json = PmcParseJson(TEXT("{\"use_engagement_bands\":false,\"standoff\":2,\"completed_order_cooldown_s\":3.5,\"cover_interrupted_cooldown_s\":2.5,\"engagement_bands\":{\"_comment\":\"x\",\"m16\":{\"min_m\":30},\"bow\":{\"min_m\":5,\"max_m\":12,\"close_quarters\":true}}}"));
 	TestNotNull(TEXT("parsed"), Json.Get());
 	if (Json.IsValid())
 	{
 		const FPmcWeights Parsed = PmcCommanderRules::FromJson(*Json);
 		TestFalse(TEXT("use_engagement_bands read"), Parsed.bUseBands);
 		TestEqual(TEXT("standoff read"), Parsed.Standoff, 2.f, 0.001f);
+		TestEqual(TEXT("completed_order_cooldown_s read"), Parsed.CompletedOrderCooldownSeconds, 3.5f, 0.001f);
+		TestEqual(TEXT("cover_interrupted_cooldown_s read"), Parsed.CoverInterruptedCooldownSeconds, 2.5f, 0.001f);
 		TestEqual(TEXT("a partial row keeps the rest (m16 min 30, max 60)"), Parsed.Bands.FindRef(TEXT("m16")).MaxCm, 6000.f, 0.5f);
 		TestEqual(TEXT("... min overridden"), Parsed.Bands.FindRef(TEXT("m16")).MinCm, 3000.f, 0.5f);
 		TestTrue(TEXT("a new weapon row added"), Parsed.Bands.Contains(TEXT("bow")) && Parsed.Bands.FindRef(TEXT("bow")).bCloseQuarters);
