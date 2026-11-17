@@ -77,7 +77,9 @@ Exit code: 0 pass, 1 a smoke failed, 2 sync / connection error. Long batches: ru
    `tailscale file cp` tries it and falls back to `winget install Microsoft.OpenSSH.Preview`, starts sshd (Automatic),
    opens TCP 22, writes `administrators_authorized_keys` (Administrators + SYSTEM only), sets PowerShell as default shell.
 4. Epic launcher -> UE 5.8 at the default path, without Starter Content / templates / extra platforms / editor symbols.
-   Git for Windows (LFS included), Python 3.12.
+   Git for Windows (LFS included), Python 3.12. The first editor start asked for VC++ redist 14.50.35719.0: install the
+   engine's bundled one (Microsoft-signed) as admin -
+   `"C:\Program Files\Epic Games\UE_5.8\Engine\Extras\Redist\en-us\vc_redist.x64.exe" /install /quiet /norestart`.
 5. Repo is public: `GIT_LFS_SKIP_SMUDGE=1 git clone https://github.com/LeonidLR/Snowmare_01.git C:\Work\CodexTactics`.
    LFS objects of the current tree (~2 GB) were copied from the main PC's `.git/lfs/objects` (tar + scp, then
    `git lfs checkout`) instead of downloading them: saves the GitHub LFS bandwidth quota and the phone data.
@@ -87,7 +89,11 @@ Exit code: 0 pass, 1 a smoke failed, 2 sync / connection error. Long batches: ru
 
 ## Verified 2026-11-17
 
-- `MovementSmoke` (`-nullrhi`): PASS, 144 s (first run on the machine, cold caches).
+- The Unreal Editor opens on the worker and shows the map (after the VC++ redist above; first start compiles shaders).
+  An open editor locks the project DLLs: `worker_sync.ps1` then stops before copying binaries - close it on the worker.
+
+- `MovementSmoke` (`-nullrhi`): PASS, 144 s (first run on the machine, cold caches); `worker_sync.ps1` end-to-end on a
+  full binary set (reset to d85d3a54, 7 changed DLLs / 451 MB copied, MovementSmoke PASS 40 s, JSON back on the main PC).
 - `SnowTracksSmoke` (rendered, `-RenderOffscreen`, reads a render target back): PASS, 163 s - D3D12 SM6 on the GTX 1080,
   driver 582.78. Pascal works for rendered smokes run from the SSH (service) session.
 - Link: `tailscale ping codex-worker` 1 ms direct on the university LAN; scp of the initial ~14 GB at 4-11 MB/s
