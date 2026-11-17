@@ -123,7 +123,9 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
             chat_file = os.path.join(self.storage_dir, "chat.jsonl")
             all_messages = agent_chat.read_all_messages(chat_file)
             idle_dict = agent_chat.compute_idle_seconds(all_messages)
-            messages = all_messages
+            status = {k: {"ts": v.get("ts"), "text": v.get("text"), "topic": v.get("topic", ""), "id": v.get("id")}
+                      for k, v in agent_chat.latest_status_per_agent(all_messages).items()}
+            messages = [m for m in all_messages if not agent_chat.is_status(m)]
             since_val = query.get("since", [None])[0]
             if since_val is not None:
                 try:
@@ -131,7 +133,7 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
                     messages = [m for m in messages if m.get("id", 0) > since_id]
                 except ValueError:
                     pass
-            self.send_json(200, {"messages": messages, "idle": idle_dict})
+            self.send_json(200, {"messages": messages, "idle": idle_dict, "status": status})
             return
 
         if path == "/api/presence":

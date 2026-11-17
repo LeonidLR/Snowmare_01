@@ -52,3 +52,5 @@ continue. A fully spent limit switches Codex off and it cannot resume by itself.
 (Ollama, ~25-33 tok/s warm, slower while the night trainer runs). Use it for model-router level 1 (and small level 2) before any paid
 model: JSON edits, one-file explanations, one-liners, test boilerplate, commit messages, short summaries. Verify the answer. Log
 `level | local | result` in your report like the router trial.
+
+- Progress lines (e.g. `041 128/287, 2 FAIL so far`) -> `agent_chat.py post --as codex --status --topic <t> --text "..."` (STATUS strip, never wakes anyone); progress lines -> --status.

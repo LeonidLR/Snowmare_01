@@ -42,3 +42,5 @@ RULES
 13. Spitter and CryoDrone do not exist: never mention, plan, test or touch them (even if old JSON / code has them).
 14. Russian for chat and reports; English for code, comments, commit messages (Conventional Commits, body names the task NNN).
 15. If a rule or the task looks wrong, say so in the report with the reason, and still do everything else.
+
+- Progress lines -> --status (`agent_chat.py post --as gemini --status --topic gemini-<NNN> --text "..."`; shown in the STATUS strip, never wakes anyone).

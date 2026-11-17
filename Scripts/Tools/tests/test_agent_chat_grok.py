@@ -26,10 +26,10 @@ class TestGrokParticipant(unittest.TestCase):
             # read: grok's message is in the chat log
             with open(os.path.join(storage, "chat.jsonl"), encoding="utf-8") as f:
                 self.assertIn('"from": "grok"', f.read())
-            # topic limit counts grok: 10 agent messages block the 11th
+            # topic limit counts grok: 25 agent messages block the 26th
             with tempfile.TemporaryDirectory() as root2:
                 st2 = agent_chat.get_storage_dir(root2)
-                for i in range(10):
+                for i in range(25):
                     self.assertIsNotNone(agent_chat.post_message(st2, "grok", "all", "lim", f"m{i}"))
                 self.assertIsNone(agent_chat.post_message(st2, "grok", "all", "lim", "over"))
                 agent_chat.post_message(st2, "designer", "all", "lim", "go")
