@@ -1,0 +1,60 @@
+{
+  "schema": "codex.turret_power/1",
+  "comment": "Turret power, phase 1 (docs/design/TURRET_POWER.md sections 3, 6, 7, 10; designer decisions 2026-11-17 section 15). Read by PowerRules::GetTuning (Source/CodexTactics/Private/Power/PowerRules.cpp); a missing key keeps the code default (the same numbers). Phase 2 keys (sensor arc, lock-on, belt, siphon, hum noise for patrols) arrive with their code. Distances in metres, times in seconds, fuel in litres.",
+  "time": {
+    "nominal_hour_real_s": 50,
+    "nominal_hour_real_s_comment": "One nominal game hour of burn = 50 s of world time (the 20-minute day / 24). Frozen in the tactical pause (time dilation) and in turn-based combat.",
+    "burn_before_contact": false,
+    "burn_before_contact_comment": "A generator running at level start (hostile / neutral) burns only after the squad first came within contact_wake_m.",
+    "contact_wake_m": 80
+  },
+  "generator": {
+    "tank_l": 20,
+    "jerrycan_l": 10,
+    "burn_base_l_per_h": 1.0,
+    "burn_per_turret_l_per_h": 0.25,
+    "burn_comment": "burn = base + per live turret on the network: 1 turret 1.25 L/h (one can = 6.7 min), 4 turrets 2.0 L/h (4.2 min).",
+    "hp": 200,
+    "fuel_lost_on_break_frac": 0.5,
+    "heat_radius_m": 8,
+    "low_fuel_warn_s": [60, 15],
+    "refuel_s": 4.0,
+    "start_s": 3.0,
+    "stop_s": 1.0,
+    "seize_s": 4.0,
+    "seize_dark_after_s": 1.0,
+    "seize_dark_after_s_comment": "A seize stops the generator after this long (its turrets go dark), then restarts it for the worker's side at seize_s.",
+    "repair_s": 5.0,
+    "engineer_time_mult": 0.5,
+    "start_s_blizzard_mult": 1.5,
+    "interrupt_reach_m": 2.5,
+    "interrupt_reach_m_comment": "The worker must stay this close to the generator box while he works; a move order, a knockdown, death or turn-based cancels the action (nothing moves).",
+    "noise": {
+      "start_m": 30,
+      "start_m_comment": "A start / seize is heard this far (walls muffle it like footsteps): every patrol / guard that hears it comes to investigate (the stealth lure search).",
+      "work_m": 4
+    }
+  },
+  "network": {
+    "cable_min_m": 8,
+    "cable_max_m": 40,
+    "max_turrets": 4,
+    "plug_range_m": 40,
+    "plug_range_m_comment": "A hand-placed generator links the nearest unlinked level turrets within this range (up to max_turrets) at BeginPlay; generated maps link by the props file.",
+    "spin_up_s": 2.0,
+    "wind_down_s": 1.5
+  },
+  "knowledge": {
+    "observe_m": 40,
+    "observe_s": 2.0,
+    "observe_s_comment": "An operative of the squad standing still with a line of sight to a turret within observe_m for observe_s identifies its owner; the generator's panel identifies the whole network at once."
+  },
+  "carry": {
+    "jerrycans_per_operative": 1,
+    "jerrycans_per_operative_comment": "Designer 2026-11-17 (question 5): one diesel jerrycan per operative, no movement penalty."
+  },
+  "teams": {
+    "hostile_owner_team": 1,
+    "hostile_owner_team_comment": "The PMC team id that owns a generator running hostile at level start (TeamId 0 = the squad)."
+  }
+}
