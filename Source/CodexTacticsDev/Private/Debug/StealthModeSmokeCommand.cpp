@@ -20,6 +20,7 @@
 #include "Characters/SquadSubsystem.h"
 #include "Characters/StealthModeRules.h"
 #include "CodexTactics.h"
+#include "Combat/FireGateRules.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
@@ -1057,7 +1058,8 @@ namespace StealthModeSmoke
 		}
 		case 6:
 			if (Op->IsInStealthMode() && State.StageTime < 8.f) { return true; }
-			Check(State, !Op->IsInStealthMode() && Op->CurrentClip < State.AmmoBefore, TEXT("actual fired round breaks the shooter's stealth"));
+			Check(State, !Op->IsInStealthMode() && Op->CurrentClip < State.AmmoBefore, FString::Printf(TEXT("actual fired round breaks the shooter's stealth (clip %d -> %d, in cover %d, last gate verdict: %s)"),
+				State.AmmoBefore, Op->CurrentClip, Op->bInCover ? 1 : 0, FireGateRules::BlockName(Op->GetLastFireGateBlock())));
 			Check(State, Op->GetMesh()->GetMaterial(0) == State.OriginalMaterial.Get(), TEXT("original body material restored"));
 			Op->SetStealthMode(true);
 			Op->SetSprinting(true);

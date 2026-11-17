@@ -34,6 +34,20 @@ bool AOperativeCharacter::IsCoverShotBlind() const
 	return bInCover && (CoverFireMode == ECoverFireMode::BlindFire || !USuppressionSubsystem::MayExposeNow(this));
 }
 
+bool AOperativeCharacter::IsStealthCoverShotWanted() const
+{
+	const UWorld* World = GetWorld();
+	const FFireGateConfig& Config = FireGateRules::GetConfig();
+	return bStealthMode && bInCover && World && FireGateLastEvalTime >= 0.0
+		&& World->GetTimeSeconds() - FireGateLastEvalTime <= FMath::Max3(Config.EvalGapSeconds, Config.StealthShotHoldSeconds, 0.05f);
+}
+
+float AOperativeCharacter::GetCornerAimOutwardDeg() const
+{
+	return bInCover && CurrentCoverHeight == ECoverHeight::HighCover && Stance == EOperativeStance::Crouching
+		? FireGateRules::GetConfig().CrouchCornerAimOutwardDeg : CornerAimOutwardDeg;
+}
+
 float AOperativeCharacter::GetFireGateResidualDeg(const FVector& AimAt) const
 {
 	if (!bInCover)
@@ -59,7 +73,7 @@ float AOperativeCharacter::GetFireGateResidualDeg(const FVector& AimAt) const
 	}
 	// A low cover's fire stance seen nowhere (off screen, headless): the crouched fire idle aims like the corner stance (it leans out and
 	// points CornerAimOutwardDeg past the along-wall line - LeanPoseSmoke), its sideways root step cancelled over the top.
-	const FVector Aim = CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, CornerAimOutwardDeg);
+	const FVector Aim = CoverFacingRules::CornerAimDirection(CoverSlot, CoverFacing, GetCornerAimOutwardDeg());
 	return FMath::Abs(AimOffsetRules::YawToTarget(GetCoverFireOrigin(), Aim, AimAt, 180.f));
 }
 

@@ -26,6 +26,8 @@ namespace FireGateRules
 		{ TEXT("anim_stale_seconds"), &FFireGateConfig::AnimStaleSeconds },
 		{ TEXT("cover_reach_seconds"), &FFireGateConfig::CoverReachSeconds },
 		{ TEXT("object_shot_timeout_seconds"), &FFireGateConfig::ObjectShotTimeoutSeconds },
+		{ TEXT("stealth_shot_hold_seconds"), &FFireGateConfig::StealthShotHoldSeconds },
+		{ TEXT("crouch_corner_aim_outward_deg"), &FFireGateConfig::CrouchCornerAimOutwardDeg },
 	};
 
 	static FFireGateConfig& FireGateConfigInForce()

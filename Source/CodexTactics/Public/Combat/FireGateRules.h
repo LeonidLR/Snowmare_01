@@ -39,6 +39,17 @@ struct CODEXTACTICS_API FFireGateConfig
 	float CoverReachSeconds = 0.6f;
 	/** A targeted shot at an object (barrel / mine / crate) waits for the gate at most this long, then the order is dropped, s. "object_shot_timeout_seconds" */
 	float ObjectShotTimeoutSeconds = 4.f;
+	/**
+	 * Stealthed at a wall, a shot hands the body from the stealth wall pose to the cover fire stance while the gate was asked within
+	 * max(eval_gap_seconds, this) - the floor keeps the hand-off from lapsing between two attempts, s. "stealth_shot_hold_seconds"
+	 */
+	float StealthShotHoldSeconds = 0.5f;
+	/**
+	 * The CROUCHED corner fire stance at a high wall (cvr_crch_fire_idle_*: the stealth stance at a wall) aims this far past the along-wall
+	 * line, deg - the base its aim offset twists from. Measured 2026-11-17 in StealthModeSmoke on the real barrel: ~64 (the standing
+	 * stance's CornerAimOutwardDeg 100 left the crouched barrel ~37 deg off every target). "crouch_corner_aim_outward_deg"
+	 */
+	float CrouchCornerAimOutwardDeg = 64.f;
 };
 
 /** Why the gate holds a round (EFireGateBlock::None = the round may leave). */

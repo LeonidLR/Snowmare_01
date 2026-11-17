@@ -323,9 +323,13 @@ void AOperativeCharacter::UpdateStealthMode()
 {
 	const USquadSubsystem* Squad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	const bool bFormationBlocked = Squad && Squad->IsStealthBlockedByFormation(*this);
+	// R17-2 (designer 2026-11-17): a mantle / vault / fence climb keeps stealth - the climb clips play over the stealth layer and the stance
+	// stays crouched (SetStance clamps Standing while stealthed); only a ladder still ends it (StealthModeRules::ShouldBreakOnClimb).
+	const FStealthModeConfig& Config = StealthModeRules::GetConfig();
 	if (bStealthMode && (bFormationBlocked || !HealthComponent || !HealthComponent->IsAlive() || IsCriticallyWounded() || IsKnockedDown()
-		|| IsPanicking() || IsRaging() || bCarrying || bVaulting || bMantling || IsClimbingLadder() || VehicleQueries::IsMounted(this)
-		|| StealthModeRules::ShouldBreak(true, false, bSprinting, IsStealthFast(), StealthModeRules::GetConfig())))
+		|| IsPanicking() || IsRaging() || bCarrying || VehicleQueries::IsMounted(this)
+		|| StealthModeRules::ShouldBreakOnClimb(true, bVaulting || bMantling, IsClimbingLadder(), Config)
+		|| StealthModeRules::ShouldBreak(true, false, bSprinting, IsStealthFast(), Config)))
 	{
 		SetStealthMode(false);
 	}
