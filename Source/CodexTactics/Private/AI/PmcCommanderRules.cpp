@@ -151,10 +151,11 @@ namespace PmcCommanderRules
 			// Bounding overwatch: one man moves while the others hold; worth it with numbers, health, ammo, and a threat beyond his band (the
 			// stop: AdvanceStopCm). A close-quarters weapon (the shotgun) closes in harder (CloseIn) and less afraid of the numbers.
 			const float Numbers = F.Band.bCloseQuarters ? FMath::Max(0.5f, NumbersFactor(S.Alive, S.EnemiesKnown)) : NumbersFactor(S.Alive, S.EnemiesKnown);
+			const bool bUseBandMax = bBand && !F.Band.bCloseQuarters && !F.Threat.bStandIn;
 			return W.Advance * (F.Band.bCloseQuarters ? FMath::Max(W.CloseIn, 0.f) : 1.f) * Step(F.bHasThreat) * (S.bContact ? 1.f : 0.4f) * Numbers * F.HealthFrac
 				* Step(F.AmmoFrac > 0.2f)
 				// A band's advance needs a real step (a shotgunner 4.4 m off a 4.2 m stop re-issued a 20 cm walk every decision, Depot arena).
-				* Step(F.Threat.DistanceCm > (bBand && !F.Band.bCloseQuarters ? F.Band.MaxCm : AdvanceStopCm(F.WeaponRangeCm, F.Band, W) + (bBand ? MinAdvanceStepCm : 0.f)))
+				* Step(F.Threat.DistanceCm > (bUseBandMax ? F.Band.MaxCm : (F.Threat.bStandIn ? MinAdvanceStepCm : AdvanceStopCm(F.WeaponRangeCm, F.Band, W) + (bBand ? MinAdvanceStepCm : 0.f))))
 				* (S.MatesAdvancing == 0 || S.Alive == 1 ? 1.f : 0.15f)
 				// Target attention (2026-11-07): a rifleman's bound waits for the moment they look away; a shotgunner rushes in regardless
 				// (his close-in is the job - PmcStandoffSmoke's shotgunners stalled at 8.9 m under the squad's eyes with it).
@@ -203,6 +204,10 @@ namespace PmcCommanderRules
 			if (!bObjective)
 			{
 				return 0.f;
+			}
+			if (F.RunningOrder == EPmcOrder::Objective)
+			{
+				return FMath::Max(W.Objective, 0.f) * (bPush ? PushGain : 1.f);
 			}
 			if (O.Role == EPmcRole::Attacker)
 			{

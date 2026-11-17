@@ -1172,6 +1172,14 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 						State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.FailedOrderCooldownSeconds);
 					}
 				}
+				else if (State.Order == EPmcOrder::Advance)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s completed Advance at %s -> Hold"), TeamId,
+						*Fighter->DisplayName.ToString(), *State.Goal.ToCompactString());
+					State.Order = EPmcOrder::Hold;
+					State.OrderSince = Now;
+					State.FailedUntil.Add(EPmcOrder::Advance, Now + Team.Weights.CompletedOrderCooldownSeconds);
+				}
 
 				// Re-engagement: after a move ends, re-target any known threat and restore Aggressive posture
 				if (AActor* Target = State.Target.Get())
@@ -1329,6 +1337,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			View.Band, &View.CoverBandFactor) && OutCoverQuality > View.CoverQuality + 0.2f;
 	}
 	// The nearest wounded mate.
+	State.Patient.Reset();
 	for (AOperativeCharacter* Mate : Mates)
 	{
 		if (Mate == &Fighter || !PmcSquadLocal::IsLiveOperative(Mate))
@@ -1686,7 +1695,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		// AdvancePoint is planar: a threat on another level (a roof above him, the street below) within the stop range in plan would
 		// leave him standing under it - he goes for the threat's own spot instead (up / down through the normal pathing).
 		// 2026-11-04: he stops at his weapon's band (a rifleman ~20 m short, a shotgunner ~4 m), not at a fixed fraction of the reach.
-		FVector AdvanceGoal = PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights, View.Band);
+		// A stand-in threat (hunt search point / assault point): walk to the search point itself.
+		FVector AdvanceGoal = View.Threat.bStandIn ? View.Threat.Location
+			: PmcCommanderRules::AdvancePoint(View.Location, View.Threat.Location, View.WeaponRangeCm, Team.Weights, View.Band);
 		if (FMath::Abs(View.Threat.Location.Z - View.Location.Z) > 250.f && FVector::Dist2D(AdvanceGoal, View.Location) < 100.f)
 		{
 			AdvanceGoal = View.Threat.Location;
