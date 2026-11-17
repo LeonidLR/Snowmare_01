@@ -7,6 +7,8 @@
 
 class UNavModifierComponent;
 class UShapeComponent;
+class UStaticMeshComponent;
+struct FPropGreyboxSpec;
 class UBoxComponent;
 class USphereComponent;
 class UNavArea;
@@ -91,6 +93,21 @@ public:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Props")
 	TObjectPtr<UNavModifierComponent> NavModifierComponent;
+
+	/**
+	 * Builds the greybox look (G003, PropsGreybox): an engine basic shape standing on the actor origin, coloured through the engine
+	 * shape material, blocking or not as the spec says, never affecting navigation itself (the nav modifier does that). Plus the turret's
+	 * muzzle bar / the tripwire's wire. Called once by UCodexLevelPropsSubsystem; a second call replaces the look.
+	 */
+	void ApplyGreybox(const FPropGreyboxSpec& Spec);
+
+	/** The greybox body (null until ApplyGreybox). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Props")
+	TObjectPtr<UStaticMeshComponent> GreyboxMesh;
+
+	/** The turret's muzzle bar / the tripwire's wire (null when the spec has none). */
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Props")
+	TObjectPtr<UStaticMeshComponent> GreyboxDetail;
 };
 
 /**

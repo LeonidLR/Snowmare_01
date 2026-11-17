@@ -12,6 +12,7 @@
 #include "HAL/PlatformTime.h"
 #include "LevelGen/CodexPropActors.h"
 #include "LevelGen/LevelPropsFile.h"
+#include "LevelGen/PropsGreybox.h"
 #include "LevelGen/PropsLayoutView.h"
 #include "LevelGen/PropsValidator.h"
 #include "Misc/FileHelper.h"
@@ -68,6 +69,30 @@ namespace CodexLevelPropsInternal
 		0,
 		TEXT("When 1, mines and trapped crates are armed but inert (no damage/explosion; for smokes). Default 0."),
 		ECVF_Default);
+
+	static TAutoConsoleVariable<int32> CVarPropsGreybox(
+		TEXT("Codex.Props.Greybox"),
+		1,
+		TEXT("Greybox look of levelgen props without a real class (G003): 1 (default) for Training Ground autogen props files (source auto), ")
+		TEXT("2 for every props file, 0 off (meshless props as before: the live-map guard drops the nav-affecting ones)."),
+		ECVF_Default);
+
+	/** True when this props file gets the greybox look (Codex.Props.Greybox; the file's top-level "source"). */
+	static bool UsesGreybox(const FLevelPropsFile& File)
+	{
+		const int32 Mode = CVarPropsGreybox.GetValueOnGameThread();
+		if (Mode >= 2)
+		{
+			return true;
+		}
+		if (Mode <= 0)
+		{
+			return false;
+		}
+		const TSharedPtr<FJsonValue>* Source = File.Extra.Find(TEXT("source"));
+		FString SourceName;
+		return Source && Source->IsValid() && (*Source)->TryGetString(SourceName) && SourceName == TEXT("auto");
+	}
 
 	static FAutoConsoleCommandWithWorld CmdPropsDump(
 		TEXT("Codex.Props.Dump"),
@@ -198,6 +223,8 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 
 	// Load balance configuration
 	LoadBalanceFile();
+	const bool bGreybox = CodexLevelPropsInternal::UsesGreybox(File);
+	GreyboxCount = 0;
 
 	// Resolve layout and validate if layout exists
 	const FString PropsDir = FPaths::GetPath(PropsFilePath);
@@ -286,6 +313,8 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 	}
 
 	TMap<FString, ACodexPropCrate*> SpawnedCratesById;
+	// The slab snap must not land on a prop spawned a moment earlier (a greybox body blocks WorldStatic).
+	TArray<AActor*> SpawnedForTrace;
 
 	for (const FLevelPropsResolvedObject& ResObj : ObjectsToSpawn)
 	{
@@ -320,6 +349,7 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		const FVector TraceEnd(Obj.Pos.X, Obj.Pos.Y, ComputedZ - 30.f);
 		FHitResult HitResult;
 		FCollisionQueryParams TraceParams(SCENE_QUERY_STAT(PropsSnapZ), false);
+		TraceParams.AddIgnoredActors(SpawnedForTrace);
 		if (World->LineTraceSingleByChannel(HitResult, TraceStart, TraceEnd, ECC_WorldStatic, TraceParams))
 		{
 			FinalZ = HitResult.ImpactPoint.Z;
@@ -350,6 +380,17 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		}
 
 		const bool bNav = VariantNavAffecting.FindRef(Obj.Variant);
+		if (bGreybox && !CodexLevelPropsInternal::ActorHasVisualMesh(PropActor))
+		{
+			float WidthCm = 180.f;
+			if (Obj.Extra.Contains(TEXT("width_cm")) && Obj.Extra[TEXT("width_cm")]->Type == EJson::Number)
+			{
+				WidthCm = static_cast<float>(Obj.Extra[TEXT("width_cm")]->AsNumber());
+			}
+			const bool bDangerous = AttachedTraps.Contains(Obj.Id);
+			PropActor->ApplyGreybox(PropsGreybox::Resolve(BalanceRoot.Get(), Obj.Variant, bDangerous, Obj.Trigger, WidthCm));
+			GreyboxCount += CodexLevelPropsInternal::ActorHasVisualMesh(PropActor) ? 1 : 0;
+		}
 		if (bRequireMesh && bNav && !CodexLevelPropsInternal::ActorHasVisualMesh(PropActor))
 		{
 			PropActor->Destroy();
@@ -464,6 +505,7 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		}
 
 		SpawnedProps.Add(PropActor);
+		SpawnedForTrace.Add(PropActor);
 		PropsByLayer.FindOrAdd(ResObj.LayerId).Add(PropActor);
 	}
 
@@ -498,8 +540,8 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 	LastSpawnDurationMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
 	bHasSpawned = true;
 
-	UE_LOG(LogCodexTactics, Display, TEXT("[Props] spawned %d props in %.2f ms (dropped: %d) from %s"),
-		SpawnedProps.Num(), LastSpawnDurationMs, DroppedPropIds.Num(), *PropsFilePath);
+	UE_LOG(LogCodexTactics, Display, TEXT("[Props] spawned %d props in %.2f ms (dropped: %d, greybox: %d, layout: %s) from %s"),
+		SpawnedProps.Num(), LastSpawnDurationMs, DroppedPropIds.Num(), GreyboxCount, bHasLayout ? TEXT("yes") : TEXT("NO - flat Z"), *PropsFilePath);
 
 	constexpr double WarnBudgetMs = 60.0;
 	if (LastSpawnDurationMs > WarnBudgetMs)
@@ -527,13 +569,14 @@ void UCodexLevelPropsSubsystem::ClearSpawnedProps()
 	ResolvedClassCache.Reset();
 	bHasSpawned = false;
 	LastSpawnDurationMs = 0.0;
+	GreyboxCount = 0;
 }
 
 void UCodexLevelPropsSubsystem::DumpProps() const
 {
 	UE_LOG(LogCodexTactics, Display, TEXT("=== Codex Level Props Dump ==="));
-	UE_LOG(LogCodexTactics, Display, TEXT("Total spawned props: %d (last spawn: %.2f ms)"),
-		GetSpawnedCount(), LastSpawnDurationMs);
+	UE_LOG(LogCodexTactics, Display, TEXT("Total spawned props: %d (last spawn: %.2f ms, greybox: %d)"),
+		GetSpawnedCount(), LastSpawnDurationMs, GreyboxCount);
 
 	for (const auto& Pair : PropsByLayer)
 	{
@@ -676,6 +719,7 @@ void UCodexLevelPropsSubsystem::LoadBalanceFile()
 	{
 		return;
 	}
+	BalanceRoot = Root;
 
 	// Parse class_map
 	const TSharedPtr<FJsonObject>* ClassMapObj = nullptr;
