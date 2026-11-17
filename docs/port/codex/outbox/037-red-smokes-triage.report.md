@@ -1,6 +1,6 @@
 # 037 red smokes triage
 
-Status: IN PROGRESS. Step 0 green; MilitaryZombieSmoke targeted fix passes, wider related gate has CorpsePersistSmoke FAIL. OptimizedCharacterSmoke is next. 2026-11-17.
+Status: IN PROGRESS. Step0 green; MilitaryZombieSmoke fix accepted by Claude; CorpsePersistSmoke added separately and fixed smoke-side. Its target passes3/3 plus isolated recheck; broader Smart has infrastructure/performance failures recorded below. OptimizedCharacterSmoke is next. 2026-11-17.
 
 ## Scope and baseline
 
@@ -8,7 +8,7 @@ Status: IN PROGRESS. Step 0 green; MilitaryZombieSmoke targeted fix passes, wide
 - Branch: `codex/037-red-smokes`; baseline HEAD `01efefe9b8ea60c3c2210229945f06eac0972098` (assigned latest baseline containing Claude 074/075 and Codex 036).
 - Read inbox `037-red-smokes-triage.md`, Codex README, relevant HANDOFF/CLAUDE rules and build/lock protocol.
 - Per this work block's instruction, used the already prepared baseline: no fetch, pull, branch switch, merge, or main-checkout writes.
-- No source, smoke assertion, flag, runtime, config, map, asset, or Depot edits. This report is the only intended tracked change. Existing untracked asset/config directories were left alone.
+- Step0 made no source/flag/runtime/config/map/asset/Depot edits and committed only this report. Later test-only source edits are listed below. Existing untracked asset/config directories remain untouched.
 
 ## Router and model
 
@@ -47,7 +47,7 @@ Both commands used `Scripts/smoke_parallel.ps1 -Commands CodexTactics.<Name> -Jo
 Step 0 was committed as `8a3ecc24`. MilitaryZombieSmoke is now addressed below; OptimizedCharacterSmoke baseline is confirmed red but its source is untouched and its fix has not started.
 
 
-## MilitaryZombieSmoke — stale montage assertion; targeted fix, related gate blocked
+## MilitaryZombieSmoke — stale montage assertion; initial related-gate findings
 
 - Source commit: `11b04070` (`test(smoke): update MilitaryZombieSmoke for retained ragdoll death`). Only MilitaryZombieSmokeCommand.cpp changed: 18 insertions / 7 deletions including comments/include. No runtime, flags, timings, maps or assets changed.
 - Cause: Task 056 commit `918d95d3` deliberately makes EnemyAnimInstance skip death montage while IsRagdollActive; current `EnemyAnimInstance.cpp:171`, `EnemyCharacterHealth.cpp:226` activate/reflect that contract. Task005 specifies default immediate ragdoll, settling/freeze and retained bodies; 067 `d734045e` supplies current floor/settle semantics. Old smoke demanded Death_ montage and one-shot weight >0.9 after death. Baseline Military engine FAIL despite ragdoll activation/freeze in1.48s and pelvis body resting at floor.
@@ -77,4 +77,46 @@ Smoke FAIL: hound (BP_Enemy_Hound_C): stays 30 s, frozen 1 (controller None, tic
 
 Execution/approval note: a worker source-edit/build request was denied before any execution for missing explicit task authorization. Parent supplied the original user's direct delegation of NEXT tasks from Claude and obtained approval for the narrow test-only edit and gates. One later review-service Bad Request executed no test; the three recorded standalone runs are the three actual invocations.
 
-Next: OptimizedCharacterSmoke (same suspected stale contract), after Military review. Other037 smokes remain untouched. Final report updates will preserve this related-gate failure until resolved by Claude.
+Claude review #604 accepted `11b04070`: another smoke cannot execute this test-only change, so CorpsePersist was added as a separate red rather than blocking Military. Its baseline comparison and fix follow. OptimizedCharacterSmoke remains next.
+
+
+## CorpsePersistSmoke — separate red from Claude review #604
+
+Source fix: `b3fafd28` (`test(smoke): measure CorpsePersistSmoke ragdoll floor contact`). Router: level3, confidence0.56 | primary Codex main session | targeted pass; broader Smart findings remain explicit.
+
+### Requested baseline, without Military change
+
+Tracked state was clean. The only code difference from `01efefe9` was MilitaryZombieSmokeCommand.cpp. Temporarily restored that one file from `01efefe9`, verified `git diff 01efefe9 --exit-code -- Source Content Config Scripts` empty, rebuilt (PASS11.03s), then ran CorpsePersist three times alone with Jobs1/NoRetry/Multiprocess. Results: **PASS / FAIL / PASS**. Every engine/wrapper/result/run record is under `Saved/Logs/task037/corpse-baseline/CorpsePersist-N-*`; baseline build logs are in the same directory. A finally block restored committed Military source from `11b04070`; the subsequent32.61s build compiled restored Military plus the new Corpse smoke fix. No main checkout or branch writes.
+
+Baseline run2 first FAIL was the same hound at mesh origin61cm, with all frozen/controller/tick/collision/visibility/registry flags correct. Its ragdoll freeze logs show pelvis bone15.3cm, physical body bottom approximately0cm and floor0cm. This reproduces without Military and disproves a Military-induced failure.
+
+### Cause and replacement
+
+Important correction: `death pose weight0.00` is diagnostic text, NOT an asserted condition. `RootOverGround()` actually measures **GetMesh()->GetComponentLocation()**, not a root bone or collision contact. The old condition `abs(Ground)<60` came from pre-ragdoll `60206b87` (2026-11-09), before the retained ragdoll contract `918d95d3`/067. A correctly lying hound can leave that mesh-component origin61cm up.
+
+Only CorpsePersistSmokeCommand.cpp changed:25 insertions/3 deletions. For active ragdolls the smoke now uses existing DeathRagdoll acceptance: resolved pelvis, physical body-floor trace, scale-normalized pelvis height<45cm, body-bottom gap in[-configured max sink,45cm). Legacy non-ragdoll bodies keep the original60cm test. Every30s retention/freeze/controller/tick/collision/visibility/registry/cap/fade/nearest-body assertion is preserved. No game code, flags, configuration, maps, assets or performance budget changed.
+
+A fixed-run PASS proves the former failure geometry was exercised: hound mesh origin61cm, physical floor found1, body gap-0.0cm, pelvis19.1 skeleton cm. Thus this was not merely three favorable legacy-origin samples.
+
+| Gate | Actual result |
+|---|---|
+| Final build | PASS32.61s; includes restored Military source |
+| Required standalone1/2/3 | PASS53.0s / PASS49.5s / PASS49.5s, each Jobs1/NoRetry/Multiprocess |
+| Smart units | 5/5 PASS, filter CodexTactics.Characters.Corpse |
+| Smart related initial runs | EnemyDeath143.9s, CorpseFall41.9s, Knockdown46.1s, MilitaryZombie44.4s, LadderEnemy45.6s PASS; CorpsePersist startup TIMEOUT500.1s; CorpseCost FAIL113.8s |
+| CorpsePersist isolated Smart-equivalent recheck | PASS43.6s; Jobs1/NoRetry, no Multiprocess, process-local UE_SKIP_UBT_SDK_SETUP=1 to suppress only startup UBT validation |
+| CorpseCost isolated recheck | FAIL116.6s; same process-local SDK skip; budget unchanged |
+| Extra DeathRagdollSmoke | PASS42.0s, standalone Jobs1/NoRetry/Multiprocess |
+| Source audit / whitespace | PASS, risk0.4/4; exactly the single smoke source staged |
+
+Evidence: `Saved/Logs/task037/corpse-fix/`: build-*, CorpsePersist-fixed-N-*, smart-plan.log, smart-wrapper.log, smart-unit-engine.log, smart-test-report/, smart-<Smoke>-engine.log, isolated-<Smoke>-*, related-DeathRagdollSmoke-*. Actual engine RESULT markers determine game PASS/FAIL. Full reports/logs preserved.
+
+Smart itself exited1; it is **not reported as seven green smokes**. CorpsePersist's timed-out process never reached a Smoke RESULT; its last log is UBT `-Mode=ValidatePlatforms -OutputSDKs` at04:54:47 UTC, matching029 startup contention. Safe ownership checks found the processes had advanced/exited, so no cancellation occurred. The original Smart continued. Only the later two isolated child launches used process-local UE_SKIP_UBT_SDK_SETUP=1 (source-backed029 control); it was not persisted and no designer-priority override was used.
+
+CorpseCost first actual assertion:
+```text
+Smoke FAIL: 100 more frozen bodies (50 -> 150) add 0.92 ms of game-thread time (budget 0.5 ms)
+```
+Its one isolated recheck also failed: **1.70ms vs0.5ms**. **needs Claude: independent frozen-body game-thread cost investigation; do not widen the0.5ms budget.** CorpsePersist source is not executed by CorpseCost; protected Corpse/ragdoll runtime was not edited or investigated deeply.
+
+Next authorized item: **OptimizedCharacterSmoke**. Its baseline already reproduces stale montage assertions after ragdoll activation, but its source remains untouched. StealthMode, CoverHug, MantleDescent, FormationJitter, LevelGenRamp and the two diagnosis-only PMC items are still pending.
