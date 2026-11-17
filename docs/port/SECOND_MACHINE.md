@@ -14,7 +14,7 @@ Set up 2026-11-17 (plan: memory `second-machine-plan`, 2026-11-11).
 | Windows | 11 Pro build 26300 (same Insider build as the main PC) |
 | Engine | UE 5.8 from the Epic launcher, `C:\Program Files\Epic Games\UE_5.8` (same path as the main PC) |
 | Project | `C:\Work\CodexTactics` (clone of `origin/main`) |
-| Tools | Git for Windows + Git LFS, Python 3.12 (`%LOCALAPPDATA%\Programs\Python\Python312`, on the user PATH), OpenSSH Server, Tailscale (Run unattended) |
+| Tools | Git for Windows + Git LFS, Python 3.12 (`%LOCALAPPDATA%\Programs\Python\Python312`, on the user PATH), OpenSSH Server, Tailscale (Run unattended), ffmpeg 9.0.2 (winget `Gyan.FFmpeg`) |
 | Not installed | Visual Studio (the worker never compiles), local LLMs (decision 2026-11-15), Claude Code |
 
 Engine patch level may differ between the PCs (worker 5.8.4, main 5.8.3 at setup): that is fine as long as the engine
@@ -64,6 +64,41 @@ What it does:
 
 Exit code: 0 pass, 1 a smoke failed, 2 sync / connection error. Long batches: run it as a background command.
 
+## Continuous loop (trainer + smokes) - `worker_loop.ps1`
+
+The worker works around the clock (designer, 2026-11-17). One Windows scheduled task on the worker runs
+`Scripts/Tools/worker_loop.ps1`; nothing on it is started by hand any more.
+
+| | |
+|---|---|
+| Task | `CodexTactics Worker Loop` - S4U as `codex-worker\user`, Highest, no time limit, triggers: at startup (+2 min) and daily `DailyAt`+10 min (watchdog; `IgnoreNew` while it runs), 3 restarts on failure |
+| Day cycle | smoke batch (`-SmokeCommands all`, jobs 2) once per day after `-DailyAt` (08:00) -> optional bot batch (`-BotArgs`) -> trainer window `run_night_trainer.ps1 -RunId <RunId> -Parallel 2 -UntilTime 08:00` (the run resumes; clips + `report.html` at the end of the window) -> again |
+| Files (worker, `C:\Work\CodexTactics\Saved\Worker\`) | `loop.log`, `loop.status.json` (phase), `loop.state.json` (last smoke batch), `smokes\<stamp>.json/.log`, `sync_points.log`, `trainer-window.log`; trainer: `Saved\Trainer\scheduler.log`, `Saved\Trainer\<RunId>\` |
+| ffmpeg | 9.0.2 via `winget install Gyan.FFmpeg` (user PATH through `WinGet\Links`) - the trainer's highlight clips need it; a task started before the install does not see it (restart the task) |
+
+Install / change the run (on the worker; `-Force` re-registers):
+```
+ssh codex-worker "powershell -ExecutionPolicy Bypass -File C:\Work\CodexTactics\Scripts\Tools\worker_loop.ps1 -Install -RunId pmc-v5 -Start"
+```
+Watch / control from the main PC:
+```
+ssh codex-worker "Get-Content C:\Work\CodexTactics\Saved\Worker\loop.log -Tail 20; Get-Content C:\Work\CodexTactics\Saved\Worker\loop.status.json"
+ssh codex-worker "Get-Content C:\Work\CodexTactics\Saved\Trainer\pmc-v5\status.json"
+ssh codex-worker "New-Item C:\Work\CodexTactics\Saved\Trainer\pmc-v5\STOP"     # restart the trainer (applies synced trainer_config / commander JSON)
+ssh codex-worker "New-Item C:\Work\CodexTactics\Saved\Worker\STOP; New-Item C:\Work\CodexTactics\Saved\Trainer\pmc-v5\STOP"   # end the loop
+ssh codex-worker "Start-ScheduledTask -TaskName 'CodexTactics Worker Loop'"   # start it again
+```
+
+**Sync while it runs** (no stopping the task any more): `worker_sync.ps1` writes `Saved\Worker\SYNC` and
+`Saved\Trainer\PAUSE` (text `worker_sync`) on the worker, waits until the running arena wave / smoke batch has finished
+(`Saved\agent.lock` free, no engine process; `-WaitEngineMinutes`, default 60 - a full smoke batch takes longer, then it
+stops with exit 2 and cleans up), takes `agent.lock` itself (manual, agent `worker-sync`) for git + binaries, appends the
+change point to `sync_points.log` (old -> new HEAD, binaries commit, trainer generation / jobs), releases the lock, runs its
+own smokes while the trainer is still paused, then removes SYNC and its PAUSE. The paused trainer goes on with the next
+wave of the same generation: C++ / map / level data changes apply at once, `trainer_config.json` / `pmc_commander.json`
+only after a trainer restart (run STOP above). A SYNC older than 3 h (dead sync, e.g. the SSH link dropped) is removed by
+the loop. The old one-shot task `CodexTactics Worker Trainer` (run_night_trainer directly) is disabled.
+
 ## First setup (what was done, to repeat on a reinstall)
 
 1. Windows: rename to `codex-worker`, NVIDIA Game Ready driver, power plan "sleep: never".
@@ -106,5 +141,5 @@ Exit code: 0 pass, 1 a smoke failed, 2 sync / connection error. Long batches: ru
 - Worker results reflect the copied binaries: a C++ change must be built on the main PC (or an agent worktree with
   `-BinariesFrom`) before the worker can test it.
 - The worker has no designer: the designer-priority wait is disabled there; its build lock (`Saved/agent.lock`) is its own.
-- Night jobs (trainer, bot) on the worker: next step - adapt `Scripts/Trainer/*` and `Scripts/bot_run.ps1` the same way
-  (`-Parallel 1`, outputs on `D:`).
+- Trainer / smokes / bots on the worker: `worker_loop.ps1` (section "Continuous loop"). Outputs still go to
+  `C:\Work\CodexTactics\Saved` (C: has room); move run folders to `D:` when C: gets tight.

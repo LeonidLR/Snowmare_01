@@ -46,10 +46,56 @@ function Invoke-Worker([string]$Script, [switch]$AllowFail) {
     return $out
 }
 
+# Handshake with the worker's own jobs (worker_loop.ps1, night trainer), see SECOND_MACHINE.md "Continuous loop":
+# Saved\Worker\SYNC = the loop starts no new phase; Saved\Trainer\PAUSE (text "worker_sync") = a running trainer waits
+# between arena waves (no stop, the run goes on afterwards); Saved\agent.lock (manual, agent worker-sync) while code and
+# binaries change. Both files are removed at the end (PAUSE only if this script made it); a dead sync is cleared by the loop.
+$script:SyncHeld = $false
+function Enter-WorkerSync {
+    $r = @(Invoke-Worker @"
+New-Item -ItemType Directory -Force '$RemoteRoot/Saved/Worker', '$RemoteRoot/Saved/Trainer' | Out-Null
+Set-Content -Encoding UTF8 '$RemoteRoot/Saved/Worker/SYNC' 'worker_sync from $env:COMPUTERNAME since $(Get-Date -Format s)'
+if (-not (Test-Path '$RemoteRoot/Saved/Trainer/PAUSE')) { Set-Content -Encoding UTF8 '$RemoteRoot/Saved/Trainer/PAUSE' 'worker_sync'; 'PAUSE set' } else { 'PAUSE already there' }
+"@)
+    $script:SyncHeld = $true
+    Say "handshake: SYNC set, $($r[-1]) - waiting for the running arena wave / smoke batch to finish"
+    $deadline = (Get-Date).AddMinutes($WaitEngineMinutes)
+    while ($true) {
+        $busy = @(Invoke-Worker @"
+`$l = '$RemoteRoot/Saved/agent.lock'
+if (Test-Path `$l) { try { `$j = Get-Content `$l -Raw | ConvertFrom-Json; if (`$j.manual -or (Get-Process -Id `$j.pid -ErrorAction SilentlyContinue)) { 'lock: ' + `$j.agent + ' (' + `$j.purpose + ')' } } catch { } }
+Get-CimInstance Win32_Process -Filter "Name like 'UnrealEditor%'" | Where-Object { `$_.CommandLine -match 'CodexTactics' -or `$_.Name -eq 'UnrealEditor.exe' } | ForEach-Object { 'engine: ' + `$_.Name }
+"@)
+        if ($busy -contains "engine: UnrealEditor.exe") { throw "the Unreal Editor is open on the worker (locks the DLLs) - close it there, then re-run" }
+        if ($busy.Count -eq 0) { break }
+        if ((Get-Date) -gt $deadline) { throw "worker still busy after $WaitEngineMinutes min: $($busy -join '; ')" }
+        Say "worker busy: $($busy -join '; ') - waiting..." "Yellow"
+        Start-Sleep -Seconds 30
+    }
+    Invoke-Worker "[pscustomobject]@{ agent = 'worker-sync'; purpose = 'worker_sync.ps1 from $env:COMPUTERNAME'; pid = 0; manual = `$true; started = (Get-Date).ToString('yyyy-MM-dd HH:mm:ss') } | ConvertTo-Json | Set-Content -Encoding UTF8 '$RemoteRoot/Saved/agent.lock'" | Out-Null
+}
+function Exit-WorkerLock {
+    if (-not $script:SyncHeld) { return }
+    Invoke-Worker -AllowFail "`$l = '$RemoteRoot/Saved/agent.lock'; if ((Test-Path `$l) -and ((Get-Content `$l -Raw) -match 'worker-sync')) { Remove-Item `$l }" | Out-Null
+}
+function Exit-WorkerSync {
+    if (-not $script:SyncHeld) { return }
+    Exit-WorkerLock
+    Invoke-Worker -AllowFail @"
+Remove-Item '$RemoteRoot/Saved/Worker/SYNC' -ErrorAction SilentlyContinue
+`$p = '$RemoteRoot/Saved/Trainer/PAUSE'
+if ((Test-Path `$p) -and ((Get-Content `$p -Raw) -match 'worker_sync')) { Remove-Item `$p }
+"@ | Out-Null
+    $script:SyncHeld = $false
+    Say "handshake released (SYNC + trainer PAUSE removed)"
+}
+
 try {
     Say "worker $Worker -> $RemoteRoot"
     $probe = @(Invoke-Worker "hostname; Test-Path '$RemoteRoot/CodexTactics.uproject'")
     if ($probe[-1] -ne "True") { throw "no checkout at $RemoteRoot on $Worker (see docs/port/SECOND_MACHINE.md, first setup)" }
+    if (-not ($SkipSync -and $SkipBinaries -and $SkipSmoke)) { Enter-WorkerSync }
+    $oldHead = @(Invoke-Worker "Set-Location '$RemoteRoot'; git rev-parse --short HEAD")[-1].Trim()
 
     # ---- 1. code -------------------------------------------------------------------------------------------------------
     if (-not $SkipSync) {
@@ -113,13 +159,28 @@ if (Test-Path `$b) { Get-ChildItem `$b -Recurse -File | ForEach-Object { `$_.Ful
             if ($LASTEXITCODE -ne 0) { throw "scp failed for $rel" }
         }
     }
+    # Code change point for the trainer report: Saved\Worker\sync_points.log (time, old -> new HEAD, binaries, trainer generation).
+    if (-not ($SkipSync -and $SkipBinaries)) {
+        $binNote = $(if ($SkipBinaries) { "binaries not copied" } else { "binaries $((& git -C $BinariesFrom rev-parse --short HEAD).Trim()), $($changed.Count) files" })
+        $point = @(Invoke-Worker @"
+`$s = Get-ChildItem '$RemoteRoot/Saved/Trainer/*/status.json' -ErrorAction SilentlyContinue | Sort-Object LastWriteTime | Select-Object -Last 1
+`$t = `$(if (`$s) { `$j = Get-Content `$s.FullName -Raw | ConvertFrom-Json; "trainer `$(`$j.run_id) gen `$(`$j.generation) `$(`$j.phase) `$(`$j.jobs_done)/`$(`$j.jobs_total)" } else { 'no trainer run' })
+`$line = (Get-Date -Format s) + ' $oldHead -> ' + (git -C '$RemoteRoot' rev-parse --short HEAD) + ' | $binNote | ' + `$t
+Add-Content -Encoding UTF8 '$RemoteRoot/Saved/Worker/sync_points.log' `$line
+`$line
+"@)
+        Say "sync point: $($point[-1])"
+    }
+    Exit-WorkerLock
 } catch {
     Say "SYNC ERROR: $_" "Red"
+    Exit-WorkerSync
     exit 2
 }
 
 # ---- 3. smokes on the worker ---------------------------------------------------------------------------------------------
-if ($SkipSmoke) { Say "smokes skipped"; exit 0 }
+# (SYNC + trainer PAUSE stay set until the batch ends: the trainer would otherwise take the lock between waves.)
+if ($SkipSmoke) { Say "smokes skipped"; Exit-WorkerSync; exit 0 }
 $names = ($Commands | ForEach-Object { $_ -split '[,;\s]+' } | Where-Object { $_ }) -join ","
 $smokeArgs = "-Commands '$names' -Jobs $Jobs -ExtraArgs '$ExtraArgs' -ResultJson '$RemoteRoot/Saved/Logs/SmokeParallel-worker.json'"
 if ($NoRetry) { $smokeArgs += " -NoRetry" }
@@ -134,6 +195,7 @@ Remove-Item 'Saved/Logs/SmokeParallel-worker.json' -ErrorAction SilentlyContinue
 exit `$LASTEXITCODE
 "@
 $smokeExit = $script:LastWorkerExit
+Exit-WorkerSync
 $run | ForEach-Object { Write-Host "  $_" }
 
 # ---- 4. results back ------------------------------------------------------------------------------------------------------
