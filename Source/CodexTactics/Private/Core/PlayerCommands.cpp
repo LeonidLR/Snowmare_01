@@ -410,6 +410,8 @@ namespace GameplayEvents
 	const FName GeneratorDown(TEXT("GeneratorDown"));
 	const FName GeneratorRepaired(TEXT("GeneratorRepaired"));
 	const FName GateOpened(TEXT("GateOpened"));
+	const FName MissionGoalReached(TEXT("MissionGoalReached"));
+	const FName MissionGoalsComplete(TEXT("MissionGoalsComplete"));
 	const FName TacticalPauseStarted(TEXT("TacticalPauseStarted"));
 	const FName TacticalPauseEnded(TEXT("TacticalPauseEnded"));
 	const FName Explosion(TEXT("Explosion"));

@@ -11,7 +11,8 @@
 //   GET  /api/levelgen/ledger                   -> the critic ledger { spentUsd, calls }
 //   POST /api/levelgen/critic   { name, layout, evaluation, candidatePng (base64), client: claude|jev|mock, budgetUsd, model }
 //                                               -> { verdict } (saved to Saved/TrainingGround/levelgen/<name>.verdicts.json; the ledger updated)
-//   POST /api/levelgen/accept   { layout, evaluation, verdicts }  -> { file }  (Content/Data/LevelGen/accepted/<name>.json + <name>.meta.json)
+//   POST /api/levelgen/accept   { layout, evaluation, verdicts }  -> { file }  (Content/Data/LevelGen/accepted/<name>.json + <name>.meta.json;
+//                                               also props/<Map>.props.json and objectives/<Map>.objectives.json - the in-game goals)
 //   POST /api/levelgen/reject   { name, seed, profile, reason }    -> appended to Saved/TrainingGround/levelgen/rejected.jsonl
 //   POST /api/levelgen/save-locks { layout }  -> { target: accepted|draft, file, locks }: the locked districts (polygons) into the map
 //                                               JSON - the accepted map's regen.locks only, else the page layout as a draft (stage 2)
@@ -28,6 +29,7 @@ import { saveLocks } from '../src/levelgen/node/locksFile.ts';
 import { createBuildPipeline, mapNameFor } from '../src/levelgen/node/buildPipeline.ts';
 import { generatePropsForLayout, canOverwritePropsFile } from '../src/levelgen/props/autogen.ts';
 import { formatPropsCanonical } from '../src/levelgen/props/canonical.ts';
+import { writeMissionGoalsFile } from '../src/levelgen/missionGoals.ts';
 import type { LevelPropsFile } from '../src/levelgen/props/schema.ts';
 import { ROOT } from '../src/movement/cli/paths.ts';
 import { ACCEPTED_DIR, ensureReferencePng, LEVELGEN_OUT, listProfiles, NAME_RE, readLedger, readProfileById, writeLedger } from '../src/levelgen/node/files.ts';
@@ -49,6 +51,8 @@ const readBody = (req: Req): Promise<Record<string, unknown>> => new Promise((re
   req.on('data', (c) => { body += String(c); });
   req.on('end', () => { try { resolve(body ? JSON.parse(body) : {}); } catch { resolve({}); } });
 });
+/** Content/Data/LevelGen/objectives: the in-game mission goals per map (src/levelgen/missionGoals.ts). */
+const MISSION_GOALS_DIR = path.join(ACCEPTED_DIR, '..', 'objectives');
 const query = (req: Req, key: string) => new URL(req.url ?? '', 'http://x').searchParams.get(key) ?? '';
 
 export function setupLevelgenApi(use: Use): void {
@@ -65,7 +69,20 @@ export function setupLevelgenApi(use: Use): void {
   use('/api/levelgen/build-map', async (req, res, next) => {
     if (req.method !== 'POST') return next ? next() : send(res, 405, { error: 'POST only' });
     const b = await readBody(req);
-    const r = pipeline.start(String(b.name ?? ''), b.confirm === true);
+    const name = String(b.name ?? '');
+    // F-4 «а» (2026-11-17): the map's in-game goals file is refreshed from the accepted layout before every build (also for maps
+    // accepted before «Принять» wrote it); a layout without objectives writes nothing.
+    if (NAME_RE.test(name)) {
+      try {
+        const acceptedFile = path.join(ACCEPTED_DIR, `${name}.json`);
+        if (fs.existsSync(acceptedFile)) {
+          writeMissionGoalsFile(JSON.parse(fs.readFileSync(acceptedFile, 'utf8')) as GenLayout, MISSION_GOALS_DIR, mapNameFor(name), name);
+        }
+      } catch {
+        // non-blocking for the build
+      }
+    }
+    const r = pipeline.start(name, b.confirm === true);
     send(res, r.status, r.body);
   });
 
@@ -191,6 +208,14 @@ export function setupLevelgenApi(use: Use): void {
         });
         fs.writeFileSync(propsPath, formatPropsCanonical(resProps.props), 'utf8');
       }
+    } catch {
+      // Non-blocking for accept
+    }
+
+    // F-4 «а» (designer 2026-11-17): the layout's objectives become the map's in-game mission goals
+    // (Content/Data/LevelGen/objectives/<Map>.objectives.json, read by UMissionGoalsSubsystem); no objectives = no file written.
+    try {
+      writeMissionGoalsFile(layout!, MISSION_GOALS_DIR, mapNameFor(layout!.name), layout!.name);
     } catch {
       // Non-blocking for accept
     }
