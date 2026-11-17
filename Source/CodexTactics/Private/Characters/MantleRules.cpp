@@ -62,6 +62,7 @@ namespace MantleRulesInternal
 		{ TEXT("align.plant_hold_s"), &FMantleConfig::AlignPlantHoldSeconds },
 		{ TEXT("align.slide_speed_cm_s"), &FMantleConfig::AlignSlideSpeedCmPerSecond },
 		{ TEXT("align.slide_body_ratio"), &FMantleConfig::AlignSlideBodyRatio },
+		{ TEXT("ghost.pose_fraction"), &FMantleConfig::GhostPoseFraction },
 		{ TEXT("align.exit_root_cm"), &FMantleConfig::AlignExitRootCm },
 		{ TEXT("align.grip_forward_cm"), &FMantleConfig::AlignGripForwardCm },
 		{ TEXT("align.grip_up_cm"), &FMantleConfig::AlignGripUpCm },
@@ -814,6 +815,26 @@ float MantleRules::ContactStartCm(const FMantleConfig& Config, const FMantleClip
 		return -1.f;
 	}
 	return FMath::Max(Config.MinFaceGapCm, static_cast<float>(Contact.HandPoint.X - Contact.RootStart.X) - Config.AlignGripForwardCm);
+}
+
+int32 MantleRules::GhostPoseSample(const FMantleConfig& Config, const FMantleClipTrack& Track, const FMantleClipContact& Contact, bool& bOutLeftHand)
+{
+	bOutLeftHand = true;
+	const int32 Num = Track.Num();
+	if (!Contact.bValid || Num < 2 || Track.SampleSeconds <= 0.f || Track.HandL.Num() != Num || Track.HandR.Num() != Num)
+	{
+		return INDEX_NONE;
+	}
+	const int32 Plant = FMath::Clamp(FMath::RoundToInt(Contact.ContactSeconds / Track.SampleSeconds), 0, Num - 1);
+	bOutLeftHand = FVector::DistSquared(Track.HandL[Plant], Contact.HandPoint) <= FVector::DistSquared(Track.HandR[Plant], Contact.HandPoint);
+	const TArray<FVector>& Hand = bOutLeftHand ? Track.HandL : Track.HandR;
+	const int32 Exit = FMath::Clamp(FMath::RoundToInt(Contact.ExitSeconds / Track.SampleSeconds), Plant, Num - 1);
+	int32 HoldEnd = Plant;
+	while (HoldEnd < Exit && FVector::Dist(Hand[HoldEnd + 1], Contact.HandPoint) <= Config.AlignPlantReachCm)
+	{
+		++HoldEnd;
+	}
+	return Plant + FMath::RoundToInt(FMath::Clamp(Config.GhostPoseFraction, 0.f, 1.f) * static_cast<float>(HoldEnd - Plant));
 }
 
 bool MantleRules::IsHeavyHit(const FMantleConfig& Config, float FinalDamage)

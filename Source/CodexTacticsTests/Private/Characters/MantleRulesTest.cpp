@@ -455,6 +455,36 @@ bool FMantleRulesSlideContactTest::RunTest(const FString&)
 	return true;
 }
 
+MANTLE_RULES_TEST(FMantleRulesGhostPoseTest, "GhostPose")
+bool FMantleRulesGhostPoseTest::RunTest(const FString&)
+{
+	// B17-2 (designer option A): the hover ghost's frame = the middle of the contact hand's hold on the lip.
+	using namespace MantleRulesTestUtil;
+	const FMantleConfig Config = MantleRules::MakeDefaultConfig();
+	const FMantleClipTrack Track = MantleSyntheticTrack(true);
+	const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, Track, 140.f);
+	bool bLeft = false;
+	const int32 Sample = MantleRules::GhostPoseSample(Config, Track, Contact, bLeft);
+	TestTrue(TEXT("a resting plant: a ghost frame"), Sample != INDEX_NONE);
+	TestTrue(TEXT("... of the planted (left) hand"), bLeft);
+	// The left hand rests on the ledge from ~0.43 s to the end; the hold is cut at the exit (~1.23 s): its middle ~0.83 s.
+	const float Time = Sample != INDEX_NONE ? Track.TimeAt(Sample) : -1.f;
+	TestTrue(FString::Printf(TEXT("... the hold's middle, 0.75 - 0.90 s (%.3f), not the plant nor the end pose"), Time), Time >= 0.75f && Time <= 0.9f);
+	TestTrue(TEXT("... the hand still on the ledge then"), Sample != INDEX_NONE && FVector::Dist(Track.HandL[Sample], Contact.HandPoint) <= Config.AlignPlantReachCm);
+	FMantleConfig AtPlant = Config;
+	AtPlant.GhostPoseFraction = 0.f;
+	const int32 Plant = MantleRules::GhostPoseSample(AtPlant, Track, Contact, bLeft);
+	TestTrue(TEXT("ghost.pose_fraction 0: the plant's frame"), Plant != INDEX_NONE && FMath::IsNearlyEqual(Track.TimeAt(Plant), Contact.ContactSeconds, Track.SampleSeconds));
+	// A sliding run clip: the hand leaves its contact point soon - the frame stays inside that short hold.
+	const FMantleClipTrack Slide = MantleSlidingTrack();
+	const FMantleClipContact SlideContact = MantleRules::AnalyseClipTrack(Config, Slide, 140.f);
+	const int32 SlideSample = MantleRules::GhostPoseSample(Config, Slide, SlideContact, bLeft);
+	TestTrue(TEXT("a slide: a ghost frame within align.plant_reach_cm of the contact"), SlideSample != INDEX_NONE
+		&& FVector::Dist((bLeft ? Slide.HandL : Slide.HandR)[SlideSample], SlideContact.HandPoint) <= Config.AlignPlantReachCm);
+	TestEqual(TEXT("no contact: no frame"), MantleRules::GhostPoseSample(Config, MantleSyntheticTrack(false), MantleRules::AnalyseClipTrack(Config, MantleSyntheticTrack(false), 140.f), bLeft),
+		static_cast<int32>(INDEX_NONE));
+	return true;
+}
 MANTLE_RULES_TEST(FMantleRulesDescentTest, "Descent")
 bool FMantleRulesDescentTest::RunTest(const FString&)
 {

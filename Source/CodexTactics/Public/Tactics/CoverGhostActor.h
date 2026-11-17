@@ -58,8 +58,12 @@ public:
 	 * The mantle preview (batch 2, docs/port/MANTLING_BATCH2_REPORT.md: hovering a climbable obstacle the selected operative can climb): the
 	 * same hologram at the climb's landing (feet), facing Yaw (the climb's direction), in the pose he ends in there - his crouch idle on a top,
 	 * his idle past a fence. Slot.WorldLocation = the landing.
+	 * B17-2 (designer option A, 2026-11-17): with ClimbClip the ghost instead stands at PoseLocation (the actor; AOperativeCharacter::
+	 * PlanMantleGhostPose) frozen in that clip's frame at ClipSeconds - hands on the lip, a leg up - not in the end pose on top; once posed it
+	 * is shifted so AnchorBone (the contact hand) sits exactly on AnchorTarget (the pose is measured, whatever the clip's root lock does).
 	 */
-	void ShowMantleFor(const AOperativeCharacter& Operative, const FVector& LandingFeet, float Yaw, bool bCrouched);
+	void ShowMantleFor(const AOperativeCharacter& Operative, const FVector& LandingFeet, float Yaw, bool bCrouched, UAnimSequenceBase* ClimbClip = nullptr,
+		float ClipSeconds = 0.f, const FVector& PoseLocation = FVector::ZeroVector, FName AnchorBone = NAME_None, const FVector& AnchorTarget = FVector::ZeroVector);
 
 	/** The ghost shows a mantle landing (ShowMantleFor). */
 	bool IsMantlePose() const { return bShown && bMantlePose; }
@@ -113,5 +117,9 @@ private:
 	bool bMantlePose = false;
 	bool bShownStealthMode = false;
 	bool bShownCrouched = false;
+	/** The frozen climb frame shown by ShowMantleFor (B17-2), s. */
+	float ShownClipSeconds = 0.f;
+	/** Where ShowMantleFor was asked to put the ghost (before the anchor shift). */
+	FVector ShownPoseLocation = FVector::ZeroVector;
 	ECoverFacing ShownFacing = ECoverFacing::Right;
 };

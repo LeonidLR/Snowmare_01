@@ -508,6 +508,14 @@ public:
 	 * climb measured from that base (landing, headroom, warp limits). False (OutReason) when the click is no climb.
 	 */
 	bool PlanMantleClick(const FHitResult& Hit, FMantleClickPlan& Out, FString* OutReason = nullptr) const;
+	/**
+	 * The hover ghost's pose for a planned click (B17-2, designer option A): the frame of the clip the click would play from the middle of its
+	 * hand hold on the lip (MantleRules::GhostPoseSample), the ghost actor's estimated location and the hand (OutAnchorBone) that must sit on
+	 * OutAnchorTarget (the grip on Plan's lip; NAME_None: the clip has no contact). False without the
+	 * clip / its track (batch 2 off: no ClipIndex).
+	 */
+	bool PlanMantleGhostPose(const FMantleClickPlan& Plan, class UAnimSequenceBase*& OutClip, float& OutSeconds, FVector& OutLocation, FName& OutAnchorBone,
+		FVector& OutAnchorTarget);
 
 	/**
 	 * Measures the obstacle ahead along Dir and starts the climb right here when the rules allow it (the click order on arrival, smokes).

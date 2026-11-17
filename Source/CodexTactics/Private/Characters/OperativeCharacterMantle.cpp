@@ -758,6 +758,51 @@ bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPla
 	Out.bTop = Site.Destination == EMantleDestination::Top;
 	Out.FacePoint = Site.FacePoint;
 	Out.ApproachCm = Decision.ApproachCm;
+	Out.ClipIndex = Decision.ClipIndex;
+	Out.EdgeTop = Site.EdgeTop;
+	Out.DepthCm = Site.Probe.DepthCm;
+	return true;
+}
+
+bool AOperativeCharacter::PlanMantleGhostPose(const FMantleClickPlan& Plan, UAnimSequenceBase*& OutClip, float& OutSeconds, FVector& OutLocation, FName& OutAnchorBone,
+	FVector& OutAnchorTarget)
+{
+	OutAnchorBone = NAME_None;
+	// B17-2 (designer 2026-11-17, option A): the hover ghost was in the T-pose - it played his locomotion idles (Animations.Idle / CrouchIdle),
+	// which the operatives' anim instances leave empty (their ABP plays its own). Now: a frozen frame of the climb clip the click would play,
+	// from the middle of its hand hold on the lip, at the face.
+	UWorld* World = GetWorld();
+	UMantleSubsystem* Mantle = World ? World->GetSubsystem<UMantleSubsystem>() : nullptr;
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	OutClip = Mantle && Config.Clips.IsValidIndex(Plan.ClipIndex) ? Mantle->GetClip(Plan.ClipIndex) : nullptr;
+	const FMantleClipTrack* Track = OutClip ? GetMantleClipTrack(Plan.ClipIndex) : nullptr;
+	if (!Track || Track->Num() == 0 || !GetMesh())
+	{
+		OutClip = nullptr;
+		return false;
+	}
+	const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, *Track, Config.Clips[Plan.ClipIndex].RiseCm);
+	bool bLeftHand = true;
+	const int32 Sample = MantleRules::GhostPoseSample(Config, *Track, Contact, bLeftHand);
+	// The ghost's body is a copy of his mesh with his mesh's relative transform. The single-node clip draws its root locked to the first frame (as the
+	// climb's montage): a bone of the track (the actor's frame) sits at Location + Facing * (RelativeLocation + bone - (root - root at frame 0)).
+	// The ghost then measures its posed hand and puts it exactly on the grip (ACoverGhostActor::ShowMantleFor's anchor).
+	const FQuat Facing = FRotator(0.f, Plan.Dir.Rotation().Yaw, 0.f).Quaternion();
+	const FVector Relative = GetMesh()->GetRelativeLocation() - MantleMeshShift;
+	if (Sample != INDEX_NONE)
+	{
+		const float GripForward = Plan.bTop ? Config.AlignGripForwardCm : FMath::Min(Config.AlignGripForwardCm, Plan.DepthCm * 0.5f);
+		const FVector Wrist = Plan.EdgeTop + Plan.Dir * GripForward + FVector(0.f, 0.f, Config.AlignGripUpCm);
+		const FVector& Hand = (bLeftHand ? Track->HandL : Track->HandR)[Sample];
+		OutSeconds = FMath::Min(Track->TimeAt(Sample), OutClip->GetPlayLength());
+		OutLocation = Wrist - Facing.RotateVector(Relative + Hand - (Track->Root[Sample] - Track->Root[0]));
+		OutAnchorBone = bLeftHand ? FName(TEXT("hand_l")) : FName(TEXT("hand_r"));
+		OutAnchorTarget = Wrist;
+		return true;
+	}
+	// No hand contact in the clip: its middle frame, drawn from the base he climbs from (root-relative, as the climb draws it).
+	OutSeconds = OutClip->GetPlayLength() * FMath::Clamp(Config.GhostPoseFraction, 0.f, 1.f);
+	OutLocation = Plan.Base + FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 	return true;
 }
 
