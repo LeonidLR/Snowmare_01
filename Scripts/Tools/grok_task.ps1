@@ -17,6 +17,11 @@ $Tree = Join-Path (Split-Path $Repo -Parent) "CodexTactics-grok"
 $Grok = Join-Path $env:USERPROFILE ".grok\bin\grok.exe"
 if (-not (Test-Path $Grok)) { throw "grok.exe not found at $Grok" }
 if (-not (Test-Path $Tree)) { throw "Grok worktree not found: $Tree" }
+# Billing guard (designer 2026-11-17): Grok must run on the monthly subscription (browser / OIDC login), never on paid API tokens.
+# An XAI_API_KEY takes precedence over the login, so refuse to start while one is set (process or user env).
+if ($env:XAI_API_KEY -or [Environment]::GetEnvironmentVariable('XAI_API_KEY', 'User') -or [Environment]::GetEnvironmentVariable('XAI_API_KEY', 'Machine')) {
+    throw "XAI_API_KEY is set - Grok would bill API tokens instead of the subscription. Remove it first."
+}
 $env:CODEX_AGENT = "grok"
 $env:PYTHONIOENCODING = "utf-8"
 $Log = Join-Path $Repo "Saved\Orchestrator\grok_runs"
