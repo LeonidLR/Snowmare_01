@@ -508,6 +508,14 @@ public:
 	 * climb measured from that base (landing, headroom, warp limits). False (OutReason) when the click is no climb.
 	 */
 	bool PlanMantleClick(const FHitResult& Hit, FMantleClickPlan& Out, FString* OutReason = nullptr) const;
+	/**
+	 * The hover ghost's pose for a planned click (B17-2, designer option A): the frame of the clip the click would play from the middle of its
+	 * hand hold on the lip (MantleRules::GhostPoseSample), the ghost actor's estimated location and the hand (OutAnchorBone) that must sit on
+	 * OutAnchorTarget (the grip on Plan's lip; NAME_None: the clip has no contact). False without the
+	 * clip / its track (batch 2 off: no ClipIndex).
+	 */
+	bool PlanMantleGhostPose(const FMantleClickPlan& Plan, class UAnimSequenceBase*& OutClip, float& OutSeconds, FVector& OutLocation, FName& OutAnchorBone,
+		FVector& OutAnchorTarget);
 
 	/**
 	 * Measures the obstacle ahead along Dir and starts the climb right here when the rules allow it (the click order on arrival, smokes).
@@ -551,6 +559,14 @@ public:
 	 * cached per clip in UMantleSubsystem). Null when the clip, his anim instance or a bone is missing.
 	 */
 	const FMantleClipTrack* GetMantleClipTrack(int32 ClipIndex);
+	/** Smokes: the climbed face (a point on it), the climb's direction into the obstacle and the top's height (the climb in progress / the last one). */
+	const FVector& GetMantleFacePoint() const { return MantleFacePoint; }
+	const FVector& GetMantleDir() const { return MantleDir; }
+	float GetMantleTopZ() const { return MantleTopZ; }
+	/** Smokes: the clip time of the hand plant the climb's first warp window aligned onto the lip (0: no contact window), s. */
+	float GetLastMantleContactSeconds() const { return MantleContactSeconds; }
+	/** Smokes: the climb's montage position now, s (-1 when he is not climbing). */
+	float GetMantleClipSeconds() const;
 
 	/**
 	 * Coming down off a mantle top (batch 2, docs/port/MANTLING_BATCH2_REPORT.md): he stands up first (prone / crouched), walks off the edge of
@@ -2647,6 +2663,8 @@ private:
 	bool ProbeMantleAhead(const FVector& Dir, float ReachCm, struct FMantleSite& Out) const;
 	/** Running for the run-up rule: above run_speed_fraction x his walk speed, or moving on a sprint order. */
 	bool IsRunningForMantle() const;
+	/** A running decision's clip may start now: the face within the clip's own run-up (its hand contact's distance, B17-3) x MantleRunStartWarp. */
+	bool IsMantleRunStartReached(const struct FMantleSite& Site, const FMantleDecision& Decision);
 	bool bMantling = false;
 	float MantleTimer = 0.f;
 	float MantleDuration = 0.f;
@@ -2670,6 +2688,8 @@ private:
 	float MantleTopZ = 0.f;
 	float MantleDepthCm = 0.f;
 	float MantleGuardPushCm = 0.f;
+	/** The clip time the first warp window ends at (the hand plant on the lip; 0 = none). */
+	float MantleContactSeconds = 0.f;
 	/** World time until which no new climb starts (mantle.json cooldown_s after the last one). */
 	float MantleCooldown = 0.f;
 	FVector MantleBaseFeet = FVector::ZeroVector;

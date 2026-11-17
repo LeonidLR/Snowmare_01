@@ -93,7 +93,7 @@ bool FMantleRulesOverTest::RunTest(const FString&)
 	TestTrue(TEXT("a 135 cm fence (10 cm thick): over"), Over.IsGo());
 	TestEqual(TEXT("... high_fence_over"), MantleClassOf(Config, Over), FName(TEXT("high_fence_over")));
 	TestEqual(TEXT("... HighFenceVault"), MantleClipName(Config, Over), FString(TEXT("HighFenceVault")));
-	TestEqual(TEXT("... starts over.start_cm from the face"), Over.ApproachCm, 110.f);
+	// B17-4: the clip's own start (its hand plant on the fence, measured), not over_start_cm.
 	Fence.HeightCm = 130.f;
 	TestTrue(TEXT("a 130 cm fence: 135 - tolerance, over"), MantleRules::Decide(Config, Fence).IsGo());
 	Fence.HeightCm = 129.f;
@@ -384,9 +384,107 @@ bool FMantleRulesClipContactTest::RunTest(const FString&)
 	TestFalse(TEXT("a ledge point under 0.6 x a 300 cm rise: no plant"), MantleRules::AnalyseClipTrack(Config, MantleSyntheticTrack(true), 300.f).bValid);
 	// Too few samples: nothing.
 	TestFalse(TEXT("an empty track: no plant"), MantleRules::AnalyseClipTrack(Config, FMantleClipTrack(), 140.f).bValid);
+	TestFalse(TEXT("a resting plant is no slide"), Contact.bSlide);
+	TestFalse(TEXT("hanging hands are no slide either (they move with the body)"), Hanging.bSlide);
 	return true;
 }
 
+namespace MantleRulesTestUtil
+{
+	/**
+	 * B17-3: a synthetic run climb (RunHighClimb's shape, MantleClickSmoke 2026-11-17) at 30 Hz, 1.5 s: the root runs 200 cm/s forward, from
+	 * 0.4 s it rises to 140 cm by 0.8 s (and runs on). The hands swing at the hip, reach the ledge's height (z 148 = the frame-0 feet 8 + the
+	 * 140 cm rise) at x 230 by 0.4 s and slide forward over the top - 150 cm/s until 0.5 s, then 60 cm/s until 0.6 s (the slowest), then
+	 * 180 cm/s - never resting (align.plant_speed_cm_s 80 is not met for align.plant_hold_s), then rise with the body.
+	 */
+	static FMantleClipTrack MantleSlidingTrack()
+	{
+		FMantleClipTrack Track;
+		Track.SampleSeconds = 1.f / 30.f;
+		for (int32 Index = 0; Index <= 45; ++Index)
+		{
+			const float T = Track.TimeAt(Index);
+			const FVector Root(200.f * T, 0.f, 140.f * FMath::Clamp((T - 0.4f) / 0.4f, 0.f, 1.f));
+			FVector Hand;
+			if (T <= 0.4f)
+			{
+				Hand = FMath::Lerp(FVector(0.f, 0.f, 100.f), FVector(230.f, 0.f, 148.f), T / 0.4f);
+			}
+			else if (T <= 0.5f)
+			{
+				Hand = FVector(230.f + 150.f * (T - 0.4f), 0.f, 148.f);
+			}
+			else if (T <= 0.6f)
+			{
+				Hand = FVector(245.f + 60.f * (T - 0.5f), 0.f, 148.f);
+			}
+			else
+			{
+				Hand = FVector(251.f + 180.f * (T - 0.6f), 0.f, 148.f + 300.f * (T - 0.6f));
+			}
+			Track.Root.Add(Root);
+			Track.Pelvis.Add(Root + FVector(0.f, 0.f, 95.f));
+			Track.HandL.Add(Hand + FVector(0.f, -20.f, 0.f));
+			Track.HandR.Add(Hand + FVector(0.f, 20.f, 0.f));
+			Track.FootL.Add(Root + FVector(0.f, -12.f, 8.f));
+			Track.FootR.Add(Root + FVector(0.f, 12.f, 8.f));
+		}
+		return Track;
+	}
+}
+
+MANTLE_RULES_TEST(FMantleRulesSlideContactTest, "SlideContact")
+bool FMantleRulesSlideContactTest::RunTest(const FString&)
+{
+	using namespace MantleRulesTestUtil;
+	const FMantleConfig Config = MantleRules::MakeDefaultConfig();
+	const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, MantleSlidingTrack(), 140.f);
+	TestTrue(TEXT("sliding hands: a contact all the same"), Contact.bValid && Contact.bSlide);
+	TestTrue(FString::Printf(TEXT("... at the slowest frame on the ledge, 0.50 - 0.60 s (%.3f)"), Contact.ContactSeconds),
+		Contact.ContactSeconds >= 0.5f && Contact.ContactSeconds <= 0.6f + KINDA_SMALL_NUMBER);
+	TestTrue(FString::Printf(TEXT("... the hand on the ledge's height (%s)"), *Contact.HandPoint.ToCompactString()), FMath::IsNearlyEqual(Contact.HandPoint.Z, 148.f, 1.f));
+	// The run-up: the face where the hand meets the ledge, minus the grip (245..251 - 8 cm), not the clip's whole forward travel.
+	const float RunUp = MantleRules::ContactStartCm(Config, Contact);
+	TestTrue(FString::Printf(TEXT("... the run-up 237 - 243 cm (%.1f)"), RunUp), RunUp >= 236.5f && RunUp <= 243.5f);
+	// A slide faster than align.slide_speed_cm_s is no contact (a hand swept through the ledge's height).
+	FMantleConfig Strict = Config;
+	Strict.AlignSlideSpeedCmPerSecond = 40.f;
+	TestFalse(TEXT("slower than any frame required: no contact"), MantleRules::AnalyseClipTrack(Strict, MantleSlidingTrack(), 140.f).bValid);
+	// The ledge far above the hands (a 230 cm rise): no frame at its height.
+	TestFalse(TEXT("hands under a 230 cm ledge: no contact"), MantleRules::AnalyseClipTrack(Config, MantleSlidingTrack(), 230.f).bValid);
+	return true;
+}
+
+MANTLE_RULES_TEST(FMantleRulesGhostPoseTest, "GhostPose")
+bool FMantleRulesGhostPoseTest::RunTest(const FString&)
+{
+	// B17-2 (designer option A): the hover ghost's frame = the middle of the contact hand's hold on the lip.
+	using namespace MantleRulesTestUtil;
+	const FMantleConfig Config = MantleRules::MakeDefaultConfig();
+	const FMantleClipTrack Track = MantleSyntheticTrack(true);
+	const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, Track, 140.f);
+	bool bLeft = false;
+	const int32 Sample = MantleRules::GhostPoseSample(Config, Track, Contact, bLeft);
+	TestTrue(TEXT("a resting plant: a ghost frame"), Sample != INDEX_NONE);
+	TestTrue(TEXT("... of the planted (left) hand"), bLeft);
+	// The left hand rests on the ledge from ~0.43 s to the end; the hold is cut at the exit (~1.23 s): its middle ~0.83 s.
+	const float Time = Sample != INDEX_NONE ? Track.TimeAt(Sample) : -1.f;
+	TestTrue(FString::Printf(TEXT("... the hold's middle, 0.75 - 0.90 s (%.3f), not the plant nor the end pose"), Time), Time >= 0.75f && Time <= 0.9f);
+	TestTrue(TEXT("... the hand still on the ledge then"), Sample != INDEX_NONE && FVector::Dist(Track.HandL[Sample], Contact.HandPoint) <= Config.AlignPlantReachCm);
+	FMantleConfig AtPlant = Config;
+	AtPlant.GhostPoseFraction = 0.f;
+	const int32 Plant = MantleRules::GhostPoseSample(AtPlant, Track, Contact, bLeft);
+	TestTrue(TEXT("ghost.pose_fraction 0: the plant's frame"), Plant != INDEX_NONE && FMath::IsNearlyEqual(Track.TimeAt(Plant), Contact.ContactSeconds, Track.SampleSeconds));
+	// A sliding run clip: the hand leaves its contact point soon - the frame stays inside that short hold.
+	const FMantleClipTrack Slide = MantleSlidingTrack();
+	const FMantleClipContact SlideContact = MantleRules::AnalyseClipTrack(Config, Slide, 140.f);
+	const int32 SlideSample = MantleRules::GhostPoseSample(Config, Slide, SlideContact, bLeft);
+	TestTrue(TEXT("a slide: a ghost frame within align.plant_reach_cm of the contact"), SlideSample != INDEX_NONE
+		&& FVector::Dist((bLeft ? Slide.HandL : Slide.HandR)[SlideSample], SlideContact.HandPoint) <= Config.AlignPlantReachCm);
+	TestEqual(TEXT("no contact: no frame"), MantleRules::GhostPoseSample(Config, MantleSyntheticTrack(false), MantleRules::AnalyseClipTrack(Config, MantleSyntheticTrack(false), 140.f), bLeft),
+		static_cast<int32>(INDEX_NONE));
+	return true;
+}
 MANTLE_RULES_TEST(FMantleRulesDescentTest, "Descent")
 bool FMantleRulesDescentTest::RunTest(const FString&)
 {

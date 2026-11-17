@@ -60,6 +60,9 @@ namespace MantleRulesInternal
 		{ TEXT("align.plant_reach_cm"), &FMantleConfig::AlignPlantReachCm },
 		{ TEXT("align.plant_min_rise_fraction"), &FMantleConfig::AlignPlantMinRiseFraction },
 		{ TEXT("align.plant_hold_s"), &FMantleConfig::AlignPlantHoldSeconds },
+		{ TEXT("align.slide_speed_cm_s"), &FMantleConfig::AlignSlideSpeedCmPerSecond },
+		{ TEXT("align.slide_body_ratio"), &FMantleConfig::AlignSlideBodyRatio },
+		{ TEXT("ghost.pose_fraction"), &FMantleConfig::GhostPoseFraction },
 		{ TEXT("align.exit_root_cm"), &FMantleConfig::AlignExitRootCm },
 		{ TEXT("align.grip_forward_cm"), &FMantleConfig::AlignGripForwardCm },
 		{ TEXT("align.grip_up_cm"), &FMantleConfig::AlignGripUpCm },
@@ -164,7 +167,7 @@ FMantleConfig MantleRules::MakeDefaultConfig()
 		MakeMantleClip(TEXT("tall_ledge"), R, M, TEXT("RunJumpClimbNEW"), 2.2f, 258.8f, 493.5f),
 		MakeMantleClip(TEXT("very_tall"), S, M, TEXT("JumpClimb"), 6.533f, 334.4f, 69.1f),
 		MakeMantleClip(TEXT("very_tall"), R, M, TEXT("RunJumpClimb"), 3.083f, 334.1f, 432.2f),
-		MakeMantleClip(TEXT("high_fence_over"), S, M, TEXT("HighFenceVault"), 2.1f, 148.7f, 344.2f, 110.f),
+		MakeMantleClip(TEXT("high_fence_over"), S, M, TEXT("HighFenceVault"), 2.1f, 148.7f, 344.2f, 182.f),
 		MakeMantleClip(TEXT("low_mantle"), S, F, TEXT("Low_Climb"), 1.017f, 80.1f, 113.9f),
 		MakeMantleClip(TEXT("low_mantle"), R, F, TEXT("RunLowClimb"), 0.9f, 94.4f, 151.3f),
 		MakeMantleClip(TEXT("high_mantle"), S, F, TEXT("HighClimb"), 1.033f, 136.7f, 164.f),
@@ -174,7 +177,7 @@ FMantleConfig MantleRules::MakeDefaultConfig()
 		MakeMantleClip(TEXT("tall_ledge"), R, F, TEXT("RunJumpClimbNEW"), 2.2f, 248.1f, 473.f),
 		MakeMantleClip(TEXT("very_tall"), S, F, TEXT("JumpClimb"), 6.533f, 320.5f, 66.2f),
 		MakeMantleClip(TEXT("very_tall"), R, F, TEXT("RunJumpClimb"), 3.083f, 320.2f, 414.3f),
-		MakeMantleClip(TEXT("high_fence_over"), S, F, TEXT("HighFenceVault"), 2.1f, 142.5f, 329.9f, 110.f),
+		MakeMantleClip(TEXT("high_fence_over"), S, F, TEXT("HighFenceVault"), 2.1f, 142.5f, 329.9f, 174.f),
 	};
 	return Config;
 }
@@ -728,6 +731,35 @@ FMantleClipContact MantleRules::AnalyseClipTrack(const FMantleConfig& Config, co
 			}
 		}
 	}
+	if (Plant == INDEX_NONE)
+	{
+		// 1b. B17-3, no hand rests (a run clip's hands slide over the top): the slowest hand frame at the ledge's height (the root's rise over
+		// the frame-0 feet, within align.hand_edge_tolerance_cm), after it reached out, while the root is still below the ledge.
+		float Slowest = Config.AlignSlideSpeedCmPerSecond + KINDA_SMALL_NUMBER; // the earliest of equally slow frames
+		const float LedgeZ = Ground + FMath::Max(0.f, RiseCm);
+		for (const TArray<FVector>* Hand : { &Track.HandL, &Track.HandR })
+		{
+			bool bReached = false;
+			for (int32 Index = 1; Index < Num - 1; ++Index)
+			{
+				bReached |= FVector::Dist((*Hand)[Index], (*Hand)[0]) >= Config.AlignPlantReachCm;
+				// The body still below the ledge (the hands lead it; RunHighClimb's hands still press the top at 0.7 s when its root is over it).
+				if (!bReached || FMath::Abs(static_cast<float>((*Hand)[Index].Z) - LedgeZ) > Config.AlignHandEdgeToleranceCm
+					|| Track.Root[Index].Z - Track.Root[0].Z >= RiseCm || FVector::Dist(Track.Root[Index], Track.Root.Last()) <= Config.AlignExitRootCm)
+				{
+					continue;
+				}
+				const float Speed = SpeedAt(*Hand, Index);
+				if (Speed < Slowest && Speed <= Config.AlignSlideBodyRatio * SpeedAt(Track.Pelvis, Index))
+				{
+					Slowest = Speed;
+					Plant = Index;
+					PlantHand = Hand;
+				}
+			}
+		}
+		Out.bSlide = Plant != INDEX_NONE;
+	}
 	if (Plant != INDEX_NONE)
 	{
 		Out.bValid = true;
@@ -783,6 +815,26 @@ float MantleRules::ContactStartCm(const FMantleConfig& Config, const FMantleClip
 		return -1.f;
 	}
 	return FMath::Max(Config.MinFaceGapCm, static_cast<float>(Contact.HandPoint.X - Contact.RootStart.X) - Config.AlignGripForwardCm);
+}
+
+int32 MantleRules::GhostPoseSample(const FMantleConfig& Config, const FMantleClipTrack& Track, const FMantleClipContact& Contact, bool& bOutLeftHand)
+{
+	bOutLeftHand = true;
+	const int32 Num = Track.Num();
+	if (!Contact.bValid || Num < 2 || Track.SampleSeconds <= 0.f || Track.HandL.Num() != Num || Track.HandR.Num() != Num)
+	{
+		return INDEX_NONE;
+	}
+	const int32 Plant = FMath::Clamp(FMath::RoundToInt(Contact.ContactSeconds / Track.SampleSeconds), 0, Num - 1);
+	bOutLeftHand = FVector::DistSquared(Track.HandL[Plant], Contact.HandPoint) <= FVector::DistSquared(Track.HandR[Plant], Contact.HandPoint);
+	const TArray<FVector>& Hand = bOutLeftHand ? Track.HandL : Track.HandR;
+	const int32 Exit = FMath::Clamp(FMath::RoundToInt(Contact.ExitSeconds / Track.SampleSeconds), Plant, Num - 1);
+	int32 HoldEnd = Plant;
+	while (HoldEnd < Exit && FVector::Dist(Hand[HoldEnd + 1], Contact.HandPoint) <= Config.AlignPlantReachCm)
+	{
+		++HoldEnd;
+	}
+	return Plant + FMath::RoundToInt(FMath::Clamp(Config.GhostPoseFraction, 0.f, 1.f) * static_cast<float>(HoldEnd - Plant));
 }
 
 bool MantleRules::IsHeavyHit(const FMantleConfig& Config, float FinalDamage)

@@ -796,7 +796,15 @@ bool ACodexTacticsPlayerController::UpdateMantleHover(AOperativeCharacter* Opera
 			}
 			if (MantleGhost)
 			{
-				MantleGhost->ShowMantleFor(*Operative, Plan.Landing, static_cast<float>(Plan.Dir.Rotation().Yaw), Plan.bTop);
+				// B17-2 (designer option A): a frame from the middle of the climb clip the click would play, at the face (hands on the lip).
+				UAnimSequenceBase* PoseClip = nullptr;
+				float PoseSeconds = 0.f;
+				FVector PoseLocation = FVector::ZeroVector;
+				FName AnchorBone = NAME_None;
+				FVector AnchorTarget = FVector::ZeroVector;
+				const bool bPosed = Operative->PlanMantleGhostPose(Plan, PoseClip, PoseSeconds, PoseLocation, AnchorBone, AnchorTarget);
+				MantleGhost->ShowMantleFor(*Operative, Plan.Landing, static_cast<float>(Plan.Dir.Rotation().Yaw), Plan.bTop, bPosed ? PoseClip : nullptr, PoseSeconds,
+					PoseLocation, AnchorBone, AnchorTarget);
 			}
 		}
 		else if (MantleGhost && MantleGhost->IsShown())

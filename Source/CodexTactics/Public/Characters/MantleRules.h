@@ -202,6 +202,16 @@ struct FMantleConfig
 	float AlignPlantMinRiseFraction = 0.6f;
 	/** ... staying planted at least this long, s. "align.plant_hold_s" */
 	float AlignPlantHoldSeconds = 0.1f;
+	/**
+	 * B17-3: a clip whose hands never rest on the ledge (the run clips: RunHighClimb's hands slide along the top at ~100-150 cm/s) takes its
+	 * slowest hand frame at the ledge's height (within align.hand_edge_tolerance_cm) as the contact, when that hand is no faster than this,
+	 * cm/s. "align.slide_speed_cm_s"
+	 */
+	float AlignSlideSpeedCmPerSecond = 250.f;
+	/** ... and no faster than this fraction of the pelvis then (the body climbs past the hand; a hand hanging on the body moves with it). "align.slide_body_ratio" */
+	float AlignSlideBodyRatio = 0.5f;
+	/** B17-2 (designer option A): the hover ghost shows the clip's frame this far through the contact hand's hold on the lip (0 = the plant). "ghost.pose_fraction" */
+	float GhostPoseFraction = 0.5f;
 	/** A hand resting once the root is within this distance of its last spot is the end pose, not a plant, cm. "align.exit_root_cm" */
 	float AlignExitRootCm = 3.f;
 	/** A planted wrist sits this far past the lip and this high over the top (the hand's point is put there, not on the lip), cm.
@@ -273,6 +283,8 @@ struct FMantleClipContact
 {
 	/** A hand plant was found (else the climb keeps one warp window over the whole clip). */
 	bool bValid = false;
+	/** B17-3: no hand rests on the ledge - the contact is the slowest hand frame at the ledge's height (align.slide_speed_cm_s). */
+	bool bSlide = false;
 	/** The first hand plant: its time and the wrist's position then. */
 	float ContactSeconds = 0.f;
 	FVector HandPoint = FVector::ZeroVector;
@@ -344,6 +356,13 @@ struct FMantleClickPlan
 	FVector Landing = FVector::ZeroVector;
 	bool bTop = true;
 	float HeightCm = 0.f;
+	/** Batch 2: the climbed face (a point on it at knee height) and the clip's start distance from it (FMantleDecision::ApproachCm), cm. */
+	FVector FacePoint = FVector::ZeroVector;
+	float ApproachCm = 0.f;
+	/** Batch 2: the clip the click would play (its config index), the lip on the face (the top's height) and the top's depth (B17-2: the ghost's pose). */
+	int32 ClipIndex = INDEX_NONE;
+	FVector EdgeTop = FVector::ZeroVector;
+	float DepthCm = 0.f;
 	/** The obstacle's top as clicked (a face click: the top just inside the face). */
 	FHitResult TopHit;
 	const class AActor* Obstacle = nullptr;
@@ -459,6 +478,13 @@ namespace MantleRules
 	 * min_face_gap_cm. Negative without a plant.
 	 */
 	CODEXTACTICS_API float ContactStartCm(const FMantleConfig& Config, const FMantleClipContact& Contact);
+
+	/**
+	 * B17-2 (designer option A, 2026-11-17: the hover ghost = a frame from the middle of the climb, hands on the lip): the track sample
+	 * ghost.pose_fraction through the contact hand's hold - from the contact to the last sample (not past the exit) the hand stays within
+	 * align.plant_reach_cm of its contact point. INDEX_NONE without a contact. bOutLeftHand: the contact hand.
+	 */
+	CODEXTACTICS_API int32 GhostPoseSample(const FMantleConfig& Config, const FMantleClipTrack& Track, const FMantleClipContact& Contact, bool& bOutLeftHand);
 
 	/** A heavy hit (FinalDamage >= HeavyHitDamage) cancels a running climb. */
 	CODEXTACTICS_API bool IsHeavyHit(const FMantleConfig& Config, float FinalDamage);

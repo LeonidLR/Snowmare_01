@@ -147,15 +147,19 @@ void ACoverGhostActor::ShowPose(const AOperativeCharacter& InOperative, const FC
 	ApplyGhostBody(InOperative, Asset, Clip, WallYaw, CoverRules::DefaultStanceFor(InSlot.Height) == EOperativeStance::Crouching);
 }
 
-void ACoverGhostActor::ShowMantleFor(const AOperativeCharacter& InOperative, const FVector& LandingFeet, float Yaw, bool bCrouched)
+void ACoverGhostActor::ShowMantleFor(const AOperativeCharacter& InOperative, const FVector& LandingFeet, float Yaw, bool bCrouched, UAnimSequenceBase* ClimbClip,
+	float ClipSeconds, const FVector& PoseLocation, FName AnchorBone, const FVector& AnchorTarget)
 {
 	const USkeletalMeshComponent* Source = InOperative.GetMesh();
 	USkeletalMesh* Asset = Source ? Cast<USkeletalMesh>(Source->GetSkinnedAsset()) : nullptr;
 	const UOperativeAnimInstance* Anim = Source ? Cast<UOperativeAnimInstance>(Source->GetAnimInstance()) : nullptr;
-	// The pose he ends the climb in: crouched on a top (designer Q3), standing past a fence - his own locomotion idles.
-	UAnimSequenceBase* Clip = Anim ? (bCrouched ? Anim->Animations.CrouchIdle.Get() : Anim->Animations.Idle.Get()) : nullptr;
+	// B17-2: the climb clip's frame (hands on the lip) when given; else the pose he ends the climb in, his locomotion idles (empty on the
+	// operatives' anim instances - their ABP plays its own: the T-pose the designer saw).
+	UAnimSequenceBase* Clip = ClimbClip ? ClimbClip : Anim ? (bCrouched ? Anim->Animations.CrouchIdle.Get() : Anim->Animations.Idle.Get()) : nullptr;
+	const FVector Where = ClimbClip ? PoseLocation : LandingFeet + FVector(0.f, 0.f, InOperative.GetSimpleCollisionHalfHeight());
 	if (bShown && bMantlePose && Operative.Get() == &InOperative && bShownCrouched == bCrouched && ShownClip == Clip
-		&& FVector::DistSquared(Slot.WorldLocation, LandingFeet) <= 1.f && FMath::IsNearlyEqual(static_cast<float>(GetActorRotation().Yaw), Yaw, 1.f))
+		&& FMath::IsNearlyEqual(ShownClipSeconds, ClipSeconds, 0.01f) && FVector::DistSquared(ShownPoseLocation, Where) <= 1.f
+		&& FMath::IsNearlyEqual(static_cast<float>(GetActorRotation().Yaw), Yaw, 1.f))
 	{
 		return;
 	}
@@ -167,9 +171,25 @@ void ACoverGhostActor::ShowMantleFor(const AOperativeCharacter& InOperative, con
 	bMantlePose = true;
 	bShownStealthMode = InOperative.IsInStealthMode();
 	bShownCrouched = bCrouched;
-	// His standing capsule's half height over the landing (the mesh's relative transform below is the same pair as his own).
-	SetActorLocationAndRotation(LandingFeet + FVector(0.f, 0.f, InOperative.GetSimpleCollisionHalfHeight()), FRotator(0.f, Yaw, 0.f));
+	ShownClipSeconds = ClipSeconds;
+	ShownPoseLocation = Where;
+	// The landing: his standing capsule's half height over it (the mesh's relative transform below is the same pair as his own); a climb
+	// frame: where its hand sits on the lip.
+	SetActorLocationAndRotation(Where, FRotator(0.f, Yaw, 0.f));
 	ApplyGhostBody(InOperative, Asset, Clip, 0.f, bCrouched);
+	if (ClimbClip && Body->GetAnimInstance())
+	{
+		// Frozen on that frame; the pose evaluated now (a ghost nobody renders yet - or a headless smoke - would keep the reference pose).
+		Body->SetPosition(ClipSeconds, false);
+		Body->Stop();
+		Body->TickAnimation(0.f, false);
+		Body->RefreshBoneTransforms();
+		// The contact hand exactly on the lip: the posed hand measured (the clip's root lock decides how the frame sits on the mesh origin).
+		if (!AnchorBone.IsNone() && Body->GetBoneIndex(AnchorBone) != INDEX_NONE)
+		{
+			AddActorWorldOffset(AnchorTarget - Body->GetSocketLocation(AnchorBone));
+		}
+	}
 }
 
 void ACoverGhostActor::ApplyGhostBody(const AOperativeCharacter& InOperative, USkeletalMesh* Asset, UAnimSequenceBase* Clip, float WallYaw, bool bCrouchedPlaceholder)

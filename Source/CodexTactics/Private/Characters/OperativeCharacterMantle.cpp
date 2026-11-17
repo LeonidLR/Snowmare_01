@@ -57,8 +57,15 @@ namespace OperativeMantleInternal
 	constexpr float MantleOrderTimeoutSeconds = 30.f;
 	/** The hop down off a low top (the vault's arc), s. */
 	constexpr float MantleHopSeconds = 0.6f;
-	/** A run clip starts once the face is no farther than its own run-up (forward warp <= this; never stretched to start early). */
+	/**
+	 * A run clip starts once the face is no farther than its own run-up x this (never stretched to start early). The run-up: the face's distance
+	 * at the clip's hand contact (its track, B17-3 - the clip's root travel says nothing about where its hands meet the ledge); without a contact
+	 * the forward warp of its whole travel.
+	 */
 	constexpr float MantleRunStartWarp = 1.05f;
+	/** B17-4: a path's fence link is probed this close to its start (2D), walking, cm; the vault starts within this past the clip's start distance, cm. */
+	constexpr float MantleOverEarlyReachCm = 220.f;
+	constexpr float MantleOverStartSlackCm = 10.f;
 	/** The torso joints the wall guard keeps off the face (hands and feet may touch the edge / the wall). */
 	static const FName MantleTorsoBones[] = { FName(TEXT("pelvis")), FName(TEXT("spine_03")), FName(TEXT("head")) };
 }
@@ -118,6 +125,14 @@ const FMantleClipTrack* AOperativeCharacter::GetMantleClipTrack(int32 ClipIndex)
 	return Mantle->FindClipTrack(ClipIndex);
 }
 
+float AOperativeCharacter::GetMantleClipSeconds() const
+{
+	const UAnimInstance* Anim = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	const UAnimMontage* Montage = MantleMontage.Get();
+	const FAnimMontageInstance* Instance = bMantling && Anim && Montage ? Anim->GetInstanceForMontage(Montage) : nullptr;
+	return Instance ? Instance->GetPosition() : -1.f;
+}
+
 EMantleBody AOperativeCharacter::GetMantleBody() const
 {
 	const USkeletalMesh* MantleBodyAsset = GetMesh() ? GetMesh()->GetSkeletalMeshAsset() : nullptr;
@@ -153,6 +168,30 @@ bool AOperativeCharacter::ProbeMantleAhead(const FVector& Dir, float ReachCm, FM
 		Out.Probe.bLandingFree = false; // another man's climb lands there
 	}
 	return true;
+}
+
+bool AOperativeCharacter::IsMantleRunStartReached(const FMantleSite& Site, const FMantleDecision& Decision)
+{
+	using namespace OperativeMantleInternal;
+	if (!Decision.IsGo() || Decision.Gait != EMantleGait::Running)
+	{
+		return false;
+	}
+	// B17-3 (designer 2026-11-17: the double-click run climb started "far from the edge" - MantleClickSmoke: RunHighClimb 394 cm off the face, its
+	// hands 59 cm short of the lip at the contact): the clip starts at its own run-up, the face where its hands meet the ledge.
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	if (CVarMantleAlign.GetValueOnGameThread() != 0 && Config.Clips.IsValidIndex(Decision.ClipIndex))
+	{
+		if (const FMantleClipTrack* Track = GetMantleClipTrack(Decision.ClipIndex))
+		{
+			const float RunUp = MantleRules::ContactStartCm(Config, MantleRules::AnalyseClipTrack(Config, *Track, Config.Clips[Decision.ClipIndex].RiseCm));
+			if (RunUp > 0.f)
+			{
+				return Site.Probe.FaceDistanceCm <= RunUp * MantleRunStartWarp;
+			}
+		}
+	}
+	return Decision.ForwardWarp <= MantleRunStartWarp;
 }
 
 bool AOperativeCharacter::IsRunningForMantle() const
@@ -243,11 +282,21 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 	}
 	const FMantleClip& ClipData = Config.Clips[Decision.ClipIndex];
 	const bool bTop = Site.Destination == EMantleDestination::Top;
+	// The clip's own contact (its hand plant / slide on the ledge; MantleRules::AnalyseClipTrack).
+	const FMantleClipTrack* AlignTrack = CVarMantleAlign.GetValueOnGameThread() != 0 ? GetMantleClipTrack(Decision.ClipIndex) : nullptr;
+	const FMantleClipContact AlignContact = AlignTrack ? MantleRules::AnalyseClipTrack(Config, *AlignTrack, ClipData.RiseCm) : FMantleClipContact();
+	// B17-4 (designer 2026-11-17: "his body passes THROUGH the fence first, only then the vault clip plays"; MantleFenceRouteSmoke: started 98-113 cm
+	// off the fence, HighFenceVault's hands came down 75-90 cm PAST its near face, the pelvis 34-49 cm through it before the plant): over a fence
+	// the hands are warped onto its near lip at the plant too (the first window), the grip at most the middle of its thin top.
+	const bool bOverContact = !bTop && MantleNavigation::IsBatch2Enabled() && AlignContact.bValid;
+	const float GripForward = bTop ? Config.AlignGripForwardCm : FMath::Min(Config.AlignGripForwardCm, Site.Probe.DepthCm * 0.5f);
 	// The landing: a top's planned spot; over a fence the clip's own travel past the face when that ground is free (no squeeze), else the probe's.
 	FVector Landing = Site.Landing;
 	if (!bTop)
 	{
-		const float Past = ClipData.ForwardCm - MantleRules::ClipStartCm(Config, ClipData) + (Decision.ApproachCm - Site.Probe.FaceDistanceCm);
+		// From the plant on the lip the clip carries him its own remaining travel; without a contact: its travel past its start distance.
+		const float Past = bOverContact ? static_cast<float>(AlignTrack->Root.Last().X - AlignContact.HandPoint.X) + GripForward
+			: ClipData.ForwardCm - MantleRules::ClipStartCm(Config, ClipData) + (Decision.ApproachCm - Site.Probe.FaceDistanceCm);
 		const FVector Far = Site.FacePoint + Site.Dir * FMath::Max(Past, static_cast<float>(FVector::Dist2D(Site.FacePoint, Site.Landing)));
 		FMantleSite FarSite = Site;
 		FCollisionQueryParams Params(SCENE_QUERY_STAT(OperativeMantleFar), false, this);
@@ -319,23 +368,23 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 	MantleRootLock = FVector::ZeroVector;
 	if (CVarMantleAlign.GetValueOnGameThread() != 0)
 	{
-		if (const FMantleClipTrack* Track = GetMantleClipTrack(Decision.ClipIndex))
+		if (const FMantleClipTrack* Track = AlignTrack)
 		{
-			const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, *Track, ClipData.RiseCm);
+			const FMantleClipContact& Contact = AlignContact;
 			// The climb ends when the clip's motion is over: its idle tail would be the "freeze" before the locomotion takes him on.
 			ExitSeconds = FMath::Clamp(MantleNavigation::IsBatch2Enabled() ? Contact.ExitSeconds : Contact.StillExitSeconds, Track->SampleSeconds, PlayLength);
 			// Root lock = the first frame: the mesh draws the body offset by the root's frame-0 position for the whole clip (HighClimb: 163 cm
 			// up = the "thrown up, then drops" pop; the tall ledges: 36 cm back off the wall). The mesh is shifted back by it, weighted by the
 			// montage's blend (UpdateMantleMeshShift): the body is drawn root-relative, where the root motion carries the capsule.
 			MantleRootLock = Contact.RootStart;
-			if (bTop && Contact.bValid && Contact.ContactSeconds > Track->SampleSeconds && Contact.ContactSeconds < ExitSeconds - Track->SampleSeconds)
+			if ((bTop || bOverContact) && Contact.bValid && Contact.ContactSeconds > Track->SampleSeconds && Contact.ContactSeconds < ExitSeconds - Track->SampleSeconds)
 			{
 				// Window 1 (start -> the plant): his feet (the mesh origin, as the warp counts them) go where the planted wrist lands on the
 				// lip (+ the grip offsets); drawn root-relative, the wrist sits HandPoint - RootAtContact from the origin at the plant.
 				// Only forward and height are aligned; sideways the clip keeps its own drift.
 				const FRotator Facing(0.f, Site.Dir.Rotation().Yaw, 0.f);
 				const FVector Origin = GetMesh()->GetComponentLocation();
-				const FVector Wrist = Site.EdgeTop + Site.Dir * Config.AlignGripForwardCm + FVector(0.f, 0.f, Config.AlignGripUpCm);
+				const FVector Wrist = Site.EdgeTop + Site.Dir * GripForward + FVector(0.f, 0.f, Config.AlignGripUpCm);
 				ContactFeet = Wrist - Facing.RotateVector(Contact.HandPoint - Contact.RootAtContact);
 				const FVector Natural = Origin + Facing.RotateVector(Contact.RootAtContact - Contact.RootStart);
 				const FVector Across = FVector::CrossProduct(FVector::UpVector, Site.Dir).GetSafeNormal();
@@ -365,6 +414,7 @@ bool AOperativeCharacter::StartMantle(const FMantleSite& Site, const FMantleDeci
 	MantleTopZ = Site.TopZ;
 	MantleDepthCm = Site.Probe.DepthCm;
 	MantleGuardPushCm = 0.f;
+	MantleContactSeconds = ContactSeconds;
 	bMantleOnTop = bTop;
 	++MantleCount;
 	++MantleRotation;
@@ -706,6 +756,53 @@ bool AOperativeCharacter::PlanMantleClick(const FHitResult& Hit, FMantleClickPla
 	}
 	Out.Landing = Site.Landing;
 	Out.bTop = Site.Destination == EMantleDestination::Top;
+	Out.FacePoint = Site.FacePoint;
+	Out.ApproachCm = Decision.ApproachCm;
+	Out.ClipIndex = Decision.ClipIndex;
+	Out.EdgeTop = Site.EdgeTop;
+	Out.DepthCm = Site.Probe.DepthCm;
+	return true;
+}
+
+bool AOperativeCharacter::PlanMantleGhostPose(const FMantleClickPlan& Plan, UAnimSequenceBase*& OutClip, float& OutSeconds, FVector& OutLocation, FName& OutAnchorBone,
+	FVector& OutAnchorTarget)
+{
+	OutAnchorBone = NAME_None;
+	// B17-2 (designer 2026-11-17, option A): the hover ghost was in the T-pose - it played his locomotion idles (Animations.Idle / CrouchIdle),
+	// which the operatives' anim instances leave empty (their ABP plays its own). Now: a frozen frame of the climb clip the click would play,
+	// from the middle of its hand hold on the lip, at the face.
+	UWorld* World = GetWorld();
+	UMantleSubsystem* Mantle = World ? World->GetSubsystem<UMantleSubsystem>() : nullptr;
+	const FMantleConfig& Config = MantleRules::GetConfig();
+	OutClip = Mantle && Config.Clips.IsValidIndex(Plan.ClipIndex) ? Mantle->GetClip(Plan.ClipIndex) : nullptr;
+	const FMantleClipTrack* Track = OutClip ? GetMantleClipTrack(Plan.ClipIndex) : nullptr;
+	if (!Track || Track->Num() == 0 || !GetMesh())
+	{
+		OutClip = nullptr;
+		return false;
+	}
+	const FMantleClipContact Contact = MantleRules::AnalyseClipTrack(Config, *Track, Config.Clips[Plan.ClipIndex].RiseCm);
+	bool bLeftHand = true;
+	const int32 Sample = MantleRules::GhostPoseSample(Config, *Track, Contact, bLeftHand);
+	// The ghost's body is a copy of his mesh with his mesh's relative transform. The single-node clip draws its root locked to the first frame (as the
+	// climb's montage): a bone of the track (the actor's frame) sits at Location + Facing * (RelativeLocation + bone - (root - root at frame 0)).
+	// The ghost then measures its posed hand and puts it exactly on the grip (ACoverGhostActor::ShowMantleFor's anchor).
+	const FQuat Facing = FRotator(0.f, Plan.Dir.Rotation().Yaw, 0.f).Quaternion();
+	const FVector Relative = GetMesh()->GetRelativeLocation() - MantleMeshShift;
+	if (Sample != INDEX_NONE)
+	{
+		const float GripForward = Plan.bTop ? Config.AlignGripForwardCm : FMath::Min(Config.AlignGripForwardCm, Plan.DepthCm * 0.5f);
+		const FVector Wrist = Plan.EdgeTop + Plan.Dir * GripForward + FVector(0.f, 0.f, Config.AlignGripUpCm);
+		const FVector& Hand = (bLeftHand ? Track->HandL : Track->HandR)[Sample];
+		OutSeconds = FMath::Min(Track->TimeAt(Sample), OutClip->GetPlayLength());
+		OutLocation = Wrist - Facing.RotateVector(Relative + Hand - (Track->Root[Sample] - Track->Root[0]));
+		OutAnchorBone = bLeftHand ? FName(TEXT("hand_l")) : FName(TEXT("hand_r"));
+		OutAnchorTarget = Wrist;
+		return true;
+	}
+	// No hand contact in the clip: its middle frame, drawn from the base he climbs from (root-relative, as the climb draws it).
+	OutSeconds = OutClip->GetPlayLength() * FMath::Clamp(Config.GhostPoseFraction, 0.f, 1.f);
+	OutLocation = Plan.Base + FVector(0.f, 0.f, GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
 	return true;
 }
 
@@ -721,7 +818,17 @@ bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint,
 	{
 		return true; // already at the face
 	}
-	if (OrderMoveTo(Plan.Base, bSprint) != EOperativeOrderResult::Accepted)
+	// B17-4: over a fence the clip starts at its own start distance (its hand plant on the fence's lip), not at the top's click base.
+	FVector Base = Plan.Base;
+	if (!Plan.bTop && Plan.ApproachCm > FVector::Dist2D(Plan.Base, Plan.FacePoint))
+	{
+		Base = FVector(Plan.FacePoint.X, Plan.FacePoint.Y, Plan.Base.Z) - Plan.Dir * Plan.ApproachCm;
+		if (OrderMoveTo(Base, bSprint) != EOperativeOrderResult::Accepted)
+		{
+			Base = Plan.Base;
+		}
+	}
+	if (Base == Plan.Base && OrderMoveTo(Plan.Base, bSprint) != EOperativeOrderResult::Accepted)
 	{
 		if (OutReason)
 		{
@@ -730,7 +837,7 @@ bool AOperativeCharacter::OrderMantleTop(const FHitResult& TopHit, bool bSprint,
 		return false;
 	}
 	bMantleOrderPending = true;
-	MantleOrderBase = Plan.Base;
+	MantleOrderBase = Base;
 	MantleOrderDir = Plan.Dir;
 	MantleOrderSeconds = 0.f;
 	UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: climb order onto %s (%.0f cm) - walking to its face"), *DisplayName.ToString(),
@@ -1142,7 +1249,7 @@ void AOperativeCharacter::UpdateMantleTrigger(float DeltaTime)
 			if (ProbeMantleAhead(MantleOrderDir, MantleRunReachCm, Site) && Mantle)
 			{
 				const FMantleDecision Decision = MantleRules::Decide(Config, Site.Probe, [Mantle](int32 Index) { return Mantle->GetClip(Index) != nullptr; });
-				if (Decision.IsGo() && Decision.Gait == EMantleGait::Running && Decision.ForwardWarp <= MantleRunStartWarp && StartMantle(Site, Decision, true, INDEX_NONE))
+				if (IsMantleRunStartReached(Site, Decision) && StartMantle(Site, Decision, true, INDEX_NONE))
 				{
 					return;
 				}
@@ -1165,7 +1272,9 @@ void AOperativeCharacter::UpdateMantleTrigger(float DeltaTime)
 		return;
 	}
 	// A path over an obstacle, running: the run clip when the face lies in its window (else the link at the face plays the standing one).
-	if (!bMantlePathAllowed || !bRunning || !bMoving || bCoolingDown || !Following->GetPath().IsValid())
+	// B17-4: a path over a fence (walking or running - no run clip there) starts the vault at the clip's own start distance, before the
+	// link's start (80 cm off the face: the clip's hand plant lies 182 cm off, the body went through the fence).
+	if (!bMantlePathAllowed || !bMoving || bCoolingDown || !Following->GetPath().IsValid())
 	{
 		return;
 	}
@@ -1179,16 +1288,32 @@ void AOperativeCharacter::UpdateMantleTrigger(float DeltaTime)
 	for (const int32 Index : OnPath)
 	{
 		const FMantleLink* Link = Mantle->GetLink(Index);
-		if (!Link || Link->bDown || FVector::Dist2D(GetActorLocation(), Link->Start) > MantleRunReachCm)
+		const float ToStart = Link ? static_cast<float>(FVector::Dist2D(GetActorLocation(), Link->Start)) : 0.f;
+		if (!Link || Link->bDown || ToStart > MantleRunReachCm)
 		{
 			continue;
+		}
+		const int32 LinkClass = MantleRules::FindClass(Config, Link->ClassId);
+		const bool bOverLink = MantleNavigation::IsBatch2Enabled() && Config.Classes.IsValidIndex(LinkClass) && Config.Classes[LinkClass].Destination == EMantleDestination::Over;
+		// Walking: only an over link close ahead and headed for (the clip's start lies a little before the link's start).
+		const FVector Velocity2D = GetVelocity().GetSafeNormal2D();
+		if (!bRunning && (!bOverLink || ToStart > MantleOverEarlyReachCm || FVector::DotProduct(Velocity2D, Link->Dir) < 0.5f))
+		{
+			break;
 		}
 		FMantleSite Site;
 		if (ProbeMantleAhead(Link->Dir, MantleRunReachCm, Site) && Site.Obstacle.Get() == Link->Obstacle.Get())
 		{
 			const FMantleDecision Decision = MantleRules::Decide(Config, Site.Probe, [Mantle](int32 Clip) { return Mantle->GetClip(Clip) != nullptr; });
-			if (Decision.IsGo() && Decision.Gait == EMantleGait::Running && Decision.ForwardWarp <= MantleRunStartWarp)
+			if (IsMantleRunStartReached(Site, Decision))
 			{
+				StartMantle(Site, Decision, false, Index);
+			}
+			else if (bOverLink && Decision.IsGo() && Decision.Gait == EMantleGait::Standing
+				&& Site.Destination == EMantleDestination::Over && Site.Probe.FaceDistanceCm <= Decision.ApproachCm + MantleOverStartSlackCm)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[Mantle] %s: the path's fence link %d - the vault starts at the clip's start, %.0f cm off the face"),
+					*DisplayName.ToString(), Index, Site.Probe.FaceDistanceCm);
 				StartMantle(Site, Decision, false, Index);
 			}
 		}
