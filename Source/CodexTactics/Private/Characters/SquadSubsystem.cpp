@@ -1585,6 +1585,8 @@ void USquadSubsystem::Tick(float DeltaTime)
 	// #57: both corners of a wall held - the held corner's end conditions, the middle men's sweeping looks.
 	UpdateFormationCornerHold(DeltaTime);
 	ApplyCornerHoldSweep(DeltaTime);
+	// R17-1: the squad's turn-taking climb (its members are out of the follow above; their looks override this frame's).
+	UpdateSquadMantle(DeltaTime);
 	ApplyFormationFrame();
 }
 

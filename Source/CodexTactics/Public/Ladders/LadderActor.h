@@ -5,6 +5,7 @@
 #include "Engine/DataTable.h"
 #include "Ladders/LadderRules.h"
 #include "Ladders/LadderTypes.h"
+#include "Ladders/TraversalQueue.h"
 #include "LadderActor.generated.h"
 
 class UBoxComponent;
@@ -150,8 +151,8 @@ public:
 	/** Takes the ladder for Climber; true when free or already his. */
 	bool TryLease(AActor* Climber);
 	void ReleaseLease(AActor* Climber);
-	AActor* GetLeaseHolder() const { return LeaseHolder.Get(); }
-	bool IsLeasedByOther(const AActor* Climber) const { return LeaseHolder.IsValid() && LeaseHolder.Get() != Climber; }
+	AActor* GetLeaseHolder() const { return Queue.GetHolder(); }
+	bool IsLeasedByOther(const AActor* Climber) const { return Queue.IsHeldByOther(Climber); }
 
 	// --- The queue (LADDERS.md 7.1, 2026-10-23: group orders - one on the ladder at a time, the others wait their turn in the order they came) ---
 
@@ -216,8 +217,8 @@ private:
 	/** Derived by Generate / BeginPlay (DetectWall); not saved. */
 	bool bHasWall = false;
 	FString ValidationText;
-	TWeakObjectPtr<AActor> LeaseHolder;
-	TArray<TWeakObjectPtr<AActor>> Waiting;
+	/** The lease + the line (TTraversalQueue, shared with the squad's mantle turns since R17-1). */
+	TTraversalQueue<AActor> Queue;
 	/** A waiter still waits for this ladder (alive, its climb component queued here). */
 	bool IsWaitingHere(const AActor* Climber) const;
 };

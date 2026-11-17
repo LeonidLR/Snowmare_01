@@ -203,13 +203,7 @@ float ALadderActor::GetClimberYaw() const
 
 bool ALadderActor::TryLease(AActor* Climber)
 {
-	if (!Climber || IsBusyFor(Climber))
-	{
-		return false;
-	}
-	LeaseHolder = Climber;
-	LeaveQueue(Climber);
-	return true;
+	return Queue.TryLease(Climber, [this](const AActor* Waiter) { return IsWaitingHere(Waiter); });
 }
 
 bool ALadderActor::IsWaitingHere(const AActor* Climber) const
@@ -220,69 +214,32 @@ bool ALadderActor::IsWaitingHere(const AActor* Climber) const
 
 void ALadderActor::JoinQueue(AActor* Climber)
 {
-	if (Climber && !Waiting.Contains(Climber))
-	{
-		Waiting.Add(Climber);
-	}
+	Queue.Join(Climber);
 }
 
 void ALadderActor::LeaveQueue(AActor* Climber)
 {
-	Waiting.RemoveAll([Climber](const TWeakObjectPtr<AActor>& Entry) { return !Entry.IsValid() || Entry.Get() == Climber; });
+	Queue.Leave(Climber);
 }
 
 int32 ALadderActor::GetQueueIndex(const AActor* Climber) const
 {
-	int32 Index = 0;
-	for (const TWeakObjectPtr<AActor>& Entry : Waiting)
-	{
-		const AActor* Waiter = Entry.Get();
-		if (!Waiter || !IsWaitingHere(Waiter))
-		{
-			continue; // left without leaving the list (killed, re-ordered): skipped
-		}
-		if (Waiter == Climber)
-		{
-			return Index;
-		}
-		++Index;
-	}
-	return INDEX_NONE;
+	return Queue.GetIndex(Climber, [this](const AActor* Waiter) { return IsWaitingHere(Waiter); });
 }
 
 int32 ALadderActor::GetQueueLength() const
 {
-	int32 Count = 0;
-	for (const TWeakObjectPtr<AActor>& Entry : Waiting)
-	{
-		Count += Entry.IsValid() && IsWaitingHere(Entry.Get()) ? 1 : 0;
-	}
-	return Count;
+	return Queue.Length([this](const AActor* Waiter) { return IsWaitingHere(Waiter); });
 }
 
 bool ALadderActor::IsBusyFor(const AActor* Climber) const
 {
-	if (IsLeasedByOther(Climber))
-	{
-		return true;
-	}
-	for (const TWeakObjectPtr<AActor>& Entry : Waiting)
-	{
-		const AActor* Waiter = Entry.Get();
-		if (Waiter && IsWaitingHere(Waiter))
-		{
-			return Waiter != Climber; // the first live waiter goes next
-		}
-	}
-	return false;
+	return Queue.IsBusyFor(Climber, [this](const AActor* Waiter) { return IsWaitingHere(Waiter); });
 }
 
 void ALadderActor::ReleaseLease(AActor* Climber)
 {
-	if (!LeaseHolder.IsValid() || LeaseHolder.Get() == Climber)
-	{
-		LeaseHolder.Reset();
-	}
+	Queue.Release(Climber);
 }
 
 int32 ALadderActor::GetRungInstanceCount() const
