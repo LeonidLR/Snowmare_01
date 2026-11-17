@@ -387,6 +387,11 @@ Names below are exact inventory names; default-name clips are standing candidate
 
 ### 11.6 Designer answers 2026-11-15
 
+**Update 2026-11-17 (designer, TASK_BOARD F-3 option B), the click on an obstacle:** a single click on the TOP = he walks to it and
+climbs; a single click on the FACE = the cover preview (unchanged); a DOUBLE click on the top or the face = he runs to it and climbs (the
+double click is the run order, so the Q2 rule "the climb never starts a sprint by itself" still holds). Batch 2 off (`Codex.Mantle.Batch2 0`):
+the old behaviour (his current gait, the face not climbable by click). Check: MantleClickSmoke cases a / a2 / b / b2 / c.
+
 - **Q1 trigger = C:** a click on a reachable ledge top orders the climb, AND a path to a clicked point that runs over an eligible obstacle mantles by itself (like the vault).
 - **Q2 run-up = A:** insufficient run-up -> stop and use the standing clip; the system never starts a sprint by itself (run clips only when already running).
 - **Q3 weapon/stance:** clip-driven sling/raise windows; no fire during the climb; on top the operative goes to a **crouch**.
