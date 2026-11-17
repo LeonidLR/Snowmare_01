@@ -1,6 +1,6 @@
 # Turret power: generators, fuel and turret allegiance
 
-> Status: **design v1, waits for the designer's decisions** (section 14). Claude, 2026-11-17. TASK_BOARD R17-7. No code changed.
+> Status: **design v1 accepted (section 15); phase 1 implemented (section 16)**. Claude, 2026-11-17. TASK_BOARD R17-7.
 > Source: the game designer, 2026-11-17: turrets work only when a generator feeds them; first you find out whether a turret is powered;
 > a powered one is hostile (fires at us and at monsters), neutral (monsters only) or friendly (PMC and monsters); refuelling or switching
 > on a dead generator makes its turrets friendly; most turrets on a map are dark, so the player chooses where to spend fuel.
@@ -424,3 +424,36 @@ size, burn, reach and arc, lock-on, counts per map.
 
 ## 15. Designer decisions (2026-11-17)
 All six open questions in section 14 are answered by the designer: every recommendation is ACCEPTED as written (portable squad turrets also need a generator within 40 m; PMC do not capture generators at first - defend theirs, break ours; neutral networks can be captured; a running generator is noisy; one jerrycan per operative, no movement penalty; no generator actions in turn-based for now). Ready to split into implementation tasks (section 13).
+
+## 16. Phase 1 implemented (2026-11-17, Claude, branch `claude/turret-power-1`)
+
+The core loop of section 13 (T1, the core of T2 / T3 / T4, a first T5 / T6 / T7): a level generator with fuel feeds its turrets, the
+starter owns the network, a start is loud, a seize flips it, generated maps get networks. Every number is data.
+
+| Piece | Where | What it does |
+|---|---|---|
+| Rules (pure) | `Source/CodexTactics/Public/Power/PowerRules.h` | States Dry / Fuelled / Running / Broken (`DeriveState`), burn per nominal hour, seconds left, low-fuel warnings, refuel / break fuel, `AllegianceOf`, the target rule `MayTargetHuman` (rule 3), the panel's one action by state (`PrimaryAction`) and its refusals (`CheckAction`, no actions in turn-based), action times (engineer x0.5, blizzard start x1.5), level start setups, plug reach, the observation clock |
+| Tuning | `Content/Data/Balance/turret_power.json` (`PowerRules::GetTuning`) | The section 10 values phase 1 uses: 50 s nominal hour, 20 L tank, 10 L can, burn 1.0 + 0.25 L/h per live turret, warnings 60 / 15 s, refuel 4 / start 3 / stop 1 / seize 4 (dark after 1 s) / repair 5 s, start noise 30 m, cable 8-40 m, max 4 turrets, spin-up 2 s / wind-down 1.5 s, observe 2 s within 40 m, 1 jerrycan per operative, a hostile start belongs to PMC team 1 |
+| Generator | `APowerGeneratorActor : AInteractableActor` (`Power/PowerGeneratorActor.*`) | `ObjectType` Generator but NOT the quest generator (`IsQuestGenerator` false: the quest chain, `SetAllPowered` and the bot repair loop ignore it). Burns only while running, in world time (frozen by the tactical pause dilation and in turn-based), a pre-powered one only after the squad came within 80 m. The panel menu offers Refuel / Start / Stop / Seize / Repair as a timed crouched action (cancelled by death, knockdown, a walk away, turn-based, a breakdown: nothing moves). A start emits the stealth-lure noise with a 30 m radius (patrols / guards investigate; `UStealthLureSubsystem::EmitNoise` radius override) and raises `GeneratorStarted` (audio) + `Power.GeneratorStarted`; also `Power.GeneratorStopped` / `Power.NetworkSeized` / `Power.GeneratorDry` / `Power.GeneratorRefuelled`; `GeneratorDamaged` / `GeneratorDown` / `GeneratorRepaired` are reused. Monster claws break it (0 HP: half the fuel lost, owner cleared; a repair leaves it intact and off). Monsters attack it only while it runs. Amber work lamp + 8 m heat while running |
+| Network turret | `ATurretActor` (`SetPowerSource`, `ApplyNetworkState`, `MayTarget`, `IsLive`) | Linked by a generator (the props links, or a hand-placed generator auto-links the nearest unlinked level turrets within 40 m): powered only while its generator runs, 2 s spin-up, the gun stops at once when the power goes, the side is the owner's (monsters always; humans of every team but the owner's; no owner = no humans). Fixed emplacement (no pick-up). A dark network turret is no monster target. The quest generator's `SetAllPowered` never touches it |
+| Jerrycan | `ETransferItem::Diesel` / `ELootItem::Diesel` / `FLootContents::DieselCans` / `AOperativeCharacter::DieselCansCount` | Carry limit 1 (`TransferRules::GetRecipientCapacity`), crates / piles / hand-over / the remains of a fallen operative, a drawer line (only while carried), save field `diesel_cans_count`. Loot item `jerrycan`, table `fuel_rare` (`props_balance.json`) |
+| Feedback | turret / generator overhead labels, the turret's status lamp | Turret: `DARK` / `LIVE ?` until identified, then `[HOSTILE / NEUTRAL / FRIENDLY]` and the lamp's colour (amber before). The squad identifies a network turret by standing still with a line of sight within 40 m for 2 s, or the whole network by opening its generator panel (`HandleDirectInteraction`). Generator: state, litres and time left once known. Optional `HumSound` on the turret (no asset shipped) |
+| Level generator | `Tools/TrainingGround/src/levelgen/props/power.ts`, layer kind `power` (TS schema + C++ `LevelPropsFile`), `props_balance.json` `presets.power_default`, `props_autogen.json` `layers.power` | After the five placement layers: the turrets are grouped into networks (sizes 1-4 by weights 3 / 4 / 2 / 1, within 40 m), one generator per network on a free ground ring spot 8-40 m from each of its turrets (clear of props, doorways, ladders, 40 m from the spawn), the start mix by largest-remainder quotas (running hostile 15 % / running neutral 10 % / fuelled 15 % / dry 40 % / broken 20 %; a running hostile network never within 60 m of the spawn), the fuel per state, the turrets get `generator` / `powered` / `faction`; round(0.4 x generators) loose loot piles (far from the route first) get `fuel_rare`. Regenerated: X4 7 generators / 8 turrets, X6 9 / 11, X2 4 / 4 (all linked, about a quarter live; `L_Gen_Depot_1.props.json` untouched) |
+| Validator | `validatePowerLinks` (TS) = `FPropsValidator::ValidatePowerLinks` (C++) | Warnings only: an unknown start, more than 4 turrets, a link that is no turret or beyond 40 m, a turret on two generators or not listed back, an unlinked turret ("no power line"), a running hostile network near the spawn. The game logs them at spawn and links each generator's turrets after the last spawn frame |
+
+Tests: `CodexTactics.Power.Rules.*` (FuelBurn, StateDerivation, TargetRule, Actions, StartSetup, PlugReachAndObserve,
+TuningFileMirrorsDefaults), `CodexTactics.LevelGen.Props.Power.*` (Fields, LinkValidator, GeneratedMaps), the generator class in
+`CodexTactics.LevelGen.Props.Gameplay.ClassesAreTheGameActors`, TG `power.test.ts` (quotas, sizes, the three maps, determinism, the
+validator cases of the C++ test). Smoke `CodexTactics.TurretPowerSmoke` (L_MovementTest, registered in `Scripts/test_map.json`): dark
+turrets silent, refuel + start = friendly turrets that shoot a monster and a PMC fighter and never the squad, the start heard 20 m away
+and not 40 m, the burn, stop = dark, the hostile turret targets the squad and not its own PMC, observing reveals the owner, seizing darkens
+it from second 1 and flips it, the other network untouched.
+
+**Left for phase 2+ (section 13):** the turret's sensor arc / lock-on / turn rate / belt and the 5 Hz target search (T3); siphon, refuel
+while running, gunfire / blast damage to a generator and the squad's portable turret plugging into a friendly generator (designer Q1)
+(T2 / T3); the Observe click / eye cursor, the arc cone, cables drawn in the world and on the minimap (T5); the generator's 18 m hum for
+patrols with the 60 s re-check (T7); PMC behaviour (T8); hostile turrets in the turn-based enemy phase (T9); arena metrics (T10); tutorial
+cards and the other smokes of section 12 (T11); the real look and sound (T12); save / load of fuel / switch / owner / links / knowledge;
+the routed cable polyline; placement by role (hostile on the route, neutral on the perimeter, dark at chokepoint exits) and the fairness
+gate's approach check; the turret density of section 6 (1.8 per ha - with today's 0.91 per ha and 30 m spacing most networks have one
+turret).
