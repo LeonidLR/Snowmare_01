@@ -80,3 +80,32 @@ float SquadMantleRules::UpLookYaw(float ClimbYaw, int32 UpIndex, const TOptional
 	}
 	return FRotator::NormalizeAxis(ClimbYaw + Offsets[UpIndex % UE_ARRAY_COUNT(Offsets)]);
 }
+
+int32 SquadMantleRules::LaneCandidateCount(int32 LanesPerFace)
+{
+	return LanesPerFace <= 0 ? 0 : LanesPerFace * 2 + 1;
+}
+
+bool SquadMantleRules::IsTurnOverTime(bool bInClip, float TurnSeconds, float TimeoutSeconds)
+{
+	return !bInClip && TurnSeconds > TimeoutSeconds;
+}
+
+bool SquadMantleRules::IsRetryDue(int32 Retries, float SinceOrderSeconds, float RetryWaitSeconds)
+{
+	return Retries <= 0 || SinceOrderSeconds >= RetryWaitSeconds;
+}
+
+int32 SquadMantleRules::WaitSpotPlace(bool bWaiting, bool bHolding, int32 LineIndex, int32 MemberIndex)
+{
+	if (bWaiting)
+	{
+		return LineIndex;
+	}
+	return bHolding && MemberIndex >= 0 ? MemberIndex : INDEX_NONE;
+}
+
+bool SquadMantleRules::ShouldWalkOn(const FWalkOnCheck& Check)
+{
+	return Check.bResumePath && Check.bFromPath && !Check.bTurnBased && Check.bResume && Check.bAlive && Check.bSameOrder && Check.DistToGoalCm > 60.f;
+}

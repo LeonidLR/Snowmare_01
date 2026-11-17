@@ -453,7 +453,8 @@ public:
 
 	/**
 	 * A path climb (a mantle link on his own order's path) by Climber just started: his group (GetSquadMantleGroup) lines up behind him. True =
-	 * he holds over there (AOperativeCharacter::StartMantle keeps him at the landing); the squad walks him on to ResumeTarget once all are over.
+	 * he holds over there (AOperativeCharacter::StartMantle keeps him at the landing); the squad walks him on to ResumeTarget when the climb ends (all over or
+	 * any other end - EndSquadMantle; SquadMantleRules::ShouldWalkOn).
 	 */
 	bool BeginSquadMantleFromPath(AOperativeCharacter& Climber, const FMantleSite& Site, const FVector& ResumeTarget);
 

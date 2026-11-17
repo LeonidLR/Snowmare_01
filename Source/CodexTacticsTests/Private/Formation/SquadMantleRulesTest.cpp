@@ -97,4 +97,70 @@ bool FMantleQueueTuningTest::RunTest(const FString&)
 	return true;
 }
 
+MANTLE_QUEUE_TEST(FMantleQueueReviewRulesTest, "TurnRules")
+bool FMantleQueueReviewRulesTest::RunTest(const FString&)
+{
+	using namespace SquadMantleRules;
+	// Review R17-1 #3: the group + 2 lanes per face, as half-step candidates; the full-spacing ones of them are the group + 2 lanes.
+	TestEqual(TEXT("no lane: no candidate"), LaneCandidateCount(0), 0);
+	TestEqual(TEXT("one lane: it and its two half-step neighbours"), LaneCandidateCount(1), 3);
+	const int32 Lanes = 4 + 2; // a 4-man squad
+	const TArray<float> Candidates = LaneOffsets(LaneCandidateCount(Lanes), 50.f, -1000.f, 1000.f);
+	TestEqual(TEXT("a 4-man squad: 13 half-step candidates"), Candidates.Num(), 13);
+	int32 Full = 0;
+	for (const float Offset : Candidates)
+	{
+		Full += FMath::IsNearlyZero(FMath::Fmod(Offset, 100.f)) ? 1 : 0;
+	}
+	TestTrue(TEXT("... holding the group + 2 lanes a full spacing apart (a fence takes all four men)"), Full >= Lanes);
+
+	// #1: the turn never times out while his man is in the clip (the next man would start mid-climb).
+	TestFalse(TEXT("in the clip past the timeout: not timed out"), IsTurnOverTime(true, 45.f, 30.f));
+	TestTrue(TEXT("out of the clip past the timeout: timed out"), IsTurnOverTime(false, 45.f, 30.f));
+	TestFalse(TEXT("inside the timeout: not timed out"), IsTurnOverTime(false, 10.f, 30.f));
+
+	// #5: a retry waits from its re-arm, not from the turn's start.
+	TestTrue(TEXT("the first ask goes at once"), IsRetryDue(0, 0.f, 1.f));
+	TestFalse(TEXT("re-armed just now: the retry waits"), IsRetryDue(1, 0.1f, 1.f));
+	TestTrue(TEXT("re-armed a second ago: the retry goes"), IsRetryDue(1, 1.f, 1.f));
+	TestFalse(TEXT("a second refusal re-armed just now waits too"), IsRetryDue(2, 0.f, 1.f));
+
+	// #4: a holder's place is fixed by his member index (the line moving does not move him); a waiter's is his line place.
+	TestEqual(TEXT("a waiter: his line place"), WaitSpotPlace(true, false, 1, 3), 1);
+	TestEqual(TEXT("a holder: his member index"), WaitSpotPlace(false, true, INDEX_NONE, 3), 3);
+	TestEqual(TEXT("... whatever the line does"), WaitSpotPlace(false, true, 0, 3), 3);
+	TestEqual(TEXT("neither: no place"), WaitSpotPlace(false, false, 2, 3), INDEX_NONE);
+
+	// #2: a path climb's man walks on to his goal whatever ended the climb.
+	FWalkOnCheck Check;
+	Check.bFromPath = true;
+	Check.bResume = true;
+	Check.bAlive = true;
+	Check.bSameOrder = true;
+	Check.DistToGoalCm = 800.f;
+	TestTrue(TEXT("the leader of a path climb walks on (any end)"), ShouldWalkOn(Check));
+	FWalkOnCheck Clicked = Check;
+	Clicked.bFromPath = false;
+	TestFalse(TEXT("a clicked climb holds up there"), ShouldWalkOn(Clicked));
+	FWalkOnCheck Reordered = Check;
+	Reordered.bSameOrder = false;
+	TestFalse(TEXT("given another order since: his order stands"), ShouldWalkOn(Reordered));
+	FWalkOnCheck Dead = Check;
+	Dead.bAlive = false;
+	TestFalse(TEXT("down: no walk"), ShouldWalkOn(Dead));
+	FWalkOnCheck Grid = Check;
+	Grid.bTurnBased = true;
+	TestFalse(TEXT("the turn-based grid owns the squad"), ShouldWalkOn(Grid));
+	FWalkOnCheck There = Check;
+	There.DistToGoalCm = 30.f;
+	TestFalse(TEXT("already at his goal"), ShouldWalkOn(There));
+	FWalkOnCheck Follower = Check;
+	Follower.bResume = false;
+	TestFalse(TEXT("a formation follower follows (no walk of his own)"), ShouldWalkOn(Follower));
+	FWalkOnCheck Reset = Check;
+	Reset.bResumePath = false;
+	TestFalse(TEXT("CancelSquadMantle (a smoke's reset) walks nobody on"), ShouldWalkOn(Reset));
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

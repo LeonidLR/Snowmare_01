@@ -176,9 +176,9 @@ TArray<USquadSubsystem::FSquadMantleLane> USquadSubsystem::MakeSquadMantleLanes(
 	auto AddFace = [&](int32 Face, const FVector& FacePoint, const FVector& Dir, const FVector& EdgeTop, const FVector& Base, float DepthCm, float MinOffset, float MaxOffset)
 	{
 		const FVector Tangent = FVector::CrossProduct(FVector::UpVector, Dir).GetSafeNormal2D();
-		// Candidates at half the lane spacing (an uneven top - a wreck's bonnet - may refuse a lane, its neighbour may do); the landing gap keeps
-		// the lanes given squad.min_landing_gap_cm apart.
-		for (const float Offset : SquadMantleRules::LaneOffsets(PerFace, Config.SquadLaneSpacingCm * 0.5f, MinOffset, MaxOffset))
+		// PerFace lanes a full spacing apart, as candidates at half the spacing (an uneven top - a wreck's bonnet - may refuse a lane, its neighbour
+		// may do); the landing gap keeps the lanes given squad.min_landing_gap_cm apart (a taken lane's half-step neighbour: the cheap test first).
+		for (const float Offset : SquadMantleRules::LaneOffsets(SquadMantleRules::LaneCandidateCount(PerFace), Config.SquadLaneSpacingCm * 0.5f, MinOffset, MaxOffset))
 		{
 			FSquadMantleLane& Lane = Lanes.AddDefaulted_GetRef();
 			Lane.Face = Face;
@@ -432,7 +432,7 @@ void USquadSubsystem::SetUpSquadMantle(const TArray<AOperativeCharacter*>& Group
 	Op.Tangent = FVector::CrossProduct(FVector::UpVector, Op.Dir).GetSafeNormal2D();
 	const AOperativeCharacter* Any = Group.IsEmpty() ? nullptr : Group[0];
 	const float Radius = Any && Any->GetCapsuleComponent() ? Any->GetCapsuleComponent()->GetScaledCapsuleRadius() : 35.f;
-	// Candidate lanes: the group + 2 per face. No traces / path queries here (a frame spike): each man's lane is tentative (its geometry keeps
+	// Lanes: the group + 2 per face (LaneCandidateCount). No traces / path queries here (a frame spike): each man's lane is tentative (its geometry keeps
 	// the landings apart) and is checked with his own clip and a path at his turn (StartSquadMantleTurn: else the first spare that is free).
 	TArray<FSquadMantleLane> Lanes = MakeSquadMantleLanes(Group.Num() + 2, Radius);
 	TArray<FVector> Landings;
@@ -519,7 +519,7 @@ void USquadSubsystem::StartSquadMantleTurn(FSquadMantleMember& Member)
 	{
 		return;
 	}
-	if (Member.Retries > 0 && Member.SinceOrder < SquadMantleLocal::TurnRetrySeconds)
+	if (!SquadMantleRules::IsRetryDue(Member.Retries, Member.SinceOrder, SquadMantleLocal::TurnRetrySeconds))
 	{
 		return;
 	}
@@ -573,6 +573,7 @@ void USquadSubsystem::StartSquadMantleTurn(FSquadMantleMember& Member)
 		{
 			MarkSquadMantleOut(Member, FString::Printf(TEXT("his climb order is refused (%s)"), *Why));
 		}
+		Member.SinceOrder = 0.f; // the next ask waits TurnRetrySeconds from this refusal (not every tick)
 		return;
 	}
 	Member.bOrdered = true;
@@ -726,8 +727,8 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 					MarkSquadMantleUp(*Member);
 				}
 			}
-			if ((Member->State == ESquadMantleState::Turn || Member->State == ESquadMantleState::Climbing) && !Holder->IsMantling()
-				&& Member->TurnSeconds > Config.SquadTurnTimeoutSeconds)
+			if ((Member->State == ESquadMantleState::Turn || Member->State == ESquadMantleState::Climbing)
+				&& SquadMantleRules::IsTurnOverTime(Holder->IsMantling(), Member->TurnSeconds, Config.SquadTurnTimeoutSeconds))
 			{
 				MarkSquadMantleOut(*Member, FString::Printf(TEXT("his turn took over %.0f s"), Config.SquadTurnTimeoutSeconds));
 			}
@@ -786,7 +787,8 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 		}
 		if (Member.State == ESquadMantleState::Waiting || Member.State == ESquadMantleState::Hold)
 		{
-			const int32 Place = Member.State == ESquadMantleState::Waiting ? Op.Queue.GetIndex(Operative, IsWaiting) : MemberIndex;
+			const bool bWaiting = Member.State == ESquadMantleState::Waiting;
+			const int32 Place = SquadMantleRules::WaitSpotPlace(bWaiting, !bWaiting, bWaiting ? Op.Queue.GetIndex(Operative, IsWaiting) : INDEX_NONE, MemberIndex);
 			if (Place != INDEX_NONE && Place != Member.SpotPlace && !Operative->IsKnockedDown())
 			{
 				Member.SpotPlace = Place;
@@ -877,13 +879,24 @@ void USquadSubsystem::EndSquadMantle(const TCHAR* Why, bool bResumePath)
 	// Mid-clip the order is taken after the landing (AOperativeCharacter::RequestMove).
 	TArray<TPair<TWeakObjectPtr<AOperativeCharacter>, FVector>> Resumes;
 	const UGameFlowSubsystem* Flow = GetWorld() ? GetWorld()->GetSubsystem<UGameFlowSubsystem>() : nullptr;
-	if (bResumePath && Op.bFromPath && !(Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
+	if (Op.bFromPath)
 	{
 		for (const FSquadMantleMember& Member : Op.Members)
 		{
 			const AOperativeCharacter* Operative = Member.Operative.Get();
-			if (Member.bResume && Operative && Operative->HealthComponent && Operative->HealthComponent->IsAlive() && Operative->GetMoveOrderSerial() == Member.OrderSerial
-				&& FVector::Dist2D(SquadMantleLocal::FeetOf(*Operative), Member.ResumeTarget) > 60.f)
+			if (!Operative)
+			{
+				continue;
+			}
+			SquadMantleRules::FWalkOnCheck Check;
+			Check.bResumePath = bResumePath;
+			Check.bFromPath = Op.bFromPath;
+			Check.bTurnBased = Flow && Flow->GetCombatMode() == ECodexCombatMode::TurnBased;
+			Check.bResume = Member.bResume;
+			Check.bAlive = Operative->HealthComponent && Operative->HealthComponent->IsAlive();
+			Check.bSameOrder = Operative->GetMoveOrderSerial() == Member.OrderSerial;
+			Check.DistToGoalCm = static_cast<float>(FVector::Dist2D(SquadMantleLocal::FeetOf(*Operative), Member.ResumeTarget));
+			if (SquadMantleRules::ShouldWalkOn(Check))
 			{
 				Resumes.Emplace(Member.Operative, Member.ResumeTarget);
 			}

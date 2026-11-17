@@ -996,7 +996,8 @@ behind him; `UpdateSectorFollower` re-checks a stand-in for an unwalkable place.
 ### 22.3 Where they stand, where they look
 - Lanes: each man climbs his own lane of the same face (`SquadMantleRules::LaneOffsets`: candidates every half `squad.lane_spacing_cm` - 0, +50,
   -50, +100 ... cm - so an uneven top (a wreck's bonnet) refusing one lane can take its neighbour),
-  inside the face's room (the obstacle's box on the face's axis, the capsule + 10 cm off its ends), the group + 2 candidates per face; at the start
+  inside the face's room (the obstacle's box on the face's axis, the capsule + 10 cm off its ends), the group + 2 lanes per face (`SquadMantleRules::LaneCandidateCount`: 2 x lanes + 1 half-step candidates; a taken lane's neighbour is
+  dropped by the cheap landing-gap test before any trace / path query); at the start
   each man gets a tentative lane from its geometry only (no traces / path queries: no frame spike), at his turn it is checked with his own clip from the lane's base
   (`AOperativeCharacter::PlanMantleClick(.., FromFeet)`) and with landings >= `squad.min_landing_gap_cm` (70) apart: the man up never stands on the
   next one's landing. A top whose clicked face has no room left gives lanes on its other faces (nearest to the clicked base first, from each
