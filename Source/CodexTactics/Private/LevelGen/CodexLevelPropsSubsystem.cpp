@@ -34,6 +34,9 @@
 #include "NavigationSystem.h"
 #include "Serialization/JsonReader.h"
 #include "Serialization/JsonSerializer.h"
+#include "Tasks/Task.h"
+
+#include <atomic>
 
 namespace CodexLevelPropsInternal
 {
@@ -95,10 +98,9 @@ namespace CodexLevelPropsInternal
 		TEXT("2 for every props file, 0 off (meshless props as before: the live-map guard drops the nav-affecting ones)."),
 		ECVF_Default);
 
-	/** True when this props file gets the greybox look (Codex.Props.Greybox; the file's top-level "source"). */
-	static bool UsesGreybox(const FLevelPropsFile& File)
+	/** True when this props file gets the greybox look (Mode = Codex.Props.Greybox; the file's top-level "source"). */
+	static bool UsesGreybox(const FLevelPropsFile& File, int32 Mode)
 	{
-		const int32 Mode = CVarPropsGreybox.GetValueOnGameThread();
 		if (Mode >= 2)
 		{
 			return true;
@@ -204,16 +206,6 @@ void UCodexLevelPropsSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UCodexLevelPropsSubsystem::StopSpawnTicker()
-{
-	if (SpawnTicker.IsValid())
-	{
-		FTSTicker::GetCoreTicker().RemoveTicker(SpawnTicker);
-		SpawnTicker.Reset();
-	}
-	Session.Reset();
-}
-
 int32 UCodexLevelPropsSubsystem::SpawnPropsForMap(
 	const FString& MapName,
 	const TSet<FString>* SkippedIds,
@@ -233,22 +225,48 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsForMap(
 /** One spawn of a props file: what is left to spawn and what the objects need from each other (G003b: spread over frames). */
 struct UCodexLevelPropsSubsystem::FPropsSpawnSession
 {
+	// --- prepare inputs (set on the game thread before PrepareSession) ---
 	FString PropsFilePath;
+	/** An explicit layout file (empty: resolved from the props file's layout name). */
+	FString LayoutFilePath;
+	/** The parsed props_balance.json (only read while the prepare runs). */
+	TSharedPtr<FJsonObject> Balance;
+	/** Codex.Props.Greybox, read on the game thread. */
+	int32 GreyboxMode = 1;
+
+	// --- prepare outputs (PrepareSession: pure data, no UObject - a live spawn runs it on a worker thread) ---
+	/** The prepare ran and the game thread took its result (TakePreparedSession). */
+	bool bPrepared = false;
+	bool bPrepareOk = false;
+	/** The prepare runs on a worker thread (a live spawn; its task handle is the subsystem's PrepareTask, not owned here). */
+	bool bAsyncPrepare = false;
+	/** Set by the game thread when the session is dropped (StopSpawnTicker): the worker stops at its next phase check. */
+	std::atomic<bool> bCancelled{ false };
 	TArray<FLevelPropsResolvedObject> Objects;
-	int32 Next = 0;
+	TArray<FString> DroppedIds;
 	bool bHasLayout = false;
 	TMap<FString, int32> LayerZ;
 	/** Layer id -> layer kind (crates / barrels / turrets / mines / loot). */
 	TMap<FString, FString> KindOfLayer;
 	TMap<FString, FLevelPropsResolvedObject> AttachedTraps;
 	TMap<FString, FLevelPropsResolvedObject> AttachedLoot;
+	/** Level turret start states by object id (PropsGameplayRules::ResolveTurrets). */
+	TMap<FString, PropsGameplayRules::FTurretSetup> TurretSetups;
+	int32 PowerWarnings = 0;
+	/** The file's own greybox rule (UsesGreybox); the game thread adds bGameplay. */
+	bool bFileGreybox = false;
+	/** File + layout + validation time (ms) and its parts: props file read + parse, layout read + build + validation + rules. */
+	double PrepareMs = 0.0;
+	double PrepParseMs = 0.0;
+	double PrepLayoutMs = 0.0;
+
+	// --- spawn state (game thread only) ---
+	int32 Next = 0;
 	TSet<FString> Skipped;
 	bool bGreybox = false;
 	bool bGameplay = false;
 	bool bRequireMesh = false;
 	TMap<FString, TWeakObjectPtr<ACodexPropCrate>> CratesById;
-	/** Level turret start states by object id (PropsGameplayRules::ResolveTurrets). */
-	TMap<FString, PropsGameplayRules::FTurretSetup> TurretSetups;
 	/** gameplay.traps_faction: level mines / wires are the enemy's. */
 	bool bTrapsHostile = true;
 	int32 PoweredTurrets = 0;
@@ -256,39 +274,66 @@ struct UCodexLevelPropsSubsystem::FPropsSpawnSession
 	TMap<FString, TWeakObjectPtr<APowerGeneratorActor>> GeneratorsById;
 	TMap<FString, TWeakObjectPtr<ATurretActor>> TurretsById;
 	TMap<FString, TArray<FString>> GeneratorLinks;
-	int32 PowerWarnings = 0;
 	/** Every actor spawned so far: the slab snap ignores them. */
 	TArray<TWeakObjectPtr<AActor>> ForTrace;
-	double PrepareMs = 0.0;
+	/** Game-thread time of the spawn call itself (balance file, session set-up; all of the prepare for a direct spawn): counted in frame 0. */
+	double GameThreadSetupMs = 0.0;
 	double SpawnMs = 0.0;
 	double MaxFrameMs = 0.0;
+	/** Game-thread ms of the latest spawn frame (FinishSession adds its link pass to it). */
+	double LastFrameMs = 0.0;
 	int32 Frames = 0;
+	/** Frames the game thread waited for the worker-thread prepare (no props work on them). */
+	int32 WaitFrames = 0;
+	/** Diagnostics (X6 spawn hitch 2026-11-18): spawn cost per layer kind / variant and the slowest object. */
+	struct FKindCost
+	{
+		int32 Count = 0;
+		double TotalMs = 0.0;
+		double MaxMs = 0.0;
+		FString MaxId;
+	};
+	TMap<FString, FKindCost> CostByKind;
+	double SlowestObjectMs = 0.0;
+	FString SlowestObject;
+	int32 MaxFrame = 0;
+	int32 MaxFrameObjects = 0;
 };
 
-int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
-	const FString& PropsFilePath,
-	const FString& LayoutFilePath,
-	const TSet<FString>* SkippedIds,
-	bool bRequireMesh,
-	bool bLive)
+void UCodexLevelPropsSubsystem::StopSpawnTicker()
 {
-	// A spawn still running (frame-sliced) is dropped first, so there is never a second ticker.
-	StopSpawnTicker();
-	if (!IsPropsEnabled())
+	if (SpawnTicker.IsValid())
 	{
-		UE_LOG(LogCodexTactics, Display, TEXT("[Props] spawning skipped (Codex.Props.Enabled 0)"));
-		return 0;
+		FTSTicker::GetCoreTicker().RemoveTicker(SpawnTicker);
+		SpawnTicker.Reset();
 	}
+	if (PrepareTask.IsValid())
+	{
+		// A live prepare still on a worker thread (a respawn, Deinitialize, the world ending): it stops at its next phase check and is
+		// waited for, so no worker of this subsystem outlives it (or the module) and there is never a second prepare in flight.
+		if (Session.IsValid())
+		{
+			Session->bCancelled.store(true, std::memory_order_relaxed);
+		}
+		PrepareTask.Wait();
+		PrepareTask = UE::Tasks::FTask();
+	}
+	Session.Reset();
+}
 
-	ClearSpawnedProps();
-
+void UCodexLevelPropsSubsystem::PrepareSession(FPropsSpawnSession& S)
+{
+	// Pure data only (a worker thread for a live spawn): file IO, JSON, layout view, validator, turret / power rules. No UObject, no CVar.
 	const double StartTime = FPlatformTime::Seconds();
+	const FJsonObject* Balance = S.Balance.Get();
+	S.bPrepareOk = false;
+	const auto Cancelled = [&S]() { return S.bCancelled.load(std::memory_order_relaxed); };
 
 	FString PropsJson;
-	if (!FFileHelper::LoadFileToString(PropsJson, *PropsFilePath))
+	if (!FFileHelper::LoadFileToString(PropsJson, *S.PropsFilePath))
 	{
-		UE_LOG(LogCodexTactics, Error, TEXT("[Props] failed to read props file: %s"), *PropsFilePath);
-		return 0;
+		UE_LOG(LogCodexTactics, Error, TEXT("[Props] failed to read props file: %s"), *S.PropsFilePath);
+		return;
 	}
 
 	FLevelPropsFile File;
@@ -297,56 +342,44 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 	{
 		for (const FString& Err : ParseErrors)
 		{
-			UE_LOG(LogCodexTactics, Error, TEXT("[Props] parse error in %s: %s"), *PropsFilePath, *Err);
+			UE_LOG(LogCodexTactics, Error, TEXT("[Props] parse error in %s: %s"), *S.PropsFilePath, *Err);
 		}
-		return 0;
+		return;
 	}
 
+	if (Cancelled())
+	{
+		return;
+	}
+	const double ParsedTime = FPlatformTime::Seconds();
 	TArray<FString> OverrideWarnings;
 	const FLevelPropsResolved Resolved = LevelPropsFile::ApplyOverrides(File, &OverrideWarnings);
-
-	// Load balance configuration
-	LoadBalanceFile();
-	GreyboxCount = 0;
-
-	TSharedRef<FPropsSpawnSession> NewSession = MakeShared<FPropsSpawnSession>();
-	FPropsSpawnSession& S = *NewSession;
-	S.PropsFilePath = PropsFilePath;
-	S.bRequireMesh = bRequireMesh;
-	// G003b: a live map spawns the real game objects (barrels, loot crates / piles, mines, wires, turrets); the greybox look is the
-	// fallback of a kind with no gameplay class (plain crates = cover) - on a live map for every props file, else autogen files only.
-	S.bGameplay = bLive && CodexLevelPropsInternal::CVarPropsReal.GetValueOnGameThread() != 0;
-	S.bTrapsHostile = PropsGameplayRules::AreTrapsHostile(BalanceRoot.Get());
-	S.bGreybox = S.bGameplay || CodexLevelPropsInternal::UsesGreybox(File);
+	S.bFileGreybox = CodexLevelPropsInternal::UsesGreybox(File, S.GreyboxMode);
 	for (const FLevelPropsLayer& Layer : File.Layers)
 	{
 		S.KindOfLayer.Add(Layer.Id, Layer.Kind);
 	}
-	if (SkippedIds)
-	{
-		S.Skipped = *SkippedIds;
-	}
 
 	// Resolve layout and validate if layout exists
-	const FString PropsDir = FPaths::GetPath(PropsFilePath);
-	const FString ResolvedLayoutPath = LayoutFilePath.IsEmpty()
+	const FString PropsDir = FPaths::GetPath(S.PropsFilePath);
+	const FString ResolvedLayoutPath = S.LayoutFilePath.IsEmpty()
 		? ResolveLayoutPath(File.Layout, PropsDir)
-		: LayoutFilePath;
+		: S.LayoutFilePath;
 
 	if (FPaths::FileExists(ResolvedLayoutPath))
 	{
 		FString LayoutJson;
-		if (FFileHelper::LoadFileToString(LayoutJson, *ResolvedLayoutPath))
+		if (FFileHelper::LoadFileToString(LayoutJson, *ResolvedLayoutPath) && !Cancelled())
 		{
 			TArray<FString> LayoutErrors;
 			FPropsLayoutConfig LayoutConfig;
-			if (BalanceRoot.IsValid())
+			if (Balance)
 			{
-				FPropsLayoutView::ReadConfig(*BalanceRoot, LayoutConfig, LayoutErrors);
+				FPropsLayoutView::ReadConfig(*Balance, LayoutConfig, LayoutErrors);
 			}
 
 			FPropsLayoutView LayoutView;
-			if (FPropsLayoutView::Build(LayoutJson, LayoutView, LayoutErrors, LayoutConfig))
+			if (FPropsLayoutView::Build(LayoutJson, LayoutView, LayoutErrors, LayoutConfig) && !Cancelled())
 			{
 				S.bHasLayout = true;
 				for (const FPropsWalkLayer& Layer : LayoutView.GetLayers())
@@ -354,12 +387,12 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 					S.LayerZ.Add(Layer.Name, Layer.ZCm);
 				}
 				FPropsValidationResult ValResult;
-				FPropsValidator::ValidateResolved(LayoutView, Resolved, ValResult, BalanceRoot.Get());
+				FPropsValidator::ValidateResolved(LayoutView, Resolved, ValResult, Balance);
 
 				S.Objects = MoveTemp(ValResult.ValidObjects);
 				for (const FLevelPropsResolvedObject& Dropped : ValResult.DroppedObjects)
 				{
-					DroppedPropIds.Add(Dropped.Object.Id);
+					S.DroppedIds.Add(Dropped.Object.Id);
 				}
 			}
 			else
@@ -372,6 +405,10 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		}
 	}
 
+	if (Cancelled())
+	{
+		return;
+	}
 	if (!S.bHasLayout)
 	{
 		// No layout file available: spawn all resolved objects directly
@@ -405,55 +442,159 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 			Turrets.Add(PropsGameplayRules::TurretInputOf(ResObj.Object));
 		}
 	}
-	S.TurretSetups = PropsGameplayRules::ResolveTurrets(BalanceRoot.Get(), PropsGameplayRules::TurretPoweredShare(BalanceRoot.Get(), &File.Extra),
-		Turrets);
+	S.TurretSetups = PropsGameplayRules::ResolveTurrets(Balance, PropsGameplayRules::TurretPoweredShare(Balance, &File.Extra), Turrets);
 	// TURRET_POWER.md phase 1: the power network's links are checked (warnings only: a broken link leaves its turret dark).
-	for (const FPropsValidationIssue& Issue : FPropsValidator::ValidatePowerLinks(S.Objects, S.KindOfLayer, BalanceRoot.Get()))
+	for (const FPropsValidationIssue& Issue : FPropsValidator::ValidatePowerLinks(S.Objects, S.KindOfLayer, Balance))
 	{
 		++S.PowerWarnings;
 		UE_LOG(LogCodexTactics, Warning, TEXT("[Props] power: %s: %s"), *Issue.ObjectId, *Issue.Reason);
 	}
 
-	S.PrepareMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
+	const double EndTime = FPlatformTime::Seconds();
+	S.PrepParseMs = (ParsedTime - StartTime) * 1000.0;
+	S.PrepLayoutMs = (EndTime - ParsedTime) * 1000.0;
+	S.PrepareMs = (EndTime - StartTime) * 1000.0;
+	S.bPrepareOk = true;
+}
+
+int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
+	const FString& PropsFilePath,
+	const FString& LayoutFilePath,
+	const TSet<FString>* SkippedIds,
+	bool bRequireMesh,
+	bool bLive)
+{
+	// A spawn still running (frame-sliced) is dropped first, so there is never a second ticker.
+	StopSpawnTicker();
+	if (!IsPropsEnabled())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[Props] spawning skipped (Codex.Props.Enabled 0)"));
+		return 0;
+	}
+
+	ClearSpawnedProps();
 	if (!GetWorld())
 	{
 		return 0;
 	}
+
+	const double StartTime = FPlatformTime::Seconds();
+	// Load balance configuration (game thread: it fills the variant tables; BalanceRoot is only read from here on).
+	LoadBalanceFile();
+	GreyboxCount = 0;
+
+	TSharedRef<FPropsSpawnSession> NewSession = MakeShared<FPropsSpawnSession>();
+	FPropsSpawnSession& S = *NewSession;
+	S.PropsFilePath = PropsFilePath;
+	S.LayoutFilePath = LayoutFilePath;
+	S.Balance = BalanceRoot;
+	S.GreyboxMode = CodexLevelPropsInternal::CVarPropsGreybox.GetValueOnGameThread();
+	S.bRequireMesh = bRequireMesh;
+	// G003b: a live map spawns the real game objects (barrels, loot crates / piles, mines, wires, turrets); the greybox look is the
+	// fallback of a kind with no gameplay class (plain crates = cover) - on a live map for every props file, else autogen files only.
+	S.bGameplay = bLive && CodexLevelPropsInternal::CVarPropsReal.GetValueOnGameThread() != 0;
+	S.bTrapsHostile = PropsGameplayRules::AreTrapsHostile(BalanceRoot.Get());
+	if (SkippedIds)
+	{
+		S.Skipped = *SkippedIds;
+	}
+
 	Session = NewSession;
 	const uint32 Generation = ++SpawnGeneration;
 
-	// A live map spreads the spawn over frames (gameplay.spawn_frame_budget_ms); a direct call (tests, tools) spawns everything now.
-	const double FrameBudgetMs = bLive ? PropsGameplayRules::SpawnFrameBudgetMs(BalanceRoot.Get()) : 0.0;
-	if (ProcessSession(FrameBudgetMs > 0.0 ? FMath::Max(FrameBudgetMs - S.PrepareMs, 1.0) : 0.0))
+	if (!bLive)
 	{
-		TWeakObjectPtr<UCodexLevelPropsSubsystem> WeakThis(this);
-		SpawnTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis, FrameBudgetMs, Generation](float)
+		// A direct call (tests, tools): everything now, on this thread.
+		PrepareSession(S);
+		S.GameThreadSetupMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
+		if (TakePreparedSession())
 		{
-			UCodexLevelPropsSubsystem* Self = WeakThis.Get();
-			if (!Self || Self->SpawnGeneration != Generation)
+			ProcessSession(0.0);
+		}
+		return GetSpawnedCount();
+	}
+
+	// A live map (X6 spawn hitch 2026-11-18): the file / layout / validation work (66 of the 68 ms X6 frame, a 1 MB layout file) runs on a
+	// worker thread; the spawn starts on the first frame after it is done and is spread over frames (gameplay.spawn_frame_budget_ms).
+	// The task holds the session (its body is released once it has run); the handle lives on the subsystem, so the session never owns
+	// the task that owns it. StopSpawnTicker cancels + waits for it.
+	S.bAsyncPrepare = true;
+	PrepareTask = UE::Tasks::Launch(UE_SOURCE_LOCATION, [Prepared = NewSession]() { PrepareSession(*Prepared); });
+	S.GameThreadSetupMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
+	const double FrameBudgetMs = PropsGameplayRules::SpawnFrameBudgetMs(BalanceRoot.Get());
+	TWeakObjectPtr<UCodexLevelPropsSubsystem> WeakThis(this);
+	SpawnTicker = FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([WeakThis, FrameBudgetMs, Generation](float)
+	{
+		UCodexLevelPropsSubsystem* Self = WeakThis.Get();
+		if (!Self || Self->SpawnGeneration != Generation)
+		{
+			return false; // gone, or a newer spawn replaced this one (and owns SpawnTicker now)
+		}
+		const UWorld* World = Self->GetWorld();
+		if (!World || World->bIsTearingDown || !World->HasBegunPlay() || !Self->Session.IsValid())
+		{
+			if (Self->Session.IsValid())
 			{
-				return false; // gone, or a newer spawn replaced this one (and owns SpawnTicker now)
+				Self->Session->bCancelled.store(true, std::memory_order_relaxed); // a worker still preparing stops early (Deinitialize waits)
 			}
-			const UWorld* World = Self->GetWorld();
-			if (!World || World->bIsTearingDown || !World->HasBegunPlay() || !Self->Session.IsValid())
+			Self->SpawnTicker.Reset();
+			Self->Session.Reset();
+			return false;
+		}
+		FPropsSpawnSession& Pending = *Self->Session;
+		if (!Pending.bPrepared)
+		{
+			if (Self->PrepareTask.IsValid() && !Self->PrepareTask.IsCompleted())
+			{
+				++Pending.WaitFrames;
+				return true; // the worker is still reading / validating: no props work on this frame
+			}
+			if (!Self->TakePreparedSession())
 			{
 				Self->SpawnTicker.Reset();
-				Self->Session.Reset();
 				return false;
 			}
-			const bool bMore = Self->ProcessSession(FrameBudgetMs);
-			if (Self->SpawnGeneration != Generation)
-			{
-				return false; // an OnPropsSpawned listener started a new spawn
-			}
-			if (!bMore)
-			{
-				Self->SpawnTicker.Reset();
-			}
-			return bMore;
-		}), 0.f);
-	}
+		}
+		const bool bMore = Self->ProcessSession(FrameBudgetMs);
+		if (Self->SpawnGeneration != Generation)
+		{
+			return false; // an OnPropsSpawned listener started a new spawn
+		}
+		if (!bMore)
+		{
+			Self->SpawnTicker.Reset();
+		}
+		return bMore;
+	}), 0.f);
 	return GetSpawnedCount();
+}
+
+bool UCodexLevelPropsSubsystem::TakePreparedSession()
+{
+	if (!Session.IsValid())
+	{
+		return false;
+	}
+	FPropsSpawnSession& S = *Session;
+	S.bPrepared = true;
+	PrepareTask = UE::Tasks::FTask(); // done (or a direct spawn): nothing in flight any more
+	if (!S.bPrepareOk)
+	{
+		// The props file did not read / parse (logged): nothing spawns and HasSpawned stays false, as before. The old code failed inside
+		// the call, before any session existed, so nobody ever saw it pending; a live spawn was pending for a frame or more, so a listener
+		// that saw IsSpawnPending (e.g. the save restore of generators) is released with OnPropsSpawned here (a direct spawn: as before).
+		const bool bWasAsync = S.bAsyncPrepare;
+		Session.Reset();
+		if (bWasAsync)
+		{
+			OnPropsSpawned.Broadcast(this);
+			OnPropsSpawnedDynamic.Broadcast(GetSpawnedCount());
+		}
+		return false;
+	}
+	DroppedPropIds = S.DroppedIds;
+	S.bGreybox = S.bGameplay || S.bFileGreybox;
+	return true;
 }
 
 bool UCodexLevelPropsSubsystem::ProcessSession(double BudgetMs)
@@ -463,10 +604,34 @@ bool UCodexLevelPropsSubsystem::ProcessSession(double BudgetMs)
 		return false;
 	}
 	FPropsSpawnSession& S = *Session;
+	// Frame 0 also carries the spawn call's own game-thread time (all of the prepare for a direct spawn).
+	const double CarriedMs = S.Frames == 0 ? S.GameThreadSetupMs : 0.0;
+	if (BudgetMs > 0.0)
+	{
+		BudgetMs = FMath::Max(BudgetMs - CarriedMs, 1.0);
+	}
 	const double FrameStart = FPlatformTime::Seconds();
+	const int32 FirstObject = S.Next;
 	while (S.Next < S.Objects.Num())
 	{
-		SpawnOne(S, S.Objects[S.Next++]);
+		const double ObjectStart = FPlatformTime::Seconds();
+		const FLevelPropsResolvedObject& ResObj = S.Objects[S.Next++];
+		SpawnOne(S, ResObj);
+		const double ObjectMs = (FPlatformTime::Seconds() - ObjectStart) * 1000.0;
+		const FString KindKey = S.KindOfLayer.FindRef(ResObj.LayerId) + TEXT("/") + ResObj.Object.Variant;
+		FPropsSpawnSession::FKindCost& Cost = S.CostByKind.FindOrAdd(KindKey);
+		++Cost.Count;
+		Cost.TotalMs += ObjectMs;
+		if (ObjectMs > Cost.MaxMs)
+		{
+			Cost.MaxMs = ObjectMs;
+			Cost.MaxId = ResObj.Object.Id;
+		}
+		if (ObjectMs > S.SlowestObjectMs)
+		{
+			S.SlowestObjectMs = ObjectMs;
+			S.SlowestObject = KindKey + TEXT(" ") + ResObj.Object.Id;
+		}
 		if (BudgetMs > 0.0 && (FPlatformTime::Seconds() - FrameStart) * 1000.0 >= BudgetMs && S.Next < S.Objects.Num())
 		{
 			break;
@@ -474,7 +639,13 @@ bool UCodexLevelPropsSubsystem::ProcessSession(double BudgetMs)
 	}
 	const double FrameMs = (FPlatformTime::Seconds() - FrameStart) * 1000.0;
 	S.SpawnMs += FrameMs;
-	S.MaxFrameMs = FMath::Max(S.MaxFrameMs, FrameMs + (S.Frames == 0 ? S.PrepareMs : 0.0));
+	S.LastFrameMs = FrameMs + CarriedMs;
+	if (S.LastFrameMs > S.MaxFrameMs)
+	{
+		S.MaxFrameMs = S.LastFrameMs;
+		S.MaxFrame = S.Frames;
+		S.MaxFrameObjects = S.Next - FirstObject;
+	}
 	++S.Frames;
 	if (S.Next < S.Objects.Num())
 	{
@@ -487,6 +658,7 @@ bool UCodexLevelPropsSubsystem::ProcessSession(double BudgetMs)
 void UCodexLevelPropsSubsystem::FinishSession()
 {
 	FPropsSpawnSession& S = *Session;
+	const double LinkStart = FPlatformTime::Seconds();
 	// In case crate was spawned after the trap/loot attachment was processed
 	for (const auto& Pair : S.AttachedTraps)
 	{
@@ -525,16 +697,36 @@ void UCodexLevelPropsSubsystem::FinishSession()
 			LinkedTurrets += Generator && Turret && Generator->LinkTurret(Turret) ? 1 : 0;
 		}
 	}
+	// The attach / link pass runs on the last spawn frame: it counts into that frame.
+	const double LinkMs = (FPlatformTime::Seconds() - LinkStart) * 1000.0;
+	S.SpawnMs += LinkMs;
+	if (S.LastFrameMs + LinkMs > S.MaxFrameMs)
+	{
+		S.MaxFrameMs = S.LastFrameMs + LinkMs;
+		S.MaxFrame = S.Frames - 1;
+	}
 	if (S.GeneratorsById.Num() > 0)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Props] power: %d generator(s), %d turret(s) linked, %d warning(s)"), S.GeneratorsById.Num(),
 			LinkedTurrets, S.PowerWarnings);
 	}
+	FString Costs;
+	for (const TPair<FString, FPropsSpawnSession::FKindCost>& Pair : S.CostByKind)
+	{
+		Costs += FString::Printf(TEXT("%s %d x %.2f ms (max %.2f %s); "), *Pair.Key, Pair.Value.Count, Pair.Value.TotalMs / FMath::Max(Pair.Value.Count, 1),
+			Pair.Value.MaxMs, *Pair.Value.MaxId);
+	}
+	UE_LOG(LogCodexTactics, Display,
+		TEXT("[Props] spawn cost: max frame #%d (%d objects), slowest object %.2f ms (%s), link pass %.2f ms, prepare %s %.2f ms (parse %.2f / layout + validate %.2f; %d frame(s) waited), game-thread setup %.2f ms; %s"),
+		S.MaxFrame, S.MaxFrameObjects, S.SlowestObjectMs, *S.SlowestObject, LinkMs, S.bAsyncPrepare ? TEXT("on a worker thread") : TEXT("on the game thread"),
+		S.PrepareMs, S.PrepParseMs, S.PrepLayoutMs, S.WaitFrames, S.GameThreadSetupMs, *Costs);
 
 	LastPrepareMs = S.PrepareMs;
 	LastMaxFrameMs = S.MaxFrameMs;
 	LastSpawnFrames = S.Frames;
-	LastSpawnDurationMs = S.PrepareMs + S.SpawnMs;
+	// Wall time of the spawn work: the game-thread set-up + spawn frames, plus the prepare when it ran on a worker thread (a direct spawn's
+	// prepare is inside its set-up already).
+	LastSpawnDurationMs = S.GameThreadSetupMs + S.SpawnMs + (S.bAsyncPrepare ? S.PrepareMs : 0.0);
 	bHasSpawned = true;
 
 	UE_LOG(LogCodexTactics, Display,
@@ -1006,6 +1198,10 @@ void UCodexLevelPropsSubsystem::DumpProps() const
 		UE_LOG(LogCodexTactics, Display, TEXT("  Layer '%s': %d game objects"), *Pair.Key, Alive);
 	}
 
+	if (IsSpawnPending())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("(a live spawn is pending: its dropped IDs are set once its worker-thread prepare is done)"));
+	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Dropped IDs (%d):"), DroppedPropIds.Num());
 	for (const FString& DroppedId : DroppedPropIds)
 	{
@@ -1245,7 +1441,7 @@ void UCodexLevelPropsSubsystem::LoadBalanceFile()
 	bBalanceLoaded = true;
 }
 
-FString UCodexLevelPropsSubsystem::ResolveLayoutPath(const FString& LayoutName, const FString& PropsDir) const
+FString UCodexLevelPropsSubsystem::ResolveLayoutPath(const FString& LayoutName, const FString& PropsDir)
 {
 	if (LayoutName.IsEmpty())
 	{
