@@ -39,13 +39,73 @@ bool FEnemyAIRulesTest::RunTest(const FString&)
 
 	TestTrue(TEXT("Hound reaches 1.8 m"), EnemyAIRules::CanMelee(170.f, 100.f, 180.f));
 	TestFalse(TEXT("Operative on a platform: no bite"), EnemyAIRules::CanMelee(170.f, 130.f, 180.f));
-	// G007: feet 1.1 m straight up. The height cap sees 110 cm, but the blow is to the body point 2.1 m away.
-	TestFalse(TEXT("1.1 m ledge: no bite"), EnemyAIRules::CanMeleeFeet(FVector::ZeroVector, FVector(0.f, 0.f, 110.f), 180.f));
-	TestFalse(TEXT("1.1 m ledge, a step out: no bite"), EnemyAIRules::CanMeleeFeet(FVector::ZeroVector, FVector(40.f, 0.f, 110.f), 180.f));
-	// The ramp stop: 1.24 m out, feet 83 cm up. Body-point distance stacks the rise on +100 cm and is past 1.8 m; feet are not.
-	TestTrue(TEXT("Shared slope: in reach"), EnemyAIRules::CanMeleeFeet(FVector::ZeroVector, FVector(124.f, 0.f, 83.f), 180.f));
-	// Flat ground still measures to the chest, so 1.6 m planar is outside the 1.8 m body reach.
-	TestFalse(TEXT("Flat, past the chest: no bite"), EnemyAIRules::CanMeleeFeet(FVector::ZeroVector, FVector(160.f, 0.f, 0.f), 180.f));
+	// G007 + API review 1: "shared slope" is the probed floor rising smoothly, not the angle. A floor profile every 25 cm from the
+	// attacker's feet (0) to the target's: a ledge steps up 110 cm in one sample, a ramp rises a little per sample.
+	const FMeleeReachConfig Reach; // the fire_gate.json "melee_reach" defaults
+	// Like CombatGround::ProbeFloor: [0] = the attacker's feet (z 0), the probes, last = the target's feet.
+	auto Profile = [](float Horizontal, float TargetZ, TFunctionRef<float(float)> FloorAt)
+	{
+		TArray<FFloorSample> Samples;
+		FGroundProbeConfig Probe;
+		float Spacing = 0.f;
+		Samples.Add({ 0.f, 0.f, true });
+		for (const float Distance : CombatGroundRules::ProbeDistances(Horizontal, Probe, Spacing))
+		{
+			Samples.Add({ Distance, FloorAt(Distance), true });
+		}
+		Samples.Add({ Horizontal, TargetZ, true });
+		return Samples;
+	};
+	for (const float Horizontal : { 0.f, 40.f, 115.f, 140.f, 170.f })
+	{
+		// The ledge face 10 cm short of the target: the floor jumps 0 -> 110 between two samples.
+		const TArray<FFloorSample> Ledge = Profile(Horizontal, 110.f, [Horizontal](float D) { return D >= Horizontal - 10.f ? 110.f : 0.f; });
+		const FVector TargetFeet(Horizontal, 0.f, 110.f);
+		TestFalse(*FString::Printf(TEXT("1.1 m ledge at %.0f cm horizontal: no bite"), Horizontal),
+			EnemyAIRules::CanMeleeOverProfile(FVector::ZeroVector, TargetFeet, 180.f, Ledge, Reach));
+		// Unknown floor (no probe) is no shared ground either: the ledge stays out of reach.
+		TestFalse(*FString::Printf(TEXT("1.1 m ledge at %.0f cm, floor unknown: no bite"), Horizontal),
+			EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, TargetFeet, 180.f, false, Reach));
+	}
+	// The review's failing case: (115, 0, 110) is 43.7 deg, the old angle test called it a slope and bit.
+	TestFalse(TEXT("review case: 1.1 m ledge 115 cm out, off shared ground"),
+		EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(115.f, 0.f, 110.f), 180.f, false, Reach));
+	// Ramps 15-35 deg within 1.8 m: shared ground, in reach.
+	for (const float SlopeDeg : { 15.f, 20.f, 25.f, 30.f, 35.f })
+	{
+		const float Tan = FMath::Tan(FMath::DegreesToRadians(SlopeDeg));
+		for (const float Distance : { 100.f, 140.f, 170.f })
+		{
+			const float Horizontal = Distance * FMath::Cos(FMath::DegreesToRadians(SlopeDeg));
+			const TArray<FFloorSample> Ramp = Profile(Horizontal, Horizontal * Tan, [Tan](float D) { return D * Tan; });
+			TestTrue(*FString::Printf(TEXT("%.0f deg ramp, %.0f cm away: shared ground"), SlopeDeg, Distance), CombatGroundRules::IsSharedGround(Ramp, Reach.StepMaxCm));
+			TestTrue(*FString::Printf(TEXT("%.0f deg ramp, %.0f cm away: bites"), SlopeDeg, Distance),
+				EnemyAIRules::CanMeleeOverProfile(FVector::ZeroVector, FVector(Horizontal, 0.f, Horizontal * Tan), 180.f, Ramp, Reach));
+		}
+	}
+	// The ramp stop from RampFightSmoke: 1.24 m out, feet 83 cm up.
+	TestTrue(TEXT("Shared slope: in reach"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(124.f, 0.f, 83.f), 180.f, true, Reach));
+	// A stair (18 cm risers every 25 cm) is shared ground; a 50 cm crate is not.
+	const TArray<FFloorSample> Stair = Profile(150.f, 108.f, [](float D) { return FMath::FloorToFloat(D / 25.f + 0.01f) * 18.f; });
+	TestTrue(TEXT("Stair: shared ground"), CombatGroundRules::IsSharedGround(Stair, Reach.StepMaxCm));
+	TArray<FFloorSample> Missed = Stair;
+	Missed[2].bHit = false;
+	TestFalse(TEXT("A missed probe: not shared (unknown)"), CombatGroundRules::IsSharedGround(Missed, Reach.StepMaxCm));
+	// Flat ground is exactly the old body-point rule either way: 1.6 m planar is past the 1.8 m body reach, 1.49 m is in.
+	TestFalse(TEXT("Flat, past the chest: no bite"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(160.f, 0.f, 0.f), 180.f, true, Reach));
+	TestTrue(TEXT("Flat, 1.49 m: bites"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(149.f, 0.f, 0.f), 180.f, false, Reach));
+	TestFalse(TEXT("Over the height cap on a ramp: no bite"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(100.f, 0.f, 125.f), 180.f, true, Reach));
+	// No reach jump at the old 15 deg threshold: the planar reach changes smoothly with the height.
+	const float Below = EnemyAIRules::MeleeReachPlanarOnGround(180.f, 36.f, true, Reach);
+	const float Above = EnemyAIRules::MeleeReachPlanarOnGround(180.f, 40.f, true, Reach);
+	TestTrue(*FString::Printf(TEXT("planar reach is continuous on a shared slope (%.1f / %.1f)"), Below, Above), FMath::Abs(Below - Above) < 15.f);
+	TestEqual(TEXT("flat planar reach = the old body-point reach"), EnemyAIRules::MeleeReachPlanarOnGround(180.f, 0.f, true, Reach), 149.666f, 0.1f);
+	TestTrue(TEXT("ramp (83 cm up) leaves planar reach (the close-in stops)"), EnemyAIRules::MeleeReachPlanarOnGround(180.f, 83.f, true, Reach) > 120.f);
+	TestEqual(TEXT("ledge (110 cm up, off shared ground): no planar reach"), EnemyAIRules::MeleeReachPlanarOnGround(180.f, 110.f, false, Reach), 0.f);
+	// Turn-based: a 1.5 m grid neighbour on flat ground bites, one up a 1.1 m ledge does not.
+	const float Grid = EnemyAIRules::GridMeleeRange(180.f, 150.f, Reach);
+	TestTrue(TEXT("turn-based flat neighbour bites"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(150.f, 0.f, 0.f), Grid, true, Reach));
+	TestFalse(TEXT("turn-based neighbour up a 1.1 m ledge: no bite"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(150.f, 0.f, 110.f), Grid, false, Reach));
 
 	const FVector Flee = EnemyAIRules::FleeDirection(FVector(100.f, 0.f, 0.f), FVector::ZeroVector, &Target);
 	TestTrue(TEXT("Flee away from the fire"), Flee.X > 0.8f);

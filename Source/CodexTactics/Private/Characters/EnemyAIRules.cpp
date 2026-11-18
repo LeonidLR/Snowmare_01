@@ -1,4 +1,5 @@
 #include "Characters/EnemyAIRules.h"
+#include "Combat/FireGateRules.h"
 #include "Data/GodotBalanceAsset.h"
 
 FEnemyAIConfig EnemyAIRules::ConfigFromBalance(const UGodotBalanceAsset* Balance)
@@ -237,19 +238,73 @@ bool EnemyAIRules::CanMelee(float DistanceCm, float HeightDifferenceCm, float At
 	return DistanceCm <= AttackRangeCm && HeightDifferenceCm <= 120.f;
 }
 
-bool EnemyAIRules::CanMeleeFeet(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm)
+bool EnemyAIRules::CanMeleeOnGround(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm, bool bSharedGround,
+	const FMeleeReachConfig& Config)
 {
-	// Godot body point: 1 m above the feet. Flat ground and a ledge still measure the blow to it.
-	constexpr float BodyOffsetCm = 100.f;
-	// Shallower than this is still the flat chest test (a few cm of floor noise). Steeper than the run is a ledge.
-	constexpr float SlopeMinDeg = 15.f;
-	const float Height = FMath::Abs(TargetFeet.Z - AttackerFeet.Z);
+	const float Rise = TargetFeet.Z - AttackerFeet.Z;
+	if (FMath::Abs(Rise) > Config.HeightCapCm)
+	{
+		return false;
+	}
 	const float Horizontal = FVector::Dist2D(AttackerFeet, TargetFeet);
-	const float AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(Height, FMath::Max(Horizontal, 1.f)));
-	const bool bLedge = Height > Horizontal;
-	const bool bSharedSlope = !bLedge && AngleDeg >= SlopeMinDeg;
-	const FVector Aim = bSharedSlope ? TargetFeet : TargetFeet + FVector(0.f, 0.f, BodyOffsetCm);
-	return CanMelee(FVector::Dist(AttackerFeet, Aim), Height, AttackRangeCm);
+	float Vertical = Rise + Config.BodyOffsetCm; // to the Godot body point
+	if (bSharedGround)
+	{
+		// Flat shared ground = the body point (the old rule); the steeper the shared slope, the more feet-to-feet.
+		const float AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(FMath::Abs(Rise), FMath::Max(Horizontal, 1.f)));
+		const float Blend = Config.SlopeFullDeg > KINDA_SMALL_NUMBER ? FMath::Clamp(AngleDeg / Config.SlopeFullDeg, 0.f, 1.f) : 1.f;
+		Vertical = FMath::Lerp(Rise + Config.BodyOffsetCm, Rise, Blend);
+	}
+	return FMath::Sqrt(FMath::Square(Horizontal) + FMath::Square(Vertical)) <= AttackRangeCm;
+}
+
+bool EnemyAIRules::CanMeleeOnGround(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm, bool bSharedGround)
+{
+	return CanMeleeOnGround(AttackerFeet, TargetFeet, AttackRangeCm, bSharedGround, FireGateRules::GetConfig().MeleeReach);
+}
+
+bool EnemyAIRules::CanMeleeOverProfile(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm,
+	TConstArrayView<FFloorSample> Profile, const FMeleeReachConfig& Config)
+{
+	return CanMeleeOnGround(AttackerFeet, TargetFeet, AttackRangeCm, CombatGroundRules::IsSharedGround(Profile, Config.StepMaxCm), Config);
+}
+
+float EnemyAIRules::MeleeReachPlanarOnGround(float AttackRangeCm, float TargetFeetHeightCm, bool bSharedGround, const FMeleeReachConfig& Config)
+{
+	const FVector Target(0.f, 0.f, TargetFeetHeightCm);
+	auto Reaches = [&](float Planar)
+	{
+		return CanMeleeOnGround(FVector::ZeroVector, Target + FVector(Planar, 0.f, 0.f), AttackRangeCm, bSharedGround, Config);
+	};
+	// The measured distance grows with the planar one (a flatter angle blends toward the body point): bisect the edge.
+	float Low = 0.f;
+	float High = FMath::Max(0.f, AttackRangeCm);
+	if (!Reaches(Low))
+	{
+		return 0.f;
+	}
+	if (Reaches(High))
+	{
+		return High;
+	}
+	for (int32 Step = 0; Step < 24; ++Step)
+	{
+		const float Mid = 0.5f * (Low + High);
+		if (Reaches(Mid))
+		{
+			Low = Mid;
+		}
+		else
+		{
+			High = Mid;
+		}
+	}
+	return Low;
+}
+
+float EnemyAIRules::GridMeleeRange(float AttackRangeCm, float PlanarCm, const FMeleeReachConfig& Config)
+{
+	return FMath::Max(AttackRangeCm, FMath::Sqrt(FMath::Square(PlanarCm) + FMath::Square(Config.BodyOffsetCm)) + 1.f);
 }
 
 float EnemyAIRules::MeleeReachPlanar(float AttackRangeCm, float HeightDifferenceCm)
@@ -259,7 +314,12 @@ float EnemyAIRules::MeleeReachPlanar(float AttackRangeCm, float HeightDifference
 
 float EnemyAIRules::MeleeApproachAcceptance(float AttackRangeCm, float HeightDifferenceCm, float SelfRadiusCm, float GoalRadiusCm, float MarginCm)
 {
-	const float Inside = MeleeReachPlanar(AttackRangeCm, HeightDifferenceCm) - SelfRadiusCm - GoalRadiusCm - MarginCm;
+	return MeleeApproachAcceptanceForReach(MeleeReachPlanar(AttackRangeCm, HeightDifferenceCm), AttackRangeCm, SelfRadiusCm, GoalRadiusCm, MarginCm);
+}
+
+float EnemyAIRules::MeleeApproachAcceptanceForReach(float PlanarReachCm, float AttackRangeCm, float SelfRadiusCm, float GoalRadiusCm, float MarginCm)
+{
+	const float Inside = PlanarReachCm - SelfRadiusCm - GoalRadiusCm - MarginCm;
 	// Floored to 5 cm: a few cm of feet height jitter must not change the request (a new acceptance = a new MoveTo, RepathRules).
 	return FMath::Clamp(FMath::FloorToFloat(Inside / 5.f) * 5.f, 0.f, FMath::Max(0.f, AttackRangeCm * 0.5f));
 }

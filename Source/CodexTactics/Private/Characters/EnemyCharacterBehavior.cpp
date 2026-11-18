@@ -315,11 +315,12 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	// APC P4: a vehicle is reached at its nearest hull side (a 7.8 m hull: its pivot is metres away), at the feet's height.
 	const FVector TargetPosition = TargetVehicle ? FVector(FVector2D(TargetVehicle->GetClosestHullPoint(Feet)), Feet.Z) : GodotPosition(Target);
 	// Bug 06 (2026-11-01): a blow needs a clear line too - within reach behind a wall it walks round (the close-in below), every melee enemy.
-	// G007: a character's height cap is feet-to-feet. The close-in below still uses the body point, so a flat bite stops where it used to.
+	// G007: a character is bitten by the ground rule (feet-to-feet cap, shared ground probed, a ledge measured to the body point);
+	// the close-in below stops at the planar reach of that same rule.
 	const bool bCharacterTarget = !TargetVehicle && Target->IsA<ACharacter>();
 	const FVector TargetFeet = bCharacterTarget ? CombatGround::FeetOf(*Target) : TargetPosition;
 	const bool bInReach = bCharacterTarget
-		? EnemyAIRules::CanMeleeFeet(Feet, TargetFeet, AttackRange)
+		? CombatGround::CanMelee(*GetWorld(), *this, *Target, AttackRange)
 		: EnemyAIRules::CanMelee(FVector::Dist(Feet, TargetPosition), FMath::Abs(TargetPosition.Z - Feet.Z), AttackRange);
 	FString MeleeBlocker;
 	const bool bMeleeLine = !bInReach || TargetVehicle || HasClearMeleeLine(Target, Feet, &MeleeBlocker);

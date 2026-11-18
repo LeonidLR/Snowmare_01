@@ -3,7 +3,7 @@
 // and closes if he acquires the operative. Every 0.1 s logs sight, targets, a shot, the blocking component and
 // the impact Z of the muzzle line and the melee line, and both health values.
 // Gate (not loosened): once the operative's side sees the Frostbitten, that Frostbitten loses health within 1.5 s;
-// the Frostbitten's melee connects only while EnemyAIRules::CanMeleeFeet says he is in reach (the same test as the AI).
+// the Frostbitten's melee connects only while CombatGround::CanMelee says he is in reach (the same test as the AI).
 //   powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -NoRetry -ExtraArgs -Multiprocess -Commands RampFightSmoke
 // Map /Game/Maps/Generated/L_Gen_Depot_1, -LevelJson=L_Gen_Depot_1.json (Scripts/test_map.json).
 
@@ -61,7 +61,7 @@ namespace RampFightSmoke
 		float DamagedAt = -1.f;
 		float MeleeAt = -1.f;
 		bool bMeleeInReach = false;
-		/** Last time CanMeleeFeet was true (the blow's knockback can leave the 0.1 s sample a few cm outside). */
+		/** Last time CombatGround::CanMelee was true (the blow's knockback can leave the 0.1 s sample a few cm outside). */
 		float InReachAt = -1.f;
 		float NextLog = 0.1f;
 		double LastShotTime = -1.0e9;
@@ -264,7 +264,7 @@ namespace RampFightSmoke
 		const FString MeleeBlock = TraceBlock(World, MeleeLineRules::LinePoint(EnFeet), MeleeLineRules::LinePoint(OpFeet), ECC_Pawn, &Enemy, nullptr, bMeleeBlocked);
 		const float Dist3 = FVector::Dist(EnFeet, OpFeet);
 		const float Dz = FMath::Abs(EnFeet.Z - OpFeet.Z);
-		const bool bCanMelee = EnemyAIRules::CanMeleeFeet(EnFeet, OpFeet, Enemy.GetAttackRange());
+		const bool bCanMelee = CombatGround::CanMelee(World, Enemy, Operative, Enemy.GetAttackRange());
 		const AActor* OpTarget = Operative.GetCurrentCombatTarget();
 		const AActor* EnTarget = Enemy.GetCurrentTarget();
 		if (bSees && State.SeenAt < 0.f)
@@ -294,11 +294,13 @@ namespace RampFightSmoke
 	{
 		const float OpHealth = HealthOf(&Operative);
 		const float Range = Enemy.GetAttackRange();
-		const bool bCanMelee = EnemyAIRules::CanMeleeFeet(FeetOf(Enemy), FeetOf(Operative), Range);
+		const UWorld& World = *Enemy.GetWorld();
+		const bool bCanMelee = CombatGround::CanMelee(World, Enemy, Operative, Range);
 		FVector StrikeAttacker = FVector::ZeroVector;
 		FVector StrikeTarget = FVector::ZeroVector;
+		const AActor* Ignore[] = { &Enemy, &Operative };
 		const bool bStrikeInReach = Enemy.GetLastMeleeStrikeFeet(StrikeAttacker, StrikeTarget)
-			&& EnemyAIRules::CanMeleeFeet(StrikeAttacker, StrikeTarget, Range);
+			&& CombatGround::CanMeleeAt(World, StrikeAttacker, StrikeTarget, Range, Ignore);
 		if (bCanMelee)
 		{
 			State.InReachAt = State.PhaseTime;
