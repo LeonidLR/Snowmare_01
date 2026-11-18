@@ -7,9 +7,10 @@
 import type { Vec2 } from '../movement/geometry.ts';
 import { toBuildingFrame } from './rotation.ts';
 import { assignRoles } from './buildingRoles.ts';
-import type { BuildingRole, GenBuilding, GenLayout, Stair } from './schema.ts';
-import { LEVEL_HEIGHT, STAIR_RUN_PER_RISE } from './schema.ts';
-import { checkBuildingReachability } from './tacticalEvaluate.ts';
+import type { BuildingRole, GenBuilding, GenLayout, Stair, WallOpening } from './schema.ts';
+import { LEVEL_HEIGHT, STAIR_RUN_PER_RISE, unifyOpenings } from './schema.ts';
+import { effectiveOpeningState, isPassableState } from './openingStates.ts';
+import { checkBuildingReachability, isVaultableGroundWindow } from './tacticalEvaluate.ts';
 
 /** Clearances, cm (BUILDING_GENERATOR.md 4.1 / 4.2). */
 export const TRAVERSAL = {
@@ -32,6 +33,8 @@ export type TraversalCode =
   | 'stair_top_no_floor'
   | 'gap_overshoot'
   | 'no_exterior_door'
+  | 'unreachable_without_explosive'
+  | 'story_rolled_back'
   | 'stair_in_other_building';
 
 /** 'error' fails the building (blocks «Принять»); 'warning' is reported only (bands, D, shares - BUILDINGS_TECH_SPEC.md 2.1). */
@@ -49,6 +52,10 @@ export const TRAVERSAL_SEVERITY: Record<TraversalCode, TraversalSeverity> = {
   stair_top_no_floor: 'error',
   gap_overshoot: 'error',
   no_exterior_door: 'error',
+  /** Every exterior entry is blocked and at least one is 'barricaded': only an explosive gets in (BUILDINGS_TECH_SPEC.md 2.1). */
+  unreachable_without_explosive: 'error',
+  /** A story's recipe failed the validator and was undone (building-stories.md 5 step 4); reported, never fails the building. */
+  story_rolled_back: 'warning',
   stair_in_other_building: 'error',
 };
 
@@ -193,6 +200,35 @@ function checkFlight(l: GenLayout, b: GenBuilding, st: Stair, issues: TraversalI
   }
 }
 
+/** An exterior entry of a building with its effective state (opening-states.md). */
+export interface ExteriorEntry {
+  opening: WallOpening;
+  state: ReturnType<typeof effectiveOpeningState>;
+}
+
+/**
+ * The exterior entries of a building (BUILDINGS_TECH_SPEC.md 2.1): its exterior ground-floor doors (b.openings, else the legacy
+ * b.doors) and its vaultable exterior ground-floor windows, each with its effective state (blocked ones included).
+ */
+export function exteriorEntries(l: GenLayout, b: GenBuilding): ExteriorEntry[] {
+  const out: ExteriorEntry[] = [];
+  for (const op of unifyOpenings(b)) {
+    const door = op.kind === 'door' && (op.floor ?? 0) === 0;
+    if (!door && !isVaultableGroundWindow(l, b, op)) continue;
+    out.push({ opening: op, state: effectiveOpeningState(l, b, op) });
+  }
+  // legacy b.doors next to a non-empty b.openings (unifyOpenings reads only the latter): still doors, as before
+  // (a door already in b.openings at the same spot - e.g. materialised by a story brick - is not counted twice)
+  if (b.openings?.length) {
+    for (const d of b.doors ?? []) {
+      if (d.floor !== 0 || b.openings.some((o) => o.kind === 'door' && (o.floor ?? 0) === 0 && o.pos[0] === d.pos[0] && o.pos[1] === d.pos[1])) continue;
+      const op: WallOpening = { kind: 'door', pos: d.pos, floor: d.floor, wall: d.wall };
+      out.push({ opening: op, state: effectiveOpeningState(l, b, op) });
+    }
+  }
+  return out;
+}
+
 /** Validate one building. Non-enterable buildings (shells, chimneys, overwatch blocks) pass trivially. */
 export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversal {
   const issues: TraversalIssue[] = [];
@@ -207,9 +243,18 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
     res.ok = traversalOk(issues);
     return res;
   }
-  const hasDoor = (b.openings ?? []).some((o) => o.kind === 'door' && o.floor === 0) || (b.doors ?? []).some((d) => d.floor === 0)
-    || (b.stairs ?? []).some((s) => s.kind === 'external');
-  if (!hasDoor) issues.push({ severity: TRAVERSAL_SEVERITY.no_exterior_door, code: 'no_exterior_door', message: `${b.id}: enterable but has no exterior door` });
+  // entries: exterior ground-floor doors + vaultable ground windows (BUILDINGS_TECH_SPEC.md 2.1) + external stairs; an entry in a
+  // blocked state (openingStates.ts) is no entry (building-route-model.md rule 3). /1 defaults (doors open, windows broken) pass.
+  const entries = exteriorEntries(l, b);
+  const hasExternalStair = (b.stairs ?? []).some((s) => s.kind === 'external');
+  const hasDoor = hasExternalStair || entries.some((e) => isPassableState(e.state));
+  if (!hasDoor) {
+    if (entries.some((e) => e.state === 'barricaded')) {
+      issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_without_explosive, code: 'unreachable_without_explosive', message: `${b.id}: every entry is blocked and the only way in is through a barricade (explosive)` });
+    } else {
+      issues.push({ severity: TRAVERSAL_SEVERITY.no_exterior_door, code: 'no_exterior_door', message: `${b.id}: enterable but has no exterior door` });
+    }
+  }
 
   for (const st of b.stairs ?? []) if (st.kind === 'stairwell') checkFlight(l, b, st, issues);
   // a flight (with its approach / landing boxes) inside another building's footprint has no navmesh: that block is solid
@@ -231,7 +276,7 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
 
   // rooms + roof (no drops: floor holes / roof holes are excluded from the graph)
   const noDrops: GenBuilding = { ...b, floor_holes: [], roof_holes: [] };
-  const reach = checkBuildingReachability(l, noDrops);
+  const reach = checkBuildingReachability(l, noDrops, { openingStates: true, windowEntries: true });
   res.rooms = { total: reach.roomsTotal, reachable: reach.roomsReachable };
   for (const r of reach.unreachableRooms) issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_room, code: 'unreachable_room', ref: r, message: `${r}: not reachable from an exterior door without a drop` });
   if (b.roof_walkable) {

@@ -132,8 +132,10 @@ test('planStairCore: no core when both long-wall sides intersect a neighbour; th
 
 test('severity (BUILDINGS_TECH_SPEC 2.1): every existing code is an error, every raised issue carries it', () => {
   assert.deepEqual(Object.keys(TRAVERSAL_SEVERITY).sort(), ['gap_overshoot', 'no_exterior_door', 'stair_foot_blocked', 'stair_foot_no_floor',
-    'stair_in_other_building', 'stair_steep', 'stair_top_blocked', 'stair_top_no_floor', 'unreachable_level', 'unreachable_roof', 'unreachable_room']);
-  for (const [code, sev] of Object.entries(TRAVERSAL_SEVERITY)) assert.equal(sev, 'error', code);
+    'stair_in_other_building', 'stair_steep', 'stair_top_blocked', 'stair_top_no_floor', 'story_rolled_back', 'unreachable_level', 'unreachable_roof',
+    'unreachable_room', 'unreachable_without_explosive']);
+  // story_rolled_back (S1 step 3a) is the only warning so far
+  for (const [code, sev] of Object.entries(TRAVERSAL_SEVERITY)) assert.equal(sev, code === 'story_rolled_back' ? 'warning' : 'error', code);
   const cases = [
     twoStorey({ floors_detail: [{ floor: 1, height_z: 300, gaps: [{ id: 'g', kind: 'stairwell', poly: [[60, 260], [140, 260], [140, 769], [60, 769]] }], rooms: [] }] } as Partial<GenBuilding>),
     twoStorey({ stairs: [{ id: 'st', pos: [100, 120], from: 0, to: 1, kind: 'stairwell', top: [100, 549] }] } as Partial<GenBuilding>),

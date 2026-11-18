@@ -78,3 +78,24 @@ export function effectiveOpeningState(
   if (opening.state !== undefined) return opening.state;
   return layout.schema === LEVELGEN_SCHEMA_V2 ? defaultStateV2(layout, building, opening) : defaultStateV1(opening);
 }
+
+/**
+ * States that give no reachability edge (building-route-model.md rule 3: blocked states produce no edge; opening-states.md 1 / 2):
+ * 'sealed' / 'barricaded' doors (a barricade needs an explosive - never a rule-5 edge), 'barred' / 'boarded' / 'fixed' windows
+ * and loopholes. 'open' / 'closed' / 'locked' doors (a kick is not an explosive) and 'broken' / 'glazed' windows are passable.
+ */
+export const BLOCKED_OPENING_STATES: readonly (DoorState | WindowState)[] = ['sealed', 'barricaded', 'barred', 'boarded', 'fixed'];
+
+/** Does a state give a rule-5 reachability edge (no explosive, no drop)? */
+export function isPassableState(state: DoorState | WindowState): boolean {
+  return !BLOCKED_OPENING_STATES.includes(state);
+}
+
+/** Is the opening passable without an explosive in its effective state (effectiveOpeningState)? */
+export function isOpeningPassable(
+  layout: Pick<GenLayout, 'schema'> & Partial<Pick<GenLayout, 'walls'>>,
+  building: Pick<GenBuilding, 'set_piece' | 'partitions'>,
+  opening: WallOpening,
+): boolean {
+  return isPassableState(effectiveOpeningState(layout, building, opening));
+}

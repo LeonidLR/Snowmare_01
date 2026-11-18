@@ -5,6 +5,7 @@
 //   - Cover share along routes, multi-level route verification, mantle edge validation, per-building and per-level scores
 
 import { inFootprint, rotationOf, rotVec, toBuildingFrame } from './rotation.ts';
+import { classifyOpening, isOpeningPassable } from './openingStates.ts';
 import type { Segment, Vec2 } from '../movement/geometry.ts';
 import { dirOf, dist, distToWall, segmentBlocked, sub } from '../movement/geometry.ts';
 import { wallSegments } from '../movement/layout.ts';
@@ -131,13 +132,35 @@ function pointInBounds(p: Vec2, bounds: { min: Vec2; max: Vec2 }, tol = ROOM_TOU
   return p[0] >= bounds.min[0] - tol && p[0] <= bounds.max[0] + tol && p[1] >= bounds.min[1] - tol && p[1] <= bounds.max[1] + tol;
 }
 
+/** Options of checkBuildingReachability (the defaults keep the tactical report's legacy graph). */
+export interface ReachabilityOptions {
+  /**
+   * Honour opening states (openingStates.ts effectiveOpeningState): a door / window in a blocked state ('sealed', 'barricaded',
+   * 'barred', 'boarded', 'fixed') gives no edge (building-route-model.md rule 3). Default false = every door is an edge.
+   */
+  openingStates?: boolean;
+  /**
+   * Exterior ground-floor windows with a vaultable sill (isMantleable) are entries from the street too (BUILDINGS_TECH_SPEC.md
+   * 2.1 "Entries"); upper-storey windows never are (opening-states.md 4 rule 5). Default false = doors only.
+   */
+  windowEntries?: boolean;
+}
+
+/** An exterior ground-floor window the operatives can vault through (sill in the mantle band); its state is checked separately. */
+export function isVaultableGroundWindow(l: Pick<GenLayout, 'walls'>, b: Pick<GenBuilding, 'partitions'>, op: WallOpening): boolean {
+  if (op.kind !== 'window' || (op.floor ?? 0) !== 0) return false;
+  if (!isMantleable(op.sill_height ?? OPENING_DEFAULTS.window.sill)) return false;
+  return classifyOpening(l, b, op).exterior;
+}
+
 /** Build the room & roof reachability graph for one building and BFS from 'street'. */
-export function checkBuildingReachability(l: GenLayout, b: GenBuilding): {
+export function checkBuildingReachability(l: GenLayout, b: GenBuilding, opts: ReachabilityOptions = {}): {
   roomsTotal: number;
   roomsReachable: number;
   unreachableRooms: string[];
   roofReachable: boolean;
 } {
+  const passable = (op: WallOpening) => !opts.openingStates || isOpeningPassable(l, b, op);
   const roofNode = 'roof';
   const streetNode = 'street';
   const adj = new Map<string, Set<string>>();
@@ -186,7 +209,8 @@ export function checkBuildingReachability(l: GenLayout, b: GenBuilding): {
     // 1. Exterior doors (floor 0 -> street) and any upper-floor openings acting as doors
     const openings = unifyOpenings(b);
     for (const op of openings) {
-      if (op.kind !== 'door') continue;
+      const entryWindow = opts.windowEntries === true && isVaultableGroundWindow(l, b, op);
+      if ((op.kind !== 'door' && !entryWindow) || !passable(op)) continue;
       const hits = rooms.filter(
         (rm) => rm.floor === op.floor && ((op.id && rm.door_ids?.includes(op.id)) || pointInBounds(toBuildingFrame(b, op.pos), rm.bounds, ROOM_TOUCH_TOL_CM)),
       );
@@ -200,7 +224,7 @@ export function checkBuildingReachability(l: GenLayout, b: GenBuilding): {
     // 2. Interior partition doors connecting rooms on same floor
     for (const pt of b.partitions ?? []) {
       for (const op of pt.openings ?? []) {
-        if (op.kind !== 'door') continue;
+        if (op.kind !== 'door' || !passable(op)) continue;
         const hits = rooms.filter(
           (rm) => rm.floor === pt.floor && ((op.id && rm.door_ids?.includes(op.id)) || pointInBounds(toBuildingFrame(b, op.pos), rm.bounds, ROOM_TOUCH_TOL_CM)),
         );
@@ -209,9 +233,16 @@ export function checkBuildingReachability(l: GenLayout, b: GenBuilding): {
     }
 
     // Also connect rooms sharing a common door_id (for hand-crafted room graphs without partition records)
+    const blockedIds = new Set<string>();
+    if (opts.openingStates) {
+      for (const op of [...openings, ...(b.partitions ?? []).flatMap((pt) => pt.openings ?? [])]) {
+        if (op.id && !passable(op)) blockedIds.add(op.id);
+      }
+    }
     const byDoor = new Map<string, GenRoom[]>();
     for (const rm of rooms) {
       for (const did of rm.door_ids ?? []) {
+        if (blockedIds.has(did)) continue;
         const list = byDoor.get(did) ?? [];
         list.push(rm);
         byDoor.set(did, list);

@@ -18,6 +18,8 @@ const CODE_RU: Record<TraversalCode, string> = {
   gap_overshoot: 'дыра в перекрытии за маршем',
   stair_in_other_building: 'марш внутри соседнего здания',
   no_exterior_door: 'нет наружной двери',
+  unreachable_without_explosive: 'войти можно только взрывчаткой (баррикада)',
+  story_rolled_back: 'история отменена',
 };
 
 /** Short Russian label per tactical role (buildingRoles.ts, building-stories.md section 1). */
