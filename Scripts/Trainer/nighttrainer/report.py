@@ -110,7 +110,7 @@ def _diff_table(trainer, state: dict) -> str:
     return f"<table><tr><th>Weight (JSON pointer)</th><th>Baseline</th><th>Champion</th><th>Change</th></tr>{body}</table>"
 
 
-def _archive_section(trainer) -> str:
+def _archive_section(trainer, state: dict | None = None) -> str:
     """Morning view of the MAP-Elites grid: cells filled, the best weights, behaviour values, one highlight each."""
     mode = qd.search_mode_of(trainer.cfg)
     if mode != "qd":
@@ -131,8 +131,27 @@ def _archive_section(trainer) -> str:
                     f"<td>{html.escape(str(cell.get('highlight', '')))}</td>"
                     f"<td>{html.escape(shown)}</td></tr>")
     body = "".join(rows) or "<tr><td colspan='5' class='muted'>No cell filled yet.</td></tr>"
+
+    hist_html = ""
+    last_hist = (state.get("history") or [{}])[-1].get("descriptors") if state else None
+    if last_hist:
+        h_rows = []
+        for aid, h in sorted(last_hist.items()):
+            edges_str = ", ".join(f"{float(e):.2f}" for e in h.get("edges", [])) or "linear"
+            bins_str = ", ".join(str(c) for c in h.get("bins", []))
+            h_rows.append(
+                f"<tr><td>{html.escape(aid)}</td><td>{h.get('min', 0.0):.2f}</td><td>{h.get('mean', 0.0):.2f}</td>"
+                f"<td>{h.get('max', 0.0):.2f}</td><td>[{bins_str}]</td><td>[{edges_str}]</td></tr>"
+            )
+        hist_html = (
+            "<h3>Descriptor distributions (latest generation)</h3>"
+            "<table><tr><th>Axis</th><th>Min</th><th>Mean</th><th>Max</th><th>Per-bin counts</th><th>Bin edges</th></tr>"
+            f"{''.join(h_rows)}</table>"
+        )
+
     return ("<section><h2>Quality-diversity archive</h2>"
             f"<p>Cells filled: <b>{filled}</b> / {cap}.</p>"
+            f"{hist_html}"
             "<table><tr><th>Cell</th><th>Best</th><th>Fitness</th><th>Highlight</th><th>Behaviour</th></tr>"
             f"{body}</table></section>")
 
@@ -228,7 +247,7 @@ The trainer never edits the game file: to adopt the champion run <code>powershel
 </section>
 <section><h2>Fitness per generation</h2>{_chart(hist)}
 <p class="muted">Best / mean = this generation's evaluation (vs the champion of that generation and the bot squad), so the curve can dip when a stronger champion is promoted. The champion line is its re-evaluation on fresh seeds.</p></section>
-{_archive_section(trainer)}
+{_archive_section(trainer, state)}
 {_highlights_section(trainer, state)}
 <section><h2>Champion vs baseline (fresh-seed evaluations)</h2>{_stats_table(state.get('baseline_stats'), champ.get('stats'))}
 <p class="muted">"vs bot" = against the player squad driven by the playtest bot: the absolute yardstick (the self-play opponent changes over the run).</p></section>

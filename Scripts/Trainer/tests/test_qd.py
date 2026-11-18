@@ -353,5 +353,130 @@ class LoopModeTests(unittest.TestCase):
             self.assertEqual(load_json(t.archive_path())["cells"][list(later.cells)[0]]["id"], "later")
 
 
+class RealDescriptorCoverageTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        fixture = os.path.join(TRAINER, "fixtures", "pmc_v6_qd_40_candidates.json")
+        if not os.path.exists(fixture):
+            raise FileNotFoundError(f"Fixture missing: {fixture}")
+        cls.candidates = load_json(fixture)
+
+    def test_forty_candidates_loaded(self):
+        self.assertEqual(len(self.candidates), 40)
+
+    def test_validate_bin_edges(self):
+        # Valid: 4 bins, 3 strictly increasing edges
+        arch = qd.Archive({"axes": [{"id": "a", "bins": 4, "bin_edges": [10.0, 20.0, 30.0]}]})
+        self.assertEqual(len(arch.axes), 1)
+
+        # Invalid length (wants bins - 1 = 2 edges, got 1)
+        with self.assertRaises(ValueError):
+            qd.Archive({"axes": [{"id": "bad_len", "bins": 3, "bin_edges": [10.0]}]})
+
+        # Non-increasing (10 >= 10)
+        with self.assertRaises(ValueError):
+            qd.Archive({"axes": [{"id": "non_inc", "bins": 3, "bin_edges": [10.0, 10.0]}]})
+
+        # Decreasing (20 > 10)
+        with self.assertRaises(ValueError):
+            qd.Archive({"axes": [{"id": "dec", "bins": 3, "bin_edges": [20.0, 10.0]}]})
+
+    def test_descriptor_histogram(self):
+        axes = [
+            {"id": "aggression", "metric": "time_in_contact_s", "bins": 4, "bin_edges": [30.0, 45.0, 60.0]},
+            {"id": "mobility", "metrics": ["flanks_completed", "moves"], "bins": 4, "bin_edges": [16.0, 24.0, 32.0]},
+        ]
+        behaviours = [
+            {"time_in_contact_s": 25.0, "flanks_completed": 0, "moves": 10},
+            {"time_in_contact_s": 50.0, "flanks_completed": 1, "moves": 20},
+            {"time_in_contact_s": 70.0, "flanks_completed": 2, "moves": 35},
+        ]
+        hist = qd.descriptor_histogram(behaviours, axes)
+        self.assertIn("aggression", hist)
+        self.assertEqual(hist["aggression"]["bins"], [1, 0, 1, 1])
+        self.assertEqual(hist["aggression"]["min"], 25.0)
+        self.assertEqual(hist["aggression"]["max"], 70.0)
+        self.assertIn("mobility", hist)
+        self.assertEqual(hist["mobility"]["bins"], [1, 1, 0, 1])
+
+    def test_old_binning_reproduces_two_of_fortyeight_cells(self):
+        """Old binning from pmc-v6-qd: mobility [0,12] saturates (avg 19 -> bin 3), aggression [0,180] in bins 0-1, patience [0,3] in bin 0."""
+        old_axes = [
+            {"id": "aggression", "metric": "time_in_contact_s", "bins": 4, "range": [0, 180]},
+            {"id": "mobility", "metrics": ["flanks_completed", "moves"], "bins": 4, "range": [0, 12]},
+            {"id": "patience", "metric": "ambush_success", "bins": 3, "range": [0, 3]}
+        ]
+        arch = qd.Archive({"axes": old_axes})
+        for c in self.candidates:
+            arch.consider(c["id"], {}, c["fitness"], c["behaviour"], c.get("gen", 0))
+        self.assertEqual(arch.capacity(), 48)
+        self.assertEqual(len(arch.cells), 2)
+        self.assertEqual(set(arch.cells.keys()), {"0,3,0", "1,3,0"})
+
+    def test_new_binning_fills_at_least_eight_cells(self):
+        """New binning from trainer_config.json: bin_edges / normalized ranges reflect real metrics and fill >= 8 cells (actual 20)."""
+        cfg_axes = CONFIG["qd"]["axes"]
+        arch = qd.Archive({"axes": cfg_axes})
+        for c in self.candidates:
+            arch.consider(c["id"], {}, c["fitness"], c["behaviour"], c.get("gen", 0))
+        self.assertEqual(arch.capacity(), 48)
+        self.assertGreaterEqual(len(arch.cells), 8)
+        self.assertEqual(len(arch.cells), 20)
+        seen_agg = {c["key"][0] for c in arch.cells.values()}
+        seen_mob = {c["key"][1] for c in arch.cells.values()}
+        seen_pat = {c["key"][2] for c in arch.cells.values()}
+        self.assertEqual(seen_agg, {0, 1, 2, 3})
+        self.assertEqual(seen_mob, {0, 1, 2, 3})
+        self.assertEqual(seen_pat, {0, 1, 2})
+
+    def test_empty_neighbors_computation(self):
+        axes = [
+            {"id": "x", "metric": "time_in_contact_s", "bins": 3, "range": [0, 30]},
+            {"id": "y", "metric": "moves", "bins": 3, "range": [0, 30]},
+        ]
+        arch = qd.Archive({"axes": axes})
+        self.assertEqual(arch.capacity(), 9)
+        arch.consider("c", {}, 1.0, _beh(time_in_contact_s=15, moves=15), 0)
+        self.assertEqual(arch.empty_neighbors((1, 1)), 8)
+        arch.consider("corner", {}, 1.0, _beh(time_in_contact_s=5, moves=5), 0)
+        self.assertEqual(arch.empty_neighbors((0, 0)), 2)
+
+    def test_bot_jobs_ask_one_round_and_avoid_padded_crashes(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            t = Trainer(_repo(tmp, "qd"), "bot_rounds", tmp, mock=True, log=lambda m: None, max_generations=1,
+                        parallel=1, poll_s=0.01)
+            plan = t._league_plan(0, "eval", os.path.join(tmp, "gen_0000"), t.baseline_path)
+            bot_match = next(p for p in plan if p["opponent"] == "bot")
+            self.assertEqual(bot_match.get("rounds"), 1)
+
+            jobs = t.make_jobs("cand_1", t.baseline_path, 0, "eval", os.path.join(tmp, "gen_0000"), plan)
+            bot_job = next(j for j in jobs if j["opponent"] == "bot")
+            self.assertEqual(bot_job["rounds"], 1)
+
+            # 1-round bot doc: parsed with job's rounds (1), 0 crash penalty
+            one_round_doc = {
+                "schema": "codex.pmc_arena/1",
+                "opponent": "bot",
+                "rounds": [{"winner": "A", "duration_s": 30, "sides": {"A": {"survivors": 3}, "B": {"survivors": 0}}}]
+            }
+            parsed = t.adapter.parse_doc(one_round_doc, expected_rounds=int(bot_job["rounds"]))
+            self.assertEqual(len(parsed), 1)
+            self.assertFalse(parsed[0].get("crashed", False))
+            score_1 = fitness.round_score(parsed[0], CONFIG["fitness"])
+            self.assertGreater(score_1, 0.0)
+
+            # Real 0-round bot doc (crashed arena before completing round): parsed with job's rounds (1), gets exactly 1 crash penalty
+            zero_round_doc = {
+                "schema": "codex.pmc_arena/1",
+                "opponent": "bot",
+                "rounds": []
+            }
+            parsed_zero = t.adapter.parse_doc(zero_round_doc, expected_rounds=int(bot_job["rounds"]))
+            self.assertEqual(len(parsed_zero), 1)
+            self.assertTrue(parsed_zero[0].get("crashed", False))
+            score_0 = fitness.round_score(parsed_zero[0], CONFIG["fitness"])
+            self.assertEqual(score_0, float(CONFIG["fitness"].get("crash_penalty", -5.0)))
+
+
 if __name__ == "__main__":
     unittest.main()

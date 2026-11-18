@@ -213,7 +213,11 @@ class ArenaAdapter:
         if schema and doc.get("schema") != schema and rc.get("strict_schema", True):
             raise ArenaResultError(f"unexpected schema {doc.get('schema')!r} (want {schema!r})")
         rounds = _dig(doc, rc.get("rounds_key", "rounds"))
-        if not isinstance(rounds, list) or not rounds:
+        if not isinstance(rounds, list):
+            raise ArenaResultError("no rounds in the arena result")
+        if not rounds:
+            if expected_rounds and rc.get("pad_missing_rounds_as_crash", True):
+                return [{"crashed": True, "won": 0.0}] * expected_rounds
             raise ArenaResultError("no rounds in the arena result")
         mine, theirs = str(rc.get("candidate_side", "A")), str(rc.get("opponent_side", "B"))
         draws = {str(v).lower() for v in rc.get("draw_values", ["draw", "none", ""])}
