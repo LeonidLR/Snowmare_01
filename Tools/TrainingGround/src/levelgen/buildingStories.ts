@@ -2,34 +2,50 @@
 // sections 3 bricks, 5 application, 6 catalogue, F1 two-step pick, F3 role budget, F5 rollback budget).
 // A story is a recipe of bricks applied to a COPY of a building; the copy must pass the traversal validator (buildingTraversal.ts,
 // opening states honoured) with no error the untouched building did not already have, else every brick is undone (the original
-// building object is returned) and a 'story_rolled_back' warning is logged. Catalogue for now: 1 'open' (no bricks) and
-// 3 'locked_door' (door_state(front, locked)). Pure and deterministic per (seed, building id); NOT wired into the generator
-// pipeline or the page yet (a later step does that).
+// building object is returned) and a 'story_rolled_back' warning is logged. Catalogue for now: 1 'open' (no bricks),
+// 3 'locked_door' (door_state(front, locked)), 4 'rubble_escape' (block_flight(0->1, rubble) + add_balcony_escape) and
+// 7 'roof_outside' (roof_access(ladder)); 4 and 7 are detours (objective / garrison / overwatch only). Bricks may add / remove
+// layout ladders (fire escapes, facade ladders): the result then carries the new `ladders` list. Pure and deterministic per
+// (seed, building id); NOT wired into the generator pipeline or the page yet (a later step does that).
 
 import type { Vec2 } from '../movement/geometry.ts';
 import { closestOnSegment, dist, rng } from '../movement/geometry.ts';
 import { fnv1a } from './props/rng.ts';
-import { toBuildingFrame } from './rotation.ts';
+import { inFootprint, normDeg, rotationOf, rotPoint, toBuildingFrame } from './rotation.ts';
 import { withRoles } from './buildingRoles.ts';
 import type { TraversalIssue } from './buildingTraversal.ts';
-import { TRAVERSAL_SEVERITY, validateBuilding } from './buildingTraversal.ts';
+import { segHitsBox, TRAVERSAL_SEVERITY, validateBuilding } from './buildingTraversal.ts';
+import { ESCAPE_BALCONY_DEPTH } from './fireEscapes.ts';
+import { obstacleHeight } from './obstacleHeights.ts';
 import { classifyOpening, effectiveOpeningState, isPassableState } from './openingStates.ts';
-import type { BuildingRole, DoorState, GenBuilding, GenLayout, Side, StoryInstance, WallOpening, WindowState } from './schema.ts';
-import { DOOR_STATES, WINDOW_STATES, unifyOpenings } from './schema.ts';
+import type { Balcony, BuildingRole, DoorState, FireEscape, GenBuilding, GenLadder, GenLayout, GenRoom, Side, Stair, StoryInstance, WallOpening, WindowState } from './schema.ts';
+import { DOOR_STATES, ladderForLevels, OPENING_DEFAULTS, WINDOW_STATES, unifyOpenings } from './schema.ts';
 import { openingOutwardDir } from './tacticalEvaluate.ts';
 
 // ---- catalogue ----------------------------------------------------------------------------------------------------------------------
 
 export type StoryAuthor = StoryInstance['author'];
-export type StoryId = 'open' | 'locked_door';
+export type StoryId = 'open' | 'locked_door' | 'rubble_escape' | 'roof_outside';
 
 /** The catalogue rows implemented so far (building-stories.md 6): number, allowed authors, type. */
-export const STORY_CATALOGUE: Record<StoryId, { num: number; authors: readonly StoryAuthor[]; type: 'base' | 'choice' }> = {
+export const STORY_CATALOGUE: Record<StoryId, { num: number; authors: readonly StoryAuthor[]; type: 'base' | 'choice' | 'detour' }> = {
   /** 1 Open: no bricks, author traces only (any author). */
   open: { num: 1, authors: ['survivors', 'pmc', 'cold', 'decay'], type: 'base' },
   /** 3 Locked door: door_state(front, locked) - kick the front or go round to the back door. */
   locked_door: { num: 3, authors: ['pmc', 'decay', 'survivors'], type: 'choice' },
+  /** 4 Rubble on the stair + fire escape: block_flight(0->1, rubble) + add_balcony_escape - block / office, >= 2 storeys. */
+  rubble_escape: { num: 4, authors: ['decay', 'pmc'], type: 'detour' },
+  /** 7 Roof only from outside: roof_access(facade ladder) - an enterable building with a walkable roof and a core / hatch to it. */
+  roof_outside: { num: 7, authors: ['decay', 'cold'], type: 'detour' },
 };
+
+/** F1: detour stories are eligible only for these roles (a detour needs a role payoff). */
+export const DETOUR_ROLES: readonly BuildingRole[] = ['objective', 'garrison', 'overwatch'];
+/**
+ * Story 4's archetypes "block, office": the generator builds both as set_piece 'facade' (blockTemplates two_storey `B_*_block`,
+ * small_office `B_*_office`); the >= 2 storeys condition is checked separately.
+ */
+export const RUBBLE_ESCAPE_SET_PIECES: readonly string[] = ['facade'];
 
 /**
  * The pick knobs (building-stories.md F1 / F3 / F5; later building_stories.json): `budget` = the share of buildings of a role that
@@ -38,10 +54,11 @@ export const STORY_CATALOGUE: Record<StoryId, { num: number; authors: readonly S
  */
 export const STORY_PICK_KNOBS = {
   budget: { objective: 1.0, garrison: 0.8, overwatch: 0.7, transit: 0.5, background: 0.1 } as Record<BuildingRole, number>,
+  // detours (4, 7) only on objective / garrison / overwatch (F1); overwatch favours the outside roof ladder (*proposal*)
   weights: {
-    objective: { locked_door: 1 },
-    garrison: { locked_door: 1 },
-    overwatch: { locked_door: 1 },
+    objective: { locked_door: 1, rubble_escape: 1, roof_outside: 1 },
+    garrison: { locked_door: 1, rubble_escape: 1, roof_outside: 1 },
+    overwatch: { locked_door: 1, rubble_escape: 0.5, roof_outside: 1.5 },
     transit: { locked_door: 1 },
     background: { locked_door: 1 },
   } as Record<BuildingRole, Partial<Record<Exclude<StoryId, 'open'>, number>>>,
@@ -52,14 +69,28 @@ export type StoryPickKnobs = typeof STORY_PICK_KNOBS;
 
 // ---- bricks -------------------------------------------------------------------------------------------------------------------------
 
-/** One brick of a recipe (building-stories.md 3); only the two opening-state bricks exist so far. */
+/** How a blocked flight is blocked (schema /2 Stair.blocked). */
+export type FlightBlock = NonNullable<Stair['blocked']>;
+export const FLIGHT_BLOCKS: readonly FlightBlock[] = ['rubble', 'burnt', 'barricade'];
+
+/** One brick of a recipe (building-stories.md 3). */
 export type Brick =
   | { kind: 'door_state'; door: string; state: DoorState }
-  | { kind: 'window_state'; target: Side | number; state: WindowState };
+  | { kind: 'window_state'; target: Side | number; state: WindowState }
+  | { kind: 'block_flight'; stair: string; block: FlightBlock }
+  /** `room` = the S1 'flat': a room on the lowest storey of `storeys`, on an exterior wall. */
+  | { kind: 'add_balcony_escape'; room: string; storeys: number[] }
+  | { kind: 'roof_access'; access: 'ladder' };
 
 /** The brick as stored in StoryInstance.bricks, e.g. "door_state(D_B1_0,locked)". */
 export function brickToString(b: Brick): string {
-  return b.kind === 'door_state' ? `door_state(${b.door},${b.state})` : `window_state(${b.target},${b.state})`;
+  switch (b.kind) {
+    case 'door_state': return `door_state(${b.door},${b.state})`;
+    case 'window_state': return `window_state(${b.target},${b.state})`;
+    case 'block_flight': return `block_flight(${b.stair},${b.block})`;
+    case 'add_balcony_escape': return `add_balcony_escape(${b.room},${b.storeys.join('|')})`;
+    case 'roof_access': return `roof_access(${b.access})`;
+  }
 }
 
 /** The reference of an opening: its id, else its index in unifyOpenings ("openings[3]"). */
@@ -108,8 +139,305 @@ export function applyWindowState(l: Pick<GenLayout, 'walls'>, b: GenBuilding, ta
   return n;
 }
 
+/** block_flight(stair, kind): the flight stays (geometry) but is impassable - no route edge (stories 4, 13, 15). Mutates `b`. */
+export function applyBlockFlight(b: GenBuilding, stairId: string, block: FlightBlock): boolean {
+  if (!FLIGHT_BLOCKS.includes(block)) return false;
+  const st = (b.stairs ?? []).find((s) => s.id === stairId);
+  if (!st || st.blocked) return false;
+  st.blocked = block;
+  return true;
+}
+
+// ---- facade geometry (building frame: north = min y, south = max y, west = min x, east = max x) ---------------------------------------
+
+type Box = [Vec2, Vec2];
+
+const SIDE_ORDER: readonly Side[] = ['north', 'east', 'south', 'west'];
+const OPPOSITE_SIDE: Record<Side, Side> = { north: 'south', south: 'north', east: 'west', west: 'east' };
+/** Ladder yaw per facade (LADDERS.md 3.1: +X away from the wall, towards the climber) - as addLadderAt in generate.ts. */
+const OUT_YAW: Record<Side, number> = { north: 270, south: 90, west: 180, east: 0 };
+
+/** Fire-escape / facade-ladder clearances, cm (building-archetypes.md 3; LADDERS.md 3.1 as addLadderAt). */
+export const FACADE = {
+  balconyWidth: 300,
+  /** Free ground in front of the escape's foot (the approach box). */
+  escapeApproach: 150,
+  ladderGap: 10,
+  /** The ladder's foot link point, out from the rungs. */
+  ladderFoot: 110,
+  /** The top link point of a roof ladder, in from the facade. */
+  ladderTopIn: 100,
+  /** A balcony door at least this far from its room's corners along the facade. */
+  doorEdge: 80,
+  /** Free wall between a new door and an existing opening. */
+  openingClear: 60,
+  /** A new door's inside point at least this far from a flight on its storey. */
+  stairClear: 250,
+  /** A ladder / escape at least this far (along the facade) from a ground door. */
+  doorClear: 150,
+  /** Candidate positions along a facade / room span (fractions, tried in order). */
+  fractions: [0.5, 0.3, 0.7, 0.15, 0.85] as readonly number[],
+};
+
+const horizontalSide = (side: Side) => side === 'north' || side === 'south';
+const alongOf = (side: Side, p: Vec2) => (horizontalSide(side) ? p[0] : p[1]);
+const fpCentre = (b: GenBuilding): Vec2 => [(b.footprint[0][0] + b.footprint[1][0]) / 2, (b.footprint[0][1] + b.footprint[1][1]) / 2];
+/** A building-frame point in world coordinates (the inverse of toBuildingFrame). */
+const toWorld = (b: GenBuilding, p: Vec2): Vec2 => rotPoint(p, fpCentre(b), rotationOf(b));
+
+/** The building-frame point on facade `side` at `along`, `out` cm outward (negative = inside). */
+function facadePoint(b: GenBuilding, side: Side, along: number, out: number): Vec2 {
+  const [[x0, y0], [x1, y1]] = b.footprint;
+  switch (side) {
+    case 'north': return [along, y0 - out];
+    case 'south': return [along, y1 + out];
+    case 'west': return [x0 - out, along];
+    case 'east': return [x1 + out, along];
+  }
+}
+
+function faceSpan(b: GenBuilding, side: Side): [number, number] {
+  const [[x0, y0], [x1, y1]] = b.footprint;
+  return horizontalSide(side) ? [x0, x1] : [y0, y1];
+}
+
+/** The building-frame box outside facade `side`: `halfW` either side of `along`, from the wall `depth` cm out. */
+function outBox(b: GenBuilding, side: Side, along: number, halfW: number, depth: number): Box {
+  const p = facadePoint(b, side, along - halfW, 0), q = facadePoint(b, side, along + halfW, depth);
+  return [[Math.min(p[0], q[0]), Math.min(p[1], q[1])], [Math.max(p[0], q[0]), Math.max(p[1], q[1])]];
+}
+
+/** No other building stands on the outside box and no ground wall / fence crosses it. */
+function outsideClear(l: GenLayout, b: GenBuilding, box: Box): boolean {
+  const [[ax, ay], [bx, by]] = box;
+  const nx = Math.max(1, Math.ceil((bx - ax) / 50)), ny = Math.max(1, Math.ceil((by - ay) / 50));
+  for (let i = 0; i <= nx; i++) {
+    for (let j = 0; j <= ny; j++) {
+      const w = toWorld(b, [ax + 5 + ((bx - ax - 10) * i) / nx, ay + 5 + ((by - ay - 10) * j) / ny]);
+      if (l.buildings.some((o) => o.id !== b.id && inFootprint(o, w))) return false;
+    }
+  }
+  return !l.walls.some((w) => w.building !== b.id && (w.floor ?? 0) === 0 && segHitsBox(toBuildingFrame(b, w.a), toBuildingFrame(b, w.b), box));
+}
+
+/** The exterior ground-floor doors of the building (any state), each with its facade side and position along it. */
+function groundDoors(l: GenLayout, b: GenBuilding): { side: Side; along: number }[] {
+  return unifyOpenings(b)
+    .filter((o) => o.kind === 'door' && (o.floor ?? 0) === 0 && classifyOpening(l, b, o).exterior)
+    .map((o) => {
+      const side = openingSide(b, o);
+      return { side, along: alongOf(side, toBuildingFrame(b, o.pos)) };
+    });
+}
+
+/** Facade sides for an escape / outside ladder: fewest ground doors first, then the side opposite the front door, then N E S W. */
+export function sidesAwayFromDoors(l: GenLayout, b: GenBuilding): Side[] {
+  const doors = groundDoors(l, b);
+  const front = frontDoor(l, b);
+  const back = front ? OPPOSITE_SIDE[openingSide(b, front.opening)] : null;
+  const key = (s: Side) => [doors.filter((d) => d.side === s).length, s === back ? 0 : 1, SIDE_ORDER.indexOf(s)];
+  return [...SIDE_ORDER].sort((a, c) => {
+    const ka = key(a), kc = key(c);
+    return ka[0] - kc[0] || ka[1] - kc[1] || ka[2] - kc[2];
+  });
+}
+
+const doorFree = (doors: readonly { side: Side; along: number }[], side: Side, along: number, half: number) =>
+  doors.every((d) => d.side !== side || Math.abs(d.along - along) >= half + FACADE.doorClear);
+
+function uniqueId(taken: ReadonlySet<string>, base: string): string {
+  if (!taken.has(base)) return base;
+  for (let k = 2; ; k++) if (!taken.has(`${base}_${k}`)) return `${base}_${k}`;
+}
+
+function ladderOf(b: GenBuilding, id: string, side: Side, levelFrom: number, levelTo: number, from: string, to: string, pos: Vec2, foot: Vec2, top: Vec2): GenLadder {
+  const lad = ladderForLevels(levelTo - levelFrom);
+  return {
+    id, pos: toWorld(b, pos), yaw: normDeg(OUT_YAW[side] + rotationOf(b)), rungs: lad.rungs, plinth_cm: lad.plinth_cm,
+    from, to, level_from: levelFrom, level_to: levelTo, foot: toWorld(b, foot), top: toWorld(b, top),
+  };
+}
+
+// ---- add_balcony_escape ---------------------------------------------------------------------------------------------------------------
+
+/** The rooms of a building (its `rooms`, else one virtual room per walkable storey, as the validator's graph). */
+function roomsOf(b: GenBuilding): GenRoom[] {
+  if (b.rooms?.length) return b.rooms;
+  return Array.from({ length: b.hollow ? 1 : b.floors }, (_, f) => ({ id: `${b.id}_floor_${f}`, floor: f, bounds: { min: b.footprint[0], max: b.footprint[1] } }));
+}
+
+/** The room touches the facade `side` (its bounds reach the footprint edge, building frame). */
+function roomOnFacade(b: GenBuilding, rm: GenRoom, side: Side, tol = 30): boolean {
+  const [[x0, y0], [x1, y1]] = b.footprint;
+  const { min, max } = rm.bounds;
+  switch (side) {
+    case 'north': return Math.abs(min[1] - y0) <= tol;
+    case 'south': return Math.abs(max[1] - y1) <= tol;
+    case 'west': return Math.abs(min[0] - x0) <= tol;
+    case 'east': return Math.abs(max[0] - x1) <= tol;
+  }
+}
+
+const roomSpan = (rm: GenRoom, side: Side): [number, number] => (horizontalSide(side) ? [rm.bounds.min[0], rm.bounds.max[0]] : [rm.bounds.min[1], rm.bounds.max[1]]);
+
+/** The S1 'flat' for an escape on storey `floor`: the first room (by id) on a facade side away from the doors, or null. */
+export function escapeRoom(l: GenLayout, b: GenBuilding, floor: number): GenRoom | null {
+  const rooms = roomsOf(b).filter((rm) => rm.floor === floor).sort((a, c) => (a.id < c.id ? -1 : a.id > c.id ? 1 : 0));
+  for (const side of sidesAwayFromDoors(l, b)) {
+    const hit = rooms.find((rm) => roomOnFacade(b, rm, side));
+    if (hit) return hit;
+  }
+  return null;
+}
+
+interface EscapeSpot { side: Side; along: number; rooms: GenRoom[] }
+
+/** A facade spot for the escape: `room` and a room above on every storey reach the facade there, wall and ground are free. */
+function planEscapeSpot(l: GenLayout, b: GenBuilding, room: GenRoom, storeys: readonly number[]): EscapeSpot | null {
+  const rooms = roomsOf(b);
+  const doors = groundDoors(l, b);
+  const half = FACADE.balconyWidth / 2;
+  for (const side of sidesAwayFromDoors(l, b)) {
+    if (!roomOnFacade(b, room, side)) continue;
+    const [lo, hi] = roomSpan(room, side), [flo, fhi] = faceSpan(b, side);
+    for (const fr of FACADE.fractions) {
+      const along = lo + (hi - lo) * fr;
+      if (along - lo < FACADE.doorEdge || hi - along < FACADE.doorEdge || along - half < flo || along + half > fhi) continue;
+      if (!doorFree(doors, side, along, half)) continue;
+      const picked: GenRoom[] = [];
+      for (const f of storeys) {
+        const rm = f === room.floor ? room : rooms
+          .filter((x) => x.floor === f && roomOnFacade(b, x, side))
+          .sort((a, c) => (a.id < c.id ? -1 : a.id > c.id ? 1 : 0))
+          .find((x) => { const [a, c] = roomSpan(x, side); return along - a >= FACADE.doorEdge && c - along >= FACADE.doorEdge; });
+        if (!rm) break;
+        const wallFree = unifyOpenings(b).every((o) => (o.floor ?? 0) !== f || openingSide(b, o) !== side
+          || Math.abs(alongOf(side, toBuildingFrame(b, o.pos)) - along) >= (o.width ?? OPENING_DEFAULTS[o.kind].width) / 2 + OPENING_DEFAULTS.door.width / 2 + FACADE.openingClear);
+        const inside = facadePoint(b, side, along, -75);
+        const stairFree = (b.stairs ?? []).every((st) => (st.from !== f && st.to !== f)
+          || dist(inside, closestOnSegment(inside, toBuildingFrame(b, st.pos), toBuildingFrame(b, st.top)).point) >= FACADE.stairClear);
+        if (!wallFree || !stairFree) break;
+        picked.push(rm);
+      }
+      if (picked.length !== storeys.length) continue;
+      if (!outsideClear(l, b, outBox(b, side, along, half, ESCAPE_BALCONY_DEPTH + FACADE.escapeApproach))) continue;
+      return { side, along, rooms: picked };
+    }
+  }
+  return null;
+}
+
+/**
+ * add_balcony_escape(flat, storeys): a balcony door + a 150-deep balcony on each storey of `storeys` and one ladder fire escape
+ * (ground -> each balcony, `GenLadder`s with ladderForLevels rungs appended to `l.ladders`) on a facade side away from the
+ * ground doors, stacked at one spot of `room`'s facade wall. S1 'flat' = any room on an exterior wall (building-stories.md 3).
+ * Mutates `b` and `l.ladders`; false (nothing changed) when no facade spot fits.
+ */
+export function applyBalconyEscape(l: GenLayout, b: GenBuilding, roomId: string, storeys: readonly number[]): boolean {
+  const floors = [...new Set(storeys)].sort((a, c) => a - c);
+  if (!b.enterable || b.hollow || !floors.length || floors[0] < 1 || floors[floors.length - 1] >= b.floors) return false;
+  const room = roomsOf(b).find((rm) => rm.id === roomId && rm.floor === floors[0]);
+  if (!room) return false;
+  const spot = planEscapeSpot(l, b, room, floors);
+  if (!spot) return false;
+  const { side, along } = spot;
+  const taken = new Set<string>([
+    ...unifyOpenings(b).map((o) => o.id ?? ''), ...(b.balconies ?? []).map((x) => x.id), ...(b.fire_escapes ?? []).map((x) => x.id), ...(l.ladders ?? []).map((x) => x.id),
+  ]);
+  const escId = uniqueId(taken, `${b.id}_esc`);
+  const D = ESCAPE_BALCONY_DEPTH, half = FACADE.balconyWidth / 2;
+  const balconies: Balcony[] = [];
+  const ladders: GenLadder[] = [];
+  const realRooms = new Set(b.rooms ?? []);
+  floors.forEach((f, i) => {
+    const doorId = `${escId}_door_f${f}`, balconyId = `${escId}_bal_f${f}`;
+    const pos = toWorld(b, facadePoint(b, side, along, 0));
+    const wall = l.walls.find((w) => w.building === b.id && (w.floor ?? 0) === f && w.kind !== 'interior' && w.kind !== 'partition'
+      && dist(pos, closestOnSegment(pos, w.a, w.b).point) < 30);
+    editableOpenings(b).push({ id: doorId, kind: 'door', pos, floor: f, width: OPENING_DEFAULTS.door.width, ...(wall ? { wall: wall.id } : {}) });
+    const r = outBox(b, side, along, half, D);
+    balconies.push({ id: balconyId, floor: f, rect: r, door_id: doorId, rail_cm: obstacleHeight('low_vault') });
+    const rm = spot.rooms[i];
+    if (realRooms.has(rm)) rm.door_ids = [...(rm.door_ids ?? []), doorId];
+    // ground -> the first balcony: on the balcony's outer edge; balcony -> balcony: against the wall at its end, through a hatch above
+    const lid = `LAD_${escId}_${i}`;
+    if (i === 0) {
+      ladders.push(ladderOf(b, lid, side, 0, f, 'ground', `floor:${b.id}:${f}`,
+        facadePoint(b, side, along, D + FACADE.ladderGap), facadePoint(b, side, along, D + FACADE.ladderFoot), facadePoint(b, side, along, D - 100)));
+    } else {
+      const a2 = along + half - 60, prev = floors[i - 1];
+      ladders.push(ladderOf(b, lid, side, prev, f, `floor:${b.id}:${prev}`, `floor:${b.id}:${f}`,
+        facadePoint(b, side, a2, FACADE.ladderGap), facadePoint(b, side, a2, FACADE.ladderFoot), facadePoint(b, side, a2, 40)));
+    }
+  });
+  const escape: FireEscape = {
+    id: escId, kind: 'ladder', side, at: facadePoint(b, side, along, D), ground: facadePoint(b, side, along, D + FACADE.ladderFoot),
+    stops: floors.map((f) => ({ floor: f, balcony_id: `${escId}_bal_f${f}` })), to_roof: false, ladder_ids: ladders.map((x) => x.id),
+  };
+  b.balconies = [...(b.balconies ?? []), ...balconies];
+  b.fire_escapes = [...(b.fire_escapes ?? []), escape];
+  (l.ladders ??= []).push(...ladders);
+  return true;
+}
+
+// ---- roof_access ----------------------------------------------------------------------------------------------------------------------
+
+/** The building's inside accesses to its walkable roof: the core's flights onto the roof, its hatches and their / inside ladders. */
+export function insideRoofAccess(l: Pick<GenLayout, 'ladders'>, b: GenBuilding): { stairs: Stair[]; hatches: number; ladders: GenLadder[] } {
+  const hatchLadders = new Set((b.hatches ?? []).map((h) => h.ladder_id).filter((x): x is string => !!x));
+  return {
+    stairs: (b.stairs ?? []).filter((st) => st.kind === 'stairwell' && st.to >= b.floors && !st.blocked),
+    hatches: (b.hatches ?? []).length,
+    ladders: (l.ladders ?? []).filter((ld) => ld.to === `roof:${b.id}` && (hatchLadders.has(ld.id) || ld.from.startsWith(`floor:${b.id}:`))),
+  };
+}
+
+/**
+ * roof_access(ladder): removes the core-to-roof access (every stairwell flight arriving on the roof, the roof hatches and their
+ * ladders) and adds one external facade ladder ground -> roof (ladderForLevels(floors), as addLadderAt in generate.ts) on a side
+ * away from the ground doors. Mutates `b` and `l.ladders`; false (nothing changed) without an inside access or a free facade spot.
+ */
+export function applyRoofAccess(l: GenLayout, b: GenBuilding, access: 'ladder'): boolean {
+  if (access !== 'ladder' || !b.enterable || !b.roof_walkable) return false;
+  const inner = insideRoofAccess(l, b);
+  if (!inner.stairs.length && !inner.hatches && !inner.ladders.length) return false;
+  const doors = groundDoors(l, b);
+  const feet = (l.ladders ?? []).filter((ld) => !inner.ladders.includes(ld)).map((ld) => toBuildingFrame(b, ld.foot));
+  let spot: { side: Side; along: number } | null = null;
+  for (const side of sidesAwayFromDoors(l, b)) {
+    const [flo, fhi] = faceSpan(b, side);
+    for (const fr of FACADE.fractions) {
+      const along = flo + (fhi - flo) * fr;
+      if (along - flo < 60 || fhi - along < 60 || !doorFree(doors, side, along, 60)) continue;
+      const foot = facadePoint(b, side, along, FACADE.ladderFoot);
+      if (feet.some((p) => dist(p, foot) < FACADE.doorClear)) continue;
+      if (!outsideClear(l, b, outBox(b, side, along, 60, FACADE.ladderFoot + 40))) continue;
+      spot = { side, along };
+      break;
+    }
+    if (spot) break;
+  }
+  if (!spot) return false;
+  const { side, along } = spot;
+  b.stairs = b.stairs.filter((st) => !inner.stairs.includes(st));
+  if (b.hatches) b.hatches = [];
+  const ladders = (l.ladders ??= []);
+  for (const ld of inner.ladders) ladders.splice(ladders.indexOf(ld), 1);
+  const id = uniqueId(new Set(ladders.map((x) => x.id)), `LAD_${b.id}_roof`);
+  ladders.push(ladderOf(b, id, side, 0, b.floors, 'ground', `roof:${b.id}`,
+    facadePoint(b, side, along, FACADE.ladderGap), facadePoint(b, side, along, FACADE.ladderFoot), facadePoint(b, side, along, -FACADE.ladderTopIn)));
+  return true;
+}
+
+/** Apply one brick to `b` (and `l.ladders` for the escape / roof bricks); false when it did not apply. */
 function applyBrick(l: GenLayout, b: GenBuilding, brick: Brick): boolean {
-  return brick.kind === 'door_state' ? applyDoorState(b, brick.door, brick.state) : applyWindowState(l, b, brick.target, brick.state) > 0;
+  switch (brick.kind) {
+    case 'door_state': return applyDoorState(b, brick.door, brick.state);
+    case 'window_state': return applyWindowState(l, b, brick.target, brick.state) > 0;
+    case 'block_flight': return applyBlockFlight(b, brick.stair, brick.block);
+    case 'add_balcony_escape': return applyBalconyEscape(l, b, brick.room, brick.storeys);
+    case 'roof_access': return applyRoofAccess(l, b, brick.access);
+  }
 }
 
 // ---- recipes ------------------------------------------------------------------------------------------------------------------------
@@ -164,11 +492,28 @@ export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick
       const front = frontDoor(l, b);
       return front ? [{ kind: 'door_state', door: front.ref, state: 'locked' }] : null;
     }
+    case 'rubble_escape': {
+      // block / office with >= 2 storeys and a core flight 0 -> 1; the escape serves every upper storey (row 4: "balcony on each
+      // storey"); whether the balcony fits is the brick's job (no spot -> rollback, Edge Cases)
+      if (!RUBBLE_ESCAPE_SET_PIECES.includes(b.set_piece) || b.hollow || b.floors < 2) return null;
+      const flight = (b.stairs ?? []).find((st) => st.kind === 'stairwell' && st.from === 0 && st.to === 1 && !st.blocked);
+      const room = flight ? escapeRoom(l, b, 1) : null;
+      if (!flight || !room) return null;
+      const storeys = Array.from({ length: b.floors - 1 }, (_, i) => i + 1);
+      return [{ kind: 'block_flight', stair: flight.id, block: 'rubble' }, { kind: 'add_balcony_escape', room: room.id, storeys }];
+    }
+    case 'roof_outside': {
+      // a walkable roof reached from inside (a core flight onto it or a hatch); the facade ladder is the brick's job
+      if (!b.roof_walkable) return null;
+      const inner = insideRoofAccess(l, b);
+      return inner.stairs.length || inner.hatches || inner.ladders.length ? [{ kind: 'roof_access', access: 'ladder' }] : null;
+    }
   }
 }
 
-/** Is the story eligible for the building (F1)? */
-export function storyEligible(l: GenLayout, b: GenBuilding, story: StoryId): boolean {
+/** Is the story eligible for the building (F1)? With a role, a detour story needs a DETOUR_ROLES role. */
+export function storyEligible(l: GenLayout, b: GenBuilding, story: StoryId, role: BuildingRole | undefined = b.role): boolean {
+  if (role && STORY_CATALOGUE[story].type === 'detour' && !DETOUR_ROLES.includes(role)) return false;
   return storyRecipe(l, b, story) !== null;
 }
 
@@ -199,7 +544,7 @@ export function pickStory(
   const l: GenLayout = opts.layout ?? ({ schema: 'codex.levelgen_layout/1', walls: [], routes: [], buildings: [building] } as unknown as GenLayout);
   const weights = knobs.weights[role] ?? {};
   const cands = (Object.keys(weights) as Exclude<StoryId, 'open'>[])
-    .filter((s) => (weights[s] ?? 0) > 0 && !exclude.includes(s) && storyEligible(l, building, s))
+    .filter((s) => (weights[s] ?? 0) > 0 && !exclude.includes(s) && storyEligible(l, building, s, role))
     .sort();
   const total = cands.reduce((a, s) => a + (weights[s] ?? 0), 0);
   if (!cands.length || total <= 0) return 'open';
@@ -222,6 +567,8 @@ export interface ApplyStoryResult {
   instance: StoryInstance;
   /** 'story_rolled_back' (warning) when not ok. */
   issues: TraversalIssue[];
+  /** The layout's ladder list after the story, only when ok and a brick changed it (fire escape, facade ladder). */
+  ladders?: GenLadder[];
 }
 
 const errorKeys = (issues: readonly TraversalIssue[]) => new Set(issues.filter((i) => i.severity === 'error').map((i) => `${i.code}|${i.ref ?? ''}`));
@@ -248,16 +595,19 @@ export function applyRecipe(layout: GenLayout, building: GenBuilding, storyId: S
   });
   if (!recipe) return rollback('not eligible');
   const copy: GenBuilding = structuredClone(building);
-  for (const brick of recipe) if (!applyBrick(layout, copy, brick)) return rollback(`brick ${brickToString(brick)} did not apply`);
+  // bricks edit the copy and a copy of the layout's ladders (fire escapes, facade ladders)
+  const work: GenLayout = { ...layout, ladders: structuredClone(layout.ladders ?? []) };
+  for (const brick of recipe) if (!applyBrick(work, copy, brick)) return rollback(`brick ${brickToString(brick)} did not apply`);
+  const swap = (base: GenLayout, b: GenBuilding): GenLayout => ({ ...base, buildings: base.buildings.map((x) => (x.id === building.id ? b : x)) });
   if (recipe.length) {
-    const swap = (b: GenBuilding): GenLayout => ({ ...layout, buildings: layout.buildings.map((x) => (x.id === building.id ? b : x)) });
-    const before = errorKeys(validateBuilding(swap(building), building).issues);
-    const after = validateBuilding(swap(copy), copy);
+    const before = errorKeys(validateBuilding(swap(layout, building), building).issues);
+    const after = validateBuilding(swap(work, copy), copy);
     const added = after.issues.filter((i) => i.severity === 'error' && !before.has(`${i.code}|${i.ref ?? ''}`));
     if (added.length) return rollback(added.map((i) => i.code).join(', '));
   }
   copy.stories = [...(copy.stories ?? []), instance];
-  return { ok: true, building: copy, instance, issues: [] };
+  const laddersChanged = JSON.stringify(work.ladders) !== JSON.stringify(layout.ladders ?? []);
+  return { ok: true, building: copy, instance, issues: [], ...(laddersChanged ? { ladders: work.ladders } : {}) };
 }
 
 // ---- per map (section 5) ------------------------------------------------------------------------------------------------------------
@@ -290,21 +640,21 @@ export function applyStoriesToLayout(
     const b = cur.buildings.find((x) => x.id === id)!;
     if (!b.enterable || !b.role || b.stories?.length) continue;
     const failed: StoryId[] = [];
-    let done: GenBuilding | null = null;
+    let done: ApplyStoryResult | null = null;
     for (let t = 0; t < knobs.t_max && !done; t++) {
       const sub = storySubSeed(seed, id, t);
       const story = pickStory(b, b.role, sub, knobs, { layout: cur, exclude: failed });
       if (story === 'open') break;
       const res = applyStory(cur, b, story, sub);
-      if (res.ok) done = res.building;
+      if (res.ok) done = res;
       else {
         failed.push(story);
         for (const issue of res.issues) log.push({ building: id, story, try: t, issue });
       }
     }
-    if (!done) done = applyStory(cur, b, 'open', storySubSeed(seed, id, 0)).building;
+    if (!done) done = applyStory(cur, b, 'open', storySubSeed(seed, id, 0));
     const next = done;
-    cur = { ...cur, buildings: cur.buildings.map((x) => (x.id === id ? next : x)) };
+    cur = { ...cur, buildings: cur.buildings.map((x) => (x.id === id ? next.building : x)), ...(next.ladders ? { ladders: next.ladders } : {}) };
   }
   return { layout: cur, log };
 }

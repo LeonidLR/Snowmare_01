@@ -6,6 +6,7 @@
 
 import { inFootprint, rotationOf, rotVec, toBuildingFrame } from './rotation.ts';
 import { classifyOpening, isOpeningPassable } from './openingStates.ts';
+import { escapeLadderIds, usableEscapes } from './fireEscapes.ts';
 import type { Segment, Vec2 } from '../movement/geometry.ts';
 import { dirOf, dist, distToWall, segmentBlocked, sub } from '../movement/geometry.ts';
 import { wallSegments } from '../movement/layout.ts';
@@ -173,6 +174,12 @@ export function checkBuildingReachability(l: GenLayout, b: GenBuilding, opts: Re
     adj.get(u)!.add(v);
     adj.get(v)!.add(u);
   };
+  /** One-way link u -> v (down_only flights / escapes). */
+  const addArc = (u: string, v: string) => {
+    addNode(u);
+    addNode(v);
+    adj.get(u)!.add(v);
+  };
 
   addNode(streetNode);
   if (b.roof_walkable) addNode(roofNode);
@@ -252,15 +259,32 @@ export function checkBuildingReachability(l: GenLayout, b: GenBuilding, opts: Re
       for (let i = 1; i < group.length; i++) addEdge(group[0].id, group[i].id);
     }
 
-    // 3. Stairs
+    // 3. Stairs (a `blocked` flight gives no edge; a `down_only` one only top -> foot - schema /2, stories 4 / 13)
     for (const st of b.stairs ?? []) {
+      if (st.blocked) continue;
       const fromNodes = st.kind === 'external'
         ? [streetNode]
         : roomsAt(st.from, st.pos, true).map((rm) => rm.id);
       const toNodes = st.to >= b.floors && b.roof_walkable
         ? [roofNode]
         : roomsAt(st.to, st.top, true).map((rm) => rm.id);
-      for (const fn of fromNodes) for (const tn of toNodes) addEdge(fn, tn);
+      for (const fn of fromNodes) for (const tn of toNodes) (st.down_only ? addArc(tn, fn) : addEdge(fn, tn));
+    }
+
+    // 3b. Fire escapes: street (ground stop outside) -> each balcony stop -> the roof (to_roof); a balcony joins the room behind
+    //     its door (in its effective state). down_only = one-way down (BUILDINGS_TECH_SPEC.md 2.1).
+    for (const ch of usableEscapes(l, b)) {
+      const seq: (string | null)[] = [ch.ground ? streetNode : null, ...ch.stops.map((s) => `balcony:${s.balcony.id}`), ...(ch.roof ? [roofNode] : [])];
+      for (let i = 0; i + 1 < seq.length; i++) {
+        const lo = seq[i], hi = seq[i + 1];
+        if (lo && hi) (ch.downOnly ? addArc(hi, lo) : addEdge(lo, hi));
+      }
+      for (const { balcony } of ch.stops) {
+        const dr = openings.find((o) => o.id === balcony.door_id && o.kind === 'door');
+        if (!dr || !passable(dr)) continue;
+        const behind = rooms.filter((rm) => rm.floor === balcony.floor && (rm.door_ids?.includes(balcony.door_id) || pointInBounds(toBuildingFrame(b, dr.pos), rm.bounds, ROOM_TOUCH_TOL_CM)));
+        for (const rm of behind) addEdge(`balcony:${balcony.id}`, rm.id);
+      }
     }
 
     // 4. Roof hatches (link floor -> roof)
@@ -282,8 +306,11 @@ export function checkBuildingReachability(l: GenLayout, b: GenBuilding, opts: Re
     }
   }
 
-  // 6. Ladders attached to this building (street/ground or interior floor -> roof or upper floor)
+  // 6. Ladders attached to this building (street/ground or interior floor -> roof or upper floor); a fire escape's ladders are
+  //    its chain (3b), not a direct street link
+  const escLadders = escapeLadderIds(b);
   for (const ld of l.ladders ?? []) {
+    if (escLadders.has(ld.id)) continue;
     if (ld.to === `roof:${b.id}` && b.roof_walkable) {
       if (ld.from === 'ground' || ld.from === 'cut') {
         addEdge(streetNode, roofNode);

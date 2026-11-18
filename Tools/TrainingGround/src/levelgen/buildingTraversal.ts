@@ -11,6 +11,7 @@ import type { BuildingRole, GenBuilding, GenLayout, Stair, WallOpening } from '.
 import { LEVEL_HEIGHT, STAIR_RUN_PER_RISE, unifyOpenings } from './schema.ts';
 import { effectiveOpeningState, isPassableState } from './openingStates.ts';
 import { checkBuildingReachability, isVaultableGroundWindow } from './tacticalEvaluate.ts';
+import { escapeLadderIds, usableEscapes } from './fireEscapes.ts';
 
 /** Clearances, cm (BUILDING_GENERATOR.md 4.1 / 4.2). */
 export const TRAVERSAL = {
@@ -120,7 +121,7 @@ function inPoly(p: Vec2, poly: Vec2[]): boolean {
 }
 
 /** Segment a-b crosses (or lies inside) the box shrunk by `inset`. */
-function segHitsBox(a: Vec2, b: Vec2, [lo, hi]: Box, inset = 2): boolean {
+export function segHitsBox(a: Vec2, b: Vec2, [lo, hi]: Box, inset = 2): boolean {
   const x0 = lo[0] + inset, y0 = lo[1] + inset, x1 = hi[0] - inset, y1 = hi[1] - inset;
   let t0 = 0, t1 = 1;
   const d = sub(b, a);
@@ -243,11 +244,14 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
     res.ok = traversalOk(issues);
     return res;
   }
-  // entries: exterior ground-floor doors + vaultable ground windows (BUILDINGS_TECH_SPEC.md 2.1) + external stairs; an entry in a
-  // blocked state (openingStates.ts) is no entry (building-route-model.md rule 3). /1 defaults (doors open, windows broken) pass.
+  // entries: exterior ground-floor doors + vaultable ground windows (BUILDINGS_TECH_SPEC.md 2.1) + external stairs + fire-escape
+  // ground stops (not down_only); an entry in a blocked state (openingStates.ts) is no entry (building-route-model.md rule 3).
+  // /1 defaults (doors open, windows broken) pass.
   const entries = exteriorEntries(l, b);
-  const hasExternalStair = (b.stairs ?? []).some((s) => s.kind === 'external');
-  const hasDoor = hasExternalStair || entries.some((e) => isPassableState(e.state));
+  const escapes = usableEscapes(l, b);
+  const hasExternalStair = (b.stairs ?? []).some((s) => s.kind === 'external' && !s.blocked);
+  const hasEscape = escapes.some((e) => e.ground && !e.downOnly && e.stops.length > 0);
+  const hasDoor = hasExternalStair || hasEscape || entries.some((e) => isPassableState(e.state));
   if (!hasDoor) {
     if (entries.some((e) => e.state === 'barricaded')) {
       issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_without_explosive, code: 'unreachable_without_explosive', message: `${b.id}: every entry is blocked and the only way in is through a barricade (explosive)` });
@@ -296,8 +300,25 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
     return m && m[1] === b.id ? Number(m[2]) : null;
   };
   const edges: [number, number][] = [];
-  for (const st of b.stairs ?? []) edges.push([st.kind === 'external' ? 0 : st.from, st.to]);
-  for (const ld of l.ladders ?? []) { const a = levelOf(ld.from), c = levelOf(ld.to); if (a !== null && c !== null) edges.push([a, c]); }
+  for (const st of b.stairs ?? []) {
+    if (st.blocked) continue; // stories 4 / 13: the flight stays but gives no edge
+    const foot = st.kind === 'external' ? 0 : st.from;
+    edges.push(st.down_only ? [st.to, foot] : [foot, st.to]);
+  }
+  const escLadders = escapeLadderIds(b);
+  for (const ld of l.ladders ?? []) {
+    if (escLadders.has(ld.id)) continue;
+    const a = levelOf(ld.from), c = levelOf(ld.to);
+    if (a !== null && c !== null) edges.push([a, c]);
+  }
+  // fire escapes: ground -> each stop -> the roof (to_roof); down_only only downward
+  for (const ch of escapes) {
+    const seq: (number | null)[] = [ch.ground ? 0 : null, ...ch.stops.map((s) => s.floor), ...(ch.roof ? [b.floors] : [])];
+    for (let i = 0; i + 1 < seq.length; i++) {
+      const lo = seq[i], hi = seq[i + 1];
+      if (lo !== null && hi !== null) edges.push(ch.downOnly ? [hi, lo] : [lo, hi]);
+    }
+  }
   for (const h of b.hatches ?? []) if (b.roof_walkable && (l.ladders ?? []).some((ld) => ld.id === h.ladder_id)) edges.push([h.floor, b.floors]);
   const reached = new Set<number>(hasDoor ? [0] : []);
   for (let changed = true; changed;) {
