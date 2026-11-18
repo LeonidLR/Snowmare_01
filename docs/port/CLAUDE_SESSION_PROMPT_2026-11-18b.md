@@ -45,3 +45,16 @@ G008 merge -> G008b (Grok) -> PMC_DEFENCE P2 deploy orders (API agent) -> P3 att
 (API agent) -> P1 grammar (Antigravity); MantleDescent / HitchProbe reds; TASK_BOARD done-list each merge; evening phone report.
 </content>
 </invoke>
+
+## Update 2026-11-18 ~17:00 (lead)
+- Merged since: worker camera 5915bd8a, G008 PMC defence 80f7d55b (= tonight's freeze; worker: frozen build -> full sweep -Jobs 4 ->
+  trainer pmc-v6-qd2 X4 tactical, start <= 18:30, report 08:20). Re-run on fresh main: CoverCrouch, LevelGenRamp, MantleDescent PASS;
+  still red Suppression, PeekMines (Codex 046), CorpseCost, HitchProbe (API agent, branch claude-api/hitchprobe in CodexTactics-claude).
+- BLD-GEN building generator moved to the building-kit Claude session (local_d6dc1267, branch claude/building-generator) - designer:
+  "as fast as possible, ideally by tomorrow"; Antigravity's 086 plan kept at docs/port/building-generator/086-antigravity-plan.md.
+  ENV-TRIM trim sheets = standing task of the same session. Materials / master material / snow layer = Claude, not Gemini.
+- PMC_DEFENCE D2 rewritten (designer): no runtime setup phase - the generator places PMC squads at strategic places + their mines /
+  tripwires (task 087); C++ spawn-at-post = API agent after 087.
+- HANDOVER: Antigravity offline ~18:00, Codex ~19:00 (designer). They commit WIP + a handover note (topics gemini-085, codex-046).
+  Then: API agent in CodexTactics-gemday: 085b remainder (if any) -> 087; API agent in CodexTactics-agents: 046 remainder. 084 waits
+  for Antigravity's return. API ledger 66.9 / 100 USD at 17:00 - budget 087 ~12, 046 ~8; keep >= 10 USD for tomorrow's reviews.
