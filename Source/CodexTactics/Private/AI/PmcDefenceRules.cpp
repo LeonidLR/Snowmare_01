@@ -874,6 +874,11 @@ namespace PmcDefenceRules
 		return bUnderFire || bIdle;
 	}
 
+	bool IsGoalOnPostLevel(bool bHasDefencePost, float GoalZ, float PostZ, float ToleranceCm)
+	{
+		return !bHasDefencePost || ToleranceCm <= 0.f || FMath::Abs(GoalZ - PostZ) <= ToleranceCm;
+	}
+
 	FString CoverObjectKey(const FString& WallActorId, const FVector& Point)
 	{
 		if (!WallActorId.IsEmpty() && !WallActorId.Equals(TEXT("None"), ESearchCase::IgnoreCase))

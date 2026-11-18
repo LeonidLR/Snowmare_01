@@ -1,4 +1,5 @@
 #include "Misc/AutomationTest.h"
+#include "AI/PmcCommanderRules.h"
 #include "AI/PmcDefenceRules.h"
 #include "Dom/JsonObject.h"
 #include "Serialization/JsonReader.h"
@@ -360,6 +361,48 @@ bool FPmcDefenceSpacingTest::RunTest(const FString&)
 	Far.Spots = { { FVector(0.f, 0.f, 900.f), 9.f } };
 	const TArray<FPmcRoofRef> Roofs = { Far, Near };
 	TestEqual(TEXT("roof on the objective level"), PmcDefenceRules::PickRoof(Roofs, FVector(4000.f, -7800.f, 300.f), 150.f), 1);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcDefencePostLevelTest, "CodexTactics.AI.PmcDefence.PostLevel",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcDefencePostLevelTest::RunTest(const FString&)
+{
+	// G008 lead review 2 (B): off his post under fire a roof guard may still fall back / take cover, but the goal stays on the
+	// post's level. A goal down the stair made a FallBack down, then an Ambush walk up again (a stair oscillation).
+	const float RoofZ = 910.f;
+	const float Tolerance = 150.f;
+	TestTrue(TEXT("a roof goal on the post level"), PmcDefenceRules::IsGoalOnPostLevel(true, 930.f, RoofZ, Tolerance));
+	TestTrue(TEXT("a roof goal at the tolerance"), PmcDefenceRules::IsGoalOnPostLevel(true, RoofZ - Tolerance, RoofZ, Tolerance));
+	TestFalse(TEXT("the street under the roof"), PmcDefenceRules::IsGoalOnPostLevel(true, 0.f, RoofZ, Tolerance));
+	TestFalse(TEXT("one floor down the stair"), PmcDefenceRules::IsGoalOnPostLevel(true, RoofZ - 300.f, RoofZ, Tolerance));
+	TestFalse(TEXT("a higher roof"), PmcDefenceRules::IsGoalOnPostLevel(true, RoofZ + 300.f, RoofZ, Tolerance));
+	TestTrue(TEXT("no defence post: any level"), PmcDefenceRules::IsGoalOnPostLevel(false, 0.f, RoofZ, Tolerance));
+	TestTrue(TEXT("planar tolerance: any level"), PmcDefenceRules::IsGoalOnPostLevel(true, 0.f, RoofZ, 0.f));
+
+	// The orders themselves still score off the post under fire (review finding 1): only their goals are held to the level.
+	const FPmcWeights Weights;
+	FPmcFighterView Guard;
+	Guard.Objective.Role = EPmcRole::Defender;
+	Guard.Objective.RadiusCm = 600.f;
+	Guard.Objective.DistanceCm = 900.f;
+	Guard.bHasDefencePost = true;
+	Guard.bUnderFire = true;
+	Guard.HealthFrac = 0.2f;
+	Guard.bHasThreat = true;
+	Guard.Threat.bSeenNow = true;
+	Guard.Threat.DistanceCm = 800.f;
+	Guard.bCoverAvailable = true;
+	Guard.bExposed = true;
+	FPmcSquadView Squad;
+	Squad.Alive = 3;
+	Squad.EnemiesKnown = 3;
+	Squad.bContact = true;
+	Squad.bEverContact = true;
+	TestTrue(TEXT("shot mid-walk: FallBack still scores (goal on the roof)"), PmcCommanderRules::ScoreOrder(EPmcOrder::FallBack, Guard, Squad, Weights) > 0.f);
+	TestTrue(TEXT("shot mid-walk: TakeCover still scores (slot on the roof)"), PmcCommanderRules::ScoreOrder(EPmcOrder::TakeCover, Guard, Squad, Weights) > 0.f);
+	TestEqual(TEXT("shot mid-walk: the walk to the post 0.75"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Guard, Squad, Weights), 0.75f, 0.001f);
 	return true;
 }
 

@@ -338,6 +338,14 @@ namespace PmcDefenceRules
 		const FPmcDefenceConfig& Config);
 
 	/**
+	 * G008 lead review 2 (B): the goal of a FallBack or TakeCover (or plain Relocate) walk for a defender. While he has a
+	 * defence post, the goal must lie on the post's level (|GoalZ - PostZ| <= ToleranceCm). Otherwise a roof guard shot
+	 * mid-walk falls back down the stair and Ambush walks him up again. Without a post, any goal is allowed.
+	 * ToleranceCm <= 0 is planar (always true), the same as PmcCommanderRules::IsSameLevel.
+	 */
+	CODEXTACTICS_API bool IsGoalOnPostLevel(bool bHasDefencePost, float GoalZ, float PostZ, float ToleranceCm);
+
+	/**
 	 * The cover-object key. A named wall actor is its own key (two slots of one actor match). An empty actor does
 	 * not match another empty actor: the key is the point quantized to 100 cm, so only the same object matches.
 	 */

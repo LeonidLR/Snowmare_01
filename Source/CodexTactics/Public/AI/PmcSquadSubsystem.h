@@ -411,10 +411,12 @@ private:
 	/**
 	 * The best cover slot round Fighter against Threat (quality x nearness x height x - 2026-11-04 - the slot's distance to the threat in his
 	 * weapon's Band (PmcCommanderRules::BandFactor, weighted by band_position) x a corner bonus); OutBandFactor = the chosen slot's band factor.
+	 * PostLevelZ (G008 lead review 2, B): a posted defender's post height - slots off that level are skipped (no cover down the stair).
 	 */
 	bool FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
 		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr,
-		TConstArrayView<FVector> ClaimedPosts = TConstArrayView<FVector>(), TConstArrayView<FString> ClaimedKeys = TConstArrayView<FString>()) const;
+		TConstArrayView<FVector> ClaimedPosts = TConstArrayView<FVector>(), TConstArrayView<FString> ClaimedKeys = TConstArrayView<FString>(),
+		const float* PostLevelZ = nullptr) const;
 	/** G008: resolve the roof access (once per objective) and assign guard / sector posts. bResolveAccess false keeps the access. */
 	void RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess);
 	void ClearDefencePosts(FTeam& Team);

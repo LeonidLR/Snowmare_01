@@ -1481,8 +1481,12 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		TArray<FVector> ClaimedPosts;
 		TArray<FString> ClaimedKeys;
 		CollectDefenceClaims(Team, Fighter, ClaimedPosts, ClaimedKeys);
+		// G008 lead review 2 (B): a posted defender's TakeCover / Relocate slot stays on his post's level, so "cover available"
+		// never means a slot down the stair.
+		const float PostZ = static_cast<float>(State.DefencePost.Z);
+		const bool bPostLevel = State.bHasDefencePost && Team.Defence.bActive;
 		View.bCoverAvailable = FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, Exclude, Team.Weights, OutCover, OutCoverQuality,
-			View.Band, &View.CoverBandFactor, ClaimedPosts, ClaimedKeys) && OutCoverQuality > View.CoverQuality + 0.2f;
+			View.Band, &View.CoverBandFactor, ClaimedPosts, ClaimedKeys, bPostLevel ? &PostZ : nullptr) && OutCoverQuality > View.CoverQuality + 0.2f;
 	}
 	// The nearest wounded mate (preserve active patient if already executing a running Heal order).
 	const bool bKeepActivePatient = State.Order == EPmcOrder::Heal && State.Patient.IsValid()
@@ -1843,6 +1847,40 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		Context.bSprint = bSprint;
 		return SquadOrderCatalog::Execute(ESquadOrder::Move, Context);
 	};
+	// G008 lead review 2 (B): a posted defender's FallBack / standoff goal stays on his post's level. The goal is projected at
+	// the post's height and walked with the level kept (no "same spot on the threat's level", no ring spot on another level).
+	// No such spot (the goal hangs over the street past the roof edge) refuses the walk, and the order fails and cools down.
+	const bool bPostLevelOnly = State.bHasDefencePost && Team.Defence.bActive;
+	const float PostLevelZ = static_cast<float>(State.DefencePost.Z);
+	// The strict level projection first (2 m round, 1.5 m up / down), then the plain one's 4 m reach, kept only when it lands on the
+	// post's level: a same-level goal the old FallBack reached is still reached (the stalemate smoke's ground posts).
+	auto ProjectOnPostLevel = [&](const FVector& Point, FVector& OutPoint) -> bool
+	{
+		const FVector AtPost(Point.X, Point.Y, PostLevelZ);
+		FVector OnNav;
+		if ((ProjectToNavAtLevel(AtPost, OnNav) || ProjectToNav(AtPost, OnNav))
+			&& PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(OnNav.Z), PostLevelZ, Team.Weights.LevelToleranceCm))
+		{
+			OutPoint = OnNav;
+			return true;
+		}
+		return false;
+	};
+	auto ToPostLevel = [&](const FVector& Point, FVector& OutPoint) -> bool
+	{
+		if (!bPostLevelOnly)
+		{
+			OutPoint = Point;
+			return true;
+		}
+		if (!ProjectOnPostLevel(Point, OutPoint))
+		{
+			WalkRefusal = TEXT("the goal is off his defence post's level");
+			return false;
+		}
+		bKeepGoalLevel = true;
+		return true;
+	};
 	switch (Order)
 	{
 	case EPmcOrder::Hold:
@@ -1976,7 +2014,8 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			FCoverSlot BandCover;
 			float BandQuality = 0.f;
 			float BandSlotFactor = 0.f;
-			if (FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, nullptr, Team.Weights, BandCover, BandQuality, View.Band, &BandSlotFactor)
+			if (FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, nullptr, Team.Weights, BandCover, BandQuality, View.Band, &BandSlotFactor,
+					TConstArrayView<FVector>(), TConstArrayView<FString>(), bPostLevelOnly ? &PostLevelZ : nullptr)
 				&& BandSlotFactor >= 0.95f)
 			{
 				if (Fighter.bInCover && Fighter.GetCoverSlot().WorldLocation.Equals(BandCover.WorldLocation, 50.f))
@@ -1994,8 +2033,12 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			}
 			if (!bTaken)
 			{
-				const FVector StandoffGoal = PmcCommanderRules::StandoffPoint(View.Location, View.Threat.Location, View.Band);
-				if (!PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, PmcSquadLocal::FeetOf(Fighter), StandoffGoal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+				FVector StandoffGoal = PmcCommanderRules::StandoffPoint(View.Location, View.Threat.Location, View.Band);
+				if (!ToPostLevel(StandoffGoal, StandoffGoal))
+				{
+					bTaken = false;
+				}
+				else if (!PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, PmcSquadLocal::FeetOf(Fighter), StandoffGoal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
 				{
 					bTaken = false;
 				}
@@ -2020,7 +2063,8 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				{
 					const FVector Candidate = View.Location + (FallBackGoal - View.Location).RotateAngleAxis(Angle, FVector::UpVector);
 					FVector OnNav;
-					const bool bOnNav = ProjectToNav(Candidate, OnNav);
+					// A posted defender's candidates are projected at his post's level (lead review 2, B): one over the street is no goal.
+					const bool bOnNav = bPostLevelOnly ? ProjectOnPostLevel(Candidate, OnNav) : ProjectToNav(Candidate, OnNav);
 					Goals.Add(bOnNav ? OnNav : Candidate);
 					// Off the navmesh: no goal at all (the worst score).
 					Dangers.Add(bOnNav ? Map->DangerAt(OnNav, ETacticalSide::Pmc).Danger : 1.f);
@@ -2034,7 +2078,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 						*Fighter.DisplayName.ToString(), Angles[Pick], Dangers[Pick], Dangers[0]);
 				}
 			}
-			if (!PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, PmcSquadLocal::FeetOf(Fighter), FallBackGoal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+			if (!ToPostLevel(FallBackGoal, FallBackGoal))
+			{
+				bTaken = false;
+			}
+			else if (!PmcCommanderRules::CanReissueOrderAt(EPmcOrder::FallBack, PmcSquadLocal::FeetOf(Fighter), FallBackGoal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
 			{
 				bTaken = false;
 			}
@@ -2187,7 +2235,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				CollectDefenceClaims(Team, Fighter, ClaimedPosts, ClaimedKeys);
 			}
 			if (FindCoverNear(Fighter, View.Location + Fighter.GetActorForwardVector() * 1000.f, 600.f, nullptr, Team.Weights, Near, Quality,
-				FPmcEngagementBand(), nullptr, ClaimedPosts, ClaimedKeys))
+				FPmcEngagementBand(), nullptr, ClaimedPosts, ClaimedKeys, bPostLevelOnly ? &PostLevelZ : nullptr))
 			{
 				Context.Cover = Near;
 				Context.bSprint = false;
@@ -2318,7 +2366,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 
 bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
 	FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band, float* OutBandFactor, TConstArrayView<FVector> ClaimedPosts,
-	TConstArrayView<FString> ClaimedKeys) const
+	TConstArrayView<FString> ClaimedKeys, const float* PostLevelZ) const
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -2402,6 +2450,11 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 			return;
 		}
 		if (Exclude && FVector::Dist2D(Slot.WorldLocation, *Exclude) < 300.f)
+		{
+			return;
+		}
+		// G008 lead review 2 (B): a posted defender's cover stays on his post's level.
+		if (PostLevelZ && !PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(Slot.WorldLocation.Z), *PostLevelZ, Weights.LevelToleranceCm))
 		{
 			return;
 		}
