@@ -141,6 +141,13 @@ public:
 	 * Unset: yaw 0, and the sectors are still deterministic. Call it before SetTeamObjective, or after (the posts are split again).
 	 */
 	void SetDefenceApproach(int32 TeamId, const FVector& AttackerSpawn);
+	/**
+	 * G008: the access a defender objective at this point would use (the tactical file, else the map's own levelgen layout).
+	 * Does not log and does not change a live plan. The roofs scenario skips a site whose access is unset.
+	 */
+	FPmcDefenceSite ResolveDefenceSite(const FVector& Objective, float LevelToleranceCm);
+	/** G008: living defenders' feet and the cover they hold, for the arena's 1 Hz sample. False when this team is not defending. */
+	bool CopyDefenceSnapshot(int32 TeamId, FPmcDefenceSnapshot& Out) const;
 	/** The objective's live state for the team's next decisions: the round's time fraction, the capture clock, an enemy on the point. */
 	void UpdateTeamObjective(int32 TeamId, float TimeFrac, float HoldFrac, bool bEnemyOnPoint);
 

@@ -21,6 +21,8 @@ float FPmcBehaviour::Value(const FString& Key) const
 	if (Key == TEXT("quiet_spells")) { return static_cast<float>(QuietSpells); }
 	if (Key == TEXT("order_churn")) { return static_cast<float>(OrderChurn); }
 	if (Key == TEXT("stalemate_share")) { return StalemateShare; }
+	if (Key == TEXT("defender_spread_m")) { return DefenderSpreadM; }
+	if (Key == TEXT("guard_near_access_share")) { return bGuardShareApplicable ? GuardNearAccessShare : 0.f; }
 	return 0.f;
 }
 
@@ -41,6 +43,8 @@ namespace PmcArenaBehaviourRules
 			{ TEXT("quiet_spells"), TEXT("Quiet spells"), TEXT("count"), 0.f, 8.f, TEXT("context") },
 			{ TEXT("order_churn"), TEXT("Order churn"), TEXT("count"), 0.f, 40.f, TEXT("lower") },
 			{ TEXT("stalemate_share"), TEXT("Stalemate share"), TEXT("fraction"), 0.f, 1.f, TEXT("lower") },
+			{ TEXT("defender_spread_m"), TEXT("Defender spread"), TEXT("m"), 0.f, 40.f, TEXT("higher") },
+			{ TEXT("guard_near_access_share"), TEXT("Guard near the access"), TEXT("fraction"), 0.f, 1.f, TEXT("higher") },
 		};
 		return Specs;
 	}
@@ -205,7 +209,14 @@ namespace PmcArenaBehaviourRules
 			Metric->SetStringField(TEXT("unit"), Spec.Unit);
 			Metric->SetArrayField(TEXT("range"), { MakeShared<FJsonValueNumber>(Spec.RangeMin), MakeShared<FJsonValueNumber>(Spec.RangeMax) });
 			Metric->SetStringField(TEXT("direction"), Spec.Direction);
-			Metric->SetNumberField(TEXT("value"), FMath::RoundToFloat(Behaviour.Value(Spec.Key) * 10.f) / 10.f);
+			if (Spec.Key == FString(TEXT("guard_near_access_share")) && !Behaviour.bGuardShareApplicable)
+			{
+				Metric->SetField(TEXT("value"), MakeShared<FJsonValueNull>());
+			}
+			else
+			{
+				Metric->SetNumberField(TEXT("value"), FMath::RoundToFloat(Behaviour.Value(Spec.Key) * 10.f) / 10.f);
+			}
 			Metrics->SetObjectField(Spec.Key, Metric);
 		}
 		Root->SetObjectField(TEXT("metrics"), Metrics);

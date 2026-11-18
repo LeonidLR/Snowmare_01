@@ -49,6 +49,8 @@
 //   tactical posts along it (UPmcSquadSubsystem::SpawnSquadTactical); the round's "tactical" object lists the posts. Maps without a
 //   tactical file (L_Gen_Depot_1, the combat lab) play exactly as before.
 // CodexTactics.PmcArenaTacticalSmoke = one tactical round on L_Gen_Depot_X4: the defenders on posts, the behaviour blocks validated.
+// CodexTactics.PmcRoofDefenceSmoke (G008) = one roofs objective round on the Depot: defender spread >= 5 m, a guard near the access
+//   on more than 0.6 of the samples, no two defenders in the same cover. The round's "defence" object carries those numbers.
 
 #include "CoreMinimal.h"
 
@@ -60,6 +62,7 @@
 #include "AI/PmcArenaRoundRules.h"
 #include "AI/PmcArenaViewRules.h"
 #include "AI/PmcCommanderRules.h"
+#include "AI/PmcDefenceRules.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "AI/PmcTacticalRules.h"
 #include "AI/SquadOrderCatalog.h"
@@ -154,6 +157,8 @@ namespace PmcArena
 		bool bSmokeStalemate = false;
 		/** PmcArenaTacticalSmoke (TACTICAL_MAP P3): one tactical round, the posts and the behaviour blocks checked. */
 		bool bSmokeTactical = false;
+		/** PmcRoofDefenceSmoke (G008): one roofs round, spread / guard share / shared cover checked. */
+		bool bSmokeRoof = false;
 		/**
 		 * Ammo=resupply|real (fix/pmc-arena-stalemate, default resupply): a fighter whose reserve runs dry gets his weapon's reserve back - an
 		 * arena-only training rule (the Depot tracks: empty rifles stood on the point next to each other for 3 minutes, unable to fight).
@@ -303,6 +308,12 @@ namespace PmcArena
 		TArray<TSharedPtr<FJsonValue>> TacticalPosts;
 		int32 LadderRoofsPicked = -1;
 		int32 LadderRoofsTotal = 0;
+		/** G008: the round's defence block (living defenders). Guard share is n/a when no roof access was found. */
+		float DefenceSpreadM = 0.f;
+		bool bGuardShareApplicable = false;
+		float GuardShare = 0.f;
+		int32 SharedCoverPairs = 0;
+		float ObjectiveShare = 0.f;
 	};
 
 	/** The last hit a fighter took (the HP drops of the next samples are that shooter's damage). */
@@ -380,6 +391,13 @@ namespace PmcArena
 		/** TACTICAL_MAP P3: per side the behaviour accumulators; each fighter's last order and where he took it (the position changes). */
 		FSideBehaviour Behaviour[2];
 		TMap<TWeakObjectPtr<AOperativeCharacter>, TPair<EPmcOrder, FVector>> MoveStart;
+		/** G008: 1 Hz samples of the living defenders (spread, a man near the access, the worst shared-cover count). */
+		float DefenceSampleWait = 0.f;
+		double DefenceSpreadSum = 0.0;
+		int32 DefenceSpreadSamples = 0;
+		int32 GuardNearSamples = 0;
+		int32 GuardApplicableSamples = 0;
+		int32 SharedCoverPairs = 0;
 	};
 	constexpr float TrackInterval = 0.2f;
 
@@ -1025,6 +1043,20 @@ namespace PmcArena
 					continue;
 				}
 			}
+			// G008: a roofs site with no way up (no stair to the roof, hatch or roof ladder) is not a defence round.
+			if (Scenario == EPmcScenario::Roofs)
+			{
+				if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
+				{
+					const FPmcDefenceSite Plan = Pmc->ResolveDefenceSite(Site, State.Config.ObjectiveLevelCm);
+					if (!Plan.Access.IsSet())
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] scenario roofs seed %d: site %s has no roof access - the next site"),
+							Seed, *Site.ToCompactString());
+						continue;
+					}
+				}
+			}
 			FSide& Atk = State.Sides[AttackerIndex];
 			FSide& Def = State.Sides[1 - AttackerIndex];
 			Atk.Spawn = Attacker;
@@ -1609,6 +1641,12 @@ namespace PmcArena
 			SideBehaviour = FSideBehaviour();
 		}
 		Track.MoveStart.Reset();
+		Track.DefenceSampleWait = 0.f;
+		Track.DefenceSpreadSum = 0.0;
+		Track.DefenceSpreadSamples = 0;
+		Track.GuardNearSamples = 0;
+		Track.GuardApplicableSamples = 0;
+		Track.SharedCoverPairs = 0;
 		FState* StatePtr = &State;
 		// fix/arena-rpg-contact-roof: an RPG-7 rocket's burst within launcher.radius_cm (suppression.json) of a live enemy of its shooter is
 		// contact (a round where only rockets flew was a no_contact draw, -3 in the trainer). Bound once for the run.
@@ -2004,6 +2042,43 @@ namespace PmcArena
 		}
 	}
 
+	/** G008: one sample a second of the living defenders (spread, a man at the access, shared cover). */
+	void SampleDefence(FState& State, UWorld* World, float DeltaSeconds)
+	{
+		if (!State.bRoundObjective)
+		{
+			return;
+		}
+		FTrack& Track = State.Track;
+		Track.DefenceSampleWait -= DeltaSeconds;
+		if (Track.DefenceSampleWait > 0.f)
+		{
+			return;
+		}
+		Track.DefenceSampleWait += 1.f;
+		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+		if (!Pmc)
+		{
+			return;
+		}
+		const int32 DefenderIndex = State.bAAttacks ? 1 : 0;
+		FPmcDefenceSnapshot Snapshot;
+		if (!Pmc->CopyDefenceSnapshot(State.Sides[DefenderIndex].TeamId, Snapshot))
+		{
+			return;
+		}
+		Track.DefenceSpreadSum += PmcDefenceRules::MeanSpreadM(Snapshot.Feet);
+		++Track.DefenceSpreadSamples;
+		const FPmcWeights& Weights = DefenderIndex == 0 ? State.WeightsA : State.WeightsB;
+		const FPmcGuardSample Guard = PmcDefenceRules::SampleGuard(Snapshot.Feet, Snapshot.Access, Weights.GuardDistCm, State.Config.ObjectiveLevelCm);
+		if (Guard.bApplicable)
+		{
+			++Track.GuardApplicableSamples;
+			Track.GuardNearSamples += Guard.bNear ? 1 : 0;
+		}
+		Track.SharedCoverPairs = FMath::Max(Track.SharedCoverPairs, PmcDefenceRules::SharedCoverPairs(Snapshot.CoverKeys));
+	}
+
 	/** One step of the capture clock and the commanders' objective inputs (the time fraction, the clock, an enemy on the point). */
 	void UpdateObjective(FState& State, UWorld* World)
 	{
@@ -2283,6 +2358,21 @@ namespace PmcArena
 			Round->SetObjectField(TEXT("sides"), Sides);
 			// G002: rounds[].behaviour = the candidate side's (A); it wins over sides.A.behaviour in the trainer (the same object here).
 			Round->SetObjectField(TEXT("behaviour"), PmcArenaBehaviourRules::ToJson(Result.Behaviour[0], TEXT("A"), Result.bTacticalMap));
+			{
+				TSharedRef<FJsonObject> Defence = MakeShared<FJsonObject>();
+				Defence->SetNumberField(TEXT("spread_m"), FMath::RoundToFloat(Result.DefenceSpreadM * 10.f) / 10.f);
+				if (Result.bGuardShareApplicable)
+				{
+					Defence->SetNumberField(TEXT("guard_share"), FMath::RoundToFloat(Result.GuardShare * 100.f) / 100.f);
+				}
+				else
+				{
+					Defence->SetField(TEXT("guard_share"), MakeShared<FJsonValueNull>());
+				}
+				Defence->SetNumberField(TEXT("shared_cover_pairs"), Result.SharedCoverPairs);
+				Defence->SetNumberField(TEXT("objective_share"), FMath::RoundToFloat(Result.ObjectiveShare * 100.f) / 100.f);
+				Round->SetObjectField(TEXT("defence"), Defence);
+			}
 			if (Result.RouteM >= 0.f)
 			{
 				TSharedRef<FJsonObject> Tactical = MakeShared<FJsonObject>();
@@ -2376,7 +2466,7 @@ namespace PmcArena
 				}
 				Check(State, bRoles && (*RoundSides)->GetObjectField(TEXT("A"))->HasField(TEXT("rockets")) && (*RoundSides)->GetObjectField(TEXT("B"))->HasField(TEXT("rocket_bursts_near")),
 					TEXT("sides.<X>.rockets / rocket_bursts_near recorded"));
-				// TACTICAL_MAP P3: the behaviour block per side and on the round (G002 codex.pmc_arena_behaviour/1, all 11 metrics).
+				// TACTICAL_MAP P3 + G008: the behaviour block per side and on the round (G002 codex.pmc_arena_behaviour/1, all 13 metrics).
 				{
 					auto IsBehaviour = [](const TSharedPtr<FJsonObject>& Object)
 					{
@@ -2401,7 +2491,27 @@ namespace PmcArena
 					const bool bBehaviour = bRoles && (*Round)->TryGetObjectField(TEXT("behaviour"), RoundBehaviour) && IsBehaviour(*RoundBehaviour)
 						&& (*RoundSides)->GetObjectField(TEXT("A"))->TryGetObjectField(TEXT("behaviour"), BehaviourA) && IsBehaviour(*BehaviourA)
 						&& (*RoundSides)->GetObjectField(TEXT("B"))->TryGetObjectField(TEXT("behaviour"), BehaviourB) && IsBehaviour(*BehaviourB);
-					Check(State, bBehaviour, TEXT("rounds[].behaviour + sides.A / B.behaviour (codex.pmc_arena_behaviour/1, the 11 G002 metrics)"));
+					Check(State, bBehaviour, TEXT("rounds[].behaviour + sides.A / B.behaviour (codex.pmc_arena_behaviour/1, the 13 G002 metrics)"));
+				}
+				if (State.Options.bSmokeRoof && !State.Results.IsEmpty())
+				{
+					const TSharedPtr<FJsonObject>* Defence = nullptr;
+					const bool bDefence = (*Round)->TryGetObjectField(TEXT("defence"), Defence) && Defence && (*Defence)->HasField(TEXT("spread_m"))
+						&& (*Defence)->HasField(TEXT("guard_share")) && (*Defence)->HasField(TEXT("shared_cover_pairs")) && (*Defence)->HasField(TEXT("objective_share"));
+					Check(State, bDefence, TEXT("rounds[].defence (spread_m, guard_share, shared_cover_pairs, objective_share)"));
+					const double Spread = bDefence ? (*Defence)->GetNumberField(TEXT("spread_m")) : 0.0;
+					const TSharedPtr<FJsonValue> GuardField = bDefence ? (*Defence)->TryGetField(TEXT("guard_share")) : nullptr;
+					const bool bGuardNumber = GuardField.IsValid() && GuardField->Type == EJson::Number;
+					const double Guard = bGuardNumber ? GuardField->AsNumber() : -1.0;
+					const double Pairs = bDefence ? (*Defence)->GetNumberField(TEXT("shared_cover_pairs")) : -1.0;
+					const FString Played = (*Round)->GetStringField(TEXT("scenario"));
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] roof defence smoke: scenario %s, spread %.1f m, guard %s, shared cover pairs %.0f, objective share %.2f"),
+						*Played, Spread, bGuardNumber ? *FString::Printf(TEXT("%.2f"), Guard) : TEXT("n/a"), Pairs,
+						bDefence ? (*Defence)->GetNumberField(TEXT("objective_share")) : -1.0);
+					Check(State, Played == TEXT("roofs"), FString::Printf(TEXT("the round played the roofs scenario (%s)"), *Played));
+					Check(State, Spread >= 5.0, FString::Printf(TEXT("defender spread %.1f m >= 5 m"), Spread));
+					Check(State, bGuardNumber && Guard > 0.6, FString::Printf(TEXT("guard share %s > 0.6"), bGuardNumber ? *FString::Printf(TEXT("%.2f"), Guard) : TEXT("n/a")));
+					Check(State, Pairs == 0.0, FString::Printf(TEXT("shared cover pairs %.0f == 0"), Pairs));
 				}
 				if (State.Options.bSmokeTactical && !State.Results.IsEmpty())
 				{
@@ -2769,8 +2879,10 @@ namespace PmcArena
 		}
 		if (State.bRoundObjective)
 		{
+			const int32 DefenderTeamId = State.Sides[1 - AttackerIndex].TeamId;
+			Pmc->SetDefenceApproach(DefenderTeamId, State.Sides[AttackerIndex].Spawn);
 			Pmc->SetTeamObjective(State.Sides[AttackerIndex].TeamId, EPmcRole::Attacker, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
-			Pmc->SetTeamObjective(State.Sides[1 - AttackerIndex].TeamId, EPmcRole::Defender, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
+			Pmc->SetTeamObjective(DefenderTeamId, EPmcRole::Defender, State.Objective, State.Config.ObjectiveRadiusCm, State.Config.ObjectiveLevelCm);
 		}
 		// TACTICAL_MAP P2/P3: on a map with a tactical file the defenders know the attackers' way to the point (cover slots facing it); the
 		// tactical round set it with their posts already.
@@ -2947,6 +3059,24 @@ namespace PmcArena
 			}
 			Track.MoveStart.Reset();
 			const TArray<float> Contacts = ContactTimesOf(State);
+			const int32 DefenderIndex = State.bAAttacks ? 1 : 0;
+			float GuardShare = 0.f;
+			const bool bGuardShare = PmcDefenceRules::TryGuardShare(Track.GuardNearSamples, Track.GuardApplicableSamples, GuardShare);
+			const float SpreadM = Track.DefenceSpreadSamples > 0
+				? static_cast<float>(Track.DefenceSpreadSum / static_cast<double>(Track.DefenceSpreadSamples)) : 0.f;
+			int32 ObjectiveOrders = 0;
+			for (const FPmcOrderEvent& Event : Track.Behaviour[DefenderIndex].Orders)
+			{
+				ObjectiveOrders += Event.Order == EPmcOrder::Objective ? 1 : 0;
+			}
+			Result.DefenceSpreadM = SpreadM;
+			Result.bGuardShareApplicable = bGuardShare;
+			Result.GuardShare = bGuardShare ? GuardShare : 0.f;
+			Result.SharedCoverPairs = Track.SharedCoverPairs;
+			Result.ObjectiveShare = PmcDefenceRules::ObjectiveOrderShare(ObjectiveOrders, Track.Behaviour[DefenderIndex].Orders.Num());
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d defence: spread %.1f m, guard %s, shared cover pairs %d, objective share %.2f (%d / %d orders)"),
+				State.Round, SpreadM, bGuardShare ? *FString::Printf(TEXT("%.2f"), GuardShare) : TEXT("n/a"), Track.SharedCoverPairs, Result.ObjectiveShare,
+				ObjectiveOrders, Track.Behaviour[DefenderIndex].Orders.Num());
 			for (int32 Index = 0; Index < 2; ++Index)
 			{
 				const FSideBehaviour& Side = Track.Behaviour[Index];
@@ -2962,6 +3092,12 @@ namespace PmcArena
 				Behaviour.QuietSpells = PmcArenaBehaviourRules::QuietSpells(Contacts, Result.Duration);
 				Behaviour.OrderChurn = PmcArenaBehaviourRules::OrderChurn(Side.Orders);
 				Behaviour.StalemateShare = PmcArenaBehaviourRules::StalemateShare(Result.bContact, Result.Winner, Result.EndReason);
+				Behaviour.bGuardShareApplicable = bGuardShare;
+				if (Index == DefenderIndex)
+				{
+					Behaviour.DefenderSpreadM = SpreadM;
+					Behaviour.GuardNearAccessShare = bGuardShare ? GuardShare : 0.f;
+				}
 			}
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d behaviour (tactical map %s): contact %.1f s, flanks A %d / B %d, moves A %d / B %d, suppress-then-move A %d / B %d, ambush hits A %d / B %d, overwatch kills A %d / B %d, in a chokepoint A %.1f / B %.1f s per man, windows A %d / B %d, quiet spells %d, churn A %d / B %d, stalemate %.0f"),
 				State.Round, State.bTacticalMap ? TEXT("yes") : TEXT("no"), Result.Behaviour[0].TimeInContactS, Result.Behaviour[0].FlanksCompleted, Result.Behaviour[1].FlanksCompleted,
@@ -3185,6 +3321,7 @@ namespace PmcArena
 			UpdateDamage(State);
 			ResupplyAmmo(State);
 			UpdateObjective(State, World);
+			SampleDefence(State, World, StepSeconds);
 			const FPmcRoundOutcome Outcome = PmcCommanderRules::ResolveRound(CountAlive(State.Sides[0].Members), CountAlive(State.Sides[1].Members),
 				State.StageTime >= State.Options.TimeLimit, State.bRoundObjective, State.Clock, State.bAAttacks,
 				!State.Track.ShotTimes.IsEmpty() || (State.Options.bRocketContact && !State.Track.RocketBurstTimes.IsEmpty()));
@@ -3215,7 +3352,7 @@ namespace PmcArena
 		}
 	}
 
-	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false, bool bSmokeStalemate = false, bool bSmokeTactical = false)
+	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false, bool bSmokeStalemate = false, bool bSmokeTactical = false, bool bSmokeRoof = false)
 	{
 		if (!World)
 		{
@@ -3254,6 +3391,15 @@ namespace PmcArena
 			State->Options.bSmokeCapture = true;
 			State->Options.bObjective = true;
 			State->Options.Seed += (State->Options.Seed % 2 == 0) ? 0 : 1;
+		}
+		if (bSmokeRoof)
+		{
+			// One roofs objective round, long enough that the walk onto the posts is a small part of the 1 Hz mean.
+			State->Options.bSmokeRoof = true;
+			State->Options.bObjective = true;
+			State->Options.Squad = 3;
+			State->Options.Scenario = static_cast<int32>(EPmcScenario::Roofs);
+			State->Options.TimeLimit = 180.f;
 		}
 		State->bWeightsALoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsA, State->WeightsA);
 		State->bWeightsBLoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsB, State->WeightsB);
@@ -3306,6 +3452,11 @@ namespace PmcArena
 		RunWith(Args, World, true, false, false, true);
 	}
 
+	void RunRoofDefenceSmoke(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, true, false, false, false, true);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
 		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
@@ -3330,6 +3481,11 @@ namespace PmcArena
 		TEXT("CodexTactics.PmcStalemateSmoke"),
 		TEXT("Dev check (fix/pmc-arena-stalemate): one real 3v3 objective round (Depot) - contact resumes within 45 s after every quiet spell, the attackers reach the point area, no order replaced inside its minimum hold, decision churn measured; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunStalemateSmoke));
+
+	static FAutoConsoleCommandWithWorldAndArgs RoofDefenceSmokeCommand(
+		TEXT("CodexTactics.PmcRoofDefenceSmoke"),
+		TEXT("Dev check (G008): one 3v3 roofs objective round - defender spread >= 5 m, guard share > 0.6, no shared cover; logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunRoofDefenceSmoke));
 }
 
 #endif // !UE_BUILD_SHIPPING

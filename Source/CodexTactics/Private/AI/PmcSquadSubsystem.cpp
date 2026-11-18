@@ -3199,6 +3199,104 @@ const FPmcLayoutAccess* UPmcSquadSubsystem::DefenceLayout()
 	return &DefenceLayoutCache.GetValue();
 }
 
+FPmcDefenceSite UPmcSquadSubsystem::ResolveDefenceSite(const FVector& Objective, float LevelToleranceCm)
+{
+	FPmcDefenceSite Site;
+	Site.LevelZ = Objective.Z;
+	TArray<FPmcRoofRef> Roofs;
+	TArray<FPmcLadderTop> LadderTops;
+	if (const UTacticalMapSubsystem* Map = GetTacticalMap())
+	{
+		const FTacticalMapFile& File = Map->GetFile();
+		Roofs.Reserve(File.OverwatchRoofs.Num());
+		for (const FTacticalOverwatchRoof& Roof : File.OverwatchRoofs)
+		{
+			FPmcRoofRef Ref;
+			Ref.Building = Roof.Building;
+			Ref.Z = Roof.Z;
+			Ref.AccessKind = PmcDefenceRules::ParseAccessKind(Roof.AccessKind);
+			Ref.AccessIds = Roof.Access;
+			Ref.Spots.Reserve(Roof.Spots.Num());
+			for (const FTacticalOverwatchSpot& Spot : Roof.Spots)
+			{
+				FPmcDefenceSpot DefenceSpot;
+				DefenceSpot.Location = Spot.Location;
+				DefenceSpot.CoveredM = Spot.CoveredM;
+				Ref.Spots.Add(DefenceSpot);
+			}
+			Roofs.Add(MoveTemp(Ref));
+		}
+		for (const FTacticalLadderRoof& LadderRoof : File.LadderOnlyRoofs)
+		{
+			const int32 Count = FMath::Min(LadderRoof.Ladders.Num(), LadderRoof.LadderTops.Num());
+			for (int32 Index = 0; Index < Count; ++Index)
+			{
+				FPmcLadderTop Top;
+				Top.Building = LadderRoof.Building;
+				Top.LadderId = LadderRoof.Ladders[Index];
+				Top.Location = LadderRoof.LadderTops[Index];
+				LadderTops.Add(Top);
+			}
+		}
+	}
+	const int32 RoofIndex = PmcDefenceRules::PickRoof(Roofs, Objective, LevelToleranceCm);
+	if (Roofs.IsValidIndex(RoofIndex))
+	{
+		const FPmcRoofRef& Roof = Roofs[RoofIndex];
+		Site.Access = PmcDefenceRules::ResolveTacticalAccess(Roof, LadderTops, DefenceLayout());
+		Site.Spots = Roof.Spots;
+		Site.LevelZ = Roof.Z;
+		Site.bRoof = true;
+		if (Roof.Spots.Num() > 0)
+		{
+			Site.Inward = PmcDefenceRules::SpotCentroid(Roof.Spots);
+			Site.bHasInward = true;
+		}
+		return Site;
+	}
+	if (const FPmcLayoutAccess* Layout = DefenceLayout())
+	{
+		const int32 BuildingIndex = PmcDefenceRules::BuildingAt(*Layout, Objective);
+		if (PmcDefenceRules::IsWalkableRoofSite(*Layout, BuildingIndex, Objective.Z, LevelToleranceCm))
+		{
+			const FPmcLayoutBuilding& Building = Layout->Buildings[BuildingIndex];
+			Site.Access = PmcDefenceRules::ResolveLayoutAccess(*Layout, BuildingIndex, Objective);
+			Site.LevelZ = PmcDefenceRules::RoofZ(*Layout, Building);
+			Site.Inward = FVector((Building.Min.X + Building.Max.X) * 0.5f, (Building.Min.Y + Building.Max.Y) * 0.5f, Site.LevelZ);
+			Site.bHasInward = true;
+		}
+	}
+	return Site;
+}
+
+bool UPmcSquadSubsystem::CopyDefenceSnapshot(int32 TeamId, FPmcDefenceSnapshot& Out) const
+{
+	Out = FPmcDefenceSnapshot();
+	const FTeam* Team = FindTeam(TeamId);
+	if (!Team || !Team->Defence.bActive)
+	{
+		return false;
+	}
+	Out.bActive = true;
+	Out.Access = Team->Defence.Access;
+	for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FFighterState>& Pair : Team->Fighters)
+	{
+		const AOperativeCharacter* Mate = Pair.Key.Get();
+		if (!PmcSquadLocal::IsLiveOperative(Mate))
+		{
+			continue;
+		}
+		Out.Feet.Add(PmcSquadLocal::FeetOf(*Mate));
+		if (Mate->bInCover)
+		{
+			const FCoverSlot& Slot = Mate->GetCoverSlot();
+			const FString WallId = Slot.WallActor.IsValid() ? Slot.WallActor->GetPathName() : FString();
+			Out.CoverKeys.Add(PmcDefenceRules::CoverObjectKey(WallId, Slot.WallPoint));
+		}
+	}
+	return true;
+}
+
 void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess)
 {
 	if (!Team.Objective.IsSet() || Team.Objective->Role != EPmcRole::Defender)
@@ -3220,78 +3318,13 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 
 	if (bResolveAccess)
 	{
-		Team.Defence.Access = FPmcDefenceAccess();
-		Team.Defence.Spots.Reset();
-		Team.Defence.bRoof = false;
-		Team.Defence.bHasInward = false;
-		Team.Defence.Inward = FVector::ZeroVector;
-		Team.Defence.LevelZ = Objective.Location.Z;
-		Team.Defence.bLogged = false;
-
-		TArray<FPmcRoofRef> Roofs;
-		TArray<FPmcLadderTop> LadderTops;
-		if (const UTacticalMapSubsystem* Map = GetTacticalMap())
-		{
-			const FTacticalMapFile& File = Map->GetFile();
-			Roofs.Reserve(File.OverwatchRoofs.Num());
-			for (const FTacticalOverwatchRoof& Roof : File.OverwatchRoofs)
-			{
-				FPmcRoofRef Ref;
-				Ref.Building = Roof.Building;
-				Ref.Z = Roof.Z;
-				Ref.AccessKind = PmcDefenceRules::ParseAccessKind(Roof.AccessKind);
-				Ref.AccessIds = Roof.Access;
-				Ref.Spots.Reserve(Roof.Spots.Num());
-				for (const FTacticalOverwatchSpot& Spot : Roof.Spots)
-				{
-					FPmcDefenceSpot DefenceSpot;
-					DefenceSpot.Location = Spot.Location;
-					DefenceSpot.CoveredM = Spot.CoveredM;
-					Ref.Spots.Add(DefenceSpot);
-				}
-				Roofs.Add(MoveTemp(Ref));
-			}
-			for (const FTacticalLadderRoof& LadderRoof : File.LadderOnlyRoofs)
-			{
-				const int32 Count = FMath::Min(LadderRoof.Ladders.Num(), LadderRoof.LadderTops.Num());
-				for (int32 Index = 0; Index < Count; ++Index)
-				{
-					FPmcLadderTop Top;
-					Top.Building = LadderRoof.Building;
-					Top.LadderId = LadderRoof.Ladders[Index];
-					Top.Location = LadderRoof.LadderTops[Index];
-					LadderTops.Add(Top);
-				}
-			}
-		}
-
-		const int32 RoofIndex = PmcDefenceRules::PickRoof(Roofs, Objective.Location, Config.LevelToleranceCm);
-		if (Roofs.IsValidIndex(RoofIndex))
-		{
-			const FPmcRoofRef& Roof = Roofs[RoofIndex];
-			Team.Defence.Access = PmcDefenceRules::ResolveTacticalAccess(Roof, LadderTops, DefenceLayout());
-			Team.Defence.Spots = Roof.Spots;
-			Team.Defence.LevelZ = Roof.Z;
-			Team.Defence.bRoof = true;
-			if (Roof.Spots.Num() > 0)
-			{
-				Team.Defence.Inward = PmcDefenceRules::SpotCentroid(Roof.Spots);
-				Team.Defence.bHasInward = true;
-			}
-		}
-		else if (const FPmcLayoutAccess* Layout = DefenceLayout())
-		{
-			const int32 BuildingIndex = PmcDefenceRules::BuildingAt(*Layout, Objective.Location);
-			if (PmcDefenceRules::IsWalkableRoofSite(*Layout, BuildingIndex, Objective.Location.Z, Config.LevelToleranceCm))
-			{
-				const FPmcLayoutBuilding& Building = Layout->Buildings[BuildingIndex];
-				Team.Defence.Access = PmcDefenceRules::ResolveLayoutAccess(*Layout, BuildingIndex, Objective.Location);
-				Team.Defence.LevelZ = PmcDefenceRules::RoofZ(*Layout, Building);
-				Team.Defence.Inward = FVector((Building.Min.X + Building.Max.X) * 0.5f, (Building.Min.Y + Building.Max.Y) * 0.5f, Team.Defence.LevelZ);
-				Team.Defence.bHasInward = true;
-			}
-		}
-
+		const FPmcDefenceSite Site = ResolveDefenceSite(Objective.Location, Config.LevelToleranceCm);
+		Team.Defence.Access = Site.Access;
+		Team.Defence.Spots = Site.Spots;
+		Team.Defence.LevelZ = Site.LevelZ;
+		Team.Defence.bRoof = Site.bRoof;
+		Team.Defence.Inward = Site.Inward;
+		Team.Defence.bHasInward = Site.bHasInward;
 		UE_LOG(LogCodexTactics, Display, TEXT("%s"), *PmcDefenceRules::AccessLogLine(TeamId, Team.Defence.Access));
 		Team.Defence.bLogged = true;
 	}

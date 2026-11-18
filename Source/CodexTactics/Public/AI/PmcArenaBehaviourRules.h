@@ -52,8 +52,20 @@ struct CODEXTACTICS_API FPmcBehaviour
 	int32 OrderChurn = 0;
 	/** 1 when the round ended without contact or as a time-limit draw, else 0. */
 	float StalemateShare = 0.f;
+	/**
+	 * G008: mean pairwise planar distance of the living defenders, metres, averaged over the round's 1 Hz samples.
+	 * 0 for the attacking side, and when fewer than two defenders are alive.
+	 */
+	float DefenderSpreadM = 0.f;
+	/**
+	 * G008: fraction of samples where a living defender stands within guard_dist of the roof access. 0 for the attacking
+	 * side. Meaningful only when bGuardShareApplicable; otherwise the metric is n/a (JSON null, not a numeric 0).
+	 */
+	float GuardNearAccessShare = 0.f;
+	/** False when the round found no roof access: guard_near_access_share is absent (n/a), not a real zero. */
+	bool bGuardShareApplicable = false;
 
-	/** The value of a catalog key (0 for an unknown one). */
+	/** The value of a catalog key (0 for an unknown one, and for a guard share that is n/a). */
 	float Value(const FString& Key) const;
 };
 
@@ -85,7 +97,7 @@ namespace PmcArenaBehaviourRules
 	/** The ambush hit: the target within this of the hiding spot's threatened point, cm. */
 	inline constexpr float AmbushThreatRadiusCm = 1000.f;
 
-	/** The G002 catalog in its table order (11 metrics). */
+	/** The G002 catalog in its table order (13 metrics: the original 11, then the two G008 defender metrics). */
 	CODEXTACTICS_API const TArray<FPmcBehaviourMetricSpec>& Catalog();
 
 	/** The seconds of the round covered by [t, t + WindowS] of the contact moments (clipped to [0, DurationS]; overlaps once). */
@@ -126,7 +138,8 @@ namespace PmcArenaBehaviourRules
 
 	/**
 	 * The G002 rich object: { "schema", "side", "tactical_map", "metrics": { <key>: { name, unit, range [min, max], direction, value } } }
-	 * - every catalog key present (0 when the metric did not happen).
+	 * - every catalog key present. guard_near_access_share is JSON null when the round has no access (n/a, not 0);
+	 *   every other value is a number (0 when the metric did not happen).
 	 */
 	CODEXTACTICS_API TSharedRef<FJsonObject> ToJson(const FPmcBehaviour& Behaviour, const FString& Side, bool bTacticalMap);
 }

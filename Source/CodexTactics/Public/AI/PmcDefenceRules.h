@@ -193,6 +193,28 @@ struct CODEXTACTICS_API FPmcGuardSample
 	bool bNear = false;
 };
 
+/** The access, spots and roof an objective point would defend. Access unset: not a walkable roof with a way up. */
+struct CODEXTACTICS_API FPmcDefenceSite
+{
+	FPmcDefenceAccess Access;
+	TArray<FPmcDefenceSpot> Spots;
+	float LevelZ = 0.f;
+	/** A tactical overwatch roof was chosen, so the area is the spot span. */
+	bool bRoof = false;
+	FVector Inward = FVector::ZeroVector;
+	bool bHasInward = false;
+};
+
+/** One sample of a defending team: living feet, and the cover objects men are actually in. */
+struct CODEXTACTICS_API FPmcDefenceSnapshot
+{
+	bool bActive = false;
+	FPmcDefenceAccess Access;
+	TArray<FVector> Feet;
+	/** Cover-object keys of the men who are in cover. A man on a post and not in cover adds none. */
+	TArray<FString> CoverKeys;
+};
+
 namespace PmcDefenceRules
 {
 	CODEXTACTICS_API const TCHAR* RoleName(EPmcDefenceRole Role);

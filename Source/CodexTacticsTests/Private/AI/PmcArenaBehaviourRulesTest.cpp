@@ -2,6 +2,7 @@
 #include "AI/PmcArenaBehaviourRules.h"
 #include "AI/PmcCommanderRules.h"
 #include "Dom/JsonObject.h"
+#include "Dom/JsonValue.h"
 #include "LevelGen/TacticalMapRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -121,8 +122,8 @@ bool FPmcArenaBehaviourJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("side"), Json->GetStringField(TEXT("side")), FString(TEXT("A")));
 	TestTrue(TEXT("tactical_map flag"), Json->GetBoolField(TEXT("tactical_map")));
 	const TSharedPtr<FJsonObject> Metrics = Json->GetObjectField(TEXT("metrics"));
-	TestEqual(TEXT("the 11 G002 metrics"), Metrics->Values.Num(), 11);
-	TestEqual(TEXT("catalog of 11"), Catalog().Num(), 11);
+	TestEqual(TEXT("the 13 G002 metrics"), Metrics->Values.Num(), 13);
+	TestEqual(TEXT("catalog of 13"), Catalog().Num(), 13);
 	for (const FPmcBehaviourMetricSpec& Spec : Catalog())
 	{
 		const TSharedPtr<FJsonObject>* Metric = nullptr;
@@ -135,6 +136,17 @@ bool FPmcArenaBehaviourJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("choke is a 'lower' metric"), Metrics->GetObjectField(TEXT("time_in_chokepoint_s"))->GetStringField(TEXT("direction")), FString(TEXT("lower")));
 	TestEqual(TEXT("quiet spells are 'context'"), Metrics->GetObjectField(TEXT("quiet_spells"))->GetStringField(TEXT("direction")), FString(TEXT("context")));
 	TestEqual(TEXT("an absent metric is 0"), Metrics->GetObjectField(TEXT("overwatch_kills"))->GetNumberField(TEXT("value")), 0.0);
+	const TSharedPtr<FJsonValue> AbsentGuard = Metrics->GetObjectField(TEXT("guard_near_access_share"))->TryGetField(TEXT("value"));
+	TestTrue(TEXT("no access: guard_near_access_share is JSON null, not 0"), AbsentGuard.IsValid() && AbsentGuard->Type == EJson::Null);
+	TestEqual(TEXT("Value() of an n/a guard share is 0 for numeric callers"), Behaviour.Value(TEXT("guard_near_access_share")), 0.f);
+	FPmcBehaviour Applicable;
+	Applicable.bGuardShareApplicable = true;
+	Applicable.GuardNearAccessShare = 0.8f;
+	Applicable.DefenderSpreadM = 7.5f;
+	const TSharedRef<FJsonObject> ApplicableJson = ToJson(Applicable, TEXT("B"), false);
+	const TSharedPtr<FJsonObject> ApplicableMetrics = ApplicableJson->GetObjectField(TEXT("metrics"));
+	TestEqual(TEXT("a real guard share is a number"), ApplicableMetrics->GetObjectField(TEXT("guard_near_access_share"))->GetNumberField(TEXT("value")), 0.8);
+	TestEqual(TEXT("defender spread is a number"), ApplicableMetrics->GetObjectField(TEXT("defender_spread_m"))->GetNumberField(TEXT("value")), 7.5);
 	return true;
 }
 
