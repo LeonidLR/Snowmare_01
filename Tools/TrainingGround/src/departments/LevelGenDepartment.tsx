@@ -38,8 +38,9 @@ import type { Vec2 } from '../movement/geometry';
 import type { CriticVerdict } from '../levelgen/critic';
 import type { Evaluation } from '../levelgen/evaluate';
 import { evaluateLayout } from '../levelgen/evaluate';
-import { generateLayout } from '../levelgen/generate';
 import type { Profile } from '../levelgen/profile';
+import type { StoryState } from '../levelgen/storyPass';
+import { generateCandidate, lockedBuildingIds, rerollBuildingStory, storyMapSummary, withBuildingStories } from '../levelgen/storyPass';
 import type { GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
 import { BuildingsPanel } from './BuildingsPanel';
@@ -74,6 +75,11 @@ export const LevelGenDepartment: React.FC = () => {
   const [count, setCount] = useState(3);
   const [params, setParams] = useState<GenParams>({ size_m: [177, 124], density: 1, variants: 3, verticality: 3 });
   const [candidates, setCandidates] = useState<Candidate[]>([]);
+  /** «Истории зданий (S1)»: the story pass as the last generation step (storyPass.ts); off = the generator's /1 output unchanged. */
+  const [storiesOn, setStoriesOn] = useState(true);
+  /** The story pass state per layout object (pristine buildings for «другая история», rollback log); history steps share it. */
+  const storyStates = useRef(new WeakMap<GenLayout, StoryState>());
+  const [storyMsg, setStoryMsg] = useState('');
   const [sel, setSel] = useState(0);
   const [layer, setLayer] = useState('all');
   const [floorMode, setFloorMode] = useState<FloorViewMode>('all');
@@ -148,7 +154,9 @@ export const LevelGenDepartment: React.FC = () => {
       try {
         const out: Candidate[] = [];
         for (let i = 0; i < count; i++) {
-          const layout = generateLayout({ profile, seed: seed + i, params });
+          const res = generateCandidate({ profile, seed: seed + i, params, stories: storiesOn });
+          const layout = res.layout;
+          if ('base' in res) storyStates.current.set(layout, res);
           out.push({ layout, ev: evaluateLayout({ layout, profile, config, noSim: true }), simmed: false, verdicts: [] });
         }
         setCandidates(out); setSel(0); setLayer('all');
@@ -275,11 +283,16 @@ export const LevelGenDepartment: React.FC = () => {
   const showLayout = (shown: GenLayout) => {
     if (!profile || !config) return;
     const layout = withoutStaleAnalysis(shown); // an edited map: the stored analysis no longer describes it
+    const st = storyStates.current.get(shown);
+    if (st) storyStates.current.set(layout, st);
     const ev = evaluateLayout({ layout, profile, config, noSim: true });
     setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, key: c.key ?? c.layout.name, layout, ev, simmed: false, verdicts: [], track: undefined, analysis: undefined } : c)));
   };
-  const pushStep = (layout: GenLayout, label: string) => {
+  /** `stories` = the story state of `layout`; absent = the current one carries over (locks, goals: the same buildings). */
+  const pushStep = (layout: GenLayout, label: string, stories?: StoryState) => {
     if (!cur) return;
+    const st = stories ?? storyStates.current.get(cur.layout);
+    if (st) storyStates.current.set(layout, st);
     setHistories((hs) => ({ ...hs, [curKey]: historyPush(hs[curKey] ?? historyInit(cur.layout, 'исходная'), layout, label) }));
     showLayout(layout);
   };
@@ -290,7 +303,9 @@ export const LevelGenDepartment: React.FC = () => {
       try {
         const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos, maxRotationDeg: maxRot });
         setRegenReport(r);
-        if (r.ok && r.layout !== cur.layout) pushStep(r.layout, `зона (${blockMode === 'full' ? `полностью, хаос ${chaos}` : blockMode === 'types' ? 'типы' : 'наполнение'}), seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`);
+        // kept / locked buildings keep their stories; the regenerated ones get new stories from the re-roll seed's sub-seeds
+        const sp = storiesOn && r.ok && r.layout !== cur.layout ? withBuildingStories(r.layout, r.seed, storyStates.current.get(cur.layout)) : null;
+        if (r.ok && r.layout !== cur.layout) pushStep(sp?.layout ?? r.layout, `зона (${blockMode === 'full' ? `полностью, хаос ${chaos}` : blockMode === 'types' ? 'типы' : 'наполнение'}), seed ${r.seed}${r.retries ? ` (повторов ${r.retries})` : ''}`, sp ?? undefined);
         setRerollSeed((s) => s + 1);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
@@ -309,6 +324,21 @@ export const LevelGenDepartment: React.FC = () => {
     catch (e) { setError(e instanceof Error ? e.message : String(e)); }
   };
   const unlock = (id: string) => { if (cur) pushStep(removeLock(cur.layout, id), `снято закрепление ${id}`); };
+  // ---- building stories (S1 step 4) -------------------------------------------------------------------------------------
+  const storyState = cur ? storyStates.current.get(cur.layout) : undefined;
+  const lockedBuildings = useMemo(() => (cur ? lockedBuildingIds(cur.layout) : new Set<string>()), [cur]);
+  const storySummary = useMemo(() => (cur && cur.layout.buildings.some((b) => b.stories?.length) ? storyMapSummary(cur.layout, storyStates.current.get(cur.layout)?.log) : null), [cur]);
+  /** «другая история»: one building's story re-rolled with the next sub-seed (refused inside a lock). */
+  const rerollStory = (id: string) => {
+    if (!cur) return;
+    const st = storyStates.current.get(cur.layout);
+    if (!st) { setStoryMsg(`${id}: нет состояния историй (карта загружена или сгенерирована без историй)`); return; }
+    try {
+      const r = rerollBuildingStory(cur.layout, id, st);
+      setStoryMsg(r.message);
+      if (r.ok && r.layout) pushStep(r.layout, `другая история ${id}: ${r.from} -> ${r.to}`, { base: r.base!, log: r.log! });
+    } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+  };
   const [locksSaved, setLocksSaved] = useState('');
   // map expansion x2 / x4 / x6 + start and goals (levelgen v2 stage 2)
   const [expandFactor, setExpandFactor] = useState(4);
@@ -380,7 +410,9 @@ export const LevelGenDepartment: React.FC = () => {
         const src = maxRot === (cur.layout.params.max_rotation_deg ?? 0) ? cur.layout : { ...cur.layout, params: { ...cur.layout.params, max_rotation_deg: maxRot } };
         const r = expandLayout({ layout: src, factor: expandFactor, seed: expandSeed, profile });
         setExpandReport({ ...r, seamChecks: r.ok ? checkSeams(r.layout, r.roads) : [] });
-        if (r.ok) { pushStep(r.layout, `расширение x${expandFactor}, seed ${r.seed}`); setZone(null); setRegenReport(null); setExpandSeed((s) => s + 1); }
+        // the old map's buildings keep their stories; the new blocks' buildings get stories from the expansion seed's sub-seeds
+        const sp = storiesOn && r.ok ? withBuildingStories(r.layout, r.seed, storyStates.current.get(cur.layout)) : null;
+        if (r.ok) { pushStep(sp?.layout ?? r.layout, `расширение x${expandFactor}, seed ${r.seed}`, sp ?? undefined); setZone(null); setRegenReport(null); setExpandSeed((s) => s + 1); }
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
     }, 20);
@@ -651,6 +683,9 @@ export const LevelGenDepartment: React.FC = () => {
               <select value={params.verticality} onChange={(e) => setParams((p) => ({ ...p, verticality: Number(e.target.value) as GenParams['verticality'] }))} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-100">
                 <option value={0}>0 — плоско</option><option value={1}>1 — лестницы и крыши</option><option value={2}>2 — + лестничные клетки, этажи</option><option value={3}>3 — + проломы в руине</option>
               </select>
+            </label>
+            <label className="flex items-center justify-between gap-2 text-xs text-slate-300" title="Последний шаг генерации: роли зданий, истории (запертая дверь, завал + пожарная лестница, крыша снаружи, сугроб), ключевые маршруты; схема /2. Действует на генерацию, расширение и перегенерацию зоны.">Истории зданий (S1)
+              <input type="checkbox" checked={storiesOn} onChange={(e) => setStoriesOn(e.target.checked)} />
             </label>
             <button onClick={generate} disabled={!profile || !config || !!busy} className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold text-sm disabled:opacity-50"><Play size={15} />Сгенерировать</button>
             {busy && <p className="text-xs text-cyan-300">{busy}</p>}
@@ -939,7 +974,8 @@ export const LevelGenDepartment: React.FC = () => {
               <ul className="text-xs text-slate-300 flex flex-col gap-1">
                 {cur.ev.variants.map((v) => <li key={v.id} className="flex items-center gap-2">{v.completable ? <CheckCircle2 size={12} className="text-emerald-400" /> : <XCircle size={12} className="text-rose-400" />}{v.id}: {v.length_m} м{v.fail ? ` — ${v.fail}` : ''}{v.intent === 'kill_zone' ? <span className="text-rose-300"> — зона убийства по замыслу (не дефект)</span> : null}</li>)}
               </ul>
-              {cur.ev.buildings && <BuildingsPanel report={cur.ev.buildings} />}
+              {cur.ev.buildings && <BuildingsPanel report={cur.ev.buildings} summary={storySummary} message={storyMsg}
+                onReroll={storyState ? rerollStory : undefined} isLocked={(id) => lockedBuildings.has(id)} canReroll={(id) => !!storyState?.base[id]} />}
               <table className="text-xs text-slate-300">
                 <tbody>
                   <tr><td className="pr-2 text-slate-500">Итог</td><td className="font-mono">{cur.ev.score} (сходство с эталоном {cur.ev.similarity.score})</td></tr>

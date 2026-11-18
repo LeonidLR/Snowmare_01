@@ -6,6 +6,7 @@ import { useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import type { StoryId } from '../levelgen/buildingStories';
 import type { RouteSummary } from '../levelgen/buildingRoutes';
+import type { StoryMapSummary } from '../levelgen/storyPass';
 import type { TraversalCode, TraversalReport } from '../levelgen/buildingTraversal';
 import type { BuildingRole } from '../levelgen/schema';
 
@@ -78,7 +79,32 @@ const ROLE_CLASS: Record<BuildingRole, string> = {
   background: 'text-slate-500',
 };
 
-export function BuildingsPanel({ report }: { report: TraversalReport }) {
+const pctOf = (v: number) => `${Math.round(v * 100)} %`;
+
+/** The per-map story line (storyPass.ts storyMapSummary): role shares, storied share, rollbacks, choice share. */
+function StorySummaryLine({ s }: { s: StoryMapSummary }) {
+  const roles = (Object.keys(ROLE_RU) as BuildingRole[]).filter((r) => s.roles[r]).map((r) => `${ROLE_RU[r]} ${pctOf(s.roles[r]!)}`).join(', ');
+  const stories = Object.entries(s.stories).filter(([k]) => k !== 'open').map(([k, n]) => `${STORY_RU[k as StoryId] ?? k} ${n}`).join(', ');
+  return (
+    <p className="text-slate-400" title="Доли считаются по входимым зданиям с ролью; «выбор» = быстрый вход отличается от тихого (F4)">
+      Истории: зданий {s.buildings}; роли: {roles || '—'}; с историей {pctOf(s.storied)}{stories ? ` (${stories})` : ''}; откатов {s.rollbacks ?? '—'}; выбор быстрый/тихий {pctOf(s.choice)}
+    </p>
+  );
+}
+
+export interface BuildingsPanelProps {
+  report: TraversalReport;
+  /** The per-map story summary (null / absent = the map has no stories). */
+  summary?: StoryMapSummary | null;
+  /** The last «другая история» result. */
+  message?: string;
+  /** «другая история» per building (absent = no story state: a loaded map or the toggle was off). */
+  onReroll?: (id: string) => void;
+  isLocked?: (id: string) => boolean;
+  canReroll?: (id: string) => boolean;
+}
+
+export function BuildingsPanel({ report, summary, message, onReroll, isLocked, canReroll }: BuildingsPanelProps) {
   const [open, setOpen] = useState(false);
   const enterable = report.buildings.filter((b) => b.rooms.total > 0);
   const failed = report.buildings.filter((b) => !b.ok);
@@ -90,6 +116,8 @@ export function BuildingsPanel({ report }: { report: TraversalReport }) {
         Здания: {failed.length ? `${failed.length} не проходят проверку проходимости` : 'все проходимы'} — входимых {enterable.length}, всего {report.checked}
         <button className="ml-auto text-slate-400 hover:text-slate-200 underline" onClick={() => setOpen(!open)}>{open ? 'только ошибки' : 'все здания'}</button>
       </p>
+      {summary && <StorySummaryLine s={summary} />}
+      {message && <p className="text-violet-300">{message}</p>}
       <ul className="flex flex-col gap-0.5 max-h-56 overflow-auto">
         {list.map((b) => (
           <li key={b.id} className="flex flex-col">
@@ -99,6 +127,11 @@ export function BuildingsPanel({ report }: { report: TraversalReport }) {
               {b.role && <span className={ROLE_CLASS[b.role]} title="тактическая роль здания">{ROLE_RU[b.role]}</span>}
               <span className="text-slate-500">{b.set_piece}</span>
               <span className="text-slate-500">комнаты {b.rooms.reachable}/{b.rooms.total}, этажи {b.levels.reachable.join(',') || '—'}{b.roof !== 'none' ? `, крыша ${b.roof === 'reachable' ? 'да' : 'нет'}` : ''}</span>
+              {isLocked?.(b.id) && <span className="text-amber-400" title="здание в закреплённом районе: история сохраняется">закреплено</span>}
+              {onReroll && b.stories?.length ? (
+                <button className="ml-auto text-violet-300 hover:text-violet-200 underline disabled:opacity-40 disabled:no-underline" disabled={!!isLocked?.(b.id) || !(canReroll?.(b.id) ?? true)}
+                  title={isLocked?.(b.id) ? 'здание закреплено' : 'перебросить историю здания следующим под-seed и пересчитать его маршруты'} onClick={() => onReroll(b.id)}>другая история</button>
+              ) : null}
             </span>
             <RouteLine route={b.route} stories={b.stories} />
             {b.issues.slice(0, 4).map((i, k) => (
