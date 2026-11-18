@@ -105,6 +105,25 @@ leads to them is.
 
 ---
 
+### 1.5 Engine test of P0 / P1a (2026-11-18 evening)
+
+Fresh X6 from the branch generator (base seed 1 -> x4 seed 7 -> x6 seed 8, like the accepted X6), built with the branch builder
+into the test map `L_Gen_BgenTest_X6` (main project, commandlet, not committed), navmesh baked. TS validator: 52 buildings,
+0 failing.
+
+| Smoke | Result | Reading |
+|---|---|---|
+| `LevelGenRampSmoke legs=solo` | 4 / 17 -> **6 / 18** after 4afb04f6 | navmesh now joins foot -> top on every ground flight but one false WARN; all 12 failures are the same jam: the sent man pushes at 5-15 cm/s behind two idle squadmates in the 150 cm flight mouth - **movement C++ (give-way), not geometry** (API agent `claude-api/give-way`) |
+| `LevelGenLaddersSmoke nocut` | 44 / 46 | only the small rotated gallery, as in the 1.4 audit |
+| `LevelGenRouteSmoke` | 8 / 25 | stalls on an open street, not in a building; the old X6 in main fails too this morning (17 / 24) - a bot / movement regression since 11-16 |
+
+Generator bug found and fixed: `B_hall_n`'s core stood inside the `B_office_w` facade block (footprints overlap 5 x 4 m since
+the base layout) - `planStairCore` now intersects each side's core box with the footprints and plans no core rather than one
+inside a neighbour; validator `stair_in_other_building` (4afb04f6, 31236b98). Smoke probe artefacts (for P0b): the "navmesh every
+1 m" samples use a +-60 cm window round a straight line and miss the real ramp surface near the top (`B_x2_4_t8_hall_stair_0`
+WARN with a complete path); upper flights print "no navmesh path" while an editor-world `FindPathToLocationSynchronously` on the
+same baked map finds complete paths.
+
 ## 2. Design decisions (the designer's forks)
 
 Asked 2026-11-18; the designer answered the same day (all four: option (a)), before any code.
