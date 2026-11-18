@@ -17,6 +17,10 @@
 #include "Components/StaticMeshComponent.h"
 #include "Materials/MaterialInterface.h"
 #include "Characters/EnemyCharacter.h"
+#include "Characters/EnemyAIRules.h"
+#include "Combat/CombatGroundQuery.h"
+#include "Combat/FireGateRules.h"
+#include "GameFramework/Character.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
@@ -3914,6 +3918,23 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 	{
 		FinishEnemyTurn(0.25f); // still on the way (UE: no pointless step back after the approach)
 		return;
+	}
+	// G007: the real-time ground rule (EnemyAIRules::CanMeleeOnGround): a neighbour up a 1.1 m ledge or over the height cap is
+	// out of reach in turn-based too; on flat ground / a shared slope the grid neighbour bites (GridMeleeRange).
+	if (Enemy->IsA<ACharacter>() && Target->IsA<ACharacter>() && GetWorld())
+	{
+		const FVector EnemyFeet = CombatGround::FeetOf(*Enemy);
+		const FVector TargetFeet = CombatGround::FeetOf(*Target);
+		const AEnemyCharacter* EnemyCharacter = Cast<AEnemyCharacter>(Enemy);
+		const float Range = EnemyAIRules::GridMeleeRange(EnemyCharacter ? EnemyCharacter->GetAttackRange() : 0.f,
+			FVector::Dist2D(EnemyFeet, TargetFeet), FireGateRules::GetConfig().MeleeReach);
+		const AActor* Ignore[] = { Enemy, Target };
+		if (!CombatGround::CanMeleeAt(*GetWorld(), EnemyFeet, TargetFeet, Range, Ignore))
+		{
+			Log(FString::Printf(TEXT("%s cannot reach %s from here (height)"), *NameOf(Enemy), *NameOf(Target)));
+			FinishEnemyTurn(0.25f);
+			return;
+		}
 	}
 	if (State->AP < Profile.AttackAPCost)
 	{

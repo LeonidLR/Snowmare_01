@@ -222,7 +222,10 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		FFlankDetourInput Detour;
 		Detour.DistanceToPointCm = FVector::Dist2D(MyFeet, Order.MovePoint);
 		Detour.DistanceToTargetCm = FVector::Dist2D(MyFeet, TargetFeet);
-		Detour.BiteReachCm = EnemyAIRules::MeleeReachPlanar(AttackRange, FMath::Abs(Target->GetActorLocation().Z - MyFeet.Z));
+		// G007: the bite reach on the real ground (the same rule as the bite itself, CombatGround::CanMelee).
+		Detour.BiteReachCm = Target->IsA<ACharacter>()
+			? CombatGround::MeleeReachPlanar(*GetWorld(), *this, *Target, AttackRange)
+			: EnemyAIRules::MeleeReachPlanar(AttackRange, FMath::Abs(Target->GetActorLocation().Z - MyFeet.Z));
 		const FVector FromTarget = (MyFeet - TargetFeet).GetSafeNormal2D();
 		const FVector FlankDirection = (Order.MovePoint - TargetFeet).GetSafeNormal2D();
 		Detour.AngleFromFlankDeg = FlankDirection.IsNearlyZero() ? 180.f
@@ -428,9 +431,12 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 			{
 				// MoveToActor's reach test adds both capsule radii: AttackRange x 0.5 stops hounds 1.7 m off, out of their own
 				// reach (bug hunt 2026-10-18). Codex.Enemy.MeleeCloseIn 1 (ai_tuning.json, user approval 2026-10-18) closes in.
+				// G007: a character target's planar reach comes from the bite's own ground rule (a ramp's body-point height of
+				// 1.8 m left no planar reach: the enemy pushed into the operative instead of stopping).
+				const float PlanarReach = bCharacterTarget ? CombatGround::MeleeReachPlanar(*GetWorld(), *this, *Target, AttackRange)
+					: EnemyAIRules::MeleeReachPlanar(AttackRange, FMath::Abs(TargetPosition.Z - Feet.Z));
 				const float Acceptance = EnemyCharacterLocal::CVarMeleeCloseIn.GetValueOnGameThread() != 0
-					? EnemyAIRules::MeleeApproachAcceptance(AttackRange, FMath::Abs(TargetPosition.Z - Feet.Z), GetSimpleCollisionRadius(),
-						Target->GetSimpleCollisionRadius())
+					? EnemyAIRules::MeleeApproachAcceptanceForReach(PlanarReach, AttackRange, GetSimpleCollisionRadius(), Target->GetSimpleCollisionRadius())
 					: AttackRange * 0.5f;
 				RequestAIMoveToActor(AIC, Target, Acceptance);
 			}
