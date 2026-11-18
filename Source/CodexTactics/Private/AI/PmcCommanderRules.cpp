@@ -1,6 +1,7 @@
 #include "AI/PmcCommanderRules.h"
 
 #include "AI/AmbushWatchRules.h"
+#include "AI/PmcDefenceRules.h"
 #include "AI/PmcTacticalRules.h"
 #include "Dom/JsonObject.h"
 #include "Math/RandomStream.h"
@@ -62,6 +63,41 @@ namespace PmcCommanderRules
 		/** A close-quarters advance must move him at least this far (the arrival radius of a walk). */
 		constexpr float MinAdvanceStepCm = 250.f;
 
+		/** G008: a defender's walk back into the defended area (0 inside it, and 0 on his defence post). */
+		inline float DefenderAreaScore(const FPmcFighterView& F, const FPmcWeights& W)
+		{
+			if (F.bHasDefencePost && F.bAtPost)
+			{
+				return 0.f;
+			}
+			const FPmcObjectiveView& O = F.Objective;
+			const bool bInside = O.bDefenceAreaSet
+				? O.bInsideDefenceArea
+				: PmcDefenceRules::IsInsideAreaFallback(O.bOnObjectiveLevel, O.DistanceCm, O.RadiusCm, W.AreaFactor);
+			return PmcDefenceRules::DefenderObjectiveScore(bInside, W.Objective, F.HealthFrac);
+		}
+
+		/**
+		 * The defender's point pull terms, 0..1: Retake while the attackers stand on the point (0.2 + 0.8 x their clock),
+		 * Occupy for a man allowed to (the occupier of a posted defence, anyone without posts) on a push (0.8) or a late
+		 * clock (0.9 at 85 %). bNeedOffPoint gates both on his being off the point (> 0.7 x radius): that is the walk
+		 * onto it. Without the gate it is the same pull while he stands on it, which keeps him there (lead review 2, A).
+		 */
+		inline float PointPullTerms(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W, bool bNeedOffPoint)
+		{
+			const FPmcObjectiveView& O = F.Objective;
+			if (!O.IsActive() || O.Role != EPmcRole::Defender)
+			{
+				return 0.f;
+			}
+			const bool bGate = !bNeedOffPoint || O.DistanceCm > 0.7f * O.RadiusCm;
+			const float Retake = Step(O.bEnemyOnPoint && bGate) * (0.2f + 0.8f * Clamp01(O.HoldFrac));
+			const bool bMayOccupy = !F.bHasDefencePost || F.bDefenceOccupier;
+			const float Occupy = Step(bMayOccupy && bGate)
+				* FMath::Max(Step(IsPushing(F, S, W)) * 0.8f, Clamp01((O.TimeFrac - 0.6f) / 0.25f) * 0.9f);
+			return FMath::Max(Retake, Occupy);
+		}
+
 		inline void ReadNumber(const FJsonObject& Json, const TCHAR* Key, float& Out)
 		{
 			double Value = 0.0;
@@ -106,6 +142,60 @@ namespace PmcCommanderRules
 		{
 			return 0.f;
 		}
+		// G008: a roof fight sees the street at once, so Ambush's contact gate is already closed and FallBack
+		// pathfinds the guard down the stair. He walks onto his post, then does not leave it.
+		// A sector shooter may still Relocate along his wedge. Attackers never set bHasDefencePost.
+		// Lead review 2 (A): standing on the point with an active pull (Retake, Occupy) he holds it. 0 for everyone else.
+		const float PointHold = DefenderPointHold(F, S, W);
+		if (F.Objective.Role == EPmcRole::Defender && F.bHasDefencePost)
+		{
+			if (!F.bAtPost)
+			{
+				// Lead review 2 (A): an active point pull outranks the walk back to the post. Off the point, Ambush (1.05)
+				// beat Retake (at most 1.0) and Occupy (0.9). Inside 0.7 x radius the walk-on pull is 0, so Ambush walked
+				// the occupier back to his post, where the pull returned: a ping-pong that never held the point. With a
+				// pull the walk is 0: off the point Objective takes him there, on it Hold keeps him there (PointHold). He
+				// does not take cover or relocate off it either. Once the pull ends, the walk back to his post returns.
+				const bool bPulled = PointHold > 0.f || DefenderPointPull(F, S, W) > 0.f;
+				if (Order == EPmcOrder::Ambush && bPulled)
+				{
+					return 0.f;
+				}
+				if (PointHold > 0.f && (Order == EPmcOrder::TakeCover || (Order == EPmcOrder::Relocate && !F.bSectorShift)))
+				{
+					return 0.f;
+				}
+				// Review finding 1: the post walk is an order, not a gate. Before contact it is the only one. In contact (squad
+				// contact, a target seen now, or fire on him) shooting / TakeCover / Heal / FallBack / Reload keep their normal
+				// scores, so a man stuck short of an unreachable post fights from where he is. Fire on him drops the walk to 0.75,
+				// so a man shot on his way takes cover / falls back / heals when that is urgent. A roof sees the street at once,
+				// so contact alone does not demote the walk: at 0.5 a rocket (0.94) kept the guard off the stair all round
+				// (PmcRoofDefenceSmoke guard share 0.00). Not under fire, the walk is 1.05: above a full-weight fight order (an
+				// exposed TakeCover with no cover scores exactly 1.0 and wins a tie by enum order). Advance and Flank stay 0: they
+				// path him off the roof.
+				const bool bFight = S.bContact || F.bUnderFire || (F.bHasThreat && F.Threat.bSeenNow && !F.Threat.bStandIn);
+				if (Order == EPmcOrder::Ambush)
+				{
+					return FMath::Max(W.Ambush, 1.f) * (F.bUnderFire ? 0.75f : 1.05f);
+				}
+				if (Order == EPmcOrder::Hold && PointHold > 0.f && !bFight)
+				{
+					return PointHold;
+				}
+				// Objective is scored below on or off post: its area term is the walk back, and its point pull is the
+				// Retake / Occupy escape (review finding 3).
+				if (Order != EPmcOrder::Objective && (!bFight || Order == EPmcOrder::Advance || Order == EPmcOrder::Flank))
+				{
+					return 0.f;
+				}
+			}
+			else if (Order == EPmcOrder::FallBack || Order == EPmcOrder::Flank || Order == EPmcOrder::Advance
+				|| Order == EPmcOrder::TakeCover
+				|| (Order == EPmcOrder::Relocate && !F.bSectorShift))
+			{
+				return 0.f;
+			}
+		}
 		const float Contact = Step(S.bContact);
 		const float SeenNow = Step(F.bHasThreat && F.Threat.bSeenNow);
 		const float InRange = Step(F.bHasThreat && F.Threat.DistanceCm <= F.WeaponRangeCm);
@@ -143,7 +233,9 @@ namespace PmcCommanderRules
 		{
 		case EPmcOrder::Hold:
 			// The baseline: the fighter keeps shooting from where he is; worth more in cover and in contact.
-			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere * PushDamp * (F.bAtPost ? 1.f : Here);
+			// PointHold (lead review 2, A) is 0 except for a posted defender off his post on the point with an active pull.
+			return FMath::Max(PointHold,
+				W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere * PushDamp * (F.bAtPost ? 1.f : Here));
 		case EPmcOrder::TakeCover:
 		{
 			// Exposed and badly covered against a known threat, with somewhere to go (a slot at his band's distance preferred).
@@ -195,6 +287,11 @@ namespace PmcCommanderRules
 		case EPmcOrder::Relocate:
 			// Spotted at this spot for too long: move to another cover.
 			// TACTICAL_MAP P2: or standing in a chokepoint (danger >= choke_leave_danger) - he leaves it before he is spotted there.
+			// G008: a sector shooter shifts along his own wedge. The flag defaults off, so the expression below stays the old one.
+			if (F.bSectorShift)
+			{
+				return W.Relocate * Step(!F.Threat.bStandIn) * PushDamp * Leave;
+			}
 			return W.Relocate * Contact * Step(!F.Threat.bStandIn) * Step(F.bCoverAvailable)
 				* FMath::Max(Step(F.bExposed && F.SecondsExposedHere >= W.RelocateAfterSeconds), Step(F.DangerHere > 0.f && F.DangerHere >= W.ChokeLeaveDanger)) * PushDamp * Leave;
 		case EPmcOrder::Ambush:
@@ -218,12 +315,13 @@ namespace PmcCommanderRules
 			{
 				return 0.f;
 			}
-			if (F.RunningOrder == EPmcOrder::Objective)
-			{
-				return FMath::Max(W.Objective, 0.f) * (bPush ? PushGain : 1.f);
-			}
 			if (O.Role == EPmcRole::Attacker)
 			{
+				// A walk already under way keeps its score (the man commits to the point).
+				if (F.RunningOrder == EPmcOrder::Objective)
+				{
+					return FMath::Max(W.Objective, 0.f) * (bPush ? PushGain : 1.f);
+				}
 				// Onto the point: more urgent as the clock runs down (the defenders win at the time limit), less under fire / against men on it.
 				const float Urgency = Clamp01(W.ObjectiveUrgency);
 				if (bPush)
@@ -235,14 +333,12 @@ namespace PmcCommanderRules
 				return FMath::Max(W.Objective, 0.f) * Step(O.DistanceCm > 0.7f * O.RadiusCm) * (1.f - Urgency + Urgency * Clamp01(O.TimeFrac)) * F.HealthFrac
 					* Step(F.AmmoFrac > 0.1f) * (SeenNow > 0.f ? 0.6f : 1.f) * (O.bEnemyOnPoint ? 0.8f : 1.f) * AttentionFactor(F, W);
 			}
-			// A defender: back onto the point while the attackers stand on it (the more of their clock ran, the more urgent), or back into
-			// its overwatch when he strayed.
-			const float Retake = Step(O.bEnemyOnPoint && O.DistanceCm > 0.7f * O.RadiusCm) * (0.2f + 0.8f * Clamp01(O.HoldFrac));
-			const float Return = Step(!O.bEnemyOnPoint && O.DistanceCm > OverwatchCm) * 0.7f;
-			// fix/pmc-arena-stalemate: the defenders win on time only standing on the point - onto it when the round goes quiet (the push)
-			// and as the time limit nears (from 60 % of the round, full at 85 %).
-			const float Occupy = Step(bOffPoint) * FMath::Max(Step(bPush) * 0.8f, Clamp01((O.TimeFrac - 0.6f) / 0.25f) * 0.9f);
-			return FMath::Max(W.Objective, 0.f) * FMath::Max(FMath::Max(Retake, Return), Occupy) * FMath::Max(0.5f, F.HealthFrac);
+			// A defender (PMC_DEFENCE.md D1): the area term is 0 inside the defended area, so he is not pulled into the capture ring.
+			// Outside it he walks back to his post at a flat 0.7. On his post it is 0, because a stair post can lie outside the 12 m bubble.
+			// The point's own pull (G008 follow-up, finding 3) is on top: Retake while the attackers stand on it, Occupy for the
+			// occupier on a push / late clock. Time wins still need a defender on the point (fix/pmc-arena-stalemate, ResolveRound).
+			// The attacker's branch above is unchanged. The capture clock is unchanged.
+			return FMath::Max(DefenderAreaScore(F, W), FMath::Max(W.Objective, 0.f) * DefenderPointPull(F, S, W) * FMath::Max(0.5f, F.HealthFrac));
 		}
 		case EPmcOrder::RpgStrike:
 			// The squad's RPG gunner (2026-11-09): a rocket target the team sees (the shared launcher rule's score, capped at 1) - worth more
@@ -297,6 +393,28 @@ namespace PmcCommanderRules
 	bool IsPushing(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
 	{
 		return Fighter.Objective.IsActive() && Weights.PushAfterSeconds > 0.f && Squad.QuietSeconds >= Weights.PushAfterSeconds;
+	}
+
+	float DefenderPointPull(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
+	{
+		return PmcCommanderLocal::PointPullTerms(Fighter, Squad, Weights, true);
+	}
+
+	float DefenderPointHold(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
+	{
+		const FPmcObjectiveView& O = Fighter.Objective;
+		if (Fighter.bKnockedDown || O.Role != EPmcRole::Defender || !Fighter.bHasDefencePost || Fighter.bAtPost || !O.IsActive()
+			|| O.DistanceCm > O.RadiusCm)
+		{
+			return 0.f;
+		}
+		return FMath::Max(Weights.Objective, 0.f) * PmcCommanderLocal::PointPullTerms(Fighter, Squad, Weights, false) * FMath::Max(0.5f, Fighter.HealthFrac);
+	}
+
+	bool DefenderObjectiveToPoint(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
+	{
+		const float Pull = FMath::Max(Weights.Objective, 0.f) * DefenderPointPull(Fighter, Squad, Weights) * FMath::Max(0.5f, Fighter.HealthFrac);
+		return Pull > 0.f && Pull >= PmcCommanderLocal::DefenderAreaScore(Fighter, Weights);
 	}
 
 	EPmcOrder PickCommitted(const TArray<FPmcOrderScore>& Scored, const FPmcCommitment& C, const FPmcWeights& W, EPmcPickReason* OutReason)
@@ -601,6 +719,25 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("objective_urgency"), Out.ObjectiveUrgency);
 		ReadNumber(Json, TEXT("objective_approach"), Out.ObjectiveApproach);
 		ReadNumber(Json, TEXT("overwatch"), Out.Overwatch);
+		// Defence roles (PMC_DEFENCE.md D1, G008). Metres in the file, centimetres here, same as tactical_reach_m.
+		float GuardM = Out.GuardDistCm / 100.f;
+		ReadNumber(Json, TEXT("guard_dist_m"), GuardM);
+		Out.GuardDistCm = FMath::Max(GuardM, 0.f) * 100.f;
+		float InsetM = Out.GuardInsetCm / 100.f;
+		ReadNumber(Json, TEXT("guard_inset_m"), InsetM);
+		Out.GuardInsetCm = FMath::Max(InsetM, 0.f) * 100.f;
+		float SpacingM = Out.MinSpacingCm / 100.f;
+		ReadNumber(Json, TEXT("min_spacing_m"), SpacingM);
+		Out.MinSpacingCm = FMath::Max(SpacingM, 0.f) * 100.f;
+		ReadNumber(Json, TEXT("spacing_penalty"), Out.SpacingPenalty);
+		ReadNumber(Json, TEXT("area_factor"), Out.AreaFactor);
+		ReadNumber(Json, TEXT("shift_after_s"), Out.ShiftAfterSeconds);
+		ReadNumber(Json, TEXT("shift_no_target_s"), Out.ShiftNoTargetSeconds);
+		ReadNumber(Json, TEXT("shift_cooldown_s"), Out.ShiftCooldownSeconds);
+		float PostWalks = static_cast<float>(Out.DefencePostWalks);
+		ReadNumber(Json, TEXT("defence_post_walks"), PostWalks);
+		Out.DefencePostWalks = FMath::Max(1, FMath::RoundToInt(PostWalks));
+		ReadNumber(Json, TEXT("sector_arc_deg"), Out.SectorArcDeg);
 		// Target attention (2026-11-07).
 		ReadNumber(Json, TEXT("attention"), Out.Attention);
 		ReadNumber(Json, TEXT("ambush_patience"), Out.AmbushPatience);

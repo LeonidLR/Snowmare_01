@@ -74,11 +74,16 @@ bool FPmcArenaOnPointLevelTest::RunTest(const FString&)
 	TestEqual(TEXT("an attacker on the roof point: no walk"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, OnRoof, OnPointSquad(), Weights), 0.f);
 	TestEqual(TEXT("under the roof: Hold without the on-point bonus"), PmcCommanderRules::ScoreOrder(EPmcOrder::Hold, Below, OnPointSquad(), Weights),
 		PmcCommanderRules::ScoreOrder(EPmcOrder::Hold, Plain, OnPointSquad(), Weights), 0.001f);
-	// A defender under his roof point late in the round goes back up (Occupy) instead of counting as on it.
+	// A defender under the roof is off its level, so he is outside the defended area and walks back up
+	// (PMC_DEFENCE.md D1: because he left the roof, not because the clock is late).
 	FPmcFighterView Defender = Below;
 	Defender.Objective.Role = EPmcRole::Defender;
-	Defender.Objective.TimeFrac = 0.9f;
-	TestTrue(TEXT("a defender under his roof point late: back onto it"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, OnPointSquad(), Weights) > 0.5f);
+	Defender.Objective.bOnObjectiveLevel = false;
+	TestTrue(TEXT("a defender under his roof point: back up onto the roof"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, OnPointSquad(), Weights) > 0.5f);
+	FPmcFighterView DefenderOnRoof = OnRoof;
+	DefenderOnRoof.Objective.Role = EPmcRole::Defender;
+	DefenderOnRoof.Objective.TimeFrac = 0.9f;
+	TestEqual(TEXT("a defender on the roof, inside the area: no capture walk"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, DefenderOnRoof, OnPointSquad(), Weights), 0.f);
 
 	// A cover slot under the roof is no "slot on the point" for an attacker; one on the roof is.
 	const FVector Far(4000.f, 0.f, 10.f);

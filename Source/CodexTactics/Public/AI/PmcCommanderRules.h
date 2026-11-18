@@ -41,8 +41,10 @@ enum class EPmcOrder : uint8
 	/** Crouch where he stands (in contact, not moving, not in cover). */
 	Crouch,
 	/**
-	 * The round's objective point (task #53, the arena): an attacker walks onto it (he wins by holding it), a defender goes back to it
-	 * when the attackers stand on it or he strayed out of its overwatch.
+	 * The round's objective point (task #53, the arena): an attacker walks onto it (he wins by holding it). A defender's Objective
+	 * order walks him back to his post from outside the defended area (PMC_DEFENCE.md D1). Inside it, and on his post, only the
+	 * point's pull scores: Retake while the attackers stand on it, Occupy for the occupier on a push or late clock
+	 * (PmcCommanderRules::DefenderPointPull).
 	 */
 	Objective,
 	/**
@@ -101,6 +103,15 @@ struct CODEXTACTICS_API FPmcObjectiveView
 	float HoldFrac = 0.f;
 	/** An enemy stands within the radius (the attackers for a defender, the defenders for an attacker). */
 	bool bEnemyOnPoint = false;
+	/**
+	 * G008: his feet are on the objective's level. Default true so a planar test uses the area fallback.
+	 * The subsystem sets it from IsSameLevel; off the level is outside the defended area (a man under the roof).
+	 */
+	bool bOnObjectiveLevel = true;
+	/** The subsystem measured the defended area. When set, bInsideDefenceArea replaces the radius fallback. */
+	bool bDefenceAreaSet = false;
+	/** Inside the defended area (roof spot span, or the ground radius times area_factor). The Objective order then scores 0. */
+	bool bInsideDefenceArea = false;
 
 	bool IsActive() const { return Role != EPmcRole::None && RadiusCm > 0.f; }
 };
@@ -310,6 +321,29 @@ struct CODEXTACTICS_API FPmcWeights
 	/** Defenders value overwatch of the approaches: a slot / Hold within reach of the point x (1 + this). */
 	float Overwatch = 0.5f;
 
+	// --- Defence roles (PMC_DEFENCE.md D1, G008). Frozen numbers in pmc_commander.json, not trainer genes. ---
+
+	/** "guard_dist_m" (4): a defender within this of the access, on its level, counts for the guard share. Cm. */
+	float GuardDistCm = 400.f;
+	/** "guard_inset_m" (1.5): the access guard stands this far from the access, toward the roof. Cm. */
+	float GuardInsetCm = 150.f;
+	/** "min_spacing_m" (5): a cover slot this close to a claimed one scores x SpacingPenalty. Cm. */
+	float MinSpacingCm = 500.f;
+	/** "spacing_penalty" (0.25): applied once, not once per teammate. */
+	float SpacingPenalty = 0.25f;
+	/** "area_factor" (2): on the ground the defended area is the point's radius times this. */
+	float AreaFactor = 2.f;
+	/** "shift_after_s" (8): a sector shooter may relocate along his wedge after this long on the post. */
+	float ShiftAfterSeconds = 8.f;
+	/** "shift_no_target_s" (6): the shift also needs fire on him, or no target seen for this long. */
+	float ShiftNoTargetSeconds = 6.f;
+	/** "shift_cooldown_s" (20): the least time between two shifts of one shooter (no ping-pong). */
+	float ShiftCooldownSeconds = 20.f;
+	/** "defence_post_walks" (3): walks to a defence post that end short (or are refused) before he drops it. */
+	int32 DefencePostWalks = 3;
+	/** "sector_arc_deg" (180): the arc facing the attacker spawn, split across the sector shooters. */
+	float SectorArcDeg = 180.f;
+
 	// --- Target attention (user 2026-11-07: strike when the enemy looks away; trainer genes +-50 %) ---
 
 	/** Flank / Advance (not a close-quarters weapon's) / an attacker's Objective walk x (1 + this x (AttentionOff - 0.5)): moving while they look away is worth more. */
@@ -459,6 +493,29 @@ struct CODEXTACTICS_API FPmcFighterView
 	EPmcPostKind PostKind = EPmcPostKind::None;
 	float PostScore = 0.f;
 	bool bAtPost = false;
+	/**
+	 * G008: this defender has an access or sector post. Off it, before contact, only the walk (Ambush) scores, unless the
+	 * point pulls him (Retake / Occupy: then Objective onto the point, Hold on it; DefenderPointHold). In contact
+	 * (squad contact, a seen target, or fire on him) the walk is one order among others: shooting / TakeCover / Heal / FallBack
+	 * keep their normal scores; Advance / Flank stay 0. On it, FallBack / Flank / Advance / TakeCover score 0, so he does not
+	 * path off the roof. Default false.
+	 */
+	bool bHasDefencePost = false;
+	/**
+	 * G008: a sector shooter moves to the next spot of his own wedge. He needs shift_after_s on the post, plus fire on him or
+	 * shift_no_target_s with no target, plus the shift cooldown (PmcDefenceRules::ShouldSectorShift).
+	 * Default false, so Relocate scores exactly as it did before the flag existed.
+	 */
+	bool bSectorShift = false;
+	/** An enemy shot at him within the last couple of seconds (NotifyShotAt). Default false. */
+	bool bUnderFire = false;
+	/**
+	 * G008 follow-up (review finding 3): the one defender of a posted defence who occupies the point on a quiet push or a late
+	 * clock (time wins need a defender on the point, fix/pmc-arena-stalemate). A defender without a defence post always may.
+	 */
+	bool bDefenceOccupier = false;
+	/** Set by the subsystem from DefenderObjectiveToPoint before executing: a defender's Objective walk goes onto the point, not to his post. */
+	bool bObjectiveToPoint = false;
 };
 
 /** The squad as a whole. */
@@ -553,6 +610,26 @@ namespace PmcCommanderRules
 
 	/** The objective round's push (fix/pmc-arena-stalemate): an active objective and the team quiet for PushAfterSeconds (> 0). */
 	CODEXTACTICS_API bool IsPushing(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * The defender's pull onto the point (fix/pmc-arena-stalemate, restored by the G008 follow-up), 0..1 before the weight and health:
+	 * - Retake: attackers on the point and he is off it, 0.2 + 0.8 x HoldFrac (the more of their clock ran, the more urgent).
+	 *   Any defender, the guard included, may leave his post for it.
+	 * - Occupy: he is off the point on a quiet push (0.8) or a late clock (from 60 %, 0.9 at 85 %). With a posted defence only the
+	 *   occupier (bDefenceOccupier) does this; the others keep their posts. Without posts, everyone may.
+	 */
+	CODEXTACTICS_API float DefenderPointPull(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * Lead review 2 (A): a posted defender off his post, standing on the point (level-aware distance <= radius), whose pull is
+	 * still active there (the DefenderPointPull terms without the off-point gate): his Hold score, weight x pull x max(0.5,
+	 * health). 0 otherwise, including on his post and without a defence post. While it is > 0 the walk back to the post
+	 * (Ambush) scores 0, so the occupier / retaker stays on the point until the pull ends.
+	 */
+	CODEXTACTICS_API float DefenderPointHold(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/** A defender's Objective order goes onto the point: the pull outscores his walk back into the area / to his post. */
+	CODEXTACTICS_API bool DefenderObjectiveToPoint(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
 
 	/** The order is a walk the man commits to (advance / flank / fall back / relocate / take cover). */
 	CODEXTACTICS_API bool IsMoveOrder(EPmcOrder Order);

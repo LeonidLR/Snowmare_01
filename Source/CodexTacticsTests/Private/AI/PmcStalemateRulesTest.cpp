@@ -156,16 +156,24 @@ bool FPmcPushTest::RunTest(const FString&)
 	TestFalse(TEXT("no objective: no push"), PmcCommanderRules::IsPushing(Plain, Squad, W));
 
 	// The defender: onto the point when it goes quiet, and as the time limit nears (from 60 % of the round, full at 85 %).
-	FPmcFighterView Defender = Attacker(900.f); // within his overwatch (1200 cm without a band)
+	// The defenders win on time only standing on it (ResolveRound), so the G008 follow-up keeps this for a defender with no
+	// defence post; with posts only the occupier does it (PmcArenaObjectiveRulesTest). 900 cm is inside the D1 area.
+	FPmcFighterView Defender = Attacker(900.f);
 	Defender.Objective.Role = EPmcRole::Defender;
 	Squad.QuietSeconds = 0.f;
 	Defender.Objective.TimeFrac = 0.3f;
-	TestEqual(TEXT("defender early, in contact, within overwatch: stays"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.f);
+	TestEqual(TEXT("defender early, in contact, inside the area: stays"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.f);
 	Defender.Objective.TimeFrac = 0.9f;
 	TestEqual(TEXT("defender near the limit: onto the point 0.9"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.9f, 0.001f);
 	Defender.Objective.TimeFrac = 0.3f;
 	Squad.QuietSeconds = 31.f;
 	TestEqual(TEXT("defender, quiet 31 s: onto the point 0.8"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.8f, 0.001f);
+	FPmcFighterView Strayed = Attacker(1500.f);
+	Strayed.Objective.Role = EPmcRole::Defender;
+	TestEqual(TEXT("defender outside the area, quiet 31 s: the push 0.8 beats the walk back 0.7"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Strayed, Squad, W), 0.8f, 0.001f);
+	Squad.QuietSeconds = 0.f;
+	TestEqual(TEXT("defender outside the area, no push: the walk back 0.7"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Strayed, Squad, W), 0.7f, 0.001f);
+	Squad.QuietSeconds = 31.f;
 
 	// No cover from a stand-in (the objective point with no enemy known): it flapped with the Objective walk.
 	FPmcFighterView Open = Attacker(3000.f);
