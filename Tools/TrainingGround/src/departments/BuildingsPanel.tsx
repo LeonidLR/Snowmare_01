@@ -2,9 +2,10 @@
 // (src/levelgen/buildingTraversal.ts, docs/design/levelgen/BUILDING_GENERATOR.md section 5). Failing buildings first.
 import { useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
-import type { TraversalReport } from '../levelgen/buildingTraversal';
+import type { TraversalCode, TraversalReport } from '../levelgen/buildingTraversal';
 
-const CODE_RU: Record<string, string> = {
+/** Russian label per traversal code (Record<TraversalCode>: a new code without a label fails the typecheck). */
+const CODE_RU: Record<TraversalCode, string> = {
   unreachable_room: 'комната недостижима',
   unreachable_roof: 'крыша недостижима',
   unreachable_level: 'этаж недостижим',
@@ -40,7 +41,7 @@ export function BuildingsPanel({ report }: { report: TraversalReport }) {
               <span className="text-slate-500">комнаты {b.rooms.reachable}/{b.rooms.total}, этажи {b.levels.reachable.join(',') || '—'}{b.roof !== 'none' ? `, крыша ${b.roof === 'reachable' ? 'да' : 'нет'}` : ''}</span>
             </span>
             {b.issues.slice(0, 4).map((i, k) => (
-              <span key={k} className="pl-5 text-rose-300" title={i.message}>{CODE_RU[i.code] ?? i.code}{i.ref ? ` (${i.ref})` : ''}</span>
+              <span key={k} className={`pl-5 ${i.severity === 'warning' ? 'text-amber-300' : 'text-rose-300'}`} title={i.message}>{i.severity === 'warning' ? 'предупреждение: ' : ''}{CODE_RU[i.code] ?? i.code}{i.ref ? ` (${i.ref})` : ''}</span>
             ))}
           </li>
         ))}

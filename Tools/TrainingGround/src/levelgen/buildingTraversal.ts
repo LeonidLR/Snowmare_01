@@ -33,7 +33,26 @@ export type TraversalCode =
   | 'no_exterior_door'
   | 'stair_in_other_building';
 
+/** 'error' fails the building (blocks «Принять»); 'warning' is reported only (bands, D, shares - BUILDINGS_TECH_SPEC.md 2.1). */
+export type TraversalSeverity = 'error' | 'warning';
+
+/** The severity of every code (all current codes are errors). */
+export const TRAVERSAL_SEVERITY: Record<TraversalCode, TraversalSeverity> = {
+  unreachable_room: 'error',
+  unreachable_roof: 'error',
+  unreachable_level: 'error',
+  stair_steep: 'error',
+  stair_foot_blocked: 'error',
+  stair_top_blocked: 'error',
+  stair_foot_no_floor: 'error',
+  stair_top_no_floor: 'error',
+  gap_overshoot: 'error',
+  no_exterior_door: 'error',
+  stair_in_other_building: 'error',
+};
+
 export interface TraversalIssue {
+  severity: TraversalSeverity;
   code: TraversalCode;
   message: string;
   /** Stair / room id the issue is about. */
@@ -48,6 +67,11 @@ export interface BuildingTraversal {
   rooms: { total: number; reachable: number };
   levels: { walkable: number[]; reachable: number[] };
   roof: 'none' | 'reachable' | 'unreachable';
+}
+
+/** A building passes when it has no 'error' issue (warnings do not fail it). */
+export function traversalOk(issues: readonly TraversalIssue[]): boolean {
+  return !issues.some((i) => i.severity === 'error');
 }
 
 export interface TraversalReport {
@@ -134,16 +158,16 @@ function checkFlight(l: GenLayout, b: GenBuilding, st: Stair, issues: TraversalI
   const u: Vec2 = [d[0] / L, d[1] / L];
   const rise = (st.to - st.from) * LEVEL_HEIGHT;
   if (L + TRAVERSAL.runTol < rise * STAIR_RUN_PER_RISE) {
-    issues.push({ code: 'stair_steep', ref: st.id, message: `${st.id}: run ${Math.round(L)} cm for a ${rise} cm rise (> 35 deg)` });
+    issues.push({ severity: TRAVERSAL_SEVERITY.stair_steep, code: 'stair_steep', ref: st.id, message: `${st.id}: run ${Math.round(L)} cm for a ${rise} cm rise (> 35 deg)` });
   }
   const foot = strip(pos, mul(u, -1), TRAVERSAL.approachDepth, TRAVERSAL.flightWidth);
   const arrive = strip(top, u, TRAVERSAL.approachDepth, TRAVERSAL.flightWidth);
-  if (!solidAt(b, st.from, foot)) issues.push({ code: 'stair_foot_no_floor', ref: st.id, message: `${st.id}: no solid floor in the 150 cm approach at its foot (level ${st.from})` });
-  if (!solidAt(b, st.to, arrive)) issues.push({ code: 'stair_top_no_floor', ref: st.id, message: `${st.id}: no solid floor in the 150 cm landing after its top (level ${st.to})` });
+  if (!solidAt(b, st.from, foot)) issues.push({ severity: TRAVERSAL_SEVERITY.stair_foot_no_floor, code: 'stair_foot_no_floor', ref: st.id, message: `${st.id}: no solid floor in the 150 cm approach at its foot (level ${st.from})` });
+  if (!solidAt(b, st.to, arrive)) issues.push({ severity: TRAVERSAL_SEVERITY.stair_top_no_floor, code: 'stair_top_no_floor', ref: st.id, message: `${st.id}: no solid floor in the 150 cm landing after its top (level ${st.to})` });
   const bf = blockedOn(b, l, st.from, foot);
-  if (bf) issues.push({ code: 'stair_foot_blocked', ref: st.id, message: `${st.id}: ${bf} stands in the approach at its foot` });
+  if (bf) issues.push({ severity: TRAVERSAL_SEVERITY.stair_foot_blocked, code: 'stair_foot_blocked', ref: st.id, message: `${st.id}: ${bf} stands in the approach at its foot` });
   const bt = st.to < b.floors ? blockedOn(b, l, st.to, arrive) : null;
-  if (bt) issues.push({ code: 'stair_top_blocked', ref: st.id, message: `${st.id}: ${bt} stands in the landing after its top` });
+  if (bt) issues.push({ severity: TRAVERSAL_SEVERITY.stair_top_blocked, code: 'stair_top_blocked', ref: st.id, message: `${st.id}: ${bt} stands in the landing after its top` });
   // cause A: the slab gap above the flight must not reach past its top
   const fd = (b.floors_detail ?? []).find((x) => x.floor === st.to);
   for (const g of fd?.gaps ?? []) {
@@ -155,13 +179,13 @@ function checkFlight(l: GenLayout, b: GenBuilding, st: Stair, issues: TraversalI
     const behind = Math.max(...poly.map((p) => (pos[0] - p[0]) * u[0] + (pos[1] - p[1]) * u[1]));
     const wide = Math.max(...across);
     if (beyond > TRAVERSAL.gapOvershootTol) {
-      issues.push({ code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} reaches ${Math.round(beyond)} cm past the flight's top (the landing has a hole)` });
+      issues.push({ severity: TRAVERSAL_SEVERITY.gap_overshoot, code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} reaches ${Math.round(beyond)} cm past the flight's top (the landing has a hole)` });
     }
     if (behind > TRAVERSAL.gapOvershootTol) {
-      issues.push({ code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} reaches ${Math.round(behind)} cm behind the flight's foot` });
+      issues.push({ severity: TRAVERSAL_SEVERITY.gap_overshoot, code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} reaches ${Math.round(behind)} cm behind the flight's foot` });
     }
     if (wide > TRAVERSAL.flightWidth / 2 + 5 + TRAVERSAL.gapOvershootTol) {
-      issues.push({ code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} is ${Math.round(2 * wide)} cm wide for a ${TRAVERSAL.flightWidth} cm flight (cuts the next lane)` });
+      issues.push({ severity: TRAVERSAL_SEVERITY.gap_overshoot, code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} is ${Math.round(2 * wide)} cm wide for a ${TRAVERSAL.flightWidth} cm flight (cuts the next lane)` });
     }
   }
 }
@@ -175,14 +199,14 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
     if (b.roof_walkable) {
       const up = (l.ladders ?? []).some((ld) => ld.to === `roof:${b.id}`) || (b.stairs ?? []).some((st) => st.kind === 'external' && st.to >= b.floors);
       res.roof = up ? 'reachable' : 'unreachable';
-      if (!up) issues.push({ code: 'unreachable_roof', message: `${b.id}: walkable roof without a ladder or external stair onto it` });
+      if (!up) issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_roof, code: 'unreachable_roof', message: `${b.id}: walkable roof without a ladder or external stair onto it` });
     }
-    res.ok = issues.length === 0;
+    res.ok = traversalOk(issues);
     return res;
   }
   const hasDoor = (b.openings ?? []).some((o) => o.kind === 'door' && o.floor === 0) || (b.doors ?? []).some((d) => d.floor === 0)
     || (b.stairs ?? []).some((s) => s.kind === 'external');
-  if (!hasDoor) issues.push({ code: 'no_exterior_door', message: `${b.id}: enterable but has no exterior door` });
+  if (!hasDoor) issues.push({ severity: TRAVERSAL_SEVERITY.no_exterior_door, code: 'no_exterior_door', message: `${b.id}: enterable but has no exterior door` });
 
   for (const st of b.stairs ?? []) if (st.kind === 'stairwell') checkFlight(l, b, st, issues);
   // a flight (with its approach / landing boxes) inside another building's footprint has no navmesh: that block is solid
@@ -196,7 +220,7 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
       if (o.id === b.id) continue;
       const [[ox0, oy0], [ox1, oy1]] = o.footprint;
       if (Math.min(fx1, ox1) - Math.max(fx0, ox0) > 1 && Math.min(fy1, oy1) - Math.max(fy0, oy0) > 1) {
-        issues.push({ code: 'stair_in_other_building', ref: st.id, message: `${st.id}: the flight or its approach lies inside ${o.id}'s footprint` });
+        issues.push({ severity: TRAVERSAL_SEVERITY.stair_in_other_building, code: 'stair_in_other_building', ref: st.id, message: `${st.id}: the flight or its approach lies inside ${o.id}'s footprint` });
         break;
       }
     }
@@ -206,10 +230,10 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
   const noDrops: GenBuilding = { ...b, floor_holes: [], roof_holes: [] };
   const reach = checkBuildingReachability(l, noDrops);
   res.rooms = { total: reach.roomsTotal, reachable: reach.roomsReachable };
-  for (const r of reach.unreachableRooms) issues.push({ code: 'unreachable_room', ref: r, message: `${r}: not reachable from an exterior door without a drop` });
+  for (const r of reach.unreachableRooms) issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_room, code: 'unreachable_room', ref: r, message: `${r}: not reachable from an exterior door without a drop` });
   if (b.roof_walkable) {
     res.roof = reach.roofReachable ? 'reachable' : 'unreachable';
-    if (!reach.roofReachable) issues.push({ code: 'unreachable_roof', message: `${b.id}: the walkable roof is not reachable without a drop` });
+    if (!reach.roofReachable) issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_roof, code: 'unreachable_roof', message: `${b.id}: the walkable roof is not reachable without a drop` });
   }
 
   // levels: every storey with a slab is walkable; reachable = climbed from the ground by the flights, ladders and hatch
@@ -235,9 +259,9 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
   const num = (a: number, c: number) => a - c;
   res.levels = { walkable: [...walkable].sort(num), reachable: [...reached].filter((lv) => lv < b.floors).sort(num) };
   for (const lv of walkable) {
-    if (!reached.has(lv)) issues.push({ code: 'unreachable_level', message: `${b.id}: storey ${lv} is not reachable without a drop` });
+    if (!reached.has(lv)) issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_level, code: 'unreachable_level', message: `${b.id}: storey ${lv} is not reachable without a drop` });
   }
-  res.ok = issues.length === 0;
+  res.ok = traversalOk(issues);
   return res;
 }
 

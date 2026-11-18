@@ -21,6 +21,19 @@ const OBJ_CFG = v2cfg.objectives;
 
 export const LEVELGEN_SCHEMA = 'codex.levelgen_layout/1';
 /**
+ * Layout schema /2 (ADR-0002, BUILDINGS_TECH_SPEC.md section 2): the building generator's fields (opening states, balconies,
+ * fire escapes, stories, routes). The defaults change meaning - a missing door / window `state` is open / broken in /1 and the
+ * opening-states default table in /2 (openingStates.ts) - so readers branch on the schema string. /1 files load unchanged.
+ */
+export const LEVELGEN_SCHEMA_V2 = 'codex.levelgen_layout/2';
+/** Every layout schema string the readers accept. */
+export const LEVELGEN_SCHEMAS = [LEVELGEN_SCHEMA, LEVELGEN_SCHEMA_V2] as const;
+export type LevelgenSchema = (typeof LEVELGEN_SCHEMAS)[number];
+/** True for 'codex.levelgen_layout/1' and '/2'. */
+export function isLevelgenSchema(s: unknown): s is LevelgenSchema {
+  return (LEVELGEN_SCHEMAS as readonly unknown[]).includes(s);
+}
+/**
  * HEIGHT LEVELS (game designer decision 2026-11-01): every map is split into discrete levels 3 m apart - level -1 = -3 m (the rail
  * cut / canal, pits, trenches, basements), 0 = the ground, +1 = +3 m (first floors, low roofs, platforms, raised rims), +2 = +6 m
  * (second floors, hall roofs, tower tops), upward in 3 m steps when needed. A layer (a walkable surface: 'ground', 'cut',
@@ -99,7 +112,64 @@ export interface WallOpening {
   top_height?: number;
   /** Facing normal or sight yaw, degrees. */
   yaw?: number;
+  /**
+   * Schema /2: the opening's state (opening-states.md 1 / 2). Absent = the default of the layout's schema - read it through
+   * openingStates.ts effectiveOpeningState, never directly.
+   */
+  state?: DoorState | WindowState;
 }
+
+/** Door / gate / shutter states (opening-states.md 1). */
+export const DOOR_STATES = ['open', 'closed', 'locked', 'barricaded', 'sealed'] as const;
+export type DoorState = (typeof DOOR_STATES)[number];
+/** Window / loophole states (opening-states.md 2); loopholes are always 'fixed'. */
+export const WINDOW_STATES = ['broken', 'glazed', 'barred', 'boarded', 'fixed'] as const;
+export type WindowState = (typeof WINDOW_STATES)[number];
+/** The facade side of a building (fire escapes). */
+export type Side = 'north' | 'south' | 'east' | 'west';
+
+/** Schema /2: a balcony on an upper storey (building local frame, cm); depth >= 150 at fire-escape stops. */
+export interface Balcony { id: string; floor: number; rect: [Vec2, Vec2]; door_id: string; rail_cm: number }
+/** Schema /2: an external fire escape (stair or ladder) with its stops (building local frame, cm). */
+export interface FireEscape {
+  id: string;
+  kind: 'stair' | 'ladder';
+  side: Side;
+  /** Foot position on the facade. */
+  at: Vec2;
+  /** Approach cell of the ground stop. */
+  ground: Vec2;
+  stops: { floor: number; balcony_id: string }[];
+  to_roof: boolean;
+  down_only?: boolean;
+  /** kind 'ladder': its entries in layout.ladders. */
+  ladder_ids?: string[];
+}
+/** Schema /2: a snow drift up to an opening (story 10); slope <= 35 deg. */
+export interface SnowRamp { id: string; from: Vec2; to_opening: string; width_cm: number }
+/** Schema /2: a breachable wall panel; `wide_with` = the adjacent panel id of a wide breach. */
+export interface BreachPanel {
+  id: string;
+  wall: string;
+  floor: number;
+  at: Vec2;
+  width_cm: 200;
+  wide_with?: string;
+  hole: [number, number];
+  links: [string, string];
+  score: number;
+}
+/** Schema /2: a link between two buildings. */
+export interface BuildingLink { id: string; kind: 'shared_wall_hole' | 'plank' | 'roof_bridge'; a: string; b: string; at: Vec2[] }
+/** Schema /2: one applied building story (building-stories GDD). */
+export interface StoryInstance { id: string; bricks: string[]; seed: number; author: 'survivors' | 'pmc' | 'cold' | 'decay'; outcome?: 'held' | 'fell' }
+/** Schema /2: a stored route through a building; recomputed on load when its cost_hash differs from the layout's. */
+export interface Route { legs: { from: string; to: string; mode: string }[]; cost: number; detour: number; cost_hash: string }
+/** Schema /2: building role (building-stories GDD). */
+export type BuildingRole = 'objective' | 'garrison' | 'overwatch' | 'transit' | 'background';
+/** Schema /2: district theme. */
+export type DistrictTheme = 'pmc' | 'survivors' | 'cold' | 'decay' | 'mixed';
+export interface District { id: string; lots: string[]; theme: DistrictTheme }
 
 export interface GenPartition {
   id: string;
@@ -212,7 +282,13 @@ export interface Door { pos: Vec2; floor: number; /** The wall id the door is cu
  * face outside the building to `mid` (the ramp's top end) and crosses onto the roof by a flat landing mid -> top. The builder cuts
  * the slab on `to` open above the ramp's last 3 m (the stairwell opening).
  */
-export interface Stair { id: string; pos: Vec2; from: number; to: number; kind: 'stairwell' | 'external'; /** The top landing point (on `to`). */ top: Vec2; mid?: Vec2 }
+export interface Stair {
+  id: string; pos: Vec2; from: number; to: number; kind: 'stairwell' | 'external'; /** The top landing point (on `to`). */ top: Vec2; mid?: Vec2;
+  /** Schema /2: the flight is impassable (stories 4, 13); the validator removes its edge (S1 later). */
+  blocked?: 'rubble' | 'burnt' | 'barricade';
+  /** Schema /2: one-way, top -> foot only. */
+  down_only?: boolean;
+}
 /** The stair's horizontal run per metre of rise (35 deg; the characters walk up to 44 deg). */
 export const STAIR_RUN_PER_RISE = 1.43;
 
@@ -254,6 +330,20 @@ export interface GenBuilding {
   /** Holes in an upper floor's slab (down one floor): { pos, floor }. */
   floor_holes: { pos: Vec2; floor: number }[];
   set_piece: SetPiece;
+  // --- schema /2 (BUILDINGS_TECH_SPEC.md section 2), all optional ---
+  role?: BuildingRole;
+  balconies?: Balcony[];
+  fire_escapes?: FireEscape[];
+  snow_ramps?: SnowRamp[];
+  breach_panels?: BreachPanel[];
+  /** 0-2 applied stories (F2 second story). */
+  stories?: StoryInstance[];
+  key_route?: Route;
+  breach_route?: Route;
+  /** Opening id of the fastest entry. */
+  fast_entry?: string;
+  /** Opening id of the quietest entry. */
+  quiet_entry?: string;
 }
 
 export interface GenCut {
@@ -311,7 +401,14 @@ export interface SpawnPoint { id: string; pos: Vec2; kind: 'edge' | 'patrol' | '
 export interface PatrolRoute { id: string; points: Vec2[] }
 
 export interface GenLayout {
+  /** LEVELGEN_SCHEMA ('/1') or LEVELGEN_SCHEMA_V2 ('/2'); kept `string` so JSON-loaded layouts type-check unchanged. */
   schema: string;
+  /** Schema /2: sha1 of building_route_costs.json; stored routes with another hash are recomputed. */
+  cost_hash?: string;
+  /** Schema /2: districts of lots with a theme. */
+  districts?: District[];
+  /** Schema /2: links between buildings. */
+  building_links?: BuildingLink[];
   name: string;
   comment?: string;
   /** The reference profile id and the generation inputs (reproducible). */
@@ -415,7 +512,7 @@ export function validateGenLayout(data: unknown): string[] {
   if (!data || typeof data !== 'object') return ['expected a JSON object'];
   const l = data as Partial<GenLayout>;
   const e: string[] = [];
-  if (l.schema !== LEVELGEN_SCHEMA) e.push(`schema must be "${LEVELGEN_SCHEMA}"`);
+  if (!isLevelgenSchema(l.schema)) e.push(`schema must be "${LEVELGEN_SCHEMA}" or "${LEVELGEN_SCHEMA_V2}"`);
   if (!isNum(l.seed)) e.push('seed: expected a number');
   if (typeof l.profile !== 'string') e.push('profile: expected the reference profile id');
   if (!isVec(l.end)) e.push('end: expected [x, y]');

@@ -4,7 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
-import { validateBuilding, validateBuildings } from './buildingTraversal.ts';
+import type { TraversalIssue } from './buildingTraversal.ts';
+import { TRAVERSAL_SEVERITY, traversalOk, validateBuilding, validateBuildings } from './buildingTraversal.ts';
 import { expandLayout } from './expand.ts';
 import { generateLayout, planStairCore, STAIR_APPROACH, STAIR_FLIGHT_W } from './generate.ts';
 import type { Profile } from './profile.ts';
@@ -127,4 +128,36 @@ test('planStairCore: no core when both long-wall sides intersect a neighbour; th
   // a neighbour lying wholly inside the core lane (not touching r's edges) also blocks that side
   const inner = planStairCore('B_t', r, 2, [], [[[0.5, 3], [1.0, 4]]]);
   assert.equal(inner?.side, 'east');
+});
+
+test('severity (BUILDINGS_TECH_SPEC 2.1): every existing code is an error, every raised issue carries it', () => {
+  assert.deepEqual(Object.keys(TRAVERSAL_SEVERITY).sort(), ['gap_overshoot', 'no_exterior_door', 'stair_foot_blocked', 'stair_foot_no_floor',
+    'stair_in_other_building', 'stair_steep', 'stair_top_blocked', 'stair_top_no_floor', 'unreachable_level', 'unreachable_roof', 'unreachable_room']);
+  for (const [code, sev] of Object.entries(TRAVERSAL_SEVERITY)) assert.equal(sev, 'error', code);
+  const cases = [
+    twoStorey({ floors_detail: [{ floor: 1, height_z: 300, gaps: [{ id: 'g', kind: 'stairwell', poly: [[60, 260], [140, 260], [140, 769], [60, 769]] }], rooms: [] }] } as Partial<GenBuilding>),
+    twoStorey({ stairs: [{ id: 'st', pos: [100, 120], from: 0, to: 1, kind: 'stairwell', top: [100, 549] }] } as Partial<GenBuilding>),
+    twoStorey({ stairs: [{ id: 'st', pos: [100, 300], from: 0, to: 1, kind: 'stairwell', top: [100, 500] }] } as Partial<GenBuilding>),
+    twoStorey({ stairs: [] } as Partial<GenBuilding>),
+    twoStorey({ doors: [], openings: [] } as Partial<GenBuilding>),
+    twoStorey({ enterable: false, roof_walkable: true } as Partial<GenBuilding>),
+  ];
+  const seen = new Set<string>();
+  for (const c of cases) {
+    const r = validateBuilding(c.l, c.b);
+    assert.ok(r.issues.length > 0, 'each case raises an issue');
+    for (const i of r.issues) { assert.equal(i.severity, 'error', `${i.code} severity`); seen.add(i.code); }
+    assert.equal(r.ok, false, 'an error fails the building');
+  }
+  for (const code of ['gap_overshoot', 'stair_foot_no_floor', 'stair_steep', 'unreachable_level', 'no_exterior_door', 'unreachable_roof']) assert.ok(seen.has(code), code);
+});
+
+test('ok = no error issues: a warning-only building passes, one error fails it', () => {
+  const warn: TraversalIssue = { severity: 'warning', code: 'unreachable_room', message: 'w' };
+  const err: TraversalIssue = { severity: 'error', code: 'stair_steep', message: 'e' };
+  assert.equal(traversalOk([]), true);
+  assert.equal(traversalOk([warn, warn]), true, 'warnings only');
+  assert.equal(traversalOk([warn, err]), false);
+  const clean = twoStorey();
+  assert.equal(validateBuilding(clean.l, clean.b).ok, true);
 });
