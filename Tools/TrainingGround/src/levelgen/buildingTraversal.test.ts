@@ -103,3 +103,13 @@ test('the audit is reproduced on the accepted pre-fix X6 / X4 layouts (skipped o
     assert.ok(codes.has('stair_foot_no_floor') && codes.has('gap_overshoot'), `${name}: causes B and A are both found (${[...codes].join(', ')})`);
   }
 });
+
+test('a stair core never lands inside a neighbouring building (2026-11-18 engine test: B_hall_n inside B_office_w)', () => {
+  const l = generateLayout({ profile, seed: 1, params: { size_m: [177, 124], density: 1, variants: 3, verticality: 3 } });
+  const rep = validateBuildings(l);
+  const inOther = rep.buildings.flatMap((b) => b.issues.filter((i) => i.code === 'stair_in_other_building'));
+  assert.deepEqual(inOther, []);
+  // the old accepted X6 (pre-fix) keeps reproducing it
+  const old = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x6.json'), 'utf8')) as GenLayout;
+  assert.ok(validateBuildings(old).buildings.some((b) => b.issues.some((i) => i.code === 'stair_in_other_building')));
+});

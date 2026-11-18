@@ -30,7 +30,8 @@ export type TraversalCode =
   | 'stair_foot_no_floor'
   | 'stair_top_no_floor'
   | 'gap_overshoot'
-  | 'no_exterior_door';
+  | 'no_exterior_door'
+  | 'stair_in_other_building';
 
 export interface TraversalIssue {
   code: TraversalCode;
@@ -184,6 +185,22 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
   if (!hasDoor) issues.push({ code: 'no_exterior_door', message: `${b.id}: enterable but has no exterior door` });
 
   for (const st of b.stairs ?? []) if (st.kind === 'stairwell') checkFlight(l, b, st, issues);
+  // a flight (with its approach / landing boxes) inside another building's footprint has no navmesh: that block is solid
+  // (2026-11-18 engine test: B_hall_n's core stood inside the B_office_w facade, the TS graph called it reachable)
+  for (const st of b.stairs ?? []) {
+    if (st.kind !== 'stairwell') continue;
+    const hw = TRAVERSAL.flightWidth / 2, ap = TRAVERSAL.approachDepth;
+    const fx0 = Math.min(st.pos[0], st.top[0]) - (st.pos[0] === st.top[0] ? hw : ap), fx1 = Math.max(st.pos[0], st.top[0]) + (st.pos[0] === st.top[0] ? hw : ap);
+    const fy0 = Math.min(st.pos[1], st.top[1]) - (st.pos[1] === st.top[1] ? hw : ap), fy1 = Math.max(st.pos[1], st.top[1]) + (st.pos[1] === st.top[1] ? hw : ap);
+    for (const o of l.buildings) {
+      if (o.id === b.id) continue;
+      const [[ox0, oy0], [ox1, oy1]] = o.footprint;
+      if (Math.min(fx1, ox1) - Math.max(fx0, ox0) > 1 && Math.min(fy1, oy1) - Math.max(fy0, oy0) > 1) {
+        issues.push({ code: 'stair_in_other_building', ref: st.id, message: `${st.id}: the flight or its approach lies inside ${o.id}'s footprint` });
+        break;
+      }
+    }
+  }
 
   // rooms + roof (no drops: floor holes / roof holes are excluded from the graph)
   const noDrops: GenBuilding = { ...b, floor_holes: [], roof_holes: [] };

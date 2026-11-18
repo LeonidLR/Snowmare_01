@@ -14,6 +14,7 @@ const CODE_RU: Record<string, string> = {
   stair_foot_no_floor: 'нет пола у подножия марша',
   stair_top_no_floor: 'нет пола на площадке после марша',
   gap_overshoot: 'дыра в перекрытии за маршем',
+  stair_in_other_building: 'марш внутри соседнего здания',
   no_exterior_door: 'нет наружной двери',
 };
 
