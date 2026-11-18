@@ -89,10 +89,12 @@ class BuildLevelGenPmcTest(unittest.TestCase):
         self.assertEqual(squads[0]["post"]["pos"], [-1500, 4910, 900], "the post position refreshed")
         self.assertEqual(squads[2]["spawn"], "random", "the hand squad kept")
 
-    def test_rebuild_without_posts_keeps_old_list_other_layout_starts_fresh(self):
+    def test_rebuild_without_posts_drops_generated_posts_other_layout_starts_fresh(self):
         builder.write_level_json(self.layout(), MAP)
         builder.write_level_json(self.layout(pmc=False), MAP)
-        self.assertEqual(len(self.read()["pmc_squads"]), 2, "same layout, no posts now -> the old list stays")
+        posts = [e for e in self.read().get("pmc_squads", []) if isinstance(e.get("post"), dict)]
+        self.assertEqual(posts, [], "the «ЧВК» toggle off -> no generated post entries stay in the level JSON (087 lead review)")
+        builder.write_level_json(self.layout(), MAP)
         data = self.read()
         data["levelgen_layout"] = "Content/Data/LevelGen/accepted/other.json"
         data["pmc_squads"][0]["count"] = 6

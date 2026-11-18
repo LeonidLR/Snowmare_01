@@ -982,11 +982,12 @@ def pmc_squads_of(layout):
 def merge_pmc_squads(old, new):
     """A rebuild from the SAME layout keeps the per-map tuned pmc_squads (like pressure / cheats): an old entry with the same post
     (id + kind) keeps its tuned keys (count, weights, posture, delay_s, seed, ...) and takes the new post position; hand entries
-    without a post (e.g. "spawn": "random") stay; old post entries the layout no longer has are dropped. No new posts -> the old list."""
+    without a post (e.g. "spawn": "random") stay; old post entries the layout no longer has are dropped. No new posts -> only the hand entries."""
     if not isinstance(old, list):
         return new
     if not new:
-        return old
+        # No posts in this layout (the page's «ЧВК» toggle was off): generated post entries go, hand entries stay (087 lead review).
+        return [e for e in old if not (isinstance(e, dict) and isinstance(e.get("post"), dict))]
     by_post = {}
     for e in old:
         post = e.get("post") if isinstance(e, dict) else None
