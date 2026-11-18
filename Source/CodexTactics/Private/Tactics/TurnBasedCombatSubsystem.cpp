@@ -3809,6 +3809,7 @@ void UTurnBasedCombatSubsystem::ExecuteEnemyTurn(AActor* Enemy)
 			Candidate.Cell = Cell;
 			Candidate.PathCost = Cost;
 			Candidate.ArcMultiplier = FGorky17Utils::CalculateAttackArc(Cell, TargetPos, FGorky17Utils::FacingToVector(TargetState->Facing)).DamageMultiplier;
+			Candidate.bCanBite = CanBiteFromCell(Enemy, Target, Cell); // G007 final review 2: no parking below a ledge
 			Paths.Add(Path);
 		}
 		const int32 Chosen = EnemyTurnRules::ChooseMeleeCell(Profile, Cells, State->AP);
@@ -3903,6 +3904,49 @@ void UTurnBasedCombatSubsystem::ExecuteEnemyTurn(AActor* Enemy)
 	EnemyAttack(Enemy, Target, TargetPos);
 }
 
+bool UTurnBasedCombatSubsystem::CanBiteFromCell(const AActor* Enemy, const AActor* Target, const FIntPoint& Cell) const
+{
+	const UWorld* World = GetWorld();
+	if (!Enemy || !Target || !World || !Grid || !Enemy->IsA<ACharacter>() || !Target->IsA<ACharacter>())
+	{
+		return true; // the grid adjacency alone (no characters: no ground rule)
+	}
+	const FTurnUnitState* State = States.Find(Enemy);
+	const FVector EnemyFeet = CombatGround::FeetOf(*Enemy);
+	const FVector TargetFeet = CombatGround::FeetOf(*Target);
+	FVector From = EnemyFeet;
+	if (!State || State->GridPos != Cell)
+	{
+		const FVector CellWorld = Grid->GridToWorld(Cell);
+		From = FVector(CellWorld.X, CellWorld.Y, EnemyFeet.Z); // StartMover keeps the walker's height
+	}
+	const AEnemyCharacter* EnemyCharacter = Cast<AEnemyCharacter>(Enemy);
+	const float Range = EnemyAIRules::GridMeleeRange(EnemyCharacter ? EnemyCharacter->GetAttackRange() : 0.f,
+		FVector::Dist2D(From, TargetFeet), FireGateRules::GetConfig().MeleeReach);
+	const AActor* Ignore[] = { Enemy, Target };
+	return CombatGround::CanMeleeAt(*World, From, TargetFeet, Range, Ignore);
+}
+
+bool UTurnBasedCombatSubsystem::HasBiteCell(const AActor* Enemy, const AActor* Target, const FIntPoint& TargetPos, const TSet<FIntPoint>& Fear) const
+{
+	const FTurnUnitState* State = States.Find(Enemy);
+	if (!State || !Grid)
+	{
+		return false;
+	}
+	const FIntPoint Offsets[] = { FIntPoint(1, 0), FIntPoint(-1, 0), FIntPoint(0, 1), FIntPoint(0, -1) };
+	for (const FIntPoint& Offset : Offsets)
+	{
+		const FIntPoint Cell = TargetPos + Offset;
+		const bool bFree = Cell == State->GridPos || (Grid->IsValidCell(Cell) && Grid->IsCellWalkable(Cell) && !Fear.Contains(Cell));
+		if (bFree && CanBiteFromCell(Enemy, Target, Cell))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
 void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const FIntPoint& TargetPos)
 {
 	FTurnUnitState* State = States.Find(Enemy);
@@ -3919,25 +3963,25 @@ void UTurnBasedCombatSubsystem::EnemyAttack(AActor* Enemy, AActor* Target, const
 		FinishEnemyTurn(0.25f); // still on the way (UE: no pointless step back after the approach)
 		return;
 	}
-	// G007: the real-time ground rule (EnemyAIRules::CanMeleeOnGround): a neighbour up a 1.1 m ledge or over the height cap is
-	// out of reach in turn-based too; on flat ground / a shared slope the grid neighbour bites (GridMeleeRange).
-	if (Enemy->IsA<ACharacter>() && Target->IsA<ACharacter>() && GetWorld())
-	{
-		const FVector EnemyFeet = CombatGround::FeetOf(*Enemy);
-		const FVector TargetFeet = CombatGround::FeetOf(*Target);
-		const AEnemyCharacter* EnemyCharacter = Cast<AEnemyCharacter>(Enemy);
-		const float Range = EnemyAIRules::GridMeleeRange(EnemyCharacter ? EnemyCharacter->GetAttackRange() : 0.f,
-			FVector::Dist2D(EnemyFeet, TargetFeet), FireGateRules::GetConfig().MeleeReach);
-		const AActor* Ignore[] = { Enemy, Target };
-		if (!CombatGround::CanMeleeAt(*GetWorld(), EnemyFeet, TargetFeet, Range, Ignore))
-		{
-			Log(FString::Printf(TEXT("%s cannot reach %s from here (height)"), *NameOf(Enemy), *NameOf(Target)));
-			FinishEnemyTurn(0.25f);
-			return;
-		}
-	}
 	if (State->AP < Profile.AttackAPCost)
 	{
+		if (Profile.bHitAndRun)
+		{
+			EnemyRetreat(Enemy, TargetPos);
+		}
+		else
+		{
+			FinishEnemyTurn(0.25f);
+		}
+		return;
+	}
+	// G007: the real-time ground rule (EnemyAIRules::CanMeleeOnGround): a neighbour up a 1.1 m ledge or over the height cap is
+	// out of reach in turn-based too; on flat ground / a shared slope the grid neighbour bites (GridMeleeRange). The target and
+	// cell choice use the same rule (CanBiteFromCell), so this only fires when no bite cell was left; the AP / hit-and-run
+	// branch above runs first and a hit-and-run enemy still steps away here (final review 2).
+	if (!CanBiteFromCell(Enemy, Target, State->GridPos))
+	{
+		Log(FString::Printf(TEXT("%s cannot reach %s from here (height)"), *NameOf(Enemy), *NameOf(Target)));
 		if (Profile.bHitAndRun)
 		{
 			EnemyRetreat(Enemy, TargetPos);
@@ -4059,6 +4103,7 @@ AActor* UTurnBasedCombatSubsystem::ChooseEnemyTarget(AActor* Enemy, bool bRanged
 	TArray<AOperativeCharacter*> Operatives;
 	TArray<FIntPoint> Cells;
 	TArray<FEnemyTacticsTarget> Targets;
+	TArray<bool> HeightBlocked;
 	for (const TWeakObjectPtr<AOperativeCharacter>& Member : Squad)
 	{
 		const FTurnUnitState* MemberState = GetUnitState(Member.Get());
@@ -4078,6 +4123,10 @@ AActor* UTurnBasedCombatSubsystem::ChooseEnemyTarget(AActor* Enemy, bool bRanged
 		Target.bUsable = bRanged || Fear.IsEmpty()
 			|| TurnManhattan(State->GridPos, MemberState->GridPos) == 1
 			|| !Grid->FindPathToAdjacent(State->GridPos, MemberState->GridPos, State->AP + 8, true, Fear).IsEmpty();
+		// G007 final review 2: melee only goes for an operative it can bite from some neighbouring cell (not one up a ledge).
+		const bool bHeightBlocked = !bRanged && !HasBiteCell(Enemy, Member.Get(), MemberState->GridPos, Fear);
+		Target.bUsable = Target.bUsable && !bHeightBlocked;
+		HeightBlocked.Add(bHeightBlocked);
 		Operatives.Add(Member.Get());
 		Cells.Add(MemberState->GridPos);
 	}
@@ -4096,15 +4145,19 @@ AActor* UTurnBasedCombatSubsystem::ChooseEnemyTarget(AActor* Enemy, bool bRanged
 	int32 Chosen = EnemyTacticsRules::ChooseTarget(Tactics, Grid->GridToWorld(State->GridPos), Targets);
 	if (Chosen == INDEX_NONE)
 	{
-		// Nobody reachable: the nearest one (it walks to the fire's edge and growls, Godot).
-		int32 BestDistance = TNumericLimits<int32>::Max();
-		for (int32 Index = 0; Index < Cells.Num(); ++Index)
+		// Nobody reachable: the nearest one (it walks to the fire's edge and growls, Godot) - one it could bite past the fire
+		// first; the nearest operative up out of reach only when every one is (G007 final review 2).
+		for (int32 Pass = 0; Pass < 2 && Chosen == INDEX_NONE; ++Pass)
 		{
-			const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, Cells[Index]);
-			if (Distance < BestDistance)
+			int32 BestDistance = TNumericLimits<int32>::Max();
+			for (int32 Index = 0; Index < Cells.Num(); ++Index)
 			{
-				BestDistance = Distance;
-				Chosen = Index;
+				const int32 Distance = TurnBasedRules::CellDistance(State->GridPos, Cells[Index]);
+				if ((Pass == 1 || !HeightBlocked[Index]) && Distance < BestDistance)
+				{
+					BestDistance = Distance;
+					Chosen = Index;
+				}
 			}
 		}
 	}

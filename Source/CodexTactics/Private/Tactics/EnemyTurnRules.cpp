@@ -82,7 +82,7 @@ int32 EnemyTurnRules::ChooseMeleeCell(const FEnemyTurnProfile& Profile, const TA
 	for (int32 Index = 0; Index < Cells.Num(); ++Index)
 	{
 		const FEnemyMeleeCell& Cell = Cells[Index];
-		if (Cell.PathCost < 0)
+		if (Cell.PathCost < 0 || !Cell.bCanBite)
 		{
 			continue;
 		}
