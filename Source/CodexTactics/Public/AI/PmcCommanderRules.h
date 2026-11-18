@@ -519,6 +519,11 @@ struct CODEXTACTICS_API FPmcFighterView
 	/** Seconds since that in-range contact began (0 while none). ambush_max_hold_s for an overwatch post counts from here. */
 	float PostRangeContactSeconds = 0.f;
 	/**
+	 * G008b: his feet are on the tactical overwatch post (IsAtPost against that post, not the G008 sector post).
+	 * bAtPost can be the sector post after he has left the roof; this flag is the roof. Default false.
+	 */
+	bool bOnOverwatchRoof = false;
+	/**
 	 * G008 follow-up (review finding 3): the one defender of a posted defence who occupies the point on a quiet push or a late
 	 * clock (time wins need a defender on the point, fix/pmc-arena-stalemate). A defender without a defence post always may.
 	 */
@@ -817,11 +822,12 @@ namespace PmcCommanderRules
 	CODEXTACTICS_API float OverwatchEngagementCm(float RoofRangeCm, float WeaponRangeCm);
 
 	/**
-	 * G008b: a defender standing on an overwatch roof post keeps it. Open while no known enemy is inside the post's engagement
-	 * range, and for AmbushMaxHoldSeconds after that in-range contact. Closed when he is hit (bUnderFire), suppressed
-	 * (bSuppressed), or the post is untenable (FallBack's reasons: wounded below fall_back_below, outnumbered, or too close
-	 * for his band). A G008 defence post on the same man does not cancel it: the squad shows him as the overwatch poster
-	 * while he stands on that roof. Attackers, other post kinds, and men off the post are outside this hold.
+	 * G008b: a defender whose feet are on an overwatch roof (bOnOverwatchRoof) keeps it. Open while no known enemy is inside
+	 * the post's engagement range, and for AmbushMaxHoldSeconds after that in-range contact. Closed when he is hit
+	 * (bUnderFire), suppressed (bSuppressed), or the post is untenable for him (wounded below fall_back_below, or too
+	 * close for his band). A mate dying does not close it: outnumbered still scores FallBack, and on X4 seed 11 that
+	 * score lost to the area walk, so Lind left B_hall_n at full health before he fired. Standing on the G008 sector
+	 * post does not open it (bAtPost there is the ground post). Attackers and other post kinds are outside this hold.
 	 */
 	CODEXTACTICS_API bool IsOverwatchHoldOpen(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
 
