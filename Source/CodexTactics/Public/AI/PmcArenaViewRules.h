@@ -54,6 +54,19 @@ namespace PmcArenaViewRules
 	CODEXTACTICS_API TArray<FVector> FramedFighters(const TArray<FVector>& Fighters, const TArray<int32>& Sides, bool bHasObjective, const FVector& Objective,
 		float IsolationCm = 3000.f);
 
+	/**
+	 * The contact the camera frames (worker-ops 2026-11-18, the designer could not read the X4 clips: every live fighter + the objective
+	 * spread over ~100 m kept the camera at its 110 m ceiling). The anchor = the closest pair of opposing fighters (3D distance); a pair
+	 * whose midpoint lies within StickyCm of PrevLook counts its distance / StickyFactor (no flicker between two equal fights). A pair
+	 * within ContactCm is a contact: the result is every fighter within FocusRadiusCm (2D) of either anchor man, plus the objective when
+	 * bHasObjective and it lies that close too. No contact yet (or one side gone): PreferredSide's men (the attackers on the move; INDEX_NONE
+	 * or none alive = everybody) through FramedFighters, the objective added when within FocusRadiusCm of one of them.
+	 * Sides[i] = fighter i's side (missing = side 0). Returns the points to frame (empty when no fighters).
+	 */
+	CODEXTACTICS_API TArray<FVector> ContactFocus(const TArray<FVector>& Fighters, const TArray<int32>& Sides, int32 PreferredSide, bool bHasObjective,
+		const FVector& Objective, bool bHasPrevLook, const FVector& PrevLook, float ContactCm = 4000.f, float FocusRadiusCm = 2500.f,
+		float StickyCm = 1500.f, float StickyFactor = 1.25f);
+
 	/** The eye of View: back from the look point against the view direction (pitch down, yaw) by the distance. */
 	CODEXTACTICS_API FVector EyeOf(const FPmcArenaView& View, const FPmcArenaFraming& Framing);
 

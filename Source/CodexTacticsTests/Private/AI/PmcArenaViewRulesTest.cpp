@@ -83,6 +83,50 @@ bool FPmcArenaClipViewFramedFightersTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcArenaClipViewContactFocusTest, "CodexTactics.AI.PmcArena.ClipView.ContactFocus",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcArenaClipViewContactFocusTest::RunTest(const FString&)
+{
+	using PmcArenaViewRules::ContactFocus;
+	// X4-like: attackers (side 1) 10 m from one defender on the street; two defenders on far roofs 80-100 m off; the objective 120 m away.
+	const TArray<FVector> Fighters = { FVector(1000.f, 0.f, 0.f), FVector(8000.f, 0.f, 900.f), FVector(0.f, 10000.f, 300.f),
+		FVector(0.f, 0.f, 0.f), FVector(-300.f, 200.f, 0.f), FVector(-200.f, -400.f, 0.f) };
+	const TArray<int32> Sides = { 0, 0, 0, 1, 1, 1 };
+	const FVector Objective(12000.f, 0.f, 0.f);
+	TArray<FVector> Kept = ContactFocus(Fighters, Sides, 1, true, Objective, false, FVector::ZeroVector);
+	TestEqual(TEXT("contact: the defender + the three attackers"), Kept.Num(), 4);
+	TestFalse(TEXT("the far roof man is not framed"), Kept.Contains(Fighters[1]));
+	TestFalse(TEXT("the far objective is not framed"), Kept.Contains(Objective));
+	// The frame of that contact is under half of the old one (every live fighter + the objective, which sits at the 110 m ceiling).
+	FPmcArenaFraming Framing;
+	TArray<FVector> All = Fighters;
+	All.Add(Objective);
+	const float AllCm = PmcArenaViewRules::FrameBox(All, Framing).DistanceCm;
+	const float ContactCm = PmcArenaViewRules::FrameBox(Kept, Framing).DistanceCm;
+	TestEqual(TEXT("the old framing hits the ceiling"), AllCm, Framing.MaxDistanceCm, 1.f);
+	TestTrue(FString::Printf(TEXT("the contact frame is close (%.0f m vs %.0f m)"), ContactCm / 100.f, AllCm / 100.f), ContactCm < 0.5f * AllCm);
+	// The objective right next to the contact is framed.
+	Kept = ContactFocus(Fighters, Sides, 1, true, FVector(500.f, 500.f, 0.f), false, FVector::ZeroVector);
+	TestEqual(TEXT("a near objective is framed"), Kept.Num(), 5);
+	// No contact (closest pair 70 m): the preferred side (the attackers) only.
+	TArray<FVector> Apart = Fighters;
+	Apart[0] = FVector(7000.f, 0.f, 0.f);
+	Kept = ContactFocus(Apart, Sides, 1, true, Objective, false, FVector::ZeroVector);
+	TestEqual(TEXT("no contact: the attackers"), Kept.Num(), 3);
+	TestTrue(TEXT("no contact: an attacker framed"), Kept.Contains(Apart[3]));
+	Kept = ContactFocus(Apart, Sides, INDEX_NONE, false, Objective, false, FVector::ZeroVector);
+	TestEqual(TEXT("no preferred side: everybody not lone"), Kept.Num(), 5);
+	// Sticky: two equal fights (A at x=0, B at x=20000); the previous look on B keeps B though A is a little closer.
+	const TArray<FVector> Two = { FVector(0.f, 0.f, 0.f), FVector(1000.f, 0.f, 0.f), FVector(20000.f, 0.f, 0.f), FVector(21100.f, 0.f, 0.f) };
+	const TArray<int32> TwoSides = { 0, 1, 0, 1 };
+	TestTrue(TEXT("no history: the closer fight"), ContactFocus(Two, TwoSides, 1, false, Objective, false, FVector::ZeroVector).Contains(Two[0]));
+	const TArray<FVector> Stuck = ContactFocus(Two, TwoSides, 1, false, Objective, true, FVector(20550.f, 0.f, 0.f));
+	TestTrue(TEXT("sticky: stays on the fight it watched"), Stuck.Contains(Two[2]) && !Stuck.Contains(Two[0]));
+	TestEqual(TEXT("nobody: nothing"), ContactFocus({}, {}, 1, true, Objective, false, FVector::ZeroVector).Num(), 0);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcArenaClipViewYawTest, "CodexTactics.AI.PmcArena.ClipView.YawAcross",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

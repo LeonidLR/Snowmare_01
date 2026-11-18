@@ -94,6 +94,82 @@ TArray<FVector> PmcArenaViewRules::FramedFighters(const TArray<FVector>& Fighter
 	return Kept;
 }
 
+TArray<FVector> PmcArenaViewRules::ContactFocus(const TArray<FVector>& Fighters, const TArray<int32>& Sides, int32 PreferredSide, bool bHasObjective,
+	const FVector& Objective, bool bHasPrevLook, const FVector& PrevLook, float ContactCm, float FocusRadiusCm, float StickyCm, float StickyFactor)
+{
+	auto SideOf = [&Sides](int32 Index) { return Sides.IsValidIndex(Index) ? Sides[Index] : 0; };
+	int32 AnchorA = INDEX_NONE;
+	int32 AnchorB = INDEX_NONE;
+	float BestScore = TNumericLimits<float>::Max();
+	float BestDistance = TNumericLimits<float>::Max();
+	for (int32 A = 0; A < Fighters.Num(); ++A)
+	{
+		for (int32 B = A + 1; B < Fighters.Num(); ++B)
+		{
+			if (SideOf(A) == SideOf(B))
+			{
+				continue;
+			}
+			const float Distance = static_cast<float>(FVector::Dist(Fighters[A], Fighters[B]));
+			const bool bSticky = bHasPrevLook && FVector::Dist2D(0.5f * (Fighters[A] + Fighters[B]), PrevLook) <= StickyCm;
+			const float Score = bSticky ? Distance / FMath::Max(StickyFactor, 1.f) : Distance;
+			if (Score < BestScore)
+			{
+				BestScore = Score;
+				BestDistance = Distance;
+				AnchorA = A;
+				AnchorB = B;
+			}
+		}
+	}
+	TArray<FVector> Kept;
+	if (AnchorA != INDEX_NONE && BestDistance <= ContactCm)
+	{
+		auto NearAnchor = [&](const FVector& Point)
+		{
+			return FVector::Dist2D(Point, Fighters[AnchorA]) <= FocusRadiusCm || FVector::Dist2D(Point, Fighters[AnchorB]) <= FocusRadiusCm;
+		};
+		for (const FVector& Fighter : Fighters)
+		{
+			if (NearAnchor(Fighter))
+			{
+				Kept.Add(Fighter);
+			}
+		}
+		if (bHasObjective && NearAnchor(Objective))
+		{
+			Kept.Add(Objective);
+		}
+		return Kept;
+	}
+	// No contact: the preferred side's men (the attackers moving in), else everybody; a lone flanker left out as before.
+	TArray<FVector> Group;
+	TArray<int32> GroupSides;
+	for (int32 Index = 0; Index < Fighters.Num(); ++Index)
+	{
+		if (PreferredSide == INDEX_NONE || SideOf(Index) == PreferredSide)
+		{
+			Group.Add(Fighters[Index]);
+			GroupSides.Add(SideOf(Index));
+		}
+	}
+	if (Group.IsEmpty())
+	{
+		Group = Fighters;
+		GroupSides.Reset();
+		for (int32 Index = 0; Index < Fighters.Num(); ++Index)
+		{
+			GroupSides.Add(SideOf(Index));
+		}
+	}
+	Kept = FramedFighters(Group, GroupSides, false, Objective);
+	if (bHasObjective && Kept.ContainsByPredicate([&](const FVector& Fighter) { return FVector::Dist2D(Fighter, Objective) <= FocusRadiusCm; }))
+	{
+		Kept.Add(Objective);
+	}
+	return Kept;
+}
+
 FVector PmcArenaViewRules::EyeOf(const FPmcArenaView& View, const FPmcArenaFraming& Framing)
 {
 	const FVector Direction = FRotator(-Framing.PitchDeg, Framing.YawDeg, 0.f).Vector();

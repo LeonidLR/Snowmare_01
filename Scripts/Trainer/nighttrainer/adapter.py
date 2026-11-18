@@ -187,7 +187,7 @@ class ArenaAdapter:
         rec = self.cfg.get("record", {})
         arena = self.console_command(dict(job, rounds=1), out_path)
         extra = " ".join(str(t).format(seed=job["seed"]) for t in rec.get("arg_template_extra", ["Record=1"]))
-        clip = str(rec.get("clip_command", "CodexTactics.ClipRecorder {clip} seconds={seconds}")).format(
+        clip = str(rec.get("clip_command", "CodexTactics.ClipRecorder {clip} seconds={seconds} nodirector waitcamera")).format(
             clip=clip_name, seconds=int(seconds) + 3)
         return self._game_argv(job, list(rec.get("engine_args", [])), f"{arena} {extra},{clip}", log_path)
 
