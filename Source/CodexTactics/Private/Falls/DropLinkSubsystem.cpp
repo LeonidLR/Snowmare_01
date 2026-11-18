@@ -133,13 +133,36 @@ void UDropLinkSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UDropLinkSubsystem::PollNavigationReady()
+bool UDropLinkSubsystem::IsNavigationReady() const
 {
 	UWorld* World = GetWorld();
 	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
-	WaitedSeconds += 0.5f;
 	const ARecastNavMesh* Recast = Nav ? Cast<ARecastNavMesh>(Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate)) : nullptr;
-	if (!Recast || Nav->IsNavigationBuildInProgress())
+	return Recast && !Nav->IsNavigationBuildInProgress();
+}
+
+bool UDropLinkSubsystem::TryGenerateForPreload()
+{
+	UWorld* World = GetWorld();
+	// Nothing pending: generated already, off on this map, or the level-start poll is gone (gave up / never armed).
+	if (!World || bGenerated || !IsEnabledForWorld() || !World->GetTimerManager().TimerExists(PollTimer))
+	{
+		return true;
+	}
+	if (!IsNavigationReady())
+	{
+		return false;
+	}
+	World->GetTimerManager().ClearTimer(PollTimer);
+	Generate();
+	return true;
+}
+
+void UDropLinkSubsystem::PollNavigationReady()
+{
+	UWorld* World = GetWorld();
+	WaitedSeconds += 0.5f;
+	if (!IsNavigationReady())
 	{
 		if (WaitedSeconds > 180.f)
 		{
