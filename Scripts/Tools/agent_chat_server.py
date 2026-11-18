@@ -13,6 +13,7 @@ import http.server
 import json
 import os
 import re
+import subprocess
 import sys
 import threading
 import time
@@ -24,6 +25,7 @@ import agent_chat
 import importlib
 import editor_status
 import task_board
+import machine_tasks
 
 _PORT_DOC_RE = re.compile(
     r"^docs/(?:port/(?:codex|gemini)/(?:inbox|outbox)/[A-Za-z0-9_.-]+\.md|systems/[A-Za-z0-9_.-]+\.md)$"
@@ -47,6 +49,46 @@ def get_editor_status_cached(ttl=10.0):
                 _EDITOR_CACHE["data"] = {"error": str(exc), "verdict": {"level": "YELLOW", "reason": "Статус редактора недоступен"}, "worktrees": []}
             _EDITOR_CACHE["ts"] = time.time()
         return _EDITOR_CACHE["data"]
+
+
+_MACHINES = {
+    "local": {"ts": 0.0, "data": None, "busy": False, "ttl": 10.0, "name": "Основной ПК", "fn": lambda: machine_tasks.collect_local()},
+    "worker": {"ts": 0.0, "data": None, "busy": False, "ttl": 30.0, "name": "Воркер (codex-worker)", "fn": lambda: machine_tasks.collect_remote()},
+}
+_MACHINES_LOCK = threading.Lock()
+
+
+def _machine_refresh(key):
+    m = _MACHINES[key]
+    try:
+        data = m["fn"]()
+    except subprocess.TimeoutExpired:
+        data = {"status": "недоступен", "error": "таймаут", "items": []}
+    except Exception as exc:
+        data = {"status": "недоступен", "error": machine_tasks.scrub(str(exc))[:300], "items": []}
+    data["checked"] = time.strftime("%H:%M:%S")
+    with _MACHINES_LOCK:
+        m["data"], m["ts"], m["busy"] = data, time.time(), False
+
+
+def get_machines_cached():
+    """Never blocks on a collector: stale data is returned while a background thread refreshes it."""
+    out = {}
+    with _MACHINES_LOCK:
+        for key, m in _MACHINES.items():
+            if not m["busy"] and (m["data"] is None or time.time() - m["ts"] > m["ttl"]):
+                m["busy"] = True
+                threading.Thread(target=_machine_refresh, args=(key,), daemon=True).start()
+    for _ in range(40):  # first call: wait up to ~4 s for the local machine only
+        with _MACHINES_LOCK:
+            if _MACHINES["local"]["data"] is not None:
+                break
+        time.sleep(0.1)
+    with _MACHINES_LOCK:
+        for key, m in _MACHINES.items():
+            d = m["data"] or {"status": "проверка…", "items": []}
+            out[key] = dict(d, name=m["name"], age_s=int(time.time() - m["ts"]) if m["ts"] else None)
+    return {"machines": out, "updated": time.strftime("%H:%M:%S")}
 
 
 class AgentChatHandler(http.server.BaseHTTPRequestHandler):
@@ -173,6 +215,10 @@ class AgentChatHandler(http.server.BaseHTTPRequestHandler):
                     chat_file=os.path.join(self.storage_dir, "chat.jsonl"),
                 )
                 self.send_json(200, data)
+            return
+
+        if path == "/api/machines":
+            self.send_json(200, get_machines_cached())
             return
 
         if path == "/api/editor-status":

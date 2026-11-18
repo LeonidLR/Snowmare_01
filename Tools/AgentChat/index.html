@@ -601,6 +601,19 @@
         grid-template-columns: 1fr;
       }
     }
+
+    /* Machines view */
+    #machines-view { display: none; flex: 1; overflow-y: auto; padding: 14px 16px; flex-direction: column; gap: 12px; }
+    #machines-view.visible { display: flex; }
+    .mach-card { background: #0b1120; border: 1px solid var(--border-color); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; }
+    .mach-head { display: flex; flex-wrap: wrap; gap: 8px 14px; align-items: baseline; margin-bottom: 8px; }
+    .mach-head strong { font-size: 14px; }
+    .mach-load { font-size: 12px; color: var(--text-muted); }
+    .mach-down { color: #f87171; font-size: 12px; }
+    .mach-item { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 5px 0; border-top: 1px solid var(--border-color); font-size: 13px; }
+    .mach-kind { font-size: 11px; font-weight: 700; color: #38bdf8; min-width: 78px; }
+    .mach-time { margin-left: auto; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .mach-empty, .mach-foot { font-size: 12px; color: var(--text-muted); }
   </style>
 </head>
 <body>
@@ -616,6 +629,7 @@
       <div class="tab-bar">
         <button class="tab-btn active" id="tab-chat">Чат</button>
         <button class="tab-btn" id="tab-board">Задачи</button>
+        <button class="tab-btn" id="tab-machines">Машины</button>
       </div>
     </div>
     <div class="presence-bar">
@@ -699,6 +713,11 @@
       <span class="idle-badge" id="board-updated-at">загрузка...</span>
     </div>
     <div class="board-columns" id="board-columns"></div>
+  </section>
+
+  <section id="machines-view" aria-label="Машины">
+    <div id="machines-body"></div>
+    <div class="mach-foot">обновлено <span id="machines-updated">…</span></div>
   </section>
 
   <div id="doc-modal" role="dialog" aria-modal="true">
@@ -975,19 +994,64 @@
 
       let boardData = null;
 
+      const tabMachines = document.getElementById('tab-machines');
+      const machinesView = document.getElementById('machines-view');
+      const machinesBody = document.getElementById('machines-body');
+      const machinesUpdated = document.getElementById('machines-updated');
+      let machinesTimer = null;
+
+      function esc(t) { const d = document.createElement('div'); d.textContent = t == null ? '' : String(t); return d.innerHTML; }
+
+      function renderMachines(data) {
+        const order = ['local', 'worker'];
+        machinesBody.innerHTML = order.map((k) => {
+          const m = (data.machines || {})[k];
+          if (!m) return '';
+          const down = m.status === 'недоступен';
+          const load = down ? `<span class="mach-down">${esc(m.error)}</span>`
+            : `<span class="mach-load">CPU ${m.cpu == null ? '?' : esc(m.cpu) + '%'} · свободно ${m.free_gb == null ? '?' : esc(m.free_gb)} ГБ RAM</span>`;
+          const items = (m.items || []).map((i) => {
+            const run = i.running_min == null ? '' : `с ${esc(i.started)} · ${esc(i.running_min)} мин`;
+            const cnt = i.count > 1 ? ` ×${i.count}` : '';
+            return `<div class="mach-item"><span class="mach-kind">${esc(i.kind)}</span><span>${esc(i.label)}${cnt}</span><span class="mach-time">${run}</span></div>`;
+          }).join('');
+          const body = down ? '' : (items || '<div class="mach-empty">ничего не запущено</div>');
+          return `<div class="mach-card"><div class="mach-head"><strong>${esc(m.name)}</strong><span class="mach-load">${esc(m.status)}</span>${load}</div>${body}</div>`;
+        }).join('');
+        machinesUpdated.textContent = data.updated || '';
+      }
+
+      async function fetchMachines() {
+        try {
+          const res = await fetch('/api/machines');
+          renderMachines(await res.json());
+        } catch (err) {
+          machinesUpdated.textContent = 'ошибка загрузки';
+        }
+      }
+
       function switchTab(tabName) {
         const isBoard = tabName === 'board';
-        tabChat.classList.toggle('active', !isBoard);
+        const isMach = tabName === 'machines';
+        tabChat.classList.toggle('active', !isBoard && !isMach);
         tabBoard.classList.toggle('active', isBoard);
-        chatWrapper.classList.toggle('hidden', isBoard);
+        tabMachines.classList.toggle('active', isMach);
+        chatWrapper.classList.toggle('hidden', isBoard || isMach);
         boardView.classList.toggle('visible', isBoard);
+        machinesView.classList.toggle('visible', isMach);
         if (isBoard && !boardData) {
           fetchBoard(false);
+        }
+        if (machinesTimer) { clearInterval(machinesTimer); machinesTimer = null; }
+        if (isMach) {
+          fetchMachines();
+          machinesTimer = setInterval(fetchMachines, 15000);
         }
       }
 
       tabChat.addEventListener('click', () => switchTab('chat'));
       tabBoard.addEventListener('click', () => switchTab('board'));
+      tabMachines.addEventListener('click', () => switchTab('machines'));
 
       async function openPortDoc(relPath) {
         docModalTitle.textContent = relPath;
