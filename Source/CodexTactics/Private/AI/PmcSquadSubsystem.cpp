@@ -1483,6 +1483,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			View.PostKind = EPmcPostKind::Overwatch;
 			View.PostScore = KindFactor > 0.f ? State.Post.Score / KindFactor : State.Post.Score;
 			View.bAtPost = true;
+			View.bOnOverwatchRoof = true;
 			View.bHasDefencePost = false;
 		}
 		else

@@ -1029,17 +1029,18 @@ namespace PmcCommanderRules
 	bool IsOverwatchHoldOpen(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
 	{
 		if (F.bKnockedDown || F.Objective.Role != EPmcRole::Defender
-			|| F.PostKind != EPmcPostKind::Overwatch || !F.bAtPost || F.bUnderFire || F.bSuppressed)
+			|| F.PostKind != EPmcPostKind::Overwatch || !F.bOnOverwatchRoof || F.bUnderFire || F.bSuppressed)
 		{
 			return false;
 		}
-		// The same reasons ScoreOrder gives FallBack: wounded, outnumbered in contact, or inside the standoff distance.
+		// Personal untenable reasons. Outnumbered stays a FallBack score and does not close this hold: on X4 seed 11 a mate
+		// died, the hold closed, and Objective 0.70 beat that FallBack (0.54) so he walked off the roof at full health.
 		const bool bBand = F.Band.IsValid();
 		const bool bTooClose = bBand && F.bHasThreat && !F.Threat.bStandIn && F.RunningOrder != EPmcOrder::Flank
 			&& (IsTooClose(F.Threat.DistanceCm, F.Band, W)
 				|| (F.RunningOrder == EPmcOrder::FallBack && !F.Band.bCloseQuarters && F.Threat.DistanceCm < 0.5f * (F.Band.MinCm + F.Band.MaxCm)));
-		const bool bLosing = S.bContact && F.bHasThreat && (F.HealthFrac < W.FallBackBelow || (S.Alive - S.EnemiesKnown) <= -1);
-		if (bTooClose || bLosing)
+		const bool bWounded = S.bContact && F.bHasThreat && F.HealthFrac < W.FallBackBelow;
+		if (bTooClose || bWounded)
 		{
 			return false;
 		}

@@ -173,6 +173,7 @@ bool FPmcCommanderOverwatchHoldTest::RunTest(const FString&)
 	Posted.Objective.bInsideDefenceArea = false;
 	Posted.PostKind = EPmcPostKind::Overwatch;
 	Posted.bAtPost = true;
+	Posted.bOnOverwatchRoof = true;
 	Posted.PostScore = 0.8f;
 	Posted.bCoverAvailable = true;
 	Posted.bExposed = true;
@@ -189,6 +190,9 @@ bool FPmcCommanderOverwatchHoldTest::RunTest(const FString&)
 	TestEqual(TEXT("Flank does not walk him off"), PmcCommanderRules::ScoreOrder(EPmcOrder::Flank, Posted, Fight, W), 0.f);
 	TestEqual(TEXT("a healthy even fight does not fall back"), PmcCommanderRules::ScoreOrder(EPmcOrder::FallBack, Posted, Fight, W), 0.f);
 	TestEqual(TEXT("he stays on the post"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Posted, Fight, W)[0].Order), TEXT("Ambush"));
+	FPmcSquadView Short = Squad(2, 3, true);
+	TestTrue(TEXT("a mate's death does not end the roof hold"), PmcCommanderRules::IsOverwatchHoldOpen(Posted, Short, W));
+	TestEqual(TEXT("Ambush still wins when the squad is one man down"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Posted, Short, W)[0].Order), TEXT("Ambush"));
 	FPmcFighterView AlsoDefence = Posted;
 	AlsoDefence.bHasDefencePost = true;
 	TestTrue(TEXT("a G008 defence flag does not cancel the hold while he stands on the roof"), PmcCommanderRules::IsOverwatchHoldOpen(AlsoDefence, Fight, W));
@@ -241,7 +245,15 @@ bool FPmcCommanderOverwatchHoldTest::RunTest(const FString&)
 
 	FPmcFighterView OffPost = Posted;
 	OffPost.bAtPost = false;
+	OffPost.bOnOverwatchRoof = false;
 	TestEqual(TEXT("off the post the ambush is over after the first contact"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, OffPost, Fight, W), 0.f);
+
+	FPmcFighterView Ground = Posted;
+	Ground.bOnOverwatchRoof = false;
+	Ground.bHasDefencePost = true;
+	Ground.bAtPost = true;
+	TestFalse(TEXT("the sector post is not the roof"), PmcCommanderRules::IsOverwatchHoldOpen(Ground, Fight, W));
+	TestEqual(TEXT("a man on his sector post does not keep the roof ambush"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Ground, Fight, W), 0.f);
 
 	TestEqual(TEXT("engagement is the smaller of the roof and the weapon"), PmcCommanderRules::OverwatchEngagementCm(11000.f, 3000.f), 3000.f);
 	TestEqual(TEXT("a longer weapon keeps the roof range"), PmcCommanderRules::OverwatchEngagementCm(11000.f, 14000.f), 11000.f);
