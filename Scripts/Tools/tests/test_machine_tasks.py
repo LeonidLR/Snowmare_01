@@ -57,6 +57,43 @@ class TestMachineTasks(unittest.TestCase):
         for bad in ("abc123", "SECRET", "foo", "bar"):
             self.assertNotIn(bad, s)
 
+    def test_ubt_line(self):
+        self.assertEqual(mt.parse_ubt_line("[14/15] Link [x64] UnrealEditor.dll"), (14, 15))
+        self.assertIsNone(mt.parse_ubt_line("Log file: x"))
+
+    def test_parse_commands(self):
+        self.assertEqual(mt.parse_commands("powershell -File Scripts/smoke_parallel.ps1 -Commands CodexTactics.A,B -Jobs 2"), ["A", "B"])
+        self.assertEqual(mt.parse_commands("x -Commands all -Jobs 2"), ["all"])
+
+    def test_smoke_counts(self):
+        logs = [
+            {"n": "Smoke-A.log", "t": 100, "r": "PASS"},
+            {"n": "Smoke-B.log", "t": 100, "r": "FAIL"},
+            {"n": "Smoke-B-alone.log", "t": 120, "r": "FAIL"},
+            {"n": "Smoke-C.log", "t": 100, "r": ""},
+            {"n": "Smoke-Old.log", "t": 10, "r": "PASS"},
+        ]
+        self.assertEqual(mt.smoke_counts(logs, 50), (2, 1))
+        self.assertEqual(mt.smoke_counts(logs, 50, {"A"}), (1, 0))
+
+    def test_progress_items(self):
+        root = "c:/x/codextactics-claude"
+        ctx = {root: {"root": root, "registry": 296,
+                      "build": {"line": "[3/12] Compile x.cpp", "t": NOW},
+                      "smokes": [{"n": "Smoke-A.log", "t": NOW - 60, "r": "PASS"}, {"n": "Smoke-B.log", "t": NOW - 30, "r": "FAIL"}]}}
+        procs = [
+            P("UnrealBuildTool.exe", r"UBT -Project=C:\x\CodexTactics-claude\CodexTactics.uproject", age_min=2),
+            P("powershell.exe", r"powershell -File Scripts\smoke_parallel.ps1 -Commands A,B,C,D", age_min=4),
+            P("grok.exe", "grok"),
+        ]
+        items = {i["kind"]: i for i in mt.classify_processes(procs, NOW, ctx)}
+        b = items["Сборка"]["progress"]
+        self.assertEqual((b["done"], b["total"], b["pct"], b["eta_min"]), (3, 12, 25.0, 6))
+        s = items["Скрипт"]["progress"]
+        self.assertEqual((s["done"], s["total"], s["state"]), (2, 4, "warn"))
+        self.assertIn("1 FAIL", s["text"])
+        self.assertTrue(items["Агент"]["progress"]["indeterminate"])
+
 
 if __name__ == "__main__":
     unittest.main()

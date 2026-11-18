@@ -613,6 +613,13 @@
     .mach-item { display: flex; flex-wrap: wrap; gap: 4px 10px; padding: 5px 0; border-top: 1px solid var(--border-color); font-size: 13px; }
     .mach-kind { font-size: 11px; font-weight: 700; color: #38bdf8; min-width: 78px; }
     .mach-time { margin-left: auto; font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .mach-prog { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .mach-prog.warn { color: #fbbf24; }
+    .mach-bar { flex-basis: 100%; height: 5px; border-radius: 3px; background: #1e293b; overflow: hidden; position: relative; }
+    .mach-fill { height: 100%; background: #0ea5e9; border-radius: 3px; transition: width 0.4s ease; }
+    .mach-fill.warn { background: #f59e0b; }
+    .mach-bar.indet .mach-fill { position: absolute; width: 30%; animation: mach-slide 1.6s ease-in-out infinite; opacity: 0.8; }
+    @keyframes mach-slide { 0% { left: -30%; } 100% { left: 100%; } }
     .mach-empty, .mach-foot { font-size: 12px; color: var(--text-muted); }
   </style>
 </head>
@@ -1013,7 +1020,14 @@
           const items = (m.items || []).map((i) => {
             const run = i.running_min == null ? '' : `с ${esc(i.started)} · ${esc(i.running_min)} мин`;
             const cnt = i.count > 1 ? ` ×${i.count}` : '';
-            return `<div class="mach-item"><span class="mach-kind">${esc(i.kind)}</span><span>${esc(i.label)}${cnt}</span><span class="mach-time">${run}</span></div>`;
+            const pg = i.progress || { indeterminate: true, text: '' };
+            const warn = pg.state === 'warn' ? ' warn' : '';
+            let ptxt = esc(pg.text || '');
+            if (!pg.indeterminate && pg.eta_min != null) ptxt += ` · ~${esc(pg.eta_min)} мин`;
+            const bar = pg.indeterminate
+              ? '<div class="mach-bar indet"><div class="mach-fill"></div></div>'
+              : `<div class="mach-bar"><div class="mach-fill${warn}" style="width:${Math.max(2, Number(pg.pct) || 0)}%"></div></div>`;
+            return `<div class="mach-item"><span class="mach-kind">${esc(i.kind)}</span><span>${esc(i.label)}${cnt}</span><span class="mach-prog${warn}">${ptxt}</span><span class="mach-time">${run}</span>${bar}</div>`;
           }).join('');
           const body = down ? '' : (items || '<div class="mach-empty">ничего не запущено</div>');
           return `<div class="mach-card"><div class="mach-head"><strong>${esc(m.name)}</strong><span class="mach-load">${esc(m.status)}</span>${load}</div>${body}</div>`;
