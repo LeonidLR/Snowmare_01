@@ -97,9 +97,10 @@ bool FPmcDefenceLayoutParseTest::RunTest(const FString&)
 		return false;
 	}
 	TestEqual(TEXT("buildings"), Layout.Buildings.Num(), 3);
-	TestEqual(TEXT("roof stair top x"), Layout.Buildings[0].Stairs[1].Top.X, 1800.f);
-	TestEqual(TEXT("hatch pos x"), Layout.Buildings[0].Hatches[0].Pos.X, 1500.f);
-	TestEqual(TEXT("ladder top x"), Layout.Ladders[0].Top.X, 3900.f);
+	// FVector2D is double in UE 5.8; a float literal makes TestEqual ambiguous (C2666).
+	TestEqual(TEXT("roof stair top x"), Layout.Buildings[0].Stairs[1].Top.X, 1800.0);
+	TestEqual(TEXT("hatch pos x"), Layout.Buildings[0].Hatches[0].Pos.X, 1500.0);
+	TestEqual(TEXT("ladder top x"), Layout.Ladders[0].Top.X, 3900.0);
 
 	const FVector OnRoof(1900.f, 100.f, 600.f);
 	const int32 Hall = PmcDefenceRules::BuildingAt(Layout, OnRoof);
