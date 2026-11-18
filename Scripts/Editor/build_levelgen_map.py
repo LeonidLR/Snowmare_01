@@ -916,7 +916,11 @@ def level_json(layout, map_path):
         "horde_enabled": False,
         "prep_phase_duration": 60,
         "wave_rest_duration": 20,
-        "cold_rate_mult": 0,
+        # Designer 2026-11-18: generated maps get the live temperature and weather - the game's cold (cold_rate_mult default 1, so
+        # the key is left out) and the procedural weather ladder (unlocked; random start weather and seed per play, default hour and
+        # snow cover). The Wave Editor's level settings tune both per map; a rebuild from the same layout keeps them.
+        "environment": {"_comment": "Generated map (designer 2026-11-18): live weather ladder, random start weather; tune here or in the Wave Editor.",
+                        "locked": False},
         "intro_dialogue": False,
         "cheats": {"immortal": True, "infinite_ammo": True},
         "levelgen_layout": "Content/Data/LevelGen/accepted/%s.json" % layout["name"],
@@ -950,7 +954,13 @@ def write_level_json(layout, map_path):
                 for key in ("pressure", "cheats"):
                     if key in old:
                         data[key] = old[key]
-                report("level JSON: kept its pressure / cheats (same layout)")
+                # Weather / temperature tuned per map (2026-11-18) survive a rebuild; an older file without "environment" still had
+                # the cold switched off (cold_rate_mult 0) - that one takes the new defaults.
+                if "environment" in old:
+                    data["environment"] = old["environment"]
+                    if "cold_rate_mult" in old:
+                        data["cold_rate_mult"] = old["cold_rate_mult"]
+                report("level JSON: kept its pressure / cheats / environment (same layout)")
         except (OSError, ValueError) as exc:
             report("REVIEW: the old level JSON %s unreadable (%r): written afresh" % (path, exc))
     with open(path, "w", encoding="utf-8") as f:

@@ -9,8 +9,11 @@
   "horde_enabled": false,
   "prep_phase_duration": 60,
   "wave_rest_duration": 20,
-  "cold_rate_mult": 0,
   "intro_dialogue": false,
+  "environment": {
+    "_comment": "Generated map (designer 2026-11-18): live weather ladder, random start weather; tune here or in the Wave Editor.",
+    "locked": false
+  },
   "cheats": {
     "immortal": true,
     "infinite_ammo": true
