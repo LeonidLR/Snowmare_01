@@ -130,10 +130,18 @@ void USquadSubsystem::UpdateGiveWay()
 			It.RemoveCurrent();
 		}
 	}
+	// The formation following the leader (squad mode, no hold) moves its followers out of his walk itself (FormationRuntime::YieldFromLeaderWay,
+	// the wall layout's own order - GroupCoverSmoke): only another member's walk asks them here.
+	const bool bFormationFollows = !bFollowersHolding && !IsSoloMode();
+	const AOperativeCharacter* LeaderRef = Leader.Get();
 	TArray<FVector> Path;
 	for (const TWeakObjectPtr<AOperativeCharacter>& MoverRef : Members)
 	{
 		AOperativeCharacter* Mover = MoverRef.Get();
+		if (bFormationFollows && Mover == LeaderRef)
+		{
+			continue;
+		}
 		// A walk into cover (CoverSmoke / GroupCoverSmoke: the men round the cover spot are its group, not in his way) moves nobody.
 		if (!IsGiveWayWalker(Mover) || !Mover->HasOwnMoveOrder() || GiveWayMoveStatus(*Mover) != EPathFollowingStatus::Moving || Mover->bInCover
 			|| Mover->HasPendingCover())
