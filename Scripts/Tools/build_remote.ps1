@@ -14,7 +14,8 @@ param(
     [switch]$FullUnity,
     [switch]$WithPdb,
     [string]$Worker = "codex-worker",
-    [int]$WaitMinutes = 30
+    [int]$WaitMinutes = 30,
+    [switch]$ForceFrozen                    # lead only: build although the worker is frozen for the night trainer (else exit 2)
 )
 $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -53,7 +54,7 @@ try {
     if ($FullUnity) { $buildArgs += " -FullUnity" }
     $resultDir = Join-Path $LogDir "Worker\build-$stamp-$PID"
     & (Join-Path $PSScriptRoot "worker_sync.ps1") -Worker $Worker -ShipHead -BinariesFrom $ProjectDir -Patch $patchArg -ExtraZip $zipArg `
-        -TreeToken $token -Build -BuildArgs $buildArgs -FetchBinaries -WithPdb:$WithPdb -SkipSmoke -ResultDir $resultDir -WaitEngineMinutes $WaitMinutes
+        -TreeToken $token -Build -BuildArgs $buildArgs -FetchBinaries -WithPdb:$WithPdb -SkipSmoke -ResultDir $resultDir -WaitEngineMinutes $WaitMinutes -ForceFrozen:$ForceFrozen
     $code = $LASTEXITCODE
 } finally {
     Remove-Item -Recurse -Force $tmp -ErrorAction SilentlyContinue
