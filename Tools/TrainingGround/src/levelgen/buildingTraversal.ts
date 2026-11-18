@@ -6,7 +6,8 @@
 
 import type { Vec2 } from '../movement/geometry.ts';
 import { toBuildingFrame } from './rotation.ts';
-import type { GenBuilding, GenLayout, Stair } from './schema.ts';
+import { assignRoles } from './buildingRoles.ts';
+import type { BuildingRole, GenBuilding, GenLayout, Stair } from './schema.ts';
 import { LEVEL_HEIGHT, STAIR_RUN_PER_RISE } from './schema.ts';
 import { checkBuildingReachability } from './tacticalEvaluate.ts';
 
@@ -67,6 +68,8 @@ export interface BuildingTraversal {
   rooms: { total: number; reachable: number };
   levels: { walkable: number[]; reachable: number[] };
   roof: 'none' | 'reachable' | 'unreachable';
+  /** The tactical role (enterable buildings): the stored `role`, else assignRoles (buildingRoles.ts) - shown on the page. */
+  role?: BuildingRole;
 }
 
 /** A building passes when it has no 'error' issue (warnings do not fail it). */
@@ -267,6 +270,10 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
 
 /** Validate every building of a layout. */
 export function validateBuildings(l: GenLayout): TraversalReport {
-  const buildings = l.buildings.map((b) => validateBuilding(l, b));
+  const roles = assignRoles(l);
+  const buildings = l.buildings.map((b) => {
+    const r = validateBuilding(l, b), role = b.enterable ? (b.role ?? roles[b.id]) : undefined;
+    return role ? { ...r, role } : r;
+  });
   return { buildings, checked: buildings.length, failed: buildings.filter((x) => !x.ok).length };
 }

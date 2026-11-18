@@ -33,7 +33,7 @@ the rest of the town breathes. The player remembers buildings, not boxes.
 | Role | Assigned to | Story budget |
 |---|---|---|
 | `objective` | buildings holding a mission goal (`objectives/*.json` `goals[].building`) | always a story; a **choice** story preferred |
-| `garrison` | buildings holding PMC defender places (`tactical/*.json` `places[].building`) or within `R_garrison` of an objective | most get a story; author mostly PMC |
+| `garrison` | buildings holding PMC defender places (passed in as `placesByBuilding` - `tactical/*.json` places carry no building id, the PMC squads data of task 087 will supply them) or within `R_garrison` of an objective | most get a story; author mostly PMC |
 | `overwatch` | the tallest enterable buildings with a walkable roof within `R_watch` of `R_main` / an objective | a story allowed to be a **detour** (the height pays it off) |
 | `transit` | enterable buildings the main route passes through or beside (<= 15 m from `R_main`) | choice story or pass-through |
 | `background` | everything else | mostly `open`; a light story (author traces only) |

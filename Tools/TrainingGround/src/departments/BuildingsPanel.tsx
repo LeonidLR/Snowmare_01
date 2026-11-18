@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
 import type { TraversalCode, TraversalReport } from '../levelgen/buildingTraversal';
+import type { BuildingRole } from '../levelgen/schema';
 
 /** Russian label per traversal code (Record<TraversalCode>: a new code without a label fails the typecheck). */
 const CODE_RU: Record<TraversalCode, string> = {
@@ -17,6 +18,22 @@ const CODE_RU: Record<TraversalCode, string> = {
   gap_overshoot: 'дыра в перекрытии за маршем',
   stair_in_other_building: 'марш внутри соседнего здания',
   no_exterior_door: 'нет наружной двери',
+};
+
+/** Short Russian label per tactical role (buildingRoles.ts, building-stories.md section 1). */
+const ROLE_RU: Record<BuildingRole, string> = {
+  objective: 'цель',
+  garrison: 'гарнизон',
+  overwatch: 'наблюдение',
+  transit: 'транзит',
+  background: 'фон',
+};
+const ROLE_CLASS: Record<BuildingRole, string> = {
+  objective: 'text-amber-300',
+  garrison: 'text-rose-300',
+  overwatch: 'text-sky-300',
+  transit: 'text-emerald-300',
+  background: 'text-slate-500',
 };
 
 export function BuildingsPanel({ report }: { report: TraversalReport }) {
@@ -37,6 +54,7 @@ export function BuildingsPanel({ report }: { report: TraversalReport }) {
             <span className="flex items-center gap-1.5">
               {b.ok ? <CheckCircle2 size={11} className="text-emerald-400" /> : <XCircle size={11} className="text-rose-400" />}
               <span className="font-mono">{b.id}</span>
+              {b.role && <span className={ROLE_CLASS[b.role]} title="тактическая роль здания">{ROLE_RU[b.role]}</span>}
               <span className="text-slate-500">{b.set_piece}</span>
               <span className="text-slate-500">комнаты {b.rooms.reachable}/{b.rooms.total}, этажи {b.levels.reachable.join(',') || '—'}{b.roof !== 'none' ? `, крыша ${b.roof === 'reachable' ? 'да' : 'нет'}` : ''}</span>
             </span>
