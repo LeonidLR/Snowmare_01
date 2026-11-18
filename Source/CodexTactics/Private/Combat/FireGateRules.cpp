@@ -43,6 +43,7 @@ namespace FireGateRules
 		FIRE_GATE_KEY("ground_probe", "up_cm", GroundProbe.UpCm),
 		FIRE_GATE_KEY("ground_probe", "down_cm", GroundProbe.DownCm),
 		FIRE_GATE_KEY("ground_probe", "max_probes", GroundProbe.MaxProbes),
+		FIRE_GATE_KEY("ground_probe", "cache_s", GroundProbe.CacheS),
 		FIRE_GATE_KEY("melee_reach", "body_offset_cm", MeleeReach.BodyOffsetCm),
 		FIRE_GATE_KEY("melee_reach", "height_cap_cm", MeleeReach.HeightCapCm),
 		FIRE_GATE_KEY("melee_reach", "step_max_cm", MeleeReach.StepMaxCm),

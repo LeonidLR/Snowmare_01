@@ -6,6 +6,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "GameFramework/Character.h"
+#include "UObject/ObjectKey.h"
 
 namespace CombatGround
 {
@@ -111,10 +112,76 @@ namespace CombatGround
 		return EnemyAIRules::CanMeleeOverProfile(AttackerFeet, TargetFeet, AttackRangeCm, Profile, Melee);
 	}
 
+	namespace
+	{
+		/** One cached shared-ground verdict (final review 3+4): ground_probe cache_s per (attacker, target). */
+		struct FSharedGroundEntry
+		{
+			TObjectKey<UWorld> World;
+			double Time = 0.0;
+			bool bShared = false;
+		};
+		using FSharedGroundKey = TPair<TObjectKey<AActor>, TObjectKey<AActor>>;
+		TMap<FSharedGroundKey, FSharedGroundEntry> SharedGroundCache; // game thread only (the AI / smoke ticks)
+
+		/**
+		 * The melee shared-ground verdict between two characters: one ProbeFloor per (attacker, target) per cache_s, shared by
+		 * CanMelee and MeleeReachPlanar (the flank bite reach, the bite and the close-in step in one tick probe once).
+		 */
+		bool IsSharedGroundBetween(const UWorld& World, const AActor& Attacker, const AActor& Target, const FVector& AttackerFeet,
+			const FVector& TargetFeet)
+		{
+			const float CacheS = Config().GroundProbe.CacheS;
+			const double Now = World.GetTimeSeconds();
+			const FSharedGroundKey Key(TObjectKey<AActor>(&Attacker), TObjectKey<AActor>(&Target));
+			if (CacheS > 0.f)
+			{
+				if (const FSharedGroundEntry* Entry = SharedGroundCache.Find(Key);
+					Entry && Entry->World == TObjectKey<UWorld>(&World) && Now >= Entry->Time && Now - Entry->Time < CacheS)
+				{
+					return Entry->bShared;
+				}
+			}
+			float Spacing = 0.f;
+			const AActor* Ignore[] = { &Attacker, &Target };
+			const TArray<FFloorSample> Profile = ProbeFloor(World, AttackerFeet, TargetFeet, Ignore, Spacing);
+			const bool bShared = CombatGroundRules::IsSharedGround(Profile, Config().MeleeReach.StepMaxCm);
+			if (CacheS > 0.f)
+			{
+				if (SharedGroundCache.Num() >= 1024)
+				{
+					// Drop the stale ones (other worlds, gone actors, expired); a burst past that clears the lot.
+					for (auto It = SharedGroundCache.CreateIterator(); It; ++It)
+					{
+						const FSharedGroundEntry& Old = It.Value();
+						if (Old.World != TObjectKey<UWorld>(&World) || Now < Old.Time || Now - Old.Time >= CacheS)
+						{
+							It.RemoveCurrent();
+						}
+					}
+					if (SharedGroundCache.Num() >= 1024)
+					{
+						SharedGroundCache.Reset();
+					}
+				}
+				SharedGroundCache.Add(Key, { TObjectKey<UWorld>(&World), Now, bShared });
+			}
+			return bShared;
+		}
+	}
+
 	bool CanMelee(const UWorld& World, const AActor& Attacker, const AActor& Target, float AttackRangeCm)
 	{
-		const AActor* Ignore[] = { &Attacker, &Target };
-		return CanMeleeAt(World, FeetOf(Attacker), FeetOf(Target), AttackRangeCm, Ignore);
+		const FMeleeReachConfig& Melee = Config().MeleeReach;
+		const FVector AttackerFeet = FeetOf(Attacker);
+		const FVector TargetFeet = FeetOf(Target);
+		const bool bOffGround = EnemyAIRules::CanMeleeOnGround(AttackerFeet, TargetFeet, AttackRangeCm, false, Melee);
+		const bool bOnGround = EnemyAIRules::CanMeleeOnGround(AttackerFeet, TargetFeet, AttackRangeCm, true, Melee);
+		if (bOffGround == bOnGround)
+		{
+			return bOnGround; // downhill, flat, out of range or over the cap: the floor changes nothing (no probe)
+		}
+		return IsSharedGroundBetween(World, Attacker, Target, AttackerFeet, TargetFeet) ? bOnGround : bOffGround;
 	}
 
 	float MeleeReachPlanar(const UWorld& World, const AActor& Attacker, const AActor& Target, float AttackRangeCm)
@@ -129,10 +196,13 @@ namespace CombatGround
 		{
 			return OnGround;
 		}
-		float Spacing = 0.f;
-		const AActor* Ignore[] = { &Attacker, &Target };
-		const TArray<FFloorSample> Profile = ProbeFloor(World, AttackerFeet, TargetFeet, Ignore, Spacing);
-		return CombatGroundRules::IsSharedGround(Profile, Melee.StepMaxCm) ? OnGround : OffGround;
+		// Final review 3: past the attack range + both capsule radii no bite and no close-in stop depends on the floor, and 12
+		// probes over a long line are metres apart (noise that flipped the acceptance): the shared-ground reach, no probe.
+		if (FVector::Dist2D(AttackerFeet, TargetFeet) > AttackRangeCm + Attacker.GetSimpleCollisionRadius() + Target.GetSimpleCollisionRadius())
+		{
+			return OnGround;
+		}
+		return IsSharedGroundBetween(World, Attacker, Target, AttackerFeet, TargetFeet) ? OnGround : OffGround;
 	}
 
 	bool HasDeadZoneEdge(const UWorld& World, const FVector& ShooterFeet, const FVector& TargetFeet, TConstArrayView<const AActor*> Ignore)

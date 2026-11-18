@@ -35,10 +35,17 @@ namespace CombatGround
 	 */
 	CODEXTACTICS_API bool CanMeleeAt(const UWorld& World, const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm,
 		TConstArrayView<const AActor*> Ignore);
-	/** CanMeleeAt between two characters' feet (FeetOf). */
+	/**
+	 * CanMeleeAt between two characters' feet (FeetOf). The shared-ground verdict is cached per (Attacker, Target) for
+	 * "ground_probe" cache_s and shared with MeleeReachPlanar (final review 3+4): at most one ProbeFloor per pair per cache_s.
+	 */
 	CODEXTACTICS_API bool CanMelee(const UWorld& World, const AActor& Attacker, const AActor& Target, float AttackRangeCm);
 
-	/** Planar bite reach toward Target on the real ground (EnemyAIRules::MeleeReachPlanarOnGround): the close-in step and the flank detour. */
+	/**
+	 * Planar bite reach toward Target on the real ground (EnemyAIRules::MeleeReachPlanarOnGround): the close-in step and the flank
+	 * detour. No probe when the floor cannot change it (downhill / flat) or the feet are further apart than AttackRangeCm + both
+	 * capsule radii (then the shared-ground reach); otherwise the cached verdict shared with CanMelee.
+	 */
 	CODEXTACTICS_API float MeleeReachPlanar(const UWorld& World, const AActor& Attacker, const AActor& Target, float AttackRangeCm);
 
 	/**

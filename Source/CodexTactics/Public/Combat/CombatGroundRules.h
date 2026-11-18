@@ -41,6 +41,12 @@ struct CODEXTACTICS_API FGroundProbeConfig
 	float DownCm = 60.f;
 	/** At most this many probes; a longer line spreads them wider. "max_probes" */
 	float MaxProbes = 12.f;
+	/**
+	 * The melee shared-ground verdict between one attacker and one target is kept this long (CombatGround::CanMelee /
+	 * MeleeReachPlanar share it: the flank bite reach, the bite and the close-in step probe once, not three times a tick).
+	 * 0 = no cache. "cache_s"
+	 */
+	float CacheS = 0.25f;
 };
 
 /** The enemy's blow on uneven ground (Godot can_melee_attack), fire_gate.json "melee_reach". */

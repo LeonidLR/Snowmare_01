@@ -21,12 +21,13 @@
     "edge_drop_cm": 60
   },
   "ground_probe": {
-    "comment": "The floor probe between two pairs of feet (CombatGroundQuery, G007; used by the dead zone and the melee shared-ground test). Vertical traces every spacing_cm (at most max_probes, then wider), from up_cm above the higher feet to down_cm below the lower; a probe that misses or lands off the previous floor retries lateral_cm to each side and keeps the floor nearest the previous sample.",
+    "comment": "The floor probe between two pairs of feet (CombatGroundQuery, G007; used by the dead zone and the melee shared-ground test). Vertical traces every spacing_cm (at most max_probes, then wider), from up_cm above the higher feet to down_cm below the lower; a probe that misses or lands off the previous floor retries lateral_cm to each side and keeps the floor nearest the previous sample. The melee shared-ground verdict per (enemy, target) is cached cache_s seconds (the flank bite reach, the bite and the close-in step share one probe; no probe at all when the target is downhill or further than the attack range + both capsule radii).",
     "spacing_cm": 25,
     "lateral_cm": 30,
     "up_cm": 60,
     "down_cm": 60,
-    "max_probes": 12
+    "max_probes": 12,
+    "cache_s": 0.25
   },
   "melee_reach": {
     "comment": "The enemy's blow on uneven ground (EnemyAIRules::CanMeleeOnGround, G007; the real-time AI, the close-in step, the flank detour, the turn-based bite and RampFightSmoke all use it). Feet-to-feet height at most height_cap_cm. Off shared ground (a ledge, a crate, unknown floor) the distance is measured to the target's body point (feet + body_offset_cm), the Godot rule: a 1.1 m ledge stays out of reach. On shared ground (the floor probe rises / falls at most step_max_cm between neighbouring samples: a ramp, a stair) the vertical part blends from that body point to feet-to-feet, fully at slope_full_deg - flat ground is exactly the old rule, no reach jump.",
