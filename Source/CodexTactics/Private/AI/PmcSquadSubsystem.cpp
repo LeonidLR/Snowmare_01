@@ -2023,8 +2023,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			if (!PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm))
 			{
 				bKeepGoalLevel = true;
-				// Sprint once the fight has started. A quiet walk is still right before contact.
-				bTaken = Walk(State.DefencePost, Team.bEverContact);
+				// Always sprint. Seed 2's stair is 25 m from the spawn and the attackers die in 18 s;
+				// a quiet walk arrives too late for guard share > 0.6. The post stays on this level.
+				bTaken = Walk(State.DefencePost, true);
 				if (bTaken)
 				{
 					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s walks to his %s post %s"), TeamId, *Fighter.DisplayName.ToString(),
