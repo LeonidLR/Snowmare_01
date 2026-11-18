@@ -5,9 +5,10 @@
 // critics' verdicts (Jev - typed judgments; the Claude API - sees both images, USD-capped; the server holds the keys). The
 // designer accepts (-> Content/Data/LevelGen/accepted, what the UE builder reads) or rejects.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Hammer, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Hammer, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus, Trash2 } from 'lucide-react';
 import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
+import { validateWallCrossings, cleanConflictingFences } from '../levelgen/layoutValidator';
 import { PropsPanel } from './PropsPanel';
 import { RegionOverlay } from './RegionOverlay';
 import type { LayerAction, ObjectiveAction, RegionMode } from './RegionOverlay';
@@ -139,6 +140,7 @@ export const LevelGenDepartment: React.FC = () => {
     const r = mandatoryRoute(cur.layout);
     return cur.ev.route.legs.filter((x) => !x.ok).flatMap((x) => [r.points[x.index - 1], r.points[x.index]]);
   }, [cur]);
+  const wallConflicts = useMemo(() => (cur ? validateWallCrossings(cur.layout) : []), [cur]);
 
   const generate = () => {
     if (!profile || !config) return;
@@ -274,6 +276,12 @@ export const LevelGenDepartment: React.FC = () => {
     if (!cur) return;
     setHistories((hs) => ({ ...hs, [curKey]: historyPush(hs[curKey] ?? historyInit(cur.layout, 'исходная'), layout, label) }));
     showLayout(layout);
+  };
+  const cleanFences = () => {
+    if (!cur) return;
+    const res = cleanConflictingFences(cur.layout);
+    if (!res.removedFamilies.length && !res.removedWalls.length) return;
+    pushStep(res.layout, 'очистка сиротских заборов');
   };
   const reroll = () => {
     if (!cur || !zone || !profileOk || !profile) return;
@@ -693,7 +701,16 @@ export const LevelGenDepartment: React.FC = () => {
                 Линии огня
               </button>
               <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
-              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
+              {wallConflicts.length > 0 && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-700 text-xs text-rose-200" title={wallConflicts.map((c) => c.reason).join('; ')}>
+                  <AlertTriangle size={13} className="text-rose-400 shrink-0" />
+                  <span>Пересечения стен ({wallConflicts.length})</span>
+                  <button type="button" onClick={cleanFences} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-800 hover:bg-rose-700 text-white font-medium text-[11px]" title="Удалить сиротские/конфликтующие заборы">
+                    <Trash2 size={11} />Удалить сиротский забор
+                  </button>
+                </div>
+              )}
+              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : wallConflicts.length > 0 ? `Внимание: обнаружено ${wallConflicts.length} пересечений стен/заборов!` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять{wallConflicts.length > 0 ? ' (!)' : ''}</button>
               <button onClick={() => buildNow(false)} disabled={!cur || !!busy || !isAccepted || building || (buildTarget !== null && !buildTarget.canBuild)} data-build
                 title={!isAccepted ? 'Сначала «Принять»: собирается принятая карта (Content/Data/LevelGen/accepted)' : buildTarget && !buildTarget.canBuild ? buildTarget.reason : `Собрать ${buildTarget?.map ?? ''} и проверить маршрут ботом (фоном, ~5-15 мин)`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-700 text-xs text-white hover:bg-orange-600 disabled:opacity-50"><Hammer size={13} />Собрать в Unreal</button>
@@ -877,7 +894,7 @@ export const LevelGenDepartment: React.FC = () => {
                   objectivesEditable={!activeLayer || activeLayer === 'objectives'} showObjectives={vis.objectives !== false}
                   layerTool={activeDef && activeDef.id !== 'objectives' && !goalTool ? layerTool : 'off'} pickLayer={pickLayer} onLayerAction={onLayerAction}
                   overlay={(h) => <LayersOverlay h={h} vis={vis} analysis={analysis} selChoke={selChoke} onSelChoke={setSelChoke} props={propsOnMap} selected={selectedEntity} activeEntities={activeEntities} />}>
-                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives hidden={hidden} tints={tints} />
+                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives hidden={hidden} tints={tints} conflicts={wallConflicts} />
                 </RegionOverlay>
                 </div>
                 {cur && (track ? (

@@ -17,7 +17,7 @@
 // Deterministic: same layout + same zone + same seed -> the same JSON.
 
 import type { Vec2 } from '../movement/geometry.ts';
-import { dirOf, pointInPoly, segSegDist } from '../movement/geometry.ts';
+import { dirOf, pointInPoly, segSegDist, segmentsIntersect } from '../movement/geometry.ts';
 import type { RouteReport } from './evaluate.ts';
 import { checkLayoutRoutes } from './evaluate.ts';
 import { expandLayout } from './expand.ts';
@@ -523,8 +523,34 @@ function applyTemplates(fresh: GenLayout, built: BuiltTemplate[], lots: readonly
   const inBlock = (p: Vec2): string | undefined => { const k = lotAt(lots, p); return k && acc.has(k.id) ? k.id : undefined; };
   const drop = new Set<object>();
   const removedB = new Set<string>();
+  const builtWalls = built.flatMap((b) => b.content.walls).filter((w) => w.kind !== 'cut_wall');
+  const builtBuildings = built.flatMap((b) => b.content.buildings);
+  const accLots = lots.filter((k) => acc.has(k.id));
+
   for (const g of layoutGroups(fresh)) {
-    if (g.fixed || g.category === 'spawn_point' || !inBlock(g.centre)) continue;
+    if (g.fixed || g.category === 'spawn_point') continue;
+    let remove = !!inBlock(g.centre);
+    if (!remove && g.category === 'wall' && (g.members.walls?.length ?? 0) > 0) {
+      // Geometry check (task 085): a parent block fence that crosses fresh parcels/groups or encloses subdivided lots
+      const walls = g.members.walls!;
+      const crossesFreshWall = walls.some((w) => builtWalls.some((bw) => segmentsIntersect(w.a, w.b, bw.a, bw.b)));
+      const crossesFreshB = walls.some((w) =>
+        builtBuildings.some((bb) => {
+          const poly = footprintPoly(bb);
+          return poly.some((p, i, arr) => segmentsIntersect(w.a, w.b, p, arr[(i + 1) % arr.length]));
+        })
+      );
+      const b = bbox(walls.flatMap((w) => [w.a, w.b]));
+      const enclosedLots = accLots.filter((k) => {
+        const c = rectCentre(k.rect);
+        return c[0] >= b.x0 && c[0] <= b.x1 && c[1] >= b.y0 && c[1] <= b.y1;
+      });
+      const enclosesSubdivided = enclosedLots.length >= 2;
+      if (crossesFreshWall || crossesFreshB || enclosesSubdivided) {
+        remove = true;
+      }
+    }
+    if (!remove) continue;
     for (const k of ARRAYS) for (const x of g.members[k] ?? []) drop.add(x);
     if (g.category === 'building') removedB.add(g.id);
   }
@@ -720,6 +746,24 @@ function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelectio
     take(g);
     pushSolids(g);
     added.push(g);
+  }
+  // task 085: a kept fence family that crosses fresh walls or fresh building footprints is removed
+  const addedWalls = added.flatMap((g) => g.members.walls ?? []).filter((w) => w.kind !== 'cut_wall');
+  const addedBuildings = added.flatMap((g) => g.members.buildings ?? []);
+  for (const o of kept) {
+    if (o.category !== 'wall' || !(o.members.walls?.length)) continue;
+    const walls = o.members.walls;
+    const crossesAddedWall = walls.some((w) => addedWalls.some((aw) => segmentsIntersect(w.a, w.b, aw.a, aw.b)));
+    const crossesAddedB = walls.some((w) =>
+      addedBuildings.some((bb) => {
+        const poly = footprintPoly(bb);
+        return poly.some((p, i, arr) => segmentsIntersect(w.a, w.b, p, arr[(i + 1) % arr.length]));
+      })
+    );
+    if (crossesAddedWall || crossesAddedB) {
+      for (const k of ARRAYS) for (const x of o.members[k] ?? []) removed.add(x);
+      dropped.push({ id: o.id, category: 'wall', reason: 'overlaps_kept' });
+    }
   }
   for (const g of added) for (const m of g.members.mantle_edges ?? []) if (m.wall && rename.has(m.wall)) m.wall = rename.get(m.wall);
   const next: Partial<GroupMembers> = {};

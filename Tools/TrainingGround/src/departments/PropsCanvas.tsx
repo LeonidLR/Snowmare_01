@@ -307,9 +307,9 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
         if (!onLayer(wl.floor ?? 0, wl.building)) continue;
         const a = P(wl.a);
         const b = P(wl.b);
-        g.strokeStyle = wl.kind === 'fence' ? '#e6e678' : wl.kind === 'cut_wall' ? '#465aa0' : '#c8c8d2';
+        g.strokeStyle = wl.kind === 'fence' ? '#fbbf24' : wl.kind === 'cut_wall' ? '#465aa0' : '#c8c8d2';
         g.lineCap = 'butt';
-        g.lineWidth = Math.max(1, wl.thickness * s);
+        g.lineWidth = Math.max(wl.kind === 'fence' ? 1.8 : 1, wl.thickness * s);
         g.beginPath();
         g.moveTo(a[0], a[1]);
         g.lineTo(b[0], b[1]);
