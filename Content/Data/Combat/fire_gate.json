@@ -13,10 +13,26 @@
     "crouch_corner_aim_outward_deg": 64
   },
   "dead_zone": {
-    "comment": "Under a platform (SquadFireRules, G007). Same numbers as the old literals. A clear shot on a shared slope or stair is not this zone: the zone applies only when the shot trace is blocked or the shooter stands on a level edge.",
+    "comment": "Under a platform (SquadFireRules::IsInDeadZone, G007): the shooter's centre (feet + chest_offset_cm) at least min_delta_z_cm above the target's feet, within max_horizontal_cm and at least min_angle_deg down. That geometry holds a shot only when the floor really blocks it: the muzzle trace is blocked, or the floor probe (ground_probe) finds a level edge - two neighbouring floor samples dropping by at least edge_drop_cm toward the target (a platform lip; 0.8 m platforms included). A missed probe (open riser, grating, off a narrow stair) is unknown, never an edge. Read by FireGateRules with this file (game start).",
     "chest_offset_cm": 100,
     "min_delta_z_cm": 180,
     "max_horizontal_cm": 240,
-    "min_angle_deg": 45
+    "min_angle_deg": 45,
+    "edge_drop_cm": 60
+  },
+  "ground_probe": {
+    "comment": "The floor probe between two pairs of feet (CombatGroundQuery, G007; used by the dead zone and the melee shared-ground test). Vertical traces every spacing_cm (at most max_probes, then wider), from up_cm above the higher feet to down_cm below the lower; a probe that misses or lands off the previous floor retries lateral_cm to each side and keeps the floor nearest the previous sample.",
+    "spacing_cm": 25,
+    "lateral_cm": 30,
+    "up_cm": 60,
+    "down_cm": 60,
+    "max_probes": 12
+  },
+  "melee_reach": {
+    "comment": "The enemy's blow on uneven ground (EnemyAIRules::CanMeleeOnGround, G007; the real-time AI, the close-in step, the flank detour, the turn-based bite and RampFightSmoke all use it). Feet-to-feet height at most height_cap_cm. Off shared ground (a ledge, a crate, unknown floor) the distance is measured to the target's body point (feet + body_offset_cm), the Godot rule: a 1.1 m ledge stays out of reach. On shared ground (the floor probe rises / falls at most step_max_cm between neighbouring samples: a ramp, a stair) the vertical part blends from that body point to feet-to-feet, fully at slope_full_deg - flat ground is exactly the old rule, no reach jump.",
+    "body_offset_cm": 100,
+    "height_cap_cm": 120,
+    "step_max_cm": 45,
+    "slope_full_deg": 15
   }
 }

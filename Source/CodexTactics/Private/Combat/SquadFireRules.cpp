@@ -1,10 +1,6 @@
 #include "Combat/SquadFireRules.h"
+#include "Combat/FireGateRules.h"
 #include "Data/GodotBalanceAsset.h"
-#include "Dom/JsonObject.h"
-#include "Misc/FileHelper.h"
-#include "Misc/Paths.h"
-#include "Serialization/JsonReader.h"
-#include "Serialization/JsonSerializer.h"
 
 namespace
 {
@@ -53,41 +49,9 @@ FElevationAdvantage SquadFireRules::GetElevationAdvantage(float ShooterFeetZ, fl
 	return Result;
 }
 
-namespace
-{
-	FDeadZoneConfig LoadDeadZoneConfig()
-	{
-		FDeadZoneConfig Config;
-		const FString Path = FPaths::ProjectContentDir() / TEXT("Data/Combat/fire_gate.json");
-		FString Text;
-		TSharedPtr<FJsonObject> Root;
-		const TSharedPtr<FJsonObject>* Zone = nullptr;
-		if (!FFileHelper::LoadFileToString(Text, *Path)
-			|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) || !Root.IsValid()
-			|| !Root->TryGetObjectField(TEXT("dead_zone"), Zone) || !Zone || !Zone->IsValid())
-		{
-			return Config;
-		}
-		auto Number = [&Zone](const TCHAR* Key, float& Value)
-		{
-			double Parsed = 0.0;
-			if ((*Zone)->TryGetNumberField(Key, Parsed))
-			{
-				Value = static_cast<float>(Parsed);
-			}
-		};
-		Number(TEXT("chest_offset_cm"), Config.ChestOffsetCm);
-		Number(TEXT("min_delta_z_cm"), Config.MinDeltaZCm);
-		Number(TEXT("max_horizontal_cm"), Config.MaxHorizontalCm);
-		Number(TEXT("min_angle_deg"), Config.MinAngleDeg);
-		return Config;
-	}
-}
-
 const FDeadZoneConfig& SquadFireRules::GetDeadZoneConfig()
 {
-	static const FDeadZoneConfig Config = LoadDeadZoneConfig();
-	return Config;
+	return FireGateRules::GetConfig().DeadZone;
 }
 
 bool SquadFireRules::IsInDeadZone(const FVector& ShooterFeet, const FVector& TargetFeet)

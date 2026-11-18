@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Combat/CombatGroundRules.h"
 
 class UGodotBalanceAsset;
 
@@ -53,22 +54,6 @@ struct CODEXTACTICS_API FSquadFireConfig
 };
 
 /**
- * The platform dead zone (Godot is_target_in_dead_zone). Numbers live in Content/Data/Combat/fire_gate.json "dead_zone"
- * (the defaults here mirror that file). Heights are cm.
- */
-struct CODEXTACTICS_API FDeadZoneConfig
-{
-	/** Shooter centre above his feet (Godot measures from the capsule centre). */
-	float ChestOffsetCm = 100.f;
-	/** Drop from that centre to the target's feet. */
-	float MinDeltaZCm = 180.f;
-	/** Horizontal limit. */
-	float MaxHorizontalCm = 240.f;
-	/** How steep the shot is, degrees down. */
-	float MinAngleDeg = 45.f;
-};
-
-/**
  * Real-time squad fire rules (Godot Scenes/movements/player.gd _find_shoot_target, _shoot_at_target,
  * get_elevation_advantage, is_target_in_dead_zone, _apply_stance_modifiers). Heights are in cm from the
  * operative's feet; Godot measures from the capsule centre (1 m above the feet) to the enemy's feet.
@@ -87,7 +72,7 @@ namespace SquadFireRules
 	/** Elevated when the shooter's centre is >= 1.5 m above the target (+25 % range, +15 % damage, over low cover). */
 	CODEXTACTICS_API FElevationAdvantage GetElevationAdvantage(float ShooterFeetZ, float TargetFeetZ);
 
-	/** fire_gate.json "dead_zone" (defaults above when the file is missing). */
+	/** fire_gate.json "dead_zone" (FireGateRules::GetConfig().DeadZone; the FDeadZoneConfig defaults when the file is missing). */
 	CODEXTACTICS_API const FDeadZoneConfig& GetDeadZoneConfig();
 
 	/** Under a platform: chest-to-feet drop, within the horizontal limit and at least the angle down. Geometry only. */
