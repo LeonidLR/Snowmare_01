@@ -133,7 +133,7 @@ namespace CombatGround
 		{
 			const float CacheS = Config().GroundProbe.CacheS;
 			const double Now = World.GetTimeSeconds();
-			const FSharedGroundKey Key(TObjectKey<AActor>(&Attacker), TObjectKey<AActor>(&Target));
+			const FSharedGroundKey Key{ TObjectKey<AActor>{ &Attacker }, TObjectKey<AActor>{ &Target } };
 			if (CacheS > 0.f)
 			{
 				if (const FSharedGroundEntry* Entry = SharedGroundCache.Find(Key);
