@@ -23,7 +23,7 @@ from nighttrainer.adapter import (ArenaAdapter, BEHAVIOUR_METRICS, _metric_value
                                   behaviour_document, parse_behaviour)
 from nighttrainer.genome import GeneSpec, load_json  # noqa: E402
 from nighttrainer.report import _archive_section  # noqa: E402
-from nighttrainer.trainer import Trainer  # noqa: E402
+from nighttrainer.trainer import Trainer, _lookup_rounds  # noqa: E402
 
 with open(os.path.join(TRAINER, "trainer_config.json"), encoding="utf-8") as _f:
     CONFIG = json.load(_f)
@@ -381,6 +381,14 @@ class RealDescriptorCoverageTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             qd.Archive({"axes": [{"id": "dec", "bins": 3, "bin_edges": [20.0, 10.0]}]})
 
+        # Non-finite edges (nan, inf, -inf)
+        with self.assertRaises(ValueError):
+            qd.Archive({"axes": [{"id": "nan_edge", "bins": 3, "bin_edges": [10.0, float("nan")]}]})
+        with self.assertRaises(ValueError):
+            qd.Archive({"axes": [{"id": "inf_edge", "bins": 3, "bin_edges": [10.0, float("inf")]}]})
+        with self.assertRaises(ValueError):
+            qd.Archive({"axes": [{"id": "neginf_edge", "bins": 3, "bin_edges": [float("-inf"), 10.0]}]})
+
     def test_descriptor_histogram(self):
         axes = [
             {"id": "aggression", "metric": "time_in_contact_s", "bins": 4, "bin_edges": [30.0, 45.0, 60.0]},
@@ -476,6 +484,37 @@ class RealDescriptorCoverageTests(unittest.TestCase):
             self.assertTrue(parsed_zero[0].get("crashed", False))
             score_0 = fitness.round_score(parsed_zero[0], CONFIG["fitness"])
             self.assertEqual(score_0, float(CONFIG["fitness"].get("crash_penalty", -5.0)))
+
+    def test_padded_crash_rounds_not_aliased(self):
+        doc = {"schema": "codex.pmc_arena/1", "opponent": "bot", "rounds": []}
+        adapter = ArenaAdapter(CONFIG["arena"], "C:/Repo")
+        rounds = adapter.parse_doc(doc, expected_rounds=3)
+        self.assertEqual(len(rounds), 3)
+        self.assertIsNot(rounds[0], rounds[1])
+        self.assertIsNot(rounds[1], rounds[2])
+        rounds[0]["won"] = 1.0
+        self.assertEqual(rounds[1]["won"], 0.0)
+
+    def test_rounds_per_job_less_than_one_raises(self):
+        with self.assertRaises(ValueError):
+            _lookup_rounds({"rounds_per_job": 0}, 4)
+        with self.assertRaises(ValueError):
+            _lookup_rounds({"rounds_per_job": -1}, 4)
+        with self.assertRaises(ValueError):
+            _lookup_rounds({}, 0)
+        with tempfile.TemporaryDirectory() as tmp:
+            bad_cfg = _repo(tmp, "ga")
+            bad_cfg["evaluation"]["rounds_per_job"] = 0
+            with self.assertRaises(ValueError):
+                Trainer(bad_cfg, "bad_rounds", tmp, mock=True, log=lambda m: None)
+
+    def test_ga_mode_skips_qd_validation_and_histogram(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            cfg = _repo(tmp, "ga")
+            cfg["search"] = {"mode": "ga"}
+            cfg["qd"]["axes"] = [{"id": "bad", "bins": 4, "bin_edges": [10.0]}]  # invalid len(bin_edges)
+            t = Trainer(cfg, "ga_skip", tmp, mock=True, log=lambda m: None, max_generations=1, parallel=1, poll_s=0.01)
+            self.assertEqual(t.search_mode(), "ga")
 
 
 if __name__ == "__main__":
