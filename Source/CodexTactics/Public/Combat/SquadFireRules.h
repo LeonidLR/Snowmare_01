@@ -75,7 +75,10 @@ namespace SquadFireRules
 	/** fire_gate.json "dead_zone" (FireGateRules::GetConfig().DeadZone; the FDeadZoneConfig defaults when the file is missing). */
 	CODEXTACTICS_API const FDeadZoneConfig& GetDeadZoneConfig();
 
-	/** Under a platform: chest-to-feet drop, within the horizontal limit and at least the angle down. Geometry only. */
+	/**
+	 * Under a platform: chest-to-feet drop, within the horizontal limit and at least the angle down. Geometry only - never hold a
+	 * shot on it alone: the one production caller is CombatGround::BlocksShot (G007 final review 5, grep 2026-11-18).
+	 */
 	CODEXTACTICS_API bool IsInDeadZone(const FVector& ShooterFeet, const FVector& TargetFeet);
 
 	/**

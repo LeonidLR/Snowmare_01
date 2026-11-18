@@ -9,7 +9,7 @@ class UWorld;
 /**
  * World side of the uneven-ground combat rules (G007, CombatGroundRules): the one feet helper, the floor probe between two pairs of
  * feet, and the melee / dead-zone verdicts every caller uses - the real-time AI (reach, close-in step, flank detour), the operative's
- * shot lines (EvaluateShotLine / EvaluateBlindLine), the turn-based bite / shot and RampFightSmoke - so real time, turn-based and the
+ * shot lines (EvaluateShotLine / EvaluateBlindLine), the turn-based bite and RampFightSmoke - so real time, turn-based and the
  * gate test all see the same answer. Tunables: fire_gate.json via FireGateRules::GetConfig().
  */
 namespace CombatGround
@@ -55,7 +55,16 @@ namespace CombatGround
 	 */
 	CODEXTACTICS_API bool HasDeadZoneEdge(const UWorld& World, const FVector& ShooterFeet, const FVector& TargetFeet, TConstArrayView<const AActor*> Ignore);
 
-	/** The dead zone as every shot path applies it: the geometry (SquadFireRules::IsInDeadZone) and a blocked trace or a level edge. */
+	/**
+	 * The dead zone as every shot path applies it: the geometry (SquadFireRules::IsInDeadZone) and a blocked trace or a level edge.
+	 * G007 final review 5 (grep of every IsInDeadZone / AppliesDeadZone caller): the only shot paths with a platform dead zone are
+	 * the operative's EvaluateShotLine and EvaluateBlindLine (OperativeCharacterCombat.cpp), both through here; every other aim
+	 * path reaches them (auto fire, quick fire, the launcher AI, the debug line reason) - PMC fighters included: a PMC fighter is
+	 * an AOperativeCharacter (TeamId != 0) and shoots through the same EvaluateShotLine. Intentionally different, no dead zone:
+	 * the turn-based shot (grid line of fire, GorkyLineOfSight::HasLineOfFireThroughCover - Godot's grid has no platform zone)
+	 * and the vehicle turret (VehicleCombatRules::IsInDeadZone, a hull-distance dead zone, unrelated). No caller holds a shot on
+	 * the geometry alone.
+	 */
 	CODEXTACTICS_API bool BlocksShot(const UWorld& World, const FVector& ShooterFeet, const FVector& TargetFeet, bool bTraceBlocked,
 		TConstArrayView<const AActor*> Ignore);
 }
