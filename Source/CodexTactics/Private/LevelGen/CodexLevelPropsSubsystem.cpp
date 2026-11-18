@@ -36,6 +36,8 @@
 #include "Serialization/JsonSerializer.h"
 #include "Tasks/Task.h"
 
+#include <atomic>
+
 namespace CodexLevelPropsInternal
 {
 	static bool ActorHasVisualMesh(const AActor* Actor)
@@ -204,16 +206,6 @@ void UCodexLevelPropsSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UCodexLevelPropsSubsystem::StopSpawnTicker()
-{
-	if (SpawnTicker.IsValid())
-	{
-		FTSTicker::GetCoreTicker().RemoveTicker(SpawnTicker);
-		SpawnTicker.Reset();
-	}
-	Session.Reset();
-}
-
 int32 UCodexLevelPropsSubsystem::SpawnPropsForMap(
 	const FString& MapName,
 	const TSet<FString>* SkippedIds,
@@ -246,8 +238,10 @@ struct UCodexLevelPropsSubsystem::FPropsSpawnSession
 	/** The prepare ran and the game thread took its result (TakePreparedSession). */
 	bool bPrepared = false;
 	bool bPrepareOk = false;
-	/** The worker-thread prepare of a live spawn (invalid for a direct spawn). */
-	UE::Tasks::FTask PrepareTask;
+	/** The prepare runs on a worker thread (a live spawn; its task handle is the subsystem's PrepareTask, not owned here). */
+	bool bAsyncPrepare = false;
+	/** Set by the game thread when the session is dropped (StopSpawnTicker): the worker stops at its next phase check. */
+	std::atomic<bool> bCancelled{ false };
 	TArray<FLevelPropsResolvedObject> Objects;
 	TArray<FString> DroppedIds;
 	bool bHasLayout = false;
@@ -306,12 +300,34 @@ struct UCodexLevelPropsSubsystem::FPropsSpawnSession
 	int32 MaxFrameObjects = 0;
 };
 
+void UCodexLevelPropsSubsystem::StopSpawnTicker()
+{
+	if (SpawnTicker.IsValid())
+	{
+		FTSTicker::GetCoreTicker().RemoveTicker(SpawnTicker);
+		SpawnTicker.Reset();
+	}
+	if (PrepareTask.IsValid())
+	{
+		// A live prepare still on a worker thread (a respawn, Deinitialize, the world ending): it stops at its next phase check and is
+		// waited for, so no worker of this subsystem outlives it (or the module) and there is never a second prepare in flight.
+		if (Session.IsValid())
+		{
+			Session->bCancelled.store(true, std::memory_order_relaxed);
+		}
+		PrepareTask.Wait();
+		PrepareTask = UE::Tasks::FTask();
+	}
+	Session.Reset();
+}
+
 void UCodexLevelPropsSubsystem::PrepareSession(FPropsSpawnSession& S)
 {
 	// Pure data only (a worker thread for a live spawn): file IO, JSON, layout view, validator, turret / power rules. No UObject, no CVar.
 	const double StartTime = FPlatformTime::Seconds();
 	const FJsonObject* Balance = S.Balance.Get();
 	S.bPrepareOk = false;
+	const auto Cancelled = [&S]() { return S.bCancelled.load(std::memory_order_relaxed); };
 
 	FString PropsJson;
 	if (!FFileHelper::LoadFileToString(PropsJson, *S.PropsFilePath))
@@ -331,6 +347,10 @@ void UCodexLevelPropsSubsystem::PrepareSession(FPropsSpawnSession& S)
 		return;
 	}
 
+	if (Cancelled())
+	{
+		return;
+	}
 	const double ParsedTime = FPlatformTime::Seconds();
 	TArray<FString> OverrideWarnings;
 	const FLevelPropsResolved Resolved = LevelPropsFile::ApplyOverrides(File, &OverrideWarnings);
@@ -349,7 +369,7 @@ void UCodexLevelPropsSubsystem::PrepareSession(FPropsSpawnSession& S)
 	if (FPaths::FileExists(ResolvedLayoutPath))
 	{
 		FString LayoutJson;
-		if (FFileHelper::LoadFileToString(LayoutJson, *ResolvedLayoutPath))
+		if (FFileHelper::LoadFileToString(LayoutJson, *ResolvedLayoutPath) && !Cancelled())
 		{
 			TArray<FString> LayoutErrors;
 			FPropsLayoutConfig LayoutConfig;
@@ -359,7 +379,7 @@ void UCodexLevelPropsSubsystem::PrepareSession(FPropsSpawnSession& S)
 			}
 
 			FPropsLayoutView LayoutView;
-			if (FPropsLayoutView::Build(LayoutJson, LayoutView, LayoutErrors, LayoutConfig))
+			if (FPropsLayoutView::Build(LayoutJson, LayoutView, LayoutErrors, LayoutConfig) && !Cancelled())
 			{
 				S.bHasLayout = true;
 				for (const FPropsWalkLayer& Layer : LayoutView.GetLayers())
@@ -385,6 +405,10 @@ void UCodexLevelPropsSubsystem::PrepareSession(FPropsSpawnSession& S)
 		}
 	}
 
+	if (Cancelled())
+	{
+		return;
+	}
 	if (!S.bHasLayout)
 	{
 		// No layout file available: spawn all resolved objects directly
@@ -492,7 +516,10 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 
 	// A live map (X6 spawn hitch 2026-11-18): the file / layout / validation work (66 of the 68 ms X6 frame, a 1 MB layout file) runs on a
 	// worker thread; the spawn starts on the first frame after it is done and is spread over frames (gameplay.spawn_frame_budget_ms).
-	S.PrepareTask = UE::Tasks::Launch(UE_SOURCE_LOCATION, [Prepared = NewSession]() { PrepareSession(*Prepared); });
+	// The task holds the session (its body is released once it has run); the handle lives on the subsystem, so the session never owns
+	// the task that owns it. StopSpawnTicker cancels + waits for it.
+	S.bAsyncPrepare = true;
+	PrepareTask = UE::Tasks::Launch(UE_SOURCE_LOCATION, [Prepared = NewSession]() { PrepareSession(*Prepared); });
 	S.GameThreadSetupMs = (FPlatformTime::Seconds() - StartTime) * 1000.0;
 	const double FrameBudgetMs = PropsGameplayRules::SpawnFrameBudgetMs(BalanceRoot.Get());
 	TWeakObjectPtr<UCodexLevelPropsSubsystem> WeakThis(this);
@@ -506,6 +533,10 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		const UWorld* World = Self->GetWorld();
 		if (!World || World->bIsTearingDown || !World->HasBegunPlay() || !Self->Session.IsValid())
 		{
+			if (Self->Session.IsValid())
+			{
+				Self->Session->bCancelled.store(true, std::memory_order_relaxed); // a worker still preparing stops early (Deinitialize waits)
+			}
 			Self->SpawnTicker.Reset();
 			Self->Session.Reset();
 			return false;
@@ -513,7 +544,7 @@ int32 UCodexLevelPropsSubsystem::SpawnPropsFromFile(
 		FPropsSpawnSession& Pending = *Self->Session;
 		if (!Pending.bPrepared)
 		{
-			if (!Pending.PrepareTask.IsCompleted())
+			if (Self->PrepareTask.IsValid() && !Self->PrepareTask.IsCompleted())
 			{
 				++Pending.WaitFrames;
 				return true; // the worker is still reading / validating: no props work on this frame
@@ -546,9 +577,19 @@ bool UCodexLevelPropsSubsystem::TakePreparedSession()
 	}
 	FPropsSpawnSession& S = *Session;
 	S.bPrepared = true;
+	PrepareTask = UE::Tasks::FTask(); // done (or a direct spawn): nothing in flight any more
 	if (!S.bPrepareOk)
 	{
-		Session.Reset(); // the props file did not read / parse (logged): nothing spawns, as before
+		// The props file did not read / parse (logged): nothing spawns and HasSpawned stays false, as before. The old code failed inside
+		// the call, before any session existed, so nobody ever saw it pending; a live spawn was pending for a frame or more, so a listener
+		// that saw IsSpawnPending (e.g. the save restore of generators) is released with OnPropsSpawned here (a direct spawn: as before).
+		const bool bWasAsync = S.bAsyncPrepare;
+		Session.Reset();
+		if (bWasAsync)
+		{
+			OnPropsSpawned.Broadcast(this);
+			OnPropsSpawnedDynamic.Broadcast(GetSpawnedCount());
+		}
 		return false;
 	}
 	DroppedPropIds = S.DroppedIds;
@@ -677,7 +718,7 @@ void UCodexLevelPropsSubsystem::FinishSession()
 	}
 	UE_LOG(LogCodexTactics, Display,
 		TEXT("[Props] spawn cost: max frame #%d (%d objects), slowest object %.2f ms (%s), link pass %.2f ms, prepare %s %.2f ms (parse %.2f / layout + validate %.2f; %d frame(s) waited), game-thread setup %.2f ms; %s"),
-		S.MaxFrame, S.MaxFrameObjects, S.SlowestObjectMs, *S.SlowestObject, LinkMs, S.PrepareTask.IsValid() ? TEXT("on a worker thread") : TEXT("on the game thread"),
+		S.MaxFrame, S.MaxFrameObjects, S.SlowestObjectMs, *S.SlowestObject, LinkMs, S.bAsyncPrepare ? TEXT("on a worker thread") : TEXT("on the game thread"),
 		S.PrepareMs, S.PrepParseMs, S.PrepLayoutMs, S.WaitFrames, S.GameThreadSetupMs, *Costs);
 
 	LastPrepareMs = S.PrepareMs;
@@ -685,7 +726,7 @@ void UCodexLevelPropsSubsystem::FinishSession()
 	LastSpawnFrames = S.Frames;
 	// Wall time of the spawn work: the game-thread set-up + spawn frames, plus the prepare when it ran on a worker thread (a direct spawn's
 	// prepare is inside its set-up already).
-	LastSpawnDurationMs = S.GameThreadSetupMs + S.SpawnMs + (S.PrepareTask.IsValid() ? S.PrepareMs : 0.0);
+	LastSpawnDurationMs = S.GameThreadSetupMs + S.SpawnMs + (S.bAsyncPrepare ? S.PrepareMs : 0.0);
 	bHasSpawned = true;
 
 	UE_LOG(LogCodexTactics, Display,
@@ -1157,6 +1198,10 @@ void UCodexLevelPropsSubsystem::DumpProps() const
 		UE_LOG(LogCodexTactics, Display, TEXT("  Layer '%s': %d game objects"), *Pair.Key, Alive);
 	}
 
+	if (IsSpawnPending())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("(a live spawn is pending: its dropped IDs are set once its worker-thread prepare is done)"));
+	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Dropped IDs (%d):"), DroppedPropIds.Num());
 	for (const FString& DroppedId : DroppedPropIds)
 	{

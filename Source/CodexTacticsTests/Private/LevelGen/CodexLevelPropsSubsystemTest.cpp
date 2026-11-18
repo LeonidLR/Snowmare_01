@@ -7,6 +7,7 @@
 
 #include "Engine/Engine.h"
 #include "Engine/World.h"
+#include "HAL/FileManager.h"
 #include "HAL/IConsoleManager.h"
 #include "LevelGen/CodexPropActors.h"
 #include "Misc/FileHelper.h"
@@ -489,6 +490,85 @@ bool FPropsSubsystemLiveSpawnOffThreadTest::RunTest(const FString& Parameters)
 			}
 		}
 		State->RealCVar->Set(State->OriginalReal, ECVF_SetByCode);
+		State->TestWorld->World->SetBegunPlay(false); // the test set it (no game mode): no EndPlay warning on cleanup
+		State->TestWorld.Reset();
+		return true;
+	}));
+	return true;
+}
+
+
+// 7. Live spawn lifecycle (lead review of the worker-thread prepare): a live spawn replaced while its prepare is in flight is cancelled and
+//    waited for (the new spawn is complete, the old one never fires OnPropsSpawned); a live prepare that fails (unparseable props file)
+//    ends the pending spawn with OnPropsSpawned and nothing spawned (HasSpawned false), so a listener that saw it pending is released.
+PROPS_SUBSYSTEM_TEST(FPropsSubsystemLiveSpawnLifecycleTest, "LiveSpawnLifecycle")
+bool FPropsSubsystemLiveSpawnLifecycleTest::RunTest(const FString& Parameters)
+{
+	using namespace LevelPropsSubsystemTestLocal;
+
+	struct FLifecycleState
+	{
+		TUniquePtr<FScopedTestWorld> TestWorld;
+		TSharedRef<int32> Broadcasts = MakeShared<int32>(0);
+		double StartTime = 0.0;
+		FString BadPath;
+	};
+	TSharedRef<FLifecycleState> State = MakeShared<FLifecycleState>();
+	State->TestWorld = MakeUnique<FScopedTestWorld>(TEXT("PropsTestLifecycleWorld"));
+	if (!TestTrue(TEXT("Test world created"), State->TestWorld->IsValid()))
+	{
+		return false;
+	}
+	UWorld* World = State->TestWorld->World;
+	World->SetBegunPlay(true);
+	UCodexLevelPropsSubsystem* Sub = World->GetSubsystem<UCodexLevelPropsSubsystem>();
+	if (!TestNotNull(TEXT("UCodexLevelPropsSubsystem exists"), Sub))
+	{
+		return false;
+	}
+	TSharedRef<int32> Broadcasts = State->Broadcasts;
+	Sub->OnPropsSpawned.AddLambda([Broadcasts](UCodexLevelPropsSubsystem*) { ++*Broadcasts; });
+
+	State->BadPath = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("Automation/props_lifecycle_bad.props.json"));
+	if (!TestTrue(TEXT("bad props file written"), FFileHelper::SaveStringToFile(TEXT("{ this is not json"), *State->BadPath)))
+	{
+		return false;
+	}
+	const FString PropsPath = SubsystemPropsFixturePath(GSubsystemSmallCrates);
+	const FString LayoutPath = SubsystemPropsFixturePath(GSubsystemSmallLayout);
+
+	// A live spawn replaced by a direct one while (possibly) still preparing: cancelled + waited, never fires.
+	Sub->SpawnPropsFromFile(PropsPath, LayoutPath, nullptr, false, /*bLive=*/ true);
+	TestTrue(TEXT("the first live spawn is pending"), Sub->IsSpawnPending());
+	const int32 Direct = Sub->SpawnPropsFromFile(PropsPath, LayoutPath);
+	TestEqual(TEXT("the replacing direct spawn placed the fixture's 10 props"), Direct, 10);
+	TestFalse(TEXT("nothing pending after the replacing direct spawn"), Sub->IsSpawnPending());
+	TestTrue(TEXT("the replacing direct spawn has spawned"), Sub->HasSpawned());
+	TestEqual(TEXT("only the direct spawn fired OnPropsSpawned"), *Broadcasts, 1);
+
+	// A live spawn whose prepare fails (its parse error is logged on the worker thread).
+	AddExpectedError(TEXT("[Props] parse error in"), EAutomationExpectedErrorFlags::Contains, 0, /*IsRegex=*/ false);
+	Sub->SpawnPropsFromFile(State->BadPath, FString(), nullptr, false, /*bLive=*/ true);
+	TestTrue(TEXT("the failing live spawn is pending until its prepare is done"), Sub->IsSpawnPending());
+	State->StartTime = FPlatformTime::Seconds();
+
+	TWeakObjectPtr<UCodexLevelPropsSubsystem> WeakSub(Sub);
+	ADD_LATENT_AUTOMATION_COMMAND(FFunctionLatentCommand([this, State, WeakSub]() -> bool
+	{
+		UCodexLevelPropsSubsystem* Props = WeakSub.Get();
+		if (Props && Props->IsSpawnPending() && FPlatformTime::Seconds() - State->StartTime < 20.0)
+		{
+			return false;
+		}
+		if (TestNotNull(TEXT("subsystem still alive"), Props))
+		{
+			TestFalse(TEXT("the failed live spawn is no longer pending"), Props->IsSpawnPending());
+			TestFalse(TEXT("a failed live spawn has not spawned"), Props->HasSpawned());
+			TestEqual(TEXT("a failed live spawn placed nothing"), Props->GetSpawnedCount(), 0);
+			TestEqual(TEXT("the failed live spawn released its listeners (OnPropsSpawned)"), *State->Broadcasts, 2);
+		}
+		IFileManager::Get().Delete(*State->BadPath);
+		State->TestWorld->World->SetBegunPlay(false); // the test set it (no game mode): no EndPlay warning on cleanup
 		State->TestWorld.Reset();
 		return true;
 	}));

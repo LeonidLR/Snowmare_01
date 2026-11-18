@@ -67,3 +67,37 @@ The longest frame is now the configured 20 ms slice, not the layout size. The 45
 - **`typesafe_triage.py --audit-diff --agent claude`:** boundary PASS.
 
 Not verified: a PIE session in the editor, with the designer's real maps and a rendering RHI (the smokes run on `-nullrhi`).
+
+## Lead review follow-up (second commit on the branch)
+
+1. **Thread safety: proven, no snapshot needed beyond what was already there.**
+   - `PrepareSession` is a `static` member, so the compiler stops it from reading subsystem members or the variant tables that `LoadBalanceFile` fills.
+   - `ResolveLayoutPath` is now `static` too. It only uses `FPaths` / `IFileManager`.
+   - The callees are `LevelPropsFile::Parse` / `ApplyOverrides`, `UsesGreybox(File, Mode)`, `FPropsLayoutView::ReadConfig` / `Build`, `FPropsValidator::ValidateResolved` / `ValidatePowerLinks` / `GetVariantHalfSize`, and `PropsGameplayRules::TurretInputOf` / `TurretPoweredShare` / `ResolveTurrets` / `IsGeneratorObject` / `GeneratorInputOf` / `TurretGeneratorOf`, plus `PropsRng::Fnv1a`.
+   - A grep of `LevelPropsFile.cpp`, `PropsLayoutView.cpp`, `PropsValidator.cpp`, `PropsGameplayRules.cpp`, `LevelGenJsonRead.h` and `PropsRng.cpp` finds:
+     - no function-local `static`;
+     - no CVar / `IConsoleManager` / `GConfig` / `GEngine` / `GWorld` / `GetDefault`;
+     - no UObject access.
+   - The only UObject reflection in those files (`FLootContents::StaticStruct` in `ApplyToContents`) is spawn-time code on the game thread, not part of the prepare.
+   - Codex.Props.Greybox, Codex.Props.Real and the traps side are read on the game thread before the launch. The task gets the balance JSON as a shared pointer, read-only. `TSharedPtr` defaults to `ESPMode::ThreadSafe`, so concurrent const reads are safe.
+2. **`DroppedPropIds` readers:**
+   - the smoke, after `!IsSpawnPending`;
+   - `DumpProps`, which now prints a "spawn pending" note during the prepare;
+   - the tests, which use direct spawns.
+   - Nothing reads it right after a live call.
+3. **No worker outlives its spawn or the subsystem.** A session has a `std::atomic<bool> bCancelled`, which the worker checks between phases: after the parse, after the layout read, after `Build`, and after validation.
+   - `StopSpawnTicker` (called by a respawn, `ClearSpawnedProps` and `Deinitialize`) sets the flag and calls `Wait()` on the in-flight task. So there is never a second prepare in flight, and none runs after `Deinitialize`.
+   - The ticker's world-ending branch sets the flag too.
+4. **Failure parity.** The old code failed inside the call, before any session existed: no `OnPropsSpawned`, and it was never pending. A live spawn is pending until its worker finishes. So a failed live prepare now ends the spawn with `OnPropsSpawned` / `OnPropsSpawnedDynamic` (nothing spawned, `HasSpawned` false). A listener that saw it pending, such as the save restore of generators, is released. A direct spawn behaves exactly as before.
+5. **No self-reference.** The `FTask` handle lives on the subsystem (`PrepareTask`), not in the session. The task holds the session, and its body is destructed right after it runs.
+6. **Tests.** New `CodexTactics.LevelGen.Props.Subsystem.LiveSpawnLifecycle`:
+   - a live spawn replaced by a direct one is cancelled and waited for, and never fires;
+   - a failed live prepare fires `OnPropsSpawned` with nothing spawned.
+
+   Both live tests reset the begun-play flag before cleanup.
+
+Follow-up verification:
+- `test.ps1 -Filter CodexTactics.LevelGen.Props`: 76 tests, 0 failed.
+- `GeneratedPropsX6Smoke` run alone: PASS, 20.1 ms.
+- Batch of X6, GeneratedPropsSmoke (X4) and TurretPowerSmoke: all PASS. X6 20.2 ms, X4 20.1 ms.
+- audit-diff: PASS.

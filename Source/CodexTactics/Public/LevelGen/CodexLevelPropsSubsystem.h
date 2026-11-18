@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Containers/Ticker.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "Tasks/Task.h"
 #include "CodexLevelPropsSubsystem.generated.h"
 
 class ACodexPropActor;
@@ -77,7 +78,8 @@ public:
 	/** True once the last spawn finished (every frame of a frame-sliced spawn done; reset by ClearSpawnedProps). */
 	bool HasSpawned() const { return bHasSpawned; }
 
-	/** Fired when a spawn finishes (after its last frame; at once for a direct spawn). */
+	/** Fired when a spawn finishes (after its last frame; at once for a direct spawn). Also when a live spawn's prepare fails (nothing
+	 * spawned, HasSpawned false), so a listener that saw it pending is released. */
 	FOnLevelPropsSpawned OnPropsSpawned;
 
 	/** Blueprint form of OnPropsSpawned. */
@@ -132,7 +134,7 @@ private:
 	bool ProcessSession(double BudgetMs);
 	/** The attach pass, the timings and the log line; ends the session and fires OnPropsSpawned. */
 	void FinishSession();
-	/** Removes the frame-slice ticker (if any) and drops the pending session. */
+	/** Removes the frame-slice ticker (if any), cancels + waits for an in-flight worker prepare and drops the pending session. */
 	void StopSpawnTicker();
 	void SpawnOne(FPropsSpawnSession& S, const FLevelPropsResolvedObject& ResObj);
 	/** The real game object of a prop (gameplay.classes); false = none (the ACodexProp* actor / greybox then). */
@@ -140,6 +142,8 @@ private:
 	static void TagProp(AActor* Actor, const FString& LayerId, const FString& PropId);
 
 	TSharedPtr<FPropsSpawnSession> Session;
+	/** The worker-thread prepare of the live spawn in flight (invalid once taken / for a direct spawn); StopSpawnTicker cancels + waits. */
+	UE::Tasks::FTask PrepareTask;
 	FTSTicker::FDelegateHandle SpawnTicker;
 	/** Bumped by every spawn: a ticker of an older spawn stops itself. */
 	uint32 SpawnGeneration = 0;
