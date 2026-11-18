@@ -146,6 +146,7 @@ FSquadGiveWayTuning SquadGiveWayTuning::FromJson(const FJsonObject& GiveWay, con
 	ReadNumber(GiveWay, TEXT("step_aside_cm"), Tuning.StepAsideCm, 50.f, 500.f);
 	ReadNumber(GiveWay, TEXT("same_level_cm"), Tuning.SameLevelCm, 30.f, 400.f);
 	ReadNumber(GiveWay, TEXT("nav_snap_cm"), Tuning.NavSnapCm, 5.f, 100.f);
+	ReadNumber(GiveWay, TEXT("max_rise_cm"), Tuning.MaxRiseCm, 5.f, 150.f);
 	ReadNumber(GiveWay, TEXT("retry_s"), Tuning.RetrySeconds, 0.1f, 10.f);
 	return Tuning;
 }
