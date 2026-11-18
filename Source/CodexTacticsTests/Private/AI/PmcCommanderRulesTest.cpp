@@ -453,6 +453,11 @@ bool FPmcCommanderEngagementBandTest::RunTest(const FString&)
 	TestEqual(TEXT("... cover interrupted cooldown"), Shipped.CoverInterruptedCooldownSeconds, 3.f, 0.001f);
 	TestEqual(TEXT("... target switch hysteresis cm"), Shipped.TargetSwitchHysteresisCm, 200.f, 0.001f);
 	TestEqual(TEXT("... facing dead band deg"), Shipped.FacingDeadBandDeg, 1.5f, 0.001f);
+	TestEqual(TEXT("... guard dist 4 m"), Shipped.GuardDistCm, 400.f, 0.5f);
+	TestEqual(TEXT("... guard inset 1.5 m"), Shipped.GuardInsetCm, 150.f, 0.5f);
+	TestEqual(TEXT("... min spacing 5 m"), Shipped.MinSpacingCm, 500.f, 0.5f);
+	TestEqual(TEXT("... area factor 2"), Shipped.AreaFactor, 2.f, 0.001f);
+	TestEqual(TEXT("... sector arc 180"), Shipped.SectorArcDeg, 180.f, 0.001f);
 
 	// CanReissueOrderAt tests (Cause A: no same order on the same spot).
 	TestFalse(TEXT("Cannot reissue FallBack on the same spot (within 250 cm)"),

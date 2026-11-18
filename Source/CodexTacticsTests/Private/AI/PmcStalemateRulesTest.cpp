@@ -155,17 +155,22 @@ bool FPmcPushTest::RunTest(const FString&)
 	Plain.Objective = FPmcObjectiveView();
 	TestFalse(TEXT("no objective: no push"), PmcCommanderRules::IsPushing(Plain, Squad, W));
 
-	// The defender: onto the point when it goes quiet, and as the time limit nears (from 60 % of the round, full at 85 %).
-	FPmcFighterView Defender = Attacker(900.f); // within his overwatch (1200 cm without a band)
+	// The defender (PMC_DEFENCE.md D1): 900 cm is inside the defended area (radius 600 x area_factor 2 = 1200),
+	// so Objective stays 0 on a late clock and during a quiet push. He is not pulled into the capture ring.
+	// The attacker's push assertions above are unchanged.
+	FPmcFighterView Defender = Attacker(900.f);
 	Defender.Objective.Role = EPmcRole::Defender;
 	Squad.QuietSeconds = 0.f;
 	Defender.Objective.TimeFrac = 0.3f;
-	TestEqual(TEXT("defender early, in contact, within overwatch: stays"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.f);
+	TestEqual(TEXT("defender inside the area, early: stays"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.f);
 	Defender.Objective.TimeFrac = 0.9f;
-	TestEqual(TEXT("defender near the limit: onto the point 0.9"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.9f, 0.001f);
+	TestEqual(TEXT("defender inside the area near the limit: stays"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.f);
 	Defender.Objective.TimeFrac = 0.3f;
 	Squad.QuietSeconds = 31.f;
-	TestEqual(TEXT("defender, quiet 31 s: onto the point 0.8"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.8f, 0.001f);
+	TestEqual(TEXT("defender inside the area, quiet 31 s: stays"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Defender, Squad, W), 0.f);
+	FPmcFighterView Strayed = Attacker(1500.f);
+	Strayed.Objective.Role = EPmcRole::Defender;
+	TestEqual(TEXT("defender outside the area: 0.7, the push does not raise it"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Strayed, Squad, W), 0.7f, 0.001f);
 
 	// No cover from a stand-in (the objective point with no enemy known): it flapped with the Objective walk.
 	FPmcFighterView Open = Attacker(3000.f);

@@ -128,13 +128,27 @@ bool FPmcArenaObjectiveOrderTest::RunTest(const FString&)
 	// On the point the attacker values holding: Hold x (1 + objective_approach).
 	TestEqual(TEXT("attacker holds on the point x 1.5"), PmcCommanderRules::ScoreOrder(EPmcOrder::Hold, ObjectiveFighter(EPmcRole::Attacker, 300.f, 0.f), Squad, Weights),
 		PlainHold * 1.5f, 0.001f);
-	// Defender: back onto the point while the attackers stand on it (more urgent as their clock runs), back into the overwatch when far.
-	const float RetakeEarly = PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 1500.f, 0.f, true, 0.f), Squad, Weights);
-	const float RetakeLate = PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 1500.f, 0.f, true, 1.f), Squad, Weights);
-	TestEqual(TEXT("defender retake at clock 0: 0.2"), RetakeEarly, 0.2f, 0.001f);
-	TestEqual(TEXT("defender retake at the full clock: 1"), RetakeLate, 1.f, 0.001f);
-	TestEqual(TEXT("defender within overwatch, nobody on it: stays"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 900.f, 0.f), Squad, Weights), 0.f);
-	TestEqual(TEXT("defender strayed past the overwatch: 0.7"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 5000.f, 0.f), Squad, Weights), 0.7f, 0.001f);
+	// Defender (PMC_DEFENCE.md D1): the defended area is the radius (600) times area_factor (2) = 1200 cm, on the level.
+	// Inside it Objective is 0, including a push and a late clock. Outside it the walk back is a flat 0.7, with no capture clock.
+	// 1500 cm used to be a retake (0.2 at clock 0, 1.0 at a full clock). It is outside the area, so both are 0.7.
+	const float OutsideEarly = PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 1500.f, 0.f, true, 0.f), Squad, Weights);
+	const float OutsideLate = PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 1500.f, 0.f, true, 1.f), Squad, Weights);
+	TestEqual(TEXT("defender outside the area, clock 0: 0.7"), OutsideEarly, 0.7f, 0.001f);
+	TestEqual(TEXT("defender outside the area, full clock: still 0.7"), OutsideLate, 0.7f, 0.001f);
+	TestEqual(TEXT("defender inside the area: stays"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 900.f, 0.f), Squad, Weights), 0.f);
+	TestEqual(TEXT("defender outside the area: back into it 0.7"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 5000.f, 0.f), Squad, Weights), 0.7f, 0.001f);
+	FPmcFighterView OffLevel = ObjectiveFighter(EPmcRole::Defender, 1000.f, 0.9f);
+	OffLevel.Objective.bOnObjectiveLevel = false;
+	TestEqual(TEXT("defender off the objective level: back up 0.7"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, OffLevel, Squad, Weights), 0.7f, 0.001f);
+	FPmcFighterView RoofEdge = ObjectiveFighter(EPmcRole::Defender, 5000.f, 0.9f, true, 1.f);
+	RoofEdge.Objective.bDefenceAreaSet = true;
+	RoofEdge.Objective.bInsideDefenceArea = true;
+	TestEqual(TEXT("defender inside a set roof area: 0 even far from the point"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, RoofEdge, Squad, Weights), 0.f);
+	FPmcFighterView Shift = ObjectiveFighter(EPmcRole::Defender, 900.f, 0.f);
+	Shift.bSectorShift = true;
+	TestTrue(TEXT("sector shift relocates without contact"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, Shift, Squad, Weights) > 0.f);
+	Shift.bSectorShift = false;
+	TestEqual(TEXT("without the flag Relocate stays 0"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, Shift, Squad, Weights), 0.f);
 	TestEqual(TEXT("defender within overwatch holds x 1.5"), PmcCommanderRules::ScoreOrder(EPmcOrder::Hold, ObjectiveFighter(EPmcRole::Defender, 900.f, 0.f), Squad, Weights),
 		PlainHold * 1.5f, 0.001f);
 	// The assault point standing in for a threat (no enemy known): a rifleman on it is not "too close" and holds it without the band penalty.

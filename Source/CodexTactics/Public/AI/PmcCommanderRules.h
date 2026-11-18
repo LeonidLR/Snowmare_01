@@ -41,8 +41,8 @@ enum class EPmcOrder : uint8
 	/** Crouch where he stands (in contact, not moving, not in cover). */
 	Crouch,
 	/**
-	 * The round's objective point (task #53, the arena): an attacker walks onto it (he wins by holding it), a defender goes back to it
-	 * when the attackers stand on it or he strayed out of its overwatch.
+	 * The round's objective point (task #53, the arena): an attacker walks onto it (he wins by holding it). A defender's Objective
+	 * order is 0 inside the defended area (PMC_DEFENCE.md D1); outside it he walks back to his post, not into the capture ring.
 	 */
 	Objective,
 	/**
@@ -101,6 +101,15 @@ struct CODEXTACTICS_API FPmcObjectiveView
 	float HoldFrac = 0.f;
 	/** An enemy stands within the radius (the attackers for a defender, the defenders for an attacker). */
 	bool bEnemyOnPoint = false;
+	/**
+	 * G008: his feet are on the objective's level. Default true so a planar test uses the area fallback.
+	 * The subsystem sets it from IsSameLevel; off the level is outside the defended area (a man under the roof).
+	 */
+	bool bOnObjectiveLevel = true;
+	/** The subsystem measured the defended area. When set, bInsideDefenceArea replaces the radius fallback. */
+	bool bDefenceAreaSet = false;
+	/** Inside the defended area (roof spot span, or the ground radius times area_factor). The Objective order then scores 0. */
+	bool bInsideDefenceArea = false;
 
 	bool IsActive() const { return Role != EPmcRole::None && RadiusCm > 0.f; }
 };
@@ -310,6 +319,23 @@ struct CODEXTACTICS_API FPmcWeights
 	/** Defenders value overwatch of the approaches: a slot / Hold within reach of the point x (1 + this). */
 	float Overwatch = 0.5f;
 
+	// --- Defence roles (PMC_DEFENCE.md D1, G008). Frozen numbers in pmc_commander.json, not trainer genes. ---
+
+	/** "guard_dist_m" (4): a defender within this of the access, on its level, counts for the guard share. Cm. */
+	float GuardDistCm = 400.f;
+	/** "guard_inset_m" (1.5): the access guard stands this far from the access, toward the roof. Cm. */
+	float GuardInsetCm = 150.f;
+	/** "min_spacing_m" (5): a cover slot this close to a claimed one scores x SpacingPenalty. Cm. */
+	float MinSpacingCm = 500.f;
+	/** "spacing_penalty" (0.25): applied once, not once per teammate. */
+	float SpacingPenalty = 0.25f;
+	/** "area_factor" (2): on the ground the defended area is the point's radius times this. */
+	float AreaFactor = 2.f;
+	/** "shift_after_s" (8): a sector shooter may relocate along his wedge after this long on the post. */
+	float ShiftAfterSeconds = 8.f;
+	/** "sector_arc_deg" (180): the arc facing the attacker spawn, split across the sector shooters. */
+	float SectorArcDeg = 180.f;
+
 	// --- Target attention (user 2026-11-07: strike when the enemy looks away; trainer genes +-50 %) ---
 
 	/** Flank / Advance (not a close-quarters weapon's) / an attacker's Objective walk x (1 + this x (AttentionOff - 0.5)): moving while they look away is worth more. */
@@ -459,6 +485,11 @@ struct CODEXTACTICS_API FPmcFighterView
 	EPmcPostKind PostKind = EPmcPostKind::None;
 	float PostScore = 0.f;
 	bool bAtPost = false;
+	/**
+	 * G008: a sector shooter moves to the next spot of his own wedge (shift_after_s on the post, or exposed in contact).
+	 * Default false, so Relocate scores exactly as it did before the flag existed.
+	 */
+	bool bSectorShift = false;
 };
 
 /** The squad as a whole. */

@@ -1,6 +1,7 @@
 #include "AI/PmcCommanderRules.h"
 
 #include "AI/AmbushWatchRules.h"
+#include "AI/PmcDefenceRules.h"
 #include "AI/PmcTacticalRules.h"
 #include "Dom/JsonObject.h"
 #include "Math/RandomStream.h"
@@ -195,6 +196,11 @@ namespace PmcCommanderRules
 		case EPmcOrder::Relocate:
 			// Spotted at this spot for too long: move to another cover.
 			// TACTICAL_MAP P2: or standing in a chokepoint (danger >= choke_leave_danger) - he leaves it before he is spotted there.
+			// G008: a sector shooter shifts along his own wedge. The flag defaults off, so the expression below stays the old one.
+			if (F.bSectorShift)
+			{
+				return W.Relocate * Step(!F.Threat.bStandIn) * PushDamp * Leave;
+			}
 			return W.Relocate * Contact * Step(!F.Threat.bStandIn) * Step(F.bCoverAvailable)
 				* FMath::Max(Step(F.bExposed && F.SecondsExposedHere >= W.RelocateAfterSeconds), Step(F.DangerHere > 0.f && F.DangerHere >= W.ChokeLeaveDanger)) * PushDamp * Leave;
 		case EPmcOrder::Ambush:
@@ -218,12 +224,13 @@ namespace PmcCommanderRules
 			{
 				return 0.f;
 			}
-			if (F.RunningOrder == EPmcOrder::Objective)
-			{
-				return FMath::Max(W.Objective, 0.f) * (bPush ? PushGain : 1.f);
-			}
 			if (O.Role == EPmcRole::Attacker)
 			{
+				// A walk already under way keeps its score (the man commits to the point).
+				if (F.RunningOrder == EPmcOrder::Objective)
+				{
+					return FMath::Max(W.Objective, 0.f) * (bPush ? PushGain : 1.f);
+				}
 				// Onto the point: more urgent as the clock runs down (the defenders win at the time limit), less under fire / against men on it.
 				const float Urgency = Clamp01(W.ObjectiveUrgency);
 				if (bPush)
@@ -235,14 +242,15 @@ namespace PmcCommanderRules
 				return FMath::Max(W.Objective, 0.f) * Step(O.DistanceCm > 0.7f * O.RadiusCm) * (1.f - Urgency + Urgency * Clamp01(O.TimeFrac)) * F.HealthFrac
 					* Step(F.AmmoFrac > 0.1f) * (SeenNow > 0.f ? 0.6f : 1.f) * (O.bEnemyOnPoint ? 0.8f : 1.f) * AttentionFactor(F, W);
 			}
-			// A defender: back onto the point while the attackers stand on it (the more of their clock ran, the more urgent), or back into
-			// its overwatch when he strayed.
-			const float Retake = Step(O.bEnemyOnPoint && O.DistanceCm > 0.7f * O.RadiusCm) * (0.2f + 0.8f * Clamp01(O.HoldFrac));
-			const float Return = Step(!O.bEnemyOnPoint && O.DistanceCm > OverwatchCm) * 0.7f;
-			// fix/pmc-arena-stalemate: the defenders win on time only standing on the point - onto it when the round goes quiet (the push)
-			// and as the time limit nears (from 60 % of the round, full at 85 %).
-			const float Occupy = Step(bOffPoint) * FMath::Max(Step(bPush) * 0.8f, Clamp01((O.TimeFrac - 0.6f) / 0.25f) * 0.9f);
-			return FMath::Max(W.Objective, 0.f) * FMath::Max(FMath::Max(Retake, Return), Occupy) * FMath::Max(0.5f, F.HealthFrac);
+			// A defender (PMC_DEFENCE.md D1): inside the defended area the order is 0, including a push and a late clock.
+			// He is not pulled into the capture ring. Outside it he walks back to his post, a flat 0.7, with no clock.
+			// The attacker's branch above is unchanged. The capture clock is unchanged.
+			{
+				const bool bInside = O.bDefenceAreaSet
+					? O.bInsideDefenceArea
+					: PmcDefenceRules::IsInsideAreaFallback(O.bOnObjectiveLevel, O.DistanceCm, O.RadiusCm, W.AreaFactor);
+				return PmcDefenceRules::DefenderObjectiveScore(bInside, W.Objective, F.HealthFrac);
+			}
 		}
 		case EPmcOrder::RpgStrike:
 			// The squad's RPG gunner (2026-11-09): a rocket target the team sees (the shared launcher rule's score, capped at 1) - worth more
@@ -601,6 +609,20 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("objective_urgency"), Out.ObjectiveUrgency);
 		ReadNumber(Json, TEXT("objective_approach"), Out.ObjectiveApproach);
 		ReadNumber(Json, TEXT("overwatch"), Out.Overwatch);
+		// Defence roles (PMC_DEFENCE.md D1, G008). Metres in the file, centimetres here, same as tactical_reach_m.
+		float GuardM = Out.GuardDistCm / 100.f;
+		ReadNumber(Json, TEXT("guard_dist_m"), GuardM);
+		Out.GuardDistCm = FMath::Max(GuardM, 0.f) * 100.f;
+		float InsetM = Out.GuardInsetCm / 100.f;
+		ReadNumber(Json, TEXT("guard_inset_m"), InsetM);
+		Out.GuardInsetCm = FMath::Max(InsetM, 0.f) * 100.f;
+		float SpacingM = Out.MinSpacingCm / 100.f;
+		ReadNumber(Json, TEXT("min_spacing_m"), SpacingM);
+		Out.MinSpacingCm = FMath::Max(SpacingM, 0.f) * 100.f;
+		ReadNumber(Json, TEXT("spacing_penalty"), Out.SpacingPenalty);
+		ReadNumber(Json, TEXT("area_factor"), Out.AreaFactor);
+		ReadNumber(Json, TEXT("shift_after_s"), Out.ShiftAfterSeconds);
+		ReadNumber(Json, TEXT("sector_arc_deg"), Out.SectorArcDeg);
 		// Target attention (2026-11-07).
 		ReadNumber(Json, TEXT("attention"), Out.Attention);
 		ReadNumber(Json, TEXT("ambush_patience"), Out.AmbushPatience);
