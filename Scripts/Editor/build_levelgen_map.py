@@ -36,7 +36,10 @@ with the world grid material, TargetPoints, ALadderActor, PlayerStart, NavMeshBo
   - the level JSON's "bot_route" (levelgen_bot_route.bot_route: the mandatory route as the playtest bot's planned route, with each
     waypoint's floor height and the drop legs marked); a rebuild KEEPS the existing level JSON's "pressure" / "cheats" blocks;
     "drop_links": true (2026-11-03): the runtime drop nav links off the open edges (UDropLinkSubsystem, LEVEL_GENERATOR.md 8.6)
-    (tuned on the Training Ground combat lab page) when it was written for the same layout.
+    (tuned on the Training Ground combat lab page) when it was written for the same layout;
+  - the level JSON's "pmc_squads" from the layout's generated PMC posts (task 087, PMC_DEFENCE.md D2: layout["pmc"]["posts"] ->
+    count / weights / posture / delay_s + "post" {id, kind, pos, yaw}); a rebuild from the same layout keeps the tuned entries
+    (merge_pmc_squads). The posts' charges go into the props file (Training Ground props autogen, layer pmc_charges), not here.
 Idempotent per map (every actor tagged LevelGen is deleted and placed again); never touches another map (L_Demo01_B_FrozenFactory
 is not read or written). Lighting (sun, sky, fog) placed once (tag LevelGen_Env).
 
@@ -84,6 +87,7 @@ CUBE = "/Engine/BasicShapes/Cube.Cube"
 CYLINDER = "/Engine/BasicShapes/Cylinder.Cylinder"
 GRID = "/Engine/EngineMaterials/WorldGridMaterial.WorldGridMaterial"
 START_Z = 100.0
+PMC_WEIGHTS_DEFAULT = "pmc_commander.json"
 REPORT = []
 
 
@@ -934,10 +938,66 @@ def level_json(layout, map_path):
     }
     if layout.get("pressure"):
         data["pressure"] = layout["pressure"]
+    squads = pmc_squads_of(layout)
+    if squads:
+        data["pmc_squads"] = squads
     route = levelgen_bot_route.bot_route(layout)
     if route:
         data["bot_route"] = route
     return data
+
+
+def pmc_weights_file():
+    """levelgen_v2.json pmc_posts.weights_file (the PMC commander weights; default pmc_commander.json)."""
+    try:
+        with open(os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "levelgen_v2.json"), encoding="utf-8-sig") as f:
+            return str((json.load(f).get("pmc_posts") or {}).get("weights_file") or PMC_WEIGHTS_DEFAULT)
+    except (OSError, ValueError):
+        return PMC_WEIGHTS_DEFAULT
+
+
+def pmc_squads_of(layout):
+    """Task 087 (PMC_DEFENCE.md D2): the layout's generated PMC posts (layout["pmc"]["posts"], Training Ground pmcPosts.ts) as the
+    level JSON "pmc_squads" - the existing schema keys count / weights / posture / delay_s, plus "post" {id, kind, pos [x, y, z]
+    world cm, yaw} instead of "spawn": "random" (until the C++ spawn-at-post task lands the game ignores "post" and spawns the squad
+    by its default rule). No pmc block -> []."""
+    posts = ((layout.get("pmc") or {}).get("posts")) or []
+    weights = pmc_weights_file() if posts else PMC_WEIGHTS_DEFAULT
+    out = []
+    for p in posts:
+        pos = list(p.get("pos") or [])
+        if len(pos) < 2 or not p.get("id"):
+            report("REVIEW: pmc post without id / pos skipped: %r" % (p,))
+            continue
+        out.append({
+            "count": int(p.get("count", 3)),
+            "weights": weights,
+            "posture": str(p.get("posture", "defend")),
+            "delay_s": p.get("delay_s", 0),
+            "post": {"id": str(p["id"]), "kind": str(p.get("kind", "")), "pos": [pos[0], pos[1], pos[2] if len(pos) > 2 else 0], "yaw": p.get("yaw", 0)},
+        })
+    return out
+
+
+def merge_pmc_squads(old, new):
+    """A rebuild from the SAME layout keeps the per-map tuned pmc_squads (like pressure / cheats): an old entry with the same post
+    (id + kind) keeps its tuned keys (count, weights, posture, delay_s, seed, ...) and takes the new post position; hand entries
+    without a post (e.g. "spawn": "random") stay; old post entries the layout no longer has are dropped. No new posts -> the old list."""
+    if not isinstance(old, list):
+        return new
+    if not new:
+        return old
+    by_post = {}
+    for e in old:
+        post = e.get("post") if isinstance(e, dict) else None
+        if isinstance(post, dict) and post.get("id"):
+            by_post[(post.get("id"), post.get("kind"))] = e
+    out = []
+    for e in new:
+        tuned = by_post.get((e["post"]["id"], e["post"]["kind"]))
+        out.append(dict(tuned, post=e["post"]) if tuned else e)
+    out.extend(e for e in old if not (isinstance(e, dict) and isinstance(e.get("post"), dict)))
+    return out
 
 
 def write_level_json(layout, map_path):
@@ -954,6 +1014,10 @@ def write_level_json(layout, map_path):
                 for key in ("pressure", "cheats"):
                     if key in old:
                         data[key] = old[key]
+                # Task 087: the tuned pmc_squads survive; generated posts refresh their positions (merge_pmc_squads).
+                if "pmc_squads" in old:
+                    data["pmc_squads"] = merge_pmc_squads(old["pmc_squads"], data.get("pmc_squads") or [])
+                    report("level JSON: pmc_squads merged (%d entries, %d generated posts)" % (len(data["pmc_squads"]), len(pmc_squads_of(layout))))
                 # Weather / temperature tuned per map (2026-11-18) survive a rebuild; an older file without "environment" still had
                 # the cold switched off (cold_rate_mult 0) - that one takes the new defaults.
                 if "environment" in old:
