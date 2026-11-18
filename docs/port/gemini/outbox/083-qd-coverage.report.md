@@ -1,8 +1,8 @@
 # Отчёт 083: Исправление покрытия архива MAP-Elites QD тренера
 
-- **Задача:** 083 (`qd-archive-coverage`)
+- **Задача:** 083 / 083b (`qd-archive-coverage`)
 - **Спецификация:** `docs/port/gemini/inbox/083-qd-archive-coverage.md`
-- **Ветка:** `gemini/083-qd-coverage` (база `main`)
+- **Ветка:** `gemini/083-qd-coverage` (база `main`, влит актуальный `origin/main` с корректным заголовком `Allowed paths:`)
 - **Ворктри:** `CodexTactics-gemday`
 - **Автор:** Gemini (Antigravity)
 
@@ -45,7 +45,14 @@
 4. **Итоговое пересечение осей:**
    `{0, 1} x {3} x {0}` -> ровно **2 ячейки из 48**: `(0, 3, 0)` и `(1, 3, 0)`.
 
-### 1.3. Диагностика бот-раундов в лиге (пункт 2b)
+### 1.3. Анализ весов мобильности (`flanks_completed` vs `moves`)
+
+- В текущих данных `moves` имеет среднее **22.96** (разброс 10 .. 46), а `flanks_completed` — среднее **0.10** (макс. 0.75, у 27 из 40 кандидатов ровно 0.0).
+- При взвешивании `flanks * 3 + moves`: максимальный вклад флангов составляет `0.75 * 3 = 2.25` (менее 10% от средних `moves` 23).
+- Чтобы фланги оказывали сопоставимое влияние, потребовался бы вес `flanks * 20` или `flanks * 30`. Однако из-за того, что у 67.5% кандидатов фланги равны 0 (триггер захода в тыл на карте депо срабатывает редко), такой искусственный вес привел бы к бимодальному ступенчатому скачку через 2 бина сразу.
+- **Решение:** пороги `bin_edges: [16.0, 24.0, 32.0]` выбраны по фактической сумме `flanks + moves`, что дает идеальное разделение 40 кандидатов по 4 бинам: 10 в бине 0, 15 в бине 1, 10 в бине 2, 5 в бине 3. После доработки C++ логики детекции флангов можно будет взвесить метрики.
+
+### 1.4. Диагностика бот-раундов в лиге (пункт 2b)
 
 - Арена играет против бота только **1 раунд**. Тренер же передавал `rounds_per_job: 3` (дефолт из `evaluation`).
 - Адаптер получал 1 раунд и при `pad_missing_rounds_as_crash: true` дополнял 2 недостающих раунда как `crashed: True`.
@@ -55,47 +62,62 @@
 
 ## 2. Реализованные изменения
 
-1. **Поддержка `bin_edges` в `qd.py` (`Scripts/Trainer/nighttrainer/qd.py:68`):**
-   - Метод `bin_index` расширен поддержкой явных порогов бинов `bin_edges: [e1, e2, ...]` (при сохранении обратной совместимости с линейным `range`).
-   - Сигнатура архива `_axis_signature` (`Scripts/Trainer/nighttrainer/qd.py:37`) включает границы бинов для предотвращения смешивания несовместимых сеток.
+1. **Валидация `bin_edges` на загрузке (`Scripts/Trainer/nighttrainer/qd.py:60`, `Scripts/Trainer/nighttrainer/qd.py:83`):**
+   - Добавлены функции `validate_axis` и `validate_axes`.
+   - Проверяется: `len(bin_edges) == bins - 1`, тип — список/кортеж, все элементы — строго возрастающие числа. При нарушении выбрасывается информативная ошибка `ValueError` с именем оси.
+   - Сигнатура архива `_axis_signature` (`Scripts/Trainer/nighttrainer/qd.py:37`) включает границы бинов.
 
-2. **Мутационное давление в пустые ячейки (`Scripts/Trainer/nighttrainer/qd.py:187`, `Scripts/Trainer/nighttrainer/qd.py:236`):**
+2. **Гистограммы дескрипторов за поколение (`Scripts/Trainer/nighttrainer/qd.py:160`, `Scripts/Trainer/nighttrainer/trainer.py:263`, `Scripts/Trainer/nighttrainer/report.py:135`):**
+   - В `qd.py` реализована функция `descriptor_histogram(behaviours, axes)`: вычисляет `min`, `mean`, `max` и распределение по бинам (`bins: [c0, c1, ...]`) для каждой оси.
+   - В `trainer.py` гистограмма записывается в `gen_NNNN/generation.json` (`descriptor_histograms`) и сохраняется в `state["history"][-1]["descriptors"]`.
+   - В `report.py` функция `_archive_section` рендерит таблицу гистограмм последнего поколения для анализа перед перенастройкой порогов на следующий день.
+
+3. **Корректные раунды для бот-матчей без костылей по именам (`Scripts/Trainer/nighttrainer/trainer.py:37`, `Scripts/Trainer/nighttrainer/adapter.py:219`):**
+   - В `trainer.py` добавлена функция `_lookup_rounds`:
+     - Проверяет `spec.get("rounds_per_job") is not None` и `spec.get("rounds") is not None` (значение 0 не считается отсутствующим).
+     - Сравнивает имя оппонента в нижнем регистре (`.strip().lower()`).
+     - Для бота по умолчанию выставляет 1 раунд, для остальных — `default_rounds` (4).
+   - В `adapter.py` удален захардкоженный clamp по имени `"bot"`. В качестве `expected_rounds` передается собственное число раундов джоба (`job["rounds"]`).
+   - В `adapter.py` обработан случай реального краша до завершения первого раунда (`rounds: []`): при наличии `expected_rounds` и `pad_missing_rounds_as_crash: true` возвращается список краш-раундов длиной `expected_rounds`.
+
+4. **Мутационное давление в пустые ячейки (`Scripts/Trainer/nighttrainer/qd.py:251`, `Scripts/Trainer/nighttrainer/qd.py:298`):**
    - Добавлен метод `Archive.empty_neighbors(key)`, вычисляющий число смежных пустых ячеек в сетке дескрипторов.
-   - В `next_population` внедрено давление в пользу исследования:
-     - Родители выбираются с весами, пропорциональными числу пустых соседей (`weighted_by_empty`), что дает приоритет особям на фронтире (границе неисследованного пространства).
-     - При наличии незаполненных ячеек (`empty_ratio > 0`) часть потомков получает увеличенную дисперсию мутации (`sigma`) и частоту (`rate`), позволяя прыгать через границы бинов в пустые ячейки.
+   - В `next_population` внедрено давление в пользу исследования: родительские особи выбираются пропорционально числу пустых соседей (`weighted_by_empty`), а на фронтире пустых ячеек увеличивается дисперсия мутации.
 
-3. **Обновление конфигурации осей (`Scripts/Trainer/trainer_config.json:11`):**
+5. **Обновление конфигурации осей (`Scripts/Trainer/trainer_config.json:11`):**
    - `aggression`: `time_in_contact_s`, 4 бина, `bin_edges: [30.0, 45.0, 60.0]`, диапазон `[0, 80]`.
    - `mobility`: `flanks_completed + moves`, 4 бина, `bin_edges: [16.0, 24.0, 32.0]`, диапазон `[0, 48]`.
    - `patience`: `ambush_success`, 3 бина, `bin_edges: [0.1, 0.35]`, диапазон `[0, 0.5]`.
    - `league.opponents`: `"rounds_per_job": 1` для бота.
    - `search.mode` сохранен дефолтным `"ga"`.
 
-4. **Корректные раунды для бот-матчей (`Scripts/Trainer/nighttrainer/trainer.py:375`, `Scripts/Trainer/nighttrainer/adapter.py:288`):**
-   - `_league_plan` и `make_jobs` выставляют `rounds: 1` для оппонента `bot`.
-   - В `adapter.py` при оппоненте `bot` ожидаемое количество раундов ограничивается 1, предотвращая ложные штрафы за падение.
-   - Реальные падения (0 раундов) по-прежнему фиксируются как `crashed: True` и штрафуются.
-
 ---
 
 ## 3. Результаты тестов
 
-1. **Тест покрытия на 40 реальных кандидатах (`Scripts/Trainer/tests/test_qd.py:382`):**
+1. **Тест покрытия на 40 реальных кандидатах (`Scripts/Trainer/tests/test_qd.py:416`):**
+   - Загрузка данных строго из закоммиченной фикстуры `Scripts/Trainer/fixtures/pmc_v6_qd_40_candidates.json:1` (без fallback в `Saved/Reports`).
    - Старый биннинг: ровно **2 / 48 ячеек** (`(0, 3, 0)` и `(1, 3, 0)`).
-   - Новый биннинг: **20 / 48 ячеек** (в 10 раз больше, требование >= 8 выполнено с запасом).
-   - Распределение по осям полностью сбалансировано:
-     - Агрессия представлена во всех бинах: 0 (7 канд.), 1 (14 канд.), 2 (12 канд.), 3 (7 канд.).
-     - Мобильность представлена во всех бинах: 0 (10 канд.), 1 (15 канд.), 2 (10 канд.), 3 (5 канд.).
-     - Терпение представлено во всех бинах: 0 (21 канд.), 1 (16 канд.), 2 (3 канд.).
+   - Новый биннинг: **20 / 48 ячеек** (устранено дублирующее условие `>= 18`, проверяются `>= 8` и точное равенство `20`).
+   - Все бины представлены по всем трём осям:
+     - Агрессия: бины {0, 1, 2, 3}.
+     - Мобильность: бины {0, 1, 2, 3}.
+     - Терпение: бины {0, 1, 2}.
 
-2. **Тесты бот-раундов и отсутствия ложных падений (`Scripts/Trainer/tests/test_qd.py:417`):**
+2. **Тесты валидации `bin_edges` (`Scripts/Trainer/tests/test_qd.py:367`):**
+   - Корректные строго возрастающие границы проходят валидацию.
+   - Неверная длина (`len != bins - 1`), неубывающие значения (`10 >= 10`), убывающие значения (`20 > 10`) вызывают `ValueError`.
+
+3. **Тесты гистограмм дескрипторов (`Scripts/Trainer/tests/test_qd.py:384`):**
+   - Проверено корректное вычисление min, mean, max и поэлементного распределения по бинам.
+
+4. **Тесты бот-раундов и обработки аварий (`Scripts/Trainer/tests/test_qd.py:444`):**
    - Задачи против бота генерируются с `rounds = 1`.
-   - При 1 сыгранном раунде ложные краши не добавляются.
-   - При 0 раундах (реальная авария) начисляется 1 раунд краша со штрафом.
+   - 1 сыгранный раунд: 0 крашей, штраф не начисляется.
+   - Реальный краш арены (`rounds: []`): начисляется ровно 1 краш со штрафом `crash_penalty = -5.0`.
 
-3. **Полный тестовый набор (`Scripts/Trainer/tests`):**
-   - 80 тестов прошли успешно (`Ran 80 tests in 14.334s, OK`).
+5. **Полный тестовый набор (`Scripts/Trainer/tests`):**
+   - 82 теста прошли успешно (`Ran 82 tests in 19.913s, OK`).
 
 ---
 
@@ -116,14 +138,22 @@
 | Утверждение (Claim) | Доказательство (Evidence) |
 |---|---|
 | 40 реальных кандидатов из `pmc-v6-qd` сохранены в виде тестовой фикстуры | `Scripts/Trainer/fixtures/pmc_v6_qd_40_candidates.json:1` |
-| Метод `bin_index` поддерживает явные границы бинов `bin_edges` | `Scripts/Trainer/nighttrainer/qd.py:70` |
-| Сигнатура архива `_axis_signature` валидирует `bin_edges` | `Scripts/Trainer/nighttrainer/qd.py:51` |
-| Подсчет пустых соседей `empty_neighbors` реализован в `Archive` | `Scripts/Trainer/nighttrainer/qd.py:187` |
-| Мутационное давление в пустые ячейки реализовано в `next_population` | `Scripts/Trainer/nighttrainer/qd.py:246` |
+| Валидация строгого возрастания и длины `bin_edges` реализована на загрузке | `Scripts/Trainer/nighttrainer/qd.py:60`, `Scripts/Trainer/nighttrainer/qd.py:83` |
+| Метод `bin_index` поддерживает явные границы бинов `bin_edges` | `Scripts/Trainer/nighttrainer/qd.py:100` |
+| Функция `descriptor_histogram` вычисляет распределение по бинам и диапазоны | `Scripts/Trainer/nighttrainer/qd.py:160` |
+| Подсчет пустых соседей `empty_neighbors` реализован в `Archive` | `Scripts/Trainer/nighttrainer/qd.py:251` |
+| Мутационное давление в пустые ячейки реализовано в `next_population` | `Scripts/Trainer/nighttrainer/qd.py:298` |
+| `_lookup_rounds` не теряет 0 и нормализует имя оппонента | `Scripts/Trainer/nighttrainer/trainer.py:37` |
+| Тренер сохраняет гистограмму дескрипторов в отчет за поколение | `Scripts/Trainer/nighttrainer/trainer.py:263` |
+| `_ga_plan` и `_league_plan` используют `_lookup_rounds` | `Scripts/Trainer/nighttrainer/trainer.py:363`, `Scripts/Trainer/nighttrainer/trainer.py:387` |
+| `make_jobs` задает 1 раунд для бот-джобов без привязки к имени в адаптере | `Scripts/Trainer/nighttrainer/trainer.py:429` |
+| `adapter.py` возвращает ровно `expected_rounds` крашей при пустом результате арены | `Scripts/Trainer/nighttrainer/adapter.py:219` |
+| Генератор отчета HTML выводит таблицу распределений дескрипторов | `Scripts/Trainer/nighttrainer/report.py:113`, `Scripts/Trainer/nighttrainer/report.py:135` |
 | Оси QD и раунды бота обновлены в `trainer_config.json` | `Scripts/Trainer/trainer_config.json:14`, `Scripts/Trainer/trainer_config.json:23` |
-| `_league_plan` и `make_jobs` задают 1 раунд для бот-джобов | `Scripts/Trainer/nighttrainer/trainer.py:382`, `Scripts/Trainer/nighttrainer/trainer.py:417` |
-| `adapter.py` защищает бот-раунды от ложного дополнения авариями | `Scripts/Trainer/nighttrainer/adapter.py:291` |
-| Тест подтверждает воспроизведение 2/48 ячеек на старом биннинге | `Scripts/Trainer/tests/test_qd.py:382` |
-| Тест подтверждает покрытие >= 8 ячеек на новом биннинге (20/48) | `Scripts/Trainer/tests/test_qd.py:397` |
-| Тесты бот-раундов и обработки аварий проходят успешно | `Scripts/Trainer/tests/test_qd.py:417` |
-| Все 80 тестов Trainer проходят успешно | `python -m unittest discover -s Scripts/Trainer/tests` (Ran 80 tests, OK) |
+| Тесты загружают кандидатов только из фикстуры без Saved/Reports | `Scripts/Trainer/tests/test_qd.py:358` |
+| Юнит-тесты валидации `bin_edges` проходят | `Scripts/Trainer/tests/test_qd.py:367` |
+| Юнит-тесты гистограммы дескрипторов проходят | `Scripts/Trainer/tests/test_qd.py:384` |
+| Тест подтверждает воспроизведение 2/48 ячеек на старом биннинге | `Scripts/Trainer/tests/test_qd.py:402` |
+| Тест подтверждает покрытие >= 8 ячеек на новом биннинге (20/48) | `Scripts/Trainer/tests/test_qd.py:416` |
+| Тесты бот-раундов проверяют отсутствие штрафа за 1 раунд и ровно 1 штраф за 0 раундов | `Scripts/Trainer/tests/test_qd.py:444` |
+| Все 82 теста Trainer проходят успешно | `python -m unittest discover -s Scripts/Trainer/tests` (Ran 82 tests, OK) |
