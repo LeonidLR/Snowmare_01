@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "AI/PmcCommanderRules.h"
+#include "AI/PmcDefenceRules.h"
 #include "AI/PmcEncounterRules.h"
 #include "AI/PmcTacticalRules.h"
 #include "Subsystems/WorldSubsystem.h"
@@ -135,6 +136,11 @@ public:
 	 * LevelToleranceCm = the point's level (fix/pmc-onpoint-3d-detour: on / near it only within this height, FPmcObjectiveView).
 	 */
 	void SetTeamObjective(int32 TeamId, EPmcRole Role, const FVector& Location, float RadiusCm, float LevelToleranceCm = 150.f);
+	/**
+	 * G008: where the attackers come from. The defender arc is centred on the yaw from the objective toward this point.
+	 * Unset: yaw 0, and the sectors are still deterministic. Call it before SetTeamObjective, or after (the posts are split again).
+	 */
+	void SetDefenceApproach(int32 TeamId, const FVector& AttackerSpawn);
 	/** The objective's live state for the team's next decisions: the round's time fraction, the capture clock, an enemy on the point. */
 	void UpdateTeamObjective(int32 TeamId, float TimeFrac, float HoldFrac, bool bEnemyOnPoint);
 
@@ -274,6 +280,15 @@ private:
 		int32 PostWalks = 0;
 		/** His distance to the post when the running post walk was issued (-1: no post walk running). */
 		float PostWalkFromCm = -1.f;
+		/** G008: his defence role and post. Reassigned only when the living set changes. */
+		EPmcDefenceRole DefenceRole = EPmcDefenceRole::None;
+		int32 DefenceSector = INDEX_NONE;
+		FVector DefencePost = FVector::ZeroVector;
+		float DefenceYaw = 0.f;
+		bool bHasDefencePost = false;
+		int32 DefenceSpotIndex = INDEX_NONE;
+		/** World time he arrived on the defence post (-1: not there). The sector shift counts from this. */
+		double DefenceArrivedAt = -1.0;
 	};
 
 	struct FTeam
@@ -319,6 +334,28 @@ private:
 		 * route-cover term does not scan every hiding spot of the map per slot.
 		 */
 		TArray<FVector> RouteCoverSpots;
+		/** G008: the defender plan for an objective round. Inactive for attackers and for teams with no objective. */
+		struct FDefence
+		{
+			bool bActive = false;
+			/** The access line was logged for this objective. A death does not log it again. */
+			bool bLogged = false;
+			FPmcDefenceAccess Access;
+			FVector ApproachPoint = FVector::ZeroVector;
+			bool bHasApproach = false;
+			float ApproachYawDeg = 0.f;
+			TArray<FPmcDefenceSpot> Spots;
+			float LevelZ = 0.f;
+			/** A roof was chosen, so the area is the spot span. Empty spots still use the ground radius. */
+			bool bRoof = false;
+			FVector Inward = FVector::ZeroVector;
+			bool bHasInward = false;
+			/** SquadIndex of each living defender the posts were built for, sorted. */
+			TArray<int32> LivingIndices;
+			/** How many wedges the living sector shooters were split into (0 when the only man is the guard). */
+			int32 SectorCount = 0;
+		};
+		FDefence Defence;
 	};
 
 	/** Sets Team.Route and refreshes Team.RouteCoverSpots from the tactical map (every route assignment goes through here). */
@@ -352,7 +389,15 @@ private:
 	 * weapon's Band (PmcCommanderRules::BandFactor, weighted by band_position) x a corner bonus); OutBandFactor = the chosen slot's band factor.
 	 */
 	bool FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
-		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr) const;
+		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr,
+		TConstArrayView<FVector> ClaimedPosts = TConstArrayView<FVector>(), TConstArrayView<FString> ClaimedKeys = TConstArrayView<FString>()) const;
+	/** G008: resolve the roof access (once per objective) and assign guard / sector posts. bResolveAccess false keeps the access. */
+	void RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess);
+	void ClearDefencePosts(FTeam& Team);
+	/** Other living defenders' cover slots or defence posts, for the spacing penalty. Empty unless this team is defending. */
+	void CollectDefenceClaims(const FTeam& Team, const AOperativeCharacter& Fighter, TArray<FVector>& OutPoints, TArray<FString>& OutKeys) const;
+	/** The map's levelgen layout (not the -LevelJson= combat override). Cached. Null when the map has none. */
+	const FPmcLayoutAccess* DefenceLayout();
 	bool ProjectToNav(const FVector& Point, FVector& OutPoint) const;
 	/** The placement roles of a squad about to spawn (its pool weapons by seed) / of living fighters (their weapons). */
 	TArray<FPmcPlacementFighter> PlacementRoles(int32 Count, int32 Seed, const FPmcWeights& Weights) const;
@@ -375,6 +420,9 @@ private:
 
 	TMap<int32, FTeam> Teams;
 	float SightTimer = 0.f;
+	/** G008: one parse of the map's levelgen layout per world. */
+	bool bDefenceLayoutTried = false;
+	TOptional<FPmcLayoutAccess> DefenceLayoutCache;
 	/** Fighters whose OnWeaponFiredNative this subsystem listens to. */
 	TSet<TWeakObjectPtr<AOperativeCharacter>> Listened;
 };

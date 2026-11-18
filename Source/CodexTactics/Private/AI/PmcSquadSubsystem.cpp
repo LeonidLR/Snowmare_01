@@ -3,6 +3,7 @@
 
 #include "AI/PmcSquadSubsystem.h"
 
+#include "AI/PmcDefenceRules.h"
 #include "AI/PmcOperatorRules.h"
 #include "Combat/LauncherTacticsRules.h"
 #include "Combat/MortarNestActor.h"
@@ -25,12 +26,18 @@
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/CodexTacticsGameMode.h"
+#include "Data/LevelJsonRules.h"
 #include "Data/WeaponDataAsset.h"
+#include "Dom/JsonObject.h"
 #include "Engine/SkeletalMesh.h"
 #include "Engine/World.h"
 #include "Falls/LedgeFallComponent.h"
 #include "GameFlow/GameFlowSubsystem.h"
 #include "HAL/IConsoleManager.h"
+#include "Misc/FileHelper.h"
+#include "Misc/Paths.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Ladders/LadderClimbComponent.h"
 #include "LevelGen/TacticalMapSubsystem.h"
 #include "Materials/MaterialInterface.h"
@@ -475,8 +482,12 @@ void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVe
 	if (Role == EPmcRole::None || RadiusCm <= 0.f)
 	{
 		Team.Objective.Reset();
+		ClearDefencePosts(Team);
+		Team.Defence = FTeam::FDefence();
 		return;
 	}
+	const bool bKeepApproach = Team.Defence.bHasApproach;
+	const FVector Approach = Team.Defence.ApproachPoint;
 	FPmcObjectiveView Objective;
 	Objective.Role = Role;
 	Objective.Location = Location;
@@ -484,6 +495,18 @@ void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVe
 	Objective.LevelToleranceCm = LevelToleranceCm;
 	Team.Objective = Objective;
 	Team.ObjectiveSetTime = GetWorld() ? GetWorld()->GetTimeSeconds() : 0.0;
+	if (Role == EPmcRole::Defender)
+	{
+		Team.Defence = FTeam::FDefence();
+		Team.Defence.bHasApproach = bKeepApproach;
+		Team.Defence.ApproachPoint = Approach;
+		RefreshDefence(TeamId, Team, true);
+	}
+	else
+	{
+		ClearDefencePosts(Team);
+		Team.Defence = FTeam::FDefence();
+	}
 	// Target attention (2026-11-07): the defenders lie in wait with their fire held from the start (the first decision may come after the
 	// first sighting; their own Aggressive auto-fire would spring the ambush before the commander could hold it).
 	if (Role == EPmcRole::Defender && Team.Weights.AmbushPatience > 0.f)
@@ -498,6 +521,17 @@ void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVe
 				Team.Fighters.FindOrAdd(Member).bHoldingFire = true;
 			}
 		}
+	}
+}
+
+void UPmcSquadSubsystem::SetDefenceApproach(int32 TeamId, const FVector& AttackerSpawn)
+{
+	FTeam& Team = TeamOf(TeamId);
+	Team.Defence.ApproachPoint = AttackerSpawn;
+	Team.Defence.bHasApproach = true;
+	if (Team.Defence.bActive)
+	{
+		RefreshDefence(TeamId, Team, false);
 	}
 }
 
@@ -1345,8 +1379,51 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 	// The round objective (the arena, task #53): his distance to the point.
 	if (Team.Objective.IsSet())
 	{
+		const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
 		View.Objective = Team.Objective.GetValue();
-		View.Objective.DistanceCm = PmcCommanderRules::ObjectiveDistanceCm(PmcSquadLocal::FeetOf(Fighter), View.Objective);
+		View.Objective.DistanceCm = PmcCommanderRules::ObjectiveDistanceCm(Feet, View.Objective);
+		View.Objective.bOnObjectiveLevel = PmcCommanderRules::IsSameLevel(static_cast<float>(Feet.Z), static_cast<float>(View.Objective.Location.Z),
+			View.Objective.LevelToleranceCm);
+		if (Team.Defence.bActive)
+		{
+			FPmcDefenceConfig Config;
+			Config.GuardDistCm = Team.Weights.GuardDistCm;
+			Config.GuardInsetCm = Team.Weights.GuardInsetCm;
+			Config.MinSpacingCm = Team.Weights.MinSpacingCm;
+			Config.SpacingPenalty = Team.Weights.SpacingPenalty;
+			Config.AreaFactor = Team.Weights.AreaFactor;
+			Config.ShiftAfterSeconds = Team.Weights.ShiftAfterSeconds;
+			Config.SectorArcDeg = Team.Weights.SectorArcDeg;
+			Config.LevelToleranceCm = View.Objective.LevelToleranceCm;
+			View.Objective.bDefenceAreaSet = true;
+			View.Objective.bInsideDefenceArea = PmcDefenceRules::IsInsideDefendedArea(Feet, View.Objective.Location, Team.Defence.LevelZ,
+				View.Objective.RadiusCm, Team.Defence.bRoof ? Team.Defence.Spots : TArray<FPmcDefenceSpot>(), Config);
+			if (State.bHasDefencePost)
+			{
+				View.bAtPost = View.bAtPost || PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
+			}
+		}
+	}
+	if (Team.Defence.bActive && State.DefenceRole == EPmcDefenceRole::SectorShooter && State.bHasDefencePost && Team.Defence.Spots.Num() > 0)
+	{
+		const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+		const bool bAtPost = PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
+		if (bAtPost)
+		{
+			if (State.DefenceArrivedAt < 0.0)
+			{
+				State.DefenceArrivedAt = Now;
+			}
+		}
+		else
+		{
+			State.DefenceArrivedAt = -1.0;
+		}
+		const int32 NextSpot = PmcDefenceRules::NextEdgeSpot(Team.Defence.Spots, Team.Objective.GetValue().Location, Team.Defence.ApproachYawDeg,
+			State.DefenceSector, Team.Defence.SectorCount, Team.Weights.SectorArcDeg, State.DefenceSpotIndex);
+		const bool bSomewhereElse = NextSpot != INDEX_NONE && NextSpot != State.DefenceSpotIndex;
+		const float SecondsOnPost = State.DefenceArrivedAt >= 0.0 ? static_cast<float>(Now - State.DefenceArrivedAt) : 0.f;
+		View.bSectorShift = bSomewhereElse && PmcDefenceRules::ShouldSectorShift(SecondsOnPost, View.bExposed && Team.bEverContact, Team.Weights.ShiftAfterSeconds);
 	}
 	// Cover: the quality of the slot he holds, and the best slot nearby (for TakeCover / Relocate).
 	OutCover = FCoverSlot();
@@ -1358,8 +1435,11 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			View.CoverQuality = PmcCommanderRules::CoverQualityAgainst(Fighter.GetCoverSlot().WorldLocation, Fighter.GetCoverSlot().WallNormal, View.Threat.Location);
 		}
 		const FVector* Exclude = Fighter.bInCover ? &View.Location : nullptr;
+		TArray<FVector> ClaimedPosts;
+		TArray<FString> ClaimedKeys;
+		CollectDefenceClaims(Team, Fighter, ClaimedPosts, ClaimedKeys);
 		View.bCoverAvailable = FindCoverNear(Fighter, View.Threat.Location, PmcSquadLocal::CoverSearchRadiusCm, Exclude, Team.Weights, OutCover, OutCoverQuality,
-			View.Band, &View.CoverBandFactor) && OutCoverQuality > View.CoverQuality + 0.2f;
+			View.Band, &View.CoverBandFactor, ClaimedPosts, ClaimedKeys) && OutCoverQuality > View.CoverQuality + 0.2f;
 	}
 	// The nearest wounded mate (preserve active patient if already executing a running Heal order).
 	const bool bKeepActivePatient = State.Order == EPmcOrder::Heal && State.Patient.IsValid()
@@ -1406,6 +1486,22 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 	if (Mates.IsEmpty())
 	{
 		return;
+	}
+	if (Team.Objective.IsSet() && Team.Objective->Role == EPmcRole::Defender)
+	{
+		TArray<int32> Living;
+		for (AOperativeCharacter* Mate : Mates)
+		{
+			if (PmcSquadLocal::IsLiveOperative(Mate))
+			{
+				Living.Add(Mate->SquadIndex);
+			}
+		}
+		Living.Sort();
+		if (!Team.Defence.bActive || Living != Team.Defence.LivingIndices)
+		{
+			RefreshDefence(TeamId, Team, !Team.Defence.bActive);
+		}
 	}
 	// Nothing moves in a tactical pause / the turn-based grid fight: the commander waits like the player's autonomy does.
 	if (const UGameFlowSubsystem* Flow = World->GetSubsystem<UGameFlowSubsystem>();
@@ -1720,6 +1816,28 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		break;
 	case EPmcOrder::TakeCover:
 	case EPmcOrder::Relocate:
+		if (Order == EPmcOrder::Relocate && State.DefenceRole == EPmcDefenceRole::SectorShooter && State.bHasDefencePost
+			&& Team.Defence.bActive && Team.Defence.Spots.Num() > 0 && Team.Objective.IsSet())
+		{
+			const int32 NextSpot = PmcDefenceRules::NextEdgeSpot(Team.Defence.Spots, Team.Objective->Location, Team.Defence.ApproachYawDeg,
+				State.DefenceSector, Team.Defence.SectorCount, Team.Weights.SectorArcDeg, State.DefenceSpotIndex);
+			if (NextSpot != INDEX_NONE && NextSpot != State.DefenceSpotIndex)
+			{
+				State.DefenceSpotIndex = NextSpot;
+				State.DefencePost = Team.Defence.Spots[NextSpot].Location;
+				FVector OnNav;
+				if (ProjectToNavAtLevel(State.DefencePost, OnNav))
+				{
+					State.DefencePost = OnNav;
+				}
+				State.DefenceYaw = Team.Defence.ApproachYawDeg;
+				State.DefenceArrivedAt = -1.0;
+				bKeepGoalLevel = true;
+				bTaken = Walk(State.DefencePost, !View.Threat.bSeenNow);
+				Team.Stats.Relocations += bTaken ? 1 : 0;
+				break;
+			}
+		}
 		if (Fighter.bInCover && Fighter.GetCoverSlot().WorldLocation.Equals(Cover.WorldLocation, 50.f))
 		{
 			// Already in this exact cover slot on this spot
@@ -1897,6 +2015,32 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		break;
 	}
 	case EPmcOrder::Ambush:
+		// G008: a defence post is walked like a tactical post, and it does not need a tactical file (Depot_1 has none).
+		if (State.bHasDefencePost && Team.Defence.bActive)
+		{
+			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+			if (!PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm))
+			{
+				bKeepGoalLevel = true;
+				bTaken = Walk(State.DefencePost, false);
+				if (bTaken)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s walks to his %s post %s"), TeamId, *Fighter.DisplayName.ToString(),
+						PmcDefenceRules::RoleName(State.DefenceRole), *State.DefencePost.ToCompactString());
+					break;
+				}
+			}
+			else
+			{
+				Context.Location = Feet + FRotator(0.f, State.DefenceYaw, 0.f).Vector() * 1500.f;
+				SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
+				Context.Stance = EOperativeStance::Crouching;
+				SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
+				bTaken = true;
+				Goal = State.DefencePost;
+				break;
+			}
+		}
 		// TACTICAL_MAP P2: a man with a post waits ON it - walks there first, then faces its look direction (crouched; standing at a
 		// window, where a crouch would hide him under the sill).
 		// A post he cannot reach (no path, three walks that ended short of it) is dropped: the plain ambush below.
@@ -1955,7 +2099,14 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		{
 			FCoverSlot Near;
 			float Quality = 0.f;
-			if (FindCoverNear(Fighter, View.Location + Fighter.GetActorForwardVector() * 1000.f, 600.f, nullptr, Team.Weights, Near, Quality))
+			TArray<FVector> ClaimedPosts;
+			TArray<FString> ClaimedKeys;
+			if (Team.Defence.bActive)
+			{
+				CollectDefenceClaims(Team, Fighter, ClaimedPosts, ClaimedKeys);
+			}
+			if (FindCoverNear(Fighter, View.Location + Fighter.GetActorForwardVector() * 1000.f, 600.f, nullptr, Team.Weights, Near, Quality,
+				FPmcEngagementBand(), nullptr, ClaimedPosts, ClaimedKeys))
 			{
 				Context.Cover = Near;
 				Context.bSprint = false;
@@ -1971,6 +2122,29 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	{
 		// Onto the point (task #53): each man to his own spot of a small ring round it (they do not stack on one navmesh point); sprint
 		// while the enemy does not see him.
+		// G008: a defender walks to his defence post, never onto the capture ring. With no post he holds where he is.
+		if (View.Objective.Role == EPmcRole::Defender)
+		{
+			if (!State.bHasDefencePost)
+			{
+				Order = EPmcOrder::Hold;
+				bTaken = true;
+				break;
+			}
+			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+			if (!PmcCommanderRules::IsWalkShort(Feet, State.DefencePost, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+			{
+				Context.Location = Feet + FRotator(0.f, State.DefenceYaw, 0.f).Vector() * 1500.f;
+				SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
+				Order = EPmcOrder::Hold;
+				bTaken = true;
+				break;
+			}
+			bKeepGoalLevel = true;
+			bTaken = Walk(State.DefencePost, !(View.bHasThreat && View.Threat.bSeenNow));
+			Team.Stats.ObjectiveMoves += bTaken ? 1 : 0;
+			break;
+		}
 		if (!View.Objective.IsActive())
 		{
 			break;
@@ -2056,7 +2230,8 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 }
 
 bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
-	FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band, float* OutBandFactor) const
+	FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band, float* OutBandFactor, TConstArrayView<FVector> ClaimedPosts,
+	TConstArrayView<FString> ClaimedKeys) const
 {
 	UWorld* World = GetWorld();
 	if (!World)
@@ -2156,9 +2331,14 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		const bool bCorner = Band.IsValid() && PeekSightRules::IsCornerInPeekReach(Slot.bLeftEdgeExposed || Slot.bRightEdgeExposed, SlotThreatCm, PeekRangeCm);
 		// The round objective (task #53): attackers prefer slots on the way to / round the point, defenders slots overwatching it.
 		const float ObjectiveFactor = Objective ? PmcCommanderRules::ObjectivePositionFactor(Slot.WorldLocation, Feet, *Objective, Band, WeaponRangeCm, Weights) : 1.f;
+		FPmcDefenceConfig SpacingConfig;
+		SpacingConfig.MinSpacingCm = Weights.MinSpacingCm;
+		SpacingConfig.SpacingPenalty = Weights.SpacingPenalty;
+		const FString SlotKey = PmcDefenceRules::CoverObjectKey(Slot.WallActor.IsValid() ? Slot.WallActor->GetPathName() : FString(), Slot.WallPoint);
+		const float Spacing = PmcDefenceRules::SpacingFactor(Slot.WorldLocation, SlotKey, ClaimedPosts, ClaimedKeys, SpacingConfig);
 		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)
 			* PmcCommanderRules::HighGroundFactor(Level, Weights) * FMath::Lerp(1.f, SlotBand, FMath::Clamp(Weights.BandPosition, 0.f, 1.f))
-			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f) * ObjectiveFactor * TerrainFactor(Slot);
+			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f) * ObjectiveFactor * TerrainFactor(Slot) * Spacing;
 		Candidates.Add({ Slot, Quality, Score, bElevated, SlotBand, PmcSquadLocal::StableCoverSlotId(Slot, bElevated) });
 	};
 	for (int32 Index = 0; Index < 16; ++Index)
@@ -2922,4 +3102,290 @@ int32 UPmcSquadSubsystem::AssignTacticalPosts(int32 TeamId, const TArray<FVector
 		}
 	}
 	return Posted;
+}
+
+void UPmcSquadSubsystem::ClearDefencePosts(FTeam& Team)
+{
+	for (TPair<TWeakObjectPtr<AOperativeCharacter>, FFighterState>& Pair : Team.Fighters)
+	{
+		FFighterState& State = Pair.Value;
+		State.DefenceRole = EPmcDefenceRole::None;
+		State.DefenceSector = INDEX_NONE;
+		State.bHasDefencePost = false;
+		State.DefencePost = FVector::ZeroVector;
+		State.DefenceYaw = 0.f;
+		State.DefenceSpotIndex = INDEX_NONE;
+		State.DefenceArrivedAt = -1.0;
+	}
+}
+
+void UPmcSquadSubsystem::CollectDefenceClaims(const FTeam& Team, const AOperativeCharacter& Fighter, TArray<FVector>& OutPoints, TArray<FString>& OutKeys) const
+{
+	OutPoints.Reset();
+	OutKeys.Reset();
+	if (!Team.Objective.IsSet() || Team.Objective->Role != EPmcRole::Defender)
+	{
+		return;
+	}
+	for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FFighterState>& Pair : Team.Fighters)
+	{
+		const AOperativeCharacter* Mate = Pair.Key.Get();
+		if (!PmcSquadLocal::IsLiveOperative(Mate) || Mate == &Fighter)
+		{
+			continue;
+		}
+		const FFighterState& State = Pair.Value;
+		if (Mate->bInCover)
+		{
+			const FCoverSlot& Slot = Mate->GetCoverSlot();
+			const FString WallId = Slot.WallActor.IsValid() ? Slot.WallActor->GetPathName() : FString();
+			OutPoints.Add(Slot.WorldLocation);
+			OutKeys.Add(PmcDefenceRules::CoverObjectKey(WallId, Slot.WallPoint));
+		}
+		else if (State.bHasDefencePost)
+		{
+			OutPoints.Add(State.DefencePost);
+			OutKeys.Add(PmcDefenceRules::CoverObjectKey(FString(), State.DefencePost));
+		}
+	}
+}
+
+const FPmcLayoutAccess* UPmcSquadSubsystem::DefenceLayout()
+{
+	if (bDefenceLayoutTried)
+	{
+		return DefenceLayoutCache.IsSet() ? &DefenceLayoutCache.GetValue() : nullptr;
+	}
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return nullptr;
+	}
+	bDefenceLayoutTried = true;
+	// The map's own LevelJson, not -LevelJson=. The arena combat override has no levelgen_layout.
+	const FString MapName = LevelJsonRules::NormalizeMapName(World->GetMapName());
+	const FString LevelJsonFile = FPaths::ProjectContentDir() / TEXT("Data/LevelJson") / (MapName + TEXT(".json"));
+	FString LevelJsonText;
+	TSharedPtr<FJsonObject> LevelJson;
+	FString Relative;
+	if (!FFileHelper::LoadFileToString(LevelJsonText, *LevelJsonFile)
+		|| !FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(LevelJsonText), LevelJson)
+		|| !LevelJson.IsValid()
+		|| !LevelJson->TryGetStringField(TEXT("levelgen_layout"), Relative)
+		|| Relative.IsEmpty())
+	{
+		return nullptr;
+	}
+	const FString LayoutPath = FPaths::IsRelative(Relative) ? FPaths::ProjectDir() / Relative : Relative;
+	FString LayoutText;
+	if (!FFileHelper::LoadFileToString(LayoutText, *LayoutPath))
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[PmcDefence] levelgen layout missing: %s"), *LayoutPath);
+		return nullptr;
+	}
+	FPmcLayoutAccess Parsed;
+	TArray<FString> Errors;
+	if (!PmcDefenceRules::ParseLayout(LayoutText, Parsed, Errors))
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[PmcDefence] levelgen layout is not a JSON object: %s"), *LayoutPath);
+		return nullptr;
+	}
+	for (const FString& Error : Errors)
+	{
+		UE_LOG(LogCodexTactics, Warning, TEXT("[PmcDefence] layout %s"), *Error);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcDefence] layout %s: %d buildings, %d ladders"), *LayoutPath, Parsed.Buildings.Num(), Parsed.Ladders.Num());
+	DefenceLayoutCache = MoveTemp(Parsed);
+	return &DefenceLayoutCache.GetValue();
+}
+
+void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess)
+{
+	if (!Team.Objective.IsSet() || Team.Objective->Role != EPmcRole::Defender)
+	{
+		ClearDefencePosts(Team);
+		Team.Defence.bActive = false;
+		return;
+	}
+	const FPmcObjectiveView& Objective = Team.Objective.GetValue();
+	FPmcDefenceConfig Config;
+	Config.GuardDistCm = Team.Weights.GuardDistCm;
+	Config.GuardInsetCm = Team.Weights.GuardInsetCm;
+	Config.MinSpacingCm = Team.Weights.MinSpacingCm;
+	Config.SpacingPenalty = Team.Weights.SpacingPenalty;
+	Config.AreaFactor = Team.Weights.AreaFactor;
+	Config.ShiftAfterSeconds = Team.Weights.ShiftAfterSeconds;
+	Config.SectorArcDeg = Team.Weights.SectorArcDeg;
+	Config.LevelToleranceCm = Objective.LevelToleranceCm;
+
+	if (bResolveAccess)
+	{
+		Team.Defence.Access = FPmcDefenceAccess();
+		Team.Defence.Spots.Reset();
+		Team.Defence.bRoof = false;
+		Team.Defence.bHasInward = false;
+		Team.Defence.Inward = FVector::ZeroVector;
+		Team.Defence.LevelZ = Objective.Location.Z;
+		Team.Defence.bLogged = false;
+
+		TArray<FPmcRoofRef> Roofs;
+		TArray<FPmcLadderTop> LadderTops;
+		if (const UTacticalMapSubsystem* Map = GetTacticalMap())
+		{
+			const FTacticalMapFile& File = Map->GetFile();
+			Roofs.Reserve(File.OverwatchRoofs.Num());
+			for (const FTacticalOverwatchRoof& Roof : File.OverwatchRoofs)
+			{
+				FPmcRoofRef Ref;
+				Ref.Building = Roof.Building;
+				Ref.Z = Roof.Z;
+				Ref.AccessKind = PmcDefenceRules::ParseAccessKind(Roof.AccessKind);
+				Ref.AccessIds = Roof.Access;
+				Ref.Spots.Reserve(Roof.Spots.Num());
+				for (const FTacticalOverwatchSpot& Spot : Roof.Spots)
+				{
+					FPmcDefenceSpot DefenceSpot;
+					DefenceSpot.Location = Spot.Location;
+					DefenceSpot.CoveredM = Spot.CoveredM;
+					Ref.Spots.Add(DefenceSpot);
+				}
+				Roofs.Add(MoveTemp(Ref));
+			}
+			for (const FTacticalLadderRoof& LadderRoof : File.LadderOnlyRoofs)
+			{
+				const int32 Count = FMath::Min(LadderRoof.Ladders.Num(), LadderRoof.LadderTops.Num());
+				for (int32 Index = 0; Index < Count; ++Index)
+				{
+					FPmcLadderTop Top;
+					Top.Building = LadderRoof.Building;
+					Top.LadderId = LadderRoof.Ladders[Index];
+					Top.Location = LadderRoof.LadderTops[Index];
+					LadderTops.Add(Top);
+				}
+			}
+		}
+
+		const int32 RoofIndex = PmcDefenceRules::PickRoof(Roofs, Objective.Location, Config.LevelToleranceCm);
+		if (Roofs.IsValidIndex(RoofIndex))
+		{
+			const FPmcRoofRef& Roof = Roofs[RoofIndex];
+			Team.Defence.Access = PmcDefenceRules::ResolveTacticalAccess(Roof, LadderTops, DefenceLayout());
+			Team.Defence.Spots = Roof.Spots;
+			Team.Defence.LevelZ = Roof.Z;
+			Team.Defence.bRoof = true;
+			if (Roof.Spots.Num() > 0)
+			{
+				Team.Defence.Inward = PmcDefenceRules::SpotCentroid(Roof.Spots);
+				Team.Defence.bHasInward = true;
+			}
+		}
+		else if (const FPmcLayoutAccess* Layout = DefenceLayout())
+		{
+			const int32 BuildingIndex = PmcDefenceRules::BuildingAt(*Layout, Objective.Location);
+			if (PmcDefenceRules::IsWalkableRoofSite(*Layout, BuildingIndex, Objective.Location.Z, Config.LevelToleranceCm))
+			{
+				const FPmcLayoutBuilding& Building = Layout->Buildings[BuildingIndex];
+				Team.Defence.Access = PmcDefenceRules::ResolveLayoutAccess(*Layout, BuildingIndex, Objective.Location);
+				Team.Defence.LevelZ = PmcDefenceRules::RoofZ(*Layout, Building);
+				Team.Defence.Inward = FVector((Building.Min.X + Building.Max.X) * 0.5f, (Building.Min.Y + Building.Max.Y) * 0.5f, Team.Defence.LevelZ);
+				Team.Defence.bHasInward = true;
+			}
+		}
+
+		UE_LOG(LogCodexTactics, Display, TEXT("%s"), *PmcDefenceRules::AccessLogLine(TeamId, Team.Defence.Access));
+		Team.Defence.bLogged = true;
+	}
+
+	Team.Defence.ApproachYawDeg = Team.Defence.bHasApproach
+		? PmcDefenceRules::YawDegrees(Objective.Location, Team.Defence.ApproachPoint)
+		: 0.f;
+	Team.Defence.bActive = true;
+
+	struct FKeptPost
+	{
+		EPmcDefenceRole Role = EPmcDefenceRole::None;
+		int32 Spot = INDEX_NONE;
+		FVector Post = FVector::ZeroVector;
+		double ArrivedAt = -1.0;
+	};
+	TMap<int32, FKeptPost> Kept;
+	const TArray<AOperativeCharacter*> Members = GetTeamMembers(TeamId);
+	TArray<FPmcDefenceMan> Men;
+	TArray<int32> Living;
+	Men.Reserve(Members.Num());
+	for (AOperativeCharacter* Member : Members)
+	{
+		if (!PmcSquadLocal::IsLiveOperative(Member))
+		{
+			continue;
+		}
+		FPmcDefenceMan Man;
+		Man.Index = Member->SquadIndex;
+		Man.Feet = PmcSquadLocal::FeetOf(*Member);
+		if (const FFighterState* State = Team.Fighters.Find(Member))
+		{
+			if (!bResolveAccess)
+			{
+				Man.PreviousRole = State->DefenceRole;
+			}
+			FKeptPost& Previous = Kept.Add(Member->SquadIndex);
+			Previous.Role = State->DefenceRole;
+			Previous.Spot = State->DefenceSpotIndex;
+			Previous.Post = State->DefencePost;
+			Previous.ArrivedAt = State->DefenceArrivedAt;
+		}
+		Men.Add(Man);
+		Living.Add(Member->SquadIndex);
+	}
+	Living.Sort();
+
+	const FVector* Inward = Team.Defence.bHasInward ? &Team.Defence.Inward : nullptr;
+	const TArray<FPmcDefenceSlot> Slots;
+	const TArray<FPmcDefencePost> Posts = PmcDefenceRules::AssignRoles(Men, Team.Defence.Access, Objective.Location,
+		Team.Defence.ApproachYawDeg, Team.Defence.Spots, Slots, Inward, Config);
+
+	ClearDefencePosts(Team);
+	int32 SectorCount = 0;
+	for (const FPmcDefencePost& Post : Posts)
+	{
+		if (Post.Role == EPmcDefenceRole::SectorShooter)
+		{
+			++SectorCount;
+		}
+		AOperativeCharacter* Fighter = nullptr;
+		for (AOperativeCharacter* Member : Members)
+		{
+			if (Member && Member->SquadIndex == Post.Index)
+			{
+				Fighter = Member;
+				break;
+			}
+		}
+		if (!Fighter)
+		{
+			continue;
+		}
+		FFighterState& State = Team.Fighters.FindOrAdd(Fighter);
+		State.DefenceRole = Post.Role;
+		State.DefenceSector = Post.Sector;
+		State.DefenceYaw = Post.Yaw;
+		State.DefenceSpotIndex = Post.SpotIndex;
+		State.bHasDefencePost = Post.bHasPost;
+		FVector Location = Post.Location;
+		if (Post.bHasPost)
+		{
+			FVector OnNav;
+			if (ProjectToNavAtLevel(Location, OnNav))
+			{
+				Location = OnNav;
+			}
+		}
+		State.DefencePost = Location;
+		const FKeptPost* Previous = Kept.Find(Post.Index);
+		const bool bSamePost = !bResolveAccess && Previous != nullptr && Previous->Role == Post.Role && Previous->Spot == Post.SpotIndex
+			&& FVector::DistSquared2D(Previous->Post, Location) <= 25.f;
+		State.DefenceArrivedAt = bSamePost ? Previous->ArrivedAt : -1.0;
+	}
+	Team.Defence.LivingIndices = MoveTemp(Living);
+	Team.Defence.SectorCount = SectorCount;
 }
