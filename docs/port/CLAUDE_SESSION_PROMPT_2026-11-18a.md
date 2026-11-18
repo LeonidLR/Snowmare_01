@@ -26,7 +26,7 @@ feed the trainer. So first: GeneratedPropsX6Smoke red (Claude, own subagent), Fo
 main when his editor is closed and update the banner note.
 
 Worker report (committed 1708ae90, docs/port/reports/worker-night-2026-11-18.md) adds tasks: overwatch_kills always 0 on X4
-(IsAtOverwatchSpot floor tolerance?) - Claude; clip camera too high on X4 + debug HUD on the first frame - Claude / Grok; bot does not
+(IsAtOverwatchSpot floor tolerance?) and clip camera too high on X4 + debug HUD on the first frame - BOTH taken by the worker session CodexWork171126 after its two-slot measurement (own branch, 'ready' in topic worker-ops; lead reviews + merges); bot does not
 engage on X4 (sees no hostile operatives); pmc-v5 champion line unstable, Relocate / Sidearm never chosen; worker two build slots with tree
 affinity - measure today. Clips already sent to the designer's phone. The designer switches the worker to Wi-Fi on 11-18: no PDB over
 Wi-Fi (remote builds already skip them), expect slower remote builds.
