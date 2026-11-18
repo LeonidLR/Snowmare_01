@@ -406,11 +406,11 @@
    "id": "B_catwalk_part_f0_0_0",
    "a": [
     2050,
-    1710
+    2190
    ],
    "b": [
     1720,
-    1710
+    2190
    ],
    "height": 300,
    "thickness": 20,
@@ -421,11 +421,11 @@
    "id": "B_catwalk_part_f0_0_1",
    "a": [
     1540,
-    1710
+    2190
    ],
    "b": [
     550,
-    1710
+    2190
    ],
    "height": 300,
    "thickness": 20,
@@ -440,7 +440,7 @@
    ],
    "b": [
     1180,
-    1340
+    1580
    ],
    "height": 300,
    "thickness": 20,
@@ -451,11 +451,11 @@
    "id": "B_catwalk_part_f0_1_1",
    "a": [
     1180,
-    1520
+    1760
    ],
    "b": [
     1180,
-    1710
+    2190
    ],
    "height": 300,
    "thickness": 20,
@@ -466,11 +466,11 @@
    "id": "B_catwalk_part_f0_2_0",
    "a": [
     1180,
-    1710
+    2190
    ],
    "b": [
     1180,
-    2140
+    2380
    ],
    "height": 300,
    "thickness": 20,
@@ -481,7 +481,7 @@
    "id": "B_catwalk_part_f0_2_1",
    "a": [
     1180,
-    2320
+    2560
    ],
    "b": [
     1180,
@@ -626,6 +626,21 @@
    ],
    "b": [
     -2150,
+    -703
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_yard_shed"
+  },
+  {
+   "id": "B_yard_shed_S_1",
+   "a": [
+    -2150,
+    -523
+   ],
+   "b": [
+    -2150,
     450
    ],
    "height": 300,
@@ -666,12 +681,12 @@
   {
    "id": "B_yard_shed_part_f0_0_0",
    "a": [
-    -1150,
-    -594
+    -1650,
+    -1350
    ],
    "b": [
-    -1340,
-    -594
+    -1650,
+    -936
    ],
    "height": 300,
    "thickness": 20,
@@ -681,72 +696,12 @@
   {
    "id": "B_yard_shed_part_f0_0_1",
    "a": [
-    -1520,
-    -594
-   ],
-   "b": [
-    -2150,
-    -594
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_yard_shed"
-  },
-  {
-   "id": "B_yard_shed_part_f0_1_0",
-   "a": [
     -1650,
-    -1350
+    -756
    ],
    "b": [
     -1650,
-    -1062
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_yard_shed"
-  },
-  {
-   "id": "B_yard_shed_part_f0_1_1",
-   "a": [
-    -1650,
-    -882
-   ],
-   "b": [
-    -1650,
-    -594
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_yard_shed"
-  },
-  {
-   "id": "B_yard_shed_part_f0_2_0",
-   "a": [
-    -1150,
-    -72
-   ],
-   "b": [
-    -1560,
-    -72
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_yard_shed"
-  },
-  {
-   "id": "B_yard_shed_part_f0_2_1",
-   "a": [
-    -1740,
-    -72
-   ],
-   "b": [
-    -2150,
-    -72
+    450
    ],
    "height": 300,
    "thickness": 20,
@@ -2664,11 +2619,11 @@
      "id": "B_catwalk_part_f0_0",
      "start": [
       2050,
-      1710
+      2190
      ],
      "end": [
       550,
-      1710
+      2190
      ],
      "floor": 0,
      "thickness": 20,
@@ -2678,7 +2633,7 @@
        "kind": "door",
        "pos": [
         1630,
-        1710
+        2190
        ],
        "floor": 0,
        "width": 120,
@@ -2695,7 +2650,7 @@
      ],
      "end": [
       1180,
-      1710
+      2190
      ],
      "floor": 0,
      "thickness": 20,
@@ -2705,7 +2660,7 @@
        "kind": "door",
        "pos": [
         1180,
-        1430
+        1670
        ],
        "floor": 0,
        "width": 120,
@@ -2718,7 +2673,7 @@
      "id": "B_catwalk_part_f0_2",
      "start": [
       1180,
-      1710
+      2190
      ],
      "end": [
       1180,
@@ -2732,7 +2687,7 @@
        "kind": "door",
        "pos": [
         1180,
-        2230
+        2470
        ],
        "floor": 0,
        "width": 120,
@@ -2828,6 +2783,28 @@
      "floor": 1,
      "height_z": 300,
      "gaps": [
+      {
+       "id": "B_catwalk_gap_stair_f1",
+       "poly": [
+        [
+         2035,
+         1315
+        ],
+        [
+         2035,
+         1744
+        ],
+        [
+         1875,
+         1744
+        ],
+        [
+         1875,
+         1315
+        ]
+       ],
+       "kind": "stairwell"
+      },
       {
        "id": "B_catwalk_gap_floor0",
        "poly": [
@@ -3017,7 +2994,7 @@
       ],
       "max": [
        2050,
-       1710
+       2190
       ]
      },
      "kind": "room",
@@ -3037,11 +3014,12 @@
       ],
       "max": [
        1180,
-       1710
+       2190
       ]
      },
      "kind": "room",
      "door_ids": [
+      "B_catwalk_door_south_1",
       "B_catwalk_partdoor_f0_1"
      ]
     },
@@ -3051,7 +3029,7 @@
      "bounds": {
       "min": [
        1180,
-       1710
+       2190
       ],
       "max": [
        2050,
@@ -3070,7 +3048,7 @@
      "bounds": {
       "min": [
        550,
-       1710
+       2190
       ],
       "max": [
        1180,
@@ -3079,7 +3057,6 @@
      },
      "kind": "room",
      "door_ids": [
-      "B_catwalk_door_south_1",
       "B_catwalk_partdoor_f0_2"
      ]
     },
@@ -3431,6 +3408,34 @@
    ],
    "stairs": [
     {
+     "id": "B_catwalk_stair_0",
+     "pos": [
+      1955,
+      1315
+     ],
+     "from": 0,
+     "to": 1,
+     "kind": "stairwell",
+     "top": [
+      1955,
+      1744
+     ]
+    },
+    {
+     "id": "B_catwalk_stair_1",
+     "pos": [
+      1795,
+      1744
+     ],
+     "from": 1,
+     "to": 2,
+     "kind": "stairwell",
+     "top": [
+      1795,
+      1315
+     ]
+    },
+    {
      "id": "STAIR_catwalk_ext",
      "pos": [
       420,
@@ -3490,6 +3495,14 @@
      ],
      "floor": 0,
      "wall": "B_yard_shed_N"
+    },
+    {
+     "pos": [
+      -2150,
+      -613
+     ],
+     "floor": 0,
+     "wall": "B_yard_shed_S"
     }
    ],
    "openings": [
@@ -3506,6 +3519,20 @@
      "sill_height": 0,
      "top_height": 210,
      "yaw": 0
+    },
+    {
+     "id": "B_yard_shed_door_south_2",
+     "kind": "door",
+     "pos": [
+      -2150,
+      -613
+     ],
+     "floor": 0,
+     "wall": "B_yard_shed_S",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 180
     },
     {
      "id": "B_yard_shed_win_north_f0_1",
@@ -3554,12 +3581,12 @@
     {
      "id": "B_yard_shed_part_f0_0",
      "start": [
-      -1150,
-      -594
+      -1650,
+      -1350
      ],
      "end": [
-      -2150,
-      -594
+      -1650,
+      450
      ],
      "floor": 0,
      "thickness": 20,
@@ -3568,62 +3595,8 @@
        "id": "B_yard_shed_partdoor_f0_0",
        "kind": "door",
        "pos": [
-        -1430,
-        -594
-       ],
-       "floor": 0,
-       "width": 120,
-       "sill_height": 0,
-       "top_height": 210
-      }
-     ]
-    },
-    {
-     "id": "B_yard_shed_part_f0_1",
-     "start": [
-      -1650,
-      -1350
-     ],
-     "end": [
-      -1650,
-      -594
-     ],
-     "floor": 0,
-     "thickness": 20,
-     "openings": [
-      {
-       "id": "B_yard_shed_partdoor_f0_1",
-       "kind": "door",
-       "pos": [
         -1650,
-        -972
-       ],
-       "floor": 0,
-       "width": 120,
-       "sill_height": 0,
-       "top_height": 210
-      }
-     ]
-    },
-    {
-     "id": "B_yard_shed_part_f0_2",
-     "start": [
-      -1150,
-      -72
-     ],
-     "end": [
-      -2150,
-      -72
-     ],
-     "floor": 0,
-     "thickness": 20,
-     "openings": [
-      {
-       "id": "B_yard_shed_partdoor_f0_2",
-       "kind": "door",
-       "pos": [
-        -1650,
-        -72
+        -846
        ],
        "floor": 0,
        "width": 120,
@@ -3647,13 +3620,13 @@
       ],
       "max": [
        -1150,
-       -594
+       450
       ]
      },
      "kind": "room",
      "door_ids": [
-      "B_yard_shed_partdoor_f0_0",
-      "B_yard_shed_partdoor_f0_1"
+      "B_yard_shed_door_north_1",
+      "B_yard_shed_partdoor_f0_0"
      ]
     },
     {
@@ -3666,50 +3639,13 @@
       ],
       "max": [
        -1650,
-       -594
-      ]
-     },
-     "kind": "room",
-     "door_ids": [
-      "B_yard_shed_partdoor_f0_1"
-     ]
-    },
-    {
-     "id": "B_yard_shed_r_f0_2",
-     "floor": 0,
-     "bounds": {
-      "min": [
-       -2150,
-       -594
-      ],
-      "max": [
-       -1150,
-       -72
-      ]
-     },
-     "kind": "room",
-     "door_ids": [
-      "B_yard_shed_door_north_1",
-      "B_yard_shed_partdoor_f0_0",
-      "B_yard_shed_partdoor_f0_2"
-     ]
-    },
-    {
-     "id": "B_yard_shed_r_f0_3",
-     "floor": 0,
-     "bounds": {
-      "min": [
-       -2150,
-       -72
-      ],
-      "max": [
-       -1150,
        450
       ]
      },
      "kind": "room",
      "door_ids": [
-      "B_yard_shed_partdoor_f0_2"
+      "B_yard_shed_door_south_2",
+      "B_yard_shed_partdoor_f0_0"
      ]
     }
    ],
@@ -4035,12 +3971,12 @@
      750
     ],
     [
-     420,
-     1742
+     1955,
+     1315
     ],
     [
-     700,
-     2600
+     1955,
+     1744
     ],
     [
      1600,

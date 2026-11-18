@@ -320,6 +320,21 @@
    ],
    "b": [
     -1650,
+    -383
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_garage"
+  },
+  {
+   "id": "B_garage_S_1",
+   "a": [
+    -1650,
+    -203
+   ],
+   "b": [
+    -1650,
     600
    ],
    "height": 300,
@@ -360,12 +375,12 @@
   {
    "id": "B_garage_part_f0_0_0",
    "a": [
-    -650,
-    -328
+    -1150,
+    -1000
    ],
    "b": [
-    -840,
-    -328
+    -1150,
+    -642
    ],
    "height": 300,
    "thickness": 20,
@@ -375,68 +390,8 @@
   {
    "id": "B_garage_part_f0_0_1",
    "a": [
-    -1020,
-    -328
-   ],
-   "b": [
-    -1650,
-    -328
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_garage"
-  },
-  {
-   "id": "B_garage_part_f0_1_0",
-   "a": [
     -1150,
-    -1000
-   ],
-   "b": [
-    -1150,
-    -754
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_garage"
-  },
-  {
-   "id": "B_garage_part_f0_1_1",
-   "a": [
-    -1150,
-    -574
-   ],
-   "b": [
-    -1150,
-    -328
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_garage"
-  },
-  {
-   "id": "B_garage_part_f0_2_0",
-   "a": [
-    -1150,
-    -328
-   ],
-   "b": [
-    -1150,
-    46
-   ],
-   "height": 300,
-   "thickness": 20,
-   "kind": "interior",
-   "building": "B_garage"
-  },
-  {
-   "id": "B_garage_part_f0_2_1",
-   "a": [
-    -1150,
-    226
+    -462
    ],
    "b": [
     -1150,
@@ -1987,6 +1942,14 @@
      ],
      "floor": 0,
      "wall": "B_garage_N"
+    },
+    {
+     "pos": [
+      -1650,
+      -293
+     ],
+     "floor": 0,
+     "wall": "B_garage_S"
     }
    ],
    "openings": [
@@ -2003,6 +1966,20 @@
      "sill_height": 0,
      "top_height": 210,
      "yaw": 0
+    },
+    {
+     "id": "B_garage_door_south_2",
+     "kind": "door",
+     "pos": [
+      -1650,
+      -293
+     ],
+     "floor": 0,
+     "wall": "B_garage_S",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 180
     },
     {
      "id": "B_garage_win_north_f0_1",
@@ -2051,62 +2028,8 @@
     {
      "id": "B_garage_part_f0_0",
      "start": [
-      -650,
-      -328
-     ],
-     "end": [
-      -1650,
-      -328
-     ],
-     "floor": 0,
-     "thickness": 20,
-     "openings": [
-      {
-       "id": "B_garage_partdoor_f0_0",
-       "kind": "door",
-       "pos": [
-        -930,
-        -328
-       ],
-       "floor": 0,
-       "width": 120,
-       "sill_height": 0,
-       "top_height": 210
-      }
-     ]
-    },
-    {
-     "id": "B_garage_part_f0_1",
-     "start": [
       -1150,
       -1000
-     ],
-     "end": [
-      -1150,
-      -328
-     ],
-     "floor": 0,
-     "thickness": 20,
-     "openings": [
-      {
-       "id": "B_garage_partdoor_f0_1",
-       "kind": "door",
-       "pos": [
-        -1150,
-        -664
-       ],
-       "floor": 0,
-       "width": 120,
-       "sill_height": 0,
-       "top_height": 210
-      }
-     ]
-    },
-    {
-     "id": "B_garage_part_f0_2",
-     "start": [
-      -1150,
-      -328
      ],
      "end": [
       -1150,
@@ -2116,11 +2039,11 @@
      "thickness": 20,
      "openings": [
       {
-       "id": "B_garage_partdoor_f0_2",
+       "id": "B_garage_partdoor_f0_0",
        "kind": "door",
        "pos": [
         -1150,
-        136
+        -552
        ],
        "floor": 0,
        "width": 120,
@@ -2144,13 +2067,13 @@
       ],
       "max": [
        -650,
-       -328
+       600
       ]
      },
      "kind": "room",
      "door_ids": [
-      "B_garage_partdoor_f0_0",
-      "B_garage_partdoor_f0_1"
+      "B_garage_door_north_1",
+      "B_garage_partdoor_f0_0"
      ]
     },
     {
@@ -2163,50 +2086,13 @@
       ],
       "max": [
        -1150,
-       -328
-      ]
-     },
-     "kind": "room",
-     "door_ids": [
-      "B_garage_partdoor_f0_1"
-     ]
-    },
-    {
-     "id": "B_garage_r_f0_2",
-     "floor": 0,
-     "bounds": {
-      "min": [
-       -1150,
-       -328
-      ],
-      "max": [
-       -650,
        600
       ]
      },
      "kind": "room",
      "door_ids": [
-      "B_garage_door_north_1",
-      "B_garage_partdoor_f0_0",
-      "B_garage_partdoor_f0_2"
-     ]
-    },
-    {
-     "id": "B_garage_r_f0_3",
-     "floor": 0,
-     "bounds": {
-      "min": [
-       -1650,
-       -328
-      ],
-      "max": [
-       -1150,
-       600
-      ]
-     },
-     "kind": "room",
-     "door_ids": [
-      "B_garage_partdoor_f0_2"
+      "B_garage_door_south_2",
+      "B_garage_partdoor_f0_0"
      ]
     }
    ],

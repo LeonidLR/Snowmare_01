@@ -641,7 +641,7 @@ export function layerWalls(l: GenLayout, layer: string): LayoutWall[] {
   if (floor >= b.floors) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
   if (b.hollow) {
     // a hall's upper level is only its stair-core landing: walk inside the core box, its edges toward the void are rails
-    const core = (b.rooms ?? []).find((rm) => rm.floor === floor && rm.kind === 'stairwell');
+    const core = (b.rooms ?? []).find((rm) => rm.floor === floor && (rm.kind === 'stairwell' || rm.kind === 'balcony'));
     if (!core) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
     const cp = rectPoly([core.bounds.min, core.bounds.max]);
     cp.forEach((a, i) => walls.push({ id: `${b.id}_f${floor}_core_${i}`, a, b: cp[(i + 1) % 4], height: 100, thickness: 10 }));

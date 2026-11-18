@@ -230,7 +230,7 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
   // yard (a small one-entry compound). The tall halls' roofs sit on HALL_ROOF_LEVEL (game designer 2026-11-02: the view from the roofs).
   {
     const r = fit(region.sawtooth);
-    addBuilding(d, 'B_hall_n', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: V >= 2, set_piece: 'industrial_hall', doorSides: ['south', 'south'], windowSides: ['south', 'north'], roofHatch: V >= 2 }, random);
+    addBuilding(d, 'B_hall_n', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: true, set_piece: 'industrial_hall', doorSides: ['south', 'south'], windowSides: ['south', 'north'], roofHatch: V >= 2 }, random);
     const y = fit(region.boilerYard);
     fenceRect(d, 'F_boilers', y, [{ side: 'south', at: (y[0][0] + y[1][0]) / 2, width: GATE_W }]);
     d.zones.push(zone('Z_boilers', 'open', 'one_entry_compound', y, 3.0, ['boiler', 'barrel']));
@@ -240,7 +240,7 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
   // the warehouse (enterable, roof, stairwell) + its fenced lot (one gate on the street)
   {
     const r = fit(region.warehouse);
-    addBuilding(d, 'B_warehouse', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: V >= 2, set_piece: 'warehouse', doorSides: ['west', 'south'], windowSides: ['west', 'south'], roofHatch: V >= 2 }, random);
+    addBuilding(d, 'B_warehouse', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: true, set_piece: 'warehouse', doorSides: ['west', 'south'], windowSides: ['west', 'south'], roofHatch: V >= 2 }, random);
     const lot = fit(region.warehouseLot);
     lotGateX = (lot[0][0] + lot[1][0]) / 2 + jit(4);
     fenceRect(d, 'F_lot', lot, [{ side: 'south', at: lotGateX, width: GATE_W }, { side: 'north', at: (lot[0][0] + lot[1][0]) / 2, width: GATE_W }]);
@@ -344,7 +344,7 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
   // the Steel Works hall (enterable, roof on +3, stairwell), two factory chimneys (tall obstacles, never climbable), the annex racks
   {
     const r = fit(region.steel);
-    addBuilding(d, 'B_steelworks', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: V >= 2, set_piece: 'industrial_hall', doorSides: ['south', 'west'], windowSides: ['south', 'west'] }, random);
+    addBuilding(d, 'B_steelworks', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: true, set_piece: 'industrial_hall', doorSides: ['south', 'west'], windowSides: ['south', 'west'] }, random);
     // the two factory chimneys: one at the hall's NE corner (over the north street's end), one at its SW (over the south street).
     // Game designer 2026-11-02: chimneys are NOT ladder towers - a tall closed obstacle that blocks sight, no ladder, no walkable
     // top, no height level of its own (validateGenLayout refuses a climbable chimney).
@@ -801,6 +801,10 @@ export interface StairCore {
   flightRect: (st: Stair) => Rect;
   /** A hall's upper-level slab keeps only the core; these rectangles are the rest (the 'atrium' gaps). */
   voidRects: Rect[];
+  /** The hall's mezzanine at +1 (designer fork 4, 2026-11-18): the whole strip along the core's side wall. */
+  mezzanine: Rect;
+  /** The 'atrium' gaps of the mezzanine level (everything but the mezzanine strip). */
+  mezzanineVoid: Rect[];
   side: Side;
 }
 
@@ -844,7 +848,9 @@ export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Si
     nearLow ? R(fLo, fHi, cMax, gHi) : R(fLo, fHi, gLo, cMin),
     R(a1 + STAIR_APPROACH, fHi, cMin, cMax),
   ].filter((v) => rect.size(v)[0] > 0.05 && rect.size(v)[1] > 0.05);
-  return { stairs, box, flightRect, voidRects, side };
+  const mezzanine = R(lo, hi, cMin, cMax);
+  const mezzanineVoid = [voidRects[0]];
+  return { stairs, box, flightRect, voidRects, mezzanine, mezzanineVoid, side };
 }
 
 /** The route layer name of a building level: ground, its storeys, its roof (the ladders' `from` / `to` convention). */
@@ -887,9 +893,17 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   const mantle_edges: MantleEdge[] = [];
   const perSide: Record<Side, [number, number][]> = { north: [], south: [], east: [], west: [] };
   const walkableFloors = s.hollow ? 1 : s.floors;
+  const OPPOSITE: Record<Side, Side> = { north: 'south', south: 'north', east: 'west', west: 'east' };
+  const doorSides = [...(s.doorSides ?? ['south'])];
+  if (s.enterable && (x1 - x0) * (y1 - y0) > 150 && new Set(doorSides).size < 2) doorSides.push(OPPOSITE[doorSides[0]]);
+  // the stair core first (BUILDING_GENERATOR.md 3: it constrains windows, rooms and slabs)
+  // P1 (2026-11-18): every enterable multi-storey building gets a core; a hall's core reaches its roof, or only its mezzanine
+  const wantCore = s.enterable && (s.stairwell ?? false) || (s.enterable && !s.hollow && s.floors >= 2);
+  const coreTop = s.hollow ? (s.roof_walkable ? s.floors : 1) : (s.roof_walkable ? s.floors : s.floors - 1);
+  const core = wantCore ? planStairCore(bid, r, coreTop, doorSides) : null;
 
-  // 1. Doors
-  for (const side of s.enterable ? s.doorSides ?? ['south'] : []) {
+  // 1. Doors (>= 2 exterior doors on different sides for buildings > 150 m2: BUILDING_GENERATOR.md 3 step 5)
+  for (const side of s.enterable ? doorSides : []) {
     const horizontal = side === 'north' || side === 'south';
     const lo = horizontal ? x0 : y0, hi = horizontal ? x1 : y1;
     const at = lo + (hi - lo) * (0.25 + 0.5 * random());
@@ -924,8 +938,9 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
       for (let k = 1; k <= count; k++) {
         const at = lo + 1.5 + k * step;
         const nearDoor = perSide[side].some(([d0, d1]) => at >= d0 - 1.2 && at <= d1 + 1.2);
-        for (let f = 0; f < walkableFloors; f++) {
+        for (let f = 0; f < (s.hollow && core ? 2 : walkableFloors); f++) {
           if (f === 0 && nearDoor) continue;
+          if (s.hollow && f === 1 && side !== core?.side) continue; // a hall's upper band only along its mezzanine
           const pos: Vec2 = horizontal ? [at, side === 'north' ? y0 : y1] : [side === 'west' ? x0 : x1, at];
           const wid = `${bid}_win_${side}_f${f}_${k}`;
           openings.push({
@@ -998,7 +1013,6 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   //    every foot and after every top, never a corner pocket. Halls (hollow) get the same core: the landings of their upper
   //    levels are slabs around the core only (floors_detail 'atrium' gaps = the rest of the hall), so the roof is reached by stairs.
   const stairs: Stair[] = [];
-  const core = s.stairwell && s.enterable ? planStairCore(bid, r, s.roof_walkable ? s.floors : s.floors - 1, s.doorSides ?? []) : null;
   if (core) stairs.push(...core.stairs);
 
   // 6. Partitions and Rooms (BSP split for enterable buildings)
@@ -1134,7 +1148,8 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   // 6b. A hall's stair core: its upper landings are walkable 'stairwell' rooms (one per level, the core box)
   if (s.hollow && core) {
     for (let f = 1; f < s.floors; f++) {
-      rooms.push({ id: `${bid}_r_f${f}_core`, floor: f, bounds: { min: core.box[0], max: core.box[1] }, kind: 'stairwell' });
+      const bx = f === 1 ? core.mezzanine : core.box; // +1 = the mezzanine strip along the core's wall, higher = the core landing
+      rooms.push({ id: `${bid}_r_f${f}_${f === 1 ? 'mezz' : 'core'}`, floor: f, bounds: { min: bx[0], max: bx[1] }, kind: f === 1 ? 'balcony' : 'stairwell' });
     }
   }
 
@@ -1183,7 +1198,7 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
       const gaps: FloorGap[] = [];
       const st = stairs.find((x) => x.to === f && x.from === f - 1);
       if (st && core) gaps.push({ id: `${bid}_gap_stair_f${f}`, poly: rect.poly(core.flightRect(st)), kind: 'stairwell' });
-      if (s.hollow && core) core.voidRects.forEach((vr, k) => gaps.push({ id: `${bid}_gap_void_f${f}_${k}`, poly: rect.poly(vr), kind: 'atrium' }));
+      if (s.hollow && core) (f === 1 ? core.mezzanineVoid : core.voidRects).forEach((vr, k) => gaps.push({ id: `${bid}_gap_void_f${f}_${k}`, poly: rect.poly(vr), kind: 'atrium' }));
       floors_detail.push({
         floor: f,
         height_z: levelZ(f),

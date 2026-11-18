@@ -250,7 +250,7 @@ function fence3(c: Ctx, r: Rect, open: Side, gates: { side: Side; at: number; wi
   if (open !== 'east') splitWall(c.d, `${id}_E`, [x1, y0], [x1, y1], g('east'), FENCE_H, FENCE_T, 'fence');
 }
 const hallSpec = (c: Ctx, s: Side, piece: SetPiece) => ({ height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: c.V >= 1,
-  stairwell: c.V >= 2, set_piece: piece, doorSides: [s, s], windowSides: [s, OPP[s]], roofHatch: c.V >= 2 });
+  stairwell: true, set_piece: piece, doorSides: [s, s], windowSides: [s, OPP[s]], roofHatch: c.V >= 2 });
 /** The roof excursion of a hall with a stairwell: up the flight, across the roof, back down (links = the stair). */
 function roofVisit(b: DraftBuilding, s: Side): VisitM | null {
   const chain = stairChainUp(b);
