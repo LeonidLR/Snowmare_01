@@ -8,6 +8,7 @@ do not match the config, is discarded so an old grid cannot be reused under new 
 """
 from __future__ import annotations
 
+import math
 import os
 
 from . import evolution
@@ -73,6 +74,8 @@ def validate_axis(axis: dict) -> None:
                 curr = float(edges[i])
             except (ValueError, TypeError):
                 raise ValueError(f"Axis '{aid}' bin_edges[{i}] is not a valid number: {edges[i]!r}")
+            if not math.isfinite(curr):
+                raise ValueError(f"Axis '{aid}' bin_edges[{i}] must be finite, got {curr}")
             if i > 0 and curr <= float(edges[i - 1]):
                 raise ValueError(
                     f"Axis '{aid}' bin_edges must be strictly increasing: "

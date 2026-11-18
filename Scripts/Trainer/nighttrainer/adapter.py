@@ -217,7 +217,7 @@ class ArenaAdapter:
             raise ArenaResultError("no rounds in the arena result")
         if not rounds:
             if expected_rounds and rc.get("pad_missing_rounds_as_crash", True):
-                return [{"crashed": True, "won": 0.0}] * expected_rounds
+                return [{"crashed": True, "won": 0.0} for _ in range(expected_rounds)]
             raise ArenaResultError("no rounds in the arena result")
         mine, theirs = str(rc.get("candidate_side", "A")), str(rc.get("opponent_side", "B"))
         draws = {str(v).lower() for v in rc.get("draw_values", ["draw", "none", ""])}
@@ -290,7 +290,7 @@ class ArenaAdapter:
                         row["close_hits_taken"] = float(st["close_hits_taken"])
             out.append(row)
         if expected_rounds and len(out) < expected_rounds and rc.get("pad_missing_rounds_as_crash", True):
-            out += [{"crashed": True, "won": 0.0}] * (expected_rounds - len(out))
+            out += [{"crashed": True, "won": 0.0} for _ in range(expected_rounds - len(out))]
         return out
 
     def _side(self, rnd: dict, side_id: str) -> dict:

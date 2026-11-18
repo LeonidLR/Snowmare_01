@@ -39,7 +39,12 @@ def _lookup_rounds(spec: dict, default_rounds: int, opp_name: str = "") -> int:
     if r is None:
         r = spec.get("rounds")
     if r is not None:
-        return int(r)
+        val = int(r)
+        if val < 1:
+            raise ValueError(f"rounds_per_job must be >= 1, got {val}")
+        return val
+    if default_rounds < 1:
+        raise ValueError(f"default rounds_per_job must be >= 1, got {default_rounds}")
     return 1 if str(opp_name).strip().lower() == "bot" else default_rounds
 
 
@@ -71,6 +76,9 @@ class Trainer:
     def _setup(self, cfg: dict, mock: bool) -> None:
         run_json = os.path.join(self.run_dir, "run.json")
         self.baseline_path = os.path.join(self.run_dir, "baseline_weights.json")
+        ev = cfg.get("evaluation", {})
+        if "rounds_per_job" in ev and int(ev["rounds_per_job"]) < 1:
+            raise ValueError(f"evaluation.rounds_per_job must be >= 1, got {ev['rounds_per_job']}")
         if os.path.exists(run_json):
             meta = load_json(run_json)
             self.cfg, self.mock, self.run_seed = meta["config"], bool(meta["mock"]), int(meta["seed"])
@@ -251,19 +259,20 @@ class Trainer:
                    "promoted": promoted, "champion_fresh": champ_fresh,
                    "candidates": [{"id": c["id"], "fitness": c["fitness"], "stats": c["agg"],
                                    "fresh": c.get("fresh")} for c in ranked]}
-        archive = self._update_archive(cands, gen) if self.search_mode() == "qd" else None
-        cand_behaviours = []
-        for cand in cands:
-            rnds = [r for rows in cand.get("by_opp", {}).values() for r in rows]
-            b = qd.mean_behaviour(rnds)
-            if b is not None:
-                cand_behaviours.append(b)
-        qd_cfg = self.cfg.get("qd", {})
-        arch_axes = archive.axes if archive is not None else qd._axes(qd_cfg)
-        desc_hist = qd.descriptor_histogram(cand_behaviours, arch_axes)
-        gen_doc["descriptor_histograms"] = desc_hist
-        if archive is not None:
+        if self.search_mode() == "qd":
+            archive = self._update_archive(cands, gen)
+            cand_behaviours = []
+            for cand in cands:
+                rnds = [r for rows in cand.get("by_opp", {}).values() for r in rows]
+                b = qd.mean_behaviour(rnds)
+                if b is not None:
+                    cand_behaviours.append(b)
+            desc_hist = qd.descriptor_histogram(cand_behaviours, archive.axes)
+            gen_doc["descriptor_histograms"] = desc_hist
             gen_doc["archive"] = {"filled": len(archive.cells), "capacity": archive.capacity()}
+        else:
+            archive = None
+            desc_hist = None
         write_json(os.path.join(gen_dir, "generation.json"), gen_doc)
         for c in ranked:
             a, bot = c["agg"]["all"], c["agg"].get("bot", {})
