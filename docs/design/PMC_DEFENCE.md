@@ -51,6 +51,7 @@ within `guard_dist_m` of the access), `setup_charges_placed`, `mine_kills`, `min
 | Phase | What | Who |
 |---|---|---|
 | P1 | D1 roles + sectors + access guard + Objective-as-area + spacing; D4 spread / guard metrics; smoke `PmcRoofDefenceSmoke` (Depot_1 roofs scenario: spread >= 5 m, guard near access > 60 %) | Grok (grok-4.7, L3) or API Opus patch -> Claude review |
+| P1b (G008b) | Overwatch hold: the commander keeps a defender on an overwatch post until contact or `ambush_max_hold_s` (worker evidence 2026-11-18: X4 overwatch_kills = 0 because 203 posted defenders were pulled off after a median ~17 s while the threat was 120-155 m out, range 110; docs/port/reports/worker-overwatch-kills.md) | Grok after G008 |
 | P2 | Deploy orders: `ESquadOrder::PlaceCharge` (mine / tripwire at location, reuses RelocationSubsystem deploy task) + `Defuse`; PMC supply; D2 setup plan; smoke `PmcSetupMinesSmoke` | Claude agent (cross-system: catalog + relocation + commander) |
 | P3 | D3 attacker mine reaction + mine_risk term + metrics | Grok / API |
 | P4 | Trainer: new metrics in the report, weights for the new terms in pmc_commander.json gene list | Antigravity (Python) |
