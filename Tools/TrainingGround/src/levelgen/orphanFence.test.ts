@@ -1,4 +1,4 @@
-// Training Ground / levelgen: orphan fence cleanup and wall crossing validation (task 085).
+// Training Ground / levelgen: orphan fence cleanup and wall crossing validation (task 085/085b).
 // Tests layoutValidator and regionRegen geometry rules for block fence removal on re-generation.
 
 import assert from 'node:assert/strict';
@@ -9,6 +9,7 @@ import { fileURLToPath } from 'node:url';
 import type { Vec2 } from '../movement/geometry.ts';
 import { segmentsIntersect, segmentSegmentIntersection } from '../movement/geometry.ts';
 import { cleanConflictingFences, validateWallCrossings } from './layoutValidator.ts';
+import { fenceClosedRing } from './regionRegen.ts';
 import type { GenBuilding, GenLayout, GenWall } from './schema.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
@@ -205,4 +206,167 @@ test('wall vs building footprint crossing is detected', () => {
   assert.equal(conflicts[0].kind, 'wall_building');
   assert.equal(conflicts[0].wallA.id, 'F_intruder');
   assert.equal(conflicts[0].building?.id, 'B_warehouse');
+});
+
+// --- Tests for 085b review points (1-4) ---
+
+test('085b (1): rotated 14 deg open fence spanning 2 lot centres is kept (not deleted as non-closed)', () => {
+  // An open fence turned ~14 deg: spans across the bounding box of 2 lot centres, but is not a closed ring
+  const openRotatedFence: GenWall[] = [
+    { id: 'F_open_1', a: [0, 0], b: [2000, 500], height: 135, thickness: 10, kind: 'fence' },
+    { id: 'F_open_2', a: [2000, 500], b: [3000, 1500], height: 135, thickness: 10, kind: 'fence' },
+  ];
+
+  // Closed ring check returns null for open fence
+  const ring = fenceClosedRing(openRotatedFence);
+  assert.equal(ring, null, 'Open fence must not be recognized as a closed polygon ring');
+
+  // Even if an axis-aligned bbox would enclose lot centres [1000, 400] and [1500, 450],
+  // the closed ring requirement ensures it is not treated as enclosing subdivided lots.
+  const closedFence: GenWall[] = [
+    { id: 'F_c_1', a: [0, 0], b: [2000, 0], height: 135, thickness: 10, kind: 'fence' },
+    { id: 'F_c_2', a: [2000, 0], b: [2000, 1000], height: 135, thickness: 10, kind: 'fence' },
+    { id: 'F_c_3', a: [2000, 1000], b: [0, 1000], height: 135, thickness: 10, kind: 'fence' },
+    { id: 'F_c_4', a: [0, 1000], b: [0, 0], height: 135, thickness: 10, kind: 'fence' },
+  ];
+  const closedRing = fenceClosedRing(closedFence);
+  assert.ok(closedRing, 'Closed fence must return polygon vertices');
+  assert.equal(closedRing.length, 4);
+});
+
+test('085b (3): endpoint tolerance - fence butted into a building wall is NOT a crossing', () => {
+  const building: GenBuilding = {
+    id: 'B_office',
+    footprint: [
+      [1000, 1000],
+      [3000, 2000],
+    ],
+    height: 400,
+    floor: 0,
+    roof_type: 'flat',
+  };
+
+  // A fence butting into the building west wall (X=1000, Y in 1000..2000), penetrating 10 cm within wall thickness (30 cm)
+  const buttedFence: GenWall = {
+    id: 'F_butted',
+    a: [200, 1500],
+    b: [1010, 1500], // penetrates 10 cm past X=1000
+    height: 135,
+    thickness: 10,
+    kind: 'fence',
+  };
+
+  const layout: GenLayout = {
+    walls: [buttedFence],
+    buildings: [building],
+    zones: [],
+    spawn_points: [],
+  };
+
+  const conflicts = validateWallCrossings(layout);
+  assert.equal(conflicts.length, 0, 'Fence butted into building wall must not be flagged as a crossing');
+});
+
+test('085b (3): endpoint tolerance - T-joint wall overshoot within thickness is NOT a crossing', () => {
+  // Continuous wall along X
+  const throughWall: GenWall = {
+    id: 'W_main',
+    a: [0, 1000],
+    b: [2000, 1000],
+    height: 200,
+    thickness: 20,
+    kind: 'wall',
+  };
+
+  // Wall butting into W_main at Y=1000 with 10 cm overshoot (less than thickness 20 cm)
+  const tWall: GenWall = {
+    id: 'W_branch',
+    a: [1000, 0],
+    b: [1000, 1010],
+    height: 200,
+    thickness: 20,
+    kind: 'wall',
+  };
+
+  const layout: GenLayout = {
+    walls: [throughWall, tWall],
+    buildings: [],
+    zones: [],
+    spawn_points: [],
+  };
+
+  const conflicts = validateWallCrossings(layout);
+  assert.equal(conflicts.length, 0, 'T-joint with overshoot within wall thickness must not be flagged');
+});
+
+test('085b (4): cleanConflictingFences victim must be a fence family, never a non-fence wall', () => {
+  // A non-fence wall crossing a fence
+  const wallFamilyWall: GenWall = {
+    id: 'W_compound_n',
+    a: [0, 1000],
+    b: [2000, 1000],
+    height: 250,
+    thickness: 30,
+    kind: 'wall',
+  };
+  const fenceWall: GenWall = {
+    id: 'F_orphan_N_0',
+    a: [1000, 0],
+    b: [1000, 2000],
+    height: 135,
+    thickness: 10,
+    kind: 'fence',
+  };
+
+  const layout: GenLayout = {
+    walls: [wallFamilyWall, fenceWall],
+    buildings: [],
+    zones: [],
+    spawn_points: [],
+  };
+
+  const conflicts = validateWallCrossings(layout);
+  assert.equal(conflicts.length, 1);
+
+  // Clean must pick the fence family as victim and NEVER remove the solid wall
+  const cleanResult = cleanConflictingFences(layout);
+  assert.deepEqual(cleanResult.removedFamilies, ['F_orphan']);
+  assert.equal(cleanResult.removedWalls.length, 1);
+  assert.equal(cleanResult.removedWalls[0], 'F_orphan_N_0');
+  assert.equal(cleanResult.layout.walls.length, 1);
+  assert.equal(cleanResult.layout.walls[0].id, 'W_compound_n');
+});
+
+test('085b (4): cleanConflictingFences between two non-fence walls removes neither', () => {
+  const wall1: GenWall = {
+    id: 'W_brick_0',
+    a: [0, 1000],
+    b: [2000, 1000],
+    height: 250,
+    thickness: 30,
+    kind: 'wall',
+  };
+  const wall2: GenWall = {
+    id: 'W_stone_0',
+    a: [1000, 0],
+    b: [1000, 2000],
+    height: 250,
+    thickness: 30,
+    kind: 'wall',
+  };
+
+  const layout: GenLayout = {
+    walls: [wall1, wall2],
+    buildings: [],
+    zones: [],
+    spawn_points: [],
+  };
+
+  const conflicts = validateWallCrossings(layout);
+  assert.equal(conflicts.length, 1);
+
+  // Since neither is a fence, cleanConflictingFences does not delete either wall family
+  const cleanResult = cleanConflictingFences(layout);
+  assert.equal(cleanResult.removedFamilies.length, 0);
+  assert.equal(cleanResult.layout.walls.length, 2);
 });
