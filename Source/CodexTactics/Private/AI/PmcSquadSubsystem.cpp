@@ -1576,11 +1576,17 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		}
 	}
 	// The ambush springs: the first contact of a fight while men hold in ambush.
+	// Not a defence post walk while he is on the move (G008 lead review 2): since review finding 1 the walk to the post is an
+	// Ambush order in contact too, and turning it into Hold here re-issued a walk under way every decision (stalemate smoke: one
+	// man's walk re-decided every 0.5 s, 13 quick same-order re-decisions against 6). A walk that stopped (pinned, ended) is still
+	// turned into Hold, so the next decision re-issues it, as before. HasOwnMoveOrder alone reads false mid-sprint: speed too.
 	if (Team.bEverContact)
 	{
 		for (AOperativeCharacter* Mate : Mates)
 		{
-			if (FFighterState* State = Team.Fighters.Find(Mate); State && State->Order == EPmcOrder::Ambush)
+			const bool bPostWalkMoving = Mate && (Mate->HasOwnMoveOrder() || Mate->GetVelocity().SizeSquared2D() >= FMath::Square(PmcSquadLocal::StillSpeedCm));
+			if (FFighterState* State = Team.Fighters.Find(Mate); State && State->Order == EPmcOrder::Ambush
+				&& !(State->bHasDefencePost && Team.Defence.bActive && State->DefencePostWalkFromCm >= 0.f && bPostWalkMoving))
 			{
 				++Team.Stats.Ambushes;
 				State->Order = EPmcOrder::Hold;
@@ -1762,7 +1768,10 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	bool bKeepGoalLevel = false;
 	// TACTICAL_MAP P2: the Ambush order's walk onto his post was refused this decision (the plain ambush instead).
 	bool bPostWalkRefused = false;
-	auto Walk = [&](const FVector& Point, bool bSprint)
+	// ShortCm: the "he already stands at the goal" refusal. A defence post walk passes half of PostArriveCm (lead review 2): with
+	// ArriveCm (250) a man 200-250 cm off his post was neither on it (bAtPost, 200) nor allowed to walk there, and three refused
+	// walks dropped the post (stalemate smoke: Vance 222 cm off his post, three quick Ambush re-decisions, then the drop).
+	auto Walk = [&](const FVector& Point, bool bSprint, float ShortCm = PmcSquadLocal::ArriveCm)
 	{
 		// Levels (the Depot arena, 2026-11-03): a goal at the fighter's height can hang over a drop (a roof squad's advance point over
 		// the street) or lie on a roof part with no way there - then the same spot on the threat's level, walked through the normal
@@ -1832,7 +1841,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		}
 		// A walk that goes nowhere is no order (the Depot street round re-took an Objective walk 30 times: each "arrived" at once) - on the
 		// goal's level only: a roof goal right over his head is a walk up (fix/pmc-onpoint-3d-detour).
-		if (!PmcCommanderRules::IsWalkShort(PmcSquadLocal::FeetOf(Fighter), Goal, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+		if (!PmcCommanderRules::IsWalkShort(PmcSquadLocal::FeetOf(Fighter), Goal, ShortCm, Team.Weights.LevelToleranceCm))
 		{
 			WalkRefusal = TEXT("he already stands at the goal");
 			return false;
@@ -1924,7 +1933,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				State.DefenceArrivedAt = -1.0;
 				bKeepGoalLevel = true;
 				// No sprint while he sees a target, so his own fire keeps going on the way.
-				bTaken = Walk(State.DefencePost, !View.Threat.bSeenNow);
+				bTaken = Walk(State.DefencePost, !View.Threat.bSeenNow, 0.5f * PostArriveCm);
 				Team.Stats.Relocations += bTaken ? 1 : 0;
 				// The cooldown counts from the attempt: a refused walk does not retry next decision either.
 				State.LastSectorShiftAt = Now;
@@ -2145,7 +2154,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				// arrives too late for guard share > 0.6 (and a roof sees the street at once, so "a target in sight" is nearly always
 				// true). Shot at, he walks, so his own fire answers on the way. The post stays on this level.
 				const float DistanceCm = static_cast<float>(FVector::Dist(Feet, State.DefencePost));
-				bTaken = Walk(State.DefencePost, !View.bUnderFire);
+				bTaken = Walk(State.DefencePost, !View.bUnderFire, 0.5f * PostArriveCm);
 				// Not taken = unreachable now: counted like a walk that ended short.
 				State.DefencePostWalks += bTaken ? 0 : 1;
 				State.DefencePostWalkFromCm = bTaken ? DistanceCm : -1.f;
@@ -2276,7 +2285,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				break;
 			}
 			bKeepGoalLevel = true;
-			bTaken = Walk(State.DefencePost, !(View.bHasThreat && View.Threat.bSeenNow));
+			bTaken = Walk(State.DefencePost, !(View.bHasThreat && View.Threat.bSeenNow), 0.5f * PostArriveCm);
 			Team.Stats.ObjectiveMoves += bTaken ? 1 : 0;
 			break;
 		}
