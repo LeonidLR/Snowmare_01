@@ -18,5 +18,7 @@ Do:
    8 cells; the old binning reproduces 2/48.
 Report docs/port/gemini/outbox/083-qd-coverage.report.md: the diagnosis table, the change, the test numbers, what should change in C++ (if
 the arena metrics themselves are flat) as a recommendation only.
-Allowed: Scripts/Trainer/**, its tests, docs/port/gemini/outbox/083-*. No C++, Content/**, Config/**, no worker / ssh actions.
+Allowed paths: Scripts/Trainer/**, docs/port/gemini/outbox/083-*
+
+Forbidden: C++, Content, Config, worker / ssh actions.
 FINISH line in chat topic gemini-083 (status | last commit | done | NOT done | needs Claude | gate | report).

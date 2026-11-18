@@ -2,6 +2,8 @@
 
 #include "Characters/SquadMantleRules.h"
 
+#include "Formation/FormationSectorRules.h"
+
 TArray<float> SquadMantleRules::LaneOffsets(int32 Count, float SpacingCm, float MinOffsetCm, float MaxOffsetCm)
 {
 	TArray<float> Out;
@@ -69,6 +71,15 @@ float SquadMantleRules::WaitLookYaw(float OutwardYaw, int32 Place, float FanDeg,
 	const float Look = Base + Sign * FanDeg * static_cast<float>(Step);
 	const float Off = FMath::Clamp(FMath::FindDeltaAngleDegrees(OutwardYaw, Look), -FMath::Abs(MaxOffDeg), FMath::Abs(MaxOffDeg));
 	return FRotator::NormalizeAxis(OutwardYaw + Off);
+}
+
+float SquadMantleRules::ClearWaitLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float WantedYaw, float CurrentYaw, float OutwardYaw,
+	float MaxOffDeg, const FFormationConfig& Config)
+{
+	FFormationLookLimit Limit;
+	Limit.Yaw = OutwardYaw;
+	Limit.Half = FMath::Min(FMath::Abs(MaxOffDeg), 180.f);
+	return FRotator::NormalizeAxis(FormationSectorRules::ClearLook(Walls, Pos, WantedYaw, CurrentYaw, Config, TOptional<float>(), Limit));
 }
 
 float SquadMantleRules::UpLookYaw(float ClimbYaw, int32 UpIndex, const TOptional<float>& ThreatYaw)

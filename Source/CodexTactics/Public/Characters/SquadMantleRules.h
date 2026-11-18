@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Formation/FormationTypes.h"
 
 /**
  * R17-1 (designer 2026-11-17, TASK_BOARD): the squad climbs onto / over a mantle obstacle the way it takes a ladder - one climbs, the others
@@ -32,6 +33,15 @@ namespace SquadMantleRules
 	 * than MaxOffDeg off the outward look (nobody covers into the obstacle).
 	 */
 	CODEXTACTICS_API float WaitLookYaw(float OutwardYaw, int32 Place, float FanDeg, float MaxOffDeg, const TOptional<float>& ThreatYaw);
+
+	/**
+	 * A waiter's look cleared of walls (the formation's rule: nobody looks into a wall, FormationSectorRules::ClearLook) WITHIN his arc: the
+	 * outward look +- MaxOffDeg (squad.wait_max_off_deg) is ClearLook's Limit, so a prop / wall right behind him turns his look aside but never
+	 * round towards the obstacle he waits at (FormationMantleSmoke c / e, 2026-11-18: the unlimited ClearLook took a free edge next to the
+	 * fence, 123 - 152 deg off outwards). WantedYaw = WaitLookYaw's look; CurrentYaw = his body's yaw (the turn's sweep); Pos = his position.
+	 */
+	CODEXTACTICS_API float ClearWaitLook(const TArray<FFormationWall>& Walls, const FVector2D& Pos, float WantedYaw, float CurrentYaw, float OutwardYaw,
+		float MaxOffDeg, const FFormationConfig& Config);
 
 	/**
 	 * The look of a man who is up (on the top / over the fence) by the order he came up: the first one covers the climb's direction (the far

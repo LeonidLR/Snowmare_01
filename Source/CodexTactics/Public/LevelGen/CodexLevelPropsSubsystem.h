@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Containers/Ticker.h"
 #include "Subsystems/WorldSubsystem.h"
+#include "Tasks/Task.h"
 #include "CodexLevelPropsSubsystem.generated.h"
 
 class ACodexPropActor;
@@ -41,8 +42,9 @@ public:
 
 	/**
 	 * Spawns props from the given props JSON file and optional layout file. Any earlier spawn (and a pending one) is cleared first.
-	 * bLive (OnWorldBeginPlay, G003b): the props spawn as the game's real objects (Codex.Props.Real) and the spawn is spread over frames
-	 * (props_balance.json gameplay.spawn_frame_budget_ms); false (tests, tools): greybox props, everything at once.
+	 * bLive (OnWorldBeginPlay, G003b): the props spawn as the game's real objects (Codex.Props.Real); the file / layout / validation work runs
+	 * on a worker thread and the spawn then is spread over frames (props_balance.json gameplay.spawn_frame_budget_ms); false (tests, tools):
+	 * greybox props, everything at once on this thread.
 	 * Returns the number of live prop actors so far (a live spawn may still be pending: IsSpawnPending / OnPropsSpawned).
 	 */
 	int32 SpawnPropsFromFile(
@@ -76,7 +78,8 @@ public:
 	/** True once the last spawn finished (every frame of a frame-sliced spawn done; reset by ClearSpawnedProps). */
 	bool HasSpawned() const { return bHasSpawned; }
 
-	/** Fired when a spawn finishes (after its last frame; at once for a direct spawn). */
+	/** Fired when a spawn finishes (after its last frame; at once for a direct spawn). Also when a live spawn's prepare fails (nothing
+	 * spawned, HasSpawned false), so a listener that saw it pending is released. */
 	FOnLevelPropsSpawned OnPropsSpawned;
 
 	/** Blueprint form of OnPropsSpawned. */
@@ -95,13 +98,14 @@ public:
 	/** Live count of GetSpawnedGameplayActors. */
 	int32 GetSpawnedGameplayCount() const;
 
-	/** The longest frame of the last spawn (ms; the first frame includes the file / layout / validation work). */
+	/** The longest game-thread frame of the last spawn (ms; frame 0 includes the spawn call's own work - all of the file / layout /
+	 * validation work for a direct spawn, only the set-up for a live one, whose prepare runs on a worker thread). */
 	double GetLastMaxFrameMs() const { return LastMaxFrameMs; }
 
 	/** Frames the last spawn took. */
 	int32 GetLastSpawnFrames() const { return LastSpawnFrames; }
 
-	/** File + layout + validation time of the last spawn (ms). */
+	/** File + layout + validation time of the last spawn (ms; on a worker thread for a live spawn). */
 	double GetLastPrepareMs() const { return LastPrepareMs; }
 
 	/** Resolves the UClass to spawn for a given variant name (using class_map or native fallback) */
@@ -122,11 +126,15 @@ public:
 private:
 	struct FPropsSpawnSession;
 
+	/** The pure-data half of a spawn (file, layout view, validator, turret / power rules) into the session; no UObject access (worker thread). */
+	static void PrepareSession(FPropsSpawnSession& S);
+	/** Takes a finished prepare on the game thread (dropped ids, greybox rule); false = it failed and the session is dropped. */
+	bool TakePreparedSession();
 	/** Spawns the session's next objects until BudgetMs is spent (0 = all); true when some are left for the next frame. */
 	bool ProcessSession(double BudgetMs);
 	/** The attach pass, the timings and the log line; ends the session and fires OnPropsSpawned. */
 	void FinishSession();
-	/** Removes the frame-slice ticker (if any) and drops the pending session. */
+	/** Removes the frame-slice ticker (if any), cancels + waits for an in-flight worker prepare and drops the pending session. */
 	void StopSpawnTicker();
 	void SpawnOne(FPropsSpawnSession& S, const FLevelPropsResolvedObject& ResObj);
 	/** The real game object of a prop (gameplay.classes); false = none (the ACodexProp* actor / greybox then). */
@@ -134,6 +142,8 @@ private:
 	static void TagProp(AActor* Actor, const FString& LayerId, const FString& PropId);
 
 	TSharedPtr<FPropsSpawnSession> Session;
+	/** The worker-thread prepare of the live spawn in flight (invalid once taken / for a direct spawn); StopSpawnTicker cancels + waits. */
+	UE::Tasks::FTask PrepareTask;
 	FTSTicker::FDelegateHandle SpawnTicker;
 	/** Bumped by every spawn: a ticker of an older spawn stops itself. */
 	uint32 SpawnGeneration = 0;
@@ -147,7 +157,7 @@ private:
 	void LoadBalanceFile();
 
 	/** Resolves layout file path for a layout name, checking accepted and fixture directories */
-	FString ResolveLayoutPath(const FString& LayoutName, const FString& PropsDir) const;
+	static FString ResolveLayoutPath(const FString& LayoutName, const FString& PropsDir);
 
 	UPROPERTY(Transient)
 	TArray<TWeakObjectPtr<ACodexPropActor>> SpawnedProps;
