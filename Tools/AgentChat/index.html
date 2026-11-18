@@ -316,36 +316,19 @@
 
     .idle-banners-container {
       display: flex;
-      flex-direction: column;
-      gap: 6px;
-      padding: 8px 16px 0 16px;
+      flex-wrap: wrap;
+      gap: 4px 10px;
+      padding: 2px 16px 0 16px;
       flex-shrink: 0;
+      font-size: 11px;
+      color: #9ca3af;
     }
+    .idle-banners-container:empty { display: none; }
 
     .idle-banner {
-      background-color: #ef4444;
-      color: #ffffff;
-      padding: 8px 14px;
-      border-radius: 6px;
-      font-size: 13px;
-      font-weight: 700;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      box-shadow: 0 2px 8px rgba(239, 68, 68, 0.35);
-      border: 1px solid #dc2626;
-      animation: idle-pulse 2s infinite ease-in-out;
+      white-space: nowrap;
     }
-
-    .idle-banner::before {
-      content: "⚠️";
-      font-size: 14px;
-    }
-
-    @keyframes idle-pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.85; }
-    }
+    .idle-banner b { color: #f87171; font-weight: 600; }
 
     /* Scrollbar styling */
     ::-webkit-scrollbar {
@@ -830,7 +813,12 @@
             const banner = document.createElement('div');
             banner.className = 'idle-banner';
             banner.id = `idle-banner-${key}`;
-            banner.textContent = `${name} спит ${mins} мин`;
+            const shown = mins >= 120 ? `${Math.floor(mins / 60)} ч` : `${mins} мин`;
+            banner.innerHTML = '';
+            const who = document.createElement('b');
+            who.textContent = name;
+            banner.appendChild(who);
+            banner.appendChild(document.createTextNode(` спит ${shown}`));
             bannersContainer.appendChild(banner);
           }
         });
