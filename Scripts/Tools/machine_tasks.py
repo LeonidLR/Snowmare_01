@@ -354,4 +354,4 @@ def collect_local():
 
 
 def collect_remote(host=REMOTE_HOST):
-    return _summarize(_run_ps(["ssh", "-o", "ConnectTimeout=8", "-o", "BatchMode=yes", host], [REMOTE_ROOT], 15))
+    return _summarize(_run_ps(["ssh", "-o", "ConnectTimeout=8", "-o", "BatchMode=yes", host], [REMOTE_ROOT], 60))  # background thread: the progress scan over Wi-Fi takes 20-40 s
