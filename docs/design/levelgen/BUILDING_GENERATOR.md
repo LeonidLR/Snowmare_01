@@ -20,6 +20,13 @@ Open topics for the studio discussion (designer 2026-11-18):
 - **Horde defence buildings**: entrances that hold without a permanent jam on the horde side and stay interesting to fight (fallback
   layers outer room -> inner room -> stair -> roof, firing positions over every approach, an inner circulation loop for the squad,
   barricadable openings, an exit); validated in the combat sim, related to Grok's G008 `docs/design/PMC_DEFENCE.md`.
+- **Destructible elements** (designer 2026-11-18): doors that can be breached by explosive or broken (kicked / rammed); glass partitions and
+  windows that shatter / blow out. Each changes the navmesh, cover and line of sight at runtime, so the plan must mark which openings are
+  destructible and what they become (open gap, rubble, frame).
+- Later (designer 2026-11-18, "think about it later"): furniture; stair flights inside; external stairs (fire escapes).
+- **Real roofs**: not a flat slab with a parapet. Real flat roofs carry many elements - parapets of different heights, vent shafts, AC / HVAC
+  units, stair / lift penthouses, skylights, pipes, chimneys, antennas, water tanks, level changes - and they are combat cover. Study
+  reference photos; roof furniture follows the cover heights of `obstacle_heights.json` and the clearance / breach rules like interiors.
 
 Sections: 1 audit (what the generator emits, what the builder builds, measured traversal) - 2 design decisions (designer forks) -
 3 the building grammar - 4 rules for our mechanics - 5 the traversal gate before «Принять» - 6 phases and owners.
