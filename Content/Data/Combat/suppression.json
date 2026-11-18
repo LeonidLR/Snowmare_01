@@ -55,6 +55,7 @@
     "zone.duration_seconds": 3,
     "zone.min_squad_distance_cm": 500,
     "zone.detour_tie_band_cm": 25,
-    "zone.detour_look_ahead_cm": 1200
+    "zone.detour_look_ahead_cm": 1200,
+    "zone.detour_pack_radius_cm": 1500
   }
 }

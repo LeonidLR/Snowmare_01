@@ -193,6 +193,8 @@ struct CODEXTACTICS_API FSuppressionConfig
 	float ZoneDetourTieBandCm = 25.f;
 	/** How far past the zone's radius enemies look for a suppression detour. */
 	float ZoneDetourLookAheadCm = 1200.f;
+	/** Nearby hounds inside this distance share an approach lane. */
+	float ZoneDetourPackRadiusCm = 1500.f;
 };
 
 /** One ground cell of the squad's fire (the fear zone of dense fire). */
@@ -318,8 +320,8 @@ namespace SuppressionRules
 	CODEXTACTICS_API bool StepFireCell(const FSuppressionConfig& Config, FSuppressionFireCell& Cell, float DeltaSeconds, bool bSquadTooClose);
 	CODEXTACTICS_API bool IsZoneOpen(const FSuppressionFireCell& Cell);
 
-	/** Lateral offset from the target-to-zone approach axis, positive on the counter-clockwise side. */
-	CODEXTACTICS_API float FearDetourLateralOffset(const FVector& Enemy, const FVector& Centre, const FVector& Target);
+	/** Lateral offset from the outward approach axis, positive on the counter-clockwise side. */
+	CODEXTACTICS_API float FearDetourLateralOffset(const FVector& Enemy, const FVector& Centre, const FVector& OutwardAxis);
 
 	/** Sign of the approach offset, or zero inside the band where the zone alternates ties. */
 	CODEXTACTICS_API int8 PickFearDetourSide(float LateralCm, float TieBandCm);

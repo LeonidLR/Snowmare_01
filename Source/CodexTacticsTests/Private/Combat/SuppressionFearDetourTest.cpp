@@ -8,14 +8,14 @@ IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSuppressionFearDetourTest, "CodexTactics.Comba
 bool FSuppressionFearDetourTest::RunTest(const FString&)
 {
 	const FVector Centre = FVector::ZeroVector;
-	const FVector Target(-1200.f, 0.f, 0.f);
 	const FVector First(1200.f, 100.f, 0.f);
 	const FVector Second(1200.f, -100.f, 0.f);
+	const FVector PackApproach = (First + Second) / 2.f - Centre;
 	const FSuppressionConfig Config;
 	TestEqual(TEXT("Opposite approach lanes choose opposing turns"), SuppressionRules::PickFearDetourSide(
-		SuppressionRules::FearDetourLateralOffset(First, Centre, Target), Config.ZoneDetourTieBandCm), static_cast<int8>(1));
+		SuppressionRules::FearDetourLateralOffset(First, Centre, PackApproach), Config.ZoneDetourTieBandCm), static_cast<int8>(1));
 	TestEqual(TEXT("The other lane turns clockwise"), SuppressionRules::PickFearDetourSide(
-		SuppressionRules::FearDetourLateralOffset(Second, Centre, Target), Config.ZoneDetourTieBandCm), static_cast<int8>(-1));
+		SuppressionRules::FearDetourLateralOffset(Second, Centre, PackApproach), Config.ZoneDetourTieBandCm), static_cast<int8>(-1));
 	TestEqual(TEXT("The centre line is a tie"), SuppressionRules::PickFearDetourSide(0.f, Config.ZoneDetourTieBandCm), static_cast<int8>(0));
 
 	FSuppressionFireCell Cell;
@@ -25,6 +25,9 @@ bool FSuppressionFearDetourTest::RunTest(const FString&)
 
 	FVector Waypoint;
 	const FVector ShiftedTarget(-1200.f, 300.f, 0.f);
+	TestTrue(TEXT("An offset prey biases both shortest approaches to one side"),
+		SuppressionRules::FearDetourLateralOffset(First, Centre, Centre - ShiftedTarget) > 0.f
+		&& SuppressionRules::FearDetourLateralOffset(Second, Centre, Centre - ShiftedTarget) > 0.f);
 	TestTrue(TEXT("A detour retains its assigned turn after the target moves"), EnemyAIRules::FireDetourWaypoint(
 		FVector(1200.f, 0.f, 0.f), Centre, 400.f, ShiftedTarget, Waypoint, EnemyAIRules::FireDetourStepDegrees, -1));
 	TestTrue(TEXT("The next waypoint stays on the assigned side"), Waypoint.Y < 0.f);

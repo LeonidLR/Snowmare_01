@@ -75,6 +75,7 @@ namespace SuppressionRules
 		{ TEXT("zone.min_squad_distance_cm"), &FSuppressionConfig::ZoneMinSquadDistanceCm },
 		{ TEXT("zone.detour_tie_band_cm"), &FSuppressionConfig::ZoneDetourTieBandCm },
 		{ TEXT("zone.detour_look_ahead_cm"), &FSuppressionConfig::ZoneDetourLookAheadCm },
+		{ TEXT("zone.detour_pack_radius_cm"), &FSuppressionConfig::ZoneDetourPackRadiusCm },
 	};
 
 	/** The values in force (GetConfig / SetConfig); loaded from the file on the first GetConfig. */
@@ -264,9 +265,9 @@ namespace SuppressionRules
 		State.Tier = ResolveStateTier(Config, State);
 	}
 
-	float FearDetourLateralOffset(const FVector& Enemy, const FVector& Centre, const FVector& Target)
+	float FearDetourLateralOffset(const FVector& Enemy, const FVector& Centre, const FVector& OutwardAxis)
 	{
-		const FVector Axis = (Centre - Target).GetSafeNormal2D();
+		const FVector Axis = OutwardAxis.GetSafeNormal2D();
 		return static_cast<float>(FVector::CrossProduct(Axis, Enemy - Centre).Z);
 	}
 

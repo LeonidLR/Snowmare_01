@@ -1139,7 +1139,7 @@ protected:
 	bool FindNearestFire(FVector& OutFire) const;
 	/** Nearest burning barrel / active heat zone whose fear radius (OutRadius) reaches within Extra of the feet. */
 	bool FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius, bool* bOutSuppressionZone = nullptr,
-		uint64* OutZoneId = nullptr, TOptional<float> SuppressionLookAhead = {}) const;
+		uint64* OutZoneId = nullptr, bool bLookAheadForHoundApproach = false) const;
 	/** Location inside a burning barrel's / active heat zone's fear radius (the heat of Candidate itself excluded). */
 	bool IsInFearZone(const FVector& Location, const AActor* Candidate) const;
 	/**

@@ -398,7 +398,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 			RequestAIMoveToLocation(AIC, TargetFeet, 30.f);
 		}
 		else if (bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire
-			&& FindNearestFireZone(800.f, Zone, ZoneRadius, nullptr, &DetourZoneId, SuppressionRules::GetConfig().ZoneDetourLookAheadCm)
+			&& FindNearestFireZone(800.f, Zone, ZoneRadius, nullptr, &DetourZoneId, true)
 			&& EnemyAIRules::FireDetourWaypoint(Feet, Zone, ZoneRadius + 50.f, TargetPosition, Waypoint))
 		{
 			if (const int8 TurnDirection = ResolveSuppressionDetourSide(DetourZoneId, Feet, Zone, TargetPosition))
@@ -790,27 +790,48 @@ bool AEnemyCharacter::IsInFearZone(const FVector& Location, const AActor* Candid
 
 int8 AEnemyCharacter::ResolveSuppressionDetourSide(uint64 ZoneId, const FVector& Feet, const FVector& Centre, const FVector& Target)
 {
-	if (ZoneId == 0)
+	if (ZoneId == 0 || Archetype != EEnemyArchetype::FrostHound)
 	{
 		return 0;
 	}
 	if (SuppressionDetourZoneId != ZoneId)
 	{
 		SuppressionDetourZoneId = ZoneId;
-		const float LateralCm = SuppressionRules::FearDetourLateralOffset(Feet, Centre, Target);
-		SuppressionDetourSide = SuppressionRules::PickFearDetourSide(LateralCm, SuppressionRules::GetConfig().ZoneDetourTieBandCm);
+		const FSuppressionConfig& Config = SuppressionRules::GetConfig();
+		const FVector2D FromZone(Feet - Centre);
+		const float PackRadiusSq = FMath::Square(FMath::Max(0.f, Config.ZoneDetourPackRadiusCm));
+		FVector PackCentre = Feet;
+		int32 PackCount = 1;
+		for (const AEnemyCharacter* Mate : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
+		{
+			if (!IsValid(Mate) || Mate == this || Mate->Archetype != Archetype || Mate->IsDying())
+			{
+				continue;
+			}
+			const FVector Position = Mate->GetActorLocation();
+			if (FVector::DistSquared2D(Position, Feet) <= PackRadiusSq && FVector2D::DotProduct(FVector2D(Position - Centre), FromZone) > 0.f)
+			{
+				PackCentre += Position;
+				++PackCount;
+			}
+		}
+		// The pack's approach axis goes through the zone and the approaching hounds. A shared prey can be off that axis.
+		const FVector OutwardAxis = PackCount > 1 ? PackCentre / PackCount - Centre : Centre - Target;
+		const float LateralCm = SuppressionRules::FearDetourLateralOffset(Feet, Centre, OutwardAxis);
+		SuppressionDetourSide = SuppressionRules::PickFearDetourSide(LateralCm, Config.ZoneDetourTieBandCm);
 		if (SuppressionDetourSide == 0)
 		{
 			SuppressionDetourSide = GetWorld()->GetSubsystem<USuppressionSubsystem>()->TakeFearDetourTieSide(ZoneId);
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("[Suppression] %s detour: side %+d, lateral %.0f cm, centre %s"),
-			*GetName(), static_cast<int32>(SuppressionDetourSide), LateralCm, *Centre.ToCompactString());
+		UE_LOG(LogCodexTactics, Display, TEXT("[Suppression] %s detour: side %+d, lateral %.0f cm, pack %d, feet %s, centre %s, prey %s"),
+			*GetName(), static_cast<int32>(SuppressionDetourSide), LateralCm, PackCount, *Feet.ToCompactString(),
+			*Centre.ToCompactString(), *Target.ToCompactString());
 	}
 	return SuppressionDetourSide;
 }
 
 bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius, bool* bOutSuppressionZone,
-	uint64* OutZoneId, TOptional<float> SuppressionLookAhead) const
+	uint64* OutZoneId, bool bLookAheadForHoundApproach) const
 {
 	if (OutZoneId)
 	{
@@ -859,8 +880,10 @@ bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& 
 	FVector Zone;
 	float ZoneRadius = 0.f;
 	uint64 ZoneId = 0;
+	const float SuppressionExtra = bLookAheadForHoundApproach && Archetype == EEnemyArchetype::FrostHound
+		? SuppressionRules::GetConfig().ZoneDetourLookAheadCm : Extra;
 	if (const USuppressionSubsystem* Suppression = World ? World->GetSubsystem<USuppressionSubsystem>() : nullptr;
-		Suppression && Suppression->FindFearZone(Feet, SuppressionLookAhead.IsSet() ? SuppressionLookAhead.GetValue() : Extra, Zone, ZoneRadius, &ZoneId))
+		Suppression && Suppression->FindFearZone(Feet, SuppressionExtra, Zone, ZoneRadius, &ZoneId))
 	{
 		const float Distance = FVector::Dist2D(Feet, Zone);
 		if (Distance - ZoneRadius < BestMargin)
