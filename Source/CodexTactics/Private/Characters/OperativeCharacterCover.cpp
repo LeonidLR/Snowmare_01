@@ -8,6 +8,7 @@
 #include "TimerManager.h"
 
 #include "CodexTactics.h"
+#include "Characters/CoverSlotHandoverRules.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeAnimInstance.h"
 #include "Characters/SquadSubsystem.h"
@@ -19,6 +20,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/PlayerCommands.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Survival/ColdSurvivalComponent.h"
@@ -36,6 +38,42 @@
 
 namespace
 {
+	/** True for the one EnterCover call after a hand-over wait timed out: the normal entry (swept move, squadmate ignored) without a new wait. */
+	bool GCoverHandoverSkipWait = false;
+
+	AOperativeCharacter* FindCoverSlotOccupant(const AOperativeCharacter& Arriving, const FCoverSlot& Slot, bool bVacatingOnly)
+	{
+		const UWorld* World = Arriving.GetWorld();
+		const UCapsuleComponent* Capsule = Arriving.GetCapsuleComponent();
+		if (!World || !Capsule)
+		{
+			return nullptr;
+		}
+
+		// EnterCover sweeps to this XY at the operative's current floor height.
+		const FVector Center(Slot.WorldLocation.X, Slot.WorldLocation.Y, Arriving.GetActorLocation().Z);
+		TArray<FOverlapResult> Overlaps;
+		World->OverlapMultiByObjectType(Overlaps, Center, FQuat::Identity, FCollisionObjectQueryParams(ECC_Pawn),
+			FCollisionShape::MakeCapsule(Capsule->GetScaledCapsuleRadius(), Capsule->GetScaledCapsuleHalfHeight()),
+			FCollisionQueryParams(SCENE_QUERY_STAT(CoverSlotHandover), false, &Arriving));
+		for (const FOverlapResult& Overlap : Overlaps)
+		{
+			AOperativeCharacter* Other = Cast<AOperativeCharacter>(Overlap.GetActor());
+			if (!Other || Overlap.GetComponent() != Other->GetCapsuleComponent() || Other->TeamId != Arriving.TeamId)
+			{
+				continue;
+			}
+			const FVector& Destination = Other->HasPendingCover() ? Other->GetPendingCoverSlot().WorldLocation : Other->GetLastMoveDestination();
+			const float CombinedRadius = Capsule->GetScaledCapsuleRadius() + Other->GetCapsuleComponent()->GetScaledCapsuleRadius();
+			if (!bVacatingOnly || CoverSlotHandoverRules::IsVacating(Other->HasOwnMoveOrder(),
+				static_cast<float>(FVector::Dist2D(Destination, Center)), CombinedRadius))
+			{
+				return Other;
+			}
+		}
+		return nullptr;
+	}
+
 	TAutoConsoleVariable<int32> CVarDebugCornerAim(TEXT("Codex.Debug.CornerAim"), 0,
 		TEXT("1: the sustained corner aim's decision, its reason and inputs over the operatives in cover."));
 	TAutoConsoleVariable<int32> CVarCornerPeekEntryTurn(TEXT("Codex.Cover.CornerPeekEntryTurn"), 1,
@@ -120,6 +158,57 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 	if (!Slot.IsValid() || !HealthComponent || !HealthComponent->IsAlive())
 	{
 		return;
+	}
+	// Preserve the cover order while a teammate is still leaving its endpoint.
+	if (!bInCover && !bQuietCoverEntryRequest && !GCoverHandoverSkipWait && PendingCoverSlot.WorldLocation == Slot.WorldLocation)
+	{
+		if (const AOperativeCharacter* Occupant = FindCoverSlotOccupant(*this, Slot, true))
+		{
+			const FCoverSlot WaitingSlot = Slot;
+			bHasPendingCover = false;
+			StopOperative();
+			bHasPendingCover = true;
+			bHasMoveOrder = true;
+			bOwnMoveOrder = true;
+			const uint32 OrderSerial = GetMoveOrderSerial();
+			const CoverSlotHandoverRules::FConfig& Config = CoverSlotHandoverRules::GetConfig();
+			const double Deadline = GetWorld()->GetTimeSeconds() + Config.TimeoutSeconds;
+			UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s waits for %s to clear the slot"),
+				*DisplayName.ToString(), *Occupant->DisplayName.ToString());
+			GetWorldTimerManager().SetTimer(PendingMoveTimer, FTimerDelegate::CreateWeakLambda(this,
+				[this, WaitingSlot, OrderSerial, Deadline]()
+				{
+					if (GetMoveOrderSerial() != OrderSerial || PendingCoverSlot.WorldLocation != WaitingSlot.WorldLocation)
+					{
+						GetWorldTimerManager().ClearTimer(PendingMoveTimer);
+						return;
+					}
+					if (!bHasPendingCover || !HealthComponent || !HealthComponent->IsAlive())
+					{
+						ClearPendingCover();
+						StopOperative();
+						return;
+					}
+
+					const auto Result = CoverSlotHandoverRules::DecideWait(
+						FindCoverSlotOccupant(*this, WaitingSlot, false) != nullptr, GetWorld()->GetTimeSeconds(), Deadline);
+					if (Result == CoverSlotHandoverRules::EWaitResult::Wait)
+					{
+						return;
+					}
+					// Enter or timeout: the normal entry; on a timeout (no new wait) its swept move repeats
+					// with the squadmate ignored, as before 046, so a mutual wait never leaves him standing without cover.
+					if (Result == CoverSlotHandoverRules::EWaitResult::Timeout)
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: slot did not clear before the wait expired - normal entry"), *DisplayName.ToString());
+					}
+					bHasPendingCover = false;
+					StopOperative();
+					TGuardValue<bool> SkipWait(GCoverHandoverSkipWait, Result == CoverSlotHandoverRules::EWaitResult::Timeout);
+					EnterCover(WaitingSlot);
+				}), Config.RetrySeconds, true);
+			return;
+		}
 	}
 	const bool bWasInCover = bInCover;
 	const bool bSameWall = bWasInCover && CoverTraceRules::IsSameWall(CoverSlot, Slot);
