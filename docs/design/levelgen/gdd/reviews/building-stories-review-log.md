@@ -55,3 +55,30 @@ db33649d74589979c48ed3a2b5b9511cbbf5627dd3145694625e849292e8fbfc  ~/.claude/skil
 fc5adde662220de8acfa5287775b3e8aceef2a28083bb6676cf49ccdbb2aada4  docs/design/levelgen/gdd/opening-states.md
 5a09ff4d3654dcec8bfeb2a52d66e6250420a5fd92d29188e38df9726f38d844  docs/design/levelgen/gdd/building-route-model.md
 5ac121ddeca7ea59ca187b3f2dea5b2a7e357d946df71df14f8736f69707935a  docs/design/levelgen/gdd/breach-panels.md
+
+## Review — 2026-11-18 — Verdict: NEEDS REVISION
+Review mode: lean · Workflow: minimal (project.yaml; all 8 sections checked anyway)
+Scope signal: L
+Specialists: none (lean). Same session as the author - not an independent review.
+Blocking items: 3 | Recommended: 7
+Summary: v2 closes all three prior blockers (bricks for S1 stories 7 / 10, stories[], pooled per-role distribution). New blockers were small rule gaps: S1 story 4 used flats that arrive in S2, no precedence when a building fits several roles, and weights alone could not meet the per-role budget. All three plus recommendations 1-3 were fixed right after this review (two-step pick, role order, N_watch, AC2 leg modes, story 19 shutters sealed); awaiting re-review.
+Prior verdict resolved: Yes (3/3 prior blockers)
+Findings:
+- [BLOCKING] Detailed Rules 3, story 4: add_balcony_escape(flat) in S1 but flats are S2 -> fixed: flat = any room on an exterior wall until S2.
+- [BLOCKING] Detailed Rules 1: no role precedence -> fixed: objective > garrison > overwatch > transit > background.
+- [BLOCKING] Formulas F1 / F3: weights cannot guarantee the role budget -> fixed: two-step pick.
+- [RECOMMENDED] Detailed Rules 1: overwatch count undefined -> fixed: N_watch 3, >= 2 storeys + walkable roof.
+- [RECOMMENDED] Acceptance Criteria 2: prose comparison -> fixed: leg modes equal the fixture's sequence.
+- [RECOMMENDED] Detailed Rules 6, story 19: shutters "fixed" vs door states -> fixed: sealed.
+- [RECOMMENDED] Formulas F2: derive compatibility from disjoint brick targets (open).
+- [RECOMMENDED] Edge Cases 14 / 18: link ownership and order by sorted ids (open).
+- [RECOMMENDED] Eligibility: 430 cm free run outside for stories 10 / 12 (open).
+- [RECOMMENDED] Story 15: name the bypass of block_flight(barricade) (open).
+Reviewed-Content-Hash: docs/design/levelgen/gdd/building-stories.md 464dc8d601415dab61e0ea375bf689dc5a987b5e
+review-receipts: not stamped, no such file: design/registry/entities.yaml
+Reviewed-Content-Hash: /c/Users/Zephyrus15Duo/.claude/skills/design-review/SKILL.md 4dcc8b81162613c757144532f1b72708ab3ba27f
+Reviewed-Content-Hash: docs/design/levelgen/gdd/building-archetypes.md 2b579056e1e2d857bb9b3612d593743d579ad0c7
+Reviewed-Content-Hash: docs/design/levelgen/gdd/opening-states.md 9c83f89a54727ce67a5176cddebff2f5d0e55791
+Reviewed-Content-Hash: docs/design/levelgen/gdd/building-route-model.md 14b282e2fdcdf5fa20fe7a94b2daecbe8a4928eb
+Reviewed-Content-Hash: docs/design/levelgen/gdd/breach-panels.md ebffa71ec38d3e852ad316baacf9eea1f6fc13c3
+Reviewed-Content-Hash: docs/design/levelgen/BUILDINGS_TECH_SPEC.md fdf691cb0d8cae6bcbaa4559ae9e4b8c8fb1c07f

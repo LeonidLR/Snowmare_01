@@ -31,7 +31,7 @@ Designer 2026-11-18: «Я хочу, чтобы каждое здание был�
 | 2 | Opening states (doors, windows) | [opening-states.md](opening-states.md) | Gameplay (level/world) | Core | 1 | Draft v2 |
 | 3 | Building route model | [building-route-model.md](building-route-model.md) | Gameplay (AI/pathfinding) | Core | 1, 2 | Draft v2 |
 | 4 | Breach panels | [breach-panels.md](breach-panels.md) | Gameplay (level/world) | Feature | 1, 2, 3, 5 (roles), DOORWAY_BREACH.md, WEAPONS_FRAMEWORK.md | Draft v2 (S4: waits for studio decisions, charges, R3 spike) |
-| 5 | Building stories | [building-stories.md](building-stories.md) | Gameplay (level/world) | Feature | 1, 2, 3 (4 downstream) | Draft v2 |
+| 5 | Building stories | [building-stories.md](building-stories.md) | Gameplay (level/world) | Feature | 1, 2, 3 (4 downstream) | In Review (v2 review 2026-11-18: 3 blockers fixed, re-review pending) |
 
 Technical specification (data contract, builder + kit, runtime C++, Training Ground page, tests, phases):
 [docs/design/levelgen/BUILDINGS_TECH_SPEC.md](../BUILDINGS_TECH_SPEC.md).

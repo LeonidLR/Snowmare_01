@@ -38,7 +38,10 @@ the rest of the town breathes. The player remembers buildings, not boxes.
 | `transit` | enterable buildings the main route passes through or beside (<= 15 m from `R_main`) | choice story or pass-through |
 | `background` | everything else | mostly `open`; a light story (author traces only) |
 
-Roles come from data the generator already has; they are stored per building (`role`) and shown on the page.
+Roles come from data the generator already has; they are stored per building (`role`) and shown on the page. A building
+that qualifies for several roles takes the first in the order **objective > garrison > overwatch > transit > background**.
+`overwatch` = at most `N_watch` buildings per map (*proposal* 3), each with >= 2 storeys and a walkable roof, the tallest
+first (ties by id).
 
 ### 2. District theme (narrative + level, studio review)
 
@@ -53,7 +56,7 @@ next to an objective are PMC-held, edge districts belong to survivors and the co
 | `door_state(door, state)` | sets a door's state (locked / barricaded / sealed) - [opening-states.md](opening-states.md) | 3, 10, 15, 20 |
 | `window_state(side or storey, state)` | sets window states on a facade / storey | 8, 9, 20 |
 | `block_flight(flight, kind)` | the flight stays (geometry) but is impassable: rubble / burnt / barricade (no route edge) | 4, 13, 15 |
-| `add_balcony_escape(flat, storeys)` | a balcony door + balcony on each storey + a fire escape between them | 4 |
+| `add_balcony_escape(flat, storeys)` | a balcony door + balcony on each storey + a fire escape between them; until flats exist (S2) `flat` = any room on an exterior wall of a block / office | 4 |
 | `roof_access(kind)` | removes the core-to-roof / hatch access and adds a facade ladder or fire escape to the roof | 7 |
 | `snow_ramp(window)` | a snow ramp from the ground to a storey-1 window (walkable slope <= 35 deg, ends at the sill as a low_vault) | 10 |
 | `escape_down_only(escape)` | marks a fire escape `down_only` (iced) | 11 |
@@ -120,7 +123,7 @@ later).
 | 16 | Sniper's nest | hatch_only(top room) | block, hall office; role garrison / overwatch | dead end with a view | position | pmc | S3 |
 | 17 | Dead-end trap | dead_end(flat) | block, office, hospital; role garrison | ambush room (PMC AI) | position | pmc | S3 |
 | 18 | Plank bridge | link_neighbour(plank window -> window) | blocks <= 3 m apart | across the plank | choice | survivors | S3 (links last) |
-| 19 | Shop below | isolate(ground-floor shop; shutters fixed) | shop + flats | flats from the courtyard | detour | decay | S2 |
+| 19 | Shop below | isolate(ground-floor shop; street shutters `sealed`) | shop + flats | flats from the courtyard | detour | decay | S2 |
 | 20 | Courtyard only | street-side doors sealed / windows barred | block, hospital (lot with a courtyard side) | round the block into the yard | detour | pmc, survivors | S3 |
 | 21 | Elevator shaft | forced_shaft(core) | block, office (3 storeys) | shaft to the storey the stair skips | choice | decay | L |
 | 22 | Basement passage | basement level -1 + tunnel to the neighbour | later stage (needs level -1) | - | choice | survivors | L |
@@ -139,10 +142,13 @@ Weights per role and archetype, eligibility, allowed authors, compatibility and 
 
 ## Formulas
 
-### F1. Story pick (per building b, role r, archetype a)
+### F1. Story pick (per building b, role r, archetype a) - two steps
 
 ```
+step 1: storied(b) = 1 with probability budget[r] (F3), else b keeps open / pass-through (traces only)
+step 2: if storied(b), among the eligible stories other than 1 and 2:
 P(s | b) = w[r][a][s] * eligible(s, b) / sum_k( w[r][a][k] * eligible(k, b) )
+        (no eligible story -> b stays open; counted as a shortfall in the F3 report)
 eligible(s, b) = 1 if a is in s's archetype list, s's phase is enabled, and b meets s's conditions
                  (storeys, neighbour distance, courtyard side, roof, role), else 0
 detour stories: eligible only if r in {objective, garrison, overwatch}
@@ -228,6 +234,7 @@ tries(b) <= T_max = 4;  rollback_share = buildings ending open by rollback / sto
 | `w[r][a][s]` | set to meet F3 | 0-1 | `building_stories.json` |
 | Role budget (F3) | table | 0-100 % | `building_stories.json` |
 | `R_garrison`, `R_watch` | 30 m, 60 m | 10-80, 30-120 | `building_stories.json` |
+| `N_watch` | 3 per map | 1-6 | `building_stories.json` |
 | `p_two` | 0.25 | 0-0.5 | `building_stories.json` |
 | `M_detour` | 2 | 1-4 | `building_stories.json` |
 | `T_max` | 4 | 1-8 | generator |
@@ -250,8 +257,8 @@ Training Ground «Здания» panel: role, story names, author / outcome, the
 ## Acceptance Criteria
 
 - [ ] Unit: every brick on a fixture building - state applied, undone exactly on rollback (layout byte-equal to before).
-- [ ] Unit: each S1 story (3, 4, 7, 10) on its fixture archetype passes reachability; 3 and 10 pass F4; the key route matches
-      the catalogue row.
+- [ ] Unit: each S1 story (3, 4, 7, 10) on its fixture archetype passes reachability; 3 and 10 pass F4; the key route's leg
+      modes equal the fixture's expected sequence (e.g. story 4: walk, open, walk, climb, walk, ..., roof).
 - [ ] Unit: roles from a fixture layout with 1 goal and 3 tactical places - the goal's building is `objective`, place
       buildings are `garrison`.
 - [ ] Determinism: same (seed, building id, cost hash) -> same role, stories, author.
