@@ -814,7 +814,7 @@ export interface StairCore {
  * WALL_INNER) so the approach boxes and the 10 cm lane gap are exact; the kit's stair module is placed by these points.
  * Returns null when the footprint is too short / narrow for a 35-degree flight with both approach boxes.
  */
-export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Side[] = [], blockedSides: Side[] = []): StairCore | null {
+export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Side[] = [], others: readonly Rect[] = []): StairCore | null {
   if (upTo <= 0) return null;
   const [[x0, y0], [x1, y1]] = r;
   const alongY = y1 - y0 >= x1 - x0;
@@ -827,10 +827,17 @@ export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Si
   const crossLo = (alongY ? x0 : y0) + WALL_INNER, crossHi = (alongY ? x1 : y1) - WALL_INNER;
   if (coreW + 1.2 > crossHi - crossLo) return null; // keep >= 1.2 m of floor beside the core
   const sides: Side[] = alongY ? ['west', 'east'] : ['north', 'south'];
-  // blockedSides (a neighbour's footprint overlaps that side, 2026-11-18 engine test: B_hall_n's core stood inside B_office_w) beat
-  // avoidSides (the door sides): a core in another building's solid block has no navmesh at all
-  const side = sides.find((sd) => !avoidSides.includes(sd) && !blockedSides.includes(sd))
-    ?? sides.find((sd) => !blockedSides.includes(sd)) ?? sides[0];
+  // a side is blocked when its core box (lanes x flights + approaches) intersects another building's footprint (2026-11-18 engine
+  // test: B_hall_n's core stood inside the B_office_w facade block, no navmesh). Blocked beats the door sides; both blocked -> no
+  // core (the validator then reports the storeys unreachable and «Принять» stays closed) - never a core inside a neighbour.
+  const boxFor = (sd: Side): Rect => {
+    const low = sd === 'west' || sd === 'north';
+    const bMin = low ? crossLo : crossHi - coreW, bMax = low ? crossLo + coreW : crossHi;
+    return alongY ? [[bMin, lo], [bMax, a1 + STAIR_APPROACH]] : [[lo, bMin], [a1 + STAIR_APPROACH, bMax]];
+  };
+  const clear = (sd: Side) => !others.some((o) => rect.overlaps(boxFor(sd), o, -0.01));
+  const side = sides.find((sd) => !avoidSides.includes(sd) && clear(sd)) ?? sides.find(clear);
+  if (!side) return null;
   const nearLow = side === 'west' || side === 'north';
   const laneC = (k: number) => nearLow ? crossLo + 0.05 + STAIR_FLIGHT_W / 2 + k * STAIR_LANE_PITCH
     : crossHi - 0.05 - STAIR_FLIGHT_W / 2 - k * STAIR_LANE_PITCH;
@@ -885,21 +892,6 @@ export function stairChainUp(b: { id: string; floors: number; stairs: Stair[] },
   return { points, layers, links, flights };
 }
 
-/** The sides of `r` that another footprint overlaps (west / north = the low x / y edge, as planStairCore's `nearLow`). */
-export function overlapSides(r: Rect, others: readonly Rect[]): Side[] {
-  const [[x0, y0], [x1, y1]] = r;
-  const out = new Set<Side>();
-  for (const [[ox0, oy0], [ox1, oy1]] of others) {
-    const w = Math.min(x1, ox1) - Math.max(x0, ox0), h = Math.min(y1, oy1) - Math.max(y0, oy0);
-    if (w <= 0.01 || h <= 0.01) continue;
-    if (ox0 <= x0 + 1e-6) out.add('west');
-    if (ox1 >= x1 - 1e-6) out.add('east');
-    if (oy0 <= y0 + 1e-6) out.add('north');
-    if (oy1 >= y1 - 1e-6) out.add('south');
-  }
-  return [...out];
-}
-
 /** A rectangular building: perimeter walls, openings (doors, windows, loopholes), partitions, rooms, roof parapets and hatches. */
 function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): DraftBuilding {
   const [[x0, y0], [x1, y1]] = r;
@@ -921,7 +913,9 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   // an explicit `stairwell: false` (hand-shaped ruins with external stairs / holes) is kept
   const wantCore = s.enterable && (s.stairwell ?? (!s.hollow && s.floors >= 2));
   const coreTop = s.hollow ? (s.roof_walkable ? s.floors : 1) : (s.roof_walkable ? s.floors : s.floors - 1);
-  const core = wantCore ? planStairCore(bid, r, coreTop, doorSides, overlapSides(r, d.buildings.map((o) => o.footprint))) : null;
+  // only buildings placed EARLIER are known here; a later neighbour overlapping this core is caught by the validator
+  // (stair_in_other_building, order-independent) - API review 4afb04f6
+  const core = wantCore ? planStairCore(bid, r, coreTop, doorSides, d.buildings.map((o) => o.footprint)) : null;
 
   // 1. Doors (>= 2 exterior doors on different sides for buildings > 150 m2: BUILDING_GENERATOR.md 3 step 5)
   for (const side of s.enterable ? doorSides : []) {

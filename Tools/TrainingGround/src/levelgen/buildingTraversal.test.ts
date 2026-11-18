@@ -109,7 +109,22 @@ test('a stair core never lands inside a neighbouring building (2026-11-18 engine
   const rep = validateBuildings(l);
   const inOther = rep.buildings.flatMap((b) => b.issues.filter((i) => i.code === 'stair_in_other_building'));
   assert.deepEqual(inOther, []);
-  // the old accepted X6 (pre-fix) keeps reproducing it
-  const old = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x6.json'), 'utf8')) as GenLayout;
-  assert.ok(validateBuildings(old).buildings.some((b) => b.issues.some((i) => i.code === 'stair_in_other_building')));
+  // the old accepted X6 (pre-fix) keeps reproducing it (skipped where the accepted file is not checked out)
+  const oldPath = path.join(ROOT, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x6.json');
+  if (fs.existsSync(oldPath)) {
+    const old = JSON.parse(fs.readFileSync(oldPath, 'utf8')) as GenLayout;
+    assert.ok(validateBuildings(old).buildings.some((b) => b.issues.some((i) => i.code === 'stair_in_other_building')));
+  }
+});
+
+test('planStairCore: no core when both long-wall sides intersect a neighbour; the clear side wins over a door side', () => {
+  const r: [[number, number], [number, number]] = [[0, 0], [12, 20]];
+  // neighbours over both long walls (west x 0-1, east x 11-12) -> null, never a core inside a neighbour
+  assert.equal(planStairCore('B_t', r, 2, [], [[[-3, 5], [1, 15]], [[11, 5], [15, 15]]]), null);
+  // only the west side blocked -> east, even if east is a door side
+  const c = planStairCore('B_t', r, 2, ['east'], [[[-3, 0], [1, 20]]]);
+  assert.equal(c?.side, 'east');
+  // a neighbour lying wholly inside the core lane (not touching r's edges) also blocks that side
+  const inner = planStairCore('B_t', r, 2, [], [[[0.5, 3], [1.0, 4]]]);
+  assert.equal(inner?.side, 'east');
 });
