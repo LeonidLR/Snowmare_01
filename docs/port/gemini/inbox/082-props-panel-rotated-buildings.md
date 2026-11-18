@@ -1,5 +1,5 @@
-# 082 - Props panel / props autogen ignore rotated buildings (Claude, 2026-11-17) - SMALL-MEDIUM, TypeScript only (Gemini CLI night)
-Base: main. Branch gemini/082-props-rotation. Worktree CodexTactics-gemcli. HARD LIMIT 45 minutes (small budget).
+# 082 - Props panel / props autogen ignore rotated buildings (Claude, 2026-11-17) - SMALL-MEDIUM, TypeScript only (Antigravity day, moved from CLI 2026-11-18)
+Base: main. Branch gemini/082-props-rotation. Worktree CodexTactics-gemday. Limit ~1.5 h.
 Why (LEVELGEN_LAYERS_REPORT + designer 11-17): the level generator can rotate buildings (max-angle setting), but the props code
 (Tools/TrainingGround/src/levelgen/props/**: the props panel / tab T5, the fast gate, autogen.ts from your 076) treats every building as an
 axis-aligned box - near a rotated building props can land inside the walls or too far from them.
