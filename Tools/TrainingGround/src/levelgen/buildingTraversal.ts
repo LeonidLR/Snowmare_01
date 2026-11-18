@@ -151,8 +151,16 @@ function checkFlight(l: GenLayout, b: GenBuilding, st: Stair, issues: TraversalI
     const across = poly.map((p) => Math.abs((p[0] - pos[0]) * -u[1] + (p[1] - pos[1]) * u[0]));
     if (Math.min(...across) > TRAVERSAL.flightWidth) continue; // a gap of another flight
     const beyond = Math.max(...poly.map((p) => (p[0] - top[0]) * u[0] + (p[1] - top[1]) * u[1]));
+    const behind = Math.max(...poly.map((p) => (pos[0] - p[0]) * u[0] + (pos[1] - p[1]) * u[1]));
+    const wide = Math.max(...across);
     if (beyond > TRAVERSAL.gapOvershootTol) {
       issues.push({ code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} reaches ${Math.round(beyond)} cm past the flight's top (the landing has a hole)` });
+    }
+    if (behind > TRAVERSAL.gapOvershootTol) {
+      issues.push({ code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} reaches ${Math.round(behind)} cm behind the flight's foot` });
+    }
+    if (wide > TRAVERSAL.flightWidth / 2 + 5 + TRAVERSAL.gapOvershootTol) {
+      issues.push({ code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} is ${Math.round(2 * wide)} cm wide for a ${TRAVERSAL.flightWidth} cm flight (cuts the next lane)` });
     }
   }
 }
@@ -162,7 +170,13 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
   const issues: TraversalIssue[] = [];
   const res: BuildingTraversal = { id: b.id, set_piece: b.set_piece, ok: true, issues, rooms: { total: 0, reachable: 0 }, levels: { walkable: [], reachable: [] }, roof: b.roof_walkable ? 'unreachable' : 'none' };
   if (!b.enterable) {
-    if (b.roof_walkable) res.roof = 'reachable'; // reached from outside (ladders) - checked by the route / ladder smokes
+    // a walkable roof of a closed block (overwatch gallery) is reached from outside: a ladder onto it or an external stair
+    if (b.roof_walkable) {
+      const up = (l.ladders ?? []).some((ld) => ld.to === `roof:${b.id}`) || (b.stairs ?? []).some((st) => st.kind === 'external' && st.to >= b.floors);
+      res.roof = up ? 'reachable' : 'unreachable';
+      if (!up) issues.push({ code: 'unreachable_roof', message: `${b.id}: walkable roof without a ladder or external stair onto it` });
+    }
+    res.ok = issues.length === 0;
     return res;
   }
   const hasDoor = (b.openings ?? []).some((o) => o.kind === 'door' && o.floor === 0) || (b.doors ?? []).some((d) => d.floor === 0)
@@ -181,18 +195,30 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
     if (!reach.roofReachable) issues.push({ code: 'unreachable_roof', message: `${b.id}: the walkable roof is not reachable without a drop` });
   }
 
-  // levels: a storey with a slab is walkable; reachable when some reachable room lies on it
+  // levels: every storey with a slab is walkable; reachable = climbed from the ground by the flights, ladders and hatch
+  // ladders of this building (no drops) - independent of whether the storey has rooms (API review 2026-11-18)
   const walkable = new Set<number>([0]);
-  for (const fd of b.floors_detail ?? []) if (fd.floor < b.floors) walkable.add(fd.floor);
+  for (const fd of b.floors_detail ?? []) if (fd.floor > 0 && fd.floor < b.floors) walkable.add(fd.floor);
   if (!b.hollow) for (let f = 1; f < b.floors; f++) walkable.add(f);
-  const unreachable = new Set(reach.unreachableRooms);
-  const reachableLevels = new Set((b.rooms ?? []).filter((r) => !unreachable.has(r.id)).map((r) => r.floor));
-  if (!(b.rooms ?? []).length) reachableLevels.add(0);
-  res.levels = { walkable: [...walkable].sort(), reachable: [...reachableLevels].sort() };
+  const levelOf = (layer: string): number | null => {
+    if (layer === 'ground' || layer === 'cut') return 0;
+    if (layer === `roof:${b.id}`) return b.floors;
+    const m = /^floor:([^:]+):(\d+)$/.exec(layer);
+    return m && m[1] === b.id ? Number(m[2]) : null;
+  };
+  const edges: [number, number][] = [];
+  for (const st of b.stairs ?? []) edges.push([st.kind === 'external' ? 0 : st.from, st.to]);
+  for (const ld of l.ladders ?? []) { const a = levelOf(ld.from), c = levelOf(ld.to); if (a !== null && c !== null) edges.push([a, c]); }
+  for (const h of b.hatches ?? []) if (b.roof_walkable && (l.ladders ?? []).some((ld) => ld.id === h.ladder_id)) edges.push([h.floor, b.floors]);
+  const reached = new Set<number>(hasDoor ? [0] : []);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const [a, c] of edges) if (reached.has(a) && !reached.has(c)) { reached.add(c); changed = true; }
+  }
+  const num = (a: number, c: number) => a - c;
+  res.levels = { walkable: [...walkable].sort(num), reachable: [...reached].filter((lv) => lv < b.floors).sort(num) };
   for (const lv of walkable) {
-    if ((b.rooms ?? []).some((r) => r.floor === lv) && !reachableLevels.has(lv)) {
-      issues.push({ code: 'unreachable_level', message: `${b.id}: storey ${lv} is not reachable without a drop` });
-    }
+    if (!reached.has(lv)) issues.push({ code: 'unreachable_level', message: `${b.id}: storey ${lv} is not reachable without a drop` });
   }
   res.ok = issues.length === 0;
   return res;

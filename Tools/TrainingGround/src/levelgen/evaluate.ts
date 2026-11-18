@@ -84,7 +84,7 @@ export interface Evaluation {
   track?: SquadTrack;
   tactical: TacticalReport;
   /** Building traversal validator (buildingTraversal.ts, BUILDING_GENERATOR.md section 5): «Принять» is blocked while one fails. */
-  buildings: TraversalReport;
+  buildings?: TraversalReport;
   score: number;
   summary: string[];
 }

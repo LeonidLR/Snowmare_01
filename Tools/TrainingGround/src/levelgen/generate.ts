@@ -810,6 +810,8 @@ export interface StairCore {
 
 /**
  * Switchback core along a long side wall of `r` reaching level `upTo` (one 300-rise flight per storey, lanes alternating).
+ * Positions are NOT snapped to the 50 cm grid on purpose: they are measured from the wall's inner face (footprint edge +
+ * WALL_INNER) so the approach boxes and the 10 cm lane gap are exact; the kit's stair module is placed by these points.
  * Returns null when the footprint is too short / narrow for a 35-degree flight with both approach boxes.
  */
 export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Side[] = []): StairCore | null {

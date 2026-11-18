@@ -189,6 +189,8 @@ export const LevelGenDepartment: React.FC = () => {
   /** BUILDING_GENERATOR.md section 5: «Принять» waits while a building fails traversal, unless the designer forces it. */
   const [forceBroken, setForceBroken] = useState(false);
   const brokenBuildings = cur?.ev.buildings?.failed ?? 0;
+  // the override is per candidate: a new candidate / seed / slot starts unforced again (API review 2026-11-18)
+  useEffect(() => { setForceBroken(false); }, [sel, cur?.layout.name, cur?.layout.seed]);
   const accept = async () => {
     if (!cur) return;
     if (brokenBuildings > 0 && !forceBroken) return;
@@ -196,7 +198,8 @@ export const LevelGenDepartment: React.FC = () => {
     try {
       // the chokepoint / threat analysis is saved with the map (block `analysis`): the shown one, else computed now
       const an = analysis ?? analyzeLayout(cur.layout, { conditions });
-      const layout: GenLayout = { ...cur.layout, analysis: an };
+      // a forced accept is recorded in the map JSON (analysis.forced_buildings = how many buildings failed traversal)
+      const layout: GenLayout = { ...cur.layout, analysis: brokenBuildings > 0 ? { ...an, forced_buildings: brokenBuildings } : an };
       const r = await fetch('/api/levelgen/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout, evaluation: cur.ev, verdicts: cur.verdicts }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? r.statusText);

@@ -78,3 +78,28 @@ test('validator: a clean flight passes; cause A (gap past the top) and cause B (
   const noStair = twoStorey({ stairs: [] } as Partial<GenBuilding>);
   assert.ok(validateBuilding(noStair.l, noStair.b).issues.some((i) => i.code === 'unreachable_level'), 'storey 1 without a way up');
 });
+
+test('one source of truth: builder STAIR_W and head-room hole match the generator flight width and gap margin', () => {
+  const py = fs.readFileSync(path.join(ROOT, 'Scripts/Editor/build_levelgen_map.py'), 'utf8');
+  const stairW = Number(/^STAIR_W = ([0-9.]+)/m.exec(py)?.[1]);
+  assert.equal(stairW, STAIR_FLIGHT_W * 100, 'build_levelgen_map.py STAIR_W (cm) == generate.ts STAIR_FLIGHT_W (m) x 100');
+  assert.match(py, /hw = STAIR_W \/ 2\.0 \+ 5\.0/, 'the hole margin (5 cm) == the gap margin of StairCore.flightRect (0.05 m)');
+  const core = planStairCore('B_m', [[0, 0], [10, 16]], 1)!;
+  const g = core.flightRect(core.stairs[0]);
+  assert.ok(Math.abs((g[1][0] - g[0][0]) - (STAIR_FLIGHT_W + 0.1)) < 1e-9, 'flightRect = flight + 5 cm each side');
+});
+
+test('the audit is reproduced on the accepted pre-fix X6 / X4 layouts (skipped once they are regenerated)', (t) => {
+  for (const name of ['gen_ref_01_02_depot_1_x6', 'gen_ref_01_02_depot_x4']) {
+    const p = path.join(ROOT, 'Content/Data/LevelGen/accepted', `${name}.json`);
+    if (!fs.existsSync(p)) { t.diagnostic(`${name}: not in this checkout`); continue; }
+    const l = JSON.parse(fs.readFileSync(p, 'utf8')) as GenLayout;
+    // a pre-fix layout still has a hall flight over several storeys (the 13 m ramp of the 2026-11-18 audit)
+    if (!l.buildings.some((b) => b.stairs.some((s) => s.kind === 'stairwell' && s.to - s.from > 1))) { t.diagnostic(`${name}: regenerated, skipped`); continue; }
+    const r = validateBuildings(l);
+    const codes = new Set(r.buildings.flatMap((b) => b.issues.map((i) => i.code)));
+    t.diagnostic(`${name}: ${r.failed} of ${r.checked} buildings fail traversal`);
+    assert.ok(r.failed > 0, `${name}: the pre-fix layout must fail`);
+    assert.ok(codes.has('stair_foot_no_floor') && codes.has('gap_overshoot'), `${name}: causes B and A are both found (${[...codes].join(', ')})`);
+  }
+});

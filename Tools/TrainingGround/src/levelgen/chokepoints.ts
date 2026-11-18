@@ -205,6 +205,8 @@ export interface HidingSpot {
 }
 export interface LayoutAnalysis {
   version: number;
+  /** «Принять» forced with this many buildings failing traversal (buildingTraversal.ts, BUILDING_GENERATOR.md 5). Absent = none. */
+  forced_buildings?: number;
   /** The hash of the geometry the analysis was made for (geometryHash): another hash = the map changed, the analysis is stale. */
   geometry_hash: string;
   conditions: Conditions;
