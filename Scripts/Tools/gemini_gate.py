@@ -259,19 +259,23 @@ def parse_allowed_paths(task_text: str) -> Tuple[bool, List[str]]:
                 break
             collected.append(line)
 
-    # Format 2: inline "Allowed paths: ..." paragraph
+    # Format 2: inline "Allowed paths: ..." or "Allowed: ..." paragraph
     if not has_section:
         in_inline = False
         for line in lines:
-            m = re.match(r"^\s*Allowed\s+paths\s*:\s*(.*)$", line, re.IGNORECASE)
+            m = re.match(r"^\s*Allowed(?:\s+paths)?\s*:\s*(.*)$", line, re.IGNORECASE)
             if m:
                 has_section = True
                 in_inline = True
-                if m.group(1).strip():
-                    collected.append(m.group(1))
+                content = m.group(1).strip()
+                no_m = re.search(r"\.\s+No\b", content, re.IGNORECASE)
+                if no_m:
+                    content = content[:no_m.start()].strip()
+                if content:
+                    collected.append(content)
                 continue
             if in_inline:
-                if not line.strip() or re.match(r"^\s*(?:##|Checks|Spec|Report|Steps|Goal|Base)\b", line, re.IGNORECASE):
+                if not line.strip() or re.match(r"^\s*(?:##|Checks|Spec|Report|Steps|Goal|Base|FINISH)\b", line, re.IGNORECASE):
                     break
                 collected.append(line)
 
@@ -388,6 +392,7 @@ def check_allowed_paths(
     if include_task_outbox:
         patterns.append(f"docs/port/gemini/outbox/{norm}*")
         patterns.append(f"saved/orchestrator/gate/{norm}*")
+        patterns.append("Scripts/Tools/gemini_gate*")
 
     forbidden_hits: List[str] = []
     outside_hits: List[str] = []
