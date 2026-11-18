@@ -11,6 +11,7 @@ import { PropsLayoutView } from './layoutView.ts';
 import { applyOverrides, rerollAll } from './placement.ts';
 import { runFastGate, type FastGateResult } from './fastGate.ts';
 import { validateStatic, type PropsValidationIssue } from './validator.ts';
+import { pmcChargesLayer } from '../pmcCharges.ts';
 import { buildPowerLayer, validatePowerLinks, type PowerBuildResult, type PowerLinkIssue } from './power.ts';
 import { mapNameFor } from '../node/buildPipeline.ts';
 
@@ -393,6 +394,12 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
 
   const layoutConfig = PropsLayoutView.readConfig(balance);
   const view = PropsLayoutView.build(layout as unknown as Record<string, unknown>, layoutConfig);
+
+  // Task 087 (PMC_DEFENCE.md D2): the layout's generated PMC charges become the LOCKED mines layer `pmc_charges` - added before the
+  // placement so the random layers keep their spacing from it; rerollAll / «перебросить» never touch a locked layer.
+  if (layout.pmc?.charges?.length) {
+    propsFile.layers.push(pmcChargesLayer(layout.pmc));
+  }
 
   // Deterministically place all layers
   rerollAll(propsFile, balance, view, layout);
