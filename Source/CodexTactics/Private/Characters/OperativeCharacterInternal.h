@@ -8,6 +8,7 @@
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Combat/CombatGroundQuery.h"
 #include "Combat/EncounterQueries.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
@@ -35,8 +36,7 @@ namespace OperativeCharacterInternal
 	/** The actor's feet: its location minus the capsule half height (a character), else its location. */
 	inline FVector ShotFeet(const AActor* Actor)
 	{
-		const ACharacter* Character = Cast<ACharacter>(Actor);
-		return Actor->GetActorLocation() - FVector(0.f, 0.f, Character ? Character->GetSimpleCollisionHalfHeight() : 0.f);
+		return CombatGround::FeetOf(*Actor); // G007: the one feet helper (capsule bottom, every stance)
 	}
 
 	/** A valid, shown actor tagged "Enemy" whose health component (if any) is alive. */

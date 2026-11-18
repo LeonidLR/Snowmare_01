@@ -19,6 +19,7 @@
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/CombatGroundQuery.h"
 #include "Combat/HealthComponent.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
@@ -84,13 +85,12 @@ namespace RampFightSmoke
 
 	float FeetZ(const AActor& Actor)
 	{
-		const float Half = Actor.GetSimpleCollisionHalfHeight();
-		return static_cast<float>(Actor.GetActorLocation().Z) - Half;
+		return static_cast<float>(CombatGround::FeetOf(Actor).Z);
 	}
 
 	FVector FeetOf(const AActor& Actor)
 	{
-		return Actor.GetActorLocation() - FVector(0.f, 0.f, Actor.GetSimpleCollisionHalfHeight());
+		return CombatGround::FeetOf(Actor); // the AI's own feet helper (G007 review 6)
 	}
 
 	float HealthOf(const AActor* Actor)

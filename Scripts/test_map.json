@@ -1328,10 +1328,10 @@
     },
     {
       "name": "ramp-fight-2026-11-18",
-      "_comment": "G007 / B17-6: a fight on STAIR_ext_7. Sight, the shot line and the Frostbitten melee reach. The smoke limit (damage within 1.5 s of sight, melee inside CanMelee) is the gate.",
-      "globs": ["Source/**/Debug/RampFightSmoke*", "Source/**/Combat/SightRules*", "Source/**/Combat/TacticalSight*", "Source/**/Combat/SquadFireRules*", "Source/**/Characters/EnemyAIRules*", "Source/**/Characters/MeleeLineRules*"],
-      "tests": ["CodexTactics.Combat.Sight", "CodexTactics.Characters.EnemyAI"],
-      "smokes": ["RampFightSmoke", "LevelGenRampSmoke", "FireGateSmoke", "CoverSmoke", "EnemyArchetypeSmoke"]
+      "_comment": "G007 / B17-6: a fight on STAIR_ext_7. Sight, the shot line and the Frostbitten melee reach. The smoke limit (damage within 1.5 s of sight, melee inside CanMelee) is the gate. API follow-up: CombatGroundRules / CombatGroundQuery (the floor probe, the dead zone edge, the melee shared ground; real time + turn-based).",
+      "globs": ["Source/**/Debug/RampFightSmoke*", "Source/**/Combat/SightRules*", "Source/**/Combat/TacticalSight*", "Source/**/Combat/SquadFireRules*", "Source/**/Characters/EnemyAIRules*", "Source/**/Characters/MeleeLineRules*", "Source/**/Combat/CombatGround*"],
+      "tests": ["CodexTactics.Combat.Sight", "CodexTactics.Combat.SquadFire", "CodexTactics.Combat.FireGate", "CodexTactics.Characters.EnemyAI"],
+      "smokes": ["RampFightSmoke", "LevelGenRampSmoke", "FireGateSmoke", "CoverSmoke", "EnemyArchetypeSmoke", "TurnBasedSmoke"]
     }
   ]
 }

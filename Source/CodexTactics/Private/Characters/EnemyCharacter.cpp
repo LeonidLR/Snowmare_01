@@ -4,6 +4,7 @@
 // Godot reference: Scenes/movements/enemy_base.gd (_ready, _physics_process, facing).
 
 #include "Characters/EnemyCharacter.h"
+#include "Combat/CombatGroundQuery.h"
 #include "Combat/KnockdownComponent.h"
 #include "AI/WorldAIPauseSubsystem.h"
 #include "Interactables/VaultNavigation.h"
@@ -199,9 +200,9 @@ void AEnemyCharacter::ResetAIMoveThrottle()
 
 FVector AEnemyCharacter::GodotPosition(const AActor* Actor)
 {
-	if (const ACharacter* Character = Cast<ACharacter>(Actor))
+	if (Actor->IsA<ACharacter>())
 	{
-		return Actor->GetActorLocation() - FVector(0.f, 0.f, Character->GetSimpleCollisionHalfHeight() - 100.f);
+		return CombatGround::FeetOf(*Actor) + FVector(0.f, 0.f, 100.f); // Godot body point: 1 m above the feet (G007: the one feet helper)
 	}
 	FVector Origin;
 	FVector Extent;
