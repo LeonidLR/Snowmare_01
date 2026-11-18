@@ -244,3 +244,96 @@ Two layers; both must pass for every enterable building, the result is shown per
 
 Process: every task via `docs/port/gemini/inbox/0NN-*.md` (Antigravity) or an API prompt; API Opus review (`Scripts/Tools/api_task.py`)
 before each merge; Claude merges into main after build / tests (`Scripts/build.ps1` never while the designer's editor is open).
+
+---
+
+## 7. Kit -> generator module contract (2026-11-18, building-kit session)
+
+> **Added 2026-11-18 by the building-kit side session, at the lead's request.** Sections 1-6 above are unchanged and still
+> on hold for the studio discussion. This section only fixes the module sizes the generator emits and the art kit must
+> match, so that P4 "kit swap by module name" works without touching the generator. Evidence lives in the scratch UE project
+> `Documents/Unreal Projects/BuildingKitLab` (not part of this repo): `Saved/mesh_bounds.csv` (1 018 meshes),
+> `Saved/kit_analysis_powerplant.json`, `Saved/Contract300/_report.json`, scripts in `BuildingKitLab/Scripts/`.
+
+### 7.1 Storey height 300 cm (designer decision 2026-11-18)
+
+Decision: **every walkable building uses a 300 cm storey** (floor-to-floor, slab 20 included). Condition set by the designer:
+it must not break climbing / mantling. Checked:
+
+| Check | Source | Result |
+|---|---|---|
+| Current generator / builder value | `Tools/TrainingGround/src/levelgen/schema.ts` `LEVEL_HEIGHT`, `Scripts/Editor/build_levelgen_map.py` `LEVEL_HEIGHT = 300.0` | already 300 - the contract formalises it, no rule changes |
+| Climb onto a 1-storey roof | `Content/Data/LevelGen/obstacle_heights.json` `very_tall` 300-320 (JumpClimb clips 308), MANTLING.md 2026-11-15: 300 stays valid inside very_tall, `wall_no_traverse` moved to 330 | a 300 roof edge is climbable **only where the generator leaves a parapet gap** (95 parapet -> 395 edge = not climbable) |
+| Upper storeys from the ground | sill of storey 1 = 300 + 95 = 395 > 320 traversal ceiling; a 2-storey roof = 600 | not climbable - correct, they need stairs / ladders |
+| Window sills, parapets, low cover | `low_vault` 95 +-5 | 95 cm everywhere (vault over / out) |
+| Coming down | MANTLING.md controlled drop 60-250 cm | no storey or roof is a controlled drop (300 > 250); down only by stair / ladder or a <= 250 intermediate step (container 230, low roof) - matches 4.3 "drops are shortcuts, never the only way" |
+| Ladders | `docs/design/LADDERS.md`: 36.4 cm rungs | 8 rungs x 36.4 = 291.2 + 8.8 plinth = 300 (as today); a 400 hall wall = 11 rungs (400.4) |
+| Very-tall climb animation in C++ | MANTLING.md section 11 | not implemented yet; the contract prepares the geometry, it does not depend on it |
+
+Industrial kit walls of 400 / 800 cm are allowed **only for single-volume halls** (archetype `hall` / `warehouse`, section 3.1):
+nothing inside them is traversed by height except by stair / ladder, and their roof edge is never marked climbable.
+A mezzanine sits at +300 so it lines up with every other storey.
+
+### 7.2 Module sizes (kit-ready names; first kit: Power Plant converted to the contract)
+
+Grid 50 cm in the generator, module widths multiples of 100. Pivot of every wall module: **bottom corner, wall along +X from
+x = 0 to its width, thickness on -Y (y = -T..0)**, z = 0 at the finished floor of the storey. All values in cm.
+
+| Module name (generator) | Kit piece (BuildingKitLab `/Game/Kit300/Meshes`) | Size W x T x H | Opening (x0-x1, z0-z1) | Collision |
+|---|---|---|---|---|
+| `wall_100/200/300` | `SM_W300_Wall_Plain_100/200/300` | 100/200/300 x 20 x 300 | - | 1 box |
+| `wall_outward_100/200/300` (plinth band at 95) | `SM_W300_Wall_Plain_Outward_*` | x 25 x 300 | - | 1 box |
+| `wall_door_200` | `SM_W300_Wall_Door_200` | 200 x 20 x 300 | 25-175, 0-240 (door 150 x 240) | 3 boxes (sides + lintel), opening free |
+| `wall_door_300` | `SM_W300_Wall_Door_300_01` | 300 x 20 x 300 | 75-225, 0-240 | 3 boxes |
+| `wall_window_s_200/300` | `SM_W300_Wall_Window_Small_03/04` | 200/300 x 20 x 300 | 150 wide centred, sill 95, head 245 | 4 boxes |
+| `wall_window_m_200/300` | `SM_W300_Wall_Window_Medium_02/01` | 200/300 x 20 x 300 | 150 wide centred, sill 95, head 265 | 4 boxes |
+| `wall_window_band_*` (ribbon, full width) | `SM_W300_Wall_Window_Small_01/02`, `Medium_03/04` | 200/300 x 25 x 300 | full width, 95-245 / 95-265 | 2 boxes (below / above) |
+| `window_insert_s / _m` (visual only) | `SM_W300_Window_Small_0x` (150 x 150), `SM_W300_Window_Medium_0x` (150 x 170) | | set into the opening at z 95 | **none** - a window stays a vaultable opening for gameplay |
+| `stair_flight_150` (visual) | `SM_W300_Stair_Flight_150` | 120 wide, run 215, rise 150 (35 deg) | - | none; collision stays the builder's ramp (4.2) |
+
+Rules the generator keeps (from sections 4.1-4.4, restated as kit constraints): door clear height 240 (>= 220 head room),
+window sills exactly 95 (`low_vault`), parapets 95 with a gap at every climb / arrival point, no edge between classes
+(`obstacle_heights.json`), every opening >= 60 from another opening's jamb.
+
+### 7.3 Fab kits measured 2026-11-18
+
+| Kit | Grid / storey as bought | Status for the generator |
+|---|---|---|
+| Modular Old Power Plant (Nimikko) | 100 grid, 400 walls, 20-25 thick | **passed** - converted: 23 modules to storey 300 (table 7.2); Tall / Wide windows, Structure walls, large gate stay 400 = hall-only |
+| Industrial Infrastructure (Sierra Division) | 200 grid (100/50), 400 panels | candidate, same conversion (next) |
+| Post-Apocalyptic Factory Overgrown (Indus North) | 400 grid, 300/400 walls, 25 centred | candidate (walls already 300 in part) |
+| Factory (Dave Berg, 5.7 build) | 600 grid, 400 + 100 cap, 50 thick, sill 127 | hall walls only; sills must be refitted to 95 |
+| Metro Maintenance Station (Nimikko, 5.6 build) | tunnel sections 250 x 400-500 | special set piece, not a building kit |
+| Post-Apocalyptic Urban City (Akairo) | not modular (454 / 600 / 1053), storey ~420 | props and set dressing only |
+| Modern City Bundle (Pedja Racan) | whole buildings 25-40 m, storey 350 | backdrop only (map edge) |
+| Military Training Facility (Dekogon) | project template ("Create Project" only) | not added |
+| Warehouse, Unfinished Building (Quixel Megascans) | photogrammetry, unique textures | **dropped** (designer 2026-11-18: no Megascans for now); Warehouse deleted from BuildingKitLab to free 6.8 GB |
+| Soviet modular residential kit | - | **to come from the designer** - needed for `block` / residential archetypes |
+
+### 7.4 Art pipeline findings (TextureCraft / Blender, headless)
+
+Pipeline proven on one wall and then the Power Plant batch: UE commandlet FBX export -> Blender 5.2 `-b` (LOD0 only,
+piecewise height remap, one material slot, UVs, pivot, UCX boxes) -> TextureCraft 0.5.0 CLI (bake + smart material) or a
+shared tiling material -> UE commandlet import.
+
+- **The UE FBX export carries LOD0-LOD3 + the UCX collision.** TextureCraft loads the whole file as one mesh: the first test
+  wall got a second, empty "Default" material slot and auto-generated (broken) UVs on part of the mesh. Fix: keep LOD0 only
+  before texturing (the Blender step does it).
+- **Concrete detail scale**: TextureCraft's smart `concrete_dirty` on a unique 2K layout gives pores / streaks that read too
+  large on a 3 x 3 m wall at our camera; a texel density for the top-down camera (proposal 256-512 px/m) must be set per
+  material, and modular walls should use shared tiling / trim materials, not a unique texture per piece.
+- Unique-UV texturing (TextureCraft) is for props and hero pieces; walls / slabs use a world-scale box UV (1 UV unit = 1 m)
+  and a shared material (`M_Kit300_Tiling`, base maps from Substance Painter starter `.sbsar` rendered with Designer's
+  `sbsrender`).
+- MaterialCraft 0.4.1 (CLI + MCP) builds trim / tiling sheets headless; only about half of the Substance Designer library
+  cooks in it today, so graphs are built from atomic nodes.
+
+### 7.5 Open questions for the designer
+
+1. Window types per archetype: is the Medium window (95-265, 170 tall) needed besides Small (95-245), or one size for all?
+2. Ribbon (full-width) windows: allowed on offices / halls only, or also on residential blocks?
+3. Door width: 150 clear (kit) vs 120 interior / 120-180 exterior (section 4.1) - accept 150 as the exterior door module?
+4. Slab thickness and floor pieces: the kit floor is a 0-thickness plane and the ceiling 42 thick; keep the builder's 20 cm
+   slab as collision and use kit pieces as visuals only?
+5. Residential storey: if the Soviet kit is 280 cm, scale it to 300 (7 %) rather than add a second storey height?
+6. Texel density target for walls at the tactical camera (256 vs 512 px/m) - decide on the first rendered corner.
