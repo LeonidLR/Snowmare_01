@@ -17,6 +17,8 @@
 //       runs through the killing ground and how many ways out the ground has - never as a defect (game designer 2026-11-02).
 // The report is <= 30 lines (the only thing an agent reads); the full Evaluation JSON feeds the department page and the critics.
 
+import type { TraversalReport } from './buildingTraversal.ts';
+import { validateBuildings } from './buildingTraversal.ts';
 import type { FormationConfig } from '../movement/config.ts';
 import type { Segment, Vec2 } from '../movement/geometry.ts';
 import { closestOnSegment, dirOf, dist, pointInPoly, raycastWalls, segmentBlocked, sub, yawOf } from '../movement/geometry.ts';
@@ -81,6 +83,8 @@ export interface Evaluation {
   /** The sampled squad trajectory (only with EvaluateOptions.track and a simulator walk). */
   track?: SquadTrack;
   tactical: TacticalReport;
+  /** Building traversal validator (buildingTraversal.ts, BUILDING_GENERATOR.md section 5): «Принять» is blocked while one fails. */
+  buildings: TraversalReport;
   score: number;
   summary: string[];
 }
@@ -331,7 +335,7 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   const tactical = evaluateTactical(l, samples, coverSegs, tops);
   const score = round(0.4 * (main.completable ? 1 : 0) + 0.2 * similarity.score + 0.2 * Math.min(1, terrainClasses / 5) + 0.2 * Math.min(1, ambush.per100m / 3), 3);
 
-  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, roofViews, killZones, ambush, counts, similarity, tactical, score, summary: [], ...(trackOut ? { track: trackOut } : {}) };
+  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, roofViews, killZones, ambush, counts, similarity, tactical, buildings: validateBuildings(l), score, summary: [], ...(trackOut ? { track: trackOut } : {}) };
   ev.summary = renderSummary(ev);
   return ev;
 }

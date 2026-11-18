@@ -42,6 +42,7 @@ import { generateLayout } from '../levelgen/generate';
 import type { Profile } from '../levelgen/profile';
 import type { GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
+import { BuildingsPanel } from './BuildingsPanel';
 
 /** `key` = the slot's history key (the first layout name: an expansion renames the map to <name>_x<N>). */
 interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string; /** The squad playback of the last simulator walk (task 072; never sent to the server). */ track?: SquadTrack;
@@ -185,8 +186,12 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('');
   };
 
+  /** BUILDING_GENERATOR.md section 5: «Принять» waits while a building fails traversal, unless the designer forces it. */
+  const [forceBroken, setForceBroken] = useState(false);
+  const brokenBuildings = cur?.ev.buildings?.failed ?? 0;
   const accept = async () => {
     if (!cur) return;
+    if (brokenBuildings > 0 && !forceBroken) return;
     setBusy('Сохраняю...');
     try {
       // the chokepoint / threat analysis is saved with the map (block `analysis`): the shown one, else computed now
@@ -693,7 +698,13 @@ export const LevelGenDepartment: React.FC = () => {
                 Линии огня
               </button>
               <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
-              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
+              {brokenBuildings > 0 && (
+                <label className="inline-flex items-center gap-1 text-[11px] text-amber-300" title="Принять карту, хотя часть зданий не проходит проверку проходимости (этажи / крыши недостижимы)">
+                  <input type="checkbox" checked={forceBroken} onChange={(e) => setForceBroken(e.target.checked)} />
+                  принять с {brokenBuildings} сломанными зданиями
+                </label>
+              )}
+              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0) || (brokenBuildings > 0 && !forceBroken)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : brokenBuildings > 0 && !forceBroken ? `${brokenBuildings} зданий не проходят проверку проходимости (панель «Здания»)` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
               <button onClick={() => buildNow(false)} disabled={!cur || !!busy || !isAccepted || building || (buildTarget !== null && !buildTarget.canBuild)} data-build
                 title={!isAccepted ? 'Сначала «Принять»: собирается принятая карта (Content/Data/LevelGen/accepted)' : buildTarget && !buildTarget.canBuild ? buildTarget.reason : `Собрать ${buildTarget?.map ?? ''} и проверить маршрут ботом (фоном, ~5-15 мин)`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-700 text-xs text-white hover:bg-orange-600 disabled:opacity-50"><Hammer size={13} />Собрать в Unreal</button>
@@ -925,6 +936,7 @@ export const LevelGenDepartment: React.FC = () => {
               <ul className="text-xs text-slate-300 flex flex-col gap-1">
                 {cur.ev.variants.map((v) => <li key={v.id} className="flex items-center gap-2">{v.completable ? <CheckCircle2 size={12} className="text-emerald-400" /> : <XCircle size={12} className="text-rose-400" />}{v.id}: {v.length_m} м{v.fail ? ` — ${v.fail}` : ''}{v.intent === 'kill_zone' ? <span className="text-rose-300"> — зона убийства по замыслу (не дефект)</span> : null}</li>)}
               </ul>
+              {cur.ev.buildings && <BuildingsPanel report={cur.ev.buildings} />}
               <table className="text-xs text-slate-300">
                 <tbody>
                   <tr><td className="pr-2 text-slate-500">Итог</td><td className="font-mono">{cur.ev.score} (сходство с эталоном {cur.ev.similarity.score})</td></tr>
