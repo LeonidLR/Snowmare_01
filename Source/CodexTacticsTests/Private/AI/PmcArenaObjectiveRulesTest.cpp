@@ -223,6 +223,84 @@ bool FPmcArenaObjectiveOrderTest::RunTest(const FString&)
 	FPmcFighterView EarlyOff = OffPost;
 	EarlyOff.Objective.DistanceCm = 2500.f;
 	TestFalse(TEXT("off post, early, outside the area: the Objective walk goes to his post"), PmcCommanderRules::DefenderObjectiveToPoint(EarlyOff, Squad, Weights));
+	// Lead review 2 (A): no ping-pong between post and point. The score sequence post -> walk -> on the point -> pull ends.
+	auto Best = [&](const FPmcFighterView& View, const FPmcSquadView& InSquad)
+	{
+		return PmcCommanderRules::ScoreAll(View, InSquad, Weights)[0].Order;
+	};
+	auto Score = [&](EPmcOrder Order, const FPmcFighterView& View, const FPmcSquadView& InSquad)
+	{
+		return PmcCommanderRules::ScoreOrder(Order, View, InSquad, Weights);
+	};
+	{
+		// Late clock 0.9, no contact now (an earlier fight closed the ambush), not yet a push: the occupier.
+		FPmcSquadView Quiet = Squad;
+		Quiet.bEverContact = true;
+		Quiet.QuietSeconds = 10.f;
+		FPmcFighterView Occupier = ObjectiveFighter(EPmcRole::Defender, 2500.f, 0.9f);
+		Occupier.bHasDefencePost = true;
+		Occupier.bDefenceOccupier = true;
+		Occupier.bAtPost = true;
+		TestEqual(TEXT("A late: on his post, Objective 0.9"), Score(EPmcOrder::Objective, Occupier, Quiet), 0.9f, 0.001f);
+		TestTrue(TEXT("A late: on his post he leaves for the point"), Best(Occupier, Quiet) == EPmcOrder::Objective);
+		Occupier.bAtPost = false;
+		Occupier.Objective.DistanceCm = 1000.f;
+		TestEqual(TEXT("A late: on the way, no walk back to the post"), Score(EPmcOrder::Ambush, Occupier, Quiet), 0.f);
+		TestTrue(TEXT("A late: on the way, Objective goes on"), Best(Occupier, Quiet) == EPmcOrder::Objective);
+		TestTrue(TEXT("A late: on the way, onto the point"), PmcCommanderRules::DefenderObjectiveToPoint(Occupier, Quiet, Weights));
+		Occupier.Objective.DistanceCm = 500.f;
+		TestEqual(TEXT("A late: at the ring (0.7-1 x radius), Hold 0.9"), Score(EPmcOrder::Hold, Occupier, Quiet), 0.9f, 0.001f);
+		TestEqual(TEXT("A late: at the ring, no walk back"), Score(EPmcOrder::Ambush, Occupier, Quiet), 0.f);
+		Occupier.Objective.DistanceCm = 200.f;
+		TestEqual(TEXT("A late: on the point, Hold 0.9"), PmcCommanderRules::DefenderPointHold(Occupier, Quiet, Weights), 0.9f, 0.001f);
+		TestEqual(TEXT("A late: on the point, Hold scores the hold"), Score(EPmcOrder::Hold, Occupier, Quiet), 0.9f, 0.001f);
+		TestEqual(TEXT("A late: on the point, no walk back (was 1.05)"), Score(EPmcOrder::Ambush, Occupier, Quiet), 0.f);
+		TestEqual(TEXT("A late: on the point, no walk onto it"), Score(EPmcOrder::Objective, Occupier, Quiet), 0.f);
+		TestTrue(TEXT("A late: on the point he holds it"), Best(Occupier, Quiet) == EPmcOrder::Hold);
+		FPmcFighterView NotOccupier = Occupier;
+		NotOccupier.bDefenceOccupier = false;
+		TestEqual(TEXT("A late: a non-occupier on the point has no hold"), PmcCommanderRules::DefenderPointHold(NotOccupier, Quiet, Weights), 0.f);
+		TestTrue(TEXT("A late: a non-occupier there walks back to his post"), Best(NotOccupier, Quiet) == EPmcOrder::Ambush);
+		// The same with a quiet push and no contact ever: Occupy 0.8 vs the late clock 0.9, the higher one.
+		FPmcSquadView Push = Squad;
+		Push.QuietSeconds = Weights.PushAfterSeconds + 1.f;
+		TestTrue(TEXT("A push: on the point he holds it"), Best(Occupier, Push) == EPmcOrder::Hold);
+		TestEqual(TEXT("A push: on the point, no walk back"), Score(EPmcOrder::Ambush, Occupier, Push), 0.f);
+	}
+	{
+		// Attackers on the point, their clock half run: the guard (not the occupier) retakes it, in contact.
+		FPmcFighterView Guard = ObjectiveFighter(EPmcRole::Defender, 2500.f, 0.f, true, 0.5f);
+		Guard.bHasDefencePost = true;
+		Guard.bAtPost = true;
+		TestEqual(TEXT("A retake: on his post, Objective 0.6"), Score(EPmcOrder::Objective, Guard, Contact), 0.6f, 0.001f);
+		TestTrue(TEXT("A retake: on his post he goes"), Best(Guard, Contact) == EPmcOrder::Objective);
+		Guard.bAtPost = false;
+		Guard.Objective.DistanceCm = 1000.f;
+		TestEqual(TEXT("A retake: on the way, no walk back"), Score(EPmcOrder::Ambush, Guard, Contact), 0.f);
+		TestTrue(TEXT("A retake: on the way, Objective goes on"), Best(Guard, Contact) == EPmcOrder::Objective);
+		FPmcFighterView FullClock = Guard;
+		FullClock.Objective.HoldFrac = 1.f;
+		TestEqual(TEXT("A retake: their full clock, retake 1.0"), Score(EPmcOrder::Objective, FullClock, Contact), 1.f, 0.001f);
+		TestTrue(TEXT("A retake: Retake beats the off-post walk (1.05 before)"), Best(FullClock, Contact) == EPmcOrder::Objective);
+		FPmcFighterView ShotRetaker = Guard;
+		ShotRetaker.bUnderFire = true;
+		TestEqual(TEXT("A retake: shot at on the way, still no walk back"), Score(EPmcOrder::Ambush, ShotRetaker, Contact), 0.f);
+		Guard.Objective.DistanceCm = 200.f;
+		TestEqual(TEXT("A retake: on the contested point, Hold 0.6"), Score(EPmcOrder::Hold, Guard, Contact), 0.6f, 0.001f);
+		TestEqual(TEXT("A retake: on the point, no walk back"), Score(EPmcOrder::Ambush, Guard, Contact), 0.f);
+		Guard.bCoverAvailable = true;
+		Guard.bHasThreat = true;
+		Guard.Threat.DistanceCm = 800.f;
+		Guard.bExposed = true;
+		TestEqual(TEXT("A retake: on the point, no cover off it"), Score(EPmcOrder::TakeCover, Guard, Contact), 0.f);
+		TestTrue(TEXT("A retake: on the point he holds it"), Best(Guard, Contact) == EPmcOrder::Hold);
+		// The pull ends (the attackers are gone): back to his post.
+		Guard.Objective.bEnemyOnPoint = false;
+		Guard.Objective.HoldFrac = 0.f;
+		TestEqual(TEXT("A retake over: no hold"), PmcCommanderRules::DefenderPointHold(Guard, Contact, Weights), 0.f);
+		TestEqual(TEXT("A retake over: the walk back 1.05"), Score(EPmcOrder::Ambush, Guard, Contact), 1.05f, 0.001f);
+		TestTrue(TEXT("A retake over: he returns to his post"), Best(Guard, Contact) == EPmcOrder::Ambush);
+	}
 	OnPost.bSectorShift = true;
 	TestTrue(TEXT("a sector shooter on his post still shifts"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, OnPost, Contact, Weights) > 0.f);
 	OnPost.bSectorShift = false;

@@ -77,6 +77,27 @@ namespace PmcCommanderRules
 			return PmcDefenceRules::DefenderObjectiveScore(bInside, W.Objective, F.HealthFrac);
 		}
 
+		/**
+		 * The defender's point pull terms, 0..1: Retake while the attackers stand on the point (0.2 + 0.8 x their clock),
+		 * Occupy for a man allowed to (the occupier of a posted defence, anyone without posts) on a push (0.8) or a late
+		 * clock (0.9 at 85 %). bNeedOffPoint gates both on his being off the point (> 0.7 x radius): that is the walk
+		 * onto it. Without the gate it is the same pull while he stands on it, which keeps him there (lead review 2, A).
+		 */
+		inline float PointPullTerms(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W, bool bNeedOffPoint)
+		{
+			const FPmcObjectiveView& O = F.Objective;
+			if (!O.IsActive() || O.Role != EPmcRole::Defender)
+			{
+				return 0.f;
+			}
+			const bool bGate = !bNeedOffPoint || O.DistanceCm > 0.7f * O.RadiusCm;
+			const float Retake = Step(O.bEnemyOnPoint && bGate) * (0.2f + 0.8f * Clamp01(O.HoldFrac));
+			const bool bMayOccupy = !F.bHasDefencePost || F.bDefenceOccupier;
+			const float Occupy = Step(bMayOccupy && bGate)
+				* FMath::Max(Step(IsPushing(F, S, W)) * 0.8f, Clamp01((O.TimeFrac - 0.6f) / 0.25f) * 0.9f);
+			return FMath::Max(Retake, Occupy);
+		}
+
 		inline void ReadNumber(const FJsonObject& Json, const TCHAR* Key, float& Out)
 		{
 			double Value = 0.0;
@@ -124,10 +145,26 @@ namespace PmcCommanderRules
 		// G008: a roof fight sees the street at once, so Ambush's contact gate is already closed and FallBack
 		// pathfinds the guard down the stair. He walks onto his post, then does not leave it.
 		// A sector shooter may still Relocate along his wedge. Attackers never set bHasDefencePost.
+		// Lead review 2 (A): standing on the point with an active pull (Retake, Occupy) he holds it. 0 for everyone else.
+		const float PointHold = DefenderPointHold(F, S, W);
 		if (F.Objective.Role == EPmcRole::Defender && F.bHasDefencePost)
 		{
 			if (!F.bAtPost)
 			{
+				// Lead review 2 (A): an active point pull outranks the walk back to the post. Off the point, Ambush (1.05)
+				// beat Retake (at most 1.0) and Occupy (0.9). Inside 0.7 x radius the walk-on pull is 0, so Ambush walked
+				// the occupier back to his post, where the pull returned: a ping-pong that never held the point. With a
+				// pull the walk is 0: off the point Objective takes him there, on it Hold keeps him there (PointHold). He
+				// does not take cover or relocate off it either. Once the pull ends, the walk back to his post returns.
+				const bool bPulled = PointHold > 0.f || DefenderPointPull(F, S, W) > 0.f;
+				if (Order == EPmcOrder::Ambush && bPulled)
+				{
+					return 0.f;
+				}
+				if (PointHold > 0.f && (Order == EPmcOrder::TakeCover || (Order == EPmcOrder::Relocate && !F.bSectorShift)))
+				{
+					return 0.f;
+				}
 				// Review finding 1: the post walk is an order, not a gate. Before contact it is the only one. In contact (squad
 				// contact, a target seen now, or fire on him) shooting / TakeCover / Heal / FallBack / Reload keep their normal
 				// scores, so a man stuck short of an unreachable post fights from where he is. Fire on him drops the walk to 0.75,
@@ -140,6 +177,10 @@ namespace PmcCommanderRules
 				if (Order == EPmcOrder::Ambush)
 				{
 					return FMath::Max(W.Ambush, 1.f) * (F.bUnderFire ? 0.75f : 1.05f);
+				}
+				if (Order == EPmcOrder::Hold && PointHold > 0.f && !bFight)
+				{
+					return PointHold;
 				}
 				// Objective is scored below on or off post: its area term is the walk back, and its point pull is the
 				// Retake / Occupy escape (review finding 3).
@@ -192,7 +233,9 @@ namespace PmcCommanderRules
 		{
 		case EPmcOrder::Hold:
 			// The baseline: the fighter keeps shooting from where he is; worth more in cover and in contact.
-			return W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere * PushDamp * (F.bAtPost ? 1.f : Here);
+			// PointHold (lead review 2, A) is 0 except for a posted defender off his post on the point with an active pull.
+			return FMath::Max(PointHold,
+				W.Hold * (F.bInCover ? 0.6f + 0.4f * F.CoverQuality : 0.3f) * (S.bContact ? 1.f : 0.5f) * StaticBand * HoldHere * PushDamp * (F.bAtPost ? 1.f : Here));
 		case EPmcOrder::TakeCover:
 		{
 			// Exposed and badly covered against a known threat, with somewhere to go (a slot at his band's distance preferred).
@@ -354,18 +397,18 @@ namespace PmcCommanderRules
 
 	float DefenderPointPull(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
 	{
-		using namespace PmcCommanderLocal;
+		return PmcCommanderLocal::PointPullTerms(Fighter, Squad, Weights, true);
+	}
+
+	float DefenderPointHold(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
+	{
 		const FPmcObjectiveView& O = Fighter.Objective;
-		if (!O.IsActive() || O.Role != EPmcRole::Defender)
+		if (Fighter.bKnockedDown || O.Role != EPmcRole::Defender || !Fighter.bHasDefencePost || Fighter.bAtPost || !O.IsActive()
+			|| O.DistanceCm > O.RadiusCm)
 		{
 			return 0.f;
 		}
-		const bool bOffPoint = O.DistanceCm > 0.7f * O.RadiusCm;
-		const float Retake = Step(O.bEnemyOnPoint && bOffPoint) * (0.2f + 0.8f * Clamp01(O.HoldFrac));
-		const bool bMayOccupy = !Fighter.bHasDefencePost || Fighter.bDefenceOccupier;
-		const float Occupy = Step(bMayOccupy && bOffPoint)
-			* FMath::Max(Step(IsPushing(Fighter, Squad, Weights)) * 0.8f, Clamp01((O.TimeFrac - 0.6f) / 0.25f) * 0.9f);
-		return FMath::Max(Retake, Occupy);
+		return FMath::Max(Weights.Objective, 0.f) * PmcCommanderLocal::PointPullTerms(Fighter, Squad, Weights, false) * FMath::Max(0.5f, Fighter.HealthFrac);
 	}
 
 	bool DefenderObjectiveToPoint(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)

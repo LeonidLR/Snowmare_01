@@ -494,7 +494,8 @@ struct CODEXTACTICS_API FPmcFighterView
 	float PostScore = 0.f;
 	bool bAtPost = false;
 	/**
-	 * G008: this defender has an access or sector post. Off it, before contact, only the walk (Ambush) scores. In contact
+	 * G008: this defender has an access or sector post. Off it, before contact, only the walk (Ambush) scores, unless the
+	 * point pulls him (Retake / Occupy: then Objective onto the point, Hold on it; DefenderPointHold). In contact
 	 * (squad contact, a seen target, or fire on him) the walk is one order among others: shooting / TakeCover / Heal / FallBack
 	 * keep their normal scores; Advance / Flank stay 0. On it, FallBack / Flank / Advance / TakeCover score 0, so he does not
 	 * path off the roof. Default false.
@@ -618,6 +619,14 @@ namespace PmcCommanderRules
 	 *   occupier (bDefenceOccupier) does this; the others keep their posts. Without posts, everyone may.
 	 */
 	CODEXTACTICS_API float DefenderPointPull(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * Lead review 2 (A): a posted defender off his post, standing on the point (level-aware distance <= radius), whose pull is
+	 * still active there (the DefenderPointPull terms without the off-point gate): his Hold score, weight x pull x max(0.5,
+	 * health). 0 otherwise, including on his post and without a defence post. While it is > 0 the walk back to the post
+	 * (Ambush) scores 0, so the occupier / retaker stays on the point until the pull ends.
+	 */
+	CODEXTACTICS_API float DefenderPointHold(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
 
 	/** A defender's Objective order goes onto the point: the pull outscores his walk back into the area / to his post. */
 	CODEXTACTICS_API bool DefenderObjectiveToPoint(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
