@@ -71,18 +71,9 @@ bool SquadFireRules::AppliesDeadZone(const FVector& ShooterFeet, const FVector& 
 	return IsInDeadZone(ShooterFeet, TargetFeet) && (bTraceBlocked || bLevelEdge);
 }
 
-bool SquadFireRules::IsLevelEdgeBetween(TConstArrayView<float> FloorZCm, float ShooterFeetZ, float MinDropCm)
+bool SquadFireRules::IsLevelEdgeBetween(TConstArrayView<FFloorSample> Profile, float SpacingCm)
 {
-	float Previous = ShooterFeetZ;
-	for (const float FloorZ : FloorZCm)
-	{
-		if (Previous - FloorZ >= MinDropCm)
-		{
-			return true;
-		}
-		Previous = FloorZ;
-	}
-	return false;
+	return CombatGroundRules::HasLevelEdge(Profile, GetDeadZoneConfig().EdgeDropCm, SpacingCm);
 }
 
 FShotLineVerdict SquadFireRules::JudgeLine(EShotLineHit Hit, EOperativeStance Stance, const FElevationAdvantage& Elevation)

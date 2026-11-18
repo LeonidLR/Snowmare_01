@@ -98,35 +98,6 @@ bool AOperativeCharacter::IsBehindBarricade() const
 	return false;
 }
 
-namespace
-{
-	/** Floor Z along the shot, every 50 cm. A platform lip falls away in one probe; a ramp or a stair does not. */
-	bool DeadZoneLevelEdge(UWorld& World, const FCollisionQueryParams& ShotParams, const FVector& ShooterFeet, const FVector& TargetFeet, const AActor* Ignore)
-	{
-		const float Horizontal = FVector::Dist2D(ShooterFeet, TargetFeet);
-		const FVector Toward = (TargetFeet - ShooterFeet).GetSafeNormal2D();
-		if (Toward.IsNearlyZero() || Horizontal < 30.f)
-		{
-			return false;
-		}
-		FCollisionQueryParams Params = ShotParams;
-		if (Ignore)
-		{
-			Params.AddIgnoredActor(Ignore);
-		}
-		TArray<float, TInlineAllocator<8>> FloorZ;
-		constexpr float StepCm = 50.f;
-		for (float Step = StepCm; Step < Horizontal - 10.f && FloorZ.Num() < 8; Step += StepCm)
-		{
-			const FVector Start = ShooterFeet + Toward * Step + FVector(0.f, 0.f, 40.f);
-			FHitResult Hit;
-			FloorZ.Add(World.LineTraceSingleByChannel(Hit, Start, Start - FVector(0.f, 0.f, 500.f), ECC_Visibility, Params)
-				? Hit.ImpactPoint.Z : ShooterFeet.Z - 500.f);
-		}
-		return SquadFireRules::IsLevelEdgeBetween(FloorZ, ShooterFeet.Z, SquadFireRules::GetDeadZoneConfig().MinDeltaZCm);
-	}
-}
-
 bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FShootCandidate& Out, bool& bOutBarricadeBlocked,
 	const TCHAR** OutReason, FString* OutDetail) const
 {
@@ -235,11 +206,9 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 		Out.AimPoint = Exposed;
 	}
 	// G007: the platform dead zone. A clear muzzle line on a shared slope is a shot; a blocked line or a level edge is not.
-	if (SquadFireRules::IsInDeadZone(MyFeet, EnemyFeet))
 	{
-		const bool bTraceBlocked = Kind == EShotLineHit::Blocked;
-		if (SquadFireRules::AppliesDeadZone(MyFeet, EnemyFeet, bTraceBlocked,
-			!bTraceBlocked && DeadZoneLevelEdge(*World, Params, MyFeet, EnemyFeet, Enemy)))
+		const AActor* Ignore[] = { this, Enemy };
+		if (CombatGround::BlocksShot(*World, MyFeet, EnemyFeet, Kind == EShotLineHit::Blocked, Ignore))
 		{
 			Reason = TEXT("dead zone");
 			return false;
@@ -326,11 +295,9 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	{
 		Kind = Hit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
 	}
-	if (SquadFireRules::IsInDeadZone(MyFeet, GhostFeet))
 	{
-		const bool bTraceBlocked = Kind == EShotLineHit::Blocked;
-		if (SquadFireRules::AppliesDeadZone(MyFeet, GhostFeet, bTraceBlocked,
-			!bTraceBlocked && DeadZoneLevelEdge(*World, Params, MyFeet, GhostFeet, nullptr)))
+		const AActor* Ignore[] = { this };
+		if (CombatGround::BlocksShot(*World, MyFeet, GhostFeet, Kind == EShotLineHit::Blocked, Ignore))
 		{
 			return false;
 		}
