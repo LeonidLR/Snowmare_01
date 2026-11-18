@@ -1,5 +1,10 @@
 # Buildings — Game Design Document + Technical Specification (levelgen v3)
 
+> **SUPERSEDED 2026-11-18.** Split into the studio-standard GDD set [gdd/systems-index.md](gdd/systems-index.md)
+> (building-archetypes, opening-states, building-route-model, breach-panels, building-stories) and
+> [BUILDINGS_TECH_SPEC.md](BUILDINGS_TECH_SPEC.md), then reworked (v2) after the design review and the studio review.
+> Kept unchanged below as the original draft; edit the new documents, not this one.
+
 Owner: Claude (building generator, designer 2026-11-18: «Бери генератор на себя»). Status: **DRAFT for the studio discussion**
 (designer 2026-11-18: «обсудим на уровне студии, создадим нормальный гейм-дизайн документ… нормальное техническое задание»).
 Nothing in parts B-D beyond what is marked *done* is implemented; numbers marked *proposal* wait for the discussion.

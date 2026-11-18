@@ -8,8 +8,9 @@ Related: [LEVEL_GENERATOR.md](LEVEL_GENERATOR.md) (the pipeline), [BUILDINGS.md]
 openings, partitions, floor slabs, hatches, parapets, mantle edges), [PROPS_LAYERS.md](PROPS_LAYERS.md), `docs/design/LADDERS.md`,
 `Content/Data/LevelGen/obstacle_heights.json`, `DoorwayBreachRules.h`.
 
-**Design + technical spec for the studio discussion: [BUILDINGS_GDD.md](BUILDINGS_GDD.md)** (building stories, opening states,
-breach panels, route model, data contract, phases, open questions; 2026-11-18).
+**Design + technical spec for the studio discussion: [gdd/systems-index.md](gdd/systems-index.md)** (5 GDDs: archetypes,
+opening states, route model, breach panels, building stories) + [BUILDINGS_TECH_SPEC.md](BUILDINGS_TECH_SPEC.md) (2026-11-18;
+the first draft [BUILDINGS_GDD.md](BUILDINGS_GDD.md) is superseded). Section 3.1's storeys are superseded by building-archetypes.
 
 **Status 2026-11-18: DRAFT, on hold.** The designer answered the forks of section 2, then asked not to run ahead: the approach (TS
 generator vs UE PCG vs Blender building plugins), the building classes and the horde-defence buildings are to be discussed at the studio
