@@ -27,7 +27,7 @@ export type PmcPosture = (typeof PMC_POSTURES)[number];
 export interface PmcChargesConfig {
   sappers_per_squad: number;
   per_sapper: { mines: number; tripwires: number };
-  mine_spacing_m: number; first_mine_m: number; flank_m: number; retreat_m: number; retreat_clear_m: number;
+  mine_spacing_m: number; first_mine_m: number; second_line_back_m: number; flank_m: number; retreat_m: number; retreat_clear_m: number;
   route_clear_m: number; start_clear_m: number; access_offset_m: number; door_inside_cm: number; tripwire_width_cm: number;
   mine: { variant: string; trigger: string }; tripwire: { variant: string; trigger: string };
   layer_id: string;
