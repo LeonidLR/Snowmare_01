@@ -52,7 +52,7 @@ Budget (50 ms) and the smoke untouched.
 | local, links moved, minimap not yet | 159.24 ms (FAIL) | #1716 | paused; minimap scan in the window |
 | local, fix, batch of 4 | **20.57 ms** | #756 | paused (93 / 127 ms under the cover), minimap 42.8 ms under the cover |
 | local, fix, alone | **20.32 ms** | #780 | paused |
-| local, fix (final), A/B run B | **18.93 ms** | #786 | paused |
+| local, fix + A/B switch, run B | **18.93 ms** | #786 | paused |
 | local, A/B run A (`-PreloadNoLevelStartWork`, old flow) | 23.48 ms (pass) | #900 | gameplay frames (mantle at 868, just before the window) |
 
 Run A shows the race: on this machine the old flow happened to finish the mantle links before the window; on the worker it did not.
@@ -61,14 +61,14 @@ Run A shows the race: on this machine the old flow happened to finish the mantle
 
 - Build: `Scripts/build.ps1` OK (pre-existing unity-clash warning `ParseJson` in CodexTacticsTests, unrelated).
 - `smoke_parallel -Commands HitchProbeSmoke,EnemyArchetypeSmoke,MilitaryZombieSmoke,PmcArenaSmoke -Jobs 4`: 4/4 PASS. HitchProbeSmoke alone: PASS
-  (2nd run). Final build: HitchProbeSmoke PASS again (A/B run B), 3 passing runs in total.
+  (2nd run). With the A/B switch build: HitchProbeSmoke PASS again (A/B run B), 4 passing runs in total. The last build only removed the temporary logs (compiled, not re-run).
 - `Scripts/test.ps1 -Smart` (with the first, 20 s-wait version): unit 389/0; smokes 61 run, FAIL PmcRoofDefenceSmoke, SuppressionSmoke,
   PauseMenuSmoke, SaveRoundTripSmoke (timeout); PASS* CornerHoldSmoke (new flaky), PmcStalemateSmoke (known flaky). After the no-wait fix,
   rerun: PauseMenuSmoke PASS, SaveRoundTripSmoke PASS, HitchProbeSmoke PASS, PmcRoofDefenceSmoke PASS*, **SuppressionSmoke FAIL**.
 - **SuppressionSmoke** (`F: the pack splits round it (6 left, 0 right)`, L_MovementTest): not caused by this change - on that map the navmesh is
   not ready under the preload, the new step is skipped at once (`navmesh not ready under the preload`) and the drop / mantle / minimap work runs at the
   same frames as on main. Separate red, needs its own look.
-- **PmcRoofDefenceSmoke** (guard share > 0.6) is flaky on its own: A/B on the final build - A (old flow, `-PreloadNoLevelStartWork`) **FAIL 0.47**,
+- **PmcRoofDefenceSmoke** (guard share > 0.6) is flaky on its own: A/B on the switch build - A (old flow, `-PreloadNoLevelStartWork`) **FAIL 0.47**,
   B (fix) PASS 0.87. Earlier runs with the fix: 0.58 / 0.51 FAIL, 0.42 FAIL (alone), 0.79 PASS (alone). Not in knownFlaky; the G008 merge reported 0.73-0.97 on 3 seeds.
   A separate issue (the guard share under load), not this fix.
 
