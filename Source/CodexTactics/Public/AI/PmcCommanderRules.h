@@ -509,6 +509,15 @@ struct CODEXTACTICS_API FPmcFighterView
 	bool bSectorShift = false;
 	/** An enemy shot at him within the last couple of seconds (NotifyShotAt). Default false. */
 	bool bUnderFire = false;
+	/** His suppression tier is Suppressed or Pinned (AOperativeCharacter::GetSuppressionTier). Default false. */
+	bool bSuppressed = false;
+	/**
+	 * G008b: a known enemy's last position is within this overwatch post's engagement range (the roof's range_m, or his
+	 * weapon reach when that is smaller). The squad subsystem sets it. Default false.
+	 */
+	bool bContactInPostRange = false;
+	/** Seconds since that in-range contact began (0 while none). ambush_max_hold_s for an overwatch post counts from here. */
+	float PostRangeContactSeconds = 0.f;
 	/**
 	 * G008 follow-up (review finding 3): the one defender of a posted defence who occupies the point on a quiet push or a late
 	 * clock (time wins need a defender on the point, fix/pmc-arena-stalemate). A defender without a defence post always may.
@@ -800,6 +809,21 @@ namespace PmcCommanderRules
 	 * is not deep in the kill zone (KillZoneFrac x his reach, or on the point) and still looks his way (AttentionOff < AmbushPatience).
 	 */
 	CODEXTACTICS_API bool ShouldHoldFire(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * G008b: how far an overwatch roof post engages, cm. The smaller of the roof's range (overwatch_roofs[].range_m, already in cm)
+	 * and the weapon's reach. A missing side (0) leaves the other. 0 when both are missing.
+	 */
+	CODEXTACTICS_API float OverwatchEngagementCm(float RoofRangeCm, float WeaponRangeCm);
+
+	/**
+	 * G008b: a defender standing on an overwatch roof post keeps it. Open while no known enemy is inside the post's engagement
+	 * range, and for AmbushMaxHoldSeconds after that in-range contact. Closed when he is hit (bUnderFire), suppressed
+	 * (bSuppressed), or the post is untenable (FallBack's reasons: wounded below fall_back_below, outnumbered, or too close
+	 * for his band). A G008 defence post on the same man does not cancel it: the squad shows him as the overwatch poster
+	 * while he stands on that roof. Attackers, other post kinds, and men off the post are outside this hold.
+	 */
+	CODEXTACTICS_API bool IsOverwatchHoldOpen(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
 
 	/** The scenario's id in args / JSON ("skirmish", "chokepoint", "street", "roofs", "blizzard"). */
 	CODEXTACTICS_API const TCHAR* ScenarioName(EPmcScenario Scenario);

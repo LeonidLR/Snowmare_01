@@ -177,6 +177,8 @@ bool FPmcTacticalPlacementTest::RunTest(const FString&)
 	Candidates.Add(Candidate(EPmcPostKind::Ambush, FVector(2000.f, 500.f, 0.f), 0.5f, TEXT("HS_far")));
 	Candidates.Add(Candidate(EPmcPostKind::Overwatch, FVector(500.f, 3000.f, 900.f), 0.6f, TEXT("B_tower")));
 	Candidates.Add(Candidate(EPmcPostKind::Overwatch, FVector(600.f, 3000.f, 900.f), 0.8f, TEXT("B_tower")));
+	Candidates[4].RangeCm = 9000.f;
+	Candidates[5].RangeCm = 11000.f;
 	Candidates.Add(Candidate(EPmcPostKind::LadderRoof, FVector(-2000.f, 0.f, 300.f), 0.5f, TEXT("B_gallery")));
 	FPmcPostCandidate Drop = Candidate(EPmcPostKind::Drop, FVector(1500.f, -400.f, 300.f), 1.f, TEXT("DA_01"));
 	Drop.Jumpers = { TEXT("cutter"), TEXT("frost_hound") };
@@ -184,6 +186,7 @@ bool FPmcTacticalPlacementTest::RunTest(const FString&)
 	const TArray<FPmcTacticalPost> Posts = PmcTacticalRules::PlanPlacement(Fighters, Candidates, W, 11);
 	TestEqual(TEXT("one post per fighter"), Posts.Num(), 4);
 	TestTrue(TEXT("the marksman on the best overwatch roof spot"), Posts[1].Kind == EPmcPostKind::Overwatch && Posts[1].Location.X == 600.f);
+	TestEqual(TEXT("the marksman's post keeps that roof's range_m"), Posts[1].RangeCm, 11000.f);
 	TestTrue(TEXT("the last rifleman on the picked ladder-only roof"), Posts[3].Kind == EPmcPostKind::LadderRoof);
 	TestTrue(TEXT("the lead ambusher at the chokepoint exit, not inside it"), Posts[0].Kind == EPmcPostKind::Ambush && Posts[0].Group == TEXT("HS_exit"));
 	TestTrue(TEXT("the next ambusher keeps 3 m off the first, never inside the chokepoint"), Posts[2].Kind == EPmcPostKind::Ambush && Posts[2].Group == TEXT("HS_far"));

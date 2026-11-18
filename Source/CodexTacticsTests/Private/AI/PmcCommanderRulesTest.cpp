@@ -153,6 +153,103 @@ bool FPmcCommanderSurvivalTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderOverwatchHoldTest, "CodexTactics.AI.PmcCommander.OverwatchHold",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcCommanderOverwatchHoldTest::RunTest(const FString&)
+{
+	using namespace PmcCommanderTestLocal;
+	// G008b: a posted overwatch defender keeps Ambush after the squad's first sighting, until the post's own contact clock
+	// (filled by the squad subsystem) reaches ambush_max_hold_s. Shipped weights: 1.0 x (1 + 0.6 x 0.8) = 1.48.
+	FPmcWeights W;
+	TestTrue(TEXT("shipped pmc_commander.json loads"), PmcCommanderRules::LoadWeightsFile(FString(), W));
+	TestTrue(TEXT("ambush_max_hold_s is set"), W.AmbushMaxHoldSeconds > 0.f);
+
+	FPmcFighterView Posted = Fighter(2000.f, true);
+	Posted.Objective.Role = EPmcRole::Defender;
+	Posted.Objective.RadiusCm = 800.f;
+	Posted.Objective.DistanceCm = 5000.f;
+	Posted.Objective.bDefenceAreaSet = true;
+	Posted.Objective.bInsideDefenceArea = false;
+	Posted.PostKind = EPmcPostKind::Overwatch;
+	Posted.bAtPost = true;
+	Posted.PostScore = 0.8f;
+	Posted.bCoverAvailable = true;
+	Posted.bExposed = true;
+	FPmcSquadView Fight = Squad(3, 3, true);
+	TestTrue(TEXT("the squad has already met the enemy"), Fight.bEverContact);
+
+	const float ExpectedAmbush = W.Ambush * (1.f + FMath::Max(W.OverwatchRoof, 0.f) * 0.8f);
+	TestTrue(TEXT("the roof bonus is on"), ExpectedAmbush > W.Ambush);
+	TestTrue(TEXT("the hold is open while nobody is inside the post's range"), PmcCommanderRules::IsOverwatchHoldOpen(Posted, Fight, W));
+	TestEqual(TEXT("Ambush keeps the roof bonus after the first sighting"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Posted, Fight, W), ExpectedAmbush, 0.001f);
+	TestEqual(TEXT("Objective does not walk him off"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Posted, Fight, W), 0.f);
+	TestEqual(TEXT("TakeCover does not walk him off"), PmcCommanderRules::ScoreOrder(EPmcOrder::TakeCover, Posted, Fight, W), 0.f);
+	TestEqual(TEXT("Advance does not walk him off"), PmcCommanderRules::ScoreOrder(EPmcOrder::Advance, Posted, Fight, W), 0.f);
+	TestEqual(TEXT("Flank does not walk him off"), PmcCommanderRules::ScoreOrder(EPmcOrder::Flank, Posted, Fight, W), 0.f);
+	TestEqual(TEXT("a healthy even fight does not fall back"), PmcCommanderRules::ScoreOrder(EPmcOrder::FallBack, Posted, Fight, W), 0.f);
+	TestEqual(TEXT("he stays on the post"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Posted, Fight, W)[0].Order), TEXT("Ambush"));
+	FPmcFighterView AlsoDefence = Posted;
+	AlsoDefence.bHasDefencePost = true;
+	TestTrue(TEXT("a G008 defence flag does not cancel the hold while he stands on the roof"), PmcCommanderRules::IsOverwatchHoldOpen(AlsoDefence, Fight, W));
+	TestEqual(TEXT("Ambush still wins over the defence flag"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, AlsoDefence, Fight, W), ExpectedAmbush, 0.001f);
+	TestEqual(TEXT("Objective stays 0 with the defence flag"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, AlsoDefence, Fight, W), 0.f);
+
+	Posted.bContactInPostRange = true;
+	Posted.PostRangeContactSeconds = W.AmbushMaxHoldSeconds - 0.05f;
+	TestTrue(TEXT("the hold lasts ambush_max_hold_s after the in-range contact"), PmcCommanderRules::IsOverwatchHoldOpen(Posted, Fight, W));
+	TestEqual(TEXT("Ambush still scores inside that window"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Posted, Fight, W), ExpectedAmbush, 0.001f);
+
+	Posted.PostRangeContactSeconds = W.AmbushMaxHoldSeconds;
+	TestFalse(TEXT("the window ends the hold"), PmcCommanderRules::IsOverwatchHoldOpen(Posted, Fight, W));
+	TestEqual(TEXT("Ambush is over once the window ends"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Posted, Fight, W), 0.f);
+	TestEqual(TEXT("outside the defended area the walk back returns"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, Posted, Fight, W), W.Objective * 0.7f, 0.001f);
+	TestTrue(TEXT("TakeCover scores again"), PmcCommanderRules::ScoreOrder(EPmcOrder::TakeCover, Posted, Fight, W) > 0.f);
+	TestTrue(TEXT("Flank scores again"), PmcCommanderRules::ScoreOrder(EPmcOrder::Flank, Posted, Fight, W) > 0.f);
+
+	Posted.bContactInPostRange = false;
+	Posted.PostRangeContactSeconds = 0.f;
+	Posted.bUnderFire = true;
+	TestFalse(TEXT("a hit ends the hold before anyone is in range"), PmcCommanderRules::IsOverwatchHoldOpen(Posted, Fight, W));
+	TestEqual(TEXT("Ambush is over when he is hit"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Posted, Fight, W), 0.f);
+	Posted.bUnderFire = false;
+	Posted.bSuppressed = true;
+	TestFalse(TEXT("suppression ends the hold"), PmcCommanderRules::IsOverwatchHoldOpen(Posted, Fight, W));
+	TestEqual(TEXT("Ambush is over when he is suppressed"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Posted, Fight, W), 0.f);
+	Posted.bSuppressed = false;
+
+	FPmcFighterView Hurt = Posted;
+	Hurt.HealthFrac = 0.2f;
+	Hurt.bCoverAvailable = false;
+	Hurt.bExposed = false;
+	TestFalse(TEXT("a wounded man leaves an untenable post"), PmcCommanderRules::IsOverwatchHoldOpen(Hurt, Fight, W));
+	TestEqual(TEXT("he falls back"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Hurt, Fight, W)[0].Order), TEXT("FallBack"));
+
+	FPmcFighterView Attacker = Posted;
+	Attacker.Objective.Role = EPmcRole::Attacker;
+	TestFalse(TEXT("an attacker is outside this hold"), PmcCommanderRules::IsOverwatchHoldOpen(Attacker, Fight, W));
+	TestEqual(TEXT("an attacker's ambush still ends at the first contact"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Attacker, Fight, W), 0.f);
+
+	FPmcFighterView NoRole = Posted;
+	NoRole.Objective.Role = EPmcRole::None;
+	NoRole.Objective.RadiusCm = 0.f;
+	TestEqual(TEXT("without a defender role the ambush still ends at the first contact"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, NoRole, Fight, W), 0.f);
+
+	FPmcFighterView Window = Posted;
+	Window.PostKind = EPmcPostKind::Window;
+	TestEqual(TEXT("a window post does not keep the overwatch hold"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Window, Fight, W), 0.f);
+
+	FPmcFighterView OffPost = Posted;
+	OffPost.bAtPost = false;
+	TestEqual(TEXT("off the post the ambush is over after the first contact"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, OffPost, Fight, W), 0.f);
+
+	TestEqual(TEXT("engagement is the smaller of the roof and the weapon"), PmcCommanderRules::OverwatchEngagementCm(11000.f, 3000.f), 3000.f);
+	TestEqual(TEXT("a longer weapon keeps the roof range"), PmcCommanderRules::OverwatchEngagementCm(11000.f, 14000.f), 11000.f);
+	TestEqual(TEXT("a missing roof leaves the weapon"), PmcCommanderRules::OverwatchEngagementCm(0.f, 3000.f), 3000.f);
+	TestEqual(TEXT("a missing weapon leaves the roof"), PmcCommanderRules::OverwatchEngagementCm(11000.f, 0.f), 11000.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderGeometryTest, "CodexTactics.AI.PmcCommander.Geometry",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

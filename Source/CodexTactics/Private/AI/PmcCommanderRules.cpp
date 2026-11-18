@@ -196,6 +196,14 @@ namespace PmcCommanderRules
 				return 0.f;
 			}
 		}
+		// G008b: a defender on an overwatch roof stays there until the attackers reach the post. Objective / TakeCover /
+		// Advance / Flank would walk him off while the threat is still outside the roof. FallBack keeps its own score.
+		const bool bOverwatchHold = IsOverwatchHoldOpen(F, S, W);
+		if (bOverwatchHold && (Order == EPmcOrder::Objective || Order == EPmcOrder::TakeCover
+			|| Order == EPmcOrder::Advance || Order == EPmcOrder::Flank))
+		{
+			return 0.f;
+		}
 		const float Contact = Step(S.bContact);
 		const float SeenNow = Step(F.bHasThreat && F.Threat.bSeenNow);
 		const float InRange = Step(F.bHasThreat && F.Threat.DistanceCm <= F.WeaponRangeCm);
@@ -298,7 +306,8 @@ namespace PmcCommanderRules
 			// No contact yet in this fight: hold in cover, crouched, and let them come.
 			// TACTICAL_MAP P2: a man with a tactical post (an ambush at a chokepoint exit, an overwatch roof, a window) waits ON it - worth
 			// x (1 + its kind's weight x its score) wherever he is (the order walks him there); without one the danger of his spot counts.
-			return W.Ambush * Step(!S.bEverContact) * (F.bInCover || F.bAtPost ? 1.f : 0.6f) * HoldHere * PushDamp
+			// G008b: an overwatch defender's gate is contact inside the post's range (IsOverwatchHoldOpen), not the team's first sighting.
+			return W.Ambush * (bOverwatchHold ? 1.f : Step(!S.bEverContact)) * (F.bInCover || F.bAtPost ? 1.f : 0.6f) * HoldHere * PushDamp
 				* (F.PostKind != EPmcPostKind::None ? 1.f + (PmcTacticalRules::PostKindFactor(F.PostKind, W) - 1.f) * Clamp01(F.PostScore) : Here);
 		case EPmcOrder::Reload:
 			// A low clip with rounds in reserve; best behind cover or out of contact.
@@ -1000,6 +1009,45 @@ namespace PmcCommanderRules
 			return 1.f;
 		}
 		return FMath::Max(0.f, 1.f + FMath::Max(Weights.Attention, 0.f) * (PmcCommanderLocal::Clamp01(Fighter.Threat.AttentionOff) - 0.5f));
+	}
+
+	float OverwatchEngagementCm(float RoofRangeCm, float WeaponRangeCm)
+	{
+		const float Roof = FMath::Max(0.f, RoofRangeCm);
+		const float Weapon = FMath::Max(0.f, WeaponRangeCm);
+		if (Roof <= 0.f)
+		{
+			return Weapon;
+		}
+		if (Weapon <= 0.f)
+		{
+			return Roof;
+		}
+		return FMath::Min(Roof, Weapon);
+	}
+
+	bool IsOverwatchHoldOpen(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
+	{
+		if (F.bKnockedDown || F.Objective.Role != EPmcRole::Defender
+			|| F.PostKind != EPmcPostKind::Overwatch || !F.bAtPost || F.bUnderFire || F.bSuppressed)
+		{
+			return false;
+		}
+		// The same reasons ScoreOrder gives FallBack: wounded, outnumbered in contact, or inside the standoff distance.
+		const bool bBand = F.Band.IsValid();
+		const bool bTooClose = bBand && F.bHasThreat && !F.Threat.bStandIn && F.RunningOrder != EPmcOrder::Flank
+			&& (IsTooClose(F.Threat.DistanceCm, F.Band, W)
+				|| (F.RunningOrder == EPmcOrder::FallBack && !F.Band.bCloseQuarters && F.Threat.DistanceCm < 0.5f * (F.Band.MinCm + F.Band.MaxCm)));
+		const bool bLosing = S.bContact && F.bHasThreat && (F.HealthFrac < W.FallBackBelow || (S.Alive - S.EnemiesKnown) <= -1);
+		if (bTooClose || bLosing)
+		{
+			return false;
+		}
+		if (!F.bContactInPostRange)
+		{
+			return true;
+		}
+		return F.PostRangeContactSeconds < FMath::Max(0.f, W.AmbushMaxHoldSeconds);
 	}
 
 	bool ShouldHoldFire(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
