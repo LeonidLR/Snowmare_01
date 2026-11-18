@@ -108,15 +108,31 @@ namespace PmcCommanderRules
 			return 0.f;
 		}
 		// G008: a roof fight sees the street at once, so Ambush's contact gate is already closed and FallBack
-		// pathfinds the guard down the stair. He finishes the walk onto his post, then does not leave it.
+		// pathfinds the guard down the stair. He walks onto his post, then does not leave it.
 		// A sector shooter may still Relocate along his wedge. Attackers never set bHasDefencePost.
 		if (F.Objective.Role == EPmcRole::Defender && F.bHasDefencePost)
 		{
 			if (!F.bAtPost)
 			{
-				return Order == EPmcOrder::Ambush ? FMath::Max(W.Ambush, 1.f) : 0.f;
+				// Review finding 1: the post walk is an order, not a gate. Before contact it is the only one. In contact (squad
+				// contact, a target seen now, or fire on him) shooting / TakeCover / Heal / FallBack / Reload keep their normal
+				// scores, so a man stuck short of an unreachable post fights from where he is. Fire on him drops the walk to 0.75,
+				// so a man shot on his way takes cover / falls back / heals when that is urgent. A roof sees the street at once,
+				// so contact alone does not demote the walk: at 0.5 a rocket (0.94) kept the guard off the stair all round
+				// (PmcRoofDefenceSmoke guard share 0.00). Not under fire, the walk is 1.05: above a full-weight fight order (an
+				// exposed TakeCover with no cover scores exactly 1.0 and wins a tie by enum order). Advance and Flank stay 0: they
+				// path him off the roof.
+				const bool bFight = S.bContact || F.bUnderFire || (F.bHasThreat && F.Threat.bSeenNow && !F.Threat.bStandIn);
+				if (Order == EPmcOrder::Ambush)
+				{
+					return FMath::Max(W.Ambush, 1.f) * (F.bUnderFire ? 0.75f : 1.05f);
+				}
+				if (!bFight || Order == EPmcOrder::Advance || Order == EPmcOrder::Flank)
+				{
+					return 0.f;
+				}
 			}
-			if (Order == EPmcOrder::FallBack || Order == EPmcOrder::Flank || Order == EPmcOrder::Advance
+			else if (Order == EPmcOrder::FallBack || Order == EPmcOrder::Flank || Order == EPmcOrder::Advance
 				|| Order == EPmcOrder::TakeCover || Order == EPmcOrder::Objective
 				|| (Order == EPmcOrder::Relocate && !F.bSectorShift))
 			{
@@ -640,6 +656,9 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("shift_after_s"), Out.ShiftAfterSeconds);
 		ReadNumber(Json, TEXT("shift_no_target_s"), Out.ShiftNoTargetSeconds);
 		ReadNumber(Json, TEXT("shift_cooldown_s"), Out.ShiftCooldownSeconds);
+		float PostWalks = static_cast<float>(Out.DefencePostWalks);
+		ReadNumber(Json, TEXT("defence_post_walks"), PostWalks);
+		Out.DefencePostWalks = FMath::Max(1, FMath::RoundToInt(PostWalks));
 		ReadNumber(Json, TEXT("sector_arc_deg"), Out.SectorArcDeg);
 		// Target attention (2026-11-07).
 		ReadNumber(Json, TEXT("attention"), Out.Attention);

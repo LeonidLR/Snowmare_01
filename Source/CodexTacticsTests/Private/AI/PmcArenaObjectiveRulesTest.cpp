@@ -156,8 +156,35 @@ bool FPmcArenaObjectiveOrderTest::RunTest(const FString&)
 	FPmcSquadView Contact = Squad;
 	Contact.bContact = true;
 	Contact.bEverContact = true;
-	TestEqual(TEXT("defender off his post keeps the walk after contact"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, OffPost, Contact, Weights), 1.f, 0.001f);
-	TestEqual(TEXT("defender off his post does not fall back"), PmcCommanderRules::ScoreOrder(EPmcOrder::FallBack, OffPost, Contact, Weights), 0.f);
+	// Review finding 1: before contact the walk is his only order; in contact it is one order among the fight orders.
+	TestEqual(TEXT("defender off his post, no contact: the walk"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, OffPost, Squad, Weights), 1.05f, 0.001f);
+	TestEqual(TEXT("defender off his post, no contact: nothing else"), PmcCommanderRules::ScoreOrder(EPmcOrder::Hold, OffPost, Squad, Weights), 0.f);
+	TestEqual(TEXT("defender off his post keeps the walk after contact, above a full-weight fight order"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, OffPost, Contact, Weights), 1.05f, 0.001f);
+	FPmcFighterView WalkUnderFire = OffPost;
+	WalkUnderFire.bUnderFire = true;
+	TestEqual(TEXT("shot at on the way: the walk drops to 0.75"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, WalkUnderFire, Contact, Weights), 0.75f, 0.001f);
+	FPmcFighterView ShotOnTheWay = OffPost;
+	ShotOnTheWay.HealthFrac = 0.2f;
+	ShotOnTheWay.bHasThreat = true;
+	ShotOnTheWay.Threat.bSeenNow = true;
+	ShotOnTheWay.Threat.DistanceCm = 800.f;
+	ShotOnTheWay.bHasMedkit = true;
+	ShotOnTheWay.WoundedMateDistanceCm = 300.f;
+	ShotOnTheWay.WoundedMateHealthFrac = 0.2f;
+	ShotOnTheWay.bCoverAvailable = true;
+	ShotOnTheWay.bExposed = true;
+	TestTrue(TEXT("shot on his way to the post: he holds and fires"), PmcCommanderRules::ScoreOrder(EPmcOrder::Hold, ShotOnTheWay, Contact, Weights) > 0.f);
+	TestTrue(TEXT("shot on his way to the post: he may take cover"), PmcCommanderRules::ScoreOrder(EPmcOrder::TakeCover, ShotOnTheWay, Contact, Weights) > 0.f);
+	TestTrue(TEXT("shot on his way to the post: he may fall back when losing"), PmcCommanderRules::ScoreOrder(EPmcOrder::FallBack, ShotOnTheWay, Contact, Weights) > 0.f);
+	TestTrue(TEXT("shot on his way to the post: he may heal a mate"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, ShotOnTheWay, Contact, Weights) > 0.f);
+	TestEqual(TEXT("off his post he still does not advance off the roof"), PmcCommanderRules::ScoreOrder(EPmcOrder::Advance, ShotOnTheWay, Contact, Weights), 0.f);
+	TestEqual(TEXT("off his post he still does not flank off the roof"), PmcCommanderRules::ScoreOrder(EPmcOrder::Flank, ShotOnTheWay, Contact, Weights), 0.f);
+	// Fire on him alone opens the fight orders, even before the squad registers contact.
+	FPmcFighterView UnderFire = OffPost;
+	UnderFire.bUnderFire = true;
+	UnderFire.bHasThreat = true;
+	UnderFire.Threat.DistanceCm = 800.f;
+	TestTrue(TEXT("under fire off his post: Hold scores"), PmcCommanderRules::ScoreOrder(EPmcOrder::Hold, UnderFire, Squad, Weights) > 0.f);
 	FPmcFighterView OnPost = OffPost;
 	OnPost.bAtPost = true;
 	OnPost.HealthFrac = 0.2f;

@@ -296,6 +296,14 @@ private:
 		int32 DefenceSpotIndex = INDEX_NONE;
 		/** World time he arrived on the defence post (-1: not there). The sector shift counts from this. */
 		double DefenceArrivedAt = -1.0;
+		/** Defence post walks that ended short or were refused (defence_post_walks of them drop the post). */
+		int32 DefencePostWalks = 0;
+		/** His distance to the defence post when the running walk there was issued (-1: none running). */
+		float DefencePostWalkFromCm = -1.f;
+		/** He already gave up one unreachable defence post; a second give-up holds where he stands. */
+		bool bDefencePostDropped = false;
+		/** The Ambush order faced / crouched him on his defence post (false while he still walks there). */
+		bool bDefenceSettled = false;
 		/** World time of his last sector shift (the shift cooldown counts from this). */
 		double LastSectorShiftAt = -1e9;
 		/** World time an enemy last shot at him (NotifyShotAt; -1e9: never). */
@@ -405,6 +413,11 @@ private:
 	/** G008: resolve the roof access (once per objective) and assign guard / sector posts. bResolveAccess false keeps the access. */
 	void RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess);
 	void ClearDefencePosts(FTeam& Team);
+	/**
+	 * G008 follow-up (review finding 1): the defence post could not be reached in defence_post_walks walks. He becomes a sector
+	 * shooter with no wedge on the nearest roof spot with a full path (not a mate's post), else where he stands.
+	 */
+	void DropDefencePost(int32 TeamId, FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State);
 	/** Other living defenders' cover slots or defence posts, for the spacing penalty. Empty unless this team is defending. */
 	void CollectDefenceClaims(const FTeam& Team, const AOperativeCharacter& Fighter, TArray<FVector>& OutPoints, TArray<FString>& OutKeys) const;
 	/** The map's levelgen layout (not the -LevelJson= combat override). Cached. Null when the map has none. */

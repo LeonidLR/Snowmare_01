@@ -337,6 +337,8 @@ struct CODEXTACTICS_API FPmcWeights
 	float ShiftNoTargetSeconds = 6.f;
 	/** "shift_cooldown_s" (20): the least time between two shifts of one shooter (no ping-pong). */
 	float ShiftCooldownSeconds = 20.f;
+	/** "defence_post_walks" (3): walks to a defence post that end short (or are refused) before he drops it. */
+	int32 DefencePostWalks = 3;
 	/** "sector_arc_deg" (180): the arc facing the attacker spawn, split across the sector shooters. */
 	float SectorArcDeg = 180.f;
 
@@ -490,8 +492,10 @@ struct CODEXTACTICS_API FPmcFighterView
 	float PostScore = 0.f;
 	bool bAtPost = false;
 	/**
-	 * G008: this defender has an access or sector post. Until he stands on it, only Ambush scores (the walk).
-	 * On it, FallBack / Flank / Advance / TakeCover score 0 so he does not path off the roof. Default false.
+	 * G008: this defender has an access or sector post. Off it, before contact, only the walk (Ambush) scores. In contact
+	 * (squad contact, a seen target, or fire on him) the walk is one order among others: shooting / TakeCover / Heal / FallBack
+	 * keep their normal scores; Advance / Flank stay 0. On it, FallBack / Flank / Advance / TakeCover score 0, so he does not
+	 * path off the roof. Default false.
 	 */
 	bool bHasDefencePost = false;
 	/**

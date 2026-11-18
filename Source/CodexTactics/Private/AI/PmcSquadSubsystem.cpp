@@ -56,6 +56,10 @@ namespace PmcSquadLocal
 	constexpr float FailShortCm = 400.f;
 	/** G008 follow-up: a shot at him within this long counts as "under fire" (the defender's contact gate, the sector shift). */
 	constexpr double UnderFireSeconds = 2.0;
+	/** G008 follow-up: a defence post walk is re-checked only once he stands still (below this speed, cm/s)... */
+	constexpr float StillSpeedCm = 30.f;
+	/** ...and the Ambush that walked him is this old (longer than the stalemate smoke's 2 s re-decide window). */
+	constexpr double DefenceRetrySeconds = 2.5;
 	constexpr float AidReachCm = 230.f;
 	constexpr float MonsterSightCm = 2500.f;
 	/** A demasked shooter (his own fire) is noticed by the teams with a man this close (planar). */
@@ -1680,9 +1684,21 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 			continue; // the running order keeps going
 		}
 		// TACTICAL_MAP P2: an Ambush that walked him to his post settles on it (faces its look, crouches) once the walk ended.
+		// Not for a defender with a defence post: Ambush walks him to that post first, so his tactical post never settles and this
+		// re-ran the defence walk every decision (stalemate smoke: 44 Ambush re-issues for one man).
+		const bool bDefencePosted = State.bHasDefencePost && Team.Defence.bActive;
 		const bool bSettlePost = Pick == EPmcOrder::Ambush && State.Order == EPmcOrder::Ambush && State.Post.IsValid() && !State.bPostSettled
-			&& !Fighter->HasOwnMoveOrder() && !PmcSquadLocal::IsTraversingLink(*Fighter);
-		if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick) && !bSettlePost)
+			&& !bDefencePosted && !Fighter->HasOwnMoveOrder() && !PmcSquadLocal::IsTraversingLink(*Fighter);
+		// G008 follow-up (review finding 1): the same for a defence post. Ambush is never "running", so without this a defence walk
+		// that ended short of the post was never retried or counted, and he stood there for the rest of the round. Now the walk's
+		// end re-executes Ambush: it settles him on the post, or counts the short walk and walks again (defence_post_walks drop it).
+		// HasOwnMoveOrder alone is not "the walk ended": it read false mid-sprint (roof smoke: three re-issues a second, every post
+		// dropped as "short"). He must stand still, and the Ambush must be older than the stalemate smoke's 2 s re-decide window.
+		const bool bStandingStill = Fighter->GetVelocity().SizeSquared2D() < FMath::Square(PmcSquadLocal::StillSpeedCm)
+			&& Now - State.OrderSince >= PmcSquadLocal::DefenceRetrySeconds;
+		const bool bSettleDefence = Pick == EPmcOrder::Ambush && State.Order == EPmcOrder::Ambush && State.bHasDefencePost && Team.Defence.bActive
+			&& (!State.bDefenceSettled || !View.bAtPost) && bStandingStill && !Fighter->HasOwnMoveOrder() && !PmcSquadLocal::IsTraversingLink(*Fighter);
+		if (Pick == State.Order && PmcCommanderRules::IsStaticOrder(Pick) && !bSettlePost && !bSettleDefence)
 		{
 			continue; // nothing new to do
 		}
@@ -1729,6 +1745,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	{
 		// Another order interrupts a post walk: it did not "end short" (TACTICAL_MAP P2, the post's three-tries rule).
 		State.PostWalkFromCm = -1.f;
+		State.DefencePostWalkFromCm = -1.f;
 	}
 	FVector Goal = FVector::ZeroVector;
 	// Why the walk was not taken (Codex.Debug.MoveTrace logs it; fix/pmc-onpoint-3d-detour).
@@ -2054,12 +2071,34 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		if (State.bHasDefencePost && Team.Defence.bActive)
 		{
 			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
-			if (!PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm))
+			bool bOnPost = PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
+			// Review finding 1: an unreachable post (a navmesh island, a walk that always ends short) is dropped after
+			// defence_post_walks tries, like the tactical posts' three short walks. A walk that made progress is no failure.
+			// Pinned is not unreachable: under fire he goes prone against the flash and an accepted sprint makes no progress
+			// (roof smoke: the guard dropped the stair post that way and settled 4.1 m from the access). A refused walk still counts.
+			if (!bOnPost && !View.bUnderFire
+				&& PmcTacticalRules::PostWalkEndedShort(State.DefencePostWalkFromCm, static_cast<float>(FVector::Dist(Feet, State.DefencePost))))
+			{
+				++State.DefencePostWalks;
+			}
+			State.DefencePostWalkFromCm = -1.f;
+			if (!bOnPost && State.DefencePostWalks >= Team.Weights.DefencePostWalks)
+			{
+				DropDefencePost(TeamId, Team, Fighter, State);
+				bOnPost = PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
+			}
+			if (!bOnPost)
 			{
 				bKeepGoalLevel = true;
-				// Always sprint. Seed 2's stair is 25 m from the spawn and the attackers die in 18 s;
-				// a quiet walk arrives too late for guard share > 0.6. The post stays on this level.
-				bTaken = Walk(State.DefencePost, true);
+				// Sprint unless he is under fire: seed 2's stair is 25 m from the spawn and the attackers die in 18 s, so a quiet walk
+				// arrives too late for guard share > 0.6 (and a roof sees the street at once, so "a target in sight" is nearly always
+				// true). Shot at, he walks, so his own fire answers on the way. The post stays on this level.
+				const float DistanceCm = static_cast<float>(FVector::Dist(Feet, State.DefencePost));
+				bTaken = Walk(State.DefencePost, !View.bUnderFire);
+				// Not taken = unreachable now: counted like a walk that ended short.
+				State.DefencePostWalks += bTaken ? 0 : 1;
+				State.DefencePostWalkFromCm = bTaken ? DistanceCm : -1.f;
+				State.bDefenceSettled = false;
 				if (bTaken)
 				{
 					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s walks to his %s post %s"), TeamId, *Fighter.DisplayName.ToString(),
@@ -2075,6 +2114,8 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
 				bTaken = true;
 				Goal = State.DefencePost;
+				State.bDefenceSettled = true;
+				State.DefencePostWalks = 0;
 				break;
 			}
 		}
@@ -3163,7 +3204,78 @@ void UPmcSquadSubsystem::ClearDefencePosts(FTeam& Team)
 		State.DefenceYaw = 0.f;
 		State.DefenceSpotIndex = INDEX_NONE;
 		State.DefenceArrivedAt = -1.0;
+		State.DefencePostWalks = 0;
+		State.DefencePostWalkFromCm = -1.f;
+		State.bDefencePostDropped = false;
+		State.bDefenceSettled = false;
 	}
+}
+
+void UPmcSquadSubsystem::DropDefencePost(int32 TeamId, FTeam& Team, AOperativeCharacter& Fighter, FFighterState& State)
+{
+	const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+	const FVector Failed = State.DefencePost;
+	FVector NewPost = Feet;
+	int32 NewSpot = INDEX_NONE;
+	// The first give-up tries the roof spots, nearest first. A second one (that spot failed too) holds where he stands.
+	if (!State.bDefencePostDropped)
+	{
+		TArray<FVector> Claimed;
+		TArray<FString> ClaimedKeys;
+		CollectDefenceClaims(Team, Fighter, Claimed, ClaimedKeys);
+		TArray<int32> Order;
+		for (int32 Index = 0; Index < Team.Defence.Spots.Num(); ++Index)
+		{
+			Order.Add(Index);
+		}
+		const TArray<FPmcDefenceSpot>& Spots = Team.Defence.Spots;
+		Order.Sort([&Spots, &Feet](int32 A, int32 B) { return FVector::DistSquared(Spots[A].Location, Feet) < FVector::DistSquared(Spots[B].Location, Feet); });
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
+		for (const int32 Index : Order)
+		{
+			FVector OnNav;
+			if (!ProjectToNavAtLevel(Spots[Index].Location, OnNav) || FVector::Dist2D(OnNav, Failed) <= PostArriveCm)
+			{
+				continue;
+			}
+			if (Claimed.ContainsByPredicate([&OnNav](const FVector& Other) { return FVector::Dist2D(Other, OnNav) <= PostArriveCm; }))
+			{
+				continue;
+			}
+			const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(GetWorld(), Fighter.GetActorLocation(), OnNav) : nullptr;
+			if (Path && Path->IsValid() && !Path->IsPartial())
+			{
+				NewPost = OnNav;
+				NewSpot = Index;
+				break;
+			}
+		}
+	}
+	if (NewSpot == INDEX_NONE)
+	{
+		FVector OnNav;
+		if (ProjectToNav(Feet, OnNav))
+		{
+			NewPost = OnNav;
+		}
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s gives up his %s post %s after %d short walks; sector shooter at %s (%s)"), TeamId,
+		*Fighter.DisplayName.ToString(), PmcDefenceRules::RoleName(State.DefenceRole), *Failed.ToCompactString(), State.DefencePostWalks,
+		*NewPost.ToCompactString(), NewSpot != INDEX_NONE ? TEXT("nearest reachable roof spot") : TEXT("where he stands"));
+	State.DefenceRole = EPmcDefenceRole::SectorShooter;
+	// No wedge: he does not shift along one (the shift needs a sector).
+	State.DefenceSector = INDEX_NONE;
+	State.DefenceSpotIndex = NewSpot;
+	State.DefencePost = NewPost;
+	if (Team.Defence.bHasApproach)
+	{
+		State.DefenceYaw = Team.Defence.ApproachYawDeg;
+	}
+	State.DefenceArrivedAt = -1.0;
+	State.DefencePostWalks = 0;
+	State.DefencePostWalkFromCm = -1.f;
+	State.bDefencePostDropped = true;
+	State.bDefenceSettled = false;
 }
 
 void UPmcSquadSubsystem::CollectDefenceClaims(const FTeam& Team, const AOperativeCharacter& Fighter, TArray<FVector>& OutPoints, TArray<FString>& OutKeys) const
