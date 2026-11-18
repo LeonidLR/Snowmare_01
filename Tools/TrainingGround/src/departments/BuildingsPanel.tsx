@@ -1,9 +1,49 @@
 // «Здания» panel of the level generator page: the building traversal validator per building
 // (src/levelgen/buildingTraversal.ts, docs/design/levelgen/BUILDING_GENERATOR.md section 5). Failing buildings first.
+// Per building also its stories and the key route (src/levelgen/buildingRoutes.ts, building-route-model.md UI Requirements):
+// the chain of leg modes, cost, D, fast / quiet entries and the F4 choice flag.
 import { useState } from 'react';
 import { CheckCircle2, XCircle } from 'lucide-react';
+import type { StoryId } from '../levelgen/buildingStories';
+import type { RouteSummary } from '../levelgen/buildingRoutes';
 import type { TraversalCode, TraversalReport } from '../levelgen/buildingTraversal';
 import type { BuildingRole } from '../levelgen/schema';
+
+/** Russian story names (building-stories.md 6; Record<StoryId>: a new story without a name fails the typecheck). */
+const STORY_RU: Record<StoryId, string> = {
+  open: 'открытое',
+  locked_door: 'запертая дверь',
+  rubble_escape: 'завал + пожарная лестница',
+  roof_outside: 'крыша только снаружи',
+  snow_drift: 'вход по сугробу',
+};
+
+/** Short Russian label per edge mode (building-route-model.md rule 3). */
+const MODE_RU: Record<string, string> = {
+  walk: 'пешком',
+  open: 'открыть',
+  kick: 'выбить',
+  shotgun: 'дробовик',
+  vault: 'перелезть',
+  shatter: 'разбить',
+  climb: 'лестница',
+  explosive: 'заряд',
+  drop: 'спрыгнуть',
+};
+
+function RouteLine({ route, stories }: { route?: RouteSummary; stories?: string[] }) {
+  if (!route && !stories?.length) return null;
+  return (
+    <span className="pl-5 text-slate-400">
+      {stories?.length ? <span className="text-violet-300">{stories.map((s) => STORY_RU[s as StoryId] ?? s).join(' + ')} · </span> : null}
+      {route ? (
+        <span title={`быстрый вход: ${route.fast_entry ?? '—'}, тихий: ${route.quiet_entry ?? '—'}${route.stored ? '' : ' (посчитано на лету)'}`}>
+          {route.modes.map((m) => MODE_RU[m] ?? m).join(' → ')} · цена {route.cost.toFixed(1)} · D {route.detour.toFixed(2)} · {route.choice ? <span className="text-emerald-300">выбор: быстрый {route.fast_entry} / тихий {route.quiet_entry}</span> : <span className="text-slate-500">без выбора</span>}
+        </span>
+      ) : <span className="text-rose-300">нет ключевого маршрута</span>}
+    </span>
+  );
+}
 
 /** Russian label per traversal code (Record<TraversalCode>: a new code without a label fails the typecheck). */
 const CODE_RU: Record<TraversalCode, string> = {
@@ -60,6 +100,7 @@ export function BuildingsPanel({ report }: { report: TraversalReport }) {
               <span className="text-slate-500">{b.set_piece}</span>
               <span className="text-slate-500">комнаты {b.rooms.reachable}/{b.rooms.total}, этажи {b.levels.reachable.join(',') || '—'}{b.roof !== 'none' ? `, крыша ${b.roof === 'reachable' ? 'да' : 'нет'}` : ''}</span>
             </span>
+            <RouteLine route={b.route} stories={b.stories} />
             {b.issues.slice(0, 4).map((i, k) => (
               <span key={k} className={`pl-5 ${i.severity === 'warning' ? 'text-amber-300' : 'text-rose-300'}`} title={i.message}>{i.severity === 'warning' ? 'предупреждение: ' : ''}{CODE_RU[i.code] ?? i.code}{i.ref ? ` (${i.ref})` : ''}</span>
             ))}

@@ -34,7 +34,7 @@ never a dead end that strands the squad.
    breach panels ([breach-panels.md](breach-panels.md)), outside legs.
 2. **Street node and outside legs**: every exterior opening (door, ground window, snow-ramp window, escape ground stop) has an
    *approach cell* 150 cm outside it. The street node is the point of the layout's main route (`R_main`) or road graph nearest
-   to the building's footprint; if there is none, a point 10 m out from the middle of the street facade. Outside legs join
+   to the building's footprint **centre** (S1 implementation: unambiguous for a street parallel to a facade); if there is none, a point 10 m out from the middle of the street facade. Outside legs join
    the street node and the approach cells along the footprint perimeter offset by 150 cm (rectilinear), length = that path.
 3. **Edge modes**: `walk`, `open`, `kick`, `shotgun`, `vault`, `shatter`, `climb` (ladder / hatch), `explosive`, `drop`.
    Each edge has a cost triple (time, noise, explosives) and an exposure flag (outside legs, fire escapes, balconies, planks,

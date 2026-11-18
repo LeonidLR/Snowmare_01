@@ -116,6 +116,9 @@ cost(opening) = (t_action, n_action, x_action)
 | shatter + vault | `t_vault + t_glass` (`t_glass` 0.5 s, 0-1) | `N_glass` 10 m (6-15) | 0 |
 | charge | `t_charge` 5 s (place + fuse, 3-10) | `N_charge` 25 m (15-40) | 1 |
 
+The TS route proxy (S1) prices a locked door by the kick only: the shotgun breach depends on the squad's loadout and is a
+runtime choice (R1); with it, `fast` would prefer the shotgun (1 + 0.1 * 30 = 4.0 < 4.5).
+
 All values *proposal*. Reference: a thrown stone lure is 8 m (STEALTH_LURE.md); every loud entry is louder than a lure.
 Blocked states (`sealed`, `barred`, `fixed`, `boarded` for now, `barricaded` without explosives) produce **no edge**.
 

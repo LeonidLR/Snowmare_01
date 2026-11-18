@@ -11,7 +11,8 @@ import type { BuildingRole, GenBuilding, GenLayout, Stair, WallOpening } from '.
 import { LEVEL_HEIGHT, STAIR_RUN_PER_RISE, unifyOpenings } from './schema.ts';
 import { effectiveOpeningState, isPassableState } from './openingStates.ts';
 import { checkBuildingReachability, isVaultableGroundWindow } from './tacticalEvaluate.ts';
-import { escapeLadderIds, usableEscapes } from './fireEscapes.ts';
+import { escapeLadderIds, usableEscapes, usableSnowRamps } from './fireEscapes.ts';
+import type { RouteSummary } from './buildingRoutes.ts';
 
 /** Clearances, cm (BUILDING_GENERATOR.md 4.1 / 4.2). */
 export const TRAVERSAL = {
@@ -78,6 +79,10 @@ export interface BuildingTraversal {
   roof: 'none' | 'reachable' | 'unreachable';
   /** The tactical role (enterable buildings): the stored `role`, else assignRoles (buildingRoles.ts) - shown on the page. */
   role?: BuildingRole;
+  /** The applied story ids (b.stories), shown on the page. */
+  stories?: string[];
+  /** Key route summary (buildingRoutes.ts withRouteSummaries): the stored key_route, else computed live. */
+  route?: RouteSummary;
 }
 
 /** A building passes when it has no 'error' issue (warnings do not fail it). */
@@ -251,7 +256,9 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
   const escapes = usableEscapes(l, b);
   const hasExternalStair = (b.stairs ?? []).some((s) => s.kind === 'external' && !s.blocked);
   const hasEscape = escapes.some((e) => e.ground && !e.downOnly && e.stops.length > 0);
-  const hasDoor = hasExternalStair || hasEscape || entries.some((e) => isPassableState(e.state));
+  // snow ramps (story 10): the upper-storey window at the ramp's top is an entry when it is passable
+  const ramps = usableSnowRamps(b).filter((r) => isPassableState(effectiveOpeningState(l, b, r.opening)));
+  const hasDoor = hasExternalStair || hasEscape || ramps.length > 0 || entries.some((e) => isPassableState(e.state));
   if (!hasDoor) {
     if (entries.some((e) => e.state === 'barricaded')) {
       issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_without_explosive, code: 'unreachable_without_explosive', message: `${b.id}: every entry is blocked and the only way in is through a barricade (explosive)` });
@@ -319,6 +326,7 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
       if (lo !== null && hi !== null) edges.push(ch.downOnly ? [hi, lo] : [lo, hi]);
     }
   }
+  for (const r of ramps) edges.push([0, r.floor]);
   for (const h of b.hatches ?? []) if (b.roof_walkable && (l.ladders ?? []).some((ld) => ld.id === h.ladder_id)) edges.push([h.floor, b.floors]);
   const reached = new Set<number>(hasDoor ? [0] : []);
   for (let changed = true; changed;) {

@@ -19,6 +19,7 @@
 
 import type { TraversalReport } from './buildingTraversal.ts';
 import { validateBuildings } from './buildingTraversal.ts';
+import { withRouteSummaries } from './buildingRoutes.ts';
 import type { FormationConfig } from '../movement/config.ts';
 import type { Segment, Vec2 } from '../movement/geometry.ts';
 import { closestOnSegment, dirOf, dist, pointInPoly, raycastWalls, segmentBlocked, sub, yawOf } from '../movement/geometry.ts';
@@ -335,7 +336,7 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
   const tactical = evaluateTactical(l, samples, coverSegs, tops);
   const score = round(0.4 * (main.completable ? 1 : 0) + 0.2 * similarity.score + 0.2 * Math.min(1, terrainClasses / 5) + 0.2 * Math.min(1, ambush.per100m / 3), 3);
 
-  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, roofViews, killZones, ambush, counts, similarity, tactical, buildings: validateBuildings(l), score, summary: [], ...(trackOut ? { track: trackOut } : {}) };
+  const ev: Evaluation = { layout: l.name, seed: l.seed, profile: l.profile, route: main, variants, mechanics: mech, sightlines: sight, roofViews, killZones, ambush, counts, similarity, tactical, buildings: withRouteSummaries(l, validateBuildings(l)), score, summary: [], ...(trackOut ? { track: trackOut } : {}) };
   ev.summary = renderSummary(ev);
   return ev;
 }

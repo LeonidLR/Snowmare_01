@@ -6,7 +6,7 @@
 
 import { inFootprint, rotationOf, rotVec, toBuildingFrame } from './rotation.ts';
 import { classifyOpening, isOpeningPassable } from './openingStates.ts';
-import { escapeLadderIds, usableEscapes } from './fireEscapes.ts';
+import { escapeLadderIds, usableEscapes, usableSnowRamps } from './fireEscapes.ts';
 import type { Segment, Vec2 } from '../movement/geometry.ts';
 import { dirOf, dist, distToWall, segmentBlocked, sub } from '../movement/geometry.ts';
 import { wallSegments } from '../movement/layout.ts';
@@ -225,6 +225,15 @@ export function checkBuildingReachability(l: GenLayout, b: GenBuilding, opts: Re
         for (const rm of hits) addEdge(streetNode, rm.id);
       } else {
         for (let i = 1; i < hits.length; i++) addEdge(hits[0].id, hits[i].id);
+      }
+    }
+
+    // 1b. Snow ramps (story 10): street -> the room behind the upper-storey window at the ramp's top (an entry only with
+    //     windowEntries, like ground windows; opening-states.md 4 rule 5)
+    if (opts.windowEntries === true) {
+      for (const { opening: op, floor } of usableSnowRamps(b)) {
+        if (!passable(op)) continue;
+        for (const rm of roomsAt(floor, op.pos, true)) addEdge(streetNode, rm.id);
       }
     }
 

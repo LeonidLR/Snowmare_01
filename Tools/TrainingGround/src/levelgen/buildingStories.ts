@@ -4,9 +4,12 @@
 // opening states honoured) with no error the untouched building did not already have, else every brick is undone (the original
 // building object is returned) and a 'story_rolled_back' warning is logged. Catalogue for now: 1 'open' (no bricks),
 // 3 'locked_door' (door_state(front, locked)), 4 'rubble_escape' (block_flight(0->1, rubble) + add_balcony_escape) and
-// 7 'roof_outside' (roof_access(ladder)); 4 and 7 are detours (objective / garrison / overwatch only). Bricks may add / remove
-// layout ladders (fire escapes, facade ladders): the result then carries the new `ladders` list. Pure and deterministic per
-// (seed, building id); NOT wired into the generator pipeline or the page yet (a later step does that).
+// 7 'roof_outside' (roof_access(ladder)) and 10 'snow_drift' (door_state(front, sealed) + snow_ramp(storey-1 window)); 4 and 7
+// are detours (objective / garrison / overwatch only), 3 and 10 are choice stories: after apply they must pass route-model F4
+// (buildingRoutes.ts: fast and quiet enter by different openings, one of them the story's lever) or roll back. Bricks may add /
+// remove layout ladders (fire escapes, facade ladders): the result then carries the new `ladders` list. applyStoriesToLayout
+// writes key_route / fast_entry / quiet_entry per building. Pure and deterministic per (seed, building id); NOT wired into the
+// generator pipeline yet (a later step does that).
 
 import type { Vec2 } from '../movement/geometry.ts';
 import { closestOnSegment, dist, rng } from '../movement/geometry.ts';
@@ -19,13 +22,14 @@ import { ESCAPE_BALCONY_DEPTH } from './fireEscapes.ts';
 import { obstacleHeight } from './obstacleHeights.ts';
 import { classifyOpening, effectiveOpeningState, isPassableState } from './openingStates.ts';
 import type { Balcony, BuildingRole, DoorState, FireEscape, GenBuilding, GenLadder, GenLayout, GenRoom, Side, Stair, StoryInstance, WallOpening, WindowState } from './schema.ts';
-import { DOOR_STATES, ladderForLevels, OPENING_DEFAULTS, WINDOW_STATES, unifyOpenings } from './schema.ts';
+import { DOOR_STATES, LEVEL_HEIGHT, ladderForLevels, OPENING_DEFAULTS, STAIR_RUN_PER_RISE, WINDOW_STATES, unifyOpenings } from './schema.ts';
+import { computeBuildingRoutes } from './buildingRoutes.ts';
 import { openingOutwardDir } from './tacticalEvaluate.ts';
 
 // ---- catalogue ----------------------------------------------------------------------------------------------------------------------
 
 export type StoryAuthor = StoryInstance['author'];
-export type StoryId = 'open' | 'locked_door' | 'rubble_escape' | 'roof_outside';
+export type StoryId = 'open' | 'locked_door' | 'rubble_escape' | 'roof_outside' | 'snow_drift';
 
 /** The catalogue rows implemented so far (building-stories.md 6): number, allowed authors, type. */
 export const STORY_CATALOGUE: Record<StoryId, { num: number; authors: readonly StoryAuthor[]; type: 'base' | 'choice' | 'detour' }> = {
@@ -37,6 +41,8 @@ export const STORY_CATALOGUE: Record<StoryId, { num: number; authors: readonly S
   rubble_escape: { num: 4, authors: ['decay', 'pmc'], type: 'detour' },
   /** 7 Roof only from outside: roof_access(facade ladder) - an enterable building with a walkable roof and a core / hatch to it. */
   roof_outside: { num: 7, authors: ['decay', 'cold'], type: 'detour' },
+  /** 10 Snow-drift entrance: door_state(front, sealed) + snow_ramp(storey-1 window on the front) - up the drift, in by the window. */
+  snow_drift: { num: 10, authors: ['cold'], type: 'choice' },
 };
 
 /** F1: detour stories are eligible only for these roles (a detour needs a role payoff). */
@@ -56,11 +62,11 @@ export const STORY_PICK_KNOBS = {
   budget: { objective: 1.0, garrison: 0.8, overwatch: 0.7, transit: 0.5, background: 0.1 } as Record<BuildingRole, number>,
   // detours (4, 7) only on objective / garrison / overwatch (F1); overwatch favours the outside roof ladder (*proposal*)
   weights: {
-    objective: { locked_door: 1, rubble_escape: 1, roof_outside: 1 },
-    garrison: { locked_door: 1, rubble_escape: 1, roof_outside: 1 },
-    overwatch: { locked_door: 1, rubble_escape: 0.5, roof_outside: 1.5 },
-    transit: { locked_door: 1 },
-    background: { locked_door: 1 },
+    objective: { locked_door: 1, rubble_escape: 1, roof_outside: 1, snow_drift: 1 },
+    garrison: { locked_door: 1, rubble_escape: 1, roof_outside: 1, snow_drift: 1 },
+    overwatch: { locked_door: 1, rubble_escape: 0.5, roof_outside: 1.5, snow_drift: 1 },
+    transit: { locked_door: 1, snow_drift: 1 },
+    background: { locked_door: 1, snow_drift: 0.5 },
   } as Record<BuildingRole, Partial<Record<Exclude<StoryId, 'open'>, number>>>,
   t_max: 4,
 };
@@ -80,7 +86,9 @@ export type Brick =
   | { kind: 'block_flight'; stair: string; block: FlightBlock }
   /** `room` = the S1 'flat': a room on the lowest storey of `storeys`, on an exterior wall. */
   | { kind: 'add_balcony_escape'; room: string; storeys: number[] }
-  | { kind: 'roof_access'; access: 'ladder' };
+  | { kind: 'roof_access'; access: 'ladder' }
+  /** `window` = an exterior storey-1 window ref (id or "openings[i]"). */
+  | { kind: 'snow_ramp'; window: string };
 
 /** The brick as stored in StoryInstance.bricks, e.g. "door_state(D_B1_0,locked)". */
 export function brickToString(b: Brick): string {
@@ -90,6 +98,7 @@ export function brickToString(b: Brick): string {
     case 'block_flight': return `block_flight(${b.stair},${b.block})`;
     case 'add_balcony_escape': return `add_balcony_escape(${b.room},${b.storeys.join('|')})`;
     case 'roof_access': return `roof_access(${b.access})`;
+    case 'snow_ramp': return `snow_ramp(${b.window})`;
   }
 }
 
@@ -429,6 +438,64 @@ export function applyRoofAccess(l: GenLayout, b: GenBuilding, access: 'ladder'):
   return true;
 }
 
+// ---- snow_ramp ------------------------------------------------------------------------------------------------------------------------
+
+/** Snow ramp geometry, cm (building-stories.md 3 brick `snow_ramp`: walkable slope <= 35 deg, ends at the sill as a low_vault). */
+export const SNOW_RAMP = {
+  width: 150,
+  /** Run per storey: 300 cm rise * 1.43 = 429 cm -> 34.97 deg. */
+  runPerStorey: LEVEL_HEIGHT * STAIR_RUN_PER_RISE,
+  /** Free ground beyond the ramp's foot (the approach cell). */
+  approach: 150,
+};
+
+/** Resolve an opening ref (id, or "openings[i]" = index in unifyOpenings). */
+function openingByRef(b: GenBuilding, ref: string): WallOpening | undefined {
+  const m = /^openings\[(\d+)\]$/.exec(ref);
+  const ops = unifyOpenings(b);
+  return m ? ops[Number(m[1])] : ops.find((o) => o.id === ref);
+}
+
+/**
+ * Where a snow ramp to window `ref` would stand: an exterior storey-1 window in a passable state, the ramp perpendicular to its
+ * facade with a run of SNOW_RAMP.runPerStorey (<= 35 deg) plus the approach on free ground inside the layout bounds, clear of the
+ * other ground doors of that facade (sealed ones and `exceptDoor` - the door the drift will seal - excepted). Null = not
+ * eligible on that facade.
+ */
+export function planSnowRamp(l: GenLayout, b: GenBuilding, ref: string, exceptDoor?: WallOpening): { side: Side; along: number; foot: Vec2 } | null {
+  const op = openingByRef(b, ref);
+  if (!op || op.kind !== 'window' || op.floor !== 1 || b.hollow || b.floors < 2) return null;
+  if (!classifyOpening(l, b, op).exterior || !isPassableState(effectiveOpeningState(l, b, op))) return null;
+  const side = openingSide(b, op), along = alongOf(side, toBuildingFrame(b, op.pos));
+  const half = SNOW_RAMP.width / 2, run = SNOW_RAMP.runPerStorey;
+  const [flo, fhi] = faceSpan(b, side);
+  if (along - half < flo || along + half > fhi) return null;
+  const doors = unifyOpenings(b)
+    .filter((o) => o !== exceptDoor && o.kind === 'door' && (o.floor ?? 0) === 0 && classifyOpening(l, b, o).exterior && openingSide(b, o) === side
+      && effectiveOpeningState(l, b, o) !== 'sealed')
+    .map((o) => ({ side, along: alongOf(side, toBuildingFrame(b, o.pos)) }));
+  if (!doorFree(doors, side, along, half)) return null;
+  const box = outBox(b, side, along, half, run + SNOW_RAMP.approach);
+  if (!outsideClear(l, b, box)) return null;
+  if (l.bounds) {
+    const far = toWorld(b, facadePoint(b, side, along, run + SNOW_RAMP.approach));
+    if (far[0] < l.bounds.min[0] || far[0] > l.bounds.max[0] || far[1] < l.bounds.min[1] || far[1] > l.bounds.max[1]) return null;
+  }
+  return { side, along, foot: facadePoint(b, side, along, run) };
+}
+
+/**
+ * snow_ramp(window): a SnowRamp from the ground (its foot `from`, building frame) up to the storey-1 window `ref`; the window then
+ * becomes an entry (validator + route model). Mutates `b`; false (nothing changed) when planSnowRamp finds no room.
+ */
+export function applySnowRamp(l: GenLayout, b: GenBuilding, ref: string): boolean {
+  const spot = planSnowRamp(l, b, ref);
+  if (!spot) return false;
+  const taken = new Set((b.snow_ramps ?? []).map((r) => r.id));
+  b.snow_ramps = [...(b.snow_ramps ?? []), { id: uniqueId(taken, `${b.id}_ramp`), from: spot.foot, to_opening: ref, width_cm: SNOW_RAMP.width }];
+  return true;
+}
+
 /** Apply one brick to `b` (and `l.ladders` for the escape / roof bricks); false when it did not apply. */
 function applyBrick(l: GenLayout, b: GenBuilding, brick: Brick): boolean {
   switch (brick.kind) {
@@ -437,6 +504,7 @@ function applyBrick(l: GenLayout, b: GenBuilding, brick: Brick): boolean {
     case 'block_flight': return applyBlockFlight(b, brick.stair, brick.block);
     case 'add_balcony_escape': return applyBalconyEscape(l, b, brick.room, brick.storeys);
     case 'roof_access': return applyRoofAccess(l, b, brick.access);
+    case 'snow_ramp': return applySnowRamp(l, b, brick.window);
   }
 }
 
@@ -508,7 +576,28 @@ export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick
       const inner = insideRoofAccess(l, b);
       return inner.stairs.length || inner.hatches || inner.ladders.length ? [{ kind: 'roof_access', access: 'ladder' }] : null;
     }
+    case 'snow_drift': {
+      // >= 2 storeys, a front door, and a storey-1 window on the front facade where the ramp fits (nearest the door first)
+      if (b.hollow || b.floors < 2) return null;
+      const front = frontDoor(l, b);
+      if (!front) return null;
+      const side = openingSide(b, front.opening), fa = alongOf(side, toBuildingFrame(b, front.opening.pos));
+      const off = (o: WallOpening) => Math.abs(alongOf(side, toBuildingFrame(b, o.pos)) - fa);
+      const hit = unifyOpenings(b)
+        .map((o, i) => ({ o, ref: openingRef(b, i) }))
+        .filter(({ o }) => o.kind === 'window' && o.floor === 1 && openingSide(b, o) === side)
+        .sort((a, c) => off(a.o) - off(c.o) || (a.ref < c.ref ? -1 : a.ref > c.ref ? 1 : 0))
+        .find((c) => planSnowRamp(l, b, c.ref, front.opening));
+      return hit ? [{ kind: 'door_state', door: front.ref, state: 'sealed' }, { kind: 'snow_ramp', window: hit.ref }] : null;
+    }
   }
+}
+
+/** The opening a choice story turns into the choice (F4 lever): the snow-ramp window (10), else the locked door (3). */
+export function choiceLever(recipe: readonly Brick[]): string | undefined {
+  for (const b of recipe) if (b.kind === 'snow_ramp') return b.window;
+  for (const b of recipe) if (b.kind === 'door_state' && b.state === 'locked') return b.door;
+  return undefined;
 }
 
 /** Is the story eligible for the building (F1)? With a role, a detour story needs a DETOUR_ROLES role. */
@@ -604,6 +693,14 @@ export function applyRecipe(layout: GenLayout, building: GenBuilding, storyId: S
     const after = validateBuilding(swap(work, copy), copy);
     const added = after.issues.filter((i) => i.severity === 'error' && !before.has(`${i.code}|${i.ref ?? ''}`));
     if (added.length) return rollback(added.map((i) => i.code).join(', '));
+    // choice stories (rule 7 / F4): fast and quiet enter by different exterior openings, one of them the story's lever
+    if (STORY_CATALOGUE[storyId].type === 'choice') {
+      const lever = choiceLever(recipe);
+      const r = computeBuildingRoutes(swap(work, copy), copy);
+      if (!r.choice || (lever !== undefined && r.fast_entry !== lever && r.quiet_entry !== lever)) {
+        return rollback(`F4: fast enters by ${r.fast_entry ?? '-'}, quiet by ${r.quiet_entry ?? '-'}`);
+      }
+    }
   }
   copy.stories = [...(copy.stories ?? []), instance];
   const laddersChanged = JSON.stringify(work.ladders) !== JSON.stringify(layout.ladders ?? []);
@@ -654,7 +751,14 @@ export function applyStoriesToLayout(
     }
     if (!done) done = applyStory(cur, b, 'open', storySubSeed(seed, id, 0));
     const next = done;
+    const before = cur;
     cur = { ...cur, buildings: cur.buildings.map((x) => (x.id === id ? next.building : x)), ...(next.ladders ? { ladders: next.ladders } : {}) };
+    // route model (building-route-model.md rule 6, F3): key route + entries, D against the building before its story
+    const routes = computeBuildingRoutes(cur, next.building, { baseline: { layout: before, building: b } });
+    if (routes.key_route) next.building.key_route = routes.key_route;
+    if (routes.breach_route) next.building.breach_route = routes.breach_route;
+    if (routes.fast_entry !== undefined) next.building.fast_entry = routes.fast_entry;
+    if (routes.quiet_entry !== undefined) next.building.quiet_entry = routes.quiet_entry;
   }
   return { layout: cur, log };
 }
