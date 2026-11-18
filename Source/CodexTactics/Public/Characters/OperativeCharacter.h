@@ -398,8 +398,8 @@ public:
 	 */
 	bool IsStealthCoverShotWanted() const;
 	/**
-	 * How far past the along-wall line his corner fire stance aims now, deg: CornerAimOutwardDeg standing; crouched at a high wall the
-	 * crouched clip's own measured angle (fire_gate.json crouch_corner_aim_outward_deg).
+	 * Corner fire stance's angle past the along-wall line, in degrees. The stealth fire clip at crouched high cover uses the
+	 * measured angle from fire_gate.json; ordinary cover uses CornerAimOutwardDeg.
 	 */
 	float GetCornerAimOutwardDeg() const;
 	/** Rounds the gate held, per verdict (smokes / logs). */

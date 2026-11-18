@@ -44,7 +44,8 @@ bool AOperativeCharacter::IsStealthCoverShotWanted() const
 
 float AOperativeCharacter::GetCornerAimOutwardDeg() const
 {
-	return bInCover && CurrentCoverHeight == ECoverHeight::HighCover && Stance == EOperativeStance::Crouching
+	// The measured crouch offset is for the stealth hand-off clip. Ordinary cover keeps its own aim base.
+	return bStealthMode && bInCover && CurrentCoverHeight == ECoverHeight::HighCover && Stance == EOperativeStance::Crouching
 		? FireGateRules::GetConfig().CrouchCornerAimOutwardDeg : CornerAimOutwardDeg;
 }
 
