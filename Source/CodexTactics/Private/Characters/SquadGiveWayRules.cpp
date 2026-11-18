@@ -13,7 +13,7 @@ namespace SquadGiveWayRules
 {
 	bool IsIdle(const FIdleState& State)
 	{
-		return State.bWalker && !State.bOwnMoveOrder && !State.bInCover && !State.bCombatAction && !State.bMoving && !State.bHeld;
+		return State.bWalker && !State.bOwnMoveOrder && !State.bInCover && !State.bCombatAction && !State.bMoving && !State.bHeld && !State.bAtOwnPost;
 	}
 
 	FCrossing FindCrossing(TArrayView<const FVector> Path, const FVector& IdleFeet, float CrossCm, const FSquadGiveWayTuning& Tuning)

@@ -48,9 +48,11 @@ namespace SquadGiveWayRules
 		bool bCombatAction = false;
 		bool bMoving = false;
 		bool bHeld = false;
+		/** Squad mode: he stands on the spot his last order sent him to (a group order's place - GroupCoverSmoke); Solo / a hold: never set. */
+		bool bAtOwnPost = false;
 	};
 
-	/** Idle: a walker with no own order, not in cover, no combat action, standing, not held by a traffic / ramp-file hold. */
+	/** Idle: a walker with no own order, not in cover, no combat action, standing, not held by a traffic / ramp-file hold, not at his post. */
 	CODEXTACTICS_API bool IsIdle(const FIdleState& State);
 
 	/** Where a mover's path crosses an idle man's capsule. */

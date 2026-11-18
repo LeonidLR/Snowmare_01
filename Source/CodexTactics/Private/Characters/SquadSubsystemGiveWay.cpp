@@ -164,6 +164,8 @@ void USquadSubsystem::UpdateGiveWay()
 			State.bCombatAction = State.bWalker && IsInCombatAction(*Idle);
 			State.bMoving = Idle->IsMoving() || GiveWayMoveStatus(*Idle) != EPathFollowingStatus::Idle;
 			State.bHeld = Idle->IsTrafficHeld() || IsRampHeld(Idle);
+			State.bAtOwnPost = bFormationFollows && FVector::Dist2D(Idle->GetActorLocation(), Idle->GetLastMoveDestination())
+				< CapsuleRadius(*Mover) + CapsuleRadius(*Idle) + Tuning.ClearanceCm;
 			const double* NextTry = GiveWayNextTry.Find(Idle);
 			if (!SquadGiveWayRules::IsIdle(State) || (NextTry && *NextTry > Now))
 			{

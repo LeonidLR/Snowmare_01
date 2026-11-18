@@ -44,6 +44,9 @@ bool FSquadGiveWayIdleTest::RunTest(const FString&)
 	State = FIdleState();
 	State.bWalker = false;
 	TestFalse(TEXT("on a ladder / knocked down / mounted"), IsIdle(State));
+	State = FIdleState();
+	State.bAtOwnPost = true;
+	TestFalse(TEXT("squad mode, on the spot his group order gave him"), IsIdle(State));
 	return true;
 }
 
