@@ -53,6 +53,22 @@ struct CODEXTACTICS_API FSquadFireConfig
 };
 
 /**
+ * The platform dead zone (Godot is_target_in_dead_zone). Numbers live in Content/Data/Combat/fire_gate.json "dead_zone"
+ * (the defaults here mirror that file). Heights are cm.
+ */
+struct CODEXTACTICS_API FDeadZoneConfig
+{
+	/** Shooter centre above his feet (Godot measures from the capsule centre). */
+	float ChestOffsetCm = 100.f;
+	/** Drop from that centre to the target's feet. */
+	float MinDeltaZCm = 180.f;
+	/** Horizontal limit. */
+	float MaxHorizontalCm = 240.f;
+	/** How steep the shot is, degrees down. */
+	float MinAngleDeg = 45.f;
+};
+
+/**
  * Real-time squad fire rules (Godot Scenes/movements/player.gd _find_shoot_target, _shoot_at_target,
  * get_elevation_advantage, is_target_in_dead_zone, _apply_stance_modifiers). Heights are in cm from the
  * operative's feet; Godot measures from the capsule centre (1 m above the feet) to the enemy's feet.
@@ -71,8 +87,25 @@ namespace SquadFireRules
 	/** Elevated when the shooter's centre is >= 1.5 m above the target (+25 % range, +15 % damage, over low cover). */
 	CODEXTACTICS_API FElevationAdvantage GetElevationAdvantage(float ShooterFeetZ, float TargetFeetZ);
 
-	/** Under a platform: >= 1.8 m above, within 2.4 m horizontally and >= 45° down. */
+	/** fire_gate.json "dead_zone" (defaults above when the file is missing). */
+	CODEXTACTICS_API const FDeadZoneConfig& GetDeadZoneConfig();
+
+	/** Under a platform: chest-to-feet drop, within the horizontal limit and at least the angle down. Geometry only. */
 	CODEXTACTICS_API bool IsInDeadZone(const FVector& ShooterFeet, const FVector& TargetFeet);
+
+	/**
+	 * The zone models a floor or edge between the shooter and the target. Geometry (IsInDeadZone) applies only when
+	 * that floor actually blocks: the shot trace to the target is blocked, or he stands on a level surface whose edge
+	 * is between them (IsLevelEdgeBetween). A clear trace on a shared slope or stair is not a dead zone.
+	 */
+	CODEXTACTICS_API bool AppliesDeadZone(const FVector& ShooterFeet, const FVector& TargetFeet, bool bTraceBlocked, bool bLevelEdge);
+
+	/**
+	 * Floor heights (cm) probed from the shooter toward the target, in order. A platform edge is one drop of at least
+	 * MinDropCm between the shooter and a probe, or between two probes. A shared slope or a stair falls a little at a
+	 * time and is not an edge.
+	 */
+	CODEXTACTICS_API bool IsLevelEdgeBetween(TConstArrayView<float> FloorZCm, float ShooterFeetZ, float MinDropCm);
 
 	/** Barricade rules: elevated shots bypass it, prone is blocked, crouched gets cover 0.8, standing shoots over. */
 	CODEXTACTICS_API FShotLineVerdict JudgeLine(EShotLineHit Hit, EOperativeStance Stance, const FElevationAdvantage& Elevation);

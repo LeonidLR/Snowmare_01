@@ -26,6 +26,19 @@ bool FSquadFireRulesTest::RunTest(const FString&)
 	TestFalse(TEXT("Dead zone needs 1.8 m"), SquadFireRules::IsInDeadZone(FVector(0.f, 0.f, 70.f), FVector(100.f, 0.f, 0.f)));
 	TestTrue(TEXT("Right under the platform"), SquadFireRules::IsInDeadZone(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f)));
 	TestFalse(TEXT("Too far out"), SquadFireRules::IsInDeadZone(FVector(0.f, 0.f, 200.f), FVector(300.f, 0.f, 0.f)));
+	// G007: the same geometry is a dead zone only when the floor blocks. A clear trace on a shared slope is a shot.
+	TestFalse(TEXT("Clear slope: no dead zone"), SquadFireRules::AppliesDeadZone(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), false, false));
+	TestTrue(TEXT("Blocked trace: the platform zone applies"), SquadFireRules::AppliesDeadZone(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), true, false));
+	TestTrue(TEXT("Level edge: the platform zone applies"), SquadFireRules::AppliesDeadZone(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), false, true));
+	const float SlopeFloor[] = { 500.f, 465.f, 430.f, 395.f };
+	TestFalse(TEXT("Shared slope is not a level edge"), SquadFireRules::IsLevelEdgeBetween(SlopeFloor, 500.f, 180.f));
+	const float StairFloor[] = { 500.f, 480.f, 460.f, 440.f };
+	TestFalse(TEXT("Stair treads are not a level edge"), SquadFireRules::IsLevelEdgeBetween(StairFloor, 500.f, 180.f));
+	const float PlatformFloor[] = { 500.f, 500.f, 200.f };
+	TestTrue(TEXT("Platform lip is a level edge"), SquadFireRules::IsLevelEdgeBetween(PlatformFloor, 500.f, 180.f));
+	const FDeadZoneConfig& DeadZone = SquadFireRules::GetDeadZoneConfig();
+	TestTrue(TEXT("Dead zone numbers from the fire config"), DeadZone.ChestOffsetCm == 100.f && DeadZone.MinDeltaZCm == 180.f
+		&& DeadZone.MaxHorizontalCm == 240.f && DeadZone.MinAngleDeg == 45.f);
 
 	const FElevationAdvantage Flat;
 	TestTrue(TEXT("Clear line"), SquadFireRules::JudgeLine(EShotLineHit::Clear, EOperativeStance::Prone, Flat).bCanHit);

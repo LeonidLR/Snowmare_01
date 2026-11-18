@@ -237,6 +237,21 @@ bool EnemyAIRules::CanMelee(float DistanceCm, float HeightDifferenceCm, float At
 	return DistanceCm <= AttackRangeCm && HeightDifferenceCm <= 120.f;
 }
 
+bool EnemyAIRules::CanMeleeFeet(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm)
+{
+	// Godot body point: 1 m above the feet. Flat ground and a ledge still measure the blow to it.
+	constexpr float BodyOffsetCm = 100.f;
+	// Shallower than this is still the flat chest test (a few cm of floor noise). Steeper than the run is a ledge.
+	constexpr float SlopeMinDeg = 15.f;
+	const float Height = FMath::Abs(TargetFeet.Z - AttackerFeet.Z);
+	const float Horizontal = FVector::Dist2D(AttackerFeet, TargetFeet);
+	const float AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(Height, FMath::Max(Horizontal, 1.f)));
+	const bool bLedge = Height > Horizontal;
+	const bool bSharedSlope = !bLedge && AngleDeg >= SlopeMinDeg;
+	const FVector Aim = bSharedSlope ? TargetFeet : TargetFeet + FVector(0.f, 0.f, BodyOffsetCm);
+	return CanMelee(FVector::Dist(AttackerFeet, Aim), Height, AttackRangeCm);
+}
+
 float EnemyAIRules::MeleeReachPlanar(float AttackRangeCm, float HeightDifferenceCm)
 {
 	return FMath::Sqrt(FMath::Max(0.f, FMath::Square(AttackRangeCm) - FMath::Square(HeightDifferenceCm)));

@@ -146,6 +146,15 @@ namespace EnemyAIRules
 	/** Godot can_melee_attack: within the attack range and at most 1.2 m of height difference. */
 	CODEXTACTICS_API bool CanMelee(float DistanceCm, float HeightDifferenceCm, float AttackRangeCm);
 
+	/**
+	 * Melee against a character, measured from both pairs of feet (G007). The height compared with the 120 cm cap is
+	 * feet-to-feet: the Godot body point (feet + 100 cm) is not added into that comparison. On flat ground the distance
+	 * stays the distance to that body point, so AttackRange is still the reach to the chest. A ledge steeper than the
+	 * run keeps the body-point distance too, so feet 1.1 m straight up (body 2.1 m away) stay outside AttackRange.
+	 * On a shared slope the body point stacks the floor rise on the +100 cm; the distance there is feet-to-feet.
+	 */
+	CODEXTACTICS_API bool CanMeleeFeet(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm);
+
 	/** Planar distance at which CanMelee passes for that height difference (sqrt(range^2 - height^2)), cm. */
 	CODEXTACTICS_API float MeleeReachPlanar(float AttackRangeCm, float HeightDifferenceCm);
 

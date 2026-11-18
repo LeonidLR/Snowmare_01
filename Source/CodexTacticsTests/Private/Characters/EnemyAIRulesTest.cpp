@@ -39,6 +39,13 @@ bool FEnemyAIRulesTest::RunTest(const FString&)
 
 	TestTrue(TEXT("Hound reaches 1.8 m"), EnemyAIRules::CanMelee(170.f, 100.f, 180.f));
 	TestFalse(TEXT("Operative on a platform: no bite"), EnemyAIRules::CanMelee(170.f, 130.f, 180.f));
+	// G007: feet 1.1 m straight up. The height cap sees 110 cm, but the blow is to the body point 2.1 m away.
+	TestFalse(TEXT("1.1 m ledge: no bite"), EnemyAIRules::CanMeleeFeet(FVector::ZeroVector, FVector(0.f, 0.f, 110.f), 180.f));
+	TestFalse(TEXT("1.1 m ledge, a step out: no bite"), EnemyAIRules::CanMeleeFeet(FVector::ZeroVector, FVector(40.f, 0.f, 110.f), 180.f));
+	// The ramp stop: 1.24 m out, feet 83 cm up. Body-point distance stacks the rise on +100 cm and is past 1.8 m; feet are not.
+	TestTrue(TEXT("Shared slope: in reach"), EnemyAIRules::CanMeleeFeet(FVector::ZeroVector, FVector(124.f, 0.f, 83.f), 180.f));
+	// Flat ground still measures to the chest, so 1.6 m planar is outside the 1.8 m body reach.
+	TestFalse(TEXT("Flat, past the chest: no bite"), EnemyAIRules::CanMeleeFeet(FVector::ZeroVector, FVector(160.f, 0.f, 0.f), 180.f));
 
 	const FVector Flee = EnemyAIRules::FleeDirection(FVector(100.f, 0.f, 0.f), FVector::ZeroVector, &Target);
 	TestTrue(TEXT("Flee away from the fire"), Flee.X > 0.8f);

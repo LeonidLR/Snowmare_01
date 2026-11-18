@@ -11,5 +11,12 @@
     "object_shot_timeout_seconds": 4,
     "stealth_shot_hold_seconds": 0.5,
     "crouch_corner_aim_outward_deg": 64
+  },
+  "dead_zone": {
+    "comment": "Under a platform (SquadFireRules, G007). Same numbers as the old literals. A clear shot on a shared slope or stair is not this zone: the zone applies only when the shot trace is blocked or the shooter stands on a level edge.",
+    "chest_offset_cm": 100,
+    "min_delta_z_cm": 180,
+    "max_horizontal_cm": 240,
+    "min_angle_deg": 45
   }
 }

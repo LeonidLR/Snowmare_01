@@ -19,6 +19,7 @@
 #include "AI/PmcOperatorRules.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeCharacter.h"
+#include "GameFramework/Character.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
@@ -313,7 +314,12 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	// APC P4: a vehicle is reached at its nearest hull side (a 7.8 m hull: its pivot is metres away), at the feet's height.
 	const FVector TargetPosition = TargetVehicle ? FVector(FVector2D(TargetVehicle->GetClosestHullPoint(Feet)), Feet.Z) : GodotPosition(Target);
 	// Bug 06 (2026-11-01): a blow needs a clear line too - within reach behind a wall it walks round (the close-in below), every melee enemy.
-	const bool bInReach = EnemyAIRules::CanMelee(FVector::Dist(Feet, TargetPosition), FMath::Abs(TargetPosition.Z - Feet.Z), AttackRange);
+	// G007: a character's height cap is feet-to-feet. The close-in below still uses the body point, so a flat bite stops where it used to.
+	const bool bCharacterTarget = !TargetVehicle && Target->IsA<ACharacter>();
+	const FVector TargetFeet = bCharacterTarget ? TargetPosition - FVector(0.f, 0.f, 100.f) : TargetPosition;
+	const bool bInReach = bCharacterTarget
+		? EnemyAIRules::CanMeleeFeet(Feet, TargetFeet, AttackRange)
+		: EnemyAIRules::CanMelee(FVector::Dist(Feet, TargetPosition), FMath::Abs(TargetPosition.Z - Feet.Z), AttackRange);
 	FString MeleeBlocker;
 	const bool bMeleeLine = !bInReach || TargetVehicle || HasClearMeleeLine(Target, Feet, &MeleeBlocker);
 	if (bInReach && !bMeleeLine)
@@ -341,6 +347,10 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		{
 			if (Target->IsA<AOperativeCharacter>())
 			{
+				// The shove inside AttackTarget moves the operative after this test. Keep the pose the reach rule used.
+				LastMeleeAttackerFeet = Feet;
+				LastMeleeTargetFeet = TargetFeet;
+				bHasLastMeleeStrikeFeet = true;
 				AttackTarget(Target);
 			}
 			else
