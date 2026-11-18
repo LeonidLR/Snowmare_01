@@ -333,6 +333,10 @@ struct CODEXTACTICS_API FPmcWeights
 	float AreaFactor = 2.f;
 	/** "shift_after_s" (8): a sector shooter may relocate along his wedge after this long on the post. */
 	float ShiftAfterSeconds = 8.f;
+	/** "shift_no_target_s" (6): the shift also needs fire on him, or no target seen for this long. */
+	float ShiftNoTargetSeconds = 6.f;
+	/** "shift_cooldown_s" (20): the least time between two shifts of one shooter (no ping-pong). */
+	float ShiftCooldownSeconds = 20.f;
 	/** "sector_arc_deg" (180): the arc facing the attacker spawn, split across the sector shooters. */
 	float SectorArcDeg = 180.f;
 
@@ -491,10 +495,13 @@ struct CODEXTACTICS_API FPmcFighterView
 	 */
 	bool bHasDefencePost = false;
 	/**
-	 * G008: a sector shooter moves to the next spot of his own wedge (shift_after_s on the post, or exposed in contact).
+	 * G008: a sector shooter moves to the next spot of his own wedge. He needs shift_after_s on the post, plus fire on him or
+	 * shift_no_target_s with no target, plus the shift cooldown (PmcDefenceRules::ShouldSectorShift).
 	 * Default false, so Relocate scores exactly as it did before the flag existed.
 	 */
 	bool bSectorShift = false;
+	/** An enemy shot at him within the last couple of seconds (NotifyShotAt). Default false. */
+	bool bUnderFire = false;
 };
 
 /** The squad as a whole. */

@@ -638,6 +638,8 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("spacing_penalty"), Out.SpacingPenalty);
 		ReadNumber(Json, TEXT("area_factor"), Out.AreaFactor);
 		ReadNumber(Json, TEXT("shift_after_s"), Out.ShiftAfterSeconds);
+		ReadNumber(Json, TEXT("shift_no_target_s"), Out.ShiftNoTargetSeconds);
+		ReadNumber(Json, TEXT("shift_cooldown_s"), Out.ShiftCooldownSeconds);
 		ReadNumber(Json, TEXT("sector_arc_deg"), Out.SectorArcDeg);
 		// Target attention (2026-11-07).
 		ReadNumber(Json, TEXT("attention"), Out.Attention);

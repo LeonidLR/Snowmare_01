@@ -288,9 +288,22 @@ bool FPmcDefenceSectorsTest::RunTest(const FString&)
 	TestEqual(TEXT("next spot in the wedge"), PmcDefenceRules::NextEdgeSpot(Spots, FVector(0.f, 0.f, 900.f), 0.f, 0, 2, 180.f, 2), 0);
 	TestEqual(TEXT("wraps to the first"), PmcDefenceRules::NextEdgeSpot(Spots, FVector(0.f, 0.f, 900.f), 0.f, 0, 2, 180.f, 0), 2);
 	TestEqual(TEXT("a lone spot stays"), PmcDefenceRules::NextEdgeSpot(Spots, FVector(0.f, 0.f, 900.f), 0.f, 1, 2, 180.f, 1), 1);
-	TestTrue(TEXT("shift timer"), PmcDefenceRules::ShouldSectorShift(8.f, false, 8.f));
-	TestFalse(TEXT("before the timer"), PmcDefenceRules::ShouldSectorShift(7.9f, false, 8.f));
-	TestTrue(TEXT("exposed in contact"), PmcDefenceRules::ShouldSectorShift(0.f, true, 8.f));
+	// Review finding 2: shift_after_s on the post AND (under fire OR no target for shift_no_target_s) AND the cooldown.
+	FPmcDefenceConfig ShiftConfig;
+	ShiftConfig.ShiftAfterSeconds = 8.f;
+	ShiftConfig.ShiftNoTargetSeconds = 6.f;
+	ShiftConfig.ShiftCooldownSeconds = 20.f;
+	TestTrue(TEXT("on post 8 s, under fire"), PmcDefenceRules::ShouldSectorShift(8.f, true, 0.f, 1e6f, ShiftConfig));
+	TestTrue(TEXT("on post 8 s, no target 6 s"), PmcDefenceRules::ShouldSectorShift(8.f, false, 6.f, 1e6f, ShiftConfig));
+	TestFalse(TEXT("on post 8 s, a target in sight, not under fire: he keeps shooting from here"),
+		PmcDefenceRules::ShouldSectorShift(8.f, false, 0.f, 1e6f, ShiftConfig));
+	TestFalse(TEXT("before the timer, even under fire"), PmcDefenceRules::ShouldSectorShift(7.9f, true, 1e6f, 1e6f, ShiftConfig));
+	TestFalse(TEXT("never at SecondsOnPost 0"), PmcDefenceRules::ShouldSectorShift(0.f, true, 1e6f, 1e6f, ShiftConfig));
+	TestFalse(TEXT("cooldown: no ping-pong"), PmcDefenceRules::ShouldSectorShift(30.f, true, 1e6f, 19.9f, ShiftConfig));
+	TestTrue(TEXT("cooldown over"), PmcDefenceRules::ShouldSectorShift(30.f, true, 1e6f, 20.f, ShiftConfig));
+	FPmcDefenceConfig NoShift = ShiftConfig;
+	NoShift.ShiftAfterSeconds = 0.f;
+	TestFalse(TEXT("shift_after_s 0 disables the shift"), PmcDefenceRules::ShouldSectorShift(30.f, true, 1e6f, 1e6f, NoShift));
 
 	// Roof area: centroid of the three spots, slack 200. Under the roof is outside.
 	const FPmcDefenceConfig Area = Config;

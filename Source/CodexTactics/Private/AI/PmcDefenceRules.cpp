@@ -859,9 +859,19 @@ namespace PmcDefenceRules
 		return FMath::Max(ObjectiveWeight, 0.f) * 0.7f * FMath::Max(0.5f, HealthFrac);
 	}
 
-	bool ShouldSectorShift(float SecondsOnPost, bool bExposedInContact, float ShiftAfterSeconds)
+	bool ShouldSectorShift(float SecondsOnPost, bool bUnderFire, float SecondsNoTarget, float SecondsSinceShift,
+		const FPmcDefenceConfig& Config)
 	{
-		return bExposedInContact || (ShiftAfterSeconds > 0.f && SecondsOnPost >= ShiftAfterSeconds);
+		if (Config.ShiftAfterSeconds <= 0.f || SecondsOnPost <= 0.f || SecondsOnPost < Config.ShiftAfterSeconds)
+		{
+			return false;
+		}
+		if (SecondsSinceShift < Config.ShiftCooldownSeconds)
+		{
+			return false;
+		}
+		const bool bIdle = Config.ShiftNoTargetSeconds > 0.f && SecondsNoTarget >= Config.ShiftNoTargetSeconds;
+		return bUnderFire || bIdle;
 	}
 
 	FString CoverObjectKey(const FString& WallActorId, const FVector& Point)

@@ -54,6 +54,8 @@ namespace PmcSquadLocal
 	constexpr float StuckProgressCm = 100.f;
 	/** A walk that ends farther than this from its goal failed (fix/pmc-arena-stalemate). */
 	constexpr float FailShortCm = 400.f;
+	/** G008 follow-up: a shot at him within this long counts as "under fire" (the defender's contact gate, the sector shift). */
+	constexpr double UnderFireSeconds = 2.0;
 	constexpr float AidReachCm = 230.f;
 	constexpr float MonsterSightCm = 2500.f;
 	/** A demasked shooter (his own fire) is noticed by the teams with a man this close (planar). */
@@ -660,6 +662,11 @@ void UPmcSquadSubsystem::NotifyShotAt(const AActor* Shooter, const AOperativeCha
 		}
 	}
 	Team->ShotRevealUntil.Add(const_cast<AActor*>(Shooter), Now + SightRules::DemaskSeconds);
+	// G008 follow-up: "taking fire" for the defender's contact gate and the sector shift.
+	if (FFighterState* VictimState = Team->Fighters.Find(const_cast<AOperativeCharacter*>(Victim)))
+	{
+		VictimState->LastShotAtTime = Now;
+	}
 	if (Flash)
 	{
 		Team->ShotRevealFlash.Add(const_cast<AActor*>(Shooter), *Flash);
@@ -1317,6 +1324,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 	}
 	View.bInCover = Fighter.bInCover;
 	View.bExposed = State.ExposedSince >= 0.0;
+	View.bUnderFire = Now - State.LastShotAtTime <= PmcSquadLocal::UnderFireSeconds;
 	View.SecondsExposedHere = View.bExposed ? static_cast<float>(Now - State.ExposedSince) : 0.f;
 	View.Stance = Fighter.GetStance();
 	View.bMoving = Fighter.GetVelocity().SizeSquared2D() > 100.f || Fighter.HasOwnMoveOrder();
@@ -1425,7 +1433,8 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			}
 		}
 	}
-	if (Team.Defence.bActive && State.DefenceRole == EPmcDefenceRole::SectorShooter && State.bHasDefencePost && Team.Defence.Spots.Num() > 0)
+	if (Team.Defence.bActive && State.DefenceRole == EPmcDefenceRole::SectorShooter && State.bHasDefencePost && Team.Defence.Spots.Num() > 0
+		&& State.DefenceSector != INDEX_NONE)
 	{
 		const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
 		const bool bAtPost = PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
@@ -1444,7 +1453,15 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			State.DefenceSector, Team.Defence.SectorCount, Team.Weights.SectorArcDeg, State.DefenceSpotIndex);
 		const bool bSomewhereElse = NextSpot != INDEX_NONE && NextSpot != State.DefenceSpotIndex;
 		const float SecondsOnPost = State.DefenceArrivedAt >= 0.0 ? static_cast<float>(Now - State.DefenceArrivedAt) : 0.f;
-		View.bSectorShift = bSomewhereElse && PmcDefenceRules::ShouldSectorShift(SecondsOnPost, View.bExposed && Team.bEverContact, Team.Weights.ShiftAfterSeconds);
+		// No target: none seen now. A remembered one counts from its last sighting; none at all counts as long ago.
+		const bool bRealThreat = View.bHasThreat && !View.Threat.bStandIn;
+		const float SecondsNoTarget = !bRealThreat ? 1e6f : (View.Threat.bSeenNow ? 0.f : View.Threat.SecondsSince);
+		FPmcDefenceConfig Shift;
+		Shift.ShiftAfterSeconds = Team.Weights.ShiftAfterSeconds;
+		Shift.ShiftNoTargetSeconds = Team.Weights.ShiftNoTargetSeconds;
+		Shift.ShiftCooldownSeconds = Team.Weights.ShiftCooldownSeconds;
+		View.bSectorShift = bSomewhereElse && PmcDefenceRules::ShouldSectorShift(SecondsOnPost, View.bUnderFire, SecondsNoTarget,
+			static_cast<float>(Now - State.LastSectorShiftAt), Shift);
 	}
 	// Cover: the quality of the slot he holds, and the best slot nearby (for TakeCover / Relocate).
 	OutCover = FCoverSlot();
@@ -1830,8 +1847,9 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		break;
 	case EPmcOrder::TakeCover:
 	case EPmcOrder::Relocate:
-		if (Order == EPmcOrder::Relocate && State.DefenceRole == EPmcDefenceRole::SectorShooter && State.bHasDefencePost
-			&& Team.Defence.bActive && Team.Defence.Spots.Num() > 0 && Team.Objective.IsSet())
+		// The wedge shift only when the view allowed it (ShouldSectorShift); any other Relocate is the plain cover move below.
+		if (Order == EPmcOrder::Relocate && View.bSectorShift && State.DefenceRole == EPmcDefenceRole::SectorShooter && State.bHasDefencePost
+			&& State.DefenceSector != INDEX_NONE && Team.Defence.bActive && Team.Defence.Spots.Num() > 0 && Team.Objective.IsSet())
 		{
 			const int32 NextSpot = PmcDefenceRules::NextEdgeSpot(Team.Defence.Spots, Team.Objective->Location, Team.Defence.ApproachYawDeg,
 				State.DefenceSector, Team.Defence.SectorCount, Team.Weights.SectorArcDeg, State.DefenceSpotIndex);
@@ -1847,8 +1865,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				State.DefenceYaw = Team.Defence.ApproachYawDeg;
 				State.DefenceArrivedAt = -1.0;
 				bKeepGoalLevel = true;
+				// No sprint while he sees a target, so his own fire keeps going on the way.
 				bTaken = Walk(State.DefencePost, !View.Threat.bSeenNow);
 				Team.Stats.Relocations += bTaken ? 1 : 0;
+				// The cooldown counts from the attempt: a refused walk does not retry next decision either.
+				State.LastSectorShiftAt = Now;
 				break;
 			}
 		}

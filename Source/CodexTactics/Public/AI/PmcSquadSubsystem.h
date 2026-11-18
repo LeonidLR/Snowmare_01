@@ -296,6 +296,10 @@ private:
 		int32 DefenceSpotIndex = INDEX_NONE;
 		/** World time he arrived on the defence post (-1: not there). The sector shift counts from this. */
 		double DefenceArrivedAt = -1.0;
+		/** World time of his last sector shift (the shift cooldown counts from this). */
+		double LastSectorShiftAt = -1e9;
+		/** World time an enemy last shot at him (NotifyShotAt; -1e9: never). */
+		double LastShotAtTime = -1e9;
 	};
 
 	struct FTeam

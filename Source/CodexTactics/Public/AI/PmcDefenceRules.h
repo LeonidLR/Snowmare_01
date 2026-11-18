@@ -56,6 +56,10 @@ struct CODEXTACTICS_API FPmcDefenceConfig
 	float AreaFactor = 2.f;
 	/** "shift_after_s" (8): a sector shooter may relocate along his wedge after this long on the post. */
 	float ShiftAfterSeconds = 8.f;
+	/** "shift_no_target_s" (6): with no target seen for this long (and shift_after_s on the post), he shifts. */
+	float ShiftNoTargetSeconds = 6.f;
+	/** "shift_cooldown_s" (20): the least time between two shifts of one shooter. */
+	float ShiftCooldownSeconds = 20.f;
 	/** "sector_arc_deg" (180): the arc, centred on the yaw from the objective toward the attacker spawn. */
 	float SectorArcDeg = 180.f;
 	/** Same level as the objective / the access (the arena's objective level tolerance). */
@@ -323,8 +327,15 @@ namespace PmcDefenceRules
 	 */
 	CODEXTACTICS_API float DefenderObjectiveScore(bool bInsideArea, float ObjectiveWeight, float HealthFrac);
 
-	/** A sector shooter leaves his post along the wedge: the shift timer elapsed, or he is exposed while in contact. */
-	CODEXTACTICS_API bool ShouldSectorShift(float SecondsOnPost, bool bExposedInContact, float ShiftAfterSeconds);
+	/**
+	 * A sector shooter leaves his post along the wedge (review finding 2). All three must hold:
+	 * - he has been on the post for at least shift_after_s (never at SecondsOnPost 0);
+	 * - he is under fire, or has had no target for shift_no_target_s;
+	 * - shift_cooldown_s has passed since his last shift, so two spots do not ping-pong.
+	 * shift_after_s <= 0 disables the shift.
+	 */
+	CODEXTACTICS_API bool ShouldSectorShift(float SecondsOnPost, bool bUnderFire, float SecondsNoTarget, float SecondsSinceShift,
+		const FPmcDefenceConfig& Config);
 
 	/**
 	 * The cover-object key. A named wall actor is its own key (two slots of one actor match). An empty actor does
