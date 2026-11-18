@@ -373,7 +373,9 @@ bool EnemyAIRules::FireDetourWaypoint(const FVector& Enemy, const FVector& Fire,
 	const float EnemyAngle = FMath::Atan2(E.Y, E.X);
 	const float TargetAngle = FMath::Atan2(T.Y, T.X);
 	float Delta = FMath::UnwindRadians(TargetAngle - EnemyAngle);
-	if (!bTargetInside && Delta * TurnDirection < 0.f)
+	// The assigned side holds while the target is well round the zone; once the shortest arc is small (the prey ran round to this
+	// side, or the rounds moved the centre past him) he takes it instead of circling ~330 deg (047 API review).
+	if (!bTargetInside && Delta * TurnDirection < 0.f && FMath::Abs(Delta) > UE_HALF_PI)
 	{
 		Delta += 2.f * UE_PI * TurnDirection;
 	}

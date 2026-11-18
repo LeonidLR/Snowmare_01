@@ -821,7 +821,8 @@ int8 AEnemyCharacter::ResolveSuppressionDetourSide(uint64 ZoneId, const FVector&
 		SuppressionDetourSide = SuppressionRules::PickFearDetourSide(LateralCm, Config.ZoneDetourTieBandCm);
 		if (SuppressionDetourSide == 0)
 		{
-			SuppressionDetourSide = GetWorld()->GetSubsystem<USuppressionSubsystem>()->TakeFearDetourTieSide(ZoneId);
+			USuppressionSubsystem* Suppression = GetWorld() ? GetWorld()->GetSubsystem<USuppressionSubsystem>() : nullptr;
+			SuppressionDetourSide = Suppression ? Suppression->TakeFearDetourTieSide(ZoneId) : 0;
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[Suppression] %s detour: side %+d, lateral %.0f cm, pack %d, feet %s, centre %s, prey %s"),
 			*GetName(), static_cast<int32>(SuppressionDetourSide), LateralCm, PackCount, *Feet.ToCompactString(),
