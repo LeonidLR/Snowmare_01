@@ -9,6 +9,7 @@
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadGiveWayRules.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
 #include "CodexTactics.h"
 #include "CollisionQueryParams.h"
 #include "Combat/HealthComponent.h"
@@ -63,7 +64,7 @@ void USquadSubsystem::BuildGiveWayPath(const AOperativeCharacter& Mover, TArray<
 	// The mover's string-pulled navmesh path (the crowd's own keeps only its start and end), once per order / destination.
 	FGiveWayPath& Cached = GiveWayPaths.FindOrAdd(&Mover);
 	const FVector Destination = Mover.GetLastMoveDestination();
-	if (Cached.Serial != Mover.GetMoveOrderSerial() || !Cached.Destination.Equals(Destination, 1.0) || Cached.Points.IsEmpty())
+	if (Cached.Serial != Mover.GetMoveOrderSerial() || !Cached.Destination.Equals(Destination, 1.0))
 	{
 		Cached.Serial = Mover.GetMoveOrderSerial();
 		Cached.Destination = Destination;
@@ -109,7 +110,9 @@ void USquadSubsystem::UpdateGiveWay()
 	const FSquadGiveWayTuning& Tuning = SquadGiveWayTuning::Get();
 	UWorld* World = GetWorld();
 	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
-	if (CVarSquadGiveWay.GetValueOnGameThread() == 0 || !Tuning.bEnabled || !World || !Nav)
+	// Turn-based combat moves men only by the player's AP orders (API review): no give-way steps there.
+	const UTurnBasedCombatSubsystem* TurnBased = World ? World->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	if (CVarSquadGiveWay.GetValueOnGameThread() == 0 || !Tuning.bEnabled || !World || !Nav || (TurnBased && TurnBased->IsActive()))
 	{
 		GiveWayTargets.Reset();
 		return;
@@ -139,6 +142,11 @@ void USquadSubsystem::UpdateGiveWay()
 	{
 		AOperativeCharacter* Mover = MoverRef.Get();
 		if (bFormationFollows && Mover == LeaderRef)
+		{
+			continue;
+		}
+		// A man stepping aside is no mover himself (no cascade / ping-pong, API review).
+		if (GiveWayTargets.Contains(MoverRef))
 		{
 			continue;
 		}
