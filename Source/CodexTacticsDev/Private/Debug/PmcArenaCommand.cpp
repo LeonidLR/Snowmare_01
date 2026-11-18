@@ -170,6 +170,8 @@ namespace PmcArena
 		float CamPitchDeg = 65.f;
 		float CamMinCm = 2000.f;
 		float CamMaxCm = 11000.f;
+		/** CamFocus=contact|all (worker-ops 2026-11-18, default contact): frame the closest fight (PmcArenaViewRules::ContactFocus); all = every live fighter + the objective (before). */
+		bool bCamContact = true;
 		/** PlayArea=on|off (fix/arena-no-outer-strip, default on): off ignores the level's "play_area" (the before / after measurement). */
 		bool bPlayArea = true;
 		/**
@@ -484,6 +486,7 @@ namespace PmcArena
 			else if (Key == TEXT("teamglow")) { Options.TeamGlow = FMath::Clamp(FCString::Atof(*Value), 0.05f, 5.f); }
 			else if (Key == TEXT("campitch")) { Options.CamPitchDeg = FMath::Clamp(FCString::Atof(*Value), 30.f, 89.f); }
 			else if (Key == TEXT("cammin")) { Options.CamMinCm = FMath::Clamp(FCString::Atof(*Value), 5.f, 200.f) * 100.f; }
+			else if (Key == TEXT("camfocus")) { Options.bCamContact = !Value.Equals(TEXT("all"), ESearchCase::IgnoreCase); }
 			else if (Key == TEXT("cammax")) { Options.CamMaxCm = FMath::Clamp(FCString::Atof(*Value), 10.f, 300.f) * 100.f; }
 			else if (Key == TEXT("playarea")) { Options.bPlayArea = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
 			else if (Key == TEXT("rocketcontact")) { Options.bRocketContact = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
@@ -1354,15 +1357,29 @@ namespace PmcArena
 				}
 			}
 		}
-		TArray<FVector> Points = PmcArenaViewRules::FramedFighters(Fighters, FighterSides, State.bRoundObjective, State.Objective);
+		TArray<FVector> Points;
+		if (State.Options.bCamContact)
+		{
+			// CamFocus=contact (worker-ops 2026-11-18): the fighters in contact (+ the objective only when it is there), not the whole map.
+			Points = PmcArenaViewRules::ContactFocus(Fighters, FighterSides, State.bRoundObjective ? (State.bAAttacks ? 0 : 1) : INDEX_NONE,
+				State.bRoundObjective, State.Objective, State.bHasView && !bSnap, State.View.Look);
+		}
+		else
+		{
+			Points = PmcArenaViewRules::FramedFighters(Fighters, FighterSides, State.bRoundObjective, State.Objective);
+			if (State.bRoundObjective && !Points.IsEmpty())
+			{
+				Points.Add(State.Objective);
+			}
+		}
 		if (Points.IsEmpty())
 		{
 			Points.Add(State.Sides[0].Spawn);
 			Points.Add(State.Sides[1].Spawn);
-		}
-		if (State.bRoundObjective)
-		{
-			Points.Add(State.Objective);
+			if (State.bRoundObjective)
+			{
+				Points.Add(State.Objective);
+			}
 		}
 		State.Framing.PitchDeg = State.Options.CamPitchDeg;
 		State.Framing.MinDistanceCm = State.Options.CamMinCm;

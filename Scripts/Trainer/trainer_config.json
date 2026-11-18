@@ -99,7 +99,7 @@
     "record": {
       "_comment": "Deterministic re-run of one highlight round, rendered: <console_command + arg_template with Rounds=1 Seed=<round seed>> + arg_template_extra, then clip_command chained in -ExecCmds (comma). frames_dir = where the recorder writes f_NNNNN.png (Scripts/Tools/clip_assemble.py watch encodes them).",
       "arg_template_extra": ["Record=1"],
-      "clip_command": "CodexTactics.ClipRecorder {clip} seconds={seconds}",
+      "clip_command": "CodexTactics.ClipRecorder {clip} seconds={seconds} nodirector waitcamera",
       "frames_dir": "Saved/Screenshots/Clips/{clip}",
       "engine_args": ["-game", "-RenderOffscreen", "-ResX=1280", "-ResY=720", "-nosound", "-nosplash", "-unattended", "-NoTelemetry", "-Multiprocess", "-benchmark", "-fps=30", "-FixedSeed", "-LevelJson=L_PmcArenaDepot.json"]
     },

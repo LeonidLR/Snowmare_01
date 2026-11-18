@@ -6,7 +6,10 @@
 //     -ExecCmds="CodexTactics.ClipRecorder start intro seconds=40"                       (the level start, driven by the recorder)
 //     -ExecCmds="CodexTactics.ClipRecorder a4,CodexTactics.TutorialAmbushLakeSmoke"     (another check drives the game; it exits it)
 // Frames: Saved/Screenshots/Clips/<name>/f_NNNNN.jpg; every frame logs "ClipRecorder <name> f=N" (to cut a clip at a logged event).
-// Args: <name> [intro] [seconds=N] (stop + exit after N game seconds; default: until the game exits) [nodirector] [format=jpg|png].
+// Args: <name> [intro] [seconds=N] (stop + exit after N game seconds; default: until the game exits) [nodirector] [format=jpg|png]
+// [waitcamera] (worker-ops 2026-11-18: the X4 arena clips opened on the game's own camera with its debug HUD): no frame until the player's
+// view target is a camera actor (the PMC arena's record camera, which also hides the HUD); seconds count from the first frame; after
+// WaitCameraMaxSeconds it records anyway (a warning).
 // format (fix/arena-clip-readability 2026-11-10, the designer approved cheaper clips): jpg (default) = JPEG quality 90, at most 1280x720
 // (a larger viewport is scaled down), written from UGameViewportClient::OnScreenshotCaptured (the engine writes no PNG meanwhile; any
 // other screenshot request while recording is still saved under its own name); png = the engine's own PNG writer, full size, as before.
@@ -22,6 +25,7 @@
 
 #if !UE_BUILD_SHIPPING
 
+#include "Camera/CameraActor.h"
 #include "Camera/TacticalCameraPawn.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
@@ -61,7 +65,13 @@ namespace ClipRecorder
 		/** format=jpg (default): the frames go through OnScreenshotCaptured as JPEG; png: the engine writes them. */
 		bool bJpeg = true;
 		FDelegateHandle CaptureHandle;
+		/** waitcamera: hold the capture until the view target is an ACameraActor (WaitedSeconds so far). */
+		bool bWaitCamera = false;
+		float WaitedSeconds = 0.f;
 	};
+
+	/** waitcamera gives up waiting after this many seconds and records whatever the view is. */
+	constexpr float WaitCameraMaxSeconds = 120.f;
 
 	/** JPEG frames: quality 90, at most this size (a larger viewport is scaled down, the aspect kept). */
 	constexpr int32 JpegQuality = 90;
@@ -203,6 +213,19 @@ namespace ClipRecorder
 			StopCapture(State);
 			return false;
 		}
+		if (State.bWaitCamera)
+		{
+			const APlayerController* PC = World->GetFirstPlayerController();
+			const bool bCamera = PC && Cast<ACameraActor>(PC->GetViewTarget()) != nullptr;
+			State.WaitedSeconds += Delta;
+			if (!bCamera && State.WaitedSeconds < WaitCameraMaxSeconds)
+			{
+				return true;
+			}
+			State.bWaitCamera = false;
+			UE_LOG(LogCodexTactics, Display, TEXT("ClipRecorder %s: %s after %.1f s - recording starts"), *State.Name,
+				bCamera ? TEXT("the record camera is on") : TEXT("WARNING no camera actor as the view target"), State.WaitedSeconds);
+		}
 		State.Time += Delta;
 		if (State.MaxSeconds > 0.f && State.Time > State.MaxSeconds)
 		{
@@ -240,6 +263,7 @@ namespace ClipRecorder
 		{
 			State->bIntro |= Arg == TEXT("intro");
 			State->bDirector &= Arg != TEXT("nodirector");
+			State->bWaitCamera |= Arg.Equals(TEXT("waitcamera"), ESearchCase::IgnoreCase);
 			if (Arg.StartsWith(TEXT("format="), ESearchCase::IgnoreCase))
 			{
 				State->bJpeg = !Arg.RightChop(7).Equals(TEXT("png"), ESearchCase::IgnoreCase);
@@ -254,8 +278,8 @@ namespace ClipRecorder
 			IFileManager::Get().MakeDirectory(*State->Dir, true);
 			State->CaptureHandle = UGameViewportClient::OnScreenshotCaptured().AddStatic(&SaveCaptured);
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("ClipRecorder %s: recording -> %s (intro %d, director %d, %.0f s, %s)"), *State->Name, *State->Dir,
-			State->bIntro ? 1 : 0, State->bDirector ? 1 : 0, State->MaxSeconds, State->bJpeg ? TEXT("jpg q90 <= 1280x720") : TEXT("png"));
+		UE_LOG(LogCodexTactics, Display, TEXT("ClipRecorder %s: recording -> %s (intro %d, director %d, wait camera %d, %.0f s, %s)"), *State->Name, *State->Dir,
+			State->bIntro ? 1 : 0, State->bDirector ? 1 : 0, State->bWaitCamera ? 1 : 0, State->MaxSeconds, State->bJpeg ? TEXT("jpg q90 <= 1280x720") : TEXT("png"));
 		FTSTicker::GetCoreTicker().AddTicker(FTickerDelegate::CreateLambda([State](float Delta)
 		{
 			return Tick(*State, Delta);
@@ -265,7 +289,7 @@ namespace ClipRecorder
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.ClipRecorder"),
 		TEXT("Dev (2026-10-24): renders every frame to Saved/Screenshots/Clips/<name>/f_NNNNN.jpg (format=png: .png) with a director camera on the action. "
-			"Args: <name> [intro] [seconds=N] [nodirector] [format=jpg|png]."),
+			"Args: <name> [intro] [seconds=N] [nodirector] [format=jpg|png] [waitcamera]."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 }
 
