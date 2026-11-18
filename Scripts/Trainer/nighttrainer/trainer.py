@@ -34,6 +34,15 @@ def seed_for(run_seed: int, generation: int, stream: str, index: int) -> int:
     return int(h[:8], 16) % 2_000_000_000
 
 
+def _lookup_rounds(spec: dict, default_rounds: int, opp_name: str = "") -> int:
+    r = spec.get("rounds_per_job")
+    if r is None:
+        r = spec.get("rounds")
+    if r is not None:
+        return int(r)
+    return 1 if str(opp_name).strip().lower() == "bot" else default_rounds
+
+
 class Trainer:
     def __init__(self, cfg: dict, run_id: str, repo_root: str, mock: bool = False, log=print,
                  deadline: float | None = None, max_generations: int | None = None, parallel: int | None = None,
@@ -243,6 +252,16 @@ class Trainer:
                    "candidates": [{"id": c["id"], "fitness": c["fitness"], "stats": c["agg"],
                                    "fresh": c.get("fresh")} for c in ranked]}
         archive = self._update_archive(cands, gen) if self.search_mode() == "qd" else None
+        cand_behaviours = []
+        for cand in cands:
+            rnds = [r for rows in cand.get("by_opp", {}).values() for r in rows]
+            b = qd.mean_behaviour(rnds)
+            if b is not None:
+                cand_behaviours.append(b)
+        qd_cfg = self.cfg.get("qd", {})
+        arch_axes = archive.axes if archive is not None else qd._axes(qd_cfg)
+        desc_hist = qd.descriptor_histogram(cand_behaviours, arch_axes)
+        gen_doc["descriptor_histograms"] = desc_hist
         if archive is not None:
             gen_doc["archive"] = {"filled": len(archive.cells), "capacity": archive.capacity()}
         write_json(os.path.join(gen_dir, "generation.json"), gen_doc)
@@ -258,6 +277,7 @@ class Trainer:
                                  "best_id": ranked[0]["id"], "champion": state["champion"]["id"],
                                  "champion_fresh": champ_fresh["all"]["fitness"], "promoted": promoted,
                                  "archive_filled": len(archive.cells) if archive is not None else 0,
+                                 "descriptors": desc_hist,
                                  "duration_s": gen_doc["duration_s"], "finished": gen_doc["finished"]})
         evo_rng = evolution.generation_rng(self.run_seed, gen, "evo")
         if archive is not None:
@@ -346,9 +366,9 @@ class Trainer:
         default_rounds = int(ev.get("rounds_per_job", 4))
         for match in ev.get("matches", [{"opponent": "champion", "jobs": 1},
                                         {"opponent": "bot", "jobs": 1}]):
-            rounds = int(match.get("rounds_per_job") or match.get("rounds") or (1 if match.get("opponent") == "bot" else default_rounds))
+            opp = str(match.get("opponent", "")).strip().lower()
+            rounds = _lookup_rounds(match, default_rounds, opp)
             for _ in range(int(match.get("jobs", 1))):
-                opp = match["opponent"]
                 plan.append({"opponent": opp, "weights_b": champion_path if opp == "champion" else None,
                              "map": match.get("map"), "rounds": rounds})
         return plan
@@ -377,8 +397,8 @@ class Trainer:
         for spec in specs:
             if not isinstance(spec, dict):
                 continue
-            source = spec.get("source", "champion")
-            rounds = int(spec.get("rounds_per_job") or spec.get("rounds") or (1 if source == "bot" else default_rounds))
+            source = str(spec.get("source", "champion")).strip().lower()
+            rounds = _lookup_rounds(spec, default_rounds, source)
             for _ in range(int(spec.get("jobs", 1))):
                 if source == "bot":
                     plan.append({"opponent": "bot", "weights_b": None, "map": spec.get("map"), "rounds": rounds})
@@ -407,12 +427,14 @@ class Trainer:
         return archive
 
     def make_jobs(self, cid: str, weights: str, gen: int, stream: str, gen_dir: str, plan: list) -> list:
-        ev = self.cfg["evaluation"]
+        ev = self.cfg.get("evaluation", {})
+        default_rounds = int(ev.get("rounds_per_job", 4))
         jobs = []
         for index, match in enumerate(plan):
-            rounds = int(match.get("rounds") or (1 if match.get("opponent") == "bot" else ev.get("rounds_per_job", 4)))
-            jobs.append({"id": f"{cid}_{stream}_{match['opponent']}_{index}", "dir": os.path.join(gen_dir, "jobs"),
-                         "weights_a": weights, "opponent": match["opponent"],
+            opp = str(match.get("opponent", "")).strip().lower()
+            rounds = _lookup_rounds(match, default_rounds, opp)
+            jobs.append({"id": f"{cid}_{stream}_{opp}_{index}", "dir": os.path.join(gen_dir, "jobs"),
+                         "weights_a": weights, "opponent": opp,
                          "weights_b": match.get("weights_b"),
                          "rounds": rounds,
                          "seed": seed_for(self.run_seed, gen, stream, index),
@@ -425,7 +447,8 @@ class Trainer:
         out = {}
         for job in jobs:
             if job["id"].startswith(cid + "_"):
-                out.setdefault(job["opponent"], []).extend(results.get(job["id"], []))
+                opp = str(job.get("opponent", "")).strip().lower()
+                out.setdefault(opp, []).extend(results.get(job["id"], []))
         return out
 
     def _job_done(self, job: dict) -> None:

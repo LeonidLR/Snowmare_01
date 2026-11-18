@@ -357,26 +357,47 @@ class RealDescriptorCoverageTests(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         fixture = os.path.join(TRAINER, "fixtures", "pmc_v6_qd_40_candidates.json")
-        if os.path.exists(fixture):
-            cls.candidates = load_json(fixture)
-        else:
-            base_dir = os.path.join(REPO, "Saved", "Reports", "worker-2026-11-18", "pmc-v6-qd")
-            rows = []
-            for gen in range(5):
-                gen_dir = os.path.join(base_dir, f"gen_{gen:04d}")
-                gdata = load_json(os.path.join(gen_dir, "generation.json"))
-                for c in gdata["candidates"]:
-                    pattern = os.path.join(gen_dir, "jobs", f"{c['id']}_eval_*.rounds.json")
-                    import glob
-                    rounds = []
-                    for jf in glob.glob(pattern):
-                        rounds.extend(load_json(jf).get("rounds", []))
-                    b = qd.mean_behaviour(rounds)
-                    rows.append({"gen": gen, "id": c["id"], "fitness": float(c["fitness"]), "behaviour": b})
-            cls.candidates = rows
+        if not os.path.exists(fixture):
+            raise FileNotFoundError(f"Fixture missing: {fixture}")
+        cls.candidates = load_json(fixture)
 
     def test_forty_candidates_loaded(self):
         self.assertEqual(len(self.candidates), 40)
+
+    def test_validate_bin_edges(self):
+        # Valid: 4 bins, 3 strictly increasing edges
+        arch = qd.Archive({"axes": [{"id": "a", "bins": 4, "bin_edges": [10.0, 20.0, 30.0]}]})
+        self.assertEqual(len(arch.axes), 1)
+
+        # Invalid length (wants bins - 1 = 2 edges, got 1)
+        with self.assertRaises(ValueError):
+            qd.Archive({"axes": [{"id": "bad_len", "bins": 3, "bin_edges": [10.0]}]})
+
+        # Non-increasing (10 >= 10)
+        with self.assertRaises(ValueError):
+            qd.Archive({"axes": [{"id": "non_inc", "bins": 3, "bin_edges": [10.0, 10.0]}]})
+
+        # Decreasing (20 > 10)
+        with self.assertRaises(ValueError):
+            qd.Archive({"axes": [{"id": "dec", "bins": 3, "bin_edges": [20.0, 10.0]}]})
+
+    def test_descriptor_histogram(self):
+        axes = [
+            {"id": "aggression", "metric": "time_in_contact_s", "bins": 4, "bin_edges": [30.0, 45.0, 60.0]},
+            {"id": "mobility", "metrics": ["flanks_completed", "moves"], "bins": 4, "bin_edges": [16.0, 24.0, 32.0]},
+        ]
+        behaviours = [
+            {"time_in_contact_s": 25.0, "flanks_completed": 0, "moves": 10},
+            {"time_in_contact_s": 50.0, "flanks_completed": 1, "moves": 20},
+            {"time_in_contact_s": 70.0, "flanks_completed": 2, "moves": 35},
+        ]
+        hist = qd.descriptor_histogram(behaviours, axes)
+        self.assertIn("aggression", hist)
+        self.assertEqual(hist["aggression"]["bins"], [1, 0, 1, 1])
+        self.assertEqual(hist["aggression"]["min"], 25.0)
+        self.assertEqual(hist["aggression"]["max"], 70.0)
+        self.assertIn("mobility", hist)
+        self.assertEqual(hist["mobility"]["bins"], [1, 1, 0, 1])
 
     def test_old_binning_reproduces_two_of_fortyeight_cells(self):
         """Old binning from pmc-v6-qd: mobility [0,12] saturates (avg 19 -> bin 3), aggression [0,180] in bins 0-1, patience [0,3] in bin 0."""
@@ -400,7 +421,7 @@ class RealDescriptorCoverageTests(unittest.TestCase):
             arch.consider(c["id"], {}, c["fitness"], c["behaviour"], c.get("gen", 0))
         self.assertEqual(arch.capacity(), 48)
         self.assertGreaterEqual(len(arch.cells), 8)
-        self.assertGreaterEqual(len(arch.cells), 18)
+        self.assertEqual(len(arch.cells), 20)
         seen_agg = {c["key"][0] for c in arch.cells.values()}
         seen_mob = {c["key"][1] for c in arch.cells.values()}
         seen_pat = {c["key"][2] for c in arch.cells.values()}
@@ -432,23 +453,29 @@ class RealDescriptorCoverageTests(unittest.TestCase):
             bot_job = next(j for j in jobs if j["opponent"] == "bot")
             self.assertEqual(bot_job["rounds"], 1)
 
+            # 1-round bot doc: parsed with job's rounds (1), 0 crash penalty
             one_round_doc = {
                 "schema": "codex.pmc_arena/1",
-                "opponent": "Bot",
+                "opponent": "bot",
                 "rounds": [{"winner": "A", "duration_s": 30, "sides": {"A": {"survivors": 3}, "B": {"survivors": 0}}}]
             }
-            parsed = t.adapter.parse_doc(one_round_doc, expected_rounds=1)
+            parsed = t.adapter.parse_doc(one_round_doc, expected_rounds=int(bot_job["rounds"]))
             self.assertEqual(len(parsed), 1)
             self.assertFalse(parsed[0].get("crashed", False))
+            score_1 = fitness.round_score(parsed[0], CONFIG["fitness"])
+            self.assertGreater(score_1, 0.0)
 
-            parsed_clamp = t.adapter.parse_doc(one_round_doc, expected_rounds=3)
-            self.assertEqual(len(parsed_clamp), 1)
-            self.assertFalse(parsed_clamp[0].get("crashed", False))
-
-            # Real crash in the runner yields exactly 1 crash_round (job['rounds'] == 1)
-            crash_rounds = [fitness.crash_round() for _ in range(int(bot_job["rounds"]))]
-            self.assertEqual(len(crash_rounds), 1)
-            self.assertTrue(crash_rounds[0].get("crashed", False))
+            # Real 0-round bot doc (crashed arena before completing round): parsed with job's rounds (1), gets exactly 1 crash penalty
+            zero_round_doc = {
+                "schema": "codex.pmc_arena/1",
+                "opponent": "bot",
+                "rounds": []
+            }
+            parsed_zero = t.adapter.parse_doc(zero_round_doc, expected_rounds=int(bot_job["rounds"]))
+            self.assertEqual(len(parsed_zero), 1)
+            self.assertTrue(parsed_zero[0].get("crashed", False))
+            score_0 = fitness.round_score(parsed_zero[0], CONFIG["fitness"])
+            self.assertEqual(score_0, float(CONFIG["fitness"].get("crash_penalty", -5.0)))
 
 
 if __name__ == "__main__":

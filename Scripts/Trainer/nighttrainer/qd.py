@@ -57,8 +57,39 @@ def _log_archive(msg: str) -> None:
     print(f"[qd] {msg}", flush=True)
 
 
+def validate_axis(axis: dict) -> None:
+    aid = axis.get("id", "<unknown>")
+    edges = axis.get("bin_edges")
+    if edges is not None:
+        if not isinstance(edges, (list, tuple)):
+            raise ValueError(f"Axis '{aid}' bin_edges must be a list or tuple, got {type(edges).__name__}")
+        bins = max(1, int(axis.get("bins", 1)))
+        if len(edges) != bins - 1:
+            raise ValueError(
+                f"Axis '{aid}' len(bin_edges) must equal bins - 1 ({bins - 1}), got {len(edges)}"
+            )
+        for i in range(len(edges)):
+            try:
+                curr = float(edges[i])
+            except (ValueError, TypeError):
+                raise ValueError(f"Axis '{aid}' bin_edges[{i}] is not a valid number: {edges[i]!r}")
+            if i > 0 and curr <= float(edges[i - 1]):
+                raise ValueError(
+                    f"Axis '{aid}' bin_edges must be strictly increasing: "
+                    f"edge[{i-1}]={edges[i-1]} >= edge[{i}]={curr}"
+                )
+
+
+def validate_axes(axes: list) -> None:
+    for a in axes:
+        if isinstance(a, dict):
+            validate_axis(a)
+
+
 def _axes(cfg: dict) -> list:
-    return [a for a in (cfg.get("axes") or []) if isinstance(a, dict) and a.get("id")]
+    axes = [a for a in (cfg.get("axes") or []) if isinstance(a, dict) and a.get("id")]
+    validate_axes(axes)
+    return axes
 
 
 def axis_value(behaviour: dict, axis: dict) -> float:
@@ -124,6 +155,34 @@ def mean_behaviour(rounds: list) -> dict | None:
         return None
     keys = behaviour_defaults()
     return {key: sum(float(r["behaviour"].get(key, 0.0) or 0.0) for r in ok) / len(ok) for key in keys}
+
+
+def descriptor_histogram(behaviours: list, axes: list) -> dict:
+    """Compute min, mean, max, and per-bin counts per axis across candidate behaviour dicts."""
+    out = {}
+    for axis in axes:
+        if not isinstance(axis, dict) or not axis.get("id"):
+            continue
+        aid = axis["id"]
+        bins = max(1, int(axis.get("bins", 1)))
+        vals = [axis_value(b, axis) for b in behaviours if isinstance(b, dict)]
+        edges = list(axis.get("bin_edges") or [])
+        if not vals:
+            out[aid] = {"min": 0.0, "mean": 0.0, "max": 0.0, "bins": [0] * bins, "edges": edges}
+            continue
+        counts = [0] * bins
+        for v in vals:
+            idx = bin_index(v, axis)
+            if 0 <= idx < bins:
+                counts[idx] += 1
+        out[aid] = {
+            "min": round(min(vals), 4),
+            "mean": round(sum(vals) / len(vals), 4),
+            "max": round(max(vals), 4),
+            "bins": counts,
+            "edges": edges,
+        }
+    return out
 
 
 class Archive:
