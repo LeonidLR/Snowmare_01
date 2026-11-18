@@ -112,3 +112,59 @@ Watch:
 - Stalemate re-decide sits exactly at its limit (6 <= 6).
 - Seed 2 guard share has 0.11 of margin.
 - The `HasOwnMoveOrder()`-false-while-sprinting behaviour probably also affects tactical-post settling for non-defenders. Not touched here.
+
+## API follow-up 2
+
+Branch `claude-api/g008-fixes`, on `3a5e113b`. Review `docs/port/grok/outbox/G008-api-review-2.md`, blocking findings A and B. Nothing pushed; main untouched; thresholds unchanged (spread >= 5 m, guard share > 0.6, shared cover pairs 0, stalemate same-order re-decide <= 6).
+
+| Finding | Commit | What changed |
+| --- | --- | --- |
+| A post / point ping-pong | `06178ee5` | New `DefenderPointHold`: a posted defender off his post, standing on the point (level-aware distance <= radius), whose pull is still active there (the `DefenderPointPull` terms without the 0.7 x R off-point gate) scores Hold = weight x pull x max(0.5, health). Off post with any active pull (on or off the point), Ambush (the walk back) scores 0: Objective takes him to the point, Hold keeps him there. No TakeCover / plain Relocate off the point while he holds it. When the pull ends (attackers gone), the walk back (1.05) returns. Retake now beats the off-post walk at any clock: the walk is 0 while it is active. |
+| B off post under fire | `fadbd2a5` | New pure rule `PmcDefenceRules::IsGoalOnPostLevel`. With a defence post: `FindCoverNear(PostLevelZ)` skips slots off the post's level (the view's cover, so `bCoverAvailable` / TakeCover / Relocate; the standoff band cover; the plain-ambush cover). FallBack / standoff goals and the tactical-map fall-back candidates are projected at the post's height and walked with the level kept. No spot on the level refuses the walk, and the order cools down. |
+| Found smoking | `8005c9ee` | (1) The ambush spring turned every Ambush into Hold after contact. Since finding 1 the off-post walk is an Ambush in contact, so it was re-issued every 0.5 s. A defence post walk under way (a move order, or speed >= the still threshold) is now left alone; a stopped one is still re-issued. (2) The walk's "already at the goal" refusal was 250 cm, the view's `bAtPost` 200 cm. A man 200-250 cm off his post could neither settle nor walk, and three refusals dropped the post. Defence post walks now refuse only within 100 cm. |
+
+Score sequences (unit test `CodexTactics.AI.PmcCommander.Objective`, default weights, radius 6 m):
+
+| Case | On post | Walking (10 m) | Ring (5 m) | On point (2 m) | Pull ends |
+| --- | --- | --- | --- | --- | --- |
+| Late clock 0.9, no contact now (occupier) | Objective 0.90 (best) | Objective 0.90, Ambush 0 (was 1.05) | Hold 0.90, Ambush 0 | Hold 0.90 (best), Ambush 0 (was 1.05), Objective 0 | - (the clock does not end) |
+| Same, quiet push | - | - | - | Hold 0.90 (best), Ambush 0 | - |
+| Attackers on the point, HoldFrac 0.5 (guard, contact) | Objective 0.60 (best) | Objective 0.60 (best), Ambush 0; HoldFrac 1: 1.00 beats the walk | - | Hold 0.60 (best), TakeCover 0, Ambush 0 | Ambush 1.05 (best): back to his post |
+| Not the occupier, late clock, on the point | - | - | - | Hold 0 | Ambush 1.05 (best) |
+
+B unit test `CodexTactics.AI.PmcDefence.PostLevel`:
+- Accepted: a roof goal (post 910, goal 930) and a goal at the tolerance (760).
+- Refused: the street (0), one floor down (610) and a higher roof (1210).
+- No post, or a planar tolerance: always accepted.
+- Off post under fire, FallBack and TakeCover still score (> 0) and the walk scores 0.75. Only their goals are held to the level.
+
+### Numbers (final tree `8005c9ee`, same binary)
+
+| Seed | Spread, m | Guard share | Objective share | Pairs | Result | Log |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 12.0 | 0.97 | 0.00 (0 / 40) | 0 | PASS | `Saved/Logs/Smoke-PmcRoofDefenceSmoke.log:2119`, PASS `:2157`, access `:1603` |
+| 2 | 8.4 | 0.81 | 0.09 (2 / 22) | 0 | PASS | `Smoke-PmcRoofDefenceSmoke-seed2.log:1956`, PASS `:1994` |
+| 3 | 8.3 | 0.73 | 0.00 (0 / 17) | 0 | PASS | `Smoke-PmcRoofDefenceSmoke-seed3.log:1746`, PASS `:1785` |
+
+Follow-up 1 (`10d54c26`) for comparison: 10.6 / 0.92, 6.7 / 0.71, 9.5 / 0.95. All three seeds keep their margins (seed 2: spread 8.4 against 5, guard share 0.81 against 0.6).
+
+Gates:
+- `Scripts/build.ps1` Succeeded.
+- `Scripts/test.ps1 -Filter CodexTactics.AI`: 97 tests, 0 failed (+1: `PmcDefence.PostLevel`).
+- `smoke_parallel.ps1 -Remote off -NoRetry -Commands PmcRoofDefenceSmoke PmcStalemateSmoke PmcArenaTacticalSmoke`: 3 run, 0 failed.
+  - PmcRoofDefenceSmoke PASS 84.3 s.
+  - PmcStalemateSmoke PASS 65.2 s: same-order re-decide 1 <= 6 (was 6 <= 6), churn 12.80 <= 20, longest quiet 4.9 s (`Smoke-PmcStalemateSmoke.log:1923-1935`).
+  - PmcArenaTacticalSmoke PASS 99.4 s.
+- Seeds 2 and 3 were launched directly as before (`-UseFixedTimeStep -FPS=60 -FixedSeed -SquadStart=formation -LevelJson=L_PmcArenaDepot.json`, `ExecCmds=CodexTactics.PmcRoofDefenceSmoke seed=N`): PASS, 110 s for both in parallel.
+
+Budget: over plan.
+- Builds: 3 completed instead of 1. The first attempt hit the 10-minute tool limit at compile step 5/58; it was not an error. The same build was then rerun detached.
+- Smoke batches: 3 instead of 1.
+  - Batch 1 (A + B only): roof PASS 59.0 s, tactical PASS 68.8 s, stalemate FAIL with same-order re-decide 13 > 6. 7 of the 13 were one defender's Ambush walk re-issued every 0.5 s by the spring.
+  - Batch 2 (+ the 4 m projection fallback, and a spring skip for any defence post walk): stalemate FAIL 7 > 6, from three refused walks 222 cm off a post (the 200 / 250 cm mismatch). Roof FAIL: spread 4.2, guard share 0.52, time limit. A stalled walk was no longer re-issued.
+  - Batch 3 (the spring skip limited to a walk on the move, and the 100 cm refusal): all PASS. It is the clean batch above.
+
+Watch:
+- With finding A the guard does leave the access to retake whenever the attackers stand on the point. That is the restored finding-3 rule, and it costs guard share in rounds where they reach it (batch 2's roof round went to the time limit). The three seeds above end by elimination before that matters.
+- On post, Heal still walks the guard off the access (unchanged here). Batch 2 showed Heal -> walk back -> Heal cycles for the guard.
+- A defender off his post, outnumbered, alternates FallBack (0.54) and Retake walks on the roof level (batch 2). Neither goes down the stair any more.
