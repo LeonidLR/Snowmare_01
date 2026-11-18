@@ -53,6 +53,8 @@
     "zone.density_decay_per_second": 2.5,
     "zone.radius_cm": 350,
     "zone.duration_seconds": 3,
-    "zone.min_squad_distance_cm": 500
+    "zone.min_squad_distance_cm": 500,
+    "zone.detour_tie_band_cm": 25,
+    "zone.detour_look_ahead_cm": 1200
   }
 }

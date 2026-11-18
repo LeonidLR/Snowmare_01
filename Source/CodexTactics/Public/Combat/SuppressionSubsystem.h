@@ -127,7 +127,10 @@ public:
 	 * Extra) - the same use as a burning barrel's zone in AEnemyCharacter::FindNearestFireZone (fire-fearing enemies flee out of it and
 	 * path round it). False: none.
 	 */
-	bool FindFearZone(const FVector& Feet, float Extra, FVector& OutCentre, float& OutRadius) const;
+	bool FindFearZone(const FVector& Feet, float Extra, FVector& OutCentre, float& OutRadius, uint64* OutZoneId = nullptr) const;
+
+	/** Allocate the next alternating turn direction for an enemy on the approach axis. */
+	int8 TakeFearDetourTieSide(uint64 ZoneId);
 	/** The centres of every open fear zone (smokes, debugging). */
 	TArray<FVector> GetOpenFearZones() const;
 
@@ -164,6 +167,7 @@ private:
 	TMap<TWeakObjectPtr<AActor>, FSuppressionState> States;
 	/** The squad's fire by where it ends (SuppressionRules::FindFireCell / StepFireCell). */
 	TArray<FSuppressionFireCell> FireCells;
+	uint64 NextFearZoneId = 0;
 	TMap<TWeakObjectPtr<const AActor>, TWeakObjectPtr<AActor>> Intents;
 	FSuppressionStats Stats;
 };

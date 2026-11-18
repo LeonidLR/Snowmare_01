@@ -1094,6 +1094,11 @@ protected:
 	/** Walk speed before frost / fear factors (archetype, balance, wave modifiers). */
 	float BaseWalkSpeed = 300.f;
 	bool bFleeingFire = false;
+	uint64 SuppressionDetourZoneId = 0;
+	int8 SuppressionDetourSide = 0;
+
+	/** Claim a side once per zone opening and retain it while the rounds move its centre. */
+	int8 ResolveSuppressionDetourSide(uint64 ZoneId, const FVector& Feet, const FVector& Centre, const FVector& Target);
 	/** Set by FindTarget (see IsBravingFire). */
 	mutable bool bBravingFire = false;
 	/** Set by FindTarget (see IsObjectDistractionAllowed). */
@@ -1133,7 +1138,8 @@ protected:
 	/** Nearest burning barrel / active heat source within the fear radius (Godot _find_nearest_active_fire_source). */
 	bool FindNearestFire(FVector& OutFire) const;
 	/** Nearest burning barrel / active heat zone whose fear radius (OutRadius) reaches within Extra of the feet. */
-	bool FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius, bool* bOutSuppressionZone = nullptr) const;
+	bool FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius, bool* bOutSuppressionZone = nullptr,
+		uint64* OutZoneId = nullptr, TOptional<float> SuppressionLookAhead = {}) const;
 	/** Location inside a burning barrel's / active heat zone's fear radius (the heat of Candidate itself excluded). */
 	bool IsInFearZone(const FVector& Location, const AActor* Candidate) const;
 	/**
