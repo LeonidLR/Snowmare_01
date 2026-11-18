@@ -17,7 +17,7 @@
 // Deterministic: same layout + same zone + same seed -> the same JSON.
 
 import type { Vec2 } from '../movement/geometry.ts';
-import { dirOf, pointInPoly, segSegDist } from '../movement/geometry.ts';
+import { dirOf, dist, pointInPoly, segSegDist, segmentsIntersect } from '../movement/geometry.ts';
 import type { RouteReport } from './evaluate.ts';
 import { checkLayoutRoutes } from './evaluate.ts';
 import { expandLayout } from './expand.ts';
@@ -316,7 +316,7 @@ export function spliceRoute(old: GenRoute, fresh: GenRoute | undefined, inZone: 
 
 // ---- the re-roll ------------------------------------------------------------------------------------------------------------
 
-export type DropReason = 'id_taken' | 'overlaps_kept' | 'overlaps_lock' | 'blocks_road';
+export type DropReason = 'id_taken' | 'overlaps_kept' | 'overlaps_lock' | 'blocks_road' | 'orphan_fence_crossing';
 export interface DroppedGroup { id: string; category: RegenCategory; reason: DropReason }
 export interface RegenAttempt { seed: number; ok: boolean; reason?: string }
 export interface RouteStatus { id: string; mandatory: boolean; completable: boolean; fail?: string }
@@ -515,6 +515,49 @@ export function rerouteThroughBlocks(r: GenRoute, inBlock: (p: Vec2) => string |
   return out;
 }
 
+/** Attempts to construct a closed polygon from fence walls (bridging gate gaps up to maxGap cm). (task 085b) */
+export function fenceClosedRing(walls: readonly GenWall[], maxGap = 350): Vec2[] | null {
+  if (walls.length < 3) return null;
+  const rem = [...walls];
+  const ring: Vec2[] = [rem[0].a, rem[0].b];
+  let curr = rem[0].b;
+  rem.splice(0, 1);
+
+  while (rem.length > 0) {
+    let bestIdx = -1;
+    let bestDist = Infinity;
+    let reverse = false;
+
+    for (let i = 0; i < rem.length; i++) {
+      const dA = dist(curr, rem[i].a);
+      const dB = dist(curr, rem[i].b);
+      if (dA < bestDist && dA <= maxGap) {
+        bestDist = dA;
+        bestIdx = i;
+        reverse = false;
+      }
+      if (dB < bestDist && dB <= maxGap) {
+        bestDist = dB;
+        bestIdx = i;
+        reverse = true;
+      }
+    }
+
+    if (bestIdx === -1) return null; // open fence, cannot close
+
+    const nextWall = rem.splice(bestIdx, 1)[0];
+    curr = reverse ? nextWall.a : nextWall.b;
+    ring.push(curr);
+  }
+
+  // Check if curr closes back to ring[0]
+  if (dist(curr, ring[0]) <= maxGap) {
+    ring.pop();
+    return ring;
+  }
+  return null;
+}
+
 /**
  * The fresh layout with the re-typed blocks' content replaced by their templates (and its routes taken through them). `acc` = the
  * old blocks whose content goes ('full': every block of a re-planned group); `visitOf` = the visit that replaces an old block's.
@@ -523,8 +566,36 @@ function applyTemplates(fresh: GenLayout, built: BuiltTemplate[], lots: readonly
   const inBlock = (p: Vec2): string | undefined => { const k = lotAt(lots, p); return k && acc.has(k.id) ? k.id : undefined; };
   const drop = new Set<object>();
   const removedB = new Set<string>();
+  const builtWalls = built.flatMap((b) => b.content.walls).filter((w) => w.kind !== 'cut_wall');
+  const builtBuildings = built.flatMap((b) => b.content.buildings);
+  const accLots = lots.filter((k) => acc.has(k.id));
+
   for (const g of layoutGroups(fresh)) {
-    if (g.fixed || g.category === 'spawn_point' || !inBlock(g.centre)) continue;
+    if (g.fixed || g.category === 'spawn_point') continue;
+    let remove = !!inBlock(g.centre);
+    // Only fence families (kind === 'fence') may be removed by geometry - never compound / perimeter / building walls (085b lead review).
+    if (!remove && g.category === 'wall' && (g.members.walls?.length ?? 0) > 0 && g.members.walls!.every((w) => w.kind === 'fence')) {
+      // Geometry check (task 085/085b): a parent block fence that crosses fresh parcels/groups or encloses subdivided lots
+      const walls = g.members.walls!;
+      const crossesFreshWall = walls.some((w) => builtWalls.some((bw) => segmentsIntersect(w.a, w.b, bw.a, bw.b)));
+      const crossesFreshB = walls.some((w) =>
+        builtBuildings.some((bb) => {
+          const poly = footprintPoly(bb);
+          return poly.some((p, i, arr) => segmentsIntersect(w.a, w.b, p, arr[(i + 1) % arr.length]));
+        })
+      );
+      // Require a closed fence ring using pointInPoly (085b): rotated / open fences are not deleted by bbox
+      const ring = fenceClosedRing(walls);
+      let enclosesSubdivided = false;
+      if (ring) {
+        const enclosedLots = accLots.filter((k) => pointInPoly(rectCentre(k.rect), ring));
+        enclosesSubdivided = enclosedLots.length >= 2;
+      }
+      if (crossesFreshWall || crossesFreshB || enclosesSubdivided) {
+        remove = true;
+      }
+    }
+    if (!remove) continue;
     for (const k of ARRAYS) for (const x of g.members[k] ?? []) drop.add(x);
     if (g.category === 'building') removedB.add(g.id);
   }
@@ -720,6 +791,27 @@ function mergeAttempt(old: GenLayout, oldGroups: RegenGroup[], sel: ZoneSelectio
     take(g);
     pushSolids(g);
     added.push(g);
+  }
+  // task 085/085b: only kind === 'fence' families may be removed (not compound / perimeter walls)
+  const addedWalls = added.flatMap((g) => g.members.walls ?? []).filter((w) => w.kind !== 'cut_wall');
+  const addedBuildings = added.flatMap((g) => g.members.buildings ?? []);
+  for (const o of kept) {
+    if (o.category !== 'wall' || !(o.members.walls?.length)) continue;
+    const walls = o.members.walls;
+    // Only kind === 'fence' families may be removed (085b)
+    if (!walls.every((w) => w.kind === 'fence')) continue;
+
+    const crossesAddedWall = walls.some((w) => addedWalls.some((aw) => segmentsIntersect(w.a, w.b, aw.a, aw.b)));
+    const crossesAddedB = walls.some((w) =>
+      addedBuildings.some((bb) => {
+        const poly = footprintPoly(bb);
+        return poly.some((p, i, arr) => segmentsIntersect(w.a, w.b, p, arr[(i + 1) % arr.length]));
+      })
+    );
+    if (crossesAddedWall || crossesAddedB) {
+      for (const k of ARRAYS) for (const x of o.members[k] ?? []) removed.add(x);
+      dropped.push({ id: o.id, category: 'wall', reason: 'orphan_fence_crossing' });
+    }
   }
   for (const g of added) for (const m of g.members.mantle_edges ?? []) if (m.wall && rename.has(m.wall)) m.wall = rename.get(m.wall);
   const next: Partial<GroupMembers> = {};
