@@ -117,7 +117,8 @@ namespace PmcCommanderRules
 				return Order == EPmcOrder::Ambush ? FMath::Max(W.Ambush, 1.f) : 0.f;
 			}
 			if (Order == EPmcOrder::FallBack || Order == EPmcOrder::Flank || Order == EPmcOrder::Advance
-				|| Order == EPmcOrder::TakeCover || (Order == EPmcOrder::Relocate && !F.bSectorShift))
+				|| Order == EPmcOrder::TakeCover || Order == EPmcOrder::Objective
+				|| (Order == EPmcOrder::Relocate && !F.bSectorShift))
 			{
 				return 0.f;
 			}

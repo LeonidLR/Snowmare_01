@@ -1401,7 +1401,9 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			if (State.bHasDefencePost)
 			{
 				View.bHasDefencePost = true;
-				View.bAtPost = View.bAtPost || PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
+				// The defence post, not a tactical spawn post. OR-ing those made a man on his
+				// spawn post look finished, so he never walked to the access.
+				View.bAtPost = PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
 			}
 		}
 	}

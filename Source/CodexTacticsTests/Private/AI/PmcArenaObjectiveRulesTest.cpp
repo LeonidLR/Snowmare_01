@@ -168,6 +168,10 @@ bool FPmcArenaObjectiveOrderTest::RunTest(const FString&)
 	TestEqual(TEXT("defender on his post does not flank"), PmcCommanderRules::ScoreOrder(EPmcOrder::Flank, OnPost, Contact, Weights), 0.f);
 	TestEqual(TEXT("defender on his post does not advance"), PmcCommanderRules::ScoreOrder(EPmcOrder::Advance, OnPost, Contact, Weights), 0.f);
 	TestEqual(TEXT("defender on his post does not take cover"), PmcCommanderRules::ScoreOrder(EPmcOrder::TakeCover, OnPost, Contact, Weights), 0.f);
+	// 900 cm is inside the 12 m area, so Objective is already 0 there. The layout stair is outside that bubble.
+	FPmcFighterView OutsidePost = OnPost;
+	OutsidePost.Objective.DistanceCm = 2500.f;
+	TestEqual(TEXT("defender on his post is not pulled by Objective"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, OutsidePost, Contact, Weights), 0.f);
 	OnPost.bSectorShift = true;
 	TestTrue(TEXT("a sector shooter on his post still shifts"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, OnPost, Contact, Weights) > 0.f);
 	OnPost.bSectorShift = false;
