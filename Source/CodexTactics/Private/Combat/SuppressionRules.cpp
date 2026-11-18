@@ -73,6 +73,9 @@ namespace SuppressionRules
 		{ TEXT("zone.radius_cm"), &FSuppressionConfig::ZoneRadiusCm },
 		{ TEXT("zone.duration_seconds"), &FSuppressionConfig::ZoneDurationSeconds },
 		{ TEXT("zone.min_squad_distance_cm"), &FSuppressionConfig::ZoneMinSquadDistanceCm },
+		{ TEXT("zone.detour_tie_band_cm"), &FSuppressionConfig::ZoneDetourTieBandCm },
+		{ TEXT("zone.detour_look_ahead_cm"), &FSuppressionConfig::ZoneDetourLookAheadCm },
+		{ TEXT("zone.detour_pack_radius_cm"), &FSuppressionConfig::ZoneDetourPackRadiusCm },
 	};
 
 	/** The values in force (GetConfig / SetConfig); loaded from the file on the first GetConfig. */
@@ -260,6 +263,28 @@ namespace SuppressionRules
 		// Two blasts close together do not stack beyond the cap; the stronger one counts.
 		State.Burst = FMath::Clamp(FMath::Max(State.Burst, Amount), 0.f, FMath::Max(0.f, Config.ExplosionMaxBurst));
 		State.Tier = ResolveStateTier(Config, State);
+	}
+
+	float FearDetourLateralOffset(const FVector& Enemy, const FVector& Centre, const FVector& OutwardAxis)
+	{
+		const FVector Axis = OutwardAxis.GetSafeNormal2D();
+		return static_cast<float>(FVector::CrossProduct(Axis, Enemy - Centre).Z);
+	}
+
+	int8 PickFearDetourSide(float LateralCm, float TieBandCm)
+	{
+		if (FMath::Abs(LateralCm) <= FMath::Max(0.f, TieBandCm))
+		{
+			return 0;
+		}
+		return LateralCm > 0.f ? 1 : -1;
+	}
+
+	int8 TakeFearDetourTieSide(FSuppressionFireCell& Cell)
+	{
+		const int8 Side = Cell.NextTieSide;
+		Cell.NextTieSide = static_cast<int8>(-Side);
+		return Side;
 	}
 
 	int32 FindFireCell(const FSuppressionConfig& Config, const TArray<FSuppressionFireCell>& Cells, const FVector& End)

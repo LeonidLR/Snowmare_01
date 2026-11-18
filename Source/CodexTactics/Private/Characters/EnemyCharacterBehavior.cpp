@@ -141,13 +141,15 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	FVector Fire;
 	float FireRadius = 0.f;
 	bool bSuppressionZone = false;
+	uint64 NearZoneId = 0;
 	const bool bNearFire = bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire
-		&& FindNearestFireZone(bFleeingFire ? 100.f : 0.f, Fire, FireRadius, &bSuppressionZone);
+		&& FindNearestFireZone(bFleeingFire ? 100.f : 0.f, Fire, FireRadius, &bSuppressionZone, &NearZoneId);
 	if (bNearFire)
 	{
 		const AActor* Victim = CurrentTarget.Get();
 		const FVector VictimLocation = Victim ? Victim->GetActorLocation() : FVector::ZeroVector;
-		const FVector Direction = EnemyAIRules::FleeDirection(GetActorLocation(), Fire, Victim ? &VictimLocation : nullptr);
+		const int8 TurnDirection = Victim ? ResolveSuppressionDetourSide(NearZoneId, GetActorLocation(), Fire, VictimLocation) : 0;
+		const FVector Direction = EnemyAIRules::FleeDirection(GetActorLocation(), Fire, Victim ? &VictimLocation : nullptr, TurnDirection);
 		if (AIC)
 		{
 			RequestAIMoveToLocation(AIC, GetActorLocation() + Direction * 300.f, 50.f);
@@ -383,6 +385,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		FVector Zone;
 		float ZoneRadius = 0.f;
 		FVector Waypoint;
+		uint64 DetourZoneId = 0;
 		if (TargetVehicle)
 		{
 			// APC P4: up to the hull side nearest it (the parked hull is carved out of the navmesh).
@@ -394,9 +397,15 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 			// feet instead, round the wall's end.
 			RequestAIMoveToLocation(AIC, TargetFeet, 30.f);
 		}
-		else if (bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && FindNearestFireZone(800.f, Zone, ZoneRadius)
+		else if (bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire
+			&& FindNearestFireZone(800.f, Zone, ZoneRadius, nullptr, &DetourZoneId, true)
 			&& EnemyAIRules::FireDetourWaypoint(Feet, Zone, ZoneRadius + 50.f, TargetPosition, Waypoint))
 		{
+			if (const int8 TurnDirection = ResolveSuppressionDetourSide(DetourZoneId, Feet, Zone, TargetPosition))
+			{
+				EnemyAIRules::FireDetourWaypoint(Feet, Zone, ZoneRadius + 50.f, TargetPosition, Waypoint,
+					EnemyAIRules::FireDetourStepDegrees, TurnDirection);
+			}
 			if (FVector::Dist2D(Feet, Waypoint) > 60.f)
 			{
 				RequestAIMoveToLocation(AIC, Waypoint, 30.f);
@@ -779,8 +788,56 @@ bool AEnemyCharacter::IsInFearZone(const FVector& Location, const AActor* Candid
 	return false;
 }
 
-bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius, bool* bOutSuppressionZone) const
+int8 AEnemyCharacter::ResolveSuppressionDetourSide(uint64 ZoneId, const FVector& Feet, const FVector& Centre, const FVector& Target)
 {
+	if (ZoneId == 0 || Archetype != EEnemyArchetype::FrostHound)
+	{
+		return 0;
+	}
+	if (SuppressionDetourZoneId != ZoneId)
+	{
+		SuppressionDetourZoneId = ZoneId;
+		const FSuppressionConfig& Config = SuppressionRules::GetConfig();
+		const FVector2D FromZone(Feet - Centre);
+		const float PackRadiusSq = FMath::Square(FMath::Max(0.f, Config.ZoneDetourPackRadiusCm));
+		FVector PackCentre = Feet;
+		int32 PackCount = 1;
+		for (const AEnemyCharacter* Mate : UEnemyRegistrySubsystem::GetEnemyCharacters(GetWorld()))
+		{
+			if (!IsValid(Mate) || Mate == this || Mate->Archetype != Archetype || Mate->IsDying())
+			{
+				continue;
+			}
+			const FVector Position = Mate->GetActorLocation();
+			if (FVector::DistSquared2D(Position, Feet) <= PackRadiusSq && FVector2D::DotProduct(FVector2D(Position - Centre), FromZone) > 0.f)
+			{
+				PackCentre += Position;
+				++PackCount;
+			}
+		}
+		// The pack's approach axis goes through the zone and the approaching hounds. A shared prey can be off that axis.
+		const FVector OutwardAxis = PackCount > 1 ? PackCentre / PackCount - Centre : Centre - Target;
+		const float LateralCm = SuppressionRules::FearDetourLateralOffset(Feet, Centre, OutwardAxis);
+		SuppressionDetourSide = SuppressionRules::PickFearDetourSide(LateralCm, Config.ZoneDetourTieBandCm);
+		if (SuppressionDetourSide == 0)
+		{
+			USuppressionSubsystem* Suppression = GetWorld() ? GetWorld()->GetSubsystem<USuppressionSubsystem>() : nullptr;
+			SuppressionDetourSide = Suppression ? Suppression->TakeFearDetourTieSide(ZoneId) : 0;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Suppression] %s detour: side %+d, lateral %.0f cm, pack %d, feet %s, centre %s, prey %s"),
+			*GetName(), static_cast<int32>(SuppressionDetourSide), LateralCm, PackCount, *Feet.ToCompactString(),
+			*Centre.ToCompactString(), *Target.ToCompactString());
+	}
+	return SuppressionDetourSide;
+}
+
+bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& OutRadius, bool* bOutSuppressionZone,
+	uint64* OutZoneId, bool bLookAheadForHoundApproach) const
+{
+	if (OutZoneId)
+	{
+		*OutZoneId = 0;
+	}
 	if (bOutSuppressionZone)
 	{
 		*bOutSuppressionZone = false;
@@ -823,8 +880,11 @@ bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& 
 	// (no wall check: the rounds land there). The same fire-fearing enemies: hounds, cutters, the frostbitten and their zombie variants.
 	FVector Zone;
 	float ZoneRadius = 0.f;
+	uint64 ZoneId = 0;
+	const float SuppressionExtra = bLookAheadForHoundApproach && Archetype == EEnemyArchetype::FrostHound
+		? SuppressionRules::GetConfig().ZoneDetourLookAheadCm : Extra;
 	if (const USuppressionSubsystem* Suppression = World ? World->GetSubsystem<USuppressionSubsystem>() : nullptr;
-		Suppression && Suppression->FindFearZone(Feet, Extra, Zone, ZoneRadius))
+		Suppression && Suppression->FindFearZone(Feet, SuppressionExtra, Zone, ZoneRadius, &ZoneId))
 	{
 		const float Distance = FVector::Dist2D(Feet, Zone);
 		if (Distance - ZoneRadius < BestMargin)
@@ -832,6 +892,10 @@ bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& 
 			BestMargin = Distance - ZoneRadius;
 			OutFire = Zone;
 			OutRadius = ZoneRadius;
+			if (OutZoneId)
+			{
+				*OutZoneId = ZoneId;
+			}
 			bFound = true;
 			if (bOutSuppressionZone)
 			{
