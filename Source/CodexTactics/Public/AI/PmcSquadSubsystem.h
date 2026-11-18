@@ -308,6 +308,11 @@ private:
 		double LastSectorShiftAt = -1e9;
 		/** World time an enemy last shot at him (NotifyShotAt; -1e9: never). */
 		double LastShotAtTime = -1e9;
+		/**
+		 * G008b: world time a known enemy entered this overwatch post's engagement range (-1: none in range now).
+		 * ambush_max_hold_s counts from here, not from the team's first contact.
+		 */
+		double PostRangeContactAt = -1.0;
 	};
 
 	struct FTeam
