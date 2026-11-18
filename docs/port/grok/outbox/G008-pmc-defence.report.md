@@ -65,3 +65,50 @@
 - `test.ps1 -Smart -Base main` при `CODEX_SMOKE_REMOTE=off`: 30 из 32 смоуков зелёные, exit 1 из-за SuppressionSmoke и таймаута SaveLoad. SaveLoad потом зелёный отдельно. Именной локальный набор (крыша ×3, stalemate, arena tactical, TacticalMap) зелёный.
 - Лестница `B_gallery` на живой крыше Depot не встречалась. Её числа закрыты юнит-тестом правил.
 - Не пушил и не мержил.
+
+## API follow-up
+
+Branch `claude-api/g008-fixes` (on `grok/G008-pmc-defence` `8b79a5f2`). Review `docs/port/grok/outbox/G008-api-review.md`, findings 1-6. One commit per finding. Nothing pushed; main untouched; thresholds unchanged (spread >= 5 m, guard share > 0.6, shared cover pairs 0, stalemate re-decide <= 6).
+
+| Finding | Commit | What changed |
+| --- | --- | --- |
+| 6 FindCoverNear cost | `3b466047` | The spacing key (`GetPathName` + `CoverObjectKey` Printf) is built only when `ClaimedPosts` is non-empty. With no claims `SpacingFactor` is 1, so behaviour is identical. |
+| 5 refresh loop | `458a9706` | `PmcSquadLocal::LivingSquadIndices` (sorted, unique) over `GetTeamMembers` is used by both Decide's change test and RefreshDefence. |
+| 4 IsWalkShort | `229c7771` | **Not inverted.** `IsWalkShort` is true while he is still *far*, so `!IsWalkShort -> Hold` held near men and walked far ones, like the attacker ring branch. Flipping it would have frozen far defenders. The real mismatch: that branch counted "there" at `ArriveCm` 250 cm, while `bAtPost` uses `PostArriveCm` 200 cm. Both now use `IsAtPost(PostArriveCm)`. |
+| 2 sector shift | `f296f4c2` | Shift = `shift_after_s` on post (never at 0) AND (shot at in the last 2 s OR no target seen for `shift_no_target_s` 6) AND `shift_cooldown_s` 20 since his last shift. The wedge move happens only when the view allowed it. The cooldown is stamped on the attempt. The shift walk does not sprint while he sees a target. |
+| 1 off-post fight | `468d633d` | Off post before contact: only the walk. In contact: fight orders keep their normal scores, the walk scores 1.05 (0.75 under fire), Advance / Flank 0. Sprints unless under fire. Unreachable post: after `defence_post_walks` 3 short / refused walks he becomes a no-wedge sector shooter on the nearest roof spot with a full path, then (second drop) where he stands. |
+| 3 Retake / Occupy | `10d54c26` | `DefenderPointPull` restores the fix/pmc-arena-stalemate numbers. Retake is 0.2 + 0.8 x HoldFrac with attackers on the point, for any defender including the guard. Occupy is 0.8 on the push, or 0.9 on a late clock (from 60 %, full at 85 %); with posts only the occupier occupies (the shooter whose post is nearest the point, else the guard). `ResolveRound` still pays a time win only for defenders alone on the point, so that win is possible again. The executor walks onto the ring when the pull beats the area walk. |
+
+Found while smoking finding 1, folded into `468d633d`:
+- `HasOwnMoveOrder()` reads false mid-sprint.
+- The tactical `bSettlePost` fired for defenders: their tactical spawn post never settles, so Ambush re-ran the defence walk **every decision**. That is the review's "re-issues Walk every decision", and it already existed on `8b79a5f2`. In PmcStalemateSmoke it produced 44 Ambush re-issues for one man and 3 false "short walks" per second. A defence post now disables it. The defence re-check also waits until the man stands still and the order is 2.5 s old.
+- A walk that ended short counts only when he is not under fire. Pinned prone (`goes prone against the flash`) is not unreachable: the guard had dropped the stair post that way and settled 4.1 m from the access.
+- A walk score of 0.5 in contact lost to a rocket (0.94) on the roof, where the street is visible at once. That run had guard share 0.00, hence 1.05 / 0.75.
+
+### Numbers (final tree `10d54c26`, same binary)
+
+| Seed | Spread, m | Guard share | Objective share | Pairs | Result | Log |
+| --- | --- | --- | --- | --- | --- | --- |
+| 1 | 10.6 | 0.92 | 0.00 | 0 | PASS | `Saved/Logs/Smoke-PmcRoofDefenceSmoke.log` |
+| 2 | 6.7 | 0.71 | 0.14 (3 Retake orders, scores 0.20 / 0.27 / 0.38) | 0 | PASS | `Smoke-PmcRoofDefenceSmoke-seed2.log` |
+| 3 | 9.5 | 0.95 | 0.00 | 0 | PASS | `Smoke-PmcRoofDefenceSmoke-seed3.log` |
+
+Grok's `9c0f35f0` for comparison: 10.3 / 0.91 / 0.00, 9.6 / 0.77 / 0.00, 9.2 / 0.89 / 0.00.
+- Seed 2 is the narrowest: spread 6.7 m against 5, guard share 0.71 against 0.6.
+- The seed-2 Objective share is now non-zero because the defender Moreau retook the point while the attackers held it (finding 3 working). Before, it was 0 by construction.
+- Sector posts at (-1655, 2259) and (-1672, 1954) on the seed-1 roof, and (-4308, 4004) on seed 3, are dropped as unreachable after 3 walks. The men hold where they stand, and no roof spot had a full path. Before this follow-up they stood short of the post forever with only Ambush scoring.
+
+Gates:
+- `Scripts/build.ps1` Succeeded.
+- `Scripts/test.ps1 -Filter CodexTactics.AI`: 96 tests, 0 failed.
+- `smoke_parallel.ps1 -Remote off -NoRetry`: PmcRoofDefenceSmoke PASS 65.6 s, PmcStalemateSmoke PASS 59.2 s (re-decide 6 <= 6, churn 17.07 <= 20, longest quiet 0.8 s), PmcArenaTacticalSmoke PASS 74.2 s, TacticalMapSmoke PASS 52.9 s, 0 failed.
+- Seeds 2 and 3 were launched directly (the same `-UseFixedTimeStep -FPS=60 -FixedSeed -SquadStart=formation -LevelJson=L_PmcArenaDepot.json`, `ExecCmds=CodexTactics.PmcRoofDefenceSmoke seed=N`), because smoke_parallel cannot pass smoke arguments.
+
+Budget: over plan.
+- Builds: 5 instead of 1. The first smoke batch failed (roof guard 0.00 / 0.07, stalemate re-decide 11), and three fix rounds followed.
+- Smoke batches: 4 runs of the 4-smoke batch plus the seed pair. The last batch is the clean one.
+
+Watch:
+- Stalemate re-decide sits exactly at its limit (6 <= 6).
+- Seed 2 guard share has 0.11 of margin.
+- The `HasOwnMoveOrder()`-false-while-sprinting behaviour probably also affects tactical-post settling for non-defenders. Not touched here.
