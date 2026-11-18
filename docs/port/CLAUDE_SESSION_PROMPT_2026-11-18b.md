@@ -58,3 +58,9 @@ G008 merge -> G008b (Grok) -> PMC_DEFENCE P2 deploy orders (API agent) -> P3 att
 - HANDOVER: Antigravity offline ~18:00, Codex ~19:00 (designer). They commit WIP + a handover note (topics gemini-085, codex-046).
   Then: API agent in CodexTactics-gemday: 085b remainder (if any) -> 087; API agent in CodexTactics-agents: 046 remainder. 084 waits
   for Antigravity's return. API ledger 66.9 / 100 USD at 17:00 - budget 087 ~12, 046 ~8; keep >= 10 USD for tomorrow's reviews.
+- Grok: 44 % used at ~17:00 (today's share spent). Tonight ONLY Codex's 046 remainder (after Codex's handover commit) on
+  grok-4.7-build-fast, low --max-turns, in CodexTactics-grok (branch from codex/046-peekmines); if it grows - stop, API agent finishes.
+  11-19 from the new share: G008b overwatch hold, SuppressionSmoke red (grok-4.7). So the API agent takes only 087 tonight.
+- Morning 11-19 first steps: get_usage; read the worker night report (trainer pmc-v6-qd2 with G008: cells filled, defender metrics,
+  clips -> designer's phone) + the frozen-tree sweep FAIL list; review / merge what landed overnight (HitchProbe, 087, 046, 085b,
+  building-kit session parts); ask the designer for Grok /usage; open designer questions are in "Designer questions open" above.
