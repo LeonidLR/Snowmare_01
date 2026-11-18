@@ -100,6 +100,13 @@ public:
 	/** Generated (Generate ran on this world's navmesh). */
 	bool HasGenerated() const { return bGenerated; }
 
+	/**
+	 * The world preload's call (UGameplayPreloadSubsystem, under the loading cover - world timers do not run while it pauses the world): generates
+	 * now when the level-start poll still waits and the navmesh is built. True = nothing left to wait for (generated, off on this map, or the poll
+	 * gave up); false = the navmesh is not ready yet. Keeps the ~0.1 s generation out of the first gameplay frames (HitchProbeSmoke, 2026-11-18).
+	 */
+	bool TryGenerateForPreload();
+
 	const TArray<FDropLink>& GetLinks() const { return Links; }
 	const FDropLink* GetLink(int32 Index) const { return Links.IsValidIndex(Index) ? &Links[Index] : nullptr; }
 
@@ -132,6 +139,8 @@ public:
 
 private:
 	void PollNavigationReady();
+	/** The infantry navmesh exists and no navigation build runs. */
+	bool IsNavigationReady() const;
 	/** The level config of this map (the game mode's), null without. */
 	const class ULevelConfigAsset* GetLevelConfig() const;
 	void HandleLinkReached(UNavLinkCustomComponent* ThisComp, UObject* PathComp, const FVector& DestPoint);

@@ -481,6 +481,23 @@ bool UMinimapSubsystem::TrySetup()
 	return bReady;
 }
 
+bool UMinimapSubsystem::TrySetupForPreload()
+{
+	UWorld* World = GetWorld();
+	const USquadSubsystem* Squad = World ? World->GetSubsystem<USquadSubsystem>() : nullptr;
+	if (bReady || !World || !World->HasBegunPlay() || !Squad || !Squad->GetLeader())
+	{
+		return true; // ready, or the level-start Tick path sets it up later as before
+	}
+	// The squad is placed under the preload already; only the navmesh build is left to settle (the preload bounds the wait).
+	if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World); Nav && Nav->IsNavigationBuildInProgress())
+	{
+		return false;
+	}
+	Rebuild();
+	return true;
+}
+
 FBox UMinimapSubsystem::ComputeArea() const
 {
 	UWorld* World = GetWorld();
