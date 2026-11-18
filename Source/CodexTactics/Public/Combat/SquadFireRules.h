@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Combat/CombatGroundRules.h"
 
 class UGodotBalanceAsset;
 
@@ -71,8 +72,28 @@ namespace SquadFireRules
 	/** Elevated when the shooter's centre is >= 1.5 m above the target (+25 % range, +15 % damage, over low cover). */
 	CODEXTACTICS_API FElevationAdvantage GetElevationAdvantage(float ShooterFeetZ, float TargetFeetZ);
 
-	/** Under a platform: >= 1.8 m above, within 2.4 m horizontally and >= 45° down. */
+	/** fire_gate.json "dead_zone" (FireGateRules::GetConfig().DeadZone; the FDeadZoneConfig defaults when the file is missing). */
+	CODEXTACTICS_API const FDeadZoneConfig& GetDeadZoneConfig();
+
+	/**
+	 * Under a platform: chest-to-feet drop, within the horizontal limit and at least the angle down. Geometry only - never hold a
+	 * shot on it alone: the one production caller is CombatGround::BlocksShot (G007 final review 5, grep 2026-11-18).
+	 */
 	CODEXTACTICS_API bool IsInDeadZone(const FVector& ShooterFeet, const FVector& TargetFeet);
+
+	/**
+	 * The zone models a floor or edge between the shooter and the target. Geometry (IsInDeadZone) applies only when
+	 * that floor actually blocks: the shot trace to the target is blocked, or he stands on a level surface whose edge
+	 * is between them (IsLevelEdgeBetween). A clear trace on a shared slope or stair is not a dead zone.
+	 */
+	CODEXTACTICS_API bool AppliesDeadZone(const FVector& ShooterFeet, const FVector& TargetFeet, bool bTraceBlocked, bool bLevelEdge);
+
+	/**
+	 * The floor profile probed from the shooter's feet ([0]) to the target's (last), CombatGround::ProbeFloor. A platform edge is
+	 * two neighbouring samples whose floor drops by at least "dead_zone" edge_drop_cm (its own key, not the chest-to-feet
+	 * min_delta_z_cm: a 0.8 m platform is an edge too). A missed probe is unknown, never an edge. A slope / stair is no edge.
+	 */
+	CODEXTACTICS_API bool IsLevelEdgeBetween(TConstArrayView<FFloorSample> Profile, float SpacingCm);
 
 	/** Barricade rules: elevated shots bypass it, prone is blocked, crouched gets cover 0.8, standing shoots over. */
 	CODEXTACTICS_API FShotLineVerdict JudgeLine(EShotLineHit Hit, EOperativeStance Stance, const FElevationAdvantage& Elevation);

@@ -235,6 +235,18 @@ bool FFireGateTuningTest::RunTest(const FString&)
 	TestEqual(TEXT("... its key"), Patched.RaiseSeconds, 0.35f);
 	TestEqual(TEXT("... the unknown key reported"), PatchUnknown.Num(), 1);
 	TestFalse(TEXT("no params object: refused"), ApplyJson(TEXT("{}"), Patched));
+	// G007: the dead zone / ground probe / melee reach sections come through the same loader (no second file reader).
+	for (const TCHAR* Key : { TEXT("dead_zone.edge_drop_cm"), TEXT("ground_probe.spacing_cm"), TEXT("melee_reach.step_max_cm"), TEXT("melee_reach.height_cap_cm") })
+	{
+		TestTrue(FString::Printf(TEXT("%s is a known key"), Key), KnownKeys().Contains(Key));
+	}
+	FFireGateConfig Sections;
+	TArray<FString> SectionUnknown;
+	TestTrue(TEXT("sections apply"), ApplyJson(TEXT("{\"params\": {}, \"dead_zone\": {\"comment\": \"x\", \"edge_drop_cm\": 70, \"nope\": 1}, \"melee_reach\": {\"step_max_cm\": 40}}"),
+		Sections, &SectionUnknown));
+	TestEqual(TEXT("... dead_zone.edge_drop_cm"), Sections.DeadZone.EdgeDropCm, 70.f);
+	TestEqual(TEXT("... melee_reach.step_max_cm"), Sections.MeleeReach.StepMaxCm, 40.f);
+	TestTrue(TEXT("... a section's unknown key reported with its section, its comment not"), SectionUnknown.Num() == 1 && SectionUnknown[0] == TEXT("dead_zone.nope"));
 	return true;
 }
 

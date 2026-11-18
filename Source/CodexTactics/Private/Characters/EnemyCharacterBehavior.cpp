@@ -4,6 +4,7 @@
 // Godot reference: Scenes/movements/enemy_base.gd (_process_enemy_behavior, _find_target); pack tactics UE-only.
 
 #include "Characters/EnemyCharacter.h"
+#include "Combat/CombatGroundQuery.h"
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Combat/KnockdownRules.h"
@@ -19,6 +20,7 @@
 #include "AI/PmcOperatorRules.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "Characters/OperativeCharacter.h"
+#include "GameFramework/Character.h"
 #include "Characters/SquadSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Engine/World.h"
@@ -198,7 +200,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	// Latched per target (no switching back to the detour: FacingSmoke's crowding hounds turned back and forth).
 	if (bHasOrder && Order.Role == EEnemyTacticRole::Flank && Target && FlankDoneTarget.Get() != Target)
 	{
-		const FVector MyFeet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		const FVector MyFeet = CombatGround::FeetOf(*this);
 		if (FlankDetourTarget.Get() != Target)
 		{
 			FlankDetourTarget = Target;
@@ -220,7 +222,10 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		FFlankDetourInput Detour;
 		Detour.DistanceToPointCm = FVector::Dist2D(MyFeet, Order.MovePoint);
 		Detour.DistanceToTargetCm = FVector::Dist2D(MyFeet, TargetFeet);
-		Detour.BiteReachCm = EnemyAIRules::MeleeReachPlanar(AttackRange, FMath::Abs(Target->GetActorLocation().Z - MyFeet.Z));
+		// G007: the bite reach on the real ground (the same rule as the bite itself, CombatGround::CanMelee).
+		Detour.BiteReachCm = Target->IsA<ACharacter>()
+			? CombatGround::MeleeReachPlanar(*GetWorld(), *this, *Target, AttackRange)
+			: EnemyAIRules::MeleeReachPlanar(AttackRange, FMath::Abs(Target->GetActorLocation().Z - MyFeet.Z));
 		const FVector FromTarget = (MyFeet - TargetFeet).GetSafeNormal2D();
 		const FVector FlankDirection = (Order.MovePoint - TargetFeet).GetSafeNormal2D();
 		Detour.AngleFromFlankDeg = FlankDirection.IsNearlyZero() ? 180.f
@@ -309,11 +314,17 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 	}
 
 	// 2. Melee reach (Godot: attack range and at most 1.2 m of height difference), else close in.
-	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const FVector Feet = CombatGround::FeetOf(*this);
 	// APC P4: a vehicle is reached at its nearest hull side (a 7.8 m hull: its pivot is metres away), at the feet's height.
 	const FVector TargetPosition = TargetVehicle ? FVector(FVector2D(TargetVehicle->GetClosestHullPoint(Feet)), Feet.Z) : GodotPosition(Target);
 	// Bug 06 (2026-11-01): a blow needs a clear line too - within reach behind a wall it walks round (the close-in below), every melee enemy.
-	const bool bInReach = EnemyAIRules::CanMelee(FVector::Dist(Feet, TargetPosition), FMath::Abs(TargetPosition.Z - Feet.Z), AttackRange);
+	// G007: a character is bitten by the ground rule (feet-to-feet cap, shared ground probed, a ledge measured to the body point);
+	// the close-in below stops at the planar reach of that same rule.
+	const bool bCharacterTarget = !TargetVehicle && Target->IsA<ACharacter>();
+	const FVector TargetFeet = bCharacterTarget ? CombatGround::FeetOf(*Target) : TargetPosition;
+	const bool bInReach = bCharacterTarget
+		? CombatGround::CanMelee(*GetWorld(), *this, *Target, AttackRange)
+		: EnemyAIRules::CanMelee(FVector::Dist(Feet, TargetPosition), FMath::Abs(TargetPosition.Z - Feet.Z), AttackRange);
 	FString MeleeBlocker;
 	const bool bMeleeLine = !bInReach || TargetVehicle || HasClearMeleeLine(Target, Feet, &MeleeBlocker);
 	if (bInReach && !bMeleeLine)
@@ -341,6 +352,10 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		{
 			if (Target->IsA<AOperativeCharacter>())
 			{
+				// The shove inside AttackTarget moves the operative after this test. Keep the pose the reach rule used.
+				LastMeleeAttackerFeet = Feet;
+				LastMeleeTargetFeet = TargetFeet;
+				bHasLastMeleeStrikeFeet = true;
 				AttackTarget(Target);
 			}
 			else
@@ -377,7 +392,7 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 		{
 			// Bug 06: within reach through a wall - MoveToActor would count it as there (its reach test adds both radii): a path to his
 			// feet instead, round the wall's end.
-			RequestAIMoveToLocation(AIC, Target->IsA<ACharacter>() ? TargetPosition - FVector(0.f, 0.f, 100.f) : TargetPosition, 30.f);
+			RequestAIMoveToLocation(AIC, TargetFeet, 30.f);
 		}
 		else if (bFearsFire && AIConfig.bFireFearEnabled && !bBravingFire && FindNearestFireZone(800.f, Zone, ZoneRadius)
 			&& EnemyAIRules::FireDetourWaypoint(Feet, Zone, ZoneRadius + 50.f, TargetPosition, Waypoint))
@@ -416,9 +431,12 @@ void AEnemyCharacter::TickBehavior(float DeltaTime)
 			{
 				// MoveToActor's reach test adds both capsule radii: AttackRange x 0.5 stops hounds 1.7 m off, out of their own
 				// reach (bug hunt 2026-10-18). Codex.Enemy.MeleeCloseIn 1 (ai_tuning.json, user approval 2026-10-18) closes in.
+				// G007: a character target's planar reach comes from the bite's own ground rule (a ramp's body-point height of
+				// 1.8 m left no planar reach: the enemy pushed into the operative instead of stopping).
+				const float PlanarReach = bCharacterTarget ? CombatGround::MeleeReachPlanar(*GetWorld(), *this, *Target, AttackRange)
+					: EnemyAIRules::MeleeReachPlanar(AttackRange, FMath::Abs(TargetPosition.Z - Feet.Z));
 				const float Acceptance = EnemyCharacterLocal::CVarMeleeCloseIn.GetValueOnGameThread() != 0
-					? EnemyAIRules::MeleeApproachAcceptance(AttackRange, FMath::Abs(TargetPosition.Z - Feet.Z), GetSimpleCollisionRadius(),
-						Target->GetSimpleCollisionRadius())
+					? EnemyAIRules::MeleeApproachAcceptanceForReach(PlanarReach, AttackRange, GetSimpleCollisionRadius(), Target->GetSimpleCollisionRadius())
 					: AttackRange * 0.5f;
 				RequestAIMoveToActor(AIC, Target, Acceptance);
 			}
@@ -485,7 +503,7 @@ bool AEnemyCharacter::IsTargetReachableOnFoot(const AActor* Target) const
 	const FVector Extent(100.f, 100.f, 250.f);
 	FNavLocation Start;
 	FNavLocation Goal;
-	const FVector TargetFeet = GodotPosition(Target) - FVector(0.f, 0.f, 100.f);
+	const FVector TargetFeet = Target->IsA<ACharacter>() ? CombatGround::FeetOf(*Target) : GodotPosition(Target) - FVector(0.f, 0.f, 100.f);
 	// The goal is projected with the enemy's own filter: a crouched operative's feet inside a barricade's vault strip snap to the
 	// walkable ground beside it, not onto the strip the enemy may not enter (that made every cover spot look "unreachable").
 	if (!Nav->ProjectPointToNavigation(GetNavAgentLocation(), Start, Extent, NavData, Filter)
@@ -600,7 +618,7 @@ AActor* AEnemyCharacter::FindTarget() const
 	// APC P4: a manned vehicle (the crew inside is the damage proxy's: the hull takes the blows), at its nearest hull point.
 	if (AVehiclePawn* Vehicle = FindVehicleTarget())
 	{
-		const FVector EnemyFeet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+		const FVector EnemyFeet = CombatGround::FeetOf(*this);
 		FEnemyTargetCandidate Candidate{ EEnemyTargetKind::Vehicle, Vehicle->GetClosestHullPoint(EnemyFeet), true };
 		Candidate.Weight = VehicleHullRules::GetEnemyTargetWeight(Archetype != EEnemyArchetype::Brute,
 			Vehicle->HullConfig);
@@ -671,7 +689,7 @@ AActor* AEnemyCharacter::FindTarget() const
 		Candidates = AllCandidates;
 	}
 	const bool bTurretHit = LastAttackerSource.Contains(TEXT("Турель")) || LastAttackerSource.Contains(TEXT("Turret")); // cyrillic-ok: legacy Russian data
-	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const FVector Feet = CombatGround::FeetOf(*this);
 	const int32 CurrentIndex = Actors.IndexOfByKey(CurrentTarget.Get());
 	const int32 Index = EnemyAIRules::SelectTarget(AIConfig, EnemyAIRules::IsSmallEnemy(Archetype), Feet, Candidates, bTurretHit,
 		bObjectDistractionAllowed, CurrentIndex);
@@ -768,7 +786,7 @@ bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& 
 		*bOutSuppressionZone = false;
 	}
 	UWorld* World = GetWorld();
-	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const FVector Feet = CombatGround::FeetOf(*this);
 	float BestMargin = TNumericLimits<float>::Max();
 	bool bFound = false;
 	auto Consider = [&](const FVector& Location, float Radius, const AActor* SourceOwner)
@@ -827,7 +845,7 @@ bool AEnemyCharacter::FindNearestFireZone(float Extra, FVector& OutFire, float& 
 bool AEnemyCharacter::FindNearestFire(FVector& OutFire) const
 {
 	UWorld* World = GetWorld();
-	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const FVector Feet = CombatGround::FeetOf(*this);
 	float MinDistance = AIConfig.FireFearRadius;
 	bool bFound = false;
 	for (TActorIterator<ABarrelActor> It(World); It; ++It)
@@ -884,7 +902,7 @@ AActor* AEnemyCharacter::FindBlockingObstacle(const AActor* Target) const
 			}
 		}
 	}
-	const FVector Feet = GetActorLocation() - FVector(0.f, 0.f, GetSimpleCollisionHalfHeight());
+	const FVector Feet = CombatGround::FeetOf(*this);
 	const FVector TargetPosition = Target ? GodotPosition(Target) : FVector::ZeroVector;
 	const int32 Index = EnemyAIRules::SelectBlockingObstacle(Feet, Target ? &TargetPosition : nullptr, Obstacles);
 	return Actors.IsValidIndex(Index) ? Actors[Index] : nullptr;

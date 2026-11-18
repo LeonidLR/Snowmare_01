@@ -1,6 +1,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Combat/CombatGroundRules.h"
 
 /**
  * The fire gate (bugs 058c / 061, game designer 2026-11-15: "he faces the wall and his rounds fly at the enemy"; "they fire first and turn
@@ -50,6 +51,13 @@ struct CODEXTACTICS_API FFireGateConfig
 	 * stance's CornerAimOutwardDeg 100 left the crouched barrel ~37 deg off every target). "crouch_corner_aim_outward_deg"
 	 */
 	float CrouchCornerAimOutwardDeg = 64.f;
+
+	/** fire_gate.json "dead_zone" (G007): the platform dead zone, read by SquadFireRules / CombatGround. */
+	FDeadZoneConfig DeadZone;
+	/** fire_gate.json "ground_probe" (G007): the floor probe between two pairs of feet (dead zone edge, melee shared ground). */
+	FGroundProbeConfig GroundProbe;
+	/** fire_gate.json "melee_reach" (G007): the enemy's blow on uneven ground (EnemyAIRules::CanMeleeOnGround, every caller). */
+	FMeleeReachConfig MeleeReach;
 };
 
 /** Why the gate holds a round (EFireGateBlock::None = the round may leave). */
@@ -103,9 +111,14 @@ namespace FireGateRules
 	/** Re-reads fire_gate.json (game start); false = the file is missing / unreadable (the values in force are kept). */
 	CODEXTACTICS_API bool ReloadConfig();
 	CODEXTACTICS_API FString GetDefaultPath();
+	/** Every tunable key: "params" keys as they are, the other sections as "section.key" (e.g. "dead_zone.edge_drop_cm"). */
 	CODEXTACTICS_API TArray<FString> KnownKeys();
 	CODEXTACTICS_API bool GetValue(const FFireGateConfig& Config, const FString& Key, float& OutValue);
-	/** Applies a fire_gate.json text ("params" object) over InOut; unknown / non-numeric keys go to OutUnknown. False without "params". */
+	/**
+	 * Applies a fire_gate.json text over InOut: the "params" object and, when present, "dead_zone" / "ground_probe" / "melee_reach";
+	 * unknown / non-numeric keys go to OutUnknown ("section.key" outside "params"; a section's "comment" is text, not a key). False
+	 * without "params".
+	 */
 	CODEXTACTICS_API bool ApplyJson(const FString& JsonText, FFireGateConfig& InOut, TArray<FString>* OutUnknown = nullptr);
 
 	/** The gate is on (Enabled > 0.5). */

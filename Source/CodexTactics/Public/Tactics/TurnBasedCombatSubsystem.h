@@ -561,6 +561,14 @@ private:
 	void EnemyAttack(AActor* Enemy, AActor* Target, const FIntPoint& TargetPos);
 	void EnemyRetreat(AActor* Enemy, const FIntPoint& TargetPos);
 	/**
+	 * G007 final review 2: Enemy's bite on Target would connect from Cell under the real-time ground rule (CombatGround::CanMeleeAt,
+	 * GridMeleeRange). Its own cell: its feet; another cell: that cell at its feet height (the grid mover keeps the height). The
+	 * bite, the bite-cell choice and the target choice all use it, so an enemy never parks below a ledge.
+	 */
+	bool CanBiteFromCell(const AActor* Enemy, const AActor* Target, const FIntPoint& Cell) const;
+	/** Some orthogonal neighbour of TargetPos (its own cell or a free walkable one outside Fear) Enemy could bite Target from. */
+	bool HasBiteCell(const AActor* Enemy, const AActor* Target, const FIntPoint& TargetPos, const TSet<FIntPoint>& Fear) const;
+	/**
 	 * Enemy tactics (EnemyTurnRules / EnemyTacticsRules, user decisions 2026-10-04): the operative to go for - the
 	 * archetype's preferences (wounded, straggler, exposed, turned away), the attackers already sent at each this
 	 * phase, the ones melee enemies can reach. nullptr: none left.

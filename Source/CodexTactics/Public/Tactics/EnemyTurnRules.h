@@ -40,6 +40,11 @@ struct CODEXTACTICS_API FEnemyMeleeCell
 	int32 PathCost = 0;
 	/** Godot attack-arc damage multiplier from that cell (front 1, flank / back more). */
 	float ArcMultiplier = 1.f;
+	/**
+	 * The bite connects from there (G007 final review 2: the real-time ground rule, CombatGround::CanMeleeAt - a cell below a
+	 * 1.1 m ledge is no bite cell). False: never chosen, like an unreachable cell.
+	 */
+	bool bCanBite = true;
 };
 
 /** A cell a ranged enemy could shoot Target from. */
@@ -69,7 +74,8 @@ namespace EnemyTurnRules
 
 	/**
 	 * The cell to bite from: among those it reaches with AP left for the bite, the best arc (weighted by the profile)
-	 * for the least walking; if none leaves AP for the bite, the nearest (it closes in). INDEX_NONE: none reachable.
+	 * for the least walking; if none leaves AP for the bite, the nearest (it closes in). Cells without a bite (bCanBite false, a
+	 * ledge) are never chosen. INDEX_NONE: none reachable.
 	 */
 	CODEXTACTICS_API int32 ChooseMeleeCell(const FEnemyTurnProfile& Profile, const TArray<FEnemyMeleeCell>& Cells, int32 AP);
 

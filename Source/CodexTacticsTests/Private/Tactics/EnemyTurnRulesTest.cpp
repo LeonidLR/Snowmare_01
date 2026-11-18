@@ -83,5 +83,21 @@ bool FEnemyTurnMeleeTest::RunTest(const FString& Parameters)
 	Cells[0].PathCost = -1;
 	Cells[1].PathCost = -1;
 	TestEqual(TEXT("unreachable: none"), EnemyTurnRules::ChooseMeleeCell(Cutter, Cells, 4), static_cast<int32>(INDEX_NONE));
+
+	// G007 final review 2: the enemy already stands next to the target but below a 1.1 m ledge (cost 0, no bite): it repaths to
+	// the reachable bite cell instead of parking there; with no bite cell at all there is no choice (the target is unusable).
+	FEnemyMeleeCell Below;
+	Below.Cell = FIntPoint(0, 1);
+	Below.PathCost = 0;
+	Below.bCanBite = false;
+	FEnemyMeleeCell Ramp;
+	Ramp.Cell = FIntPoint(0, -1);
+	Ramp.PathCost = 3;
+	Cells = { Below, Ramp };
+	TestEqual(TEXT("below the ledge: repaths to the bite cell (frostbitten)"), EnemyTurnRules::ChooseMeleeCell(Horde, Cells, 6), 1);
+	TestEqual(TEXT("below the ledge: repaths to the bite cell (cutter)"), EnemyTurnRules::ChooseMeleeCell(Cutter, Cells, 6), 1);
+	TestEqual(TEXT("below the ledge, too little AP: closes in on the bite cell"), EnemyTurnRules::ChooseMeleeCell(Horde, Cells, 2), 1);
+	Cells[1].bCanBite = false;
+	TestEqual(TEXT("no bite cell: none"), EnemyTurnRules::ChooseMeleeCell(Horde, Cells, 6), static_cast<int32>(INDEX_NONE));
 	return true;
 }

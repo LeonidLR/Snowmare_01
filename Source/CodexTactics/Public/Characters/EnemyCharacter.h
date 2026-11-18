@@ -406,6 +406,18 @@ public:
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	float GetAttackRange() const { return AttackRange; }
 
+	/** Feet from the last melee decision, before AttackTarget's shove. False until a blow starts. */
+	bool GetLastMeleeStrikeFeet(FVector& OutAttackerFeet, FVector& OutTargetFeet) const
+	{
+		if (!bHasLastMeleeStrikeFeet)
+		{
+			return false;
+		}
+		OutAttackerFeet = LastMeleeAttackerFeet;
+		OutTargetFeet = LastMeleeTargetFeet;
+		return true;
+	}
+
 	UFUNCTION(BlueprintPure, Category = "CodexTactics|Enemy")
 	float GetAttackCooldown() const { return AttackCooldown; }
 
@@ -999,6 +1011,11 @@ protected:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
 	float AttackRange = 180.0f; // 1.8m
+
+	/** Pose used by the reach test that started the last blow (the shove moves the capsules afterwards). */
+	bool bHasLastMeleeStrikeFeet = false;
+	FVector LastMeleeAttackerFeet = FVector::ZeroVector;
+	FVector LastMeleeTargetFeet = FVector::ZeroVector;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "CodexTactics|Enemy")
 	float AttackCooldown = 1.0f;

@@ -1,4 +1,5 @@
 #include "Combat/SquadFireRules.h"
+#include "Combat/FireGateRules.h"
 #include "Data/GodotBalanceAsset.h"
 
 namespace
@@ -48,15 +49,31 @@ FElevationAdvantage SquadFireRules::GetElevationAdvantage(float ShooterFeetZ, fl
 	return Result;
 }
 
+const FDeadZoneConfig& SquadFireRules::GetDeadZoneConfig()
+{
+	return FireGateRules::GetConfig().DeadZone;
+}
+
 bool SquadFireRules::IsInDeadZone(const FVector& ShooterFeet, const FVector& TargetFeet)
 {
-	const float DeltaZ = ShooterFeet.Z + 100.f - TargetFeet.Z;
-	if (DeltaZ < 180.f)
+	const FDeadZoneConfig& Config = GetDeadZoneConfig();
+	const float DeltaZ = ShooterFeet.Z + Config.ChestOffsetCm - TargetFeet.Z;
+	if (DeltaZ < Config.MinDeltaZCm)
 	{
 		return false;
 	}
 	const float Horizontal = FVector::Dist2D(ShooterFeet, TargetFeet);
-	return Horizontal <= 240.f && FMath::Atan2(DeltaZ, Horizontal) >= FMath::DegreesToRadians(45.f);
+	return Horizontal <= Config.MaxHorizontalCm && FMath::Atan2(DeltaZ, Horizontal) >= FMath::DegreesToRadians(Config.MinAngleDeg);
+}
+
+bool SquadFireRules::AppliesDeadZone(const FVector& ShooterFeet, const FVector& TargetFeet, bool bTraceBlocked, bool bLevelEdge)
+{
+	return IsInDeadZone(ShooterFeet, TargetFeet) && (bTraceBlocked || bLevelEdge);
+}
+
+bool SquadFireRules::IsLevelEdgeBetween(TConstArrayView<FFloorSample> Profile, float SpacingCm)
+{
+	return CombatGroundRules::HasLevelEdge(Profile, GetDeadZoneConfig().EdgeDropCm, SpacingCm);
 }
 
 FShotLineVerdict SquadFireRules::JudgeLine(EShotLineHit Hit, EOperativeStance Stance, const FElevationAdvantage& Elevation)

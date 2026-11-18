@@ -3,6 +3,7 @@
 // Godot reference: Scenes/movements/enemy_base.gd (_attack_target), enemy_frost_spitter.gd, enemy_cutter.gd (jump attack).
 
 #include "Characters/EnemyCharacter.h"
+#include "Combat/CombatGroundQuery.h"
 #include "Vehicles/VehiclePawn.h"
 #include "Vehicles/VehicleSubsystem.h"
 #include "Combat/KnockdownComponent.h"
@@ -33,11 +34,7 @@ namespace EnemyCombatInternal
 	/** A character's feet (its capsule bottom), anything else its location. */
 	FVector FeetOf(const AActor& Actor)
 	{
-		if (const ACharacter* Character = Cast<ACharacter>(&Actor))
-		{
-			return Character->GetActorLocation() - FVector(0.f, 0.f, Character->GetSimpleCollisionHalfHeight());
-		}
-		return Actor.GetActorLocation();
+		return CombatGround::FeetOf(Actor);
 	}
 }
 

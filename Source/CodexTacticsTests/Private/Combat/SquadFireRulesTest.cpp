@@ -26,6 +26,74 @@ bool FSquadFireRulesTest::RunTest(const FString&)
 	TestFalse(TEXT("Dead zone needs 1.8 m"), SquadFireRules::IsInDeadZone(FVector(0.f, 0.f, 70.f), FVector(100.f, 0.f, 0.f)));
 	TestTrue(TEXT("Right under the platform"), SquadFireRules::IsInDeadZone(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f)));
 	TestFalse(TEXT("Too far out"), SquadFireRules::IsInDeadZone(FVector(0.f, 0.f, 200.f), FVector(300.f, 0.f, 0.f)));
+	// G007: the same geometry is a dead zone only when the floor blocks. A clear trace on a shared slope is a shot.
+	TestFalse(TEXT("Clear slope: no dead zone"), SquadFireRules::AppliesDeadZone(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), false, false));
+	TestTrue(TEXT("Blocked trace: the platform zone applies"), SquadFireRules::AppliesDeadZone(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), true, false));
+	TestTrue(TEXT("Level edge: the platform zone applies"), SquadFireRules::AppliesDeadZone(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), false, true));
+	// G007 API review 2-4: the floor profile like CombatGround::ProbeFloor ([0] = the shooter's feet, probes, last = the target's
+	// feet); FloorAt < -1000 = a probe that found no floor (unknown).
+	auto Profile = [](const FVector& Shooter, const FVector& Target, TFunctionRef<float(float)> FloorAt, float& OutSpacing)
+	{
+		const float Horizontal = FVector::Dist2D(Shooter, Target);
+		TArray<FFloorSample> Samples;
+		Samples.Add({ 0.f, static_cast<float>(Shooter.Z), true });
+		for (const float Distance : CombatGroundRules::ProbeDistances(Horizontal, FGroundProbeConfig(), OutSpacing))
+		{
+			const float Z = FloorAt(Distance);
+			Samples.Add({ Distance, Z, Z > -1000.f });
+		}
+		Samples.Add({ Horizontal, static_cast<float>(Target.Z), true });
+		return Samples;
+	};
+	auto DeadZoneHolds = [&](const FVector& Shooter, const FVector& Target, TFunctionRef<float(float)> FloorAt)
+	{
+		float Spacing = 0.f;
+		const TArray<FFloorSample> Floor = Profile(Shooter, Target, FloorAt, Spacing);
+		return SquadFireRules::AppliesDeadZone(Shooter, Target, false, SquadFireRules::IsLevelEdgeBetween(Floor, Spacing));
+	};
+	// 2. Platforms 0.8 / 1.2 / 1.8 m, lip 50 cm out, target 1 m out below: an edge (its own edge_drop_cm, not min_delta_z_cm).
+	for (const float Height : { 80.f, 120.f, 180.f })
+	{
+		TestTrue(*FString::Printf(TEXT("%.1f m platform: dead zone"), Height / 100.f), DeadZoneHolds(FVector(0.f, 0.f, Height), FVector(100.f, 0.f, 0.f),
+			[Height](float D) { return D <= 50.f ? Height : 0.f; }));
+	}
+	// 3. The lip 30-60 cm out (the old probe loop took none there): a lip at 55 cm with the target further out, and the
+	// review's case - the target 55 cm out right under the lip - and one 20 cm out (no probe at all: feet to feet).
+	TestTrue(TEXT("lip at 55 cm, target 1.2 m out: dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(120.f, 0.f, 0.f),
+		[](float D) { return D <= 55.f ? 200.f : 0.f; }));
+	TestTrue(TEXT("on the lip, target 55 cm out: dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(55.f, 0.f, 0.f),
+		[](float D) { return D <= 40.f ? 200.f : 0.f; }));
+	TestTrue(TEXT("on the lip, target 20 cm out: dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(20.f, 0.f, 0.f),
+		[](float) { return 200.f; }));
+	TestTrue(TEXT("target right under the platform: dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f),
+		[](float) { return 200.f; }));
+	// 4. Real stairs: a steep stair (2 m over 1.5 m) is no edge; with open risers / grating / a probe off the side the missed probes
+	// are unknown, never an edge (the old code read them as a 5 m drop).
+	auto StairAt = [](float D) { return 200.f - D * (200.f / 150.f); };
+	TestFalse(TEXT("steep stair: no dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), StairAt));
+	TestFalse(TEXT("open stair, every other probe missed: no dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f),
+		[StairAt](float D) { return FMath::RoundToInt(D / 25.f) % 2 == 0 ? -5000.f : StairAt(D); }));
+	TestFalse(TEXT("open stair, every probe missed: no dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f),
+		[](float) { return -5000.f; }));
+	// Final review 6: melee bridges an isolated missed probe (IsSharedGround), the dead-zone edge does not - a lone miss right
+	// at a 2 m lip stays unknown (no edge -> the shot is not held by the edge test), and melee does not bridge it either (200 cm).
+	{
+		auto LipMissed = [](float D) { return FMath::IsNearlyEqual(D, 50.f, 1.f) ? -5000.f : (D < 50.f ? 200.f : 0.f); };
+		TestFalse(TEXT("lone miss at the lip: unknown, no dead-zone edge"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), LipMissed));
+		float Spacing = 0.f;
+		const TArray<FFloorSample> Floor = Profile(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), LipMissed, Spacing);
+		TestFalse(TEXT("lone miss at the lip: no edge"), CombatGroundRules::HasLevelEdge(Floor, SquadFireRules::GetDeadZoneConfig().EdgeDropCm, Spacing));
+		TestFalse(TEXT("lone miss at the lip: melee does not bridge 2 m"), CombatGroundRules::IsSharedGround(Floor, FMeleeReachConfig().StepMaxCm));
+		// The open stair above (every other probe missed): shared ground for melee, still no edge for the dead zone.
+		const TArray<FFloorSample> Open = Profile(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f),
+			[StairAt](float D) { return FMath::RoundToInt(D / 25.f) % 2 == 0 ? -5000.f : StairAt(D); }, Spacing);
+		TestFalse(TEXT("open stair: no dead-zone edge"), CombatGroundRules::HasLevelEdge(Open, SquadFireRules::GetDeadZoneConfig().EdgeDropCm, Spacing));
+	}
+	TestFalse(TEXT("shared slope: no dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f),
+		[](float D) { return 200.f - D * (200.f / 150.f); }));
+	const FDeadZoneConfig& DeadZone = SquadFireRules::GetDeadZoneConfig();
+	TestTrue(TEXT("Dead zone numbers from the fire config"), DeadZone.ChestOffsetCm == 100.f && DeadZone.MinDeltaZCm == 180.f
+		&& DeadZone.MaxHorizontalCm == 240.f && DeadZone.MinAngleDeg == 45.f && DeadZone.EdgeDropCm == 60.f);
 
 	const FElevationAdvantage Flat;
 	TestTrue(TEXT("Clear line"), SquadFireRules::JudgeLine(EShotLineHit::Clear, EOperativeStance::Prone, Flat).bCanHit);

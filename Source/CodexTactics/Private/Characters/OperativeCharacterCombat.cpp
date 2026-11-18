@@ -132,7 +132,7 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 		Reason = TEXT("corner shot impossible from this cover");
 		return false;
 	}
-	if (!World || SquadFireRules::IsInDeadZone(MyFeet, EnemyFeet))
+	if (!World)
 	{
 		Reason = TEXT("dead zone");
 		return false;
@@ -205,6 +205,15 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 		Out.bExposedAim = true;
 		Out.AimPoint = Exposed;
 	}
+	// G007: the platform dead zone. A clear muzzle line on a shared slope is a shot; a blocked line or a level edge is not.
+	{
+		const AActor* Ignore[] = { this, Enemy };
+		if (CombatGround::BlocksShot(*World, MyFeet, EnemyFeet, Kind == EShotLineHit::Blocked, Ignore))
+		{
+			Reason = TEXT("dead zone");
+			return false;
+		}
+	}
 	const FShotLineVerdict Verdict = SquadFireRules::JudgeLine(Kind, Stance, Elevation);
 	bOutBarricadeBlocked = Verdict.bBarricadeBlocked;
 	if (!Verdict.bCanHit)
@@ -259,7 +268,7 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	{
 		return false; // Sprint 12 (a silhouette out on the open side: a normal shot, user decision 2026-10-06)
 	}
-	if (!World || SquadFireRules::IsInDeadZone(MyFeet, GhostFeet))
+	if (!World)
 	{
 		return false;
 	}
@@ -285,6 +294,13 @@ bool AOperativeCharacter::EvaluateBlindLine(const AEnemyGhostActor& Ghost, FShoo
 	if (World->LineTraceSingleByChannel(Hit, bCornerShot ? GetCoverFireOrigin() : GetMuzzleLocation(), Ghost.GetAimPoint(), ECC_Visibility, Params) && Hit.GetActor())
 	{
 		Kind = Hit.GetActor()->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
+	}
+	{
+		const AActor* Ignore[] = { this };
+		if (CombatGround::BlocksShot(*World, MyFeet, GhostFeet, Kind == EShotLineHit::Blocked, Ignore))
+		{
+			return false;
+		}
 	}
 	// Suppression into cover: a barricade at the silhouette does not stop a standing / crouched shooter (JudgeLine).
 	const FShotLineVerdict Verdict = SquadFireRules::JudgeLine(Kind, Stance, Elevation);

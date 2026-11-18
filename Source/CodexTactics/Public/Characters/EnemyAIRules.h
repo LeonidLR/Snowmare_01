@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Combat/CombatGroundRules.h"
 #include "Combat/SquadFireRules.h"
 #include "Data/CombatTypes.h"
 
@@ -146,6 +147,39 @@ namespace EnemyAIRules
 	/** Godot can_melee_attack: within the attack range and at most 1.2 m of height difference. */
 	CODEXTACTICS_API bool CanMelee(float DistanceCm, float HeightDifferenceCm, float AttackRangeCm);
 
+	/**
+	 * Melee against a character on uneven ground, from both pairs of feet (G007 + API review). The height capped by HeightCapCm is
+	 * feet-to-feet. Off shared ground (a ledge, a crate, a gap, unknown floor) the distance is measured to the target's body point
+	 * (feet + BodyOffsetCm), the Godot rule: feet 1.1 m up a ledge are >= 2.1 m of body-point distance away whatever the horizontal,
+	 * so a ledge is never in reach. On shared ground (bSharedGround: the floor between them rises smoothly, CombatGroundRules::
+	 * IsSharedGround over the probed profile - not the angle alone) the vertical part blends from that body point to feet-to-feet,
+	 * fully at SlopeFullDeg: flat ground is exactly the old rule, a ramp no longer stacks its rise on the +1 m. The blend applies
+	 * only uphill (target feet higher): downhill the body point is the nearer one, so a target lower on a ramp keeps the old
+	 * body-point reach (final review 1) - and the floor between them never changes a downhill verdict (no probe). The single rule every
+	 * caller uses (real time via CombatGround::CanMelee, turn-based, RampFightSmoke).
+	 */
+	CODEXTACTICS_API bool CanMeleeOnGround(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm, bool bSharedGround,
+		const FMeleeReachConfig& Config);
+	/** The same with fire_gate.json "melee_reach" (FireGateRules::GetConfig().MeleeReach). */
+	CODEXTACTICS_API bool CanMeleeOnGround(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm, bool bSharedGround);
+
+	/** CanMeleeOnGround with the shared-ground verdict taken from a floor profile (attacker first, target last). */
+	CODEXTACTICS_API bool CanMeleeOverProfile(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm,
+		TConstArrayView<FFloorSample> Profile, const FMeleeReachConfig& Config);
+
+	/**
+	 * Largest planar distance at which CanMeleeOnGround passes for a target whose feet are TargetFeetHeightCm (signed) above the
+	 * attacker's, cm (0 = never: over the height cap). Off shared / on flat ground: MeleeReachPlanar(range, height + body offset).
+	 */
+	CODEXTACTICS_API float MeleeReachPlanarOnGround(float AttackRangeCm, float TargetFeetHeightCm, bool bSharedGround, const FMeleeReachConfig& Config);
+
+	/**
+	 * Turn-based bite (grid adjacency stands in for the attack range): the range for a bite PlanarCm away is at least the flat-ground
+	 * body-point distance at that spacing, so an orthogonal neighbour on flat ground always bites; the ground rule (ledge / height
+	 * cap / shared slope) is the real-time one.
+	 */
+	CODEXTACTICS_API float GridMeleeRange(float AttackRangeCm, float PlanarCm, const FMeleeReachConfig& Config);
+
 	/** Planar distance at which CanMelee passes for that height difference (sqrt(range^2 - height^2)), cm. */
 	CODEXTACTICS_API float MeleeReachPlanar(float AttackRangeCm, float HeightDifferenceCm);
 
@@ -157,6 +191,13 @@ namespace EnemyAIRules
 	 * Returns min(AttackRange x 0.5, planar reach - both radii - MarginCm floored to 5 cm), at least 0.
 	 */
 	CODEXTACTICS_API float MeleeApproachAcceptance(float AttackRangeCm, float HeightDifferenceCm, float SelfRadiusCm, float GoalRadiusCm,
+		float MarginCm = 15.f);
+
+	/**
+	 * The same from a planar bite reach already worked out on the ground (CombatGround::MeleeReachPlanar, G007): the close-in step
+	 * stops where the bite reaches, not where a 1.8 m body-point height on a ramp left no planar reach at all.
+	 */
+	CODEXTACTICS_API float MeleeApproachAcceptanceForReach(float PlanarReachCm, float AttackRangeCm, float SelfRadiusCm, float GoalRadiusCm,
 		float MarginCm = 15.f);
 
 	/**
