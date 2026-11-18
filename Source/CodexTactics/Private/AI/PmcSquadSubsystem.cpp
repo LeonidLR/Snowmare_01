@@ -1400,6 +1400,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 				View.Objective.RadiusCm, Team.Defence.bRoof ? Team.Defence.Spots : TArray<FPmcDefenceSpot>(), Config);
 			if (State.bHasDefencePost)
 			{
+				View.bHasDefencePost = true;
 				View.bAtPost = View.bAtPost || PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
 			}
 		}
@@ -2022,7 +2023,8 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			if (!PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm))
 			{
 				bKeepGoalLevel = true;
-				bTaken = Walk(State.DefencePost, false);
+				// Sprint once the fight has started. A quiet walk is still right before contact.
+				bTaken = Walk(State.DefencePost, Team.bEverContact);
 				if (bTaken)
 				{
 					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s walks to his %s post %s"), TeamId, *Fighter.DisplayName.ToString(),

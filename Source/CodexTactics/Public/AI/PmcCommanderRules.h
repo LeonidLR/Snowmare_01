@@ -486,6 +486,11 @@ struct CODEXTACTICS_API FPmcFighterView
 	float PostScore = 0.f;
 	bool bAtPost = false;
 	/**
+	 * G008: this defender has an access or sector post. Until he stands on it, only Ambush scores (the walk).
+	 * On it, FallBack / Flank / Advance / TakeCover score 0 so he does not path off the roof. Default false.
+	 */
+	bool bHasDefencePost = false;
+	/**
 	 * G008: a sector shooter moves to the next spot of his own wedge (shift_after_s on the post, or exposed in contact).
 	 * Default false, so Relocate scores exactly as it did before the flag existed.
 	 */

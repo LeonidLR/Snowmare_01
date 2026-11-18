@@ -107,6 +107,21 @@ namespace PmcCommanderRules
 		{
 			return 0.f;
 		}
+		// G008: a roof fight sees the street at once, so Ambush's contact gate is already closed and FallBack
+		// pathfinds the guard down the stair. He finishes the walk onto his post, then does not leave it.
+		// A sector shooter may still Relocate along his wedge. Attackers never set bHasDefencePost.
+		if (F.Objective.Role == EPmcRole::Defender && F.bHasDefencePost)
+		{
+			if (!F.bAtPost)
+			{
+				return Order == EPmcOrder::Ambush ? FMath::Max(W.Ambush, 1.f) : 0.f;
+			}
+			if (Order == EPmcOrder::FallBack || Order == EPmcOrder::Flank || Order == EPmcOrder::Advance
+				|| Order == EPmcOrder::TakeCover || (Order == EPmcOrder::Relocate && !F.bSectorShift))
+			{
+				return 0.f;
+			}
+		}
 		const float Contact = Step(S.bContact);
 		const float SeenNow = Step(F.bHasThreat && F.Threat.bSeenNow);
 		const float InRange = Step(F.bHasThreat && F.Threat.DistanceCm <= F.WeaponRangeCm);

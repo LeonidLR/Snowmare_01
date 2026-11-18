@@ -149,6 +149,35 @@ bool FPmcArenaObjectiveOrderTest::RunTest(const FString&)
 	TestTrue(TEXT("sector shift relocates without contact"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, Shift, Squad, Weights) > 0.f);
 	Shift.bSectorShift = false;
 	TestEqual(TEXT("without the flag Relocate stays 0"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, Shift, Squad, Weights), 0.f);
+	// Contact on a roof closes Ambush and FallBack walks the guard down the stair. Off the post only the walk scores.
+	// On the post he stays; a sector shooter may still shift along his wedge. An attacker is unchanged.
+	FPmcFighterView OffPost = ObjectiveFighter(EPmcRole::Defender, 900.f, 0.f);
+	OffPost.bHasDefencePost = true;
+	FPmcSquadView Contact = Squad;
+	Contact.bContact = true;
+	Contact.bEverContact = true;
+	TestEqual(TEXT("defender off his post keeps the walk after contact"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, OffPost, Contact, Weights), 1.f, 0.001f);
+	TestEqual(TEXT("defender off his post does not fall back"), PmcCommanderRules::ScoreOrder(EPmcOrder::FallBack, OffPost, Contact, Weights), 0.f);
+	FPmcFighterView OnPost = OffPost;
+	OnPost.bAtPost = true;
+	OnPost.HealthFrac = 0.2f;
+	OnPost.bHasThreat = true;
+	OnPost.Threat.bSeenNow = true;
+	OnPost.Threat.DistanceCm = 800.f;
+	TestEqual(TEXT("defender on his post does not fall back"), PmcCommanderRules::ScoreOrder(EPmcOrder::FallBack, OnPost, Contact, Weights), 0.f);
+	TestEqual(TEXT("defender on his post does not flank"), PmcCommanderRules::ScoreOrder(EPmcOrder::Flank, OnPost, Contact, Weights), 0.f);
+	TestEqual(TEXT("defender on his post does not advance"), PmcCommanderRules::ScoreOrder(EPmcOrder::Advance, OnPost, Contact, Weights), 0.f);
+	TestEqual(TEXT("defender on his post does not take cover"), PmcCommanderRules::ScoreOrder(EPmcOrder::TakeCover, OnPost, Contact, Weights), 0.f);
+	OnPost.bSectorShift = true;
+	TestTrue(TEXT("a sector shooter on his post still shifts"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, OnPost, Contact, Weights) > 0.f);
+	OnPost.bSectorShift = false;
+	TestEqual(TEXT("the guard does not relocate off the access"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, OnPost, Contact, Weights), 0.f);
+	FPmcFighterView LosingAttacker = ObjectiveFighter(EPmcRole::Attacker, 800.f, 0.f);
+	LosingAttacker.HealthFrac = 0.2f;
+	LosingAttacker.bHasThreat = true;
+	LosingAttacker.Threat.bSeenNow = true;
+	LosingAttacker.Threat.DistanceCm = 800.f;
+	TestTrue(TEXT("an attacker still falls back when losing"), PmcCommanderRules::ScoreOrder(EPmcOrder::FallBack, LosingAttacker, Contact, Weights) > 0.f);
 	TestEqual(TEXT("defender within overwatch holds x 1.5"), PmcCommanderRules::ScoreOrder(EPmcOrder::Hold, ObjectiveFighter(EPmcRole::Defender, 900.f, 0.f), Squad, Weights),
 		PlainHold * 1.5f, 0.001f);
 	// The assault point standing in for a threat (no enemy known): a rifleman on it is not "too close" and holds it without the band penalty.
