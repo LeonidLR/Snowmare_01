@@ -129,21 +129,26 @@ bool FPmcArenaObjectiveOrderTest::RunTest(const FString&)
 	TestEqual(TEXT("attacker holds on the point x 1.5"), PmcCommanderRules::ScoreOrder(EPmcOrder::Hold, ObjectiveFighter(EPmcRole::Attacker, 300.f, 0.f), Squad, Weights),
 		PlainHold * 1.5f, 0.001f);
 	// Defender (PMC_DEFENCE.md D1): the defended area is the radius (600) times area_factor (2) = 1200 cm, on the level.
-	// Inside it Objective is 0, including a push and a late clock. Outside it the walk back is a flat 0.7, with no capture clock.
-	// 1500 cm used to be a retake (0.2 at clock 0, 1.0 at a full clock). It is outside the area, so both are 0.7.
+	// Outside it the walk back is a flat 0.7. On top of it is the point's pull (fix/pmc-arena-stalemate, restored by the G008
+	// follow-up): Retake 0.2 + 0.8 x HoldFrac with attackers on the point, Occupy on a late clock / push.
 	const float OutsideEarly = PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 1500.f, 0.f, true, 0.f), Squad, Weights);
 	const float OutsideLate = PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 1500.f, 0.f, true, 1.f), Squad, Weights);
-	TestEqual(TEXT("defender outside the area, clock 0: 0.7"), OutsideEarly, 0.7f, 0.001f);
-	TestEqual(TEXT("defender outside the area, full clock: still 0.7"), OutsideLate, 0.7f, 0.001f);
+	TestEqual(TEXT("defender outside the area, attackers on the point, their clock 0: the walk back 0.7 beats a 0.2 retake"), OutsideEarly, 0.7f, 0.001f);
+	TestEqual(TEXT("defender outside the area, attackers' clock full: retake 1.0"), OutsideLate, 1.f, 0.001f);
 	TestEqual(TEXT("defender inside the area: stays"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 900.f, 0.f), Squad, Weights), 0.f);
 	TestEqual(TEXT("defender outside the area: back into it 0.7"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, ObjectiveFighter(EPmcRole::Defender, 5000.f, 0.f), Squad, Weights), 0.7f, 0.001f);
 	FPmcFighterView OffLevel = ObjectiveFighter(EPmcRole::Defender, 1000.f, 0.9f);
 	OffLevel.Objective.bOnObjectiveLevel = false;
-	TestEqual(TEXT("defender off the objective level: back up 0.7"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, OffLevel, Squad, Weights), 0.7f, 0.001f);
+	TestEqual(TEXT("defender off the objective level, late clock: occupy 0.9"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, OffLevel, Squad, Weights), 0.9f, 0.001f);
+	OffLevel.Objective.TimeFrac = 0.f;
+	TestEqual(TEXT("defender off the objective level, early: back up 0.7"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, OffLevel, Squad, Weights), 0.7f, 0.001f);
 	FPmcFighterView RoofEdge = ObjectiveFighter(EPmcRole::Defender, 5000.f, 0.9f, true, 1.f);
 	RoofEdge.Objective.bDefenceAreaSet = true;
 	RoofEdge.Objective.bInsideDefenceArea = true;
-	TestEqual(TEXT("defender inside a set roof area: 0 even far from the point"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, RoofEdge, Squad, Weights), 0.f);
+	TestEqual(TEXT("defender inside a set roof area, attackers' clock full: he leaves to retake"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, RoofEdge, Squad, Weights), 1.f, 0.001f);
+	RoofEdge.Objective.bEnemyOnPoint = false;
+	RoofEdge.Objective.TimeFrac = 0.f;
+	TestEqual(TEXT("defender inside a set roof area, nobody on the point: 0 even far from it"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, RoofEdge, Squad, Weights), 0.f);
 	FPmcFighterView Shift = ObjectiveFighter(EPmcRole::Defender, 900.f, 0.f);
 	Shift.bSectorShift = true;
 	TestTrue(TEXT("sector shift relocates without contact"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, Shift, Squad, Weights) > 0.f);
@@ -199,6 +204,25 @@ bool FPmcArenaObjectiveOrderTest::RunTest(const FString&)
 	FPmcFighterView OutsidePost = OnPost;
 	OutsidePost.Objective.DistanceCm = 2500.f;
 	TestEqual(TEXT("defender on his post is not pulled by Objective"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, OutsidePost, Contact, Weights), 0.f);
+	// Review finding 3: the escape. Attackers on the point: any defender, the guard on his post included, may retake it.
+	FPmcFighterView GuardRetake = OutsidePost;
+	GuardRetake.HealthFrac = 1.f;
+	GuardRetake.Objective.bEnemyOnPoint = true;
+	GuardRetake.Objective.HoldFrac = 0.9f;
+	TestEqual(TEXT("guard on his post, attackers' clock at 0.9: retake 0.92"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, GuardRetake, Contact, Weights), 0.92f, 0.001f);
+	TestTrue(TEXT("the retake goes onto the point"), PmcCommanderRules::DefenderObjectiveToPoint(GuardRetake, Contact, Weights));
+	// Late clock, nobody on the point: only the occupier leaves his post, so the others keep the spread.
+	FPmcFighterView LatePost = OutsidePost;
+	LatePost.HealthFrac = 1.f;
+	LatePost.Objective.TimeFrac = 0.9f;
+	TestEqual(TEXT("late clock, not the occupier: stays on post"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, LatePost, Contact, Weights), 0.f);
+	TestFalse(TEXT("not the occupier: no walk onto the point"), PmcCommanderRules::DefenderObjectiveToPoint(LatePost, Contact, Weights));
+	LatePost.bDefenceOccupier = true;
+	TestEqual(TEXT("late clock, the occupier: onto the point 0.9"), PmcCommanderRules::ScoreOrder(EPmcOrder::Objective, LatePost, Contact, Weights), 0.9f, 0.001f);
+	TestTrue(TEXT("the occupier walks onto the point"), PmcCommanderRules::DefenderObjectiveToPoint(LatePost, Contact, Weights));
+	FPmcFighterView EarlyOff = OffPost;
+	EarlyOff.Objective.DistanceCm = 2500.f;
+	TestFalse(TEXT("off post, early, outside the area: the Objective walk goes to his post"), PmcCommanderRules::DefenderObjectiveToPoint(EarlyOff, Squad, Weights));
 	OnPost.bSectorShift = true;
 	TestTrue(TEXT("a sector shooter on his post still shifts"), PmcCommanderRules::ScoreOrder(EPmcOrder::Relocate, OnPost, Contact, Weights) > 0.f);
 	OnPost.bSectorShift = false;

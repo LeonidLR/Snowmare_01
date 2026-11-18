@@ -63,6 +63,20 @@ namespace PmcCommanderRules
 		/** A close-quarters advance must move him at least this far (the arrival radius of a walk). */
 		constexpr float MinAdvanceStepCm = 250.f;
 
+		/** G008: a defender's walk back into the defended area (0 inside it, and 0 on his defence post). */
+		inline float DefenderAreaScore(const FPmcFighterView& F, const FPmcWeights& W)
+		{
+			if (F.bHasDefencePost && F.bAtPost)
+			{
+				return 0.f;
+			}
+			const FPmcObjectiveView& O = F.Objective;
+			const bool bInside = O.bDefenceAreaSet
+				? O.bInsideDefenceArea
+				: PmcDefenceRules::IsInsideAreaFallback(O.bOnObjectiveLevel, O.DistanceCm, O.RadiusCm, W.AreaFactor);
+			return PmcDefenceRules::DefenderObjectiveScore(bInside, W.Objective, F.HealthFrac);
+		}
+
 		inline void ReadNumber(const FJsonObject& Json, const TCHAR* Key, float& Out)
 		{
 			double Value = 0.0;
@@ -127,13 +141,15 @@ namespace PmcCommanderRules
 				{
 					return FMath::Max(W.Ambush, 1.f) * (F.bUnderFire ? 0.75f : 1.05f);
 				}
-				if (!bFight || Order == EPmcOrder::Advance || Order == EPmcOrder::Flank)
+				// Objective is scored below on or off post: its area term is the walk back, and its point pull is the
+				// Retake / Occupy escape (review finding 3).
+				if (Order != EPmcOrder::Objective && (!bFight || Order == EPmcOrder::Advance || Order == EPmcOrder::Flank))
 				{
 					return 0.f;
 				}
 			}
 			else if (Order == EPmcOrder::FallBack || Order == EPmcOrder::Flank || Order == EPmcOrder::Advance
-				|| Order == EPmcOrder::TakeCover || Order == EPmcOrder::Objective
+				|| Order == EPmcOrder::TakeCover
 				|| (Order == EPmcOrder::Relocate && !F.bSectorShift))
 			{
 				return 0.f;
@@ -274,15 +290,12 @@ namespace PmcCommanderRules
 				return FMath::Max(W.Objective, 0.f) * Step(O.DistanceCm > 0.7f * O.RadiusCm) * (1.f - Urgency + Urgency * Clamp01(O.TimeFrac)) * F.HealthFrac
 					* Step(F.AmmoFrac > 0.1f) * (SeenNow > 0.f ? 0.6f : 1.f) * (O.bEnemyOnPoint ? 0.8f : 1.f) * AttentionFactor(F, W);
 			}
-			// A defender (PMC_DEFENCE.md D1): inside the defended area the order is 0, including a push and a late clock.
-			// He is not pulled into the capture ring. Outside it he walks back to his post, a flat 0.7, with no clock.
+			// A defender (PMC_DEFENCE.md D1): the area term is 0 inside the defended area, so he is not pulled into the capture ring.
+			// Outside it he walks back to his post at a flat 0.7. On his post it is 0, because a stair post can lie outside the 12 m bubble.
+			// The point's own pull (G008 follow-up, finding 3) is on top: Retake while the attackers stand on it, Occupy for the
+			// occupier on a push / late clock. Time wins still need a defender on the point (fix/pmc-arena-stalemate, ResolveRound).
 			// The attacker's branch above is unchanged. The capture clock is unchanged.
-			{
-				const bool bInside = O.bDefenceAreaSet
-					? O.bInsideDefenceArea
-					: PmcDefenceRules::IsInsideAreaFallback(O.bOnObjectiveLevel, O.DistanceCm, O.RadiusCm, W.AreaFactor);
-				return PmcDefenceRules::DefenderObjectiveScore(bInside, W.Objective, F.HealthFrac);
-			}
+			return FMath::Max(DefenderAreaScore(F, W), FMath::Max(W.Objective, 0.f) * DefenderPointPull(F, S, W) * FMath::Max(0.5f, F.HealthFrac));
 		}
 		case EPmcOrder::RpgStrike:
 			// The squad's RPG gunner (2026-11-09): a rocket target the team sees (the shared launcher rule's score, capped at 1) - worth more
@@ -337,6 +350,28 @@ namespace PmcCommanderRules
 	bool IsPushing(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
 	{
 		return Fighter.Objective.IsActive() && Weights.PushAfterSeconds > 0.f && Squad.QuietSeconds >= Weights.PushAfterSeconds;
+	}
+
+	float DefenderPointPull(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
+	{
+		using namespace PmcCommanderLocal;
+		const FPmcObjectiveView& O = Fighter.Objective;
+		if (!O.IsActive() || O.Role != EPmcRole::Defender)
+		{
+			return 0.f;
+		}
+		const bool bOffPoint = O.DistanceCm > 0.7f * O.RadiusCm;
+		const float Retake = Step(O.bEnemyOnPoint && bOffPoint) * (0.2f + 0.8f * Clamp01(O.HoldFrac));
+		const bool bMayOccupy = !Fighter.bHasDefencePost || Fighter.bDefenceOccupier;
+		const float Occupy = Step(bMayOccupy && bOffPoint)
+			* FMath::Max(Step(IsPushing(Fighter, Squad, Weights)) * 0.8f, Clamp01((O.TimeFrac - 0.6f) / 0.25f) * 0.9f);
+		return FMath::Max(Retake, Occupy);
+	}
+
+	bool DefenderObjectiveToPoint(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights)
+	{
+		const float Pull = FMath::Max(Weights.Objective, 0.f) * DefenderPointPull(Fighter, Squad, Weights) * FMath::Max(0.5f, Fighter.HealthFrac);
+		return Pull > 0.f && Pull >= PmcCommanderLocal::DefenderAreaScore(Fighter, Weights);
 	}
 
 	EPmcOrder PickCommitted(const TArray<FPmcOrderScore>& Scored, const FPmcCommitment& C, const FPmcWeights& W, EPmcPickReason* OutReason)

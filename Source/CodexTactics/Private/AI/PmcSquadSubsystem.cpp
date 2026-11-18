@@ -1428,6 +1428,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			View.Objective.bDefenceAreaSet = true;
 			View.Objective.bInsideDefenceArea = PmcDefenceRules::IsInsideDefendedArea(Feet, View.Objective.Location, Team.Defence.LevelZ,
 				View.Objective.RadiusCm, Team.Defence.bRoof ? Team.Defence.Spots : TArray<FPmcDefenceSpot>(), Config);
+			View.bDefenceOccupier = Fighter.SquadIndex == Team.Defence.OccupierIndex;
 			if (State.bHasDefencePost)
 			{
 				View.bHasDefencePost = true;
@@ -1668,6 +1669,8 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 				bHoldFire ? TEXT("holds his fire") : TEXT("opens fire"), View.Threat.DistanceCm, View.Threat.AttentionOff);
 		}
 		const TArray<FPmcOrderScore> Scored = PmcCommanderRules::ScoreAll(View, Own, Team.Weights);
+		// G008 follow-up (finding 3): which way a defender's Objective walk goes (onto the point to retake / occupy, or to his post).
+		View.bObjectiveToPoint = PmcCommanderRules::DefenderObjectiveToPoint(View, Own, Team.Weights);
 		Team.Stats.PushDecisions += PmcCommanderRules::IsPushing(View, Own, Team.Weights) ? 1 : 0;
 		// Order commitment (fix/pmc-arena-stalemate): a running order holds OrderMinHoldSeconds unless invalid, then only a clearly better one
 		// breaks it; a failed order sits out its cooldown.
@@ -2200,8 +2203,10 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	{
 		// Onto the point (task #53): each man to his own spot of a small ring round it (they do not stack on one navmesh point); sprint
 		// while the enemy does not see him.
-		// G008: a defender walks to his defence post, never onto the capture ring. With no post he holds where he is.
-		if (View.Objective.Role == EPmcRole::Defender)
+		// G008: a defender walks to his defence post. With no post he holds where he is.
+		// G008 follow-up (finding 3): to retake the point, or to occupy it on a push or late clock, he goes onto its ring like an
+		// attacker (the code below).
+		if (View.Objective.Role == EPmcRole::Defender && !View.bObjectiveToPoint)
 		{
 			if (!State.bHasDefencePost)
 			{
@@ -3537,6 +3542,22 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 
 	ClearDefencePosts(Team);
 	int32 SectorCount = 0;
+	// The occupier: the sector shooter nearest the point keeps the time win possible; the guard only when he is alone.
+	int32 Occupier = INDEX_NONE;
+	bool bOccupierIsShooter = false;
+	double OccupierDistSq = TNumericLimits<double>::Max();
+	for (const FPmcDefencePost& Post : Posts)
+	{
+		const bool bShooter = Post.Role == EPmcDefenceRole::SectorShooter;
+		const double DistSq = FVector::DistSquared(Post.Location, Objective.Location);
+		if ((bShooter && !bOccupierIsShooter) || (bShooter == bOccupierIsShooter && DistSq < OccupierDistSq))
+		{
+			Occupier = Post.Index;
+			bOccupierIsShooter = bShooter;
+			OccupierDistSq = DistSq;
+		}
+	}
+	Team.Defence.OccupierIndex = Occupier;
 	for (const FPmcDefencePost& Post : Posts)
 	{
 		if (Post.Role == EPmcDefenceRole::SectorShooter)

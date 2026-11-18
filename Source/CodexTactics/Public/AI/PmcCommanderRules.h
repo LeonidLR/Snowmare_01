@@ -42,7 +42,9 @@ enum class EPmcOrder : uint8
 	Crouch,
 	/**
 	 * The round's objective point (task #53, the arena): an attacker walks onto it (he wins by holding it). A defender's Objective
-	 * order is 0 inside the defended area (PMC_DEFENCE.md D1); outside it he walks back to his post, not into the capture ring.
+	 * order walks him back to his post from outside the defended area (PMC_DEFENCE.md D1). Inside it, and on his post, only the
+	 * point's pull scores: Retake while the attackers stand on it, Occupy for the occupier on a push or late clock
+	 * (PmcCommanderRules::DefenderPointPull).
 	 */
 	Objective,
 	/**
@@ -506,6 +508,13 @@ struct CODEXTACTICS_API FPmcFighterView
 	bool bSectorShift = false;
 	/** An enemy shot at him within the last couple of seconds (NotifyShotAt). Default false. */
 	bool bUnderFire = false;
+	/**
+	 * G008 follow-up (review finding 3): the one defender of a posted defence who occupies the point on a quiet push or a late
+	 * clock (time wins need a defender on the point, fix/pmc-arena-stalemate). A defender without a defence post always may.
+	 */
+	bool bDefenceOccupier = false;
+	/** Set by the subsystem from DefenderObjectiveToPoint before executing: a defender's Objective walk goes onto the point, not to his post. */
+	bool bObjectiveToPoint = false;
 };
 
 /** The squad as a whole. */
@@ -600,6 +609,18 @@ namespace PmcCommanderRules
 
 	/** The objective round's push (fix/pmc-arena-stalemate): an active objective and the team quiet for PushAfterSeconds (> 0). */
 	CODEXTACTICS_API bool IsPushing(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * The defender's pull onto the point (fix/pmc-arena-stalemate, restored by the G008 follow-up), 0..1 before the weight and health:
+	 * - Retake: attackers on the point and he is off it, 0.2 + 0.8 x HoldFrac (the more of their clock ran, the more urgent).
+	 *   Any defender, the guard included, may leave his post for it.
+	 * - Occupy: he is off the point on a quiet push (0.8) or a late clock (from 60 %, 0.9 at 85 %). With a posted defence only the
+	 *   occupier (bDefenceOccupier) does this; the others keep their posts. Without posts, everyone may.
+	 */
+	CODEXTACTICS_API float DefenderPointPull(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/** A defender's Objective order goes onto the point: the pull outscores his walk back into the area / to his post. */
+	CODEXTACTICS_API bool DefenderObjectiveToPoint(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
 
 	/** The order is a walk the man commits to (advance / flank / fall back / relocate / take cover). */
 	CODEXTACTICS_API bool IsMoveOrder(EPmcOrder Order);

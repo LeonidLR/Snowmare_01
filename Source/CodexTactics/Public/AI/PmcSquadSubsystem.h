@@ -373,6 +373,11 @@ private:
 			TArray<int32> LivingIndices;
 			/** How many wedges the living sector shooters were split into (0 when the only man is the guard). */
 			int32 SectorCount = 0;
+			/**
+			 * SquadIndex of the occupier (review finding 3): the sector shooter whose post is nearest the point, else the guard.
+			 * He alone walks onto the point on a quiet push or a late clock, so a time win stays possible.
+			 */
+			int32 OccupierIndex = INDEX_NONE;
 		};
 		FDefence Defence;
 	};
