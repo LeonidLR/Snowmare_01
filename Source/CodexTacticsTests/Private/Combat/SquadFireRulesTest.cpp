@@ -75,6 +75,20 @@ bool FSquadFireRulesTest::RunTest(const FString&)
 		[StairAt](float D) { return FMath::RoundToInt(D / 25.f) % 2 == 0 ? -5000.f : StairAt(D); }));
 	TestFalse(TEXT("open stair, every probe missed: no dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f),
 		[](float) { return -5000.f; }));
+	// Final review 6: melee bridges an isolated missed probe (IsSharedGround), the dead-zone edge does not - a lone miss right
+	// at a 2 m lip stays unknown (no edge -> the shot is not held by the edge test), and melee does not bridge it either (200 cm).
+	{
+		auto LipMissed = [](float D) { return FMath::IsNearlyEqual(D, 50.f, 1.f) ? -5000.f : (D < 50.f ? 200.f : 0.f); };
+		TestFalse(TEXT("lone miss at the lip: unknown, no dead-zone edge"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), LipMissed));
+		float Spacing = 0.f;
+		const TArray<FFloorSample> Floor = Profile(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f), LipMissed, Spacing);
+		TestFalse(TEXT("lone miss at the lip: no edge"), CombatGroundRules::HasLevelEdge(Floor, SquadFireRules::GetDeadZoneConfig().EdgeDropCm, Spacing));
+		TestFalse(TEXT("lone miss at the lip: melee does not bridge 2 m"), CombatGroundRules::IsSharedGround(Floor, FMeleeReachConfig().StepMaxCm));
+		// The open stair above (every other probe missed): shared ground for melee, still no edge for the dead zone.
+		const TArray<FFloorSample> Open = Profile(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f),
+			[StairAt](float D) { return FMath::RoundToInt(D / 25.f) % 2 == 0 ? -5000.f : StairAt(D); }, Spacing);
+		TestFalse(TEXT("open stair: no dead-zone edge"), CombatGroundRules::HasLevelEdge(Open, SquadFireRules::GetDeadZoneConfig().EdgeDropCm, Spacing));
+	}
 	TestFalse(TEXT("shared slope: no dead zone"), DeadZoneHolds(FVector(0.f, 0.f, 200.f), FVector(150.f, 0.f, 0.f),
 		[](float D) { return 200.f - D * (200.f / 150.f); }));
 	const FDeadZoneConfig& DeadZone = SquadFireRules::GetDeadZoneConfig();

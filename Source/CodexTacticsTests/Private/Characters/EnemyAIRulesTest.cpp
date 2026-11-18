@@ -108,9 +108,35 @@ bool FEnemyAIRulesTest::RunTest(const FString&)
 	// A stair (18 cm risers every 25 cm) is shared ground; a 50 cm crate is not.
 	const TArray<FFloorSample> Stair = Profile(150.f, 108.f, [](float D) { return FMath::FloorToFloat(D / 25.f + 0.01f) * 18.f; });
 	TestTrue(TEXT("Stair: shared ground"), CombatGroundRules::IsSharedGround(Stair, Reach.StepMaxCm));
+	// Final review 6: an open / grated stair. Isolated missed probes are bridged when the hits on both sides are within
+	// step_max_cm; two misses in a row (or a gap the bridge would hide) stay unknown.
 	TArray<FFloorSample> Missed = Stair;
 	Missed[2].bHit = false;
-	TestFalse(TEXT("A missed probe: not shared (unknown)"), CombatGroundRules::IsSharedGround(Missed, Reach.StepMaxCm));
+	TestTrue(TEXT("Stair, one missed probe: shared (bridged)"), CombatGroundRules::IsSharedGround(Missed, Reach.StepMaxCm));
+	TArray<FFloorSample> TwoMissed = Missed;
+	TwoMissed[3].bHit = false;
+	TestFalse(TEXT("Stair, two missed probes in a row: not shared (unknown)"), CombatGroundRules::IsSharedGround(TwoMissed, Reach.StepMaxCm));
+	{
+		// The reported stairs case: 83 cm up at 124 cm planar (34 deg), every other probe through an open riser.
+		const float Tan = 83.f / 124.f;
+		TArray<FFloorSample> OpenStair = Profile(124.f, 83.f, [Tan](float D) { return FMath::FloorToFloat(D * Tan / 16.6f + 0.01f) * 16.6f; });
+		for (int32 Index = 1; Index < OpenStair.Num() - 1; Index += 2)
+		{
+			OpenStair[Index].bHit = false;
+		}
+		TestTrue(TEXT("open stair, every other probe missed: shared"), CombatGroundRules::IsSharedGround(OpenStair, Reach.StepMaxCm));
+		TestTrue(TEXT("open stair, 83 cm up at 124 cm: bites"), EnemyAIRules::CanMeleeOverProfile(FVector::ZeroVector, FVector(124.f, 0.f, 83.f), 180.f, OpenStair, Reach));
+		// A ledge hidden behind a miss: the hits on both sides are 110 cm apart -> not bridged.
+		TArray<FFloorSample> HiddenLedge = Profile(124.f, 110.f, [](float D) { return D >= 60.f ? 110.f : 0.f; });
+		for (FFloorSample& Sample : HiddenLedge)
+		{
+			if (Sample.DistanceCm > 45.f && Sample.DistanceCm < 70.f)
+			{
+				Sample.bHit = false;
+			}
+		}
+		TestFalse(TEXT("ledge behind a missed probe: not shared"), CombatGroundRules::IsSharedGround(HiddenLedge, Reach.StepMaxCm));
+	}
 	// Flat ground is exactly the old body-point rule either way: 1.6 m planar is past the 1.8 m body reach, 1.49 m is in.
 	TestFalse(TEXT("Flat, past the chest: no bite"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(160.f, 0.f, 0.f), 180.f, true, Reach));
 	TestTrue(TEXT("Flat, 1.49 m: bites"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(149.f, 0.f, 0.f), 180.f, false, Reach));

@@ -90,8 +90,10 @@ namespace CombatGroundRules
 	CODEXTACTICS_API bool HasLevelEdge(TConstArrayView<FFloorSample> Profile, float EdgeDropCm, float SpacingCm);
 
 	/**
-	 * The two stand on shared ground: every sample hit (unknown floor is not shared) and no rise / drop between neighbours above
-	 * StepMaxCm. A ramp or a stair is shared; a ledge, a crate or a gap is not.
+	 * The two stand on shared ground (melee only): no rise / drop between neighbouring hit samples above StepMaxCm. An isolated
+	 * missed probe (open riser / grated stair, final review 6) is bridged: the hits on both sides of it must be within StepMaxCm of
+	 * each other. Two misses in a row, or a missed first / last sample, are unknown = not shared. A ramp or a stair (open or not)
+	 * is shared; a ledge, a crate or a gap is not. The dead-zone edge (HasLevelEdge) keeps every miss unknown.
 	 */
 	CODEXTACTICS_API bool IsSharedGround(TConstArrayView<FFloorSample> Profile, float StepMaxCm);
 }

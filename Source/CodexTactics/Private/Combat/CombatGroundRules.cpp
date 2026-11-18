@@ -42,13 +42,30 @@ namespace CombatGroundRules
 		{
 			return false;
 		}
-		for (int32 Index = 0; Index < Profile.Num(); ++Index)
+		// Melee only (final review 6): an isolated missed probe (an open riser, a grating) is bridged when the hits on both sides
+		// are within StepMaxCm of each other; two misses in a row stay unknown. The dead-zone edge (HasLevelEdge) keeps every miss
+		// unknown.
+		int32 Previous = 0; // the last hit sample
+		if (!Profile[0].bHit)
 		{
-			if (!Profile[Index].bHit || (Index > 0 && FMath::Abs(Profile[Index].Z - Profile[Index - 1].Z) > StepMaxCm))
+			return false;
+		}
+		for (int32 Index = 1; Index < Profile.Num(); ++Index)
+		{
+			if (!Profile[Index].bHit)
+			{
+				if (Index - Previous > 1)
+				{
+					return false; // the second miss in a row
+				}
+				continue;
+			}
+			if (FMath::Abs(Profile[Index].Z - Profile[Previous].Z) > StepMaxCm)
 			{
 				return false;
 			}
+			Previous = Index;
 		}
-		return true;
+		return Previous == Profile.Num() - 1;
 	}
 }
