@@ -875,9 +875,26 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 			{
 				const float LaneOutYaw = static_cast<float>((-Member.Lane.Dir).Rotation().Yaw); // away from the obstacle at his face
 				const float Raw = SquadMantleRules::WaitLookYaw(LaneOutYaw, Place, Config.SquadWaitFanDeg, Config.SquadWaitMaxOffDeg, ThreatYaw);
-				// The formation's rule: nobody looks into a wall (FormationSectorRules::ClearLook).
-				Member.LookYaw = FormationSectorRules::ClearLook(Op.Walls, FVector2D(Operative->GetActorLocation()), Raw, static_cast<float>(Operative->GetActorRotation().Yaw),
-					FormationTuning::Get());
+				// The formation's rule: nobody looks into a wall (FormationSectorRules::ClearLook) - kept within squad.wait_max_off_deg of the
+				// outward look: a prop / wall right behind him turns him aside, never round to the obstacle (FormationMantleSmoke c / e, 2026-11-18).
+				const FVector2D Here(Operative->GetActorLocation());
+				const float BodyYaw = static_cast<float>(Operative->GetActorRotation().Yaw);
+				const float Cleared = SquadMantleRules::ClearWaitLook(Op.Walls, Here, Raw, BodyYaw, LaneOutYaw, Config.SquadWaitMaxOffDeg, FormationTuning::Get());
+				Member.LookYaw = Cleared;
+				if (FMath::Abs(FMath::FindDeltaAngleDegrees(Raw, Cleared)) > 1.f)
+				{
+					// A wall turned his look (once per new look, not every tick).
+					static TMap<TWeakObjectPtr<AOperativeCharacter>, float> LoggedClear;
+					const float* Last = LoggedClear.Find(Member.Operative);
+					if (!Last || FMath::Abs(FMath::FindDeltaAngleDegrees(*Last, Cleared)) > 5.f)
+					{
+						LoggedClear.Add(Member.Operative, Cleared);
+						const float Unlimited = FormationSectorRules::ClearLook(Op.Walls, Here, Raw, BodyYaw, FormationTuning::Get());
+						UE_LOG(LogCodexTactics, Display, TEXT("[SquadMantle] %s waits (place %d): a wall turns his look %.0f -> %.0f (outward %.0f, %.0f off; unlimited ClearLook %.0f, %.0f off; %d walls)"),
+							*Operative->DisplayName.ToString(), Place, Raw, Cleared, LaneOutYaw, FMath::Abs(FMath::FindDeltaAngleDegrees(LaneOutYaw, Cleared)), Unlimited,
+							FMath::Abs(FMath::FindDeltaAngleDegrees(LaneOutYaw, Unlimited)), Op.Walls.Num());
+					}
+				}
 			}
 		}
 		else if (Member.State == ESquadMantleState::Up)

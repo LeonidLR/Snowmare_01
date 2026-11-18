@@ -5,6 +5,7 @@
 #include "Misc/AutomationTest.h"
 #include "Characters/MantleRules.h"
 #include "Characters/SquadMantleRules.h"
+#include "Formation/FormationSectorRules.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
 
@@ -68,6 +69,53 @@ bool FMantleQueueWaitLookTest::RunTest(const FString&)
 		TestTrue(FString::Printf(TEXT("place %d never covers into the obstacle"), Place), FMath::Abs(FMath::FindDeltaAngleDegrees(Out, Look)) <= 80.f + KINDA_SMALL_NUMBER);
 	}
 	TestTrue(TEXT("open side: within 90 of the outward look"), IsThreatOnOpenSide(Out, 95.f) && !IsThreatOnOpenSide(Out, 0.f));
+	return true;
+}
+
+MANTLE_QUEUE_TEST(FMantleQueueWaitLookWallsTest, "WaitLookWalls")
+bool FMantleQueueWaitLookWallsTest::RunTest(const FString&)
+{
+	// FormationMantleSmoke c / e (2026-11-18, the Depot's props spawned since G003b): a waiter 250 cm off a fence (east) with walls round him
+	// behind and to both sides - the formation's ClearLook alone turned him towards the fence's free edge; ClearWaitLook keeps him within
+	// squad.wait_max_off_deg of the outward look.
+	using namespace SquadMantleRules;
+	const FFormationConfig Config; // look.wall_dist 260, look.wall_angle 55, look.min_free_deg 30 (formation_config.json)
+	const auto Wall = [](float AX, float AY, float BX, float BY)
+	{
+		FFormationWall W;
+		W.A = FVector2D(AX, AY);
+		W.B = FVector2D(BX, BY);
+		W.Thickness = 10.f;
+		return W;
+	};
+	const float Out = 180.f;
+	const float MaxOff = 80.f;
+	const FVector2D Pos(0.f, 0.f);
+	const TArray<FFormationWall> Fence = { Wall(250.f, -400.f, 250.f, 400.f) };
+	// Open behind him: the straight-out look stays.
+	TestEqual(TEXT("only the fence (in front, 250 cm): he looks straight out"), ClearWaitLook(Fence, Pos, Out, Out, Out, MaxOff, Config), 180.f);
+	// A crate right behind him: aside, within the arc.
+	TArray<FFormationWall> Crate = Fence;
+	Crate.Add(Wall(-100.f, -60.f, -100.f, 60.f));
+	const float Aside = ClearWaitLook(Crate, Pos, Out, Out, Out, MaxOff, Config);
+	TestTrue(FString::Printf(TEXT("a crate behind him: his look turns aside (%.0f), off the crate, within 80 of outwards"), Aside),
+		FMath::Abs(FMath::FindDeltaAngleDegrees(Out, Aside)) >= 40.f && FMath::Abs(FMath::FindDeltaAngleDegrees(Out, Aside)) <= MaxOff + 0.01f);
+	// Boxed in behind and on both sides: every direction is blocked (ClearLook's enclosed case).
+	TArray<FFormationWall> Boxed = Fence;
+	Boxed.Add(Wall(-100.f, -400.f, -100.f, 400.f));
+	Boxed.Add(Wall(-400.f, 150.f, 0.f, 150.f));
+	Boxed.Add(Wall(-400.f, -150.f, 0.f, -150.f));
+	const float Unlimited = FormationSectorRules::ClearLook(Boxed, Pos, Out, Out, Config);
+	TestTrue(FString::Printf(TEXT("the formation's ClearLook alone leaves the outward arc here (%.0f) - the smoke's bug"), Unlimited),
+		FMath::Abs(FMath::FindDeltaAngleDegrees(Out, Unlimited)) > 90.f);
+	for (const float Body : { 180.f, 90.f, 0.f, -90.f })
+	{
+		const float Look = ClearWaitLook(Boxed, Pos, Out, Body, Out, MaxOff, Config);
+		TestTrue(FString::Printf(TEXT("boxed in, body at %.0f: the waiter's look %.0f stays within 80 of outwards"), Body, Look),
+			FMath::Abs(FMath::FindDeltaAngleDegrees(Out, Look)) <= MaxOff + 0.01f);
+	}
+	// A fanned wanted look (place 3: -100) is kept when it is free.
+	TestEqual(TEXT("a free fanned look is kept"), ClearWaitLook(Fence, Pos, -100.f, Out, Out, MaxOff, Config), -100.f);
 	return true;
 }
 
