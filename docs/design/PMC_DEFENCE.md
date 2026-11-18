@@ -55,10 +55,9 @@ within `guard_dist_m` of the access), `setup_charges_placed`, `mine_kills`, `min
 | P3 | D3 attacker mine reaction + mine_risk term + metrics | Grok / API |
 | P4 | Trainer: new metrics in the report, weights for the new terms in pmc_commander.json gene list | Antigravity (Python) |
 
-## Open questions (designer)
-- Q1 Charges: how many mines / tripwires does a PMC squad carry? Recommendation: the PMC sapper role carries 2 mines + 1 tripwire,
-  others 0 (mirrors the player's medic-sapper; arena JSON can override).
-- Q2 Setup time: defenders get until first contact, capped at `setup_max_s` = 45 s? (Arena rounds today give the attackers ~30-60 s of
-  approach.)
+## Designer decisions 2026-11-18 (all recommendations accepted)
+- Q1 Charges: the PMC sapper role carries 2 mines + 1 tripwire, others 0 (mirrors the player's medic-sapper; arena JSON can override).
+- Q2 Setup time: until first contact, capped at `setup_max_s` = 45 s (JSON).
+- Q3 Lanes: P1 = Grok (grok-4.7) after G007, instead of G005 short orders (G005 moves after P1); Claude reviews + merges.
 </content>
 </invoke>
