@@ -25,6 +25,12 @@ He tests the level generator with ALL assets (mines, barrels, loot, turrets, gen
 feed the trainer. So first: GeneratedPropsX6Smoke red (Claude, own subagent), FormationMantleSmoke red (R17-1 follow-up), then rebuild
 main when his editor is closed and update the banner note.
 
+Worker report (committed 1708ae90, docs/port/reports/worker-night-2026-11-18.md) adds tasks: overwatch_kills always 0 on X4
+(IsAtOverwatchSpot floor tolerance?) - Claude; clip camera too high on X4 + debug HUD on the first frame - Claude / Grok; bot does not
+engage on X4 (sees no hostile operatives); pmc-v5 champion line unstable, Relocate / Sidearm never chosen; worker two build slots with tree
+affinity - measure today. Clips already sent to the designer's phone. The designer switches the worker to Wi-Fi on 11-18: no PDB over
+Wi-Fi (remote builds already skip them), expect slower remote builds.
+
 ## Lanes
 | Who | Task | Where |
 |---|---|---|
