@@ -27,8 +27,14 @@ re-assigns only when a fighter dies:
 - **Spacing:** two defenders never share one cover object and keep >= `min_spacing_m` (JSON, ~5 m); the cover score of a slot within
   `min_spacing_m` of a teammate's claimed slot is multiplied by `spacing_penalty`.
 
-## D2 Setup phase (defenders before contact)
-From round start until the first sighting (or `setup_max_s`), defenders with charges run a setup plan, then take their D1 posts:
+## D2 Pre-placed PMC positions and charges (REPLACES the setup phase - designer decision 2026-11-18 evening)
+Designer: a 45 s runtime setup phase is a waste; instead the LEVEL GENERATOR places PMC squads at the strategic places (chokepoint exits,
+ambush / hiding spots, overwatch roofs, windows on the route - the tactical-map analysis rules already given) and generates THEIR mines /
+tripwires around them by the rules below, seeded-random (each generated map differs, the same seed repeats). Output: the layout's
+`pmc_squads` (position, posture defend / hunt, count, post kind) + PMC-owned charges in the props layers (hostile traps), carried into the
+level JSON `pmc_squads` and the props file by the builder; a squad that is not generated has no charges. The runtime lay-mine order (old P2)
+is dropped for now; maybe later only for dynamic cases (retreat, a point just taken).
+Placement rules for the charges (unchanged from the designer's notes):
 - **Mines on the approaches:** points on the straight line attacker start -> point (route lines / chokepoint exits from the tactical map),
   `mine_spacing_m` apart, never on the defenders' own retreat line.
 - **Doorway mine:** the doorway the attack route enters (tactical map doors on the route).
@@ -52,7 +58,7 @@ within `guard_dist_m` of the access), `setup_charges_placed`, `mine_kills`, `min
 |---|---|---|
 | P1 | D1 roles + sectors + access guard + Objective-as-area + spacing; D4 spread / guard metrics; smoke `PmcRoofDefenceSmoke` (Depot_1 roofs scenario: spread >= 5 m, guard near access > 60 %) | Grok (grok-4.7, L3) or API Opus patch -> Claude review |
 | P1b (G008b) | Overwatch hold: the commander keeps a defender on an overwatch post until contact or `ambush_max_hold_s` (worker evidence 2026-11-18: X4 overwatch_kills = 0 because 203 posted defenders were pulled off after a median ~17 s while the threat was 120-155 m out, range 110; docs/port/reports/worker-overwatch-kills.md) | Grok after G008 |
-| P2 | Deploy orders: `ESquadOrder::PlaceCharge` (mine / tripwire at location, reuses RelocationSubsystem deploy task) + `Defuse`; PMC supply; D2 setup plan; smoke `PmcSetupMinesSmoke` | Claude agent (cross-system: catalog + relocation + commander) |
+| P2 | (designer 2026-11-18 evening) Generator places PMC squads at strategic places + their charges (D2): Training Ground TS layer + panel, builder carries `pmc_squads` / PMC charges into level JSON / props; C++ spawns squads at the generated posts (PmcEncounterSubsystem reads posts instead of `spawn: random`); smoke on a generated map | Antigravity (TS, task 087) + API agent (C++ spawn-at-post) |
 | P3 | D3 attacker mine reaction + mine_risk term + metrics | Grok / API |
 | P4 | Trainer: new metrics in the report, weights for the new terms in pmc_commander.json gene list | Antigravity (Python) |
 
