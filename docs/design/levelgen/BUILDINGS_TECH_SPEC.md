@@ -188,7 +188,7 @@ parked (building-archetypes Q9).
 
 ## 8. ADRs + owners
 
-ADRs to write before S1 (studio `/architecture-decision`; `docs/architecture/` is not in this checkout yet):
+ADRs (Proposed 2026-11-18, `docs/architecture/adr-000{1,2,3}-*.md`):
 
 | ADR | Decision (proposal) |
 |---|---|
