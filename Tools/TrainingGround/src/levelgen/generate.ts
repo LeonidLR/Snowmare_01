@@ -898,7 +898,8 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   if (s.enterable && (x1 - x0) * (y1 - y0) > 150 && new Set(doorSides).size < 2) doorSides.push(OPPOSITE[doorSides[0]]);
   // the stair core first (BUILDING_GENERATOR.md 3: it constrains windows, rooms and slabs)
   // P1 (2026-11-18): every enterable multi-storey building gets a core; a hall's core reaches its roof, or only its mezzanine
-  const wantCore = s.enterable && (s.stairwell ?? false) || (s.enterable && !s.hollow && s.floors >= 2);
+  // an explicit `stairwell: false` (hand-shaped ruins with external stairs / holes) is kept
+  const wantCore = s.enterable && (s.stairwell ?? (!s.hollow && s.floors >= 2));
   const coreTop = s.hollow ? (s.roof_walkable ? s.floors : 1) : (s.roof_walkable ? s.floors : s.floors - 1);
   const core = wantCore ? planStairCore(bid, r, coreTop, doorSides) : null;
 

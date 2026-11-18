@@ -401,7 +401,7 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
   two_storey: (c) => {
     const sp = c.spec as typeof TC.catalog.two_storey;
     const r = placeIn(c.r, c.s, Math.min(sp.max_m[0], lengthOf(c.r, c.s)), Math.min(sp.max_m[1], depthOf(c.r, c.s)), c.s, 0.5, 0.5 + (c.random() * 2 - 1) * 0.1);
-    const b = addBuilding(c.d, `B_${c.tag}_block`, r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: c.V >= 1, stairwell: c.V >= 2, set_piece: 'facade', doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true, roofHatch: c.V >= 2 }, c.random);
+    const b = addBuilding(c.d, `B_${c.tag}_block`, r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: c.V >= 1, stairwell: true, set_piece: 'facade', doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true, roofHatch: c.V >= 2 }, c.random);
     zoneOf(c, 'open', 'facade');
     scatter(c, c.r, [r], b.doors.map((x) => x.pos));
     cornerAmbush(c, b);
