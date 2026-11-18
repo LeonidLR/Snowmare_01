@@ -573,7 +573,8 @@ function applyTemplates(fresh: GenLayout, built: BuiltTemplate[], lots: readonly
   for (const g of layoutGroups(fresh)) {
     if (g.fixed || g.category === 'spawn_point') continue;
     let remove = !!inBlock(g.centre);
-    if (!remove && g.category === 'wall' && (g.members.walls?.length ?? 0) > 0) {
+    // Only fence families (kind === 'fence') may be removed by geometry - never compound / perimeter / building walls (085b lead review).
+    if (!remove && g.category === 'wall' && (g.members.walls?.length ?? 0) > 0 && g.members.walls!.every((w) => w.kind === 'fence')) {
       // Geometry check (task 085/085b): a parent block fence that crosses fresh parcels/groups or encloses subdivided lots
       const walls = g.members.walls!;
       const crossesFreshWall = walls.some((w) => builtWalls.some((bw) => segmentsIntersect(w.a, w.b, bw.a, bw.b)));
