@@ -2336,11 +2336,17 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 		const bool bCorner = Band.IsValid() && PeekSightRules::IsCornerInPeekReach(Slot.bLeftEdgeExposed || Slot.bRightEdgeExposed, SlotThreatCm, PeekRangeCm);
 		// The round objective (task #53): attackers prefer slots on the way to / round the point, defenders slots overwatching it.
 		const float ObjectiveFactor = Objective ? PmcCommanderRules::ObjectivePositionFactor(Slot.WorldLocation, Feet, *Objective, Band, WeaponRangeCm, Weights) : 1.f;
-		FPmcDefenceConfig SpacingConfig;
-		SpacingConfig.MinSpacingCm = Weights.MinSpacingCm;
-		SpacingConfig.SpacingPenalty = Weights.SpacingPenalty;
-		const FString SlotKey = PmcDefenceRules::CoverObjectKey(Slot.WallActor.IsValid() ? Slot.WallActor->GetPathName() : FString(), Slot.WallPoint);
-		const float Spacing = PmcDefenceRules::SpacingFactor(Slot.WorldLocation, SlotKey, ClaimedPosts, ClaimedKeys, SpacingConfig);
+		// G008: the spacing term needs claims. Attackers and an undeployed defence have none, so they skip the
+		// per-candidate GetPathName and the CoverObjectKey Printf.
+		float Spacing = 1.f;
+		if (!ClaimedPosts.IsEmpty())
+		{
+			FPmcDefenceConfig SpacingConfig;
+			SpacingConfig.MinSpacingCm = Weights.MinSpacingCm;
+			SpacingConfig.SpacingPenalty = Weights.SpacingPenalty;
+			const FString SlotKey = PmcDefenceRules::CoverObjectKey(Slot.WallActor.IsValid() ? Slot.WallActor->GetPathName() : FString(), Slot.WallPoint);
+			Spacing = PmcDefenceRules::SpacingFactor(Slot.WorldLocation, SlotKey, ClaimedPosts, ClaimedKeys, SpacingConfig);
+		}
 		const float Score = Quality * (1.f - 0.5f * FMath::Clamp(Distance / RadiusCm, 0.f, 1.f)) * (Slot.Height == ECoverHeight::HighCover ? 1.f : 0.9f)
 			* PmcCommanderRules::HighGroundFactor(Level, Weights) * FMath::Lerp(1.f, SlotBand, FMath::Clamp(Weights.BandPosition, 0.f, 1.f))
 			* (bCorner ? 1.f + FMath::Max(Weights.CornerBonus, 0.f) : 1.f) * ObjectiveFactor * TerrainFactor(Slot) * Spacing;
