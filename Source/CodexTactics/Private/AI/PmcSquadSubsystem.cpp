@@ -2148,7 +2148,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				break;
 			}
 			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
-			if (!PmcCommanderRules::IsWalkShort(Feet, State.DefencePost, PmcSquadLocal::ArriveCm, Team.Weights.LevelToleranceCm))
+			// On his post: hold and face the defence yaw; off it: walk there. This is the same arrival test as the view's bAtPost
+			// (PostArriveCm), so the order and the scoring agree on "there". (IsWalkShort is true while he is still FAR, so the old
+			// "!IsWalkShort -> Hold" was not inverted; it only used ArriveCm, 50 cm wider than bAtPost.)
+			const bool bOnPost = PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
+			if (bOnPost)
 			{
 				Context.Location = Feet + FRotator(0.f, State.DefenceYaw, 0.f).Vector() * 1500.f;
 				SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
