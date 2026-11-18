@@ -38,6 +38,9 @@
 
 namespace
 {
+	/** True for the one EnterCover call after a hand-over wait timed out: the normal entry (swept move, squadmate ignored) without a new wait. */
+	bool GCoverHandoverSkipWait = false;
+
 	AOperativeCharacter* FindCoverSlotOccupant(const AOperativeCharacter& Arriving, const FCoverSlot& Slot, bool bVacatingOnly)
 	{
 		const UWorld* World = Arriving.GetWorld();
@@ -157,7 +160,7 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 		return;
 	}
 	// Preserve the cover order while a teammate is still leaving its endpoint.
-	if (!bInCover && !bQuietCoverEntryRequest && PendingCoverSlot.WorldLocation == Slot.WorldLocation)
+	if (!bInCover && !bQuietCoverEntryRequest && !GCoverHandoverSkipWait && PendingCoverSlot.WorldLocation == Slot.WorldLocation)
 	{
 		if (const AOperativeCharacter* Occupant = FindCoverSlotOccupant(*this, Slot, true))
 		{
@@ -193,17 +196,16 @@ void AOperativeCharacter::EnterCover(const FCoverSlot& Slot)
 					{
 						return;
 					}
+					// Enter or timeout: the normal entry; on a timeout (no new wait) its swept move repeats
+					// with the squadmate ignored, as before 046, so a mutual wait never leaves him standing without cover.
+					if (Result == CoverSlotHandoverRules::EWaitResult::Timeout)
+					{
+						UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: slot did not clear before the wait expired - normal entry"), *DisplayName.ToString());
+					}
 					bHasPendingCover = false;
 					StopOperative();
-					if (Result == CoverSlotHandoverRules::EWaitResult::Enter)
-					{
-						EnterCover(WaitingSlot);
-					}
-					else
-					{
-						ClearPendingCover();
-						UE_LOG(LogCodexTactics, Display, TEXT("[Cover] %s: slot did not clear before the wait expired"), *DisplayName.ToString());
-					}
+					TGuardValue<bool> SkipWait(GCoverHandoverSkipWait, Result == CoverSlotHandoverRules::EWaitResult::Timeout);
+					EnterCover(WaitingSlot);
 				}), Config.RetrySeconds, true);
 			return;
 		}
