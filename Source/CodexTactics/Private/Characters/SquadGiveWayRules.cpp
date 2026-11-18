@@ -114,10 +114,10 @@ namespace SquadGiveWayRules
 
 namespace SquadGiveWayTuningLocal
 {
-	FSquadGiveWayTuning Current;
-	bool bLoaded = false;
+	FSquadGiveWayTuning GiveWayTuningCurrent;
+	bool bGiveWayTuningLoaded = false;
 
-	void ReadNumber(const FJsonObject& Json, const TCHAR* Key, float& Out, float Min, float Max)
+	void ReadGiveWayNumber(const FJsonObject& Json, const TCHAR* Key, float& Out, float Min, float Max)
 	{
 		double Value = 0.0;
 		if (Json.TryGetNumberField(Key, Value))
@@ -141,20 +141,20 @@ FSquadGiveWayTuning SquadGiveWayTuning::FromJson(const FJsonObject& GiveWay, con
 	{
 		Tuning.bEnabled = Enabled != 0.0;
 	}
-	ReadNumber(GiveWay, TEXT("look_ahead_cm"), Tuning.LookAheadCm, 50.f, 2000.f);
-	ReadNumber(GiveWay, TEXT("clearance_cm"), Tuning.ClearanceCm, 0.f, 200.f);
-	ReadNumber(GiveWay, TEXT("step_aside_cm"), Tuning.StepAsideCm, 50.f, 500.f);
-	ReadNumber(GiveWay, TEXT("same_level_cm"), Tuning.SameLevelCm, 30.f, 400.f);
-	ReadNumber(GiveWay, TEXT("nav_snap_cm"), Tuning.NavSnapCm, 5.f, 100.f);
-	ReadNumber(GiveWay, TEXT("max_rise_cm"), Tuning.MaxRiseCm, 5.f, 150.f);
-	ReadNumber(GiveWay, TEXT("retry_s"), Tuning.RetrySeconds, 0.1f, 10.f);
+	ReadGiveWayNumber(GiveWay, TEXT("look_ahead_cm"), Tuning.LookAheadCm, 50.f, 2000.f);
+	ReadGiveWayNumber(GiveWay, TEXT("clearance_cm"), Tuning.ClearanceCm, 0.f, 200.f);
+	ReadGiveWayNumber(GiveWay, TEXT("step_aside_cm"), Tuning.StepAsideCm, 50.f, 500.f);
+	ReadGiveWayNumber(GiveWay, TEXT("same_level_cm"), Tuning.SameLevelCm, 30.f, 400.f);
+	ReadGiveWayNumber(GiveWay, TEXT("nav_snap_cm"), Tuning.NavSnapCm, 5.f, 100.f);
+	ReadGiveWayNumber(GiveWay, TEXT("max_rise_cm"), Tuning.MaxRiseCm, 5.f, 150.f);
+	ReadGiveWayNumber(GiveWay, TEXT("retry_s"), Tuning.RetrySeconds, 0.1f, 10.f);
 	return Tuning;
 }
 
 bool SquadGiveWayTuning::Reload()
 {
 	using namespace SquadGiveWayTuningLocal;
-	bLoaded = true;
+	bGiveWayTuningLoaded = true;
 	FString Text;
 	TSharedPtr<FJsonObject> Json;
 	const TSharedPtr<FJsonObject>* GiveWay = nullptr;
@@ -163,18 +163,18 @@ bool SquadGiveWayTuning::Reload()
 	{
 		return false;
 	}
-	Current = FromJson(**GiveWay);
+	GiveWayTuningCurrent = FromJson(**GiveWay);
 	UE_LOG(LogCodexTactics, Display, TEXT("Squad give-way tuning from %s: enabled %d, look ahead %.0f cm, clearance %.0f cm, step aside %.0f cm, retry %.1f s"),
-		*GetDefaultPath(), Current.bEnabled ? 1 : 0, Current.LookAheadCm, Current.ClearanceCm, Current.StepAsideCm, Current.RetrySeconds);
+		*GetDefaultPath(), GiveWayTuningCurrent.bEnabled ? 1 : 0, GiveWayTuningCurrent.LookAheadCm, GiveWayTuningCurrent.ClearanceCm, GiveWayTuningCurrent.StepAsideCm, GiveWayTuningCurrent.RetrySeconds);
 	return true;
 }
 
 const FSquadGiveWayTuning& SquadGiveWayTuning::Get()
 {
 	using namespace SquadGiveWayTuningLocal;
-	if (!bLoaded)
+	if (!bGiveWayTuningLoaded)
 	{
 		Reload();
 	}
-	return Current;
+	return GiveWayTuningCurrent;
 }

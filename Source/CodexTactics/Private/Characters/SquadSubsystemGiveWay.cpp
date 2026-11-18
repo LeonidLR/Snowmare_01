@@ -45,7 +45,7 @@ namespace SquadSubsystemGiveWayLocal
 			|| Operative.IsDroppingOffLedge() || Operative.IsHeldDownByCriticalWound();
 	}
 
-	float FeetZ(const AOperativeCharacter& Operative)
+	float GiveWayFeetZ(const AOperativeCharacter& Operative)
 	{
 		return static_cast<float>(Operative.GetActorLocation().Z) - Operative.GetSimpleCollisionHalfHeight();
 	}
@@ -134,7 +134,9 @@ void USquadSubsystem::UpdateGiveWay()
 	for (const TWeakObjectPtr<AOperativeCharacter>& MoverRef : Members)
 	{
 		AOperativeCharacter* Mover = MoverRef.Get();
-		if (!IsGiveWayWalker(Mover) || !Mover->HasOwnMoveOrder() || GiveWayMoveStatus(*Mover) != EPathFollowingStatus::Moving)
+		// A walk into cover (CoverSmoke / GroupCoverSmoke: the men round the cover spot are its group, not in his way) moves nobody.
+		if (!IsGiveWayWalker(Mover) || !Mover->HasOwnMoveOrder() || GiveWayMoveStatus(*Mover) != EPathFollowingStatus::Moving || Mover->bInCover
+			|| Mover->HasPendingCover())
 		{
 			continue;
 		}
@@ -168,13 +170,13 @@ void USquadSubsystem::UpdateGiveWay()
 			{
 				break;
 			}
-			const float IdleFeet = FeetZ(*Idle);
+			const float IdleFeet = GiveWayFeetZ(*Idle);
 			const FVector Feet(Idle->GetActorLocation().X, Idle->GetActorLocation().Y, IdleFeet);
 			const float CrossCm = CapsuleRadius(*Mover) + CapsuleRadius(*Idle) + Tuning.ClearanceCm;
 			const SquadGiveWayRules::FCrossing Crossing = SquadGiveWayRules::FindCrossing(Path, Feet, CrossCm, Tuning);
-			if (!Crossing.bCrosses)
+			if (!Crossing.bCrosses || Idle->IsBehindBarricade())
 			{
-				continue;
+				continue; // clear of the path, or holding a barricade (a cover spot without the cover state)
 			}
 			GiveWayNextTry.Add(Idle, Now + Tuning.RetrySeconds);
 			// The spots the others stand on or walk to are taken.
@@ -208,6 +210,8 @@ void USquadSubsystem::UpdateGiveWay()
 				if (!Nav->ProjectPointToNavigation(FVector(Point.X, Point.Y, IdleFeet), OnNav, FVector(Tuning.NavSnapCm, Tuning.NavSnapCm, Tuning.SameLevelCm))
 					|| FVector2D::Distance(FVector2D(OnNav.Location), Point) > Tuning.NavSnapCm || FMath::Abs(OnNav.Location.Z - IdleFeet) > Tuning.MaxRiseCm
 					|| IsRampUnder(Point, IdleFeet)
+					// The navmesh projection may pull the spot back to the path (a wall beside it): still clear of it.
+					|| SquadGiveWayRules::DistanceToPath(Path, FVector2D(OnNav.Location), Crossing.AlongCm + Tuning.LookAheadCm) < CrossCm
 					|| Taken.ContainsByPredicate([&Point, CrossCm](const FVector2D& Other) { return FVector2D::Distance(Other, Point) < CrossCm; })
 					|| World->LineTraceSingleByChannel(Hit, Feet + Lift, OnNav.Location + Lift, ECC_Visibility, WalkParams))
 				{
