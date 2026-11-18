@@ -285,6 +285,10 @@ class ArenaAdapter:
                     if st:
                         row["close_hits_taken"] = float(st["close_hits_taken"])
             out.append(row)
+        # G002 / 083: bot jobs play 1 round in the arena. If the opponent is bot, expected_rounds is at most 1.
+        opp_name = str(doc.get("opponent", "")).strip().lower()
+        if opp_name == "bot" and expected_rounds and expected_rounds > 1:
+            expected_rounds = 1
         if expected_rounds and len(out) < expected_rounds and rc.get("pad_missing_rounds_as_crash", True):
             out += [{"crashed": True, "won": 0.0}] * (expected_rounds - len(out))
         return out

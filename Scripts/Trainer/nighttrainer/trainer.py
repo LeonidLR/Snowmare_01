@@ -342,12 +342,15 @@ class Trainer:
 
     def _ga_plan(self, champion_path: str) -> list:
         plan = []
-        for match in self.cfg["evaluation"].get("matches", [{"opponent": "champion", "jobs": 1},
-                                                            {"opponent": "bot", "jobs": 1}]):
+        ev = self.cfg.get("evaluation", {})
+        default_rounds = int(ev.get("rounds_per_job", 4))
+        for match in ev.get("matches", [{"opponent": "champion", "jobs": 1},
+                                        {"opponent": "bot", "jobs": 1}]):
+            rounds = int(match.get("rounds_per_job") or match.get("rounds") or (1 if match.get("opponent") == "bot" else default_rounds))
             for _ in range(int(match.get("jobs", 1))):
                 opp = match["opponent"]
                 plan.append({"opponent": opp, "weights_b": champion_path if opp == "champion" else None,
-                             "map": match.get("map")})
+                             "map": match.get("map"), "rounds": rounds})
         return plan
 
     def _archive_in_path(self, gen_dir: str) -> str:
@@ -368,14 +371,17 @@ class Trainer:
                                                                 {"source": "bot", "jobs": 1}]
         rng = evolution.generation_rng(self.run_seed, gen, f"league-{stream}")
         archive = qd.Archive.load(self._archive_in_path(gen_dir), self.cfg.get("qd", {}))
+        ev = self.cfg.get("evaluation", {})
+        default_rounds = int(ev.get("rounds_per_job", 4))
         plan = []
         for spec in specs:
             if not isinstance(spec, dict):
                 continue
             source = spec.get("source", "champion")
+            rounds = int(spec.get("rounds_per_job") or spec.get("rounds") or (1 if source == "bot" else default_rounds))
             for _ in range(int(spec.get("jobs", 1))):
                 if source == "bot":
-                    plan.append({"opponent": "bot", "weights_b": None, "map": spec.get("map")})
+                    plan.append({"opponent": "bot", "weights_b": None, "map": spec.get("map"), "rounds": rounds})
                     continue
                 if source == "archive":
                     cell = archive.sample_cell(rng)
@@ -384,9 +390,9 @@ class Trainer:
                         if not os.path.exists(path):
                             write_json(path, apply_genes(self.baseline_doc, cell["genes"]))
                         plan.append({"opponent": "archive", "weights_b": path, "map": spec.get("map"),
-                                     "cell": cell.get("key")})
+                                     "cell": cell.get("key"), "rounds": rounds})
                         continue
-                plan.append({"opponent": "champion", "weights_b": champion_path, "map": spec.get("map")})
+                plan.append({"opponent": "champion", "weights_b": champion_path, "map": spec.get("map"), "rounds": rounds})
         return plan
 
     def _update_archive(self, cands: list, gen: int) -> qd.Archive:
@@ -404,10 +410,11 @@ class Trainer:
         ev = self.cfg["evaluation"]
         jobs = []
         for index, match in enumerate(plan):
+            rounds = int(match.get("rounds") or (1 if match.get("opponent") == "bot" else ev.get("rounds_per_job", 4)))
             jobs.append({"id": f"{cid}_{stream}_{match['opponent']}_{index}", "dir": os.path.join(gen_dir, "jobs"),
                          "weights_a": weights, "opponent": match["opponent"],
                          "weights_b": match.get("weights_b"),
-                         "rounds": int(ev.get("rounds_per_job", 4)),
+                         "rounds": rounds,
                          "seed": seed_for(self.run_seed, gen, stream, index),
                          "map": match.get("map") or self.cfg["arena"].get("map"),
                          "time_limit_s": self.cfg["arena"].get("time_limit_s", 300)})

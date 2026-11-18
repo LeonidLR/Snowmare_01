@@ -1,0 +1,722 @@
+[
+  {
+    "gen": 0,
+    "id": "g0000_c01",
+    "fitness": 9.9349,
+    "behaviour": {
+      "time_in_contact_s": 28.3,
+      "flanks_completed": 0.0,
+      "moves": 10.0,
+      "suppress_then_move": 1.25,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 3.575,
+      "window_positions_used": 0.5,
+      "quiet_spells": 0.5,
+      "order_churn": 22.75,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 0,
+    "id": "g0000_c05",
+    "fitness": 6.3326,
+    "behaviour": {
+      "time_in_contact_s": 64.05,
+      "flanks_completed": 0.0,
+      "moves": 11.75,
+      "suppress_then_move": 2.25,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 4.475,
+      "window_positions_used": 0.5,
+      "quiet_spells": 1.25,
+      "order_churn": 28.0,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 0,
+    "id": "g0000_c00",
+    "fitness": 5.7415,
+    "behaviour": {
+      "time_in_contact_s": 41.25,
+      "flanks_completed": 0.0,
+      "moves": 26.5,
+      "suppress_then_move": 2.0,
+      "ambush_success": 0.5,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 3.525,
+      "window_positions_used": 0.75,
+      "quiet_spells": 1.5,
+      "order_churn": 47.5,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 0,
+    "id": "g0000_c07",
+    "fitness": 4.1529,
+    "behaviour": {
+      "time_in_contact_s": 44.025,
+      "flanks_completed": 0.0,
+      "moves": 22.0,
+      "suppress_then_move": 0.5,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 8.6,
+      "window_positions_used": 1.0,
+      "quiet_spells": 1.0,
+      "order_churn": 41.25,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 0,
+    "id": "g0000_c03",
+    "fitness": 3.93,
+    "behaviour": {
+      "time_in_contact_s": 41.525,
+      "flanks_completed": 0.25,
+      "moves": 12.0,
+      "suppress_then_move": 1.0,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 2.75,
+      "window_positions_used": 0.5,
+      "quiet_spells": 1.0,
+      "order_churn": 28.75,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 0,
+    "id": "g0000_c04",
+    "fitness": 3.0759,
+    "behaviour": {
+      "time_in_contact_s": 51.3,
+      "flanks_completed": 0.0,
+      "moves": 15.5,
+      "suppress_then_move": 2.75,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 2.875,
+      "window_positions_used": 0.75,
+      "quiet_spells": 0.75,
+      "order_churn": 36.5,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 0,
+    "id": "g0000_c06",
+    "fitness": 1.9189,
+    "behaviour": {
+      "time_in_contact_s": 43.975,
+      "flanks_completed": 0.25,
+      "moves": 12.25,
+      "suppress_then_move": 1.25,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 3.95,
+      "window_positions_used": 0.5,
+      "quiet_spells": 0.75,
+      "order_churn": 22.0,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 0,
+    "id": "g0000_c02",
+    "fitness": 1.53,
+    "behaviour": {
+      "time_in_contact_s": 49.55,
+      "flanks_completed": 0.0,
+      "moves": 14.75,
+      "suppress_then_move": 2.5,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 6.525,
+      "window_positions_used": 1.0,
+      "quiet_spells": 1.5,
+      "order_churn": 34.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 1,
+    "id": "g0001_c06",
+    "fitness": 4.9227,
+    "behaviour": {
+      "time_in_contact_s": 51.525,
+      "flanks_completed": 0.0,
+      "moves": 15.5,
+      "suppress_then_move": 1.0,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 6.675,
+      "window_positions_used": 2.0,
+      "quiet_spells": 1.0,
+      "order_churn": 30.0,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 1,
+    "id": "g0001_c03",
+    "fitness": 2.874,
+    "behaviour": {
+      "time_in_contact_s": 60.875,
+      "flanks_completed": 0.75,
+      "moves": 28.5,
+      "suppress_then_move": 1.5,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 6.275,
+      "window_positions_used": 1.25,
+      "quiet_spells": 2.75,
+      "order_churn": 49.25,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 1,
+    "id": "g0001_c00",
+    "fitness": 1.4698,
+    "behaviour": {
+      "time_in_contact_s": 70.825,
+      "flanks_completed": 0.0,
+      "moves": 36.25,
+      "suppress_then_move": 1.75,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 9.1,
+      "window_positions_used": 1.5,
+      "quiet_spells": 1.5,
+      "order_churn": 56.25,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 1,
+    "id": "g0001_c05",
+    "fitness": -0.1586,
+    "behaviour": {
+      "time_in_contact_s": 54.6,
+      "flanks_completed": 0.25,
+      "moves": 16.75,
+      "suppress_then_move": 0.25,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 6.775,
+      "window_positions_used": 1.0,
+      "quiet_spells": 1.75,
+      "order_churn": 31.25,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 1,
+    "id": "g0001_c02",
+    "fitness": -0.1662,
+    "behaviour": {
+      "time_in_contact_s": 70.475,
+      "flanks_completed": 0.0,
+      "moves": 25.25,
+      "suppress_then_move": 0.25,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 11.15,
+      "window_positions_used": 1.75,
+      "quiet_spells": 1.75,
+      "order_churn": 50.5,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 1,
+    "id": "g0001_c01",
+    "fitness": -0.3687,
+    "behaviour": {
+      "time_in_contact_s": 61.3,
+      "flanks_completed": 0.0,
+      "moves": 21.75,
+      "suppress_then_move": 1.25,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 9.5,
+      "window_positions_used": 1.75,
+      "quiet_spells": 1.5,
+      "order_churn": 40.0,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 1,
+    "id": "g0001_c07",
+    "fitness": -1.8215,
+    "behaviour": {
+      "time_in_contact_s": 53.6,
+      "flanks_completed": 0.0,
+      "moves": 15.5,
+      "suppress_then_move": 0.0,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 5.625,
+      "window_positions_used": 1.5,
+      "quiet_spells": 1.5,
+      "order_churn": 29.0,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 1,
+    "id": "g0001_c04",
+    "fitness": -3.8385,
+    "behaviour": {
+      "time_in_contact_s": 47.925,
+      "flanks_completed": 0.0,
+      "moves": 17.0,
+      "suppress_then_move": 0.5,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 5.025,
+      "window_positions_used": 0.75,
+      "quiet_spells": 1.5,
+      "order_churn": 22.25,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 2,
+    "id": "g0002_c00",
+    "fitness": 7.3387,
+    "behaviour": {
+      "time_in_contact_s": 22.225,
+      "flanks_completed": 0.25,
+      "moves": 43.0,
+      "suppress_then_move": 2.5,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 4.8,
+      "window_positions_used": 1.5,
+      "quiet_spells": 1.0,
+      "order_churn": 58.25,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 2,
+    "id": "g0002_c04",
+    "fitness": 7.2992,
+    "behaviour": {
+      "time_in_contact_s": 28.1,
+      "flanks_completed": 0.25,
+      "moves": 41.25,
+      "suppress_then_move": 0.75,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 4.35,
+      "window_positions_used": 0.75,
+      "quiet_spells": 0.5,
+      "order_churn": 52.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 2,
+    "id": "g0002_c05",
+    "fitness": 4.1227,
+    "behaviour": {
+      "time_in_contact_s": 30.1,
+      "flanks_completed": 0.0,
+      "moves": 46.0,
+      "suppress_then_move": 0.25,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 5.35,
+      "window_positions_used": 1.0,
+      "quiet_spells": 1.5,
+      "order_churn": 55.5,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 2,
+    "id": "g0002_c02",
+    "fitness": 3.8769,
+    "behaviour": {
+      "time_in_contact_s": 23.8,
+      "flanks_completed": 0.0,
+      "moves": 33.0,
+      "suppress_then_move": 0.25,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 3.95,
+      "window_positions_used": 1.0,
+      "quiet_spells": 0.5,
+      "order_churn": 38.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 2,
+    "id": "g0002_c03",
+    "fitness": 3.1213,
+    "behaviour": {
+      "time_in_contact_s": 23.9,
+      "flanks_completed": 0.0,
+      "moves": 42.75,
+      "suppress_then_move": 0.5,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 3.925,
+      "window_positions_used": 1.0,
+      "quiet_spells": 0.75,
+      "order_churn": 52.5,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 2,
+    "id": "g0002_c06",
+    "fitness": 3.0037,
+    "behaviour": {
+      "time_in_contact_s": 20.375,
+      "flanks_completed": 0.0,
+      "moves": 38.5,
+      "suppress_then_move": 0.75,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 3.55,
+      "window_positions_used": 0.75,
+      "quiet_spells": 0.75,
+      "order_churn": 46.25,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 2,
+    "id": "g0002_c01",
+    "fitness": 1.0697,
+    "behaviour": {
+      "time_in_contact_s": 30.825,
+      "flanks_completed": 0.25,
+      "moves": 44.5,
+      "suppress_then_move": 1.0,
+      "ambush_success": 0.5,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 9.3,
+      "window_positions_used": 0.75,
+      "quiet_spells": 1.25,
+      "order_churn": 55.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 2,
+    "id": "g0002_c07",
+    "fitness": 0.9065,
+    "behaviour": {
+      "time_in_contact_s": 34.2,
+      "flanks_completed": 0.0,
+      "moves": 41.25,
+      "suppress_then_move": 1.0,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 5.075,
+      "window_positions_used": 1.5,
+      "quiet_spells": 0.5,
+      "order_churn": 53.0,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 3,
+    "id": "g0003_c06",
+    "fitness": 7.2272,
+    "behaviour": {
+      "time_in_contact_s": 30.825,
+      "flanks_completed": 0.0,
+      "moves": 13.25,
+      "suppress_then_move": 1.25,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 7.8,
+      "window_positions_used": 0.25,
+      "quiet_spells": 0.25,
+      "order_churn": 23.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 3,
+    "id": "g0003_c00",
+    "fitness": 6.533,
+    "behaviour": {
+      "time_in_contact_s": 40.075,
+      "flanks_completed": 0.0,
+      "moves": 12.25,
+      "suppress_then_move": 1.75,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 3.775,
+      "window_positions_used": 0.25,
+      "quiet_spells": 0.0,
+      "order_churn": 24.0,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 3,
+    "id": "g0003_c02",
+    "fitness": 5.2426,
+    "behaviour": {
+      "time_in_contact_s": 59.125,
+      "flanks_completed": 0.5,
+      "moves": 19.75,
+      "suppress_then_move": 0.75,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 4.45,
+      "window_positions_used": 0.75,
+      "quiet_spells": 1.5,
+      "order_churn": 46.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 3,
+    "id": "g0003_c01",
+    "fitness": 4.1612,
+    "behaviour": {
+      "time_in_contact_s": 44.325,
+      "flanks_completed": 0.0,
+      "moves": 17.0,
+      "suppress_then_move": 1.5,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 6.525,
+      "window_positions_used": 0.25,
+      "quiet_spells": 0.75,
+      "order_churn": 31.0,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 3,
+    "id": "g0003_c05",
+    "fitness": 4.1022,
+    "behaviour": {
+      "time_in_contact_s": 42.025,
+      "flanks_completed": 0.25,
+      "moves": 19.0,
+      "suppress_then_move": 2.25,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 10.325,
+      "window_positions_used": 0.25,
+      "quiet_spells": 1.25,
+      "order_churn": 38.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 3,
+    "id": "g0003_c04",
+    "fitness": 3.9912,
+    "behaviour": {
+      "time_in_contact_s": 57.65,
+      "flanks_completed": 0.0,
+      "moves": 27.0,
+      "suppress_then_move": 1.75,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 12.3,
+      "window_positions_used": 0.25,
+      "quiet_spells": 1.25,
+      "order_churn": 48.25,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 3,
+    "id": "g0003_c07",
+    "fitness": 0.969,
+    "behaviour": {
+      "time_in_contact_s": 54.525,
+      "flanks_completed": 0.0,
+      "moves": 17.25,
+      "suppress_then_move": 2.0,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 5.575,
+      "window_positions_used": 1.0,
+      "quiet_spells": 1.0,
+      "order_churn": 34.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 3,
+    "id": "g0003_c03",
+    "fitness": 0.4777,
+    "behaviour": {
+      "time_in_contact_s": 41.85,
+      "flanks_completed": 0.25,
+      "moves": 13.75,
+      "suppress_then_move": 0.75,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 5.275,
+      "window_positions_used": 0.25,
+      "quiet_spells": 0.25,
+      "order_churn": 24.25,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 4,
+    "id": "g0004_c06",
+    "fitness": 10.1385,
+    "behaviour": {
+      "time_in_contact_s": 55.85,
+      "flanks_completed": 0.25,
+      "moves": 21.5,
+      "suppress_then_move": 3.5,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 9.35,
+      "window_positions_used": 1.0,
+      "quiet_spells": 0.75,
+      "order_churn": 42.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 4,
+    "id": "g0004_c02",
+    "fitness": 9.4576,
+    "behaviour": {
+      "time_in_contact_s": 57.425,
+      "flanks_completed": 0.25,
+      "moves": 24.5,
+      "suppress_then_move": 2.25,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 7.8,
+      "window_positions_used": 0.75,
+      "quiet_spells": 1.5,
+      "order_churn": 50.0,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 4,
+    "id": "g0004_c04",
+    "fitness": 9.3769,
+    "behaviour": {
+      "time_in_contact_s": 53.45,
+      "flanks_completed": 0.0,
+      "moves": 22.75,
+      "suppress_then_move": 1.75,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 6.775,
+      "window_positions_used": 0.75,
+      "quiet_spells": 1.5,
+      "order_churn": 47.75,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 4,
+    "id": "g0004_c00",
+    "fitness": 9.1137,
+    "behaviour": {
+      "time_in_contact_s": 28.225,
+      "flanks_completed": 0.0,
+      "moves": 14.75,
+      "suppress_then_move": 2.0,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 6.85,
+      "window_positions_used": 0.5,
+      "quiet_spells": 0.5,
+      "order_churn": 22.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 4,
+    "id": "g0004_c01",
+    "fitness": 7.8893,
+    "behaviour": {
+      "time_in_contact_s": 52.35,
+      "flanks_completed": 0.25,
+      "moves": 19.25,
+      "suppress_then_move": 1.75,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 6.675,
+      "window_positions_used": 0.75,
+      "quiet_spells": 1.0,
+      "order_churn": 34.75,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 4,
+    "id": "g0004_c07",
+    "fitness": 6.8841,
+    "behaviour": {
+      "time_in_contact_s": 34.375,
+      "flanks_completed": 0.0,
+      "moves": 16.0,
+      "suppress_then_move": 1.25,
+      "ambush_success": 0.25,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 6.525,
+      "window_positions_used": 0.75,
+      "quiet_spells": 0.75,
+      "order_churn": 28.75,
+      "stalemate_share": 0.25
+    }
+  },
+  {
+    "gen": 4,
+    "id": "g0004_c05",
+    "fitness": 3.6478,
+    "behaviour": {
+      "time_in_contact_s": 32.325,
+      "flanks_completed": 0.0,
+      "moves": 14.25,
+      "suppress_then_move": 1.75,
+      "ambush_success": 0.0,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 8.25,
+      "window_positions_used": 0.5,
+      "quiet_spells": 0.75,
+      "order_churn": 27.0,
+      "stalemate_share": 0.0
+    }
+  },
+  {
+    "gen": 4,
+    "id": "g0004_c03",
+    "fitness": 1.5118,
+    "behaviour": {
+      "time_in_contact_s": 54.6,
+      "flanks_completed": 0.0,
+      "moves": 14.5,
+      "suppress_then_move": 1.0,
+      "ambush_success": 0.5,
+      "overwatch_kills": 0.0,
+      "time_in_chokepoint_s": 12.275,
+      "window_positions_used": 1.5,
+      "quiet_spells": 0.5,
+      "order_churn": 35.25,
+      "stalemate_share": 0.25
+    }
+  }
+]
