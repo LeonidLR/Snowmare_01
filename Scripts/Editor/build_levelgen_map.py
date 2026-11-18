@@ -168,6 +168,20 @@ def rect_slab(label, folder, x0, y0, x1, y1, top_z, tags=None):
     return cube(label, folder, [(x0 + x1) / 2.0, (y0 + y1) / 2.0, top_z - SLAB / 2.0], [x1 - x0, y1 - y0, SLAB], 0.0, tags)
 
 
+def stairwell_hole_rect(pos, top, length=None):
+    """The slab opening over a stairwell flight's last `length` (default STAIRWELL_HOLE) cm, as wide as the flight + 5 cm
+    each side: (x0, y0, x1, y1). Never past the flight's top (the arrival landing stays solid)."""
+    d = (top[0] - pos[0], top[1] - pos[1])
+    L = math.hypot(*d) or 1.0
+    ux, uy = d[0] / L, d[1] / L
+    back = min(STAIRWELL_HOLE if length is None else length, L)
+    hw = STAIR_W / 2.0 + 5.0
+    ax, ay = top[0] - ux * back, top[1] - uy * back
+    xs = [ax - uy * hw, ax + uy * hw, top[0] - uy * hw, top[0] + uy * hw]
+    ys = [ay + ux * hw, ay - ux * hw, top[1] + ux * hw, top[1] - ux * hw]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
 def slabs_with_holes(label, folder, x0, y0, x1, y1, top_z, holes, tags=None):
     """A slab with rectangular or square holes cut out.
     A hole is (x, y), (x, y, half), or an explicit rect (hx0, hy0, hx1, hy1).
@@ -483,6 +497,7 @@ def _walls_and_buildings_legacy(layout, gz, chimneys, frames, gaps):
             holes_by_floor.setdefault(int(h["floor"]), []).append(h["pos"])
         for s in b.get("stairs", []):
             if s.get("kind") == "stairwell":
+                # legacy layouts keep their square hole (bit-identical rebuilds); the extended path uses stairwell_hole_rect
                 end = s["top"]
                 d = (end[0] - s["pos"][0], end[1] - s["pos"][1])
                 L = math.hypot(*d) or 1.0
@@ -588,11 +603,9 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
             holes_by_floor.setdefault(int(h["floor"]), []).append(h["pos"])
         for s in b.get("stairs", []):
             if s.get("kind") == "stairwell":
-                end = s["top"]
-                d = (end[0] - s["pos"][0], end[1] - s["pos"][1])
-                L = math.hypot(*d) or 1.0
-                half = STAIRWELL_HOLE / 2.0
-                holes_by_floor.setdefault(int(s["to"]), []).append((end[0] - d[0] / L * half, end[1] - d[1] / L * half, half))
+                # head room over the flight's last STAIRWELL_HOLE, only as wide as the flight (BUILDING_GENERATOR.md 2026-11-18:
+                # a square hole cut the neighbouring lane of the switchback core, where the next flight starts)
+                holes_by_floor.setdefault(int(s["to"]), []).append(stairwell_hole_rect(s["pos"], s["top"]))
         for fd in b.get("floors_detail", []):
             fl = int(fd["floor"])
             for g in fd.get("gaps", []):
@@ -607,8 +620,10 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
             for fl in range(h_floor + 1, floors + 1):
                 holes_by_floor.setdefault(fl, []).append(h_rect)
 
-        if not hollow:
-            for n in range(1, floors):
+        slab_levels = {int(fd["floor"]) for fd in b.get("floors_detail", [])}
+        for n in range(1, floors):
+            # a hollow hall gets a slab only where the generator emitted one (its stair-core landings; the rest is an 'atrium' gap)
+            if not hollow or n in slab_levels:
                 specs.extend(slabs_with_holes("%s_floor%d" % (bid, n), "Buildings/%s" % bid, bx0, by0, bx1, by1, gz + z_of(n), holes_by_floor.get(n, []), tags=["floor_slab", "building=" + bid, "floor=%d" % n]))
         if b.get("roof_walkable") or b.get("enterable"):
             roof_holes = list(b.get("roof_holes", [])) + holes_by_floor.get(floors, [])

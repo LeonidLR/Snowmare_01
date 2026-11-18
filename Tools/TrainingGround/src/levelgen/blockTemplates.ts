@@ -13,7 +13,7 @@ import type { Vec2 } from '../movement/geometry.ts';
 import { dist, rng } from '../movement/geometry.ts';
 import type { ZoneKind } from '../movement/layout.ts';
 import type { Draft, DraftBuilding, Rect, Side } from './generate.ts';
-import { COVER_SIZE, addBuilding, addLadderAt, fenceRect, finalizeDraftToLayout, generateLayoutWithLots, splitWall } from './generate.ts';
+import { COVER_SIZE, addBuilding, addLadderAt, fenceRect, finalizeDraftToLayout, generateLayoutWithLots, levelLayer, splitWall, stairChainUp } from './generate.ts';
 import { obstacleHeight } from './obstacleHeights.ts';
 import { drawAngle, fitScale, ROTATION, rotateContent, rotPoint } from './rotation.ts';
 import type { Profile } from './profile.ts';
@@ -253,14 +253,30 @@ const hallSpec = (c: Ctx, s: Side, piece: SetPiece) => ({ height: HALL_ROOF_LEVE
   stairwell: c.V >= 2, set_piece: piece, doorSides: [s, s], windowSides: [s, OPP[s]], roofHatch: c.V >= 2 });
 /** The roof excursion of a hall with a stairwell: up the flight, across the roof, back down (links = the stair). */
 function roofVisit(b: DraftBuilding, s: Side): VisitM | null {
-  const st = b.stairs.find((x) => x.kind === 'stairwell' && x.from === 0 && x.to === b.floors);
+  const chain = stairChainUp(b);
   const inside = doorInside(b, s);
-  if (!st || !b.roof_walkable) return groundVisit(inside);
+  if (!chain || !b.roof_walkable) return groundVisit(inside);
   const roof = `roof:${b.id}`;
   const c = rect.centre(b.footprint);
-  const pts: Vec2[] = [...(inside ? [inside] : []), st.pos, st.top, c, st.top, st.pos];
-  const off = inside ? 1 : 0;
-  return { points: pts, layers: [...(inside ? ['ground'] : []), 'ground', roof, roof, roof, 'ground'], links: [{ at: off + 1, via: st.id }, { at: off + 4, via: st.id }] };
+  // up the switchback core flight by flight, across the roof, and back down the same flights
+  const pts: Vec2[] = [...(inside ? [inside] : [])];
+  const layers: string[] = [...(inside ? ['ground'] : [])];
+  const links: { at: number; via: string }[] = [];
+  for (let i = 0; i < chain.points.length; i++) {
+    pts.push(chain.points[i]);
+    layers.push(chain.layers[i]);
+    const l = chain.links.find((x) => x.at === i);
+    if (l) links.push({ at: pts.length - 1, via: l.via });
+  }
+  pts.push(c);
+  layers.push(roof);
+  for (let n = chain.flights.length - 1; n >= 0; n--) {
+    const st = chain.flights[n];
+    pts.push(st.top, st.pos);
+    layers.push(levelLayer(b, st.to), levelLayer(b, st.from));
+    links.push({ at: pts.length - 1, via: st.id });
+  }
+  return { points: pts, layers, links };
 }
 
 /** The catalog: each fills c.r (metres) and returns its visit (null = the route only passes by). */

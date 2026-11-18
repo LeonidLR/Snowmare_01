@@ -579,12 +579,17 @@ export function validateRegenState(s: unknown): string[] {
   return e;
 }
 
-/** The named layers (walkable surfaces) a layout has: 'ground', 'cut', 'roof:<b>', 'floor:<b>:<n>' (none inside a hollow building). */
+/**
+ * The named layers (walkable surfaces) a layout has: 'ground', 'cut', 'roof:<b>', 'floor:<b>:<n>'. A hollow hall has a floor
+ * layer only where its stair core leaves a landing slab (floors_detail entry, BUILDING_GENERATOR.md 2026-11-18 switchback core).
+ */
 export function layersOf(l: GenLayout): string[] {
   const out = ['ground'];
   if (l.cut) out.push('cut');
   for (const b of l.buildings) {
-    if (!b.hollow) for (let n = 1; n < b.floors; n++) out.push(`floor:${b.id}:${n}`);
+    for (let n = 1; n < b.floors; n++) {
+      if (!b.hollow || (b.floors_detail ?? []).some((fd) => fd.floor === n)) out.push(`floor:${b.id}:${n}`);
+    }
     if (b.roof_walkable) out.push(`roof:${b.id}`);
   }
   return out;
@@ -633,7 +638,15 @@ export function layerWalls(l: GenLayout, layer: string): LayoutWall[] {
     return walls;
   }
   const floor = Number(m[3] ?? 1);
-  if (b.hollow || floor >= b.floors) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
+  if (floor >= b.floors) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
+  if (b.hollow) {
+    // a hall's upper level is only its stair-core landing: walk inside the core box, its edges toward the void are rails
+    const core = (b.rooms ?? []).find((rm) => rm.floor === floor && rm.kind === 'stairwell');
+    if (!core) throw new Error(`layer "${layer}": ${b.id} has no floor ${floor}`);
+    const cp = rectPoly([core.bounds.min, core.bounds.max]);
+    cp.forEach((a, i) => walls.push({ id: `${b.id}_f${floor}_core_${i}`, a, b: cp[(i + 1) % 4], height: 100, thickness: 10 }));
+    return walls;
+  }
   fp.forEach((a, i) => walls.push({ id: `${b.id}_f${floor}_perimeter_${i}`, a, b: fp[(i + 1) % 4], height: LEVEL_HEIGHT, thickness: 30 }));
   const floorWalls = l.walls.filter((w) => w.building === b.id && (w.floor ?? 0) === floor);
   for (const w of floorWalls) walls.push({ id: w.id, a: w.a, b: w.b, height: w.height, thickness: w.thickness });

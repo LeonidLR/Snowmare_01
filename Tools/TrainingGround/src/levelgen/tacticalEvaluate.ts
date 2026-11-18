@@ -132,7 +132,7 @@ function pointInBounds(p: Vec2, bounds: { min: Vec2; max: Vec2 }, tol = ROOM_TOU
 }
 
 /** Build the room & roof reachability graph for one building and BFS from 'street'. */
-function checkBuildingReachability(l: GenLayout, b: GenBuilding): {
+export function checkBuildingReachability(l: GenLayout, b: GenBuilding): {
   roomsTotal: number;
   roomsReachable: number;
   unreachableRooms: string[];
