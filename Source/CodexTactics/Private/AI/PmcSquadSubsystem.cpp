@@ -88,6 +88,24 @@ namespace PmcSquadLocal
 	}
 
 	/**
+	 * G008: the SquadIndex set the defence posts were built for, sorted and unique. Decide and RefreshDefence both use this
+	 * over GetTeamMembers, so the "living set changed" test cannot stay true forever (review finding 5).
+	 */
+	inline TArray<int32> LivingSquadIndices(TConstArrayView<AOperativeCharacter*> Members)
+	{
+		TArray<int32> Living;
+		for (const AOperativeCharacter* Member : Members)
+		{
+			if (IsLiveOperative(Member))
+			{
+				Living.AddUnique(Member->SquadIndex);
+			}
+		}
+		Living.Sort();
+		return Living;
+	}
+
+	/**
 	 * fix/pmc-onpoint-3d-detour: he is on a ladder / a drop link of his walk (queued at the ladder, climbing, running off the edge, landing).
 	 * The ladder's StartEntry stops his path following (StopOperative) and resumes the walk after the climb (ResumeMoveAfterLadder), so for
 	 * the commander the walk is still running - it used to read as "ended short of its goal", failed the order and re-decided mid-climb.
@@ -1492,15 +1510,8 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 	}
 	if (Team.Objective.IsSet() && Team.Objective->Role == EPmcRole::Defender)
 	{
-		TArray<int32> Living;
-		for (AOperativeCharacter* Mate : Mates)
-		{
-			if (PmcSquadLocal::IsLiveOperative(Mate))
-			{
-				Living.Add(Mate->SquadIndex);
-			}
-		}
-		Living.Sort();
+		// Mates is GetTeamMembers(TeamId), the same list RefreshDefence reads.
+		const TArray<int32> Living = PmcSquadLocal::LivingSquadIndices(Mates);
 		if (!Team.Defence.bActive || Living != Team.Defence.LivingIndices)
 		{
 			RefreshDefence(TeamId, Team, !Team.Defence.bActive);
@@ -3355,7 +3366,8 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 	TMap<int32, FKeptPost> Kept;
 	const TArray<AOperativeCharacter*> Members = GetTeamMembers(TeamId);
 	TArray<FPmcDefenceMan> Men;
-	TArray<int32> Living;
+	// The same helper and source as Decide's change test, so a refresh settles the comparison.
+	TArray<int32> Living = PmcSquadLocal::LivingSquadIndices(Members);
 	Men.Reserve(Members.Num());
 	for (AOperativeCharacter* Member : Members)
 	{
@@ -3379,9 +3391,7 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 			Previous.ArrivedAt = State->DefenceArrivedAt;
 		}
 		Men.Add(Man);
-		Living.Add(Member->SquadIndex);
 	}
-	Living.Sort();
 
 	const FVector* Inward = Team.Defence.bHasInward ? &Team.Defence.Inward : nullptr;
 	const TArray<FPmcDefenceSlot> Slots;
