@@ -10,13 +10,17 @@ param(
     [Parameter(Mandatory)][string]$PromptFile,
     [string]$Model = "claude-sonnet-5-5",
     [double]$BudgetUsd = 10,
-    [string]$Label = "agent"
+    [string]$Label = "agent",
+    # designer 2026-11-18: ANTHROPIC_API_KEY_EXTRA (valid until 2026-11-19) is spent first when it is set
+    [string]$KeyEnv = ""
 )
 $ErrorActionPreference = "Stop"
 Get-ChildItem env: | Where-Object { $_.Name -match '^(CLAUDE|ANTHROPIC_BASE_URL)' } | ForEach-Object {
     Remove-Item -LiteralPath "env:$($_.Name)" -ErrorAction SilentlyContinue }
-$env:ANTHROPIC_API_KEY = [Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY', 'User')
-if (-not $env:ANTHROPIC_API_KEY) { throw "ANTHROPIC_API_KEY is not set in the user environment" }
+if (-not $KeyEnv) { $KeyEnv = if ("$([Environment]::GetEnvironmentVariable('ANTHROPIC_API_KEY_EXTRA', 'User'))".StartsWith('sk-ant-')) { 'ANTHROPIC_API_KEY_EXTRA' } else { 'ANTHROPIC_API_KEY' } }
+$env:ANTHROPIC_API_KEY = [Environment]::GetEnvironmentVariable($KeyEnv, 'User')
+if (-not $env:ANTHROPIC_API_KEY) { throw "$KeyEnv is not set in the user environment" }
+Write-Host "API key: $KeyEnv" 
 $env:CODEX_AGENT = "claude-api"
 
 $Repo = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent

@@ -24,15 +24,34 @@ PRICES = {
 LEDGER = os.path.join("Saved", "Orchestrator", "api_spend.jsonl")
 
 
-def spent_so_far() -> float:
+EXTRA_KEY_ENV = "ANTHROPIC_API_KEY_EXTRA"  # designer 2026-11-18: a second key valid until 2026-11-19, spend it first
+
+
+def user_env(name: str) -> str:
+    """The variable from this process, else from the Windows user environment (never printed)."""
+    value = os.environ.get(name, "")
+    if value or os.name != "nt":
+        return value
+    try:
+        import winreg
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment") as key:
+            return str(winreg.QueryValueEx(key, name)[0])
+    except OSError:
+        return ""
+
+
+def spent_so_far(key_env: str = "ANTHROPIC_API_KEY") -> float:
+    """USD in the ledger for one key (entries without "key" belong to the main ANTHROPIC_API_KEY)."""
     if not os.path.exists(LEDGER):
         return 0.0
     total = 0.0
     with open(LEDGER, encoding="utf-8") as f:
         for line in f:
             try:
-                total += float(json.loads(line).get("usd", 0.0))
-            except (ValueError, json.JSONDecodeError):
+                row = json.loads(line)
+                if row.get("key", "ANTHROPIC_API_KEY") == key_env:
+                    total += float(row.get("usd", 0.0))
+            except (ValueError, json.JSONDecodeError, AttributeError):
                 pass
     return total
 
@@ -48,10 +67,15 @@ def main() -> int:
     ap.add_argument("--label", default="")
     ap.add_argument("--effort", choices=["low", "medium", "high", "max"], default="medium",
                     help="output_config.effort: caps the adaptive thinking (2026-11-10: a 32k Opus patch job spent everything thinking)")
+    ap.add_argument("--key-env", default="",
+                    help="environment variable with the API key (default: ANTHROPIC_API_KEY_EXTRA when set, else ANTHROPIC_API_KEY); "
+                         "an expired extra key falls back to the main one")
     args = ap.parse_args()
 
-    if not os.environ.get("ANTHROPIC_API_KEY"):
-        print("ANTHROPIC_API_KEY is not set", file=sys.stderr)
+    key_env = args.key_env or (EXTRA_KEY_ENV if user_env(EXTRA_KEY_ENV).startswith("sk-ant-") else "ANTHROPIC_API_KEY")
+    api_key = user_env(key_env)
+    if not api_key:
+        print(f"{key_env} is not set", file=sys.stderr)
         return 2
     prompt = open(args.prompt_file, encoding="utf-8").read()
     parts = [prompt]
@@ -62,19 +86,33 @@ def main() -> int:
 
     in_price, out_price = PRICES[args.model]
     worst = len(text) / 3.5 / 1e6 * in_price + args.max_tokens / 1e6 * out_price
-    already = spent_so_far()
-    if already + worst > args.budget_usd:
+    already = spent_so_far(key_env)
+    if key_env == "ANTHROPIC_API_KEY" and already + worst > args.budget_usd:
         print(f"refused: spent {already:.2f} + worst case {worst:.2f} > budget {args.budget_usd:.2f} USD", file=sys.stderr)
         return 3
 
     import anthropic
 
-    client = anthropic.Anthropic()
-    # Streamed (2026-11-10): the SDK refuses a non-streamed call whose max_tokens may run past 10 minutes (Opus, 24k).
-    with client.messages.stream(model=args.model, max_tokens=args.max_tokens,
-                                messages=[{"role": "user", "content": text}],
-                                extra_body={"output_config": {"effort": args.effort}}) as stream:
-        msg = stream.get_final_message()
+    def run(key: str):
+        client = anthropic.Anthropic(api_key=key)
+        # Streamed (2026-11-10): the SDK refuses a non-streamed call whose max_tokens may run past 10 minutes (Opus, 24k).
+        with client.messages.stream(model=args.model, max_tokens=args.max_tokens,
+                                    messages=[{"role": "user", "content": text}],
+                                    extra_body={"output_config": {"effort": args.effort}}) as stream:
+            return stream.get_final_message()
+
+    try:
+        msg = run(api_key)
+    except anthropic.AuthenticationError:
+        main_key = user_env("ANTHROPIC_API_KEY")
+        if key_env == "ANTHROPIC_API_KEY" or not main_key:
+            raise
+        print(f"note: {key_env} was rejected (expired?) - falling back to ANTHROPIC_API_KEY", file=sys.stderr)
+        key_env = "ANTHROPIC_API_KEY"
+        if spent_so_far(key_env) + worst > args.budget_usd:
+            print("refused: main key budget", file=sys.stderr)
+            return 3
+        msg = run(main_key)
     answer = "".join(block.text for block in msg.content if getattr(block, "type", "") == "text")
     if not answer.strip():
         # 2026-11-10: a big input can spend the whole max_tokens before any text (stop_reason max_tokens) - say so, don't write silence.
@@ -86,7 +124,7 @@ def main() -> int:
     os.makedirs(os.path.dirname(LEDGER), exist_ok=True)
     with open(LEDGER, "a", encoding="utf-8") as f:
         f.write(json.dumps({"when": dt.datetime.now().isoformat(timespec="seconds"), "model": args.model,
-                            "label": args.label, "in": msg.usage.input_tokens, "out": msg.usage.output_tokens,
+                            "label": args.label, "key": key_env, "in": msg.usage.input_tokens, "out": msg.usage.output_tokens,
                             "usd": round(usd, 4)}) + "\n")
     print(f"ok: {args.out}  ({msg.usage.input_tokens} in / {msg.usage.output_tokens} out, {usd:.3f} USD; "
           f"total {already + usd:.2f} / {args.budget_usd:.2f})")
