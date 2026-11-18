@@ -1141,6 +1141,26 @@ private:
 	 */
 	FVector KeepSlotOffRamp(const AOperativeCharacter& LeaderRef, const FVector& Slot) const;
 
+	// --- Give way (bug report 2026-11-02 item 7, "formation stuck at a ramp foot"; SquadGiveWayRules; SquadSubsystemGiveWay.cpp) ---
+	/**
+	 * Each frame (Codex.Squad.GiveWay): an idle member (no own order, not in cover, no combat action, standing) whose capsule a squadmate's own
+	 * walk crosses within give_way.look_ahead_cm steps aside off that path (squad and Solo mode; asked again every give_way.retry_s).
+	 */
+	void UpdateGiveWay();
+	/** The mover's navmesh path from where he is now (Path[0] = his feet; cached per order serial / destination). */
+	void BuildGiveWayPath(const AOperativeCharacter& Mover, TArray<FVector>& OutPath);
+	struct FGiveWayPath
+	{
+		uint32 Serial = 0;
+		FVector Destination = FVector::ZeroVector;
+		TArray<FVector> Points;
+	};
+	TMap<TWeakObjectPtr<const AOperativeCharacter>, FGiveWayPath> GiveWayPaths;
+	/** Idle members not asked again before this world time, s. */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, double> GiveWayNextTry;
+	/** Members stepping aside -> their spot (dropped once they stand). */
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FVector2D> GiveWayTargets;
+
 	struct FRampHoldState
 	{
 		bool bHeld = false;
