@@ -153,7 +153,9 @@ namespace EnemyAIRules
 	 * (feet + BodyOffsetCm), the Godot rule: feet 1.1 m up a ledge are >= 2.1 m of body-point distance away whatever the horizontal,
 	 * so a ledge is never in reach. On shared ground (bSharedGround: the floor between them rises smoothly, CombatGroundRules::
 	 * IsSharedGround over the probed profile - not the angle alone) the vertical part blends from that body point to feet-to-feet,
-	 * fully at SlopeFullDeg: flat ground is exactly the old rule, a ramp no longer stacks its rise on the +1 m. The single rule every
+	 * fully at SlopeFullDeg: flat ground is exactly the old rule, a ramp no longer stacks its rise on the +1 m. The blend applies
+	 * only uphill (target feet higher): downhill the body point is the nearer one, so a target lower on a ramp keeps the old
+	 * body-point reach (final review 1) - and the floor between them never changes a downhill verdict (no probe). The single rule every
 	 * caller uses (real time via CombatGround::CanMelee, turn-based, RampFightSmoke).
 	 */
 	CODEXTACTICS_API bool CanMeleeOnGround(const FVector& AttackerFeet, const FVector& TargetFeet, float AttackRangeCm, bool bSharedGround,

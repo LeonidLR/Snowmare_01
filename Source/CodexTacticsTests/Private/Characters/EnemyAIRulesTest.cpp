@@ -83,6 +83,26 @@ bool FEnemyAIRulesTest::RunTest(const FString&)
 				EnemyAIRules::CanMeleeOverProfile(FVector::ZeroVector, FVector(Horizontal, 0.f, Horizontal * Tan), 180.f, Ramp, Reach));
 		}
 	}
+	// G007 final review 1: downhill keeps the old body-point reach (the blend is uphill only). The attacker above on a 20 / 34 deg
+	// ramp, the target's feet 100 cm lower 150 cm out: vertical 0, distance 150 -> bites, on or off shared ground.
+	for (const float SlopeDeg : { 20.f, 34.f })
+	{
+		const float Tan = FMath::Tan(FMath::DegreesToRadians(SlopeDeg));
+		// The ramp falls toward the target and levels out at -100 cm (34 deg reaches it at ~148 cm, 20 deg never: a drop at the end).
+		const TArray<FFloorSample> Down = Profile(150.f, -100.f, [Tan](float D) { return FMath::Max(-D * Tan, -100.f); });
+		TestTrue(*FString::Printf(TEXT("%.0f deg ramp, target 100 cm lower at 150 cm: bites (profile)"), SlopeDeg),
+			EnemyAIRules::CanMeleeOverProfile(FVector::ZeroVector, FVector(150.f, 0.f, -100.f), 180.f, Down, Reach));
+		// The target on the ramp itself, 150 cm out.
+		const TArray<FFloorSample> OnRamp = Profile(150.f, -150.f * Tan, [Tan](float D) { return -D * Tan; });
+		TestTrue(*FString::Printf(TEXT("%.0f deg ramp, target down the ramp 150 cm out: shared"), SlopeDeg), CombatGroundRules::IsSharedGround(OnRamp, Reach.StepMaxCm));
+		TestTrue(*FString::Printf(TEXT("%.0f deg ramp, target down the ramp 150 cm out: bites"), SlopeDeg),
+			EnemyAIRules::CanMeleeOverProfile(FVector::ZeroVector, FVector(150.f, 0.f, -150.f * Tan), 180.f, OnRamp, Reach));
+	}
+	TestTrue(TEXT("downhill 100 cm at 150 cm, shared ground: bites"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(150.f, 0.f, -100.f), 180.f, true, Reach));
+	TestTrue(TEXT("downhill 100 cm at 150 cm, off shared ground: bites"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(150.f, 0.f, -100.f), 180.f, false, Reach));
+	TestEqual(TEXT("downhill 100 cm: the old ~180 cm planar reach, shared or not"), EnemyAIRules::MeleeReachPlanarOnGround(180.f, -100.f, true, Reach),
+		EnemyAIRules::MeleeReachPlanarOnGround(180.f, -100.f, false, Reach), 0.01f);
+	TestTrue(TEXT("downhill 100 cm: planar reach ~180 cm"), EnemyAIRules::MeleeReachPlanarOnGround(180.f, -100.f, true, Reach) > 179.f);
 	// The ramp stop from RampFightSmoke: 1.24 m out, feet 83 cm up.
 	TestTrue(TEXT("Shared slope: in reach"), EnemyAIRules::CanMeleeOnGround(FVector::ZeroVector, FVector(124.f, 0.f, 83.f), 180.f, true, Reach));
 	// A stair (18 cm risers every 25 cm) is shared ground; a 50 cm crate is not.

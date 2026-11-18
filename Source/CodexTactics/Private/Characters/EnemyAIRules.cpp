@@ -248,9 +248,11 @@ bool EnemyAIRules::CanMeleeOnGround(const FVector& AttackerFeet, const FVector& 
 	}
 	const float Horizontal = FVector::Dist2D(AttackerFeet, TargetFeet);
 	float Vertical = Rise + Config.BodyOffsetCm; // to the Godot body point
-	if (bSharedGround)
+	if (bSharedGround && Rise > 0.f)
 	{
-		// Flat shared ground = the body point (the old rule); the steeper the shared slope, the more feet-to-feet.
+		// Flat shared ground = the body point (the old rule); the steeper the shared slope, the more feet-to-feet. Uphill only
+		// (G007 final review 1): downhill the body point (Rise + offset) is already nearer than the feet, so the blend would
+		// shrink the reach - a target lower on the ramp keeps the old body-point reach.
 		const float AngleDeg = FMath::RadiansToDegrees(FMath::Atan2(FMath::Abs(Rise), FMath::Max(Horizontal, 1.f)));
 		const float Blend = Config.SlopeFullDeg > KINDA_SMALL_NUMBER ? FMath::Clamp(AngleDeg / Config.SlopeFullDeg, 0.f, 1.f) : 1.f;
 		Vertical = FMath::Lerp(Rise + Config.BodyOffsetCm, Rise, Blend);
