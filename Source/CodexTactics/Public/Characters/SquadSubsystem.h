@@ -982,6 +982,8 @@ private:
 		bool bResume = false;
 		FVector ResumeTarget = FVector::ZeroVector;
 		TOptional<float> LookYaw;
+		/** Last wall-adjusted wait yaw written to the log for this member. */
+		TOptional<float> LastLoggedWaitLookYaw;
 		FString OutWhy;
 	};
 	/** R17-1: the squad's turn-taking climb (one at a time). */

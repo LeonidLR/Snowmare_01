@@ -803,6 +803,7 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 			if (Op.Queue.TryLease(Operative, IsWaiting))
 			{
 				Member.State = ESquadMantleState::Turn;
+				Member.LastLoggedWaitLookYaw.Reset();
 				Member.TurnSeconds = 0.f;
 				Member.SinceOrder = 0.f;
 				Member.bOrdered = false;
@@ -836,6 +837,10 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 		FSquadMantleMember& Member = Op.Members[MemberIndex];
 		AOperativeCharacter* Operative = Member.Operative.Get();
 		Member.LookYaw.Reset();
+		if (Member.State != ESquadMantleState::Waiting && Member.State != ESquadMantleState::Hold)
+		{
+			Member.LastLoggedWaitLookYaw.Reset();
+		}
 		if (!Operative)
 		{
 			continue;
@@ -884,11 +889,10 @@ void USquadSubsystem::UpdateSquadMantle(float DeltaTime)
 				if (FMath::Abs(FMath::FindDeltaAngleDegrees(Raw, Cleared)) > 1.f)
 				{
 					// A wall turned his look (once per new look, not every tick).
-					static TMap<TWeakObjectPtr<AOperativeCharacter>, float> LoggedClear;
-					const float* Last = LoggedClear.Find(Member.Operative);
-					if (!Last || FMath::Abs(FMath::FindDeltaAngleDegrees(*Last, Cleared)) > 5.f)
+					if (!Member.LastLoggedWaitLookYaw.IsSet()
+						|| FMath::Abs(FMath::FindDeltaAngleDegrees(Member.LastLoggedWaitLookYaw.GetValue(), Cleared)) > 5.f)
 					{
-						LoggedClear.Add(Member.Operative, Cleared);
+						Member.LastLoggedWaitLookYaw = Cleared;
 						const float Unlimited = FormationSectorRules::ClearLook(Op.Walls, Here, Raw, BodyYaw, FormationTuning::Get());
 						UE_LOG(LogCodexTactics, Display, TEXT("[SquadMantle] %s waits (place %d): a wall turns his look %.0f -> %.0f (outward %.0f, %.0f off; unlimited ClearLook %.0f, %.0f off; %d walls)"),
 							*Operative->DisplayName.ToString(), Place, Raw, Cleared, LaneOutYaw, FMath::Abs(FMath::FindDeltaAngleDegrees(LaneOutYaw, Cleared)), Unlimited,
