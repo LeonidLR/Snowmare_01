@@ -44,3 +44,11 @@ docs/port/CLAUDE_SESSION_PROMPT_2026-11-19c.md (the main lead's state), the newe
 Commit + push the branch. Keep `docs/port/claude/outbox/WORKER_LEAD_2026-11-20.report.md` current: what was done (commits), digest
 numbers before / after, what is unfinished, what the main lead must review. When the 5-hour quota runs out: commit, push, write the
 report, stop.
+
+## No silent stops (designer 2026-11-19, docs/port/LANES.md)
+- The worker's night loop (C:\Work\NightLoop\worker_night_loop.ps1, kept alive by task "CodexTactics Night Guard") runs until
+  07:45 and releases the agent.lock between jobs; it does not touch CodexTactics-slot1. Its results + digest:
+  C:\Work\CodexTactics\Saved\Worker\nightloop\<date>\digest.log - read it first in the morning (the overnight numbers).
+- Your own lanes: keep docs/port/LANES.json on your branch current (state active / blocked / waiting + reason) and post a
+  status line at every step; never go idle without writing why. The main-PC watchdog is offline while the main PC is;
+  check `C:\Work\CodexTactics\Saved\Worker\nightloop\guard.log` yourself if something looks stuck.
