@@ -39,3 +39,6 @@ Caveat: on the committed seed-1 maps the route was already almost clean (nearest
 - `npm test`: 511 tests, 511 pass, 0 fail (no icon failures in this worktree).
 - `typesafe_triage.py --audit-diff --agent claude`: Boundary Breach PASS, risk 0.4 / 4.
 - `git diff --check`: clean.
+
+## Designer decision 2026-11-19
+«Оставляй 6 м» - route_clear_m = 6 m (props_autogen.json mines layer) is final; the approved 3 m is superseded.
