@@ -37,5 +37,5 @@ $settings = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoi
     -MultipleInstances IgnoreNew -ExecutionTimeLimit ([TimeSpan]::FromHours(8))
 $principal = New-ScheduledTaskPrincipal -UserId "$env:USERDOMAIN\$env:USERNAME" -LogonType Interactive -RunLevel Limited
 Register-ScheduledTask -TaskName $TaskName -Action $action -Trigger @($repeat, $logon) -Settings $settings -Principal $principal -Force | Out-Null
-Write-Host "installed $TaskName: every $EveryHours h + at logon, hidden; log $logDir\sync.log"
+Write-Host "installed ${TaskName}: every $EveryHours h + at logon, hidden; log $logDir\sync.log"
 if ($RunNow) { Start-ScheduledTask -TaskName $TaskName; Write-Host "started one run now" }
