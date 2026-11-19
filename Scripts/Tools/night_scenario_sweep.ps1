@@ -24,8 +24,13 @@ try {
 } catch { L "worker busy (lock / sync after 90 min) - sweep skipped"; exit 2 }
 try {
     $env:CODEX_AGENT = 'worker'; $env:CODEX_IGNORE_DESIGNER = '1'; $env:CODEX_SMOKE_REMOTE = 'off'; $env:CODEX_LOCK_HELD = '1'
+    # A designer working in this checkout (the dev-switch day, MAIN_PC_FORMAT 5.5): never touch his tracked changes - skip.
+    $dirty = @(git status --porcelain --untracked-files=no)
+    if ($dirty.Count) { L "checkout has $($dirty.Count) tracked changes (someone works here) - sweep skipped"; Add-Content -Encoding UTF8 (Join-Path $dir 'sweeps.log') "$day SKIPPED: $($dirty.Count) tracked changes in the checkout"; return }
     git fetch --quiet origin 2>&1 | Out-Null
-    git checkout --quiet -B main origin/main 2>&1 | Out-Null
+    # -f: an untracked file that is now tracked upstream (a mirror copy) must not block the switch; tracked changes are 0 here.
+    $co = (git checkout --quiet -f -B main origin/main 2>&1 | Out-String).Trim()
+    if ($LASTEXITCODE -ne 0) { L "checkout FAILED: $co"; Add-Content -Encoding UTF8 (Join-Path $dir 'sweeps.log') "$day SKIPPED: checkout failed"; return }
     git lfs pull 2>&1 | Out-Null
     $head = (git rev-parse --short HEAD).Trim()
     $names = @((Get-Content (Join-Path $Repo 'Scripts\test_map.json') -Raw | ConvertFrom-Json).smokeRegistry | Where-Object { $_ -match $Pattern })
