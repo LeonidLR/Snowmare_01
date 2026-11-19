@@ -1439,19 +1439,23 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			}
 		}
 	}
-	// G008 defence refresh gives every objective defender a post, including a man already spawned on an overwatch roof.
-	// While his feet are on that roof the commander sees the overwatch post, so the defence walk does not pull him off it.
-	// When he leaves the roof the defence post returns. A defence flag on the same man does not cancel the contact clock.
+	// G008 defence refresh gives every objective defender a post, including a man already on a ranged tactical post.
+	// While his feet are on that post the commander sees it, so the defence walk does not pull him off it.
+	// When he leaves it the defence post returns. A defence flag on the same man does not cancel the contact clock.
 	{
 		const FVector HoldFeet = PmcSquadLocal::FeetOf(Fighter);
-		const bool bOnOverwatchPost = State.Post.Kind == EPmcPostKind::Overwatch
+		const bool bOnTacticalPost = State.Post.IsValid()
 			&& PmcTacticalRules::IsAtPost(HoldFeet, State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm);
-		// G008b: contact for an overwatch roof is measured from the post, not from the man. ambush_max_hold_s starts when a known
-		// enemy's last position enters the engagement range (the roof's range_m, or his weapon reach when that is smaller) and
-		// restarts if they all leave it, or if he steps off the roof. The assault stand-in is not in Team.Known, so it never starts this clock.
-		if (bOnOverwatchPost)
+		const bool bRangedPost = State.Post.Kind == EPmcPostKind::Overwatch || State.Post.Kind == EPmcPostKind::Window
+			|| State.Post.Kind == EPmcPostKind::Ambush;
+		// G008b / T-06: contact for a ranged post is measured from the post, not from the man. ambush_max_hold_s starts when a
+		// known enemy's last position enters the engagement range and restarts if they all leave it, or if he steps off the post.
+		// Overwatch: the smaller of the roof's range_m and his weapon reach. Window and ambush: the weapon band's max.
+		// The assault stand-in is not in Team.Known, so it never starts this clock.
+		if (bOnTacticalPost && bRangedPost)
 		{
-			const float EngagementCm = PmcCommanderRules::OverwatchEngagementCm(State.Post.RangeCm, View.WeaponRangeCm);
+			const float BandMaxCm = View.Band.IsValid() ? View.Band.MaxCm : 0.f;
+			const float EngagementCm = PmcCommanderRules::PostEngagementCm(State.Post.Kind, State.Post.RangeCm, View.WeaponRangeCm, BandMaxCm);
 			float NearestCm = TNumericLimits<float>::Max();
 			bool bInRange = false;
 			for (const TPair<TWeakObjectPtr<AActor>, FKnownTarget>& Pair : Team.Known)
@@ -1474,16 +1478,17 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			else if (State.PostRangeContactAt < 0.0)
 			{
 				State.PostRangeContactAt = Now;
-				UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s overwatch contact in range (nearest %.0f cm, post range %.0f cm)"),
-					TeamId, *Fighter.DisplayName.ToString(), NearestCm, EngagementCm);
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s %s contact in range (nearest %.0f cm, post range %.0f cm)"),
+					TeamId, *Fighter.DisplayName.ToString(), PmcTacticalRules::PostKindName(State.Post.Kind), NearestCm, EngagementCm);
 			}
 			View.bContactInPostRange = State.PostRangeContactAt >= 0.0;
 			View.PostRangeContactSeconds = View.bContactInPostRange ? static_cast<float>(Now - State.PostRangeContactAt) : 0.f;
-			const float KindFactor = PmcTacticalRules::PostKindFactor(EPmcPostKind::Overwatch, Team.Weights);
-			View.PostKind = EPmcPostKind::Overwatch;
+			const float KindFactor = PmcTacticalRules::PostKindFactor(State.Post.Kind, Team.Weights);
+			View.PostKind = State.Post.Kind;
 			View.PostScore = KindFactor > 0.f ? State.Post.Score / KindFactor : State.Post.Score;
 			View.bAtPost = true;
-			View.bOnOverwatchRoof = true;
+			View.bOnRangedPost = true;
+			View.bOnOverwatchRoof = State.Post.Kind == EPmcPostKind::Overwatch;
 			View.bHasDefencePost = false;
 		}
 		else
@@ -1647,14 +1652,16 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 			{
 				continue;
 			}
-			// G008b: a defender standing on an overwatch roof keeps Ambush until the fighter loop sees the hold close.
-			// Springing it here, before his view exists, walked him off while the threat was still outside the roof.
+			// G008b / T-06: a defender standing on a ranged post keeps Ambush until the fighter loop sees the hold close.
+			// Springing it here, before his view exists, walked him off while the threat was still outside the post.
 			// His G008 defence post does not count: the refresh stamps one on every objective defender.
 			const FVector PostFeet = Mate ? PmcSquadLocal::FeetOf(*Mate) : FVector::ZeroVector;
-			const bool bOverwatchDefender = Mate && Team.Objective.IsSet() && Team.Objective->Role == EPmcRole::Defender
-				&& State->Post.Kind == EPmcPostKind::Overwatch
+			const bool bRangedKind = State->Post.Kind == EPmcPostKind::Overwatch || State->Post.Kind == EPmcPostKind::Window
+				|| State->Post.Kind == EPmcPostKind::Ambush;
+			const bool bRangedDefender = Mate && Team.Objective.IsSet() && Team.Objective->Role == EPmcRole::Defender
+				&& bRangedKind
 				&& PmcTacticalRules::IsAtPost(PostFeet, State->Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm);
-			if (bOverwatchDefender)
+			if (bRangedDefender)
 			{
 				continue;
 			}
@@ -1738,7 +1745,7 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		// the kill zone / the ambush is blown) - the Passive posture, back to Aggressive when he strikes.
 		// G008b: the pre-loop spring skipped this overwatch defender. Once the hold closes (in range for ambush_max_hold_s, or he
 		// is hit, suppressed, or the post is untenable) the ambush ends here, once. A moving defence-post walk is still spared.
-		if (Team.bEverContact && State.Order == EPmcOrder::Ambush && !PmcCommanderRules::IsOverwatchHoldOpen(View, Own, Team.Weights))
+		if (Team.bEverContact && State.Order == EPmcOrder::Ambush && !PmcCommanderRules::IsAmbushHoldOpen(View, Own, Team.Weights))
 		{
 			const bool bPostWalkMoving = Fighter->HasOwnMoveOrder() || Fighter->GetVelocity().SizeSquared2D() >= FMath::Square(PmcSquadLocal::StillSpeedCm);
 			const bool bDefenceWalk = State.bHasDefencePost && Team.Defence.bActive && State.DefencePostWalkFromCm >= 0.f && bPostWalkMoving;
@@ -2214,9 +2221,11 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		// is the leave this order must not take while the hold is what scored Ambush.
 		{
 			const FVector RoofFeet = PmcSquadLocal::FeetOf(Fighter);
-			const bool bOnOverwatchRoof = State.Post.Kind == EPmcPostKind::Overwatch
+			const bool bRangedKind = State.Post.Kind == EPmcPostKind::Overwatch || State.Post.Kind == EPmcPostKind::Window
+				|| State.Post.Kind == EPmcPostKind::Ambush;
+			const bool bOnRangedPost = bRangedKind
 				&& PmcTacticalRules::IsAtPost(RoofFeet, State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm);
-			if (State.bHasDefencePost && Team.Defence.bActive && !bOnOverwatchRoof)
+			if (State.bHasDefencePost && Team.Defence.bActive && !bOnRangedPost)
 			{
 			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
 			bool bOnPost = PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
@@ -2318,9 +2327,10 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			bTaken = true;
 			Goal = State.Post.Location;
 			State.bPostSettled = true;
-			// On the overwatch roof the sector post stays assigned, but he is settled here: the defence-walk retry must not
-			// start while his feet are still on this roof (bSettleDefence reads bDefenceSettled).
-			if (State.bHasDefencePost && State.Post.Kind == EPmcPostKind::Overwatch)
+			// On a ranged tactical post the sector post stays assigned, but he is settled here: the defence-walk retry must not
+			// start while his feet are still on this post (bSettleDefence reads bDefenceSettled).
+			if (State.bHasDefencePost && (State.Post.Kind == EPmcPostKind::Overwatch || State.Post.Kind == EPmcPostKind::Window
+				|| State.Post.Kind == EPmcPostKind::Ambush))
 			{
 				State.bDefenceSettled = true;
 				State.DefencePostWalks = 0;

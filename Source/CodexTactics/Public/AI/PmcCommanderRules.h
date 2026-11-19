@@ -524,6 +524,11 @@ struct CODEXTACTICS_API FPmcFighterView
 	 */
 	bool bOnOverwatchRoof = false;
 	/**
+	 * T-06: his feet are on a tactical post that has its own range (overwatch roof, window, or ambush). The sector post
+	 * does not set this. Overwatch also sets bOnOverwatchRoof. Default false.
+	 */
+	bool bOnRangedPost = false;
+	/**
 	 * G008 follow-up (review finding 3): the one defender of a posted defence who occupies the point on a quiet push or a late
 	 * clock (time wins need a defender on the point, fix/pmc-arena-stalemate). A defender without a defence post always may.
 	 */
@@ -822,6 +827,13 @@ namespace PmcCommanderRules
 	CODEXTACTICS_API float OverwatchEngagementCm(float RoofRangeCm, float WeaponRangeCm);
 
 	/**
+	 * T-06: how far this post engages, cm. Overwatch is OverwatchEngagementCm (the roof's range_m, or the weapon reach when
+	 * that is smaller). A window or an ambush post uses the weapon band's max (BandMaxCm); a missing band (0) leaves the
+	 * weapon reach. Ladder, drop, and none have no range and return 0.
+	 */
+	CODEXTACTICS_API float PostEngagementCm(EPmcPostKind Kind, float RoofRangeCm, float WeaponRangeCm, float BandMaxCm);
+
+	/**
 	 * G008b: a defender whose feet are on an overwatch roof (bOnOverwatchRoof) keeps it. Open while no known enemy is inside
 	 * the post's engagement range, and for AmbushMaxHoldSeconds after that in-range contact. Closed when he is hit
 	 * (bUnderFire), suppressed (bSuppressed), or the post is untenable for him (wounded below fall_back_below, or too
@@ -830,6 +842,13 @@ namespace PmcCommanderRules
 	 * post does not open it (bAtPost there is the ground post). Attackers and other post kinds are outside this hold.
 	 */
 	CODEXTACTICS_API bool IsOverwatchHoldOpen(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * T-06: the same hold for every post kind that has a range. Overwatch uses bOnOverwatchRoof and the roof's range.
+	 * Window and ambush use bOnRangedPost and the weapon band's max. Ladder, drop, none, attackers, and a man on the
+	 * sector post only are outside it. The clock and the untenable reasons are IsOverwatchHoldOpen's.
+	 */
+	CODEXTACTICS_API bool IsAmbushHoldOpen(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
 
 	/** The scenario's id in args / JSON ("skirmish", "chokepoint", "street", "roofs", "blizzard"). */
 	CODEXTACTICS_API const TCHAR* ScenarioName(EPmcScenario Scenario);

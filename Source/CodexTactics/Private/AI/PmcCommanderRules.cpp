@@ -196,9 +196,9 @@ namespace PmcCommanderRules
 				return 0.f;
 			}
 		}
-		// G008b: a defender on an overwatch roof stays there until the attackers reach the post. Objective / TakeCover /
-		// Advance / Flank would walk him off while the threat is still outside the roof. FallBack keeps its own score.
-		const bool bOverwatchHold = IsOverwatchHoldOpen(F, S, W);
+		// G008b / T-06: a defender on a post that has a range stays there until the attackers reach that range.
+		// Objective / TakeCover / Advance / Flank would walk him off while the threat is still outside it. FallBack keeps its own score.
+		const bool bOverwatchHold = IsAmbushHoldOpen(F, S, W);
 		if (bOverwatchHold && (Order == EPmcOrder::Objective || Order == EPmcOrder::TakeCover
 			|| Order == EPmcOrder::Advance || Order == EPmcOrder::Flank))
 		{
@@ -306,7 +306,7 @@ namespace PmcCommanderRules
 			// No contact yet in this fight: hold in cover, crouched, and let them come.
 			// TACTICAL_MAP P2: a man with a tactical post (an ambush at a chokepoint exit, an overwatch roof, a window) waits ON it - worth
 			// x (1 + its kind's weight x its score) wherever he is (the order walks him there); without one the danger of his spot counts.
-			// G008b: an overwatch defender's gate is contact inside the post's range (IsOverwatchHoldOpen), not the team's first sighting.
+			// G008b / T-06: a ranged post's gate is contact inside that post's range (IsAmbushHoldOpen), not the team's first sighting.
 			return W.Ambush * (bOverwatchHold ? 1.f : Step(!S.bEverContact)) * (F.bInCover || F.bAtPost ? 1.f : 0.6f) * HoldHere * PushDamp
 				* (F.PostKind != EPmcPostKind::None ? 1.f + (PmcTacticalRules::PostKindFactor(F.PostKind, W) - 1.f) * Clamp01(F.PostScore) : Here);
 		case EPmcOrder::Reload:
@@ -1026,10 +1026,33 @@ namespace PmcCommanderRules
 		return FMath::Min(Roof, Weapon);
 	}
 
-	bool IsOverwatchHoldOpen(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
+	float PostEngagementCm(EPmcPostKind Kind, float RoofRangeCm, float WeaponRangeCm, float BandMaxCm)
 	{
-		if (F.bKnockedDown || F.Objective.Role != EPmcRole::Defender
-			|| F.PostKind != EPmcPostKind::Overwatch || !F.bOnOverwatchRoof || F.bUnderFire || F.bSuppressed)
+		const float Weapon = FMath::Max(0.f, WeaponRangeCm);
+		switch (Kind)
+		{
+		case EPmcPostKind::Overwatch:
+			return OverwatchEngagementCm(RoofRangeCm, Weapon);
+		case EPmcPostKind::Window:
+		case EPmcPostKind::Ambush:
+			return BandMaxCm > 0.f ? BandMaxCm : Weapon;
+		default:
+			return 0.f;
+		}
+	}
+
+	static bool IsOnRangedPost(const FPmcFighterView& F)
+	{
+		if (F.PostKind == EPmcPostKind::Overwatch)
+		{
+			return F.bOnOverwatchRoof;
+		}
+		return (F.PostKind == EPmcPostKind::Window || F.PostKind == EPmcPostKind::Ambush) && F.bOnRangedPost;
+	}
+
+	bool IsAmbushHoldOpen(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
+	{
+		if (F.bKnockedDown || F.Objective.Role != EPmcRole::Defender || !IsOnRangedPost(F) || F.bUnderFire || F.bSuppressed)
 		{
 			return false;
 		}
@@ -1049,6 +1072,15 @@ namespace PmcCommanderRules
 			return true;
 		}
 		return F.PostRangeContactSeconds < FMath::Max(0.f, W.AmbushMaxHoldSeconds);
+	}
+
+	bool IsOverwatchHoldOpen(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
+	{
+		if (F.PostKind != EPmcPostKind::Overwatch || !F.bOnOverwatchRoof)
+		{
+			return false;
+		}
+		return IsAmbushHoldOpen(F, S, W);
 	}
 
 	bool ShouldHoldFire(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
