@@ -86,7 +86,14 @@ namespace LevelGenBuildingsSmoke
 			const FBox2D Box(Point(Bounds, TEXT("min")), Point(Bounds, TEXT("max")));
 			const int32 Floor = Room.GetIntegerField(TEXT("floor"));
 			const double* Height = FloorHeights.Find(Floor);
-			Targets.Add({ Id, TEXT("room"), FVector(Frame.Rotate(Box.GetCenter(), Frame.Rotation),
+			// The room's walkable anchor (building frame, like the bounds) when the layout has one: the centre can lie on a floor gap or a flight.
+			FVector2D Probe = Box.GetCenter();
+			const FJsonObjects* Anchor = nullptr;
+			if (Room.TryGetArrayField(TEXT("anchor"), Anchor) && Anchor->Num() >= 2)
+			{
+				Probe = Point(*Anchor);
+			}
+			Targets.Add({ Id, TEXT("room"), FVector(Frame.Rotate(Probe, Frame.Rotation),
 				GroundZ + (Height ? *Height : Floor * StoreyHeight)), Box });
 		}
 	}

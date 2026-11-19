@@ -84,6 +84,7 @@ Tuning data (*proposal*, JSON, read by both the TS generator and the C++ runtime
 Done in S2 R4: `building_route_costs.json` (ROUTE_COSTS, `buildingGraph.ts`) and `building_stories.json` (pick knobs, compatibility,
 detour roles, story 4 / 9 eligibility; `buildingStories.ts`) exist and are read by the TS generator; which building fields are in the
 local frame vs world coordinates is the table `Content/Data/LevelGen/building_coord_fields.json`.
+`GenRoom.anchor?: Vec2` (2026-11-19): a walkable representative point of the room on its own floor, in the building frame (like `rooms[].bounds`), set by `roomAnchors.ts` (`roomAnchor`, 25 cm grid, >= 50 cm clear of floor gaps, flights touching the floor, hatches, floor holes, partitions; none when no such point) at the end of `finalizeDraftToLayout` and by `npm run levelgen:anchors` for existing files; the engine smoke `LevelGenBuildingsSmoke` probes it instead of the bounds centre (the centre of a stair strip lies on a gap / flight).
 
 ### 2.1 Validator changes (`buildingTraversal.ts`)
 

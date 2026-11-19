@@ -214,6 +214,7 @@ type OpeningRole = 'entry' | 'unit_entry' | 'room' | 'enfilade' | 'wing' | 'serv
 interface WallOpening { /* existing */ links?: [string, string];          // room ids | 'street' | 'balcony:<id>'
   role?: OpeningRole; slot?: 'balcony' | 'escape'; module?: string }      // module = kit name (wall_door_200 ...)
 interface GenRoom { /* existing */ kind?: /* existing */ | 'lobby' | 'service' | 'shop'; unit?: string; zone?: string;
+  anchor?: Vec2;                                                          // walkable representative point, building frame (roomAnchors.ts; the smoke probes it, not the bounds centre)
   walls?: string[] }                                                      // exterior wall ids it touches (replaces roomOnFacade)
 interface BuildingUnit { id: string; kind: 'flat' | 'suite' | 'shop' | 'common'; floor: number; rooms: string[]; entries: string[];
   column?: string; dead_end?: boolean; run_cm?: number }                  // column = the stack of flats sharing balcony slots

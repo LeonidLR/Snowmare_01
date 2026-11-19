@@ -253,6 +253,11 @@ export interface GenRoom {
   bounds: { min: Vec2; max: Vec2 };
   kind?: 'room' | 'corridor' | 'stairwell' | 'hall' | 'balcony';
   door_ids?: string[];
+  /**
+   * A walkable representative point of the room on its own floor, in the BUILDING frame (the frame of `bounds`: unrotated, absolute cm);
+   * absent = no walkable point found. The bounds centre can lie on a floor gap or a flight (roomAnchors.ts); the engine smoke probes this.
+   */
+  anchor?: Vec2;
 }
 
 /** The set-piece vocabulary of the grammar (docs/design/levelgen/LEVEL_GENERATOR.md section 3). */

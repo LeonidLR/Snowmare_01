@@ -1017,6 +1017,10 @@
        "kind": "room",
        "door_ids": [
         "B_house_partdoor_f1_1"
+       ],
+       "anchor": [
+        1050,
+        -977.5
        ]
       },
       {
@@ -1036,6 +1040,10 @@
        "door_ids": [
         "B_house_partdoor_f1_0",
         "B_house_partdoor_f1_1"
+       ],
+       "anchor": [
+        1050,
+        -327.5
        ]
       },
       {
@@ -1055,6 +1063,10 @@
        "door_ids": [
         "B_house_partdoor_f1_0",
         "B_house_partdoor_f1_2"
+       ],
+       "anchor": [
+        1050,
+        225
        ]
       },
       {
@@ -1073,6 +1085,10 @@
        "kind": "room",
        "door_ids": [
         "B_house_partdoor_f1_2"
+       ],
+       "anchor": [
+        1050,
+        875
        ]
       }
      ]
@@ -1151,6 +1167,10 @@
      "door_ids": [
       "B_house_door_south_1",
       "B_house_partdoor_f0_0"
+     ],
+     "anchor": [
+      1050,
+      -750
      ]
     },
     {
@@ -1170,6 +1190,10 @@
      "door_ids": [
       "B_house_partdoor_f0_0",
       "B_house_partdoor_f0_1"
+     ],
+     "anchor": [
+      1050,
+      225
      ]
     },
     {
@@ -1189,6 +1213,10 @@
      "door_ids": [
       "B_house_door_east_2",
       "B_house_partdoor_f0_1"
+     ],
+     "anchor": [
+      1050,
+      875
      ]
     },
     {
@@ -1207,6 +1235,10 @@
      "kind": "room",
      "door_ids": [
       "B_house_partdoor_f1_1"
+     ],
+     "anchor": [
+      1050,
+      -977.5
      ]
     },
     {
@@ -1226,6 +1258,10 @@
      "door_ids": [
       "B_house_partdoor_f1_0",
       "B_house_partdoor_f1_1"
+     ],
+     "anchor": [
+      1050,
+      -327.5
      ]
     },
     {
@@ -1245,6 +1281,10 @@
      "door_ids": [
       "B_house_partdoor_f1_0",
       "B_house_partdoor_f1_2"
+     ],
+     "anchor": [
+      1050,
+      225
      ]
     },
     {
@@ -1263,6 +1303,10 @@
      "kind": "room",
      "door_ids": [
       "B_house_partdoor_f1_2"
+     ],
+     "anchor": [
+      1050,
+      875
      ]
     }
    ],
@@ -1881,6 +1925,10 @@
      "door_ids": [
       "B_garage_door_north_1",
       "B_garage_partdoor_f0_0"
+     ],
+     "anchor": [
+      -900,
+      -200
      ]
     },
     {
@@ -1900,6 +1948,10 @@
      "door_ids": [
       "B_garage_door_south_2",
       "B_garage_partdoor_f0_0"
+     ],
+     "anchor": [
+      -1400,
+      -200
      ]
     }
    ],

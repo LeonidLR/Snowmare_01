@@ -1393,6 +1393,10 @@
        "door_ids": [
         "B_warehouse_partdoor_f1_0",
         "B_warehouse_partdoor_f1_1"
+       ],
+       "anchor": [
+        1850,
+        -1600
        ]
       },
       {
@@ -1411,6 +1415,10 @@
        "kind": "room",
        "door_ids": [
         "B_warehouse_partdoor_f1_1"
+       ],
+       "anchor": [
+        1050,
+        -1600
        ]
       },
       {
@@ -1430,6 +1438,10 @@
        "door_ids": [
         "B_warehouse_partdoor_f1_0",
         "B_warehouse_partdoor_f1_2"
+       ],
+       "anchor": [
+        1850,
+        -100
        ]
       },
       {
@@ -1448,6 +1460,10 @@
        "kind": "room",
        "door_ids": [
         "B_warehouse_partdoor_f1_2"
+       ],
+       "anchor": [
+        1050,
+        -100
        ]
       }
      ]
@@ -1540,6 +1556,10 @@
      "door_ids": [
       "B_warehouse_partdoor_f0_0",
       "B_warehouse_partdoor_f0_1"
+     ],
+     "anchor": [
+      1850,
+      -1600
      ]
     },
     {
@@ -1559,6 +1579,10 @@
      "door_ids": [
       "B_warehouse_door_west_2",
       "B_warehouse_partdoor_f0_1"
+     ],
+     "anchor": [
+      1050,
+      -1600
      ]
     },
     {
@@ -1578,6 +1602,10 @@
      "door_ids": [
       "B_warehouse_partdoor_f0_0",
       "B_warehouse_partdoor_f0_2"
+     ],
+     "anchor": [
+      1850,
+      -100
      ]
     },
     {
@@ -1597,6 +1625,10 @@
      "door_ids": [
       "B_warehouse_door_south_1",
       "B_warehouse_partdoor_f0_2"
+     ],
+     "anchor": [
+      1050,
+      -100
      ]
     },
     {
@@ -1616,6 +1648,10 @@
      "door_ids": [
       "B_warehouse_partdoor_f1_0",
       "B_warehouse_partdoor_f1_1"
+     ],
+     "anchor": [
+      1850,
+      -1600
      ]
     },
     {
@@ -1634,6 +1670,10 @@
      "kind": "room",
      "door_ids": [
       "B_warehouse_partdoor_f1_1"
+     ],
+     "anchor": [
+      1050,
+      -1600
      ]
     },
     {
@@ -1653,6 +1693,10 @@
      "door_ids": [
       "B_warehouse_partdoor_f1_0",
       "B_warehouse_partdoor_f1_2"
+     ],
+     "anchor": [
+      1850,
+      -100
      ]
     },
     {
@@ -1671,6 +1715,10 @@
      "kind": "room",
      "door_ids": [
       "B_warehouse_partdoor_f1_2"
+     ],
+     "anchor": [
+      1050,
+      -100
      ]
     }
    ],
@@ -2709,6 +2757,10 @@
        "door_ids": [
         "B_catwalk_partdoor_f1_0",
         "B_catwalk_partdoor_f1_1"
+       ],
+       "anchor": [
+        1675,
+        1550
        ]
       },
       {
@@ -2727,6 +2779,10 @@
        "kind": "room",
        "door_ids": [
         "B_catwalk_partdoor_f1_1"
+       ],
+       "anchor": [
+        925,
+        1650
        ]
       },
       {
@@ -2746,6 +2802,10 @@
        "door_ids": [
         "B_catwalk_partdoor_f1_0",
         "B_catwalk_partdoor_f1_2"
+       ],
+       "anchor": [
+        1850,
+        2350
        ]
       },
       {
@@ -2764,6 +2824,10 @@
        "kind": "room",
        "door_ids": [
         "B_catwalk_partdoor_f1_2"
+       ],
+       "anchor": [
+        925,
+        2350
        ]
       }
      ]
@@ -2843,6 +2907,10 @@
       "B_catwalk_door_west_2",
       "B_catwalk_partdoor_f0_0",
       "B_catwalk_partdoor_f0_1"
+     ],
+     "anchor": [
+      1615,
+      1430
      ]
     },
     {
@@ -2861,6 +2929,10 @@
      "kind": "room",
      "door_ids": [
       "B_catwalk_partdoor_f0_1"
+     ],
+     "anchor": [
+      865,
+      1430
      ]
     },
     {
@@ -2880,6 +2952,10 @@
      "door_ids": [
       "B_catwalk_partdoor_f0_0",
       "B_catwalk_partdoor_f0_2"
+     ],
+     "anchor": [
+      1615,
+      2230
      ]
     },
     {
@@ -2899,6 +2975,10 @@
      "door_ids": [
       "B_catwalk_door_south_1",
       "B_catwalk_partdoor_f0_2"
+     ],
+     "anchor": [
+      865,
+      2230
      ]
     },
     {
@@ -2918,6 +2998,10 @@
      "door_ids": [
       "B_catwalk_partdoor_f1_0",
       "B_catwalk_partdoor_f1_1"
+     ],
+     "anchor": [
+      1675,
+      1550
      ]
     },
     {
@@ -2936,6 +3020,10 @@
      "kind": "room",
      "door_ids": [
       "B_catwalk_partdoor_f1_1"
+     ],
+     "anchor": [
+      925,
+      1650
      ]
     },
     {
@@ -2955,6 +3043,10 @@
      "door_ids": [
       "B_catwalk_partdoor_f1_0",
       "B_catwalk_partdoor_f1_2"
+     ],
+     "anchor": [
+      1850,
+      2350
      ]
     },
     {
@@ -2973,6 +3065,10 @@
      "kind": "room",
      "door_ids": [
       "B_catwalk_partdoor_f1_2"
+     ],
+     "anchor": [
+      925,
+      2350
      ]
     }
    ],
@@ -3384,6 +3480,10 @@
      "door_ids": [
       "B_yard_shed_door_north_1",
       "B_yard_shed_partdoor_f0_0"
+     ],
+     "anchor": [
+      -1400,
+      -450
      ]
     },
     {
@@ -3403,6 +3503,10 @@
      "door_ids": [
       "B_yard_shed_door_south_2",
       "B_yard_shed_partdoor_f0_0"
+     ],
+     "anchor": [
+      -1900,
+      -450
      ]
     }
    ],

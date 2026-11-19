@@ -15,6 +15,7 @@ import { dist, rng } from '../movement/geometry.ts';
 import type { ZoneKind } from '../movement/layout.ts';
 import type { Profile } from './profile.ts';
 import { mapBuildingCoords } from './buildingCoordFields.ts';
+import { addRoomAnchors } from './roomAnchors.ts';
 import { toUE } from './profile.ts';
 import type {
   Archetype,
@@ -653,7 +654,8 @@ export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta):
   };
   const heightGate = runObstacleHeightGate(layout);
   if (heightGate.gate === 'fail') throw new Error(heightGate.errors.map((e) => e.reason).join('; '));
-  return layout;
+  // every room of an enterable building gets its walkable anchor (building frame; rotateContent moves it by the coord table)
+  return addRoomAnchors(layout);
 }
 
 // ---- helpers (metres) -----------------------------------------------------------------------------------------------------

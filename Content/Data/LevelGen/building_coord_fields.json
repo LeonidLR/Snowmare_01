@@ -5,6 +5,8 @@
     { "path": "footprint", "kind": "rect", "frame": "building" },
     { "path": "rooms[].bounds", "kind": "bounds", "frame": "building" },
     { "path": "floors_detail[].rooms[].bounds", "kind": "bounds", "frame": "building" },
+    { "path": "rooms[].anchor", "kind": "point", "frame": "building" },
+    { "path": "floors_detail[].rooms[].anchor", "kind": "point", "frame": "building" },
     { "path": "balconies[].rect", "kind": "rect", "frame": "building" },
     { "path": "fire_escapes[].at", "kind": "point", "frame": "building" },
     { "path": "fire_escapes[].ground", "kind": "point", "frame": "building" },
