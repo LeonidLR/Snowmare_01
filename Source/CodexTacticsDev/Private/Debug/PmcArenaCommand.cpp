@@ -51,6 +51,11 @@
 // CodexTactics.PmcArenaTacticalSmoke = one tactical round on L_Gen_Depot_X4: the defenders on posts, the behaviour blocks validated.
 // CodexTactics.PmcRoofDefenceSmoke (G008) = one roofs objective round on the Depot: defender spread >= 5 m, a guard near the access
 //   on more than 0.6 of the samples, no two defenders in the same cover. The round's "defence" object carries those numbers.
+// CodexTactics.PmcCrossroadsSmoke / PmcAlleySmoke (smart-enemies T-04, docs/design/gdd/smart-enemies.md A-00A / A-00B) = one 3v3 objective round
+//   on a street (an open site) / a chokepoint (a 1-3 m passage between walls) of the Depot, the defenders' position metrics of rounds[].defence
+//   (open_idle_s, on_position_before_contact, crossfire_deg, first_shot_gap_s, spread_m) judged against the GDD's ambush criteria. They are
+//   RED on purpose until the squad plays (T-08): registered knownFail in Scripts/test_map.json. Failed preconditions are logged as
+//   "precondition", failed criteria as "A-00A.n" / "A-00B.n" so a red run says which of the two it is.
 
 #include "CoreMinimal.h"
 
@@ -161,6 +166,9 @@ namespace PmcArena
 		bool bSmokeTactical = false;
 		/** PmcRoofDefenceSmoke (G008): one roofs round, spread / guard share / shared cover checked. */
 		bool bSmokeRoof = false;
+		/** PmcCrossroadsSmoke / PmcAlleySmoke (smart-enemies T-04b): which GDD acceptance example the round is judged against. */
+		bool bSmokeCrossroads = false;
+		bool bSmokeAlley = false;
 		/**
 		 * Ammo=resupply|real (fix/pmc-arena-stalemate, default resupply): a fighter whose reserve runs dry gets his weapon's reserve back - an
 		 * arena-only training rule (the Depot tracks: empty rifles stood on the point next to each other for 3 minutes, unable to fight).
@@ -2619,6 +2627,89 @@ namespace PmcArena
 	}
 
 	/** The smoke's validation of the file it wrote (the schema the trainer reads). */
+	/**
+	 * smart-enemies T-04b: the round's defenders judged against the GDD's ambush acceptance (docs/design/gdd/smart-enemies.md A-00A crossroads,
+	 * A-00B alley), using only what the arena measures (rounds[].defence). The numbers are the GDD's: the open-idle limit and the crossfire
+	 * angle (A-00A.1 / .2, "crossfire_min_deg" 45 - the GDD keeps it in squad_plays.json, which does not exist before T-08) and the hammers'
+	 * first shots (A-00A.4); the spacing is pmc_commander.json "min_spacing_m". A precondition failure (no site, no contact) is NOT the
+	 * behaviour failing: it is logged as "precondition" so a red run says which one it is. Not measured here, listed in the T-04 report: the
+	 * anvil's hiding spot / enclosure, the roof role, fields of fire over the lane, the attackers' outcome (A-00A.3, 5, 6; A-00B.1, 3, 5).
+	 */
+	void JudgeAmbushPositions(FState& State, const TSharedPtr<FJsonObject>& Round, bool bAlley)
+	{
+		constexpr float MaxOpenIdleBeforeContactS = 2.f;   // A-00A.1
+		constexpr float MinCrossfireDeg = 45.f;            // A-00A.2 (GDD crossfire_min_deg)
+		constexpr float MaxFirstShotGapS = 1.5f;           // A-00A.4
+		const TCHAR* Id = bAlley ? TEXT("A-00B") : TEXT("A-00A");
+		const TCHAR* Want = bAlley ? TEXT("chokepoint") : TEXT("street");
+		const FString Played = Round->GetStringField(TEXT("scenario"));
+		const FString DefenderSide = Round->GetStringField(TEXT("attacker")) == TEXT("A") ? TEXT("B") : TEXT("A");
+		const TSharedPtr<FJsonObject>* Defence = nullptr;
+		const bool bDefence = Round->TryGetObjectField(TEXT("defence"), Defence) && Defence && (*Defence)->HasField(TEXT("open_idle_s"))
+			&& (*Defence)->HasField(TEXT("on_position_before_contact")) && (*Defence)->HasField(TEXT("crossfire_deg"))
+			&& (*Defence)->HasField(TEXT("first_shot_gap_s")) && (*Defence)->HasField(TEXT("max_exposed_run_m"));
+		Check(State, bDefence, TEXT("precondition: rounds[].defence carries the T-04 metrics (open_idle_s, on_position_before_contact, crossfire_deg, max_exposed_run_m, first_shot_gap_s)"));
+		Check(State, Played == Want, FString::Printf(TEXT("precondition: the round played the %s scenario (%s)"), Want, *Played));
+		if (!bDefence)
+		{
+			return;
+		}
+		auto Optional = [&Defence](const TCHAR* Key, double& Out)
+		{
+			const TSharedPtr<FJsonValue> Value = (*Defence)->TryGetField(Key);
+			Out = Value.IsValid() && Value->Type == EJson::Number ? Value->AsNumber() : -1.0;
+			return Value.IsValid() && Value->Type == EJson::Number;
+		};
+		double OnPosition = -1.0;
+		double Crossfire = -1.0;
+		double FirstShotGap = -1.0;
+		const bool bContact = Optional(TEXT("on_position_before_contact"), OnPosition);
+		const bool bCrossfire = Optional(TEXT("crossfire_deg"), Crossfire);
+		const bool bGap = Optional(TEXT("first_shot_gap_s"), FirstShotGap);
+		double WorstIdle = 0.0;
+		double WorstIdleTotal = 0.0;
+		int32 Men = 0;
+		const TArray<TSharedPtr<FJsonValue>>* Idle = nullptr;
+		if ((*Defence)->TryGetArrayField(TEXT("open_idle_s"), Idle))
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Idle)
+			{
+				const TSharedPtr<FJsonObject> Man = Value->AsObject();
+				if (Man.IsValid() && Man->GetStringField(TEXT("side")) == DefenderSide)
+				{
+					++Men;
+					WorstIdle = FMath::Max(WorstIdle, Man->GetNumberField(TEXT("before_contact_s")));
+					WorstIdleTotal = FMath::Max(WorstIdleTotal, Man->GetNumberField(TEXT("total_s")));
+				}
+			}
+		}
+		const double Spread = (*Defence)->GetNumberField(TEXT("spread_m"));
+		const FPmcWeights& DefenderWeights = DefenderSide == TEXT("A") ? State.WeightsA : State.WeightsB;
+		const double MinSpacingM = DefenderWeights.MinSpacingCm / 100.f;
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] %s smoke metrics (%s, defenders %s, %d men): worst open idle before contact %.2f s (total %.2f s), on position at first range contact %s, crossfire %s deg, first-shot gap %s s, mean spread %.1f m, attackers' longest exposed run %.1f m"),
+			Id, *Played, *DefenderSide, Men, WorstIdle, WorstIdleTotal, bContact ? *FString::Printf(TEXT("%.2f"), OnPosition) : TEXT("n/a"),
+			bCrossfire ? *FString::Printf(TEXT("%.1f"), Crossfire) : TEXT("n/a"), bGap ? *FString::Printf(TEXT("%.2f"), FirstShotGap) : TEXT("n/a"),
+			Spread, (*Defence)->GetNumberField(TEXT("max_exposed_run_m")));
+		Check(State, Men == State.Options.Squad, FString::Printf(TEXT("precondition: every defender has an open_idle_s entry (%d of %d)"), Men, State.Options.Squad));
+		Check(State, bContact, TEXT("precondition: an attacker came within a defender's weapon range (on_position_before_contact measured)"));
+		// The behaviour. Each line names the GDD criterion it pins; none is tuned to today's code.
+		Check(State, WorstIdle <= MaxOpenIdleBeforeContactS, FString::Printf(TEXT("%s.1 no defender stands in the open and still before contact for more than %.1f s (worst %.2f s)"),
+			Id, MaxOpenIdleBeforeContactS, WorstIdle));
+		Check(State, bContact && OnPosition >= 1.0, FString::Printf(TEXT("%s.1 every defender is at a cover slot or post when the first attacker is in range (share %s)"),
+			Id, bContact ? *FString::Printf(TEXT("%.2f"), OnPosition) : TEXT("n/a")));
+		Check(State, bCrossfire && Crossfire >= MinCrossfireDeg, FString::Printf(TEXT("%s.2 crossfire angle at the first shot >= %.0f deg (%s)"),
+			Id, MinCrossfireDeg, bCrossfire ? *FString::Printf(TEXT("%.1f"), Crossfire) : TEXT("not measured")));
+		if (bAlley)
+		{
+			Check(State, Spread >= MinSpacingM, FString::Printf(TEXT("A-00B.2 the defenders' mean spread %.1f m >= min_spacing_m %.1f m (nobody bunched at the goal)"), Spread, MinSpacingM));
+		}
+		else
+		{
+			Check(State, bGap && FirstShotGap <= MaxFirstShotGapS, FString::Printf(TEXT("A-00A.4 the first two defenders' first shots <= %.1f s apart (%s)"),
+				MaxFirstShotGapS, bGap ? *FString::Printf(TEXT("%.2f s"), FirstShotGap) : TEXT("fewer than two defenders fired")));
+		}
+	}
+
 	void ValidateJson(FState& State, const FString& Path)
 	{
 		FString Text;
@@ -2710,6 +2801,12 @@ namespace PmcArena
 					Check(State, Spread >= 5.0, FString::Printf(TEXT("defender spread %.1f m >= 5 m"), Spread));
 					Check(State, bGuardNumber && Guard > 0.6, FString::Printf(TEXT("guard share %s > 0.6"), bGuardNumber ? *FString::Printf(TEXT("%.2f"), Guard) : TEXT("n/a")));
 					Check(State, Pairs == 0.0, FString::Printf(TEXT("shared cover pairs %.0f == 0"), Pairs));
+				}
+				if ((State.Options.bSmokeCrossroads || State.Options.bSmokeAlley) && !State.Results.IsEmpty())
+				{
+					// smart-enemies T-04b: the designer's clips as scenario smokes (red until the squad plays).
+					JudgeAmbushPositions(State, *Round, State.Options.bSmokeAlley);
+					return;
 				}
 				if (State.Options.bSmokeTactical && !State.Results.IsEmpty())
 				{
@@ -3581,7 +3678,8 @@ namespace PmcArena
 		}
 	}
 
-	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false, bool bSmokeStalemate = false, bool bSmokeTactical = false, bool bSmokeRoof = false)
+	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false, bool bSmokeStalemate = false, bool bSmokeTactical = false, bool bSmokeRoof = false,
+		bool bSmokeCrossroads = false, bool bSmokeAlley = false)
 	{
 		if (!World)
 		{
@@ -3629,6 +3727,17 @@ namespace PmcArena
 			State->Options.Squad = 3;
 			State->Options.Scenario = static_cast<int32>(EPmcScenario::Roofs);
 			State->Options.TimeLimit = 180.f;
+		}
+		if (bSmokeCrossroads || bSmokeAlley)
+		{
+			// smart-enemies T-04b: one 3v3 objective round on an open street (A-00A) / a lane (A-00B) site, long enough for the defenders to
+			// get into position (the GDD gives them the walk time + 5 s) and for the attackers to arrive.
+			State->Options.bSmokeCrossroads = bSmokeCrossroads;
+			State->Options.bSmokeAlley = bSmokeAlley;
+			State->Options.bObjective = true;
+			State->Options.Squad = 3;
+			State->Options.Scenario = static_cast<int32>(bSmokeCrossroads ? EPmcScenario::Street : EPmcScenario::Chokepoint);
+			State->Options.TimeLimit = 120.f;
 		}
 		State->bWeightsALoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsA, State->WeightsA);
 		State->bWeightsBLoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsB, State->WeightsB);
@@ -3686,6 +3795,16 @@ namespace PmcArena
 		RunWith(Args, World, true, false, false, false, true);
 	}
 
+	void RunCrossroadsSmoke(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, true, false, false, false, false, true, false);
+	}
+
+	void RunAlleySmoke(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, true, false, false, false, false, false, true);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
 		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
@@ -3715,6 +3834,16 @@ namespace PmcArena
 		TEXT("CodexTactics.PmcRoofDefenceSmoke"),
 		TEXT("Dev check (G008): one 3v3 roofs objective round - defender spread >= 5 m, guard share > 0.6, no shared cover; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunRoofDefenceSmoke));
+
+	static FAutoConsoleCommandWithWorldAndArgs CrossroadsSmokeCommand(
+		TEXT("CodexTactics.PmcCrossroadsSmoke"),
+		TEXT("Dev check (smart-enemies T-04, GDD A-00A): one 3v3 objective round on an open street site - the defenders in position before contact, no open idle, crossfire >= 45 deg, the hammers' first shots <= 1.5 s apart. RED until the squad plays (knownFail); logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunCrossroadsSmoke));
+
+	static FAutoConsoleCommandWithWorldAndArgs AlleySmokeCommand(
+		TEXT("CodexTactics.PmcAlleySmoke"),
+		TEXT("Dev check (smart-enemies T-04, GDD A-00B): one 3v3 objective round on a lane (chokepoint) site - the defenders in position before contact, no open idle, spaced by min_spacing_m, crossfire >= 45 deg. RED until the squad plays (knownFail); logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunAlleySmoke));
 }
 
 #endif // !UE_BUILD_SHIPPING
