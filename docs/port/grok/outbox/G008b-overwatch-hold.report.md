@@ -1,100 +1,100 @@
-# G008b report - overwatch roof hold
+# G008b report - overwatch roof hold, and the round that leaves it
 
-Branch `grok/G008b-overwatch-hold`. Base `4dd38cb9` (origin/main at dispatch). Nothing pushed. `main` not touched. Maps, `Content/VFX`, `Config/DefaultScalability.ini`, and the designer's untracked `Content/` were not staged.
+Branch `grok/G008b-overwatch-hold`. Merged with `origin/main` at `08b64ee6`. Nothing pushed. `main` not touched. Maps, `Content/VFX`, `Config/DefaultScalability.ini`, and the designer's untracked `Content/` were not staged.
 
 ## Handover
 
 Done:
 
-- Local diagnosis on X4 tactical seeds 11, 22, 33, before any scoring change.
-- The posted defender stays on the overwatch roof until the post's engagement range has held a known attacker for `ambush_max_hold_s` (20 s), or he is hit, suppressed, wounded, or too close for his band. A mate dying does not close the hold. The sector post on the ground is not the roof.
-- Commits `07c27808` and `089c480e`. Local editor build of that tree succeeded.
+- The posted defender stays on the overwatch roof for the post's engagement window (`07c27808`, `089c480e`). A mate dying does not close the hold. Those commits stay.
+- Seed 11, team-1 Operator Lind (sniper, clip 5): the first fight `[FireTrace]` is `no target`. The crouch muzzle hits the roof rim. The sight line already starts past it, so the team sees a man at 80-85 m and no round leaves.
+- A low rim is now stepped past (`fire_gate.json` `roof_lip`). Seed 11 after that: 3 shots from the post, 3 overwatch hits, side metric `overwatch_kills` 1, then he leaves at 20.6 s on Objective 0.70 (the 20 s gene).
 
 Left:
 
-- `overwatch_kills` is still 0 on every before and after seed. Shots from the post are still 0. The sniper on seed 11 held the full 20 s window at full health and never emitted a ballistic round.
+- Acceptance asks `overwatch_kills > 0` and shots-from-post `> 0` on 2-3 X4 tactical seeds. Seed 11 meets both. Seed 33 (Haas) fires 8 shots from the post and the side kill metric stays 0. Seed 22 (Roux) leaves at 14 s on the allowed too-close FallBack and fires 0 from the post.
+- `Scripts/test.ps1 -Smart` exited 1. Units 622/0. The only smoke that failed its solo re-run is `PmcRoofDefenceSmoke` (roofs seed 1). The named batch of that smoke, with `-Multiprocess`, passed on this same binary. The check was not weakened.
 
-Next exact step:
+Next exact step, if someone continues:
 
-- One local X4 tactical seed 11 with console `Codex.Debug.FireTrace 1` (CVar in `OperativeCharacterCombat.cpp`, default 0). Read the first `[FireTrace]` reason on team-1 Operator Lind during the Ambush 2.39 window. The hold must stay as it is. The round never leaves because `FindShootTarget` / `PrepareSniperShot` (`OperativeCharacterCombat.cpp`, `OperativeCharacterSniper.cpp`) never reaches a shot clip: the log shows `AS_Knee_Aim_Idle` and no `[Sniper]` line for those 20 s. Those files are outside this task's allowed paths.
+- One quiet local `PmcRoofDefenceSmoke` with the named-batch flags (`-Multiprocess -UseFixedTimeStep -FPS=60 -FixedSeed`) and read `spread_m` / `guard_share`. The two Smart failures of roofs seed 1 disagree with each other (guard 0.35, then spread 0.7 m). The rounds end by elimination from the ground (RPG-7, a ground Lind). `roof_lip` retries only when the shooter stands at least `min_drop_cm` (180) above the target, so an upward shot is unchanged.
 
 ## Cause
 
-The worker chain (Ambush gated on `!bEverContact`, so a threat at 120-155 m zeroed the roof before the post's 110 m) is the trainer's binary. On this branch G008 is already in, and the local before-fix leave is the defence-post walk.
+`Saved/Logs/G008b-trace-11.log`, X4 tactical seed 11, `Codex.Debug.FireTrace 1`, binary before the lip retry.
 
-Seed 11 before (`Saved/Logs/G008b-before-11.log`), same frame the sniper is on `B_hall_n` with a threat at 85.4 m (inside the roof's 110 m):
+Team-1 Lind is the sniper (clip 5) on `B_hall_n`, post `V(5600, -750, 910)`, range 11000 cm (`:1636`-`:1638`). Team-2 Lind is the m16 (clip 30). The hold opens at `:1667`-`:1670`: contact 8544 cm, "opens fire" (the posture order, attention off 1.00), Ambush 2.39, hp 100%.
 
-- `:1661` `Operator Lind opens fire (threat at 8544 cm, attention off 1.00)` - posture, not a round.
-- `:1663` `walks to his sector_shooter post V(X=10175.11, Y=4793.52, Z=10.00)`.
-- `:1664` `-> Ambush (score 1.00; threat seen at 8544 cm, hp 100%)`.
+The first `[FireTrace]` for the sniper after that order:
 
-`07c27808` stopped that walk. The first after run then closed the hold when a mate died: squad outnumbered made FallBack 0.54, Objective 0.70 won, and he left at full health about 6 s in. Off the roof, `PostKind` stayed Overwatch and `bAtPost` became the ground sector post, so Ambush 2.38 came back for the rest of the round. `089c480e` removed the outnumbered close and requires his feet on the tactical overwatch post (`bOnOverwatchRoof`).
+- `:1686` `exploring: no opening shot` (stance 1, clip 5). The fight has not started, so `RunCombatShooting` returns before `FindShootTarget` (`OperativeCharacterCombat.cpp:836`).
+- `:1709` `no target` (stance 1, clip 5). That is the first fight reason. `FindShootTarget` returned empty (`OperativeCharacterCombat.cpp:904-907`).
 
-Seed 11 after that fix (`Saved/Logs/G008b-after2-11.log`), binary `089c480e`:
+The detail on `:1709` lists the three nearest Enemy-tagged actors: himself at 0 cm and two teammates, each `not visible to the team`. Both teams carry the tag, so that list is not the shoot set. The man the commander sees at 8544 cm is inside the post range and inside the sniper's 120 m. `EvaluateShotLine` (`OperativeCharacterCombat.cpp:121`) refuses an unseen man before the muzzle trace. A seen man who fails the muzzle trace is dropped with no line of his own, and the reason collapses to `no target`.
 
-- `:1661` contact in range, nearest 8544 cm, post range 11000 cm.
-- `:1664` Ambush 2.39, threat seen at 8544 cm, hp 100%.
-- `:1679` `[SniperAnim] stance 0 -> 1: AS_Knee_Aim_Start`. `:1699` loop `AS_Knee_Aim_Idle`.
-- `:1728` still Ambush 2.39 at 8005 cm, hp 100%, after the other side's Lind killed Vance. The mate's death did not close the hold.
-- `:1787` Objective 0.70, threat remembered at 8005 cm, hp 100%. Track time of that order is 20.0 s (`ambush_max_hold_s` in `pmc_commander.json`). Feet left at 20.6 s. Side-aware shots from that post: 0 of 0 for the whole round. No second "opens fire" / "holds fire", and no `[Sniper]` line, until the later wounded FallBack.
-
-Seeds 22 and 33 leave earlier for an allowed reason. Roux (`G008b-after2-22.log:1688` and `:1691`) is already at 1826 cm with a weapon cap of 6000 cm, then FallBack 0.92 at full health. Haas (`G008b-after2-33.log:1754`) FallBack 0.94 at 1724 cm, full health. That is the standoff band, not the 20 s clock. After they leave, the order is Ambush 1.05 (the ground defence walk), not a fake roof 2.38.
-
-`ShouldHoldFire` was not retargeted. Attention off on the seed-11 open is 1.00. The "opens fire" line is the posture order (`SquadOrderCatalog` FirePosture). Standing fire is not a workaround: the standing shot clip is unused (`OperativeAnimInstance.h`).
+The muzzle is the crouch point (85 cm). On this roof the shot toward the team-2 spawn runs southwest. The rim in that direction is about 27 m out, inside `lip_cm` (60 m). A parapet near 100 cm, and the roof slab on a descending line, stop the trace. The sight sample starts past that rim, which is why the team already knows the man. `ShouldHoldFire` was left alone (attention off 1.00). The kneel is the sniper gate (`AS_Knee_Aim_Start` / `AS_Knee_Aim_Idle`), and standing fire is unused. The dead zone (`max_horizontal_cm` 240) does not cover an 80 m shot from a 9 m roof. Weapon range is not the cap: engagement is `min(11000, 12000)`.
 
 ## What changed
 
-`07c27808` `feat(ai): hold overwatch defenders until the post's range`
+`fix(combat): a kneeling shot from a roof steps past the parapet`
 
-- `PmcCommanderRules.cpp:199-206` zeros Objective / TakeCover / Advance / Flank while `IsOverwatchHoldOpen`. Ambush at `:305-311` uses that hold instead of `Step(!S.bEverContact)`.
-- `PmcCommanderRules.cpp:1014-1051` engagement is `min(roof range, weapon reach)`. The hold stays open until in-range contact has lasted `ambush_max_hold_s`, and closes on hit (`bUnderFire`), suppression, a personal wound (`HealthFrac < fall_back_below`), or too close.
-- `PmcSquadSubsystem.cpp:1445-1492` stamps `bContactInPostRange` / `PostRangeContactSeconds` from the post, not from the man. The clock restarts if every known enemy leaves the range or he steps off.
-- `PmcSquadSubsystem.cpp:2210-2219` Ambush does not walk the G008 sector post while his feet are on the overwatch roof.
-- `PmcTacticalRules` copies `overwatch_roofs[].range_m` onto the post as `RangeCm`. No new gene. `pmc_commander.json` comment only. `ambush_max_hold_s` stays 20.
-- Unit test `CodexTactics.AI.PmcCommander.OverwatchHold` in `PmcCommanderRulesTest.cpp`.
+When the body line is blocked, the shot is not a corner shot, and his feet are at least `min_drop_cm` above the target, the line walks a horizontal probe out to `lip_cm` (`OperativeCharacterCombat.cpp:181-261`). A hit whose top sits in the band around his feet is his own rim (`SquadFireRules::MayClearRoofLip`, `SquadFireRules.cpp:108-127`). The shot is retried from `past_cm` beyond that face, at muzzle height (`RoofLipRetryOrigin`, `:129-133`). A retry that starts inside geometry stays blocked. A tall wall, a hit past `lip_cm`, and a man on the ground (drop under 180 cm, so prone fire through a wall) do not retry. The dead zone still applies after the line. `HasUsefulFireLine` is unchanged.
 
-`089c480e` `fix(ai): keep the overwatch hold when a mate dies`
+Numbers, `Content/Data/Combat/fire_gate.json` `roof_lip`, mirrored by `FRoofLipConfig` (`FireGateRules.h:27-38`) and loaded in `FireGateRules.cpp:51-55`:
 
-- `IsOverwatchHoldOpen` (`PmcCommanderRules.cpp:1029-1045`) no longer closes when `Alive - EnemiesKnown <= -1`. That FallBack score remains for everyone else.
-- `bOnOverwatchRoof` (`PmcSquadSubsystem.cpp:1486`) is feet on the tactical overwatch post. `bAtPost` from the sector post does not reopen the hold.
+| Key | cm |
+| --- | --- |
+| lip_cm | 6000 |
+| past_cm | 80 |
+| min_drop_cm | 180 |
+| band_above_cm | 120 |
+| band_below_cm | 40 |
+
+`past_cm` 80 clears the fixture parapet (20 cm thick) and stays inside a 4 m wall. Unit test `CodexTactics.Combat.SquadFire.RoofLip` (`SquadFireRulesTest.cpp:154`). `FireGateRulesTest.cpp:239` lists `roof_lip.lip_cm` and `roof_lip.past_cm` as known keys, so the file must match the struct defaults.
+
+The hold is unchanged. `IsOverwatchHoldOpen` still closes on hit, suppression, a personal wound, too close, or `ambush_max_hold_s` (20) after in-range contact. Objective / TakeCover / Advance / Flank stay 0 while it is open.
 
 ## Before to after
 
-Side-aware. The posted fighter is the first track index of that display name (two men are named Operator Lind). Radius 300 cm planar, same as `IsAtOverwatchSpot`. Shots from post are shot events of that fighter while his feet are inside the radius. Source: `Saved/Arena/G008b-{before,after,after2}-{11,22,33}.json` and each round's track.
+Side-aware. The posted fighter is the first track index of that display name. Radius 300 cm, the same disk as `IsAtOverwatchSpot`. Shots from post are that fighter's shot events while his feet are inside the disk.
 
 | Run | Defender | On post | First leave | Shots from post | Overwatch kills | First orders |
 | --- | --- | --- | --- | --- | --- | --- |
 | before-11 Lind A | A | 0.6 s | 0.6 s | 0/5 | 0 | Ambush 1.00, then the sector walk |
 | before-22 Roux B | B | 0.8 s | 0.8 s | 0/44 | 0 | Ambush 1.00 at 0 s |
 | before-33 Haas A | A | 0.6 s | 0.6 s | 0/30 | 0 | Ambush 1.00 at 0 s |
-| after-11 Lind A | A | 12.6 s | 8.4 s | 0/0 | 0 | Ambush 2.39, Objective 0.70 at 6 s (mate died) |
-| after-22 Roux B | B | 14.8 s | 14.8 s | 0/30 | 0 | Ambush 1.58, FallBack 0.92 at 14 s, later fake roof 2.38 |
-| after-33 Haas A | A | 26.2 s | 24.6 s | 0/27 | 0 | Ambush 2.36, FallBack 0.94 at 24 s, later fake roof 2.36 |
-| after2-11 Lind A | A | 20.6 s | 20.6 s | 0/0 | 0 | Ambush 2.39, Objective 0.70 at 20 s (the gene) |
-| after2-22 Roux B | B | 14.8 s | 14.8 s | 0/0 | 0 | Ambush 1.58, FallBack 0.92 at 14 s, then Ambush 1.05 |
-| after2-33 Haas A | A | 26.2 s | 24.6 s | 0/17 | 0 | Ambush 2.36, FallBack 0.94 at 24 s, then Ambush 1.05 |
+| after2-11 Lind A | A | 20.6 s | 20.6 s | 0/0 | 0 | Ambush 2.39, Objective 0.70 at 20 s |
+| after2-22 Roux B | B | 14.8 s | 14.8 s | 0/0 | 0 | Ambush 1.58, FallBack 0.92 at 14 s |
+| after2-33 Haas A | A | 26.2 s | 24.6 s | 0/17 | 0 | Ambush 2.36, FallBack 0.94 at 24 s |
+| after3-11 Lind A | A | 20.6 s | 20.6 s | 3/3 | 1 | Ambush 2.39, Objective 0.70 at 20 s |
+| after3-22 Roux B | B | 14.8 s | 14.8 s | 0/49 | 0 | Ambush 1.58, FallBack 0.92 at 14 s |
+| after3-33 Haas A | A | 26.2 s | 24.6 s | 8/38 | 0 | Ambush 2.36, FallBack 0.94 at 24 s |
 
-Time on post, median of the three seeds: before 0.6 s, after2 20.6 s. The acceptance line `overwatch_kills > 0` and shots-from-post `> 0` is not met. The 17 and 30 shots in the Haas/Roux rows are after the allowed FallBack, not from the roof.
+after3 logs: `Saved/Logs/G008b-after3-{11,22,33}.log`. Seed 11 behaviour line `:2141` `overwatch kills A 1 / B 0`. The 3 Lind shots are also `overwatch` hits. Haas's 8 shots include 3 overwatch hits; the side kill metric stays 0 (no killing blow inside the 3 s / on-spot window). Roux's 49 shots are after the allowed FallBack. His weapon caps the roof at 60 m, and the threat is already inside the too-close band. Median time on post: before 0.6 s, after3 20.6 s.
 
 ## Gate
 
-Build: `Scripts/build.ps1` local, no `-Remote`, after `089c480e`. `Saved/Logs/Build.log`: `Result: Succeeded`, `Total execution time: 217.98 seconds`. The only warning is the pre-existing `ParseJson` unity clash.
+Build: `Scripts/build.ps1` local, after the lip edit. `Saved/Logs/Build.log`: `Result: Succeeded`, `Total execution time: 24.84 seconds`. The first compile of the edit failed on `C2440` (`EvaluateShotLine` is const; the penetrating retry must not assign `this`). That assignment was removed. The pre-existing `ParseJson` unity clash is a warning.
 
-Arena: seeds 11, 22, 33, scenario tactical, `L_Gen_Depot_X4`. Logs `Saved/Logs/G008b-before-*.log`, `G008b-after-*.log`, `G008b-after2-*.log`. All nine exited 0. `overwatch kills A 0 / B 0` on the behaviour line (before-11 `:2434`, after2-11 `:2034`).
+Arena: seeds 11, 22, 33, scenario tactical, `L_Gen_Depot_X4`, local, fixed step. after3 exited 0.
 
-`git diff --check` on the worktree and on `4dd38cb9..HEAD`: both exit 0, no whitespace errors. `python Scripts/Tools/typesafe_triage.py --audit-diff --agent grok`: exit 0, `Clean workspace: No changes to audit` (the two commits were already HEAD; the audit reads the unstaged diff, not untracked files). Untracked designer `Content/` and `Config/DefaultScalability.ini` were not part of that diff and were not staged.
+`git diff --check` on the eight combat files: exit 0. `python Scripts/Tools/typesafe_triage.py --audit-diff --agent grok`: exit 0, risk 1.7 / 4, boundary pass. Untracked designer `Content/` and `Config/DefaultScalability.ini` were outside that diff.
 
-`Scripts/test.ps1 -Smart -Base 4dd38cb9 -Jobs 3 -SkipSmokes` with `CODEX_SMOKE_REMOTE=off`: `137 tests, 0 failed` in 28 s. Filter `CodexTactics.AI+CodexTactics.LevelJson+CodexTactics.Combat.Sight+CodexTactics.Combat.Cheats+CodexTactics.CodexTactics.AI+CodexTactics.LevelGen.TacticalMap+CodexTactics.Core.GameplayPreload`. Log `C:\Users\ZEPHYR~1\AppData\Local\Temp\g008b-units.log`. Report `Saved/TestReport`. `-Base 4dd38cb9` because `-Smart` against HEAD would see only the designer's untracked files. The first gate wrapper treated its own status line as the exit code and stopped; the unit process itself exited 0. Named smokes and the mapped `-Smart` smokes were re-launched after that.
-
-Named smokes via `smoke_parallel.ps1 -Jobs 3 -Remote off -ExtraArgs -Multiprocess`, fixed step 60 FPS. Exit 0. `0 failed`, no re-run. Wall 93 s.
+Named smokes, `smoke_parallel.ps1 -Jobs 3 -Remote off -ExtraArgs -Multiprocess`, `CODEX_SMOKE_REMOTE=off`. Exit 0. Wall 194 s.
 
 | Smoke | Result | Seconds |
 | --- | --- | --- |
-| PmcRoofDefenceSmoke | PASS | 58.4 |
-| PmcStalemateSmoke | PASS | 45.4 |
-| PmcArenaTacticalSmoke | PASS | 54.3 |
-| PmcArenaSmoke | PASS | 44.1 |
+| PmcRoofDefenceSmoke | PASS | 70.1 |
+| PmcStalemateSmoke | PASS* | 137.0 (first try FAIL 67.2 s, solo re-run PASS 69.8 s) |
+| PmcArenaTacticalSmoke | PASS | 75.3 |
+| PmcArenaSmoke | PASS | 51.5 |
 
-Table from the batch log. Engine logs: `Saved/Logs/Smoke-PmcRoofDefenceSmoke.log` (`Smoke RESULT: PASS` at `:2352`; spread 9.8 m >= 5 m, guard share 0.73 > 0.6, `:2339` and `:2340`), `Smoke-PmcStalemateSmoke.log:1967`, `Smoke-PmcArenaTacticalSmoke.log:1962`, `Smoke-PmcArenaSmoke.log:1944`. Each ends `Smoke RESULT: PASS`.
+Stalemate is the known flake (quiet spell / attackers short of the point; `smoke_parallel` printed the 2026-11-10 / 2026-11-11 note). The PASS log for roof defence in this batch was overwritten by the Smart run below.
 
-`test.ps1 -Smart -Base 4dd38cb9 -Jobs 3 -SkipUnit` is the rest of the impact set (the PMC rule plus hitch-probe and tactical-pmc, including the four above again). Results filled in when that run finishes.
+`Scripts/test.ps1 -Smart -Jobs 3`, `CODEX_SMOKE_REMOTE=off`, base HEAD while the lip edit was uncommitted. Units: `622 tests, 0 failed` in 101 s (the filter includes `CodexTactics.Combat.SquadFire.RoofLip`). Smokes: 71 mapped, wall 2280 s, exit 1.
+
+- `PmcRoofDefenceSmoke` FAIL. Parallel (`Saved/Logs/Smoke-PmcRoofDefenceSmoke.log:2471-2474`): roofs seed 1, spread 5.2 m (passes `>= 5`), guard share 0.35 (fails `> 0.6`), winner B by elimination. Solo re-run (`Smoke-PmcRoofDefenceSmoke-alone.log:1989-2004`): same seed, spread 0.7 m (fails), guard 0.96 (passes). Defenders die on the roof to RPG-7 and to Operator Lind, who spawned on the ground (`:1612`, `:1664`, `:1714`).
+- `GroupSelectSmoke`, `GroupCoverSmoke`, `SquadControlSmoke`: TIMEOUT at 300 s under the 3-wide load, then PASS alone (PASS*). SaveLoadSmoke PASS 43.6 s.
+- `PmcStalemateSmoke`, `PmcArenaTacticalSmoke`, `PmcArenaSmoke` PASS inside this Smart batch as well (68.1 s, 79.6 s, 64.5 s).
+
+The roof-defence check, its 5 m / 0.6 thresholds, and its fixture were not changed.
