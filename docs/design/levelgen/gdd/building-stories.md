@@ -113,7 +113,7 @@ later).
 | 6 | Collapsed floor | opening(floor, hole over a rubble heap, drop <= 250) | block, ruin | down by the hole, up by the far stair | position | decay | S3 |
 | 7 | Roof only from outside | roof_access(facade ladder / escape) | all with a walkable roof | out -> ladder -> roof | detour | decay, cold | **S1** |
 | 8 | Barred ground floor | window_state(storey 0, barred) | all | doors only | detour | pmc, decay | S3 |
-| 9 | Broken back windows | window_state(back, broken) + front glazed | all | quiet entry from the back | choice | survivors, decay | S3 |
+| 9 | Broken back windows | window_state(back, broken) + front glazed; eligible only with a loud or absent front (front door locked / sealed / barricaded - in practice the F2 second story after 3, designer 2026-11-19) | all | quiet entry from the back | choice | survivors, decay | S3 |
 | 10 | Snow-drift entrance | door_state(front, sealed: drift) + snow_ramp(storey-1 window) | block, office | up the drift, in by the window | choice | cold | **S1** |
 | 11 | Iced fire escape | escape_down_only(escape) | block | escape is an exit, not an entry | position | cold | S3 |
 | 12 | Facade collapse | opening(wall, collapse) + rubble ramp to storey 1 | ruin, block | up the rubble into the cut flat | choice | decay | S3 |
@@ -198,6 +198,8 @@ tries(b) <= T_max = 4;  rollback_share = buildings ending open by rollback / sto
 - **If story 4 blocks flight 0->1 and the fire escape cannot be placed**: rollback (storey 1 unreachable).
 - **If story 5 splits a building and wing B has no core and no fire escape**: rollback; each wing needs an entrance and an
   up-route.
+- **If story 9 is drawn while the front door is quiet** (closed / open): not eligible - 9 needs a locked, sealed or barricaded
+  front, so it comes as the F2 second story after 3 (compatibility list 3 <-> 9).
 - **If two chosen stories touch the same opening** (3 locks the front, 10 seals it with a drift): incompatible pair -
   excluded by the compatibility list.
 - **If story 7 removes the only roof access and the facade ladder cannot be placed**: rollback.

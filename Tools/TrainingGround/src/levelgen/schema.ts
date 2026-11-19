@@ -291,6 +291,11 @@ export interface Stair {
 }
 /** The stair's horizontal run per metre of rise (35 deg; the characters walk up to 44 deg). */
 export const STAIR_RUN_PER_RISE = 1.43;
+/**
+ * The free approach box (cm) in front of every stair-core flight's foot and after its top (BUILDING_GENERATOR.md 4.2: 200; the squad
+ * bunches here). One source for the generator (generate.ts STAIR_APPROACH, metres) and the validator (TRAVERSAL.approachDepth).
+ */
+export const STAIR_APPROACH_CM = 200;
 
 export interface GenBuilding {
   id: string;

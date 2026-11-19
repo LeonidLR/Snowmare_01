@@ -5,12 +5,12 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { TraversalIssue } from './buildingTraversal.ts';
-import { TRAVERSAL_SEVERITY, traversalOk, validateBuilding, validateBuildings } from './buildingTraversal.ts';
+import { TRAVERSAL, TRAVERSAL_SEVERITY, traversalOk, validateBuilding, validateBuildings } from './buildingTraversal.ts';
 import { expandLayout } from './expand.ts';
-import { generateLayout, planStairCore, STAIR_APPROACH, STAIR_FLIGHT_W } from './generate.ts';
+import { generateLayout, planStairCore, STAIR_APPROACH, STAIR_FLIGHT_W, STAIR_LANE_WALL_T } from './generate.ts';
 import type { Profile } from './profile.ts';
 import type { GenBuilding, GenLayout } from './schema.ts';
-import { LEVEL_HEIGHT, STAIR_RUN_PER_RISE } from './schema.ts';
+import { LEVEL_HEIGHT, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE } from './schema.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const profile = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/refs/ref_01_02_depot.json'), 'utf8')) as Profile;
@@ -162,4 +162,39 @@ test('ok = no error issues: a warning-only building passes, one error fails it',
   assert.equal(traversalOk([warn, err]), false);
   const clean = twoStorey();
   assert.equal(validateBuilding(clean.l, clean.b).ok, true);
+});
+
+test('stair core 4.2: a 200 cm approach box from one source; a 2-lane core gets a doorless lane wall per storey, landings free', () => {
+  assert.equal(STAIR_APPROACH_CM, 200);
+  assert.equal(TRAVERSAL.approachDepth, STAIR_APPROACH_CM, 'validator == schema');
+  assert.ok(Math.abs(STAIR_APPROACH * 100 - STAIR_APPROACH_CM) < 1e-9, 'generator == schema');
+  const core = planStairCore('B_t', [[0, 0], [10, 16]], 3)!;
+  assert.ok(core.stairs[0].pos[1] >= STAIR_APPROACH, 'the first foot leaves 200 cm');
+  assert.equal(core.laneWalls.length, 3, 'one lane wall per storey the flights span');
+  const a0 = core.stairs[0].pos[1], a1 = core.stairs[0].top[1];
+  const mid = (core.stairs[0].pos[0] + core.stairs[1].pos[0]) / 2;
+  for (const [f, w] of core.laneWalls.entries()) {
+    assert.equal(w.floor, f);
+    assert.ok(Math.abs(w.a[0] - mid) < 1e-9 && Math.abs(w.b[0] - mid) < 1e-9, 'on the gap between the lanes');
+    assert.ok(Math.abs(Math.min(w.a[1], w.b[1]) - a0) < 1e-9 && Math.abs(Math.max(w.a[1], w.b[1]) - a1) < 1e-9, 'the run only: both landings stay free');
+  }
+  assert.deepEqual(planStairCore('B_1', [[0, 0], [10, 16]], 1)!.laneWalls, [], 'a 1-lane core has no lane wall');
+  // the generated depot: every 2-lane core's lane walls are emitted as doorless interior walls one storey high
+  const l = generateLayout({ profile, seed: 1 });
+  let n = 0;
+  for (const b of l.buildings) {
+    const flights = b.stairs.filter((st) => st.kind === 'stairwell');
+    const walls = l.walls.filter((w) => w.building === b.id && w.id.startsWith(`${b.id}_lanewall_`));
+    assert.equal(walls.length, flights.length > 1 ? flights.length : 0, b.id);
+    for (const w of walls) {
+      assert.equal(w.kind, 'interior');
+      assert.equal(w.height, LEVEL_HEIGHT);
+      assert.equal(w.thickness, STAIR_LANE_WALL_T);
+      assert.ok(w.thickness >= 10 && w.thickness <= 20);
+      n++;
+    }
+  }
+  assert.ok(n > 0, 'the depot has 2-lane cores');
+  const blocked = validateBuildings(l).buildings.flatMap((b) => b.issues.filter((i) => i.code === 'stair_foot_blocked' || i.code === 'stair_top_blocked'));
+  assert.deepEqual(blocked, [], 'the lane walls never stand in an approach box');
 });

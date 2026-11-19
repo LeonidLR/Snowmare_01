@@ -8,7 +8,10 @@ import path from 'node:path';
 import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import { computeBuildingRoutes } from './buildingRoutes.ts';
-import { applyDoorState, applyStory, backWindows, openingRef, openingSide, passableExteriorDoors, STORY_PICK_KNOBS, storyRecipe, storySubSeed } from './buildingStories.ts';
+import {
+  applyDoorState, applyStory, backWindows, frontDoorAnyState, openingRef, openingSide, passableExteriorDoors, pickSecondStory, STORY_COMPATIBLE,
+  STORY_PICK_KNOBS, storyEligible, storyRecipe, storySubSeed,
+} from './buildingStories.ts';
 import { generateLayout } from './generate.ts';
 import { placeObjectives } from './objectives.ts';
 import { effectiveOpeningState } from './openingStates.ts';
@@ -90,25 +93,40 @@ test('goals re-run: deterministic run to run; a toggle-off map has no stories (t
 /** The Depot seed 1 as schema /2 (the opening-state defaults: doors closed, windows glazed), no stories. */
 const depotV2 = (): GenLayout => ({ ...generateLayout({ profile, seed: 1 }), schema: LEVELGEN_SCHEMA_V2 });
 
-test('story 9 eligibility + recipe: the facade opposite the front door, its ground windows only', () => {
+/** `b` with its front door (frontDoorAnyState) set to `state`, in a copy of `l`. */
+function withFront(l: GenLayout, b: GenBuilding, state: 'locked' | 'sealed' | 'barricaded') {
+  const c: GenBuilding = structuredClone(b);
+  assert.ok(applyDoorState(c, frontDoorAnyState(l, b)!.ref, state), b.id);
+  return { l: { ...l, buildings: l.buildings.map((x) => (x.id === b.id ? c : x)) } as GenLayout, b: c };
+}
+
+test('story 9 eligibility (designer 2026-11-19): only with a loud or absent front; the facade opposite the front, its ground windows only', () => {
   const l = depotV2();
-  const elig = l.buildings.filter((b) => storyRecipe(l, b, 'broken_back_windows'));
-  assert.ok(elig.length > 0);
-  for (const b of elig) {
-    const back = backWindows(l, b)!;
-    assert.ok(back.refs.length >= 1, b.id);
-    assert.notEqual(back.side, openingSide(b, back.front.opening), `${b.id}: back != front side`);
-    assert.deepEqual(storyRecipe(l, b, 'broken_back_windows'), [{ kind: 'window_state', target: back.side, state: 'broken', floor: 0 }]);
+  const cands = l.buildings.filter((b) => b.enterable && backWindows(l, b)?.refs.length);
+  assert.ok(cands.length > 0);
+  for (const b of cands) {
+    // the default front door ('closed' in /2) is quiet -> not eligible
+    assert.equal(storyRecipe(l, b, 'broken_back_windows'), null, `${b.id}: closed front`);
+    for (const state of ['locked', 'sealed', 'barricaded'] as const) {
+      const w = withFront(l, b, state);
+      const back = backWindows(w.l, w.b)!;
+      assert.equal(back.front.ref, frontDoorAnyState(l, b)!.ref, `${b.id} ${state}: the front stays the front`);
+      assert.notEqual(back.side, openingSide(w.b, back.front.opening), `${b.id}: back != front side`);
+      assert.deepEqual(storyRecipe(w.l, w.b, 'broken_back_windows'), [{ kind: 'window_state', target: back.side, state: 'broken', floor: 0 }], `${b.id} ${state}`);
+    }
   }
-  // no front door -> not eligible
-  const doorless = l.buildings.find((b) => b.enterable && !passableExteriorDoors(l, b).length);
+  // no exterior door at all -> no front / back facade -> not eligible
+  const doorless = l.buildings.find((b) => b.enterable && !frontDoorAnyState(l, b));
   if (doorless) assert.equal(storyRecipe(l, doorless, 'broken_back_windows'), null);
 });
 
-test('story 9 rollback: on the Depot the front door is as quiet as a broken window (F4 fails) -> the original object, layout unchanged', () => {
-  const l = depotV2();
+test('story 9 rollback: F4 fails on a locked-front Depot building -> the original object, layout unchanged', () => {
+  const l0 = depotV2();
+  const hit = l0.buildings.filter((x) => x.enterable && backWindows(l0, x)?.refs.length).map((x) => withFront(l0, x, 'locked'))
+    .find((w) => !applyStory(w.l, w.b, 'broken_back_windows', 7).ok);
+  assert.ok(hit, 'some locked-front building where F4 fails');
+  const { l, b } = hit;
   const before = json(l);
-  const b = l.buildings.find((x) => storyRecipe(l, x, 'broken_back_windows'))!;
   const res = applyStory(l, b, 'broken_back_windows', 7);
   assert.equal(res.ok, false);
   assert.equal(res.building, b, 'the original building object');
@@ -128,7 +146,7 @@ test('story 9 apply + F4: with a noisy (locked) front door, quiet enters by a ba
     const l: GenLayout = { ...l0, buildings: l0.buildings.map((x) => (x.id === cand.id ? locked : x)) };
     return { l, locked, res: applyStory(l, locked, 'broken_back_windows', 7) };
   };
-  const hit = l0.buildings.filter((x) => storyRecipe(l0, x, 'broken_back_windows')).map(prep).find((p) => p.res.ok);
+  const hit = l0.buildings.filter((x) => x.enterable && backWindows(l0, x)?.refs.length).map(prep).find((p) => p.res.ok);
   assert.ok(hit, 'story 9 holds on some building with a noisy front door');
   const { l, locked, res } = hit;
   const back = backWindows(l, locked)!;
@@ -147,4 +165,41 @@ test('story 9 apply + F4: with a noisy (locked) front door, quiet enters by a ba
   const fastOp = unifyOpenings(b).find((_, i) => openingRef(b, i) === r.fast_entry)!;
   assert.equal(openingSide(b, fastOp), openingSide(b, back.front.opening), `fast by the front facade (${r.fast_entry})`);
   assert.ok(back.refs.includes(r.quiet_entry!), `quiet by a back window (${r.quiet_entry})`);
+});
+
+test('F2 3 -> 9: after story 3 (front locked, back door kept) story 9 is the compatible second story, applies and passes F4', () => {
+  assert.deepEqual(STORY_COMPATIBLE.locked_door, ['broken_back_windows']);
+  const l0 = depotV2();
+  // the state story 3 leaves (its recipe door_state(front, locked); the back door stays passable) on the 3-eligible buildings
+  const after3 = (b: GenBuilding) => {
+    const rec = storyRecipe(l0, b, 'locked_door');
+    if (!rec || rec[0].kind !== 'door_state') return null;
+    const c: GenBuilding = structuredClone(b);
+    assert.ok(applyDoorState(c, rec[0].door, 'locked'));
+    c.stories = [{ id: 'locked_door', bricks: [`door_state(${rec[0].door},locked)`], seed: 1, author: 'pmc' }];
+    return { before: b, b: c, l: { ...l0, buildings: l0.buildings.map((x) => (x.id === b.id ? c : x)) } as GenLayout };
+  };
+  const cases = l0.buildings.map(after3).filter((x): x is NonNullable<typeof x> => x !== null && !!backWindows(x.l, x.b)?.refs.length);
+  assert.ok(cases.length > 0, 'a 3-eligible building with back ground windows');
+  const knobs = { ...STORY_PICK_KNOBS, p_two: 1 };
+  let held = 0;
+  for (const { l, b, before } of cases) {
+    assert.ok(passableExteriorDoors(l, b).length >= 1, `${b.id}: the back door stays`);
+    assert.equal(storyEligible(l0, before, 'broken_back_windows', 'objective'), false, `${b.id}: 9 not eligible before 3 (closed front)`);
+    assert.equal(storyEligible(l, b, 'broken_back_windows', 'objective'), true, `${b.id}: 9 eligible after 3`);
+    assert.equal(pickSecondStory(b, 'locked_door', 'objective', 1, knobs, { layout: l }), 'broken_back_windows', `${b.id}: F2 picks 9 after 3`);
+    assert.equal(pickSecondStory(b, 'locked_door', 'objective', 1, { ...knobs, p_two: 0 }, { layout: l }), null, 'p_two 0 -> no second story');
+    assert.equal(pickSecondStory(b, 'snow_drift', 'objective', 1, knobs, { layout: l }), null, 'not compatible -> none');
+    const res = applyStory(l, b, 'broken_back_windows', 7);
+    if (!res.ok) continue;
+    held++;
+    assert.equal(json(applyStory(l, b, 'broken_back_windows', 7)), json(res), 'deterministic');
+    assert.deepEqual(res.building.stories!.map((st) => st.id), ['locked_door', 'broken_back_windows'], 'both stories stored');
+    const back = backWindows(l, b)!;
+    const r = computeBuildingRoutes({ ...l, buildings: l.buildings.map((x) => (x.id === b.id ? res.building : x)) }, res.building);
+    const fastOp = unifyOpenings(res.building).find((_, i) => openingRef(res.building, i) === r.fast_entry)!;
+    assert.equal(openingSide(res.building, fastOp), openingSide(b, back.front.opening), `${b.id}: fast by the front facade - kick the front or its glass (${r.fast_entry})`);
+    assert.ok(back.refs.includes(r.quiet_entry!), `${b.id}: quiet by a back window (${r.quiet_entry})`);
+  }
+  assert.ok(held > 0, 'story 9 holds after story 3 on some Depot building');
 });

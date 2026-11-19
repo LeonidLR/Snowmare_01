@@ -49,6 +49,7 @@ import {
   LEVELGEN_SCHEMA,
   LEVEL_HEIGHT,
   OPENING_DEFAULTS,
+  STAIR_APPROACH_CM,
   STAIR_RUN_PER_RISE,
   ladderForLevels,
   levelZ,
@@ -790,7 +791,9 @@ export type { Draft, DraftBuilding, Side, Rect };
 /** Stair core geometry (metres). BUILDING_GENERATOR.md 4.2: flights >= 150 wide, 35 deg, a free approach box at every end. */
 export const STAIR_FLIGHT_W = 1.5;
 export const STAIR_LANE_PITCH = 1.6;   // centre to centre of the two switchback lanes (10 cm between the flights)
-export const STAIR_APPROACH = 1.5;     // free box in front of a foot / after a top (the squad bunches here)
+export const STAIR_APPROACH = STAIR_APPROACH_CM / 100; // free box in front of a foot / after a top (the squad bunches here), 4.2: 200 cm
+/** The wall between the two lanes of a switchback core (BUILDING_GENERATOR.md 4.2): fills the 10 cm lane gap, no door. */
+export const STAIR_LANE_WALL_T = 10;
 const WALL_INNER = BUILDING_T / 200;   // the perimeter wall's half thickness: its inner face is this far inside the footprint
 
 export interface StairCore {
@@ -805,6 +808,12 @@ export interface StairCore {
   mezzanine: Rect;
   /** The 'atrium' gaps of the mezzanine level (everything but the mezzanine strip). */
   mezzanineVoid: Rect[];
+  /**
+   * A 2-lane core's lane walls (BUILDING_GENERATOR.md 4.2): one per storey the flights span, on the 10 cm gap between the lanes,
+   * from the flights' low end to their high end only (the approach boxes at both ends stay free), no door - a path cannot hug
+   * the ramp edge. Empty for a 1-lane core.
+   */
+  laneWalls: { a: Vec2; b: Vec2; floor: number }[];
   side: Side;
 }
 
@@ -812,7 +821,8 @@ export interface StairCore {
  * Switchback core along a long side wall of `r` reaching level `upTo` (one 300-rise flight per storey, lanes alternating).
  * Positions are NOT snapped to the 50 cm grid on purpose: they are measured from the wall's inner face (footprint edge +
  * WALL_INNER) so the approach boxes and the 10 cm lane gap are exact; the kit's stair module is placed by these points.
- * Returns null when the footprint is too short / narrow for a 35-degree flight with both approach boxes.
+ * Returns null when the footprint is too short / narrow for a 35-degree flight with both approach boxes (inside length >=
+ * 2 x STAIR_APPROACH + run: 4.0 + 4.29 = 8.29 m plus the wall faces).
  */
 export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Side[] = [], others: readonly Rect[] = []): StairCore | null {
   if (upTo <= 0) return null;
@@ -862,7 +872,9 @@ export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Si
   ].filter((v) => rect.size(v)[0] > 0.05 && rect.size(v)[1] > 0.05);
   const mezzanine = R(lo, hi, cMin, cMax);
   const mezzanineVoid = [voidRects[0]];
-  return { stairs, box, flightRect, voidRects, mezzanine, mezzanineVoid, side };
+  const mid = (laneC(0) + laneC(1)) / 2;
+  const laneWalls = lanes > 1 ? Array.from({ length: upTo }, (_, f) => ({ a: P(a0, mid), b: P(a1, mid), floor: f })) : [];
+  return { stairs, box, flightRect, voidRects, mezzanine, mezzanineVoid, laneWalls, side };
 }
 
 /** The route layer name of a building level: ground, its storeys, its roof (the ladders' `from` / `to` convention). */
@@ -1029,6 +1041,8 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   //    levels are slabs around the core only (floors_detail 'atrium' gaps = the rest of the hall), so the roof is reached by stairs.
   const stairs: Stair[] = [];
   if (core) stairs.push(...core.stairs);
+  // the core's lane walls (4.2): an interior wall one storey high between the two lanes on every storey the flights span
+  for (const lw of core?.laneWalls ?? []) addWall(d, `${bid}_lanewall_f${lw.floor}`, lw.a, lw.b, LEVEL_HEIGHT, STAIR_LANE_WALL_T, 'interior', lw.floor, bid);
 
   // 6. Partitions and Rooms (BSP split for enterable buildings)
   const bw = x1 - x0, bd = y1 - y0;

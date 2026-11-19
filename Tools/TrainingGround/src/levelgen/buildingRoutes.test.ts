@@ -52,8 +52,9 @@ function block(id: string, x = 0, openings?: WallOpening[]): GenBuilding {
       { id: `${id}_r1`, floor: 1, bounds: { min: [x, 0], max: [x + 1000, 800] }, kind: 'room' },
     ],
     stairs: [
-      { id: `${id}_st0`, pos: [x + 200, 160], from: 0, to: 1, kind: 'stairwell', top: [x + 200, 590] },
-      { id: `${id}_st1`, pos: [x + 360, 590], from: 1, to: 2, kind: 'stairwell', top: [x + 360, 160] },
+      // along the 10 m side: 200 approach + 430 run + 200 approach (BUILDING_GENERATOR.md 4.2) fit, the 8 m side would not
+      { id: `${id}_st0`, pos: [x + 200, 200], from: 0, to: 1, kind: 'stairwell', top: [x + 630, 200] },
+      { id: `${id}_st1`, pos: [x + 630, 360], from: 1, to: 2, kind: 'stairwell', top: [x + 200, 360] },
     ],
     roof_holes: [], floor_holes: [],
   } as unknown as GenBuilding;

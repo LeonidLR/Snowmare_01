@@ -127,6 +127,37 @@
    "building": "B_warehouse"
   },
   {
+   "id": "B_warehouse_lanewall_f0",
+   "a": [
+    2075,
+    -2135
+   ],
+   "b": [
+    2075,
+    -1706
+   ],
+   "height": 300,
+   "thickness": 10,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
+   "id": "B_warehouse_lanewall_f1",
+   "a": [
+    2075,
+    -2135
+   ],
+   "b": [
+    2075,
+    -1706
+   ],
+   "height": 300,
+   "thickness": 10,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_warehouse"
+  },
+  {
    "id": "B_warehouse_part_f0_0_0",
    "a": [
     2250,
@@ -1382,19 +1413,19 @@
        "poly": [
         [
          2235,
-         -2185
+         -2135
         ],
         [
          2235,
-         -1756
+         -1706
         ],
         [
          2075,
-         -1756
+         -1706
         ],
         [
          2075,
-         -2185
+         -2135
         ]
        ],
        "kind": "stairwell"
@@ -2395,28 +2426,28 @@
      "id": "B_warehouse_stair_0",
      "pos": [
       2155,
-      -2185
+      -2135
      ],
      "from": 0,
      "to": 1,
      "kind": "stairwell",
      "top": [
       2155,
-      -1756
+      -1706
      ]
     },
     {
      "id": "B_warehouse_stair_1",
      "pos": [
       1995,
-      -1756
+      -1706
      ],
      "from": 1,
      "to": 2,
      "kind": "stairwell",
      "top": [
       1995,
-      -2185
+      -2135
      ]
     }
    ],
@@ -3886,11 +3917,11 @@
     ],
     [
      2155,
-     -2185
+     -2135
     ],
     [
      2155,
-     -1756
+     -1706
     ],
     [
      720,

@@ -62,7 +62,7 @@ gallery, facade); the mapping template -> archetype is a table in the generator 
 
 | Element | Rule | State |
 |---|---|---|
-| **Switchback stair core** | One 300-rise flight per storey (35 deg, run 430), lanes side by side along a long wall (2 lanes when the core serves 2+ storeys), a free 150 cm approach box at every foot and after every top, the slab gap exactly the flight. Needs inside length 150 + 430 + 150 and a cross width of the core + 120 cm of floor (`planStairCore`). Halls climb to the roof by it. | *done* (P0) |
+| **Switchback stair core** | One 300-rise flight per storey (35 deg, run 430), lanes side by side along a long wall (2 lanes when the core serves 2+ storeys), a free 200 cm approach box at every foot and after every top (BUILDING_GENERATOR.md 4.2, 2026-11-19; was 150), the slab gap exactly the flight; a 2-lane core has a doorless full-length lane wall (interior, one storey high, 10 cm, on the lane gap, the run only - both landings stay free) on every storey its flights span, so a path cannot hug the ramp edge. Needs inside length 200 + 430 + 200 and a cross width of the core + 120 cm of floor (`planStairCore`). Halls climb to the roof by it. | *done* (P0) |
 | **External fire escape** | A steel stair or a ladder on a facade, landing on balconies. Storey-by-storey from a ground stop; the top one may reach the roof. May be `down_only` (iced, story 11). | *new* (S1 with story 4) |
 | **Balcony** | A slab outside a flat's balcony door, 95 cm rail (= `low_vault`). Depth 120-150; **150 minimum where a fire escape lands** (the 150 x 150 approach box must fit). Connected by a fire escape or, to a neighbour's balcony, by a walkway / plank module (walk, no gap). A balcony with neither is a firing position only. | *new* |
 | **Ladder / hatch** | `ALadderActor`, 36.4 cm rungs, rungs = floor(rise / 36.4), the remainder is the plinth (F1; a storey = 8 rungs + 8.8). Hatch 100 x 100 with a 3-sided rim. Ladders longer than one storey only outside on a facade. | *exists* |
@@ -124,7 +124,7 @@ storeys(office) = 2 if long_side >= 8 m else 1
 
 ## Edge Cases
 
-- **If a lot is too short for a switchback core** (`planStairCore` returns null: inside length < 150 + 430 + 150 or cross
+- **If a lot is too short for a switchback core** (`planStairCore` returns null: inside length < 200 + 430 + 200 or cross
   width < core + 120): the archetype falls back to an external fire escape as the up-route (2+ storeys) or a straight stair
   with 150 landings (sheds / ruins); if neither fits, the lot gets a 1-storey archetype.
 - **If a balcony has neither a fire escape nor a walkway to a neighbour**: firing position only, never a route node (validator
@@ -160,7 +160,7 @@ storeys(office) = 2 if long_side >= 8 m else 1
 |---|---|---|---|---|
 | `H_storey` | 300 cm | fixed (contract) | `schema.ts` `LEVEL_HEIGHT`, builder | every height rule |
 | Stair slope | 35 deg | 30-35 | generator | run length, navmesh margin (navmesh 44 deg) |
-| Approach box | 150 x 150 cm | 150-200 | `TRAVERSAL` in `buildingTraversal.ts` | stair mouth jams (audit cause B) |
+| Approach box | 200 x 150 cm (depth x flight width; 4.2, 2026-11-19, was 150) | 150-200 | `STAIR_APPROACH_CM` in `schema.ts` (generator + `TRAVERSAL`) | stair mouth jams (audit cause B) |
 | Balcony depth | 120-150 (150 at escape stops) | 120-180 | generator | firing position size, escape landing |
 | Balcony rail | 95 cm | 95 (low_vault) or tall | generator | vaultable drop vs no exit (Q8) |
 | Walkway max span | 300 cm | 100-300 | generator | balcony-to-balcony links |

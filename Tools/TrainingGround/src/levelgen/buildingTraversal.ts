@@ -8,7 +8,7 @@ import type { Vec2 } from '../movement/geometry.ts';
 import { toBuildingFrame } from './rotation.ts';
 import { assignRoles } from './buildingRoles.ts';
 import type { BuildingRole, GenBuilding, GenLayout, Stair, WallOpening } from './schema.ts';
-import { LEVEL_HEIGHT, STAIR_RUN_PER_RISE, unifyOpenings } from './schema.ts';
+import { LEVEL_HEIGHT, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE, unifyOpenings } from './schema.ts';
 import { effectiveOpeningState, isPassableState } from './openingStates.ts';
 import { checkBuildingReachability, isVaultableGroundWindow } from './tacticalEvaluate.ts';
 import { escapeLadderIds, usableEscapes, usableSnowRamps } from './fireEscapes.ts';
@@ -17,7 +17,8 @@ import type { RouteSummary } from './buildingRoutes.ts';
 /** Clearances, cm (BUILDING_GENERATOR.md 4.1 / 4.2). */
 export const TRAVERSAL = {
   flightWidth: 150,
-  approachDepth: 150,
+  /** The approach box at a flight's foot / after its top: schema.ts STAIR_APPROACH_CM (one source with generate.ts). */
+  approachDepth: STAIR_APPROACH_CM,
   /** A slab gap may end at most this far past a flight's top (the arrival landing must be solid). */
   gapOvershootTol: 5,
   /** Run tolerance for the 35-degree rule. */
@@ -178,8 +179,8 @@ function checkFlight(l: GenLayout, b: GenBuilding, st: Stair, issues: TraversalI
   }
   const foot = strip(pos, mul(u, -1), TRAVERSAL.approachDepth, TRAVERSAL.flightWidth);
   const arrive = strip(top, u, TRAVERSAL.approachDepth, TRAVERSAL.flightWidth);
-  if (!solidAt(b, st.from, foot)) issues.push({ severity: TRAVERSAL_SEVERITY.stair_foot_no_floor, code: 'stair_foot_no_floor', ref: st.id, message: `${st.id}: no solid floor in the 150 cm approach at its foot (level ${st.from})` });
-  if (!solidAt(b, st.to, arrive)) issues.push({ severity: TRAVERSAL_SEVERITY.stair_top_no_floor, code: 'stair_top_no_floor', ref: st.id, message: `${st.id}: no solid floor in the 150 cm landing after its top (level ${st.to})` });
+  if (!solidAt(b, st.from, foot)) issues.push({ severity: TRAVERSAL_SEVERITY.stair_foot_no_floor, code: 'stair_foot_no_floor', ref: st.id, message: `${st.id}: no solid floor in the ${TRAVERSAL.approachDepth} cm approach at its foot (level ${st.from})` });
+  if (!solidAt(b, st.to, arrive)) issues.push({ severity: TRAVERSAL_SEVERITY.stair_top_no_floor, code: 'stair_top_no_floor', ref: st.id, message: `${st.id}: no solid floor in the ${TRAVERSAL.approachDepth} cm landing after its top (level ${st.to})` });
   const bf = blockedOn(b, l, st.from, foot);
   if (bf) issues.push({ severity: TRAVERSAL_SEVERITY.stair_foot_blocked, code: 'stair_foot_blocked', ref: st.id, message: `${st.id}: ${bf} stands in the approach at its foot` });
   const bt = st.to < b.floors ? blockedOn(b, l, st.to, arrive) : null;

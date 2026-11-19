@@ -127,6 +127,37 @@
    "building": "B_checkpoint"
   },
   {
+   "id": "B_checkpoint_lanewall_f0",
+   "a": [
+    775,
+    -835
+   ],
+   "b": [
+    775,
+    -406
+   ],
+   "height": 300,
+   "thickness": 10,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
+   "id": "B_checkpoint_lanewall_f1",
+   "a": [
+    775,
+    -835
+   ],
+   "b": [
+    775,
+    -406
+   ],
+   "height": 300,
+   "thickness": 10,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_checkpoint"
+  },
+  {
    "id": "B_checkpoint_part_f0_0_0",
    "a": [
     1800,
@@ -1170,19 +1201,19 @@
        "poly": [
         [
          775,
-         -885
+         -835
         ],
         [
          775,
-         -456
+         -406
         ],
         [
          615,
-         -456
+         -406
         ],
         [
          615,
-         -885
+         -835
         ]
        ],
        "kind": "stairwell"
@@ -1623,28 +1654,28 @@
      "id": "B_checkpoint_stair_0",
      "pos": [
       695,
-      -885
+      -835
      ],
      "from": 0,
      "to": 1,
      "kind": "stairwell",
      "top": [
       695,
-      -456
+      -406
      ]
     },
     {
      "id": "B_checkpoint_stair_1",
      "pos": [
       855,
-      -456
+      -406
      ],
      "from": 1,
      "to": 2,
      "kind": "stairwell",
      "top": [
       855,
-      -885
+      -835
      ]
     }
    ],
@@ -2489,19 +2520,19 @@
     ],
     [
      695,
-     -885
+     -835
     ],
     [
      695,
-     -456
+     -406
     ],
     [
      855,
-     -456
+     -406
     ],
     [
      855,
-     -885
+     -835
     ],
     [
      1200,

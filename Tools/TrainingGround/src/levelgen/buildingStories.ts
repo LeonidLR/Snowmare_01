@@ -73,7 +73,22 @@ export const STORY_PICK_KNOBS = {
     background: { locked_door: 1, broken_back_windows: 1, snow_drift: 0.5 },
   } as Record<BuildingRole, Partial<Record<Exclude<StoryId, 'open'>, number>>>,
   t_max: 4,
+  /** F2: the chance a storied building gets a second, compatible story (building-stories.md F2, *proposal*). */
+  p_two: 0.25,
 };
+
+/**
+ * F2 compatibility list (building-stories.md 5 step 5 / F2 / Edge Cases): the stories that may follow a first story on the same
+ * building. Only 3 + 9 so far (the GDD example; designer 2026-11-19: story 9 needs a loud or absent front, which story 3 gives).
+ * Pairs that touch the same opening (3 + 10: lock vs drift-seal of the front) are left out.
+ */
+export const STORY_COMPATIBLE: Partial<Record<StoryId, readonly Exclude<StoryId, 'open'>[]>> = {
+  locked_door: ['broken_back_windows'],
+  broken_back_windows: ['locked_door'],
+};
+
+/** Front-door states that make story 9 eligible (designer 2026-11-19): a kick (locked) or no way in (sealed / barricaded). */
+export const LOUD_FRONT_STATES: readonly DoorState[] = ['locked', 'sealed', 'barricaded'];
 
 export type StoryPickKnobs = typeof STORY_PICK_KNOBS;
 
@@ -540,7 +555,21 @@ function routeDistance(route: readonly Vec2[], p: Vec2): { d: number; point: Vec
  * Null without a passable exterior door.
  */
 export function frontDoor(l: GenLayout, b: GenBuilding): { ref: string; opening: WallOpening } | null {
-  const doors = passableExteriorDoors(l, b);
+  return pickFront(l, b, passableExteriorDoors(l, b));
+}
+
+/**
+ * The front door whatever its state: as frontDoor, but among ALL exterior ground-floor doors (a sealed / barricaded front is still
+ * the front). Story 9 reads its state and its facade. Null without an exterior ground-floor door.
+ */
+export function frontDoorAnyState(l: GenLayout, b: GenBuilding): { ref: string; opening: WallOpening } | null {
+  const doors = unifyOpenings(b)
+    .map((opening, i) => ({ ref: openingRef(b, i), opening }))
+    .filter(({ opening: o }) => o.kind === 'door' && (o.floor ?? 0) === 0 && classifyOpening(l, b, o).exterior);
+  return pickFront(l, b, doors);
+}
+
+function pickFront(l: GenLayout, b: GenBuilding, doors: { ref: string; opening: WallOpening }[]): { ref: string; opening: WallOpening } | null {
   if (!doors.length) return null;
   const route = l.routes.find((r) => r.mandatory)?.points ?? [];
   if (!route.length) return doors[0];
@@ -555,11 +584,12 @@ export function frontDoor(l: GenLayout, b: GenBuilding): { ref: string; opening:
 }
 
 /**
- * Story 9's back facade: the ground-floor facade opposite the front door's side (frontDoor, as story 3), with the refs of its
- * exterior ground windows that are not 'broken' already (a ruin's are: the story would change nothing). Null without a front door.
+ * Story 9's back facade: the ground-floor facade opposite the front door's side (frontDoorAnyState: the same door as story 3's
+ * frontDoor while every door is passable; a sealed front stays the front), with the refs of its exterior ground windows that are not
+ * 'broken' already (a ruin's are: the story would change nothing). Null without an exterior ground door.
  */
 export function backWindows(l: GenLayout, b: GenBuilding): { front: { ref: string; opening: WallOpening }; side: Side; refs: string[] } | null {
-  const front = frontDoor(l, b);
+  const front = frontDoorAnyState(l, b);
   if (!front) return null;
   const side = OPPOSITE_SIDE[openingSide(b, front.opening)];
   const refs = unifyOpenings(b)
@@ -598,9 +628,12 @@ export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick
       return inner.stairs.length || inner.hatches || inner.ladders.length ? [{ kind: 'roof_access', access: 'ladder' }] : null;
     }
     case 'broken_back_windows': {
-      // a front door and >= 1 ground window on the opposite facade; the front windows keep their default ('glazed' in /2)
+      // designer 2026-11-19: only with a loud or absent front - the front door locked (a kick), sealed or barricaded (no passable
+      // front door); in practice after story 3 (F2 "3 + 9"). >= 1 ground window on the opposite facade; the front windows keep their
+      // default ('glazed' in /2)
       const back = backWindows(l, b);
-      return back?.refs.length ? [{ kind: 'window_state', target: back.side, state: 'broken', floor: 0 }] : null;
+      if (!back || !(LOUD_FRONT_STATES as readonly string[]).includes(effectiveOpeningState(l, b, back.front.opening))) return null;
+      return back.refs.length ? [{ kind: 'window_state', target: back.side, state: 'broken', floor: 0 }] : null;
     }
     case 'snow_drift': {
       // >= 2 storeys, a front door, and a storey-1 window on the front facade where the ramp fits (nearest the door first)
@@ -663,6 +696,37 @@ export function pickStory(
     .sort();
   const total = cands.reduce((a, s) => a + (weights[s] ?? 0), 0);
   if (!cands.length || total <= 0) return 'open';
+  let x = r() * total;
+  for (const s of cands) {
+    x -= weights[s] ?? 0;
+    if (x < 0) return s;
+  }
+  return cands[cands.length - 1];
+}
+
+/**
+ * F2 second story: with probability p_two (skipped on a retry, `exclude` non-empty) pick among compatible(first) \ {first} the
+ * stories eligible on `building` AS IT IS after the first story (F1 step-2 weights of the role); null = no second story.
+ * Deterministic per seed (the pass uses its own sub-seeds, so the first pick is unchanged).
+ */
+export function pickSecondStory(
+  building: GenBuilding,
+  first: StoryId,
+  role: BuildingRole | undefined,
+  seed: number,
+  knobs: StoryPickKnobs = STORY_PICK_KNOBS,
+  opts: PickStoryOptions = {},
+): StoryId | null {
+  if (!role || !building.enterable || first === 'open') return null;
+  const compat = (STORY_COMPATIBLE[first] ?? []).filter((s) => s !== first && !(opts.exclude ?? []).includes(s));
+  if (!compat.length) return null;
+  const r = rng(seed);
+  if (!(opts.exclude ?? []).length && r() >= (knobs.p_two ?? 0)) return null;
+  const l: GenLayout = opts.layout ?? ({ schema: 'codex.levelgen_layout/1', walls: [], routes: [], buildings: [building] } as unknown as GenLayout);
+  const weights = knobs.weights[role] ?? {};
+  const cands = compat.filter((s) => (weights[s] ?? 0) > 0 && storyEligible(l, building, s, role)).sort();
+  const total = cands.reduce((a, s) => a + (weights[s] ?? 0), 0);
+  if (!cands.length || total <= 0) return null;
   let x = r() * total;
   for (const s of cands) {
     x -= weights[s] ?? 0;
@@ -754,7 +818,8 @@ export function storySubSeed(seed: number, id: string, t: number): number {
 
 /**
  * Roles (withRoles) + per enterable building: pick (F1) and apply, up to t_max tries (a rolled-back story is excluded from the next
- * try), then 'open'. Every enterable building ends with one StoryInstance; a building that already has `stories` (locked on the
+ * try), then 'open'; a held story may get a second compatible one (F2, p_two, STORY_COMPATIBLE: 3 + 9). Every enterable building
+ * ends with one StoryInstance (two after F2); a building that already has `stories` (locked on the
  * page) is kept as it is. Deterministic per (seed, building id). The input layout is not mutated.
  */
 export function applyStoriesToLayout(
@@ -781,9 +846,29 @@ export function applyStoriesToLayout(
       }
     }
     if (!done) done = applyStory(cur, b, 'open', storySubSeed(seed, id, 0));
-    const next = done;
+    const first = done;
     const before = cur;
-    cur = { ...cur, buildings: cur.buildings.map((x) => (x.id === id ? next.building : x)), ...(next.ladders ? { ladders: next.ladders } : {}) };
+    cur = { ...cur, buildings: cur.buildings.map((x) => (x.id === id ? first.building : x)), ...(first.ladders ? { ladders: first.ladders } : {}) };
+    // F2 (section 5 step 5): a second compatible story on the storied building, steps 2-4 for it alone (own sub-seeds `<id>#2`)
+    let next = first;
+    const firstId = first.instance.id as StoryId;
+    if (first.ok && STORY_COMPATIBLE[firstId]?.length) {
+      const failed2: StoryId[] = [];
+      for (let t = 0; t < knobs.t_max; t++) {
+        const sub = storySubSeed(seed, `${id}#2`, t);
+        const second = pickSecondStory(first.building, firstId, b.role, sub, knobs, { layout: cur, exclude: failed2 });
+        if (!second) break;
+        const res = applyStory(cur, first.building, second, sub);
+        if (res.ok) {
+          next = res;
+          const held = res;
+          cur = { ...cur, buildings: cur.buildings.map((x) => (x.id === id ? held.building : x)), ...(held.ladders ? { ladders: held.ladders } : {}) };
+          break;
+        }
+        failed2.push(second);
+        for (const issue of res.issues) log.push({ building: id, story: second, try: t, issue });
+      }
+    }
     // route model (building-route-model.md rule 6, F3): key route + entries, D against the building before its story
     const routes = computeBuildingRoutes(cur, next.building, { baseline: { layout: before, building: b } });
     if (routes.key_route) next.building.key_route = routes.key_route;
