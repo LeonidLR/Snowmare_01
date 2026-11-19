@@ -4,9 +4,10 @@
 // opening states honoured) with no error the untouched building did not already have, else every brick is undone (the original
 // building object is returned) and a 'story_rolled_back' warning is logged. Catalogue for now: 1 'open' (no bricks),
 // 3 'locked_door' (door_state(front, locked)), 4 'rubble_escape' (block_flight(0->1, rubble) + add_balcony_escape) and
-// 7 'roof_outside' (roof_access(ladder)) and 10 'snow_drift' (door_state(front, sealed) + snow_ramp(storey-1 window)); 4 and 7
-// are detours (objective / garrison / overwatch only), 3 and 10 are choice stories: after apply they must pass route-model F4
-// (buildingRoutes.ts: fast and quiet enter by different openings, one of them the story's lever) or roll back. Bricks may add /
+// 7 'roof_outside' (roof_access(ladder)), 9 'broken_back_windows' (window_state(back:0, broken), the front windows at their default)
+// and 10 'snow_drift' (door_state(front, sealed) + snow_ramp(storey-1 window)); 4 and 7 are detours (objective / garrison / overwatch
+// only), 3, 9 and 10 are choice stories: after apply they must pass route-model F4 (buildingRoutes.ts: fast and quiet enter by
+// different openings, one of them the story's lever; story 9: quiet by a back window, fast by the front facade) or roll back. Bricks may add /
 // remove layout ladders (fire escapes, facade ladders): the result then carries the new `ladders` list. applyStoriesToLayout
 // writes key_route / fast_entry / quiet_entry per building. Pure and deterministic per (seed, building id); NOT wired into the
 // generator pipeline yet (a later step does that).
@@ -29,7 +30,7 @@ import { openingOutwardDir } from './tacticalEvaluate.ts';
 // ---- catalogue ----------------------------------------------------------------------------------------------------------------------
 
 export type StoryAuthor = StoryInstance['author'];
-export type StoryId = 'open' | 'locked_door' | 'rubble_escape' | 'roof_outside' | 'snow_drift';
+export type StoryId = 'open' | 'locked_door' | 'rubble_escape' | 'roof_outside' | 'broken_back_windows' | 'snow_drift';
 
 /** The catalogue rows implemented so far (building-stories.md 6): number, allowed authors, type. */
 export const STORY_CATALOGUE: Record<StoryId, { num: number; authors: readonly StoryAuthor[]; type: 'base' | 'choice' | 'detour' }> = {
@@ -41,6 +42,8 @@ export const STORY_CATALOGUE: Record<StoryId, { num: number; authors: readonly S
   rubble_escape: { num: 4, authors: ['decay', 'pmc'], type: 'detour' },
   /** 7 Roof only from outside: roof_access(facade ladder) - an enterable building with a walkable roof and a core / hatch to it. */
   roof_outside: { num: 7, authors: ['decay', 'cold'], type: 'detour' },
+  /** 9 Broken back windows: window_state(back facade ground windows, broken), the front glazed (its default) - quiet in from the back. */
+  broken_back_windows: { num: 9, authors: ['survivors', 'decay'], type: 'choice' },
   /** 10 Snow-drift entrance: door_state(front, sealed) + snow_ramp(storey-1 window on the front) - up the drift, in by the window. */
   snow_drift: { num: 10, authors: ['cold'], type: 'choice' },
 };
@@ -60,13 +63,14 @@ export const RUBBLE_ESCAPE_SET_PIECES: readonly string[] = ['facade'];
  */
 export const STORY_PICK_KNOBS = {
   budget: { objective: 1.0, garrison: 0.8, overwatch: 0.7, transit: 0.5, background: 0.1 } as Record<BuildingRole, number>,
-  // detours (4, 7) only on objective / garrison / overwatch (F1); overwatch favours the outside roof ladder (*proposal*)
+  // detours (4, 7) only on objective / garrison / overwatch (F1); overwatch favours the outside roof ladder (*proposal*); 9 is a
+  // light choice story (no geometry) on every role, 0.5 on overwatch like the other non-roof detour there (*proposal*)
   weights: {
-    objective: { locked_door: 1, rubble_escape: 1, roof_outside: 1, snow_drift: 1 },
-    garrison: { locked_door: 1, rubble_escape: 1, roof_outside: 1, snow_drift: 1 },
-    overwatch: { locked_door: 1, rubble_escape: 0.5, roof_outside: 1.5, snow_drift: 1 },
-    transit: { locked_door: 1, snow_drift: 1 },
-    background: { locked_door: 1, snow_drift: 0.5 },
+    objective: { locked_door: 1, rubble_escape: 1, roof_outside: 1, broken_back_windows: 1, snow_drift: 1 },
+    garrison: { locked_door: 1, rubble_escape: 1, roof_outside: 1, broken_back_windows: 1, snow_drift: 1 },
+    overwatch: { locked_door: 1, rubble_escape: 0.5, roof_outside: 1.5, broken_back_windows: 0.5, snow_drift: 1 },
+    transit: { locked_door: 1, broken_back_windows: 1, snow_drift: 1 },
+    background: { locked_door: 1, broken_back_windows: 1, snow_drift: 0.5 },
   } as Record<BuildingRole, Partial<Record<Exclude<StoryId, 'open'>, number>>>,
   t_max: 4,
 };
@@ -82,7 +86,8 @@ export const FLIGHT_BLOCKS: readonly FlightBlock[] = ['rubble', 'burnt', 'barric
 /** One brick of a recipe (building-stories.md 3). */
 export type Brick =
   | { kind: 'door_state'; door: string; state: DoorState }
-  | { kind: 'window_state'; target: Side | number; state: WindowState }
+  /** `floor` (optional) limits a side target to one storey (story 9: the back facade's ground windows). */
+  | { kind: 'window_state'; target: Side | number; state: WindowState; floor?: number }
   | { kind: 'block_flight'; stair: string; block: FlightBlock }
   /** `room` = the S1 'flat': a room on the lowest storey of `storeys`, on an exterior wall. */
   | { kind: 'add_balcony_escape'; room: string; storeys: number[] }
@@ -94,7 +99,7 @@ export type Brick =
 export function brickToString(b: Brick): string {
   switch (b.kind) {
     case 'door_state': return `door_state(${b.door},${b.state})`;
-    case 'window_state': return `window_state(${b.target},${b.state})`;
+    case 'window_state': return `window_state(${b.target}${b.floor !== undefined ? `:${b.floor}` : ''},${b.state})`;
     case 'block_flight': return `block_flight(${b.stair},${b.block})`;
     case 'add_balcony_escape': return `add_balcony_escape(${b.room},${b.storeys.join('|')})`;
     case 'roof_access': return `roof_access(${b.access})`;
@@ -134,14 +139,15 @@ export function applyDoorState(b: GenBuilding, door: string, state: DoorState): 
 
 /**
  * window_state(side or storey, state): set the state of every exterior window on a facade side (all storeys) or on a storey (all
- * sides). Loopholes stay 'fixed'. Returns the number of windows changed. Mutates `b`.
+ * sides); `floor` limits a side target to that storey. Loopholes stay 'fixed'. Returns the number of windows changed. Mutates `b`.
  */
-export function applyWindowState(l: Pick<GenLayout, 'walls'>, b: GenBuilding, target: Side | number, state: WindowState): number {
+export function applyWindowState(l: Pick<GenLayout, 'walls'>, b: GenBuilding, target: Side | number, state: WindowState, floor?: number): number {
   if (!WINDOW_STATES.includes(state)) return 0;
   let n = 0;
   for (const op of editableOpenings(b)) {
     if (op.kind !== 'window' || !classifyOpening(l, b, op).exterior) continue;
     if (typeof target === 'number' ? (op.floor ?? 0) !== target : openingSide(b, op) !== target) continue;
+    if (floor !== undefined && (op.floor ?? 0) !== floor) continue;
     op.state = state;
     n++;
   }
@@ -500,7 +506,7 @@ export function applySnowRamp(l: GenLayout, b: GenBuilding, ref: string): boolea
 function applyBrick(l: GenLayout, b: GenBuilding, brick: Brick): boolean {
   switch (brick.kind) {
     case 'door_state': return applyDoorState(b, brick.door, brick.state);
-    case 'window_state': return applyWindowState(l, b, brick.target, brick.state) > 0;
+    case 'window_state': return applyWindowState(l, b, brick.target, brick.state, brick.floor) > 0;
     case 'block_flight': return applyBlockFlight(b, brick.stair, brick.block);
     case 'add_balcony_escape': return applyBalconyEscape(l, b, brick.room, brick.storeys);
     case 'roof_access': return applyRoofAccess(l, b, brick.access);
@@ -548,6 +554,21 @@ export function frontDoor(l: GenLayout, b: GenBuilding): { ref: string; opening:
   return scored[0].d;
 }
 
+/**
+ * Story 9's back facade: the ground-floor facade opposite the front door's side (frontDoor, as story 3), with the refs of its
+ * exterior ground windows that are not 'broken' already (a ruin's are: the story would change nothing). Null without a front door.
+ */
+export function backWindows(l: GenLayout, b: GenBuilding): { front: { ref: string; opening: WallOpening }; side: Side; refs: string[] } | null {
+  const front = frontDoor(l, b);
+  if (!front) return null;
+  const side = OPPOSITE_SIDE[openingSide(b, front.opening)];
+  const refs = unifyOpenings(b)
+    .map((o, i) => ({ o, ref: openingRef(b, i) }))
+    .filter(({ o }) => o.kind === 'window' && (o.floor ?? 0) === 0 && openingSide(b, o) === side && classifyOpening(l, b, o).exterior && effectiveOpeningState(l, b, o) !== 'broken')
+    .map(({ ref }) => ref);
+  return { front, side, refs };
+}
+
 /** The bricks of a story for this building, or null when the story is not eligible (F1 `eligible(s, b)`). */
 export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick[] | null {
   if (!b.enterable) return story === 'open' ? [] : null;
@@ -575,6 +596,11 @@ export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick
       if (!b.roof_walkable) return null;
       const inner = insideRoofAccess(l, b);
       return inner.stairs.length || inner.hatches || inner.ladders.length ? [{ kind: 'roof_access', access: 'ladder' }] : null;
+    }
+    case 'broken_back_windows': {
+      // a front door and >= 1 ground window on the opposite facade; the front windows keep their default ('glazed' in /2)
+      const back = backWindows(l, b);
+      return back?.refs.length ? [{ kind: 'window_state', target: back.side, state: 'broken', floor: 0 }] : null;
     }
     case 'snow_drift': {
       // >= 2 storeys, a front door, and a storey-1 window on the front facade where the ramp fits (nearest the door first)
@@ -697,7 +723,12 @@ export function applyRecipe(layout: GenLayout, building: GenBuilding, storyId: S
     if (STORY_CATALOGUE[storyId].type === 'choice') {
       const lever = choiceLever(recipe);
       const r = computeBuildingRoutes(swap(work, copy), copy);
-      if (!r.choice || (lever !== undefined && r.fast_entry !== lever && r.quiet_entry !== lever)) {
+      // story 9: the quiet entry is one of the broken back windows and the fast entry on the front facade (the front door, or a
+      // glazed front window shattered - "front glazed")
+      const back = storyId === 'broken_back_windows' ? backWindows(layout, building) : null;
+      const fastOp = back ? unifyOpenings(copy).find((_, i) => openingRef(copy, i) === r.fast_entry) : undefined;
+      const backOk = !back || (!!fastOp && openingSide(copy, fastOp) === OPPOSITE_SIDE[back.side] && back.refs.includes(r.quiet_entry ?? ''));
+      if (!r.choice || !backOk || (lever !== undefined && r.fast_entry !== lever && r.quiet_entry !== lever)) {
         return rollback(`F4: fast enters by ${r.fast_entry ?? '-'}, quiet by ${r.quiet_entry ?? '-'}`);
       }
     }

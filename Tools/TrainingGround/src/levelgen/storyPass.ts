@@ -4,10 +4,12 @@
 //   - withBuildingStories(layout, seed): the layout as schema /2 + `cost_hash` (routeCostHash of ROUTE_COSTS), then
 //     applyStoriesToLayout - roles, one story per enterable building, key routes. A building that already has stories (kept by a
 //     region re-roll / a lock, or the old map of an expansion) keeps them; the fresh ones get stories from `seed`'s sub-seeds.
+//   - restoryForGoals: the pass re-run after the mission goals change (designer 2026-11-19): role-changed buildings re-picked.
 //   - rerollBuildingStory: «другая история» - one building's story re-rolled with the next sub-seed (refused inside a lock).
 //   - storyMapSummary: the per-map line of the «Здания» panel (role shares, storied share, rollbacks, choice share).
 // Toggle off = none of this runs: the generator's /1 output is unchanged byte for byte. Pure, deterministic, no DOM.
 import { applyStoriesToLayout, storySubSeed, type StoryId, type StoryLogEntry } from './buildingStories.ts';
+import { assignRoles } from './buildingRoles.ts';
 import { routeCostHash } from './buildingRoutes.ts';
 import { generateLayout } from './generate.ts';
 import type { Profile } from './profile.ts';
@@ -65,6 +67,52 @@ export function withBuildingStories(layout: GenLayout, seed: number, prev?: Stor
 export function generateCandidate(o: { profile: Profile; seed: number; params?: Partial<GenParams>; stories: boolean }): StoryPassResult | { layout: GenLayout } {
   const layout = generateLayout({ profile: o.profile, seed: o.seed, params: o.params });
   return o.stories ? withBuildingStories(layout, o.seed) : { layout };
+}
+
+/** Does the layout carry the story pass (any building with stories)? A toggle-off map has none: goal edits leave it /1. */
+export const hasStories = (l: GenLayout): boolean => l.buildings.some((b) => b.stories?.length);
+
+/** A building without its story and the route fields the pass writes (the 'open' story of a loaded map has no pristine copy). */
+function unstoried(b: GenBuilding): GenBuilding {
+  const { stories: _s, key_route: _k, breach_route: _b, fast_entry: _f, quiet_entry: _q, ...rest } = b;
+  return rest;
+}
+
+export interface GoalStoryResult extends StoryPassResult {
+  /** Buildings whose story was re-picked (their role changed with the goals). */
+  repicked: string[];
+  /** Buildings whose role changed but whose story stayed: inside a locked district, or storied without a pristine copy (loaded map). */
+  keptChanged: string[];
+}
+
+/**
+ * Designer decision 2026-11-19 (a): the story pass after the mission goals, re-run whenever `layout.objectives` changes. Roles are
+ * re-assigned from the new goals (buildingRoles.ts); a storied building whose role changed goes back to its pristine copy (its story
+ * ladders dropped) and gets a story again from `seed`'s sub-seeds (storySubSeed(seed, id, t), the generation pass's chain); a
+ * building inside a locked district, or whose role did not change, keeps its story. Nothing changed role -> `layout` itself.
+ * The caller runs it only on a storied map (hasStories) with the toggle on.
+ */
+export function restoryForGoals(layout: GenLayout, seed: number, state?: StoryState): GoalStoryResult {
+  const roles = assignRoles(layout);
+  const locked = lockedBuildingIds(layout);
+  const repicked: string[] = [], keptChanged: string[] = [], drop = new Set<string>();
+  const buildings = layout.buildings.map((b) => {
+    if (!b.stories?.length || roles[b.id] === b.role) return b;
+    const p = state?.base[b.id];
+    if (!locked.has(b.id) && (p || b.stories.at(-1)!.id === 'open')) {
+      repicked.push(b.id);
+      for (const k of p?.ladders ?? []) drop.add(k);
+      return p ? p.building : unstoried(b);
+    }
+    keptChanged.push(b.id);
+    return b;
+  });
+  const base = state?.base ?? {}, log = state?.log ?? [];
+  if (!repicked.length && !keptChanged.length) return { layout, base, log, repicked, keptChanged };
+  const gone = new Set(repicked);
+  const rest: StoryState = { base: Object.fromEntries(Object.entries(base).filter(([id]) => !gone.has(id))), log: log.filter((e) => !gone.has(e.building)) };
+  const bare: GenLayout = { ...layout, buildings, ...(layout.ladders ? { ladders: layout.ladders.filter((k) => !drop.has(k.id)) } : {}) };
+  return { ...withBuildingStories(bare, seed, rest), repicked, keptChanged };
 }
 
 /** The ids of the buildings inside a locked district (by centre, as the region re-roll selects them). */

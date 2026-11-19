@@ -14,6 +14,7 @@ import type { BuildingRole } from '../levelgen/schema';
 const STORY_RU: Record<StoryId, string> = {
   open: 'открытое',
   locked_door: 'запертая дверь',
+  broken_back_windows: 'выбитые окна сзади',
   rubble_escape: 'завал + пожарная лестница',
   roof_outside: 'крыша только снаружи',
   snow_drift: 'вход по сугробу',

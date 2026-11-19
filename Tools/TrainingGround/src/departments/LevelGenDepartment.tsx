@@ -40,7 +40,7 @@ import type { Evaluation } from '../levelgen/evaluate';
 import { evaluateLayout } from '../levelgen/evaluate';
 import type { Profile } from '../levelgen/profile';
 import type { StoryState } from '../levelgen/storyPass';
-import { generateCandidate, lockedBuildingIds, rerollBuildingStory, storyMapSummary, withBuildingStories } from '../levelgen/storyPass';
+import { generateCandidate, hasStories, lockedBuildingIds, rerollBuildingStory, restoryForGoals, storyMapSummary, withBuildingStories } from '../levelgen/storyPass';
 import type { GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
 import { BuildingsPanel } from './BuildingsPanel';
@@ -296,6 +296,16 @@ export const LevelGenDepartment: React.FC = () => {
     setHistories((hs) => ({ ...hs, [curKey]: historyPush(hs[curKey] ?? historyInit(cur.layout, 'исходная'), layout, label) }));
     showLayout(layout);
   };
+  /**
+   * A step that wrote `layout.objectives` (place / clear / add / move / remove a goal): with the story toggle on and a storied map,
+   * the story pass re-runs for the buildings whose role changed (restoryForGoals; locked districts keep theirs), else as it is.
+   */
+  const pushGoalStep = (layout: GenLayout, label: string) => {
+    if (!cur) return;
+    if (!storiesOn || !hasStories(layout)) { pushStep(layout, label); return; }
+    const r = restoryForGoals(layout, layout.seed, storyStates.current.get(cur.layout));
+    pushStep(r.layout, r.repicked.length ? `${label}; истории заново: ${r.repicked.length}` : label, r);
+  };
   const reroll = () => {
     if (!cur || !zone || !profileOk || !profile) return;
     setBusy('Перегенерация зоны...'); setError('');
@@ -371,7 +381,7 @@ export const LevelGenDepartment: React.FC = () => {
     if (!cur || busy) return;
     const r = a.kind === 'add' ? addGoal(cur.layout, a.pos, nav ?? undefined) : a.kind === 'move' ? moveObjective(cur.layout, a.id, a.pos, nav ?? undefined) : removeGoal(cur.layout, a.id, nav ?? undefined);
     setObjMsg({ ok: r.ok && !!r.check?.ok, text: r.message });
-    if (r.ok) { pushStep(r.layout, r.message.split(';')[0]); setGoalReport(null); }
+    if (r.ok) { pushGoalStep(r.layout, r.message.split(';')[0]); setGoalReport(null); }
   };
   const zoomBy = (f: number) => setView((v) => zoomAt(v, [planBox.current ? planBox.current.clientWidth / 2 : 0, 260], f));
   const planBox = useRef<HTMLDivElement>(null);
@@ -424,7 +434,7 @@ export const LevelGenDepartment: React.FC = () => {
       try {
         const r = placeObjectives({ layout: cur.layout, seed: goalSeed, count: goalCount || undefined, start: goalStart });
         setGoalReport(r);
-        if (r.ok) pushStep(r.layout, `старт + цели, seed ${goalSeed}`);
+        if (r.ok) pushGoalStep(r.layout, `старт + цели, seed ${goalSeed}`);
         setGoalSeed((s) => s + 1);
       } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
       setBusy('');
@@ -434,7 +444,7 @@ export const LevelGenDepartment: React.FC = () => {
     if (!cur?.layout.objectives) return;
     const next = { ...cur.layout };
     delete next.objectives;
-    pushStep(next, 'цели убраны'); setGoalReport(null);
+    pushGoalStep(next, 'цели убраны'); setGoalReport(null);
   };
   const saveLocksNow = async () => {
     if (!cur) return;
