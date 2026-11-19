@@ -107,7 +107,7 @@ later).
 |---|---|---|---|---|---|---|---|
 | 1 | Open | - | all | door -> stair -> up | - | any (traces only) | S1 (base) |
 | 2 | Pass-through | 2 doors on **opposite** sides (the base rule already gives 2 doors > 150 m2; this enforces opposite) | all >= 150 m2 | street A -> through -> street B | choice | any | S1 (base) |
-| 3 | Locked door | door_state(front, locked) | all | kick the front, or round to the back door | choice | pmc, decay, survivors | **S1** |
+| 3 | Locked door | door_state(front, locked) + window_state(front facade storey 0, boarded) - the loud facade is boarded up, so the fast entry is the kick, not a front window (F4 rule A, designer 2026-11-19); no front window -> the door alone | all | kick the front, or round to the back door | choice | pmc, decay, survivors | **S1** |
 | 4 | Rubble on the stair + fire escape | block_flight(0->1, rubble) + add_balcony_escape | block, office | flat 1 -> balcony -> fire escape -> balcony 2 -> up | detour | decay, pmc | **S1** |
 | 5 | Split wings ("hospital") | split(corridor) + per-wing entrance; wing B upstairs only by its escape | hospital/school, office | out, round, into wing B, up its escape | detour | decay, survivors | S2 (needs the hospital archetype) |
 | 6 | Collapsed floor | opening(floor, hole over a rubble heap, drop <= 250) | block, ruin | down by the hole, up by the far stair | position | decay | S3 |

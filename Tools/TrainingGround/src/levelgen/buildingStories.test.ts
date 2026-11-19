@@ -12,6 +12,7 @@ import {
   STORY_PICK_KNOBS,
   storyEligible,
 } from './buildingStories.ts';
+import { computeBuildingRoutes } from './buildingRoutes.ts';
 import { validateBuilding } from './buildingTraversal.ts';
 import type { GenBuilding, GenLayout, WallOpening } from './schema.ts';
 import { LEVELGEN_SCHEMA, LEVELGEN_SCHEMA_V2 } from './schema.ts';
@@ -92,6 +93,25 @@ test('story 3 locked_door needs >= 2 passable exterior doors', () => {
   assert.equal(storyEligible(layoutOf([sealedBack]), sealedBack, 'locked_door'), false, 'a sealed back door is no alternative');
   const two = twoDoors();
   assert.equal(storyEligible(layoutOf([two]), two, 'locked_door'), true);
+});
+
+test('story 3 boards the front facade ground windows (F4 rule A, designer 2026-11-19): fast = the kick, not a front window', () => {
+  // south (route side) door + two south ground windows + a south storey-1-free shed; north back door; a west side window
+  const b = shed('B1', [door('D_n', [500, 0]), door('D_s', [500, 800]), win('W_s1', [200, 800]), win('W_s2', [800, 800]), win('W_w', [0, 400])]);
+  const l = layoutOf([b]);
+  const res = applyStory(l, b, 'locked_door', 11);
+  assert.equal(res.ok, true, JSON.stringify(res.issues));
+  assert.deepEqual(res.building.stories!.map((s) => s.bricks), [['door_state(D_s,locked)', 'window_state(south:0,boarded)']]);
+  const st = (id: string) => res.building.openings!.find((o) => o.id === id)!.state;
+  assert.equal(st('W_s1'), 'boarded');
+  assert.equal(st('W_s2'), 'boarded');
+  assert.equal(st('W_w'), undefined, 'a side window keeps its default');
+  const r = computeBuildingRoutes({ ...l, buildings: [res.building] }, res.building);
+  assert.ok(r.fast_entry !== undefined && !['W_s1', 'W_s2'].includes(r.fast_entry), `fast by ${r.fast_entry}`);
+  assert.equal(r.choice, true, `fast ${r.fast_entry} / quiet ${r.quiet_entry}`);
+  // no window on the front facade -> the door brick alone (twoDoors: the window is west)
+  const plain = applyStory(layoutOf([twoDoors()]), twoDoors(), 'locked_door', 11);
+  assert.deepEqual(plain.building.stories!.map((s) => s.bricks), [['door_state(D_s,locked)']]);
 });
 
 test('the front door faces the mandatory route; a locked front keeps the building reachable', () => {

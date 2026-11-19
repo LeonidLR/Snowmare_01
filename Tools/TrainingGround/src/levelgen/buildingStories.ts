@@ -3,7 +3,7 @@
 // A story is a recipe of bricks applied to a COPY of a building; the copy must pass the traversal validator (buildingTraversal.ts,
 // opening states honoured) with no error the untouched building did not already have, else every brick is undone (the original
 // building object is returned) and a 'story_rolled_back' warning is logged. Catalogue for now: 1 'open' (no bricks),
-// 3 'locked_door' (door_state(front, locked)), 4 'rubble_escape' (block_flight(0->1, rubble) + add_balcony_escape) and
+// 3 'locked_door' (door_state(front, locked) + window_state(front:0, boarded)), 4 'rubble_escape' (block_flight(0->1, rubble) + add_balcony_escape) and
 // 7 'roof_outside' (roof_access(ladder)), 9 'broken_back_windows' (window_state(back:0, broken), the front windows at their default)
 // and 10 'snow_drift' (door_state(front, sealed) + snow_ramp(storey-1 window)); 4 and 7 are detours (objective / garrison / overwatch
 // only), 3, 9 and 10 are choice stories: after apply they must pass route-model F4 (buildingRoutes.ts: fast and quiet enter by
@@ -36,7 +36,7 @@ export type StoryId = 'open' | 'locked_door' | 'rubble_escape' | 'roof_outside' 
 export const STORY_CATALOGUE: Record<StoryId, { num: number; authors: readonly StoryAuthor[]; type: 'base' | 'choice' | 'detour' }> = {
   /** 1 Open: no bricks, author traces only (any author). */
   open: { num: 1, authors: ['survivors', 'pmc', 'cold', 'decay'], type: 'base' },
-  /** 3 Locked door: door_state(front, locked) - kick the front or go round to the back door. */
+  /** 3 Locked door: door_state(front, locked) + window_state(front:0, boarded) - kick the front or go round to the back door. */
   locked_door: { num: 3, authors: ['pmc', 'decay', 'survivors'], type: 'choice' },
   /** 4 Rubble on the stair + fire escape: block_flight(0->1, rubble) + add_balcony_escape - block / office, >= 2 storeys. */
   rubble_escape: { num: 4, authors: ['decay', 'pmc'], type: 'detour' },
@@ -599,6 +599,11 @@ export function backWindows(l: GenLayout, b: GenBuilding): { front: { ref: strin
   return { front, side, refs };
 }
 
+/** Story 3's boarded facade: the exterior ground windows on `side` that are not boarded already. */
+export function frontGroundWindows(l: GenLayout, b: GenBuilding, side: Side): WallOpening[] {
+  return unifyOpenings(b).filter((o) => o.kind === 'window' && (o.floor ?? 0) === 0 && openingSide(b, o) === side && classifyOpening(l, b, o).exterior && effectiveOpeningState(l, b, o) !== 'boarded');
+}
+
 /** The bricks of a story for this building, or null when the story is not eligible (F1 `eligible(s, b)`). */
 export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick[] | null {
   if (!b.enterable) return story === 'open' ? [] : null;
@@ -609,7 +614,12 @@ export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick
       // the back door must stay: >= 2 passable exterior doors (building-stories.md 6 row 3 "round to the back door")
       if (passableExteriorDoors(l, b).length < 2) return null;
       const front = frontDoor(l, b);
-      return front ? [{ kind: 'door_state', door: front.ref, state: 'locked' }] : null;
+      if (!front) return null;
+      // designer 2026-11-19 (F4 rule A): the loud facade is boarded up - its ground windows 'boarded', so the fast route has to kick
+      // the locked front instead of breaking a front window (fast = quiet entry made the 3 + 9 pair rare); no front window -> door only
+      const side = openingSide(b, front.opening);
+      const board = frontGroundWindows(l, b, side).length > 0;
+      return [{ kind: 'door_state', door: front.ref, state: 'locked' }, ...(board ? [{ kind: 'window_state', target: side, state: 'boarded', floor: 0 } as Brick] : [])];
     }
     case 'rubble_escape': {
       // block / office with >= 2 storeys and a core flight 0 -> 1; the escape serves every upper storey (row 4: "balcony on each
