@@ -26,8 +26,8 @@
  */
 struct CODEXTACTICS_API FRoofLipConfig
 {
-	/** His own rim, no farther than this (cm). Past it the hit is another building. "lip_cm" */
-	float LipCm = 6000.f;
+	/** His own rim, no farther than this (cm). About 2 m: the parapet at his feet, not the next crate. "lip_cm" */
+	float LipCm = 200.f;
 	/** Step past the rim's near face (cm). 80 clears a 20 cm parapet and stays inside a 4 m wall. "past_cm" */
 	float PastCm = 80.f;
 	/** Feet this far above the target's feet (cm) or the retry never runs (a man on the ground keeps the wall). "min_drop_cm" */
@@ -79,8 +79,8 @@ struct CODEXTACTICS_API FFireGateConfig
 	FMeleeReachConfig MeleeReach;
 
 	/**
-	 * fire_gate.json "roof_lip" (G008b). A kneeling muzzle (85 cm) on a roof hits the parapet (~100 cm) or the roof slab;
-	 * the sight line already starts past that rim, so the team sees the man and the shot does not. SquadFireRules::MayClearRoofLip.
+	 * fire_gate.json "roof_lip" (G008b). A kneeling muzzle (85 cm) on a roof hits the parapet beside his feet.
+	 * One step past that rim, and only when the hit is the floor he stands on. SquadFireRules::MayClearRoofLip.
 	 */
 	FRoofLipConfig RoofLip;
 };

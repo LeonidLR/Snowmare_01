@@ -222,12 +222,40 @@ bool FPmcCommanderOverwatchHoldTest::RunTest(const FString&)
 	TestEqual(TEXT("Ambush is over when he is suppressed"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Posted, Fight, W), 0.f);
 	Posted.bSuppressed = false;
 
+	{
+		FPmcFighterView Hit = Posted;
+		Hit.bUnderFire = true;
+		TestTrue(TEXT("a hit latches the hold"), PmcCommanderRules::ShouldLatchOverwatchHold(Hit, Fight, W));
+		FPmcFighterView After = Posted;
+		After.bOverwatchHoldClosed = true;
+		After.bContactInPostRange = true;
+		After.PostRangeContactSeconds = 1.f;
+		TestFalse(TEXT("a hit stays closed after the fire window"), PmcCommanderRules::IsOverwatchHoldOpen(After, Fight, W));
+		TestEqual(TEXT("Ambush stays 0 after the latch"), PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, After, Fight, W), 0.f);
+		FPmcFighterView Fresh = Posted;
+		TestTrue(TEXT("a fresh posting opens the hold again"), PmcCommanderRules::IsOverwatchHoldOpen(Fresh, Fight, W));
+		TestFalse(TEXT("the window alone does not latch"), PmcCommanderRules::ShouldLatchOverwatchHold(Fresh, Fight, W));
+		Fresh.bContactInPostRange = true;
+		Fresh.PostRangeContactSeconds = W.AmbushMaxHoldSeconds;
+		TestFalse(TEXT("an expired window does not latch"), PmcCommanderRules::ShouldLatchOverwatchHold(Fresh, Fight, W));
+		FPmcFighterView Suppressed = Posted;
+		Suppressed.bSuppressed = true;
+		TestTrue(TEXT("suppression latches the hold"), PmcCommanderRules::ShouldLatchOverwatchHold(Suppressed, Fight, W));
+		TestFalse(TEXT("a mate's death does not latch the hold"), PmcCommanderRules::ShouldLatchOverwatchHold(Posted, Short, W));
+	}
+
 	FPmcFighterView Hurt = Posted;
 	Hurt.HealthFrac = 0.2f;
 	Hurt.bCoverAvailable = false;
 	Hurt.bExposed = false;
 	TestFalse(TEXT("a wounded man leaves an untenable post"), PmcCommanderRules::IsOverwatchHoldOpen(Hurt, Fight, W));
+	TestTrue(TEXT("a wound latches the hold"), PmcCommanderRules::ShouldLatchOverwatchHold(Hurt, Fight, W));
 	TestEqual(TEXT("he falls back"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Hurt, Fight, W)[0].Order), TEXT("FallBack"));
+	FPmcFighterView TooClose = Posted;
+	TooClose.Band = PmcCommanderRules::ResolveBand(TEXT("sniper_rifle"), 12000.f, W);
+	TooClose.Threat.DistanceCm = 1000.f;
+	TestTrue(TEXT("standing too close latches the hold"), PmcCommanderRules::ShouldLatchOverwatchHold(TooClose, Fight, W));
+	TestFalse(TEXT("standing too close closes the hold"), PmcCommanderRules::IsOverwatchHoldOpen(TooClose, Fight, W));
 
 	FPmcFighterView Attacker = Posted;
 	Attacker.Objective.Role = EPmcRole::Attacker;

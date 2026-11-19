@@ -309,10 +309,15 @@ private:
 		/** World time an enemy last shot at him (NotifyShotAt; -1e9: never). */
 		double LastShotAtTime = -1e9;
 		/**
-		 * G008b: world time a known enemy entered this overwatch post's engagement range (-1: none in range now).
-		 * ambush_max_hold_s counts from here, not from the team's first contact.
+		 * G008b: world time a known enemy first entered this overwatch post's engagement range (-1: not yet).
+		 * It is not cleared when that attacker steps back out. Stepping off the roof clears it.
 		 */
 		double PostRangeContactAt = -1.0;
+		/**
+		 * G008b review: the overwatch hold closed for this posting (hit, suppression, wound, too close).
+		 * Stays set while he remains on the post. Cleared when he steps off.
+		 */
+		bool bOverwatchHoldClosed = false;
 	};
 
 	struct FTeam

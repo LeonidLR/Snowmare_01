@@ -149,31 +149,35 @@ bool FSquadFirePeekAimPointTest::RunTest(const FString&)
 	return true;
 }
 
-// G008b: X4 tactical seed 11, the kneeling sniper on B_hall_n sees a man at ~85 m (the sight line starts past the roof rim) and the
-// crouch muzzle hits the parapet. The retry is allowed only for that low rim. A 4 m wall and a man on the ground stay blocked.
+// G008b review: the kneeling muzzle may step past his own low rim (about 2 m, lip_cm 200). A rim at 27 m, a 4 m wall,
+// and a man on the ground stay blocked. The trace that proves it is his floor is in EvaluateShotLine, not here.
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FSquadFireRoofLipTest, "CodexTactics.Combat.SquadFire.RoofLip",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
 bool FSquadFireRoofLipTest::RunTest(const FString&)
 {
 	const FRoofLipConfig Lip;
+	TestTrue(TEXT("lip_cm is his own rim, about 2 m"), Lip.LipCm >= 150.f && Lip.LipCm <= 200.f);
 	SquadFireRules::FRoofLipShot Shot;
 	Shot.ShooterFeetZ = 900.f;
 	Shot.TargetFeetZ = 0.f;
-	Shot.HitDistanceCm = 2700.f;
+	Shot.HitDistanceCm = 160.f;
 	Shot.TargetDistanceCm = 8544.f;
 	Shot.RimTopZ = 1000.f;
-	TestTrue(TEXT("roof, parapet top 100 cm, target 85 m past a rim at 27 m: retry"), SquadFireRules::MayClearRoofLip(Shot, Lip));
+	TestTrue(TEXT("roof, parapet top 100 cm, his own rim at 160 cm: retry"), SquadFireRules::MayClearRoofLip(Shot, Lip));
 	const FVector Origin = SquadFireRules::RoofLipRetryOrigin(FVector(5600.f, -750.f, 985.f), FVector(4532.f, -3250.f, 985.f), Lip.PastCm);
 	TestTrue(TEXT("the retry keeps the muzzle height"), FMath::IsNearlyEqual(static_cast<float>(Origin.Z), 985.f, 0.1f));
 	TestTrue(TEXT("the retry steps past the near face"), FVector::Dist2D(Origin, FVector(4532.f, -3250.f, 985.f)) > 79.f);
 	TestTrue(TEXT("80 cm does not cross a 4 m wall"), Lip.PastCm < 400.f);
 
+	Shot.HitDistanceCm = 2700.f;
+	TestFalse(TEXT("a rim at 27 m is not his own parapet"), SquadFireRules::MayClearRoofLip(Shot, Lip));
+
 	Shot.ShooterFeetZ = 0.f;
 	Shot.TargetFeetZ = 0.f;
-	Shot.HitDistanceCm = 400.f;
-	Shot.RimTopZ = 300.f;
-	TestFalse(TEXT("on the ground, a wall at 4 m: no retry"), SquadFireRules::MayClearRoofLip(Shot, Lip));
+	Shot.HitDistanceCm = 160.f;
+	Shot.RimTopZ = 100.f;
+	TestFalse(TEXT("on the ground, a low lip: no retry"), SquadFireRules::MayClearRoofLip(Shot, Lip));
 
 	Shot.ShooterFeetZ = 900.f;
 	Shot.TargetFeetZ = 0.f;
@@ -182,12 +186,13 @@ bool FSquadFireRoofLipTest::RunTest(const FString&)
 	Shot.RimTopZ = 1000.f;
 	TestFalse(TEXT("a rim past lip_cm is another building"), SquadFireRules::MayClearRoofLip(Shot, Lip));
 
-	Shot.HitDistanceCm = 1500.f;
+	Shot.HitDistanceCm = 160.f;
+	Shot.TargetDistanceCm = 8544.f;
 	Shot.RimTopZ = 900.f + 300.f;
 	TestFalse(TEXT("a tall wall on the roof: no retry"), SquadFireRules::MayClearRoofLip(Shot, Lip));
 
 	Shot.RimTopZ = 1000.f;
-	Shot.TargetDistanceCm = 1000.f;
+	Shot.TargetDistanceCm = 200.f;
 	TestFalse(TEXT("the target is not beyond the rim"), SquadFireRules::MayClearRoofLip(Shot, Lip));
 
 	Shot.TargetDistanceCm = 8544.f;

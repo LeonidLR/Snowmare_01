@@ -37,8 +37,8 @@
     "slope_full_deg": 15
   },
   "roof_lip": {
-    "comment": "G008b: a kneeling muzzle (85 cm) on a roof hits the parapet (~100 cm, 20 cm thick) or the roof slab, while the sight line starts past that rim, so the team sees a man on the ground and no round leaves. When the shooter stands at least min_drop_cm above the target and the blocked hit is within lip_cm with its top inside the band around his feet, the shot is retried from past_cm beyond the rim's near face. past_cm 80 clears the parapet and stays inside a 4 m wall; a tall wall (top above band_above_cm) and a man on the ground are not retried. Read by FireGateRules with this file; SquadFireRules::MayClearRoofLip.",
-    "lip_cm": 6000,
+    "comment": "G008b: a kneeling muzzle (85 cm) hits the parapet he stands against (~100 cm, 20 cm thick), while the sight line starts past that rim. lip_cm 200 is that rim only: one step, and the hit must be the floor actor under his feet. The line is traced to the rim and across the past_cm step (the rim actor ignored), so a crate, sandbags, or the next parapet stay in the way. past_cm 80 clears a 20 cm parapet and stays inside a 4 m wall. A tall wall and a man on the ground are not retried. Read by FireGateRules; SquadFireRules::MayClearRoofLip.",
+    "lip_cm": 200,
     "past_cm": 80,
     "min_drop_cm": 180,
     "band_above_cm": 120,

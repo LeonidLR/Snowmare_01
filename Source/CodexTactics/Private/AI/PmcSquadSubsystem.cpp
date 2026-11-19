@@ -1446,9 +1446,10 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		const FVector HoldFeet = PmcSquadLocal::FeetOf(Fighter);
 		const bool bOnOverwatchPost = State.Post.Kind == EPmcPostKind::Overwatch
 			&& PmcTacticalRules::IsAtPost(HoldFeet, State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm);
-		// G008b: contact for an overwatch roof is measured from the post, not from the man. ambush_max_hold_s starts when a known
-		// enemy's last position enters the engagement range (the roof's range_m, or his weapon reach when that is smaller) and
-		// restarts if they all leave it, or if he steps off the roof. The assault stand-in is not in Team.Known, so it never starts this clock.
+		// G008b: contact for an overwatch roof is measured from the post, not from the man. ambush_max_hold_s starts the first
+		// time a known enemy's last position enters the engagement range (the roof's range_m, or his weapon reach when that
+		// is smaller) and keeps running while he stays on the roof, including while that attacker steps back out. Stepping
+		// off the roof clears it. The assault stand-in is not in Team.Known, so it never starts this clock.
 		if (bOnOverwatchPost)
 		{
 			const float EngagementCm = PmcCommanderRules::OverwatchEngagementCm(State.Post.RangeCm, View.WeaponRangeCm);
@@ -1467,11 +1468,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 					NearestCm = FMath::Min(NearestCm, DistanceCm);
 				}
 			}
-			if (!bInRange)
-			{
-				State.PostRangeContactAt = -1.0;
-			}
-			else if (State.PostRangeContactAt < 0.0)
+			if (bInRange && State.PostRangeContactAt < 0.0)
 			{
 				State.PostRangeContactAt = Now;
 				UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s overwatch contact in range (nearest %.0f cm, post range %.0f cm)"),
@@ -1489,6 +1486,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		else
 		{
 			State.PostRangeContactAt = -1.0;
+			State.bOverwatchHoldClosed = false;
 		}
 	}
 	if (Team.Defence.bActive && State.DefenceRole == EPmcDefenceRole::SectorShooter && State.bHasDefencePost && Team.Defence.Spots.Num() > 0
@@ -1736,6 +1734,20 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		}
 		// Target attention (2026-11-07): an objective defender in ambush holds his fire until the seen target looks away (or is deep in
 		// the kill zone / the ambush is blown) - the Passive posture, back to Aggressive when he strikes.
+		// G008b review: a hit, suppression, his own wound, or standing too close latches the hold shut for this posting.
+		// The 20 s window is the contact clock, not a latch. Stepping off the roof clears the latch (BuildFighterView).
+		if (View.bOnOverwatchRoof)
+		{
+			if (State.bOverwatchHoldClosed || PmcCommanderRules::ShouldLatchOverwatchHold(View, Own, Team.Weights))
+			{
+				State.bOverwatchHoldClosed = true;
+			}
+			View.bOverwatchHoldClosed = State.bOverwatchHoldClosed;
+		}
+		else
+		{
+			State.bOverwatchHoldClosed = false;
+		}
 		// G008b: the pre-loop spring skipped this overwatch defender. Once the hold closes (in range for ambush_max_hold_s, or he
 		// is hit, suppressed, or the post is untenable) the ambush ends here, once. A moving defence-post walk is still spared.
 		if (Team.bEverContact && State.Order == EPmcOrder::Ambush && !PmcCommanderRules::IsOverwatchHoldOpen(View, Own, Team.Weights))

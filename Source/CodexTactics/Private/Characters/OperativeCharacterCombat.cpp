@@ -178,83 +178,107 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 			}
 		}
 	}
-	// G008b: the team sees over the roof rim (the sight line starts past it) while this crouch muzzle hits the parapet or the slab.
-	// Step past a low rim and trace again. A tall wall, a hit past lip_cm, and a man on the ground stay blocked (fire_gate.json "roof_lip").
-	if (Kind == EShotLineHit::Blocked && !bCornerShot)
+	// G008b review: one step past his own roof rim. lip_cm is about 2 m, so a crate, sandbags, or the next
+	// parapet stay in the way. The blocked muzzle hit is the only candidate, and it must be the floor he
+	// stands on (same actor, or the same floor component). The real shot is traced up to that rim, then
+	// from the rim to the retry point with only the rim actor ignored. A tall wall and a man on the ground
+	// stay blocked (fire_gate.json "roof_lip", SquadFireRules::MayClearRoofLip).
+	if (Kind == EShotLineHit::Blocked && !bCornerShot && Hit.GetActor() && !Hit.bStartPenetrating)
 	{
 		const FRoofLipConfig& Lip = FireGateRules::GetConfig().RoofLip;
-		const FVector Flat(LineTo.X - LineFrom.X, LineTo.Y - LineFrom.Y, 0.f);
-		const float FlatLen = static_cast<float>(Flat.Size());
-		if (FlatLen > 1.f && Lip.LipCm > 0.f && MyFeet.Z - EnemyFeet.Z >= Lip.MinDropCm)
+		const float HitDistanceCm = static_cast<float>(Hit.Distance);
+		if (Lip.LipCm > 0.f && HitDistanceCm > 1.f && HitDistanceCm <= Lip.LipCm)
 		{
-			const FVector Dir = Flat / FlatLen;
-			const FVector ProbeEnd = LineFrom + Dir * Lip.LipCm;
-			FVector Cursor = LineFrom;
-			float Travelled = 0.f;
-			bool bClearedRim = false;
-			FVector RetryFrom = LineFrom;
-			for (int32 Step = 0; Step < 4 && Travelled < Lip.LipCm; ++Step)
+			FHitResult FloorHit;
+			const bool bFloor = World->LineTraceSingleByChannel(FloorHit, MyFeet + FVector(0.f, 0.f, 40.f), MyFeet - FVector(0.f, 0.f, 120.f), ECC_Visibility, Params);
+			AActor* FloorActor = bFloor && !FloorHit.bStartPenetrating ? FloorHit.GetActor() : nullptr;
+			UPrimitiveComponent* FloorComp = bFloor && !FloorHit.bStartPenetrating ? FloorHit.GetComponent() : nullptr;
+			AActor* RimActor = Hit.GetActor();
+			UPrimitiveComponent* RimComp = Hit.GetComponent();
+			const bool bOwnRoof = (FloorActor && RimActor == FloorActor) || (FloorComp && RimComp == FloorComp);
+			if (bOwnRoof)
 			{
-				FHitResult RimHit;
-				if (!World->LineTraceSingleByChannel(RimHit, Cursor, ProbeEnd, ECC_Visibility, Params) || RimHit.bStartPenetrating
-					|| !RimHit.GetActor() || RimHit.GetActor() == Enemy)
-				{
-					break;
-				}
-				const float StepCm = static_cast<float>(RimHit.Distance);
-				if (StepCm <= 1.f)
-				{
-					break;
-				}
-				Travelled += StepCm;
 				FHitResult TopHit;
-				// A hand into the face: a 20 cm parapet still has a top under the probe, a tall wall contains the probe.
-				const FVector Into = FVector(-RimHit.ImpactNormal.X, -RimHit.ImpactNormal.Y, 0.f).GetSafeNormal();
-				const FVector Column = FVector(RimHit.ImpactPoint.X, RimHit.ImpactPoint.Y, 0.f) + Into * 10.f;
+				// One column, 10 cm into the face: a 20 cm parapet still has a top, a tall wall contains the probe.
+				const FVector Into = FVector(-Hit.ImpactNormal.X, -Hit.ImpactNormal.Y, 0.f).GetSafeNormal();
+				const FVector Column = FVector(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, 0.f) + Into * 10.f;
 				const bool bTop = World->LineTraceSingleByChannel(TopHit,
 					FVector(Column.X, Column.Y, MyFeet.Z + Lip.BandAboveCm + 20.f),
 					FVector(Column.X, Column.Y, MyFeet.Z - Lip.BandBelowCm), ECC_Visibility, Params);
 				SquadFireRules::FRoofLipShot LipShot;
-				LipShot.HitDistanceCm = Travelled;
+				LipShot.HitDistanceCm = HitDistanceCm;
 				LipShot.TargetDistanceCm = Distance;
 				LipShot.ShooterFeetZ = MyFeet.Z;
 				LipShot.TargetFeetZ = EnemyFeet.Z;
 				LipShot.RimTopZ = bTop && !TopHit.bStartPenetrating ? static_cast<float>(TopHit.ImpactPoint.Z) : MyFeet.Z + Lip.BandAboveCm + 1.f;
-				if (!SquadFireRules::MayClearRoofLip(LipShot, Lip))
+				if (SquadFireRules::MayClearRoofLip(LipShot, Lip))
 				{
-					break;
-				}
-				bClearedRim = true;
-				RetryFrom = SquadFireRules::RoofLipRetryOrigin(LineFrom, RimHit.ImpactPoint, Lip.PastCm);
-				Cursor = RetryFrom;
-			}
-			if (bClearedRim)
-			{
-				FHitResult RetryHit;
-				const bool bRetryHit = World->LineTraceSingleByChannel(RetryHit, RetryFrom, LineTo, ECC_Visibility, Params);
-				AActor* RetryActor = bRetryHit ? RetryHit.GetActor() : nullptr;
-				// A start inside the rim means the step was too short: the blocked line stands.
-				if (!(bRetryHit && RetryHit.bStartPenetrating))
-				{
-					if (!bRetryHit || !RetryActor || RetryActor == Enemy)
+					bool bApproachBlocked = false;
+					if (HitDistanceCm > 6.f)
 					{
-						Kind = EShotLineHit::Clear;
-						HitEnemy = Enemy;
+						const FVector ShotDir = (LineTo - LineFrom).GetSafeNormal();
+						const FVector ApproachTo = Hit.ImpactPoint - ShotDir * 5.f;
+						FHitResult ApproachHit;
+						if (World->LineTraceSingleByChannel(ApproachHit, LineFrom, ApproachTo, ECC_Visibility, Params))
+						{
+							AActor* ApproachActor = ApproachHit.GetActor();
+							if (ApproachHit.bStartPenetrating || (ApproachActor && ApproachActor != RimActor && ApproachActor != Enemy))
+							{
+								bApproachBlocked = true;
+							}
+						}
 					}
-					else if (RetryActor->ActorHasTag(CombatQueries::EnemyTag))
+					const FVector RetryFrom = SquadFireRules::RoofLipRetryOrigin(LineFrom, Hit.ImpactPoint, Lip.PastCm);
+					if (!bApproachBlocked)
 					{
-						Kind = EShotLineHit::Clear;
-						HitEnemy = bKeepTarget ? Enemy : RetryActor;
+						FCollisionQueryParams GapParams(Params);
+						GapParams.AddIgnoredActor(RimActor);
+						FHitResult GapHit;
+						const bool bGapHit = World->LineTraceSingleByChannel(GapHit, Hit.ImpactPoint, RetryFrom, ECC_Visibility, GapParams);
+						if (!bGapHit)
+						{
+							FHitResult RetryHit;
+							const bool bRetryHit = World->LineTraceSingleByChannel(RetryHit, RetryFrom, LineTo, ECC_Visibility, Params);
+							AActor* RetryActor = bRetryHit ? RetryHit.GetActor() : nullptr;
+							// A start inside geometry means something past the rim was not cleared: the blocked line stands.
+							if (!(bRetryHit && RetryHit.bStartPenetrating))
+							{
+								if (!bRetryHit || !RetryActor || RetryActor == Enemy)
+								{
+									Kind = EShotLineHit::Clear;
+									HitEnemy = Enemy;
+								}
+								else if (RetryActor->ActorHasTag(CombatQueries::EnemyTag))
+								{
+									Kind = EShotLineHit::Clear;
+									HitEnemy = bKeepTarget ? Enemy : RetryActor;
+								}
+								else if (RetryActor->IsA<ABarricadeActor>())
+								{
+									Kind = EShotLineHit::Barricade;
+								}
+							}
+						}
+						else if (!GapHit.bStartPenetrating)
+						{
+							AActor* GapActor = GapHit.GetActor();
+							if (GapActor == Enemy)
+							{
+								Kind = EShotLineHit::Clear;
+								HitEnemy = Enemy;
+							}
+							else if (GapActor && GapActor->ActorHasTag(CombatQueries::EnemyTag))
+							{
+								Kind = EShotLineHit::Clear;
+								HitEnemy = bKeepTarget ? Enemy : GapActor;
+							}
+						}
 					}
-					else if (RetryActor->IsA<ABarricadeActor>())
+					if (OutDetail)
 					{
-						Kind = EShotLineHit::Barricade;
+						*OutDetail += FString::Printf(TEXT("; roof lip from %s: %s"), *RetryFrom.ToCompactString(),
+							Kind == EShotLineHit::Blocked ? TEXT("still blocked") : TEXT("clear"));
 					}
-				}
-				if (OutDetail)
-				{
-					*OutDetail += FString::Printf(TEXT("; roof lip from %s: %s"), *RetryFrom.ToCompactString(),
-						Kind == EShotLineHit::Blocked ? TEXT("still blocked") : TEXT("clear"));
 				}
 			}
 		}

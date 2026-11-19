@@ -519,6 +519,11 @@ struct CODEXTACTICS_API FPmcFighterView
 	/** Seconds since that in-range contact began (0 while none). ambush_max_hold_s for an overwatch post counts from here. */
 	float PostRangeContactSeconds = 0.f;
 	/**
+	 * G008b review: this posting already closed (hit, suppression, a personal wound, or too close). It stays closed
+	 * while his feet remain on the post, after bUnderFire and suppression have worn off. Cleared when he steps off.
+	 */
+	bool bOverwatchHoldClosed = false;
+	/**
 	 * G008b: his feet are on the tactical overwatch post (IsAtPost against that post, not the G008 sector post).
 	 * bAtPost can be the sector post after he has left the roof; this flag is the roof. Default false.
 	 */
@@ -823,13 +828,19 @@ namespace PmcCommanderRules
 
 	/**
 	 * G008b: a defender whose feet are on an overwatch roof (bOnOverwatchRoof) keeps it. Open while no known enemy is inside
-	 * the post's engagement range, and for AmbushMaxHoldSeconds after that in-range contact. Closed when he is hit
-	 * (bUnderFire), suppressed (bSuppressed), or the post is untenable for him (wounded below fall_back_below, or too
-	 * close for his band). A mate dying does not close it: outnumbered still scores FallBack, and on X4 seed 11 that
-	 * score lost to the area walk, so Lind left B_hall_n at full health before he fired. Standing on the G008 sector
-	 * post does not open it (bAtPost there is the ground post). Attackers and other post kinds are outside this hold.
+	 * the post's engagement range, and for AmbushMaxHoldSeconds after the first in-range contact (the clock does not
+	 * restart when that attacker steps out). Closed when he is hit (bUnderFire), suppressed (bSuppressed), or the post
+	 * is untenable for him (wounded below fall_back_below, or too close for his band). Those four latch
+	 * (bOverwatchHoldClosed) for as long as he stays on the post. A mate dying does not close it. Standing on the G008
+	 * sector post does not open it. Attackers and other post kinds are outside this hold.
 	 */
 	CODEXTACTICS_API bool IsOverwatchHoldOpen(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * G008b review: the hold should latch shut. True for a posted overwatch defender who is hit, suppressed, wounded,
+	 * or too close. The 20 s window is not a latch (the contact clock keeps it shut). A mate dying is not a latch.
+	 */
+	CODEXTACTICS_API bool ShouldLatchOverwatchHold(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
 
 	/** The scenario's id in args / JSON ("skirmish", "chokepoint", "street", "roofs", "blizzard"). */
 	CODEXTACTICS_API const TCHAR* ScenarioName(EPmcScenario Scenario);
