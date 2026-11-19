@@ -29,6 +29,25 @@ building is open air for the cold. Verify this first (log the zone multiplier fo
   effect only: `WeatherMultiplier = 1 + (blended - 1) * strength` in GatherEnvironment's weather step. A TG task (T-020) writes
   this key from the UI in parallel; 1 = today's behaviour exactly.
 
+## DESIGNER UPDATE 2026-11-19 (replaces the 0 / 0.5 / 1 rule above)
+Quote: "Чем больше в здании разбитых или выбитых дверей, разбитых окон или пробитых стен, тем холоднее здание ... когда они все
+закрыты, это 100 % герметичность ... Чем дальше от открытой двери, тем теплее (в радиусе 3-4 м от выбитой двери холодно)."
+Lead formula (numbers in a new JSON, e.g. `Content/Data/Survival/cold_shelter.json`, every number commented):
+- Each building's openings (from the layout + their live state): weight door 3, window 1, wall breach 4 (`weights`).
+  `leak = sum(weight of openings that are broken / kicked out / open / breached) / sum(weight of all openings)`;
+  airtightness = 1 - leak. An intact closed door / glazed or boarded window = sealed; an OPEN (not broken) door leaks while open.
+- Building base multiplier = `leak * leak_to_cold` (`leak_to_cold` 1.0: a fully open building = open air; all sealed = 0).
+- Draught near an open opening, same storey: within `draught_full_m` 3.5 m the multiplier is 1 (outdoor), falling linearly to the
+  base at `draught_fade_m` 10 m. Final indoor multiplier = max(base, strongest draught). Openings on other storeys count only
+  in `leak`.
+- LIVE state: openings change in play (a door kicked, glass shot, a breach blown) - find the runtime events / actors that hold
+  door, window and breach states (doors, breach panels, glazed windows: grep the opening / door / window / breach actors and
+  the event bus) and update the building's leak when they change (event-driven, no per-tick scans). If some opening kind has no
+  runtime state yet, take its layout state and list it as a follow-up.
+- Tests: all sealed 0; one window of 2 doors + 8 windows -> leak 1/14; both doors kicked -> 6/14; draught 1 at 2 m, base at 10 m,
+  linear between; camera zone still wins; weather strength as before. ColdIndoorsSmoke: sealed building ~0, then break a door in
+  the smoke -> the building's drain rises and is higher near the door than at the far wall.
+
 ## Gate
 Build on the worker: `$env:CODEX_AGENT='claude'; powershell -ExecutionPolicy Bypass -File Scripts/build.ps1 -Remote worker`
 (if the remote build fails for infrastructure reasons twice, local `Scripts/build.ps1`). Unit tests for the rules
