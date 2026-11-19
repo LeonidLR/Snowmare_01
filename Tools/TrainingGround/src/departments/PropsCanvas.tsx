@@ -33,6 +33,16 @@ const SET_TINT: Record<string, string> = {
   chimney: '#46464e',
 };
 
+/** The legend: one row per props kind the canvas draws (the swatch repeats the drawing's colours). */
+const LEGEND: { kind: string; label: string; swatch: (g: CanvasRenderingContext2D, x: number, y: number) => void }[] = [
+  { kind: 'crates', label: 'Ящики', swatch: (g, x, y) => { g.fillStyle = '#0284c7'; g.fillRect(x - 4, y - 4, 8, 8); g.strokeStyle = '#7dd3fc'; g.lineWidth = 1; g.strokeRect(x - 4, y - 4, 8, 8); } },
+  { kind: 'barrels', label: 'Бочки (взрыв)', swatch: (g, x, y) => { g.fillStyle = '#ef4444'; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); g.fillStyle = '#fbbf24'; g.beginPath(); g.arc(x, y, 1.8, 0, Math.PI * 2); g.fill(); } },
+  { kind: 'turrets', label: 'Турели', swatch: (g, x, y) => { g.fillStyle = '#a855f7'; g.beginPath(); g.moveTo(x, y - 5); g.lineTo(x + 4, y); g.lineTo(x, y + 4); g.lineTo(x - 4, y); g.closePath(); g.fill(); } },
+  { kind: 'mines', label: 'Мины', swatch: (g, x, y) => { g.fillStyle = '#eab308'; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#000'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x - 4, y); g.lineTo(x + 4, y); g.moveTo(x, y - 4); g.lineTo(x, y + 4); g.stroke(); } },
+  { kind: 'loot', label: 'Лут', swatch: (g, x, y) => { g.fillStyle = '#10b981'; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); } },
+  { kind: 'power', label: 'Генераторы + кабели', swatch: (g, x, y) => { g.fillStyle = '#f97316'; g.fillRect(x - 4, y - 4, 8, 8); g.strokeStyle = '#fb923c'; g.lineWidth = 1; g.setLineDash([2, 2]); g.beginPath(); g.moveTo(x + 4, y); g.lineTo(x + 12, y); g.stroke(); g.setLineDash([]); } },
+];
+
 export interface PropsCanvasHandle {
   toPngBase64: () => string | null;
 }
@@ -442,6 +452,8 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
       }
 
       // 12. Props Overlay
+      const posById = new Map<string, [number, number]>();
+      for (const l of propsFile?.layers ?? []) for (const o of l.objects) posById.set(o.id, o.pos);
       if (propsFile?.layers) {
         for (const l of propsFile.layers) {
           if (visibleLayers[l.id] === false) continue;
@@ -592,6 +604,33 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
               g.strokeStyle = isSelected ? '#ffffff' : isLocked ? '#fbbf24' : '#064e3b';
               g.lineWidth = isSelected || isLocked ? 2 : 1;
               g.stroke();
+            } else if ((l.kind as string) === 'power') {
+              // T-020: a generator (power layer) with its cables to the linked turrets
+              g.save();
+              g.strokeStyle = '#fb923c';
+              g.lineWidth = 1;
+              g.setLineDash([3, 3]);
+              for (const id of o.links ?? []) {
+                const tp = posById.get(id);
+                if (!tp) continue;
+                const tq = P(tp);
+                g.beginPath();
+                g.moveTo(q[0], q[1]);
+                g.lineTo(tq[0], tq[1]);
+                g.stroke();
+              }
+              g.restore();
+              const half = Math.max(4, 40 * s);
+              g.fillStyle = '#f97316';
+              g.fillRect(q[0] - half, q[1] - half, half * 2, half * 2);
+              g.strokeStyle = isSelected ? '#ffffff' : isLocked ? '#fbbf24' : '#7c2d12';
+              g.lineWidth = isSelected || isLocked ? 2 : 1.2;
+              g.strokeRect(q[0] - half, q[1] - half, half * 2, half * 2);
+              g.fillStyle = '#431407';
+              g.font = `bold ${Math.max(7, Math.round(half * 1.4))}px ui-sans-serif, system-ui`;
+              g.textAlign = 'center';
+              g.fillText('G', q[0], q[1] + half * 0.5);
+              g.textAlign = 'left';
             }
 
             // Lock badge / dot
@@ -616,44 +655,34 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
         }
       }
 
-      // 13. Legend overlay in top-left
+      // 13. Legend overlay in top-left (T-020: every kind the file has, not only crates / barrels)
+      const present = new Set<string>((propsFile?.layers ?? []).map((l) => l.kind as string));
+      const entries = LEGEND.filter((e) => present.size === 0 || present.has(e.kind));
+      const rows = entries.length + 1; // + the locked mark
+      const boxH = 12 + rows * 15;
       g.fillStyle = '#0f172a';
       g.strokeStyle = '#334155';
       g.lineWidth = 1;
       g.beginPath();
-      g.roundRect(8, 8, 140, 72, 6);
+      g.roundRect(8, 8, 150, boxH, 6);
       g.fill();
       g.stroke();
 
       g.font = '10px ui-sans-serif, system-ui';
       g.textAlign = 'left';
-
-      // Crates legend
-      g.fillStyle = '#0284c7';
-      g.fillRect(14, 15, 8, 8);
-      g.strokeStyle = '#7dd3fc';
-      g.strokeRect(14, 15, 8, 8);
-      g.fillStyle = '#cbd5e1';
-      g.fillText('Ящики', 28, 23);
-
-      // Barrels legend
-      g.fillStyle = '#ef4444';
-      g.beginPath();
-      g.arc(18, 35, 4, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = '#fbbf24';
-      g.beginPath();
-      g.arc(18, 35, 1.8, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = '#cbd5e1';
-      g.fillText('Бочки (взрыв)', 28, 38);
-
+      entries.forEach((e, i) => {
+        const cy = 21 + i * 15;
+        e.swatch(g, 18, cy);
+        g.fillStyle = '#cbd5e1';
+        g.fillText(e.label, 30, cy + 3);
+      });
       // Locked legend
+      const ly = 21 + entries.length * 15;
       g.strokeStyle = '#fbbf24';
       g.lineWidth = 1.8;
-      g.strokeRect(14, 46, 8, 8);
+      g.strokeRect(14, ly - 4, 8, 8);
       g.fillStyle = '#cbd5e1';
-      g.fillText('Заблокировано', 28, 54);
+      g.fillText('Заблокировано', 30, ly + 3);
 
       // Bottom info bar
       g.fillStyle = '#fbbf24';
