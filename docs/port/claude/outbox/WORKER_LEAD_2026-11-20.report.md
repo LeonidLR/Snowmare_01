@@ -13,13 +13,27 @@ Machine: codex-worker, checkout C:\Work\CodexTactics-slot1. Brief: docs/port/WOR
   C:\Work\CodexTactics\Content (robocopy /XC /XN /XO, nothing overwritten, 0 failed). slot2 has the same gap. They show as `??`
   in slot1's git status: never `git add -A` there.
 
-## Baseline (night loop on main 19a90f52, this machine, 30 seeds)
-- crossroads-c1: on_pos p50 0, idle_max 19.4 s, crossfire 13.58 deg, gap 2.24 s, spread 4.95 m.
-- alley: pending (night loop).
+## Day-loop numbers (30 seeds, scripted opponent, this machine; medians)
+| run | ref | on_pos | idle_max s | crossfire deg | gap s |
+|---|---|---|---|---|---|
+| crossroads night c1 / c2 (baseline) | main 19a90f52 | 0 / 0 | 19.4 / 17.9 | 13.6 / 8.8 | 2.24 / 1.93 |
+| alley night c1 / c2 (baseline) | main 19a90f52 | 0 / 0 | 14.1 / 17.1 | 17.4 / 17.7 | 1.63 / 1.92 |
+| crossroads T-05 iter 1 | c4f8f561 | 0.33 | 4.1 | 19.0 | 2.05 |
+| alley T-05 iter 1 | c4f8f561 | 0 | 9.4 | 15.3 | 2.42 |
+Folders: C:\Work\CodexTactics\Saved\Worker
+ightloop6-11-19\digest.log; slot1 Saved\Logs\SeedBatch\dayloop-c4f8f561-{cross,alley}.
+Target (brief): on_pos >= 0.67, crossfire >= 45, idle <= 2 s on both. NOT met yet.
+My 30-seed runs take the machine with a day-caller marker `SYNC.worker-lead-slot1-*` (removed after each batch), so they never run in parallel with the night loop.
 
 ## T-05 phase b
 - Diagnosis (seeds 1-2 each, Saved/Logs/SeedBatch/t05-diag-2-*): 0-1 of 3 shooters seated. Causes: (1) candidate starvation - an area
   gather returns 0-3 valid positions from 30-143 scan points; (2) tier 2 (1.8x band) finds FEWER than tier 1 (global stride thins a wider
   ring; slots counted before the ring filter); (3) "forward of the kill zone" (distance to the approach point) drops flank positions;
   (4) phase-b literals in C++ instead of JSON.
-- Sonnet subagent fixing (1)-(4) on worker/t05-firing-positions; then the lead runs Crossroads + Alley x30.
+- Iteration 1 (Sonnet, 1ad3f83b + c4f8f561): one shared cover scan per area (tier 2 = superset), axis-based forward rule
+  (forward_margin_cm 800), all phase-b numbers in JSON, 10/10 FiringPosition + 70/70 Pmc unit tests, 7 gate smokes PASS.
+  Correction of cause (1): scan density was NOT the starvation; 40-50 % of slots are high walls without an edge, 30-45 % see no sample.
+- Lead finding after iteration 1 (Saved/Scripts/first_shot_geometry.py): the smoke's crossfire is the pair angle AT THE ATTACKERS
+  at the round's first shot; the attackers fire first in 4/5 seeds from 25-62 m out, while phase b paired the defenders around the
+  OBJECTIVE. Decision: the ground kill zone moves onto the attackers' nav path, kill_zone_reach_factor x reach before the objective.
+- Iteration 2 (Sonnet) running: that kill zone + factor sweep on 10 seeds + why seated men are not on position at contact.
