@@ -59,6 +59,32 @@ that is the squad layer (T-08); the alley's approach has little ground cover tha
 Proposal for the main lead: accept T-05 phase b as the positions layer (idle met, on_pos / crossfire much better), move the remaining
 on_pos / crossfire acceptance to T-06 / T-08 where the commander and fire discipline live.
 
+## Fable review 2026-11-19 ~23:00 (designer asked for it) - CORRECTS the T-05 claims above
+Read-only review of the reports, diffs and raw seed data. Lead verified finding 1 himself (winner column of the summaries).
+1. **Defenders lose MORE on Crossroads with T-05**: defender (side A) wins per 30 seeds - main night cycles c1-c5: 7*, 15, 16, 19, 14
+   (*c1 had unfinished rows); T-05 day loops c4f8f561 / f025 / 5544431a: 13, 13, 11. Proxy metrics up, fight result down. Candidate cause
+   (UNVERIFIED): RefreshDefence re-runs AssignFiringPositions on every death and re-pairs / re-walks men mid-fight.
+2. Baseline and T-05 ran on DIFFERENT seeds (night loop 1030-1179 vs 1-30); the report quoted only cycles c1 / c2.
+3. Tuned on the test set: all variants were picked on seeds 1-10, part of the 30 acceptance seeds. Held-out seeds 11-30: Crossroads
+   crossfire iteration 2 -> 3 is 22.8 -> 23.1 (no gain); the 31 deg median is a tuning artefact. Alley's gain holds on held-out seeds
+   (on_pos 0 -> 0.67, idle 4.5 -> 0.8 s, crossfire 18.9 -> 37.1).
+4. "Idle <= 2 s met" rests on one 30-seed run each; bootstrap 95 % of the median 0.5-3.6 s / 0.5-4.3 s. Three changes in one commit.
+5. Metric-shaped logic: ground window stands excluded because the arena counts only cover; attacker_speed_factor fits the walking
+   scripted opponent only. forward_margin_cm 4000 has no held-out support (2000 / 0.22 had better on_pos) - revert candidate.
+6. Cover scan 32-109 ms on the game thread ~1.7x per round (the first, before SetDefenceApproach, is wasted); up to 16 path queries per
+   man per refresh; a JSON comment promises a contact test of "position or start" but the code tests the stand point only.
+7. The roadmap's own T-05 proof (overwatch_kills > 0 on X4) is not reported - it depends on the generator's firing gaps.
+8. T-021 (low): draught lerps to 1.0, not to the outdoor multiplier; a campfire is "sheltered" in any generated building, even a
+   fully leaking one.
+9. Priority: ~4 h on T-05 tuning while the generator (designer's first priority) had no commit 17:35-22:13.
+**Verdict on my claims:** crossfire is measured at the attackers at the first shot - holds; "on_pos limited by walk time + commander
+switching" - mostly does NOT hold (37 of 90 men never seated; in 19/30 seeds only 2 shooters eligible because the guard keeps his G008
+post, capping on_pos at 0.67; ~27 of 89 off-position men stand still in Ambush / Hold outside cover); Alley lacks seeing cover - holds
+with a caveat; min_covered_share 0.22 - supported, forward_margin 4000 - not; "accept T-05 as the positions layer" - NOT yet.
+**T-05 status now: NOT ready for merge into main.** Process changes adopted: stop tuning; generator first; one paired held-out A/B
+(main vs T-05 on the night loop's seeds, twice) when the machine is free; tune on 1-10, accept held-out; one change per run; reports
+always show win rate, seed sets, all baseline cycles and intervals; brief deviations as questions before a merge.
+
 ## T-021 cold indoors - DONE, merged into this branch (34c832ab)
 worker/t021-cold-indoors 86ef2882 (from claude/cold-indoors 01c6cb01 + main). Leafless doorway = open (designer 11-19), test 6/14.
 Gate: build OK; ColdShelter 11/11, Environment 114, LevelJson 7, PmcDefence 7, Pmc 70; ColdIndoors / Cold / Environment / Weather / WarmIdle /
