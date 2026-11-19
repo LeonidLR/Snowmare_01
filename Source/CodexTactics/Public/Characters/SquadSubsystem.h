@@ -1154,8 +1154,26 @@ private:
 		uint32 Serial = 0;
 		FVector Destination = FVector::ZeroVector;
 		TArray<FVector> Points;
+		/** v2: the ramp / stair feet on Points (SquadGiveWayRules::FindFlightFeet) and the mover's way along each flight's axis. */
+		TArray<FVector> FlightFeet;
+		TArray<FVector2D> FlightDirections;
 	};
 	TMap<TWeakObjectPtr<const AOperativeCharacter>, FGiveWayPath> GiveWayPaths;
+	/**
+	 * v3: Point (feet height) lies in the approach zone (widened by ExtraCm) of the flight Mover walks onto next on his own order - the
+	 * RampFile holder yield never steps a man there (X6 B_x1_8: it put the Commander back into the stair mouth give way had cleared).
+	 */
+	bool InMoverFlightApproach(const AOperativeCharacter& Mover, const FVector& Point, float ExtraCm);
+	/** v2: the floor under Point is a flight; OutUphill = its uphill axis (the ramp component's up vector, else the hit normal). */
+	bool RampAxisUnder(const FVector& Point, FVector2D& OutUphill) const;
+	/** v2: formation walkers waiting while their slot walk would cross a mover's flight approach -> the mover, since when (s). */
+	struct FGiveWaySlotHold
+	{
+		TWeakObjectPtr<const AOperativeCharacter> Mover;
+		double Since = 0.0;
+	};
+	TMap<TWeakObjectPtr<AOperativeCharacter>, FGiveWaySlotHold> GiveWaySlotHolds;
+	void ReleaseGiveWaySlotHold(AOperativeCharacter& Walker, const TCHAR* Why);
 	/** Idle members not asked again before this world time, s. */
 	TMap<TWeakObjectPtr<AOperativeCharacter>, double> GiveWayNextTry;
 	/** Members stepping aside -> their spot (dropped once they stand). */
