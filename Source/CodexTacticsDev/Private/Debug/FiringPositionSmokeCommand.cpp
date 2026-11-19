@@ -193,8 +193,11 @@ namespace FiringPositionSmoke
 		for (int32 SpotIndex = 0; SpotIndex < Roof->Spots.Num(); ++SpotIndex)
 		{
 			const FTacticalOverwatchSpot& Spot = Roof->Spots[SpotIndex];
-			for (const float Distance : { 1500.f, 2500.f, 4000.f })
+			// The street OUTSIDE the roof: past the rim of the walk surface toward the spot's facing (a point ahead of the spot may lie under the hall itself).
+			const float Rim = Service.FindRimDistance(Spot.Location, FRotator(0.f, Spot.FacingYaw, 0.f).Vector(), Service.GetConfig().RimSearchMaxCm);
+			for (const float Past : { 1500.f, 2500.f, 4000.f })
 			{
+				const float Distance = Rim + Past;
 				FVector Target;
 				if (!StreetPointAhead(World, File, Spot.Location, Spot.FacingYaw, Distance, Target))
 				{
@@ -203,8 +206,8 @@ namespace FiringPositionSmoke
 					continue;
 				}
 				const TArray<FFiringTraceDiag> Lines = Service.DiagnoseRoofSpot(Spot.Location, Spot.FacingYaw, Target);
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke   DIAG %s#%d spot %s facing %.0f -> street %s (%.0f cm ahead, aim +%.0f cm), the roof's rim is %.0f cm from the spot"), *Roof->Building,
-					SpotIndex, *Spot.Location.ToCompactString(), Spot.FacingYaw, *Target.ToCompactString(), Distance, Service.GetConfig().SampleHeightCm,
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke   DIAG %s#%d spot %s facing %.0f -> street %s (%.0f cm ahead = %.0f cm past the rim, aim +%.0f cm), the roof's rim is %.0f cm from the spot"), *Roof->Building,
+					SpotIndex, *Spot.Location.ToCompactString(), Spot.FacingYaw, *Target.ToCompactString(), Distance, Past, Service.GetConfig().SampleHeightCm,
 					Lines.Num() > 0 ? Lines[0].RimDistanceCm : 0.f);
 				for (const EOperativeStance Stance : { EOperativeStance::Standing, EOperativeStance::Crouching, EOperativeStance::Prone })
 				{
@@ -240,7 +243,7 @@ namespace FiringPositionSmoke
 		Check(State, Rows > 0, FString::Printf(TEXT("the roof diagnosis traced %d lines"), Rows));
 	}
 
-	void BuildAreas(UWorld* World, FState& State, const UTacticalMapSubsystem& Map)
+	void BuildAreas(UWorld* World, FState& State, UFiringPositionSubsystem& Service, const UTacticalMapSubsystem& Map)
 	{
 		const FTacticalMapFile& File = Map.GetFile();
 		// A street in front of B_hall_n's first spot (the roof G008b used): the roof-edge areas.
@@ -251,8 +254,10 @@ namespace FiringPositionSmoke
 				continue;
 			}
 			FVector Street;
-			for (const float Distance : { 2500.f, 3500.f, 1500.f })
+			const float Rim = Service.FindRimDistance(Roof.Spots[0].Location, FRotator(0.f, Roof.Spots[0].FacingYaw, 0.f).Vector(), Service.GetConfig().RimSearchMaxCm);
+			for (const float Past : { 2500.f, 3500.f, 1500.f })
 			{
+				const float Distance = Rim + Past;
 				if (StreetPointAhead(World, File, Roof.Spots[0].Location, Roof.Spots[0].FacingYaw, Distance, Street))
 				{
 					FArea Area;
@@ -389,7 +394,7 @@ namespace FiringPositionSmoke
 		Check(State, FMath::IsNearlyEqual(Config.MuzzleStandingCm, Defaults.MuzzleStandingCm) && Config.CrossfireMinDeg == Defaults.CrossfireMinDeg && Config.AreaSamples == 9,
 			TEXT("the firing_positions block of pmc_commander.json was read"));
 		DiagnoseRoof(World, State, Service, Map);
-		BuildAreas(World, State, Map);
+		BuildAreas(World, State, Service, Map);
 		Check(State, State.Areas.Num() >= 3, FString::Printf(TEXT("%d areas to query (a roof street, the top places, a window street)"), State.Areas.Num()));
 		for (FArea& Area : State.Areas)
 		{

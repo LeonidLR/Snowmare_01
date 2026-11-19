@@ -234,7 +234,15 @@ void UFiringPositionSubsystem::BuildContext(FFiringScanContext& Context, const F
 		if (ProjectOnNav(Sample, FVector(100.f, 100.f, 150.f), OnNav) && FMath::Abs(OnNav.Z - AreaCenter.Z) <= Context.FloorToleranceCm)
 		{
 			// The navmesh floats ~8 cm over the floor; a target's feet (and the real shot's aim, feet + 80) are on the floor.
-			Context.Aims.Add(SnapToFloor(OnNav) + FVector(0.f, 0.f, Cfg.SampleHeightCm));
+			const FVector Floor = SnapToFloor(OnNav);
+			// ...and a man must fit there: a crate / a wall edge under the sample (the nav ignores small props) is no place to stand.
+			FCollisionQueryParams BodyParams(SCENE_QUERY_STAT(FiringPositionBody), false);
+			FiringPositionSubsystemLocal::AddShotLineIgnored(Context.World, BodyParams);
+			if (Context.World && Context.World->OverlapBlockingTestByChannel(Floor + FVector(0.f, 0.f, 95.f), FQuat::Identity, ECC_Pawn, FCollisionShape::MakeCapsule(34.f, 88.f), BodyParams))
+			{
+				continue;
+			}
+			Context.Aims.Add(Floor + FVector(0.f, 0.f, Cfg.SampleHeightCm));
 		}
 	}
 }

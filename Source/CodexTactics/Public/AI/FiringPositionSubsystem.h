@@ -95,6 +95,9 @@ public:
 	 */
 	TArray<FFiringTraceDiag> DiagnoseRoofSpot(const FVector& SpotFeet, float FacingYaw, const FVector& Target) const;
 
+	/** Where the walk surface ends from Start along Dir (planar), cm: the rim of a roof. 0 when Start is the last walkable point. */
+	float FindRimDistance(const FVector& Start, const FVector& Dir, float MaxCm) const;
+
 	/** Forgets every cached area (a round's start, a geometry change). */
 	void InvalidateCache();
 
@@ -113,8 +116,6 @@ private:
 	TArray<FFiringCandidate> Gather(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask);
 	/** Feet on the real floor: a downward trace 40 cm over / under Point (the navmesh floats ~8 cm above the floor; the muzzle is measured from the floor). */
 	FVector SnapToFloor(const FVector& Point) const;
-	/** Where the walk surface ends from Start along Dir (planar), cm: the rim of a roof. 0 when Start is the last walkable point. */
-	float FindRimDistance(const FVector& Start, const FVector& Dir, float MaxCm) const;
 	bool ProjectOnNav(const FVector& Point, const FVector& Extent, FVector& Out) const;
 	/**
 	 * The roof's walk surface: the navmesh within HorizontalCm / VerticalCm of Point, else the floor test (a downward trace 30 cm over / under

@@ -95,7 +95,7 @@ namespace FiringPositionRules
 		FiringReadNumber(Block, TEXT("rim_step_max_cm"), Out.RimStepMaxCm);
 		Out.RimStepMaxCm = FMath::Clamp(Out.RimStepMaxCm, 0.f, 300.f);
 		FiringReadNumber(Block, TEXT("rim_search_max_cm"), Out.RimSearchMaxCm);
-		Out.RimSearchMaxCm = FMath::Clamp(Out.RimSearchMaxCm, 0.f, 5000.f);
+		Out.RimSearchMaxCm = FMath::Clamp(Out.RimSearchMaxCm, 0.f, 20000.f);
 		if (const TSharedPtr<FJsonObject>* Muzzle = nullptr; Block.TryGetObjectField(TEXT("muzzle_height_cm"), Muzzle) && Muzzle && Muzzle->IsValid())
 		{
 			FiringReadNumber(**Muzzle, TEXT("standing"), Out.MuzzleStandingCm);
