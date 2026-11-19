@@ -40,11 +40,11 @@ Status words: **EXISTS** (in main, with a test), **PARTIAL**, **MISSING**, **BRO
 | Encounters / Director | level JSON squads, 3 postures | generator posts (TS only) | spawn at the generated post, charge ownership, Director |
 | Training | pipeline runs 14 h without crashes; QD archive; clips | metrics | fitness and descriptors that measure the designer's criteria; evaluation with enough rounds; any gate before a run |
 
-Of the 19 dangerous situations of GDD section 8 (table in section 3): **2 work today** (DS-16 pack hunt, DS-18 RPG - both
-older than the trainer), **7 partly** (DS-01, DS-04, DS-09, DS-10, DS-12, DS-14, DS-15), **10 cannot happen** with today's
-code. None of the human-squad situations the designer listed on 2026-11-19 works. The anchor DS-00 (Crossroads) cannot
-happen: there is no crossfire selection, no retreat prediction and no pre-contact "occupy positions" (0 matches for
-crossfire / anvil / cut-off in `Source/`).
+Of the 20 dangerous situations of GDD section 8 (table in section 3): **2 work today** (DS-16 pack hunt, DS-18 RPG - both
+older than the trainer), **7 partly** (DS-01, DS-04, DS-09, DS-10, DS-12, DS-14, DS-15), **11 cannot happen** with today's
+code. None of the human-squad situations the designer listed on 2026-11-19 works. Neither of his two acceptance examples
+(DS-00A Crossroads, DS-00B Alley) can happen: there is no kill-zone recognition, no crossfire selection, no cut-off (static
+or by a run round a building) and no pre-contact "occupy positions" (0 matches for crossfire / anvil / cut-off in `Source/`).
 
 ## 2. Behaviour by behaviour
 
@@ -171,7 +171,8 @@ There is **no squad layer**. The "commander" is a per-fighter scorer that sees f
 
 | Id | Can it happen today? | Why not |
 |---|---|---|
-| DS-00 Crossroads | no | no PL-02, no crossfire, no retreat prediction, no fire-hold that survives distant contact |
+| DS-00A Crossroads | no | no PL-02, no crossfire, no retreat prediction, no fire-hold that survives distant contact |
+| DS-00B Alley | no | no kill-zone recognition; nothing sends a man onto the taller roof (height is only a bonus on cover slots near him, `SQ:2503-2504`; roof posts come from the tactical map at spawn and cannot fire, 2.1); a "flank" is a point `flank_distance_cm` 10 m from a SEEN threat (`CR:267`, `CR:575-586`), not a run round a building to a rear exit before contact; a ground goal pulls the squad together (4.1) |
 | DS-01 Window fire | by spawn luck only | window post at spawn; no duck / shift; sectors unvalidated |
 | DS-02 Roof overwatch | no | 0 shots from roof posts |
 | DS-03 Upstairs | no | no hearing, no storeys, no stair head |
@@ -193,10 +194,15 @@ There is **no squad layer**. The "commander" is a per-fighter scorer that sees f
 
 ## 4. Why the night training produced bad behaviour
 
-### 4.1 The Crossroads clip (the designer's example)
+### 4.1 The designer's two clips (Crossroads, Alley)
 
-What the designer saw: the attackers ran a long way in the open; the defenders stood in the middle of the crossroads without
-cover and let them through.
+What the designer saw. Clip 1: the attackers ran a long way in the open; the defenders stood in the middle of the crossroads
+without cover and let them through. Clip 2: the attackers ran down a lane between two buildings; the defenders stood bunched
+between the buildings next to the goal marker ("GOAL 2" is visible in his screenshot), nobody on the taller roof, nobody at
+the corner, nobody behind the attackers.
+
+**The common pattern (his words and the code agree):** the failure is position selection - kill-zone recognition, role
+assignment, pre-occupation - not shooting. RC1, RC3 and RC4 below are that failure seen from three sides.
 
 **Guaranteed by the code (verified):**
 1. Nothing can produce the expected ambush: no code chooses two crossing positions, predicts a retreat or places a cut-off.
@@ -209,7 +215,10 @@ cover and let them through.
 5. The attackers' approach is a straight walk (2.3).
 
 **Hypotheses about that round (to check on its track + log; roadmap task T-01):**
-- H1 the round was a ground-objective scenario (street / tactical route end), so cases 3 and 4 applied to all three defenders;
+- H1 the round was a ground-objective scenario (street / tactical route end), so cases 3 and 4 applied to all three defenders.
+  Clip 2 supports it by eye: the defenders stand at the goal ring on the ground; with a posted defence only the occupier is
+  pulled onto the point (`DefenderPointPull`, `CRh:621`), but a ground goal has no site, so nobody is "posted" and everyone
+  may be pulled - to confirm in the round's order log;
 - H2 the defenders had tactical posts along a long route and left them when `bEverContact` turned true at long range;
 - H3 no cover slot was found near them (`bCoverAvailable` false): the crates of that arena may not be cover objects, or lie
   outside the search radius;

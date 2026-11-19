@@ -3,7 +3,7 @@
 > **Status**: Draft v1 for the designer's review (nothing here is approved; every number marked *proposal* is a starting value)
 > **Author**: Claude Fable (design architect session, 2026-11-19), for the lead session
 > **Last Updated**: 2026-11-19
-> **Implements**: the designer's core requirement of 2026-11-19 (below) + his clip notes 2026-11-18 + his "Crossroads" note 2026-11-19
+> **Implements**: the designer's core requirement of 2026-11-19 (below) + his clip notes 2026-11-18 + his two clip notes of 2026-11-19 (Crossroads, Alley)
 > **Companions**: [smart-enemies-audit.md](smart-enemies-audit.md) (what exists / is broken, with evidence),
 > [smart-enemies-roadmap.md](smart-enemies-roadmap.md) (phases + the first two weeks as tasks)
 > **Supersedes as the top-level spec**: docs/design/PMC_DEFENCE.md, TACTICAL_MAP.md sections 3-4, KILL_ZONE_AMBUSH.md and
@@ -36,6 +36,11 @@ steps on named positions of the terrain. They cannot be reached by tuning the we
 all the night trainer can do today. The system is therefore specified in four parts that must exist in this order:
 positions (where it makes sense to stand), movement (how to get there alive), squad plays (who does what, together), and
 only then tuning (numbers of the designed plays). Training is the last 10 %, not the engine of behaviour (OQ-2, OQ-10).
+
+**What the designer's two clips show** (section 8, DS-00A and DS-00B): the enemy did not fail at shooting. It failed at
+**position selection** - recognising the kill zone on the opponent's route, giving out the roles (crossfire, height, cut-off)
+and standing on the positions before the opponent arrived. That one behaviour, "set an ambush on the predicted route", is
+the first deliverable of this system.
 
 ## Player Fantasy
 
@@ -116,7 +121,7 @@ audit lists the state of each.
 | Heal self / heal a mate | The first-aid rules; a medic drags nobody yet. |
 | Grenade | OQ-12 (PMC carry 0 grenades today). |
 | RPG strike | The squad's RPG gunner [D 2026-11-09]. |
-| Charges: mine / tripwire | Pre-placed by the level generator around PMC posts [D 2026-11-18 evening]; no runtime laying for now. Attackers spot (3 m), defuse or detour (PMC_DEFENCE D3). |
+| Charges: mine / tripwire | Pre-placed by the level generator around PMC posts [D 2026-11-18 evening]; no runtime laying for now. Attackers spot (3 m), defuse or detour (PMC_DEFENCE D3). Scope to confirm against the weapons roster: OQ-21. |
 
 **Squad verbs** (what a group does; each is a *play*, section 4): bound, hold, take height, garrison a building, fall back
 upstairs, escape, enter and clear, ambush, hammer and anvil, bait, flank, hold a chokepoint, fall back by layers, suppress and
@@ -160,13 +165,27 @@ rifle -> everything else; RPG gunner -> hammer against a cover cluster; sapper -
 **Fire teams.** A squad of 3 is one team. A squad of 4-6 is two teams (the player's SQUAD_SIX_FIRE_TEAMS shapes mirrored):
 one team fixes, the other moves; plays below are written per team and combined by the commander.
 
+**Hard rules of every play** (from both of the designer's clips, 2026-11-19; a play that breaks one is a bug, not a tuning
+matter):
+1. **Never bunch.** Squad members who are holding keep >= `min_spacing_m` from each other and never share a cover object;
+   the squad's mean pairwise distance while holding is >= 5 m. Standing together "cancels every advantage" (designer).
+   Exceptions: a stack at a door (PL-09) and a queue at a ladder, for the seconds they last.
+2. **Nobody rests in the open.** A man who is not moving is at a firing position in cover.
+3. **Positions before contact.** A squad with time (defending, waiting, arrived first) is on its positions before the enemy
+   is in range; the positions are chosen from the kill zone backwards (F8), not from where the men happen to stand.
+4. **Defence in depth.** A defending force meets the enemy on his route, early: ambushes (and the generator's charges) lie
+   along the predicted approach, and the squad at the goal is the last layer, not the only one. "The green team runs - no
+   ambushes, no mines, nothing" (designer) is a failure of the encounter layer as much as of the squad.
+5. **A post nobody can reach or fire from does not exist.** A height without an access the body can use, or a position
+   without a line of fire, is never assigned.
+
 **Play catalogue.** Each play: when it is chosen, the roles, what the player sees, how it ends.
 
 | Id | Play | Chosen when | Roles and steps | Ends when |
 |---|---|---|---|---|
 | PL-01 | **Bound** (cover to cover) | any move of more than one bound through ground an enemy may see | mover goes to the next cover <= `bound_max_m`; the others hold a fire line on the threat sector; roles rotate | goal reached; contact -> the play of the moment |
 | PL-02 | **Occupy positions** (pre-contact) | a defending squad without contact; a squad that just arrived | every fighter walks to an assigned firing position (section 5) and faces his sector; nobody idles in the open | contact; orders change |
-| PL-03 | **Hammer and anvil** (ambush with cut-off) | defending, the enemy's approach known, a kill zone with >= 2 crossing positions and a predicted retreat (F3) | 2 hammers on crossing positions, 1 anvil hidden on the predicted retreat; all hold fire; hammers open together; anvil fires when retreaters reach him | enemy destroyed / broke through / anvil found -> PL-13 or PL-12 |
+| PL-03 | **Set an ambush on the predicted route** (hammer and anvil: crossfire + height + cut-off) | defending or waiting, the enemy's route known or predicted, a kill zone on it (F8) | hammers on crossing positions - one of them on a usable height over the kill zone when there is one (PL-10); the anvil closes the way back: hidden in the predicted retreat (F3, static, DS-00A) or a flanker who runs round a building out of sight to the kill zone's rear exit (mobile, DS-00B); all in place before contact, all hold fire (F4); hammers open together; the anvil fires when the enemy turns back | enemy destroyed / broke through / anvil found -> PL-11 or PL-12 |
 | PL-04 | **Ambush at the exit** | a chokepoint on the enemy's route (tactical map) | hide at the EXIT, never inside; hold fire until the kill zone (F4); one overwatch above if available | sprung -> fight on; discovered -> PL-12 or relocate |
 | PL-05 | **Hold a roof / point** (designer notes 1, 1b) | defending an objective | 1 access guard (stair / hatch: aim at it; outside ladder: roof edge above it, covering ladder and street); the others sector shooters on the approach arc, shifting along the edge | access lost -> PL-11; point empty -> PL-02 |
 | PL-06 | **Garrison a building** | a `garrison` / `objective` building (building roles) | window shooters by facade toward the approach, 1 door / stair guard; shooters fire, duck, shift windows after `window_shift_s` or when suppressed | enemy enters the ground floor -> PL-07; building untenable -> PL-08 |
@@ -268,10 +287,10 @@ PMC shoot them only in self-defence. A firefight is noise; noise is a dinner bel
 
 ### 8. Catalogue of dangerous situations
 
-Each situation: setup -> enemy behaviour -> tells -> player counterplay -> needs. The first one is the designer's own
-acceptance example and the anchor of the whole system.
+Each situation: setup -> enemy behaviour -> tells -> player counterplay -> needs. The first two are the designer's own
+acceptance examples (two clips of the 2026-11-19 night) and the anchor of the whole system.
 
-#### DS-00 Crossroads ambush - hammer and anvil (the designer's acceptance example, 2026-11-19)
+#### DS-00A Crossroads ambush - hammer and anvil (the designer's first acceptance example, 2026-11-19)
 
 The designer on the worst night clip: *"The fighters run for a long time. Then they run up to another group that just stands in
 the middle of the street, in the middle of the crossroads, in the open, without taking any cover, not peeking round corners,
@@ -297,7 +316,41 @@ near side, aimed at its entrance gap.
   before the crossroads, see or suspect the positions and do not all enter the kill zone.
 - **Needs**: firing positions on cover objects with checked lines; crossing-fire selection (F2); retreat prediction (F3); fire
   discipline (F4); PL-02 so nobody idles; PL-01 for the attackers.
-- **Acceptance**: section "Acceptance Criteria" A-00.
+- **Acceptance**: section "Acceptance Criteria" A-00A.
+
+#### DS-00B Alley ambush - height + corner + cut-off (the designer's second acceptance example, 2026-11-19)
+
+The designer on the second clip: *"The green team runs. Of course no ambushes, no mines, nothing. OK, suppose. It reaches a
+classic ambush spot: buildings, a narrow lane between them. And the red team bunched up between the two buildings, effectively
+cancelling every advantage. You could put one on top of the taller building (the one casting the shadow), pouring fire from
+above; the second at the front corner of the one-storey building; and the third could run round the one-storey building from
+behind and cut off any retreat for the green group."* His sketch: the lane runs along a one-storey building toward the goal
+marker; a taller building stands on the other side of the lane's mouth; red dots on the taller building's roof, at the
+near corner of the one-storey building, and at its far end after a run round its back - three fields of fire meeting in
+the lane.
+
+- **Setup**: 3 defenders hold a goal at the mouth of a narrow lane between two buildings; one building is taller with a
+  walkable roof; the attackers' route comes down the lane.
+- **Enemy behaviour** (PL-02 -> PL-03 with PL-10 and a mobile anvil): one man takes the roof of the taller building by its
+  ladder / stair and fires down into the lane; one stands at the near corner of the low building and fires along the lane
+  from a lean; the third goes round the back of the low building, out of the attackers' sight, to the lane's far end and
+  closes it once the attackers are inside. Nobody stands between the buildings.
+- **Tells**: a figure on the skyline of the taller roof; tracks round the back of the low building; the lane itself (a
+  chokepoint on the tactical map); the goal marker beyond it.
+- **Counterplay**: do not enter the lane in a group - one man first, the others watching the roof line and the corner; take
+  the taller roof first; leave a rear guard at the lane's entrance (he meets the cut-off man); go round the buildings.
+- **Needs**: kill-zone recognition (F8); a roof access the body can use and the generator guarantees (ladder / stair core,
+  building generator); a roof-edge position that can fire into the lane; a covered route round the building (F1); the
+  never-bunch rule; defence in depth on the way to the goal (hard rule 4).
+- **Acceptance**: A-00B.
+
+#### The common pattern of both clips
+
+In both clips the shooting was not the problem. **The defence failed at position selection**: recognising the kill zone on
+the enemy's route, assigning roles to it (crossfire, height, cut-off) and occupying the positions before the enemy arrived.
+Both are one missing behaviour - PL-03, "set an ambush on the predicted route with crossfire + height + cut-off" - and it is
+the first thing the roadmap builds and the first thing the designer judges. Every other play reuses its parts: kill-zone
+recognition, firing positions with checked lines, role assignment with spacing, pre-occupation, fire discipline.
 
 #### The rest of the catalogue
 
@@ -314,7 +367,7 @@ near side, aimed at its entrance gap.
 | DS-09 | **Mined approach and doorway** (designer note 2) | generator charges on the direct line and in the door; one defender per cover; tripwire on the flank | disturbed snow; the sapper's spotting rule (3 m) | spot and defuse, detour, or accept the risk | generator posts + charges in game; attackers' mine reaction (D3) |
 | DS-10 | **Roof defence with an access guard** (designer notes 1, 1b) | PL-05 | men moving along the parapet | suppress one sector, climb at another; second access | exists on the Depot roof smoke; not on generated maps |
 | DS-11 | **They leave through the window and come back** | PL-08 then PL-09 / PL-03 from outside | glass, a body dropping to the snow, tracks | watch the back; do not assume a cleared building stays clear | escape exits in the building graph; OQ-6 |
-| DS-12 | **Hunt squad** (meeting engagement) | PL-13 with PL-01 | bounding figures, hand signals / short radio | ambush them (the player plays DS-00 himself) | PL-01 |
+| DS-12 | **Hunt squad** (meeting engagement) | PL-13 with PL-01 | bounding figures, hand signals / short radio | ambush them (the player plays DS-00A himself) | PL-01 |
 | DS-13 | **They storm your building** | PL-09 against the player holding a house | stack at the door, a kick | mine the door, hold the stair head, leave by the window | door runtime (R1); breach hookup |
 | DS-14 | **The dinner bell** | a firefight draws a pack / horde onto both sides | howls, the horde arrows | break contact; let the monsters hit the PMC first | noise -> monster attraction; monsters vs PMC (exists) |
 | DS-15 | **Drop ambush** (monsters) | jumpers on edges above the route | snow falling from an edge, scratching | look up; walk the middle of the street | drop spots + jumper archetypes |
@@ -378,6 +431,21 @@ open when  attackers_in_K >= min(2, known attackers)  or  lead attacker passed c
 Hammers open within sync_s 1.0 of each other.  Distance is NOT contact: an enemy known but outside the position's range
 does not end the hold (the 2026-11-18 overwatch finding).
 ```
+**F8 Kill zone on a predicted route** (where PL-03 is set; computed from the tactical map + positions, at build / load time).
+```
+Predicted route = the enemy's known route (mission route, objective approach) or the shortest walkable path from his
+                  last known place to what the squad defends.
+Candidates K   = tactical-map chokepoints on the route (narrow / canyon / single route), open crossings (a route segment
+                 >= open_min_m 10 with no cover for the walker), the last bound before the goal.
+Q(K) = cross(K) * height(K) * cutoff(K) * (1 - cover_for_victim(K)) * early(K)
+  cross    = 1 when >= 2 valid firing positions (F2) see K at >= crossfire_min_deg, 0.5 with one, 0 with none
+  height   = 1.3 when one of them is a roof / upper-storey position with a usable access, else 1
+  cutoff   = 1 when a static anvil (F3) or a covered route to K's rear exit (F1 exposure <= bound limit, walk time
+             <= the enemy's time to reach K) exists, else 0.6
+  early    = 1 for the first good K on the route, lower nearer the goal (defence in depth: do not wait at the goal)
+The squad takes the best K it can reach in time; roles: best height position -> hammer 1, best crossing position ->
+hammer 2, the cut-off -> anvil (mobile if the route exists, else static).  Spacing by F2.
+```
 **F5 Reaction time.**
 ```
 t_react = t_base(faction, difficulty) * (1 + 0.5 * surprised) * (1 + 0.5 * edge_of_cone) * weather_factor
@@ -395,6 +463,10 @@ accept iff  mean(score_candidate - score_baseline) over N paired seeds > 0 with 
 
 - **No valid firing position within reach**: the fighter takes the best cover slot and the play is downgraded (PL-03 -> PL-04
   -> PL-02); he never stands in the open waiting for one.
+- **The only height over the kill zone has no usable access, or its edge cannot fire down**: it is not a position (hard
+  rule 5); the height role becomes a second crossing position on the ground and the fault is reported as level data.
+- **The cut-off route is seen by the attackers**: the mobile anvil is not sent; the play runs with a static anvil or three
+  hammers. A cut-off man who is spotted on the way becomes a flanker (PL-11) at once.
 - **Two fighters want one cover object**: the role with the higher priority takes it; the other takes the next position
   (existing spacing rule), never shares.
 - **The predicted retreat is wrong** (attackers break the other way): the anvil counts `anvil_wait_s` after the opening fire,
@@ -426,6 +498,7 @@ accept iff  mean(score_candidate - score_baseline) over N paired seeds > 0 with 
 | Building generator (levelgen GDD set, branch `claude/building-generator`) | storeys, stair cores, windows, exits, roles, opening states | P0 + S1 on the branch, not merged; runtime doors R1 / glass R2 / breach R3 / AI costs R4 not started |
 | Level generator PMC posts + charges (task 087) | PL-02 / PL-12 positions and lines | TS done; C++ spawn-at-post and charge ownership not done |
 | MANTLING, LADDERS, drop links | vertical movement | body done; no enemy-side proof on generated buildings |
+| Roof access on every roof a play may use (ladder >= 7 rungs or a stair core; building generator validator) | DS-00B, PL-05, PL-10: the height man must be able to get up and to fire over the parapet | generator rule exists ("a ladder must exist" for overwatch buildings); the AI's use of it is unproven on generated maps |
 | DOORWAY_BREACH | PL-09 | rules + slots done; no in-game hookup even for the player |
 | SUPPRESSION, STEALTH, weapons roster, first aid | fire, hiding, wounds | exist |
 | AI Director (AI_DIRECTOR.md) | pacing, when squads activate | draft only |
@@ -471,7 +544,7 @@ A behaviour is accepted when (1) its **scenario smoke** passes on fixed seeds, (
 the lab map is above the floor, and (3) the designer has seen one readable clip of it and said yes. Scenario smokes use a
 scripted opponent (a walking / bounding stand-in for the player's squad), not self-play.
 
-**A-00 Crossroads (DS-00)** - the first acceptance example. On the arena layout of the designer's screenshot (crates on the
+**A-00A Crossroads (DS-00A)** - the first acceptance example. On the arena layout of the designer's screenshot (crates on the
 far side, the walled enclosure on the near side), 3 defenders vs 3 attackers who cross the crossroads:
 1. Each defender stands at an assigned firing position at least 5 s before the first attacker enters the kill zone; time
    standing in the open and not moving before contact <= 2 s per man.
@@ -482,6 +555,24 @@ far side, the walled enclosure on the near side), 3 defenders vs 3 attackers who
    in >= 60 % of the rounds where an attacker enters the enclosure the anvil hits him there.
 6. Against attackers using PL-01: no attacker runs more than `bound_max_m` exposed; fewer than 2 attackers are inside the
    kill zone at the opening fire in >= 60 % of seeds (the bound is the counter - both sides are tested).
+
+**A-00B Alley (DS-00B)** - the second acceptance example. On the layout of the designer's second screenshot (a lane along a
+one-storey building, a taller building with a roof access at its mouth, the goal beyond), 3 defenders vs 3 attackers coming
+down the lane:
+1. Before contact the three roles are occupied: one defender on the taller roof at a roof-edge position with a checked line
+   into the lane; one at the near corner of the low building (corner position, lean); one at the lane's far end after a
+   route round the back that no attacker could see (F1).
+2. No two defenders within `min_spacing_m`; no defender between the two buildings in the open; mean pairwise distance >= 5 m.
+3. All three fields of fire cover the lane (each has a line onto >= 50 % of its length; together 100 %).
+4. Fire opens by F4; the cut-off man fires only when the attackers are inside the lane or turn back.
+5. The attackers cannot leave the way they came: in >= 80 % of 20 seeds no attacker exits the lane's far end alive after the
+   opening fire; >= 2 of 3 attackers down in >= 80 % of seeds (attackers running straight in, as in the clip).
+6. If the roof access is missing or the body cannot use it, the squad does not assign the roof (hard rule 5): the smoke
+   then fails on its precondition and reports a level-data fault, it does not pass with a man standing under the wall.
+
+**Both examples, the shared check**: time from the defenders' spawn to "all roles on position" is logged; the scenario gives
+the defenders at least that time plus 5 s before the attackers reach the kill zone. A defence that had the time and is not in
+position fails.
 
 | Id | Behaviour | Scenario smoke (*proposed name*) | Pass line | Arena / lab metric |
 |---|---|---|---|---|
@@ -506,12 +597,12 @@ can name, unprompted, at least five different situations of section 8 that happe
 
 ## Open Questions
 
-Answered: **which clips were catastrophic** - the Crossroads clip (DS-00) is the first acceptance example; if other clips of
-that night showed other failures, each becomes an A-nn line.
+Answered 2026-11-19: **which clips were catastrophic** - the Crossroads clip (DS-00A) and the Alley clip (DS-00B) are the
+first two acceptance examples; a further clip with a different failure becomes another A-nn line.
 
 | # | Question | Alternatives (cost) | Recommendation |
 |---|---|---|---|
-| OQ-1 | First milestone scope: which situations first? | (a) DS-00 + DS-01 + DS-03 (street ambush, windows, upstairs: needs buildings, ~4-6 weeks); (b) DS-00 + DS-04 + DS-10 only (streets and roofs, ~2-3 weeks, no interiors); (c) all of section 8 before showing anything (months, no feedback) | (b) first, then (a) as buildings land |
+| OQ-1 | First milestone scope: which situations first? | (a) DS-00A + DS-00B + DS-01 + DS-03 (street ambushes, windows, upstairs: needs buildings, ~4-6 weeks); (b) DS-00A + DS-00B + DS-04 + DS-10 only (streets and roofs, ~2-3 weeks, no interiors); (c) all of section 8 before showing anything (months, no feedback) | (b) first, then (a) as buildings land |
 | OQ-2 | How the squad brain is built | (A) keep the flat per-fighter utility, add orders, keep training (cheapest now; it produced 2026-11-19; cannot express roles or sequences); (B) authored squad plays above the existing utility (2-3 weeks for the layer, then ~2-4 days per play; deterministic, testable, tunable); (C) Learning Agents first (experimental plugin, GPU, needs recorded play and a working body anyway; months, opaque) | B; C later as an imitation experiment on top of B |
 | OQ-3 | Resistance and survivors: who are they, whose side? | (a) both hostile to the player; (b) resistance fights PMC and may ally with the player, survivors neutral until threatened; (c) decide later - build PMC only, keep profiles as data | (c) now; (b) reads best with the narrative, needs bible entries |
 | OQ-4 | What may the first volley of an ambush do to an unaware squad? | (a) full damage after the tell lead (harsh, teaches fast; frustration risk); (b) the first volley wounds but cannot kill (KILL_ZONE_AMBUSH proposal; softer, less respect); (c) by difficulty | (c): Normal = b, Hard = a |
@@ -531,3 +622,5 @@ that night showed other failures, each becomes an A-nn line.
 | OQ-18 | Do humans surrender or flee for good? | (a) fight to the last (simple); (b) broken squads flee the map; (c) survivors can surrender (needs narrative + UI) | (b) for PMC / resistance, (c) later |
 | OQ-19 | Cold for enemies (`cold_applies`, pending since 2026-11-03) | (a) cold affects humans like the player's men (garrisons need fires - a tell and a target); (b) enemies ignore cold | (a): the fire is a tell |
 | OQ-20 | The Hunt posture's "radio intel" (a deliberate cheat today) | (a) keep until hearing exists; (b) remove now (hunts may never find the player) | (a) |
+| OQ-21 | Enemy mines and tripwires. Mines are equipment, not in the weapons roster of 2026-11-08 (rifle -> shotgun -> pistol -> sniper + RPG-7; grenade stays); the designer's notes of 2026-11-18 ask for mined approaches and he accepted "sapper = 2 mines + 1 tripwire, placed by the generator"; on 2026-11-19 he again noted "no ambushes, no mines". Confirm the scope. | (a) as accepted on 2026-11-18: generator-placed charges round PMC posts only (TS done; the game does not yet know they are the PMC's); (b) also at every ambush site along the approach (denser, more spotting / defusing play; risk of mine fatigue and of the player's bot runs dying to mines); (c) no enemy charges until he confirms them against the roster | (a) now; (b) limited to one charge per ambush site once DS-00B works |
+| OQ-22 | How early on the route does the defence meet the player (defence in depth)? | (a) one ambush squad on the approach + the squad at the goal (2 squads per goal: more enemies per level, fights before every goal); (b) the goal squad itself moves forward to the best kill zone on the route and falls back to the goal (PL-12; no extra enemies, the goal may be empty when bypassed); (c) the Director decides per level budget | (b) for the arena and the first lab tests, (c) in the campaign |
