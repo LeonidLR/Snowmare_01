@@ -4,6 +4,7 @@
 // _process_leader_movement).
 
 #include "Characters/OperativeCharacter.h"
+#include "Tactics/TurnBasedCombatSubsystem.h"
 
 #include "CodexTactics.h"
 #include "Characters/CriticalWoundRules.h"
@@ -619,7 +620,10 @@ bool AOperativeCharacter::RetryBlockedOwnMove()
 		BlockedRetryCount = 0;
 	}
 	// Not mid cover wrap / bypass steering / cover walk (their own ends handle a stop), only a plain own walk.
-	if (bCoverWrapActive || bSteeringOwnMove || bHasPendingCover || bMantling || IsMantleDescending())
+	// Never while dead / in turn-based combat (AP moves are the player's, 047-style review) (give-way v2 lead review).
+	const UTurnBasedCombatSubsystem* TurnBased = GetWorld() ? GetWorld()->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	if (bCoverWrapActive || bSteeringOwnMove || bHasPendingCover || bMantling || IsMantleDescending()
+		|| (HealthComponent && !HealthComponent->IsAlive()) || (TurnBased && TurnBased->IsActive()))
 	{
 		return false;
 	}
@@ -630,10 +634,11 @@ bool AOperativeCharacter::RetryBlockedOwnMove()
 	}
 	++BlockedRetryCount;
 	const EOperativeOrderResult Result = RequestMove(LastMoveDestination, /*bFormationMove*/ false);
+	BlockedRetrySerial = MoveOrderSerial; // RequestMove bumps the serial: keep counting this order's retries (cap 4, review finding 1)
 	UE_LOG(LogCodexTactics, Display, TEXT("[GiveWay] %s: his walk to (%.0f, %.0f) was ended as blocked %.0f cm from it - asked again (%d / %d) -> %d"),
 		*DisplayName.ToString(), LastMoveDestination.X, LastMoveDestination.Y, ToGoalCm, BlockedRetryCount, SquadGiveWayTuning::Get().BlockedRetries,
 		static_cast<int32>(Result));
-	return Result == EOperativeOrderResult::Accepted && bHasMoveOrder;
+	return Result == EOperativeOrderResult::Accepted; // an accepted re-request is never treated as an arrival
 }
 
 void AOperativeCharacter::HandleMoveFinished()
