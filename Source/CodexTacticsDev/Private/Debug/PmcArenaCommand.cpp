@@ -36,6 +36,12 @@
 //   Per round per side: role (attacker / defender), damage_dealt, damage_from_concealment (dealt while the shooter was not seen by the
 //   target's team), first_strike (1 = this side's hit came first), objective_hold_s (seconds of sole control of the point),
 //   median_engagement_m (its shots' median distance).
+// Opponent=Script Script=run|bound (smart-enemies T-03, docs/design/gdd/smart-enemies-roadmap.md; AI/PmcArenaScriptRules.h): side B is the ATTACKER
+//   of every round (not by the seed's parity), a PMC squad spawned exactly as for Opponent=Pmc but with NO commander (SetTeamCommanded(B, false))
+//   and no assault point: a waypoint follower walks every man along the round's route (the tactical scenario's route, else the navmesh path from
+//   B's spawn to the objective) to its end in one go, waypoints every script_waypoint_m (the level JSON's "pmc_arena" keys script_waypoint_m /
+//   script_arrive_m / script_level_m / script_sprint), and the men fire back by the operative body's own rules. Nothing in the walk is random:
+//   the same seed gives the same walk. Script=bound is T-07's seam (a bounding follower): until it is filled it plays as run with a warning.
 // CodexTactics.PmcArenaSmoke = one pmc round + the JSON validated (Smoke RESULT: PASS / FAIL).
 // CodexTactics.PmcStalemateSmoke (fix/pmc-arena-stalemate 2026-11-10) = one real 3v3 objective round on the Depot: contact happens and resumes
 //   within 45 s after every quiet spell, the attackers reach the point area, no running order is replaced inside its minimum hold, the
@@ -65,6 +71,7 @@
 #include "AI/PmcArenaBehaviourRules.h"
 #include "AI/PmcArenaPlayArea.h"
 #include "AI/PmcArenaRoundRules.h"
+#include "AI/PmcArenaScriptRules.h"
 #include "AI/PmcArenaViewRules.h"
 #include "AI/PmcCommanderRules.h"
 #include "AI/PmcDefenceRules.h"
@@ -129,7 +136,13 @@ namespace PmcArena
 	constexpr int32 TeamA = 1;
 	constexpr int32 TeamB = 2;
 
-	enum class EOpponent : uint8 { Pmc, Player, Bot };
+	enum class EOpponent : uint8 { Pmc, Player, Bot, Script };
+
+	/** Side B is a PMC squad (TeamB) - self-play or the scripted opponent; else the player's squad (Player / Bot). */
+	inline bool IsPmcSideB(EOpponent Opponent)
+	{
+		return Opponent == EOpponent::Pmc || Opponent == EOpponent::Script;
+	}
 
 	struct FOptions
 	{
@@ -138,6 +151,8 @@ namespace PmcArena
 		FString WeightsA;
 		FString WeightsB;
 		EOpponent Opponent = EOpponent::Pmc;
+		/** Script=run|bound (Opponent=Script, T-03): the mode asked for; Bound plays as Run until T-07. */
+		PmcArenaScriptRules::EMode ScriptMode = PmcArenaScriptRules::EMode::Run;
 		float TimeLimit = 120.f;
 		int32 Squad = 3;
 		float DistanceCm = 3000.f;
@@ -229,6 +244,8 @@ namespace PmcArena
 		 * (PmcArenaPlayAreaRules::IsInside); unrestricted without it or with PlayArea=off.
 		 */
 		FPmcArenaPlayArea PlayArea;
+		/** Opponent=Script (T-03): the waypoint spacing / arrival / sprint, the "script_*" keys (new; the defaults without them). */
+		PmcArenaScriptRules::FConfig Script;
 		FString Source = TEXT("defaults");
 	};
 
@@ -318,6 +335,8 @@ namespace PmcArena
 		/** The tactical scenario: the squad's route length, the defenders' posts (JSON), the ladder-only roofs the seed picked (-1: none asked). */
 		float RouteM = -1.f;
 		TArray<TSharedPtr<FJsonValue>> TacticalPosts;
+		/** Opponent=Script (T-03): the round's "script" object (mode, route, waypoints, each man's progress); null otherwise. */
+		TSharedPtr<FJsonObject> ScriptRun;
 		int32 LadderRoofsPicked = -1;
 		int32 LadderRoofsTotal = 0;
 		/** G008: the round's defence block (living defenders). Guard share is n/a when no roof access was found. */
@@ -428,6 +447,32 @@ namespace PmcArena
 		FPmcArenaOpeningShots DefenderOpeningShots;
 	};
 	constexpr float TrackInterval = 0.2f;
+	/** Opponent=Script: a man whose Move order was refused / ended short of its waypoint is given it again after this, s. */
+	constexpr float ScriptRetrySeconds = 0.5f;
+
+	/** Opponent=Script (smart-enemies T-03): this round's walk - the route, its waypoints and each man's progress along them. */
+	struct FScriptRun
+	{
+		struct FMan
+		{
+			TWeakObjectPtr<AOperativeCharacter> Fighter;
+			/** The waypoint he is walking to (Waypoints.Num() = the goal reached) and the one his running Move order was issued for. */
+			int32 Next = 0;
+			int32 Issued = -1;
+			float RetryAt = 0.f;
+			int32 Orders = 0;
+			int32 Reissues = 0;
+			int32 Refused = 0;
+			/** Round seconds he first stood on the goal waypoint (-1 = not yet). */
+			float GoalAtS = -1.f;
+		};
+		bool bActive = false;
+		PmcArenaScriptRules::EMode Mode = PmcArenaScriptRules::EMode::Run;
+		bool bFellBack = false;
+		TArray<FVector> Route;
+		TArray<FVector> Waypoints;
+		TArray<FMan> Men;
+	};
 
 	struct FState
 	{
@@ -487,6 +532,8 @@ namespace PmcArena
 		/** TacticalPosts[i] is the post of TacticalFighters[i] (SpawnSquadTactical's result, index-aligned with OutPosts). */
 		TArray<TWeakObjectPtr<AOperativeCharacter>> TacticalFighters;
 		TArray<int32> LadderRoofsPicked;
+		/** Opponent=Script (T-03): this round's walk. */
+		FScriptRun Script;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -543,7 +590,14 @@ namespace PmcArena
 			else if (Key == TEXT("opponent"))
 			{
 				const FString Lower = Value.ToLower();
-				Options.Opponent = Lower == TEXT("player") ? EOpponent::Player : (Lower == TEXT("bot") ? EOpponent::Bot : EOpponent::Pmc);
+				Options.Opponent = Lower == TEXT("player") ? EOpponent::Player : (Lower == TEXT("bot") ? EOpponent::Bot : (Lower == TEXT("script") ? EOpponent::Script : EOpponent::Pmc));
+			}
+			else if (Key == TEXT("script"))
+			{
+				if (!PmcArenaScriptRules::ParseMode(Value, Options.ScriptMode))
+				{
+					UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] Script=%s is not a script mode (run | bound): run"), *Value);
+				}
 			}
 		}
 		return Options;
@@ -555,6 +609,7 @@ namespace PmcArena
 		{
 		case EOpponent::Player: return TEXT("Player");
 		case EOpponent::Bot: return TEXT("Bot");
+		case EOpponent::Script: return TEXT("Script");
 		default: return TEXT("Pmc");
 		}
 	}
@@ -695,6 +750,7 @@ namespace PmcArena
 		Read(TEXT("passage_max_m"), Config.PassageMaxCm, 100.f, 50.f, 1000.f);
 		Read(TEXT("wall_min_height_m"), Config.WallHeightCm, 100.f, 100.f, 2000.f);
 		Config.PassageMaxCm = FMath::Max(Config.PassageMaxCm, Config.PassageMinCm);
+		PmcArenaScriptRules::ReadJson(**Arena, Config.Script);
 		Config.Source = FPaths::GetCleanFilename(Path);
 		TArray<FString> AreaErrors;
 		PmcArenaPlayAreaRules::ReadJson(**Arena, Config.PlayArea, AreaErrors);
@@ -2441,7 +2497,7 @@ namespace PmcArena
 		Root->SetStringField(TEXT("run"), State.RunName);
 		Root->SetBoolField(TEXT("record"), State.Options.bRecord);
 		Root->SetStringField(TEXT("weights_a"), State.Options.WeightsA.IsEmpty() ? TEXT("Content/Data/AI/pmc_commander.json") : State.Options.WeightsA);
-		Root->SetStringField(TEXT("weights_b"), State.Options.Opponent == EOpponent::Bot ? TEXT("None") : (State.Options.WeightsB.IsEmpty() ? TEXT("Content/Data/AI/pmc_commander.json") : State.Options.WeightsB));
+		Root->SetStringField(TEXT("weights_b"), State.Options.Opponent == EOpponent::Bot || State.Options.Opponent == EOpponent::Script ? TEXT("None") : (State.Options.WeightsB.IsEmpty() ? TEXT("Content/Data/AI/pmc_commander.json") : State.Options.WeightsB));
 		Root->SetBoolField(TEXT("objective"), State.Options.bObjective);
 		Root->SetStringField(TEXT("scenario"), State.Options.Scenario < 0 ? TEXT("random") : PmcCommanderRules::ScenarioName(static_cast<EPmcScenario>(State.Options.Scenario)));
 		{
@@ -2539,7 +2595,8 @@ namespace PmcArena
 			for (int32 Index = 0; Index < 2; ++Index)
 			{
 				TSharedRef<FJsonObject> Side = MakeShared<FJsonObject>();
-				Side->SetStringField(TEXT("team"), Index == 0 || State.Options.Opponent == EOpponent::Pmc ? TEXT("pmc") : (State.Options.Opponent == EOpponent::Bot ? TEXT("bot") : TEXT("player")));
+				Side->SetStringField(TEXT("team"), Index == 0 || State.Options.Opponent == EOpponent::Pmc ? TEXT("pmc") : (State.Options.Opponent == EOpponent::Bot ? TEXT("bot")
+					: (State.Options.Opponent == EOpponent::Script ? TEXT("script") : TEXT("player"))));
 				Side->SetNumberField(TEXT("survivors"), Result.Survivors[Index]);
 				Side->SetNumberField(TEXT("squad_size"), State.Options.Squad);
 				Side->SetNumberField(TEXT("hp_lost"), FMath::RoundToFloat(Result.HpLost[Index]));
@@ -2613,6 +2670,10 @@ namespace PmcArena
 				Tactical->SetNumberField(TEXT("ladder_roofs_picked"), Result.LadderRoofsPicked);
 				Tactical->SetNumberField(TEXT("ladder_roofs_total"), Result.LadderRoofsTotal);
 				Round->SetObjectField(TEXT("tactical"), Tactical);
+			}
+			if (Result.ScriptRun.IsValid())
+			{
+				Round->SetObjectField(TEXT("script"), Result.ScriptRun);
 			}
 			auto Pair = [&Result](auto Getter)
 			{
@@ -2998,6 +3059,135 @@ namespace PmcArena
 		}
 	}
 
+	/**
+	 * Opponent=Script (smart-enemies T-03): side B's walk for this round - its route (the tactical scenario's, else the navmesh path from B's
+	 * spawn to the objective / A's spawn), the waypoints every script_waypoint_m and each man's progress record. Called once B's men stand.
+	 */
+	void StartScript(FState& State, UPmcSquadSubsystem& Pmc, int32 Seed)
+	{
+		FScriptRun& Run = State.Script;
+		Run = FScriptRun();
+		Run.Mode = PmcArenaScriptRules::ResolveMode(State.Options.ScriptMode, Run.bFellBack);
+		if (Run.bFellBack)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArenaScript] Script=%s is not implemented yet (smart-enemies T-07): playing run"),
+				PmcArenaScriptRules::ModeName(State.Options.ScriptMode));
+		}
+		const FSide& B = State.Sides[1];
+		Run.Route = !State.TacticalRoute.IsEmpty() ? State.TacticalRoute : Pmc.RouteBetween(B.Spawn, State.bRoundObjective ? State.Objective : State.Sides[0].Spawn);
+		Run.Waypoints = PmcArenaScriptRules::WaypointsFromRoute(Run.Route, State.Config.Script.WaypointCm);
+		for (const TWeakObjectPtr<AOperativeCharacter>& Member : B.Members)
+		{
+			FScriptRun::FMan& Man = Run.Men.AddDefaulted_GetRef();
+			Man.Fighter = Member;
+		}
+		Run.bActive = !Run.Waypoints.IsEmpty() && !Run.Men.IsEmpty();
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaScript] seed %d mode %s (asked %s): route %d points %.0f m -> %d waypoints every %.1f m (arrive %.1f m, height %.1f m, %s), %d men of team %d, commander %s"),
+			Seed, PmcArenaScriptRules::ModeName(Run.Mode), PmcArenaScriptRules::ModeName(State.Options.ScriptMode), Run.Route.Num(), PmcArenaScriptRules::RouteLength(Run.Route) / 100.f,
+			Run.Waypoints.Num(), State.Config.Script.WaypointCm / 100.f, State.Config.Script.ArriveCm / 100.f, State.Config.Script.LevelCm / 100.f,
+			State.Config.Script.bSprint ? TEXT("sprint") : TEXT("walk"), Run.Men.Num(), B.TeamId, Pmc.IsTeamCommanded(B.TeamId) ? TEXT("ON (BUG)") : TEXT("off"));
+		if (!Run.bActive)
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArenaScript] seed %d: no route / no men - side B stands where it spawned"), Seed);
+		}
+	}
+
+	/**
+	 * One 10 Hz step of the scripted walk: every living man is sent to his next waypoint with the operative's own Move order (the shared
+	 * SquadOrderCatalog the commander uses) - a new order when he reached one (no stop in between), the same one again when his order ended
+	 * short of it. A man under his own SUPPRESS order (the body's return fire at a target just lost) is left to finish it. The commander is
+	 * off for the team: nothing else moves them but the operative's own rules.
+	 */
+	void StepScript(FState& State)
+	{
+		FScriptRun& Run = State.Script;
+		if (!Run.bActive)
+		{
+			return;
+		}
+		for (FScriptRun::FMan& Man : Run.Men)
+		{
+			AOperativeCharacter* Fighter = Man.Fighter.Get();
+			if (!SquadOrderCatalog::IsOperativeOrderable(Fighter))
+			{
+				continue;
+			}
+			Man.Next = PmcArenaScriptRules::AdvanceWaypoint(Run.Waypoints, Man.Next, FeetOf(*Fighter), State.Config.Script);
+			if (Man.Next >= Run.Waypoints.Num())
+			{
+				Man.GoalAtS = Man.GoalAtS < 0.f ? State.StageTime : Man.GoalAtS;
+				continue;
+			}
+			if (Fighter->HasSuppressOrder())
+			{
+				continue;
+			}
+			const bool bNewWaypoint = Man.Issued != Man.Next;
+			if (!bNewWaypoint && (Fighter->HasOwnMoveOrder() || State.StageTime < Man.RetryAt))
+			{
+				continue;
+			}
+			FSquadOrderContext Context;
+			Context.Operative = Fighter;
+			Context.Location = Run.Waypoints[Man.Next];
+			Context.bSprint = State.Config.Script.bSprint;
+			if (SquadOrderCatalog::Execute(ESquadOrder::Move, Context))
+			{
+				Man.Issued = Man.Next;
+				++Man.Orders;
+				Man.Reissues += bNewWaypoint ? 0 : 1;
+			}
+			else
+			{
+				++Man.Refused;
+			}
+			Man.RetryAt = State.StageTime + ScriptRetrySeconds;
+		}
+	}
+
+	/** The round's script record (the result JSON's rounds[].script) and one log line; the men's progress at the round's end. */
+	TSharedPtr<FJsonObject> SummariseScript(FState& State, int32 CommanderDecisions)
+	{
+		const FScriptRun& Run = State.Script;
+		TSharedRef<FJsonObject> Json = MakeShared<FJsonObject>();
+		Json->SetStringField(TEXT("mode"), PmcArenaScriptRules::ModeName(Run.Mode));
+		Json->SetStringField(TEXT("mode_asked"), PmcArenaScriptRules::ModeName(State.Options.ScriptMode));
+		Json->SetBoolField(TEXT("fell_back"), Run.bFellBack);
+		Json->SetNumberField(TEXT("route_points"), Run.Route.Num());
+		Json->SetNumberField(TEXT("route_m"), FMath::RoundToFloat(PmcArenaScriptRules::RouteLength(Run.Route) / 100.f));
+		Json->SetNumberField(TEXT("waypoints"), Run.Waypoints.Num());
+		Json->SetNumberField(TEXT("waypoint_m"), State.Config.Script.WaypointCm / 100.f);
+		Json->SetBoolField(TEXT("sprint"), State.Config.Script.bSprint);
+		Json->SetBoolField(TEXT("commanded"), false);
+		Json->SetNumberField(TEXT("commander_decisions"), CommanderDecisions);
+		TArray<TSharedPtr<FJsonValue>> MenJson;
+		FString Line;
+		int32 AtGoal = 0;
+		for (const FScriptRun::FMan& Man : Run.Men)
+		{
+			const AOperativeCharacter* Fighter = Man.Fighter.Get();
+			const bool bAtGoal = Man.Next >= Run.Waypoints.Num() && !Run.Waypoints.IsEmpty();
+			TSharedRef<FJsonObject> One = MakeShared<FJsonObject>();
+			One->SetStringField(TEXT("fighter"), Fighter ? Fighter->DisplayName.ToString() : TEXT("?"));
+			One->SetBoolField(TEXT("alive"), SquadOrderCatalog::IsOperativeOrderable(Fighter));
+			One->SetNumberField(TEXT("waypoint"), Man.Next);
+			One->SetBoolField(TEXT("reached_goal"), bAtGoal);
+			One->SetNumberField(TEXT("goal_at_s"), Man.GoalAtS);
+			One->SetNumberField(TEXT("orders"), Man.Orders);
+			One->SetNumberField(TEXT("reissues"), Man.Reissues);
+			One->SetNumberField(TEXT("refused"), Man.Refused);
+			AtGoal += bAtGoal ? 1 : 0;
+			Line += FString::Printf(TEXT(" %s:%d/%d%s"), Fighter ? *Fighter->DisplayName.ToString() : TEXT("?"), Man.Next, Run.Waypoints.Num(),
+				SquadOrderCatalog::IsOperativeOrderable(Fighter) ? TEXT("") : TEXT("(down)"));
+			MenJson.Add(MakeShared<FJsonValueObject>(One));
+		}
+		Json->SetNumberField(TEXT("men_at_goal"), AtGoal);
+		Json->SetArrayField(TEXT("men"), MenJson);
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArenaScript] round %d over: %d of %d men reached the goal waypoint, waypoint index per man:%s; commander decisions of team %d: %d"),
+			State.Round, AtGoal, Run.Men.Num(), *Line, State.Sides[1].TeamId, CommanderDecisions);
+		return Json;
+	}
+
 	void StartRound(FState& State, UWorld* World)
 	{
 		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
@@ -3018,7 +3208,8 @@ namespace PmcArena
 		Pmc->ResetTeam(TeamA);
 		Pmc->ResetTeam(TeamB);
 		// The attacker alternates with the round seed's parity (even = A); task #53: the round's scenario and objective.
-		const bool bAAttacks = (Seed % 2) == 0;
+		// Opponent=Script (T-03): side B is the scripted ATTACKER of every round (A defends on its posts), whatever the seed's parity.
+		const bool bAAttacks = State.Options.Opponent == EOpponent::Script ? false : (Seed % 2) == 0;
 		State.bAAttacks = bAAttacks;
 		const int32 AttackerIndex = bAAttacks ? 0 : 1;
 		const FString ScenarioRequested = State.Options.Scenario < 0 ? FString(TEXT("random")) : FString(PmcCommanderRules::ScenarioName(static_cast<EPmcScenario>(State.Options.Scenario)));
@@ -3114,7 +3305,7 @@ namespace PmcArena
 		Pmc->SetTeamCommanded(TeamA, true, &State.WeightsA);
 		// Side B.
 		FSide& B = State.Sides[1];
-		if (State.Options.Opponent == EOpponent::Pmc)
+		if (IsPmcSideB(State.Options.Opponent))
 		{
 			Pmc->SetTeamWeights(TeamB, State.WeightsB);
 			const bool bTacticalB = bTacticalRound && bAAttacks;
@@ -3133,7 +3324,8 @@ namespace PmcArena
 			{
 				PlaceAround(State, World, B, State.bRoundObjective ? State.Objective : State.Sides[0].Spawn);
 			}
-			Pmc->SetTeamCommanded(TeamB, true, &State.WeightsB);
+			// Opponent=Script: no commander - the follower walks the team, the men fire back by the body's own rules.
+			Pmc->SetTeamCommanded(TeamB, State.Options.Opponent != EOpponent::Script, &State.WeightsB);
 		}
 		else
 		{
@@ -3232,6 +3424,11 @@ namespace PmcArena
 					Member->SetActorLocation(Member->GetActorLocation() + FVector(100000.f + Index * 500.f, 50000.f, 0.f), false, nullptr, ETeleportType::TeleportPhysics);
 				}
 			}
+		}
+		State.Script = FScriptRun();
+		if (State.Options.Opponent == EOpponent::Script)
+		{
+			StartScript(State, *Pmc, Seed);
 		}
 		for (FSide& Side : State.Sides)
 		{
@@ -3355,6 +3552,12 @@ namespace PmcArena
 		Result.AttackerHeld = State.Clock.Held;
 		SampleTrack(State, World, TrackInterval); // the last sample
 		Result.EndReason = Outcome.Reason;
+		if (State.Options.Opponent == EOpponent::Script)
+		{
+			// Opponent=Script (T-03): where the walk ended, and that the commander took no decision for team B (Stats.OrdersIssued counts its picks only).
+			Result.ScriptRun = SummariseScript(State, Result.Stats[1].OrdersIssued);
+			State.Script.bActive = false;
+		}
 		const int32 AttackerIndex = State.bAAttacks ? 0 : 1;
 		for (int32 Index = 0; Index < 2; ++Index)
 		{
@@ -3588,7 +3791,7 @@ namespace PmcArena
 			State.Sides[0].Label = TEXT("A");
 			State.Sides[0].Spawn = Start;
 			State.Sides[0].Facing = (Far - Start).GetSafeNormal2D().Rotation();
-			State.Sides[1].TeamId = State.Options.Opponent == EOpponent::Pmc ? TeamB : PmcTeam::Player;
+			State.Sides[1].TeamId = IsPmcSideB(State.Options.Opponent) ? TeamB : PmcTeam::Player;
 			State.Sides[1].Label = TEXT("B");
 			State.Sides[1].Spawn = Far;
 			State.Sides[1].Facing = (Start - Far).GetSafeNormal2D().Rotation();
@@ -3603,7 +3806,7 @@ namespace PmcArena
 					State.GroundZ = static_cast<float>(OnNav.Location.Z);
 				}
 			}
-			if (State.Options.Opponent == EOpponent::Pmc)
+			if (IsPmcSideB(State.Options.Opponent))
 			{
 				ParkPlayerSquad(State, World);
 			}
@@ -3666,6 +3869,7 @@ namespace PmcArena
 		{
 			SampleTrack(State, World, StepSeconds);
 			ApplyTeamOverlays(State);
+			StepScript(State);
 			// record=1: the camera follows every rendered frame (RunWith's frame ticker), not this 10 Hz step.
 			if (State.Options.bShots && State.Round == 1)
 			{
@@ -3838,7 +4042,7 @@ namespace PmcArena
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
-		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
+		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot|script script=run|bound time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 
 	static FAutoConsoleCommandWithWorldAndArgs SmokeCommand(
