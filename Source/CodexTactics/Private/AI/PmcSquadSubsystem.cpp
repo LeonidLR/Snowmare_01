@@ -3450,21 +3450,13 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		}
 		return nullptr;
 	};
+	const bool bRoof = Team.Defence.bRoof;
+	// The kill zone. A ground objective: the objective itself. A roof: the street toward the attackers, 0.5 x the first man's reach out.
 	AOperativeCharacter* Lead = MemberOf(Posts[Shooters[0]].Index);
 	if (!Lead)
 	{
 		return;
 	}
-	// The kill zone and the weapon band. A ground objective: the objective itself. A roof: the street toward the attackers at the band's middle.
-	const float Range = Lead->CurrentWeapon ? Lead->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
-	FPmcEngagementBand Band = PmcCommanderRules::ResolveBand(Lead->CurrentWeapon ? Lead->CurrentWeapon->WeaponId : FString(), Range, Team.Weights);
-	if (!Band.IsValid())
-	{
-		Band.MinCm = 0.f;
-		Band.MaxCm = Range * 0.95f;
-	}
-	Band.MaxCm = FMath::Min(Band.MaxCm, Range * 0.9f); // the 3-D distance from a roof must stay inside his reach
-	const bool bRoof = Team.Defence.bRoof;
 	FVector KillZone = Objective.Location;
 	if (bRoof)
 	{
@@ -3472,124 +3464,158 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		{
 			return;
 		}
+		const float LeadReach = Lead->CurrentWeapon ? Lead->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
 		const FVector Toward = (Team.Defence.ApproachPoint - Objective.Location).GetSafeNormal2D();
-		const float Reach = FMath::Min(static_cast<float>(FVector::Dist2D(Team.Defence.ApproachPoint, Objective.Location)), 0.5f * (Band.MinCm + Band.MaxCm));
+		const float Reach = FMath::Min(static_cast<float>(FVector::Dist2D(Team.Defence.ApproachPoint, Objective.Location)), 0.45f * LeadReach);
 		KillZone = FVector(Objective.Location.X, Objective.Location.Y, Team.Defence.ApproachPoint.Z) + Toward * Reach;
 	}
 	const float AreaRadius = FMath::Max(Objective.RadiusCm, 600.f);
-	const TArray<FFiringCandidate>& All = Service->GetCandidates(KillZone, AreaRadius, Band.MinCm, Band.MaxCm);
 	FPmcDefenceConfig AreaConfig;
 	AreaConfig.LevelToleranceCm = Objective.LevelToleranceCm;
-	TArray<FFiringCandidate> Eligible;
-	for (const FFiringCandidate& Candidate : All)
+
+	// Each man's own candidates: his weapon's reach is the band (0.2 .. 0.9 of it), so a shotgun man gets close cover and a rifleman far cover.
+	struct FSeat
 	{
-		const FFiringPosition& Pos = Candidate.Position;
-		if (!Pos.bValid)
+		int32 PostIndex = INDEX_NONE;
+		AOperativeCharacter* Fighter = nullptr;
+		TArray<FFiringCandidate> Eligible;
+	};
+	TArray<FSeat> Seats;
+	for (const int32 PostIndex : Shooters)
+	{
+		FSeat Seat;
+		Seat.PostIndex = PostIndex;
+		Seat.Fighter = MemberOf(Posts[PostIndex].Index);
+		if (!Seat.Fighter)
 		{
 			continue;
 		}
-		if (bRoof)
+		const float Reach = Seat.Fighter->CurrentWeapon ? Seat.Fighter->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
+		const float BandMax = 0.9f * Reach;
+		const float BandMin = 0.2f * BandMax;
+		for (const FFiringCandidate& Candidate : Service->GetCandidates(KillZone, AreaRadius, BandMin, BandMax))
 		{
-			if (Pos.Kind != EFiringPositionKind::RoofEdge
-				|| !PmcDefenceRules::IsInsideDefendedArea(Pos.StandPoint, Objective.Location, Team.Defence.LevelZ, Objective.RadiusCm, Team.Defence.Spots, AreaConfig))
+			const FFiringPosition& Pos = Candidate.Position;
+			if (!Pos.bValid)
 			{
 				continue;
 			}
-		}
-		else
-		{
-			// On the ground a man takes a cover slot (the arena counts a defender on position when he is in cover); window stands and roof edges are not that.
-			if ((Pos.Kind != EFiringPositionKind::Corner && Pos.Kind != EFiringPositionKind::LowCover)
-				|| !PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(Pos.StandPoint.Z), static_cast<float>(Objective.Location.Z), Objective.LevelToleranceCm))
+			if (bRoof)
 			{
-				continue;
+				if (Pos.Kind != EFiringPositionKind::RoofEdge
+					|| !PmcDefenceRules::IsInsideDefendedArea(Pos.StandPoint, Objective.Location, Team.Defence.LevelZ, Objective.RadiusCm, Team.Defence.Spots, AreaConfig))
+				{
+					continue;
+				}
 			}
-			// A defender never stands forward of his kill zone (nearer the attackers' spawn than the zone).
-			if (Team.Defence.bHasApproach && FVector::Dist2D(Pos.StandPoint, Team.Defence.ApproachPoint) < FVector::Dist2D(KillZone, Team.Defence.ApproachPoint))
+			else
 			{
-				continue;
+				// On the ground a man takes a cover slot (the arena counts a defender on position when he is in cover); window stands and roof edges are not that.
+				if ((Pos.Kind != EFiringPositionKind::Corner && Pos.Kind != EFiringPositionKind::LowCover)
+					|| !PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(Pos.StandPoint.Z), static_cast<float>(Objective.Location.Z), Objective.LevelToleranceCm))
+				{
+					continue;
+				}
+				// A defender never stands forward of his kill zone (nearer the attackers' spawn than the zone).
+				if (Team.Defence.bHasApproach && FVector::Dist2D(Pos.StandPoint, Team.Defence.ApproachPoint) < FVector::Dist2D(KillZone, Team.Defence.ApproachPoint))
+				{
+					continue;
+				}
 			}
+			Seat.Eligible.Add(Candidate);
 		}
-		Eligible.Add(Candidate);
+		Seats.Add(MoveTemp(Seat));
 	}
-	// Every sector shooter gets a seat (an idle man in the open before contact is the metric): the first two hammers a crossfire pair on the ground
-	// (the best roof edges on a roof), the rest the best remaining positions, 5 m apart, one cover object each.
-	TArray<FFiringPosition> Chosen;
-	float CrossfireDeg = -1.f;
-	if (!bRoof && Shooters.Num() >= 2)
-	{
-		int32 First = INDEX_NONE;
-		int32 Second = INDEX_NONE;
-		if (FiringPositionRules::PickCrossfirePair(Eligible, KillZone, TConstArrayView<FString>(), Config, First, Second))
-		{
-			Chosen.Add(Eligible[First].Position);
-			Chosen.Add(Eligible[Second].Position);
-			CrossfireDeg = FiringPositionRules::CrossfireAngleDeg(Chosen[0].StandPoint, Chosen[1].StandPoint, KillZone);
-		}
-	}
-	while (Chosen.Num() < Shooters.Num())
-	{
-		int32 BestIndex = INDEX_NONE;
-		float BestScore = 0.f;
-		for (int32 Index = 0; Index < Eligible.Num(); ++Index)
-		{
-			const FFiringCandidate& Candidate = Eligible[Index];
-			const float Score = Candidate.Score * FiringPositionRules::SpacingOf(Candidate.Position, Chosen, TConstArrayView<FString>(), Config);
-			if (Candidate.Position.bValid && Score > BestScore)
-			{
-				BestIndex = Index;
-				BestScore = Score;
-			}
-		}
-		if (BestIndex == INDEX_NONE)
-		{
-			break;
-		}
-		Chosen.Add(Eligible[BestIndex].Position);
-		// A spaced-out pick only: a position the spacing already penalised is not taken by a third man this way.
-		Eligible.RemoveAtSwap(BestIndex);
-	}
-	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: firing positions on %s (kill zone r %.0f cm, band %.0f..%.0f cm): %d eligible of %d valid, %d chosen for %d shooters%s"), TeamId,
-		*KillZone.ToCompactString(), AreaRadius, Band.MinCm, Band.MaxCm, Eligible.Num(), All.Num(), Chosen.Num(), Shooters.Num(), bRoof ? TEXT(" (roof)") : TEXT(""));
-	if (Chosen.IsEmpty())
+	if (Seats.IsEmpty())
 	{
 		return;
 	}
-	// Seats: the man nearest to a position takes it (the pair first), no man twice.
-	TArray<bool> Taken;
-	Taken.Init(false, Shooters.Num());
-	for (int32 Seat = 0; Seat < Chosen.Num(); ++Seat)
+	// The hammers (the first two shooters): the best position of the first, then the best partner of the second that crosses it (a roof: no crossfire, the best positions).
+	TArray<FFiringPosition> Chosen;
+	Chosen.SetNum(Seats.Num());
+	TArray<bool> Has;
+	Has.Init(false, Seats.Num());
+	float CrossfireDeg = -1.f;
+	if (!bRoof && Seats.Num() >= 2)
 	{
-		const FFiringPosition& Pos = Chosen[Seat];
-		int32 Man = INDEX_NONE;
-		double BestDistance = TNumericLimits<double>::Max();
-		for (int32 Index = 0; Index < Shooters.Num(); ++Index)
+		float BestSum = 0.f;
+		int32 BestA = INDEX_NONE;
+		int32 BestB = INDEX_NONE;
+		for (int32 A = 0; A < Seats[0].Eligible.Num(); ++A)
 		{
-			const AOperativeCharacter* Fighter = MemberOf(Posts[Shooters[Index]].Index);
-			if (Taken[Index] || !Fighter)
+			const FFiringCandidate& First = Seats[0].Eligible[A];
+			for (int32 B = 0; B < Seats[1].Eligible.Num(); ++B)
 			{
-				continue;
-			}
-			const double Distance = FVector::Dist(Fighter->GetActorLocation(), Pos.StandPoint);
-			if (Distance < BestDistance)
-			{
-				BestDistance = Distance;
-				Man = Index;
+				const FFiringCandidate& Second = Seats[1].Eligible[B];
+				if (!FiringPositionRules::CrossfireOk(First.Position.StandPoint, Second.Position.StandPoint, KillZone, Config.CrossfireMinDeg, Config.LineClearCm))
+				{
+					continue;
+				}
+				const float Sum = First.Score * FiringPositionRules::SpacingOf(First.Position, TConstArrayView<FFiringPosition>(), TConstArrayView<FString>(), Config)
+					+ Second.Score * FiringPositionRules::SpacingOf(Second.Position, MakeArrayView(&First.Position, 1), TConstArrayView<FString>(), Config);
+				if (Sum > BestSum)
+				{
+					BestSum = Sum;
+					BestA = A;
+					BestB = B;
+				}
 			}
 		}
-		if (Man == INDEX_NONE)
+		if (BestA != INDEX_NONE)
 		{
-			break;
+			Chosen[0] = Seats[0].Eligible[BestA].Position;
+			Chosen[1] = Seats[1].Eligible[BestB].Position;
+			Has[0] = Has[1] = true;
+			CrossfireDeg = FiringPositionRules::CrossfireAngleDeg(Chosen[0].StandPoint, Chosen[1].StandPoint, KillZone);
 		}
-		Taken[Man] = true;
-		AOperativeCharacter* Fighter = MemberOf(Posts[Shooters[Man]].Index);
+	}
+	// Everybody else (and the hammers when no pair exists): his best position, spaced from the chosen ones, one cover object each.
+	int32 Taken = 0;
+	for (int32 Man = 0; Man < Seats.Num(); ++Man)
+	{
+		if (!Has[Man])
+		{
+			TArray<FFiringPosition> Others;
+			for (int32 Other = 0; Other < Seats.Num(); ++Other)
+			{
+				if (Has[Other])
+				{
+					Others.Add(Chosen[Other]);
+				}
+			}
+			float BestScore = 0.f;
+			for (const FFiringCandidate& Candidate : Seats[Man].Eligible)
+			{
+				const float Score = Candidate.Score * FiringPositionRules::SpacingOf(Candidate.Position, Others, TConstArrayView<FString>(), Config);
+				if (Score > BestScore)
+				{
+					BestScore = Score;
+					Chosen[Man] = Candidate.Position;
+					Has[Man] = true;
+				}
+			}
+		}
+		Taken += Has[Man] ? 1 : 0;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: firing positions on %s (kill zone r %.0f cm): %d of %d shooters seated%s"), TeamId, *KillZone.ToCompactString(), AreaRadius, Taken,
+		Seats.Num(), bRoof ? TEXT(" (roof)") : TEXT(""));
+	for (int32 Man = 0; Man < Seats.Num(); ++Man)
+	{
+		AOperativeCharacter* Fighter = Seats[Man].Fighter;
+		if (!Has[Man])
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s keeps his G008 post: no firing position in his reach (%d eligible)"), TeamId, *Fighter->DisplayName.ToString(),
+				Seats[Man].Eligible.Num());
+			continue;
+		}
+		const FFiringPosition& Pos = Chosen[Man];
 		if (!HasFullNavPath(Fighter->GetActorLocation(), Pos.StandPoint))
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s keeps his G008 post: no full path to the firing position %s %s"), TeamId, *Fighter->DisplayName.ToString(),
 				FiringPositionRules::KindName(Pos.Kind), *Pos.SourceId);
 			continue;
 		}
-		FPmcDefencePost& Post = Posts[Shooters[Man]];
+		FPmcDefencePost& Post = Posts[Seats[Man].PostIndex];
 		Post.Location = Pos.StandPoint;
 		Post.Yaw = Pos.FacingYaw;
 		Post.SpotIndex = INDEX_NONE;
