@@ -88,6 +88,8 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -312,6 +314,11 @@ namespace PmcArena
 		int32 LadderRoofsTotal = 0;
 		/** G008: the round's defence block (living defenders). Guard share is n/a when no roof access was found. */
 		float DefenceSpreadM = 0.f;
+		TArray<TSharedPtr<FJsonValue>> OpenIdleByFighter;
+		TOptional<float> OnPositionBeforeContact;
+		TOptional<float> CrossfireDeg;
+		double MaxExposedRunM = 0.0;
+		TOptional<float> FirstShotGapS;
 		bool bGuardShareApplicable = false;
 		float GuardShare = 0.f;
 		int32 SharedCoverPairs = 0;
@@ -400,6 +407,14 @@ namespace PmcArena
 		int32 GuardNearSamples = 0;
 		int32 GuardApplicableSamples = 0;
 		int32 SharedCoverPairs = 0;
+		/** T-04: one previous observation and a running total per member; no additional track frames. */
+		TArray<FPmcArenaPositionSample> PositionSamples[2];
+		TArray<FPmcArenaPositionTime> PositionTotals[2];
+		float LastPositionTimeS = -1.f;
+		TOptional<float> OnPositionBeforeContact;
+		bool bOpeningShotObserved = false;
+		TOptional<float> CrossfireDeg;
+		FPmcArenaOpeningShots DefenderOpeningShots;
 	};
 	constexpr float TrackInterval = 0.2f;
 
@@ -1621,6 +1636,138 @@ namespace PmcArena
 		return Times;
 	}
 
+	bool PositionFighterAlive(const AOperativeCharacter* Fighter)
+	{
+		return Fighter && !Fighter->IsKilledInAction() && Fighter->HealthComponent && Fighter->HealthComponent->IsAlive();
+	}
+
+	bool HasNearbyArenaCoverSlot(UWorld& World, const FVector& Feet, const FCollisionQueryParams& Params,
+		const TArray<const AActor*>& Ignored, UNavigationSystemV1* Nav, const FNavAgentProperties& Agent)
+	{
+		// T-04's reach is measured to the stand point, rather than the face of the wall.
+		constexpr float SlotReachCm = 200.f;
+		constexpr int32 DirectionCount = 16;
+		FCoverTraceConfig Config;
+		Config.MaxEdgeProbes = 0; // the existence of a slot does not depend on its corners
+		const FVector Start = Feet + FVector(0.f, 0.f, Config.KneeHeightCm);
+		const float RayReach = SlotReachCm + 2.f * Config.SlotOffsetCm;
+		for (int32 Step = 0; Step < DirectionCount; ++Step)
+		{
+			const FVector Direction = FRotator(0.f, Step * (360.f / DirectionCount), 0.f).Vector();
+			FHitResult Hit;
+			FCoverSlot Slot;
+			if (!World.LineTraceSingleByChannel(Hit, Start, Start + Direction * RayReach, ECC_Visibility, Params)
+				|| !CoverTraceRules::FindCoverSlotAt(&World, Hit.ImpactPoint, Direction, Slot, Config, Ignored))
+			{
+				continue;
+			}
+			FNavLocation OnNav;
+			if (Nav && Nav->ProjectPointToNavigation(Slot.WorldLocation, OnNav, Config.NavProjectExtent, &Agent)
+				&& PmcTacticalRules::IsAtPost(Feet, OnNav.Location, SlotReachCm, Config.NavProjectExtent.Z))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void SamplePositions(FState& State, UWorld& World)
+	{
+		FTrack& Track = State.Track;
+		const bool bBeforeContact = !Track.OnPositionBeforeContact.IsSet();
+		const bool bHasPrevious = Track.LastPositionTimeS >= 0.f;
+		const float DeltaS = State.StageTime - Track.LastPositionTimeS;
+		if (bHasPrevious && DeltaS <= 0.f)
+		{
+			return;
+		}
+
+		const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(&World);
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(&World);
+		const int32 AttackerIndex = State.bAAttacks ? 0 : 1;
+		TArray<const AActor*> Ignored;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(PmcArenaPositionCover), false);
+		for (const TWeakObjectPtr<AOperativeCharacter>& Member : Track.Fighters)
+		{
+			if (const AOperativeCharacter* Fighter = Member.Get())
+			{
+				Ignored.Add(Fighter);
+				Params.AddIgnoredActor(Fighter);
+			}
+		}
+
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			const auto& Members = State.Sides[Side].Members;
+			const FPmcWeights& Weights = Side == 0 ? State.WeightsA : State.WeightsB;
+			for (int32 Index = 0; Index < Members.Num(); ++Index)
+			{
+				const AOperativeCharacter* Fighter = Members[Index].Get();
+				FPmcArenaPositionSample Sample;
+				Sample.bAlive = PositionFighterAlive(Fighter);
+				if (Sample.bAlive)
+				{
+					constexpr double IdleSpeedCmPerS = 15.0; // operative locomotion's movement threshold, without its order bit
+					Sample.Feet = FeetOf(*Fighter);
+					Sample.WeaponRangeCm = Fighter->CurrentWeapon ? Fighter->CurrentWeapon->Stats.Range.MaxRangeCm : 0.f;
+					Sample.bMoving = Fighter->GetVelocity().SizeSquared() > FMath::Square(IdleSpeedCmPerS)
+						|| Fighter->IsMantling() || Fighter->IsClimbingLadder();
+					const FPmcTacticalPost* Post = Pmc ? Pmc->GetFighterPost(Fighter) : nullptr;
+					Sample.bOnPosition = Fighter->bInCover || (Post && PmcTacticalRules::IsAtPost(Sample.Feet, Post->Location,
+						UPmcSquadSubsystem::PostArriveCm, Weights.LevelToleranceCm));
+					Sample.bWalking = Side == AttackerIndex && Sample.bMoving && Fighter->GetCharacterMovement()->IsMovingOnGround()
+						&& !Fighter->IsMantling() && !Fighter->IsClimbingLadder();
+					if (Sample.bWalking)
+					{
+						Sample.bNearCoverSlot = Fighter->bInCover || HasNearbyArenaCoverSlot(World, Sample.Feet, Params, Ignored,
+							Nav, Fighter->GetNavAgentPropertiesRef());
+					}
+				}
+				FPmcArenaPositionSample& Previous = Track.PositionSamples[Side][Index];
+				if (bHasPrevious)
+				{
+					Track.PositionTotals[Side][Index].AddInterval(Previous, Sample, DeltaS, bBeforeContact);
+				}
+				Previous = Sample;
+			}
+		}
+
+		const auto& Defenders = Track.PositionSamples[1 - AttackerIndex];
+		if (bBeforeContact && PmcArenaBehaviourRules::AttackersInRange(Defenders, Track.PositionSamples[AttackerIndex]))
+		{
+			Track.OnPositionBeforeContact = PmcArenaBehaviourRules::OnPositionShare(Defenders);
+		}
+		Track.LastPositionTimeS = State.StageTime;
+	}
+
+	void ObservePositionShot(FState& State, int32 ShooterSide, AOperativeCharacter* Shooter, const AOperativeCharacter* HitVictim)
+	{
+		FTrack& Track = State.Track;
+		const int32 AttackerIndex = State.bAAttacks ? 0 : 1;
+		if (!Track.bOpeningShotObserved)
+		{
+			Track.bOpeningShotObserved = true;
+			TArray<FVector> Feet[2];
+			for (int32 Side = 0; Side < 2; ++Side)
+			{
+				for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[Side].Members)
+				{
+					const AOperativeCharacter* Fighter = Member.Get();
+					// The fire delegate follows damage application: include the first shot's victim if the hit killed him.
+					if (PositionFighterAlive(Fighter) || (Fighter && Fighter == HitVictim))
+					{
+						Feet[Side].Add(FeetOf(*Fighter));
+					}
+				}
+			}
+			Track.CrossfireDeg = PmcArenaBehaviourRules::CrossfireDeg(Feet[1 - AttackerIndex], Feet[AttackerIndex]);
+		}
+		if (ShooterSide != AttackerIndex)
+		{
+			Track.DefenderOpeningShots.Record(Track.Fighters.IndexOfByKey(Shooter), Shooter->GetWorld()->GetTimeSeconds());
+		}
+	}
+
 	void StartTrack(FState& State, UWorld* World)
 	{
 		FTrack& Track = State.Track;
@@ -1664,6 +1811,18 @@ namespace PmcArena
 		Track.GuardNearSamples = 0;
 		Track.GuardApplicableSamples = 0;
 		Track.SharedCoverPairs = 0;
+		Track.LastPositionTimeS = -1.f;
+		Track.OnPositionBeforeContact.Reset();
+		Track.bOpeningShotObserved = false;
+		Track.CrossfireDeg.Reset();
+		Track.DefenderOpeningShots = FPmcArenaOpeningShots();
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			Track.PositionSamples[Side].Reset();
+			Track.PositionSamples[Side].SetNum(State.Sides[Side].Members.Num());
+			Track.PositionTotals[Side].Reset();
+			Track.PositionTotals[Side].SetNum(State.Sides[Side].Members.Num());
+		}
 		FState* StatePtr = &State;
 		// fix/arena-rpg-contact-roof: an RPG-7 rocket's burst within launcher.radius_cm (suppression.json) of a live enemy of its shooter is
 		// contact (a round where only rockets flew was a no_contact draw, -3 in the trainer). Bound once for the run.
@@ -1736,6 +1895,11 @@ namespace PmcArena
 					const AOperativeCharacter* Victim = Cast<AOperativeCharacter>(Target);
 					const int32 ShooterSide = SideIndexOf(*StatePtr, Shooter);
 					const int32 VictimSide = SideIndexOf(*StatePtr, Victim);
+					if (StatePtr->Stage == 2 && Shooter && IsSideIndex(ShooterSide))
+					{
+						ObservePositionShot(*StatePtr, ShooterSide, Shooter,
+							bHit && VictimSide == 1 - ShooterSide ? Victim : nullptr);
+					}
 					// The RPG-7's launch (fix/arena-rpg-contact-roof): counted per side whatever its target; at an enemy it is a shot below, and its
 					// burst near an enemy is another contact moment (the projectile listener).
 					if (Shooter && IsSideIndex(ShooterSide) && Shooter->IsLauncherEquipped())
@@ -1880,6 +2044,7 @@ namespace PmcArena
 			return;
 		}
 		Track.SampleTimer = TrackInterval;
+		SamplePositions(State, *World);
 		const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
 		TArray<TSharedPtr<FJsonValue>> Frame;
 		TArray<TSharedPtr<FJsonValue>> Detail;
@@ -2388,6 +2553,22 @@ namespace PmcArena
 				}
 				Defence->SetNumberField(TEXT("shared_cover_pairs"), Result.SharedCoverPairs);
 				Defence->SetNumberField(TEXT("objective_share"), FMath::RoundToFloat(Result.ObjectiveShare * 100.f) / 100.f);
+				Defence->SetArrayField(TEXT("open_idle_s"), Result.OpenIdleByFighter);
+				auto WriteObservation = [&Defence](const TCHAR* Key, const TOptional<float>& Value)
+				{
+					if (Value.IsSet())
+					{
+						Defence->SetNumberField(Key, FMath::RoundToFloat(Value.GetValue() * 100.f) / 100.f);
+					}
+					else
+					{
+						Defence->SetField(Key, MakeShared<FJsonValueNull>());
+					}
+				};
+				WriteObservation(TEXT("on_position_before_contact"), Result.OnPositionBeforeContact);
+				WriteObservation(TEXT("crossfire_deg"), Result.CrossfireDeg);
+				Defence->SetNumberField(TEXT("max_exposed_run_m"), FMath::RoundToDouble(Result.MaxExposedRunM * 100.0) / 100.0);
+				WriteObservation(TEXT("first_shot_gap_s"), Result.FirstShotGapS);
 				Round->SetObjectField(TEXT("defence"), Defence);
 			}
 			if (Result.RouteM >= 0.f)
@@ -2992,11 +3173,41 @@ namespace PmcArena
 			State.bRoundObjective ? TEXT("on") : TEXT("off"), *State.Objective.ToCompactString(), State.Config.ObjectiveRadiusCm / 100.f, State.Config.HoldSeconds);
 	}
 
+	void FinishPositionMetrics(FState& State, UWorld& World, FRoundResult& Result)
+	{
+		SamplePositions(State, World);
+		const FTrack& PositionTrack = State.Track;
+		const int32 AttackerIndex = State.bAAttacks ? 0 : 1;
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			for (int32 Index = 0; Index < State.Sides[Side].Members.Num(); ++Index)
+			{
+				const AOperativeCharacter* Fighter = State.Sides[Side].Members[Index].Get();
+				const FPmcArenaPositionTime& Time = PositionTrack.PositionTotals[Side][Index];
+				TSharedRef<FJsonObject> Idle = MakeShared<FJsonObject>();
+				Idle->SetNumberField(TEXT("fighter_index"), PositionTrack.Fighters.IndexOfByKey(State.Sides[Side].Members[Index]));
+				Idle->SetStringField(TEXT("id"), Fighter ? Fighter->DisplayName.ToString() : TEXT("?"));
+				Idle->SetStringField(TEXT("side"), Side == 0 ? TEXT("A") : TEXT("B"));
+				Idle->SetNumberField(TEXT("total_s"), FMath::RoundToFloat(Time.OpenIdleS * 100.f) / 100.f);
+				Idle->SetNumberField(TEXT("before_contact_s"), FMath::RoundToFloat(Time.OpenIdleBeforeContactS * 100.f) / 100.f);
+				Result.OpenIdleByFighter.Add(MakeShared<FJsonValueObject>(Idle));
+				if (Side == AttackerIndex)
+				{
+					Result.MaxExposedRunM = FMath::Max(Result.MaxExposedRunM, Time.MaxExposedRunCm / 100.0);
+				}
+			}
+		}
+		Result.OnPositionBeforeContact = PositionTrack.OnPositionBeforeContact;
+		Result.CrossfireDeg = PositionTrack.CrossfireDeg;
+		Result.FirstShotGapS = PositionTrack.DefenderOpeningShots.GapS();
+	}
+
 	void EndRound(FState& State, UWorld* World, const FPmcRoundOutcome& Outcome)
 	{
 		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
 		FRoundResult& Result = State.Results.Last();
 		Result.Duration = State.StageTime;
+		FinishPositionMetrics(State, *World, Result);
 		UpdateDamage(State);
 		const TCHAR* Why = *Outcome.Reason;
 		for (int32 Index = 0; Index < 2; ++Index)
@@ -3321,6 +3532,7 @@ namespace PmcArena
 			StartRound(State, World);
 			State.Stage = 2;
 			State.StageTime = 0.f;
+			SamplePositions(State, *World);
 			return true;
 		case 2: // the fight
 		{

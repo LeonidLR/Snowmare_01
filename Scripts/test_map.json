@@ -1311,9 +1311,9 @@
     {
       "name": "tactical-pmc-2026-11-17",
       "_comment": "TACTICAL_MAP P2 / P3 (designer 2026-11-17: the dangerous places affect gameplay and feed the trainer): the PMC commander's terrain terms + the squad's placement on the tactical map's spots (AI/PmcTacticalRules, UPmcSquadSubsystem::SpawnSquadTactical / AssignTacticalPosts, pmc_commander.json terrain_danger / ambush_exit / overwatch_roof / window_position / route_cover / chokepoint_avoid), the arena's tactical scenario and the round's behaviour metrics (AI/PmcArenaBehaviourRules, G002 codex.pmc_arena_behaviour/1).",
-      "globs": ["Source/**/AI/PmcTactical*", "Source/**/AI/PmcArenaBehaviour*", "Source/**/Debug/TacticalPmcSmoke*", "Source/CodexTacticsTests/Private/AI/PmcTacticalRulesTest*", "Source/CodexTacticsTests/Private/AI/PmcArenaBehaviourRulesTest*", "Content/Data/LevelJson/L_Gen_Depot_X4.json", "Content/Data/LevelJson/L_Gen_Test_X2.json"],
-      "tests": ["CodexTactics.AI.PmcTactical", "CodexTactics.AI.PmcArena", "CodexTactics.AI.PmcCommander", "CodexTactics.LevelGen.TacticalMap"],
-      "smokes": ["TacticalPmcSmoke", "PmcArenaTacticalSmoke", "TacticalMapSmoke", "PmcStalemateSmoke", "PmcEncounterSmoke"]
+      "globs": ["Source/**/AI/PmcTactical*", "Source/**/AI/PmcArenaBehaviour*", "Source/**/Debug/TacticalPmcSmoke*", "Source/**/Debug/PmcArenaCommand.cpp", "Source/CodexTacticsTests/Private/AI/PmcTacticalRulesTest*", "Source/CodexTacticsTests/Private/AI/PmcArenaBehaviourRulesTest*", "Content/Data/LevelJson/L_Gen_Depot_X4.json", "Content/Data/LevelJson/L_Gen_Test_X2.json"],
+      "tests": ["CodexTactics.AI.PmcTactical", "CodexTactics.AI.PmcArena", "CodexTactics.AI.PmcArenaBehaviour", "CodexTactics.AI.PmcCommander", "CodexTactics.LevelGen.TacticalMap"],
+      "smokes": ["TacticalPmcSmoke", "PmcArenaTacticalSmoke", "PmcRoofDefenceSmoke", "TacticalMapSmoke", "PmcStalemateSmoke", "PmcEncounterSmoke"]
     },
     {
       "name": "turret-power-2026-11-17",
