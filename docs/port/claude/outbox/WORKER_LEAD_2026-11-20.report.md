@@ -22,8 +22,7 @@ Machine: codex-worker, checkout C:\Work\CodexTactics-slot1. Brief: docs/port/WOR
 | alley T-05 iter 1 | c4f8f561 | 0 | 9.4 | 15.3 | 2.42 |
 | crossroads T-05 kill zone 0.25 | 4588fbbc | 0.33 | 3.1 | 22.8 | 1.85 |
 | alley T-05 kill zone 0.25 | 4588fbbc | 0 | 8.6 | 18.9 | 2.33 |
-Folders: C:\Work\CodexTactics\Saved\Worker
-ightloop6-11-19\digest.log; slot1 Saved\Logs\SeedBatch\dayloop-c4f8f561-{cross,alley}.
+Folders: C:/Work/CodexTactics/Saved/Worker/nightloop/2026-11-19/digest.log; slot1 Saved/Logs/SeedBatch/dayloop-<ref>-{cross,alley}.
 Target (brief): on_pos >= 0.67, crossfire >= 45, idle <= 2 s on both. NOT met yet.
 My 30-seed runs take the machine with a day-caller marker `SYNC.worker-lead-slot1-*` (removed after each batch), so they never run in parallel with the night loop.
 
