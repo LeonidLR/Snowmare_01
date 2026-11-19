@@ -422,7 +422,7 @@ void USquadSubsystem::UpdateGiveWay()
 				{
 					GiveWayTargets.Add(Idle, FVector2D(OnNav.Location));
 				}
-				return true;
+				return Result == EOperativeOrderResult::Accepted; // a refused step tries the next spot (v3 review finding 4)
 			};
 			for (const FVector2D& Point : SquadGiveWayRules::AsideSpots(Path, Crossing, CrossCm, Tuning, &Feet2D, Approach.bValid ? &Approach : nullptr,
 					 CapsuleRadius(*Idle)))
