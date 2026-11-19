@@ -41,3 +41,4 @@ Syntax: `<owner> <task> -> <new owner>`, one per line. Designer re-plan 2026-11-
 - codex 049 -> claude T004 (Codex left 2026-11-19; Sonnet subagent continues from its WIP)
 - codex 050 -> claude T012 (after T04, Sonnet subagent)
 - gemini 088 -> claude (Antigravity unavailable 2026-11-19; Sonnet subagent finishes its WIP)
+- claude (lead) -> grok G010 (2026-11-19: PmcRoofDefence 6/10 flake after G009)
