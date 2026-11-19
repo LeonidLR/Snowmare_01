@@ -4,15 +4,14 @@
   {
    "id": "T-05",
    "title": "smart enemies: firing positions",
-   "owner": "lead Sonnet subagent",
-   "branch": "claude/firing-positions",
+   "owner": "worker stand-in",
+   "branch": "worker/t05-firing-positions",
    "topic": "claude-T005",
-   "state": "waiting",
+   "state": "active",
    "max_quiet_min": 45,
-   "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-agents",
-   "machine": "main",
-   "reason": "main PC offline 11-20 >= 4 h: the stand-in lead on codex-worker continues from the branch (docs/port/WORKER_LEAD_2026-11-20.md)",
-   "max_wait_min": 480
+   "worktree": "C:/Work/CodexTactics-slot1",
+   "machine": "worker",
+   "reason": "stand-in lead on codex-worker: build a1dae05a, read the per-man band log, fix seating, then Crossroads + Alley x30"
   },
   {
    "id": "T-020",
