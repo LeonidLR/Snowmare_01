@@ -361,8 +361,14 @@ namespace PmcDefenceRules
 	/** Pairs of defenders on one non-empty cover key. Empty keys are not a shared object. */
 	CODEXTACTICS_API int32 SharedCoverPairs(TConstArrayView<FString> CoverKeys);
 
-	/** Mean pairwise planar distance of the feet, metres. Fewer than two men is 0. */
+	/** Mean pairwise planar distance of the feet, metres. Fewer than two men is 0 (no pair). */
 	CODEXTACTICS_API float MeanSpreadM(TConstArrayView<FVector> Feet);
+
+	/**
+	 * One 1 Hz spread sample. False when fewer than two defenders are alive: there is no pair, so that second is
+	 * not a bunch of 0 m (G010: a last man standing was pulling defender_spread_m under 5 m). Out is left untouched.
+	 */
+	CODEXTACTICS_API bool TrySpreadSample(TConstArrayView<FVector> Feet, float& OutSpreadM);
 
 	/** One sample of the guard share. Not applicable (n/a, not a zero) when Access is unset. */
 	CODEXTACTICS_API FPmcGuardSample SampleGuard(TConstArrayView<FVector> LivingFeet, const FPmcDefenceAccess& Access,
