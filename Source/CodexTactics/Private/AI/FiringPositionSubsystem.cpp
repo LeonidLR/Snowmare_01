@@ -347,7 +347,10 @@ void UFiringPositionSubsystem::GatherRoofs(FFiringScanContext& Context, TArray<F
 				continue;
 			}
 			FVector Walk;
-			if (!FindWalkSurface(Spot.Location, 60.f, 40.f, Walk))
+			// A spot behind a FIRING GAP (building generator, BUILDING_GENERATOR.md section 8: the parapet is cut there and refilled with a sill a kneeling
+			// muzzle clears) stands at the gap's stand point: that IS the position, so no rim search. Without a gap the old rim logic applies.
+			const FTacticalFiringGap* Gap = Context.Map->GetFile().FindFiringGap(Spot.GapId);
+			if (!FindWalkSurface(Gap ? Gap->Stand : Spot.Location, 60.f, 40.f, Walk))
 			{
 				continue; // not on the roof's walkable surface: no man stands there
 			}
@@ -355,7 +358,7 @@ void UFiringPositionSubsystem::GatherRoofs(FFiringScanContext& Context, TArray<F
 			const FString SourceId = FString::Printf(TEXT("%s#%d"), *Roof.Building, SpotIndex);
 			++LastStats.RoofSpots;
 			// The file's spot lies well behind the rim: follow the walk surface toward the area to the rim, then try the rim and 10 cm steps back.
-			const float Rim = FindRimDistance(Walk, Dir, Cfg.RimSearchMaxCm);
+			const float Rim = Gap ? 0.f : FindRimDistance(Walk, Dir, Cfg.RimSearchMaxCm);
 			bool bFound = false;
 			// The crouched shot first (the protection a parapet gives), then the standing one.
 			for (const EOperativeStance Stance : { EOperativeStance::Crouching, EOperativeStance::Standing })

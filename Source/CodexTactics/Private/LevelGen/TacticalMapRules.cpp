@@ -400,6 +400,7 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 					Spot.FacingYaw = Num(*S, TEXT("facing_yaw"), 0.f);
 					Spot.CoveredM = Num(*S, TEXT("covered_m"), 0.f);
 					Spot.LongestLosM = Num(*S, TEXT("longest_los_m"), 0.f);
+					Spot.GapId = Str(*S, TEXT("gap"));
 					R.Spots.Add(Spot);
 				}
 			}
@@ -436,6 +437,31 @@ bool TacticalMapRules::Parse(const FString& Json, FTacticalMapFile& Out, TArray<
 		Out.HidingSpots.Add(MoveTemp(H));
 		return true;
 	});
+	if (Root->HasField(TEXT("firing_gaps"))) // optional: only a layout with firing gaps lists them
+	{
+		ForEachItem(*Root, TEXT("firing_gaps"), OutErrors, [&Out](const FJsonObject& J)
+		{
+			FTacticalFiringGap G;
+			G.Id = Str(J, TEXT("id"));
+			if (G.Id.IsEmpty() || !VecField(J, TEXT("pos"), G.Location) || !VecField(J, TEXT("stand"), G.Stand))
+			{
+				return false;
+			}
+			G.Building = Str(J, TEXT("building"));
+			G.Layer = Str(J, TEXT("layer"));
+			G.Parapet = Str(J, TEXT("parapet"));
+			G.Yaw = Num(J, TEXT("yaw"), 0.f);
+			G.WidthCm = Num(J, TEXT("width_cm"), 0.f);
+			G.SillCm = Num(J, TEXT("sill_cm"), 0.f);
+			const FJsonArray* OutwardArray = nullptr;
+			if (J.TryGetArrayField(TEXT("outward"), OutwardArray) && OutwardArray && OutwardArray->Num() >= 2)
+			{
+				G.Outward = FVector2D((*OutwardArray)[0]->AsNumber(), (*OutwardArray)[1]->AsNumber());
+			}
+			Out.FiringGaps.Add(MoveTemp(G));
+			return true;
+		});
+	}
 	ForEachItem(*Root, TEXT("ladder_only_roofs"), OutErrors, [&Out](const FJsonObject& J)
 	{
 		FTacticalLadderRoof L;

@@ -97,6 +97,26 @@ struct CODEXTACTICS_API FTacticalOverwatchSpot
 	float FacingYaw = 0.f;
 	float CoveredM = 0.f;
 	float LongestLosM = 0.f;
+	/** The firing gap (FTacticalFiringGap::Id) the shooter stands behind; empty = none (building generator, BUILDING_GENERATOR.md section 8). */
+	FString GapId;
+};
+
+/**
+ * A firing gap in a roof parapet (tactical file `firing_gaps[]`): a span cut out of the parapet and refilled with a sill SillCm high, which
+ * a kneeling muzzle clears. Stand = the shooter's point behind it (on the roof floor), Outward = unit XY out over the parapet.
+ */
+struct CODEXTACTICS_API FTacticalFiringGap
+{
+	FString Id;
+	FString Building;
+	FString Layer;
+	FString Parapet;
+	FVector Location = FVector::ZeroVector;
+	FVector Stand = FVector::ZeroVector;
+	FVector2D Outward = FVector2D::ZeroVector;
+	float Yaw = 0.f;
+	float WidthCm = 0.f;
+	float SillCm = 0.f;
 };
 
 /** A roof a marksman can reach, with its best spots. */
@@ -183,6 +203,14 @@ struct CODEXTACTICS_API FTacticalMapFile
 	TArray<FTacticalOverwatchRoof> OverwatchRoofs;
 	TArray<FTacticalHidingSpot> HidingSpots;
 	TArray<FTacticalLadderRoof> LadderOnlyRoofs;
+	/** Only a layout with firing gaps lists them (the file has no `firing_gaps` key otherwise). */
+	TArray<FTacticalFiringGap> FiringGaps;
+
+	/** The firing gap with this id, or nullptr. */
+	const FTacticalFiringGap* FindFiringGap(const FString& Id) const
+	{
+		return Id.IsEmpty() ? nullptr : FiringGaps.FindByPredicate([&Id](const FTacticalFiringGap& Gap) { return Gap.Id == Id; });
+	}
 
 	bool IsEmpty() const
 	{

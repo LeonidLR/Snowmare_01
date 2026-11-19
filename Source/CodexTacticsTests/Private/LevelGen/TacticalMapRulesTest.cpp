@@ -129,6 +129,50 @@ bool FTacticalMapParseTest::RunTest(const FString&)
 	return true;
 }
 
+TACTICAL_MAP_TEST(FTacticalMapParseFiringGapsTest, "ParseFiringGaps")
+bool FTacticalMapParseFiringGapsTest::RunTest(const FString&)
+{
+	// Building generator firing gaps (BUILDING_GENERATOR.md section 8): a spot may name its gap, the file may list the gaps.
+	const FString WithGaps = TEXT(R"json({
+		"schema": "codex.tactical_map/1", "map": "L_Gen_G", "layout": "g", "geometry_hash": "abc", "analysis_version": 2, "analysis_source": "layout",
+		"conditions": { "weather": "clear", "time_of_day": "day" }, "ground_z": 0,
+		"chokepoints": [], "drop_spots": [], "windows": [], "hiding_spots": [], "ladder_only_roofs": [],
+		"overwatch_roofs": [
+			{ "building": "B_R", "layer": "roof:B_R", "level": 2, "z": 600, "height_cm": 600, "range_m": 110, "access": ["ladder:l"], "access_kind": "ladder", "ladder_only": true,
+			  "spots": [{ "pos": [1700, 60, 600], "facing_yaw": -90, "covered_m": 100, "longest_los_m": 50, "gap": "FG_B_R_1" }, { "pos": [900, 60, 600], "facing_yaw": -90, "covered_m": 90, "longest_los_m": 40 }], "places": [] }
+		],
+		"firing_gaps": [
+			{ "id": "FG_B_R_1", "building": "B_R", "layer": "roof:B_R", "parapet": "B_R_parapet_W", "pos": [1700, 0, 600], "stand": [1700, 60, 600], "outward": [0, -1], "yaw": -90, "width_cm": 90, "sill_cm": 60 },
+			{ "building": "B_R", "pos": [0, 0, 0], "stand": [0, 0, 0] }
+		]
+	})json");
+	FTacticalMapFile File;
+	TArray<FString> Errors;
+	TestTrue(TEXT("parses"), TacticalMapRules::Parse(WithGaps, File, Errors));
+	TestEqual(TEXT("the gap without an id is skipped, one kept"), File.FiringGaps.Num(), 1);
+	TestEqual(TEXT("one error for the bad gap"), Errors.Num(), 1);
+	if (File.FiringGaps.Num() == 1 && File.OverwatchRoofs.Num() == 1 && File.OverwatchRoofs[0].Spots.Num() == 2)
+	{
+		const FTacticalFiringGap& G = File.FiringGaps[0];
+		TestEqual(TEXT("gap parapet"), G.Parapet, FString(TEXT("B_R_parapet_W")));
+		TestEqual(TEXT("gap stand"), G.Stand, FVector(1700.0, 60.0, 600.0));
+		TestEqual(TEXT("gap outward"), G.Outward, FVector2D(0.0, -1.0));
+		TestEqual(TEXT("gap width / sill"), FVector2D(G.WidthCm, G.SillCm), FVector2D(90.0, 60.0));
+		TestEqual(TEXT("the spot names its gap"), File.OverwatchRoofs[0].Spots[0].GapId, FString(TEXT("FG_B_R_1")));
+		TestTrue(TEXT("the other spot has none"), File.OverwatchRoofs[0].Spots[1].GapId.IsEmpty());
+		TestTrue(TEXT("FindFiringGap finds it"), File.FindFiringGap(TEXT("FG_B_R_1")) == &G);
+		TestTrue(TEXT("an empty / unknown id finds none"), File.FindFiringGap(FString()) == nullptr && File.FindFiringGap(TEXT("FG_none")) == nullptr);
+	}
+	// a file without the key (every file without gaps) reads exactly as before: no gaps, no error about them
+	FTacticalMapFile Plain;
+	TArray<FString> PlainErrors;
+	TestTrue(TEXT("a file without firing_gaps parses"), TacticalMapRules::Parse(TEXT(R"json({ "schema": "codex.tactical_map/1", "chokepoints": [], "drop_spots": [], "windows": [],
+		"overwatch_roofs": [], "hiding_spots": [], "ladder_only_roofs": [] })json"), Plain, PlainErrors));
+	TestEqual(TEXT("no gaps"), Plain.FiringGaps.Num(), 0);
+	TestEqual(TEXT("no error"), PlainErrors.Num(), 0);
+	return true;
+}
+
 TACTICAL_MAP_TEST(FTacticalMapParseRejectsTest, "ParseRejects")
 bool FTacticalMapParseRejectsTest::RunTest(const FString&)
 {
@@ -337,7 +381,8 @@ TACTICAL_MAP_TEST(FTacticalMapCommittedFilesTest, "CommittedFiles")
 bool FTacticalMapCommittedFilesTest::RunTest(const FString&)
 {
 	// the exported files of the three generated maps (Tools/TrainingGround scripts/export-tactical-map.ts); x4 counts as in
-	// LEVELGEN_LAYERS_REPORT.md 7 (46 places, 7 drop spots, 163 windows, 22 roofs, 150 hiding spots) + 7 ladder-only roofs
+	// LEVELGEN_LAYERS_REPORT.md 7 (7 drop spots, 163 windows, 22 roofs, 150 hiding spots) + 7 ladder-only roofs; analysis v2 (rim spots, outward
+	// only, FIRING_GAPS_HANDOVER.md) made it 44 places (46 before: two 'sniper' places that looked across a roof slab are gone) + 159 firing gaps
 	for (const TCHAR* Map : { TEXT("L_Gen_Test_X2"), TEXT("L_Gen_Depot_X4"), TEXT("L_Gen_Depot_1_X6") })
 	{
 		FString Json;
@@ -351,14 +396,22 @@ bool FTacticalMapCommittedFilesTest::RunTest(const FString&)
 		TestEqual(FString::Printf(TEXT("%s: no errors"), Map), Errors.Num(), 0);
 		TestEqual(FString::Printf(TEXT("%s map name"), Map), File.Map, FString(Map));
 		TestTrue(FString::Printf(TEXT("%s has places"), Map), File.Chokepoints.Num() > 0 && File.HidingSpots.Num() > 0);
+		for (const FTacticalOverwatchRoof& Roof : File.OverwatchRoofs)
+		{
+			for (const FTacticalOverwatchSpot& Spot : Roof.Spots)
+			{
+				TestTrue(FString::Printf(TEXT("%s %s: a spot's gap id names a listed gap"), Map, *Roof.Building), Spot.GapId.IsEmpty() || File.FindFiringGap(Spot.GapId) != nullptr);
+			}
+		}
 		if (FString(Map) == TEXT("L_Gen_Depot_X4"))
 		{
-			TestEqual(TEXT("x4 places"), File.Chokepoints.Num(), 46);
+			TestEqual(TEXT("x4 places"), File.Chokepoints.Num(), 44);
 			TestEqual(TEXT("x4 drop spots"), File.DropSpots.Num(), 7);
 			TestEqual(TEXT("x4 windows"), File.Windows.Num(), 163);
 			TestEqual(TEXT("x4 roofs"), File.OverwatchRoofs.Num(), 22);
 			TestEqual(TEXT("x4 hiding spots"), File.HidingSpots.Num(), 150);
 			TestEqual(TEXT("x4 ladder-only roofs"), File.LadderOnlyRoofs.Num(), 7);
+			TestEqual(TEXT("x4 firing gaps"), File.FiringGaps.Num(), 159);
 			const FTacticalRuntimeConfig Config;
 			if (!TestTrue(TEXT("x4 has a top place"), File.Chokepoints.Num() > 0))
 			{
