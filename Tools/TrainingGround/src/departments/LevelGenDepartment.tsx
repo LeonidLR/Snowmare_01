@@ -4,12 +4,17 @@
 // quality, profile similarity), the page shows the candidate's top-down render next to the reference image, the metrics and the
 // critics' verdicts (Jev - typed judgments; the Claude API - sees both images, USD-capped; the server holds the keys). The
 // designer accepts (-> Content/Data/LevelGen/accepted, what the UE builder reads) or rejects.
+// T-020: the whole department works on ONE current map (selector on top, kept by the server in Saved/TrainingGround/current_map.json):
+// «Управление картой» opens its accepted layout at once and holds its weather section; «Пропсы уровней» follows it.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Hammer, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus, Trash2 } from 'lucide-react';
 import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
 import { validateWallCrossings, cleanConflictingFences } from '../levelgen/layoutValidator';
 import { PropsPanel } from './PropsPanel';
+import { MapWeatherSection } from './MapWeatherSection';
+import type { MapEntry } from '../levelgen/currentMap';
+import { mapLabel } from '../levelgen/currentMap';
 import { RegionOverlay } from './RegionOverlay';
 import type { LayerAction, ObjectiveAction, RegionMode } from './RegionOverlay';
 import { LayersOverlay, LayersPanel } from './LayersPanel';
@@ -55,6 +60,8 @@ interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdic
 const HIDDEN_AT_START = ['threat_drop', 'threat_windows', 'threat_overwatch', 'threat_hiding'];
 const sameConditions = (a: Conditions, b: Conditions) => a.weather === b.weather && a.time_of_day === b.time_of_day;
 type ProfileRow = { id: string; title: string; size_m: [number, number] };
+/** Browser cache of the current map (the server's Saved/TrainingGround/current_map.json is the master). */
+const CURRENT_MAP_CACHE = 'tg.levelgen.currentMap';
 
 const pct = (v?: number) => `${Math.round((v ?? 0) * 100)} %`;
 /** Block types (levelgen_v2.json templates.catalog + the classic-only ones) as the designer reads them. */
@@ -69,7 +76,13 @@ const blockLabel = (t: string) => BLOCK_LABEL[t] ?? t;
 const blockLabels = (t: string) => t.split(' + ').filter(Boolean).map(blockLabel).join(' + ');
 
 export const LevelGenDepartment: React.FC = () => {
-  const [activeTab, setActiveTab] = useState<'generator' | 'props'>('props');
+  const [activeTab, setActiveTab] = useState<'generator' | 'props'>('generator');
+  // T-020: the department's current map (the server keeps the choice; localStorage only avoids a flash before it answers)
+  const [maps, setMaps] = useState<MapEntry[]>([]);
+  const [currentMap, setCurrentMapState] = useState<string | null>(() => { try { return localStorage.getItem(CURRENT_MAP_CACHE); } catch { return null; } });
+  const [mapsLoaded, setMapsLoaded] = useState(false);
+  const [weatherDirty, setWeatherDirty] = useState(false);
+  const [propsDirty, setPropsDirty] = useState(false);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [profileId, setProfileId] = useState('');
   const [profile, setProfile] = useState<Profile | null>(null);
@@ -133,7 +146,23 @@ export const LevelGenDepartment: React.FC = () => {
     fetch('/api/levelgen/profiles').then((r) => r.json()).then((d) => { const list: ProfileRow[] = d.profiles ?? []; setProfiles(list); setProfileId((s) => s || list[0]?.id || ''); }).catch(() => {});
     fetch('/api/levelgen/ledger').then((r) => r.json()).then(setLedger).catch(() => {});
     fetch('/api/levelgen/accepted').then((r) => r.json()).then((d) => setAccepted(d.accepted ?? [])).catch(() => {});
+    fetch('/api/levelgen/maps').then((r) => r.json()).then((d: { maps?: MapEntry[]; current?: string | null }) => {
+      setMaps(d.maps ?? []);
+      if (d.current) { setCurrentMapState(d.current); try { localStorage.setItem(CURRENT_MAP_CACHE, d.current); } catch { /* cache only */ } }
+    }).catch(() => {}).finally(() => setMapsLoaded(true));
   }, []);
+  const currentEntry = useMemo(() => maps.find((m) => m.map === currentMap) ?? null, [maps, currentMap]);
+  /** Switches the department's current map (asks first when the weather section or the props have unsaved edits). */
+  const changeMap = async (map: string) => {
+    if (map === currentMap) return;
+    if ((weatherDirty || propsDirty) && !window.confirm('Есть несохранённые правки (погода или пропсы) текущей карты. Переключить карту и потерять их?')) return;
+    setCurrentMapState(map);
+    try { localStorage.setItem(CURRENT_MAP_CACHE, map); } catch { /* cache only */ }
+    try {
+      const r = await fetch('/api/levelgen/current-map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ map }) });
+      if (!r.ok) throw new Error((await r.json()).error ?? r.statusText);
+    } catch (e) { setError(`Текущая карта не сохранилась на сервере: ${e instanceof Error ? e.message : String(e)}`); }
+  };
   useEffect(() => {
     if (!profileId) return;
     fetch(`/api/levelgen/profile?id=${encodeURIComponent(profileId)}`).then((r) => r.json()).then((p: Profile) => { setProfile(p); setParams((q) => ({ ...q, size_m: [p.bounds.max[0], p.bounds.max[1]] })); }).catch(() => {});
@@ -209,6 +238,17 @@ export const LevelGenDepartment: React.FC = () => {
       setAccepted((a) => [...a.filter((x) => x.name !== cur.layout.name), { name: cur.layout.name, seed: cur.layout.seed, profile: cur.layout.profile, at: new Date().toISOString() }]);
       setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, layout, analysis: an } : c)));
       setAcceptedSnap((m) => ({ ...m, [cur.layout.name]: JSON.stringify(layout) }));
+      // T-020: «Принять» makes the accepted layout's map the current one (the generated candidates did not change it until now)
+      try {
+        const md = await (await fetch('/api/levelgen/maps')).json() as { maps?: MapEntry[] };
+        setMaps(md.maps ?? []);
+        const acc = (md.maps ?? []).find((m) => m.layout === cur.layout.name);
+        if (acc && acc.map !== currentMap) {
+          setCurrentMapState(acc.map);
+          try { localStorage.setItem(CURRENT_MAP_CACHE, acc.map); } catch { /* cache only */ }
+          await fetch('/api/levelgen/current-map', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ map: acc.map }) });
+        }
+      } catch { /* the accept itself succeeded */ }
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
   };
@@ -445,6 +485,17 @@ export const LevelGenDepartment: React.FC = () => {
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
   };
+  // T-020: «Управление картой» shows the current map's accepted layout at once (a candidate already on the page is just selected)
+  const currentLayoutName = currentEntry?.layout ?? '';
+  const candidatesRef = useRef(candidates);
+  candidatesRef.current = candidates;
+  useEffect(() => {
+    if (activeTab !== 'generator' || !config || !currentLayoutName) return;
+    const have = candidatesRef.current.findIndex((c) => c.layout.name === currentLayoutName);
+    if (have >= 0) { setSel(have); setLayer('all'); return; }
+    void openAccepted(currentLayoutName);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, config, currentLayoutName]);
   // ---- layers: assignment, visibility, the active layer's tools, the props file, the chokepoint analysis -------------------------
   const propsFile = propsState?.file ?? null;
   const assignment = useMemo(() => (curLayout ? assignMap(curLayout, propsFile) : null), [curLayout, propsFile]);
@@ -618,6 +669,17 @@ export const LevelGenDepartment: React.FC = () => {
       <div className="bg-slate-950/80 border-b border-slate-800 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
+            onClick={() => setActiveTab('generator')}
+            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+              activeTab === 'generator'
+                ? 'bg-cyan-600 text-slate-950 font-bold'
+                : 'bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800'
+            }`}
+          >
+            <Boxes size={14} />
+            Управление картой
+          </button>
+          <button
             onClick={() => setActiveTab('props')}
             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
               activeTab === 'props'
@@ -628,29 +690,34 @@ export const LevelGenDepartment: React.FC = () => {
             <Layers size={14} />
             Пропсы уровней (T5)
           </button>
-          <button
-            onClick={() => setActiveTab('generator')}
-            className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-              activeTab === 'generator'
-                ? 'bg-cyan-600 text-slate-950 font-bold'
-                : 'bg-slate-900 border border-slate-800 text-slate-300 hover:bg-slate-800'
-            }`}
-          >
-            <Boxes size={14} />
-            Генератор раскладок
-          </button>
         </div>
-        <span className="text-[11px] text-slate-500 font-mono">
-          codex.levelgen_props/1 &bull; docs/design/levelgen/PROPS_LAYERS.md
-        </span>
+        <div className="flex items-center gap-2 text-xs" data-testid="current-map-bar">
+          <span className="text-slate-400">Текущая карта:</span>
+          {maps.length > 0 ? (
+            <select
+              value={currentMap ?? ''}
+              onChange={(e) => void changeMap(e.target.value)}
+              data-testid="current-map-select"
+              className="bg-slate-900 border border-cyan-700 rounded-lg px-2.5 py-1.5 text-xs text-cyan-100 font-mono font-semibold max-w-[32rem]"
+              title="Одна карта на весь отдел «Генератор уровней»: раскладка, погода и пропсы. Выбор запоминается на сервере."
+            >
+              {maps.map((m) => <option key={m.map} value={m.map}>{mapLabel(m)}</option>)}
+            </select>
+          ) : (
+            <span className="font-mono text-slate-500">{mapsLoaded ? 'нет сгенерированных карт' : 'загрузка...'}</span>
+          )}
+        </div>
       </div>
 
       {activeTab === 'props' ? (
-        <PropsPanel />
+        <PropsPanel mapName={currentEntry?.map ?? null} propsId={currentEntry?.propsId || null} onDirtyChange={setPropsDirty} />
       ) : (
-        <div className="p-6 grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)_380px]">
+        <div className="p-6 flex flex-col gap-6">
+        <MapWeatherSection map={currentEntry?.map ?? null} hasLevelJson={!!currentEntry?.levelJson} onDirtyChange={setWeatherDirty} />
+        <div className="grid gap-6 xl:grid-cols-[300px_minmax(0,1fr)_380px]">
           <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3">
-            <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400">Генерация</h3>
+            <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400">Генерация кандидатов</h3>
+            <p className="text-[11px] text-slate-500">Кандидаты не меняют текущую карту, пока вы не нажмёте «Принять».</p>
             {error && <p className="text-sm text-rose-300">{error}</p>}
             <label className="text-xs text-slate-300 flex flex-col gap-1">Эталон (профиль)
               <select value={profileId} onChange={(e) => setProfileId(e.target.value)} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-slate-100">
@@ -692,7 +759,7 @@ export const LevelGenDepartment: React.FC = () => {
 
           <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400 mr-1">{cur ? cur.layout.name : 'Кандидат'}</h3>
+              <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400 mr-1" data-testid="layout-title">{cur ? cur.layout.name : 'Кандидат'}{cur && currentEntry && currentEntry.layout === cur.layout.name ? <span className="ml-2 normal-case tracking-normal font-mono text-cyan-300">карта {currentEntry.map}</span> : null}</h3>
               <div className="inline-flex rounded-lg bg-slate-950 border border-slate-700 p-0.5 text-[11px]">
                 {([['all', 'Все'], ['ground', 'Земля'], ['1', 'Этаж 1'], ['2', 'Этаж 2'], ['roof', 'Крыша']] as const).map(([mode, label]) => (
                   <button
@@ -1009,6 +1076,7 @@ export const LevelGenDepartment: React.FC = () => {
             </>)}
           </section>
           </div>
+        </div>
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@
 // What cannot be re-rolled alone (the locked PMC charges, a kind the placement does not know) is reported with a reason, not thrown.
 
 import type { GenLayout } from '../schema.ts';
-import type { LevelPropsFile, PropLayer } from './schema.ts';
+import type { LevelPropsFile, PropLayer, PropObject } from './schema.ts';
 import type { PropsLayoutView } from './layoutView.ts';
 import type { PropsAutogenConfig } from './autogenConfig.ts';
 import { DEFAULT_AUTOGEN_CONFIG } from './autogenConfig.ts';
@@ -136,6 +136,22 @@ export function rerollPropsLayers(
       }
       l.report = report;
     }
+  }
+  // 5. an "attach_orphaned" warning (placement.ts rerollLayer) that a later re-roll of the attached layer already settled is stale: drop it
+  const byId = new Map<string, PropObject>();
+  for (const l of file.layers) for (const o of l.objects) byId.set(o.id, o);
+  for (const l of file.layers) {
+    const w = l.report?.warnings;
+    if (!w || !l.report) continue;
+    l.report = {
+      ...l.report,
+      warnings: w.filter((x) => {
+        const m = /^attach_orphaned (.+)$/.exec(x);
+        if (!m) return true;
+        const o = byId.get(m[1]);
+        return o !== undefined && o.attach !== undefined && !byId.has(o.attach);
+      }),
+    };
   }
   return out;
 }

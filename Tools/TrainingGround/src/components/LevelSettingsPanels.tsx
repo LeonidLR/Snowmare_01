@@ -8,6 +8,7 @@ import {
   HORDE_SPAWN_DISTANCE_DEFAULT, HORDE_SPAWN_DISTANCE_MAX, HORDE_SPAWN_DISTANCE_MIN, HordeWaveFeed, describeHordeWaves, getHordeSpawnDistance,
   getHordeWaveFeed, hasOwnHordeSpawnDistance, setHordeSpawnDistance, validateHordeSpawnDistance,
   getEnvironment, setEnvironmentKey, validateEnvironment, ARCTIC_WEATHER_OPTIONS, TEMPERATE_WEATHER_OPTIONS, CLIMATE_OPTIONS,
+  WEATHER_STRENGTH_DEFAULT, WEATHER_STRENGTH_MAX, WEATHER_STRENGTH_MIN,
 } from '../utils/levelSettings';
 
 /** Game designer 2026-11-09: what the waves of this level do for the firefight horde (HordeRules::ShouldWavesFeedHorde). */
@@ -291,59 +292,81 @@ export const LevelHordePanel: React.FC<PanelProps> = ({ config, onChange }) => {
   );
 };
 
+/** A labelled control with a short Russian hint under it (the weather section of «Управление картой»). */
+const Field: React.FC<{ label: React.ReactNode; hint: string; title?: string; className?: string; children: React.ReactNode }> = ({ label, hint, title, className, children }) => (
+  <label className={`flex flex-col gap-1 ${className ?? 'w-52'}`} title={title}>
+    <span className="text-slate-400">{label}</span>
+    {children}
+    <span className="text-[10px] leading-snug text-slate-500">{hint}</span>
+  </label>
+);
+
+const Flag: React.FC<{ checked: boolean; onChange: (v: boolean) => void; label: string; hint: string; tone: string; title?: string; testId: string }> = ({ checked, onChange, label, hint, tone, title, testId }) => (
+  <label className="flex items-start gap-2 text-xs cursor-pointer w-64" title={title}>
+    <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className={`${tone} w-4 h-4 mt-0.5`} data-testid={testId} />
+    <span className="flex flex-col gap-0.5">
+      <span className="font-semibold text-slate-100">{label}</span>
+      <span className="text-[10px] leading-snug text-slate-500">{hint}</span>
+    </span>
+  </label>
+);
+
+/**
+ * The level's weather and time of day (level JSON "environment", FEnvironmentLevelSettings). Since T-020 it lives on the map page
+ * («Управление картой» -> weather section), no longer in the Wave Editor; `config` is the level (or the part of it being edited).
+ */
 export const LevelEnvironmentPanel: React.FC<{ config: LevelLike; onChange: (next: any) => void }> = ({ config, onChange }) => {
   const env = getEnvironment(config);
   const errors = validateEnvironment(env);
   const isTemperate = env.climate === 'temperate';
   const weatherOptions = isTemperate ? TEMPERATE_WEATHER_OPTIONS : ARCTIC_WEATHER_OPTIONS;
+  const strength = env.weather_strength !== undefined ? env.weather_strength : WEATHER_STRENGTH_DEFAULT;
 
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl p-4" title="Level JSON object 'environment' (FEnvironmentLevelSettings)">
       <div className="flex items-center gap-2 mb-3">
         <CloudSun className="w-4 h-4 text-amber-300" />
-        <h3 className="text-sm font-bold text-slate-100">Погода и время суток уровня</h3>
+        <h3 className="text-sm font-bold text-slate-100">Погода и время суток карты</h3>
         <span className="text-[11px] text-slate-500">environment</span>
       </div>
 
       {/* Флаги фиксации и приоритета */}
-      <div className="flex flex-wrap items-center gap-4 mb-3 text-xs">
-        <label className="flex items-center gap-1.5 text-slate-200 cursor-pointer" title="locked = погода и стрелки часов заморожены на весь уровень; на зафиксированном уровне погода не меняет холод">
-          <input
-            type="checkbox"
-            checked={env.locked === true}
-            onChange={(e) => onChange(setEnvironmentKey(config, 'locked', e.target.checked))}
-            className="accent-amber-400 w-4 h-4"
-          />
-          <span className="font-semibold">Зафиксировать погоду и часы (locked)</span>
-        </label>
-
-        <label className="flex items-center gap-1.5 text-amber-200 cursor-pointer" title="Погода уровня важнее перенесённой (override_carry): при переходе из кампании погода и время старта уровня имеют приоритет над перенесённым состоянием (даже если уровень не зафиксирован)">
-          <input
-            type="checkbox"
-            checked={env.override_carry === true}
-            onChange={(e) => onChange(setEnvironmentKey(config, 'override_carry', e.target.checked))}
-            className="accent-amber-500 w-4 h-4"
-          />
-          <span className="font-semibold">Погода уровня важнее перенесённой</span>
-        </label>
-
-        <label className="flex items-center gap-1.5 text-slate-400 cursor-pointer" title="visuals: false отключает презентер погоды (остаётся авторское освещение карты)">
-          <input
-            type="checkbox"
-            checked={env.visuals !== false}
-            onChange={(e) => onChange(setEnvironmentKey(config, 'visuals', e.target.checked ? undefined : false))}
-            className="accent-slate-500 w-4 h-4"
-          />
-          <span>Визуализатор погоды</span>
-        </label>
+      <div className="flex flex-wrap items-start gap-x-6 gap-y-3 mb-4">
+        <Flag
+          testId="env-locked"
+          checked={env.locked === true}
+          onChange={(v) => onChange(setEnvironmentKey(config, 'locked', v))}
+          label="Зафиксировать погоду и часы (locked)"
+          hint="Погода и стрелки часов заморожены на весь уровень; на зафиксированном уровне погода не меняет холод."
+          tone="accent-amber-400"
+          title="locked = погода и стрелки часов заморожены на весь уровень; на зафиксированном уровне погода не меняет холод"
+        />
+        <Flag
+          testId="env-override-carry"
+          checked={env.override_carry === true}
+          onChange={(v) => onChange(setEnvironmentKey(config, 'override_carry', v))}
+          label="Погода уровня важнее перенесённой (override_carry)"
+          hint="При переходе из кампании запускается указанная здесь погода и час, а не перенесённое состояние (даже если уровень не зафиксирован)."
+          tone="accent-amber-500"
+          title="Погода уровня важнее перенесённой (override_carry): при переходе из кампании погода и время старта уровня имеют приоритет над перенесённым состоянием (даже если уровень не зафиксирован)"
+        />
+        <Flag
+          testId="env-visuals"
+          checked={env.visuals !== false}
+          onChange={(v) => onChange(setEnvironmentKey(config, 'visuals', v ? undefined : false))}
+          label="Визуализатор погоды (visuals)"
+          hint="Снимите, чтобы отключить презентер погоды: останется авторское освещение карты."
+          tone="accent-slate-500"
+          title="visuals: false отключает презентер погоды (остаётся авторское освещение карты)"
+        />
       </div>
 
       {/* Селекторы параметров */}
-      <div className="flex flex-wrap items-end gap-4 text-xs">
-        <label className="flex flex-col gap-1">
-          <span className="text-slate-500">Климат (climate)</span>
+      <div className="flex flex-wrap items-start gap-x-6 gap-y-4 text-xs">
+        <Field label="Климат (climate)" hint="Арктика — вся игра; умеренный — сюжетные уровни (солнце, дождь, без роста снега).">
           <select
             value={env.climate || 'arctic'}
+            data-testid="env-climate"
             onChange={(e) => {
               const val = e.target.value as 'arctic' | 'temperate';
               let nextConf = setEnvironmentKey(config, 'climate', val === 'arctic' ? undefined : val);
@@ -359,12 +382,12 @@ export const LevelEnvironmentPanel: React.FC<{ config: LevelLike; onChange: (nex
               <option key={c.value} value={c.value}>{c.label}</option>
             ))}
           </select>
-        </label>
+        </Field>
 
-        <label className="flex flex-col gap-1">
-          <span className="text-slate-500">Погода на старте (weather)</span>
+        <Field label="Погода на старте (weather)" hint="С какой погоды начинается уровень. Если не locked, дальше погода меняется по лестнице.">
           <select
             value={env.weather || ''}
+            data-testid="env-weather"
             onChange={(e) => onChange(setEnvironmentKey(config, 'weather', (e.target.value || undefined) as any))}
             className={fieldCls(false)}
           >
@@ -373,40 +396,39 @@ export const LevelEnvironmentPanel: React.FC<{ config: LevelLike; onChange: (nex
               <option key={w.value} value={w.value}>{w.label}</option>
             ))}
           </select>
-        </label>
+        </Field>
 
-        <label className="flex flex-col gap-1" title="start_hour: час старта уровня (0..24), например 23 (Ночь) или 12 (День)">
-          <span className="text-slate-500">Время суток <span className="text-slate-600">(0..24 ч)</span></span>
+        <Field className="w-40" label={<>Время суток <span className="text-slate-600">(0..24 ч)</span></>} hint="Час старта уровня: 12 — день, 23 — ночь." title="start_hour: час старта уровня (0..24), например 23 (Ночь) или 12 (День)">
           <input
             type="number"
             min={0}
             max={24}
             step={0.5}
             placeholder="по умолчанию"
+            data-testid="env-start-hour"
             value={env.start_hour !== undefined ? env.start_hour : ''}
             onChange={(e) => onChange(setEnvironmentKey(config, 'start_hour', e.target.value === '' ? undefined : Number(e.target.value)))}
             className={`${fieldCls(env.start_hour !== undefined && (env.start_hour < 0 || env.start_hour > 24))} w-28`}
           />
-        </label>
+        </Field>
 
-        <label className="flex flex-col gap-1" title="snow_cover: стартовый снежный покров 0..1">
-          <span className="text-slate-500">Снег <span className="text-slate-600">(0..1)</span></span>
+        <Field className="w-40" label={<>Снег <span className="text-slate-600">(0..1)</span></>} hint="Стартовый снежный покров: 0 — голая земля, 1 — всё в снегу." title="snow_cover: стартовый снежный покров 0..1">
           <input
             type="number"
             min={0}
             max={1}
             step={0.05}
             placeholder="по умолчанию"
+            data-testid="env-snow-cover"
             value={env.snow_cover !== undefined ? env.snow_cover : ''}
             onChange={(e) => onChange(setEnvironmentKey(config, 'snow_cover', e.target.value === '' ? undefined : Number(e.target.value)))}
             className={`${fieldCls(env.snow_cover !== undefined && (env.snow_cover < 0 || env.snow_cover > 1))} w-24`}
           />
-        </label>
+        </Field>
 
         {isTemperate && (
           <>
-            <label className="flex flex-col gap-1" title="wetness: намокание 0..1 (для умеренного климата)">
-              <span className="text-slate-500">Влажность <span className="text-slate-600">(0..1)</span></span>
+            <Field className="w-40" label={<>Влажность <span className="text-slate-600">(0..1)</span></>} hint="Намокание поверхностей (умеренный климат)." title="wetness: намокание 0..1 (для умеренного климата)">
               <input
                 type="number"
                 min={0}
@@ -417,10 +439,9 @@ export const LevelEnvironmentPanel: React.FC<{ config: LevelLike; onChange: (nex
                 onChange={(e) => onChange(setEnvironmentKey(config, 'wetness', e.target.value === '' ? undefined : Number(e.target.value)))}
                 className={`${fieldCls(env.wetness !== undefined && (env.wetness < 0 || env.wetness > 1))} w-24`}
               />
-            </label>
+            </Field>
 
-            <label className="flex flex-col gap-1" title="puddles: лужи 0..1 (для умеренного климата)">
-              <span className="text-slate-500">Лужи <span className="text-slate-600">(0..1)</span></span>
+            <Field className="w-40" label={<>Лужи <span className="text-slate-600">(0..1)</span></>} hint="Лужи на земле (умеренный климат)." title="puddles: лужи 0..1 (для умеренного климата)">
               <input
                 type="number"
                 min={0}
@@ -431,12 +452,11 @@ export const LevelEnvironmentPanel: React.FC<{ config: LevelLike; onChange: (nex
                 onChange={(e) => onChange(setEnvironmentKey(config, 'puddles', e.target.value === '' ? undefined : Number(e.target.value)))}
                 className={`${fieldCls(env.puddles !== undefined && (env.puddles < 0 || env.puddles > 1))} w-24`}
               />
-            </label>
+            </Field>
           </>
         )}
 
-        <label className="flex flex-col gap-1" title="exposure_bias: коррекция экспозиции (-4..+4 EV)">
-          <span className="text-slate-500">Экспозиция <span className="text-slate-600">(EV)</span></span>
+        <Field className="w-40" label={<>Экспозиция <span className="text-slate-600">(EV)</span></>} hint="Подсветка или затемнение картинки: -4..+4 EV." title="exposure_bias: коррекция экспозиции (-4..+4 EV)">
           <input
             type="number"
             min={-4}
@@ -447,12 +467,26 @@ export const LevelEnvironmentPanel: React.FC<{ config: LevelLike; onChange: (nex
             onChange={(e) => onChange(setEnvironmentKey(config, 'exposure_bias', e.target.value === '' ? undefined : Number(e.target.value)))}
             className={`${fieldCls(env.exposure_bias !== undefined && (env.exposure_bias < -4 || env.exposure_bias > 4))} w-20`}
           />
-        </label>
-      </div>
+        </Field>
 
-      <p className="mt-2 text-[11px] text-slate-500">
-        locked = погода и стрелки часов заморожены на весь уровень; на зафиксированном уровне погода не меняет холод. Галочка «Погода уровня важнее перенесённой» заставляет уровень запускать указанную погоду и час даже при переходе отряда из кампании.
-      </p>
+        <Field
+          className="w-60"
+          label={<>Сила воздействия погоды <span className="text-slate-600">(0..2)</span></>}
+          hint="Насколько сильно погода меняет холод. 1 = как сейчас; 0 = погода холод не меняет; 2 = вдвое сильнее. Ключ environment.weather_strength (на 1 ключ не пишется)."
+          title="environment.weather_strength: насколько погода меняет холод, 0..2 (1 = как сейчас). Игровую сторону добавляет задача T-021."
+        >
+          <input
+            type="number"
+            min={WEATHER_STRENGTH_MIN}
+            max={WEATHER_STRENGTH_MAX}
+            step={0.1}
+            data-testid="env-weather-strength"
+            value={Number.isNaN(strength) ? '' : strength}
+            onChange={(e) => onChange(setEnvironmentKey(config, 'weather_strength', e.target.value === '' ? undefined : Number(e.target.value)))}
+            className={`${fieldCls(env.weather_strength !== undefined && (env.weather_strength < WEATHER_STRENGTH_MIN || env.weather_strength > WEATHER_STRENGTH_MAX))} w-24`}
+          />
+        </Field>
+      </div>
       <Errors errors={errors} />
     </div>
   );

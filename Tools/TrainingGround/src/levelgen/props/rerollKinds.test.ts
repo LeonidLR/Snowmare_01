@@ -144,6 +144,21 @@ describe('rerollPropsLayers (T-020)', () => {
     assert.ok(out.notes.some((n) => /power/.test(n)));
   });
 
+  it('re-rolling crates together with the mines / loot attached to them leaves no stale attach_orphaned warning', () => {
+    const f = fresh();
+    rerollPropsLayers(f, balance, view, layout, { ids: ['crates', 'mines', 'loot'], seedFor: () => 777 }, cfg);
+    const byId = new Map<string, PropLayer['objects'][number]>();
+    for (const l of f.layers) for (const o of l.objects) byId.set(o.id, o);
+    for (const l of f.layers) {
+      for (const w of l.report?.warnings ?? []) {
+        const m = /^attach_orphaned (.+)$/.exec(w);
+        if (!m) continue;
+        const o = byId.get(m[1]);
+        assert.ok(o && o.attach !== undefined && !byId.has(o.attach), `stale warning ${w} on ${l.id}`);
+      }
+    }
+  });
+
   it('a frozen file refuses every layer', () => {
     const f = fresh();
     f.frozen = true;
