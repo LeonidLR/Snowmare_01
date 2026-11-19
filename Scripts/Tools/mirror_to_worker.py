@@ -51,6 +51,8 @@ GLOBAL_EXCLUDES = [
     "*password*", "cookies", "cookies-journal", "login data*", "web data*", "vpn tokens*", "EdgeProfile", "*/EdgeProfile",
     ".git-credentials", ".netrc", "_netrc", ".npmrc", ".pypirc", "id_ecdsa*", "id_dsa*", "*.ppk", "*.kdbx", "*.kdb",
     "credentials", ".aws", "*/.aws", "local state",
+    # locked / special files of running apps (never readable, never needed)
+    "*.sock", "lockfile", "*.guard", "GrShaderCache", "ShaderCache", "GraphiteDawnCache",
 ]
 
 # Config files that may carry keys inside (primaryApiKey, oauthAccount, env blocks, mcpServers.*.env, tokens): never sent
@@ -182,7 +184,7 @@ class Worker:
     def ps(self, script, timeout=600, check=True):
         b64 = base64.b64encode(("$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; " + script)
                                .encode("utf-16-le")).decode()
-        r = subprocess.run(["ssh", "-o", "ConnectTimeout=20", "-o", "BatchMode=yes", self.host,
+        r = subprocess.run(["ssh", "-o", "ConnectTimeout=20", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", self.host,
                             f"powershell -NoProfile -NonInteractive -EncodedCommand {b64}"],
                            capture_output=True, text=True, timeout=timeout, creationflags=NO_WINDOW)
         if check and r.returncode != 0:
@@ -190,13 +192,13 @@ class Worker:
         return r.stdout
 
     def scp_to(self, local, remote, timeout=7200):
-        r = subprocess.run(["scp", "-q", "-o", "BatchMode=yes", local, f"{self.host}:{remote}"],
+        r = subprocess.run(["scp", "-q", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", local, f"{self.host}:{remote}"],
                            capture_output=True, text=True, timeout=timeout, creationflags=NO_WINDOW)
         if r.returncode != 0:
             raise RuntimeError(f"scp failed: {r.stderr.strip()[-300:]}")
 
     def scp_from(self, remote, local, timeout=7200):
-        r = subprocess.run(["scp", "-q", "-o", "BatchMode=yes", f"{self.host}:{remote}", local],
+        r = subprocess.run(["scp", "-q", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", f"{self.host}:{remote}", local],
                            capture_output=True, text=True, timeout=timeout, creationflags=NO_WINDOW)
         if r.returncode != 0:
             raise RuntimeError(f"scp failed: {r.stderr.strip()[-300:]}")
@@ -261,8 +263,10 @@ def send_parts(worker, source, files, changed, state, part_bytes):
         if batch:
             remote_tar = f"{worker.root}/.part-{name}-{part_no:04d}.tar"
             worker.scp_to(tar_path, remote_tar)
-            worker.ps(f"Set-Location '{dest}'; & tar -xf '{remote_tar}'; if ($LASTEXITCODE -ne 0) {{ throw 'tar exit ' + $LASTEXITCODE }}; "
-                      f"Remove-Item '{remote_tar}'")
+            out = worker.ps(f"Set-Location '{dest}'; $o = cmd /c \"tar -xf `\"{remote_tar}`\" 2>&1\"; $c = $LASTEXITCODE; "
+                            f"Remove-Item '{remote_tar}' -ErrorAction SilentlyContinue; 'TAR_EXIT ' + $c; $o | Select-Object -First 8")
+            if "TAR_EXIT 0" not in out:
+                raise RuntimeError("tar on the worker: " + " | ".join(l.strip() for l in out.splitlines() if l.strip())[:600])
             for rel in batch:
                 state[rel] = files[rel]
             save_state(name, state)

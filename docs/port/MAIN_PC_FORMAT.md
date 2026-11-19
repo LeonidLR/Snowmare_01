@@ -119,8 +119,8 @@ enters the keys on the worker himself.
 | Claude desktop | winget `Anthropic.Claude` | installed |
 | Claude Code / Gemini CLI / Codex CLI | `npm i -g @anthropic-ai/claude-code @google/gemini-cli @openai/codex` (as on the main PC) | 2.1.328 / 0.69.0 / 0.170.0 |
 | Grok CLI | the main PC's own `~/.grok/bin` from the mirror (no download), user PATH | 1.0.88 |
-| Visual Studio 2026 Community, game C++ workload (debugging) | winget `Microsoft.VisualStudio.Community` | installing |
-| Blender 5.2.0, MaterialCraft 0.4.1, TextureCraft 0.5.0 (the main PC's versions) | winget `BlenderFoundation.Blender`, `ArtCraft.MaterialCraft`, `ArtCraft.TextureCraft` | queued after VS |
+| Visual Studio 2026 Community, game C++ workload (debugging) | winget `Microsoft.VisualStudio.Community` | 18.12.1, finished by the 08:45 reboot (2026-11-19) |
+| Blender, MaterialCraft, TextureCraft | winget `BlenderFoundation.Blender`, `ArtCraft.MaterialCraft`, `ArtCraft.TextureCraft` | Blender 5.2.0 and MaterialCraft 0.4.1 (the main PC's versions); TextureCraft 0.6.1, because winget no longer has the main PC's 0.5.0 |
 
 ### 5.2 Entered by the designer by hand (names only; the values never pass through any script)
 
@@ -144,17 +144,23 @@ enters the keys on the worker himself.
 - Agent chat: it stores its history in `<checkout>\Saved\AgentChat`, one per machine. Copy
   `C:\Mirror\Main\CodexTactics\Saved\AgentChat` into the worker checkout before agents use the chat there.
 
+### 5.0 Network note (2026-11-19)
+
+After the 08:45 reboot, the worker's Ethernet showed `Disconnected` (cable / port) and it came up on the iPhone hotspot
+Wi-Fi. Tailscale then runs over a DERP relay at ~2-5 Mbit/s. In that state the mirror refuses to run (minimum 20 Mbit/s)
+and the remote builds are slow. Check the cable before relying on the worker.
+
 ### 5.4 Verification checklist (worker-ops runs it and reports pass / fail per line)
 
 | # | Check | Command | 2026-11-19 result |
 |---|---|---|---|
 | 1 | Tools present | versions of git, git lfs, gh, node, claude.cmd, gemini.cmd, codex.cmd, grok, python, UE 5.8, MSVC | PASS |
-| 2 | Build locally on the worker | `Scriptsuild.ps1` in `C:\Work\CodexTactics` | after 08:00 (night trainer) |
-| 3 | Smokes locally | `Scripts\smoke_parallel.ps1 -Remote off -Commands MovementSmoke,CoverSmoke` | after 08:00 |
+| 2 | Build locally on the worker | `worker_sync -SkipSync -SkipBinaries -Build`, which runs the worker's own `Scriptsuild.ps1` | PASS (2026-11-19 08:49, after the reboot with VS 2026) |
+| 3 | Smokes locally | the worker's `smoke_parallel` (`-Commands MovementSmoke,CoverSmoke`) | PASS: MovementSmoke PASS, CoverSmoke PASS* (passed on the re-run) |
 | 4 | Agent chat runs | `python Scripts\Toolsgent_chat.py read --last 1` | PASS (runs; empty history until 5.3) |
 | 5 | git fetch | `git fetch --dry-run origin` | PASS |
-| 6 | git push | `git push --dry-run origin HEAD:refs/heads/worker-push-probe` | FAIL until `gh auth login` (5.2.3) - expected |
-| 7 | CLI logins | `gh auth status`, `codex login status`, Claude / Gemini / Grok start | not logged in (5.2) - expected |
+| 6 | git push | `git push --dry-run origin HEAD:refs/heads/worker-push-probe` | PASS: the designer asked to move the GitHub credential, and `gh` is logged in |
+| 7 | CLI logins | `gh auth status`, `codex login status`, Claude / Gemini / Grok start | gh PASS; API-key env vars moved at the designer's request; the Claude / Codex / Gemini / Grok OAuth logins are the designer's own sign-ins (his choice, not copied) |
 | 8 | Editor + playable map | open `CodexTactics.uproject`, play the start map (GTX 1080) | designer, after the logins |
 
 **Expect:**
