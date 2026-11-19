@@ -10,7 +10,11 @@
 # Results: Saved\Worker\nightloop\<date>\<job>-c<k>\ (worker_seed_batch result folders) + one line per job in
 # Saved\Worker\nightloop\<date>\digest.log (dayloop_digest.py) - the morning report reads that file.
 # Stop for a night: create Saved\Worker\STOP_NIGHTLOOP (the guard then neither starts nor restarts it).
-param([string]$Repo = 'C:\Work\CodexTactics', [string]$Until = '07:45', [int]$Jobs = 4, [switch]$Once)
+#   05:30-07:30 (-TrainerFrom .. -TrainerUntil): the weight trainer (night_trainer.py, run pmc-v6-qd2; designer 11-19: 2 h of
+#   the night for the trainer, the rest for tasks).
+param([string]$Repo = 'C:\Work\CodexTactics', [string]$Until = '07:45', [int]$Jobs = 4, [switch]$Once,
+      [string]$TrainerFrom = '05:30', [string]$TrainerUntil = '07:30', [string]$TrainerRunId = 'pmc-v6-qd2',
+      [string]$Py = 'C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe')
 $ErrorActionPreference = 'Continue'
 Set-Location $Repo
 $root = Join-Path $Repo 'Saved\Worker\nightloop'; New-Item -ItemType Directory -Force $root | Out-Null
@@ -59,14 +63,34 @@ function UpdateAndBuild {
 }
 function Digest([string]$dir, [string]$label) {
     $d = Join-Path $root (Get-Date -Format 'yyyy-MM-dd')
-    $py = (Get-Command python -ErrorAction SilentlyContinue)
-    $line = if ($py) { (& python Scripts\Tools\dayloop_digest.py $dir 2>&1 | Select-Object -First 3) -join ' | ' } else { 'no python on the worker' }
+    $line = if (Test-Path $Py) { (& $Py -I Scripts\Tools\dayloop_digest.py $dir 2>&1 | Select-Object -First 3) -join ' | ' } else { "no python at $Py" }
     Add-Content -Encoding UTF8 (Join-Path $d 'digest.log') ("{0} {1} HEAD {2}: {3}" -f (Get-Date -Format s), $label, $script:BuiltHead, $line)
 }
 $seedBatch = Join-Path $Repo 'Scripts\Tools\worker_seed_batch.ps1'
 $k = 0
 Beat 'start'; L "night loop start pid $PID until $($deadline.ToString('s'))"
+function TrainerAt([string]$hhmm) { $t = [datetime]::ParseExact($hhmm, 'HH:mm', $null); return $deadline.Date.Add($t.TimeOfDay) }
+$script:TrainerDone = $false
+function MaybeTrainer {
+    # Designer 2026-11-19: 2 hours of the night for the trainer (the end of the night), the rest for tasks.
+    if ($script:TrainerDone -or (Get-Date) -lt (TrainerAt $TrainerFrom) -or (Get-Date) -ge (TrainerAt $TrainerUntil)) { return }
+    if (-not (TakeLock)) { L 'trainer window: worker busy 30 min - trying again after the next job'; return }
+    try {
+        $env:CODEX_LOCK_HELD = '1'; $env:CODEX_AGENT = 'night-trainer'
+        [void](UpdateAndBuild)
+        $stopAt = (TrainerAt $TrainerUntil).ToString('yyyy-MM-ddTHH:mm')
+        $cfg = Join-Path $Repo 'Saved\Worker\trainer_config_qd2_x4.json'
+        $pargs = @('Scripts\Trainer\night_trainer.py', '--run-id', $TrainerRunId, '--stop-at', $stopAt, '--parallel', '2')
+        if (Test-Path $cfg) { $pargs += @('--config', $cfg) }
+        $tlog = Join-Path $root ((Get-Date -Format 'yyyy-MM-dd') + '\trainer.log')
+        L "trainer start: $($pargs -join ' ')"
+        $job = Start-Job -ScriptBlock { param($py, $a, $repo, $log) Set-Location $repo; & $py @a *>> $log } -ArgumentList $Py, $pargs, $Repo, $tlog
+        while ($job.State -eq 'Running') { Beat "trainer $TrainerRunId running until $stopAt"; Start-Sleep 300 }
+        L "trainer end: $($job.State)"; Remove-Job $job -Force
+    } finally { ReleaseLock; $script:TrainerDone = $true; Beat 'after trainer' }
+}
 while ((Get-Date) -lt $deadline) {
+    MaybeTrainer
     $k++
     $base = 1000 + 30 * $k
     $jobsList = @(
@@ -77,6 +101,7 @@ while ((Get-Date) -lt $deadline) {
     )
     foreach ($j in $jobsList) {
         if ((Get-Date) -ge $deadline) { break }
+        MaybeTrainer
         if (Test-Path (Join-Path $Repo 'Saved\Worker\STOP_NIGHTLOOP')) { L 'STOP_NIGHTLOOP - exit'; Beat 'stopped'; exit 0 }
         if (-not (TakeLock)) { L "worker busy 30 min - skipping $($j.Label)"; continue }
         try {
