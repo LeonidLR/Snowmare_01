@@ -103,6 +103,33 @@ Designer order 11-19 evening: generator + smart enemies first, Training Ground a
 **Now:** S2.3 block archetype (Sonnet, TS only, worktree C:/Work/CodexTactics-slot1/Saved/wt-bgen so it never switches slot1);
 paired A/B of T-05 5544431a vs main on the night loop's own seeds 1060-1209 (150 per scenario) running in slot1.
 
+## T-05 paired A/B (the night loop's own seeds 1060-1209, main 19a90f52 = the merge-base) + the cause
+Defender (side A) wins, paired seeds: Crossroads main 82 / 143 -> T-05 5544431a 32 / 143 (discordant 58 vs 8), attacker objective
+captures 17 -> 86; Alley main 16 / 133 -> 21 / 133, captures 40 -> 76. 150-seed medians of 5544431a: Crossroads on_pos 0.67 / idle 1.8 /
+crossfire 29.9; Alley 0.33 / 1.9 / 36.3.
+Cause (Sonnet diagnosis from the track files, lead-checked on the win counts): the firing positions take EVERY defender off the point
+(median 24 m from the objective, 97 % outside the 6 m radius); the objective clock runs while no defender is inside, so the attackers win
+by capture (no defender on the point when the attackers first arrive: 72 of 112 T-05 rounds vs 4 of 112 on main). The brief said only the
+hammers take positions and the others keep their G008 role; the code seated every sector shooter. Mid-fight re-assignment on each death
+is real (survivors move 11 m in 5 s vs 5 m) but not the main cause.
+Fix c3cc6f3e (`keep_occupier`, default true): on a ground objective the shooter whose G008 post is nearest the point keeps it.
+Paired A/B of c3cc6f3e on the same seeds: running (result below when it lands).
+
+## S2.3 block archetype (worker/bgen-firing-gaps 0ada99f1; TS + Python mirror, no engine)
+Sections / landings / flats / lobbies / slots, story 4 by flat column, `dead_end` tags; flat doors closed (designer), balconies only with
+fire escapes (designer). TS 650 -> 664, Python 60; plans-off golden byte-identical; property: 864 blocks planned, 0 validator issues, 0 %
+fallback. Review gate for the designer: docs/design/levelgen/S2_3_PLANS.md (ASCII plans, questions B1-B5) - sent to his phone; S2.4 waits.
+Engine check NOT run yet (needs slot1): the 1200-core landing navmesh + a planned X6-style build (`levelgen_build_map.ps1` with plans).
+
+## T-022 Training Ground map edit + F11 (worker/t022-tg-map-edit 7be7d2d2, from main; TS only)
+Bigger plan (782x690 vs ~470x520), F11 / «На весь экран» full window with the layers drawer (zoom kept), drag-move of buildings with all
+their parts (walls, ladders, openings, roof items, route points inside), fence segment / whole ring / end points, ladders (building
+constraint), crossings (must stay over the canal), cover; nudge 10 cm / Shift 1 m / Ctrl 10 m; grid snap; undo / redo (arrow runs
+coalesced); checks after every move show only problems the move ADDED; dirty flag + confirms; stale derived files listed after accept.
+npm test 541 -> 558, typecheck clean. Headless Edge check on L_Gen_Depot_1 (nothing accepted / saved): screenshots in
+docs/port/claude/outbox/T022/ on that branch. Review points: the move permission for buildings / bridges is in code (MAP_MOVE), not in
+layers.json (Content/Data was off limits); building rotation by gesture not done; props / tactical do not follow a moved building (listed stale).
+
 ## T-021 cold indoors - DONE, merged into this branch (34c832ab)
 worker/t021-cold-indoors 86ef2882 (from claude/cold-indoors 01c6cb01 + main). Leafless doorway = open (designer 11-19), test 6/14.
 Gate: build OK; ColdShelter 11/11, Environment 114, LevelJson 7, PmcDefence 7, Pmc 70; ColdIndoors / Cold / Environment / Weather / WarmIdle /
