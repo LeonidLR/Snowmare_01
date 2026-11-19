@@ -85,6 +85,12 @@ namespace SquadGiveWayRules
 
 	TArray<FVector2D> AsideSpots(TArrayView<const FVector> Path, const FCrossing& Crossing, float CrossCm, const FSquadGiveWayTuning& Tuning)
 	{
+		return AsideSpots(Path, Crossing, CrossCm, Tuning, nullptr);
+	}
+
+	TArray<FVector2D> AsideSpots(TArrayView<const FVector> Path, const FCrossing& Crossing, float CrossCm, const FSquadGiveWayTuning& Tuning,
+		const FVector2D* IdleFeet, const FFlightApproach* Approach, float ZoneExtraCm)
+	{
 		TArray<FVector2D> Out;
 		if (!Crossing.bCrosses)
 		{
@@ -92,23 +98,169 @@ namespace SquadGiveWayRules
 		}
 		const FVector2D Left(-Crossing.Direction.Y, Crossing.Direction.X);
 		const float Window = Crossing.AlongCm + Tuning.LookAheadCm;
+		// v1's three distances; v2 (a man already well off the line, a zone to clear) two more.
+		const TArray<float> Scales = IdleFeet || Approach ? TArray<float>{ 1.f, 1.5f, 2.f, 2.5f, 3.f } : TArray<float>{ 1.f, 1.5f, 2.f };
 		for (const int32 Side : { Crossing.Side, -Crossing.Side })
 		{
 			const FVector2D Out90 = Left * static_cast<double>(Side);
 			const FVector2D Back45 = (Out90 - Crossing.Direction).GetSafeNormal();
-			for (const float Scale : { 1.f, 1.5f, 2.f })
+			for (const float Scale : Scales)
 			{
 				for (const FVector2D& Way : { Out90, Back45 })
 				{
 					const FVector2D Spot = Crossing.OnPath + Way * static_cast<double>(Tuning.StepAsideCm * Scale);
-					if (DistanceToPath(Path, Spot, Window) >= CrossCm)
+					if (DistanceToPath(Path, Spot, Window) < CrossCm
+						|| (IdleFeet && FVector2D::Distance(Spot, *IdleFeet) < Tuning.MinStepCm)
+						|| (Approach && Approach->bValid && InApproachZone(*Approach, Spot, ZoneExtraCm, Tuning)))
 					{
-						Out.Add(Spot);
+						continue;
 					}
+					Out.Add(Spot);
 				}
 			}
 		}
 		return Out;
+	}
+
+	TArray<FFlightFoot> FindFlightFeet(TArrayView<const FVector> Path, TFunctionRef<bool(const FVector&, FVector2D&)> IsRamp, float SampleCm)
+	{
+		TArray<FFlightFoot> Out;
+		if (Path.Num() < 2)
+		{
+			return Out;
+		}
+		const double Step = FMath::Max(5.0, static_cast<double>(SampleCm));
+		FVector2D Uphill = FVector2D::ZeroVector;
+		bool bWasRamp = IsRamp(Path[0], Uphill);
+		for (int32 Index = 0; Index + 1 < Path.Num(); ++Index)
+		{
+			const FVector A = Path[Index];
+			const FVector B = Path[Index + 1];
+			const double Length = FVector2D::Distance(FVector2D(A), FVector2D(B));
+			if (Length < UE_KINDA_SMALL_NUMBER)
+			{
+				continue;
+			}
+			const FVector2D Leg = (FVector2D(B) - FVector2D(A)) / Length;
+			const int32 Samples = FMath::Max(1, FMath::CeilToInt(Length / Step));
+			for (int32 Sample = 1; Sample <= Samples; ++Sample)
+			{
+				const FVector Point = FMath::Lerp(A, B, static_cast<double>(Sample) / Samples);
+				Uphill = FVector2D::ZeroVector;
+				const bool bRamp = IsRamp(Point, Uphill);
+				if (bRamp && !bWasRamp)
+				{
+					FFlightFoot Foot;
+					Foot.Foot = Point;
+					const FVector2D Axis = Uphill.GetSafeNormal();
+					Foot.Direction = Axis.IsNearlyZero() ? Leg : Axis * (FVector2D::DotProduct(Axis, Leg) >= 0.0 ? 1.0 : -1.0);
+					Out.Add(Foot);
+				}
+				bWasRamp = bRamp;
+			}
+		}
+		return Out;
+	}
+
+	FFlightApproach SelectApproach(TArrayView<const FFlightFoot> Feet, const FVector& MoverFeet, const FSquadGiveWayTuning& Tuning)
+	{
+		FFlightApproach Out;
+		for (const FFlightFoot& Foot : Feet)
+		{
+			const double Past = FVector2D::DotProduct(FVector2D(MoverFeet) - FVector2D(Foot.Foot), Foot.Direction);
+			if (Past > Tuning.ApproachAfterCm || -Past > Tuning.LookAheadCm)
+			{
+				continue; // passed, or still far
+			}
+			if (Past < 0.0 && FMath::Abs(MoverFeet.Z - Foot.Foot.Z) > Tuning.SameLevelCm)
+			{
+				continue; // another level's flight
+			}
+			Out.bValid = true;
+			Out.Foot = FVector2D(Foot.Foot);
+			Out.Direction = Foot.Direction;
+			Out.FootZ = static_cast<float>(Foot.Foot.Z);
+			Out.ToFootCm = static_cast<float>(-Past);
+			return Out;
+		}
+		return Out;
+	}
+
+	bool InApproachZone(const FFlightApproach& Approach, const FVector2D& Point, float ExtraCm, const FSquadGiveWayTuning& Tuning)
+	{
+		if (!Approach.bValid)
+		{
+			return false;
+		}
+		const FVector2D Offset = Point - Approach.Foot;
+		const double Along = FVector2D::DotProduct(Offset, Approach.Direction);
+		const double Across = FMath::Abs(FVector2D::CrossProduct(Approach.Direction, Offset));
+		return Along >= -Tuning.ApproachBeforeCm && Along <= Tuning.ApproachAfterCm && Across <= Tuning.ApproachHalfWidthCm + ExtraCm;
+	}
+
+	FCrossing ApproachCrossing(const FFlightApproach& Approach, const FVector2D& IdleFeet)
+	{
+		FCrossing Out;
+		if (!Approach.bValid)
+		{
+			return Out;
+		}
+		const FVector2D Offset = IdleFeet - Approach.Foot;
+		const double Along = FVector2D::DotProduct(Offset, Approach.Direction);
+		Out.bCrosses = true;
+		Out.OnPath = Approach.Foot + Approach.Direction * Along;
+		Out.Direction = Approach.Direction;
+		Out.AlongCm = FMath::Max(0.f, Approach.ToFootCm + static_cast<float>(Along));
+		Out.Side = FVector2D::CrossProduct(Approach.Direction, Offset) >= 0.0 ? 1 : -1;
+		return Out;
+	}
+
+	bool SlotWalkEntersApproach(const FFlightApproach& Approach, const FVector2D& From, const FVector2D& To, float ExtraCm, const FSquadGiveWayTuning& Tuning)
+	{
+		if (!Approach.bValid || InApproachZone(Approach, From, ExtraCm, Tuning))
+		{
+			return false; // already in it: let him walk out (holding him there blocks it)
+		}
+		// Liang-Barsky clip of the walk against the zone rectangle in the flight's frame.
+		const FVector2D Side(-Approach.Direction.Y, Approach.Direction.X);
+		const FVector2D P0 = From - Approach.Foot;
+		const FVector2D D = To - From;
+		const double X0 = FVector2D::DotProduct(P0, Approach.Direction), Y0 = FVector2D::DotProduct(P0, Side);
+		const double DX = FVector2D::DotProduct(D, Approach.Direction), DY = FVector2D::DotProduct(D, Side);
+		const double Half = Tuning.ApproachHalfWidthCm + ExtraCm;
+		double T0 = 0.0, T1 = 1.0;
+		const double Ps[4] = { -DX, DX, -DY, DY };
+		const double Qs[4] = { X0 + Tuning.ApproachBeforeCm, Tuning.ApproachAfterCm - X0, Y0 + Half, Half - Y0 };
+		for (int32 Edge = 0; Edge < 4; ++Edge)
+		{
+			if (FMath::IsNearlyZero(Ps[Edge]))
+			{
+				if (Qs[Edge] < 0.0)
+				{
+					return false;
+				}
+				continue;
+			}
+			const double T = Qs[Edge] / Ps[Edge];
+			if (Ps[Edge] < 0.0)
+			{
+				T0 = FMath::Max(T0, T);
+			}
+			else
+			{
+				T1 = FMath::Min(T1, T);
+			}
+			if (T0 > T1)
+			{
+				return false;
+			}
+		}
+		return true;
+	}
+
+	bool ShouldRetryBlockedMove(bool bOwnMoveOrder, float ToGoalCm, int32 RetriesSoFar, const FSquadGiveWayTuning& Tuning)
+	{
+		return Tuning.bEnabled && bOwnMoveOrder && ToGoalCm > Tuning.BlockedRetryMinGoalCm && RetriesSoFar < Tuning.BlockedRetries;
 	}
 }
 
@@ -148,6 +300,16 @@ FSquadGiveWayTuning SquadGiveWayTuning::FromJson(const FJsonObject& GiveWay, con
 	ReadGiveWayNumber(GiveWay, TEXT("nav_snap_cm"), Tuning.NavSnapCm, 5.f, 100.f);
 	ReadGiveWayNumber(GiveWay, TEXT("max_rise_cm"), Tuning.MaxRiseCm, 5.f, 150.f);
 	ReadGiveWayNumber(GiveWay, TEXT("retry_s"), Tuning.RetrySeconds, 0.1f, 10.f);
+	ReadGiveWayNumber(GiveWay, TEXT("min_step_cm"), Tuning.MinStepCm, 0.f, 300.f);
+	ReadGiveWayNumber(GiveWay, TEXT("approach_before_cm"), Tuning.ApproachBeforeCm, 0.f, 1000.f);
+	ReadGiveWayNumber(GiveWay, TEXT("approach_after_cm"), Tuning.ApproachAfterCm, 0.f, 500.f);
+	ReadGiveWayNumber(GiveWay, TEXT("approach_half_width_cm"), Tuning.ApproachHalfWidthCm, 0.f, 500.f);
+	ReadGiveWayNumber(GiveWay, TEXT("ramp_sample_cm"), Tuning.RampSampleCm, 10.f, 200.f);
+	ReadGiveWayNumber(GiveWay, TEXT("slot_hold_max_s"), Tuning.SlotHoldMaxSeconds, 0.f, 30.f);
+	ReadGiveWayNumber(GiveWay, TEXT("blocked_retry_min_goal_cm"), Tuning.BlockedRetryMinGoalCm, 0.f, 1000.f);
+	float Retries = static_cast<float>(Tuning.BlockedRetries);
+	ReadGiveWayNumber(GiveWay, TEXT("blocked_retries"), Retries, 0.f, 20.f);
+	Tuning.BlockedRetries = FMath::RoundToInt(Retries);
 	return Tuning;
 }
 

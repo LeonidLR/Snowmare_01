@@ -221,6 +221,15 @@ public:
 	void ReleaseOwnMoveOrder() { bOwnMoveOrder = false; }
 
 	/**
+	 * Give way v2: his own move just ended Blocked (the path following's block detection) - the same order is asked again (a new path from
+	 * where he stands) up to give_way.blocked_retries times per order while he is give_way.blocked_retry_min_goal_cm+ from its goal.
+	 * True: re-requested (the order goes on); false: let it end (HandleMoveFinished).
+	 */
+	bool RetryBlockedOwnMove();
+	uint32 BlockedRetrySerial = 0;
+	int32 BlockedRetryCount = 0;
+
+	/**
 	 * Formation rules v2.1 bypass (USquadSubsystem, contract docs/design/FORMATION_CONTRACT.md 10.2): his running own move order is steered
 	 * through Via first - the order stays his (GetLastMoveDestination, the serial and HasOwnMoveOrder are kept); reaching Via (or failing
 	 * there) the walk goes on to the order's own destination by itself. False (nothing changed) without an own order running, under a
