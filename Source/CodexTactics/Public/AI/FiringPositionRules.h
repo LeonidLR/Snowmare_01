@@ -128,7 +128,7 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	/** "roof_reach_factor" (0.45): a roof defence's kill zone lies this x the lead's reach out toward the attackers. */
 	float RoofReachFactor = 0.45f;
 	/** "kill_zone_reach_factor" (0.6): a ground defence's kill zone lies on the attackers' nav path to the objective, this x the shooters' median weapon reach before the objective (at most the path length). */
-	float KillZoneReachFactor = 0.6f;
+	float KillZoneReachFactor = 0.25f;
 	/** "default_reach_cm" (1400): the reach of a man with no weapon. */
 	float DefaultReachCm = 1400.f;
 	/** "forward_margin_cm" (800): a ground position is forward of the kill zone only when it is nearer the attackers along the approach axis by MORE than this. */

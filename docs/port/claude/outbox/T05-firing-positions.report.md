@@ -5,6 +5,16 @@ Spec: roadmap T-05, GDD smart-enemies section 5 + F2, brief `docs/port/claude/in
 
 ## Handover (kept current)
 
+**Worker stand-in lead, 11-19 20:15 (supersedes the iteration notes below where they differ).** Ref: worker/t05-firing-positions after c48f077f, kill_zone_reach_factor 0.25.
+30 seeds, scripted opponent, medians (on_pos / idle_max s / crossfire deg): crossroads main 0 / 18-19 / 9-14 -> iter 1 (K = objective) 0.33 / 4.1 / 19.0 -> 0.25: 0.33 / 3.1 / 22.8;
+alley main 0 / 14-17 / 17-18 -> iter 1 0 / 9.4 / 15.3 -> 0.25: 0 / 8.6 / 18.9. Factor sweep, seeds 1-10: 0.6 0 / 1.9 / 15.2 and 0 / 8.8 / 12.9; 0.4 0.17 / 5.4 / 16.5 and 0 / 8.8 / 15.2; 0.25 0.59 / 1.9 / 23.1 and 0 / 13.6 / 20.7.
+Gate on this ref: build OK, FiringPosition 11/11, Pmc 70/70, FiringPositionSmoke / TacticalPmc / PmcArenaTactical / PmcFireLine / HitchProbe / PmcRoofDefence / PmcStalemate PASS (smoke_parallel -Remote off, slot1).
+Acceptance (on_pos >= 0.67, crossfire >= 45, idle <= 2 s on both) NOT met. Findings (Saved/Scripts/first_shot_geometry.py on the track files):
+(1) the crossfire metric is the pair angle AT THE ATTACKERS at the round's first shot, and the attackers fire first in most seeds from 25-62 m - when a pair IS seated around the approach kill zone it reads 47-72 deg;
+(2) on_pos: the arena spawns defenders ~8 m from the objective; a firing position 25-36 m out is reached after contact (caught walking) - next lever: seat only positions the man reaches before the attackers' expected arrival (walk time vs attacker path time), in AssignFiringPositions;
+(3) alley: some approach points have no cover that sees them (0 valid of 330 scan points) - ground cover cannot make the A-00B crossfire; roadmap gives height / mobile anvil to T-08b.
+
+
 **Phase a: DONE and gated** - commit `0bf3fbd2` (rules + service + 8 unit tests + `FiringPositionSmoke` PASS on X4 + regression smokes green). Diagnosis numbers below.
 **Phase b (worker stand-in lead, branch `worker/t05-firing-positions`, commits `1ad3f83b`, `c4f8f561`): seating fixed on the crossroads, alley still geometry-limited, NOT accepted (30-seed day loop is the lead's).**
 Diagnosis with the new `[FiringPos] cover breakdown` log (seeds 1-2, both smokes): candidate starvation by scan density was NOT the main cause (35-89 slots found per gather, all on level, all in ring). Real causes: (1) the polar grid thinned by ONE global stride made a wider ring sparser (tier 2 found fewer slots than tier 1: 143 -> 97 scan points) and the slot cap counted before the ring filter; (2) 40-50 % of the slots are high walls without an exposed edge (no corner to lean round), another 30-45 % see no area sample; (3) the "forward" test left E = V - F eligible (F = V in most rows); (4) alley: the kill zone is not visible from the ground ring at all (a diagnostic of free-standing nav points in the 11-54 m band: 14 / 63 / 35 see >= 1 sample and 0 / 14 / 0 see >= 4 of 9 on seeds 1 / 2 / 3, so no cover slot there can fire).
