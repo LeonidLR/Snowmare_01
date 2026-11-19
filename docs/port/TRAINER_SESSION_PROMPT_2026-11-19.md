@@ -19,7 +19,7 @@ what was rejected and why. Sources (read all; use `python Scripts/Tools/jev_dige
 - Code: Source/CodexTactics/Private/AI/PmcCommanderRules.cpp (utility scores), PmcSquadSubsystem*.cpp (orders, posts, contact),
   PmcTacticalRules*, PmcArenaBehaviourRules.cpp (metrics), PmcArenaCommand.cpp (arena rounds), SquadOrderCatalog*, PmcEncounter*;
   Content/Data/AI/pmc_commander.json + pmc_commander.bounds.json (genes), Content/Data/LevelGen/tactical_runtime.json.
-- Trainer: Scripts/Trainer/night_trainer.py, nighttrainer/trainer.py, trainer_config.json, make_qd_config.py, run_night_trainer.ps1;
+- Trainer: Scripts/Trainer/night_trainer.py, nighttrainer/trainer.py, trainer_config.json, run_night_trainer.ps1 (make_qd_config.py lives on the worker - ask worker-ops);
   Antigravity 083 / 083c (QD archive fixes) reports in docs/port/gemini/outbox/083*.
 - Runs and reports: docs/port/reports/worker-night-2026-11-18.md and worker-night-2026-11-19.md (pmc-v6-qd and pmc-v6-qd2 on
   L_Gen_Depot_X4 tactical: 37 generations, 1776 rounds, archive 14/48, best 21.13), docs/port/reports/worker-overwatch-kills.md
