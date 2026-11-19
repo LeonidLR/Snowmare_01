@@ -3464,12 +3464,12 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		{
 			return;
 		}
-		const float LeadReach = Lead->CurrentWeapon ? Lead->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
+		const float LeadReach = Lead->CurrentWeapon ? Lead->CurrentWeapon->Stats.Range.MaxRangeCm : Config.DefaultReachCm;
 		const FVector Toward = (Team.Defence.ApproachPoint - Objective.Location).GetSafeNormal2D();
-		const float Reach = FMath::Min(static_cast<float>(FVector::Dist2D(Team.Defence.ApproachPoint, Objective.Location)), 0.45f * LeadReach);
+		const float Reach = FMath::Min(static_cast<float>(FVector::Dist2D(Team.Defence.ApproachPoint, Objective.Location)), Config.RoofReachFactor * LeadReach);
 		KillZone = FVector(Objective.Location.X, Objective.Location.Y, Team.Defence.ApproachPoint.Z) + Toward * Reach;
 	}
-	const float AreaRadius = FMath::Max(Objective.RadiusCm, 600.f);
+	const float AreaRadius = FMath::Max(Objective.RadiusCm, Config.AreaRadiusFloorCm);
 	FPmcDefenceConfig AreaConfig;
 	AreaConfig.LevelToleranceCm = Objective.LevelToleranceCm;
 
@@ -3481,6 +3481,19 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		TArray<FFiringCandidate> Eligible;
 	};
 	TArray<FSeat> Seats;
+	// ONE cover scan for the whole squad: the widest band of every man's fallback tier, so each man's (narrower) band sees a subset of the slots the wider ones see.
+	float WidestBandMax = 0.f;
+	for (const int32 PostIndex : Shooters)
+	{
+		if (const AOperativeCharacter* Member = MemberOf(Posts[PostIndex].Index))
+		{
+			float Unused = 0.f;
+			float BandMaxOfMan = 0.f;
+			FiringPositionRules::WeaponBand(Member->CurrentWeapon ? Member->CurrentWeapon->Stats.Range.MaxRangeCm : 0.f, 1, Config, Unused, BandMaxOfMan);
+			WidestBandMax = FMath::Max(WidestBandMax, BandMaxOfMan);
+		}
+	}
+	Service->PrepareCoverScan(KillZone, AreaRadius, WidestBandMax);
 	for (const int32 PostIndex : Shooters)
 	{
 		FSeat Seat;
@@ -3490,13 +3503,16 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		{
 			continue;
 		}
-		const float Reach = Seat.Fighter->CurrentWeapon ? Seat.Fighter->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
-		const float BandMin = 0.2f * 0.9f * Reach;
+		const float Reach = Seat.Fighter->CurrentWeapon ? Seat.Fighter->CurrentWeapon->Stats.Range.MaxRangeCm : Config.DefaultReachCm;
+		float BandMin = 0.f;
+		float BandMaxUnused = 0.f;
+		FiringPositionRules::WeaponBand(Reach, 0, Config, BandMin, BandMaxUnused);
 		// Tier 1: inside his weapon's band. Tier 2 (nothing there, e.g. a shotgun on an open street): cover up to twice as far - he holds there in cover
 		// and closes in when the attackers come (the engagement-band orders); an idle man in the open is worse.
 		for (int32 Tier = 0; Tier < 2 && Seat.Eligible.IsEmpty(); ++Tier)
 		{
-		const float BandMax = (Tier == 0 ? 0.9f : 1.8f) * Reach;
+		float BandMax = 0.f;
+		FiringPositionRules::WeaponBand(Reach, Tier, Config, BandMaxUnused, BandMax);
 		int32 Valid = 0;
 		int32 NotCover = 0;
 		int32 OffLevel = 0;
@@ -3530,8 +3546,8 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 					++OffLevel;
 					continue;
 				}
-				// A defender never stands forward of his kill zone (nearer the attackers' spawn than the zone).
-				if (Team.Defence.bHasApproach && FVector::Dist2D(Pos.StandPoint, Team.Defence.ApproachPoint) < FVector::Dist2D(KillZone, Team.Defence.ApproachPoint))
+				// A defender never stands forward of his kill zone: nearer the attackers than the zone ALONG the approach axis by more than the margin (a flank position beside the zone is fine).
+				if (Team.Defence.bHasApproach && FiringPositionRules::IsForwardOfKillZone(Pos.StandPoint, KillZone, Team.Defence.ApproachPoint, Config.ForwardMarginCm))
 				{
 					++Forward;
 					continue;

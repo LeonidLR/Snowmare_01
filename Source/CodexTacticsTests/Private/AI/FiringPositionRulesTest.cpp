@@ -269,6 +269,107 @@ bool FFiringPositionRoofTermsTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFiringPositionScanTest, "CodexTactics.AI.FiringPosition.CoverScanPoints",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FFiringPositionScanTest::RunTest(const FString&)
+{
+	FFiringPositionConfig Config; // step 600, dense 6000, far stride 2, cap 400
+	const FVector Centre(1234.0, -5678.0, 10.0);
+	const TArray<FVector> Narrow = FiringPositionRules::CoverScanPoints(Centre, 3000.f, Config);
+	const TArray<FVector> Wide = FiringPositionRules::CoverScanPoints(Centre, 9000.f, Config);
+	TestTrue(TEXT("a ring of 30 m has points"), Narrow.Num() > 40);
+	TestTrue(TEXT("a wider ring has more points"), Wide.Num() > Narrow.Num());
+	// The T-05 phase b bug: a wider ring must NEVER lose a point of a narrower one (tier 2 found fewer slots than tier 1).
+	int32 Missing = 0;
+	for (const FVector& Point : Narrow)
+	{
+		Missing += Wide.ContainsByPredicate([&Point](const FVector& Other) { return Other.Equals(Point, 0.01); }) ? 0 : 1;
+	}
+	TestEqual(TEXT("every point of the narrow ring is in the wide ring"), Missing, 0);
+	for (const FVector& Point : Wide)
+	{
+		TestTrue(TEXT("inside the ring"), FVector::Dist2D(Point, Centre) <= 9000.0 + 0.01);
+		TestEqual(TEXT("on the grid in X"), FMath::Fmod(static_cast<float>(Point.X), 600.f), 0.f, 0.01f);
+		TestEqual(TEXT("on the grid in Y"), FMath::Fmod(static_cast<float>(Point.Y), 600.f), 0.f, 0.01f);
+		TestEqual(TEXT("at the area's height"), static_cast<float>(Point.Z), 10.f, 0.01f);
+	}
+	// Nearest first.
+	bool bSorted = true;
+	for (int32 Index = 1; Index < Wide.Num(); ++Index)
+	{
+		bSorted &= FVector::Dist2D(Wide[Index - 1], Centre) <= FVector::Dist2D(Wide[Index], Centre) + 0.01;
+	}
+	TestTrue(TEXT("sorted nearest first"), bSorted);
+	// Beyond the dense radius only every second grid line (indices of both axes even).
+	for (const FVector& Point : Wide)
+	{
+		if (FVector::Dist2D(Point, Centre) > 6000.0)
+		{
+			TestEqual(TEXT("far X on an even grid line"), FMath::Abs(FMath::RoundToInt(static_cast<float>(Point.X) / 600.f)) % 2, 0);
+			TestEqual(TEXT("far Y on an even grid line"), FMath::Abs(FMath::RoundToInt(static_cast<float>(Point.Y) / 600.f)) % 2, 0);
+		}
+	}
+	// The cap keeps the nearest points; a wider ring's capped list is still a superset of a narrower capped list.
+	FFiringPositionConfig Capped = Config;
+	Capped.MaxScanPoints = 25;
+	const TArray<FVector> CappedNarrow = FiringPositionRules::CoverScanPoints(Centre, 1500.f, Capped);
+	const TArray<FVector> CappedWide = FiringPositionRules::CoverScanPoints(Centre, 20000.f, Capped);
+	TestEqual(TEXT("the cap cuts the list"), CappedWide.Num(), 25);
+	int32 CappedMissing = 0;
+	for (const FVector& Point : CappedNarrow)
+	{
+		CappedMissing += CappedWide.ContainsByPredicate([&Point](const FVector& Other) { return Other.Equals(Point, 0.01); }) ? 0 : 1;
+	}
+	TestEqual(TEXT("a capped wide ring still contains the capped narrow one"), CappedMissing, 0);
+	TestEqual(TEXT("a zero ring is at most the one grid point"), FiringPositionRules::CoverScanPoints(Centre, 0.f, Config).Num() <= 1, true);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFiringPositionBandTest, "CodexTactics.AI.FiringPosition.BandAndForward",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FFiringPositionBandTest::RunTest(const FString&)
+{
+	const FFiringPositionConfig Config;
+	// HitsInBand: the mask says which lines are clear, the band which samples count.
+	const TArray<float> Distances = { 500.f, 1500.f, 2500.f, 3500.f };
+	TestEqual(TEXT("all clear, band 1000..3000: two samples"), FiringPositionRules::HitsInBand(Distances, 0xFu, 1000.f, 3000.f), 2);
+	TestEqual(TEXT("a blocked line does not count"), FiringPositionRules::HitsInBand(Distances, 0b0100u, 1000.f, 3000.f), 1);
+	TestEqual(TEXT("no upper limit"), FiringPositionRules::HitsInBand(Distances, 0xFu, 1000.f, 0.f), 3);
+	TestEqual(TEXT("nothing clear"), FiringPositionRules::HitsInBand(Distances, 0u, 0.f, 0.f), 0);
+	// A WIDER band never sees fewer samples than a narrower one on the same mask: tier 2 is a superset of tier 1.
+	for (uint32 Mask = 0; Mask < 16; ++Mask)
+	{
+		TestTrue(TEXT("a wider band hits at least as many"), FiringPositionRules::HitsInBand(Distances, Mask, 400.f, 4000.f) >= FiringPositionRules::HitsInBand(Distances, Mask, 400.f, 2000.f));
+	}
+
+	float Min = 0.f;
+	float Max = 0.f;
+	FiringPositionRules::WeaponBand(1000.f, 0, Config, Min, Max);
+	TestEqual(TEXT("tier 1 min is 0.18 of the reach"), Min, 180.f, 0.01f);
+	TestEqual(TEXT("tier 1 max is 0.9 of the reach"), Max, 900.f, 0.01f);
+	FiringPositionRules::WeaponBand(1000.f, 1, Config, Min, Max);
+	TestEqual(TEXT("tier 2 max is 1.8 of the reach"), Max, 1800.f, 0.01f);
+	FiringPositionRules::WeaponBand(0.f, 0, Config, Min, Max);
+	TestEqual(TEXT("no weapon: the default reach 1400 x 0.9"), Max, 1260.f, 0.01f);
+
+	// IsForwardOfKillZone: attackers come from the west (-X), the kill zone is at the origin, the axis points east.
+	const FVector Zone(0.0, 0.0, 0.0);
+	const FVector Approach(-3000.0, 0.0, 0.0);
+	TestFalse(TEXT("1 m toward the attackers and 8 m beside the zone: inside the margin"), FiringPositionRules::IsForwardOfKillZone(FVector(-100.0, 800.0, 0.0), Zone, Approach, 300.f));
+	TestTrue(TEXT("5 m toward the attackers is forward"), FiringPositionRules::IsForwardOfKillZone(FVector(-500.0, 0.0, 0.0), Zone, Approach, 300.f));
+	TestFalse(TEXT("a flank position level with the zone is not forward (the old distance rule counted it)"), FiringPositionRules::IsForwardOfKillZone(FVector(0.0, 1500.0, 0.0), Zone, Approach, 300.f));
+	TestFalse(TEXT("behind the zone is not forward"), FiringPositionRules::IsForwardOfKillZone(FVector(1200.0, 100.0, 0.0), Zone, Approach, 300.f));
+	TestFalse(TEXT("a flank position slightly toward the attackers, under the margin, is not forward"), FiringPositionRules::IsForwardOfKillZone(FVector(-250.0, 1500.0, 0.0), Zone, Approach, 300.f));
+	TestTrue(TEXT("a flank position 4 m toward the attackers is forward"), FiringPositionRules::IsForwardOfKillZone(FVector(-400.0, 1500.0, 0.0), Zone, Approach, 300.f));
+	TestFalse(TEXT("no axis (approach == zone): never forward"), FiringPositionRules::IsForwardOfKillZone(FVector(-900.0, 0.0, 0.0), Zone, Zone, 300.f));
+	// Beside the zone, level with it along the axis: not forward at any lateral distance (crossfire flanks).
+	TestFalse(TEXT("a far flank level with the zone is not forward"), FiringPositionRules::IsForwardOfKillZone(FVector(0.0, 2500.0, 0.0), Zone, Approach, 300.f));
+	TestFalse(TEXT("the other flank too"), FiringPositionRules::IsForwardOfKillZone(FVector(0.0, -2500.0, 0.0), Zone, Approach, 300.f));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFiringPositionConfigTest, "CodexTactics.AI.FiringPosition.Config",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -282,7 +383,8 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 
 	const TSharedPtr<FJsonObject> Block = ParseBlock(TEXT(R"JSON({
 		"crossfire_min_deg": 60, "area_samples": 1, "min_covered_share": 2.0, "rim_step_max_cm": 500, "min_spacing_m": 7,
-		"muzzle_height_cm": { "crouching": 90 }, "defence_use": false, "scan_rays": 99, "max_cover_slots": 0, "ignored_key": 5
+		"muzzle_height_cm": { "crouching": 90 }, "defence_use": false, "scan_rays": 99, "max_cover_slots": 0, "ignored_key": 5,
+			"band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "scan_far_stride": 99, "roof_reach_factor": 7, "default_reach_cm": 5
 	})JSON"));
 	TestTrue(TEXT("the block parses"), Block.IsValid());
 	if (Block.IsValid())
@@ -298,7 +400,14 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 		TestFalse(TEXT("defence_use false read"), Read.bDefenceUse);
 		TestEqual(TEXT("scan_rays clamps to 16"), Read.ScanRays, 16);
 		TestEqual(TEXT("max_cover_slots is at least 1"), Read.MaxCoverSlots, 1);
+		TestEqual(TEXT("band_max_factor read"), Read.BandMaxFactor, 0.5f, 0.001f);
+		TestEqual(TEXT("tier 2 is never narrower than tier 1"), Read.BandMaxFactorTier2, 0.5f, 0.001f);
+		TestEqual(TEXT("forward_margin_cm is at least 0"), Read.ForwardMarginCm, 0.f, 0.001f);
+		TestEqual(TEXT("scan_far_stride clamps to 8"), Read.ScanFarStride, 8);
+		TestEqual(TEXT("roof_reach_factor clamps to 1"), Read.RoofReachFactor, 1.f, 0.001f);
+		TestEqual(TEXT("default_reach_cm is at least 100"), Read.DefaultReachCm, 100.f, 0.001f);
 		TestEqual(TEXT("a missing key keeps the default"), Read.LineClearCm, Defaults.LineClearCm, 0.001f);
+		TestEqual(TEXT("a missing phase b key keeps the default"), Read.AreaRadiusFloorCm, Defaults.AreaRadiusFloorCm, 0.001f);
 	}
 
 	// The shipped file mirrors the code defaults (the numbers live in pmc_commander.json; the defaults are only the fallback).
@@ -328,6 +437,15 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	TestEqual(TEXT("shipped scan_reach_cm"), Shipped.ScanReachCm, Defaults.ScanReachCm, 0.001f);
 	TestEqual(TEXT("shipped max_scan_points"), Shipped.MaxScanPoints, Defaults.MaxScanPoints);
 	TestEqual(TEXT("shipped max_cover_slots"), Shipped.MaxCoverSlots, Defaults.MaxCoverSlots);
+	TestEqual(TEXT("shipped scan_dense_cm"), Shipped.ScanDenseCm, Defaults.ScanDenseCm, 0.001f);
+	TestEqual(TEXT("shipped scan_far_stride"), Shipped.ScanFarStride, Defaults.ScanFarStride);
+	TestEqual(TEXT("shipped band_min_factor"), Shipped.BandMinFactor, Defaults.BandMinFactor, 0.001f);
+	TestEqual(TEXT("shipped band_max_factor"), Shipped.BandMaxFactor, Defaults.BandMaxFactor, 0.001f);
+	TestEqual(TEXT("shipped band_max_factor_tier2"), Shipped.BandMaxFactorTier2, Defaults.BandMaxFactorTier2, 0.001f);
+	TestEqual(TEXT("shipped area_radius_floor_cm"), Shipped.AreaRadiusFloorCm, Defaults.AreaRadiusFloorCm, 0.001f);
+	TestEqual(TEXT("shipped roof_reach_factor"), Shipped.RoofReachFactor, Defaults.RoofReachFactor, 0.001f);
+	TestEqual(TEXT("shipped default_reach_cm"), Shipped.DefaultReachCm, Defaults.DefaultReachCm, 0.001f);
+	TestEqual(TEXT("shipped forward_margin_cm"), Shipped.ForwardMarginCm, Defaults.ForwardMarginCm, 0.001f);
 	TestTrue(TEXT("shipped defence_use"), Shipped.bDefenceUse == Defaults.bDefenceUse);
 	return true;
 }

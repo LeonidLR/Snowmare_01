@@ -69,6 +69,40 @@ struct UFiringPositionSubsystem::FFiringScanContext
 	int32 RoofFaults = 0;
 };
 
+/**
+ * One area's cover scan (band-independent, cached per area for the round): every wall hit between a slot and the area as a slot entry, with its firing variants
+ * (stance x lean side) and the bit mask of the area samples each variant's line reaches. A man's weapon band is applied to the masks at query time.
+ */
+struct UFiringPositionSubsystem::FFiringCoverScan
+{
+	struct FVariant
+	{
+		EFiringPositionKind Kind = EFiringPositionKind::LowCover;
+		EOperativeStance Stance = EOperativeStance::Crouching;
+		FVector Origin = FVector::ZeroVector;
+		uint32 ClearMask = 0;
+	};
+	struct FSlotEntry
+	{
+		FCoverSlot Slot;
+		FVector Feet = FVector::ZeroVector;
+		float Quality = 0.f;
+		float DistanceCm = 0.f;
+		FString WallId;
+		bool bHigh = false;
+		/** Empty for a high wall with no exposed edge (nothing to lean round). */
+		TArray<FVariant> Variants;
+	};
+	float RingMaxCm = 0.f;
+	TArray<FSlotEntry> Slots;
+	int32 ScanPoints = 0;
+	int32 RaysPrefiltered = 0;
+	int32 SlotsFound = 0;
+	int32 Traces = 0;
+	double Milliseconds = 0.0;
+	bool bSlotCapHit = false;
+};
+
 bool UFiringPositionSubsystem::DoesSupportWorldType(const EWorldType::Type WorldType) const
 {
 	return WorldType == EWorldType::Game || WorldType == EWorldType::PIE;
@@ -95,11 +129,13 @@ void UFiringPositionSubsystem::SetConfig(const FFiringPositionConfig& InConfig)
 	Config = InConfig;
 	bConfigLoaded = true;
 	Cache.Reset();
+	CoverScans.Reset();
 }
 
 void UFiringPositionSubsystem::InvalidateCache()
 {
 	Cache.Reset();
+	CoverScans.Reset();
 }
 
 FString UFiringPositionSubsystem::AreaKey(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask) const
@@ -445,37 +481,45 @@ void UFiringPositionSubsystem::GatherWindows(FFiringScanContext& Context, TArray
 	}
 }
 
-void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<FFiringCandidate>& Out)
+FString UFiringPositionSubsystem::ScanKey(const FVector& AreaCenter, float AreaRadiusCm) const
+{
+	return FString::Printf(TEXT("%d,%d,%d|%d"), FMath::RoundToInt(static_cast<float>(AreaCenter.X) / 50.f), FMath::RoundToInt(static_cast<float>(AreaCenter.Y) / 50.f),
+		FMath::RoundToInt(static_cast<float>(AreaCenter.Z) / 50.f), FMath::RoundToInt(AreaRadiusCm / 50.f));
+}
+
+TSharedPtr<UFiringPositionSubsystem::FFiringCoverScan> UFiringPositionSubsystem::EnsureCoverScan(FFiringScanContext& Context, float NeedRingCm, bool& bOutCached)
 {
 	using namespace FiringPositionSubsystemLocal;
-	const FFiringPositionConfig& Cfg = GetConfig();
-	const float RingMin = FMath::Max(0.f, Context.BandMin - Context.Radius);
-	const float RingMax = Context.BandMax > 0.f ? Context.BandMax + Context.Radius : RingMin + 3000.f;
-	// The polar grid of scan points over the ring, thinned to MaxScanPoints (a deterministic stride).
-	TArray<FVector> Raw;
-	int32 RingIndex = 0;
-	for (float Radius = RingMin + Cfg.ScanStepCm * 0.5f; Radius <= RingMax; Radius += Cfg.ScanStepCm, ++RingIndex)
+	const FString Key = ScanKey(Context.Centre, Context.Radius);
+	if (const TSharedPtr<FFiringCoverScan>* Found = CoverScans.Find(Key); Found && Found->IsValid() && (*Found)->RingMaxCm + 1.f >= NeedRingCm)
 	{
-		const int32 Count = FMath::Max(1, FMath::CeilToInt(2.f * PI * Radius / Cfg.ScanStepCm));
-		for (int32 Index = 0; Index < Count; ++Index)
-		{
-			const float Angle = 2.f * PI * (static_cast<float>(Index) + (RingIndex % 2 == 0 ? 0.f : 0.5f)) / static_cast<float>(Count);
-			Raw.Add(Context.Centre + FVector(FMath::Cos(Angle) * Radius, FMath::Sin(Angle) * Radius, 0.f));
-		}
+		bOutCached = true;
+		return *Found;
 	}
-	const int32 Stride = FMath::Max(1, FMath::CeilToInt(static_cast<float>(Raw.Num()) / static_cast<float>(Cfg.MaxScanPoints)));
+	bOutCached = false;
+	const double Start = FPlatformTime::Seconds();
+	const int32 TracesBefore = Context.Traces;
+	const FFiringPositionConfig& Cfg = GetConfig();
+	TSharedPtr<FFiringCoverScan> Scan = MakeShared<FFiringCoverScan>();
+	Scan->RingMaxCm = NeedRingCm;
 	TSet<FString> Seen;
-	int32 Slots = 0;
-	for (int32 Index = 0; Index < Raw.Num() && Slots < Cfg.MaxCoverSlots; Index += Stride)
+	// The scan is band-independent: every wall hit that stands between a slot and the area becomes a slot entry with its firing variants and the area samples each variant
+	// reaches (a bit mask). A man's weapon band is applied LATER (GatherCover), so a wider band always sees every slot a narrower band sees.
+	for (const FVector& Raw : FiringPositionRules::CoverScanPoints(Context.Centre, NeedRingCm, Cfg))
 	{
+		if (Scan->Slots.Num() >= Cfg.MaxCoverSlots)
+		{
+			Scan->bSlotCapHit = true;
+			break;
+		}
 		FVector OnNav;
-		if (!ProjectOnNav(Raw[Index], FVector(150.f, 150.f, 150.f), OnNav) || FMath::Abs(OnNav.Z - Context.Centre.Z) > Context.FloorToleranceCm)
+		if (!ProjectOnNav(Raw, FVector(150.f, 150.f, 150.f), OnNav) || FMath::Abs(OnNav.Z - Context.Centre.Z) > Context.FloorToleranceCm)
 		{
 			continue;
 		}
-		++LastStats.ScanPoints;
+		++Scan->ScanPoints;
 		const FVector RayOrigin = OnNav + FVector(0.f, 0.f, 90.f);
-		for (int32 Ray = 0; Ray < Cfg.ScanRays && Slots < Cfg.MaxCoverSlots; ++Ray)
+		for (int32 Ray = 0; Ray < Cfg.ScanRays && Scan->Slots.Num() < Cfg.MaxCoverSlots; ++Ray)
 		{
 			const FVector Direction = FRotator(0.f, 360.f * static_cast<float>(Ray) / static_cast<float>(Cfg.ScanRays), 0.f).Vector();
 			FCoverSlot Slot;
@@ -485,6 +529,7 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 				FVector Normal(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f);
 				if (FMath::Abs(Hit.ImpactNormal.Z) > 0.3f || !Normal.Normalize())
 				{
+					++Scan->RaysPrefiltered;
 					return false;
 				}
 				if (FVector::DotProduct(Normal, Direction) > 0.f)
@@ -494,25 +539,27 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 				const FVector Approx = Hit.ImpactPoint + Normal * 45.f;
 				if (PmcCommanderRules::CoverQualityAgainst(Approx, Normal, Context.Centre) < MinCoverQuality)
 				{
+					++Scan->RaysPrefiltered;
 					return false;
 				}
 				const FString Cell = FString::Printf(TEXT("%s|%d,%d,%d"), Hit.GetActor() ? *Hit.GetActor()->GetPathName() : TEXT(""), FMath::FloorToInt(static_cast<float>(Approx.X) / SlotCellCm),
 					FMath::FloorToInt(static_cast<float>(Approx.Y) / SlotCellCm), FMath::FloorToInt(static_cast<float>(Approx.Z) / SlotCellCm));
 				bool bAlready = false;
 				Seen.Add(Cell, &bAlready);
+				Scan->RaysPrefiltered += bAlready ? 1 : 0;
 				return !bAlready;
 			};
 			if (!UPmcSquadSubsystem::CoverSlotAlongRay(Context.World, RayOrigin, Direction, Cfg.ScanReachCm, Context.Params, Slot, Prefilter))
 			{
 				continue;
 			}
-			++Slots;
+			++Scan->SlotsFound;
 			if (FMath::Abs(Slot.WorldLocation.Z - Context.Centre.Z) > Context.FloorToleranceCm)
 			{
 				continue;
 			}
 			const float Distance = static_cast<float>(FVector::Dist2D(Slot.WorldLocation, Context.Centre));
-			if (Distance < RingMin || Distance > RingMax)
+			if (Distance > NeedRingCm)
 			{
 				continue;
 			}
@@ -521,12 +568,29 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 			{
 				continue;
 			}
-			const FString WallId = Slot.WallActor.IsValid() ? Slot.WallActor->GetPathName() : FString();
-			const FVector Feet = SnapToFloor(Slot.WorldLocation);
-			FFiringCandidate Best;
-			float BestShare = 0.f;
-			FVector BestMean = FVector::ZeroVector;
-			if (Slot.Height == ECoverHeight::HighCover)
+			FFiringCoverScan::FSlotEntry Entry;
+			Entry.Slot = Slot;
+			Entry.Quality = Quality;
+			Entry.DistanceCm = Distance;
+			Entry.WallId = Slot.WallActor.IsValid() ? Slot.WallActor->GetPathName() : FString();
+			Entry.Feet = SnapToFloor(Slot.WorldLocation);
+			Entry.bHigh = Slot.Height == ECoverHeight::HighCover;
+			auto AddVariant = [&](EFiringPositionKind Kind, EOperativeStance Stance, const FVector& Origin)
+			{
+				FFiringCoverScan::FVariant Variant;
+				Variant.Kind = Kind;
+				Variant.Stance = Stance;
+				Variant.Origin = Origin;
+				for (int32 Index = 0; Index < Context.Aims.Num() && Index < 32; ++Index)
+				{
+					if (!LineBlocked(Context, Origin, Context.Aims[Index]))
+					{
+						Variant.ClearMask |= 1u << Index;
+					}
+				}
+				Entry.Variants.Add(Variant);
+			};
+			if (Entry.bHigh)
 			{
 				// A full wall: fire only round an exposed corner, the lean point is the muzzle (CoverRules::CornerLeanPoint); the lean works crouched too.
 				for (const ECoverFacing Facing : { ECoverFacing::Left, ECoverFacing::Right })
@@ -537,22 +601,8 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 					}
 					for (const EOperativeStance Stance : { EOperativeStance::Crouching, EOperativeStance::Standing })
 					{
-						if (!FiringStances::Allows(Context.StanceMask, Stance))
-						{
-							continue;
-						}
-						const FVector Muzzle = Feet + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance));
-						const FVector Origin = CoverRules::CornerLeanPoint(Slot, Facing, Muzzle, CoverRules::GetConfig().CornerPeekOffsetCm);
-						FVector Mean = FVector::ZeroVector;
-						const float Share = FiringPositionRules::CoveredShare(CountClear(Context, Origin, 0.f, 0.f, &Mean), Context.Aims.Num());
-						if (Share > BestShare)
-						{
-							BestShare = Share;
-							BestMean = Mean;
-							Best.Position.Kind = EFiringPositionKind::Corner;
-							Best.Position.Stance = Stance;
-							Best.Position.FireOrigin = Origin;
-						}
+						const FVector Muzzle = Entry.Feet + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance));
+						AddVariant(EFiringPositionKind::Corner, Stance, CoverRules::CornerLeanPoint(Slot, Facing, Muzzle, CoverRules::GetConfig().CornerPeekOffsetCm));
 					}
 				}
 			}
@@ -561,39 +611,119 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 				// A low wall: over the top, crouched first (the protection), then standing.
 				for (const EOperativeStance Stance : { EOperativeStance::Crouching, EOperativeStance::Standing })
 				{
-					if (!FiringStances::Allows(Context.StanceMask, Stance))
-					{
-						continue;
-					}
-					const FVector Origin = Feet + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance));
-					FVector Mean = FVector::ZeroVector;
-					const float Share = FiringPositionRules::CoveredShare(CountClear(Context, Origin, 0.f, 0.f, &Mean), Context.Aims.Num());
-					if (Share > BestShare)
-					{
-						BestShare = Share;
-						BestMean = Mean;
-						Best.Position.Kind = EFiringPositionKind::LowCover;
-						Best.Position.Stance = Stance;
-						Best.Position.FireOrigin = Origin;
-					}
+					AddVariant(EFiringPositionKind::LowCover, Stance, Entry.Feet + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance)));
 				}
 			}
-			if (BestShare <= 0.f)
+			Scan->Slots.Add(MoveTemp(Entry));
+		}
+	}
+	Scan->Milliseconds = (FPlatformTime::Seconds() - Start) * 1000.0;
+	Scan->Traces = Context.Traces - TracesBefore;
+	CoverScans.Add(Key, Scan);
+	bOutCached = false;
+	return Scan;
+}
+
+void UFiringPositionSubsystem::PrepareCoverScan(const FVector& AreaCenter, float AreaRadiusCm, float BandMaxCm)
+{
+	FFiringScanContext Context;
+	BuildContext(Context, AreaCenter, AreaRadiusCm, 0.f, BandMaxCm);
+	if (!Context.World || Context.Aims.IsEmpty())
+	{
+		return;
+	}
+	bool bCached = false;
+	const TSharedPtr<FFiringCoverScan> Scan = EnsureCoverScan(Context, BandMaxCm > 0.f ? BandMaxCm + AreaRadiusCm : AreaRadiusCm + 3000.f, bCached);
+	if (!bCached && Scan.IsValid())
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[FiringPos] cover scan %s r %.0f cm ring %.0f cm: %d scan points, %d slots (%d wall hits, %d rays prefiltered%s), %d traces, %.1f ms"), *AreaCenter.ToCompactString(),
+			AreaRadiusCm, Scan->RingMaxCm, Scan->ScanPoints, Scan->Slots.Num(), Scan->SlotsFound, Scan->RaysPrefiltered, Scan->bSlotCapHit ? TEXT(", SLOT CAP HIT") : TEXT(""), Scan->Traces, Scan->Milliseconds);
+	}
+}
+
+void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<FFiringCandidate>& Out)
+{
+	using namespace FiringPositionSubsystemLocal;
+	const FFiringPositionConfig& Cfg = GetConfig();
+	const float RingMin = FMath::Max(0.f, Context.BandMin - Context.Radius);
+	const float RingMax = Context.BandMax > 0.f ? Context.BandMax + Context.Radius : RingMin + 3000.f;
+	bool bCached = false;
+	const TSharedPtr<FFiringCoverScan> Scan = EnsureCoverScan(Context, RingMax, bCached);
+	LastStats.bScanCached = bCached;
+	LastStats.ScanMilliseconds = bCached ? 0.0 : Scan->Milliseconds;
+	LastStats.ScanRingMaxCm = Scan->RingMaxCm;
+	LastStats.ScanPoints = Scan->ScanPoints;
+	LastStats.RaysPrefiltered = Scan->RaysPrefiltered;
+	LastStats.SlotsFound = Scan->SlotsFound;
+	LastStats.SlotsOnLevel = Scan->Slots.Num();
+	TArray<float, TInlineAllocator<16>> Distances;
+	for (const FFiringCoverScan::FSlotEntry& Entry : Scan->Slots)
+	{
+		// The ring filter first: only slots a man could stand on for THIS band count.
+		if (Entry.DistanceCm < RingMin || Entry.DistanceCm > RingMax)
+		{
+			continue;
+		}
+		++LastStats.SlotsInRing;
+		LastStats.SlotsHigh += Entry.bHigh ? 1 : 0;
+		FFiringCandidate Best;
+		float BestShare = 0.f;
+		FVector BestMean = FVector::ZeroVector;
+		bool bAnyClear = false;
+		for (const FFiringCoverScan::FVariant& Variant : Entry.Variants)
+		{
+			if (!FiringStances::Allows(Context.StanceMask, Variant.Stance))
 			{
 				continue;
 			}
-			Best.Position.StandPoint = Feet;
-			Best.Position.Slot = Slot;
-			Best.Position.bHasSlot = true;
-			Best.Position.FacingYaw = YawOf(Best.Position.FireOrigin, BestMean);
-			Best.Position.CoveredShare = BestShare;
-			Best.Position.CoverKey = PmcDefenceRules::CoverObjectKey(WallId, Slot.WallPoint);
-			Best.Position.SourceId = FString::Printf(TEXT("%s@%s"), Slot.WallActor.IsValid() ? *Slot.WallActor->GetName() : TEXT("wall"), *Slot.WallPoint.ToCompactString());
-			FinishCandidate(Context, Best, Quality, Best.Position.Kind == EFiringPositionKind::Corner ? Cfg.EscapeSecondWay : Cfg.EscapeOneWay);
-			if (Best.Position.bValid)
+			bAnyClear |= Variant.ClearMask != 0;
+			Distances.Reset();
+			for (const FVector& Aim : Context.Aims)
 			{
-				Out.Add(Best);
+				Distances.Add(static_cast<float>(FVector::Dist2D(Variant.Origin, Aim)));
 			}
+			const int32 Hits = FiringPositionRules::HitsInBand(Distances, Variant.ClearMask, Context.BandMin, Context.BandMax);
+			const float Share = FiringPositionRules::CoveredShare(Hits, Context.Aims.Num());
+			if (Share > BestShare)
+			{
+				FVector Sum = FVector::ZeroVector;
+				for (int32 Index = 0; Index < Context.Aims.Num() && Index < 32; ++Index)
+				{
+					if ((Variant.ClearMask & (1u << Index)) != 0 && FiringPositionRules::SampleInBand(Distances[Index], Context.BandMin, Context.BandMax, 0.f))
+					{
+						Sum += Context.Aims[Index];
+					}
+				}
+				BestShare = Share;
+				BestMean = Sum / static_cast<double>(FMath::Max(Hits, 1));
+				Best.Position.Kind = Variant.Kind;
+				Best.Position.Stance = Variant.Stance;
+				Best.Position.FireOrigin = Variant.Origin;
+			}
+		}
+		if (BestShare <= 0.f)
+		{
+			++LastStats.SlotsShareFailed;
+			++(Entry.Variants.IsEmpty() ? LastStats.SlotsHighNoEdge : LastStats.SlotsNoClearLine);
+			LastStats.SlotsClearOutOfBand += bAnyClear ? 1 : 0;
+			continue;
+		}
+		Best.Position.StandPoint = Entry.Feet;
+		Best.Position.Slot = Entry.Slot;
+		Best.Position.bHasSlot = true;
+		Best.Position.FacingYaw = YawOf(Best.Position.FireOrigin, BestMean);
+		Best.Position.CoveredShare = BestShare;
+		Best.Position.CoverKey = PmcDefenceRules::CoverObjectKey(Entry.WallId, Entry.Slot.WallPoint);
+		Best.Position.SourceId = FString::Printf(TEXT("%s@%s"), Entry.Slot.WallActor.IsValid() ? *Entry.Slot.WallActor->GetName() : TEXT("wall"), *Entry.Slot.WallPoint.ToCompactString());
+		FinishCandidate(Context, Best, Entry.Quality, Best.Position.Kind == EFiringPositionKind::Corner ? Cfg.EscapeSecondWay : Cfg.EscapeOneWay);
+		if (Best.Position.bValid)
+		{
+			Out.Add(Best);
+		}
+		else
+		{
+			++LastStats.SlotsShareFailed;
+			++LastStats.SlotsBelowMinShare;
 		}
 	}
 }
@@ -622,6 +752,7 @@ TArray<FFiringCandidate> UFiringPositionSubsystem::Gather(const FVector& AreaCen
 		}
 		return A.Position.SourceId.Compare(B.Position.SourceId, ESearchCase::CaseSensitive) < 0;
 	});
+	LastStats.AreaSamples = Context.Aims.Num();
 	LastStats.Valid = Out.Num();
 	LastStats.CoverSlots = Out.FilterByPredicate([](const FFiringCandidate& C) { return C.Position.Kind == EFiringPositionKind::Corner || C.Position.Kind == EFiringPositionKind::LowCover; }).Num();
 	LastStats.Traces = Context.Traces;
@@ -630,6 +761,12 @@ TArray<FFiringCandidate> UFiringPositionSubsystem::Gather(const FVector& AreaCen
 		TEXT("[FiringPos] area %s r %.0f cm band %.0f..%.0f cm: %d valid (%d cover, %d roof spots tried, %d windows tried, %d scan points), %d roof faults, %d traces, %.1f ms"),
 		*AreaCenter.ToCompactString(), AreaRadiusCm, BandMinCm, BandMaxCm, LastStats.Valid, LastStats.CoverSlots, LastStats.RoofSpots, LastStats.Windows, LastStats.ScanPoints,
 		Context.RoofFaults, LastStats.Traces, LastStats.Milliseconds);
+	UE_LOG(LogCodexTactics, Display,
+		TEXT("[FiringPos] cover breakdown %s band %.0f..%.0f cm: %d scan points, %d rays prefiltered (no wall between / cell taken), %d slots found (%d high), %d on level, %d in ring, %d failed share (%d high wall without an exposed edge, %d no clear line (%d of them see a sample, but outside the band), %d share below min), %d valid, %d area samples"),
+		*AreaCenter.ToCompactString(), BandMinCm, BandMaxCm, LastStats.ScanPoints, LastStats.RaysPrefiltered, LastStats.SlotsFound, LastStats.SlotsHigh, LastStats.SlotsOnLevel, LastStats.SlotsInRing,
+		LastStats.SlotsShareFailed, LastStats.SlotsHighNoEdge, LastStats.SlotsNoClearLine, LastStats.SlotsClearOutOfBand, LastStats.SlotsBelowMinShare, LastStats.CoverSlots, LastStats.AreaSamples);
+	UE_LOG(LogCodexTactics, Display, TEXT("[FiringPos] cover scan %s: ring %.0f cm, %s%.1f ms"), *AreaCenter.ToCompactString(), LastStats.ScanRingMaxCm,
+			LastStats.bScanCached ? TEXT("cached, ") : TEXT("scanned now in "), LastStats.bScanCached ? 0.0 : LastStats.ScanMilliseconds);
 	return Out;
 }
 

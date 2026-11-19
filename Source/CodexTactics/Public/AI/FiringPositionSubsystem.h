@@ -35,11 +35,30 @@ struct CODEXTACTICS_API FFiringGatherStats
 {
 	int32 ScanPoints = 0;
 	int32 CoverSlots = 0;
+	/** Cover breakdown: wall hits turned into slots / of those inside the ring, on the area's level, quality ok / failed (no clear sample or share below the minimum). */
+	int32 SlotsFound = 0;
+	int32 SlotsInRing = 0;
+	int32 SlotsOnLevel = 0;
+	int32 SlotsShareFailed = 0;
+	/** Why a slot failed: a high wall with no exposed edge / a standing or crouched muzzle with no clear line / a share below min_covered_share. Plus the standable area samples. */
+	int32 SlotsHighNoEdge = 0;
+	int32 SlotsNoClearLine = 0;
+	/** Of the no-clear-line slots: some variant sees a sample, just not inside this band. */
+	int32 SlotsClearOutOfBand = 0;
+	int32 SlotsBelowMinShare = 0;
+	int32 SlotsHigh = 0;
+	int32 AreaSamples = 0;
+	/** Wall hits the prefilter dropped (no wall between slot and area, or the wall cell was already taken). */
+	int32 RaysPrefiltered = 0;
 	int32 RoofSpots = 0;
 	int32 Windows = 0;
 	int32 Valid = 0;
 	int32 Traces = 0;
 	double Milliseconds = 0.0;
+	/** The cover scan this gather used: its cost when it ran now (ms), whether it came from the per-area cache, the ring it covers (cm). */
+	double ScanMilliseconds = 0.0;
+	bool bScanCached = false;
+	float ScanRingMaxCm = 0.f;
 };
 
 /**
@@ -98,6 +117,12 @@ public:
 	/** Where the walk surface ends from Start along Dir (planar), cm: the rim of a roof. 0 when Start is the last walkable point. */
 	float FindRimDistance(const FVector& Start, const FVector& Dir, float MaxCm) const;
 
+	/**
+	 * Runs (or widens) the area's cover scan for a ring out to BandMaxCm + AreaRadiusCm: call it ONCE with the widest band of every man before the per-man queries, so
+	 * all of them share one scan (a narrow band's candidates are then a subset of a wider band's). A scan that already covers the ring is reused.
+	 */
+	void PrepareCoverScan(const FVector& AreaCenter, float AreaRadiusCm, float BandMaxCm);
+
 	/** Forgets every cached area (a round's start, a geometry change). */
 	void InvalidateCache();
 
@@ -110,6 +135,11 @@ public:
 
 private:
 	struct FFiringScanContext;
+	struct FFiringCoverScan;
+
+	FString ScanKey(const FVector& AreaCenter, float AreaRadiusCm) const;
+	/** The area's cover scan covering at least NeedRingCm (scans or widens it when the cache is narrower). */
+	TSharedPtr<FFiringCoverScan> EnsureCoverScan(FFiringScanContext& Context, float NeedRingCm, bool& bOutCached);
 
 	FString AreaKey(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask) const;
 	void BuildContext(FFiringScanContext& Context, const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask = FiringStances::Default) const;
@@ -133,6 +163,7 @@ private:
 	FFiringPositionConfig Config;
 	bool bConfigLoaded = false;
 	TMap<FString, TArray<FFiringCandidate>> Cache;
+	TMap<FString, TSharedPtr<FFiringCoverScan>> CoverScans;
 	FFiringGatherStats LastStats;
 	int32 GatherCount = 0;
 };

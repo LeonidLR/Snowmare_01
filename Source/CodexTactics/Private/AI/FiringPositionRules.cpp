@@ -125,6 +125,25 @@ namespace FiringPositionRules
 		float MaxSlots = static_cast<float>(Out.MaxCoverSlots);
 		FiringReadNumber(Block, TEXT("max_cover_slots"), MaxSlots);
 		Out.MaxCoverSlots = FMath::Max(1, FMath::RoundToInt(MaxSlots));
+		FiringReadNumber(Block, TEXT("scan_dense_cm"), Out.ScanDenseCm);
+		Out.ScanDenseCm = FMath::Max(Out.ScanDenseCm, 0.f);
+		float FarStride = static_cast<float>(Out.ScanFarStride);
+		FiringReadNumber(Block, TEXT("scan_far_stride"), FarStride);
+		Out.ScanFarStride = FMath::Clamp(FMath::RoundToInt(FarStride), 1, 8);
+		FiringReadNumber(Block, TEXT("band_min_factor"), Out.BandMinFactor);
+		Out.BandMinFactor = FMath::Clamp(Out.BandMinFactor, 0.f, 1.f);
+		FiringReadNumber(Block, TEXT("band_max_factor"), Out.BandMaxFactor);
+		Out.BandMaxFactor = FMath::Clamp(Out.BandMaxFactor, 0.1f, 4.f);
+		FiringReadNumber(Block, TEXT("band_max_factor_tier2"), Out.BandMaxFactorTier2);
+		Out.BandMaxFactorTier2 = FMath::Clamp(Out.BandMaxFactorTier2, Out.BandMaxFactor, 6.f); // the fallback band is never narrower than the first
+		FiringReadNumber(Block, TEXT("area_radius_floor_cm"), Out.AreaRadiusFloorCm);
+		Out.AreaRadiusFloorCm = FMath::Max(Out.AreaRadiusFloorCm, 0.f);
+		FiringReadNumber(Block, TEXT("roof_reach_factor"), Out.RoofReachFactor);
+		Out.RoofReachFactor = FMath::Clamp(Out.RoofReachFactor, 0.f, 1.f);
+		FiringReadNumber(Block, TEXT("default_reach_cm"), Out.DefaultReachCm);
+		Out.DefaultReachCm = FMath::Max(Out.DefaultReachCm, 100.f);
+		FiringReadNumber(Block, TEXT("forward_margin_cm"), Out.ForwardMarginCm);
+		Out.ForwardMarginCm = FMath::Max(Out.ForwardMarginCm, 0.f);
 		bool bUse = Out.bDefenceUse;
 		if (Block.TryGetBoolField(TEXT("defence_use"), bUse))
 		{
@@ -303,6 +322,82 @@ namespace FiringPositionRules
 			}
 		}
 		return false;
+	}
+
+	TArray<FVector> CoverScanPoints(const FVector& Centre, float RingMaxCm, const FFiringPositionConfig& Config)
+	{
+		TArray<FVector> Points;
+		const double Step = FMath::Max(Config.ScanStepCm, 100.f);
+		const int32 Stride = FMath::Max(1, Config.ScanFarStride);
+		const double Ring = FMath::Max(RingMaxCm, 0.f);
+		const int32 Reach = FMath::CeilToInt(static_cast<float>(Ring / Step)) + 1;
+		const int32 CentreX = FMath::RoundToInt(static_cast<float>(Centre.X / Step));
+		const int32 CentreY = FMath::RoundToInt(static_cast<float>(Centre.Y / Step));
+		for (int32 IY = CentreY - Reach; IY <= CentreY + Reach; ++IY)
+		{
+			for (int32 IX = CentreX - Reach; IX <= CentreX + Reach; ++IX)
+			{
+				const FVector Point(IX * Step, IY * Step, Centre.Z);
+				const double Distance = FVector::Dist2D(Point, Centre);
+				if (Distance > Ring)
+				{
+					continue;
+				}
+				if (Distance > Config.ScanDenseCm && ((IX % Stride) != 0 || (IY % Stride) != 0))
+				{
+					continue;
+				}
+				Points.Add(Point);
+			}
+		}
+		Points.StableSort([&Centre](const FVector& A, const FVector& B)
+		{
+			const double DA = FVector::Dist2D(A, Centre);
+			const double DB = FVector::Dist2D(B, Centre);
+			if (DA != DB)
+			{
+				return DA < DB;
+			}
+			return A.X != B.X ? A.X < B.X : A.Y < B.Y;
+		});
+		if (Points.Num() > Config.MaxScanPoints)
+		{
+			Points.SetNum(Config.MaxScanPoints);
+		}
+		return Points;
+	}
+
+	int32 HitsInBand(TConstArrayView<float> AimDistancesCm, uint32 ClearMask, float BandMinCm, float BandMaxCm)
+	{
+		int32 Hits = 0;
+		for (int32 Index = 0; Index < AimDistancesCm.Num() && Index < 32; ++Index)
+		{
+			if ((ClearMask & (1u << Index)) != 0 && SampleInBand(AimDistancesCm[Index], BandMinCm, BandMaxCm, 0.f))
+			{
+				++Hits;
+			}
+		}
+		return Hits;
+	}
+
+	void WeaponBand(float ReachCm, int32 Tier, const FFiringPositionConfig& Config, float& OutMinCm, float& OutMaxCm)
+	{
+		const float Reach = ReachCm > 0.f ? ReachCm : Config.DefaultReachCm;
+		OutMinCm = Config.BandMinFactor * Reach;
+		OutMaxCm = (Tier <= 0 ? Config.BandMaxFactor : Config.BandMaxFactorTier2) * Reach;
+	}
+
+	bool IsForwardOfKillZone(const FVector& StandPoint, const FVector& KillZone, const FVector& ApproachPoint, float MarginCm)
+	{
+		const FVector2D Axis = FVector2D(KillZone.X - ApproachPoint.X, KillZone.Y - ApproachPoint.Y);
+		if (Axis.SizeSquared() < KINDA_SMALL_NUMBER)
+		{
+			return false;
+		}
+		const FVector2D ToStand = FVector2D(StandPoint.X - KillZone.X, StandPoint.Y - KillZone.Y);
+		// Along the axis from the attackers toward the zone: negative = nearer the attackers than the zone.
+		const float Along = static_cast<float>(FVector2D::DotProduct(ToStand, Axis.GetSafeNormal()));
+		return Along < -FMath::Max(MarginCm, 0.f);
 	}
 
 	TArray<FVector> AreaSamplePoints(const FVector& Centre, float RadiusCm, int32 AreaSamples)

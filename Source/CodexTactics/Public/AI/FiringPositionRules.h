@@ -104,13 +104,31 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	/** "min_spacing_m" (5) / "spacing_penalty" (0.25): the G008 numbers (a position within this of a chosen one scores x penalty; the same cover object 0). */
 	float MinSpacingCm = 500.f;
 	float SpacingPenalty = 0.25f;
-	/** "scan_step_cm" (600), "scan_rays" (8), "scan_reach_cm" (350), "max_scan_points" (160): the cover-slot scan of an area ring (a trace budget, one query per round). */
+	/**
+	 * "scan_step_cm" (600), "scan_rays" (8), "scan_reach_cm" (350), "max_scan_points" (400): the cover-slot scan of an area (a trace budget, ONE scan per
+	 * area per round, shared by every man's weapon band): a world-anchored grid every scan_step_cm out to the widest ring asked for, nearest first, cut at max_scan_points.
+	 */
 	float ScanStepCm = 600.f;
 	int32 ScanRays = 8;
 	float ScanReachCm = 350.f;
-	int32 MaxScanPoints = 160;
-	/** "max_cover_slots" (120): wall hits turned into cover slots per area (FindCoverSlotAt is ~25 traces each). */
-	int32 MaxCoverSlots = 120;
+	int32 MaxScanPoints = 400;
+	/** "scan_dense_cm" (6000) / "scan_far_stride" (2): beyond scan_dense_cm from the area only every scan_far_stride-th grid line is scanned (far cover is sparser by design). */
+	float ScanDenseCm = 6000.f;
+	int32 ScanFarStride = 2;
+	/** "max_cover_slots" (250): cover slots (on the area's level, inside the scanned ring) kept per area (FindCoverSlotAt is ~25 traces each). */
+	int32 MaxCoverSlots = 250;
+	/** "band_min_factor" (0.18) / "band_max_factor" (0.9) / "band_max_factor_tier2" (1.8): a man's weapon band = these x his weapon's max range (tier 2 = the wider fallback band). */
+	float BandMinFactor = 0.18f;
+	float BandMaxFactor = 0.9f;
+	float BandMaxFactorTier2 = 1.8f;
+	/** "area_radius_floor_cm" (600): the defended area's radius is at least this. */
+	float AreaRadiusFloorCm = 600.f;
+	/** "roof_reach_factor" (0.45): a roof defence's kill zone lies this x the lead's reach out toward the attackers. */
+	float RoofReachFactor = 0.45f;
+	/** "default_reach_cm" (1400): the reach of a man with no weapon. */
+	float DefaultReachCm = 1400.f;
+	/** "forward_margin_cm" (300): a ground position is forward of the kill zone only when it is nearer the attackers along the approach axis by MORE than this. */
+	float ForwardMarginCm = 300.f;
 	/** "defence_use" (true): objective defenders take firing positions before contact (phase b; PmcSquadSubsystem). */
 	bool bDefenceUse = true;
 
@@ -193,6 +211,28 @@ namespace FiringPositionRules
 	 */
 	CODEXTACTICS_API bool PickCrossfirePair(TConstArrayView<FFiringCandidate> Candidates, const FVector& KillZone, TConstArrayView<FString> ExcludeKeys,
 		const FFiringPositionConfig& Config, int32& OutFirst, int32& OutSecond);
+
+	/**
+	 * The grid points of a cover scan over the disc of radius RingMaxCm round Centre (planar, Z = Centre.Z): a WORLD-ANCHORED grid (multiples of ScanStepCm),
+	 * every point out to ScanDenseCm, beyond it only the lines whose both indices are multiples of ScanFarStride; nearest first (ties by X, then Y), cut at
+	 * MaxScanPoints. A wider ring returns a superset of a narrower one (same centre / config), so the scan a wide band needs contains the one a narrow band needs.
+	 */
+	CODEXTACTICS_API TArray<FVector> CoverScanPoints(const FVector& Centre, float RingMaxCm, const FFiringPositionConfig& Config);
+
+	/**
+	 * How many of the samples a muzzle sees clear inside a weapon band: bit i of ClearMask = the line to sample i is clear, AimDistancesCm[i] = the planar distance
+	 * muzzle -> sample i. Only samples inside [BandMinCm, BandMaxCm] count (SampleInBand; BandMaxCm <= 0: no upper limit). At most 32 samples.
+	 */
+	CODEXTACTICS_API int32 HitsInBand(TConstArrayView<float> AimDistancesCm, uint32 ClearMask, float BandMinCm, float BandMaxCm);
+
+	/** The band of a man's weapon: BandMinFactor x Reach .. BandMaxFactor x Reach (Tier 0) or BandMaxFactorTier2 x Reach (Tier 1). Reach <= 0 uses DefaultReachCm. */
+	CODEXTACTICS_API void WeaponBand(float ReachCm, int32 Tier, const FFiringPositionConfig& Config, float& OutMinCm, float& OutMaxCm);
+
+	/**
+	 * A ground position is FORWARD of the kill zone when, on the approach axis (ApproachPoint -> KillZone, planar), it lies nearer the attackers than the zone by MORE
+	 * than MarginCm. Beside the zone (the flanks) it is NOT forward, however close to the approach it is in a straight line. False without an axis (point == zone).
+	 */
+	CODEXTACTICS_API bool IsForwardOfKillZone(const FVector& StandPoint, const FVector& KillZone, const FVector& ApproachPoint, float MarginCm);
 
 	/**
 	 * The 3x3 (AreaSamples 9) or centre-only (1) sample points of a circular area on its floor: centre +- (2/3 R) on each axis.
