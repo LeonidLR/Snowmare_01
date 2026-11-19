@@ -154,10 +154,15 @@ void AProximityMineActor::Tick(float DeltaSeconds)
 	}
 
 	const FVector Location = GetActorLocation();
-	// 1. Enemies always set it off.
+	// 1. Enemies always set it off - but not the PMC fighters (tagged enemies too) when it is the PMC's own charge (T-11, DeployableRules::IgnoresBody).
+	const bool bPmcOwned = DeployableRules::IsPmcOwned(*this);
 	for (AActor* Enemy : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
 	{
 		if (!Enemy->ActorHasTag(CombatQueries::EnemyTag))
+		{
+			continue;
+		}
+		if (const AOperativeCharacter* Fighter = Cast<AOperativeCharacter>(Enemy); Fighter && DeployableRules::IgnoresBody(bPmcOwned, !Fighter->IsPlayerTeam()))
 		{
 			continue;
 		}

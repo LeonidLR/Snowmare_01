@@ -68,6 +68,15 @@ FString PropsGameplayRules::ClassKeyFor(const FString& LayerKind, const FLevelPr
 	return Object.Variant;
 }
 
+bool PropsGameplayRules::IsPmcOwned(const FString& LayerId, const FLevelPropsObject& Object)
+{
+	if (const TSharedPtr<FJsonValue>* Owner = Object.Extra.Find(TEXT("owner")); Owner && Owner->IsValid() && (*Owner)->Type == EJson::String)
+	{
+		return (*Owner)->AsString().TrimStartAndEnd().Equals(TEXT("pmc"), ESearchCase::IgnoreCase);
+	}
+	return LayerId == PmcChargesLayerId;
+}
+
 FString PropsGameplayRules::ClassPathFor(const FJsonObject* Balance, const FString& Key)
 {
 	using namespace PropsGameplayRulesLocal;
