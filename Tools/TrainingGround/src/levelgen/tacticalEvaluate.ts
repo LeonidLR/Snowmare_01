@@ -5,12 +5,13 @@
 //   - Cover share along routes, multi-level route verification, mantle edge validation, per-building and per-level scores
 
 import { inFootprint, rotationOf, rotVec, toBuildingFrame } from './rotation.ts';
-import { classifyOpening, isOpeningPassable } from './openingStates.ts';
-import { escapeLadderIds, usableEscapes, usableSnowRamps } from './fireEscapes.ts';
+import { isOpeningPassable } from './openingStates.ts';
+import type { BuildingGraph, EdgeMode } from './buildingGraph.ts';
+import { buildBuildingGraph, roomReachability } from './buildingGraph.ts';
 import type { Segment, Vec2 } from '../movement/geometry.ts';
 import { dirOf, dist, distToWall, segmentBlocked, sub } from '../movement/geometry.ts';
 import { wallSegments } from '../movement/layout.ts';
-import type { GenBuilding, GenLayout, GenRoom, MantleEdge, WallOpening } from './schema.ts';
+import type { GenBuilding, GenLayout, MantleEdge, WallOpening } from './schema.ts';
 import {
   isMantleable,
   layerLevel,
@@ -22,6 +23,8 @@ import {
   toFormationLayout,
   unifyOpenings,
 } from './schema.ts';
+
+export { isVaultableGroundWindow } from './buildingGraph.ts';
 
 export interface FiringLine {
   openingId: string;
@@ -106,7 +109,6 @@ const WALL_CLEAR_CM = 150;
 const MAX_FIRING_CM = 15000;
 const COVER_NEAR_CM = 400;
 const COVER_COUNT_CM = 600;
-const ROOM_TOUCH_TOL_CM = 60;
 
 const round = (v: number, digits = 0) => {
   const k = 10 ** digits;
@@ -129,10 +131,6 @@ export function openingOutwardDir(b: GenBuilding, op: WallOpening): Vec2 {
   return rotVec(local, rotationOf(b));
 }
 
-function pointInBounds(p: Vec2, bounds: { min: Vec2; max: Vec2 }, tol = ROOM_TOUCH_TOL_CM): boolean {
-  return p[0] >= bounds.min[0] - tol && p[0] <= bounds.max[0] + tol && p[1] >= bounds.min[1] - tol && p[1] <= bounds.max[1] + tol;
-}
-
 /** Options of checkBuildingReachability (the defaults keep the tactical report's legacy graph). */
 export interface ReachabilityOptions {
   /**
@@ -147,218 +145,15 @@ export interface ReachabilityOptions {
   windowEntries?: boolean;
 }
 
-/** An exterior ground-floor window the operatives can vault through (sill in the mantle band); its state is checked separately. */
-export function isVaultableGroundWindow(l: Pick<GenLayout, 'walls'>, b: Pick<GenBuilding, 'partitions'>, op: WallOpening): boolean {
-  if (op.kind !== 'window' || (op.floor ?? 0) !== 0) return false;
-  if (!isMantleable(op.sill_height ?? OPENING_DEFAULTS.window.sill)) return false;
-  return classifyOpening(l, b, op).exterior;
+/** The room & roof reachability graph of one building: the one building graph (buildingGraph.ts) in its reachability variant. */
+export function reachabilityGraph(l: GenLayout, b: GenBuilding, opts: ReachabilityOptions = {}): BuildingGraph {
+  const modesOf = (op: WallOpening): EdgeMode[] => (!opts.openingStates || isOpeningPassable(l, b, op) ? ['walk'] : []);
+  return buildBuildingGraph(l, b, { modesOf, reach: { windowEntries: opts.windowEntries === true } });
 }
 
 /** Build the room & roof reachability graph for one building and BFS from 'street'. */
-export function checkBuildingReachability(l: GenLayout, b: GenBuilding, opts: ReachabilityOptions = {}): {
-  roomsTotal: number;
-  roomsReachable: number;
-  unreachableRooms: string[];
-  roofReachable: boolean;
-} {
-  const passable = (op: WallOpening) => !opts.openingStates || isOpeningPassable(l, b, op);
-  const roofNode = 'roof';
-  const streetNode = 'street';
-  const adj = new Map<string, Set<string>>();
-  const addNode = (u: string) => {
-    if (!adj.has(u)) adj.set(u, new Set());
-  };
-  const addEdge = (u: string, v: string) => {
-    addNode(u);
-    addNode(v);
-    adj.get(u)!.add(v);
-    adj.get(v)!.add(u);
-  };
-  /** One-way link u -> v (down_only flights / escapes). */
-  const addArc = (u: string, v: string) => {
-    addNode(u);
-    addNode(v);
-    adj.get(u)!.add(v);
-  };
-
-  addNode(streetNode);
-  if (b.roof_walkable) addNode(roofNode);
-
-  // Build room list (or fallback virtual per-floor rooms when legacy building omits `rooms`)
-  const walkableFloors = b.hollow ? 1 : b.floors;
-  const rooms: GenRoom[] = [];
-  if (b.enterable) {
-    if (b.rooms && b.rooms.length > 0) {
-      rooms.push(...b.rooms);
-    } else {
-      for (let f = 0; f < walkableFloors; f++) {
-        rooms.push({
-          id: `${b.id}_floor_${f}`,
-          floor: f,
-          bounds: { min: b.footprint[0], max: b.footprint[1] },
-          kind: b.hollow ? 'hall' : 'room',
-        });
-      }
-    }
-    for (const rm of rooms) addNode(rm.id);
-  }
-
-  const roomsAt = (floor: number, pos: Vec2, fallbackSingle = false): GenRoom[] => {
-    const onFloor = rooms.filter((rm) => rm.floor === floor);
-    const local = toBuildingFrame(b, pos); // room bounds are in the building's own frame (rotation.ts)
-    const hits = onFloor.filter((rm) => pointInBounds(local, rm.bounds, ROOM_TOUCH_TOL_CM));
-    if (hits.length > 0) return hits;
-    if (fallbackSingle && onFloor.length === 1) return onFloor;
-    return [];
-  };
-
-  if (b.enterable) {
-    // 1. Exterior doors (floor 0 -> street) and any upper-floor openings acting as doors
-    const openings = unifyOpenings(b);
-    for (const op of openings) {
-      const entryWindow = opts.windowEntries === true && isVaultableGroundWindow(l, b, op);
-      if ((op.kind !== 'door' && !entryWindow) || !passable(op)) continue;
-      const hits = rooms.filter(
-        (rm) => rm.floor === op.floor && ((op.id && rm.door_ids?.includes(op.id)) || pointInBounds(toBuildingFrame(b, op.pos), rm.bounds, ROOM_TOUCH_TOL_CM)),
-      );
-      if (op.floor === 0) {
-        for (const rm of hits) addEdge(streetNode, rm.id);
-      } else {
-        for (let i = 1; i < hits.length; i++) addEdge(hits[0].id, hits[i].id);
-      }
-    }
-
-    // 1b. Snow ramps (story 10): street -> the room behind the upper-storey window at the ramp's top (an entry only with
-    //     windowEntries, like ground windows; opening-states.md 4 rule 5)
-    if (opts.windowEntries === true) {
-      for (const { opening: op, floor } of usableSnowRamps(b)) {
-        if (!passable(op)) continue;
-        for (const rm of roomsAt(floor, op.pos, true)) addEdge(streetNode, rm.id);
-      }
-    }
-
-    // 2. Interior partition doors connecting rooms on same floor
-    for (const pt of b.partitions ?? []) {
-      for (const op of pt.openings ?? []) {
-        if (op.kind !== 'door' || !passable(op)) continue;
-        const hits = rooms.filter(
-          (rm) => rm.floor === pt.floor && ((op.id && rm.door_ids?.includes(op.id)) || pointInBounds(toBuildingFrame(b, op.pos), rm.bounds, ROOM_TOUCH_TOL_CM)),
-        );
-        for (let i = 1; i < hits.length; i++) addEdge(hits[0].id, hits[i].id);
-      }
-    }
-
-    // Also connect rooms sharing a common door_id (for hand-crafted room graphs without partition records)
-    const blockedIds = new Set<string>();
-    if (opts.openingStates) {
-      for (const op of [...openings, ...(b.partitions ?? []).flatMap((pt) => pt.openings ?? [])]) {
-        if (op.id && !passable(op)) blockedIds.add(op.id);
-      }
-    }
-    const byDoor = new Map<string, GenRoom[]>();
-    for (const rm of rooms) {
-      for (const did of rm.door_ids ?? []) {
-        if (blockedIds.has(did)) continue;
-        const list = byDoor.get(did) ?? [];
-        list.push(rm);
-        byDoor.set(did, list);
-      }
-    }
-    for (const group of byDoor.values()) {
-      for (let i = 1; i < group.length; i++) addEdge(group[0].id, group[i].id);
-    }
-
-    // 3. Stairs (a `blocked` flight gives no edge; a `down_only` one only top -> foot - schema /2, stories 4 / 13)
-    for (const st of b.stairs ?? []) {
-      if (st.blocked) continue;
-      const fromNodes = st.kind === 'external'
-        ? [streetNode]
-        : roomsAt(st.from, st.pos, true).map((rm) => rm.id);
-      const toNodes = st.to >= b.floors && b.roof_walkable
-        ? [roofNode]
-        : roomsAt(st.to, st.top, true).map((rm) => rm.id);
-      for (const fn of fromNodes) for (const tn of toNodes) (st.down_only ? addArc(tn, fn) : addEdge(fn, tn));
-    }
-
-    // 3b. Fire escapes: street (ground stop outside) -> each balcony stop -> the roof (to_roof); a balcony joins the room behind
-    //     its door (in its effective state). down_only = one-way down (BUILDINGS_TECH_SPEC.md 2.1).
-    for (const ch of usableEscapes(l, b)) {
-      const seq: (string | null)[] = [ch.ground ? streetNode : null, ...ch.stops.map((s) => `balcony:${s.balcony.id}`), ...(ch.roof ? [roofNode] : [])];
-      for (let i = 0; i + 1 < seq.length; i++) {
-        const lo = seq[i], hi = seq[i + 1];
-        if (lo && hi) (ch.downOnly ? addArc(hi, lo) : addEdge(lo, hi));
-      }
-      for (const { balcony } of ch.stops) {
-        const dr = openings.find((o) => o.id === balcony.door_id && o.kind === 'door');
-        if (!dr || !passable(dr)) continue;
-        const behind = rooms.filter((rm) => rm.floor === balcony.floor && (rm.door_ids?.includes(balcony.door_id) || pointInBounds(toBuildingFrame(b, dr.pos), rm.bounds, ROOM_TOUCH_TOL_CM)));
-        for (const rm of behind) addEdge(`balcony:${balcony.id}`, rm.id);
-      }
-    }
-
-    // 4. Roof hatches (link floor -> roof)
-    for (const ht of b.hatches ?? []) {
-      if (!b.roof_walkable) continue;
-      for (const rm of roomsAt(ht.floor, ht.pos, true)) addEdge(rm.id, roofNode);
-    }
-
-    // 5. Roof holes and floor holes (ruined two-level)
-    for (const rh of b.roof_holes ?? []) {
-      if (!b.roof_walkable || b.floors < 1) continue;
-      const topFloor = b.hollow ? 0 : b.floors - 1;
-      for (const rm of roomsAt(topFloor, rh, false)) addEdge(roofNode, rm.id);
-    }
-    for (const fh of b.floor_holes ?? []) {
-      const upper = roomsAt(fh.floor, fh.pos, false);
-      const lower = roomsAt(Math.max(0, fh.floor - 1), fh.pos, false);
-      for (const u of upper) for (const lo of lower) addEdge(u.id, lo.id);
-    }
-  }
-
-  // 6. Ladders attached to this building (street/ground or interior floor -> roof or upper floor); a fire escape's ladders are
-  //    its chain (3b), not a direct street link
-  const escLadders = escapeLadderIds(b);
-  for (const ld of l.ladders ?? []) {
-    if (escLadders.has(ld.id)) continue;
-    if (ld.to === `roof:${b.id}` && b.roof_walkable) {
-      if (ld.from === 'ground' || ld.from === 'cut') {
-        addEdge(streetNode, roofNode);
-      } else if (ld.from.startsWith(`floor:${b.id}:`) && b.enterable) {
-        const fl = Number(ld.from.split(':')[2]);
-        for (const rm of roomsAt(fl, ld.foot, true)) addEdge(rm.id, roofNode);
-      }
-    } else if (ld.to.startsWith(`floor:${b.id}:`) && b.enterable) {
-      const fl = Number(ld.to.split(':')[2]);
-      const srcNodes = ld.from === 'ground'
-        ? [streetNode]
-        : ld.from.startsWith(`floor:${b.id}:`)
-          ? roomsAt(Number(ld.from.split(':')[2]), ld.foot, true).map((r) => r.id)
-          : [];
-      for (const sn of srcNodes) for (const rm of roomsAt(fl, ld.top, true)) addEdge(sn, rm.id);
-    }
-  }
-
-  // BFS from street
-  const visited = new Set<string>([streetNode]);
-  const queue = [streetNode];
-  while (queue.length > 0) {
-    const u = queue.shift()!;
-    for (const v of adj.get(u) ?? []) {
-      if (!visited.has(v)) {
-        visited.add(v);
-        queue.push(v);
-      }
-    }
-  }
-
-  const unreachableRooms = rooms.filter((rm) => !visited.has(rm.id)).map((rm) => rm.id);
-  const roofReachable = !b.roof_walkable || visited.has(roofNode);
-  return {
-    roomsTotal: rooms.length,
-    roomsReachable: rooms.length - unreachableRooms.length,
-    unreachableRooms,
-    roofReachable,
-  };
+export function checkBuildingReachability(l: GenLayout, b: GenBuilding, opts: ReachabilityOptions = {}): ReturnType<typeof roomReachability> {
+  return roomReachability(reachabilityGraph(l, b, opts));
 }
 
 /** Main entry: compute comprehensive tactical checks for a layout and its sampled mandatory route. */

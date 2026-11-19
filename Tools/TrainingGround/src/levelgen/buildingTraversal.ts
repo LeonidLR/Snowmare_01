@@ -7,13 +7,17 @@
 import type { Vec2 } from '../movement/geometry.ts';
 import { toBuildingFrame } from './rotation.ts';
 import { assignRoles } from './buildingRoles.ts';
-import type { BuildingRole, GenBuilding, GenLayout, Stair, WallOpening } from './schema.ts';
-import { LEVEL_HEIGHT, OPENING_DEFAULTS, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE, unifyOpenings } from './schema.ts';
+import type { BuildingRole, GenBuilding, GenLayout, Stair } from './schema.ts';
+import { LEVEL_HEIGHT, OPENING_DEFAULTS, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE } from './schema.ts';
 import { windowOntoCore, windowPartitionClash } from './windowClearance.ts';
 import { effectiveOpeningState, isPassableState } from './openingStates.ts';
-import { checkBuildingReachability, isVaultableGroundWindow } from './tacticalEvaluate.ts';
-import { escapeLadderIds, usableEscapes, usableSnowRamps } from './fireEscapes.ts';
+import { reachabilityGraph } from './tacticalEvaluate.ts';
+import { usableEscapes, usableSnowRamps } from './fireEscapes.ts';
 import type { RouteSummary } from './buildingRoutes.ts';
+import { exteriorEntries, roomReachability, segHitsBox } from './buildingGraph.ts';
+
+export type { ExteriorEntry } from './buildingGraph.ts';
+export { exteriorEntries, segHitsBox } from './buildingGraph.ts';
 
 /** Clearances, cm (BUILDING_GENERATOR.md 4.1 / 4.2). */
 export const TRAVERSAL = {
@@ -133,19 +137,6 @@ function inPoly(p: Vec2, poly: Vec2[]): boolean {
   return inside;
 }
 
-/** Segment a-b crosses (or lies inside) the box shrunk by `inset`. */
-export function segHitsBox(a: Vec2, b: Vec2, [lo, hi]: Box, inset = 2): boolean {
-  const x0 = lo[0] + inset, y0 = lo[1] + inset, x1 = hi[0] - inset, y1 = hi[1] - inset;
-  let t0 = 0, t1 = 1;
-  const d = sub(b, a);
-  for (const [p, q] of [[-d[0], a[0] - x0], [d[0], x1 - a[0]], [-d[1], a[1] - y0], [d[1], y1 - a[1]]] as const) {
-    if (Math.abs(p) < 1e-9) { if (q < 0) return false; continue; }
-    const t = q / p;
-    if (p < 0) { if (t > t1) return false; if (t > t0) t0 = t; } else { if (t < t0) return false; if (t < t1) t1 = t; }
-  }
-  return t0 <= t1;
-}
-
 /** Is every probe point of `box` on solid walkable surface of `level` (building frame)? */
 function solidAt(b: GenBuilding, level: number, box: Box): boolean {
   const f = b.footprint;
@@ -236,35 +227,6 @@ function checkWindows(l: GenLayout, b: GenBuilding, issues: TraversalIssue[]): v
   }
 }
 
-/** An exterior entry of a building with its effective state (opening-states.md). */
-export interface ExteriorEntry {
-  opening: WallOpening;
-  state: ReturnType<typeof effectiveOpeningState>;
-}
-
-/**
- * The exterior entries of a building (BUILDINGS_TECH_SPEC.md 2.1): its exterior ground-floor doors (b.openings, else the legacy
- * b.doors) and its vaultable exterior ground-floor windows, each with its effective state (blocked ones included).
- */
-export function exteriorEntries(l: GenLayout, b: GenBuilding): ExteriorEntry[] {
-  const out: ExteriorEntry[] = [];
-  for (const op of unifyOpenings(b)) {
-    const door = op.kind === 'door' && (op.floor ?? 0) === 0;
-    if (!door && !isVaultableGroundWindow(l, b, op)) continue;
-    out.push({ opening: op, state: effectiveOpeningState(l, b, op) });
-  }
-  // legacy b.doors next to a non-empty b.openings (unifyOpenings reads only the latter): still doors, as before
-  // (a door already in b.openings at the same spot - e.g. materialised by a story brick - is not counted twice)
-  if (b.openings?.length) {
-    for (const d of b.doors ?? []) {
-      if (d.floor !== 0 || b.openings.some((o) => o.kind === 'door' && (o.floor ?? 0) === 0 && o.pos[0] === d.pos[0] && o.pos[1] === d.pos[1])) continue;
-      const op: WallOpening = { kind: 'door', pos: d.pos, floor: d.floor, wall: d.wall };
-      out.push({ opening: op, state: effectiveOpeningState(l, b, op) });
-    }
-  }
-  return out;
-}
-
 /** Validate one building. Non-enterable buildings (shells, chimneys, overwatch blocks) pass trivially. */
 export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversal {
   const issues: TraversalIssue[] = [];
@@ -319,7 +281,8 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
 
   // rooms + roof (no drops: floor holes / roof holes are excluded from the graph)
   const noDrops: GenBuilding = { ...b, floor_holes: [], roof_holes: [] };
-  const reach = checkBuildingReachability(l, noDrops, { openingStates: true, windowEntries: true });
+  const graph = reachabilityGraph(l, noDrops, { openingStates: true, windowEntries: true });
+  const reach = roomReachability(graph);
   res.rooms = { total: reach.roomsTotal, reachable: reach.roomsReachable };
   for (const r of reach.unreachableRooms) issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_room, code: 'unreachable_room', ref: r, message: `${r}: not reachable from an exterior door without a drop` });
   if (b.roof_walkable) {
@@ -327,43 +290,15 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
     if (!reach.roofReachable) issues.push({ severity: TRAVERSAL_SEVERITY.unreachable_roof, code: 'unreachable_roof', message: `${b.id}: the walkable roof is not reachable without a drop` });
   }
 
-  // levels: every storey with a slab is walkable; reachable = climbed from the ground by the flights, ladders and hatch
-  // ladders of this building (no drops) - independent of whether the storey has rooms (API review 2026-11-18)
+  // levels: every storey with a slab is walkable; reachable = climbed from the ground by the graph's level arcs (flights, ladders,
+  // escapes, snow ramps, hatch ladders; no drops) - independent of whether the storey has rooms (API review 2026-11-18)
   const walkable = new Set<number>([0]);
   for (const fd of b.floors_detail ?? []) if (fd.floor > 0 && fd.floor < b.floors) walkable.add(fd.floor);
   if (!b.hollow) for (let f = 1; f < b.floors; f++) walkable.add(f);
-  const levelOf = (layer: string): number | null => {
-    if (layer === 'ground' || layer === 'cut') return 0;
-    if (layer === `roof:${b.id}`) return b.floors;
-    const m = /^floor:([^:]+):(\d+)$/.exec(layer);
-    return m && m[1] === b.id ? Number(m[2]) : null;
-  };
-  const edges: [number, number][] = [];
-  for (const st of b.stairs ?? []) {
-    if (st.blocked) continue; // stories 4 / 13: the flight stays but gives no edge
-    const foot = st.kind === 'external' ? 0 : st.from;
-    edges.push(st.down_only ? [st.to, foot] : [foot, st.to]);
-  }
-  const escLadders = escapeLadderIds(b);
-  for (const ld of l.ladders ?? []) {
-    if (escLadders.has(ld.id)) continue;
-    const a = levelOf(ld.from), c = levelOf(ld.to);
-    if (a !== null && c !== null) edges.push([a, c]);
-  }
-  // fire escapes: ground -> each stop -> the roof (to_roof); down_only only downward
-  for (const ch of escapes) {
-    const seq: (number | null)[] = [ch.ground ? 0 : null, ...ch.stops.map((s) => s.floor), ...(ch.roof ? [b.floors] : [])];
-    for (let i = 0; i + 1 < seq.length; i++) {
-      const lo = seq[i], hi = seq[i + 1];
-      if (lo !== null && hi !== null) edges.push(ch.downOnly ? [hi, lo] : [lo, hi]);
-    }
-  }
-  for (const r of ramps) edges.push([0, r.floor]);
-  for (const h of b.hatches ?? []) if (b.roof_walkable && (l.ladders ?? []).some((ld) => ld.id === h.ladder_id)) edges.push([h.floor, b.floors]);
   const reached = new Set<number>(hasDoor ? [0] : []);
   for (let changed = true; changed;) {
     changed = false;
-    for (const [a, c] of edges) if (reached.has(a) && !reached.has(c)) { reached.add(c); changed = true; }
+    for (const [a, c] of graph.levelArcs) if (reached.has(a) && !reached.has(c)) { reached.add(c); changed = true; }
   }
   const num = (a: number, c: number) => a - c;
   res.levels = { walkable: [...walkable].sort(num), reachable: [...reached].filter((lv) => lv < b.floors).sort(num) };
