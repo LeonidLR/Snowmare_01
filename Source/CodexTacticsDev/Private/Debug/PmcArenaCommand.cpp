@@ -3973,6 +3973,9 @@ namespace PmcArena
 			State->Options.Squad = 3;
 			State->Options.Scenario = static_cast<int32>(bSmokeCrossroads ? EPmcScenario::Street : EPmcScenario::Chokepoint);
 			State->Options.TimeLimit = 120.f;
+			// T-03 merged: scenario smokes are judged against the scripted opponent (GDD Acceptance Criteria), not self-play, so
+			// every seed sees the same attacker walk (the navmesh path from B's spawn to the point). script=run until T-07.
+			State->Options.Opponent = EOpponent::Script;
 		}
 		State->bWeightsALoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsA, State->WeightsA);
 		State->bWeightsBLoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsB, State->WeightsB);
