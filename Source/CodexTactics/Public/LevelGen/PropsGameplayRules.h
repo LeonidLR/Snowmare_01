@@ -23,6 +23,15 @@ namespace PropsGameplayRules
 	 */
 	CODEXTACTICS_API FString ClassKeyFor(const FString& LayerKind, const FLevelPropsObject& Object, bool bContainer);
 
+	/** The props layer the generator puts the PMC posts' charges in (PROPS_LAYERS / PMC_DEFENCE D2). */
+	inline constexpr const TCHAR* PmcChargesLayerId = TEXT("pmc_charges");
+
+	/**
+	 * Smart-enemies T-11: an object belongs to the PMC when its "owner" key reads "pmc" (case-insensitive) or it lies in the
+	 * pmc_charges layer. Such a mine / tripwire is set off by the player's side only and avoided by the PMC fighters.
+	 */
+	CODEXTACTICS_API bool IsPmcOwned(const FString& LayerId, const FLevelPropsObject& Object);
+
 	/** gameplay.classes[Key] (a native class path such as /Script/CodexTactics.BarrelActor); empty = none (greybox fallback). */
 	CODEXTACTICS_API FString ClassPathFor(const FJsonObject* Balance, const FString& Key);
 

@@ -4,6 +4,7 @@
 // _process_leader_movement).
 
 #include "Characters/OperativeCharacter.h"
+#include "AI/PmcEncounterNav.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
 #include "CodexTactics.h"
@@ -489,6 +490,11 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	// path goes round (or ends at the fence as a partial path, where the fence refuses him with the "go prone" hint).
 	// Known traps (rev 5e, game designer 2026-10-14): only the squad AUTO mode (Ctrl+T) paths round a spotted / own wire or mine;
 	// a player's order is literal - through the wire if that is the way (TripwireRules::ChooseOperativeMoveFilter).
+	if (!IsPlayerTeam())
+	{
+		// A PMC fighter (smart-enemies T-11): crawl rules as the player's men, walks into the squad's known traps, goes round the PMC's own charges.
+		return PmcEncounterNav::FilterFor(Stance == EOperativeStance::Prone, bMantlePathAllowed);
+	}
 	const USquadSubsystem* MoveSquad = GetWorld() ? GetWorld()->GetSubsystem<USquadSubsystem>() : nullptr;
 	TSubclassOf<UNavigationQueryFilter> Filter = nullptr;
 	switch (TripwireRules::ChooseOperativeMoveFilter(Stance == EOperativeStance::Prone, MoveSquad && MoveSquad->IsAutonomousSquadCombat()))
