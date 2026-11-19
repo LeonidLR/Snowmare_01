@@ -125,7 +125,8 @@ bool FFiringPositionPickTest::RunTest(const FString&)
 	const FFiringPositionConfig Config; // min spacing 500 cm, penalty 0.25
 	TArray<FFiringCandidate> Candidates;
 	Candidates.Add(MakeFiringCandidate(TEXT("a"), FVector(0.0, 0.0, 0.0), 0.9f, TEXT("wallA")));
-	Candidates.Add(Candidates[0]);
+	const FFiringCandidate SameWall = Candidates[0]; // a copy: TArray::Add of its own element asserts
+	Candidates.Add(SameWall);
 	Candidates[1].Position.SourceId = TEXT("a2");
 	Candidates[1].Position.StandPoint = FVector(5000.0, 0.0, 0.0);
 	Candidates[1].Score = 0.85f; // the same wall object as "a": scores 0 once "a" is taken
