@@ -3497,6 +3497,10 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		for (int32 Tier = 0; Tier < 2 && Seat.Eligible.IsEmpty(); ++Tier)
 		{
 		const float BandMax = (Tier == 0 ? 0.9f : 1.8f) * Reach;
+		int32 Valid = 0;
+		int32 NotCover = 0;
+		int32 OffLevel = 0;
+		int32 Forward = 0;
 		for (const FFiringCandidate& Candidate : Service->GetCandidates(KillZone, AreaRadius, BandMin, BandMax))
 		{
 			const FFiringPosition& Pos = Candidate.Position;
@@ -3504,6 +3508,7 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 			{
 				continue;
 			}
+			++Valid;
 			if (bRoof)
 			{
 				if (Pos.Kind != EFiringPositionKind::RoofEdge
@@ -3515,19 +3520,27 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 			else
 			{
 				// On the ground a man takes a cover slot (the arena counts a defender on position when he is in cover); window stands and roof edges are not that.
-				if ((Pos.Kind != EFiringPositionKind::Corner && Pos.Kind != EFiringPositionKind::LowCover)
-					|| !PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(Pos.StandPoint.Z), static_cast<float>(Objective.Location.Z), Objective.LevelToleranceCm))
+				if (Pos.Kind != EFiringPositionKind::Corner && Pos.Kind != EFiringPositionKind::LowCover)
 				{
+					++NotCover;
+					continue;
+				}
+				if (!PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(Pos.StandPoint.Z), static_cast<float>(Objective.Location.Z), Objective.LevelToleranceCm))
+				{
+					++OffLevel;
 					continue;
 				}
 				// A defender never stands forward of his kill zone (nearer the attackers' spawn than the zone).
 				if (Team.Defence.bHasApproach && FVector::Dist2D(Pos.StandPoint, Team.Defence.ApproachPoint) < FVector::Dist2D(KillZone, Team.Defence.ApproachPoint))
 				{
+					++Forward;
 					continue;
 				}
 			}
 			Seat.Eligible.Add(Candidate);
 		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s band %.0f..%.0f cm (tier %d): %d valid positions, %d not cover, %d off level, %d forward of the kill zone, %d eligible"), TeamId,
+			*Seat.Fighter->DisplayName.ToString(), BandMin, BandMax, Tier, Valid, NotCover, OffLevel, Forward, Seat.Eligible.Num());
 		}
 		Seats.Add(MoveTemp(Seat));
 	}
