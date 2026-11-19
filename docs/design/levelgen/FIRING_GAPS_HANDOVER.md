@@ -77,9 +77,10 @@ the rim behind those gaps. Every number goes in JSON.
 
 ## Gate
 
-Open question to the lead, sent 11-19: may the ACCEPTED X4 layout
-(`Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x4.json`) and its tactical file be refreshed in this branch? The refresh
-writes a fresh analysis and `firing_gaps`. If yes, run the gate:
+**Lead's answer 2026-11-19: YES, on this branch / a throwaway branch only.** Refresh the ACCEPTED X4 layout
+(`Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x4.json`) and its tactical file there; the refresh writes a fresh analysis
+and `firing_gaps`. main's X4 accepted + tactical files stay unchanged: they are the T-05 / T-06 baseline, and the worker's night
+loop checks out main, so its X4 runs use main's map again. Also in WORKER_LEAD_2026-11-20.md. Then run the gate:
 - Rebuild `L_Gen_Depot_X4` on the worker only.
 - Run T-05's `FiringPositionSmoke` there, from a throwaway ref that merges this branch with `claude/firing-positions` 64bae31c.
 - PASS needs kneeling roof-edge positions on its roofs.
