@@ -127,6 +127,8 @@ export interface TemplateContext {
   maxRotationDeg?: number;
   /** Scales the angle (the full re-roll's chaos when rotation.chaos_scales; default 1). */
   rotationScale?: number;
+  /** The map's `building_plans` toggle (S2.2): the template's offices get band plans (generate.ts addPlannedOffice). */
+  building_plans?: boolean;
 }
 
 export type TemplateContent = Pick<GenLayout, 'walls' | 'buildings' | 'ladders' | 'covers' | 'zones' | 'ambush_points'> & { mantle_edges: NonNullable<GenLayout['mantle_edges']> };
@@ -442,6 +444,7 @@ export function buildTemplate(template: TemplateId, lot: BlockRecord, ctx: Templ
   const inset = TC.inset_m;
   const r: Rect = [[outer[0][0] + inset, outer[0][1] + inset], [outer[1][0] - inset, outer[1][1] - inset]];
   const d = emptyDraft();
+  if (ctx.building_plans) d.building_plans = true;
   const c: Ctx = { d, r, s: place?.side ?? streetSide(r, ctx.streets_m), random: rng(lotSeed(ctx.seed, `${lot.id}:${template}`)), tag: templateTag(lot.id, ctx.seed),
     V: ctx.verticality, density: ctx.density, spec: TC.catalog[template] };
   const vm = BUILD[template](c);
@@ -460,5 +463,6 @@ export function buildTemplate(template: TemplateId, lot: BlockRecord, ctx: Templ
 
 /** The layout's block-template context (frame, streets, the generation params). */
 export function templateContext(l: GenLayout, seed: number): TemplateContext {
-  return { seed, frame: frameOf(l), streets_m: streetRectsM(l), verticality: l.params.verticality, density: l.params.density, maxRotationDeg: l.params.max_rotation_deg ?? ROTATION.max_deg_default };
+  return { seed, frame: frameOf(l), streets_m: streetRectsM(l), verticality: l.params.verticality, density: l.params.density, maxRotationDeg: l.params.max_rotation_deg ?? ROTATION.max_deg_default,
+    ...(l.params.building_plans ? { building_plans: true } : {}) };
 }

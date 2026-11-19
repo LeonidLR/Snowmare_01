@@ -82,6 +82,10 @@ export const LevelGenDepartment: React.FC = () => {
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   /** «Истории зданий (S1)»: the story pass as the last generation step (storyPass.ts); off = the generator's /1 output unchanged. */
   const [storiesOn, setStoriesOn] = useState(true);
+  /** «Планировки зданий (S2)»: enterable offices get a band plan with doors / windows / links (generate.ts addPlannedOffice, schema /2); off = the /1 output unchanged. */
+  const [plansOn, setPlansOn] = useState(false);
+  /** The layout with the plans toggle in its params (what a re-roll / an expansion reads); unchanged (same object) when it already matches. */
+  const withPlansParam = (l: GenLayout): GenLayout => ((l.params.building_plans ?? false) === plansOn ? l : { ...l, params: { ...l.params, building_plans: plansOn } });
   /** The story pass state per layout object (pristine buildings for «другая история», rollback log); history steps share it. */
   const storyStates = useRef(new WeakMap<GenLayout, StoryState>());
   const [storyMsg, setStoryMsg] = useState('');
@@ -163,7 +167,7 @@ export const LevelGenDepartment: React.FC = () => {
       try {
         const out: Candidate[] = [];
         for (let i = 0; i < count; i++) {
-          const res = generateCandidate({ profile, seed: seed + i, params, stories: storiesOn });
+          const res = generateCandidate({ profile, seed: seed + i, params: plansOn ? { ...params, building_plans: true } : params, stories: storiesOn });
           const layout = res.layout;
           if ('base' in res) storyStates.current.set(layout, res);
           out.push({ layout, ev: evaluateLayout({ layout, profile, config, noSim: true }), simmed: false, verdicts: [] });
@@ -328,7 +332,7 @@ export const LevelGenDepartment: React.FC = () => {
     setBusy('Перегенерация зоны...'); setError('');
     setTimeout(() => {
       try {
-        const r = regenerateRegion({ layout: cur.layout, zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos, maxRotationDeg: maxRot });
+        const r = regenerateRegion({ layout: withPlansParam(cur.layout), zone, seed: rerollSeed, profile, maxRetries, blocks: blockMode, chaos, maxRotationDeg: maxRot });
         setRegenReport(r);
         // kept / locked buildings keep their stories; the regenerated ones get new stories from the re-roll seed's sub-seeds
         const sp = storiesOn && r.ok && r.layout !== cur.layout ? withBuildingStories(r.layout, r.seed, storyStates.current.get(cur.layout)) : null;
@@ -434,7 +438,8 @@ export const LevelGenDepartment: React.FC = () => {
     setTimeout(() => {
       try {
         // the rotation setting rides in the map's params (absent / unchanged = the map as it is: byte-identical expansions)
-        const src = maxRot === (cur.layout.params.max_rotation_deg ?? 0) ? cur.layout : { ...cur.layout, params: { ...cur.layout.params, max_rotation_deg: maxRot } };
+        const base = withPlansParam(cur.layout);
+        const src = maxRot === (base.params.max_rotation_deg ?? 0) ? base : { ...base, params: { ...base.params, max_rotation_deg: maxRot } };
         const r = expandLayout({ layout: src, factor: expandFactor, seed: expandSeed, profile });
         setExpandReport({ ...r, seamChecks: r.ok ? checkSeams(r.layout, r.roads) : [] });
         // the old map's buildings keep their stories; the new blocks' buildings get stories from the expansion seed's sub-seeds
@@ -720,6 +725,9 @@ export const LevelGenDepartment: React.FC = () => {
             </label>
             <label className="flex items-center justify-between gap-2 text-xs text-slate-300" title="Последний шаг генерации: роли зданий, истории (запертая дверь, завал + пожарная лестница, крыша снаружи, сугроб), ключевые маршруты; схема /2. Действует на генерацию, расширение и перегенерацию зоны.">Истории зданий (S1)
               <input type="checkbox" checked={storiesOn} onChange={(e) => setStoriesOn(e.target.checked)} />
+            </label>
+            <label className="flex items-center justify-between gap-2 text-xs text-slate-300" title="Офисы получают планировку по полосам: комнаты, коридор, двери с ролями и связями, окна по фасаду; схема /2. Выключено — прежний генератор без изменений. Действует на генерацию, расширение и перегенерацию зоны.">Планировки зданий (S2)
+              <input type="checkbox" checked={plansOn} onChange={(e) => setPlansOn(e.target.checked)} />
             </label>
             <button onClick={generate} disabled={!profile || !config || !!busy} className="inline-flex items-center justify-center gap-2 px-3 py-2 rounded-lg bg-cyan-600 hover:bg-cyan-500 text-slate-950 font-semibold text-sm disabled:opacity-50"><Play size={15} />Сгенерировать</button>
             {busy && <p className="text-xs text-cyan-300">{busy}</p>}

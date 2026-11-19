@@ -1,9 +1,10 @@
 // `npm run levelgen -- [--profile ref_01_02_depot] [--seed 1] [--seeds 1] [--size 177x124] [--density 1] [--variants 3]
-//  [--verticality 3] [--out Saved/TrainingGround/levelgen] [--no-sim] [--stories] [--accept <name>]` - generates candidate layouts from a
+//  [--verticality 3] [--out Saved/TrainingGround/levelgen] [--no-sim] [--stories] [--plans] [--accept <name>]` - generates candidate layouts from a
 // reference profile, evaluates each (route completability, mechanics, sightlines, ambush quality, profile similarity) and writes
 // <out>/<name>.json (schema codex.levelgen_layout/1), <name>.eval.json and report.md (<= 30 lines per candidate; the only thing
 // an agent reads). --stories = the page's «Истории зданий (S1)» toggle (storyPass.ts: the story pass as the last step, schema /2 +
-// cost_hash; default off so existing scripts and golden files do not change). --accept <name> copies a written candidate into Content/Data/LevelGen/accepted/ (what the UE builder reads).
+// cost_hash; default off so existing scripts and golden files do not change). --plans = the page's «Планировки зданий (S2)» toggle
+// (params.building_plans: enterable offices get a band plan with doors / windows / links, schema /2; default off, byte-identical output). --accept <name> copies a written candidate into Content/Data/LevelGen/accepted/ (what the UE builder reads).
 import fs from 'node:fs';
 import path from 'node:path';
 import { configValues } from '../../movement/config.ts';
@@ -24,6 +25,7 @@ if (typeof args.size === 'string') { const [w, h] = args.size.split('x').map(Num
 if (args.density !== undefined) params.density = Number(args.density) || 1;
 if (args.variants !== undefined) params.variants = Number(args.variants) || 0;
 if (args.verticality !== undefined) params.verticality = Math.max(0, Math.min(3, Number(args.verticality) || 0)) as GenParams['verticality'];
+if (args.plans) params.building_plans = true;
 const config = configValues(readConfigFile(CONFIG_PATH));
 
 fs.mkdirSync(out, { recursive: true });

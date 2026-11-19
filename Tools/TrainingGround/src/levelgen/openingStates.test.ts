@@ -73,6 +73,16 @@ test('/2 default table (opening-states.md 3): one assertion per row', () => {
   }
 });
 
+test('/2 role default (S2.2): a portal door is open wherever it sits, other roles keep the table', () => {
+  const portal: WallOpening = { id: 'B_f0_d3', kind: 'door', pos: [500, 400], floor: 0, width: 200, role: 'portal', module: 'portal_200' };
+  const b = building();
+  assert.equal(effectiveOpeningState(V2, b, portal), 'open', 'a portal off every partition would classify as exterior (closed) without the role');
+  assert.equal(effectiveOpeningState(V2, b, { ...portal, role: 'room' }), 'closed', 'the same door with another role: the table');
+  assert.equal(effectiveOpeningState(V2, building('ruined_two_level'), portal), 'open');
+  assert.equal(effectiveOpeningState(V2, b, { ...portal, state: 'sealed' }), 'sealed', 'an explicit state wins');
+  assert.equal(effectiveOpeningState(V1, b, { ...extDoor, role: 'entry' }), 'open', '/1 ignores roles');
+});
+
 test('an explicit state always wins over both schemas\' defaults', () => {
   const b = building('ruined_two_level');
   for (const L of [V1, V2]) {

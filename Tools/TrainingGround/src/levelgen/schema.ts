@@ -15,6 +15,7 @@ import type { PmcPlan } from './pmcPosts.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
 import type { Layout, LayoutRoute, LayoutWall, LayoutZone, ZoneKind } from '../movement/layout.ts';
+import type { OpeningRole } from './buildings/planDoors.ts';
 import { LAYOUT_SCHEMA, validateLayout, ZONE_KINDS } from '../movement/layout.ts';
 
 /** levelgen_v2.json objectives: the goal-count limits validateObjectives checks (manual_count_min..count_max). */
@@ -118,7 +119,16 @@ export interface WallOpening {
    * openingStates.ts effectiveOpeningState, never directly.
    */
   state?: DoorState | WindowState;
+  /** Schema /2, planned buildings (S2_ROOMS_PLAN.md 4.1): the two room ids the opening joins, or [roomId, 'street'] for an exterior opening. */
+  links?: [string, string];
+  /** Schema /2, planned buildings: what the opening is for (the default state table reads it: 'portal' = open). */
+  role?: OpeningRole;
+  /** Schema /2, planned buildings: the kit module name ('wall_door_200', 'portal_200', 'wall_window_200'). */
+  module?: string;
+  /** Schema /2: a window marked as the place of a balcony / fire-escape door (S2.3 / S2.4, not written yet). */
+  slot?: 'balcony' | 'escape';
 }
+export type { OpeningRole };
 
 /** Door / gate / shutter states (opening-states.md 1). */
 export const DOOR_STATES = ['open', 'closed', 'locked', 'barricaded', 'sealed'] as const;
@@ -251,8 +261,15 @@ export interface GenRoom {
   id: string;
   floor: number;
   bounds: { min: Vec2; max: Vec2 };
-  kind?: 'room' | 'corridor' | 'stairwell' | 'hall' | 'balcony';
+  kind?: 'room' | 'corridor' | 'stairwell' | 'hall' | 'balcony' | 'lobby' | 'service';
+  /** Ids of every opening whose `links` name the room (planned buildings: windows too; seam ids between two corridor cells). */
   door_ids?: string[];
+  /** Planned buildings: the unit the room belongs to ('suite' = an end suite). */
+  unit?: string;
+  /** Planned buildings: the zone (wing, common ...); none written yet. */
+  zone?: string;
+  /** Planned buildings: the exterior wall ids (`<building>_N|S|W|E`) the room touches. */
+  walls?: string[];
   /**
    * A walkable representative point of the room on its own floor, in the BUILDING frame (the frame of `bounds`: unrotated, absolute cm);
    * absent = no walkable point found. The bounds centre can lie on a floor gap or a flight (roomAnchors.ts); the engine smoke probes this.
@@ -380,6 +397,12 @@ export interface GenBuilding {
   fast_entry?: string;
   /** Opening id of the quietest entry. */
   quiet_entry?: string;
+  /**
+   * Schema /2, planned buildings (S2_ROOMS_PLAN.md 4.1; the `building_plans` toggle): how the interior was made. 'bands' = the band
+   * plan (buildings/bandPlan.ts) with doors / windows from planDoors / planWindows; 'bsp' = the plan fell back (`fallback` = why) and the
+   * legacy partitioning ran. `core_wall` / `street_wall` are wall ids (`<id>_N|S|W|E`), never Side labels of another frame.
+   */
+  plan?: { v: 1; kind: 'bands' | 'bsp' | 'single'; seed: number; core_wall: string; street_wall: string; variant?: string; fallback?: string };
 }
 
 export interface GenCut {
@@ -542,6 +565,11 @@ export interface GenParams {
   verticality: 0 | 1 | 2 | 3;
   /** «Макс. угол поворота зданий», degrees (absent = levelgen_v2.json rotation.max_deg_default = 0): re-rolls / expansions rotate templates within +-it. */
   max_rotation_deg?: number;
+  /**
+   * «Планировки зданий (S2)»: enterable offices get a band plan with doors, windows and links (generate.ts addPlannedOffice; schema /2).
+   * Absent = off, and the output is byte for byte the /1 generator's - never put in DEFAULT_PARAMS.
+   */
+  building_plans?: boolean;
 }
 
 export const DEFAULT_PARAMS: GenParams = { size_m: [177, 124], density: 1, variants: 3, verticality: 3 };

@@ -50,6 +50,7 @@ import {
   HALL_ROOF_LEVEL,
   HOLE_HALF_CM,
   LEVELGEN_SCHEMA,
+  LEVELGEN_SCHEMA_V2,
   LEVEL_HEIGHT,
   OPENING_DEFAULTS,
   STAIR_APPROACH_CM,
@@ -60,6 +61,13 @@ import {
   rect,
 } from './schema.ts';
 import { WINDOW_JAMB_CM, windowOntoCore, windowPartitionClash } from './windowClearance.ts';
+import { BUILDING_PLANS, planBands, snapFootprint } from './buildings/bandPlan.ts';
+import type { PlanFrame } from './buildings/planFrame.ts';
+import { OPPOSITE, SIDE_NORMAL, SIDE_YAW, cellRect, planDir, sharedSegs, toDraft, toPlan, vFlipped, wallKeyOf, wallSides, yawOfDir } from './buildings/planFrame.ts';
+import type { PlanOpening, WallKey } from './buildings/planDoors.ts';
+import { WALL_ORDER, planDoors, wallSpan } from './buildings/planDoors.ts';
+import { planWindows } from './buildings/planWindows.ts';
+import { fnv1a } from './props/rng.ts';
 
 type Rect = [Vec2, Vec2];
 
@@ -93,6 +101,11 @@ interface Draft {
   mantle_edges: MantleEdge[];
   /** Rectangles nothing may be placed in (streets, the route corridor). */
   keepFree: Rect[];
+  /**
+   * The `building_plans` toggle (S2.2): enterable offices get a band plan (addPlannedOffice) and the layout is schema /2. Set from the
+   * layout params by every code that builds a Draft; never emitted. Absent = off = the legacy stages, byte for byte.
+   */
+  building_plans?: boolean;
 }
 
 const WALL_H = obstacleHeight('wall_no_traverse');        // cm, a greybox wall (the lab's)
@@ -139,7 +152,7 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
   let random = rng((o.skeletonSeed ?? o.seed) * 104729 + 7);
   const jit = (amp: number) => (random() * 2 - 1) * amp;
   const pick = <T,>(xs: readonly T[]): T => xs[Math.floor(random() * xs.length)];
-  const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [] };
+  const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [], ...(params.building_plans ? { building_plans: true } : {}) };
   let n = 0;
   const id = (p: string) => `${p}_${++n}`;
   const V = params.verticality;
@@ -617,7 +630,7 @@ export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta):
   ].map(mapMantleEdge);
 
   const layout: GenLayout = {
-    schema: LEVELGEN_SCHEMA,
+    schema: d.building_plans ? LEVELGEN_SCHEMA_V2 : LEVELGEN_SCHEMA,
     name: meta.name,
     profile: meta.profile,
     seed: meta.seed,
@@ -940,9 +953,15 @@ const OPPOSITE_SIDE: Record<Side, Side> = { north: 'south', south: 'north', east
  * Split into named stages (S2_ROOMS_PLAN.md section 7 item 2). The S2 order is shell -> cores -> rooms -> doors -> windows ->
  * roof -> slabs (3.2); the stages below still run in the S1 order (openings before rooms) so the output - and the shared
  * `random` stream, drawn only by placeExteriorDoors - is unchanged. Window and parapet mantle edges are emitted with them.
+ * With the draft's `building_plans` toggle an enterable office takes the planned path instead (addPlannedOffice, step S2.2).
  */
 function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): DraftBuilding {
-  const p = planShell(d, bid, r, s, random);
+  if (d.building_plans && s.archetype === 'office' && s.enterable && !s.hollow) return addPlannedOffice(d, bid, r, s, random);
+  return legacyStages(planShell(d, bid, r, s, random));
+}
+
+/** The S1 stages 2-14 of addBuilding on a fresh shell (the legacy path, and the fallback of a plan that did not fit). */
+function legacyStages(p: BuildingPlan): DraftBuilding {
   planCores(p);
   placeExteriorDoors(p);
   placeWindows(p);
@@ -956,6 +975,177 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   addRoofHatch(p);
   buildSlabs(p);
   return emitBuilding(p);
+}
+
+/**
+ * Step S2.2 piece B: an enterable office from its BAND PLAN (S2_ROOMS_PLAN.md 3.2; buildings/bandPlan.ts + planDoors.ts + planWindows.ts).
+ * The footprint is snapped to the 100 cm grid (keeping its min corner, rounded to a whole cm), the stair core is placed by planCores as
+ * always and mapped to the plan (core at the low / high end of the long wall it stands on), the plan is cut, its doors / portals /
+ * windows planned, and everything is emitted: rooms per cell and storey, partitions per shared edge, the same walls as `interior` walls,
+ * exterior doors and windows with `links` / `role` / `module`. A plan that does not fit (or a core the plan cannot map) runs the legacy
+ * stages on the ORIGINAL rectangle and says why in `plan.fallback`. The shared `random` stream is drawn once per exterior door side,
+ * in placeExteriorDoors' order, and nowhere else (nothing is drawn before a fallback).
+ */
+function addPlannedOffice(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): DraftBuilding {
+  const O = BUILDING_PLANS.constants.openings;
+  const COREBAY = BUILDING_PLANS.constants.core.bay_length_cm;
+  const sideId = (side: Side): string => `${bid}_${side[0].toUpperCase()}`;
+  // 1. snap: whole-cm min corner, sizes floored to the 100 grid, the long axis = the plan's u
+  const sn = snapFootprint((r[1][0] - r[0][0]) * 100 + 1e-6, (r[1][1] - r[0][1]) * 100 + 1e-6);
+  const wx = sn.swapped ? sn.D : sn.L, wy = sn.swapped ? sn.L : sn.D;
+  const cx0 = Math.round(r[0][0] * 100), cy0 = Math.round(r[0][1] * 100), cx1 = cx0 + wx, cy1 = cy0 + wy;
+  const rp: Rect = [[cx0 / 100, cy0 / 100], [cx1 / 100, cy1 / 100]];
+  // a square footprint (a tie) takes the axis planStairCore takes: the same expression on the same rectangle, so the two always agree
+  const alongY = rp[1][1] - rp[0][1] >= rp[1][0] - rp[0][0];
+  // 2. shell + the core, mapped to the plan
+  const p = planShell(d, bid, rp, s, random);
+  planCores(p);
+  const first = p.doorSides[0];
+  const longSides: Side[] = alongY ? ['west', 'east'] : ['north', 'south'];
+  let coreSide: Side = longSides.includes(first) ? OPPOSITE[first] : alongY ? 'west' : 'north';
+  let reason: string | null = null;
+  let core: { u0: number; depth: 350 | 200; portalU0: number } | null = null;
+  if (p.cores.length > 1) reason = 'multi_core';
+  else if (p.cores.length === 1) {
+    const c = p.cores[0], [[bx0, by0], [bx1, by1]] = c.box;
+    coreSide = c.side;
+    const lowRel = Math.round((alongY ? by0 : bx0) * 100 - (alongY ? cy0 : cx0)); // the box's low end from the footprint's low corner
+    const inner = Math.round(BUILDING_T / 2); // the perimeter wall's half thickness: a core at the low end starts here
+    const highRel = sn.L - inner - Math.round(stairCoreLength() * 100); // ...and one flush with the high end here
+    const lenOk = Math.abs((alongY ? by1 - by0 : bx1 - bx0) * 100 - stairCoreLength() * 100) <= 1;
+    const u0 = Math.abs(lowRel - inner) <= 1 ? 0 : Math.abs(lowRel - highRel) <= 1 ? sn.L - COREBAY : null;
+    if (u0 === null || !lenOk) reason = 'core_unmapped';
+    // portalU0 = where planDoors measures its two pad portals from: the pads sit `inner` after the cell's start for the low core,
+    // so the high core (its box starts later in its cell) gets the same portals shifted by the box's offset
+    else core = { u0, depth: c.laneWalls.length ? 350 : 200, portalU0: lowRel - inner };
+  }
+  // 3. the plan
+  const planSeed = fnv1a(`${bid}|${sn.L}x${sn.D}|${s.floors}|office`);
+  const plan = reason ? null : planBands({ L: sn.L, D: sn.D, archetype: 'office', core: core ? { u0: core.u0, depth: core.depth } : null, seed: planSeed });
+  if (!plan || plan.kind === 'fallback') {
+    const p2 = planShell(d, bid, r, s, random);
+    const b = legacyStages(p2);
+    b.plan = { v: 1, kind: 'bsp', seed: planSeed, core_wall: sideId(p2.cores[0]?.side ?? coreSide), street_wall: sideId(first), fallback: reason ?? plan?.fallback ?? 'plan_fallback' };
+    return b;
+  }
+  const f: PlanFrame = { alongY, coreSide, cx0, cy0, cx1, cy1 };
+  const sides = wallSides(f);
+  // 5. exterior doors: ONE draw per door side, as placeExteriorDoors does (the plan's v axis may run against the draft's: mirror t)
+  const doorWalls = p.doorSides.map((side) => {
+    const wall = wallKeyOf(f, side), t = 0.25 + 0.5 * random();
+    return { wall, t: (wall === 'u0' || wall === 'uL') && vFlipped(f) ? 1 - t : t };
+  });
+  const res = planDoors(plan, { storeys: s.floors, seed: planSeed, core: core ? { u0: core.portalU0, depth: core.depth } : null, doorWalls });
+  // windows keep clear of a neighbour standing within 1 m outside the wall
+  const blocked: Partial<Record<WallKey, [number, number][]>> = {};
+  for (const key of WALL_ORDER) {
+    const side = sides[key], horizontal = side === 'north' || side === 'south';
+    const strip: Rect = side === 'north' ? [[rp[0][0], rp[0][1] - 1], [rp[1][0], rp[0][1]]] : side === 'south' ? [[rp[0][0], rp[1][1]], [rp[1][0], rp[1][1] + 1]]
+      : side === 'west' ? [[rp[0][0] - 1, rp[0][1]], [rp[0][0], rp[1][1]]] : [[rp[1][0], rp[0][1]], [rp[1][0] + 1, rp[1][1]]];
+    for (const o of d.buildings) {
+      const [[fx0, fy0], [fx1, fy1]] = o.footprint;
+      if (Math.min(strip[1][0], fx1) - Math.max(strip[0][0], fx0) <= 1e-9 || Math.min(strip[1][1], fy1) - Math.max(strip[0][1], fy0) <= 1e-9) continue;
+      const lo = horizontal ? Math.max(rp[0][0], fx0) : Math.max(rp[0][1], fy0), hi = horizontal ? Math.min(rp[1][0], fx1) : Math.min(rp[1][1], fy1);
+      const a = horizontal ? toPlan(f, lo, rp[0][1]) : toPlan(f, rp[0][0], lo), b = horizontal ? toPlan(f, hi, rp[0][1]) : toPlan(f, rp[0][0], hi);
+      const ax = key === 'v0' || key === 'vD' ? 0 : 1; // the plan axis along the wall: u for the long walls, v for the ends
+      (blocked[key] ??= []).push([Math.min(a[ax], b[ax]), Math.max(a[ax], b[ax])]);
+    }
+  }
+  const windows = planWindows(plan, { storeys: s.floors, doors: res.openings, blocked });
+  // 6. the openings in the draft (metres)
+  const roomId = (storey: number, cell: string): string => `${bid}_r_f${storey}_${cell}`;
+  const mkOpening = (o: PlanOpening): WallOpening => {
+    const q = o.axis === 'u' ? toDraft(f, o.c, o.at) : toDraft(f, o.at, o.c);
+    const window = o.kind === 'window';
+    return {
+      id: `${bid}_${o.id}`,
+      kind: o.kind,
+      pos: q,
+      floor: o.storey,
+      ...(o.wall ? { wall: sideId(sides[o.wall]) } : {}),
+      width: o.width,
+      sill_height: window ? O.window_sill_cm : 0,
+      top_height: window ? O.window_head_cm : O.door_top_cm,
+      yaw: o.wall ? SIDE_YAW[sides[o.wall]] : yawOfDir(planDir(f, o.axis === 'u' ? 'v' : 'u')),
+      links: [roomId(o.storey, o.links[0]), o.links[1] === 'street' ? 'street' : roomId(o.storey, o.links[1])],
+      role: o.role,
+      module: o.module,
+    };
+  };
+  const along = (side: Side, q: Vec2): number => (side === 'north' || side === 'south' ? q[0] : q[1]);
+  for (const o of [...res.openings, ...windows].filter((x) => x.wall)) {
+    const side = sides[o.wall!], op = mkOpening(o), wallId = sideId(side);
+    p.openings.push(op);
+    if (o.kind === 'door') {
+      p.doors.push({ pos: op.pos, floor: o.storey, wall: wallId });
+      p.perSide[side].push([along(side, op.pos) - o.width / 200, along(side, op.pos) + o.width / 200]);
+    } else {
+      const horizontal = side === 'north' || side === 'south', half = o.width / 200;
+      const dx = horizontal ? half : 0, dy = horizontal ? 0 : half;
+      p.mantle_edges.push({
+        id: `me_${op.id}`,
+        start: [op.pos[0] - dx, op.pos[1] - dy],
+        end: [op.pos[0] + dx, op.pos[1] + dy],
+        floor: o.storey,
+        base_z: levelZ(o.storey),
+        height_cm: O.window_sill_cm,
+        normal: [SIDE_NORMAL[side][0], SIDE_NORMAL[side][1]],
+        kind: 'window',
+        building: bid,
+        wall: wallId,
+      });
+    }
+  }
+  // 8. partitions (one per shared cell edge that is not a corridor seam), the same wall as an `interior` wall split at its openings
+  const interior = res.openings.filter((x) => !x.wall);
+  const segs = sharedSegs(plan);
+  const seamIds = new Map<string, string[]>();
+  for (let storey = 0; storey < s.floors; storey++) {
+    let k = 0, seamK = 0;
+    for (const seg of segs) {
+      if (seg.seam) {
+        const seamId = `${bid}_f${storey}_seam_${seamK++}`;
+        for (const c of [seg.a, seg.b]) seamIds.set(roomId(storey, c.id), [...(seamIds.get(roomId(storey, c.id)) ?? []), seamId]);
+        continue;
+      }
+      const ops = interior.filter((o) => o.storey === storey && o.axis === seg.axis && o.at === seg.at && o.c >= seg.lo && o.c <= seg.hi
+        && o.links.includes(seg.a.id) && o.links.includes(seg.b.id)).map(mkOpening);
+      const a = seg.axis === 'u' ? toDraft(f, seg.lo, seg.at) : toDraft(f, seg.at, seg.lo), b = seg.axis === 'u' ? toDraft(f, seg.hi, seg.at) : toDraft(f, seg.at, seg.hi);
+      const partId = `${bid}_part_f${storey}_${k++}`;
+      p.partitions.push({ id: partId, start: a, end: b, floor: storey, thickness: 20, openings: ops });
+      const horizontal = a[1] === b[1];
+      const gaps = ops.map((op): [number, number] => { const c = horizontal ? op.pos[0] : op.pos[1], h = (op.width ?? 0) / 200; return [c - h, c + h]; });
+      splitWall(d, partId, a, b, gaps, LEVEL_HEIGHT, 20, 'interior', storey, bid);
+    }
+  }
+  // 7. rooms: one per cell and storey
+  const lobbies = new Set(res.lobbies);
+  const doorIds = new Map<string, string[]>();
+  for (const o of [...res.openings, ...windows]) {
+    for (const link of o.links) if (link !== 'street') doorIds.set(roomId(o.storey, link), [...(doorIds.get(roomId(o.storey, link)) ?? []), `${bid}_${o.id}`]);
+  }
+  for (let storey = 0; storey < s.floors; storey++) {
+    for (const cell of plan.cells) {
+      const id = roomId(storey, cell.id), [min, max] = cellRect(f, cell);
+      const kind: GenRoom['kind'] = storey === 0 && lobbies.has(cell.id) ? 'lobby' : cell.kind === 'core' ? 'stairwell' : cell.kind === 'corridor' ? 'corridor' : cell.kind === 'service' ? 'service' : 'room';
+      const ids = [...(doorIds.get(id) ?? []), ...(seamIds.get(id) ?? [])];
+      p.rooms.push({
+        id, floor: storey, bounds: { min, max }, kind,
+        ...(cell.kind === 'end' ? { unit: 'suite' } : {}),
+        walls: WALL_ORDER.filter((key) => wallSpan(plan, cell, key)).map((key) => sideId(sides[key])),
+        ...(ids.length ? { door_ids: ids } : {}),
+      });
+    }
+  }
+  // 9. the rest of the pipeline (no fitWindows / planRooms / placeWindows / placeExteriorDoors on this path)
+  placeLoopholes(p);
+  buildPerimeterWalls(p);
+  placeStairs(p);
+  addRoofParapets(p);
+  addRoofHatch(p);
+  buildSlabs(p);
+  for (const fd of p.floors_detail) fd.rooms = []; // the rooms live in `rooms` only (nothing reads the second copy)
+  return emitBuilding(p, { v: 1, kind: 'bands', seed: planSeed, core_wall: sideId(coreSide), street_wall: p.doors[0]?.wall ?? sideId(first), ...(plan.variant ? { variant: plan.variant } : {}) });
 }
 
 /** Stage 1, shell: the footprint, the empty element lists and the exterior door sides (>= 2 sides above 150 m2: BUILDING_GENERATOR.md 3 step 5). */
@@ -1346,7 +1536,7 @@ function buildSlabs(p: BuildingPlan): void {
 }
 
 /** Stage 14, the DraftBuilding (pushed onto the draft). */
-function emitBuilding(p: BuildingPlan): DraftBuilding {
+function emitBuilding(p: BuildingPlan, plan?: GenBuilding['plan']): DraftBuilding {
   const { s } = p;
   const b: DraftBuilding = {
     id: p.bid,
@@ -1369,6 +1559,7 @@ function emitBuilding(p: BuildingPlan): DraftBuilding {
     floor_holes: [] as { pos: Vec2; floor: number }[],
     set_piece: s.set_piece,
     ...(s.archetype ? { archetype: s.archetype } : {}),
+    ...(plan ? { plan } : {}),
   };
   p.d.buildings.push(b);
   return b;
