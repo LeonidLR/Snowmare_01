@@ -23,6 +23,7 @@
 
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
+#include "Survival/ColdSurvivalComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Components/CapsuleComponent.h"
@@ -409,6 +410,16 @@ namespace LevelGenRampSmoke
 	{
 		TArray<AOperativeCharacter*> Members = Squad.GetMembers();
 		Members.Remove(nullptr);
+		// The smoke checks the flights, not the cold (designer 2026-11-19): generated maps are cold since 6dbc9e38 and a frostbite collapse
+		// (prone crawl) mid-run would fail legs for a reason that has its own smokes.
+		for (AOperativeCharacter* Member : Members)
+		{
+			Member->ColdLevel = 0.f;
+			if (Member->ColdSurvival)
+			{
+				Member->ColdSurvival->SetComponentTickEnabled(false);
+			}
+		}
 		if (Members.Num() < 2)
 		{
 			return nullptr;
