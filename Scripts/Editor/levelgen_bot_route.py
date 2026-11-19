@@ -14,6 +14,10 @@ The route block:
     to the hole's rim + RIM_MARGIN_CM (a point over a hole is off the navmesh);
   - a leg that goes through a hole link ("links": {"at": i, "via": "hole_*"}) marks its end waypoint "drop": "<via>" - the squad
     drops through the builder's drop nav link (the bot reports whether the leader fell or the drop had to be scripted);
+  - a leg that crosses a MANTLE edge ("links": {"at": i, "via": "<mantle edge id>"}, T-02 gap 4) marks its end waypoint "mantle": "<edge id>"
+    and "mantle_at": [x, y] (where the leg crosses the edge): the leader is ordered over the obstacle there (a mantle path link, the
+    squad climbs in turns - MANTLING.md 6.4). BotRouteRules::Parse ignores the two keys (it reads label / action / wall / hold_sec / z / drop
+    only), so an unaware bot simply walks the leg;
   - the last point gets a "wall" action when the route expects the formation wall layout in the zone it lies in (a click on the
     nearest ground wall within WALL_SEARCH_CM);
   - "loop": true (the timed bot runs walk it again and again; a lap = the route once).
@@ -108,6 +112,32 @@ def nearest_wall_point(layout, p):
     return best
 
 
+def find_mantle_edge(layout, edge_id):
+    """A mantle edge by id: the layout's own list, then every building's (schema.ts findMantleEdge); None if absent."""
+    for m in layout.get("mantle_edges", []):
+        if m.get("id") == edge_id:
+            return m
+    for b in layout.get("buildings", []):
+        for m in b.get("mantle_edges", []):
+            if m.get("id") == edge_id:
+                return m
+    return None
+
+
+def segment_crossing(p, q, a, b):
+    """The point where segment p-q crosses segment a-b (open crossing, like geometry.ts segmentsIntersect), else None."""
+    rx, ry = q[0] - p[0], q[1] - p[1]
+    sx, sy = b[0] - a[0], b[1] - a[1]
+    denom = rx * sy - ry * sx
+    if abs(denom) < 1e-9:
+        return None
+    t = ((a[0] - p[0]) * sy - (a[1] - p[1]) * sx) / denom
+    u = ((a[0] - p[0]) * ry - (a[1] - p[1]) * rx) / denom
+    if not (0.0 < t < 1.0 and 0.0 < u < 1.0):
+        return None
+    return [round(p[0] + t * rx), round(p[1] + t * ry)]
+
+
 def mandatory_route(layout):
     return next((r for r in layout.get("routes", []) if r.get("mandatory")), None)
 
@@ -133,6 +163,12 @@ def bot_route(layout, route=None):
         wp = {"at": at, "z": round(layer_level(layout, layer) * LEVEL_HEIGHT), "label": label}
         if via.startswith("hole"):
             wp["drop"] = via
+        edge = find_mantle_edge(layout, via) if via and i > 0 else None
+        if edge is not None:
+            wp["mantle"] = via
+            cross = segment_crossing(points[i - 1], p, edge["start"], edge["end"])
+            if cross is not None:
+                wp["mantle_at"] = cross
         if i == len(points) - 1 and layer == "ground":
             zone = next((z for z in layout.get("zones", []) if z["id"] in wall_zones and point_in_poly(at, z["poly"])), None)
             wall = nearest_wall_point(layout, at) if zone else None
@@ -238,6 +274,15 @@ def _self_test():
     assert [l["via"] for l in links] == ["hole_roof_0", "hole_floor_0"], links   # the hollow hall's 9 m roof hole gets none
     assert links[0]["upper_z"] == 600 and links[0]["lower_z"] == 300 and links[1]["lower_z"] == 0
     assert links[0]["starts"][0] == [190.0, 0.0]
+    # a mantle leg (T-02 gap 4): the end waypoint carries the edge id and the crossing point; the other waypoints stay plain
+    mlayout = {"name": "m", "walls": [], "zones": [], "buildings": [],
+               "mantle_edges": [{"id": "me_W_n", "start": [100, 0], "end": [100, 600], "height_cm": 120}],
+               "routes": [{"id": "V", "mandatory": True, "points": [[0, 300], [60, 300], [160, 300], [400, 300]],
+                           "layers": ["ground"] * 4, "links": [{"at": 2, "via": "me_W_n"}]}]}
+    mr = bot_route(mlayout)["points"]
+    assert mr[2]["mantle"] == "me_W_n" and mr[2]["mantle_at"] == [100, 300], mr[2]
+    assert "mantle" not in mr[1] and "mantle" not in mr[3] and "drop" not in mr[2], mr
+    assert "via me_W_n" in mr[2]["label"], mr[2]
     print("levelgen_bot_route self-test: ok")
 
 

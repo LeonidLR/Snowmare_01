@@ -33,16 +33,23 @@ import { createTrackRecorder } from './playback.ts';
 import type { Profile } from './profile.ts';
 import { targetScore } from './profile.ts';
 import type { GenLayout, GenRoute, RouteIntent } from './schema.ts';
-import { layerLevel, layersOf, levelsOf, levelZ, mandatoryRoute, NEVER_CLIMBABLE, rect, toFormationLayout } from './schema.ts';
+import { findMantleEdge, isKnownLinkId, layerLevel, layersOf, levelsOf, levelZ, mandatoryRoute, mantleLegIssue, NEVER_CLIMBABLE, rect, toFormationLayout } from './schema.ts';
 import type { BlockedOpening, BuildingTacticalReport, FiringLine, TacticalReport } from './tacticalEvaluate.ts';
 import { evaluateTactical } from './tacticalEvaluate.ts';
 import { buildSimNav, prepareSimLeg } from './simNav.ts';
+import { ROUTE_COSTS } from './buildingGraph.ts';
 import { inFootprint, rotationOf, rotPoint } from './rotation.ts';
 
 export type { BlockedOpening, BuildingTacticalReport, FiringLine, TacticalReport };
 
-export interface LegReport { index: number; layer: string; ok: boolean; reason?: string; detour_cm?: number; link?: string }
-export interface RouteReport { id: string; mandatory: boolean; completable: boolean; legs: LegReport[]; length_m: number; fail?: string; layers: string[]; intent?: RouteIntent; intent_note?: string }
+export interface LegReport { index: number; layer: string; ok: boolean; reason?: string; detour_cm?: number; link?: string; /** The leg crosses a mantle edge (link = its id). */ mantle?: true }
+export interface RouteReport {
+  id: string; mandatory: boolean; completable: boolean; legs: LegReport[]; length_m: number; fail?: string; layers: string[]; intent?: RouteIntent; intent_note?: string;
+  /** Mantle crossings on the route (T-02 gap 4) - only present when > 0. */
+  mantles?: number;
+  /** Walk time at building_route_costs.json v_ref + vault.t per mantle, seconds - only present on a route with a mantle. */
+  time_s?: number;
+}
 /** The view from one walkable roof (elevated eye: the roof's level + 1.6 m; only obstacles reaching that height block). */
 export interface RoofView { id: string; level: number; longest_m: number; mean_m: number; open_share: number }
 /** A route the designer marked as a deliberate kill zone, reported as intended. */
@@ -69,6 +76,8 @@ export interface Evaluation {
     levels: number[];
     levelShare: Record<string, number>;
     simSeconds: number;
+    /** Mantle crossings on the mandatory route (simSeconds includes their time) - only present when > 0. */
+    mantleUses?: number;
     /** Simulator walk (simNav.ts): route points moved out of an obstacle (a cover) / point pairs the covers cut apart (walked over). */
     simSnapped: number;
     simVaults: number;
@@ -110,6 +119,8 @@ const RAYS = 36;
 const MAX_LOS_CM = 20000;
 /** A link's two ends must lie within this of the leg's ends (a cut crossing is a 5 m ramp; a ladder's foot / top points). */
 const LINK_REACH_CM = 500;
+/** One mantle crossing's time, s: the route cost table's vault action (building_route_costs.json actions.vault.t) - the squad's walking speed there is v_ref. */
+const MANTLE_S = ROUTE_COSTS.actions.vault.t;
 /** A standing man's eye above the surface he stands on, cm (the elevated-vision rule). */
 const EYE_CM = 160;
 /** A roof ray counts as OPEN when it runs at least this far (m). */
@@ -196,6 +207,8 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
       rec?.endLeg(legSeconds);
     }
     if (rec) trackOut = rec.track();
+    // a mantle crossing is not walked by the simulator (the walk is split at it, toFormationLayout): its vault time is added
+    mech.simSeconds += (mandatory.links ?? []).filter((k) => findMantleEdge(l, k.via)).length * MANTLE_S;
     for (const [k, v] of terrainT) mech.terrain[k as TerrainClass] = round(v / Math.max(1, total), 3);
     for (const [k, v] of formT) mech.formation[k as Formation] = round(v / Math.max(1, total), 3);
   }
@@ -206,6 +219,7 @@ export function evaluateLayout(o: EvaluateOptions): Evaluation {
     if (l.ladders.some((x) => x.id === k.via)) mech.ladderUses++;
     else if (l.buildings.some((b) => b.stairs.some((s) => s.id === k.via))) mech.stairUses++;
     else if (k.via.startsWith('hole')) mech.holeUses++;
+    else if (findMantleEdge(l, k.via)) mech.mantleUses = (mech.mantleUses ?? 0) + 1;
   }
   mech.roofs = new Set(mlayers.filter((x) => x.startsWith('roof:'))).size;
   mech.floors = new Set(mlayers.filter((x) => x.startsWith('floor:'))).size;
@@ -362,6 +376,7 @@ function checkRoute(l: GenLayout, r: GenRoute, layers: string[], layerNav: (laye
   const legs: LegReport[] = [];
   let fail: string | undefined;
   const linkAt = new Map((r.links ?? []).map((k) => [k.at, k.via]));
+  let mantles = 0;
   for (let i = 1; i < r.points.length; i++) {
     const a = r.points[i - 1], b = r.points[i];
     const la = lay[i - 1], lb = lay[i];
@@ -369,6 +384,7 @@ function checkRoute(l: GenLayout, r: GenRoute, layers: string[], layerNav: (laye
     if (la !== lb) {
       const via = linkAt.get(i);
       const ends = via ? linkEnds(l, via) : null;
+      if (via && findMantleEdge(l, via)) { legs.push({ index: i, layer: lb, ok: false, reason: `mantle link "${via}" must stay on one layer (${la} -> ${lb})`, link: via }); fail ??= `leg ${i}: mantle link ${via} changes layer`; continue; }
       if (!via) { legs.push({ index: i, layer: lb, ok: false, reason: `layer ${la} -> ${lb} without a link` }); fail ??= `leg ${i}: no link ${la} -> ${lb}`; continue; }
       if (!ends) { legs.push({ index: i, layer: lb, ok: false, reason: `link "${via}" does not exist`, link: via }); fail ??= `leg ${i}: missing link ${via}`; continue; }
       const touch = Math.min(dist(a, ends[0]), dist(a, ends[1])) < LINK_REACH_CM && Math.min(dist(b, ends[0]), dist(b, ends[1])) < LINK_REACH_CM;
@@ -379,12 +395,29 @@ function checkRoute(l: GenLayout, r: GenRoute, layers: string[], layerNav: (laye
     const grid = layerNav(la);
     const inA = !grid.walkable(a), inB = !grid.walkable(b);
     if (inA || inB) { legs.push({ index: i, layer: la, ok: false, reason: `point ${inA ? i - 1 : i} inside a wall / off the layer` }); fail ??= `leg ${i}: point in a wall`; continue; }
+    // a link on a same-layer leg: a MANTLE over an edge (the walls-only grid is not asked: the leg crosses the obstacle it belongs to)
+    const via = linkAt.get(i);
+    if (via) {
+      const edge = findMantleEdge(l, via);
+      if (!edge) {
+        if (isKnownLinkId(l, via)) { /* a ladder / stair / hole / crossing on one layer: nothing to check here, the walls-only path below */ }
+        else { legs.push({ index: i, layer: la, ok: false, reason: `link "${via}" does not exist`, link: via }); fail ??= `leg ${i}: missing link ${via}`; continue; }
+      } else {
+        const issue = mantleLegIssue(a, b, la, lb, edge);
+        if (issue) { legs.push({ index: i, layer: la, ok: false, reason: issue, link: via }); fail ??= `leg ${i}: ${issue}`; continue; }
+        legs.push({ index: i, layer: la, ok: true, link: via, mantle: true, detour_cm: 0 });
+        mantles++;
+        continue;
+      }
+    }
     const path = grid.path(a, b);
     if (!path) { legs.push({ index: i, layer: la, ok: false, reason: 'unreachable: walls block the leg completely' }); fail ??= `leg ${i}: unreachable on ${la}`; continue; }
     const L = path.slice(1).reduce((acc, p, k) => acc + dist(path[k], p), 0);
     legs.push({ index: i, layer: la, ok: true, detour_cm: Math.round(L - dist(a, b)) });
   }
-  return { id: r.id, mandatory: !!r.mandatory, completable: !fail, legs, length_m: round(polyLength(r.points) / 100), fail, layers: [...new Set(lay)],
+  const length_m = round(polyLength(r.points) / 100);
+  return { id: r.id, mandatory: !!r.mandatory, completable: !fail, legs, length_m, fail, layers: [...new Set(lay)],
+    ...(mantles ? { mantles, time_s: round(polyLength(r.points) / 100 / ROUTE_COSTS.v_ref + mantles * MANTLE_S, 1) } : {}),
     ...(r.intent ? { intent: r.intent, intent_note: r.intent_note } : {}) };
 }
 

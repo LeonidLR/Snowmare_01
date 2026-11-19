@@ -342,7 +342,13 @@ function buildBridge(): LabMapBundle {
   const west = doorApproach(bw, 'west'), north = doorApproach(bw, 'north');
   const windowsPts: Vec2[] = [start, [36, 46], [36, 36], [36, 28], [34, 22.5], [west.outside[0], 22.5], west.outside, west.inside, [west.inside[0] + 3, west.inside[1]], north.inside, north.outside, [36, 6], goal];
   const windows: GenRoute = { id: 'V2_windows', pace: 'walk', points: windowsPts, layers: groundLayers(windowsPts.length), links: [], set_pieces: ['cut_crossing', 'facade'] };
-  d.routes.push(main, trench, windows);
+  // V3: the mantle way (T-02 gap 4, DS-00C line 1: the cut-off man comes up over the obstacle): from the obstacle's south foot (AMB_obstacle's
+  // spot) OVER W_obstacle (a link via its south edge, the first one the leg crosses) to its north side, then along the trench rim onto the bridge.
+  const overPts: Vec2[] = [start, [40, 46], [44, 41], [44, 39.2], [44, 35.8], [36, 35.5], [36, 30], [36, 24], [36, 14], goal];
+  const over: GenRoute = {
+    id: 'V3_mantle', pace: 'walk', points: overPts, layers: groundLayers(overPts.length), links: [{ at: 4, via: 'me_W_obstacle_s' }], set_pieces: ['cut_crossing'],
+  };
+  d.routes.push(main, trench, windows, over);
 
   d.spawn_points.push({ id: 'SP_start', pos: start, kind: 'edge' });
   d.ambush_points.push(

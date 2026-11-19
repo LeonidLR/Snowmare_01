@@ -13,7 +13,7 @@ import { footprintBBox, footprintPoly } from './rotation.ts';
 import type { LayoutAnalysis } from './chokepoints.ts';
 import type { PmcPlan } from './pmcPosts.ts';
 import type { Vec2 } from '../movement/geometry.ts';
-import { pointInPoly } from '../movement/geometry.ts';
+import { pointInPoly, segmentsIntersect } from '../movement/geometry.ts';
 import type { Layout, LayoutRoute, LayoutWall, LayoutZone, ZoneKind } from '../movement/layout.ts';
 import type { OpeningRole } from './buildings/planDoors.ts';
 import { LAYOUT_SCHEMA, validateLayout, ZONE_KINDS } from '../movement/layout.ts';
@@ -241,6 +241,28 @@ export function isMantleable(height_cm: number): boolean {
   return height_cm >= MIN_MANTLE_HEIGHT_CM && height_cm <= MAX_MANTLE_HEIGHT_CM;
 }
 
+/** A mantle edge by id: the layout's own list first, then every building's (null-safe on partial data). */
+export function findMantleEdge(l: Partial<Pick<GenLayout, 'mantle_edges' | 'buildings'>>, id: string): MantleEdge | undefined {
+  return (l.mantle_edges ?? []).find((m) => m.id === id) ?? (l.buildings ?? []).flatMap((b) => b.mantle_edges ?? []).find((m) => m.id === id);
+}
+
+/**
+ * Why the leg a -> b (on layers la -> lb) cannot be a crossing of mantle edge `edge` (null: it can): both ends on ONE layer, the
+ * edge's height in the mantle band (50..150 cm), and the segment a-b crossing the edge's span (segmentsIntersect).
+ */
+export function mantleLegIssue(a: Vec2, b: Vec2, la: string, lb: string, edge: MantleEdge): string | null {
+  if (la !== lb) return `mantle edge ${edge.id}: a mantle leg stays on one layer (${la} -> ${lb})`;
+  if (!isMantleable(edge.height_cm)) return `mantle edge ${edge.id}: height ${edge.height_cm} cm is outside the mantle band ${MIN_MANTLE_HEIGHT_CM}..${MAX_MANTLE_HEIGHT_CM} cm`;
+  if (!segmentsIntersect(a, b, edge.start, edge.end)) return `the leg does not cross mantle edge ${edge.id}`;
+  return null;
+}
+
+/** True when `via` names something a route link can take: a ladder, a building stair, a cut crossing, a hole (hole_*) or a mantle edge. */
+export function isKnownLinkId(l: Partial<Pick<GenLayout, 'ladders' | 'buildings' | 'cut' | 'mantle_edges'>>, via: string): boolean {
+  return via.startsWith('hole') || !!findMantleEdge(l, via) || (l.ladders ?? []).some((x) => x.id === via)
+    || (l.buildings ?? []).some((b) => (b.stairs ?? []).some((x) => x.id === via)) || !!l.cut?.crossings?.some((c) => c.id === via);
+}
+
 export interface MantleEdge {
   id: string;
   start: Vec2;
@@ -443,7 +465,12 @@ export interface GenRoute extends LayoutRoute {
   mandatory?: boolean;
   /** The floor / level each point stands on (same length as points; default all 0). 'cut' = the trench floor; 'roof:<b>' / 'floor:<b>:<n>'. */
   layers?: string[];
-  /** Links taken between consecutive points on different layers: { at: index of the point AFTER the link, via: ladder / stair / hole id }. */
+  /**
+   * Links taken between consecutive points: { at: index of the point AFTER the link, via: ladder / stair / hole / cut crossing id }.
+   * A MANTLE link ({ at, via: '<mantle edge id>' }, T-02 gap 4) joins two points on the SAME layer: the leg points[at - 1] -> points[at]
+   * crosses that edge (an obstacle the squad climbs over instead of walking round it, mantleLegIssue); the walls-only nav check lets the
+   * leg through and the evaluation adds the vault time (building_route_costs.json actions.vault.t) per mantle.
+   */
   links?: { at: number; via: string }[];
   /** Which set-pieces the route passes, in order (for the report). */
   set_pieces?: SetPiece[];
@@ -669,7 +696,16 @@ export function validateGenLayout(data: unknown): string[] {
   if (mandatory.length !== 1) e.push(`routes: exactly one mandatory route (found ${mandatory.length})`);
   for (const r of l.routes ?? []) {
     if (r.layers && r.layers.length !== r.points.length) e.push(`route ${r.id}: layers must match points (${r.layers.length} vs ${r.points.length})`);
-    for (const k of r.links ?? []) if (k.at < 1 || k.at >= r.points.length) e.push(`route ${r.id}: link at ${k.at} out of range`);
+    for (const k of r.links ?? []) {
+      if (k.at < 1 || k.at >= r.points.length) { e.push(`route ${r.id}: link at ${k.at} out of range`); continue; }
+      const edge = findMantleEdge(l, k.via);
+      if (edge) {
+        // a mantle link (T-02 gap 4): the leg must cross the edge, on one layer, within the mantle band
+        const lay = r.layers ?? r.points.map(() => 'ground');
+        const issue = isVec(r.points[k.at - 1]) && isVec(r.points[k.at]) ? mantleLegIssue(r.points[k.at - 1], r.points[k.at], lay[k.at - 1], lay[k.at], edge) : null;
+        if (issue) e.push(`route ${r.id}: link at ${k.at}: ${issue}`);
+      } else if (!isKnownLinkId(l, k.via)) e.push(`route ${r.id}: link at ${k.at}: unknown link "${k.via}" (a ladder, stair, hole, cut crossing or mantle edge id)`);
+    }
     if (r.intent !== undefined && !(ROUTE_INTENTS as readonly string[]).includes(r.intent)) e.push(`route ${r.id}: unknown intent "${r.intent}"`);
     if (r.intent === 'kill_zone' && r.mandatory) e.push(`route ${r.id}: the mandatory route is never a kill zone (a variant the player chooses)`);
   }
@@ -903,9 +939,11 @@ export function toFormationLayout(l: GenLayout, layer = 'ground'): Layout {
     const layers = r.layers ?? r.points.map(() => 'ground');
     let run: Vec2[] = [];
     let k = 0;
+    // a mantle crossing is no walk: the run is cut at the leg that crosses the edge (the simulator never paths it through its obstacle)
+    const mantleAt = new Set((r.links ?? []).filter((x) => findMantleEdge(l, x.via)).map((x) => x.at));
     const flush = () => {
       if (run.length >= 2) {
-        const id = layers.every((x) => x === layer) ? r.id : `${r.id}_L${k++}`;
+        const id = layers.every((x) => x === layer) && !mantleAt.size ? r.id : `${r.id}_L${k++}`;
         // a split route keeps only the expectations of the zones THIS run enters (sampled every metre along its legs)
         const samples: Vec2[] = [];
         for (let i = 1; i < run.length; i++) {
@@ -918,7 +956,7 @@ export function toFormationLayout(l: GenLayout, layer = 'ground'): Layout {
       }
       run = [];
     };
-    r.points.forEach((p, i) => { if (layers[i] === layer) run.push(p); else flush(); });
+    r.points.forEach((p, i) => { if (layers[i] === layer) { if (mantleAt.has(i)) flush(); run.push(p); } else flush(); });
     flush();
   }
   const zones: LayoutZone[] = layer === 'ground' ? l.zones.map((z) => ({ id: z.id, kind: labZoneKind(z.kind), poly: z.poly })) : [];

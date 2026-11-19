@@ -997,6 +997,73 @@
     "cut_crossing",
     "facade"
    ]
+  },
+  {
+   "id": "V3_mantle",
+   "pace": "walk",
+   "points": [
+    [
+     -2700,
+     0
+    ],
+    [
+     -1600,
+     400
+    ],
+    [
+     -1100,
+     800
+    ],
+    [
+     -920,
+     800
+    ],
+    [
+     -580,
+     800
+    ],
+    [
+     -550,
+     0
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     600,
+     0
+    ],
+    [
+     1600,
+     0
+    ],
+    [
+     2600,
+     0
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [
+    {
+     "at": 4,
+     "via": "me_W_obstacle_s"
+    }
+   ],
+   "set_pieces": [
+    "cut_crossing"
+   ]
   }
  ],
  "spawn_points": [
