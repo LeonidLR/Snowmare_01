@@ -5,7 +5,11 @@ worker-load-jobs, no-unasked-rule-changes), docs/port/TASK_TEMPLATE.md (inbox te
 TASK_BOARD "Сделано (2026-11-19)". Reply to the designer in Russian. Designer is away most of 11-20: gameplay decisions go to ONE
 evening list; Antigravity cannot be woken without him.
 
-## UPDATE 11-19 ~09:15 - MAIN PC FORMAT TODAY, development moves to codex-worker (read this first)
+## UPDATE 11-19 ~09:30 - FORMAT POSTPONED: the designer keeps working on the main PC for now; the worker copy stays and
+updates every 2 h. Codex / Antigravity continue as usual (told in chat); worker-ops HOLDS the dev-checkout conversion. The
+09:15 notes below apply on the day he really switches. Mirror fix e774494a (Python tarfile on the worker: Cyrillic folder name).
+
+## UPDATE 11-19 ~09:15 - (postponed, see 09:30) main PC format, development moves to codex-worker
 - Designer formats the main PC TODAY (not Saturday). The lead session restarts ON THE WORKER: checkout C:\Work\CodexTactics,
   user C:\Users\User; project memory already at C:\Users\User\.claude\projects\C--Work-CodexTactics\memory (copied 09:10).
 - Mirror of the main PC: C:\Mirror\Main\<source> (Codex = Documents/Codex incl. godot-test-01 + ASSETS; CodexTactics = files incl.
