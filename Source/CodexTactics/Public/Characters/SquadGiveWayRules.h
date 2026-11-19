@@ -31,6 +31,8 @@ struct CODEXTACTICS_API FSquadGiveWayTuning
 	float SameLevelCm = 150.f;
 	/** A spot must project onto the navmesh within this (2D), cm (nav_snap_cm). */
 	float NavSnapCm = 30.f;
+	/** "overhead_clear_cm": a step spot needs nothing overhead from +50 cm up to this height (not under a stair flight). */
+	float OverheadClearCm = 230.f;
 	/** ... and no more than this above / below his feet - a flat step, not a stair's first flight (also the walk check's lift), cm (max_rise_cm). */
 	float MaxRiseCm = 60.f;
 	/** Asked again after this long while he still stands in the way (a refused / blocked step, a mover's new path), s (retry_s). */

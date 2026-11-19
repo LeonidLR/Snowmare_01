@@ -393,6 +393,13 @@ void USquadSubsystem::UpdateGiveWay()
 				{
 					Refused = TEXT("ramp");
 				}
+				// Not UNDER a flight either (B_x1_8 2026-11-19): a man on the ground below the upper part of a stair is a crowd neighbour of the
+				// one walking up it (the avoidance height band ~176 cm) and stalls him halfway. Something overhead within OverheadClearCm = refused.
+				else if (World->LineTraceSingleByChannel(Hit, OnNav.Location + FVector(0.f, 0.f, 50.f), OnNav.Location + FVector(0.f, 0.f, Tuning.OverheadClearCm),
+					ECC_Visibility, WalkParams))
+				{
+					Refused = TEXT("under a flight / overhead");
+				}
 				// The navmesh projection may pull the spot back to the path (a wall beside it): still clear of it.
 				else if (SquadGiveWayRules::DistanceToPath(Path, FVector2D(OnNav.Location), Crossing.AlongCm + Tuning.LookAheadCm) < CrossCm)
 				{
