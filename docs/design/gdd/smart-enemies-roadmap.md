@@ -6,15 +6,15 @@
 
 ## 1. The plan in one paragraph
 
-Stop tuning. Build the missing behaviour bottom-up, test-first, on the designer's own two examples: first the measuring
+Stop tuning. Build the missing behaviour bottom-up, test-first, on the designer's own three examples: first the measuring
 stick (the two clips as red smokes, a scripted opponent, honest metrics), then **positions** (where it makes sense to stand,
 with a checked line of fire), then **movement** (cover to cover, and round a building unseen), then the **squad layer** with
-one play - "set an ambush on the predicted route" - until both clips turn green and the designer says yes to the re-recorded
+one play - "set an ambush on the predicted route" - until his clips turn green and the designer says yes to the re-recorded
 clips. Only then widen: more plays on streets and roofs, buildings as the generator delivers them, monsters, encounters,
 and at the very end tuning by night runs behind a gate.
 
 Rules of the plan:
-1. **One vertical slice first** (DS-00A + DS-00B), not fifteen plays at 20 %.
+1. **One vertical slice first** (DS-00A + DS-00B + DS-00C option 2), not fifteen plays at 20 %.
 2. **Smoke before code**: every behaviour gets its scenario smoke first, registered red (`knownFail`), then the code turns it
    green. No check is weakened to pass.
 3. **The designer judges clips, not fitness**: each phase ends with 1-3 readable clips of the new situation.
@@ -50,9 +50,9 @@ lasts, about 2026-11-23), **Bgen** (the building-generator session), **Worker-op
 | **0 Measuring stick** | See the failure, be able to prove a fix | decision traces of the two clips (T-01); lab maps of both layouts (T-02); scripted opponent (T-03); new arena metrics + the two smokes red (T-04); enemy traversal smoke (T-12); training gate + scenario regression runner (T-10); night evolution paused | the two smokes FAIL on main for the reasons in the audit; every new metric non-zero in a hand test | Antigravity, Bgen, Opus agent, Codex | 5 MEDIUM | - |
 | **1 Positions** | Layer 0: positions that can fire, everywhere a play needs them | firing position service with checked lines (T-05); fire-hold "distance is not contact" (T-06); tactical map export v2 with building ids, storeys, ground sites round goals, open crossings (T-09) | A-03; `overwatch_kills` > 0 and shots from posts > 0 on X4; A-04 `guard_share` not null | Lead + Opus agent, Grok, Antigravity | 1 HEAVY + 2 MEDIUM | T-01 result (it confirms or kills H1-H4) for the ground-site half only |
 | **2 Movement** | Nobody runs across the open; a man can go round a building unseen | exposure cost F1, covered-route query, bounding move used by Advance / Objective / FallBack / Flank (T-07); fixes found by T-12 | A-01; flank success measured as shots from the flank, not attempts | Opus agent | 1 HEAVY | T-12 (know what is walkable); lab maps |
-| **3 Squad layer + PL-03** | The designer's two examples work | squad plan (play, roles, positions), event-driven re-plan, role constraints on the fighter brain; PL-02 occupy; PL-03 with F8 kill zone, F2 crossfire, F3 static anvil, mobile anvil, F4 discipline; G008's roof defence moved into the layer as PL-05 (T-08, T-08b) | **A-00A, A-00B**, A-02 green; the designer accepts the two re-recorded clips | Lead (core), Opus agent | 2 HEAVY | OQ-2; Phase 1 position queries; Phase 2 covered route (for the mobile anvil only - the static half may start earlier) |
+| **3 Squad layer + PL-03** | The designer's two examples work | squad plan (play, roles, positions), event-driven re-plan, role constraints on the fighter brain; PL-02 occupy; PL-03 with F8 kill zone, F2 crossfire, F3 static anvil, mobile anvil, F4 discipline; G008's roof defence moved into the layer as PL-05 (T-08, T-08b) | **A-00A, A-00B, A-00C (option 2: the cut-off on an obstacle top)**, A-02 green; the designer accepts the three re-recorded clips | Lead (core), Opus agent | 2 HEAVY | OQ-2; Phase 1 position queries; Phase 2 covered route (for the mobile anvil only - the static half may start earlier) |
 | **4 Streets and roofs** | The squad fights as a group outdoors | attackers bound (PL-01 in the commander); PL-04 / PL-15 on the layer; PL-10 take the height; PL-11 flank by exposure; PL-12 layers; generator posts in the game: spawn at post, own charges known (T-11); defence in depth (OQ-22); attackers vs mines (PMC_DEFENCE D3) | A-09, A-10, A-11; clips of DS-04, DS-08, DS-09, DS-10, DS-12 | Lead + Opus agents, Grok / Codex for isolated pieces | 3 HEAVY + 3 MEDIUM | Phase 3 accepted by the designer |
-| **5 Buildings** | Windows, storeys, stairs, exits | hearing (noise events); storeys in the belief; runtime building file (rooms, stair heads, exits, roles) exported by the generator; PL-06 window fire with duck / shift; PL-07 upstairs; PL-08 escape; then PL-09 enter and clear | A-05, A-06, A-07, A-12, then A-08; clips of DS-01, DS-03, DS-05, DS-07, DS-11, DS-13 | Lead + Opus agents; Bgen for data | 4 HEAVY + 3 MEDIUM | building generator merged with P0-proof (`LevelGenBuildingsSmoke` >= 95 %) and S1 roles; S2 rooms for PL-07 / PL-09; door runtime R1 for PL-09 and for kick noise; OQ-6, OQ-8 |
+| **5 Buildings** | Windows, storeys, stairs, exits | hearing (noise events); storeys in the belief; runtime building file (rooms, stair heads, exits, roles) exported by the generator; PL-06 window fire with duck / shift; PL-07 upstairs; PL-08 escape; then PL-09 enter and clear | A-05, A-06, A-07, A-12, then A-08; clips of DS-01, DS-03, DS-05, DS-07, DS-11, DS-13 and DS-00C option 1 (A-00C line 5: the building defender - window to window, window exit, run round) | Lead + Opus agents; Bgen for data | 4 HEAVY + 3 MEDIUM | building generator merged with P0-proof (`LevelGenBuildingsSmoke` >= 95 %) and S1 roles; S2 rooms for PL-07 / PL-09; door runtime R1 for PL-09 and for kick noise; OQ-6, OQ-8 |
 | **6 Monsters and collisions** | The two languages meet | jumpers placed on tactical drop spots; noise attraction to firefights; doors rule (OQ-14); `MonsterDoorSmoke`; DS-14, DS-15, DS-17 | A-14 | Codex / Antigravity (isolated), Lead review | 3 MEDIUM | none for jumpers and noise (may run beside Phase 3-4 on a light lane); R1 + OQ-14 for doors |
 | **7 Encounters, Director, factions, fairness** | The campaign uses it | garrisons by building role; hunt squads; reinforcement (OQ-9); Director budget hooks; faction profiles (resistance, survivors after OQ-3); tells (glint, tracks, voices), reaction times, first-volley rule | A-13; the 30-minute designer playtest (GDD whole-system acceptance) | Lead, Antigravity (Director data), audio / VFX owners | 3 HEAVY | Phases 4-5; OQ-3, OQ-4, OQ-5, OQ-9 |
 | **8 Tuning** | Numbers of the designed plays | fitness = situation quality + behaviour floors; league with the stand-in; QD descriptors redefined on designed behaviours (height share, cut-off rate, bound discipline); night runs resume | gate G1-G5; a tuned candidate beats the baseline by F7 | Antigravity (Python), Worker-ops, Lead review | 2 MEDIUM | the gate; Phases 3-4 accepted |
@@ -74,6 +74,8 @@ Critical path: 0 -> 1 -> 3 (static) -> 2 -> 3 (mobile) -> 4. Phase 5 is paced by
 | Building roles (objective, garrison, overwatch, transit) | Phase 7 garrisons, F8 `early` | S1 | on the branch | export `role` to the level JSON |
 | Lab layouts: the two clip layouts; a 2-storey block with a core, windows on both facades, a roof ladder, a back exit | Phase 0, Phase 5 | Training Ground + builder | `L_Gen_Train_1..3` regenerated on the branch | T-02 |
 | Breach panels | R-B8 | S4 | waits | none now |
+| Climbable obstacles beside chokepoints with a top one man can stand on (heights of the MANTLING table) | DS-00C option 2 | mantle edges / links, props layers | exist for the squad of the player; not known as firing positions | T-05 scores obstacle tops; T-09 exports them near chokepoints |
+| Windows onto a named area as checked firing positions + window exits within the drop rule + a way round the building | DS-00C option 1 | S1 / S2, the runtime building file, glass R2 | on the branch / not started | Phase 5 |
 
 ## 5. What stops or is parked now
 
@@ -100,7 +102,7 @@ Antigravity and Codex lanes do not depend on it.
 | W1 d3-5 | T-05 firing positions | T-09 tactical export v2 | T-04b the two smokes (red), T-12 traversal smoke | (budget ends) | S2 as planned |
 | W1 d6-7 | T-05 review + merge; T-07 start | T-10 gate + regression runner | T-12 report | - | - |
 | W2 d1-4 | T-07 movement; T-08 squad layer + PL-02 + PL-03 static (A-00A) | T-10 finish; T-09 follow-ups | regression fixes from T-12 (light) | - | roof firing-step rule |
-| W2 d5-7 | T-08b mobile anvil + height (A-00B); T-11 posts in game | scenario regression nightly report | - | - | - |
+| W2 d5-7 | T-08b mobile anvil + height (A-00B); T-11 posts in game; T-08c obstacle-top cut-off (A-00C) starts, may end in week 3 | scenario regression nightly report | - | - | - |
 | End of W2 | two re-recorded clips to the designer; decision on Phase 4 vs 5 order (OQ-1) | | | | |
 
 ### Tasks (docs/port/TASK_TEMPLATE.md form)
@@ -136,14 +138,15 @@ not carry order scores, report which log line is missing (that becomes a C++ log
 **Allowed paths.** `Scripts/Tools/pmc_round_trace.py`, `Scripts/Trainer/tests/test_round_trace.py`,
 `Scripts/Trainer/fixtures/`, `docs/port/gemini/outbox/`.
 
-#### T-02 - Two small lab maps that reproduce the designer's screenshots (TEST fixture) - MEDIUM, TS + builder
+#### T-02 - Three small lab maps that reproduce the designer's screenshots (TEST fixture) - MEDIUM, TS + builder
 Owner: Bgen session (or Antigravity for the layouts, the lead for the Unreal build). Branch `claude/lab-ambush-maps`.
 Worktree `CodexTactics-bgen`.
 **Design gate.** Spec: GDD DS-00A, DS-00B, A-00A, A-00B; OQ-17. Acceptance: `L_Lab_Crossroads` - an open crossroads, >= 4
 cover objects (crates / blocks) on its far side, a walled enclosure with one gap on the near side, attacker start 60-80 m
 away, a goal beyond the crossroads; `L_Lab_Alley` - a lane 3-5 m wide along a one-storey building, a 2-storey building with a
 walkable roof, a parapet and a ladder of >= 7 rungs at the lane's mouth, a way round the back of the low building, the goal
-at the mouth. Each map <= 80 x 80 m, with its tactical, objectives and level JSON files. Proved by: `TacticalMapSmoke`-style
+at the mouth; `L_Lab_Bridge` - a crossing over a cut (a drop on both sides within the drop rule), two cover objects at its
+near end, a climbable obstacle of a MANTLING-table height beside its far end, a building with windows onto the deck. Each map <= 80 x 80 m, with its tactical, objectives and level JSON files. Proved by: `TacticalMapSmoke`-style
 load check on both maps (counts = JSON, every spot on the navmesh), the validator green. Designer decision needed: OQ-17
 (default if unanswered: build them; they are new files and cost nothing elsewhere).
 **Evidence so far.** The two screenshots (lead has them); no existing map isolates either layout; X4 rounds are 160 m
@@ -184,7 +187,7 @@ Owner: Codex (two small parts). Branch `codex/NNN-pmc-position-metrics`. Worktre
 `on_position_before_contact` (share of defenders at a cover slot or post when the first attacker comes within weapon range),
 `crossfire_deg` (largest angle between two defenders' lines to the attackers' centroid at the first shot),
 `max_exposed_run_m` (attackers: longest walk segment with no cover slot within 2 m), `first_shot_gap_s`; pure rules with unit
-tests. Part b: `PmcCrossroadsSmoke` and `PmcAlleySmoke` on the lab maps with the A-00A / A-00B checks, registered
+tests. Part b: `PmcCrossroadsSmoke`, `PmcAlleySmoke` and `PmcBridgeSmoke` (A-00C lines 1-4) on the lab maps with the A-00A / A-00B / A-00C checks, registered
 `knownFail` with the audit's reason. Proved by: `CodexTactics.AI.PmcArenaBehaviour.*` new tests; the two smokes run and FAIL
 on the listed checks, not on a crash or a missing actor. Designer decision needed: none.
 **Evidence so far.** The 11 behaviour metrics do not contain any of the designer's criteria; `spread_m` exists (G008).
@@ -200,7 +203,7 @@ the arena does not record (e.g. cover state per frame) - list it, add the smalle
 Owner: Lead (design + review) with an Opus agent. Branch `claude/firing-positions`. Worktree `CodexTactics-claude`.
 **Design gate.** Spec: GDD section 5 "Firing positions", F2, hard rule 5; audit 2.1. Acceptance: a query
 `PositionsCovering(area, weapon band, n)` returns stand point + stance + facing + covered share for corner slots, low-cover
-slots, roof-edge spots and window stands; every returned position has a traced line of fire from the muzzle at its firing
+slots, roof-edge spots, window stands and obstacle tops a mantle reaches (DS-00C option 2); every returned position has a traced line of fire from the muzzle at its firing
 stance to >= 1 sample of the area; a marksman placed on any returned roof-edge position of X4 fires at a target standing in
 its area. Proved by: unit tests `CodexTactics.AI.FiringPosition.*` (pure scoring F2) + `FiringPositionSmoke` on X4 and
 `L_Lab_Alley` (GDD A-03: 100 % of returned positions fire; `overwatch_kills` > 0 on the two X4 seeds 11 / 33 used by G008b).
@@ -263,10 +266,12 @@ movement.
 seam), `Content/Data/AI/squad_plays.json` (new), `Source/CodexTacticsDev/Private/Debug/`, `Source/CodexTacticsTests/`,
 `Scripts/test_map.json`.
 
-#### T-08 - The squad sets an ambush on the predicted route: both of the designer's clips turn green (GAME) - HEAVY x 2, C++
+#### T-08 - The squad sets an ambush on the predicted route: the designer's three clips turn green (GAME) - HEAVY x 2, C++
 Owner: Lead (core architecture), Opus agent for the rules + tests. Branch `claude/squad-plays`. Worktree `CodexTactics-claude`.
 **Design gate.** Spec: GDD sections 3-4 (layers, hard rules, PL-02, PL-03, PL-05), F2, F3, F4, F8; A-00A, A-00B, A-02.
-Acceptance: `PmcCrossroadsSmoke` green (T-08, static anvil), then `PmcAlleySmoke` green (T-08b, height + mobile anvil);
+Acceptance: `PmcCrossroadsSmoke` green (T-08, static anvil), then `PmcAlleySmoke` green (T-08b, height + mobile anvil), then `PmcBridgeSmoke` green (T-08c: the cut-off climbs an
+obstacle top - this adds a `MantleTop` entry to `SquadOrderCatalog` so the AI can order the climb, and
+`Source/CodexTactics/{Public,Private}/AI/SquadOrderCatalog.*` joins the allowed paths);
 `PmcRoofDefenceSmoke` still green with the roof defence running as PL-05 inside the layer; with no kill zone found the squad
 still occupies positions (PL-02) - `open_idle_s` <= 2 s per man before contact on X4 tactical. Proved by: unit tests
 `CodexTactics.AI.SquadPlan.*` (kill-zone score, role assignment with spacing, retreat prediction, opening-fire rule) and the

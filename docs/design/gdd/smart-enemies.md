@@ -3,7 +3,7 @@
 > **Status**: Draft v1 for the designer's review (nothing here is approved; every number marked *proposal* is a starting value)
 > **Author**: Claude Fable (design architect session, 2026-11-19), for the lead session
 > **Last Updated**: 2026-11-19
-> **Implements**: the designer's core requirement of 2026-11-19 (below) + his clip notes 2026-11-18 + his two clip notes of 2026-11-19 (Crossroads, Alley)
+> **Implements**: the designer's core requirement of 2026-11-19 (below) + his clip notes 2026-11-18 + his three clip notes of 2026-11-19 (Crossroads, Alley, Bridge)
 > **Companions**: [smart-enemies-audit.md](smart-enemies-audit.md) (what exists / is broken, with evidence),
 > [smart-enemies-roadmap.md](smart-enemies-roadmap.md) (phases + the first two weeks as tasks)
 > **Supersedes as the top-level spec**: docs/design/PMC_DEFENCE.md, TACTICAL_MAP.md sections 3-4, KILL_ZONE_AMBUSH.md and
@@ -37,7 +37,7 @@ all the night trainer can do today. The system is therefore specified in four pa
 positions (where it makes sense to stand), movement (how to get there alive), squad plays (who does what, together), and
 only then tuning (numbers of the designed plays). Training is the last 10 %, not the engine of behaviour (OQ-2, OQ-10).
 
-**What the designer's two clips show** (section 8, DS-00A and DS-00B): the enemy did not fail at shooting. It failed at
+**What the designer's three clips show** (section 8, DS-00A, DS-00B, DS-00C): the enemy did not fail at shooting. It failed at
 **position selection** - recognising the kill zone on the opponent's route, giving out the roles (crossfire, height, cut-off)
 and standing on the positions before the opponent arrived. That one behaviour, "set an ambush on the predicted route", is
 the first deliverable of this system.
@@ -185,7 +185,7 @@ matter):
 |---|---|---|---|---|
 | PL-01 | **Bound** (cover to cover) | any move of more than one bound through ground an enemy may see | mover goes to the next cover <= `bound_max_m`; the others hold a fire line on the threat sector; roles rotate | goal reached; contact -> the play of the moment |
 | PL-02 | **Occupy positions** (pre-contact) | a defending squad without contact; a squad that just arrived | every fighter walks to an assigned firing position (section 5) and faces his sector; nobody idles in the open | contact; orders change |
-| PL-03 | **Set an ambush on the predicted route** (hammer and anvil: crossfire + height + cut-off) | defending or waiting, the enemy's route known or predicted, a kill zone on it (F8) | hammers on crossing positions - one of them on a usable height over the kill zone when there is one (PL-10); the anvil closes the way back: hidden in the predicted retreat (F3, static, DS-00A) or a flanker who runs round a building out of sight to the kill zone's rear exit (mobile, DS-00B); all in place before contact, all hold fire (F4); hammers open together; the anvil fires when the enemy turns back | enemy destroyed / broke through / anvil found -> PL-11 or PL-12 |
+| PL-03 | **Set an ambush on the predicted route** (hammer and anvil: crossfire + height + cut-off) | defending or waiting, the enemy's route known or predicted, a kill zone on it (F8) | hammers on crossing positions - one of them on a usable height over the kill zone when there is one (PL-10); the anvil closes the way back: hidden in the predicted retreat (F3, static, DS-00A) or a flanker who runs round a building out of sight to the kill zone's rear exit (mobile, DS-00B), or a man on an obstacle top / in a building over the exit (DS-00C); all in place before contact, all hold fire (F4); hammers open together; the anvil fires when the enemy turns back | enemy destroyed / broke through / anvil found -> PL-11 or PL-12 |
 | PL-04 | **Ambush at the exit** | a chokepoint on the enemy's route (tactical map) | hide at the EXIT, never inside; hold fire until the kill zone (F4); one overwatch above if available | sprung -> fight on; discovered -> PL-12 or relocate |
 | PL-05 | **Hold a roof / point** (designer notes 1, 1b) | defending an objective | 1 access guard (stair / hatch: aim at it; outside ladder: roof edge above it, covering ladder and street); the others sector shooters on the approach arc, shifting along the edge | access lost -> PL-11; point empty -> PL-02 |
 | PL-06 | **Garrison a building** | a `garrison` / `objective` building (building roles) | window shooters by facade toward the approach, 1 door / stair guard; shooters fire, duck, shift windows after `window_shift_s` or when suppressed | enemy enters the ground floor -> PL-07; building untenable -> PL-08 |
@@ -223,6 +223,7 @@ load time, not assumed from geometry). Kinds:
 | Stair head | above a flight, off its axis | the flight and its foot | the slab edge / a wall | the indoor chokepoint |
 | Door cover | inside a room, off the door line | the doorway | furniture / wall | never opposite the door |
 | Balcony / fire-escape landing | on the slab | street, neighbour windows | the rail only (weak) | firing position only unless a fire escape lands there |
+| Obstacle top (a mantle target: container, crate stack, wall top) | on top, kneeling or prone, reached by a mantle | what the height opens: a bridge deck, a lane behind a wall | almost none; lying down helps against fire from below | an improvised height where no roof has an access (DS-00C option 2); needs a mantle order for the AI and a way down |
 
 **Rules for using a building** (R-B):
 - R-B1 **Enter** when: the play's position is inside; or no outdoor cover exists within one bound and a door / broken window
@@ -287,8 +288,8 @@ PMC shoot them only in self-defence. A firefight is noise; noise is a dinner bel
 
 ### 8. Catalogue of dangerous situations
 
-Each situation: setup -> enemy behaviour -> tells -> player counterplay -> needs. The first two are the designer's own
-acceptance examples (two clips of the 2026-11-19 night) and the anchor of the whole system.
+Each situation: setup -> enemy behaviour -> tells -> player counterplay -> needs. The first three are the designer's own
+acceptance examples (three clips of the 2026-11-19 night) and the anchor of the whole system.
 
 #### DS-00A Crossroads ambush - hammer and anvil (the designer's first acceptance example, 2026-11-19)
 
@@ -344,11 +345,40 @@ the lane.
   never-bunch rule; defence in depth on the way to the goal (hard rule 4).
 - **Acceptance**: A-00B.
 
-#### The common pattern of both clips
+#### DS-00C Bridge ambush - two ends + a cut-off from an obstacle top or a building (the designer's third acceptance example, 2026-11-19)
 
-In both clips the shooting was not the problem. **The defence failed at position selection**: recognising the kill zone on
+The designer on the third clip: *"There is a bridge; two fighters can take positions and fire on the bridge. Then two options.
+Option 1: the third fighter is inside the building, holds it, moving from window to window, and if needed jumps out of
+windows, runs round the building and so on. Option 2, simpler: we taught our fighters to climb onto obstacles. He climbs onto
+the obstacle and pours fire, cutting off every retreat route for the group crossing the bridge. Then the green group is forced
+either to jump down, which completely breaks their movement route, or die."* His sketch: a crossing over a cut (map label
+`cut_crossing`); two red positions at the two corners of the bridge's near end, firing along the deck; the third either
+inside the large building beside the cut, moving between windows, or - marked "2" - on top of the wall-like obstacle beside
+the bridge's far end.
+
+- **Setup**: a bridge = a linear chokepoint: no cover on the deck, a drop on both sides; cover at its near end; beside it a
+  building with windows onto the deck and / or a climbable obstacle beside its far end.
+- **Enemy behaviour** (PL-02 -> PL-03): two hammers at the near end, one each side, crossing fire along the deck. The cut-off:
+  **option 2 (built first)** - the third mantles onto the obstacle beside the far end and fires onto the deck and its exit
+  from an improvised height; **option 1 (with buildings)** - the third holds the building (PL-06): fires from a window that
+  covers the bridge, shifts window to window, and when the building is threatened leaves by a window and runs round it
+  (PL-08) to fire again. Fire opens when the group is on the deck (F4).
+- **Tells**: figures at the bridge's end; a man on top of an obstacle against the sky; movement in the windows; the bridge
+  itself (a chokepoint on the tactical map).
+- **Counterplay**: never the whole group on the deck - one crosses, two watch; suppress the man on the obstacle (he has
+  almost no cover up there) or the window; the cut itself: dropping off the bridge is a real escape that costs the route
+  (the designer's "jump down or die").
+- **Needs**: option 2 - obstacle tops as firing positions (mantle targets scored by F2), a mantle order the AI can give, a
+  way down for him; "drop into the cut" known as the victim's only retreat and left open on purpose (it breaks his route).
+  Option 1 - walkable interiors, windows as checked firing positions, window exits within the drop rule (building
+  generator, roadmap Phase 5; OQ-6).
+- **Acceptance**: A-00C.
+
+#### The common pattern of the three clips
+
+In all three clips the shooting was not the problem. **The defence failed at position selection**: recognising the kill zone on
 the enemy's route, assigning roles to it (crossfire, height, cut-off) and occupying the positions before the enemy arrived.
-Both are one missing behaviour - PL-03, "set an ambush on the predicted route with crossfire + height + cut-off" - and it is
+All three are one missing behaviour - PL-03, "set an ambush on the predicted route with crossfire + height + cut-off" - and it is
 the first thing the roadmap builds and the first thing the designer judges. Every other play reuses its parts: kill-zone
 recognition, firing positions with checked lines, role assignment with spacing, pre-occupation, fire discipline.
 
@@ -570,7 +600,20 @@ down the lane:
 6. If the roof access is missing or the body cannot use it, the squad does not assign the roof (hard rule 5): the smoke
    then fails on its precondition and reports a level-data fault, it does not pass with a man standing under the wall.
 
-**Both examples, the shared check**: time from the defenders' spawn to "all roles on position" is logged; the scenario gives
+**A-00C Bridge (DS-00C)** - the third acceptance example. On the layout of the third screenshot (a crossing over a cut, cover
+at its near end, a climbable obstacle beside its far end, a building with windows onto the deck), 3 defenders vs 3 attackers
+crossing:
+1. Before contact two defenders stand at the two near-end positions (different cover objects or >= 5 m apart), each with a
+   checked line along the deck; the third is on the obstacle top (option 2), reached by a mantle, with a checked line onto
+   the deck and its far exit.
+2. Fire opens only when >= 2 attackers are on the deck (F4); the cut-off man fires when they turn back or reach the exit.
+3. After the opening fire no attacker leaves the bridge by either end alive in >= 80 % of 20 seeds: each is down or has
+   dropped into the cut (logged as `route_broken`).
+4. The man on the obstacle is not stuck: suppressed or flanked he comes down (mantle descent or a drop within the rule).
+5. Option 1 variant (after buildings land): the third fires from >= 2 different windows during the round and, when an
+   attacker enters the building, leaves through a window within the drop rule and fires again from a new position.
+
+**All three examples, the shared check**: time from the defenders' spawn to "all roles on position" is logged; the scenario gives
 the defenders at least that time plus 5 s before the attackers reach the kill zone. A defence that had the time and is not in
 position fails.
 
@@ -597,8 +640,8 @@ can name, unprompted, at least five different situations of section 8 that happe
 
 ## Open Questions
 
-Answered 2026-11-19: **which clips were catastrophic** - the Crossroads clip (DS-00A) and the Alley clip (DS-00B) are the
-first two acceptance examples; a further clip with a different failure becomes another A-nn line.
+Answered 2026-11-19: **which clips were catastrophic** - the Crossroads (DS-00A), Alley (DS-00B) and Bridge (DS-00C) clips are the
+first three acceptance examples; a further clip with a different failure becomes another A-nn line.
 
 | # | Question | Alternatives (cost) | Recommendation |
 |---|---|---|---|

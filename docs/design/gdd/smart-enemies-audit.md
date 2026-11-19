@@ -40,10 +40,10 @@ Status words: **EXISTS** (in main, with a test), **PARTIAL**, **MISSING**, **BRO
 | Encounters / Director | level JSON squads, 3 postures | generator posts (TS only) | spawn at the generated post, charge ownership, Director |
 | Training | pipeline runs 14 h without crashes; QD archive; clips | metrics | fitness and descriptors that measure the designer's criteria; evaluation with enough rounds; any gate before a run |
 
-Of the 20 dangerous situations of GDD section 8 (table in section 3): **2 work today** (DS-16 pack hunt, DS-18 RPG - both
-older than the trainer), **7 partly** (DS-01, DS-04, DS-09, DS-10, DS-12, DS-14, DS-15), **11 cannot happen** with today's
-code. None of the human-squad situations the designer listed on 2026-11-19 works. Neither of his two acceptance examples
-(DS-00A Crossroads, DS-00B Alley) can happen: there is no kill-zone recognition, no crossfire selection, no cut-off (static
+Of the 21 dangerous situations of GDD section 8 (table in section 3): **2 work today** (DS-16 pack hunt, DS-18 RPG - both
+older than the trainer), **7 partly** (DS-01, DS-04, DS-09, DS-10, DS-12, DS-14, DS-15), **12 cannot happen** with today's
+code. None of the human-squad situations the designer listed on 2026-11-19 works. None of his three acceptance examples
+(DS-00A Crossroads, DS-00B Alley, DS-00C Bridge) can happen: there is no kill-zone recognition, no crossfire selection, no cut-off (static
 or by a run round a building) and no pre-contact "occupy positions" (0 matches for crossfire / anvil / cut-off in `Source/`).
 
 ## 2. Behaviour by behaviour
@@ -173,6 +173,7 @@ There is **no squad layer**. The "commander" is a per-fighter scorer that sees f
 |---|---|---|
 | DS-00A Crossroads | no | no PL-02, no crossfire, no retreat prediction, no fire-hold that survives distant contact |
 | DS-00B Alley | no | no kill-zone recognition; nothing sends a man onto the taller roof (height is only a bonus on cover slots near him, `SQ:2503-2504`; roof posts come from the tactical map at spawn and cannot fire, 2.1); a "flank" is a point `flank_distance_cm` 10 m from a SEEN threat (`CR:267`, `CR:575-586`), not a run round a building to a rear exit before contact; a ground goal pulls the squad together (4.1) |
+| DS-00C Bridge | no | as DS-00A, plus - option 2: the AI cannot order a climb (no mantle entry among the 13 catalog orders, `CAT:19-48`; 0 mentions of mantle in `SQ` / `CR`) and obstacle tops are not positions (the body can do it: `OrderMantleTop`, `OperativeCharacter.h:526`); option 1: no interior behaviour, no window-to-window shift, no window exit (2.4 PL-06 / PL-08, 2.6). The victims' drop off the bridge exists (drop links) |
 | DS-01 Window fire | by spawn luck only | window post at spawn; no duck / shift; sectors unvalidated |
 | DS-02 Roof overwatch | no | 0 shots from roof posts |
 | DS-03 Upstairs | no | no hearing, no storeys, no stair head |
@@ -194,12 +195,13 @@ There is **no squad layer**. The "commander" is a per-fighter scorer that sees f
 
 ## 4. Why the night training produced bad behaviour
 
-### 4.1 The designer's two clips (Crossroads, Alley)
+### 4.1 The designer's three clips (Crossroads, Alley, Bridge)
 
 What the designer saw. Clip 1: the attackers ran a long way in the open; the defenders stood in the middle of the crossroads
 without cover and let them through. Clip 2: the attackers ran down a lane between two buildings; the defenders stood bunched
 between the buildings next to the goal marker ("GOAL 2" is visible in his screenshot), nobody on the taller roof, nobody at
-the corner, nobody behind the attackers.
+the corner, nobody behind the attackers. Clip 3: the attackers crossed a bridge over a cut unhindered; nobody held its
+ends, nobody used the building beside it or the obstacle at its far end.
 
 **The common pattern (his words and the code agree):** the failure is position selection - kill-zone recognition, role
 assignment, pre-occupation - not shooting. RC1, RC3 and RC4 below are that failure seen from three sides.
