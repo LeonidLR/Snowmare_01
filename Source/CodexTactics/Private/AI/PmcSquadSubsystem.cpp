@@ -3491,8 +3491,12 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 			continue;
 		}
 		const float Reach = Seat.Fighter->CurrentWeapon ? Seat.Fighter->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
-		const float BandMax = 0.9f * Reach;
-		const float BandMin = 0.2f * BandMax;
+		const float BandMin = 0.2f * 0.9f * Reach;
+		// Tier 1: inside his weapon's band. Tier 2 (nothing there, e.g. a shotgun on an open street): cover up to twice as far - he holds there in cover
+		// and closes in when the attackers come (the engagement-band orders); an idle man in the open is worse.
+		for (int32 Tier = 0; Tier < 2 && Seat.Eligible.IsEmpty(); ++Tier)
+		{
+		const float BandMax = (Tier == 0 ? 0.9f : 1.8f) * Reach;
 		for (const FFiringCandidate& Candidate : Service->GetCandidates(KillZone, AreaRadius, BandMin, BandMax))
 		{
 			const FFiringPosition& Pos = Candidate.Position;
@@ -3523,6 +3527,7 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 				}
 			}
 			Seat.Eligible.Add(Candidate);
+		}
 		}
 		Seats.Add(MoveTemp(Seat));
 	}
