@@ -20,6 +20,7 @@
 					"mode": "density",
 					"per_100m2": 0.25
 				},
+				"route_corridor_m": 2,
 				"where": {
 					"near": [
 						{
@@ -945,6 +946,7 @@
 					"mode": "count",
 					"value": 16
 				},
+				"route_corridor_m": 2,
 				"where": {
 					"near": [
 						{
@@ -1233,7 +1235,8 @@
 						"mode": "count",
 						"value": 8
 					}
-				}
+				},
+				"route_clear_m": 3
 			},
 			"objects": [
 				{

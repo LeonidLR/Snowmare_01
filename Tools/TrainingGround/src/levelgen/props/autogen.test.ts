@@ -7,6 +7,7 @@ import type { LevelPropsFile } from './schema.ts';
 import { validateProps } from './schema.ts';
 import { formatPropsCanonical } from './canonical.ts';
 import { applyOverrides } from './placement.ts';
+import { mandatorySegments, routeDistOnLayer } from '../pmcPosts.ts';
 import {
   generatePropsForLayout,
   canOverwritePropsFile,
@@ -130,5 +131,71 @@ describe('autogen props placement (task 076)', () => {
 
     // Verify more crates were added for the expanded area
     assert.ok(newCrates.length >= originalInside.length, 'Expanded map should have at least as many crates as kept base crates');
+  });
+
+  it('088 route clearance: no mine/tripwire within route_clear_m and no crate/barrel within route_corridor_m on 3 seeds', () => {
+    const x4LayoutPath = path.join(root, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x4.json');
+    const x4Layout = JSON.parse(fs.readFileSync(x4LayoutPath, 'utf8')) as GenLayout;
+    const segs = mandatorySegments(x4Layout);
+    assert.ok(segs.length > 0, 'Mandatory route must have segments');
+
+    const routeClearCm = 300;
+    const routeCorridorCm = 200;
+
+    for (const seed of [1, 2, 3]) {
+      const res = generatePropsForLayout({
+        layout: x4Layout,
+        balance,
+        autogenConfig: autogenCfg,
+        seed,
+        layoutName: 'gen_ref_01_02_depot_1_x4',
+        projectRoot: root,
+      });
+
+      assert.equal(res.fastGateResult.gate, 'pass', `Fast gate must pass on seed ${seed}`);
+
+      for (const l of res.props.layers) {
+        if (l.kind === 'mines' && l.id !== 'pmc_charges') {
+          for (const obj of l.objects) {
+            const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
+            assert.ok(
+              d >= routeClearCm,
+              `Mine/tripwire ${obj.id} (${obj.variant}) at pos [${obj.pos}] layer ${obj.walk_layer} is within route_clear_m: dist=${d}cm < ${routeClearCm}cm (seed ${seed})`
+            );
+          }
+        } else if (l.kind === 'crates' || l.kind === 'barrels') {
+          for (const obj of l.objects) {
+            const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
+            assert.ok(
+              d >= routeCorridorCm,
+              `Prop ${obj.id} (${l.kind}) at pos [${obj.pos}] layer ${obj.walk_layer} is within route_corridor_m: dist=${d}cm < ${routeCorridorCm}cm (seed ${seed})`
+            );
+          }
+        }
+      }
+    }
+  });
+
+  it('088 determinism: same seed produces identical route clearance drops and canonical JSON', () => {
+    const x4LayoutPath = path.join(root, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x4.json');
+    const x4Layout = JSON.parse(fs.readFileSync(x4LayoutPath, 'utf8')) as GenLayout;
+    const resA = generatePropsForLayout({
+      layout: x4Layout,
+      balance,
+      autogenConfig: autogenCfg,
+      seed: 42,
+      layoutName: 'gen_ref_01_02_depot_1_x4',
+      projectRoot: root,
+    });
+    const resB = generatePropsForLayout({
+      layout: x4Layout,
+      balance,
+      autogenConfig: autogenCfg,
+      seed: 42,
+      layoutName: 'gen_ref_01_02_depot_1_x4',
+      projectRoot: root,
+    });
+    assert.deepEqual(resA.droppedByRouteClearance, resB.droppedByRouteClearance);
+    assert.equal(formatPropsCanonical(resA.props), formatPropsCanonical(resB.props));
   });
 });
