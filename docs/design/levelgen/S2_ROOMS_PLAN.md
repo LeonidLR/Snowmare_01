@@ -307,7 +307,8 @@ legacy files keep the `walls[]` path bit for bit (`partition_driven`, tests `tes
 `Content/Data/LevelGen/building_coord_fields.json` (path / kind / frame) drives `finalizeDraftToLayout`, `rotateContent` and the builder's
 `_building_local` (rotateContent now moves balconies / fire escapes / snow ramps / breach panels with the building; the builder no
 longer turns the building-frame ramp foot and escape points back), coverage tests in TS and Python; `ROUTE_COSTS` ->
-`building_route_costs.json` (`cost_hash` = FNV-1a of its canonical JSON), story knobs -> `building_stories.json`. S2.1 next.
+`building_route_costs.json` (`cost_hash` = FNV-1a of its canonical JSON), story knobs -> `building_stories.json`.
+S2.1 engine module done (bandPlan.ts, building_plans.json), not wired yet - S2.2 wires it with doors.
 
 ## 6. Risks and early detection
 

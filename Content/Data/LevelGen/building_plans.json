@@ -1,0 +1,30 @@
+{
+  "schema": "codex.building_plans/1",
+  "comment": "Constants and per-archetype recipes of the building band planner (S2_ROOMS_PLAN.md sections 3.1, 3.3, 3.4, 3.8; designer decision 8.1: minimum room 4 x 4 m). Read by Tools/TrainingGround/src/levelgen/buildings/bandPlan.ts. All lengths are integer cm in the planner's own frame (u along the long side, v across, v = 0 on the core wall). core.corridor_max_cm is a planner knob, not a plan constant: the widest the corridor may get beside the core in a double-loaded bay (it starts at the core depth and ends on the corridor line shared with the neighbouring bays).",
+  "constants": {
+    "grid_cm": 100,
+    "opening_grid_cm": 50,
+    "core": {
+      "bay_length_cm": 900,
+      "depth_two_lane_cm": 350,
+      "depth_one_lane_cm": 200,
+      "corridor_beside_two_lane_cm": 250,
+      "corridor_max_cm": 400
+    },
+    "corridor_cm": 200,
+    "room_cm": { "min": 400, "max": 800 },
+    "service_room": { "depth_min_cm": 200, "depth_max_cm": 350, "width_min_cm": 300, "width_max_cm": 500 },
+    "end_bay_cm": { "min": 400, "max": 600 },
+    "max_rerolls": 4
+  },
+  "recipes": {
+    "office": {
+      "min_depth_double_loaded_cm": 1000,
+      "min_depth_single_loaded_cm": 800,
+      "min_length_cm": 900,
+      "back_room_depth_cm": { "min": 400, "max": 600 },
+      "front_room_min_depth_cm": 400,
+      "bay_grammar": "core room* (end | exit) | room* core room*"
+    }
+  }
+}
