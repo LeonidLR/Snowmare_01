@@ -19,6 +19,7 @@ import { RegionOverlay } from './RegionOverlay';
 import type { LayerAction, LayerHit, ObjectiveAction, RegionMode, WallHandle } from './RegionOverlay';
 import { FullWindowFrame, useFullWindow } from '../components/FullWindowFrame';
 import { isKeyConsumer, planHeightFor } from '../utils/fullWindow';
+import { confirmLeave } from '../utils/unsavedGuard';
 import { DEFAULT_SNAP_CM, nudgeDelta, NUDGE_CM, SNAP_STEPS_CM, snapReference } from '../levelgen/mapEdit';
 import { describeProblems, newProblems, validateMapEdit } from '../levelgen/mapChecks';
 import type { MapValidation } from '../levelgen/mapChecks';
@@ -854,7 +855,7 @@ export const LevelGenDepartment: React.FC = () => {
       <div className="bg-slate-950/80 border-b border-slate-800 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setActiveTab('generator')}
+            onClick={() => { if (activeTab === 'props' && !confirmLeave()) return; setActiveTab('generator'); }}
             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
               activeTab === 'generator'
                 ? 'bg-cyan-600 text-slate-950 font-bold'
