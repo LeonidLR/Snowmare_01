@@ -29,18 +29,18 @@ Rules of the plan:
 |---|---|---|
 | OQ-2 - **RESOLVED 2026-11-19: B**, authored squad plays above the existing utility | nothing any more: Phase 3 / T-08 is unblocked | done |
 | OQ-10 - **RESOLVED 2026-11-19: a**, weight evolution paused, scenario regressions at night | nothing any more: the nights follow section 5; T-10 delivers the runner and the gate | done |
-| OQ-17 lab maps for judging (rec. small lab maps + generator arenas) | task T-02, all scenario smokes | day 1 |
+| OQ-17 - **RESOLVED 2026-11-19: lab maps + generator arenas** | nothing any more (T-02 / scenario smokes) | done |
 | OQ-1 first milestone scope - **RESOLVED 2026-11-19: streets and roofs first** (Phase 4 before Phase 5) | the order of Phases 4 and 5 | decided |
-| OQ-21 enemy charges scope | the charge half of T-11 | week 2 |
-| OQ-22 defence in depth: who meets the player on the route | Phase 4 | week 3 |
-| OQ-11 the evaluation opponent (rec. bot squad that sees humans) | Phase 8, part of Phase 0 | week 3 |
+| OQ-21 - **RESOLVED 2026-11-19: as on 11-18**, generator charges round PMC posts only; one charge per ambush site later | nothing any more (T-11 charge half) | done |
+| OQ-22 - **RESOLVED 2026-11-19: the goal squad moves forward** to the best kill zone and falls back (PL-12); the Director later in the campaign | nothing any more (Phase 4) | done |
+| OQ-11 - **RESOLVED 2026-11-19: the playtest bot squad** taught to see and fight like humans; recordings later | nothing any more (T-03, Phase 8) | done |
 | OQ-3 resistance and survivors | Phase 7 profiles only | later |
 | OQ-4 / OQ-5 first volley, difficulty | Phase 7 fairness pass | later |
 | OQ-6 / OQ-8 / OQ-12 / OQ-14 window jumps, doors, grenades, monsters and doors | Phase 5 / 6 | before Phase 5 |
 
 Tasks T-01, T-03, T-04 (metrics half), T-05, T-06, T-07, T-09, T-12 need no decision and can start at once. Since
 2026-11-19 T-08 and T-10 need none either: T-08 waits only for its technical inputs (T-05 position queries, T-07 for the
-mobile half), T-10 can start at once. T-02 has a default; only the charge half of T-11 still waits (OQ-21).
+mobile half), T-10 can start at once. T-02 has a default; the charge half of T-11 no longer waits (OQ-21 decided 2026-11-19).
 
 ## 3. Phases in dependency order
 
@@ -124,7 +124,7 @@ Calendar assumption: week 1 = 2026-11-21 .. 11-27 (after the weekly limit reset)
 PC format is POSTPONED (lead, 2026-11-19: the designer keeps working on the main PC for now), so builds run as usual;
 if the format happens later, tasks that need an Unreal build (T-02's map build, T-05) wait for a confirmed build machine.
 Dispatched 2026-11-19 (lead, fd9715a6): Grok G009 = T-06; Codex 049 = T-04, 050 = T-12; Antigravity 089 = T-01, 090 = T-09,
-091 = T-10. Held: T-02 / T-03 (OQ-11 / OQ-17 open), T-05 / T-07 / T-08 / T-11 (lead work after the 11-21 reset).
+091 = T-10. Held: T-02 / T-03 (OQ-11 / OQ-17 were open; decided later on 11-19 - now dispatchable), T-05 / T-07 / T-08 / T-11 (lead work after the 11-21 reset).
 
 | Day | Lead / Opus agents | Antigravity | Codex | Grok | Bgen |
 |---|---|---|---|---|---|
@@ -177,8 +177,8 @@ away, a goal beyond the crossroads; `L_Lab_Alley` - a lane 3-5 m wide along a on
 walkable roof, a parapet and a ladder of >= 7 rungs at the lane's mouth, a way round the back of the low building, the goal
 at the mouth; `L_Lab_Bridge` - a crossing over a cut (a drop on both sides within the drop rule), two cover objects at its
 near end, a climbable obstacle of a MANTLING-table height beside its far end, a building with windows onto the deck. Each map <= 80 x 80 m, with its tactical, objectives and level JSON files. Proved by: `TacticalMapSmoke`-style
-load check on both maps (counts = JSON, every spot on the navmesh), the validator green. Designer decision needed: OQ-17
-(default if unanswered: build them; they are new files and cost nothing elsewhere).
+load check on both maps (counts = JSON, every spot on the navmesh), the validator green. Designer decision: OQ-17
+decided 2026-11-19 - lab maps + generator arenas `L_Gen_Train_1..3`.
 **Evidence so far.** The two screenshots (lead has them); no existing map isolates either layout; X4 rounds are 160 m
 routes where the situation appears by chance.
 **Task.** 1. Author the two layouts in the Training Ground (hand-placed, locked), accept them, export tactical + objectives.
@@ -371,7 +371,7 @@ Owner: Opus agent. Branch `claude/pmc-posts-in-game`. Worktree `CodexTactics-cla
 layer belong to the PMC: its squads never path over them and are not hurt by walking near them unless triggered by the
 player's side; the player's squad spots them by the normal 3 m rule. Proved by: unit test for `ParseSquad` (`post`), new
 `PmcPostsSmoke` on X4 (after the lead accepts the «ЧВК» layer for X4 on the Training Ground page and rebuilds), `PeekMinesSmoke`
-unchanged. Designer decision needed: **OQ-21** for the charge half (the spawn-at-post half has none).
+unchanged. Designer decision: OQ-21 decided 2026-11-19 - charges round PMC posts only, as accepted on 11-18.
 **Evidence so far.** 087 report "Left": `ParseSquad` does not read `post`; `owner: "pmc"` is not read
 (`PropsGameplayRules.cpp:57` treats the layer as ordinary mines); no accepted layout has a `pmc` block.
 **Task.** 1. Spawn at post. 2. Ownership: the props spawn tags the charge with the owning side; path cost / avoidance for
