@@ -1,6 +1,8 @@
 # Smart Enemies - tactical human squads and monsters
 
-> **Status**: Draft v1 for the designer's review (nothing here is approved; every number marked *proposal* is a starting value)
+> **Status**: Draft v1 for the designer's review. Decided by the designer on 2026-11-19: OQ-2 (authored squad plays above the existing
+> per-fighter utility) and OQ-10 (weight evolution paused, scenario regressions at night). Everything else is not approved
+> yet; every number marked *proposal* is a starting value
 > **Author**: Claude Fable (design architect session, 2026-11-19), for the lead session
 > **Last Updated**: 2026-11-19
 > **Implements**: the designer's core requirement of 2026-11-19 (below) + his clip notes 2026-11-18 + his three clip notes of 2026-11-19 (Crossroads, Alley, Bridge)
@@ -35,7 +37,7 @@ The designer's requirement (2026-11-19, binding): human enemies must
 steps on named positions of the terrain. They cannot be reached by tuning the weights of a per-fighter order score, which is
 all the night trainer can do today. The system is therefore specified in four parts that must exist in this order:
 positions (where it makes sense to stand), movement (how to get there alive), squad plays (who does what, together), and
-only then tuning (numbers of the designed plays). Training is the last 10 %, not the engine of behaviour (OQ-2, OQ-10).
+only then tuning (numbers of the designed plays). Training is the last 10 %, not the engine of behaviour (OQ-2 and OQ-10, both decided by the designer on 2026-11-19).
 
 **What the designer's three clips show** (section 8, DS-00A, DS-00B, DS-00C): the enemy did not fail at shooting. It failed at
 **position selection** - recognising the kill zone on the opponent's route, giving out the roles (crossfire, height, cut-off)
@@ -150,7 +152,9 @@ Rules between the layers:
 4. **Layer 0 is data, validated at build time**: every firing position used by a play has a checked line of fire from the
    firing stance to the area it claims to cover (section 5).
 
-How the brain of layer 4 is built (utility over plays, a state tree, an HTN) is an architecture decision - OQ-2. This GDD
+**[D 2026-11-19, OQ-2]** Layer 4 is built as authored squad plays (ambush, crossfire, cut-off and the rest of section 4) on
+top of the existing per-fighter utility. Whether a play is coded as plain rules, a state tree or an HTN is an implementation
+choice of the lead. This GDD
 specifies plays by preconditions, roles, steps and exits so any of them can implement it.
 
 ### 4. Squad roles and plays
@@ -421,8 +425,8 @@ recognition, firing positions with checked lines, role assignment with spacing, 
 3. **Fitness measures the player-facing result**, not who wins a mirror match: situation quality (did the designed
    situation happen, readably), pressure without cheating, survival of the enemies as a means, not a goal.
 4. **Until the gate passes** the second machine runs scenario regression (many seeds of the scripted situations) instead of
-   evolution - OQ-10.
-5. Learning Agents (imitation from the designer's recorded play) is a later, separate track - OQ-2 option C.
+   evolution **[D 2026-11-19, OQ-10: the trainer's weight evolution is paused; the worker runs scenario regressions at night]**.
+5. Learning Agents (imitation from the designer's recorded play) is a later, separate track (OQ-2 option C, not chosen on 2026-11-19).
 
 ## Formulas
 
@@ -643,10 +647,13 @@ can name, unprompted, at least five different situations of section 8 that happe
 Answered 2026-11-19: **which clips were catastrophic** - the Crossroads (DS-00A), Alley (DS-00B) and Bridge (DS-00C) clips are the
 first three acceptance examples; a further clip with a different failure becomes another A-nn line.
 
+Decided 2026-11-19 (designer: "Да, принимаю рекомендации по OQ-2 и OQ-10"): **OQ-2 -> B** and **OQ-10 -> a**. Their rows stay in the table,
+marked RESOLVED, so the rejected alternatives remain on record.
+
 | # | Question | Alternatives (cost) | Recommendation |
 |---|---|---|---|
 | OQ-1 | First milestone scope: which situations first? | (a) DS-00A + DS-00B + DS-01 + DS-03 (street ambushes, windows, upstairs: needs buildings, ~4-6 weeks); (b) DS-00A + DS-00B + DS-04 + DS-10 only (streets and roofs, ~2-3 weeks, no interiors); (c) all of section 8 before showing anything (months, no feedback) | (b) first, then (a) as buildings land |
-| OQ-2 | How the squad brain is built | (A) keep the flat per-fighter utility, add orders, keep training (cheapest now; it produced 2026-11-19; cannot express roles or sequences); (B) authored squad plays above the existing utility (2-3 weeks for the layer, then ~2-4 days per play; deterministic, testable, tunable); (C) Learning Agents first (experimental plugin, GPU, needs recorded play and a working body anyway; months, opaque) | B; C later as an imitation experiment on top of B |
+| OQ-2 | **RESOLVED 2026-11-19 (designer) -> B.** How the squad brain is built | (A) keep the flat per-fighter utility, add orders, keep training (cheapest now; it produced 2026-11-19; cannot express roles or sequences); (B) authored squad plays above the existing utility (2-3 weeks for the layer, then ~2-4 days per play; deterministic, testable, tunable); (C) Learning Agents first (experimental plugin, GPU, needs recorded play and a working body anyway; months, opaque) | **decided: B** - authored squad plays on top of the existing per-fighter utility; C stays a later imitation experiment on top of B |
 | OQ-3 | Resistance and survivors: who are they, whose side? | (a) both hostile to the player; (b) resistance fights PMC and may ally with the player, survivors neutral until threatened; (c) decide later - build PMC only, keep profiles as data | (c) now; (b) reads best with the narrative, needs bible entries |
 | OQ-4 | What may the first volley of an ambush do to an unaware squad? | (a) full damage after the tell lead (harsh, teaches fast; frustration risk); (b) the first volley wounds but cannot kill (KILL_ZONE_AMBUSH proposal; softer, less respect); (c) by difficulty | (c): Normal = b, Hard = a |
 | OQ-5 | Difficulty tiers | (a) one difficulty until the vertical slice (least work); (b) tiers scale reaction, coordination, plays known; (c) tiers scale health / damage / numbers (cheap, feels unfair) | (a) now with (b)'s knobs in data |
@@ -654,7 +661,7 @@ first three acceptance examples; a further clip with a different failure becomes
 | OQ-7 | Squad size in the campaign | (a) 3 as in the arena; (b) 4-6 with two fire teams for garrisons (needs the two-team commander; more readable crossfire, heavier fights); (c) by building role | (c): hunt 3, garrison 4-6 |
 | OQ-8 | May defenders change opening states at runtime? | (a) no - only the generator sets states; (b) close and lock doors behind them (needs door runtime R1); (c) barricade at runtime (building-stories Q10; animation + navmesh cost) | (a) now, (b) with R1 |
 | OQ-9 | Reinforcements | (a) none: each squad fights alone; (b) the nearest garrison sends a team after T s of fire (Director budget; fights grow); (c) scripted per level | (a) until the Director exists |
-| OQ-10 | Night training now | (a) stop evolution until the training gate passes; the worker runs scenario regression on many seeds; (b) keep nightly runs for pipeline health, ignore results (burns the night, tempts conclusions); (c) start the Learning Agents spike on the worker | (a) |
+| OQ-10 | **RESOLVED 2026-11-19 (designer) -> a.** Night training now | (a) stop evolution until the training gate passes; the worker runs scenario regression on many seeds; (b) keep nightly runs for pipeline health, ignore results (burns the night, tempts conclusions); (c) start the Learning Agents spike on the worker | **decided: (a)** - weight evolution paused; the worker runs scenario regressions at night |
 | OQ-11 | Who is the opponent in evaluation? | (a) the playtest bot squad taught to see and fight humans (1-2 tasks; reusable for all tests); (b) replays of the designer's recorded play ("shadow"); (c) self-play only (what failed) | (a) now, (b) when recordings exist |
 | OQ-12 | Grenades for human enemies | (a) none; (b) frag only, to flush cover / stairwells, with a shout + visible throw + fuse tell; (c) frag + smoke for crossing (smoke is not in the weapons roster) | (b) after DS-03 exists |
 | OQ-13 | Squad leader and voices | (a) no leader, silent squads; (b) a leader whose death delays play changes and lowers break_frac; short voiced calls as tells (audio work) | (b) later; calls are a cheap strong tell |

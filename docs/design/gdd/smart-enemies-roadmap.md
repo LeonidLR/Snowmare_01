@@ -1,7 +1,9 @@
 # Smart Enemies - roadmap and the first two weeks
 
 > **Status**: v1 proposal, 2026-11-19, Claude Fable (design architect session). Nothing here is dispatched: the lead session
-> dispatches from this document after the designer approves the GDD direction.
+> dispatches from this document after the designer approves the GDD direction. Decided by the designer on 2026-11-19
+> ("Да, принимаю рекомендации по OQ-2 и OQ-10"): OQ-2 = authored squad plays on top of the existing per-fighter utility; OQ-10 =
+> the trainer's weight evolution is paused and the worker runs scenario regressions at night.
 > **GDD**: [smart-enemies.md](smart-enemies.md). **Audit**: [smart-enemies-audit.md](smart-enemies-audit.md).
 
 ## 1. The plan in one paragraph
@@ -25,8 +27,8 @@ Rules of the plan:
 
 | Decision (GDD open question) | Blocks | Needed by |
 |---|---|---|
-| OQ-2 squad brain = authored plays above the existing utility (rec. B) | Phase 3 (task T-08) | start of week 2 |
-| OQ-10 pause night evolution; the worker runs scenario regression (rec. a) | tonight's and every night's schedule; task T-10 | now |
+| OQ-2 - **RESOLVED 2026-11-19: B**, authored squad plays above the existing utility | nothing any more: Phase 3 / T-08 is unblocked | done |
+| OQ-10 - **RESOLVED 2026-11-19: a**, weight evolution paused, scenario regressions at night | nothing any more: the nights follow section 5; T-10 delivers the runner and the gate | done |
 | OQ-17 lab maps for judging (rec. small lab maps + generator arenas) | task T-02, all scenario smokes | day 1 |
 | OQ-1 first milestone scope (rec. streets and roofs first) | the order of Phases 4 and 5 | end of week 2 |
 | OQ-21 enemy charges scope | the charge half of T-11 | week 2 |
@@ -36,7 +38,9 @@ Rules of the plan:
 | OQ-4 / OQ-5 first volley, difficulty | Phase 7 fairness pass | later |
 | OQ-6 / OQ-8 / OQ-12 / OQ-14 window jumps, doors, grenades, monsters and doors | Phase 5 / 6 | before Phase 5 |
 
-Tasks T-01, T-03, T-04 (metrics half), T-05, T-06, T-07, T-09, T-12 need no decision and can start at once.
+Tasks T-01, T-03, T-04 (metrics half), T-05, T-06, T-07, T-09, T-12 need no decision and can start at once. Since
+2026-11-19 T-08 and T-10 need none either: T-08 waits only for its technical inputs (T-05 position queries, T-07 for the
+mobile half), T-10 can start at once. T-02 has a default; only the charge half of T-11 still waits (OQ-21).
 
 ## 3. Phases in dependency order
 
@@ -50,7 +54,7 @@ lasts, about 2026-11-23), **Bgen** (the building-generator session), **Worker-op
 | **0 Measuring stick** | See the failure, be able to prove a fix | decision traces of the two clips (T-01); lab maps of both layouts (T-02); scripted opponent (T-03); new arena metrics + the two smokes red (T-04); enemy traversal smoke (T-12); training gate + scenario regression runner (T-10); night evolution paused | the two smokes FAIL on main for the reasons in the audit; every new metric non-zero in a hand test | Antigravity, Bgen, Opus agent, Codex | 5 MEDIUM | - |
 | **1 Positions** | Layer 0: positions that can fire, everywhere a play needs them | firing position service with checked lines (T-05); fire-hold "distance is not contact" (T-06); tactical map export v2 with building ids, storeys, ground sites round goals, open crossings (T-09) | A-03; `overwatch_kills` > 0 and shots from posts > 0 on X4; A-04 `guard_share` not null | Lead + Opus agent, Grok, Antigravity | 1 HEAVY + 2 MEDIUM | T-01 result (it confirms or kills H1-H4) for the ground-site half only |
 | **2 Movement** | Nobody runs across the open; a man can go round a building unseen | exposure cost F1, covered-route query, bounding move used by Advance / Objective / FallBack / Flank (T-07); fixes found by T-12 | A-01; flank success measured as shots from the flank, not attempts | Opus agent | 1 HEAVY | T-12 (know what is walkable); lab maps |
-| **3 Squad layer + PL-03** | The designer's two examples work | squad plan (play, roles, positions), event-driven re-plan, role constraints on the fighter brain; PL-02 occupy; PL-03 with F8 kill zone, F2 crossfire, F3 static anvil, mobile anvil, F4 discipline; G008's roof defence moved into the layer as PL-05 (T-08, T-08b) | **A-00A, A-00B, A-00C (option 2: the cut-off on an obstacle top)**, A-02 green; the designer accepts the three re-recorded clips | Lead (core), Opus agent | 2 HEAVY | OQ-2; Phase 1 position queries; Phase 2 covered route (for the mobile anvil only - the static half may start earlier) |
+| **3 Squad layer + PL-03** | The designer's three examples work | squad plan (play, roles, positions), event-driven re-plan, role constraints on the fighter brain; PL-02 occupy; PL-03 with F8 kill zone, F2 crossfire, F3 static anvil, mobile anvil, F4 discipline; G008's roof defence moved into the layer as PL-05 (T-08, T-08b) | **A-00A, A-00B, A-00C (option 2: the cut-off on an obstacle top)**, A-02 green; the designer accepts the three re-recorded clips | Lead (core), Opus agent | 2 HEAVY | Phase 1 position queries (OQ-2 is decided); Phase 2 covered route (for the mobile anvil only - the static half may start earlier) |
 | **4 Streets and roofs** | The squad fights as a group outdoors | attackers bound (PL-01 in the commander); PL-04 / PL-15 on the layer; PL-10 take the height; PL-11 flank by exposure; PL-12 layers; generator posts in the game: spawn at post, own charges known (T-11); defence in depth (OQ-22); attackers vs mines (PMC_DEFENCE D3) | A-09, A-10, A-11; clips of DS-04, DS-08, DS-09, DS-10, DS-12 | Lead + Opus agents, Grok / Codex for isolated pieces | 3 HEAVY + 3 MEDIUM | Phase 3 accepted by the designer |
 | **5 Buildings** | Windows, storeys, stairs, exits | hearing (noise events); storeys in the belief; runtime building file (rooms, stair heads, exits, roles) exported by the generator; PL-06 window fire with duck / shift; PL-07 upstairs; PL-08 escape; then PL-09 enter and clear | A-05, A-06, A-07, A-12, then A-08; clips of DS-01, DS-03, DS-05, DS-07, DS-11, DS-13 and DS-00C option 1 (A-00C line 5: the building defender - window to window, window exit, run round) | Lead + Opus agents; Bgen for data | 4 HEAVY + 3 MEDIUM | building generator merged with P0-proof (`LevelGenBuildingsSmoke` >= 95 %) and S1 roles; S2 rooms for PL-07 / PL-09; door runtime R1 for PL-09 and for kick noise; OQ-6, OQ-8 |
 | **6 Monsters and collisions** | The two languages meet | jumpers placed on tactical drop spots; noise attraction to firefights; doors rule (OQ-14); `MonsterDoorSmoke`; DS-14, DS-15, DS-17 | A-14 | Codex / Antigravity (isolated), Lead review | 3 MEDIUM | none for jumpers and noise (may run beside Phase 3-4 on a light lane); R1 + OQ-14 for doors |
@@ -79,7 +83,10 @@ Critical path: 0 -> 1 -> 3 (static) -> 2 -> 3 (mobile) -> 4. Phase 5 is paced by
 
 ## 5. What stops or is parked now
 
-- **Night evolution (GA and QD)**: paused (OQ-10). The worker keeps the smoke sweeps and gets the scenario regression (T-10).
+- **Night evolution (GA and QD)**: paused by the designer's decision of 2026-11-19 (OQ-10) until the training gate of GDD
+  section 9 passes; nobody starts `run_night_trainer.ps1` meanwhile. At night the worker runs scenario regressions: until
+  T-10's runner exists, the existing sweep (`smoke_parallel`) over the PMC / tactical smokes; with T-10, N seeds per
+  scenario smoke and a pass-rate report every morning.
 - **Branch `grok/G008b-overwatch-hold`** (10 commits, unfinished): not merged as a branch. Its two working commits
   (`07c27808` hold until the post's range, `089c480e` keep the hold when a mate dies) are re-applied by T-06; its parapet
   finding becomes input of T-05; then the branch is closed.
@@ -275,8 +282,8 @@ obstacle top - this adds a `MantleTop` entry to `SquadOrderCatalog` so the AI ca
 `PmcRoofDefenceSmoke` still green with the roof defence running as PL-05 inside the layer; with no kill zone found the squad
 still occupies positions (PL-02) - `open_idle_s` <= 2 s per man before contact on X4 tactical. Proved by: unit tests
 `CodexTactics.AI.SquadPlan.*` (kill-zone score, role assignment with spacing, retreat prediction, opening-fire rule) and the
-three smokes; two clips re-recorded for the designer. Designer decision needed: **OQ-2** (this task is option B; it does not
-go out until he answers).
+three smokes; three clips re-recorded for the designer. Designer decision needed: none - OQ-2 was
+decided on 2026-11-19 (option B, which is this task).
 **Evidence so far.** Audit 2.4 (no squad layer), 4.1 (both clips), 0 matches for crossfire / cut-off in `Source/`.
 **Task.** 1. `PmcSquadPlanRules` (pure): F8 over the tactical map's chokepoints and open crossings + the positions of T-05;
 F2 role assignment; F3; F4. 2. A plan object per team in `UPmcSquadSubsystem`: play, kill zone, role -> fighter -> position;
@@ -322,7 +329,8 @@ rounds per scenario exists for the freeze commit, (c) a listed smoke is not gree
 refuses to start without a fresh gate file; `Scripts/Tools/scenario_regression.py` runs a list of scenario smokes on N seeds
 on the worker and writes pass rates + the worst seeds (markdown + JSON). Proved by: `Scripts/Trainer/tests/test_gate.py`
 (the 2026-11-19 config with `overwatch_kills` 0 and `guard_share` None is refused - fixture from that night). Designer
-decision needed: **OQ-10** (default if unanswered: the gate is built, evolution stays manual).
+decision needed: none - OQ-10 was decided on 2026-11-19: evolution is paused and the worker runs scenario regressions at
+night; this task delivers that runner and the gate that must pass before evolution may resume.
 **Evidence so far.** A 14.5 h run on two dead metrics (night 2026-11-19); 6 rounds per candidate, promotion margin 0.
 **Task.** 1. Gate checks + tests. 2. The regression runner over `smoke_parallel.ps1` with smoke arguments (`seed=N` - today
 smoke_parallel cannot pass them: G008 report). 3. Stop rule: if passing a seed needs a registry change, add an optional
