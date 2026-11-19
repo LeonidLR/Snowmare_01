@@ -15,6 +15,7 @@
     "step_aside_cm": 120,
     "same_level_cm": 150,
     "nav_snap_cm": 30,
+    "overhead_clear_cm": 230,
     "max_rise_cm": 60,
     "retry_s": 1.5,
       "_comment_v2": "Give way v2 (X6 legs=solo 12 / 16). A step aside lands min_step_cm+ from where he stands. A ramp / stair foot on the mover's path (probed every ramp_sample_cm once per order) within look_ahead_cm ahead: an idle mate in its approach zone (approach_before_cm before the foot .. approach_after_cm up the flight, approach_half_width_cm + his radius to each side) steps out of the zone too; a formation walker whose slot walk enters the zone waits (traffic hold, slot_hold_max_s at most). An own move ended by the path following's block detection is asked again (blocked_retries per order, while farther than blocked_retry_min_goal_cm from its goal) instead of dropped.",
