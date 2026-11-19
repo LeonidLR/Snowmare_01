@@ -10,9 +10,11 @@ docs/port/CLAUDE_SESSION_PROMPT_2026-11-19c.md (the main lead's state), the newe
 ## Hard rules (the main PC stays primary)
 - Work ONLY on branch `worker/lead-2026-11-20` (created from origin/main). Push ONLY that branch. NEVER push main, never force-push,
   never touch other branches. The main-PC lead reviews and merges it when the main PC is back.
+  Exception for the handed-over lanes below: continue each on a copy branch `worker/<lane>` (e.g. `worker/t05-firing-positions`
+  from origin/claude/firing-positions) and push those copies too; merge them into worker/lead-2026-11-20 when a lane is gated.
 - Nothing from the worker is copied to the main PC. No edits outside this checkout. No login / credential files anywhere in git.
-- You are the only user of this checkout today: worker_sync / smoke runs from the main PC are off. Do not start the night trainer
-  (STOP file stays). Do not delete or rebuild the other slots / C:\Mirror.
+- You are the only user of this checkout today: worker_sync / smoke runs from the main PC are off. The weight trainer runs only
+  inside the night loop's 05:30-07:30 window (designer 11-19: 2 h of the night for the trainer); do not start it by hand. Do not delete or rebuild the other slots / C:\Mirror.
 - Economy: Sonnet subagents write code (Agent subagent_type "ue-l3-major", model "sonnet"), one at a time; you review.
 - Behaviour changes are accepted only on repeats: 20-50 seeds or at least 10 repeats, never one green run.
 
@@ -44,3 +46,49 @@ docs/port/CLAUDE_SESSION_PROMPT_2026-11-19c.md (the main lead's state), the newe
 Commit + push the branch. Keep `docs/port/claude/outbox/WORKER_LEAD_2026-11-20.report.md` current: what was done (commits), digest
 numbers before / after, what is unfinished, what the main lead must review. When the 5-hour quota runs out: commit, push, write the
 report, stop.
+
+## No silent stops (designer 2026-11-19, docs/port/LANES.md)
+- The worker's night loop (C:\Work\NightLoop\worker_night_loop.ps1, kept alive by task "CodexTactics Night Guard") runs until
+  07:45 and releases the agent.lock between jobs; it does not touch CodexTactics-slot1. Its results + digest:
+  C:\Work\CodexTactics\Saved\Worker\nightloop\<date>\digest.log - read it first in the morning (the overnight numbers).
+- Your own lanes: keep docs/port/LANES.json on your branch current (state active / blocked / waiting + reason) and post a
+  status line at every step; never go idle without writing why. The main-PC watchdog is offline while the main PC is;
+  check `C:\Work\CodexTactics\Saved\Worker\nightloop\guard.log` yourself if something looks stuck.
+
+## Lanes handed over by the main lead (11-19 evening, `docs/port/HANDOVER_LIVE.md` has the heads)
+Work them in this order, one Sonnet subagent at a time (you review + gate; accept behaviour only on repeats):
+1. **T-05 firing positions** - branch `claude/firing-positions` (phase a done + gated; phase b = defenders take crossfire
+   positions, WIP). Brief docs/port/claude/inbox/T005-firing-positions.md ("THE baseline" + acceptance numbers), handover at the
+   top of docs/port/claude/outbox/T05-firing-positions.report.md. Gate = Crossroads + Alley x30 vs the scripted opponent.
+2. **T-021 cold indoors** - branch `claude/cold-indoors`, brief docs/port/claude/inbox/T021-cold-indoors-generated.md
+   (DESIGNER UPDATE: airtightness by weighted broken openings + draught fading from an open opening, live state). Handover at the
+   top of docs/port/claude/outbox/T021-cold-indoors.report.md.
+3. **bgen** (building generator) - branch `claude/building-generator` head 091c40b0 (bot mantle 3a40a588 DONE, worker PASS;
+   firing-gaps design + exact commands: docs/design/levelgen/FIRING_GAPS_HANDOVER.md, config firing_gaps.json, code NOT started;
+   lead's YES: refresh the accepted X4 layout + tactical file ONLY on that branch / a throwaway branch, rebuild L_Gen_Depot_X4 on
+   the worker only, gate with T-05's FiringPositionSmoke from a throwaway merge with claude/firing-positions; main's X4 files stay
+   the T-05/T-06 baseline; next: parapet
+   FIRING GAPS (designer 11-19: snipers keep kneeling; sill <= ~70 cm, 80-100 cm wide, overwatch spots move to the rim), then
+   S2.3 blocks with the 1200-core check). Resume notes: docs/design/levelgen/S2_ROOMS_PLAN.md section 5. Never merge bgen into main.
+4. **T-022 / T-023 Training Ground editing** (not started) - brief docs/port/claude/inbox/T022-tg-map-edit-fullscreen.md:
+   map plan bigger + F11, move buildings / fences / elements -> accepted layout -> Unreal; props tab zoom / pan / F11, zone
+   (box / polygon / lasso) props re-roll, drag props (auto-lock) -> props JSON -> Unreal. TS only; run `npm ci` in
+   Tools/TrainingGround on the worker if needed.
+Keep docs/port/LANES.json on your branch current (owner = "worker stand-in", machine = "worker", worktree = your slot path).
+
+## Switching back to the main PC (docs/port/LEAD_SWITCH.md)
+When the designer says «верни на основную» (or the main PC is back and he asks): commit + push every worker/* branch, then
+`python Scripts/Tools/lead_switch.py --to main --note "<what is hot>"` from slot1 (it writes LEAD_ACTIVE.json + HANDOVER_LIVE.md
+on your branch and pushes), tell the designer the line it prints, and stop starting work. The main lead backs up the
+designer's files, merges your branches into main, builds, and continues; the next «передай на вторую» runs the same script
+there with `--to worker`. The night loop keeps running on its own schedule either way.
+
+## Known test noise in the main checkout (main lead 11-19)
+`npm test` in the MAIN checkout fails 3 tests because of the designer's uncommitted X6 files (gen_ref_01_02_depot_1_x6.json has
+no analysis block; X6 power) + one timing test under load. In a clean checkout / slot1 it is 541/541. Not a regression.
+
+## Designer decision 2026-11-19 (T-021): doorways without a leaf are OPEN
+«Open, with draught»: in generated buildings a doorway gap with no door leaf counts as an OPEN opening (it leaks with the
+door weight 3 and makes a draught: outdoor cold within 3.5 m, fading to the building base at 10 m). Windows stay sealed until a
+runtime glass / boarded state exists. Change it in `ColdShelterRules::IsStateOpen` (a missing state on a door = open) or in the
+layout reader, with a unit test (2 leafless doors + 8 windows -> leak 6/14), before the T-021 gate.

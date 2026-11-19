@@ -22,27 +22,27 @@ import type { GenLayout } from '../levelgen/schema.ts';
 import { layersOf } from '../levelgen/schema.ts';
 import type { LevelPropsFile, PropObject } from '../levelgen/props/schema.ts';
 import { PropsLayoutView } from '../levelgen/props/layoutView.ts';
-import { rerollLayer } from '../levelgen/props/placement.ts';
+import { rerollPropsLayers, rerollSupport } from '../levelgen/props/rerollKinds.ts';
+import type { PropsAutogenConfig } from '../levelgen/props/autogenConfig.ts';
+import { DEFAULT_AUTOGEN_CONFIG } from '../levelgen/props/autogenConfig.ts';
 import { PropsCanvas, type PropsCanvasHandle } from './PropsCanvas.tsx';
 
-interface PropsFileOption {
-  id: string;
-  name: string;
-  map: string;
-  layout: string;
-  isFixture: boolean;
-  filePath: string;
-  relativeFilePath: string;
-  revision: number;
-  frozen: boolean;
+/** Props file the panel shows: the CURRENT MAP of the department (T-020; no file picker, no Depot default). */
+export interface PropsPanelProps {
+  /** The current map's name (for the headline). */
+  mapName: string | null;
+  /** The current map's props file id (`<id>.props.json`), '' / null when the map has none. */
+  propsId: string | null;
+  /** The panel has unsaved props edits (the page asks before switching the map). */
+  onDirtyChange?: (dirty: boolean) => void;
 }
 
-export const PropsPanel: React.FC = () => {
-  const [fileOptions, setFileOptions] = useState<PropsFileOption[]>([]);
-  const [selectedMap, setSelectedMap] = useState<string>('L_Gen_Depot_1');
+export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirtyChange }) => {
+  const selectedMap = propsId ?? '';
   const [propsFile, setPropsFile] = useState<LevelPropsFile | null>(null);
   const [layout, setLayout] = useState<GenLayout | null>(null);
   const [balance, setBalance] = useState<Record<string, unknown> | null>(null);
+  const [autogenCfg, setAutogenCfg] = useState<PropsAutogenConfig>(DEFAULT_AUTOGEN_CONFIG);
   const [filePath, setFilePath] = useState<string>('');
 
   const [visibleLayers, setVisibleLayers] = useState<Record<string, boolean>>({});
@@ -57,24 +57,12 @@ export const PropsPanel: React.FC = () => {
   const [error, setError] = useState<string>('');
   const [conflict, setConflict] = useState<{ message: string; serverRev?: number } | null>(null);
   const [saveSuccess, setSaveSuccess] = useState<string>('');
+  /** What the last re-roll did (the 088 clearance, validator drops, skipped layers). */
+  const [rerollNote, setRerollNote] = useState<{ ok: boolean; text: string } | null>(null);
 
   const canvasRef = useRef<PropsCanvasHandle>(null);
 
-  // 1. Fetch file list on mount
-  useEffect(() => {
-    fetch('/api/levelgen/props-list')
-      .then((r) => r.json())
-      .then((data) => {
-        const files: PropsFileOption[] = data.files ?? [];
-        setFileOptions(files);
-        if (files.length > 0) {
-          const defaultFile =
-            files.find((f) => f.map === 'L_Gen_Depot_1' || f.id.includes('depot')) ?? files[0];
-          setSelectedMap(defaultFile.id);
-        }
-      })
-      .catch((err) => setError(`Ошибка загрузки списка файлов: ${err}`));
-  }, []);
+  useEffect(() => { onDirtyChange?.(isDirty); }, [isDirty, onDirtyChange]);
 
   // 2. Load props file and associated layout when selectedMap changes
   const loadMapProps = (mapName: string) => {
@@ -96,7 +84,9 @@ export const PropsPanel: React.FC = () => {
         setPropsFile(loadedProps);
         setLayout(data.layout ?? null);
         setBalance(data.balance ?? null);
+        setAutogenCfg((data.autogen as PropsAutogenConfig | null) ?? DEFAULT_AUTOGEN_CONFIG);
         setFilePath(data.filePath ?? '');
+        setRerollNote(null);
 
         // Initialize visibility
         const vis: Record<string, boolean> = {};
@@ -117,6 +107,13 @@ export const PropsPanel: React.FC = () => {
   useEffect(() => {
     if (selectedMap) {
       loadMapProps(selectedMap);
+    } else {
+      setPropsFile(null);
+      setLayout(null);
+      setFilePath('');
+      setIsDirty(false);
+      setSelectedProp(null);
+      setRerollNote(null);
     }
   }, [selectedMap]);
 
@@ -177,39 +174,48 @@ export const PropsPanel: React.FC = () => {
     setIsDirty(true);
   };
 
-  // 7. Re-roll single layer
-  const handleRerollLayer = (layerId: string, customSeed?: number) => {
-    if (!propsFile || !balance || !layoutView) {
+  // 7. Re-roll (T-020: every kind the autogen supports - crates, barrels, turrets, mines, loot, power - with the 088 route clearance)
+  const describeOutcome = (out: ReturnType<typeof rerollPropsLayers>): { ok: boolean; text: string } => {
+    const parts: string[] = [];
+    if (out.rerolled.length > 0) parts.push(`Переброшено: ${out.rerolled.join(', ')}.`);
+    const c = out.clearance;
+    if (c.droppedTotal > 0) {
+      parts.push(`Трасса (088) убрала ${c.droppedTotal}: ящиков ${c.droppedCrates}, бочек ${c.droppedBarrels}, мин ${c.droppedMines}, лута ${c.droppedLoot}.`);
+    } else if (out.rerolled.some((id) => id !== 'power')) {
+      parts.push('Трасса (088) свободна: ничего убирать не пришлось.');
+    }
+    if (out.droppedByValidator > 0) parts.push(`Валидатор игры убрал ${out.droppedByValidator}.`);
+    if (out.powerRebuilt) parts.push('Сеть питания пересобрана.');
+    if (c.pmcChargesInside.length > 0) parts.push(`Заряды ЧВК на трассе: ${c.pmcChargesInside.join(', ')}.`);
+    for (const n of out.notes) parts.push(n + '.');
+    for (const sk of out.skipped) parts.push(`${sk.id}: ${sk.reason}.`);
+    return { ok: out.rerolled.length > 0, text: parts.join(' ') || 'Нечего перебрасывать.' };
+  };
+
+  const runReroll = (ids: string[], seedFor: (l: { seed?: number }) => number, label: string) => {
+    if (!propsFile || !balance || !layoutView || !layout) {
       setError('Невозможно перебросить: отсутствует модель уровня или баланса');
       return;
     }
-
-    const layer = propsFile.layers.find((l) => l.id === layerId);
-    if (!layer) return;
-
-    if (layer.locked) {
-      setError(`Слой "${layerId}" заблокирован. Снимите блокировку перед переброской.`);
-      return;
-    }
-
-    if (layer.kind !== 'crates' && layer.kind !== 'barrels') {
-      setError(`Слой kind="${layer.kind}" пока не поддерживается генератором T2.`);
-      return;
-    }
-
-    setBusy(`Переброска слоя ${layerId}...`);
+    setBusy(label);
     setError('');
-
+    setRerollNote(null);
     setTimeout(() => {
       try {
-        const seedToUse = customSeed !== undefined ? customSeed : (layer.seed ?? 1) + 1;
-        // Deep clone file before mutating
+        // Deep clone the file before mutating
         const cloned: LevelPropsFile = JSON.parse(JSON.stringify(propsFile));
-        rerollLayer(cloned, balance, layoutView, layerId, seedToUse, layout ?? undefined);
-
-        setPropsFile(cloned);
-        setIsDirty(true);
-        setSaveSuccess('');
+        const out = rerollPropsLayers(cloned, balance, layoutView, layout, { ids, seedFor }, autogenCfg);
+        if (out.rerolled.length > 0) {
+          setPropsFile(cloned);
+          setIsDirty(true);
+          setSaveSuccess('');
+          setVisibleLayers((prev) => {
+            const next = { ...prev };
+            for (const l of cloned.layers) if (next[l.id] === undefined) next[l.id] = l.enabled !== false;
+            return next;
+          });
+        }
+        setRerollNote(describeOutcome(out));
       } catch (e) {
         setError(`Ошибка переброски: ${e instanceof Error ? e.message : String(e)}`);
       } finally {
@@ -218,30 +224,22 @@ export const PropsPanel: React.FC = () => {
     }, 15);
   };
 
-  // 8. Re-roll all unlocked layers
-  const handleRerollAll = () => {
-    if (!propsFile || !balance || !layoutView) return;
-    setBusy('Генерация всех слоев...');
-    setError('');
+  const handleRerollLayer = (layerId: string, customSeed?: number) => {
+    const layer = propsFile?.layers.find((l) => l.id === layerId);
+    if (!layer) return;
+    const verdict = rerollSupport(layer, propsFile?.frozen);
+    if (!verdict.ok) {
+      setRerollNote({ ok: false, text: `${layerId}: ${verdict.reason}.` });
+      return;
+    }
+    runReroll([layerId], (l) => customSeed ?? (l.seed ?? 1) + 1, `Переброска слоя ${layerId}...`);
+  };
 
-    setTimeout(() => {
-      try {
-        const cloned: LevelPropsFile = JSON.parse(JSON.stringify(propsFile));
-        for (const l of cloned.layers) {
-          if (!l.locked && l.enabled !== false && (l.kind === 'crates' || l.kind === 'barrels')) {
-            const nextSeed = (l.seed ?? 1) + 1;
-            rerollLayer(cloned, balance, layoutView, l.id, nextSeed, layout ?? undefined);
-          }
-        }
-        setPropsFile(cloned);
-        setIsDirty(true);
-        setSaveSuccess('');
-      } catch (e) {
-        setError(`Ошибка генерации: ${e instanceof Error ? e.message : String(e)}`);
-      } finally {
-        setBusy('');
-      }
-    }, 20);
+  // 8. Re-roll all unlocked layers (the locked ones and pmc_charges stay)
+  const handleRerollAll = () => {
+    if (!propsFile) return;
+    const ids = propsFile.layers.filter((l) => l.enabled !== false && !l.locked && rerollSupport(l, propsFile.frozen).ok).map((l) => l.id);
+    runReroll(ids, (l) => (l.seed ?? 1) + 1, 'Генерация всех слоев...');
   };
 
   // 9. Toggle lock on selected object
@@ -329,19 +327,20 @@ export const PropsPanel: React.FC = () => {
       {/* ---------------- LEFT COLUMN: Layers & Controls ---------------- */}
       <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-4">
         <div>
-          <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400 mb-2">Файл пропсов</h3>
-          <select
-            value={selectedMap}
-            onChange={(e) => setSelectedMap(e.target.value)}
-            className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-slate-100 font-mono"
-          >
-            {fileOptions.map((f) => (
-              <option key={f.id} value={f.id}>
-                {f.name} {f.isFixture ? '(тест)' : ''}
-              </option>
-            ))}
-          </select>
-          {filePath && <p className="text-[10px] text-slate-500 font-mono mt-1 break-all">{filePath}</p>}
+          <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400 mb-2">Пропсы текущей карты</h3>
+          <div className="w-full bg-slate-950 border border-slate-700 rounded-lg px-2.5 py-1.5 text-xs text-cyan-200 font-mono" data-testid="props-map-name">
+            {mapName ?? 'карта не выбрана'}
+          </div>
+          {propsId ? (
+            filePath && <p className="text-[10px] text-slate-500 font-mono mt-1 break-all">{filePath}</p>
+          ) : (
+            <p className="text-[11px] text-amber-300 mt-1">
+              {mapName
+                ? 'У этой карты нет файла пропсов (Content/Data/LevelGen/props/<карта>.props.json). Он появляется при «Принять» раскладки на странице «Управление картой».'
+                : 'Выберите карту в выпадающем списке сверху.'}
+            </p>
+          )}
+          <p className="text-[10px] text-slate-500 mt-1">Карту переключают сверху, одну на весь отдел «Генератор уровней».</p>
         </div>
 
         {/* Status badges */}
@@ -432,6 +431,15 @@ export const PropsPanel: React.FC = () => {
 
         {busy && <p className="text-xs text-cyan-300 animate-pulse">{busy}</p>}
 
+        {rerollNote && (
+          <div
+            className={`p-2.5 rounded-lg border text-[11px] leading-snug ${rerollNote.ok ? 'bg-slate-950 border-cyan-900 text-cyan-200' : 'bg-amber-950/60 border-amber-800 text-amber-200'}`}
+            data-testid="reroll-note"
+          >
+            {rerollNote.text}
+          </div>
+        )}
+
         {/* Layers List */}
         <div>
           <div className="flex items-center justify-between mb-2">
@@ -443,6 +451,7 @@ export const PropsPanel: React.FC = () => {
             {propsFile?.layers.map((l) => {
               const isVisible = visibleLayers[l.id] !== false;
               const isLayerLocked = Boolean(l.locked || propsFile.frozen);
+              const support = rerollSupport(l, propsFile.frozen);
 
               return (
                 <div
@@ -491,13 +500,18 @@ export const PropsPanel: React.FC = () => {
 
                     <button
                       onClick={() => handleRerollLayer(l.id, (l.seed ?? 1) + 1)}
-                      disabled={isLayerLocked || !isVisible || !!busy}
+                      disabled={!support.ok || !isVisible || !!busy}
+                      title={support.ok ? 'Перебросить слой (с очисткой трассы, задача 088)' : support.reason}
                       className="inline-flex items-center gap-1 px-2.5 py-1 rounded bg-slate-800 hover:bg-slate-700 border border-slate-700 text-[11px] text-cyan-300 font-medium disabled:opacity-50 transition-colors"
                     >
                       <RefreshCw size={11} />
                       Перебросить
                     </button>
                   </div>
+
+                  {!support.ok && (
+                    <p className="text-[10px] text-slate-500 leading-snug" data-testid="layer-reroll-reason">{support.reason}</p>
+                  )}
 
                   {/* Report line summary */}
                   <div className="text-[11px] text-slate-400 flex items-center justify-between font-mono bg-slate-900/60 px-2 py-1 rounded">

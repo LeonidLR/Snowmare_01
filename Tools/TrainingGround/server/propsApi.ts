@@ -20,6 +20,8 @@ export const PROPS_DIR = path.join(ROOT, 'Content/Data/LevelGen/props');
 export const PROPS_FIXTURES_DIR = path.join(PROPS_DIR, 'fixtures');
 export const ACCEPTED_DIR = path.join(ROOT, 'Content/Data/LevelGen/accepted');
 export const BALANCE_PATH = path.join(ROOT, 'Content/Data/Balance/props_balance.json');
+/** The props autogen config (route clearance distances for the browser's re-roll, task T-020). */
+export const AUTOGEN_PATH = path.join(ROOT, 'Content/Data/LevelGen/props_autogen.json');
 
 type Req = { method?: string; url?: string; on: (ev: string, cb: (chunk?: unknown) => void) => void };
 type Res = { statusCode: number; setHeader: (k: string, v: string) => void; end: (body?: string) => void };
@@ -203,6 +205,8 @@ export function readPropsData(mapOrName: string): {
   props: LevelPropsFile;
   layout?: GenLayout | null;
   balance?: Record<string, unknown> | null;
+  /** props_autogen.json (null when absent: the page then uses the built-in defaults). */
+  autogen?: Record<string, unknown> | null;
   filePath: string;
 } {
   if (!isValidPropsName(mapOrName)) {
@@ -234,10 +238,20 @@ export function readPropsData(mapOrName: string): {
     }
   }
 
+  let autogen: Record<string, unknown> | null = null;
+  if (fs.existsSync(AUTOGEN_PATH)) {
+    try {
+      autogen = JSON.parse(fs.readFileSync(AUTOGEN_PATH, 'utf8').replace(/^\uFEFF/, ''));
+    } catch {
+      // ignore
+    }
+  }
+
   return {
     props,
     layout,
     balance,
+    autogen,
     filePath: path.relative(ROOT, resolved.fullPath).replace(/\\/g, '/'),
   };
 }
