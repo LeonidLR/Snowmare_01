@@ -1,0 +1,16 @@
+{
+  "_comment": "Lanes of work in flight (designer 2026-11-19: no process may stop silently). Rules: docs/port/LANES.md. Checked every 10 min by Scripts/Tools/lane_watchdog.py (Windows task CodexLaneWatchdog). state: active | blocked | waiting | done | paused-by-designer; blocked / waiting need a reason. Activity = last commit of origin/<branch> or last chat post in <topic>.",
+  "lanes": [
+    {"id": "T-05", "title": "smart enemies: firing positions", "owner": "lead Sonnet subagent", "branch": "claude/firing-positions",
+     "topic": "claude-T005", "state": "active", "max_quiet_min": 45},
+    {"id": "T-020", "title": "TG map management", "owner": "lead Sonnet subagent", "branch": "claude/tg-map-management",
+     "topic": "claude-T020", "state": "active", "max_quiet_min": 45},
+    {"id": "T-021", "title": "cold indoors on generated maps", "owner": "lead Sonnet subagent", "branch": "claude/cold-indoors",
+     "topic": "claude-T021", "state": "active", "max_quiet_min": 45},
+    {"id": "bgen", "title": "building generator (bot mantle -> parapet firing gaps -> S2.3)", "owner": "session Генератор зданий local_93362388",
+     "branch": "claude/building-generator", "topic": "claude-S022", "state": "active", "max_quiet_min": 60},
+    {"id": "worker-night", "title": "codex-worker continuous night loop (scenario seeds + sweeps)", "owner": "worker: C:/Work/NightLoop guard, task CodexTactics Night Guard",
+     "branch": "", "topic": "", "state": "active", "max_quiet_min": 60, "window": "17:10-07:40",
+     "ssh_heartbeat": {"host": "codex-worker", "path": "C:/Work/CodexTactics/Saved/Worker/nightloop/heartbeat.txt"}}
+  ]
+}
