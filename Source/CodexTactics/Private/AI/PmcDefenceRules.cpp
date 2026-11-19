@@ -384,6 +384,10 @@ namespace PmcDefenceRules
 				{
 					for (const TSharedPtr<FJsonValue>& HoleValue : *RoofHoles)
 					{
+						FPmcLayoutOpening Hole;
+						Hole.Kind = TEXT("roof_hole");
+						Hole.State = TEXT("open");
+						Hole.Floor = Building.Floors - 1;
 						// roof_holes[] is Vec2[] (levelgen schema.ts: the hole's world position); an object with "pos" is read too.
 						const TSharedPtr<FJsonObject> HoleObject = HoleValue.IsValid() && HoleValue->Type == EJson::Object ? HoleValue->AsObject() : nullptr;
 						const TArray<TSharedPtr<FJsonValue>>* Pos = nullptr;
