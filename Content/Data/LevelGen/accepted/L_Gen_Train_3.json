@@ -1015,34 +1015,6 @@
      "yaw": 90
     },
     {
-     "id": "B_warehouse_win_east_f0_2",
-     "kind": "window",
-     "pos": [
-      1450,
-      650
-     ],
-     "floor": 0,
-     "wall": "B_warehouse_E",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 90
-    },
-    {
-     "id": "B_warehouse_win_east_f1_2",
-     "kind": "window",
-     "pos": [
-      1450,
-      650
-     ],
-     "floor": 1,
-     "wall": "B_warehouse_E",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 90
-    },
-    {
      "id": "B_warehouse_win_east_f0_3",
      "kind": "window",
      "pos": [
@@ -1069,34 +1041,6 @@
      "sill_height": 95,
      "top_height": 210,
      "yaw": 90
-    },
-    {
-     "id": "B_warehouse_win_north_f0_1",
-     "kind": "window",
-     "pos": [
-      2250,
-      -1814
-     ],
-     "floor": 0,
-     "wall": "B_warehouse_N",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 0
-    },
-    {
-     "id": "B_warehouse_win_north_f1_1",
-     "kind": "window",
-     "pos": [
-      2250,
-      -1814
-     ],
-     "floor": 1,
-     "wall": "B_warehouse_N",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 0
     },
     {
      "id": "B_warehouse_win_north_f0_2",
@@ -2005,48 +1949,6 @@
      "wall": "B_warehouse_E"
     },
     {
-     "id": "me_B_warehouse_win_east_f0_2",
-     "start": [
-      1510,
-      650
-     ],
-     "end": [
-      1390,
-      650
-     ],
-     "floor": 0,
-     "base_z": 0,
-     "height_cm": 95,
-     "normal": [
-      0,
-      1
-     ],
-     "kind": "window",
-     "building": "B_warehouse",
-     "wall": "B_warehouse_E"
-    },
-    {
-     "id": "me_B_warehouse_win_east_f1_2",
-     "start": [
-      1510,
-      650
-     ],
-     "end": [
-      1390,
-      650
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      0,
-      1
-     ],
-     "kind": "window",
-     "building": "B_warehouse",
-     "wall": "B_warehouse_E"
-    },
-    {
      "id": "me_B_warehouse_win_east_f0_3",
      "start": [
       1185,
@@ -2087,48 +1989,6 @@
      "kind": "window",
      "building": "B_warehouse",
      "wall": "B_warehouse_E"
-    },
-    {
-     "id": "me_B_warehouse_win_north_f0_1",
-     "start": [
-      2250,
-      -1874
-     ],
-     "end": [
-      2250,
-      -1754
-     ],
-     "floor": 0,
-     "base_z": 0,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_warehouse",
-     "wall": "B_warehouse_N"
-    },
-    {
-     "id": "me_B_warehouse_win_north_f1_1",
-     "start": [
-      2250,
-      -1874
-     ],
-     "end": [
-      2250,
-      -1754
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_warehouse",
-     "wall": "B_warehouse_N"
     },
     {
      "id": "me_B_warehouse_win_north_f0_2",
@@ -2523,7 +2383,7 @@
      "kind": "window",
      "pos": [
       550,
-      1625
+      1575
      ],
      "floor": 0,
      "wall": "B_catwalk_S",
@@ -2538,20 +2398,6 @@
      "pos": [
       550,
       1625
-     ],
-     "floor": 1,
-     "wall": "B_catwalk_S",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 180
-    },
-    {
-     "id": "B_catwalk_win_south_f1_2",
-     "kind": "window",
-     "pos": [
-      550,
-      1950
      ],
      "floor": 1,
      "wall": "B_catwalk_S",
@@ -2593,20 +2439,6 @@
      "kind": "window",
      "pos": [
       1600,
-      1150
-     ],
-     "floor": 1,
-     "wall": "B_catwalk_W",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 270
-    },
-    {
-     "id": "B_catwalk_win_west_f1_2",
-     "kind": "window",
-     "pos": [
-      1300,
       1150
      ],
      "floor": 1,
@@ -3149,11 +2981,11 @@
      "id": "me_B_catwalk_win_south_f0_1",
      "start": [
       550,
-      1565
+      1515
      ],
      "end": [
       550,
-      1685
+      1635
      ],
      "floor": 0,
      "base_z": 0,
@@ -3175,27 +3007,6 @@
      "end": [
       550,
       1685
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_catwalk",
-     "wall": "B_catwalk_S"
-    },
-    {
-     "id": "me_B_catwalk_win_south_f1_2",
-     "start": [
-      550,
-      1890
-     ],
-     "end": [
-      550,
-      2010
      ],
      "floor": 1,
      "base_z": 300,
@@ -3258,27 +3069,6 @@
      ],
      "end": [
       1540,
-      1150
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      0,
-      -1
-     ],
-     "kind": "window",
-     "building": "B_catwalk",
-     "wall": "B_catwalk_W"
-    },
-    {
-     "id": "me_B_catwalk_win_west_f1_2",
-     "start": [
-      1360,
-      1150
-     ],
-     "end": [
-      1240,
       1150
      ],
      "floor": 1,
@@ -3542,20 +3332,6 @@
      "sill_height": 95,
      "top_height": 210,
      "yaw": 0
-    },
-    {
-     "id": "B_yard_shed_win_east_f0_1",
-     "kind": "window",
-     "pos": [
-      -1650,
-      450
-     ],
-     "floor": 0,
-     "wall": "B_yard_shed_E",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 90
     }
    ],
    "partitions": [
@@ -3672,27 +3448,6 @@
      "kind": "window",
      "building": "B_yard_shed",
      "wall": "B_yard_shed_N"
-    },
-    {
-     "id": "me_B_yard_shed_win_east_f0_1",
-     "start": [
-      -1590,
-      450
-     ],
-     "end": [
-      -1710,
-      450
-     ],
-     "floor": 0,
-     "base_z": 0,
-     "height_cm": 95,
-     "normal": [
-      0,
-      1
-     ],
-     "kind": "window",
-     "building": "B_yard_shed",
-     "wall": "B_yard_shed_E"
     }
    ],
    "stairs": [],
@@ -4564,48 +4319,6 @@
    "wall": "B_warehouse_E"
   },
   {
-   "id": "me_B_warehouse_win_east_f0_2",
-   "start": [
-    1510,
-    650
-   ],
-   "end": [
-    1390,
-    650
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    0,
-    1
-   ],
-   "kind": "window",
-   "building": "B_warehouse",
-   "wall": "B_warehouse_E"
-  },
-  {
-   "id": "me_B_warehouse_win_east_f1_2",
-   "start": [
-    1510,
-    650
-   ],
-   "end": [
-    1390,
-    650
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    0,
-    1
-   ],
-   "kind": "window",
-   "building": "B_warehouse",
-   "wall": "B_warehouse_E"
-  },
-  {
    "id": "me_B_warehouse_win_east_f0_3",
    "start": [
     1185,
@@ -4646,48 +4359,6 @@
    "kind": "window",
    "building": "B_warehouse",
    "wall": "B_warehouse_E"
-  },
-  {
-   "id": "me_B_warehouse_win_north_f0_1",
-   "start": [
-    2250,
-    -1874
-   ],
-   "end": [
-    2250,
-    -1754
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_warehouse",
-   "wall": "B_warehouse_N"
-  },
-  {
-   "id": "me_B_warehouse_win_north_f1_1",
-   "start": [
-    2250,
-    -1874
-   ],
-   "end": [
-    2250,
-    -1754
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_warehouse",
-   "wall": "B_warehouse_N"
   },
   {
    "id": "me_B_warehouse_win_north_f0_2",
@@ -4983,11 +4654,11 @@
    "id": "me_B_catwalk_win_south_f0_1",
    "start": [
     550,
-    1565
+    1515
    ],
    "end": [
     550,
-    1685
+    1635
    ],
    "floor": 0,
    "base_z": 0,
@@ -5009,27 +4680,6 @@
    "end": [
     550,
     1685
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_catwalk",
-   "wall": "B_catwalk_S"
-  },
-  {
-   "id": "me_B_catwalk_win_south_f1_2",
-   "start": [
-    550,
-    1890
-   ],
-   "end": [
-    550,
-    2010
    ],
    "floor": 1,
    "base_z": 300,
@@ -5092,27 +4742,6 @@
    ],
    "end": [
     1540,
-    1150
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    0,
-    -1
-   ],
-   "kind": "window",
-   "building": "B_catwalk",
-   "wall": "B_catwalk_W"
-  },
-  {
-   "id": "me_B_catwalk_win_west_f1_2",
-   "start": [
-    1360,
-    1150
-   ],
-   "end": [
-    1240,
     1150
    ],
    "floor": 1,
@@ -5289,27 +4918,6 @@
    "kind": "window",
    "building": "B_yard_shed",
    "wall": "B_yard_shed_N"
-  },
-  {
-   "id": "me_B_yard_shed_win_east_f0_1",
-   "start": [
-    -1590,
-    450
-   ],
-   "end": [
-    -1710,
-    450
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    0,
-    1
-   ],
-   "kind": "window",
-   "building": "B_yard_shed",
-   "wall": "B_yard_shed_E"
   }
  ],
  "pressure": {

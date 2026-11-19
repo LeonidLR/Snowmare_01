@@ -62,6 +62,8 @@ const CODE_RU: Record<TraversalCode, string> = {
   no_exterior_door: 'нет наружной двери',
   unreachable_without_explosive: 'войти можно только взрывчаткой (баррикада)',
   story_rolled_back: 'история отменена',
+  window_onto_stair: 'окно выходит на лестничный марш',
+  window_partition_clash: 'перегородка упирается в окно',
 };
 
 /** Short Russian label per tactical role (buildingRoles.ts, building-stories.md section 1). */

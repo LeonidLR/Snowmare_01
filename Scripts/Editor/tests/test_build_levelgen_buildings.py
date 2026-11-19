@@ -42,7 +42,9 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         # B_house + B_garage: ground windows get vaultable window_sill, floor 1 windows get mantle_sill
         self.assertGreater(len(window_sills), 0)
         self.assertGreater(len(mantle_sills), 0)
-        self.assertEqual(len(lintels), 25 + 4 + 8)  # 25 house + 4 garage + 8 partition doors
+        # house 2 doors + 17 windows, garage 2 doors + 2 windows, 6 partition doors (2026-11-19 S2 window clearances: the arena
+        # regenerated without the windows onto the stair core / within a partition end's jamb - was 2 + 23, 2 + 3, 6 = 36)
+        self.assertEqual(len(lintels), (2 + 17) + (2 + 2) + 6)
         # Window sills: measured low_vault target 95 cm (MANTLING.md 11, 58a7e34e) + CodexMantleEdge tag
         for s in window_sills:
             self.assertAlmostEqual(s["scale"][2] * 100.0, 95.0, places=1)
@@ -163,14 +165,15 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
     # ---- rotated buildings (designer 2026-11-16 item 4) -------------------------------------------------------------------------
 
     @staticmethod
-    def _rotate_building(layout, bid, deg):
+    def _rotate_building(layout, bid, deg, ndigits=None):
         """The layout with building `bid` turned by deg about its footprint centre the way Training Ground stores it (rotation.ts):
-        "rotation" set, footprint / room bounds unchanged, every other point of it, its walls and its ladders turned."""
+        "rotation" set, footprint / room bounds unchanged, every other point of it, its walls and its ladders turned. ndigits=2:
+        every turned point rounded to 0.01 cm like the Training Ground's saved files."""
         out = json.loads(json.dumps(layout))
         b = next(x for x in out["buildings"] if x["id"] == bid)
         (x0, y0), (x1, y1) = b["footprint"]
         c = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
-        P = lambda q: builder._rot_xy(q, c, deg)  # noqa: E731
+        P = lambda q: [round(v, ndigits) if ndigits is not None else v for v in builder._rot_xy(q, c, deg)]  # noqa: E731
         b["rotation"] = deg
         for d in b.get("doors", []):
             d["pos"] = P(d["pos"])
@@ -202,9 +205,12 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
                 ld["pos"], ld["foot"], ld["top"], ld["yaw"] = P(ld["pos"]), P(ld["foot"]), P(ld["top"]), ld["yaw"] + deg
         return out, c
 
-    def _assert_rotated_plan(self, layout, bid, deg):
+    def _assert_rotated_plan(self, layout, bid, deg, ndigits=None):
+        """The rotated building plans the same actors as its unrotated twin, turned. ndigits: the twin's points rounded (0.01 cm noise
+        after turning back -> locations / scales compared to 0.05 cm instead of 1e-3)."""
         flat = builder.plan(layout)
-        turned, c = self._rotate_building(layout, bid, deg)
+        turned, c = self._rotate_building(layout, bid, deg, ndigits)
+        tol = 0.05 if ndigits is not None else 0.0005
         rot = builder.plan(turned)
         wall_ids = tuple(w["id"] for w in layout["walls"] if w.get("building") == bid)  # legacy: its walls go to Walls/L<n>
         mine = lambda s: s.get("folder", "") == "Buildings/%s" % bid or s.get("folder", "").startswith("Buildings/%s/" % bid) or "building=%s" % bid in s.get("tags", []) or s["label"].startswith(wall_ids)  # noqa: E731
@@ -216,10 +222,15 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
             r = rot_b[label]
             want = builder._rot_xy(s["location"], c, deg)
             for k in range(3):
-                self.assertAlmostEqual(r["location"][k], want[k], places=3, msg="%s location" % label)
+                self.assertAlmostEqual(r["location"][k], want[k], delta=tol, msg="%s location" % label)
             dyaw = (r["yaw"] - s["yaw"] - deg + 180.0) % 360.0 - 180.0
-            self.assertAlmostEqual(dyaw, 0.0, places=3, msg="%s: actor yaw = layout rotation" % label)
-            self.assertEqual(r["scale"] if "scale" in r else None, s["scale"] if "scale" in s else None, label)
+            self.assertAlmostEqual(dyaw, 0.0, delta=tol, msg="%s: actor yaw = layout rotation" % label)
+            if ndigits is None:
+                self.assertEqual(r["scale"] if "scale" in r else None, s["scale"] if "scale" in s else None, label)
+            else:
+                self.assertEqual("scale" in r, "scale" in s, label)
+                for k in range(len(s.get("scale", []))):
+                    self.assertAlmostEqual(r["scale"][k], s["scale"][k], delta=tol / 100.0, msg="%s scale" % label)
         # everything else stays where it was (its ladders and the drop links through its holes move with it: world points)
         other = lambda s: not mine(s) and s["kind"] not in ("ladder", "nav_link") and not s["label"].endswith("_plinth")  # noqa: E731
         others_flat = sorted(json.dumps(s, sort_keys=True) for s in flat if other(s))
@@ -241,6 +252,39 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         flat_ld = next(s for s in builder.plan(train) if s["kind"] == "ladder" and s["label"] == "LAD_B_house")
         rot_ld = next(s for s in rot if s["kind"] == "ladder" and s["label"] == "LAD_B_house")
         self.assertAlmostEqual((rot_ld["yaw"] - flat_ld["yaw"] - 30.0 + 180.0) % 360.0 - 180.0, 0.0, places=2)
+
+    def test_rotated_building_keeps_lintels_with_tg_rounding(self):
+        """S2 R3: a building turned with the Training Ground's 0.01 cm rounding keeps every door lintel, window sill / lintel and
+        opening-state actor of its unrotated twin (lost 8 -> 0 before: the exact-equality axis test in _collinear_gaps /
+        _merged_building_edges dropped every rounded wall), at the turned positions."""
+        train = self._load("L_Gen_Train_1")
+        kinds = ("door_lintel", "opening_lintel", "window_sill", "mantle_sill")
+        flat = builder.plan(train)
+        mine = lambda s: "building=B_house" in s.get("tags", [])  # noqa: E731
+        flat_counts = {k: sum(1 for s in flat if mine(s) and k in s["tags"]) for k in kinds}
+        self.assertGreater(flat_counts["door_lintel"], 0)
+        self.assertGreater(flat_counts["window_sill"], 0)
+        for deg in (90.0, 30.0, 17.3):
+            turned, _ = self._rotate_building(train, "B_house", deg, ndigits=2)
+            rot = builder.plan(turned)
+            self.assertEqual({k: sum(1 for s in rot if mine(s) and k in s["tags"]) for k in kinds}, flat_counts, "deg %.1f" % deg)
+            self._assert_rotated_plan(train, "B_house", deg, ndigits=2)
+
+    def test_axis_tolerance_groups_rounded_segments(self):
+        """_collinear_gaps / _merged_building_edges take a wall within 0.05 cm of an axis as axis-aligned and group pieces whose
+        fixed coordinate differs by rounding noise; exact layouts group as before."""
+        segs = [{"id": "W_n_0", "a": [0.0, 100.004], "b": [400.0, 99.998], "thickness": 30.0},
+                {"id": "W_n_1", "a": [520.0, 100.003], "b": [900.0, 99.996], "thickness": 30.0}]
+        gaps = builder._collinear_gaps(segs, "B", 0)
+        self.assertEqual(len(gaps), 1)
+        self.assertAlmostEqual(gaps[0]["g0"], 400.0)
+        self.assertAlmostEqual(gaps[0]["g1"], 520.0)
+        merged = builder._merged_building_edges([dict(w, height=300.0) for w in segs])
+        self.assertEqual(len(merged), 1)
+        self.assertAlmostEqual(merged[0]["a"][0], 0.0)
+        self.assertAlmostEqual(merged[0]["b"][0], 900.0)
+        # a real diagonal stays free
+        self.assertEqual(builder._collinear_gaps([{"id": "D_0", "a": [0.0, 0.0], "b": [100.0, 1.0], "thickness": 30.0}], "B", 0), [])
 
 
 if __name__ == "__main__":

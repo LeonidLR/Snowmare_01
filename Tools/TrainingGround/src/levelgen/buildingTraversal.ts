@@ -8,7 +8,8 @@ import type { Vec2 } from '../movement/geometry.ts';
 import { toBuildingFrame } from './rotation.ts';
 import { assignRoles } from './buildingRoles.ts';
 import type { BuildingRole, GenBuilding, GenLayout, Stair, WallOpening } from './schema.ts';
-import { LEVEL_HEIGHT, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE, unifyOpenings } from './schema.ts';
+import { LEVEL_HEIGHT, OPENING_DEFAULTS, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE, unifyOpenings } from './schema.ts';
+import { windowOntoCore, windowPartitionClash } from './windowClearance.ts';
 import { effectiveOpeningState, isPassableState } from './openingStates.ts';
 import { checkBuildingReachability, isVaultableGroundWindow } from './tacticalEvaluate.ts';
 import { escapeLadderIds, usableEscapes, usableSnowRamps } from './fireEscapes.ts';
@@ -38,7 +39,9 @@ export type TraversalCode =
   | 'no_exterior_door'
   | 'unreachable_without_explosive'
   | 'story_rolled_back'
-  | 'stair_in_other_building';
+  | 'stair_in_other_building'
+  | 'window_onto_stair'
+  | 'window_partition_clash';
 
 /** 'error' fails the building (blocks «Принять»); 'warning' is reported only (bands, D, shares - BUILDINGS_TECH_SPEC.md 2.1). */
 export type TraversalSeverity = 'error' | 'warning';
@@ -60,6 +63,10 @@ export const TRAVERSAL_SEVERITY: Record<TraversalCode, TraversalSeverity> = {
   /** A story's recipe failed the validator and was undone (building-stories.md 5 step 4); reported, never fails the building. */
   story_rolled_back: 'warning',
   stair_in_other_building: 'error',
+  /** A window whose inner side is the stair core: a flight, its slab gap, an approach box / landing, a lane wall (3 step 7). */
+  window_onto_stair: 'warning',
+  /** A partition end inside a window or within its 60 cm jamb (BUILDING_GENERATOR.md 4.4). */
+  window_partition_clash: 'warning',
 };
 
 export interface TraversalIssue {
@@ -207,6 +214,28 @@ function checkFlight(l: GenLayout, b: GenBuilding, st: Stair, issues: TraversalI
   }
 }
 
+/** Window clearances (windowClearance.ts, BUILDING_GENERATOR.md 3 step 7 / 4.4): warnings, the page shows every remaining case. */
+function checkWindows(l: GenLayout, b: GenBuilding, issues: TraversalIssue[]): void {
+  const windows = (b.openings ?? []).filter((op) => op.kind === 'window' && op.pos);
+  if (!windows.length) return;
+  const flights = (b.stairs ?? []).filter((st) => st.kind === 'stairwell' && st.pos && st.top)
+    .map((st) => ({ pos: toBuildingFrame(b, st.pos), top: toBuildingFrame(b, st.top), from: st.from, to: st.to }));
+  const laneWalls = l.walls.filter((w) => w.building === b.id && w.kind === 'interior' && /_lanewall_f\d+$/.test(w.id))
+    .map((w) => ({ a: toBuildingFrame(b, w.a), b: toBuildingFrame(b, w.b), floor: w.floor ?? 0, thickness: w.thickness ?? 10 }));
+  for (const op of windows) {
+    const pos = toBuildingFrame(b, op.pos), floor = op.floor ?? 0, width = op.width ?? OPENING_DEFAULTS.window.width;
+    const ref = op.id ?? `${b.id} window (${Math.round(op.pos[0])}, ${Math.round(op.pos[1])}) f${floor}`;
+    if (windowOntoCore(b.footprint, pos, width, floor, flights, laneWalls, 1)) {
+      issues.push({ severity: TRAVERSAL_SEVERITY.window_onto_stair, code: 'window_onto_stair', ref, message: `${ref}: opens onto the stair core (a flight, its gap or an approach box) on storey ${floor}` });
+    }
+    const parts = (b.partitions ?? []).filter((pt) => pt.floor === floor && pt.start && pt.end); // hand fixtures may omit the ends
+    const k = windowPartitionClash(b.footprint, pos, width, parts.map((pt) => ({ start: toBuildingFrame(b, pt.start), end: toBuildingFrame(b, pt.end), thickness: pt.thickness })), 1);
+    if (k >= 0) {
+      issues.push({ severity: TRAVERSAL_SEVERITY.window_partition_clash, code: 'window_partition_clash', ref, message: `${ref}: the partition ${parts[k].id} ends inside the window or its 60 cm jamb` });
+    }
+  }
+}
+
 /** An exterior entry of a building with its effective state (opening-states.md). */
 export interface ExteriorEntry {
   opening: WallOpening;
@@ -285,6 +314,8 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
       }
     }
   }
+
+  checkWindows(l, b, issues);
 
   // rooms + roof (no drops: floor holes / roof holes are excluded from the graph)
   const noDrops: GenBuilding = { ...b, floor_holes: [], roof_holes: [] };

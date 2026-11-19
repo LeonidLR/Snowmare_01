@@ -641,22 +641,48 @@ def _slice_wall_with_openings(label_prefix, folder, a, b, z0, thickness, floor_i
     return out
 
 
+AXIS_TOL_CM = 0.05  # a wall within 0.05 cm of an axis counts as axis-aligned: a rotated building's walls turned back into its own
+                   # frame carry the Training Ground's 0.01 cm rounding (S2 R3); integer / exact layouts are unaffected
+
+
+def _wall_axis(w):
+    """(along_y, fixed) of an axis-aligned wall (within AXIS_TOL_CM), or None for a diagonal one; exact walls give fixed = ax / ay."""
+    ax, ay = w["a"]
+    bx, by = w["b"]
+    if abs(ax - bx) <= AXIS_TOL_CM:
+        return True, (ax + bx) / 2.0
+    if abs(ay - by) <= AXIS_TOL_CM:
+        return False, (ay + by) / 2.0
+    return None
+
+
+def _axis_groups(segs):
+    """[(prefix, along_y, fixed, [walls])] in first-appearance order: the axis-aligned walls grouped by id prefix, axis and fixed
+    coordinate (within AXIS_TOL_CM of the group's first wall); diagonal walls as ("free", None, None, [wall])."""
+    groups = []
+    for w in segs:
+        axis = _wall_axis(w)
+        if axis is None:
+            groups.append(("free", None, None, [w]))
+            continue
+        along_y, fixed = axis
+        prefix = w["id"].rsplit("_", 1)[0]
+        g = next((g for g in groups if g[0] == prefix and g[1] == along_y and abs(g[2] - fixed) <= AXIS_TOL_CM), None)
+        if g is None:
+            groups.append((prefix, along_y, fixed, [w]))
+        else:
+            g[3].append(w)
+    return groups
+
+
 def _collinear_gaps(segs, building_id, floor_idx):
     """Find axis-aligned collinear gaps between wall segments (door openings pre-split in walls[])."""
-    groups = {}
-    for w in segs:
-        ax, ay = w["a"]
-        bx, by = w["b"]
-        if ax != bx and ay != by:
-            continue
-        along_y = (ax == bx)
-        fixed = ax if along_y else ay
-        t0, t1 = (min(ay, by), max(ay, by)) if along_y else (min(ax, bx), max(ax, bx))
-        prefix = w["id"].rsplit("_", 1)[0]
-        groups.setdefault((prefix, along_y, fixed), []).append((t0, t1, float(w["thickness"])))
     gaps_out = []
-    for (prefix, along_y, fixed), spans in groups.items():
-        spans.sort()
+    for prefix, along_y, fixed, ws in _axis_groups(segs):
+        if along_y is None:
+            continue
+        spans = sorted(((min(w["a"][1], w["b"][1]), max(w["a"][1], w["b"][1])) if along_y else (min(w["a"][0], w["b"][0]), max(w["a"][0], w["b"][0])))
+                       + (float(w["thickness"]),) for w in ws)
         for i in range(len(spans) - 1):
             g0, g1 = spans[i][1], spans[i + 1][0]
             if 40.0 <= g1 - g0 <= 300.0:
@@ -668,23 +694,11 @@ def _collinear_gaps(segs, building_id, floor_idx):
 
 def _merged_building_edges(ext_walls):
     """Merge collinear ground-split building perimeter pieces into continuous edges for upper storeys (f >= 1)."""
-    groups = {}
-    for w in ext_walls:
-        ax, ay = w["a"]
-        bx, by = w["b"]
-        if ax != bx and ay != by:
-            groups[("free", w["id"])] = [w]
-            continue
-        along_y = (ax == bx)
-        fixed = ax if along_y else ay
-        prefix = w["id"].rsplit("_", 1)[0]
-        groups.setdefault((prefix, along_y, fixed), []).append(w)
     merged = []
-    for key, ws in groups.items():
-        if key[0] == "free":
+    for prefix, along_y, fixed, ws in _axis_groups(ext_walls):
+        if along_y is None:
             merged.extend(ws)
             continue
-        prefix, along_y, fixed = key
         pts = [coord for w in ws for coord in ([w["a"][1], w["b"][1]] if along_y else [w["a"][0], w["b"][0]])]
         lo, hi = min(pts), max(pts)
         a = [fixed, lo] if along_y else [lo, fixed]
@@ -721,10 +735,10 @@ def _intersect_box_to_edge(x0, y0, x1, y1, e0, e1, margin=10.0, tag="stair_exit"
     L = math.hypot(ex, ey)
     if L < 1.0:
         return None
-    if abs(ex) <= 1e-3 and (x0 - margin <= e0[0] <= x1 + margin):
+    if abs(ex) <= AXIS_TOL_CM and (x0 - margin <= e0[0] <= x1 + margin):
         sign = 1.0 if ey > 0.0 else -1.0
         t_a, t_b = (y0 - margin - e0[1]) * sign, (y1 + margin - e0[1]) * sign
-    elif abs(ey) <= 1e-3 and (y0 - margin <= e0[1] <= y1 + margin):
+    elif abs(ey) <= AXIS_TOL_CM and (y0 - margin <= e0[1] <= y1 + margin):
         sign = 1.0 if ex > 0.0 else -1.0
         t_a, t_b = (x0 - margin - e0[0]) * sign, (x1 + margin - e0[0]) * sign
     else:

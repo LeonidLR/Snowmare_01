@@ -55,6 +55,7 @@ import {
   levelZ,
   rect,
 } from './schema.ts';
+import { WINDOW_JAMB_CM, windowOntoCore, windowPartitionClash } from './windowClearance.ts';
 
 type Rect = [Vec2, Vec2];
 
@@ -1182,6 +1183,13 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
     }
   }
 
+  // 6c. Window clearances (BUILDING_GENERATOR.md 3 step 7 and 4.4; windowClearance.ts = the validator's window_onto_stair /
+  //     window_partition_clash): with the core and the partitions known, a window whose inner side is the stair core (a flight, its
+  //     slab gap, an approach box, a lane wall) or that lies within a 60 cm jamb of a partition end slides along its wall to the
+  //     nearest clear spot (<= 1 m; the same 1.5 m wall margin, 1.2 m door clearance and a jamb to the other windows), else it is
+  //     dropped. Its mantle edge follows it. Consumes no random numbers: the rest of the draft is unchanged.
+  fitWindows(r, openings, mantle_edges, partitions, core, perSide);
+
   // 7. Parapets on flat roofs
   if (s.roof_walkable) {
     parapets.push(
@@ -1260,6 +1268,49 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
   };
   d.buildings.push(b);
   return b;
+}
+
+/** Step 6c of addBuilding (metres; windowClearance.ts works in cm x `M`): slide or drop the windows that break a clearance. */
+function fitWindows(r: Rect, openings: WallOpening[], mantleEdges: MantleEdge[], partitions: readonly GenPartition[], core: StairCore | null,
+  perSide: Record<Side, [number, number][]>): void {
+  const M = 0.01; // 1 cm in metres
+  const [[x0, y0], [x1, y1]] = r;
+  const SIDE: Record<string, Side> = { N: 'north', S: 'south', W: 'west', E: 'east' };
+  const flights = core?.stairs ?? [];
+  const coreWalls = (core?.laneWalls ?? []).map((lw) => ({ ...lw, thickness: STAIR_LANE_WALL_T * M }));
+  const dropped = new Set<WallOpening>();
+  for (const op of openings) {
+    if (op.kind !== 'window' || !op.wall) continue;
+    const side = SIDE[op.wall.slice(-1)];
+    if (!side) continue;
+    const horizontal = side === 'north' || side === 'south', ax = horizontal ? 0 : 1;
+    const f = op.floor ?? 0, w = (op.width ?? OPENING_DEFAULTS.window.width) * M;
+    const lo = horizontal ? x0 : y0, hi = horizontal ? x1 : y1;
+    const parts = partitions.filter((pt) => pt.floor === f).map((pt) => ({ start: pt.start, end: pt.end, thickness: (pt.thickness ?? 20) * M }));
+    const others = openings.filter((o) => o !== op && !dropped.has(o) && o.kind === 'window' && (o.floor ?? 0) === f && o.wall === op.wall);
+    const posAt = (at: number): Vec2 => (horizontal ? [at, op.pos[1]] : [op.pos[0], at]);
+    const clear = (at: number) => at >= lo + 1.5 - 1e-9 && at <= hi - 1.5 + 1e-9
+      && !(f === 0 && perSide[side].some(([d0, d1]) => at >= d0 - 1.2 && at <= d1 + 1.2))
+      && !windowOntoCore(r, posAt(at), w, f, flights, coreWalls, M)
+      && windowPartitionClash(r, posAt(at), w, parts, M) < 0
+      && others.every((o) => Math.abs(o.pos[ax] - at) >= (w + (o.width ?? OPENING_DEFAULTS.window.width) * M) / 2 + WINDOW_JAMB_CM * M - 1e-9);
+    const at0 = op.pos[ax];
+    if (clear(at0)) continue;
+    const at = [0.25, -0.25, 0.5, -0.5, 0.75, -0.75, 1, -1].map((dt) => at0 + dt).find(clear);
+    const me = mantleEdges.find((m) => m.id === `me_${op.id}`);
+    if (at === undefined) {
+      dropped.add(op);
+      if (me) mantleEdges.splice(mantleEdges.indexOf(me), 1);
+      continue;
+    }
+    op.pos = posAt(at);
+    if (me) {
+      const dt = at - at0;
+      me.start = horizontal ? [me.start[0] + dt, me.start[1]] : [me.start[0], me.start[1] + dt];
+      me.end = horizontal ? [me.end[0] + dt, me.end[1]] : [me.end[0], me.end[1] + dt];
+    }
+  }
+  for (let i = openings.length - 1; i >= 0; i--) if (dropped.has(openings[i])) openings.splice(i, 1);
 }
 
 /** A ladder up a building's face onto its roof (10 cm off the face, the combat lab's towers). */
