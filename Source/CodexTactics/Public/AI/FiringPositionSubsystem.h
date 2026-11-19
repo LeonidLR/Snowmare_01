@@ -13,6 +13,8 @@ struct CODEXTACTICS_API FFiringTraceDiag
 	EOperativeStance Stance = EOperativeStance::Standing;
 	/** Centimetres stepped from the spot toward the rim. */
 	float StepCm = 0.f;
+	/** Where the walk surface ends from the spot toward the target (the rim), cm. */
+	float RimDistanceCm = 0.f;
 	/** The stepped point is on the roof's walkable surface (navmesh within a few cm at the roof's level). */
 	bool bOnWalkSurface = false;
 	FVector Muzzle = FVector::ZeroVector;
@@ -71,14 +73,14 @@ public:
 	 * band: a sample counts only inside it (BandMaxCm <= 0: no upper limit). N <= 0: all valid positions, unspaced, best first.
 	 */
 	TArray<FFiringPosition> PositionsCovering(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, int32 N,
-		const TArray<FString>& ExcludeCoverKeys = TArray<FString>());
+		const TArray<FString>& ExcludeCoverKeys = TArray<FString>(), uint8 StanceMask = FiringStances::Default);
 
 	/** The cached, scored, valid candidates of an area (best first). The pair picker works on this list. */
-	const TArray<FFiringCandidate>& GetCandidates(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm);
+	const TArray<FFiringCandidate>& GetCandidates(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask = FiringStances::Default);
 
 	/** Two hammers with a crossfire on KillZone (FiringPositionRules::PickCrossfirePair over the area's candidates). False: no pair. */
 	bool PickCrossfirePair(const FVector& KillZone, float AreaRadiusCm, float BandMinCm, float BandMaxCm, const TArray<FString>& ExcludeCoverKeys,
-		FFiringPosition& OutFirst, FFiringPosition& OutSecond);
+		FFiringPosition& OutFirst, FFiringPosition& OutSecond, uint8 StanceMask = FiringStances::Default);
 
 	/**
 	 * Re-traces a position's lines to the area's samples from its recorded FireOrigin, uncached: OutClear of OutSamples (the area's standable
@@ -106,9 +108,13 @@ public:
 private:
 	struct FFiringScanContext;
 
-	FString AreaKey(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm) const;
-	void BuildContext(FFiringScanContext& Context, const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm) const;
-	TArray<FFiringCandidate> Gather(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm);
+	FString AreaKey(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask) const;
+	void BuildContext(FFiringScanContext& Context, const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask = FiringStances::Default) const;
+	TArray<FFiringCandidate> Gather(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask);
+	/** Feet on the real floor: a downward trace 40 cm over / under Point (the navmesh floats ~8 cm above the floor; the muzzle is measured from the floor). */
+	FVector SnapToFloor(const FVector& Point) const;
+	/** Where the walk surface ends from Start along Dir (planar), cm: the rim of a roof. 0 when Start is the last walkable point. */
+	float FindRimDistance(const FVector& Start, const FVector& Dir, float MaxCm) const;
 	bool ProjectOnNav(const FVector& Point, const FVector& Extent, FVector& Out) const;
 	/**
 	 * The roof's walk surface: the navmesh within HorizontalCm / VerticalCm of Point, else the floor test (a downward trace 30 cm over / under

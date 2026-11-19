@@ -60,6 +60,7 @@ struct UFiringPositionSubsystem::FFiringScanContext
 	float Radius = 0.f;
 	float BandMin = 0.f;
 	float BandMax = 0.f;
+	uint8 StanceMask = FiringStances::Default;
 	/** The standable sample points of the area, lifted to the aim height. */
 	TArray<FVector> Aims;
 	const UTacticalMapSubsystem* Map = nullptr;
@@ -101,10 +102,10 @@ void UFiringPositionSubsystem::InvalidateCache()
 	Cache.Reset();
 }
 
-FString UFiringPositionSubsystem::AreaKey(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm) const
+FString UFiringPositionSubsystem::AreaKey(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask) const
 {
-	return FString::Printf(TEXT("%d,%d,%d|%d|%d,%d"), FMath::RoundToInt(static_cast<float>(AreaCenter.X) / 50.f), FMath::RoundToInt(static_cast<float>(AreaCenter.Y) / 50.f),
-		FMath::RoundToInt(static_cast<float>(AreaCenter.Z) / 50.f), FMath::RoundToInt(AreaRadiusCm / 50.f), FMath::RoundToInt(BandMinCm / 100.f), FMath::RoundToInt(BandMaxCm / 100.f));
+	return FString::Printf(TEXT("%d,%d,%d|%d|%d,%d|%d"), FMath::RoundToInt(static_cast<float>(AreaCenter.X) / 50.f), FMath::RoundToInt(static_cast<float>(AreaCenter.Y) / 50.f),
+		FMath::RoundToInt(static_cast<float>(AreaCenter.Z) / 50.f), FMath::RoundToInt(AreaRadiusCm / 50.f), FMath::RoundToInt(BandMinCm / 100.f), FMath::RoundToInt(BandMaxCm / 100.f), static_cast<int32>(StanceMask));
 }
 
 bool UFiringPositionSubsystem::ProjectOnNav(const FVector& Point, const FVector& Extent, FVector& Out) const
@@ -124,6 +125,39 @@ bool UFiringPositionSubsystem::ProjectOnNav(const FVector& Point, const FVector&
 	return true;
 }
 
+FVector UFiringPositionSubsystem::SnapToFloor(const FVector& Point) const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return Point;
+	}
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(FiringPositionSnap), false);
+	FiringPositionSubsystemLocal::AddShotLineIgnored(World, Params);
+	FHitResult Hit;
+	if (World->LineTraceSingleByChannel(Hit, Point + FVector(0.f, 0.f, 40.f), Point - FVector(0.f, 0.f, 40.f), ECC_Visibility, Params) && !Hit.bStartPenetrating
+		&& Hit.ImpactNormal.Z > 0.7f)
+	{
+		return FVector(Point.X, Point.Y, Hit.ImpactPoint.Z);
+	}
+	return Point;
+}
+
+float UFiringPositionSubsystem::FindRimDistance(const FVector& Start, const FVector& Dir, float MaxCm) const
+{
+	float Rim = 0.f;
+	for (float Distance = 10.f; Distance <= MaxCm; Distance += 10.f)
+	{
+		FVector OnSurface;
+		if (!FindWalkSurface(Start + Dir * Distance, FiringPositionSubsystemLocal::WalkSurfaceCm, 40.f, OnSurface))
+		{
+			break;
+		}
+		Rim = Distance;
+	}
+	return Rim;
+}
+
 bool UFiringPositionSubsystem::FindWalkSurface(const FVector& Point, float HorizontalCm, float VerticalCm, FVector& Out) const
 {
 	if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
@@ -131,7 +165,7 @@ bool UFiringPositionSubsystem::FindWalkSurface(const FVector& Point, float Horiz
 		FNavLocation OnNav;
 		if (Nav->ProjectPointToNavigation(Point, OnNav, FVector(HorizontalCm, HorizontalCm, VerticalCm)) && FVector::Dist2D(OnNav.Location, Point) <= HorizontalCm)
 		{
-			Out = OnNav.Location;
+			Out = SnapToFloor(OnNav.Location);
 			return true;
 		}
 	}
@@ -164,8 +198,9 @@ bool UFiringPositionSubsystem::LineBlocked(FFiringScanContext& Context, const FV
 	return Context.World->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Context.Params);
 }
 
-void UFiringPositionSubsystem::BuildContext(FFiringScanContext& Context, const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm) const
+void UFiringPositionSubsystem::BuildContext(FFiringScanContext& Context, const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask) const
 {
+	Context.StanceMask = StanceMask;
 	Context.World = GetWorld();
 	Context.Params = FCollisionQueryParams(SCENE_QUERY_STAT(FiringPositionLine), false);
 	FiringPositionSubsystemLocal::AddShotLineIgnored(Context.World, Context.Params);
@@ -248,7 +283,7 @@ void UFiringPositionSubsystem::GatherRoofs(FFiringScanContext& Context, TArray<F
 	const FFiringPositionConfig& Cfg = GetConfig();
 	const float RingMin = FMath::Max(0.f, Context.BandMin - Context.Radius);
 	const float RingMax = Context.BandMax > 0.f ? Context.BandMax + Context.Radius : TNumericLimits<float>::Max();
-	const TArray<float> Steps = FiringPositionRules::RimSteps(Cfg);
+	const TArray<float> Back = FiringPositionRules::RimSteps(Cfg);
 	for (const FTacticalOverwatchRoof& Roof : Context.Map->GetFile().OverwatchRoofs)
 	{
 		for (int32 SpotIndex = 0; SpotIndex < Roof.Spots.Num(); ++SpotIndex)
@@ -267,21 +302,29 @@ void UFiringPositionSubsystem::GatherRoofs(FFiringScanContext& Context, TArray<F
 			const FVector Dir = (Context.Centre - Walk).GetSafeNormal2D();
 			const FString SourceId = FString::Printf(TEXT("%s#%d"), *Roof.Building, SpotIndex);
 			++LastStats.RoofSpots;
+			// The file's spot lies well behind the rim: follow the walk surface toward the area to the rim, then try the rim and 10 cm steps back.
+			const float Rim = FindRimDistance(Walk, Dir, Cfg.RimSearchMaxCm);
 			bool bFound = false;
-			// The crouched shot first (the protection a parapet gives), then the standing one; each walks the rim steps outwards.
+			// The crouched shot first (the protection a parapet gives), then the standing one.
 			for (const EOperativeStance Stance : { EOperativeStance::Crouching, EOperativeStance::Standing })
 			{
-				for (const float Step : Steps)
+				if (!FiringStances::Allows(Context.StanceMask, Stance))
 				{
-					FVector Stand = Walk;
-					if (Step > 0.f)
+					continue;
+				}
+				float LastTried = -1.f;
+				for (const float BackCm : Back)
+				{
+					const float Stepped = FMath::Max(Rim - BackCm, 0.f);
+					if (Stepped == LastTried)
 					{
-						FVector OnSurface;
-						if (!FindWalkSurface(Walk + Dir * Step, FiringPositionSubsystemLocal::WalkSurfaceCm, 40.f, OnSurface))
-						{
-							break; // the roof's walkable surface ends here: no further step
-						}
-						Stand = OnSurface;
+						break; // back at the spot: the rest are the same point
+					}
+					LastTried = Stepped;
+					FVector Stand = Walk;
+					if (Stepped > 0.f && !FindWalkSurface(Walk + Dir * Stepped, FiringPositionSubsystemLocal::WalkSurfaceCm, 40.f, Stand))
+					{
+						continue;
 					}
 					const FVector Origin = Stand + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance));
 					FVector Mean = FVector::ZeroVector;
@@ -300,7 +343,7 @@ void UFiringPositionSubsystem::GatherRoofs(FFiringScanContext& Context, TArray<F
 					Pos.CoveredShare = Share;
 					Pos.SourceId = SourceId;
 					Pos.FireOrigin = Origin;
-					Pos.RimStepCm = Step;
+					Pos.RimStepCm = Stepped;
 					FinishCandidate(Context, Candidate, FiringPositionRules::RoofProtectOf(Roof.Level, Cfg),
 						FiringPositionRules::RoofEscape(Roof.Access.Num(), Roof.bLadderOnly, Cfg));
 					Out.Add(Candidate);
@@ -315,8 +358,9 @@ void UFiringPositionSubsystem::GatherRoofs(FFiringScanContext& Context, TArray<F
 			if (!bFound)
 			{
 				++Context.RoofFaults;
-				UE_LOG(LogCodexTactics, Display, TEXT("[FiringPos] roof %s: parapet blocks every stance (spot %s, steps up to %.0f cm)"), *SourceId, *Spot.Location.ToCompactString(),
-					Cfg.RimStepMaxCm);
+				UE_LOG(LogCodexTactics, Display, TEXT("[FiringPos] roof %s: parapet blocks every stance (spot %s, rim %.0f cm ahead, tried the rim and %.0f cm back, stances %s%s)"), *SourceId,
+					*Spot.Location.ToCompactString(), Rim, Cfg.RimStepMaxCm, FiringStances::Allows(Context.StanceMask, EOperativeStance::Crouching) ? TEXT("crouching ") : TEXT(""),
+					FiringStances::Allows(Context.StanceMask, EOperativeStance::Standing) ? TEXT("standing") : TEXT(""));
 			}
 		}
 	}
@@ -344,19 +388,37 @@ void UFiringPositionSubsystem::GatherWindows(FFiringScanContext& Context, TArray
 		{
 			continue;
 		}
+		Stand = SnapToFloor(Stand);
 		++LastStats.Windows;
-		const FVector Origin = Stand + FVector(0.f, 0.f, Cfg.MuzzleStandingCm);
-		FVector Mean = FVector::ZeroVector;
-		const int32 Hits = CountClear(Context, Origin, Window.Yaw, HalfFov, &Mean);
+		// Standing first (PmcSquadSubsystem's window post stands: a crouch hides him under the sill); a crouch only when it fires and the stand does not.
 		FFiringCandidate Candidate;
-		FFiringPosition& Pos = Candidate.Position;
-		Pos.Kind = EFiringPositionKind::Window;
-		Pos.StandPoint = Stand;
-		Pos.Stance = EOperativeStance::Standing; // a crouch would hide him under the sill (PmcSquadSubsystem's window post)
-		Pos.FacingYaw = Window.Yaw;
-		Pos.CoveredShare = FiringPositionRules::CoveredShare(Hits, Context.Aims.Num());
-		Pos.SourceId = Window.Id;
-		Pos.FireOrigin = Origin;
+		float BestShare = 0.f;
+		for (const EOperativeStance Stance : { EOperativeStance::Standing, EOperativeStance::Crouching })
+		{
+			if (!FiringStances::Allows(Context.StanceMask, Stance))
+			{
+				continue;
+			}
+			const FVector Origin = Stand + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance));
+			FVector Mean = FVector::ZeroVector;
+			const float Share = FiringPositionRules::CoveredShare(CountClear(Context, Origin, Window.Yaw, HalfFov, &Mean), Context.Aims.Num());
+			if (Share > BestShare)
+			{
+				BestShare = Share;
+				FFiringPosition& Pos = Candidate.Position;
+				Pos.Kind = EFiringPositionKind::Window;
+				Pos.StandPoint = Stand;
+				Pos.Stance = Stance;
+				Pos.FacingYaw = Window.Yaw;
+				Pos.CoveredShare = Share;
+				Pos.SourceId = Window.Id;
+				Pos.FireOrigin = Origin;
+			}
+		}
+		if (BestShare <= 0.f)
+		{
+			continue;
+		}
 		FinishCandidate(Context, Candidate, Cfg.WindowProtect, Cfg.EscapeOneWay);
 		if (Candidate.Position.bValid)
 		{
@@ -442,6 +504,7 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 				continue;
 			}
 			const FString WallId = Slot.WallActor.IsValid() ? Slot.WallActor->GetPathName() : FString();
+			const FVector Feet = SnapToFloor(Slot.WorldLocation);
 			FFiringCandidate Best;
 			float BestShare = 0.f;
 			FVector BestMean = FVector::ZeroVector;
@@ -454,7 +517,11 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 					{
 						continue;
 					}
-					const FVector Muzzle = Slot.WorldLocation + FVector(0.f, 0.f, Cfg.MuzzleStandingCm);
+					if (!FiringStances::Allows(Context.StanceMask, EOperativeStance::Standing))
+					{
+						continue; // the lean round a corner is a standing shot
+					}
+					const FVector Muzzle = Feet + FVector(0.f, 0.f, Cfg.MuzzleStandingCm);
 					const FVector Origin = CoverRules::CornerLeanPoint(Slot, Facing, Muzzle, CoverRules::GetConfig().CornerPeekOffsetCm);
 					FVector Mean = FVector::ZeroVector;
 					const float Share = FiringPositionRules::CoveredShare(CountClear(Context, Origin, 0.f, 0.f, &Mean), Context.Aims.Num());
@@ -473,7 +540,11 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 				// A low wall: over the top, crouched first (the protection), then standing.
 				for (const EOperativeStance Stance : { EOperativeStance::Crouching, EOperativeStance::Standing })
 				{
-					const FVector Origin = Slot.WorldLocation + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance));
+					if (!FiringStances::Allows(Context.StanceMask, Stance))
+					{
+						continue;
+					}
+					const FVector Origin = Feet + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance));
 					FVector Mean = FVector::ZeroVector;
 					const float Share = FiringPositionRules::CoveredShare(CountClear(Context, Origin, 0.f, 0.f, &Mean), Context.Aims.Num());
 					if (Share > BestShare)
@@ -490,7 +561,7 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 			{
 				continue;
 			}
-			Best.Position.StandPoint = Slot.WorldLocation;
+			Best.Position.StandPoint = Feet;
 			Best.Position.FacingYaw = YawOf(Best.Position.FireOrigin, BestMean);
 			Best.Position.CoveredShare = BestShare;
 			Best.Position.CoverKey = PmcDefenceRules::CoverObjectKey(WallId, Slot.WallPoint);
@@ -504,13 +575,13 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 	}
 }
 
-TArray<FFiringCandidate> UFiringPositionSubsystem::Gather(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm)
+TArray<FFiringCandidate> UFiringPositionSubsystem::Gather(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask)
 {
 	const double Start = FPlatformTime::Seconds();
 	++GatherCount;
 	LastStats = FFiringGatherStats();
 	FFiringScanContext Context;
-	BuildContext(Context, AreaCenter, AreaRadiusCm, BandMinCm, BandMaxCm);
+	BuildContext(Context, AreaCenter, AreaRadiusCm, BandMinCm, BandMaxCm, StanceMask);
 	TArray<FFiringCandidate> Out;
 	if (!Context.World || Context.Aims.IsEmpty())
 	{
@@ -539,20 +610,20 @@ TArray<FFiringCandidate> UFiringPositionSubsystem::Gather(const FVector& AreaCen
 	return Out;
 }
 
-const TArray<FFiringCandidate>& UFiringPositionSubsystem::GetCandidates(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm)
+const TArray<FFiringCandidate>& UFiringPositionSubsystem::GetCandidates(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, uint8 StanceMask)
 {
-	const FString Key = AreaKey(AreaCenter, AreaRadiusCm, BandMinCm, BandMaxCm);
+	const FString Key = AreaKey(AreaCenter, AreaRadiusCm, BandMinCm, BandMaxCm, StanceMask);
 	if (const TArray<FFiringCandidate>* Cached = Cache.Find(Key))
 	{
 		return *Cached;
 	}
-	return Cache.Add(Key, Gather(AreaCenter, AreaRadiusCm, BandMinCm, BandMaxCm));
+	return Cache.Add(Key, Gather(AreaCenter, AreaRadiusCm, BandMinCm, BandMaxCm, StanceMask));
 }
 
 TArray<FFiringPosition> UFiringPositionSubsystem::PositionsCovering(const FVector& AreaCenter, float AreaRadiusCm, float BandMinCm, float BandMaxCm, int32 N,
-	const TArray<FString>& ExcludeCoverKeys)
+	const TArray<FString>& ExcludeCoverKeys, uint8 StanceMask)
 {
-	const TArray<FFiringCandidate>& Candidates = GetCandidates(AreaCenter, AreaRadiusCm, BandMinCm, BandMaxCm);
+	const TArray<FFiringCandidate>& Candidates = GetCandidates(AreaCenter, AreaRadiusCm, BandMinCm, BandMaxCm, StanceMask);
 	TArray<FFiringPosition> Result;
 	if (N <= 0)
 	{
@@ -573,9 +644,9 @@ TArray<FFiringPosition> UFiringPositionSubsystem::PositionsCovering(const FVecto
 }
 
 bool UFiringPositionSubsystem::PickCrossfirePair(const FVector& KillZone, float AreaRadiusCm, float BandMinCm, float BandMaxCm, const TArray<FString>& ExcludeCoverKeys,
-	FFiringPosition& OutFirst, FFiringPosition& OutSecond)
+	FFiringPosition& OutFirst, FFiringPosition& OutSecond, uint8 StanceMask)
 {
-	const TArray<FFiringCandidate>& Candidates = GetCandidates(KillZone, AreaRadiusCm, BandMinCm, BandMaxCm);
+	const TArray<FFiringCandidate>& Candidates = GetCandidates(KillZone, AreaRadiusCm, BandMinCm, BandMaxCm, StanceMask);
 	int32 First = INDEX_NONE;
 	int32 Second = INDEX_NONE;
 	if (!FiringPositionRules::PickCrossfirePair(Candidates, KillZone, ExcludeCoverKeys, GetConfig(), First, Second))
@@ -616,23 +687,31 @@ TArray<FFiringTraceDiag> UFiringPositionSubsystem::DiagnoseRoofSpot(const FVecto
 	FiringPositionSubsystemLocal::AddShotLineIgnored(World, Params);
 	const FVector Dir = (Target - SpotFeet).GetSafeNormal2D();
 	const FVector Aim = Target + FVector(0.f, 0.f, Cfg.SampleHeightCm);
+	const float Rim = FindRimDistance(SpotFeet, Dir, Cfg.RimSearchMaxCm);
+	TArray<float> Distances;
+	Distances.Add(0.f);
+	for (const float Back : { 80.f, 40.f, 0.f })
+	{
+		const float Stepped = FMath::Max(Rim - Back, 0.f);
+		if (!Distances.Contains(Stepped))
+		{
+			Distances.Add(Stepped);
+		}
+	}
 	for (const EOperativeStance Stance : { EOperativeStance::Standing, EOperativeStance::Crouching, EOperativeStance::Prone })
 	{
-		for (const float Step : FiringPositionRules::RimSteps(Cfg))
+		for (const float Step : Distances)
 		{
 			FFiringTraceDiag Diag;
 			Diag.Stance = Stance;
 			Diag.StepCm = Step;
+			Diag.RimDistanceCm = Rim;
 			FVector Stand = SpotFeet + Dir * Step;
 			FVector OnSurface;
-			if (FindWalkSurface(Stand, FiringPositionSubsystemLocal::WalkSurfaceCm, 40.f, OnSurface))
+			Diag.bOnWalkSurface = FindWalkSurface(Stand, FiringPositionSubsystemLocal::WalkSurfaceCm, 40.f, OnSurface);
+			if (Diag.bOnWalkSurface)
 			{
-				Diag.bOnWalkSurface = true;
 				Stand = OnSurface;
-			}
-			else
-			{
-				Diag.bOnWalkSurface = false;
 			}
 			Diag.Muzzle = Stand + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance));
 			Diag.Aim = Aim;
@@ -643,13 +722,13 @@ TArray<FFiringTraceDiag> UFiringPositionSubsystem::DiagnoseRoofSpot(const FVecto
 				Diag.HitActor = GetNameSafe(Hit.GetActor());
 				Diag.HitComponent = GetNameSafe(Hit.GetComponent());
 				Diag.HitDistanceCm = Hit.Distance;
-				Diag.HitHeightCm = static_cast<float>(Hit.ImpactPoint.Z - SpotFeet.Z);
+				Diag.HitHeightCm = static_cast<float>(Hit.ImpactPoint.Z - Stand.Z);
 				// The top of what was hit: straight down on it, just inside its face.
 				const FVector Inside = Hit.ImpactPoint + (Aim - Diag.Muzzle).GetSafeNormal2D() * 5.f;
 				FHitResult Top;
-				if (World->LineTraceSingleByChannel(Top, FVector(Inside.X, Inside.Y, SpotFeet.Z + 500.f), FVector(Inside.X, Inside.Y, SpotFeet.Z - 5.f), ECC_Visibility, Params))
+				if (World->LineTraceSingleByChannel(Top, FVector(Inside.X, Inside.Y, Stand.Z + 500.f), FVector(Inside.X, Inside.Y, Stand.Z - 5.f), ECC_Visibility, Params))
 				{
-					Diag.HitTopCm = static_cast<float>(Top.ImpactPoint.Z - SpotFeet.Z);
+					Diag.HitTopCm = static_cast<float>(Top.ImpactPoint.Z - Stand.Z);
 				}
 			}
 			Out.Add(Diag);

@@ -76,6 +76,12 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	/** "rim_step_cm" (10) / "rim_step_max_cm" (80): a roof spot steps toward the rim in these steps while the trace stays blocked. */
 	float RimStepCm = 10.f;
 	float RimStepMaxCm = 80.f;
+	/**
+	 * "rim_search_max_cm" (1500): how far from the file's roof spot toward the area the walk surface is followed to find the rim. T-05's diagnosis: the
+	 * overwatch spots lie 3-6.5 m BEHIND the rim (the line to the street hits the roof slab 2.8-6.4 m ahead), so the rim step is counted back from the
+	 * rim: rim - 0 .. rim - rim_step_max_cm.
+	 */
+	float RimSearchMaxCm = 1500.f;
 	/** "muzzle_height_cm": the muzzle above the feet per stance - a mirror of AOperativeCharacter::GetMuzzleLocation (checked by FiringPositionSmoke). */
 	float MuzzleStandingCm = 140.f;
 	float MuzzleCrouchingCm = 85.f;
@@ -118,6 +124,16 @@ struct CODEXTACTICS_API FFiringScoreInputs
 	float Spacing = 1.f;
 	float RoleFit = 1.f;
 };
+
+/** Stances a query may use, a bit per EOperativeStance. A sniper fires only kneeling (SniperRules::FiringStance): his query is Crouching only. */
+namespace FiringStances
+{
+	constexpr uint8 Standing = 1 << static_cast<uint8>(EOperativeStance::Standing);
+	constexpr uint8 Crouching = 1 << static_cast<uint8>(EOperativeStance::Crouching);
+	/** The default: a rifleman stands or crouches (prone is not a position stance). */
+	constexpr uint8 Default = Standing | Crouching;
+	inline bool Allows(uint8 Mask, EOperativeStance Stance) { return (Mask & (1 << static_cast<uint8>(Stance))) != 0; }
+}
 
 namespace FiringPositionRules
 {
@@ -193,7 +209,7 @@ namespace FiringPositionRules
 	CODEXTACTICS_API float RoofProtectOf(int32 Levels, const FFiringPositionConfig& Config);
 
 	/**
-	 * The steps of the rim search: 0, RimStepCm, 2 x RimStepCm ... up to RimStepMaxCm (inclusive). Always at least {0}.
+	 * The offsets back from the rim tried in turn: 0, RimStepCm, 2 x RimStepCm ... up to RimStepMaxCm (inclusive). Always at least {0}.
 	 */
 	CODEXTACTICS_API TArray<float> RimSteps(const FFiringPositionConfig& Config);
 

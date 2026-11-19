@@ -5,7 +5,8 @@
 // 2. UFiringPositionSubsystem::PositionsCovering over a roof's street, the top chokepoints and a window's street: every returned position is
 //    valid, re-traced (uncached) from its own muzzle to >= 1 standable sample of the area, one man per cover object; the second query is the
 //    cache, a flushed one gives the same list; the kinds found are logged (a roof that cannot fire at all is a generator finding, logged).
-// 3. A shooter (sniper rifle, Codex.Sight 0 so only the LINE is judged) placed on the stand point and stance of a returned roof-edge / window /
+// 3. A shooter (m16: the sniper rifle kneels for every shot - SniperRules::FiringStance - so a sniper query is Crouching only and is logged as a
+//    finding below; Codex.Sight 0 so only the LINE is judged) placed on the stand point and stance of a returned roof-edge / window /
 //    low-cover position with a passive target standing on a clear sample: the real EvaluateShotLine verdict is SHOT, the real muzzle is the
 //    position's FireOrigin, and the shooter's own fire sends a round. Corner positions are re-trace checked only (the real corner shot needs
 //    the man IN cover, which an uncommanded spawn is not).
@@ -43,8 +44,8 @@ namespace FiringPositionSmoke
 	constexpr int32 ShooterTeam = 7;
 	constexpr int32 TargetTeam = 8;
 	constexpr int32 MaxTrials = 5;
-	/** The weapon the marksman fires: the sniper rifle's 120 m reach covers the 60 m band. */
-	const TCHAR* const MarksmanWeapon = TEXT("sniper_rifle");
+	/** The weapon of the trial shooter: the m16 (60 m reach) fires from the stance the position says; the sniper rifle kneels whatever it is. */
+	const TCHAR* const MarksmanWeapon = TEXT("m16");
 
 	enum class EStage : uint8
 	{
@@ -202,8 +203,9 @@ namespace FiringPositionSmoke
 					continue;
 				}
 				const TArray<FFiringTraceDiag> Lines = Service.DiagnoseRoofSpot(Spot.Location, Spot.FacingYaw, Target);
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke   DIAG %s#%d spot %s facing %.0f -> street %s (%.0f cm ahead, aim +%.0f cm)"), *Roof->Building, SpotIndex,
-					*Spot.Location.ToCompactString(), Spot.FacingYaw, *Target.ToCompactString(), Distance, Service.GetConfig().SampleHeightCm);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke   DIAG %s#%d spot %s facing %.0f -> street %s (%.0f cm ahead, aim +%.0f cm), the roof's rim is %.0f cm from the spot"), *Roof->Building,
+					SpotIndex, *Spot.Location.ToCompactString(), Spot.FacingYaw, *Target.ToCompactString(), Distance, Service.GetConfig().SampleHeightCm,
+					Lines.Num() > 0 ? Lines[0].RimDistanceCm : 0.f);
 				for (const EOperativeStance Stance : { EOperativeStance::Standing, EOperativeStance::Crouching, EOperativeStance::Prone })
 				{
 					float FirstClear = -1.f;
@@ -218,11 +220,6 @@ namespace FiringPositionSmoke
 						{
 							FirstClear = Line.StepCm;
 						}
-						const bool bPrint = Line.StepCm == 0.f || Line.StepCm == 40.f || Line.StepCm == 80.f || (!Line.bBlocked && Line.StepCm == FirstClear);
-						if (!bPrint)
-						{
-							continue;
-						}
 						if (Line.bBlocked)
 						{
 							UE_LOG(LogCodexTactics, Display, TEXT("Smoke     %-9s step %2.0f cm (walk surface %d) muzzle +%.0f: BLOCKED by %s / %s at %.0f cm, impact +%.0f cm over the floor, its top %s"),
@@ -235,8 +232,8 @@ namespace FiringPositionSmoke
 								Line.bOnWalkSurface ? 1 : 0, Line.Muzzle.Z - Spot.Location.Z);
 						}
 					}
-					UE_LOG(LogCodexTactics, Display, TEXT("Smoke     %-9s first clear rim step: %s"), FiringPositionRules::StanceName(Stance),
-						FirstClear >= 0.f ? *FString::Printf(TEXT("%.0f cm"), FirstClear) : TEXT("NONE (blocked at every step)"));
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke     %-9s first clear stand distance: %s"), FiringPositionRules::StanceName(Stance),
+						FirstClear >= 0.f ? *FString::Printf(TEXT("%.0f cm from the spot"), FirstClear) : TEXT("NONE (blocked at every point)"));
 				}
 			}
 		}
@@ -262,6 +259,7 @@ namespace FiringPositionSmoke
 					Area.Name = TEXT("roof_B_hall_n");
 					Area.Centre = Street;
 					Area.Radius = 800.f;
+					Area.BandMax = 5500.f;
 					State.Areas.Add(Area);
 					break;
 				}
@@ -284,6 +282,7 @@ namespace FiringPositionSmoke
 			Area.Name = FString::Printf(TEXT("place_%s"), *Place.Id);
 			Area.Centre = Place.Location;
 			Area.Radius = 1000.f;
+			Area.BandMax = 5500.f;
 			State.Areas.Add(Area);
 		}
 		// A window's street: the window with the longest covered length.
@@ -302,6 +301,7 @@ namespace FiringPositionSmoke
 			Area.Name = FString::Printf(TEXT("window_%s"), *Best->Id);
 			Area.Centre = Street;
 			Area.Radius = 800.f;
+			Area.BandMax = 5500.f;
 			State.Areas.Add(Area);
 		}
 	}
@@ -395,6 +395,24 @@ namespace FiringPositionSmoke
 		{
 			CheckArea(World, State, Service, Area);
 		}
+		// The sniper finding: he kneels for every shot, so only the crouched muzzle counts. A roof edge behind a parapet taller than the kneeling muzzle cannot fire.
+		int32 SniperRoofs = 0;
+		int32 SniperAll = 0;
+		int32 RifleRoofs = 0;
+		for (const FArea& Area : State.Areas)
+		{
+			const TArray<FFiringPosition> Rifle = Service.PositionsCovering(Area.Centre, Area.Radius, Area.BandMin, Area.BandMax, 0);
+			const TArray<FFiringPosition> Sniper = Service.PositionsCovering(Area.Centre, Area.Radius, Area.BandMin, Area.BandMax, 0, TArray<FString>(), FiringStances::Crouching);
+			const int32 RifleRoof = Rifle.FilterByPredicate([](const FFiringPosition& P) { return P.Kind == EFiringPositionKind::RoofEdge; }).Num();
+			const int32 SniperRoof = Sniper.FilterByPredicate([](const FFiringPosition& P) { return P.Kind == EFiringPositionKind::RoofEdge; }).Num();
+			RifleRoofs += RifleRoof;
+			SniperRoofs += SniperRoof;
+			SniperAll += Sniper.Num();
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke   FINDING area %s: roof-edge positions for a rifleman (stand or crouch) %d, for a sniper (kneeling only) %d; all kinds %d vs %d"), *Area.Name,
+				RifleRoof, SniperRoof, Rifle.Num(), Sniper.Num());
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke   FINDING roof edges over %d areas: rifleman %d, sniper %d - the sniper rifle kneels (muzzle +%.0f cm) under the parapet"), State.Areas.Num(), RifleRoofs,
+			SniperRoofs, Config.MuzzleCrouchingCm);
 		const int32 Corners = State.KindCounts[static_cast<int32>(EFiringPositionKind::Corner)];
 		const int32 Lows = State.KindCounts[static_cast<int32>(EFiringPositionKind::LowCover)];
 		const int32 Windows = State.KindCounts[static_cast<int32>(EFiringPositionKind::Window)];

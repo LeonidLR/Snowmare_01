@@ -257,6 +257,11 @@ bool FFiringPositionRoofTermsTest::RunTest(const FString&)
 		TestEqual(TEXT("starts at 0"), Steps[0], 0.f, 0.001f);
 		TestEqual(TEXT("ends at rim_step_max_cm"), Steps[8], 80.f, 0.001f);
 	}
+	TestEqual(TEXT("rim_search_max_cm default"), Config.RimSearchMaxCm, 1500.f, 0.001f);
+	TestTrue(TEXT("default queries stand and crouch"), FiringStances::Allows(FiringStances::Default, EOperativeStance::Standing) && FiringStances::Allows(FiringStances::Default, EOperativeStance::Crouching));
+	TestFalse(TEXT("prone is not a position stance"), FiringStances::Allows(FiringStances::Default, EOperativeStance::Prone));
+	TestFalse(TEXT("a sniper's query (crouching only) does not allow standing"), FiringStances::Allows(FiringStances::Crouching, EOperativeStance::Standing));
+	TestTrue(TEXT("...and allows crouching"), FiringStances::Allows(FiringStances::Crouching, EOperativeStance::Crouching));
 	FFiringPositionConfig NoStep = Config;
 	NoStep.RimStepMaxCm = 0.f;
 	TestEqual(TEXT("no rim step: just the spot"), FiringPositionRules::RimSteps(NoStep).Num(), 1);
@@ -304,6 +309,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	TestEqual(TEXT("shipped min_covered_share"), Shipped.MinCoveredShare, Defaults.MinCoveredShare, 0.001f);
 	TestEqual(TEXT("shipped rim_step_cm"), Shipped.RimStepCm, Defaults.RimStepCm, 0.001f);
 	TestEqual(TEXT("shipped rim_step_max_cm"), Shipped.RimStepMaxCm, Defaults.RimStepMaxCm, 0.001f);
+	TestEqual(TEXT("shipped rim_search_max_cm"), Shipped.RimSearchMaxCm, Defaults.RimSearchMaxCm, 0.001f);
 	TestEqual(TEXT("shipped muzzle standing"), Shipped.MuzzleStandingCm, Defaults.MuzzleStandingCm, 0.001f);
 	TestEqual(TEXT("shipped muzzle crouching"), Shipped.MuzzleCrouchingCm, Defaults.MuzzleCrouchingCm, 0.001f);
 	TestEqual(TEXT("shipped muzzle prone"), Shipped.MuzzleProneCm, Defaults.MuzzleProneCm, 0.001f);
