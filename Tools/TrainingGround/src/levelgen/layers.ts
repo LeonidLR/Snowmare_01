@@ -11,6 +11,7 @@ import balanceCfg from '../../../../Content/Data/Balance/props_balance.json' wit
 import type { Vec2 } from '../movement/geometry.ts';
 import { dirOf, distToWall, pointInPoly } from '../movement/geometry.ts';
 import { footprintPoly } from './rotation.ts';
+import { moveBuilding, moveCover, moveCrossing, moveLadder, moveWallEnd, moveWalls } from './mapEdit.ts';
 import type { CoverKind, GenCover, GenLayout, GenWall, WallKind } from './schema.ts';
 import type { LevelPropsFile, PropLayer, PropLayerKind, PropObject, PropOverride } from './props/schema.ts';
 
@@ -52,6 +53,19 @@ export const LAYERS = layersCfg as unknown as LayersConfig;
 export const MAP_PANEL_EXCLUDED: readonly string[] = ['mines', 'loot', 'special', 'objectives'];
 /** Of those, the layers that are not drawn on the plan either. */
 export const MAP_PLAN_HIDDEN: readonly string[] = ['mines', 'loot', 'special'];
+/**
+ * T-022 (designer 2026-11-19: «передвигать здания, заборы и другие элементы карты»): the entity types a layer's «move» tool takes IN
+ * ADDITION to what layers.json `edit` lists. layers.json is the designer's data file (it stays untouched), so the move permission of
+ * the layers that had none lives here: the buildings layer moves its buildings (a click on a building wall picks the building) and
+ * its ladders, the bridges layer its crossings. The obstacle layers (edit has `move`) move walls / fences / covers / props.
+ */
+export const MAP_MOVE: Readonly<Record<string, readonly EntityType[]>> = { buildings: ['building', 'ladder'], bridges: ['crossing'] };
+/** The layer's pencil can drag something (layers.json `move` or MAP_MOVE). */
+export const layerMovable = (def: Pick<LayerDef, 'id' | 'edit'>): boolean => def.edit.includes('move') || !!MAP_MOVE[def.id];
+/** The entity types the layer's tool moves. */
+export function movableTypes(def: Pick<LayerDef, 'id' | 'edit'>): readonly EntityType[] {
+  return [...(def.edit.includes('move') ? (['cover', 'wall', 'prop'] as const) : []), ...(MAP_MOVE[def.id] ?? [])];
+}
 
 /** The config's own checks (empty = valid): unique ids, known types / tools, one fallback per type at most, compilable regexes. */
 export function validateLayersConfig(c: LayersConfig): string[] {
@@ -339,10 +353,24 @@ export function pickEntity(a: LayerAssignment, activeLayer: string, p: Vec2, tol
   return best;
 }
 
+/**
+ * pickEntity for the move tool: a click on a building's wall picks the BUILDING (the walls are its parts; the whole building moves),
+ * and the building's polygon is picked from anywhere inside it unless a smaller entity (a ladder) is under the cursor.
+ */
+export function pickMoveEntity(a: LayerAssignment, l: GenLayout, activeLayer: string, p: Vec2, tol: number): Entity | null {
+  const e = pickEntity(a, activeLayer, p, tol);
+  if (!e || e.type !== 'wall') return e;
+  const bid = l.walls.find((w) => w.id === e.id)?.building;
+  return bid ? (a.byLayer[activeLayer] ?? []).find((x) => x.key === `building:${bid}`) ?? e : e;
+}
+
 // ---- editing a layout, scoped to the active layer --------------------------------------------------------------------------------
 
 export type LayoutEdit =
-  | { op: 'move'; key: string; delta: Vec2 }
+  /** `family`: a fence segment moves with its whole ring (mapEdit.moveWalls). */
+  | { op: 'move'; key: string; delta: Vec2; family?: boolean }
+  /** T-022: one end of a free wall / fence dragged to `pos` (the length changes). */
+  | { op: 'move_end'; key: string; end: 'a' | 'b'; pos: Vec2 }
   | { op: 'rotate'; key: string; deg: number }
   | { op: 'delete'; key: string }
   | { op: 'add'; template: AddTemplate; pos: Vec2; yaw?: number };
@@ -351,7 +379,6 @@ export interface LayoutEditResult { ok: boolean; layout: GenLayout; message: str
 
 const refuse = (layout: GenLayout, message: string): LayoutEditResult => ({ ok: false, layout, message });
 const r1 = (v: number): number => Math.round(v);
-const moved = (p: Vec2, d: Vec2): Vec2 => [r1(p[0] + d[0]), r1(p[1] + d[1])];
 const freshId = (taken: Set<string>, prefix: string): string => { for (let n = 1; ; n++) { const id = `${prefix}${n}`; if (!taken.has(id)) return id; } };
 const rotAbout = (p: Vec2, c: Vec2, deg: number): Vec2 => { const d = dirOf(deg), x = p[0] - c[0], y = p[1] - c[1]; return [r1(c[0] + x * d[0] - y * d[1]), r1(c[1] + x * d[1] + y * d[0])]; };
 const layersOfBuilding = (id: string) => (layer: string) => layer === `roof:${id}` || layer.startsWith(`floor:${id}:`);
@@ -366,8 +393,8 @@ const layersOfBuilding = (id: string) => (layer: string) => layer === `roof:${id
 export function editLayout(l: GenLayout, activeLayer: string, edit: LayoutEdit, c: LayersConfig = LAYERS): LayoutEditResult {
   const def = layerById(activeLayer, c);
   if (!def) return refuse(l, `нет слоя "${activeLayer}"`);
-  const tool: LayerTool = edit.op === 'rotate' ? 'move' : edit.op;
-  if (!def.edit.includes(tool)) return refuse(l, `слой «${def.name}» не поддерживает действие «${tool}»`);
+  const tool: LayerTool = edit.op === 'rotate' || edit.op === 'move_end' ? 'move' : edit.op;
+  if (tool === 'move' ? !layerMovable(def) : !def.edit.includes(tool)) return refuse(l, `слой «${def.name}» не поддерживает действие «${tool}»`);
   if (edit.op === 'add') {
     const t = edit.template;
     if (t.cover) {
@@ -389,22 +416,33 @@ export function editLayout(l: GenLayout, activeLayer: string, edit: LayoutEdit, 
   const owner = a.layerOf[edit.key];
   if (!owner) return refuse(l, `нет объекта ${edit.key}`);
   if (owner !== activeLayer) return refuse(l, `${edit.key} — на слое «${layerById(owner, c)?.name ?? owner}», активен «${def.name}»`);
-  const [type, id] = [edit.key.slice(0, edit.key.indexOf(':')), edit.key.slice(edit.key.indexOf(':') + 1)];
-  if (edit.op === 'move' || edit.op === 'rotate') {
+  let [type, id] = [edit.key.slice(0, edit.key.indexOf(':')), edit.key.slice(edit.key.indexOf(':') + 1)];
+  if (edit.op === 'move' || edit.op === 'rotate' || edit.op === 'move_end') {
+    // a wall of a building is part of the building: the whole building moves (the page picks the building on a click anyway)
+    const ownWall = type === 'wall' ? l.walls.find((x) => x.id === id) : undefined;
+    if (ownWall?.building && edit.op === 'move') { type = 'building'; id = ownWall.building; }
+    if (!movableTypes(def).includes(type as EntityType)) return refuse(l, `${type} нельзя двигать этим инструментом`);
+    const key = `${type}:${id}`;
+    const done = (r: { ok: boolean; layout: GenLayout; message: string }): LayoutEditResult => ({ ok: r.ok, layout: r.layout, message: r.message, ...(r.ok ? { key } : {}) });
+    if (edit.op === 'move_end') return type === 'wall' ? done(moveWallEnd(l, id, edit.end, edit.pos)) : refuse(l, `${type}: концы двигают только у стен и заборов`);
+    if (edit.op === 'move') {
+      if (type === 'cover') return done(moveCover(l, id, edit.delta));
+      if (type === 'wall') return done(moveWalls(l, id, edit.delta, !!edit.family));
+      if (type === 'building') return done(moveBuilding(l, id, edit.delta));
+      if (type === 'ladder') return done(moveLadder(l, id, edit.delta));
+      if (type === 'crossing') return done(moveCrossing(l, id, edit.delta));
+    }
+    // rotate: covers and free-standing walls
+    if (edit.op !== 'rotate') return refuse(l, `${type} нельзя двигать этим инструментом`);
     if (type === 'cover') {
-      const covers = l.covers.map((x) => (x.id !== id ? x : edit.op === 'move' ? { ...x, pos: moved(x.pos, edit.delta) } : { ...x, yaw: (((x.yaw + edit.deg) % 360) + 360) % 360 }));
-      return { ok: true, layout: { ...l, covers }, message: `${id}: ${edit.op === 'move' ? 'перемещено' : 'повёрнуто'}`, key: edit.key };
+      const covers = l.covers.map((x) => (x.id !== id ? x : { ...x, yaw: (((x.yaw + edit.deg) % 360) + 360) % 360 }));
+      return { ok: true, layout: { ...l, covers }, message: `${id}: повёрнуто`, key: edit.key };
     }
     if (type === 'wall') {
-      const walls = l.walls.map((x) => {
-        if (x.id !== id) return x;
-        if (edit.op === 'move') return { ...x, a: moved(x.a, edit.delta), b: moved(x.b, edit.delta) };
-        const m = mid(x.a, x.b);
-        return { ...x, a: rotAbout(x.a, m, edit.deg), b: rotAbout(x.b, m, edit.deg) };
-      });
-      return { ok: true, layout: { ...l, walls }, message: `${id}: ${edit.op === 'move' ? 'перемещено' : 'повёрнуто'}`, key: edit.key };
+      const walls = l.walls.map((x) => (x.id !== id ? x : { ...x, a: rotAbout(x.a, mid(x.a, x.b), edit.deg), b: rotAbout(x.b, mid(x.a, x.b), edit.deg) }));
+      return { ok: true, layout: { ...l, walls }, message: `${id}: повёрнуто`, key: edit.key };
     }
-    return refuse(l, `${type} нельзя двигать этим инструментом`);
+    return refuse(l, `${type} нельзя вращать этим инструментом`);
   }
   // delete
   if (type === 'cover') return { ok: true, layout: { ...l, covers: l.covers.filter((x) => x.id !== id) }, message: `удалено: ${id}` };

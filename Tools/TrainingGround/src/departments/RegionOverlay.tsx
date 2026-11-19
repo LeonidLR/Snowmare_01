@@ -12,6 +12,8 @@ import type { PlanView } from '../levelgen/planView';
 import { panBy, planTransform, toScreen, toWorld, viewTransform, wheelFactor, zoomAt } from '../levelgen/planView';
 import { isUsableZone, shapePolygon, simplifyLasso } from '../levelgen/regionRegen';
 import type { LockDistrict, ObjectiveSet } from '../levelgen/schema';
+import type { EntityShape } from '../levelgen/layers';
+import { snapMoveDelta } from '../levelgen/mapEdit';
 
 export type RegionMode = 'off' | 'rect' | 'poly' | 'lasso';
 
@@ -21,13 +23,18 @@ export type ObjectiveAction = { kind: 'move'; id: string; pos: Vec2 } | { kind: 
 /** The layer tools (levelgen/layers.ts): 'select' = click selects an entity of the active layer, a drag moves it; 'add' = a click places one. */
 export type LayerToolMode = 'off' | 'select' | 'add';
 /** One layer-tool gesture on the plan (the page applies it with layers.ts editLayout / editProps). */
-export type LayerAction = { kind: 'select'; key: string | null } | { kind: 'move'; key: string; delta: Vec2 } | { kind: 'add'; pos: Vec2 };
+export type LayerAction = { kind: 'select'; key: string | null } | { kind: 'move'; key: string; delta: Vec2 } | { kind: 'move_end'; key: string; end: 'a' | 'b'; pos: Vec2 } | { kind: 'add'; pos: Vec2 };
+/** What the layer pick tells the overlay: the entity, whether it can be dragged, its shape (the drag ghost) and the point the grid snap uses. */
+export interface LayerHit { key: string; movable: boolean; shape?: EntityShape; ref?: Vec2 }
+/** A draggable end of the selected wall / fence (T-022). */
+export interface WallHandle { key: string; end: 'a' | 'b'; pos: Vec2 }
 /** What the page's extra overlay gets to draw in plan coordinates. */
 export interface OverlayHelpers { scr: (p: Vec2) => [number, number]; pts: (poly: Vec2[]) => string; /** px per cm. */ scale: number; size: [number, number] }
 
 interface Props {
   bounds: { min: Vec2; max: Vec2 } | null;
-  height: number;
+  /** px, or a CSS length (a full-window plan fills its box). */
+  height: number | string;
   mode: RegionMode;
   zone: Vec2[] | null;
   locks: LockDistrict[];
@@ -64,8 +71,12 @@ interface Props {
   /** The layer tool: 'select' picks / drags an entity of the active layer, 'add' places one by click. */
   layerTool?: LayerToolMode;
   /** The entity of the active layer at a plan point (tolerance in cm). */
-  pickLayer?: (p: Vec2, tolCm: number) => { key: string; movable: boolean } | null;
+  pickLayer?: (p: Vec2, tolCm: number) => LayerHit | null;
   onLayerAction?: (a: LayerAction) => void;
+  /** Grid snap of a move (cm; 0 / absent = none): the ghost and the applied delta land the entity's reference point on the grid. */
+  snapStep?: number;
+  /** Drag handles of the selected wall's ends (T-022): shown with the select tool, a drag changes the wall's length. */
+  handles?: WallHandle[];
   /** Extra SVG drawn under the start / goals (chokepoints, props, the selection), in the plan's transform. */
   overlay?: (h: OverlayHelpers) => React.ReactNode;
   children: React.ReactNode;
@@ -78,9 +89,9 @@ const BORDER_PX = 1;
 const CLICK_PX = 4;
 const START_ID = 'START';
 
-export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, locks, inside = [], locked = [], blocks = [], onZone, view, onView, objectives, objErrors = {}, objWarnings = {}, bestPath, addGoal = false, onObjective, squad, trail, trails, objectivesEditable = true, showObjectives = true, layerTool = 'off', pickLayer, onLayerAction, overlay, children }) => {
+export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, locks, inside = [], locked = [], blocks = [], onZone, view, onView, objectives, objErrors = {}, objWarnings = {}, bestPath, addGoal = false, onObjective, squad, trail, trails, objectivesEditable = true, showObjectives = true, layerTool = 'off', pickLayer, onLayerAction, snapStep = 0, handles = [], overlay, children }) => {
   const box = useRef<HTMLDivElement>(null);
-  const [size, setSize] = useState<[number, number]>([0, height]);
+  const [size, setSize] = useState<[number, number]>([0, typeof height === 'number' ? height : 0]);
   const [draft, setDraft] = useState<Vec2[]>([]);
   const [hover, setHover] = useState<Vec2 | null>(null);
   const dragging = useRef(false);
@@ -88,7 +99,9 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
   const [panning, setPanning] = useState(false);
   const [drag, setDrag] = useState<{ id: string; pos: Vec2 } | null>(null);
   // the layer tool's drag: a ghost line follows the cursor; the move is applied on release
-  const [layerDrag, setLayerDrag] = useState<{ key: string; from: Vec2; to: Vec2; movable: boolean } | null>(null);
+  const [layerDrag, setLayerDrag] = useState<{ key: string; from: Vec2; to: Vec2; movable: boolean; shape?: EntityShape; ref?: Vec2 } | null>(null);
+  // T-022: a wall end being dragged (the new position is applied on release)
+  const [endDrag, setEndDrag] = useState<{ key: string; end: 'a' | 'b'; to: Vec2 } | null>(null);
   const space = useRef(false);
   const [spaceDown, setSpaceDown] = useState(false);
   const viewRef = useRef(view);
@@ -153,7 +166,7 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
         e.preventDefault();
         (e.target as Element).setPointerCapture?.(e.pointerId);
         onLayerAction?.({ kind: 'select', key: hit.key });
-        setLayerDrag({ key: hit.key, from: p, to: p, movable: hit.movable });
+        setLayerDrag({ key: hit.key, from: p, to: p, movable: hit.movable, shape: hit.shape, ref: hit.ref });
         return;
       }
     }
@@ -180,6 +193,7 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
     }
     const p = world(e);
     if (!p) return;
+    if (endDrag) { setEndDrag({ ...endDrag, to: snapStep > 0 ? [Math.round(p[0] / snapStep) * snapStep, Math.round(p[1] / snapStep) * snapStep] : p }); return; }
     if (layerDrag) { if (layerDrag.movable) setLayerDrag({ ...layerDrag, to: p }); return; }
     if (drag) { setDrag({ id: drag.id, pos: p }); return; }
     setHover(p);
@@ -196,9 +210,10 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
       else if (!pn.moved && pn.click && layerTool === 'select' && onLayerAction) onLayerAction({ kind: 'select', key: null });
       return;
     }
+    if (endDrag) { onLayerAction?.({ kind: 'move_end', key: endDrag.key, end: endDrag.end, pos: endDrag.to }); setEndDrag(null); return; }
     if (layerDrag) {
-      const d: Vec2 = [layerDrag.to[0] - layerDrag.from[0], layerDrag.to[1] - layerDrag.from[1]];
-      if (layerDrag.movable && t && Math.hypot(d[0], d[1]) * t.s >= CLICK_PX) onLayerAction?.({ kind: 'move', key: layerDrag.key, delta: d });
+      const raw: Vec2 = [layerDrag.to[0] - layerDrag.from[0], layerDrag.to[1] - layerDrag.from[1]];
+      if (layerDrag.movable && t && Math.hypot(raw[0], raw[1]) * t.s >= CLICK_PX) onLayerAction?.({ kind: 'move', key: layerDrag.key, delta: dragDelta(layerDrag) });
       setLayerDrag(null);
       return;
     }
@@ -216,6 +231,15 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
     setDraft([]);
     if (isUsableZone(d)) onZone(d);
   };
+  /** The delta of a layer drag: the cursor's, landed on the grid when the snap is on. */
+  const dragDelta = (d: { from: Vec2; to: Vec2; ref?: Vec2 }): Vec2 => snapMoveDelta(d.ref ?? d.from, [d.to[0] - d.from[0], d.to[1] - d.from[1]], snapStep);
+  /** A press on a wall end handle starts the length drag. */
+  const handleDown = (h: WallHandle) => (e: React.PointerEvent) => {
+    if (e.button !== 0 || space.current) return;
+    e.stopPropagation();
+    (e.currentTarget as Element).setPointerCapture?.(e.pointerId);
+    setEndDrag({ key: h.key, end: h.end, to: h.pos });
+  };
   const draftPoly = mode === 'rect' && draft.length === 2 ? shapePolygon({ kind: 'rect', a: draft[0], b: draft[1] }) : mode === 'poly' && hover && draft.length ? [...draft, hover] : draft;
 
   /** A marker press starts its drag (never a pan / a zone). */
@@ -232,7 +256,7 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
     onObjective?.({ kind: 'remove', id });
   };
   const posOf = (id: string, p: Vec2): Vec2 => (drag && drag.id === id ? drag.pos : p);
-  const cursor = panning || drag || layerDrag ? 'grabbing' : spaceDown ? 'grab' : addGoal || layerTool === 'add' ? 'copy' : layerTool === 'select' ? 'default' : mode === 'off' ? 'grab' : 'crosshair';
+  const cursor = panning || drag || layerDrag || endDrag ? 'grabbing' : spaceDown ? 'grab' : addGoal || layerTool === 'add' ? 'copy' : layerTool === 'select' ? 'default' : mode === 'off' ? 'grab' : 'crosshair';
 
   return (
     <div ref={box} className="relative overflow-hidden rounded-xl" style={{ height }}>
@@ -267,7 +291,32 @@ export const RegionOverlay: React.FC<Props> = ({ bounds, height, mode, zone, loc
         {t && squad && squad.map((p, i) => { const q = scr(p); return <circle key={`sq${i}`} cx={q[0]} cy={q[1]} r={i === 0 ? 6 : 4.5} fill={i === 0 ? '#f472b6' : '#fbcfe8'} stroke="#111827" strokeWidth={1.5} style={{ pointerEvents: 'none' }} />; })}
         {/* the page's layers overlay: chokepoints, threat spots, props, the selection */}
         {t && overlay && overlay({ scr, pts, scale: t.s, size })}
-        {t && layerDrag && layerDrag.movable && (() => { const a = scr(layerDrag.from), b = scr(layerDrag.to); return <g style={{ pointerEvents: 'none' }}><line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#f8fafc" strokeWidth={1.5} strokeDasharray="4 3" /><circle cx={b[0]} cy={b[1]} r={6} fill="none" stroke="#f8fafc" strokeWidth={2} /></g>; })()}
+        {t && layerDrag && layerDrag.movable && (() => {
+          const a = scr(layerDrag.from), d = dragDelta(layerDrag), sh = layerDrag.shape;
+          const mv = (q: Vec2): Vec2 => [q[0] + d[0], q[1] + d[1]];
+          const b = scr(mv(layerDrag.from));
+          return (
+            <g style={{ pointerEvents: 'none' }} data-drag-ghost>
+              {sh?.kind === 'poly' && <polygon points={pts(sh.poly.map(mv))} fill="rgba(248, 250, 252, 0.12)" stroke="#f8fafc" strokeWidth={2} strokeDasharray="5 3" />}
+              {sh?.kind === 'seg' && (() => { const p = scr(mv(sh.a)), q = scr(mv(sh.b)); return <line x1={p[0]} y1={p[1]} x2={q[0]} y2={q[1]} stroke="#f8fafc" strokeWidth={Math.max(3, sh.thickness * t.s)} strokeOpacity={0.45} strokeLinecap="round" />; })()}
+              {sh?.kind === 'point' && (() => { const q = scr(mv(layerDrag.ref ?? layerDrag.from)); return <circle cx={q[0]} cy={q[1]} r={Math.max(6, sh.r * t.s)} fill="rgba(248, 250, 252, 0.12)" stroke="#f8fafc" strokeWidth={2} />; })()}
+              <line x1={a[0]} y1={a[1]} x2={b[0]} y2={b[1]} stroke="#f8fafc" strokeWidth={1.5} strokeDasharray="4 3" />
+              <circle cx={b[0]} cy={b[1]} r={6} fill="none" stroke="#f8fafc" strokeWidth={2} />
+              <text x={b[0] + 9} y={b[1] - 8} fill="#f8fafc" fontSize={10} fontFamily="ui-monospace, monospace" style={{ paintOrder: 'stroke', stroke: '#111827', strokeWidth: 3 }}>{`${d[0] >= 0 ? '+' : ''}${(d[0] / 100).toFixed(2)} м, ${d[1] >= 0 ? '+' : ''}${(d[1] / 100).toFixed(2)} м`}</text>
+            </g>
+          );
+        })()}
+        {/* the selected wall's end handles (T-022: drag = change the length); the dragged one follows the cursor */}
+        {t && layerTool === 'select' && mode === 'off' && handles.map((h) => {
+          const p = scr(endDrag && endDrag.key === h.key && endDrag.end === h.end ? endDrag.to : h.pos);
+          return (
+            <g key={`${h.key}:${h.end}`} onPointerDown={handleDown(h)} style={{ cursor: 'crosshair' }} data-wall-handle={`${h.key}:${h.end}`}>
+              <title>{`Конец ${h.end.toUpperCase()}: перетащите, чтобы изменить длину`}</title>
+              <circle cx={p[0]} cy={p[1]} r={9} fill="rgba(0,0,0,0.001)" />
+              <circle cx={p[0]} cy={p[1]} r={5} fill="#f8fafc" stroke="#0891b2" strokeWidth={2} />
+            </g>
+          );
+        })}
         {/* the start + goals */}
         {t && objectives && showObjectives && (() => {
           const sp = scr(posOf(START_ID, objectives.start.pos));
