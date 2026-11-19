@@ -263,7 +263,9 @@ def send_parts(worker, source, files, changed, state, part_bytes):
         if batch:
             remote_tar = f"{worker.root}/.part-{name}-{part_no:04d}.tar"
             worker.scp_to(tar_path, remote_tar)
-            out = worker.ps(f"Set-Location '{dest}'; $o = cmd /c \"tar -xf `\"{remote_tar}`\" 2>&1\"; $c = $LASTEXITCODE; "
+            # Python tarfile, not the worker's bsdtar: bsdtar on the en-US worker cannot write non-ASCII names from PAX
+            # headers ('Archive entry has empty or unreadable filename', 2026-11-19: ASSETS/Blender/Creatures/<Cyrillic C>utter).
+            out = worker.ps(f"Set-Location '{dest}'; $o = cmd /c \"python -X utf8 -c `\"import tarfile,sys;tarfile.open(sys.argv[1]).extractall(sys.argv[2])`\" `\"{remote_tar}`\" . 2>&1\"; $c = $LASTEXITCODE; "
                             f"Remove-Item '{remote_tar}' -ErrorAction SilentlyContinue; 'TAR_EXIT ' + $c; $o | Select-Object -First 8")
             if "TAR_EXIT 0" not in out:
                 raise RuntimeError("tar on the worker: " + " | ".join(l.strip() for l in out.splitlines() if l.strip())[:600])
