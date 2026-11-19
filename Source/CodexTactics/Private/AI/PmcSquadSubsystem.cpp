@@ -2480,6 +2480,21 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	return bTaken;
 }
 
+bool UPmcSquadSubsystem::CoverSlotAlongRay(UWorld* World, const FVector& Origin, const FVector& Direction, float Reach, const FCollisionQueryParams& Params,
+	FCoverSlot& OutSlot, const TFunction<bool(const FHitResult&)>& Accept)
+{
+	FHitResult Hit;
+	if (!World || !World->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * Reach, ECC_Visibility, Params) || !Hit.GetActor() || Cast<APawn>(Hit.GetActor()))
+	{
+		return false;
+	}
+	if (Accept && !Accept(Hit))
+	{
+		return false;
+	}
+	return CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, Direction, OutSlot) && OutSlot.IsValid();
+}
+
 bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
 	FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band, float* OutBandFactor, TConstArrayView<FVector> ClaimedPosts,
 	TConstArrayView<FString> ClaimedKeys, const float* PostLevelZ) const
@@ -2555,13 +2570,8 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 	};
 	auto TryRay = [&](const FVector& Origin, const FVector& Direction, float Reach, bool bElevated)
 	{
-		FHitResult Hit;
-		if (!World->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * Reach, ECC_Visibility, Params) || !Hit.GetActor() || Cast<APawn>(Hit.GetActor()))
-		{
-			return;
-		}
 		FCoverSlot Slot;
-		if (!CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, Direction, Slot) || !Slot.IsValid())
+		if (!CoverSlotAlongRay(World, Origin, Direction, Reach, Params, Slot))
 		{
 			return;
 		}

@@ -5,6 +5,8 @@
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcEncounterRules.h"
 #include "AI/PmcTacticalRules.h"
+#include "CollisionQueryParams.h"
+#include "Engine/HitResult.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Tactics/CoverTypes.h"
 #include "PmcSquadSubsystem.generated.h"
@@ -422,6 +424,16 @@ private:
 		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr,
 		TConstArrayView<FVector> ClaimedPosts = TConstArrayView<FVector>(), TConstArrayView<FString> ClaimedKeys = TConstArrayView<FString>(),
 		const float* PostLevelZ = nullptr) const;
+public:
+	/**
+	 * The cover-slot generation of FindCoverNear's rays as a read helper (T-05, FiringPositionSubsystem uses it too): one ray from Origin
+	 * along Direction (planar) up to Reach; the first non-pawn actor it hits is tried as a cover slot (CoverTraceRules::FindCoverSlotAt).
+	 * Accept (optional) sees the hit before the slot is built and may refuse it (a cheap pre-filter). False: no wall / refused / no slot.
+	 */
+	static bool CoverSlotAlongRay(UWorld* World, const FVector& Origin, const FVector& Direction, float Reach, const FCollisionQueryParams& Params,
+		FCoverSlot& OutSlot, const TFunction<bool(const FHitResult&)>& Accept = nullptr);
+
+private:
 	/** G008: resolve the roof access (once per objective) and assign guard / sector posts. bResolveAccess false keeps the access. */
 	void RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess);
 	void ClearDefencePosts(FTeam& Team);
