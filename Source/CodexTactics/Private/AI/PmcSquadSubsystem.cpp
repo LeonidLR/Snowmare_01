@@ -3451,7 +3451,8 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		return nullptr;
 	};
 	const bool bRoof = Team.Defence.bRoof;
-	// The kill zone. A ground objective: the objective itself. A roof: the street toward the attackers, 0.5 x the first man's reach out.
+	// The kill zone. A ground objective: the point on the attackers' nav path (spawn -> objective) KillZoneReachFactor x the shooters' median reach before the objective
+	// (contact happens out on the approach, so the crossfire pair is judged from there), the objective itself without a path. A roof: the street toward the attackers, 0.45 x the first man's reach out.
 	AOperativeCharacter* Lead = MemberOf(Posts[Shooters[0]].Index);
 	if (!Lead)
 	{
@@ -3468,6 +3469,32 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		const FVector Toward = (Team.Defence.ApproachPoint - Objective.Location).GetSafeNormal2D();
 		const float Reach = FMath::Min(static_cast<float>(FVector::Dist2D(Team.Defence.ApproachPoint, Objective.Location)), Config.RoofReachFactor * LeadReach);
 		KillZone = FVector(Objective.Location.X, Objective.Location.Y, Team.Defence.ApproachPoint.Z) + Toward * Reach;
+	}
+	else if (Team.Defence.bHasApproach && Config.KillZoneReachFactor > 0.f)
+	{
+		// One synchronous path query per defence refresh (a refresh is an event - new objective, approach, a death - not a tick).
+		TArray<float> Reaches;
+		for (const int32 PostIndex : Shooters)
+		{
+			const AOperativeCharacter* Member = MemberOf(Posts[PostIndex].Index);
+			Reaches.Add(Member && Member->CurrentWeapon ? Member->CurrentWeapon->Stats.Range.MaxRangeCm : Config.DefaultReachCm);
+		}
+		const float WantedCm = Config.KillZoneReachFactor * FiringPositionRules::MedianOf(Reaches);
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, Team.Defence.ApproachPoint, Objective.Location) : nullptr;
+		FVector OnApproach = FVector::ZeroVector;
+		float UsedCm = 0.f;
+		if (Path && Path->IsValid() && !Path->IsPartial()
+			&& FiringPositionRules::PointAlongPathBefore(Path->PathPoints, WantedCm, OnApproach, UsedCm))
+		{
+			KillZone = OnApproach;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: kill zone on the approach %s (path %.1f m before the objective, %.1f m of path, wanted %.1f m = %.2f x median reach)"),
+				TeamId, *KillZone.ToCompactString(), UsedCm / 100.f, FiringPositionRules::PolylineLength(Path->PathPoints) / 100.f, WantedCm / 100.f, Config.KillZoneReachFactor);
+		}
+		else
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: no full nav path from the approach to the objective: the kill zone stays on the objective"), TeamId);
+		}
 	}
 	const float AreaRadius = FMath::Max(Objective.RadiusCm, Config.AreaRadiusFloorCm);
 	FPmcDefenceConfig AreaConfig;

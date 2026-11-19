@@ -127,6 +127,8 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	float AreaRadiusFloorCm = 600.f;
 	/** "roof_reach_factor" (0.45): a roof defence's kill zone lies this x the lead's reach out toward the attackers. */
 	float RoofReachFactor = 0.45f;
+	/** "kill_zone_reach_factor" (0.6): a ground defence's kill zone lies on the attackers' nav path to the objective, this x the shooters' median weapon reach before the objective (at most the path length). */
+	float KillZoneReachFactor = 0.6f;
 	/** "default_reach_cm" (1400): the reach of a man with no weapon. */
 	float DefaultReachCm = 1400.f;
 	/** "forward_margin_cm" (800): a ground position is forward of the kill zone only when it is nearer the attackers along the approach axis by MORE than this. */
@@ -235,6 +237,18 @@ namespace FiringPositionRules
 	 * than MarginCm. Beside the zone (the flanks) it is NOT forward, however close to the approach it is in a straight line. False without an axis (point == zone).
 	 */
 	CODEXTACTICS_API bool IsForwardOfKillZone(const FVector& StandPoint, const FVector& KillZone, const FVector& ApproachPoint, float MarginCm);
+
+	/** The length of a polyline (all three axes), cm. 0 for fewer than two points. */
+	CODEXTACTICS_API float PolylineLength(TConstArrayView<FVector> Points);
+
+	/**
+	 * The point on a polyline (a nav path from the attackers' spawn to the objective) lying DistanceCm of path length before its END. DistanceCm <= 0 gives the last point,
+	 * >= the whole length the first. OutUsedCm = the distance actually used (clamped to [0, length]). False (OutPoint untouched) for fewer than two points.
+	 */
+	CODEXTACTICS_API bool PointAlongPathBefore(TConstArrayView<FVector> Points, float DistanceCm, FVector& OutPoint, float& OutUsedCm);
+
+	/** The median of the values (the mean of the two middle ones for an even count); 0 for none. */
+	CODEXTACTICS_API float MedianOf(TArray<float> Values);
 
 	/**
 	 * The 3x3 (AreaSamples 9) or centre-only (1) sample points of a circular area on its floor: centre +- (2/3 R) on each axis.

@@ -370,6 +370,47 @@ bool FFiringPositionBandTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFiringPositionPathPointTest, "CodexTactics.AI.FiringPosition.PointAlongPathBefore",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FFiringPositionPathPointTest::RunTest(const FString&)
+{
+	// An L-shaped path: spawn (0,0) -> (1000,0) -> (1000,500) = objective; length 1500.
+	const TArray<FVector> Path = { FVector(0.0, 0.0, 0.0), FVector(1000.0, 0.0, 0.0), FVector(1000.0, 500.0, 0.0) };
+	TestEqual(TEXT("length of the L path"), FiringPositionRules::PolylineLength(Path), 1500.f, 0.01f);
+	FVector Point = FVector::ZeroVector;
+	float Used = 0.f;
+	TestTrue(TEXT("a point on the last leg"), FiringPositionRules::PointAlongPathBefore(Path, 200.f, Point, Used));
+	TestTrue(TEXT("200 cm before the end is (1000, 300)"), Point.Equals(FVector(1000.0, 300.0, 0.0), 0.01));
+	TestEqual(TEXT("the used distance is the asked one"), Used, 200.f, 0.01f);
+	TestTrue(TEXT("a point round the corner"), FiringPositionRules::PointAlongPathBefore(Path, 800.f, Point, Used));
+	TestTrue(TEXT("800 cm before the end is (700, 0)"), Point.Equals(FVector(700.0, 0.0, 0.0), 0.01));
+	TestTrue(TEXT("exactly the corner"), FiringPositionRules::PointAlongPathBefore(Path, 500.f, Point, Used));
+	TestTrue(TEXT("500 cm before the end is the corner"), Point.Equals(FVector(1000.0, 0.0, 0.0), 0.01));
+	TestTrue(TEXT("longer than the path"), FiringPositionRules::PointAlongPathBefore(Path, 99999.f, Point, Used));
+	TestTrue(TEXT("a distance beyond the path is the spawn"), Point.Equals(FVector::ZeroVector, 0.01));
+	TestEqual(TEXT("the used distance is clamped to the length"), Used, 1500.f, 0.01f);
+	TestTrue(TEXT("zero distance"), FiringPositionRules::PointAlongPathBefore(Path, 0.f, Point, Used));
+	TestTrue(TEXT("zero before the end is the objective"), Point.Equals(FVector(1000.0, 500.0, 0.0), 0.01));
+	TestTrue(TEXT("a negative distance is the objective too"), FiringPositionRules::PointAlongPathBefore(Path, -50.f, Point, Used) && Point.Equals(FVector(1000.0, 500.0, 0.0), 0.01));
+	// Heights interpolate (a path over stairs).
+	const TArray<FVector> Stairs = { FVector(0.0, 0.0, 0.0), FVector(1000.0, 0.0, 200.0) };
+	TestTrue(TEXT("height on a slope"), FiringPositionRules::PointAlongPathBefore(Stairs, FVector::Dist(Stairs[0], Stairs[1]) * 0.5f, Point, Used) && FMath::IsNearlyEqual(static_cast<float>(Point.Z), 100.f, 0.1f));
+	// Degenerate input: fewer than two points gives nothing, a zero-length leg does not divide by zero.
+	const TArray<FVector> One = { FVector(5.0, 5.0, 5.0) };
+	Point = FVector(1.0, 2.0, 3.0);
+	TestFalse(TEXT("one point is no path"), FiringPositionRules::PointAlongPathBefore(One, 100.f, Point, Used));
+	TestTrue(TEXT("and leaves the output alone"), Point.Equals(FVector(1.0, 2.0, 3.0)));
+	const TArray<FVector> Flat = { FVector(0.0, 0.0, 0.0), FVector(0.0, 0.0, 0.0), FVector(300.0, 0.0, 0.0) };
+	TestTrue(TEXT("a zero-length leg"), FiringPositionRules::PointAlongPathBefore(Flat, 100.f, Point, Used));
+	TestTrue(TEXT("is skipped"), Point.Equals(FVector(200.0, 0.0, 0.0), 0.01));
+	// MedianOf.
+	TestEqual(TEXT("median of none"), FiringPositionRules::MedianOf({}), 0.f);
+	TestEqual(TEXT("median of an odd count"), FiringPositionRules::MedianOf({ 3000.f, 1000.f, 2000.f }), 2000.f);
+	TestEqual(TEXT("median of an even count is the mean of the middle two"), FiringPositionRules::MedianOf({ 4000.f, 1000.f, 2000.f, 3000.f }), 2500.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFiringPositionConfigTest, "CodexTactics.AI.FiringPosition.Config",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -384,7 +425,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	const TSharedPtr<FJsonObject> Block = ParseBlock(TEXT(R"JSON({
 		"crossfire_min_deg": 60, "area_samples": 1, "min_covered_share": 2.0, "rim_step_max_cm": 500, "min_spacing_m": 7,
 		"muzzle_height_cm": { "crouching": 90 }, "defence_use": false, "scan_rays": 99, "max_cover_slots": 0, "ignored_key": 5,
-			"min_cover_quality": 2.0, "band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "scan_far_stride": 99, "roof_reach_factor": 7, "default_reach_cm": 5
+			"min_cover_quality": 2.0, "band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "scan_far_stride": 99, "roof_reach_factor": 7, "kill_zone_reach_factor": 9, "default_reach_cm": 5
 	})JSON"));
 	TestTrue(TEXT("the block parses"), Block.IsValid());
 	if (Block.IsValid())
@@ -406,6 +447,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 		TestEqual(TEXT("forward_margin_cm is at least 0"), Read.ForwardMarginCm, 0.f, 0.001f);
 		TestEqual(TEXT("scan_far_stride clamps to 8"), Read.ScanFarStride, 8);
 		TestEqual(TEXT("roof_reach_factor clamps to 1"), Read.RoofReachFactor, 1.f, 0.001f);
+		TestEqual(TEXT("kill_zone_reach_factor clamps to 2"), Read.KillZoneReachFactor, 2.f, 0.001f);
 		TestEqual(TEXT("default_reach_cm is at least 100"), Read.DefaultReachCm, 100.f, 0.001f);
 		TestEqual(TEXT("a missing key keeps the default"), Read.LineClearCm, Defaults.LineClearCm, 0.001f);
 		TestEqual(TEXT("a missing phase b key keeps the default"), Read.AreaRadiusFloorCm, Defaults.AreaRadiusFloorCm, 0.001f);
@@ -446,6 +488,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	TestEqual(TEXT("shipped band_max_factor_tier2"), Shipped.BandMaxFactorTier2, Defaults.BandMaxFactorTier2, 0.001f);
 	TestEqual(TEXT("shipped area_radius_floor_cm"), Shipped.AreaRadiusFloorCm, Defaults.AreaRadiusFloorCm, 0.001f);
 	TestEqual(TEXT("shipped roof_reach_factor"), Shipped.RoofReachFactor, Defaults.RoofReachFactor, 0.001f);
+	TestEqual(TEXT("shipped kill_zone_reach_factor"), Shipped.KillZoneReachFactor, Defaults.KillZoneReachFactor, 0.001f);
 	TestEqual(TEXT("shipped default_reach_cm"), Shipped.DefaultReachCm, Defaults.DefaultReachCm, 0.001f);
 	TestEqual(TEXT("shipped forward_margin_cm"), Shipped.ForwardMarginCm, Defaults.ForwardMarginCm, 0.001f);
 	TestTrue(TEXT("shipped defence_use"), Shipped.bDefenceUse == Defaults.bDefenceUse);

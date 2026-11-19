@@ -142,6 +142,8 @@ namespace FiringPositionRules
 		Out.AreaRadiusFloorCm = FMath::Max(Out.AreaRadiusFloorCm, 0.f);
 		FiringReadNumber(Block, TEXT("roof_reach_factor"), Out.RoofReachFactor);
 		Out.RoofReachFactor = FMath::Clamp(Out.RoofReachFactor, 0.f, 1.f);
+		FiringReadNumber(Block, TEXT("kill_zone_reach_factor"), Out.KillZoneReachFactor);
+		Out.KillZoneReachFactor = FMath::Clamp(Out.KillZoneReachFactor, 0.f, 2.f);
 		FiringReadNumber(Block, TEXT("default_reach_cm"), Out.DefaultReachCm);
 		Out.DefaultReachCm = FMath::Max(Out.DefaultReachCm, 100.f);
 		FiringReadNumber(Block, TEXT("forward_margin_cm"), Out.ForwardMarginCm);
@@ -400,6 +402,53 @@ namespace FiringPositionRules
 		// Along the axis from the attackers toward the zone: negative = nearer the attackers than the zone.
 		const float Along = static_cast<float>(FVector2D::DotProduct(ToStand, Axis.GetSafeNormal()));
 		return Along < -FMath::Max(MarginCm, 0.f);
+	}
+
+	float PolylineLength(TConstArrayView<FVector> Points)
+	{
+		double Length = 0.0;
+		for (int32 Index = 1; Index < Points.Num(); ++Index)
+		{
+			Length += FVector::Dist(Points[Index - 1], Points[Index]);
+		}
+		return static_cast<float>(Length);
+	}
+
+	bool PointAlongPathBefore(TConstArrayView<FVector> Points, float DistanceCm, FVector& OutPoint, float& OutUsedCm)
+	{
+		if (Points.Num() < 2)
+		{
+			return false;
+		}
+		const float Total = PolylineLength(Points);
+		OutUsedCm = FMath::Clamp(DistanceCm, 0.f, Total);
+		// Walk back from the end.
+		float Remaining = OutUsedCm;
+		for (int32 Index = Points.Num() - 1; Index >= 1; --Index)
+		{
+			const FVector& Tail = Points[Index];
+			const FVector& Head = Points[Index - 1];
+			const float Segment = static_cast<float>(FVector::Dist(Head, Tail));
+			if (Remaining <= Segment)
+			{
+				OutPoint = Segment > KINDA_SMALL_NUMBER ? FMath::Lerp(Tail, Head, Remaining / Segment) : Tail;
+				return true;
+			}
+			Remaining -= Segment;
+		}
+		OutPoint = Points[0];
+		return true;
+	}
+
+	float MedianOf(TArray<float> Values)
+	{
+		if (Values.IsEmpty())
+		{
+			return 0.f;
+		}
+		Values.Sort();
+		const int32 Mid = Values.Num() / 2;
+		return (Values.Num() % 2 == 1) ? Values[Mid] : 0.5f * (Values[Mid - 1] + Values[Mid]);
 	}
 
 	TArray<FVector> AreaSamplePoints(const FVector& Centre, float RadiusCm, int32 AreaSamples)
