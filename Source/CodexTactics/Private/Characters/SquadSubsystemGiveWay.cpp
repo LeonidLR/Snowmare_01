@@ -148,6 +148,32 @@ void USquadSubsystem::BuildGiveWayPath(const AOperativeCharacter& Mover, TArray<
 	}
 }
 
+bool USquadSubsystem::InMoverFlightApproach(const AOperativeCharacter& Mover, const FVector& Point, float ExtraCm)
+{
+	using namespace SquadSubsystemGiveWayLocal;
+	const FSquadGiveWayTuning& Tuning = SquadGiveWayTuning::Get();
+	if (CVarSquadGiveWay.GetValueOnGameThread() == 0 || !Tuning.bEnabled || !Mover.HasOwnMoveOrder())
+	{
+		return false;
+	}
+	TArray<FVector> Path;
+	BuildGiveWayPath(Mover, Path);
+	const FGiveWayPath* Cached = GiveWayPaths.Find(&Mover);
+	if (!Cached || Cached->FlightFeet.IsEmpty())
+	{
+		return false;
+	}
+	TArray<SquadGiveWayRules::FFlightFoot> Feet;
+	for (int32 Index = 0; Index < Cached->FlightFeet.Num(); ++Index)
+	{
+		Feet.Add({ Cached->FlightFeet[Index], Cached->FlightDirections[Index] });
+	}
+	const SquadGiveWayRules::FFlightApproach Approach = SquadGiveWayRules::SelectApproach(Feet,
+		FVector(Mover.GetActorLocation().X, Mover.GetActorLocation().Y, GiveWayFeetZ(Mover)), Tuning);
+	return Approach.bValid && FMath::Abs(Point.Z - Approach.FootZ) <= Tuning.SameLevelCm
+		&& SquadGiveWayRules::InApproachZone(Approach, FVector2D(Point), ExtraCm, Tuning);
+}
+
 void USquadSubsystem::UpdateGiveWay()
 {
 	using namespace SquadSubsystemGiveWayLocal;
@@ -345,32 +371,80 @@ void USquadSubsystem::UpdateGiveWay()
 			}
 			const FVector Lift(0.f, 0.f, Tuning.MaxRiseCm);
 			bool bStepped = false;
-			for (const FVector2D& Point : SquadGiveWayRules::AsideSpots(Path, Crossing, CrossCm, Tuning, &Feet2D, Approach.bValid ? &Approach : nullptr,
-					 CapsuleRadius(*Idle)))
+			// One candidate spot: the reason it is refused (nullptr: free - he steps there).
+			auto TrySpot = [&](const FVector2D& Point, const TCHAR* Kind) -> bool
 			{
 				FNavLocation OnNav;
 				FHitResult Hit;
-				if (!Nav->ProjectPointToNavigation(FVector(Point.X, Point.Y, IdleFeet), OnNav, FVector(Tuning.NavSnapCm, Tuning.NavSnapCm, Tuning.SameLevelCm))
-					|| FVector2D::Distance(FVector2D(OnNav.Location), Point) > Tuning.NavSnapCm || FMath::Abs(OnNav.Location.Z - IdleFeet) > Tuning.MaxRiseCm
-					|| IsRampUnder(Point, IdleFeet)
-					// The navmesh projection may pull the spot back to the path (a wall beside it): still clear of it.
-					|| SquadGiveWayRules::DistanceToPath(Path, FVector2D(OnNav.Location), Crossing.AlongCm + Tuning.LookAheadCm) < CrossCm
-					|| (Approach.bValid && SquadGiveWayRules::InApproachZone(Approach, FVector2D(OnNav.Location), CapsuleRadius(*Idle), Tuning))
-					|| Taken.ContainsByPredicate([&Point, CrossCm](const FVector2D& Other) { return FVector2D::Distance(Other, Point) < CrossCm; })
-					|| World->LineTraceSingleByChannel(Hit, Feet + Lift, OnNav.Location + Lift, ECC_Visibility, WalkParams))
+				const TCHAR* Refused = nullptr;
+				if (!Nav->ProjectPointToNavigation(FVector(Point.X, Point.Y, IdleFeet), OnNav, FVector(Tuning.NavSnapCm, Tuning.NavSnapCm, Tuning.SameLevelCm)))
 				{
-					continue;
+					Refused = TEXT("off the navmesh");
+				}
+				else if (FVector2D::Distance(FVector2D(OnNav.Location), Point) > Tuning.NavSnapCm)
+				{
+					Refused = TEXT("nav snap too far");
+				}
+				else if (FMath::Abs(OnNav.Location.Z - IdleFeet) > Tuning.MaxRiseCm)
+				{
+					Refused = TEXT("rise");
+				}
+				else if (IsRampUnder(Point, IdleFeet))
+				{
+					Refused = TEXT("ramp");
+				}
+				// The navmesh projection may pull the spot back to the path (a wall beside it): still clear of it.
+				else if (SquadGiveWayRules::DistanceToPath(Path, FVector2D(OnNav.Location), Crossing.AlongCm + Tuning.LookAheadCm) < CrossCm)
+				{
+					Refused = TEXT("snapped onto the path");
+				}
+				else if (Approach.bValid && SquadGiveWayRules::InApproachZone(Approach, FVector2D(OnNav.Location), CapsuleRadius(*Idle), Tuning))
+				{
+					Refused = TEXT("approach zone");
+				}
+				else if (Taken.ContainsByPredicate([&Point, CrossCm](const FVector2D& Other) { return FVector2D::Distance(Other, Point) < CrossCm; }))
+				{
+					Refused = TEXT("taken");
+				}
+				else if (World->LineTraceSingleByChannel(Hit, Feet + Lift, OnNav.Location + Lift, ECC_Visibility, WalkParams))
+				{
+					Refused = TEXT("wall trace");
+				}
+				if (Refused)
+				{
+					return false;
 				}
 				const EOperativeOrderResult Result = Idle->FollowTo(OnNav.Location, FormationTuning::Get().PaceWalkSpeed);
-				UE_LOG(LogCodexTactics, Display, TEXT("[GiveWay] %s (idle) stands on %s's %s %.0f cm ahead of him: steps aside from (%.0f, %.0f) to (%.0f, %.0f) -> %d"),
-					*Idle->DisplayName.ToString(), *Mover->DisplayName.ToString(), bInZone ? TEXT("flight approach") : TEXT("path"), Crossing.AlongCm, Feet.X, Feet.Y,
+				UE_LOG(LogCodexTactics, Display, TEXT("[GiveWay] %s (idle) stands on %s's %s %.0f cm ahead of him: steps %s from (%.0f, %.0f) to (%.0f, %.0f) -> %d"),
+					*Idle->DisplayName.ToString(), *Mover->DisplayName.ToString(), bInZone ? TEXT("flight approach") : TEXT("path"), Crossing.AlongCm, Kind, Feet.X, Feet.Y,
 					OnNav.Location.X, OnNav.Location.Y, static_cast<int32>(Result));
 				if (Result == EOperativeOrderResult::Accepted)
 				{
 					GiveWayTargets.Add(Idle, FVector2D(OnNav.Location));
 				}
-				bStepped = true;
-				break;
+				return Result == EOperativeOrderResult::Accepted; // a refused step tries the next spot (v3 review finding 4)
+			};
+			for (const FVector2D& Point : SquadGiveWayRules::AsideSpots(Path, Crossing, CrossCm, Tuning, &Feet2D, Approach.bValid ? &Approach : nullptr,
+					 CapsuleRadius(*Idle)))
+			{
+				if (TrySpot(Point, TEXT("aside")))
+				{
+					bStepped = true;
+					break;
+				}
+			}
+			// v3 (X6 B_x2_13): both sides walled - a spot behind the mover, away from his way / the flight.
+			if (!bStepped)
+			{
+				for (const FVector2D& Point : SquadGiveWayRules::BehindSpots(Path, Crossing, CrossCm, Tuning, &Feet2D, Approach.bValid ? &Approach : nullptr,
+						 CapsuleRadius(*Idle)))
+				{
+					if (TrySpot(Point, TEXT("behind")))
+					{
+						bStepped = true;
+						break;
+					}
+				}
 			}
 			if (!bStepped)
 			{

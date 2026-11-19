@@ -112,6 +112,15 @@ namespace SquadGiveWayRules
 	CODEXTACTICS_API TArray<FVector2D> AsideSpots(TArrayView<const FVector> Path, const FCrossing& Crossing, float CrossCm, const FSquadGiveWayTuning& Tuning,
 		const FVector2D* IdleFeet, const FFlightApproach* Approach = nullptr, float ZoneExtraCm = 0.f);
 
+	/**
+	 * v3: the fallback when no aside spot is free (both sides walled - L_Gen_BgenTest_X6 B_x2_13: the mover wedged between two mates at his
+	 * path's start): spots BEHIND the mover (Path[0]), against his first leg's way - straight back, then 45 deg back to the idle man's side,
+	 * then to the other side, at StepAsideCm x 1 / 1.5 / 2 / 2.5 / 3 - same filters as AsideSpots (CrossCm off the path within
+	 * Crossing.AlongCm + LookAheadCm, MinStepCm from IdleFeet, out of Approach's zone widened by ZoneExtraCm).
+	 */
+	CODEXTACTICS_API TArray<FVector2D> BehindSpots(TArrayView<const FVector> Path, const FCrossing& Crossing, float CrossCm, const FSquadGiveWayTuning& Tuning,
+		const FVector2D* IdleFeet, const FFlightApproach* Approach = nullptr, float ZoneExtraCm = 0.f);
+
 	/** A ramp / stair foot on a path: where its floor turns into a flight, and the mover's way along the flight's axis there (unit 2D). */
 	struct FFlightFoot
 	{

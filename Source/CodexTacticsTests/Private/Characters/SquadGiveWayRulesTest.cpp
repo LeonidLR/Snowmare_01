@@ -244,6 +244,37 @@ bool FSquadGiveWayMinStepTest::RunTest(const FString&)
 	return true;
 }
 
+SQUAD_GIVE_WAY_TEST(FSquadGiveWayBehindTest, "Behind")
+bool FSquadGiveWayBehindTest::RunTest(const FString&)
+{
+	using namespace SquadGiveWayRules;
+	using namespace SquadGiveWayTestLocal;
+	const FSquadGiveWayTuning Tuning;
+	// X6 B_x2_13: the mover at his path's start, a mate on it beside him (0 cm ahead), the sides walled: spots behind the mover.
+	const TArray<FVector> Path = { FVector(0, 0, 0), FVector(400, 0, 0), FVector(800, 0, 300) };
+	const FCrossing Crossing = FindCrossing(Path, FVector(10, -40, 0), CrossCm, Tuning);
+	TestTrue(TEXT("crosses"), Crossing.bCrosses);
+	const FVector2D Idle(10.0, -40.0);
+	FFlightApproach Approach;
+	Approach.bValid = true;
+	Approach.Foot = FVector2D(400.0, 0.0);
+	Approach.Direction = FVector2D(1.0, 0.0);
+	const TArray<FVector2D> Spots = BehindSpots(Path, Crossing, CrossCm, Tuning, &Idle, &Approach, 35.f);
+	TestTrue(TEXT("some spot"), Spots.Num() > 0);
+	for (const FVector2D& Spot : Spots)
+	{
+		TestTrue(TEXT("behind the mover (against his way)"), Spot.X < 0.0);
+		TestTrue(TEXT("off his path"), DistanceToPath(Path, Spot, Crossing.AlongCm + Tuning.LookAheadCm) >= CrossCm);
+		TestTrue(TEXT("a real step"), FVector2D::Distance(Spot, Idle) >= Tuning.MinStepCm);
+	}
+	if (Spots.Num() > 0)
+	{
+		TestTrue(TEXT("straight back first"), FMath::IsNearlyZero(Spots[0].Y, 0.1));
+	}
+	TestEqual(TEXT("no crossing: none"), BehindSpots(Path, FCrossing(), CrossCm, Tuning, &Idle).Num(), 0);
+	return true;
+}
+
 SQUAD_GIVE_WAY_TEST(FSquadGiveWaySlotWalkTest, "SlotWalk")
 bool FSquadGiveWaySlotWalkTest::RunTest(const FString&)
 {

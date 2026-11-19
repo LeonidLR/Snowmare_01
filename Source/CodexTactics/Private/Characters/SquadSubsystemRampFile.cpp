@@ -251,7 +251,7 @@ void USquadSubsystem::UpdateHolderYield(AOperativeCharacter& Operative, const AO
 	const uint32 Serial = LeaderRef.GetMoveOrderSerial();
 	const uint32* Done = HolderYieldSerial.Find(&Operative);
 	if (!LeaderRef.HasOwnMoveOrder() || !IsWalker(&Operative) || Operative.bInCover || Operative.HasOwnMoveOrder() || Operative.IsTrafficHeld()
-		|| Operative.IsMoving() || (Done && *Done == Serial))
+		|| Operative.IsMoving() || (Done && *Done == Serial) || GiveWayTargets.Contains(&Operative))
 	{
 		UE_CLOG(bDebug, LogCodexTactics, Display, TEXT("[RampFile] yield %s: leader's own walk %d, walker %d cover %d own %d held %d moving %d, done for order %d"),
 			*Operative.DisplayName.ToString(), LeaderRef.HasOwnMoveOrder() ? 1 : 0, IsWalker(&Operative) ? 1 : 0, Operative.bInCover ? 1 : 0,
@@ -289,6 +289,14 @@ void USquadSubsystem::UpdateHolderYield(AOperativeCharacter& Operative, const AO
 			Taken.Add(Target.Value);
 		}
 	}
+	// v3: the give-way step targets are taken too (one claimed-spot set for both rules).
+	for (const TPair<TWeakObjectPtr<AOperativeCharacter>, FVector2D>& Target : GiveWayTargets)
+	{
+		if (Target.Key.IsValid() && Target.Key.Get() != &Operative)
+		{
+			Taken.Add(Target.Value);
+		}
+	}
 	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld());
 	const float Feet = RampFeetZ(Operative);
 	FCollisionQueryParams WalkParams(SCENE_QUERY_STAT(SquadRampYieldWalk), false);
@@ -309,7 +317,9 @@ void USquadSubsystem::UpdateHolderYield(AOperativeCharacter& Operative, const AO
 		FNavLocation OnNav;
 		if (!Nav || !Nav->ProjectPointToNavigation(FVector(Point.X, Point.Y, Operative.GetActorLocation().Z), OnNav, FVector(30.f, 30.f, 150.f))
 			|| FVector2D::Distance(FVector2D(OnNav.Location), Point) > 30.f || FMath::Abs(OnNav.Location.Z - Feet) > 60.f || IsRampUnder(Point, Feet)
-			|| Taken.ContainsByPredicate([&Point](const FVector2D& Other) { return FVector2D::Distance(Other, Point) < 100.0; }) || !IsStraightWalk(OnNav.Location))
+			|| Taken.ContainsByPredicate([&Point](const FVector2D& Other) { return FVector2D::Distance(Other, Point) < 100.0; }) || !IsStraightWalk(OnNav.Location)
+			// v3 (X6 B_x1_8): never back into the stair mouth give way cleared (the leader's flight approach zone) - no ping-pong.
+			|| InMoverFlightApproach(LeaderRef, FVector(OnNav.Location.X, OnNav.Location.Y, Feet), Operative.GetSimpleCollisionRadius()))
 		{
 			continue;
 		}
