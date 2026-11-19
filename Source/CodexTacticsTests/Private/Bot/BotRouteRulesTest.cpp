@@ -313,6 +313,44 @@ bool FBotRouteLevelsTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FBotRouteParseMantleTest, "CodexTactics.Bot.Route.ParseMantle",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FBotRouteParseMantleTest::RunTest(const FString&)
+{
+	using namespace BotRouteTest;
+	// A leg over a mantle edge (Scripts/Editor/levelgen_bot_route.py, the lab bridge's V3_mantle): the end waypoint's "mantle" (edge id) and
+	// "mantle_at" (the crossing point on the edge line, world cm). A malformed "mantle_at" is ignored, the edge id kept.
+	FBotRouteConfig Config;
+	FString Error;
+	const TSharedPtr<FJsonObject> Json = ParseRouteObject(TEXT(R"({"loop": false, "points": [{"at": [4400, 3920], "z": 0},
+		{"at": [4400, 3580], "z": 0, "label": "over the wall", "mantle": "me_W_obstacle_s", "mantle_at": [4400, 3690]},
+		{"at": [4400, 3300], "mantle": "me_W_obstacle_s"},
+		{"at": [4000, 3300], "mantle": "me_W_obstacle_s", "mantle_at": [4400]},
+		{"at": [3500, 3300], "mantle_at": [10, 20]}]})"));
+	if (!TestTrue(TEXT("parses"), Json.IsValid() && BotRouteRules::Parse(*Json, Config, &Error)))
+	{
+		return false;
+	}
+	TestEqual(TEXT("five waypoints"), Config.Points.Num(), 5);
+	TestEqual(TEXT("the edge id read"), Config.Points[1].Mantle, FString(TEXT("me_W_obstacle_s")));
+	TestTrue(TEXT("the crossing point read"), Config.Points[1].bHasMantleAt);
+	TestEqual(TEXT("the crossing point x"), Config.Points[1].MantleAt.X, 4400.0);
+	TestEqual(TEXT("the crossing point y"), Config.Points[1].MantleAt.Y, 3690.0);
+	TestTrue(TEXT("absent keys: no edge, no crossing point"), Config.Points[0].Mantle.IsEmpty() && !Config.Points[0].bHasMantleAt);
+	TestEqual(TEXT("an edge without a crossing point keeps the edge"), Config.Points[2].Mantle, FString(TEXT("me_W_obstacle_s")));
+	TestFalse(TEXT("... and no crossing point"), Config.Points[2].bHasMantleAt);
+	TestFalse(TEXT("a malformed mantle_at is ignored"), Config.Points[3].bHasMantleAt);
+	TestEqual(TEXT("... the edge id kept"), Config.Points[3].Mantle, FString(TEXT("me_W_obstacle_s")));
+	TestTrue(TEXT("a crossing point without an edge is read as it stands"), Config.Points[4].Mantle.IsEmpty() && Config.Points[4].bHasMantleAt);
+	TestTrue(TEXT("the other keys are unaffected (z, label)"), Config.Points[1].bHasZ && Config.Points[1].Label == TEXT("over the wall"));
+
+	// The bookkeeping record starts empty (nothing clicked / climbed / reached, no refusal).
+	const FBotRouteMantle Record;
+	TestTrue(TEXT("a fresh mantle record is empty"), !Record.bClicked && !Record.bClimbed && !Record.bReached && Record.MembersUp == 0 && Record.Members == 0 && Record.Why.IsEmpty());
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FBotRouteGeneratedDepotTest, "CodexTactics.Bot.Route.GeneratedDepotRoute",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

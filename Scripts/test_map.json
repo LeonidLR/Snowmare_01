@@ -14,7 +14,7 @@
   "smokeRegistry": [
     "HitchProbeSmoke", "VehicleSmoke", "VehicleCombatSmoke", "VehicleDamageSmoke", "EnemyPrioritySmoke", "EnemyArchetypeSmoke", "EnemyFacingJitterSmoke", "MilitaryZombieSmoke", "TacticalHeatSmoke", "MovementSmoke", "CameraZoneSmoke", "CameraStaySmoke", "CameraMinZoomSmoke", "CameraMinZoomDepotSmoke", "QuestChainSmoke", "CombatFlowSmoke", "WaveCombatSmoke", "ColdSmoke",
     "StanceSmoke", "OptimizedCharacterSmoke", "BarrelSmoke", "RelocationSmoke", "DeployableSmoke", "LootSmoke", "TurretSmoke", "TurretPowerSmoke", "TargetedShotSmoke",
-    "MissionSmoke", "MissionGoalsSmoke", "TacticalMapSmoke", "TacticalMapLabCrossroadsSmoke", "TacticalMapLabAlleySmoke", "TacticalMapLabBridgeSmoke", "TacticalPmcSmoke", "PmcArenaTacticalSmoke", "GeneratedPropsSmoke", "GeneratedPropsX6Smoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
+    "MissionSmoke", "MissionGoalsSmoke", "TacticalMapSmoke", "TacticalMapLabCrossroadsSmoke", "TacticalMapLabAlleySmoke", "TacticalMapLabBridgeSmoke", "LabBridgeMantleRouteSmoke", "TacticalPmcSmoke", "PmcArenaTacticalSmoke", "GeneratedPropsSmoke", "GeneratedPropsX6Smoke", "MainMenuSmoke", "DialogueSmoke", "ActionBarSmoke", "BannersSmoke", "TurnBasedSmoke",
     "LevelWaveSmoke", "ExposedZonesSmoke", "TurnBasedPushSmoke", "TurnBasedBarricadeSmoke", "TurnBasedDeploySmoke",
     "WeaponSelectorSmoke", "GrenadeSmoke", "GuardSmoke", "InventorySmoke", "TransferSmoke", "SaveLoadSmoke",
     "SaveRoundTripSmoke", "PauseMenuSmoke", "RadiusRingSmoke", "FlankBreachSmoke", "SusaninSmoke", "FloatingTextSmoke",
@@ -164,6 +164,7 @@
     "TacticalMapLabCrossroadsSmoke": { "map": "/Game/Maps/Generated/L_Lab_Crossroads", "extra": "-LevelJson=L_Lab_Crossroads.json", "timeout": 600, "_why": "T-02 smart-enemies lab map (DS-00A): load-only tactical map check - file loaded, counts = JSON, every spot on the navmesh / a walkable surface" },
     "TacticalMapLabAlleySmoke": { "map": "/Game/Maps/Generated/L_Lab_Alley", "extra": "-LevelJson=L_Lab_Alley.json", "timeout": 600, "_why": "T-02 smart-enemies lab map (DS-00B): load-only tactical map check - file loaded, counts = JSON, every spot on the navmesh / a walkable surface" },
     "TacticalMapLabBridgeSmoke": { "map": "/Game/Maps/Generated/L_Lab_Bridge", "extra": "-LevelJson=L_Lab_Bridge.json", "timeout": 600, "_why": "T-02 smart-enemies lab map (DS-00C): load-only tactical map check - file loaded, counts = JSON, every spot on the navmesh / a walkable surface" },
+    "LabBridgeMantleRouteSmoke": { "map": "/Game/Maps/Generated/L_Lab_Bridge", "extra": "-LevelJson=L_Lab_Bridge.json", "timeout": 900, "_why": "T-02 gap 4 (2026-11-19): the bot route mode walks the lab bridge route variant V3_mantle (level JSON bot_route_variants) - the leg over the W_obstacle is a climb click on its top, the squad climbs in turns; PASS = every waypoint reached + the mantle climbed (UPlaytestBotSubsystem::GetRouteMantles)" },
     "TacticalPmcSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_X4", "extra": "-LevelJson=L_Gen_Depot_X4.json", "timeout": 600, "_why": "TACTICAL_MAP P2 (designer 2026-11-17: the dangerous places affect gameplay): a PMC squad spawned with the map's tactical file along the squad's way to a mission goal (UPmcSquadSubsystem::SpawnSquadTactical, PmcTacticalRules) - the marksman on an overwatch roof spot, an ambusher at a chokepoint exit (its hiding spot, outside the outline), the seeded ladder-only roof picker, the men hold their posts when commanded, their positions safer (DangerAt PMC side) than random points along the way, a fall-back round a chokepoint, no file = no posts" },
     "PmcArenaTacticalSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_X4", "extra": "-LevelJson=L_Gen_Depot_X4.json", "timeout": 900, "_why": "TACTICAL_MAP P3 (designer 2026-11-17: the data feeds the trainer): one tactical arena round on the generated map (the attackers walk the squad's route from the level start / a mission goal to another goal, the defenders spawn on their tactical posts) and the result JSON's behaviour blocks (rounds[].behaviour + sides.A / B.behaviour, Grok G002 codex.pmc_arena_behaviour/1, 13 metrics) validated" },
     "RoofCutawayFocusSmoke": { "map": "/Game/Maps/Generated/L_Gen_Depot_1", "extra": "-LevelJson=L_Gen_Depot_1.json", "timeout": 300, "_why": "game designer bug report 2026-11-02 item 8 (L_Gen_Depot_1): 2 men on the hall roof, 1 under it - the roof cutaway and the minimap floor follow the SELECTED man (the leader in group mode): roof man -> the roof stays, ground man -> it is cut, back -> it stays" },
@@ -536,7 +537,7 @@
       "name": "mantling-slice1-2026-11-15",
       "globs": ["Source/**/Characters/MantleRules*", "Source/**/Characters/OperativeCharacterMantle*", "Source/**/Interactables/MantleNavigation*", "Source/**/Debug/MantleSmoke*", "Source/**/Debug/MantleAlignSmoke*", "Source/**/Debug/MantleDescentSmoke*", "Source/**/Debug/MantleClickSmoke*", "Source/**/Debug/MantleFenceRouteSmoke*", "Source/**/Debug/FormationMantleSmoke*", "Source/**/Characters/SquadMantleRules*", "Source/**/Characters/SquadSubsystemMantleQueue*", "Source/**/Tactics/CoverGhostActor*", "Content/Data/Movement/mantle.json", "Content/Data/LevelGen/obstacle_heights.json", "Scripts/Tools/apply_depot_height_classes.py"],
       "tests": ["CodexTactics.Characters.Mantle", "CodexTactics.Formation.MantleQueue", "CodexTactics.Ladder.TraversalQueue", "CodexTactics.Characters.Vault", "CodexTactics.Movement.Vault"],
-      "smokes": ["MantleSmoke", "FormationMantleSmoke", "MantleAlignSmoke", "MantleDescentSmoke", "MantleClickSmoke", "MantleFenceRouteSmoke", "CornerHoldSmoke", "VaultSmoke", "DepotVaultSmoke", "BarricadeVaultBackSmoke", "FallDropSmoke", "LevelGenRouteSmoke", "SoloStartSmoke"]
+      "smokes": ["MantleSmoke", "FormationMantleSmoke", "MantleAlignSmoke", "MantleDescentSmoke", "MantleClickSmoke", "MantleFenceRouteSmoke", "CornerHoldSmoke", "VaultSmoke", "DepotVaultSmoke", "BarricadeVaultBackSmoke", "FallDropSmoke", "LevelGenRouteSmoke", "LabBridgeMantleRouteSmoke", "SoloStartSmoke"]
     },
     {
       "name": "designer-2026-10-22-vault-back",
@@ -1295,7 +1296,7 @@
       "globs": ["Scripts/Editor/levelgen_bot_route.py", "Scripts/levelgen_record_run.ps1", "Scripts/levelgen_route_smoke.ps1", "Scripts/job_status.ps1", "Scripts/Tools/clip_assemble.py",
         "Source/**/Bot/BotRouteRules*", "Source/**/Bot/PlaytestBotRouteMode*", "Source/**/Bot/CombatLabRunCollector*", "Source/**/Debug/ClipRecorderCommand*", "Tools/TrainingGround/src/combatLab/maps*"],
       "tests": ["CodexTactics.Bot.Route", "CodexTactics.Bot.CombatLab", "CodexTactics.LevelJson"],
-      "smokes": ["LevelGenRouteSmoke", "FormationLabCombatSmoke", "CombatLabAmbushSmoke", "CombatLabTowerSmoke"]
+      "smokes": ["LevelGenRouteSmoke", "LabBridgeMantleRouteSmoke", "FormationLabCombatSmoke", "CombatLabAmbushSmoke", "CombatLabTowerSmoke"]
     },
     {
       "name": "mission-goals-2026-11-17",
@@ -1309,7 +1310,7 @@
       "_comment": "TACTICAL_MAP P1 (designer 2026-11-17): the level generator's danger analysis as the in-game tactical map - Content/Data/LevelGen/tactical/<Map>.tactical.json (Tools/TrainingGround src/levelgen/tacticalMap.ts, scripts/export-tactical-map.ts, the accept / build hook src/levelgen/node/runtimeFiles.ts), Content/Data/LevelGen/tactical_runtime.json, UTacticalMapSubsystem + TacticalMapRules, the debug draw / dump.",
       "globs": ["Source/**/LevelGen/TacticalMap*", "Source/**/Debug/TacticalMapSmoke*", "Content/Data/LevelGen/tactical/**", "Content/Data/LevelGen/tactical_runtime.json", "Tools/TrainingGround/src/levelgen/tacticalMap*", "Tools/TrainingGround/src/levelgen/node/runtimeFiles*", "Tools/TrainingGround/scripts/export-tactical-map.ts"],
       "tests": ["CodexTactics.LevelGen.TacticalMap", "CodexTactics.LevelGen.MissionGoals", "CodexTactics.AI.PmcTactical"],
-      "smokes": ["TacticalMapSmoke", "TacticalMapLabCrossroadsSmoke", "TacticalMapLabAlleySmoke", "TacticalMapLabBridgeSmoke", "MissionGoalsSmoke", "TacticalPmcSmoke", "PmcArenaTacticalSmoke"]
+      "smokes": ["TacticalMapSmoke", "TacticalMapLabCrossroadsSmoke", "TacticalMapLabAlleySmoke", "TacticalMapLabBridgeSmoke", "LabBridgeMantleRouteSmoke", "MissionGoalsSmoke", "TacticalPmcSmoke", "PmcArenaTacticalSmoke"]
     },
     {
       "name": "tactical-pmc-2026-11-17",

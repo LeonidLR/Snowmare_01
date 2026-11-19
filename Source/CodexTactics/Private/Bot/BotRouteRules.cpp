@@ -140,6 +140,12 @@ bool BotRouteRules::Parse(const FJsonObject& Route, FBotRouteConfig& OutConfig, 
 		Waypoint.bHasZ = Point->TryGetNumberField(TEXT("z"), Z);
 		Waypoint.Z = static_cast<float>(Z);
 		Point->TryGetStringField(TEXT("drop"), Waypoint.Drop);
+		Point->TryGetStringField(TEXT("mantle"), Waypoint.Mantle);
+		Waypoint.bHasMantleAt = ReadXY(*Point, TEXT("mantle_at"), Waypoint.MantleAt);
+		if (!Waypoint.bHasMantleAt)
+		{
+			Waypoint.MantleAt = FVector2D::ZeroVector;
+		}
 		if (Waypoint.Label.IsEmpty())
 		{
 			Waypoint.Label = FString::Printf(TEXT("#%d"), Each);

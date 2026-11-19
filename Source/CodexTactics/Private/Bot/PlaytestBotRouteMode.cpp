@@ -10,6 +10,12 @@
 // the builder's drop nav link (the leader walks off the rim and falls) - recorded per drop (fell / scripted), and a drop leg that gets
 // stuck is SCRIPTED: the bot puts the squad down at the waypoint itself and the record says so. Codex.Bot.Route starts the mode from the
 // console (LevelGenRouteSmoke, the clip recorder).
+// A leg over a MANTLE edge (a waypoint with "mantle" + "mantle_at", Scripts/Editor/levelgen_bot_route.py): instead of the ground click the bot
+// clicks the obstacle's TOP just past the edge crossing - the player's own climb click (ACodexTacticsPlayerController::HandleWorldHit ->
+// USquadSubsystem::OrderSquadMantle: the formation climbs in turns, the leader first, MANTLING.md 6.4; one man: OrderMantleTop) - and waits
+// for the climb (the stuck clock paused) before the ground move on to the waypoint. Recorded per mantle (FBotRouteMantle: clicked / climbed /
+// members up / why); a click that finds no top or is refused leaves the leg to the plain ground walk. SetRouteOverride runs a route other
+// than the level's own (a "bot_route_variants" entry: a non-mandatory route with a mantle leg) for the next run.
 #include "Bot/PlaytestBotSubsystem.h"
 
 #include "AI/AmbushWatchRules.h"
@@ -62,6 +68,14 @@ namespace BotRouteModeLocal
 	constexpr float LevelClickBelowCm = 200.f;
 	/** A scripted drop puts the members on a ring this wide round the waypoint, cm. */
 	constexpr float DropRingCm = 90.f;
+	/** The mantle top click: the trace points past the edge crossing along the leg (the obstacle's top is there), cm - the first one that hits a top. */
+	constexpr float MantleTopOffsetsCm[] = { 30.f, 15.f, 50.f, 5.f };
+	/** The mantle top click's downward trace runs from this far above the leader's feet to this far below them, cm. */
+	constexpr float MantleTopAboveCm = 400.f;
+	constexpr float MantleTopBelowCm = 100.f;
+	/** A hit is a top, not the ground, when its normal points up (the controller's climb-click rule: |N.Z| >= 0.3) and it lies this far above the feet, cm. */
+	constexpr float MantleTopMinNormalZ = 0.3f;
+	constexpr float MantleTopMinAboveFeetCm = 40.f;
 
 	FVector2D To2D(const FVector& Point)
 	{
@@ -98,7 +112,9 @@ bool UPlaytestBotSubsystem::TrySetupRouteMode()
 	{
 		RouteSwitch = RouteForce;
 	}
-	const bool bHasRoute = Level && Level->Config.BotRoute.IsValid();
+	// SetRouteOverride (a smoke's route variant) is ONE-SHOT: taken here, forgotten whatever this setup decides.
+	const FBotRouteConfig* RouteConfig = bHasRouteOverride ? &RouteOverride : (Level ? &Level->Config.BotRoute : nullptr);
+	const bool bHasRoute = Level && RouteConfig && RouteConfig->IsValid();
 	const bool bEndless = Level && Level->Config.Pressure.bEnabled;
 	if (RouteSwitch == 0 || !bHasRoute || (RouteSwitch < 0 && !bEndless))
 	{
@@ -106,12 +122,16 @@ bool UPlaytestBotSubsystem::TrySetupRouteMode()
 		{
 			UE_LOG(LogCodexTactics, Warning, TEXT("[Bot] -BotRoute=1 but the level JSON has no valid \"bot_route\": the usual bot"));
 		}
+		bHasRouteOverride = false;
+		RouteOverride = FBotRouteConfig();
 		return false;
 	}
 	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
 	if (!Squad || !Leader)
 	{
+		bHasRouteOverride = false;
+		RouteOverride = FBotRouteConfig();
 		return false;
 	}
 	bRouteMode = true;
@@ -133,7 +153,7 @@ bool UPlaytestBotSubsystem::TrySetupRouteMode()
 	// The squad fights with its automatic fire (as the wave bot); the route is walked in formation.
 	Squad->SetSquadPosture(ESquadFirePosture::Aggressive);
 	RouteStartTime = World->GetTimeSeconds();
-	RouteTracker.Reset(Level->Config.BotRoute, 0.f, To2D(Leader->GetActorLocation()));
+	RouteTracker.Reset(*RouteConfig, 0.f, To2D(Leader->GetActorLocation()));
 	LabCollector.Begin(0.f);
 	LabSampleTimer = 0.f;
 	LabLiveTimer = 0.f;
@@ -142,9 +162,16 @@ bool UPlaytestBotSubsystem::TrySetupRouteMode()
 	RouteLoggedIndex = 0;
 	RouteDrops.Reset();
 	RouteDropActive = INDEX_NONE;
-	const FBotRouteConfig& Route = Level->Config.BotRoute;
-	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route mode: route '%s' (%d waypoints, lap %.0f m, loop %d), %.0f s by time, pressure seed %d, immortal %d, infinite ammo %d, report %s"),
-		*Route.Name, Route.Points.Num(), Route.LapLengthCm() / 100.f, Route.bLoop ? 1 : 0, RouteDurationSeconds, RoutePressureSeed,
+	RouteMantles.Reset();
+	RouteMantleActive = INDEX_NONE;
+	bRouteMantleWait = false;
+	bRouteMantleSquad = false;
+	const bool bOverridden = bHasRouteOverride;
+	bHasRouteOverride = false;
+	const FBotRouteConfig& Route = RouteTracker.GetConfig(); // the tracker holds its own copy: RouteConfig may point at the override
+	RouteOverride = FBotRouteConfig();
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route mode: %sroute '%s' (%d waypoints, lap %.0f m, loop %d), %.0f s by time, pressure seed %d, immortal %d, infinite ammo %d, report %s"),
+		bOverridden ? TEXT("OVERRIDDEN (a route variant) ") : TEXT(""), *Route.Name, Route.Points.Num(), Route.LapLengthCm() / 100.f, Route.bLoop ? 1 : 0, RouteDurationSeconds, RoutePressureSeed,
 		CombatCheats::IsImmortal(World) ? 1 : 0, CombatCheats::IsInfiniteAmmo(World) ? 1 : 0, CombatLabReportFile.IsEmpty() ? TEXT("(none)") : *CombatLabReportFile);
 	WriteCombatLabLive();
 	return true;
@@ -162,7 +189,7 @@ FBotRouteInput UPlaytestBotSubsystem::RouteInput() const
 		In.LeaderFeetZ = BotRouteModeLocal::RouteFeetZ(*Leader);
 	}
 	const ULadderClimbComponent* Climb = Leader ? Leader->LadderClimb.Get() : nullptr;
-	In.bPaused = bRouteFightHold || RoutePhase != ERouteActionPhase::None || !Leader || Leader->IsKnockedDown() || (Climb && Climb->IsOnLadder());
+	In.bPaused = bRouteFightHold || bRouteMantleWait || RoutePhase != ERouteActionPhase::None || !Leader || Leader->IsKnockedDown() || (Climb && Climb->IsOnLadder());
 	return In;
 }
 
@@ -259,6 +286,8 @@ void UPlaytestBotSubsystem::TickRoute(float DeltaTime)
 		TickRouteAction(DeltaTime);
 	}
 	TrackRouteDrop();
+	TrackRouteMantle();
+	TickRouteMantleWait();
 	const EBotRouteCommand Command = RouteTracker.Tick(RouteInput());
 	if (Command != EBotRouteCommand::None)
 	{
@@ -376,14 +405,9 @@ bool UPlaytestBotSubsystem::TryTakeFightCover()
 	return true;
 }
 
-bool UPlaytestBotSubsystem::RouteClick(const FVector& Start, const FVector& End, const TCHAR* What)
+bool UPlaytestBotSubsystem::TraceRouteHit(const FVector& Start, const FVector& End, FHitResult& OutHit) const
 {
 	UWorld* World = GetWorld();
-	ACodexTacticsPlayerController* Controller = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
-	if (!Controller)
-	{
-		return false;
-	}
 	FCollisionQueryParams Params(SCENE_QUERY_STAT(BotRouteClick), false);
 	if (const USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>())
 	{
@@ -392,10 +416,21 @@ bool UPlaytestBotSubsystem::RouteClick(const FVector& Start, const FVector& End,
 			Params.AddIgnoredActor(Member); // a click through a body is not meant to select him
 		}
 	}
-	FHitResult Hit;
 	// Visibility first (the cursor's channel). A slab the view cuts away round the squad inside a building (a generated map's floor under
 	// the leader's roof hole, 2026-11-02) ignores Visibility but still blocks WorldStatic: the click lands on it then.
-	if (!World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, Params) && !World->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldStatic, Params))
+	return World->LineTraceSingleByChannel(OutHit, Start, End, ECC_Visibility, Params) || World->LineTraceSingleByChannel(OutHit, Start, End, ECC_WorldStatic, Params);
+}
+
+bool UPlaytestBotSubsystem::RouteClick(const FVector& Start, const FVector& End, const TCHAR* What)
+{
+	UWorld* World = GetWorld();
+	ACodexTacticsPlayerController* Controller = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+	if (!Controller)
+	{
+		return false;
+	}
+	FHitResult Hit;
+	if (!TraceRouteHit(Start, End, Hit))
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route click (%s) from %s to %s hit nothing"), What, *Start.ToCompactString(), *End.ToCompactString());
 		return false;
@@ -415,12 +450,19 @@ void UPlaytestBotSubsystem::IssueRouteMove(const TCHAR* Why)
 	{
 		return;
 	}
-	if (RouteClickCooldown > 0.f)
+	if (RouteClickCooldown > 0.f || bRouteMantleWait)
 	{
-		bRouteReorder = true; // issued once the click interval has passed
+		bRouteReorder = true; // issued once the click interval has passed / the climb is over (a ground click now would end it)
 		return;
 	}
 	RouteClickCooldown = ClickInterval;
+	// A leg over a mantle edge: the first order is the climb click on the obstacle's top (the squad climbs, the ground move follows it).
+	if (TryRouteMantleClick(*Waypoint))
+	{
+		RouteTracker.NotifyOrder(FString::Printf(TEXT("%s: mantle over %s to #%d %s (%.0f, %.0f)"), Why, *Waypoint->Mantle, RouteTracker.GetIndex(), *Waypoint->Label,
+			Waypoint->At.X, Waypoint->At.Y));
+		return;
+	}
 	// A waypoint with its level ("z"): the click just above that level (never the roof over it, never the floor under it); else from
 	// above the leader's own level as before.
 	const FVector Target(Waypoint->At.X, Waypoint->At.Y, Waypoint->bHasZ ? Waypoint->Z : RouteFeetZ(*Leader));
@@ -767,6 +809,18 @@ void UPlaytestBotSubsystem::WriteCombatLabReport(const TCHAR* Result) const
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route report: drops %d (fell through the hole %d, scripted %d)"), Meta.Drops.Num(), Fell, Scripted);
 	}
+	const TArray<FBotRouteMantle> Mantles = GetRouteMantles();
+	if (!Mantles.IsEmpty())
+	{
+		int32 Climbed = 0;
+		int32 Clicked = 0;
+		for (const FBotRouteMantle& Mantle : Mantles)
+		{
+			Climbed += Mantle.bClimbed ? 1 : 0;
+			Clicked += Mantle.bClicked ? 1 : 0;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route report: mantles %d (climbed %d, clicked %d)"), Mantles.Num(), Climbed, Clicked);
+	}
 	if (!CombatLabReportFile.IsEmpty())
 	{
 		if (!FFileHelper::SaveStringToFile(Line + TEXT("\n"), *CombatLabReportFile, FFileHelper::EEncodingOptions::ForceUTF8WithoutBOM))
@@ -854,6 +908,219 @@ TArray<FBotRouteDrop> UPlaytestBotSubsystem::GetRouteDrops() const
 		Out[RouteDropActive].Seconds = static_cast<float>(GetWorld()->GetTimeSeconds() - RouteStartTime) - RouteDropStart;
 	}
 	return Out;
+}
+
+void UPlaytestBotSubsystem::TrackRouteMantle()
+{
+	const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	const float Now = static_cast<float>(GetWorld()->GetTimeSeconds() - RouteStartTime);
+	const FBotRouteWaypoint* Waypoint = RouteTracker.IsFinished() ? nullptr : RouteTracker.GetWaypoint();
+	if (RouteMantles.IsValidIndex(RouteMantleActive) && (RouteMantles[RouteMantleActive].Waypoint != RouteTracker.GetIndex() || RouteTracker.IsFinished()))
+	{
+		FBotRouteMantle& Done = RouteMantles[RouteMantleActive];
+		Done.bReached = RouteTracker.GetTotalReached() > RouteMantleReachedBase;
+		Done.bClimbed = Leader && Leader->GetMantleCount() > RouteMantleCountBase;
+		Done.Seconds = Now - RouteMantleStart;
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: MANTLE over %s to #%d (%s) %s after %.1f s: clicked %d, climbed %d, up %d / %d%s%s"), *Done.Via, Done.Waypoint, *Done.Label,
+			Done.bReached ? TEXT("reached") : TEXT("GIVEN UP"), Done.Seconds, Done.bClicked ? 1 : 0, Done.bClimbed ? 1 : 0, Done.MembersUp, Done.Members,
+			Done.Why.IsEmpty() ? TEXT("") : TEXT(", why "), *Done.Why);
+		RouteMantleActive = INDEX_NONE;
+		bRouteMantleWait = false; // the route moved on (reached / skipped): nothing left to wait for
+	}
+	if (RouteMantleActive == INDEX_NONE && Waypoint && !Waypoint->Mantle.IsEmpty() && !RouteTracker.IsInAction())
+	{
+		FBotRouteMantle Mantle;
+		Mantle.Waypoint = RouteTracker.GetIndex();
+		Mantle.Label = Waypoint->Label;
+		Mantle.Via = Waypoint->Mantle;
+		if (!Waypoint->bHasMantleAt)
+		{
+			Mantle.Why = TEXT("no_mantle_at"); // the generator found no crossing point: the leg is only walked
+		}
+		RouteMantleActive = RouteMantles.Add(Mantle);
+		RouteMantleReachedBase = RouteTracker.GetTotalReached();
+		RouteMantleCountBase = Leader ? Leader->GetMantleCount() : 0;
+		RouteMantleStart = Now;
+	}
+}
+
+bool UPlaytestBotSubsystem::TryRouteMantleClick(const FBotRouteWaypoint& Waypoint)
+{
+	using namespace BotRouteModeLocal;
+	if (Waypoint.Mantle.IsEmpty() || !Waypoint.bHasMantleAt)
+	{
+		return false;
+	}
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	TrackRouteMantle(); // the new leg's record is opened by this very first order, before the click
+	if (!Leader || !RouteMantles.IsValidIndex(RouteMantleActive))
+	{
+		return false;
+	}
+	FBotRouteMantle& Record = RouteMantles[RouteMantleActive];
+	if (Record.bClicked || !Record.Why.IsEmpty() || Record.Waypoint != RouteTracker.GetIndex())
+	{
+		return false; // one climb click per leg: a retry / a refusal walks the leg
+	}
+
+	// The leg's direction: from the previous waypoint (the first one follows the last on a loop); else from the leader.
+	const TArray<FBotRouteWaypoint>& Points = RouteTracker.GetConfig().Points;
+	const int32 Index = RouteTracker.GetIndex();
+	const int32 Previous = Index > 0 ? Index - 1 : (RouteTracker.GetConfig().bLoop ? Points.Num() - 1 : INDEX_NONE);
+	FVector2D Direction = Points.IsValidIndex(Previous) ? (Waypoint.At - Points[Previous].At).GetSafeNormal() : FVector2D::ZeroVector;
+	if (Direction.IsNearlyZero())
+	{
+		Direction = (Waypoint.At - To2D(Leader->GetActorLocation())).GetSafeNormal();
+	}
+
+	// The obstacle's TOP just past the edge crossing: a downward trace (the click's own channels) at each offset along the leg; the first hit
+	// that faces up and lies above the ground under the feet is the top.
+	const float FeetZ = RouteFeetZ(*Leader);
+	bool bFound = false;
+	FVector Start = FVector::ZeroVector;
+	FVector End = FVector::ZeroVector;
+	FHitResult TopHit;
+	for (const float Offset : MantleTopOffsetsCm)
+	{
+		const FVector2D Spot = Waypoint.MantleAt + Direction * Offset;
+		Start = FVector(Spot.X, Spot.Y, FeetZ + MantleTopAboveCm);
+		End = FVector(Spot.X, Spot.Y, FeetZ - MantleTopBelowCm);
+		if (TraceRouteHit(Start, End, TopHit) && TopHit.ImpactNormal.Z >= MantleTopMinNormalZ && TopHit.ImpactPoint.Z > FeetZ + MantleTopMinAboveFeetCm)
+		{
+			bFound = true;
+			break;
+		}
+	}
+	if (!bFound)
+	{
+		Record.Why = TEXT("no_top_hit");
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: #%d (%s) mantle over %s: no obstacle top just past the edge crossing (%.0f, %.0f) along the leg - the leg is walked"), Index,
+			*Waypoint.Label, *Waypoint.Mantle, Waypoint.MantleAt.X, Waypoint.MantleAt.Y);
+		return false;
+	}
+
+	// The player's own click on the top (the same trace again lands on the same hit): the controller orders the squad climb / the leader's climb.
+	const bool bClicked = RouteClick(Start, End, TEXT("mantle top"));
+	const bool bAccepted = bClicked && (Squad->IsSquadMantleActive() || Leader->HasMantleOrder() || Leader->IsMantling());
+	if (!bAccepted)
+	{
+		ACodexTacticsPlayerController* Controller = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
+		if (Controller && Controller->HasCoverPreview())
+		{
+			Controller->HideCoverPreview(); // the refused top click may have left a cover preview
+		}
+		Record.Why = TEXT("climb_refused");
+		UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: #%d (%s) mantle over %s: the click on the top of %s at %s was no climb order - the leg is walked"), Index, *Waypoint.Label,
+			*Waypoint.Mantle, *GetNameSafe(TopHit.GetActor()), *TopHit.ImpactPoint.ToCompactString());
+		if (bClicked)
+		{
+			bRouteReorder = true; // a click was made: the ground move follows after the click interval
+			return true;
+		}
+		return false;
+	}
+	Record.bClicked = true;
+	bRouteMantleWait = true;
+	RouteMantleWaitStart = static_cast<float>(World->GetTimeSeconds() - RouteStartTime);
+	bRouteMantleSquad = Squad->IsSquadMantleActive();
+	RouteMantleMembersUp = 0;
+	RouteMantleMembers = 0;
+	bRouteReorder = false;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: #%d (%s) mantle over %s: the click on the top of %s at %s - %s climbs"), Index, *Waypoint.Label, *Waypoint.Mantle,
+		*GetNameSafe(TopHit.GetActor()), *TopHit.ImpactPoint.ToCompactString(), bRouteMantleSquad ? TEXT("the squad (in turns)") : TEXT("the leader alone"));
+	return true;
+}
+
+void UPlaytestBotSubsystem::TickRouteMantleWait()
+{
+	if (!bRouteMantleWait)
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+	const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+	if (!Leader || !RouteMantles.IsValidIndex(RouteMantleActive))
+	{
+		bRouteMantleWait = false;
+		return;
+	}
+	FBotRouteMantle& Record = RouteMantles[RouteMantleActive];
+	const float Now = static_cast<float>(World->GetTimeSeconds() - RouteStartTime);
+	bool bDone = false;
+	if (bRouteMantleSquad)
+	{
+		// The squad climbs in turns: over when everybody is up (it holds there) or the climb ended any other way.
+		if (Squad->IsSquadMantleActive())
+		{
+			const FSquadMantleView View = Squad->GetSquadMantleView();
+			int32 Up = 0;
+			for (const FSquadMantleMemberView& Member : View.Members)
+			{
+				Up += Member.State == ESquadMantleState::Up ? 1 : 0;
+			}
+			RouteMantleMembersUp = FMath::Max(RouteMantleMembersUp, Up);
+			RouteMantleMembers = FMath::Max(RouteMantleMembers, View.Members.Num());
+			bDone = View.bHolding;
+		}
+		else
+		{
+			bDone = true;
+		}
+	}
+	else
+	{
+		// One man (the leader alone, OrderMantleTop): over when he neither walks to the face nor climbs any more.
+		RouteMantleMembers = 1;
+		bDone = !Leader->IsMantling() && !Leader->HasMantleOrder();
+		RouteMantleMembersUp = bDone && Leader->GetMantleCount() > RouteMantleCountBase ? 1 : 0;
+	}
+	const bool bTimedOut = !bDone && Now - RouteMantleWaitStart >= RouteTracker.GetConfig().ActionTimeoutSeconds;
+	if (!bDone && !bTimedOut)
+	{
+		return;
+	}
+	Record.MembersUp = RouteMantleMembersUp;
+	Record.Members = RouteMantleMembers;
+	if (bTimedOut)
+	{
+		Record.Why = TEXT("climb_timeout");
+	}
+	bRouteMantleWait = false;
+	UE_LOG(LogCodexTactics, Display, TEXT("[Bot] Route: the climb over %s is %s after %.1f s (up %d / %d, leader's climbs %d -> %d) - on to #%d (%s)"), *Record.Via,
+		bTimedOut ? TEXT("TIMED OUT") : TEXT("over"), Now - RouteMantleWaitStart, Record.MembersUp, Record.Members, RouteMantleCountBase, Leader->GetMantleCount(),
+		Record.Waypoint, *Record.Label);
+	RouteClickCooldown = 0.f;
+	IssueRouteMove(TEXT("after the climb")); // the leg's record has clicked: the plain ground move on to the waypoint
+}
+
+TArray<FBotRouteMantle> UPlaytestBotSubsystem::GetRouteMantles() const
+{
+	TArray<FBotRouteMantle> Out = RouteMantles;
+	if (Out.IsValidIndex(RouteMantleActive))
+	{
+		const USquadSubsystem* Squad = GetWorld()->GetSubsystem<USquadSubsystem>();
+		const AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+		FBotRouteMantle& Active = Out[RouteMantleActive];
+		Active.Seconds = static_cast<float>(GetWorld()->GetTimeSeconds() - RouteStartTime) - RouteMantleStart;
+		Active.bReached = RouteTracker.GetTotalReached() > RouteMantleReachedBase;
+		Active.bClimbed = Leader && Leader->GetMantleCount() > RouteMantleCountBase;
+		if (bRouteMantleWait)
+		{
+			Active.MembersUp = RouteMantleMembersUp;
+			Active.Members = RouteMantleMembers;
+		}
+	}
+	return Out;
+}
+
+void UPlaytestBotSubsystem::SetRouteOverride(const FBotRouteConfig& Route)
+{
+	RouteOverride = Route;
+	bHasRouteOverride = true;
 }
 
 void UPlaytestBotSubsystem::StartRouteRun(float DurationSeconds, bool bQuitAtEnd, int32 InSeed)

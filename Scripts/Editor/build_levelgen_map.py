@@ -34,7 +34,8 @@ with the world grid material, TargetPoints, ALadderActor, PlayerStart, NavMeshBo
     one-way point links from 70 cm outside each edge on the upper slab down to the hole's centre one level below - the squad
     (and the enemies) walk off the rim and fall 3 m instead of being teleported; only one-level drops onto a real slab;
   - the level JSON's "bot_route" (levelgen_bot_route.bot_route: the mandatory route as the playtest bot's planned route, with each
-    waypoint's floor height and the drop legs marked); a rebuild KEEPS the existing level JSON's "pressure" / "cheats" blocks;
+    waypoint's floor height and the drop legs marked, the mantle legs with the edge id) and "bot_route_variants" (the non-mandatory routes
+    that have a mantle link, same block format; the smokes pick one); a rebuild KEEPS the existing level JSON's "pressure" / "cheats" blocks;
     "drop_links": true (2026-11-03): the runtime drop nav links off the open edges (UDropLinkSubsystem, LEVEL_GENERATOR.md 8.6)
     (tuned on the Training Ground combat lab page) when it was written for the same layout;
   - the level JSON's "pmc_squads" from the layout's generated PMC posts (task 087, PMC_DEFENCE.md D2: layout["pmc"]["posts"] ->
@@ -1372,6 +1373,9 @@ def level_json(layout, map_path):
     route = levelgen_bot_route.bot_route(layout)
     if route:
         data["bot_route"] = route
+        variants = levelgen_bot_route.bot_route_variants(layout)
+        if variants:
+            data["bot_route_variants"] = variants  # non-mandatory mantle routes, picked by the smokes (SetRouteOverride)
     return data
 
 

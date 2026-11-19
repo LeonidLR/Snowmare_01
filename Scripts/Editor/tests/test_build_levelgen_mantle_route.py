@@ -59,6 +59,30 @@ class MantleBotRouteTest(unittest.TestCase):
         self.assertEqual(wp["mantle"], "me_W_obstacle_s")
         self.assertNotIn("mantle_at", wp)
 
+    def test_variants_hold_only_the_non_mandatory_mantle_routes(self):
+        layout = _bridge()
+        variants = bot.bot_route_variants(layout)
+        self.assertEqual(list(variants), ["V3_mantle"])
+        v3 = next(r for r in layout["routes"] if r["id"] == "V3_mantle")
+        self.assertEqual(variants["V3_mantle"], bot.bot_route(layout, v3))
+        self.assertEqual(variants["V3_mantle"]["points"][4]["mantle"], "me_W_obstacle_s")
+
+    def test_apply_keeps_the_level_keys_and_places_the_variants_after_bot_route(self):
+        layout = _bridge()
+        level = {"a": 1, "waves": [], "z": 2}
+        out, block = bot.apply_bot_route(level, layout)
+        self.assertEqual(list(out), ["a", "bot_route", "bot_route_variants", "waves", "z"])
+        self.assertEqual(block, out["bot_route"])
+        self.assertEqual(list(out["bot_route_variants"]), ["V3_mantle"])
+        # a second pass replaces in place; a layout without a mantle variant drops the stale key
+        again, _ = bot.apply_bot_route(dict(out), layout)
+        self.assertEqual(list(again), list(out))
+        plain = json.loads(json.dumps(layout))
+        plain["routes"] = [r for r in plain["routes"] if r["id"] != "V3_mantle"]
+        cleaned, _ = bot.apply_bot_route(dict(out), plain)
+        self.assertNotIn("bot_route_variants", cleaned)
+        self.assertEqual(list(cleaned), ["a", "bot_route", "waves", "z"])
+
     def test_self_test(self):
         bot._self_test()
 

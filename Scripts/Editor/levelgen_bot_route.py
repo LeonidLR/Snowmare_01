@@ -15,9 +15,12 @@ The route block:
   - a leg that goes through a hole link ("links": {"at": i, "via": "hole_*"}) marks its end waypoint "drop": "<via>" - the squad
     drops through the builder's drop nav link (the bot reports whether the leader fell or the drop had to be scripted);
   - a leg that crosses a MANTLE edge ("links": {"at": i, "via": "<mantle edge id>"}, T-02 gap 4) marks its end waypoint "mantle": "<edge id>"
-    and "mantle_at": [x, y] (where the leg crosses the edge): the leader is ordered over the obstacle there (a mantle path link, the
-    squad climbs in turns - MANTLING.md 6.4). BotRouteRules::Parse ignores the two keys (it reads label / action / wall / hold_sec / z / drop
-    only), so an unaware bot simply walks the leg;
+    and "mantle_at": [x, y] (where the leg crosses the edge): the bot's route mode clicks the obstacle's TOP there (the player's climb click:
+    the squad climbs in turns, MANTLING.md 6.4; BotRouteRules::Parse reads both keys) and falls back to walking the leg when the climb is
+    refused;
+  - "bot_route_variants" (next to "bot_route"): the same block format for every NON-mandatory route that has at least one mantle link,
+    keyed by the route id (the mandatory route stays the only "bot_route"). The level's own bot route never takes them; a smoke picks one
+    (LevelGenRouteSmoke route=<id> -> UPlaytestBotSubsystem::SetRouteOverride). No such route -> the key is absent;
   - the last point gets a "wall" action when the route expects the formation wall layout in the zone it lies in (a click on the
     nearest ground wall within WALL_SEARCH_CM);
   - "loop": true (the timed bot runs walk it again and again; a lap = the route once).
@@ -193,6 +196,23 @@ def bot_route(layout, route=None):
     }
 
 
+def has_mantle_link(layout, route):
+    """True when a link of the route (past its first point, like bot_route) goes over a mantle edge of the layout."""
+    return any(int(l["at"]) > 0 and find_mantle_edge(layout, str(l["via"])) is not None for l in route.get("links", []))
+
+
+def bot_route_variants(layout):
+    """{route id: bot_route block} for every non-mandatory route with at least one mantle link ({} when none)."""
+    out = {}
+    for route in layout.get("routes", []):
+        if route.get("mandatory") or not has_mantle_link(layout, route):
+            continue
+        block = bot_route(layout, route)
+        if block is not None:
+            out[str(route["id"])] = block
+    return out
+
+
 def drop_links(layout, ground_z=0.0):
     """The one-way DROP nav links through the roof / floor holes: per hole four links (one from each side, starting DROP_START_CM
     outside its edge on the upper slab) down to the hole's centre on the slab one level below. Only one-level drops (3 m) onto a
@@ -229,21 +249,42 @@ def drop_links(layout, ground_z=0.0):
     return out
 
 
-def patch_level_json(layout, level_path):
-    """Adds / replaces "bot_route" in an existing level JSON (the rest of the file untouched, its key order kept). -> the block."""
-    with open(level_path, encoding="utf-8") as f:
-        level = json.load(f)
+def apply_bot_route(level, layout):
+    """Sets "bot_route" (+ "bot_route_variants") in the level dict: an existing key keeps its place, a new "bot_route" goes before "waves"
+    (readable order, like the combat lab's file) else at the end, the variants right after it; no variants -> a stale key is removed.
+    -> (the level dict - a new one when a key had to be inserted, the bot_route block - None without a mandatory route)."""
     block = bot_route(layout)
     if block is None:
-        raise ValueError("%s: no mandatory route" % layout.get("name"))
+        return level, None
+    variants = bot_route_variants(layout)
     if "bot_route" in level:
         level["bot_route"] = block
     else:
-        # before "waves" like the combat lab's file (readable order); else at the end
         items = list(level.items())
         at = next((i for i, (k, _) in enumerate(items) if k == "waves"), len(items))
         items.insert(at, ("bot_route", block))
         level = dict(items)
+    if variants:
+        if "bot_route_variants" in level:
+            level["bot_route_variants"] = variants
+        else:
+            items = list(level.items())
+            at = next(i for i, (k, _) in enumerate(items) if k == "bot_route") + 1
+            items.insert(at, ("bot_route_variants", variants))
+            level = dict(items)
+    else:
+        level.pop("bot_route_variants", None)
+    return level, block
+
+
+def patch_level_json(layout, level_path):
+    """Adds / replaces "bot_route" and "bot_route_variants" in an existing level JSON (the rest of the file untouched, its key order
+    kept). -> the bot_route block."""
+    with open(level_path, encoding="utf-8") as f:
+        level = json.load(f)
+    level, block = apply_bot_route(level, layout)
+    if block is None:
+        raise ValueError("%s: no mandatory route" % layout.get("name"))
     with open(level_path, "w", encoding="utf-8") as f:
         json.dump(level, f, indent=2)
         f.write("\n")
@@ -283,6 +324,18 @@ def _self_test():
     assert mr[2]["mantle"] == "me_W_n" and mr[2]["mantle_at"] == [100, 300], mr[2]
     assert "mantle" not in mr[1] and "mantle" not in mr[3] and "drop" not in mr[2], mr
     assert "via me_W_n" in mr[2]["label"], mr[2]
+    # route variants: only a NON-mandatory route with a mantle link; none -> no key (and a stale key is removed)
+    assert bot_route_variants(mlayout) == {}, "the mandatory mantle route is bot_route, not a variant"
+    vlayout = dict(mlayout)
+    vlayout["routes"] = mlayout["routes"] + [
+        {"id": "V2", "points": [[0, 300], [60, 300], [160, 300], [400, 300]], "layers": ["ground"] * 4, "links": [{"at": 2, "via": "me_W_n"}]},
+        {"id": "V3", "points": [[0, 300], [400, 300]], "layers": ["ground"] * 2, "links": []}]
+    variants = bot_route_variants(vlayout)
+    assert list(variants) == ["V2"] and variants["V2"]["points"][2]["mantle_at"] == [100, 300], variants
+    level, block = apply_bot_route({"a": 1, "waves": [], "z": 2}, vlayout)
+    assert list(level) == ["a", "bot_route", "bot_route_variants", "waves", "z"] and block["name"] == "m_V", list(level)
+    level, _ = apply_bot_route(level, mlayout)
+    assert "bot_route_variants" not in level and list(level) == ["a", "bot_route", "waves", "z"], list(level)
     print("levelgen_bot_route self-test: ok")
 
 

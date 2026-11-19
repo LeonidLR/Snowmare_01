@@ -43,6 +43,15 @@ struct CODEXTACTICS_API FBotRouteWaypoint
 	float Z = 0.f;
 	/** "drop": the leg to this waypoint drops through that roof / floor hole (a drop nav link; the bot reports how it went). */
 	FString Drop;
+	/**
+	 * "mantle" / "mantle_at" (generated maps, Scripts/Editor/levelgen_bot_route.py): the leg to this waypoint crosses that mantle edge (an
+	 * obstacle's climbable top edge). MantleAt is the crossing point on the edge line (world cm); bHasMantleAt is false when the key is
+	 * absent or malformed. The route mode then CLICKS THE OBSTACLE'S TOP near MantleAt (a climb click = the squad mantles in turns,
+	 * MANTLING.md 6.4) instead of the ground click; without MantleAt the bot only walks the leg as before.
+	 */
+	FString Mantle;
+	bool bHasMantleAt = false;
+	FVector2D MantleAt = FVector2D::ZeroVector;
 };
 
 /** The level JSON "bot_route" block (defaults = the 2026-11-01 combat lab values). */
@@ -109,6 +118,28 @@ struct CODEXTACTICS_API FBotRouteDrop
 	bool bReached = false;
 	/** From the leg's order to the waypoint reached (or given up), s. */
 	float Seconds = 0.f;
+};
+
+/**
+ * One mantle over an obstacle (a waypoint with "mantle"; generated maps): how the squad got over it. bClicked = the bot's click on the
+ * obstacle's top was accepted as a climb order; bClimbed = the leader's mantle count rose during the leg (he really went over);
+ * MembersUp / Members = the members standing up on the obstacle when the squad climb ended / the squad's member count (the squad climbs
+ * in turns, leader first). Why = "no_top_hit" | "climb_refused" | "climb_timeout" (empty when it went fine); after a refusal the bot walks
+ * the leg with the ground click as before.
+ */
+struct CODEXTACTICS_API FBotRouteMantle
+{
+	int32 Waypoint = 0;
+	FString Label;
+	FString Via;
+	bool bClicked = false;
+	bool bClimbed = false;
+	int32 MembersUp = 0;
+	int32 Members = 0;
+	bool bReached = false;
+	/** From the leg's order to the waypoint reached (or given up), s. */
+	float Seconds = 0.f;
+	FString Why;
 };
 
 /** One finished lap. */
@@ -231,7 +262,8 @@ namespace BotRouteRules
 	 * The level JSON "bot_route" object: {"name", "loop", "reach_radius_cm", "stuck_after_sec", "stuck_move_cm", "leg_base_sec",
 	 * "leg_min_speed_cm", "reach_height_cm", "max_retries", "fight_hold_sec", "action_timeout_sec", "fight_cover": {"enabled", "search_cm", "hold_sec", "min_wall_cm",
 	 * "min_height_cm", "min_threat_cm", "min_facing_cos"}, "points": [{"at": [x, y], "z", "label", "action": "walk" | "wall" |
-	 * "climb", "wall": [x, y], "hold_sec", "drop": "<hole id>"}]}. Absent keys keep the defaults (clamped to sane ranges). False + OutError on fewer than two points,
+	 * "climb", "wall": [x, y], "hold_sec", "drop": "<hole id>", "mantle": "<edge id>", "mantle_at": [x, y]}]}. Absent keys keep the defaults (clamped to sane ranges). A malformed
+	 * "mantle_at" is ignored (bHasMantleAt false, "mantle" kept). False + OutError on fewer than two points,
 	 * a point without "at": [x, y], an unknown action or a "wall" action without "wall": [x, y].
 	 */
 	CODEXTACTICS_API bool Parse(const FJsonObject& Route, FBotRouteConfig& OutConfig, FString* OutError = nullptr);
