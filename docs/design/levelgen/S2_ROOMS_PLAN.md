@@ -365,3 +365,15 @@ Review gate after S2.3: three ASCII / page plans per archetype shown to the desi
 | Q5 | Minimum room 4 x 4 m (window and breach rules) instead of 3 x 3; smaller only as windowless service rooms | accept |
 | Q6 | Long blocks of 2 sections (36-40 m, two entrances, a blind wall between, joined only over the roof)? Today a block is at most 20 x 14 m = one section | yes, as a second template after S2.3 |
 | Q7 | S2 behind a page toggle, off until the first planned X6 is reviewed; accepted maps stay as they are | yes |
+
+### 8.1 Designer answers (2026-11-19)
+
+| Question | Decision |
+|---|---|
+| Story 19: how into the sealed shop? | **one locked shutter** (kickable; the rest sealed) |
+| Flat doors by default | **closed** |
+| Balconies | **only where a fire escape is** (no decorative balconies on every flat) |
+| Hospital / school size | **yes**: 12 x 30-60 m, corridor 3 m |
+| Minimum room | **yes**: 4 x 4 m (was 3 x 3) |
+| Long blocks | **two entrances** (two stair cores / entrances on long residential blocks) |
+| Start S2 | **go** - S2 starts after the two bug fixes and the pre-S2 refactors of section 7 |
