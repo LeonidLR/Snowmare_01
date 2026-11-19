@@ -7,16 +7,12 @@
    "owner": "worker stand-in",
    "branch": "worker/t05-firing-positions",
    "topic": "claude-T005",
-   "state": "active",
+   "state": "waiting",
    "max_quiet_min": 45,
    "worktree": "C:/Work/CodexTactics-slot1",
    "machine": "worker",
-<<<<<<< HEAD
-   "reason": "iteration 3 (seat only positions reachable before the attackers arrive) queued after T-021; 4588fbbc gated (build, tests, 7 smokes PASS), acceptance numbers not met",
-   "max_wait_min": 240
-=======
-   "reason": "stand-in lead on codex-worker: build a1dae05a, read the per-man band log, fix seating, then Crossroads + Alley x30"
->>>>>>> origin/worker/t05-firing-positions
+   "reason": "iteration 3 5544431a gated + merged into worker/lead-2026-11-20 (2d2ad1e9); acceptance partly met (idle yes, on_pos / crossfire short): main lead review",
+   "max_wait_min": 900
   },
   {
    "id": "T-020",
@@ -44,15 +40,14 @@
   {
    "id": "bgen",
    "title": "building generator (bot mantle -> parapet firing gaps -> S2.3)",
-   "owner": "session Генератор зданий local_93362388",
-   "branch": "claude/building-generator",
+   "owner": "worker stand-in",
+   "branch": "worker/bgen-firing-gaps",
    "topic": "claude-S022",
-   "state": "waiting",
+   "state": "active",
    "max_quiet_min": 60,
-   "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-bgen",
-   "machine": "main",
-   "reason": "main PC offline 11-20 >= 4 h: the stand-in lead on codex-worker continues from the branch (docs/port/WORKER_LEAD_2026-11-20.md)",
-   "max_wait_min": 480
+   "worktree": "C:/Work/CodexTactics-slot1",
+   "machine": "worker",
+   "reason": "parapet firing gaps per docs/design/levelgen/FIRING_GAPS_HANDOVER.md (designer 11-19: bgen + enemies first)"
   },
   {
    "id": "worker-night",
