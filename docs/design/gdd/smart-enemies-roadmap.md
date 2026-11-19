@@ -96,6 +96,28 @@ Critical path: 0 -> 1 -> 3 (static) -> 2 -> 3 (mobile) -> 4. Phase 5 is paced by
 - **Flat-utility fixes that only move scores** (new weights, new order factors): no new ones; bugs are fixed, but behaviour
   goes into the squad layer.
 
+## 5a. Work rhythm: day loop + night regression (designer decision 2026-11-19)
+
+The designer asked whether night-only runs are the right rhythm. Decision: a hybrid. While behaviour is being BUILT
+(Phases 0-7) the work is debugging, not training, and needs a short loop; the nights give the statistics.
+
+- **Day loop (per change).** After each behaviour fix the worker runs only the affected scenario smoke (A-00A crossroads,
+  A-00B alley, A-00C bridge, or the task's own smoke) on 20-50 seeds - target under ~15 minutes - and returns a short digest
+  (pass rate, the worst 3 seeds, the decision trace of one failed seed). The implementer reads the digest, never raw logs,
+  fixes, and reruns. Repeat until the pass rate meets the task's gate. Screenshots / a short clip of one seed go to the
+  designer when a clip scenario first turns green.
+- **Night regression.** The former trainer window (16:30-08:00 on the worker) runs every scenario smoke on hundreds of
+  seeds. Morning report: what got worse since yesterday, what is stable, flaky seeds. A behaviour that works in 1 of 3
+  rounds is not done.
+- **Weight tuning (Phase 8 only).** Only after the behaviour passes its acceptance on the designer's clips and the
+  training gate (T-10) is green, the trainer tunes NUMBERS of designed plays (fire-open range, ambush hold time, spacing).
+  That tuning may run at night again.
+- **Why not night-only:** one mistake costs a day, and evolution cannot create a behaviour the order catalogue lacks (the
+  2026-11-19 night). **Why not day-only:** the worker idles at night and day runs alone give too few seeds to trust; each
+  day iteration also costs tokens for reading the digest, so digests stay short (Jev / `jev_digest.py`).
+- **Needs:** T-10's runner with a quick mode (one scenario, N seeds, digest) - see T-10; Worker-ops moves the 16:30-08:00
+  window from the trainer to the regression sweep.
+
 ## 6. The first two weeks
 
 Calendar assumption: week 1 = 2026-11-21 .. 11-27 (after the weekly limit reset), week 2 = 11-28 .. 12-04. The main
@@ -328,7 +350,8 @@ Owner: Antigravity, with Worker-ops for the schedule. Branch `gemini/NNN-trainin
 the reason when (a) a metric used by fitness / descriptors is constant over a 6-round probe, (b) no baseline with >= 30
 rounds per scenario exists for the freeze commit, (c) a listed smoke is not green in the last sweep; `run_night_trainer.ps1`
 refuses to start without a fresh gate file; `Scripts/Tools/scenario_regression.py` runs a list of scenario smokes on N seeds
-on the worker and writes pass rates + the worst seeds (markdown + JSON). Proved by: `Scripts/Trainer/tests/test_gate.py`
+on the worker and writes pass rates + the worst seeds (markdown + JSON); a quick day mode (`--scenario X --seeds 20..50`,
+target < ~15 min) prints a short digest for the day loop of section 5a. Proved by: `Scripts/Trainer/tests/test_gate.py`
 (the 2026-11-19 config with `overwatch_kills` 0 and `guard_share` None is refused - fixture from that night). Designer
 decision needed: none - OQ-10 was decided on 2026-11-19: evolution is paused and the worker runs scenario regressions at
 night; this task delivers that runner and the gate that must pass before evolution may resume.
