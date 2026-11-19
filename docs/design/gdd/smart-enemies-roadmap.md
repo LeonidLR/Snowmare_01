@@ -99,9 +99,10 @@ Critical path: 0 -> 1 -> 3 (static) -> 2 -> 3 (mobile) -> 4. Phase 5 is paced by
 ## 6. The first two weeks
 
 Calendar assumption: week 1 = 2026-11-21 .. 11-27 (after the weekly limit reset), week 2 = 11-28 .. 12-04. The main
-PC is being formatted (lead's session prompt 19b, 2026-11-19: the lead works from codex-worker meanwhile): tasks that need an
-Unreal build of new maps or the main checkout (T-02's map build, T-05) start when a build machine is confirmed; the
-Antigravity and Codex lanes do not depend on it.
+PC format is POSTPONED (lead, 2026-11-19: the designer keeps working on the main PC for now), so builds run as usual;
+if the format happens later, tasks that need an Unreal build (T-02's map build, T-05) wait for a confirmed build machine.
+Dispatched 2026-11-19 (lead, fd9715a6): Grok G009 = T-06; Codex 049 = T-04, 050 = T-12; Antigravity 089 = T-01, 090 = T-09,
+091 = T-10. Held: T-02 / T-03 (OQ-11 / OQ-17 open), T-05 / T-07 / T-08 / T-11 (lead work after the 11-21 reset).
 
 | Day | Lead / Opus agents | Antigravity | Codex | Grok | Bgen |
 |---|---|---|---|---|---|
@@ -385,7 +386,7 @@ once got a 2-point straight path (pmc-squad-ai.md:630).
 | Roof edges cannot fire on the current parapet geometry | DS-00B, DS-02 blocked | T-05 reports it in week 1; the generator gets a firing-step rule (section 4); until then the height role is not assigned (hard rule 5) |
 | Buildings arrive later than Phase 5 needs | the designer's window / upstairs wishes wait | Phases 3-4 deliver the two clips and street / roof fights meanwhile; say this to the designer with OQ-1 |
 | Budget: Grok ends about 11-23, no API tokens, Codex light only, the lead at ~50 % | week-1 lanes thin out | T-06 is small and Codex can take it; the critical path (T-05, T-07, T-08) sits on Claude agents only |
-| The main PC format (announced 2026-11-19) | builds / maps stop until it is back or the worker takes over | Antigravity + Codex lanes continue; T-02's layouts are authored first, the Unreal build follows on whichever machine builds |
+| The main PC format (announced, then postponed 2026-11-19) | builds / maps stop until it is back or the worker takes over | Antigravity + Codex lanes continue; T-02's layouts are authored first, the Unreal build follows on whichever machine builds |
 | Pressure to restart night training early | another wasted night, wrong conclusions | the gate (T-10) refuses; the worker has scenario regression to do |
 | Scenario smokes pass but clips still look wrong | false confidence | every phase ends with clips to the designer; his "no" adds an A-nn line, not a tuning run |
 | New enemy behaviour is too lethal for the player | frustration | fairness pass (Phase 7) is designed now (GDD 6); first volley rule OQ-4; the bound and tells are tested on both sides (A-00A line 6) |
