@@ -63,7 +63,11 @@ Work them in this order, one Sonnet subagent at a time (you review + gate; accep
 2. **T-021 cold indoors** - branch `claude/cold-indoors`, brief docs/port/claude/inbox/T021-cold-indoors-generated.md
    (DESIGNER UPDATE: airtightness by weighted broken openings + draught fading from an open opening, live state). Handover at the
    top of docs/port/claude/outbox/T021-cold-indoors.report.md.
-3. **bgen** (building generator) - branch `claude/building-generator` (bot mantle 3a40a588 + its worker gate; next: parapet
+3. **bgen** (building generator) - branch `claude/building-generator` head 091c40b0 (bot mantle 3a40a588 DONE, worker PASS;
+   firing-gaps design + exact commands: docs/design/levelgen/FIRING_GAPS_HANDOVER.md, config firing_gaps.json, code NOT started;
+   lead's YES: refresh the accepted X4 layout + tactical file ONLY on that branch / a throwaway branch, rebuild L_Gen_Depot_X4 on
+   the worker only, gate with T-05's FiringPositionSmoke from a throwaway merge with claude/firing-positions; main's X4 files stay
+   the T-05/T-06 baseline; next: parapet
    FIRING GAPS (designer 11-19: snipers keep kneeling; sill <= ~70 cm, 80-100 cm wide, overwatch spots move to the rim), then
    S2.3 blocks with the 1200-core check). Resume notes: docs/design/levelgen/S2_ROOMS_PLAN.md section 5. Never merge bgen into main.
 4. **T-022 / T-023 Training Ground editing** (not started) - brief docs/port/claude/inbox/T022-tg-map-edit-fullscreen.md:
@@ -78,3 +82,7 @@ When the designer says «верни на основную» (or the main PC is b
 on your branch and pushes), tell the designer the line it prints, and stop starting work. The main lead backs up the
 designer's files, merges your branches into main, builds, and continues; the next «передай на вторую» runs the same script
 there with `--to worker`. The night loop keeps running on its own schedule either way.
+
+## Known test noise in the main checkout (main lead 11-19)
+`npm test` in the MAIN checkout fails 3 tests because of the designer's uncommitted X6 files (gen_ref_01_02_depot_1_x6.json has
+no analysis block; X6 power) + one timing test under load. In a clean checkout / slot1 it is 541/541. Not a regression.
