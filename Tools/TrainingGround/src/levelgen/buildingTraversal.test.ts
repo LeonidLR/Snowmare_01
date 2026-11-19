@@ -132,11 +132,13 @@ test('planStairCore: no core when both long-wall sides intersect a neighbour; th
 });
 
 test('severity (BUILDINGS_TECH_SPEC 2.1): every existing code is an error, every raised issue carries it', () => {
-  assert.deepEqual(Object.keys(TRAVERSAL_SEVERITY).sort(), ['gap_overshoot', 'no_exterior_door', 'stair_foot_blocked', 'stair_foot_no_floor',
-    'stair_in_other_building', 'stair_steep', 'stair_top_blocked', 'stair_top_no_floor', 'story_rolled_back', 'unreachable_level', 'unreachable_roof',
-    'unreachable_room', 'unreachable_without_explosive', 'window_onto_stair', 'window_partition_clash']);
-  // story_rolled_back (S1 step 3a) and the window clearances (windowClearance.ts) are the warnings
-  const WARNINGS = new Set(['story_rolled_back', 'window_onto_stair', 'window_partition_clash']);
+  assert.deepEqual(Object.keys(TRAVERSAL_SEVERITY).sort(), ['corridor_narrow', 'gap_overshoot', 'no_exterior_door', 'off_grid', 'opening_into_core', 'opening_no_links',
+    'room_no_door', 'room_size', 'room_tiling', 'stair_foot_blocked', 'stair_foot_no_floor', 'stair_in_other_building', 'stair_pad_unlinked', 'stair_steep',
+    'stair_top_blocked', 'stair_top_no_floor', 'storey_no_loop', 'story_rolled_back', 'unreachable_level', 'unreachable_roof', 'unreachable_room',
+    'unreachable_without_explosive', 'window_onto_stair', 'window_partition_clash', 'window_rule']);
+  // story_rolled_back (S1 step 3a), the window clearances (windowClearance.ts) and the planned-building window rule (planValidate.ts) are the
+  // warnings (storey_no_loop / corridor_narrow are errors that an issue downgrades per case)
+  const WARNINGS = new Set(['story_rolled_back', 'window_onto_stair', 'window_partition_clash', 'window_rule']);
   for (const [code, sev] of Object.entries(TRAVERSAL_SEVERITY)) assert.equal(sev, WARNINGS.has(code) ? 'warning' : 'error', code);
   const cases = [
     twoStorey({ floors_detail: [{ floor: 1, height_z: 300, gaps: [{ id: 'g', kind: 'stairwell', poly: [[60, 260], [140, 260], [140, 769], [60, 769]] }], rooms: [] }] } as Partial<GenBuilding>),

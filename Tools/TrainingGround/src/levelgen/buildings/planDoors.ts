@@ -292,13 +292,17 @@ function corridorlessDoors(ctx: Ctx, cells: PlanCell[]): Door[] {
   return out;
 }
 
-/** 3.5 rule 5: the two pad portals on the core cell's open edge, centres u0 + 100 and u0 + 750. */
+/**
+ * 3.5 rule 5: the two pad portals on the core cell's open edge, centres u0 + 100 and u0 + 750. A caller whose pads sit off the cell's grid
+ * (generate.ts: a core flush with the high end starts 41 cm into its 900 cell) passes the shifted `u0`; the centre is snapped to the 50
+ * grid (the opening grid holds for portals too - planValidate off_grid) and still overlaps its pad by >= 150.
+ */
 function corePortals(ctx: Ctx, core: { u0: number; depth: number }): Door[] {
   const cell = ctx.plan.cells.find((c) => c.kind === 'core');
   if (!cell) return [];
   const out: Door[] = [];
   for (const off of O.portal_offsets_cm) {
-    const c = core.u0 + off;
+    const c = snap(core.u0 + off);
     const q = ctx.plan.cells.find((o) => o.kind === 'corridor' && o.v0 === core.depth && o.u0 <= c && c <= o.u1);
     if (!q) continue;
     out.push({ cell, other: q, axis: 'u', at: core.depth, legal: [c], c, sib: null, role: 'portal' });

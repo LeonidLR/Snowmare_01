@@ -10,6 +10,8 @@ import { assignRoles } from './buildingRoles.ts';
 import type { BuildingRole, GenBuilding, GenLayout, Stair } from './schema.ts';
 import { LEVEL_HEIGHT, OPENING_DEFAULTS, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE } from './schema.ts';
 import { windowOntoCore, windowPartitionClash } from './windowClearance.ts';
+import type { PlanCode } from './buildings/planValidate.ts';
+import { PLAN_SEVERITY, checkPlan, isCorridorEndWindow } from './buildings/planValidate.ts';
 import { effectiveOpeningState, isPassableState } from './openingStates.ts';
 import { reachabilityGraph } from './tacticalEvaluate.ts';
 import { usableEscapes, usableSnowRamps } from './fireEscapes.ts';
@@ -45,7 +47,9 @@ export type TraversalCode =
   | 'story_rolled_back'
   | 'stair_in_other_building'
   | 'window_onto_stair'
-  | 'window_partition_clash';
+  | 'window_partition_clash'
+  // planned buildings (plan.kind 'bands'; buildings/planValidate.ts, S2_ROOMS_PLAN.md 4.2)
+  | PlanCode;
 
 /** 'error' fails the building (blocks «Принять»); 'warning' is reported only (bands, D, shares - BUILDINGS_TECH_SPEC.md 2.1). */
 export type TraversalSeverity = 'error' | 'warning';
@@ -71,6 +75,18 @@ export const TRAVERSAL_SEVERITY: Record<TraversalCode, TraversalSeverity> = {
   window_onto_stair: 'warning',
   /** A partition end inside a window or within its 60 cm jamb (BUILDING_GENERATOR.md 4.4). */
   window_partition_clash: 'warning',
+  // planned buildings (buildings/planValidate.ts): storey_no_loop is a warning once a story was applied, corridor_narrow one between
+  // 120 and 180 cm clear (both set per issue); window_rule is a warning
+  room_tiling: PLAN_SEVERITY.room_tiling,
+  off_grid: PLAN_SEVERITY.off_grid,
+  room_size: PLAN_SEVERITY.room_size,
+  room_no_door: PLAN_SEVERITY.room_no_door,
+  opening_no_links: PLAN_SEVERITY.opening_no_links,
+  storey_no_loop: PLAN_SEVERITY.storey_no_loop,
+  corridor_narrow: PLAN_SEVERITY.corridor_narrow,
+  opening_into_core: PLAN_SEVERITY.opening_into_core,
+  stair_pad_unlinked: PLAN_SEVERITY.stair_pad_unlinked,
+  window_rule: PLAN_SEVERITY.window_rule,
 };
 
 export interface TraversalIssue {
@@ -216,12 +232,15 @@ function checkWindows(l: GenLayout, b: GenBuilding, issues: TraversalIssue[]): v
     .map((st) => ({ pos: toBuildingFrame(b, st.pos), top: toBuildingFrame(b, st.top), from: st.from, to: st.to }));
   const laneWalls = l.walls.filter((w) => w.building === b.id && w.kind === 'interior' && /_lanewall_f\d+$/.test(w.id))
     .map((w) => ({ a: toBuildingFrame(b, w.a), b: toBuildingFrame(b, w.b), floor: w.floor ?? 0, thickness: w.thickness ?? 10 }));
+  // a planned building's corridor-end window (150 in a 200 corridor) sits 25 cm from the corridor walls by design (S2_ROOMS_PLAN.md 3.6)
+  const planned = b.plan?.kind === 'bands';
   for (const op of windows) {
     const pos = toBuildingFrame(b, op.pos), floor = op.floor ?? 0, width = op.width ?? OPENING_DEFAULTS.window.width;
     const ref = op.id ?? `${b.id} window (${Math.round(op.pos[0])}, ${Math.round(op.pos[1])}) f${floor}`;
     if (windowOntoCore(b.footprint, pos, width, floor, flights, laneWalls, 1)) {
       issues.push({ severity: TRAVERSAL_SEVERITY.window_onto_stair, code: 'window_onto_stair', ref, message: `${ref}: opens onto the stair core (a flight, its gap or an approach box) on storey ${floor}` });
     }
+    if (planned && isCorridorEndWindow(b.rooms ?? [], op)) continue;
     const parts = (b.partitions ?? []).filter((pt) => pt.floor === floor && pt.start && pt.end); // hand fixtures may omit the ends
     const k = windowPartitionClash(b.footprint, pos, width, parts.map((pt) => ({ start: toBuildingFrame(b, pt.start), end: toBuildingFrame(b, pt.end), thickness: pt.thickness })), 1);
     if (k >= 0) {
@@ -281,6 +300,7 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
   }
 
   checkWindows(l, b, issues);
+  checkPlan(l, b, issues); // planned (bands) buildings only: tiling, grid, sizes, links, loops, core clearances, windows
 
   // rooms + roof (no drops: floor holes / roof holes are excluded from the graph)
   const noDrops: GenBuilding = { ...b, floor_holes: [], roof_holes: [] };

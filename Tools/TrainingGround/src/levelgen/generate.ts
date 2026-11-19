@@ -1127,7 +1127,7 @@ function addPlannedOffice(d: Draft, bid: string, r: Rect, s: BuildingSpec, rando
   for (let storey = 0; storey < s.floors; storey++) {
     for (const cell of plan.cells) {
       const id = roomId(storey, cell.id), [min, max] = cellRect(f, cell);
-      const kind: GenRoom['kind'] = storey === 0 && lobbies.has(cell.id) ? 'lobby' : cell.kind === 'core' ? 'stairwell' : cell.kind === 'corridor' ? 'corridor' : cell.kind === 'service' ? 'service' : 'room';
+      const kind: GenRoom['kind'] = storey === 0 && lobbies.has(cell.id) && cell.kind !== 'service' ? 'lobby' : cell.kind === 'core' ? 'stairwell' : cell.kind === 'corridor' ? 'corridor' : cell.kind === 'service' ? 'service' : 'room';
       const ids = [...(doorIds.get(id) ?? []), ...(seamIds.get(id) ?? [])];
       p.rooms.push({
         id, floor: storey, bounds: { min, max }, kind,

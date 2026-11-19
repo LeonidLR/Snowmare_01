@@ -308,7 +308,17 @@ legacy files keep the `walls[]` path bit for bit (`partition_driven`, tests `tes
 `_building_local` (rotateContent now moves balconies / fire escapes / snow ramps / breach panels with the building; the builder no
 longer turns the building-frame ramp foot and escape points back), coverage tests in TS and Python; `ROUTE_COSTS` ->
 `building_route_costs.json` (`cost_hash` = FNV-1a of its canonical JSON), story knobs -> `building_stories.json`.
-S2.1 engine module done (bandPlan.ts, building_plans.json), not wired yet - S2.2 wires it with doors.
+S2.1 engine module done (bandPlan.ts, building_plans.json). S2.2 done for the **office** archetype (203b184b, 37881ccd + the
+validator commit): `buildings/planDoors.ts` (spine, second doors >= 700, enfilade loop per storey - an end suite joins it only when no
+same-band pair exists -, two 200 core pad portals, exterior doors at the slot nearest the legacy draw), `planWindows.ts` (per facade
+span, none on core / service cells, one in every corridor end that is not an exit), wired in `addPlannedOffice` behind
+`GenParams.building_plans` (page «Планировки зданий (S2)», CLI `--plans`, off by default; schema /2 when on; toggle off byte-identical,
+golden `scripts/plans-golden.ts` x1 / x6 seeds 1-3); validator codes room_tiling, off_grid, room_size, room_no_door, opening_no_links,
+storey_no_loop, corridor_narrow, opening_into_core, stair_pad_unlinked, window_rule (`buildings/planValidate.ts`, one failing fixture
+each); property test 1836 offices (seeds 1-200, 1 storey / 2 storeys with a low or high core): 1548 planned, 0 issues; fallback 16 %, all
+`core_stretch_*` (a 2-storey core at an end leaving 100-300 cm beside it) - the core placement should try the plan-legal positions
+before S2.3. Corridor-end windows are exempt from the 120 clearance and from window_partition_clash; a lobby needs no window of its own.
+Open for later steps: `room_no_triad` / `door_jamb_blocked` / `exterior_doors_one_side`, units / `dead_end` tags, route model on `links`.
 
 ## 6. Risks and early detection
 

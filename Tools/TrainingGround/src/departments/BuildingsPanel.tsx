@@ -64,6 +64,16 @@ const CODE_RU: Record<TraversalCode, string> = {
   story_rolled_back: 'история отменена',
   window_onto_stair: 'окно выходит на лестничный марш',
   window_partition_clash: 'перегородка упирается в окно',
+  room_tiling: 'комнаты не покрывают этаж без наложений',
+  off_grid: 'вне сетки (стены 100, проёмы 50)',
+  room_size: 'размер комнаты вне допуска',
+  room_no_door: 'в комнату нет двери',
+  opening_no_links: 'проём без id или связей',
+  storey_no_loop: 'на этаже нет кольца дверей',
+  corridor_narrow: 'узкий коридор',
+  opening_into_core: 'проём выходит на лестничное ядро',
+  stair_pad_unlinked: 'у площадки марша нет проёма ≥ 200',
+  window_rule: 'окна: нет окна или нарушены отступы',
 };
 
 /** Short Russian label per tactical role (buildingRoles.ts, building-stories.md section 1). */
