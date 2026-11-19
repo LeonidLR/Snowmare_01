@@ -27,7 +27,7 @@ import { FIT_VIEW, PLAN_VIEW, planTransform, viewOfRect, zoomAt } from '../level
 import type { Conditions, LayoutAnalysis } from '../levelgen/chokepoints';
 import { analyzeLayout, CHOKE, geometryHash, threatNumbers, withoutStaleAnalysis } from '../levelgen/chokepoints';
 import type { LayerVisibility } from '../levelgen/layers';
-import { assignMap, defaultVisibility, editLayout, editProps, hiddenKeys, layerById, layerCounts, LAYERS, layerTints, mergeLayerReroll, pickEntity, resolveProps } from '../levelgen/layers';
+import { assignMap, defaultVisibility, editLayout, editProps, hiddenKeys, layerById, layerCounts, LAYERS, layerTints, MAP_PLAN_HIDDEN, mergeLayerReroll, pickEntity, resolveProps } from '../levelgen/layers';
 import type { LevelPropsFile } from '../levelgen/props/schema';
 import type { History } from '../levelgen/regenHistory';
 import { canRedo, canUndo, historyInit, historyPush, historyRedo, historyUndo } from '../levelgen/regenHistory';
@@ -57,7 +57,7 @@ import { layersOf, mandatoryRoute } from '../levelgen/schema';
 interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string; /** The squad playback of the last simulator walk (task 072; never sent to the server). */ track?: SquadTrack;
   /** The chokepoint / threat analysis of `layout` (chokepoints.ts); «Принять» writes it into the layout JSON. */ analysis?: LayoutAnalysis }
 /** The threat sub-layers start hidden (hundreds of marks on a big map); the designer turns them on in the panel. */
-const HIDDEN_AT_START = ['threat_drop', 'threat_windows', 'threat_overwatch', 'threat_hiding'];
+const HIDDEN_AT_START = ['threat_drop', 'threat_windows', 'threat_overwatch', 'threat_hiding', ...MAP_PLAN_HIDDEN];
 const sameConditions = (a: Conditions, b: Conditions) => a.weather === b.weather && a.time_of_day === b.time_of_day;
 type ProfileRow = { id: string; title: string; size_m: [number, number] };
 /** Browser cache of the current map (the server's Saved/TrainingGround/current_map.json is the master). */
@@ -775,14 +775,6 @@ export const LevelGenDepartment: React.FC = () => {
               <select value={layer} onChange={(e) => { setLayer(e.target.value); if (e.target.value !== 'all') setFloorMode('all'); }} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
                 {layers.map((l) => <option key={l} value={l}>{l === 'all' ? 'все слои' : l}</option>)}
               </select>
-              <button
-                type="button"
-                onClick={() => setVis((v) => ({ ...v, fire_lines: v.fire_lines === false }))}
-                title="Слой «Линия огня» (то же, что галочка в панели слоёв)"
-                className={`px-2.5 py-1 rounded-lg border text-xs ${showFiringLines ? 'bg-rose-900/60 border-rose-500 text-rose-200' : 'bg-slate-800 border-slate-700 text-slate-400 hover:text-slate-200'}`}
-              >
-                Линии огня
-              </button>
               <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
               {wallConflicts.length > 0 && (
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-700 text-xs text-rose-200" title={wallConflicts.map((c) => c.reason).join('; ')}>

@@ -44,6 +44,14 @@ export interface SizeClassRule { small_max_height_cm: number; large_min_height_c
 export interface LayersConfig { schema: string; size_classes: SizeClassRule; layers: LayerDef[] }
 
 export const LAYERS = layersCfg as unknown as LayersConfig;
+/**
+ * Designer 2026-11-19: not listed in the «Управление картой» layers panel. Mines / loot / special items live in «Пропсы уровней»
+ * (and are not drawn on this plan); the objectives row is gone too, but start + goals stay drawn and edited through
+ * «Расставить старт и цели» / «+ цель».
+ */
+export const MAP_PANEL_EXCLUDED: readonly string[] = ['mines', 'loot', 'special', 'objectives'];
+/** Of those, the layers that are not drawn on the plan either. */
+export const MAP_PLAN_HIDDEN: readonly string[] = ['mines', 'loot', 'special'];
 
 /** The config's own checks (empty = valid): unique ids, known types / tools, one fallback per type at most, compilable regexes. */
 export function validateLayersConfig(c: LayersConfig): string[] {
