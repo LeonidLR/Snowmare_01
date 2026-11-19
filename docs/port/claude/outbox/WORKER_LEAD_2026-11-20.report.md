@@ -20,6 +20,8 @@ Machine: codex-worker, checkout C:\Work\CodexTactics-slot1. Brief: docs/port/WOR
 | alley night c1 / c2 (baseline) | main 19a90f52 | 0 / 0 | 14.1 / 17.1 | 17.4 / 17.7 | 1.63 / 1.92 |
 | crossroads T-05 iter 1 | c4f8f561 | 0.33 | 4.1 | 19.0 | 2.05 |
 | alley T-05 iter 1 | c4f8f561 | 0 | 9.4 | 15.3 | 2.42 |
+| crossroads T-05 kill zone 0.25 | 4588fbbc | 0.33 | 3.1 | 22.8 | 1.85 |
+| alley T-05 kill zone 0.25 | 4588fbbc | 0 | 8.6 | 18.9 | 2.33 |
 Folders: C:\Work\CodexTactics\Saved\Worker
 ightloop6-11-19\digest.log; slot1 Saved\Logs\SeedBatch\dayloop-c4f8f561-{cross,alley}.
 Target (brief): on_pos >= 0.67, crossfire >= 45, idle <= 2 s on both. NOT met yet.
@@ -37,8 +39,6 @@ My 30-seed runs take the machine with a day-caller marker `SYNC.worker-lead-slot
   at the round's first shot; the attackers fire first in 4/5 seeds from 25-62 m out, while phase b paired the defenders around the
   OBJECTIVE. Decision: the ground kill zone moves onto the attackers' nav path, kill_zone_reach_factor x reach before the objective.
 - Iteration 2 (Sonnet) running: that kill zone + factor sweep on 10 seeds + why seated men are not on position at contact.
-| crossroads T-05 kill zone 0.25 | 4588fbbc | 0.33 | 3.1 | 22.8 | 1.85 |
-| alley T-05 kill zone 0.25 | 4588fbbc | 0 | 8.6 | 18.9 | 2.33 |
 
 ## T-05 state (worker/t05-firing-positions 4588fbbc, gated, NOT accepted)
 Iteration 2: ground kill zone on the attackers' nav path (kill_zone_reach_factor; 10-seed sweep 0.6 / 0.4 / 0.25 -> 0.25). Gate: build OK,
