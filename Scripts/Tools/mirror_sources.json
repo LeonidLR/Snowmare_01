@@ -85,7 +85,9 @@
       "exclude": [
         "tmp",
         "cache",
-        "*.lock"
+        "*.lock",
+        "*_cache.json",
+        "active_sessions.json"
       ]
     },
     {

@@ -22,6 +22,10 @@ the second machine, the format day and the restore.
 | Git config, SSH host aliases (no keys) | `~/.gitconfig`, `~/.ssh/config` | `gitconfig`, `ssh-config` |
 | Machine info: installed apps, user env variable names, git config, scheduled tasks, engines / Marketplace plugins | generated at each sync | `machine-info` |
 
+**Sanitised, not copied as they are:** `.claude.json`, `settings*.json`, `config.toml`, `config.json` and the `mcp*.json`
+files go as cleaned copies. Every key / token / oauth / auth / password / session field and every `env` / `headers` block
+is replaced by `<removed by mirror_to_worker>`. A file that does not parse is not sent at all.
+
 **Not copied, on purpose:**
 - Regenerable folders: `Intermediate`, `Binaries`, `DerivedDataCache`, `Saved/{Logs, Crashes, StagedBuilds, Cooked, Shaders}`, `*.pdb`.
 - The tracked repository: it is on GitHub.
@@ -33,6 +37,7 @@ the second machine, the format day and the restore.
 python Scripts/Tools/mirror_to_worker.py plan                    # what would go, nothing sent
 python Scripts/Tools/mirror_to_worker.py sync [--only NAME ...]  # send the changes (resumes a cut run)
 python Scripts/Tools/mirror_to_worker.py verify                  # the worker's files vs the state (live logs may differ)
+python Scripts/Tools/mirror_to_worker.py purge                   # after changing the excludes: delete now-excluded copies on the worker
 powershell -ExecutionPolicy Bypass -File Scripts/Tools/mirror_schedule.ps1   # task "CodexTactics Mirror": every 2 h + at logon, hidden
 ```
 
@@ -97,21 +102,61 @@ powershell -ExecutionPolicy Bypass -File Scripts/Tools/mirror_schedule.ps1   # t
    - Open the editor and play the start map.
 6. **Re-enable the mirror** with `Scripts/Tools/mirror_schedule.ps1`.
 
-## 5. The worker as the main machine during the gap
+## 5. Work on the worker (the main machine during the gap)
 
-**Already works on the worker:**
-- UE 5.8 + VS Build Tools: compile, run smokes, the trainer, rendered clips.
-- The repository with LFS and the big packs.
-- GTX 1080, 32 GB RAM.
+Lead decision 2026-11-19: the mirror stays secret-free. No credential is copied by any script. The designer signs in and
+enters the keys on the worker himself.
 
-**Missing on the worker for daily work.** Each needs a download or install, so the designer approves first:
-- Claude desktop / Claude Code;
-- `gh`;
-- the Gemini / Codex / Grok CLIs;
-- a full Visual Studio for debugging;
-- the logins from section 3.
+### 5.1 Installed (2026-11-19, `Saved\Worker\install_tools*.ps1` on the worker, official sources only)
 
-The mirror's `dot-claude` etc. can be copied into the worker's user profile once those tools are there.
+| Tool | How | State 2026-11-19 |
+|---|---|---|
+| UE 5.8 + VS 18 Build Tools (MSVC 14.51.36231) | earlier setup | present |
+| git 2.56 + git lfs 3.8 | earlier setup | present |
+| GitHub CLI `gh` | winget `GitHub.cli` | 2.105.0 |
+| Node.js LTS | winget `OpenJS.NodeJS.LTS` | 26.13.1 |
+| VS Code | winget `Microsoft.VisualStudioCode` | installed |
+| Claude desktop | winget `Anthropic.Claude` | installed |
+| Claude Code / Gemini CLI / Codex CLI | `npm i -g @anthropic-ai/claude-code @google/gemini-cli @openai/codex` (as on the main PC) | 2.1.328 / 0.69.0 / 0.170.0 |
+| Grok CLI | the main PC's own `~/.grok/bin` from the mirror (no download), user PATH | 1.0.88 |
+| Visual Studio 2026 Community, game C++ workload (debugging) | winget `Microsoft.VisualStudio.Community` | installing |
+| Blender 5.2.0, MaterialCraft 0.4.1, TextureCraft 0.5.0 (the main PC's versions) | winget `BlenderFoundation.Blender`, `ArtCraft.MaterialCraft`, `ArtCraft.TextureCraft` | queued after VS |
 
-**Expect** a slower editor (i7-6700K, 4 cores), and heavy Lumen on the GTX 1080. The test farm and the night trainer stop while
-the worker is the main machine.
+### 5.2 Entered by the designer by hand (names only; the values never pass through any script)
+
+1. **PowerShell script policy** (a security setting, the designer's call). The main PC has `CurrentUser=RemoteSigned`; the
+   worker has none, so the npm shims `claude.ps1` / `gemini.ps1` / `codex.ps1` are blocked in PowerShell. Fix it with
+   `Set-ExecutionPolicy -Scope CurrentUser RemoteSigned`. Until then, use `claude.cmd` / `gemini.cmd` / `codex.cmd`, cmd or Git
+   Bash.
+2. **User environment variables:** `ANTHROPIC_API_KEY`, `ANTHROPIC_API_KEY_EXTRA`, `GEMINI_API_KEY`, `TYPESAFE_API_KEY`. The
+   list comes from `machine-info/user-env-var-NAMES.txt`; the rest there are paths.
+3. **GitHub:** `gh auth login`, then `gh auth setup-git`, so that `git push` works.
+4. **Git identity:** `git config --global user.name` / `user.email`, as in `C:\Mirror\Main\gitconfig`. It is empty on the worker.
+5. **Claude desktop + Claude Code:** sign in.
+6. **Codex** (`codex login`), **Gemini CLI** (`gemini`, then sign in or the key), **Grok** (`grok`, then sign in).
+7. **Tailscale:** same account. It is already signed in on the worker.
+8. **Epic Games Launcher / Fab:** sign in, needed only for new Marketplace content.
+
+### 5.3 Settings and history to bring over (from the mirror, no secrets in it)
+
+- `C:\Mirror\Main\dot-claude\` -> `%USERPROFILE%\.claude\` (memory, skills, settings without env).
+- Codex / Gemini / Grok dirs likewise.
+- Agent chat: it stores its history in `<checkout>\Saved\AgentChat`, one per machine. Copy
+  `C:\Mirror\Main\CodexTactics\Saved\AgentChat` into the worker checkout before agents use the chat there.
+
+### 5.4 Verification checklist (worker-ops runs it and reports pass / fail per line)
+
+| # | Check | Command | 2026-11-19 result |
+|---|---|---|---|
+| 1 | Tools present | versions of git, git lfs, gh, node, claude.cmd, gemini.cmd, codex.cmd, grok, python, UE 5.8, MSVC | PASS |
+| 2 | Build locally on the worker | `Scriptsuild.ps1` in `C:\Work\CodexTactics` | after 08:00 (night trainer) |
+| 3 | Smokes locally | `Scripts\smoke_parallel.ps1 -Remote off -Commands MovementSmoke,CoverSmoke` | after 08:00 |
+| 4 | Agent chat runs | `python Scripts\Toolsgent_chat.py read --last 1` | PASS (runs; empty history until 5.3) |
+| 5 | git fetch | `git fetch --dry-run origin` | PASS |
+| 6 | git push | `git push --dry-run origin HEAD:refs/heads/worker-push-probe` | FAIL until `gh auth login` (5.2.3) - expected |
+| 7 | CLI logins | `gh auth status`, `codex login status`, Claude / Gemini / Grok start | not logged in (5.2) - expected |
+| 8 | Editor + playable map | open `CodexTactics.uproject`, play the start map (GTX 1080) | designer, after the logins |
+
+**Expect:**
+- A slower editor (i7-6700K, 4 cores) and heavy Lumen on the GTX 1080.
+- The test farm and the night trainer stop while the worker is the main machine.

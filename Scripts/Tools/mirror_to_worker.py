@@ -12,7 +12,8 @@ How (wired link only - never over the iPhone hotspot, see --max-mbit):
   2. pack the new / changed files into tar parts of --part-mb, scp each part to the worker, unpack it there (Windows tar),
      delete the part; the state is saved after every part (a cut link resumes where it stopped);
   3. files gone here are moved on the worker into C:/Mirror/Trash/<date>/<source>/... (kept --trash-days, then removed);
-  4. secrets are never sent (GLOBAL_EXCLUDES: credential / token / key files) - re-enter them after a reinstall
+  4. secrets are never sent: GLOBAL_EXCLUDES drops credential / token / key / password / cookie files, SANITISE_NAMES
+     configs (.claude.json, settings*.json, config.toml ...) go as cleaned copies; re-enter keys / logins by hand
      (docs/port/MAIN_PC_FORMAT.md).
 
 Usage:
@@ -27,8 +28,10 @@ import argparse
 import base64
 import datetime as dt
 import fnmatch
+import io
 import json
 import os
+import re
 import subprocess
 import sys
 import tarfile
@@ -46,7 +49,51 @@ GLOBAL_EXCLUDES = [
     ".credentials.json", "credentials.json", "auth.json", "oauth_creds.json", "google_accounts.json", "*token*.json",
     "*.pem", "*.key", "*.pfx", "*.p12", "id_rsa*", "id_ed25519*", ".env", ".env.*", "*secret*", "*apikey*", "*api_key*",
     "*password*", "cookies", "cookies-journal", "login data*", "web data*", "vpn tokens*", "EdgeProfile", "*/EdgeProfile",
+    ".git-credentials", ".netrc", "_netrc", ".npmrc", ".pypirc", "id_ecdsa*", "id_dsa*", "*.ppk", "*.kdbx", "*.kdb",
+    "credentials", ".aws", "*/.aws", "local state",
 ]
+
+# Config files that may carry keys inside (primaryApiKey, oauthAccount, env blocks, mcpServers.*.env, tokens): never sent
+# as they are - a sanitised copy goes instead (sanitise_bytes), so "secrets are never sent" holds for them too.
+SANITISE_NAMES = {".claude.json", "settings.json", "settings.local.json", "config.toml", "config.json", ".mcp.json", "mcp.json",
+                  "mcp_config.json"}
+SECRET_KEY_RE = re.compile(r"(key|token|secret|passw|oauth|auth|credential|cookie|session|bearer|^env$|^headers$)", re.I)
+
+
+def _strip(obj):
+    if isinstance(obj, dict):
+        return {k: ("<removed by mirror_to_worker>" if SECRET_KEY_RE.search(str(k)) else _strip(v)) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_strip(v) for v in obj]
+    return obj
+
+
+def sanitise_bytes(name, data):
+    """The sanitised content of a SANITISE_NAMES file: JSON with every key-like field (and env / headers blocks) replaced;
+    TOML without key-like assignments and without [*env*] / [*headers*] tables. Unparsable JSON is not sent at all (None)."""
+    text = data.decode("utf-8-sig", errors="replace")
+    if name.lower().endswith(".toml"):
+        out, skip = [], False
+        for line in text.splitlines():
+            st = line.strip()
+            if st.startswith("["):
+                hdr = st.strip("[]").lower()
+                skip = any(w in hdr for w in ("env", "header", "auth", "token", "secret"))
+                out.append(line if not skip else f"# [{st.strip('[]')}] removed by mirror_to_worker")
+                continue
+            if skip:
+                continue
+            key = st.split("=", 1)[0].strip().strip('"') if "=" in st and not st.startswith("#") else ""
+            out.append(f"# {key} = <removed by mirror_to_worker>" if key and SECRET_KEY_RE.search(key) else line)
+        return ("\n".join(out) + "\n").encode("utf-8")
+    try:
+        return (json.dumps(_strip(json.loads(text)), indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    except ValueError:
+        return None
+
+
+def is_sanitised(rel):
+    return os.path.basename(rel).lower() in SANITISE_NAMES
 
 
 def log(msg):
@@ -196,7 +243,16 @@ def send_parts(worker, source, files, changed, state, part_bytes):
                 rel = changed[i]
                 i += 1
                 try:
-                    tar.add(os.path.join(base, rel.replace("/", os.sep)), arcname=rel, recursive=False)
+                    full = os.path.join(base, rel.replace("/", os.sep))
+                    if is_sanitised(rel):
+                        with open(full, "rb") as f:
+                            clean = sanitise_bytes(os.path.basename(rel), f.read())
+                        if clean is not None:
+                            info = tarfile.TarInfo(rel)
+                            info.size, info.mtime = len(clean), files[rel][1]
+                            tar.addfile(info, io.BytesIO(clean))
+                    else:
+                        tar.add(full, arcname=rel, recursive=False)
                     batch.append(rel)
                     size += files[rel][0]
                 except OSError as ex:
@@ -389,6 +445,11 @@ def _sync(cfg, args):
             continue
         state = load_state(s["name"])
         files, changed, gone = plan_source(s, state)
+        if state and len(gone) > 0.5 * len(state):
+            log(f"{s['name']}: ABORT - {len(gone)} of {len(state)} mirrored files look gone (source unreadable / emptied?); "
+                f"nothing sent or trashed for it - check {s['src']}")
+            failed += 1
+            continue
         log(f"{s['name']}: {len(changed)} to send ({sum(files[r][0] for r in changed) / 1e9:.2f} GB), {len(gone)} gone")
         try:
             if changed:
@@ -426,11 +487,62 @@ def cmd_verify(cfg, args):
                 rel, size = line.rsplit("\t", 1)
                 remote[rel] = int(size)
         missing = [r for r in state if r not in remote]
-        differ = [r for r in state if r in remote and remote[r] != state[r][0]]
+        differ = [r for r in state if r in remote and remote[r] != state[r][0] and not is_sanitised(r)]
         bad += len(missing) + len(differ)
         log(f"{s['name']}: {len(state)} in state, {len(remote)} on the worker, missing {len(missing)}, size differs {len(differ)}"
             + (f" e.g. {(missing + differ)[:3]}" if missing or differ else ""))
     return 1 if bad else 0
+
+
+def cmd_purge(cfg, args):
+    """After the excludes / sanitise rules changed: delete on the worker (inside C:/Mirror/Main only, NOT to the trash) every
+    mirrored file that is now excluded or sanitised, and drop it from the state - sanitised ones go again, cleaned, next sync."""
+    worker = Worker(cfg)
+    for s in selected(cfg, args.only):
+        state = load_state(s["name"])
+        patterns = list(s.get("exclude", [])) + GLOBAL_EXCLUDES
+        hit = [r for r in state if is_sanitised(r) or excluded(r, os.path.basename(r), patterns)
+               or any(excluded("/".join(r.split("/")[:i]), r.split("/")[i - 1], patterns) for i in range(1, r.count("/") + 1))]
+        if not hit:
+            continue
+        listing = os.path.join(tempfile.gettempdir(), f"mirror-purge-{s['name']}.txt")
+        with open(listing, "w", encoding="utf-8") as f:
+            f.write("\n".join(hit))
+        remote_list = f"{worker.root}/.purge-{s['name']}.txt"
+        worker.scp_to(listing, remote_list, timeout=600)
+        out = worker.ps(f"""
+$src = '{worker.root}/{s['name']}'; $n = 0
+foreach ($rel in Get-Content -Encoding UTF8 '{remote_list}') {{
+    if (-not $rel) {{ continue }}
+    $p = Join-Path $src $rel
+    if (Test-Path -LiteralPath $p) {{ Remove-Item -LiteralPath $p -Force; $n++ }}
+}}
+Remove-Item '{remote_list}'; $n""", timeout=1800)
+        os.remove(listing)
+        for r in hit:
+            state.pop(r, None)
+        save_state(s["name"], state)
+        log(f"{s['name']}: purged {out.strip().splitlines()[-1] if out.strip() else 0} worker copies of {len(hit)} now excluded / sanitised files "
+            f"(sanitised ones are re-sent cleaned)")
+    return 0
+
+
+def safe_extract(tar_path, to):
+    """Extract only regular files / dirs that land inside `to` (Python 3.10 has no tarfile data filter): links, devices,
+    absolute paths and .. escapes are refused and logged. Returns the number refused."""
+    root = os.path.realpath(to)
+    refused = 0
+    with tarfile.open(tar_path, "r") as tar:
+        members = []
+        for m in tar.getmembers():
+            target = os.path.realpath(os.path.join(root, m.name))
+            if not (m.isfile() or m.isdir()) or not (target == root or target.startswith(root + os.sep)):
+                log(f"  refused tar member {m.name!r} (not a plain file / dir, or outside {to})")
+                refused += 1
+                continue
+            members.append(m)
+        tar.extractall(root, members=members)
+    return refused
 
 
 def cmd_restore(cfg, args):
@@ -444,8 +556,7 @@ def cmd_restore(cfg, args):
     local_tar = os.path.join(args.to, f".restore-{name}.tar")
     worker.scp_from(remote_tar, local_tar)
     worker.ps(f"Remove-Item '{remote_tar}'", check=False)
-    with tarfile.open(local_tar, "r") as tar:
-        tar.extractall(args.to)
+    safe_extract(local_tar, args.to)
     os.remove(local_tar)
     log(f"restored {name} -> {args.to}")
     return 0
@@ -455,7 +566,7 @@ def main():
     ap = argparse.ArgumentParser(description="One-way mirror of the main PC onto codex-worker (C:/Mirror/Main)")
     ap.add_argument("--config", default=DEFAULT_CONFIG)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for c in ("plan", "sync", "verify"):
+    for c in ("plan", "sync", "verify", "purge"):
         p = sub.add_parser(c)
         p.add_argument("--only", nargs="*", help="source names (default: all)")
         if c == "sync":
@@ -470,7 +581,7 @@ def main():
     except (OSError, ValueError) as ex:
         log(f"config error: {ex}")
         return 2
-    return {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "restore": cmd_restore}[args.cmd](cfg, args)
+    return {"plan": cmd_plan, "sync": cmd_sync, "verify": cmd_verify, "purge": cmd_purge, "restore": cmd_restore}[args.cmd](cfg, args)
 
 
 if __name__ == "__main__":
