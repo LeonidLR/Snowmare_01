@@ -583,6 +583,8 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 				continue;
 			}
 			Best.Position.StandPoint = Feet;
+			Best.Position.Slot = Slot;
+			Best.Position.bHasSlot = true;
 			Best.Position.FacingYaw = YawOf(Best.Position.FireOrigin, BestMean);
 			Best.Position.CoveredShare = BestShare;
 			Best.Position.CoverKey = PmcDefenceRules::CoverObjectKey(WallId, Slot.WallPoint);

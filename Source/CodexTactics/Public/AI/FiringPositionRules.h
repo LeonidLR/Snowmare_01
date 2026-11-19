@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
+#include "Tactics/CoverTypes.h"
 
 class FJsonObject;
 
@@ -50,6 +51,9 @@ struct CODEXTACTICS_API FFiringPosition
 	FVector FireOrigin = FVector::ZeroVector;
 	/** Centimetres the stand point was stepped toward the rim (RoofEdge). */
 	float RimStepCm = 0.f;
+	/** Corner / LowCover: the cover slot the position was found at (the man takes it with the TakeCover order: bInCover, the corner lean). */
+	FCoverSlot Slot;
+	bool bHasSlot = false;
 	bool bValid = false;
 };
 

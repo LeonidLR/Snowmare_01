@@ -2,6 +2,7 @@
 // UE-only, no Godot reference.
 
 #include "AI/PmcSquadSubsystem.h"
+#include "AI/FiringPositionSubsystem.h"
 
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcOperatorRules.h"
@@ -2265,10 +2266,24 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			}
 			else
 			{
-				Context.Location = Feet + FRotator(0.f, State.DefenceYaw, 0.f).Vector() * 1500.f;
-				SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
-				Context.Stance = EOperativeStance::Crouching;
-				SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
+				if (State.bFiringPosition && State.bFiringCover)
+				{
+					// T-05 phase b: a cover-slot firing position is taken (bInCover, the corner lean / over-the-top fire), not stood beside.
+					if (!Fighter.bInCover)
+					{
+						Context.Cover = State.FiringSlot;
+						Context.bSprint = false;
+						SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
+					}
+				}
+				else
+				{
+					Context.Location = Feet + FRotator(0.f, State.DefenceYaw, 0.f).Vector() * 1500.f;
+					SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
+					// T-05 phase b: a firing position fires from its own stance (a roof edge stands: the parapet is above a kneeling muzzle).
+					Context.Stance = State.bFiringPosition ? State.FiringStance : EOperativeStance::Crouching;
+					SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
+				}
 				bTaken = true;
 				Goal = State.DefencePost;
 				State.bDefenceSettled = true;
@@ -3393,6 +3408,195 @@ void UPmcSquadSubsystem::ClearDefencePosts(FTeam& Team)
 		State.DefencePostWalkFromCm = -1.f;
 		State.bDefencePostDropped = false;
 		State.bDefenceSettled = false;
+		State.bFiringPosition = false;
+		State.FiringStance = EOperativeStance::Crouching;
+		State.bFiringCover = false;
+		State.FiringSlot = FCoverSlot();
+	}
+}
+
+void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const TArray<AOperativeCharacter*>& Members, TArray<FPmcDefencePost>& Posts,
+	TMap<int32, FFiringPosition>& OutPositions)
+{
+	UWorld* World = GetWorld();
+	UFiringPositionSubsystem* Service = World ? World->GetSubsystem<UFiringPositionSubsystem>() : nullptr;
+	if (!Service || !Service->GetConfig().bDefenceUse || !Team.Objective.IsSet())
+	{
+		return;
+	}
+	const FFiringPositionConfig& Config = Service->GetConfig();
+	const FPmcObjectiveView& Objective = Team.Objective.GetValue();
+	TArray<int32> Shooters;
+	for (int32 Index = 0; Index < Posts.Num(); ++Index)
+	{
+		if (Posts[Index].Role == EPmcDefenceRole::SectorShooter && Posts[Index].bHasPost)
+		{
+			Shooters.Add(Index);
+		}
+	}
+	if (Shooters.IsEmpty())
+	{
+		return;
+	}
+	Shooters.Sort([&Posts](int32 A, int32 B) { return Posts[A].Index < Posts[B].Index; });
+	auto MemberOf = [&Members](int32 SquadIndex) -> AOperativeCharacter*
+	{
+		for (AOperativeCharacter* Member : Members)
+		{
+			if (Member && Member->SquadIndex == SquadIndex)
+			{
+				return Member;
+			}
+		}
+		return nullptr;
+	};
+	AOperativeCharacter* Lead = MemberOf(Posts[Shooters[0]].Index);
+	if (!Lead)
+	{
+		return;
+	}
+	// The kill zone and the weapon band. A ground objective: the objective itself. A roof: the street toward the attackers at the band's middle.
+	const float Range = Lead->CurrentWeapon ? Lead->CurrentWeapon->Stats.Range.MaxRangeCm : 1400.f;
+	FPmcEngagementBand Band = PmcCommanderRules::ResolveBand(Lead->CurrentWeapon ? Lead->CurrentWeapon->WeaponId : FString(), Range, Team.Weights);
+	if (!Band.IsValid())
+	{
+		Band.MinCm = 0.f;
+		Band.MaxCm = Range * 0.95f;
+	}
+	Band.MaxCm = FMath::Min(Band.MaxCm, Range * 0.9f); // the 3-D distance from a roof must stay inside his reach
+	const bool bRoof = Team.Defence.bRoof;
+	FVector KillZone = Objective.Location;
+	if (bRoof)
+	{
+		if (!Team.Defence.bHasApproach)
+		{
+			return;
+		}
+		const FVector Toward = (Team.Defence.ApproachPoint - Objective.Location).GetSafeNormal2D();
+		const float Reach = FMath::Min(static_cast<float>(FVector::Dist2D(Team.Defence.ApproachPoint, Objective.Location)), 0.5f * (Band.MinCm + Band.MaxCm));
+		KillZone = FVector(Objective.Location.X, Objective.Location.Y, Team.Defence.ApproachPoint.Z) + Toward * Reach;
+	}
+	const float AreaRadius = FMath::Max(Objective.RadiusCm, 600.f);
+	const TArray<FFiringCandidate>& All = Service->GetCandidates(KillZone, AreaRadius, Band.MinCm, Band.MaxCm);
+	FPmcDefenceConfig AreaConfig;
+	AreaConfig.LevelToleranceCm = Objective.LevelToleranceCm;
+	TArray<FFiringCandidate> Eligible;
+	for (const FFiringCandidate& Candidate : All)
+	{
+		const FFiringPosition& Pos = Candidate.Position;
+		if (!Pos.bValid)
+		{
+			continue;
+		}
+		if (bRoof)
+		{
+			if (Pos.Kind != EFiringPositionKind::RoofEdge
+				|| !PmcDefenceRules::IsInsideDefendedArea(Pos.StandPoint, Objective.Location, Team.Defence.LevelZ, Objective.RadiusCm, Team.Defence.Spots, AreaConfig))
+			{
+				continue;
+			}
+		}
+		else
+		{
+			// On the ground a man takes a cover slot (the arena counts a defender on position when he is in cover); window stands and roof edges are not that.
+			if ((Pos.Kind != EFiringPositionKind::Corner && Pos.Kind != EFiringPositionKind::LowCover)
+				|| !PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(Pos.StandPoint.Z), static_cast<float>(Objective.Location.Z), Objective.LevelToleranceCm))
+			{
+				continue;
+			}
+			// A defender never stands forward of his kill zone (nearer the attackers' spawn than the zone).
+			if (Team.Defence.bHasApproach && FVector::Dist2D(Pos.StandPoint, Team.Defence.ApproachPoint) < FVector::Dist2D(KillZone, Team.Defence.ApproachPoint))
+			{
+				continue;
+			}
+		}
+		Eligible.Add(Candidate);
+	}
+	// Every sector shooter gets a seat (an idle man in the open before contact is the metric): the first two hammers a crossfire pair on the ground
+	// (the best roof edges on a roof), the rest the best remaining positions, 5 m apart, one cover object each.
+	TArray<FFiringPosition> Chosen;
+	float CrossfireDeg = -1.f;
+	if (!bRoof && Shooters.Num() >= 2)
+	{
+		int32 First = INDEX_NONE;
+		int32 Second = INDEX_NONE;
+		if (FiringPositionRules::PickCrossfirePair(Eligible, KillZone, TConstArrayView<FString>(), Config, First, Second))
+		{
+			Chosen.Add(Eligible[First].Position);
+			Chosen.Add(Eligible[Second].Position);
+			CrossfireDeg = FiringPositionRules::CrossfireAngleDeg(Chosen[0].StandPoint, Chosen[1].StandPoint, KillZone);
+		}
+	}
+	while (Chosen.Num() < Shooters.Num())
+	{
+		int32 BestIndex = INDEX_NONE;
+		float BestScore = 0.f;
+		for (int32 Index = 0; Index < Eligible.Num(); ++Index)
+		{
+			const FFiringCandidate& Candidate = Eligible[Index];
+			const float Score = Candidate.Score * FiringPositionRules::SpacingOf(Candidate.Position, Chosen, TConstArrayView<FString>(), Config);
+			if (Candidate.Position.bValid && Score > BestScore)
+			{
+				BestIndex = Index;
+				BestScore = Score;
+			}
+		}
+		if (BestIndex == INDEX_NONE)
+		{
+			break;
+		}
+		Chosen.Add(Eligible[BestIndex].Position);
+		// A spaced-out pick only: a position the spacing already penalised is not taken by a third man this way.
+		Eligible.RemoveAtSwap(BestIndex);
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: firing positions on %s (kill zone r %.0f cm, band %.0f..%.0f cm): %d eligible of %d valid, %d chosen for %d shooters%s"), TeamId,
+		*KillZone.ToCompactString(), AreaRadius, Band.MinCm, Band.MaxCm, Eligible.Num(), All.Num(), Chosen.Num(), Shooters.Num(), bRoof ? TEXT(" (roof)") : TEXT(""));
+	if (Chosen.IsEmpty())
+	{
+		return;
+	}
+	// Seats: the man nearest to a position takes it (the pair first), no man twice.
+	TArray<bool> Taken;
+	Taken.Init(false, Shooters.Num());
+	for (int32 Seat = 0; Seat < Chosen.Num(); ++Seat)
+	{
+		const FFiringPosition& Pos = Chosen[Seat];
+		int32 Man = INDEX_NONE;
+		double BestDistance = TNumericLimits<double>::Max();
+		for (int32 Index = 0; Index < Shooters.Num(); ++Index)
+		{
+			const AOperativeCharacter* Fighter = MemberOf(Posts[Shooters[Index]].Index);
+			if (Taken[Index] || !Fighter)
+			{
+				continue;
+			}
+			const double Distance = FVector::Dist(Fighter->GetActorLocation(), Pos.StandPoint);
+			if (Distance < BestDistance)
+			{
+				BestDistance = Distance;
+				Man = Index;
+			}
+		}
+		if (Man == INDEX_NONE)
+		{
+			break;
+		}
+		Taken[Man] = true;
+		AOperativeCharacter* Fighter = MemberOf(Posts[Shooters[Man]].Index);
+		if (!HasFullNavPath(Fighter->GetActorLocation(), Pos.StandPoint))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s keeps his G008 post: no full path to the firing position %s %s"), TeamId, *Fighter->DisplayName.ToString(),
+				FiringPositionRules::KindName(Pos.Kind), *Pos.SourceId);
+			continue;
+		}
+		FPmcDefencePost& Post = Posts[Shooters[Man]];
+		Post.Location = Pos.StandPoint;
+		Post.Yaw = Pos.FacingYaw;
+		Post.SpotIndex = INDEX_NONE;
+		Post.Sector = INDEX_NONE; // no wedge: the sector shift would move him back to a G008 spot
+		OutPositions.Add(Post.Index, Pos);
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s firing position %s %s at %s %s covers %.2f crossfire %.0f deg"), TeamId, *Fighter->DisplayName.ToString(),
+			FiringPositionRules::KindName(Pos.Kind), *Pos.SourceId, *Pos.StandPoint.ToCompactString(), FiringPositionRules::StanceName(Pos.Stance), Pos.CoveredShare, CrossfireDeg);
 	}
 }
 
@@ -3717,8 +3921,18 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 
 	const FVector* Inward = Team.Defence.bHasInward ? &Team.Defence.Inward : nullptr;
 	const TArray<FPmcDefenceSlot> Slots;
-	const TArray<FPmcDefencePost> Posts = PmcDefenceRules::AssignRoles(Men, Team.Defence.Access, Objective.Location,
+	TArray<FPmcDefencePost> Posts = PmcDefenceRules::AssignRoles(Men, Team.Defence.Access, Objective.Location,
 		Team.Defence.ApproachYawDeg, Team.Defence.Spots, Slots, Inward, Config);
+	// T-05 phase b: firing positions on the kill zone for the hammers (a new objective = a new round: the cached lines are dropped first).
+	TMap<int32, FFiringPosition> FiringPositionMap;
+	if (UFiringPositionSubsystem* FiringService = GetWorld() ? GetWorld()->GetSubsystem<UFiringPositionSubsystem>() : nullptr)
+	{
+		if (bResolveAccess)
+		{
+			FiringService->InvalidateCache();
+		}
+		AssignFiringPositions(TeamId, Team, Members, Posts, FiringPositionMap);
+	}
 
 	ClearDefencePosts(Team);
 	int32 SectorCount = 0;
@@ -3763,6 +3977,13 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 		State.DefenceYaw = Post.Yaw;
 		State.DefenceSpotIndex = Post.SpotIndex;
 		State.bHasDefencePost = Post.bHasPost;
+		if (const FFiringPosition* Firing = FiringPositionMap.Find(Post.Index))
+		{
+			State.bFiringPosition = true;
+			State.FiringStance = Firing->Stance;
+			State.bFiringCover = Firing->bHasSlot;
+			State.FiringSlot = Firing->Slot;
+		}
 		FVector Location = Post.Location;
 		if (Post.bHasPost)
 		{
