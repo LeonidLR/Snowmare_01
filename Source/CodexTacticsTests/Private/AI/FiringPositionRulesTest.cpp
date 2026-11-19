@@ -384,7 +384,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	const TSharedPtr<FJsonObject> Block = ParseBlock(TEXT(R"JSON({
 		"crossfire_min_deg": 60, "area_samples": 1, "min_covered_share": 2.0, "rim_step_max_cm": 500, "min_spacing_m": 7,
 		"muzzle_height_cm": { "crouching": 90 }, "defence_use": false, "scan_rays": 99, "max_cover_slots": 0, "ignored_key": 5,
-			"band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "scan_far_stride": 99, "roof_reach_factor": 7, "default_reach_cm": 5
+			"min_cover_quality": 2.0, "band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "scan_far_stride": 99, "roof_reach_factor": 7, "default_reach_cm": 5
 	})JSON"));
 	TestTrue(TEXT("the block parses"), Block.IsValid());
 	if (Block.IsValid())
@@ -400,6 +400,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 		TestFalse(TEXT("defence_use false read"), Read.bDefenceUse);
 		TestEqual(TEXT("scan_rays clamps to 16"), Read.ScanRays, 16);
 		TestEqual(TEXT("max_cover_slots is at least 1"), Read.MaxCoverSlots, 1);
+		TestEqual(TEXT("min_cover_quality clamps to 1"), Read.MinCoverQuality, 1.f, 0.001f);
 		TestEqual(TEXT("band_max_factor read"), Read.BandMaxFactor, 0.5f, 0.001f);
 		TestEqual(TEXT("tier 2 is never narrower than tier 1"), Read.BandMaxFactorTier2, 0.5f, 0.001f);
 		TestEqual(TEXT("forward_margin_cm is at least 0"), Read.ForwardMarginCm, 0.f, 0.001f);
@@ -437,6 +438,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	TestEqual(TEXT("shipped scan_reach_cm"), Shipped.ScanReachCm, Defaults.ScanReachCm, 0.001f);
 	TestEqual(TEXT("shipped max_scan_points"), Shipped.MaxScanPoints, Defaults.MaxScanPoints);
 	TestEqual(TEXT("shipped max_cover_slots"), Shipped.MaxCoverSlots, Defaults.MaxCoverSlots);
+	TestEqual(TEXT("shipped min_cover_quality"), Shipped.MinCoverQuality, Defaults.MinCoverQuality, 0.001f);
 	TestEqual(TEXT("shipped scan_dense_cm"), Shipped.ScanDenseCm, Defaults.ScanDenseCm, 0.001f);
 	TestEqual(TEXT("shipped scan_far_stride"), Shipped.ScanFarStride, Defaults.ScanFarStride);
 	TestEqual(TEXT("shipped band_min_factor"), Shipped.BandMinFactor, Defaults.BandMinFactor, 0.001f);

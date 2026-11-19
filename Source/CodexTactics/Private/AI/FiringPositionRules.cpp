@@ -125,6 +125,8 @@ namespace FiringPositionRules
 		float MaxSlots = static_cast<float>(Out.MaxCoverSlots);
 		FiringReadNumber(Block, TEXT("max_cover_slots"), MaxSlots);
 		Out.MaxCoverSlots = FMath::Max(1, FMath::RoundToInt(MaxSlots));
+		FiringReadNumber(Block, TEXT("min_cover_quality"), Out.MinCoverQuality);
+		Out.MinCoverQuality = FiringClamp01(Out.MinCoverQuality);
 		FiringReadNumber(Block, TEXT("scan_dense_cm"), Out.ScanDenseCm);
 		Out.ScanDenseCm = FMath::Max(Out.ScanDenseCm, 0.f);
 		float FarStride = static_cast<float>(Out.ScanFarStride);

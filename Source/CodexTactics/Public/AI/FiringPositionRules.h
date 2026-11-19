@@ -112,6 +112,8 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	int32 ScanRays = 8;
 	float ScanReachCm = 350.f;
 	int32 MaxScanPoints = 400;
+	/** "min_cover_quality" (0.35, FindCoverNear's number): a cover slot is a candidate only when its wall stands between it and the area within this CoverQualityAgainst (cos of the angle to the area, 0 = a wall beside him). */
+	float MinCoverQuality = 0.35f;
 	/** "scan_dense_cm" (6000) / "scan_far_stride" (2): beyond scan_dense_cm from the area only every scan_far_stride-th grid line is scanned (far cover is sparser by design). */
 	float ScanDenseCm = 6000.f;
 	int32 ScanFarStride = 2;
@@ -127,8 +129,8 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	float RoofReachFactor = 0.45f;
 	/** "default_reach_cm" (1400): the reach of a man with no weapon. */
 	float DefaultReachCm = 1400.f;
-	/** "forward_margin_cm" (300): a ground position is forward of the kill zone only when it is nearer the attackers along the approach axis by MORE than this. */
-	float ForwardMarginCm = 300.f;
+	/** "forward_margin_cm" (800): a ground position is forward of the kill zone only when it is nearer the attackers along the approach axis by MORE than this. */
+	float ForwardMarginCm = 800.f;
 	/** "defence_use" (true): objective defenders take firing positions before contact (phase b; PmcSquadSubsystem). */
 	bool bDefenceUse = true;
 

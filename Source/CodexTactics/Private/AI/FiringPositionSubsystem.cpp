@@ -44,8 +44,6 @@ namespace FiringPositionSubsystemLocal
 		return FMath::Abs(FMath::FindDeltaAngleDegrees(A, B));
 	}
 
-	/** A cover candidate may be tried as a position only within this CoverQualityAgainst (FindCoverNear's 0.35). */
-	constexpr float MinCoverQuality = 0.35f;
 	/** A rim step is on the walkable surface when the navmesh has a point this close (planar), cm. */
 	constexpr float WalkSurfaceCm = 12.f;
 	/** A cover wall tried again within this cell is the same slot, cm. */
@@ -537,7 +535,7 @@ TSharedPtr<UFiringPositionSubsystem::FFiringCoverScan> UFiringPositionSubsystem:
 					Normal = -Normal;
 				}
 				const FVector Approx = Hit.ImpactPoint + Normal * 45.f;
-				if (PmcCommanderRules::CoverQualityAgainst(Approx, Normal, Context.Centre) < MinCoverQuality)
+				if (PmcCommanderRules::CoverQualityAgainst(Approx, Normal, Context.Centre) < Cfg.MinCoverQuality)
 				{
 					++Scan->RaysPrefiltered;
 					return false;
@@ -564,7 +562,7 @@ TSharedPtr<UFiringPositionSubsystem::FFiringCoverScan> UFiringPositionSubsystem:
 				continue;
 			}
 			const float Quality = PmcCommanderRules::CoverQualityAgainst(Slot.WorldLocation, Slot.WallNormal, Context.Centre);
-			if (Quality < MinCoverQuality)
+			if (Quality < Cfg.MinCoverQuality)
 			{
 				continue;
 			}
