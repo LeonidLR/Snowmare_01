@@ -182,11 +182,13 @@ class Worker:
         self.trash = cfg.get("remote_trash", "C:/Mirror/Trash").rstrip("/")
 
     def ps(self, script, timeout=600, check=True):
-        b64 = base64.b64encode(("$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; " + script)
+        b64 = base64.b64encode(("$ErrorActionPreference='Stop'; $ProgressPreference='SilentlyContinue'; "
+                                "[Console]::OutputEncoding = [Text.Encoding]::UTF8; " + script)
                                .encode("utf-16-le")).decode()
         r = subprocess.run(["ssh", "-o", "ConnectTimeout=20", "-o", "BatchMode=yes", "-o", "ServerAliveInterval=15", "-o", "ServerAliveCountMax=4", self.host,
                             f"powershell -NoProfile -NonInteractive -EncodedCommand {b64}"],
-                           capture_output=True, text=True, timeout=timeout, creationflags=NO_WINDOW)
+                           capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=timeout,
+                           creationflags=NO_WINDOW)
         if check and r.returncode != 0:
             raise RuntimeError(f"worker command failed (exit {r.returncode}): {(r.stderr or r.stdout).strip()[-400:]}")
         return r.stdout
