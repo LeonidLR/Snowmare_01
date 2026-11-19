@@ -364,3 +364,66 @@ shared tiling material -> UE commandlet import.
    slab as collision and use kit pieces as visuals only?
 5. Residential storey: if the Soviet kit is 280 cm, scale it to 300 (7 %) rather than add a second storey height?
 6. Texel density target for walls at the tactical camera (256 vs 512 px/m) - decide on the first rendered corner.
+
+---
+
+## 8. Firing gaps in the roof parapet (designer 2026-11-19)
+
+**Why.** T-05 on `L_Gen_Depot_X4` found no kneeling roof-edge firing position: the roof parapet is 95 cm, a sniper always fires
+kneeling (`SniperRules::FiringStance`, muzzle 85 cm over the floor; snipers keep kneeling, `SniperRules` is unchanged), and the
+overwatch spots of the tactical file were not at the rim (the analysis let a spot "cover" a street across its own slab). Decision:
+cut **firing gaps** (a low sill a kneeling muzzle clears) into the parapets of overwatch roofs, and stand the overwatch spots at the
+rim behind them.
+
+**The rule.** A gap is a 90 cm span of the parapet (designer: 80-100 cm) refilled with a 60 cm sill (designer: <= ~70 cm).
+Every number is in `Content/Data/LevelGen/firing_gaps.json` (schema `codex.levelgen_firing_gaps/1`; the code reads exactly its
+keys, `firingGaps.test.ts` pins that):
+
+| Key | Value | Meaning |
+|---|---|---|
+| `enabled` | true | false = nothing is planned, the builder cuts nothing extra |
+| `sill_cm` / `width_cm` | 60 / 90 | the sill height over the roof floor / the span along the parapet |
+| `spacing_m` | 4 | least centre-to-centre distance between two gaps of a roof |
+| `corner_clear_m` | 1.2 | a gap's edge keeps this far from either end of its parapet (the corner post stays solid) |
+| `max_per_side` / `max_per_roof` | 3 / 8 | caps (spot gaps count) |
+| `stand_inset_cm` | 60 | the shooter's stand point behind the gap centre |
+| `street_probe_m` | 8 | a parapet faces the street when the point this far out of its midpoint is in the map and outside every other footprint |
+| `ladder_clear_cm` | 60 | no gap this close to a ladder top / external stair top that arrives on that parapet |
+| `roles` | ["overwatch"] | a roof qualifies by its building `role` or by being in the analysis' `overwatchRoofs`; it must be walkable with parapets |
+
+**Planning** (`src/levelgen/firingGaps.ts planFiringGaps(layout, analysis)`, pure and deterministic): per qualifying roof, first one
+gap at each analysis spot (on its nearest parapet, at the spot's projection), then extra gaps every `spacing_m` along the
+street-facing parapets in the order N, S, W, E, skipping positions within `spacing_m` of another gap or `ladder_clear_cm` of a
+ladder / stair top, under the per-side and per-roof caps. A gap is `{ id 'FG_<building>_<n>', building, parapet (wall_id), center,
+width_cm, sill_cm, outward, stand = center - outward * stand_inset, facing_yaw }`, world cm. Rotated buildings work from their
+world-space parapets.
+
+**Analysis change** (`chokepoints.ts` threat 3, `ANALYSIS_VERSION` 1 -> 2; `chokepoints.json threats.overwatch`):
+- `rim_stand_inset_m` 0.6 replaces `edge_inset_m` 1: the candidate ring lies 60 cm inside the roof edge (the stand point of a gap);
+- `rim_corner_clear_m` 1.65 (= `corner_clear_m` 1.2 + `width_cm` / 2, a test pins `>=`): candidates keep this far from each roof corner,
+  so a gap always fits behind the spot. Deviation from the handover, which let corner candidates stand and count either adjacent
+  edge: on X4 almost every best spot was a corner (only 5 of 44 spots could link to a gap, the corner post is solid), now 40 of 44 link and the other 4 sit at a ladder top;
+- `outward_only` true: a target sample counts for a spot only when it lies outward of the spot's roof edge
+  (`dot(target - spot, outward normal) > 0`), so a spot no longer covers a street across its own slab.
+A version-1 analysis still loads; `scripts/add-firing-gaps.ts` recomputes it.
+
+**Data flow.**
+1. `GenLayout.firing_gaps` is TOP-LEVEL, never inside `buildings` (`geometryHash` hashes the buildings; a derived field there would make
+   the analysis stale). `withoutStaleAnalysis` drops it with a stale analysis; `validateGenLayout` checks its shape.
+2. Written by «Принять» (`LevelGenDepartment.accept`: the posted layout is `withFiringGaps(layout, analysis)`) and for existing files by
+   `npm run levelgen:firing-gaps -- [--dry] <layout.json>...` (`scripts/add-firing-gaps.ts`, explicit paths only: recomputes a missing /
+   stale analysis, writes `analysis` + `firing_gaps`, keeps every other key in order and the file's style, idempotent).
+3. The tactical file (`tacticalMap.ts`): overwatch spots stay the analysis spots (now at the rim); each gets an optional `gap` id (the
+   gap whose centre is within `width / 2 + 30` cm of the spot's projection on its parapet) and a top-level `firing_gaps` list
+   `{ id, building, layer 'roof:<B>', parapet, pos, stand, outward, yaw, width_cm, sill_cm }` is written only when the layout has gaps
+   (files without gaps stay byte-identical). Refresh: `node scripts/export-tactical-map.ts <layout.json> <Map>`.
+4. The builder (`Scripts/Editor/build_levelgen_map.py`, no constants of its own): each gap is a span cut from its parapet (the shape of
+   the ladder `exit_gaps` spans, `firing_gap_spans`) and a sill piece is spawned over it (`firing_gap_sill_specs`): the parapet's
+   thickness and base z, `sill_cm` high, tags `parapet`, `firing_gap`, `CodexMantleEdge`, `building=<id>`, `floor=<n>`, `gap=<id>`,
+   label `<gap id>_sill`, folder `Buildings/<id>/Parapets`. A sill that overlaps a ladder / stair cut is clipped to the parts still
+   standing (none left = no sill). Rotated buildings: the gaps are turned into the building frame with its ladders.
+
+**Gate** (lead's yes 2026-11-19, branch / throwaway only): the accepted `gen_ref_01_02_depot_1_x4.json` and its tactical file are
+refreshed on `worker/bgen-firing-gaps` only; main's X4 files stay the T-05 / T-06 baseline. Rebuild `L_Gen_Depot_X4` on the worker, run
+`FiringPositionSmoke` from a throwaway ref (`worker/bgen-gate` = this branch + `worker/t05-firing-positions`); PASS needs kneeling
+roof-edge positions on its roofs. Numbers and commands: FIRING_GAPS_HANDOVER.md.

@@ -231,7 +231,7 @@ export function addRoomAnchors<T extends GenLayout>(layout: T): T {
 }
 
 /** The layout file's text style: BOM, line ending, indent, final newline - so a rewrite changes nothing but the anchors. */
-function textStyle(text: string): { bom: string; eol: string; indent: string | number | undefined; tail: string } {
+export function textStyle(text: string): { bom: string; eol: string; indent: string | number | undefined; tail: string } {
   const bom = text.startsWith('\uFEFF') ? '\uFEFF' : '';
   const body = text.slice(bom.length);
   const eol = body.includes('\r\n') ? '\r\n' : '\n';

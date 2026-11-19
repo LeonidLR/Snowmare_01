@@ -232,6 +232,24 @@ export interface RoofParapet {
   thickness_cm?: number;
 }
 
+/**
+ * A FIRING GAP in a roof parapet (FIRING_GAPS_HANDOVER.md, firingGaps.ts planFiringGaps): a span cut out of the parapet and refilled with a
+ * low sill a kneeling muzzle clears. World coordinates (cm). `stand` = the shooter's point behind the gap, `outward` = unit vector
+ * over the parapet away from the roof, `facing_yaw` = yawOf(outward).
+ */
+export interface FiringGap {
+  id: string;
+  building: string;
+  /** The wall_id of the parapet the gap is cut from. */
+  parapet: string;
+  center: Vec2;
+  width_cm: number;
+  sill_cm: number;
+  outward: Vec2;
+  stand: Vec2;
+  facing_yaw: number;
+}
+
 export const MANTLE_KINDS = ['window', 'fence', 'parapet', 'obstacle', 'crate', 'partition', 'ledge'] as const;
 export type MantleKind = (typeof MANTLE_KINDS)[number];
 
@@ -539,6 +557,12 @@ export interface GenLayout {
    */
   analysis?: LayoutAnalysis;
   /**
+   * Firing gaps in the parapets of overwatch roofs (firingGaps.ts withFiringGaps, written by «Принять» / scripts/add-firing-gaps.ts); the
+   * builder cuts each from its parapet and spawns a sill. TOP-LEVEL on purpose: geometryHash hashes `buildings`, and a derived field there
+   * would make the analysis stale. Not part of geometryHash. Absent = no gaps (the config is off, or no roof qualifies).
+   */
+  firing_gaps?: FiringGap[];
+  /**
    * PMC posts + the defend posts' charges (pmcPosts.ts / pmcCharges.ts, PMC_DEFENCE.md D2, task 087): the builder carries the posts into
    * the level JSON `pmc_squads`, the props autogen writes the charges as the locked props layer `pmc_charges`. Absent = no generated PMC.
    * Not part of geometryHash (it never changes the geometry); stale when its geometry_hash differs from the tactical map's.
@@ -547,7 +571,9 @@ export interface GenLayout {
 }
 
 /** The version of the `analysis` block; a file with a newer one is refused, an absent block = not analysed (old files load). */
-export const ANALYSIS_VERSION = 1;
+export const ANALYSIS_VERSION = 2;
+// 2 (firing gaps): the overwatch spots stand at the roof rim (threats.overwatch.rim_stand_inset_m) and count only targets OUTWARD of
+// their own roof edge (outward_only); a version-1 analysis still loads but its spots lie 1 m in and see across their own slab.
 
 /**
  * The version of the `regen` block; a file with a newer version is refused (validateGenLayout), an absent block = no locks.
@@ -717,6 +743,26 @@ export function validateGenLayout(data: unknown): string[] {
   if (l.expansion !== undefined) e.push(...validateExpansionState(l.expansion));
   if (l.objectives !== undefined) e.push(...validateObjectives(l.objectives, l.bounds));
   if (l.analysis !== undefined) e.push(...validateAnalysis(l.analysis));
+  if (l.firing_gaps !== undefined) e.push(...validateFiringGaps(l.firing_gaps, l.buildings ?? []));
+  return e;
+}
+
+/** The `firing_gaps` list's own checks (empty = valid): shape, unique ids, a known building, the parapet one of its walls. */
+export function validateFiringGaps(g: unknown, buildings: readonly GenBuilding[]): string[] {
+  if (!Array.isArray(g)) return ['firing_gaps: expected an array'];
+  const e: string[] = [], seen = new Set<string>();
+  for (const x of g as Partial<FiringGap>[]) {
+    const id = typeof x?.id === 'string' ? x.id : '?';
+    if (typeof x?.id !== 'string' || !x.id) { e.push('firing_gaps: every gap needs an id'); continue; }
+    if (seen.has(id)) e.push(`firing_gap ${id}: duplicate id`);
+    seen.add(id);
+    const b = buildings.find((bb) => bb.id === x.building);
+    if (!b) e.push(`firing_gap ${id}: unknown building "${x.building}"`);
+    else if (!(b.parapets ?? []).some((p) => p.wall_id === x.parapet)) e.push(`firing_gap ${id}: building ${b.id} has no parapet "${x.parapet}"`);
+    for (const k of ['center', 'outward', 'stand'] as const) if (!isVec(x[k])) e.push(`firing_gap ${id}: ${k} must be [x, y]`);
+    for (const k of ['width_cm', 'sill_cm'] as const) if (!isNum(x[k]) || (x[k] as number) <= 0) e.push(`firing_gap ${id}: ${k} must be > 0`);
+    if (!isNum(x.facing_yaw)) e.push(`firing_gap ${id}: facing_yaw must be a number`);
+  }
   return e;
 }
 

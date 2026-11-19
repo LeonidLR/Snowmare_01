@@ -21,6 +21,7 @@ import type { PlanView } from '../levelgen/planView';
 import { FIT_VIEW, PLAN_VIEW, planTransform, viewOfRect, zoomAt } from '../levelgen/planView';
 import type { Conditions, LayoutAnalysis } from '../levelgen/chokepoints';
 import { analyzeLayout, CHOKE, geometryHash, threatNumbers, withoutStaleAnalysis } from '../levelgen/chokepoints';
+import { withFiringGaps } from '../levelgen/firingGaps';
 import type { LayerVisibility } from '../levelgen/layers';
 import { assignMap, defaultVisibility, editLayout, editProps, hiddenKeys, layerById, layerCounts, LAYERS, layerTints, mergeLayerReroll, pickEntity, resolveProps } from '../levelgen/layers';
 import type { LevelPropsFile } from '../levelgen/props/schema';
@@ -222,7 +223,8 @@ export const LevelGenDepartment: React.FC = () => {
       // a forced accept is recorded in the map JSON (analysis.forced_buildings = how many buildings failed traversal); task 087: the
       // «ЧВК» layer's plan (posts + charges) goes with the map only while the layer is on (opt-in until the C++ spawn-at-post)
       const pmc = pmcOn ? (pmcPlan ?? planPmc(cur.layout, tacticalMapFor(cur.layout, cur.layout.name, cur.layout.name, an), pmcSeed ?? cur.layout.seed)) : undefined;
-      const layout: GenLayout = { ...cur.layout, analysis: brokenBuildings > 0 ? { ...an, forced_buildings: brokenBuildings } : an, ...(pmc ? { pmc } : {}) };
+      // FIRING GAPS (firingGaps.ts, FIRING_GAPS_HANDOVER.md): the parapet gaps of the overwatch roofs go with the map (top-level `firing_gaps`)
+      const layout: GenLayout = withFiringGaps({ ...cur.layout, analysis: brokenBuildings > 0 ? { ...an, forced_buildings: brokenBuildings } : an, ...(pmc ? { pmc } : {}) }, an);
       const r = await fetch('/api/levelgen/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout, evaluation: cur.ev, verdicts: cur.verdicts }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? r.statusText);

@@ -11,6 +11,7 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
+import { geometryHash } from './chokepoints.ts';
 import { generateLayout } from './generate.ts';
 import { expandLayout } from './expand.ts';
 import type { AddTemplate, LayerAssignment, LayersConfig } from './layers.ts';
@@ -63,7 +64,9 @@ test('layers assignment: every entity of every shipped map is in exactly one lay
   maps.push(['depot x2 + goals', placeObjectives({ layout: ex.layout, seed: 1 }).layout]);
   assert.ok(maps.length >= 9);
   for (const [name, l] of maps) {
-    assert.equal(l.analysis, undefined, `${name}: an old file has no analysis block`);
+    // an old file has no analysis block; the refreshed accepted x4 of the firing-gaps branch carries a current one (add-firing-gaps.ts)
+    if (name === 'gen_ref_01_02_depot_1_x4.json' && l.analysis) assert.equal(l.analysis.geometry_hash, geometryHash(l), `${name}: its analysis is current`);
+    else assert.equal(l.analysis, undefined, `${name}: an old file has no analysis block`);
     const entities = layoutEntities(l);
     assert.equal(new Set(entities.map((e) => e.key)).size, entities.length, `${name}: entity keys are unique`);
     for (const e of entities) assert.equal(matchingLayers(e).length, 1, `${name}: ${e.key} matches ${matchingLayers(e).join(' + ') || 'nothing'}`);

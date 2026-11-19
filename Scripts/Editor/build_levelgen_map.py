@@ -752,6 +752,62 @@ def _intersect_box_to_edge(x0, y0, x1, y1, e0, e1, margin=10.0, tag="stair_exit"
     return (t0, t1, tag) if t1 - t0 > 1.0 else None
 
 
+def firing_gap_spans(p_walls, fgaps):
+    """{parapet wall id: [(t0, t1, gap id), ...]}: the span each firing gap cuts from its parapet (cm along the wall from its `a`, the
+    centre's projection +- width / 2) - the same shape as levelgen_ladders.exit_gaps, fed to split_walls. A gap whose parapet is not
+    there (the layout changed after it was planned) is skipped."""
+    by_id = {w["id"]: w for w in p_walls}
+    spans = {}
+    for g in fgaps:
+        w = by_id.get(g["parapet"])
+        if w is None:
+            continue
+        a, wv, _length = levelgen_ladders._wall_frame(w)
+        t = (g["center"][0] - a[0]) * wv[0] + (g["center"][1] - a[1]) * wv[1]
+        half = float(g["width_cm"]) / 2.0
+        spans.setdefault(w["id"], []).append((t - half, t + half, g["id"]))
+    return spans
+
+
+def _span_minus(span, cuts, min_piece_cm=10.0):
+    """The parts of the interval span = (t0, t1) not covered by any of the cuts [(c0, c1, ...)], pieces shorter than min_piece_cm dropped."""
+    t0, t1 = span
+    out = []
+    t = t0
+    for c0, c1, _ in sorted(cuts):
+        if c0 - t >= min_piece_cm:
+            out.append((t, min(c0, t1)))
+        t = max(t, c1)
+        if t >= t1:
+            break
+    if t1 - t >= min_piece_cm:
+        out.append((t, t1))
+    return [(p0, p1) for p0, p1 in out if p1 - p0 >= min_piece_cm]
+
+
+def firing_gap_sill_specs(bid, floors, base_z, p_walls, fgaps, ladder_cuts):
+    """The sill piece of each firing gap: over the cut span, the parapet's thickness and base z, `sill_cm` high; clipped to the parts a
+    ladder exit / external stair cut leaves standing (none left = no sill: the opening is already wider). Tags: parapet, firing_gap,
+    CodexMantleEdge, building=, floor=, gap=<id>. Label <gap id>_sill (clipped in several parts: _sill_l<n>), folder Buildings/<id>/Parapets."""
+    by_id = {w["id"]: w for w in p_walls}
+    specs = []
+    for g in fgaps:
+        w = by_id.get(g["parapet"])
+        if w is None:
+            continue
+        a, wv, _length = levelgen_ladders._wall_frame(w)
+        for wid, spans in firing_gap_spans([w], [g]).items():
+            for t0, t1, gid in spans:
+                parts = _span_minus((t0, t1), ladder_cuts.get(wid, []))
+                for n, (p0, p1) in enumerate(parts):
+                    label = "%s_sill" % gid if len(parts) == 1 else "%s_sill_l%d" % (gid, n)
+                    pa = [round(a[0] + wv[0] * p0, 1), round(a[1] + wv[1] * p0, 1)]
+                    pb = [round(a[0] + wv[0] * p1, 1), round(a[1] + wv[1] * p1, 1)]
+                    specs.append(wall_cube(label, "Buildings/%s/Parapets" % bid, pa, pb, base_z, float(g["sill_cm"]), float(w["thickness"]),
+                                           ["parapet", "firing_gap", "CodexMantleEdge", "building=" + bid, "floor=%d" % floors, "gap=" + gid]))
+    return specs
+
+
 def _hatch_rim_specs(b, h, gz, roof_z, frames):
     """3-sided visual hatch curb leaving the ladder approach/exit side clear."""
     hx, hy = h["pos"]
@@ -1024,8 +1080,16 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
                             hit = _intersect_box_to_edge(*lrect, pw["a"], pw["b"]) or hit
                         if hit:
                             p_gaps.setdefault(pw["id"], []).append(hit)
+            # FIRING GAPS (the layout's top-level `firing_gaps`, Tools/TrainingGround firingGaps.ts): each is a span cut from its parapet
+            # (the data shape of the exit_gaps spans) and refilled with a low sill; every number comes from the gap entry
+            fgaps = [g for g in layout.get("firing_gaps", []) or [] if g.get("building") == bid]
+            fg_spans = firing_gap_spans(p_walls, fgaps)
+            ladder_cuts = {wid: list(cuts) for wid, cuts in p_gaps.items()}  # the ladder / stair cuts only: the sill is clipped to what still stands
+            for wid, cuts in fg_spans.items():
+                p_gaps.setdefault(wid, []).extend(cuts)
             for pw in levelgen_ladders.split_walls(p_walls, p_gaps):
                 specs.append(wall_cube(pw["id"], "Buildings/%s/Parapets" % bid, pw["a"], pw["b"], gz + z_of(floors), float(pw["height"]), float(pw["thickness"]), ["parapet", "CodexMantleEdge", "building=" + bid, "floor=%d" % floors]))
+            specs.extend(firing_gap_sill_specs(bid, floors, gz + z_of(floors), p_walls, fgaps, ladder_cuts))
 
         for s in b.get("stairs", []):
             specs.extend(_stair_specs(bid, s, gz, "Buildings/%s" % bid))
@@ -1134,7 +1198,10 @@ def _building_local(layout, b):
     mine = ("roof:%s" % b["id"], "floor:%s:" % b["id"])
     ladders = [dict(ld, pos=P(ld["pos"]), foot=P(ld["foot"]), top=P(ld["top"]), yaw=float(ld.get("yaw", 0.0)) - deg)
                for ld in layout.get("ladders", []) if any(str(ld.get(k, "")).startswith(mine) for k in ("from", "to"))]
-    return dict(layout, buildings=[lb], walls=walls, ladders=ladders), c, deg
+    # firing gaps (top-level, world frame) of this building, turned back like its ladders: points, the outward vector, the facing yaw
+    fgaps = [dict(g, center=P(g["center"]), stand=P(g["stand"]), outward=[round(v, 6) for v in _rot_xy(g["outward"], (0.0, 0.0), -deg)], facing_yaw=float(g.get("facing_yaw", 0.0)) - deg)
+             for g in layout.get("firing_gaps", []) or [] if g.get("building") == b["id"]]
+    return dict(layout, buildings=[lb], walls=walls, ladders=ladders, firing_gaps=fgaps), c, deg
 
 
 def _globalize_specs(specs, c, deg):

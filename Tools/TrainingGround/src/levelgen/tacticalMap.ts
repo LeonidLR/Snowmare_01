@@ -8,6 +8,8 @@
 //     windows covering the lines (window point + the stand point inside, look yaw), overwatch roofs (access incl. ladder-only, spots +
 //     look yaw), hiding spots (reveal distances, stealth-only, facing yaw), and every ladder-only roof (the P2 placement picks PART of
 //     them with the ladder-only factor, seeded - C++ TacticalMapRules::PickLadderOnlyRoofs);
+//   - firing gaps (firingGaps.ts, BUILDING_GENERATOR.md section 8): `firing_gaps[]` + a `gap` id on the overwatch spots standing behind one; written
+//     only for a layout that has gaps (files without them stay byte-identical);
 //   - geometry_hash: the layout geometry the analysis describes (chokepoints.ts geometryHash).
 // The layout's own analysis is used when it is current (the hash matches); else it is computed here exactly as «Принять» does
 // (analyzeLayout with the config's default conditions). Written next to the objectives file by «Принять» / «Собрать в Unreal»
@@ -20,6 +22,7 @@ import { dirOf } from '../movement/geometry.ts';
 import type { Conditions, LayoutAnalysis } from './chokepoints.ts';
 import { analyzeLayout, CHOKE, geometryHash, threatNumbers } from './chokepoints.ts';
 import { layerZ } from './missionGoals.ts';
+import { gapForSpot } from './firingGaps.ts';
 import { footprintPoly } from './rotation.ts';
 import type { GenBuilding, GenLayout } from './schema.ts';
 import { NEVER_CLIMBABLE } from './schema.ts';
@@ -56,7 +59,19 @@ export interface TacticalWindow {
   /** The window point on the wall (floor z), the stand point WINDOW_STAND_INSET_CM inside, the look yaw (outward, degrees). */
   pos: Vec3; stand: Vec3; yaw: number; covered_m: number; min_dist_m: number; places: string[];
 }
-export interface TacticalOverwatchSpot { pos: Vec3; facing_yaw: number; covered_m: number; longest_los_m: number }
+export interface TacticalOverwatchSpot {
+  pos: Vec3; facing_yaw: number; covered_m: number; longest_los_m: number;
+  /** The firing gap (`firing_gaps[].id`) the shooter stands behind; only on a layout with gaps (firingGaps.ts gapForSpot). */
+  gap?: string;
+}
+/**
+ * A firing gap in a roof parapet (firingGaps.ts): a span cut out of the parapet and refilled with a sill `sill_cm` high. `pos` = the gap
+ * centre and `stand` = the shooter's point behind it, both on the roof floor (world); `outward` = unit XY out over the parapet.
+ */
+export interface TacticalFiringGap {
+  id: string; building: string; layer: string; parapet: string;
+  pos: Vec3; stand: Vec3; outward: Vec2; yaw: number; width_cm: number; sill_cm: number;
+}
 export interface TacticalOverwatchRoof {
   building: string; layer: string; level: number; z: number; height_cm: number; range_m: number;
   /** "stair:<id>" / "ladder:<id>" / "hatch:<id>" entries; access_kind = stairs | ladder | hatch. */
@@ -105,6 +120,8 @@ export interface TacticalMapFile {
   ladder_only_roofs: TacticalLadderRoof[];
   /** Only when the layout marks one (absent otherwise: older files stay byte-identical). */
   kill_zones?: TacticalKillZone[];
+  /** Only when the layout has firing gaps (absent otherwise: files without gaps stay byte-identical). */
+  firing_gaps?: TacticalFiringGap[];
 }
 
 const r0 = (v: number): number => { const x = Math.round(v); return Object.is(x, -0) ? 0 : x; };
@@ -175,7 +192,16 @@ export function tacticalMapFor(l: GenLayout, mapName: string, layoutName = l.nam
   const overwatch_roofs = a.overwatchRoofs.map((r): TacticalOverwatchRoof => {
     const layer = `roof:${r.building}`, z = r0(layerZ(l, layer)), kind = accessKind(r.access);
     return { building: r.building, layer, level: r.level, z, height_cm: r.height_cm, range_m: r.range_m, access: [...r.access], access_kind: kind, ladder_only: kind === 'ladder',
-      spots: r.spots.map((s) => ({ pos: at(s.pos, z), facing_yaw: s.facing_yaw, covered_m: s.covered_m, longest_los_m: s.longest_los_m })), places: [...r.places] };
+      spots: r.spots.map((s): TacticalOverwatchSpot => {
+        const gap = gapForSpot(l.firing_gaps ?? [], r.building, s.pos);
+        return { pos: at(s.pos, z), facing_yaw: s.facing_yaw, covered_m: s.covered_m, longest_los_m: s.longest_los_m, ...(gap ? { gap: gap.id } : {}) };
+      }), places: [...r.places] };
+  });
+
+  // firing gaps in the roof parapets (firingGaps.ts), on the roof layer of their building; absent when the layout has none
+  const firing_gaps = (l.firing_gaps ?? []).map((g): TacticalFiringGap => {
+    const layer = `roof:${g.building}`, z = layerZ(l, layer);
+    return { id: g.id, building: g.building, layer, parapet: g.parapet, pos: at(g.center, z), stand: at(g.stand, z), outward: [g.outward[0], g.outward[1]], yaw: g.facing_yaw, width_cm: g.width_cm, sill_cm: g.sill_cm };
   });
 
   const hiding_spots = a.hidingSpots.map((h): TacticalHidingSpot => ({
@@ -218,12 +244,13 @@ export function tacticalMapFor(l: GenLayout, mapName: string, layoutName = l.nam
     thresholds: { ...a.thresholds, ladder_only_factor: factor },
     chokepoints, drop_spots, windows, overwatch_roofs, hiding_spots, ladder_only_roofs,
     ...(kill_zones.length ? { kill_zones } : {}),
+    ...(firing_gaps.length ? { firing_gaps } : {}),
   };
 }
 
 /** Stable text (compact items, one per line - the X6 file stays small and diffs cleanly; LF + final newline). */
 export function formatTacticalMap(f: TacticalMapFile): string {
-  const lists = ['chokepoints', 'drop_spots', 'windows', 'overwatch_roofs', 'hiding_spots', 'ladder_only_roofs', ...(f.kill_zones ? ['kill_zones'] as const : [])] as const;
+  const lists = ['chokepoints', 'drop_spots', 'windows', 'overwatch_roofs', 'hiding_spots', 'ladder_only_roofs', ...(f.kill_zones ? ['kill_zones'] as const : []), ...(f.firing_gaps ? ['firing_gaps'] as const : [])] as const;
   const head: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(f)) if (!(lists as readonly string[]).includes(k)) head[k] = v;
   const headText = JSON.stringify(head, null, 2);

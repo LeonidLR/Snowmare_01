@@ -1,5 +1,20 @@
 # Firing gaps in the roof parapet - handover (2026-11-19 evening)
 
+> **HANDOVER 2026-11-19 late (worker stand-in lead, slot1, branch `worker/bgen-firing-gaps`).**
+> - **Done (steps 1-7, code + tests + docs):** config test; analysis fix (`rim_stand_inset_m` 0.6, `rim_corner_clear_m` 1.65, `outward_only`,
+>   `ANALYSIS_VERSION` 2); `src/levelgen/firingGaps.ts` (`planFiringGaps`, `withFiringGaps`, `gapForSpot`); `accept()` + `scripts/add-firing-gaps.ts`
+>   (`npm run levelgen:firing-gaps`); `tacticalMap.ts` (`gap` id on spots, top-level `firing_gaps`); `build_levelgen_map.py` (gap spans, sill
+>   pieces, rotated buildings, `tests/test_build_levelgen_firing_gaps.py`); BUILDING_GENERATOR.md section 8, TACTICAL_MAP.md.
+> - **Deviation from the design (found by running it on X4):** the old candidate ring put 39 of 44 best spots at roof CORNERS, where a gap
+>   cannot stand (corner post solid): only 5 of 44 spots could link to a gap. `chokepoints.json threats.overwatch.rim_corner_clear_m` 1.65
+>   (= 1.2 + 0.9 / 2, pinned by a test) keeps candidates clear of the corners; now 40 of 44 link (the other 4 sit at a ladder top).
+> - **X4 refresh (gate step a) is committed on this branch only:** `accepted/gen_ref_01_02_depot_1_x4.json` (now carries `analysis` v2 + 159
+>   `firing_gaps` on 22 roofs) and `tactical/L_Gen_Depot_X4.tactical.json`. main's X4 files are untouched. NOTE for the merge into main:
+>   `tacticalMap.test.ts` pins the committed X4 tactical file against the layout's analysis, so the analysis change cannot reach main
+>   without this refresh (or a re-pin) - the lead decides.
+> - **Gate (throwaway `worker/bgen-gate` = this branch + `origin/worker/t05-firing-positions`):** see the last block of this file for the
+>   results / what is left (updated at the end of the run).
+
 Owner: Claude (building generator), branch `claude/building-generator`. Status: **design done, code NOT started**
 (only `Content/Data/LevelGen/firing_gaps.json` exists; nothing reads it yet). Main PC went offline; the stand-in lead on
 codex-worker continues from here.
