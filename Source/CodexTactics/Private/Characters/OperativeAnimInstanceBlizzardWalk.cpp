@@ -15,6 +15,7 @@
 #include "Engine/World.h"
 #include "Environment/EnvironmentRules.h"
 #include "Environment/EnvironmentSubsystem.h"
+#include "Survival/ColdShelterSubsystem.h"
 #include "Survival/ColdSurvivalComponent.h"
 
 namespace
@@ -181,7 +182,7 @@ void UOperativeAnimInstance::UpdateBlizzardWalkLayer(const AOperativeCharacter& 
 	if (BlizzardAmount > 0.f && (BlizzardShelterCheckTime < 0.0 || Now - BlizzardShelterCheckTime >= BlizzardShelterCheckSeconds || Now < BlizzardShelterCheckTime))
 	{
 		BlizzardShelterCheckTime = Now;
-		bBlizzardSheltered = ACameraZoneVolume::IsShelteredLocation(World, Operative.GetActorLocation())
+		bBlizzardSheltered = UColdShelterSubsystem::IsShelteredLocation(World, Operative.GetActorLocation())
 			|| (Operative.ColdSurvival && Operative.ColdSurvival->IsNearHeatSource());
 	}
 

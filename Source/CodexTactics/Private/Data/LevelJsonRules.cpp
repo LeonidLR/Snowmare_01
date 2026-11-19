@@ -207,6 +207,11 @@ FEnvironmentLevelSettings LevelJsonRules::ParseEnvironmentSettings(const FJsonOb
 	{
 		Settings.ExposureBias = FMath::Clamp(static_cast<float>(Number), -4.f, 4.f);
 	}
+	// T-021: the per-level weather strength on the cold (0..2, default 1; EnvironmentRules::ApplyWeatherStrength).
+	if (Environment.TryGetNumberField(TEXT("weather_strength"), Number))
+	{
+		Settings.WeatherStrength = EnvironmentRules::ClampWeatherStrength(static_cast<float>(Number));
+	}
 	// Training Ground pass 1 (2026-11-09): the level's start hour / weather win over a campaign carry (UEnvironmentSubsystem::ResolveInitialState).
 	bool bOverrideCarry = false;
 	if (Environment.TryGetBoolField(TEXT("override_carry"), bOverrideCarry))
