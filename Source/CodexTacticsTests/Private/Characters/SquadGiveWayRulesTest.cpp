@@ -134,7 +134,145 @@ bool FSquadGiveWayTuningTest::RunTest(const FString&)
 		const FSquadGiveWayTuning Shipped = SquadGiveWayTuning::FromJson(**GiveWay);
 		TestTrue(TEXT("shipped: on"), Shipped.bEnabled);
 		TestTrue(TEXT("shipped: the spot clears two capsules + the clearance"), Shipped.StepAsideCm > 70.f + Shipped.ClearanceCm);
+		TestTrue(TEXT("shipped v2: a zone before the foot"), Shipped.ApproachBeforeCm > 0.f && Shipped.ApproachHalfWidthCm > 0.f);
+		TestTrue(TEXT("shipped v2: blocked orders retried"), Shipped.BlockedRetries > 0);
 	}
+	return true;
+}
+
+namespace SquadGiveWayTestLocal
+{
+	// A flight going up +X from a foot at (0, 0) (X6 B_x1_4 shape: lane 150 cm wide), the mover 200 cm before it on the floor.
+	SquadGiveWayRules::FFlightApproach FlightAlongX(float ToFootCm = 200.f)
+	{
+		SquadGiveWayRules::FFlightApproach Approach;
+		Approach.bValid = true;
+		Approach.Foot = FVector2D(0.0, 0.0);
+		Approach.Direction = FVector2D(1.0, 0.0);
+		Approach.ToFootCm = ToFootCm;
+		return Approach;
+	}
+}
+
+SQUAD_GIVE_WAY_TEST(FSquadGiveWayFlightFeetTest, "FlightFeet")
+bool FSquadGiveWayFlightFeetTest::RunTest(const FString&)
+{
+	using namespace SquadGiveWayRules;
+	// Floor x < 300, a flight (uphill +X... axis given as -X: signed along the walk) from x 300 to 700, floor again after.
+	const TArray<FVector> Path = { FVector(0, 0, 0), FVector(300, 0, 0), FVector(700, 0, 300), FVector(900, 0, 300) };
+	auto IsRamp = [](const FVector& Point, FVector2D& OutUphill)
+	{
+		OutUphill = FVector2D(-1.0, 0.0);
+		return Point.X > 300.0 && Point.X < 700.0;
+	};
+	const TArray<FFlightFoot> Feet = FindFlightFeet(Path, IsRamp, 40.f);
+	TestEqual(TEXT("one flight"), Feet.Num(), 1);
+	if (Feet.Num() == 1)
+	{
+		TestTrue(TEXT("its foot just past x 300"), Feet[0].Foot.X > 300.0 && Feet[0].Foot.X <= 345.0);
+		TestTrue(TEXT("the axis signed along his walk"), Feet[0].Direction.Equals(FVector2D(1.0, 0.0), 1e-3));
+	}
+	auto AllRamp = [](const FVector&, FVector2D& OutUphill) { OutUphill = FVector2D::ZeroVector; return true; };
+	TestEqual(TEXT("starting on the flight: no foot"), FindFlightFeet(Path, AllRamp, 40.f).Num(), 0);
+
+	FSquadGiveWayTuning Tuning;
+	FFlightFoot Foot;
+	Foot.Foot = FVector(0, 0, 0);
+	Foot.Direction = FVector2D(1.0, 0.0);
+	const TArray<FFlightFoot> One = { Foot };
+	const FFlightApproach Near = SelectApproach(One, FVector(-200, 0, 0), Tuning);
+	TestTrue(TEXT("200 cm before the foot: its approach"), Near.bValid && FMath::IsNearlyEqual(Near.ToFootCm, 200.f, 1.f));
+	TestTrue(TEXT("50 cm up the flight: still"), SelectApproach(One, FVector(50, 0, 40), Tuning).bValid);
+	TestFalse(TEXT("past it"), SelectApproach(One, FVector(Tuning.ApproachAfterCm + 50.f, 0, 100), Tuning).bValid);
+	TestFalse(TEXT("too far before it"), SelectApproach(One, FVector(-Tuning.LookAheadCm - 50.f, 0, 0), Tuning).bValid);
+	TestFalse(TEXT("another level's flight"), SelectApproach(One, FVector(-200, 0, 400), Tuning).bValid);
+	return true;
+}
+
+SQUAD_GIVE_WAY_TEST(FSquadGiveWayApproachZoneTest, "ApproachZone")
+bool FSquadGiveWayApproachZoneTest::RunTest(const FString&)
+{
+	using namespace SquadGiveWayRules;
+	using namespace SquadGiveWayTestLocal;
+	const FSquadGiveWayTuning Tuning;
+	const FFlightApproach Approach = FlightAlongX();
+	// X6 B_x1_4: the Engineer 69 cm before the foot, 48 cm beside its axis - off the string-pulled line, in the mouth.
+	TestTrue(TEXT("beside the line in the mouth"), InApproachZone(Approach, FVector2D(-69.0, 48.0), 35.f, Tuning));
+	TestTrue(TEXT("on the flight's first metre"), InApproachZone(Approach, FVector2D(80.0, 0.0), 35.f, Tuning));
+	TestFalse(TEXT("far up the flight"), InApproachZone(Approach, FVector2D(300.0, 0.0), 35.f, Tuning));
+	TestFalse(TEXT("well to the side"), InApproachZone(Approach, FVector2D(-69.0, 250.0), 35.f, Tuning));
+	TestFalse(TEXT("far before it"), InApproachZone(Approach, FVector2D(-400.0, 0.0), 35.f, Tuning));
+
+	const FCrossing Crossing = ApproachCrossing(Approach, FVector2D(-69.0, 48.0));
+	TestTrue(TEXT("a crossing"), Crossing.bCrosses);
+	TestEqual(TEXT("his side (left of +X)"), Crossing.Side, 1);
+	TestTrue(TEXT("on the axis abreast of him"), Crossing.OnPath.Equals(FVector2D(-69.0, 0.0), 0.1));
+
+	// The spots: out of the zone and a real step from where he stands.
+	const TArray<FVector> Path = { FVector(-200, 0, 0), FVector(0, 0, 0), FVector(400, 0, 300) };
+	const FVector2D Idle(-69.0, 48.0);
+	const TArray<FVector2D> Spots = AsideSpots(Path, Crossing, CrossCm, Tuning, &Idle, &Approach, 35.f);
+	TestTrue(TEXT("some spot"), Spots.Num() > 0);
+	for (const FVector2D& Spot : Spots)
+	{
+		TestFalse(TEXT("spot out of the zone"), InApproachZone(Approach, Spot, 35.f, Tuning));
+		TestTrue(TEXT("spot min_step_cm+ from him"), FVector2D::Distance(Spot, Idle) >= Tuning.MinStepCm);
+	}
+	if (Spots.Num() > 0)
+	{
+		TestTrue(TEXT("his own side first"), Spots[0].Y > 0.0);
+	}
+	return true;
+}
+
+SQUAD_GIVE_WAY_TEST(FSquadGiveWayMinStepTest, "MinStep")
+bool FSquadGiveWayMinStepTest::RunTest(const FString&)
+{
+	using namespace SquadGiveWayRules;
+	using namespace SquadGiveWayTestLocal;
+	const FSquadGiveWayTuning Tuning;
+	// X6 B_x1_4 v1: he stands 85 cm off the line; 120 cm off the line was a 35 cm "step" (inside the walk's acceptance radius).
+	const TArray<FVector> Path = { FVector(0, 0, 0), FVector(400, 0, 0) };
+	const FCrossing Crossing = FindCrossing(Path, FVector(200, 85, 0), CrossCm, Tuning);
+	TestTrue(TEXT("crosses"), Crossing.bCrosses);
+	const FVector2D Idle(200.0, 85.0);
+	for (const FVector2D& Spot : AsideSpots(Path, Crossing, CrossCm, Tuning, &Idle))
+	{
+		TestTrue(TEXT("no token step"), FVector2D::Distance(Spot, Idle) >= Tuning.MinStepCm);
+	}
+	TestEqual(TEXT("v1 overload unchanged"), AsideSpots(Path, Crossing, CrossCm, Tuning).Num() > 0, true);
+	return true;
+}
+
+SQUAD_GIVE_WAY_TEST(FSquadGiveWaySlotWalkTest, "SlotWalk")
+bool FSquadGiveWaySlotWalkTest::RunTest(const FString&)
+{
+	using namespace SquadGiveWayRules;
+	using namespace SquadGiveWayTestLocal;
+	const FSquadGiveWayTuning Tuning;
+	const FFlightApproach Approach = FlightAlongX();
+	// X6 B_x2_13: the Commander walks his slot across the mouth.
+	TestTrue(TEXT("across the mouth"), SlotWalkEntersApproach(Approach, FVector2D(-100.0, 300.0), FVector2D(-100.0, -300.0), 35.f, Tuning));
+	TestTrue(TEXT("into the mouth"), SlotWalkEntersApproach(Approach, FVector2D(-100.0, 300.0), FVector2D(-100.0, 20.0), 35.f, Tuning));
+	TestFalse(TEXT("well before it"), SlotWalkEntersApproach(Approach, FVector2D(-500.0, 300.0), FVector2D(-500.0, -300.0), 35.f, Tuning));
+	TestFalse(TEXT("alongside, off the side"), SlotWalkEntersApproach(Approach, FVector2D(-300.0, 250.0), FVector2D(200.0, 250.0), 35.f, Tuning));
+	TestFalse(TEXT("already in it: walks out"), SlotWalkEntersApproach(Approach, FVector2D(-50.0, 0.0), FVector2D(-50.0, 400.0), 35.f, Tuning));
+	TestFalse(TEXT("no flight"), SlotWalkEntersApproach(FFlightApproach(), FVector2D(-100.0, 300.0), FVector2D(-100.0, -300.0), 35.f, Tuning));
+	return true;
+}
+
+SQUAD_GIVE_WAY_TEST(FSquadGiveWayBlockedRetryTest, "BlockedRetry")
+bool FSquadGiveWayBlockedRetryTest::RunTest(const FString&)
+{
+	using namespace SquadGiveWayRules;
+	const FSquadGiveWayTuning Tuning;
+	TestTrue(TEXT("own order far from the goal: asked again"), ShouldRetryBlockedMove(true, 1000.f, 0, Tuning));
+	TestFalse(TEXT("a formation move: the formation re-paths it"), ShouldRetryBlockedMove(false, 1000.f, 0, Tuning));
+	TestFalse(TEXT("near the goal: arrived enough"), ShouldRetryBlockedMove(true, Tuning.BlockedRetryMinGoalCm - 1.f, 0, Tuning));
+	TestFalse(TEXT("retries used up"), ShouldRetryBlockedMove(true, 1000.f, Tuning.BlockedRetries, Tuning));
+	FSquadGiveWayTuning Off = Tuning;
+	Off.bEnabled = false;
+	TestFalse(TEXT("give way off"), ShouldRetryBlockedMove(true, 1000.f, 0, Off));
 	return true;
 }
 

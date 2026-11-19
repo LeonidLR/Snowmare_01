@@ -35,6 +35,23 @@ struct CODEXTACTICS_API FSquadGiveWayTuning
 	float MaxRiseCm = 60.f;
 	/** Asked again after this long while he still stands in the way (a refused / blocked step, a mover's new path), s (retry_s). */
 	float RetrySeconds = 1.5f;
+	// --- v2 (X6 LevelGenRampSmoke legs=solo 12 / 16: idle mates beside the line in a stair mouth, slot walks across it, dropped orders) ---
+	/** A step aside lands at least this far from where he stands (v1 stepped 120 cm off the PATH: 25 cm for a man 95 cm off it), cm (min_step_cm). */
+	float MinStepCm = 60.f;
+	/** The flight's approach zone: from this far before a ramp / stair foot on the mover's path ... , cm (approach_before_cm). */
+	float ApproachBeforeCm = 250.f;
+	/** ... to this far up the flight past the foot, cm (approach_after_cm). */
+	float ApproachAfterCm = 100.f;
+	/** ... this wide to each side of the foot's axis (+ the idle man's radius), cm (approach_half_width_cm). */
+	float ApproachHalfWidthCm = 100.f;
+	/** The mover's path is probed for ramp floor every this far (once per order), cm (ramp_sample_cm). */
+	float RampSampleCm = 40.f;
+	/** A formation walker whose slot walk crosses the approach zone waits at most this long, s (slot_hold_max_s). */
+	float SlotHoldMaxSeconds = 6.f;
+	/** An own move ended by the path following's block detection is asked again this many times per order (blocked_retries)... */
+	int32 BlockedRetries = 4;
+	/** ... while he is farther than this from its goal, cm (blocked_retry_min_goal_cm). */
+	float BlockedRetryMinGoalCm = 100.f;
 };
 
 namespace SquadGiveWayRules
@@ -86,6 +103,55 @@ namespace SquadGiveWayRules
 	 * navmesh, on his level, off a ramp and free.
 	 */
 	CODEXTACTICS_API TArray<FVector2D> AsideSpots(TArrayView<const FVector> Path, const FCrossing& Crossing, float CrossCm, const FSquadGiveWayTuning& Tuning);
+
+	struct FFlightApproach;
+	/**
+	 * v2: IdleFeet (given) drops the spots closer than MinStepCm to him (scales 2.5 / 3 added); Approach (given) drops the spots inside its
+	 * zone widened by ZoneExtraCm.
+	 */
+	CODEXTACTICS_API TArray<FVector2D> AsideSpots(TArrayView<const FVector> Path, const FCrossing& Crossing, float CrossCm, const FSquadGiveWayTuning& Tuning,
+		const FVector2D* IdleFeet, const FFlightApproach* Approach = nullptr, float ZoneExtraCm = 0.f);
+
+	/** A ramp / stair foot on a path: where its floor turns into a flight, and the mover's way along the flight's axis there (unit 2D). */
+	struct FFlightFoot
+	{
+		FVector Foot = FVector::ZeroVector;
+		FVector2D Direction = FVector2D::ZeroVector;
+	};
+
+	/**
+	 * The feet on Path (navmesh corners with Z): sampled every SampleCm; IsRamp(point, OutUphill) says the floor there is a flight and its
+	 * uphill axis. A foot is the first ramp sample after a non-ramp one (the path's start on a ramp is none); its direction is the axis
+	 * signed along the leg (the leg's own direction when the axis is unknown / zero).
+	 */
+	CODEXTACTICS_API TArray<FFlightFoot> FindFlightFeet(TArrayView<const FVector> Path, TFunctionRef<bool(const FVector&, FVector2D&)> IsRamp, float SampleCm);
+
+	/** The flight the mover walks onto next and how far its foot is ahead of him. */
+	struct FFlightApproach
+	{
+		bool bValid = false;
+		FVector2D Foot = FVector2D::ZeroVector;
+		FVector2D Direction = FVector2D::ZeroVector;
+		float FootZ = 0.f;
+		/** Along the flight axis from the mover to the foot (negative: he is already past it, on the flight), cm. */
+		float ToFootCm = 0.f;
+	};
+
+	/** The first foot of Feet he has not passed by ApproachAfterCm and is within LookAheadCm of (on its level: SameLevelCm, or past it). */
+	CODEXTACTICS_API FFlightApproach SelectApproach(TArrayView<const FFlightFoot> Feet, const FVector& MoverFeet, const FSquadGiveWayTuning& Tuning);
+
+	/** Point lies in the approach zone (ApproachBeforeCm before the foot .. ApproachAfterCm past it, ApproachHalfWidthCm + ExtraCm to each side). */
+	CODEXTACTICS_API bool InApproachZone(const FFlightApproach& Approach, const FVector2D& Point, float ExtraCm, const FSquadGiveWayTuning& Tuning);
+
+	/** The crossing for an idle man in the approach zone: his nearest point on the zone's axis, the axis direction, his side (AsideSpots' input). */
+	CODEXTACTICS_API FCrossing ApproachCrossing(const FFlightApproach& Approach, const FVector2D& IdleFeet);
+
+	/** A formation walker's straight walk From -> To enters the approach zone (widened by ExtraCm) from outside it: he waits. */
+	CODEXTACTICS_API bool SlotWalkEntersApproach(const FFlightApproach& Approach, const FVector2D& From, const FVector2D& To, float ExtraCm,
+		const FSquadGiveWayTuning& Tuning);
+
+	/** An own move ended by the path following's block detection is asked again (retry RetriesSoFar + 1) instead of dropped. */
+	CODEXTACTICS_API bool ShouldRetryBlockedMove(bool bOwnMoveOrder, float ToGoalCm, int32 RetriesSoFar, const FSquadGiveWayTuning& Tuning);
 }
 
 namespace SquadGiveWayTuning
