@@ -23,12 +23,21 @@ docs/port/CLAUDE_SESSION_PROMPT_2026-11-19c.md (the main lead's state), the newe
 
 ## Plan, in order
 1. `git fetch origin; git switch -c worker/lead-2026-11-20 origin/main`; build; run PmcCrossroadsSmoke x30 and PmcAlleySmoke x30
-   (baseline digest).
-2. Smart enemies T-03 (scripted opponent): if the main lead's Sonnet branch for T-03 is on origin, continue from it; else start it
-   from docs/port/claude/inbox/T003-scripted-opponent.md. Build, tests, smokes, digest.
-3. T-05 firing positions (roadmap 6; the main defect: defenders not in position at contact, bunched, first-shot gap p50 10 s vs
-   <= 1.5 s). Lead designs the change in a short note docs/port/claude/outbox/T05-design.md, Sonnet writes it; accept on 30 seeds of
-   Crossroads + Alley.
+   (baseline digest: `python Scripts/Tools/dayloop_digest.py <result folder>`; runs via Scripts/Tools/worker_seed_batch.ps1,
+   e.g. `& Scripts/Tools/worker_seed_batch.ps1 -Command CodexTactics.PmcCrossroadsSmoke -Map /Game/Maps/Generated/L_Gen_Depot_1
+   -LevelJson L_PmcArenaDepot.json -ExtraCmdArgs 'Seed={seed} Out={out}' -Seeds (1..30) -Jobs 5` from a PowerShell prompt;
+   `-File` cannot take an int array). These smokes now play against the SCRIPTED opponent (T-03 merged f159ccec, smokes switched
+   in 3f5cc62a) - this run is the baseline T-05 is judged against. The main lead also took this baseline locally on 11-19
+   (Saved/Logs/Worker/baseline-script-* on the main PC; numbers in docs/port/claude/outbox/T05-firing-positions.report.md if it
+   got there); yours is the one that counts on this machine.
+2. (T-03 is DONE - merged into main f159ccec; skip.)
+3. T-05 firing positions: brief docs/port/claude/inbox/T005-firing-positions.md (lead design, phases a + b). A Sonnet subagent
+   started it on the main PC on branch `claude/firing-positions` and pushes WIP + a Handover section at the top of
+   docs/port/claude/outbox/T05-firing-positions.report.md. Continue FROM that branch (fetch it; merge it into your
+   worker/lead-2026-11-20 branch or work on a copy `worker/t05-firing-positions` - never push claude/firing-positions itself
+   while the main PC may still push it). If the branch is not on origin, start T-05 from the brief. Accept phase b only when
+   Crossroads + Alley x30 vs the scripted opponent beat the step-1 baseline (on_position_before_contact, crossfire, open idle)
+   and the brief's smokes PASS.
 4. Do NOT start the machine-gun nest (queued after T-05) and do NOT merge the building generator.
 
 ## Every hour and at the end
