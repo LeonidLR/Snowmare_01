@@ -37,3 +37,18 @@ My 30-seed runs take the machine with a day-caller marker `SYNC.worker-lead-slot
   at the round's first shot; the attackers fire first in 4/5 seeds from 25-62 m out, while phase b paired the defenders around the
   OBJECTIVE. Decision: the ground kill zone moves onto the attackers' nav path, kill_zone_reach_factor x reach before the objective.
 - Iteration 2 (Sonnet) running: that kill zone + factor sweep on 10 seeds + why seated men are not on position at contact.
+| crossroads T-05 kill zone 0.25 | 4588fbbc | 0.33 | 3.1 | 22.8 | 1.85 |
+| alley T-05 kill zone 0.25 | 4588fbbc | 0 | 8.6 | 18.9 | 2.33 |
+
+## T-05 state (worker/t05-firing-positions 4588fbbc, gated, NOT accepted)
+Iteration 2: ground kill zone on the attackers' nav path (kill_zone_reach_factor; 10-seed sweep 0.6 / 0.4 / 0.25 -> 0.25). Gate: build OK,
+FiringPosition 11/11, Pmc 70/70, 7 smokes PASS. Findings + next step in the T-05 report handover: seated pairs reach 47-72 deg, but the
+defenders spawn ~8 m from the objective and are caught walking; next = seat only positions reachable before the attackers' expected arrival.
+Alley: some approach points have no ground cover that sees them (height / mobile anvil = T-08b in the roadmap) - acceptance fork for the main lead.
+
+## T-021 cold indoors - DONE, merged into this branch (34c832ab)
+worker/t021-cold-indoors 86ef2882 (from claude/cold-indoors 01c6cb01 + main). Leafless doorway = open (designer 11-19), test 6/14.
+Gate: build OK; ColdShelter 11/11, Environment 114, LevelJson 7, PmcDefence 7, Pmc 70; ColdIndoors / Cold / Environment / Weather / WarmIdle /
+PmcRoofDefence / TacticalPmc smokes PASS. Open points for the designer: (1) the committed L_Gen_Depot_1_X6.json (and Depot_1, arena maps) has
+cold_rate_mult 0 - the indoor rule shows only where level cold is on; (2) 13 of 70 X6 buildings have no openings in the layout (airtight, no
+entrance) - generator doors?; (3) 57 of 70 X6 buildings leak at start; (4) nothing at runtime calls SetOpeningOpen yet (no door / glass actors).
