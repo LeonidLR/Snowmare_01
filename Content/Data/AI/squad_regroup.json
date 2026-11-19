@@ -6,5 +6,16 @@
   "sprint_out_of_combat": 1,
   "critical_health_pct": 20,
   "stand_up_to_run": 1,
-  "repath_s": 0.5
+  "repath_s": 0.5,
+  "give_way": {
+    "_comment": "Give way (bug 2026-11-02 item 7, 'formation stuck at a ramp foot'). Read by SquadGiveWayTuning (C++, Source/CodexTactics/Public/Characters/SquadGiveWayRules.h). An idle member (no own move order, not in cover, no combat action, standing) whose capsule a squadmate's path crosses within look_ahead_cm ahead of him (closer than both capsule radii + clearance_cm, within same_level_cm of his feet) steps aside: perpendicular to that path, step_aside_cm (x1 / 1.5 / 2) off it, onto the navmesh (nav_snap_cm, no more than max_rise_cm above / below his feet), off a ramp, off the path corridor; asked again every retry_s while still in the way. enabled 0 / Codex.Squad.GiveWay 0 = off.",
+    "enabled": 1,
+    "look_ahead_cm": 400,
+    "clearance_cm": 20,
+    "step_aside_cm": 120,
+    "same_level_cm": 150,
+    "nav_snap_cm": 30,
+    "max_rise_cm": 60,
+    "retry_s": 1.5
+  }
 }
