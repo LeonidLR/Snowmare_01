@@ -16,6 +16,14 @@ X4 tactical (10 seeds): overwatch_kills 0 in every round (the old "0 shots from 
 Folders: Saved/Logs/Worker/dayloop-crossroads-1, dayloop-alley-1, x4-t04metrics-540e2ec4 (main checkout; digest with
 `python Scripts/Tools/dayloop_digest.py <folder>`).
 
+## THE baseline T-05 is judged against (scripted opponent, main 3f5cc62a, main PC local run 11-19, 30 seeds each)
+| scenario | on_pos p50 | open idle before contact p50 | crossfire p50 | first-shot gap p50 | spread p50 | seeds failing >= 3 criteria |
+|---|---|---|---|---|---|---|
+| A-00A crossroads | 0.0 | 13.0 s | 9.1 deg | 0.7 s | 4.75 m | 25 / 30 |
+| A-00B alley | 0.0 | 8.8 s | 14.2 deg | 2.65 s | 6.85 m | 26 / 30 |
+(Saved/Logs/Worker/baseline-script-crossroads, baseline-script-alley on the main PC.) Phase b is accepted when on_pos p50 >= 0.67,
+crossfire p50 >= 45 deg and open idle p50 <= 2 s on BOTH scenarios, 30 seeds, same command.
+
 ## Lead design decisions
 1. **Data.** `FFiringPosition { Kind (Corner, LowCover, Window, RoofEdge, StairHead, ObstacleTop), StandPoint, Stance,
    FacingYaw, CoveredShare (0..1), CoverKey (actor / object id, for spacing), SourceId, bValid }` in `AI/FiringPositionRules.h`.
