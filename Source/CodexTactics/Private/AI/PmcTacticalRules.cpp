@@ -224,6 +224,7 @@ namespace PmcTacticalRules
 			Post.Group = Candidate.Group;
 			Post.SourceIndex = Candidate.SourceIndex;
 			Post.SpotIndex = Candidate.SpotIndex;
+			Post.RangeCm = Candidate.RangeCm;
 			if (!Candidate.Group.IsEmpty())
 			{
 				UsedGroups.Add(Candidate.Group);

@@ -34,6 +34,8 @@ struct CODEXTACTICS_API FPmcPostCandidate
 	/** The index into the source list of the tactical file (hiding spot / roof / window / ladder roof / drop spot) and the roof's spot. */
 	int32 SourceIndex = INDEX_NONE;
 	int32 SpotIndex = INDEX_NONE;
+	/** Overwatch roofs: overwatch_roofs[].range_m in cm. 0 for every other kind. */
+	float RangeCm = 0.f;
 };
 
 /** One fighter as the placement sees him. */
@@ -59,6 +61,8 @@ struct CODEXTACTICS_API FPmcTacticalPost
 	FString Group;
 	int32 SourceIndex = INDEX_NONE;
 	int32 SpotIndex = INDEX_NONE;
+	/** Overwatch roofs: overwatch_roofs[].range_m in cm (0 for every other kind). The engagement range is the smaller of this and the weapon reach. */
+	float RangeCm = 0.f;
 
 	bool IsValid() const { return Kind != EPmcPostKind::None; }
 };
