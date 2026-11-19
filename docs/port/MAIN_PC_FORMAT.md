@@ -163,6 +163,34 @@ and the remote builds are slow. Check the cable before relying on the worker.
 | 7 | CLI logins | `gh auth status`, `codex login status`, Claude / Gemini / Grok start | gh PASS; API-key env vars moved at the designer's request; the Claude / Codex / Gemini / Grok OAuth logins are the designer's own sign-ins (his choice, not copied) |
 | 8 | Editor + playable map | open `CodexTactics.uproject`, play the start map (GTX 1080) | designer, after the logins |
 
+### 5.5 Switch day: the worker becomes the dev machine (rehearsed 2026-11-19, then reverted)
+
+The full run was done once on 2026-11-19 and undone the same morning, when the format was postponed:
+- main `6a634d56`;
+- 1178 untracked files (2.9 GB) copied, 0 replaced;
+- all 9 WIP files sha1-equal to the main PC;
+- build PASS.
+
+Steps:
+
+1. **Last mirror run.** On the main PC, on the wire, with the editor closed:
+   - run `python Scripts/Tools/mirror_to_worker.py sync`, then `verify`. Wait for `failed: 0` in the worker's
+     `C:\Mirror\Main\LAST_SYNC.json`;
+   - note the WIP list from `git status --porcelain` and its sha1s (`sha1sum <files>`).
+2. **Worker: save the trainer freeze and stop the loop.** In `C:\Work\CodexTactics`:
+   - `git branch -f worker/trainer-freeze-<sha> HEAD`;
+   - `New-Item Saved\Worker\STOP` (no trainer while the designer works there).
+3. **Worker: switch to main.** `git fetch origin; git checkout -B main origin/main; git lfs pull`. Expect 0 tracked changes.
+4. **Worker: bring the files.**
+   - Set the `NINE` list in `Scripts/Tools/worker_dev_restore.py` to the WIP list of step 1.
+   - Run `python -I Scripts\Tools\worker_dev_restore.py --dry`, check the counts, then run it without `--dry`.
+   - Compare the printed sha1s with step 1: every pair must be equal. `git status` shows exactly the WIP files as M.
+5. **Worker: build and smoke.** `Scriptsuild.ps1`, then `Scripts\smoke_parallel.ps1 -Remote off -Commands MovementSmoke`.
+6. **Worker: designer's sign-ins (5.2)**, and copy `C:\Mirror\Main\CodexTactics\Saved\AgentChat` into the checkout. The
+   restore script does that already.
+7. **Back to the trainer later.** `git worktree add C:\Work\CodexTactics-trainer worker/trainer-freeze-<sha>` and point
+   `worker_loop.ps1` at it. That is not done yet; it is the step to do before the next night run on the worker.
+
 **Expect:**
 - A slower editor (i7-6700K, 4 cores) and heavy Lumen on the GTX 1080.
 - The test farm and the night trainer stop while the worker is the main machine.
