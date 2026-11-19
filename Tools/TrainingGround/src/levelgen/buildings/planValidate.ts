@@ -190,8 +190,8 @@ function roomSize(b: GenBuilding, rooms: GenRoom[], issues: TraversalIssue[]): v
         break;
       }
       case 'stairwell':
-        if (!uv(u, v, (uu, vv) => near(uu, C.core.bay_length_cm) && (near(vv, C.core.depth_two_lane_cm) || near(vv, C.core.depth_one_lane_cm)))) {
-          bad(r, `a stair core is ${dims}, not ${C.core.bay_length_cm} x ${C.core.depth_two_lane_cm} / ${C.core.depth_one_lane_cm}`);
+        if (!uv(u, v, (uu, vv) => uu >= C.core.bay_length_cm - TOL && uu <= C.core.bay_length_cm + C.core.bay_extra_max_cm + TOL && (near(vv, C.core.depth_two_lane_cm) || near(vv, C.core.depth_one_lane_cm)))) {
+          bad(r, `a stair core is ${dims}, not ${C.core.bay_length_cm}-${C.core.bay_length_cm + C.core.bay_extra_max_cm} x ${C.core.depth_two_lane_cm} / ${C.core.depth_one_lane_cm}`);
         }
         break;
       default: break;

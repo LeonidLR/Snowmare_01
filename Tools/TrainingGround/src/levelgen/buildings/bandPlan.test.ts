@@ -108,7 +108,10 @@ test('CodexTactics.LevelGen.BandPlan.Fallbacks: a footprint under the minimum, a
   assert.match(planBands({ ...base, L: 800, D: 800 }).fallback ?? '', /footprint_too_small/); // L < 900
   assert.match(planBands({ ...base, L: 1200, D: 700 }).fallback ?? '', /footprint_too_small/); // D < 800
   assert.match(planBands({ ...base, L: 1250, D: 900 }).fallback ?? '', /off_grid/);
-  assert.match(planBands({ ...base, L: 1200, D: 900, core: { u0: 100, depth: 200 } }).fallback ?? '', /core_stretch_100/); // 100 beside the core
+  // S2.2b: a 100-300 stretch beside the core is absorbed into the core bay (1000-1200 long) instead of falling back
+  const absorbed = planBands({ ...base, L: 1200, D: 900, core: { u0: 100, depth: 200 } });
+  assert.equal(absorbed.kind, 'bands', absorbed.fallback);
+  assert.deepEqual(absorbed.bays.filter((x) => x.kind === 'core').map((x) => [x.u0, x.u1]), [[0, 1200]], 'both short stretches (100, 200) join the core bay');
   assert.match(planBands({ ...base, L: 1200, D: 900, core: { u0: 400, depth: 200 } }).fallback ?? '', /core_does_not_fit/);
   assert.match(planBands({ ...base, L: 1200, D: 900, core: { u0: 50, depth: 200 } }).fallback ?? '', /core_does_not_fit/);
   // A two-lane core needs 350 + 200 + 400 = 950 across: D = 900 falls back, a one-lane core (200 + 200 + 400) plans.
@@ -117,7 +120,8 @@ test('CodexTactics.LevelGen.BandPlan.Fallbacks: a footprint under the minimum, a
   assert.equal(two.cells.length, 0);
   assert.equal(planBands({ ...base, L: 1300, D: 900, core: { u0: 0, depth: 200 } }).kind, 'bands');
   assert.equal(planBands({ ...base, L: 1300, D: 900, core: { u0: 0, depth: 350 } }).kind, 'fallback');
-  assert.match(planBands({ ...base, L: 1200, D: 900, core: { u0: 0, depth: 200 } }).fallback ?? '', /core_stretch_300/);
+  const whole = planBands({ ...base, L: 1200, D: 900, core: { u0: 0, depth: 200 } });
+  assert.deepEqual(whole.bays.map((x) => [x.kind, x.u0, x.u1]), [['core', 0, 1200]], 'the 300 stretch joins the core bay');
 });
 
 test('CodexTactics.LevelGen.BandPlan.SnapFootprint: floors to 100 and puts the long side first', () => {

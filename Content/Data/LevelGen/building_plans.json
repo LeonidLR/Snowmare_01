@@ -6,6 +6,7 @@
     "opening_grid_cm": 50,
     "core": {
       "bay_length_cm": 900,
+      "bay_extra_max_cm": 300,
       "depth_two_lane_cm": 350,
       "depth_one_lane_cm": 200,
       "corridor_beside_two_lane_cm": 250,

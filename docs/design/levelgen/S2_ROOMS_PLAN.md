@@ -316,8 +316,9 @@ span, none on core / service cells, one in every corridor end that is not an exi
 golden `scripts/plans-golden.ts` x1 / x6 seeds 1-3); validator codes room_tiling, off_grid, room_size, room_no_door, opening_no_links,
 storey_no_loop, corridor_narrow, opening_into_core, stair_pad_unlinked, window_rule (`buildings/planValidate.ts`, one failing fixture
 each); property test 1836 offices (seeds 1-200, 1 storey / 2 storeys with a low or high core): 1548 planned, 0 issues; fallback 16 %, all
-`core_stretch_*` (a 2-storey core at an end leaving 100-300 cm beside it) - the core placement should try the plan-legal positions
-before S2.3. Corridor-end windows are exempt from the 120 clearance and from window_partition_clash; a lobby needs no window of its own.
+`core_stretch_*` (a 2-storey core at an end leaving 100-300 cm beside it). **S2.2b**: no core position is plan-legal for L 1000-1200
+(L - 900 = 100-300 cannot split into 0 / >= 400), so a 100-300 stretch beside the core is absorbed into the core bay instead (900-1200
+long, `core.bay_extra_max_cm` 300: a longer landing, the front rooms span the bay) -> 1836 / 1836 planned, fallback 0 %, 0 issues. Corridor-end windows are exempt from the 120 clearance and from window_partition_clash; a lobby needs no window of its own.
 Open for later steps: `room_no_triad` / `door_jamb_blocked` / `exterior_doors_one_side`, units / `dead_end` tags, route model on `links`.
 
 ## 6. Risks and early detection

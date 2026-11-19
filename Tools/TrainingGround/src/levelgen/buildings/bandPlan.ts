@@ -15,6 +15,8 @@ const C = cfg.constants;
 const OFFICE = cfg.recipes.office;
 const GRID = C.grid_cm;
 const COREBAY = C.core.bay_length_cm;
+/** The core bay may grow by up to this much: a 100-300 stretch beside the core (no room fits) is absorbed as a longer landing (S2.2b). */
+const COREBAY_MAX = COREBAY + C.core.bay_extra_max_cm;
 
 export type BayKind = 'core' | 'room' | 'end' | 'exit';
 export type CellKind = 'room' | 'corridor' | 'core' | 'service' | 'end';
@@ -76,9 +78,12 @@ function splitStretch(S: number, r: Rand): number[] {
   return w;
 }
 
+/** The core bay's span along u (900, or up to 1200 with an absorbed stretch). */
+type CoreSpan = { u0: number; u1: number } | null;
+
 /** The bays along u: the core bay, room bays, optionally one end suite or exit bay at a building end. A string = infeasible (reason). */
-function planBaysU(L: number, core: BandPlanInput['core'], r: Rand, allowEnds: boolean): PlanBay[] | string {
-  const stretches = (core ? [[0, core.u0], [core.u0 + COREBAY, L]] : [[0, L]]).filter(([a, b]) => b > a);
+function planBaysU(L: number, core: CoreSpan, r: Rand, allowEnds: boolean): PlanBay[] | string {
+  const stretches = (core ? [[0, core.u0], [core.u1, L]] : [[0, L]]).filter(([a, b]) => b > a);
   for (const [a, b] of stretches) if (b - a < C.room_cm.min) return `stretch_${b - a}_too_short`;
   // Options: none, or (end | exit) at the left / right building end, whose stretch must stay 0 or >= 400 after the end bay.
   type Opt = { side: 'left' | 'right'; kind: 'end' | 'exit'; ends: number[] };
@@ -97,7 +102,7 @@ function planBaysU(L: number, core: BandPlanInput['core'], r: Rand, allowEnds: b
   const bays: PlanBay[] = [];
   let coreDone = !core;
   for (const [a, b] of stretches) {
-    if (!coreDone && a > core!.u0) { bays.push({ kind: 'core', u0: core!.u0, u1: core!.u0 + COREBAY }); coreDone = true; }
+    if (!coreDone && a > core!.u0) { bays.push({ kind: 'core', u0: core!.u0, u1: core!.u1 }); coreDone = true; }
     const here = opt && (opt.side === 'left' ? a === 0 : b === L);
     const e = here && opt!.kind === 'end' ? pick(r, opt!.ends) : 0;
     const lo = here && opt!.side === 'left' ? a + e : a, hi = here && opt!.side === 'right' ? b - e : b;
@@ -108,7 +113,7 @@ function planBaysU(L: number, core: BandPlanInput['core'], r: Rand, allowEnds: b
     bays.push(...rooms);
     if (here && opt!.kind === 'end' && opt!.side === 'right') bays.push({ kind: 'end', u0: b - e, u1: b });
   }
-  if (!coreDone) bays.push({ kind: 'core', u0: core!.u0, u1: core!.u0 + COREBAY });
+  if (!coreDone) bays.push({ kind: 'core', u0: core!.u0, u1: core!.u1 });
   return bays;
 }
 
@@ -204,9 +209,13 @@ export function planBands(inp: BandPlanInput): BandPlan {
   if (D > L) return fb('long_side_not_first');
   if (core) {
     if (core.u0 % GRID || core.u0 < 0 || core.u0 + COREBAY > L) return fb('core_does_not_fit');
-    const a = core.u0, b = L - core.u0 - COREBAY;
-    if ((a > 0 && a < C.room_cm.min) || (b > 0 && b < C.room_cm.min)) return fb(`core_stretch_${a > 0 && a < C.room_cm.min ? a : b}`);
   }
+  // A stretch beside the core too short for a room (100-300) is absorbed into the core bay (a longer landing / front rooms): S2.2b.
+  const span: CoreSpan = core ? {
+    u0: core.u0 > 0 && core.u0 < C.room_cm.min ? 0 : core.u0,
+    u1: L - core.u0 - COREBAY > 0 && L - core.u0 - COREBAY < C.room_cm.min ? L : core.u0 + COREBAY,
+  } : null;
+  if (span && span.u1 - span.u0 > COREBAY_MAX) return fb(`core_bay_${span.u1 - span.u0}_too_long`);
   const variants: PlanVariant[] = [];
   if (D >= OFFICE.min_depth_double_loaded_cm) variants.push('double');
   variants.push('single');
@@ -216,7 +225,7 @@ export function planBands(inp: BandPlanInput): BandPlan {
     let reason = '';
     for (let k = 0; k < C.max_rerolls; ++k) {
       const r = rng(fnv1a(`${inp.seed}|${k}`));
-      const bays = planBaysU(L, core, r, variant !== 'corridorless');
+      const bays = planBaysU(L, span, r, variant !== 'corridorless');
       if (typeof bays === 'string') { reason = bays; continue; }
       const raw = variant === 'double' ? buildDouble(inp, bays, r) : variant === 'single' ? buildSingle(inp, bays, r) : buildCorridorless(inp, bays, r);
       if (typeof raw === 'string') { reason = raw; continue; }
@@ -255,7 +264,7 @@ export function validatePlanTiling(plan: BandPlan): string[] {
       case 'room': need('u', w, C.room_cm.min, C.room_cm.max); need('v', h, C.room_cm.min, C.room_cm.max); break;
       case 'end': need('u', w, C.end_bay_cm.min, C.end_bay_cm.max); need('v', h, C.room_cm.min, D); break; // a suite over the whole depth
       case 'core':
-        if (w !== COREBAY) out.push(`${c.id} core: length ${w} is not ${COREBAY}`);
+        if (!inRange(w, COREBAY, COREBAY_MAX)) out.push(`${c.id} core: length ${w} outside ${COREBAY}-${COREBAY_MAX}`);
         if (c.v0 !== 0 || (h !== C.core.depth_two_lane_cm && h !== C.core.depth_one_lane_cm)) out.push(`${c.id} core: depth ${h} from ${c.v0}`);
         break;
       case 'service': need('depth', h, C.service_room.depth_min_cm, C.service_room.depth_max_cm); need('width', w, C.service_room.width_min_cm, C.service_room.width_max_cm); break;
@@ -280,7 +289,7 @@ export function validatePlanTiling(plan: BandPlan): string[] {
     if (b.u0 !== u) out.push(`bay gap at u=${u}`);
     u = b.u1;
     const w = b.u1 - b.u0;
-    if (b.kind === 'core' ? w !== COREBAY : b.kind === 'end' ? !inRange(w, C.end_bay_cm.min, C.end_bay_cm.max) : !inRange(w, C.room_cm.min, C.room_cm.max)) out.push(`bay ${b.kind} ${b.u0}..${b.u1}: width ${w}`);
+    if (b.kind === 'core' ? !inRange(w, COREBAY, COREBAY_MAX) : b.kind === 'end' ? !inRange(w, C.end_bay_cm.min, C.end_bay_cm.max) : !inRange(w, C.room_cm.min, C.room_cm.max)) out.push(`bay ${b.kind} ${b.u0}..${b.u1}: width ${w}`);
   }
   if (u !== L) out.push(`bays end at ${u}, not ${L}`);
   if (plan.bays.filter((b) => b.kind === 'end' || b.kind === 'exit').length > 1) out.push('more than one end / exit bay');
