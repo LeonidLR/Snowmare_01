@@ -5,6 +5,16 @@ worker-load-jobs, no-unasked-rule-changes), docs/port/TASK_TEMPLATE.md (inbox te
 TASK_BOARD "Сделано (2026-11-19)". Reply to the designer in Russian. Designer is away most of 11-20: gameplay decisions go to ONE
 evening list; Antigravity cannot be woken without him.
 
+## UPDATE 11-19 ~09:00 (read this first)
+- WEEKLY limit was NOT reset: get_usage shows "Weekly - all models" 96 % (reset 11-21 09:00 UTC); only the 5-hour window was fresh.
+  Team stop at 98 % still applies -> lead does only critical merges / reviews until the weekly reset shows.
+- SMART ENEMIES re-plan (designer): a separate FABLE session runs docs/port/SMART_ENEMIES_FABLE_PROMPT_2026-11-19.md (GDD
+  docs/design/gdd/smart-enemies.md + audit + roadmap). No new PMC / trainer / G008b tasks until the designer approves that roadmap;
+  then the lead dispatches from it. docs/port/TRAINER_SESSION_PROMPT_2026-11-19.md is superseded by the Fable prompt.
+- G008b parked: branch grok/G008b-overwatch-hold, WIP d38a1289 (spot snap to the parapet, still 0 overwatch kills) - not mergeable.
+- Bgen: R3 done 94c14f5f (builder interior walls from partitions[]), stopped at 96 % (new bgen session id local_93362388).
+- Still waiting: Codex 048 FINISH (if the designer woke it), Antigravity 088 plan (if woken), worker-ops 'ready' for the mirror.
+
 ## Mode and budgets (designer 2026-11-19 08:00 'поехали')
 - Claude subscription limits were RESET by the designer -> NORMAL pace for a long autonomous week: lead + bgen session together
   ~18-20 %/day so it lasts to ~Tue 11-24 (get_usage each morning; the app may lag after a reset). The lead implements again
