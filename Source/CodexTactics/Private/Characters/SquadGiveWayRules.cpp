@@ -122,6 +122,46 @@ namespace SquadGiveWayRules
 		return Out;
 	}
 
+	TArray<FVector2D> BehindSpots(TArrayView<const FVector> Path, const FCrossing& Crossing, float CrossCm, const FSquadGiveWayTuning& Tuning,
+		const FVector2D* IdleFeet, const FFlightApproach* Approach, float ZoneExtraCm)
+	{
+		TArray<FVector2D> Out;
+		if (!Crossing.bCrosses || Path.Num() < 2)
+		{
+			return Out;
+		}
+		const FVector2D Start(Path[0]);
+		FVector2D Forward = FVector2D::ZeroVector;
+		for (int32 Index = 1; Index < Path.Num() && Forward.IsNearlyZero(); ++Index)
+		{
+			Forward = (FVector2D(Path[Index]) - Start).GetSafeNormal();
+		}
+		if (Forward.IsNearlyZero())
+		{
+			return Out;
+		}
+		const FVector2D Left(-Forward.Y, Forward.X);
+		const FVector2D Back = -Forward;
+		const FVector2D BackOwn = (Back + Left * static_cast<double>(Crossing.Side)).GetSafeNormal();
+		const FVector2D BackOther = (Back - Left * static_cast<double>(Crossing.Side)).GetSafeNormal();
+		const float Window = Crossing.AlongCm + Tuning.LookAheadCm;
+		for (const float Scale : { 1.f, 1.5f, 2.f, 2.5f, 3.f })
+		{
+			for (const FVector2D& Way : { Back, BackOwn, BackOther })
+			{
+				const FVector2D Spot = Start + Way * static_cast<double>(Tuning.StepAsideCm * Scale);
+				if (DistanceToPath(Path, Spot, Window) < CrossCm
+					|| (IdleFeet && FVector2D::Distance(Spot, *IdleFeet) < Tuning.MinStepCm)
+					|| (Approach && Approach->bValid && InApproachZone(*Approach, Spot, ZoneExtraCm, Tuning)))
+				{
+					continue;
+				}
+				Out.Add(Spot);
+			}
+		}
+		return Out;
+	}
+
 	TArray<FFlightFoot> FindFlightFeet(TArrayView<const FVector> Path, TFunctionRef<bool(const FVector&, FVector2D&)> IsRamp, float SampleCm)
 	{
 		TArray<FFlightFoot> Out;
