@@ -824,10 +824,45 @@ def _walls_and_buildings_legacy(layout, gz, chimneys, frames, gaps):
     return specs
 
 
+def partition_driven(layout, building):
+    """True when the building's interior walls are built from its partitions[] (one record per wall with its openings) instead of
+    the pre-split interior walls[] (S2 R3, S2_ROOMS_PLAN 7.3 / 4.5): an S2 planned building (it carries "plan") or a layout that
+    opts in with "interior_walls": "partitions". Legacy files keep the walls[] path, bit for bit."""
+    return bool(building.get("plan")) or layout.get("interior_walls") == "partitions"
+
+
+def _partition_wall_specs(layout, b, gz):
+    """Interior walls of a partition-driven building: each partition cut round its openings by _slice_wall_with_openings (door gap =
+    the opening's width, lintel, sill, opening-state actors at the cut - so a sealed / barricaded interior door of a rotated
+    building is never an open gap). Every piece carries the "interior" tag like the legacy walls[] cubes."""
+    bid = b["id"]
+    out = []
+    for pt in b.get("partitions", []) or []:
+        lvl = int(pt.get("floor", 0))
+        orig = {}
+        ops = []
+        for op in pt.get("openings", []) or []:
+            o = op if "floor" in op else dict(op, floor=lvl)
+            orig[id(o)] = op
+            ops.append(o)
+        state_of = lambda o, _orig=orig: effective_opening_state(layout, b, _orig.get(id(o), o))  # noqa: E731
+        base = ["interior", "building=" + bid, "floor=%d" % lvl]
+        pieces = _slice_wall_with_openings(pt["id"], "Buildings/%s/L%d" % (bid, lvl), pt["start"], pt["end"], gz + z_of(lvl),
+                                           float(pt.get("thickness", 20.0)), lvl, bid, "interior", ops, base, state_of=state_of)
+        for s in pieces:
+            if "interior" not in s.get("tags", []):
+                s["tags"] = ["interior"] + list(s.get("tags", []))
+        out.extend(pieces)
+    return out
+
+
 def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
     specs = []
     b_by_id = {b["id"]: b for b in layout["buildings"]}
     split = [w for w in levelgen_ladders.split_walls(layout["walls"], gaps) if w.get("building") not in chimneys]
+    by_partitions = {bid for bid, b in b_by_id.items() if bid not in chimneys and partition_driven(layout, b)}
+    for bid in sorted(by_partitions):
+        specs.extend(_partition_wall_specs(layout, b_by_id[bid], gz))
 
     # Non-building and interior partition walls
     interior_by_building_floor = {}
@@ -837,6 +872,8 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         lvl = int(w.get("floor", 0))
         if not bid or bid not in b_by_id:
             specs.append(wall_cube(w["id"], "Walls/L%d" % lvl, w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), [w.get("kind", "wall")]))
+        elif w.get("kind") == "interior" and bid in by_partitions:
+            continue  # built from its partitions[] above
         elif w.get("kind") == "interior":
             specs.append(wall_cube(w["id"], "Buildings/%s/L%d" % (bid, lvl), w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), ["interior", "building=" + bid, "floor=%d" % lvl]))
             interior_by_building_floor.setdefault((bid, lvl), []).append(w)

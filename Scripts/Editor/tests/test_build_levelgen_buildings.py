@@ -270,6 +270,50 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
             self.assertEqual({k: sum(1 for s in rot if mine(s) and k in s["tags"]) for k in kinds}, flat_counts, "deg %.1f" % deg)
             self._assert_rotated_plan(train, "B_house", deg, ndigits=2)
 
+    # ---- S2 R3: interior walls from partitions[] ----------------------------------------------------------------------------------
+
+    @staticmethod
+    def _interior(specs, bid):
+        return [s for s in specs if "interior" in s.get("tags", []) and "building=%s" % bid in s.get("tags", [])]
+
+    def test_partition_driven_interior_walls(self):
+        """A layout that opts in ("interior_walls": "partitions") builds each partition cut round its openings: the walls[] interior
+        cubes are gone, every partition door has a lintel as wide as the opening, the rest of the map is unchanged. Without the
+        opt-in the legacy path stays (Train_1 lintel count and the depot sha above)."""
+        train = self._load("L_Gen_Train_1")
+        house = next(b for b in train["buildings"] if b["id"] == "B_house")
+        self.assertFalse(builder.partition_driven(train, house))
+        legacy = builder.plan(train)
+        opted = builder.plan(dict(train, interior_walls="partitions"))
+        part_doors = [op for b in train["buildings"] for pt in b.get("partitions", []) for op in pt.get("openings", []) if op.get("kind") == "door"]
+        self.assertGreater(len(part_doors), 0)
+        wall_ids = {w["id"] for w in train["walls"] if w.get("kind") == "interior"}
+        self.assertFalse([s["label"] for s in opted if s["label"] in wall_ids or "_ilintel_" in s["label"] or "_idoor_" in s["label"]])
+        interiors = [s for s in opted if "interior" in s.get("tags", [])]
+        lintels = [s for s in interiors if "door_lintel" in s["tags"]]
+        self.assertEqual(len(lintels), len(part_doors))
+        self.assertEqual(sorted(round(s["scale"][0] * 100.0, 3) for s in lintels), sorted(float(op.get("width", 120.0)) for op in part_doors))
+        self.assertEqual(sum("opening_lintel" in s.get("tags", []) for s in opted), sum("opening_lintel" in s.get("tags", []) for s in legacy))
+        rest = lambda specs: sorted(json.dumps(s, sort_keys=True) for s in specs if "interior" not in s.get("tags", []))  # noqa: E731
+        self.assertEqual(rest(opted), rest(legacy))
+
+    def test_partition_driven_sealed_door_rotated_with_tg_rounding(self):
+        """The failure R3 closes: a sealed interior door of a building turned with the 0.01 cm rounding keeps its wall fill and
+        lintel (one record per wall, no gap matching), at the turned position; a "plan" marker alone opts the building in."""
+        train = self._load("L_Gen_Train_1")
+        house = next(b for b in train["buildings"] if b["id"] == "B_house")
+        house["plan"] = {"v": 1, "kind": "bands", "seed": 1, "core_wall": "B_house_N", "street_wall": "B_house_S"}
+        door = next(op for pt in house["partitions"] for op in pt.get("openings", []) if op.get("kind") == "door")
+        door["state"] = "sealed"
+        flat = builder.plan(train)
+        self.assertEqual(sum("door_state=sealed" in s["tags"] for s in self._interior(flat, "B_house")), 1)
+        counts = lambda specs: (len(self._interior(specs, "B_house")), sum("door_lintel" in s["tags"] for s in self._interior(specs, "B_house")),  # noqa: E731
+                                sum("door_state=sealed" in s["tags"] for s in self._interior(specs, "B_house")))
+        for deg in (17.3, 90.0):
+            turned, _ = self._rotate_building(train, "B_house", deg, ndigits=2)
+            self.assertEqual(counts(builder.plan(turned)), counts(flat), "deg %.1f" % deg)
+            self._assert_rotated_plan(train, "B_house", deg, ndigits=2)
+
     def test_axis_tolerance_groups_rounded_segments(self):
         """_collinear_gaps / _merged_building_edges take a wall within 0.05 cm of an axis as axis-aligned and group pieces whose
         fixed coordinate differs by rounding noise; exact layouts group as before."""

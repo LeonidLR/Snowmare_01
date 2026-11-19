@@ -299,6 +299,11 @@ Order: R1 -> R2 -> R3 -> R4 -> S2.1 ... S2.5 -> S2.6 -> S2.7 -> S2.8 -> S2.9 -> 
 could run side by side if two tasks are ever allowed; S2.9's C++ part can be queued for an API agent from the start.
 Review gate after S2.3: three ASCII / page plans per archetype shown to the designer before S2.4.
 
+Status (2026-11-19): R1, R2 done (6dc78810, c47810a2); R3 done - the 0.05 cm axis tolerance landed in baa4722c, and the builder
+builds the interior walls of a **partition-driven** building (`plan` set, or the layout's `"interior_walls": "partitions"`)
+from `partitions[]` through `_slice_wall_with_openings` (door gap = the opening width, lintel and state actors at the cut);
+legacy files keep the `walls[]` path bit for bit (`partition_driven`, tests `test_partition_driven_*`). R4 next.
+
 ## 6. Risks and early detection
 
 | # | Risk | Detect early by | Mitigation |
