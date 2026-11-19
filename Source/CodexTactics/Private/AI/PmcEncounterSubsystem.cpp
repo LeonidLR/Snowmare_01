@@ -278,12 +278,38 @@ int32 UPmcEncounterSubsystem::SpawnEncounter(const FPmcEncounterSpec& Spec, int3
 	FPmcWeights Weights;
 	const bool bWeights = PmcCommanderRules::LoadWeightsFile(Spec.Weights, Weights);
 	const FVector Towards = (Anchor - Spot).GetSafeNormal2D();
-	const FRotator Facing = Towards.IsNearlyZero() ? FRotator::ZeroRotator : Towards.Rotation();
+	// A generator post (smart-enemies T-11): the men face the post's yaw and stand on / beside the post itself (PmcEncounterRules::PostSlots,
+	// pmc_operators.json post_spawn) - no ring, no "out of the squad's view" test (the post is where the generator put it).
+	const FPmcPostSpawnConfig PostConfig = Spec.bHasPost ? PmcEncounterRules::LoadPostSpawnConfig() : FPmcPostSpawnConfig();
+	const FRotator Facing = Spec.bHasPost ? PmcEncounterRules::PostFacing(Spec.Post)
+		: (Towards.IsNearlyZero() ? FRotator::ZeroRotator : Towards.Rotation());
 	const FVector Right(-Towards.Y, Towards.X, 0.f);
 	int32 Count = 0;
 	TArray<FVector> Used;
 	for (int32 Index = 0; Index < Spec.Count; ++Index)
 	{
+		if (Spec.bHasPost)
+		{
+			FPmcEncounterPost OnNavPost = Spec.Post;
+			OnNavPost.Pos.Z = Spot.Z; // the navmesh height of the post (a ground post's Z 0 means "unknown")
+			FVector Place = Spot;
+			for (const FVector& Want : PmcEncounterRules::PostSlots(OnNavPost, Index, PostConfig))
+			{
+				FNavLocation OnNav;
+				if (Nav->ProjectPointToNavigation(Want, OnNav, FVector(100.f, 100.f, 150.f)) && FMath::Abs(OnNav.Location.Z - Spot.Z) <= 150.f
+					&& !Used.ContainsByPredicate([&OnNav](const FVector& Taken) { return FVector::Dist2D(Taken, OnNav.Location) < 90.f; }))
+				{
+					Place = OnNav.Location;
+					break;
+				}
+			}
+			Used.Add(Place);
+			if (Pmc->SpawnFighter(TeamId, Place + FVector(0.f, 0.f, 95.f), Facing, Seed, Index))
+			{
+				++Count;
+			}
+			continue;
+		}
 		// A line across the squad's direction, a second / third rank behind, then a ring round the spot: on the navmesh at the spot's
 		// level, out of the squad's view, not on a mate's place.
 		TArray<FVector> Wants;
@@ -322,8 +348,9 @@ int32 UPmcEncounterSubsystem::SpawnEncounter(const FPmcEncounterSpec& Spec, int3
 	Pmc->SetTeamPosture(TeamId, Spec.Posture, Spot, PlayerStart, Seed, Weights);
 	// TACTICAL_MAP.md P2 (2026-11-17): a defending squad on a generated map with a tactical file waits on its tactical posts along the
 	// player's way to it (ambushes at chokepoint exits, the marksman on an overwatch roof, a man on a picked ladder-only roof; the Ambush
-	// order walks them there) - none closer than half the encounter's minimum distance to the squad. No tactical file: unchanged.
-	if (Spec.Posture == EPmcPosture::Defend && Pmc->GetTacticalMap())
+	// order walks them there) - none closer than half the encounter's minimum distance to the squad. No tactical file: unchanged. A squad
+	// that has its own generator post stays on it (smart-enemies T-11).
+	if (Spec.Posture == EPmcPosture::Defend && !Spec.bHasPost && Pmc->GetTacticalMap())
 	{
 		const int32 Posted = Pmc->AssignTacticalPosts(TeamId, Pmc->RouteBetween(PathFrom, Spot), Seed, 0.5f * Spec.MinCm);
 		UE_LOG(LogCodexTactics, Display, TEXT("[PmcEncounter] team %d: %d of %d fighter(s) on tactical posts along the squad's way"), TeamId, Posted, Count);
@@ -341,9 +368,10 @@ int32 UPmcEncounterSubsystem::SpawnEncounter(const FPmcEncounterSpec& Spec, int3
 	Record.Level = SpotLevel;
 	Record.Seed = Seed;
 	Record.Time = World->GetTimeSeconds();
-	UE_LOG(LogCodexTactics, Display, TEXT("[PmcEncounter] team %d: %d fighter(s), posture %s, weights %s%s, at %s level %d, %.0f m from the squad (seed %d)"),
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcEncounter] team %d: %d fighter(s), posture %s, weights %s%s, at %s level %d, %.0f m from the squad (seed %d)%s"),
 		TeamId, Count, PmcEncounterRules::PostureName(Spec.Posture), *Spec.Weights, bWeights ? TEXT("") : TEXT(" (missing: defaults)"),
-		*Spot.ToCompactString(), SpotLevel, FVector::Dist2D(Spot, Anchor) / 100.f, Seed);
+		*Spot.ToCompactString(), SpotLevel, FVector::Dist2D(Spot, Anchor) / 100.f, Seed,
+		Spec.bHasPost ? *FString::Printf(TEXT(", on post %s (%s) facing %.0f"), *Spec.Post.Id, *Spec.Post.Kind, Spec.Post.YawDeg) : TEXT(""));
 	return TeamId;
 }
 
