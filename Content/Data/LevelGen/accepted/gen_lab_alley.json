@@ -1276,9 +1276,10 @@
   {
    "id": "AMB_roof",
    "pos": [
-    -1223,
-    1510
-   ]
+    -500,
+    600
+   ],
+   "layer": "roof:B_tall"
   },
   {
    "id": "AMB_corner",
@@ -1633,8 +1634,8 @@
   "ambush": {
    "points": [
     [
-     -1223,
-     1510
+     -500,
+     600
     ],
     [
      100,
@@ -1651,6 +1652,7 @@
    }
   }
  },
+ "export_intents": true,
  "objectives": {
   "version": 1,
   "seed": 402,

@@ -76,6 +76,15 @@ export interface TacticalLadderRoof {
   /** It is an overwatch roof / the drop spots off it. */
   overwatch: boolean; drop_spots: string[];
 }
+/**
+ * A designer-marked killing ground (T-02 gap 1): a zone or a route with intent 'kill_zone' (schema.ts RouteIntent) - the authored
+ * place squad plays (T-08) and DangerAt pick, never a defect. Zone: its outline; route: its points on their layers.
+ */
+export interface TacticalKillZone {
+  id: string; source: 'zone' | 'route'; intent: string; note?: string; set_piece?: string;
+  /** The centre (world, on the first layer) and, for a zone, its outline (world XY); for a route, its points (world, per layer). */
+  center: Vec3; poly?: Vec2[]; line?: Vec3[];
+}
 export interface TacticalMapFile {
   schema: typeof TACTICAL_MAP_SCHEMA;
   map: string;
@@ -94,6 +103,8 @@ export interface TacticalMapFile {
   overwatch_roofs: TacticalOverwatchRoof[];
   hiding_spots: TacticalHidingSpot[];
   ladder_only_roofs: TacticalLadderRoof[];
+  /** Only when the layout marks one (absent otherwise: older files stay byte-identical). */
+  kill_zones?: TacticalKillZone[];
 }
 
 const r0 = (v: number): number => { const x = Math.round(v); return Object.is(x, -0) ? 0 : x; };
@@ -186,17 +197,33 @@ export function tacticalMapFor(l: GenLayout, mapName: string, layoutName = l.nam
     })
     .sort((x, y) => (x.building < y.building ? -1 : x.building > y.building ? 1 : 0));
 
+  // designer-marked killing grounds (zones / routes with an intent), in id order
+  const kill_zones: TacticalKillZone[] = !l.export_intents ? [] : [
+    ...l.zones.filter((z) => z.intent).map((z): TacticalKillZone => {
+      const cx = z.poly.reduce((s, p) => s + p[0], 0) / z.poly.length, cy = z.poly.reduce((s, p) => s + p[1], 0) / z.poly.length;
+      return { id: z.id, source: 'zone', intent: z.intent!, ...(z.set_piece ? { set_piece: z.set_piece } : {}), center: at([cx, cy], groundZ),
+        poly: z.poly.map((p) => [r0(p[0]), r0(p[1])] as Vec2) };
+    }),
+    ...l.routes.filter((r) => r.intent).map((r): TacticalKillZone => {
+      const layers = r.layers ?? r.points.map(() => 'ground');
+      const line = r.points.map((p, i) => at(p, layerZ(l, layers[i] ?? 'ground')));
+      const mid = line[Math.floor(line.length / 2)];
+      return { id: r.id, source: 'route', intent: r.intent!, ...(r.intent_note ? { note: r.intent_note } : {}), center: mid, line };
+    }),
+  ].sort((x, y) => (x.id < y.id ? -1 : x.id > y.id ? 1 : 0));
+
   return {
     schema: TACTICAL_MAP_SCHEMA, map: mapName, layout: layoutName, geometry_hash: a.geometry_hash, analysis_version: a.version,
     analysis_source: own ? 'layout' : 'computed', conditions: { weather: a.conditions.weather, time_of_day: a.conditions.time_of_day }, ground_z: r1(gz),
     thresholds: { ...a.thresholds, ladder_only_factor: factor },
     chokepoints, drop_spots, windows, overwatch_roofs, hiding_spots, ladder_only_roofs,
+    ...(kill_zones.length ? { kill_zones } : {}),
   };
 }
 
 /** Stable text (compact items, one per line - the X6 file stays small and diffs cleanly; LF + final newline). */
 export function formatTacticalMap(f: TacticalMapFile): string {
-  const lists = ['chokepoints', 'drop_spots', 'windows', 'overwatch_roofs', 'hiding_spots', 'ladder_only_roofs'] as const;
+  const lists = ['chokepoints', 'drop_spots', 'windows', 'overwatch_roofs', 'hiding_spots', 'ladder_only_roofs', ...(f.kill_zones ? ['kill_zones'] as const : [])] as const;
   const head: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(f)) if (!(lists as readonly string[]).includes(k)) head[k] = v;
   const headText = JSON.stringify(head, null, 2);

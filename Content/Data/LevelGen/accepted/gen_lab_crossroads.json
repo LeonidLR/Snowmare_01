@@ -770,6 +770,7 @@
    }
   }
  },
+ "export_intents": true,
  "objectives": {
   "version": 1,
   "seed": 401,

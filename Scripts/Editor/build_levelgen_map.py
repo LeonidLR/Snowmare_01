@@ -789,6 +789,32 @@ def _point_in_cover(px, py, c, margin=12.0):
     return abs(lx) <= c["size"][0] * 0.5 + margin and abs(ly) <= c["size"][1] * 0.5 + margin
 
 
+MANTLE_WALL_EDGE_KINDS = ("obstacle", "wall", "crate", "cover")
+
+
+def _wall_mantle_tags(w, edges):
+    """["CodexMantleEdge"] when a layout mantle edge (kind obstacle / wall / crate / cover) runs along this wall piece - parallel, its
+    midpoint within half the thickness + 15 cm of the wall axis and inside the piece's span - else []. MantleRules refuses a plain
+    "wall" tag, so an authored mantle-able wall (T-02 gap 2: the bridge obstacle, the arenas' low walls) needs it like parapets / sills."""
+    ax, ay = w["a"]
+    bx, by = w["b"]
+    L = math.hypot(bx - ax, by - ay)
+    if L < 1.0:
+        return []
+    ux, uy = (bx - ax) / L, (by - ay) / L
+    reach = float(w.get("thickness", 20.0)) * 0.5 + 15.0
+    for m in edges:
+        (sx, sy), (ex, ey) = m["start"], m["end"]
+        ml = math.hypot(ex - sx, ey - sy)
+        if ml < 1.0 or abs(((ex - sx) * uy - (ey - sy) * ux) / ml) > 0.05:
+            continue
+        mx, my = 0.5 * (sx + ex), 0.5 * (sy + ey)
+        t = (mx - ax) * ux + (my - ay) * uy
+        if -1.0 <= t <= L + 1.0 and abs((mx - ax) * uy - (my - ay) * ux) <= reach:
+            return ["CodexMantleEdge"]
+    return []
+
+
 def _walls_and_buildings_legacy(layout, gz, chimneys, frames, gaps):
     specs = []
     for w in levelgen_ladders.split_walls(layout["walls"], gaps):
@@ -864,6 +890,7 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
     specs = []
     b_by_id = {b["id"]: b for b in layout["buildings"]}
     split = [w for w in levelgen_ladders.split_walls(layout["walls"], gaps) if w.get("building") not in chimneys]
+    mantle_edges = [m for m in layout.get("mantle_edges", []) or [] if m.get("kind") in MANTLE_WALL_EDGE_KINDS]
     by_partitions = {bid for bid, b in b_by_id.items() if bid not in chimneys and partition_driven(layout, b)}
     for bid in sorted(by_partitions):
         specs.extend(_partition_wall_specs(layout, b_by_id[bid], gz))
@@ -875,7 +902,7 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         bid = w.get("building")
         lvl = int(w.get("floor", 0))
         if not bid or bid not in b_by_id:
-            specs.append(wall_cube(w["id"], "Walls/L%d" % lvl, w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), [w.get("kind", "wall")]))
+            specs.append(wall_cube(w["id"], "Walls/L%d" % lvl, w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), [w.get("kind", "wall")] + _wall_mantle_tags(w, mantle_edges)))
         elif w.get("kind") == "interior" and bid in by_partitions:
             continue  # built from its partitions[] above
         elif w.get("kind") == "interior":
@@ -1234,14 +1261,21 @@ def plan(layout):
     for sp in layout.get("spawn_points", []):
         specs.append({"kind": "target_point", "label": sp["id"], "folder": "Spawns", "location": [sp["pos"][0], sp["pos"][1], gz + 50.0], "yaw": 0.0, "tags": ["LevelGenSpawn", sp.get("kind", "edge")]})
     for ap in layout.get("ambush_points", []):
-        specs.append({"kind": "target_point", "label": ap["id"], "folder": "Ambush", "location": [ap["pos"][0], ap["pos"][1], gz + 50.0], "yaw": 0.0, "tags": [AMBUSH_TAG]})
+        # an optional route layer ('roof:<bid>', 'floor:<bid>:<n>') lifts the point onto that level (T-02 gap 3); ground points as before
+        alayer = ap.get("layer")
+        az = gz + z_of(layer_level(layout, alayer)) + 50.0 if alayer else gz + 50.0
+        specs.append({"kind": "target_point", "label": ap["id"], "folder": "Ambush", "location": [ap["pos"][0], ap["pos"][1], az], "yaw": 0.0,
+                      "tags": [AMBUSH_TAG] + (["layer=%s" % alayer] if alayer else [])})
     for pr in layout.get("patrol_routes", []):
         for n, (px, py) in enumerate(pr["points"]):
             specs.append({"kind": "target_point", "label": "%s_%d" % (pr["id"], n), "folder": "Patrols/" + pr["id"], "location": [px, py, gz + 50.0], "yaw": 0.0, "tags": ["LevelGenPatrol", pr["id"]]})
     for z in layout["zones"]:
         cx = sum(p[0] for p in z["poly"]) / len(z["poly"])
         cy = sum(p[1] for p in z["poly"]) / len(z["poly"])
-        specs.append({"kind": "text", "label": "Zone_" + z["id"], "folder": "Zones", "text": "%s (%s)" % (z["id"], z.get("set_piece", z["kind"])), "location": [cx, cy, gz + 3.0], "yaw": 0.0})
+        zspec = {"kind": "text", "label": "Zone_" + z["id"], "folder": "Zones", "text": "%s (%s)" % (z["id"], z.get("set_piece", z["kind"])), "location": [cx, cy, gz + 3.0], "yaw": 0.0}
+        if z.get("intent") and layout.get("export_intents"):  # a designer-marked killing ground (T-02 gap 1): tagged; the outline is in the tactical file's kill_zones
+            zspec["tags"] = ["LevelGenZone", "zone=%s" % z["id"], "intent=%s" % z["intent"]]
+        specs.append(zspec)
     # ---- drop nav links through the roof / floor holes (one level down; levelgen_bot_route.drop_links)
     for dl in levelgen_bot_route.drop_links(layout, gz):
         hx, hy = dl["hole"]

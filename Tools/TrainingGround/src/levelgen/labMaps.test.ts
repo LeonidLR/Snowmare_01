@@ -248,3 +248,14 @@ test('L_Lab_Bridge (DS-00C): a trench with ONE bridge, cover at the north end, a
   assert.ok((bw.openings ?? []).some((o) => o.kind === 'window' && Math.abs(m(o.pos)[1] - 21) < 0.01), 'windows on the south side');
   assert.ok(bw.stairs.some((s) => s.kind === 'stairwell'), 'B_windows has a stairwell');
 });
+
+test('T-02 gap 1: the lab maps export their kill zones (opt-in export_intents); a layout without the flag exports none', async () => {
+  const { tacticalMapFor } = await import('./tacticalMap.ts');
+  const bridge = buildLabMap('bridge');
+  assert.equal(bridge.layout.export_intents, true);
+  const t = tacticalMapFor(bridge.layout, bridge.mapName, bridge.layout.name);
+  assert.deepEqual(t.kill_zones?.map((k) => [k.id, k.source, k.intent]), [['V1_trench', 'route', 'kill_zone'], ['Z_deck', 'zone', 'kill_zone']]);
+  assert.ok(t.kill_zones![1].poly!.length >= 3);
+  const off = tacticalMapFor({ ...bridge.layout, export_intents: undefined }, bridge.mapName, bridge.layout.name);
+  assert.equal(off.kill_zones, undefined, 'no flag -> no kill_zones key (older files stay byte-identical)');
+});

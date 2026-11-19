@@ -96,7 +96,7 @@ interface Draft {
   zones: { id: string; kind: ZoneKind; set_piece: SetPiece; poly: Vec2[]; density: number; coverKinds: CoverKind[]; intent?: 'kill_zone' }[];
   routes: GenRoute[];
   spawn_points: SpawnPoint[];
-  ambush_points: { id: string; pos: Vec2 }[];
+  ambush_points: { id: string; pos: Vec2; layer?: string }[];
   patrol_routes: PatrolRoute[];
   mantle_edges: MantleEdge[];
   /** Rectangles nothing may be placed in (streets, the route corridor). */

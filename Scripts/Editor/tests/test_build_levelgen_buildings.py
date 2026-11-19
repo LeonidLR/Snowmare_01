@@ -397,6 +397,32 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         # a real diagonal stays free
         self.assertEqual(builder._collinear_gaps([{"id": "D_0", "a": [0.0, 0.0], "b": [100.0, 1.0], "thickness": 30.0}], "B", 0), [])
 
+    # ---- T-02 builder gaps ---------------------------------------------------------------------------------------------------------
+
+    def test_mantle_edge_wall_gets_mantle_tag(self):
+        """T-02 gap 2: a free wall carrying a layout mantle edge (the bridge obstacle W_obstacle, kind 'wall') is tagged CodexMantleEdge
+        (MantleRules refuses a plain 'wall'); a full-height wall without an edge is not."""
+        specs = builder.plan(self._load("gen_lab_bridge"))
+        tagged = {s["label"] for s in specs if s.get("folder", "").startswith("Walls") and "CodexMantleEdge" in s.get("tags", [])}
+        self.assertIn("W_obstacle", tagged)
+        self.assertFalse([l for l in tagged if l.startswith("W_") and l != "W_obstacle"], tagged)
+        edges = [{"start": [0.0, 30.0], "end": [100.0, 30.0], "kind": "obstacle"}]
+        wall = {"a": [0.0, 0.0], "b": [100.0, 0.0], "thickness": 20.0}
+        self.assertEqual(builder._wall_mantle_tags(wall, edges), [], "30 cm off a 20 cm wall (reach 25): out")
+        self.assertEqual(builder._wall_mantle_tags(dict(wall, thickness=30.0), edges), ["CodexMantleEdge"])
+        self.assertEqual(builder._wall_mantle_tags(wall, [{"start": [50.0, -50.0], "end": [50.0, 50.0], "kind": "obstacle"}]), [], "crossing, not along")
+
+    def test_ambush_point_layer_lifts_it_to_the_roof(self):
+        """T-02 gap 3: an ambush point with layer 'roof:<bid>' stands on that roof (z_of(floors) + 50) and carries a layer= tag; ground
+        points stay at gz + 50 without one."""
+        alley = self._load("gen_lab_alley")
+        specs = {s["label"]: s for s in builder.plan(alley) if "CodexAmbushPoint" in s.get("tags", [])}
+        gz = float(alley.get("ground_z", 0.0))
+        self.assertAlmostEqual(specs["AMB_roof"]["location"][2], gz + builder.z_of(2) + 50.0)
+        self.assertIn("layer=roof:B_tall", specs["AMB_roof"]["tags"])
+        self.assertAlmostEqual(specs["AMB_corner"]["location"][2], gz + 50.0)
+        self.assertEqual(specs["AMB_corner"]["tags"], [builder.AMBUSH_TAG])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -464,6 +464,12 @@ export interface GenLayout {
   schema: string;
   /** Schema /2: sha1 of building_route_costs.json; stored routes with another hash are recomputed. */
   cost_hash?: string;
+  /**
+   * Export the designer-marked killing grounds (zones / routes with an `intent`) to the runtime files: the tactical file's
+   * `kill_zones` and tagged zone actors (T-02 gap 1). Opt-in so the accepted maps (Depot X2 / X4 / X6) stay byte-identical until
+   * they are re-exported on purpose; the lab maps set it.
+   */
+  export_intents?: boolean;
   /** Schema /2: districts of lots with a theme. */
   districts?: District[];
   /** Schema /2: links between buildings. */
@@ -486,7 +492,8 @@ export interface GenLayout {
   zones: (LayoutZone & { set_piece?: SetPiece; /** 'kill_zone': the zone is a deliberate killing ground (the cut). */ intent?: RouteIntent })[];
   routes: GenRoute[];
   spawn_points: SpawnPoint[];
-  ambush_points: { id: string; pos: Vec2 }[];
+  /** layer: 'ground' (absent) or a route layer ('roof:<bid>', 'floor:<bid>:<n>') - the level the ambusher waits on (T-02 gap 3). */
+  ambush_points: { id: string; pos: Vec2; layer?: string }[];
   patrol_routes: PatrolRoute[];
   /** Global mantle edge markers for vaulting/climbing (50-150 cm). */
   mantle_edges?: MantleEdge[];

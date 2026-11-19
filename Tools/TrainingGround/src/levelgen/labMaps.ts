@@ -153,6 +153,7 @@ function finish(spec: LabSpec, d: Draft, variants: number, profile: Profile, com
   });
   const withGoal: GenLayout = {
     ...layout,
+    export_intents: true,
     objectives: {
       version: OBJECTIVES_VERSION,
       seed: spec.seed,
@@ -268,8 +269,8 @@ function buildAlley(): LabMapBundle {
 
   d.spawn_points.push({ id: 'SP_start', pos: start, kind: 'edge' });
   d.ambush_points.push(
-    // ambush points are ground-only in the schema (no layer): the roof ambusher is placed at the ladder foot, the AI climbs from there
-    { id: 'AMB_roof', pos: [ladder.foot[0], ladder.foot[1]] },
+    // the roof ambusher waits on B_tall's roof behind the north parapet, over the lane (layer 'roof:B_tall', T-02 gap 3)
+    { id: 'AMB_roof', pos: [38, 29], layer: 'roof:B_tall' },
     { id: 'AMB_corner', pos: [44, 23] },
     { id: 'AMB_cutoff', pos: [10, 10] },
   );

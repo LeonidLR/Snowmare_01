@@ -61,5 +61,9 @@
     {"id":"HS_16","layer":"ground","pos":[575,-1275,0],"facing_yaw":-7.7,"reveal_normal_m":11.8,"reveal_stealth_m":11.8,"stealth_only":false,"blind":false,"rush_m":2.2,"cover":"wall:CUTWALL_N_0","cover_height_cm":140,"threatens":{"line":"route:V2_windows","route":"V2_windows","pos":[789,-1304,0]},"place":"CP_01"},
     {"id":"HS_17","layer":"ground","pos":[575,1475,0],"facing_yaw":46.2,"reveal_normal_m":11.3,"reveal_stealth_m":11.3,"stealth_only":false,"blind":false,"rush_m":7.1,"cover":"wall:CUTWALL_N_1","cover_height_cm":140,"threatens":{"line":"route:V1_trench","route":"V1_trench","pos":[1077,1998,0]}}
   ],
-  "ladder_only_roofs": []
+  "ladder_only_roofs": [],
+  "kill_zones": [
+    {"id":"V1_trench","source":"route","intent":"kill_zone","note":"the trench floor is seen from both rims; the ladders are the only ways out (a way for a man who dropped, not a plan)","center":[0,0,-300],"line":[[-2700,0,0],[-1600,-1600,0],[-1000,-2600,0],[-550,-2600,0],[-190,-2600,-300],[0,0,-300],[190,2600,-300],[550,2600,0],[1600,1400,0],[2600,0,0]]},
+    {"id":"Z_deck","source":"zone","intent":"kill_zone","set_piece":"cut_crossing","center":[0,0,0],"poly":[[450,-200],[450,200],[-450,200],[-450,-200]]}
+  ]
 }

@@ -64,5 +64,8 @@
     {"id":"HS_09","layer":"ground","pos":[-325,-1625,0],"facing_yaw":11.3,"reveal_normal_m":11.8,"reveal_stealth_m":11.8,"stealth_only":false,"blind":false,"rush_m":1.7,"cover":"wall:W_lane_s","cover_height_cm":330,"threatens":{"line":"route:R_main","route":"R_main","pos":[-200,-1600,0]},"place":"CP_01"},
     {"id":"HS_10","layer":"ground","pos":[1125,-1375,0],"facing_yaw":0.1,"reveal_normal_m":11,"reveal_stealth_m":11,"stealth_only":false,"blind":false,"rush_m":6,"cover":"wall:B_low_N_0","cover_height_cm":300,"threatens":{"line":"route:V1_back","route":"V1_back","pos":[1728,-1374,0]}}
   ],
-  "ladder_only_roofs": []
+  "ladder_only_roofs": [],
+  "kill_zones": [
+    {"id":"Z_lane","source":"zone","intent":"kill_zone","set_piece":"street","center":[-200,-400,0],"poly":[[0,-2000],[0,1200],[-400,1200],[-400,-2000]]}
+  ]
 }
