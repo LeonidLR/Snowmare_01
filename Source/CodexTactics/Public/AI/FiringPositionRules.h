@@ -135,6 +135,12 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	float ForwardMarginCm = 4000.f;
 	/** "defence_use" (true): objective defenders take firing positions before contact (phase b; PmcSquadSubsystem). */
 	bool bDefenceUse = true;
+	/**
+	 * "keep_occupier" (true): on a GROUND objective the sector shooter whose G008 post is nearest the objective takes no firing position: he stays
+	 * on the point as the occupier (brief T-05 phase b: only the hammers take positions, the others keep their G008 role). Diagnosis 11-19: with
+	 * every shooter seated 24 m out on average, the point stood empty and the attackers won by capture (69 of 112 rounds vs 11 on main).
+	 */
+	bool bKeepOccupier = true;
 	/** "reach_before_contact" (true): a ground defender is seated only on a position he reaches before the attackers' expected contact (ReachableBeforeContact); false = no time filter. */
 	bool bReachBeforeContact = true;
 	/** "reach_margin_s" (1.5): the safety margin of that rule, s (order latency, acceleration, a walk that cuts corners the nav path does not). */

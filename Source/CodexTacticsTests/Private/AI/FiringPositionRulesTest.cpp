@@ -456,7 +456,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 
 	const TSharedPtr<FJsonObject> Block = ParseBlock(TEXT(R"JSON({
 		"crossfire_min_deg": 60, "area_samples": 1, "min_covered_share": 2.0, "rim_step_max_cm": 500, "min_spacing_m": 7,
-		"muzzle_height_cm": { "crouching": 90 }, "defence_use": false, "scan_rays": 99, "max_cover_slots": 0, "ignored_key": 5,
+		"muzzle_height_cm": { "crouching": 90 }, "defence_use": false, "keep_occupier": false, "scan_rays": 99, "max_cover_slots": 0, "ignored_key": 5,
 			"min_cover_quality": 2.0, "band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "reach_margin_s": 99, "attacker_speed_factor": 0, "max_path_queries": 500, "reach_before_contact": false, "scan_far_stride": 99, "roof_reach_factor": 7, "kill_zone_reach_factor": 9, "default_reach_cm": 5
 	})JSON"));
 	TestTrue(TEXT("the block parses"), Block.IsValid());
@@ -471,6 +471,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 		TestEqual(TEXT("a muzzle key read"), Read.MuzzleCrouchingCm, 90.f, 0.001f);
 		TestEqual(TEXT("a missing muzzle key keeps the default"), Read.MuzzleStandingCm, 140.f, 0.001f);
 		TestFalse(TEXT("defence_use false read"), Read.bDefenceUse);
+		TestFalse(TEXT("keep_occupier false read"), Read.bKeepOccupier);
 		TestEqual(TEXT("scan_rays clamps to 16"), Read.ScanRays, 16);
 		TestEqual(TEXT("max_cover_slots is at least 1"), Read.MaxCoverSlots, 1);
 		TestEqual(TEXT("min_cover_quality clamps to 1"), Read.MinCoverQuality, 1.f, 0.001f);
@@ -532,6 +533,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	TestEqual(TEXT("shipped max_path_queries"), Shipped.MaxPathQueries, Defaults.MaxPathQueries);
 	TestTrue(TEXT("shipped reach_before_contact"), Shipped.bReachBeforeContact == Defaults.bReachBeforeContact);
 	TestTrue(TEXT("shipped defence_use"), Shipped.bDefenceUse == Defaults.bDefenceUse);
+	TestTrue(TEXT("shipped keep_occupier"), Shipped.bKeepOccupier == Defaults.bKeepOccupier);
 	return true;
 }
 

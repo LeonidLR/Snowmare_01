@@ -3440,6 +3440,32 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		return;
 	}
 	Shooters.Sort([&Posts](int32 A, int32 B) { return Posts[A].Index < Posts[B].Index; });
+	// On the ground the shooter whose G008 post is nearest the objective stays on it as the occupier (keep_occupier; the brief's "others keep
+	// their G008 role"): with every shooter seated out on the approach the point stood empty and the attackers won by capture.
+	if (!Team.Defence.bRoof && Config.bKeepOccupier)
+	{
+		int32 Nearest = INDEX_NONE;
+		double NearestDistSq = TNumericLimits<double>::Max();
+		for (int32 Slot = 0; Slot < Shooters.Num(); ++Slot)
+		{
+			const double DistSq = FVector::DistSquared(Posts[Shooters[Slot]].Location, Objective.Location);
+			if (DistSq < NearestDistSq)
+			{
+				NearestDistSq = DistSq;
+				Nearest = Slot;
+			}
+		}
+		if (Nearest != INDEX_NONE)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: squad index %d keeps his G008 post as the objective occupier (%.0f cm from the point)"), TeamId,
+				Posts[Shooters[Nearest]].Index, FMath::Sqrt(NearestDistSq));
+			Shooters.RemoveAt(Nearest);
+		}
+		if (Shooters.IsEmpty())
+		{
+			return;
+		}
+	}
 	auto MemberOf = [&Members](int32 SquadIndex) -> AOperativeCharacter*
 	{
 		for (AOperativeCharacter* Member : Members)

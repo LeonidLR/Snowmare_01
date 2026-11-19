@@ -165,6 +165,11 @@ namespace FiringPositionRules
 		{
 			Out.bDefenceUse = bUse;
 		}
+		bool bKeep = Out.bKeepOccupier;
+		if (Block.TryGetBoolField(TEXT("keep_occupier"), bKeep))
+		{
+			Out.bKeepOccupier = bKeep;
+		}
 		return Out;
 	}
 
