@@ -516,7 +516,11 @@ def build_task_board(
             last_chat_ts=chat_info["last_chat_ts"],
             now_ts=ref_now,
         )
-        title_ru = reg_matches[0]["name"] if reg_matches else ""
+        # 2026-11-19: a register name replaces the task title only on a strong match (the register doc named in the task);
+        # the old token match gave wrong names (T-06 "hold" -> "Удержать линию любой ценой").
+        strong = [rm for rm in reg_matches if rm.get("doc") and len(os.path.basename(rm["doc"]).replace(".md", "")) >= 5
+                  and os.path.basename(rm["doc"]).replace(".md", "").lower() in (task["slug"].lower() + " " + task["title"].lower())]
+        title_ru = strong[0]["name"] if strong and not re.search("[Ѐ-ӿ]", task["title"]) else ""
         area = reg_matches[0]["group_title"] if reg_matches else "Tools / Port"
         board_tasks.append(
             {
