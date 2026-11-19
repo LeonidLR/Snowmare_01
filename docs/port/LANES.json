@@ -11,7 +11,7 @@
    "max_quiet_min": 45,
    "worktree": "C:/Work/CodexTactics-slot1",
    "machine": "worker",
-   "reason": "iteration 3 5544431a gated + merged into worker/lead-2026-11-20 (2d2ad1e9); acceptance partly met (idle yes, on_pos / crossfire short): main lead review",
+   "reason": "NOT ready (Fable review: defenders win less, tuned on test seeds); paired A/B vs main on seeds 1060-1209 running",
    "max_wait_min": 900
   },
   {
@@ -45,9 +45,9 @@
    "topic": "claude-S022",
    "state": "active",
    "max_quiet_min": 60,
-   "worktree": "C:/Work/CodexTactics-slot1",
+   "worktree": "C:/Work/CodexTactics-slot1/Saved/wt-bgen",
    "machine": "worker",
-   "reason": "parapet firing gaps per docs/design/levelgen/FIRING_GAPS_HANDOVER.md (designer 11-19: bgen + enemies first)"
+   "reason": "firing gaps done + gated (worker/bgen-gate); S2.3 block archetype in progress (worktree Saved/wt-bgen)"
   },
   {
    "id": "worker-night",

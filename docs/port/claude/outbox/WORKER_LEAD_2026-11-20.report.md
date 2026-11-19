@@ -85,6 +85,24 @@ with a caveat; min_covered_share 0.22 - supported, forward_margin 4000 - not; "a
 (main vs T-05 on the night loop's seeds, twice) when the machine is free; tune on 1-10, accept held-out; one change per run; reports
 always show win rate, seed sets, all baseline cycles and intervals; brief deviations as questions before a merge.
 
+## Building generator - parapet FIRING GAPS done (worker/bgen-firing-gaps 24db207e / ad5ee46f / 4daabfce; gate ref worker/bgen-gate)
+Designer order 11-19 evening: generator + smart enemies first, Training Ground after (T-021 was taken out of that order - my mistake).
+- Planner `firingGaps.ts` (159 gaps on 22 overwatch roofs of X4), analysis v2 (overwatch spots on the rim, outward only; new
+  `rim_corner_clear_m` 1.65 so spots keep off the corner posts: 40 of 44 spots link to a gap, 4 stand at a ladder top), tactical export
+  gap ids, builder spans + 60 cm sills (tags parapet / firing_gap / CodexMantleEdge), `levelgen:firing-gaps` script, docs section 8.
+- Tests: TS 640 -> 650, typecheck clean; Python builder 53 -> 59; engine (gate ref) TacticalMap 11/11, AI 123/123.
+- X4 refreshed ONLY on the bgen branches (accepted layout + tactical file); L_Gen_Depot_X4.umap rebuilt only on worker/bgen-gate
+  (throwaway = bgen + worker/t05-firing-positions). main's X4 files are the T-05 / T-06 baseline and are untouched.
+- Gate (worker/bgen-gate): build, map build, FiringPositionSmoke / TacticalPmcSmoke / LevelGenRouteSmoke / TacticalMapSmoke /
+  PmcArenaTacticalSmoke PASS. Kneeling (sniper) roof-edge positions over the 5 areas: 0 (T-05 report) -> 7; crouched real shots
+  over the sill `SHOT: ok`. Still 26 of 33 sniper-tried spots blocked: a spot sees only through its own 90 cm gap.
+- The gate needed a minimal C++ change on the T-05 side (2ed6ee5d, gate ref only): TacticalMapRules reads the spot's `gap` +
+  `firing_gaps`; GatherRoofs stands a gap spot at the gap's stand point. **Port it when T-05 and bgen meet in main.**
+- Merge note: tacticalMap.test.ts pins the committed X4 tactical file to the layout analysis, so the analysis change cannot reach
+  main without the X4 refresh.
+**Now:** S2.3 block archetype (Sonnet, TS only, worktree C:/Work/CodexTactics-slot1/Saved/wt-bgen so it never switches slot1);
+paired A/B of T-05 5544431a vs main on the night loop's own seeds 1060-1209 (150 per scenario) running in slot1.
+
 ## T-021 cold indoors - DONE, merged into this branch (34c832ab)
 worker/t021-cold-indoors 86ef2882 (from claude/cold-indoors 01c6cb01 + main). Leafless doorway = open (designer 11-19), test 6/14.
 Gate: build OK; ColdShelter 11/11, Environment 114, LevelJson 7, PmcDefence 7, Pmc 70; ColdIndoors / Cold / Environment / Weather / WarmIdle /
