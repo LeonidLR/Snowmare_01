@@ -16,6 +16,7 @@ import type { ZoneKind } from '../movement/layout.ts';
 import type { Profile } from './profile.ts';
 import { toUE } from './profile.ts';
 import type {
+  Archetype,
   BuildingFloor,
   CoverKind,
   Door,
@@ -51,6 +52,7 @@ import {
   OPENING_DEFAULTS,
   STAIR_APPROACH_CM,
   STAIR_RUN_PER_RISE,
+  TEMPLATE_ARCHETYPE,
   ladderForLevels,
   levelZ,
   rect,
@@ -207,12 +209,12 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
   let shedDoor: Vec2 = [0, 0];
 
   // facades along the NW edge (closed tall blocks)
-  addBuilding(d, 'B_office_w', fit(region.offices), { height: 900, floors: 3, hollow: true, enterable: false, roof_walkable: false, set_piece: 'facade' }, random);
+  addBuilding(d, 'B_office_w', fit(region.offices), { height: 900, floors: 3, hollow: true, enterable: false, roof_walkable: false, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.facade }, random);
   // the pipe yard: a ladder overwatch platform (B2) + racks as covers
   {
     const r = fit(region.pipeYard);
     const plat: Rect = [[r[0][0] + 2, r[0][1] + 2], [Math.min(r[1][0], r[0][0] + 14), Math.min(r[1][1], r[0][1] + 10)]];
-    const b = addBuilding(d, 'B_gallery', plat, { height: LEVEL_HEIGHT, floors: 1, enterable: false, roof_walkable: V >= 1, set_piece: 'ladder_overwatch' }, random);
+    const b = addBuilding(d, 'B_gallery', plat, { height: LEVEL_HEIGHT, floors: 1, enterable: false, roof_walkable: V >= 1, set_piece: 'ladder_overwatch', archetype: TEMPLATE_ARCHETYPE.ladder_overwatch }, random);
     if (V >= 1) addLadderAt(d, b, 'south', random);
     d.zones.push(zone('Z_pipeyard', 'open', 'ladder_overwatch', r, 3.5, ['crate', 'barrel', 'boiler']));
   }
@@ -223,7 +225,7 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
     compN = r[0][1];
     fenceRect(d, 'F_compound', r, [{ side: 'north', at: compGateX, width: GATE_W }]);
     const shed: Rect = [[r[0][0] + 1.5, r[0][1] + 2], [r[0][0] + 13, r[1][1] - 1.5]];
-    const shedB = addBuilding(d, 'B_shed', shed, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'one_entry_compound', doorSides: ['east'], windowSides: ['east', 'north'], partitionRooms: true }, random);
+    const shedB = addBuilding(d, 'B_shed', shed, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'one_entry_compound', archetype: TEMPLATE_ARCHETYPE.one_entry_compound, doorSides: ['east'], windowSides: ['east', 'north'], partitionRooms: true }, random);
     shedDoor = shedB.doors[0]?.pos ?? [shed[1][0], (shed[0][1] + shed[1][1]) / 2];
     d.zones.push(zone('Z_compound', 'open', 'one_entry_compound', r, 3.5, ['crate', 'barrel', 'wreck']));
     d.ambush_points.push({ id: id('AMB_shed'), pos: [shed[1][0] + 1, shed[1][1] - 1] });
@@ -232,17 +234,17 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
   // yard (a small one-entry compound). The tall halls' roofs sit on HALL_ROOF_LEVEL (game designer 2026-11-02: the view from the roofs).
   {
     const r = fit(region.sawtooth);
-    addBuilding(d, 'B_hall_n', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: true, set_piece: 'industrial_hall', doorSides: ['south', 'south'], windowSides: ['south', 'north'], roofHatch: V >= 2 }, random);
+    addBuilding(d, 'B_hall_n', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: true, set_piece: 'industrial_hall', archetype: TEMPLATE_ARCHETYPE.industrial_hall, doorSides: ['south', 'south'], windowSides: ['south', 'north'], roofHatch: V >= 2 }, random);
     const y = fit(region.boilerYard);
     fenceRect(d, 'F_boilers', y, [{ side: 'south', at: (y[0][0] + y[1][0]) / 2, width: GATE_W }]);
     d.zones.push(zone('Z_boilers', 'open', 'one_entry_compound', y, 3.0, ['boiler', 'barrel']));
   }
   // the small office (low, a door on the south face, partitioned interior) and the alley between it and the warehouse lot
-  addBuilding(d, 'B_office_s', fit(region.office), { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'facade', doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true }, random);
+  addBuilding(d, 'B_office_s', fit(region.office), { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.small_office, doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true }, random);
   // the warehouse (enterable, roof, stairwell) + its fenced lot (one gate on the street)
   {
     const r = fit(region.warehouse);
-    addBuilding(d, 'B_warehouse', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: true, set_piece: 'warehouse', doorSides: ['west', 'south'], windowSides: ['west', 'south'], roofHatch: V >= 2 }, random);
+    addBuilding(d, 'B_warehouse', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: true, set_piece: 'warehouse', archetype: TEMPLATE_ARCHETYPE.warehouse, doorSides: ['west', 'south'], windowSides: ['west', 'south'], roofHatch: V >= 2 }, random);
     const lot = fit(region.warehouseLot);
     lotGateX = (lot[0][0] + lot[1][0]) / 2 + jit(4);
     fenceRect(d, 'F_lot', lot, [{ side: 'south', at: lotGateX, width: GATE_W }, { side: 'north', at: (lot[0][0] + lot[1][0]) / 2, width: GATE_W }]);
@@ -263,7 +265,7 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
     const lotS = Math.min(r[0][1] + 20, r[1][1] - 14);
     const pumpE = r[1][0] - 3 + jit(1);
     const pump: Rect = [[pumpE - 12, lotS + 4], [pumpE, Math.min(lotS + 14, r[1][1] - 1.5)]];
-    addBuilding(d, 'B_pump', pump, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'tank_farm', doorSides: ['west'], windowSides: ['west', 'south'] }, random);
+    addBuilding(d, 'B_pump', pump, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'tank_farm', archetype: TEMPLATE_ARCHETYPE.tank_farm, doorSides: ['west'], windowSides: ['west', 'south'] }, random);
     fenceRect(d, 'F_tanks', [[r[0][0], r[0][1]], [r[1][0], lotS]], [{ side: 'north', at: xCross, width: GATE_W + 2 }, { side: 'south', at: xCross, width: GATE_W + 2 }, { side: 'east', at: (r[0][1] + lotS) / 2, width: GATE_W }]);
     d.zones.push(zone('Z_tanks', 'open', 'tank_farm', r, 3.5, ['barrel', 'crate', 'boiler']));
   }
@@ -281,7 +283,7 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
   // the ruined two-level factory: 2 floors, roof holes (V >= 3), floor holes, an external stair on the south face, an annex with wall holes
   {
     const r = fit(region.ruin);
-    const b = addBuilding(d, 'B_ruin', r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: V >= 1, stairwell: false, set_piece: 'ruined_two_level', doorSides: ['west', 'south'], windowSides: ['west', 'south'] }, random);
+    const b = addBuilding(d, 'B_ruin', r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: V >= 1, stairwell: false, set_piece: 'ruined_two_level', archetype: TEMPLATE_ARCHETYPE.ruined_two_level, doorSides: ['west', 'south'], windowSides: ['west', 'south'] }, random);
     if (V >= 1) {
       // the external stair climbs along the south face (a 35 deg ramp sized to the level difference: the roof on level `floors` =
       // 2 -> 6 m rise = 8.6 m run) to `mid`, then a flat landing (mid -> top) crosses the wall's top onto the roof
@@ -340,13 +342,13 @@ export function generateLayoutWithLots(o: GenerateOptions): GenerateWithLots {
       b.floors_detail = [{ floor: 1, height_z: levelZ(1), gaps: f1Gaps, rooms: b.rooms.filter((rm) => rm.floor === 1) }];
     }
     const a = fit(region.ruinAnnex);
-    addBuilding(d, 'B_ruin_annex', a, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'ruined_two_level', doorSides: ['west', 'south', 'north'], windowSides: ['west', 'east'] }, random);
+    addBuilding(d, 'B_ruin_annex', a, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'ruined_two_level', archetype: TEMPLATE_ARCHETYPE.ruined_two_level, doorSides: ['west', 'south', 'north'], windowSides: ['west', 'east'] }, random);
     d.zones.push(zone('Z_ruin', 'open', 'ruined_two_level', [[a[0][0] - 2, r[0][1] - 2], [r[1][0] + 2, a[1][1] + 2]], 2.5, ['crate', 'barrel']));
   }
   // the Steel Works hall (enterable, roof on +3, stairwell), two factory chimneys (tall obstacles, never climbable), the annex racks
   {
     const r = fit(region.steel);
-    addBuilding(d, 'B_steelworks', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: true, set_piece: 'industrial_hall', doorSides: ['south', 'west'], windowSides: ['south', 'west'] }, random);
+    addBuilding(d, 'B_steelworks', r, { height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: V >= 1, stairwell: true, set_piece: 'industrial_hall', archetype: TEMPLATE_ARCHETYPE.industrial_hall, doorSides: ['south', 'west'], windowSides: ['south', 'west'] }, random);
     // the two factory chimneys: one at the hall's NE corner (over the north street's end), one at its SW (over the south street).
     // Game designer 2026-11-02: chimneys are NOT ladder towers - a tall closed obstacle that blocks sight, no ladder, no walkable
     // top, no height level of its own (validateGenLayout refuses a climbable chimney).
@@ -784,6 +786,14 @@ export interface BuildingSpec {
   loopholeSides?: Side[];
   partitionRooms?: boolean;
   roofHatch?: boolean;
+  /**
+   * Stair cores of a building that gets one (S2_ROOMS_PLAN.md section 3: two for the hospital and long residential blocks,
+   * designer 2026-11-19): a count spread from the low to the high end of the long axis, or explicit positions. Default 1 = ['low']
+   * (S1). A core that does not fit (or would overlap a neighbour / an earlier core on both sides) is skipped.
+   */
+  cores?: number | CoreAt[];
+  /** building-archetypes.md section 1, from the lot template (TEMPLATE_ARCHETYPE); informational until S2. */
+  archetype?: Archetype;
 }
 
 export { addWall, fenceRect, addBuilding, addLadderAt, splitWall };
@@ -796,6 +806,16 @@ export const STAIR_APPROACH = STAIR_APPROACH_CM / 100; // free box in front of a
 /** The wall between the two lanes of a switchback core (BUILDING_GENERATOR.md 4.2): fills the 10 cm lane gap, no door. */
 export const STAIR_LANE_WALL_T = 10;
 const WALL_INNER = BUILDING_T / 200;   // the perimeter wall's half thickness: its inner face is this far inside the footprint
+
+/** Where a stair core sits along the long axis: the low / high end, or metres from the low inner wall face to the core box. */
+export type CoreAt = 'low' | 'high' | number;
+export interface StairCoreOptions {
+  at?: CoreAt;
+  /** The core's number in its building: 0 (default) keeps the S1 ids, k > 0 prefixes the stair ids with `c<k>_`. */
+  index?: number;
+}
+/** A core box's length along the long axis (metres): both approach boxes + one flight's run. */
+export const stairCoreLength = (): number => 2 * STAIR_APPROACH + STAIR_RUN_PER_RISE * (LEVEL_HEIGHT / 100);
 
 export interface StairCore {
   stairs: Stair[];
@@ -824,15 +844,21 @@ export interface StairCore {
  * WALL_INNER) so the approach boxes and the 10 cm lane gap are exact; the kit's stair module is placed by these points.
  * Returns null when the footprint is too short / narrow for a 35-degree flight with both approach boxes (inside length >=
  * 2 x STAIR_APPROACH + run: 4.0 + 4.29 = 8.29 m plus the wall faces).
+ * `opts.at` places the core along the long axis (S2_ROOMS_PLAN.md section 7 item 2): 'low' (default, the low-end corner as in
+ * S1), 'high' (flush with the high-end inner face) or metres from the low inner face to the core box; outside the wall faces -> null.
+ * `opts.index` > 0 (a building's second, third... core) prefixes the stair ids with `c<index>_`; 0 keeps the S1 ids.
  */
-export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Side[] = [], others: readonly Rect[] = []): StairCore | null {
+export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Side[] = [], others: readonly Rect[] = [],
+  opts: StairCoreOptions = {}): StairCore | null {
   if (upTo <= 0) return null;
   const [[x0, y0], [x1, y1]] = r;
   const alongY = y1 - y0 >= x1 - x0;
   const run = STAIR_RUN_PER_RISE * (LEVEL_HEIGHT / 100);
   const lo = (alongY ? y0 : x0) + WALL_INNER, hi = (alongY ? y1 : x1) - WALL_INNER;
-  const a0 = lo + STAIR_APPROACH, a1 = a0 + run;
-  if (a1 + STAIR_APPROACH > hi + 1e-6) return null;
+  const at = opts.at ?? 'low';
+  const start = at === 'low' ? lo : at === 'high' ? hi - stairCoreLength() : lo + at; // the core box's low end
+  const a0 = start + STAIR_APPROACH, a1 = a0 + run;
+  if (start < lo - 1e-6 || a1 + STAIR_APPROACH > hi + 1e-6) return null;
   const lanes = upTo > 1 ? 2 : 1;
   const coreW = 0.05 + STAIR_FLIGHT_W + (lanes - 1) * STAIR_LANE_PITCH + 0.05;
   const crossLo = (alongY ? x0 : y0) + WALL_INNER, crossHi = (alongY ? x1 : y1) - WALL_INNER;
@@ -844,7 +870,7 @@ export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Si
   const boxFor = (sd: Side): Rect => {
     const low = sd === 'west' || sd === 'north';
     const bMin = low ? crossLo : crossHi - coreW, bMax = low ? crossLo + coreW : crossHi;
-    return alongY ? [[bMin, lo], [bMax, a1 + STAIR_APPROACH]] : [[lo, bMin], [a1 + STAIR_APPROACH, bMax]];
+    return alongY ? [[bMin, start], [bMax, a1 + STAIR_APPROACH]] : [[start, bMin], [a1 + STAIR_APPROACH, bMax]];
   };
   const clear = (sd: Side) => !others.some((o) => rect.overlaps(boxFor(sd), o, -0.01));
   const side = sides.find((sd) => !avoidSides.includes(sd) && clear(sd)) ?? sides.find(clear);
@@ -854,13 +880,14 @@ export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Si
     : crossHi - 0.05 - STAIR_FLIGHT_W / 2 - k * STAIR_LANE_PITCH;
   const P = (along: number, cross: number): Vec2 => (alongY ? [cross, along] : [along, cross]);
   const stairs: Stair[] = [];
+  const idBase = opts.index ? `${bid}_c${opts.index}` : bid;
   for (let n = 0; n < upTo; n++) {
     const k = n % 2, up = n % 2 === 0;
-    stairs.push({ id: `${bid}_stair_${n}`, pos: P(up ? a0 : a1, laneC(k)), from: n, to: n + 1, kind: 'stairwell', top: P(up ? a1 : a0, laneC(k)) });
+    stairs.push({ id: `${idBase}_stair_${n}`, pos: P(up ? a0 : a1, laneC(k)), from: n, to: n + 1, kind: 'stairwell', top: P(up ? a1 : a0, laneC(k)) });
   }
   const cMin = nearLow ? crossLo : crossHi - coreW, cMax = nearLow ? crossLo + coreW : crossHi;
   const R = (aMin: number, aMax: number, bMin: number, bMax: number): Rect => (alongY ? [[bMin, aMin], [bMax, aMax]] : [[aMin, bMin], [aMax, bMax]]);
-  const box = R(lo, a1 + STAIR_APPROACH, cMin, cMax);
+  const box = R(start, a1 + STAIR_APPROACH, cMin, cMax);
   const flightRect = (st: Stair): Rect => {
     const along = (p: Vec2) => (alongY ? p[1] : p[0]), cross = (p: Vec2) => (alongY ? p[0] : p[1]);
     const c = cross(st.pos);
@@ -870,6 +897,7 @@ export function planStairCore(bid: string, r: Rect, upTo: number, avoidSides: Si
   const voidRects: Rect[] = [
     nearLow ? R(fLo, fHi, cMax, gHi) : R(fLo, fHi, gLo, cMin),
     R(a1 + STAIR_APPROACH, fHi, cMin, cMax),
+    ...(start > lo + 1e-6 ? [R(fLo, start, cMin, cMax)] : []), // a core off the low end: the strip before it
   ].filter((v) => rect.size(v)[0] > 0.05 && rect.size(v)[1] > 0.05);
   const mezzanine = R(lo, hi, cMin, cMax);
   const mezzanineVoid = [voidRects[0]];
@@ -905,36 +933,111 @@ export function stairChainUp(b: { id: string; floors: number; stairs: Stair[] },
   return { points, layers, links, flights };
 }
 
-/** A rectangular building: perimeter walls, openings (doors, windows, loopholes), partitions, rooms, roof parapets and hatches. */
-function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): DraftBuilding {
-  const [[x0, y0], [x1, y1]] = r;
-  const doors: Door[] = [];
-  const openings: WallOpening[] = [];
-  const partitions: GenPartition[] = [];
-  const floors_detail: BuildingFloor[] = [];
-  const hatches: RoofHatch[] = [];
-  const parapets: RoofParapet[] = [];
-  const rooms: GenRoom[] = [];
-  const mantle_edges: MantleEdge[] = [];
-  const perSide: Record<Side, [number, number][]> = { north: [], south: [], east: [], west: [] };
-  const walkableFloors = s.hollow ? 1 : s.floors;
-  const OPPOSITE: Record<Side, Side> = { north: 'south', south: 'north', east: 'west', west: 'east' };
-  const doorSides = [...(s.doorSides ?? ['south'])];
-  if (s.enterable && (x1 - x0) * (y1 - y0) > 150 && new Set(doorSides).size < 2) doorSides.push(OPPOSITE[doorSides[0]]);
-  // the stair core first (BUILDING_GENERATOR.md 3: it constrains windows, rooms and slabs)
-  // P1 (2026-11-18): every enterable multi-storey building gets a core; a hall's core reaches its roof, or only its mezzanine
-  // an explicit `stairwell: false` (hand-shaped ruins with external stairs / holes) is kept
-  const wantCore = s.enterable && (s.stairwell ?? (!s.hollow && s.floors >= 2));
-  const coreTop = s.hollow ? (s.roof_walkable ? s.floors : 1) : (s.roof_walkable ? s.floors : s.floors - 1);
-  // only buildings placed EARLIER are known here; a later neighbour overlapping this core is caught by the validator
-  // (stair_in_other_building, order-independent) - API review 4afb04f6
-  const core = wantCore ? planStairCore(bid, r, coreTop, doorSides, d.buildings.map((o) => o.footprint)) : null;
+/**
+ * The working state of one addBuilding call (metres, draft frame), threaded through its stages. The stages mutate it in order;
+ * `emitBuilding` turns it into the DraftBuilding.
+ */
+interface BuildingPlan {
+  d: Draft;
+  bid: string;
+  r: Rect;
+  s: BuildingSpec;
+  random: () => number;
+  x0: number; y0: number; x1: number; y1: number;
+  /** The exterior door sides (the requested ones + the opposite side above 150 m2). */
+  doorSides: Side[];
+  /** Storeys with a walkable floor of their own (a hall: only its ground). */
+  walkableFloors: number;
+  /** The stair cores, index 0 = the S1 core (its ids are unprefixed). Empty when the building has none. */
+  cores: StairCore[];
+  /** The exterior door gaps per wall (along-wall intervals), filled by placeExteriorDoors. */
+  perSide: Record<Side, [number, number][]>;
+  doors: Door[];
+  openings: WallOpening[];
+  partitions: GenPartition[];
+  floors_detail: BuildingFloor[];
+  hatches: RoofHatch[];
+  parapets: RoofParapet[];
+  rooms: GenRoom[];
+  mantle_edges: MantleEdge[];
+  stairs: Stair[];
+}
 
-  // 1. Doors (>= 2 exterior doors on different sides for buildings > 150 m2: BUILDING_GENERATOR.md 3 step 5)
-  for (const side of s.enterable ? doorSides : []) {
+const OPPOSITE_SIDE: Record<Side, Side> = { north: 'south', south: 'north', east: 'west', west: 'east' };
+
+/**
+ * A rectangular building: perimeter walls, openings (doors, windows, loopholes), partitions, rooms, roof parapets and hatches.
+ * Split into named stages (S2_ROOMS_PLAN.md section 7 item 2). The S2 order is shell -> cores -> rooms -> doors -> windows ->
+ * roof -> slabs (3.2); the stages below still run in the S1 order (openings before rooms) so the output - and the shared
+ * `random` stream, drawn only by placeExteriorDoors - is unchanged. Window and parapet mantle edges are emitted with them.
+ */
+function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): DraftBuilding {
+  const p = planShell(d, bid, r, s, random);
+  planCores(p);
+  placeExteriorDoors(p);
+  placeWindows(p);
+  placeLoopholes(p);
+  buildPerimeterWalls(p);
+  placeStairs(p);
+  planRooms(p);
+  addHallLandings(p);
+  fitWindows(p.r, p.openings, p.mantle_edges, p.partitions, p.cores, p.perSide);
+  addRoofParapets(p);
+  addRoofHatch(p);
+  buildSlabs(p);
+  return emitBuilding(p);
+}
+
+/** Stage 1, shell: the footprint, the empty element lists and the exterior door sides (>= 2 sides above 150 m2: BUILDING_GENERATOR.md 3 step 5). */
+function planShell(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): BuildingPlan {
+  const [[x0, y0], [x1, y1]] = r;
+  const doorSides = [...(s.doorSides ?? ['south'])];
+  if (s.enterable && (x1 - x0) * (y1 - y0) > 150 && new Set(doorSides).size < 2) doorSides.push(OPPOSITE_SIDE[doorSides[0]]);
+  return {
+    d, bid, r, s, random, x0, y0, x1, y1, doorSides,
+    walkableFloors: s.hollow ? 1 : s.floors,
+    cores: [],
+    perSide: { north: [], south: [], east: [], west: [] },
+    doors: [], openings: [], partitions: [], floors_detail: [], hatches: [], parapets: [], rooms: [], mantle_edges: [], stairs: [],
+  };
+}
+
+/** The core positions a `cores` request asks for: a count is spread evenly from 'low' to 'high' along the long axis. */
+function coreSlots(r: Rect, req: BuildingSpec['cores']): CoreAt[] {
+  if (Array.isArray(req)) return req;
+  const n = Math.max(1, Math.floor(req ?? 1));
+  if (n === 1) return ['low'];
+  const [[x0, y0], [x1, y1]] = r;
+  const free = Math.max(y1 - y0, x1 - x0) - 2 * WALL_INNER - stairCoreLength();
+  return Array.from({ length: n }, (_, k): CoreAt => (k === 0 ? 'low' : k === n - 1 ? 'high' : (free * k) / (n - 1)));
+}
+
+/**
+ * Stage 2, core(s) - first, as BUILDING_GENERATOR.md 3 wants (they constrain windows, rooms and slabs).
+ * P1 (2026-11-18): every enterable multi-storey building gets a core; a hall's core reaches its roof, or only its mezzanine;
+ * an explicit `stairwell: false` (hand-shaped ruins with external stairs / holes) is kept. Only buildings placed EARLIER are
+ * known here; a later neighbour overlapping a core is caught by the validator (stair_in_other_building, order-independent) -
+ * API review 4afb04f6. A later core also keeps out of the earlier cores' boxes.
+ */
+function planCores(p: BuildingPlan): void {
+  const { s } = p;
+  const wantCore = s.enterable && (s.stairwell ?? (!s.hollow && s.floors >= 2));
+  if (!wantCore) return;
+  const coreTop = s.hollow ? (s.roof_walkable ? s.floors : 1) : (s.roof_walkable ? s.floors : s.floors - 1);
+  const neighbours = p.d.buildings.map((o) => o.footprint);
+  for (const at of coreSlots(p.r, s.cores)) {
+    const core = planStairCore(p.bid, p.r, coreTop, p.doorSides, [...neighbours, ...p.cores.map((c) => c.box)], { at, index: p.cores.length });
+    if (core) p.cores.push(core);
+  }
+}
+
+/** Stage 3, exterior doors on the door sides (the only stage that draws from `random`: one draw per door). */
+function placeExteriorDoors(p: BuildingPlan): void {
+  const { bid, s, x0, y0, x1, y1, doors, openings, perSide } = p;
+  for (const side of s.enterable ? p.doorSides : []) {
     const horizontal = side === 'north' || side === 'south';
     const lo = horizontal ? x0 : y0, hi = horizontal ? x1 : y1;
-    const at = lo + (hi - lo) * (0.25 + 0.5 * random());
+    const at = lo + (hi - lo) * (0.25 + 0.5 * p.random());
     perSide[side].push([at - DOOR_W / 2, at + DOOR_W / 2]);
     const pos: Vec2 = horizontal ? [at, side === 'north' ? y0 : y1] : [side === 'west' ? x0 : x1, at];
     const doorYaw = side === 'north' ? 270 : side === 'south' ? 90 : side === 'west' ? 180 : 0;
@@ -951,8 +1054,12 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
       yaw: doorYaw,
     });
   }
+}
 
-  // 2. Windows on facades (emitted on walkable storeys only so units can stand behind them)
+/** Stage 4, windows on facades (walkable storeys only so units can stand behind them) + their mantle edges. */
+function placeWindows(p: BuildingPlan): void {
+  const { bid, s, x0, y0, x1, y1, openings, mantle_edges, perSide, walkableFloors } = p;
+  const core = p.cores[0] ?? null;
   for (const side of s.windowSides ?? []) {
     const horizontal = side === 'north' || side === 'south';
     const lo = horizontal ? x0 : y0, hi = horizontal ? x1 : y1;
@@ -998,8 +1105,11 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
       }
     }
   }
+}
 
-  // 3. Fortified Loopholes
+/** Stage 5, fortified loopholes. */
+function placeLoopholes(p: BuildingPlan): void {
+  const { bid, s, x0, y0, x1, y1, openings, perSide, walkableFloors } = p;
   for (const side of s.loopholeSides ?? []) {
     const horizontal = side === 'north' || side === 'south';
     const lo = horizontal ? x0 : y0, hi = horizontal ? x1 : y1;
@@ -1029,255 +1139,279 @@ function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: ()
       }
     }
   }
+}
 
-  // 4. Perimeter Walls
+/** Stage 6, the perimeter walls, split at the exterior door gaps. */
+function buildPerimeterWalls(p: BuildingPlan): void {
+  const { d, bid, s, x0, y0, x1, y1, perSide } = p;
   splitWall(d, `${bid}_N`, [x0, y0], [x1, y0], perSide.north, s.height, BUILDING_T, 'building', 0, bid);
   splitWall(d, `${bid}_S`, [x0, y1], [x1, y1], perSide.south, s.height, BUILDING_T, 'building', 0, bid);
   splitWall(d, `${bid}_W`, [x0, y0], [x0, y1], perSide.west, s.height, BUILDING_T, 'building', 0, bid);
   splitWall(d, `${bid}_E`, [x1, y0], [x1, y1], perSide.east, s.height, BUILDING_T, 'building', 0, bid);
+}
 
-  // 5. Stairs - a switchback core (BUILDING_GENERATOR.md 4.2, causes A / B of the 2026-11-18 audit): one 300-rise flight per
-  //    storey, flights alternate between two lanes along the long side wall, a free approach box of STAIR_APPROACH in front of
-  //    every foot and after every top, never a corner pocket. Halls (hollow) get the same core: the landings of their upper
-  //    levels are slabs around the core only (floors_detail 'atrium' gaps = the rest of the hall), so the roof is reached by stairs.
-  const stairs: Stair[] = [];
-  if (core) stairs.push(...core.stairs);
-  // the core's lane walls (4.2): an interior wall one storey high between the two lanes on every storey the flights span
-  for (const lw of core?.laneWalls ?? []) addWall(d, `${bid}_lanewall_f${lw.floor}`, lw.a, lw.b, LEVEL_HEIGHT, STAIR_LANE_WALL_T, 'interior', lw.floor, bid);
+/**
+ * Stage 7, stairs - switchback cores (BUILDING_GENERATOR.md 4.2, causes A / B of the 2026-11-18 audit): one 300-rise flight per
+ * storey, flights alternate between two lanes along the long side wall, a free approach box of STAIR_APPROACH in front of every
+ * foot and after every top, never a corner pocket. Halls (hollow) get the same core: the landings of their upper levels are
+ * slabs around the core only (floors_detail 'atrium' gaps = the rest of the hall), so the roof is reached by stairs. Each core's
+ * lane walls (4.2): an interior wall one storey high between its two lanes on every storey the flights span.
+ */
+function placeStairs(p: BuildingPlan): void {
+  const { d, bid } = p;
+  p.cores.forEach((core, k) => {
+    p.stairs.push(...core.stairs);
+    const pre = k ? `${bid}_c${k}` : bid;
+    for (const lw of core.laneWalls) addWall(d, `${pre}_lanewall_f${lw.floor}`, lw.a, lw.b, LEVEL_HEIGHT, STAIR_LANE_WALL_T, 'interior', lw.floor, bid);
+  });
+}
 
-  // 6. Partitions and Rooms (BSP split for enterable buildings)
+/** Stage 8, partitions and rooms (a BSP split for enterable partitioned buildings, else one room per storey). */
+function planRooms(p: BuildingPlan): void {
+  const { d, bid, r, s, x0, y0, x1, y1, openings, partitions, rooms, perSide, walkableFloors } = p;
   const bw = x1 - x0, bd = y1 - y0;
-  if (s.enterable) {
-    for (let f = 0; f < walkableFloors; f++) {
-      if (!s.hollow && s.partitionRooms && (bw >= 8 || bd >= 6)) {
-        // the whole core (both lanes + the approach boxes) is a keep-out for partitions on every storey it serves
-        const stairBoxes: Rect[] = core ? [core.box] : [];
-        const extDoorXs = f === 0 ? [...perSide.north, ...perSide.south].map(([a, b]) => (a + b) / 2) : [];
-        const extDoorYs = f === 0 ? [...perSide.west, ...perSide.east].map(([a, b]) => (a + b) / 2) : [];
+  if (!s.enterable) return;
+  for (let f = 0; f < walkableFloors; f++) {
+    if (!s.hollow && s.partitionRooms && (bw >= 8 || bd >= 6)) {
+      // every core (both lanes + the approach boxes) is a keep-out for partitions on every storey it serves
+      const stairBoxes: Rect[] = p.cores.map((c) => c.box);
+      const extDoorXs = f === 0 ? [...perSide.north, ...perSide.south].map(([a, b]) => (a + b) / 2) : [];
+      const extDoorYs = f === 0 ? [...perSide.west, ...perSide.east].map(([a, b]) => (a + b) / 2) : [];
 
-        const blockedXs = [...extDoorXs];
-        const blockedYs = [...extDoorYs];
+      const blockedXs = [...extDoorXs];
+      const blockedYs = [...extDoorYs];
 
-        const leafBoxes: Rect[] = [];
-        let partIdx = 0;
-        const maxDepth = bw >= 12 && bd >= 9 ? 2 : 1;
+      const leafBoxes: Rect[] = [];
+      let partIdx = 0;
+      const maxDepth = bw >= 12 && bd >= 9 ? 2 : 1;
 
-        const pickSplit = (lo: number, hi: number, blockedCoords: number[], stairRanges: [number, number][]): number | null => {
-          if (hi - lo < 6.5) return null;
-          for (const t of [0.5, 0.42, 0.58, 0.35, 0.65]) {
-            const c = lo + (hi - lo) * t;
-            if (c - lo < 3.0 || hi - c < 3.0) continue;
-            if (blockedCoords.some((bc) => Math.abs(c - bc) < 1.8)) continue;
-            if (stairRanges.some(([s0, s1]) => c >= s0 && c <= s1)) continue;
-            return c;
+      const pickSplit = (lo: number, hi: number, blockedCoords: number[], stairRanges: [number, number][]): number | null => {
+        if (hi - lo < 6.5) return null;
+        for (const t of [0.5, 0.42, 0.58, 0.35, 0.65]) {
+          const c = lo + (hi - lo) * t;
+          if (c - lo < 3.0 || hi - c < 3.0) continue;
+          if (blockedCoords.some((bc) => Math.abs(c - bc) < 1.8)) continue;
+          if (stairRanges.some(([s0, s1]) => c >= s0 && c <= s1)) continue;
+          return c;
+        }
+        return null;
+      };
+
+      const bsp = (box: Rect, depth: number) => {
+        const [[bx0, by0], [bx1, by1]] = box;
+        const rw = bx1 - bx0, rd = by1 - by0;
+        if (depth >= maxDepth || (rw < 6.5 && rd < 6.5)) {
+          leafBoxes.push(box);
+          return;
+        }
+        const tryX = (): number | null => pickSplit(
+          bx0, bx1,
+          blockedXs,
+          stairBoxes.filter((sb) => sb[0][1] < by1 && sb[1][1] > by0).map((sb) => [sb[0][0], sb[1][0]]),
+        );
+        const tryY = (): number | null => pickSplit(
+          by0, by1,
+          blockedYs,
+          stairBoxes.filter((sb) => sb[0][0] < bx1 && sb[1][0] > bx0).map((sb) => [sb[0][1], sb[1][1]]),
+        );
+
+        const preferX = rw >= rd;
+        const splitX = preferX ? tryX() : null;
+        const splitY = splitX === null ? tryY() : null;
+        const fallbackX = splitX === null && splitY === null && !preferX ? tryX() : null;
+        const px = splitX ?? fallbackX;
+
+        if (px !== null) {
+          let doorY = by0 + rd * (depth === 0 && maxDepth > 1 ? 0.28 : 0.5);
+          if (stairBoxes.some((sb) => px >= sb[0][0] && px <= sb[1][0] && doorY >= sb[0][1] - 0.5 && doorY <= sb[1][1] + 0.5)) {
+            doorY = Math.abs(doorY - by0) < Math.abs(by1 - doorY) ? by1 - 1.5 : by0 + 1.5;
           }
-          return null;
-        };
-
-        const bsp = (box: Rect, depth: number) => {
-          const [[bx0, by0], [bx1, by1]] = box;
-          const rw = bx1 - bx0, rd = by1 - by0;
-          if (depth >= maxDepth || (rw < 6.5 && rd < 6.5)) {
-            leafBoxes.push(box);
-            return;
-          }
-          const tryX = (): number | null => pickSplit(
-            bx0, bx1,
-            blockedXs,
-            stairBoxes.filter((sb) => sb[0][1] < by1 && sb[1][1] > by0).map((sb) => [sb[0][0], sb[1][0]]),
-          );
-          const tryY = (): number | null => pickSplit(
-            by0, by1,
-            blockedYs,
-            stairBoxes.filter((sb) => sb[0][0] < bx1 && sb[1][0] > bx0).map((sb) => [sb[0][1], sb[1][1]]),
-          );
-
-          const preferX = rw >= rd;
-          const splitX = preferX ? tryX() : null;
-          const splitY = splitX === null ? tryY() : null;
-          const fallbackX = splitX === null && splitY === null && !preferX ? tryX() : null;
-          const px = splitX ?? fallbackX;
-
-          if (px !== null) {
-            let doorY = by0 + rd * (depth === 0 && maxDepth > 1 ? 0.28 : 0.5);
-            if (stairBoxes.some((sb) => px >= sb[0][0] && px <= sb[1][0] && doorY >= sb[0][1] - 0.5 && doorY <= sb[1][1] + 0.5)) {
-              doorY = Math.abs(doorY - by0) < Math.abs(by1 - doorY) ? by1 - 1.5 : by0 + 1.5;
-            }
-            blockedYs.push(doorY);
-            const idx = partIdx++;
-            const pDoorId = `${bid}_partdoor_f${f}_${idx}`;
-            const pDoor: WallOpening = {
-              id: pDoorId, kind: 'door', pos: [px, doorY], floor: f,
-              width: OPENING_DEFAULTS.door.width, sill_height: 0, top_height: 210,
-            };
-            partitions.push({
-              id: `${bid}_part_f${f}_${idx}`, start: [px, by0], end: [px, by1], floor: f, thickness: 20, openings: [pDoor],
-            });
-            splitWall(d, `${bid}_part_f${f}_${idx}`, [px, by0], [px, by1], [[doorY - DOOR_W / 2, doorY + DOOR_W / 2]], LEVEL_HEIGHT, 20, 'interior', f, bid);
-            bsp([[bx0, by0], [px, by1]], depth + 1);
-            bsp([[px, by0], [bx1, by1]], depth + 1);
-          } else if (splitY !== null) {
-            const py = splitY;
-            let doorX = bx0 + rw * (depth === 0 && maxDepth > 1 ? 0.28 : 0.5);
-            if (stairBoxes.some((sb) => py >= sb[0][1] && py <= sb[1][1] && doorX >= sb[0][0] - 0.5 && doorX <= sb[1][0] + 0.5)) {
-              doorX = Math.abs(doorX - bx0) < Math.abs(bx1 - doorX) ? bx1 - 1.5 : bx0 + 1.5;
-            }
-            blockedXs.push(doorX);
-            const idx = partIdx++;
-            const pDoorId = `${bid}_partdoor_f${f}_${idx}`;
-            const pDoor: WallOpening = {
-              id: pDoorId, kind: 'door', pos: [doorX, py], floor: f,
-              width: OPENING_DEFAULTS.door.width, sill_height: 0, top_height: 210,
-            };
-            partitions.push({
-              id: `${bid}_part_f${f}_${idx}`, start: [bx0, py], end: [bx1, py], floor: f, thickness: 20, openings: [pDoor],
-            });
-            splitWall(d, `${bid}_part_f${f}_${idx}`, [bx0, py], [bx1, py], [[doorX - DOOR_W / 2, doorX + DOOR_W / 2]], LEVEL_HEIGHT, 20, 'interior', f, bid);
-            bsp([[bx0, by0], [bx1, py]], depth + 1);
-            bsp([[bx0, py], [bx1, by1]], depth + 1);
-          } else {
-            leafBoxes.push(box);
-          }
-        };
-
-        bsp(r, 0);
-        const allDoorsOnFloor = [
-          ...openings.filter((op) => op.kind === 'door' && op.floor === f),
-          ...partitions.filter((pt) => pt.floor === f).flatMap((pt) => pt.openings ?? []).filter((op) => op.kind === 'door'),
-        ];
-        leafBoxes.forEach((lb, rIdx) => {
-          const [[rx0, ry0], [rx1, ry1]] = lb;
-          const touchingDoors = allDoorsOnFloor
-            .filter((op) => op.pos[0] >= rx0 - 0.25 && op.pos[0] <= rx1 + 0.25 && op.pos[1] >= ry0 - 0.25 && op.pos[1] <= ry1 + 0.25)
-            .map((op) => op.id!)
-            .filter(Boolean);
-          rooms.push({
-            id: `${bid}_r_f${f}_${rIdx}`,
-            floor: f,
-            bounds: { min: [rx0, ry0], max: [rx1, ry1] },
-            kind: 'room',
-            door_ids: touchingDoors,
+          blockedYs.push(doorY);
+          const idx = partIdx++;
+          const pDoorId = `${bid}_partdoor_f${f}_${idx}`;
+          const pDoor: WallOpening = {
+            id: pDoorId, kind: 'door', pos: [px, doorY], floor: f,
+            width: OPENING_DEFAULTS.door.width, sill_height: 0, top_height: 210,
+          };
+          partitions.push({
+            id: `${bid}_part_f${f}_${idx}`, start: [px, by0], end: [px, by1], floor: f, thickness: 20, openings: [pDoor],
           });
-        });
-      } else {
-        const floorDoors = openings
-          .filter((op) => op.kind === 'door' && op.floor === f)
+          splitWall(d, `${bid}_part_f${f}_${idx}`, [px, by0], [px, by1], [[doorY - DOOR_W / 2, doorY + DOOR_W / 2]], LEVEL_HEIGHT, 20, 'interior', f, bid);
+          bsp([[bx0, by0], [px, by1]], depth + 1);
+          bsp([[px, by0], [bx1, by1]], depth + 1);
+        } else if (splitY !== null) {
+          const py = splitY;
+          let doorX = bx0 + rw * (depth === 0 && maxDepth > 1 ? 0.28 : 0.5);
+          if (stairBoxes.some((sb) => py >= sb[0][1] && py <= sb[1][1] && doorX >= sb[0][0] - 0.5 && doorX <= sb[1][0] + 0.5)) {
+            doorX = Math.abs(doorX - bx0) < Math.abs(bx1 - doorX) ? bx1 - 1.5 : bx0 + 1.5;
+          }
+          blockedXs.push(doorX);
+          const idx = partIdx++;
+          const pDoorId = `${bid}_partdoor_f${f}_${idx}`;
+          const pDoor: WallOpening = {
+            id: pDoorId, kind: 'door', pos: [doorX, py], floor: f,
+            width: OPENING_DEFAULTS.door.width, sill_height: 0, top_height: 210,
+          };
+          partitions.push({
+            id: `${bid}_part_f${f}_${idx}`, start: [bx0, py], end: [bx1, py], floor: f, thickness: 20, openings: [pDoor],
+          });
+          splitWall(d, `${bid}_part_f${f}_${idx}`, [bx0, py], [bx1, py], [[doorX - DOOR_W / 2, doorX + DOOR_W / 2]], LEVEL_HEIGHT, 20, 'interior', f, bid);
+          bsp([[bx0, by0], [bx1, py]], depth + 1);
+          bsp([[bx0, py], [bx1, by1]], depth + 1);
+        } else {
+          leafBoxes.push(box);
+        }
+      };
+
+      bsp(r, 0);
+      const allDoorsOnFloor = [
+        ...openings.filter((op) => op.kind === 'door' && op.floor === f),
+        ...partitions.filter((pt) => pt.floor === f).flatMap((pt) => pt.openings ?? []).filter((op) => op.kind === 'door'),
+      ];
+      leafBoxes.forEach((lb, rIdx) => {
+        const [[rx0, ry0], [rx1, ry1]] = lb;
+        const touchingDoors = allDoorsOnFloor
+          .filter((op) => op.pos[0] >= rx0 - 0.25 && op.pos[0] <= rx1 + 0.25 && op.pos[1] >= ry0 - 0.25 && op.pos[1] <= ry1 + 0.25)
           .map((op) => op.id!)
           .filter(Boolean);
         rooms.push({
-          id: `${bid}_r_f${f}_0`,
+          id: `${bid}_r_f${f}_${rIdx}`,
           floor: f,
-          bounds: { min: [x0, y0], max: [x1, y1] },
-          kind: s.hollow ? 'hall' : 'room',
-          ...(floorDoors.length ? { door_ids: floorDoors } : {}),
+          bounds: { min: [rx0, ry0], max: [rx1, ry1] },
+          kind: 'room',
+          door_ids: touchingDoors,
         });
-      }
-    }
-  }
-
-  // 6b. A hall's stair core: its upper landings are walkable 'stairwell' rooms (one per level, the core box)
-  if (s.hollow && core) {
-    for (let f = 1; f < s.floors; f++) {
-      const bx = f === 1 ? core.mezzanine : core.box; // +1 = the mezzanine strip along the core's wall, higher = the core landing
-      rooms.push({ id: `${bid}_r_f${f}_${f === 1 ? 'mezz' : 'core'}`, floor: f, bounds: { min: bx[0], max: bx[1] }, kind: f === 1 ? 'balcony' : 'stairwell' });
-    }
-  }
-
-  // 6c. Window clearances (BUILDING_GENERATOR.md 3 step 7 and 4.4; windowClearance.ts = the validator's window_onto_stair /
-  //     window_partition_clash): with the core and the partitions known, a window whose inner side is the stair core (a flight, its
-  //     slab gap, an approach box, a lane wall) or that lies within a 60 cm jamb of a partition end slides along its wall to the
-  //     nearest clear spot (<= 1 m; the same 1.5 m wall margin, 1.2 m door clearance and a jamb to the other windows), else it is
-  //     dropped. Its mantle edge follows it. Consumes no random numbers: the rest of the draft is unchanged.
-  fitWindows(r, openings, mantle_edges, partitions, core, perSide);
-
-  // 7. Parapets on flat roofs
-  if (s.roof_walkable) {
-    parapets.push(
-      { wall_id: `${bid}_parapet_N`, start: [x0, y0], end: [x1, y0], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
-      { wall_id: `${bid}_parapet_S`, start: [x0, y1], end: [x1, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
-      { wall_id: `${bid}_parapet_W`, start: [x0, y0], end: [x0, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
-      { wall_id: `${bid}_parapet_E`, start: [x1, y0], end: [x1, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
-    );
-    mantle_edges.push(
-      { id: `me_${bid}_para_N`, start: [x0, y0], end: [x1, y0], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [0, -1], kind: 'parapet', building: bid },
-      { id: `me_${bid}_para_S`, start: [x0, y1], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [0, 1], kind: 'parapet', building: bid },
-      { id: `me_${bid}_para_W`, start: [x0, y0], end: [x0, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [-1, 0], kind: 'parapet', building: bid },
-      { id: `me_${bid}_para_E`, start: [x1, y0], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [1, 0], kind: 'parapet', building: bid },
-    );
-  }
-
-  // 8. Roof Hatches + hatch access ladders
-  if (s.roof_walkable && s.roofHatch) {
-    const hatchFloor = s.hollow ? 0 : s.floors - 1;
-    const hx = x1 - 1.8, hy = y1 - 1.8;
-    const ladderId = `LAD_${bid}_hatch`;
-    const lad = ladderForLevels(s.floors - hatchFloor);
-    d.ladders.push({
-      id: ladderId,
-      pos: [hx, hy + 0.1],
-      yaw: 90,
-      rungs: lad.rungs,
-      plinth_cm: lad.plinth_cm,
-      from: hatchFloor === 0 ? 'ground' : `floor:${bid}:${hatchFloor}`,
-      to: `roof:${bid}`,
-      level_from: hatchFloor,
-      level_to: s.floors,
-      foot: [hx, hy + 1.1],
-      top: [hx, hy - 1.0],
-    });
-    hatches.push({ id: `${bid}_roof_hatch`, pos: [hx, hy], floor: hatchFloor, size: [100, 100], ladder_id: ladderId });
-  }
-
-  // 9. Floors detail (slabs with gaps). The stairwell gap is EXACTLY the footprint of the flight arriving on that slab
-  //    (no overshoot past its top: cause A); a hall's upper levels keep only the core's slab (the rest is an 'atrium' gap).
-  if (!s.hollow || core) {
-    for (let f = 1; f < s.floors; f++) {
-      const gaps: FloorGap[] = [];
-      const st = stairs.find((x) => x.to === f && x.from === f - 1);
-      if (st && core) gaps.push({ id: `${bid}_gap_stair_f${f}`, poly: rect.poly(core.flightRect(st)), kind: 'stairwell' });
-      if (s.hollow && core) (f === 1 ? core.mezzanineVoid : core.voidRects).forEach((vr, k) => gaps.push({ id: `${bid}_gap_void_f${f}_${k}`, poly: rect.poly(vr), kind: 'atrium' }));
-      floors_detail.push({
+      });
+    } else {
+      const floorDoors = openings
+        .filter((op) => op.kind === 'door' && op.floor === f)
+        .map((op) => op.id!)
+        .filter(Boolean);
+      rooms.push({
+        id: `${bid}_r_f${f}_0`,
         floor: f,
-        height_z: levelZ(f),
-        gaps,
-        rooms: rooms.filter((r) => r.floor === f),
+        bounds: { min: [x0, y0], max: [x1, y1] },
+        kind: s.hollow ? 'hall' : 'room',
+        ...(floorDoors.length ? { door_ids: floorDoors } : {}),
       });
     }
   }
+}
 
+/** Stage 9, a hall's stair core: its upper landings are walkable rooms (+1 = the mezzanine strip along the core's wall, higher = the core landing). */
+function addHallLandings(p: BuildingPlan): void {
+  const { bid, s, rooms } = p;
+  const core = p.cores[0];
+  if (!s.hollow || !core) return;
+  for (let f = 1; f < s.floors; f++) {
+    const bx = f === 1 ? core.mezzanine : core.box;
+    rooms.push({ id: `${bid}_r_f${f}_${f === 1 ? 'mezz' : 'core'}`, floor: f, bounds: { min: bx[0], max: bx[1] }, kind: f === 1 ? 'balcony' : 'stairwell' });
+  }
+}
+
+/** Stage 11, parapets on a walkable roof + their mantle edges. */
+function addRoofParapets(p: BuildingPlan): void {
+  const { bid, s, x0, y0, x1, y1, parapets, mantle_edges } = p;
+  if (!s.roof_walkable) return;
+  parapets.push(
+    { wall_id: `${bid}_parapet_N`, start: [x0, y0], end: [x1, y0], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
+    { wall_id: `${bid}_parapet_S`, start: [x0, y1], end: [x1, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
+    { wall_id: `${bid}_parapet_W`, start: [x0, y0], end: [x0, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
+    { wall_id: `${bid}_parapet_E`, start: [x1, y0], end: [x1, y1], height_cm: obstacleHeight('low_vault'), thickness_cm: 20 },
+  );
+  mantle_edges.push(
+    { id: `me_${bid}_para_N`, start: [x0, y0], end: [x1, y0], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [0, -1], kind: 'parapet', building: bid },
+    { id: `me_${bid}_para_S`, start: [x0, y1], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [0, 1], kind: 'parapet', building: bid },
+    { id: `me_${bid}_para_W`, start: [x0, y0], end: [x0, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [-1, 0], kind: 'parapet', building: bid },
+    { id: `me_${bid}_para_E`, start: [x1, y0], end: [x1, y1], floor: s.floors, base_z: levelZ(s.floors), height_cm: obstacleHeight('low_vault'), normal: [1, 0], kind: 'parapet', building: bid },
+  );
+}
+
+/** Stage 12, the roof hatch + its access ladder. */
+function addRoofHatch(p: BuildingPlan): void {
+  const { d, bid, s, x1, y1, hatches } = p;
+  if (!s.roof_walkable || !s.roofHatch) return;
+  const hatchFloor = s.hollow ? 0 : s.floors - 1;
+  const hx = x1 - 1.8, hy = y1 - 1.8;
+  const ladderId = `LAD_${bid}_hatch`;
+  const lad = ladderForLevels(s.floors - hatchFloor);
+  d.ladders.push({
+    id: ladderId,
+    pos: [hx, hy + 0.1],
+    yaw: 90,
+    rungs: lad.rungs,
+    plinth_cm: lad.plinth_cm,
+    from: hatchFloor === 0 ? 'ground' : `floor:${bid}:${hatchFloor}`,
+    to: `roof:${bid}`,
+    level_from: hatchFloor,
+    level_to: s.floors,
+    foot: [hx, hy + 1.1],
+    top: [hx, hy - 1.0],
+  });
+  hatches.push({ id: `${bid}_roof_hatch`, pos: [hx, hy], floor: hatchFloor, size: [100, 100], ladder_id: ladderId });
+}
+
+/**
+ * Stage 13, floors detail (slabs with gaps). A stairwell gap is EXACTLY the footprint of the flight arriving on that slab (no
+ * overshoot past its top: cause A), one per core; a hall's upper levels keep only its core's slab (the rest is an 'atrium' gap).
+ */
+function buildSlabs(p: BuildingPlan): void {
+  const { bid, s, rooms, floors_detail } = p;
+  const core0 = p.cores[0];
+  if (s.hollow && !core0) return;
+  for (let f = 1; f < s.floors; f++) {
+    const gaps: FloorGap[] = [];
+    p.cores.forEach((core, k) => {
+      const st = core.stairs.find((x) => x.to === f && x.from === f - 1);
+      if (st) gaps.push({ id: `${k ? `${bid}_c${k}` : bid}_gap_stair_f${f}`, poly: rect.poly(core.flightRect(st)), kind: 'stairwell' });
+    });
+    if (s.hollow && core0) (f === 1 ? core0.mezzanineVoid : core0.voidRects).forEach((vr, k) => gaps.push({ id: `${bid}_gap_void_f${f}_${k}`, poly: rect.poly(vr), kind: 'atrium' }));
+    floors_detail.push({
+      floor: f,
+      height_z: levelZ(f),
+      gaps,
+      rooms: rooms.filter((rm) => rm.floor === f),
+    });
+  }
+}
+
+/** Stage 14, the DraftBuilding (pushed onto the draft). */
+function emitBuilding(p: BuildingPlan): DraftBuilding {
+  const { s } = p;
   const b: DraftBuilding = {
-    id: bid,
-    footprint: r,
+    id: p.bid,
+    footprint: p.r,
     height: s.height,
     floors: s.floors,
     ...(s.hollow ? { hollow: true } : {}),
     enterable: s.enterable,
     roof_walkable: s.roof_walkable,
-    doors,
-    openings,
-    partitions,
-    floors_detail,
-    hatches,
-    parapets,
-    rooms,
-    mantle_edges,
-    stairs,
+    doors: p.doors,
+    openings: p.openings,
+    partitions: p.partitions,
+    floors_detail: p.floors_detail,
+    hatches: p.hatches,
+    parapets: p.parapets,
+    rooms: p.rooms,
+    mantle_edges: p.mantle_edges,
+    stairs: p.stairs,
     roof_holes: [] as Vec2[],
     floor_holes: [] as { pos: Vec2; floor: number }[],
     set_piece: s.set_piece,
+    ...(s.archetype ? { archetype: s.archetype } : {}),
   };
-  d.buildings.push(b);
+  p.d.buildings.push(b);
   return b;
 }
 
-/** Step 6c of addBuilding (metres; windowClearance.ts works in cm x `M`): slide or drop the windows that break a clearance. */
-function fitWindows(r: Rect, openings: WallOpening[], mantleEdges: MantleEdge[], partitions: readonly GenPartition[], core: StairCore | null,
+/** Stage 10 of addBuilding, window clearances (metres; windowClearance.ts works in cm x `M`): slide or drop the windows that break a clearance. */
+function fitWindows(r: Rect, openings: WallOpening[], mantleEdges: MantleEdge[], partitions: readonly GenPartition[], cores: readonly StairCore[],
   perSide: Record<Side, [number, number][]>): void {
   const M = 0.01; // 1 cm in metres
   const [[x0, y0], [x1, y1]] = r;
   const SIDE: Record<string, Side> = { N: 'north', S: 'south', W: 'west', E: 'east' };
-  const flights = core?.stairs ?? [];
-  const coreWalls = (core?.laneWalls ?? []).map((lw) => ({ ...lw, thickness: STAIR_LANE_WALL_T * M }));
+  const flights = cores.flatMap((c) => c.stairs);
+  const coreWalls = cores.flatMap((c) => c.laneWalls).map((lw) => ({ ...lw, thickness: STAIR_LANE_WALL_T * M }));
   const dropped = new Set<WallOpening>();
   for (const op of openings) {
     if (op.kind !== 'window' || !op.wall) continue;

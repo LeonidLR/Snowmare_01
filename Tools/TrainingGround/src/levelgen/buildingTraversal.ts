@@ -190,6 +190,9 @@ function checkFlight(l: GenLayout, b: GenBuilding, st: Stair, issues: TraversalI
     const poly = g.poly.map((p) => toBuildingFrame(b, p));
     const across = poly.map((p) => Math.abs((p[0] - pos[0]) * -u[1] + (p[1] - pos[1]) * u[0]));
     if (Math.min(...across) > TRAVERSAL.flightWidth) continue; // a gap of another flight
+    // ...or of a flight of another core further along the same lane line (S2: two cores on one wall): no overlap with this run
+    const along = poly.map((p) => (p[0] - pos[0]) * u[0] + (p[1] - pos[1]) * u[1]), run = (top[0] - pos[0]) * u[0] + (top[1] - pos[1]) * u[1];
+    if (Math.min(...along) >= run || Math.max(...along) <= 0) continue;
     const beyond = Math.max(...poly.map((p) => (p[0] - top[0]) * u[0] + (p[1] - top[1]) * u[1]));
     const behind = Math.max(...poly.map((p) => (pos[0] - p[0]) * u[0] + (pos[1] - p[1]) * u[1]));
     const wide = Math.max(...across);

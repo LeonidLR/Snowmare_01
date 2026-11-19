@@ -7,10 +7,11 @@ import { fileURLToPath } from 'node:url';
 import type { TraversalIssue } from './buildingTraversal.ts';
 import { TRAVERSAL, TRAVERSAL_SEVERITY, traversalOk, validateBuilding, validateBuildings } from './buildingTraversal.ts';
 import { expandLayout } from './expand.ts';
-import { generateLayout, planStairCore, STAIR_APPROACH, STAIR_FLIGHT_W, STAIR_LANE_WALL_T } from './generate.ts';
+import type { Draft } from './generate.ts';
+import { addBuilding, finalizeDraftToLayout, generateLayout, planStairCore, STAIR_APPROACH, STAIR_FLIGHT_W, STAIR_LANE_WALL_T, stairCoreLength } from './generate.ts';
 import type { Profile } from './profile.ts';
 import type { GenBuilding, GenLayout } from './schema.ts';
-import { LEVEL_HEIGHT, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE } from './schema.ts';
+import { ARCHETYPES, DEFAULT_PARAMS, LEVEL_HEIGHT, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE } from './schema.ts';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../..');
 const profile = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGen/refs/ref_01_02_depot.json'), 'utf8')) as Profile;
@@ -198,4 +199,58 @@ test('stair core 4.2: a 200 cm approach box from one source; a 2-lane core gets 
   assert.ok(n > 0, 'the depot has 2-lane cores');
   const blocked = validateBuildings(l).buildings.flatMap((b) => b.issues.filter((i) => i.code === 'stair_foot_blocked' || i.code === 'stair_top_blocked'));
   assert.deepEqual(blocked, [], 'the lane walls never stand in an approach box');
+});
+
+test('planStairCore at: low / high / metres place the core along the long axis; outside the wall faces -> null', () => {
+  const r: [[number, number], [number, number]] = [[0, 0], [12, 40]];
+  const lo = planStairCore('B_p', r, 2, [], [], { at: 'low' })!, hi = planStairCore('B_p', r, 2, [], [], { at: 'high', index: 1 })!;
+  const s1 = planStairCore('B_p', r, 2)!;
+  assert.deepEqual([lo.stairs, lo.box, lo.voidRects, lo.laneWalls, lo.side], [s1.stairs, s1.box, s1.voidRects, s1.laneWalls, s1.side], "'low' is the S1 default");
+  assert.ok(Math.abs(hi.box[1][1] - (40 - 0.15)) < 1e-9, "'high' ends at the high inner wall face");
+  assert.ok(hi.stairs.every((s) => s.id.startsWith('B_p_c1_stair_')), 'a second core prefixes its stair ids');
+  const mid = planStairCore('B_p', r, 2, [], [], { at: 10 })!;
+  assert.ok(Math.abs(mid.box[0][1] - 10.15) < 1e-9, 'a number = metres from the low inner face');
+  assert.equal(planStairCore('B_p', r, 2, [], [], { at: 40 - 0.3 - stairCoreLength() + 0.01 }), null, 'past the high face');
+  assert.equal(planStairCore('B_p', r, 2, [], [], { at: -0.01 }), null, 'before the low face');
+});
+
+test('addBuilding cores: 2 - a 12 x 40 m block gets two non-overlapping cores with approach boxes + lane walls and passes the validator', () => {
+  const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [] };
+  const r: [[number, number], [number, number]] = [[10, 5], [22, 45]];
+  addBuilding(d, 'B_long', r, { height: 3 * LEVEL_HEIGHT, floors: 3, enterable: true, roof_walkable: false, stairwell: true, set_piece: 'facade',
+    archetype: 'block', doorSides: ['south'], windowSides: ['west', 'east'], partitionRooms: true, cores: 2 }, () => 0.5);
+  const db = d.buildings[0];
+  const cores = [planStairCore('B_long', r, 2, ['south', 'north'], [], { at: 'low' })!, planStairCore('B_long', r, 2, ['south', 'north'], [], { at: 'high', index: 1 })!];
+  assert.deepEqual(db.stairs.map((s) => s.id), ['B_long_stair_0', 'B_long_stair_1', 'B_long_c1_stair_0', 'B_long_c1_stair_1']);
+  assert.deepEqual(db.stairs, cores.flatMap((c) => c.stairs), 'the building carries both cores');
+  const [a, b] = cores.map((c) => c.box);
+  assert.ok(a[1][1] < b[0][1], 'the two core boxes do not overlap');
+  for (const c of cores) {
+    // along y: the core box holds a free STAIR_APPROACH box before the first foot and after the first top (the second flight runs back)
+    assert.ok(Math.abs(c.stairs[0].pos[1] - c.box[0][1] - STAIR_APPROACH) < 1e-9, 'approach box before the foot');
+    assert.ok(Math.abs(c.box[1][1] - c.stairs[0].top[1] - STAIR_APPROACH) < 1e-9, 'approach box after the top');
+    assert.equal(c.laneWalls.length, 2, 'a 2-lane core: a lane wall per storey its flights span');
+  }
+  assert.deepEqual(d.walls.filter((w) => /_lanewall_f\d+$/.test(w.id)).map((w) => w.id).sort(),
+    ['B_long_c1_lanewall_f0', 'B_long_c1_lanewall_f1', 'B_long_lanewall_f0', 'B_long_lanewall_f1']);
+  const gaps = (db.floors_detail ?? []).flatMap((f) => (f.gaps ?? []).map((g) => g.id));
+  assert.deepEqual(gaps, ['B_long_gap_stair_f1', 'B_long_c1_gap_stair_f1', 'B_long_gap_stair_f2', 'B_long_c1_gap_stair_f2'], 'a slab gap per core flight');
+  const l = finalizeDraftToLayout(d, [40, 60], { name: 'test_two_cores', profile: 'test', seed: 1, params: { ...DEFAULT_PARAMS, size_m: [40, 60] }, start: [4, 2], end: [36, 58] });
+  const lb = l.buildings[0];
+  assert.equal(lb.archetype, 'block');
+  const issues = validateBuilding(l, lb).issues;
+  assert.ok(traversalOk(issues), issues.filter((i) => i.severity === 'error').map((i) => i.message).join('; '));
+  assert.deepEqual(issues.filter((i) => i.code === 'window_onto_stair').map((i) => i.ref), [], 'no window opens onto either core');
+});
+
+test('archetype: every generated building but the chimneys carries one from the template map (depot seed 1 and its x4)', () => {
+  const s1 = generateLayout({ profile, seed: 1 });
+  const x4 = expandLayout({ layout: s1, factor: 4, seed: 7, profile }).layout;
+  for (const b of [...s1.buildings, ...x4.buildings]) {
+    if (b.set_piece === 'chimney') { assert.equal(b.archetype, undefined, b.id); continue; }
+    assert.ok(b.archetype && (ARCHETYPES as readonly string[]).includes(b.archetype), `${b.id}: ${b.archetype}`);
+  }
+  const by = Object.fromEntries(s1.buildings.map((b) => [b.id, b.archetype]));
+  assert.equal(by.B_office_s, 'office', 'the classic office region is an office, not its facade set-piece');
+  assert.equal(by.B_hall_n, 'hall');
 });

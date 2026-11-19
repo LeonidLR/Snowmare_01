@@ -19,7 +19,7 @@ import { drawAngle, fitScale, ROTATION, rotateContent, rotPoint } from './rotati
 import type { Profile } from './profile.ts';
 import { fromUE, toUE } from './profile.ts';
 import type { BlockRecord, CoverKind, GenLayout, SetPiece } from './schema.ts';
-import { DEFAULT_PARAMS, HALL_ROOF_LEVEL, LEVEL_HEIGHT, rect } from './schema.ts';
+import { DEFAULT_PARAMS, HALL_ROOF_LEVEL, LEVEL_HEIGHT, TEMPLATE_ARCHETYPE, rect } from './schema.ts';
 
 /** The stage-2 configuration (templates, expansion, objectives). */
 export const V2 = cfg;
@@ -250,7 +250,7 @@ function fence3(c: Ctx, r: Rect, open: Side, gates: { side: Side; at: number; wi
   if (open !== 'east') splitWall(c.d, `${id}_E`, [x1, y0], [x1, y1], g('east'), FENCE_H, FENCE_T, 'fence');
 }
 const hallSpec = (c: Ctx, s: Side, piece: SetPiece) => ({ height: HALL_ROOF_LEVEL * LEVEL_HEIGHT, floors: HALL_ROOF_LEVEL, hollow: true, enterable: true, roof_walkable: c.V >= 1,
-  stairwell: true, set_piece: piece, doorSides: [s, s], windowSides: [s, OPP[s]], roofHatch: c.V >= 2 });
+  stairwell: true, set_piece: piece, archetype: TEMPLATE_ARCHETYPE[piece], doorSides: [s, s], windowSides: [s, OPP[s]], roofHatch: c.V >= 2 });
 /** The roof excursion of a hall with a stairwell: up the flight, across the roof, back down (links = the stair). */
 function roofVisit(b: DraftBuilding, s: Side): VisitM | null {
   const chain = stairChainUp(b);
@@ -301,7 +301,7 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
     const gateAt = along(c.r, c.s, 0.5 + (c.random() * 2 - 1) * 0.15, TC.gate_w_m);
     fenceRect(c.d, `F_${c.tag}`, c.r, [{ side: c.s, at: gateAt, width: TC.gate_w_m }]);
     const shedR = placeIn(c.r, c.s, Math.min(sp.shed_m[0], lengthOf(c.r, c.s) * 0.6), Math.min(sp.shed_m[1], depthOf(c.r, c.s) * 0.45), OPP[c.s], 1.5, 0.5 + (c.random() * 2 - 1) * 0.1);
-    const shed = addBuilding(c.d, `B_${c.tag}_shed`, shedR, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'one_entry_compound', doorSides: [c.s], windowSides: [c.s], partitionRooms: true }, c.random);
+    const shed = addBuilding(c.d, `B_${c.tag}_shed`, shedR, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'one_entry_compound', archetype: TEMPLATE_ARCHETYPE.one_entry_compound, doorSides: [c.s], windowSides: [c.s], partitionRooms: true }, c.random);
     zoneOf(c, 'open', 'one_entry_compound');
     const gateIn = sidePoint(c.r, c.s, gateAt, TC.visit_inside_m);
     scatter(c, c.r, [shedR], [gateIn, ...(doorOutside(shed, c.s) ? [doorOutside(shed, c.s)!] : [])]);
@@ -333,7 +333,7 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
     const sp = c.spec as typeof TC.catalog.small_office;
     const j = () => 0.9 + c.random() * 0.1;
     const r = placeIn(c.r, c.s, Math.min(sp.max_m[0], lengthOf(c.r, c.s)) * j(), Math.min(sp.max_m[1], depthOf(c.r, c.s)) * j(), c.s, 0.5, 0.5 + (c.random() * 2 - 1) * 0.1);
-    const b = addBuilding(c.d, `B_${c.tag}_office`, r, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'facade', doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true }, c.random);
+    const b = addBuilding(c.d, `B_${c.tag}_office`, r, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.small_office, doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true }, c.random);
     zoneOf(c, 'open', 'facade');
     scatter(c, c.r, [r], b.doors.map((x) => x.pos));
     cornerAmbush(c, b);
@@ -343,14 +343,14 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
     const sp = c.spec as typeof TC.catalog.facade;
     const k = () => c.random() * 0.05;
     const r: Rect = [[c.r[0][0] + wOf(c.r) * k(), c.r[0][1] + hOf(c.r) * k()], [c.r[1][0] - wOf(c.r) * k(), c.r[1][1] - hOf(c.r) * k()]];
-    addBuilding(c.d, `B_${c.tag}_facade`, r, { height: sp.height_cm, floors: sp.floors, hollow: true, enterable: false, roof_walkable: false, set_piece: 'facade' }, c.random);
+    addBuilding(c.d, `B_${c.tag}_facade`, r, { height: sp.height_cm, floors: sp.floors, hollow: true, enterable: false, roof_walkable: false, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.facade }, c.random);
     zoneOf(c, 'wall_run', 'facade');
     return null;
   },
   ladder_overwatch: (c) => {
     const sp = c.spec as typeof TC.catalog.ladder_overwatch;
     const r = placeIn(c.r, c.s, Math.min(sp.max_m[0], lengthOf(c.r, c.s) * 0.7), Math.min(sp.max_m[1], depthOf(c.r, c.s) * 0.6), OPP[c.s], 1.0, 0.5 + (c.random() * 2 - 1) * 0.15);
-    const b = addBuilding(c.d, `B_${c.tag}_gallery`, r, { height: LEVEL_HEIGHT, floors: 1, enterable: false, roof_walkable: c.V >= 1, set_piece: 'ladder_overwatch' }, c.random);
+    const b = addBuilding(c.d, `B_${c.tag}_gallery`, r, { height: LEVEL_HEIGHT, floors: 1, enterable: false, roof_walkable: c.V >= 1, set_piece: 'ladder_overwatch', archetype: TEMPLATE_ARCHETYPE.ladder_overwatch }, c.random);
     zoneOf(c, 'open', 'ladder_overwatch');
     let visit: VisitM | null = null;
     if (c.V >= 1) {
@@ -371,7 +371,7 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
     const sp = c.spec as typeof TC.catalog.tank_farm;
     const { near, far } = splitAt(c.r, c.s, Math.min(depthOf(c.r, c.s) * 0.5, sp.pump_m[1] + 4));
     const pumpR = placeIn(near, c.s, Math.min(sp.pump_m[0], lengthOf(near, c.s) * 0.7), Math.min(sp.pump_m[1], depthOf(near, c.s) - 2), c.s, 1.0, 0.5 + (c.random() * 2 - 1) * 0.15);
-    const pump = addBuilding(c.d, `B_${c.tag}_pump`, pumpR, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'tank_farm', doorSides: [c.s], windowSides: [c.s, OPP[c.s]] }, c.random);
+    const pump = addBuilding(c.d, `B_${c.tag}_pump`, pumpR, { height: LEVEL_HEIGHT, floors: 1, enterable: true, roof_walkable: false, set_piece: 'tank_farm', archetype: TEMPLATE_ARCHETYPE.tank_farm, doorSides: [c.s], windowSides: [c.s, OPP[c.s]] }, c.random);
     const silo = COVER_SIZE.silo, rad = silo[0] / 200;
     const lenF = lengthOf(far, c.s), depF = depthOf(far, c.s);
     const yard: Rect = [[far[0][0] + 0.5, far[0][1] + 0.5], [far[1][0] - 0.5, far[1][1] - 0.5]];
@@ -401,7 +401,7 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
   two_storey: (c) => {
     const sp = c.spec as typeof TC.catalog.two_storey;
     const r = placeIn(c.r, c.s, Math.min(sp.max_m[0], lengthOf(c.r, c.s)), Math.min(sp.max_m[1], depthOf(c.r, c.s)), c.s, 0.5, 0.5 + (c.random() * 2 - 1) * 0.1);
-    const b = addBuilding(c.d, `B_${c.tag}_block`, r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: c.V >= 1, stairwell: true, set_piece: 'facade', doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true, roofHatch: c.V >= 2 }, c.random);
+    const b = addBuilding(c.d, `B_${c.tag}_block`, r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: c.V >= 1, stairwell: true, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.two_storey, doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true, roofHatch: c.V >= 2 }, c.random);
     zoneOf(c, 'open', 'facade');
     scatter(c, c.r, [r], b.doors.map((x) => x.pos));
     cornerAmbush(c, b);

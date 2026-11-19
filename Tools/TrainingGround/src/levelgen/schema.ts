@@ -265,6 +265,29 @@ export const SET_PIECES = ['alley', 't_junction', 'facade', 'one_entry_compound'
 export const NEVER_CLIMBABLE: readonly SetPiece[] = ['chimney'];
 export type SetPiece = (typeof SET_PIECES)[number];
 
+/**
+ * The building archetypes of docs/design/levelgen/gdd/building-archetypes.md section 1 (S2_ROOMS_PLAN.md section 7 item 2).
+ * Informational until S2: stories, rooms and doors do not key off it yet (they still key off `set_piece`).
+ */
+export const ARCHETYPES = ['hall', 'warehouse', 'office', 'block', 'hospital', 'shop_flats', 'shed', 'ruin', 'gallery', 'facade'] as const;
+export type Archetype = (typeof ARCHETYPES)[number];
+/**
+ * Lot template (levelgen_v2.json `templates.catalog`, blockTemplates.ts) / classic-grammar piece (generate.ts) -> the archetype
+ * of the building it places. Templates without a building (junkyard_field, fenced_lot, boiler_yard) and the chimney (an
+ * obstacle, not an archetype) have no entry.
+ */
+export const TEMPLATE_ARCHETYPE: Readonly<Record<string, Archetype>> = {
+  industrial_hall: 'hall',
+  warehouse: 'warehouse',
+  small_office: 'office',
+  two_storey: 'block',
+  one_entry_compound: 'shed',
+  tank_farm: 'shed',
+  ladder_overwatch: 'gallery',
+  facade: 'facade',
+  ruined_two_level: 'ruin',
+};
+
 export const COVER_KINDS = ['jersey', 'sandbag', 'crate', 'wreck', 'barrel', 'silo', 'boiler'] as const;
 export type CoverKind = (typeof COVER_KINDS)[number];
 
@@ -336,6 +359,8 @@ export interface GenBuilding {
   floor_holes: { pos: Vec2; floor: number }[];
   set_piece: SetPiece;
   // --- schema /2 (BUILDINGS_TECH_SPEC.md section 2), all optional ---
+  /** The archetype (building-archetypes.md section 1), from the lot template (TEMPLATE_ARCHETYPE); none on a chimney. */
+  archetype?: Archetype;
   role?: BuildingRole;
   balconies?: Balcony[];
   fire_escapes?: FireEscape[];
