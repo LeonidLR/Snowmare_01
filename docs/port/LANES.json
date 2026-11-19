@@ -18,7 +18,7 @@
    "owner": "lead Sonnet subagent",
    "branch": "claude/tg-map-management",
    "topic": "claude-T020",
-   "state": "active",
+   "state": "done",
    "max_quiet_min": 45,
    "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-claude",
    "machine": "main"
