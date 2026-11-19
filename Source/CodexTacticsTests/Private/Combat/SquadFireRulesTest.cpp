@@ -198,6 +198,10 @@ bool FSquadFireRoofLipTest::RunTest(const FString&)
 	Shot.TargetDistanceCm = 8544.f;
 	Shot.RimTopZ = 900.f - 50.f;
 	TestFalse(TEXT("a floor well below his feet is not the rim"), SquadFireRules::MayClearRoofLip(Shot, Lip));
+	TestTrue(TEXT("the floor he stands on is his rim"), SquadFireRules::IsShooterRoofRim(true, false, false));
+	TestTrue(TEXT("his parapet: floor just inside the face, none just outside"), SquadFireRules::IsShooterRoofRim(false, true, false));
+	TestFalse(TEXT("a crate on the roof: the floor continues past it"), SquadFireRules::IsShooterRoofRim(false, true, true));
+	TestFalse(TEXT("the next building: no floor just inside that face"), SquadFireRules::IsShooterRoofRim(false, false, false));
 	return true;
 }
 

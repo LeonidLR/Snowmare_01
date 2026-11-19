@@ -23,6 +23,7 @@
 #include "Combat/SuppressionRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Combat/WaveSubsystem.h"
+#include "CollisionQueryParams.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Core/CodexTacticsGameMode.h"
@@ -1487,6 +1488,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 		{
 			State.PostRangeContactAt = -1.0;
 			State.bOverwatchHoldClosed = false;
+			State.bOverwatchSpotSnapped = false;
 		}
 	}
 	if (Team.Defence.bActive && State.DefenceRole == EPmcDefenceRole::SectorShooter && State.bHasDefencePost && Team.Defence.Spots.Num() > 0
@@ -1712,6 +1714,12 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		float CoverQuality = 0.f;
 		AActor* ThreatActor = nullptr;
 		FPmcFighterView View = BuildFighterView(TeamId, Team, *Fighter, State, Mates, Cover, CoverQuality, ThreatActor);
+		// G008b: the posted man fires from the parapet the shot crosses, not from the interior spot the generator kept.
+		// The same frame as first contact, so the hold clock started above is not cleared by a walk off the old post.
+		if (View.bOnOverwatchRoof && View.bContactInPostRange && !State.bOverwatchSpotSnapped)
+		{
+			TrySnapOverwatchPost(TeamId, *Fighter, State, Team, View.WeaponRangeCm);
+		}
 		if (ThreatActor && ThreatActor != State.LastThreat.Get())
 		{
 			// A new threat appeared: clear completed cooldowns for the previous threat so the fighter can react.
@@ -2768,6 +2776,190 @@ bool UPmcSquadSubsystem::ProjectToNavAtLevel(const FVector& Point, FVector& OutP
 		return true;
 	}
 	return false;
+}
+
+void UPmcSquadSubsystem::TrySnapOverwatchPost(int32 TeamId, AOperativeCharacter& Fighter, FFighterState& State, const FTeam& Team, float WeaponRangeCm)
+{
+	UWorld* World = GetWorld();
+	if (!World || State.bOverwatchSpotSnapped || State.Post.Kind != EPmcPostKind::Overwatch)
+	{
+		return;
+	}
+	const float EngagementCm = PmcCommanderRules::OverwatchEngagementCm(State.Post.RangeCm, WeaponRangeCm);
+	FVector Threat = FVector::ZeroVector;
+	float NearestCm = TNumericLimits<float>::Max();
+	for (const TPair<TWeakObjectPtr<AActor>, FKnownTarget>& Pair : Team.Known)
+	{
+		if (!Pair.Value.Actor.IsValid() || EngagementCm <= 0.f)
+		{
+			continue;
+		}
+		const float DistanceCm = FVector::Dist2D(State.Post.Location, Pair.Value.LastKnown);
+		if (DistanceCm <= EngagementCm && DistanceCm < NearestCm)
+		{
+			NearestCm = DistanceCm;
+			Threat = Pair.Value.LastKnown;
+		}
+	}
+	const FVector2D Dir = FVector2D(Threat.X - State.Post.Location.X, Threat.Y - State.Post.Location.Y).GetSafeNormal();
+	if (Dir.IsNearlyZero())
+	{
+		return;
+	}
+	// The roof is the floor under his feet. Walk that floor along the shot until it stops: that stop is the parapet.
+	// A point already within ~60 cm stays. The navmesh point must still be inside lip_cm of that edge.
+	const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
+	FCollisionQueryParams Params(FName(TEXT("OverwatchParapet")), false, &Fighter);
+	struct FRoofFloor
+	{
+		AActor* Actor = nullptr;
+		UPrimitiveComponent* Comp = nullptr;
+		float Z = 0.f;
+		bool bValid = false;
+	};
+	auto Probe = [&](const FVector2D& At) -> FRoofFloor
+	{
+		FRoofFloor Out;
+		FHitResult Hit;
+		const bool bHit = World->LineTraceSingleByChannel(Hit, FVector(At.X, At.Y, Feet.Z + 40.f), FVector(At.X, At.Y, Feet.Z - 120.f), ECC_Visibility, Params);
+		if (!bHit || Hit.bStartPenetrating || Hit.ImpactNormal.Z < 0.5f)
+		{
+			return Out;
+		}
+		Out.Actor = Hit.GetActor();
+		Out.Comp = Hit.GetComponent();
+		Out.Z = static_cast<float>(Hit.ImpactPoint.Z);
+		Out.bValid = Out.Actor != nullptr || Out.Comp != nullptr;
+		return Out;
+	};
+	auto SameFloor = [](const FRoofFloor& Home, const FRoofFloor& There) -> bool
+	{
+		if (!Home.bValid || !There.bValid || FMath::Abs(Home.Z - There.Z) > 40.f)
+		{
+			return false;
+		}
+		return (Home.Actor && Home.Actor == There.Actor) || (Home.Comp && Home.Comp == There.Comp);
+	};
+	const FVector2D Origin(State.Post.Location.X, State.Post.Location.Y);
+	const FRoofFloor Home = Probe(Origin);
+	if (!Home.bValid)
+	{
+		return;
+	}
+	constexpr float StepCm = 50.f;
+	constexpr float MaxCm = 4500.f;
+	constexpr float InsetCm = 60.f;
+	float LastGood = 0.f;
+	float FirstBad = -1.f;
+	for (float Distance = StepCm; Distance <= MaxCm; Distance += StepCm)
+	{
+		if (!SameFloor(Home, Probe(Origin + Dir * Distance)))
+		{
+			FirstBad = Distance;
+			break;
+		}
+		LastGood = Distance;
+	}
+	if (FirstBad < 0.f)
+	{
+		State.bOverwatchSpotSnapped = true;
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s overwatch post stays %s (no parapet within %.0f cm along the shot)"),
+			TeamId, *Fighter.DisplayName.ToString(), *State.Post.Location.ToCompactString(), MaxCm);
+		return;
+	}
+	float Lo = LastGood;
+	float Hi = FirstBad;
+	for (int32 Step = 0; Step < 4; ++Step)
+	{
+		const float Mid = 0.5f * (Lo + Hi);
+		if (SameFloor(Home, Probe(Origin + Dir * Mid)))
+		{
+			Lo = Mid;
+		}
+		else
+		{
+			Hi = Mid;
+		}
+	}
+	const float ExitCm = Lo;
+	if (ExitCm <= InsetCm + 1.f)
+	{
+		State.bOverwatchSpotSnapped = true;
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s overwatch post already %.0f cm inside the parapet"),
+			TeamId, *Fighter.DisplayName.ToString(), ExitCm);
+		return;
+	}
+	auto RemainingAt = [&](const FVector2D& At) -> float
+	{
+		float Last = 0.f;
+		for (float Distance = 25.f; Distance <= 250.f; Distance += 25.f)
+		{
+			if (!SameFloor(Home, Probe(At + Dir * Distance)))
+			{
+				return Last;
+			}
+			Last = Distance;
+		}
+		return -1.f;
+	};
+	const UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	FVector Chosen = State.Post.Location;
+	float ChosenRemaining = -1.f;
+	bool bPlaced = false;
+	const float InsetsCm[] = { 60.f, 90.f, 120.f, 150.f };
+	for (const float Inset : InsetsCm)
+	{
+		if (ExitCm <= Inset)
+		{
+			continue;
+		}
+		const FVector Ideal = PmcTacticalRules::PointInsetFromRoofEdge(State.Post.Location, Dir, ExitCm, Inset);
+		FNavLocation Projected;
+		if (!Nav || !Nav->ProjectPointToNavigation(Ideal, Projected, FVector(80.f, 80.f, 150.f)) || FMath::Abs(Projected.Location.Z - Ideal.Z) > 150.f)
+		{
+			continue;
+		}
+		const FVector2D OnNav(Projected.Location.X, Projected.Location.Y);
+		if (!SameFloor(Home, Probe(OnNav)))
+		{
+			continue;
+		}
+		// RemainingAt steps by 25 cm, so a spot 60 cm inside the edge reads as 50. Below that the capsule meets the parapet.
+		const float Remaining = RemainingAt(OnNav);
+		if (Remaining < 45.f || Remaining > 170.f)
+		{
+			continue;
+		}
+		Chosen = Projected.Location;
+		ChosenRemaining = Remaining;
+		bPlaced = true;
+		break;
+	}
+	State.bOverwatchSpotSnapped = true;
+	if (!bPlaced || FVector::Dist2D(Chosen, State.Post.Location) < 30.f)
+	{
+		if (!bPlaced)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s overwatch post stays %s (no roof navmesh within 170 cm of the parapet, edge %.0f cm out)"),
+				TeamId, *Fighter.DisplayName.ToString(), *State.Post.Location.ToCompactString(), ExitCm);
+		}
+		return;
+	}
+	const FVector Old = State.Post.Location;
+	const float Half = Fighter.GetSimpleCollisionHalfHeight();
+	Fighter.StopOperative();
+	Fighter.SetActorLocation(FVector(Chosen.X, Chosen.Y, Chosen.Z + Half), false, nullptr, ETeleportType::TeleportPhysics);
+	State.Post.Location = Chosen;
+	if (UTacticalMapSubsystem* Map = World->GetSubsystem<UTacticalMapSubsystem>())
+	{
+		if (!Map->MoveOverwatchSpot(State.Post.SourceIndex, State.Post.SpotIndex, Chosen))
+		{
+			UE_LOG(LogCodexTactics, Warning, TEXT("[PmcAI] team %d: %s overwatch spot %d:%d was not in the tactical file"),
+				TeamId, *Fighter.DisplayName.ToString(), State.Post.SourceIndex, State.Post.SpotIndex);
+		}
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s overwatch post snapped to the parapet %s (was %s, %.0f cm inside the edge)"),
+		TeamId, *Fighter.DisplayName.ToString(), *Chosen.ToCompactString(), *Old.ToCompactString(), ChosenRemaining);
 }
 
 void UPmcSquadSubsystem::KeepCandidatesOnNav(TArray<FPmcPostCandidate>& Candidates) const

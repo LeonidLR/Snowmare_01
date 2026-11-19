@@ -268,6 +268,50 @@ bool FPmcTacticalWeightsJsonTest::RunTest(const FString&)
 	return true;
 }
 
+// G008b: the posted marksman fires from the parapet the opening shot crosses, about 60 cm inside it.
+// Seed 11's spot faces across the roof; the street is the south edge. Seed 33's shot leaves the east edge.
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcTacticalOverwatchParapetTest, "CodexTactics.AI.PmcTactical.OverwatchParapet",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcTacticalOverwatchParapetTest::RunTest(const FString&)
+{
+	const FBox2D Hall(FVector2D(3200.f, -3250.f), FVector2D(5700.f, 550.f));
+	const FVector Lind(5600.f, -750.f, 900.f);
+	const FVector2D Threat = FVector2D(2505.f - 5600.f, -8713.f - (-750.f)).GetSafeNormal();
+	const FVector Snapped = PmcTacticalRules::SnapOverwatchSpotToParapet(Lind, Threat, Hall, 60.f);
+	TestTrue(TEXT("seed 11 stays on B_hall_n"), Snapped.X > 3200.f && Snapped.X < 5700.f && Snapped.Y > -3250.f && Snapped.Y < 550.f);
+	const float ToSouth = (-3250.f - static_cast<float>(Snapped.Y)) / static_cast<float>(Threat.Y);
+	TestNearlyEqual(TEXT("seed 11: 60 cm inside the south parapet, the street the shot crosses"), ToSouth, 60.f, 1.f);
+	const FVector2D Along(Snapped.X - Lind.X, Snapped.Y - Lind.Y);
+	TestNearlyEqual(TEXT("the snap stays on the shot"), static_cast<float>(Along.X * Threat.Y - Along.Y * Threat.X), 0.f, 2.f);
+	TestTrue(TEXT("he leaves the interior spot"), FVector::Dist2D(Snapped, Lind) > 2000.f);
+
+	// Facing yaw -145 points across the roof to the west wall, not at the street.
+	const FVector2D Facing(-0.8192f, -0.5736f);
+	const FVector West = PmcTacticalRules::SnapOverwatchSpotToParapet(Lind, Facing, Hall, 60.f);
+	TestTrue(TEXT("facing yaw -145 is the west parapet, not Lind's street"), West.X < 3400.f);
+	TestTrue(TEXT("the threat snap is not that west point"), Snapped.X > 4000.f);
+
+	const FBox2D HaasRoof(FVector2D(-12108.f, 613.f), FVector2D(-9975.f, 2125.f));
+	const FVector Haas(-10075.f, 713.f, 900.f);
+	const FVector2D HaasDir = FVector2D(-1504.f - (-10075.f), 15539.f - 713.f).GetSafeNormal();
+	const FVector HaasSnap = PmcTacticalRules::SnapOverwatchSpotToParapet(Haas, HaasDir, HaasRoof, 60.f);
+	const float ToEast = (-9975.f - static_cast<float>(HaasSnap.X)) / static_cast<float>(HaasDir.X);
+	TestNearlyEqual(TEXT("seed 33: 60 cm inside the east parapet"), ToEast, 60.f, 1.f);
+	TestTrue(TEXT("seed 33 stays on the roof"), HaasSnap.Y > 613.f && HaasSnap.Y < 2125.f);
+
+	const FVector Close(5600.f, -3210.f, 900.f);
+	const FVector Stayed = PmcTacticalRules::SnapOverwatchSpotToParapet(Close, FVector2D(0.f, -1.f), Hall, 60.f);
+	TestNearlyEqual(TEXT("already within 60 cm of the parapet stays"), static_cast<float>(Stayed.Y), static_cast<float>(Close.Y), 0.1f);
+
+	const FVector Street(2500.f, -8000.f, 0.f);
+	const FVector Unmoved = PmcTacticalRules::SnapOverwatchSpotToParapet(Street, Threat, Hall, 60.f);
+	TestNearlyEqual(TEXT("a spot off the roof is not pulled onto it"), static_cast<float>(Unmoved.X), static_cast<float>(Street.X), 0.1f);
+	const FVector NoDir = PmcTacticalRules::SnapOverwatchSpotToParapet(Lind, FVector2D::ZeroVector, Hall, 60.f);
+	TestNearlyEqual(TEXT("no shot direction stays"), static_cast<float>(NoDir.X), static_cast<float>(Lind.X), 0.1f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcTacticalScenarioTest, "CodexTactics.AI.PmcTactical.ArenaScenario",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

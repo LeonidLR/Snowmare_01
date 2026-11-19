@@ -311,4 +311,71 @@ namespace PmcTacticalRules
 	{
 		return WalkFromCm >= 0.f && NowCm > WalkFromCm - PostWalkMinProgressCm;
 	}
+
+	namespace PmcTacticalLocal
+	{
+		/** Exit distance of a ray that starts inside Box, or -1 when the origin is outside or Dir is zero. */
+		float RayExitBox(const FVector2D& Origin, const FVector2D& Dir, const FBox2D& Box)
+		{
+			const float D[2] = { static_cast<float>(Dir.X), static_cast<float>(Dir.Y) };
+			const float P[2] = { static_cast<float>(Origin.X), static_cast<float>(Origin.Y) };
+			const float BMin[2] = { static_cast<float>(Box.Min.X), static_cast<float>(Box.Min.Y) };
+			const float BMax[2] = { static_cast<float>(Box.Max.X), static_cast<float>(Box.Max.Y) };
+			float TMin = 0.f;
+			float TMax = TNumericLimits<float>::Max();
+			for (int32 Axis = 0; Axis < 2; ++Axis)
+			{
+				if (FMath::Abs(D[Axis]) < KINDA_SMALL_NUMBER)
+				{
+					if (P[Axis] < BMin[Axis] || P[Axis] > BMax[Axis])
+					{
+						return -1.f;
+					}
+				}
+				else
+				{
+					float T1 = (BMin[Axis] - P[Axis]) / D[Axis];
+					float T2 = (BMax[Axis] - P[Axis]) / D[Axis];
+					if (T1 > T2)
+					{
+						Swap(T1, T2);
+					}
+					TMin = FMath::Max(TMin, T1);
+					TMax = FMath::Min(TMax, T2);
+					if (TMin > TMax)
+					{
+						return -1.f;
+					}
+				}
+			}
+			// Inside: the entry is behind the origin and the exit is ahead. On the boundary, TMax is the far side.
+			return TMin <= 1.f && TMax > 1.f ? TMax : -1.f;
+		}
+	}
+
+	FVector PointInsetFromRoofEdge(const FVector& Location, const FVector2D& Dir, float ExitDistanceCm, float InsetCm)
+	{
+		const FVector2D Direction = Dir.GetSafeNormal();
+		if (Direction.IsNearlyZero() || !(InsetCm > 0.f) || !(ExitDistanceCm > InsetCm))
+		{
+			return Location;
+		}
+		const FVector2D Snapped = FVector2D(Location.X, Location.Y) + Direction * (ExitDistanceCm - InsetCm);
+		return FVector(Snapped.X, Snapped.Y, Location.Z);
+	}
+
+	FVector SnapOverwatchSpotToParapet(const FVector& Location, const FVector2D& Dir, const FBox2D& Footprint, float InsetCm)
+	{
+		const FVector2D Direction = Dir.GetSafeNormal();
+		if (Direction.IsNearlyZero() || Footprint.Max.X <= Footprint.Min.X || Footprint.Max.Y <= Footprint.Min.Y)
+		{
+			return Location;
+		}
+		const float ExitCm = PmcTacticalLocal::RayExitBox(FVector2D(Location.X, Location.Y), Direction, Footprint);
+		if (ExitCm < 0.f)
+		{
+			return Location;
+		}
+		return PointInsetFromRoofEdge(Location, Direction, ExitCm, InsetCm);
+	}
 }

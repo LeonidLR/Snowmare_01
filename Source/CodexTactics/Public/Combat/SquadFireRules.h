@@ -127,6 +127,12 @@ namespace SquadFireRules
 	 */
 	CODEXTACTICS_API bool MayClearRoofLip(const FRoofLipShot& Shot, const FRoofLipConfig& Lip);
 
+	/**
+	 * The blocked hit is the roof he stands on: the floor itself, or his parapet (the floor continues just inside the face and
+	 * does not continue just outside). A crate on the roof has floor on both sides. The next building has none just inside.
+	 */
+	CODEXTACTICS_API bool IsShooterRoofRim(bool bSameFloor, bool bFloorJustInside, bool bFloorJustOutside);
+
 	/** The retry starts PastCm past the rim's near face, at the muzzle's height (the line then falls to the target). */
 	CODEXTACTICS_API FVector RoofLipRetryOrigin(const FVector& Muzzle, const FVector& Impact, float PastCm);
 

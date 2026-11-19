@@ -38,6 +38,12 @@ public:
 	float GetDangerAt(const FVector& Point, bool bSquadSide = true) const { return DangerAt(Point, bSquadSide ? ETacticalSide::Squad : ETacticalSide::Pmc).Danger; }
 
 	const FTacticalMapFile& GetFile() const { return File; }
+
+	/**
+	 * Move one overwatch spot (G008b). The posted man fires from the parapet the shot crosses; IsAtOverwatchSpot reads this
+	 * spot, so the edge he moves to has to be the spot of record. False when the roof or the spot index is missing.
+	 */
+	bool MoveOverwatchSpot(int32 RoofIndex, int32 SpotIndex, const FVector& Location);
 	const FTacticalRuntimeConfig& GetConfig() const { return Config; }
 	const FString& GetLoadedPath() const { return LoadedPath; }
 

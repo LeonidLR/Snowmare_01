@@ -105,6 +105,11 @@ FShotLineVerdict SquadFireRules::JudgeLine(EShotLineHit Hit, EOperativeStance St
 	return Verdict;
 }
 
+bool SquadFireRules::IsShooterRoofRim(bool bSameFloor, bool bFloorJustInside, bool bFloorJustOutside)
+{
+	return bSameFloor || (bFloorJustInside && !bFloorJustOutside);
+}
+
 bool SquadFireRules::MayClearRoofLip(const FRoofLipShot& Shot, const FRoofLipConfig& Lip)
 {
 	if (!(Lip.LipCm > 0.f) || !(Lip.PastCm > 0.f))

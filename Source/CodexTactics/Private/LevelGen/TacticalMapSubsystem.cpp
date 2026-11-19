@@ -148,6 +148,16 @@ void UTacticalMapSubsystem::Clear()
 	bLoaded = false;
 }
 
+bool UTacticalMapSubsystem::MoveOverwatchSpot(int32 RoofIndex, int32 SpotIndex, const FVector& Location)
+{
+	if (!File.OverwatchRoofs.IsValidIndex(RoofIndex) || !File.OverwatchRoofs[RoofIndex].Spots.IsValidIndex(SpotIndex))
+	{
+		return false;
+	}
+	File.OverwatchRoofs[RoofIndex].Spots[SpotIndex].Location = Location;
+	return true;
+}
+
 void UTacticalMapSubsystem::Dump() const
 {
 	if (!bLoaded)

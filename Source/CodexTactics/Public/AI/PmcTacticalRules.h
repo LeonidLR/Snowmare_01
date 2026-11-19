@@ -138,4 +138,17 @@ namespace PmcTacticalRules
 	 * False without a walk (WalkFromCm < 0) - a walk that made progress, or one another order interrupted, is no failed try.
 	 */
 	CODEXTACTICS_API bool PostWalkEndedShort(float WalkFromCm, float NowCm);
+
+	/**
+	 * The point InsetCm before a roof edge that the shot reaches at ExitDistanceCm along Dir (planar). Dir need not be a unit.
+	 * Already within InsetCm, a zero Dir, or no positive exit stays at Location. Z is unchanged.
+	 */
+	CODEXTACTICS_API FVector PointInsetFromRoofEdge(const FVector& Location, const FVector2D& Dir, float ExitDistanceCm, float InsetCm);
+
+	/**
+	 * Slide an overwatch spot toward the street until it is InsetCm inside Footprint, along Dir (the shot, not the post's facing).
+	 * The spot stays when it is already that close, outside the footprint, or Dir is zero. Z is unchanged.
+	 * About 60 cm: a kneeling muzzle then meets the parapet inside lip_cm, and the point is still on the roof.
+	 */
+	CODEXTACTICS_API FVector SnapOverwatchSpotToParapet(const FVector& Location, const FVector2D& Dir, const FBox2D& Footprint, float InsetCm);
 }

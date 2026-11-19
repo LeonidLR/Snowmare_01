@@ -22,7 +22,7 @@
 
 /**
  * A shot over the shooter's own roof rim (G008b). The crouch muzzle sits under a low parapet; a line from just past that
- * rim is the shot the sight already allowed. Numbers: Content/Data/Combat/fire_gate.json "roof_lip".
+ * rim is the shot the sight already allowed. The rim is the floor he stands on, or his own parapet. Numbers: Content/Data/Combat/fire_gate.json "roof_lip".
  */
 struct CODEXTACTICS_API FRoofLipConfig
 {
@@ -80,7 +80,7 @@ struct CODEXTACTICS_API FFireGateConfig
 
 	/**
 	 * fire_gate.json "roof_lip" (G008b). A kneeling muzzle (85 cm) on a roof hits the parapet beside his feet.
-	 * One step past that rim, and only when the hit is the floor he stands on. SquadFireRules::MayClearRoofLip.
+	 * One step past that rim, when the hit is the floor he stands on or his own parapet. SquadFireRules::MayClearRoofLip.
 	 */
 	FRoofLipConfig RoofLip;
 };

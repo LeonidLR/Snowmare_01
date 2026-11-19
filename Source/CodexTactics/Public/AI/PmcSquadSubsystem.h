@@ -318,6 +318,11 @@ private:
 		 * Stays set while he remains on the post. Cleared when he steps off.
 		 */
 		bool bOverwatchHoldClosed = false;
+		/**
+		 * G008b: this posting already slid the overwatch spot to the parapet the first in-range shot crosses.
+		 * Cleared with the contact clock when he steps off the roof.
+		 */
+		bool bOverwatchSpotSnapped = false;
 	};
 
 	struct FTeam
@@ -403,6 +408,12 @@ private:
 
 	/** ProjectToNav with a small vertical extent: OutPoint on the navmesh within 150 cm of Point's own height (false: none there). */
 	bool ProjectToNavAtLevel(const FVector& Point, FVector& OutPoint) const;
+
+	/**
+	 * G008b: once, on the first in-range contact, move this overwatch post to about 60 cm inside the parapet the shot
+	 * crosses and stand him there the same frame. The tactical-map spot moves with the post. Already that close stays.
+	 */
+	void TrySnapOverwatchPost(int32 TeamId, AOperativeCharacter& Fighter, FFighterState& State, const FTeam& Team, float WeaponRangeCm);
 
 	FTeam& TeamOf(int32 TeamId);
 	const FTeam* FindTeam(int32 TeamId) const;

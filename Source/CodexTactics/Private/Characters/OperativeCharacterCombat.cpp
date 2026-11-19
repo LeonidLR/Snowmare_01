@@ -178,11 +178,12 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 			}
 		}
 	}
-	// G008b review: one step past his own roof rim. lip_cm is about 2 m, so a crate, sandbags, or the next
-	// parapet stay in the way. The blocked muzzle hit is the only candidate, and it must be the floor he
-	// stands on (same actor, or the same floor component). The real shot is traced up to that rim, then
-	// from the rim to the retry point with only the rim actor ignored. A tall wall and a man on the ground
-	// stay blocked (fire_gate.json "roof_lip", SquadFireRules::MayClearRoofLip).
+	// G008b review: one step past his own roof rim. lip_cm is about 2 m, so a crate, sandbags in the middle
+	// of the roof, or the next building stay in the way. The blocked muzzle hit is the only candidate. It is
+	// his rim when it is the floor he stands on, or his parapet: that floor continues just inside the face and
+	// does not continue just outside (the parapet is its own actor, so the floor check alone never sees it).
+	// The real shot is traced up to that rim, then from the rim to the retry point with only the rim actor
+	// ignored. A tall wall and a man on the ground stay blocked (fire_gate.json "roof_lip", SquadFireRules::MayClearRoofLip).
 	if (Kind == EShotLineHit::Blocked && !bCornerShot && Hit.GetActor() && !Hit.bStartPenetrating)
 	{
 		const FRoofLipConfig& Lip = FireGateRules::GetConfig().RoofLip;
@@ -195,7 +196,38 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 			UPrimitiveComponent* FloorComp = bFloor && !FloorHit.bStartPenetrating ? FloorHit.GetComponent() : nullptr;
 			AActor* RimActor = Hit.GetActor();
 			UPrimitiveComponent* RimComp = Hit.GetComponent();
-			const bool bOwnRoof = (FloorActor && RimActor == FloorActor) || (FloorComp && RimComp == FloorComp);
+			const bool bSameFloor = (FloorActor && RimActor == FloorActor) || (FloorComp && RimComp == FloorComp);
+			bool bFloorJustInside = false;
+			bool bFloorJustOutside = false;
+			if (!bSameFloor && (FloorActor || FloorComp))
+			{
+				FVector Inward(Hit.ImpactNormal.X, Hit.ImpactNormal.Y, 0.f);
+				Inward = Inward.GetSafeNormal();
+				if (Inward.IsNearlyZero())
+				{
+					Inward = FVector(LineFrom.X - Hit.ImpactPoint.X, LineFrom.Y - Hit.ImpactPoint.Y, 0.f).GetSafeNormal();
+				}
+				if (!Inward.IsNearlyZero())
+				{
+					// 30 cm back onto his deck, 45 cm past the face: a 20 cm parapet is cleared, a crate still has deck beyond it.
+					auto FloorContinues = [&](float SignedCm) -> bool
+					{
+						const FVector At = FVector(Hit.ImpactPoint.X, Hit.ImpactPoint.Y, 0.f) + Inward * SignedCm;
+						FHitResult ProbeHit;
+						const bool bProbe = World->LineTraceSingleByChannel(ProbeHit, FVector(At.X, At.Y, MyFeet.Z + 40.f),
+							FVector(At.X, At.Y, MyFeet.Z - 120.f), ECC_Visibility, Params);
+						if (!bProbe || ProbeHit.bStartPenetrating || ProbeHit.ImpactNormal.Z < 0.5f)
+						{
+							return false;
+						}
+						const bool bHisFloor = (FloorActor && ProbeHit.GetActor() == FloorActor) || (FloorComp && ProbeHit.GetComponent() == FloorComp);
+						return bHisFloor && FMath::Abs(ProbeHit.ImpactPoint.Z - FloorHit.ImpactPoint.Z) <= Lip.BandBelowCm;
+					};
+					bFloorJustInside = FloorContinues(30.f);
+					bFloorJustOutside = FloorContinues(-45.f);
+				}
+			}
+			const bool bOwnRoof = SquadFireRules::IsShooterRoofRim(bSameFloor, bFloorJustInside, bFloorJustOutside);
 			if (bOwnRoof)
 			{
 				FHitResult TopHit;
