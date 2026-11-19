@@ -22,6 +22,8 @@ Machine: codex-worker, checkout C:\Work\CodexTactics-slot1. Brief: docs/port/WOR
 | alley T-05 iter 1 | c4f8f561 | 0 | 9.4 | 15.3 | 2.42 |
 | crossroads T-05 kill zone 0.25 | 4588fbbc | 0.33 | 3.1 | 22.8 | 1.85 |
 | alley T-05 kill zone 0.25 | 4588fbbc | 0 | 8.6 | 18.9 | 2.33 |
+| crossroads T-05 iter 3 (reach before contact) | 5544431a | 0.59 | 0.9 | 31.1 | 2.0 |
+| alley T-05 iter 3 | 5544431a | 0.33 | 1.4 | 27.0 | 4.84 |
 Folders: C:/Work/CodexTactics/Saved/Worker/nightloop/2026-11-19/digest.log; slot1 Saved/Logs/SeedBatch/dayloop-<ref>-{cross,alley}.
 Target (brief): on_pos >= 0.67, crossfire >= 45, idle <= 2 s on both. NOT met yet.
 My 30-seed runs take the machine with a day-caller marker `SYNC.worker-lead-slot1-*` (removed after each batch), so they never run in parallel with the night loop.
@@ -39,11 +41,23 @@ My 30-seed runs take the machine with a day-caller marker `SYNC.worker-lead-slot
   OBJECTIVE. Decision: the ground kill zone moves onto the attackers' nav path, kill_zone_reach_factor x reach before the objective.
 - Iteration 2 (Sonnet) running: that kill zone + factor sweep on 10 seeds + why seated men are not on position at contact.
 
-## T-05 state (worker/t05-firing-positions 4588fbbc, gated, NOT accepted)
-Iteration 2: ground kill zone on the attackers' nav path (kill_zone_reach_factor; 10-seed sweep 0.6 / 0.4 / 0.25 -> 0.25). Gate: build OK,
-FiringPosition 11/11, Pmc 70/70, 7 smokes PASS. Findings + next step in the T-05 report handover: seated pairs reach 47-72 deg, but the
-defenders spawn ~8 m from the objective and are caught walking; next = seat only positions reachable before the attackers' expected arrival.
-Alley: some approach points have no ground cover that sees them (height / mobile anvil = T-08b in the roadmap) - acceptance fork for the main lead.
+## T-05 state (worker/t05-firing-positions 5544431a, gated, merged into this branch 2d2ad1e9; NOT accepted as done)
+Iterations on the worker: (1) one shared cover scan per area, axis forward rule, numbers in JSON; (2) ground kill zone on the attackers'
+nav path (kill_zone_reach_factor 0.25 after a 10-seed sweep); (3) seat only positions reachable before contact (defender sprint 725 cm/s
+vs the scripted attackers' walk 220 cm/s, both from the movement rules; attacker path until within the squad's median reach).
+Gate on 5544431a: build OK, FiringPosition 12/12, Pmc 70/70, FiringPositionSmoke / TacticalPmc / PmcArenaTactical / PmcFireLine /
+HitchProbe / PmcRoofDefence / PmcStalemate PASS. Idle <= 2 s met on both; on_pos 0.59 / 0.33 and crossfire 31 / 27 short.
+**Main lead must review - deviations from the brief (stand-in lead's calls):**
+- `min_covered_share` 0.34 -> 0.22 (a brief number): a position must see 2 of 9 area samples, not 3. Alley seats 17 of 30 instead of 4 of 30.
+  Same real-shot traces, nothing through geometry.
+- `forward_margin_cm` 800 -> 4000: the "not forward of the kill zone" rule is in effect off; only the reach-before-contact rule guards it.
+- `attacker_speed_factor` 1.0 assumes the scripted (walking) opponent; vs a sprinting opponent (factor 3.3) fewer men seat - re-measure
+  when the opponent changes.
+**What limits the rest (evidence in the T-05 report):** the attackers fire first from ~60 m in some seeds (RPG at t 0.6-1.6 s); a seated man
+is switched off his slot by the commander's utility (Suppress / Ambush / TakeCover) and the arena counts only bInCover or a tactical post -
+that is the squad layer (T-08); the alley's approach has little ground cover that sees it (height / mobile anvil = T-08b).
+Proposal for the main lead: accept T-05 phase b as the positions layer (idle met, on_pos / crossfire much better), move the remaining
+on_pos / crossfire acceptance to T-06 / T-08 where the commander and fire discipline live.
 
 ## T-021 cold indoors - DONE, merged into this branch (34c832ab)
 worker/t021-cold-indoors 86ef2882 (from claude/cold-indoors 01c6cb01 + main). Leafless doorway = open (designer 11-19), test 6/14.
