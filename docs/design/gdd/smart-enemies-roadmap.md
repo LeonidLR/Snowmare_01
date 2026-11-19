@@ -30,7 +30,7 @@ Rules of the plan:
 | OQ-2 - **RESOLVED 2026-11-19: B**, authored squad plays above the existing utility | nothing any more: Phase 3 / T-08 is unblocked | done |
 | OQ-10 - **RESOLVED 2026-11-19: a**, weight evolution paused, scenario regressions at night | nothing any more: the nights follow section 5; T-10 delivers the runner and the gate | done |
 | OQ-17 lab maps for judging (rec. small lab maps + generator arenas) | task T-02, all scenario smokes | day 1 |
-| OQ-1 first milestone scope (rec. streets and roofs first) | the order of Phases 4 and 5 | end of week 2 |
+| OQ-1 first milestone scope - **RESOLVED 2026-11-19: streets and roofs first** (Phase 4 before Phase 5) | the order of Phases 4 and 5 | decided |
 | OQ-21 enemy charges scope | the charge half of T-11 | week 2 |
 | OQ-22 defence in depth: who meets the player on the route | Phase 4 | week 3 |
 | OQ-11 the evaluation opponent (rec. bot squad that sees humans) | Phase 8, part of Phase 0 | week 3 |
@@ -110,7 +110,7 @@ Antigravity and Codex lanes do not depend on it.
 | W1 d6-7 | T-05 review + merge; T-07 start | T-10 gate + regression runner | T-12 report | - | - |
 | W2 d1-4 | T-07 movement; T-08 squad layer + PL-02 + PL-03 static (A-00A) | T-10 finish; T-09 follow-ups | regression fixes from T-12 (light) | - | roof firing-step rule |
 | W2 d5-7 | T-08b mobile anvil + height (A-00B); T-11 posts in game; T-08c obstacle-top cut-off (A-00C) starts, may end in week 3 | scenario regression nightly report | - | - | - |
-| End of W2 | two re-recorded clips to the designer; decision on Phase 4 vs 5 order (OQ-1) | | | | |
+| End of W2 | two re-recorded clips to the designer; Phase 4 (streets / roofs) continues - OQ-1 decided 2026-11-19 | | | | |
 
 ### Tasks (docs/port/TASK_TEMPLATE.md form)
 
