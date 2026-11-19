@@ -68,3 +68,6 @@ merge main; touch Tools/TrainingGround (T-020 owns it).
 PmcDefenceRules' API), `Source/CodexTacticsDev/Private/Debug/`, `Source/CodexTacticsTests/`, `Scripts/test_map.json`,
 `docs/port/claude/**`, `docs/systems/` (a short note in the cold / environment doc).
 Report: `docs/port/claude/outbox/T021-cold-indoors.report.md`.
+
+## Designer decision 2026-11-19: doorways without a leaf = OPEN ("Open, with draught")
+A door gap with no leaf / no state counts as open (door weight 3 + draught). Windows sealed until a runtime state exists.

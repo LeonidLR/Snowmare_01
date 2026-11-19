@@ -86,3 +86,9 @@ there with `--to worker`. The night loop keeps running on its own schedule eithe
 ## Known test noise in the main checkout (main lead 11-19)
 `npm test` in the MAIN checkout fails 3 tests because of the designer's uncommitted X6 files (gen_ref_01_02_depot_1_x6.json has
 no analysis block; X6 power) + one timing test under load. In a clean checkout / slot1 it is 541/541. Not a regression.
+
+## Designer decision 2026-11-19 (T-021): doorways without a leaf are OPEN
+«Open, with draught»: in generated buildings a doorway gap with no door leaf counts as an OPEN opening (it leaks with the
+door weight 3 and makes a draught: outdoor cold within 3.5 m, fading to the building base at 10 m). Windows stay sealed until a
+runtime glass / boarded state exists. Change it in `ColdShelterRules::IsStateOpen` (a missing state on a door = open) or in the
+layout reader, with a unit test (2 leafless doors + 8 windows -> leak 6/14), before the T-021 gate.
