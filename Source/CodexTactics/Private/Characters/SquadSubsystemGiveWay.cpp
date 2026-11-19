@@ -16,6 +16,7 @@
 #include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "Formation/FormationTuning.h"
+#include "Formation/RampFileRules.h"
 #include "HAL/IConsoleManager.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationPath.h"
@@ -58,6 +59,40 @@ namespace SquadSubsystemGiveWayLocal
 	}
 }
 
+bool USquadSubsystem::RampAxisUnder(const FVector& Point, FVector2D& OutUphill) const
+{
+	OutUphill = FVector2D::ZeroVector;
+	const UWorld* World = GetWorld();
+	if (!World || !IsRampUnder(FVector2D(Point), static_cast<float>(Point.Z)))
+	{
+		return false;
+	}
+	// The axis: the ramp component's up vector (one axis per flight, as IsOperativeOnRamp), else the floor normal.
+	FHitResult Hit;
+	FCollisionObjectQueryParams Objects;
+	Objects.AddObjectTypesToQuery(ECC_WorldStatic);
+	const FCollisionQueryParams Params(SCENE_QUERY_STAT(SquadGiveWayRampAxis), false);
+	if (World->LineTraceSingleByObjectType(Hit, Point + FVector(0.f, 0.f, 100.f), Point - FVector(0.f, 0.f, 400.f), Objects, Params))
+	{
+		const UPrimitiveComponent* Ramp = Hit.GetComponent();
+		const FVector Up = Ramp ? Ramp->GetUpVector() : FVector::UpVector;
+		const FVector2D FromUp = RampFileRules::UphillOf(Up);
+		OutUphill = FromUp.IsNearlyZero() || Up.Z > 0.999 ? RampFileRules::UphillOf(Hit.ImpactNormal) : FromUp;
+	}
+	return true;
+}
+
+void USquadSubsystem::ReleaseGiveWaySlotHold(AOperativeCharacter& Walker, const TCHAR* Why)
+{
+	FGiveWaySlotHold Hold;
+	if (!GiveWaySlotHolds.RemoveAndCopyValue(&Walker, Hold))
+	{
+		return;
+	}
+	Walker.SetTrafficHold(Hold.Mover.Get(), false);
+	UE_LOG(LogCodexTactics, Display, TEXT("[GiveWay] %s walks to his formation slot again: %s"), *Walker.DisplayName.ToString(), Why);
+}
+
 void USquadSubsystem::BuildGiveWayPath(const AOperativeCharacter& Mover, TArray<FVector>& OutPath)
 {
 	OutPath.Reset();
@@ -73,6 +108,15 @@ void USquadSubsystem::BuildGiveWayPath(const AOperativeCharacter& Mover, TArray<
 		if (Path && Path->IsValid())
 		{
 			Cached.Points = Path->PathPoints;
+		}
+		// v2: the flights on it (their approach zones), probed once per order.
+		Cached.FlightFeet.Reset();
+		Cached.FlightDirections.Reset();
+		for (const SquadGiveWayRules::FFlightFoot& Foot : SquadGiveWayRules::FindFlightFeet(Cached.Points,
+			[this](const FVector& Point, FVector2D& OutUphill) { return RampAxisUnder(Point, OutUphill); }, SquadGiveWayTuning::Get().RampSampleCm))
+		{
+			Cached.FlightFeet.Add(Foot.Foot);
+			Cached.FlightDirections.Add(Foot.Direction);
 		}
 	}
 	if (Cached.Points.Num() < 2)
@@ -112,11 +156,23 @@ void USquadSubsystem::UpdateGiveWay()
 	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 	// Turn-based combat moves men only by the player's AP orders (API review): no give-way steps there.
 	const UTurnBasedCombatSubsystem* TurnBased = World ? World->GetSubsystem<UTurnBasedCombatSubsystem>() : nullptr;
+	TArray<TWeakObjectPtr<AOperativeCharacter>> SlotHeld;
+	GiveWaySlotHolds.GetKeys(SlotHeld);
 	if (CVarSquadGiveWay.GetValueOnGameThread() == 0 || !Tuning.bEnabled || !World || !Nav || (TurnBased && TurnBased->IsActive()))
 	{
 		GiveWayTargets.Reset();
+		for (const TWeakObjectPtr<AOperativeCharacter>& Walker : SlotHeld)
+		{
+			if (Walker.IsValid())
+			{
+				ReleaseGiveWaySlotHold(*Walker.Get(), TEXT("give way off"));
+			}
+		}
+		GiveWaySlotHolds.Reset();
 		return;
 	}
+	// v2 (b): the slot walkers held this frame (the rest are released after the movers' loop).
+	TSet<AOperativeCharacter*> SlotHoldsKept;
 	const double Now = World->GetTimeSeconds();
 	for (auto It = GiveWayTargets.CreateIterator(); It; ++It)
 	{
@@ -158,6 +214,70 @@ void USquadSubsystem::UpdateGiveWay()
 		}
 		Path.Reset();
 		bool bPathBuilt = false;
+		// v2: the flight he walks onto next (its approach zone), from his order's cached path.
+		SquadGiveWayRules::FFlightApproach Approach;
+		auto EnsurePath = [&]()
+		{
+			if (bPathBuilt)
+			{
+				return;
+			}
+			BuildGiveWayPath(*Mover, Path);
+			bPathBuilt = true;
+			if (const FGiveWayPath* Cached = GiveWayPaths.Find(Mover); Cached && Cached->FlightFeet.Num() > 0)
+			{
+				TArray<SquadGiveWayRules::FFlightFoot> Feet;
+				for (int32 Index = 0; Index < Cached->FlightFeet.Num(); ++Index)
+				{
+					Feet.Add({ Cached->FlightFeet[Index], Cached->FlightDirections[Index] });
+				}
+				Approach = SquadGiveWayRules::SelectApproach(Feet, FVector(Mover->GetActorLocation().X, Mover->GetActorLocation().Y, GiveWayFeetZ(*Mover)), Tuning);
+			}
+		};
+		// v2 (b): a formation walker whose slot walk enters the flight's approach zone waits (a traffic hold) until the mover is up.
+		EnsurePath();
+		if (Approach.bValid)
+		{
+			for (const TWeakObjectPtr<AOperativeCharacter>& WalkerRef : Members)
+			{
+				AOperativeCharacter* Walker = WalkerRef.Get();
+				if (!Walker || Walker == Mover || !IsGiveWayWalker(Walker) || Walker->HasOwnMoveOrder() || Walker->bInCover || GiveWayTargets.Contains(Walker)
+					|| HolderYieldTargets.Contains(Walker) || IsRampHeld(Walker) || FMath::Abs(GiveWayFeetZ(*Walker) - Approach.FootZ) > Tuning.SameLevelCm)
+				{
+					continue;
+				}
+				const float Extra = CapsuleRadius(*Walker) + Tuning.ClearanceCm;
+				if (const FGiveWaySlotHold* Hold = GiveWaySlotHolds.Find(Walker))
+				{
+					// Held: kept while the zone is still his slot walk's way and the hold is young.
+					if (Hold->Mover.Get() == Mover && Now - Hold->Since < Tuning.SlotHoldMaxSeconds
+						&& SquadGiveWayRules::SlotWalkEntersApproach(Approach, FVector2D(Walker->GetActorLocation()), FVector2D(Walker->GetLastMoveDestination()), Extra, Tuning))
+					{
+						SlotHoldsKept.Add(Walker);
+					}
+					continue;
+				}
+				const double* NextTry = GiveWayNextTry.Find(Walker);
+				if (!Walker->IsMoving() || Walker->IsTrafficHeld() || (NextTry && *NextTry > Now)
+					|| !SquadGiveWayRules::SlotWalkEntersApproach(Approach, FVector2D(Walker->GetActorLocation()), FVector2D(Walker->GetLastMoveDestination()), Extra, Tuning))
+				{
+					continue;
+				}
+				Walker->SetTrafficHold(Mover, true);
+				if (Walker->GetVelocity().SizeSquared2D() > 25.f)
+				{
+					Walker->StopOperative();
+				}
+				FGiveWaySlotHold NewHold;
+				NewHold.Mover = Mover;
+				NewHold.Since = Now;
+				GiveWaySlotHolds.Add(Walker, NewHold);
+				SlotHoldsKept.Add(Walker);
+				UE_LOG(LogCodexTactics, Display, TEXT("[GiveWay] %s waits: his slot walk to (%.0f, %.0f) crosses %s's approach to the flight foot (%.0f, %.0f) %.0f cm ahead of him"),
+					*Walker->DisplayName.ToString(), Walker->GetLastMoveDestination().X, Walker->GetLastMoveDestination().Y, *Mover->DisplayName.ToString(),
+					Approach.Foot.X, Approach.Foot.Y, Approach.ToFootCm);
+			}
+		}
 		for (const TWeakObjectPtr<AOperativeCharacter>& IdleRef : Members)
 		{
 			AOperativeCharacter* Idle = IdleRef.Get();
@@ -179,19 +299,23 @@ void USquadSubsystem::UpdateGiveWay()
 			{
 				continue;
 			}
-			if (!bPathBuilt)
-			{
-				BuildGiveWayPath(*Mover, Path);
-				bPathBuilt = true;
-			}
+			EnsurePath();
 			if (Path.Num() < 2)
 			{
 				break;
 			}
 			const float IdleFeet = GiveWayFeetZ(*Idle);
 			const FVector Feet(Idle->GetActorLocation().X, Idle->GetActorLocation().Y, IdleFeet);
+			const FVector2D Feet2D(Feet);
 			const float CrossCm = CapsuleRadius(*Mover) + CapsuleRadius(*Idle) + Tuning.ClearanceCm;
-			const SquadGiveWayRules::FCrossing Crossing = SquadGiveWayRules::FindCrossing(Path, Feet, CrossCm, Tuning);
+			SquadGiveWayRules::FCrossing Crossing = SquadGiveWayRules::FindCrossing(Path, Feet, CrossCm, Tuning);
+			// v2 (a): beside the line but in the flight's approach zone (the stair mouth the mover has to fit through) counts too.
+			const bool bInZone = Approach.bValid && FMath::Abs(IdleFeet - Approach.FootZ) <= Tuning.SameLevelCm
+				&& SquadGiveWayRules::InApproachZone(Approach, Feet2D, CapsuleRadius(*Idle), Tuning);
+			if (bInZone)
+			{
+				Crossing = SquadGiveWayRules::ApproachCrossing(Approach, Feet2D);
+			}
 			if (!Crossing.bCrosses || Idle->IsBehindBarricade())
 			{
 				continue; // clear of the path, or holding a barricade (a cover spot without the cover state)
@@ -221,7 +345,8 @@ void USquadSubsystem::UpdateGiveWay()
 			}
 			const FVector Lift(0.f, 0.f, Tuning.MaxRiseCm);
 			bool bStepped = false;
-			for (const FVector2D& Point : SquadGiveWayRules::AsideSpots(Path, Crossing, CrossCm, Tuning))
+			for (const FVector2D& Point : SquadGiveWayRules::AsideSpots(Path, Crossing, CrossCm, Tuning, &Feet2D, Approach.bValid ? &Approach : nullptr,
+					 CapsuleRadius(*Idle)))
 			{
 				FNavLocation OnNav;
 				FHitResult Hit;
@@ -230,15 +355,16 @@ void USquadSubsystem::UpdateGiveWay()
 					|| IsRampUnder(Point, IdleFeet)
 					// The navmesh projection may pull the spot back to the path (a wall beside it): still clear of it.
 					|| SquadGiveWayRules::DistanceToPath(Path, FVector2D(OnNav.Location), Crossing.AlongCm + Tuning.LookAheadCm) < CrossCm
+					|| (Approach.bValid && SquadGiveWayRules::InApproachZone(Approach, FVector2D(OnNav.Location), CapsuleRadius(*Idle), Tuning))
 					|| Taken.ContainsByPredicate([&Point, CrossCm](const FVector2D& Other) { return FVector2D::Distance(Other, Point) < CrossCm; })
 					|| World->LineTraceSingleByChannel(Hit, Feet + Lift, OnNav.Location + Lift, ECC_Visibility, WalkParams))
 				{
 					continue;
 				}
 				const EOperativeOrderResult Result = Idle->FollowTo(OnNav.Location, FormationTuning::Get().PaceWalkSpeed);
-				UE_LOG(LogCodexTactics, Display, TEXT("[GiveWay] %s (idle) stands on %s's path %.0f cm ahead of him: steps aside from (%.0f, %.0f) to (%.0f, %.0f) -> %d"),
-					*Idle->DisplayName.ToString(), *Mover->DisplayName.ToString(), Crossing.AlongCm, Feet.X, Feet.Y, OnNav.Location.X, OnNav.Location.Y,
-					static_cast<int32>(Result));
+				UE_LOG(LogCodexTactics, Display, TEXT("[GiveWay] %s (idle) stands on %s's %s %.0f cm ahead of him: steps aside from (%.0f, %.0f) to (%.0f, %.0f) -> %d"),
+					*Idle->DisplayName.ToString(), *Mover->DisplayName.ToString(), bInZone ? TEXT("flight approach") : TEXT("path"), Crossing.AlongCm, Feet.X, Feet.Y,
+					OnNav.Location.X, OnNav.Location.Y, static_cast<int32>(Result));
 				if (Result == EOperativeOrderResult::Accepted)
 				{
 					GiveWayTargets.Add(Idle, FVector2D(OnNav.Location));
@@ -251,6 +377,26 @@ void USquadSubsystem::UpdateGiveWay()
 				UE_LOG(LogCodexTactics, Display, TEXT("[GiveWay] %s (idle) stands on %s's path %.0f cm ahead of him at (%.0f, %.0f): no free spot aside"),
 					*Idle->DisplayName.ToString(), *Mover->DisplayName.ToString(), Crossing.AlongCm, Feet.X, Feet.Y);
 			}
+		}
+	}
+	// v2 (b): the slot walkers no mover holds any more (he is up / stopped, the walk no longer crosses, the hold timed out) walk on.
+	for (const TWeakObjectPtr<AOperativeCharacter>& WalkerRef : SlotHeld)
+	{
+		AOperativeCharacter* Walker = WalkerRef.Get();
+		if (!Walker)
+		{
+			GiveWaySlotHolds.Remove(WalkerRef);
+			continue;
+		}
+		if (!SlotHoldsKept.Contains(Walker))
+		{
+			const FGiveWaySlotHold* Hold = GiveWaySlotHolds.Find(Walker);
+			const bool bTimedOut = Hold && Now - Hold->Since >= Tuning.SlotHoldMaxSeconds;
+			if (bTimedOut)
+			{
+				GiveWayNextTry.Add(Walker, Now + Tuning.SlotHoldMaxSeconds); // he walks his slot now, not held again at once
+			}
+			ReleaseGiveWaySlotHold(*Walker, bTimedOut ? TEXT("held too long") : TEXT("the way to the flight is clear"));
 		}
 	}
 }
