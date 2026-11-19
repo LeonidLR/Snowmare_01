@@ -1,0 +1,182 @@
+{
+  "_comment": "Sources of Scripts/Tools/mirror_to_worker.py (designer 2026-11-18: the main PC is formatted, codex-worker keeps a copy). src = absolute folder or file on the main PC (~ = the user profile); each goes to C:/Mirror/Main/<name>/ on the worker. exclude = fnmatch patterns on the relative path or the name (folders are pruned). Credential / token / key files are excluded by the script itself (GLOBAL_EXCLUDES). The tracked repository is on GitHub; git_bundles keeps the local-only commits.",
+  "worker": "codex-worker",
+  "remote_root": "C:/Mirror/Main",
+  "remote_trash": "C:/Mirror/Trash",
+  "trash_days": 14,
+  "min_link_mbit": 20,
+  "sources": [
+    {
+      "name": "machine-info",
+      "src": "~/AppData/Local/CodexTactics/mirror/machine-info",
+      "exclude": []
+    },
+    {
+      "name": "gitconfig",
+      "src": "~/.gitconfig",
+      "exclude": []
+    },
+    {
+      "name": "ssh-config",
+      "src": "~/.ssh/config",
+      "exclude": []
+    },
+    {
+      "name": "dot-claude-json",
+      "src": "~/.claude.json",
+      "exclude": []
+    },
+    {
+      "name": "dot-claude",
+      "src": "~/.claude",
+      "exclude": [
+        "shell-snapshots",
+        "statsig",
+        "todos",
+        "cache",
+        "*.lock"
+      ]
+    },
+    {
+      "name": "Claude-Data",
+      "src": "~/AppData/Local/Claude-Data",
+      "exclude": [
+        "Cache",
+        "Code Cache",
+        "GPUCache",
+        "DawnCache",
+        "DawnGraphiteCache",
+        "DawnWebGPUCache",
+        "Cookies*",
+        "Network",
+        "Local Storage",
+        "Session Storage",
+        "IndexedDB",
+        "blob_storage",
+        "Service Worker",
+        "Shared Dictionary",
+        "*.log",
+        "*.lock"
+      ]
+    },
+    {
+      "name": "dot-codex",
+      "src": "~/.codex",
+      "exclude": [
+        "log",
+        "tmp",
+        ".tmp",
+        "cache",
+        "*.lock"
+      ]
+    },
+    {
+      "name": "dot-gemini",
+      "src": "~/.gemini",
+      "exclude": [
+        "tmp",
+        "cache",
+        "*.lock"
+      ]
+    },
+    {
+      "name": "dot-grok",
+      "src": "~/.grok",
+      "exclude": [
+        "tmp",
+        "cache",
+        "*.lock"
+      ]
+    },
+    {
+      "name": "Codex",
+      "src": "~/Documents/Codex",
+      "exclude": [
+        ".godot",
+        "*/.godot",
+        "__pycache__",
+        "node_modules",
+        "*/Intermediate",
+        "*/DerivedDataCache"
+      ]
+    },
+    {
+      "name": "CodexTactics",
+      "src": "~/Documents/Unreal Projects/CodexTactics",
+      "exclude": [
+        ".git",
+        "Intermediate",
+        "Binaries",
+        "DerivedDataCache",
+        ".vs",
+        "Saved/Logs",
+        "Saved/Crashes",
+        "Saved/StagedBuilds",
+        "Saved/Cooked",
+        "Saved/Shaders",
+        "Saved/Temp",
+        "*/Intermediate",
+        "*/Binaries",
+        "*.pdb",
+        "__pycache__",
+        "node_modules"
+      ]
+    },
+    {
+      "name": "PCG_01",
+      "src": "~/Documents/Unreal Projects/PCG_01",
+      "exclude": [
+        "Intermediate",
+        "Binaries",
+        "DerivedDataCache",
+        "Saved/Logs",
+        "Saved/Crashes",
+        "Saved/Shaders",
+        ".vs"
+      ]
+    },
+    {
+      "name": "WEFALL_Mig_01",
+      "src": "~/Documents/Unreal Projects/WEFALL_Mig_01",
+      "exclude": [
+        "Intermediate",
+        "Binaries",
+        "DerivedDataCache",
+        "Saved/Logs"
+      ]
+    },
+    {
+      "name": "_Reference",
+      "src": "~/Documents/Unreal Projects/_Reference",
+      "exclude": [
+        "Intermediate",
+        "Binaries",
+        "DerivedDataCache",
+        "Saved/Logs",
+        "Saved/Shaders"
+      ]
+    },
+    {
+      "name": "BuildingKitLab",
+      "src": "~/Documents/Unreal Projects/BuildingKitLab",
+      "exclude": [
+        "Intermediate",
+        "Binaries",
+        "DerivedDataCache",
+        "Saved/Logs",
+        "Saved/Crashes",
+        "Saved/Shaders",
+        ".vs",
+        "*/Intermediate",
+        "*/Binaries"
+      ]
+    }
+  ],
+  "git_bundles": [
+    {
+      "name": "CodexTactics",
+      "path": "~/Documents/Unreal Projects/CodexTactics"
+    }
+  ],
+  "_comment_order": "Sources go in this order: small and irreplaceable first (agent configs, memory), the big UE projects last."
+}
