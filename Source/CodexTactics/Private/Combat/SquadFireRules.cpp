@@ -105,6 +105,33 @@ FShotLineVerdict SquadFireRules::JudgeLine(EShotLineHit Hit, EOperativeStance St
 	return Verdict;
 }
 
+bool SquadFireRules::MayClearRoofLip(const FRoofLipShot& Shot, const FRoofLipConfig& Lip)
+{
+	if (!(Lip.LipCm > 0.f) || !(Lip.PastCm > 0.f))
+	{
+		return false;
+	}
+	if (Shot.HitDistanceCm <= 1.f || Shot.HitDistanceCm > Lip.LipCm)
+	{
+		return false;
+	}
+	if (Shot.TargetDistanceCm <= Shot.HitDistanceCm + Lip.PastCm)
+	{
+		return false;
+	}
+	if (Shot.ShooterFeetZ - Shot.TargetFeetZ < Lip.MinDropCm)
+	{
+		return false;
+	}
+	return Shot.RimTopZ >= Shot.ShooterFeetZ - Lip.BandBelowCm && Shot.RimTopZ <= Shot.ShooterFeetZ + Lip.BandAboveCm;
+}
+
+FVector SquadFireRules::RoofLipRetryOrigin(const FVector& Muzzle, const FVector& Impact, float PastCm)
+{
+	const FVector Flat(Impact.X - Muzzle.X, Impact.Y - Muzzle.Y, 0.f);
+	return FVector(Impact.X, Impact.Y, Muzzle.Z) + Flat.GetSafeNormal() * FMath::Max(PastCm, 0.f);
+}
+
 EShotAimPoint SquadFireRules::ChooseShotAimPoint(EShotLineHit BodyLine, bool bHasExposedPoint, EShotLineHit ExposedLine)
 {
 	// Only a wall in the body's way moves the aim; a barricade keeps JudgeLine's stance rules on the body.

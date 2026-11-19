@@ -19,6 +19,25 @@
  * Content/Data/Combat/fire_gate.json "params" (the FFireGateConfig defaults mirror it: CodexTactics.Combat.FireGate.TuningFileMirrorsDefaults).
  * Pure rules, unit tests CodexTactics.Combat.FireGate.*; runtime AOperativeCharacter::CanFireAt (OperativeCharacterFireGate.cpp).
  */
+
+/**
+ * A shot over the shooter's own roof rim (G008b). The crouch muzzle sits under a low parapet; a line from just past that
+ * rim is the shot the sight already allowed. Numbers: Content/Data/Combat/fire_gate.json "roof_lip".
+ */
+struct CODEXTACTICS_API FRoofLipConfig
+{
+	/** His own rim, no farther than this (cm). Past it the hit is another building. "lip_cm" */
+	float LipCm = 6000.f;
+	/** Step past the rim's near face (cm). 80 clears a 20 cm parapet and stays inside a 4 m wall. "past_cm" */
+	float PastCm = 80.f;
+	/** Feet this far above the target's feet (cm) or the retry never runs (a man on the ground keeps the wall). "min_drop_cm" */
+	float MinDropCm = 180.f;
+	/** The rim's top is at most this far above his feet (cm): a low parapet, not a tall wall. "band_above_cm" */
+	float BandAboveCm = 120.f;
+	/** ... and not this far below his feet (cm): the roof surface, not a floor underneath. "band_below_cm" */
+	float BandBelowCm = 40.f;
+};
+
 struct CODEXTACTICS_API FFireGateConfig
 {
 	/** 1 = the gate is on (0 = the 2026-11-15 per-path checks only; A/B with the CVar Codex.Fire.Gate too). "enabled" */
@@ -58,6 +77,12 @@ struct CODEXTACTICS_API FFireGateConfig
 	FGroundProbeConfig GroundProbe;
 	/** fire_gate.json "melee_reach" (G007): the enemy's blow on uneven ground (EnemyAIRules::CanMeleeOnGround, every caller). */
 	FMeleeReachConfig MeleeReach;
+
+	/**
+	 * fire_gate.json "roof_lip" (G008b). A kneeling muzzle (85 cm) on a roof hits the parapet (~100 cm) or the roof slab;
+	 * the sight line already starts past that rim, so the team sees the man and the shot does not. SquadFireRules::MayClearRoofLip.
+	 */
+	FRoofLipConfig RoofLip;
 };
 
 /** Why the gate holds a round (EFireGateBlock::None = the round may leave). */
@@ -115,9 +140,9 @@ namespace FireGateRules
 	CODEXTACTICS_API TArray<FString> KnownKeys();
 	CODEXTACTICS_API bool GetValue(const FFireGateConfig& Config, const FString& Key, float& OutValue);
 	/**
-	 * Applies a fire_gate.json text over InOut: the "params" object and, when present, "dead_zone" / "ground_probe" / "melee_reach";
-	 * unknown / non-numeric keys go to OutUnknown ("section.key" outside "params"; a section's "comment" is text, not a key). False
-	 * without "params".
+	 * Applies a fire_gate.json text over InOut: the "params" object and, when present, "dead_zone" / "ground_probe" / "melee_reach" /
+	 * "roof_lip"; unknown / non-numeric keys go to OutUnknown ("section.key" outside "params"; a section's "comment" is text, not a
+	 * key). False without "params".
 	 */
 	CODEXTACTICS_API bool ApplyJson(const FString& JsonText, FFireGateConfig& InOut, TArray<FString>* OutUnknown = nullptr);
 

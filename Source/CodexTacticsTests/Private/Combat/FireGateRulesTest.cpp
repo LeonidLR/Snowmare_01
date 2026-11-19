@@ -236,7 +236,7 @@ bool FFireGateTuningTest::RunTest(const FString&)
 	TestEqual(TEXT("... the unknown key reported"), PatchUnknown.Num(), 1);
 	TestFalse(TEXT("no params object: refused"), ApplyJson(TEXT("{}"), Patched));
 	// G007: the dead zone / ground probe / melee reach sections come through the same loader (no second file reader).
-	for (const TCHAR* Key : { TEXT("dead_zone.edge_drop_cm"), TEXT("ground_probe.spacing_cm"), TEXT("melee_reach.step_max_cm"), TEXT("melee_reach.height_cap_cm") })
+	for (const TCHAR* Key : { TEXT("dead_zone.edge_drop_cm"), TEXT("ground_probe.spacing_cm"), TEXT("melee_reach.step_max_cm"), TEXT("melee_reach.height_cap_cm"), TEXT("roof_lip.lip_cm"), TEXT("roof_lip.past_cm") })
 	{
 		TestTrue(FString::Printf(TEXT("%s is a known key"), Key), KnownKeys().Contains(Key));
 	}

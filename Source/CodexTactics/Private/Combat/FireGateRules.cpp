@@ -48,11 +48,16 @@ namespace FireGateRules
 		FIRE_GATE_KEY("melee_reach", "height_cap_cm", MeleeReach.HeightCapCm),
 		FIRE_GATE_KEY("melee_reach", "step_max_cm", MeleeReach.StepMaxCm),
 		FIRE_GATE_KEY("melee_reach", "slope_full_deg", MeleeReach.SlopeFullDeg),
+		FIRE_GATE_KEY("roof_lip", "lip_cm", RoofLip.LipCm),
+		FIRE_GATE_KEY("roof_lip", "past_cm", RoofLip.PastCm),
+		FIRE_GATE_KEY("roof_lip", "min_drop_cm", RoofLip.MinDropCm),
+		FIRE_GATE_KEY("roof_lip", "band_above_cm", RoofLip.BandAboveCm),
+		FIRE_GATE_KEY("roof_lip", "band_below_cm", RoofLip.BandBelowCm),
 	};
 #undef FIRE_GATE_KEY
 
 	/** The sections besides "params" (each optional in the file). */
-	static const TCHAR* const ExtraSections[] = { TEXT("dead_zone"), TEXT("ground_probe"), TEXT("melee_reach") };
+	static const TCHAR* const ExtraSections[] = { TEXT("dead_zone"), TEXT("ground_probe"), TEXT("melee_reach"), TEXT("roof_lip") };
 
 	static FString FullKey(const FFireGateTuningKey& Entry)
 	{

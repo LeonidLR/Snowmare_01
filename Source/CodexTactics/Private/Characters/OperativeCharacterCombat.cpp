@@ -6,6 +6,7 @@
 #include "Characters/OperativeCharacter.h"
 
 #include "Combat/CombatCheats.h"
+#include "Combat/FireGateRules.h"
 
 #include "CodexTactics.h"
 #include "Characters/EnemyCharacter.h"
@@ -174,6 +175,87 @@ bool AOperativeCharacter::EvaluateShotLine(AActor* Enemy, bool bKeepTarget, FSho
 			else
 			{
 				Kind = Blocker->IsA<ABarricadeActor>() ? EShotLineHit::Barricade : EShotLineHit::Blocked;
+			}
+		}
+	}
+	// G008b: the team sees over the roof rim (the sight line starts past it) while this crouch muzzle hits the parapet or the slab.
+	// Step past a low rim and trace again. A tall wall, a hit past lip_cm, and a man on the ground stay blocked (fire_gate.json "roof_lip").
+	if (Kind == EShotLineHit::Blocked && !bCornerShot)
+	{
+		const FRoofLipConfig& Lip = FireGateRules::GetConfig().RoofLip;
+		const FVector Flat(LineTo.X - LineFrom.X, LineTo.Y - LineFrom.Y, 0.f);
+		const float FlatLen = static_cast<float>(Flat.Size());
+		if (FlatLen > 1.f && Lip.LipCm > 0.f && MyFeet.Z - EnemyFeet.Z >= Lip.MinDropCm)
+		{
+			const FVector Dir = Flat / FlatLen;
+			const FVector ProbeEnd = LineFrom + Dir * Lip.LipCm;
+			FVector Cursor = LineFrom;
+			float Travelled = 0.f;
+			bool bClearedRim = false;
+			FVector RetryFrom = LineFrom;
+			for (int32 Step = 0; Step < 4 && Travelled < Lip.LipCm; ++Step)
+			{
+				FHitResult RimHit;
+				if (!World->LineTraceSingleByChannel(RimHit, Cursor, ProbeEnd, ECC_Visibility, Params) || RimHit.bStartPenetrating
+					|| !RimHit.GetActor() || RimHit.GetActor() == Enemy)
+				{
+					break;
+				}
+				const float StepCm = static_cast<float>(RimHit.Distance);
+				if (StepCm <= 1.f)
+				{
+					break;
+				}
+				Travelled += StepCm;
+				FHitResult TopHit;
+				// A hand into the face: a 20 cm parapet still has a top under the probe, a tall wall contains the probe.
+				const FVector Into = FVector(-RimHit.ImpactNormal.X, -RimHit.ImpactNormal.Y, 0.f).GetSafeNormal();
+				const FVector Column = FVector(RimHit.ImpactPoint.X, RimHit.ImpactPoint.Y, 0.f) + Into * 10.f;
+				const bool bTop = World->LineTraceSingleByChannel(TopHit,
+					FVector(Column.X, Column.Y, MyFeet.Z + Lip.BandAboveCm + 20.f),
+					FVector(Column.X, Column.Y, MyFeet.Z - Lip.BandBelowCm), ECC_Visibility, Params);
+				SquadFireRules::FRoofLipShot LipShot;
+				LipShot.HitDistanceCm = Travelled;
+				LipShot.TargetDistanceCm = Distance;
+				LipShot.ShooterFeetZ = MyFeet.Z;
+				LipShot.TargetFeetZ = EnemyFeet.Z;
+				LipShot.RimTopZ = bTop && !TopHit.bStartPenetrating ? static_cast<float>(TopHit.ImpactPoint.Z) : MyFeet.Z + Lip.BandAboveCm + 1.f;
+				if (!SquadFireRules::MayClearRoofLip(LipShot, Lip))
+				{
+					break;
+				}
+				bClearedRim = true;
+				RetryFrom = SquadFireRules::RoofLipRetryOrigin(LineFrom, RimHit.ImpactPoint, Lip.PastCm);
+				Cursor = RetryFrom;
+			}
+			if (bClearedRim)
+			{
+				FHitResult RetryHit;
+				const bool bRetryHit = World->LineTraceSingleByChannel(RetryHit, RetryFrom, LineTo, ECC_Visibility, Params);
+				AActor* RetryActor = bRetryHit ? RetryHit.GetActor() : nullptr;
+				// A start inside the rim means the step was too short: the blocked line stands.
+				if (!(bRetryHit && RetryHit.bStartPenetrating))
+				{
+					if (!bRetryHit || !RetryActor || RetryActor == Enemy)
+					{
+						Kind = EShotLineHit::Clear;
+						HitEnemy = Enemy;
+					}
+					else if (RetryActor->ActorHasTag(CombatQueries::EnemyTag))
+					{
+						Kind = EShotLineHit::Clear;
+						HitEnemy = bKeepTarget ? Enemy : RetryActor;
+					}
+					else if (RetryActor->IsA<ABarricadeActor>())
+					{
+						Kind = EShotLineHit::Barricade;
+					}
+				}
+				if (OutDetail)
+				{
+					*OutDetail += FString::Printf(TEXT("; roof lip from %s: %s"), *RetryFrom.ToCompactString(),
+						Kind == EShotLineHit::Blocked ? TEXT("still blocked") : TEXT("clear"));
+				}
 			}
 		}
 	}

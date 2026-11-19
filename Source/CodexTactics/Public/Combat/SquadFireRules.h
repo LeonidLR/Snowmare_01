@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "Characters/OperativeMovementRules.h"
 #include "Combat/CombatGroundRules.h"
+#include "Combat/FireGateRules.h"
 
 class UGodotBalanceAsset;
 
@@ -106,6 +107,28 @@ namespace SquadFireRules
 	 * (bHasExposedPoint: he peeks) and the line to it is clear. The hidden rest of him stays covered: no exposed part, no shot.
 	 */
 	CODEXTACTICS_API EShotAimPoint ChooseShotAimPoint(EShotLineHit BodyLine, bool bHasExposedPoint, EShotLineHit ExposedLine);
+
+	/**
+	 * One blocked elevated shot that may be retried from past the shooter's own roof rim (G008b, fire_gate.json "roof_lip").
+	 * HitDistanceCm is how far along the shot the rim was found; RimTopZ is the top of that hit (a parapet, the roof).
+	 */
+	struct FRoofLipShot
+	{
+		float HitDistanceCm = 0.f;
+		float TargetDistanceCm = 0.f;
+		float ShooterFeetZ = 0.f;
+		float TargetFeetZ = 0.f;
+		float RimTopZ = 0.f;
+	};
+
+	/**
+	 * True when the blocked hit is his own low rim: he stands MinDropCm above the target, the rim is within LipCm and short of the
+	 * target, and its top sits in the band around his feet. A man on the ground, a hit past the lip, or a tall wall stays false.
+	 */
+	CODEXTACTICS_API bool MayClearRoofLip(const FRoofLipShot& Shot, const FRoofLipConfig& Lip);
+
+	/** The retry starts PastCm past the rim's near face, at the muzzle's height (the line then falls to the target). */
+	CODEXTACTICS_API FVector RoofLipRetryOrigin(const FVector& Muzzle, const FVector& Impact, float PastCm);
 
 	/** The closest candidate replaces the current target when much closer (ratio) or within 3.5 m. */
 	CODEXTACTICS_API bool IsSignificantlyCloser(float ClosestDistanceCm, float CurrentDistanceCm, float SwitchRatio);
