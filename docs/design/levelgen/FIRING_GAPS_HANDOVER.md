@@ -11,9 +11,26 @@
 > - **X4 refresh (gate step a) is committed on this branch only:** `accepted/gen_ref_01_02_depot_1_x4.json` (now carries `analysis` v2 + 159
 >   `firing_gaps` on 22 roofs) and `tactical/L_Gen_Depot_X4.tactical.json`. main's X4 files are untouched. NOTE for the merge into main:
 >   `tacticalMap.test.ts` pins the committed X4 tactical file against the layout's analysis, so the analysis change cannot reach main
->   without this refresh (or a re-pin) - the lead decides.
-> - **Gate (throwaway `worker/bgen-gate` = this branch + `origin/worker/t05-firing-positions`):** see the last block of this file for the
->   results / what is left (updated at the end of the run).
+>   without this refresh (or a re-pin) - the lead decides. The C++ pin `TacticalMapRulesTest.cpp CommittedFiles` (46 -> 44 places) is changed
+>   on this branch too (not built here; the gate built and ran it).
+> - **Gate DONE on the throwaway `origin/worker/bgen-gate`** (= this branch + `origin/worker/t05-firing-positions`, test_map.json keeps both
+>   smoke lists; + 2 gate-only commits: the gap-aware C++ below and the rebuilt `L_Gen_Depot_X4.umap` with 159 sills). On codex-worker, slot1:
+>   build OK (7 min full, 3 min incremental); `CodexTactics.AI.*` 123 / 123, `CodexTactics.LevelGen.TacticalMap.*` 11 / 11 (new `ParseFiringGaps`);
+>   smokes (`-Remote off -Jobs 3`) FiringPositionSmoke, TacticalPmcSmoke, LevelGenRouteSmoke, TacticalMapSmoke, PmcArenaTacticalSmoke = all PASS.
+> - **C++ change on the gate branch (clearly required, T-05 side):** with the plain T-05 code FiringPositionSmoke FAILED (trial `roof_edge
+>   B_gallery#1`: the rim search along the area ray put the stand point 15 cm from the parapet, the man was pushed 64 cm off, limit 60).
+>   `TacticalMapRules` now reads the spot's `gap` and the file's `firing_gaps`; `UFiringPositionSubsystem::GatherRoofs` puts a spot with a gap
+>   at the gap's stand point (no rim search); spots without a gap keep the old logic. This must be ported when T-05 merges into main.
+> - **Gate numbers (X4, FiringPositionSmoke, 5 areas, kneeling-only sniper query vs rifleman):** T-05 report (main, spots 1 m in, 95 cm parapet,
+>   no gaps): sniper 0 roof-edge positions, rifleman 16, 8-9 of ~44 spots blocked per area. Old map + new rim spots (intermediate run): sniper 5,
+>   rifleman 22. Gaps + gap-aware stand: **sniper 7, rifleman 19**; real-shot trials with a CROUCHING (muzzle +85) shooter over the sill pass
+>   (`roof_edge B_gallery#0`, `B_warehouse#0`: `SHOT: ok`, 2 cm off the stand point). Roof faults (`parapet blocks every stance`) per sniper
+>   query: 7/7, 8/10, 3/4, 7/8, 1/4 spots (26 of 33) - a spot only sees through ITS 90 cm gap from 60 cm behind it, so most spots cannot fire at an
+>   area that is not in front of them (the analysis picks spots for the routes, not for the queried area).
+> - **Left / next exact step:** (1) the lead decides the merge (code on `worker/bgen-firing-gaps`; X4 data refresh + rebuilt umap + C++ on the
+>   gate only); (2) levers if more kneeling positions are wanted: `firing_gaps.json width_cm` 100 (designer max), `stand_inset_cm` 40 (and
+>   `chokepoints.json rim_stand_inset_m` 0.4: the capsule needs ~45 cm), or let `max_per_roof` / the street-side extras follow the spots;
+>   (3) S2.3 blocks (S2_ROOMS_PLAN.md section 5). Not done: nothing of steps 1-7; the engine run of `CodexTactics.Bot.Route.ParseMantle` stays open.
 
 Owner: Claude (building generator), branch `claude/building-generator`. Status: **design done, code NOT started**
 (only `Content/Data/LevelGen/firing_gaps.json` exists; nothing reads it yet). Main PC went offline; the stand-in lead on
