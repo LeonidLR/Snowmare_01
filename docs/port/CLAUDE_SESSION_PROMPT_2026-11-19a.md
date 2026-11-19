@@ -4,7 +4,11 @@ Read first: CLAUDE.md, MEMORY.md (start with `current-state`, then grok-budget, 
 no-unasked-rule-changes, main-pc-format-mirror), docs/port/TASK_TEMPLATE.md (inbox template + lead review checklist - binding),
 TASK_BOARD "Сделано (2026-11-19)" and "(2026-11-18)". Reply to the designer in Russian.
 
-## Mode: lead = TEST + REVIEW, agents implement (designer 2026-11-19)
+## UPDATE 11-19 08:00 (designer 'поехали'): limits reset -> NORMAL pace, lead implements again (C++ for the building generator while
+Antigravity / Grok are away), 18-20 %/day for lead + bgen; NO API tokens (reviews: own + a Sonnet subagent, verify findings);
+Grok usable until ~Mon 11-23; designer away 11-20 (no Antigravity), gameplay decisions -> one evening list.
+
+## Mode (before the reset): lead = TEST + REVIEW, agents implement (designer 2026-11-19)
 - Subscription weekly limit was 95 % on 11-19 07:30 (reset 11-21 09:00 UTC). Hard stop for the whole team at **98 %** (get_usage before
   every bigger step). Until the reset the lead does NOT write features: it dispatches (TASK_TEMPLATE), tests and reviews what
   Antigravity, Grok and API agents hand over, merges.
