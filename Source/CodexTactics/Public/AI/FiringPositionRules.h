@@ -76,7 +76,7 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	/** "sample_height_cm" (80): the aim point above the sample's floor - AOperativeCharacter::EvaluateShotLine aims at feet + 80, so a clear line here is a clear real shot. */
 	float SampleHeightCm = 80.f;
 	/** "min_covered_share" (0.34): a position covering less of the area is dropped (not a position). */
-	float MinCoveredShare = 0.34f;
+	float MinCoveredShare = 0.22f;
 	/** "rim_step_cm" (10) / "rim_step_max_cm" (80): a roof spot steps toward the rim in these steps while the trace stays blocked. */
 	float RimStepCm = 10.f;
 	float RimStepMaxCm = 80.f;
@@ -131,10 +131,18 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	float KillZoneReachFactor = 0.25f;
 	/** "default_reach_cm" (1400): the reach of a man with no weapon. */
 	float DefaultReachCm = 1400.f;
-	/** "forward_margin_cm" (800): a ground position is forward of the kill zone only when it is nearer the attackers along the approach axis by MORE than this. */
-	float ForwardMarginCm = 800.f;
+	/** "forward_margin_cm" (4000): a ground position is forward of the kill zone only when it is nearer the attackers along the approach axis by MORE than this. */
+	float ForwardMarginCm = 4000.f;
 	/** "defence_use" (true): objective defenders take firing positions before contact (phase b; PmcSquadSubsystem). */
 	bool bDefenceUse = true;
+	/** "reach_before_contact" (true): a ground defender is seated only on a position he reaches before the attackers' expected contact (ReachableBeforeContact); false = no time filter. */
+	bool bReachBeforeContact = true;
+	/** "reach_margin_s" (1.5): the safety margin of that rule, s (order latency, acceleration, a walk that cuts corners the nav path does not). */
+	float ReachMarginS = 1.5f;
+	/** "attacker_speed_factor" (1.0): the attackers' pace as a multiple of the operative WALK speed (1 = they advance walking: the scripted opponent; ~3.3 = they sprint, the commander's own advance). */
+	float AttackerSpeedFactor = 1.f;
+	/** "max_path_queries" (16): defender nav-path queries per man per defence refresh (nearest candidates first; the rest count as unchecked and are dropped). */
+	int32 MaxPathQueries = 16;
 
 	/** The muzzle height above the feet of a stance, cm. */
 	float MuzzleHeight(EOperativeStance Stance) const;
@@ -246,6 +254,21 @@ namespace FiringPositionRules
 	 * >= the whole length the first. OutUsedCm = the distance actually used (clamped to [0, length]). False (OutPoint untouched) for fewer than two points.
 	 */
 	CODEXTACTICS_API bool PointAlongPathBefore(TConstArrayView<FVector> Points, float DistanceCm, FVector& OutPoint, float& OutUsedCm);
+
+	/**
+	 * The path length (cm, all three axes) the attackers walk before they FIRST come within ReachCm of Point (a firing position or a defender's start): the polyline is
+	 * followed from its first point and the crossing is solved inside the leg. 0 when it starts already within reach; the whole length when it never gets that close
+	 * (no contact on the way); 0 for fewer than two points.
+	 */
+	CODEXTACTICS_API float PathLengthUntilWithin(TConstArrayView<FVector> Points, const FVector& Point, float ReachCm);
+
+	/**
+	 * Can a defender take a position before the attackers' expected contact? The defender needs DefenderPathCm / DefenderSpeedCm seconds, the attackers
+	 * AttackerPathToContactCm / AttackerSpeedCm; OutSlackSeconds = attacker time - defender time - MarginSeconds (clamped to +-999). Reachable when slack >= 0.
+	 * A defender speed <= 0 never arrives; an attacker speed <= 0 never makes contact (slack +999).
+	 */
+	CODEXTACTICS_API bool ReachableBeforeContact(float DefenderPathCm, float DefenderSpeedCm, float AttackerPathToContactCm, float AttackerSpeedCm, float MarginSeconds,
+		float& OutSlackSeconds);
 
 	/** The median of the values (the mean of the two middle ones for an even count); 0 for none. */
 	CODEXTACTICS_API float MedianOf(TArray<float> Values);

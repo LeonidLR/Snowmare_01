@@ -148,6 +148,18 @@ namespace FiringPositionRules
 		Out.DefaultReachCm = FMath::Max(Out.DefaultReachCm, 100.f);
 		FiringReadNumber(Block, TEXT("forward_margin_cm"), Out.ForwardMarginCm);
 		Out.ForwardMarginCm = FMath::Max(Out.ForwardMarginCm, 0.f);
+		FiringReadNumber(Block, TEXT("reach_margin_s"), Out.ReachMarginS);
+		Out.ReachMarginS = FMath::Clamp(Out.ReachMarginS, 0.f, 10.f);
+		FiringReadNumber(Block, TEXT("attacker_speed_factor"), Out.AttackerSpeedFactor);
+		Out.AttackerSpeedFactor = FMath::Clamp(Out.AttackerSpeedFactor, 0.1f, 5.f);
+		float PathQueries = static_cast<float>(Out.MaxPathQueries);
+		FiringReadNumber(Block, TEXT("max_path_queries"), PathQueries);
+		Out.MaxPathQueries = FMath::Clamp(FMath::RoundToInt(PathQueries), 1, 64);
+		bool bReach = Out.bReachBeforeContact;
+		if (Block.TryGetBoolField(TEXT("reach_before_contact"), bReach))
+		{
+			Out.bReachBeforeContact = bReach;
+		}
 		bool bUse = Out.bDefenceUse;
 		if (Block.TryGetBoolField(TEXT("defence_use"), bUse))
 		{
@@ -438,6 +450,60 @@ namespace FiringPositionRules
 		}
 		OutPoint = Points[0];
 		return true;
+	}
+
+	float PathLengthUntilWithin(TConstArrayView<FVector> Points, const FVector& Point, float ReachCm)
+	{
+		if (Points.Num() < 2)
+		{
+			return 0.f;
+		}
+		const double Reach = FMath::Max(ReachCm, 0.f);
+		if (FVector::Dist(Points[0], Point) <= Reach)
+		{
+			return 0.f;
+		}
+		double Walked = 0.0;
+		for (int32 Index = 1; Index < Points.Num(); ++Index)
+		{
+			const FVector Head = Points[Index - 1];
+			const FVector Tail = Points[Index];
+			const FVector Leg = Tail - Head;
+			const double Length = Leg.Size();
+			if (Length > KINDA_SMALL_NUMBER)
+			{
+				// |Head + t Leg - Point|^2 = Reach^2, the smaller root t in [0, 1] (the start of the leg is outside the circle).
+				const FVector Offset = Head - Point;
+				const double A = Leg.SizeSquared();
+				const double B = 2.0 * FVector::DotProduct(Offset, Leg);
+				const double C = Offset.SizeSquared() - Reach * Reach;
+				const double Discriminant = B * B - 4.0 * A * C;
+				if (Discriminant >= 0.0)
+				{
+					const double T = (-B - FMath::Sqrt(Discriminant)) / (2.0 * A);
+					if (T >= 0.0 && T <= 1.0)
+					{
+						return static_cast<float>(Walked + T * Length);
+					}
+				}
+			}
+			Walked += Length;
+		}
+		return static_cast<float>(Walked);
+	}
+
+	bool ReachableBeforeContact(float DefenderPathCm, float DefenderSpeedCm, float AttackerPathToContactCm, float AttackerSpeedCm, float MarginSeconds, float& OutSlackSeconds)
+	{
+		constexpr float Cap = 999.f;
+		if (DefenderSpeedCm <= KINDA_SMALL_NUMBER)
+		{
+			OutSlackSeconds = -Cap;
+			return false;
+		}
+		const float DefenderSeconds = FMath::Max(DefenderPathCm, 0.f) / DefenderSpeedCm;
+		const float AttackerSeconds = AttackerSpeedCm > KINDA_SMALL_NUMBER ? FMath::Max(AttackerPathToContactCm, 0.f) / AttackerSpeedCm : Cap;
+		OutSlackSeconds = FMath::Clamp(AttackerSeconds - DefenderSeconds - MarginSeconds, -Cap, Cap);
+		return OutSlackSeconds >= 0.f;
 	}
 
 	float MedianOf(TArray<float> Values)

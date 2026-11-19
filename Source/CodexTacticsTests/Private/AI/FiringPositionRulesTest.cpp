@@ -79,8 +79,8 @@ bool FFiringPositionCoveredShareTest::RunTest(const FString&)
 	TestEqual(TEXT("no samples is 0, not a division"), FiringPositionRules::CoveredShare(3, 0), 0.f, 0.0001f);
 	TestEqual(TEXT("more hits than samples clamps to 1"), FiringPositionRules::CoveredShare(12, 9), 1.f, 0.0001f);
 	FFiringPositionConfig Config;
-	TestTrue(TEXT("3 of 9 is under min_covered_share 0.34"), FiringPositionRules::CoveredShare(3, 9) < Config.MinCoveredShare);
-	TestTrue(TEXT("4 of 9 reaches it"), FiringPositionRules::CoveredShare(4, 9) >= Config.MinCoveredShare);
+	TestTrue(TEXT("1 of 9 is under min_covered_share 0.22"), FiringPositionRules::CoveredShare(1, 9) < Config.MinCoveredShare);
+	TestTrue(TEXT("2 of 9 reaches it"), FiringPositionRules::CoveredShare(2, 9) >= Config.MinCoveredShare);
 	return true;
 }
 
@@ -411,6 +411,38 @@ bool FFiringPositionPathPointTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFiringPositionReachTest, "CodexTactics.AI.FiringPosition.ReachBeforeContact",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FFiringPositionReachTest::RunTest(const FString&)
+{
+	// The attackers walk a 10 m leg east then a 10 m leg north: (0,0) -> (1000,0) -> (1000,1000).
+	const TArray<FVector> Path = { FVector(0, 0, 0), FVector(1000, 0, 0), FVector(1000, 1000, 0) };
+	const float Whole = 2000.f;
+	// A point 500 cm north of the corner, reach 300: the attackers reach it first on the north leg, 200 cm up it (1000, 200) is 300 from (1000, 500).
+	TestEqual(TEXT("first within reach on the second leg"), FiringPositionRules::PathLengthUntilWithin(Path, FVector(1000, 500, 0), 300.f), 1200.f, 0.5f);
+	TestEqual(TEXT("a point beside the first leg: the circle is met inside leg one"), FiringPositionRules::PathLengthUntilWithin(Path, FVector(500, 400, 0), 500.f), 200.f, 0.5f);
+	TestEqual(TEXT("already within reach at the start is 0"), FiringPositionRules::PathLengthUntilWithin(Path, FVector(100, 0, 0), 300.f), 0.f, 0.001f);
+	TestEqual(TEXT("never within reach is the whole path"), FiringPositionRules::PathLengthUntilWithin(Path, FVector(-9000, 0, 0), 300.f), Whole, 0.5f);
+	TestEqual(TEXT("a circle that only touches the path further on"), FiringPositionRules::PathLengthUntilWithin(Path, FVector(1000, 1400, 0), 400.f), Whole, 0.5f);
+	TestEqual(TEXT("one point is no path"), FiringPositionRules::PathLengthUntilWithin(TArray<FVector>{ FVector::ZeroVector }, FVector(10, 0, 0), 300.f), 0.f, 0.001f);
+
+	float Slack = 0.f;
+	// Defender 20 m at 5 m/s = 4 s; attackers 15 m at 2 m/s = 7.5 s; margin 1.5 s -> slack 2 s.
+	TestTrue(TEXT("reachable with slack"), FiringPositionRules::ReachableBeforeContact(2000.f, 500.f, 1500.f, 200.f, 1.5f, Slack));
+	TestEqual(TEXT("slack is attacker time - defender time - margin"), Slack, 2.f, 0.001f);
+	TestFalse(TEXT("late by the margin"), FiringPositionRules::ReachableBeforeContact(2000.f, 500.f, 1000.f, 200.f, 1.5f, Slack));
+	TestEqual(TEXT("negative slack"), Slack, -0.5f, 0.001f);
+	TestTrue(TEXT("exactly on the margin is reachable"), FiringPositionRules::ReachableBeforeContact(2000.f, 500.f, 1100.f, 200.f, 1.5f, Slack));
+	TestEqual(TEXT("zero slack"), Slack, 0.f, 0.001f);
+	TestFalse(TEXT("a defender who cannot move never arrives"), FiringPositionRules::ReachableBeforeContact(100.f, 0.f, 99999.f, 200.f, 0.f, Slack));
+	TestEqual(TEXT("and the slack says so"), Slack, -999.f, 0.001f);
+	TestTrue(TEXT("attackers who never move never make contact"), FiringPositionRules::ReachableBeforeContact(5000.f, 500.f, 100.f, 0.f, 1.f, Slack));
+	TestEqual(TEXT("a never-contact clock is 999 s: 999 - 10 s walk - 1 s margin"), Slack, 988.f, 0.001f);
+	TestTrue(TEXT("contact at the start with an already standing defender: needs the margin"), !FiringPositionRules::ReachableBeforeContact(0.f, 500.f, 0.f, 200.f, 1.5f, Slack) && FMath::IsNearlyEqual(Slack, -1.5f, 0.001f));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFiringPositionConfigTest, "CodexTactics.AI.FiringPosition.Config",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -425,7 +457,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	const TSharedPtr<FJsonObject> Block = ParseBlock(TEXT(R"JSON({
 		"crossfire_min_deg": 60, "area_samples": 1, "min_covered_share": 2.0, "rim_step_max_cm": 500, "min_spacing_m": 7,
 		"muzzle_height_cm": { "crouching": 90 }, "defence_use": false, "scan_rays": 99, "max_cover_slots": 0, "ignored_key": 5,
-			"min_cover_quality": 2.0, "band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "scan_far_stride": 99, "roof_reach_factor": 7, "kill_zone_reach_factor": 9, "default_reach_cm": 5
+			"min_cover_quality": 2.0, "band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "reach_margin_s": 99, "attacker_speed_factor": 0, "max_path_queries": 500, "reach_before_contact": false, "scan_far_stride": 99, "roof_reach_factor": 7, "kill_zone_reach_factor": 9, "default_reach_cm": 5
 	})JSON"));
 	TestTrue(TEXT("the block parses"), Block.IsValid());
 	if (Block.IsValid())
@@ -445,6 +477,10 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 		TestEqual(TEXT("band_max_factor read"), Read.BandMaxFactor, 0.5f, 0.001f);
 		TestEqual(TEXT("tier 2 is never narrower than tier 1"), Read.BandMaxFactorTier2, 0.5f, 0.001f);
 		TestEqual(TEXT("forward_margin_cm is at least 0"), Read.ForwardMarginCm, 0.f, 0.001f);
+		TestEqual(TEXT("reach_margin_s clamps to 10"), Read.ReachMarginS, 10.f, 0.001f);
+		TestEqual(TEXT("attacker_speed_factor is at least 0.1"), Read.AttackerSpeedFactor, 0.1f, 0.001f);
+		TestEqual(TEXT("max_path_queries clamps to 64"), Read.MaxPathQueries, 64);
+		TestFalse(TEXT("reach_before_contact false read"), Read.bReachBeforeContact);
 		TestEqual(TEXT("scan_far_stride clamps to 8"), Read.ScanFarStride, 8);
 		TestEqual(TEXT("roof_reach_factor clamps to 1"), Read.RoofReachFactor, 1.f, 0.001f);
 		TestEqual(TEXT("kill_zone_reach_factor clamps to 2"), Read.KillZoneReachFactor, 2.f, 0.001f);
@@ -491,6 +527,10 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	TestEqual(TEXT("shipped kill_zone_reach_factor"), Shipped.KillZoneReachFactor, Defaults.KillZoneReachFactor, 0.001f);
 	TestEqual(TEXT("shipped default_reach_cm"), Shipped.DefaultReachCm, Defaults.DefaultReachCm, 0.001f);
 	TestEqual(TEXT("shipped forward_margin_cm"), Shipped.ForwardMarginCm, Defaults.ForwardMarginCm, 0.001f);
+	TestEqual(TEXT("shipped reach_margin_s"), Shipped.ReachMarginS, Defaults.ReachMarginS, 0.001f);
+	TestEqual(TEXT("shipped attacker_speed_factor"), Shipped.AttackerSpeedFactor, Defaults.AttackerSpeedFactor, 0.001f);
+	TestEqual(TEXT("shipped max_path_queries"), Shipped.MaxPathQueries, Defaults.MaxPathQueries);
+	TestTrue(TEXT("shipped reach_before_contact"), Shipped.bReachBeforeContact == Defaults.bReachBeforeContact);
 	TestTrue(TEXT("shipped defence_use"), Shipped.bDefenceUse == Defaults.bDefenceUse);
 	return true;
 }

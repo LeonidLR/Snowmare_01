@@ -14,6 +14,7 @@
 #include "AIController.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/EnemyRegistrySubsystem.h"
@@ -3470,32 +3471,53 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		const float Reach = FMath::Min(static_cast<float>(FVector::Dist2D(Team.Defence.ApproachPoint, Objective.Location)), Config.RoofReachFactor * LeadReach);
 		KillZone = FVector(Objective.Location.X, Objective.Location.Y, Team.Defence.ApproachPoint.Z) + Toward * Reach;
 	}
-	else if (Team.Defence.bHasApproach && Config.KillZoneReachFactor > 0.f)
+	// The attackers' nav path (spawn -> objective): ONE synchronous query per defence refresh (a refresh is an event - new objective, approach, a death - not a tick). It
+	// places the kill zone and is the clock of the reach-before-contact rule below.
+	TArray<FVector> AttackerPath;
+	TArray<float> Reaches;
+	TArray<float> EffectiveReaches;
+	for (const int32 PostIndex : Shooters)
 	{
-		// One synchronous path query per defence refresh (a refresh is an event - new objective, approach, a death - not a tick).
-		TArray<float> Reaches;
-		for (const int32 PostIndex : Shooters)
+		const AOperativeCharacter* Member = MemberOf(Posts[PostIndex].Index);
+		Reaches.Add(Member && Member->CurrentWeapon ? Member->CurrentWeapon->Stats.Range.MaxRangeCm : Config.DefaultReachCm);
+	}
+	// The arena's contact test: the median EFFECTIVE reach of the whole squad (every living man with a weapon).
+	for (const AOperativeCharacter* Member : Members)
+	{
+		if (Member && Member->CurrentWeapon && Member->CurrentWeapon->Stats.Range.GetEffectiveRangeCm() > 0.f)
 		{
-			const AOperativeCharacter* Member = MemberOf(Posts[PostIndex].Index);
-			Reaches.Add(Member && Member->CurrentWeapon ? Member->CurrentWeapon->Stats.Range.MaxRangeCm : Config.DefaultReachCm);
+			EffectiveReaches.Add(Member->CurrentWeapon->Stats.Range.GetEffectiveRangeCm());
 		}
-		const float WantedCm = Config.KillZoneReachFactor * FiringPositionRules::MedianOf(Reaches);
+	}
+	const float ContactReachCm = FiringPositionRules::MedianOf(EffectiveReaches);
+	if (!bRoof && Team.Defence.bHasApproach && (Config.KillZoneReachFactor > 0.f || Config.bReachBeforeContact))
+	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 		const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, Team.Defence.ApproachPoint, Objective.Location) : nullptr;
+		if (Path && Path->IsValid() && !Path->IsPartial() && Path->PathPoints.Num() >= 2)
+		{
+			AttackerPath = Path->PathPoints;
+		}
+		if (AttackerPath.IsEmpty())
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: no full nav path from the approach to the objective: the kill zone stays on the objective, no reach-before-contact filter"), TeamId);
+		}
+	}
+	if (!AttackerPath.IsEmpty() && Config.KillZoneReachFactor > 0.f)
+	{
+		const float WantedCm = Config.KillZoneReachFactor * FiringPositionRules::MedianOf(Reaches);
 		FVector OnApproach = FVector::ZeroVector;
 		float UsedCm = 0.f;
-		if (Path && Path->IsValid() && !Path->IsPartial()
-			&& FiringPositionRules::PointAlongPathBefore(Path->PathPoints, WantedCm, OnApproach, UsedCm))
+		if (FiringPositionRules::PointAlongPathBefore(AttackerPath, WantedCm, OnApproach, UsedCm))
 		{
 			KillZone = OnApproach;
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: kill zone on the approach %s (path %.1f m before the objective, %.1f m of path, wanted %.1f m = %.2f x median reach)"),
-				TeamId, *KillZone.ToCompactString(), UsedCm / 100.f, FiringPositionRules::PolylineLength(Path->PathPoints) / 100.f, WantedCm / 100.f, Config.KillZoneReachFactor);
-		}
-		else
-		{
-			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: no full nav path from the approach to the objective: the kill zone stays on the objective"), TeamId);
+				TeamId, *KillZone.ToCompactString(), UsedCm / 100.f, FiringPositionRules::PolylineLength(AttackerPath) / 100.f, WantedCm / 100.f, Config.KillZoneReachFactor);
 		}
 	}
+	// Reach before contact: ground defences only (a roof man's walk is a stair / ladder climb, his own G008 rules).
+	const bool bReachFilter = Config.bReachBeforeContact && !bRoof && !AttackerPath.IsEmpty() && ContactReachCm > 0.f;
+	float AttackerSpeedCm = 0.f;
 	const float AreaRadius = FMath::Max(Objective.RadiusCm, Config.AreaRadiusFloorCm);
 	FPmcDefenceConfig AreaConfig;
 	AreaConfig.LevelToleranceCm = Objective.LevelToleranceCm;
@@ -3506,8 +3528,18 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		int32 PostIndex = INDEX_NONE;
 		AOperativeCharacter* Fighter = nullptr;
 		TArray<FFiringCandidate> Eligible;
+		/** His nav path length (cm) to each stand point asked so far, -1 = no full path; shared by the tiers. */
+		TMap<FIntVector, float> PathCm;
+		int32 PathQueries = 0;
 	};
 	TArray<FSeat> Seats;
+	UNavigationSystemV1* PathNav = bReachFilter ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	if (bReachFilter)
+	{
+		// The attackers' pace: the operative WALK speed (the same body, standing, no sprint) x attacker_speed_factor.
+		AttackerSpeedCm = Config.AttackerSpeedFactor * OperativeMovementRules::ComputeMaxSpeed(Lead->MovementConfig, EOperativeStance::Standing, false, false, false)
+			* Lead->GetColdSpeedMultiplier();
+	}
 	// ONE cover scan for the whole squad: the widest band of every man's fallback tier, so each man's (narrower) band sees a subset of the slots the wider ones see.
 	float WidestBandMax = 0.f;
 	for (const int32 PostIndex : Shooters)
@@ -3582,8 +3614,68 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 			}
 			Seat.Eligible.Add(Candidate);
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s band %.0f..%.0f cm (tier %d): %d valid positions, %d not cover, %d off level, %d forward of the kill zone, %d eligible"), TeamId,
-			*Seat.Fighter->DisplayName.ToString(), BandMin, BandMax, Tier, Valid, NotCover, OffLevel, Forward, Seat.Eligible.Num());
+		// Reach before contact: drop the positions this man cannot take before the attackers' expected contact. His speed is the one the defence post walk really uses before
+		// he is under fire (the sprint, OperativeMovementRules::ComputeMaxSpeed); the clock of the attackers is their nav path up to where it first comes within the squad's
+		// median effective reach of the position (PathLengthUntilWithin) at AttackerSpeedCm. Nearest candidates are asked first, at most max_path_queries per man.
+		FString ReachNote;
+		if (bReachFilter && !Seat.Eligible.IsEmpty())
+		{
+			const FVector Feet = PmcSquadLocal::FeetOf(*Seat.Fighter);
+			const float DefenderSpeedCm = OperativeMovementRules::ComputeMaxSpeed(Seat.Fighter->MovementConfig, EOperativeStance::Standing, true, Seat.Fighter->IsWounded(), false)
+				* Seat.Fighter->GetColdSpeedMultiplier() * Seat.Fighter->GetWoundTierSpeedScale();
+			Seat.Eligible.StableSort([&Feet](const FFiringCandidate& A, const FFiringCandidate& B)
+				{ return FVector::DistSquared(A.Position.StandPoint, Feet) < FVector::DistSquared(B.Position.StandPoint, Feet); });
+			TArray<FFiringCandidate> Kept;
+			int32 TooFar = 0;
+			int32 NoPath = 0;
+			int32 Unchecked = 0;
+			float MinSlack = 999.f;
+			float MaxSlack = -999.f;
+			for (const FFiringCandidate& Candidate : Seat.Eligible)
+			{
+				const FVector& Stand = Candidate.Position.StandPoint;
+				const float AttackerToContactCm = FiringPositionRules::PathLengthUntilWithin(AttackerPath, Stand, ContactReachCm);
+				float Slack = 0.f;
+				// A path is never shorter than the straight line: a candidate the straight line already loses needs no query.
+				if (!FiringPositionRules::ReachableBeforeContact(static_cast<float>(FVector::Dist(Feet, Stand)), DefenderSpeedCm, AttackerToContactCm, AttackerSpeedCm, Config.ReachMarginS, Slack))
+				{
+					++TooFar;
+					continue;
+				}
+				const FIntVector Key(FMath::RoundToInt(Stand.X), FMath::RoundToInt(Stand.Y), FMath::RoundToInt(Stand.Z));
+				float* Known = Seat.PathCm.Find(Key);
+				if (!Known)
+				{
+					if (Seat.PathQueries >= Config.MaxPathQueries)
+					{
+						++Unchecked;
+						continue;
+					}
+					++Seat.PathQueries;
+					const UNavigationPath* Path = PathNav ? PathNav->FindPathToLocationSynchronously(World, Seat.Fighter->GetActorLocation(), Stand) : nullptr;
+					const float LengthCm = Path && Path->IsValid() && !Path->IsPartial() ? FiringPositionRules::PolylineLength(Path->PathPoints) : -1.f;
+					Known = &Seat.PathCm.Add(Key, LengthCm);
+				}
+				if (*Known < 0.f)
+				{
+					++NoPath;
+					continue;
+				}
+				if (!FiringPositionRules::ReachableBeforeContact(*Known, DefenderSpeedCm, AttackerToContactCm, AttackerSpeedCm, Config.ReachMarginS, Slack))
+				{
+					++TooFar;
+					continue;
+				}
+				MinSlack = FMath::Min(MinSlack, Slack);
+				MaxSlack = FMath::Max(MaxSlack, Slack);
+				Kept.Add(Candidate);
+			}
+			ReachNote = FString::Printf(TEXT(", reachable %d of %d (slack %.1f..%.1f s; %d too late, %d no path, %d unchecked; %d path queries; walks %.0f cm/s, attackers %.0f cm/s)"),
+				Kept.Num(), Seat.Eligible.Num(), Kept.IsEmpty() ? 0.f : MinSlack, Kept.IsEmpty() ? 0.f : MaxSlack, TooFar, NoPath, Unchecked, Seat.PathQueries, DefenderSpeedCm, AttackerSpeedCm);
+			Seat.Eligible = MoveTemp(Kept);
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s band %.0f..%.0f cm (tier %d): %d valid positions, %d not cover, %d off level, %d forward of the kill zone, %d eligible%s"), TeamId,
+			*Seat.Fighter->DisplayName.ToString(), BandMin, BandMax, Tier, Valid, NotCover, OffLevel, Forward, Seat.Eligible.Num(), *ReachNote);
 		}
 		Seats.Add(MoveTemp(Seat));
 	}
