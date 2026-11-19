@@ -1,5 +1,10 @@
 # Claude (lead) plan for 2026-11-20 morning - the designer is travelling, offline until after lunch (supersedes 19c)
 
+**CHANGE (designer, 11-19 evening): the MAIN PC is OFFLINE for >= 4 h tomorrow, not the worker.** During that time a stand-in
+lead runs ON codex-worker by docs/port/WORKER_LEAD_2026-11-20.md (C:\Work\CodexTactics-slot1, branch worker/lead-2026-11-20 only).
+This file is for the main-PC lead AFTER the PC is back: first review + merge worker/lead-2026-11-20 (backup the designer's X6
+files first), then continue below. Do not run worker_sync while the worker lead owns slot1. The 'worker off' advice below is void.
+
 Read first: CLAUDE.md, MEMORY.md (start with `current-state`, `results-over-speed`, `focus-bgen-and-enemies`,
 `dont-ask-editor-closed`, `backup-before-merge-main`, `lead-not-implementer`), docs/port/TASK_TEMPLATE.md, the roadmap
 docs/design/gdd/smart-enemies-roadmap.md (5, 5a, 6). Reply to the designer in Russian. He reads ONE short summary after lunch.
