@@ -102,6 +102,15 @@ namespace EnvironmentRules
 	 */
 	CODEXTACTICS_API float GetBlendedColdWeatherMultiplier(const FEnvironmentConfig& Config, const FEnvironmentState& State);
 
+	/** Level "weather_strength" limits: 0 (the weather has no cold effect) .. 2. Non-finite -> 1. */
+	CODEXTACTICS_API float ClampWeatherStrength(float Strength);
+
+	/**
+	 * The weather cold multiplier after the level's strength: 1 + (Blended - 1) * clamp(Strength, 0, 2). Strength 1 returns Blended
+	 * unchanged (today's behaviour exactly); 0 returns 1; never negative.
+	 */
+	CODEXTACTICS_API float ApplyWeatherStrength(float Blended, float Strength);
+
 	/**
 	 * The weather / phase cold multipliers apply on this level: always on a running (unlocked) level; on a LOCKED one (Demo 01 tutorial,
 	 * its cold_rate_mult was tuned without weather) only with Config.bColdOnLockedLevels. False -> the cold uses 1 / 1.
