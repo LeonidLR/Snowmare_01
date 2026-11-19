@@ -77,8 +77,60 @@ struct CODEXTACTICS_API FPmcOrderEvent
 	EPmcOrder Order = EPmcOrder::Hold;
 };
 
+/** T-04 position sample. Alive, cover/post occupancy and locomotion come from the arena, not from orders. */
+struct CODEXTACTICS_API FPmcArenaPositionSample
+{
+	FVector Feet = FVector::ZeroVector;
+	float WeaponRangeCm = 0.f;
+	bool bAlive = false;
+	bool bMoving = false;
+	bool bWalking = false;
+	bool bOnPosition = false;
+	bool bNearCoverSlot = false;
+};
+
+struct CODEXTACTICS_API FPmcArenaPositionTime
+{
+	float OpenIdleS = 0.f;
+	float OpenIdleBeforeContactS = 0.f;
+	double ExposedRunCm = 0.0;
+	double MaxExposedRunCm = 0.0;
+
+	/** Integrate one observed interval. The previous sample holds until the new sample. */
+	void AddInterval(const FPmcArenaPositionSample& Previous, const FPmcArenaPositionSample& Current,
+		float DeltaS, bool bBeforeContact);
+};
+
+/** Only the first shot by each defender counts. Simultaneous openers have a zero gap. */
+struct CODEXTACTICS_API FPmcArenaOpeningShots
+{
+	void Record(int32 Fighter, double TimeS);
+	TOptional<float> GapS() const { return Gap; }
+
+private:
+	int32 FirstFighter = INDEX_NONE;
+	double FirstTimeS = 0.0;
+	TOptional<float> Gap;
+};
+
 namespace PmcArenaBehaviourRules
 {
+	/**
+	 * The squad's kill-zone reach: the MEDIAN of the living armed defenders' WeaponRangeCm (the effective reach of the equipped weapon).
+	 * The median, not the longest gun: a squad with one marksman (90 m) and two rifles (28 m) opens its kill zone at 28 m, and a
+	 * 78-88 m spawn separation is then no "contact" (T-04 run 2: the longest reach made the first sample the contact). 0 = nobody armed.
+	 */
+	CODEXTACTICS_API float SquadReachCm(TConstArrayView<FPmcArenaPositionSample> Defenders);
+
+	/** A living attacker is within SquadReachCm of a living armed defender (3D, independent of visibility and fire). */
+	CODEXTACTICS_API bool AttackersInRange(TConstArrayView<FPmcArenaPositionSample> Defenders, TConstArrayView<FPmcArenaPositionSample> Attackers);
+
+	/** Share of the living defenders on cover/post at the first in-range sample. */
+	CODEXTACTICS_API TOptional<float> OnPositionShare(TConstArrayView<FPmcArenaPositionSample> Defenders);
+
+	/** Largest 3D angle between the living defenders' lines to the live attackers' centroid. */
+	CODEXTACTICS_API TOptional<float> CrossfireDeg(TConstArrayView<FVector> Defenders, TConstArrayView<FVector> Attackers);
+
 	/** "codex.pmc_arena_behaviour/1". */
 	extern CODEXTACTICS_API const TCHAR* const Schema;
 

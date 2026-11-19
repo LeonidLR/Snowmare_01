@@ -51,6 +51,11 @@
 // CodexTactics.PmcArenaTacticalSmoke = one tactical round on L_Gen_Depot_X4: the defenders on posts, the behaviour blocks validated.
 // CodexTactics.PmcRoofDefenceSmoke (G008) = one roofs objective round on the Depot: defender spread >= 5 m, a guard near the access
 //   on more than 0.6 of the samples, no two defenders in the same cover. The round's "defence" object carries those numbers.
+// CodexTactics.PmcCrossroadsSmoke / PmcAlleySmoke (smart-enemies T-04, docs/design/gdd/smart-enemies.md A-00A / A-00B) = one 3v3 objective round
+//   on a street (an open site) / a chokepoint (a 1-3 m passage between walls) of the Depot, the defenders' position metrics of rounds[].defence
+//   (open_idle_s, on_position_before_contact, crossfire_deg, first_shot_gap_s, spread_m) judged against the GDD's ambush criteria. They are
+//   RED on purpose until the squad plays (T-08): registered knownFail in Scripts/test_map.json. Failed preconditions are logged as
+//   "precondition", failed criteria as "A-00A.n" / "A-00B.n" so a red run says which of the two it is.
 
 #include "CoreMinimal.h"
 
@@ -88,6 +93,8 @@
 #include "Engine/GameViewportClient.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
+#include "GameFramework/CharacterMovementComponent.h"
+#include "Tactics/CoverTraceRules.h"
 #include "Combat/TacticalSightSubsystem.h"
 #include "Data/WeaponDataAsset.h"
 #include "GameFlow/GameFlowSubsystem.h"
@@ -159,6 +166,9 @@ namespace PmcArena
 		bool bSmokeTactical = false;
 		/** PmcRoofDefenceSmoke (G008): one roofs round, spread / guard share / shared cover checked. */
 		bool bSmokeRoof = false;
+		/** PmcCrossroadsSmoke / PmcAlleySmoke (smart-enemies T-04b): which GDD acceptance example the round is judged against. */
+		bool bSmokeCrossroads = false;
+		bool bSmokeAlley = false;
 		/**
 		 * Ammo=resupply|real (fix/pmc-arena-stalemate, default resupply): a fighter whose reserve runs dry gets his weapon's reserve back - an
 		 * arena-only training rule (the Depot tracks: empty rifles stood on the point next to each other for 3 minutes, unable to fight).
@@ -312,6 +322,12 @@ namespace PmcArena
 		int32 LadderRoofsTotal = 0;
 		/** G008: the round's defence block (living defenders). Guard share is n/a when no roof access was found. */
 		float DefenceSpreadM = 0.f;
+		TArray<TSharedPtr<FJsonValue>> OpenIdleByFighter;
+		TOptional<float> OnPositionBeforeContact;
+		float RangeContactTimeS = -1.f;
+		TOptional<float> CrossfireDeg;
+		double MaxExposedRunM = 0.0;
+		TOptional<float> FirstShotGapS;
 		bool bGuardShareApplicable = false;
 		float GuardShare = 0.f;
 		int32 SharedCoverPairs = 0;
@@ -400,6 +416,16 @@ namespace PmcArena
 		int32 GuardNearSamples = 0;
 		int32 GuardApplicableSamples = 0;
 		int32 SharedCoverPairs = 0;
+		/** T-04: one previous observation and a running total per member; no additional track frames. */
+		TArray<FPmcArenaPositionSample> PositionSamples[2];
+		TArray<FPmcArenaPositionTime> PositionTotals[2];
+		float LastPositionTimeS = -1.f;
+		TOptional<float> OnPositionBeforeContact;
+		/** Round time of that first in-range sample, s. */
+		float RangeContactTimeS = -1.f;
+		bool bOpeningShotObserved = false;
+		TOptional<float> CrossfireDeg;
+		FPmcArenaOpeningShots DefenderOpeningShots;
 	};
 	constexpr float TrackInterval = 0.2f;
 
@@ -1621,6 +1647,152 @@ namespace PmcArena
 		return Times;
 	}
 
+	bool PositionFighterAlive(const AOperativeCharacter* Fighter)
+	{
+		return Fighter && !Fighter->IsKilledInAction() && Fighter->HealthComponent && Fighter->HealthComponent->IsAlive();
+	}
+
+	bool HasNearbyArenaCoverSlot(UWorld& World, const FVector& Feet, const FCollisionQueryParams& Params,
+		const TArray<const AActor*>& Ignored, UNavigationSystemV1* Nav, const FNavAgentProperties& Agent)
+	{
+		// T-04's reach is measured to the stand point, rather than the face of the wall.
+		constexpr float SlotReachCm = 200.f;
+		constexpr int32 DirectionCount = 16;
+		FCoverTraceConfig Config;
+		Config.MaxEdgeProbes = 0; // the existence of a slot does not depend on its corners
+		const FVector Start = Feet + FVector(0.f, 0.f, Config.KneeHeightCm);
+		const float RayReach = SlotReachCm + 2.f * Config.SlotOffsetCm;
+		for (int32 Step = 0; Step < DirectionCount; ++Step)
+		{
+			const FVector Direction = FRotator(0.f, Step * (360.f / DirectionCount), 0.f).Vector();
+			FHitResult Hit;
+			FCoverSlot Slot;
+			if (!World.LineTraceSingleByChannel(Hit, Start, Start + Direction * RayReach, ECC_Visibility, Params)
+				|| !CoverTraceRules::FindCoverSlotAt(&World, Hit.ImpactPoint, Direction, Slot, Config, Ignored))
+			{
+				continue;
+			}
+			FNavLocation OnNav;
+			if (Nav && Nav->ProjectPointToNavigation(Slot.WorldLocation, OnNav, Config.NavProjectExtent, &Agent)
+				&& PmcTacticalRules::IsAtPost(Feet, OnNav.Location, SlotReachCm, Config.NavProjectExtent.Z))
+			{
+				return true;
+			}
+		}
+		return false;
+	}
+
+	void SamplePositions(FState& State, UWorld& World)
+	{
+		FTrack& Track = State.Track;
+		const bool bBeforeContact = !Track.OnPositionBeforeContact.IsSet();
+		const bool bHasPrevious = Track.LastPositionTimeS >= 0.f;
+		const float DeltaS = State.StageTime - Track.LastPositionTimeS;
+		if (bHasPrevious && DeltaS <= 0.f)
+		{
+			return;
+		}
+
+		const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(&World);
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(&World);
+		const int32 AttackerIndex = State.bAAttacks ? 0 : 1;
+		TArray<const AActor*> Ignored;
+		FCollisionQueryParams Params(SCENE_QUERY_STAT(PmcArenaPositionCover), false);
+		for (const TWeakObjectPtr<AOperativeCharacter>& Member : Track.Fighters)
+		{
+			if (const AOperativeCharacter* Fighter = Member.Get())
+			{
+				Ignored.Add(Fighter);
+				Params.AddIgnoredActor(Fighter);
+			}
+		}
+
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			const auto& Members = State.Sides[Side].Members;
+			const FPmcWeights& Weights = Side == 0 ? State.WeightsA : State.WeightsB;
+			for (int32 Index = 0; Index < Members.Num(); ++Index)
+			{
+				const AOperativeCharacter* Fighter = Members[Index].Get();
+				FPmcArenaPositionSample Sample;
+				Sample.bAlive = PositionFighterAlive(Fighter);
+				if (Sample.bAlive)
+				{
+					constexpr double IdleSpeedCmPerS = 15.0; // operative locomotion's movement threshold, without its order bit
+					Sample.Feet = FeetOf(*Fighter);
+					// The EFFECTIVE reach (full hit chance), not the max reach; AttackersInRange then takes the squad's MEDIAN of these
+					// (T-04 report: the max reach and a marksman's 90 m both made the first sample of the 78-88 m smokes "contact").
+					Sample.WeaponRangeCm = Fighter->CurrentWeapon ? Fighter->CurrentWeapon->Stats.Range.GetEffectiveRangeCm() : 0.f;
+					Sample.bMoving = Fighter->GetVelocity().SizeSquared() > FMath::Square(IdleSpeedCmPerS)
+						|| Fighter->IsMantling() || Fighter->IsClimbingLadder();
+					const FPmcTacticalPost* Post = Pmc ? Pmc->GetFighterPost(Fighter) : nullptr;
+					Sample.bOnPosition = Fighter->bInCover || (Post && PmcTacticalRules::IsAtPost(Sample.Feet, Post->Location,
+						UPmcSquadSubsystem::PostArriveCm, Weights.LevelToleranceCm));
+					Sample.bWalking = Side == AttackerIndex && Sample.bMoving && Fighter->GetCharacterMovement()->IsMovingOnGround()
+						&& !Fighter->IsMantling() && !Fighter->IsClimbingLadder();
+					if (Sample.bWalking)
+					{
+						Sample.bNearCoverSlot = Fighter->bInCover || HasNearbyArenaCoverSlot(World, Sample.Feet, Params, Ignored,
+							Nav, Fighter->GetNavAgentPropertiesRef());
+					}
+				}
+				FPmcArenaPositionSample& Previous = Track.PositionSamples[Side][Index];
+				if (bHasPrevious)
+				{
+					Track.PositionTotals[Side][Index].AddInterval(Previous, Sample, DeltaS, bBeforeContact);
+				}
+				Previous = Sample;
+			}
+		}
+
+		const auto& Defenders = Track.PositionSamples[1 - AttackerIndex];
+		if (bBeforeContact && PmcArenaBehaviourRules::AttackersInRange(Defenders, Track.PositionSamples[AttackerIndex]))
+		{
+			Track.OnPositionBeforeContact = PmcArenaBehaviourRules::OnPositionShare(Defenders);
+			Track.RangeContactTimeS = State.StageTime;
+			double ClosestCm = TNumericLimits<double>::Max();
+			const float ReachCm = PmcArenaBehaviourRules::SquadReachCm(Defenders);
+			for (const FPmcArenaPositionSample& Defender : Defenders)
+			{
+				for (const FPmcArenaPositionSample& Attacker : Track.PositionSamples[AttackerIndex])
+				{
+					ClosestCm = Defender.bAlive && Attacker.bAlive ? FMath::Min(ClosestCm, FVector::Dist(Defender.Feet, Attacker.Feet)) : ClosestCm;
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] T-04 first attacker in effective reach at %.1f s: closest defender-attacker pair %.1f m, squad (median) reach %.1f m, defenders on position %.2f"),
+				State.StageTime, ClosestCm / 100.0, ReachCm / 100.f, Track.OnPositionBeforeContact.Get(-1.f));
+		}
+		Track.LastPositionTimeS = State.StageTime;
+	}
+
+	void ObservePositionShot(FState& State, int32 ShooterSide, AOperativeCharacter* Shooter, const AOperativeCharacter* HitVictim)
+	{
+		FTrack& Track = State.Track;
+		const int32 AttackerIndex = State.bAAttacks ? 0 : 1;
+		if (!Track.bOpeningShotObserved)
+		{
+			Track.bOpeningShotObserved = true;
+			TArray<FVector> Feet[2];
+			for (int32 Side = 0; Side < 2; ++Side)
+			{
+				for (const TWeakObjectPtr<AOperativeCharacter>& Member : State.Sides[Side].Members)
+				{
+					const AOperativeCharacter* Fighter = Member.Get();
+					// The fire delegate follows damage application: include the first shot's victim if the hit killed him.
+					if (PositionFighterAlive(Fighter) || (Fighter && Fighter == HitVictim))
+					{
+						Feet[Side].Add(FeetOf(*Fighter));
+					}
+				}
+			}
+			Track.CrossfireDeg = PmcArenaBehaviourRules::CrossfireDeg(Feet[1 - AttackerIndex], Feet[AttackerIndex]);
+		}
+		if (ShooterSide != AttackerIndex)
+		{
+			Track.DefenderOpeningShots.Record(Track.Fighters.IndexOfByKey(Shooter), Shooter->GetWorld()->GetTimeSeconds());
+		}
+	}
+
 	void StartTrack(FState& State, UWorld* World)
 	{
 		FTrack& Track = State.Track;
@@ -1664,6 +1836,19 @@ namespace PmcArena
 		Track.GuardNearSamples = 0;
 		Track.GuardApplicableSamples = 0;
 		Track.SharedCoverPairs = 0;
+		Track.LastPositionTimeS = -1.f;
+		Track.OnPositionBeforeContact.Reset();
+		Track.RangeContactTimeS = -1.f;
+		Track.bOpeningShotObserved = false;
+		Track.CrossfireDeg.Reset();
+		Track.DefenderOpeningShots = FPmcArenaOpeningShots();
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			Track.PositionSamples[Side].Reset();
+			Track.PositionSamples[Side].SetNum(State.Sides[Side].Members.Num());
+			Track.PositionTotals[Side].Reset();
+			Track.PositionTotals[Side].SetNum(State.Sides[Side].Members.Num());
+		}
 		FState* StatePtr = &State;
 		// fix/arena-rpg-contact-roof: an RPG-7 rocket's burst within launcher.radius_cm (suppression.json) of a live enemy of its shooter is
 		// contact (a round where only rockets flew was a no_contact draw, -3 in the trainer). Bound once for the run.
@@ -1736,6 +1921,11 @@ namespace PmcArena
 					const AOperativeCharacter* Victim = Cast<AOperativeCharacter>(Target);
 					const int32 ShooterSide = SideIndexOf(*StatePtr, Shooter);
 					const int32 VictimSide = SideIndexOf(*StatePtr, Victim);
+					if (StatePtr->Stage == 2 && Shooter && IsSideIndex(ShooterSide))
+					{
+						ObservePositionShot(*StatePtr, ShooterSide, Shooter,
+							bHit && VictimSide == 1 - ShooterSide ? Victim : nullptr);
+					}
 					// The RPG-7's launch (fix/arena-rpg-contact-roof): counted per side whatever its target; at an enemy it is a shot below, and its
 					// burst near an enemy is another contact moment (the projectile listener).
 					if (Shooter && IsSideIndex(ShooterSide) && Shooter->IsLauncherEquipped())
@@ -1880,6 +2070,7 @@ namespace PmcArena
 			return;
 		}
 		Track.SampleTimer = TrackInterval;
+		SamplePositions(State, *World);
 		const UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
 		TArray<TSharedPtr<FJsonValue>> Frame;
 		TArray<TSharedPtr<FJsonValue>> Detail;
@@ -2388,6 +2579,23 @@ namespace PmcArena
 				}
 				Defence->SetNumberField(TEXT("shared_cover_pairs"), Result.SharedCoverPairs);
 				Defence->SetNumberField(TEXT("objective_share"), FMath::RoundToFloat(Result.ObjectiveShare * 100.f) / 100.f);
+				Defence->SetArrayField(TEXT("open_idle_s"), Result.OpenIdleByFighter);
+				auto WriteObservation = [&Defence](const TCHAR* Key, const TOptional<float>& Value)
+				{
+					if (Value.IsSet())
+					{
+						Defence->SetNumberField(Key, FMath::RoundToFloat(Value.GetValue() * 100.f) / 100.f);
+					}
+					else
+					{
+						Defence->SetField(Key, MakeShared<FJsonValueNull>());
+					}
+				};
+				WriteObservation(TEXT("on_position_before_contact"), Result.OnPositionBeforeContact);
+				WriteObservation(TEXT("range_contact_s"), Result.RangeContactTimeS >= 0.f ? TOptional<float>(Result.RangeContactTimeS) : TOptional<float>());
+				WriteObservation(TEXT("crossfire_deg"), Result.CrossfireDeg);
+				Defence->SetNumberField(TEXT("max_exposed_run_m"), FMath::RoundToDouble(Result.MaxExposedRunM * 100.0) / 100.0);
+				WriteObservation(TEXT("first_shot_gap_s"), Result.FirstShotGapS);
 				Round->SetObjectField(TEXT("defence"), Defence);
 			}
 			if (Result.RouteM >= 0.f)
@@ -2438,6 +2646,93 @@ namespace PmcArena
 	}
 
 	/** The smoke's validation of the file it wrote (the schema the trainer reads). */
+	/**
+	 * smart-enemies T-04b: the round's defenders judged against the GDD's ambush acceptance (docs/design/gdd/smart-enemies.md A-00A crossroads,
+	 * A-00B alley), using only what the arena measures (rounds[].defence). The numbers are the GDD's: the open-idle limit and the crossfire
+	 * angle (A-00A.1 / .2, "crossfire_min_deg" 45 - the GDD keeps it in squad_plays.json, which does not exist before T-08) and the hammers'
+	 * first shots (A-00A.4); the spacing is pmc_commander.json "min_spacing_m". A precondition failure (no site, no contact) is NOT the
+	 * behaviour failing: it is logged as "precondition" so a red run says which one it is. Not measured here, listed in the T-04 report: the
+	 * anvil's hiding spot / enclosure, the roof role, fields of fire over the lane, the attackers' outcome (A-00A.3, 5, 6; A-00B.1, 3, 5).
+	 */
+	void JudgeAmbushPositions(FState& State, const TSharedPtr<FJsonObject>& Round, bool bAlley)
+	{
+		constexpr float MaxOpenIdleBeforeContactS = 2.f;   // A-00A.1
+		constexpr float MinCrossfireDeg = 45.f;            // A-00A.2 (GDD crossfire_min_deg)
+		constexpr float MaxFirstShotGapS = 1.5f;           // A-00A.4
+		const TCHAR* Id = bAlley ? TEXT("A-00B") : TEXT("A-00A");
+		const TCHAR* Want = bAlley ? TEXT("chokepoint") : TEXT("street");
+		const FString Played = Round->GetStringField(TEXT("scenario"));
+		const FString DefenderSide = Round->GetStringField(TEXT("attacker")) == TEXT("A") ? TEXT("B") : TEXT("A");
+		const TSharedPtr<FJsonObject>* Defence = nullptr;
+		const bool bDefence = Round->TryGetObjectField(TEXT("defence"), Defence) && Defence && (*Defence)->HasField(TEXT("open_idle_s"))
+			&& (*Defence)->HasField(TEXT("on_position_before_contact")) && (*Defence)->HasField(TEXT("crossfire_deg"))
+			&& (*Defence)->HasField(TEXT("first_shot_gap_s")) && (*Defence)->HasField(TEXT("max_exposed_run_m"));
+		Check(State, bDefence, TEXT("precondition: rounds[].defence carries the T-04 metrics (open_idle_s, on_position_before_contact, crossfire_deg, max_exposed_run_m, first_shot_gap_s)"));
+		Check(State, Played == Want, FString::Printf(TEXT("precondition: the round played the %s scenario (%s)"), Want, *Played));
+		if (!bDefence)
+		{
+			return;
+		}
+		auto Optional = [&Defence](const TCHAR* Key, double& Out)
+		{
+			const TSharedPtr<FJsonValue> Value = (*Defence)->TryGetField(Key);
+			Out = Value.IsValid() && Value->Type == EJson::Number ? Value->AsNumber() : -1.0;
+			return Value.IsValid() && Value->Type == EJson::Number;
+		};
+		double OnPosition = -1.0;
+		double Crossfire = -1.0;
+		double FirstShotGap = -1.0;
+		double RangeContactS = -1.0;
+		Optional(TEXT("range_contact_s"), RangeContactS);
+		const bool bContact = Optional(TEXT("on_position_before_contact"), OnPosition);
+		const bool bCrossfire = Optional(TEXT("crossfire_deg"), Crossfire);
+		const bool bGap = Optional(TEXT("first_shot_gap_s"), FirstShotGap);
+		double WorstIdle = 0.0;
+		double WorstIdleTotal = 0.0;
+		int32 Men = 0;
+		const TArray<TSharedPtr<FJsonValue>>* Idle = nullptr;
+		if ((*Defence)->TryGetArrayField(TEXT("open_idle_s"), Idle))
+		{
+			for (const TSharedPtr<FJsonValue>& Value : *Idle)
+			{
+				const TSharedPtr<FJsonObject> Man = Value->AsObject();
+				if (Man.IsValid() && Man->GetStringField(TEXT("side")) == DefenderSide)
+				{
+					++Men;
+					WorstIdle = FMath::Max(WorstIdle, Man->GetNumberField(TEXT("before_contact_s")));
+					WorstIdleTotal = FMath::Max(WorstIdleTotal, Man->GetNumberField(TEXT("total_s")));
+				}
+			}
+		}
+		const double Spread = (*Defence)->GetNumberField(TEXT("spread_m"));
+		const FPmcWeights& DefenderWeights = DefenderSide == TEXT("A") ? State.WeightsA : State.WeightsB;
+		const double MinSpacingM = DefenderWeights.MinSpacingCm / 100.f;
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] %s smoke metrics (%s, defenders %s, %d men): worst open idle before contact %.2f s (total %.2f s), on position at first range contact %s, crossfire %s deg, first-shot gap %s s, mean spread %.1f m, attackers' longest exposed run %.1f m, first in-range sample at %.1f s"),
+			Id, *Played, *DefenderSide, Men, WorstIdle, WorstIdleTotal, bContact ? *FString::Printf(TEXT("%.2f"), OnPosition) : TEXT("n/a"),
+			bCrossfire ? *FString::Printf(TEXT("%.1f"), Crossfire) : TEXT("n/a"), bGap ? *FString::Printf(TEXT("%.2f"), FirstShotGap) : TEXT("n/a"),
+			Spread, (*Defence)->GetNumberField(TEXT("max_exposed_run_m")), RangeContactS);
+		Check(State, Men == State.Options.Squad, FString::Printf(TEXT("precondition: every defender has an open_idle_s entry (%d of %d)"), Men, State.Options.Squad));
+		Check(State, bContact, TEXT("precondition: an attacker came within a defender's weapon range (on_position_before_contact measured)"));
+		// A contact at the very first sample would make "before contact" empty and the position share a measurement of the spawn, not of the play.
+		Check(State, RangeContactS > 0.0, FString::Printf(TEXT("precondition: the first attacker came into effective range after the start (at %.1f s)"), RangeContactS));
+		// The behaviour. Each line names the GDD criterion it pins; none is tuned to today's code.
+		Check(State, WorstIdle <= MaxOpenIdleBeforeContactS, FString::Printf(TEXT("%s.1 no defender stands in the open and still before contact for more than %.1f s (worst %.2f s)"),
+			Id, MaxOpenIdleBeforeContactS, WorstIdle));
+		Check(State, bContact && OnPosition >= 1.0, FString::Printf(TEXT("%s.1 every defender is at a cover slot or post when the first attacker is in range (share %s)"),
+			Id, bContact ? *FString::Printf(TEXT("%.2f"), OnPosition) : TEXT("n/a")));
+		Check(State, bCrossfire && Crossfire >= MinCrossfireDeg, FString::Printf(TEXT("%s.2 crossfire angle at the first shot >= %.0f deg (%s)"),
+			Id, MinCrossfireDeg, bCrossfire ? *FString::Printf(TEXT("%.1f"), Crossfire) : TEXT("not measured")));
+		if (bAlley)
+		{
+			Check(State, Spread >= MinSpacingM, FString::Printf(TEXT("A-00B.2 the defenders' mean spread %.1f m >= min_spacing_m %.1f m (nobody bunched at the goal)"), Spread, MinSpacingM));
+		}
+		else
+		{
+			Check(State, bGap && FirstShotGap <= MaxFirstShotGapS, FString::Printf(TEXT("A-00A.4 the first two defenders' first shots <= %.1f s apart (%s)"),
+				MaxFirstShotGapS, bGap ? *FString::Printf(TEXT("%.2f s"), FirstShotGap) : TEXT("fewer than two defenders fired")));
+		}
+	}
+
 	void ValidateJson(FState& State, const FString& Path)
 	{
 		FString Text;
@@ -2529,6 +2824,12 @@ namespace PmcArena
 					Check(State, Spread >= 5.0, FString::Printf(TEXT("defender spread %.1f m >= 5 m"), Spread));
 					Check(State, bGuardNumber && Guard > 0.6, FString::Printf(TEXT("guard share %s > 0.6"), bGuardNumber ? *FString::Printf(TEXT("%.2f"), Guard) : TEXT("n/a")));
 					Check(State, Pairs == 0.0, FString::Printf(TEXT("shared cover pairs %.0f == 0"), Pairs));
+				}
+				if ((State.Options.bSmokeCrossroads || State.Options.bSmokeAlley) && !State.Results.IsEmpty())
+				{
+					// smart-enemies T-04b: the designer's clips as scenario smokes (red until the squad plays).
+					JudgeAmbushPositions(State, *Round, State.Options.bSmokeAlley);
+					return;
 				}
 				if (State.Options.bSmokeTactical && !State.Results.IsEmpty())
 				{
@@ -2992,11 +3293,42 @@ namespace PmcArena
 			State.bRoundObjective ? TEXT("on") : TEXT("off"), *State.Objective.ToCompactString(), State.Config.ObjectiveRadiusCm / 100.f, State.Config.HoldSeconds);
 	}
 
+	void FinishPositionMetrics(FState& State, UWorld& World, FRoundResult& Result)
+	{
+		SamplePositions(State, World);
+		const FTrack& PositionTrack = State.Track;
+		const int32 AttackerIndex = State.bAAttacks ? 0 : 1;
+		for (int32 Side = 0; Side < 2; ++Side)
+		{
+			for (int32 Index = 0; Index < State.Sides[Side].Members.Num(); ++Index)
+			{
+				const AOperativeCharacter* Fighter = State.Sides[Side].Members[Index].Get();
+				const FPmcArenaPositionTime& Time = PositionTrack.PositionTotals[Side][Index];
+				TSharedRef<FJsonObject> Idle = MakeShared<FJsonObject>();
+				Idle->SetNumberField(TEXT("fighter_index"), PositionTrack.Fighters.IndexOfByKey(State.Sides[Side].Members[Index]));
+				Idle->SetStringField(TEXT("id"), Fighter ? Fighter->DisplayName.ToString() : TEXT("?"));
+				Idle->SetStringField(TEXT("side"), Side == 0 ? TEXT("A") : TEXT("B"));
+				Idle->SetNumberField(TEXT("total_s"), FMath::RoundToFloat(Time.OpenIdleS * 100.f) / 100.f);
+				Idle->SetNumberField(TEXT("before_contact_s"), FMath::RoundToFloat(Time.OpenIdleBeforeContactS * 100.f) / 100.f);
+				Result.OpenIdleByFighter.Add(MakeShared<FJsonValueObject>(Idle));
+				if (Side == AttackerIndex)
+				{
+					Result.MaxExposedRunM = FMath::Max(Result.MaxExposedRunM, Time.MaxExposedRunCm / 100.0);
+				}
+			}
+		}
+		Result.OnPositionBeforeContact = PositionTrack.OnPositionBeforeContact;
+		Result.RangeContactTimeS = PositionTrack.RangeContactTimeS;
+		Result.CrossfireDeg = PositionTrack.CrossfireDeg;
+		Result.FirstShotGapS = PositionTrack.DefenderOpeningShots.GapS();
+	}
+
 	void EndRound(FState& State, UWorld* World, const FPmcRoundOutcome& Outcome)
 	{
 		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
 		FRoundResult& Result = State.Results.Last();
 		Result.Duration = State.StageTime;
+		FinishPositionMetrics(State, *World, Result);
 		UpdateDamage(State);
 		const TCHAR* Why = *Outcome.Reason;
 		for (int32 Index = 0; Index < 2; ++Index)
@@ -3321,6 +3653,7 @@ namespace PmcArena
 			StartRound(State, World);
 			State.Stage = 2;
 			State.StageTime = 0.f;
+			SamplePositions(State, *World);
 			return true;
 		case 2: // the fight
 		{
@@ -3369,7 +3702,8 @@ namespace PmcArena
 		}
 	}
 
-	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false, bool bSmokeStalemate = false, bool bSmokeTactical = false, bool bSmokeRoof = false)
+	void RunWith(const TArray<FString>& Args, UWorld* World, bool bSmoke, bool bSmokeCapture = false, bool bSmokeStalemate = false, bool bSmokeTactical = false, bool bSmokeRoof = false,
+		bool bSmokeCrossroads = false, bool bSmokeAlley = false)
 	{
 		if (!World)
 		{
@@ -3417,6 +3751,17 @@ namespace PmcArena
 			State->Options.Squad = 3;
 			State->Options.Scenario = static_cast<int32>(EPmcScenario::Roofs);
 			State->Options.TimeLimit = 180.f;
+		}
+		if (bSmokeCrossroads || bSmokeAlley)
+		{
+			// smart-enemies T-04b: one 3v3 objective round on an open street (A-00A) / a lane (A-00B) site, long enough for the defenders to
+			// get into position (the GDD gives them the walk time + 5 s) and for the attackers to arrive.
+			State->Options.bSmokeCrossroads = bSmokeCrossroads;
+			State->Options.bSmokeAlley = bSmokeAlley;
+			State->Options.bObjective = true;
+			State->Options.Squad = 3;
+			State->Options.Scenario = static_cast<int32>(bSmokeCrossroads ? EPmcScenario::Street : EPmcScenario::Chokepoint);
+			State->Options.TimeLimit = 120.f;
 		}
 		State->bWeightsALoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsA, State->WeightsA);
 		State->bWeightsBLoaded = PmcCommanderRules::LoadWeightsFile(State->Options.WeightsB, State->WeightsB);
@@ -3474,6 +3819,16 @@ namespace PmcArena
 		RunWith(Args, World, true, false, false, false, true);
 	}
 
+	void RunCrossroadsSmoke(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, true, false, false, false, false, true, false);
+	}
+
+	void RunAlleySmoke(const TArray<FString>& Args, UWorld* World)
+	{
+		RunWith(Args, World, true, false, false, false, false, false, true);
+	}
+
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
 		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
@@ -3503,6 +3858,16 @@ namespace PmcArena
 		TEXT("CodexTactics.PmcRoofDefenceSmoke"),
 		TEXT("Dev check (G008): one 3v3 roofs objective round - defender spread >= 5 m, guard share > 0.6, no shared cover; logs PASS/FAIL, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunRoofDefenceSmoke));
+
+	static FAutoConsoleCommandWithWorldAndArgs CrossroadsSmokeCommand(
+		TEXT("CodexTactics.PmcCrossroadsSmoke"),
+		TEXT("Dev check (smart-enemies T-04, GDD A-00A): one 3v3 objective round on an open street site - the defenders in position before contact, no open idle, crossfire >= 45 deg, the hammers' first shots <= 1.5 s apart. RED until the squad plays (knownFail); logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunCrossroadsSmoke));
+
+	static FAutoConsoleCommandWithWorldAndArgs AlleySmokeCommand(
+		TEXT("CodexTactics.PmcAlleySmoke"),
+		TEXT("Dev check (smart-enemies T-04, GDD A-00B): one 3v3 objective round on a lane (chokepoint) site - the defenders in position before contact, no open idle, spaced by min_spacing_m, crossfire >= 45 deg. RED until the squad plays (knownFail); logs PASS/FAIL, then exits."),
+		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunAlleySmoke));
 }
 
 #endif // !UE_BUILD_SHIPPING

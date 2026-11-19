@@ -26,8 +26,139 @@ float FPmcBehaviour::Value(const FString& Key) const
 	return 0.f;
 }
 
+void FPmcArenaPositionTime::AddInterval(const FPmcArenaPositionSample& Previous, const FPmcArenaPositionSample& Current,
+	float DeltaS, bool bBeforeContact)
+{
+	if (DeltaS <= 0.f)
+	{
+		return;
+	}
+	if (Previous.bAlive && !Previous.bMoving && !Previous.bOnPosition)
+	{
+		OpenIdleS += DeltaS;
+		if (bBeforeContact)
+		{
+			OpenIdleBeforeContactS += DeltaS;
+		}
+	}
+	if (Previous.bWalking && Current.bWalking && !Previous.bNearCoverSlot && !Current.bNearCoverSlot)
+	{
+		ExposedRunCm += FVector::Dist2D(Previous.Feet, Current.Feet);
+		MaxExposedRunCm = FMath::Max(MaxExposedRunCm, ExposedRunCm);
+	}
+	else
+	{
+		ExposedRunCm = 0.0;
+	}
+}
+
+void FPmcArenaOpeningShots::Record(int32 Fighter, double TimeS)
+{
+	if (Fighter == INDEX_NONE || Gap.IsSet())
+	{
+		return;
+	}
+	if (FirstFighter == INDEX_NONE)
+	{
+		FirstFighter = Fighter;
+		FirstTimeS = TimeS;
+	}
+	else if (Fighter != FirstFighter)
+	{
+		Gap = static_cast<float>(TimeS - FirstTimeS);
+	}
+}
+
 namespace PmcArenaBehaviourRules
 {
+	float SquadReachCm(TConstArrayView<FPmcArenaPositionSample> Defenders)
+	{
+		TArray<float, TInlineAllocator<8>> Reaches;
+		for (const FPmcArenaPositionSample& Defender : Defenders)
+		{
+			if (Defender.bAlive && Defender.WeaponRangeCm > 0.f)
+			{
+				Reaches.Add(Defender.WeaponRangeCm);
+			}
+		}
+		if (Reaches.IsEmpty())
+		{
+			return 0.f;
+		}
+		Reaches.Sort();
+		const int32 Mid = Reaches.Num() / 2;
+		return Reaches.Num() % 2 == 1 ? Reaches[Mid] : 0.5f * (Reaches[Mid - 1] + Reaches[Mid]);
+	}
+
+	bool AttackersInRange(TConstArrayView<FPmcArenaPositionSample> Defenders, TConstArrayView<FPmcArenaPositionSample> Attackers)
+	{
+		const float ReachCm = SquadReachCm(Defenders);
+		if (ReachCm <= 0.f)
+		{
+			return false;
+		}
+		for (const FPmcArenaPositionSample& Defender : Defenders)
+		{
+			if (!Defender.bAlive || Defender.WeaponRangeCm <= 0.f)
+			{
+				continue;
+			}
+			for (const FPmcArenaPositionSample& Attacker : Attackers)
+			{
+				if (Attacker.bAlive && FVector::DistSquared(Defender.Feet, Attacker.Feet) <= FMath::Square(ReachCm))
+				{
+					return true;
+				}
+			}
+		}
+		return false;
+	}
+
+	TOptional<float> OnPositionShare(TConstArrayView<FPmcArenaPositionSample> Defenders)
+	{
+		int32 Living = 0;
+		int32 Positioned = 0;
+		for (const FPmcArenaPositionSample& Fighter : Defenders)
+		{
+			if (Fighter.bAlive)
+			{
+				++Living;
+				Positioned += Fighter.bOnPosition ? 1 : 0;
+			}
+		}
+		return Living > 0 ? TOptional<float>(static_cast<float>(Positioned) / Living) : TOptional<float>();
+	}
+
+	TOptional<float> CrossfireDeg(TConstArrayView<FVector> Defenders, TConstArrayView<FVector> Attackers)
+	{
+		if (Attackers.IsEmpty())
+		{
+			return {};
+		}
+		FVector Centroid = FVector::ZeroVector;
+		for (const FVector& Feet : Attackers)
+		{
+			Centroid += Feet;
+		}
+		Centroid /= Attackers.Num();
+		TOptional<float> Angle;
+		for (int32 I = 0; I < Defenders.Num(); ++I)
+		{
+			const FVector A = (Centroid - Defenders[I]).GetSafeNormal();
+			for (int32 J = I + 1; J < Defenders.Num(); ++J)
+			{
+				const FVector B = (Centroid - Defenders[J]).GetSafeNormal();
+				if (!A.IsNearlyZero() && !B.IsNearlyZero())
+				{
+					const double Dot = FMath::Clamp(FVector::DotProduct(A, B), -1.0, 1.0);
+					const float Degrees = static_cast<float>(FMath::RadiansToDegrees(FMath::Acos(Dot)));
+					Angle = FMath::Max(Angle.Get(0.f), Degrees);
+				}
+			}
+		}
+		return Angle;
+	}
+
 	const TArray<FPmcBehaviourMetricSpec>& Catalog()
 	{
 		// The G002 table (docs/port/grok/outbox/G002-arena-behaviour-schema.md): the same keys, names, units, ranges and directions.

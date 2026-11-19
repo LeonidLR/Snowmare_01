@@ -150,4 +150,109 @@ bool FPmcArenaBehaviourJsonTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcArenaPositionTimeTest, "CodexTactics.AI.PmcArenaBehaviour.PositionTime",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcArenaPositionTimeTest::RunTest(const FString&)
+{
+	FPmcArenaPositionSample Idle;
+	Idle.bAlive = true;
+	FPmcArenaPositionSample Covered = Idle;
+	Covered.bOnPosition = true;
+	FPmcArenaPositionSample Walking = Idle;
+	Walking.bMoving = true;
+	Walking.bWalking = true;
+	FPmcArenaPositionTime Time;
+	Time.AddInterval(Idle, Covered, 1.25f, true);
+	Time.AddInterval(Covered, Walking, 2.f, true);
+	Time.AddInterval(Idle, Walking, 3.f, false);
+	Time.AddInterval({}, Idle, 4.f, false);
+	TestEqual(TEXT("Only observed living open idle contributes"), Time.OpenIdleS, 4.25f);
+	TestEqual(TEXT("Open idle before contact is retained separately"), Time.OpenIdleBeforeContactS, 1.25f);
+	FPmcArenaPositionSample Next = Walking;
+	Next.Feet.X = 100.f;
+	Time.AddInterval(Walking, Next, 1.f, false);
+	FPmcArenaPositionSample Turn = Next;
+	Turn.Feet.Y = 150.f;
+	Time.AddInterval(Next, Turn, 1.f, false);
+	TestEqual(TEXT("Exposure sums distance along a turn"), Time.MaxExposedRunCm, 250.0);
+	FPmcArenaPositionSample NearCover = Turn;
+	NearCover.bNearCoverSlot = true;
+	Time.AddInterval(Turn, NearCover, 1.f, false);
+	TestEqual(TEXT("A nearby slot breaks the uncovered segment"), Time.ExposedRunCm, 0.0);
+	Time.AddInterval(Turn, Next, 1.f, false);
+	Time.AddInterval(Next, Idle, 1.f, false);
+	TestEqual(TEXT("Stopping breaks the uncovered segment"), Time.ExposedRunCm, 0.0);
+	TestEqual(TEXT("Separate running segments do not merge"), Time.MaxExposedRunCm, 250.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcArenaPositionContactTest, "CodexTactics.AI.PmcArenaBehaviour.PositionContact",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcArenaPositionContactTest::RunTest(const FString&)
+{
+	using namespace PmcArenaBehaviourRules;
+	FPmcArenaPositionSample Defender;
+	Defender.bAlive = true;
+	Defender.WeaponRangeCm = 500.f;
+	Defender.bOnPosition = true;
+	FPmcArenaPositionSample Unarmed;
+	Unarmed.bAlive = true;
+	TArray<FPmcArenaPositionSample> Defenders = { Defender, Unarmed, {} };
+	FPmcArenaPositionSample Attacker;
+	Attacker.bAlive = true;
+	Attacker.Feet = FVector(300.f, 0.f, 400.f);
+	TArray<FPmcArenaPositionSample> Attackers = { Attacker };
+	TestTrue(TEXT("An attacker at the exact weapon reach is in range"), AttackersInRange(Defenders, Attackers));
+	Attackers[0].Feet.Z += 1.f;
+	TestFalse(TEXT("3D height contributes to range"), AttackersInRange(Defenders, Attackers));
+	Attackers[0].bAlive = false;
+	Attackers[0].Feet = FVector::ZeroVector;
+	TestFalse(TEXT("A casualty does not trigger range"), AttackersInRange(Defenders, Attackers));
+	// One marksman (90 m) among two rifles (5 m here): the kill zone is the median reach, not the longest gun.
+	FPmcArenaPositionSample Marksman = Defender;
+	Marksman.WeaponRangeCm = 9000.f;
+	Marksman.Feet = FVector(-100.f, 0.f, 0.f);
+	TArray<FPmcArenaPositionSample> Squad = { Defender, Defender, Marksman };
+	TestEqual(TEXT("Squad reach is the median of the armed living defenders"), SquadReachCm(Squad), 500.f);
+	TestEqual(TEXT("Two guns average their reach"), SquadReachCm(TArray<FPmcArenaPositionSample>{ Defender, Marksman }), 4750.f);
+	TestEqual(TEXT("No armed defender, no reach"), SquadReachCm(TArray<FPmcArenaPositionSample>{ Unarmed, FPmcArenaPositionSample() }), 0.f);
+	Attackers[0].bAlive = true;
+	Attackers[0].Feet = FVector(-3000.f, 0.f, 0.f);
+	TestFalse(TEXT("An attacker inside only the marksman's reach is no contact"), AttackersInRange(Squad, Attackers));
+	Attackers[0].Feet = FVector(300.f, 0.f, 0.f);
+	TestTrue(TEXT("An attacker inside the squad's median reach is contact"), AttackersInRange(Squad, Attackers));
+	Attackers[0].bAlive = false;
+	TestEqual(TEXT("One of two live defenders is in position"), OnPositionShare(Defenders).Get(-1.f), 0.5f);
+	TestFalse(TEXT("Empty team has no position share"), OnPositionShare({}).IsSet());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcArenaOpeningGeometryTest, "CodexTactics.AI.PmcArenaBehaviour.OpeningGeometry",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcArenaOpeningGeometryTest::RunTest(const FString&)
+{
+	const TArray<FVector> Defenders = { FVector(100.f, 0.f, 0.f), FVector(0.f, 0.f, 100.f), FVector(50.f, 0.f, 50.f) };
+	const TArray<FVector> Attackers = { FVector(0.f, 10.f, 0.f), FVector(0.f, -10.f, 0.f) };
+	TestNearlyEqual(TEXT("Maximum angle to the attackers' centroid includes elevation"),
+		PmcArenaBehaviourRules::CrossfireDeg(Defenders, Attackers).Get(-1.f), 90.f, 0.01f);
+	TestFalse(TEXT("No attackers makes crossfire unavailable"), PmcArenaBehaviourRules::CrossfireDeg(Defenders, {}).IsSet());
+
+	FPmcArenaOpeningShots Shots;
+	Shots.Record(1, 3.f);
+	Shots.Record(1, 3.1f);
+	TestFalse(TEXT("Two shots by the same man do not establish a gap"), Shots.GapS().IsSet());
+	Shots.Record(2, 3.5f);
+	Shots.Record(3, 9.f);
+	TestEqual(TEXT("Second distinct defender fixes the gap"), Shots.GapS().Get(-1.f), 0.5f);
+
+	FPmcArenaOpeningShots Simultaneous;
+	Simultaneous.Record(1, 1.f);
+	Simultaneous.Record(2, 1.f);
+	TestEqual(TEXT("Two defenders opening together is a measured zero gap"), Simultaneous.GapS().Get(-1.f), 0.f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS
