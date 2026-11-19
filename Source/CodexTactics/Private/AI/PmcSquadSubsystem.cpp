@@ -2,6 +2,7 @@
 // UE-only, no Godot reference.
 
 #include "AI/PmcSquadSubsystem.h"
+#include "AI/FiringPositionSubsystem.h"
 
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcOperatorRules.h"
@@ -13,6 +14,7 @@
 #include "AIController.h"
 #include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
+#include "Characters/OperativeMovementRules.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Combat/EnemyRegistrySubsystem.h"
@@ -60,7 +62,7 @@ namespace PmcSquadLocal
 	constexpr float StillSpeedCm = 30.f;
 	/** ...and the Ambush that walked him is this old (longer than the stalemate smoke's 2 s re-decide window). */
 	constexpr double DefenceRetrySeconds = 2.5;
-	constexpr float AidReachCm = 230.f;
+	// The heal walk's reach is FPmcWeights::HealReachCm (pmc_commander.json heal_reach_m), shared with the post gate.
 	constexpr float MonsterSightCm = 2500.f;
 	/** A demasked shooter (his own fire) is noticed by the teams with a man this close (planar). */
 	constexpr float GunfireHearingCm = 6000.f;
@@ -1213,7 +1215,7 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 				else if (State.Order == EPmcOrder::Heal)
 				{
 					const float Dist = State.Patient.IsValid() ? FVector::Dist2D(Feet, State.Patient->GetActorLocation()) : 99999.f;
-					if (Dist <= PmcSquadLocal::AidReachCm && Fighter->MedkitsCount > 0 && State.Patient.IsValid()
+					if (Dist <= Team.Weights.HealReachCm && Fighter->MedkitsCount > 0 && State.Patient.IsValid()
 						&& PmcSquadLocal::IsLiveOperative(State.Patient.Get()) && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f)
 					{
 						FSquadOrderContext Context;
@@ -1232,7 +1234,7 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 					else
 					{
 						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s heal approach ended: patient out of reach (%.0f cm > %.0f cm) -> cancel"), TeamId,
-							*Fighter->DisplayName.ToString(), Dist, PmcSquadLocal::AidReachCm);
+							*Fighter->DisplayName.ToString(), Dist, Team.Weights.HealReachCm);
 						State.Order = EPmcOrder::Hold;
 						State.OrderSince = Now;
 						State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.FailedOrderCooldownSeconds);
@@ -1329,6 +1331,7 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 	View.bInCover = Fighter.bInCover;
 	View.bExposed = State.ExposedSince >= 0.0;
 	View.bUnderFire = Now - State.LastShotAtTime <= PmcSquadLocal::UnderFireSeconds;
+	View.bSuppressed = Fighter.GetSuppressionTier() != ESuppressionTier::None;
 	View.SecondsExposedHere = View.bExposed ? static_cast<float>(Now - State.ExposedSince) : 0.f;
 	View.Stance = Fighter.GetStance();
 	View.bMoving = Fighter.GetVelocity().SizeSquared2D() > 100.f || Fighter.HasOwnMoveOrder();
@@ -1436,6 +1439,63 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 				// spawn post look finished, so he never walked to the access.
 				View.bAtPost = PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
 			}
+		}
+	}
+	// G008 defence refresh gives every objective defender a post, including a man already on a ranged tactical post.
+	// While his feet are on that post the commander sees it, so the defence walk does not pull him off it.
+	// When he leaves it the defence post returns. A defence flag on the same man does not cancel the contact clock.
+	{
+		const FVector HoldFeet = PmcSquadLocal::FeetOf(Fighter);
+		const bool bOnTacticalPost = State.Post.IsValid()
+			&& PmcTacticalRules::IsAtPost(HoldFeet, State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm);
+		const bool bRangedPost = State.Post.Kind == EPmcPostKind::Overwatch || State.Post.Kind == EPmcPostKind::Window
+			|| State.Post.Kind == EPmcPostKind::Ambush;
+		// G008b / T-06: contact for a ranged post is measured from the post, not from the man. ambush_max_hold_s starts when a
+		// known enemy's last position enters the engagement range and restarts if they all leave it, or if he steps off the post.
+		// Overwatch: the smaller of the roof's range_m and his weapon reach. Window and ambush: the weapon band's max.
+		// The assault stand-in is not in Team.Known, so it never starts this clock.
+		if (bOnTacticalPost && bRangedPost)
+		{
+			const float BandMaxCm = View.Band.IsValid() ? View.Band.MaxCm : 0.f;
+			const float EngagementCm = PmcCommanderRules::PostEngagementCm(State.Post.Kind, State.Post.RangeCm, View.WeaponRangeCm, BandMaxCm);
+			float NearestCm = TNumericLimits<float>::Max();
+			bool bInRange = false;
+			for (const TPair<TWeakObjectPtr<AActor>, FKnownTarget>& Pair : Team.Known)
+			{
+				if (!Pair.Value.Actor.IsValid() || EngagementCm <= 0.f)
+				{
+					continue;
+				}
+				const float DistanceCm = FVector::Dist2D(State.Post.Location, Pair.Value.LastKnown);
+				if (DistanceCm <= EngagementCm)
+				{
+					bInRange = true;
+					NearestCm = FMath::Min(NearestCm, DistanceCm);
+				}
+			}
+			if (!bInRange)
+			{
+				State.PostRangeContactAt = -1.0;
+			}
+			else if (State.PostRangeContactAt < 0.0)
+			{
+				State.PostRangeContactAt = Now;
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s %s contact in range (nearest %.0f cm, post range %.0f cm)"),
+					TeamId, *Fighter.DisplayName.ToString(), PmcTacticalRules::PostKindName(State.Post.Kind), NearestCm, EngagementCm);
+			}
+			View.bContactInPostRange = State.PostRangeContactAt >= 0.0;
+			View.PostRangeContactSeconds = View.bContactInPostRange ? static_cast<float>(Now - State.PostRangeContactAt) : 0.f;
+			const float KindFactor = PmcTacticalRules::PostKindFactor(State.Post.Kind, Team.Weights);
+			View.PostKind = State.Post.Kind;
+			View.PostScore = KindFactor > 0.f ? State.Post.Score / KindFactor : State.Post.Score;
+			View.bAtPost = true;
+			View.bOnRangedPost = true;
+			View.bOnOverwatchRoof = State.Post.Kind == EPmcPostKind::Overwatch;
+			View.bHasDefencePost = false;
+		}
+		else
+		{
+			State.PostRangeContactAt = -1.0;
 		}
 	}
 	if (Team.Defence.bActive && State.DefenceRole == EPmcDefenceRole::SectorShooter && State.bHasDefencePost && Team.Defence.Spots.Num() > 0
@@ -1584,13 +1644,31 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 	{
 		for (AOperativeCharacter* Mate : Mates)
 		{
-			const bool bPostWalkMoving = Mate && (Mate->HasOwnMoveOrder() || Mate->GetVelocity().SizeSquared2D() >= FMath::Square(PmcSquadLocal::StillSpeedCm));
-			if (FFighterState* State = Team.Fighters.Find(Mate); State && State->Order == EPmcOrder::Ambush
-				&& !(State->bHasDefencePost && Team.Defence.bActive && State->DefencePostWalkFromCm >= 0.f && bPostWalkMoving))
+			FFighterState* State = Team.Fighters.Find(Mate);
+			if (!State || State->Order != EPmcOrder::Ambush)
 			{
-				++Team.Stats.Ambushes;
-				State->Order = EPmcOrder::Hold;
+				continue;
 			}
+			const bool bPostWalkMoving = Mate && (Mate->HasOwnMoveOrder() || Mate->GetVelocity().SizeSquared2D() >= FMath::Square(PmcSquadLocal::StillSpeedCm));
+			if (State->bHasDefencePost && Team.Defence.bActive && State->DefencePostWalkFromCm >= 0.f && bPostWalkMoving)
+			{
+				continue;
+			}
+			// G008b / T-06: a defender standing on a ranged post keeps Ambush until the fighter loop sees the hold close.
+			// Springing it here, before his view exists, walked him off while the threat was still outside the post.
+			// His G008 defence post does not count: the refresh stamps one on every objective defender.
+			const FVector PostFeet = Mate ? PmcSquadLocal::FeetOf(*Mate) : FVector::ZeroVector;
+			const bool bRangedKind = State->Post.Kind == EPmcPostKind::Overwatch || State->Post.Kind == EPmcPostKind::Window
+				|| State->Post.Kind == EPmcPostKind::Ambush;
+			const bool bRangedDefender = Mate && Team.Objective.IsSet() && Team.Objective->Role == EPmcRole::Defender
+				&& bRangedKind
+				&& PmcTacticalRules::IsAtPost(PostFeet, State->Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm);
+			if (bRangedDefender)
+			{
+				continue;
+			}
+			++Team.Stats.Ambushes;
+			State->Order = EPmcOrder::Hold;
 		}
 	}
 
@@ -1667,6 +1745,18 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		}
 		// Target attention (2026-11-07): an objective defender in ambush holds his fire until the seen target looks away (or is deep in
 		// the kill zone / the ambush is blown) - the Passive posture, back to Aggressive when he strikes.
+		// G008b: the pre-loop spring skipped this overwatch defender. Once the hold closes (in range for ambush_max_hold_s, or he
+		// is hit, suppressed, or the post is untenable) the ambush ends here, once. A moving defence-post walk is still spared.
+		if (Team.bEverContact && State.Order == EPmcOrder::Ambush && !PmcCommanderRules::IsAmbushHoldOpen(View, Own, Team.Weights))
+		{
+			const bool bPostWalkMoving = Fighter->HasOwnMoveOrder() || Fighter->GetVelocity().SizeSquared2D() >= FMath::Square(PmcSquadLocal::StillSpeedCm);
+			const bool bDefenceWalk = State.bHasDefencePost && Team.Defence.bActive && State.DefencePostWalkFromCm >= 0.f && bPostWalkMoving;
+			if (!bDefenceWalk)
+			{
+				++Team.Stats.Ambushes;
+				State.Order = EPmcOrder::Hold;
+			}
+		}
 		const bool bHoldFire = PmcCommanderRules::ShouldHoldFire(View, Own, Team.Weights);
 		if (bHoldFire != State.bHoldingFire)
 		{
@@ -2109,7 +2199,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		{
 			break;
 		}
-		if (FVector::Dist2D(View.Location, Patient->GetActorLocation()) <= PmcSquadLocal::AidReachCm)
+		if (FVector::Dist2D(View.Location, Patient->GetActorLocation()) <= Team.Weights.HealReachCm)
 		{
 			Context.Patient = Patient;
 			bTaken = SquadOrderCatalog::Execute(ESquadOrder::Heal, Context);
@@ -2128,8 +2218,17 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	}
 	case EPmcOrder::Ambush:
 		// G008: a defence post is walked like a tactical post, and it does not need a tactical file (Depot_1 has none).
-		if (State.bHasDefencePost && Team.Defence.bActive)
+		// G008b: a man already standing on his overwatch roof keeps that post. The defence refresh still stamps a sector
+		// post on him, and walking it (seed 11 before the hold: Lind sprinted off B_hall_n to the ground sector spot)
+		// is the leave this order must not take while the hold is what scored Ambush.
 		{
+			const FVector RoofFeet = PmcSquadLocal::FeetOf(Fighter);
+			const bool bRangedKind = State.Post.Kind == EPmcPostKind::Overwatch || State.Post.Kind == EPmcPostKind::Window
+				|| State.Post.Kind == EPmcPostKind::Ambush;
+			const bool bOnRangedPost = bRangedKind
+				&& PmcTacticalRules::IsAtPost(RoofFeet, State.Post.Location, PostArriveCm, Team.Weights.LevelToleranceCm);
+			if (State.bHasDefencePost && Team.Defence.bActive && !bOnRangedPost)
+			{
 			const FVector Feet = PmcSquadLocal::FeetOf(Fighter);
 			bool bOnPost = PmcTacticalRules::IsAtPost(Feet, State.DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
 			// Review finding 1: an unreachable post (a navmesh island, a walk that always ends short) is dropped after
@@ -2168,15 +2267,30 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			}
 			else
 			{
-				Context.Location = Feet + FRotator(0.f, State.DefenceYaw, 0.f).Vector() * 1500.f;
-				SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
-				Context.Stance = EOperativeStance::Crouching;
-				SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
+				if (State.bFiringPosition && State.bFiringCover)
+				{
+					// T-05 phase b: a cover-slot firing position is taken (bInCover, the corner lean / over-the-top fire), not stood beside.
+					if (!Fighter.bInCover)
+					{
+						Context.Cover = State.FiringSlot;
+						Context.bSprint = false;
+						SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
+					}
+				}
+				else
+				{
+					Context.Location = Feet + FRotator(0.f, State.DefenceYaw, 0.f).Vector() * 1500.f;
+					SquadOrderCatalog::Execute(ESquadOrder::Hold, Context);
+					// T-05 phase b: a firing position fires from its own stance (a roof edge stands: the parapet is above a kneeling muzzle).
+					Context.Stance = State.bFiringPosition ? State.FiringStance : EOperativeStance::Crouching;
+					SquadOrderCatalog::Execute(ESquadOrder::Stance, Context);
+				}
 				bTaken = true;
 				Goal = State.DefencePost;
 				State.bDefenceSettled = true;
 				State.DefencePostWalks = 0;
 				break;
+			}
 			}
 		}
 		// TACTICAL_MAP P2: a man with a post waits ON it - walks there first, then faces its look direction (crouched; standing at a
@@ -2229,6 +2343,15 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 			bTaken = true;
 			Goal = State.Post.Location;
 			State.bPostSettled = true;
+			// On a ranged tactical post the sector post stays assigned, but he is settled here: the defence-walk retry must not
+			// start while his feet are still on this post (bSettleDefence reads bDefenceSettled).
+			if (State.bHasDefencePost && (State.Post.Kind == EPmcPostKind::Overwatch || State.Post.Kind == EPmcPostKind::Window
+				|| State.Post.Kind == EPmcPostKind::Ambush))
+			{
+				State.bDefenceSettled = true;
+				State.DefencePostWalks = 0;
+				State.DefencePostWalkFromCm = -1.f;
+			}
 			break;
 		}
 		Context.Stance = EOperativeStance::Crouching;
@@ -2373,6 +2496,21 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 	return bTaken;
 }
 
+bool UPmcSquadSubsystem::CoverSlotAlongRay(UWorld* World, const FVector& Origin, const FVector& Direction, float Reach, const FCollisionQueryParams& Params,
+	FCoverSlot& OutSlot, const TFunction<bool(const FHitResult&)>& Accept)
+{
+	FHitResult Hit;
+	if (!World || !World->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * Reach, ECC_Visibility, Params) || !Hit.GetActor() || Cast<APawn>(Hit.GetActor()))
+	{
+		return false;
+	}
+	if (Accept && !Accept(Hit))
+	{
+		return false;
+	}
+	return CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, Direction, OutSlot) && OutSlot.IsValid();
+}
+
 bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const FVector& Threat, float RadiusCm, const FVector* Exclude, const FPmcWeights& Weights,
 	FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band, float* OutBandFactor, TConstArrayView<FVector> ClaimedPosts,
 	TConstArrayView<FString> ClaimedKeys, const float* PostLevelZ) const
@@ -2448,13 +2586,8 @@ bool UPmcSquadSubsystem::FindCoverNear(const AOperativeCharacter& Fighter, const
 	};
 	auto TryRay = [&](const FVector& Origin, const FVector& Direction, float Reach, bool bElevated)
 	{
-		FHitResult Hit;
-		if (!World->LineTraceSingleByChannel(Hit, Origin, Origin + Direction * Reach, ECC_Visibility, Params) || !Hit.GetActor() || Cast<APawn>(Hit.GetActor()))
-		{
-			return;
-		}
 		FCoverSlot Slot;
-		if (!CoverTraceRules::FindCoverSlotAt(World, Hit.ImpactPoint, Direction, Slot) || !Slot.IsValid())
+		if (!CoverSlotAlongRay(World, Origin, Direction, Reach, Params, Slot))
 		{
 			return;
 		}
@@ -3049,6 +3182,7 @@ TArray<FPmcPostCandidate> UPmcSquadSubsystem::GatherPostCandidates(const TArray<
 		Candidate.Group = Roof.Building;
 		Candidate.SourceIndex = Entry.Key.Key;
 		Candidate.SpotIndex = Entry.Key.Value;
+		Candidate.RangeCm = Roof.RangeM * 100.f;
 	}
 	for (const TPair<int32, float>& Entry : Windows)
 	{
@@ -3221,8 +3355,8 @@ TArray<AOperativeCharacter*> UPmcSquadSubsystem::SpawnSquadTactical(int32 TeamId
 			State.bPostSettled = false;
 			State.PostWalks = 0;
 			State.PostWalkFromCm = -1.f;
-			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s placed on a %s post %s (yaw %.0f, score %.2f, danger %.2f, %s)"), TeamId,
-				*Fighter->DisplayName.ToString(), PmcTacticalRules::PostKindName(Post.Kind), *Post.Location.ToCompactString(), Post.Yaw, Post.Score, Post.Danger, *Post.Group);
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s placed on a %s post %s (yaw %.0f, score %.2f, danger %.2f, range %.0f cm, %s)"), TeamId,
+				*Fighter->DisplayName.ToString(), PmcTacticalRules::PostKindName(Post.Kind), *Post.Location.ToCompactString(), Post.Yaw, Post.Score, Post.Danger, Post.RangeCm, *Post.Group);
 		}
 	}
 	SetRouteOf(TeamOf(TeamId), Route);
@@ -3252,8 +3386,8 @@ int32 UPmcSquadSubsystem::AssignTacticalPosts(int32 TeamId, const TArray<FVector
 		if (Posts[Index].IsValid())
 		{
 			++Posted;
-			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s gets a %s post %s (score %.2f, danger %.2f)"), TeamId, *Fighters[Index]->DisplayName.ToString(),
-				PmcTacticalRules::PostKindName(Posts[Index].Kind), *Posts[Index].Location.ToCompactString(), Posts[Index].Score, Posts[Index].Danger);
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s gets a %s post %s (score %.2f, danger %.2f, range %.0f cm)"), TeamId, *Fighters[Index]->DisplayName.ToString(),
+				PmcTacticalRules::PostKindName(Posts[Index].Kind), *Posts[Index].Location.ToCompactString(), Posts[Index].Score, Posts[Index].Danger, Posts[Index].RangeCm);
 		}
 	}
 	return Posted;
@@ -3275,6 +3409,373 @@ void UPmcSquadSubsystem::ClearDefencePosts(FTeam& Team)
 		State.DefencePostWalkFromCm = -1.f;
 		State.bDefencePostDropped = false;
 		State.bDefenceSettled = false;
+		State.bFiringPosition = false;
+		State.FiringStance = EOperativeStance::Crouching;
+		State.bFiringCover = false;
+		State.FiringSlot = FCoverSlot();
+	}
+}
+
+void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const TArray<AOperativeCharacter*>& Members, TArray<FPmcDefencePost>& Posts,
+	TMap<int32, FFiringPosition>& OutPositions)
+{
+	UWorld* World = GetWorld();
+	UFiringPositionSubsystem* Service = World ? World->GetSubsystem<UFiringPositionSubsystem>() : nullptr;
+	if (!Service || !Service->GetConfig().bDefenceUse || !Team.Objective.IsSet())
+	{
+		return;
+	}
+	const FFiringPositionConfig& Config = Service->GetConfig();
+	const FPmcObjectiveView& Objective = Team.Objective.GetValue();
+	TArray<int32> Shooters;
+	for (int32 Index = 0; Index < Posts.Num(); ++Index)
+	{
+		if (Posts[Index].Role == EPmcDefenceRole::SectorShooter && Posts[Index].bHasPost)
+		{
+			Shooters.Add(Index);
+		}
+	}
+	if (Shooters.IsEmpty())
+	{
+		return;
+	}
+	Shooters.Sort([&Posts](int32 A, int32 B) { return Posts[A].Index < Posts[B].Index; });
+	auto MemberOf = [&Members](int32 SquadIndex) -> AOperativeCharacter*
+	{
+		for (AOperativeCharacter* Member : Members)
+		{
+			if (Member && Member->SquadIndex == SquadIndex)
+			{
+				return Member;
+			}
+		}
+		return nullptr;
+	};
+	const bool bRoof = Team.Defence.bRoof;
+	// The kill zone. A ground objective: the point on the attackers' nav path (spawn -> objective) KillZoneReachFactor x the shooters' median reach before the objective
+	// (contact happens out on the approach, so the crossfire pair is judged from there), the objective itself without a path. A roof: the street toward the attackers, 0.45 x the first man's reach out.
+	AOperativeCharacter* Lead = MemberOf(Posts[Shooters[0]].Index);
+	if (!Lead)
+	{
+		return;
+	}
+	FVector KillZone = Objective.Location;
+	if (bRoof)
+	{
+		if (!Team.Defence.bHasApproach)
+		{
+			return;
+		}
+		const float LeadReach = Lead->CurrentWeapon ? Lead->CurrentWeapon->Stats.Range.MaxRangeCm : Config.DefaultReachCm;
+		const FVector Toward = (Team.Defence.ApproachPoint - Objective.Location).GetSafeNormal2D();
+		const float Reach = FMath::Min(static_cast<float>(FVector::Dist2D(Team.Defence.ApproachPoint, Objective.Location)), Config.RoofReachFactor * LeadReach);
+		KillZone = FVector(Objective.Location.X, Objective.Location.Y, Team.Defence.ApproachPoint.Z) + Toward * Reach;
+	}
+	// The attackers' nav path (spawn -> objective): ONE synchronous query per defence refresh (a refresh is an event - new objective, approach, a death - not a tick). It
+	// places the kill zone and is the clock of the reach-before-contact rule below.
+	TArray<FVector> AttackerPath;
+	TArray<float> Reaches;
+	TArray<float> EffectiveReaches;
+	for (const int32 PostIndex : Shooters)
+	{
+		const AOperativeCharacter* Member = MemberOf(Posts[PostIndex].Index);
+		Reaches.Add(Member && Member->CurrentWeapon ? Member->CurrentWeapon->Stats.Range.MaxRangeCm : Config.DefaultReachCm);
+	}
+	// The arena's contact test: the median EFFECTIVE reach of the whole squad (every living man with a weapon).
+	for (const AOperativeCharacter* Member : Members)
+	{
+		if (Member && Member->CurrentWeapon && Member->CurrentWeapon->Stats.Range.GetEffectiveRangeCm() > 0.f)
+		{
+			EffectiveReaches.Add(Member->CurrentWeapon->Stats.Range.GetEffectiveRangeCm());
+		}
+	}
+	const float ContactReachCm = FiringPositionRules::MedianOf(EffectiveReaches);
+	if (!bRoof && Team.Defence.bHasApproach && (Config.KillZoneReachFactor > 0.f || Config.bReachBeforeContact))
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, Team.Defence.ApproachPoint, Objective.Location) : nullptr;
+		if (Path && Path->IsValid() && !Path->IsPartial() && Path->PathPoints.Num() >= 2)
+		{
+			AttackerPath = Path->PathPoints;
+		}
+		if (AttackerPath.IsEmpty())
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: no full nav path from the approach to the objective: the kill zone stays on the objective, no reach-before-contact filter"), TeamId);
+		}
+	}
+	if (!AttackerPath.IsEmpty() && Config.KillZoneReachFactor > 0.f)
+	{
+		const float WantedCm = Config.KillZoneReachFactor * FiringPositionRules::MedianOf(Reaches);
+		FVector OnApproach = FVector::ZeroVector;
+		float UsedCm = 0.f;
+		if (FiringPositionRules::PointAlongPathBefore(AttackerPath, WantedCm, OnApproach, UsedCm))
+		{
+			KillZone = OnApproach;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: kill zone on the approach %s (path %.1f m before the objective, %.1f m of path, wanted %.1f m = %.2f x median reach)"),
+				TeamId, *KillZone.ToCompactString(), UsedCm / 100.f, FiringPositionRules::PolylineLength(AttackerPath) / 100.f, WantedCm / 100.f, Config.KillZoneReachFactor);
+		}
+	}
+	// Reach before contact: ground defences only (a roof man's walk is a stair / ladder climb, his own G008 rules).
+	const bool bReachFilter = Config.bReachBeforeContact && !bRoof && !AttackerPath.IsEmpty() && ContactReachCm > 0.f;
+	float AttackerSpeedCm = 0.f;
+	const float AreaRadius = FMath::Max(Objective.RadiusCm, Config.AreaRadiusFloorCm);
+	FPmcDefenceConfig AreaConfig;
+	AreaConfig.LevelToleranceCm = Objective.LevelToleranceCm;
+
+	// Each man's own candidates: his weapon's reach is the band (0.2 .. 0.9 of it), so a shotgun man gets close cover and a rifleman far cover.
+	struct FSeat
+	{
+		int32 PostIndex = INDEX_NONE;
+		AOperativeCharacter* Fighter = nullptr;
+		TArray<FFiringCandidate> Eligible;
+		/** His nav path length (cm) to each stand point asked so far, -1 = no full path; shared by the tiers. */
+		TMap<FIntVector, float> PathCm;
+		int32 PathQueries = 0;
+	};
+	TArray<FSeat> Seats;
+	UNavigationSystemV1* PathNav = bReachFilter ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
+	if (bReachFilter)
+	{
+		// The attackers' pace: the operative WALK speed (the same body, standing, no sprint) x attacker_speed_factor.
+		AttackerSpeedCm = Config.AttackerSpeedFactor * OperativeMovementRules::ComputeMaxSpeed(Lead->MovementConfig, EOperativeStance::Standing, false, false, false)
+			* Lead->GetColdSpeedMultiplier();
+	}
+	// ONE cover scan for the whole squad: the widest band of every man's fallback tier, so each man's (narrower) band sees a subset of the slots the wider ones see.
+	float WidestBandMax = 0.f;
+	for (const int32 PostIndex : Shooters)
+	{
+		if (const AOperativeCharacter* Member = MemberOf(Posts[PostIndex].Index))
+		{
+			float Unused = 0.f;
+			float BandMaxOfMan = 0.f;
+			FiringPositionRules::WeaponBand(Member->CurrentWeapon ? Member->CurrentWeapon->Stats.Range.MaxRangeCm : 0.f, 1, Config, Unused, BandMaxOfMan);
+			WidestBandMax = FMath::Max(WidestBandMax, BandMaxOfMan);
+		}
+	}
+	Service->PrepareCoverScan(KillZone, AreaRadius, WidestBandMax);
+	for (const int32 PostIndex : Shooters)
+	{
+		FSeat Seat;
+		Seat.PostIndex = PostIndex;
+		Seat.Fighter = MemberOf(Posts[PostIndex].Index);
+		if (!Seat.Fighter)
+		{
+			continue;
+		}
+		const float Reach = Seat.Fighter->CurrentWeapon ? Seat.Fighter->CurrentWeapon->Stats.Range.MaxRangeCm : Config.DefaultReachCm;
+		float BandMin = 0.f;
+		float BandMaxUnused = 0.f;
+		FiringPositionRules::WeaponBand(Reach, 0, Config, BandMin, BandMaxUnused);
+		// Tier 1: inside his weapon's band. Tier 2 (nothing there, e.g. a shotgun on an open street): cover up to twice as far - he holds there in cover
+		// and closes in when the attackers come (the engagement-band orders); an idle man in the open is worse.
+		for (int32 Tier = 0; Tier < 2 && Seat.Eligible.IsEmpty(); ++Tier)
+		{
+		float BandMax = 0.f;
+		FiringPositionRules::WeaponBand(Reach, Tier, Config, BandMaxUnused, BandMax);
+		int32 Valid = 0;
+		int32 NotCover = 0;
+		int32 OffLevel = 0;
+		int32 Forward = 0;
+		for (const FFiringCandidate& Candidate : Service->GetCandidates(KillZone, AreaRadius, BandMin, BandMax))
+		{
+			const FFiringPosition& Pos = Candidate.Position;
+			if (!Pos.bValid)
+			{
+				continue;
+			}
+			++Valid;
+			if (bRoof)
+			{
+				if (Pos.Kind != EFiringPositionKind::RoofEdge
+					|| !PmcDefenceRules::IsInsideDefendedArea(Pos.StandPoint, Objective.Location, Team.Defence.LevelZ, Objective.RadiusCm, Team.Defence.Spots, AreaConfig))
+				{
+					continue;
+				}
+			}
+			else
+			{
+				// On the ground a man takes a cover slot (the arena counts a defender on position when he is in cover); window stands and roof edges are not that.
+				if (Pos.Kind != EFiringPositionKind::Corner && Pos.Kind != EFiringPositionKind::LowCover)
+				{
+					++NotCover;
+					continue;
+				}
+				if (!PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(Pos.StandPoint.Z), static_cast<float>(Objective.Location.Z), Objective.LevelToleranceCm))
+				{
+					++OffLevel;
+					continue;
+				}
+				// A defender never stands forward of his kill zone: nearer the attackers than the zone ALONG the approach axis by more than the margin (a flank position beside the zone is fine).
+				if (Team.Defence.bHasApproach && FiringPositionRules::IsForwardOfKillZone(Pos.StandPoint, KillZone, Team.Defence.ApproachPoint, Config.ForwardMarginCm))
+				{
+					++Forward;
+					continue;
+				}
+			}
+			Seat.Eligible.Add(Candidate);
+		}
+		// Reach before contact: drop the positions this man cannot take before the attackers' expected contact. His speed is the one the defence post walk really uses before
+		// he is under fire (the sprint, OperativeMovementRules::ComputeMaxSpeed); the clock of the attackers is their nav path up to where it first comes within the squad's
+		// median effective reach of the position (PathLengthUntilWithin) at AttackerSpeedCm. Nearest candidates are asked first, at most max_path_queries per man.
+		FString ReachNote;
+		if (bReachFilter && !Seat.Eligible.IsEmpty())
+		{
+			const FVector Feet = PmcSquadLocal::FeetOf(*Seat.Fighter);
+			const float DefenderSpeedCm = OperativeMovementRules::ComputeMaxSpeed(Seat.Fighter->MovementConfig, EOperativeStance::Standing, true, Seat.Fighter->IsWounded(), false)
+				* Seat.Fighter->GetColdSpeedMultiplier() * Seat.Fighter->GetWoundTierSpeedScale();
+			Seat.Eligible.StableSort([&Feet](const FFiringCandidate& A, const FFiringCandidate& B)
+				{ return FVector::DistSquared(A.Position.StandPoint, Feet) < FVector::DistSquared(B.Position.StandPoint, Feet); });
+			TArray<FFiringCandidate> Kept;
+			int32 TooFar = 0;
+			int32 NoPath = 0;
+			int32 Unchecked = 0;
+			float MinSlack = 999.f;
+			float MaxSlack = -999.f;
+			for (const FFiringCandidate& Candidate : Seat.Eligible)
+			{
+				const FVector& Stand = Candidate.Position.StandPoint;
+				const float AttackerToContactCm = FiringPositionRules::PathLengthUntilWithin(AttackerPath, Stand, ContactReachCm);
+				float Slack = 0.f;
+				// A path is never shorter than the straight line: a candidate the straight line already loses needs no query.
+				if (!FiringPositionRules::ReachableBeforeContact(static_cast<float>(FVector::Dist(Feet, Stand)), DefenderSpeedCm, AttackerToContactCm, AttackerSpeedCm, Config.ReachMarginS, Slack))
+				{
+					++TooFar;
+					continue;
+				}
+				const FIntVector Key(FMath::RoundToInt(Stand.X), FMath::RoundToInt(Stand.Y), FMath::RoundToInt(Stand.Z));
+				float* Known = Seat.PathCm.Find(Key);
+				if (!Known)
+				{
+					if (Seat.PathQueries >= Config.MaxPathQueries)
+					{
+						++Unchecked;
+						continue;
+					}
+					++Seat.PathQueries;
+					const UNavigationPath* Path = PathNav ? PathNav->FindPathToLocationSynchronously(World, Seat.Fighter->GetActorLocation(), Stand) : nullptr;
+					const float LengthCm = Path && Path->IsValid() && !Path->IsPartial() ? FiringPositionRules::PolylineLength(Path->PathPoints) : -1.f;
+					Known = &Seat.PathCm.Add(Key, LengthCm);
+				}
+				if (*Known < 0.f)
+				{
+					++NoPath;
+					continue;
+				}
+				if (!FiringPositionRules::ReachableBeforeContact(*Known, DefenderSpeedCm, AttackerToContactCm, AttackerSpeedCm, Config.ReachMarginS, Slack))
+				{
+					++TooFar;
+					continue;
+				}
+				MinSlack = FMath::Min(MinSlack, Slack);
+				MaxSlack = FMath::Max(MaxSlack, Slack);
+				Kept.Add(Candidate);
+			}
+			ReachNote = FString::Printf(TEXT(", reachable %d of %d (slack %.1f..%.1f s; %d too late, %d no path, %d unchecked; %d path queries; walks %.0f cm/s, attackers %.0f cm/s)"),
+				Kept.Num(), Seat.Eligible.Num(), Kept.IsEmpty() ? 0.f : MinSlack, Kept.IsEmpty() ? 0.f : MaxSlack, TooFar, NoPath, Unchecked, Seat.PathQueries, DefenderSpeedCm, AttackerSpeedCm);
+			Seat.Eligible = MoveTemp(Kept);
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s band %.0f..%.0f cm (tier %d): %d valid positions, %d not cover, %d off level, %d forward of the kill zone, %d eligible%s"), TeamId,
+			*Seat.Fighter->DisplayName.ToString(), BandMin, BandMax, Tier, Valid, NotCover, OffLevel, Forward, Seat.Eligible.Num(), *ReachNote);
+		}
+		Seats.Add(MoveTemp(Seat));
+	}
+	if (Seats.IsEmpty())
+	{
+		return;
+	}
+	// The hammers (the first two shooters): the best position of the first, then the best partner of the second that crosses it (a roof: no crossfire, the best positions).
+	TArray<FFiringPosition> Chosen;
+	Chosen.SetNum(Seats.Num());
+	TArray<bool> Has;
+	Has.Init(false, Seats.Num());
+	float CrossfireDeg = -1.f;
+	if (!bRoof && Seats.Num() >= 2)
+	{
+		float BestSum = 0.f;
+		int32 BestA = INDEX_NONE;
+		int32 BestB = INDEX_NONE;
+		for (int32 A = 0; A < Seats[0].Eligible.Num(); ++A)
+		{
+			const FFiringCandidate& First = Seats[0].Eligible[A];
+			for (int32 B = 0; B < Seats[1].Eligible.Num(); ++B)
+			{
+				const FFiringCandidate& Second = Seats[1].Eligible[B];
+				if (!FiringPositionRules::CrossfireOk(First.Position.StandPoint, Second.Position.StandPoint, KillZone, Config.CrossfireMinDeg, Config.LineClearCm))
+				{
+					continue;
+				}
+				const float Sum = First.Score * FiringPositionRules::SpacingOf(First.Position, TConstArrayView<FFiringPosition>(), TConstArrayView<FString>(), Config)
+					+ Second.Score * FiringPositionRules::SpacingOf(Second.Position, MakeArrayView(&First.Position, 1), TConstArrayView<FString>(), Config);
+				if (Sum > BestSum)
+				{
+					BestSum = Sum;
+					BestA = A;
+					BestB = B;
+				}
+			}
+		}
+		if (BestA != INDEX_NONE)
+		{
+			Chosen[0] = Seats[0].Eligible[BestA].Position;
+			Chosen[1] = Seats[1].Eligible[BestB].Position;
+			Has[0] = Has[1] = true;
+			CrossfireDeg = FiringPositionRules::CrossfireAngleDeg(Chosen[0].StandPoint, Chosen[1].StandPoint, KillZone);
+		}
+	}
+	// Everybody else (and the hammers when no pair exists): his best position, spaced from the chosen ones, one cover object each.
+	int32 Taken = 0;
+	for (int32 Man = 0; Man < Seats.Num(); ++Man)
+	{
+		if (!Has[Man])
+		{
+			TArray<FFiringPosition> Others;
+			for (int32 Other = 0; Other < Seats.Num(); ++Other)
+			{
+				if (Has[Other])
+				{
+					Others.Add(Chosen[Other]);
+				}
+			}
+			float BestScore = 0.f;
+			for (const FFiringCandidate& Candidate : Seats[Man].Eligible)
+			{
+				const float Score = Candidate.Score * FiringPositionRules::SpacingOf(Candidate.Position, Others, TConstArrayView<FString>(), Config);
+				if (Score > BestScore)
+				{
+					BestScore = Score;
+					Chosen[Man] = Candidate.Position;
+					Has[Man] = true;
+				}
+			}
+		}
+		Taken += Has[Man] ? 1 : 0;
+	}
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: firing positions on %s (kill zone r %.0f cm): %d of %d shooters seated%s"), TeamId, *KillZone.ToCompactString(), AreaRadius, Taken,
+		Seats.Num(), bRoof ? TEXT(" (roof)") : TEXT(""));
+	for (int32 Man = 0; Man < Seats.Num(); ++Man)
+	{
+		AOperativeCharacter* Fighter = Seats[Man].Fighter;
+		if (!Has[Man])
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s keeps his G008 post: no firing position in his reach (%d eligible)"), TeamId, *Fighter->DisplayName.ToString(),
+				Seats[Man].Eligible.Num());
+			continue;
+		}
+		const FFiringPosition& Pos = Chosen[Man];
+		if (!HasFullNavPath(Fighter->GetActorLocation(), Pos.StandPoint))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s keeps his G008 post: no full path to the firing position %s %s"), TeamId, *Fighter->DisplayName.ToString(),
+				FiringPositionRules::KindName(Pos.Kind), *Pos.SourceId);
+			continue;
+		}
+		FPmcDefencePost& Post = Posts[Seats[Man].PostIndex];
+		Post.Location = Pos.StandPoint;
+		Post.Yaw = Pos.FacingYaw;
+		Post.SpotIndex = INDEX_NONE;
+		Post.Sector = INDEX_NONE; // no wedge: the sector shift would move him back to a G008 spot
+		OutPositions.Add(Post.Index, Pos);
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s firing position %s %s at %s %s covers %.2f crossfire %.0f deg"), TeamId, *Fighter->DisplayName.ToString(),
+			FiringPositionRules::KindName(Pos.Kind), *Pos.SourceId, *Pos.StandPoint.ToCompactString(), FiringPositionRules::StanceName(Pos.Stance), Pos.CoveredShare, CrossfireDeg);
 	}
 }
 
@@ -3599,8 +4100,18 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 
 	const FVector* Inward = Team.Defence.bHasInward ? &Team.Defence.Inward : nullptr;
 	const TArray<FPmcDefenceSlot> Slots;
-	const TArray<FPmcDefencePost> Posts = PmcDefenceRules::AssignRoles(Men, Team.Defence.Access, Objective.Location,
+	TArray<FPmcDefencePost> Posts = PmcDefenceRules::AssignRoles(Men, Team.Defence.Access, Objective.Location,
 		Team.Defence.ApproachYawDeg, Team.Defence.Spots, Slots, Inward, Config);
+	// T-05 phase b: firing positions on the kill zone for the hammers (a new objective = a new round: the cached lines are dropped first).
+	TMap<int32, FFiringPosition> FiringPositionMap;
+	if (UFiringPositionSubsystem* FiringService = GetWorld() ? GetWorld()->GetSubsystem<UFiringPositionSubsystem>() : nullptr)
+	{
+		if (bResolveAccess)
+		{
+			FiringService->InvalidateCache();
+		}
+		AssignFiringPositions(TeamId, Team, Members, Posts, FiringPositionMap);
+	}
 
 	ClearDefencePosts(Team);
 	int32 SectorCount = 0;
@@ -3645,6 +4156,13 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 		State.DefenceYaw = Post.Yaw;
 		State.DefenceSpotIndex = Post.SpotIndex;
 		State.bHasDefencePost = Post.bHasPost;
+		if (const FFiringPosition* Firing = FiringPositionMap.Find(Post.Index))
+		{
+			State.bFiringPosition = true;
+			State.FiringStance = Firing->Stance;
+			State.bFiringCover = Firing->bHasSlot;
+			State.FiringSlot = Firing->Slot;
+		}
 		FVector Location = Post.Location;
 		if (Post.bHasPost)
 		{

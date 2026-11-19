@@ -1,10 +1,13 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "AI/FiringPositionRules.h"
 #include "AI/PmcCommanderRules.h"
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcEncounterRules.h"
 #include "AI/PmcTacticalRules.h"
+#include "CollisionQueryParams.h"
+#include "Engine/HitResult.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "Tactics/CoverTypes.h"
 #include "PmcSquadSubsystem.generated.h"
@@ -300,6 +303,15 @@ private:
 		int32 DefencePostWalks = 0;
 		/** His distance to the defence post when the running walk there was issued (-1: none running). */
 		float DefencePostWalkFromCm = -1.f;
+		/**
+		 * T-05 phase b: his defence post is a firing position (UFiringPositionSubsystem, firing_positions.defence_use): the stance that fires from it
+		 * (a roof edge or a low wall fires standing), instead of the post's default crouch.
+		 */
+		bool bFiringPosition = false;
+		EOperativeStance FiringStance = EOperativeStance::Crouching;
+		/** A cover-slot firing position (Corner / LowCover): he takes the slot (bInCover) instead of crouching beside it. */
+		bool bFiringCover = false;
+		FCoverSlot FiringSlot;
 		/** He already gave up one unreachable defence post; a second give-up holds where he stands. */
 		bool bDefencePostDropped = false;
 		/** The Ambush order faced / crouched him on his defence post (false while he still walks there). */
@@ -308,6 +320,11 @@ private:
 		double LastSectorShiftAt = -1e9;
 		/** World time an enemy last shot at him (NotifyShotAt; -1e9: never). */
 		double LastShotAtTime = -1e9;
+		/**
+		 * G008b: world time a known enemy entered this overwatch post's engagement range (-1: none in range now).
+		 * ambush_max_hold_s counts from here, not from the team's first contact.
+		 */
+		double PostRangeContactAt = -1.0;
 	};
 
 	struct FTeam
@@ -417,9 +434,27 @@ private:
 		FCoverSlot& OutSlot, float& OutQuality, const FPmcEngagementBand& Band = FPmcEngagementBand(), float* OutBandFactor = nullptr,
 		TConstArrayView<FVector> ClaimedPosts = TConstArrayView<FVector>(), TConstArrayView<FString> ClaimedKeys = TConstArrayView<FString>(),
 		const float* PostLevelZ = nullptr) const;
+public:
+	/**
+	 * The cover-slot generation of FindCoverNear's rays as a read helper (T-05, FiringPositionSubsystem uses it too): one ray from Origin
+	 * along Direction (planar) up to Reach; the first non-pawn actor it hits is tried as a cover slot (CoverTraceRules::FindCoverSlotAt).
+	 * Accept (optional) sees the hit before the slot is built and may refuse it (a cheap pre-filter). False: no wall / refused / no slot.
+	 */
+	static bool CoverSlotAlongRay(UWorld* World, const FVector& Origin, const FVector& Direction, float Reach, const FCollisionQueryParams& Params,
+		FCoverSlot& OutSlot, const TFunction<bool(const FHitResult&)>& Accept = nullptr);
+
+private:
 	/** G008: resolve the roof access (once per objective) and assign guard / sector posts. bResolveAccess false keeps the access. */
 	void RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess);
 	void ClearDefencePosts(FTeam& Team);
+	/**
+	 * T-05 phase b (firing_positions.defence_use): before contact the first two sector shooters take firing positions on the kill zone (a
+	 * crossfire pair on the ground, the best roof edges on a roof) instead of their G008 wedge spots; the rest keep their G008 role. Rewrites
+	 * Posts (location, yaw, no wedge so no shift) and fills OutPositions (SquadIndex -> his firing position). Leaves Posts alone when the
+	 * service returns too little, the switch is off, or a man has no full path to his position.
+	 */
+	void AssignFiringPositions(int32 TeamId, FTeam& Team, const TArray<AOperativeCharacter*>& Members, TArray<FPmcDefencePost>& Posts,
+		TMap<int32, FFiringPosition>& OutPositions);
 	/**
 	 * G008 follow-up (review finding 1): the defence post could not be reached in defence_post_walks walks. He becomes a sector
 	 * shooter with no wedge on the nearest roof spot with a full path (not a mate's post), else where he stands.

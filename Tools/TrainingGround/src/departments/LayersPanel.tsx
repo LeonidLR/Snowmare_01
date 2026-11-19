@@ -12,7 +12,7 @@ import { dirOf } from '../movement/geometry';
 import type { Vec2 } from '../movement/geometry';
 import type { ChokeConfig, Chokepoint, Conditions, LayoutAnalysis, ThreatNumbers } from '../levelgen/chokepoints';
 import type { Entity, LayerDef, LayerVisibility, ResolvedProp } from '../levelgen/layers';
-import { isSolo, LAYERS, sizeClassRuleText, soloVisibility } from '../levelgen/layers';
+import { isSolo, LAYERS, MAP_PANEL_EXCLUDED, MAP_PLAN_HIDDEN, sizeClassRuleText, soloVisibility } from '../levelgen/layers';
 import type { OverlayHelpers } from './RegionOverlay';
 
 /** The heat colour of a score 0..1: yellow -> orange -> red. */
@@ -88,14 +88,14 @@ export const LayersPanel: React.FC<PanelProps> = ({ counts, vis, onVis, active, 
       </li>
     );
   };
-  const group = (g: 'main' | 'analysis') => LAYERS.layers.filter((l) => l.group === g);
+  const group = (g: 'main' | 'analysis') => LAYERS.layers.filter((l) => l.group === g && !MAP_PANEL_EXCLUDED.includes(l.id));
   const threats = LAYERS.layers.filter((l) => l.group === 'threats');
   const chokes = analysis?.chokepoints ?? [];
   return (
     <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2 min-w-0 text-xs" data-layers-panel>
       <div className="flex items-center gap-2">
         <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400 inline-flex items-center gap-1.5"><Layers size={13} />Слои</h3>
-        <button type="button" onClick={() => onVis(Object.fromEntries(LAYERS.layers.map((x) => [x.id, true])))} className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700">все</button>
+        <button type="button" onClick={() => onVis(Object.fromEntries(LAYERS.layers.map((x) => [x.id, !MAP_PLAN_HIDDEN.includes(x.id)])))} className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700">все</button>
         <button type="button" onClick={() => onVis(Object.fromEntries(LAYERS.layers.map((x) => [x.id, false])))} className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700">ничего</button>
         <label className="ml-auto inline-flex items-center gap-1 text-slate-400" title="Преграды на плане красятся цветом своего класса (крупные / средние / мелкие)"><input type="checkbox" checked={tintOn} onChange={(e) => onTint(e.target.checked)} className="accent-cyan-500" />цвета классов</label>
       </div>

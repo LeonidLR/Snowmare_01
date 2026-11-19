@@ -7,7 +7,7 @@ Six resources. Rule: the cheapest one that can do the job reliably; the expensiv
 | Resource | Role | Gets | Never |
 |---|---|---|---|
 | **Claude (Max subscription)** - scarce, protect | Orchestrator + gatekeeper | merges into main, final reviews (diff skim + tests), architecture / design docs, hard bugs nobody else cracked, designer questions | routine code, reading big logs, babysitting chat (the dispatcher does it) |
-| **OpenAI Codex** | REMOVED from development 2026-11-12 (designer: limits drain too fast) | his work handed over (interim/2026-11-12 + docs/port/codex/outbox/004 report) | - |
+| **OpenAI Codex** | LEFT for good 2026-11-19 (designer); earlier REMOVED 2026-11-12 (designer: limits drain too fast) | his work handed over (interim/2026-11-12 + docs/port/codex/outbox/004 report) | - |
 | **Gemini (Pro, Antigravity)** | Reader + TS / Python + reviewer | implementation maps, code reviews of Codex branches, Training Ground (TS), Python tooling, docs (RU guides), log / trainer analysis, merge plans; C++ only as approved trials on named paths | C++ outside an approved trial, main, push |
 | **Anthropic API** (designer's credit, ledger cap) | Second opinion + gap filler | Sonnet: independent reviews of risky diffs (~0.1-0.3 $), patch drafts when Codex is out of limit; Opus: rare design drafts. Always `--label`, `--budget-usd` | bulk reading, anything a subscription can do now |
 | **Jev (TypeSafe)** | Cheap judgment | boundary audits before merges, `test.ps1 -Smart`, telemetry digests, model-router classification, typed yes / no checks in tools | C++ / syntax / boilerplate |
@@ -38,3 +38,7 @@ Syntax: `<owner> <task> -> <new owner>`, one per line. Designer re-plan 2026-11-
 
 - codex 042 -> grok G006
 - codex 043 -> grok G007
+- codex 049 -> claude T004 (Codex left 2026-11-19; Sonnet subagent continues from its WIP)
+- codex 050 -> claude T012 (after T04, Sonnet subagent)
+- gemini 088 -> claude (Antigravity unavailable 2026-11-19; Sonnet subagent finishes its WIP)
+- claude (lead) -> grok G010 (2026-11-19: PmcRoofDefence 6/10 flake after G009)

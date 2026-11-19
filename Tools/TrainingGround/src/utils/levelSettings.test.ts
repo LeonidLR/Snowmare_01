@@ -10,7 +10,7 @@ import {
   HORDE_AFTER_FIREFIGHTS_DEFAULT, HORDE_AFTER_FIREFIGHTS_MIN, getHordeAfterFirefights, getHordeEnabled, setHordeAfterFirefights, setHordeEnabled, validateHordeAfterFirefights,
   HORDE_SPAWN_DISTANCE_DEFAULT, activeWaves, describeHordeWaves, getHordeSpawnDistance, getHordeWaveFeed, hasOwnHordeSpawnDistance, setHordeSpawnDistance,
   validateHordeSpawnDistance, waveForHorde,
-  getEnvironment, setEnvironmentKey, validateEnvironment,
+  getEnvironment, setEnvironmentKey, validateEnvironment, WEATHER_STRENGTH_MAX,
   getLoadouts, setOperativeLoadout, validateLoadouts,
   getKit, setOperativeKit, validateKit,
 } from './levelSettings.ts';
@@ -195,6 +195,22 @@ test('horde distance (game designer 2026-11-09): default 300 m from horde.json, 
   assert.equal(validateHordeSpawnDistance(NaN).length, 1);
   assert.equal(validateLevelSettings({ waves: [], horde: { firefight_spawn_distance_m: 5 } }).length, 1);
   assert.equal(validateLevelSettings({ waves: [], horde: { firefight_spawn_distance_m: 300 } }).length, 0);
+});
+
+test('environment.weather_strength (T-020): 0..2, 1 (the default) is an absent key, other keys stay', () => {
+  const level = { level_id: 'x', environment: { weather: 'Clear', locked: true }, waves: [] };
+  const strong = setEnvironmentKey(level, 'weather_strength', 1.5);
+  assert.equal(strong.environment.weather_strength, 1.5);
+  assert.equal(strong.environment.weather, 'Clear');
+  assert.equal('weather_strength' in level.environment, false, 'input not mutated');
+  assert.equal('weather_strength' in setEnvironmentKey(strong, 'weather_strength', 1).environment, false);
+  assert.equal(setEnvironmentKey(strong, 'weather_strength', 0).environment.weather_strength, 0, '0 is a real value (weather has no effect)');
+  assert.equal(WEATHER_STRENGTH_MAX, 2);
+  assert.deepEqual(validateEnvironment({ weather_strength: 0 }), []);
+  assert.deepEqual(validateEnvironment({ weather_strength: 2 }), []);
+  assert.equal(validateEnvironment({ weather_strength: 2.5 }).length, 1);
+  assert.equal(validateEnvironment({ weather_strength: -1 }).length, 1);
+  assert.equal(validateLevelSettings({ waves: [], environment: { weather_strength: 9 } }).length, 1);
 });
 
 test('environment: get, set, override_carry, climate/weather validation, remove when empty', () => {

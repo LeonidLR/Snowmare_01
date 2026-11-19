@@ -155,7 +155,7 @@ There is **no squad layer**. The "commander" is a per-fighter scorer that sees f
 | Jumpers placed on the tactical map's drop spots | MISSING | TACTICAL_MAP.md 7 "PMC jumpers (no archetype allowed)"; placement of monsters by the analysis is F-4b "later" |
 | Ladders: mutants never, zombified soldiers / marksman yes | EXISTS | `LadderEnemySmoke` |
 | Monsters vs PMC | EXISTS | `pmc_operators.json` `factions` |
-| Doors and monsters | undefined | OQ-14 |
+| Doors and monsters | decided 2026-11-19 (OQ-14): closed doors stop mutants, a horde breaks one in T s; not built yet | OQ-14 |
 
 ### 2.8 Encounters and the Director
 

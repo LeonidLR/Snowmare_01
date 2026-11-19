@@ -16,6 +16,7 @@
       "base_max": 80,
       "min_count": 8,
       "max_count": 300,
+      "route_corridor_m": 2,
       "where": {
         "near": [
           { "max_cm": 150, "weight": 3, "what": "wall" },
@@ -29,6 +30,7 @@
       "per_10000m2": 3.64,
       "min_count": 4,
       "max_count": 80,
+      "route_corridor_m": 2,
       "where": {
         "near": [
           { "max_cm": 120, "weight": 2, "what": "wall" }
@@ -47,7 +49,8 @@
       "min_field_count": 2,
       "max_field_count": 30,
       "doorway_percent": 25,
-      "crate_percent": 10
+      "crate_percent": 10,
+      "route_clear_m": 6
     },
     "loot": {
       "preset": "loot_default",

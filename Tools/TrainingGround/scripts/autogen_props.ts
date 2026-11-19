@@ -104,6 +104,8 @@ export function runAutogenProps(projectRoot?: string, targets = DEFAULT_TARGETS)
     for (const issue of res.droppedByValidator) {
       console.log(`[autogen_props]   left out ${issue.objectId} (${issue.layerId}): ${issue.reason}`);
     }
+    const rc = res.droppedByRouteClearance;
+    console.log(`[autogen_props]   route clearance: dropped ${rc.droppedTotal} (crates ${rc.droppedCrates}, barrels ${rc.droppedBarrels}, mines/tripwires ${rc.droppedMines}, loot on dropped crates ${rc.droppedLoot}); pmc_charges inside the clearance: ${rc.pmcChargesInside.length ? rc.pmcChargesInside.join(', ') : 'none'}`);
     if (res.power) {
       const starts = res.power.networks.map((n) => String(n.generator.start)).join(', ');
       const linked = res.power.networks.reduce((s, n) => s + n.turretIds.length, 0);

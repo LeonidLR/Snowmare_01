@@ -950,6 +950,16 @@ namespace PmcDefenceRules
 		return Pairs > 0 ? static_cast<float>(Sum / static_cast<double>(Pairs)) / 100.f : 0.f;
 	}
 
+	bool TrySpreadSample(TConstArrayView<FVector> Feet, float& OutSpreadM)
+	{
+		if (Feet.Num() < 2)
+		{
+			return false;
+		}
+		OutSpreadM = MeanSpreadM(Feet);
+		return true;
+	}
+
 	FPmcGuardSample SampleGuard(TConstArrayView<FVector> LivingFeet, const FPmcDefenceAccess& Access, float GuardDistCm, float LevelToleranceCm)
 	{
 		using namespace PmcDefenceLocal;

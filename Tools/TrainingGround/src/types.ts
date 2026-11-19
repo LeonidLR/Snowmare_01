@@ -155,6 +155,8 @@ export interface EnvironmentConfig {
   exposure_bias?: number;
   /** When true, level's weather / start_hour win over campaign carry state even if not locked (default false; omit when false). */
   override_carry?: boolean;
+  /** T-020 / T-021: how strongly the weather changes the cold, 0..2 (default 1 = as before; absent key = 1). */
+  weather_strength?: number;
 }
 
 export type OperativeKey = 'commander' | 'engineer' | 'medic_sapper' | 'recruit' | 'slot_0' | 'slot_1' | 'slot_2' | string;

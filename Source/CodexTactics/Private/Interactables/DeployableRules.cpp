@@ -1,5 +1,6 @@
 #include "Interactables/DeployableRules.h"
 #include "Data/TacticalHeatTuning.h"
+#include "GameFramework/Actor.h"
 
 #define LOCTEXT_NAMESPACE "DeployableRules"
 
@@ -106,3 +107,18 @@ FText DeployableRules::GetDefusalStanceName(EOperativeStance Stance)
 }
 
 #undef LOCTEXT_NAMESPACE
+
+FName DeployableRules::PmcOwnerTag()
+{
+	return FName(TEXT("trap_owner=pmc"));
+}
+
+bool DeployableRules::IsPmcOwned(const AActor& Charge)
+{
+	return Charge.ActorHasTag(PmcOwnerTag());
+}
+
+bool DeployableRules::IgnoresBody(bool bChargePmcOwned, bool bBodyIsPmcFighter)
+{
+	return bChargePmcOwned && bBodyIsPmcFighter;
+}

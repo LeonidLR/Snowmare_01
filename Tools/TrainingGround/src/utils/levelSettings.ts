@@ -381,6 +381,11 @@ export const TEMPERATE_WEATHER_OPTIONS: { value: string; label: string }[] = [
   { value: 'Storm', label: 'Шторм (Storm)' },
 ];
 
+/** environment.weather_strength (T-020 / T-021): how strongly the weather changes the cold; 1 = as before (the key is then absent). */
+export const WEATHER_STRENGTH_DEFAULT = 1;
+export const WEATHER_STRENGTH_MIN = 0;
+export const WEATHER_STRENGTH_MAX = 2;
+
 export const CLIMATE_OPTIONS: { value: 'arctic' | 'temperate'; label: string }[] = [
   { value: 'arctic', label: 'Арктический (arctic, по умолчанию)' },
   { value: 'temperate', label: 'Умеренный (temperate, сюжетные уровни)' },
@@ -404,7 +409,8 @@ export function setEnvironmentKey<K extends keyof EnvironmentConfig>(
     (typeof value === 'number' && Number.isNaN(value)) ||
     (key === 'override_carry' && value === false) ||
     (key === 'locked' && value === false) ||
-    (key === 'visuals' && value === true)
+    (key === 'visuals' && value === true) ||
+    (key === 'weather_strength' && value === WEATHER_STRENGTH_DEFAULT)
   ) {
     delete env[key];
   } else {
@@ -455,6 +461,11 @@ export function validateEnvironment(env: EnvironmentConfig): string[] {
   if (env.puddles !== undefined) {
     if (!Number.isFinite(env.puddles) || env.puddles < 0 || env.puddles > 1) {
       errors.push('Лужи: число от 0 до 1');
+    }
+  }
+  if (env.weather_strength !== undefined) {
+    if (!Number.isFinite(env.weather_strength) || env.weather_strength < WEATHER_STRENGTH_MIN || env.weather_strength > WEATHER_STRENGTH_MAX) {
+      errors.push(`Сила погоды: число ${WEATHER_STRENGTH_MIN}..${WEATHER_STRENGTH_MAX} (1 = как сейчас)`);
     }
   }
   if (env.exposure_bias !== undefined) {
