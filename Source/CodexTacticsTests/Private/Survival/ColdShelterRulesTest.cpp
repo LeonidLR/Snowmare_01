@@ -34,9 +34,10 @@ namespace
 
 	/**
 	 * A 20 m x 10 m hall (X 0..2000, Y 0..1000), 1 storey (roof 300). Two doors on the west wall (index 0, 1) and eight windows on the
-	 * south wall (index 2..9, one every 2 m from x = 400). Ground 0.
+	 * south wall (index 2..9, one every 2 m from x = 400). Ground 0. The doors carry an explicit "closed" state (a door with a leaf) unless
+	 * bLeafless: a doorway gap with no state, which the designer (2026-11-19) counts as OPEN.
 	 */
-	FPmcLayoutAccess CsMakeHall(int32 Floors = 1)
+	FPmcLayoutAccess CsMakeHall(int32 Floors = 1, bool bLeafless = false)
 	{
 		FPmcLayoutAccess Layout;
 		FPmcLayoutBuilding Hall;
@@ -44,8 +45,8 @@ namespace
 		Hall.Min = FVector2D(0.f, 0.f);
 		Hall.Max = FVector2D(2000.f, 1000.f);
 		Hall.Floors = Floors;
-		Hall.Openings.Add(CsMakeOpening(TEXT("door_a"), TEXT("door"), FVector2D(0.f, 300.f), 0));
-		Hall.Openings.Add(CsMakeOpening(TEXT("door_b"), TEXT("door"), FVector2D(0.f, 700.f), 0));
+		Hall.Openings.Add(CsMakeOpening(TEXT("door_a"), TEXT("door"), FVector2D(0.f, 300.f), 0, bLeafless ? TEXT("") : TEXT("closed")));
+		Hall.Openings.Add(CsMakeOpening(TEXT("door_b"), TEXT("door"), FVector2D(0.f, 700.f), 0, bLeafless ? TEXT("") : TEXT("closed")));
 		for (int32 Index = 0; Index < 8; ++Index)
 		{
 			Hall.Openings.Add(CsMakeOpening(*FString::Printf(TEXT("win_%d"), Index), TEXT("window"), FVector2D(400.f + 200.f * Index, 0.f), 0));
@@ -75,7 +76,7 @@ bool FColdShelterSealedTest::RunTest(const FString&)
 	FPmcLayoutAccess Layout = CsMakeHall();
 	const FColdShelterSample Inside = ColdShelterRules::SampleLayout(Layout, CsFeet(1000.f, 500.f), Config);
 	TestTrue(TEXT("inside the hall"), Inside.IsIndoors());
-	TestEqual(TEXT("no state in the layout = every opening sealed: leak 0"), Inside.Leak, 0.f);
+	TestEqual(TEXT("closed doors + stateless windows = every opening sealed: leak 0"), Inside.Leak, 0.f);
 	TestEqual(TEXT("sealed: multiplier 0"), Inside.Multiplier, 0.f);
 	TestEqual(TEXT("no draught without an open opening"), Inside.NearestOpenCm, -1.f);
 	// Even at the door itself.
@@ -83,6 +84,42 @@ bool FColdShelterSealedTest::RunTest(const FString&)
 	// A building with no openings at all is airtight too.
 	Layout.Buildings[0].Openings.Reset();
 	TestEqual(TEXT("no openings: leak 0"), ColdShelterRules::SampleLayout(Layout, CsFeet(1000.f, 500.f), Config).Leak, 0.f);
+	return true;
+}
+
+COLD_SHELTER_TEST(FColdShelterLeaflessDoorTest, "LeaflessDoorwayIsOpen")
+bool FColdShelterLeaflessDoorTest::RunTest(const FString&)
+{
+	// Designer decision 2026-11-19: a doorway gap with no door leaf (no state) is OPEN, with a draught; windows stay sealed.
+	const FColdShelterConfig Config;
+	FPmcLayoutAccess Layout = CsMakeHall(1, true);
+	FPmcLayoutBuilding& Hall = Layout.Buildings[0];
+	const TArray<bool> Open = ColdShelterRules::InitialOpenFlags(Hall);
+	TestEqual(TEXT("10 openings"), Open.Num(), 10);
+	TestTrue(TEXT("both leafless doors are open"), Open[0] && Open[1]);
+	bool bAnyWindowOpen = false;
+	for (int32 Index = 2; Index < Open.Num(); ++Index)
+	{
+		bAnyWindowOpen |= Open[Index];
+	}
+	TestFalse(TEXT("stateless windows stay sealed"), bAnyWindowOpen);
+	const float Leak = 6.f / 14.f;
+	TestEqual(TEXT("2 leafless doors + 8 windows: leak 6/14"), ColdShelterRules::ComputeLeak(Hall, Open, Config), Leak, 1.e-5f);
+
+	const FColdShelterSample Near = ColdShelterRules::SampleLayout(Layout, CsFeet(200.f, 300.f), Config);
+	TestEqual(TEXT("sampled leak 6/14"), Near.Leak, Leak, 1.e-5f);
+	TestEqual(TEXT("2 m from a leafless doorway: outdoor cold (draught)"), Near.Multiplier, 1.f);
+	const FColdShelterSample Far = ColdShelterRules::SampleLayout(Layout, CsFeet(1900.f, 500.f), Config);
+	TestEqual(TEXT("far wall: the base only"), Far.Multiplier, Leak, 1.e-5f);
+
+	// An explicit door state wins: closed / locked = a leaf, sealed; kicked = open.
+	TestFalse(TEXT("an explicit closed door is sealed"), ColdShelterRules::IsOpeningInitiallyOpen(CsMakeOpening(TEXT("d"), TEXT("door"), FVector2D::ZeroVector, 0, TEXT("closed"))));
+	TestFalse(TEXT("a locked door is sealed"), ColdShelterRules::IsOpeningInitiallyOpen(CsMakeOpening(TEXT("d"), TEXT("door"), FVector2D::ZeroVector, 0, TEXT("locked"))));
+	TestTrue(TEXT("a kicked door is open"), ColdShelterRules::IsOpeningInitiallyOpen(CsMakeOpening(TEXT("d"), TEXT("door"), FVector2D::ZeroVector, 0, TEXT("kicked"))));
+	// Only DOORS: a stateless window / loophole is sealed, IsStateOpen itself stays false for an empty state.
+	TestFalse(TEXT("a stateless window is sealed"), ColdShelterRules::IsOpeningInitiallyOpen(CsMakeOpening(TEXT("w"), TEXT("window"), FVector2D::ZeroVector, 0)));
+	TestFalse(TEXT("a stateless loophole is sealed"), ColdShelterRules::IsOpeningInitiallyOpen(CsMakeOpening(TEXT("l"), TEXT("loophole"), FVector2D::ZeroVector, 0)));
+	TestFalse(TEXT("an empty state text alone is not open"), ColdShelterRules::IsStateOpen(TEXT("")));
 	return true;
 }
 
@@ -269,7 +306,8 @@ bool FColdShelterParseTest::RunTest(const FString&)
 	const FColdShelterConfig Config;
 	// kicked door (3) + 2 roof holes (4 + 4) of 3 + 1 + 4 + 4.
 	TestEqual(TEXT("building A leak"), ColdShelterRules::ComputeLeak(A, ColdShelterRules::InitialOpenFlags(A), Config), 11.f / 12.f, 1.e-5f);
-	TestEqual(TEXT("the legacy door is sealed"), ColdShelterRules::ComputeLeak(Old, ColdShelterRules::InitialOpenFlags(Old), Config), 0.f);
+	// Designer 2026-11-19: a legacy doors[] entry has no state = a doorway with no leaf = OPEN (was sealed before the decision).
+	TestEqual(TEXT("the legacy stateless door is open: leak 1"), ColdShelterRules::ComputeLeak(Old, ColdShelterRules::InitialOpenFlags(Old), Config), 1.f);
 	return true;
 }
 

@@ -69,10 +69,17 @@ namespace ColdShelterRules
 
 	/**
 	 * State text: open / ajar / broken / smashed / kicked / breached / destroyed / blown / missing -> true (the cold gets in);
-	 * closed / locked / sealed / boarded / barred / welded / glazed / intact and empty / unknown (the generator writes none: a shut door,
-	 * a glazed window) -> false.
+	 * closed / locked / sealed / boarded / barred / welded / glazed / intact and empty / unknown -> false
+	 * (an EMPTY state is sealed here; a leafless DOOR is open by IsOpeningInitiallyOpen).
 	 */
 	CODEXTACTICS_API bool IsStateOpen(const FString& State);
+
+	/**
+	 * The layout's initial state of one opening. A DOOR with an empty state (a doorway gap with no leaf: the level generator writes none)
+	 * counts as OPEN (designer decision 2026-11-19: "open, with draught"); every other kind uses IsStateOpen (a stateless window = glazed =
+	 * sealed until a runtime glass / boarded state exists). An explicit door state (closed / locked / ...) wins.
+	 */
+	CODEXTACTICS_API bool IsOpeningInitiallyOpen(const FPmcLayoutOpening& Opening);
 
 	/** The weight of one opening by its kind ("door" / "window" / "loophole" / "breach" / "roof_hole"; unknown = window). */
 	CODEXTACTICS_API float GetOpeningWeight(const FPmcLayoutOpening& Opening, const FColdShelterConfig& Config);

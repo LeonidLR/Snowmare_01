@@ -2,56 +2,46 @@
 
 ## Handover (read first)
 
-**State: code, tests, smoke, data and docs are written and pushed on `claude/cold-indoors`. NOTHING IS BUILT OR RUN YET.**
-The first remote build (HEAD ec8c665e) failed with one compile error in `PmcDefenceRules.cpp` (`Hole` undeclared); fixed in 837654aa.
-A 2nd remote build was queued behind other agents on the worker (the main PC then went offline); an earlier attempt hit an ssh timeout
-(infra failure 1). No test or smoke result exists. No compile error other than the `Hole` one was reported by UBT, but UBT stops listing
-after the failing TU group, so more may surface.
+**State 2026-11-19 (worker slot1, local build): BUILT, TESTED, SMOKED. Gate passed. Branch `worker/t021-cold-indoors`.**
 
-**Done**
-- Designer model (replaces the lead's 0 / 0.5 / 1 rule): per building `leak` = open opening weight / all weight (door 3, window 1, loophole 0.5,
-  wall breach and roof hole 4); base multiplier = `leak * leak_to_cold` (1.0); draught = 1 within 3.5 m of an OPEN opening on the SAME storey,
-  linear to the base at 10 m; indoor multiplier = max(base, draught); a camera zone still wins; outside = wave multiplier (today).
-  Numbers (commented): `Content/Data/Survival/cold_shelter.json`.
-- `Source/CodexTactics/{Public,Private}/Survival/ColdShelterRules.*` (pure rule + `ConfigFromJson`), `ColdShelterSubsystem.*` (loads the map's
-  `levelgen_layout` once via the existing `PmcDefenceRules::ParseLayout`; live per-opening flags; `SetOpeningOpen(BuildingId, OpeningId, bool)`,
-  `SetOpeningOpenAt(XY, Storey, Radius, bool)`, `OnLeakChanged`; event-driven, no per-tick scan).
-- `PmcDefenceRules` parser extended additively: `FPmcLayoutOpening` (id, kind, state, floor, pos) in `FPmcLayoutBuilding::Openings`
-  (openings[]; legacy doors[] only if no door opening; roof_holes[] as kind `roof_hole`, state open, top storey). API unchanged.
-- `UColdSurvivalComponent::GatherEnvironment` uses it (camera zone > layout building > wave multiplier). Campfire `IsIndoors` and the blizzard-walk
-  shelter test call `UColdShelterSubsystem::IsShelteredLocation` (zone OR layout building) - one line each.
-- `environment.weather_strength` (0..2, default 1): `FEnvironmentLevelSettings::WeatherStrength`, `LevelJsonRules::ParseEnvironmentSettings`,
-  `EnvironmentRules::ApplyWeatherStrength` = `1 + (blended - 1) * strength`, applied in GatherEnvironment's weather step only.
-- Tests `Source/CodexTacticsTests/Private/Survival/ColdShelterRulesTest.cpp` (`CodexTactics.Survival.ColdShelter.*`: all sealed 0, 1/14 and 6/14 leaks,
-  draught 1 at 2 m / base at 10 m / linear, same storey only, inside / outside / roof Z / rotated footprint, camera zone wins, layout parse,
-  config JSON incl. the shipped file, weather strength 0 / 1 / 2 + level JSON key).
-- Smoke `CodexTactics.ColdIndoorsSmoke` (`Source/CodexTacticsDev/Private/Debug/ColdIndoorsSmokeCommand.cpp`), registered in `Scripts/test_map.json`
-  (map `/Game/Maps/Generated/L_Gen_Depot_1_X6`, `-LevelJson=L_Gen_Depot_1_X6.json`): camera zone count (diagnosis), outside open air, sealed building 0,
-  door kicked via `SetOpeningOpen` -> event + leak = door share, near door = outdoor value, far wall lower, resealed 0, roof = open air.
-- Doc note: `docs/systems/survival-cold-heat.md` (last section).
+**Build** (`Scripts/build.ps1`, local, CODEX_AGENT=claude): Succeeded, 669 s, NO compile errors (the earlier `Hole` fix 837654aa was the only one UBT had;
+the full 59-action build found no more). Only the pre-existing `ParseJson` unity-clash warning (not mine).
 
-**Diagnosis (verified without running):** the X6 `.umap` has 0 `CameraZoneVolume` references (binary scan), `build_levelgen_map.py` places none, and
-`GatherEnvironment` only lowered cold through `ACameraZoneVolume` -> every generated building was open air (zone multiplier 1). The smoke logs the
-live count + multiplier too.
+**Designer decision 2026-11-19 (leafless doorway = OPEN) - implemented**
+- `ColdShelterRules::IsOpeningInitiallyOpen(const FPmcLayoutOpening&)` (Source/CodexTactics/Public/Survival/ColdShelterRules.h, Private/.../ColdShelterRules.cpp):
+  a DOOR with an empty state is open (leaks with the door weight 3 and makes the draught: outdoor cold within 3.5 m, fading to the base at 10 m);
+  every other kind (stateless window / loophole) is sealed; an explicit door state (closed / locked / kicked ...) wins. `InitialOpenFlags` uses it.
+  `IsStateOpen(State)` itself is unchanged (empty = false), so the rule stays pure; the layout reader is unchanged.
+- New test `CodexTactics.Survival.ColdShelter.LeaflessDoorwayIsOpen` (2 leafless doors + 8 windows -> leak 6/14, draught 1 at 2 m, base at the far wall,
+  explicit closed / locked sealed, kicked open, stateless window / loophole sealed).
+- Assumptions changed ONLY where they were exactly "a stateless door is sealed": (1) test fixture `CsMakeHall` now gives its doors an explicit
+  `closed` state (a hall with leafed doors) so AllSealedIsAirtight / LeakWeights / Draught / Storey / Zone tests keep every check unchanged; the leafless
+  variant is `CsMakeHall(1, true)`. (2) `LayoutParse`: "the legacy stateless door is sealed (leak 0)" became "is open (leak 1)" - the legacy doors[] entry has no
+  state = a leafless doorway. (3) `ColdIndoorsSmoke`: no longer requires the picked building to start sealed; it first checks the building AS GENERATED
+  (leak > 0, door open, draught = outdoor cold beside the doorway), then seals every opening through `SetOpeningOpen` for the airtight baseline, then
+  the unchanged kick / far wall / reseal / roof checks. Comments in cold_shelter.json and docs/systems/survival-cold-heat.md updated.
 
-**Next (in order)**
-1. `$env:CODEX_AGENT='claude'; powershell -ExecutionPolicy Bypass -File Scripts/build.ps1 -Remote worker` (or local `Scripts/build.ps1`). Fix any compile
-   errors. Confirm the copied-back DLLs contain the change (search for the log string `[ColdShelter]`).
-2. `powershell -ExecutionPolicy Bypass -File Scripts/test.ps1 -Filter CodexTactics.Survival.ColdShelter` then `-Filter CodexTactics.Environment`,
-   `-Filter CodexTactics.LevelJson`, `-Filter CodexTactics.AI.PmcDefence` (the parser changed).
-3. `powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Remote on -Commands ColdIndoorsSmoke,ColdSmoke,EnvironmentSmoke,WeatherSmoke,WarmIdleSmoke`
-   (use full names; the smoke needs the committed `cold_shelter.json` and `Content/Data/LevelJson/L_Gen_Depot_1_X6.json`).
-4. `python Scripts/Tools/typesafe_triage.py --audit-diff --agent claude` (it audits unstaged changes only: run it before committing a fix).
-5. Update this report with real results, commit (Conventional Commits, `Co-Authored-By: Claude Opus 5.5 <noreply@anthropic.com>`), push the branch only.
+**Smoke measurement fix (not a rule change):** the committed `Content/Data/LevelJson/L_Gen_Depot_1_X6.json` has `"cold_rate_mult": 0` (also L_Gen_Depot_1,
+PmcArena*, FormationLab*), so every cold RATE on it is 0 whatever the zone. The smoke's `RatePerSecond` now pins LevelMultiplier / Weather / Phase /
+Accumulation to 1 (only the zone is under test; weather / phase are covered by ColdSmoke / EnvironmentSmoke). The first smoke run failed 4 checks purely on
+the 0.000 %/s rate (the zone values were already right).
 
-**Gate state:** build NOT passed, tests NOT run, smokes NOT run, audit NOT run (all changes were committed, so the audit saw 0 files).
+**Tests** (`Scripts/test.ps1 -Filter ...`, counts compared with the macros; no crash): `CodexTactics.Survival.ColdShelter` 11 tests / 0 failed (11 macros);
+`CodexTactics.Environment` 114 / 0 failed; `CodexTactics.LevelJson` 7 / 0 (7 macros); `CodexTactics.AI.PmcDefence` 7 / 0 (7 macros);
+`CodexTactics.AI.Pmc` 70 / 0 (70 macros).
+
+**Smokes** (`Scripts/smoke_parallel.ps1 -Remote off -Jobs 3`, full SYNC file around each run): ColdSmoke PASS, EnvironmentSmoke PASS, WeatherSmoke PASS,
+WarmIdleSmoke PASS, PmcRoofDefenceSmoke PASS, TacticalPmcSmoke PASS (the last two guard the layout-parser change). ColdIndoorsSmoke: FAIL in the first run
+(the rate issue above), PASS 16 checks / 0 failed after the fix (building B_x1_4_t7_hall: as generated leak 0.250 = 2 doors; sealed zone 0; kicked door
+share 0.125; near door zone 1.0 / 0.880 %/s, mid 0.562, far wall (39.4 m) 0.125 / 0.110 %/s; roof = open air). Logs: `Saved/Logs/Smoke-ColdIndoorsSmoke.log`
+(final), `Smoke-ColdIndoorsSmoke-alone.log` (the failing run). Log string `[ColdShelter] L_Gen_Depot_1_X6: 70 buildings, 399 openings, 57 buildings leak at the start`.
 
 ## Decisions / things to tell the designer
-- X6's generator writes no opening states and its doors are wall gaps with no leaf, so every layout opening starts SEALED (an intact closed door /
-  glazed window, per the designer's model): a generated building is airtight (multiplier 0) until something opens an opening. Only B_ruin starts
-  leaking (its 2 roof holes count as breaches, weight 4 each). If the designer wants door gaps to count as open, set the door's state to `open` in the
-  layout (or flip the default in `ColdShelterRules::IsStateOpen`).
-- Stateless layout windows / loopholes are sealed.
+- DECIDED 2026-11-19 (designer): X6's generator writes no opening states and its doors are wall gaps with no leaf; these now count as OPEN with a draught
+  (see the Handover). 57 of the 70 X6 buildings leak at the start. Windows / loopholes without a state stay sealed until a runtime glass / boarded state exists.
+- Buildings with NO openings in the layout (office_w, gallery, chimneys, facades: 13 of 70) are airtight (leak 0, multiplier 0) with no door at all - designer
+  to confirm or fix in the generator (they have no entrance, so only matter when someone is inside).
+- The committed X6 level JSON has `cold_rate_mult: 0` (cold off) - the designer's local version evidently differs; the indoor rule only matters where the level cold is on.
 
 ## Follow-ups
 - No runtime door / window / breach actor exists yet (grep of Source: nothing holds an opening state; `DoorwaySubsystem` is a doorway registry for

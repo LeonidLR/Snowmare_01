@@ -73,13 +73,23 @@ namespace ColdShelterRules
 		return FMath::Max(0.f, Config.WeightWindow);
 	}
 
+	bool IsOpeningInitiallyOpen(const FPmcLayoutOpening& Opening)
+	{
+		// Designer decision 2026-11-19: a doorway gap with no leaf (the generator writes no state for doors) is OPEN, with a draught.
+		if (Opening.Kind == TEXT("door") && Opening.State.IsEmpty())
+		{
+			return true;
+		}
+		return IsStateOpen(Opening.State);
+	}
+
 	TArray<bool> InitialOpenFlags(const FPmcLayoutBuilding& Building)
 	{
 		TArray<bool> Flags;
 		Flags.Reserve(Building.Openings.Num());
 		for (const FPmcLayoutOpening& Opening : Building.Openings)
 		{
-			Flags.Add(IsStateOpen(Opening.State));
+			Flags.Add(IsOpeningInitiallyOpen(Opening));
 		}
 		return Flags;
 	}

@@ -1,9 +1,10 @@
 // Dev-only console command for the cold indoors of a GENERATED map (T-021, designer 2026-11-19):
 //   Scripts/smoke_parallel.ps1 -Commands ColdIndoorsSmoke   (map /Game/Maps/Generated/L_Gen_Depot_1_X6, see Scripts/test_map.json)
 // Diagnosis first: the map has no ACameraZoneVolume (the zone multiplier of an operative inside a building was 1 = open air). Then the
-// UColdShelterSubsystem's model on the real layout: the leader teleported into a SEALED building (ground-floor door, no open opening)
-// -> zone multiplier 0 and no cold accumulates; outside -> the open-air rate; a door kicked in play (SetOpeningOpen, event-driven) -> the
-// building's leak is the door's share, the cold near the door is the outdoor value and falls toward the far wall; sealed again -> 0.
+// UColdShelterSubsystem's model on the real layout: the building as generated (doorways with no leaf count as OPEN, designer 2026-11-19)
+// leaks and draughts at its doorway; then every opening is sealed in play (SetOpeningOpen) -> zone multiplier 0 and no cold accumulates;
+// outside -> the open-air rate; a door kicked in play (event-driven) -> the building's leak is the door's share, the cold near the door is
+// the outdoor value and falls toward the far wall; sealed again -> 0.
 // The rates are read through GatherEnvironment + ColdRules::StepCold (a 1 s step from 20 %), like ColdSmoke, so preparation / sprint /
 // the weather in force do not matter.
 
@@ -51,6 +52,12 @@ namespace ColdIndoorsSmoke
 		Environment.bSprinting = false;
 		Environment.bElevated = false;
 		Environment.bInCover = false;
+		// Only the zone multiplier is under test: the committed L_Gen_Depot_1_X6.json has "cold_rate_mult": 0 (cold off for the level), and the
+		// weather / time of day in force differ per run, so the other factors are pinned to 1 (they are covered by ColdSmoke / EnvironmentSmoke).
+		Environment.LevelMultiplier = 1.f;
+		Environment.WeatherMultiplier = 1.f;
+		Environment.PhaseMultiplier = 1.f;
+		Environment.AccumulationMultiplier = 1.f;
 		OutZone = Environment.ZoneMultiplier;
 		return ColdRules::StepCold(Cold.Config, 20.f, 1.f, Environment, EOperativeStance::Standing, Cold.Fortitude) - 20.f;
 	}
@@ -101,7 +108,7 @@ namespace ColdIndoorsSmoke
 		}
 		const FColdShelterConfig& Config = Shelter->GetConfig();
 
-		// The test building: the largest one with a sealed ground-floor door (an enterable hall).
+		// The test building: the largest one with a ground-floor door (an enterable hall); as generated its leafless doorways are open.
 		int32 Pick = INDEX_NONE;
 		int32 PickDoor = INDEX_NONE;
 		float PickArea = 0.f;
@@ -109,7 +116,7 @@ namespace ColdIndoorsSmoke
 		{
 			const FPmcLayoutBuilding& Building = Layout->Buildings[Index];
 			const float Area = (Building.Max.X - Building.Min.X) * (Building.Max.Y - Building.Min.Y);
-			if (Building.RotationDeg != 0.f || Shelter->GetBuildingLeak(Building.Id) != 0.f || Area <= PickArea)
+			if (Building.RotationDeg != 0.f || Area <= PickArea)
 			{
 				continue;
 			}
@@ -127,7 +134,7 @@ namespace ColdIndoorsSmoke
 		}
 		if (Pick == INDEX_NONE)
 		{
-			Check(State, false, TEXT("a sealed building with a ground-floor door exists in the layout"));
+			Check(State, false, TEXT("a building with a ground-floor door exists in the layout"));
 			Finish(State);
 			return;
 		}
@@ -170,6 +177,26 @@ namespace ColdIndoorsSmoke
 		const float OutsideRate = RatePerSecond(*Cold, OutsideZone);
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke outside (%.0f, %.0f): zone multiplier %.3f, cold rate %.3f %%/s"), OutsideSpot.X, OutsideSpot.Y, OutsideZone, OutsideRate);
 		Check(State, OutsideZone > 0.99f && OutsideRate > 0.05f, FString::Printf(TEXT("outside: the cold accumulates (zone %.2f, %.3f %%/s)"), OutsideZone, OutsideRate));
+
+		// 1b. As generated (designer 2026-11-19): a doorway gap with no leaf is OPEN, so the hall leaks and draughts at its doorway.
+		const float GeneratedLeak = Shelter->GetBuildingLeak(Building.Id);
+		float GeneratedNearZone = -1.f;
+		Put(*Leader, Layout->GroundZ, NearSpot);
+		const float GeneratedNearRate = RatePerSecond(*Cold, GeneratedNearZone);
+		UE_LOG(LogCodexTactics, Display, TEXT("Smoke as generated %s: leak %.3f, door %s open %d, near-door zone %.3f rate %.3f %%/s"), *Building.Id, GeneratedLeak,
+			*Door.Id, Shelter->IsOpeningOpen(Building.Id, Door.Id) ? 1 : 0, GeneratedNearZone, GeneratedNearRate);
+		Check(State, GeneratedLeak > 0.f && Door.State.IsEmpty() == Shelter->IsOpeningOpen(Building.Id, Door.Id),
+			FString::Printf(TEXT("as generated the leafless doorway is open and the building leaks (leak %.3f)"), GeneratedLeak));
+		Check(State, GeneratedNearZone > 0.99f && GeneratedNearRate > 0.05f, FString::Printf(TEXT("as generated: a draught of the outdoor cold beside the open doorway (zone %.2f)"), GeneratedNearZone));
+		// Seal every opening (a runtime door leaf / glazing would do this) to test the airtight baseline.
+		for (const FPmcLayoutOpening& Opening : Building.Openings)
+		{
+			if (Shelter->IsOpeningOpen(Building.Id, Opening.Id))
+			{
+				Shelter->SetOpeningOpen(Building.Id, Opening.Id, false);
+			}
+		}
+		Check(State, Shelter->GetBuildingLeak(Building.Id) <= 0.0001f, FString::Printf(TEXT("every opening sealed: leak %.3f"), Shelter->GetBuildingLeak(Building.Id)));
 
 		// 2. Sealed building: no accumulation.
 		float SealedZone = -1.f;

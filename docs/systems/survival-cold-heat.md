@@ -144,8 +144,9 @@ camera zones (the X6 map holds 0 of them), so every generated building was open 
 - Indoors = the feet inside a building footprint of the map's `levelgen_layout` (`PmcDefenceRules::ParseLayout` / `BuildingAt` / `RoofZ`, reused),
   above its ground and 30 cm under its roof slab. A camera zone, when one holds the operative, still wins (hand-made maps unchanged).
 - Each building's exterior openings weigh door 3, window 1, loophole 0.5, wall breach / roof hole 4. `leak` = weight of the open ones (open, kicked
-  out, broken, breached) / weight of all; sealed = 0, airtightness = 1 - leak. The generator writes no opening state, so every layout opening
-  starts sealed; only the roof holes (B_ruin) start open.
+  out, broken, breached) / weight of all; sealed = 0, airtightness = 1 - leak. The generator writes no opening state: a doorway gap with no
+  leaf (a door with no state) starts OPEN with a draught (designer 2026-11-19, `ColdShelterRules::IsOpeningInitiallyOpen`), a stateless window
+  starts sealed (glazed) until a runtime glass / boarded state exists, roof holes start open; an explicit door state (closed / locked) wins.
 - Base multiplier = `leak * leak_to_cold` (1.0): all sealed 0 (the cold then warms, like a Closed zone), a fully open building 1.
 - Draught: within `draught_full_m` (3.5 m) of an open opening on the SAME storey the multiplier is 1, falling linearly to the base at
   `draught_fade_m` (10 m). Indoor multiplier = max(base, draught). Openings on other storeys only count in the leak.
