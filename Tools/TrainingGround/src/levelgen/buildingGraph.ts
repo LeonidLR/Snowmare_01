@@ -6,6 +6,7 @@
 // Nodes: street, approach cells, rooms, balconies, snow-ramp tops, roof; typed edges (mode, one-way pairs, length, rungs).
 // Units: layout cm; positions in the building's own (unrotated) frame. Pure and deterministic (edge ids in creation order).
 
+import routeCostsJson from '../../../../Content/Data/LevelGen/building_route_costs.json' with { type: 'json' };
 import type { Vec2 } from '../movement/geometry.ts';
 import { closestOnSegment, dist } from '../movement/geometry.ts';
 import { toBuildingFrame } from './rotation.ts';
@@ -14,13 +15,16 @@ import { escapeLadderIds, usableEscapes, usableSnowRamps } from './fireEscapes.t
 import type { DoorState, GenBuilding, GenLayout, GenRoom, WallOpening, WindowState } from './schema.ts';
 import { isMantleable, LEVEL_HEIGHT, ladderForLevels, OPENING_DEFAULTS, unifyOpenings } from './schema.ts';
 
-// ---- cost table (later building_route_costs.json; the graph reads its geometry part) -----------------------------------------------
+// ---- cost table (Content/Data/LevelGen/building_route_costs.json; the graph reads its geometry part) -----------------------------
 
 /** Edge modes (route-model rule 3). */
 export type EdgeMode = 'walk' | 'open' | 'kick' | 'shotgun' | 'vault' | 'shatter' | 'climb' | 'explosive' | 'drop';
 export type RouteProfile = 'balanced' | 'quiet' | 'fast';
 
 export interface RouteCostTable {
+  /** The file's schema id and note (part of the hashed content; not read by the model). */
+  schema?: string;
+  comment?: string;
   /** Reference walk speed, m/s (BotWalkSpeedCm 300). */
   v_ref: number;
   /** Seconds per ladder rung (audit 1.4). */
@@ -45,34 +49,8 @@ export interface RouteCostTable {
   detour_bands: { open: [number, number]; storied: [number, number]; warn: number };
 }
 
-/** The defaults of building-route-model.md F1 and opening-states.md F1 (all *proposal*). */
-export const ROUTE_COSTS: RouteCostTable = {
-  v_ref: 3.0,
-  t_rung: 0.9,
-  n_squad: 1,
-  t_follow: 0.5,
-  approach_cm: 150,
-  street_fallback_cm: 1000,
-  actions: {
-    walk: { t: 0, n: 0, x: 0 },
-    open: { t: 1, n: 0, x: 0 },
-    kick: { t: 3, n: 15, x: 0 },
-    shotgun: { t: 1, n: 30, x: 0 },
-    vault: { t: 1.2, n: 0, x: 0 },
-    shatter: { t: 1.7, n: 10, x: 0 },
-    climb: { t: 0, n: 0, x: 0 },
-    explosive: { t: 5, n: 25, x: 1 },
-    drop: { t: 0, n: 0, x: 0 },
-  },
-  locked_breach: ['kick'],
-  profiles: {
-    balanced: { a_n: 0.5, a_x: 60, a_e: 1 },
-    quiet: { a_n: 3, a_x: 120, a_e: 1 },
-    fast: { a_n: 0.1, a_x: 20, a_e: 0.2 },
-  },
-  exposure: { above_ground: 1.0, ground: 0.5 },
-  detour_bands: { open: [1.0, 1.3], storied: [1.5, 4.0], warn: 4.0 },
-};
+/** The defaults of building-route-model.md F1 and opening-states.md F1 (all *proposal*): building_route_costs.json. */
+export const ROUTE_COSTS: RouteCostTable = routeCostsJson as RouteCostTable;
 
 /** Modes a door / window in `state` gives (blocked = none; barricaded = explosive only). */
 export function openingModes(kind: WallOpening['kind'], state: DoorState | WindowState, costs: RouteCostTable = ROUTE_COSTS): EdgeMode[] {

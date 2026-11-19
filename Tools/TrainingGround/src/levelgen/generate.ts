@@ -14,6 +14,7 @@ import type { Vec2 } from '../movement/geometry.ts';
 import { dist, rng } from '../movement/geometry.ts';
 import type { ZoneKind } from '../movement/layout.ts';
 import type { Profile } from './profile.ts';
+import { mapBuildingCoords } from './buildingCoordFields.ts';
 import { toUE } from './profile.ts';
 import type {
   Archetype,
@@ -595,32 +596,13 @@ export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta):
     return [[Math.min(a[0], b[0]), Math.min(a[1], b[1])], [Math.max(a[0], b[0]), Math.max(a[1], b[1])]];
   };
   const normalToUE = (n: Vec2): Vec2 => [-n[1], n[0]];
-  const boundsToUE = (bnd: { min: Vec2; max: Vec2 }): { min: Vec2; max: Vec2 } => {
-    const p1 = U(bnd.min), p2 = U(bnd.max);
-    return {
-      min: [Math.min(p1[0], p2[0]), Math.min(p1[1], p2[1])],
-      max: [Math.max(p1[0], p2[0]), Math.max(p1[1], p2[1])],
-    };
-  };
-  const mapOpening = (op: WallOpening): WallOpening => ({
-    ...op,
-    pos: U(op.pos),
-    ...(op.yaw !== undefined ? { yaw: yawToUE(op.yaw) } : {}),
+  // Every building field of BUILDING_COORD_FIELDS: the draft has no building rotation, so both frames map the same way.
+  const mapBuilding = (b: DraftBuilding): GenBuilding => mapBuildingCoords(b, {
+    point: (p) => U(p),
+    rect: (r) => UR(r),
+    direction: (v) => normalToUE(v),
+    yaw: (y) => yawToUE(y),
   });
-  const mapPartition = (p: GenPartition): GenPartition => ({
-    ...p,
-    start: U(p.start),
-    end: U(p.end),
-    ...(p.openings ? { openings: p.openings.map(mapOpening) } : {}),
-  });
-  const mapFloorDetail = (fl: BuildingFloor): BuildingFloor => ({
-    ...fl,
-    ...(fl.gaps ? { gaps: fl.gaps.map((g) => ({ ...g, poly: g.poly.map(U) })) } : {}),
-    ...(fl.rooms ? { rooms: fl.rooms.map((rm) => ({ ...rm, bounds: boundsToUE(rm.bounds) })) } : {}),
-  });
-  const mapHatch = (ht: RoofHatch): RoofHatch => ({ ...ht, pos: U(ht.pos) });
-  const mapParapet = (p: RoofParapet): RoofParapet => ({ ...p, start: U(p.start), end: U(p.end) });
-  const mapRoom = (rm: GenRoom): GenRoom => ({ ...rm, bounds: boundsToUE(rm.bounds) });
   const mapMantleEdge = (me: MantleEdge): MantleEdge => ({
     ...me,
     start: U(me.start),
@@ -645,21 +627,7 @@ export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta):
     spawn: { pos: U(meta.start), yaw: meta.yaw ?? 90 },
     end: U(meta.end),
     walls: d.walls.map((wl) => ({ id: wl.id, a: U(wl.a), b: U(wl.b), height: wl.height, thickness: wl.thickness, ...(wl.floor ? { floor: wl.floor } : {}), ...(wl.kind ? { kind: wl.kind } : {}), ...(wl.building ? { building: wl.building } : {}) })),
-    buildings: d.buildings.map((b) => ({
-      ...b,
-      footprint: UR(b.footprint),
-      doors: b.doors.map((x) => ({ ...x, pos: U(x.pos) })),
-      stairs: b.stairs.map((s) => ({ ...s, pos: U(s.pos), top: U(s.top), ...(s.mid ? { mid: U(s.mid) } : {}) })),
-      roof_holes: b.roof_holes.map(U),
-      floor_holes: b.floor_holes.map((x) => ({ pos: U(x.pos), floor: x.floor })),
-      ...(b.openings?.length ? { openings: b.openings.map(mapOpening) } : {}),
-      ...(b.partitions?.length ? { partitions: b.partitions.map(mapPartition) } : {}),
-      ...(b.floors_detail?.length ? { floors_detail: b.floors_detail.map(mapFloorDetail) } : {}),
-      ...(b.hatches?.length ? { hatches: b.hatches.map(mapHatch) } : {}),
-      ...(b.parapets?.length ? { parapets: b.parapets.map(mapParapet) } : {}),
-      ...(b.rooms?.length ? { rooms: b.rooms.map(mapRoom) } : {}),
-      ...(b.mantle_edges?.length ? { mantle_edges: b.mantle_edges.map(mapMantleEdge) } : {}),
-    })),
+    buildings: d.buildings.map(mapBuilding),
     cut: d.cut ? { poly: d.cut.poly.map(U), level: d.cut.level, floor_z: d.cut.floor_z, crossings: d.cut.crossings.map((c) => ({ ...c, poly: c.poly.map(U) })) } : undefined,
     ladders: d.ladders.map((l) => ({ ...l, pos: U(l.pos), foot: U(l.foot), top: U(l.top), yaw: yawToUE(l.yaw) })),
     covers: d.covers.map((c) => ({ ...c, pos: U(c.pos), yaw: yawToUE(c.yaw) })),

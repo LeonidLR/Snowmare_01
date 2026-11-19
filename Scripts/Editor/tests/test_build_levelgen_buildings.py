@@ -167,36 +167,21 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
     @staticmethod
     def _rotate_building(layout, bid, deg, ndigits=None):
         """The layout with building `bid` turned by deg about its footprint centre the way Training Ground stores it (rotation.ts):
-        "rotation" set, footprint / room bounds unchanged, every other point of it, its walls and its ladders turned. ndigits=2:
-        every turned point rounded to 0.01 cm like the Training Ground's saved files."""
+        "rotation" set, its building-frame fields (building_coord_fields.json) unchanged, every world point of it, its walls and its
+        ladders turned. ndigits=2: every turned point rounded to 0.01 cm like the Training Ground's saved files."""
         out = json.loads(json.dumps(layout))
         b = next(x for x in out["buildings"] if x["id"] == bid)
         (x0, y0), (x1, y1) = b["footprint"]
         c = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
         P = lambda q: [round(v, ndigits) if ndigits is not None else v for v in builder._rot_xy(q, c, deg)]  # noqa: E731
         b["rotation"] = deg
-        for d in b.get("doors", []):
-            d["pos"] = P(d["pos"])
-        for st in b.get("stairs", []):
-            for k in ("pos", "mid", "top"):
-                if st.get(k):
-                    st[k] = P(st[k])
-        b["roof_holes"] = [P(h) for h in b.get("roof_holes", [])]
-        for h in b.get("floor_holes", []):
-            h["pos"] = P(h["pos"])
-        for op in b.get("openings", []) + [o for pt in b.get("partitions", []) for o in pt.get("openings", [])]:
-            op["pos"] = P(op["pos"])
-            if isinstance(op.get("yaw"), (int, float)):
-                op["yaw"] = op["yaw"] + deg
-        for pt in b.get("partitions", []):
-            pt["start"], pt["end"] = P(pt["start"]), P(pt["end"])
-        for pp in b.get("parapets", []):
-            pp["start"], pp["end"] = P(pp["start"]), P(pp["end"])
-        for h in b.get("hatches", []):
-            h["pos"] = P(h["pos"])
-        for fd in b.get("floors_detail", []):
-            for g in fd.get("gaps", []):
-                g["poly"] = [P(q) for q in g["poly"]]
+        # building fields per building_coord_fields.json: world ones turn, building-frame ones stay
+        builder.map_building_coords(b, {
+            "point": lambda q, frame, path: P(q) if frame == "world" else q,
+            "rect": lambda r, frame, path: r,
+            "direction": lambda v, frame, path: builder._rot_xy(v, (0.0, 0.0), deg),
+            "yaw": lambda y, frame, path: y + deg,
+        })
         for w in out["walls"]:
             if w.get("building") == bid:
                 w["a"], w["b"] = P(w["a"]), P(w["b"])
@@ -313,6 +298,88 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
             turned, _ = self._rotate_building(train, "B_house", deg, ndigits=2)
             self.assertEqual(counts(builder.plan(turned)), counts(flat), "deg %.1f" % deg)
             self._assert_rotated_plan(train, "B_house", deg, ndigits=2)
+
+    # ---- S2 R4: one table of building coordinate fields (building_coord_fields.json) ----------------------------------------------
+
+    FULL_BUILDING = os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "TestFixtures", "building_all_coord_fields.json")
+
+    @staticmethod
+    def _values_at(node, path):
+        """The values at a table path ("partitions[].openings[].pos") in document order (absent ones skipped)."""
+        cur = [node]
+        for head in path.split("."):
+            many = head.endswith("[]")
+            key = head[:-2] if many else head
+            nxt = []
+            for n in cur:
+                v = n.get(key) if isinstance(n, dict) else None
+                if v is not None:
+                    nxt.extend(v if many else [v])
+            cur = nxt
+        return cur
+
+    @staticmethod
+    def _points_of(kind, v):
+        return {"point": lambda: [v], "point_list": lambda: v, "rect": lambda: v, "bounds": lambda: [v["min"], v["max"]]}.get(kind, lambda: [])()
+
+    def test_coord_table_covers_every_pair_of_the_full_building(self):
+        """Every number pair (Vec2 / Vec2[]) on the full building (one entry per field; the same data as the TS fixture
+        buildingCoordFields.fixture.ts) is a building_coord_fields.json row or a declared size, and every row resolves to one value."""
+        with open(self.FULL_BUILDING, encoding="utf-8") as f:
+            full = json.load(f)
+        rows = builder.BUILDING_COORD_FIELDS
+        covered = {r["path"] for r in rows} | {r["path"] for r in builder.BUILDING_COORD_TABLE["not_coordinates"]}
+        pair = lambda v: isinstance(v, list) and len(v) == 2 and all(isinstance(x, (int, float)) and not isinstance(x, bool) for x in v)  # noqa: E731
+        missing = []
+
+        def walk(v, path):
+            if path in covered:
+                return
+            if pair(v) or (isinstance(v, list) and v and all(pair(x) for x in v)):
+                missing.append(path)
+            elif isinstance(v, list):
+                for el in v:
+                    walk(el, path + "[]")
+            elif isinstance(v, dict):
+                for k, x in v.items():
+                    walk(x, "%s.%s" % (path, k) if path else k)
+
+        walk(full, "")
+        self.assertEqual(missing, [], "coordinate-looking fields missing from building_coord_fields.json")
+        for r in rows:
+            self.assertEqual(len(self._values_at(full, r["path"])), 1, r["path"])
+
+    def test_building_local_follows_coord_table(self):
+        """_building_local turns every world-frame table field of the full building back about its footprint centre (points, yaws,
+        directions) and keeps every building-frame field (footprint, room bounds, balconies, fire escapes, snow ramps, breach panels -
+        before R4 the snow ramp foot and the fire-escape points were turned too, so a rotated building's ramp stood off its window)."""
+        with open(self.FULL_BUILDING, encoding="utf-8") as f:
+            full = json.load(f)
+        deg = float(full["rotation"])
+        self.assertNotEqual(deg, 0.0)
+        local, c, d = builder._building_local({"walls": [], "ladders": [], "buildings": [full]}, full)
+        lb = local["buildings"][0]
+        self.assertEqual(d, deg)
+        self.assertNotIn("rotation", lb)
+        self.assertEqual(full["rotation"], deg, "the input building is not modified")
+        for r in builder.BUILDING_COORD_FIELDS:
+            v0, v1 = self._values_at(full, r["path"])[0], self._values_at(lb, r["path"])[0]
+            if r["frame"] == "building":
+                self.assertEqual(v1, v0, "%s: building frame - kept" % r["path"])
+            elif r["kind"] == "yaw":
+                self.assertAlmostEqual(v1, v0 - deg, msg=r["path"])
+            elif r["kind"] == "direction":
+                want = builder._rot_xy(v0, (0.0, 0.0), -deg)
+                self.assertAlmostEqual(v1[0], want[0], msg=r["path"])
+                self.assertAlmostEqual(v1[1], want[1], msg=r["path"])
+            else:
+                p0, p1 = self._points_of(r["kind"], v0), self._points_of(r["kind"], v1)
+                self.assertEqual(len(p1), len(p0), r["path"])
+                for a, b in zip(p0, p1):
+                    want = builder._rot_xy(a, c, -deg)
+                    self.assertAlmostEqual(b[0], want[0], places=3, msg=r["path"])
+                    self.assertAlmostEqual(b[1], want[1], places=3, msg=r["path"])
+                    self.assertGreater(abs(b[0] - a[0]) + abs(b[1] - a[1]), 1.0, "%s: turned back" % r["path"])
 
     def test_axis_tolerance_groups_rounded_segments(self):
         """_collinear_gaps / _merged_building_edges take a wall within 0.05 cm of an axis as axis-aligned and group pieces whose

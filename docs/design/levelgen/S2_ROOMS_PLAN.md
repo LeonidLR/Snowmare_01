@@ -302,7 +302,11 @@ Review gate after S2.3: three ASCII / page plans per archetype shown to the desi
 Status (2026-11-19): R1, R2 done (6dc78810, c47810a2); R3 done - the 0.05 cm axis tolerance landed in baa4722c, and the builder
 builds the interior walls of a **partition-driven** building (`plan` set, or the layout's `"interior_walls": "partitions"`)
 from `partitions[]` through `_slice_wall_with_openings` (door gap = the opening width, lintel and state actors at the cut);
-legacy files keep the `walls[]` path bit for bit (`partition_driven`, tests `test_partition_driven_*`). R4 next.
+legacy files keep the `walls[]` path bit for bit (`partition_driven`, tests `test_partition_driven_*`). R4 done - one table
+`Content/Data/LevelGen/building_coord_fields.json` (path / kind / frame) drives `finalizeDraftToLayout`, `rotateContent` and the builder's
+`_building_local` (rotateContent now moves balconies / fire escapes / snow ramps / breach panels with the building; the builder no
+longer turns the building-frame ramp foot and escape points back), coverage tests in TS and Python; `ROUTE_COSTS` ->
+`building_route_costs.json` (`cost_hash` = FNV-1a of its canonical JSON), story knobs -> `building_stories.json`. S2.1 next.
 
 ## 6. Risks and early detection
 

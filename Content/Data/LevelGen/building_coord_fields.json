@@ -1,0 +1,37 @@
+{
+  "schema": "codex.building_coord_fields/1",
+  "comment": "The one table of the coordinate-bearing fields of a layout building (GenBuilding, schema.ts; S2_ROOMS_PLAN.md R4, section 7 item 5). Read by Tools/TrainingGround/src/levelgen/buildingCoordFields.ts (finalizeDraftToLayout draft -> layout, rotateContent) and Scripts/Editor/build_levelgen_map.py (_building_local); a coordinate field missing here fails the coverage tests (buildingCoordFields.test.ts, test_build_levelgen_buildings.py). path: dot-separated keys, '[]' = every element of that array. kind: point = [x, y] cm; point_list = [[x, y], ...]; rect = [[minx, miny], [maxx, maxy]]; bounds = { min: [x, y], max: [x, y] }; direction = a unit vector (turns, never moves); yaw = degrees (UE yaw sense). frame: 'building' = the building's own UNROTATED frame (absolute cm, the frame `footprint` is in: with `rotation` the point stands at its turn about the footprint centre; a rigid move of the building translates it with the footprint centre); 'world' = layout coordinates (a rigid move rotates it with the building). `rotation` itself is the building frame's angle, not a field here: rotateContent adds the turn to it, _building_local drops it, a draft building has none. not_coordinates: number pairs that are sizes, not positions (the coverage walker skips them).",
+  "fields": [
+    { "path": "footprint", "kind": "rect", "frame": "building" },
+    { "path": "rooms[].bounds", "kind": "bounds", "frame": "building" },
+    { "path": "floors_detail[].rooms[].bounds", "kind": "bounds", "frame": "building" },
+    { "path": "balconies[].rect", "kind": "rect", "frame": "building" },
+    { "path": "fire_escapes[].at", "kind": "point", "frame": "building" },
+    { "path": "fire_escapes[].ground", "kind": "point", "frame": "building" },
+    { "path": "snow_ramps[].from", "kind": "point", "frame": "building" },
+    { "path": "breach_panels[].at", "kind": "point", "frame": "building" },
+    { "path": "doors[].pos", "kind": "point", "frame": "world" },
+    { "path": "openings[].pos", "kind": "point", "frame": "world" },
+    { "path": "openings[].yaw", "kind": "yaw", "frame": "world" },
+    { "path": "partitions[].start", "kind": "point", "frame": "world" },
+    { "path": "partitions[].end", "kind": "point", "frame": "world" },
+    { "path": "partitions[].openings[].pos", "kind": "point", "frame": "world" },
+    { "path": "partitions[].openings[].yaw", "kind": "yaw", "frame": "world" },
+    { "path": "floors_detail[].gaps[].poly", "kind": "point_list", "frame": "world" },
+    { "path": "hatches[].pos", "kind": "point", "frame": "world" },
+    { "path": "parapets[].start", "kind": "point", "frame": "world" },
+    { "path": "parapets[].end", "kind": "point", "frame": "world" },
+    { "path": "mantle_edges[].start", "kind": "point", "frame": "world" },
+    { "path": "mantle_edges[].end", "kind": "point", "frame": "world" },
+    { "path": "mantle_edges[].normal", "kind": "direction", "frame": "world" },
+    { "path": "stairs[].pos", "kind": "point", "frame": "world" },
+    { "path": "stairs[].top", "kind": "point", "frame": "world" },
+    { "path": "stairs[].mid", "kind": "point", "frame": "world" },
+    { "path": "roof_holes", "kind": "point_list", "frame": "world" },
+    { "path": "floor_holes[].pos", "kind": "point", "frame": "world" }
+  ],
+  "not_coordinates": [
+    { "path": "hatches[].size", "why": "hatch opening size [x, y], cm" },
+    { "path": "breach_panels[].hole", "why": "hole size [width, height], cm" }
+  ]
+}

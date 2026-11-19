@@ -1007,10 +1007,12 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
 
 
 # ---- rotated buildings (levelgen v2, designer 2026-11-16 item 4; Training Ground src/levelgen/rotation.ts) -------------------------
-# A building with "rotation" (degrees, UE yaw sense) stands turned about its footprint centre: "footprint" / room bounds are the
-# UNROTATED rectangles, every other point of it (doors, openings, stairs, holes, hatches, parapets, partitions) and its walls /
-# ladders are world coordinates. The builder plans such a building in its own frame (the points turned back, so the slab / hole /
-# landing / rim code stays axis-aligned) and turns the resulting actors back: location about the centre, yaw + rotation.
+# A building with "rotation" (degrees, UE yaw sense) stands turned about its footprint centre: "footprint" / room bounds and the
+# schema /2 balconies, fire escapes, snow ramps, breach panels are in the UNROTATED building frame, every other point of it (doors,
+# openings, stairs, holes, hatches, parapets, partitions) and its walls / ladders are world coordinates (the one list:
+# Content/Data/LevelGen/building_coord_fields.json). The builder plans such a building in its own frame (the points turned back,
+# so the slab / hole / landing / rim code stays axis-aligned) and turns the resulting actors back: location about the centre,
+# yaw + rotation.
 
 def _rot_xy(p, c, deg):
     """The point p (x, y[, ...]) turned by deg about c; extra coordinates are kept."""
@@ -1026,45 +1028,76 @@ def building_rotation(b):
     return float(b.get("rotation") or 0.0)
 
 
+# The one table of a building's coordinate fields (S2_ROOMS_PLAN.md R4; shared with Training Ground buildingCoordFields.ts):
+# path ("partitions[].openings[].pos"), kind (point / point_list / rect / bounds / direction / yaw), frame ("building" = its own
+# unrotated frame like "footprint", "world" = layout coordinates).
+BUILDING_COORD_FIELDS_FILE = os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "building_coord_fields.json")
+with open(BUILDING_COORD_FIELDS_FILE, encoding="utf-8") as _f:
+    BUILDING_COORD_TABLE = json.load(_f)
+BUILDING_COORD_FIELDS = BUILDING_COORD_TABLE["fields"]
+
+
+def _visit_path(node, keys, fn):
+    """fn applied in place to the value at keys under node ("name[]" = every element of that list); absent values are skipped."""
+    head, rest = keys[0], keys[1:]
+    many = head.endswith("[]")
+    key = head[:-2] if many else head
+    v = node.get(key) if isinstance(node, dict) else None
+    if v is None:
+        return
+    if not rest:
+        node[key] = fn(v)
+    elif many:
+        for el in v:
+            _visit_path(el, rest, fn)
+    else:
+        _visit_path(v, rest, fn)
+
+
+def map_building_coords(b, maps, fields=None):
+    """In place: every BUILDING_COORD_FIELDS value of the building dict b mapped by maps[kind](value, frame, path), kinds point /
+    rect / direction / yaw (point_list and bounds go through point / rect; a yaw that is not a number is kept). Returns b."""
+    for f in BUILDING_COORD_FIELDS if fields is None else fields:
+        kind, frame, path = f["kind"], f["frame"], f["path"]
+        if kind == "point_list":
+            fn = lambda v, fr=frame, pa=path: [maps["point"](q, fr, pa) for q in v]  # noqa: E731
+        elif kind == "bounds":
+            def fn(v, fr=frame, pa=path):
+                r = maps["rect"]([v["min"], v["max"]], fr, pa)
+                return dict(v, min=r[0], max=r[1])
+        elif kind == "yaw":
+            fn = lambda v, fr=frame, pa=path: maps["yaw"](v, fr, pa) if isinstance(v, (int, float)) else v  # noqa: E731
+        elif kind in ("point", "rect", "direction"):
+            fn = lambda v, k=kind, fr=frame, pa=path: maps[k](v, fr, pa)  # noqa: E731
+        else:
+            raise ValueError("building_coord_fields.json: %s: unknown kind %r" % (path, kind))
+        _visit_path(b, path.split("."), fn)
+    return b
+
+
+def _no_rule(kind):
+    def fail(v, frame, path):
+        raise ValueError("building coordinate %s: no rule for %s in the %s frame" % (path, kind, frame))
+    return fail
+
+
 def _building_local(layout, b):
-    """(local layout, centre, deg): the building, its walls and the ladders onto it turned back into its own frame (deg = rotation)."""
+    """(local layout, centre, deg): the building, its walls and the ladders onto it turned back into its own frame (deg = rotation).
+    Building fields per BUILDING_COORD_FIELDS: world points / yaws / directions turned back, building-frame fields (footprint, room
+    bounds, balconies, fire escapes, snow ramps, breach panels) already local - kept."""
     deg = building_rotation(b)
     (x0, y0), (x1, y1) = b["footprint"]
     c = ((x0 + x1) / 2.0, (y0 + y1) / 2.0)
     P = lambda q: [round(v, 4) for v in _rot_xy(q, c, -deg)]  # noqa: E731  (rounded: an integer layout turns back exactly)
+    world = lambda fn, kind: lambda v, frame, path: fn(v) if frame == "world" else _no_rule(kind)(v, frame, path)  # noqa: E731
     lb = json.loads(json.dumps(b))
     lb.pop("rotation", None)
-    for d in lb.get("doors", []):
-        d["pos"] = P(d["pos"])
-    for st in lb.get("stairs", []):
-        for k in ("pos", "mid", "top"):
-            if st.get(k):
-                st[k] = P(st[k])
-    lb["roof_holes"] = [P(h) for h in lb.get("roof_holes", [])]
-    for h in lb.get("floor_holes", []):
-        h["pos"] = P(h["pos"])
-    for op in lb.get("openings", []) + [o for pt in lb.get("partitions", []) for o in pt.get("openings", [])]:
-        op["pos"] = P(op["pos"])
-        if isinstance(op.get("yaw"), (int, float)):
-            op["yaw"] = float(op["yaw"]) - deg
-    for pt in lb.get("partitions", []):
-        pt["start"], pt["end"] = P(pt["start"]), P(pt["end"])
-    for pp in lb.get("parapets", []):
-        pp["start"], pp["end"] = P(pp["start"]), P(pp["end"])
-    for h in lb.get("hatches", []):
-        h["pos"] = P(h["pos"])
-    for fd in lb.get("floors_detail", []):
-        for g in fd.get("gaps", []):
-            g["poly"] = [P(q) for q in g["poly"]]
-    for sr in lb.get("snow_ramps", []):
-        sr["from"] = P(sr["from"])
-    for fe in lb.get("fire_escapes", []):
-        for k in ("at", "ground"):
-            if fe.get(k):
-                fe[k] = P(fe[k])
-    for m in lb.get("mantle_edges", []):
-        m["start"], m["end"] = P(m["start"]), P(m["end"])
-        m["normal"] = _rot_xy(m["normal"], (0.0, 0.0), -deg)
+    map_building_coords(lb, {
+        "point": lambda q, frame, path: P(q) if frame == "world" else q,
+        "rect": lambda r, frame, path: r if frame == "building" else _no_rule("rect")(r, frame, path),
+        "direction": world(lambda v: _rot_xy(v, (0.0, 0.0), -deg), "direction"),
+        "yaw": world(lambda y: float(y) - deg, "yaw"),
+    })
     walls = [dict(w, a=P(w["a"]), b=P(w["b"])) for w in layout["walls"] if w.get("building") == b["id"]]
     mine = ("roof:%s" % b["id"], "floor:%s:" % b["id"])
     ladders = [dict(ld, pos=P(ld["pos"]), foot=P(ld["foot"]), top=P(ld["top"]), yaw=float(ld.get("yaw", 0.0)) - deg)

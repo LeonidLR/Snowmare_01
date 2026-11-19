@@ -12,6 +12,7 @@
 // writes key_route / fast_entry / quiet_entry per building. Pure and deterministic per (seed, building id); NOT wired into the
 // generator pipeline yet (a later step does that).
 
+import storiesJson from '../../../../Content/Data/LevelGen/building_stories.json' with { type: 'json' };
 import type { Vec2 } from '../movement/geometry.ts';
 import { closestOnSegment, dist, rng } from '../movement/geometry.ts';
 import { fnv1a } from './props/rng.ts';
@@ -48,49 +49,41 @@ export const STORY_CATALOGUE: Record<StoryId, { num: number; authors: readonly S
   snow_drift: { num: 10, authors: ['cold'], type: 'choice' },
 };
 
-/** F1: detour stories are eligible only for these roles (a detour needs a role payoff). */
-export const DETOUR_ROLES: readonly BuildingRole[] = ['objective', 'garrison', 'overwatch'];
+/** F1: detour stories are eligible only for these roles (a detour needs a role payoff). building_stories.json `detour_roles`. */
+export const DETOUR_ROLES: readonly BuildingRole[] = storiesJson.detour_roles as BuildingRole[];
 /**
  * Story 4's archetypes "block, office": the generator builds both as set_piece 'facade' (blockTemplates two_storey `B_*_block`,
- * small_office `B_*_office`); the >= 2 storeys condition is checked separately.
+ * small_office `B_*_office`); the >= 2 storeys condition is checked separately. building_stories.json `rubble_escape_set_pieces`.
  */
-export const RUBBLE_ESCAPE_SET_PIECES: readonly string[] = ['facade'];
+export const RUBBLE_ESCAPE_SET_PIECES: readonly string[] = storiesJson.rubble_escape_set_pieces;
 
 /**
- * The pick knobs (building-stories.md F1 / F3 / F5; later building_stories.json): `budget` = the share of buildings of a role that
- * get a story other than open (F3, *proposal*), `weights[role][story]` = F1 step-2 weights (archetype dimension not used yet;
- * detour stories are not in this step), `t_max` = tries per building before it keeps 'open' (F5).
+ * The pick knobs (building-stories.md F1 / F3 / F5): `budget` = the share of buildings of a role that get a story other than open
+ * (F3, *proposal*), `weights[role][story]` = F1 step-2 weights (archetype dimension not used yet), `t_max` = tries per building
+ * before it keeps 'open' (F5), `p_two` = the chance of a second, compatible story (F2).
  */
-export const STORY_PICK_KNOBS = {
-  budget: { objective: 1.0, garrison: 0.8, overwatch: 0.7, transit: 0.5, background: 0.1 } as Record<BuildingRole, number>,
-  // detours (4, 7) only on objective / garrison / overwatch (F1); overwatch favours the outside roof ladder (*proposal*); 9 is a
-  // light choice story (no geometry) on every role, 0.5 on overwatch like the other non-roof detour there (*proposal*)
-  weights: {
-    objective: { locked_door: 1, rubble_escape: 1, roof_outside: 1, broken_back_windows: 1, snow_drift: 1 },
-    garrison: { locked_door: 1, rubble_escape: 1, roof_outside: 1, broken_back_windows: 1, snow_drift: 1 },
-    overwatch: { locked_door: 1, rubble_escape: 0.5, roof_outside: 1.5, broken_back_windows: 0.5, snow_drift: 1 },
-    transit: { locked_door: 1, broken_back_windows: 1, snow_drift: 1 },
-    background: { locked_door: 1, broken_back_windows: 1, snow_drift: 0.5 },
-  } as Record<BuildingRole, Partial<Record<Exclude<StoryId, 'open'>, number>>>,
-  t_max: 4,
-  /** F2: the chance a storied building gets a second, compatible story (building-stories.md F2, *proposal*). */
-  p_two: 0.25,
-};
+export interface StoryPickKnobs {
+  budget: Record<BuildingRole, number>;
+  weights: Record<BuildingRole, Partial<Record<Exclude<StoryId, 'open'>, number>>>;
+  t_max: number;
+  p_two: number;
+}
+
+/** The pick knobs: building_stories.json `pick`. */
+export const STORY_PICK_KNOBS: StoryPickKnobs = storiesJson.pick as StoryPickKnobs;
 
 /**
  * F2 compatibility list (building-stories.md 5 step 5 / F2 / Edge Cases): the stories that may follow a first story on the same
- * building. Only 3 + 9 so far (the GDD example; designer 2026-11-19: story 9 needs a loud or absent front, which story 3 gives).
- * Pairs that touch the same opening (3 + 10: lock vs drift-seal of the front) are left out.
+ * building (building_stories.json `compatible`). Only 3 + 9 so far (the GDD example; designer 2026-11-19: story 9 needs a loud or
+ * absent front, which story 3 gives). Pairs that touch the same opening (3 + 10: lock vs drift-seal of the front) are left out.
  */
-export const STORY_COMPATIBLE: Partial<Record<StoryId, readonly Exclude<StoryId, 'open'>[]>> = {
-  locked_door: ['broken_back_windows'],
-  broken_back_windows: ['locked_door'],
-};
+export const STORY_COMPATIBLE: Partial<Record<StoryId, readonly Exclude<StoryId, 'open'>[]>> = storiesJson.compatible as Partial<Record<StoryId, Exclude<StoryId, 'open'>[]>>;
 
-/** Front-door states that make story 9 eligible (designer 2026-11-19): a kick (locked) or no way in (sealed / barricaded). */
-export const LOUD_FRONT_STATES: readonly DoorState[] = ['locked', 'sealed', 'barricaded'];
-
-export type StoryPickKnobs = typeof STORY_PICK_KNOBS;
+/**
+ * Front-door states that make story 9 eligible (designer 2026-11-19): a kick (locked) or no way in (sealed / barricaded).
+ * building_stories.json `loud_front_states`.
+ */
+export const LOUD_FRONT_STATES: readonly DoorState[] = storiesJson.loud_front_states as DoorState[];
 
 // ---- bricks -------------------------------------------------------------------------------------------------------------------------
 

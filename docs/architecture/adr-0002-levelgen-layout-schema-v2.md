@@ -47,7 +47,9 @@ building-stories rules 5-8.
    ground / ladder_ids`, `breach_panels.score / wide_with`, `key_route`, `breach_route`, `fast_entry`, `quiet_entry`), all in the
    building's local frame.
 3. `cost_hash` = sha1 of `building_route_costs.json`; a stored route whose hash differs is recomputed on load (page) and
-   ignored by the builder; the runtime never reads stored routes for movement (ADR-0001).
+   ignored by the builder; the runtime never reads stored routes for movement (ADR-0001). Implemented (S2 R4) as FNV-1a
+   (8 hex) of the file's canonical JSON (sorted keys) - `Content/Data/LevelGen/building_route_costs.json`, story tuning in
+   `building_stories.json`.
 4. Determinism: floats rounded to 0.1 cm, object keys sorted on write, CI test compares 5 seeds byte-for-byte.
 5. Budgets (measured on X6, *proposal*):
 

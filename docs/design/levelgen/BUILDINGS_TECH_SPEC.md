@@ -81,6 +81,10 @@ Tuning data (*proposal*, JSON, read by both the TS generator and the C++ runtime
 | `Content/Data/LevelGen/building_route_costs.json` | `v_ref`, `t_rung`, `n_squad`, action times, noise radii, profile weights, exposure factors, bands, `G_min`, `k_def`, `P_max`, drift gate | building-route-model, opening-states, breach-panels |
 | generator table | template (`blockTemplates.ts` `set_piece` / `id`) -> archetype, min footprints | building-archetypes |
 
+Done in S2 R4: `building_route_costs.json` (ROUTE_COSTS, `buildingGraph.ts`) and `building_stories.json` (pick knobs, compatibility,
+detour roles, story 4 / 9 eligibility; `buildingStories.ts`) exist and are read by the TS generator; which building fields are in the
+local frame vs world coordinates is the table `Content/Data/LevelGen/building_coord_fields.json`.
+
 ### 2.1 Validator changes (`buildingTraversal.ts`)
 
 | Change | Why |

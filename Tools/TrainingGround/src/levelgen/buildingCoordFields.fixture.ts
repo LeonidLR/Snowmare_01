@@ -1,0 +1,46 @@
+// TEST FIXTURE for buildingCoordFields.test.ts (S2_ROOMS_PLAN.md R4): one building with EVERY GenBuilding field set, one entry per
+// array, every optional sub-field present. It lives outside *.test.ts so `npm run typecheck` checks it (tests are excluded from tsc):
+// a field added to GenBuilding or one of its parts fails the typecheck here until it is added - and the coverage test then fails if
+// it carries coordinates missing from building_coord_fields.json. Keep equal to
+// Content/Data/LevelGen/TestFixtures/building_all_coord_fields.json (the Python builder test's copy; the test compares them).
+import type { GenBuilding } from './schema.ts';
+
+/** Every optional key required, recursively (number tuples kept as they are). */
+export type Full<T> = T extends readonly number[] ? T : T extends readonly (infer U)[] ? Full<U>[] : T extends object ? { [K in keyof T]-?: Full<T[K]> } : T;
+
+/** The full building (cm; footprint 12 x 8 m centred on (1600, 2400), turned 10 deg). */
+export const ALL_FIELDS_BUILDING: Full<GenBuilding> = {
+  "id": "B_all",
+  "footprint": [[1000, 2000], [2200, 2800]],
+  "rotation": 10,
+  "height": 600,
+  "floors": 2,
+  "hollow": false,
+  "enterable": true,
+  "roof_walkable": true,
+  "doors": [{ "pos": [1600, 2800], "floor": 0, "wall": "B_all_S" }],
+  "openings": [{ "id": "B_all_w0", "kind": "window", "pos": [1000, 2300], "floor": 1, "wall": "B_all_W", "width": 120, "sill_height": 95, "top_height": 210, "yaw": 180, "state": "glazed" }],
+  "partitions": [{ "id": "B_all_p0", "start": [1500, 2000], "end": [1500, 2800], "floor": 0, "height": 300, "thickness": 20,
+    "openings": [{ "id": "B_all_p0_d", "kind": "door", "pos": [1500, 2450], "floor": 0, "wall": "B_all_p0", "width": 120, "sill_height": 0, "top_height": 210, "yaw": 90, "state": "closed" }] }],
+  "floors_detail": [{ "floor": 1, "height_z": 300, "gaps": [{ "id": "B_all_g0", "poly": [[2000, 2100], [2150, 2100], [2150, 2500]], "kind": "stairwell" }],
+    "rooms": [{ "id": "B_all_r1", "floor": 1, "bounds": { "min": [1010, 2010], "max": [1490, 2790] }, "kind": "room", "door_ids": ["B_all_w0"] }] }],
+  "hatches": [{ "id": "B_all_h0", "pos": [1800, 2200], "floor": 1, "size": [100, 100], "ladder_id": "LAD_B_all_h0" }],
+  "parapets": [{ "wall_id": "B_all_N", "start": [1000, 2000], "end": [2200, 2000], "height_cm": 100, "thickness_cm": 20 }],
+  "rooms": [{ "id": "B_all_r0", "floor": 0, "bounds": { "min": [1020, 2020], "max": [1480, 2780] }, "kind": "hall", "door_ids": ["B_all_p0_d"] }],
+  "mantle_edges": [{ "id": "B_all_m0", "start": [1000, 2250], "end": [1000, 2350], "floor": 1, "base_z": 300, "height_cm": 95, "normal": [-1, 0], "kind": "window", "building": "B_all", "wall": "B_all_W" }],
+  "stairs": [{ "id": "B_all_s0", "pos": [2050, 2150], "from": 0, "to": 1, "kind": "stairwell", "top": [2050, 2580], "mid": [2050, 2400], "blocked": "rubble", "down_only": false }],
+  "roof_holes": [[1300, 2600]],
+  "floor_holes": [{ "pos": [1250, 2250], "floor": 1 }],
+  "set_piece": "facade",
+  "archetype": "block",
+  "role": "garrison",
+  "balconies": [{ "id": "B_all_bal0", "floor": 1, "rect": [[1450, 2800], [1750, 2950]], "door_id": "B_all_bal0_d", "rail_cm": 95 }],
+  "fire_escapes": [{ "id": "B_all_esc0", "kind": "ladder", "side": "south", "at": [1600, 2950], "ground": [1600, 3060], "stops": [{ "floor": 1, "balcony_id": "B_all_bal0" }], "to_roof": false, "down_only": false, "ladder_ids": ["LAD_B_all_esc0_0"] }],
+  "snow_ramps": [{ "id": "B_all_ramp0", "from": [571, 2300], "to_opening": "B_all_w0", "width_cm": 150 }],
+  "breach_panels": [{ "id": "B_all_bp0", "wall": "B_all_E", "floor": 0, "at": [2200, 2600], "width_cm": 200, "wide_with": "B_all_bp1", "hole": [200, 210], "links": ["street", "B_all_r0"], "score": 0.5 }],
+  "stories": [{ "id": "snow_drift", "bricks": ["door_state(B_all_d0,sealed)"], "seed": 7, "author": "cold", "outcome": "held" }],
+  "key_route": { "legs": [{ "from": "street", "to": "B_all_r0", "mode": "walk" }], "cost": 10, "detour": 1, "cost_hash": "00000000" },
+  "breach_route": { "legs": [{ "from": "street", "to": "B_all_r0", "mode": "explosive" }], "cost": 70, "detour": 7, "cost_hash": "00000000" },
+  "fast_entry": "B_all_w0",
+  "quiet_entry": "B_all_w0"
+};

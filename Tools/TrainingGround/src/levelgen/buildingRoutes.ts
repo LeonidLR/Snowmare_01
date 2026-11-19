@@ -15,9 +15,22 @@ export type { EdgeMode, RouteCostTable, RouteEdge, RouteGraph, RouteProfile } fr
 export { openingModes, outsideLegCm, ROOF, ROUTE_COSTS, STREET, streetPoint } from './buildingGraph.ts';
 export const ROUTE_PROFILES: readonly RouteProfile[] = ['balanced', 'quiet', 'fast'];
 
-/** The cost-table hash stored with every route (rule 10; a route with another hash is stale). */
+/** JSON with object keys sorted at every level and no whitespace: the canonical form a hash is taken of (formatting-proof). */
+export function canonicalJson(v: unknown): string {
+  if (Array.isArray(v)) return `[${v.map(canonicalJson).join(',')}]`;
+  if (v && typeof v === 'object') {
+    return `{${Object.keys(v).filter((k) => (v as Record<string, unknown>)[k] !== undefined).sort()
+      .map((k) => `${JSON.stringify(k)}:${canonicalJson((v as Record<string, unknown>)[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(v);
+}
+
+/**
+ * The cost-table hash stored with every route (rule 10; a route with another hash is stale): FNV-1a (8 hex) of the table's
+ * canonical JSON - for ROUTE_COSTS the content of building_route_costs.json (ADR-0002), whatever its formatting.
+ */
 export function routeCostHash(costs: RouteCostTable = ROUTE_COSTS): string {
-  return fnv1a(JSON.stringify(costs)).toString(16).padStart(8, '0');
+  return fnv1a(canonicalJson(costs)).toString(16).padStart(8, '0');
 }
 
 const ACTION_MODES: readonly EdgeMode[] = ['open', 'kick', 'shotgun', 'vault', 'shatter', 'explosive'];
