@@ -60,7 +60,7 @@ namespace PmcSquadLocal
 	constexpr float StillSpeedCm = 30.f;
 	/** ...and the Ambush that walked him is this old (longer than the stalemate smoke's 2 s re-decide window). */
 	constexpr double DefenceRetrySeconds = 2.5;
-	constexpr float AidReachCm = 230.f;
+	// The heal walk's reach is FPmcWeights::HealReachCm (pmc_commander.json heal_reach_m), shared with the post gate.
 	constexpr float MonsterSightCm = 2500.f;
 	/** A demasked shooter (his own fire) is noticed by the teams with a man this close (planar). */
 	constexpr float GunfireHearingCm = 6000.f;
@@ -1213,7 +1213,7 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 				else if (State.Order == EPmcOrder::Heal)
 				{
 					const float Dist = State.Patient.IsValid() ? FVector::Dist2D(Feet, State.Patient->GetActorLocation()) : 99999.f;
-					if (Dist <= PmcSquadLocal::AidReachCm && Fighter->MedkitsCount > 0 && State.Patient.IsValid()
+					if (Dist <= Team.Weights.HealReachCm && Fighter->MedkitsCount > 0 && State.Patient.IsValid()
 						&& PmcSquadLocal::IsLiveOperative(State.Patient.Get()) && PmcSquadLocal::HealthFractionOf(*State.Patient) < 1.f)
 					{
 						FSquadOrderContext Context;
@@ -1232,7 +1232,7 @@ void UPmcSquadSubsystem::UpdateTeamRunning(int32 TeamId, FTeam& Team, float Delt
 					else
 					{
 						UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s heal approach ended: patient out of reach (%.0f cm > %.0f cm) -> cancel"), TeamId,
-							*Fighter->DisplayName.ToString(), Dist, PmcSquadLocal::AidReachCm);
+							*Fighter->DisplayName.ToString(), Dist, Team.Weights.HealReachCm);
 						State.Order = EPmcOrder::Hold;
 						State.OrderSince = Now;
 						State.FailedUntil.Add(EPmcOrder::Heal, Now + Team.Weights.FailedOrderCooldownSeconds);
@@ -2197,7 +2197,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 		{
 			break;
 		}
-		if (FVector::Dist2D(View.Location, Patient->GetActorLocation()) <= PmcSquadLocal::AidReachCm)
+		if (FVector::Dist2D(View.Location, Patient->GetActorLocation()) <= Team.Weights.HealReachCm)
 		{
 			Context.Patient = Patient;
 			bTaken = SquadOrderCatalog::Execute(ESquadOrder::Heal, Context);

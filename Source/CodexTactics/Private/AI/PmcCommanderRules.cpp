@@ -289,9 +289,21 @@ namespace PmcCommanderRules
 			return FMath::Max(Losing, Standoff);
 		}
 		case EPmcOrder::Heal:
+		{
+			// G010: a defender standing on his post does not walk off it to a wounded mate. On Depot_1 the roof has no
+			// tactical post, so the ranged hold never opens and Ambush is 0 after the first sighting. Heal (0.2-1.0)
+			// then beat Hold (~0.1): the access guard yo-yoed between the stair and the patient (roof smoke runs 01 /
+			// 07 / 10, guard share 0.55 / 0.41 / 0.55). A mate already within heal_reach_m is healed in place. Off the
+			// post, Heal keeps its score and the walk back to the post stays the 1.05 Ambush.
+			const bool bStandingPost = F.bAtPost && (F.bHasDefencePost || F.bOnRangedPost || F.bOnOverwatchRoof);
+			if (bStandingPost && F.WoundedMateDistanceCm > W.HealReachCm)
+			{
+				return 0.f;
+			}
 			// A wounded mate within reach, a medkit in the kit, and nobody looking (seen threats make it a last resort).
 			return W.Heal * Step(F.bHasMedkit && F.WoundedMateDistanceCm >= 0.f && F.WoundedMateHealthFrac < W.HealBelow) * Clamp01(1.f - F.WoundedMateHealthFrac)
 				* (S.EnemiesSeenNow == 0 ? 1.f : 0.3f) * (S.MatesHealing == 0 ? 1.f : 0.2f);
+		}
 		case EPmcOrder::Relocate:
 			// Spotted at this spot for too long: move to another cover.
 			// TACTICAL_MAP P2: or standing in a chokepoint (danger >= choke_leave_danger) - he leaves it before he is spotted there.
@@ -747,6 +759,9 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("defence_post_walks"), PostWalks);
 		Out.DefencePostWalks = FMath::Max(1, FMath::RoundToInt(PostWalks));
 		ReadNumber(Json, TEXT("sector_arc_deg"), Out.SectorArcDeg);
+		float HealReachM = Out.HealReachCm / 100.f;
+		ReadNumber(Json, TEXT("heal_reach_m"), HealReachM);
+		Out.HealReachCm = FMath::Max(HealReachM, 0.f) * 100.f;
 		// Target attention (2026-11-07).
 		ReadNumber(Json, TEXT("attention"), Out.Attention);
 		ReadNumber(Json, TEXT("ambush_patience"), Out.AmbushPatience);

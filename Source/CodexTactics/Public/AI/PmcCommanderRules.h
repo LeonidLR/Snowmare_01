@@ -343,6 +343,12 @@ struct CODEXTACTICS_API FPmcWeights
 	int32 DefencePostWalks = 3;
 	/** "sector_arc_deg" (180): the arc facing the attacker spawn, split across the sector shooters. */
 	float SectorArcDeg = 180.f;
+	/**
+	 * "heal_reach_m" (2.3): a defender standing on his post scores Heal 0 when the wounded mate is farther than this,
+	 * so he does not walk off the post to reach him. Within it he heals in place. The heal walk uses the same reach.
+	 * Frozen, not a trainer gene. Cm.
+	 */
+	float HealReachCm = 230.f;
 
 	// --- Target attention (user 2026-11-07: strike when the enemy looks away; trainer genes +-50 %) ---
 

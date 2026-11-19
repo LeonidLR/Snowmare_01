@@ -154,6 +154,81 @@ bool FPmcCommanderSurvivalTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderPostHealStaysTest, "CodexTactics.AI.PmcCommander.PostHealStays",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcCommanderPostHealStaysTest::RunTest(const FString&)
+{
+	using namespace PmcCommanderTestLocal;
+	// G010: on Depot_1 the access guard has no ranged post, so after the first sighting Ambush is 0 and Hold is ~0.1.
+	// Heal (0.2-1.0) for a mate past heal_reach_m used to win, and the executor walked him off the stair (roof smoke
+	// runs 01 / 07 / 10). Standing on the post, that walk scores 0. A mate already within reach is healed in place.
+	const FPmcWeights W;
+	FPmcFighterView Guard = Fighter(2000.f, false);
+	Guard.Objective.Role = EPmcRole::Defender;
+	Guard.bHasDefencePost = true;
+	Guard.bAtPost = true;
+	Guard.bHasMedkit = true;
+	Guard.WoundedMateDistanceCm = 800.f;
+	Guard.WoundedMateHealthFrac = 0.3f;
+	FPmcSquadView Lull = Squad(3, 2, true);
+	Lull.EnemiesSeenNow = 0;
+
+	TestEqual(TEXT("on the post, a far patient is not a walk"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Guard, Lull, W), 0.f);
+	TestEqual(TEXT("he stays (Crouch), he does not leave for the patient"),
+		PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Guard, Lull, W)[0].Order), TEXT("Crouch"));
+
+	Guard.WoundedMateDistanceCm = 200.f;
+	TestTrue(TEXT("within heal_reach_m he heals in place"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Guard, Lull, W) > 0.7f);
+	TestEqual(TEXT("in place, Heal wins"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Guard, Lull, W)[0].Order), TEXT("Heal"));
+
+	Guard.WoundedMateDistanceCm = W.HealReachCm;
+	TestTrue(TEXT("exactly heal_reach_m still heals in place"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Guard, Lull, W) > 0.f);
+	TestEqual(TEXT("the boundary keeps Heal"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Guard, Lull, W)[0].Order), TEXT("Heal"));
+
+	Guard.WoundedMateDistanceCm = W.HealReachCm + 1.f;
+	TestEqual(TEXT("one centimetre past the reach is a walk again"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Guard, Lull, W), 0.f);
+
+	Guard.WoundedMateDistanceCm = -1.f;
+	TestEqual(TEXT("no patient still scores 0"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Guard, Lull, W), 0.f);
+
+	// Off the post the heal walk keeps its score. The walk back to the post (Ambush 1.05) still outranks it.
+	Guard.bAtPost = false;
+	Guard.WoundedMateDistanceCm = 800.f;
+	TestTrue(TEXT("off the post, Heal keeps its score"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Guard, Lull, W) > 0.f);
+	TestTrue(TEXT("the post walk still beats that heal"),
+		PmcCommanderRules::ScoreOrder(EPmcOrder::Ambush, Guard, Lull, W) > PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Guard, Lull, W));
+	TestEqual(TEXT("off the post he walks back"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Guard, Lull, W)[0].Order), TEXT("Ambush"));
+
+	// No defence post and no ranged post: an unposted medic (and an attacker) still goes to the patient.
+	FPmcFighterView Medic = Fighter(2000.f, false);
+	Medic.bHasMedkit = true;
+	Medic.WoundedMateDistanceCm = 400.f;
+	Medic.WoundedMateHealthFrac = 0.3f;
+	TestEqual(TEXT("an unposted medic still heals"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Medic, Lull, W)[0].Order), TEXT("Heal"));
+
+	// A ranged tactical post (the subsystem clears bHasDefencePost while he stands it) uses the same gate.
+	FPmcFighterView Window = Guard;
+	Window.bHasDefencePost = false;
+	Window.bAtPost = true;
+	Window.bOnRangedPost = true;
+	Window.PostKind = EPmcPostKind::Window;
+	Window.WoundedMateDistanceCm = 800.f;
+	TestEqual(TEXT("a window post does not walk off to heal"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Window, Lull, W), 0.f);
+	TestEqual(TEXT("the ranged hold stays Ambush"), PmcCommanderRules::OrderName(PmcCommanderRules::ScoreAll(Window, Lull, W)[0].Order), TEXT("Ambush"));
+	Window.WoundedMateDistanceCm = 200.f;
+	TestTrue(TEXT("on the window, a mate within reach still scores"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Window, Lull, W) > 0.f);
+
+	FPmcFighterView Roof = Guard;
+	Roof.bHasDefencePost = false;
+	Roof.bAtPost = true;
+	Roof.bOnOverwatchRoof = true;
+	Roof.PostKind = EPmcPostKind::Overwatch;
+	Roof.WoundedMateDistanceCm = 800.f;
+	TestEqual(TEXT("an overwatch roof does not walk off to heal"), PmcCommanderRules::ScoreOrder(EPmcOrder::Heal, Roof, Lull, W), 0.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcCommanderOverwatchHoldTest, "CodexTactics.AI.PmcCommander.OverwatchHold",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -420,6 +495,14 @@ bool FPmcCommanderWeightsJsonTest::RunTest(const FString&)
 	FPmcWeights Shipped;
 	TestTrue(TEXT("Content/Data/AI/pmc_commander.json loads"), PmcCommanderRules::LoadWeightsFile(FString(), Shipped));
 	TestTrue(TEXT("... with a positive flank weight"), Shipped.Flank > 0.f);
+	TestEqual(TEXT("shipped heal_reach_m is 2.3 m"), Shipped.HealReachCm, 230.f, 0.001f);
+	TestEqual(TEXT("a missing heal_reach_m keeps 2.3 m"), W.HealReachCm, 230.f, 0.001f);
+	const TSharedPtr<FJsonObject> Reach = PmcParseJson(TEXT("{\"heal_reach_m\":4.5}"));
+	TestNotNull(TEXT("heal_reach parsed"), Reach.Get());
+	if (Reach.IsValid())
+	{
+		TestEqual(TEXT("heal_reach_m is metres"), PmcCommanderRules::FromJson(*Reach).HealReachCm, 450.f, 0.001f);
+	}
 	FPmcWeights Missing;
 	TestFalse(TEXT("a missing file gives the defaults"), PmcCommanderRules::LoadWeightsFile(TEXT("no_such_weights_file.json"), Missing));
 	TestEqual(TEXT("... name default"), Missing.Name, FString(TEXT("default")));

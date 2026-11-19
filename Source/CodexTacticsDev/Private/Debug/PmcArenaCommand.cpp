@@ -2275,8 +2275,15 @@ namespace PmcArena
 		{
 			return;
 		}
-		Track.DefenceSpreadSum += PmcDefenceRules::MeanSpreadM(Snapshot.Feet);
-		++Track.DefenceSpreadSamples;
+		// G010: a second with fewer than two living defenders is not a sample. MeanSpreadM would return 0, and those
+		// zeros pulled a spread-out squad under 5 m once only the access guard was left (roof smoke runs 01 and 05:
+		// 9.3 m and 13.6 m while a pair was alive, 4.7 m and 3.6 m once the solo tail counted as 0).
+		float SpreadM = 0.f;
+		if (PmcDefenceRules::TrySpreadSample(Snapshot.Feet, SpreadM))
+		{
+			Track.DefenceSpreadSum += SpreadM;
+			++Track.DefenceSpreadSamples;
+		}
 		const FPmcWeights& Weights = DefenderIndex == 0 ? State.WeightsA : State.WeightsB;
 		const FPmcGuardSample Guard = PmcDefenceRules::SampleGuard(Snapshot.Feet, Snapshot.Access, Weights.GuardDistCm, State.Config.ObjectiveLevelCm);
 		if (Guard.bApplicable)
