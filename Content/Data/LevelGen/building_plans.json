@@ -46,6 +46,16 @@
       "back_room_depth_cm": { "min": 400, "max": 600 },
       "front_room_min_depth_cm": 400,
       "bay_grammar": "core room* (end | exit) | room* core room*"
+    },
+    "block": {
+      "comment": "S2.3 block (S2_ROOMS_PLAN.md 3.3 / 3.4): sections `flat core flat` (section_cm) or, under one section's minimum, `core flat` (the flat takes flat_bay_cm: L = 900 + flat); a landing (corridor cell) over the core bay at v = core depth .. landing_top (A / B boundary, one line for the whole building); per flat a back room A (depth = landing_top), a front room B (the rest) and the nearer front room C of the core bay (the core bay's front is split in two rooms of room_cm); the flat of one side per section gets a second entry through C (the section's loop), the other flat is a dead end. A long block is several sections side by side, a wall without doors between them (they meet on the roof). Per-storey slot windows (balcony / fire escape of story 4) sit in the B room of every flat from slot_min_storey up; designer 2026-11-19: no balcony without a fire escape, so no base balconies are generated.",
+      "min_depth_cm": 1000,
+      "min_length_cm": 1300,
+      "flat_bay_cm": { "min": 400, "max": 700 },
+      "section_cm": { "min": 1700, "max": 2300 },
+      "slot_min_storey": 1,
+      "p_three_storeys": 0.35,
+      "dead_end_min_run_cm": 800
     }
   }
 }

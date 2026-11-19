@@ -61,12 +61,14 @@ import {
   rect,
 } from './schema.ts';
 import { WINDOW_JAMB_CM, windowOntoCore, windowPartitionClash } from './windowClearance.ts';
-import { BUILDING_PLANS, planBands, snapFootprint } from './buildings/bandPlan.ts';
+import type { BandPlan } from './buildings/bandPlan.ts';
+import { BUILDING_PLANS, planBands, planBlock, snapFootprint } from './buildings/bandPlan.ts';
 import type { PlanFrame } from './buildings/planFrame.ts';
 import { OPPOSITE, SIDE_NORMAL, SIDE_YAW, cellRect, planDir, sharedSegs, toDraft, toPlan, vFlipped, wallKeyOf, wallSides, yawOfDir } from './buildings/planFrame.ts';
-import type { PlanOpening, WallKey } from './buildings/planDoors.ts';
+import type { PlanDoorsOpts, PlanOpening, WallKey } from './buildings/planDoors.ts';
 import { WALL_ORDER, planDoors, wallSpan } from './buildings/planDoors.ts';
 import { planWindows } from './buildings/planWindows.ts';
+import { planUnits } from './buildings/planUnits.ts';
 import { fnv1a } from './props/rng.ts';
 
 type Rect = [Vec2, Vec2];
@@ -953,10 +955,13 @@ const OPPOSITE_SIDE: Record<Side, Side> = { north: 'south', south: 'north', east
  * Split into named stages (S2_ROOMS_PLAN.md section 7 item 2). The S2 order is shell -> cores -> rooms -> doors -> windows ->
  * roof -> slabs (3.2); the stages below still run in the S1 order (openings before rooms) so the output - and the shared
  * `random` stream, drawn only by placeExteriorDoors - is unchanged. Window and parapet mantle edges are emitted with them.
- * With the draft's `building_plans` toggle an enterable office takes the planned path instead (addPlannedOffice, step S2.2).
+ * With the draft's `building_plans` toggle an enterable office / block takes the planned path instead (addPlannedOffice S2.2, addPlannedBlock S2.3).
  */
 function addBuilding(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): DraftBuilding {
-  if (d.building_plans && s.archetype === 'office' && s.enterable && !s.hollow) return addPlannedOffice(d, bid, r, s, random);
+  if (d.building_plans && s.enterable && !s.hollow) {
+    if (s.archetype === 'office') return addPlannedOffice(d, bid, r, s, random);
+    if (s.archetype === 'block') return addPlannedBlock(d, bid, r, s, random);
+  }
   return legacyStages(planShell(d, bid, r, s, random));
 }
 
@@ -987,7 +992,6 @@ function legacyStages(p: BuildingPlan): DraftBuilding {
  * in placeExteriorDoors' order, and nowhere else (nothing is drawn before a fallback).
  */
 function addPlannedOffice(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): DraftBuilding {
-  const O = BUILDING_PLANS.constants.openings;
   const COREBAY = BUILDING_PLANS.constants.core.bay_length_cm;
   const sideId = (side: Side): string => `${bid}_${side[0].toUpperCase()}`;
   // 1. snap: whole-cm min corner, sizes floored to the 100 grid, the long axis = the plan's u
@@ -1029,13 +1033,84 @@ function addPlannedOffice(d: Draft, bid: string, r: Rect, s: BuildingSpec, rando
     return b;
   }
   const f: PlanFrame = { alongY, coreSide, cx0, cy0, cx1, cy1 };
+  return emitPlanned({ d, bid, s, random, p, plan, f, rp, planSeed, coreSide, first, doors: { core: core ? { u0: core.portalU0, depth: core.depth } : null } });
+}
+
+/**
+ * Step S2.3: an enterable residential BLOCK from its band plan (S2_ROOMS_PLAN.md 3.3 / 3.4; bandPlan.ts planBlock). Unlike the office the plan comes
+ * first: it cuts the long side into sections (`flat core flat`), and each section's stair core is then placed at the plan's position
+ * (`cores: [metres]` of planCores, one `c<k>_` prefixed core per section after the first); the core wall is the long wall away from the street
+ * (the first door side). Shell, doors, windows, partitions, rooms are the shared tail (emitPlanned), plus the flats (`units`, `dead_end`, the balcony
+ * columns) and the `slot` windows. A plan that does not fit - or a core the plan cannot map, or cores that landed on different walls - runs the legacy
+ * stages on the ORIGINAL rectangle with the original spec and says why in `plan.fallback`.
+ */
+function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random: () => number): DraftBuilding {
+  const COREBAY = BUILDING_PLANS.constants.core.bay_length_cm;
+  const sideId = (side: Side): string => `${bid}_${side[0].toUpperCase()}`;
+  const sn = snapFootprint((r[1][0] - r[0][0]) * 100 + 1e-6, (r[1][1] - r[0][1]) * 100 + 1e-6);
+  const wx = sn.swapped ? sn.D : sn.L, wy = sn.swapped ? sn.L : sn.D;
+  const cx0 = Math.round(r[0][0] * 100), cy0 = Math.round(r[0][1] * 100), cx1 = cx0 + wx, cy1 = cy0 + wy;
+  const rp: Rect = [[cx0 / 100, cy0 / 100], [cx1 / 100, cy1 / 100]];
+  const alongY = rp[1][1] - rp[0][1] >= rp[1][0] - rp[0][0];
+  const doorSides = planShell(d, bid, rp, s, random).doorSides, first = doorSides[0];
+  const longSides: Side[] = alongY ? ['west', 'east'] : ['north', 'south'];
+  // the core's flights reach the roof of a walkable-roof block, else the top storey: >= 2 flights = two lanes (350 deep), one = a single lane (200)
+  const coreTop = s.roof_walkable ? s.floors : s.floors - 1;
+  const depth: 350 | 200 = coreTop > 1 ? 350 : 200;
+  const planSeed = fnv1a(`${bid}|${sn.L}x${sn.D}|${s.floors}|block`);
+  const plan = planBlock({ L: sn.L, D: sn.D, depth, seed: planSeed });
+  let coreSide: Side = longSides.includes(first) ? OPPOSITE[first] : alongY ? 'west' : 'north';
+  const fallback = (why: string): DraftBuilding => {
+    const p2 = planShell(d, bid, r, s, random);
+    const b = legacyStages(p2);
+    b.plan = { v: 1, kind: 'bsp', seed: planSeed, core_wall: sideId(p2.cores[0]?.side ?? coreSide), street_wall: sideId(first), fallback: why };
+    return b;
+  };
+  if (plan.kind === 'fallback' || !plan.sections) return fallback(plan.fallback ?? 'plan_fallback');
+  // the shell with one core per section, at the plan's positions; only the street side is kept clear of them (the court side is the core wall)
+  const p = planShell(d, bid, rp, { ...s, cores: plan.sections.map((sec) => sec.core.u0 / 100) }, random);
+  const allSides = p.doorSides;
+  p.doorSides = [first];
+  planCores(p);
+  p.doorSides = allSides;
+  if (p.cores.length !== plan.sections.length) return fallback('block_core_blocked');
+  coreSide = p.cores[0].side;
+  const inner = Math.round(BUILDING_T / 2);
+  for (const [k, c] of p.cores.entries()) {
+    const [[bx0, by0], [bx1, by1]] = c.box;
+    const lowRel = Math.round((alongY ? by0 : bx0) * 100 - (alongY ? cy0 : cx0));
+    const lenOk = Math.abs((alongY ? by1 - by0 : bx1 - bx0) * 100 - stairCoreLength() * 100) <= 1;
+    const sec = plan.sections[k];
+    if (c.side !== coreSide) return fallback('block_core_sides_differ');
+    if (!lenOk || Math.abs(lowRel - inner - sec.core.u0) > 1 || sec.core.u0 + COREBAY > sn.L || (c.laneWalls.length ? 350 : 200) !== depth) return fallback('block_core_unmapped');
+  }
+  const f: PlanFrame = { alongY, coreSide, cx0, cy0, cx1, cy1 };
+  return emitPlanned({ d, bid, s, random, p, plan, f, rp, planSeed, coreSide, first, doors: { core: null, cores: plan.sections.map((sec) => ({ u0: sec.core.u0, depth })) } });
+}
+
+/** What the shared tail of a planned building needs (addPlannedOffice / addPlannedBlock): the shell with its cores placed, the plan, its frame. */
+interface PlannedArgs {
+  d: Draft; bid: string; s: BuildingSpec; random: () => number; p: BuildingPlan; plan: BandPlan; f: PlanFrame; rp: Rect; planSeed: number;
+  coreSide: Side; first: Side;
+  /** The core(s) for planDoors: the pad-portal origin and depth (an office `core`, a block `cores` per section). */
+  doors: Pick<PlanDoorsOpts, 'core' | 'cores'>;
+}
+
+/**
+ * The shared tail of a planned building (S2_ROOMS_PLAN.md 3.2 steps 5-9): the exterior door draws (ONE per door side, in placeExteriorDoors' order),
+ * doors / portals / windows (and a block's units and slots), the draft openings, partitions, rooms, then the rest of the pipeline.
+ */
+function emitPlanned(a: PlannedArgs): DraftBuilding {
+  const { d, bid, s, random, p, plan, f, rp, planSeed, coreSide, first } = a;
+  const O = BUILDING_PLANS.constants.openings;
+  const sideId = (side: Side): string => `${bid}_${side[0].toUpperCase()}`;
   const sides = wallSides(f);
   // 5. exterior doors: ONE draw per door side, as placeExteriorDoors does (the plan's v axis may run against the draft's: mirror t)
   const doorWalls = p.doorSides.map((side) => {
     const wall = wallKeyOf(f, side), t = 0.25 + 0.5 * random();
     return { wall, t: (wall === 'u0' || wall === 'uL') && vFlipped(f) ? 1 - t : t };
   });
-  const res = planDoors(plan, { storeys: s.floors, seed: planSeed, core: core ? { u0: core.portalU0, depth: core.depth } : null, doorWalls });
+  const res = planDoors(plan, { storeys: s.floors, seed: planSeed, ...a.doors, doorWalls });
   // windows keep clear of a neighbour standing within 1 m outside the wall
   const blocked: Partial<Record<WallKey, [number, number][]>> = {};
   for (const key of WALL_ORDER) {
@@ -1052,6 +1127,10 @@ function addPlannedOffice(d: Draft, bid: string, r: Rect, s: BuildingSpec, rando
     }
   }
   const windows = planWindows(plan, { storeys: s.floors, doors: res.openings, blocked });
+  const block = plan.archetype === 'block';
+  const units = block ? planUnits(plan, res.openings, res.lobbies, s.floors) : [];
+  const unitOf = new Map<string, string>(); // `${storey}|${cell id}` -> unit id
+  for (const u of units) for (const c of u.cells) unitOf.set(`${u.storey}|${c}`, `${bid}_u_f${u.storey}_${u.key}`);
   // 6. the openings in the draft (metres)
   const roomId = (storey: number, cell: string): string => `${bid}_r_f${storey}_${cell}`;
   const mkOpening = (o: PlanOpening): WallOpening => {
@@ -1070,6 +1149,7 @@ function addPlannedOffice(d: Draft, bid: string, r: Rect, s: BuildingSpec, rando
       links: [roomId(o.storey, o.links[0]), o.links[1] === 'street' ? 'street' : roomId(o.storey, o.links[1])],
       role: o.role,
       module: o.module,
+      ...(o.slot ? { slot: o.slot } : {}),
     };
   };
   const along = (side: Side, q: Vec2): number => (side === 'north' || side === 'south' ? q[0] : q[1]);
@@ -1132,6 +1212,8 @@ function addPlannedOffice(d: Draft, bid: string, r: Rect, s: BuildingSpec, rando
       p.rooms.push({
         id, floor: storey, bounds: { min, max }, kind,
         ...(cell.kind === 'end' ? { unit: 'suite' } : {}),
+        ...(unitOf.has(`${storey}|${cell.id}`) ? { unit: unitOf.get(`${storey}|${cell.id}`) } : {}),
+        ...(block && !unitOf.has(`${storey}|${cell.id}`) ? { zone: 'common' } : {}),
         walls: WALL_ORDER.filter((key) => wallSpan(plan, cell, key)).map((key) => sideId(sides[key])),
         ...(ids.length ? { door_ids: ids } : {}),
       });
@@ -1145,7 +1227,15 @@ function addPlannedOffice(d: Draft, bid: string, r: Rect, s: BuildingSpec, rando
   addRoofHatch(p);
   buildSlabs(p);
   for (const fd of p.floors_detail) fd.rooms = []; // the rooms live in `rooms` only (nothing reads the second copy)
-  return emitBuilding(p, { v: 1, kind: 'bands', seed: planSeed, core_wall: sideId(coreSide), street_wall: p.doors[0]?.wall ?? sideId(first), ...(plan.variant ? { variant: plan.variant } : {}) });
+  const b = emitBuilding(p, { v: 1, kind: 'bands', seed: planSeed, core_wall: sideId(coreSide), street_wall: p.doors[0]?.wall ?? sideId(first),
+    ...(block ? { variant: 'block', sections: plan.sections?.length ?? 1 } : plan.variant ? { variant: plan.variant } : {}) });
+  if (units.length) {
+    b.units = units.map((u) => ({
+      id: `${bid}_u_f${u.storey}_${u.key}`, kind: 'flat', floor: u.storey, rooms: u.cells.map((c) => roomId(u.storey, c)), entries: u.entries.map((e) => `${bid}_${e}`),
+      column: `${bid}_col_${u.key}`, ...(u.dead_end ? { dead_end: true, run_cm: u.run_cm } : {}),
+    }));
+  }
+  return b;
 }
 
 /** Stage 1, shell: the footprint, the empty element lists and the exterior door sides (>= 2 sides above 150 m2: BUILDING_GENERATOR.md 3 step 5). */

@@ -22,6 +22,8 @@ export type OpeningRole = 'entry' | 'unit_entry' | 'room' | 'enfilade' | 'wing' 
 
 /** One door / portal / window of a plan, per storey. Centres are cm on the 50 grid. */
 export interface PlanOpening {
+  /** A window marked as the place of a balcony / fire-escape door of its flat (block, storeys >= 1; planWindows.ts). */
+  slot?: 'balcony' | 'escape';
   /** Unique per plan: `f<storey>_d<k>` doors / portals, `f<storey>_w<k>` windows (k counts per storey in emission order). */
   id: string;
   storey: number;
@@ -44,6 +46,8 @@ export interface PlanDoorsOpts {
   storeys: number;
   seed: number;
   core: { u0: number; depth: number } | null;
+  /** 'block' plans: the pad-portal origin and depth of every section's core, in section order (as `core` for an office). */
+  cores?: { u0: number; depth: number }[];
   /** One exterior door per entry, in order; `t` in [0,1) = the caller's legacy draw fraction along that wall (0.25 + 0.5 * random()). */
   doorWalls: { wall: WallKey; t: number }[];
   /** Test hook: counts the storeys' loop decisions (plans with eligible enfilade pairs, and how many needed the forced pair). */
@@ -181,9 +185,12 @@ function neighbourSegs(ctx: Ctx, cell: PlanCell, want: (o: PlanCell) => boolean)
 }
 
 /** One door (or two on an edge >= second_door_edge_cm) on `seg`, positions drawn from the legal centres; null when none is legal. */
-function doorsOnSeg(ctx: Ctx, cell: PlanCell, other: PlanCell, seg: Seg, role: OpeningRole, allowSecond: boolean): Door[] | null {
-  const legal = legalCentres(seg.lo, seg.hi, crossings(ctx.plan, seg.axis, seg.at, ctx.cache));
+function doorsOnSeg(ctx: Ctx, cell: PlanCell, other: PlanCell, seg: Seg, role: OpeningRole, allowSecond: boolean, avoid: number[] = []): Door[] | null {
+  let legal = legalCentres(seg.lo, seg.hi, crossings(ctx.plan, seg.axis, seg.at, ctx.cache));
   if (!legal.length) return null;
+  // a centre facing one of `avoid` (the pad portals across the landing) keeps its distance where the wall allows
+  const apart = legal.filter((c) => avoid.every((a) => Math.abs(c - a) >= O.facing_offset_cm));
+  if (apart.length) legal = apart;
   if (allowSecond && seg.hi - seg.lo >= O.second_door_edge_cm) {
     const pairs: [number, number][] = [];
     for (let i = 0; i < legal.length; ++i) for (let j = i + 1; j < legal.length; ++j) if (legal[j] - legal[i] >= O.second_door_gap_cm) pairs.push([legal[i], legal[j]]);
@@ -297,8 +304,8 @@ function corridorlessDoors(ctx: Ctx, cells: PlanCell[]): Door[] {
  * (generate.ts: a core flush with the high end starts 41 cm into its 900 cell) passes the shifted `u0`; the centre is snapped to the 50
  * grid (the opening grid holds for portals too - planValidate off_grid) and still overlaps its pad by >= 150.
  */
-function corePortals(ctx: Ctx, core: { u0: number; depth: number }): Door[] {
-  const cell = ctx.plan.cells.find((c) => c.kind === 'core');
+function corePortals(ctx: Ctx, core: { u0: number; depth: number }, section?: number): Door[] {
+  const cell = ctx.plan.cells.find((c) => c.kind === 'core' && (section === undefined || c.section === section));
   if (!cell) return [];
   const out: Door[] = [];
   for (const off of O.portal_offsets_cm) {
@@ -342,6 +349,66 @@ function nearestSlot(slots: Slot[], target: number): Slot | null {
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
+// Block doors (S2.3, S2_ROOMS_PLAN.md 3.3 / 3.5)
+
+const segOf = (ctx: Ctx, x: PlanCell, y: PlanCell): Seg | undefined => ctx.segs.find((s) => (s.a === x && s.b === y) || (s.a === y && s.b === x));
+
+/**
+ * The interior doors of a block, per section: the flat's entry from the landing's end wall into its back room A (jambs are the landing walls:
+ * the middle of the wall), A -> B across the flat's depth, B -> C along the core bay's edge; the section's loop flat also gets C -> landing
+ * (the second entry: landing - A - B - C - landing), the other flat has one entry = a dead end; a core bay's front room on a side with no
+ * flat (`core flat`) is a one-room studio entered from the landing. The two pad portals of each core close it.
+ */
+function blockDoors(ctx: Ctx, cells: PlanCell[], cores: { u0: number; depth: number }[]): Door[] {
+  const out: Door[] = [];
+  const part = (section: number, p: PlanCell['part'], flat?: PlanCell['flat']): PlanCell | undefined =>
+    cells.find((c) => c.section === section && c.part === p && (flat === undefined || c.flat === flat));
+  const link = (x: PlanCell, y: PlanCell, role: OpeningRole, avoid: number[] = []): void => {
+    const seg = segOf(ctx, x, y);
+    const ds = seg ? doorsOnSeg(ctx, x, y, seg, role, false, avoid) : null;
+    if (ds) out.push(...ds); else ctx.warnings.push(`no_door:${x.id}`);
+  };
+  for (const sec of ctx.plan.sections ?? []) {
+    const landing = part(sec.index, 'landing')!;
+    const core = cores[sec.index];
+    const portals = core ? O.portal_offsets_cm.map((off) => snap(core.u0 + off)) : [];
+    for (const side of ['L', 'R'] as const) {
+      const A = part(sec.index, 'A', side), B = part(sec.index, 'B', side), Cc = part(sec.index, 'C', side)!;
+      if (A && B) {
+        const seg = segOf(ctx, A, landing), d = seg ? middleDoor(seg, A, landing, 'unit_entry') : null;
+        if (d) out.push(d); else ctx.warnings.push(`no_door:${A.id}`);
+        link(A, B, 'room');
+        link(B, Cc, 'room');
+        if (side === sec.loop) link(Cc, landing, 'unit_entry', portals);
+      } else link(Cc, landing, 'unit_entry', portals);
+    }
+    if (core) out.push(...corePortals(ctx, core, sec.index));
+  }
+  return out;
+}
+
+/**
+ * The exterior door slots of a block wall for one section (3.2 step 7): the street wall (v = D) at the loop flat's C room (the lobby that
+ * has the landing door), the core wall (v = 0) at the back room A of the flat without the loop (else the only flat's), cells in preference
+ * order, the first with a free slot. Other walls (the short ends) use the generic slots of the walls' rooms.
+ */
+function blockSlots(plan: BandPlan, wall: WallKey, section: number, taken: Set<string>): Slot[] {
+  const sec = plan.sections![section];
+  const prefer = (c: PlanCell): number => (wall === 'vD' ? (c.flat === sec.loop ? 0 : 1) : (c.flat !== sec.loop ? 0 : 1));
+  // a lobby needs a door onto the landing: C rooms of the loop flat or of a side without a flat (a studio); every flat's A has its entry
+  const landingDoor = (c: PlanCell): boolean => c.part !== 'C' || c.flat === sec.loop || !sec.flats.includes(c.flat!);
+  const want = plan.cells.filter((c) => c.section === section && c.part === (wall === 'vD' ? 'C' : 'A') && landingDoor(c)).sort((x, y) => prefer(x) - prefer(y) || byId(x, y));
+  for (const cell of want) {
+    const span = wallSpan(plan, cell, wall);
+    if (!span || taken.has(`${wall}|${cell.id}`)) continue;
+    const slots: Slot[] = [];
+    for (let c = gridUp(span[0] + O.jamb_cm); c <= span[1] - O.jamb_cm; c += GRID) slots.push({ cell, c });
+    if (slots.length) return slots;
+  }
+  return [];
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
 
 /**
  * Plans every door / portal of a bands plan on every storey. Deterministic for the same plan and opts; the same interior doors repeat on
@@ -354,7 +421,9 @@ export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult 
   const cells = [...plan.cells].sort(byId);
   const interior: Door[] = [];
 
-  if (plan.variant === 'corridorless') {
+  if (plan.archetype === 'block') {
+    interior.push(...blockDoors(ctx, cells, opts.cores ?? []));
+  } else if (plan.variant === 'corridorless') {
     interior.push(...corridorlessDoors(ctx, cells));
   } else {
     const spine: Door[] = [];
@@ -369,6 +438,17 @@ export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult 
   const taken = new Set<string>(), holding = new Set<WallKey>();
   const exterior: { slot: Slot; wall: WallKey }[] = [];
   for (const { wall, t } of opts.doorWalls) {
+    if (plan.archetype === 'block' && (wall === 'vD' || wall === 'v0')) {
+      // a block: one door per section on its long wall (every section is an entrance of its own), at the section's share `t` of its length
+      for (const sec of plan.sections ?? []) {
+        const slot = nearestSlot(blockSlots(plan, wall, sec.index, taken), sec.u0 + (sec.u1 - sec.u0) * t);
+        if (!slot) { warnings.push(`exterior_door_none:${wall}:s${sec.index}`); continue; }
+        taken.add(`${wall}|${slot.cell.id}`);
+        holding.add(wall);
+        exterior.push({ slot, wall });
+      }
+      continue;
+    }
     const at = (w: WallKey): Slot | null => nearestSlot(wallSlots(plan, w, taken), wallInfo(plan, w).length * t);
     let slot = at(wall), used = wall;
     if (!slot) {

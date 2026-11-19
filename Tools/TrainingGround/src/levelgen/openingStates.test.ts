@@ -83,6 +83,15 @@ test('/2 role default (S2.2): a portal door is open wherever it sits, other role
   assert.equal(effectiveOpeningState(V1, b, { ...extDoor, role: 'entry' }), 'open', '/1 ignores roles');
 });
 
+test('/2 role default (S2.3): a flat entry (unit_entry) is closed on a partition, an explicit state wins, /1 and ruins keep their tables', () => {
+  const entry: WallOpening = { ...partDoor, role: 'unit_entry', module: 'wall_door_200' }; // the building's partition door (matched by id)
+  assert.equal(effectiveOpeningState(V2, building(), entry), 'closed', 'an interior door is open, a flat entry is closed (designer 2026-11-19)');
+  assert.equal(effectiveOpeningState(V2, building(), { ...entry, role: 'room' }), 'open', 'the same door as a room door: the table');
+  assert.equal(effectiveOpeningState(V2, building(), { ...entry, state: 'locked' }), 'locked');
+  assert.equal(effectiveOpeningState(V2, building('ruined_two_level'), entry), 'open', 'ruins: every door is open');
+  assert.equal(effectiveOpeningState(V1, building(), entry), 'open', '/1 ignores roles');
+});
+
 test('an explicit state always wins over both schemas\' defaults', () => {
   const b = building('ruined_two_level');
   for (const L of [V1, V2]) {

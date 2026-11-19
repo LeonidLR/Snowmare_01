@@ -1,16 +1,18 @@
 # S2 plan - room layouts (building generator, levelgen v3)
 
-> **HANDOVER 2026-11-19 evening (main PC offline; the stand-in lead on codex-worker continues from this branch).**
-> - Done today, all pushed, none merged: R3, F4 rule A, R4, room anchors, S2.1, S2.2, S2.2b, T-02 gaps 1-4.
-> - Also done: **bot mantle** 3a40a588. Worker results:
->   - build OK;
->   - `LabBridgeMantleRouteSmoke` PASS: the squad climbs W_obstacle in turns, up 3/3 in 6.2 s;
->   - `LevelGenRouteSmoke` PASS;
->   - `TacticalMapLabBridgeSmoke` PASS;
->   - the automation test `CodexTactics.Bot.Route.ParseMantle` is built but not run yet.
-> - **Next: parapet FIRING GAPS** (designer 11-19). The design and the exact commands are in [FIRING_GAPS_HANDOVER.md](FIRING_GAPS_HANDOVER.md).
->   Only `firing_gaps.json` exists; the code is not started. The gate needs the lead's yes to refresh the accepted X4.
-> - **Then S2.3 blocks** (section 5 below). The 1200-core engine check goes in S2.3's first worker build.
+> **HANDOVER 2026-11-20 (main PC offline; the stand-in lead on codex-worker continues from branch `worker/bgen-firing-gaps`, nothing is merged).**
+> - **Done** (all pushed to this branch): R3, F4 rule A, R4, room anchors, S2.1, S2.2, S2.2b, T-02 gaps 1-4, bot mantle 3a40a588, parapet firing gaps (24db207e +
+>   the refreshed X4 ad5ee46f), and **S2.3 block** (details in the Status paragraph of section 5). Tests 650 -> 664, typecheck clean, plans-off golden unchanged.
+> - **Review gate open**: `S2_3_PLANS.md` (three offices, blocks 10 x 18 / 14 x 20 / 12 x 36, storeys 1 and 2, story 4) + questions B1-B5 for the designer.
+>   **S2.4 (hospital / school) does not start before the designer has looked at it.**
+> - **Left for the lead (engine, I did not run it)**: (1) the **1200-core engine check** of S2.2b: an office whose core bay is 900-1200 long (footprint L 1000-1200,
+>   core at an end) built with plans on, navmesh over the longer landing / the front rooms spanning the bay; (2) the first **built planned X6 with blocks**
+>   (`levelgen_build_map.ps1` with `--plans`, the designer's editor closed): flat doors (`unit_entry`, now `closed` in TS and in `build_levelgen_map.py`) become leaf actors,
+>   two cores in a 36 m block (ids `B_x_c1_stair_*`), the section wall, slot windows; `LevelGenRouteSmoke` / ramp smokes re-run; navmesh island count per block;
+>   (3) `CodexTactics.Bot.Route.ParseMantle` still unrun in the editor. P0b `LevelGenBuildingsSmoke` is S2.9.
+> - **Next exact step** (after the designer's answers to B1-B5): S2.4 per section 5 (`blockTemplates.ts` hospital template + `levelgen_v2.json` catalog entry, two wings = two
+>   `planBlock`-style cores via `cores[]`, wing doors, `slot: 'escape'`, story 5). Unblocked meanwhile: S2.7 (page overlay of the plan: units, `slot`, `dead_end`, loops) and
+>   S2.6 (builder items of 4.5 + the spec-count test).
 
 Owner: Claude (building generator). Status: **PLAN, no code** (2026-11-19, branch `claude/building-generator`). Read:
 `gdd/*.md`, `BUILDINGS_TECH_SPEC.md`, `BUILDING_GENERATOR.md` 1 / 3 / 4 / 7, ADR-0001..3, `generate.ts` (`addBuilding`,
@@ -331,7 +333,18 @@ each); property test 1836 offices (seeds 1-200, 1 storey / 2 storeys with a low 
 `core_stretch_*` (a 2-storey core at an end leaving 100-300 cm beside it). **S2.2b**: no core position is plan-legal for L 1000-1200
 (L - 900 = 100-300 cannot split into 0 / >= 400), so a 100-300 stretch beside the core is absorbed into the core bay instead (900-1200
 long, `core.bay_extra_max_cm` 300: a longer landing, the front rooms span the bay) -> 1836 / 1836 planned, fallback 0 %, 0 issues. Corridor-end windows are exempt from the 120 clearance and from window_partition_clash; a lobby needs no window of its own.
-Open for later steps: `room_no_triad` / `door_jamb_blocked` / `exterior_doors_one_side`, units / `dead_end` tags, route model on `links`.
+Open for later steps: `room_no_triad` / `door_jamb_blocked` / `exterior_doors_one_side`, route model on `links`.
+**S2.3 block done** (branch `worker/bgen-firing-gaps`): `planBlock` (bandPlan.ts; recipe `recipes.block` in building_plans.json: sections `flat core flat` 1700-2300 or
+`core flat` 1300-1600, n sections for 3400-4600, a gap 2400-3300 falls back to the BSP; landing = a corridor cell over the core bay, 200-400 wide; A / B line shared by all
+sections), `blockDoors` + per-section street / court lobby doors (planDoors.ts), `slot: 'balcony'` windows in every flat's front room from storey 1 (planWindows.ts),
+`planUnits.ts` (flats, entries, `column`, `dead_end`, `run_cm`), `addPlannedBlock` + the shared `emitPlanned` in generate.ts (office path unchanged, plans-off golden equal),
+`GenBuilding.units`, `plan.sections`, `GenRoom.zone = 'common'`, the validator's loop rule per connected part of a storey (= per section), flat entries `closed` by default (TS + Python),
+story 4 by flat column (`escapeColumns` / slot spot in buildingStories.ts; the slot window becomes the balcony door at its point; layout-level window mantle edges follow),
+`two_storey` -> block with 2 or 3 storeys when plans are on (`p_three_storeys` 0.35, its own stream). **No base balconies**: your answer 2026-11-19 (balconies only where a fire escape is)
+supersedes the "base balconies / `p_balcony`" of this table's S2.3 row. Tests (`buildings/blockPlan.test.ts`, 13): fixtures 10 x 18 / 14 x 20 / 12 x 36, ASCII goldens, planBlock property
+(L 1000-4800 x D 900-1700 x 2 depths x seeds 1-200), the generator property (864 blocks over L 1300-2300 and 3400-4600, D 1000-1400, 2 / 3 storeys, roof or not, door sides; seeds 1-200:
+**864 planned, 0 issues, fallback 0 %**), story 4 key-route modes `walk - climb - open - walk - open - walk`, rollback byte-equal, template check. Review gate: `S2_3_PLANS.md`
+(generated by `Tools/TrainingGround/scripts/plans-ascii.ts`). Not done: engine check (see HANDOVER), S2.4-S2.5.
 
 ## 6. Risks and early detection
 

@@ -16,6 +16,7 @@ import storiesJson from '../../../../Content/Data/LevelGen/building_stories.json
 import type { Vec2 } from '../movement/geometry.ts';
 import { closestOnSegment, dist, rng } from '../movement/geometry.ts';
 import { fnv1a } from './props/rng.ts';
+import { BUILDING_PLANS } from './buildings/bandPlan.ts';
 import { inFootprint, normDeg, rotationOf, rotPoint, toBuildingFrame } from './rotation.ts';
 import { withRoles } from './buildingRoles.ts';
 import type { TraversalIssue } from './buildingTraversal.ts';
@@ -313,10 +314,62 @@ export function escapeRoom(l: GenLayout, b: GenBuilding, floor: number): GenRoom
   return null;
 }
 
-interface EscapeSpot { side: Side; along: number; rooms: GenRoom[] }
+interface EscapeSpot { side: Side; along: number; rooms: GenRoom[]; /** A planned block: the slot windows (one per storey) the escape's doors replace. */ slots?: WallOpening[] }
+
+/** The balcony slot windows of a planned block (S2.3: `slot: 'balcony'`, one per flat and storey from 1) with their room and the flat's column. */
+function slotWindows(b: GenBuilding): { op: WallOpening; room: GenRoom; column: string }[] {
+  const out: { op: WallOpening; room: GenRoom; column: string }[] = [];
+  for (const op of b.openings ?? []) {
+    if (op.kind !== 'window' || op.slot !== 'balcony') continue;
+    const room = (b.rooms ?? []).find((rm) => rm.id === op.links?.[0]);
+    const unit = room?.unit ? (b.units ?? []).find((u) => u.id === room.unit) : undefined;
+    if (room && unit) out.push({ op, room, column: unit.column });
+  }
+  return out;
+}
+
+/**
+ * The flat columns that can take the escape of story 4 (S2_ROOMS_PLAN.md 3.6): a slot window on every storey of `storeys`, the same spot on each.
+ * Ordered by column id; each is the flat's room on the lowest storey with the spot checked by planEscapeSpot.
+ */
+export function escapeColumns(l: GenLayout, b: GenBuilding, storeys: readonly number[]): GenRoom[] {
+  const all = slotWindows(b);
+  const first = Math.min(...storeys);
+  return all.filter((x) => (x.op.floor ?? 0) === first).sort((x, y) => (x.column < y.column ? -1 : x.column > y.column ? 1 : 0))
+    .filter((x) => planSlotSpot(l, b, x.room, storeys, all) !== null).map((x) => x.room);
+}
+
+/**
+ * The spot of a room's slot window, the same column's windows above it: undefined when the room has no slot (the generic spot search applies),
+ * null when the spot does not fit (ground door too near, a wall opening beside it, a flight, something outside), else the spot.
+ */
+function planSlotSpot(l: GenLayout, b: GenBuilding, room: GenRoom, storeys: readonly number[], all = slotWindows(b)): EscapeSpot | null | undefined {
+  const mine = all.find((x) => x.room.id === room.id);
+  if (!mine) return undefined;
+  const half = FACADE.balconyWidth / 2, side = openingSide(b, mine.op), along = alongOf(side, toBuildingFrame(b, mine.op.pos));
+  const [flo, fhi] = faceSpan(b, side);
+  if (along - half < flo || along + half > fhi || !doorFree(groundDoors(l, b), side, along, half)) return null;
+  const rooms: GenRoom[] = [], slots: WallOpening[] = [];
+  for (const f of storeys) {
+    const hit = all.find((x) => x.column === mine.column && (x.op.floor ?? 0) === f && openingSide(b, x.op) === side && Math.abs(alongOf(side, toBuildingFrame(b, x.op.pos)) - along) <= 1);
+    if (!hit) return null;
+    const wallFree = unifyOpenings(b).every((o) => o.id === hit.op.id || (o.floor ?? 0) !== f || openingSide(b, o) !== side
+      || Math.abs(alongOf(side, toBuildingFrame(b, o.pos)) - along) >= (o.width ?? OPENING_DEFAULTS[o.kind].width) / 2 + (hit.op.width ?? OPENING_DEFAULTS.door.width) / 2 + FACADE.openingClear);
+    const inside = facadePoint(b, side, along, -75);
+    const stairFree = (b.stairs ?? []).every((st) => (st.from !== f && st.to !== f)
+      || dist(inside, closestOnSegment(inside, toBuildingFrame(b, st.pos), toBuildingFrame(b, st.top)).point) >= FACADE.stairClear);
+    if (!wallFree || !stairFree) return null;
+    rooms.push(hit.room);
+    slots.push(hit.op);
+  }
+  if (!outsideClear(l, b, outBox(b, side, along, half, ESCAPE_BALCONY_DEPTH + FACADE.escapeApproach))) return null;
+  return { side, along, rooms, slots };
+}
 
 /** A facade spot for the escape: `room` and a room above on every storey reach the facade there, wall and ground are free. */
 function planEscapeSpot(l: GenLayout, b: GenBuilding, room: GenRoom, storeys: readonly number[]): EscapeSpot | null {
+  const viaSlot = planSlotSpot(l, b, room, storeys);
+  if (viaSlot !== undefined) return viaSlot;
   const rooms = roomsOf(b);
   const doors = groundDoors(l, b);
   const half = FACADE.balconyWidth / 2;
@@ -377,10 +430,21 @@ export function applyBalconyEscape(l: GenLayout, b: GenBuilding, roomId: string,
     const pos = toWorld(b, facadePoint(b, side, along, 0));
     const wall = l.walls.find((w) => w.building === b.id && (w.floor ?? 0) === f && w.kind !== 'interior' && w.kind !== 'partition'
       && dist(pos, closestOnSegment(pos, w.a, w.b).point) < 30);
-    editableOpenings(b).push({ id: doorId, kind: 'door', pos, floor: f, width: OPENING_DEFAULTS.door.width, ...(wall ? { wall: wall.id } : {}) });
+    const rm = spot.rooms[i], slot = spot.slots?.[i];
+    const O = BUILDING_PLANS.constants.openings;
+    // a planned building's doors carry links / role / module (validator opening_no_links); a slot window is replaced by the door at its point
+    const planned = b.plan?.kind === 'bands';
+    if (slot) {
+      b.openings = editableOpenings(b).filter((o) => o.id !== slot.id);
+      b.mantle_edges = (b.mantle_edges ?? []).filter((m) => m.id !== `me_${slot.id}`);
+      if (realRooms.has(rm)) rm.door_ids = (rm.door_ids ?? []).filter((x) => x !== slot.id);
+    }
+    editableOpenings(b).push({
+      id: doorId, kind: 'door', pos, floor: f, width: planned ? O.door_cm : OPENING_DEFAULTS.door.width, ...(wall ? { wall: wall.id } : {}),
+      ...(planned ? { sill_height: 0, top_height: O.door_top_cm, links: [rm.id, `balcony:${balconyId}`] as [string, string], role: 'balcony' as const, module: 'wall_door_200' } : {}),
+    });
     const r = outBox(b, side, along, half, D);
     balconies.push({ id: balconyId, floor: f, rect: r, door_id: doorId, rail_cm: obstacleHeight('low_vault') });
-    const rm = spot.rooms[i];
     if (realRooms.has(rm)) rm.door_ids = [...(rm.door_ids ?? []), doorId];
     // ground -> the first balcony: on the balcony's outer edge; balcony -> balcony: against the wall at its end, through a hatch above
     const lid = `LAD_${escId}_${i}`;
@@ -619,9 +683,10 @@ export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick
       // storey"); whether the balcony fits is the brick's job (no spot -> rollback, Edge Cases)
       if (!RUBBLE_ESCAPE_SET_PIECES.includes(b.set_piece) || b.hollow || b.floors < 2) return null;
       const flight = (b.stairs ?? []).find((st) => st.kind === 'stairwell' && st.from === 0 && st.to === 1 && !st.blocked);
-      const room = flight ? escapeRoom(l, b, 1) : null;
-      if (!flight || !room) return null;
       const storeys = Array.from({ length: b.floors - 1 }, (_, i) => i + 1);
+      // a planned block (flats with balcony slots, S2.3): the first flat column whose slots all fit; any other building: the S1 rule
+      const room = !flight ? null : b.units?.length ? escapeColumns(l, b, storeys)[0] ?? null : escapeRoom(l, b, 1);
+      if (!flight || !room) return null;
       return [{ kind: 'block_flight', stair: flight.id, block: 'rubble' }, { kind: 'add_balcony_escape', room: room.id, storeys }];
     }
     case 'roof_outside': {
@@ -879,5 +944,16 @@ export function applyStoriesToLayout(
     if (routes.fast_entry !== undefined) next.building.fast_entry = routes.fast_entry;
     if (routes.quiet_entry !== undefined) next.building.quiet_entry = routes.quiet_entry;
   }
-  return { layout: cur, log };
+  return { layout: syncMantleEdges(cur), log };
+}
+
+/**
+ * A brick that replaces a window by a door (story 4 on a slot window) drops the window's mantle edge from the building; the layout-level list
+ * (`mantle_edges`, a copy made by finalizeDraftToLayout) loses it too. Only window edges of a building with its own list are checked; layouts where nothing went stay as they are.
+ */
+function syncMantleEdges(l: GenLayout): GenLayout {
+  if (!l.mantle_edges?.length) return l;
+  const own = new Map(l.buildings.filter((b) => b.mantle_edges).map((b) => [b.id, new Set(b.mantle_edges!.map((m) => m.id))]));
+  const kept = l.mantle_edges.filter((m) => m.kind !== 'window' || !m.building || !own.has(m.building) || own.get(m.building)!.has(m.id));
+  return kept.length === l.mantle_edges.length ? l : { ...l, mantle_edges: kept };
 }

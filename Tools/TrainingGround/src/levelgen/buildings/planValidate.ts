@@ -243,6 +243,18 @@ function hasCycle(nodes: Iterable<string>, edges: [string, string][]): boolean {
   return alive.size > 0;
 }
 
+/** The connected components of a door graph (sorted by their smallest id; a block's sections meet on the roof only, so each is one). */
+function components(nodes: Iterable<string>, edges: [string, string][]): string[][] {
+  const parent = new Map<string, string>();
+  for (const n of nodes) parent.set(n, n);
+  const root = (n: string): string => { let r = n; while (parent.get(r) !== r) r = parent.get(r)!; return r; };
+  for (const [a, c] of edges) if (parent.has(a) && parent.has(c)) parent.set(root(a), root(c));
+  const groups = new Map<string, string[]>();
+  for (const n of parent.keys()) groups.set(root(n), [...(groups.get(root(n)) ?? []), n]);
+  return [...groups.values()].map((g) => g.sort()).sort((x, y) => (x[0] < y[0] ? -1 : 1));
+}
+
+/** Every storey segment with >= 3 rooms has a loop (S2_ROOMS_PLAN.md 3.5 rule 3): an office storey, a block section (one component of the storey's door graph). */
 function storeyNoLoop(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: TraversalIssue[]): void {
   const corridorless = b.plan?.variant === 'corridorless';
   const severity: TraversalSeverity = b.stories?.length ? 'warning' : PLAN_SEVERITY.storey_no_loop;
@@ -261,8 +273,13 @@ function storeyNoLoop(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues
       else if (corridorless && ids.has(a) && c === 'street') { nodes.add('street'); edges.push([a, 'street']); }
     }
     for (const grp of seamGroups(rs).values()) for (let i = 1; i < grp.length; i++) edges.push([grp[0].id, grp[i].id]);
-    if (!hasCycle(nodes, edges)) {
-      issues.push({ severity, code: 'storey_no_loop', ref: `${b.id} f${f}`, message: `${b.id}: storey ${f} has ${counted} rooms but no loop in its door graph` });
+    const comps = components(nodes, edges);
+    for (const comp of comps) {
+      const inside = new Set(comp);
+      const here = rs.filter((r) => inside.has(r.id) && isRoomy(r)).length;
+      if (here < 3 || hasCycle(comp, edges.filter(([a, c]) => inside.has(a) && inside.has(c)))) continue;
+      const part = comps.length > 1 ? ` (the part with ${comp[0]})` : '';
+      issues.push({ severity, code: 'storey_no_loop', ref: comps.length > 1 ? `${b.id} f${f} ${comp[0]}` : `${b.id} f${f}`, message: `${b.id}: storey ${f} has ${here} rooms${part} but no loop in its door graph` });
     }
   }
 }

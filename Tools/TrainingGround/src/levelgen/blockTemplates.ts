@@ -14,7 +14,9 @@ import { dist, rng } from '../movement/geometry.ts';
 import type { ZoneKind } from '../movement/layout.ts';
 import type { Draft, DraftBuilding, Rect, Side } from './generate.ts';
 import { COVER_SIZE, addBuilding, addLadderAt, fenceRect, finalizeDraftToLayout, generateLayoutWithLots, levelLayer, splitWall, stairChainUp } from './generate.ts';
+import { BUILDING_PLANS } from './buildings/bandPlan.ts';
 import { obstacleHeight } from './obstacleHeights.ts';
+import { fnv1a } from './props/rng.ts';
 import { drawAngle, fitScale, ROTATION, rotateContent, rotPoint } from './rotation.ts';
 import type { Profile } from './profile.ts';
 import { fromUE, toUE } from './profile.ts';
@@ -403,7 +405,9 @@ const BUILD: Record<TemplateId, (c: Ctx) => VisitM | null> = {
   two_storey: (c) => {
     const sp = c.spec as typeof TC.catalog.two_storey;
     const r = placeIn(c.r, c.s, Math.min(sp.max_m[0], lengthOf(c.r, c.s)), Math.min(sp.max_m[1], depthOf(c.r, c.s)), c.s, 0.5, 0.5 + (c.random() * 2 - 1) * 0.1);
-    const b = addBuilding(c.d, `B_${c.tag}_block`, r, { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: c.V >= 1, stairwell: true, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.two_storey, doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true, roofHatch: c.V >= 2 }, c.random);
+    // plans on (S2.3): a block has 2 or 3 storeys (building_plans.json recipes.block.p_three_storeys; its own stream, the lot's is not touched)
+    const floors = c.d.building_plans && rng(fnv1a(`${c.tag}|storeys`))() < BUILDING_PLANS.recipes.block.p_three_storeys ? 3 : 2;
+    const b = addBuilding(c.d, `B_${c.tag}_block`, r, { height: floors * LEVEL_HEIGHT, floors, enterable: true, roof_walkable: c.V >= 1, stairwell: true, set_piece: 'facade', archetype: TEMPLATE_ARCHETYPE.two_storey, doorSides: [c.s], windowSides: [c.s, OPP[c.s]], partitionRooms: true, roofHatch: c.V >= 2 }, c.random);
     zoneOf(c, 'open', 'facade');
     scatter(c, c.r, [r], b.doors.map((x) => x.pos));
     cornerAmbush(c, b);

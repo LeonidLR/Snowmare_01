@@ -125,7 +125,7 @@ export interface WallOpening {
   role?: OpeningRole;
   /** Schema /2, planned buildings: the kit module name ('wall_door_200', 'portal_200', 'wall_window_200'). */
   module?: string;
-  /** Schema /2: a window marked as the place of a balcony / fire-escape door (S2.3 / S2.4, not written yet). */
+  /** Schema /2: a window marked as the place of a balcony / fire-escape door (blocks, S2.3: one per flat and storey from 1; story 4 turns it into a door). */
   slot?: 'balcony' | 'escape';
 }
 export type { OpeningRole };
@@ -304,9 +304,9 @@ export interface GenRoom {
   kind?: 'room' | 'corridor' | 'stairwell' | 'hall' | 'balcony' | 'lobby' | 'service';
   /** Ids of every opening whose `links` name the room (planned buildings: windows too; seam ids between two corridor cells). */
   door_ids?: string[];
-  /** Planned buildings: the unit the room belongs to ('suite' = an end suite). */
+  /** Planned buildings: the unit the room belongs to ('suite' = an end suite; a block's flat id, GenBuilding.units). */
   unit?: string;
-  /** Planned buildings: the zone (wing, common ...); none written yet. */
+  /** Planned buildings: the zone ('common' = a block's stair core, landing and ground lobbies; wings later). */
   zone?: string;
   /** Planned buildings: the exterior wall ids (`<building>_N|S|W|E`) the room touches. */
   walls?: string[];
@@ -442,7 +442,26 @@ export interface GenBuilding {
    * plan (buildings/bandPlan.ts) with doors / windows from planDoors / planWindows; 'bsp' = the plan fell back (`fallback` = why) and the
    * legacy partitioning ran. `core_wall` / `street_wall` are wall ids (`<id>_N|S|W|E`), never Side labels of another frame.
    */
-  plan?: { v: 1; kind: 'bands' | 'bsp' | 'single'; seed: number; core_wall: string; street_wall: string; variant?: string; fallback?: string };
+  plan?: { v: 1; kind: 'bands' | 'bsp' | 'single'; seed: number; core_wall: string; street_wall: string; variant?: string; fallback?: string; /** Blocks: the number of sections (one stair core and entrance each). */ sections?: number };
+  /** Schema /2, planned blocks (S2_ROOMS_PLAN.md 4.1): the flats of every storey (ids only: rooms, doors, columns). */
+  units?: BuildingUnit[];
+}
+
+/** A flat of a planned block on one storey: its rooms, its entry doors, the column it shares with the flats above / below, the dead-end tag (story 17). */
+export interface BuildingUnit {
+  id: string;
+  kind: 'flat';
+  floor: number;
+  /** Room ids. */
+  rooms: string[];
+  /** Opening ids of the doors joining the flat to a room outside it. */
+  entries: string[];
+  /** The stack of the same flat on every storey (balcony slots, a fire escape). */
+  column: string;
+  /** A single entry: nothing else leads in. */
+  dead_end?: boolean;
+  /** Dead ends: cm walked from the nearest stair pad to the deepest room. */
+  run_cm?: number;
 }
 
 export interface GenCut {

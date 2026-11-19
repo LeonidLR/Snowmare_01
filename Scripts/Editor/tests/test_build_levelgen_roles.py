@@ -14,6 +14,7 @@ V2 = builder.SCHEMA_V2
 
 PORTAL = {"id": "B_f0_d3", "kind": "door", "floor": 0, "pos": [0, 0], "width": 200, "role": "portal", "module": "portal_200"}
 ROOM_DOOR = {"id": "B_f0_d4", "kind": "door", "floor": 0, "pos": [10, 0], "width": 150, "role": "room", "module": "wall_door_200"}
+UNIT_ENTRY = {"id": "B_f1_d7", "kind": "door", "floor": 1, "pos": [20, 0], "width": 150, "role": "unit_entry", "module": "wall_door_200"}
 ENTRY = {"id": "B_f0_d0", "kind": "door", "floor": 0, "pos": [0, 500], "wall": "B_S", "width": 150, "role": "entry", "module": "wall_door_300"}
 
 
@@ -47,10 +48,20 @@ class PortalDefaultTest(unittest.TestCase):
         self.assertEqual(self.state(PORTAL, _building("ruined_two_level")), "open")
         self.assertEqual(self.state(dict(PORTAL, state="sealed")), "sealed")
 
+    def test_unit_entry_is_closed_unless_overridden(self):
+        # a flat's front door (a block's landing -> flat door, S2.3; designer 2026-11-19): closed, like the TS table in openingStates.ts
+        building = _building()
+        building["partitions"][0]["openings"].append(UNIT_ENTRY)
+        self.assertEqual(self.state(UNIT_ENTRY, building), "closed")
+        self.assertEqual(self.state(dict(UNIT_ENTRY, role="room"), building), "open")
+        self.assertEqual(self.state(dict(UNIT_ENTRY, state="locked"), building), "locked")
+        self.assertEqual(self.state(UNIT_ENTRY, _building("ruined_two_level")), "open")
+
     def test_v1_ignores_roles(self):
         v1 = {"schema": builder.SCHEMA, "walls": []}
         self.assertEqual(self.state(PORTAL, layout=v1), "open")
         self.assertEqual(self.state(ENTRY, layout=v1), "open")
+        self.assertEqual(self.state(UNIT_ENTRY, layout=v1), "open")
 
 
 if __name__ == "__main__":

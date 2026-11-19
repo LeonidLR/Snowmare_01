@@ -1,6 +1,7 @@
-// Training Ground / level generator v3 - BAND PLAN (S2_ROOMS_PLAN.md sections 3.1, 3.3, 3.4, 3.8; step S2.1): slices a rectangle into
-// bays along its long side and bands of rooms across it from a recipe table (Content/Data/LevelGen/building_plans.json). Only the
-// office recipe exists so far. PURE: integer cm, no draft / layout / engine types, nothing wired into generate.ts (S2.2 adds doors).
+// Training Ground / level generator v3 - BAND PLAN (S2_ROOMS_PLAN.md sections 3.1, 3.3, 3.4, 3.8; steps S2.1 / S2.3): slices a rectangle into
+// bays along its long side and bands of rooms across it from a recipe table (Content/Data/LevelGen/building_plans.json). Recipes: the
+// office (planBands) and the residential block (planBlock: sections of flats round a stair core and a landing). PURE: integer cm, no
+// draft / layout / engine types (generate.ts addPlannedBuilding wires it; planDoors.ts / planWindows.ts / planUnits.ts add the rest).
 // Frame: u along the long side 0..L, v across 0..D, v = 0 is the CORE WALL; cells are axis-aligned rectangles that tile [0,L] x [0,D]
 // exactly. All coordinates are multiples of 100 except the edge a core cell makes at its depth (350). The same plan serves every storey.
 // Chain (3.8): per variant (double-loaded -> single-loaded -> corridor-less when no core is given) up to `max_rerolls` sub-seeds
@@ -13,20 +14,30 @@ import { fnv1a } from '../props/rng.ts';
 export const BUILDING_PLANS = cfg;
 const C = cfg.constants;
 const OFFICE = cfg.recipes.office;
+const BLOCK = cfg.recipes.block;
 const GRID = C.grid_cm;
 const COREBAY = C.core.bay_length_cm;
 /** The core bay may grow by up to this much: a 100-300 stretch beside the core (no room fits) is absorbed as a longer landing (S2.2b). */
 const COREBAY_MAX = COREBAY + C.core.bay_extra_max_cm;
 
-export type BayKind = 'core' | 'room' | 'end' | 'exit';
+export type BayKind = 'core' | 'room' | 'end' | 'exit' | 'flat';
 export type CellKind = 'room' | 'corridor' | 'core' | 'service' | 'end';
 export type CellBand = 'back' | 'corridor' | 'front' | 'full';
 export type PlanVariant = 'double' | 'single' | 'corridorless';
 
 /** A bay: a stretch of the long side with one cross recipe. `exit` = a room bay whose corridor end is the building's exit slot. */
 export interface PlanBay { kind: BayKind; u0: number; u1: number }
-/** One rectangle of the tiling, cm, `[u0,u1] x [v0,v1]`. */
-export interface PlanCell { id: string; kind: CellKind; u0: number; u1: number; v0: number; v1: number; band: CellBand }
+/**
+ * One rectangle of the tiling, cm, `[u0,u1] x [v0,v1]`. Block cells (planBlock) also say where they sit: `section` (index along u),
+ * `flat` (the side of the core bay the flat is on: 'L' = lower u) and `part` (A = back room of the flat bay, B = its front room, C = the front
+ * room of the core bay on that side, 'landing' = the corridor cell over the core bay).
+ */
+export interface PlanCell { id: string; kind: CellKind; u0: number; u1: number; v0: number; v1: number; band: CellBand; section?: number; flat?: FlatSide; part?: BlockPart }
+export type FlatSide = 'L' | 'R';
+export type BlockPart = 'A' | 'B' | 'C' | 'landing';
+
+/** One section of a block: its span along u, its core bay, the flats beside it and the side whose flat has the second (loop) entry. */
+export interface PlanSection { index: number; u0: number; u1: number; core: { u0: number; depth: 350 | 200 }; flats: FlatSide[]; loop: FlatSide }
 
 export interface BandPlan {
   kind: 'bands' | 'fallback';
@@ -38,6 +49,10 @@ export interface BandPlan {
   cells: PlanCell[];
   /** The recipe variant that produced the plan. */
   variant?: PlanVariant;
+  /** 'block' plans only: the sections and the A / B boundary (= the landing's far edge, v) of the whole building. */
+  archetype?: 'office' | 'block';
+  sections?: PlanSection[];
+  landingTop?: number;
 }
 
 export interface BandPlanInput {
@@ -60,8 +75,9 @@ type Rand = () => number;
 type RawCell = Omit<PlanCell, 'id'>;
 const pickInt = (r: Rand, n: number): number => Math.floor(r() * n);
 const pick = <T>(r: Rand, xs: readonly T[]): T => xs[pickInt(r, xs.length)];
+const gridUp = (x: number): number => Math.ceil(x / GRID) * GRID;
 const steps = (lo: number, hi: number): number[] => { const o: number[] = []; for (let x = lo; x <= hi; x += GRID) o.push(x); return o; };
-const cell = (kind: CellKind, band: CellBand, u0: number, u1: number, v0: number, v1: number): RawCell => ({ kind, band, u0, u1, v0, v1 });
+const cell = (kind: CellKind, band: CellBand, u0: number, u1: number, v0: number, v1: number, tag: Pick<PlanCell, 'section' | 'flat' | 'part'> = {}): RawCell => ({ kind, band, u0, u1, v0, v1, ...tag });
 const inRange = (x: number, lo: number, hi: number): boolean => x >= lo && x <= hi;
 
 /** Splits a stretch (0 or >= 400 long) into room bays of 400-800: a seeded count, then the 100 cm steps of the remainder go to the widest bay first. */
@@ -198,6 +214,95 @@ function buildCorridorless(inp: BandPlanInput, bays: PlanBay[], r: Rand): RawCel
 const finish = (raw: RawCell[]): PlanCell[] =>
   raw.sort((a, b) => a.u0 - b.u0 || a.v0 - b.v0 || a.u1 - b.u1 || a.v1 - b.v1).map((c, i) => ({ id: `c${i}`, ...c }));
 
+// ---------------------------------------------------------------------------------------------------------------------------------
+// Block (S2.3): sections of `flat core flat` (or `core flat`) with a landing over each core bay
+
+export interface BlockPlanInput {
+  /** Long side and depth, cm, multiples of 100 (snapFootprint). */
+  L: number;
+  D: number;
+  /** The core's depth: 350 two lanes (a roof / 3-storey block), 200 one lane. */
+  depth: 350 | 200;
+  seed: number;
+}
+
+/** The section widths along u: one `core flat` section under the minimum of a full one, else n full sections (1700-2300 each). A string = infeasible. */
+function blockSectionWidths(L: number, r: Rand): number[] | string {
+  const SEC = BLOCK.section_cm, flatMin = BLOCK.flat_bay_cm.min, flatMax = BLOCK.flat_bay_cm.max;
+  if (L < SEC.min) return L >= COREBAY + flatMin && L <= COREBAY + flatMax ? [L] : `block_no_section_for_${L}`;
+  const ns: number[] = [];
+  for (let n = 1; n * SEC.min <= L; ++n) if (L <= n * SEC.max) ns.push(n);
+  if (!ns.length) return `block_no_section_for_${L}`;
+  const n = pick(r, ns), w = new Array<number>(n).fill(SEC.min);
+  for (let left = (L - SEC.min * n) / GRID; left > 0; --left) w[pick(r, w.map((_, i) => i).filter((i) => w[i] < SEC.max))] += GRID;
+  return w;
+}
+
+/** A block: the sections, one landing cell per core bay, the flats' rooms A / B and the core bay's front rooms C (S2_ROOMS_PLAN.md 3.3). */
+function buildBlock(inp: BlockPlanInput, r: Rand): { bays: PlanBay[]; raw: RawCell[]; sections: PlanSection[]; landingTop: number } | string {
+  const { L, D, depth: K } = inp, Cw = C.corridor_cm;
+  const widths = blockSectionWidths(L, r);
+  if (typeof widths === 'string') return widths;
+  // the A / B boundary = the landing's far edge: a landing of >= 200 (<= the corridor knob), a back room and a front room of 400-800
+  const tops = steps(Math.max(gridUp(K + Cw), C.room_cm.min, D - C.room_cm.max), Math.min(K + C.core.corridor_max_cm, C.room_cm.max, D - C.room_cm.min));
+  if (!tops.length) return 'block_no_landing_depth';
+  const top = pick(r, tops);
+  const bays: PlanBay[] = [], raw: RawCell[] = [], sections: PlanSection[] = [];
+  let s0 = 0;
+  widths.forEach((S, index) => {
+    const s1 = s0 + S;
+    let flats: FlatSide[], cu0: number;
+    if (S < BLOCK.section_cm.min) { // `core flat`: the flat on one side of the core bay
+      const side = pick(r, ['L', 'R'] as const);
+      flats = [side];
+      cu0 = side === 'R' ? s0 : s1 - COREBAY;
+    } else {
+      flats = ['L', 'R'];
+      const T = S - COREBAY, wl = pick(r, steps(Math.max(BLOCK.flat_bay_cm.min, T - BLOCK.flat_bay_cm.max), Math.min(BLOCK.flat_bay_cm.max, T - BLOCK.flat_bay_cm.min)));
+      cu0 = s0 + wl;
+    }
+    const cu1 = cu0 + COREBAY, loop = flats.length === 2 ? pick(r, flats) : flats[0];
+    if (flats.includes('L')) bays.push({ kind: 'flat', u0: s0, u1: cu0 });
+    bays.push({ kind: 'core', u0: cu0, u1: cu1 });
+    if (flats.includes('R')) bays.push({ kind: 'flat', u0: cu1, u1: s1 });
+    const tag = { section: index };
+    raw.push(cell('core', 'back', cu0, cu1, 0, K, tag), cell('corridor', 'corridor', cu0, cu1, K, top, { ...tag, part: 'landing' }));
+    for (const side of flats) {
+      const [b0, b1] = side === 'L' ? [s0, cu0] : [cu1, s1];
+      raw.push(cell('room', 'back', b0, b1, 0, top, { ...tag, flat: side, part: 'A' }), cell('room', 'front', b0, b1, top, D, { ...tag, flat: side, part: 'B' }));
+    }
+    const [wc] = splitCoreFront(COREBAY, r);
+    raw.push(cell('room', 'front', cu0, cu0 + wc, top, D, { ...tag, flat: 'L', part: 'C' }), cell('room', 'front', cu0 + wc, cu1, top, D, { ...tag, flat: 'R', part: 'C' }));
+    sections.push({ index, u0: s0, u1: s1, core: { u0: cu0, depth: K }, flats, loop });
+    s0 = s1;
+  });
+  return { bays, raw, sections, landingTop: top };
+}
+
+/**
+ * Plans a residential block (archetype `block`, S2_ROOMS_PLAN.md 3.4): v = 0 is the core wall (the courtyard side), the long side is cut into
+ * sections, each a `flat core flat` (or `core flat`) with its own stair core and landing; the A / B line is shared by the whole building.
+ * Deterministic. `kind: 'fallback'` = the caller keeps today's BSP.
+ */
+export function planBlock(inp: BlockPlanInput): BandPlan {
+  const { L, D } = inp;
+  const fb = (reason: string): BandPlan => ({ kind: 'fallback', fallback: reason, L, D, bays: [], cells: [], archetype: 'block' });
+  if (L % GRID || D % GRID) return fb('footprint_off_grid');
+  if (L < BLOCK.min_length_cm || D < BLOCK.min_depth_cm) return fb('footprint_too_small');
+  if (D > L) return fb('long_side_not_first');
+  let reason = '';
+  for (let k = 0; k < C.max_rerolls; ++k) {
+    const r = rng(fnv1a(`${inp.seed}|${k}`));
+    const res = buildBlock(inp, r);
+    if (typeof res === 'string') { reason = res; continue; }
+    const plan: BandPlan = { kind: 'bands', L, D, bays: res.bays, cells: finish(res.raw), archetype: 'block', sections: res.sections, landingTop: res.landingTop };
+    const problems = validatePlanTiling(plan);
+    if (!problems.length) return plan;
+    reason = `invalid: ${problems[0]}`;
+  }
+  return fb(`block: ${reason}`);
+}
+
 /**
  * Plans one footprint. Deterministic: same input -> identical plan. `kind: 'fallback'` (no cells) = the caller keeps its BSP / hall / one room.
  */
@@ -289,9 +394,22 @@ export function validatePlanTiling(plan: BandPlan): string[] {
     if (b.u0 !== u) out.push(`bay gap at u=${u}`);
     u = b.u1;
     const w = b.u1 - b.u0;
-    if (b.kind === 'core' ? !inRange(w, COREBAY, COREBAY_MAX) : b.kind === 'end' ? !inRange(w, C.end_bay_cm.min, C.end_bay_cm.max) : !inRange(w, C.room_cm.min, C.room_cm.max)) out.push(`bay ${b.kind} ${b.u0}..${b.u1}: width ${w}`);
+    if (b.kind === 'core' ? !inRange(w, COREBAY, COREBAY_MAX) : b.kind === 'end' ? !inRange(w, C.end_bay_cm.min, C.end_bay_cm.max)
+      : b.kind === 'flat' ? !inRange(w, BLOCK.flat_bay_cm.min, BLOCK.flat_bay_cm.max) : !inRange(w, C.room_cm.min, C.room_cm.max)) out.push(`bay ${b.kind} ${b.u0}..${b.u1}: width ${w}`);
   }
   if (u !== L) out.push(`bays end at ${u}, not ${L}`);
+  if (plan.sections) {
+    let su = 0;
+    for (const sec of plan.sections) {
+      const w = sec.u1 - sec.u0;
+      if (sec.u0 !== su) out.push(`section ${sec.index} starts at ${sec.u0}, not ${su}`);
+      su = sec.u1;
+      if (!(sec.flats.length === 2 ? inRange(w, BLOCK.section_cm.min, BLOCK.section_cm.max) : inRange(w, COREBAY + BLOCK.flat_bay_cm.min, COREBAY + BLOCK.flat_bay_cm.max))) out.push(`section ${sec.index}: width ${w}`);
+      if (!sec.flats.includes(sec.loop)) out.push(`section ${sec.index}: the loop flat ${sec.loop} does not exist`);
+      if (!plan.cells.some((c) => c.kind === 'core' && c.u0 === sec.core.u0 && c.v1 === sec.core.depth)) out.push(`section ${sec.index}: no core cell at ${sec.core.u0}`);
+    }
+    if (su !== L) out.push(`sections end at ${su}, not ${L}`);
+  }
   if (plan.bays.filter((b) => b.kind === 'end' || b.kind === 'exit').length > 1) out.push('more than one end / exit bay');
   return out;
 }

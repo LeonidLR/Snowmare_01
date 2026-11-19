@@ -10,6 +10,7 @@ import type { PlanOpening, WallKey } from './planDoors.ts';
 import { WALL_ORDER, byId, gridUp, snap, wallInfo, wallSpan } from './planDoors.ts';
 
 const C = BUILDING_PLANS.constants;
+const BLOCK = BUILDING_PLANS.recipes.block;
 const O = C.openings;
 const GRID = C.opening_grid_cm;
 const HALF = O.window_cm / 2;
@@ -58,8 +59,26 @@ export function planWindows(plan: BandPlan, opts: PlanWindowsOpts): PlanOpening[
         }
       }
     }
+    if (plan.archetype === 'block' && storey >= BLOCK.slot_min_storey) markSlots(plan, out.filter((o) => o.storey === storey));
   }
   return out;
+}
+
+/**
+ * S2.3 slots (S2_ROOMS_PLAN.md 3.6): in the front room B of every flat (street wall, v = D) the window nearest the room's middle is the flat's
+ * balcony / fire-escape slot; the same column on every storey from `slot_min_storey`. Nothing is built from it until a story (4) turns it into a door.
+ */
+function markSlots(plan: BandPlan, windows: PlanOpening[]): void {
+  for (const cell of plan.cells) {
+    if (cell.part !== 'B') continue;
+    const mid = (cell.u0 + cell.u1) / 2;
+    let best: PlanOpening | null = null;
+    for (const w of windows) {
+      if (w.wall !== 'vD' || w.links[0] !== cell.id) continue;
+      if (!best || Math.abs(w.c - mid) < Math.abs(best.c - mid) || (Math.abs(w.c - mid) === Math.abs(best.c - mid) && w.c < best.c)) best = w;
+    }
+    if (best) best.slot = 'balcony';
+  }
 }
 
 /** The centre the window gets: `want` when legal, else the nearest legal 50-grid centre inside the span (ties: the smaller), else null (dropped). */

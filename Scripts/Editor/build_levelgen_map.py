@@ -347,6 +347,8 @@ def _default_state_v2(layout, building, opening):
     if kind == "door":
         if ruin or opening.get("role") == "portal":
             return "open"  # a stair-core pad portal has no leaf (openingStates.ts, S2_ROOMS_PLAN.md 4.1)
+        if opening.get("role") == "unit_entry":
+            return "closed"  # a flat's front door is closed by default (designer 2026-11-19; openingStates.ts)
         return "closed" if classify_opening(layout, building, opening)[0] else "open"
     return "broken" if ruin else "glazed"
 

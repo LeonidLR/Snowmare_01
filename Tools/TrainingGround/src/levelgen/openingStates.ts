@@ -50,8 +50,8 @@ function defaultStateV1(opening: WallOpening): DoorState | WindowState {
 /**
  * The /2 default table (opening-states.md 3): exterior door 'closed' (hall / warehouse gates too), interior door 'open',
  * ground-floor and upper-storey windows 'glazed', loopholes 'fixed'; ruins: doors 'open', windows 'broken'.
- * Role defaults (S2.2, schema /2 planned buildings): a 'portal' door is 'open' wherever it sits. ('shop_window' -> 'fixed' and
- * 'unit_entry' -> 'closed' wait for S2.3 / S2.5.)
+ * Role defaults (schema /2 planned buildings): a 'portal' door is 'open' wherever it sits (S2.2); a flat's 'unit_entry' is 'closed' (S2.3, designer
+ * 2026-11-19: flat doors are closed by default - a leaf to open or breach). ('shop_window' -> 'fixed' waits for S2.5.)
  */
 function defaultStateV2(
   layout: Partial<Pick<GenLayout, 'walls'>>,
@@ -62,6 +62,7 @@ function defaultStateV2(
   const ruin = RUIN_SET_PIECES.includes(building.set_piece);
   if (opening.kind === 'door') {
     if (ruin || opening.role === 'portal') return 'open'; // a stair-core pad portal has no leaf (S2_ROOMS_PLAN.md 4.1)
+    if (opening.role === 'unit_entry') return 'closed'; // a flat's front door (a block's landing -> flat door)
     return classifyOpening(layout, building, opening).exterior ? 'closed' : 'open';
   }
   // window: ground floor and upper storeys share 'glazed'; a shop window ('fixed') is not marked in the data yet
