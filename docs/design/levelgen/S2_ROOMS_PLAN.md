@@ -1,5 +1,17 @@
 # S2 plan - room layouts (building generator, levelgen v3)
 
+> **HANDOVER 2026-11-19 evening (main PC offline; the stand-in lead on codex-worker continues from this branch).**
+> - Done today, all pushed, none merged: R3, F4 rule A, R4, room anchors, S2.1, S2.2, S2.2b, T-02 gaps 1-4.
+> - Also done: **bot mantle** 3a40a588. Worker results:
+>   - build OK;
+>   - `LabBridgeMantleRouteSmoke` PASS: the squad climbs W_obstacle in turns, up 3/3 in 6.2 s;
+>   - `LevelGenRouteSmoke` PASS;
+>   - `TacticalMapLabBridgeSmoke` PASS;
+>   - the automation test `CodexTactics.Bot.Route.ParseMantle` is built but not run yet.
+> - **Next: parapet FIRING GAPS** (designer 11-19). The design and the exact commands are in [FIRING_GAPS_HANDOVER.md](FIRING_GAPS_HANDOVER.md).
+>   Only `firing_gaps.json` exists; the code is not started. The gate needs the lead's yes to refresh the accepted X4.
+> - **Then S2.3 blocks** (section 5 below). The 1200-core engine check goes in S2.3's first worker build.
+
 Owner: Claude (building generator). Status: **PLAN, no code** (2026-11-19, branch `claude/building-generator`). Read:
 `gdd/*.md`, `BUILDINGS_TECH_SPEC.md`, `BUILDING_GENERATOR.md` 1 / 3 / 4 / 7, ADR-0001..3, `generate.ts` (`addBuilding`,
 `planStairCore`), `blockTemplates.ts`, `schema.ts`, `buildingTraversal.ts`, `tacticalEvaluate.ts`, `buildingRoutes.ts`,
