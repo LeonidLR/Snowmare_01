@@ -34,9 +34,9 @@ Rules of the plan:
 | OQ-21 - **RESOLVED 2026-11-19: as on 11-18**, generator charges round PMC posts only; one charge per ambush site later | nothing any more (T-11 charge half) | done |
 | OQ-22 - **RESOLVED 2026-11-19: the goal squad moves forward** to the best kill zone and falls back (PL-12); the Director later in the campaign | nothing any more (Phase 4) | done |
 | OQ-11 - **RESOLVED 2026-11-19: the playtest bot squad** taught to see and fight like humans; recordings later | nothing any more (T-03, Phase 8) | done |
-| OQ-3 resistance and survivors | Phase 7 profiles only | later |
-| OQ-4 / OQ-5 first volley, difficulty | Phase 7 fairness pass | later |
-| OQ-6 / OQ-8 / OQ-12 / OQ-14 window jumps, doors, grenades, monsters and doors | Phase 5 / 6 | before Phase 5 |
+| OQ-3 - **RESOLVED 2026-11-19 (as recommended)**: build PMC now, resistance / survivors later as profiles | nothing now (Phase 7) | done |
+| OQ-4 / OQ-5 - **RESOLVED 2026-11-19 (as recommended)**: first volley by difficulty (Normal wounds, Hard full); one difficulty now, knobs in data | nothing now (Phase 7) | done |
+| OQ-6 / OQ-8 / OQ-12 / OQ-14 - **RESOLVED 2026-11-19 (as recommended)**: first upper storey with the fall rule; doors not changed by defenders now, close/lock with R1; frag grenades with tells after DS-03; closed doors stop mutants, a horde breaks them | nothing now (Phase 5 / 6) | done |
 
 Tasks T-01, T-03, T-04 (metrics half), T-05, T-06, T-07, T-09, T-12 need no decision and can start at once. Since
 2026-11-19 T-08 and T-10 need none either: T-08 waits only for its technical inputs (T-05 position queries, T-07 for the
