@@ -45,7 +45,7 @@ _MOVE_ARROW_RE = re.compile(
     re.IGNORECASE,
 )
 _REPORT_NUM_RE = re.compile(r"^([A-Za-z]?\d+)-")
-TASK_OWNERS = ("codex", "gemini", "grok")
+TASK_OWNERS = ("codex", "gemini", "grok", "claude")  # claude = lead-run sessions / Sonnet subagents (2026-11-19)
 _URL_RE = re.compile(r"https?://\S+", re.IGNORECASE)
 _QUESTION_WORDS_RE = re.compile(r"(?:\bвопрос\b|\bquestion\b|подтверди|выбери вариант|нужно решение)", re.IGNORECASE)
 _BLOCKER_WORDS_RE = re.compile(r"(?:\bblocker\b|\bблокер\b|\bfatal\b|не собирается|build failed)", re.IGNORECASE)
@@ -570,7 +570,7 @@ def build_task_board(
 
     # Per-agent "Сейчас" strip
     now_by_agent: dict[str, dict[str, Any]] = {}
-    for agent_name in ("codex", "gemini", "claude", "grok"):
+    for agent_name in ("gemini", "claude", "grok"):  # Codex left for good 2026-11-19
         agent_chats = [
             parse_iso_timestamp(m.get("ts"))
             for m in messages
