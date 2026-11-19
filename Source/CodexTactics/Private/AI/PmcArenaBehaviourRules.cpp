@@ -71,8 +71,32 @@ void FPmcArenaOpeningShots::Record(int32 Fighter, double TimeS)
 
 namespace PmcArenaBehaviourRules
 {
+	float SquadReachCm(TConstArrayView<FPmcArenaPositionSample> Defenders)
+	{
+		TArray<float, TInlineAllocator<8>> Reaches;
+		for (const FPmcArenaPositionSample& Defender : Defenders)
+		{
+			if (Defender.bAlive && Defender.WeaponRangeCm > 0.f)
+			{
+				Reaches.Add(Defender.WeaponRangeCm);
+			}
+		}
+		if (Reaches.IsEmpty())
+		{
+			return 0.f;
+		}
+		Reaches.Sort();
+		const int32 Mid = Reaches.Num() / 2;
+		return Reaches.Num() % 2 == 1 ? Reaches[Mid] : 0.5f * (Reaches[Mid - 1] + Reaches[Mid]);
+	}
+
 	bool AttackersInRange(TConstArrayView<FPmcArenaPositionSample> Defenders, TConstArrayView<FPmcArenaPositionSample> Attackers)
 	{
+		const float ReachCm = SquadReachCm(Defenders);
+		if (ReachCm <= 0.f)
+		{
+			return false;
+		}
 		for (const FPmcArenaPositionSample& Defender : Defenders)
 		{
 			if (!Defender.bAlive || Defender.WeaponRangeCm <= 0.f)
@@ -81,7 +105,7 @@ namespace PmcArenaBehaviourRules
 			}
 			for (const FPmcArenaPositionSample& Attacker : Attackers)
 			{
-				if (Attacker.bAlive && FVector::DistSquared(Defender.Feet, Attacker.Feet) <= FMath::Square(Defender.WeaponRangeCm))
+				if (Attacker.bAlive && FVector::DistSquared(Defender.Feet, Attacker.Feet) <= FMath::Square(ReachCm))
 				{
 					return true;
 				}

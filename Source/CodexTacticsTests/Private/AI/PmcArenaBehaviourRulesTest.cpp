@@ -210,6 +210,20 @@ bool FPmcArenaPositionContactTest::RunTest(const FString&)
 	Attackers[0].bAlive = false;
 	Attackers[0].Feet = FVector::ZeroVector;
 	TestFalse(TEXT("A casualty does not trigger range"), AttackersInRange(Defenders, Attackers));
+	// One marksman (90 m) among two rifles (5 m here): the kill zone is the median reach, not the longest gun.
+	FPmcArenaPositionSample Marksman = Defender;
+	Marksman.WeaponRangeCm = 9000.f;
+	Marksman.Feet = FVector(-100.f, 0.f, 0.f);
+	TArray<FPmcArenaPositionSample> Squad = { Defender, Defender, Marksman };
+	TestEqual(TEXT("Squad reach is the median of the armed living defenders"), SquadReachCm(Squad), 500.f);
+	TestEqual(TEXT("Two guns average their reach"), SquadReachCm(TArray<FPmcArenaPositionSample>{ Defender, Marksman }), 4750.f);
+	TestEqual(TEXT("No armed defender, no reach"), SquadReachCm(TArray<FPmcArenaPositionSample>{ Unarmed, FPmcArenaPositionSample() }), 0.f);
+	Attackers[0].bAlive = true;
+	Attackers[0].Feet = FVector(-3000.f, 0.f, 0.f);
+	TestFalse(TEXT("An attacker inside only the marksman's reach is no contact"), AttackersInRange(Squad, Attackers));
+	Attackers[0].Feet = FVector(300.f, 0.f, 0.f);
+	TestTrue(TEXT("An attacker inside the squad's median reach is contact"), AttackersInRange(Squad, Attackers));
+	Attackers[0].bAlive = false;
 	TestEqual(TEXT("One of two live defenders is in position"), OnPositionShare(Defenders).Get(-1.f), 0.5f);
 	TestFalse(TEXT("Empty team has no position share"), OnPositionShare({}).IsSet());
 	return true;

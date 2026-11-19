@@ -324,6 +324,7 @@ namespace PmcArena
 		float DefenceSpreadM = 0.f;
 		TArray<TSharedPtr<FJsonValue>> OpenIdleByFighter;
 		TOptional<float> OnPositionBeforeContact;
+		float RangeContactTimeS = -1.f;
 		TOptional<float> CrossfireDeg;
 		double MaxExposedRunM = 0.0;
 		TOptional<float> FirstShotGapS;
@@ -420,6 +421,8 @@ namespace PmcArena
 		TArray<FPmcArenaPositionTime> PositionTotals[2];
 		float LastPositionTimeS = -1.f;
 		TOptional<float> OnPositionBeforeContact;
+		/** Round time of that first in-range sample, s. */
+		float RangeContactTimeS = -1.f;
 		bool bOpeningShotObserved = false;
 		TOptional<float> CrossfireDeg;
 		FPmcArenaOpeningShots DefenderOpeningShots;
@@ -1717,7 +1720,9 @@ namespace PmcArena
 				{
 					constexpr double IdleSpeedCmPerS = 15.0; // operative locomotion's movement threshold, without its order bit
 					Sample.Feet = FeetOf(*Fighter);
-					Sample.WeaponRangeCm = Fighter->CurrentWeapon ? Fighter->CurrentWeapon->Stats.Range.MaxRangeCm : 0.f;
+					// The EFFECTIVE reach (full hit chance), not the max reach; AttackersInRange then takes the squad's MEDIAN of these
+					// (T-04 report: the max reach and a marksman's 90 m both made the first sample of the 78-88 m smokes "contact").
+					Sample.WeaponRangeCm = Fighter->CurrentWeapon ? Fighter->CurrentWeapon->Stats.Range.GetEffectiveRangeCm() : 0.f;
 					Sample.bMoving = Fighter->GetVelocity().SizeSquared() > FMath::Square(IdleSpeedCmPerS)
 						|| Fighter->IsMantling() || Fighter->IsClimbingLadder();
 					const FPmcTacticalPost* Post = Pmc ? Pmc->GetFighterPost(Fighter) : nullptr;
@@ -1744,6 +1749,18 @@ namespace PmcArena
 		if (bBeforeContact && PmcArenaBehaviourRules::AttackersInRange(Defenders, Track.PositionSamples[AttackerIndex]))
 		{
 			Track.OnPositionBeforeContact = PmcArenaBehaviourRules::OnPositionShare(Defenders);
+			Track.RangeContactTimeS = State.StageTime;
+			double ClosestCm = TNumericLimits<double>::Max();
+			const float ReachCm = PmcArenaBehaviourRules::SquadReachCm(Defenders);
+			for (const FPmcArenaPositionSample& Defender : Defenders)
+			{
+				for (const FPmcArenaPositionSample& Attacker : Track.PositionSamples[AttackerIndex])
+				{
+					ClosestCm = Defender.bAlive && Attacker.bAlive ? FMath::Min(ClosestCm, FVector::Dist(Defender.Feet, Attacker.Feet)) : ClosestCm;
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] T-04 first attacker in effective reach at %.1f s: closest defender-attacker pair %.1f m, squad (median) reach %.1f m, defenders on position %.2f"),
+				State.StageTime, ClosestCm / 100.0, ReachCm / 100.f, Track.OnPositionBeforeContact.Get(-1.f));
 		}
 		Track.LastPositionTimeS = State.StageTime;
 	}
@@ -1821,6 +1838,7 @@ namespace PmcArena
 		Track.SharedCoverPairs = 0;
 		Track.LastPositionTimeS = -1.f;
 		Track.OnPositionBeforeContact.Reset();
+		Track.RangeContactTimeS = -1.f;
 		Track.bOpeningShotObserved = false;
 		Track.CrossfireDeg.Reset();
 		Track.DefenderOpeningShots = FPmcArenaOpeningShots();
@@ -2574,6 +2592,7 @@ namespace PmcArena
 					}
 				};
 				WriteObservation(TEXT("on_position_before_contact"), Result.OnPositionBeforeContact);
+				WriteObservation(TEXT("range_contact_s"), Result.RangeContactTimeS >= 0.f ? TOptional<float>(Result.RangeContactTimeS) : TOptional<float>());
 				WriteObservation(TEXT("crossfire_deg"), Result.CrossfireDeg);
 				Defence->SetNumberField(TEXT("max_exposed_run_m"), FMath::RoundToDouble(Result.MaxExposedRunM * 100.0) / 100.0);
 				WriteObservation(TEXT("first_shot_gap_s"), Result.FirstShotGapS);
@@ -2663,6 +2682,8 @@ namespace PmcArena
 		double OnPosition = -1.0;
 		double Crossfire = -1.0;
 		double FirstShotGap = -1.0;
+		double RangeContactS = -1.0;
+		Optional(TEXT("range_contact_s"), RangeContactS);
 		const bool bContact = Optional(TEXT("on_position_before_contact"), OnPosition);
 		const bool bCrossfire = Optional(TEXT("crossfire_deg"), Crossfire);
 		const bool bGap = Optional(TEXT("first_shot_gap_s"), FirstShotGap);
@@ -2686,12 +2707,14 @@ namespace PmcArena
 		const double Spread = (*Defence)->GetNumberField(TEXT("spread_m"));
 		const FPmcWeights& DefenderWeights = DefenderSide == TEXT("A") ? State.WeightsA : State.WeightsB;
 		const double MinSpacingM = DefenderWeights.MinSpacingCm / 100.f;
-		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] %s smoke metrics (%s, defenders %s, %d men): worst open idle before contact %.2f s (total %.2f s), on position at first range contact %s, crossfire %s deg, first-shot gap %s s, mean spread %.1f m, attackers' longest exposed run %.1f m"),
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] %s smoke metrics (%s, defenders %s, %d men): worst open idle before contact %.2f s (total %.2f s), on position at first range contact %s, crossfire %s deg, first-shot gap %s s, mean spread %.1f m, attackers' longest exposed run %.1f m, first in-range sample at %.1f s"),
 			Id, *Played, *DefenderSide, Men, WorstIdle, WorstIdleTotal, bContact ? *FString::Printf(TEXT("%.2f"), OnPosition) : TEXT("n/a"),
 			bCrossfire ? *FString::Printf(TEXT("%.1f"), Crossfire) : TEXT("n/a"), bGap ? *FString::Printf(TEXT("%.2f"), FirstShotGap) : TEXT("n/a"),
-			Spread, (*Defence)->GetNumberField(TEXT("max_exposed_run_m")));
+			Spread, (*Defence)->GetNumberField(TEXT("max_exposed_run_m")), RangeContactS);
 		Check(State, Men == State.Options.Squad, FString::Printf(TEXT("precondition: every defender has an open_idle_s entry (%d of %d)"), Men, State.Options.Squad));
 		Check(State, bContact, TEXT("precondition: an attacker came within a defender's weapon range (on_position_before_contact measured)"));
+		// A contact at the very first sample would make "before contact" empty and the position share a measurement of the spawn, not of the play.
+		Check(State, RangeContactS > 0.0, FString::Printf(TEXT("precondition: the first attacker came into effective range after the start (at %.1f s)"), RangeContactS));
 		// The behaviour. Each line names the GDD criterion it pins; none is tuned to today's code.
 		Check(State, WorstIdle <= MaxOpenIdleBeforeContactS, FString::Printf(TEXT("%s.1 no defender stands in the open and still before contact for more than %.1f s (worst %.2f s)"),
 			Id, MaxOpenIdleBeforeContactS, WorstIdle));
@@ -3295,6 +3318,7 @@ namespace PmcArena
 			}
 		}
 		Result.OnPositionBeforeContact = PositionTrack.OnPositionBeforeContact;
+		Result.RangeContactTimeS = PositionTrack.RangeContactTimeS;
 		Result.CrossfireDeg = PositionTrack.CrossfireDeg;
 		Result.FirstShotGapS = PositionTrack.DefenderOpeningShots.GapS();
 	}

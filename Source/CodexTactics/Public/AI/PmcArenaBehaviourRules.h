@@ -115,7 +115,14 @@ private:
 
 namespace PmcArenaBehaviourRules
 {
-	/** A living attacker enters any living defender's equipped weapon reach (3D, independent of visibility and fire). */
+	/**
+	 * The squad's kill-zone reach: the MEDIAN of the living armed defenders' WeaponRangeCm (the effective reach of the equipped weapon).
+	 * The median, not the longest gun: a squad with one marksman (90 m) and two rifles (28 m) opens its kill zone at 28 m, and a
+	 * 78-88 m spawn separation is then no "contact" (T-04 run 2: the longest reach made the first sample the contact). 0 = nobody armed.
+	 */
+	CODEXTACTICS_API float SquadReachCm(TConstArrayView<FPmcArenaPositionSample> Defenders);
+
+	/** A living attacker is within SquadReachCm of a living armed defender (3D, independent of visibility and fire). */
 	CODEXTACTICS_API bool AttackersInRange(TConstArrayView<FPmcArenaPositionSample> Defenders, TConstArrayView<FPmcArenaPositionSample> Attackers);
 
 	/** Share of the living defenders on cover/post at the first in-range sample. */
