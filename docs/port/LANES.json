@@ -7,12 +7,16 @@
    "owner": "worker stand-in",
    "branch": "worker/t05-firing-positions",
    "topic": "claude-T005",
-   "state": "waiting",
+   "state": "active",
    "max_quiet_min": 45,
    "worktree": "C:/Work/CodexTactics-slot1",
    "machine": "worker",
+<<<<<<< HEAD
    "reason": "iteration 3 (seat only positions reachable before the attackers arrive) queued after T-021; 4588fbbc gated (build, tests, 7 smokes PASS), acceptance numbers not met",
    "max_wait_min": 240
+=======
+   "reason": "stand-in lead on codex-worker: build a1dae05a, read the per-man band log, fix seating, then Crossroads + Alley x30"
+>>>>>>> origin/worker/t05-firing-positions
   },
   {
    "id": "T-020",
