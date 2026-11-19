@@ -266,6 +266,8 @@ void USuppressionSubsystem::Tick(float DeltaTime)
 		}
 		if (!bWasOpen && SuppressionRules::IsZoneOpen(Cell))
 		{
+			Cell.ZoneId = ++NextFearZoneId;
+			Cell.NextTieSide = 1;
 			++Stats.ZonesOpened;
 			UE_LOG(LogCodexTactics, Display, TEXT("[Suppression] dense fire: a fear zone opens at (%.0f, %.0f) - melee packs scatter round it"),
 				Cell.Centre.X, Cell.Centre.Y);
@@ -314,8 +316,12 @@ void USuppressionSubsystem::ReportExplosion(const FVector& Location, float Blast
 	}
 }
 
-bool USuppressionSubsystem::FindFearZone(const FVector& Feet, float Extra, FVector& OutCentre, float& OutRadius) const
+bool USuppressionSubsystem::FindFearZone(const FVector& Feet, float Extra, FVector& OutCentre, float& OutRadius, uint64* OutZoneId) const
 {
+	if (OutZoneId)
+	{
+		*OutZoneId = 0;
+	}
 	if (IsSuppressionOff())
 	{
 		return false;
@@ -331,10 +337,23 @@ bool USuppressionSubsystem::FindFearZone(const FVector& Feet, float Extra, FVect
 			BestMargin = Distance - Radius;
 			OutCentre = Cell.Centre;
 			OutRadius = Radius;
+			if (OutZoneId)
+			{
+				*OutZoneId = Cell.ZoneId;
+			}
 			bFound = true;
 		}
 	}
 	return bFound;
+}
+
+int8 USuppressionSubsystem::TakeFearDetourTieSide(uint64 ZoneId)
+{
+	FSuppressionFireCell* Cell = FireCells.FindByPredicate([ZoneId](const FSuppressionFireCell& Each)
+	{
+		return Each.ZoneId == ZoneId && SuppressionRules::IsZoneOpen(Each);
+	});
+	return Cell ? SuppressionRules::TakeFearDetourTieSide(*Cell) : 0;
 }
 
 TArray<FVector> USuppressionSubsystem::GetOpenFearZones() const

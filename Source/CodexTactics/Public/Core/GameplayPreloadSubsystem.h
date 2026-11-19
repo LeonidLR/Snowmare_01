@@ -89,6 +89,11 @@ private:
 	void GatherDependencies(UObject* Object, TArray<FGameplayPreloadPath>& Out);
 	void Finish(bool bSuccess);
 	void ReleaseStartupGates();
+	/**
+	 * The level-start one-shot work (drop links, mantle links, minimap setup; 40-230 ms each, one per frame) under the loading cover instead of
+	 * their world-timer poll / first unpaused ticks in the first gameplay frames (HitchProbeSmoke, 2026-11-18). True = done, or the navmesh is not built yet (no wait - fail-open: their own level-start paths keep the work).
+	 */
+	bool PrepareLevelStartWork();
 
 	EPhase Phase = EPhase::WaitingForMode;
 	TWeakObjectPtr<ACodexTacticsGameMode> ModeOwner;
@@ -103,4 +108,5 @@ private:
 	bool bInitialBatchAwaitingBeginPlay = false;
 	bool bFailed = false;
 	bool bOwnsAIBlocker = false;
+	uint8 LevelStartStep = 0; // 0 drop links, 1 mantle links, 2 minimap, 3 done
 };

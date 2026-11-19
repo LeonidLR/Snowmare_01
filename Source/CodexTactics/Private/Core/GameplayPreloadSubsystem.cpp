@@ -16,7 +16,10 @@
 #include "Engine/SkinnedAsset.h"
 #include "Engine/StreamableManager.h"
 #include "Engine/World.h"
+#include "Falls/DropLinkSubsystem.h"
+#include "Interactables/MantleNavigation.h"
 #include "Ladders/LadderClimbComponent.h"
+#include "UI/MinimapSubsystem.h"
 #include "HAL/IConsoleManager.h"
 #include "Misc/CommandLine.h"
 #include "Misc/Parse.h"
@@ -37,6 +40,21 @@ namespace
 		TEXT("1 (default): also pause the world (engine pause) while the preload prepares, on top of the explicit squad tick / clock / input / AI "
 			"gates - the level's own beats (tutorial cards, fades, placed enemies, quest timers) must not run under the loading cover. 0: the explicit "
 			"gates only (A/B; -PreloadNoWorldPause does the same for one process)."));
+	TAutoConsoleVariable<int32> CVarPreloadLevelStartWork(TEXT("Codex.Preload.LevelStartWork"), 1,
+		TEXT("1 (default): the level-start one-shot work (drop links, mantle links, minimap setup) runs under the preload's loading cover when the "
+			"navmesh is ready (HitchProbeSmoke 2026-11-18). 0: it stays in the first gameplay frames as before (A/B; -PreloadNoLevelStartWork does the "
+			"same for one process)."));
+
+	bool UsesLevelStartWork()
+	{
+#if !UE_BUILD_SHIPPING
+		if (FParse::Param(FCommandLine::Get(), TEXT("PreloadNoLevelStartWork")))
+		{
+			return false;
+		}
+#endif
+		return CVarPreloadLevelStartWork.GetValueOnGameThread() != 0;
+	}
 }
 
 bool UGameplayPreloadSubsystem::UsesWorldPause()
@@ -391,7 +409,51 @@ void UGameplayPreloadSubsystem::Tick(float DeltaTime)
 		}
 	}
 #endif
+	if (!PrepareLevelStartWork())
+	{
+		return;
+	}
 	Finish(true);
+}
+
+bool UGameplayPreloadSubsystem::PrepareLevelStartWork()
+{
+	UWorld* World = GetWorld();
+	if (LevelStartStep >= 3 || !World || !UsesLevelStartWork())
+	{
+		return true;
+	}
+	bool bStepDone = true;
+	if (LevelStartStep == 0)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Codex_GameplayPreloadDropLinks);
+		UDropLinkSubsystem* Drops = World->GetSubsystem<UDropLinkSubsystem>();
+		bStepDone = !Drops || Drops->TryGenerateForPreload();
+	}
+	else if (LevelStartStep == 1)
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Codex_GameplayPreloadMantleLinks);
+		UMantleSubsystem* Mantle = World->GetSubsystem<UMantleSubsystem>();
+		bStepDone = !Mantle || Mantle->TryGenerateForPreload();
+	}
+	else
+	{
+		TRACE_CPUPROFILER_EVENT_SCOPE(Codex_GameplayPreloadMinimap);
+		UMinimapSubsystem* Minimap = World->GetSubsystem<UMinimapSubsystem>();
+		bStepDone = !Minimap || Minimap->TrySetupForPreload();
+	}
+	if (!bStepDone)
+	{
+		// No waiting: a navmesh built at runtime (L_MovementTest) does not build while the preload pauses the world (the navigation system
+		// does not tick paused), so waiting only delays the level. The subsystems' own level-start paths (link polls, minimap tick) do it
+		// once the navmesh is ready, as before. Prebuilt navmeshes (generated levels) are ready here.
+		UE_LOG(LogCodexTactics, Display, TEXT("[GameplayPreload] navmesh not ready under the preload: level-start step %d onward left to gameplay"),
+			int32(LevelStartStep));
+		LevelStartStep = 3;
+		return true;
+	}
+	++LevelStartStep;
+	return false; // one generator per frame: the next tick runs the next step / finishes
 }
 
 void UGameplayPreloadSubsystem::ReleaseStartupGates()

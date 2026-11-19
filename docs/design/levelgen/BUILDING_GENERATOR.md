@@ -124,6 +124,10 @@ inside a neighbour; validator `stair_in_other_building` (4afb04f6, 31236b98). Sm
 WARN with a complete path); upper flights print "no navmesh path" while an editor-world `FindPathToLocationSynchronously` on the
 same baked map finds complete paths.
 
+### 1.6 Built-map gate results (2026-11-19)
+
+`LevelGenBuildingsSmoke` reported **13 failures among 41 enterable buildings** on BgenTest X6 (52 total, TS validator reported 0) and **7 among 57** on Depot X6 (70 total, brief audit 24 of 70). On BgenTest X6, 12 of the first unreachable room centres fall in the stairwell cutouts on storey 2. The corrected ramp probe found complete paths on 29 of 29 upper flights, up from 12 of 29. The Solo smoke ran 48 legs and passed 32, including 14 of 29 upper legs. See `docs/port/codex/outbox/048-buildings-smoke.report.md` for IDs and logs.
+
 ## 2. Design decisions (the designer's forks)
 
 Asked 2026-11-18; the designer answered the same day (all four: option (a)), before any code.

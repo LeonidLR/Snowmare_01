@@ -189,6 +189,12 @@ struct CODEXTACTICS_API FSuppressionConfig
 	float ZoneDurationSeconds = 3.f;
 	/** "zone.min_squad_distance_cm": no zone opens this close to a live operative (a hound biting him is fought, not scattered). */
 	float ZoneMinSquadDistanceCm = 500.f;
+	/** Hounds closer to the approach axis than this alternate sides within the zone. */
+	float ZoneDetourTieBandCm = 25.f;
+	/** How far past the zone's radius enemies look for a suppression detour. */
+	float ZoneDetourLookAheadCm = 1200.f;
+	/** Nearby hounds inside this distance share an approach lane. */
+	float ZoneDetourPackRadiusCm = 1500.f;
 };
 
 /** One ground cell of the squad's fire (the fear zone of dense fire). */
@@ -200,6 +206,9 @@ struct CODEXTACTICS_API FSuppressionFireCell
 	FVector Centre = FVector::ZeroVector;
 	/** Seconds the fear zone stays open (> 0: open). */
 	float ZoneLeft = 0.f;
+	/** Identity for one opening, stable while later rounds move Centre. */
+	uint64 ZoneId = 0;
+	int8 NextTieSide = 1;
 };
 
 /** A known enemy a Shift + click may mean (SuppressionRules::PickClickTarget). */
@@ -310,6 +319,15 @@ namespace SuppressionRules
 	 */
 	CODEXTACTICS_API bool StepFireCell(const FSuppressionConfig& Config, FSuppressionFireCell& Cell, float DeltaSeconds, bool bSquadTooClose);
 	CODEXTACTICS_API bool IsZoneOpen(const FSuppressionFireCell& Cell);
+
+	/** Lateral offset from the outward approach axis, positive on the counter-clockwise side. */
+	CODEXTACTICS_API float FearDetourLateralOffset(const FVector& Enemy, const FVector& Centre, const FVector& OutwardAxis);
+
+	/** Sign of the approach offset, or zero inside the band where the zone alternates ties. */
+	CODEXTACTICS_API int8 PickFearDetourSide(float LateralCm, float TieBandCm);
+
+	/** Allocate one of the alternating sides to the next tied enemy in this opening. */
+	CODEXTACTICS_API int8 TakeFearDetourTieSide(FSuppressionFireCell& Cell);
 
 	// --- The Shift + click order (user decision 2026-10-26) ---
 

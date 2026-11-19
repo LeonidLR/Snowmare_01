@@ -11,6 +11,7 @@ import type { FiringLine } from '../levelgen/tacticalEvaluate';
 import type { PlanView } from '../levelgen/planView';
 import { buildingRectPoly, footprintPoly, rotationOf, rotVec, toBuildingFrame } from '../levelgen/rotation';
 import { FIT_VIEW, planTransform, viewTransform } from '../levelgen/planView';
+import type { WallCrossingConflict } from '../levelgen/layoutValidator';
 
 const SET_TINT: Record<string, string> = {
   street: '#787882', marksman_lane: '#8a7070', t_junction: '#8c8c5a', alley: '#969664', facade: '#5a463c', one_entry_compound: '#966e3c',
@@ -43,9 +44,11 @@ interface Props {
   hidden?: ReadonlySet<string>;
   /** Plan colours by entity key («цвета слоёв»: the obstacle size classes; layers.ts layerTints). */
   tints?: ReadonlyMap<string, string>;
+  /** Wall crossing conflicts to mark with red indicators (task 085). */
+  conflicts?: WallCrossingConflict[];
 }
 
-export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks, view = FIT_VIEW, hideObjectives = false, hidden, tints }, ref) => {
+export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks, view = FIT_VIEW, hideObjectives = false, hidden, tints, conflicts }, ref) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   useImperativeHandle(ref, () => ({ toPngBase64: () => canvas.current ? canvas.current.toDataURL('image/png').replace(/^data:image\/png;base64,/, '') : null }), []);
   // redraw on a size change (the region-select overlay over this canvas tracks its size: both must use the same transform)
@@ -201,8 +204,8 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
       if (!onLayer(wl.floor ?? 0, wl.building) || !shown(`wall:${wl.id}`)) continue;
       const a = P(wl.a), b = P(wl.b);
       const wTint = tints?.get(`wall:${wl.id}`);
-      g.strokeStyle = wTint ?? (wl.kind === 'fence' ? '#e6e678' : wl.kind === 'cut_wall' ? '#465aa0' : '#c8c8d2'); g.lineCap = 'butt';
-      g.lineWidth = Math.max(wTint ? 1.6 : 1, wl.thickness * s);
+      g.strokeStyle = wTint ?? (wl.kind === 'fence' ? '#fbbf24' : wl.kind === 'cut_wall' ? '#465aa0' : '#c8c8d2'); g.lineCap = 'butt';
+      g.lineWidth = Math.max(wTint ? 1.8 : (wl.kind === 'fence' ? 1.8 : 1), wl.thickness * s);
       g.beginPath(); g.moveTo(a[0], a[1]); g.lineTo(b[0], b[1]); g.stroke();
     }
     // covers
@@ -288,10 +291,29 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
       });
       g.restore();
     }
+    // conflict markers (task 085: red markers per wall crossing)
+    for (const cf of conflicts ?? []) {
+      const q = P(cf.point);
+      g.save();
+      g.strokeStyle = '#ef4444';
+      g.fillStyle = 'rgba(239, 68, 68, 0.4)';
+      g.lineWidth = 2;
+      g.beginPath();
+      g.arc(q[0], q[1], 8, 0, Math.PI * 2);
+      g.fill();
+      g.stroke();
+      g.beginPath();
+      g.moveTo(q[0] - 5, q[1] - 5);
+      g.lineTo(q[0] + 5, q[1] + 5);
+      g.moveTo(q[0] + 5, q[1] - 5);
+      g.lineTo(q[0] - 5, q[1] + 5);
+      g.stroke();
+      g.restore();
+    }
     for (const m of marks ?? []) { const q = P(m); g.strokeStyle = '#f97316'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.stroke(); }
     g.fillStyle = '#ffe600'; g.font = '11px ui-monospace, monospace'; g.textAlign = 'left';
     g.fillText(`${layout.name}  ${Math.round((maxY - minY) / 100)} x ${Math.round((maxX - minX) / 100)} m  seed ${layout.seed}  layer ${layer !== 'all' ? layer : floorMode}`, 8, h - 8);
-  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW, view, hideObjectives, hidden, tints]);
+  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW, view, hideObjectives, hidden, tints, conflicts]);
 
   return <canvas ref={canvas} style={{ width: '100%', height }} className="rounded-xl border border-slate-800 block" />;
 });

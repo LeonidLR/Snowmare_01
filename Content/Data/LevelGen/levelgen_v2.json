@@ -114,5 +114,42 @@
     "log_lines": 400,
     "log_tail": 80,
     "log_comment": "The scripts run hidden (no window); their output goes to the page's log panel: the server keeps the last log_lines lines (also Saved/LevelGen/<build|route>_<map>.log), the status poll sends the last log_tail."
+  },
+  "pmc_posts": {
+    "comment": "PMC posts + their charges (docs/design/PMC_DEFENCE.md D2, designer 2026-11-18 evening; task 087): the generator places 1-N PMC squads at strategic places of the tactical map (pmcPosts.ts) and the defend squads' mines / tripwires round them. count_by_factor: [min, max] posts by the expansion factor (1 = not expanded), drawn seeded. kinds: the draw weight and the squad size per post kind (ambush_exit = a hiding spot at a chokepoint, overwatch_roof = a roof spot, window = a window stand point over a line, hiding_spot = a hiding spot off the chokepoints). A post never stands inside a chokepoint outline (+ chokepoint_margin_m), within min_from_start_m of the player start, within route_clear_m of the mandatory route on its own layer, or farther than max_from_route_m from it; posts keep squad_spacing_m apart, one per building. posture_weights: defend / hunt share; delay_s: the level JSON's delay per posture; weights_file: the commander weights file.",
+    "count_by_factor": { "1": [1, 2], "2": [1, 3], "4": [2, 4], "6": [2, 5] },
+    "kinds": {
+      "ambush_exit":    { "weight": 1.0, "squad": 3 },
+      "overwatch_roof": { "weight": 0.8, "squad": 2 },
+      "window":         { "weight": 0.6, "squad": 2 },
+      "hiding_spot":    { "weight": 0.4, "squad": 3 }
+    },
+    "posture_weights": { "defend": 0.75, "hunt": 0.25 },
+    "delay_s": { "defend": 0, "hunt": 120 },
+    "weights_file": "pmc_commander.json",
+    "min_from_start_m": 40,
+    "route_clear_m": 3,
+    "max_from_route_m": 60,
+    "chokepoint_margin_m": 1,
+    "squad_spacing_m": 30,
+    "charges": {
+      "comment": "Charges of a DEFEND post (D2; hunt posts get none). Supply: sappers_per_squad x per_sapper (designer Q1: the PMC sapper carries 2 mines + 1 tripwire). Order: doorway mine (the door of the post's building the attack enters - nearest to the attack anchor = the mandatory route point nearest the post), then mines on the straight approach line anchor -> target (the post / its door / its ladder foot) from first_mine_m out every mine_spacing_m, then on the second line target -> the mandatory-route point second_line_back_m upstream of the anchor (towards the start: the way the attackers come); the tripwire: inside roof access (stairwell top / hatch, access_offset_m onto the roof - outside the validator's 175 cm stair keep-out) for a roof post, an outside ladder / external stair -> no access trap (the guard covers it); a window post: across the building's other door; else (and when those fail) across the flank, flank_m to the side of the post / its door / ladder foot, the covered side first. Never within retreat_clear_m of the retreat line (post -> retreat_m straight away from the anchor), route_clear_m of the mandatory route, start_clear_m of the start, mine_spacing_m of another charge; every charge passes the props static validator (the game drops nothing at load).",
+      "sappers_per_squad": 1,
+      "per_sapper": { "mines": 2, "tripwires": 1 },
+      "mine_spacing_m": 4,
+      "first_mine_m": 5,
+      "second_line_back_m": 20,
+      "flank_m": 5,
+      "retreat_m": 12,
+      "retreat_clear_m": 2,
+      "route_clear_m": 2,
+      "start_clear_m": 20,
+      "access_offset_m": 2.2,
+      "door_inside_cm": 60,
+      "tripwire_width_cm": 300,
+      "mine": { "variant": "mine_proximity", "trigger": "proximity" },
+      "tripwire": { "variant": "mine_tripwire", "trigger": "tripwire" },
+      "layer_id": "pmc_charges"
+    }
   }
 }

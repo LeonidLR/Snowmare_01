@@ -42,6 +42,12 @@ void AOperativeAIController::OnMoveCompleted(FAIRequestID RequestID, const FPath
 				*Operative->DisplayName.ToString(), *Result.ToString(), FVector::Dist2D(Operative->GetLastMoveDestination(), Operative->GetActorLocation()),
 				Velocity.Size2D(), FVector::DotProduct(Velocity.GetSafeNormal2D(), ToGoal));
 		}
+		// Give way v2 (X6 LevelGenRampSmoke): the crowd's block detection (no 10 cm in 5 s, a mate in a stair mouth) ended the player's order
+		// silently ('order none') - it is asked again instead (SquadGiveWayRules::ShouldRetryBlockedMove).
+		if (Result.Code == EPathFollowingResult::Blocked && Operative->RetryBlockedOwnMove())
+		{
+			return;
+		}
 		Operative->HandleMoveFinished();
 	}
 }

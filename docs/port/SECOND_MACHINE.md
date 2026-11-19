@@ -138,6 +138,25 @@ Measured 2026-11-17 (wired LAN, Development Editor, `CodexTacticsEditor`):
 | incremental, one .cpp changed (uncommitted, as a patch) | 35 s | 1.2 min (15 MB back) | 2-5 min |
 | smoke on that build (`MovementSmoke`) | 42 s | 0.9 min, no sync | - |
 
+### Night guard (2026-11-18)
+
+On 2026-11-18 three main-PC callers moved the frozen tree under the running night trainer. Now every `worker_sync.ps1` run
+that takes the worker is **refused with exit 2** when both hold:
+- the worker's `Saved\Worker\FROZEN` was written since 08:30 of the window's day;
+- the worker's clock is inside 16:30-08:00.
+
+The refused callers are `build_remote.ps1` / `build.ps1 -Remote worker`, `smoke_remote.ps1` / `smoke_parallel -Remote` and plain
+`worker_sync`. Each prints the one-line reason: "worker frozen for the night trainer until 08:00 - build / smoke locally".
+
+After a refusal:
+- build locally;
+- `smoke_parallel -Remote auto` falls back to a local run, as on any exit 2;
+- `-Remote on` exits 2.
+
+These pass: `worker_sync -Frozen` (the freeze itself), and `-ForceFrozen` (lead only; also on `build_remote.ps1`) or env
+`CODEX_FORCE_FROZEN=1`. The check is one ssh call. To test it read-only:
+`worker_sync.ps1 -FrozenCheckOnly [-FrozenTestNow 2026-11-19T07:30]` (exit 0 = allowed, 2 = refused).
+
 ## Continuous loop (test farm + trainer) - `worker_loop.ps1`
 
 One Windows scheduled task on the worker runs `Scripts/Tools/worker_loop.ps1`; nothing on it is started by hand.

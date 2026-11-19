@@ -152,6 +152,12 @@ public:
 	int32 Generate();
 	void ClearLinks();
 	bool HasGenerated() const { return bGenerated; }
+	/**
+	 * The world preload's call (UGameplayPreloadSubsystem, under the loading cover - world timers do not run while it pauses the world): generates
+	 * now when the level-start poll still waits, the navmesh is built and the drop links are done. True = nothing left to wait for; false = not
+	 * ready yet. Keeps the ~0.12 s generation out of the first gameplay frames (HitchProbeSmoke frame #984 141.6 ms, 2026-11-18).
+	 */
+	bool TryGenerateForPreload();
 	/** The last generation stopped at the link cap (links.max_total): obstacles after it got no links (smokes, batch 2 item 9). */
 	bool WasLinkCapReached() const { return bLinkCapReached; }
 
@@ -183,6 +189,8 @@ public:
 
 private:
 	void PollReady();
+	/** The infantry navmesh exists, no navigation build runs and the drop links are done (or waited out). */
+	bool IsReadyToGenerate() const;
 	void HandleLinkReached(UNavLinkCustomComponent* ThisComp, UObject* PathComp, const FVector& DestPoint);
 
 	TArray<FMantleLink> Links;

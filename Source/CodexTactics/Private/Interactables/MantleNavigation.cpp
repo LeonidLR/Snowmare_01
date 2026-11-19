@@ -451,16 +451,39 @@ void UMantleSubsystem::Deinitialize()
 	Super::Deinitialize();
 }
 
-void UMantleSubsystem::PollReady()
+bool UMantleSubsystem::IsReadyToGenerate() const
 {
 	UWorld* World = GetWorld();
 	UNavigationSystemV1* Nav = World ? FNavigationSystem::GetCurrent<UNavigationSystemV1>(World) : nullptr;
-	WaitedSeconds += 0.5f;
 	const ARecastNavMesh* Recast = Nav ? Cast<ARecastNavMesh>(Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate)) : nullptr;
 	// After the drop links (their reach graph counts in ours: a tall top left by a drop is not a dead end).
 	const UDropLinkSubsystem* Drops = World ? World->GetSubsystem<UDropLinkSubsystem>() : nullptr;
 	const bool bDropsReady = !Drops || !Drops->IsEnabledForWorld() || Drops->HasGenerated() || WaitedSeconds > 60.f;
-	if (!Recast || Nav->IsNavigationBuildInProgress() || !bDropsReady)
+	return Recast && !Nav->IsNavigationBuildInProgress() && bDropsReady;
+}
+
+bool UMantleSubsystem::TryGenerateForPreload()
+{
+	UWorld* World = GetWorld();
+	// Nothing pending: generated already, links off (no poll armed), or the level-start poll gave up.
+	if (!World || bGenerated || !World->GetTimerManager().TimerExists(PollTimer))
+	{
+		return true;
+	}
+	if (!IsReadyToGenerate())
+	{
+		return false;
+	}
+	World->GetTimerManager().ClearTimer(PollTimer);
+	Generate();
+	return true;
+}
+
+void UMantleSubsystem::PollReady()
+{
+	UWorld* World = GetWorld();
+	WaitedSeconds += 0.5f;
+	if (!IsReadyToGenerate())
 	{
 		if (WaitedSeconds > 180.f && World)
 		{

@@ -25,6 +25,7 @@
 #include "Bot/BotRouteRules.h"
 #include "Bot/PlaytestBotSubsystem.h"
 #include "Characters/OperativeCharacter.h"
+#include "Survival/ColdSurvivalComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Core/CodexTacticsGameMode.h"
@@ -273,6 +274,14 @@ namespace LevelGenRouteSmoke
 		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
+		// The smoke checks the route, not the cold (designer 2026-11-19): no frostbite collapse on the cold generated maps.
+		for (AOperativeCharacter* Each : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			if (Each && Each->ColdSurvival && Each->ColdSurvival->IsComponentTickEnabled())
+			{
+				Each->ColdSurvival->SetComponentTickEnabled(false);
+			}
+		}
 		if (!Leader)
 		{
 			Check(State, false, TEXT("a squad leader exists"));

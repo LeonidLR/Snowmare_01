@@ -158,6 +158,12 @@ public:
 
 	/** Captures done (or created headless), floors and fog set up. */
 	bool IsReady() const { return bReady; }
+	/**
+	 * The world preload's call (UGameplayPreloadSubsystem, under the loading cover - this subsystem does not tick while the world is paused):
+	 * the setup (floor scan, captures, fog; 40-80 ms) now when the squad stands and no navigation build runs, instead of 1 s into gameplay
+	 * (HitchProbeSmoke, 2026-11-18). True = ready (or nothing to set up yet: no leader); false = wait for the navmesh.
+	 */
+	bool TrySetupForPreload();
 	const FMinimapIsoProjection& GetProjection() const { return Projection; }
 	/** The transient capture actor (smokes: its view axes = the projection's). */
 	const ASceneCapture2D* GetCaptureActor() const { return CaptureActor; }

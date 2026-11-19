@@ -331,7 +331,7 @@ bool EnemyAIRules::FeelsHeat(float Distance2DCm, float ReachCm, bool bLineClear)
 	return Distance2DCm < ReachCm && bLineClear;
 }
 
-FVector EnemyAIRules::FleeDirection(const FVector& Enemy, const FVector& Fire, const FVector* Target)
+FVector EnemyAIRules::FleeDirection(const FVector& Enemy, const FVector& Fire, const FVector* Target, int8 TurnDirection)
 {
 	FVector Away = FVector(Enemy.X - Fire.X, Enemy.Y - Fire.Y, 0.f).GetSafeNormal();
 	if (Away.IsNearlyZero())
@@ -348,7 +348,7 @@ FVector EnemyAIRules::FleeDirection(const FVector& Enemy, const FVector& Fire, c
 		return Away;
 	}
 	FVector Tangent(-Away.Y, Away.X, 0.f);
-	if ((Tangent | ToTarget) < 0.f)
+	if (TurnDirection < 0 || (TurnDirection == 0 && (Tangent | ToTarget) < 0.f))
 	{
 		Tangent = -Tangent;
 	}
@@ -356,7 +356,7 @@ FVector EnemyAIRules::FleeDirection(const FVector& Enemy, const FVector& Fire, c
 }
 
 bool EnemyAIRules::FireDetourWaypoint(const FVector& Enemy, const FVector& Fire, float AvoidRadius, const FVector& Target,
-	FVector& OutWaypoint, float StepDegrees)
+	FVector& OutWaypoint, float StepDegrees, int8 TurnDirection)
 {
 	const FVector2D E(Enemy.X - Fire.X, Enemy.Y - Fire.Y);
 	const FVector2D T(Target.X - Fire.X, Target.Y - Fire.Y);
@@ -372,7 +372,13 @@ bool EnemyAIRules::FireDetourWaypoint(const FVector& Enemy, const FVector& Fire,
 	}
 	const float EnemyAngle = FMath::Atan2(E.Y, E.X);
 	const float TargetAngle = FMath::Atan2(T.Y, T.X);
-	const float Delta = FMath::UnwindRadians(TargetAngle - EnemyAngle);
+	float Delta = FMath::UnwindRadians(TargetAngle - EnemyAngle);
+	// The assigned side holds while the target is well round the zone; once the shortest arc is small (the prey ran round to this
+	// side, or the rounds moved the centre past him) he takes it instead of circling ~330 deg (047 API review).
+	if (!bTargetInside && Delta * TurnDirection < 0.f && FMath::Abs(Delta) > UE_HALF_PI)
+	{
+		Delta += 2.f * UE_PI * TurnDirection;
+	}
 	const float Step = FMath::Sign(Delta) * FMath::Min(FMath::Abs(Delta), FMath::DegreesToRadians(StepDegrees));
 	const float Orbit = AvoidRadius + 100.f;
 	const float Angle = EnemyAngle + Step;

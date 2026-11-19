@@ -4,13 +4,13 @@
 // docs/systems/squad-and-orders.md "The formation across height levels", docs/design/levelgen/LEVEL_GENERATOR.md 7 (external stairs /
 // stairwells). The stairs are the accepted layout's (the level JSON's "levelgen_layout"); with the pressure and the PMC encounters off (Codex.Pressure.Enabled 0,
 // Codex.Pmc.Encounters 0),
-// per stair from the ground (every external stair and stairwell of the layout; a stair whose ramp navmesh does not join its foot to its top is a
+// per stair (every external stair and stairwell of the layout; a stair whose ramp navmesh does not join its foot to its top is a
 // layout defect - reported as a WARN line and skipped, strictnav = a FAIL):
 //  1. squad  - squad mode, the squad bunched in the stair's mouth; the man at the BACK is selected (he becomes the leader) and the player's
 //              click (HandleWorldHit) on the roof sends him up: every member ends on the stair's top level, nobody stuck at the bottom;
 //  2. group  - squad mode, all three box-selected (the HUD's "Group (3 operatives) moving into position!"), a double click (sprint) on the
 //              roof right past the stair's top: every member ends on the top level (no group target falls off the roof edge);
-//  3. solo   - Solo, the man at the back selected and sent up: he ends on the top level, the others stay on the ground.
+//  3. solo   - Solo, the man at the back selected and sent up: he ends on the top level, the others stay on the starting level.
 // A member standing still for 10 s off the top level (squad legs) fails the leg with every member's position, order and path state.
 // PASS / FAIL, then exits.
 //   powershell -ExecutionPolicy Bypass -File Scripts/smoke_parallel.ps1 -Commands LevelGenRampSmoke -ExtraArgs "-Multiprocess"
@@ -23,6 +23,7 @@
 
 #include "AIController.h"
 #include "Characters/OperativeCharacter.h"
+#include "Survival/ColdSurvivalComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
 #include "Components/CapsuleComponent.h"
@@ -272,7 +273,7 @@ namespace LevelGenRampSmoke
 	}
 
 	/** Diagnosis: the navmesh along the ramp (every metre at its height) and a path from its foot to its top level. */
-	bool LogRampNav(UWorld* World, const FState& State, const FStair& Stair, const FVector2D& RampEnd)
+	bool LogRampNav(UWorld* World, const FState& State, const FStair& Stair, const FVector2D& RampEnd, FVector& TopOnNav)
 	{
 		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
 		if (!Nav)
@@ -289,13 +290,34 @@ namespace LevelGenRampSmoke
 			const double T = FMath::Clamp(D / FMath::Max(Length, 1.0), 0.0, 1.0);
 			const FVector2D P = Stair.Foot + Stair.Dir * D;
 			FNavLocation Out;
-			const bool bOn = Nav->ProjectPointToNavigation(FVector(P.X, P.Y, FMath::Lerp(Z0, Z1, static_cast<float>(T)) + 20.f), Out, FVector(30.f, 30.f, 60.f));
+			// Recast can end the sloping polygon below the straight line to the slab.
+			// Widen the vertical probe locally without allowing a different storey.
+			const double ExpectedZ = FMath::Lerp(static_cast<double>(Z0), static_cast<double>(Z1), T);
+			const double LowZ = FMath::Max(ExpectedZ - 110.0, Z0 - 25.0);
+			const double HighZ = FMath::Min(ExpectedZ + 80.0, Z1 + 40.0);
+			const bool bOn = Nav->ProjectPointToNavigation(FVector(P.X, P.Y, (LowZ + HighZ) * 0.5), Out,
+				FVector(30.0, 30.0, (HighZ - LowZ) * 0.5))
+				&& Out.Location.Z >= LowZ && Out.Location.Z <= HighZ;
 			Samples += bOn ? FString::Printf(TEXT(" %.0f"), Out.Location.Z) : FString(TEXT(" ---"));
 			bConnected &= bOn;
 		}
 		const FVector From(Stair.Foot.X - Stair.Dir.X * 40.0, Stair.Foot.Y - Stair.Dir.Y * 40.0, Z0 + 20.f);
-		const FVector2D TopIn = Stair.Top + Stair.Inward * 300.0;
-		const FString Note = PathNote(World, OnNav(World, From), FVector(TopIn.X, TopIn.Y, Z1 + 20.f), nullptr);
+		// A compact upper landing can end before the nominal three-metre inset.
+		// Search toward the stair while staying on the arrival level.
+		bool bTopOnNav = false;
+		for (double Inset = 300.0; Inset >= 50.0; Inset -= 50.0)
+		{
+			const FVector2D TopIn = Stair.Top + Stair.Inward * Inset;
+			FNavLocation Landing;
+			if (Nav->ProjectPointToNavigation(FVector(TopIn, Z1 + 15.0), Landing, FVector(75.0, 75.0, 50.0))
+				&& FMath::Abs(Landing.Location.Z - Z1) <= LevelTolCm)
+			{
+				TopOnNav = Landing.Location;
+				bTopOnNav = true;
+				break;
+			}
+		}
+		const FString Note = bTopOnNav ? PathNote(World, OnNav(World, From), TopOnNav, nullptr) : TEXT("no top-level navmesh");
 		bConnected &= !Note.Contains(TEXT("PARTIAL")) && !Note.StartsWith(TEXT("no "));
 		UE_LOG(LogCodexTactics, Display, TEXT("Smoke: ramp nav %s (%s, level %d -> %d, %.0f cm run): navmesh z along it every 1 m:%s; foot -> top: %s"), *Stair.Id, *Stair.Kind,
 			Stair.LevelFrom, Stair.LevelTo, Length, *Samples, *Note);
@@ -362,9 +384,10 @@ namespace LevelGenRampSmoke
 						Stair.Holes.Add(OTop - (OTop - OPos).GetSafeNormal() * 175.0);
 					}
 				}
-				const bool bConnected = LogRampNav(World, State, Stair, Mid);
+				FVector TopOnNav = FVector::ZeroVector;
+				const bool bConnected = LogRampNav(World, State, Stair, Mid, TopOnNav);
 				const bool bWanted = State.Only.IsEmpty() || State.Only == Stair.Id;
-				if (!bWanted || Stair.LevelFrom != 0)
+				if (!bWanted)
 				{
 					continue;
 				}
@@ -394,7 +417,7 @@ namespace LevelGenRampSmoke
 					Leg.Kind = Kind;
 					Leg.Stair = Index;
 					// The group's click lands right past the stair's top (the player clicks where the stair arrives); the others further in.
-					Leg.Goal = RoofGoal(State, State.Stairs[Index], Kind == ELegKind::Group ? 250.f : 600.f);
+					Leg.Goal = Stair.LevelFrom > 0 ? TopOnNav : RoofGoal(State, State.Stairs[Index], Kind == ELegKind::Group ? 250.f : 600.f);
 					Leg.Limit = 60.f + Rise / 10.f;
 					State.Legs.Add(Leg);
 				}
@@ -405,10 +428,20 @@ namespace LevelGenRampSmoke
 	}
 
 	/** The squad bunched in the stair's mouth (Ordered = the man at the BACK, 2.6 m off the foot; the others 1.2 m off it side by side). */
-	AOperativeCharacter* PlaceSquad(UWorld* World, USquadSubsystem& Squad, const FStair& Stair, float GroundZ)
+	AOperativeCharacter* PlaceSquad(UWorld* World, USquadSubsystem& Squad, const FStair& Stair, float StartZ)
 	{
 		TArray<AOperativeCharacter*> Members = Squad.GetMembers();
 		Members.Remove(nullptr);
+		// The smoke checks the flights, not the cold (designer 2026-11-19): generated maps are cold since 6dbc9e38 and a frostbite collapse
+		// (prone crawl) mid-run would fail legs for a reason that has its own smokes.
+		for (AOperativeCharacter* Member : Members)
+		{
+			Member->ColdLevel = 0.f;
+			if (Member->ColdSurvival)
+			{
+				Member->ColdSurvival->SetComponentTickEnabled(false);
+			}
+		}
 		if (Members.Num() < 2)
 		{
 			return nullptr;
@@ -432,7 +465,7 @@ namespace LevelGenRampSmoke
 		{
 			AOperativeCharacter* Member = Members[Index];
 			const FVector2D Spot = Index == 0 ? Spots[2] : Index == 1 ? Spots[0] : Index == 2 ? Spots[1] : Spots[3];
-			const FVector At = OnNav(World, FVector(Spot.X, Spot.Y, GroundZ + 50.f));
+			const FVector At = OnNav(World, FVector(Spot.X, Spot.Y, StartZ + 50.f));
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s placed at %s (asked %s)%s"), *Member->DisplayName.ToString(), *At.ToCompactString(), *Spot.ToString(),
 				Index == 0 ? TEXT(" - at the back, the one sent up") : TEXT(""));
 			Member->TeleportTo(At + FVector(0.f, 0.f, Member->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), FVector(Stair.Dir, 0.0).Rotation(), false, true);
@@ -506,7 +539,7 @@ namespace LevelGenRampSmoke
 			Squad->SetFollowersHolding(false);
 		}
 		Squad->SetSelectedGroup(TArray<AOperativeCharacter*>{ Squad->GetLeader() }, false);
-		State.Ordered = PlaceSquad(World, *Squad, Stair, State.GroundZ);
+		State.Ordered = PlaceSquad(World, *Squad, Stair, State.GroundZ + Stair.LevelFrom * LevelHeightCm);
 		State.PhaseTime = 0.f;
 		State.DoneFor = 0.f;
 		State.OrderedUpFor = 0.f;
@@ -614,6 +647,7 @@ namespace LevelGenRampSmoke
 		{
 			const FLeg& Leg = State.Legs[State.Leg];
 			const FStair& Stair = State.Stairs[Leg.Stair];
+			const float StartZ = State.GroundZ + Stair.LevelFrom * LevelHeightCm;
 			const float TopZ = State.GroundZ + Stair.LevelTo * LevelHeightCm;
 			AOperativeCharacter* Ordered = State.Ordered.Get();
 			bool bAllUp = true;
@@ -629,7 +663,7 @@ namespace LevelGenRampSmoke
 				bAllUp &= bUp;
 				if (Member != Ordered)
 				{
-					bOthersDown &= FMath::Abs(FeetZ(*Member) - State.GroundZ) <= LevelTolCm;
+					bOthersDown &= FMath::Abs(FeetZ(*Member) - StartZ) <= LevelTolCm;
 				}
 				const FVector Pos = Member->GetActorLocation();
 				const FVector* Last = State.LastPos.Find(Member);
@@ -668,8 +702,8 @@ namespace LevelGenRampSmoke
 				State.OrderedUpFor = bOrderedUp ? State.OrderedUpFor + Dt : 0.f;
 				if (State.OrderedUpFor >= SoloSettleSeconds || !bOthersDown)
 				{
-					EndLeg(State, bOrderedUp && bOthersDown, FString::Printf(TEXT("%s in %.1f s:%s"), bOthersDown ? TEXT("he is up, the others stayed on the ground")
-						: TEXT("ANOTHER MAN LEFT THE GROUND in Solo"), State.PhaseTime, *Describe(World, *Squad, Leg.Goal, TopZ, State)));
+					EndLeg(State, bOrderedUp && bOthersDown, FString::Printf(TEXT("%s in %.1f s:%s"), bOthersDown ? TEXT("he is up, the others stayed on the starting level")
+						: TEXT("ANOTHER MAN LEFT THE STARTING LEVEL in Solo"), State.PhaseTime, *Describe(World, *Squad, Leg.Goal, TopZ, State)));
 					return true;
 				}
 			}

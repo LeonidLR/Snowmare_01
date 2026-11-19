@@ -11,6 +11,7 @@ import v2cfg from '../../../../Content/Data/LevelGen/levelgen_v2.json' with { ty
 import { obstacleHeight } from './obstacleHeights.ts';
 import { footprintBBox, footprintPoly } from './rotation.ts';
 import type { LayoutAnalysis } from './chokepoints.ts';
+import type { PmcPlan } from './pmcPosts.ts';
 import type { Vec2 } from '../movement/geometry.ts';
 import { pointInPoly } from '../movement/geometry.ts';
 import type { Layout, LayoutRoute, LayoutWall, LayoutZone, ZoneKind } from '../movement/layout.ts';
@@ -475,6 +476,12 @@ export interface GenLayout {
    * from geometryHash(layout) (the map was edited after it).
    */
   analysis?: LayoutAnalysis;
+  /**
+   * PMC posts + the defend posts' charges (pmcPosts.ts / pmcCharges.ts, PMC_DEFENCE.md D2, task 087): the builder carries the posts into
+   * the level JSON `pmc_squads`, the props autogen writes the charges as the locked props layer `pmc_charges`. Absent = no generated PMC.
+   * Not part of geometryHash (it never changes the geometry); stale when its geometry_hash differs from the tactical map's.
+   */
+  pmc?: PmcPlan;
 }
 
 /** The version of the `analysis` block; a file with a newer one is refused, an absent block = not analysed (old files load). */

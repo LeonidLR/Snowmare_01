@@ -163,12 +163,23 @@ export function segSegDist(p: Vec2, q: Vec2, a: Vec2, b: Vec2): number {
   );
 }
 
-function segmentsIntersect(p: Vec2, q: Vec2, a: Vec2, b: Vec2): boolean {
+export function segmentsIntersect(p: Vec2, q: Vec2, a: Vec2, b: Vec2): boolean {
   const d1 = cross(sub(q, p), sub(a, p));
   const d2 = cross(sub(q, p), sub(b, p));
   const d3 = cross(sub(b, a), sub(p, a));
   const d4 = cross(sub(b, a), sub(q, a));
   return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
+}
+
+/** The point of intersection between two crossing open segments (or null if they do not cross). */
+export function segmentSegmentIntersection(p: Vec2, q: Vec2, a: Vec2, b: Vec2): Vec2 | null {
+  if (!segmentsIntersect(p, q, a, b)) return null;
+  const ab = sub(b, a);
+  const pq = sub(q, p);
+  const denom = cross(pq, ab);
+  if (Math.abs(denom) < 1e-9) return null;
+  const t = cross(sub(a, p), ab) / denom;
+  return [round(p[0] + pq[0] * t, 2), round(p[1] + pq[1] * t, 2)];
 }
 
 /** Point in polygon (even-odd). */

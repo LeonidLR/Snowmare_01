@@ -31,6 +31,16 @@ param(
     [switch]$WithPdb,                                       # also copy *.pdb (~420 MB; wired link, crash analysis on the worker)
     [switch]$NoPdb,                                         # obsolete: no PDB is the default now
     [switch]$Frozen,                                        # this sync is the evening trainer freeze: writes Saved\Worker\FROZEN
+    # Night guard (2026-11-18): while the worker is frozen for the night trainer (Saved\Worker\FROZEN written since 08:30 of the
+    # window's day, worker clock inside -TrainerFrom .. -TrainerUntil) every run that takes the worker is refused with exit 2
+    # (callers build / smoke locally; smoke_remote falls back by itself). -Frozen (the freeze itself) and -ForceFrozen (lead;
+    # or env CODEX_FORCE_FROZEN=1) pass. -FrozenCheckOnly prints the decision and exits (0 = free / allowed, 2 = refused),
+    # -FrozenTestNow "yyyy-MM-ddTHH:mm" checks as if the worker's clock showed that time (tests; read-only either way).
+    [switch]$ForceFrozen,
+    [switch]$FrozenCheckOnly,
+    [string]$FrozenTestNow = "",
+    [string]$TrainerFrom = "16:30",
+    [string]$TrainerUntil = "08:00",
     [int]$WaitEngineMinutes = 60,                           # how long to wait for a running wave / batch on the worker
     [double]$LockStaleHours = 3,                            # a sync older than this is dead whatever its host (= loop's -SyncStaleHours)
     # Remote compile (Tools\build_remote.ps1 / build.ps1 -Remote worker): the caller's uncommitted work rides along.
@@ -172,6 +182,35 @@ if (-not (Get-ChildItem '$RemoteRoot/Saved/Worker/SYNC.*' -ErrorAction SilentlyC
 }
 
 if ($ReclaimStale) { Clear-StaleWorkerSyncs; Say "stale check done"; exit 0 }
+
+# The night guard (see the -ForceFrozen params): one ssh call, the worker's own clock and FROZEN file decide.
+function Test-WorkerFrozen {
+    $nowExpr = $(if ($FrozenTestNow) { "[datetime]::ParseExact('$FrozenTestNow', 'yyyy-MM-ddTHH:mm', `$null)" } else { "Get-Date" })
+    $r = @(Invoke-Worker -AllowFail @"
+`$now = $nowExpr
+`$from = `$now.Date + [TimeSpan]::Parse('$TrainerFrom'); `$until = `$now.Date + [TimeSpan]::Parse('$TrainerUntil')
+`$inWindow = (`$now -ge `$from) -or (`$now -lt `$until)
+`$start = `$(if (`$now -ge `$from) { `$from } else { `$from.AddDays(-1) })
+`$f = '$RemoteRoot/Saved/Worker/FROZEN'
+`$fresh = (Test-Path `$f) -and ((Get-Item `$f).LastWriteTime -ge `$start.Date.AddHours(8.5))
+if (`$inWindow -and `$fresh) { 'FROZEN-ACTIVE ' + (Get-Item `$f).LastWriteTime.ToString('s') + ' | ' + (Get-Content `$f -Raw).Trim() } else { 'FREE window ' + `$inWindow + ', fresh freeze ' + `$fresh }
+"@)
+    return "$($r[-1])"
+}
+if (-not $Frozen -and -not ($SkipSync -and $SkipBinaries -and $SkipSmoke) -or $FrozenCheckOnly) {
+    $frozenState = Test-WorkerFrozen
+    $force = $ForceFrozen -or $env:CODEX_FORCE_FROZEN -eq "1"
+    $refuse = $frozenState -like "FROZEN-ACTIVE*" -and -not $force -and -not $Frozen
+    if ($FrozenCheckOnly) {
+        Say ("frozen check: {0} -> {1}" -f $frozenState, $(if ($refuse) { "REFUSED" } elseif ($frozenState -like "FROZEN-ACTIVE*") { "allowed (-Frozen / -ForceFrozen)" } else { "allowed" }))
+        exit $(if ($refuse) { 2 } else { 0 })
+    }
+    if ($refuse) {
+        Say "worker frozen for the night trainer until $TrainerUntil - build / smoke locally (freeze: $($frozenState.Substring(14)); lead: -ForceFrozen)" "Red"
+        exit 2
+    }
+    if ($frozenState -like "FROZEN-ACTIVE*") { Say "worker frozen for the night trainer - passing with -ForceFrozen" "Yellow" }
+}
 
 try {
     Say "worker $Worker -> $RemoteRoot"

@@ -5,13 +5,18 @@
 // critics' verdicts (Jev - typed judgments; the Claude API - sees both images, USD-capped; the server holds the keys). The
 // designer accepts (-> Content/Data/LevelGen/accepted, what the UE builder reads) or rejects.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Hammer, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Hammer, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus, Trash2 } from 'lucide-react';
 import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
+import { validateWallCrossings, cleanConflictingFences } from '../levelgen/layoutValidator';
 import { PropsPanel } from './PropsPanel';
 import { RegionOverlay } from './RegionOverlay';
 import type { LayerAction, ObjectiveAction, RegionMode } from './RegionOverlay';
 import { LayersOverlay, LayersPanel } from './LayersPanel';
+import { PmcOverlay } from './PmcOverlay';
+import type { PmcPlan } from '../levelgen/pmcPosts';
+import { planPmc } from '../levelgen/pmcCharges';
+import { tacticalMapFor } from '../levelgen/tacticalMap';
 import type { PlanView } from '../levelgen/planView';
 import { FIT_VIEW, PLAN_VIEW, planTransform, viewOfRect, zoomAt } from '../levelgen/planView';
 import type { Conditions, LayoutAnalysis } from '../levelgen/chokepoints';
@@ -98,6 +103,9 @@ export const LevelGenDepartment: React.FC = () => {
   const [conditions, setConditions] = useState<Conditions>(CHOKE.threats.conditions);
   const [analysisBusy, setAnalysisBusy] = useState(false);
   const [selChoke, setSelChoke] = useState<string | null>(null);
+  // the «ЧВК» layer on / its re-roll seed (task 087; the plan itself is a memo below the analysis)
+  const [pmcOn, setPmcOn] = useState(false);
+  const [pmcSeed, setPmcSeed] = useState<number | null>(null);
   // the reference image beside the plan can be folded away: the plan then takes the whole width (big maps, the layers)
   const [showRef, setShowRef] = useState(true);
   const showFiringLines = vis.fire_lines !== false;
@@ -146,6 +154,7 @@ export const LevelGenDepartment: React.FC = () => {
     const r = mandatoryRoute(cur.layout);
     return cur.ev.route.legs.filter((x) => !x.ok).flatMap((x) => [r.points[x.index - 1], r.points[x.index]]);
   }, [cur]);
+  const wallConflicts = useMemo(() => (cur ? validateWallCrossings(cur.layout) : []), [cur]);
 
   const generate = () => {
     if (!profile || !config) return;
@@ -206,8 +215,10 @@ export const LevelGenDepartment: React.FC = () => {
     try {
       // the chokepoint / threat analysis is saved with the map (block `analysis`): the shown one, else computed now
       const an = analysis ?? analyzeLayout(cur.layout, { conditions });
-      // a forced accept is recorded in the map JSON (analysis.forced_buildings = how many buildings failed traversal)
-      const layout: GenLayout = { ...cur.layout, analysis: brokenBuildings > 0 ? { ...an, forced_buildings: brokenBuildings } : an };
+      // a forced accept is recorded in the map JSON (analysis.forced_buildings = how many buildings failed traversal); task 087: the
+      // «ЧВК» layer's plan (posts + charges) goes with the map only while the layer is on (opt-in until the C++ spawn-at-post)
+      const pmc = pmcOn ? (pmcPlan ?? planPmc(cur.layout, tacticalMapFor(cur.layout, cur.layout.name, cur.layout.name, an), pmcSeed ?? cur.layout.seed)) : undefined;
+      const layout: GenLayout = { ...cur.layout, analysis: brokenBuildings > 0 ? { ...an, forced_buildings: brokenBuildings } : an, ...(pmc ? { pmc } : {}) };
       const r = await fetch('/api/levelgen/accept', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ layout, evaluation: cur.ev, verdicts: cur.verdicts }) });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error ?? r.statusText);
@@ -305,6 +316,12 @@ export const LevelGenDepartment: React.FC = () => {
     if (!storiesOn || !hasStories(layout)) { pushStep(layout, label); return; }
     const r = restoryForGoals(layout, layout.seed, storyStates.current.get(cur.layout));
     pushStep(r.layout, r.repicked.length ? `${label}; истории заново: ${r.repicked.length}` : label, r);
+  };
+  const cleanFences = () => {
+    if (!cur) return;
+    const res = cleanConflictingFences(cur.layout);
+    if (!res.removedFamilies.length && !res.removedWalls.length) return;
+    pushStep(res.layout, 'очистка сиротских заборов');
   };
   const reroll = () => {
     if (!cur || !zone || !profileOk || !profile) return;
@@ -487,7 +504,7 @@ export const LevelGenDepartment: React.FC = () => {
     for (const a of [cur.analysis, cur.layout.analysis]) if (a && a.geometry_hash === geoHash && sameConditions(a.conditions, conditions)) return a;
     return null;
   }, [cur, geoHash, conditions]);
-  const analysisWanted = ['chokepoints', ...HIDDEN_AT_START].some((id) => vis[id] !== false);
+  const analysisWanted = pmcOn || ['chokepoints', ...HIDDEN_AT_START].some((id) => vis[id] !== false);
   const runAnalysis = (layout: GenLayout, slot: number) => {
     setAnalysisBusy(true);
     return window.setTimeout(() => {
@@ -503,6 +520,13 @@ export const LevelGenDepartment: React.FC = () => {
     return () => { window.clearTimeout(id); setAnalysisBusy(false); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [curLayout, hasAnalysis, analysisWanted, conditions, sel]);
+  // the «ЧВК» layer (task 087, PMC_DEFENCE.md D2): PMC posts + the defend posts' charges from the shown analysis, seeded (the map's seed
+  // until «перебросить ЧВК» draws a new one); «Принять» saves the shown plan as the layout's `pmc` block only while the layer is on
+  const pmcPlan = useMemo<PmcPlan | null>(() => {
+    if (!pmcOn || !cur || !analysis) return null;
+    try { return planPmc(cur.layout, tacticalMapFor(cur.layout, cur.layout.name, cur.layout.name, analysis), pmcSeed ?? cur.layout.seed); }
+    catch (e) { console.warn('pmc plan:', e); return null; }
+  }, [pmcOn, cur, analysis, pmcSeed]);
   const threat = useMemo(() => threatNumbers(CHOKE, conditions), [conditions]);
   const hidden = useMemo(() => (assignment ? hiddenKeys(assignment, vis) : undefined), [assignment, vis]);
   const tints = useMemo(() => (assignment && tintOn ? layerTints(assignment) : undefined), [assignment, tintOn]);
@@ -752,7 +776,16 @@ export const LevelGenDepartment: React.FC = () => {
                   принять с {brokenBuildings} сломанными зданиями
                 </label>
               )}
-              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0) || (brokenBuildings > 0 && !forceBroken)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : brokenBuildings > 0 && !forceBroken ? `${brokenBuildings} зданий не проходят проверку проходимости (панель «Здания»)` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять</button>
+              {wallConflicts.length > 0 && (
+                <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-700 text-xs text-rose-200" title={wallConflicts.map((c) => c.reason).join('; ')}>
+                  <AlertTriangle size={13} className="text-rose-400 shrink-0" />
+                  <span>Пересечения стен ({wallConflicts.length})</span>
+                  <button type="button" onClick={cleanFences} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-rose-800 hover:bg-rose-700 text-white font-medium text-[11px]" title="Удалить сиротские/конфликтующие заборы">
+                    <Trash2 size={11} />Удалить сиротский забор
+                  </button>
+                </div>
+              )}
+              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0) || (brokenBuildings > 0 && !forceBroken)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : brokenBuildings > 0 && !forceBroken ? `${brokenBuildings} зданий не проходят проверку проходимости (панель «Здания»)` : wallConflicts.length > 0 ? `Внимание: обнаружено ${wallConflicts.length} пересечений стен/заборов!` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять{wallConflicts.length > 0 ? ' (!)' : ''}</button>
               <button onClick={() => buildNow(false)} disabled={!cur || !!busy || !isAccepted || building || (buildTarget !== null && !buildTarget.canBuild)} data-build
                 title={!isAccepted ? 'Сначала «Принять»: собирается принятая карта (Content/Data/LevelGen/accepted)' : buildTarget && !buildTarget.canBuild ? buildTarget.reason : `Собрать ${buildTarget?.map ?? ''} и проверить маршрут ботом (фоном, ~5-15 мин)`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-700 text-xs text-white hover:bg-orange-600 disabled:opacity-50"><Hammer size={13} />Собрать в Unreal</button>
@@ -926,6 +959,14 @@ export const LevelGenDepartment: React.FC = () => {
                   <button type="button" onClick={() => setView(FIT_VIEW)} disabled={!cur} title="Вписать карту целиком" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Maximize2 size={12} />Вписать</button>
                   <button type="button" onClick={() => { setGoalTool((v) => !v); setRegionMode('off'); }} disabled={!cur} title="Щелчок по плану добавляет цель" className={`inline-flex items-center gap-1 px-2 py-1 rounded border disabled:opacity-40 ${goalTool ? 'bg-yellow-500 border-yellow-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-yellow-200 hover:bg-slate-700'}`}><MapPinPlus size={12} />+ цель</button>
                   <button type="button" onClick={() => setShowRef((v) => !v)} title="Показать / скрыть эталонную картинку справа от плана (без неё план занимает всю ширину)" className="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700" data-ref-toggle>{showRef ? 'скрыть эталон' : 'показать эталон'}</button>
+                  <button type="button" onClick={() => setPmcOn((v) => !v)} disabled={!cur} data-pmc-toggle
+                    title="Слой «ЧВК» (PMC_DEFENCE D2): посты отрядов ЧВК в стратегических местах (засада у выхода из узкого места, крыша, окно над маршрутом, укрытие) и мины / растяжки оборонительных постов. Пока слой включён, «Принять» сохраняет показанный план в карту (блок pmc → pmc_squads уровня и слой пропсов pmc_charges)."
+                    className={`px-2 py-1 rounded border disabled:opacity-40 ${pmcOn ? 'bg-orange-500 border-orange-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-orange-200 hover:bg-slate-700'}`}>ЧВК</button>
+                  {pmcOn && <button type="button" onClick={() => setPmcSeed(Math.floor(Math.random() * 0x7fffffff))} disabled={!cur || !analysis} data-pmc-reroll
+                    title="Перебросить посты ЧВК и их заряды по всей карте с новым сидом" className="px-2 py-1 rounded bg-slate-800 border border-orange-700 text-orange-200 hover:bg-slate-700 disabled:opacity-40">перебросить ЧВК</button>}
+                  {pmcOn && (pmcPlan
+                    ? <span className="text-orange-200/90" data-pmc-summary>{`постов ${pmcPlan.posts.length} (оборона ${pmcPlan.posts.filter((p) => p.posture === 'defend').length}), мин ${pmcPlan.charges.filter((c) => c.type === 'mine').length}, растяжек ${pmcPlan.charges.filter((c) => c.type === 'tripwire').length}; сид ${pmcPlan.seed}`}</span>
+                    : <span className="text-slate-500">{analysisBusy ? 'анализ карты...' : 'нужен анализ карты (слой «Узкие места»)'}</span>)}
                   <span className="text-slate-500">колесо — масштаб у курсора; сдвиг — средняя кнопка или пробел + перетаскивание (в «Просмотре» — левой)</span>
                 </div>
                 <div ref={planBox}>
@@ -935,8 +976,8 @@ export const LevelGenDepartment: React.FC = () => {
                   addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null} trails={squadNow?.trails ?? null}
                   objectivesEditable={!activeLayer || activeLayer === 'objectives'} showObjectives={vis.objectives !== false}
                   layerTool={activeDef && activeDef.id !== 'objectives' && !goalTool ? layerTool : 'off'} pickLayer={pickLayer} onLayerAction={onLayerAction}
-                  overlay={(h) => <LayersOverlay h={h} vis={vis} analysis={analysis} selChoke={selChoke} onSelChoke={setSelChoke} props={propsOnMap} selected={selectedEntity} activeEntities={activeEntities} />}>
-                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives hidden={hidden} tints={tints} />
+                  overlay={(h) => <><LayersOverlay h={h} vis={vis} analysis={analysis} selChoke={selChoke} onSelChoke={setSelChoke} props={propsOnMap} selected={selectedEntity} activeEntities={activeEntities} />{pmcPlan && <PmcOverlay h={h} plan={pmcPlan} />}</>}>
+                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives hidden={hidden} tints={tints} conflicts={wallConflicts} />
                 </RegionOverlay>
                 </div>
                 {cur && (track ? (
