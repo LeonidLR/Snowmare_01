@@ -11,6 +11,7 @@ import { mandatorySegments, routeDistOnLayer } from '../pmcPosts.ts';
 import {
   generatePropsForLayout,
   canOverwritePropsFile,
+  clearanceCm,
   targetMapNameForLayout,
   findProjectRoot,
   loadAutogenConfig,
@@ -134,41 +135,40 @@ describe('autogen props placement (task 076)', () => {
   });
 
   it('088 route clearance: no mine/tripwire within route_clear_m and no crate/barrel within route_corridor_m on 3 seeds', () => {
-    const x4LayoutPath = path.join(root, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x4.json');
-    const x4Layout = JSON.parse(fs.readFileSync(x4LayoutPath, 'utf8')) as GenLayout;
-    const segs = mandatorySegments(x4Layout);
-    assert.ok(segs.length > 0, 'Mandatory route must have segments');
+    const routeClearCm = clearanceCm(autogenCfg, 'mines', 'route_clear_m');
+    const crateCorridorCm = clearanceCm(autogenCfg, 'crates', 'route_corridor_m');
+    const barrelCorridorCm = clearanceCm(autogenCfg, 'barrels', 'route_corridor_m');
+    assert.ok(routeClearCm > 0 && crateCorridorCm > 0 && barrelCorridorCm > 0, 'the clearances come from props_autogen.json');
 
-    const routeClearCm = 300;
-    const routeCorridorCm = 200;
+    for (const layoutName of ['gen_ref_01_02_depot_1_x2']) {
+      const layout = JSON.parse(
+        fs.readFileSync(path.join(root, 'Content/Data/LevelGen/accepted', `${layoutName}.json`), 'utf8')
+      ) as GenLayout;
+      const segs = mandatorySegments(layout);
+      assert.ok(segs.length > 0, 'Mandatory route must have segments');
 
-    for (const seed of [1, 2, 3]) {
-      const res = generatePropsForLayout({
-        layout: x4Layout,
-        balance,
-        autogenConfig: autogenCfg,
-        seed,
-        layoutName: 'gen_ref_01_02_depot_1_x4',
-        projectRoot: root,
-      });
+      for (const seed of [1, 2, 3]) {
+        const res = generatePropsForLayout({ layout, balance, autogenConfig: autogenCfg, seed, layoutName, projectRoot: root });
+        assert.equal(res.fastGateResult.gate, 'pass', `Fast gate must pass on ${layoutName} seed ${seed}`);
+        if (seed === 1) {
+          // determinism: the same seed gives the same drops and the same canonical JSON
+          const again = generatePropsForLayout({ layout, balance, autogenConfig: autogenCfg, seed, layoutName, projectRoot: root });
+          assert.deepEqual(again.droppedByRouteClearance, res.droppedByRouteClearance);
+          assert.equal(formatPropsCanonical(again.props), formatPropsCanonical(res.props));
+        }
 
-      assert.equal(res.fastGateResult.gate, 'pass', `Fast gate must pass on seed ${seed}`);
-
-      for (const l of res.props.layers) {
-        if (l.kind === 'mines' && l.id !== 'pmc_charges') {
+        for (const l of res.props.layers) {
+          const limit =
+            l.kind === 'mines' && l.id !== 'pmc_charges' ? routeClearCm
+            : l.kind === 'crates' ? crateCorridorCm
+            : l.kind === 'barrels' ? barrelCorridorCm
+            : 0;
+          if (limit === 0) continue;
           for (const obj of l.objects) {
             const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
             assert.ok(
-              d >= routeClearCm,
-              `Mine/tripwire ${obj.id} (${obj.variant}) at pos [${obj.pos}] layer ${obj.walk_layer} is within route_clear_m: dist=${d}cm < ${routeClearCm}cm (seed ${seed})`
-            );
-          }
-        } else if (l.kind === 'crates' || l.kind === 'barrels') {
-          for (const obj of l.objects) {
-            const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
-            assert.ok(
-              d >= routeCorridorCm,
-              `Prop ${obj.id} (${l.kind}) at pos [${obj.pos}] layer ${obj.walk_layer} is within route_corridor_m: dist=${d}cm < ${routeCorridorCm}cm (seed ${seed})`
+              d >= limit,
+              `${l.kind} ${obj.id} (${obj.variant}) at [${obj.pos}] on ${obj.walk_layer} is ${d} cm from the route < ${limit} cm (${layoutName}, seed ${seed})`
             );
           }
         }
@@ -176,26 +176,37 @@ describe('autogen props placement (task 076)', () => {
     }
   });
 
-  it('088 determinism: same seed produces identical route clearance drops and canonical JSON', () => {
-    const x4LayoutPath = path.join(root, 'Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1_x4.json');
-    const x4Layout = JSON.parse(fs.readFileSync(x4LayoutPath, 'utf8')) as GenLayout;
-    const resA = generatePropsForLayout({
-      layout: x4Layout,
-      balance,
-      autogenConfig: autogenCfg,
-      seed: 42,
-      layoutName: 'gen_ref_01_02_depot_1_x4',
-      projectRoot: root,
+  it('088 route clearance bites: a wide clearance drops objects, cascades to attachments, never touches pmc_charges', () => {
+    const layoutName = 'gen_ref_01_02_depot_1_x2';
+    const layout = JSON.parse(
+      fs.readFileSync(path.join(root, 'Content/Data/LevelGen/accepted', `${layoutName}.json`), 'utf8')
+    ) as GenLayout;
+    const segs = mandatorySegments(layout);
+    const run = (cfg: typeof autogenCfg) =>
+      generatePropsForLayout({ layout, balance, autogenConfig: cfg, seed: 1, layoutName, projectRoot: root });
+    const wideM = 25; // far wider than the shipped clearances
+    const wide = run({
+      ...autogenCfg,
+      layers: {
+        ...autogenCfg.layers,
+        crates: { ...autogenCfg.layers!.crates, route_corridor_m: wideM },
+        barrels: { ...autogenCfg.layers!.barrels, route_corridor_m: wideM },
+        mines: { ...autogenCfg.layers!.mines, route_clear_m: wideM },
+      },
     });
-    const resB = generatePropsForLayout({
-      layout: x4Layout,
-      balance,
-      autogenConfig: autogenCfg,
-      seed: 42,
-      layoutName: 'gen_ref_01_02_depot_1_x4',
-      projectRoot: root,
-    });
-    assert.deepEqual(resA.droppedByRouteClearance, resB.droppedByRouteClearance);
-    assert.equal(formatPropsCanonical(resA.props), formatPropsCanonical(resB.props));
+    const st = wide.droppedByRouteClearance;
+    assert.ok(st.droppedCrates > 0 && st.droppedBarrels > 0 && st.droppedMines > 0, 'a 25 m clearance must drop crates, barrels and mines');
+    assert.equal(st.droppedTotal, st.droppedCrates + st.droppedBarrels + st.droppedMines + st.droppedLoot);
+
+    const ids = new Set(wide.props.layers.flatMap((l) => l.objects.map((o) => o.id)));
+    for (const l of wide.props.layers) {
+      for (const o of l.objects) {
+        if (o.attach) assert.ok(ids.has(o.attach), `${o.id} is attached to the dropped ${o.attach}`);
+        if (l.kind === 'crates') assert.ok(routeDistOnLayer(o.pos, segs, o.walk_layer || 'ground') >= wideM * 100);
+      }
+    }
+    const pmcIds = (r: ReturnType<typeof run>) =>
+      r.props.layers.filter((l) => l.id === 'pmc_charges').flatMap((l) => l.objects.map((o) => o.id));
+    assert.deepEqual(pmcIds(wide), pmcIds(run(autogenCfg)), 'the locked pmc_charges layer is not changed by the clearance');
   });
 });

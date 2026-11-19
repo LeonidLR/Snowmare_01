@@ -1236,7 +1236,7 @@
 						"value": 8
 					}
 				},
-				"route_clear_m": 3
+				"route_clear_m": 6
 			},
 			"objects": [
 				{
@@ -1317,17 +1317,6 @@
 					"width_cm": 300
 				},
 				{
-					"id": "mines_00000001_7",
-					"variant": "mine_tripwire",
-					"pos": [-3080, 546],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"door": "B_ruin_annex#2",
-					"trigger": "tripwire",
-					"width_cm": 180
-				},
-				{
 					"id": "mines_00000001_8",
 					"variant": "mine_tripwire",
 					"pos": [-1904, 11279],
@@ -1398,16 +1387,6 @@
 					"yaw": 0,
 					"locked": false,
 					"attach": "crates_00000001_61",
-					"trigger": "crate_open"
-				},
-				{
-					"id": "mines_00000001_15",
-					"variant": "mine_crate",
-					"pos": [-5350, 7300],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"attach": "crates_00000001_76",
 					"trigger": "crate_open"
 				},
 				{

@@ -139,7 +139,7 @@ export const DEFAULT_AUTOGEN_CONFIG: PropsAutogenConfig = {
       max_field_count: 30,
       doorway_percent: 25,
       crate_percent: 10,
-      route_clear_m: 3,
+      route_clear_m: 6,
     },
     loot: {
       preset: 'loot_default',
@@ -174,6 +174,16 @@ export function findProjectRoot(startDir = process.cwd()): string {
 }
 
 /** Loads Content/Data/LevelGen/props_autogen.json or returns default fallback. */
+/** A route clearance of a layer in cm: the config value, else the built-in default, else 0 (no clearance). */
+export function clearanceCm(
+  cfg: PropsAutogenConfig,
+  kind: 'crates' | 'barrels' | 'mines',
+  key: 'route_clear_m' | 'route_corridor_m'
+): number {
+  const m = cfg.layers?.[kind]?.[key] ?? DEFAULT_AUTOGEN_CONFIG.layers?.[kind]?.[key] ?? 0;
+  return Math.max(0, Math.round(m * 100));
+}
+
 export function loadAutogenConfig(projectRoot?: string): PropsAutogenConfig {
   const root = projectRoot ?? findProjectRoot();
   const cfgPath = path.join(root, 'Content/Data/LevelGen/props_autogen.json');
@@ -436,8 +446,8 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
   }
 
   // Task 088 (PROPS_LAYERS.md + 088-props-route-clearance.md):
-  // Mandatory route clearance: never place an autogen mine or tripwire within route_clear_m (config, default 3 m),
-  // and keep a free corridor of route_corridor_m (config, default 2 m) for crates / barrels.
+  // Mandatory route clearance: never place an autogen mine or tripwire within route_clear_m (config props_autogen.json; 6 m = the 4.5 m spot range + 1.5 m Medic-Sapper bonus, TripwireRules / DeployableRules),
+  // and keep a free corridor of route_corridor_m (config) for crates / barrels.
   // Reuses 087 helpers: mandatorySegments and routeDistOnLayer.
   // Never touch the locked pmc_charges layer (list in report if any lands inside).
   // If a crate is dropped, any mine / loot attached to that crate is also dropped.
@@ -453,13 +463,9 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
   };
 
   if (segs.length > 0) {
-    const minesCfg = cfg.layers?.mines ?? DEFAULT_AUTOGEN_CONFIG.layers?.mines;
-    const cratesCfg = cfg.layers?.crates ?? DEFAULT_AUTOGEN_CONFIG.layers?.crates;
-    const barrelsCfg = cfg.layers?.barrels ?? DEFAULT_AUTOGEN_CONFIG.layers?.barrels;
-
-    const routeClearCm = Math.round((minesCfg?.route_clear_m ?? 3) * 100);
-    const crateCorridorCm = Math.round((cratesCfg?.route_corridor_m ?? 2) * 100);
-    const barrelCorridorCm = Math.round((barrelsCfg?.route_corridor_m ?? 2) * 100);
+    const routeClearCm = clearanceCm(cfg, 'mines', 'route_clear_m');
+    const crateCorridorCm = clearanceCm(cfg, 'crates', 'route_corridor_m');
+    const barrelCorridorCm = clearanceCm(cfg, 'barrels', 'route_corridor_m');
 
     for (const l of propsFile.layers) {
       if (l.kind === 'crates' && !l.locked) {

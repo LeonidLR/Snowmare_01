@@ -50,7 +50,7 @@
       "max_field_count": 30,
       "doorway_percent": 25,
       "crate_percent": 10,
-      "route_clear_m": 3
+      "route_clear_m": 6
     },
     "loot": {
       "preset": "loot_default",
