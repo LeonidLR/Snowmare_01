@@ -1,0 +1,1679 @@
+{
+ "schema": "codex.levelgen_layout/1",
+ "name": "gen_lab_alley",
+ "profile": "lab_02_alley",
+ "seed": 402,
+ "params": {
+  "size_m": [
+   64,
+   48
+  ],
+  "density": 1,
+  "variants": 2,
+  "verticality": 3
+ },
+ "comment": "Hand-placed lab map for the smart-enemies clip DS-00B (height + corner + cut-off): a 4 m lane between a low building and a wall / a tall building with a walkable roof, the way round the back.",
+ "bounds": {
+  "min": [
+   -2400,
+   -3200
+  ],
+  "max": [
+   2400,
+   3200
+  ]
+ },
+ "ground_z": 0,
+ "spawn": {
+  "pos": [
+   -200,
+   -2800
+  ],
+  "yaw": 90
+ },
+ "end": [
+  -200,
+  1900
+ ],
+ "walls": [
+  {
+   "id": "B_low_N_0",
+   "a": [
+    1000,
+    -2000
+   ],
+   "b": [
+    1000,
+    -717
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_low"
+  },
+  {
+   "id": "B_low_N_1",
+   "a": [
+    1000,
+    -537
+   ],
+   "b": [
+    1000,
+    1000
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_low"
+  },
+  {
+   "id": "B_low_S_0",
+   "a": [
+    0,
+    -2000
+   ],
+   "b": [
+    0,
+    -127
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_low"
+  },
+  {
+   "id": "B_low_S_1",
+   "a": [
+    0,
+    53
+   ],
+   "b": [
+    0,
+    1000
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_low"
+  },
+  {
+   "id": "B_low_W_0",
+   "a": [
+    1000,
+    -2000
+   ],
+   "b": [
+    0,
+    -2000
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_low"
+  },
+  {
+   "id": "B_low_E_0",
+   "a": [
+    1000,
+    1000
+   ],
+   "b": [
+    0,
+    1000
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_low"
+  },
+  {
+   "id": "W_lane_s",
+   "a": [
+    -400,
+    -2000
+   ],
+   "b": [
+    -400,
+    -200
+   ],
+   "height": 330,
+   "thickness": 30,
+   "kind": "wall"
+  },
+  {
+   "id": "W_south_seal",
+   "a": [
+    -400,
+    -2000
+   ],
+   "b": [
+    -2400,
+    -2000
+   ],
+   "height": 330,
+   "thickness": 30,
+   "kind": "wall"
+  },
+  {
+   "id": "B_tall_N_0",
+   "a": [
+    -400,
+    -200
+   ],
+   "b": [
+    -400,
+    1400
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tall"
+  },
+  {
+   "id": "B_tall_S_0",
+   "a": [
+    -1600,
+    -200
+   ],
+   "b": [
+    -1600,
+    398
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tall"
+  },
+  {
+   "id": "B_tall_S_1",
+   "a": [
+    -1600,
+    578
+   ],
+   "b": [
+    -1600,
+    1400
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tall"
+  },
+  {
+   "id": "B_tall_W_0",
+   "a": [
+    -400,
+    -200
+   ],
+   "b": [
+    -1201,
+    -200
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tall"
+  },
+  {
+   "id": "B_tall_W_1",
+   "a": [
+    -1381,
+    -200
+   ],
+   "b": [
+    -1600,
+    -200
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tall"
+  },
+  {
+   "id": "B_tall_E_0",
+   "a": [
+    -400,
+    1400
+   ],
+   "b": [
+    -1600,
+    1400
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_tall"
+  },
+  {
+   "id": "B_tall_lanewall_f0",
+   "a": [
+    -575,
+    15
+   ],
+   "b": [
+    -575,
+    444
+   ],
+   "height": 300,
+   "thickness": 10,
+   "kind": "interior",
+   "building": "B_tall"
+  },
+  {
+   "id": "B_tall_lanewall_f1",
+   "a": [
+    -575,
+    15
+   ],
+   "b": [
+    -575,
+    444
+   ],
+   "height": 300,
+   "thickness": 10,
+   "floor": 1,
+   "kind": "interior",
+   "building": "B_tall"
+  }
+ ],
+ "buildings": [
+  {
+   "id": "B_low",
+   "footprint": [
+    [
+     0,
+     -2000
+    ],
+    [
+     1000,
+     1000
+    ]
+   ],
+   "height": 300,
+   "floors": 1,
+   "enterable": true,
+   "roof_walkable": false,
+   "doors": [
+    {
+     "pos": [
+      1000,
+      -627
+     ],
+     "floor": 0,
+     "wall": "B_low_N"
+    },
+    {
+     "pos": [
+      0,
+      -37
+     ],
+     "floor": 0,
+     "wall": "B_low_S"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_low_door_north_1",
+     "kind": "door",
+     "pos": [
+      1000,
+      -627
+     ],
+     "floor": 0,
+     "wall": "B_low_N",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_low_door_south_2",
+     "kind": "door",
+     "pos": [
+      0,
+      -37
+     ],
+     "floor": 0,
+     "wall": "B_low_S",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_low_win_south_f0_1",
+     "kind": "window",
+     "pos": [
+      0,
+      -1464
+     ],
+     "floor": 0,
+     "wall": "B_low_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_low_win_south_f0_2",
+     "kind": "window",
+     "pos": [
+      0,
+      -1079
+     ],
+     "floor": 0,
+     "wall": "B_low_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_low_win_south_f0_3",
+     "kind": "window",
+     "pos": [
+      0,
+      -693
+     ],
+     "floor": 0,
+     "wall": "B_low_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_low_win_south_f0_4",
+     "kind": "window",
+     "pos": [
+      0,
+      -307
+     ],
+     "floor": 0,
+     "wall": "B_low_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_low_win_south_f0_6",
+     "kind": "window",
+     "pos": [
+      0,
+      464
+     ],
+     "floor": 0,
+     "wall": "B_low_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    }
+   ],
+   "partitions": [],
+   "floors_detail": [],
+   "hatches": [],
+   "parapets": [],
+   "rooms": [
+    {
+     "id": "B_low_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       0,
+       -2000
+      ],
+      "max": [
+       1000,
+       1000
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_low_door_north_1",
+      "B_low_door_south_2"
+     ],
+     "anchor": [
+      500,
+      -500
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_low_win_south_f0_1",
+     "start": [
+      0,
+      -1524
+     ],
+     "end": [
+      0,
+      -1404
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_low",
+     "wall": "B_low_S"
+    },
+    {
+     "id": "me_B_low_win_south_f0_2",
+     "start": [
+      0,
+      -1139
+     ],
+     "end": [
+      0,
+      -1019
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_low",
+     "wall": "B_low_S"
+    },
+    {
+     "id": "me_B_low_win_south_f0_3",
+     "start": [
+      0,
+      -753
+     ],
+     "end": [
+      0,
+      -633
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_low",
+     "wall": "B_low_S"
+    },
+    {
+     "id": "me_B_low_win_south_f0_4",
+     "start": [
+      0,
+      -367
+     ],
+     "end": [
+      0,
+      -247
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_low",
+     "wall": "B_low_S"
+    },
+    {
+     "id": "me_B_low_win_south_f0_6",
+     "start": [
+      0,
+      404
+     ],
+     "end": [
+      0,
+      524
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_low",
+     "wall": "B_low_S"
+    }
+   ],
+   "stairs": [],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "facade"
+  },
+  {
+   "id": "B_tall",
+   "footprint": [
+    [
+     -1600,
+     -200
+    ],
+    [
+     -400,
+     1400
+    ]
+   ],
+   "height": 600,
+   "floors": 2,
+   "enterable": true,
+   "roof_walkable": true,
+   "doors": [
+    {
+     "pos": [
+      -1600,
+      488
+     ],
+     "floor": 0,
+     "wall": "B_tall_S"
+    },
+    {
+     "pos": [
+      -1291,
+      -200
+     ],
+     "floor": 0,
+     "wall": "B_tall_W"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_tall_door_south_1",
+     "kind": "door",
+     "pos": [
+      -1600,
+      488
+     ],
+     "floor": 0,
+     "wall": "B_tall_S",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_tall_door_west_2",
+     "kind": "door",
+     "pos": [
+      -1291,
+      -200
+     ],
+     "floor": 0,
+     "wall": "B_tall_W",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_tall_win_north_f0_2",
+     "kind": "window",
+     "pos": [
+      -400,
+      600
+     ],
+     "floor": 0,
+     "wall": "B_tall_N",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_tall_win_north_f0_3",
+     "kind": "window",
+     "pos": [
+      -400,
+      925
+     ],
+     "floor": 0,
+     "wall": "B_tall_N",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_tall_win_north_f1_3",
+     "kind": "window",
+     "pos": [
+      -400,
+      925
+     ],
+     "floor": 1,
+     "wall": "B_tall_N",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 0
+    }
+   ],
+   "partitions": [],
+   "floors_detail": [
+    {
+     "floor": 1,
+     "height_z": 300,
+     "gaps": [
+      {
+       "id": "B_tall_gap_stair_f1",
+       "poly": [
+        [
+         -415,
+         15
+        ],
+        [
+         -415,
+         444
+        ],
+        [
+         -575,
+         444
+        ],
+        [
+         -575,
+         15
+        ]
+       ],
+       "kind": "stairwell"
+      }
+     ],
+     "rooms": [
+      {
+       "id": "B_tall_r_f1_0",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         -1600,
+         -200
+        ],
+        "max": [
+         -400,
+         1400
+        ]
+       },
+       "kind": "room",
+       "anchor": [
+        -1000,
+        600
+       ]
+      }
+     ]
+    }
+   ],
+   "hatches": [],
+   "parapets": [
+    {
+     "wall_id": "B_tall_parapet_N",
+     "start": [
+      -400,
+      -200
+     ],
+     "end": [
+      -400,
+      1400
+     ],
+     "height_cm": 95,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_tall_parapet_S",
+     "start": [
+      -1600,
+      -200
+     ],
+     "end": [
+      -1600,
+      1400
+     ],
+     "height_cm": 95,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_tall_parapet_W",
+     "start": [
+      -400,
+      -200
+     ],
+     "end": [
+      -1600,
+      -200
+     ],
+     "height_cm": 95,
+     "thickness_cm": 20
+    },
+    {
+     "wall_id": "B_tall_parapet_E",
+     "start": [
+      -400,
+      1400
+     ],
+     "end": [
+      -1600,
+      1400
+     ],
+     "height_cm": 95,
+     "thickness_cm": 20
+    }
+   ],
+   "rooms": [
+    {
+     "id": "B_tall_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       -1600,
+       -200
+      ],
+      "max": [
+       -400,
+       1400
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_tall_door_south_1",
+      "B_tall_door_west_2"
+     ],
+     "anchor": [
+      -1000,
+      600
+     ]
+    },
+    {
+     "id": "B_tall_r_f1_0",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       -1600,
+       -200
+      ],
+      "max": [
+       -400,
+       1400
+      ]
+     },
+     "kind": "room",
+     "anchor": [
+      -1000,
+      600
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_tall_win_north_f0_2",
+     "start": [
+      -400,
+      540
+     ],
+     "end": [
+      -400,
+      660
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_tall",
+     "wall": "B_tall_N"
+    },
+    {
+     "id": "me_B_tall_win_north_f0_3",
+     "start": [
+      -400,
+      865
+     ],
+     "end": [
+      -400,
+      985
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_tall",
+     "wall": "B_tall_N"
+    },
+    {
+     "id": "me_B_tall_win_north_f1_3",
+     "start": [
+      -400,
+      865
+     ],
+     "end": [
+      -400,
+      985
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 95,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_tall",
+     "wall": "B_tall_N"
+    },
+    {
+     "id": "me_B_tall_para_N",
+     "start": [
+      -400,
+      -200
+     ],
+     "end": [
+      -400,
+      1400
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 95,
+     "normal": [
+      1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_tall"
+    },
+    {
+     "id": "me_B_tall_para_S",
+     "start": [
+      -1600,
+      -200
+     ],
+     "end": [
+      -1600,
+      1400
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "parapet",
+     "building": "B_tall"
+    },
+    {
+     "id": "me_B_tall_para_W",
+     "start": [
+      -400,
+      -200
+     ],
+     "end": [
+      -1600,
+      -200
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 95,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "parapet",
+     "building": "B_tall"
+    },
+    {
+     "id": "me_B_tall_para_E",
+     "start": [
+      -400,
+      1400
+     ],
+     "end": [
+      -1600,
+      1400
+     ],
+     "floor": 2,
+     "base_z": 600,
+     "height_cm": 95,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "parapet",
+     "building": "B_tall"
+    }
+   ],
+   "stairs": [
+    {
+     "id": "B_tall_stair_0",
+     "pos": [
+      -495,
+      15
+     ],
+     "from": 0,
+     "to": 1,
+     "kind": "stairwell",
+     "top": [
+      -495,
+      444
+     ]
+    },
+    {
+     "id": "B_tall_stair_1",
+     "pos": [
+      -655,
+      444
+     ],
+     "from": 1,
+     "to": 2,
+     "kind": "stairwell",
+     "top": [
+      -655,
+      15
+     ]
+    }
+   ],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "facade"
+  }
+ ],
+ "ladders": [
+  {
+   "id": "LAD_B_tall",
+   "pos": [
+    -1223,
+    1410
+   ],
+   "yaw": 90,
+   "rungs": 16,
+   "plinth_cm": 17.6,
+   "from": "ground",
+   "to": "roof:B_tall",
+   "level_from": 0,
+   "level_to": 2,
+   "foot": [
+    -1223,
+    1510
+   ],
+   "top": [
+    -1223,
+    1300
+   ]
+  }
+ ],
+ "covers": [
+  {
+   "id": "C_back_c1",
+   "kind": "crate",
+   "pos": [
+    1450,
+    -800
+   ],
+   "size": [
+    120,
+    120,
+    85
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_back_c2",
+   "kind": "crate",
+   "pos": [
+    1350,
+    500
+   ],
+   "size": [
+    120,
+    120,
+    85
+   ],
+   "yaw": 90
+  }
+ ],
+ "zones": [
+  {
+   "id": "Z_lane",
+   "kind": "corridor",
+   "set_piece": "street",
+   "poly": [
+    [
+     0,
+     -2000
+    ],
+    [
+     0,
+     1200
+    ],
+    [
+     -400,
+     1200
+    ],
+    [
+     -400,
+     -2000
+    ]
+   ],
+   "intent": "kill_zone"
+  }
+ ],
+ "routes": [
+  {
+   "id": "R_main",
+   "pace": "walk",
+   "points": [
+    [
+     -200,
+     -2800
+    ],
+    [
+     -200,
+     -2000
+    ],
+    [
+     -200,
+     -1000
+    ],
+    [
+     -200,
+     0
+    ],
+    [
+     -200,
+     1200
+    ],
+    [
+     -200,
+     1900
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "street"
+   ],
+   "mandatory": true
+  },
+  {
+   "id": "V1_back",
+   "pace": "walk",
+   "points": [
+    [
+     -200,
+     -2800
+    ],
+    [
+     200,
+     -2400
+    ],
+    [
+     1600,
+     -2400
+    ],
+    [
+     1750,
+     -1200
+    ],
+    [
+     1750,
+     0
+    ],
+    [
+     1700,
+     1400
+    ],
+    [
+     1200,
+     1800
+    ],
+    [
+     500,
+     1900
+    ],
+    [
+     -200,
+     1900
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "street"
+   ]
+  },
+  {
+   "id": "V2_roof",
+   "pace": "walk",
+   "points": [
+    [
+     -200,
+     -2800
+    ],
+    [
+     200,
+     -2400
+    ],
+    [
+     1600,
+     -2400
+    ],
+    [
+     1750,
+     -1200
+    ],
+    [
+     1750,
+     0
+    ],
+    [
+     1700,
+     1400
+    ],
+    [
+     1200,
+     1800
+    ],
+    [
+     -1223,
+     1800
+    ],
+    [
+     -1223,
+     1510
+    ],
+    [
+     -1223,
+     1300
+    ],
+    [
+     -1223,
+     600
+    ],
+    [
+     -1223,
+     1300
+    ],
+    [
+     -1223,
+     1510
+    ],
+    [
+     -200,
+     1900
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "roof:B_tall",
+    "roof:B_tall",
+    "roof:B_tall",
+    "ground",
+    "ground"
+   ],
+   "links": [
+    {
+     "at": 9,
+     "via": "LAD_B_tall"
+    },
+    {
+     "at": 12,
+     "via": "LAD_B_tall"
+    }
+   ],
+   "set_pieces": [
+    "ladder_overwatch"
+   ]
+  }
+ ],
+ "spawn_points": [
+  {
+   "id": "SP_start",
+   "pos": [
+    -200,
+    -2800
+   ],
+   "kind": "edge"
+  }
+ ],
+ "ambush_points": [
+  {
+   "id": "AMB_roof",
+   "pos": [
+    -1223,
+    1510
+   ]
+  },
+  {
+   "id": "AMB_corner",
+   "pos": [
+    100,
+    1200
+   ]
+  },
+  {
+   "id": "AMB_cutoff",
+   "pos": [
+    1400,
+    -2200
+   ]
+  }
+ ],
+ "patrol_routes": [],
+ "mantle_edges": [
+  {
+   "id": "me_C_back_c1_a",
+   "start": [
+    1390,
+    -858
+   ],
+   "end": [
+    1390,
+    -742
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_back_c1_b",
+   "start": [
+    1510,
+    -858
+   ],
+   "end": [
+    1510,
+    -742
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_back_c2_a",
+   "start": [
+    1290,
+    442
+   ],
+   "end": [
+    1290,
+    558
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_back_c2_b",
+   "start": [
+    1410,
+    442
+   ],
+   "end": [
+    1410,
+    558
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_B_low_win_south_f0_1",
+   "start": [
+    0,
+    -1524
+   ],
+   "end": [
+    0,
+    -1404
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_S"
+  },
+  {
+   "id": "me_B_low_win_south_f0_2",
+   "start": [
+    0,
+    -1139
+   ],
+   "end": [
+    0,
+    -1019
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_S"
+  },
+  {
+   "id": "me_B_low_win_south_f0_3",
+   "start": [
+    0,
+    -753
+   ],
+   "end": [
+    0,
+    -633
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_S"
+  },
+  {
+   "id": "me_B_low_win_south_f0_4",
+   "start": [
+    0,
+    -367
+   ],
+   "end": [
+    0,
+    -247
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_S"
+  },
+  {
+   "id": "me_B_low_win_south_f0_6",
+   "start": [
+    0,
+    404
+   ],
+   "end": [
+    0,
+    524
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_S"
+  },
+  {
+   "id": "me_B_tall_win_north_f0_2",
+   "start": [
+    -400,
+    540
+   ],
+   "end": [
+    -400,
+    660
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_tall",
+   "wall": "B_tall_N"
+  },
+  {
+   "id": "me_B_tall_win_north_f0_3",
+   "start": [
+    -400,
+    865
+   ],
+   "end": [
+    -400,
+    985
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_tall",
+   "wall": "B_tall_N"
+  },
+  {
+   "id": "me_B_tall_win_north_f1_3",
+   "start": [
+    -400,
+    865
+   ],
+   "end": [
+    -400,
+    985
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 95,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_tall",
+   "wall": "B_tall_N"
+  },
+  {
+   "id": "me_B_tall_para_N",
+   "start": [
+    -400,
+    -200
+   ],
+   "end": [
+    -400,
+    1400
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 95,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_tall"
+  },
+  {
+   "id": "me_B_tall_para_S",
+   "start": [
+    -1600,
+    -200
+   ],
+   "end": [
+    -1600,
+    1400
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "parapet",
+   "building": "B_tall"
+  },
+  {
+   "id": "me_B_tall_para_W",
+   "start": [
+    -400,
+    -200
+   ],
+   "end": [
+    -1600,
+    -200
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 95,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "parapet",
+   "building": "B_tall"
+  },
+  {
+   "id": "me_B_tall_para_E",
+   "start": [
+    -400,
+    1400
+   ],
+   "end": [
+    -1600,
+    1400
+   ],
+   "floor": 2,
+   "base_z": 600,
+   "height_cm": 95,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "parapet",
+   "building": "B_tall"
+  }
+ ],
+ "pressure": {
+  "first_event_sec": 30,
+  "interval_sec": 90,
+  "group_min": 2,
+  "group_max": 4,
+  "max_alive": 8,
+  "patrol_share": 0.3,
+  "seed": 402,
+  "ambush": {
+   "points": [
+    [
+     -1223,
+     1510
+    ],
+    [
+     100,
+     1200
+    ],
+    [
+     1400,
+     -2200
+    ]
+   ],
+   "coordinated": {
+    "share": 0.5,
+    "max_alive": 8
+   }
+  }
+ },
+ "objectives": {
+  "version": 1,
+  "seed": 402,
+  "order": "free",
+  "start": {
+   "pos": [
+    -200,
+    -2800
+   ],
+   "yaw": 90,
+   "layer": "ground",
+   "source": "manual"
+  },
+  "goals": [
+   {
+    "id": "GOAL_1",
+    "pos": [
+     -200,
+     1900
+    ],
+    "layer": "ground",
+    "kind": "street"
+   }
+  ]
+ }
+}

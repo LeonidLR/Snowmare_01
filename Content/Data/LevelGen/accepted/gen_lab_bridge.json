@@ -1,0 +1,1408 @@
+{
+ "schema": "codex.levelgen_layout/1",
+ "name": "gen_lab_bridge",
+ "profile": "lab_03_bridge",
+ "seed": 403,
+ "params": {
+  "size_m": [
+   72,
+   60
+  ],
+  "density": 1,
+  "variants": 2,
+  "verticality": 3
+ },
+ "comment": "Hand-placed lab map for the smart-enemies clip DS-00C (two ends + cut-off from an obstacle top): a trench with one bridge, cover at the north end, a climbable obstacle at the south end, a building overlooking the deck.",
+ "bounds": {
+  "min": [
+   -3000,
+   -3600
+  ],
+  "max": [
+   3000,
+   3600
+  ]
+ },
+ "ground_z": 0,
+ "spawn": {
+  "pos": [
+   -2700,
+   0
+  ],
+  "yaw": 0
+ },
+ "end": [
+  2600,
+  0
+ ],
+ "walls": [
+  {
+   "id": "CUTWALL_N_0",
+   "a": [
+    375,
+    -3600
+   ],
+   "b": [
+    375,
+    -200
+   ],
+   "height": 140,
+   "thickness": 150,
+   "kind": "cut_wall"
+  },
+  {
+   "id": "CUTWALL_N_1",
+   "a": [
+    375,
+    200
+   ],
+   "b": [
+    375,
+    3600
+   ],
+   "height": 140,
+   "thickness": 150,
+   "kind": "cut_wall"
+  },
+  {
+   "id": "CUTWALL_S_0",
+   "a": [
+    -375,
+    -3600
+   ],
+   "b": [
+    -375,
+    -200
+   ],
+   "height": 140,
+   "thickness": 150,
+   "kind": "cut_wall"
+  },
+  {
+   "id": "CUTWALL_S_1",
+   "a": [
+    -375,
+    200
+   ],
+   "b": [
+    -375,
+    3600
+   ],
+   "height": 140,
+   "thickness": 150,
+   "kind": "cut_wall"
+  },
+  {
+   "id": "B_windows_N_0",
+   "a": [
+    2100,
+    -2000
+   ],
+   "b": [
+    2100,
+    -1652
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_windows"
+  },
+  {
+   "id": "B_windows_N_1",
+   "a": [
+    2100,
+    -1472
+   ],
+   "b": [
+    2100,
+    -700
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_windows"
+  },
+  {
+   "id": "B_windows_S_0",
+   "a": [
+    900,
+    -2000
+   ],
+   "b": [
+    900,
+    -700
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_windows"
+  },
+  {
+   "id": "B_windows_W_0",
+   "a": [
+    2100,
+    -2000
+   ],
+   "b": [
+    1701,
+    -2000
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_windows"
+  },
+  {
+   "id": "B_windows_W_1",
+   "a": [
+    1521,
+    -2000
+   ],
+   "b": [
+    900,
+    -2000
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_windows"
+  },
+  {
+   "id": "B_windows_E_0",
+   "a": [
+    2100,
+    -700
+   ],
+   "b": [
+    900,
+    -700
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_windows"
+  },
+  {
+   "id": "W_obstacle",
+   "a": [
+    -750,
+    500
+   ],
+   "b": [
+    -750,
+    1100
+   ],
+   "height": 140,
+   "thickness": 120,
+   "kind": "wall"
+  }
+ ],
+ "buildings": [
+  {
+   "id": "B_windows",
+   "footprint": [
+    [
+     900,
+     -2000
+    ],
+    [
+     2100,
+     -700
+    ]
+   ],
+   "height": 600,
+   "floors": 2,
+   "enterable": true,
+   "roof_walkable": false,
+   "doors": [
+    {
+     "pos": [
+      1611,
+      -2000
+     ],
+     "floor": 0,
+     "wall": "B_windows_W"
+    },
+    {
+     "pos": [
+      2100,
+      -1562
+     ],
+     "floor": 0,
+     "wall": "B_windows_N"
+    }
+   ],
+   "openings": [
+    {
+     "id": "B_windows_door_west_1",
+     "kind": "door",
+     "pos": [
+      1611,
+      -2000
+     ],
+     "floor": 0,
+     "wall": "B_windows_W",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_windows_door_north_2",
+     "kind": "door",
+     "pos": [
+      2100,
+      -1562
+     ],
+     "floor": 0,
+     "wall": "B_windows_N",
+     "width": 120,
+     "sill_height": 0,
+     "top_height": 210,
+     "yaw": 0
+    },
+    {
+     "id": "B_windows_win_east_f0_1",
+     "kind": "window",
+     "pos": [
+      1650,
+      -700
+     ],
+     "floor": 0,
+     "wall": "B_windows_E",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_windows_win_east_f1_1",
+     "kind": "window",
+     "pos": [
+      1650,
+      -700
+     ],
+     "floor": 1,
+     "wall": "B_windows_E",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_windows_win_east_f0_2",
+     "kind": "window",
+     "pos": [
+      1350,
+      -700
+     ],
+     "floor": 0,
+     "wall": "B_windows_E",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_windows_win_east_f1_2",
+     "kind": "window",
+     "pos": [
+      1350,
+      -700
+     ],
+     "floor": 1,
+     "wall": "B_windows_E",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 90
+    },
+    {
+     "id": "B_windows_win_south_f0_2",
+     "kind": "window",
+     "pos": [
+      900,
+      -1183
+     ],
+     "floor": 0,
+     "wall": "B_windows_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_windows_win_south_f1_2",
+     "kind": "window",
+     "pos": [
+      900,
+      -1083
+     ],
+     "floor": 1,
+     "wall": "B_windows_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    }
+   ],
+   "partitions": [],
+   "floors_detail": [
+    {
+     "floor": 1,
+     "height_z": 300,
+     "gaps": [
+      {
+       "id": "B_windows_gap_stair_f1",
+       "poly": [
+        [
+         1075,
+         -1785
+        ],
+        [
+         1075,
+         -1356
+        ],
+        [
+         915,
+         -1356
+        ],
+        [
+         915,
+         -1785
+        ]
+       ],
+       "kind": "stairwell"
+      }
+     ],
+     "rooms": [
+      {
+       "id": "B_windows_r_f1_0",
+       "floor": 1,
+       "bounds": {
+        "min": [
+         900,
+         -2000
+        ],
+        "max": [
+         2100,
+         -700
+        ]
+       },
+       "kind": "room",
+       "anchor": [
+        1500,
+        -1350
+       ]
+      }
+     ]
+    }
+   ],
+   "hatches": [],
+   "parapets": [],
+   "rooms": [
+    {
+     "id": "B_windows_r_f0_0",
+     "floor": 0,
+     "bounds": {
+      "min": [
+       900,
+       -2000
+      ],
+      "max": [
+       2100,
+       -700
+      ]
+     },
+     "kind": "room",
+     "door_ids": [
+      "B_windows_door_west_1",
+      "B_windows_door_north_2"
+     ],
+     "anchor": [
+      1500,
+      -1350
+     ]
+    },
+    {
+     "id": "B_windows_r_f1_0",
+     "floor": 1,
+     "bounds": {
+      "min": [
+       900,
+       -2000
+      ],
+      "max": [
+       2100,
+       -700
+      ]
+     },
+     "kind": "room",
+     "anchor": [
+      1500,
+      -1350
+     ]
+    }
+   ],
+   "mantle_edges": [
+    {
+     "id": "me_B_windows_win_east_f0_1",
+     "start": [
+      1710,
+      -700
+     ],
+     "end": [
+      1590,
+      -700
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_windows",
+     "wall": "B_windows_E"
+    },
+    {
+     "id": "me_B_windows_win_east_f1_1",
+     "start": [
+      1710,
+      -700
+     ],
+     "end": [
+      1590,
+      -700
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 95,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_windows",
+     "wall": "B_windows_E"
+    },
+    {
+     "id": "me_B_windows_win_east_f0_2",
+     "start": [
+      1410,
+      -700
+     ],
+     "end": [
+      1290,
+      -700
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_windows",
+     "wall": "B_windows_E"
+    },
+    {
+     "id": "me_B_windows_win_east_f1_2",
+     "start": [
+      1410,
+      -700
+     ],
+     "end": [
+      1290,
+      -700
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 95,
+     "normal": [
+      0,
+      1
+     ],
+     "kind": "window",
+     "building": "B_windows",
+     "wall": "B_windows_E"
+    },
+    {
+     "id": "me_B_windows_win_south_f0_2",
+     "start": [
+      900,
+      -1243
+     ],
+     "end": [
+      900,
+      -1123
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_windows",
+     "wall": "B_windows_S"
+    },
+    {
+     "id": "me_B_windows_win_south_f1_2",
+     "start": [
+      900,
+      -1143
+     ],
+     "end": [
+      900,
+      -1023
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_windows",
+     "wall": "B_windows_S"
+    }
+   ],
+   "stairs": [
+    {
+     "id": "B_windows_stair_0",
+     "pos": [
+      995,
+      -1785
+     ],
+     "from": 0,
+     "to": 1,
+     "kind": "stairwell",
+     "top": [
+      995,
+      -1356
+     ]
+    }
+   ],
+   "roof_holes": [],
+   "floor_holes": [],
+   "set_piece": "facade"
+  }
+ ],
+ "cut": {
+  "poly": [
+   [
+    300,
+    -3600
+   ],
+   [
+    300,
+    3600
+   ],
+   [
+    -300,
+    3600
+   ],
+   [
+    -300,
+    -3600
+   ]
+  ],
+  "level": -1,
+  "floor_z": -300,
+  "crossings": [
+   {
+    "id": "X_bridge",
+    "poly": [
+     [
+      450,
+      -200
+     ],
+     [
+      450,
+      200
+     ],
+     [
+      -450,
+      200
+     ],
+     [
+      -450,
+      -200
+     ]
+    ],
+    "kind": "bridge"
+   }
+  ]
+ },
+ "ladders": [
+  {
+   "id": "LAD_cut_s",
+   "pos": [
+    -290,
+    -2600
+   ],
+   "yaw": 0,
+   "rungs": 8,
+   "plinth_cm": 8.8,
+   "from": "cut",
+   "to": "ground",
+   "level_from": -1,
+   "level_to": 0,
+   "foot": [
+    -190,
+    -2600
+   ],
+   "top": [
+    -550,
+    -2600
+   ]
+  },
+  {
+   "id": "LAD_cut_n",
+   "pos": [
+    290,
+    2600
+   ],
+   "yaw": 180,
+   "rungs": 8,
+   "plinth_cm": 8.8,
+   "from": "cut",
+   "to": "ground",
+   "level_from": -1,
+   "level_to": 0,
+   "foot": [
+    190,
+    2600
+   ],
+   "top": [
+    550,
+    2600
+   ]
+  }
+ ],
+ "covers": [
+  {
+   "id": "C_end_w",
+   "kind": "crate",
+   "pos": [
+    700,
+    -450
+   ],
+   "size": [
+    120,
+    120,
+    85
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_end_e",
+   "kind": "crate",
+   "pos": [
+    700,
+    450
+   ],
+   "size": [
+    120,
+    120,
+    85
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_appr_j1",
+   "kind": "jersey",
+   "pos": [
+    -1600,
+    -700
+   ],
+   "size": [
+    300,
+    60,
+    95
+   ],
+   "yaw": 90
+  },
+  {
+   "id": "C_appr_c1",
+   "kind": "crate",
+   "pos": [
+    -2000,
+    700
+   ],
+   "size": [
+    120,
+    120,
+    85
+   ],
+   "yaw": 90
+  }
+ ],
+ "zones": [
+  {
+   "id": "Z_road",
+   "kind": "corridor",
+   "set_piece": "street",
+   "poly": [
+    [
+     3000,
+     -500
+    ],
+    [
+     3000,
+     500
+    ],
+    [
+     -3000,
+     500
+    ],
+    [
+     -3000,
+     -500
+    ]
+   ]
+  },
+  {
+   "id": "Z_deck",
+   "kind": "corridor",
+   "set_piece": "cut_crossing",
+   "poly": [
+    [
+     450,
+     -200
+    ],
+    [
+     450,
+     200
+    ],
+    [
+     -450,
+     200
+    ],
+    [
+     -450,
+     -200
+    ]
+   ],
+   "intent": "kill_zone"
+  }
+ ],
+ "routes": [
+  {
+   "id": "R_main",
+   "pace": "walk",
+   "points": [
+    [
+     -2700,
+     0
+    ],
+    [
+     -1600,
+     0
+    ],
+    [
+     -1000,
+     0
+    ],
+    [
+     -550,
+     0
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     600,
+     0
+    ],
+    [
+     1600,
+     0
+    ],
+    [
+     2600,
+     0
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "street",
+    "cut_crossing"
+   ],
+   "mandatory": true
+  },
+  {
+   "id": "V1_trench",
+   "pace": "walk",
+   "points": [
+    [
+     -2700,
+     0
+    ],
+    [
+     -1600,
+     -1600
+    ],
+    [
+     -1000,
+     -2600
+    ],
+    [
+     -550,
+     -2600
+    ],
+    [
+     -190,
+     -2600
+    ],
+    [
+     0,
+     0
+    ],
+    [
+     190,
+     2600
+    ],
+    [
+     550,
+     2600
+    ],
+    [
+     1600,
+     1400
+    ],
+    [
+     2600,
+     0
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "cut",
+    "cut",
+    "cut",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [
+    {
+     "at": 4,
+     "via": "LAD_cut_s"
+    },
+    {
+     "at": 7,
+     "via": "LAD_cut_n"
+    }
+   ],
+   "set_pieces": [
+    "cut_crossing"
+   ],
+   "intent": "kill_zone",
+   "intent_note": "the trench floor is seen from both rims; the ladders are the only ways out (a way for a man who dropped, not a plan)"
+  },
+  {
+   "id": "V2_windows",
+   "pace": "walk",
+   "points": [
+    [
+     -2700,
+     0
+    ],
+    [
+     -1600,
+     0
+    ],
+    [
+     -600,
+     0
+    ],
+    [
+     200,
+     0
+    ],
+    [
+     750,
+     -200
+    ],
+    [
+     750,
+     -2180
+    ],
+    [
+     1611,
+     -2180
+    ],
+    [
+     1611,
+     -1820
+    ],
+    [
+     1611,
+     -1520
+    ],
+    [
+     1920,
+     -1562
+    ],
+    [
+     2280,
+     -1562
+    ],
+    [
+     2400,
+     0
+    ],
+    [
+     2600,
+     0
+    ]
+   ],
+   "layers": [
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground",
+    "ground"
+   ],
+   "links": [],
+   "set_pieces": [
+    "cut_crossing",
+    "facade"
+   ]
+  }
+ ],
+ "spawn_points": [
+  {
+   "id": "SP_start",
+   "pos": [
+    -2700,
+    0
+   ],
+   "kind": "edge"
+  }
+ ],
+ "ambush_points": [
+  {
+   "id": "AMB_end_w",
+   "pos": [
+    850,
+    -450
+   ]
+  },
+  {
+   "id": "AMB_end_e",
+   "pos": [
+    850,
+    450
+   ]
+  },
+  {
+   "id": "AMB_obstacle",
+   "pos": [
+    -900,
+    800
+   ]
+  }
+ ],
+ "patrol_routes": [],
+ "mantle_edges": [
+  {
+   "id": "me_C_end_w_a",
+   "start": [
+    640,
+    -508
+   ],
+   "end": [
+    640,
+    -392
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_end_w_b",
+   "start": [
+    760,
+    -508
+   ],
+   "end": [
+    760,
+    -392
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_end_e_a",
+   "start": [
+    640,
+    392
+   ],
+   "end": [
+    640,
+    508
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_end_e_b",
+   "start": [
+    760,
+    392
+   ],
+   "end": [
+    760,
+    508
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_W_obstacle_n",
+   "start": [
+    -690,
+    500
+   ],
+   "end": [
+    -690,
+    1100
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 140,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_W_obstacle_s",
+   "start": [
+    -810,
+    500
+   ],
+   "end": [
+    -810,
+    1100
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 140,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_appr_j1_a",
+   "start": [
+    -1630,
+    -844
+   ],
+   "end": [
+    -1630,
+    -556
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_appr_j1_b",
+   "start": [
+    -1570,
+    -844
+   ],
+   "end": [
+    -1570,
+    -556
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "obstacle"
+  },
+  {
+   "id": "me_C_appr_c1_a",
+   "start": [
+    -2060,
+    642
+   ],
+   "end": [
+    -2060,
+    758
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_C_appr_c1_b",
+   "start": [
+    -1940,
+    642
+   ],
+   "end": [
+    -1940,
+    758
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 85,
+   "normal": [
+    1,
+    0
+   ],
+   "kind": "crate"
+  },
+  {
+   "id": "me_B_windows_win_east_f0_1",
+   "start": [
+    1710,
+    -700
+   ],
+   "end": [
+    1590,
+    -700
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_windows",
+   "wall": "B_windows_E"
+  },
+  {
+   "id": "me_B_windows_win_east_f1_1",
+   "start": [
+    1710,
+    -700
+   ],
+   "end": [
+    1590,
+    -700
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 95,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_windows",
+   "wall": "B_windows_E"
+  },
+  {
+   "id": "me_B_windows_win_east_f0_2",
+   "start": [
+    1410,
+    -700
+   ],
+   "end": [
+    1290,
+    -700
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_windows",
+   "wall": "B_windows_E"
+  },
+  {
+   "id": "me_B_windows_win_east_f1_2",
+   "start": [
+    1410,
+    -700
+   ],
+   "end": [
+    1290,
+    -700
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 95,
+   "normal": [
+    0,
+    1
+   ],
+   "kind": "window",
+   "building": "B_windows",
+   "wall": "B_windows_E"
+  },
+  {
+   "id": "me_B_windows_win_south_f0_2",
+   "start": [
+    900,
+    -1243
+   ],
+   "end": [
+    900,
+    -1123
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_windows",
+   "wall": "B_windows_S"
+  },
+  {
+   "id": "me_B_windows_win_south_f1_2",
+   "start": [
+    900,
+    -1143
+   ],
+   "end": [
+    900,
+    -1023
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_windows",
+   "wall": "B_windows_S"
+  }
+ ],
+ "pressure": {
+  "first_event_sec": 30,
+  "interval_sec": 90,
+  "group_min": 2,
+  "group_max": 4,
+  "max_alive": 8,
+  "patrol_share": 0.3,
+  "seed": 403,
+  "ambush": {
+   "points": [
+    [
+     850,
+     -450
+    ],
+    [
+     850,
+     450
+    ],
+    [
+     -900,
+     800
+    ]
+   ],
+   "coordinated": {
+    "share": 0.5,
+    "max_alive": 8
+   }
+  }
+ },
+ "objectives": {
+  "version": 1,
+  "seed": 403,
+  "order": "free",
+  "start": {
+   "pos": [
+    -2700,
+    0
+   ],
+   "yaw": 0,
+   "layer": "ground",
+   "source": "manual"
+  },
+  "goals": [
+   {
+    "id": "GOAL_1",
+    "pos": [
+     2600,
+     0
+    ],
+    "layer": "ground",
+    "kind": "street"
+   }
+  ]
+ }
+}

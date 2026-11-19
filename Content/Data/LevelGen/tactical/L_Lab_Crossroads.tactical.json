@@ -1,0 +1,45 @@
+{
+  "schema": "codex.tactical_map/1",
+  "map": "L_Lab_Crossroads",
+  "layout": "gen_lab_crossroads",
+  "geometry_hash": "3f46d1e35900e772",
+  "analysis_version": 1,
+  "analysis_source": "computed",
+  "conditions": {
+    "weather": "clear",
+    "time_of_day": "day"
+  },
+  "ground_z": 0,
+  "thresholds": {
+    "narrow_width_m": 6,
+    "clutter_min_obstacles": 4,
+    "clutter_blocked_fraction": 0.12,
+    "lane_width_m": 2.5,
+    "canyon_tall_cm": 230,
+    "canyon_side_max_m": 8,
+    "detour_critical_m": 40,
+    "drop_reach_cm": 400,
+    "drop_min_cm": 150,
+    "drop_max_cm": 650,
+    "window_range_m": 60,
+    "sniper_range_m": 110,
+    "reveal_close_m": 12,
+    "stealth_sight_m": 48,
+    "min_score": 0.25,
+    "ladder_only_factor": 0.65
+  },
+  "chokepoints": [
+    {"id":"CP_01","kind":"canyon","kind_name":"каньон с высотами","tags":["narrow","canyon","hiding"],"score":0.428,"layer":"ground","pos":[1200,707,0],"line":[[1200,807,0],[1200,607,0]],"poly":[[1310,807],[1310,607],[1090,607],[1090,807]],"length_m":2,"width_m":2.2,"lane_m":2.2,"route":"variant","sources":["route:V1_enclosure"],"alternative":"n/a","detour_m":null,"drop_spots":[],"windows":[],"overwatch":[],"hiding_spots":["HS_01","HS_02","HS_05"],"reveal_m":1.8,"reveal_stealth_m":1.8}
+  ],
+  "drop_spots": [],
+  "windows": [],
+  "overwatch_roofs": [],
+  "hiding_spots": [
+    {"id":"HS_01","layer":"ground","pos":[1025,775,0],"facing_yaw":-10.4,"reveal_normal_m":1.8,"reveal_stealth_m":1.8,"stealth_only":false,"blind":false,"rush_m":2.2,"cover":"wall:W_grave_W_1","cover_height_cm":330,"threatens":{"line":"route:V1_enclosure","route":"V1_enclosure","pos":[1200,743,0]},"place":"CP_01"},
+    {"id":"HS_02","layer":"ground","pos":[1875,725,0],"facing_yaw":-120.5,"reveal_normal_m":5.3,"reveal_stealth_m":5.3,"stealth_only":false,"blind":false,"rush_m":5,"cover":"wall:W_grave_N","cover_height_cm":330,"threatens":{"line":"route:V1_enclosure","route":"V1_enclosure","pos":[1630,308,0]},"place":"CP_01"},
+    {"id":"HS_03","layer":"ground","pos":[-2125,-175,0],"facing_yaw":81.9,"reveal_normal_m":6,"reveal_stealth_m":6,"stealth_only":false,"blind":false,"rush_m":2.2,"cover":"cover:C_appr_j2","cover_height_cm":95,"threatens":{"line":"route:R_main","route":"R_main","pos":[-2100,0,0]}},
+    {"id":"HS_04","layer":"ground","pos":[-125,-175,0],"facing_yaw":81.9,"reveal_normal_m":6,"reveal_stealth_m":6,"stealth_only":false,"blind":false,"rush_m":2.2,"cover":"cover:C_appr_j1","cover_height_cm":95,"threatens":{"line":"route:R_main","route":"R_main","pos":[-100,0,0]}},
+    {"id":"HS_05","layer":"ground","pos":[725,1175,0],"facing_yaw":-3.9,"reveal_normal_m":6.4,"reveal_stealth_m":6.4,"stealth_only":false,"blind":false,"rush_m":5.2,"cover":"wall:W_grave_S","cover_height_cm":330,"threatens":{"line":"route:V1_enclosure","route":"V1_enclosure","pos":[1200,1143,0]},"place":"CP_01"}
+  ],
+  "ladder_only_roofs": []
+}
