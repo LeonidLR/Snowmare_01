@@ -12,50 +12,14 @@ import { applyOverrides, rerollAll } from './placement.ts';
 import { runFastGate, type FastGateResult } from './fastGate.ts';
 import { validateStatic, type PropsValidationIssue } from './validator.ts';
 import { pmcChargesLayer } from '../pmcCharges.ts';
-import { mandatorySegments, routeDistOnLayer, type RouteSeg } from '../pmcPosts.ts';
 import { buildPowerLayer, validatePowerLinks, type PowerBuildResult, type PowerLinkIssue } from './power.ts';
 import { mapNameFor } from '../node/buildPipeline.ts';
+import { DEFAULT_AUTOGEN_CONFIG, type PropsAutogenConfig } from './autogenConfig.ts';
+import { applyRouteClearance, type RouteClearanceStats } from './routeClearance.ts';
 
-export interface PropsAutogenLayerConfig {
-  preset: string;
-  count_mode?: string;
-  per_100m2?: number;
-  per_10000m2?: number;
-  base_max?: number;
-  min_count?: number;
-  max_count?: number;
-  min_field_count?: number;
-  max_field_count?: number;
-  field_per_10000m2?: number;
-  doorway_percent?: number;
-  crate_percent?: number;
-  budget_per_10000m2?: number;
-  min_budget?: number;
-  max_budget?: number;
-  where?: Record<string, unknown>;
-  route_clear_m?: number;
-  route_corridor_m?: number;
-}
-
-export interface PropsAutogenConfig {
-  schema?: string;
-  unit_area_m2?: number;
-  reference?: {
-    map: string;
-    layout: string;
-    area_m2: number;
-  };
-  layers?: {
-    crates?: PropsAutogenLayerConfig;
-    barrels?: PropsAutogenLayerConfig;
-    turrets?: PropsAutogenLayerConfig;
-    mines?: PropsAutogenLayerConfig;
-    loot?: PropsAutogenLayerConfig;
-    /** TURRET_POWER.md phase 1: generators + links + jerrycans (power.ts; the preset holds every number). Absent = no power layer. */
-    power?: PropsAutogenLayerConfig;
-  };
-  zone_multipliers?: Record<string, number>;
-}
+export { DEFAULT_AUTOGEN_CONFIG, clearanceCm } from './autogenConfig.ts';
+export type { PropsAutogenConfig, PropsAutogenLayerConfig } from './autogenConfig.ts';
+export type { RouteClearanceStats } from './routeClearance.ts';
 
 export interface GeneratePropsOptions {
   layout: GenLayout;
@@ -66,15 +30,6 @@ export interface GeneratePropsOptions {
   mapName?: string;
   layoutName?: string;
   projectRoot?: string;
-}
-
-export interface RouteClearanceStats {
-  droppedCrates: number;
-  droppedBarrels: number;
-  droppedMines: number;
-  droppedLoot: number;
-  droppedTotal: number;
-  pmcChargesInside: string[];
 }
 
 export interface AutogenPropsResult {
@@ -92,73 +47,6 @@ export interface AutogenPropsResult {
   areaFactor: number;
 }
 
-export const DEFAULT_AUTOGEN_CONFIG: PropsAutogenConfig = {
-  unit_area_m2: 10000,
-  reference: {
-    map: 'L_Gen_Depot_1',
-    layout: 'gen_ref_01_02_depot_1',
-    area_m2: 21948,
-  },
-  layers: {
-    crates: {
-      preset: 'crates_default',
-      count_mode: 'density',
-      per_100m2: 0.25,
-      base_max: 80,
-      min_count: 8,
-      max_count: 300,
-      route_corridor_m: 2,
-      where: {
-        near: [
-          { max_cm: 150, weight: 3, what: 'wall' },
-          { max_cm: 200, weight: 2, what: 'cover' },
-        ],
-        walk_layers: ['ground', 'floor:*'],
-      },
-    },
-    barrels: {
-      preset: 'barrels_default',
-      per_10000m2: 3.64,
-      min_count: 4,
-      max_count: 80,
-      route_corridor_m: 2,
-      where: {
-        near: [{ max_cm: 120, weight: 2, what: 'wall' }],
-      },
-    },
-    turrets: {
-      preset: 'turrets_default',
-      per_10000m2: 0.91,
-      min_count: 1,
-      max_count: 12,
-    },
-    mines: {
-      preset: 'mines_default',
-      field_per_10000m2: 1.82,
-      min_field_count: 2,
-      max_field_count: 30,
-      doorway_percent: 25,
-      crate_percent: 10,
-      route_clear_m: 6,
-    },
-    loot: {
-      preset: 'loot_default',
-      budget_per_10000m2: 273.0,
-      min_budget: 300,
-      max_budget: 3600,
-    },
-    power: {
-      preset: 'power_default',
-    },
-  },
-  zone_multipliers: {
-    industrial: 1.0,
-    yard: 1.0,
-    open: 0.8,
-    street: 0.6,
-  },
-};
-
 /** Finds the project root directory from cwd or path segments. */
 export function findProjectRoot(startDir = process.cwd()): string {
   let cur = path.resolve(startDir);
@@ -174,16 +62,6 @@ export function findProjectRoot(startDir = process.cwd()): string {
 }
 
 /** Loads Content/Data/LevelGen/props_autogen.json or returns default fallback. */
-/** A route clearance of a layer in cm: the config value, else the built-in default, else 0 (no clearance). */
-export function clearanceCm(
-  cfg: PropsAutogenConfig,
-  kind: 'crates' | 'barrels' | 'mines',
-  key: 'route_clear_m' | 'route_corridor_m'
-): number {
-  const m = cfg.layers?.[kind]?.[key] ?? DEFAULT_AUTOGEN_CONFIG.layers?.[kind]?.[key] ?? 0;
-  return Math.max(0, Math.round(m * 100));
-}
-
 export function loadAutogenConfig(projectRoot?: string): PropsAutogenConfig {
   const root = projectRoot ?? findProjectRoot();
   const cfgPath = path.join(root, 'Content/Data/LevelGen/props_autogen.json');
@@ -445,97 +323,8 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
     }
   }
 
-  // Task 088 (PROPS_LAYERS.md + 088-props-route-clearance.md):
-  // Mandatory route clearance: never place an autogen mine or tripwire within route_clear_m (config props_autogen.json; 6 m = the 4.5 m spot range + 1.5 m Medic-Sapper bonus, TripwireRules / DeployableRules),
-  // and keep a free corridor of route_corridor_m (config) for crates / barrels.
-  // Reuses 087 helpers: mandatorySegments and routeDistOnLayer.
-  // Never touch the locked pmc_charges layer (list in report if any lands inside).
-  // If a crate is dropped, any mine / loot attached to that crate is also dropped.
-  const segs: RouteSeg[] = mandatorySegments(layout);
-  const droppedCrateIds = new Set<string>();
-  const routeClearanceStats: RouteClearanceStats = {
-    droppedCrates: 0,
-    droppedBarrels: 0,
-    droppedMines: 0,
-    droppedLoot: 0,
-    droppedTotal: 0,
-    pmcChargesInside: [],
-  };
-
-  if (segs.length > 0) {
-    const routeClearCm = clearanceCm(cfg, 'mines', 'route_clear_m');
-    const crateCorridorCm = clearanceCm(cfg, 'crates', 'route_corridor_m');
-    const barrelCorridorCm = clearanceCm(cfg, 'barrels', 'route_corridor_m');
-
-    for (const l of propsFile.layers) {
-      if (l.kind === 'crates' && !l.locked) {
-        const kept: PropObject[] = [];
-        for (const obj of l.objects) {
-          const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
-          if (d < crateCorridorCm) {
-            droppedCrateIds.add(obj.id);
-            routeClearanceStats.droppedCrates++;
-          } else {
-            kept.push(obj);
-          }
-        }
-        l.objects = kept;
-      } else if (l.kind === 'barrels' && !l.locked) {
-        const kept: PropObject[] = [];
-        for (const obj of l.objects) {
-          const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
-          if (d < barrelCorridorCm) {
-            routeClearanceStats.droppedBarrels++;
-          } else {
-            kept.push(obj);
-          }
-        }
-        l.objects = kept;
-      }
-    }
-
-    for (const l of propsFile.layers) {
-      if (l.kind === 'mines' && l.id !== 'pmc_charges' && !l.locked) {
-        const kept: PropObject[] = [];
-        for (const obj of l.objects) {
-          if (obj.attach && droppedCrateIds.has(obj.attach)) {
-            routeClearanceStats.droppedMines++;
-            continue;
-          }
-          const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
-          if (d < routeClearCm) {
-            routeClearanceStats.droppedMines++;
-          } else {
-            kept.push(obj);
-          }
-        }
-        l.objects = kept;
-      } else if (l.kind === 'loot' && !l.locked) {
-        const kept: PropObject[] = [];
-        for (const obj of l.objects) {
-          if (obj.attach && droppedCrateIds.has(obj.attach)) {
-            routeClearanceStats.droppedLoot++;
-            continue;
-          }
-          kept.push(obj);
-        }
-        l.objects = kept;
-      } else if (l.id === 'pmc_charges') {
-        for (const obj of l.objects) {
-          const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
-          if (d < routeClearCm) {
-            routeClearanceStats.pmcChargesInside.push(`${obj.id} (${(d / 100).toFixed(2)}m)`);
-          }
-        }
-      }
-    }
-
-    routeClearanceStats.droppedTotal =
-      routeClearanceStats.droppedCrates +
-      routeClearanceStats.droppedBarrels +
-      routeClearanceStats.droppedMines +
-      routeClearanceStats.droppedLoot;
-  }
+  // Task 088: the mandatory route stays clear of traps and blocking props (routeClearance.ts; shared with the Training Ground re-roll).
+  const routeClearanceStats: RouteClearanceStats = applyRouteClearance(propsFile, layout, cfg);
 
   // G003b: leave out what the game's static validator (FPropsValidator) would drop at load - e.g. a Depot crate kept from the
   // source props that now overlaps a Depot cover, a mine inside a stair keep-out disk / a doorway corridor - so the TG shows what

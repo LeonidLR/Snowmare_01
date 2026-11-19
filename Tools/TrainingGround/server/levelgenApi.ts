@@ -8,6 +8,11 @@
 //   GET  /api/levelgen/accepted                 -> { accepted: [{ name, seed, profile, at }] }   (Content/Data/LevelGen/accepted)
 //   GET  /api/levelgen/open-accepted?name=<n>   -> the accepted layout JSON, read-only (opened in the page for a region re-roll / locks;
 //                                                  saved back only by the designer's «Принять» = POST /api/levelgen/accept)
+//   GET  /api/levelgen/maps                   -> { maps: [{ map, layout, levelJson, propsId, acceptedAt }], current }   (T-020: every generated map +
+//                                               the department's ONE current map: the saved choice, else the most recently accepted layout's map)
+//   POST /api/levelgen/current-map { map }    -> { current }  (Saved/TrainingGround/current_map.json; survives a browser change)
+//   GET  /api/levelgen/map-environment?map=<M> -> { file, environment, cold_rate_mult, layout }  the current map's level JSON weather block
+//   POST /api/levelgen/map-environment { map, environment, cold_rate_mult } -> { changed, file }  (only those two keys, atomic, no write when unchanged)
 //   GET  /api/levelgen/ledger                   -> the critic ledger { spentUsd, calls }
 //   POST /api/levelgen/critic   { name, layout, evaluation, candidatePng (base64), client: claude|jev|mock, budgetUsd, model }
 //                                               -> { verdict } (saved to Saved/TrainingGround/levelgen/<name>.verdicts.json; the ledger updated)
@@ -37,6 +42,10 @@ import { ACCEPTED_DIR, ensureReferencePng, LEVELGEN_OUT, listProfiles, NAME_RE, 
 import type { GenLayout } from '../src/levelgen/schema.ts';
 import { validateGenLayout } from '../src/levelgen/schema.ts';
 import { setupPropsApi } from './propsApi.ts';
+import { pickCurrentMap } from '../src/levelgen/currentMap.ts';
+import { listMapEntries, readCurrentMap, writeCurrentMap } from '../src/levelgen/node/currentMapFiles.ts';
+import type { EnvironmentEdit } from '../src/levelgen/node/levelEnvironment.ts';
+import { readLevelEnvironment, writeLevelEnvironment } from '../src/levelgen/node/levelEnvironment.ts';
 
 type Req = { method?: string; url?: string; on: (ev: string, cb: (chunk?: unknown) => void) => void };
 type Res = { statusCode: number; setHeader: (k: string, v: string) => void; end: (body?: string | Buffer) => void };
@@ -126,6 +135,38 @@ export function setupLevelgenApi(use: Use): void {
       const layout = JSON.parse(fs.readFileSync(file, 'utf8')) as GenLayout;
       send(res, 200, { layout, errors: validateGenLayout(layout) });
     } catch (e) { send(res, 500, { error: e instanceof Error ? e.message : String(e) }); }
+  });
+
+  // T-020: the department's current map (one for the whole «Генератор уровней») and the weather block of its level JSON
+  use('/api/levelgen/maps', (_req, res) => {
+    try {
+      const maps = listMapEntries();
+      send(res, 200, { maps, current: pickCurrentMap(maps, readCurrentMap()) });
+    } catch (e) { send(res, 500, { error: e instanceof Error ? e.message : String(e) }); }
+  });
+  use('/api/levelgen/current-map', async (req, res, next) => {
+    if (req.method !== 'POST') return next ? next() : send(res, 405, { error: 'POST only' });
+    const b = await readBody(req);
+    const map = String(b.map ?? '');
+    try {
+      const maps = listMapEntries();
+      if (!maps.some((m) => m.map === map)) return send(res, 400, { error: `unknown map ${map}` });
+      writeCurrentMap(map);
+      send(res, 200, { current: map });
+    } catch (e) { send(res, 500, { error: e instanceof Error ? e.message : String(e) }); }
+  });
+  use('/api/levelgen/map-environment', async (req, res) => {
+    try {
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        const edit: EnvironmentEdit = {
+          environment: b.environment && typeof b.environment === 'object' ? (b.environment as EnvironmentEdit['environment']) : null,
+          cold_rate_mult: typeof b.cold_rate_mult === 'number' ? b.cold_rate_mult : null,
+        };
+        return send(res, 200, writeLevelEnvironment(String(b.map ?? ''), edit));
+      }
+      send(res, 200, readLevelEnvironment(query(req, 'map')));
+    } catch (e) { send(res, 400, { error: e instanceof Error ? e.message : String(e) }); }
   });
 
   use('/api/levelgen/ledger', (_req, res) => send(res, 200, readLedger() ?? emptyLedger()));
