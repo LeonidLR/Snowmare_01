@@ -7,10 +7,12 @@
    "owner": "lead Sonnet subagent",
    "branch": "claude/firing-positions",
    "topic": "claude-T005",
-   "state": "active",
+   "state": "waiting",
    "max_quiet_min": 45,
    "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-agents",
-   "machine": "main"
+   "machine": "main",
+   "reason": "main PC offline 11-20 >= 4 h: the stand-in lead on codex-worker continues from the branch (docs/port/WORKER_LEAD_2026-11-20.md)",
+   "max_wait_min": 480
   },
   {
    "id": "T-020",
@@ -29,10 +31,12 @@
    "owner": "lead Sonnet subagent",
    "branch": "claude/cold-indoors",
    "topic": "claude-T021",
-   "state": "active",
+   "state": "waiting",
    "max_quiet_min": 45,
    "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-gemday",
-   "machine": "main"
+   "machine": "main",
+   "reason": "main PC offline 11-20 >= 4 h: the stand-in lead on codex-worker continues from the branch (docs/port/WORKER_LEAD_2026-11-20.md)",
+   "max_wait_min": 480
   },
   {
    "id": "bgen",
@@ -40,10 +44,12 @@
    "owner": "session Генератор зданий local_93362388",
    "branch": "claude/building-generator",
    "topic": "claude-S022",
-   "state": "active",
+   "state": "waiting",
    "max_quiet_min": 60,
    "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-bgen",
-   "machine": "main"
+   "machine": "main",
+   "reason": "main PC offline 11-20 >= 4 h: the stand-in lead on codex-worker continues from the branch (docs/port/WORKER_LEAD_2026-11-20.md)",
+   "max_wait_min": 480
   },
   {
    "id": "worker-night",
@@ -59,6 +65,16 @@
     "path": "C:/Work/CodexTactics/Saved/Worker/nightloop/heartbeat.txt"
    },
    "machine": "worker"
+  },
+  {
+   "id": "T-022/023",
+   "title": "TG map + props editing (F11, move elements, zone props re-roll)",
+   "owner": "not started - stand-in lead (Sonnet) or main lead",
+   "branch": "claude/tg-map-edit",
+   "topic": "claude-T022",
+   "state": "waiting",
+   "reason": "queued: brief docs/port/claude/inbox/T022-tg-map-edit-fullscreen.md",
+   "max_wait_min": 720
   }
  ]
 }
