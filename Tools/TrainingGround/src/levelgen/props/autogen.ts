@@ -12,6 +12,7 @@ import { applyOverrides, rerollAll } from './placement.ts';
 import { runFastGate, type FastGateResult } from './fastGate.ts';
 import { validateStatic, type PropsValidationIssue } from './validator.ts';
 import { pmcChargesLayer } from '../pmcCharges.ts';
+import { mandatorySegments, routeDistOnLayer, type RouteSeg } from '../pmcPosts.ts';
 import { buildPowerLayer, validatePowerLinks, type PowerBuildResult, type PowerLinkIssue } from './power.ts';
 import { mapNameFor } from '../node/buildPipeline.ts';
 
@@ -32,6 +33,8 @@ export interface PropsAutogenLayerConfig {
   min_budget?: number;
   max_budget?: number;
   where?: Record<string, unknown>;
+  route_clear_m?: number;
+  route_corridor_m?: number;
 }
 
 export interface PropsAutogenConfig {
@@ -65,11 +68,22 @@ export interface GeneratePropsOptions {
   projectRoot?: string;
 }
 
+export interface RouteClearanceStats {
+  droppedCrates: number;
+  droppedBarrels: number;
+  droppedMines: number;
+  droppedLoot: number;
+  droppedTotal: number;
+  pmcChargesInside: string[];
+}
+
 export interface AutogenPropsResult {
   props: LevelPropsFile;
   fastGateResult: FastGateResult;
   /** Objects the static validator left out (the game would drop them at load: PropsValidator.cpp). */
   droppedByValidator: PropsValidationIssue[];
+  /** Objects dropped to keep the mandatory route clear of traps and blocking props (task 088). */
+  droppedByRouteClearance: RouteClearanceStats;
   /** The power layer build (null when the config has no power layer). */
   power: PowerBuildResult | null;
   /** Power network warnings (validatePowerLinks; nothing dropped). */
@@ -93,6 +107,7 @@ export const DEFAULT_AUTOGEN_CONFIG: PropsAutogenConfig = {
       base_max: 80,
       min_count: 8,
       max_count: 300,
+      route_corridor_m: 2,
       where: {
         near: [
           { max_cm: 150, weight: 3, what: 'wall' },
@@ -106,6 +121,7 @@ export const DEFAULT_AUTOGEN_CONFIG: PropsAutogenConfig = {
       per_10000m2: 3.64,
       min_count: 4,
       max_count: 80,
+      route_corridor_m: 2,
       where: {
         near: [{ max_cm: 120, weight: 2, what: 'wall' }],
       },
@@ -123,6 +139,7 @@ export const DEFAULT_AUTOGEN_CONFIG: PropsAutogenConfig = {
       max_field_count: 30,
       doorway_percent: 25,
       crate_percent: 10,
+      route_clear_m: 6,
     },
     loot: {
       preset: 'loot_default',
@@ -157,6 +174,16 @@ export function findProjectRoot(startDir = process.cwd()): string {
 }
 
 /** Loads Content/Data/LevelGen/props_autogen.json or returns default fallback. */
+/** A route clearance of a layer in cm: the config value, else the built-in default, else 0 (no clearance). */
+export function clearanceCm(
+  cfg: PropsAutogenConfig,
+  kind: 'crates' | 'barrels' | 'mines',
+  key: 'route_clear_m' | 'route_corridor_m'
+): number {
+  const m = cfg.layers?.[kind]?.[key] ?? DEFAULT_AUTOGEN_CONFIG.layers?.[kind]?.[key] ?? 0;
+  return Math.max(0, Math.round(m * 100));
+}
+
 export function loadAutogenConfig(projectRoot?: string): PropsAutogenConfig {
   const root = projectRoot ?? findProjectRoot();
   const cfgPath = path.join(root, 'Content/Data/LevelGen/props_autogen.json');
@@ -299,6 +326,7 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
             per_100m2: lcfg.per_100m2 ?? 0.25,
             max: maxCrates,
           },
+          ...(lcfg.route_corridor_m !== undefined ? { route_corridor_m: lcfg.route_corridor_m } : {}),
           ...(lcfg.where ? { where: lcfg.where } : {}),
         };
         break;
@@ -311,6 +339,7 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
         );
         rules = {
           count: { mode: 'count', value: barrelCount },
+          ...(lcfg.route_corridor_m !== undefined ? { route_corridor_m: lcfg.route_corridor_m } : {}),
           ...(lcfg.where ? { where: lcfg.where } : {}),
         };
         break;
@@ -336,6 +365,7 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
           field: { count: { mode: 'count', value: fieldCount } },
           doorways: { mode: 'percent', value: lcfg.doorway_percent ?? 25 },
           crates: { percent: lcfg.crate_percent ?? 10 },
+          ...(lcfg.route_clear_m !== undefined ? { route_clear_m: lcfg.route_clear_m } : {}),
         };
         break;
       }
@@ -415,6 +445,98 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
     }
   }
 
+  // Task 088 (PROPS_LAYERS.md + 088-props-route-clearance.md):
+  // Mandatory route clearance: never place an autogen mine or tripwire within route_clear_m (config props_autogen.json; 6 m = the 4.5 m spot range + 1.5 m Medic-Sapper bonus, TripwireRules / DeployableRules),
+  // and keep a free corridor of route_corridor_m (config) for crates / barrels.
+  // Reuses 087 helpers: mandatorySegments and routeDistOnLayer.
+  // Never touch the locked pmc_charges layer (list in report if any lands inside).
+  // If a crate is dropped, any mine / loot attached to that crate is also dropped.
+  const segs: RouteSeg[] = mandatorySegments(layout);
+  const droppedCrateIds = new Set<string>();
+  const routeClearanceStats: RouteClearanceStats = {
+    droppedCrates: 0,
+    droppedBarrels: 0,
+    droppedMines: 0,
+    droppedLoot: 0,
+    droppedTotal: 0,
+    pmcChargesInside: [],
+  };
+
+  if (segs.length > 0) {
+    const routeClearCm = clearanceCm(cfg, 'mines', 'route_clear_m');
+    const crateCorridorCm = clearanceCm(cfg, 'crates', 'route_corridor_m');
+    const barrelCorridorCm = clearanceCm(cfg, 'barrels', 'route_corridor_m');
+
+    for (const l of propsFile.layers) {
+      if (l.kind === 'crates' && !l.locked) {
+        const kept: PropObject[] = [];
+        for (const obj of l.objects) {
+          const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
+          if (d < crateCorridorCm) {
+            droppedCrateIds.add(obj.id);
+            routeClearanceStats.droppedCrates++;
+          } else {
+            kept.push(obj);
+          }
+        }
+        l.objects = kept;
+      } else if (l.kind === 'barrels' && !l.locked) {
+        const kept: PropObject[] = [];
+        for (const obj of l.objects) {
+          const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
+          if (d < barrelCorridorCm) {
+            routeClearanceStats.droppedBarrels++;
+          } else {
+            kept.push(obj);
+          }
+        }
+        l.objects = kept;
+      }
+    }
+
+    for (const l of propsFile.layers) {
+      if (l.kind === 'mines' && l.id !== 'pmc_charges' && !l.locked) {
+        const kept: PropObject[] = [];
+        for (const obj of l.objects) {
+          if (obj.attach && droppedCrateIds.has(obj.attach)) {
+            routeClearanceStats.droppedMines++;
+            continue;
+          }
+          const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
+          if (d < routeClearCm) {
+            routeClearanceStats.droppedMines++;
+          } else {
+            kept.push(obj);
+          }
+        }
+        l.objects = kept;
+      } else if (l.kind === 'loot' && !l.locked) {
+        const kept: PropObject[] = [];
+        for (const obj of l.objects) {
+          if (obj.attach && droppedCrateIds.has(obj.attach)) {
+            routeClearanceStats.droppedLoot++;
+            continue;
+          }
+          kept.push(obj);
+        }
+        l.objects = kept;
+      } else if (l.id === 'pmc_charges') {
+        for (const obj of l.objects) {
+          const d = routeDistOnLayer(obj.pos, segs, obj.walk_layer || 'ground');
+          if (d < routeClearCm) {
+            routeClearanceStats.pmcChargesInside.push(`${obj.id} (${(d / 100).toFixed(2)}m)`);
+          }
+        }
+      }
+    }
+
+    routeClearanceStats.droppedTotal =
+      routeClearanceStats.droppedCrates +
+      routeClearanceStats.droppedBarrels +
+      routeClearanceStats.droppedMines +
+      routeClearanceStats.droppedLoot;
+  }
+
   // G003b: leave out what the game's static validator (FPropsValidator) would drop at load - e.g. a Depot crate kept from the
   // source props that now overlaps a Depot cover, a mine inside a stair keep-out disk / a doorway corridor - so the TG shows what
   // the game spawns. A mines / loot object attached to a dropped crate goes with it (the validator's pass 2).
@@ -448,6 +570,7 @@ export function generatePropsForLayout(options: GeneratePropsOptions): AutogenPr
     props: propsFile,
     fastGateResult,
     droppedByValidator: staticCheck.issues,
+    droppedByRouteClearance: routeClearanceStats,
     power,
     powerIssues,
     areaM2,

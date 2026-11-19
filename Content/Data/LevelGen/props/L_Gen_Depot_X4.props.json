@@ -20,6 +20,7 @@
 					"mode": "density",
 					"per_100m2": 0.25
 				},
+				"route_corridor_m": 2,
 				"where": {
 					"near": [
 						{
@@ -1001,6 +1002,7 @@
 					"mode": "count",
 					"value": 32
 				},
+				"route_corridor_m": 2,
 				"where": {
 					"near": [
 						{
@@ -1476,7 +1478,8 @@
 						"mode": "count",
 						"value": 16
 					}
-				}
+				},
+				"route_clear_m": 6
 			},
 			"objects": [
 				{
@@ -1715,16 +1718,6 @@
 					"yaw": 0,
 					"locked": false,
 					"attach": "crates_00000001_107",
-					"trigger": "crate_open"
-				},
-				{
-					"id": "mines_00000001_24",
-					"variant": "mine_crate",
-					"pos": [-3150, 2450],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false,
-					"attach": "crates_00000001_113",
 					"trigger": "crate_open"
 				},
 				{
