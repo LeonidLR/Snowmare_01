@@ -145,11 +145,20 @@ FVector UFiringPositionSubsystem::SnapToFloor(const FVector& Point) const
 
 float UFiringPositionSubsystem::FindRimDistance(const FVector& Start, const FVector& Dir, float MaxCm) const
 {
+	// Coarse 100 cm steps to the first point off the walk surface, then 10 cm steps from the last good one (a roof hall is 30+ m across).
 	float Rim = 0.f;
-	for (float Distance = 10.f; Distance <= MaxCm; Distance += 10.f)
+	FVector Unused;
+	for (float Distance = 100.f; Distance <= MaxCm; Distance += 100.f)
 	{
-		FVector OnSurface;
-		if (!FindWalkSurface(Start + Dir * Distance, FiringPositionSubsystemLocal::WalkSurfaceCm, 40.f, OnSurface))
+		if (!FindWalkSurface(Start + Dir * Distance, FiringPositionSubsystemLocal::WalkSurfaceCm, 40.f, Unused, false))
+		{
+			break;
+		}
+		Rim = Distance;
+	}
+	for (float Distance = Rim + 10.f; Distance < Rim + 100.f && Distance <= MaxCm; Distance += 10.f)
+	{
+		if (!FindWalkSurface(Start + Dir * Distance, FiringPositionSubsystemLocal::WalkSurfaceCm, 40.f, Unused, false))
 		{
 			break;
 		}
@@ -158,14 +167,14 @@ float UFiringPositionSubsystem::FindRimDistance(const FVector& Start, const FVec
 	return Rim;
 }
 
-bool UFiringPositionSubsystem::FindWalkSurface(const FVector& Point, float HorizontalCm, float VerticalCm, FVector& Out) const
+bool UFiringPositionSubsystem::FindWalkSurface(const FVector& Point, float HorizontalCm, float VerticalCm, FVector& Out, bool bSnap) const
 {
 	if (UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(GetWorld()))
 	{
 		FNavLocation OnNav;
 		if (Nav->ProjectPointToNavigation(Point, OnNav, FVector(HorizontalCm, HorizontalCm, VerticalCm)) && FVector::Dist2D(OnNav.Location, Point) <= HorizontalCm)
 		{
-			Out = SnapToFloor(OnNav.Location);
+			Out = bSnap ? SnapToFloor(OnNav.Location) : OnNav.Location;
 			return true;
 		}
 	}
@@ -224,7 +233,8 @@ void UFiringPositionSubsystem::BuildContext(FFiringScanContext& Context, const F
 		FVector OnNav;
 		if (ProjectOnNav(Sample, FVector(100.f, 100.f, 150.f), OnNav) && FMath::Abs(OnNav.Z - AreaCenter.Z) <= Context.FloorToleranceCm)
 		{
-			Context.Aims.Add(OnNav + FVector(0.f, 0.f, Cfg.SampleHeightCm));
+			// The navmesh floats ~8 cm over the floor; a target's feet (and the real shot's aim, feet + 80) are on the floor.
+			Context.Aims.Add(SnapToFloor(OnNav) + FVector(0.f, 0.f, Cfg.SampleHeightCm));
 		}
 	}
 }
@@ -510,28 +520,31 @@ void UFiringPositionSubsystem::GatherCover(FFiringScanContext& Context, TArray<F
 			FVector BestMean = FVector::ZeroVector;
 			if (Slot.Height == ECoverHeight::HighCover)
 			{
-				// A full wall: fire only round an exposed corner, the lean point is the muzzle (CoverRules::CornerLeanPoint).
+				// A full wall: fire only round an exposed corner, the lean point is the muzzle (CoverRules::CornerLeanPoint); the lean works crouched too.
 				for (const ECoverFacing Facing : { ECoverFacing::Left, ECoverFacing::Right })
 				{
 					if (!Slot.IsEdgeExposed(Facing))
 					{
 						continue;
 					}
-					if (!FiringStances::Allows(Context.StanceMask, EOperativeStance::Standing))
+					for (const EOperativeStance Stance : { EOperativeStance::Crouching, EOperativeStance::Standing })
 					{
-						continue; // the lean round a corner is a standing shot
-					}
-					const FVector Muzzle = Feet + FVector(0.f, 0.f, Cfg.MuzzleStandingCm);
-					const FVector Origin = CoverRules::CornerLeanPoint(Slot, Facing, Muzzle, CoverRules::GetConfig().CornerPeekOffsetCm);
-					FVector Mean = FVector::ZeroVector;
-					const float Share = FiringPositionRules::CoveredShare(CountClear(Context, Origin, 0.f, 0.f, &Mean), Context.Aims.Num());
-					if (Share > BestShare)
-					{
-						BestShare = Share;
-						BestMean = Mean;
-						Best.Position.Kind = EFiringPositionKind::Corner;
-						Best.Position.Stance = EOperativeStance::Standing;
-						Best.Position.FireOrigin = Origin;
+						if (!FiringStances::Allows(Context.StanceMask, Stance))
+						{
+							continue;
+						}
+						const FVector Muzzle = Feet + FVector(0.f, 0.f, Cfg.MuzzleHeight(Stance));
+						const FVector Origin = CoverRules::CornerLeanPoint(Slot, Facing, Muzzle, CoverRules::GetConfig().CornerPeekOffsetCm);
+						FVector Mean = FVector::ZeroVector;
+						const float Share = FiringPositionRules::CoveredShare(CountClear(Context, Origin, 0.f, 0.f, &Mean), Context.Aims.Num());
+						if (Share > BestShare)
+						{
+							BestShare = Share;
+							BestMean = Mean;
+							Best.Position.Kind = EFiringPositionKind::Corner;
+							Best.Position.Stance = Stance;
+							Best.Position.FireOrigin = Origin;
+						}
 					}
 				}
 			}

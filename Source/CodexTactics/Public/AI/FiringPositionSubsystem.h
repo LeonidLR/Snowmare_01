@@ -120,7 +120,7 @@ private:
 	 * The roof's walk surface: the navmesh within HorizontalCm / VerticalCm of Point, else the floor test (a downward trace 30 cm over / under
 	 * Point hits an upward-facing surface; a point inside a parapet starts inside it and fails). Out = the surface point under Point.
 	 */
-	bool FindWalkSurface(const FVector& Point, float HorizontalCm, float VerticalCm, FVector& Out) const;
+	bool FindWalkSurface(const FVector& Point, float HorizontalCm, float VerticalCm, FVector& Out, bool bSnap = true) const;
 	bool LineBlocked(FFiringScanContext& Context, const FVector& From, const FVector& To) const;
 	/** How many of the context's samples a muzzle at Origin reaches (inside the band; Sector: bearing within HalfFov of Yaw when HalfFov > 0). */
 	int32 CountClear(FFiringScanContext& Context, const FVector& Origin, float SectorYaw, float SectorHalfFovDeg, FVector* OutMeanAim, FVector* OutFirstClearAim = nullptr) const;

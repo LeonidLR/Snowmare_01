@@ -257,7 +257,7 @@ bool FFiringPositionRoofTermsTest::RunTest(const FString&)
 		TestEqual(TEXT("starts at 0"), Steps[0], 0.f, 0.001f);
 		TestEqual(TEXT("ends at rim_step_max_cm"), Steps[8], 80.f, 0.001f);
 	}
-	TestEqual(TEXT("rim_search_max_cm default"), Config.RimSearchMaxCm, 1500.f, 0.001f);
+	TestEqual(TEXT("rim_search_max_cm default"), Config.RimSearchMaxCm, 6000.f, 0.001f);
 	TestTrue(TEXT("default queries stand and crouch"), FiringStances::Allows(FiringStances::Default, EOperativeStance::Standing) && FiringStances::Allows(FiringStances::Default, EOperativeStance::Crouching));
 	TestFalse(TEXT("prone is not a position stance"), FiringStances::Allows(FiringStances::Default, EOperativeStance::Prone));
 	TestFalse(TEXT("a sniper's query (crouching only) does not allow standing"), FiringStances::Allows(FiringStances::Crouching, EOperativeStance::Standing));

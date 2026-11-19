@@ -77,11 +77,11 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	float RimStepCm = 10.f;
 	float RimStepMaxCm = 80.f;
 	/**
-	 * "rim_search_max_cm" (1500): how far from the file's roof spot toward the area the walk surface is followed to find the rim. T-05's diagnosis: the
-	 * overwatch spots lie 3-6.5 m BEHIND the rim (the line to the street hits the roof slab 2.8-6.4 m ahead), so the rim step is counted back from the
-	 * rim: rim - 0 .. rim - rim_step_max_cm.
+	 * "rim_search_max_cm" (6000): how far from the file's roof spot toward the area the walk surface is followed to find the rim. T-05's diagnosis: the
+	 * overwatch spots are NOT at the rim (B_hall_n: the walk surface runs on 15+ m past the spot and the line to the street hits the roof slab 1.4-6 m
+	 * ahead), so the rim step is counted back from the rim: rim - 0 .. rim - rim_step_max_cm.
 	 */
-	float RimSearchMaxCm = 1500.f;
+	float RimSearchMaxCm = 6000.f;
 	/** "muzzle_height_cm": the muzzle above the feet per stance - a mirror of AOperativeCharacter::GetMuzzleLocation (checked by FiringPositionSmoke). */
 	float MuzzleStandingCm = 140.f;
 	float MuzzleCrouchingCm = 85.f;
