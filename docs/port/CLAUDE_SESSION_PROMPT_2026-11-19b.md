@@ -5,6 +5,22 @@ worker-load-jobs, no-unasked-rule-changes), docs/port/TASK_TEMPLATE.md (inbox te
 TASK_BOARD "Сделано (2026-11-19)". Reply to the designer in Russian. Designer is away most of 11-20: gameplay decisions go to ONE
 evening list; Antigravity cannot be woken without him.
 
+## UPDATE 11-19 ~09:15 - MAIN PC FORMAT TODAY, development moves to codex-worker (read this first)
+- Designer formats the main PC TODAY (not Saturday). The lead session restarts ON THE WORKER: checkout C:\Work\CodexTactics,
+  user C:\Users\User; project memory already at C:\Users\User\.claude\projects\C--Work-CodexTactics\memory (copied 09:10).
+- Mirror of the main PC: C:\Mirror\Main\<source> (Codex = Documents/Codex incl. godot-test-01 + ASSETS; CodexTactics = files incl.
+  untracked packs + designer WIP; _git = bundle of local-only refs). Godot archive on the worker: C:\Mirror\Main\Codex\godot-test-01
+  (CLAUDE.md still names the main-PC path).
+- Merged 09:00: main-pc-mirror 7713954e (+22540839). Pushed before the format: grok/G008b-overwatch-hold d38a1289 (WIP),
+  codex/048-buildings-smoke 981660b1 (Codex 048 in progress). Codex / Antigravity told (chat codex-048 / gemini-088) to commit +
+  push their branches and stop; they continue on the worker from origin.
+- Worker-ops (local_83f5d1d5): makes C:\Work\CodexTactics the dev checkout on origin/main (was the trainer freeze 80f7d55b),
+  copies untracked files + the designer's 9 WIP files byte-exact from the mirror, build + MovementSmoke -> 'ready dev-checkout'.
+- On the worker, build.ps1 -Remote worker / smoke_parallel -Remote / worker_sync point at itself: build and smoke LOCALLY
+  (-Remote off). Agent worktrees (-agents / -grok / -gemday / -claude / -bgen) do not exist there yet: git worktree add from the
+  origin branches when an agent restarts.
+- Weekly limit 96 % (reset 11-21 09:00 UTC), team stop 98 %: only the move + critical merges until then.
+
 ## UPDATE 11-19 ~09:00 (read this first)
 - WEEKLY limit was NOT reset: get_usage shows "Weekly - all models" 96 % (reset 11-21 09:00 UTC); only the 5-hour window was fresh.
   Team stop at 98 % still applies -> lead does only critical merges / reviews until the weekly reset shows.
