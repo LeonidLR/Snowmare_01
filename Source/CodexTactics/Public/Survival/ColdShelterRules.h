@@ -19,6 +19,7 @@ class FJsonObject;
  *  - Base multiplier = leak * leak_to_cold: all sealed 0, a fully open building 1 (= open air).
  *  - Draught: near an open opening on the SAME storey the multiplier is 1 within draught_full_m (3.5 m) and falls linearly to the base at
  *    draught_fade_m (10 m). Indoor multiplier = max(base, the strongest draught). Openings on other storeys only count in the leak.
+ *  - All of these are shares of the OUTDOOR cold (1 = the street): ResolveZoneMultiplier multiplies them by the wave's multiplier.
  * A camera zone, when one holds the operative, still wins (the caller checks it first, ResolveZoneMultiplier).
  */
 
@@ -115,7 +116,10 @@ namespace ColdShelterRules
 
 	/**
 	 * The zone multiplier of FColdEnvironment: a camera zone that holds the operative wins (its own multiplier, so hand-made maps are
-	 * unchanged); otherwise the indoor multiplier; otherwise WaveMultiplier (the wave's cold_drain_mult).
+	 * unchanged); otherwise the indoor multiplier SCALED BY WaveMultiplier (the indoor multiplier is a share of the outdoor cold: 1 by an
+	 * open door = exactly the street's cold, G012 2026-11-20 - it was a hard 1 and ignored a wave's cold_drain_mult); otherwise
+	 * WaveMultiplier (the wave's cold_drain_mult). The weather multiplier is applied after this by ColdRules::CombineZoneWeather, the same
+	 * way indoors and out.
 	 */
 	CODEXTACTICS_API float ResolveZoneMultiplier(bool bInCameraZone, float CameraZoneMultiplier, const FColdShelterSample& Shelter, float WaveMultiplier);
 }

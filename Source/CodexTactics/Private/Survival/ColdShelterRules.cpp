@@ -203,6 +203,7 @@ namespace ColdShelterRules
 		{
 			return CameraZoneMultiplier;
 		}
-		return Shelter.IsIndoors() ? Shelter.Multiplier : WaveMultiplier;
+		// Indoors: a share of the outdoor cold (G012) - by an open door exactly the street's multiplier, a sealed building 0.
+		return Shelter.IsIndoors() ? Shelter.Multiplier * FMath::Max(0.f, WaveMultiplier) : WaveMultiplier;
 	}
 }
