@@ -40,7 +40,7 @@ struct CODEXTACTICS_API FPmcBehaviour
 	int32 SuppressThenMove = 0;
 	/** Enemies first hit from a hiding spot of a chokepoint (the TACTICAL map's ambush spots; the target near the spot's threatened point). */
 	int32 AmbushSuccess = 0;
-	/** Kills by a man standing at an overwatch roof spot. */
+	/** Kills by a hit from an overwatch roof spot, or by a man standing on his Overwatch post. */
 	int32 OverwatchKills = 0;
 	/** Mean seconds per man of the side spent inside a chokepoint (its outline, his floor) - bad. */
 	float TimeInChokepointS = 0.f;
@@ -77,8 +77,73 @@ struct CODEXTACTICS_API FPmcOrderEvent
 	EPmcOrder Order = EPmcOrder::Hold;
 };
 
+/** T-04 position sample. Alive, cover/post occupancy and locomotion come from the arena, not from orders. */
+struct CODEXTACTICS_API FPmcArenaPositionSample
+{
+	FVector Feet = FVector::ZeroVector;
+	float WeaponRangeCm = 0.f;
+	bool bAlive = false;
+	bool bMoving = false;
+	bool bWalking = false;
+	bool bOnPosition = false;
+	bool bNearCoverSlot = false;
+};
+
+struct CODEXTACTICS_API FPmcArenaPositionTime
+{
+	float OpenIdleS = 0.f;
+	float OpenIdleBeforeContactS = 0.f;
+	double ExposedRunCm = 0.0;
+	double MaxExposedRunCm = 0.0;
+
+	/** Integrate one observed interval. The previous sample holds until the new sample. */
+	void AddInterval(const FPmcArenaPositionSample& Previous, const FPmcArenaPositionSample& Current,
+		float DeltaS, bool bBeforeContact);
+};
+
+/** Only the first shot by each defender counts. Simultaneous openers have a zero gap. */
+struct CODEXTACTICS_API FPmcArenaOpeningShots
+{
+	void Record(int32 Fighter, double TimeS);
+	TOptional<float> GapS() const { return Gap; }
+
+private:
+	int32 FirstFighter = INDEX_NONE;
+	double FirstTimeS = 0.0;
+	TOptional<float> Gap;
+};
+
+/**
+ * One hit that may become an overwatch kill. Filled at the shot: the killer's side, his tactical post, and whether he stood on
+ * that post or on an overwatch roof spot. The death time is compared with HitTimeS.
+ */
+struct CODEXTACTICS_API FPmcOverwatchKillNote
+{
+	int32 Side = INDEX_NONE;
+	EPmcPostKind PostKind = EPmcPostKind::None;
+	bool bAtPost = false;
+	bool bAtOverwatchSpot = false;
+	float HitTimeS = 0.f;
+};
+
 namespace PmcArenaBehaviourRules
 {
+	/**
+	 * The squad's kill-zone reach: the MEDIAN of the living armed defenders' WeaponRangeCm (the effective reach of the equipped weapon).
+	 * The median, not the longest gun: a squad with one marksman (90 m) and two rifles (28 m) opens its kill zone at 28 m, and a
+	 * 78-88 m spawn separation is then no "contact" (T-04 run 2: the longest reach made the first sample the contact). 0 = nobody armed.
+	 */
+	CODEXTACTICS_API float SquadReachCm(TConstArrayView<FPmcArenaPositionSample> Defenders);
+
+	/** A living attacker is within SquadReachCm of a living armed defender (3D, independent of visibility and fire). */
+	CODEXTACTICS_API bool AttackersInRange(TConstArrayView<FPmcArenaPositionSample> Defenders, TConstArrayView<FPmcArenaPositionSample> Attackers);
+
+	/** Share of the living defenders on cover/post at the first in-range sample. */
+	CODEXTACTICS_API TOptional<float> OnPositionShare(TConstArrayView<FPmcArenaPositionSample> Defenders);
+
+	/** Largest 3D angle between the living defenders' lines to the live attackers' centroid. */
+	CODEXTACTICS_API TOptional<float> CrossfireDeg(TConstArrayView<FVector> Defenders, TConstArrayView<FVector> Attackers);
+
 	/** "codex.pmc_arena_behaviour/1". */
 	extern CODEXTACTICS_API const TCHAR* const Schema;
 
@@ -92,6 +157,8 @@ namespace PmcArenaBehaviourRules
 	inline constexpr float MoveMinCm = 300.f;
 	/** A shooter stands at an ambush / overwatch spot within this, cm (planar, his floor). */
 	inline constexpr float SpotRadiusCm = 300.f;
+	/** A kill counts from a hit no older than this (the damage attribution window). Age equal to it still counts. */
+	inline constexpr float OverwatchKillWindowS = 3.f;
 	/** A man stands at a window position within this of its stand point, cm (planar, his floor). */
 	inline constexpr float WindowRadiusCm = 120.f;
 	/** The ambush hit: the target within this of the hiding spot's threatened point, cm. */
@@ -135,6 +202,16 @@ namespace PmcArenaBehaviourRules
 
 	/** The shooter stands at an overwatch roof spot (SpotRadiusCm, its floor). */
 	CODEXTACTICS_API bool IsAtOverwatchSpot(const FTacticalMapFile& File, const FTacticalRuntimeConfig& Config, const FVector& ShooterFeet);
+
+	/**
+	 * An overwatch kill: side 0 or 1, the hit is not older than WindowS (DeathTimeS - HitTimeS <= WindowS; a negative delta still
+	 * counts), and the shooter stood on an overwatch roof spot OR on his Overwatch post. Window, ambush, ladder and none do not.
+	 * An Overwatch post he has left, while he is not on a roof spot, does not.
+	 */
+	CODEXTACTICS_API bool CountsAsOverwatchKill(const FPmcOverwatchKillNote& Note, float DeathTimeS, float WindowS = OverwatchKillWindowS);
+
+	/** 1 when a walk onto a post was taken, else 0. A hold and a refused walk stay 0. */
+	CODEXTACTICS_API int32 PostMoveIncrement(bool bWalkTaken);
 
 	/**
 	 * The G002 rich object: { "schema", "side", "tactical_map", "metrics": { <key>: { name, unit, range [min, max], direction, value } } }

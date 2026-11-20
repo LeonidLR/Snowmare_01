@@ -19,6 +19,7 @@
 #include "Interactables/DroppedItemActor.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/LootCrateActor.h"
+#include "AI/PmcEncounterNav.h"
 #include "Interactables/ProximityMineActor.h"
 #include "Interactables/TripwireActor.h"
 #include "Interactables/TurretActor.h"
@@ -924,6 +925,22 @@ bool UCodexLevelPropsSubsystem::SpawnGameplayActor(FPropsSpawnSession& S, const 
 	if (AProximityMineActor* Mine = Cast<AProximityMineActor>(Actor); Mine && !S.bTrapsHostile)
 	{
 		Mine->RestoreSaved(/*bInPlacedBySquad=*/ true, /*bInTrapped=*/ true, /*bInRevealed=*/ true, /*InArmingTimeLeft=*/ 0.f);
+	}
+	// Smart-enemies T-11: a charge of the generator's PMC posts (layer pmc_charges / owner "pmc") belongs to the PMC - its fighters walk
+	// over it unharmed and path round it (PmcEncounterNav); the player's side sets it off and spots it by the normal rule.
+	if (S.bTrapsHostile && PropsGameplayRules::IsPmcOwned(ResObj.LayerId, Obj))
+	{
+		if (const AProximityMineActor* Mine = Cast<AProximityMineActor>(Actor))
+		{
+			const float Half = Mine->TriggerRadius + PmcEncounterNav::OwnChargeMarginCm;
+			PmcEncounterNav::AdoptCharge(*Actor, FVector(Half, Half, 60.f));
+		}
+		else if (const ATripwireActor* Wire = Cast<ATripwireActor>(Actor))
+		{
+			// Actor space, X along the wire (as ATripwireActor::EnsureNavModifier).
+			const float Length = static_cast<float>(FVector::Dist2D(Wire->AnchorA, Wire->AnchorB));
+			PmcEncounterNav::AdoptCharge(*Actor, FVector(Length * 0.5f + PmcEncounterNav::OwnChargeMarginCm, PmcEncounterNav::OwnChargeMarginCm, 40.f));
+		}
 	}
 	TagProp(Actor, ResObj.LayerId, Obj.Id);
 	// The crate's mine / loot objects are this actor (the TG shows them as markers on it).

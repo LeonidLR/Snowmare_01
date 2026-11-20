@@ -16,7 +16,7 @@ import { StealthCombatPanel } from './components/StealthCombatPanel';
 import { HudLabelsPanel } from './components/HudLabelsPanel';
 import { AudioReviewPanel } from './components/AudioReviewPanel';
 import { applyLevelEncounterPatch } from './utils/stealthCombat';
-import { BlastDoorPanel, DemoPanel, LevelColdPanel, LevelHordePanel, LevelEnvironmentPanel } from './components/LevelSettingsPanels';
+import { BlastDoorPanel, DemoPanel, LevelColdPanel, LevelHordePanel } from './components/LevelSettingsPanels';
 import { LevelOperativesPanel } from './components/LevelOperativesPanel';
 import { LevelItem, LEVEL_GROUPS, LEVEL_GROUP_LABELS } from './utils/levelList';
 import { validateLevelSettings } from './utils/levelSettings';
@@ -410,10 +410,24 @@ export const App: React.FC = () => {
     }
     try {
       const stageParam = activeStageId || config.level_id || 'stage_01';
+      // T-020: the weather block is edited on «Управление картой» now; this tab must not write back its (maybe stale) copy of it,
+      // so the file's current `environment` goes into the saved level (an unknown / missing file: the copy stays as it was).
+      let payload: LevelConfig = config;
+      try {
+        const envRes = await fetch(`/api/levelgen/map-environment?map=${encodeURIComponent(stageParam.replace(/\.json$/, ''))}`);
+        if (envRes.ok) {
+          const onDisk = await envRes.json();
+          payload = { ...config };
+          if (onDisk.environment) payload.environment = onDisk.environment;
+          else delete payload.environment;
+        }
+      } catch {
+        // dev server offline: the direct save below fails the same way
+      }
       const res = await fetch(`/api/save-stage?id=${encodeURIComponent(stageParam)}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(config, null, 2),
+        body: JSON.stringify(payload, null, 2),
       });
       if (res.ok) {
         setIsServerConnected(true);
@@ -829,9 +843,9 @@ export const App: React.FC = () => {
           </div>
         </div>
 
-        {/* Настройки уровня (не волны): погода и время суток, бластовая дверь, орда, демо / туториал, холод уровня */}
+        {/* Настройки уровня (не волны): бластовая дверь, орда, демо / туториал, холод уровня.
+            Погода и время суток (environment) переехали в «Генератор уровней» -> «Управление картой» (T-020). */}
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
-          <LevelEnvironmentPanel config={config} onChange={(next) => setConfig(next)} />
           <BlastDoorPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
           <LevelHordePanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />
           <DemoPanel config={config} waveCount={config.waves.length} onChange={(next) => setConfig(next)} />

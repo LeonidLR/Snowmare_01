@@ -1,0 +1,7 @@
+{
+ "lead": "main",
+ "since": "2026-11-20T13:45:00+02:00",
+ "from": "worker",
+ "handover_branch": "main",
+ "note": "worker stand-in session died at the 08:34 reboot; main lead resumed, merged T-021 + T-022/023 + goal-zone-clear"
+}

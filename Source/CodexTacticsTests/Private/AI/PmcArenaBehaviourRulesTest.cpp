@@ -136,6 +136,42 @@ bool FPmcArenaBehaviourJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("choke is a 'lower' metric"), Metrics->GetObjectField(TEXT("time_in_chokepoint_s"))->GetStringField(TEXT("direction")), FString(TEXT("lower")));
 	TestEqual(TEXT("quiet spells are 'context'"), Metrics->GetObjectField(TEXT("quiet_spells"))->GetStringField(TEXT("direction")), FString(TEXT("context")));
 	TestEqual(TEXT("an absent metric is 0"), Metrics->GetObjectField(TEXT("overwatch_kills"))->GetNumberField(TEXT("value")), 0.0);
+
+	// Counting only (G011). The JSON value above stays 0 when the round recorded no kill.
+	{
+		FPmcOverwatchKillNote Note;
+		Note.Side = 1;
+		Note.PostKind = EPmcPostKind::Overwatch;
+		Note.bAtPost = true;
+		Note.HitTimeS = 10.f;
+		TestTrue(TEXT("on an Overwatch post, not on a roof spot"), CountsAsOverwatchKill(Note, 12.f));
+		Note.bAtPost = false;
+		Note.bAtOverwatchSpot = true;
+		TestTrue(TEXT("on a roof spot, post left"), CountsAsOverwatchKill(Note, 13.f));
+		Note.bAtOverwatchSpot = false;
+		TestFalse(TEXT("Overwatch post left and not on a spot"), CountsAsOverwatchKill(Note, 12.f));
+		Note.bAtPost = true;
+		Note.PostKind = EPmcPostKind::Window;
+		TestFalse(TEXT("a window post is not an overwatch kill"), CountsAsOverwatchKill(Note, 12.f));
+		Note.PostKind = EPmcPostKind::Ambush;
+		TestFalse(TEXT("an ambush post is not an overwatch kill"), CountsAsOverwatchKill(Note, 12.f));
+		Note.PostKind = EPmcPostKind::LadderRoof;
+		TestFalse(TEXT("a ladder roof is not an overwatch kill"), CountsAsOverwatchKill(Note, 12.f));
+		Note.PostKind = EPmcPostKind::None;
+		TestFalse(TEXT("no post and no spot"), CountsAsOverwatchKill(Note, 12.f));
+		Note.bAtOverwatchSpot = true;
+		Note.Side = 0;
+		Note.HitTimeS = 10.f;
+		TestTrue(TEXT("age 3.0 still counts"), CountsAsOverwatchKill(Note, 13.f));
+		TestFalse(TEXT("age 3.01 does not"), CountsAsOverwatchKill(Note, 13.01f));
+		TestTrue(TEXT("a negative delta still counts"), CountsAsOverwatchKill(Note, 9.f));
+		Note.Side = INDEX_NONE;
+		TestFalse(TEXT("no side does not count"), CountsAsOverwatchKill(Note, 10.f));
+		Note.Side = 2;
+		TestFalse(TEXT("side 2 does not count"), CountsAsOverwatchKill(Note, 10.f));
+		TestEqual(TEXT("a taken walk counts"), PostMoveIncrement(true), 1);
+		TestEqual(TEXT("a refused walk does not"), PostMoveIncrement(false), 0);
+	}
 	const TSharedPtr<FJsonValue> AbsentGuard = Metrics->GetObjectField(TEXT("guard_near_access_share"))->TryGetField(TEXT("value"));
 	TestTrue(TEXT("no access: guard_near_access_share is JSON null, not 0"), AbsentGuard.IsValid() && AbsentGuard->Type == EJson::Null);
 	TestEqual(TEXT("Value() of an n/a guard share is 0 for numeric callers"), Behaviour.Value(TEXT("guard_near_access_share")), 0.f);
@@ -147,6 +183,111 @@ bool FPmcArenaBehaviourJsonTest::RunTest(const FString&)
 	const TSharedPtr<FJsonObject> ApplicableMetrics = ApplicableJson->GetObjectField(TEXT("metrics"));
 	TestEqual(TEXT("a real guard share is a number"), ApplicableMetrics->GetObjectField(TEXT("guard_near_access_share"))->GetNumberField(TEXT("value")), 0.8);
 	TestEqual(TEXT("defender spread is a number"), ApplicableMetrics->GetObjectField(TEXT("defender_spread_m"))->GetNumberField(TEXT("value")), 7.5);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcArenaPositionTimeTest, "CodexTactics.AI.PmcArenaBehaviour.PositionTime",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcArenaPositionTimeTest::RunTest(const FString&)
+{
+	FPmcArenaPositionSample Idle;
+	Idle.bAlive = true;
+	FPmcArenaPositionSample Covered = Idle;
+	Covered.bOnPosition = true;
+	FPmcArenaPositionSample Walking = Idle;
+	Walking.bMoving = true;
+	Walking.bWalking = true;
+	FPmcArenaPositionTime Time;
+	Time.AddInterval(Idle, Covered, 1.25f, true);
+	Time.AddInterval(Covered, Walking, 2.f, true);
+	Time.AddInterval(Idle, Walking, 3.f, false);
+	Time.AddInterval({}, Idle, 4.f, false);
+	TestEqual(TEXT("Only observed living open idle contributes"), Time.OpenIdleS, 4.25f);
+	TestEqual(TEXT("Open idle before contact is retained separately"), Time.OpenIdleBeforeContactS, 1.25f);
+	FPmcArenaPositionSample Next = Walking;
+	Next.Feet.X = 100.f;
+	Time.AddInterval(Walking, Next, 1.f, false);
+	FPmcArenaPositionSample Turn = Next;
+	Turn.Feet.Y = 150.f;
+	Time.AddInterval(Next, Turn, 1.f, false);
+	TestEqual(TEXT("Exposure sums distance along a turn"), Time.MaxExposedRunCm, 250.0);
+	FPmcArenaPositionSample NearCover = Turn;
+	NearCover.bNearCoverSlot = true;
+	Time.AddInterval(Turn, NearCover, 1.f, false);
+	TestEqual(TEXT("A nearby slot breaks the uncovered segment"), Time.ExposedRunCm, 0.0);
+	Time.AddInterval(Turn, Next, 1.f, false);
+	Time.AddInterval(Next, Idle, 1.f, false);
+	TestEqual(TEXT("Stopping breaks the uncovered segment"), Time.ExposedRunCm, 0.0);
+	TestEqual(TEXT("Separate running segments do not merge"), Time.MaxExposedRunCm, 250.0);
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcArenaPositionContactTest, "CodexTactics.AI.PmcArenaBehaviour.PositionContact",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcArenaPositionContactTest::RunTest(const FString&)
+{
+	using namespace PmcArenaBehaviourRules;
+	FPmcArenaPositionSample Defender;
+	Defender.bAlive = true;
+	Defender.WeaponRangeCm = 500.f;
+	Defender.bOnPosition = true;
+	FPmcArenaPositionSample Unarmed;
+	Unarmed.bAlive = true;
+	TArray<FPmcArenaPositionSample> Defenders = { Defender, Unarmed, {} };
+	FPmcArenaPositionSample Attacker;
+	Attacker.bAlive = true;
+	Attacker.Feet = FVector(300.f, 0.f, 400.f);
+	TArray<FPmcArenaPositionSample> Attackers = { Attacker };
+	TestTrue(TEXT("An attacker at the exact weapon reach is in range"), AttackersInRange(Defenders, Attackers));
+	Attackers[0].Feet.Z += 1.f;
+	TestFalse(TEXT("3D height contributes to range"), AttackersInRange(Defenders, Attackers));
+	Attackers[0].bAlive = false;
+	Attackers[0].Feet = FVector::ZeroVector;
+	TestFalse(TEXT("A casualty does not trigger range"), AttackersInRange(Defenders, Attackers));
+	// One marksman (90 m) among two rifles (5 m here): the kill zone is the median reach, not the longest gun.
+	FPmcArenaPositionSample Marksman = Defender;
+	Marksman.WeaponRangeCm = 9000.f;
+	Marksman.Feet = FVector(-100.f, 0.f, 0.f);
+	TArray<FPmcArenaPositionSample> Squad = { Defender, Defender, Marksman };
+	TestEqual(TEXT("Squad reach is the median of the armed living defenders"), SquadReachCm(Squad), 500.f);
+	TestEqual(TEXT("Two guns average their reach"), SquadReachCm(TArray<FPmcArenaPositionSample>{ Defender, Marksman }), 4750.f);
+	TestEqual(TEXT("No armed defender, no reach"), SquadReachCm(TArray<FPmcArenaPositionSample>{ Unarmed, FPmcArenaPositionSample() }), 0.f);
+	Attackers[0].bAlive = true;
+	Attackers[0].Feet = FVector(-3000.f, 0.f, 0.f);
+	TestFalse(TEXT("An attacker inside only the marksman's reach is no contact"), AttackersInRange(Squad, Attackers));
+	Attackers[0].Feet = FVector(300.f, 0.f, 0.f);
+	TestTrue(TEXT("An attacker inside the squad's median reach is contact"), AttackersInRange(Squad, Attackers));
+	Attackers[0].bAlive = false;
+	TestEqual(TEXT("One of two live defenders is in position"), OnPositionShare(Defenders).Get(-1.f), 0.5f);
+	TestFalse(TEXT("Empty team has no position share"), OnPositionShare({}).IsSet());
+	return true;
+}
+
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcArenaOpeningGeometryTest, "CodexTactics.AI.PmcArenaBehaviour.OpeningGeometry",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcArenaOpeningGeometryTest::RunTest(const FString&)
+{
+	const TArray<FVector> Defenders = { FVector(100.f, 0.f, 0.f), FVector(0.f, 0.f, 100.f), FVector(50.f, 0.f, 50.f) };
+	const TArray<FVector> Attackers = { FVector(0.f, 10.f, 0.f), FVector(0.f, -10.f, 0.f) };
+	TestNearlyEqual(TEXT("Maximum angle to the attackers' centroid includes elevation"),
+		PmcArenaBehaviourRules::CrossfireDeg(Defenders, Attackers).Get(-1.f), 90.f, 0.01f);
+	TestFalse(TEXT("No attackers makes crossfire unavailable"), PmcArenaBehaviourRules::CrossfireDeg(Defenders, {}).IsSet());
+
+	FPmcArenaOpeningShots Shots;
+	Shots.Record(1, 3.f);
+	Shots.Record(1, 3.1f);
+	TestFalse(TEXT("Two shots by the same man do not establish a gap"), Shots.GapS().IsSet());
+	Shots.Record(2, 3.5f);
+	Shots.Record(3, 9.f);
+	TestEqual(TEXT("Second distinct defender fixes the gap"), Shots.GapS().Get(-1.f), 0.5f);
+
+	FPmcArenaOpeningShots Simultaneous;
+	Simultaneous.Record(1, 1.f);
+	Simultaneous.Record(2, 1.f);
+	TestEqual(TEXT("Two defenders opening together is a measured zero gap"), Simultaneous.GapS().Get(-1.f), 0.f);
 	return true;
 }
 

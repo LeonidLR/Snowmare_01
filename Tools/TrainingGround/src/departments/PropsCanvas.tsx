@@ -9,9 +9,11 @@
 //   Locked objects: prominent amber / gold outline (#fbbf24).
 //   Overrides: added (green), moved (blue), deleted (gray X).
 
-import React, { useEffect, useImperativeHandle, useRef } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { GenLayout } from '../levelgen/schema.ts';
-import type { LevelPropsFile, PropObject } from '../levelgen/props/schema.ts';
+import type { LevelPropsFile } from '../levelgen/props/schema.ts';
+import type { PlanView } from '../levelgen/planView.ts';
+import { FIT_VIEW, planTransform, toScreen, viewTransform } from '../levelgen/planView.ts';
 
 const SET_TINT: Record<string, string> = {
   street: '#787882',
@@ -33,6 +35,16 @@ const SET_TINT: Record<string, string> = {
   chimney: '#46464e',
 };
 
+/** The legend: one row per props kind the canvas draws (the swatch repeats the drawing's colours). */
+const LEGEND: { kind: string; label: string; swatch: (g: CanvasRenderingContext2D, x: number, y: number) => void }[] = [
+  { kind: 'crates', label: 'Ящики', swatch: (g, x, y) => { g.fillStyle = '#0284c7'; g.fillRect(x - 4, y - 4, 8, 8); g.strokeStyle = '#7dd3fc'; g.lineWidth = 1; g.strokeRect(x - 4, y - 4, 8, 8); } },
+  { kind: 'barrels', label: 'Бочки (взрыв)', swatch: (g, x, y) => { g.fillStyle = '#ef4444'; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); g.fillStyle = '#fbbf24'; g.beginPath(); g.arc(x, y, 1.8, 0, Math.PI * 2); g.fill(); } },
+  { kind: 'turrets', label: 'Турели', swatch: (g, x, y) => { g.fillStyle = '#a855f7'; g.beginPath(); g.moveTo(x, y - 5); g.lineTo(x + 4, y); g.lineTo(x, y + 4); g.lineTo(x - 4, y); g.closePath(); g.fill(); } },
+  { kind: 'mines', label: 'Мины', swatch: (g, x, y) => { g.fillStyle = '#eab308'; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#000'; g.lineWidth = 0.8; g.beginPath(); g.moveTo(x - 4, y); g.lineTo(x + 4, y); g.moveTo(x, y - 4); g.lineTo(x, y + 4); g.stroke(); } },
+  { kind: 'loot', label: 'Лут', swatch: (g, x, y) => { g.fillStyle = '#10b981'; g.beginPath(); g.arc(x, y, 4, 0, Math.PI * 2); g.fill(); } },
+  { kind: 'power', label: 'Генераторы + кабели', swatch: (g, x, y) => { g.fillStyle = '#f97316'; g.fillRect(x - 4, y - 4, 8, 8); g.strokeStyle = '#fb923c'; g.lineWidth = 1; g.setLineDash([2, 2]); g.beginPath(); g.moveTo(x + 4, y); g.lineTo(x + 12, y); g.stroke(); g.setLineDash([]); } },
+];
+
 export interface PropsCanvasHandle {
   toPngBase64: () => string | null;
 }
@@ -43,9 +55,14 @@ export interface PropsCanvasProps {
   layerFilter?: string; // 'all' or specific walk layer
   visibleLayers?: Record<string, boolean>; // layerId -> boolean
   selectedPropId?: string | null;
-  onSelectProp?: (prop: PropObject | null, layerId: string | null) => void;
   showExclusions?: boolean;
-  height?: number;
+  /** px, or a CSS length (the full-window plan fills its box). */
+  height?: number | string;
+  /**
+   * T-023: zoom + pan (levelgen/planView.ts, the same PlanView as the map page). The canvas only DRAWS; picking, dragging, zone tools, wheel zoom
+   * and pan live in RegionOverlay on top of it (same size and transform: 1 px border, fitted plan with a 10 px pad).
+   */
+  view?: PlanView;
 }
 
 export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>(
@@ -56,22 +73,22 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
       layerFilter = 'all',
       visibleLayers = {},
       selectedPropId = null,
-      onSelectProp,
       showExclusions = false,
       height = 560,
+      view = FIT_VIEW,
     },
     ref
   ) => {
     const canvas = useRef<HTMLCanvasElement>(null);
-    const transformRef = useRef<{
-      s: number;
-      ox: number;
-      oy: number;
-      minX: number;
-      minY: number;
-      maxX: number;
-      maxY: number;
-    }>({ s: 1, ox: 0, oy: 0, minX: 0, minY: 0, maxX: 0, maxY: 0 });
+    // the box size changes without a prop change (the F11 toggle, the window): redraw on it
+    const [boxSize, setBoxSize] = useState('');
+    useEffect(() => {
+      const c = canvas.current;
+      if (!c) return;
+      const ro = new ResizeObserver(() => setBoxSize(`${c.clientWidth}x${c.clientHeight}`));
+      ro.observe(c);
+      return () => ro.disconnect();
+    }, []);
 
     useImperativeHandle(
       ref,
@@ -81,47 +98,6 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
       }),
       []
     );
-
-    // Canvas click handling: find nearest prop object
-    const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const c = canvas.current;
-      if (!c || !propsFile || !onSelectProp) return;
-      const rect = c.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const clickY = e.clientY - rect.top;
-
-      const { s, ox, oy, minY, maxX } = transformRef.current;
-      if (s <= 0) return;
-
-      // Invert transform:
-      // Screen X = ox + (worldY - minY) * s  =>  worldY = minY + (clickX - ox) / s
-      // Screen Y = oy + (maxX - worldX) * s  =>  worldX = maxX - (clickY - oy) / s
-      const worldY = minY + (clickX - ox) / s;
-      const worldX = maxX - (clickY - oy) / s;
-
-      let closestProp: PropObject | null = null;
-      let closestLayerId: string | null = null;
-      let minPixelDist = 18; // maximum click distance in screen pixels
-
-      for (const layer of propsFile.layers) {
-        if (visibleLayers[layer.id] === false) continue;
-        for (const obj of layer.objects) {
-          if (layerFilter !== 'all' && obj.walk_layer && obj.walk_layer !== layerFilter) {
-            continue;
-          }
-          const dxWorld = obj.pos[0] - worldX;
-          const dyWorld = obj.pos[1] - worldY;
-          const pixelDist = Math.sqrt(dxWorld * dxWorld + dyWorld * dyWorld) * s;
-          if (pixelDist < minPixelDist) {
-            minPixelDist = pixelDist;
-            closestProp = obj;
-            closestLayerId = layer.id;
-          }
-        }
-      }
-
-      onSelectProp(closestProp, closestLayerId);
-    };
 
     useEffect(() => {
       const c = canvas.current;
@@ -148,17 +124,10 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
 
       const [minX, minY] = layout.bounds.min;
       const [maxX, maxY] = layout.bounds.max;
-      const pad = 16;
-      const s = Math.min((w - 2 * pad) / (maxY - minY), (h - 2 * pad) / (maxX - minX));
-      const ox = (w - (maxY - minY) * s) / 2;
-      const oy = (h - (maxX - minX) * s) / 2;
+      const tv = viewTransform(planTransform(layout.bounds, w, h), view);
+      const s = tv.s;
 
-      transformRef.current = { s, ox, oy, minX, minY, maxX, maxY };
-
-      const P = (p: [number, number]): [number, number] => [
-        ox + (p[1] - minY) * s,
-        oy + (maxX - p[0]) * s,
-      ];
+      const P = (p: [number, number]): [number, number] => toScreen(tv, p);
 
       const poly = (pts: [number, number][]) => {
         g.beginPath();
@@ -442,6 +411,8 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
       }
 
       // 12. Props Overlay
+      const posById = new Map<string, [number, number]>();
+      for (const l of propsFile?.layers ?? []) for (const o of l.objects) posById.set(o.id, o.pos);
       if (propsFile?.layers) {
         for (const l of propsFile.layers) {
           if (visibleLayers[l.id] === false) continue;
@@ -592,6 +563,33 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
               g.strokeStyle = isSelected ? '#ffffff' : isLocked ? '#fbbf24' : '#064e3b';
               g.lineWidth = isSelected || isLocked ? 2 : 1;
               g.stroke();
+            } else if ((l.kind as string) === 'power') {
+              // T-020: a generator (power layer) with its cables to the linked turrets
+              g.save();
+              g.strokeStyle = '#fb923c';
+              g.lineWidth = 1;
+              g.setLineDash([3, 3]);
+              for (const id of o.links ?? []) {
+                const tp = posById.get(id);
+                if (!tp) continue;
+                const tq = P(tp);
+                g.beginPath();
+                g.moveTo(q[0], q[1]);
+                g.lineTo(tq[0], tq[1]);
+                g.stroke();
+              }
+              g.restore();
+              const half = Math.max(4, 40 * s);
+              g.fillStyle = '#f97316';
+              g.fillRect(q[0] - half, q[1] - half, half * 2, half * 2);
+              g.strokeStyle = isSelected ? '#ffffff' : isLocked ? '#fbbf24' : '#7c2d12';
+              g.lineWidth = isSelected || isLocked ? 2 : 1.2;
+              g.strokeRect(q[0] - half, q[1] - half, half * 2, half * 2);
+              g.fillStyle = '#431407';
+              g.font = `bold ${Math.max(7, Math.round(half * 1.4))}px ui-sans-serif, system-ui`;
+              g.textAlign = 'center';
+              g.fillText('G', q[0], q[1] + half * 0.5);
+              g.textAlign = 'left';
             }
 
             // Lock badge / dot
@@ -616,44 +614,34 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
         }
       }
 
-      // 13. Legend overlay in top-left
+      // 13. Legend overlay in top-left (T-020: every kind the file has, not only crates / barrels)
+      const present = new Set<string>((propsFile?.layers ?? []).map((l) => l.kind as string));
+      const entries = LEGEND.filter((e) => present.size === 0 || present.has(e.kind));
+      const rows = entries.length + 1; // + the locked mark
+      const boxH = 12 + rows * 15;
       g.fillStyle = '#0f172a';
       g.strokeStyle = '#334155';
       g.lineWidth = 1;
       g.beginPath();
-      g.roundRect(8, 8, 140, 72, 6);
+      g.roundRect(8, 8, 150, boxH, 6);
       g.fill();
       g.stroke();
 
       g.font = '10px ui-sans-serif, system-ui';
       g.textAlign = 'left';
-
-      // Crates legend
-      g.fillStyle = '#0284c7';
-      g.fillRect(14, 15, 8, 8);
-      g.strokeStyle = '#7dd3fc';
-      g.strokeRect(14, 15, 8, 8);
-      g.fillStyle = '#cbd5e1';
-      g.fillText('Ящики', 28, 23);
-
-      // Barrels legend
-      g.fillStyle = '#ef4444';
-      g.beginPath();
-      g.arc(18, 35, 4, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = '#fbbf24';
-      g.beginPath();
-      g.arc(18, 35, 1.8, 0, Math.PI * 2);
-      g.fill();
-      g.fillStyle = '#cbd5e1';
-      g.fillText('Бочки (взрыв)', 28, 38);
-
+      entries.forEach((e, i) => {
+        const cy = 21 + i * 15;
+        e.swatch(g, 18, cy);
+        g.fillStyle = '#cbd5e1';
+        g.fillText(e.label, 30, cy + 3);
+      });
       // Locked legend
+      const ly = 21 + entries.length * 15;
       g.strokeStyle = '#fbbf24';
       g.lineWidth = 1.8;
-      g.strokeRect(14, 46, 8, 8);
+      g.strokeRect(14, ly - 4, 8, 8);
       g.fillStyle = '#cbd5e1';
-      g.fillText('Заблокировано', 28, 54);
+      g.fillText('Заблокировано', 30, ly + 3);
 
       // Bottom info bar
       g.fillStyle = '#fbbf24';
@@ -666,13 +654,12 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
         8,
         h - 8
       );
-    }, [layout, propsFile, layerFilter, visibleLayers, selectedPropId, showExclusions, height]);
+    }, [layout, propsFile, layerFilter, visibleLayers, selectedPropId, showExclusions, height, view, boxSize]);
 
     return (
       <canvas
         ref={canvas}
-        onClick={handleCanvasClick}
-        style={{ width: '100%', height, cursor: 'crosshair' }}
+        style={{ width: '100%', height }}
         className="rounded-xl border border-slate-800 block select-none"
       />
     );

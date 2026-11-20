@@ -1,0 +1,31 @@
+current map in page: L_Gen_Test_X2
+levelgen tab loaded on map L_Gen_Test_X2
+screenshot 01-before-move.jpg
+activating buildings layer...
+clicking B_hall_n at px 500, 300...
+selected entity: building:B_hall_n
+nudging building with Shift+ArrowUp (+100 cm)...
+waiting for route evaluation to finish...
+banner after move: ● Раскладка изменена и не записана в файл: «Принять» запишет её (accepted/gen_ref_01_02_depot_1_x2.json), затем «Собрать в Unreal» построит по ней карту.
+screenshot 02-building-moved.jpg
+clicking Accept...
+dialog opening: После правок на карте есть проблемы (6):
+- Стена B_office_w_S_0 (building, B_office_w_S_0) пересекает B_hall_n_W_0 (building, B_hall_n_W_0)
+- Стена B_office_w_E_0 (building, B_office_w_E_0) пересекает B_hall_n_N_0 (building, B_hall_n_N_0)
+- Стена B_office_w_S_0 (building) пересекает контур здания B_hall_n
+- Стена B_office_w_E_0 (building) пересекает контур здания B_hall_n
+- Стена B_hall_n_N_0 (building) пересекает контур здания B_office_w
+- Стена B_hall_n_W_0 (building) пересекает контур здания B_office_w
+
+Всё равно принять?
+stale note text: Записано в accepted/gen_ref_01_02_depot_1_x2.json. Сдвинуто: зданий 1 (B_hall_n).закрытьПересчитано сервером при «Принять»: тактическая карта да, цели нет (целей нет), пропсы — созданы.Не пересчитано: план ЧВК (включите слой «ЧВК» и снова «Принять»), карта в Unreal — нажмите «Собрать в Unreal».Перенести пропсы и точки вместе со зданием
+screenshot 03-stale-banner-with-carry-button.jpg
+has carry button: true
+clicking carry button...
+after carry text: Записано в accepted/gen_ref_01_02_depot_1_x2.json. Сдвинуто: зданий 1 (B_hall_n).закрытьПересчитано сервером при «Принять»: тактическая карта да, цели нет (целей нет), пропсы — созданы.Не пересчитано: план ЧВК (включите слой «ЧВК» и снова «Принять»), карта в Unreal — нажмите «Собрать в Unreal».✓ Пропсы перенесены (6 шт.). Валидация: PASS (0 замечаний, маршруты: 0 дропов).Отменить перенос
+screenshot 04-props-carried.jpg
+has undo carry button: true
+clicking undo carry button...
+after undo text: Записано в accepted/gen_ref_01_02_depot_1_x2.json. Сдвинуто: зданий 1 (B_hall_n).закрытьПересчитано сервером при «Принять»: тактическая карта да, цели нет (целей нет), пропсы — созданы.Не пересчитано: план ЧВК (включите слой «ЧВК» и снова «Принять»), карта в Unreal — нажмите «Собрать в Unreal».Перенести пропсы и точки вместе со зданием
+screenshot 05-carry-undone.jpg
+browser check finished successfully

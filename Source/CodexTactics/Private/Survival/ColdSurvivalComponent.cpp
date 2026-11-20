@@ -16,6 +16,8 @@
 #include "Data/EnvironmentTuning.h"
 #include "Environment/EnvironmentRules.h"
 #include "Environment/EnvironmentSubsystem.h"
+#include "Survival/ColdShelterRules.h"
+#include "Survival/ColdShelterSubsystem.h"
 #include "Survival/TacticalHeatRules.h"
 #include "Survival/WarmIdleRules.h"
 #include "UI/GameMessageSubsystem.h"
@@ -180,14 +182,24 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 		Environment.LevelMultiplier = Level->Config.ColdRateMult;
 	}
 	const FVector Location = Operative->GetActorLocation();
+	const float FeetZ = Location.Z - Operative->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
+	bool bInCameraZone = false;
+	float CameraZoneMultiplier = 1.f;
 	for (TActorIterator<ACameraZoneVolume> It(GetWorld()); It; ++It)
 	{
 		if (It->ContainsLocation(Location))
 		{
-			Environment.ZoneMultiplier = It->GetColdMultiplier();
+			bInCameraZone = true;
+			CameraZoneMultiplier = It->GetColdMultiplier();
 			break;
 		}
 	}
+	// T-021 (designer bug 2026-11-19): generated maps have no camera zones, so a building was open air for the cold. A camera zone still wins
+	// (hand-made maps unchanged); otherwise the building of the map's levelgen layout the feet stand in: sealed 0 .. a fully open building 1
+	// by its leak, 1 within 3.5 m of an open opening on the same storey fading to the base at 10 m (ColdShelterRules, cold_shelter.json).
+	const UColdShelterSubsystem* Shelter = GetWorld()->GetSubsystem<UColdShelterSubsystem>();
+	const FColdShelterSample ShelterSample = !bInCameraZone && Shelter ? Shelter->GetShelterAt(FVector(Location.X, Location.Y, FeetZ)) : FColdShelterSample();
+	Environment.ZoneMultiplier = ColdShelterRules::ResolveZoneMultiplier(bInCameraZone, CameraZoneMultiplier, ShelterSample, Environment.ZoneMultiplier);
 	// Environment phase 2 (docs/systems/environment-weather.md §4.3): the weather (blended through a transition) and the time of day
 	// scale the open-air cold. A locked level (Demo 01 tutorial, cold_rate_mult tuned without weather) keeps 1 / 1 unless
 	// bColdOnLockedLevels; no environment (menus, tests) -> 1 / 1.
@@ -197,13 +209,15 @@ FColdEnvironment UColdSurvivalComponent::GatherEnvironment() const
 		const FEnvironmentConfig& EnvironmentConfig = EnvironmentTuning::Get();
 		if (EnvironmentRules::ShouldApplyCold(EnvironmentConfig, EnvironmentSubsystem->IsLocked()))
 		{
-			Environment.WeatherMultiplier = EnvironmentRules::GetBlendedColdWeatherMultiplier(EnvironmentConfig, EnvironmentSubsystem->GetStateRef());
+			// Level JSON environment.weather_strength (T-021, default 1 = the table exactly): 0 no weather effect, 2 twice the deviation from 1.
+			Environment.WeatherMultiplier = EnvironmentRules::ApplyWeatherStrength(
+				EnvironmentRules::GetBlendedColdWeatherMultiplier(EnvironmentConfig, EnvironmentSubsystem->GetStateRef()),
+				EnvironmentSubsystem->GetLevelSettings().WeatherStrength);
 			// Section 17: a temperate level's mild table (an arctic level: the arctic multipliers exactly as before).
 			Environment.PhaseMultiplier = EnvironmentRules::GetColdPhaseMultiplier(EnvironmentConfig, EnvironmentSubsystem->GetClimate(), EnvironmentSubsystem->GetPhase());
 		}
 	}
 
-	const float FeetZ = Location.Z - Operative->GetCapsuleComponent()->GetScaledCapsuleHalfHeight();
 	Environment.bElevated = FeetZ >= Config.ElevatedHeight;
 	Environment.bSprinting = Operative->IsSprinting() && Operative->GetVelocity().Size2D() > 150.f;
 	Environment.bInCover = Operative->bInCover; // Sprint 12: a wall at the back halves the wind chill

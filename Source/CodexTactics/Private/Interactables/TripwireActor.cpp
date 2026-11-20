@@ -442,13 +442,16 @@ void ATripwireActor::Tick(float DeltaSeconds)
 			}
 		}
 	}
+	const bool bPmcOwned = DeployableRules::IsPmcOwned(*this);
 	for (TActorIterator<ACharacter> It(GetWorld()); It; ++It)
 	{
 		ACharacter* Body = *It;
-		const bool bOperative = Body->IsA<AOperativeCharacter>();
+		const AOperativeCharacter* BodyOperative = Cast<AOperativeCharacter>(Body);
+		const bool bOperative = BodyOperative != nullptr;
 		const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(Body);
 		if ((!bOperative && !Enemy) || !TripwireRules::TriggersOn(IsHostile(), bOperative)
-			|| FVector::Dist2D(Body->GetActorLocation(), Mid) > Reach || Body == Disarmer.Get())
+			|| FVector::Dist2D(Body->GetActorLocation(), Mid) > Reach || Body == Disarmer.Get()
+			|| DeployableRules::IgnoresBody(bPmcOwned, BodyOperative && !BodyOperative->IsPlayerTeam())) // T-11: the PMC's own wire lets its fighters pass
 		{
 			continue;
 		}

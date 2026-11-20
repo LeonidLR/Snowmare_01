@@ -4,6 +4,8 @@
 #include "Characters/OperativeMovementRules.h"
 #include "DeployableRules.generated.h"
 
+class AActor;
+
 /** Squad role (defusal skill, deployable routing). Godot: character_name "Commander" / "Engineer" / "Medic-Sapper". */
 UENUM(BlueprintType)
 enum class EOperativeRole : uint8
@@ -110,4 +112,14 @@ namespace DeployableRules
 	constexpr float EnemyFalloff = 0.4f;
 	constexpr float SquadFalloff = 0.5f;
 	constexpr float SquadDamageScale = 0.75f;
+
+	/**
+	 * Smart-enemies T-11 (PMC_DEFENCE D2): the actor tag of a level charge that belongs to the PMC (the generator's "pmc_charges" layer,
+	 * owner "pmc"; set by PmcEncounterNav::AdoptCharge). An owned charge is set off by the player's side only: PMC fighters (operatives
+	 * of another team, tagged enemies) walk over it unharmed.
+	 */
+	CODEXTACTICS_API FName PmcOwnerTag();
+	CODEXTACTICS_API bool IsPmcOwned(const AActor& Charge);
+	/** True when a charge of this owner ignores the body: a PMC-owned charge and a PMC fighter (an operative that is not on the player's team). */
+	CODEXTACTICS_API bool IgnoresBody(bool bChargePmcOwned, bool bBodyIsPmcFighter);
 }

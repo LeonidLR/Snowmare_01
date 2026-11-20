@@ -1,0 +1,50 @@
+current map in the page: L_Gen_Test_X2
+props tab loaded: map L_Gen_Test_X2, crates:109 barrels:16 turrets:4 mines:23 loot:22 power:4; canvas 800 x 618 px (was 560 px high, 3-column grid)
+screenshot 01-normal-plan.jpg
+zoom label at start: 100 %
+after 3 wheel notches at the cursor: 173 %
+screenshot 02-zoomed-wheel.jpg
+after the + button: 259 %
+after two - buttons: 115 %
+screenshot 03-panned-middle-button.jpg
+after «Вписать»: 100 %
+full window before F11: off
+after F11: on plan {"l":8,"t":128.5,"w":1202,"h":733}
+screenshot 04-f11-full-window.jpg
+after F11 again: off
+F11 then Esc: off
+button «На весь экран»: on
+button «Свернуть»: off
+crate crates_00000001_3 at 2800,-4900 -> px 633,513
+selected card: crates_00000001_3Вариант: crate_lX: 2800 см, Y: -4900 смYaw: 180°Слой: groundЗаблокировать
+screenshot 05-prop-selected.jpg
+after the drag, note: crates_00000001_3: на [1999, -3618] см, слой ground; закреплён замком. Замок можно снять.
+selected card after the drag: crates_00000001_3Вариант: crate_lX: 1999 см, Y: -3618 смYaw: 180°Слой: groundЗаблокирован
+screenshot 06-prop-dragged-locked.jpg
+lock button text: Заблокирован
+after 3 x ArrowUp + Shift+ArrowRight: crates_00000001_3Вариант: crate_lX: 2029 см, Y: -3518 смYaw: 180°Слой: groundЗаблокирован
+undo label count: Отменить (2)
+after Ctrl+Z (the nudge run is ONE step: back to the drag result): crates_00000001_3Вариант: crate_lX: 1999 см, Y: -3618 смYaw: 180°Слой: groundЗаблокирован
+after Ctrl+Y: crates_00000001_3Вариант: crate_lX: 2029 см, Y: -3518 смYaw: 180°Слой: groundЗаблокирован
+check panel: Проверка (валидатор игры + проходимость)ПРОВЕРКА…
+check panel after the debounce: Проверка (валидатор игры + проходимость)GATE: PASSИгра уберёт при загрузке: 0 (было при открытии 0, новых после правок 0)
+screenshot 07-check-panel.jpg
+tab switch with unsaved edits -> dialog: ["Есть несохранённые правки: пропсы карты L_Gen_Test_X2. Уйти без сохранения? Они пропадут."] ; still on props: true
+zone summary (box): В зоне: заменится 47 пропсов (голубые точки), останется закреплённых 4 (зелёные квадраты); слои: crates, barrels, turrets, mines, loot.
+screenshot 08-zone-box.jpg
+zone re-roll note: Переброшено: crates, barrels, turrets, mines, loot. В зоне: убрано 47, поставлено 53 (ещё 1 не встали: слишком близко к соседям у границы); вне зоны не тронуто 122, закреплено в зоне 4. Трасса (088) убрала 2: ящиков 0, бочек 0, мин 2, лута 0. Валидатор игры убрал 1.
+screenshot 09-after-box-reroll.jpg
+zone summary (lasso): В зоне: заменится 19 пропсов (голубые точки), останется закреплённых 0 (зелёные квадраты); слои: crates, barrels, turrets, mines, loot.
+screenshot 10-zone-lasso.jpg
+lasso re-roll note: Переброшено: crates, barrels, turrets, mines, loot. В зоне: убрано 19, поставлено 10; вне зоны не тронуто 153, закреплено в зоне 0. Трасса (088) свободна: ничего убирать не пришлось. Сеть питания: 2 замечаний после зоны (link 'turrets_00000001_0' is not a turret of the map; no power line (no generator feeds it: dark for good)); перебросьте слой power целиком.
+screenshot 11-after-lasso-reroll.jpg
+zone summary (polygon): В зоне: заменится 13 пропсов (голубые точки), останется закреплённых 1 (зелёные квадраты); слои: crates, barrels, turrets, mines, loot.
+screenshot 12-zone-polygon.jpg
+save click: clicked
+page says: Сохранено успешно (ревизия 2)
+screenshot 13-saved.jpg
+file on disk: revision 1 -> 2
+dragged crate on disk: {"pos":[2029,-3518],"locked":true,"walk_layer":"ground"} (was [2800,-4900] )
+objects outside the zones: 104 identical, 0 changed (the polygon zone was drawn but NOT rolled); inside the zones: 66 replaced, 3 kept
+new objects on disk: 60
+GET after save: {"rev":2,"n":172}

@@ -33,7 +33,8 @@ interface Props {
   firingLines?: FiringLine[];
   /** Toggle display of firing line rays. */
   showFiringLines?: boolean;
-  height?: number;
+  /** px, or a CSS length (the full-window plan fills its box). */
+  height?: number | string;
   /** Highlighted points (failing route legs). */
   marks?: Vec2[];
   /** Zoom + pan on top of the fitted plan (planView.ts; default: fit). */
@@ -48,17 +49,19 @@ interface Props {
   conflicts?: WallCrossingConflict[];
   /** The «Планировки» overlay (PlansOverlay.tsx) draws the rooms of the planned buildings: skip the dashed room bounds and ids here (S2.7). */
   plansOverlay?: boolean;
+  /** T-022: the geometric problems a move made (mapChecks.ts): red squares for errors, amber for warnings. */
+  issueMarks?: { at: Vec2; severity: 'error' | 'warn' }[];
 }
 
-export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks, view = FIT_VIEW, hideObjectives = false, hidden, tints, conflicts, plansOverlay = false }, ref) => {
+export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks, view = FIT_VIEW, hideObjectives = false, hidden, tints, conflicts, plansOverlay = false, issueMarks }, ref) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   useImperativeHandle(ref, () => ({ toPngBase64: () => canvas.current ? canvas.current.toDataURL('image/png').replace(/^data:image\/png;base64,/, '') : null }), []);
   // redraw on a size change (the region-select overlay over this canvas tracks its size: both must use the same transform)
-  const [boxW, setBoxW] = useState(0);
+  const [boxW, setBoxW] = useState('');
   useEffect(() => {
     const c = canvas.current;
     if (!c) return;
-    const ro = new ResizeObserver(() => setBoxW(c.clientWidth));
+    const ro = new ResizeObserver(() => setBoxW(`${c.clientWidth}x${c.clientHeight}`));
     ro.observe(c);
     return () => ro.disconnect();
   }, []);
@@ -312,10 +315,17 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
       g.stroke();
       g.restore();
     }
+    // T-022: the problems of a move (two buildings on each other, a torn-off ladder, a cover on a wall ...)
+    for (const m of issueMarks ?? []) {
+      const q = P(m.at), c = m.severity === 'error' ? '#ef4444' : '#f59e0b';
+      g.save(); g.strokeStyle = c; g.fillStyle = m.severity === 'error' ? 'rgba(239, 68, 68, 0.25)' : 'rgba(245, 158, 11, 0.2)'; g.lineWidth = 2;
+      g.fillRect(q[0] - 7, q[1] - 7, 14, 14); g.strokeRect(q[0] - 7, q[1] - 7, 14, 14);
+      g.beginPath(); g.moveTo(q[0] - 3, q[1] - 3); g.lineTo(q[0] + 3, q[1] + 3); g.moveTo(q[0] + 3, q[1] - 3); g.lineTo(q[0] - 3, q[1] + 3); g.stroke(); g.restore();
+    }
     for (const m of marks ?? []) { const q = P(m); g.strokeStyle = '#f97316'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.stroke(); }
     g.fillStyle = '#ffe600'; g.font = '11px ui-monospace, monospace'; g.textAlign = 'left';
     g.fillText(`${layout.name}  ${Math.round((maxY - minY) / 100)} x ${Math.round((maxX - minX) / 100)} m  seed ${layout.seed}  layer ${layer !== 'all' ? layer : floorMode}`, 8, h - 8);
-  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW, view, hideObjectives, hidden, tints, conflicts, plansOverlay]);
+  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW, view, hideObjectives, hidden, tints, conflicts, plansOverlay, issueMarks]);
 
   return <canvas ref={canvas} style={{ width: '100%', height }} className="rounded-xl border border-slate-800 block" />;
 });

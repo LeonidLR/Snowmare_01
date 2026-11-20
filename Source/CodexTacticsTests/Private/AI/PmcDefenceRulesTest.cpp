@@ -364,6 +364,43 @@ bool FPmcDefenceSpacingTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcDefenceSpreadSampleTest, "CodexTactics.AI.PmcDefence.SpreadSample",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcDefenceSpreadSampleTest::RunTest(const FString&)
+{
+	// G010: MeanSpreadM of one man stays 0 (no pair). The smoke mean must not count that 0. Roof defence runs 01 and 05
+	// coded 4.7 m and 3.6 m because a last man standing was averaged in; the formed seconds were 9.3 m and 13.6 m.
+	TestEqual(TEXT("one man is still 0"), PmcDefenceRules::MeanSpreadM({ FVector::ZeroVector }), 0.f);
+	float Untouched = 42.f;
+	TestFalse(TEXT("one living defender is not a sample"), PmcDefenceRules::TrySpreadSample({ FVector::ZeroVector }, Untouched));
+	TestEqual(TEXT("a rejected sample does not write 0"), Untouched, 42.f);
+	const TArray<FVector> Nobody;
+	TestFalse(TEXT("nobody is not a sample"), PmcDefenceRules::TrySpreadSample(Nobody, Untouched));
+	TestEqual(TEXT("an empty sample leaves the out value"), Untouched, 42.f);
+
+	float Pair = 0.f;
+	TestTrue(TEXT("two men are a sample"), PmcDefenceRules::TrySpreadSample({ FVector::ZeroVector, FVector(1000.f, 0.f, 0.f) }, Pair));
+	TestEqual(TEXT("two men 10 m apart"), Pair, 10.f);
+
+	float Sum = 0.f;
+	int32 Count = 0;
+	const TArray<FVector> Formed = { FVector::ZeroVector, FVector(1000.f, 0.f, 0.f) };
+	const TArray<TArray<FVector>> Seconds = { Formed, Formed, { FVector(50.f, 0.f, 0.f) } };
+	for (const TArray<FVector>& Feet : Seconds)
+	{
+		float Sample = 0.f;
+		if (PmcDefenceRules::TrySpreadSample(Feet, Sample))
+		{
+			Sum += Sample;
+			++Count;
+		}
+	}
+	TestEqual(TEXT("the solo second is skipped"), Count, 2);
+	TestEqual(TEXT("the mean stays 10 m"), Count > 0 ? Sum / static_cast<float>(Count) : 0.f, 10.f);
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcDefencePostLevelTest, "CodexTactics.AI.PmcDefence.PostLevel",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 

@@ -12,7 +12,8 @@ import { dirOf } from '../movement/geometry';
 import type { Vec2 } from '../movement/geometry';
 import type { ChokeConfig, Chokepoint, Conditions, LayoutAnalysis, ThreatNumbers } from '../levelgen/chokepoints';
 import type { Entity, LayerDef, LayerVisibility, ResolvedProp } from '../levelgen/layers';
-import { isSolo, LAYERS, sizeClassRuleText, soloVisibility } from '../levelgen/layers';
+import { isSolo, layerMovable, LAYERS, MAP_PANEL_EXCLUDED, MAP_PLAN_HIDDEN, movableTypes, sizeClassRuleText, soloVisibility } from '../levelgen/layers';
+import { NUDGE_CM } from '../levelgen/mapEdit';
 import type { OverlayHelpers } from './RegionOverlay';
 
 /** The heat colour of a score 0..1: yellow -> orange -> red. */
@@ -27,6 +28,8 @@ const TIMES: [string, string][] = [['day', 'день'], ['twilight', 'сумер
 const ROUTE_RU: Record<string, string> = { mandatory: 'основной маршрут', variant: 'вариант маршрута', objectives: 'путь к целям', street: 'улица' };
 const TAG_RU: Record<string, string> = { narrow: 'узко', clutter: 'завал', canyon: 'каньон', only_way: 'единственный путь', drop_ambush: 'спрыгивание', window_fire: 'окна', sniper: 'снайпер', hiding: 'скрытый противник' };
 const GROUP_RU: Record<string, string> = { main: 'Слои карты', analysis: 'Анализ', service: 'Служебные' };
+
+const MOVE_TYPE_RU: Record<string, string> = { building: 'здание целиком', ladder: 'лестница', crossing: 'мост / пандус', wall: 'стена / забор', cover: 'преграда' };
 
 export interface PropsInfo { map: string; path: string; revision: number; frozen: boolean; dirty: boolean }
 
@@ -91,14 +94,14 @@ export const LayersPanel: React.FC<PanelProps> = ({ counts, vis, onVis, active, 
       </li>
     );
   };
-  const group = (g: 'main' | 'analysis') => LAYERS.layers.filter((l) => l.group === g);
+  const group = (g: 'main' | 'analysis') => LAYERS.layers.filter((l) => l.group === g && !MAP_PANEL_EXCLUDED.includes(l.id));
   const threats = LAYERS.layers.filter((l) => l.group === 'threats');
   const chokes = analysis?.chokepoints ?? [];
   return (
     <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-2 min-w-0 text-xs" data-layers-panel>
       <div className="flex items-center gap-2">
         <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400 inline-flex items-center gap-1.5"><Layers size={13} />Слои</h3>
-        <button type="button" onClick={() => onVis(Object.fromEntries(LAYERS.layers.map((x) => [x.id, true])))} className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700">все</button>
+        <button type="button" onClick={() => onVis(Object.fromEntries(LAYERS.layers.map((x) => [x.id, !MAP_PLAN_HIDDEN.includes(x.id)])))} className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700">все</button>
         <button type="button" onClick={() => onVis(Object.fromEntries(LAYERS.layers.map((x) => [x.id, false])))} className="px-1.5 py-0.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700">ничего</button>
         <label className="ml-auto inline-flex items-center gap-1 text-slate-400" title="Преграды на плане красятся цветом своего класса (крупные / средние / мелкие)"><input type="checkbox" checked={tintOn} onChange={(e) => onTint(e.target.checked)} className="accent-cyan-500" />цвета классов</label>
       </div>
@@ -116,7 +119,7 @@ export const LayersPanel: React.FC<PanelProps> = ({ counts, vis, onVis, active, 
           <p className="text-cyan-200">Активный слой: <b>{def.name}</b>{def.hint ? <span className="text-slate-400"> — {def.hint}</span> : null}</p>
           {def.id === 'objectives' ? <p className="text-slate-400">Старт и цели: «+ цель» над планом и щелчок, перетаскивание мышью, × или правая кнопка — удалить.</p> : (
             <div className="flex flex-wrap items-center gap-1.5">
-              <button type="button" onClick={() => onTool('select')} className={`inline-flex items-center gap-1 px-2 py-1 rounded border ${tool === 'select' ? 'bg-cyan-500 border-cyan-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-slate-200'}`} data-tool="select"><MousePointer2 size={12} />{def.edit.includes('move') ? 'Выбрать / двигать' : 'Выбрать'}</button>
+              <button type="button" onClick={() => onTool('select')} className={`inline-flex items-center gap-1 px-2 py-1 rounded border ${tool === 'select' ? 'bg-cyan-500 border-cyan-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-slate-200'}`} data-tool="select"><MousePointer2 size={12} />{layerMovable(def) ? 'Выбрать / двигать' : 'Выбрать'}</button>
               {def.edit.includes('add') && def.add && def.add.length > 0 && (<>
                 <button type="button" onClick={() => onTool('add')} className={`inline-flex items-center gap-1 px-2 py-1 rounded border ${tool === 'add' ? 'bg-cyan-500 border-cyan-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-slate-200'}`} data-tool="add"><Plus size={12} />Добавить щелчком</button>
                 <select value={addIdx} onChange={(e) => { onAddIdx(Number(e.target.value)); onTool('add'); }} className="bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" data-add-template>
@@ -132,6 +135,11 @@ export const LayersPanel: React.FC<PanelProps> = ({ counts, vis, onVis, active, 
                 ? <button type="button" onClick={() => onRerollLayer?.()} disabled={!onRerollLayer || busy} title="Нарисуйте зону (рамка / многоугольник / лассо): внутри неё заново расставляются только укрытия этого слоя, остальное не меняется" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-amber-500 text-slate-950 font-semibold disabled:opacity-40" data-tool="reroll"><Shuffle size={12} />Перегенерировать слой в зоне</button>
                 : <span className="text-slate-400">перегенерация зданий — «Перегенерировать зону» (режимы «Полностью» / «Тип квартала»)</span>)}
             </div>
+          )}
+          {layerMovable(def) && def.id !== 'objectives' && (
+            <p className="text-[11px] text-slate-400" data-move-hint>
+              Двигать: перетащите на плане ({movableTypes(def).filter((t) => t !== 'prop').map((t) => MOVE_TYPE_RU[t] ?? t).join(', ')}); стрелки сдвигают выбранное на {NUDGE_CM.fine} см, Shift — {NUDGE_CM.coarse / 100} м, Ctrl — {NUDGE_CM.huge / 100} м; Ctrl+Z / Ctrl+Y — отменить / вернуть.
+            </p>
           )}
           {def.props && (propsInfo
             ? <p className="text-slate-400 flex flex-wrap items-center gap-1.5">Файл пропсов: <span className="font-mono text-slate-300">{propsInfo.path}</span> (ревизия {propsInfo.revision}{propsInfo.frozen ? ', заморожен' : ''})

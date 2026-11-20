@@ -8,6 +8,11 @@
 //   GET  /api/levelgen/accepted                 -> { accepted: [{ name, seed, profile, at }] }   (Content/Data/LevelGen/accepted)
 //   GET  /api/levelgen/open-accepted?name=<n>   -> the accepted layout JSON, read-only (opened in the page for a region re-roll / locks;
 //                                                  saved back only by the designer's «Принять» = POST /api/levelgen/accept)
+//   GET  /api/levelgen/maps                   -> { maps: [{ map, layout, levelJson, propsId, acceptedAt }], current }   (T-020: every generated map +
+//                                               the department's ONE current map: the saved choice, else the most recently accepted layout's map)
+//   POST /api/levelgen/current-map { map }    -> { current }  (Saved/TrainingGround/current_map.json; survives a browser change)
+//   GET  /api/levelgen/map-environment?map=<M> -> { file, environment, cold_rate_mult, layout }  the current map's level JSON weather block
+//   POST /api/levelgen/map-environment { map, environment, cold_rate_mult } -> { changed, file }  (only those two keys, atomic, no write when unchanged)
 //   GET  /api/levelgen/ledger                   -> the critic ledger { spentUsd, calls }
 //   POST /api/levelgen/critic   { name, layout, evaluation, candidatePng (base64), client: claude|jev|mock, budgetUsd, model }
 //                                               -> { verdict } (saved to Saved/TrainingGround/levelgen/<name>.verdicts.json; the ledger updated)
@@ -37,6 +42,10 @@ import { ACCEPTED_DIR, ensureReferencePng, LEVELGEN_OUT, listProfiles, NAME_RE, 
 import type { GenLayout } from '../src/levelgen/schema.ts';
 import { validateGenLayout } from '../src/levelgen/schema.ts';
 import { setupPropsApi } from './propsApi.ts';
+import { pickCurrentMap } from '../src/levelgen/currentMap.ts';
+import { listMapEntries, readCurrentMap, writeCurrentMap } from '../src/levelgen/node/currentMapFiles.ts';
+import type { EnvironmentEdit } from '../src/levelgen/node/levelEnvironment.ts';
+import { readLevelEnvironment, writeLevelEnvironment } from '../src/levelgen/node/levelEnvironment.ts';
 
 type Req = { method?: string; url?: string; on: (ev: string, cb: (chunk?: unknown) => void) => void };
 type Res = { statusCode: number; setHeader: (k: string, v: string) => void; end: (body?: string | Buffer) => void };
@@ -128,6 +137,38 @@ export function setupLevelgenApi(use: Use): void {
     } catch (e) { send(res, 500, { error: e instanceof Error ? e.message : String(e) }); }
   });
 
+  // T-020: the department's current map (one for the whole «Генератор уровней») and the weather block of its level JSON
+  use('/api/levelgen/maps', (_req, res) => {
+    try {
+      const maps = listMapEntries();
+      send(res, 200, { maps, current: pickCurrentMap(maps, readCurrentMap()) });
+    } catch (e) { send(res, 500, { error: e instanceof Error ? e.message : String(e) }); }
+  });
+  use('/api/levelgen/current-map', async (req, res, next) => {
+    if (req.method !== 'POST') return next ? next() : send(res, 405, { error: 'POST only' });
+    const b = await readBody(req);
+    const map = String(b.map ?? '');
+    try {
+      const maps = listMapEntries();
+      if (!maps.some((m) => m.map === map)) return send(res, 400, { error: `unknown map ${map}` });
+      writeCurrentMap(map);
+      send(res, 200, { current: map });
+    } catch (e) { send(res, 500, { error: e instanceof Error ? e.message : String(e) }); }
+  });
+  use('/api/levelgen/map-environment', async (req, res) => {
+    try {
+      if (req.method === 'POST') {
+        const b = await readBody(req);
+        const edit: EnvironmentEdit = {
+          environment: b.environment && typeof b.environment === 'object' ? (b.environment as EnvironmentEdit['environment']) : null,
+          cold_rate_mult: typeof b.cold_rate_mult === 'number' ? b.cold_rate_mult : null,
+        };
+        return send(res, 200, writeLevelEnvironment(String(b.map ?? ''), edit));
+      }
+      send(res, 200, readLevelEnvironment(query(req, 'map')));
+    } catch (e) { send(res, 400, { error: e instanceof Error ? e.message : String(e) }); }
+  });
+
   use('/api/levelgen/ledger', (_req, res) => send(res, 200, readLedger() ?? emptyLedger()));
 
   use('/api/levelgen/critic', async (req, res, next) => {
@@ -181,6 +222,8 @@ export function setupLevelgenApi(use: Use): void {
     const ev = b.evaluation as Evaluation | undefined;
     fs.writeFileSync(path.join(ACCEPTED_DIR, `${layout!.name}.meta.json`), JSON.stringify({ at: new Date().toISOString(), score: ev?.score, summary: ev?.summary, verdicts: b.verdicts ?? [] }, null, 1) + '\n');
 
+    // T-022: what the accept path derived from the layout, told to the page (the stale-files notice after a map with moved elements)
+    const derived: { props: 'regenerated' | 'created' | 'kept_hand' | 'error'; propsSource?: string; objectives: string | null; tactical: string | null } = { props: 'error', objectives: null, tactical: null };
     // Task 076: automatic props for accepted layout
     try {
       const targetMap = mapNameFor(layout!.name);
@@ -188,9 +231,12 @@ export function setupLevelgenApi(use: Use): void {
       fs.mkdirSync(propsDir, { recursive: true });
       const propsPath = path.join(propsDir, `${targetMap}.props.json`);
       let canWrite = true;
+      let existed = false;
       if (fs.existsSync(propsPath)) {
         const existing = JSON.parse(fs.readFileSync(propsPath, 'utf8')) as LevelPropsFile;
         canWrite = canOverwritePropsFile(existing);
+        existed = true;
+        derived.propsSource = String(existing.source ?? '');
       }
       if (canWrite) {
         let sourceProps: LevelPropsFile | null = null;
@@ -208,7 +254,8 @@ export function setupLevelgenApi(use: Use): void {
           projectRoot: ROOT,
         });
         fs.writeFileSync(propsPath, formatPropsCanonical(resProps.props), 'utf8');
-      }
+        derived.props = existed ? 'regenerated' : 'created';
+      } else derived.props = 'kept_hand';
     } catch {
       // Non-blocking for accept
     }
@@ -216,9 +263,10 @@ export function setupLevelgenApi(use: Use): void {
     // F-4 «а» + TACTICAL_MAP P1 (designer 2026-11-17): the layout's objectives become the map's in-game mission goals
     // (Content/Data/LevelGen/objectives/<Map>.objectives.json, UMissionGoalsSubsystem; no objectives = no file) and its danger analysis
     // the tactical map (Content/Data/LevelGen/tactical/<Map>.tactical.json, UTacticalMapSubsystem). Non-blocking for accept.
-    writeRuntimeFiles(layout!, RUNTIME_DIRS, mapNameFor(layout!.name), layout!.name);
+    const rt = writeRuntimeFiles(layout!, RUNTIME_DIRS, mapNameFor(layout!.name), layout!.name);
+    derived.objectives = rt.objectives; derived.tactical = rt.tactical;
 
-    send(res, 200, { file: path.relative(path.resolve(ACCEPTED_DIR, '../../../..'), file).split(path.sep).join('/') });
+    send(res, 200, { derived, file: path.relative(path.resolve(ACCEPTED_DIR, '../../../..'), file).split(path.sep).join('/') });
   });
 
   use('/api/levelgen/save-locks', async (req, res, next) => {

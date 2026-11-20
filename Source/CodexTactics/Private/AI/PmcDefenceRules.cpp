@@ -330,6 +330,79 @@ namespace PmcDefenceRules
 						Building.Hatches.Add(Hatch);
 					}
 				}
+
+				// Exterior openings (the cold shelter rule). doors[] repeats the door openings in the generator's files; it is only
+				// used for an older layout that has no openings[]. roof_holes[] are open to the sky: kind "roof_hole", state "open".
+				const auto ReadOpening = [](const TSharedPtr<FJsonObject>& OpeningObject, const TCHAR* DefaultKind, FPmcLayoutOpening& Opening)
+				{
+					Opening.Kind = DefaultKind;
+					OpeningObject->TryGetStringField(TEXT("id"), Opening.Id);
+					OpeningObject->TryGetStringField(TEXT("kind"), Opening.Kind);
+					OpeningObject->TryGetStringField(TEXT("state"), Opening.State);
+					Opening.Kind = Opening.Kind.ToLower();
+					Opening.State = Opening.State.ToLower();
+					double OpeningFloor = 0.0;
+					if (OpeningObject->TryGetNumberField(TEXT("floor"), OpeningFloor))
+					{
+						Opening.Floor = FMath::RoundToInt(OpeningFloor);
+					}
+					const TArray<TSharedPtr<FJsonValue>>* Pos = nullptr;
+					Opening.bHasPos = OpeningObject->TryGetArrayField(TEXT("pos"), Pos) && ReadVec2(Pos, Opening.Pos);
+				};
+				const TArray<TSharedPtr<FJsonValue>>* Openings = nullptr;
+				if (Object->TryGetArrayField(TEXT("openings"), Openings))
+				{
+					for (const TSharedPtr<FJsonValue>& OpeningValue : *Openings)
+					{
+						const TSharedPtr<FJsonObject> OpeningObject = OpeningValue.IsValid() ? OpeningValue->AsObject() : nullptr;
+						if (OpeningObject.IsValid())
+						{
+							FPmcLayoutOpening Opening;
+							ReadOpening(OpeningObject, TEXT("door"), Opening);
+							Building.Openings.Add(Opening);
+						}
+					}
+				}
+				const bool bHasDoorOpening = Building.Openings.ContainsByPredicate([](const FPmcLayoutOpening& Opening) { return Opening.Kind == TEXT("door"); });
+				const TArray<TSharedPtr<FJsonValue>>* Doors = nullptr;
+				if (!bHasDoorOpening && Object->TryGetArrayField(TEXT("doors"), Doors))
+				{
+					for (const TSharedPtr<FJsonValue>& DoorValue : *Doors)
+					{
+						const TSharedPtr<FJsonObject> DoorObject = DoorValue.IsValid() ? DoorValue->AsObject() : nullptr;
+						if (DoorObject.IsValid())
+						{
+							FPmcLayoutOpening Door;
+							ReadOpening(DoorObject, TEXT("door"), Door);
+							Door.Kind = TEXT("door");
+							Building.Openings.Add(Door);
+						}
+					}
+				}
+				const TArray<TSharedPtr<FJsonValue>>* RoofHoles = nullptr;
+				if (Object->TryGetArrayField(TEXT("roof_holes"), RoofHoles))
+				{
+					for (const TSharedPtr<FJsonValue>& HoleValue : *RoofHoles)
+					{
+						FPmcLayoutOpening Hole;
+						Hole.Kind = TEXT("roof_hole");
+						Hole.State = TEXT("open");
+						Hole.Floor = Building.Floors - 1;
+						// roof_holes[] is Vec2[] (levelgen schema.ts: the hole's world position); an object with "pos" is read too.
+						const TSharedPtr<FJsonObject> HoleObject = HoleValue.IsValid() && HoleValue->Type == EJson::Object ? HoleValue->AsObject() : nullptr;
+						const TArray<TSharedPtr<FJsonValue>>* Pos = nullptr;
+						if (HoleObject.IsValid())
+						{
+							Hole.bHasPos = HoleObject->TryGetArrayField(TEXT("pos"), Pos) && ReadVec2(Pos, Hole.Pos);
+						}
+						else
+						{
+							Hole.bHasPos = HoleValue.IsValid() && HoleValue->TryGetArray(Pos) && ReadVec2(Pos, Hole.Pos);
+						}
+						Hole.Id = FString::Printf(TEXT("%s_roof_hole_%d"), *Building.Id, Building.Openings.Num());
+						Building.Openings.Add(Hole);
+					}
+				}
 				Out.Buildings.Add(Building);
 			}
 		}
@@ -948,6 +1021,16 @@ namespace PmcDefenceRules
 			}
 		}
 		return Pairs > 0 ? static_cast<float>(Sum / static_cast<double>(Pairs)) / 100.f : 0.f;
+	}
+
+	bool TrySpreadSample(TConstArrayView<FVector> Feet, float& OutSpreadM)
+	{
+		if (Feet.Num() < 2)
+		{
+			return false;
+		}
+		OutSpreadM = MeanSpreadM(Feet);
+		return true;
 	}
 
 	FPmcGuardSample SampleGuard(TConstArrayView<FVector> LivingFeet, const FPmcDefenceAccess& Access, float GuardDistCm, float LevelToleranceCm)

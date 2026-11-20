@@ -49,7 +49,7 @@ struct CODEXTACTICS_API FPmcTeamStats
 	int32 Detours = 0;
 	int32 Preempts = 0;
 	int32 PushDecisions = 0;
-	/** TACTICAL_MAP P2 (2026-11-17): walks onto a tactical post (the Ambush order), and fall-backs turned off a chokepoint (not straight away). */
+	/** TACTICAL_MAP P2 (2026-11-17): a taken walk onto a tactical post, or onto the defence post (the Ambush order). Holds and refused walks stay 0. */
 	int32 PostMoves = 0;
 	int32 TacticalFallBacks = 0;
 };
@@ -308,6 +308,11 @@ private:
 		double LastSectorShiftAt = -1e9;
 		/** World time an enemy last shot at him (NotifyShotAt; -1e9: never). */
 		double LastShotAtTime = -1e9;
+		/**
+		 * G008b: world time a known enemy entered this overwatch post's engagement range (-1: none in range now).
+		 * ambush_max_hold_s counts from here, not from the team's first contact.
+		 */
+		double PostRangeContactAt = -1.0;
 	};
 
 	struct FTeam

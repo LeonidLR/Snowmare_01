@@ -33,6 +33,10 @@
     "passage_min_m": 1,
     "passage_max_m": 3,
     "wall_min_height_m": 3,
+    "script_waypoint_m": 6,
+    "script_arrive_m": 2,
+    "script_level_m": 1.5,
+    "script_sprint": false,
     "play_area": {
       "_comment": "fix/arena-no-outer-strip (the game designer 2026-11-10): no arena spawn, squad slot or objective outside this area - the outer strip between the perimeter walls and the map edge is hidden from the camera and teaches the trainer little (AI/PmcArenaPlayArea.h). World cm, XY only. include_box_cm = the generator layout's bounds (Content/Data/LevelGen/accepted/gen_ref_01_02_depot_1.json; the map builder lays 10 m more ground round them: the outer strip); exclude_boxes_cm = the sliver between the long west fence F_south (x -6050, y -3892..8319) and the layout edge.",
       "include_box_cm": { "min": [-6200, -8850], "max": [6200, 8850] },

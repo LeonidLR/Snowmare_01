@@ -343,6 +343,12 @@ struct CODEXTACTICS_API FPmcWeights
 	int32 DefencePostWalks = 3;
 	/** "sector_arc_deg" (180): the arc facing the attacker spawn, split across the sector shooters. */
 	float SectorArcDeg = 180.f;
+	/**
+	 * "heal_reach_m" (2.3): a defender standing on his post scores Heal 0 when the wounded mate is farther than this,
+	 * so he does not walk off the post to reach him. Within it he heals in place. The heal walk uses the same reach.
+	 * Frozen, not a trainer gene. Cm.
+	 */
+	float HealReachCm = 230.f;
 
 	// --- Target attention (user 2026-11-07: strike when the enemy looks away; trainer genes +-50 %) ---
 
@@ -509,6 +515,25 @@ struct CODEXTACTICS_API FPmcFighterView
 	bool bSectorShift = false;
 	/** An enemy shot at him within the last couple of seconds (NotifyShotAt). Default false. */
 	bool bUnderFire = false;
+	/** His suppression tier is Suppressed or Pinned (AOperativeCharacter::GetSuppressionTier). Default false. */
+	bool bSuppressed = false;
+	/**
+	 * G008b: a known enemy's last position is within this overwatch post's engagement range (the roof's range_m, or his
+	 * weapon reach when that is smaller). The squad subsystem sets it. Default false.
+	 */
+	bool bContactInPostRange = false;
+	/** Seconds since that in-range contact began (0 while none). ambush_max_hold_s for an overwatch post counts from here. */
+	float PostRangeContactSeconds = 0.f;
+	/**
+	 * G008b: his feet are on the tactical overwatch post (IsAtPost against that post, not the G008 sector post).
+	 * bAtPost can be the sector post after he has left the roof; this flag is the roof. Default false.
+	 */
+	bool bOnOverwatchRoof = false;
+	/**
+	 * T-06: his feet are on a tactical post that has its own range (overwatch roof, window, or ambush). The sector post
+	 * does not set this. Overwatch also sets bOnOverwatchRoof. Default false.
+	 */
+	bool bOnRangedPost = false;
 	/**
 	 * G008 follow-up (review finding 3): the one defender of a posted defence who occupies the point on a quiet push or a late
 	 * clock (time wins need a defender on the point, fix/pmc-arena-stalemate). A defender without a defence post always may.
@@ -800,6 +825,36 @@ namespace PmcCommanderRules
 	 * is not deep in the kill zone (KillZoneFrac x his reach, or on the point) and still looks his way (AttentionOff < AmbushPatience).
 	 */
 	CODEXTACTICS_API bool ShouldHoldFire(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * G008b: how far an overwatch roof post engages, cm. The smaller of the roof's range (overwatch_roofs[].range_m, already in cm)
+	 * and the weapon's reach. A missing side (0) leaves the other. 0 when both are missing.
+	 */
+	CODEXTACTICS_API float OverwatchEngagementCm(float RoofRangeCm, float WeaponRangeCm);
+
+	/**
+	 * T-06: how far this post engages, cm. Overwatch is OverwatchEngagementCm (the roof's range_m, or the weapon reach when
+	 * that is smaller). A window or an ambush post uses the weapon band's max (BandMaxCm); a missing band (0) leaves the
+	 * weapon reach. Ladder, drop, and none have no range and return 0.
+	 */
+	CODEXTACTICS_API float PostEngagementCm(EPmcPostKind Kind, float RoofRangeCm, float WeaponRangeCm, float BandMaxCm);
+
+	/**
+	 * G008b: a defender whose feet are on an overwatch roof (bOnOverwatchRoof) keeps it. Open while no known enemy is inside
+	 * the post's engagement range, and for AmbushMaxHoldSeconds after that in-range contact. Closed when he is hit
+	 * (bUnderFire), suppressed (bSuppressed), or the post is untenable for him (wounded below fall_back_below, or too
+	 * close for his band). A mate dying does not close it: outnumbered still scores FallBack, and on X4 seed 11 that
+	 * score lost to the area walk, so Lind left B_hall_n at full health before he fired. Standing on the G008 sector
+	 * post does not open it (bAtPost there is the ground post). Attackers and other post kinds are outside this hold.
+	 */
+	CODEXTACTICS_API bool IsOverwatchHoldOpen(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
+
+	/**
+	 * T-06: the same hold for every post kind that has a range. Overwatch uses bOnOverwatchRoof and the roof's range.
+	 * Window and ambush use bOnRangedPost and the weapon band's max. Ladder, drop, none, attackers, and a man on the
+	 * sector post only are outside it. The clock and the untenable reasons are IsOverwatchHoldOpen's.
+	 */
+	CODEXTACTICS_API bool IsAmbushHoldOpen(const FPmcFighterView& Fighter, const FPmcSquadView& Squad, const FPmcWeights& Weights);
 
 	/** The scenario's id in args / JSON ("skirmish", "chokepoint", "street", "roofs", "blizzard"). */
 	CODEXTACTICS_API const TCHAR* ScenarioName(EPmcScenario Scenario);

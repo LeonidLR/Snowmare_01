@@ -196,6 +196,14 @@ namespace PmcCommanderRules
 				return 0.f;
 			}
 		}
+		// G008b / T-06: a defender on a post that has a range stays there until the attackers reach that range.
+		// Objective / TakeCover / Advance / Flank would walk him off while the threat is still outside it. FallBack keeps its own score.
+		const bool bOverwatchHold = IsAmbushHoldOpen(F, S, W);
+		if (bOverwatchHold && (Order == EPmcOrder::Objective || Order == EPmcOrder::TakeCover
+			|| Order == EPmcOrder::Advance || Order == EPmcOrder::Flank))
+		{
+			return 0.f;
+		}
 		const float Contact = Step(S.bContact);
 		const float SeenNow = Step(F.bHasThreat && F.Threat.bSeenNow);
 		const float InRange = Step(F.bHasThreat && F.Threat.DistanceCm <= F.WeaponRangeCm);
@@ -281,9 +289,21 @@ namespace PmcCommanderRules
 			return FMath::Max(Losing, Standoff);
 		}
 		case EPmcOrder::Heal:
+		{
+			// G010: a defender standing on his post does not walk off it to a wounded mate. On Depot_1 the roof has no
+			// tactical post, so the ranged hold never opens and Ambush is 0 after the first sighting. Heal (0.2-1.0)
+			// then beat Hold (~0.1): the access guard yo-yoed between the stair and the patient (roof smoke runs 01 /
+			// 07 / 10, guard share 0.55 / 0.41 / 0.55). A mate already within heal_reach_m is healed in place. Off the
+			// post, Heal keeps its score and the walk back to the post stays the 1.05 Ambush.
+			const bool bStandingPost = F.bAtPost && (F.bHasDefencePost || F.bOnRangedPost || F.bOnOverwatchRoof);
+			if (bStandingPost && F.WoundedMateDistanceCm > W.HealReachCm)
+			{
+				return 0.f;
+			}
 			// A wounded mate within reach, a medkit in the kit, and nobody looking (seen threats make it a last resort).
 			return W.Heal * Step(F.bHasMedkit && F.WoundedMateDistanceCm >= 0.f && F.WoundedMateHealthFrac < W.HealBelow) * Clamp01(1.f - F.WoundedMateHealthFrac)
 				* (S.EnemiesSeenNow == 0 ? 1.f : 0.3f) * (S.MatesHealing == 0 ? 1.f : 0.2f);
+		}
 		case EPmcOrder::Relocate:
 			// Spotted at this spot for too long: move to another cover.
 			// TACTICAL_MAP P2: or standing in a chokepoint (danger >= choke_leave_danger) - he leaves it before he is spotted there.
@@ -298,7 +318,8 @@ namespace PmcCommanderRules
 			// No contact yet in this fight: hold in cover, crouched, and let them come.
 			// TACTICAL_MAP P2: a man with a tactical post (an ambush at a chokepoint exit, an overwatch roof, a window) waits ON it - worth
 			// x (1 + its kind's weight x its score) wherever he is (the order walks him there); without one the danger of his spot counts.
-			return W.Ambush * Step(!S.bEverContact) * (F.bInCover || F.bAtPost ? 1.f : 0.6f) * HoldHere * PushDamp
+			// G008b / T-06: a ranged post's gate is contact inside that post's range (IsAmbushHoldOpen), not the team's first sighting.
+			return W.Ambush * (bOverwatchHold ? 1.f : Step(!S.bEverContact)) * (F.bInCover || F.bAtPost ? 1.f : 0.6f) * HoldHere * PushDamp
 				* (F.PostKind != EPmcPostKind::None ? 1.f + (PmcTacticalRules::PostKindFactor(F.PostKind, W) - 1.f) * Clamp01(F.PostScore) : Here);
 		case EPmcOrder::Reload:
 			// A low clip with rounds in reserve; best behind cover or out of contact.
@@ -738,6 +759,9 @@ namespace PmcCommanderRules
 		ReadNumber(Json, TEXT("defence_post_walks"), PostWalks);
 		Out.DefencePostWalks = FMath::Max(1, FMath::RoundToInt(PostWalks));
 		ReadNumber(Json, TEXT("sector_arc_deg"), Out.SectorArcDeg);
+		float HealReachM = Out.HealReachCm / 100.f;
+		ReadNumber(Json, TEXT("heal_reach_m"), HealReachM);
+		Out.HealReachCm = FMath::Max(HealReachM, 0.f) * 100.f;
 		// Target attention (2026-11-07).
 		ReadNumber(Json, TEXT("attention"), Out.Attention);
 		ReadNumber(Json, TEXT("ambush_patience"), Out.AmbushPatience);
@@ -1000,6 +1024,78 @@ namespace PmcCommanderRules
 			return 1.f;
 		}
 		return FMath::Max(0.f, 1.f + FMath::Max(Weights.Attention, 0.f) * (PmcCommanderLocal::Clamp01(Fighter.Threat.AttentionOff) - 0.5f));
+	}
+
+	float OverwatchEngagementCm(float RoofRangeCm, float WeaponRangeCm)
+	{
+		const float Roof = FMath::Max(0.f, RoofRangeCm);
+		const float Weapon = FMath::Max(0.f, WeaponRangeCm);
+		if (Roof <= 0.f)
+		{
+			return Weapon;
+		}
+		if (Weapon <= 0.f)
+		{
+			return Roof;
+		}
+		return FMath::Min(Roof, Weapon);
+	}
+
+	float PostEngagementCm(EPmcPostKind Kind, float RoofRangeCm, float WeaponRangeCm, float BandMaxCm)
+	{
+		const float Weapon = FMath::Max(0.f, WeaponRangeCm);
+		switch (Kind)
+		{
+		case EPmcPostKind::Overwatch:
+			return OverwatchEngagementCm(RoofRangeCm, Weapon);
+		case EPmcPostKind::Window:
+		case EPmcPostKind::Ambush:
+			return BandMaxCm > 0.f ? BandMaxCm : Weapon;
+		default:
+			return 0.f;
+		}
+	}
+
+	static bool IsOnRangedPost(const FPmcFighterView& F)
+	{
+		if (F.PostKind == EPmcPostKind::Overwatch)
+		{
+			return F.bOnOverwatchRoof;
+		}
+		return (F.PostKind == EPmcPostKind::Window || F.PostKind == EPmcPostKind::Ambush) && F.bOnRangedPost;
+	}
+
+	bool IsAmbushHoldOpen(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
+	{
+		if (F.bKnockedDown || F.Objective.Role != EPmcRole::Defender || !IsOnRangedPost(F) || F.bUnderFire || F.bSuppressed)
+		{
+			return false;
+		}
+		// Personal untenable reasons. Outnumbered stays a FallBack score and does not close this hold: on X4 seed 11 a mate
+		// died, the hold closed, and Objective 0.70 beat that FallBack (0.54) so he walked off the roof at full health.
+		const bool bBand = F.Band.IsValid();
+		const bool bTooClose = bBand && F.bHasThreat && !F.Threat.bStandIn && F.RunningOrder != EPmcOrder::Flank
+			&& (IsTooClose(F.Threat.DistanceCm, F.Band, W)
+				|| (F.RunningOrder == EPmcOrder::FallBack && !F.Band.bCloseQuarters && F.Threat.DistanceCm < 0.5f * (F.Band.MinCm + F.Band.MaxCm)));
+		const bool bWounded = S.bContact && F.bHasThreat && F.HealthFrac < W.FallBackBelow;
+		if (bTooClose || bWounded)
+		{
+			return false;
+		}
+		if (!F.bContactInPostRange)
+		{
+			return true;
+		}
+		return F.PostRangeContactSeconds < FMath::Max(0.f, W.AmbushMaxHoldSeconds);
+	}
+
+	bool IsOverwatchHoldOpen(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)
+	{
+		if (F.PostKind != EPmcPostKind::Overwatch || !F.bOnOverwatchRoof)
+		{
+			return false;
+		}
+		return IsAmbushHoldOpen(F, S, W);
 	}
 
 	bool ShouldHoldFire(const FPmcFighterView& F, const FPmcSquadView& S, const FPmcWeights& W)

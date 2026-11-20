@@ -136,6 +136,25 @@ struct CODEXTACTICS_API FPmcLayoutHatch
 };
 
 /**
+ * One exterior wall opening of a layout building (openings[] kind door / window / loophole, a legacy doors[] entry, or a roof_holes[]
+ * entry as kind "roof_hole", state "open", on the top storey). State is the optional "state" text of the entry (open / closed /
+ * locked / broken ...); empty when the file has none (the generator writes none today). Read by Survival/ColdShelterRules (the cold
+ * indoors on generated maps).
+ */
+struct CODEXTACTICS_API FPmcLayoutOpening
+{
+	FString Id;
+	/** "door" / "window" / "loophole" (a legacy doors[] entry is "door"). */
+	FString Kind;
+	/** The entry's "state" text, lower case; empty when absent. */
+	FString State;
+	int32 Floor = 0;
+	/** World cm centre (no Z in the file). A roof hole's is its first corner. Valid only with bHasPos. */
+	FVector2D Pos = FVector2D::ZeroVector;
+	bool bHasPos = false;
+};
+
+/**
  * One building. Footprint is the unrotated [min, max] rectangle; RotationDeg spins it about its centre
  * (levelgen rotation.ts, UE yaw). Stairs and hatches are already world coordinates.
  */
@@ -149,6 +168,8 @@ struct CODEXTACTICS_API FPmcLayoutBuilding
 	bool bRoofWalkable = false;
 	TArray<FPmcLayoutStair> Stairs;
 	TArray<FPmcLayoutHatch> Hatches;
+	/** Exterior openings (openings[]; the legacy doors[] only when openings[] has no door; roof_holes[] as "roof_hole"). Partition openings are not read. */
+	TArray<FPmcLayoutOpening> Openings;
 };
 
 /** A layout ladder. To is "roof:<building>" for a roof climb. Top is world cm, no Z in the file. */
@@ -361,8 +382,14 @@ namespace PmcDefenceRules
 	/** Pairs of defenders on one non-empty cover key. Empty keys are not a shared object. */
 	CODEXTACTICS_API int32 SharedCoverPairs(TConstArrayView<FString> CoverKeys);
 
-	/** Mean pairwise planar distance of the feet, metres. Fewer than two men is 0. */
+	/** Mean pairwise planar distance of the feet, metres. Fewer than two men is 0 (no pair). */
 	CODEXTACTICS_API float MeanSpreadM(TConstArrayView<FVector> Feet);
+
+	/**
+	 * One 1 Hz spread sample. False when fewer than two defenders are alive: there is no pair, so that second is
+	 * not a bunch of 0 m (G010: a last man standing was pulling defender_spread_m under 5 m). Out is left untouched.
+	 */
+	CODEXTACTICS_API bool TrySpreadSample(TConstArrayView<FVector> Feet, float& OutSpreadM);
 
 	/** One sample of the guard share. Not applicable (n/a, not a zero) when Access is unset. */
 	CODEXTACTICS_API FPmcGuardSample SampleGuard(TConstArrayView<FVector> LivingFeet, const FPmcDefenceAccess& Access,
