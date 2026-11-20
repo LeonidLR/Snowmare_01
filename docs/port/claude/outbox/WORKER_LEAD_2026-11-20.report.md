@@ -160,6 +160,14 @@ ported to worker/bgen-firing-gaps d48f165b; (2) door leaves lose pawn IGNORE aft
 stair timeouts: diagnosis + fix running (Sonnet, throwaway worker/bgen-door-leaf); (3) planned office with a west entry (B_o12w) STUCK;
 (4) 10.2 x 9.4 m 2-storey office falls back to BSP (depth < 1000, probably intended).
 
+## S2.7 plan overlay in Training Ground (worker/bgen-firing-gaps 0ecc50f7; TS only)
+Layer «Планировки» per storey (rooms by unit / zone, doors by role, loops, dead-end flats, validator issues on the building; legend =
+S2_3_PLANS.md), «Другой план» per building (next plan-seed counter, only that building + its stories re-run, locked refused, one undo step),
+map summary (planned / fallback with reasons / legacy, per archetype, rooms, dead-end flats, issues, stories) + the same `plans:` line in the
+CLI `--plans`. npm test 664 -> 684, typecheck clean. Headless check on the plans-check layout: docs/design/levelgen/S2_7/*.jpg (4 sent to the
+designer). Content/Data: one `plans` row in layers.json. Not done: triad flags (no validator rule), clicking the overlay, a re-planned building
+built in the engine. Also on this branch tonight: builder fixes d48f165b (nav flag) + d9e78dfd (door leaves stay walk-through after the bake).
+
 ## T-022 Training Ground map edit + F11 (worker/t022-tg-map-edit 7be7d2d2, from main; TS only)
 Bigger plan (782x690 vs ~470x520), F11 / «На весь экран» full window with the layers drawer (zoom kept), drag-move of buildings with all
 their parts (walls, ladders, openings, roof items, route points inside), fence segment / whole ring / end points, ladders (building

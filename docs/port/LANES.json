@@ -42,11 +42,12 @@
    "owner": "worker stand-in",
    "branch": "worker/bgen-firing-gaps",
    "topic": "claude-S022",
-   "state": "active",
+   "state": "waiting",
    "max_quiet_min": 60,
    "worktree": "C:/Work/CodexTactics-slot1/Saved/wt-bgen",
    "machine": "worker",
-   "reason": "S2.3 engine check on throwaway worker/bgen-s23-engine in slot1; S2.4 waits for the designer review (B1-B5)"
+   "reason": "S2.3 + engine check + builder fixes + S2.7 done (0ecc50f7); S2.4 waits for the designer answers B1-B5",
+   "max_wait_min": 900
   },
   {
    "id": "worker-night",
