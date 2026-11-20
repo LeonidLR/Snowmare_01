@@ -312,25 +312,68 @@ class BalconyAndSnowRampTest(unittest.TestCase):
         self.assertFalse([s for s in _plan(lay) if "snow_ramp=SR_X" in s.get("tags", [])])
 
 
+class _Struct:
+    """A stand-in unreal struct: set_editor_property / get_editor_property over a dict."""
+
+    def __init__(self, **props):
+        self.props = dict(props)
+
+    def set_editor_property(self, name, value):
+        self.props[name] = value
+
+    def get_editor_property(self, name):
+        return self.props[name]
+
+
 class PlacerFlagsTest(unittest.TestCase):
-    """Placer.apply_flags with a stand-in unreal module: the spec flags reach the component calls."""
+    """Placer.apply_flags with a stand-in unreal module: the spec flags reach the component."""
+
+    def _fake(self):
+        return types.SimpleNamespace(
+            CollisionResponseType=types.SimpleNamespace(ECR_BLOCK="BLOCK", ECR_IGNORE="IGNORE", ECR_OVERLAP="OVERLAP"),
+            ResponseChannel=_Struct)
+
+    def _comp(self, calls):
+        body = _Struct(collision_responses=_Struct(response_array=[]), collision_profile_name="BlockAll")
+        comp = _Struct(body_instance=body)
+        comp.set_can_ever_affect_navigation = lambda v: calls.append(("nav", v))
+        # the setter that does NOT survive a save + reload in UE 5.8 must never be used for the responses
+        comp.set_collision_response_to_channel = lambda ch, r: calls.append(("SETTER", ch, r))
+        return comp, body
 
     def test_apply_flags(self):
         calls = []
-        comp = types.SimpleNamespace(set_can_ever_affect_navigation=lambda v: calls.append(("nav", v)),
-                                     set_collision_response_to_channel=lambda ch, r: calls.append((ch, r)))
-        fake = types.SimpleNamespace(
-            CollisionChannel=types.SimpleNamespace(ECC_PAWN="PAWN", ECC_VISIBILITY="VIS", ECC_CAMERA="CAM"),
-            CollisionResponseType=types.SimpleNamespace(ECR_BLOCK="BLOCK", ECR_IGNORE="IGNORE", ECR_OVERLAP="OVERLAP"))
+        comp, body = self._comp(calls)
         saved = builder.unreal
-        builder.unreal = fake
+        builder.unreal = self._fake()
         try:
             placer = builder.Placer.__new__(builder.Placer)
             placer.apply_flags(comp, {"label": "leaf", "affects_navigation": False, "collision": builder.COLLISION_LEAF})
-            self.assertEqual(calls, [("nav", False), ("PAWN", "IGNORE"), ("VIS", "BLOCK")])
+            self.assertEqual(calls, [("nav", False)])
+            self.assertIs(comp.get_editor_property("body_instance"), body)
+            self.assertEqual(body.get_editor_property("collision_profile_name"), "Custom")
+            # the mesh's default collision would overwrite the Custom responses (bake: FinishAllCompilation; game: registration)
+            self.assertIs(comp.get_editor_property("use_default_collision"), False)
+            array = body.get_editor_property("collision_responses").get_editor_property("response_array")
+            self.assertEqual([(e.get_editor_property("channel"), e.get_editor_property("response")) for e in array],
+                             [("Pawn", "IGNORE"), ("Visibility", "BLOCK")])
             calls.clear()
-            placer.apply_flags(comp, {"label": "wall"})                 # a legacy spec: untouched
+            comp2, body2 = self._comp(calls)
+            placer.apply_flags(comp2, {"label": "wall"})                # a legacy spec: untouched
             self.assertEqual(calls, [])
+            self.assertEqual(body2.get_editor_property("collision_profile_name"), "BlockAll")
+            self.assertNotIn("use_default_collision", comp2.props)
+        finally:
+            builder.unreal = saved
+
+    def test_nav_property_fallback(self):
+        comp = _Struct()
+        saved = builder.unreal
+        builder.unreal = self._fake()
+        try:
+            placer = builder.Placer.__new__(builder.Placer)
+            placer.apply_flags(comp, {"label": "leaf", "affects_navigation": False})
+            self.assertIs(comp.get_editor_property("can_ever_affect_navigation"), False)
         finally:
             builder.unreal = saved
 
