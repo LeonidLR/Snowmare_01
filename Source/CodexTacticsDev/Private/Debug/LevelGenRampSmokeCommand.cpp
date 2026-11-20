@@ -26,6 +26,7 @@
 #include "Survival/ColdSurvivalComponent.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "CollisionQueryParams.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "Containers/Ticker.h"
@@ -427,6 +428,34 @@ namespace LevelGenRampSmoke
 		return true;
 	}
 
+	/**
+	 * A spot a man may be stood on for the leg: on the navmesh within 30 cm of the asked point, on the starting level, and in the flight's room -
+	 * nothing static between the stair's mouth (40 cm off its foot) and the spot. 2026-11-20: a planned building's stair core (S2.2b / S2.3) has
+	 * its partition 95 cm beside the flight, so the stairwell's "Side * 120 / 260" spots stood behind that wall (B_o12w_stair_1: one man projected
+	 * 35 cm into the core's portal doorway, the man sent up in the corridor behind him) - not the squad bunched in the mouth this smoke checks.
+	 */
+	bool IsMouthSpot(UWorld* World, const FStair& Stair, const FVector2D& Spot, float StartZ, FVector& OutAt)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		FNavLocation OnNav;
+		if (!Nav || !Nav->ProjectPointToNavigation(FVector(Spot.X, Spot.Y, StartZ + 50.f), OnNav, FVector(120.f, 120.f, 150.f))
+			|| FVector2D::Distance(FVector2D(OnNav.Location), Spot) > 30.0 || FMath::Abs(OnNav.Location.Z - StartZ) > 25.f)
+		{
+			return false;
+		}
+		const FVector2D Mouth = Stair.Foot - Stair.Dir * 40.0;
+		FCollisionObjectQueryParams Statics;
+		Statics.AddObjectTypesToQuery(ECC_WorldStatic);
+		FHitResult Hit;
+		if (World->LineTraceSingleByObjectType(Hit, FVector(Mouth, StartZ + 60.f), FVector(FVector2D(OnNav.Location), StartZ + 60.f), Statics,
+			FCollisionQueryParams(SCENE_QUERY_STAT(RampSmokeMouthSpot), false)))
+		{
+			return false;
+		}
+		OutAt = OnNav.Location;
+		return true;
+	}
+
 	/** The squad bunched in the stair's mouth (Ordered = the man at the BACK, 2.6 m off the foot; the others 1.2 m off it side by side). */
 	AOperativeCharacter* PlaceSquad(UWorld* World, USquadSubsystem& Squad, const FStair& Stair, float StartZ)
 	{
@@ -457,6 +486,32 @@ namespace LevelGenRampSmoke
 			? TArray<FVector2D>{ Stair.Foot - Stair.Dir * 50.0 + Side * 40.0, Stair.Foot + Side * 120.0, Stair.Foot - Stair.Dir * 40.0 + Side * 260.0, Stair.Foot + Side * 260.0 + Stair.Dir * 100.0 }
 			: TArray<FVector2D>{ Stair.Foot - Stair.Dir * 120.0 + Side * 60.0, Stair.Foot - Stair.Dir * 120.0 - Side * 60.0, Stair.Foot - Stair.Dir * 260.0,
 				Stair.Foot - Stair.Dir * 260.0 + Side * 130.0 };
+		// A spot behind a wall (IsMouthSpot) gives way to the next free one in the mouth: behind the foot along the flight's axis (the open floor a
+		// stairwell in a stair core has there), the back man the farthest. The spots of the maps before the cores stay as they were.
+		const TArray<FVector2D> BackSpots{ Stair.Foot - Stair.Dir * 260.0, Stair.Foot - Stair.Dir * 260.0 + Side * 60.0, Stair.Foot - Stair.Dir * 260.0 - Side * 60.0,
+			Stair.Foot - Stair.Dir * 200.0 };
+		const TArray<FVector2D> NearSpots{ Stair.Foot - Stair.Dir * 120.0 + Side * 60.0, Stair.Foot - Stair.Dir * 120.0 - Side * 60.0, Stair.Foot - Stair.Dir * 60.0,
+			Stair.Foot - Stair.Dir * 180.0 };
+		TArray<FVector2D> Chosen;
+		const auto Pick = [&](const FVector2D& First, const TArray<FVector2D>& Others, FVector& OutAt, FVector2D& OutAsked)
+		{
+			TArray<FVector2D> Tries{ First };
+			Tries.Append(Others);
+			for (const FVector2D& Try : Tries)
+			{
+				const bool bFree = !Chosen.ContainsByPredicate([&Try](const FVector2D& Taken) { return FVector2D::Distance(Taken, Try) < 80.0; });
+				if (bFree && IsMouthSpot(World, Stair, Try, StartZ, OutAt))
+				{
+					Chosen.Add(Try);
+					OutAsked = Try;
+					return true;
+				}
+			}
+			OutAsked = First; // none fits: the old spot, as before
+			OutAt = OnNav(World, FVector(First.X, First.Y, StartZ + 50.f));
+			Chosen.Add(First);
+			return false;
+		};
 		// The current leader in the mouth, the last member at the back (the one the player selects).
 		AOperativeCharacter* Back = Members.Last() != Squad.GetLeader() ? Members.Last() : Members[0];
 		Members.Remove(Back);
@@ -464,10 +519,13 @@ namespace LevelGenRampSmoke
 		for (int32 Index = 0; Index < Members.Num(); ++Index)
 		{
 			AOperativeCharacter* Member = Members[Index];
-			const FVector2D Spot = Index == 0 ? Spots[2] : Index == 1 ? Spots[0] : Index == 2 ? Spots[1] : Spots[3];
-			const FVector At = OnNav(World, FVector(Spot.X, Spot.Y, StartZ + 50.f));
-			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s placed at %s (asked %s)%s"), *Member->DisplayName.ToString(), *At.ToCompactString(), *Spot.ToString(),
-				Index == 0 ? TEXT(" - at the back, the one sent up") : TEXT(""));
+			const FVector2D First = Index == 0 ? Spots[2] : Index == 1 ? Spots[0] : Index == 2 ? Spots[1] : Spots[3];
+			FVector At;
+			FVector2D Spot;
+			const bool bFits = Pick(First, Index == 0 ? BackSpots : NearSpots, At, Spot);
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: %s placed at %s (asked %s)%s%s"), *Member->DisplayName.ToString(), *At.ToCompactString(), *Spot.ToString(),
+				Index == 0 ? TEXT(" - at the back, the one sent up") : TEXT(""), !bFits ? TEXT(" - no spot in the mouth fits, the old one")
+				: Spot != First ? *FString::Printf(TEXT(" - instead of %s (behind a wall / off the navmesh)"), *First.ToString()) : TEXT(""));
 			Member->TeleportTo(At + FVector(0.f, 0.f, Member->GetCapsuleComponent()->GetScaledCapsuleHalfHeight() + 5.f), FVector(Stair.Dir, 0.0).Rotation(), false, true);
 			if (AAIController* AI = Cast<AAIController>(Member->GetController()))
 			{
