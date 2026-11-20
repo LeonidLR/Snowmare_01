@@ -144,6 +144,26 @@ same order re-decided 12 / 9 > 6) and PASSES 4 / 4 alone (churn 9-13) - a load-s
 paired experiment, switched on only if defender wins >= ~70 / 143; (2) keep it off until T-08; (3) approach ambush (DS-00A) with a fall-back
 rule = T-08. Lead recommends (1) as an experiment with the default staying off.
 
+## T-08 first slice - covered holder in the zone + hammers' fall-back (worker/t08-holder-fallback efd65621; NOT merged) - FAIL, ships OFF
+
+Built to the designer's 11-20 rules: holder on the best covered post inside the 6 m zone (route never across the kill zone), hammers fire from T-05 positions and fall back by bounding to covered zone posts on rule 1 (zone emptying), 2 (ambush bypassed, only after the first defender shot) or 4 (not in time for the capture); no fall-back while >= 2 attackers are down. New pure rules `PmcDefenceRolesRules` + 5 tests; JSON block `defence_roles` (`enabled: false`). Tests: FiringPosition 13/13, Pmc 75/75. Gate smokes pass ON and OFF (PmcRoofDefenceSmoke flaked once OFF, passed on re-run).
+
+Paired run, seeds 1060-1209 vs main 19a90f52, ONE run, thresholds set before the run (lead re-checked with paired_wins.py):
+
+| variant | def wins | att captures | att killed / round | share >= 2 down | paired main-only / new-only |
+|---|---|---|---|---|---|
+| crossroads main | 82/143 | 17 | 1.99 | 0.629 | - |
+| crossroads garrison (T-05 b) | 53 | 46 | 1.46 | 0.420 | 35 / 6 |
+| crossroads T-08 | 51 | 54 | 1.51 | 0.469 | 38 / 7 |
+| alley main | 16/133 | 40 | 0.67 | 0.188 | - |
+| alley T-08 | 19 | 22 | 0.71 | 0.195 | 11 / 14 |
+
+Verdict: FAIL (crossroads misses all three: kills 1.51 < 1.9, wins 51 < 75, share 0.469 < 0.629). Alley passes and attacker captures drop 40 -> 22.
+
+Cause: the crossroads 6 m zone has NO covered post in 80 of 150 rounds, so the holder stays in the open and most hammers get no fall-back plan - the layer barely runs there and the result equals T-05 keep_occupier. On the alley (cover in the zone) it works as designed. Rule 4 fires alone in ~2/3 of fall-backs, i.e. just when the attackers enter the kill zone - it pulls hammers off positions at the moment they should fire.
+
+Open for the designer: (1) the crossroads test point has no cover - give the zone cover (bigger test zone / generator places cover at goals) or allow an open holder post; (2) should rule 4 wait until the hammers have opened fire? (3) rule 3 + leaving the zone not built. Trainer trap: `defence_roles` numbers would become trainer genes unless frozen in pmc_commander.bounds.json (not touched).
+
 ## S2.3 block archetype (worker/bgen-firing-gaps 0ada99f1; TS + Python mirror, no engine)
 Sections / landings / flats / lobbies / slots, story 4 by flat column, `dead_end` tags; flat doors closed (designer), balconies only with
 fire escapes (designer). TS 650 -> 664, Python 60; plans-off golden byte-identical; property: 864 blocks planned, 0 validator issues, 0 %

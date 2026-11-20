@@ -11,7 +11,7 @@
    "max_quiet_min": 45,
    "worktree": "C:/Work/CodexTactics-slot1",
    "machine": "worker",
-   "reason": "designer decisions 11-20: defence = destroy the group; T-08 slice holder-in-zone + fall-back (rules 1/2/4) under paired A/B vs main"
+   "reason": "T-08 slice FAIL on crossroads (no cover in the 6 m zone), ships OFF (efd65621); next: goal counts only after the zone is cleared + defended goal shown as a zone on HUD/minimap"
   },
   {
    "id": "T-020",
