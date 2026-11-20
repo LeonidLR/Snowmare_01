@@ -916,6 +916,7 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
             <button key={m} type="button" onClick={() => setTool(m)} data-props-tool={m} className={`px-2 py-0.5 rounded ${tool === m ? (m === 'move' ? 'bg-cyan-700 text-white font-semibold' : 'bg-amber-600 text-slate-950 font-semibold') : 'text-slate-300 hover:text-white'}`}>{label}</button>
           ))}
         </div>
+        {!full && undoRedo}
         {tool === 'move' ? (
           <span className="inline-flex flex-wrap items-center gap-1.5 px-2 py-0.5 rounded bg-slate-950 border border-cyan-900 text-slate-300" data-props-move-controls>
             <label className="inline-flex items-center gap-1" title="Сетка: при перетаскивании пропс встаёт на узел сетки"><input type="checkbox" checked={snapOn} onChange={(e) => setSnapOn(e.target.checked)} className="accent-cyan-500" data-props-snap-toggle /><Grid3x3 size={12} />сетка</label>
@@ -941,12 +942,6 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
           </>
         )}
       </div>
-      {zone && tool !== 'move' && preview && (
-        <p className="text-[11px] text-slate-300" data-props-zone-summary>
-          В зоне: заменится <span className="text-cyan-300 font-mono">{preview.inside.length}</span> пропсов (голубые точки), останется закреплённых <span className="text-emerald-300 font-mono">{preview.locked.length}</span> (зелёные квадраты); слои: {zoneLayerIds.join(', ') || 'не выбраны'}.
-        </p>
-      )}
-
       {/* Canvas: the drawing under the zone / pick / drag overlay (the same PlanView) */}
       <div ref={planBox}>
         <RegionOverlay
@@ -986,6 +981,12 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
           />
         </RegionOverlay>
       </div>
+
+      {zone && tool !== 'move' && preview && (
+        <p className="text-[11px] text-slate-300" data-props-zone-summary>
+          В зоне: заменится <span className="text-cyan-300 font-mono">{preview.inside.length}</span> пропсов (голубые точки), останется закреплённых <span className="text-emerald-300 font-mono">{preview.locked.length}</span> (зелёные квадраты); слои: {zoneLayerIds.join(', ') || 'не выбраны'}.
+        </p>
+      )}
 
       {moveNote && (
         <p className={`text-[11px] ${moveNote.ok ? 'text-cyan-200' : 'text-amber-300'}`} data-props-move-note>{moveNote.text}</p>

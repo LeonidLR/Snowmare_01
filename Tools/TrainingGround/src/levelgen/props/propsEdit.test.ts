@@ -130,6 +130,29 @@ describe('zone re-roll (T-023)', () => {
     assert.ok(out.clearance.droppedTotal >= 0);
   });
 
+  it('re-rolling crates + mines + loot in one zone leaves no object attached to a crate that is gone, and says nothing about orphans then', () => {
+    const f = fresh();
+    const zone = halfZone(f, 'crates');
+    const out = rerollPropsLayers(f, balance, view, layout, { ids: ['crates', 'mines', 'loot'], seedFor: () => 2024, zone }, cfg);
+    const all = new Map<string, PropObject>();
+    for (const l of f.layers) for (const o of l.objects) all.set(o.id, o);
+    const orphans = [...all.values()].filter((o) => o.attach !== undefined && !all.has(o.attach));
+    assert.equal(orphans.length, 0, `orphans: ${orphans.map((o) => o.id).join(', ')}`);
+    assert.ok(!out.notes.some((n) => /привязаны/.test(n)));
+    for (const l of f.layers) assert.ok(!(l.report?.warnings ?? []).some((w) => /^attach_orphaned/.test(w)), `${l.id} has a stale orphan warning`);
+  });
+
+  it('crates alone in a zone: the mines / loot attached to the replaced crates are named as orphans (not silently kept)', () => {
+    const f = fresh();
+    const zone = halfZone(f, 'crates');
+    const crateIds = new Set(layerOf(f, 'crates').objects.filter((o) => pointInPoly(o.pos, zone) && !o.locked).map((o) => o.id));
+    const attached = f.layers.flatMap((l) => l.objects).filter((o) => o.attach && crateIds.has(o.attach));
+    assert.ok(attached.length > 0, 'the fixture has attached objects inside the zone');
+    const out = rerollPropsLayers(f, balance, view, layout, { ids: ['crates'], seedFor: () => 2025, zone }, cfg);
+    assert.ok(out.notes.some((n) => /привязаны/.test(n)));
+    assert.ok(f.layers.some((l) => (l.report?.warnings ?? []).some((w) => /^attach_orphaned/.test(w))));
+  });
+
   it('the power layer is not rebuilt by a zone (outside stays): skipped with a reason; a turret zone re-roll only reports the links', () => {
     const f = fresh();
     const zone = halfZone(f, 'turrets');

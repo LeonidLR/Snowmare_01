@@ -89,6 +89,8 @@ export function rerollPropsLayers(
   if (zone) out.zone = { removed: 0, added: 0, droppedSpacing: 0, keptOutside: 0, keptPinned: 0 };
   // the ids of the objects this call creates (a zone re-roll's clearance / validator only judge those)
   const freshIds = new Set<string>();
+  // zone re-roll: objects of other layers that were attached to an object the zone removed (judged at the end, after every layer is done)
+  const orphanCandidates = new Set<string>();
 
   // 1. placement of the placed kinds, in the autogen's order
   const placed = new Set<string>();
@@ -103,14 +105,7 @@ export function rerollPropsLayers(
         out.zone!.droppedSpacing += z.droppedSpacing;
         out.zone!.keptOutside += z.keptOutside;
         out.zone!.keptPinned += z.keptPinned;
-        if (z.orphaned.length > 0) {
-          out.notes.push(`${layer.id}: объекты ${z.orphaned.slice(0, 3).join(', ')}${z.orphaned.length > 3 ? ` и ещё ${z.orphaned.length - 3}` : ''} были привязаны к убранным в зоне; перебросьте и их слой (игра их уберёт при загрузке)`);
-          const orphanSet = new Set(z.orphaned);
-          for (const l of file.layers) {
-            if (l.id === layer.id || !l.objects.some((o) => orphanSet.has(o.id))) continue;
-            l.report = { ...(l.report ?? {}), warnings: [...(l.report?.warnings ?? []), ...z.orphaned.filter((id) => l.objects.some((o) => o.id === id)).map((id) => `attach_orphaned ${id}`)] };
-          }
-        }
+        for (const id of z.orphaned) orphanCandidates.add(id);
       } else {
         rerollLayer(file, balance, view, layer.id, req.seedFor(layer), layout);
       }
@@ -202,6 +197,20 @@ export function rerollPropsLayers(
         return o !== undefined && o.attach !== undefined && !byId.has(o.attach);
       }),
     };
+  }
+  // 6. a zone re-roll: whatever is still attached to a removed object is reported (the game's validator drops it at load); layers re-rolled
+  // in the same call have already replaced theirs, so only the real leftovers are named
+  if (zone && orphanCandidates.size > 0) {
+    const left: PropObject[] = [];
+    for (const l of file.layers) for (const o of l.objects) if (orphanCandidates.has(o.id) && o.attach !== undefined && !byId.has(o.attach)) left.push(o);
+    if (left.length > 0) {
+      out.notes.push(`${left.length} объектов (${left.slice(0, 3).map((o) => o.id).join(', ')}${left.length > 3 ? ', …' : ''}) были привязаны к убранным в зоне; перебросьте и их слой (игра их уберёт при загрузке)`);
+      const leftIds = new Set(left.map((o) => o.id));
+      for (const l of file.layers) {
+        const mine = l.objects.filter((o) => leftIds.has(o.id));
+        if (mine.length > 0) l.report = { ...(l.report ?? {}), warnings: [...(l.report?.warnings ?? []), ...mine.map((o) => `attach_orphaned ${o.id}`)] };
+      }
+    }
   }
   return out;
 }
