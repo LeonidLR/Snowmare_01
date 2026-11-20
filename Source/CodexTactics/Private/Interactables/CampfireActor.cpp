@@ -16,6 +16,7 @@
 #include "Materials/MaterialInstanceDynamic.h"
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
+#include "Survival/ColdShelterSubsystem.h"
 #include "Survival/TacticalHeatActor.h"
 #include "Survival/TacticalHeatTimerComponent.h"
 #include "UI/FloatingTextSubsystem.h"
@@ -133,7 +134,8 @@ void ACampfireActor::RestoreHeatState(bool bBurning, bool bBurntOut, float TimeL
 
 bool ACampfireActor::IsIndoors() const
 {
-	return ACameraZoneVolume::IsShelteredLocation(GetWorld(), GetActorLocation());
+	// A Closed / Shelter camera zone, or (T-021) a building of the generated map's layout.
+	return UColdShelterSubsystem::IsShelteredLocation(GetWorld(), GetActorLocation());
 }
 
 int32 ACampfireActor::AlertPatrols()

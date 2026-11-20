@@ -423,6 +423,16 @@ namespace EnvironmentRules
 			GetTransitionBlend(Config, State));
 	}
 
+	float ClampWeatherStrength(float Strength)
+	{
+		return FMath::IsFinite(Strength) ? FMath::Clamp(Strength, 0.f, 2.f) : 1.f;
+	}
+
+	float ApplyWeatherStrength(float Blended, float Strength)
+	{
+		return FMath::Max(0.f, 1.f + (Blended - 1.f) * ClampWeatherStrength(Strength));
+	}
+
 	bool ShouldApplyCold(const FEnvironmentConfig& Config, bool bLocked)
 	{
 		return !bLocked || Config.bColdOnLockedLevels;
