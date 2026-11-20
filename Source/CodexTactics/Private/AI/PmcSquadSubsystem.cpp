@@ -3,6 +3,7 @@
 
 #include "AI/PmcSquadSubsystem.h"
 
+#include "AI/PmcArenaBehaviourRules.h"
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcOperatorRules.h"
 #include "Combat/LauncherTacticsRules.h"
@@ -2258,6 +2259,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				State.bDefenceSettled = false;
 				if (bTaken)
 				{
+					Team.Stats.PostMoves += PmcArenaBehaviourRules::PostMoveIncrement(true);
 					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s walks to his %s post %s"), TeamId, *Fighter.DisplayName.ToString(),
 						PmcDefenceRules::RoleName(State.DefenceRole), *State.DefencePost.ToCompactString());
 					break;
@@ -2303,7 +2305,7 @@ bool UPmcSquadSubsystem::ExecuteOrder(int32 TeamId, FTeam& Team, AOperativeChara
 				const float DistanceCm = static_cast<float>(FVector::Dist(Feet, State.Post.Location));
 				bKeepGoalLevel = true;
 				bTaken = Walk(State.Post.Location, false);
-				Team.Stats.PostMoves += bTaken ? 1 : 0;
+				Team.Stats.PostMoves += PmcArenaBehaviourRules::PostMoveIncrement(bTaken);
 				State.bPostSettled = false;
 				// Not taken = unreachable now: counted like a walk that ended short.
 				State.PostWalks += bTaken ? 0 : 1;

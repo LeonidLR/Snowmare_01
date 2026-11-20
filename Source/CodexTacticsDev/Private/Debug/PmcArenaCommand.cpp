@@ -361,6 +361,10 @@ namespace PmcArena
 		float Time = 0.f;
 		/** TACTICAL_MAP P3: the shooter stood at an overwatch roof spot (a kill from it is an overwatch kill). */
 		bool bOverwatch = false;
+		/** His tactical post at the shot (None when he has none). A defence post is not this post. */
+		EPmcPostKind PostKind = EPmcPostKind::None;
+		/** He stood on that post (PostArriveCm, his side's level tolerance). */
+		bool bAtPost = false;
 	};
 
 	/** TACTICAL_MAP P3: one side's behaviour accumulators of the round (PmcArenaBehaviourRules). */
@@ -2010,7 +2014,15 @@ namespace PmcArena
 							const UTacticalMapSubsystem* Map = StatePtr->bTacticalMap && Shooter->GetWorld() ? Shooter->GetWorld()->GetSubsystem<UTacticalMapSubsystem>() : nullptr;
 							const FVector ShooterFeet = FeetOf(*Shooter);
 							const bool bOverwatch = Map && PmcArenaBehaviourRules::IsAtOverwatchSpot(Map->GetFile(), Map->GetConfig(), ShooterFeet);
-							ShotTrack.LastHit.Add(const_cast<AOperativeCharacter*>(Victim), { ShooterSide, bConcealed, StatePtr->StageTime, bOverwatch });
+							EPmcPostKind PostKind = EPmcPostKind::None;
+							bool bAtPost = false;
+							if (const FPmcTacticalPost* Post = Pmc ? Pmc->GetFighterPost(Shooter) : nullptr)
+							{
+								PostKind = Post->Kind;
+								const FPmcWeights& Weights = ShooterSide == 0 ? StatePtr->WeightsA : StatePtr->WeightsB;
+								bAtPost = PmcTacticalRules::IsAtPost(ShooterFeet, Post->Location, UPmcSquadSubsystem::PostArriveCm, Weights.LevelToleranceCm);
+							}
+							ShotTrack.LastHit.Add(const_cast<AOperativeCharacter*>(Victim), { ShooterSide, bConcealed, StatePtr->StageTime, bOverwatch, PostKind, bAtPost });
 							FSideBehaviour& ShooterBehaviour = ShotTrack.Behaviour[ShooterSide];
 							if (Map && !ShooterBehaviour.AmbushVictims.Contains(Victim)
 								&& PmcArenaBehaviourRules::IsAmbushHit(Map->GetFile(), Map->GetConfig(), ShooterFeet, FeetOf(*Victim)))
@@ -2042,12 +2054,25 @@ namespace PmcArena
 						Json->SetStringField(TEXT("target"), Fallen ? Fallen->DisplayName.ToString() : (Victim ? Victim->GetName() : TEXT("?")));
 						Json->SetStringField(TEXT("side"), SideOf(*StatePtr, Fallen));
 						Json->SetStringField(TEXT("by"), AttackerSource);
-						// TACTICAL_MAP P3: killed by a hit from an overwatch roof spot (within the damage attribution's 3 s).
+						// TACTICAL_MAP P3: killed by a hit from an overwatch roof spot, or by a man on his Overwatch post (the 3 s window).
 						const FHitNote* Note = Fallen ? StatePtr->Track.LastHit.Find(const_cast<AOperativeCharacter*>(Fallen)) : nullptr;
-						if (Note && Note->bOverwatch && IsSideIndex(Note->Side) && StatePtr->StageTime - Note->Time <= 3.f)
+						if (Note)
 						{
-							++StatePtr->Track.Behaviour[Note->Side].OverwatchKills;
-							Json->SetBoolField(TEXT("overwatch"), true);
+							FPmcOverwatchKillNote Kill;
+							Kill.Side = Note->Side;
+							Kill.PostKind = Note->PostKind;
+							Kill.bAtPost = Note->bAtPost;
+							Kill.bAtOverwatchSpot = Note->bOverwatch;
+							Kill.HitTimeS = Note->Time;
+							const bool bCounted = PmcArenaBehaviourRules::CountsAsOverwatchKill(Kill, StatePtr->StageTime);
+							UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] overwatch kill check: side %d kind %s at_post %s spot %s age %.2f counted %s"),
+								Note->Side, PmcTacticalRules::PostKindName(Note->PostKind), Note->bAtPost ? TEXT("yes") : TEXT("no"),
+								Note->bOverwatch ? TEXT("yes") : TEXT("no"), StatePtr->StageTime - Note->Time, bCounted ? TEXT("yes") : TEXT("no"));
+							if (bCounted)
+							{
+								++StatePtr->Track.Behaviour[Note->Side].OverwatchKills;
+								Json->SetBoolField(TEXT("overwatch"), true);
+							}
 						}
 						StatePtr->Track.Events.Add(MakeShared<FJsonValueObject>(Json));
 					});
@@ -3664,6 +3689,8 @@ namespace PmcArena
 				Result.Behaviour[1].AmbushSuccess, Result.Behaviour[0].OverwatchKills, Result.Behaviour[1].OverwatchKills, Result.Behaviour[0].TimeInChokepointS,
 				Result.Behaviour[1].TimeInChokepointS, Result.Behaviour[0].WindowPositionsUsed, Result.Behaviour[1].WindowPositionsUsed, Result.Behaviour[0].QuietSpells,
 				Result.Behaviour[0].OrderChurn, Result.Behaviour[1].OrderChurn, Result.Behaviour[0].StalemateShare);
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d post moves A %d / B %d"),
+				State.Round, Result.Stats[0].PostMoves, Result.Stats[1].PostMoves);
 		}
 		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] round %d contact: %s (%d moments: %d shots, rockets A %d / B %d, bursts near an enemy A %d / B %d, rocket contact %s), objective reach attackers %s / defenders %s"),
 			State.Round, Result.bContact ? TEXT("yes") : TEXT("no"), Result.ContactEvents, State.Track.ShotTimes.Num(), Result.Rockets[0], Result.Rockets[1],

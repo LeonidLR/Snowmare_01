@@ -40,7 +40,7 @@ struct CODEXTACTICS_API FPmcBehaviour
 	int32 SuppressThenMove = 0;
 	/** Enemies first hit from a hiding spot of a chokepoint (the TACTICAL map's ambush spots; the target near the spot's threatened point). */
 	int32 AmbushSuccess = 0;
-	/** Kills by a man standing at an overwatch roof spot. */
+	/** Kills by a hit from an overwatch roof spot, or by a man standing on his Overwatch post. */
 	int32 OverwatchKills = 0;
 	/** Mean seconds per man of the side spent inside a chokepoint (its outline, his floor) - bad. */
 	float TimeInChokepointS = 0.f;
@@ -113,6 +113,19 @@ private:
 	TOptional<float> Gap;
 };
 
+/**
+ * One hit that may become an overwatch kill. Filled at the shot: the killer's side, his tactical post, and whether he stood on
+ * that post or on an overwatch roof spot. The death time is compared with HitTimeS.
+ */
+struct CODEXTACTICS_API FPmcOverwatchKillNote
+{
+	int32 Side = INDEX_NONE;
+	EPmcPostKind PostKind = EPmcPostKind::None;
+	bool bAtPost = false;
+	bool bAtOverwatchSpot = false;
+	float HitTimeS = 0.f;
+};
+
 namespace PmcArenaBehaviourRules
 {
 	/**
@@ -144,6 +157,8 @@ namespace PmcArenaBehaviourRules
 	inline constexpr float MoveMinCm = 300.f;
 	/** A shooter stands at an ambush / overwatch spot within this, cm (planar, his floor). */
 	inline constexpr float SpotRadiusCm = 300.f;
+	/** A kill counts from a hit no older than this (the damage attribution window). Age equal to it still counts. */
+	inline constexpr float OverwatchKillWindowS = 3.f;
 	/** A man stands at a window position within this of its stand point, cm (planar, his floor). */
 	inline constexpr float WindowRadiusCm = 120.f;
 	/** The ambush hit: the target within this of the hiding spot's threatened point, cm. */
@@ -187,6 +202,16 @@ namespace PmcArenaBehaviourRules
 
 	/** The shooter stands at an overwatch roof spot (SpotRadiusCm, its floor). */
 	CODEXTACTICS_API bool IsAtOverwatchSpot(const FTacticalMapFile& File, const FTacticalRuntimeConfig& Config, const FVector& ShooterFeet);
+
+	/**
+	 * An overwatch kill: side 0 or 1, the hit is not older than WindowS (DeathTimeS - HitTimeS <= WindowS; a negative delta still
+	 * counts), and the shooter stood on an overwatch roof spot OR on his Overwatch post. Window, ambush, ladder and none do not.
+	 * An Overwatch post he has left, while he is not on a roof spot, does not.
+	 */
+	CODEXTACTICS_API bool CountsAsOverwatchKill(const FPmcOverwatchKillNote& Note, float DeathTimeS, float WindowS = OverwatchKillWindowS);
+
+	/** 1 when a walk onto a post was taken, else 0. A hold and a refused walk stay 0. */
+	CODEXTACTICS_API int32 PostMoveIncrement(bool bWalkTaken);
 
 	/**
 	 * The G002 rich object: { "schema", "side", "tactical_map", "metrics": { <key>: { name, unit, range [min, max], direction, value } } }
