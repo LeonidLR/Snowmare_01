@@ -43,4 +43,4 @@ Syntax: `<owner> <task> -> <new owner>`, one per line. Designer re-plan 2026-11-
 - gemini 088 -> claude (Antigravity unavailable 2026-11-19; Sonnet subagent finishes its WIP)
 - claude (lead) -> grok G010 (2026-11-19: PmcRoofDefence 6/10 flake after G009)
 - claude (lead) -> gemini 092 + 093 (2026-11-20: TG building move carries props / tactical; paired A/B digest)
-- claude (lead) -> grok G011 then G012 (2026-11-20: arena dead metrics; draught = outdoor cold + campfire shelter threshold)
+- claude (lead) -> grok G011 then G012 (2026-11-20: arena dead metrics; G012 then done by claude - designer: Grok budget 83 %)
