@@ -129,7 +129,17 @@ rule = T-08. Lead recommends (1) as an experiment with the default staying off.
 Sections / landings / flats / lobbies / slots, story 4 by flat column, `dead_end` tags; flat doors closed (designer), balconies only with
 fire escapes (designer). TS 650 -> 664, Python 60; plans-off golden byte-identical; property: 864 blocks planned, 0 validator issues, 0 %
 fallback. Review gate for the designer: docs/design/levelgen/S2_3_PLANS.md (ASCII plans, questions B1-B5) - sent to his phone; S2.4 waits.
-Engine check NOT run yet (needs slot1): the 1200-core landing navmesh + a planned X6-style build (`levelgen_build_map.ps1` with plans).
+**Engine check (throwaway origin/worker/bgen-s23-engine 4ab3effb):** planned gen_bgen_test_x6 (generator test map, not the designer's
+Depot X6: 52 buildings, 15 planned) + a fixture map L_Gen_BgenPlans (36 m blocks B_x / B_y with two sections, 18 / 20 m blocks, offices with a
+1000-1200 core bay). PASS: flat doors -> closed leaf actors (45 + 17 on the fixture, 106 on X6), two cores per 36 m block, full-depth section
+wall, balcony slot windows, LevelGenBuildingsSmoke 9/9 and 41/41 (every entry -> room / landing / roof path complete, incl. the 1100-1200
+core offices), 1 navmesh island per planned building (new LevelGenIslandsProbe), Bot.Route tests 8/8 incl. ParseMantle.
+FAIL: LevelGenRampSmoke (fixture 18/25, X6 27/49 - planned block stair_0 legs time out with a complete path), LevelGenRouteSmoke (X6 8/25,
+same as the 11-18 note: bot / movement regression), Ladders X6 44/46 (known rotated gallery).
+Defects: (1) builder crash - UE 5.8 Python has no set_can_ever_affect_navigation, no /2 map with a closed door leaf could be saved: FIXED,
+ported to worker/bgen-firing-gaps d48f165b; (2) door leaves lose pawn IGNORE after the bake re-save (pawn BLOCK) - leading suspect for the
+stair timeouts: diagnosis + fix running (Sonnet, throwaway worker/bgen-door-leaf); (3) planned office with a west entry (B_o12w) STUCK;
+(4) 10.2 x 9.4 m 2-storey office falls back to BSP (depth < 1000, probably intended).
 
 ## T-022 Training Ground map edit + F11 (worker/t022-tg-map-edit 7be7d2d2, from main; TS only)
 Bigger plan (782x690 vs ~470x520), F11 / «На весь экран» full window with the layers drawer (zoom kept), drag-move of buildings with all
