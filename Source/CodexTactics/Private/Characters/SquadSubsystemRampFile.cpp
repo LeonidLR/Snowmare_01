@@ -305,8 +305,28 @@ void USquadSubsystem::UpdateHolderYield(AOperativeCharacter& Operative, const AO
 		WalkParams.AddIgnoredActor(Member.Get());
 	}
 	// A spot he walks straight to (nothing between: a spot behind the building's wall is a walk round through its door).
+	// 2026-11-20 (L_Gen_BgenPlans B_b20_stair_2 / B_o12w_stair_1): nor through a team-mate - the leader waits for him ("X steps out of his
+	// way") while his step is blocked by that waiting leader: neither moves, the 6 s cap re-holds the leader 2 s later. Only a walk
+	// through the team-mate's centre counts: the sum of both radii also refused steps that brush past (B_o12w_stair_0, 24 / 25).
 	const auto IsStraightWalk = [this, &Operative, &WalkParams](const FVector& To)
 	{
+		for (const TWeakObjectPtr<AOperativeCharacter>& Member : Members)
+		{
+			const AOperativeCharacter* Other = Member.Get();
+			if (!Other || Other == &Operative || FMath::Abs(RampFeetZ(*Other) - RampFeetZ(Operative)) > 120.f)
+			{
+				continue;
+			}
+			const FVector2D A(Operative.GetActorLocation());
+			const FVector2D B(To);
+			const FVector2D P(Other->GetActorLocation());
+			const FVector2D AB = B - A;
+			const double T = AB.SizeSquared() > 1.0 ? FMath::Clamp(FVector2D::DotProduct(P - A, AB) / AB.SizeSquared(), 0.0, 1.0) : 0.0;
+			if (FVector2D::Distance(A + AB * T, P) < Other->GetSimpleCollisionRadius())
+			{
+				return false;
+			}
+		}
 		FHitResult Hit;
 		const FVector Lift(0.f, 0.f, 50.f);
 		return !GetWorld()->LineTraceSingleByChannel(Hit, Operative.GetActorLocation() - FVector(0.f, 0.f, Operative.GetSimpleCollisionHalfHeight()) + Lift,
