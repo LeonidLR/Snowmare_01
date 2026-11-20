@@ -13,6 +13,7 @@
 #include "Engine/TextureRenderTarget2D.h"
 #include "GlobalRenderResources.h"
 #include "HAL/PlatformTime.h"
+#include "LevelGen/MissionGoalsSubsystem.h"
 #include "TextureResource.h"
 #include "UI/MinimapSubsystem.h"
 
@@ -182,6 +183,31 @@ void ACodexTacticsHUD::DrawMapView(UMinimapSubsystem& Minimap, const FMinimapVie
 		if (MinimapRules::ClipSegmentToRect(A, B, Rect))
 		{
 			DrawLine(A.X, A.Y, B.X, B.Y, FLinearColor(0.85f, 0.92f, 1.f, 0.75f), 1.5f);
+		}
+	}
+
+	// Mission goal zones (designer 2026-11-20: a goal is a ZONE - its room or its RadiusCm circle - not a point), under the icons;
+	// red while the squad stands in it with a resisting enemy (blocked). The objective diamond stays on top as the pointer.
+	if (const UMissionGoalsSubsystem* Goals = GetWorld()->GetSubsystem<UMissionGoalsSubsystem>(); Goals && Goals->IsActive())
+	{
+		for (int32 Index = 0; Index < Goals->GetGoalCount(); ++Index)
+		{
+			if (Goals->IsGoalReached(Index))
+			{
+				continue;
+			}
+			const bool bBlocked = Goals->IsGoalBlocked(Index);
+			const FLinearColor Color = bBlocked ? FLinearColor(1.f, 0.18f, 0.12f, 0.95f) : FLinearColor(1.f, 0.55f, 0.08f, 0.85f);
+			const TArray<FVector> Outline = MissionGoalsRules::BuildZoneOutline(Goals->GetGoals()[Index], 32);
+			for (int32 Corner = 0; Corner < Outline.Num(); ++Corner)
+			{
+				FVector2D A = View.MapToScreen(Minimap.GetProjection().WorldToMap(Outline[Corner]));
+				FVector2D B = View.MapToScreen(Minimap.GetProjection().WorldToMap(Outline[(Corner + 1) % Outline.Num()]));
+				if (MinimapRules::ClipSegmentToRect(A, B, Rect))
+				{
+					DrawLine(A.X, A.Y, B.X, B.Y, Color, bBlocked ? 2.5f : 1.5f);
+				}
+			}
 		}
 	}
 

@@ -18,7 +18,10 @@ DECLARE_DYNAMIC_MULTICAST_DELEGATE(FOnMissionGoalsComplete);
  * Each unreached goal has a world marker (AMissionGoalMarkerActor, the orange hologram) and therefore a minimap objective icon; the HUD
  * draws "GOALS: n/N" under the objective banner (GetHudLine). A goal is REACHED when a living squad operative's feet stand within its
  * radius (2D, same floor) - a room goal: inside its room (MissionGoalsRules::IsAtGoal); "free" order = any order, "sequence" = only
- * the next one. Each reached goal hides its marker, posts a radio line and raises GameplayEvents::MissionGoalReached on the event bus
+ * the next one. ZONE CLEAR (designer 2026-11-20): a goal does not count while a RESISTING hostile (an "Enemy"-tagged actor - monster or
+ * hostile PMC fighter - alive, not dying / killed in action, seen or not) stands in its zone (the same zone test); the squad standing
+ * in a contested zone is BLOCKED (HUD "CLEAR THE ZONE", a radio line, the zone drawn red) and the goal counts once the zone is clear.
+ * The HUD and the minimap draw every unreached goal as its zone (MissionGoalsRules::BuildZoneOutline: the room or a RadiusCm circle). Each reached goal hides its marker, posts a radio line and raises GameplayEvents::MissionGoalReached on the event bus
  * (UCodexEventBus::OnGameplayEvent / Detailed) plus OnGoalReached; when the last is reached, GameplayEvents::MissionGoalsComplete,
  * OnGoalsComplete and the EXISTING level end: ULevelExitSubsystem::CompleteLevel (mission complete, fade, next level / menu).
  * Codex.MissionGoals.Enabled 0 switches it off. UE-only (the Godot archive had no generated maps).
@@ -49,6 +52,15 @@ public:
 	bool AreAllReached() const { return bActive && MissionGoalsRules::AreAllReached(Reached); }
 
 	bool IsGoalReached(int32 Index) const { return Reached.IsValidIndex(Index) && Reached[Index]; }
+
+	/** A resisting hostile stands in the goal's zone (as of the last check). Internal truth - the HUD shows only IsGoalBlocked. */
+	bool IsGoalContested(int32 Index) const { return Contested.IsValidIndex(Index) && Contested[Index]; }
+
+	/** The squad stands in the countable goal's zone but it does not count: the zone is contested (as of the last check). */
+	bool IsGoalBlocked(int32 Index) const { return Blocked.IsValidIndex(Index) && Blocked[Index]; }
+
+	/** Some goal is blocked now (the HUD's "CLEAR THE ZONE"). */
+	bool IsAnyGoalBlocked() const { return Blocked.Contains(true); }
 
 	/** The goal may count now (unreached; in a sequence the next one). */
 	bool CanGoalCount(int32 Index) const { return MissionGoalsRules::CanCount(File.Order, Reached, Index); }
@@ -97,8 +109,17 @@ private:
 	void HandleReached(int32 GoalIndex, AOperativeCharacter* Operative);
 	void HandleAllReached(AOperativeCharacter* LastOperative);
 
+	/** The hostiles of the world as the zone-clear rule sees them (the "Enemy"-tagged actors). */
+	void GatherHostiles(TArray<FMissionGoalHostile>& OutHostiles) const;
+	/** Stores the contested / blocked state of this check; posts the radio line when a goal becomes blocked. */
+	void UpdateZoneState(TConstArrayView<FVector> ResistingFeet, TConstArrayView<int32> BlockedGoals);
+
 	FMissionGoalsFile File;
 	TArray<bool> Reached;
+	TArray<bool> Contested;
+	TArray<bool> Blocked;
+	/** The radio line of this contested spell was posted (cleared when the zone stops being contested). */
+	TArray<bool> BlockAnnounced;
 	FString LoadedPath;
 	bool bActive = false;
 	bool bCompleted = false;

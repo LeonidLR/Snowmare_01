@@ -528,6 +528,7 @@ void ACodexTacticsHUD::DrawHUD()
 	{
 		DrawHitChanceLabel();
 	}
+	DrawMissionGoalZones();
 	DrawSelectionBox();
 	DrawCoverSwitchPreview();
 	DrawSquadMovePreview();
@@ -1640,8 +1641,55 @@ float ACodexTacticsHUD::DrawMissionGoalsLine(float Top)
 	const float Height = H + 12.f;
 	DrawRect(ObjectiveFrameColor, Left - 2.f, LineTop - 2.f, Width + 4.f, Height + 4.f);
 	DrawRect(ObjectivePanelColor, Left, LineTop, Width, Height);
-	DrawText(Text, Goals->AreAllReached() ? FLinearColor(0.45f, 1.f, 0.5f) : ObjectiveTextColor, Left + 12.f, LineTop + 6.f, Font, 1.f);
+	const FLinearColor GoalsLineColor = Goals->AreAllReached() ? FLinearColor(0.45f, 1.f, 0.5f)
+		: (Goals->IsAnyGoalBlocked() ? FLinearColor(1.f, 0.35f, 0.28f) : ObjectiveTextColor); // red: "CLEAR THE ZONE"
+	DrawText(Text, GoalsLineColor, Left + 12.f, LineTop + 6.f, Font, 1.f);
 	return LineTop + Height + 2.f;
+}
+
+void ACodexTacticsHUD::DrawMissionGoalZones()
+{
+	const UMissionGoalsSubsystem* Goals = GetWorld()->GetSubsystem<UMissionGoalsSubsystem>();
+	if (!Goals || !Goals->IsActive() || !Canvas)
+	{
+		return;
+	}
+	const FLinearColor ZoneColor(1.f, 0.55f, 0.08f, 0.85f);
+	const FLinearColor BlockedColor(1.f, 0.18f, 0.12f, 0.95f);
+	constexpr float LiftCm = 6.f; // just above the floor, under the feet
+	UFont* Font = GEngine->GetSmallFont();
+	for (int32 Index = 0; Index < Goals->GetGoalCount(); ++Index)
+	{
+		if (Goals->IsGoalReached(Index))
+		{
+			continue;
+		}
+		const FMissionGoal& Goal = Goals->GetGoals()[Index];
+		const bool bBlocked = Goals->IsGoalBlocked(Index);
+		const FLinearColor& Color = bBlocked ? BlockedColor : ZoneColor;
+		const TArray<FVector> Outline = MissionGoalsRules::BuildZoneOutline(Goal, 40);
+		for (int32 Corner = 0; Corner < Outline.Num(); ++Corner)
+		{
+			const FVector A = Project(Outline[Corner] + FVector(0.f, 0.f, LiftCm), true);
+			const FVector B = Project(Outline[(Corner + 1) % Outline.Num()] + FVector(0.f, 0.f, LiftCm), true);
+			if (A.Z > 0.f && B.Z > 0.f)
+			{
+				DrawLine(A.X, A.Y, B.X, B.Y, Color, bBlocked ? 3.f : 2.f);
+			}
+		}
+		if (bBlocked)
+		{
+			const FVector Centre = Project(Goal.Location + FVector(0.f, 0.f, LiftCm), true);
+			if (Centre.Z > 0.f)
+			{
+				const FString Text = TEXT("ENEMY IN ZONE");
+				float W = 0.f;
+				float H = 0.f;
+				GetTextSize(Text, W, H, Font, 1.f);
+				DrawText(Text, BlockedColor, Centre.X - W * 0.5f, Centre.Y - H * 0.5f, Font, 1.f);
+			}
+		}
+	}
 }
 
 void ACodexTacticsHUD::DrawSquadPanel(float Top)

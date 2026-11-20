@@ -314,6 +314,11 @@ private:
 	float DrawObjectiveBanner();
 	/** F-4 «а»: "GOALS: n/N" of a generated map's mission goals (UMissionGoalsSubsystem) under the banner; returns the bottom (Top without goals). */
 	float DrawMissionGoalsLine(float Top);
+	/**
+	 * Designer 2026-11-20: every unreached mission goal as its ZONE on the ground (MissionGoalsRules::BuildZoneOutline: the room or a
+	 * RadiusCm circle), orange; red with "ENEMY IN ZONE" while the squad stands in it and a resisting enemy too (blocked).
+	 */
+	void DrawMissionGoalZones();
 	void DrawSquadPanel(float Top);
 	void DrawOperativeLabels();
 	/** Floating combat texts (UFloatingTextSubsystem; Godot Label3D _spawn_floating_combat_text). */
