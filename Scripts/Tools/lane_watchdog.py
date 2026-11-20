@@ -28,6 +28,15 @@ import sys
 from pathlib import Path
 
 REPO = Path(__file__).resolve().parents[2]
+
+# The scheduled task runs under pythonw (no console): every console child (git, ssh, python) would open its own window every 10 min
+# (designer 2026-11-20: "окна PowerShell постоянно выскакивают"). CREATE_NO_WINDOW keeps them hidden.
+_NO_WINDOW = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+
+
+def _run(*args, **kwargs):
+    kwargs.setdefault("creationflags", _NO_WINDOW)
+    return subprocess.run(*args, **kwargs)
 REGISTRY = REPO / "docs" / "port" / "LANES.json"
 OUT_DIR = REPO / "Saved" / "Lanes"
 CHAT = REPO / "Saved" / "AgentChat" / "chat.jsonl"
@@ -67,9 +76,9 @@ def last_commit(branch: str, fetched: set[str]) -> dt.datetime | None:
     if not branch:
         return None
     if branch not in fetched:
-        subprocess.run(["git", "-C", str(REPO), "fetch", "-q", "origin", branch], capture_output=True, timeout=120)
+        _run(["git", "-C", str(REPO), "fetch", "-q", "origin", branch], capture_output=True, timeout=120)
         fetched.add(branch)
-    r = subprocess.run(["git", "-C", str(REPO), "log", "-1", "--format=%cI", f"origin/{branch}"], capture_output=True, text=True)
+    r = _run(["git", "-C", str(REPO), "log", "-1", "--format=%cI", f"origin/{branch}"], capture_output=True, text=True)
     return parse_ts(r.stdout.strip()) if r.returncode == 0 and r.stdout.strip() else None
 
 
@@ -86,7 +95,7 @@ def ssh_mtime(spec: dict) -> dt.datetime | None:
     """Last write time (UTC) of a file on another machine: {"host": "codex-worker", "path": "C:/..."}; None when unreachable."""
     cmd = f"powershell -NoProfile -Command \"(Get-Item '{spec['path']}').LastWriteTimeUtc.ToString('o')\""
     try:
-        r = subprocess.run(["ssh", "-o", "ConnectTimeout=8", "-o", "BatchMode=yes", spec["host"], cmd], capture_output=True, text=True, timeout=40)
+        r = _run(["ssh", "-o", "ConnectTimeout=8", "-o", "BatchMode=yes", spec["host"], cmd], capture_output=True, text=True, timeout=40)
     except (subprocess.TimeoutExpired, OSError):
         return None
     return parse_ts(r.stdout.strip()) if r.returncode == 0 else None
@@ -122,7 +131,7 @@ def evaluate(lane: dict, commit_ts: dt.datetime | None, chat_ts: dt.datetime | N
 
 
 def post(text: str) -> None:
-    subprocess.run([sys.executable, str(REPO / "Scripts" / "Tools" / "agent_chat.py"), "post", "--as", "claude", "--to", "all",
+    _run([sys.executable, str(REPO / "Scripts" / "Tools" / "agent_chat.py"), "post", "--as", "claude", "--to", "all",
                     "--topic", "lanes", "--text", text], capture_output=True, timeout=60)
 
 
