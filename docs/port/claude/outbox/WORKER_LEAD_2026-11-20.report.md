@@ -118,8 +118,9 @@ point, fix the roles (T-08)"; Fable found OQ-22 (b) already allows the goal to b
 A-00A scores lethality, not holding. Garrison experiment (positions that see the point, <= 0.5 x range) FAILED its pre-set gate:
 crossroads wins 53 / 143 (main 82), captures 46 (17), attackers killed per round 1.46 (1.99); alley 16 / 38 / 0.63 (main 16 / 40 / 0.67);
 code ships inert (4398591c). Dead arena metrics: owKills and postMoves are 0 in all 750 rows - fix before the T-10 gate relies on them.
-Designer questions still open (Fable): does a generated-map goal count as reached while defenders are alive near it (today: instant at 3 m)?
-Show a defended goal as a zone on the HUD / minimap?
+4. «Нет, не засчитывается. Только после зачистки зоны от противника.» -> a generated-map mission goal is NOT reached while enemies are alive
+   in its zone (today UMissionGoalsSubsystem counts it when an operative steps within 3 m) - a game task (mission goals + room / yard zones).
+5. «Да» -> a defended goal is shown as a ZONE on the HUD and the minimap (UX: MINIMAP.md has no zone concept yet) - a game / UI task.
 
 ## T-05 paired A/B (the night loop's own seeds 1060-1209, main 19a90f52 = the merge-base) + the cause
 Defender (side A) wins, paired seeds: Crossroads main 82 / 143 -> T-05 5544431a 32 / 143 (discordant 58 vs 8), attacker objective
