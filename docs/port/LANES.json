@@ -5,14 +5,13 @@
    "id": "T-05",
    "title": "smart enemies: firing positions",
    "owner": "worker stand-in",
-   "branch": "worker/t05-firing-positions",
+   "branch": "worker/t08-holder-fallback",
    "topic": "claude-T005",
-   "state": "waiting",
+   "state": "active",
    "max_quiet_min": 45,
    "worktree": "C:/Work/CodexTactics-slot1",
    "machine": "worker",
-   "reason": "defence_use OFF by default (7a0af436): every phase-b variant lost on paired defender wins; designer asked: garrison experiment / keep off until T-08",
-   "max_wait_min": 900
+   "reason": "designer decisions 11-20: defence = destroy the group; T-08 slice holder-in-zone + fall-back (rules 1/2/4) under paired A/B vs main"
   },
   {
    "id": "T-020",

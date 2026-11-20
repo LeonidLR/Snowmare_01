@@ -103,6 +103,24 @@ Designer order 11-19 evening: generator + smart enemies first, Training Ground a
 **Now:** S2.3 block archetype (Sonnet, TS only, worktree C:/Work/CodexTactics-slot1/Saved/wt-bgen so it never switches slot1);
 paired A/B of T-05 5544431a vs main on the night loop's own seeds 1060-1209 (150 per scenario) running in slot1.
 
+## DESIGNER DECISIONS 2026-11-20 night - objective defence (binding for T-05 / T-08)
+1. «В обороне любых участков есть только одна основная задача - уничтожение группы противника. Все остальное - это то, как это сделать.
+   Удержание точки, или зоны, невозможно, если в твоей зоне есть солдаты противника которые сопротивляются.» -> defence AI is judged first
+   by attackers killed per round / the attacker group destroyed (GDD A-00A criterion 5); positions / crossfire / idle are the "how".
+2. «Видеть точку - не значит захватить ее.» -> holding = physically inside the zone, alive; no "sees the point" counting; the arena rule
+   (attackers hold only with no live defender inside) stays; the zone is NOT enlarged to fit firing positions.
+3. Scheme: a covered HOLDER physically in the zone + HAMMERS destroy the group on the approach + FALL BACK into the zone. Fall-back rules
+   approved («Давай»): (1) holder down / zone emptying with attackers near; (2) ambush bypassed; (4) not in time for the capture; never while
+   >= 2 of 3 attackers are down, not before the opening fire; bounding, never across the kill zone, to a covered post inside the zone.
+   Rule (3) "position discovered" = next step. Implementation: worker/t08-holder-fallback (Sonnet, running).
+Process: studio discussion (5 Sonnet specialists: game / level / AI / QA / UX) + Fable head-of-studio arbitration -> verdict "keep the
+point, fix the roles (T-08)"; Fable found OQ-22 (b) already allows the goal to be empty when bypassed with a fall-back (PL-12), and that
+A-00A scores lethality, not holding. Garrison experiment (positions that see the point, <= 0.5 x range) FAILED its pre-set gate:
+crossroads wins 53 / 143 (main 82), captures 46 (17), attackers killed per round 1.46 (1.99); alley 16 / 38 / 0.63 (main 16 / 40 / 0.67);
+code ships inert (4398591c). Dead arena metrics: owKills and postMoves are 0 in all 750 rows - fix before the T-10 gate relies on them.
+Designer questions still open (Fable): does a generated-map goal count as reached while defenders are alive near it (today: instant at 3 m)?
+Show a defended goal as a zone on the HUD / minimap?
+
 ## T-05 paired A/B (the night loop's own seeds 1060-1209, main 19a90f52 = the merge-base) + the cause
 Defender (side A) wins, paired seeds: Crossroads main 82 / 143 -> T-05 5544431a 32 / 143 (discordant 58 vs 8), attacker objective
 captures 17 -> 86; Alley main 16 / 133 -> 21 / 133, captures 40 -> 76. 150-seed medians of 5544431a: Crossroads on_pos 0.67 / idle 1.8 /
