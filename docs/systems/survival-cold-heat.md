@@ -150,6 +150,10 @@ camera zones (the X6 map holds 0 of them), so every generated building was open 
 - Base multiplier = `leak * leak_to_cold` (1.0): all sealed 0 (the cold then warms, like a Closed zone), a fully open building 1.
 - Draught: within `draught_full_m` (3.5 m) of an open opening on the SAME storey the multiplier is 1, falling linearly to the base at
   `draught_fade_m` (10 m). Indoor multiplier = max(base, draught). Openings on other storeys only count in the leak.
+- These are shares of the OUTDOOR cold (G012, 2026-11-20): the zone multiplier indoors = indoor multiplier x the wave's `cold_drain_mult`,
+  so by an open door it is exactly the street's cold in a storm wave too (it was a hard 1). The weather multiplier applies after it, the
+  same indoors and out (`ColdRules::CombineZoneWeather`). A campfire's "indoors" (`ACampfireActor::IsIndoors`) only lowers its noise
+  radius - walls muffle sound whatever the windows - so it stays "inside any layout building", no leak threshold (lead decision, G012).
 - Live state: `UColdShelterSubsystem::SetOpeningOpen(BuildingId, OpeningId, bOpen)` / `SetOpeningOpenAt(XY, Storey, Radius, bOpen)` recomputes ONE
   building's leak and fires `OnLeakChanged` (no per-tick scan). No door / window / breach actor exists at runtime yet (generated doors are wall
   gaps, windows holes), so the layout states are the initial state and the setters are the hook for them.

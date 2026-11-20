@@ -263,6 +263,19 @@ bool FColdShelterZoneWinsTest::RunTest(const FString&)
 	TestEqual(TEXT("a Closed camera zone (0) beats the open outside"), ColdShelterRules::ResolveZoneMultiplier(true, 0.f, Outside, 1.f), 0.f);
 	TestEqual(TEXT("no zone, in the sealed hall: 0"), ColdShelterRules::ResolveZoneMultiplier(false, 1.f, Sealed, 1.f), 0.f);
 	TestEqual(TEXT("no zone, outside: the wave's multiplier unchanged (hand-made maps / today)"), ColdShelterRules::ResolveZoneMultiplier(false, 1.f, Outside, 1.5f), 1.5f);
+	// G012 (2026-11-20): the indoor multiplier is a share of the outdoor cold - by an open door exactly the street, a storm wave included.
+	FColdShelterSample ByDoor;
+	ByDoor.Building = 0;
+	ByDoor.Leak = 0.5f;
+	ByDoor.Base = 0.5f;
+	ByDoor.Multiplier = 1.f;
+	TestEqual(TEXT("by an open door in a 2.5 storm wave: 2.5, as on the street (was 1)"), ColdShelterRules::ResolveZoneMultiplier(false, 1.f, ByDoor, 2.5f), 2.5f);
+	TestEqual(TEXT("by an open door in a calm 1.0 wave: 1"), ColdShelterRules::ResolveZoneMultiplier(false, 1.f, ByDoor, 1.f), 1.f);
+	FColdShelterSample Deep = ByDoor;
+	Deep.Multiplier = 0.5f;
+	TestEqual(TEXT("deep inside a half-leaking building in a 2.0 wave: half the street (1.0)"), ColdShelterRules::ResolveZoneMultiplier(false, 1.f, Deep, 2.f), 1.f);
+	TestEqual(TEXT("a sealed hall stays 0 in a storm wave"), ColdShelterRules::ResolveZoneMultiplier(false, 1.f, Sealed, 2.5f), 0.f);
+	TestEqual(TEXT("a warm 0 wave: 0 indoors too"), ColdShelterRules::ResolveZoneMultiplier(false, 1.f, ByDoor, 0.f), 0.f);
 	return true;
 }
 
