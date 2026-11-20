@@ -426,13 +426,22 @@ export const PropsPanel: React.FC<PropsPanelProps> = ({ mapName, propsId, onDirt
       return;
     }
 
+    // Designer bug 2026-11-20: the current map (L_Gen_BgenTest_X6) has no props file, the canvas still held another map's props
+    // (L_Gen_Depot_1_X6) and «Сохранить» sent map="" -> "Invalid props map name". Save into the file's OWN map, after asking.
+    const target = selectedMap || propsFile.map || '';
+    if (!target) {
+      setError('Не понятно, в какую карту сохранять: у текущей карты нет файла пропсов. Выберите карту с файлом пропсов сверху.');
+      return;
+    }
+    if (target !== selectedMap && !window.confirm(`На экране пропсы карты ${target}, а у текущей карты ${mapName ?? ''} своего файла пропсов нет.\n\nСохранить правки в пропсы карты ${target}?`)) return;
+
     setBusy('Сохранение на диск...');
     setError('');
     setConflict(null);
     setSaveSuccess('');
 
     try {
-      const response = await fetch(`/api/levelgen/props?map=${encodeURIComponent(selectedMap)}`, {
+      const response = await fetch(`/api/levelgen/props?map=${encodeURIComponent(target)}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
