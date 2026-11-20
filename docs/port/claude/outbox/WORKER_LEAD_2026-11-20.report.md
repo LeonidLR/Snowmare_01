@@ -113,7 +113,17 @@ by capture (no defender on the point when the attackers first arrive: 72 of 112 
 hammers take positions and the others keep their G008 role; the code seated every sector shooter. Mid-fight re-assignment on each death
 is real (survivors move 11 m in 5 s vs 5 m) but not the main cause.
 Fix c3cc6f3e (`keep_occupier`, default true): on a ground objective the shooter whose G008 post is nearest the point keeps it.
-Paired A/B of c3cc6f3e on the same seeds: running (result below when it lands).
+Paired A/B of c3cc6f3e (same seeds): crossroads defender wins 44 / 143 (main 82, 5544431a 32), captures 69 (main 17), idle_max p50 10.7 s;
+alley wins 20 / 133 (main 16), captures 53 (main 40). Diagnosis of c3cc6f3e (track files): the kept occupier sits at his post 4 m from the
+point in the open (98 % of samples not in cover), dies at a median 4 m to the three attackers walking in together while the two hammers are
+~21 m away; lethality fell (attackers killed per round main 1.99 / c3cc6f3e 1.35).
+**Decision (stand-in lead, 7a0af436): `defence_use` = false by default** (JSON + C++ default): objective defence behaves as on main; the
+positions layer, its tests and FiringPositionSmoke stay behind the flag; T-08 decides who holds the point. Gate of 7a0af436: build OK,
+FiringPosition 12/12, Pmc 70/70, 6 smokes PASS; PmcStalemateSmoke FAILED twice under -Jobs 3 + night loop load (decision churn 20.25 > 20,
+same order re-decided 12 / 9 > 6) and PASSES 4 / 4 alone (churn 9-13) - a load-sensitive smoke, worth a look by the main lead.
+**Question to the designer (sent 11-20 night):** (1) "garrison" positions (must see the point, <= 0.5 x weapon range) as an overnight
+paired experiment, switched on only if defender wins >= ~70 / 143; (2) keep it off until T-08; (3) approach ambush (DS-00A) with a fall-back
+rule = T-08. Lead recommends (1) as an experiment with the default staying off.
 
 ## S2.3 block archetype (worker/bgen-firing-gaps 0ada99f1; TS + Python mirror, no engine)
 Sections / landings / flats / lobbies / slots, story 4 by flat column, `dead_end` tags; flat doors closed (designer), balconies only with
@@ -129,6 +139,14 @@ coalesced); checks after every move show only problems the move ADDED; dirty fla
 npm test 541 -> 558, typecheck clean. Headless Edge check on L_Gen_Depot_1 (nothing accepted / saved): screenshots in
 docs/port/claude/outbox/T022/ on that branch. Review points: the move permission for buildings / bridges is in code (MAP_MOVE), not in
 layers.json (Content/Data was off limits); building rotation by gesture not done; props / tactical do not follow a moved building (listed stale).
+
+## T-023 Training Ground props editing (worker/t023-tg-props-edit 77fbb349 + 9939529c, on top of T-022; TS only)
+Zoom (wheel at cursor, buttons, %), pan, «Вписать», F11 / Esc via the T-022 helper; zone re-roll by box / polygon / lasso (RegionOverlay):
+only new objects inside the zone, outside / locked / pinned / pmc_charges byte-identical, 088 clearance + validator judge the new ones (power
+layer skipped: map-wide); drag / nudge a prop with walk-surface snap and auto lock; validation card; undo / redo; unsaved-edit guards on
+tab / department / map switch + beforeunload; persistence via the existing «Сохранить». npm test 558 -> 579 (578 pass; combatSim
+"10-min run took 1056 ms" wall-clock test failed once under load, 20 / 20 alone), typecheck clean. Headless Edge check on L_Gen_Test_X2:
+screenshots docs/port/claude/outbox/T023/; the saved props file restored by git checkout (sha256 matched), current_map.json restored.
 
 ## T-021 cold indoors - DONE, merged into this branch (34c832ab)
 worker/t021-cold-indoors 86ef2882 (from claude/cold-indoors 01c6cb01 + main). Leafless doorway = open (designer 11-19), test 6/14.

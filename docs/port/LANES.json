@@ -7,11 +7,12 @@
    "owner": "worker stand-in",
    "branch": "worker/t05-firing-positions",
    "topic": "claude-T005",
-   "state": "active",
+   "state": "waiting",
    "max_quiet_min": 45,
    "worktree": "C:/Work/CodexTactics-slot1",
    "machine": "worker",
-   "reason": "paired A/B showed defenders lose (point left empty); fix c3cc6f3e keep_occupier under paired A/B on seeds 1060-1209"
+   "reason": "defence_use OFF by default (7a0af436): every phase-b variant lost on paired defender wins; designer asked: garrison experiment / keep off until T-08",
+   "max_wait_min": 900
   },
   {
    "id": "T-020",
@@ -42,12 +43,11 @@
    "owner": "worker stand-in",
    "branch": "worker/bgen-firing-gaps",
    "topic": "claude-S022",
-   "state": "waiting",
+   "state": "active",
    "max_quiet_min": 60,
    "worktree": "C:/Work/CodexTactics-slot1/Saved/wt-bgen",
    "machine": "worker",
-   "reason": "S2.3 done 0ada99f1; S2.4 waits for the designer review of S2_3_PLANS.md (B1-B5); engine check queued for slot1",
-   "max_wait_min": 900
+   "reason": "S2.3 engine check on throwaway worker/bgen-s23-engine in slot1; S2.4 waits for the designer review (B1-B5)"
   },
   {
    "id": "worker-night",
@@ -68,10 +68,10 @@
    "id": "T-022/023",
    "title": "TG map + props editing (F11, move elements, zone props re-roll)",
    "owner": "worker stand-in",
-   "branch": "worker/t022-tg-map-edit",
+   "branch": "worker/t023-tg-props-edit",
    "topic": "claude-T022",
-   "state": "active",
-   "reason": "T-022 done 7be7d2d2 (tests 558, headless check); T-023 next",
+   "state": "done",
+   "reason": "T-022 7be7d2d2 + T-023 9939529c done (tests 579, headless checks); main lead review",
    "machine": "worker",
    "worktree": "C:/Work/CodexTactics-slot1/Saved/wt-tg"
   }
