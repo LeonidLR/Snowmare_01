@@ -128,6 +128,11 @@ bool BuildingWalkRules::IsArrived(const FVector& Feet, const FVector& Goal, doub
 	return FVector::Dist2D(Feet, Goal) <= RadiusCm && FMath::Abs(Feet.Z - Goal.Z) <= ZToleranceCm;
 }
 
+bool BuildingWalkRules::IsFollowerIn(bool bSameStorey, bool bInFlat, bool bLeaderArrived, bool bSettled, double DistToLeaderCm, double MovedCm)
+{
+	return bSameStorey && (bInFlat || (bLeaderArrived && bSettled && DistToLeaderCm <= FormationReachCm && MovedCm >= FollowerMovedCm));
+}
+
 bool BuildingWalkRules::SquadWithinRatio(double SquadSeconds, double SoloSeconds, double MaxRatio)
 {
 	return SoloSeconds > 0.0 && SquadSeconds >= 0.0 && SquadSeconds <= MaxRatio * SoloSeconds;

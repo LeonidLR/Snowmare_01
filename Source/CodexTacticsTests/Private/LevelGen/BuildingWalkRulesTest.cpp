@@ -127,6 +127,14 @@ bool FBuildingWalkGatesTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("19 / 20 = 0.95"), BuildingWalkRules::PassesShare(19, 20, 0.95));
 	TestTrue(TEXT("minpass 0: any checked run passes"), BuildingWalkRules::PassesShare(0, 3, 0.0));
 	TestFalse(TEXT("nothing checked never passes"), BuildingWalkRules::PassesShare(0, 0, 0.0));
+	// Followers: in the flat, or settled in a formation slot (the column's 330 / 480 cm) by the arrived leader.
+	TestTrue(TEXT("in the flat"), BuildingWalkRules::IsFollowerIn(true, true, false, false, 900.0, 0.0));
+	TestFalse(TEXT("in the flat's XY on another storey"), BuildingWalkRules::IsFollowerIn(false, true, true, true, 100.0, 500.0));
+	TestTrue(TEXT("column slot 2, settled"), BuildingWalkRules::IsFollowerIn(true, false, true, true, 480.0, 400.0));
+	TestFalse(TEXT("slot distance but his move still running (a jam)"), BuildingWalkRules::IsFollowerIn(true, false, true, false, 330.0, 400.0));
+	TestFalse(TEXT("settled before the leader arrived"), BuildingWalkRules::IsFollowerIn(true, false, false, true, 330.0, 400.0));
+	TestFalse(TEXT("never left the start"), BuildingWalkRules::IsFollowerIn(true, false, true, true, 400.0, 20.0));
+	TestFalse(TEXT("left behind beyond the formation"), BuildingWalkRules::IsFollowerIn(true, false, true, true, 651.0, 400.0));
 	TestEqual(TEXT("leg limit 0 m"), BuildingWalkRules::LegLimitSeconds(0.0), 20.0);
 	TestEqual(TEXT("leg limit 30 m"), BuildingWalkRules::LegLimitSeconds(3000.0), 50.0);
 	return true;

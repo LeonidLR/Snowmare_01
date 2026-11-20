@@ -335,7 +335,7 @@ namespace LevelGenBuildingsSmoke
 		/** walk mode: also the flat entry legs (squad=0 skips them). */
 		bool bSquad = true;
 		/** walk mode: wall-clock budget of the whole run, seconds (under the runner's timeout). */
-		double BudgetSeconds = 1650.0;
+		double BudgetSeconds = 540.0;
 	};
 
 	void StartWalk(UWorld& World, const FOptions& Options, const TSharedPtr<FJsonObject>& Layout, const FJsonObjects& PathResults,
@@ -420,7 +420,6 @@ namespace LevelGenBuildingsSmoke
 	constexpr double TeleportSettleSeconds = 1.0;
 	constexpr double SoloHoldSeconds = 0.3;  // the leader within the arrival radius this long = arrived
 	constexpr double SquadHoldSeconds = 1.0; // every member ok this long = the squad is in
-	constexpr double FollowerNearLeaderCm = 250.0;
 
 	const TCHAR* LegKindName(ELegKind Kind)
 	{
@@ -501,6 +500,8 @@ namespace LevelGenBuildingsSmoke
 		FVector LastLeaderPos = FVector::ZeroVector;
 		TArray<FBuildingWalkProgress> Progress;
 		TArray<double> OkSince;
+		/** Each member's feet when the order was given (BuildingWalkRules::FollowerMovedCm). */
+		TArray<FVector> MemberStart;
 		bool bBudgetHit = false;
 	};
 
@@ -1064,6 +1065,14 @@ namespace LevelGenBuildingsSmoke
 		Walk.LastLeaderPos = LeaderFeet;
 		Walk.Progress.Init(FBuildingWalkProgress(), Walk.Members.Num());
 		Walk.OkSince.Init(-1.0, Walk.Members.Num());
+		Walk.MemberStart.Init(FVector::ZeroVector, Walk.Members.Num());
+		for (int32 Index = 0; Index < Walk.Members.Num(); ++Index)
+		{
+			if (const AOperativeCharacter* Operative = Member(Walk, Index))
+			{
+				Walk.MemberStart[Index] = Feet(*Operative);
+			}
+		}
 		Walk.Phase = EWalkPhase::Run;
 	}
 
@@ -1094,6 +1103,12 @@ namespace LevelGenBuildingsSmoke
 				continue;
 			}
 			const FVector At = Feet(*Operative);
+			const UPathFollowingComponent* Follow = nullptr;
+			if (const AAIController* AI = Cast<AAIController>(Operative->GetController()))
+			{
+				Follow = AI->GetPathFollowingComponent();
+			}
+			const bool bMoving = Follow && Follow->GetStatus() != EPathFollowingStatus::Idle;
 			bool bOk = bLeaderOk;
 			if (Index > 0)
 			{
@@ -1101,20 +1116,16 @@ namespace LevelGenBuildingsSmoke
 				const bool bStorey = FMath::Abs(At.Z - Leg.Goal.Z) <= BuildingWalkRules::ArriveZToleranceCm;
 				const bool bInFlat = bStorey && InFlat(Leg, Frame, At);
 				InFlatCount += bInFlat ? 1 : 0;
-				// A follower is in when he stands in the flat, or holds his formation slot by the arrived leader on that storey.
-				bOk = bStorey && (bInFlat || (bLeaderOk && FVector::Dist2D(At, LeaderFeet) <= FollowerNearLeaderCm));
+				// In the flat, or settled in his formation slot by the arrived leader (the column stops 330 / 480 cm behind him).
+				const bool bSettled = !bMoving && Operative->GetVelocity().Size2D() < 20.0;
+				bOk = BuildingWalkRules::IsFollowerIn(bStorey, bInFlat, bLeaderOk, bSettled, FVector::Dist2D(At, LeaderFeet),
+					FVector::Dist2D(At, Walk.MemberStart.IsValidIndex(Index) ? Walk.MemberStart[Index] : At));
 			}
 			double& Since = Walk.OkSince[Index];
 			Since = bOk ? (Since < 0.0 ? T : Since) : -1.0;
 			bAllOk &= bOk;
 			if (!bOk && Walk.Progress[Index].IsStuck(T, At, BuildingWalkRules::StuckMoveCm, BuildingWalkRules::StuckSeconds))
 			{
-				const UPathFollowingComponent* Follow = nullptr;
-				if (const AAIController* AI = Cast<AAIController>(Operative->GetController()))
-				{
-					Follow = AI->GetPathFollowingComponent();
-				}
-				const bool bMoving = Follow && Follow->GetStatus() != EPathFollowingStatus::Idle;
 				Leg.bStuck = true;
 				Leg.Seconds = Elapsed;
 				Leg.FollowersInFlat = InFlatCount;
@@ -1123,7 +1134,8 @@ namespace LevelGenBuildingsSmoke
 					Index == 0 ? TEXT("leader ") : TEXT("follower "), *Operative->DisplayName.ToString(),
 					bMoving ? TEXT("STUCK (move active)") : TEXT("STOPPED (no move order running)"), Elapsed, BuildingWalkRules::StuckSeconds,
 					FVector::Dist2D(At, Leg.Goal), At.Z - Leg.Goal.Z,
-					Index == 0 ? TEXT("") : *FString::Printf(TEXT(", %.0f cm from the leader"), FVector::Dist2D(At, LeaderFeet))), At);
+					Index == 0 ? *FString::Printf(TEXT(", his order to %s"), *Operative->GetLastMoveDestination().ToCompactString())
+						: *FString::Printf(TEXT(", %.0f cm from the leader"), FVector::Dist2D(At, LeaderFeet))), At);
 				return;
 			}
 			if (bOk)

@@ -65,6 +65,13 @@ namespace BuildingWalkRules
 	constexpr double MaxSquadRatio = 2.0;
 	/** S2.9 acceptance: share of passing buildings. */
 	constexpr double TargetMinPass = 0.95;
+	/**
+	 * A settled follower counts as in with the squad within this of the arrived leader: the formation's deepest default slot plus a margin
+	 * (FSquadFormationConfig: column 180 + 150 = 330 / 480 cm, triad rear 420, diamond rear 560 cm behind the leader).
+	 */
+	constexpr double FormationReachCm = 650.0;
+	/** ...and only when he walked at least this far in the leg (a man who never left the start is not "in"). */
+	constexpr double FollowerMovedCm = 100.0;
 
 	/**
 	 * The flat entries of a layout building: every units[] record of kind "flat" lists its entry opening ids; the opening is looked up
@@ -75,6 +82,13 @@ namespace BuildingWalkRules
 
 	CODEXTACTICS_API bool IsArrived(const FVector& Feet, const FVector& Goal, double RadiusCm = ArriveRadiusCm,
 		double ZToleranceCm = ArriveZToleranceCm);
+
+	/**
+	 * A follower of a squad leg is in: on the goal's storey and either inside the flat, or settled (no move running, standing) in his
+	 * formation slot by the arrived leader (DistToLeaderCm <= FormationReachCm) after walking at least FollowerMovedCm. A follower
+	 * with a move running is never "in" outside the flat: no progress for StuckSeconds there is a jam.
+	 */
+	CODEXTACTICS_API bool IsFollowerIn(bool bSameStorey, bool bInFlat, bool bLeaderArrived, bool bSettled, double DistToLeaderCm, double MovedCm);
 
 	/** Squad time within MaxRatio x the solo time (a failed / zero solo leg: false). */
 	CODEXTACTICS_API bool SquadWithinRatio(double SquadSeconds, double SoloSeconds, double MaxRatio = MaxSquadRatio);
