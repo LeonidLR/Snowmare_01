@@ -1561,7 +1561,11 @@ class Placer:
         SetCanEverAffectNavigation(false); "collision" {"pawn" | "visibility" | "camera": "block" | "ignore"} -> per-channel
         responses on top of the default BlockAll. Legacy specs carry neither key."""
         if spec.get("affects_navigation") is False:
-            comp.set_can_ever_affect_navigation(False)
+            # UE 5.8 Python does not expose SetCanEverAffectNavigation (engine check 2026-11-20): use the property when the setter is missing
+            if hasattr(comp, "set_can_ever_affect_navigation"):
+                comp.set_can_ever_affect_navigation(False)
+            else:
+                comp.set_editor_property("can_ever_affect_navigation", False)
         coll = spec.get("collision")
         if coll:
             channels = {"pawn": unreal.CollisionChannel.ECC_PAWN, "visibility": unreal.CollisionChannel.ECC_VISIBILITY,
