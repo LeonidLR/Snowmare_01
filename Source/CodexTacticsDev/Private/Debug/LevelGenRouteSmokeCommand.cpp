@@ -302,6 +302,21 @@ namespace LevelGenRouteSmoke
 		return 0.f; // the generated maps are built at ground_z 0 (build_levelgen_map.py)
 	}
 
+	/**
+	 * The smoke checks the route, not the cold (designer 2026-11-19): no frostbite collapse on the cold generated maps. Both walks call it
+	 * every step (2026-11-20: the bot route walk had no call - on L_Gen_BgenTest_X6 the squad went PRONE at ~110 s and crawled, 8 / 25).
+	 */
+	void KeepColdOff(USquadSubsystem* Squad)
+	{
+		for (AOperativeCharacter* Each : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
+		{
+			if (Each && Each->ColdSurvival && Each->ColdSurvival->IsComponentTickEnabled())
+			{
+				Each->ColdSurvival->SetComponentTickEnabled(false);
+			}
+		}
+	}
+
 	bool Step(UWorld* World, FState& State, float Dt)
 	{
 		if (State.Stage == EStage::Done)
@@ -310,14 +325,7 @@ namespace LevelGenRouteSmoke
 		}
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		AOperativeCharacter* Leader = Squad ? Squad->GetLeader() : nullptr;
-		// The smoke checks the route, not the cold (designer 2026-11-19): no frostbite collapse on the cold generated maps.
-		for (AOperativeCharacter* Each : Squad ? Squad->GetMembers() : TArray<AOperativeCharacter*>())
-		{
-			if (Each && Each->ColdSurvival && Each->ColdSurvival->IsComponentTickEnabled())
-			{
-				Each->ColdSurvival->SetComponentTickEnabled(false);
-			}
-		}
+		KeepColdOff(Squad);
 		if (!Leader)
 		{
 			Check(State, false, TEXT("a squad leader exists"));
@@ -420,6 +428,7 @@ namespace LevelGenRouteSmoke
 			return false;
 		}
 		State.Total += Dt;
+		KeepColdOff(World->GetSubsystem<USquadSubsystem>());
 #if CODEX_WITH_PLAYTEST_BOT
 		const UPlaytestBotSubsystem* Bot = World->GetSubsystem<UPlaytestBotSubsystem>();
 		if (!Bot || !Bot->IsRouteMode())
