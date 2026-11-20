@@ -62,6 +62,59 @@ namespace TacticalMapTestLocal
 		]
 	})json");
 
+	const TCHAR* const FixtureV2 = TEXT(R"json({
+		"schema": "codex.tactical_map/2", "map": "L_Gen_V2", "layout": "v2", "geometry_hash": "def", "analysis_version": 1, "analysis_source": "computed",
+		"conditions": { "weather": "rain", "time_of_day": "night" }, "ground_z": 100,
+		"thresholds": { "drop_reach_cm": 400, "window_range_m": 60, "sniper_range_m": 110, "reveal_close_m": 12, "detour_critical_m": 40, "min_score": 0.25, "ladder_only_factor": 0.65 },
+		"chokepoints": [
+			{ "id": "CP_01", "kind": "only_way", "tags": ["narrow"], "score": 0.9, "layer": "ground", "pos": [1000, 2000, 100],
+			  "line": [[1000, 1500, 100], [1000, 2500, 100]], "poly": [[900, 1500], [1100, 1500], [1100, 2500], [900, 2500]], "length_m": 10, "width_m": 2, "lane_m": 2,
+			  "route": "mandatory", "alternative": "none", "detour_m": null, "drop_spots": [], "windows": [], "overwatch": [], "hiding_spots": [],
+			  "reveal_m": null, "reveal_stealth_m": null, "building": "B_depot", "floor": 1 }
+		],
+		"drop_spots": [],
+		"windows": [
+			{ "id": "W_01", "building": "B_depot", "floor": 1, "layer": "floor:B_depot:1", "kind": "window", "pos": [1500, 2000, 400], "stand": [1560, 2000, 400], "yaw": 0,
+			  "covered_m": 50, "min_dist_m": 10, "places": [] }
+		],
+		"overwatch_roofs": [
+			{ "building": "B_tower", "layer": "roof:B_tower", "level": 2, "floor": 2, "z": 700, "height_cm": 600, "range_m": 110,
+			  "access": ["stair:s1"], "access_kind": "stairs",
+			  "access_points": [{ "id": "s1", "kind": "stairs", "top": [5000, 5000, 700] }],
+			  "ladder_only": false,
+			  "spots": [{ "pos": [5100, 5100, 700], "facing_yaw": 45, "covered_m": 500, "longest_los_m": 90, "building": "B_tower", "floor": 2 }], "places": [] }
+		],
+		"hiding_spots": [
+			{ "id": "HS_01", "layer": "ground", "pos": [1200, 2200, 100], "facing_yaw": 90, "reveal_normal_m": 5, "reveal_stealth_m": 3, "stealth_only": false, "blind": false,
+			  "rush_m": 5, "cover": "cover:crate", "cover_height_cm": 100, "threatens": { "line": "route:main", "pos": [1000, 2200, 100] },
+			  "building": "B_depot", "floor": 1 }
+		],
+		"ladder_only_roofs": [
+			{ "building": "B_shed", "layer": "roof:B_shed", "z": 400, "center": [3000, 3000, 400], "poly": [[2500, 2500], [3500, 2500], [3500, 3500], [2500, 3500]],
+			  "ladders": ["lad1"], "ladder_tops": [[2600, 3000, 400]],
+			  "access_points": [{ "id": "lad1", "kind": "ladder", "top": [2600, 3000, 400] }],
+			  "overwatch": false, "drop_spots": [] }
+		],
+		"walkable_roofs": [
+			{ "building": "B_tower", "layer": "roof:B_tower", "floor": 2, "z": 700, "ladder_only": false,
+			  "access": [{ "id": "s1", "kind": "stairs", "top": [5000, 5000, 700] }] },
+			{ "building": "B_shed", "layer": "roof:B_shed", "floor": 1, "z": 400, "ladder_only": true,
+			  "access": [{ "id": "lad1", "kind": "ladder", "top": [2600, 3000, 400] }] }
+		],
+		"open_crossings": [
+			{ "id": "OC_01", "route": "R_main", "start": [0, 0, 100], "end": [2000, 0, 100], "length_m": 20, "nearest_cover_cm": 350,
+			  "seeing_covers": ["COV_1", "COV_2"] }
+		],
+		"goal_sites": [
+			{ "goal_id": "GOAL_A", "cover_id": "COV_1", "pos": [500, 200, 100], "dist_m": 12.5, "facing_yaw": 90, "sector_arc_deg": 90,
+			  "cover_kind": "barrel", "cover_height_cm": 95 },
+			{ "goal_id": "GOAL_A", "cover_id": "COV_2", "pos": [800, 300, 100], "dist_m": 18, "facing_yaw": -45, "sector_arc_deg": 90,
+			  "cover_kind": "sandbag", "cover_height_cm": 100 },
+			{ "goal_id": "GOAL_B", "cover_id": "COV_3", "pos": [5000, 5000, 100], "dist_m": 8, "facing_yaw": 180, "sector_arc_deg": 90,
+			  "cover_kind": "wreck", "cover_height_cm": 140 }
+		]
+	})json");
+
 	FTacticalMapFile ParseTacticalOk(FAutomationTestBase& Test, const FString& Json)
 	{
 		FTacticalMapFile File;
@@ -129,6 +182,105 @@ bool FTacticalMapParseTest::RunTest(const FString&)
 	return true;
 }
 
+TACTICAL_MAP_TEST(FTacticalMapV2Test, "V2")
+bool FTacticalMapV2Test::RunTest(const FString&)
+{
+	using namespace TacticalMapTestLocal;
+	const FTacticalMapFile File = ParseTacticalOk(*this, FixtureV2);
+	TestEqual(TEXT("schema v2"), File.Schema, FString(TEXT("codex.tactical_map/2")));
+	TestEqual(TEXT("map"), File.Map, FString(TEXT("L_Gen_V2")));
+	TestEqual(TEXT("ground z"), File.GroundZ, 100.f);
+
+	// building and floor attribution
+	TestEqual(TEXT("1 place"), File.Chokepoints.Num(), 1);
+	if (File.Chokepoints.Num() >= 1)
+	{
+		TestEqual(TEXT("CP_01 building"), File.Chokepoints[0].Building, FString(TEXT("B_depot")));
+		TestEqual(TEXT("CP_01 floor"), File.Chokepoints[0].Floor, 1);
+	}
+	TestEqual(TEXT("1 hiding spot"), File.HidingSpots.Num(), 1);
+	if (File.HidingSpots.Num() >= 1)
+	{
+		TestEqual(TEXT("HS_01 building"), File.HidingSpots[0].Building, FString(TEXT("B_depot")));
+		TestEqual(TEXT("HS_01 floor"), File.HidingSpots[0].Floor, 1);
+	}
+	TestEqual(TEXT("1 overwatch roof"), File.OverwatchRoofs.Num(), 1);
+	if (File.OverwatchRoofs.Num() >= 1)
+	{
+		const FTacticalOverwatchRoof& R = File.OverwatchRoofs[0];
+		TestEqual(TEXT("roof floor"), R.Floor, 2);
+		TestEqual(TEXT("access points num"), R.AccessPoints.Num(), 1);
+		if (R.AccessPoints.Num() >= 1)
+		{
+			TestEqual(TEXT("access id"), R.AccessPoints[0].Id, FString(TEXT("s1")));
+			TestEqual(TEXT("access kind"), R.AccessPoints[0].Kind, FString(TEXT("stairs")));
+			TestEqual(TEXT("access top"), R.AccessPoints[0].Top, FVector(5000.0, 5000.0, 700.0));
+		}
+		TestEqual(TEXT("roof spots num"), R.Spots.Num(), 1);
+		if (R.Spots.Num() >= 1)
+		{
+			TestEqual(TEXT("spot building"), R.Spots[0].Building, FString(TEXT("B_tower")));
+			TestEqual(TEXT("spot floor"), R.Spots[0].Floor, 2);
+		}
+	}
+
+	// ladder-only roof access points
+	TestEqual(TEXT("1 ladder roof"), File.LadderOnlyRoofs.Num(), 1);
+	if (File.LadderOnlyRoofs.Num() >= 1)
+	{
+		TestEqual(TEXT("ladder access points num"), File.LadderOnlyRoofs[0].AccessPoints.Num(), 1);
+		if (File.LadderOnlyRoofs[0].AccessPoints.Num() >= 1)
+		{
+			TestEqual(TEXT("ladder access kind"), File.LadderOnlyRoofs[0].AccessPoints[0].Kind, FString(TEXT("ladder")));
+		}
+	}
+
+	// walkable roofs
+	TestEqual(TEXT("2 walkable roofs"), File.WalkableRoofs.Num(), 2);
+	if (File.WalkableRoofs.Num() >= 2)
+	{
+		TestEqual(TEXT("walkable 0 building"), File.WalkableRoofs[0].Building, FString(TEXT("B_tower")));
+		TestEqual(TEXT("walkable 0 floor"), File.WalkableRoofs[0].Floor, 2);
+		TestFalse(TEXT("walkable 0 ladder only"), File.WalkableRoofs[0].bLadderOnly);
+		TestEqual(TEXT("walkable 1 building"), File.WalkableRoofs[1].Building, FString(TEXT("B_shed")));
+		TestTrue(TEXT("walkable 1 ladder only"), File.WalkableRoofs[1].bLadderOnly);
+	}
+
+	// open crossings
+	TestEqual(TEXT("1 open crossing"), File.OpenCrossings.Num(), 1);
+	if (File.OpenCrossings.Num() >= 1)
+	{
+		const FTacticalOpenCrossing& OC = File.OpenCrossings[0];
+		TestEqual(TEXT("crossing id"), OC.Id, FString(TEXT("OC_01")));
+		TestEqual(TEXT("crossing route"), OC.Route, FString(TEXT("R_main")));
+		TestEqual(TEXT("crossing length"), OC.LengthM, 20.f);
+		TestEqual(TEXT("nearest cover"), OC.NearestCoverCm, 350.f);
+		TestEqual(TEXT("seeing covers num"), OC.SeeingCovers.Num(), 2);
+	}
+
+	// goal sites
+	TestEqual(TEXT("3 goal sites"), File.GoalSites.Num(), 3);
+	if (File.GoalSites.Num() >= 3)
+	{
+		TestEqual(TEXT("GS 0 goal"), File.GoalSites[0].GoalId, FString(TEXT("GOAL_A")));
+		TestEqual(TEXT("GS 0 cover"), File.GoalSites[0].CoverId, FString(TEXT("COV_1")));
+		TestEqual(TEXT("GS 0 dist"), File.GoalSites[0].DistM, 12.5f);
+		TestEqual(TEXT("GS 0 yaw"), File.GoalSites[0].FacingYaw, 90.f);
+		TestEqual(TEXT("GS 0 sector arc"), File.GoalSites[0].SectorArcDeg, 90.f);
+		TestEqual(TEXT("GS 0 height"), File.GoalSites[0].CoverHeightCm, 95.f);
+	}
+
+	// queries for goal sites
+	const TArray<FTacticalGoalSite> SitesA = TacticalMapRules::GetGoalSitesForGoal(File, TEXT("GOAL_A"));
+	TestEqual(TEXT("sites for GOAL_A"), SitesA.Num(), 2);
+	const TArray<FTacticalGoalSite> SitesB = TacticalMapRules::GetGoalSitesForGoal(File, TEXT("GOAL_B"));
+	TestEqual(TEXT("sites for GOAL_B"), SitesB.Num(), 1);
+	const TArray<FTacticalGoalSite> SitesC = TacticalMapRules::GetGoalSitesForGoal(File, TEXT("GOAL_NONE"));
+	TestEqual(TEXT("sites for GOAL_NONE"), SitesC.Num(), 0);
+
+	return true;
+}
+
 TACTICAL_MAP_TEST(FTacticalMapParseRejectsTest, "ParseRejects")
 bool FTacticalMapParseRejectsTest::RunTest(const FString&)
 {
@@ -136,7 +288,12 @@ bool FTacticalMapParseRejectsTest::RunTest(const FString&)
 	TArray<FString> Errors;
 	TestFalse(TEXT("not JSON"), TacticalMapRules::Parse(TEXT("{ nope"), File, Errors));
 	TestFalse(TEXT("another schema"), TacticalMapRules::Parse(TEXT(R"({ "schema": "codex.mission_goals/1" })"), File, Errors));
-	TestFalse(TEXT("a newer schema"), TacticalMapRules::Parse(TEXT(R"({ "schema": "codex.tactical_map/2" })"), File, Errors));
+	TestFalse(TEXT("a newer schema"), TacticalMapRules::Parse(TEXT(R"({ "schema": "codex.tactical_map/3" })"), File, Errors));
+	Errors.Reset();
+	TestTrue(TEXT("schema v2 empty lists parse"), TacticalMapRules::Parse(TEXT(R"({ "schema": "codex.tactical_map/2", "chokepoints": [], "drop_spots": [], "windows": [],
+		"overwatch_roofs": [], "hiding_spots": [], "ladder_only_roofs": [], "walkable_roofs": [], "open_crossings": [], "goal_sites": [] })"), File, Errors));
+	TestTrue(TEXT("empty map v2"), File.IsEmpty());
+	TestEqual(TEXT("no errors v2"), Errors.Num(), 0);
 	Errors.Reset();
 	TestTrue(TEXT("empty lists parse"), TacticalMapRules::Parse(TEXT(R"({ "schema": "codex.tactical_map/1", "chokepoints": [], "drop_spots": [], "windows": [],
 		"overwatch_roofs": [], "hiding_spots": [], "ladder_only_roofs": [] })"), File, Errors));

@@ -50,7 +50,8 @@ for (const [layoutPath, map] of targets) {
   const file = writeTacticalMapFile(layout, outDir, map, layoutName, f);
   console.log(`[tactical-map] ${map}: analysis ${f.analysis_source} (goals: ${goals}), ${Date.now() - t0} ms -> ${path.relative(root, file)}`);
   console.log(`  chokepoints ${f.chokepoints.length}, drop spots ${f.drop_spots.length}, windows ${f.windows.length}, overwatch roofs ${f.overwatch_roofs.length}, `
-    + `hiding spots ${f.hiding_spots.length}, ladder-only roofs ${f.ladder_only_roofs.length}; hash ${f.geometry_hash}`);
+    + `hiding spots ${f.hiding_spots.length}, ladder-only roofs ${f.ladder_only_roofs.length}, walkable roofs ${f.walkable_roofs?.length ?? 0}, `
+    + `open crossings ${f.open_crossings?.length ?? 0}, goal sites ${f.goal_sites?.length ?? 0}; hash ${f.geometry_hash}`);
   for (const c of f.chokepoints.slice(0, 3)) console.log(`  ${c.id} ${c.kind} ${c.score} @ ${c.pos.join(', ')} (${c.alternative}${c.detour_m !== null ? ` ${c.detour_m} m` : ''})`);
 }
 process.exit(failed ? 1 : 0);

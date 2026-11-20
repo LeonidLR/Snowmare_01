@@ -53,6 +53,8 @@ struct CODEXTACTICS_API FTacticalChokepoint
 	TArray<FString> HidingSpots;
 	float RevealM = -1.f;
 	float RevealStealthM = -1.f;
+	FString Building;
+	int32 Floor = 0;
 };
 
 /** A drop-down ambush: a jumper waits on Edge (roof / wall top) and lands on Land. */
@@ -97,6 +99,17 @@ struct CODEXTACTICS_API FTacticalOverwatchSpot
 	float FacingYaw = 0.f;
 	float CoveredM = 0.f;
 	float LongestLosM = 0.f;
+	FString Building;
+	int32 Floor = 0;
+};
+
+/** A roof access point (stairs, ladder, hatch) with its landing point on the roof. */
+struct CODEXTACTICS_API FTacticalRoofAccess
+{
+	FString Id;
+	/** stairs / ladder / hatch */
+	FString Kind;
+	FVector Top = FVector::ZeroVector;
 };
 
 /** A roof a marksman can reach, with its best spots. */
@@ -105,12 +118,14 @@ struct CODEXTACTICS_API FTacticalOverwatchRoof
 	FString Building;
 	FString Layer;
 	int32 Level = 0;
+	int32 Floor = 0;
 	float Z = 0.f;
 	float HeightCm = 0.f;
 	float RangeM = 0.f;
 	TArray<FString> Access;
 	/** stairs / ladder / hatch. */
 	FString AccessKind;
+	TArray<FTacticalRoofAccess> AccessPoints;
 	bool bLadderOnly = false;
 	TArray<FTacticalOverwatchSpot> Spots;
 	TArray<FString> Places;
@@ -137,6 +152,8 @@ struct CODEXTACTICS_API FTacticalHidingSpot
 	FString Place;
 	/** Place resolved to an index into FTacticalMapFile::Chokepoints (Parse / UpdateDerived; INDEX_NONE: none). */
 	int32 PlaceIndex = INDEX_NONE;
+	FString Building;
+	int32 Floor = 0;
 };
 
 /** A walkable roof reached by ladder(s) only (the P2 placement puts enemies on PART of them). */
@@ -149,8 +166,45 @@ struct CODEXTACTICS_API FTacticalLadderRoof
 	TArray<FVector2D> Poly;
 	TArray<FString> Ladders;
 	TArray<FVector> LadderTops;
+	TArray<FTacticalRoofAccess> AccessPoints;
 	bool bOverwatch = false;
 	TArray<FString> DropSpots;
+};
+
+/** Every walkable roof in the layout with its floor, z, access points and ladder-only flag. */
+struct CODEXTACTICS_API FTacticalWalkableRoof
+{
+	FString Building;
+	FString Layer;
+	int32 Floor = 0;
+	float Z = 0.f;
+	TArray<FTacticalRoofAccess> Access;
+	bool bLadderOnly = false;
+};
+
+/** Route segments >= 10 m with no cover within 2 m of the path, and the cover objects that see them. */
+struct CODEXTACTICS_API FTacticalOpenCrossing
+{
+	FString Id;
+	FString Route;
+	FVector Start = FVector::ZeroVector;
+	FVector End = FVector::ZeroVector;
+	float LengthM = 0.f;
+	float NearestCoverCm = 0.f;
+	TArray<FString> SeeingCovers;
+};
+
+/** Cover objects within 25 m of a mission goal with the sector each covers. */
+struct CODEXTACTICS_API FTacticalGoalSite
+{
+	FString GoalId;
+	FString CoverId;
+	FVector Location = FVector::ZeroVector;
+	float DistM = 0.f;
+	float FacingYaw = 0.f;
+	float SectorArcDeg = 90.f;
+	FString CoverKind;
+	float CoverHeightCm = 0.f;
 };
 
 /** The analysis thresholds the file carries (defaults = chokepoints.json today). */
@@ -169,6 +223,7 @@ struct CODEXTACTICS_API FTacticalThresholds
 /** The parsed runtime file. */
 struct CODEXTACTICS_API FTacticalMapFile
 {
+	FString Schema;
 	FString Map;
 	FString Layout;
 	FString GeometryHash;
@@ -183,10 +238,13 @@ struct CODEXTACTICS_API FTacticalMapFile
 	TArray<FTacticalOverwatchRoof> OverwatchRoofs;
 	TArray<FTacticalHidingSpot> HidingSpots;
 	TArray<FTacticalLadderRoof> LadderOnlyRoofs;
+	TArray<FTacticalWalkableRoof> WalkableRoofs;
+	TArray<FTacticalOpenCrossing> OpenCrossings;
+	TArray<FTacticalGoalSite> GoalSites;
 
 	bool IsEmpty() const
 	{
-		return Chokepoints.IsEmpty() && DropSpots.IsEmpty() && Windows.IsEmpty() && OverwatchRoofs.IsEmpty() && HidingSpots.IsEmpty() && LadderOnlyRoofs.IsEmpty();
+		return Chokepoints.IsEmpty() && DropSpots.IsEmpty() && Windows.IsEmpty() && OverwatchRoofs.IsEmpty() && HidingSpots.IsEmpty() && LadderOnlyRoofs.IsEmpty() && WalkableRoofs.IsEmpty() && OpenCrossings.IsEmpty() && GoalSites.IsEmpty();
 	}
 };
 
@@ -282,6 +340,8 @@ struct CODEXTACTICS_API FTacticalDetour
 namespace TacticalMapRules
 {
 	extern CODEXTACTICS_API const TCHAR* const Schema;
+	extern CODEXTACTICS_API const TCHAR* const SchemaV1;
+	extern CODEXTACTICS_API const TCHAR* const SchemaV2;
 	extern CODEXTACTICS_API const TCHAR* const ConfigSchema;
 
 	/**
@@ -349,6 +409,9 @@ namespace TacticalMapRules
 	 * of them, ~Factor on average, independent of the list order). Factor < 0 = the file's ladder-only factor. Returns indices, ascending.
 	 */
 	CODEXTACTICS_API TArray<int32> PickLadderOnlyRoofs(const FTacticalMapFile& File, int32 Seed, float Factor = -1.f);
+
+	/** Returns all goal sites associated with a specific goal ID. */
+	CODEXTACTICS_API TArray<FTacticalGoalSite> GetGoalSitesForGoal(const FTacticalMapFile& File, const FString& GoalId);
 
 	/** The layer's danger kind names (for logs): "drop_ambush" etc. */
 	CODEXTACTICS_API FString JoinKinds(TConstArrayView<FName> Kinds);

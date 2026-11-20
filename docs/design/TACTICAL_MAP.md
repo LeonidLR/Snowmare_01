@@ -172,3 +172,36 @@ the route cached once per route (`FTeam::RouteCoverSpots`, `SetRouteOf`), not ev
 the three tries only when it ended short: refused, or not 1 m closer (`PmcTacticalRules::PostWalkEndedShort`, test
 `CodexTactics.AI.PmcTactical.PostWalkEndedShort`); an interrupting order resets it. (6) The arena's side-indexed tracks are guarded by
 `IsSideIndex` (0 / 1) everywhere.
+
+## 8. v2 — Здания, этажность, выходы на крыши, открытые прострелы, позиции у целей (Smart Enemies T-09, 2026-11-20)
+
+**Схема `codex.tactical_map/2` и обратная совместимость:**
+- Экспорт обновлён до схемы `codex.tactical_map/2` в `Tools/TrainingGround/src/levelgen/tacticalMap.ts`.
+- C++ загрузчик (`TacticalMapRules::Parse`) поддерживает как `codex.tactical_map/1`, так и `codex.tactical_map/2`. Файлы v1 читаются без ошибок (новые поля v2 остаются пустыми/дефолтными), файлы более новых схем (v3+) отклоняются.
+- Сохранены все существующие поля и контракты v1.
+
+**Новые структуры и атрибуция этажности/зданий:**
+- `building` и `floor` добавлены на:
+  - `windows[]`: здание и этаж окна.
+  - `overwatch_roofs[]`: этаж крыши (`floor`), а также `building` и `floor` на каждой точке обзора `spots[]`.
+  - `hiding_spots[]`: здание и этаж укрытия (определяются геометрически по планам зданий/этажей).
+  - `chokepoints[]`: здание и этаж узкого места (если проход расположен внутри здания).
+- Выходы на крыши (`access_points[]` с `id`, `kind`: stairs / ladder / hatch, `top` xyz):
+  - Добавлены в `overwatch_roofs[]` и `ladder_only_roofs[]`.
+  - Позволяют ботам и алгоритмам перемещения точно знать координаты точек выхода на крышу, а не только их текстовые идентификаторы.
+- `walkable_roofs[]`:
+  - Полный реестр всех доступных для перемещения крыш на карте (`building`, `layer`, `floor`, `z`, `ladder_only`, `access[]`).
+- `open_crossings[]`:
+  - Длинные открытые участки основных маршрутов ($\ge 10\text{ м}$), где на расстоянии 2 м от осевой линии пути нет укрытий (`nearest_cover_cm`).
+  - Список укрытий в радиусе 40 м (`seeing_covers[]`), откуда этот участок простреливается.
+  - Используется для планирования перебежек squad и организации засад PMC.
+- `goal_sites[]`:
+  - Позиции укрытий в радиусе 25 м вокруг каждой цели миссии (`goal_id`, `cover_id`, `pos`, `dist_m`, `facing_yaw`, `sector_arc_deg: 90`, `cover_kind`, `cover_height_cm`).
+  - `facing_yaw` ориентирован от укрытия в сторону цели.
+  - TS-экспорт формирует геометрию без выполнения line trace (stop rule задачи 090: физическая line-trace валидация видимости делегирована в T-05).
+
+**Запросы C++ Subsystem и интеграция:**
+- `TacticalMapRules::GetGoalSitesForGoal(File, GoalId)` и `UTacticalMapSubsystem::GetGoalSitesForGoal(GoalId)`: выборка доступных укрытий вокруг указанной цели.
+- Использование в Smart Enemies:
+  - T-05 (Line-trace валидация позиций): валидация прострелов для `open_crossings` и видимости целей с `goal_sites` в Unreal Engine.
+  - T-12 (Защита целей): боты PMC выбирают `goal_sites` для занятия круговой обороны вокруг точек эвакуации, терминалов и зон удержания.
