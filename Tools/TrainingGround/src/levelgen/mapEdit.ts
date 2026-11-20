@@ -268,3 +268,6 @@ export function snapReference(l: GenLayout, key: string): Vec2 | null {
   if (type === 'crossing') { const x = l.cut?.crossings.find((c) => c.id === id); return x ? [x.poly.reduce((s, p) => s + p[0], 0) / x.poly.length, x.poly.reduce((s, p) => s + p[1], 0) / x.poly.length] : null; }
   return null;
 }
+
+// ---- derived files (task 092) -------------------------------------------------------------------------------------------------------------
+export { carryPropsWithBuilding, carryTacticalWithBuilding, isPropOnBuilding } from './moveDerived.ts';
