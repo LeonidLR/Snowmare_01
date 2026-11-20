@@ -9,9 +9,11 @@
 //   Locked objects: prominent amber / gold outline (#fbbf24).
 //   Overrides: added (green), moved (blue), deleted (gray X).
 
-import React, { useEffect, useImperativeHandle, useRef } from 'react';
+import React, { useEffect, useImperativeHandle, useRef, useState } from 'react';
 import type { GenLayout } from '../levelgen/schema.ts';
-import type { LevelPropsFile, PropObject } from '../levelgen/props/schema.ts';
+import type { LevelPropsFile } from '../levelgen/props/schema.ts';
+import type { PlanView } from '../levelgen/planView.ts';
+import { FIT_VIEW, planTransform, toScreen, viewTransform } from '../levelgen/planView.ts';
 
 const SET_TINT: Record<string, string> = {
   street: '#787882',
@@ -53,9 +55,14 @@ export interface PropsCanvasProps {
   layerFilter?: string; // 'all' or specific walk layer
   visibleLayers?: Record<string, boolean>; // layerId -> boolean
   selectedPropId?: string | null;
-  onSelectProp?: (prop: PropObject | null, layerId: string | null) => void;
   showExclusions?: boolean;
-  height?: number;
+  /** px, or a CSS length (the full-window plan fills its box). */
+  height?: number | string;
+  /**
+   * T-023: zoom + pan (levelgen/planView.ts, the same PlanView as the map page). The canvas only DRAWS; picking, dragging, zone tools, wheel zoom
+   * and pan live in RegionOverlay on top of it (same size and transform: 1 px border, fitted plan with a 10 px pad).
+   */
+  view?: PlanView;
 }
 
 export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>(
@@ -66,22 +73,22 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
       layerFilter = 'all',
       visibleLayers = {},
       selectedPropId = null,
-      onSelectProp,
       showExclusions = false,
       height = 560,
+      view = FIT_VIEW,
     },
     ref
   ) => {
     const canvas = useRef<HTMLCanvasElement>(null);
-    const transformRef = useRef<{
-      s: number;
-      ox: number;
-      oy: number;
-      minX: number;
-      minY: number;
-      maxX: number;
-      maxY: number;
-    }>({ s: 1, ox: 0, oy: 0, minX: 0, minY: 0, maxX: 0, maxY: 0 });
+    // the box size changes without a prop change (the F11 toggle, the window): redraw on it
+    const [boxSize, setBoxSize] = useState('');
+    useEffect(() => {
+      const c = canvas.current;
+      if (!c) return;
+      const ro = new ResizeObserver(() => setBoxSize(`${c.clientWidth}x${c.clientHeight}`));
+      ro.observe(c);
+      return () => ro.disconnect();
+    }, []);
 
     useImperativeHandle(
       ref,
@@ -91,47 +98,6 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
       }),
       []
     );
-
-    // Canvas click handling: find nearest prop object
-    const handleCanvasClick = (e: React.MouseEvent<HTMLCanvasElement>) => {
-      const c = canvas.current;
-      if (!c || !propsFile || !onSelectProp) return;
-      const rect = c.getBoundingClientRect();
-      const clickX = e.clientX - rect.left;
-      const clickY = e.clientY - rect.top;
-
-      const { s, ox, oy, minY, maxX } = transformRef.current;
-      if (s <= 0) return;
-
-      // Invert transform:
-      // Screen X = ox + (worldY - minY) * s  =>  worldY = minY + (clickX - ox) / s
-      // Screen Y = oy + (maxX - worldX) * s  =>  worldX = maxX - (clickY - oy) / s
-      const worldY = minY + (clickX - ox) / s;
-      const worldX = maxX - (clickY - oy) / s;
-
-      let closestProp: PropObject | null = null;
-      let closestLayerId: string | null = null;
-      let minPixelDist = 18; // maximum click distance in screen pixels
-
-      for (const layer of propsFile.layers) {
-        if (visibleLayers[layer.id] === false) continue;
-        for (const obj of layer.objects) {
-          if (layerFilter !== 'all' && obj.walk_layer && obj.walk_layer !== layerFilter) {
-            continue;
-          }
-          const dxWorld = obj.pos[0] - worldX;
-          const dyWorld = obj.pos[1] - worldY;
-          const pixelDist = Math.sqrt(dxWorld * dxWorld + dyWorld * dyWorld) * s;
-          if (pixelDist < minPixelDist) {
-            minPixelDist = pixelDist;
-            closestProp = obj;
-            closestLayerId = layer.id;
-          }
-        }
-      }
-
-      onSelectProp(closestProp, closestLayerId);
-    };
 
     useEffect(() => {
       const c = canvas.current;
@@ -158,17 +124,10 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
 
       const [minX, minY] = layout.bounds.min;
       const [maxX, maxY] = layout.bounds.max;
-      const pad = 16;
-      const s = Math.min((w - 2 * pad) / (maxY - minY), (h - 2 * pad) / (maxX - minX));
-      const ox = (w - (maxY - minY) * s) / 2;
-      const oy = (h - (maxX - minX) * s) / 2;
+      const tv = viewTransform(planTransform(layout.bounds, w, h), view);
+      const s = tv.s;
 
-      transformRef.current = { s, ox, oy, minX, minY, maxX, maxY };
-
-      const P = (p: [number, number]): [number, number] => [
-        ox + (p[1] - minY) * s,
-        oy + (maxX - p[0]) * s,
-      ];
+      const P = (p: [number, number]): [number, number] => toScreen(tv, p);
 
       const poly = (pts: [number, number][]) => {
         g.beginPath();
@@ -695,13 +654,12 @@ export const PropsCanvas = React.forwardRef<PropsCanvasHandle, PropsCanvasProps>
         8,
         h - 8
       );
-    }, [layout, propsFile, layerFilter, visibleLayers, selectedPropId, showExclusions, height]);
+    }, [layout, propsFile, layerFilter, visibleLayers, selectedPropId, showExclusions, height, view, boxSize]);
 
     return (
       <canvas
         ref={canvas}
-        onClick={handleCanvasClick}
-        style={{ width: '100%', height, cursor: 'crosshair' }}
+        style={{ width: '100%', height }}
         className="rounded-xl border border-slate-800 block select-none"
       />
     );

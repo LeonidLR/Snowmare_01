@@ -222,6 +222,8 @@ export function setupLevelgenApi(use: Use): void {
     const ev = b.evaluation as Evaluation | undefined;
     fs.writeFileSync(path.join(ACCEPTED_DIR, `${layout!.name}.meta.json`), JSON.stringify({ at: new Date().toISOString(), score: ev?.score, summary: ev?.summary, verdicts: b.verdicts ?? [] }, null, 1) + '\n');
 
+    // T-022: what the accept path derived from the layout, told to the page (the stale-files notice after a map with moved elements)
+    const derived: { props: 'regenerated' | 'created' | 'kept_hand' | 'error'; propsSource?: string; objectives: string | null; tactical: string | null } = { props: 'error', objectives: null, tactical: null };
     // Task 076: automatic props for accepted layout
     try {
       const targetMap = mapNameFor(layout!.name);
@@ -229,9 +231,12 @@ export function setupLevelgenApi(use: Use): void {
       fs.mkdirSync(propsDir, { recursive: true });
       const propsPath = path.join(propsDir, `${targetMap}.props.json`);
       let canWrite = true;
+      let existed = false;
       if (fs.existsSync(propsPath)) {
         const existing = JSON.parse(fs.readFileSync(propsPath, 'utf8')) as LevelPropsFile;
         canWrite = canOverwritePropsFile(existing);
+        existed = true;
+        derived.propsSource = String(existing.source ?? '');
       }
       if (canWrite) {
         let sourceProps: LevelPropsFile | null = null;
@@ -249,7 +254,8 @@ export function setupLevelgenApi(use: Use): void {
           projectRoot: ROOT,
         });
         fs.writeFileSync(propsPath, formatPropsCanonical(resProps.props), 'utf8');
-      }
+        derived.props = existed ? 'regenerated' : 'created';
+      } else derived.props = 'kept_hand';
     } catch {
       // Non-blocking for accept
     }
@@ -257,9 +263,10 @@ export function setupLevelgenApi(use: Use): void {
     // F-4 «а» + TACTICAL_MAP P1 (designer 2026-11-17): the layout's objectives become the map's in-game mission goals
     // (Content/Data/LevelGen/objectives/<Map>.objectives.json, UMissionGoalsSubsystem; no objectives = no file) and its danger analysis
     // the tactical map (Content/Data/LevelGen/tactical/<Map>.tactical.json, UTacticalMapSubsystem). Non-blocking for accept.
-    writeRuntimeFiles(layout!, RUNTIME_DIRS, mapNameFor(layout!.name), layout!.name);
+    const rt = writeRuntimeFiles(layout!, RUNTIME_DIRS, mapNameFor(layout!.name), layout!.name);
+    derived.objectives = rt.objectives; derived.tactical = rt.tactical;
 
-    send(res, 200, { file: path.relative(path.resolve(ACCEPTED_DIR, '../../../..'), file).split(path.sep).join('/') });
+    send(res, 200, { derived, file: path.relative(path.resolve(ACCEPTED_DIR, '../../../..'), file).split(path.sep).join('/') });
   });
 
   use('/api/levelgen/save-locks', async (req, res, next) => {
