@@ -3579,6 +3579,11 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		}
 	}
 	Service->PrepareCoverScan(KillZone, AreaRadius, WidestBandMax);
+	// Garrison (ground only): a position must stand within garrison_max_reach_factor x the man's reach of the OBJECTIVE and see its centre (chest height) along a real shot line.
+	const bool bGarrisonReach = !bRoof && Config.GarrisonMaxReachFactor > 0.f;
+	const bool bGarrisonLos = !bRoof && Config.bGarrisonPointLos;
+	const FCollisionQueryParams GarrisonParams = bGarrisonLos ? Service->MakeShotLineParams() : FCollisionQueryParams();
+	const FVector GarrisonAim = Objective.Location + FVector(0.f, 0.f, Config.SampleHeightCm);
 	for (const int32 PostIndex : Shooters)
 	{
 		FSeat Seat;
@@ -3602,6 +3607,8 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		int32 NotCover = 0;
 		int32 OffLevel = 0;
 		int32 Forward = 0;
+		int32 GarrisonFar = 0;
+		int32 GarrisonNoLos = 0;
 		for (const FFiringCandidate& Candidate : Service->GetCandidates(KillZone, AreaRadius, BandMin, BandMax))
 		{
 			const FFiringPosition& Pos = Candidate.Position;
@@ -3635,6 +3642,16 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 				if (Team.Defence.bHasApproach && FiringPositionRules::IsForwardOfKillZone(Pos.StandPoint, KillZone, Team.Defence.ApproachPoint, Config.ForwardMarginCm))
 				{
 					++Forward;
+					continue;
+				}
+				if (bGarrisonReach && !FiringPositionRules::WithinGarrisonReach(Pos.StandPoint, Objective.Location, Reach, Config.GarrisonMaxReachFactor))
+				{
+					++GarrisonFar;
+					continue;
+				}
+				if (bGarrisonLos && !Service->IsShotLineClear(Pos.StandPoint + FVector(0.f, 0.f, Config.MuzzleHeight(Pos.Stance)), GarrisonAim, GarrisonParams))
+				{
+					++GarrisonNoLos;
 					continue;
 				}
 			}
@@ -3700,8 +3717,8 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 				Kept.Num(), Seat.Eligible.Num(), Kept.IsEmpty() ? 0.f : MinSlack, Kept.IsEmpty() ? 0.f : MaxSlack, TooFar, NoPath, Unchecked, Seat.PathQueries, DefenderSpeedCm, AttackerSpeedCm);
 			Seat.Eligible = MoveTemp(Kept);
 		}
-		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s band %.0f..%.0f cm (tier %d): %d valid positions, %d not cover, %d off level, %d forward of the kill zone, %d eligible%s"), TeamId,
-			*Seat.Fighter->DisplayName.ToString(), BandMin, BandMax, Tier, Valid, NotCover, OffLevel, Forward, Seat.Eligible.Num(), *ReachNote);
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s band %.0f..%.0f cm (tier %d): %d valid positions, %d not cover, %d off level, %d forward of the kill zone, %d too far from the objective, %d no line to the objective, %d eligible%s"), TeamId,
+			*Seat.Fighter->DisplayName.ToString(), BandMin, BandMax, Tier, Valid, NotCover, OffLevel, Forward, GarrisonFar, GarrisonNoLos, Seat.Eligible.Num(), *ReachNote);
 		}
 		Seats.Add(MoveTemp(Seat));
 	}

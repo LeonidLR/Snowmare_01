@@ -155,6 +155,13 @@ namespace FiringPositionRules
 		float PathQueries = static_cast<float>(Out.MaxPathQueries);
 		FiringReadNumber(Block, TEXT("max_path_queries"), PathQueries);
 		Out.MaxPathQueries = FMath::Clamp(FMath::RoundToInt(PathQueries), 1, 64);
+		FiringReadNumber(Block, TEXT("garrison_max_reach_factor"), Out.GarrisonMaxReachFactor);
+		Out.GarrisonMaxReachFactor = FMath::Clamp(Out.GarrisonMaxReachFactor, 0.f, 4.f);
+		bool bGarrisonLos = Out.bGarrisonPointLos;
+		if (Block.TryGetBoolField(TEXT("garrison_point_los"), bGarrisonLos))
+		{
+			Out.bGarrisonPointLos = bGarrisonLos;
+		}
 		bool bReach = Out.bReachBeforeContact;
 		if (Block.TryGetBoolField(TEXT("reach_before_contact"), bReach))
 		{
@@ -419,6 +426,19 @@ namespace FiringPositionRules
 		// Along the axis from the attackers toward the zone: negative = nearer the attackers than the zone.
 		const float Along = static_cast<float>(FVector2D::DotProduct(ToStand, Axis.GetSafeNormal()));
 		return Along < -FMath::Max(MarginCm, 0.f);
+	}
+
+	bool WithinGarrisonReach(const FVector& StandPoint, const FVector& ObjectiveCentre, float ReachCm, float Factor)
+	{
+		if (Factor <= 0.f)
+		{
+			return true; // the rule is off
+		}
+		if (ReachCm <= 0.f)
+		{
+			return false;
+		}
+		return FVector::Dist2D(StandPoint, ObjectiveCentre) <= Factor * ReachCm;
 	}
 
 	float PolylineLength(TConstArrayView<FVector> Points)

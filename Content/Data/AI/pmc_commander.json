@@ -136,6 +136,9 @@
     "reach_before_contact": true,
     "reach_margin_s": 1.5,
     "attacker_speed_factor": 1.0,
+    "_comment_garrison": "T-05 phase b garrison experiment 2026-11-20 (one change on 7a0af436): a GROUND firing position must (a) stand within garrison_max_reach_factor x the man's weapon max range (the reach the band uses) of the OBJECTIVE centre, and (b) when garrison_point_los is true, see the objective centre at sample_height_cm over its floor along a real shot line (ECC_Visibility, operatives and turrets ignored) from its muzzle at its stance. Cause (paired seeds 1060-1209): the hammers sat 20-40 m out on the attackers' approach and the point was held by one man in the open. RESULT: FAILED on paired seeds 1060-1209 with 0.5 / true (crossroads defender wins 53 of 143 vs main 82, captures 46 vs 17, attackers killed per round 1.46 vs 1.99; alley 16 vs 16) and the idea was dropped (designer: holding the point means being physically in the zone), so it SHIPS INERT: 0 / false = off = exactly the previous behaviour. Roof defences are not affected.",
+    "garrison_max_reach_factor": 0,
+    "garrison_point_los": false,
     "max_path_queries": 16
   },
   "engagement_bands": {

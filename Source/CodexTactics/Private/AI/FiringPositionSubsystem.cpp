@@ -234,6 +234,23 @@ bool UFiringPositionSubsystem::FindWalkSurface(const FVector& Point, float Horiz
 	return false;
 }
 
+FCollisionQueryParams UFiringPositionSubsystem::MakeShotLineParams() const
+{
+	FCollisionQueryParams Params(SCENE_QUERY_STAT(FiringPositionShotLine), false);
+	if (const UWorld* World = GetWorld())
+	{
+		FiringPositionSubsystemLocal::AddShotLineIgnored(World, Params);
+	}
+	return Params;
+}
+
+bool UFiringPositionSubsystem::IsShotLineClear(const FVector& From, const FVector& To, const FCollisionQueryParams& Params) const
+{
+	const UWorld* World = GetWorld();
+	FHitResult Hit;
+	return World && !World->LineTraceSingleByChannel(Hit, From, To, ECC_Visibility, Params);
+}
+
 bool UFiringPositionSubsystem::LineBlocked(FFiringScanContext& Context, const FVector& From, const FVector& To) const
 {
 	FHitResult Hit;

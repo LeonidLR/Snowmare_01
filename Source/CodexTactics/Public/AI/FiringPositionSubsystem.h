@@ -2,6 +2,7 @@
 
 #include "CoreMinimal.h"
 #include "AI/FiringPositionRules.h"
+#include "CollisionQueryParams.h"
 #include "Subsystems/WorldSubsystem.h"
 #include "FiringPositionSubsystem.generated.h"
 
@@ -122,6 +123,15 @@ public:
 	 * all of them share one scan (a narrow band's candidates are then a subset of a wider band's). A scan that already covers the ring is reused.
 	 */
 	void PrepareCoverScan(const FVector& AreaCenter, float AreaRadiusCm, float BandMaxCm);
+
+	/**
+	 * The collision params of a real shot line (ECC_Visibility query, every operative and turret ignored; AOperativeCharacter::EvaluateShotLine). Build once, reuse for
+	 * many LineClear calls (the actor sweep is not free).
+	 */
+	FCollisionQueryParams MakeShotLineParams() const;
+
+	/** True when the shot line From -> To (ECC_Visibility, Params from MakeShotLineParams) hits nothing. */
+	bool IsShotLineClear(const FVector& From, const FVector& To, const FCollisionQueryParams& Params) const;
 
 	/** Forgets every cached area (a round's start, a geometry change). */
 	void InvalidateCache();

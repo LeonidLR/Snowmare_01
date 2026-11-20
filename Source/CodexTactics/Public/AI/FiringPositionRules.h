@@ -149,6 +149,14 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	float AttackerSpeedFactor = 1.f;
 	/** "max_path_queries" (16): defender nav-path queries per man per defence refresh (nearest candidates first; the rest count as unchecked and are dropped). */
 	int32 MaxPathQueries = 16;
+	/**
+	 * "garrison_max_reach_factor" (0 = off, the shipped value): a GROUND firing position must stand within this x the man's weapon reach (the reach the band uses) of the
+	 * OBJECTIVE centre. Experiment 11-20 (0.5, with garrison_point_los): FAILED on paired seeds 1060-1209 (crossroads defender wins 53 of 143 vs main 82, captures 46 vs 17);
+	 * the idea was dropped (designer: holding means being physically in the zone). The code stays INERT for the record.
+	 */
+	float GarrisonMaxReachFactor = 0.f;
+	/** "garrison_point_los" (false = off, the shipped value): a GROUND firing position must also see the objective centre (chest height) along a real shot line from its muzzle at its stance. Inert, see above. */
+	bool bGarrisonPointLos = false;
 
 	/** The muzzle height above the feet of a stance, cm. */
 	float MuzzleHeight(EOperativeStance Stance) const;
@@ -251,6 +259,12 @@ namespace FiringPositionRules
 	 * than MarginCm. Beside the zone (the flanks) it is NOT forward, however close to the approach it is in a straight line. False without an axis (point == zone).
 	 */
 	CODEXTACTICS_API bool IsForwardOfKillZone(const FVector& StandPoint, const FVector& KillZone, const FVector& ApproachPoint, float MarginCm);
+
+	/**
+	 * The garrison reach rule: a stand point is within the garrison when its PLANAR distance to the objective centre is <= Factor x ReachCm. Factor <= 0 = the rule is off
+	 * (always true). ReachCm <= 0 never fits (false) unless the rule is off.
+	 */
+	CODEXTACTICS_API bool WithinGarrisonReach(const FVector& StandPoint, const FVector& ObjectiveCentre, float ReachCm, float Factor);
 
 	/** The length of a polyline (all three axes), cm. 0 for fewer than two points. */
 	CODEXTACTICS_API float PolylineLength(TConstArrayView<FVector> Points);

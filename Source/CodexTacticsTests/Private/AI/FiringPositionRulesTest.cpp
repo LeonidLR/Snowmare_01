@@ -443,6 +443,26 @@ bool FFiringPositionReachTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFiringPositionGarrisonTest, "CodexTactics.AI.FiringPosition.GarrisonReach",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FFiringPositionGarrisonTest::RunTest(const FString&)
+{
+	const FVector Objective(1000.f, 2000.f, 0.f);
+	// Reach 3000 cm x 0.5 = 1500 cm of garrison radius.
+	TestTrue(TEXT("on the objective is inside"), FiringPositionRules::WithinGarrisonReach(Objective, Objective, 3000.f, 0.5f));
+	TestTrue(TEXT("exactly at the limit is inside"), FiringPositionRules::WithinGarrisonReach(Objective + FVector(1500.f, 0.f, 0.f), Objective, 3000.f, 0.5f));
+	TestFalse(TEXT("1 cm past the limit is outside"), FiringPositionRules::WithinGarrisonReach(Objective + FVector(1501.f, 0.f, 0.f), Objective, 3000.f, 0.5f));
+	TestTrue(TEXT("the distance is planar: 5 m of height does not count"), FiringPositionRules::WithinGarrisonReach(Objective + FVector(900.f, 1200.f, 500.f), Objective, 3000.f, 0.5f));
+	TestFalse(TEXT("the planar distance is Euclidean: (1200, 1200) is 1697 cm"), FiringPositionRules::WithinGarrisonReach(Objective + FVector(1200.f, 1200.f, 0.f), Objective, 3000.f, 0.5f));
+	TestFalse(TEXT("a shorter weapon shrinks the garrison"), FiringPositionRules::WithinGarrisonReach(Objective + FVector(1000.f, 0.f, 0.f), Objective, 1500.f, 0.5f));
+	TestTrue(TEXT("factor 0 = off, however far"), FiringPositionRules::WithinGarrisonReach(Objective + FVector(90000.f, 0.f, 0.f), Objective, 3000.f, 0.f));
+	TestTrue(TEXT("a negative factor is off too"), FiringPositionRules::WithinGarrisonReach(Objective + FVector(90000.f, 0.f, 0.f), Objective, 3000.f, -1.f));
+	TestFalse(TEXT("no reach never fits while the rule is on"), FiringPositionRules::WithinGarrisonReach(Objective, Objective, 0.f, 0.5f));
+	TestTrue(TEXT("no reach is irrelevant while the rule is off"), FiringPositionRules::WithinGarrisonReach(Objective, Objective, 0.f, 0.f));
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FFiringPositionConfigTest, "CodexTactics.AI.FiringPosition.Config",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -457,7 +477,7 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	const TSharedPtr<FJsonObject> Block = ParseBlock(TEXT(R"JSON({
 		"crossfire_min_deg": 60, "area_samples": 1, "min_covered_share": 2.0, "rim_step_max_cm": 500, "min_spacing_m": 7,
 		"muzzle_height_cm": { "crouching": 90 }, "defence_use": false, "keep_occupier": false, "scan_rays": 99, "max_cover_slots": 0, "ignored_key": 5,
-			"min_cover_quality": 2.0, "band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "reach_margin_s": 99, "attacker_speed_factor": 0, "max_path_queries": 500, "reach_before_contact": false, "scan_far_stride": 99, "roof_reach_factor": 7, "kill_zone_reach_factor": 9, "default_reach_cm": 5
+			"min_cover_quality": 2.0, "band_max_factor": 0.5, "band_max_factor_tier2": 0.2, "forward_margin_cm": -50, "reach_margin_s": 99, "attacker_speed_factor": 0, "max_path_queries": 500, "reach_before_contact": false, "garrison_max_reach_factor": 9, "garrison_point_los": false, "scan_far_stride": 99, "roof_reach_factor": 7, "kill_zone_reach_factor": 9, "default_reach_cm": 5
 	})JSON"));
 	TestTrue(TEXT("the block parses"), Block.IsValid());
 	if (Block.IsValid())
@@ -482,6 +502,16 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 		TestEqual(TEXT("attacker_speed_factor is at least 0.1"), Read.AttackerSpeedFactor, 0.1f, 0.001f);
 		TestEqual(TEXT("max_path_queries clamps to 64"), Read.MaxPathQueries, 64);
 		TestFalse(TEXT("reach_before_contact false read"), Read.bReachBeforeContact);
+		TestEqual(TEXT("garrison_max_reach_factor clamps to 4"), Read.GarrisonMaxReachFactor, 4.f, 0.001f);
+		TestFalse(TEXT("garrison_point_los false read"), Read.bGarrisonPointLos);
+		const TSharedPtr<FJsonObject> NegativeBlock = ParseBlock(TEXT(R"JSON({ "garrison_max_reach_factor": -2 })JSON"));
+		TestTrue(TEXT("the negative block parses"), NegativeBlock.IsValid());
+		if (NegativeBlock.IsValid())
+		{
+			const FFiringPositionConfig Negative = FiringPositionRules::ConfigFromJson(*NegativeBlock);
+			TestEqual(TEXT("garrison_max_reach_factor clamps to 0 (off)"), Negative.GarrisonMaxReachFactor, 0.f, 0.001f);
+			TestTrue(TEXT("a missing garrison_point_los keeps the default"), Negative.bGarrisonPointLos == Defaults.bGarrisonPointLos);
+		}
 		TestEqual(TEXT("scan_far_stride clamps to 8"), Read.ScanFarStride, 8);
 		TestEqual(TEXT("roof_reach_factor clamps to 1"), Read.RoofReachFactor, 1.f, 0.001f);
 		TestEqual(TEXT("kill_zone_reach_factor clamps to 2"), Read.KillZoneReachFactor, 2.f, 0.001f);
@@ -534,6 +564,9 @@ bool FFiringPositionConfigTest::RunTest(const FString&)
 	TestTrue(TEXT("shipped reach_before_contact"), Shipped.bReachBeforeContact == Defaults.bReachBeforeContact);
 	TestTrue(TEXT("shipped defence_use"), Shipped.bDefenceUse == Defaults.bDefenceUse);
 	TestTrue(TEXT("shipped keep_occupier"), Shipped.bKeepOccupier == Defaults.bKeepOccupier);
+	TestEqual(TEXT("shipped garrison_max_reach_factor"), Shipped.GarrisonMaxReachFactor, Defaults.GarrisonMaxReachFactor, 0.001f);
+	TestTrue(TEXT("shipped garrison_point_los"), Shipped.bGarrisonPointLos == Defaults.bGarrisonPointLos);
+	TestTrue(TEXT("the garrison rule ships inert (dropped idea, experiment 11-20 failed)"), Shipped.GarrisonMaxReachFactor <= 0.f && !Shipped.bGarrisonPointLos);
 	return true;
 }
 
