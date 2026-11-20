@@ -4,11 +4,13 @@ Reads every seed*.json / run*.json (schema codex.pmc_arena/1, written by Scripts
 and prints: the pass rate (from summary.json when present), the median of the T-04 defence metrics, and the worst 3 seeds.
 Never prints raw logs (token economy). Usage:
     python Scripts/Tools/dayloop_digest.py Saved/Logs/Worker/dayloop-crossroads-1 [--json out.json]
+    python Scripts/Tools/dayloop_digest.py folderA --compare folderB [--tune-seeds 1-10]
 """
 from __future__ import annotations
 
 import argparse
 import json
+import re
 import statistics
 import sys
 from pathlib import Path
@@ -32,11 +34,59 @@ def row(path: Path, states: dict[str, str]) -> dict:
     d = rnd.get("defence") or {}
     side = defender_side(rnd)
     idle = [f.get("before_contact_s", 0.0) for f in d.get("open_idle_s") or [] if side is None or f.get("side") == side]
+
+    # 093 paired A/B fields
+    seed = rnd.get("seed")
+    if seed is None:
+        m = re.search(r"(?:seed|run)?(\d+)", path.stem)
+        seed = int(m.group(1)) if m else path.stem
+    scenario = rnd.get("scenario") or "default"
+    def_side = side or "A"
+    atk_side = None
+    for k, s in (rnd.get("sides") or {}).items():
+        if isinstance(s, dict) and s.get("role") == "attacker":
+            atk_side = k
+            break
+    if atk_side is None:
+        atk_side = "B" if def_side == "A" else "A"
+
+    def_win = (rnd.get("winner") == def_side)
+    end_reason = rnd.get("end_reason")
+    atk_capture = (end_reason == "objective" and rnd.get("winner") != def_side)
+
+    sides = rnd.get("sides") or {}
+    def_info = sides.get(def_side) or {}
+    atk_info = sides.get(atk_side) or {}
+    def_kills = def_info.get("kills")
+    squad_size = atk_info.get("squad_size", 3)
+    survivors = atk_info.get("survivors")
+
+    if survivors is not None:
+        att_down = max(0, squad_size - survivors)
+    elif def_kills is not None:
+        att_down = def_kills
+    else:
+        att_down = squad_size if def_win else 0
+
+    if def_kills is not None:
+        att_killed = def_kills
+    else:
+        att_killed = att_down
+
     r = {
         "run": path.stem,
+        "seed": seed,
+        "scenario": scenario,
         "state": states.get(path.stem, "?"),
         "winner": rnd.get("winner"),
-        "end": rnd.get("end_reason"),
+        "end": end_reason,
+        "def_side": def_side,
+        "atk_side": atk_side,
+        "def_win": bool(def_win),
+        "atk_capture": bool(atk_capture),
+        "att_killed": att_killed,
+        "att_down": att_down,
+        "att_down_ge2": bool(att_down >= 2),
         "on_pos": d.get("on_position_before_contact"),
         "idle_max": max(idle) if idle else None,
         "crossfire": d.get("crossfire_deg"),
@@ -58,24 +108,53 @@ def med(rows: list[dict], key: str):
     return round(statistics.median(vals), 2) if vals else None
 
 
-def main() -> int:
-    ap = argparse.ArgumentParser()
-    ap.add_argument("folder")
-    ap.add_argument("--json")
-    a = ap.parse_args()
-    folder = Path(a.folder)
+def load_folder(folder: Path | str) -> list[dict]:
+    f = Path(folder)
     states: dict[str, str] = {}
-    summary = folder / "summary.json"
+    summary = f / "summary.json"
     if summary.exists():
         try:
             s = json.loads(summary.read_text(encoding="utf-8-sig"))
             for x in s.get("runs", s if isinstance(s, list) else []):
-                if isinstance(x, dict) and x.get("run"):
-                    states[str(x["run"])] = str(x.get("state", "?"))
+                if isinstance(x, dict):
+                    if x.get("run"):
+                        states[str(x["run"])] = str(x.get("state", "?"))
+                    if x.get("tag"):
+                        states[str(x["tag"])] = str(x.get("state", "?"))
         except (ValueError, AttributeError):
             pass
-    files = sorted(p for p in folder.glob("*.json") if p.name != "summary.json")
-    rows = [row(p, states) for p in files]
+    files = sorted(p for p in f.glob("*.json") if p.name != "summary.json")
+    if not files:
+        files = sorted(p for p in f.rglob("*.json") if p.name != "summary.json")
+    return [row(p, states) for p in files]
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Smart-enemies day loop digest")
+    ap.add_argument("folder", help="Path to result folder")
+    ap.add_argument("--compare", help="Path to second result folder to run paired A/B comparison against")
+    ap.add_argument("--tune-seeds", help="Seed spec for tuning set (e.g. '1-10'); reports tune vs held-out")
+    ap.add_argument("--rng-seed", type=int, default=42, help="RNG seed for bootstrap resampling (default: 42)")
+    ap.add_argument("--resamples", type=int, default=2000, help="Number of bootstrap resamples (default: 2000)")
+    ap.add_argument("--json", help="Path to output JSON")
+    a = ap.parse_args()
+
+    if a.compare:
+        try:
+            from paired_ab import compare_folders_cli
+        except ImportError:
+            from Scripts.Tools.paired_ab import compare_folders_cli
+        return compare_folders_cli(
+            a.folder,
+            a.compare,
+            tune_seeds=a.tune_seeds,
+            rng_seed=a.rng_seed,
+            n_resamples=a.resamples,
+            json_out=a.json,
+        )
+
+    folder = Path(a.folder)
+    rows = load_folder(folder)
     if not rows:
         print(f"no result JSON in {folder}")
         return 1
