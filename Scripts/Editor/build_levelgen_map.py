@@ -1568,15 +1568,35 @@ class Placer:
                 comp.set_editor_property("can_ever_affect_navigation", False)
         coll = spec.get("collision")
         if coll:
-            channels = {"pawn": unreal.CollisionChannel.ECC_PAWN, "visibility": unreal.CollisionChannel.ECC_VISIBILITY,
-                        "camera": unreal.CollisionChannel.ECC_CAMERA}
-            responses = {"block": unreal.CollisionResponseType.ECR_BLOCK, "ignore": unreal.CollisionResponseType.ECR_IGNORE,
-                         "overlap": unreal.CollisionResponseType.ECR_OVERLAP}
+            self.apply_collision_responses(comp, spec["label"], coll)
+
+    def apply_collision_responses(self, comp, label, coll):
+        """Per-channel responses written into the body instance's CollisionResponses.ResponseArray (profile Custom).
+
+        NOT through set_collision_response_to_channel: in UE 5.8 that setter changes the live container and the array in memory but the
+        value never survives a save + reload (engine check 2026-11-20: any load of the saved map reads BLOCK again; the bake commandlet
+        was not the cause). Only the array assigned as a property is serialized, and the container is rebuilt from it on load
+        (FBodyInstance::FixupData -> UpdateResponseContainerFromArray). So the live container of this editor session stays stale;
+        the builder does not simulate."""
+        channels = {"pawn": "Pawn", "visibility": "Visibility", "camera": "Camera"}          # UCollisionProfile channel display names
+        responses = {"block": unreal.CollisionResponseType.ECR_BLOCK, "ignore": unreal.CollisionResponseType.ECR_IGNORE,
+                     "overlap": unreal.CollisionResponseType.ECR_OVERLAP}
+        try:
+            entries = []
             for ch, resp in sorted(coll.items()):
-                try:
-                    comp.set_collision_response_to_channel(channels[ch], responses[resp])
-                except Exception as exc:
-                    report("REVIEW: %s: collision %s=%s not set: %r" % (spec["label"], ch, resp, exc))
+                entry = unreal.ResponseChannel()
+                entry.set_editor_property("channel", channels[ch])
+                entry.set_editor_property("response", responses[resp])
+                entries.append(entry)
+            comp.set_editor_property("use_default_collision", False)
+            body = comp.get_editor_property("body_instance")
+            col = body.get_editor_property("collision_responses")
+            col.set_editor_property("response_array", entries)
+            body.set_editor_property("collision_responses", col)
+            body.set_editor_property("collision_profile_name", "Custom")
+            comp.set_editor_property("body_instance", body)
+        except Exception as exc:
+            report("REVIEW: %s: collision %s not set: %r" % (label, sorted(coll.items()), exc))
 
     def place(self, spec):
         kind = spec["kind"]
