@@ -326,6 +326,29 @@ namespace PmcArenaBehaviourRules
 		return false;
 	}
 
+	bool CountsAsOverwatchKill(const FPmcOverwatchKillNote& Note, float DeathTimeS, float WindowS)
+	{
+		if (Note.Side != 0 && Note.Side != 1)
+		{
+			return false;
+		}
+		// Age 3.0 counts, 3.01 does not. A death stamped before the hit (negative delta) still counts, as the old inline check did.
+		if (DeathTimeS - Note.HitTimeS > WindowS)
+		{
+			return false;
+		}
+		if (Note.bAtOverwatchSpot)
+		{
+			return true;
+		}
+		return Note.bAtPost && Note.PostKind == EPmcPostKind::Overwatch;
+	}
+
+	int32 PostMoveIncrement(bool bWalkTaken)
+	{
+		return bWalkTaken ? 1 : 0;
+	}
+
 	TSharedRef<FJsonObject> ToJson(const FPmcBehaviour& Behaviour, const FString& Side, bool bTacticalMap)
 	{
 		TSharedRef<FJsonObject> Root = MakeShared<FJsonObject>();
