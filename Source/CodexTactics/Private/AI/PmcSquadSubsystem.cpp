@@ -526,6 +526,15 @@ void UPmcSquadSubsystem::SetTeamObjective(int32 TeamId, EPmcRole Role, const FVe
 		Team.Defence = FTeam::FDefence();
 		Team.Defence.bHasApproach = bKeepApproach;
 		Team.Defence.ApproachPoint = Approach;
+		// T-08: a new objective is a new round - the fall-back state and the enemies seen start empty.
+		Team.EnemiesSeen.Reset();
+		for (TPair<TWeakObjectPtr<AOperativeCharacter>, FFighterState>& Pair : Team.Fighters)
+		{
+			Pair.Value.FallBackPhase = EPmcFallBackPhase::None;
+			Pair.Value.FallBackPost = FFiringCandidate();
+			Pair.Value.FallBackStartedAt = -1.0;
+			Pair.Value.bFallBackHoldLogged = false;
+		}
 		RefreshDefence(TeamId, Team, true);
 	}
 	else
@@ -583,6 +592,17 @@ void UPmcSquadSubsystem::NotifyOperativeDied(AOperativeCharacter* Operative, con
 	if (!Operative)
 	{
 		return;
+	}
+	// T-08: how a defender died (holder / hammer / falling back / fallen back) - the fall-back statistics read these lines.
+	if (FTeam* DeadTeam = Teams.Find(Operative->TeamId); DeadTeam && DeadTeam->Defence.bActive)
+	{
+		if (const FFighterState* DeadState = DeadTeam->Fighters.Find(Operative))
+		{
+			const TCHAR* Phase = DeadState->FallBackPhase == EPmcFallBackPhase::Moving ? TEXT("falling back") : (DeadState->FallBackPhase == EPmcFallBackPhase::InZone ? TEXT("fallen back") : TEXT("-"));
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s died (%s, fall-back %s, %s)"), Operative->TeamId, *Operative->DisplayName.ToString(),
+				Operative->SquadIndex == DeadTeam->Defence.HolderIndex ? TEXT("holder") : ((DeadState->bFallBackPlan || DeadState->FallBackPhase != EPmcFallBackPhase::None) ? TEXT("hammer") : TEXT("other")), Phase,
+				DeadState->bZonePost ? TEXT("on a zone post") : TEXT("not on a zone post"));
+		}
 	}
 	// The killer's team gets the kill (the attacker source is the shooter's display name).
 	for (TPair<int32, FTeam>& Pair : Teams)
@@ -787,6 +807,10 @@ void UPmcSquadSubsystem::UpdateSight()
 				FKnownTarget& Known = Team.Known.FindOrAdd(Target);
 				Known.Actor = Target;
 				Known.LastKnown = ContactLocation;
+				if (Cast<AOperativeCharacter>(Target))
+				{
+					Team.EnemiesSeen.Add(Target); // T-08: Known forgets the dead; the defence counts the attackers it saw go down
+				}
 				const AOperativeCharacter* TargetOperative = Cast<AOperativeCharacter>(Target);
 				Known.bSeenNow = bEye || (Contact == SightRules::EContact::Seen && (!TargetOperative || !TargetOperative->IsInStealthMode()));
 				if (Known.bSeenNow || !Previous)
@@ -1016,6 +1040,7 @@ void UPmcSquadSubsystem::ResetTeam(int32 TeamId)
 {
 	FTeam& Team = TeamOf(TeamId);
 	Team.Known.Reset();
+	Team.EnemiesSeen.Reset();
 	Team.Fighters.Reset();
 	Team.Stats = FPmcTeamStats();
 	Team.bEverContact = false;
@@ -1432,6 +1457,8 @@ FPmcFighterView UPmcSquadSubsystem::BuildFighterView(int32 TeamId, const FTeam& 
 			View.Objective.bInsideDefenceArea = PmcDefenceRules::IsInsideDefendedArea(Feet, View.Objective.Location, Team.Defence.LevelZ,
 				View.Objective.RadiusCm, Team.Defence.bRoof ? Team.Defence.Spots : TArray<FPmcDefenceSpot>(), Config);
 			View.bDefenceOccupier = Fighter.SquadIndex == Team.Defence.OccupierIndex;
+			View.bZonePost = State.bZonePost;
+			View.bFallingBack = State.bFallingBack;
 			if (State.bHasDefencePost)
 			{
 				View.bHasDefencePost = true;
@@ -1608,6 +1635,11 @@ void UPmcSquadSubsystem::Decide(int32 TeamId, FTeam& Team)
 		Flow && (Flow->GetCombatMode() == ECodexCombatMode::TacticalPause || Flow->GetCombatMode() == ECodexCombatMode::TurnBased))
 	{
 		return;
+	}
+	// T-08 (defence_roles): the hammers' fall-back, at the decision rate, before the fighters' orders are scored (the post they are given is read below).
+	if (Team.Objective.IsSet() && Team.Objective->Role == EPmcRole::Defender && Team.Defence.bActive)
+	{
+		UpdateFallBack(TeamId, Team, Mates, Now);
 	}
 
 	FPmcSquadView Squad;
@@ -2837,6 +2869,16 @@ void UPmcSquadSubsystem::SetRouteOf(FTeam& Team, const TArray<FVector>& Route) c
 
 void UPmcSquadSubsystem::HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit)
 {
+	// T-08: the defence's first shot of the round (fall-back rule 2 waits for it).
+	if (Shooter)
+	{
+		FTeam* OwnTeam = Teams.Find(Shooter->TeamId);
+		if (OwnTeam && OwnTeam->Defence.bActive && OwnTeam->Defence.FirstShotAt < 0.0 && GetWorld())
+		{
+			OwnTeam->Defence.FirstShotAt = GetWorld()->GetTimeSeconds();
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: the defence fires its first shot (%s)"), Shooter->TeamId, *Shooter->DisplayName.ToString());
+		}
+	}
 	const AOperativeCharacter* Victim = Cast<AOperativeCharacter>(Target);
 	if (!Shooter || !Victim || Victim == Shooter)
 	{
@@ -3413,6 +3455,12 @@ void UPmcSquadSubsystem::ClearDefencePosts(FTeam& Team)
 		State.FiringStance = EOperativeStance::Crouching;
 		State.bFiringCover = false;
 		State.FiringSlot = FCoverSlot();
+		// T-08: rebuilt by the refresh (the fall-back PHASE and post persist for the round).
+		State.bZonePost = false;
+		State.bFallingBack = false;
+		State.bFallBackPlan = false;
+		State.FallBackPlanPost = FFiringCandidate();
+		State.FallBackPlanPathCm = -1.f;
 	}
 }
 
@@ -3421,6 +3469,10 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 {
 	UWorld* World = GetWorld();
 	UFiringPositionSubsystem* Service = World ? World->GetSubsystem<UFiringPositionSubsystem>() : nullptr;
+	// T-08: the holder and the kill zone of THIS refresh (ApplyDefenceRoles reads them).
+	Team.Defence.HolderIndex = INDEX_NONE;
+	Team.Defence.bHasKillZone = false;
+	Team.Defence.KillZoneFromObjectiveCm = 0.f;
 	if (!Service || !Service->GetConfig().bDefenceUse || !Team.Objective.IsSet())
 	{
 		return;
@@ -3440,6 +3492,23 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		return;
 	}
 	Shooters.Sort([&Posts](int32 A, int32 B) { return Posts[A].Index < Posts[B].Index; });
+	// T-08: a hammer that already fell back into the zone keeps his zone post (RefreshDefence applies it): he takes no firing position and is not the holder.
+	Shooters.RemoveAll([&](int32 PostIndex)
+		{
+			for (AOperativeCharacter* Member : Members)
+			{
+				if (Member && Member->SquadIndex == Posts[PostIndex].Index)
+				{
+					const FFighterState* State = Team.Fighters.Find(Member);
+					return State && State->FallBackPhase != EPmcFallBackPhase::None;
+				}
+			}
+			return false;
+		});
+	if (Shooters.IsEmpty())
+	{
+		return;
+	}
 	// On the ground the shooter whose G008 post is nearest the objective stays on it as the occupier (keep_occupier; the brief's "others keep
 	// their G008 role"): with every shooter seated out on the approach the point stood empty and the attackers won by capture.
 	if (!Team.Defence.bRoof && Config.bKeepOccupier)
@@ -3459,6 +3528,7 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		{
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: squad index %d keeps his G008 post as the objective occupier (%.0f cm from the point)"), TeamId,
 				Posts[Shooters[Nearest]].Index, FMath::Sqrt(NearestDistSq));
+			Team.Defence.HolderIndex = Posts[Shooters[Nearest]].Index;
 			Shooters.RemoveAt(Nearest);
 		}
 		if (Shooters.IsEmpty())
@@ -3540,6 +3610,13 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: kill zone on the approach %s (path %.1f m before the objective, %.1f m of path, wanted %.1f m = %.2f x median reach)"),
 				TeamId, *KillZone.ToCompactString(), UsedCm / 100.f, FiringPositionRules::PolylineLength(AttackerPath) / 100.f, WantedCm / 100.f, Config.KillZoneReachFactor);
 		}
+	}
+	// T-08: the ground kill zone (rule 2's yardstick: how far from the objective the ambush is set).
+	if (!bRoof)
+	{
+		Team.Defence.bHasKillZone = true;
+		Team.Defence.KillZone = KillZone;
+		Team.Defence.KillZoneFromObjectiveCm = static_cast<float>(FVector::Dist2D(KillZone, Objective.Location));
 	}
 	// Reach before contact: ground defences only (a roof man's walk is a stair / ladder climb, his own G008 rules).
 	const bool bReachFilter = Config.bReachBeforeContact && !bRoof && !AttackerPath.IsEmpty() && ContactReachCm > 0.f;
@@ -3819,6 +3896,485 @@ void UPmcSquadSubsystem::AssignFiringPositions(int32 TeamId, FTeam& Team, const 
 		OutPositions.Add(Post.Index, Pos);
 		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s firing position %s %s at %s %s covers %.2f crossfire %.0f deg"), TeamId, *Fighter->DisplayName.ToString(),
 			FiringPositionRules::KindName(Pos.Kind), *Pos.SourceId, *Pos.StandPoint.ToCompactString(), FiringPositionRules::StanceName(Pos.Stance), Pos.CoveredShare, CrossfireDeg);
+	}
+}
+
+// --- T-08 defence roles (the holder in the zone, the hammers' fall-back) ---------------------------------------------------------
+
+const FPmcDefenceRolesConfig& UPmcSquadSubsystem::GetRolesConfig()
+{
+	if (!RolesConfigCache.IsSet())
+	{
+		RolesConfigCache = PmcDefenceRoles::LoadConfig();
+	}
+	return RolesConfigCache.GetValue();
+}
+
+void UPmcSquadSubsystem::BuildZonePosts(int32 TeamId, FTeam& Team)
+{
+	Team.Defence.bZonePostsBuilt = true;
+	Team.Defence.ZonePosts.Reset();
+	UWorld* World = GetWorld();
+	UFiringPositionSubsystem* Service = World ? World->GetSubsystem<UFiringPositionSubsystem>() : nullptr;
+	if (!World || !Service || !Team.Objective.IsSet())
+	{
+		return;
+	}
+	const FPmcDefenceRolesConfig& Roles = GetRolesConfig();
+	const FPmcObjectiveView& Objective = Team.Objective.GetValue();
+	// The threat the zone posts shield from: the kill zone on the approach (where the attackers come from), else the attackers' spawn.
+	FVector Threat = FVector::ZeroVector;
+	if (Team.Defence.bHasKillZone && Team.Defence.KillZoneFromObjectiveCm > 0.f)
+	{
+		Threat = Team.Defence.KillZone;
+	}
+	else if (Team.Defence.bHasApproach)
+	{
+		Threat = Team.Defence.ApproachPoint;
+	}
+	else
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: zone posts: no approach known, no covered zone posts"), TeamId);
+		return;
+	}
+	const double StartSeconds = FPlatformTime::Seconds();
+	const float Radius = Objective.RadiusCm;
+	TArray<FVector> Origins;
+	Origins.Add(Objective.Location);
+	for (const float Fraction : { 0.5f, 0.95f })
+	{
+		for (int32 Step = 0; Step < 8; ++Step)
+		{
+			Origins.Add(Objective.Location + FRotator(0.f, Step * 45.f, 0.f).Vector() * (Radius * Fraction));
+		}
+	}
+	const FCollisionQueryParams Params = Service->MakeShotLineParams();
+	const float SampleHeightCm = Service->GetConfig().SampleHeightCm;
+	const float StandingMuzzleCm = Service->GetConfig().MuzzleHeight(EOperativeStance::Standing);
+	TSet<FString> Cells;
+	TSet<FString> SlotIds;
+	TArray<FFiringCandidate> Found;
+	int32 Rays = 0;
+	int32 Slots = 0;
+	int32 TooFar = 0;
+	int32 OffLevel = 0;
+	int32 WeakCover = 0;
+	float NearestSlotCm = -1.f;
+	for (const FVector& Origin : Origins)
+	{
+		FVector OnNav;
+		if (!ProjectToNavAtLevel(Origin, OnNav) || FVector::Dist2D(OnNav, Objective.Location) > Radius * 1.1f)
+		{
+			continue;
+		}
+		const FVector Chest = OnNav + FVector(0.f, 0.f, 100.f);
+		for (int32 Ray = 0; Ray < 16; ++Ray)
+		{
+			++Rays;
+			const FVector Direction = FRotator(0.f, Ray * 22.5f, 0.f).Vector();
+			// One slot attempt per 50 cm wall cell (FindCoverSlotAt is ~25 traces).
+			const TFunction<bool(const FHitResult&)> Accept = [&Cells](const FHitResult& Hit)
+			{
+				const FVector Point = Hit.ImpactPoint;
+				bool bAlready = false;
+				Cells.Add(FString::Printf(TEXT("%s|%d,%d,%d"), Hit.GetActor() ? *Hit.GetActor()->GetPathName() : TEXT(""), FMath::FloorToInt(static_cast<float>(Point.X) / 50.f),
+					FMath::FloorToInt(static_cast<float>(Point.Y) / 50.f), FMath::FloorToInt(static_cast<float>(Point.Z) / 50.f)), &bAlready);
+				return !bAlready;
+			};
+			FCoverSlot Slot;
+			if (!CoverSlotAlongRay(World, Chest, Direction, Roles.ZoneRayReachCm, Params, Slot, Accept))
+			{
+				continue;
+			}
+			++Slots;
+			const FVector Stand = Slot.WorldLocation;
+			const float DistCm = static_cast<float>(FVector::Dist2D(Stand, Objective.Location));
+			NearestSlotCm = NearestSlotCm < 0.f ? DistCm : FMath::Min(NearestSlotCm, DistCm);
+			if (DistCm > Radius)
+			{
+				++TooFar;
+				continue;
+			}
+			if (!PmcDefenceRules::IsGoalOnPostLevel(true, static_cast<float>(Stand.Z), static_cast<float>(Objective.Location.Z), Objective.LevelToleranceCm))
+			{
+				++OffLevel;
+				continue;
+			}
+			const float Quality = PmcCommanderRules::CoverQualityAgainst(Slot.WorldLocation, Slot.WallNormal, Threat);
+			bool bAlreadyHave = false;
+			SlotIds.Add(PmcSquadLocal::StableCoverSlotId(Slot, false), &bAlreadyHave);
+			if (Quality < Roles.ZoneMinQuality || bAlreadyHave)
+			{
+				WeakCover += bAlreadyHave ? 0 : 1;
+				continue;
+			}
+			// Can he fire on the approach from it? A corner to lean round, or a clear standing line over a low wall.
+			const bool bSeesApproach = Slot.HasExposedEdge()
+				|| Service->IsShotLineClear(Stand + FVector(0.f, 0.f, StandingMuzzleCm), Threat + FVector(0.f, 0.f, SampleHeightCm), Params);
+			FFiringCandidate Candidate;
+			FFiringPosition& Pos = Candidate.Position;
+			Pos.Kind = Slot.Height == ECoverHeight::HighCover ? EFiringPositionKind::Corner : EFiringPositionKind::LowCover;
+			Pos.StandPoint = Stand;
+			Pos.Stance = EOperativeStance::Crouching;
+			Pos.FacingYaw = PmcDefenceRules::YawDegrees(Stand, Threat);
+			Pos.CoveredShare = Quality;
+			const FString WallId = Slot.WallActor.IsValid() ? Slot.WallActor->GetPathName() : FString();
+			Pos.CoverKey = PmcDefenceRules::CoverObjectKey(WallId, Slot.WallPoint);
+			Pos.SourceId = FString::Printf(TEXT("%s@%s"), Slot.WallActor.IsValid() ? *Slot.WallActor->GetName() : TEXT("wall"), *Slot.WallPoint.ToCompactString());
+			Pos.Slot = Slot;
+			Pos.bHasSlot = true;
+			Pos.bValid = true;
+			Candidate.Score = PmcDefenceRoles::ZonePostScore(Quality, bSeesApproach, DistCm, Radius, Roles);
+			Found.Add(Candidate);
+		}
+	}
+	Found.StableSort([](const FFiringCandidate& A, const FFiringCandidate& B)
+		{ return A.Score != B.Score ? A.Score > B.Score : A.Position.SourceId.Compare(B.Position.SourceId, ESearchCase::CaseSensitive) < 0; });
+	if (Found.Num() > Roles.MaxZonePosts)
+	{
+		Found.SetNum(Roles.MaxZonePosts);
+	}
+	Team.Defence.ZonePosts = MoveTemp(Found);
+	const FString Best = Team.Defence.ZonePosts.IsEmpty() ? FString(TEXT("-"))
+		: FString::Printf(TEXT("%s %s score %.2f"), FiringPositionRules::KindName(Team.Defence.ZonePosts[0].Position.Kind), *Team.Defence.ZonePosts[0].Position.SourceId, Team.Defence.ZonePosts[0].Score);
+	UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: zone posts: %d covered slots inside the zone (r %.0f cm, %d origins, %d rays, %d wall slots: %d outside the zone, %d off level, %d weak cover vs the approach; nearest slot %.1f m from the point) in %.1f ms; best %s"), TeamId,
+		Team.Defence.ZonePosts.Num(), Radius, Origins.Num(), Rays, Slots, TooFar, OffLevel, WeakCover, NearestSlotCm / 100.f, (FPlatformTime::Seconds() - StartSeconds) * 1000.0, *Best);
+}
+
+void UPmcSquadSubsystem::ApplyDefenceRoles(int32 TeamId, FTeam& Team, const TArray<AOperativeCharacter*>& Members, TArray<FPmcDefencePost>& Posts,
+	TMap<int32, FFiringPosition>& InOutPositions, TMap<int32, FFallBackPlanEntry>& OutPlans, TSet<int32>& OutZoneMen)
+{
+	const FPmcDefenceRolesConfig& Roles = GetRolesConfig();
+	UWorld* World = GetWorld();
+	if (!Roles.bEnabled || !World || !Team.Objective.IsSet() || Team.Defence.bRoof)
+	{
+		return;
+	}
+	if (!Team.Defence.bZonePostsBuilt)
+	{
+		BuildZonePosts(TeamId, Team);
+	}
+	const TArray<FFiringCandidate>& ZonePosts = Team.Defence.ZonePosts;
+	auto MemberOf = [&Members](int32 SquadIndex) -> AOperativeCharacter*
+	{
+		for (AOperativeCharacter* Member : Members)
+		{
+			if (Member && Member->SquadIndex == SquadIndex)
+			{
+				return Member;
+			}
+		}
+		return nullptr;
+	};
+	// The zone posts already held: the men who fell back keep theirs.
+	TArray<FVector> ClaimedStands;
+	TArray<FString> ClaimedKeys;
+	for (AOperativeCharacter* Member : Members)
+	{
+		const FFighterState* State = Member ? Team.Fighters.Find(Member) : nullptr;
+		if (State && State->FallBackPhase != EPmcFallBackPhase::None)
+		{
+			ClaimedStands.Add(State->FallBackPost.Position.StandPoint);
+			ClaimedKeys.Add(State->FallBackPost.Position.CoverKey);
+		}
+	}
+	// The holder: the best covered post inside the zone he can walk to; none = he keeps his G008 post.
+	const int32 HolderIndex = Team.Defence.HolderIndex;
+	if (Roles.bHolderCover && HolderIndex != INDEX_NONE)
+	{
+		AOperativeCharacter* Holder = MemberOf(HolderIndex);
+		FPmcDefencePost* HolderPost = Posts.FindByPredicate([HolderIndex](const FPmcDefencePost& Post) { return Post.Index == HolderIndex; });
+		if (Holder && HolderPost)
+		{
+			TArray<int32> Excluded;
+			bool bPlaced = false;
+			for (int32 Try = 0; Try < 4 && !bPlaced; ++Try)
+			{
+				const int32 Pick = PmcDefenceRoles::PickZonePost(ZonePosts, Excluded, ClaimedStands, ClaimedKeys, Roles);
+				if (Pick == INDEX_NONE)
+				{
+					break;
+				}
+				const FFiringPosition& Pos = ZonePosts[Pick].Position;
+				// A full nav route that does not cross the kill zone (a holder who was a hammer walks in from his firing position).
+				UNavigationSystemV1* HolderNav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+				const UNavigationPath* HolderPath = HolderNav ? HolderNav->FindPathToLocationSynchronously(World, Holder->GetActorLocation(), Pos.StandPoint) : nullptr;
+				const bool bRouteOk = HolderPath && HolderPath->IsValid() && !HolderPath->IsPartial() && HolderPath->PathPoints.Num() >= 2
+					&& !(Team.Defence.bHasKillZone && Team.Defence.KillZoneFromObjectiveCm > 0.f
+						&& PmcDefenceRoles::PathCrossesKillZone(HolderPath->PathPoints, Team.Defence.KillZone, Roles.KillZoneClearCm));
+				if (bRouteOk)
+				{
+					HolderPost->Location = Pos.StandPoint;
+					HolderPost->Yaw = Pos.FacingYaw;
+					HolderPost->SpotIndex = INDEX_NONE;
+					HolderPost->Sector = INDEX_NONE; // no wedge: the sector shift would move him back to a G008 spot
+					InOutPositions.Add(HolderIndex, Pos);
+					OutZoneMen.Add(HolderIndex);
+					ClaimedStands.Add(Pos.StandPoint);
+					ClaimedKeys.Add(Pos.CoverKey);
+					bPlaced = true;
+					UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s is the holder: covered zone post %s %s at %s (%.1f m from the point, shields %.2f, score %.2f)"), TeamId,
+						*Holder->DisplayName.ToString(), FiringPositionRules::KindName(Pos.Kind), *Pos.SourceId, *Pos.StandPoint.ToCompactString(),
+						FVector::Dist2D(Pos.StandPoint, Team.Objective->Location) / 100.0, Pos.CoveredShare, ZonePosts[Pick].Score);
+				}
+				else
+				{
+					Excluded.Add(Pick);
+				}
+			}
+			if (!bPlaced)
+			{
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s is the holder but the zone has no covered post he can reach (%d posts): he keeps his G008 post"), TeamId,
+					*Holder->DisplayName.ToString(), ZonePosts.Num());
+			}
+		}
+	}
+	// The hammers' fall-back plans: the best free zone post whose nav route from the firing position does not cross the kill zone.
+	if (!Roles.bFallBack)
+	{
+		return;
+	}
+	UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+	for (const TPair<int32, FFiringPosition>& Entry : InOutPositions)
+	{
+		AOperativeCharacter* Hammer = MemberOf(Entry.Key);
+		if (!Hammer || Entry.Key == HolderIndex || OutZoneMen.Contains(Entry.Key))
+		{
+			continue;
+		}
+		const FFiringPosition& From = Entry.Value;
+		TArray<int32> Excluded;
+		int32 Crossing = 0;
+		int32 NoPath = 0;
+		bool bPlanned = false;
+		for (int32 Query = 0; Query < Roles.MaxPathQueries && !bPlanned; ++Query)
+		{
+			const int32 Pick = PmcDefenceRoles::PickZonePost(ZonePosts, Excluded, ClaimedStands, ClaimedKeys, Roles);
+			if (Pick == INDEX_NONE)
+			{
+				break;
+			}
+			Excluded.Add(Pick);
+			const FFiringPosition& Zone = ZonePosts[Pick].Position;
+			const UNavigationPath* Path = Nav ? Nav->FindPathToLocationSynchronously(World, From.StandPoint, Zone.StandPoint) : nullptr;
+			if (!Path || !Path->IsValid() || Path->IsPartial() || Path->PathPoints.Num() < 2)
+			{
+				++NoPath;
+				continue;
+			}
+			if (Team.Defence.bHasKillZone && Team.Defence.KillZoneFromObjectiveCm > 0.f && PmcDefenceRoles::PathCrossesKillZone(Path->PathPoints, Team.Defence.KillZone, Roles.KillZoneClearCm))
+			{
+				++Crossing;
+				continue;
+			}
+			FFallBackPlanEntry Plan;
+			Plan.Post = ZonePosts[Pick];
+			Plan.PathCm = FiringPositionRules::PolylineLength(Path->PathPoints);
+			OutPlans.Add(Entry.Key, Plan);
+			ClaimedStands.Add(Zone.StandPoint);
+			ClaimedKeys.Add(Zone.CoverKey);
+			bPlanned = true;
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s fall-back plan: zone post %s %s at %s, route %.1f m from his firing position (%d routes crossed the kill zone, %d had no path)"), TeamId,
+				*Hammer->DisplayName.ToString(), FiringPositionRules::KindName(Zone.Kind), *Zone.SourceId, *Zone.StandPoint.ToCompactString(), Plan.PathCm / 100.f, Crossing, NoPath);
+		}
+		if (!bPlanned)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s has no fall-back plan (%d zone posts, %d routes crossed the kill zone, %d had no path): he holds his firing position"), TeamId,
+				*Hammer->DisplayName.ToString(), ZonePosts.Num(), Crossing, NoPath);
+		}
+	}
+}
+
+void UPmcSquadSubsystem::UpdateFallBack(int32 TeamId, FTeam& Team, const TArray<AOperativeCharacter*>& Mates, double Now)
+{
+	const FPmcDefenceRolesConfig& Roles = GetRolesConfig();
+	if (!Roles.bEnabled || Team.Defence.bRoof || !Team.Objective.IsSet())
+	{
+		return;
+	}
+	UWorld* World = GetWorld();
+	const UFiringPositionSubsystem* Service = World ? World->GetSubsystem<UFiringPositionSubsystem>() : nullptr;
+	if (!Service)
+	{
+		return;
+	}
+	const FPmcObjectiveView& Objective = Team.Objective.GetValue();
+	auto InZone = [&Objective](const AOperativeCharacter& Man)
+	{
+		const FVector Feet = PmcSquadLocal::FeetOf(Man);
+		return PmcCommanderRules::IsSameLevel(static_cast<float>(Feet.Z), static_cast<float>(Objective.Location.Z), Objective.LevelToleranceCm)
+			&& FVector::Dist2D(Feet, Objective.Location) <= Objective.RadiusCm;
+	};
+
+	// 1. Arrivals; a zone man (holder / fallen-back hammer) at his post but not in cover takes it - the commander's Ambush order does not run in contact on a post.
+	for (AOperativeCharacter* Mate : Mates)
+	{
+		FFighterState* State = Team.Fighters.Find(Mate);
+		if (!State)
+		{
+			continue;
+		}
+		const FVector Feet = PmcSquadLocal::FeetOf(*Mate);
+		const bool bAtPost = State->bHasDefencePost && PmcTacticalRules::IsAtPost(Feet, State->DefencePost, PostArriveCm, Team.Weights.LevelToleranceCm);
+		if (State->FallBackPhase == EPmcFallBackPhase::Moving)
+		{
+			const bool bTimedOut = Now - State->FallBackStartedAt > Roles.MoveTimeoutS;
+			if (bAtPost || bTimedOut)
+			{
+				State->FallBackPhase = EPmcFallBackPhase::InZone;
+				State->bFallingBack = false;
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s %s the zone post (%.1f s, %.1f m from the point)"), TeamId, *Mate->DisplayName.ToString(),
+					bAtPost ? TEXT("is on") : TEXT("did not reach (timed out), counts as in"), Now - State->FallBackStartedAt, FVector::Dist2D(Feet, Objective.Location) / 100.0);
+			}
+		}
+		if (State->bZonePost && State->bFiringCover && bAtPost && !State->bFallingBack && !Mate->bInCover && !Mate->HasOwnMoveOrder()
+			&& Now - State->ZoneCoverTriedAt >= 1.5)
+		{
+			State->ZoneCoverTriedAt = Now;
+			FSquadOrderContext Context;
+			Context.Operative = Mate;
+			Context.Cover = State->FiringSlot;
+			Context.bSprint = false;
+			SquadOrderCatalog::Execute(ESquadOrder::TakeCover, Context);
+		}
+	}
+	if (!Roles.bFallBack)
+	{
+		return;
+	}
+
+	// 2. What the squad knows: the nearest attacker it saw lately, the attackers it saw go down, whether anybody stands in the zone.
+	float Nearest = -1.f;
+	for (const TPair<TWeakObjectPtr<AActor>, FKnownTarget>& Pair : Team.Known)
+	{
+		const AOperativeCharacter* Enemy = Cast<AOperativeCharacter>(Pair.Value.Actor.Get());
+		if (!Enemy || !PmcSquadLocal::IsLiveOperative(Enemy))
+		{
+			continue;
+		}
+		const double Age = Pair.Value.bSeenNow ? 0.0 : Now - Pair.Value.LastSeenTime;
+		if (Age > Roles.KnownMaxAgeS)
+		{
+			continue;
+		}
+		const float Dist = static_cast<float>(FVector::Dist2D(Pair.Value.LastKnown, Objective.Location));
+		Nearest = Nearest < 0.f ? Dist : FMath::Min(Nearest, Dist);
+	}
+	int32 Down = 0;
+	for (const TWeakObjectPtr<AActor>& Seen : Team.EnemiesSeen)
+	{
+		const AOperativeCharacter* Enemy = Cast<AOperativeCharacter>(Seen.Get());
+		Down += (!Enemy || !PmcSquadLocal::IsLiveOperative(Enemy)) ? 1 : 0;
+	}
+	bool bZoneHeld = false;
+	bool bAnyMoving = false;
+	for (AOperativeCharacter* Mate : Mates)
+	{
+		const FFighterState* State = Team.Fighters.Find(Mate);
+		bZoneHeld |= !Mate->IsKnockedDown() && InZone(*Mate);
+		bAnyMoving |= State && State->FallBackPhase == EPmcFallBackPhase::Moving;
+	}
+
+	// 3. The hammers: the rules, then bounding (one mover at a time).
+	const bool bFinish = Down >= Roles.FinishDownMin;
+	TArray<FPmcMoverCandidate> Candidates;
+	TMap<int32, FPmcFallBackDecision> Decisions;
+	for (AOperativeCharacter* Mate : Mates)
+	{
+		FFighterState* State = Team.Fighters.Find(Mate);
+		if (!State || !State->bFallBackPlan || State->FallBackPhase != EPmcFallBackPhase::None || Mate->IsKnockedDown())
+		{
+			continue;
+		}
+		const float ColdSpeed = Mate->GetColdSpeedMultiplier();
+		FPmcFallBackSituation Situation;
+		Situation.bZoneHeld = bZoneHeld;
+		Situation.NearestAttackerFromObjectiveCm = Nearest;
+		Situation.ObjectiveRadiusCm = Objective.RadiusCm;
+		Situation.KillZoneFromObjectiveCm = Team.Defence.KillZoneFromObjectiveCm;
+		Situation.AttackersDown = Down;
+		Situation.bDefenceHasFired = Team.Defence.FirstShotAt >= 0.0;
+		Situation.AttackerSpeedCm = Service->GetConfig().AttackerSpeedFactor * OperativeMovementRules::ComputeMaxSpeed(Mate->MovementConfig, EOperativeStance::Standing, false, false, false) * ColdSpeed;
+		Situation.HammerSpeedCm = OperativeMovementRules::ComputeMaxSpeed(Mate->MovementConfig, EOperativeStance::Standing, true, Mate->IsWounded(), false) * ColdSpeed
+			* Mate->GetWoundTierSpeedScale();
+		Situation.HammerPathCm = State->FallBackPlanPathCm;
+		FPmcFallBackDecision Decision = PmcDefenceRoles::DecideFallBack(Situation, Roles);
+		const bool bFollows = Team.Defence.bFallBackLatched; // a fall-back was ordered: the other hammers follow in turn
+		if ((Decision.Rules != 0 || bFollows) && bFinish)
+		{
+			if (!State->bFallBackHoldLogged)
+			{
+				State->bFallBackHoldLogged = true;
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s holds (>= %d down: %d of %d seen; rules %s%s)"), TeamId, *Mate->DisplayName.ToString(), Roles.FinishDownMin, Down,
+					Team.EnemiesSeen.Num(), *PmcDefenceRoles::RuleList(Decision.Rules), bFollows ? TEXT(", the fall-back had been ordered") : TEXT(""));
+			}
+			continue;
+		}
+		if (Decision.Rules == 0 && !bFollows)
+		{
+			State->bFallBackHoldLogged = false;
+			continue;
+		}
+		Decision.bFallBack = true;
+		Decisions.Add(Mate->SquadIndex, Decision);
+		FPmcMoverCandidate Candidate;
+		Candidate.Index = Mate->SquadIndex;
+		Candidate.PathTimeS = Situation.HammerSpeedCm > 0.f ? State->FallBackPlanPathCm / Situation.HammerSpeedCm : 999.f;
+		Candidates.Add(Candidate);
+	}
+	const int32 Picked = PmcDefenceRoles::PickMover(Candidates, bAnyMoving, static_cast<float>(Now - Team.Defence.LastMoverStartAt), Roles);
+	if (Picked == INDEX_NONE)
+	{
+		return;
+	}
+	for (AOperativeCharacter* Mate : Mates)
+	{
+		FFighterState* State = Team.Fighters.Find(Mate);
+		if (!State || Mate->SquadIndex != Picked)
+		{
+			continue;
+		}
+		const FPmcFallBackDecision& Decision = Decisions.FindChecked(Picked);
+		const FFiringPosition& Zone = State->FallBackPlanPost.Position;
+		FVector OnNav;
+		const FVector Post = ProjectToNavAtLevel(Zone.StandPoint, OnNav) ? OnNav : Zone.StandPoint;
+		const uint8 Rules = Decision.Rules != 0 ? Decision.Rules : Team.Defence.LatchedRules;
+		FString Why;
+		if (Decision.Rules != 0)
+		{
+			Why = FString::Printf(TEXT("%s%s%s"), (Decision.Rules & static_cast<uint8>(EPmcFallBackRule::ZoneEmptying)) ? TEXT("zone_emptying ") : TEXT(""),
+				(Decision.Rules & static_cast<uint8>(EPmcFallBackRule::Bypassed)) ? TEXT("bypassed ") : TEXT(""), (Decision.Rules & static_cast<uint8>(EPmcFallBackRule::NotInTime)) ? TEXT("not_in_time") : TEXT(""));
+			Why.TrimEndInline();
+		}
+		else
+		{
+			Why = TEXT("follows the ordered fall-back, bounding");
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcAI] team %d: %s falls back (rule %s: %s; nearest attacker %.1f m from the point, kill zone %.1f m out, zone %s, %d of %d seen down, slack %.1f s, route %.1f m to %s %s)"),
+			TeamId, *Mate->DisplayName.ToString(), *PmcDefenceRoles::RuleList(Rules), *Why, Nearest < 0.f ? -1.f : Nearest / 100.f, Team.Defence.KillZoneFromObjectiveCm / 100.f,
+			bZoneHeld ? TEXT("held") : TEXT("EMPTY"), Down, Team.EnemiesSeen.Num(), Decision.SlackS, State->FallBackPlanPathCm / 100.f, FiringPositionRules::KindName(Zone.Kind), *Zone.SourceId);
+		Team.Defence.bFallBackLatched = true;
+		Team.Defence.LatchedRules |= Decision.Rules;
+		Team.Defence.LastMoverStartAt = Now;
+		State->FallBackPhase = EPmcFallBackPhase::Moving;
+		State->FallBackPost = State->FallBackPlanPost;
+		State->FallBackStartedAt = Now;
+		State->bFallingBack = true;
+		State->bZonePost = true;
+		State->DefencePost = Post;
+		State->DefenceYaw = Zone.FacingYaw;
+		State->DefenceSpotIndex = INDEX_NONE;
+		State->DefenceSector = INDEX_NONE;
+		State->bFiringPosition = true;
+		State->FiringStance = Zone.Stance;
+		State->bFiringCover = Zone.bHasSlot;
+		State->FiringSlot = Zone.Slot;
+		State->DefenceArrivedAt = -1.0;
+		State->DefencePostWalks = 0;
+		State->DefencePostWalkFromCm = -1.f;
+		State->bDefencePostDropped = false;
+		State->bDefenceSettled = false;
+		break;
 	}
 }
 
@@ -4147,6 +4703,8 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 		Team.Defence.ApproachYawDeg, Team.Defence.Spots, Slots, Inward, Config);
 	// T-05 phase b: firing positions on the kill zone for the hammers (a new objective = a new round: the cached lines are dropped first).
 	TMap<int32, FFiringPosition> FiringPositionMap;
+	TMap<int32, FFallBackPlanEntry> FallBackPlans;
+	TSet<int32> ZoneMen;
 	if (UFiringPositionSubsystem* FiringService = GetWorld() ? GetWorld()->GetSubsystem<UFiringPositionSubsystem>() : nullptr)
 	{
 		if (bResolveAccess)
@@ -4154,6 +4712,11 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 			FiringService->InvalidateCache();
 		}
 		AssignFiringPositions(TeamId, Team, Members, Posts, FiringPositionMap);
+		// T-08 (defence_roles.enabled): the holder on a covered post inside the zone, the hammers' fall-back plans.
+		if (GetRolesConfig().bEnabled && !Team.Defence.bRoof)
+		{
+			ApplyDefenceRoles(TeamId, Team, Members, Posts, FiringPositionMap, FallBackPlans, ZoneMen);
+		}
 	}
 
 	ClearDefencePosts(Team);
@@ -4206,8 +4769,32 @@ void UPmcSquadSubsystem::RefreshDefence(int32 TeamId, FTeam& Team, bool bResolve
 			State.bFiringCover = Firing->bHasSlot;
 			State.FiringSlot = Firing->Slot;
 		}
+		State.bZonePost = ZoneMen.Contains(Post.Index);
+		if (const FFallBackPlanEntry* Plan = FallBackPlans.Find(Post.Index))
+		{
+			State.bFallBackPlan = true;
+			State.FallBackPlanPost = Plan->Post;
+			State.FallBackPlanPathCm = Plan->PathCm;
+		}
 		FVector Location = Post.Location;
-		if (Post.bHasPost)
+		const bool bFallen = State.FallBackPhase != EPmcFallBackPhase::None;
+		if (bFallen)
+		{
+			// T-08: a hammer that fell back keeps his zone post over a refresh (a death elsewhere does not walk him out of the zone).
+			const FFiringPosition& Zone = State.FallBackPost.Position;
+			State.bZonePost = true;
+			State.bFallingBack = State.FallBackPhase == EPmcFallBackPhase::Moving;
+			State.DefenceYaw = Zone.FacingYaw;
+			State.DefenceSpotIndex = INDEX_NONE;
+			State.DefenceSector = INDEX_NONE;
+			State.bHasDefencePost = true;
+			State.bFiringPosition = true;
+			State.FiringStance = Zone.Stance;
+			State.bFiringCover = Zone.bHasSlot;
+			State.FiringSlot = Zone.Slot;
+			Location = Zone.StandPoint;
+		}
+		if (Post.bHasPost || bFallen)
 		{
 			FVector OnNav;
 			if (ProjectToNavAtLevel(Location, OnNav))

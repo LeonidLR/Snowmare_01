@@ -141,6 +141,27 @@
     "garrison_point_los": false,
     "max_path_queries": 16
   },
+  "defence_roles": {
+    "_comment": "Defence roles (smart enemies T-08 first slice, designer decisions 2026-11-20 night; AI/PmcDefenceRolesRules.h, UPmcSquadSubsystem::ApplyDefenceRoles / UpdateFallBack). FROZEN numbers, not trainer genes. The ONE task of a defence is destroying the attacking group; holding the zone is only a means and a zone is held only by being physically inside it alive. On a GROUND objective with firing_positions.defence_use true: the HOLDER (the occupier, firing_positions.keep_occupier) stands on a COVERED post inside the objective zone (a cover slot whose wall shields it from the approach, zone_min_quality; none = his G008 post) and the other shooters are HAMMERS on T-05 firing positions. The hammers FALL BACK into prepared covered posts inside the zone by three rules: 1 zone emptying (nobody stands in the zone and an attacker is within zone_near_m of its edge), 2 ambush bypassed (an attacker is nearer the objective than the kill zone by more than bypass_margin_m; only after the defence has fired its first shot), 4 not in time (the attackers' time to the zone edge at the walk speed x firing_positions.attacker_speed_factor is less than the hammer's nav-path time to his zone post + not_in_time_margin_s). Rule 3 (position discovered / suppressed) is not built. NEVER while finish_down_min attackers are down (finish them). Rules read only what the squad has seen (known_max_age_s). HOW: bounding - one hammer moves while the other covers, the next starts when the mover is in the zone or after bound_max_wait_s (a walk not arrived after move_timeout_s counts as done); the route never passes within kill_zone_clear_m of the kill zone; once inside the zone a man stays (no point pull, no leave) for the round. Zone posts: cover slots found by rays (zone_ray_reach_cm) from points inside the objective radius, scored quality x (no line to the approach: zone_no_line_factor) x (1 - zone_dist_weight x distance from the centre / radius), at most max_zone_posts, zone_min_spacing_m apart when the zone has room. max_path_queries = nav-path queries per hammer per defence refresh (his fall-back plan). enabled false (the shipped value) = the layer does nothing: exactly the T-05 behaviour; holder_cover / fall_back switch its two halves.",
+    "enabled": false,
+    "holder_cover": true,
+    "fall_back": true,
+    "zone_near_m": 25,
+    "bypass_margin_m": 5,
+    "finish_down_min": 2,
+    "known_max_age_s": 3,
+    "not_in_time_margin_s": 2,
+    "bound_max_wait_s": 6,
+    "move_timeout_s": 15,
+    "kill_zone_clear_m": 8,
+    "zone_min_quality": 0.1,
+    "zone_no_line_factor": 0.6,
+    "zone_dist_weight": 0.3,
+    "zone_min_spacing_m": 2.5,
+    "zone_ray_reach_cm": 400,
+    "max_zone_posts": 24,
+    "max_path_queries": 6
+  },
   "engagement_bands": {
     "m16": { "min_m": 25, "max_m": 60 },
     "sniper_rifle": { "min_m": 45, "max_m": 110 },

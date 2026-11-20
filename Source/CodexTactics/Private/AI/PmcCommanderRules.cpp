@@ -90,6 +90,11 @@ namespace PmcCommanderRules
 			{
 				return 0.f;
 			}
+			// T-08: a man on a prepared zone post is IN the zone (that is what holds it): no walk out onto the point.
+			if (F.bZonePost)
+			{
+				return 0.f;
+			}
 			const bool bGate = !bNeedOffPoint || O.DistanceCm > 0.7f * O.RadiusCm;
 			const float Retake = Step(O.bEnemyOnPoint && bGate) * (0.2f + 0.8f * Clamp01(O.HoldFrac));
 			const bool bMayOccupy = !F.bHasDefencePost || F.bDefenceOccupier;
@@ -176,7 +181,8 @@ namespace PmcCommanderRules
 				const bool bFight = S.bContact || F.bUnderFire || (F.bHasThreat && F.Threat.bSeenNow && !F.Threat.bStandIn);
 				if (Order == EPmcOrder::Ambush)
 				{
-					return FMath::Max(W.Ambush, 1.f) * (F.bUnderFire ? 0.75f : 1.05f);
+					// T-08: a fall-back walk is ordered by the squad plan - it outscores the fight orders, under fire too.
+					return FMath::Max(W.Ambush, 1.f) * (F.bFallingBack ? 1.6f : (F.bUnderFire ? 0.75f : 1.05f));
 				}
 				if (Order == EPmcOrder::Hold && PointHold > 0.f && !bFight)
 				{

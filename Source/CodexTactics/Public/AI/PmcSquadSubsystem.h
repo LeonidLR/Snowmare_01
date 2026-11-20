@@ -3,6 +3,7 @@
 #include "CoreMinimal.h"
 #include "AI/FiringPositionRules.h"
 #include "AI/PmcCommanderRules.h"
+#include "AI/PmcDefenceRolesRules.h"
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcEncounterRules.h"
 #include "AI/PmcTacticalRules.h"
@@ -312,6 +313,25 @@ private:
 		/** A cover-slot firing position (Corner / LowCover): he takes the slot (bInCover) instead of crouching beside it. */
 		bool bFiringCover = false;
 		FCoverSlot FiringSlot;
+		/**
+		 * T-08 (defence_roles): his defence post is a prepared post INSIDE the zone (the holder's, or a hammer that fell back): the point pull
+		 * (Retake / Occupy) is off for him, he holds it from cover. Rebuilt by every defence refresh.
+		 */
+		bool bZonePost = false;
+		/** T-08: he is walking to his zone post (a fall-back under way): the Ambush walk outscores a fight order. */
+		bool bFallingBack = false;
+		/** T-08: this refresh's fall-back plan (a hammer only): the zone post he would take and his nav-path length to it from his firing position (-1: none usable). */
+		bool bFallBackPlan = false;
+		FFiringCandidate FallBackPlanPost;
+		float FallBackPlanPathCm = -1.f;
+		/** T-08: his fall-back phase and post. Persist over the refreshes of one round; reset when a new objective is set. */
+		EPmcFallBackPhase FallBackPhase = EPmcFallBackPhase::None;
+		FFiringCandidate FallBackPost;
+		double FallBackStartedAt = -1.0;
+		/** T-08: the "holds (>= N down)" log line was written for the situation that holds him (reset when no rule holds). */
+		bool bFallBackHoldLogged = false;
+		/** T-08: world time a zone man was last told to take his cover slot (a zone man at his post, not in cover; throttle). */
+		double ZoneCoverTriedAt = -1e9;
 		/** He already gave up one unreachable defence post; a second give-up holds where he stands. */
 		bool bDefencePostDropped = false;
 		/** The Ambush order faced / crouched him on his defence post (false while he still walks there). */
@@ -331,6 +351,8 @@ private:
 	{
 		TArray<TWeakObjectPtr<AOperativeCharacter>> Members;
 		TMap<TWeakObjectPtr<AActor>, FKnownTarget> Known;
+		/** T-08: every enemy operative this team has seen this round (Known forgets the dead): the dead among them are the "attackers down". */
+		TSet<TWeakObjectPtr<AActor>> EnemiesSeen;
 		/** NotifyShotAt: a shooter who fired at one of the team, seen until this time whatever the range (bug #43). */
 		TMap<TWeakObjectPtr<AActor>, double> ShotRevealUntil;
 		/** Where that shooter's muzzle flash was (fix/pmc-fire-through-wall: seen only with a clear line to it, or to him). */
@@ -395,6 +417,21 @@ private:
 			 * He alone walks onto the point on a quiet push or a late clock, so a time win stays possible.
 			 */
 			int32 OccupierIndex = INDEX_NONE;
+			/** T-08: SquadIndex of the holder (the occupier AssignFiringPositions kept off the firing positions; INDEX_NONE: none) and the ground kill zone it used. */
+			int32 HolderIndex = INDEX_NONE;
+			bool bHasKillZone = false;
+			FVector KillZone = FVector::ZeroVector;
+			/** T-08: the kill zone's planar distance to the objective centre, cm (rule 2's yardstick). */
+			float KillZoneFromObjectiveCm = 0.f;
+			/** T-08: world time of the defence's first shot of the round (-1: none yet). */
+			double FirstShotAt = -1.0;
+			/** T-08: the prepared covered posts inside the zone, best first (built once per round, BuildZonePosts). */
+			TArray<FFiringCandidate> ZonePosts;
+			bool bZonePostsBuilt = false;
+			/** T-08: a fall-back was ordered this round (the later hammers follow, bounded), the rules that fired first, when the last mover started. */
+			bool bFallBackLatched = false;
+			uint8 LatchedRules = 0;
+			double LastMoverStartAt = -1e9;
 		};
 		FDefence Defence;
 	};
@@ -447,6 +484,25 @@ private:
 	/** G008: resolve the roof access (once per objective) and assign guard / sector posts. bResolveAccess false keeps the access. */
 	void RefreshDefence(int32 TeamId, FTeam& Team, bool bResolveAccess);
 	void ClearDefencePosts(FTeam& Team);
+	/** T-08: the fall-back plan of one hammer - his zone post and the nav-path length to it from his firing position. */
+	struct FFallBackPlanEntry
+	{
+		FFiringCandidate Post;
+		float PathCm = -1.f;
+	};
+	/**
+	 * T-08 (defence_roles.enabled, a GROUND defence with firing positions): the holder takes a covered post inside the zone (rewrites his post in Posts / InOutPositions,
+	 * flags him in OutZoneMen) and every hammer gets a fall-back plan (OutPlans: the best free zone post whose nav route does not cross the kill zone). Builds the
+	 * zone posts once per round. Men who already fell back keep their zone posts (they claim them).
+	 */
+	void ApplyDefenceRoles(int32 TeamId, FTeam& Team, const TArray<AOperativeCharacter*>& Members, TArray<FPmcDefencePost>& Posts,
+		TMap<int32, FFiringPosition>& InOutPositions, TMap<int32, FFallBackPlanEntry>& OutPlans, TSet<int32>& OutZoneMen);
+	/** T-08: the cover slots inside the objective zone that shield from the approach, scored and sorted best first (Team.Defence.ZonePosts). */
+	void BuildZonePosts(int32 TeamId, FTeam& Team);
+	/** T-08: at the commander's decision rate - the fall-back rules for the hammers, bounding, arrival (UpdateFallBack never traces; the plans hold the nav paths). */
+	void UpdateFallBack(int32 TeamId, FTeam& Team, const TArray<AOperativeCharacter*>& Mates, double Now);
+	/** T-08 config (the "defence_roles" block, read once). */
+	const FPmcDefenceRolesConfig& GetRolesConfig();
 	/**
 	 * T-05 phase b (firing_positions.defence_use): before contact the first two sector shooters take firing positions on the kill zone (a
 	 * crossfire pair on the ground, the best roof edges on a roof) instead of their G008 wedge spots; the rest keep their G008 role. Rewrites
@@ -485,6 +541,7 @@ private:
 	void HandleWeaponFired(AOperativeCharacter* Shooter, AActor* Target, bool bHit);
 
 	TMap<int32, FTeam> Teams;
+	TOptional<FPmcDefenceRolesConfig> RolesConfigCache;
 	float SightTimer = 0.f;
 	/** G008: one parse of the map's levelgen layout per world. */
 	bool bDefenceLayoutTried = false;

@@ -541,6 +541,13 @@ struct CODEXTACTICS_API FPmcFighterView
 	bool bDefenceOccupier = false;
 	/** Set by the subsystem from DefenderObjectiveToPoint before executing: a defender's Objective walk goes onto the point, not to his post. */
 	bool bObjectiveToPoint = false;
+	/**
+	 * T-08 role gate (defence_roles): his defence post is a prepared covered post INSIDE the zone (the holder, or a hammer fallen back): the point pull
+	 * (Retake / Occupy) is 0 for him - he holds the zone from cover instead of walking out onto the point. Default false.
+	 */
+	bool bZonePost = false;
+	/** T-08 role gate: he is walking to that zone post (a fall-back): the Ambush walk outscores a fight order, in contact and under fire. Default false. */
+	bool bFallingBack = false;
 };
 
 /** The squad as a whole. */
