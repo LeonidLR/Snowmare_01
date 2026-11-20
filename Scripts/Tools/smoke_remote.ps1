@@ -23,7 +23,9 @@ param(
     [string]$WindowFrom = "08:00",
     [string]$WindowTo = "16:30",
     [int]$WaitMinutes = 20,
-    [int]$MaxJobs = 2                       # i7-6700K
+    [int]$MaxJobs = 2,                      # i7-6700K
+    [int]$Repeat = 1,
+    [switch]$RepeatSeeds
 )
 $ErrorActionPreference = "Stop"
 $ProjectDir = Split-Path (Split-Path $PSScriptRoot -Parent) -Parent
@@ -73,7 +75,8 @@ $sync = Join-Path $PSScriptRoot "worker_sync.ps1"
 $syncMode = $(if ($sameBuild) { @{ SkipSync = $true; SkipBinaries = $true } } else { @{ ShipHead = $true } })
 if ($sameBuild) { Say "worker already holds this checkout's build ($($myToken.Substring(0, 8))...): smokes only, no sync" }
 & $sync @syncMode -Worker $Worker -BinariesFrom $ProjectDir -Commands $Commands -Jobs $width -TimeoutSeconds $TimeoutSeconds `
-    -ExtraArgs $engineArgs -SmokeExtra ($extra -join " ") -ResultDir $resultDir -AllLogs -NoRetry:$NoRetry -WaitEngineMinutes $WaitMinutes
+    -ExtraArgs $engineArgs -SmokeExtra ($extra -join " ") -ResultDir $resultDir -AllLogs -NoRetry:$NoRetry -WaitEngineMinutes $WaitMinutes `
+    -Repeat $Repeat -RepeatSeeds:$RepeatSeeds
 $code = $LASTEXITCODE
 $json = Join-Path $resultDir "SmokeParallel-worker.json"
 if ($code -eq 2 -or -not (Test-Path $json)) { Local "worker run failed (worker_sync exit $code, $resultDir)" }
