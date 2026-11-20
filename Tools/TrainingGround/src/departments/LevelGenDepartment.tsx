@@ -43,6 +43,11 @@ import type { ExpandResult, SeamCheck } from '../levelgen/expand';
 import { checkSeams, expandLayout, expansionSize } from '../levelgen/expand';
 import type { PlaceObjectivesResult } from '../levelgen/objectives';
 import { addGoal, checkObjectives, defaultGoalCount, groundNav, moveObjective, placeObjectives, removeGoal, START_ID } from '../levelgen/objectives';
+import { carryPropsWithBuilding } from '../levelgen/moveDerived';
+import { PropsLayoutView } from '../levelgen/props/layoutView';
+import { checkProps } from '../levelgen/props/propsEdit';
+import { applyRouteClearance } from '../levelgen/props/routeClearance';
+import { DEFAULT_AUTOGEN_CONFIG, type PropsAutogenConfig } from '../levelgen/props/autogenConfig';
 import { V2 } from '../levelgen/blockTemplates';
 import { FULL } from '../levelgen/fullReroll';
 import { ROTATION } from '../levelgen/rotation';
@@ -57,7 +62,7 @@ import type { Evaluation } from '../levelgen/evaluate';
 import { evaluateLayout } from '../levelgen/evaluate';
 import { generateLayout } from '../levelgen/generate';
 import type { Profile } from '../levelgen/profile';
-import type { GenLayout, GenParams } from '../levelgen/schema';
+import type { GenBuilding, GenLayout, GenParams } from '../levelgen/schema';
 import { layersOf, mandatoryRoute } from '../levelgen/schema';
 
 /** `key` = the slot's history key (the first layout name: an expansion renames the map to <name>_x<N>). */
@@ -68,8 +73,19 @@ interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdic
 const HIDDEN_AT_START = ['threat_drop', 'threat_windows', 'threat_overwatch', 'threat_hiding', ...MAP_PLAN_HIDDEN];
 const sameConditions = (a: Conditions, b: Conditions) => a.weather === b.weather && a.time_of_day === b.time_of_day;
 const PROPS_DERIVED_RU = { regenerated: 'пересозданы автоматически', created: 'созданы', kept_hand: 'не тронуты (файл ручной)', error: 'ошибка пересоздания' } as const;
-/** What «Принять» told the designer after a map with MOVED elements was written (T-022). */
-interface StaleNote { name: string; buildings: string[]; others: number; propsOnMoved: number; propsFile: string; derived?: { props: 'regenerated' | 'created' | 'kept_hand' | 'error'; propsSource?: string; objectives: string | null; tactical: string | null } }
+/** What «Принять» told the designer after a map with MOVED elements was written (T-022, task 092). */
+interface StaleBuildingMove { id: string; buildingBefore: GenBuilding; delta: Vec2; }
+interface StaleNote {
+  name: string;
+  buildings: string[];
+  others: number;
+  propsOnMoved: number;
+  propsFile: string;
+  derived?: { props: 'regenerated' | 'created' | 'kept_hand' | 'error'; propsSource?: string; objectives: string | null; tactical: string | null };
+  buildingMoves?: StaleBuildingMove[];
+  carried?: { propsCount: number; issuesCount: number; gate: string; routeClearanceDropped: number };
+  prevPropsFile?: LevelPropsFile;
+}
 type ProfileRow = { id: string; title: string; size_m: [number, number] };
 /** Browser cache of the current map (the server's Saved/TrainingGround/current_map.json is the master). */
 const CURRENT_MAP_CACHE = 'tg.levelgen.currentMap';
@@ -118,7 +134,7 @@ export const LevelGenDepartment: React.FC = () => {
   const [tintOn, setTintOn] = useState(true);
   const [layerMsg, setLayerMsg] = useState<{ ok: boolean; text: string } | null>(null);
   // the map's props file (mines, loot, special items): read through the props API, hand edits are written as its overrides
-  const [propsState, setPropsState] = useState<{ map: string; path: string; file: LevelPropsFile; dirty: boolean } | null>(null);
+  const [propsState, setPropsState] = useState<{ map: string; path: string; file: LevelPropsFile; dirty: boolean; balance?: Record<string, unknown> | null; autogen?: PropsAutogenConfig | null } | null>(null);
   const NO_PROPS = 'У этой карты ещё нет файла пропсов — пропсы появятся после задачи 076 (автоматические пропсы для сгенерированных карт).';
   // the chokepoint / threat analysis (levelgen/chokepoints.ts)
   const [conditions, setConditions] = useState<Conditions>(CHOKE.threats.conditions);
@@ -270,11 +286,25 @@ export const LevelGenDepartment: React.FC = () => {
       setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, layout, analysis: an } : c)));
       setAcceptedSnap((m) => ({ ...m, [cur.layout.name]: JSON.stringify(layout) }));
       setBaseLayouts((m) => ({ ...m, [cur.layout.name]: layout }));
-      // T-022: the derived files that depend on positions (props on a moved building, the tactical map, the objectives file) - say which are stale
+      // T-022 / task 092: the derived files that depend on positions (props on a moved building, the tactical map, the objectives file) - say which are stale
       if (moved && (moved.buildings.size || moved.others)) {
         const ids = [...moved.buildings];
+        const buildingMoves: StaleBuildingMove[] = [];
+        if (before) {
+          for (const id of ids) {
+            const bBefore = before.buildings.find((x) => x.id === id);
+            const bAfter = layout.buildings.find((x) => x.id === id);
+            if (bBefore && bAfter) {
+              const delta: Vec2 = [
+                Math.round(bAfter.footprint[0][0] - bBefore.footprint[0][0]),
+                Math.round(bAfter.footprint[0][1] - bBefore.footprint[0][1]),
+              ];
+              buildingMoves.push({ id, buildingBefore: bBefore, delta });
+            }
+          }
+        }
         const onMoved = before ? resolveProps(propsFile).filter((pr) => ids.some((id) => { const b = before.buildings.find((x) => x.id === id); return !!b && inFootprint(b, pr.object.pos, 0); })).length : 0;
-        setStaleNote({ name: cur.layout.name, buildings: ids, others: moved.others, propsOnMoved: onMoved, propsFile: propsState?.path ?? '', derived: d.derived });
+        setStaleNote({ name: cur.layout.name, buildings: ids, others: moved.others, propsOnMoved: onMoved, propsFile: propsState?.path ?? '', derived: d.derived, buildingMoves });
       } else setStaleNote(null);
       delete moveLog.current[cur.layout.name];
       // T-020: «Принять» makes the accepted layout's map the current one (the generated candidates did not change it until now)
@@ -635,8 +665,8 @@ export const LevelGenDepartment: React.FC = () => {
       const f = (d.files ?? []).find((x) => !x.isFixture && x.layout === curLayoutName);
       if (!f || dead) return;
       const r = await fetch(`/api/levelgen/props?map=${encodeURIComponent(f.id)}`);
-      const p = await r.json() as { props?: LevelPropsFile; filePath?: string };
-      if (r.ok && p.props && !dead) setPropsState({ map: f.id, path: p.filePath ?? f.id, file: p.props, dirty: false });
+      const p = await r.json() as { props?: LevelPropsFile; filePath?: string; balance?: Record<string, unknown>; autogen?: PropsAutogenConfig };
+      if (r.ok && p.props && !dead) setPropsState({ map: f.id, path: p.filePath ?? f.id, file: p.props, dirty: false, balance: p.balance ?? null, autogen: p.autogen ?? null });
     }).catch(() => {});
     return () => { dead = true; };
   }, [curLayoutName]);
@@ -652,6 +682,51 @@ export const LevelGenDepartment: React.FC = () => {
       setLayerMsg({ ok: true, text: `пропсы сохранены: ${propsState.path}, ревизия ${d.revision}` });
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
+  };
+  /** Task 092: carries props of moved buildings along with them and runs validator + 088 clearance. */
+  const carryDerivedProps = () => {
+    if (!staleNote?.buildingMoves?.length || !propsState || !cur) return;
+    const prevProps = propsState.file;
+    let nextProps = propsState.file;
+    for (const bm of staleNote.buildingMoves) {
+      nextProps = carryPropsWithBuilding(nextProps, bm.buildingBefore, bm.delta);
+    }
+    let issuesCount = 0;
+    let gateStatus = 'pass';
+    let droppedCount = 0;
+    try {
+      const balanceObj = propsState.balance ?? {};
+      const view = PropsLayoutView.build(cur.layout as unknown as Record<string, unknown>, PropsLayoutView.readConfig(balanceObj));
+      const check = checkProps(nextProps, view, cur.layout, balanceObj);
+      issuesCount = check.issues.length;
+      gateStatus = check.gate.gate;
+      const autogenConfig = propsState.autogen ?? DEFAULT_AUTOGEN_CONFIG;
+      const stats = applyRouteClearance(JSON.parse(JSON.stringify(nextProps)), cur.layout, autogenConfig, { keepLockedObjects: true });
+      droppedCount = stats.droppedTotal;
+    } catch {
+      // non-blocking
+    }
+    const prevMap = new Map(prevProps.layers.flatMap((l) => l.objects).map((o) => [o.id, o.pos]));
+    let totalMoved = 0;
+    for (const l of nextProps.layers) {
+      for (const o of l.objects) {
+        const p0 = prevMap.get(o.id);
+        if (p0 && (p0[0] !== o.pos[0] || p0[1] !== o.pos[1])) totalMoved++;
+      }
+    }
+    setPropsState({ ...propsState, file: nextProps, dirty: true });
+    setStaleNote({
+      ...staleNote,
+      prevPropsFile: prevProps,
+      carried: { propsCount: totalMoved, issuesCount, gate: gateStatus, routeClearanceDropped: droppedCount },
+    });
+    setLayerMsg({ ok: true, text: `Пропсы перенесены (${totalMoved} шт.). Нажмите «Сохранить» для записи в файл.` });
+  };
+  const undoCarryDerivedProps = () => {
+    if (!staleNote?.prevPropsFile || !propsState) return;
+    setPropsState({ ...propsState, file: staleNote.prevPropsFile, dirty: true });
+    setStaleNote({ ...staleNote, prevPropsFile: undefined, carried: undefined });
+    setLayerMsg({ ok: true, text: 'Перенос пропсов отменён.' });
   };
   /** Whether the last layer edit was applied (deleteSelected reads it right after the call). */
   const layerMsgOk = useRef(false);
@@ -835,6 +910,35 @@ export const LevelGenDepartment: React.FC = () => {
             {staleNote.derived && (staleNote.derived.props === 'kept_hand' || staleNote.derived.props === 'error') && <li className="text-amber-200">Файл пропсов {staleNote.propsFile || '(нет)'} НЕ пересоздан ({staleNote.derived.props === 'kept_hand' ? `ручной, source=${staleNote.derived.propsSource ?? '?'}` : 'ошибка'}): на сдвинутых зданиях стоит {staleNote.propsOnMoved} пропсов — они остались на старых местах. Вкладка «Пропсы уровней» → «Перебросить»; сам файл не менялся.</li>}
             <li>Не пересчитано: план ЧВК (включите слой «ЧВК» и снова «Принять»), карта в Unreal — нажмите «Собрать в Unreal».</li>
           </ul>
+          {staleNote.buildingMoves && staleNote.buildingMoves.length > 0 && (
+            <div className="mt-2 pt-2 border-t border-sky-800/60 flex flex-wrap items-center gap-3">
+              {!staleNote.carried ? (
+                <button
+                  type="button"
+                  onClick={carryDerivedProps}
+                  disabled={!propsState}
+                  className="px-2.5 py-1 rounded bg-sky-700 hover:bg-sky-600 border border-sky-500 text-white font-medium text-xs shadow-sm transition-colors disabled:opacity-50"
+                  data-carry-derived
+                >
+                  Перенести пропсы и точки вместе со зданием
+                </button>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-emerald-300 font-medium">
+                    ✓ Пропсы перенесены ({staleNote.carried.propsCount} шт.). Валидация: {staleNote.carried.gate.toUpperCase()} ({staleNote.carried.issuesCount} замечаний, маршруты: {staleNote.carried.routeClearanceDropped} дропов).
+                  </span>
+                  <button
+                    type="button"
+                    onClick={undoCarryDerivedProps}
+                    className="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 border border-slate-600 text-slate-200 text-xs"
+                    data-undo-carry
+                  >
+                    Отменить перенос
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
         </div>
       )}
     </div>
