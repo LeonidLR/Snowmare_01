@@ -9,6 +9,7 @@ import type { RouteSummary } from '../levelgen/buildingRoutes';
 import type { StoryMapSummary } from '../levelgen/storyPass';
 import type { TraversalCode, TraversalReport } from '../levelgen/buildingTraversal';
 import type { BuildingRole } from '../levelgen/schema';
+import type { PlanMapSummary } from '../levelgen/buildings/planSummary';
 
 /** Russian story names (building-stories.md 6; Record<StoryId>: a new story without a name fails the typecheck). */
 const STORY_RU: Record<StoryId, string> = {
@@ -105,6 +106,25 @@ function StorySummaryLine({ s }: { s: StoryMapSummary }) {
   );
 }
 
+/** The per-map plan line (buildings/planSummary.ts planMapSummary, the CLI `--plans` line carries the same numbers): planned / fallback / legacy, archetypes, issues, stories. */
+function PlanSummaryBlock({ s }: { s: PlanMapSummary }) {
+  const arch = s.archetypes.map((a) => `${a.archetype} ${a.planned}/${a.buildings}`).join(', ');
+  const codes = Object.entries(s.issues.by_code).sort(([a], [b]) => (a < b ? -1 : 1)).map(([c, n]) => `${CODE_RU[c as TraversalCode] ?? c} ${n}`).join(', ');
+  const fb = Object.entries(s.fallbacks).map(([k, n]) => `${k} ${n}`).join(', ');
+  const stories = Object.entries(s.stories).map(([k, n]) => `${STORY_RU[k as StoryId] ?? k} ${n}`).join(', ');
+  return (
+    <div className="flex flex-col gap-0.5 border-l-2 border-sky-700 pl-2" data-plan-summary>
+      <p className="text-sky-300" title="Планировщик комнат (S2): здания с планом по полосам, запасной BSP и здания без планировщика; то же печатает CLI --plans">
+        Планировки: входимых {s.enterable}; с планом {s.planned}, запасной BSP {s.fallback}{fb ? ` (${fb})` : ''}, без планировщика {s.legacy}{s.replanned ? `; переплан. ${s.replanned}` : ''}
+      </p>
+      <p className="text-slate-400">По типам: {arch || '—'}; комнат {s.rooms}, тупиковых квартир {s.dead_end_units}</p>
+      <p className={s.issues.error ? 'text-rose-300' : 'text-slate-400'}>
+        Замечания планов: {s.issues.error} ошибок / {s.issues.warning} предупреждений{codes ? ` (${codes})` : ''}; зданий с ошибкой {s.failing}; истории на планах: {stories || '—'}
+      </p>
+    </div>
+  );
+}
+
 export interface BuildingsPanelProps {
   report: TraversalReport;
   /** The per-map story summary (null / absent = the map has no stories). */
@@ -115,9 +135,15 @@ export interface BuildingsPanelProps {
   onReroll?: (id: string) => void;
   isLocked?: (id: string) => boolean;
   canReroll?: (id: string) => boolean;
+  /** The per-map plan summary (null / absent = no planned building). */
+  planSummary?: PlanMapSummary | null;
+  /** «другой план» (S2.7) per planned building. */
+  onReplan?: (id: string) => void;
+  /** null = the building was never planned (no button); 'locked' = inside a locked district; 'no_base' = storied without a pristine copy (loaded map). */
+  replanState?: (id: string) => 'ok' | 'locked' | 'no_base' | null;
 }
 
-export function BuildingsPanel({ report, summary, message, onReroll, isLocked, canReroll }: BuildingsPanelProps) {
+export function BuildingsPanel({ report, summary, message, onReroll, isLocked, canReroll, planSummary, onReplan, replanState }: BuildingsPanelProps) {
   const [open, setOpen] = useState(false);
   const enterable = report.buildings.filter((b) => b.rooms.total > 0);
   const failed = report.buildings.filter((b) => !b.ok);
@@ -130,6 +156,7 @@ export function BuildingsPanel({ report, summary, message, onReroll, isLocked, c
         <button className="ml-auto text-slate-400 hover:text-slate-200 underline" onClick={() => setOpen(!open)}>{open ? 'только ошибки' : 'все здания'}</button>
       </p>
       {summary && <StorySummaryLine s={summary} />}
+      {planSummary && <PlanSummaryBlock s={planSummary} />}
       {message && <p className="text-violet-300">{message}</p>}
       <ul className="flex flex-col gap-0.5 max-h-56 overflow-auto">
         {list.map((b) => (
@@ -141,6 +168,10 @@ export function BuildingsPanel({ report, summary, message, onReroll, isLocked, c
               <span className="text-slate-500">{b.set_piece}</span>
               <span className="text-slate-500">комнаты {b.rooms.reachable}/{b.rooms.total}, этажи {b.levels.reachable.join(',') || '—'}{b.roof !== 'none' ? `, крыша ${b.roof === 'reachable' ? 'да' : 'нет'}` : ''}</span>
               {isLocked?.(b.id) && <span className="text-amber-400" title="здание в закреплённом районе: история сохраняется">закреплено</span>}
+              {onReplan && replanState?.(b.id) ? (
+                <button className={`${onReroll && b.stories?.length ? '' : 'ml-auto '}text-sky-300 hover:text-sky-200 underline disabled:opacity-40 disabled:no-underline`} data-replan={b.id} disabled={replanState(b.id) !== 'ok'}
+                  title={replanState(b.id) === 'locked' ? 'здание закреплено: план и история сохраняются' : replanState(b.id) === 'no_base' ? 'карта загружена из файла: нет исходного здания, перегенерируйте' : 'другой план: перепланировать только это здание со следующим счётчиком, его истории пересчитать, остальную карту не трогать'} onClick={() => onReplan(b.id)}>другой план</button>
+              ) : null}
               {onReroll && b.stories?.length ? (
                 <button className="ml-auto text-violet-300 hover:text-violet-200 underline disabled:opacity-40 disabled:no-underline" disabled={!!isLocked?.(b.id) || !(canReroll?.(b.id) ?? true)}
                   title={isLocked?.(b.id) ? 'здание закреплено' : 'перебросить историю здания следующим под-seed и пересчитать его маршруты'} onClick={() => onReroll(b.id)}>другая история</button>

@@ -12,11 +12,15 @@ const STEP = 50;
 const LOOP_LETTERS = 'afghjkmnqtvxyz', DEAD_LETTERS = 'ACFGHJMNQRTVXYZ';
 const GLYPH: Record<string, string> = { entry: 'E', unit_entry: 'U', room: 'd', enfilade: 'e', portal: 'P', balcony: 'b' };
 
-function glyphOf(op: WallOpening): string {
+/** The glyph of an opening (the ASCII view and the page's plan overlay share it, so the legend of S2_3_PLANS.md reads the same on both). */
+export function openingGlyph(op: Pick<WallOpening, 'kind' | 'role' | 'slot'>): string {
   if (op.slot === 'balcony' || op.slot === 'escape') return 'S';
   if (op.kind === 'window') return 'w';
   return GLYPH[op.role ?? 'room'] ?? 'd';
 }
+
+/** The letter of the i-th flat of a storey: lower case = a flat with a second entry (a loop), upper case = a dead-end flat. */
+export const flatLetter = (i: number, dead: boolean): string => (dead ? DEAD_LETTERS[i % DEAD_LETTERS.length] : LOOP_LETTERS[i % LOOP_LETTERS.length]);
 
 /**
  * The building turned to read well: the long side across, the street (the wall of the main entry, `wall_door_300`) at the bottom, so the court /
@@ -75,7 +79,7 @@ export function buildingToAscii(b0: GenBuilding, floor: number): string {
     for (const op of pt.openings ?? []) if (op.kind !== 'loophole') entries.push({ op, horizontal: Math.abs(pt.start[1] - pt.end[1]) < 1 });
   }
   for (const { op, horizontal } of entries) {
-    const half = (op.width ?? 150) / 2, ch = glyphOf(op);
+    const half = (op.width ?? 150) / 2, ch = openingGlyph(op);
     for (let t = -half + STEP / 2; t < half; t += STEP) {
       const r = row(horizontal ? op.pos[1] : op.pos[1] + t), c = col(horizontal ? op.pos[0] + t : op.pos[0]);
       if (r >= 0 && r <= H && c >= 0 && c <= W) g[r][c] = ch;
@@ -92,7 +96,7 @@ export function buildingToAscii(b0: GenBuilding, floor: number): string {
     if (u) {
       if (!letters.has(u.column)) letters.set(u.column, String(letters.size));
       const i = Number(letters.get(u.column)!);
-      return u.dead_end ? DEAD_LETTERS[i % DEAD_LETTERS.length] : LOOP_LETTERS[i % LOOP_LETTERS.length];
+      return flatLetter(i, !!u.dead_end);
     }
     return r.unit === 'suite' ? 'e' : 'r';
   };

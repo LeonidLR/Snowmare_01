@@ -108,6 +108,11 @@ interface Draft {
    * layout params by every code that builds a Draft; never emitted. Absent = off = the legacy stages, byte for byte.
    */
   building_plans?: boolean;
+  /**
+   * Re-plan counters per building id (S2.7 «другой план», buildings/replan.ts): the plan seed of a building with a counter n > 0 gets `|r<n>` appended,
+   * so the same (building, counter) always gives the same plan. Never set by the generator itself (absent = every seed unchanged, byte for byte).
+   */
+  plan_reroll?: Record<string, number>;
 }
 
 const WALL_H = obstacleHeight('wall_no_traverse');        // cm, a greybox wall (the lab's)
@@ -982,6 +987,13 @@ function legacyStages(p: BuildingPlan): DraftBuilding {
   return emitBuilding(p);
 }
 
+/** The plan seed of a planned building: fnv1a(id | snapped footprint | storeys | archetype), plus `|r<n>` for the n-th re-plan («другой план», n > 0). */
+export function planSeedFor(bid: string, L: number, D: number, floors: number, archetype: 'office' | 'block', n = 0): number {
+  const base = `${bid}|${L}x${D}|${floors}|${archetype}`;
+  return fnv1a(n > 0 ? `${base}|r${n}` : base);
+}
+const planSeedOf = (d: Draft, bid: string, L: number, D: number, floors: number, archetype: 'office' | 'block'): number => planSeedFor(bid, L, D, floors, archetype, d.plan_reroll?.[bid] ?? 0);
+
 /**
  * Step S2.2 piece B: an enterable office from its BAND PLAN (S2_ROOMS_PLAN.md 3.2; buildings/bandPlan.ts + planDoors.ts + planWindows.ts).
  * The footprint is snapped to the 100 cm grid (keeping its min corner, rounded to a whole cm), the stair core is placed by planCores as
@@ -1024,7 +1036,7 @@ function addPlannedOffice(d: Draft, bid: string, r: Rect, s: BuildingSpec, rando
     else core = { u0, depth: c.laneWalls.length ? 350 : 200, portalU0: lowRel - inner };
   }
   // 3. the plan
-  const planSeed = fnv1a(`${bid}|${sn.L}x${sn.D}|${s.floors}|office`);
+  const planSeed = planSeedOf(d, bid, sn.L, sn.D, s.floors, 'office');
   const plan = reason ? null : planBands({ L: sn.L, D: sn.D, archetype: 'office', core: core ? { u0: core.u0, depth: core.depth } : null, seed: planSeed });
   if (!plan || plan.kind === 'fallback') {
     const p2 = planShell(d, bid, r, s, random);
@@ -1057,7 +1069,7 @@ function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random
   // the core's flights reach the roof of a walkable-roof block, else the top storey: >= 2 flights = two lanes (350 deep), one = a single lane (200)
   const coreTop = s.roof_walkable ? s.floors : s.floors - 1;
   const depth: 350 | 200 = coreTop > 1 ? 350 : 200;
-  const planSeed = fnv1a(`${bid}|${sn.L}x${sn.D}|${s.floors}|block`);
+  const planSeed = planSeedOf(d, bid, sn.L, sn.D, s.floors, 'block');
   const plan = planBlock({ L: sn.L, D: sn.D, depth, seed: planSeed });
   let coreSide: Side = longSides.includes(first) ? OPPOSITE[first] : alongY ? 'west' : 'north';
   const fallback = (why: string): DraftBuilding => {

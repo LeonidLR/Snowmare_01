@@ -38,11 +38,11 @@ const ZONE_NW: Vec2[] = [[500, -9000], [6200, -9000], [6200, 0], [500, 0]];
 const tpl = (layer: string, label: string): AddTemplate => layerById(layer)!.add!.find((t) => t.label === label)!;
 const FREE_WALL_KINDS = ['wall', 'fence', 'curb'];
 
-test('layers config: valid; the ten layers of the designer + the fire line + the chokepoints, in his order', () => {
+test('layers config: valid; the ten layers of the designer + the fire line + the chokepoints + the room plans (S2.7), in his order', () => {
   assert.deepEqual(validateLayersConfig(LAYERS), []);
   const main = LAYERS.layers.filter((l) => l.group === 'main').map((l) => l.name);
   assert.deepEqual(main, ['Дороги', 'Здания / структуры', 'Мосты', 'Преграды крупные', 'Преграды средние', 'Преграды мелкие', 'Мины', 'Лут', 'Особые предметы', 'Цели']);
-  assert.deepEqual(LAYERS.layers.filter((l) => l.group === 'analysis').map((l) => l.id), ['fire_lines', 'chokepoints']);
+  assert.deepEqual(LAYERS.layers.filter((l) => l.group === 'analysis').map((l) => l.id), ['fire_lines', 'chokepoints', 'plans']);
   assert.deepEqual(LAYERS.layers.filter((l) => l.group === 'threats').map((l) => l.id), ['threat_drop', 'threat_windows', 'threat_overwatch', 'threat_hiding']);
   // a broken config is reported, not swallowed
   const bad = JSON.parse(JSON.stringify(LAYERS)) as LayersConfig;
@@ -170,7 +170,7 @@ test('layers visibility: hidden layers give exactly their keys; solo; counts wit
   const counts = layerCounts(a, { fire_line: 7, chokepoint: 3, hiding: 5 });
   assert.deepEqual([counts.fire_lines, counts.chokepoints, counts.threat_hiding, counts.threat_drop], [7, 3, 5, 0]);
   assert.equal(counts.obstacles_small, a.byLayer.obstacles_small.length);
-  assert.deepEqual(analysisLayerCounts({ window: 2 }), { fire_lines: 0, chokepoints: 0, threat_drop: 0, threat_windows: 2, threat_overwatch: 0, threat_hiding: 0 });
+  assert.deepEqual(analysisLayerCounts({ window: 2, plan: 4 }), { fire_lines: 0, chokepoints: 0, plans: 4, threat_drop: 0, threat_windows: 2, threat_overwatch: 0, threat_hiding: 0 });
   const tints = layerTints(a);
   assert.equal(tints.get(a.byLayer.obstacles_large[0].key), layerById('obstacles_large')!.color);
   assert.equal(tints.size, a.byLayer.obstacles_large.length + a.byLayer.obstacles_medium.length + a.byLayer.obstacles_small.length);

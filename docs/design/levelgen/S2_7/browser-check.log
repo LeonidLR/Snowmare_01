@@ -1,0 +1,22 @@
+opened gen_bgen_plans_check: 9 buildings, planned 9
+layers panel row: plans count = 9, checked = true
+overview, ground: {"buildings":9,"rooms":68,"doors":166,"loopRooms":24,"dead":12,"issues":0,"floors":"0"}
+screenshot 00-overview-ground.jpg
+B_x (12 x 36 m block, 2 storeys) ground: {"buildings":9,"rooms":68,"doors":166,"loopRooms":24,"dead":12,"issues":0,"floors":"0"}
+screenshot 01-block-36m-storey-1-ground.jpg
+B_x storey 2 (selector 'Этаж 1'): {"buildings":9,"rooms":68,"doors":166,"loopRooms":24,"dead":18,"issues":0,"floors":"1"}
+screenshot 02-block-36m-storey-2.jpg
+hover B_x_r_f1_c0: label B_x_r_f1_c0; title "B_x_r_f1_c0\nквартира, B_x_u_f1_s0L (тупик)\n6.0 x 4.0 м, 24.0 м2\nпроёмы: 4"
+screenshot 02b-hover-dead-end-flat.jpg
+office B_o12h ground: {"buildings":9,"rooms":68,"doors":166,"loopRooms":24,"dead":12,"issues":0,"floors":"0"}
+screenshot 03-office-ground.jpg
+screenshot 03b-office-storey-2.jpg
+plan summary text: Планировки: входимых 9; с планом 9, запасной BSP 0, без планировщика 0По типам: block 4/4, office 5/5; комнат 160, тупиковых квартир 15Замечания планов: 0 ошибок / 0 предупреждений; зданий с ошибкой 0; истории на планах: —
+screenshot 04-summary-panel.jpg
+screenshot 05-replan-before.jpg
+replan button for B_o12: true, disabled = false
+after «другой план»: undo button Отменить (1) (before: Отменить (0)); message: B_o12: другой план 1
+B_o12 plan changed on screen: true
+screenshot 06-replan-after.jpg
+after undo the plan is the old one again: true; undo button Отменить (0)
+selected: Выбрано: B_o12, высота 600 см; context button: Другой план для B_o12

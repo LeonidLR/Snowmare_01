@@ -4,11 +4,12 @@
 // <out>/<name>.json (schema codex.levelgen_layout/1), <name>.eval.json and report.md (<= 30 lines per candidate; the only thing
 // an agent reads). --stories = the page's «Истории зданий (S1)» toggle (storyPass.ts: the story pass as the last step, schema /2 +
 // cost_hash; default off so existing scripts and golden files do not change). --plans = the page's «Планировки зданий (S2)» toggle
-// (params.building_plans: enterable offices get a band plan with doors / windows / links, schema /2; default off, byte-identical output). --accept <name> copies a written candidate into Content/Data/LevelGen/accepted/ (what the UE builder reads).
+// (params.building_plans: enterable offices and blocks get a band plan with doors / windows / links, schema /2; default off, byte-identical output; with it the report prints a `plans:` summary line). --accept <name> copies a written candidate into Content/Data/LevelGen/accepted/ (what the UE builder reads).
 import fs from 'node:fs';
 import path from 'node:path';
 import { configValues } from '../../movement/config.ts';
 import { CONFIG_PATH, parseArgs, readConfigFile, ROOT } from '../../movement/cli/paths.ts';
+import { planMapSummary, planSummaryLine } from '../buildings/planSummary.ts';
 import { evaluateLayout } from '../evaluate.ts';
 import { generateCandidate, storyMapSummary } from '../storyPass.ts';
 import { ACCEPTED_DIR, LEVELGEN_OUT, readProfileById } from '../node/files.ts';
@@ -49,6 +50,8 @@ for (let s = 0; s < seeds; s++) {
   fs.writeFileSync(path.join(out, `${layout.name}.json`), JSON.stringify(layout, null, 1) + '\n');
   fs.writeFileSync(path.join(out, `${layout.name}.eval.json`), JSON.stringify(ev, null, 1) + '\n');
   report.push(...ev.summary);
+  // --plans: the map's plan summary (buildings/planSummary.ts; the page's «Здания» panel shows the same numbers)
+  if (args.plans) report.push(planSummaryLine(planMapSummary(layout, ev.buildings?.buildings)));
   if ('log' in res) {
     const s = storyMapSummary(layout, res.log);
     const stories = Object.entries(s.stories).map(([k, n]) => `${k} ${n}`).join(', ');

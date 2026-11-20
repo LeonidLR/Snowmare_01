@@ -46,9 +46,11 @@ interface Props {
   tints?: ReadonlyMap<string, string>;
   /** Wall crossing conflicts to mark with red indicators (task 085). */
   conflicts?: WallCrossingConflict[];
+  /** The «Планировки» overlay (PlansOverlay.tsx) draws the rooms of the planned buildings: skip the dashed room bounds and ids here (S2.7). */
+  plansOverlay?: boolean;
 }
 
-export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks, view = FIT_VIEW, hideObjectives = false, hidden, tints, conflicts }, ref) => {
+export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, layer = 'all', floorMode = 'all', firingLines, showFiringLines = false, height = 560, marks, view = FIT_VIEW, hideObjectives = false, hidden, tints, conflicts, plansOverlay = false }, ref) => {
   const canvas = useRef<HTMLCanvasElement>(null);
   useImperativeHandle(ref, () => ({ toPngBase64: () => canvas.current ? canvas.current.toDataURL('image/png').replace(/^data:image\/png;base64,/, '') : null }), []);
   // redraw on a size change (the region-select overlay over this canvas tracks its size: both must use the same transform)
@@ -136,7 +138,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
       }
       // Interior rooms (subtle boundary & id)
       for (const rm of b.rooms ?? []) {
-        if (!floorActive(rm.floor, b.id)) continue;
+        if (!floorActive(rm.floor, b.id) || (plansOverlay && b.plan)) continue;
         g.save(); g.strokeStyle = 'rgba(226, 232, 240, 0.35)'; g.lineWidth = 0.8; g.setLineDash([2, 2]); poly(buildingRectPoly(b, [rm.bounds.min, rm.bounds.max])); g.stroke(); g.restore();
         if (floorMode !== 'all' || layer !== 'all') {
           g.fillStyle = 'rgba(226, 232, 240, 0.7)'; g.font = '8px ui-monospace, monospace'; g.textAlign = 'center';
@@ -313,7 +315,7 @@ export const LayoutView = React.forwardRef<LayoutViewHandle, Props>(({ layout, l
     for (const m of marks ?? []) { const q = P(m); g.strokeStyle = '#f97316'; g.lineWidth = 2.5; g.beginPath(); g.arc(q[0], q[1], 10, 0, Math.PI * 2); g.stroke(); }
     g.fillStyle = '#ffe600'; g.font = '11px ui-monospace, monospace'; g.textAlign = 'left';
     g.fillText(`${layout.name}  ${Math.round((maxY - minY) / 100)} x ${Math.round((maxX - minX) / 100)} m  seed ${layout.seed}  layer ${layer !== 'all' ? layer : floorMode}`, 8, h - 8);
-  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW, view, hideObjectives, hidden, tints, conflicts]);
+  }, [layout, layer, floorMode, firingLines, showFiringLines, height, marks, boxW, view, hideObjectives, hidden, tints, conflicts, plansOverlay]);
 
   return <canvas ref={canvas} style={{ width: '100%', height }} className="rounded-xl border border-slate-800 block" />;
 });

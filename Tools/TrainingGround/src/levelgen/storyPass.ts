@@ -6,12 +6,14 @@
 //     region re-roll / a lock, or the old map of an expansion) keeps them; the fresh ones get stories from `seed`'s sub-seeds.
 //   - restoryForGoals: the pass re-run after the mission goals change (designer 2026-11-19): role-changed buildings re-picked.
 //   - rerollBuildingStory: «другая история» - one building's story re-rolled with the next sub-seed (refused inside a lock).
+//   - replanBuildingStory: «другой план» (S2.7) - one planned building re-planned (buildings/replan.ts), its stories re-run alone.
 //   - storyMapSummary: the per-map line of the «Здания» panel (role shares, storied share, rollbacks, choice share).
 // Toggle off = none of this runs: the generator's /1 output is unchanged byte for byte. Pure, deterministic, no DOM.
 import { applyStoriesToLayout, storySubSeed, type StoryId, type StoryLogEntry } from './buildingStories.ts';
 import { assignRoles } from './buildingRoles.ts';
 import { routeCostHash } from './buildingRoutes.ts';
 import { generateLayout } from './generate.ts';
+import { replanBuilding, spliceBuilding } from './buildings/replan.ts';
 import type { Profile } from './profile.ts';
 import { isLockedAt, layoutGroups, regenStateOf } from './regionRegen.ts';
 import type { BuildingRole, GenBuilding, GenLadder, GenLayout, GenParams } from './schema.ts';
@@ -172,6 +174,42 @@ export function rerollBuildingStory(layout: GenLayout, id: string, state: StoryS
     ok: true, ...res!, from: cur.id, to, seed,
     message: to === cur.id ? `${id}: другая история не выпала за ${REROLL_MAX_STEPS} попыток (${cur.id})` : `${id}: ${cur.id} -> ${to}`,
   };
+}
+
+// ---- «другой план» (S2.7) ---------------------------------------------------------------------------------------------------------
+
+export interface ReplanStoryResult extends Partial<StoryPassResult> {
+  ok: boolean;
+  message: string;
+  /** The re-plan counter of the new plan (building.plan.reroll). */
+  counter?: number;
+  /** The story before / after (undefined = the map has no stories). */
+  from?: string;
+  to?: string;
+}
+
+/**
+ * «другой план» (S2.7): ONE planned building gets another plan (buildings/replan.ts: the next counter of its plan seed) and, on a storied map, its stories are dropped and
+ * re-run for it alone (the pristine copy is the base; the story seed is the layout's, as in the generation pass). Every other building, its stories and the rollback log stay;
+ * the building's walls and mantle edges are swapped, its story ladders dropped. Refused for a building in a locked district, one that was never planned, or a storied one
+ * without a pristine copy (a loaded map: nothing to undo its story with). Deterministic: the same layout, building and state give the same result.
+ */
+export function replanBuildingStory(layout: GenLayout, id: string, state?: StoryState): ReplanStoryResult {
+  const b = layout.buildings.find((x) => x.id === id);
+  if (!b) return { ok: false, message: `${id}: нет такого здания` };
+  if (isBuildingLocked(layout, id)) return { ok: false, message: `${id}: здание в закреплённом районе - план и история сохраняются` };
+  const storied = !!b.stories?.length;
+  const pristine = storied ? state?.base[id]?.building : b;
+  if (!pristine) return { ok: false, message: `${id}: нет исходного здания (карта загружена из файла) - перегенерируйте` };
+  const res = replanBuilding(layout, pristine);
+  if (!res.ok || !res.piece) return { ok: false, message: res.message };
+  const bare = spliceBuilding(layout, id, res.piece, new Set(storied ? state?.base[id]?.ladders ?? [] : []));
+  const base = state?.base ?? {}, log = state?.log ?? [];
+  if (!storied) return { ok: true, layout: bare, base, log, counter: res.counter, message: res.message };
+  const rest: StoryState = { base: Object.fromEntries(Object.entries(base).filter(([k]) => k !== id)), log: log.filter((e) => e.building !== id) };
+  const out = withBuildingStories(bare, layout.seed, rest);
+  const from = b.stories!.at(-1)!.id, to = out.layout.buildings.find((x) => x.id === id)?.stories?.at(-1)?.id ?? 'open';
+  return { ok: true, ...out, counter: res.counter, from, to, message: `${res.message}; история ${from} -> ${to}` };
 }
 
 // ---- per-map summary (section 5 "Map summary"; computed only, no new numbers) ------------------------------------------------------

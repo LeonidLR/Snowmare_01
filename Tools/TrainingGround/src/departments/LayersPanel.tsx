@@ -46,6 +46,9 @@ interface PanelProps {
   selected: Entity | null;
   onDelete: () => void;
   onRotate: (deg: number) => void;
+  /** «другой план» for a selected building (S2.7): absent = no plans on the map. `replanState`: null = not a planned building; 'locked' / 'no_base' = refused. */
+  onReplan?: (id: string) => void;
+  replanState?: (id: string) => 'ok' | 'locked' | 'no_base' | null;
   /** Re-roll the active (obstacle) layer inside the drawn zone; null = no zone / no reference profile. */
   onRerollLayer: (() => void) | null;
   message: { ok: boolean; text: string } | null;
@@ -64,7 +67,7 @@ interface PanelProps {
   config: ChokeConfig;
 }
 
-export const LayersPanel: React.FC<PanelProps> = ({ counts, vis, onVis, active, onActive, tool, onTool, addIdx, onAddIdx, tintOn, onTint, selected, onDelete, onRotate, onRerollLayer, message, propsInfo, propsNote, onSaveProps, busy,
+export const LayersPanel: React.FC<PanelProps> = ({ counts, vis, onVis, active, onActive, tool, onTool, addIdx, onAddIdx, tintOn, onTint, selected, onDelete, onRotate, onReplan, replanState, onRerollLayer, message, propsInfo, propsNote, onSaveProps, busy,
   analysis, analysisBusy, conditions, onConditions, onAnalyze, selChoke, onZoomChoke, threat, config }) => {
   const def = active ? LAYERS.layers.find((l) => l.id === active) ?? null : null;
   const row = (l: LayerDef, indent = false) => {
@@ -135,6 +138,11 @@ export const LayersPanel: React.FC<PanelProps> = ({ counts, vis, onVis, active, 
                 <button type="button" onClick={onSaveProps} disabled={!propsInfo.dirty || busy || propsInfo.frozen} className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-emerald-700 text-white disabled:opacity-40" data-save-props><Save size={11} />Сохранить пропсы{propsInfo.dirty ? ' *' : ''}</button></p>
             : <p className="text-amber-300">{propsNote}</p>)}
           {selected && <p className="text-slate-300" data-selected={selected.key}>Выбрано: <span className="font-mono text-cyan-200">{selected.id}</span>{selected.kind ? ` (${selected.kind}${selected.variant ? ` / ${selected.variant}` : ''})` : ''}{selected.height_cm !== undefined ? `, высота ${selected.height_cm} см` : ''}{selected.footprint_m2 !== undefined ? `, площадь ${Math.round(selected.footprint_m2 * 100) / 100} м²` : ''}{selected.size_class ? `, класс: ${selected.size_class === 'large' ? 'крупная' : selected.size_class === 'medium' ? 'средняя' : 'мелкая'}` : ''}</p>}
+          {selected?.type === 'building' && onReplan && replanState?.(selected.id) && (
+            <button type="button" onClick={() => onReplan(selected.id)} disabled={busy || replanState(selected.id) !== 'ok'} data-replan-selected={selected.id}
+              title={replanState(selected.id) === 'locked' ? 'здание закреплено: план и история сохраняются' : replanState(selected.id) === 'no_base' ? 'карта загружена из файла: нет исходного здания, перегенерируйте' : 'Перепланировать только это здание (следующий счётчик seed плана), его истории пересчитать, остальную карту не трогать; отмена — «Отменить»'}
+              className="self-start inline-flex items-center gap-1 px-2 py-1 rounded bg-sky-700 border border-sky-500 text-white font-semibold disabled:opacity-40"><Shuffle size={12} />Другой план для {selected.id}</button>
+          )}
           {message && <p className={message.ok ? 'text-emerald-300' : 'text-rose-300'} data-layer-msg>{message.text}</p>}
         </div>
       )}
