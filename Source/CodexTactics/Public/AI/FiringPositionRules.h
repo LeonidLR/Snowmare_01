@@ -133,8 +133,8 @@ struct CODEXTACTICS_API FFiringPositionConfig
 	float DefaultReachCm = 1400.f;
 	/** "forward_margin_cm" (4000): a ground position is forward of the kill zone only when it is nearer the attackers along the approach axis by MORE than this. */
 	float ForwardMarginCm = 4000.f;
-	/** "defence_use" (true): objective defenders take firing positions before contact (phase b; PmcSquadSubsystem). */
-	bool bDefenceUse = true;
+	/** "defence_use" (false since 11-20): objective defenders take firing positions before contact (phase b; PmcSquadSubsystem). OFF by default: on paired seeds 1060-1209 every variant lost to main on defender wins (crossroads 32-44 vs 82 of 143) - the point is left empty / held by one man in the open; T-08 decides who holds the point. */
+	bool bDefenceUse = false;
 	/**
 	 * "keep_occupier" (true): on a GROUND objective the sector shooter whose G008 post is nearest the objective takes no firing position: he stays
 	 * on the point as the occupier (brief T-05 phase b: only the hammers take positions, the others keep their G008 role). Diagnosis 11-19: with
