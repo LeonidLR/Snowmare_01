@@ -164,6 +164,12 @@ Cause: the crossroads 6 m zone has NO covered post in 80 of 150 rounds, so the h
 
 Open for the designer: (1) the crossroads test point has no cover - give the zone cover (bigger test zone / generator places cover at goals) or allow an open holder post; (2) should rule 4 wait until the hammers have opened fire? (3) rule 3 + leaving the zone not built. Trainer trap: `defence_roles` numbers would become trainer genes unless frozen in pmc_commander.bounds.json (not touched).
 
+## Goal counts only after its zone is cleared + goals drawn as zones (worker/goal-zone-clear 6f9b16c7, from main 19a90f52; NOT merged) - DONE, gated
+
+Designer answers 1 + 2 (11-20). Generated-map reach goals (`Content/Data/LevelGen/objectives/*.objectives.json`) no longer count while a live "Enemy"-tagged actor (monster or hostile PMC, seen or unseen, wounded or knocked down) stands in the goal zone (same zone test as the squad: room polygon or `radius_cm` circle, same floor). HUD: `GOALS: n/N - CLEAR THE ZONE`, zone outline on the ground (orange, red + "ENEMY IN ZONE" when blocked), outlines on the corner + full minimap, one HQ radio line per contest. Fixed on the way: Parse reset floor_tolerance_cm when label_world_size_cm was absent. Tests: MissionGoals 11/11 (6 new), LevelGen 97/97, UI.Minimap 13/13; MissionGoalsSmoke PASS (stand-in enemy blocks GOAL_1 3 s, then it counts), MinimapSmoke / MissionSmoke / GateExitLakeSmoke PASS. No viewport screenshot (nullrhi) - designer to look in PIE.
+
+Open for the designer: (1) zone = reach radius 3 m - want a separate larger `zone_radius_cm`? (2) red zone tells the player a hidden enemy is inside - OK? (3) critically wounded enemy keeps blocking - OK? (4) enemies on another floor above a street goal do not block - OK?
+
 ## S2.3 block archetype (worker/bgen-firing-gaps 0ada99f1; TS + Python mirror, no engine)
 Sections / landings / flats / lobbies / slots, story 4 by flat column, `dead_end` tags; flat doors closed (designer), balconies only with
 fire escapes (designer). TS 650 -> 664, Python 60; plans-off golden byte-identical; property: 864 blocks planned, 0 validator issues, 0 %

@@ -5,13 +5,13 @@
    "id": "T-05",
    "title": "smart enemies: firing positions",
    "owner": "worker stand-in",
-   "branch": "worker/t08-holder-fallback",
+   "branch": "worker/goal-zone-clear",
    "topic": "claude-T005",
-   "state": "active",
+   "state": "waiting",
    "max_quiet_min": 45,
    "worktree": "C:/Work/CodexTactics-slot1",
    "machine": "worker",
-   "reason": "T-08 slice FAIL on crossroads (no cover in the 6 m zone), ships OFF (efd65621); next: goal counts only after the zone is cleared + defended goal shown as a zone on HUD/minimap"
+   "reason": "T-08 FAIL (no cover in crossroads zone), goal-zone-clear done 6f9b16c7; waiting for designer: cover at goal / rule 4 timing / zone radius"
   },
   {
    "id": "T-020",
