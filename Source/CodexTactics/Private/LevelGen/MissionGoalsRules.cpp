@@ -121,10 +121,8 @@ bool MissionGoalsRules::Parse(const FString& Json, FMissionGoalsFile& Out, TArra
 	{
 		Out.LabelWorldSizeCm = static_cast<float>(Number);
 	}
-	else
-	{
-		Out.FloorToleranceCm = DefaultFloorToleranceCm;
-	}
+	// (No else here: FloorToleranceCm keeps the file's floor_tolerance_cm, else the struct default DefaultFloorToleranceCm. A misplaced
+	// else used to reset it whenever label_world_size_cm was absent.)
 
 	const TArray<TSharedPtr<FJsonValue>>* Goals = nullptr;
 	if (!Root->TryGetArrayField(TEXT("goals"), Goals) || !Goals)
@@ -231,6 +229,59 @@ bool MissionGoalsRules::IsAtGoal(const FMissionGoal& Goal, const FVector& FeetLo
 	return FVector2D::DistSquared(Feet, FVector2D(Goal.Location.X, Goal.Location.Y)) <= FMath::Square(FMath::Max(0.f, Goal.RadiusCm));
 }
 
+bool MissionGoalsRules::IsResisting(const FMissionGoalHostile& Hostile)
+{
+	return Hostile.bAlive && !Hostile.bDying;
+}
+
+TArray<FVector> MissionGoalsRules::ResistingFeet(TConstArrayView<FMissionGoalHostile> Hostiles)
+{
+	TArray<FVector> Feet;
+	for (const FMissionGoalHostile& Hostile : Hostiles)
+	{
+		if (IsResisting(Hostile))
+		{
+			Feet.Add(Hostile.Feet);
+		}
+	}
+	return Feet;
+}
+
+bool MissionGoalsRules::IsGoalContested(const FMissionGoal& Goal, TConstArrayView<FVector> ResistingHostileFeet, float FloorToleranceCm)
+{
+	for (const FVector& Feet : ResistingHostileFeet)
+	{
+		if (IsAtGoal(Goal, Feet, FloorToleranceCm))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+TArray<FVector> MissionGoalsRules::BuildZoneOutline(const FMissionGoal& Goal, int32 CircleSegments)
+{
+	TArray<FVector> Outline;
+	const double Z = Goal.Location.Z;
+	if (Goal.Kind == EMissionGoalKind::Room && Goal.Area.Num() >= 3)
+	{
+		for (const FVector2D& Corner : Goal.Area)
+		{
+			Outline.Add(FVector(Corner.X, Corner.Y, Z));
+		}
+		return Outline;
+	}
+	const int32 Segments = FMath::Clamp(CircleSegments, 8, 128);
+	const double Radius = FMath::Max(0.f, Goal.RadiusCm);
+	Outline.Reserve(Segments);
+	for (int32 Index = 0; Index < Segments; ++Index)
+	{
+		const double Angle = 2.0 * UE_DOUBLE_PI * Index / Segments;
+		Outline.Add(FVector(Goal.Location.X + FMath::Cos(Angle) * Radius, Goal.Location.Y + FMath::Sin(Angle) * Radius, Z));
+	}
+	return Outline;
+}
+
 bool MissionGoalsRules::CanCount(EMissionGoalOrder Order, TConstArrayView<bool> Reached, int32 GoalIndex)
 {
 	if (!Reached.IsValidIndex(GoalIndex) || Reached[GoalIndex])
@@ -251,10 +302,15 @@ bool MissionGoalsRules::CanCount(EMissionGoalOrder Order, TConstArrayView<bool> 
 	return true;
 }
 
-TArray<FMissionGoalHit> MissionGoalsRules::UpdateReached(const FMissionGoalsFile& File, TArray<bool>& Reached, TConstArrayView<FVector> OperativeFeet)
+TArray<FMissionGoalHit> MissionGoalsRules::UpdateReached(const FMissionGoalsFile& File, TArray<bool>& Reached, TConstArrayView<FVector> OperativeFeet,
+	TConstArrayView<FVector> ResistingHostileFeet, TArray<int32>* OutBlocked)
 {
 	TArray<FMissionGoalHit> Hits;
 	Reached.SetNum(File.Goals.Num());
+	if (OutBlocked)
+	{
+		OutBlocked->Reset();
+	}
 	bool bChanged = true;
 	while (bChanged)
 	{
@@ -265,15 +321,26 @@ TArray<FMissionGoalHit> MissionGoalsRules::UpdateReached(const FMissionGoalsFile
 			{
 				continue;
 			}
+			const FMissionGoal& Goal = File.Goals[GoalIndex];
 			for (int32 Operative = 0; Operative < OperativeFeet.Num(); ++Operative)
 			{
-				if (IsAtGoal(File.Goals[GoalIndex], OperativeFeet[Operative], File.FloorToleranceCm))
+				if (!IsAtGoal(Goal, OperativeFeet[Operative], File.FloorToleranceCm))
 				{
-					Reached[GoalIndex] = true;
-					Hits.Add({ GoalIndex, Operative });
-					bChanged = true;
+					continue;
+				}
+				if (IsGoalContested(Goal, ResistingHostileFeet, File.FloorToleranceCm))
+				{
+					// Designer 2026-11-20: not reached while a resisting enemy is in the zone - it counts once the zone is cleared.
+					if (OutBlocked)
+					{
+						OutBlocked->AddUnique(GoalIndex);
+					}
 					break;
 				}
+				Reached[GoalIndex] = true;
+				Hits.Add({ GoalIndex, Operative });
+				bChanged = true;
+				break;
 			}
 		}
 	}
@@ -295,9 +362,14 @@ bool MissionGoalsRules::AreAllReached(TConstArrayView<bool> Reached)
 	return !Reached.IsEmpty() && CountReached(Reached) == Reached.Num();
 }
 
-FString MissionGoalsRules::FormatHudLine(int32 ReachedCount, int32 Total)
+FString MissionGoalsRules::FormatHudLine(int32 ReachedCount, int32 Total, bool bZoneNotClear)
 {
-	return FString::Printf(TEXT("GOALS: %d/%d"), FMath::Clamp(ReachedCount, 0, FMath::Max(0, Total)), FMath::Max(0, Total));
+	FString Line = FString::Printf(TEXT("GOALS: %d/%d"), FMath::Clamp(ReachedCount, 0, FMath::Max(0, Total)), FMath::Max(0, Total));
+	if (bZoneNotClear)
+	{
+		Line += TEXT(" - CLEAR THE ZONE");
+	}
+	return Line;
 }
 
 FString MissionGoalsRules::GetDefaultPathForMap(const FString& MapName)

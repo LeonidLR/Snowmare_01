@@ -9,6 +9,7 @@ import { MovementDepartment } from './departments/MovementDepartment';
 import { CombatLabDepartment } from './departments/CombatLabDepartment';
 // levelgen (tools/level-generator): the «Генератор уровней» department - registered in its own small hunk
 import { LevelGenDepartment } from './departments/LevelGenDepartment';
+import { confirmLeave } from './utils/unsavedGuard';
 
 type DepartmentId = 'waves' | 'movement' | 'combat' | 'levelgen';
 
@@ -32,6 +33,7 @@ function initialDepartment(): DepartmentId {
 export const TrainingGround: React.FC = () => {
   const [department, setDepartment] = useState<DepartmentId>(initialDepartment);
   const choose = (id: DepartmentId) => {
+    if (id !== department && !confirmLeave()) return; // T-023: «Пропсы уровней» has unsaved edits
     setDepartment(id);
     try { localStorage.setItem(STORAGE_KEY, id); } catch { /* ignore */ }
   };

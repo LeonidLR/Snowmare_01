@@ -4,6 +4,8 @@
 // one minimap objective icon per goal, the HUD line "GOALS: 0/N". The squad is teleported to each goal in turn: each is counted
 // (marker hidden, the icon gone, MissionGoalReached on the event bus), no victory before the last one; after the last the EXISTING level
 // end runs (ULevelExitSubsystem::CompleteLevel -> mission complete + the fade). [map=<L_Gen_...>] for another generated map.
+// Zone clear (designer 2026-11-20): before the first goal an "Enemy"-tagged stand-in is put inside its zone - the squad on the goal
+// must NOT count it (blocked, HUD "CLEAR THE ZONE", no event) until the stand-in is removed; then it counts.
 
 #include "CoreMinimal.h"
 
@@ -16,11 +18,14 @@
 #include "Containers/Ticker.h"
 #include "Core/MissionSubsystem.h"
 #include "Core/SaveGameSubsystem.h"
+#include "Combat/EncounterQueries.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Dom/JsonObject.h"
 #include "Dom/JsonValue.h"
 #include "Core/PlayerCommands.h"
 #include "Debug/EventBusProbe.h"
 #include "Debug/SmokeUtils.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "GameFlow/LevelExitSubsystem.h"
 #include "HAL/IConsoleManager.h"
@@ -49,6 +54,7 @@ namespace MissionGoalsSmoke
 	{
 		Begin,
 		Teleport,
+		ContestHold,
 		WaitCount,
 		Settle,
 		Victory,
@@ -62,6 +68,8 @@ namespace MissionGoalsSmoke
 		float StageTime = 0.f;
 		int32 Goal = 0;
 		int32 Failures = 0;
+		bool bContestDone = false;
+		TWeakObjectPtr<AActor> StandIn;
 		FString MapName;
 		SmokeUtils::FPreloadGate PreloadGate;
 		TStrongObjectPtr<UEventBusProbe> Probe;
@@ -274,7 +282,50 @@ namespace MissionGoalsSmoke
 		{
 			const FMissionGoal& Goal = Goals->GetGoals()[State.Goal];
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: the squad to %s (%s) at %s"), *Goal.Id, MissionGoalsRules::KindToString(Goal.Kind), *Goal.Location.ToCompactString());
+			if (State.Goal == 0 && !State.bContestDone)
+			{
+				// A resisting enemy stand-in 120 cm from the goal's point, inside its zone (radius 300 cm / the room).
+				const FVector2D Dir = Goal.Area.Num() >= 3 ? (FBox2D(Goal.Area).GetCenter() - FVector2D(Goal.Location)).GetSafeNormal() : FVector2D(1.0, 0.0);
+				const FVector Spot = Goal.Location + FVector(Dir.IsNearlyZero() ? FVector2D(1.0, 0.0) * 120.0 : Dir * 120.0, 50.0);
+				AStaticMeshActor* StandIn = World->SpawnActor<AStaticMeshActor>(Spot, FRotator::ZeroRotator, FActorSpawnParameters());
+				if (StandIn)
+				{
+					StandIn->Tags.Add(CombatQueries::EnemyTag);
+					if (UEnemyRegistrySubsystem* Registry = World->GetSubsystem<UEnemyRegistrySubsystem>())
+					{
+						Registry->RegisterTaggedActor(StandIn);
+					}
+				}
+				Check(State, StandIn != nullptr, FString::Printf(TEXT("an enemy stand-in in the zone of %s"), *Goal.Id));
+				State.StandIn = StandIn;
+				TeleportSquad(World, Goal);
+				SetStage(EStage::ContestHold);
+				return true;
+			}
 			TeleportSquad(World, Goal);
+			SetStage(EStage::WaitCount);
+			return true;
+		}
+		case EStage::ContestHold:
+		{
+			if (State.StageTime < CountWithinSeconds)
+			{
+				return true;
+			}
+			const FMissionGoal& Goal = Goals->GetGoals()[State.Goal];
+			Check(State, !Goals->IsGoalReached(State.Goal), FString::Printf(TEXT("%s NOT counted while an enemy is in its zone (%.1f s)"), *Goal.Id, State.StageTime));
+			Check(State, Goals->IsGoalContested(State.Goal) && Goals->IsGoalBlocked(State.Goal), FString::Printf(TEXT("%s contested and blocked"), *Goal.Id));
+			Check(State, Goals->GetHudLine() == MissionGoalsRules::FormatHudLine(0, Total, true), FString::Printf(TEXT("HUD line '%s'"), *Goals->GetHudLine()));
+			const int32 Heard = State.Probe ? State.Probe->CountEvent(GameplayEvents::MissionGoalReached) : 0;
+			Check(State, Heard == 0, FString::Printf(TEXT("no MissionGoalReached while blocked (%d)"), Heard));
+			const AMissionGoalMarkerActor* Marker = Goals->GetMarker(State.Goal);
+			Check(State, Marker && Marker->IsMarkerShown(), FString::Printf(TEXT("%s marker still shown"), *Goal.Id));
+			if (AActor* StandIn = State.StandIn.Get())
+			{
+				StandIn->Destroy(); // the enemy is gone: the zone is clear
+			}
+			State.bContestDone = true;
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: the stand-in removed - %s must count now"), *Goal.Id);
 			SetStage(EStage::WaitCount);
 			return true;
 		}

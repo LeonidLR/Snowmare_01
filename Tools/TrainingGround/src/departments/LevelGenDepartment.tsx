@@ -7,7 +7,7 @@
 // T-020: the whole department works on ONE current map (selector on top, kept by the server in Saved/TrainingGround/current_map.json):
 // «Управление картой» opens its accepted layout at once and holds its weather section; «Пропсы уровней» follows it.
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Hammer, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus, Trash2 } from 'lucide-react';
+import { CheckCircle2, AlertTriangle, XCircle, Play, Pause, Hammer, Footprints, ThumbsUp, ThumbsDown, Bot, Boxes, Layers, Shuffle, Undo2, Redo2, Lock, FolderOpen, Eraser, Save, ZoomIn, ZoomOut, Maximize2, MapPinPlus, Trash2, Expand, Grid3x3 } from 'lucide-react';
 import { LayoutView } from './LayoutView';
 import type { FloorViewMode, LayoutViewHandle } from './LayoutView';
 import { validateWallCrossings, cleanConflictingFences } from '../levelgen/layoutValidator';
@@ -16,7 +16,14 @@ import { MapWeatherSection } from './MapWeatherSection';
 import type { MapEntry } from '../levelgen/currentMap';
 import { mapLabel } from '../levelgen/currentMap';
 import { RegionOverlay } from './RegionOverlay';
-import type { LayerAction, ObjectiveAction, RegionMode } from './RegionOverlay';
+import type { LayerAction, LayerHit, ObjectiveAction, RegionMode, WallHandle } from './RegionOverlay';
+import { FullWindowFrame, useFullWindow } from '../components/FullWindowFrame';
+import { isKeyConsumer, planHeightFor } from '../utils/fullWindow';
+import { confirmLeave } from '../utils/unsavedGuard';
+import { DEFAULT_SNAP_CM, nudgeDelta, NUDGE_CM, SNAP_STEPS_CM, snapReference } from '../levelgen/mapEdit';
+import { describeProblems, newProblems, validateMapEdit } from '../levelgen/mapChecks';
+import type { MapValidation } from '../levelgen/mapChecks';
+import { inFootprint } from '../levelgen/rotation';
 import { LayersOverlay, LayersPanel } from './LayersPanel';
 import { PmcOverlay } from './PmcOverlay';
 import type { PmcPlan } from '../levelgen/pmcPosts';
@@ -27,10 +34,10 @@ import { FIT_VIEW, PLAN_VIEW, planTransform, viewOfRect, zoomAt } from '../level
 import type { Conditions, LayoutAnalysis } from '../levelgen/chokepoints';
 import { analyzeLayout, CHOKE, geometryHash, threatNumbers, withoutStaleAnalysis } from '../levelgen/chokepoints';
 import type { LayerVisibility } from '../levelgen/layers';
-import { assignMap, defaultVisibility, editLayout, editProps, hiddenKeys, layerById, layerCounts, LAYERS, layerTints, MAP_PLAN_HIDDEN, mergeLayerReroll, pickEntity, resolveProps } from '../levelgen/layers';
+import { assignMap, defaultVisibility, editLayout, editProps, hiddenKeys, layerById, layerCounts, LAYERS, layerMovable, layerTints, MAP_PLAN_HIDDEN, mergeLayerReroll, movableTypes, pickMoveEntity, resolveProps } from '../levelgen/layers';
 import type { LevelPropsFile } from '../levelgen/props/schema';
 import type { History } from '../levelgen/regenHistory';
-import { canRedo, canUndo, historyInit, historyPush, historyRedo, historyUndo } from '../levelgen/regenHistory';
+import { canRedo, canUndo, historyInit, historyPush, historyPushCoalesced, historyRedo, historyUndo } from '../levelgen/regenHistory';
 import type { BlockMode, RegionRegenResult } from '../levelgen/regionRegen';
 import type { ExpandResult, SeamCheck } from '../levelgen/expand';
 import { checkSeams, expandLayout, expansionSize } from '../levelgen/expand';
@@ -55,14 +62,20 @@ import { layersOf, mandatoryRoute } from '../levelgen/schema';
 
 /** `key` = the slot's history key (the first layout name: an expansion renames the map to <name>_x<N>). */
 interface Candidate { layout: GenLayout; ev: Evaluation; simmed: boolean; verdicts: CriticVerdict[]; key?: string; /** The squad playback of the last simulator walk (task 072; never sent to the server). */ track?: SquadTrack;
-  /** The chokepoint / threat analysis of `layout` (chokepoints.ts); «Принять» writes it into the layout JSON. */ analysis?: LayoutAnalysis }
+  /** The chokepoint / threat analysis of `layout` (chokepoints.ts); «Принять» writes it into the layout JSON. */ analysis?: LayoutAnalysis;
+  /** T-022: `ev` still describes the layout BEFORE the last move (the route check runs a moment after the move, not on every arrow key): «Принять» waits. */ evStale?: boolean }
 /** The threat sub-layers start hidden (hundreds of marks on a big map); the designer turns them on in the panel. */
 const HIDDEN_AT_START = ['threat_drop', 'threat_windows', 'threat_overwatch', 'threat_hiding', ...MAP_PLAN_HIDDEN];
 const sameConditions = (a: Conditions, b: Conditions) => a.weather === b.weather && a.time_of_day === b.time_of_day;
+const PROPS_DERIVED_RU = { regenerated: 'пересозданы автоматически', created: 'созданы', kept_hand: 'не тронуты (файл ручной)', error: 'ошибка пересоздания' } as const;
+/** What «Принять» told the designer after a map with MOVED elements was written (T-022). */
+interface StaleNote { name: string; buildings: string[]; others: number; propsOnMoved: number; propsFile: string; derived?: { props: 'regenerated' | 'created' | 'kept_hand' | 'error'; propsSource?: string; objectives: string | null; tactical: string | null } }
 type ProfileRow = { id: string; title: string; size_m: [number, number] };
 /** Browser cache of the current map (the server's Saved/TrainingGround/current_map.json is the master). */
 const CURRENT_MAP_CACHE = 'tg.levelgen.currentMap';
 
+/** T-022: how long after the last move / nudge / undo the route check of the plan runs, ms. */
+const EVALUATE_DELAY_MS = 350;
 const pct = (v?: number) => `${Math.round((v ?? 0) * 100)} %`;
 /** Block types (levelgen_v2.json templates.catalog + the classic-only ones) as the designer reads them. */
 const BLOCK_LABEL: Record<string, string> = {
@@ -82,6 +95,8 @@ export const LevelGenDepartment: React.FC = () => {
   const [currentMap, setCurrentMapState] = useState<string | null>(() => { try { return localStorage.getItem(CURRENT_MAP_CACHE); } catch { return null; } });
   const [mapsLoaded, setMapsLoaded] = useState(false);
   const [weatherDirty, setWeatherDirty] = useState(false);
+  /** T-022: the shown layout has edits «Принять» has not written (read by changeMap + the unload guard). */
+  const mapDirtyRef = useRef(false);
   const [propsDirty, setPropsDirty] = useState(false);
   const [profiles, setProfiles] = useState<ProfileRow[]>([]);
   const [profileId, setProfileId] = useState('');
@@ -113,7 +128,14 @@ export const LevelGenDepartment: React.FC = () => {
   const [pmcOn, setPmcOn] = useState(false);
   const [pmcSeed, setPmcSeed] = useState<number | null>(null);
   // the reference image beside the plan can be folded away: the plan then takes the whole width (big maps, the layers)
-  const [showRef, setShowRef] = useState(true);
+  // T-022: the plan takes the whole centre column by default (the reference image is one click away)
+  const [showRef, setShowRef] = useState(false);
+  // T-022: moving map elements: grid snap (off by default), a fence ring moves whole, the full-window mode (F11)
+  const [snapOn, setSnapOn] = useState(false);
+  const [snapStep, setSnapStep] = useState<number>(DEFAULT_SNAP_CM);
+  const [moveFamily, setMoveFamily] = useState(false);
+  const [vh, setVh] = useState(() => (typeof window === 'undefined' ? 900 : window.innerHeight));
+  useEffect(() => { const f = () => setVh(window.innerHeight); window.addEventListener('resize', f); return () => window.removeEventListener('resize', f); }, []);
   const showFiringLines = vis.fire_lines !== false;
   const [busy, setBusy] = useState('');
   const [error, setError] = useState('');
@@ -126,6 +148,9 @@ export const LevelGenDepartment: React.FC = () => {
   // region re-roll + locked districts (levelgen v2 stage 1, task 070; docs/port/LEVELGEN_V2_STAGE1_REPORT.md)
   const [regionMode, setRegionMode] = useState<RegionMode>('off');
   const [zone, setZone] = useState<Vec2[] | null>(null);
+  // T-022: F11 / the «На весь экран» button: the plan fills the browser window (Esc / F11 back; Esc stays the polygon tool's own while it draws)
+  const { full, toggle: toggleFull, setFull } = useFullWindow(activeTab === 'generator', regionMode !== 'poly');
+
   const [rerollSeed, setRerollSeed] = useState(1001);
   const [maxRetries, setMaxRetries] = useState(DEFAULT_MAX_RETRIES);
   const [lockName, setLockName] = useState('');
@@ -155,7 +180,7 @@ export const LevelGenDepartment: React.FC = () => {
   /** Switches the department's current map (asks first when the weather section or the props have unsaved edits). */
   const changeMap = async (map: string) => {
     if (map === currentMap) return;
-    if ((weatherDirty || propsDirty) && !window.confirm('Есть несохранённые правки (погода или пропсы) текущей карты. Переключить карту и потерять их?')) return;
+    if ((weatherDirty || propsDirty || mapDirtyRef.current) && !window.confirm(`Есть несохранённые правки (${[weatherDirty && 'погода', propsDirty && 'пропсы', mapDirtyRef.current && 'раскладка карты (перемещения, перегенерация)'].filter(Boolean).join(', ')}) текущей карты. Переключить карту? Правки раскладки останутся в списке кандидатов, пока страница открыта, но в файл карты они не записаны — «Принять» записывает.`)) return;
     setCurrentMapState(map);
     try { localStorage.setItem(CURRENT_MAP_CACHE, map); } catch { /* cache only */ }
     try {
@@ -225,6 +250,12 @@ export const LevelGenDepartment: React.FC = () => {
 
   const accept = async () => {
     if (!cur) return;
+    // T-022: never silently accept an overlap a move made (the server refuses a layout that breaks the schema's rules at all)
+    const errs = (sinceOpen?.issues ?? []).filter((i) => i.severity === 'error');
+    const bad = [...errs.map((i) => i.message), ...(sinceOpen?.schema ?? []), ...(edited ? wallConflicts.map((c) => c.reason) : [])];
+    if (bad.length && !window.confirm(`После правок на карте есть проблемы (${bad.length}):\n- ${bad.slice(0, 8).join('\n- ')}${bad.length > 8 ? `\n- ещё ${bad.length - 8}` : ''}\n\nВсё равно принять?`)) return;
+    const moved = moveLog.current[cur.layout.name];
+    const before = baseLayouts[cur.layout.name] ?? history?.past[0]?.state ?? null;
     setBusy('Сохраняю...');
     try {
       // the chokepoint / threat analysis is saved with the map (block `analysis`): the shown one, else computed now
@@ -238,6 +269,14 @@ export const LevelGenDepartment: React.FC = () => {
       setAccepted((a) => [...a.filter((x) => x.name !== cur.layout.name), { name: cur.layout.name, seed: cur.layout.seed, profile: cur.layout.profile, at: new Date().toISOString() }]);
       setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, layout, analysis: an } : c)));
       setAcceptedSnap((m) => ({ ...m, [cur.layout.name]: JSON.stringify(layout) }));
+      setBaseLayouts((m) => ({ ...m, [cur.layout.name]: layout }));
+      // T-022: the derived files that depend on positions (props on a moved building, the tactical map, the objectives file) - say which are stale
+      if (moved && (moved.buildings.size || moved.others)) {
+        const ids = [...moved.buildings];
+        const onMoved = before ? resolveProps(propsFile).filter((pr) => ids.some((id) => { const b = before.buildings.find((x) => x.id === id); return !!b && inFootprint(b, pr.object.pos, 0); })).length : 0;
+        setStaleNote({ name: cur.layout.name, buildings: ids, others: moved.others, propsOnMoved: onMoved, propsFile: propsState?.path ?? '', derived: d.derived });
+      } else setStaleNote(null);
+      delete moveLog.current[cur.layout.name];
       // T-020: «Принять» makes the accepted layout's map the current one (the generated candidates did not change it until now)
       try {
         const md = await (await fetch('/api/levelgen/maps')).json() as { maps?: MapEntry[] };
@@ -259,6 +298,9 @@ export const LevelGenDepartment: React.FC = () => {
     result: { built: boolean; actors?: number; nav_tiles?: string; route?: string; route_summary?: string; reason?: string };
     /** The scripts' latest output lines (they run hidden, no window: bug 2026-11-16 evening). */ log?: string[] };
   const [acceptedSnap, setAcceptedSnap] = useState<Record<string, string>>({});
+  /** T-022: the layout as last opened / accepted, by layout name: «new problems» and the stale-files notice compare against it. */
+  const [baseLayouts, setBaseLayouts] = useState<Record<string, GenLayout>>({});
+  const [staleNote, setStaleNote] = useState<StaleNote | null>(null);
   const [buildAsk, setBuildAsk] = useState<BuildTarget | null>(null);
   const [buildTarget, setBuildTarget] = useState<BuildTarget | null>(null);
   const [buildState, setBuildState] = useState<BuildState | null>(null);
@@ -314,17 +356,38 @@ export const LevelGenDepartment: React.FC = () => {
   const region = useMemo(() => { try { return cur && zone ? selectRegion(cur.layout, zone, profileOk ? profile : null, blockMode) : null; } catch { return null; } }, [cur, zone, profile, profileOk, blockMode]);
   const selection = region?.selection ?? null;
 
-  /** Show a layout in the current candidate slot (re-evaluated without the simulator; old verdicts no longer apply). */
-  const showLayout = (shown: GenLayout) => {
+  /**
+   * Show a layout in the current candidate slot (re-evaluated without the simulator; old verdicts no longer apply). `defer` (T-022, moves /
+   * nudges / undo): the plan shows the layout at once and the route check (seconds on the big maps) runs EVALUATE_DELAY_MS after the last
+   * such edit - an arrow-key run is checked once, not on every key; «Принять» waits for it (Candidate.evStale).
+   */
+  const evalTimer = useRef(0);
+  const showLayout = (shown: GenLayout, defer = false) => {
     if (!profile || !config) return;
+    window.clearTimeout(evalTimer.current);
     const layout = withoutStaleAnalysis(shown); // an edited map: the stored analysis no longer describes it
+    const slot = sel;
+    if (defer) {
+      setCandidates((cs) => cs.map((c, i) => (i === slot ? { ...c, key: c.key ?? c.layout.name, layout, evStale: true, simmed: false, verdicts: [], track: undefined, analysis: undefined } : c)));
+      evalTimer.current = window.setTimeout(() => {
+        try {
+          const ev = evaluateLayout({ layout, profile, config, noSim: true });
+          setCandidates((cs) => cs.map((c, i) => (i === slot && c.layout === layout ? { ...c, ev, evStale: false } : c)));
+        } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
+      }, EVALUATE_DELAY_MS);
+      return;
+    }
     const ev = evaluateLayout({ layout, profile, config, noSim: true });
-    setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, key: c.key ?? c.layout.name, layout, ev, simmed: false, verdicts: [], track: undefined, analysis: undefined } : c)));
+    setCandidates((cs) => cs.map((c, i) => (i === slot ? { ...c, key: c.key ?? c.layout.name, layout, ev, evStale: false, simmed: false, verdicts: [], track: undefined, analysis: undefined } : c)));
   };
-  const pushStep = (layout: GenLayout, label: string) => {
+  /** One undo step; `coalesce` merges runs of the same gesture (arrow-key nudges of one entity) into a single step. */
+  const pushStep = (layout: GenLayout, label: string, coalesce?: string, defer = false) => {
     if (!cur) return;
-    setHistories((hs) => ({ ...hs, [curKey]: historyPush(hs[curKey] ?? historyInit(cur.layout, 'исходная'), layout, label) }));
-    showLayout(layout);
+    setHistories((hs) => {
+      const h = hs[curKey] ?? historyInit(cur.layout, 'исходная');
+      return { ...hs, [curKey]: coalesce ? historyPushCoalesced(h, layout, label, coalesce) : historyPush(h, layout, label) };
+    });
+    showLayout(layout, defer);
   };
   const cleanFences = () => {
     if (!cur) return;
@@ -350,7 +413,7 @@ export const LevelGenDepartment: React.FC = () => {
     const h = dir === 'undo' ? historyUndo(history) : historyRedo(history);
     setHistories((hs) => ({ ...hs, [curKey]: h }));
     setRegenReport(null); setObjMsg(null); setLayerMsg(null);
-    showLayout(h.present.state);
+    showLayout(h.present.state, true);
   };
   const lockZone = () => {
     if (!cur || !zone) return;
@@ -392,7 +455,7 @@ export const LevelGenDepartment: React.FC = () => {
     setObjMsg({ ok: r.ok && !!r.check?.ok, text: r.message });
     if (r.ok) { pushStep(r.layout, r.message.split(';')[0]); setGoalReport(null); }
   };
-  const zoomBy = (f: number) => setView((v) => zoomAt(v, [planBox.current ? planBox.current.clientWidth / 2 : 0, 260], f));
+  const zoomBy = (f: number) => setView((v) => zoomAt(v, [planBox.current ? planBox.current.clientWidth / 2 : 0, planBox.current ? planBox.current.clientHeight / 2 : 260], f));
   const planBox = useRef<HTMLDivElement>(null);
   // the squad playback (task 072): a clock driven by requestAnimationFrame at x1..x8, a scrubber; dots + the leader's trail
   const [playT, setPlayT] = useState(0);
@@ -466,6 +529,10 @@ export const LevelGenDepartment: React.FC = () => {
   };
   const openAccepted = async (name: string) => {
     if (!config) return;
+    // T-022: re-opening a map from its file drops the edits made since («Принять» writes them): ask first
+    const shown = candidates.find((c) => c.layout.name === name);
+    if (shown && (histories[shown.key ?? name]?.past.length ?? 0) > 0 && JSON.stringify(shown.layout) !== acceptedSnap[name]
+      && !window.confirm(`В карте ${name} есть несохранённые правки раскладки (перемещения, перегенерация). Открыть её из файла и потерять их?`)) return;
     setBusy('Открываю принятую карту...'); setError('');
     try {
       const r = await fetch(`/api/levelgen/open-accepted?name=${encodeURIComponent(name)}`);
@@ -482,6 +549,8 @@ export const LevelGenDepartment: React.FC = () => {
       setHistories((hs) => { const keep = { ...hs }; delete keep[layout.name]; return keep; });
       setZone(null); setRegenReport(null);
       setAcceptedSnap((m) => ({ ...m, [layout.name]: JSON.stringify(layout) }));
+      setBaseLayouts((m) => ({ ...m, [layout.name]: layout }));
+      setStaleNote(null); delete moveLog.current[layout.name];
     } catch (e) { setError(e instanceof Error ? e.message : String(e)); }
     setBusy('');
   };
@@ -496,6 +565,23 @@ export const LevelGenDepartment: React.FC = () => {
     void openAccepted(currentLayoutName);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeTab, config, currentLayoutName]);
+  // ---- T-022: dirty flag + the checks after every edit -----------------------------------------------------------------------------
+  const edited = !!history && history.past.length > 0;
+  /** The shown layout has edits «Принять» has not written (an accepted layout: differs from its file; a candidate: any undo step). */
+  const mapDirty = !!cur && (acceptedSync === 'changed' || (acceptedSync === 'unknown' && edited));
+  mapDirtyRef.current = mapDirty;
+  useEffect(() => {
+    if (!mapDirty) return;
+    const warn = (e: BeforeUnloadEvent) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [mapDirty]);
+  const baseLayout = cur ? baseLayouts[cur.layout.name] ?? history?.past[0]?.state ?? cur.layout : null;
+  const baseVal = useMemo(() => (baseLayout ? validateMapEdit(baseLayout) : null), [baseLayout]);
+  const mapValidation = useMemo<MapValidation | null>(() => (curLayout ? validateMapEdit(curLayout) : null), [curLayout]);
+  /** The problems the edits since the layout was opened / accepted ADDED (an old defect of the generator is not blamed on a move). */
+  const sinceOpen = useMemo(() => (mapValidation && baseVal && baseLayout !== curLayout ? newProblems(baseVal, mapValidation) : null), [mapValidation, baseVal, baseLayout, curLayout]);
+  const issueMarks = useMemo(() => (sinceOpen?.issues ?? []).map((i) => ({ at: i.at, severity: i.severity })), [sinceOpen]);
   // ---- layers: assignment, visibility, the active layer's tools, the props file, the chokepoint analysis -------------------------
   const propsFile = propsState?.file ?? null;
   const assignment = useMemo(() => (curLayout ? assignMap(curLayout, propsFile) : null), [curLayout, propsFile]);
@@ -578,28 +664,45 @@ export const LevelGenDepartment: React.FC = () => {
     if (r.ok) setPropsState({ ...propsState, file: r.props, dirty: true });
     return r.ok ? r.id : undefined;
   };
-  /** A layout edit of the active layer: one undo step. */
-  const applyLayout = (edit: Parameters<typeof editLayout>[2]): string | undefined => {
+  /** A layout edit of the active layer: one undo step; a move is checked right away (mapChecks.ts) and its NEW problems are shown. */
+  const applyLayout = (edit: Parameters<typeof editLayout>[2], coalesce?: string): string | undefined => {
     if (!cur || !activeLayer) return undefined;
     const r = editLayout(cur.layout, activeLayer, edit);
     layerMsgOk.current = r.ok;
-    setLayerMsg({ ok: r.ok, text: r.message });
-    if (r.ok) pushStep(r.layout, `${activeDef?.name ?? activeLayer}: ${r.message}`);
+    let text = r.message, ok = r.ok;
+    if (r.ok && (edit.op === 'move' || edit.op === 'move_end')) {
+      const fresh = newProblems(mapValidation ?? { issues: [], schema: [] }, validateMapEdit(r.layout));
+      const bad = describeProblems(fresh);
+      if (bad) { text = `${r.message}. ПРОБЛЕМЫ после перемещения: ${bad}`; ok = false; }
+      noteMove(r.key);
+    }
+    setLayerMsg({ ok, text });
+    if (r.ok) pushStep(r.layout, `${activeDef?.name ?? activeLayer}: ${r.message}`, coalesce, edit.op === 'move' || edit.op === 'move_end');
     return r.ok ? r.key : undefined;
   };
-  const pickLayer = (p: Vec2, tol: number) => {
-    if (!assignment || !activeDef) return null;
-    const e = pickEntity(assignment, activeDef.id, p, tol);
-    return e ? { key: e.key, movable: activeDef.edit.includes('move') && (e.type === 'cover' || e.type === 'wall' || e.type === 'prop') } : null;
+  /** What the accepted file's derived data lost its match with: remembered per layout until «Принять» (the stale notice). */
+  const moveLog = useRef<Record<string, { buildings: Set<string>; others: number }>>({});
+  const noteMove = (key?: string) => {
+    if (!cur || !key) return;
+    setStaleNote(null);
+    const log = (moveLog.current[cur.layout.name] ??= { buildings: new Set(), others: 0 });
+    if (key.startsWith('building:')) log.buildings.add(key.slice(9)); else log.others++;
+  };
+  const pickLayer = (p: Vec2, tol: number): LayerHit | null => {
+    if (!assignment || !activeDef || !cur) return null;
+    const e = pickMoveEntity(assignment, cur.layout, activeDef.id, p, tol);
+    if (!e) return null;
+    return { key: e.key, movable: movableTypes(activeDef).includes(e.type), shape: e.shape, ref: snapReference(cur.layout, e.key) ?? e.pos };
   };
   const onLayerAction = (a: LayerAction) => {
     if (!cur || !activeDef || busy) return;
     if (a.kind === 'select') { setSelKey(a.key); return; }
+    if (a.kind === 'move_end') { applyLayout({ op: 'move_end', key: a.key, end: a.end, pos: a.pos }); return; }
     if (a.kind === 'move') {
       if (a.key.startsWith('prop:')) {
         const id = a.key.slice(5), o = resolveProps(propsFile).find((x) => x.object.id === id)?.object;
         if (o) applyProps({ op: 'move', id, pos: [o.pos[0] + a.delta[0], o.pos[1] + a.delta[1]] });
-      } else applyLayout({ op: 'move', key: a.key, delta: a.delta });
+      } else applyLayout({ op: 'move', key: a.key, delta: a.delta, family: moveFamily });
       return;
     }
     const t = activeDef.add?.[addIdx];
@@ -617,11 +720,30 @@ export const LevelGenDepartment: React.FC = () => {
   };
   const deleteRef = useRef(deleteSelected);
   deleteRef.current = deleteSelected;
+  /** T-022: arrow keys nudge the selection (10 cm / Shift 1 m / Ctrl 10 m), Ctrl+Z / Ctrl+Y (Ctrl+Shift+Z) undo / redo the plan's history. */
+  const nudgeKey = (e: KeyboardEvent): boolean => {
+    if (activeTab !== 'generator' || busy) return false;
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && ['z', 'Z', 'y', 'Y'].includes(e.key)) {
+      const redo = e.key === 'y' || e.key === 'Y' || e.shiftKey;
+      if (!history || (redo ? !canRedo(history) : !canUndo(history))) return false;
+      stepHistory(redo ? 'redo' : 'undo');
+      return true;
+    }
+    const d = nudgeDelta(e.key, { shift: e.shiftKey, ctrl: e.ctrlKey || e.metaKey });
+    if (!d || e.altKey || !selKey || !activeDef || !layerMovable(activeDef) || activeDef.id === 'objectives' || layerTool !== 'select' || regionMode !== 'off') return false;
+    if (selKey.startsWith('prop:')) {
+      const id = selKey.slice(5), o = resolveProps(propsFile).find((x) => x.object.id === id)?.object;
+      if (o) applyProps({ op: 'move', id, pos: [o.pos[0] + d[0], o.pos[1] + d[1]] });
+    } else applyLayout({ op: 'move', key: selKey, delta: d, family: moveFamily }, `nudge:${selKey}`);
+    return true;
+  };
+  const nudgeRef = useRef(nudgeKey);
+  nudgeRef.current = nudgeKey;
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      const el = e.target;
-      if (e.key !== 'Delete' || (el instanceof HTMLElement && ['INPUT', 'SELECT', 'TEXTAREA'].includes(el.tagName))) return;
-      deleteRef.current();
+      if (isKeyConsumer(e.target)) return;
+      if (e.key === 'Delete') { deleteRef.current(); return; }
+      if (nudgeRef.current(e)) e.preventDefault();
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
@@ -647,7 +769,7 @@ export const LevelGenDepartment: React.FC = () => {
     const cp = analysis?.chokepoints.find((c) => c.id === id), el = planBox.current;
     if (!cp || !cur || !el) return;
     setVis((v) => (v.chokepoints === false ? { ...v, chokepoints: true } : v));
-    const xs = cp.poly.map((q) => q[0]), ys = cp.poly.map((q) => q[1]), pad = 1500, w = el.clientWidth - 2, h = 518;
+    const xs = cp.poly.map((q) => q[0]), ys = cp.poly.map((q) => q[1]), pad = 1500, w = el.clientWidth - 2, h = el.clientHeight - 2;
     setView(viewOfRect(planTransform(cur.layout.bounds, w, h), [Math.min(...xs) - pad, Math.min(...ys) - pad], [Math.max(...xs) + pad, Math.max(...ys) + pad], w, h));
   };
   const regionHint: Record<RegionMode, string> = {
@@ -664,12 +786,76 @@ export const LevelGenDepartment: React.FC = () => {
   );
   const verdictIcon = (v: CriticVerdict) => (v.fits === null ? <AlertTriangle size={14} className="text-amber-300" /> : v.fits ? <CheckCircle2 size={14} className="text-emerald-400" /> : <XCircle size={14} className="text-rose-400" />);
 
+  // ---- T-022: the pieces the normal page and the full-window header share ------------------------------------------------------------
+  const moveOn = !!activeDef && layerMovable(activeDef) && activeDef.id !== 'objectives';
+  const planHeight = full ? planHeightFor(vh, 170, 320) : planHeightFor(vh, 260, 600);
+  const wallHandles = useMemo<WallHandle[]>(() => {
+    if (!cur || !selKey || !selKey.startsWith('wall:') || !activeDef || !layerMovable(activeDef) || !movableTypes(activeDef).includes('wall') || layerTool !== 'select') return [];
+    const w = cur.layout.walls.find((x) => x.id === selKey.slice(5));
+    return w && !w.building ? [{ key: selKey, end: 'a', pos: w.a }, { key: selKey, end: 'b', pos: w.b }] : [];
+  }, [cur, selKey, activeDef, layerTool]);
+  const undoRedo = (<>
+    <button type="button" onClick={() => stepHistory('undo')} disabled={!history || !canUndo(history) || !!busy} title={history && canUndo(history) ? `Отменить: ${history.present.label} (Ctrl+Z)` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40" data-undo><Undo2 size={13} />Отменить ({history?.past.length ?? 0})</button>
+    <button type="button" onClick={() => stepHistory('redo')} disabled={!history || !canRedo(history) || !!busy} title={history && canRedo(history) ? `Вернуть: ${history.future[0].label} (Ctrl+Y)` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40" data-redo><Redo2 size={13} />Вернуть ({history?.future.length ?? 0})</button>
+  </>);
+  const floorBar = (<>
+    <div className="inline-flex rounded-lg bg-slate-950 border border-slate-700 p-0.5 text-[11px]">
+      {([['all', 'Все'], ['ground', 'Земля'], ['1', 'Этаж 1'], ['2', 'Этаж 2'], ['roof', 'Крыша']] as const).map(([mode, label]) => (
+        <button key={mode} type="button" onClick={() => { setFloorMode(mode); setLayer('all'); }} className={`px-2 py-0.5 rounded ${layer === 'all' && floorMode === mode ? 'bg-cyan-700 text-white' : 'text-slate-300 hover:text-white'}`}>{label}</button>
+      ))}
+    </div>
+    <select value={layer} onChange={(e) => { setLayer(e.target.value); if (e.target.value !== 'all') setFloorMode('all'); }} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
+      {layers.map((l) => <option key={l} value={l}>{l === 'all' ? 'все слои' : l}</option>)}
+    </select>
+  </>);
+  const acceptBlocked = !cur || !!busy || !!cur.evStale || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0);
+  const acceptButton = (
+    <button onClick={accept} disabled={acceptBlocked} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : wallConflicts.length > 0 ? `Внимание: обнаружено ${wallConflicts.length} пересечений стен/заборов!` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50" data-accept><ThumbsUp size={13} />Принять{wallConflicts.length > 0 ? ' (!)' : ''}{mapDirty ? ' *' : ''}</button>
+  );
+  const mapBanner = cur ? (
+    <div className="flex flex-col gap-1 text-[11px] mb-1" data-map-banner>
+      {cur.evStale && <p className="text-cyan-300" data-eval-pending>Проверка маршрута после правки…</p>}
+      {mapDirty && <p className="text-amber-300" data-map-dirty>● Раскладка изменена и не записана в файл: «Принять» запишет её (accepted/{cur.layout.name}.json), затем «Собрать в Unreal» построит по ней карту.</p>}
+      {sinceOpen && (sinceOpen.issues.length > 0 || sinceOpen.schema.length > 0) && (
+        <div className="bg-rose-950/60 border border-rose-800 rounded-lg p-2 text-rose-200" data-map-issues>
+          <p className="font-semibold">Новые проблемы после правок ({sinceOpen.issues.length + sinceOpen.schema.length}) — отмечены на плане; «Принять» спросит подтверждение:</p>
+          <ul className="list-disc pl-4">
+            {sinceOpen.issues.slice(0, 8).map((i) => <li key={i.id} className={i.severity === 'error' ? 'text-rose-300' : 'text-amber-300'}>{i.message}</li>)}
+            {sinceOpen.schema.slice(0, 4).map((m) => <li key={m} className="text-rose-300">проверка карты: {m}</li>)}
+            {sinceOpen.issues.length > 8 && <li>ещё {sinceOpen.issues.length - 8}</li>}
+          </ul>
+        </div>
+      )}
+      {staleNote && (
+        <div className="bg-sky-950/60 border border-sky-800 rounded-lg p-2 text-sky-100" data-stale-note>
+          <p className="font-semibold">Записано в accepted/{staleNote.name}.json. Сдвинуто: {staleNote.buildings.length ? `зданий ${staleNote.buildings.length} (${staleNote.buildings.slice(0, 6).join(', ')}${staleNote.buildings.length > 6 ? ', …' : ''})` : ''}{staleNote.buildings.length && staleNote.others ? ', ' : ''}{staleNote.others ? `других элементов ${staleNote.others}` : ''}.
+            <button type="button" onClick={() => setStaleNote(null)} className="ml-2 px-1.5 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700">закрыть</button></p>
+          <ul className="list-disc pl-4">
+            <li>Пересчитано сервером при «Принять»: {staleNote.derived ? `тактическая карта ${staleNote.derived.tactical ? 'да' : 'нет'}, цели ${staleNote.derived.objectives ? 'да' : 'нет (целей нет)'}, пропсы — ${PROPS_DERIVED_RU[staleNote.derived.props]}` : 'ответ сервера без списка'}.</li>
+            {staleNote.derived && (staleNote.derived.props === 'kept_hand' || staleNote.derived.props === 'error') && <li className="text-amber-200">Файл пропсов {staleNote.propsFile || '(нет)'} НЕ пересоздан ({staleNote.derived.props === 'kept_hand' ? `ручной, source=${staleNote.derived.propsSource ?? '?'}` : 'ошибка'}): на сдвинутых зданиях стоит {staleNote.propsOnMoved} пропсов — они остались на старых местах. Вкладка «Пропсы уровней» → «Перебросить»; сам файл не менялся.</li>}
+            <li>Не пересчитано: план ЧВК (включите слой «ЧВК» и снова «Принять»), карта в Unreal — нажмите «Собрать в Unreal».</li>
+          </ul>
+        </div>
+      )}
+    </div>
+  ) : null;
+  const layersPanel = cur && assignment ? (
+    <LayersPanel counts={layerCountsNow} vis={vis} onVis={setVis} active={activeLayer} onActive={(id) => { setActiveLayer(id); if (id) { setRegionMode('off'); setGoalTool(false); } }}
+      tool={layerTool} onTool={setLayerTool} addIdx={addIdx} onAddIdx={setAddIdx} tintOn={tintOn} onTint={setTintOn} selected={selectedEntity} onDelete={deleteSelected}
+      onRotate={(deg) => { if (selKey && !selKey.startsWith('prop:')) applyLayout({ op: 'rotate', key: selKey, deg }); }}
+      onRerollLayer={zone && profileOk && activeDef?.size_class ? rerollLayer : null} message={layerMsg}
+      propsInfo={propsState ? { map: propsState.map, path: propsState.path, revision: propsState.file.revision, frozen: propsState.file.frozen, dirty: propsState.dirty } : null} propsNote={NO_PROPS} onSaveProps={saveProps} busy={!!busy}
+      analysis={analysis} analysisBusy={analysisBusy} conditions={conditions} onConditions={setConditions}
+      onAnalyze={() => { if (cur) { setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, analysis: undefined } : c))); runAnalysis(cur.layout, sel); } }}
+      selChoke={selChoke} onZoomChoke={zoomToChoke} threat={threat} config={CHOKE} />
+  ) : null;
+
   return (
     <div className="flex flex-col min-h-full">
       <div className="bg-slate-950/80 border-b border-slate-800 px-6 py-2.5 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setActiveTab('generator')}
+            onClick={() => { if (activeTab === 'props' && !confirmLeave()) return; setActiveTab('generator'); }}
             className={`inline-flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
               activeTab === 'generator'
                 ? 'bg-cyan-600 text-slate-950 font-bold'
@@ -760,21 +946,7 @@ export const LevelGenDepartment: React.FC = () => {
           <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400 mr-1" data-testid="layout-title">{cur ? cur.layout.name : 'Кандидат'}{cur && currentEntry && currentEntry.layout === cur.layout.name ? <span className="ml-2 normal-case tracking-normal font-mono text-cyan-300">карта {currentEntry.map}</span> : null}</h3>
-              <div className="inline-flex rounded-lg bg-slate-950 border border-slate-700 p-0.5 text-[11px]">
-                {([['all', 'Все'], ['ground', 'Земля'], ['1', 'Этаж 1'], ['2', 'Этаж 2'], ['roof', 'Крыша']] as const).map(([mode, label]) => (
-                  <button
-                    key={mode}
-                    type="button"
-                    onClick={() => { setFloorMode(mode); setLayer('all'); }}
-                    className={`px-2 py-0.5 rounded ${layer === 'all' && floorMode === mode ? 'bg-cyan-700 text-white' : 'text-slate-300 hover:text-white'}`}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-              <select value={layer} onChange={(e) => { setLayer(e.target.value); if (e.target.value !== 'all') setFloorMode('all'); }} className="bg-slate-950 border border-slate-700 rounded px-2 py-1 text-xs text-slate-100">
-                {layers.map((l) => <option key={l} value={l}>{l === 'all' ? 'все слои' : l}</option>)}
-              </select>
+              {!full && floorBar}
               <button onClick={walk} disabled={!cur || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-slate-800 border border-slate-700 text-xs text-slate-200 hover:bg-slate-700 disabled:opacity-50"><Footprints size={13} />Прогнать отряд (симулятор)</button>
               {wallConflicts.length > 0 && (
                 <div className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-rose-950/70 border border-rose-700 text-xs text-rose-200" title={wallConflicts.map((c) => c.reason).join('; ')}>
@@ -785,7 +957,7 @@ export const LevelGenDepartment: React.FC = () => {
                   </button>
                 </div>
               )}
-              <button onClick={accept} disabled={!cur || !!busy || !cur.ev.route.completable || (!!cur.layout.objectives && !!objCheck && objCheck.errors.length > 0)} title={cur?.layout.objectives && objCheck?.errors.length ? `Цели с ошибками: ${objCheck.errors.join('; ')}` : wallConflicts.length > 0 ? `Внимание: обнаружено ${wallConflicts.length} пересечений стен/заборов!` : ''} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-700 text-xs text-white hover:bg-emerald-600 disabled:opacity-50"><ThumbsUp size={13} />Принять{wallConflicts.length > 0 ? ' (!)' : ''}</button>
+              {!full && acceptButton}
               <button onClick={() => buildNow(false)} disabled={!cur || !!busy || !isAccepted || building || (buildTarget !== null && !buildTarget.canBuild)} data-build
                 title={!isAccepted ? 'Сначала «Принять»: собирается принятая карта (Content/Data/LevelGen/accepted)' : buildTarget && !buildTarget.canBuild ? buildTarget.reason : `Собрать ${buildTarget?.map ?? ''} и проверить маршрут ботом (фоном, ~5-15 мин)`}
                 className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-orange-700 text-xs text-white hover:bg-orange-600 disabled:opacity-50"><Hammer size={13} />Собрать в Unreal</button>
@@ -867,8 +1039,7 @@ export const LevelGenDepartment: React.FC = () => {
                     </label>
                   )}
                   <button type="button" onClick={reroll} disabled={!zone || !profileOk || !!busy} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold disabled:opacity-40"><Shuffle size={13} />Перегенерировать зону</button>
-                  <button type="button" onClick={() => stepHistory('undo')} disabled={!history || !canUndo(history) || !!busy} title={history && canUndo(history) ? `Отменить: ${history.present.label}` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Undo2 size={13} />Отменить ({history?.past.length ?? 0})</button>
-                  <button type="button" onClick={() => stepHistory('redo')} disabled={!history || !canRedo(history) || !!busy} title={history && canRedo(history) ? `Вернуть: ${history.future[0].label}` : ''} className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Redo2 size={13} />Вернуть ({history?.future.length ?? 0})</button>
+                  {!full && undoRedo}
                   <input value={lockName} onChange={(e) => setLockName(e.target.value)} placeholder="имя района" className="w-28 bg-slate-950 border border-slate-700 rounded px-1.5 py-0.5 text-slate-100" />
                   <button type="button" onClick={lockZone} disabled={!zone || !!busy} className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-emerald-800 hover:bg-emerald-700 text-white disabled:opacity-40"><Lock size={12} />Закрепить район</button>
                   <button type="button" onClick={saveLocksNow} disabled={!!busy} title="Записать закреплённые районы (многоугольники) в JSON карты: в принятую карту (только блок regen.locks), иначе — черновик Saved/TrainingGround/levelgen" className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-slate-800 border border-emerald-700 text-emerald-200 hover:bg-slate-700 disabled:opacity-40"><Save size={12} />Сохранить замки</button>
@@ -950,7 +1121,16 @@ export const LevelGenDepartment: React.FC = () => {
                 <p className="text-[11px] text-slate-500">Расширение: старая карта остаётся в центре без изменений (кроме проёма в заборе, если он перегораживает продолжение дороги), кварталы вокруг — из каталога levelgen_v2.json; их тоже можно перегенерировать зоной. Цели — на земле, достижимы со старта, разнесены, не в закреплённых зданиях; хранятся в JSON карты (блок objectives).</p>
               </div>
             )}
-            <div className={`grid gap-3 ${showRef ? 'lg:grid-cols-2' : ''}`}>
+            <FullWindowFrame full={full} onExit={() => setFull(false)} drawer={layersPanel} drawerTitle="Слои"
+              header={<>
+                <span className="font-mono text-cyan-200" data-full-title>{cur?.layout.name ?? ''}</span>
+                {floorBar}
+                {undoRedo}
+                {acceptButton}
+                {mapDirty && <span className="text-amber-300" title="Раскладка изменена и не записана">● не записано</span>}
+                <span className="text-slate-500">F11 / Esc — свернуть</span>
+              </>}>
+            <div className={`grid gap-3 ${showRef && !full ? 'lg:grid-cols-2' : ''}`}>
               <div>
                 <div className="flex flex-wrap items-center gap-1.5 mb-1 text-[11px]">
                   <button type="button" onClick={() => zoomBy(1 / PLAN_VIEW.button_step)} disabled={!cur} title="Отдалить" className="p-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><ZoomOut size={13} /></button>
@@ -958,6 +1138,17 @@ export const LevelGenDepartment: React.FC = () => {
                   <button type="button" onClick={() => zoomBy(PLAN_VIEW.button_step)} disabled={!cur} title="Приблизить" className="p-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><ZoomIn size={13} /></button>
                   <button type="button" onClick={() => setView(FIT_VIEW)} disabled={!cur} title="Вписать карту целиком" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-200 hover:bg-slate-700 disabled:opacity-40"><Maximize2 size={12} />Вписать</button>
                   <button type="button" onClick={() => { setGoalTool((v) => !v); setRegionMode('off'); }} disabled={!cur} title="Щелчок по плану добавляет цель" className={`inline-flex items-center gap-1 px-2 py-1 rounded border disabled:opacity-40 ${goalTool ? 'bg-yellow-500 border-yellow-400 text-slate-950 font-semibold' : 'bg-slate-800 border-slate-700 text-yellow-200 hover:bg-slate-700'}`}><MapPinPlus size={12} />+ цель</button>
+                  {!full && <button type="button" onClick={toggleFull} disabled={!cur} title="План на всё окно браузера (F11); обратно — F11, Esc или «Свернуть»" className="inline-flex items-center gap-1 px-2 py-1 rounded bg-slate-800 border border-cyan-700 text-cyan-200 hover:bg-slate-700 disabled:opacity-40" data-full-enter><Expand size={12} />На весь экран</button>}
+                  {moveOn && (
+                    <span className="inline-flex flex-wrap items-center gap-1.5 px-2 py-0.5 rounded bg-slate-950 border border-cyan-900 text-slate-300" data-move-controls>
+                      <label className="inline-flex items-center gap-1" title="Сетка: при перетаскивании опорная точка объекта (центр здания, середина стены, позиция преграды) встаёт на узел сетки"><input type="checkbox" checked={snapOn} onChange={(e) => setSnapOn(e.target.checked)} className="accent-cyan-500" data-snap-toggle /><Grid3x3 size={12} />сетка</label>
+                      <select value={snapStep} disabled={!snapOn} onChange={(e) => setSnapStep(Number(e.target.value))} className="bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-slate-100 disabled:opacity-40" data-snap-step>
+                        {SNAP_STEPS_CM.map((c) => <option key={c} value={c}>{c >= 100 ? `${c / 100} м${c === 1000 ? ' (сетка плана)' : ''}` : `${c} см`}</option>)}
+                      </select>
+                      <label className="inline-flex items-center gap-1" title="Забор из нескольких сегментов (F_…_N_0, F_…_E_1 …) двигается целиком, а не по одному сегменту"><input type="checkbox" checked={moveFamily} onChange={(e) => setMoveFamily(e.target.checked)} className="accent-cyan-500" data-move-family />весь забор</label>
+                      <span className="text-slate-500">стрелки: {NUDGE_CM.fine} см · Shift {NUDGE_CM.coarse / 100} м · Ctrl {NUDGE_CM.huge / 100} м</span>
+                    </span>
+                  )}
                   <button type="button" onClick={() => setShowRef((v) => !v)} title="Показать / скрыть эталонную картинку справа от плана (без неё план занимает всю ширину)" className="px-2 py-1 rounded bg-slate-800 border border-slate-700 text-slate-300 hover:bg-slate-700" data-ref-toggle>{showRef ? 'скрыть эталон' : 'показать эталон'}</button>
                   <button type="button" onClick={() => setPmcOn((v) => !v)} disabled={!cur} data-pmc-toggle
                     title="Слой «ЧВК» (PMC_DEFENCE D2): посты отрядов ЧВК в стратегических местах (засада у выхода из узкого места, крыша, окно над маршрутом, укрытие) и мины / растяжки оборонительных постов. Пока слой включён, «Принять» сохраняет показанный план в карту (блок pmc → pmc_squads уровня и слой пропсов pmc_charges)."
@@ -969,15 +1160,16 @@ export const LevelGenDepartment: React.FC = () => {
                     : <span className="text-slate-500">{analysisBusy ? 'анализ карты...' : 'нужен анализ карты (слой «Узкие места»)'}</span>)}
                   <span className="text-slate-500">колесо — масштаб у курсора; сдвиг — средняя кнопка или пробел + перетаскивание (в «Просмотре» — левой)</span>
                 </div>
+                {mapBanner}
                 <div ref={planBox}>
-                <RegionOverlay bounds={cur?.layout.bounds ?? null} height={520} mode={goalTool ? 'off' : regionMode} zone={zone} locks={locks} blocks={region?.plan.selLots.map((k) => k.rect)}
+                <RegionOverlay bounds={cur?.layout.bounds ?? null} height={planHeight} snapStep={snapOn ? snapStep : 0} handles={wallHandles} mode={goalTool ? 'off' : regionMode} zone={zone} locks={locks} blocks={region?.plan.selLots.map((k) => k.rect)}
                   inside={selection?.inside.map((g) => g.centre)} locked={selection?.locked.map((g) => g.centre)} onZone={setZone}
                   view={view} onView={setView} objectives={cur?.layout.objectives ?? null} objErrors={objErrors} objWarnings={objWarnings} bestPath={objCheck?.bestPath}
                   addGoal={goalTool} onObjective={cur ? onObjective : undefined} squad={squadNow?.members ?? null} trail={squadNow?.trail ?? null} trails={squadNow?.trails ?? null}
                   objectivesEditable={!activeLayer || activeLayer === 'objectives'} showObjectives={vis.objectives !== false}
                   layerTool={activeDef && activeDef.id !== 'objectives' && !goalTool ? layerTool : 'off'} pickLayer={pickLayer} onLayerAction={onLayerAction}
                   overlay={(h) => <><LayersOverlay h={h} vis={vis} analysis={analysis} selChoke={selChoke} onSelChoke={setSelChoke} props={propsOnMap} selected={selectedEntity} activeEntities={activeEntities} />{pmcPlan && <PmcOverlay h={h} plan={pmcPlan} />}</>}>
-                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={520} marks={marks} view={view} hideObjectives hidden={hidden} tints={tints} conflicts={wallConflicts} />
+                  <LayoutView ref={view0} layout={cur?.layout ?? null} layer={layer} floorMode={floorMode} firingLines={cur?.ev.tactical?.firingLines.lines} showFiringLines={showFiringLines} height={planHeight} marks={marks} view={view} hideObjectives hidden={hidden} tints={tints} conflicts={wallConflicts} issueMarks={issueMarks} />
                 </RegionOverlay>
                 </div>
                 {cur && (track ? (
@@ -995,25 +1187,17 @@ export const LevelGenDepartment: React.FC = () => {
                   </div>
                 ) : cur.simmed ? <p className="mt-1 text-[11px] text-slate-500">Симулятор не прошёл маршрут (основной маршрут не проходим) — воспроизводить нечего.</p> : <p className="mt-1 text-[11px] text-slate-500">«Прогнать отряд (симулятор)» — после прогона здесь появится проигрыватель: отряд идёт по маршруту на плане.</p>)}
               </div>
-              {showRef && (<div>
+              {showRef && !full && (<div>
                 <p className="text-[11px] text-slate-500 mb-1">Эталон (карта дизайнера, развёрнутая сверху; синее — его маршрут, жёлтое — лестницы, зелёный круг — старт)</p>
                 {refOk ? <img src="/api/levelgen/ref-image" alt="reference" onError={() => setRefOk(false)} className="rounded-xl border border-slate-800 w-full" style={{ maxHeight: 520, objectFit: 'contain', background: '#191c22' }} />
                   : <p className="text-xs text-amber-300">Эталонная картинка недоступна (Saved/MapRefs или python/PIL).</p>}
               </div>)}
             </div>
+            </FullWindowFrame>
           </section>
 
           <div className="flex flex-col gap-6 min-w-0">
-          {cur && assignment && (
-            <LayersPanel counts={layerCountsNow} vis={vis} onVis={setVis} active={activeLayer} onActive={(id) => { setActiveLayer(id); if (id) { setRegionMode('off'); setGoalTool(false); } }}
-              tool={layerTool} onTool={setLayerTool} addIdx={addIdx} onAddIdx={setAddIdx} tintOn={tintOn} onTint={setTintOn} selected={selectedEntity} onDelete={deleteSelected}
-              onRotate={(deg) => { if (selKey && !selKey.startsWith('prop:')) applyLayout({ op: 'rotate', key: selKey, deg }); }}
-              onRerollLayer={zone && profileOk && activeDef?.size_class ? rerollLayer : null} message={layerMsg}
-              propsInfo={propsState ? { map: propsState.map, path: propsState.path, revision: propsState.file.revision, frozen: propsState.file.frozen, dirty: propsState.dirty } : null} propsNote={NO_PROPS} onSaveProps={saveProps} busy={!!busy}
-              analysis={analysis} analysisBusy={analysisBusy} conditions={conditions} onConditions={setConditions}
-              onAnalyze={() => { if (cur) { setCandidates((cs) => cs.map((c, i) => (i === sel ? { ...c, analysis: undefined } : c))); runAnalysis(cur.layout, sel); } }}
-              selChoke={selChoke} onZoomChoke={zoomToChoke} threat={threat} config={CHOKE} />
-          )}
+          {!full && layersPanel}
           <section className="bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 min-w-0">
             <h3 className="text-xs font-bold tracking-widest uppercase text-slate-400">Оценка</h3>
             {!cur && <p className="text-sm text-slate-500">Сгенерируйте кандидатов.</p>}

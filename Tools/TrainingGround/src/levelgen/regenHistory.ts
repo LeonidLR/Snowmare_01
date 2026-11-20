@@ -5,7 +5,7 @@
 export const HISTORY_MIN_STEPS = 20;
 export const HISTORY_DEFAULT_LIMIT = 50;
 
-export interface HistoryEntry<T> { state: T; label: string }
+export interface HistoryEntry<T> { state: T; label: string; /** Set by historyPushCoalesced: the next push with the same key replaces this entry instead of adding a step. */ coalesce?: string }
 export interface History<T> {
   past: HistoryEntry<T>[];
   present: HistoryEntry<T>;
@@ -24,15 +24,28 @@ export function historyPush<T>(h: History<T>, state: T, label: string): History<
   return { ...h, past: past.length > h.limit ? past.slice(past.length - h.limit) : past, present: { state, label }, future: [] };
 }
 
+/**
+ * historyPush that MERGES into the present step when it carries the same `coalesce` key (T-022: ten arrow-key nudges of one building
+ * are one undo step, not ten). The step keeps the key, so the run continues until any other push (or an undo) breaks it.
+ */
+export function historyPushCoalesced<T>(h: History<T>, state: T, label: string, coalesce: string): History<T> {
+  if (h.present.coalesce === coalesce && h.past.length > 0) return { ...h, present: { state, label, coalesce }, future: [] };
+  const next = historyPush(h, state, label);
+  return { ...next, present: { ...next.present, coalesce } };
+}
+
 export const canUndo = <T>(h: History<T>): boolean => h.past.length > 0;
 export const canRedo = <T>(h: History<T>): boolean => h.future.length > 0;
 
+/** An entry without its coalesce key (after an undo / redo a new edit always starts a new step). */
+const plain = <T>(e: HistoryEntry<T>): HistoryEntry<T> => { if (e.coalesce === undefined) return e; const { coalesce: _c, ...rest } = e; return rest; };
+
 export function historyUndo<T>(h: History<T>): History<T> {
   if (!canUndo(h)) return h;
-  return { ...h, past: h.past.slice(0, -1), present: h.past[h.past.length - 1], future: [h.present, ...h.future] };
+  return { ...h, past: h.past.slice(0, -1), present: plain(h.past[h.past.length - 1]), future: [h.present, ...h.future] };
 }
 
 export function historyRedo<T>(h: History<T>): History<T> {
   if (!canRedo(h)) return h;
-  return { ...h, past: [...h.past, h.present], present: h.future[0], future: h.future.slice(1) };
+  return { ...h, past: [...h.past, h.present], present: plain(h.future[0]), future: h.future.slice(1) };
 }

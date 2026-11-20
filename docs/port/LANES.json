@@ -4,15 +4,15 @@
   {
    "id": "T-05",
    "title": "smart enemies: firing positions",
-   "owner": "lead Sonnet subagent",
-   "branch": "claude/firing-positions",
+   "owner": "main lead",
+   "branch": "worker/t05-firing-positions",
    "topic": "claude-T005",
    "state": "waiting",
    "max_quiet_min": 45,
    "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-agents",
    "machine": "main",
-   "reason": "main PC offline 11-20 >= 4 h: the stand-in lead on codex-worker continues from the branch (docs/port/WORKER_LEAD_2026-11-20.md)",
-   "max_wait_min": 480
+   "reason": "NOT for main (Fable review + paired A/B: defender wins fall); defence_use=false; waits for designer answers on garrison experiment / T-08",
+   "max_wait_min": 720
   },
   {
    "id": "T-020",
@@ -29,27 +29,27 @@
    "id": "T-021",
    "title": "cold indoors on generated maps",
    "owner": "lead Sonnet subagent",
-   "branch": "claude/cold-indoors",
+   "branch": "worker/t021-cold-indoors",
    "topic": "claude-T021",
-   "state": "waiting",
+   "state": "done",
    "max_quiet_min": 45,
    "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-gemday",
    "machine": "main",
-   "reason": "main PC offline 11-20 >= 4 h: the stand-in lead on codex-worker continues from the branch (docs/port/WORKER_LEAD_2026-11-20.md)",
+   "reason": "merged into main 2026-11-20",
    "max_wait_min": 480
   },
   {
    "id": "bgen",
    "title": "building generator (bot mantle -> parapet firing gaps -> S2.3)",
-   "owner": "session Генератор зданий local_93362388",
-   "branch": "claude/building-generator",
+   "owner": "main lead",
+   "branch": "worker/bgen-firing-gaps",
    "topic": "claude-S022",
    "state": "waiting",
    "max_quiet_min": 60,
    "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-bgen",
    "machine": "main",
-   "reason": "main PC offline 11-20 >= 4 h: the stand-in lead on codex-worker continues from the branch (docs/port/WORKER_LEAD_2026-11-20.md)",
-   "max_wait_min": 480
+   "reason": "S2.3 + S2.7 + firing gaps done on branch; S2.4 waits for designer answers B1-B5 (docs/design/levelgen/S2_3_PLANS.md); never merge into main",
+   "max_wait_min": 720
   },
   {
    "id": "worker-night",
@@ -70,11 +70,42 @@
    "id": "T-022/023",
    "title": "TG map + props editing (F11, move elements, zone props re-roll)",
    "owner": "not started - stand-in lead (Sonnet) or main lead",
-   "branch": "claude/tg-map-edit",
+   "branch": "worker/t023-tg-props-edit",
    "topic": "claude-T022",
-   "state": "waiting",
-   "reason": "queued: brief docs/port/claude/inbox/T022-tg-map-edit-fullscreen.md",
+   "state": "done",
+   "reason": "merged into main 2026-11-20; designer review in TG",
    "max_wait_min": 720
+  },
+  {
+   "id": "T-08",
+   "title": "objective defence: covered holder + hammers fall-back",
+   "owner": "main lead",
+   "branch": "worker/t08-holder-fallback",
+   "topic": "claude-T008",
+   "state": "waiting",
+   "max_wait_min": 720,
+   "machine": "main",
+   "reason": "first slice FAIL on crossroads (no cover in the 6 m zone), ships OFF; waits for designer: cover at goal / rule 4 timing"
+  },
+  {
+   "id": "goal-zone-clear",
+   "title": "mission goal counts only after its zone is cleared",
+   "owner": "main lead",
+   "branch": "worker/goal-zone-clear",
+   "topic": "",
+   "state": "done",
+   "reason": "merged into main 2026-11-20; 4 open designer questions in the stand-in report"
+  },
+  {
+   "id": "squad-holder-yield",
+   "title": "ramp file: holder step-aside never through a team-mate",
+   "owner": "main lead",
+   "branch": "claude/squad-holder-yield",
+   "topic": "",
+   "state": "active",
+   "max_quiet_min": 90,
+   "machine": "main",
+   "worktree": "C:/Users/Zephyrus15Duo/Documents/Unreal Projects/CodexTactics-grok"
   }
  ]
 }

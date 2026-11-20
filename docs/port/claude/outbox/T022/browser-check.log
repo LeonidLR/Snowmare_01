@@ -1,0 +1,31 @@
+map shown: gen_ref_01_02_depot_1карта L_Gen_Depot_1
+normal mode: the plan is 782 x 690 px in a 1600 x 950 window (was ~470 x 520)
+screenshot 01-normal-plan.jpg
+building B_hall_n centre 4450,-1350 -> px 698,154, scale 0.0429 px/cm
+screenshot 02-buildings-layer-active.jpg
+after the building drag: layer message = "здание B_hall_n перемещено на (-582, -1164) см вместе с: стен 6. ПРОБЛЕМЫ после перемещения: укрытие COV_34 заходит в здание B_hall_n; укрытие COV_35 заходит в здание B_hall_n; укрытие COV_236 заходит в здание B_hall_n; укрытие COV_237 заходит в здание B_hall_n"
+undo button: Отменить (1); dirty banner: ● Раскладка изменена и не записана в файл: «Принять» запишет её (accepted/gen_ref_01_02_depot_1.json), затем «Собрать в Unreal» построит по ней карту.
+screenshot 03-building-dragged.jpg
+after Ctrl+Z: undo button: Отменить (0); redo: Вернуть (1); dirty banner: ""
+screenshot 04-building-undone.jpg
+selected: Выбрано: B_hall_n, высота 900 см
+after 3 Shift+ArrowUp: undo button: Отменить (1) (one step); message: здание B_hall_n перемещено на (100, 0) см вместе с: стен 6
+after Ctrl+Z: Отменить (0)
+snap on, focus on the checkbox, ArrowRight: undo Отменить (1); здание B_hall_n перемещено на (0, 10) см вместе с: стен 6
+snapped drag: здание B_hall_n перемещено на (-650, -450) см вместе с: стен 6. ПРОБЛЕМЫ после перемещения: здания B_hall_n и B_office_s пересекаются; укрытие COV_34 заходит в здание B_hall_n; eval-pending: 
+screenshot 04b-snapped-drag-selected.jpg
+after Ctrl+Z: Отменить (0)
+F11 -> full-window = on; zoom before 173 %, in full 173 %
+full window: the plan is 1204 x 780 px
+screenshot 05-f11-full-window.jpg
+drawer toggled: false
+screenshot 06-full-window-drawer-closed.jpg
+F11 again -> full-window = off; zoom 173 %
+F11 + Esc -> full-window = off
+screenshot 07-back-to-normal.jpg
+fence F_compound_N_0 is on layer obstacles_large
+fence dragged (full window): F_compound_N_0: перемещено на (-1145, 0) см; undo Отменить (1)
+wall handles: 2
+screenshot 08-fence-dragged-full-window.jpg
+fence move undone: undo Отменить (0)
+screenshot 09-fence-undone.jpg
