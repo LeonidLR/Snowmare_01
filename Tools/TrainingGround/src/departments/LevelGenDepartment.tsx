@@ -920,7 +920,7 @@ export const LevelGenDepartment: React.FC = () => {
                   className="px-2.5 py-1 rounded bg-sky-700 hover:bg-sky-600 border border-sky-500 text-white font-medium text-xs shadow-sm transition-colors disabled:opacity-50"
                   data-carry-derived
                 >
-                  Перенести пропсы и точки вместе со зданием
+                  Перенести пропсы вместе со зданием
                 </button>
               ) : (
                 <div className="flex items-center gap-3">
