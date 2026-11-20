@@ -106,6 +106,7 @@ local frame vs world coordinates is the table `Content/Data/LevelGen/building_co
 - Door states: `open` - frame only; `closed` / `locked` - a door leaf actor with tags `door_state=closed|locked`,
   `CanEverAffectNavigation = false` and no pawn collision until R1 (opening-states 5); `barricaded` - leaf + barricade props
   per author (blocking collision, affects navigation), tag `door_state=barricaded`; `sealed` - wall fill.
+  Collision of the state actors (2026-11-20): `use_default_collision = False` + `response_array` on the body instance (TRAPS.md, "Scripted collision responses").
 - Window states: tags `window_state=*` on the opening; `glazed` - a glass pane actor (no pawn collision until R2, visual),
   `barred` - bars mesh with pawn collision but no visibility block, `boarded` - boards mesh (visibility + collision),
   `broken` - empty frame; loopholes / shop windows `fixed` - glazing with collision.
