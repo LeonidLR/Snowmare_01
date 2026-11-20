@@ -1,0 +1,98 @@
+{
+  "schema": "codex.pmc_arena/1",
+  "_comment": "Fixture for smart enemies T-10 (training gate): 6-round probe from night 2026-11-19 where overwatch_kills is 0 and guard_share is None.",
+  "map": "/Game/Maps/Generated/L_Gen_Depot_X4",
+  "seed": 537472962,
+  "rounds": [
+    {
+      "index": 1,
+      "scenario": "tactical",
+      "sides": {
+        "A": {"role": "attacker", "kills": 2, "overwatch_kills": 0, "survivors": 2, "hp_lost": 120, "damage_dealt": 200},
+        "B": {"role": "defender", "kills": 1, "overwatch_kills": 0, "survivors": 1, "hp_lost": 200, "damage_dealt": 120}
+      },
+      "defence": {
+        "guard_share": null,
+        "spread_m": 24.5,
+        "shared_cover_pairs": 0,
+        "objective_share": 0.05,
+        "overwatch_kills": 0
+      }
+    },
+    {
+      "index": 2,
+      "scenario": "tactical",
+      "sides": {
+        "A": {"role": "attacker", "kills": 3, "overwatch_kills": 0, "survivors": 3, "hp_lost": 40, "damage_dealt": 300},
+        "B": {"role": "defender", "kills": 0, "overwatch_kills": 0, "survivors": 0, "hp_lost": 300, "damage_dealt": 40}
+      },
+      "defence": {
+        "guard_share": null,
+        "spread_m": 31.2,
+        "shared_cover_pairs": 0,
+        "objective_share": 0.08,
+        "overwatch_kills": 0
+      }
+    },
+    {
+      "index": 3,
+      "scenario": "tactical",
+      "sides": {
+        "A": {"role": "attacker", "kills": 1, "overwatch_kills": 0, "survivors": 1, "hp_lost": 180, "damage_dealt": 160},
+        "B": {"role": "defender", "kills": 2, "overwatch_kills": 0, "survivors": 2, "hp_lost": 160, "damage_dealt": 180}
+      },
+      "defence": {
+        "guard_share": null,
+        "spread_m": 19.8,
+        "shared_cover_pairs": 0,
+        "objective_share": 0.02,
+        "overwatch_kills": 0
+      }
+    },
+    {
+      "index": 4,
+      "scenario": "tactical",
+      "sides": {
+        "A": {"role": "attacker", "kills": 2, "overwatch_kills": 0, "survivors": 2, "hp_lost": 110, "damage_dealt": 210},
+        "B": {"role": "defender", "kills": 1, "overwatch_kills": 0, "survivors": 1, "hp_lost": 210, "damage_dealt": 110}
+      },
+      "defence": {
+        "guard_share": null,
+        "spread_m": 27.4,
+        "shared_cover_pairs": 1,
+        "objective_share": 0.11,
+        "overwatch_kills": 0
+      }
+    },
+    {
+      "index": 5,
+      "scenario": "tactical",
+      "sides": {
+        "A": {"role": "attacker", "kills": 0, "overwatch_kills": 0, "survivors": 0, "hp_lost": 300, "damage_dealt": 80},
+        "B": {"role": "defender", "kills": 3, "overwatch_kills": 0, "survivors": 3, "hp_lost": 80, "damage_dealt": 300}
+      },
+      "defence": {
+        "guard_share": null,
+        "spread_m": 35.1,
+        "shared_cover_pairs": 0,
+        "objective_share": 0.04,
+        "overwatch_kills": 0
+      }
+    },
+    {
+      "index": 6,
+      "scenario": "tactical",
+      "sides": {
+        "A": {"role": "attacker", "kills": 2, "overwatch_kills": 0, "survivors": 2, "hp_lost": 140, "damage_dealt": 190},
+        "B": {"role": "defender", "kills": 1, "overwatch_kills": 0, "survivors": 1, "hp_lost": 190, "damage_dealt": 140}
+      },
+      "defence": {
+        "guard_share": null,
+        "spread_m": 22.0,
+        "shared_cover_pairs": 0,
+        "objective_share": 0.06,
+        "overwatch_kills": 0
+      }
+    }
+  ]
+}

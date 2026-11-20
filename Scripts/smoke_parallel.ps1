@@ -34,7 +34,10 @@ param(
     # Test farm (2026-11-17): auto = during 08:00-16:30 the batch runs on the second machine codex-worker (Tools\smoke_remote.ps1:
     # this checkout's HEAD + binaries go there, logs + result JSON come back to the usual places), otherwise / when not possible here.
     # on = worker or fail, off = always here. Default: env CODEX_SMOKE_REMOTE, else auto.
-    [ValidateSet("", "auto", "on", "off")][string]$Remote = ""
+    [ValidateSet("", "auto", "on", "off")][string]$Remote = "",
+    # Arguments passed directly to the smoke command(s) in -ExecCmds (e.g. "Seed=12" or "Rounds=1 Seed=42").
+    [string]$SmokeArgs = "",
+    [string]$Args = ""
 )
 
 $ErrorActionPreference = "Stop"
@@ -90,7 +93,10 @@ function Start-SmokeProcess([string]$Name, [string]$Suffix) {
     # A "rendered" smoke (test_map smokeOptions, e.g. SnowTracksSmoke reads a render target back) needs a real RHI: offscreen instead of -nullrhi.
     $rhi = $(if (Get-Option $Name "rendered" $false) { "-RenderOffscreen -ResX=1280 -ResY=720" } else { "-nullrhi" })
     # Start-Process takes one argument string: quote the paths (the project path has a space).
-    $exec = $(if ($PreCmds) { "$PreCmds,CodexTactics.$Name" } else { "CodexTactics.$Name" })
+    $smokeOptArgs = Get-Option $Name "args" ""
+    $cmdArgs = ($smokeOptArgs + " " + $SmokeArgs + " " + $Args).Trim()
+    $cmdWithArgs = if ($cmdArgs) { "CodexTactics.$Name $cmdArgs" } else { "CodexTactics.$Name" }
+    $exec = $(if ($PreCmds) { "$PreCmds,$cmdWithArgs" } else { $cmdWithArgs })
     $gameArgs = "`"$Project`" $map -game $rhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=$exec`" `"-abslog=$log`" $extra"
     Wait-DesignerPriority
     $proc = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $gameArgs -WindowStyle Hidden -PassThru

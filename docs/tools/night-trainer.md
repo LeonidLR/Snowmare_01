@@ -164,5 +164,35 @@ The scheduled task now runs `-RunId pmc-v4`. pmc-v3 (created 2026-11-07) froze i
 (`push`, `push_after_s`, `order_min_hold_s`, `failed_order_cooldown_s`, `rpg_strike`, `rpg_gunner_share`) never evolved (Gemini's
 review 009). pmc-v4 was created by hand from a SEED: `Saved/Trainer/seeds/pmc_commander.seed_v4.json` = the repo's
 `Content/Data/AI/pmc_commander.json` (every gene) with the pmc-v3 champion's values overlaid (40 values), bounds from
-`pmc_commander.bounds.json`. The game file is unchanged (apply a champion only with `apply_champion.ps1`). If you reinstall the task
-with install_night_trainer.ps1, pass `-RunId pmc-v4`.
+`pmc_commander.bounds.json`. The game file is unchanged (apply a champion only with `apply_champion.ps1`). If you reinstall the task with install_night_trainer.ps1, pass `-RunId pmc-v4`.
+
+## 8. Training Gate & Scenario Regression (smart enemies T-10)
+
+Adopted 2026-11-19 (OQ-10: evolution paused; worker runs scenario regressions at night).
+
+### 8.1 Training Gate (`night_trainer.py --check-gate`)
+Before any evolution run starts, the training gate enforces conditions G1-G5:
+- **G1 Smoke Health**: All listed foundation and scenario smokes (`PmcCrossroadsSmoke`, `PmcAlleySmoke`, `PmcRoofDefenceSmoke`, `PmcStalemateSmoke`) must be green (`PASS` / `PASS*` / `KNOWN_FAIL`) in the latest sweep (`Saved/Reports/sweep-result.json`).
+- **G2 Metric Liveness**: Every metric used by fitness bonuses/penalties or QD axes must be non-zero and non-constant across a 6-round probe. A dead metric (e.g. `overwatch_kills == 0` or `guard_share is null` as seen on 2026-11-19) immediately blocks the run.
+- **G3 Baseline Sufficiency**: A baseline dataset must exist with $\ge 30$ rounds per scenario for the current freeze commit (F7).
+- `run_night_trainer.ps1` refuses to launch without a fresh, valid gate file (`Saved/Trainer/gate_pass.json` < 24 h old).
+
+```bash
+# Check training gate:
+python Scripts/Trainer/night_trainer.py --check-gate --config Scripts/Trainer/trainer_config.json
+```
+
+### 8.2 Scenario Regression Runner (`Scripts/Tools/scenario_regression.py`)
+Executes scenario smokes across multiple seeds using `smoke_parallel.ps1 -SmokeArgs "Seed=S"`:
+- **Quick Day Mode** (`--scenario X --seeds 20..50`, target < 15 min):
+  Produces a short digest for the day loop: pass rate, the worst 3 seeds, and the decision trace of one failed seed.
+- **Night Mode** (`--night`, sweep 16:30-08:00 on worker):
+  Tracks pass rates across all scenarios, compares with yesterday's results (`--compare-yesterday`), and isolates regressions and flaky seeds.
+
+```bash
+# Day loop quick digest:
+python Scripts/Tools/scenario_regression.py --scenario crossroads --seeds 20
+
+# Nightly regression sweep:
+python Scripts/Tools/scenario_regression.py --night --seeds 100 --out-md Saved/Reports/night-regression.md
+```
