@@ -329,6 +329,68 @@ bool FFormationConfinedTooTightTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_CONFINED_TEST(FFormationConfinedLinesTest, "NoPlaceRoundTheJambCorner")
+bool FFormationConfinedLinesTest::RunTest(const FString&)
+{
+	// The 2.5 m hall, entered through its -X door; the runtime's entry test (navmesh line + jamb clearance) sees every place but the far
+	// corners (x > 20, |y| > 50: round a corner from the entry point). No place there - with the test off the cheapest places are there.
+	using namespace FormationConfinedTestLocal;
+	const FFormationConfinedTuning Tuning;
+	const FFormationConfinedPocket Pocket = RoomPocket(FVector2D::ZeroVector, 90.f, 90.f, 45.f, Tuning);
+	const FVector2D Entry(-150.0, 0.0);
+	const auto BehindJamb = [](const FVector2D& Place) { return Place.X > 20.0 && FMath::Abs(Place.Y) > 50.0; };
+	FFormationConfinedLineTests Lines;
+	Lines.FromEntry = [&BehindJamb](const FVector2D& Place) { return !BehindJamb(Place); };
+	const TArray<FFormationConfinedSlot> Slots{ Slot(FVector2D(-330.0, 0.0), FVector2D(-200.0, 10.0)), Slot(FVector2D(-480.0, 0.0), FVector2D(-300.0, -10.0)) };
+	const FFormationConfinedResult Without = FormationConfinedRules::CompressSlots(Pocket, Slots, TOptional<FVector2D>(), Entry, Tuning);
+	TestTrue(TEXT("without the test a place lies behind the jamb (the walk smoke's snag)"),
+		BehindJamb(Without.Places[0]) || BehindJamb(Without.Places[1]));
+	const FFormationConfinedResult With = FormationConfinedRules::CompressSlots(Pocket, Slots, TOptional<FVector2D>(), Entry, Tuning, &Lines);
+	TestEqual(TEXT("both placed"), With.ReplacedCount, 2);
+	for (const FVector2D& Place : With.Places)
+	{
+		TestFalse(*FString::Printf(TEXT("(%.0f, %.0f) not behind the jamb"), Place.X, Place.Y), BehindJamb(Place));
+		TestTrue(TEXT("inside the pocket"), FormationConfinedRules::IsInside(Pocket, Place, Tuning));
+	}
+	// A test that sees nothing (a bad entry point) is dropped: the men still get places.
+	FFormationConfinedLineTests Blind;
+	Blind.FromEntry = [](const FVector2D&) { return false; };
+	TestEqual(TEXT("blind entry test: still placed"),
+		FormationConfinedRules::CompressSlots(Pocket, Slots, TOptional<FVector2D>(), Entry, Tuning, &Blind).ReplacedCount, 2);
+	// A man already inside walks his own straight line: a place he cannot see is not "reachable" - another one is chosen.
+	FFormationConfinedLineTests Own;
+	Own.Straight = [](const FVector2D& From, const FVector2D& To) { return To.Y <= 0.0; }; // a wall across his way north
+	const TArray<FFormationConfinedSlot> Inside{ Slot(FVector2D(-330.0, 0.0), FVector2D(0.0, 40.0)) };
+	const FFormationConfinedResult Seen = FormationConfinedRules::CompressSlots(Pocket, Inside, TOptional<FVector2D>(), TOptional<FVector2D>(), Tuning, &Own);
+	TestTrue(*FString::Printf(TEXT("his place (%.0f, %.0f) is one he sees"), Seen.Places[0].X, Seen.Places[0].Y), Seen.Places[0].Y <= 0.0);
+	return true;
+}
+
+FORMATION_CONFINED_TEST(FFormationConfinedGapTest, "NoPlaceInTheDoorway")
+bool FFormationConfinedGapTest::RunTest(const FString&)
+{
+	// The grey showcase S03 hall's probe (2.5 m hall, its 150 cm door north seen through by ray 4 alone): no place out along that ray in the
+	// door (the man stood there - the leg's 5.84 ratio); a corridor's axis (long neighbours) keeps its reach.
+	using namespace FormationConfinedTestLocal;
+	const FFormationConfinedTuning Tuning;
+	FFormationConfinedPocket Hall;
+	Hall.Free = { 450.f, 200.f, 113.f, 89.f, 450.f, 149.f, 81.f, 62.f, 57.f, 62.f, 81.f, 84.f, 450.f, 199.f, 107.f, 268.f };
+	TestEqual(TEXT("the door ray reaches only its shorter neighbour"), FormationConfinedRules::RayReach(Hall, 4, Tuning), 89.f - Tuning.WallMarginCm);
+	TestFalse(TEXT("(0, 160) out in the door is outside"), FormationConfinedRules::IsInside(Hall, FVector2D(0.0, 160.0), Tuning));
+	TestTrue(TEXT("(0, 79) in the hall is inside"), FormationConfinedRules::IsInside(Hall, FVector2D(0.0, 79.0), Tuning));
+	for (const FVector2D& Place : FormationConfinedRules::Candidates(Hall, Tuning))
+	{
+		if (FMath::Abs(Place.X) < 1.0 && Place.Y > 0.0)
+		{
+			TestTrue(*FString::Printf(TEXT("door-ray candidate (%.0f, %.0f) stays in the hall"), Place.X, Place.Y), Place.Y <= 79.01);
+		}
+	}
+	const FFormationConfinedPocket Narrow = RoomPocket(FVector2D::ZeroVector, 215.f, 40.f, 40.f, Tuning);
+	TestEqual(TEXT("a narrow hall's axis keeps the pocket radius"), FormationConfinedRules::RayReach(Narrow, 0, Tuning),
+		FormationConfinedRules::PocketRadius(Narrow, Tuning));
+	return true;
+}
+
 FORMATION_CONFINED_TEST(FFormationConfinedTuningTest, "TuningFromJsonAndFile")
 bool FFormationConfinedTuningTest::RunTest(const FString&)
 {
@@ -376,6 +438,9 @@ bool FFormationConfinedTuningTest::RunTest(const FString&)
 	TestEqual(TEXT("depth_weight"), FromFile.DepthWeight, Defaults.DepthWeight);
 	TestEqual(TEXT("pass_free_cm"), FromFile.PassFreeCm, Defaults.PassFreeCm);
 	TestEqual(TEXT("face_walk_cm"), FromFile.FaceWalkCm, Defaults.FaceWalkCm);
+	TestEqual(TEXT("jamb_clear_cm"), FromFile.JambClearCm, Defaults.JambClearCm);
+	TestEqual(TEXT("jamb_sample_cm"), FromFile.JambSampleCm, Defaults.JambSampleCm);
+	TestEqual(TEXT("gap_factor"), FromFile.GapFactor, Defaults.GapFactor);
 	return true;
 }
 
