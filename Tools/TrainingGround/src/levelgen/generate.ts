@@ -68,7 +68,9 @@ import { OPPOSITE, SIDE_NORMAL, SIDE_YAW, cellRect, planDir, sharedSegs, toDraft
 import type { PlanDoorsOpts, PlanOpening, WallKey } from './buildings/planDoors.ts';
 import { WALL_ORDER, planDoors, wallSpan } from './buildings/planDoors.ts';
 import { planWindows } from './buildings/planWindows.ts';
-import { planUnits } from './buildings/planUnits.ts';
+import { fixEntryRoles, planUnits } from './buildings/planUnits.ts';
+import { DEFAULT_BLOCK_TEMPLATE, blockTemplate, kitStairGeom, kitTemplate, planKitBlock, templateForSeries } from './buildings/kitPlan.ts';
+import { annotateStructure, annotateWindowVault } from './structureClasses.ts';
 import { fnv1a } from './props/rng.ts';
 
 type Rect = [Vec2, Vec2];
@@ -674,6 +676,9 @@ export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta):
   };
   const heightGate = runObstacleHeightGate(layout);
   if (heightGate.gate === 'fail') throw new Error(heightGate.errors.map((e) => e.reason).join('; '));
+  // schema /2: structural class / material of every wall and opening, the vault data of every window (structureClasses.ts; data only).
+  // Plans off (/1) the layout stays byte for byte what it was.
+  if (d.building_plans) annotateWindowVault(annotateStructure(layout));
   // every room of an enterable building gets its walkable anchor (building frame; rotateContent moves it by the coord table)
   return addRoomAnchors(layout);
 }
@@ -784,6 +789,13 @@ export interface BuildingSpec {
   cores?: number | CoreAt[];
   /** building-archetypes.md section 1, from the lot template (TEMPLATE_ARCHETYPE); informational until S2. */
   archetype?: Archetype;
+  /**
+   * A planned block's plan template (building_plans.json recipes.block.templates: block_khrushchevka = the kit planner, block_sections = the S2.3
+   * planner, more house types later); absent = the template of `series`, else templates.default.
+   */
+  plan_template?: string;
+  /** A residential block's building series (e.g. '1-464'): picks the template with that series when no plan_template is named. */
+  series?: string;
 }
 
 export { addWall, fenceRect, addBuilding, addLadderAt, splitWall };
@@ -1070,12 +1082,34 @@ function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random
   const coreTop = s.roof_walkable ? s.floors : s.floors - 1;
   const depth: 350 | 200 = coreTop > 1 ? 350 : 200;
   const planSeed = planSeedOf(d, bid, sn.L, sn.D, s.floors, 'block');
+  // the plan template (building_plans.json recipes.block.templates): a kit-planner template first; a footprint it cannot cut falls back to the
+  // S2.3 sections planner below (template block_sections), then to the BSP
+  let kitWhy: string | undefined;
+  const tpl = blockTemplate(s.plan_template ?? templateForSeries(s.series) ?? DEFAULT_BLOCK_TEMPLATE);
+  if (tpl.planner === 'kit_sections') {
+    const kit = planKitBlock({ L: sn.L, D: sn.D, seed: planSeed, template: tpl.id });
+    if (kit.kind === 'bands' && kit.kit) {
+      const fk: PlanFrame = { alongY, coreSide: longSides.includes(first) ? OPPOSITE[first] : alongY ? 'west' : 'north', cx0, cy0, cx1, cy1 };
+      const pk = planShell(d, bid, rp, s, random);
+      pk.cores = kit.kit.sections.map((sec, k) => switchbackCore(bid, fk, sec.core.u0, coreTop, k, tpl.id));
+      if (pk.cores.every((c) => !!c.stairs.length || coreTop <= 0)) {
+        const b = emitPlanned({ d, bid, s, random, p: pk, plan: kit, f: fk, rp, planSeed, coreSide: fk.coreSide, first, doors: { core: null } });
+        if (kit.kit.notes.length || kit.kit.sections.some((x) => x.notes.length)) b.plan!.notes = [...kit.kit.notes, ...kit.kit.sections.flatMap((x) => x.notes)];
+        b.plan!.template = tpl.id;
+        if (tpl.series) b.series = tpl.series;
+        b.era = tpl.era;
+        return b;
+      }
+      kitWhy = 'kit: core_unbuilt';
+    } else kitWhy = kit.fallback;
+  }
   const plan = planBlock({ L: sn.L, D: sn.D, depth, seed: planSeed });
   let coreSide: Side = longSides.includes(first) ? OPPOSITE[first] : alongY ? 'west' : 'north';
   const fallback = (why: string): DraftBuilding => {
     const p2 = planShell(d, bid, r, s, random);
     const b = legacyStages(p2);
-    b.plan = { v: 1, kind: 'bsp', seed: planSeed, core_wall: sideId(p2.cores[0]?.side ?? coreSide), street_wall: sideId(first), fallback: why };
+    b.plan = { v: 1, kind: 'bsp', seed: planSeed, core_wall: sideId(p2.cores[0]?.side ?? coreSide), street_wall: sideId(first), fallback: why, ...(kitWhy ? { notes: [kitWhy] } : {}) };
+    b.era = blockTemplate('block_sections').era;
     return b;
   };
   if (plan.kind === 'fallback' || !plan.sections) return fallback(plan.fallback ?? 'plan_fallback');
@@ -1097,7 +1131,39 @@ function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random
     if (!lenOk || Math.abs(lowRel - inner - sec.core.u0) > 1 || sec.core.u0 + COREBAY > sn.L || (c.laneWalls.length ? 350 : 200) !== depth) return fallback('block_core_unmapped');
   }
   const f: PlanFrame = { alongY, coreSide, cx0, cy0, cx1, cy1 };
-  return emitPlanned({ d, bid, s, random, p, plan, f, rp, planSeed, coreSide, first, doors: { core: null, cores: plan.sections.map((sec) => ({ u0: sec.core.u0, depth })) } });
+  const b = emitPlanned({ d, bid, s, random, p, plan, f, rp, planSeed, coreSide, first, doors: { core: null, cores: plan.sections.map((sec) => ({ u0: sec.core.u0, depth })) } });
+  if (kitWhy && b.plan) b.plan.notes = [kitWhy];
+  if (b.plan) b.plan.template = 'block_sections';
+  b.era = blockTemplate('block_sections').era;
+  return b;
+}
+
+/**
+ * The half-landing switchback core of a kit section (kitPlan.ts kitStairGeom; BGEN_KIT_PLANS_2026-11-21.md section 2), draft metres. Per storey n
+ * (0 .. upTo-1) one stair record: flight a from the floor landing (court side, level n) inward to the mid landing (n + 1/2) in lane 0, flight b
+ * back out in lane 1 onto the next floor landing (n + 1): `pos` -> `turn`, `mid` -> `top`, `mid_rect` = the mid landing slab. The slab gap of
+ * level n + 1 (`flightRect`) is the whole core beyond the floor landing (both lanes + the mid landing); one lane wall per storey between the flights.
+ * Stair ids as planStairCore: `<bid>_stair_<n>`, `<bid>_c<k>_stair_<n>` for the k-th section. No flights when upTo <= 0.
+ */
+function switchbackCore(bid: string, f: PlanFrame, coreU0: number, upTo: number, index: number, template: string): StairCore {
+  const KIT = kitTemplate(template);
+  const g = kitStairGeom(coreU0, template)!;
+  const P = (u: number, v: number): Vec2 => toDraft(f, u, v);
+  const R = (u0: number, v0: number, u1: number, v1: number): Rect => {
+    const a = P(u0, v0), b = P(u1, v1);
+    return [[Math.min(a[0], b[0]), Math.min(a[1], b[1])], [Math.max(a[0], b[0]), Math.max(a[1], b[1])]];
+  };
+  const idBase = index ? `${bid}_c${index}` : bid;
+  const stairs: Stair[] = [];
+  const midRect = R(g.uIn[0], g.vMid, g.uIn[1], g.vFar);
+  for (let n = 0; n < upTo; n++) {
+    stairs.push({ id: `${idBase}_stair_${n}`, pos: P(g.lane[0], g.vLanding), turn: P(g.lane[0], g.vMid), mid: P(g.lane[1], g.vMid), top: P(g.lane[1], g.vLanding),
+      from: n, to: n + 1, kind: 'stairwell', mid_rect: midRect, width: KIT.core.flight_w_cm });
+  }
+  const box = R(coreU0, 0, coreU0 + KIT.core.width_cm, KIT.core.depth_cm);
+  const gap = R(g.uIn[0], g.vLanding, g.uIn[1], g.vFar);
+  const laneWalls = Array.from({ length: upTo }, (_, n) => ({ a: P(g.uLaneWall, g.vLanding), b: P(g.uLaneWall, g.vMid), floor: n }));
+  return { stairs, box, flightRect: () => gap, voidRects: [], mezzanine: box, mezzanineVoid: [], laneWalls, side: f.coreSide };
 }
 
 /** What the shared tail of a planned building needs (addPlannedOffice / addPlannedBlock): the shell with its cores placed, the plan, its frame. */
@@ -1141,6 +1207,7 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
   const windows = planWindows(plan, { storeys: s.floors, doors: res.openings, blocked });
   const block = plan.archetype === 'block';
   const units = block ? planUnits(plan, res.openings, res.lobbies, s.floors) : [];
+  if (block) fixEntryRoles(res.openings, units); // roles follow the flats (the S2.9 ground-floor mismatches)
   const unitOf = new Map<string, string>(); // `${storey}|${cell id}` -> unit id
   for (const u of units) for (const c of u.cells) unitOf.set(`${u.storey}|${c}`, `${bid}_u_f${u.storey}_${u.key}`);
   // 6. the openings in the draft (metres)
@@ -1224,6 +1291,7 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
       p.rooms.push({
         id, floor: storey, bounds: { min, max }, kind,
         ...(cell.kind === 'end' ? { unit: 'suite' } : {}),
+        ...(cell.use ? { use: cell.use } : {}),
         ...(unitOf.has(`${storey}|${cell.id}`) ? { unit: unitOf.get(`${storey}|${cell.id}`) } : {}),
         ...(block && !unitOf.has(`${storey}|${cell.id}`) ? { zone: 'common' } : {}),
         walls: WALL_ORDER.filter((key) => wallSpan(plan, cell, key)).map((key) => sideId(sides[key])),
@@ -1239,8 +1307,9 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
   addRoofHatch(p);
   buildSlabs(p);
   for (const fd of p.floors_detail) fd.rooms = []; // the rooms live in `rooms` only (nothing reads the second copy)
-  const b = emitBuilding(p, { v: 1, kind: 'bands', seed: planSeed, core_wall: sideId(coreSide), street_wall: p.doors[0]?.wall ?? sideId(first),
-    ...(block ? { variant: 'block', sections: plan.sections?.length ?? 1 } : plan.variant ? { variant: plan.variant } : {}) });
+  const b = emitBuilding(p, { v: 1, kind: 'bands', seed: planSeed, core_wall: sideId(coreSide), street_wall: plan.pattern === 'kit' ? sideId(first) : p.doors[0]?.wall ?? sideId(first),
+    ...(block ? { variant: 'block', sections: plan.kit?.sections.length ?? plan.sections?.length ?? 1 } : plan.variant ? { variant: plan.variant } : {}),
+    ...(plan.pattern ? { pattern: plan.pattern } : {}) });
   if (units.length) {
     b.units = units.map((u) => ({
       id: `${bid}_u_f${u.storey}_${u.key}`, kind: 'flat', floor: u.storey, rooms: u.cells.map((c) => roomId(u.storey, c)), entries: u.entries.map((e) => `${bid}_${e}`),

@@ -86,6 +86,12 @@ AOperativeCharacter* ACodexTacticsPlayerController::FindClickedMember(const FHit
 			{
 				continue; // inside a vehicle: picked with 1-4, never by a click near the hull
 			}
+			// Only on his own storey: the floor / landing right above or below him is a move there, not "Operative selected".
+			const float HalfHeight = Member->GetSimpleCollisionHalfHeight();
+			if (!ClickPickRules::IsOnPickStorey(static_cast<float>(Hit.ImpactPoint.Z), static_cast<float>(Member->GetActorLocation().Z) - HalfHeight, 2.f * HalfHeight))
+			{
+				continue;
+			}
 			const float Dist = FVector::Dist2D(Member->GetActorLocation(), Hit.ImpactPoint);
 			if (Dist <= ClosestDist)
 			{

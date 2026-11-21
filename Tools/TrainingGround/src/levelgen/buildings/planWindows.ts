@@ -5,6 +5,7 @@
 // PURE: integer cm, plan frame (see planDoors.ts), constants from building_plans.json `constants.openings`; the shared opening types are
 // exported by planDoors.ts.
 import type { BandPlan } from './bandPlan.ts';
+import { kitTemplate } from './kitPlan.ts';
 import { BUILDING_PLANS } from './bandPlan.ts';
 import type { PlanOpening, WallKey } from './planDoors.ts';
 import { WALL_ORDER, byId, gridUp, snap, wallInfo, wallSpan } from './planDoors.ts';
@@ -42,6 +43,8 @@ export function planWindows(plan: BandPlan, opts: PlanWindowsOpts): PlanOpening[
     const placed: Record<WallKey, number[]> = { v0: [], vD: [], u0: [], uL: [] };
     for (const cell of cells) {
       if (cell.kind === 'core' || cell.kind === 'service') continue;
+      // kit plans: the hall, the flat's corridor, the bath and the tambour are windowless (the kit pack; the window pass is a later step)
+      if (cell.use === 'hall' || cell.use === 'corridor' || cell.use === 'bath' || cell.use === 'tambour') continue;
       for (const wall of WALL_ORDER) {
         const span = wallSpan(plan, cell, wall);
         if (!span) continue;
@@ -51,7 +54,7 @@ export function planWindows(plan: BandPlan, opts: PlanWindowsOpts): PlanOpening[
         const [s0, s1] = span;
         const wants = corridor ? [snap((s0 + s1) / 2)] : preferred(s0, s1 - s0);
         for (const want of wants) {
-          const c = place(want, s0, s1, corridor, doors, placed[wall], opts.blocked?.[wall] ?? []);
+          const c = place(want, s0, s1, corridor, doors, placed[wall], opts.blocked?.[wall] ?? [], plan.pattern === 'kit' ? kitTemplate(plan.kit?.template).window_clear_cm : O.window_clear_cm);
           if (c === null) continue;
           placed[wall].push(c);
           const w = wallInfo(plan, wall);
@@ -84,9 +87,9 @@ function markSlots(plan: BandPlan, windows: PlanOpening[]): void {
 /** The centre the window gets: `want` when legal, else the nearest legal 50-grid centre inside the span (ties: the smaller), else null (dropped). */
 function place(
   want: number, s0: number, s1: number, exempt: boolean,
-  doors: PlanOpening[], windows: number[], blocked: [number, number][],
+  doors: PlanOpening[], windows: number[], blocked: [number, number][], clearCm: number = O.window_clear_cm,
 ): number | null {
-  const clear = exempt ? 0 : O.window_clear_cm; // a corridor end is exempt from the 120 rule
+  const clear = exempt ? 0 : clearCm; // a corridor end is exempt from the 120 rule (a kit room keeps 60)
   const legal = (c: number): boolean => {
     if (c - HALF < s0 + clear || c + HALF > s1 - clear) return false;
     if (doors.some((d) => Math.abs(c - d.c) < HALF + d.width / 2 + (exempt ? O.window_jamb_cm : clear))) return false;

@@ -32,6 +32,18 @@ const profile = JSON.parse(fs.readFileSync(path.join(ROOT, 'Content/Data/LevelGe
 interface OfficeOpts { x0?: number; y0?: number; w: number; h: number; floors?: number; sides?: Side[]; plans: boolean; cores?: BuildingSpec['cores']; seed?: number; before?: (d: Draft) => void }
 
 /** One office in an otherwise empty draft (a seeded stand-in for the generator's `random`, counted), finalized to a layout. */
+/**
+ * A copy without the schema /2 data-only fields (structureClasses.ts, lead addendum 2026-11-21): structure / material on walls, partitions and
+ * openings, the window vault data. They exist on every building of a /2 layout and nothing in the generator reads them, so "untouched" compares
+ * the rest.
+ */
+const DATA_ONLY = new Set(['structure', 'material', 'vaultable', 'sill_cm', 'width_cm', 'vault_onto']);
+function withoutDataOnly<T>(v: T): T {
+  if (Array.isArray(v)) return v.map(withoutDataOnly) as T;
+  if (v && typeof v === 'object') return Object.fromEntries(Object.entries(v).filter(([k]) => !DATA_ONLY.has(k)).map(([k, x]) => [k, withoutDataOnly(x)])) as T;
+  return v;
+}
+
 function office(o: OfficeOpts): { d: Draft; l: GenLayout; b: GenBuilding; draws: number } {
   const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [], ...(o.plans ? { building_plans: true } : {}) };
   o.before?.(d);
@@ -151,7 +163,7 @@ test('toggle ON (depot x1 seed 1): B_office_s is a bands plan on schema /2 with 
   // determinism
   assert.deepEqual(generateLayout({ profile, seed: 1, params: { building_plans: true } }), on);
   // one random() per exterior door side keeps the shared stream aligned: the buildings placed after the office are identical
-  assert.deepEqual(on.buildings.filter((x) => x.id !== 'B_office_s'), off.buildings.filter((x) => x.id !== 'B_office_s'));
+  assert.deepEqual(withoutDataOnly(on.buildings.filter((x) => x.id !== 'B_office_s')), off.buildings.filter((x) => x.id !== 'B_office_s'));
   // the opening-state defaults of schema /2: the exterior door closed, interior doors open, windows glazed
   for (const { op, part } of allOpenings(b)) {
     const st = effectiveOpeningState(on, b, op);
@@ -251,8 +263,8 @@ test('a plan that does not fit keeps the legacy output byte for byte (plus the p
     assert.match(on.b.plan!.fallback!, why);
     assert.equal(on.draws, off.draws, 'the same number of draws (nothing is drawn before the fallback)');
     const { plan: _plan, ...rest } = on.b;
-    assert.deepEqual(rest, off.b);
-    assert.deepEqual(on.l.walls, off.l.walls);
+    assert.deepEqual(withoutDataOnly(rest), off.b);
+    assert.deepEqual(withoutDataOnly(on.l.walls), off.l.walls);
   }
 });
 

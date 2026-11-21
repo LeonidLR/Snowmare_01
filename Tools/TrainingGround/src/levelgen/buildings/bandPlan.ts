@@ -9,6 +9,8 @@
 import cfg from '../../../../../Content/Data/LevelGen/building_plans.json' with { type: 'json' };
 import { rng } from '../../movement/geometry.ts';
 import { fnv1a } from '../props/rng.ts';
+import type { KitDoor, KitSection, RoomUse } from './kitPlan.ts';
+import { validateKitPlan } from './kitPlan.ts';
 
 /** The plan constants and recipes (building_plans.json). */
 export const BUILDING_PLANS = cfg;
@@ -32,7 +34,13 @@ export interface PlanBay { kind: BayKind; u0: number; u1: number }
  * `flat` (the side of the core bay the flat is on: 'L' = lower u) and `part` (A = back room of the flat bay, B = its front room, C = the front
  * room of the core bay on that side, 'landing' = the corridor cell over the core bay).
  */
-export interface PlanCell { id: string; kind: CellKind; u0: number; u1: number; v0: number; v1: number; band: CellBand; section?: number; flat?: FlatSide; part?: BlockPart }
+export interface PlanCell {
+  id: string; kind: CellKind; u0: number; u1: number; v0: number; v1: number; band: CellBand; section?: number; flat?: FlatSide; part?: BlockPart;
+  /** Kit plans (kitPlan.ts): the flat the cell belongs to (`s<section><A|B|C>`), absent for the common cells (core, tambour). */
+  unit?: string;
+  /** Kit plans: what the room is for (GenRoom.use). */
+  use?: RoomUse;
+}
 export type FlatSide = 'L' | 'R';
 export type BlockPart = 'A' | 'B' | 'C' | 'landing';
 
@@ -53,6 +61,10 @@ export interface BandPlan {
   archetype?: 'office' | 'block';
   sections?: PlanSection[];
   landingTop?: number;
+  /** 'kit' = the kit-pattern block of kitPlan.ts (sections in `kit`, no bays). */
+  pattern?: 'kit';
+  /** Kit plans: the sections, the doors the planner wants (planDoors.ts realises them) and why a section has fewer flats / rooms. */
+  kit?: { sections: KitSection[]; doors: KitDoor[]; notes: string[]; /** The block template id (recipes.block.templates). */ template: string };
 }
 
 export interface BandPlanInput {
@@ -354,6 +366,7 @@ export function validatePlanTiling(plan: BandPlan): string[] {
     return out;
   }
   if (!plan.cells.length) return ['bands plan has no cells'];
+  if (plan.pattern === 'kit') return validateKitPlan(plan);
   const coreEdges = new Set(plan.cells.filter((c) => c.kind === 'core').map((c) => c.v1));
   const onGrid = (x: number, v: boolean): boolean => x % GRID === 0 || (v && coreEdges.has(x));
   let area = 0;

@@ -68,6 +68,8 @@ function specOf(b: GenBuilding, sides: Side[]): BuildingSpec {
     doorSides: sides, windowSides: [sides[0], opposite[sides[0]]], partitionRooms: true,
     ...(b.hatches?.length ? { roofHatch: true } : {}),
     ...(b.archetype ? { archetype: b.archetype } : {}),
+    // a block keeps its plan pattern (a kit block re-plans as a kit block, an S2.3 block as S2.3)
+    ...(b.archetype === 'block' && b.plan?.kind === 'bands' ? { plan_template: b.plan.template ?? (b.plan.pattern === 'kit' ? 'block_khrushchevka' : 'block_sections') } : {}),
   };
 }
 

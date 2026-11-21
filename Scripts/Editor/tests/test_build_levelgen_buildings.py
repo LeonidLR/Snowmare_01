@@ -424,5 +424,115 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         self.assertEqual(specs["AMB_corner"]["tags"], [builder.AMBUSH_TAG])
 
 
+class SwitchbackStairTest(unittest.TestCase):
+    """Kit block cores (docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md): a half-landing switchback stair = two ramps of half the storey
+    rise each + a mid landing slab at the half level; no straight-flight hole (the generator's floors_detail gap opens the slab)."""
+
+    STAIR = {"id": "B_k_stair_0", "kind": "stairwell", "from": 0, "to": 1, "pos": [90.0, 215.0], "turn": [90.0, 430.0], "mid": [260.0, 430.0],
+             "top": [260.0, 215.0], "mid_rect": [[10.0, 430.0], [340.0, 590.0]]}
+
+    def test_roof_opens_over_the_last_switchback(self):
+        """A walkable roof over the core: the roof slab is cut over both flights + the mid landing (the stair to the roof had no head room)."""
+        top = dict(self.STAIR, id="B_k_stair_1", **{"from": 1, "to": 2})
+        b = {"id": "B_k", "footprint": [[0.0, 0.0], [1400.0, 2000.0]], "floors": 2, "height": 600, "enterable": True, "roof_walkable": True,
+             "openings": [], "partitions": [], "plan": {"v": 1, "kind": "bands"}, "stairs": [dict(self.STAIR), top],
+             "floors_detail": [{"floor": 1, "height_z": 300, "gaps": [{"id": "g", "kind": "stairwell", "poly": [[10, 215], [340, 215], [340, 590], [10, 590]]}]}]}
+        self.assertEqual(builder.switchback_hole_rect(top), (10.0, 215.0, 340.0, 590.0))
+        specs = builder._walls_and_buildings_extended({"walls": [], "buildings": [b], "ladders": [], "mantle_edges": []}, 0.0, set(), {}, {})
+        roof = [s for s in specs if "roof_slab" in s.get("tags", [])]
+        area = sum(s["scale"][0] * s["scale"][1] * 1e4 for s in roof)
+        self.assertAlmostEqual(area, 1400.0 * 2000.0 - 330.0 * 375.0, delta=1.0)
+
+    def test_switchback_lane_walls_are_built(self):
+        """The lane wall between the two flights of a kit core is a layout wall (no partition) of a partition-driven building: built, while the
+        planned building's other interior walls come from partitions[] (engine check 2026-11-21: without it two sections' ground flights had
+        no navmesh - one 10 cm gap rasterised both flights into one column)."""
+        b = {"id": "B_k", "footprint": [[0.0, 0.0], [1400.0, 2000.0]], "floors": 2, "height": 600, "enterable": True, "roof_walkable": False,
+             "openings": [], "partitions": [], "plan": {"v": 1, "kind": "bands"}, "stairs": [dict(self.STAIR)], "floors_detail": []}
+        walls = [{"id": "B_k_lanewall_f0", "a": [175.0, 215.0], "b": [175.0, 430.0], "height": 300, "thickness": 10, "kind": "interior", "building": "B_k"},
+                 {"id": "B_k_part_f0_0_x", "a": [0.0, 600.0], "b": [350.0, 600.0], "height": 300, "thickness": 20, "kind": "interior", "building": "B_k"}]
+        specs = builder._walls_and_buildings_extended({"walls": walls, "buildings": [b], "ladders": [], "mantle_edges": []}, 0.0, set(), {}, {})
+        labels = [s["label"] for s in specs]
+        self.assertIn("B_k_lanewall_f0", labels)
+        self.assertNotIn("B_k_part_f0_0_x", labels)
+
+    def test_two_ramps_and_a_mid_landing(self):
+        specs = builder._stair_specs("B_k", dict(self.STAIR), 0.0, "Buildings/B_k")
+        self.assertEqual([s["label"] for s in specs], ["B_k_B_k_stair_0", "B_k_B_k_stair_0_b", "B_k_B_k_stair_0_midlanding"])
+        a, b, mid = specs
+        # each ramp rises half a storey (150 cm) over the 215 cm run: 34.9 deg, walkable (<= 44)
+        for ramp in (a, b):
+            self.assertAlmostEqual(abs(ramp["pitch"]), 34.9, places=1)
+            self.assertLessEqual(abs(ramp["pitch"]), 44.0)
+        self.assertGreater(a["pitch"], 0.0)  # pos -> turn rises
+        self.assertAlmostEqual(a["location"][2], 75.0 - builder.SLAB / 2.0)
+        self.assertAlmostEqual(b["location"][2], 225.0 - builder.SLAB / 2.0)
+        self.assertAlmostEqual(mid["location"][2], 150.0 - builder.SLAB / 2.0)  # the slab top at the half level
+        self.assertAlmostEqual(mid["scale"][0] * 100.0, 330.0)
+        self.assertAlmostEqual(mid["scale"][1] * 100.0, 160.0)
+        self.assertIn("mid_landing", mid["tags"])
+        self.assertTrue(all("switchback" in s["tags"] for s in specs))
+
+    def test_upper_storey_heights(self):
+        st = dict(self.STAIR, id="B_k_stair_1", **{"from": 1, "to": 2})
+        a, b, mid = builder._stair_specs("B_k", st, 10.0, "Buildings/B_k")
+        self.assertAlmostEqual(mid["location"][2], 10.0 + 450.0 - builder.SLAB / 2.0)
+        self.assertAlmostEqual(b["location"][2], 10.0 + 525.0 - builder.SLAB / 2.0)
+
+    def test_blocked_switchback_blocks_both_flights(self):
+        specs = builder._stair_specs("B_k", dict(self.STAIR, blocked="rubble"), 0.0, "Buildings/B_k")
+        self.assertEqual(sum(1 for s in specs if "flight_block" in s.get("tags", [])), 2)
+        self.assertEqual(sum(1 for s in specs if s.get("kind") == "nav_modifier"), 2)
+
+    def test_no_straight_hole_for_a_switchback(self):
+        """A planned building with one switchback stair: the floor-1 slab is cut by the floors_detail gap only (one hole), never by
+        stairwell_hole_rect across the two lanes."""
+        b = {"id": "B_k", "footprint": [[0.0, 0.0], [1400.0, 2000.0]], "floors": 2, "height": 600, "enterable": True, "roof_walkable": False,
+             "openings": [], "partitions": [], "plan": {"v": 1, "kind": "bands"}, "stairs": [dict(self.STAIR)],
+             "floors_detail": [{"floor": 1, "height_z": 300, "gaps": [{"id": "g", "kind": "stairwell", "poly": [[10, 215], [340, 215], [340, 590], [10, 590]]}]}]}
+        layout = {"walls": [], "buildings": [b], "ladders": [], "mantle_edges": []}
+        specs = builder._walls_and_buildings_extended(layout, 0.0, set(), {}, {})
+        floor1 = [s for s in specs if "floor_slab" in s.get("tags", []) and "floor=1" in s.get("tags", [])]
+        area = sum(s["scale"][0] * s["scale"][1] * 1e4 for s in floor1)
+        self.assertAlmostEqual(area, 1400.0 * 2000.0 - 330.0 * 375.0, delta=1.0)
+
+
+class StructureVaultTagsTest(unittest.TestCase):
+    """Lead addendum 2026-11-21 (data only): the builder carries the layout's structure / material of walls, partitions and openings and the window
+    vault data as actor tags; a record without them adds no tag (the /1 bit-identical rebuilds)."""
+
+    def test_tags_from_the_records(self):
+        self.assertEqual(builder.structure_tags({"structure": "load_bearing", "material": "concrete_panel"}), ["structure=load_bearing", "material=concrete_panel"])
+        self.assertEqual(builder.structure_tags({}), [])
+        self.assertEqual(builder.vault_tags({"kind": "window", "vaultable": True, "vault_onto": "ground"}), ["vaultable=1", "vault_onto=ground"])
+        self.assertEqual(builder.vault_tags({"kind": "window", "vaultable": False}), ["vaultable=0"])
+        self.assertEqual(builder.vault_tags({"kind": "window"}), [])
+
+    def test_walls_partitions_and_window_sills_carry_them(self):
+        cls = {"structure": "load_bearing", "material": "concrete_panel"}
+        win = dict({"id": "B_v_w0", "kind": "window", "pos": [500.0, 0.0], "floor": 0, "width": 150.0, "sill_height": 95.0, "top_height": 245.0,
+                    "vaultable": True, "vault_onto": "ground"}, **cls)
+        door = {"id": "B_v_d0", "kind": "door", "pos": [400.0, 500.0], "floor": 0, "width": 150.0, "sill_height": 0.0, "top_height": 240.0,
+                "structure": "partition", "material": "plaster"}
+        b = {"id": "B_v", "footprint": [[0.0, 0.0], [1000.0, 1000.0]], "floors": 1, "height": 300, "enterable": True, "roof_walkable": False,
+             "openings": [win], "plan": {"v": 1, "kind": "bands"},
+             "partitions": [{"id": "B_v_p0", "start": [0.0, 500.0], "end": [1000.0, 500.0], "floor": 0, "thickness": 20, "openings": [door],
+                             "structure": "partition", "material": "plaster"}]}
+        walls = [dict({"id": "B_v_N", "a": [0.0, 0.0], "b": [1000.0, 0.0], "height": 300, "thickness": 30, "kind": "building", "building": "B_v"}, **cls),
+                 {"id": "F_1", "a": [2000.0, 0.0], "b": [2500.0, 0.0], "height": 140, "thickness": 10, "kind": "fence", "structure": "annex", "material": "sheet_metal"}]
+        layout = {"schema": "codex.levelgen_layout/2", "walls": walls, "buildings": [b], "ladders": [], "mantle_edges": []}
+        specs = builder._walls_and_buildings_extended(layout, 0.0, set(), {}, {})
+        outer = [s for s in specs if s["label"].startswith("B_v_N") and s["tags"][0] == "building"]  # the wall pieces (not the window glass state actor)
+        self.assertTrue(outer and all("structure=load_bearing" in s["tags"] and "material=concrete_panel" in s["tags"] for s in outer))
+        sill = next(s for s in specs if "window_sill" in s["tags"])
+        self.assertIn("vaultable=1", sill["tags"])
+        self.assertIn("vault_onto=ground", sill["tags"])
+        self.assertIn("structure=load_bearing", sill["tags"])
+        part = [s for s in specs if s["label"].startswith("B_v_p0")]
+        self.assertTrue(part and all("structure=partition" in s["tags"] and "material=plaster" in s["tags"] for s in part))
+        fence = next(s for s in specs if s["label"] == "F_1")
+        self.assertIn("structure=annex", fence["tags"])
+
+
 if __name__ == "__main__":
     unittest.main()

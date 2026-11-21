@@ -77,4 +77,17 @@ namespace ClickPickRules
 	 * TightPickRadiusCm on the ground and 0 on anything else (a wall's top / face is a cover click, never a selection).
 	 */
 	CODEXTACTICS_API float PickRadius(bool bSquadAtWall, bool bGroundHit, float SelectRadius);
+
+	/** A proximity pick reaches this far below an operative's feet (a step, a ramp's foot), cm. */
+	inline constexpr float StoreyPickBelowCm = 60.f;
+	/** ... and this far above his head, cm: less than a storey (300) minus his height, so the floor above him never picks him. */
+	inline constexpr float StoreyPickAboveCm = 60.f;
+
+	/**
+	 * A click that did not hit a body picks an operative by proximity only on his own storey: the hit lies between StoreyPickBelowCm under
+	 * his feet and StoreyPickAboveCm over his head (feet + BodyHeightCm). The kit blocks' half-landing stairs stack every floor landing over
+	 * the one below (2026-11-21, LevelGenBuildingsWalkSmoke: a click on the landing above the leader picked him, the 2D select radius ignored
+	 * the storey, and no move was ordered).
+	 */
+	CODEXTACTICS_API bool IsOnPickStorey(float HitZ, float FeetZ, float BodyHeightCm);
 }

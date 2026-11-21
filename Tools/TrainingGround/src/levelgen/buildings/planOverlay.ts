@@ -192,10 +192,10 @@ const centroid = (pts: readonly Vec2[]): Vec2 => [round(pts.reduce((s, p) => s +
 
 function fillOf(r: GenRoom, unit?: BuildingUnit): RoomFill {
   if (r.kind === 'stairwell') return 'core';
+  if (unit) return 'flat'; // a kit flat's hall, corridor and bath are rooms of the flat (drawn in its colour)
   if (r.kind === 'corridor') return 'corridor';
   if (r.kind === 'lobby') return 'lobby';
   if (r.kind === 'service') return 'service';
-  if (unit) return 'flat';
   return r.unit === 'suite' ? 'suite' : 'office';
 }
 

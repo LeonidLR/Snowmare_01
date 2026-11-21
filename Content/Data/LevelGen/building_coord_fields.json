@@ -29,6 +29,8 @@
     { "path": "stairs[].pos", "kind": "point", "frame": "world" },
     { "path": "stairs[].top", "kind": "point", "frame": "world" },
     { "path": "stairs[].mid", "kind": "point", "frame": "world" },
+    { "path": "stairs[].turn", "kind": "point", "frame": "world" },
+    { "path": "stairs[].mid_rect", "kind": "rect", "frame": "building" },
     { "path": "roof_holes", "kind": "point_list", "frame": "world" },
     { "path": "floor_holes[].pos", "kind": "point", "frame": "world" }
   ],

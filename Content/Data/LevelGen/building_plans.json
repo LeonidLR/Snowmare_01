@@ -13,9 +13,20 @@
       "corridor_max_cm": 400
     },
     "corridor_cm": 200,
-    "room_cm": { "min": 400, "max": 800 },
-    "service_room": { "depth_min_cm": 200, "depth_max_cm": 350, "width_min_cm": 300, "width_max_cm": 500 },
-    "end_bay_cm": { "min": 400, "max": 600 },
+    "room_cm": {
+      "min": 400,
+      "max": 800
+    },
+    "service_room": {
+      "depth_min_cm": 200,
+      "depth_max_cm": 350,
+      "width_min_cm": 300,
+      "width_max_cm": 500
+    },
+    "end_bay_cm": {
+      "min": 400,
+      "max": 600
+    },
     "max_rerolls": 4,
     "openings": {
       "door_cm": 150,
@@ -31,11 +42,25 @@
       "p_enfilade": 0.35,
       "second_door_edge_cm": 700,
       "second_door_gap_cm": 300,
-      "portal_offsets_cm": [100, 750],
+      "portal_offsets_cm": [
+        100,
+        750
+      ],
       "window_two_min_cm": 700,
       "window_two_max_cm": 800,
       "window_pitch_cm": 400,
       "window_two_inset_cm": 200
+    },
+    "window_vault": {
+      "comment": "Window vault data (lead addendum 2026-11-21; Tools/TrainingGround/src/levelgen/structureClasses.ts annotateWindowVault, schema /2 layouts): a window is vaultable when it is at least min_width_cm wide, its sill is one of the obstacle_heights.json classes in sill_classes (the mantle clip heights the obstacles are standardised to) and there is something to land on outside - the ground (storey 0), a balcony at the window or a walkable roof within roof_step_cm of the storey (probed probe_out_cm outside the wall).",
+      "min_width_cm": 80,
+      "sill_classes": [
+        "low_vault",
+        "low_mantle",
+        "high_mantle"
+      ],
+      "probe_out_cm": 60,
+      "roof_step_cm": 35
     }
   },
   "recipes": {
@@ -43,7 +68,10 @@
       "min_depth_double_loaded_cm": 1000,
       "min_depth_single_loaded_cm": 800,
       "min_length_cm": 900,
-      "back_room_depth_cm": { "min": 400, "max": 600 },
+      "back_room_depth_cm": {
+        "min": 400,
+        "max": 600
+      },
       "front_room_min_depth_cm": 400,
       "bay_grammar": "core room* (end | exit) | room* core room*"
     },
@@ -51,11 +79,110 @@
       "comment": "S2.3 block (S2_ROOMS_PLAN.md 3.3 / 3.4): sections `flat core flat` (section_cm) or, under one section's minimum, `core flat` (the flat takes flat_bay_cm: L = 900 + flat); a landing (corridor cell) over the core bay at v = core depth .. landing_top (A / B boundary, one line for the whole building); per flat a back room A (depth = landing_top), a front room B (the rest) and the nearer front room C of the core bay (the core bay's front is split in two rooms of room_cm); the flat of one side per section gets a second entry through C (the section's loop), the other flat is a dead end. A long block is several sections side by side, a wall without doors between them (they meet on the roof). Per-storey slot windows (balcony / fire escape of story 4) sit in the B room of every flat from slot_min_storey up; designer 2026-11-19: no balcony without a fire escape, so no base balconies are generated.",
       "min_depth_cm": 1000,
       "min_length_cm": 1300,
-      "flat_bay_cm": { "min": 400, "max": 700 },
-      "section_cm": { "min": 1700, "max": 2300 },
+      "flat_bay_cm": {
+        "min": 400,
+        "max": 700
+      },
+      "section_cm": {
+        "min": 1700,
+        "max": 2300
+      },
       "slot_min_storey": 1,
       "p_three_storeys": 0.35,
-      "dead_end_min_run_cm": 800
+      "dead_end_min_run_cm": 800,
+      "templates": {
+        "comment": "Residential block plan templates (lead addendum 2026-11-21: several house types / eras - Stalin, brick, barracks, dormitory - are one data entry each). A building takes templates.default unless its spec names one (BuildingSpec.plan_template) or a series (BuildingSpec.series) that matches a template's series; GenBuilding.plan.template and GenBuilding.series / era record the choice. planner = the code that reads the entry: 'kit_sections' (buildings/kitPlan.ts: sections round a court-side core, flats with hall / bath / kitchen / living rooms) or 'sections' (the S2.3 planner, bandPlan.ts planBlock, numbers in recipes.block itself). A new template of an existing planner is a JSON entry only; storey_cm other than 300 needs a per-building storey height in the generator / builder (LEVEL_HEIGHT, z_of) - not wired yet.",
+        "default": "block_khrushchevka",
+        "block_khrushchevka": {
+          "comment": "Template block_khrushchevka (series 1-464, the 1960s five-storey panel block - the kit pattern of docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md). Kit pattern of the residential block (docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md; measured from the Soviet panel-block pack: KIT_PILOT_2026-11-20.md, Saved/KitDump). Chosen by templates.default / BuildingSpec.plan_template / GenBuilding.series; a footprint it cannot cut falls back to the S2.3 sections planner (recipes.block), then to the BSP. Plan frame as everywhere: u along the facade, v across, v = 0 = the court wall. A section = [flat A | tambour T | core K | flat C] along u; K (core.width_cm x core.depth_cm) and T (tambour_cm x core.depth_cm) stand on the court wall, flat B takes the street band over T + K (v = core depth .. D), A and C run the full depth. The core is a half-landing switchback: the floor landing (landing_cm) on the court side - the ground storey's court door opens onto it -, two flights per storey (each half the storey rise, 35 deg run) in two lanes, the mid landing (mid_landing_cm) at the far (inner) end; flats are entered from the landing (C) and from the tambour (A, B). A section under three_flat_min_depth_cm deep (the street band too shallow for flat B) is a two-flat section [A | K | C] (A and C full depth, both entered from the landing). Rooms on the 50 cm grid (designer 2026-11-20); every door keeps today's 150 cm (a door needs a 200 cm wall, so baths are 200 deep - the kit's 80 cm doors would allow 3 m2 baths: open question). Windows keep window_clear_cm (50, the kit's window grid in 3 m bays) from partitions and corners instead of the office's 120, so a 300 cm kitchen gets its window (the full window pass is a later step). Room areas: hall ~5-9, bath ~5-11, kitchen ~6-14, living ~9-35 m2 (room_area_m2 = the tolerance the TS tests check).",
+          "planner": "kit_sections",
+          "series": "1-464",
+          "era": "khrushchev_1960s",
+          "storey_cm": 300,
+          "flats_per_landing": 3,
+          "entrance_side": "court",
+          "stair": "half_landing",
+          "core_position": "court_mid",
+          "grid_cm": 50,
+          "min_depth_cm": 1000,
+          "max_depth_cm": 1500,
+          "three_flat_min_depth_cm": 1100,
+          "core": {
+            "width_cm": 400,
+            "depth_cm": 600,
+            "landing_cm": 200,
+            "mid_landing_cm": 160,
+            "flight_w_cm": 180,
+            "lane_gap_cm": 10,
+            "wall_inner_cm": 15,
+            "partition_half_cm": 10
+          },
+          "tambour_cm": 300,
+          "full_flat_cm": {
+            "min": 550,
+            "max": 800
+          },
+          "full_flat": {
+            "spine_cm": 250,
+            "hall_depth_cm": 250,
+            "kitchen_depth_cm": 250,
+            "bath_depth_cm": 200,
+            "living_min_cm": 300,
+            "street_living_cm": {
+              "min": 350,
+              "max": 550
+            }
+          },
+          "street_flat": {
+            "hall_width_cm": 500,
+            "hall_depth_cm": 200,
+            "kitchen_width_cm": 300,
+            "kitchen_max_depth_cm": 400
+          },
+          "living_rooms": {
+            "A": 2,
+            "B": 1,
+            "C": 3
+          },
+          "window_clear_cm": 50,
+          "room_area_m2": {
+            "hall": [
+              4,
+              10
+            ],
+            "corridor": [
+              1,
+              30
+            ],
+            "bath": [
+              3,
+              11.5
+            ],
+            "kitchen": [
+              5,
+              16
+            ],
+            "living": [
+              9,
+              45
+            ],
+            "tambour": [
+              5,
+              25
+            ]
+          }
+        },
+        "block_sections": {
+          "comment": "The S2.3 sections planner (S2_ROOMS_PLAN.md S2.3): flat core flat sections with a landing and lobbies; its numbers are recipes.block. Kept as a template and as the fallback of a footprint the kit planner cannot cut.",
+          "planner": "sections",
+          "series": null,
+          "era": "generic",
+          "storey_cm": 300,
+          "entrance_side": "street",
+          "stair": "single_flight",
+          "core_position": "court_wall"
+        }
+      }
     }
   }
 }

@@ -127,6 +127,16 @@ export interface WallOpening {
   module?: string;
   /** Schema /2: a window marked as the place of a balcony / fire-escape door (blocks, S2.3: one per flat and storey from 1; story 4 turns it into a door). */
   slot?: 'balcony' | 'escape';
+  /** Schema /2 (structureClasses.ts, structure_classes.json): the host wall's structural class and material (future destruction; nothing reads it yet). */
+  structure?: 'load_bearing' | 'partition' | 'annex' | 'facade';
+  material?: 'concrete_panel' | 'brick' | 'plaster' | 'wood' | 'sheet_metal';
+  /** Schema /2 windows (structureClasses.ts annotateWindowVault): can a body vault / climb through it (sill height class, width, a landing outside). */
+  vaultable?: boolean;
+  /** Schema /2 windows: the sill height and the opening width the vault rule read, cm. */
+  sill_cm?: number;
+  width_cm?: number;
+  /** Schema /2 windows: what a body climbing out lands on. */
+  vault_onto?: 'ground' | 'balcony' | 'roof' | 'none';
 }
 export type { OpeningRole };
 
@@ -193,6 +203,9 @@ export interface GenPartition {
   thickness?: number;
   /** Door or window openings along this partition wall. */
   openings?: WallOpening[];
+  /** Schema /2 (structureClasses.ts): structural class and material of the wall. */
+  structure?: 'load_bearing' | 'partition' | 'annex' | 'facade';
+  material?: 'concrete_panel' | 'brick' | 'plaster' | 'wood' | 'sheet_metal';
 }
 
 export interface FloorGap {
@@ -302,6 +315,8 @@ export interface GenRoom {
   floor: number;
   bounds: { min: Vec2; max: Vec2 };
   kind?: 'room' | 'corridor' | 'stairwell' | 'hall' | 'balcony' | 'lobby' | 'service';
+  /** Kit-planned blocks: what the room is for (kitPlan.ts RoomUse): hall, corridor, bath, kitchen, living, tambour, landing (the stair core). */
+  use?: 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'tambour' | 'landing';
   /** Ids of every opening whose `links` name the room (planned buildings: windows too; seam ids between two corridor cells). */
   door_ids?: string[];
   /** Planned buildings: the unit the room belongs to ('suite' = an end suite; a block's flat id, GenBuilding.units). */
@@ -360,6 +375,9 @@ export interface GenWall extends LayoutWall {
   kind?: WallKind;
   /** The building this wall belongs to (perimeter / interior / parapet). */
   building?: string;
+  /** Schema /2 (structureClasses.ts, structure_classes.json): structural class and material of the segment (future destruction; nothing reads it yet). */
+  structure?: 'load_bearing' | 'partition' | 'annex' | 'facade';
+  material?: 'concrete_panel' | 'brick' | 'plaster' | 'wood' | 'sheet_metal';
 }
 
 export interface Door { pos: Vec2; floor: number; /** The wall id the door is cut into. */ wall?: string }
@@ -369,7 +387,18 @@ export interface Door { pos: Vec2; floor: number; /** The wall id the door is cu
  * the slab on `to` open above the ramp's last 3 m (the stairwell opening).
  */
 export interface Stair {
-  id: string; pos: Vec2; from: number; to: number; kind: 'stairwell' | 'external'; /** The top landing point (on `to`). */ top: Vec2; mid?: Vec2;
+  id: string; pos: Vec2; from: number; to: number; kind: 'stairwell' | 'external'; /** The top landing point (on `to`). */ top: Vec2;
+  /**
+   * External stair: the ramp's end before its landing. A HALF-LANDING SWITCHBACK stairwell (kit block, kitPlan.ts; `turn` set): the foot of the
+   * second flight on the mid landing - flight a runs pos -> turn (from -> half level), flight b mid -> top (half level -> to).
+   */
+  mid?: Vec2;
+  /** Switchback stairwell only: the top of the first flight (on the mid landing, half a storey above `from`). */
+  turn?: Vec2;
+  /** Switchback stairwell only: the mid landing slab, [min, max] in the BUILDING frame (like `footprint`, building_coord_fields.json: a world rect cannot turn), its top half a storey above `from`. */
+  mid_rect?: [Vec2, Vec2];
+  /** Switchback stairwell only: the width of each flight, cm (the kit template's flight_w_cm; absent = STAIR_FLIGHT_W 150). */
+  width?: number;
   /** Schema /2: the flight is impassable (stories 4, 13); the validator removes its edge (S1 later). */
   blocked?: 'rubble' | 'burnt' | 'barricade';
   /** Schema /2: one-way, top -> foot only. */
@@ -377,6 +406,22 @@ export interface Stair {
 }
 /** The stair's horizontal run per metre of rise (35 deg; the characters walk up to 44 deg). */
 export const STAIR_RUN_PER_RISE = 1.43;
+
+/** One walkable flight of a stair: from `a` (on level `z0`, storeys, may be a half level) to `b` (level `z1`). */
+export interface StairFlight { a: Vec2; b: Vec2; z0: number; z1: number }
+/**
+ * The flights of a stair: one (pos -> top) for a straight flight or an external stair's ramp (pos -> mid), two for a half-landing switchback
+ * (pos -> turn, mid -> top). Every consumer that needs the ramp bodies (validators, anchors, the builder's mirror) goes through this.
+ */
+export function stairFlights(st: Stair): StairFlight[] {
+  if (st.kind === 'stairwell' && st.turn && st.mid) {
+    const h = (st.from + st.to) / 2;
+    return [{ a: st.pos, b: st.turn, z0: st.from, z1: h }, { a: st.mid, b: st.top, z0: h, z1: st.to }];
+  }
+  return [{ a: st.pos, b: st.kind === 'external' && st.mid ? st.mid : st.top, z0: st.from, z1: st.to }];
+}
+/** Is this a half-landing switchback stairwell (two flights + a mid landing)? */
+export const isSwitchback = (st: Stair): boolean => st.kind === 'stairwell' && !!st.turn && !!st.mid;
 /**
  * The free approach box (cm) in front of every stair-core flight's foot and after its top (BUILDING_GENERATOR.md 4.2: 200; the squad
  * bunches here). One source for the generator (generate.ts STAIR_APPROACH, metres) and the validator (TRAVERSAL.approachDepth).
@@ -442,7 +487,15 @@ export interface GenBuilding {
    * plan (buildings/bandPlan.ts) with doors / windows from planDoors / planWindows; 'bsp' = the plan fell back (`fallback` = why) and the
    * legacy partitioning ran. `core_wall` / `street_wall` are wall ids (`<id>_N|S|W|E`), never Side labels of another frame.
    */
-  plan?: { v: 1; kind: 'bands' | 'bsp' | 'single'; seed: number; core_wall: string; street_wall: string; variant?: string; fallback?: string; /** Blocks: the number of sections (one stair core and entrance each). */ sections?: number };
+  plan?: { v: 1; kind: 'bands' | 'bsp' | 'single'; seed: number; core_wall: string; street_wall: string; variant?: string; fallback?: string; /** Blocks: the number of sections (one stair core and entrance each). */ sections?: number;
+    /** Kit blocks: 'kit' (kitPlan.ts); notes = why a section has fewer flats / rooms than the kit, or why the kit pattern fell back to the S2.3 planner. */
+    pattern?: 'kit'; notes?: string[];
+    /** Planned blocks: the plan template (building_plans.json recipes.block.templates, e.g. block_khrushchevka / block_sections). */
+    template?: string };
+  /** Residential blocks: the building series of its plan template (e.g. '1-464', the khrushchevka); absent = no series (a generic plan). */
+  series?: string;
+  /** Residential blocks: the era / house type of its plan template (khrushchev_1960s, generic; later stalin, barracks, dormitory ...). */
+  era?: string;
   /** Schema /2, planned blocks (S2_ROOMS_PLAN.md 4.1): the flats of every storey (ids only: rooms, doors, columns). */
   units?: BuildingUnit[];
 }

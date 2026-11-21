@@ -115,7 +115,7 @@ function sharedSegs(plan: BandPlan): Seg[] {
 /** True when the edge `e` of corridor cell `c` is only a seam to another corridor cell (an open boundary, no wall). */
 function isSeam(plan: BandPlan, c: PlanCell, edgeAxis: 'u' | 'v', e: number): boolean {
   if (c.kind !== 'corridor') return false;
-  return plan.cells.some((o) => o !== c && o.kind === 'corridor' && (edgeAxis === 'u'
+  return plan.cells.some((o) => o !== c && o.kind === 'corridor' && o.unit === c.unit && (edgeAxis === 'u'
     ? ((o.u1 === e && c.u0 === e) || (o.u0 === e && c.u1 === e)) && o.v0 < c.v1 && c.v0 < o.v1
     : ((o.v1 === e && c.v0 === e) || (o.v0 === e && c.v1 === e)) && o.u0 < c.u1 && c.u0 < o.u1));
 }
@@ -409,6 +409,43 @@ function blockSlots(plan: BandPlan, wall: WallKey, section: number, taken: Set<s
 }
 
 // ---------------------------------------------------------------------------------------------------------------------------------
+// Kit block doors (kitPlan.ts, BGEN_KIT_PLANS_2026-11-21.md)
+
+/**
+ * The interior doors of a kit plan: every door of `plan.kit.doors` on the wall its two cells share, centred at its preferred `at` (snapped to the 50
+ * grid, kept inside the shared wall) or the middle of the wall. The jamb rule is not applied: a flat's rooms are 200-300 cm walls and the door is
+ * the wall's middle (the kit's own layout); the validator's room checks stay.
+ */
+function kitDoors(ctx: Ctx): Door[] {
+  const out: Door[] = [];
+  const byId = new Map(ctx.plan.cells.map((c) => [c.id, c]));
+  for (const k of ctx.plan.kit?.doors ?? []) {
+    const a = byId.get(k.a), b = byId.get(k.b);
+    const seg = a && b ? segOf(ctx, a, b) : undefined;
+    if (!a || !b || !seg) { ctx.warnings.push(`no_door:${k.a}-${k.b}`); continue; }
+    const lo = seg.lo + HALF, hi = seg.hi - HALF;
+    if (hi < lo) { ctx.warnings.push(`no_door:${k.a}-${k.b}`); continue; }
+    const want = k.at ?? (seg.lo + seg.hi) / 2;
+    let c = snap(Math.min(Math.max(want, lo), hi));
+    if (c < lo) c += GRID;
+    if (c > hi) c -= GRID;
+    if (c < lo || c > hi) c = (seg.lo + seg.hi) / 2; // a wall exactly one door wide (never on the kit's grid)
+    out.push(mkDoor(a, b, seg, k.role, [c], c));
+  }
+  return out;
+}
+
+/** The exterior doors of a kit plan (storey 0): one per section, in the court wall (v = 0) at the middle of the stair core: the floor landing. */
+function kitEntrances(plan: BandPlan): { slot: Slot; wall: WallKey }[] {
+  const out: { slot: Slot; wall: WallKey }[] = [];
+  for (const sec of plan.kit?.sections ?? []) {
+    const cell = plan.cells.find((c) => c.kind === 'core' && c.section === sec.index);
+    if (cell) out.push({ slot: { cell, c: snap(sec.core.u0 + sec.core.width / 2) }, wall: 'v0' });
+  }
+  return out;
+}
+
+// ---------------------------------------------------------------------------------------------------------------------------------
 
 /**
  * Plans every door / portal of a bands plan on every storey. Deterministic for the same plan and opts; the same interior doors repeat on
@@ -421,7 +458,9 @@ export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult 
   const cells = [...plan.cells].sort(byId);
   const interior: Door[] = [];
 
-  if (plan.archetype === 'block') {
+  if (plan.pattern === 'kit') {
+    interior.push(...kitDoors(ctx));
+  } else if (plan.archetype === 'block') {
     interior.push(...blockDoors(ctx, cells, opts.cores ?? []));
   } else if (plan.variant === 'corridorless') {
     interior.push(...corridorlessDoors(ctx, cells));
@@ -436,8 +475,9 @@ export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult 
 
   // Exterior doors (storey 0): the slot nearest to the target along the wall; none -> the next free wall + a warning.
   const taken = new Set<string>(), holding = new Set<WallKey>();
-  const exterior: { slot: Slot; wall: WallKey }[] = [];
-  for (const { wall, t } of opts.doorWalls) {
+  const exterior: { slot: Slot; wall: WallKey }[] = plan.pattern === 'kit' ? kitEntrances(plan) : [];
+  // a kit block is entered from the court only, through each section's stair core (the caller's door walls / draws are not used)
+  for (const { wall, t } of plan.pattern === 'kit' ? [] : opts.doorWalls) {
     if (plan.archetype === 'block' && (wall === 'vD' || wall === 'v0')) {
       // a block: one door per section on its long wall (every section is an entrance of its own), at the section's share `t` of its length
       for (const sec of plan.sections ?? []) {
@@ -484,7 +524,7 @@ export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult 
       });
     });
   }
-  const lobbies = [...new Set(exterior.filter((e) => e.slot.cell.kind !== 'corridor').map((e) => e.slot.cell.id))]
+  const lobbies = [...new Set(exterior.filter((e) => e.slot.cell.kind !== 'corridor' && e.slot.cell.kind !== 'core').map((e) => e.slot.cell.id))]
     .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))); // a corridor end stays a corridor, not a lobby
   return { openings, lobbies, warnings };
 }

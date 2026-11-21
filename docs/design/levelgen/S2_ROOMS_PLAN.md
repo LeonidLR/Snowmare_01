@@ -1,5 +1,30 @@
 # S2 plan - room layouts (building generator, levelgen v3)
 
+> **STATUS 2026-11-21 - kit pattern step 1 (branch `claude/building-generator`, not merged; designer summary in Russian:
+> `BGEN_KIT_PLANS_2026-11-21.md`).**
+> - **Block plans = a template catalog** (`building_plans.json` `recipes.block.templates`; default `block_khrushchevka`, series 1-464, planner
+>   `kit_sections` = `buildings/kitPlan.ts`; `block_sections` = the S2.3 planner below, also the kit's fallback). `GenBuilding.plan.template`,
+>   `series`, `era` record the choice; `BuildingSpec.plan_template` / `series` pick it. A new house type of an existing planner = a JSON entry; a
+>   new planner (corridor dormitory) = one `planner` branch in `addPlannedBlock`; a storey other than 300 needs a per-building storey height (not wired).
+> - **Khrushchevka plan**: section `[flat A | tambour | stair core | flat C]` + street flat B over tambour + core (three flats per landing);
+>   `[A | core | C]` when under 11 m deep or the length fits no three-flat section (reason in `plan.notes`). Flat = windowless hall (+ its
+>   corridor, an open seam) + bath + kitchen + 1-3 living rooms on the 50 cm grid. Core 400 x 600 on the court wall, the only exterior door per
+>   section from the court onto the floor landing. Supersedes for blocks: the S2.3 landing / lobby layout, the 4 x 4 m minimum (kit area bands),
+>   the loop rule for flats (3.5 rule 3 now drops dead-end flats, as written).
+> - **Half-landing switchback** (`generate.ts switchbackCore`): two half-rise flights per storey (35 deg, 215 cm run, 180 cm wide) in two lanes,
+>   floor landing 200 cm on the court side, mid landing 160 cm at the far end, `Stair.turn / mid / mid_rect / width`, slab gap = the core beyond
+>   the floor landing (the roof too), a built lane wall per storey; `LevelGenRampSmoke` samples both flights. Offices keep the single-flight core.
+> - **Fixed at the root**: S2.9 role mismatches (`fixEntryRoles`: roles follow the units; 0 in the walk smoke, was 24); a click on the floor above
+>   an operative picked him (`ClickPickRules::IsOnPickStorey`).
+> - **Addendum (data only)**: `structureClasses.ts` + `structure_classes.json` (structure / material per wall, partition, opening; hp_class TBD) and
+>   window vault data (`vaultable`, `sill_cm`, `width_cm`, `vault_onto`) on every /2 window; builder tags `structure=` / `material=` / `vaultable=`.
+> - **Engine (worker, before the 4 m core)**: path check 7/9, islands 1 for B_x / B_b20 / offices, 2 for B_y / B_b18 (one flight each without navmesh:
+>   the 150 cm flights between two walls - fixed by the 4 m core, NOT re-checked: worker frozen for the night baseline); walk smoke 5/9, walk legs
+>   28/32, entry legs 52/86 - the squad legs into 5 m2 halls are a formation question (designer Q7 in the summary), not a jam.
+> - **Not done**: windows / balconies / doors on the kit (story 4 has no balcony slots on kit blocks yet), openable doors (next step), the engine
+>   re-check of the 4 m core, the rebuilt L_Gen_BgenPlans.umap is not committed (rebuild: `Scripts/levelgen_build_map.ps1 -Layout gen_bgen_plans_check
+>   -Target /Game/Maps/Generated/L_Gen_BgenPlans`).
+
 > **HANDOVER 2026-11-20 (main PC offline; the stand-in lead on codex-worker continues from branch `worker/bgen-firing-gaps`, nothing is merged).**
 > - **Done** (all pushed to this branch): R3, F4 rule A, R4, room anchors, S2.1, S2.2, S2.2b, T-02 gaps 1-4, bot mantle 3a40a588, parapet firing gaps (24db207e +
 >   the refreshed X4 ad5ee46f), and **S2.3 block** (details in the Status paragraph of section 5). Tests 650 -> 664 (S2.3) -> 684 (S2.7), typecheck clean, plans-off golden unchanged.

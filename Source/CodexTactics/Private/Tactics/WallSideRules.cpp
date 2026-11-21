@@ -43,4 +43,9 @@ namespace ClickPickRules
 		}
 		return bGroundHit ? FMath::Min(TightPickRadiusCm, SelectRadius) : 0.f;
 	}
+
+	bool IsOnPickStorey(float HitZ, float FeetZ, float BodyHeightCm)
+	{
+		return HitZ >= FeetZ - StoreyPickBelowCm && HitZ <= FeetZ + FMath::Max(0.f, BodyHeightCm) + StoreyPickAboveCm;
+	}
 }

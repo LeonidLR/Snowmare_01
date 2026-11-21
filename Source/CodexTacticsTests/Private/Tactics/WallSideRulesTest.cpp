@@ -78,6 +78,21 @@ bool FWallSideTightPickTest::RunTest(const FString&)
 	return true;
 }
 
+WALL_SIDE_TEST(FWallSidePickStoreyTest, "PickOnlyOnHisStorey")
+bool FWallSidePickStoreyTest::RunTest(const FString&)
+{
+	using namespace ClickPickRules;
+	// An operative 180 cm tall standing on a floor landing at z 300 (feet 300).
+	TestTrue(TEXT("the ground at his feet picks him"), IsOnPickStorey(300.f, 300.f, 180.f));
+	TestTrue(TEXT("his body / head picks him"), IsOnPickStorey(470.f, 300.f, 180.f));
+	TestTrue(TEXT("a ramp's foot a step below him still does"), IsOnPickStorey(250.f, 300.f, 180.f));
+	TestFalse(TEXT("the landing one storey above (z 600) is a move there, never a pick"), IsOnPickStorey(600.f, 300.f, 180.f));
+	TestFalse(TEXT("the landing one storey below (z 0) neither"), IsOnPickStorey(0.f, 300.f, 180.f));
+	TestTrue(TEXT("the floor above stays out: a body plus the upper margin is under one storey"), 180.f + StoreyPickAboveCm < 300.f);
+	TestTrue(TEXT("the floor below stays out: the lower margin is under one storey"), StoreyPickBelowCm < 300.f);
+	return true;
+}
+
 #undef WALL_SIDE_TEST
 
 #endif // WITH_DEV_AUTOMATION_TESTS
