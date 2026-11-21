@@ -4,7 +4,7 @@
 // layout / engine types; generate.ts addPlannedBlock wires it, planDoors.ts realises its door list, planUnits.ts its flats.
 // Frame as bandPlan.ts: u along the long side 0..L, v across 0..D, v = 0 = the CORE (court) wall. Section = [A | T | K | C] along u (or mirrored):
 // K = the stair core (core.width_cm x core.depth_cm, on the court wall), T = the tambour (a common corridor, tambour_cm x core depth), A / C =
-// full-depth flats, B = the street flat over T + K. A section too shallow for B is [A | K | C]. Numbers: building_plans.json recipes.block_kit.
+// full-depth flats, B = the street flat over T + K. A section too shallow for B is [A | K | C]. Numbers: the template entry of building_plans.json recipes.block.templates (default block_khrushchevka, series 1-464).
 // Determinism: rng(fnv1a(`${seed}|kit|${k}`)) per attempt; nothing is drawn from a caller's stream.
 import cfg from '../../../../../Content/Data/LevelGen/building_plans.json' with { type: 'json' };
 import type { BandPlan, PlanCell, CellKind, CellBand } from './bandPlan.ts';
@@ -13,14 +13,42 @@ import { rng } from '../../movement/geometry.ts';
 import { fnv1a } from '../props/rng.ts';
 import { STAIR_RUN_PER_RISE } from '../schema.ts';
 
-/** The kit recipe (building_plans.json recipes.block_kit). */
-export const KIT = cfg.recipes.block_kit;
-const BUILDING_PLANS = cfg; // the JSON itself, not bandPlan's re-export: bandPlan.ts imports this module (no cycle at load time)
-const G = KIT.grid_cm;
-const K = KIT.core;
-const FF = KIT.full_flat;
-const SF = KIT.street_flat;
-const STOREY_CM = 300;
+/** The residential block templates (building_plans.json recipes.block.templates): id -> entry; `default` names the default one. */
+const TEMPLATES = cfg.recipes.block.templates as unknown as Record<string, unknown> & { default: string };
+export type KitTemplate = typeof cfg.recipes.block.templates.block_khrushchevka;
+/** The default block template id (building_plans.json recipes.block.templates.default). */
+export const DEFAULT_BLOCK_TEMPLATE: string = TEMPLATES.default;
+export interface BlockTemplateInfo { id: string; planner: string; series: string | null; era: string }
+const isTemplate = (k: string): boolean => k !== 'default' && k !== 'comment' && typeof TEMPLATES[k] === 'object' && TEMPLATES[k] !== null;
+/** A template entry by id ({ id, planner, series, era }), the default for an unknown / absent id. */
+export function blockTemplate(id?: string): BlockTemplateInfo {
+  const key = id && isTemplate(id) ? id : DEFAULT_BLOCK_TEMPLATE;
+  const t = TEMPLATES[key] as { planner: string; series: string | null; era: string };
+  return { id: key, planner: t.planner, series: t.series, era: t.era };
+}
+/** The template of a series (GenBuilding.series, e.g. '1-464'), or undefined. */
+export function templateForSeries(series?: string): string | undefined {
+  return series ? Object.keys(TEMPLATES).find((k) => isTemplate(k) && (TEMPLATES[k] as { series?: string | null }).series === series) : undefined;
+}
+/** The khrushchevka template (series 1-464): the kit planner's default numbers. */
+export const KIT: KitTemplate = cfg.recipes.block.templates.block_khrushchevka;
+const BUILDING_PLANS = cfg; // the JSON itself, not bandPlan.ts's re-export: bandPlan.ts imports this module (no cycle at load time)
+/** The kit planner's numbers of template `id` (a non-kit template / absent id: the khrushchevka's). */
+export const kitTemplate = (id?: string): KitTemplate => {
+  const t = blockTemplate(id);
+  return (t.planner === 'kit_sections' ? TEMPLATES[t.id] : KIT) as KitTemplate;
+};
+// The numbers of the template the current call plans with (set by every public entry point; plain single-threaded code).
+let TT: KitTemplate = KIT;
+let G = KIT.grid_cm;
+let K = KIT.core;
+let FF = KIT.full_flat;
+let SF = KIT.street_flat;
+let STOREY_CM = KIT.storey_cm;
+/** Plan / validate with the numbers of template `id` (the default for an absent / unknown id). */
+function useTemplate(id?: string): void {
+  TT = kitTemplate(id); G = TT.grid_cm; K = TT.core; FF = TT.full_flat; SF = TT.street_flat; STOREY_CM = TT.storey_cm;
+}
 
 /** What a room of a kit flat is for (GenRoom.use). The core cell is the 'landing' (it holds the floor landing and the flights). */
 export type RoomUse = 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'tambour' | 'landing';
@@ -62,7 +90,8 @@ export interface KitStairGeom {
 }
 
 /** The kit core's stair geometry for a core cell starting at `u0` (null when the recipe's numbers do not fit the core depth). */
-export function kitStairGeom(u0: number): KitStairGeom | null {
+export function kitStairGeom(u0: number, template?: string): KitStairGeom | null {
+  if (template !== undefined) useTemplate(template);
   const run = Math.ceil((STOREY_CM / 2) * STAIR_RUN_PER_RISE);
   const vLanding = K.wall_inner_cm + K.landing_cm, vMid = vLanding + run, vFar = K.depth_cm - K.partition_half_cm;
   if (vFar - vMid < K.mid_landing_cm) return null;
@@ -78,6 +107,8 @@ export interface KitPlanInput {
   L: number;
   D: number;
   seed: number;
+  /** The block template id (building_plans.json recipes.block.templates; absent = templates.default). */
+  template?: string;
 }
 
 type Rand = () => number;
@@ -177,9 +208,9 @@ function streetFlat(bld: Builder, sec: number, f: FlatFrame, W: number, v0: numb
 /** One section's cells and doors. */
 function buildSection(bld: Builder, index: number, s0: number, S: number, D: number, three: boolean, r: Rand): KitSection {
   const mirrored = r() < 0.5;
-  const Wk = K.width_cm, T = three ? KIT.tambour_cm : 0;
+  const Wk = K.width_cm, T = three ? TT.tambour_cm : 0;
   const rest = S - Wk - T; // W_A + W_C
-  const was = steps(Math.max(KIT.full_flat_cm.min, rest - KIT.full_flat_cm.max), Math.min(KIT.full_flat_cm.max, rest - KIT.full_flat_cm.min));
+  const was = steps(Math.max(TT.full_flat_cm.min, rest - TT.full_flat_cm.max), Math.min(TT.full_flat_cm.max, rest - TT.full_flat_cm.min));
   // flat C (3 living rooms) wants the width to split its street room: prefer an A width that leaves C >= 2 living rooms wide
   const roomy = was.filter((w) => rest - w >= 2 * FF.living_min_cm);
   const wa = pick(r, roomy.length ? roomy : was);
@@ -210,9 +241,9 @@ function buildSection(bld: Builder, index: number, s0: number, S: number, D: num
     // flat B over T + K: its entry from the tambour's inner end, x from the tambour's outer edge (the A side) towards the core
     streetFlat(bld, index, frameFrom(at(wa), dir), T + Wk, K.depth_cm, D, tam, at(wa) + dir * T / 2);
   }
-  fullFlat(bld, index, 'A', frameFrom(at(wa), (-dir) as 1 | -1), wa, D, KIT.living_rooms.A, aFrom, aAt, r);
+  fullFlat(bld, index, 'A', frameFrom(at(wa), (-dir) as 1 | -1), wa, D, TT.living_rooms.A, aFrom, aAt, r);
   const fC = frameFrom(at(wa + T + Wk), dir);
-  const c = fullFlat(bld, index, 'C', fC, wc, D, three ? KIT.living_rooms.C : KIT.living_rooms.C - 1, core, landingDoorV, r);
+  const c = fullFlat(bld, index, 'C', fC, wc, D, three ? TT.living_rooms.C : TT.living_rooms.C - 1, core, landingDoorV, r);
   if (!three) {
     // two flats: the street band over the core (no flat B) is one more living room of C, entered from C's corridor (or its street room)
     const over = add(bld, `s${index}C_living0`, 'room', 'front', fC, -Wk, 0, K.depth_cm, D, { section: index, unit: `s${index}C`, use: 'living' });
@@ -228,20 +259,22 @@ function buildSection(bld: Builder, index: number, s0: number, S: number, D: num
  */
 export function planKitBlock(inp: KitPlanInput): BandPlan {
   const { L, D } = inp;
-  const fb = (reason: string): BandPlan => ({ kind: 'fallback', fallback: reason, L, D, bays: [], cells: [], archetype: 'block', pattern: 'kit' });
+  useTemplate(inp.template);
+  const tid = blockTemplate(inp.template).id;
+  const fb = (reason: string): BandPlan => ({ kind: 'fallback', fallback: reason, L, D, bays: [], cells: [], archetype: 'block', pattern: 'kit', kit: { sections: [], doors: [], notes: [], template: tid } });
   if (L % 100 || D % 100) return fb('footprint_off_grid');
   if (D > L) return fb('long_side_not_first');
-  if (D < KIT.min_depth_cm || D > KIT.max_depth_cm) return fb(`kit_depth_${D}_outside_${KIT.min_depth_cm}-${KIT.max_depth_cm}`);
+  if (D < TT.min_depth_cm || D > TT.max_depth_cm) return fb(`kit_depth_${D}_outside_${TT.min_depth_cm}-${TT.max_depth_cm}`);
   if (!kitStairGeom(0)) return fb('kit_core_does_not_fit_its_stair');
-  const ffMin = KIT.full_flat_cm.min, ffMax = KIT.full_flat_cm.max, Wk = K.width_cm;
-  const threeMin = 2 * ffMin + Wk + KIT.tambour_cm, threeMax = 2 * ffMax + Wk + KIT.tambour_cm;
+  const ffMin = TT.full_flat_cm.min, ffMax = TT.full_flat_cm.max, Wk = K.width_cm;
+  const threeMin = 2 * ffMin + Wk + TT.tambour_cm, threeMax = 2 * ffMax + Wk + TT.tambour_cm;
   const twoMin = 2 * ffMin + Wk, twoMax = 2 * ffMax + Wk;
   let reason = '';
   for (let k = 0; k < BUILDING_PLANS.constants.max_rerolls; ++k) {
     const r = rng(fnv1a(`${inp.seed}|kit|${k}`));
     const planNotes: string[] = [];
-    let three = D >= KIT.three_flat_min_depth_cm;
-    if (!three) planNotes.push(`depth ${D} < ${KIT.three_flat_min_depth_cm}: the street band is too shallow for flat B - two flats per landing`);
+    let three = D >= TT.three_flat_min_depth_cm;
+    if (!three) planNotes.push(`depth ${D} < ${TT.three_flat_min_depth_cm}: the street band is too shallow for flat B - two flats per landing`);
     let widths = three ? sectionWidths(L, threeMin, threeMax, r) : sectionWidths(L, twoMin, twoMax, r);
     if (typeof widths === 'string' && three) {
       const two = sectionWidths(L, twoMin, twoMax, r);
@@ -257,7 +290,7 @@ export function planKitBlock(inp: KitPlanInput): BandPlan {
     const idOf = new Map<string, string>();
     const cells: PlanCell[] = sorted.map((c, i) => { idOf.set(c.key, `c${i}`); const { key: _k, ...rest } = c; void _k; return { id: `c${i}`, ...rest }; });
     const doors = bld.doors.map((d) => ({ ...d, a: idOf.get(d.a)!, b: idOf.get(d.b)! }));
-    const plan: BandPlan = { kind: 'bands', L, D, bays: [], cells, archetype: 'block', pattern: 'kit', kit: { sections, doors, notes: planNotes } };
+    const plan: BandPlan = { kind: 'bands', L, D, bays: [], cells, archetype: 'block', pattern: 'kit', kit: { sections, doors, notes: planNotes, template: tid } };
     const problems = validateKitPlan(plan);
     if (!problems.length) return plan;
     reason = `invalid: ${problems[0]}`;
@@ -271,6 +304,7 @@ const area = (c: PlanCell): number => ((c.u1 - c.u0) * (c.v1 - c.v0)) / 1e4;
 export function validateKitPlan(plan: BandPlan): string[] {
   const out: string[] = [];
   if (plan.kind !== 'bands' || !plan.kit) return ['not a kit plan'];
+  useTemplate(plan.kit.template);
   const { L, D } = plan;
   let total = 0;
   for (const c of plan.cells) {
@@ -279,7 +313,7 @@ export function validateKitPlan(plan: BandPlan): string[] {
     if (w <= 0 || h <= 0) { out.push(`${c.id}: empty`); continue; }
     if (c.u0 < 0 || c.v0 < 0 || c.u1 > L || c.v1 > D) out.push(`${c.id}: outside ${L} x ${D}`);
     total += w * h;
-    const range = c.use ? (KIT.room_area_m2 as Record<string, number[]>)[c.use] : undefined;
+    const range = c.use ? (TT.room_area_m2 as Record<string, number[]>)[c.use] : undefined;
     if (range && (area(c) < range[0] - 1e-9 || area(c) > range[1] + 1e-9)) out.push(`${c.id} ${c.use}: ${area(c)} m2 outside ${range[0]}-${range[1]}`);
     if (c.use === 'living' && Math.min(w, h) < FF.living_min_cm) out.push(`${c.id} living: ${Math.min(w, h)} cm narrow`);
     if (c.kind === 'core' && (w !== K.width_cm || h !== K.depth_cm || c.v0 !== 0)) out.push(`${c.id} core: ${w} x ${h} from v ${c.v0}`);
@@ -313,6 +347,7 @@ const USE_GLYPH: Record<RoomUse, string> = { hall: 'h', corridor: 'c', bath: 'b'
  */
 export function kitPlanToAscii(plan: BandPlan): string {
   if (plan.kind !== 'bands') return `fallback: ${plan.fallback}`;
+  useTemplate(plan.kit?.template);
   const W = plan.L / G, H = plan.D / G;
   const g: string[][] = Array.from({ length: H }, () => new Array<string>(W).fill(' '));
   for (const c of plan.cells) {

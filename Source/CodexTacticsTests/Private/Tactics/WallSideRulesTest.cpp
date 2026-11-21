@@ -88,7 +88,8 @@ bool FWallSidePickStoreyTest::RunTest(const FString&)
 	TestTrue(TEXT("a ramp's foot a step below him still does"), IsOnPickStorey(250.f, 300.f, 180.f));
 	TestFalse(TEXT("the landing one storey above (z 600) is a move there, never a pick"), IsOnPickStorey(600.f, 300.f, 180.f));
 	TestFalse(TEXT("the landing one storey below (z 0) neither"), IsOnPickStorey(0.f, 300.f, 180.f));
-	TestTrue(TEXT("a storey is higher than a body plus both margins"), 180.f + StoreyPickBelowCm + StoreyPickAboveCm < 300.f);
+	TestTrue(TEXT("the floor above stays out: a body plus the upper margin is under one storey"), 180.f + StoreyPickAboveCm < 300.f);
+	TestTrue(TEXT("the floor below stays out: the lower margin is under one storey"), StoreyPickBelowCm < 300.f);
 	return true;
 }
 

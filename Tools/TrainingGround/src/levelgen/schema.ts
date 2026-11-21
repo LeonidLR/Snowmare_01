@@ -487,7 +487,13 @@ export interface GenBuilding {
    */
   plan?: { v: 1; kind: 'bands' | 'bsp' | 'single'; seed: number; core_wall: string; street_wall: string; variant?: string; fallback?: string; /** Blocks: the number of sections (one stair core and entrance each). */ sections?: number;
     /** Kit blocks: 'kit' (kitPlan.ts); notes = why a section has fewer flats / rooms than the kit, or why the kit pattern fell back to the S2.3 planner. */
-    pattern?: 'kit'; notes?: string[] };
+    pattern?: 'kit'; notes?: string[];
+    /** Planned blocks: the plan template (building_plans.json recipes.block.templates, e.g. block_khrushchevka / block_sections). */
+    template?: string };
+  /** Residential blocks: the building series of its plan template (e.g. '1-464', the khrushchevka); absent = no series (a generic plan). */
+  series?: string;
+  /** Residential blocks: the era / house type of its plan template (khrushchev_1960s, generic; later stalin, barracks, dormitory ...). */
+  era?: string;
   /** Schema /2, planned blocks (S2_ROOMS_PLAN.md 4.1): the flats of every storey (ids only: rooms, doors, columns). */
   units?: BuildingUnit[];
 }

@@ -44,7 +44,7 @@ function block(o: BlockOpts): { l: GenLayout; b: GenBuilding } {
   const floors = o.floors ?? 2, bid = o.bid ?? 'B_t';
   addBuilding(d, bid, [[20.37, 15.21], [20.37 + o.w, 15.21 + o.h]], {
     height: floors * LEVEL_HEIGHT, floors, enterable: true, roof_walkable: o.roof ?? true, stairwell: true, set_piece: 'facade', archetype: 'block',
-    doorSides: o.sides ?? ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_pattern: 'sections', // the S2.3 planner (the kit has kitPlan.test.ts)
+    doorSides: o.sides ?? ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_template: 'block_sections', // the S2.3 planner (the kit has kitPlan.test.ts)
   }, random);
   const l = finalizeDraftToLayout(d, [90, 90], { name: 't', profile: 't', seed: 1, params: { ...DEFAULT_PARAMS, size_m: [90, 90], building_plans: true }, start: [4, 2], end: [36, 58] });
   return { l, b: l.buildings.find((x) => x.id === bid)! };

@@ -64,7 +64,7 @@ export interface BandPlan {
   /** 'kit' = the kit-pattern block of kitPlan.ts (sections in `kit`, no bays). */
   pattern?: 'kit';
   /** Kit plans: the sections, the doors the planner wants (planDoors.ts realises them) and why a section has fewer flats / rooms. */
-  kit?: { sections: KitSection[]; doors: KitDoor[]; notes: string[] };
+  kit?: { sections: KitSection[]; doors: KitDoor[]; notes: string[]; /** The block template id (recipes.block.templates). */ template: string };
 }
 
 export interface BandPlanInput {

@@ -43,6 +43,8 @@ export const ALL_FIELDS_BUILDING: Full<GenBuilding> = {
   "breach_route": { "legs": [{ "from": "street", "to": "B_all_r0", "mode": "explosive" }], "cost": 70, "detour": 7, "cost_hash": "00000000" },
   "fast_entry": "B_all_w0",
   "quiet_entry": "B_all_w0",
-  "plan": { "v": 1, "kind": "bands", "seed": 12345, "core_wall": "B_all_N", "street_wall": "B_all_S", "variant": "double", "fallback": "none", "sections": 2, "pattern": "kit", "notes": ["n"] },
+  "plan": { "v": 1, "kind": "bands", "seed": 12345, "core_wall": "B_all_N", "street_wall": "B_all_S", "variant": "double", "fallback": "none", "sections": 2, "pattern": "kit", "notes": ["n"], "template": "block_khrushchevka" },
+  "series": "1-464",
+  "era": "khrushchev_1960s",
   "units": [{ "id": "B_all_u_f1_s0L", "kind": "flat", "floor": 1, "rooms": ["B_all_r1"], "entries": ["B_all_p0_d"], "column": "B_all_col_s0L", "dead_end": true, "run_cm": 640 }]
 };

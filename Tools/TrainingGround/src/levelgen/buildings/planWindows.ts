@@ -5,7 +5,7 @@
 // PURE: integer cm, plan frame (see planDoors.ts), constants from building_plans.json `constants.openings`; the shared opening types are
 // exported by planDoors.ts.
 import type { BandPlan } from './bandPlan.ts';
-import { KIT } from './kitPlan.ts';
+import { kitTemplate } from './kitPlan.ts';
 import { BUILDING_PLANS } from './bandPlan.ts';
 import type { PlanOpening, WallKey } from './planDoors.ts';
 import { WALL_ORDER, byId, gridUp, snap, wallInfo, wallSpan } from './planDoors.ts';
@@ -54,7 +54,7 @@ export function planWindows(plan: BandPlan, opts: PlanWindowsOpts): PlanOpening[
         const [s0, s1] = span;
         const wants = corridor ? [snap((s0 + s1) / 2)] : preferred(s0, s1 - s0);
         for (const want of wants) {
-          const c = place(want, s0, s1, corridor, doors, placed[wall], opts.blocked?.[wall] ?? [], plan.pattern === 'kit' ? KIT.window_clear_cm : O.window_clear_cm);
+          const c = place(want, s0, s1, corridor, doors, placed[wall], opts.blocked?.[wall] ?? [], plan.pattern === 'kit' ? kitTemplate(plan.kit?.template).window_clear_cm : O.window_clear_cm);
           if (c === null) continue;
           placed[wall].push(c);
           const w = wallInfo(plan, wall);

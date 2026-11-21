@@ -69,7 +69,7 @@ function specOf(b: GenBuilding, sides: Side[]): BuildingSpec {
     ...(b.hatches?.length ? { roofHatch: true } : {}),
     ...(b.archetype ? { archetype: b.archetype } : {}),
     // a block keeps its plan pattern (a kit block re-plans as a kit block, an S2.3 block as S2.3)
-    ...(b.archetype === 'block' && b.plan?.kind === 'bands' ? { plan_pattern: b.plan.pattern === 'kit' ? 'kit' as const : 'sections' as const } : {}),
+    ...(b.archetype === 'block' && b.plan?.kind === 'bands' ? { plan_template: b.plan.template ?? (b.plan.pattern === 'kit' ? 'block_khrushchevka' : 'block_sections') } : {}),
   };
 }
 

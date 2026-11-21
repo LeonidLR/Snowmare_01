@@ -13,7 +13,7 @@ import { addBuilding, finalizeDraftToLayout } from '../generate.ts';
 import type { GenBuilding, GenLayout, WallOpening } from '../schema.ts';
 import { DEFAULT_PARAMS, LEVEL_HEIGHT, STAIR_RUN_PER_RISE, isSwitchback, stairFlights } from '../schema.ts';
 import { toBuildingFrame } from '../rotation.ts';
-import { KIT, kitPlanToAscii, kitStairGeom, planKitBlock, validateKitPlan } from './kitPlan.ts';
+import { DEFAULT_BLOCK_TEMPLATE, KIT, blockTemplate, kitPlanToAscii, kitStairGeom, planKitBlock, templateForSeries, validateKitPlan } from './kitPlan.ts';
 import type { BandPlan, PlanCell } from './bandPlan.ts';
 
 const area = (c: PlanCell): number => ((c.u1 - c.u0) * (c.v1 - c.v0)) / 1e4;
@@ -25,7 +25,7 @@ function kitBlock(w: number, h: number, floors = 2, seed = 4, opts: { pattern?: 
   const random = (): number => { n = (n * 1103515245 + 12345) & 0x7fffffff; return n / 0x7fffffff; };
   addBuilding(d, 'B_k', [[20.37, 15.21], [20.37 + w, 15.21 + h]], {
     height: floors * LEVEL_HEIGHT, floors, enterable: true, roof_walkable: opts.roof ?? true, stairwell: true, set_piece: 'facade', archetype: 'block',
-    doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_pattern: opts.pattern ?? 'kit',
+    doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_template: opts.pattern === 'sections' ? 'block_sections' : 'block_khrushchevka',
   }, random);
   const l = finalizeDraftToLayout(d, [90, 90], { name: 't', profile: 't', seed: 1, params: { ...DEFAULT_PARAMS, size_m: [90, 90], building_plans: true }, start: [4, 2], end: [36, 58] });
   return { l, b: l.buildings.find((x) => x.id === 'B_k')! };
@@ -218,3 +218,29 @@ test('CodexTactics.LevelGen.KitPlan.RolesFollowUnits: S2.3 ground floors - every
 
 // keep the type import used (BandPlan) for readers of the plan shape
 export type { BandPlan };
+
+// ---- (4) the template catalog (lead addendum 2026-11-21: several house types, the khrushchevka is one) ----------------------------------
+
+test('CodexTactics.LevelGen.KitPlan.Templates: the khrushchevka (series 1-464) is the default block template; a series or a template id picks; the building records template / series / era', () => {
+  assert.equal(DEFAULT_BLOCK_TEMPLATE, 'block_khrushchevka');
+  assert.deepEqual(blockTemplate(), { id: 'block_khrushchevka', planner: 'kit_sections', series: '1-464', era: 'khrushchev_1960s' });
+  assert.equal(blockTemplate('no_such_template').id, 'block_khrushchevka', 'an unknown id falls back to the default');
+  assert.equal(blockTemplate('block_sections').planner, 'sections');
+  assert.equal(templateForSeries('1-464'), 'block_khrushchevka');
+  assert.equal(templateForSeries('II-18'), undefined);
+  const kit = kitBlock(20.2, 14.1, 2).b;
+  assert.equal(kit.plan?.template, 'block_khrushchevka');
+  assert.equal(kit.series, '1-464');
+  assert.equal(kit.era, 'khrushchev_1960s');
+  const s23 = kitBlock(20.2, 14.1, 2, 4, { pattern: 'sections' }).b;
+  assert.equal(s23.plan?.template, 'block_sections');
+  assert.notEqual(s23.plan?.pattern, 'kit');
+  assert.equal(s23.series, undefined);
+  assert.equal(s23.era, 'generic');
+  // every template entry names a planner the generator knows and the fields the house-type config needs
+  for (const id of ['block_khrushchevka', 'block_sections']) {
+    const t = blockTemplate(id);
+    assert.ok(['kit_sections', 'sections'].includes(t.planner), id);
+  }
+  assert.ok(KIT.flats_per_landing === 3 && KIT.storey_cm === 300 && KIT.entrance_side === 'court' && KIT.stair === 'half_landing');
+});

@@ -69,7 +69,7 @@ import type { PlanDoorsOpts, PlanOpening, WallKey } from './buildings/planDoors.
 import { WALL_ORDER, planDoors, wallSpan } from './buildings/planDoors.ts';
 import { planWindows } from './buildings/planWindows.ts';
 import { fixEntryRoles, planUnits } from './buildings/planUnits.ts';
-import { KIT, kitStairGeom, planKitBlock } from './buildings/kitPlan.ts';
+import { DEFAULT_BLOCK_TEMPLATE, blockTemplate, kitStairGeom, kitTemplate, planKitBlock, templateForSeries } from './buildings/kitPlan.ts';
 import { annotateStructure, annotateWindowVault } from './structureClasses.ts';
 import { fnv1a } from './props/rng.ts';
 
@@ -789,8 +789,13 @@ export interface BuildingSpec {
   cores?: number | CoreAt[];
   /** building-archetypes.md section 1, from the lot template (TEMPLATE_ARCHETYPE); informational until S2. */
   archetype?: Archetype;
-  /** A planned block's plan pattern: 'kit' (kitPlan.ts) or 'sections' (the S2.3 planner); default building_plans.json recipes.block.pattern. */
-  plan_pattern?: 'kit' | 'sections';
+  /**
+   * A planned block's plan template (building_plans.json recipes.block.templates: block_khrushchevka = the kit planner, block_sections = the S2.3
+   * planner, more house types later); absent = the template of `series`, else templates.default.
+   */
+  plan_template?: string;
+  /** A residential block's building series (e.g. '1-464'): picks the template with that series when no plan_template is named. */
+  series?: string;
 }
 
 export { addWall, fenceRect, addBuilding, addLadderAt, splitWall };
@@ -1077,17 +1082,22 @@ function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random
   const coreTop = s.roof_walkable ? s.floors : s.floors - 1;
   const depth: 350 | 200 = coreTop > 1 ? 350 : 200;
   const planSeed = planSeedOf(d, bid, sn.L, sn.D, s.floors, 'block');
-  // the kit pattern first (building_plans.json recipes.block.pattern); a footprint it cannot cut falls back to the S2.3 sections planner below
+  // the plan template (building_plans.json recipes.block.templates): a kit-planner template first; a footprint it cannot cut falls back to the
+  // S2.3 sections planner below (template block_sections), then to the BSP
   let kitWhy: string | undefined;
-  if ((s.plan_pattern ?? BUILDING_PLANS.recipes.block.pattern) === 'kit') {
-    const kit = planKitBlock({ L: sn.L, D: sn.D, seed: planSeed });
+  const tpl = blockTemplate(s.plan_template ?? templateForSeries(s.series) ?? DEFAULT_BLOCK_TEMPLATE);
+  if (tpl.planner === 'kit_sections') {
+    const kit = planKitBlock({ L: sn.L, D: sn.D, seed: planSeed, template: tpl.id });
     if (kit.kind === 'bands' && kit.kit) {
       const fk: PlanFrame = { alongY, coreSide: longSides.includes(first) ? OPPOSITE[first] : alongY ? 'west' : 'north', cx0, cy0, cx1, cy1 };
       const pk = planShell(d, bid, rp, s, random);
-      pk.cores = kit.kit.sections.map((sec, k) => switchbackCore(bid, fk, sec.core.u0, coreTop, k));
+      pk.cores = kit.kit.sections.map((sec, k) => switchbackCore(bid, fk, sec.core.u0, coreTop, k, tpl.id));
       if (pk.cores.every((c) => !!c.stairs.length || coreTop <= 0)) {
         const b = emitPlanned({ d, bid, s, random, p: pk, plan: kit, f: fk, rp, planSeed, coreSide: fk.coreSide, first, doors: { core: null } });
         if (kit.kit.notes.length || kit.kit.sections.some((x) => x.notes.length)) b.plan!.notes = [...kit.kit.notes, ...kit.kit.sections.flatMap((x) => x.notes)];
+        b.plan!.template = tpl.id;
+        if (tpl.series) b.series = tpl.series;
+        b.era = tpl.era;
         return b;
       }
       kitWhy = 'kit: core_unbuilt';
@@ -1099,6 +1109,7 @@ function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random
     const p2 = planShell(d, bid, r, s, random);
     const b = legacyStages(p2);
     b.plan = { v: 1, kind: 'bsp', seed: planSeed, core_wall: sideId(p2.cores[0]?.side ?? coreSide), street_wall: sideId(first), fallback: why, ...(kitWhy ? { notes: [kitWhy] } : {}) };
+    b.era = blockTemplate('block_sections').era;
     return b;
   };
   if (plan.kind === 'fallback' || !plan.sections) return fallback(plan.fallback ?? 'plan_fallback');
@@ -1122,6 +1133,8 @@ function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random
   const f: PlanFrame = { alongY, coreSide, cx0, cy0, cx1, cy1 };
   const b = emitPlanned({ d, bid, s, random, p, plan, f, rp, planSeed, coreSide, first, doors: { core: null, cores: plan.sections.map((sec) => ({ u0: sec.core.u0, depth })) } });
   if (kitWhy && b.plan) b.plan.notes = [kitWhy];
+  if (b.plan) b.plan.template = 'block_sections';
+  b.era = blockTemplate('block_sections').era;
   return b;
 }
 
@@ -1132,8 +1145,9 @@ function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random
  * level n + 1 (`flightRect`) is the whole core beyond the floor landing (both lanes + the mid landing); one lane wall per storey between the flights.
  * Stair ids as planStairCore: `<bid>_stair_<n>`, `<bid>_c<k>_stair_<n>` for the k-th section. No flights when upTo <= 0.
  */
-function switchbackCore(bid: string, f: PlanFrame, coreU0: number, upTo: number, index: number): StairCore {
-  const g = kitStairGeom(coreU0)!;
+function switchbackCore(bid: string, f: PlanFrame, coreU0: number, upTo: number, index: number, template: string): StairCore {
+  const KIT = kitTemplate(template);
+  const g = kitStairGeom(coreU0, template)!;
   const P = (u: number, v: number): Vec2 => toDraft(f, u, v);
   const R = (u0: number, v0: number, u1: number, v1: number): Rect => {
     const a = P(u0, v0), b = P(u1, v1);

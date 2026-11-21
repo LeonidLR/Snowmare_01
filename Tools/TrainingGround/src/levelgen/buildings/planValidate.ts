@@ -11,7 +11,7 @@ import { STAIR_APPROACH_CM, isSwitchback, stairFlights } from '../schema.ts';
 import type { Box, CoreFlight } from '../windowClearance.ts';
 import { boxesOverlap, coreBoxesOn } from '../windowClearance.ts';
 import { BUILDING_PLANS } from './bandPlan.ts';
-import { KIT } from './kitPlan.ts';
+import { kitTemplate } from './kitPlan.ts';
 
 const C = BUILDING_PLANS.constants;
 const O = C.openings;
@@ -134,7 +134,7 @@ function roomTiling(b: GenBuilding, rooms: GenRoom[], issues: TraversalIssue[]):
 
 function offGrid(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: TraversalIssue[]): void {
   const fp = b.footprint;
-  const grid = b.plan?.pattern === 'kit' ? KIT.grid_cm : C.grid_cm; // the kit's rooms lie on the designer's 50 cm grid
+  const grid = b.plan?.pattern === 'kit' ? kitTemplate(b.plan.template).grid_cm : C.grid_cm; // the kit's rooms lie on the designer's 50 cm grid
   // the edge a stair-core room makes at its depth (200 / 350 from a building wall) is off the 100 grid by design; its neighbours share it
   const core: [number[], number[]] = [[], []];
   for (const r of rooms) {
@@ -173,6 +173,7 @@ function roomSize(b: GenBuilding, rooms: GenRoom[], issues: TraversalIssue[]): v
   const suiteFits = (u: number, v: number): boolean => range(u, C.end_bay_cm.min, C.end_bay_cm.max) && v >= C.room_cm.min - TOL;
   const roomFits = (u: number, v: number): boolean => range(u, C.room_cm.min, C.room_cm.max) && range(v, C.room_cm.min, C.room_cm.max);
   const serviceFits = (u: number, v: number): boolean => range(v, C.service_room.depth_min_cm, C.service_room.depth_max_cm) && range(u, C.service_room.width_min_cm, C.service_room.width_max_cm);
+  const KIT = kitTemplate(b.plan?.template);
   const kitAreas = KIT.room_area_m2 as Record<string, number[]>;
   for (const r of rooms) {
     const a = rectOf(r), w = a.x1 - a.x0, h = a.y1 - a.y0, u = alongY ? h : w, v = alongY ? w : h;
@@ -413,7 +414,7 @@ function windowRule(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: 
       if (d.op.kind !== 'door' || d.part || d.op.floor !== w.op.floor || !near(d.pos[1 - wall.along], wall.line)) continue;
       ends.push([`the door ${d.ref}`, d.pos[wall.along], (d.op.width ?? O.door_cm) / 2]);
     }
-    const clearCm = b.plan?.pattern === 'kit' ? KIT.window_clear_cm : O.window_clear_cm;
+    const clearCm = b.plan?.pattern === 'kit' ? kitTemplate(b.plan.template).window_clear_cm : O.window_clear_cm;
     for (const [what, at, other] of ends) {
       if (gap(at, other) + TOL < clearCm) issues.push({ severity: PLAN_SEVERITY.window_rule, code: 'window_rule', ref: w.ref, message: `${w.ref}: ${Math.round(gap(at, other))} cm from ${what} (< ${clearCm})` });
     }
