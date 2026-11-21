@@ -53,6 +53,7 @@ Without Unreal: `python build_levelgen_map.py plan [layout.json]` prints the act
 import datetime
 import json
 import math
+import re
 import os
 import sys
 
@@ -446,6 +447,9 @@ def blocked_flight_specs(label, folder, a, b, z0, z1, kind, width=STAIR_W):
     rc = [a[0] + ux * rl / 2.0, a[1] + uy * rl / 2.0, z0 + RUBBLE_H / 2.0]
     out.append(_flagged(cube(label + "_rubble", folder, rc, [rl, width, RUBBLE_H], yaw, tags + ["rubble_flight"]), COLLISION_BLOCK_ALL))
     return out
+
+
+LANE_WALL_RE = re.compile(r"_lanewall_f\d+$")
 
 
 def is_switchback(s):
@@ -1008,6 +1012,9 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
     split = [w for w in levelgen_ladders.split_walls(layout["walls"], gaps) if w.get("building") not in chimneys]
     mantle_edges = [m for m in layout.get("mantle_edges", []) or [] if m.get("kind") in MANTLE_WALL_EDGE_KINDS]
     by_partitions = {bid for bid, b in b_by_id.items() if bid not in chimneys and partition_driven(layout, b)}
+    # kit blocks: the lane wall between the two flights of a switchback core is a layout wall, not a partition - it is built (the S2 offices keep
+    # their old output: their lane walls stay unbuilt, a separate review item)
+    switchback_buildings = {bid for bid, b in b_by_id.items() if any(is_switchback(s) for s in b.get("stairs", []) or [])}
     for bid in sorted(by_partitions):
         specs.extend(_partition_wall_specs(layout, b_by_id[bid], gz))
 
@@ -1019,8 +1026,8 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         lvl = int(w.get("floor", 0))
         if not bid or bid not in b_by_id:
             specs.append(wall_cube(w["id"], "Walls/L%d" % lvl, w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), [w.get("kind", "wall")] + _wall_mantle_tags(w, mantle_edges) + structure_tags(w)))
-        elif w.get("kind") == "interior" and bid in by_partitions:
-            continue  # built from its partitions[] above
+        elif w.get("kind") == "interior" and bid in by_partitions and not (bid in switchback_buildings and LANE_WALL_RE.search(w["id"])):
+            continue  # built from its partitions[] above (a switchback core's lane walls are no partitions: built below)
         elif w.get("kind") == "interior":
             specs.append(wall_cube(w["id"], "Buildings/%s/L%d" % (bid, lvl), w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), ["interior", "building=" + bid, "floor=%d" % lvl] + structure_tags(w)))
             interior_by_building_floor.setdefault((bid, lvl), []).append(w)

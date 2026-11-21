@@ -443,6 +443,19 @@ class SwitchbackStairTest(unittest.TestCase):
         area = sum(s["scale"][0] * s["scale"][1] * 1e4 for s in roof)
         self.assertAlmostEqual(area, 1400.0 * 2000.0 - 330.0 * 375.0, delta=1.0)
 
+    def test_switchback_lane_walls_are_built(self):
+        """The lane wall between the two flights of a kit core is a layout wall (no partition) of a partition-driven building: built, while the
+        planned building's other interior walls come from partitions[] (engine check 2026-11-21: without it two sections' ground flights had
+        no navmesh - one 10 cm gap rasterised both flights into one column)."""
+        b = {"id": "B_k", "footprint": [[0.0, 0.0], [1400.0, 2000.0]], "floors": 2, "height": 600, "enterable": True, "roof_walkable": False,
+             "openings": [], "partitions": [], "plan": {"v": 1, "kind": "bands"}, "stairs": [dict(self.STAIR)], "floors_detail": []}
+        walls = [{"id": "B_k_lanewall_f0", "a": [175.0, 215.0], "b": [175.0, 430.0], "height": 300, "thickness": 10, "kind": "interior", "building": "B_k"},
+                 {"id": "B_k_part_f0_0_x", "a": [0.0, 600.0], "b": [350.0, 600.0], "height": 300, "thickness": 20, "kind": "interior", "building": "B_k"}]
+        specs = builder._walls_and_buildings_extended({"walls": walls, "buildings": [b], "ladders": [], "mantle_edges": []}, 0.0, set(), {}, {})
+        labels = [s["label"] for s in specs]
+        self.assertIn("B_k_lanewall_f0", labels)
+        self.assertNotIn("B_k_part_f0_0_x", labels)
+
     def test_two_ramps_and_a_mid_landing(self):
         specs = builder._stair_specs("B_k", dict(self.STAIR), 0.0, "Buildings/B_k")
         self.assertEqual([s["label"] for s in specs], ["B_k_B_k_stair_0", "B_k_B_k_stair_0_b", "B_k_B_k_stair_0_midlanding"])
