@@ -431,6 +431,18 @@ class SwitchbackStairTest(unittest.TestCase):
     STAIR = {"id": "B_k_stair_0", "kind": "stairwell", "from": 0, "to": 1, "pos": [90.0, 215.0], "turn": [90.0, 430.0], "mid": [260.0, 430.0],
              "top": [260.0, 215.0], "mid_rect": [[10.0, 430.0], [340.0, 590.0]]}
 
+    def test_roof_opens_over_the_last_switchback(self):
+        """A walkable roof over the core: the roof slab is cut over both flights + the mid landing (the stair to the roof had no head room)."""
+        top = dict(self.STAIR, id="B_k_stair_1", **{"from": 1, "to": 2})
+        b = {"id": "B_k", "footprint": [[0.0, 0.0], [1400.0, 2000.0]], "floors": 2, "height": 600, "enterable": True, "roof_walkable": True,
+             "openings": [], "partitions": [], "plan": {"v": 1, "kind": "bands"}, "stairs": [dict(self.STAIR), top],
+             "floors_detail": [{"floor": 1, "height_z": 300, "gaps": [{"id": "g", "kind": "stairwell", "poly": [[10, 215], [340, 215], [340, 590], [10, 590]]}]}]}
+        self.assertEqual(builder.switchback_hole_rect(top), (10.0, 215.0, 340.0, 590.0))
+        specs = builder._walls_and_buildings_extended({"walls": [], "buildings": [b], "ladders": [], "mantle_edges": []}, 0.0, set(), {}, {})
+        roof = [s for s in specs if "roof_slab" in s.get("tags", [])]
+        area = sum(s["scale"][0] * s["scale"][1] * 1e4 for s in roof)
+        self.assertAlmostEqual(area, 1400.0 * 2000.0 - 330.0 * 375.0, delta=1.0)
+
     def test_two_ramps_and_a_mid_landing(self):
         specs = builder._stair_specs("B_k", dict(self.STAIR), 0.0, "Buildings/B_k")
         self.assertEqual([s["label"] for s in specs], ["B_k_B_k_stair_0", "B_k_B_k_stair_0_b", "B_k_B_k_stair_0_midlanding"])

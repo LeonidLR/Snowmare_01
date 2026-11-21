@@ -475,6 +475,16 @@ def switchback_specs(bid, s, gz, folder):
     return out
 
 
+def switchback_hole_rect(s):
+    """The slab opening of a switchback stair on its arrival level: the core beyond the floor landing = the bounding box of the floor-landing
+    edge (`pos`, `top`) and the mid landing (`mid_rect`), (x0, y0, x1, y1). The generator writes the same rectangle as the floors_detail gap of
+    every storey below the roof; the roof has no floors_detail entry, so the builder cuts it there (switchback_roof_holes)."""
+    (ax, ay), (bx, by) = s["mid_rect"]
+    xs = [s["pos"][0], s["top"][0], ax, bx]
+    ys = [s["pos"][1], s["top"][1], ay, by]
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
 def _stair_specs(bid, s, gz, folder):
     """A building stair's ramp (+ landing for an external flight with a mid point), plus the blocked-flight extras when
     s["blocked"] is set (absent on every /1 stair: the legacy specs, unchanged). A switchback: switchback_specs."""
@@ -1080,6 +1090,9 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         for h in b.get("floor_holes", []):
             holes_by_floor.setdefault(int(h["floor"]), []).append(h["pos"])
         for s in b.get("stairs", []):
+            if is_switchback(s) and s.get("mid_rect") and int(s["to"]) >= floors:
+                # the roof over the last switchback (a walkable roof): open over both flights and the mid landing
+                holes_by_floor.setdefault(int(s["to"]), []).append(switchback_hole_rect(s))
             if s.get("kind") == "stairwell" and not is_switchback(s):
                 # head room over the flight's last STAIRWELL_HOLE, only as wide as the flight (BUILDING_GENERATOR.md 2026-11-18:
                 # a square hole cut the neighbouring lane of the switchback core, where the next flight starts)
