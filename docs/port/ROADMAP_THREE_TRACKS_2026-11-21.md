@@ -1,4 +1,4 @@
-# Roadmap: building generation -> smart enemies -> destruction (designer-agreed 2026-11-21, pending Lead approval of the week)
+# Roadmap: building generation -> smart enemies -> destruction (designer-agreed 2026-11-21; week APPROVED by Lead 2026-11-21 with 4 changes)
 
 The three mechanics form a chain: **buildings** produce space and data (entrances, windows, stairs, wall materials),
 **enemies** consume it (cover, entries, firing positions), **destruction** changes both at runtime. Changing the whole chain
@@ -8,9 +8,13 @@ at once makes failures unattributable. Destruction design: `docs/design/gdd/dest
 ## Rules
 1. **One hot track at a time** merges gameplay code into main; the other two work on data, spikes and tests in their branches.
 2. **Every mechanic behind a switch** (`Destruction=0`, `SoftCover=0`, ...); with it off, old seeds replay bit-identically, else no merge.
+   Until arena determinism lands (see the week below) this is not checkable: meanwhile the off arm must match main within the measured
+   A/A noise.
 3. **Enemies train on frozen reference buildings**: each stage fixes a reference set (story showcase + Crossroads); the generator
    may change, the references do not until the stage ends.
 4. **Every combat-changing step passes a paired A/B on the same seeds** (lesson 11-21: goal-zone cover made defence worse).
+   Paired A/B only once the arena is deterministic; until then independent samples, >= ~150 rounds per arm (Fisher / bootstrap),
+   plus an A/A run to measure the noise.
 5. **Destruction is data-only until stage 2**: the generator already emits materials, load-bearing walls, wall cells (P0).
 
 ## Stages
@@ -29,6 +33,10 @@ at once makes failures unattributable. Destruction design: `docs/design/gdd/dest
 ## Week 2026-11-22 .. 11-28 (stage 1) - for Lead approval
 - Bgen (19c): gable door + balconies + all-khrushchevka showcase (running) -> formation compression in tight rooms -> story variants
   (random by weight + manual override) -> openable doors (R1 runtime prerequisite) -> destruction P0 data (opening material, cells, validator).
-- Enemy AI session: defence finish line on Crossroads / Alley with paired A/B; goal-zone cover stays ON HOLD.
+- Openable doors change sight / cover / paths = combat-changing: they land behind a switch (off by default) and need the AI session's
+  A/B (doors on vs off on Crossroads / Alley + one showcase house) before the switch is turned on in main.
+- Enemy AI session, FIRST item: arena determinism (branch ai/arena-determinism, timebox 11-23; gate: same build + same seed 10x ->
+  same outcome; measured 11-21: the same seed gives a 5/5 split today, so paired A/B on seeds is not valid yet). Then the defence
+  finish line on Crossroads / Alley; goal-zone cover stays ON HOLD.
 - Destruction: no runtime code; designer answers the 9 forks of the studio review (section 7).
 - Worker: off overnight 11-21; powered on by hand on 11-22.
