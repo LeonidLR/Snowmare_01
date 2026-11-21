@@ -145,6 +145,13 @@ public:
 	 * Unset: yaw 0, and the sectors are still deterministic. Call it before SetTeamObjective, or after (the posts are split again).
 	 */
 	void SetDefenceApproach(int32 TeamId, const FVector& AttackerSpawn);
+	/** T-08: the "defence_roles" numbers in use (the pmc_commander.json block, read once, unless SetDefenceRolesConfig overrode it). */
+	const FPmcDefenceRolesConfig& GetDefenceRolesConfig() { return GetRolesConfig(); }
+	/**
+	 * T-08 slice 2: replaces the "defence_roles" numbers for this world (the arena's DefenceRoles= / Rule4AfterFire= args; the shipped file stays as it is).
+	 * Takes effect at the next defence refresh / fall-back update.
+	 */
+	void SetDefenceRolesConfig(const FPmcDefenceRolesConfig& InConfig) { RolesConfigCache = InConfig; }
 	/**
 	 * G008: the access a defender objective at this point would use (the tactical file, else the map's own levelgen layout).
 	 * Does not log and does not change a live plan. The roofs scenario skips a site whose access is unset.

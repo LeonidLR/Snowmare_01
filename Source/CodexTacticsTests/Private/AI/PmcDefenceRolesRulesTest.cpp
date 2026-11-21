@@ -145,6 +145,74 @@ bool FPmcFallBackRulesTest::RunTest(const FString&)
 	return true;
 }
 
+IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcRule4AfterFirstFireTest, "CodexTactics.AI.PmcDefenceRoles.Rule4AfterFirstFire",
+	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
+
+bool FPmcRule4AfterFirstFireTest::RunTest(const FString&)
+{
+	// T-08 slice 2 (designer decision 2026-11-21): with rule4_after_first_fire rule 4 waits for the defence's first shot; rules 1 / 2 and the finish gate
+	// are unchanged. Off (the shipped value) = slice 1: rule 4 fires on the clock alone.
+	using namespace PmcDefenceRolesTest;
+	const uint8 R1 = static_cast<uint8>(EPmcFallBackRule::ZoneEmptying);
+	const uint8 R4 = static_cast<uint8>(EPmcFallBackRule::NotInTime);
+	FPmcDefenceRolesConfig Off;
+	FPmcDefenceRolesConfig On;
+	On.bRule4AfterFirstFire = true;
+	TestFalse(TEXT("the code default is off (slice 1 behaviour)"), Off.bRule4AfterFirstFire);
+
+	// Not in time (edge 11 m / 220 = 5 s vs walk 3.45 s + 2 s), the zone held, nobody down.
+	FPmcFallBackSituation S = BaseSituation();
+	S.HammerPathCm = 2500.f;
+	S.NearestAttackerFromObjectiveCm = 1700.f;
+	S.KillZoneFromObjectiveCm = 0.f; // rule 2 out of the way
+	S.bDefenceHasFired = false;
+	{
+		const FPmcFallBackDecision D = PmcDefenceRoles::DecideFallBack(S, Off);
+		TestEqual(TEXT("off, before the first shot: rule 4 fires"), D.Rules, R4);
+		TestTrue(TEXT("off, before the first shot: falls back"), D.bFallBack);
+	}
+	{
+		const FPmcFallBackDecision D = PmcDefenceRoles::DecideFallBack(S, On);
+		TestEqual(TEXT("on, before the first shot: rule 4 waits"), D.Rules, static_cast<uint8>(0));
+		TestFalse(TEXT("on, before the first shot: no fall-back"), D.bFallBack);
+		TestFalse(TEXT("on, before the first shot: nothing for the finish gate"), D.bHeldByFinish);
+		TestEqual(TEXT("on: the slack is still computed (log lines)"), D.SlackS, 11.f * 100.f / 220.f - 2500.f / 725.f - 2.f, 0.01f);
+	}
+	S.bDefenceHasFired = true;
+	{
+		const FPmcFallBackDecision D = PmcDefenceRoles::DecideFallBack(S, On);
+		TestEqual(TEXT("on, after the first shot: rule 4 fires"), D.Rules, R4);
+		TestTrue(TEXT("on, after the first shot: falls back"), D.bFallBack);
+		TestEqual(TEXT("off, after the first shot: rule 4 fires too"), PmcDefenceRoles::DecideFallBack(S, Off).Rules, R4);
+	}
+	// Rule 1 is not gated by the setting: an empty zone with an attacker near still falls back before the first shot.
+	S.bDefenceHasFired = false;
+	S.bZoneHeld = false;
+	{
+		const FPmcFallBackDecision D = PmcDefenceRoles::DecideFallBack(S, On);
+		TestEqual(TEXT("on, before the first shot: rule 1 alone"), D.Rules, R1);
+		TestTrue(TEXT("on: rule 1 still falls back before the first shot"), D.bFallBack);
+		TestEqual(TEXT("off: rules 1 + 4"), PmcDefenceRoles::DecideFallBack(S, Off).Rules, static_cast<uint8>(R1 | R4));
+	}
+	// The finish gate holds whatever the setting.
+	S.bDefenceHasFired = true;
+	S.AttackersDown = 2;
+	{
+		const FPmcFallBackDecision D = PmcDefenceRoles::DecideFallBack(S, On);
+		TestEqual(TEXT("on, >= 2 down: the rules are reported"), D.Rules, static_cast<uint8>(R1 | R4));
+		TestFalse(TEXT("on, >= 2 down: nobody falls back"), D.bFallBack);
+		TestTrue(TEXT("on, >= 2 down: held by the finish gate"), D.bHeldByFinish);
+	}
+	// Rule 2 keeps its own first-shot gate (unchanged).
+	{
+		FPmcFallBackSituation Bypass = BaseSituation();
+		Bypass.NearestAttackerFromObjectiveCm = 800.f;
+		Bypass.bDefenceHasFired = true;
+		TestEqual(TEXT("on: rule 2 unchanged"), PmcDefenceRoles::DecideFallBack(Bypass, On).Rules, static_cast<uint8>(EPmcFallBackRule::Bypassed));
+	}
+	return true;
+}
+
 IMPLEMENT_SIMPLE_AUTOMATION_TEST(FPmcFallBackBoundingTest, "CodexTactics.AI.PmcDefenceRoles.Bounding",
 	EAutomationTestFlags::EditorContext | EAutomationTestFlags::EngineFilter)
 
@@ -249,7 +317,7 @@ bool FPmcDefenceRolesConfigTest::RunTest(const FString&)
 	const TSharedPtr<FJsonObject> Block = ParseBlock(TEXT(R"JSON({
 		"enabled": true, "holder_cover": false, "fall_back": false, "zone_near_m": 30, "bypass_margin_m": -3, "finish_down_min": 99, "known_max_age_s": 99,
 		"not_in_time_margin_s": 99, "bound_max_wait_s": -1, "move_timeout_s": 0, "kill_zone_clear_m": 10, "zone_min_quality": 2, "zone_no_line_factor": -1,
-		"zone_dist_weight": 5, "zone_min_spacing_m": 4, "zone_ray_reach_cm": 5, "max_zone_posts": 0, "max_path_queries": 500, "ignored_key": 7
+		"zone_dist_weight": 5, "zone_min_spacing_m": 4, "zone_ray_reach_cm": 5, "max_zone_posts": 0, "max_path_queries": 500, "rule4_after_first_fire": true, "ignored_key": 7
 	})JSON"));
 	TestTrue(TEXT("the block parses"), Block.IsValid());
 	if (Block.IsValid())
@@ -273,6 +341,7 @@ bool FPmcDefenceRolesConfigTest::RunTest(const FString&)
 		TestEqual(TEXT("zone_ray_reach_cm is at least 100"), Read.ZoneRayReachCm, 100.f, 0.001f);
 		TestEqual(TEXT("max_zone_posts is at least 1"), Read.MaxZonePosts, 1);
 		TestEqual(TEXT("max_path_queries clamps to 32"), Read.MaxPathQueries, 32);
+		TestTrue(TEXT("rule4_after_first_fire read"), Read.bRule4AfterFirstFire);
 		const TSharedPtr<FJsonObject> Empty = ParseBlock(TEXT("{}"));
 		TestTrue(TEXT("the empty block parses"), Empty.IsValid());
 		if (Empty.IsValid())
@@ -303,6 +372,7 @@ bool FPmcDefenceRolesConfigTest::RunTest(const FString&)
 	TestEqual(TEXT("shipped zone_ray_reach_cm"), Shipped.ZoneRayReachCm, Defaults.ZoneRayReachCm, 0.001f);
 	TestEqual(TEXT("shipped max_zone_posts"), Shipped.MaxZonePosts, Defaults.MaxZonePosts);
 	TestEqual(TEXT("shipped max_path_queries"), Shipped.MaxPathQueries, Defaults.MaxPathQueries);
+	TestFalse(TEXT("shipped rule4_after_first_fire is false (slice 1 behaviour)"), Shipped.bRule4AfterFirstFire);
 	return true;
 }
 

@@ -160,7 +160,9 @@
     "zone_min_spacing_m": 2.5,
     "zone_ray_reach_cm": 400,
     "max_zone_posts": 24,
-    "max_path_queries": 6
+    "max_path_queries": 6,
+    "_rule4_comment": "T-08 slice 2 (designer decision 2026-11-21): rule4_after_first_fire true = rule 4 (not in time) may pull a hammer off his position only once the defence has fired its first shot of the round (in slice 1 it fired alone in ~2/3 of the fall-backs, as the attackers entered the kill zone). false (shipped) = slice 1. Arena arg Rule4AfterFire=0|1 overrides it for one run. A bool: not a trainer gene.",
+    "rule4_after_first_fire": false
   },
   "engagement_bands": {
     "m16": { "min_m": 25, "max_m": 60 },

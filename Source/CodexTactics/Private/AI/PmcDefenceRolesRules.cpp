@@ -62,6 +62,7 @@ namespace PmcDefenceRoles
 		ReadBool(Block, TEXT("enabled"), Out.bEnabled);
 		ReadBool(Block, TEXT("holder_cover"), Out.bHolderCover);
 		ReadBool(Block, TEXT("fall_back"), Out.bFallBack);
+		ReadBool(Block, TEXT("rule4_after_first_fire"), Out.bRule4AfterFirstFire);
 		ReadMetres(Block, TEXT("zone_near_m"), Out.ZoneNearCm);
 		Out.ZoneNearCm = FMath::Max(Out.ZoneNearCm, 0.f);
 		ReadMetres(Block, TEXT("bypass_margin_m"), Out.BypassMarginCm);
@@ -158,13 +159,14 @@ namespace PmcDefenceRoles
 			{
 				Out.Rules |= static_cast<uint8>(EPmcFallBackRule::Bypassed);
 			}
-			// Rule 4: the attackers reach the zone edge before the hammer can be in it (+ margin).
+			// Rule 4: the attackers reach the zone edge before the hammer can be in it (+ margin). With rule4_after_first_fire (slice 2) only once the
+			// defence has opened fire: before that the hammers are springing the ambush, not late for the capture.
 			if (Situation.HammerPathCm >= 0.f && Situation.HammerSpeedCm > 0.f && Situation.AttackerSpeedCm > 0.f)
 			{
 				const float AttackerS = EdgeCm / Situation.AttackerSpeedCm;
 				const float HammerS = Situation.HammerPathCm / Situation.HammerSpeedCm;
 				Out.SlackS = FMath::Clamp(AttackerS - HammerS - Config.NotInTimeMarginS, -999.f, 999.f);
-				if (Out.SlackS < 0.f)
+				if (Out.SlackS < 0.f && (!Config.bRule4AfterFirstFire || Situation.bDefenceHasFired))
 				{
 					Out.Rules |= static_cast<uint8>(EPmcFallBackRule::NotInTime);
 				}

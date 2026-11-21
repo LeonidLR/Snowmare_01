@@ -62,12 +62,23 @@
 //   (open_idle_s, on_position_before_contact, crossfire_deg, first_shot_gap_s, spread_m) judged against the GDD's ambush criteria. They are
 //   RED on purpose until the squad plays (T-08): registered knownFail in Scripts/test_map.json. Failed preconditions are logged as
 //   "precondition", failed criteria as "A-00A.n" / "A-00B.n" so a red run says which of the two it is.
+// T-08 slice 2 variant switches (designer decisions 2026-11-21; all OFF by default = today's behaviour; paired A/B seeds run them from one build), for
+//   CodexTactics.PmcArena and every arena smoke:
+//   ZoneCover=0|1 - each objective round gets low-cover blocks inside the zone facing the attackers' approach (AI/PmcZoneCoverRules.h,
+//     Content/Data/AI/pmc_arena_zone_cover.json): placed after the site / spawns, before any squad spawns; the round waits (stage 5) for the navmesh
+//     rebuild, then spawns; the blocks are destroyed at the round's end. Log "[PmcArena] zone cover: ...".
+//   DefenceRoles=0|1 - 1 turns on firing_positions.defence_use + keep_occupier + defence_roles.enabled for the run (the shipped JSON stays false).
+//   Rule4AfterFire=0|1 - overrides defence_roles.rule4_after_first_fire (fall-back rule 4 only after the defence's first shot).
+//   rounds[].config echoes them: zone_cover, defence_roles, rule4_after_fire (effective), defence_use, keep_occupier, defence_roles_enabled and, with
+//   ZoneCover=1, zone_cover_blocks / _skipped / _approach_from_path / _approach_yaw_deg / _nav_ready / _nav_cut / _fighters_inside.
 
 #include "CoreMinimal.h"
 
 #if !UE_BUILD_SHIPPING
 
 #include "AI/AmbushWatchRules.h"
+#include "AI/FiringPositionSubsystem.h"
+#include "AI/NavigationSystemBase.h"
 #include "AI/PmcArenaBehaviourRules.h"
 #include "AI/PmcArenaPlayArea.h"
 #include "AI/PmcArenaRoundRules.h"
@@ -77,6 +88,7 @@
 #include "AI/PmcDefenceRules.h"
 #include "AI/PmcSquadSubsystem.h"
 #include "AI/PmcTacticalRules.h"
+#include "AI/PmcZoneCoverRules.h"
 #include "AI/SquadOrderCatalog.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Bot/PlaytestBotRules.h"
@@ -97,7 +109,12 @@
 #include "Environment/EnvironmentSubsystem.h"
 #include "Debug/SmokeUtils.h"
 #include "Dom/JsonObject.h"
+#include "Components/StaticMeshComponent.h"
+#include "Engine/CollisionProfile.h"
 #include "Engine/GameViewportClient.h"
+#include "Engine/OverlapResult.h"
+#include "Engine/StaticMesh.h"
+#include "Engine/StaticMeshActor.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -215,6 +232,16 @@ namespace PmcArena
 		 * sides' spawns (PmcArenaRoundRules::IsReachableFromBoth), else another point; off = the old placement (the measurement).
 		 */
 		bool bObjectiveReach = true;
+		/**
+		 * T-08 slice 2 (designer decisions 2026-11-21), all OFF by default (= today's behaviour), switchable per run for paired A/B seeds from one build:
+		 * ZoneCover=0|1 - low-cover blocks inside the objective zone facing the attackers' approach (PmcZoneCoverRules, pmc_arena_zone_cover.json), placed
+		 * before the squads spawn, the round waits for the navmesh rebuild, destroyed at the round's end;
+		 * DefenceRoles=0|1 - 1 turns on firing_positions.defence_use + keep_occupier + defence_roles.enabled for this run (0 / absent: the shipped JSON);
+		 * Rule4AfterFire=0|1 - overrides defence_roles.rule4_after_first_fire (-1 = absent: the JSON's value).
+		 */
+		bool bZoneCover = false;
+		bool bDefenceRoles = false;
+		int32 Rule4AfterFire = -1;
 	};
 
 	/** PmcStalemateSmoke's limits (the designer 2026-11-08): the fight resumes within this after a quiet spell, s. */
@@ -351,6 +378,20 @@ namespace PmcArena
 		float GuardShare = 0.f;
 		int32 SharedCoverPairs = 0;
 		float ObjectiveShare = 0.f;
+		/** T-08 slice 2: the round's variant switches (rounds[].config) and the zone cover placed. */
+		bool bZoneCover = false;
+		bool bDefenceRoles = false;
+		bool bRule4AfterFire = false;
+		bool bDefenceUse = false;
+		bool bKeepOccupier = false;
+		bool bDefenceRolesEnabled = false;
+		int32 ZoneCoverBlocks = 0;
+		int32 ZoneCoverSkipped = 0;
+		bool bZoneCoverFromPath = false;
+		bool bZoneCoverNavReady = true;
+		int32 ZoneCoverNavCut = 0;
+		int32 ZoneCoverFightersInside = 0;
+		float ZoneCoverApproachYaw = 0.f;
 	};
 
 	/** The last hit a fighter took (the HP drops of the next samples are that shooter's damage). */
@@ -538,6 +579,29 @@ namespace PmcArena
 		TArray<int32> LadderRoofsPicked;
 		/** Opponent=Script (T-03): this round's walk. */
 		FScriptRun Script;
+		/** StartRound's placement half handed to its spawn half (T-08 slice 2: with ZoneCover=1 the navmesh rebuild is awaited between them, stage 5). */
+		struct FRoundPrep
+		{
+			int32 Seed = 0;
+			int32 AttackerIndex = 1;
+			EPmcScenario Scenario = EPmcScenario::Skirmish;
+			FString ScenarioRequested;
+			bool bTacticalRound = false;
+			bool bRandomPair = false;
+		} Prep;
+		/** T-08 slice 2 (ZoneCover=1): this round's blocks (destroyed at its end), their footprints, the placement facts for rounds[].config. */
+		TArray<TWeakObjectPtr<AActor>> ZoneCoverActors;
+		TArray<FPmcZoneCoverBlock> ZoneCoverBlocks;
+		int32 ZoneCoverSkipped = 0;
+		bool bZoneCoverFromPath = false;
+		float ZoneCoverApproachYaw = 0.f;
+		bool bZoneCoverNavReady = true;
+		int32 ZoneCoverNavCut = 0;
+		/** The run's effective defence switches (stage 0, after the DefenceRoles= / Rule4AfterFire= overrides). */
+		bool bDefenceUse = false;
+		bool bKeepOccupier = false;
+		bool bDefenceRolesEnabled = false;
+		bool bRule4AfterFire = false;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -586,6 +650,13 @@ namespace PmcArena
 			else if (Key == TEXT("playarea")) { Options.bPlayArea = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
 			else if (Key == TEXT("rocketcontact")) { Options.bRocketContact = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
 			else if (Key == TEXT("objectivereach")) { Options.bObjectiveReach = !(Value.Equals(TEXT("off"), ESearchCase::IgnoreCase) || Value == TEXT("0")); }
+			else if (Key == TEXT("zonecover")) { Options.bZoneCover = Value == TEXT("1") || Value.Equals(TEXT("on"), ESearchCase::IgnoreCase); }
+			else if (Key == TEXT("defenceroles")) { Options.bDefenceRoles = Value == TEXT("1") || Value.Equals(TEXT("on"), ESearchCase::IgnoreCase); }
+			else if (Key == TEXT("rule4afterfire"))
+			{
+				Options.Rule4AfterFire = (Value == TEXT("1") || Value.Equals(TEXT("on"), ESearchCase::IgnoreCase)) ? 1
+					: ((Value == TEXT("0") || Value.Equals(TEXT("off"), ESearchCase::IgnoreCase)) ? 0 : -1);
+			}
 			else if (Key == TEXT("scenario"))
 			{
 				EPmcScenario Scenario = EPmcScenario::Skirmish;
@@ -2592,6 +2663,27 @@ namespace PmcArena
 			// fix/pmc-arena-stalemate: a round without a shot between the sides is a no-reward draw for the trainer; the fight flow numbers.
 			Round->SetBoolField(TEXT("contact"), Result.bContact);
 			{
+				// T-08 slice 2: which variant ran (the switches as given + the effective defence flags) and the zone cover placed - for the A/B digest.
+				TSharedRef<FJsonObject> Variant = MakeShared<FJsonObject>();
+				Variant->SetBoolField(TEXT("zone_cover"), Result.bZoneCover);
+				Variant->SetBoolField(TEXT("defence_roles"), Result.bDefenceRoles);
+				Variant->SetBoolField(TEXT("rule4_after_fire"), Result.bRule4AfterFire);
+				Variant->SetBoolField(TEXT("defence_use"), Result.bDefenceUse);
+				Variant->SetBoolField(TEXT("keep_occupier"), Result.bKeepOccupier);
+				Variant->SetBoolField(TEXT("defence_roles_enabled"), Result.bDefenceRolesEnabled);
+				if (Result.bZoneCover)
+				{
+					Variant->SetNumberField(TEXT("zone_cover_blocks"), Result.ZoneCoverBlocks);
+					Variant->SetNumberField(TEXT("zone_cover_skipped"), Result.ZoneCoverSkipped);
+					Variant->SetBoolField(TEXT("zone_cover_approach_from_path"), Result.bZoneCoverFromPath);
+					Variant->SetNumberField(TEXT("zone_cover_approach_yaw_deg"), FMath::RoundToFloat(Result.ZoneCoverApproachYaw));
+					Variant->SetBoolField(TEXT("zone_cover_nav_ready"), Result.bZoneCoverNavReady);
+					Variant->SetNumberField(TEXT("zone_cover_nav_cut"), Result.ZoneCoverNavCut);
+					Variant->SetNumberField(TEXT("zone_cover_fighters_inside"), Result.ZoneCoverFightersInside);
+				}
+				Round->SetObjectField(TEXT("config"), Variant);
+			}
+			{
 				TSharedRef<FJsonObject> Flow = MakeShared<FJsonObject>();
 				auto Round1 = [](float Value) { return FMath::RoundToFloat(Value * 10.f) / 10.f; };
 				Flow->SetNumberField(TEXT("shots_per_min"), Round1(Result.ShotsPerMin));
@@ -3019,10 +3111,13 @@ namespace PmcArena
 		Check(State, Json->TryGetObjectField(TEXT("summary"), Summary) && (*Summary)->HasField(TEXT("A_wins")), TEXT("summary present"));
 	}
 
+	void ClearZoneCover(FState& State, UWorld* World);
+
 	bool Finish(FState& State, UWorld* World, bool bComplete)
 	{
 		if (World)
 		{
+			ClearZoneCover(State, World);
 			if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
 			{
 				Pmc->DestroyTeam(TeamA);
@@ -3213,13 +3308,250 @@ namespace PmcArena
 		return Json;
 	}
 
-	void StartRound(FState& State, UWorld* World)
+	// --- T-08 slice 2: zone cover (ZoneCover=1) ----------------------------------------------------------------------------------------
+
+	/** Tag on the arena's zone cover blocks (log / debug lookups). */
+	const FName ZoneCoverTag(TEXT("PmcArenaZoneCover"));
+	/** Stage 5 waits at least this long after the blocks spawn (the nav octree takes their dirty areas on its next tick), then until the navmesh is idle. */
+	constexpr float ZoneCoverNavMinWaitSeconds = 0.3f;
+	constexpr float ZoneCoverNavTimeoutSeconds = 30.f;
+
+	/** The round's zone cover blocks are destroyed (the round's end / the run's end); the firing-position cache forgets their walls. */
+	void ClearZoneCover(FState& State, UWorld* World)
+	{
+		int32 Destroyed = 0;
+		for (const TWeakObjectPtr<AActor>& Block : State.ZoneCoverActors)
+		{
+			if (AActor* Actor = Block.Get())
+			{
+				Actor->Destroy();
+				++Destroyed;
+			}
+		}
+		State.ZoneCoverActors.Reset();
+		State.ZoneCoverBlocks.Reset();
+		if (Destroyed > 0)
+		{
+			if (UFiringPositionSubsystem* Service = World ? World->GetSubsystem<UFiringPositionSubsystem>() : nullptr)
+			{
+				Service->InvalidateCache();
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] zone cover: %d blocks removed (round %d over)"), Destroyed, State.Round);
+		}
+	}
+
+	/** Fighters (both sides) whose capsule stands inside a zone cover block's footprint and height (must stay 0: FreeSpot / the navmesh keep them out). */
+	int32 CountFightersInsideZoneCover(const FState& State)
+	{
+		int32 Inside = 0;
+		for (const FSide& Side : State.Sides)
+		{
+			for (const TWeakObjectPtr<AOperativeCharacter>& Member : Side.Members)
+			{
+				const AOperativeCharacter* Operative = Member.Get();
+				if (!Operative)
+				{
+					continue;
+				}
+				const FVector Feet = FeetOf(*Operative);
+				const float CapsuleRadius = Operative->GetSimpleCollisionRadius();
+				for (const FPmcZoneCoverBlock& Block : State.ZoneCoverBlocks)
+				{
+					const bool bLevel = Feet.Z < Block.Centre.Z + Block.HalfExtent.Z * 2.f - 5.f && Feet.Z + 2.f * Operative->GetSimpleCollisionHalfHeight() > Block.Centre.Z;
+					if (bLevel && PmcZoneCover::FootprintDistance(Block, Feet) < CapsuleRadius - 5.f)
+					{
+						++Inside;
+						UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] zone cover: %s stands inside block slot %d at %s"), *Operative->DisplayName.ToString(), Block.Slot,
+							*Block.Centre.ToCompactString());
+						break;
+					}
+				}
+			}
+		}
+		return Inside;
+	}
+
+	/**
+	 * ZoneCover=1: the round's low-cover blocks inside the objective zone, before any fighter spawns (PrepareRound placed the objective and the spawns).
+	 * The approach = toward where the attackers' nav path (their spawn -> the objective) enters the zone, else toward their spawn (PmcZoneCover). Each
+	 * planned block is snapped to the ground under it and skipped when it is off the navmesh / off the objective's level, overlaps world geometry or a
+	 * pawn, or comes within spawn_clear_m of a side's spawn. Spawned: an AStaticMeshActor (/Engine/BasicShapes/Cube, Movable, BlockAll - blocks
+	 * ECC_Visibility, so CoverTraceRules finds it; affects the navmesh). Returns the blocks spawned (0: the round goes on at once).
+	 */
+	int32 PlaceZoneCover(FState& State, UWorld* World)
+	{
+		ClearZoneCover(State, World);
+		State.ZoneCoverSkipped = 0;
+		State.bZoneCoverFromPath = false;
+		State.ZoneCoverApproachYaw = 0.f;
+		State.bZoneCoverNavReady = true;
+		State.ZoneCoverNavCut = 0;
+		const int32 Seed = State.Prep.Seed;
+		if (!State.bRoundObjective)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] zone cover: seed %d has no objective - no blocks"), Seed);
+			return 0;
+		}
+		const FPmcZoneCoverConfig Config = PmcZoneCover::LoadConfig();
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		const FSide& Attackers = State.Sides[State.Prep.AttackerIndex];
+		const FSide& Defenders = State.Sides[1 - State.Prep.AttackerIndex];
+		const float Radius = State.Config.ObjectiveRadiusCm;
+		TArray<FVector> Path;
+		if (const UNavigationPath* NavPath = Nav ? Nav->FindPathToLocationSynchronously(World, Attackers.Spawn, State.Objective) : nullptr)
+		{
+			if (NavPath->IsValid())
+			{
+				Path = NavPath->PathPoints;
+			}
+		}
+		bool bFromPath = false;
+		const FVector2D Approach = PmcZoneCover::ApproachDirection(State.Objective, Radius, Path, Attackers.Spawn, &bFromPath);
+		State.bZoneCoverFromPath = bFromPath;
+		State.ZoneCoverApproachYaw = FMath::RadiansToDegrees(FMath::Atan2(static_cast<float>(Approach.Y), static_cast<float>(Approach.X)));
+		TArray<FString> Skipped;
+		const TArray<FPmcZoneCoverBlock> Planned = PmcZoneCover::LayoutBlocks(State.Objective, Approach, Radius, Config, &Skipped);
+		UStaticMesh* Cube = LoadObject<UStaticMesh>(nullptr, TEXT("/Engine/BasicShapes/Cube.Cube"));
+		if (!Cube)
+		{
+			UE_LOG(LogCodexTactics, Error, TEXT("[PmcArena] zone cover: /Engine/BasicShapes/Cube did not load - no blocks"));
+			State.ZoneCoverSkipped = Planned.Num() + Skipped.Num();
+			return 0;
+		}
+		const FCollisionQueryParams Params(SCENE_QUERY_STAT(PmcArenaZoneCover), false);
+		FCollisionObjectQueryParams Geometry;
+		Geometry.AddObjectTypesToQuery(ECC_WorldStatic);
+		Geometry.AddObjectTypesToQuery(ECC_WorldDynamic);
+		Geometry.AddObjectTypesToQuery(ECC_PhysicsBody);
+		Geometry.AddObjectTypesToQuery(ECC_Destructible);
+		const FCollisionObjectQueryParams PawnsOnly(ECC_Pawn);
+		FString Placed;
+		for (FPmcZoneCoverBlock Block : Planned)
+		{
+			const FString Where = FString::Printf(TEXT("slot %d at %s"), Block.Slot, *Block.Centre.ToCompactString());
+			// On the navmesh, and the ground under the footprint's centre (pawns ignored) at the objective's level.
+			FNavLocation OnNav;
+			if (Nav && !Nav->ProjectPointToNavigation(Block.Centre, OnNav, FVector(60.f, 60.f, Config.GroundMaxDzCm + 50.f)))
+			{
+				Skipped.Add(FString::Printf(TEXT("%s: off the navmesh"), *Where));
+				continue;
+			}
+			FHitResult Floor;
+			const FVector Probe(Block.Centre.X, Block.Centre.Y, State.Objective.Z);
+			if (!World->LineTraceSingleByObjectType(Floor, Probe + FVector(0.f, 0.f, 150.f), Probe - FVector(0.f, 0.f, 300.f), Geometry, Params))
+			{
+				Skipped.Add(FString::Printf(TEXT("%s: no ground under it"), *Where));
+				continue;
+			}
+			const float GroundZ = static_cast<float>(Floor.ImpactPoint.Z);
+			if (FMath::Abs(GroundZ - static_cast<float>(State.Objective.Z)) > Config.GroundMaxDzCm)
+			{
+				Skipped.Add(FString::Printf(TEXT("%s: ground %.0f cm off the objective's level (%s)"), *Where, GroundZ - State.Objective.Z,
+					Floor.GetActor() ? *Floor.GetActor()->GetName() : TEXT("?")));
+				continue;
+			}
+			Block.Centre.Z = GroundZ;
+			const FQuat Rotation = FRotator(0.f, Block.YawDeg, 0.f).Quaternion();
+			// The overlap test box: lifted 10 cm off the ground (the floor itself is no obstacle), 2 cm inside the block's sides.
+			const FVector Half(FMath::Max(1.f, Block.HalfExtent.X - 2.f), FMath::Max(1.f, Block.HalfExtent.Y - 2.f), FMath::Max(1.f, Block.HalfExtent.Z - 5.f));
+			const FVector BoxCentre(Block.Centre.X, Block.Centre.Y, GroundZ + 10.f + Half.Z);
+			TArray<FOverlapResult> Overlaps;
+			World->OverlapMultiByObjectType(Overlaps, BoxCentre, Rotation, Geometry, FCollisionShape::MakeBox(Half), Params);
+			const FOverlapResult* Solid = Overlaps.FindByPredicate([](const FOverlapResult& Overlap)
+				{ return Overlap.GetActor() && !Cast<APawn>(Overlap.GetActor()) && Overlap.Component.IsValid() && Overlap.Component->IsCollisionEnabled(); });
+			if (Solid)
+			{
+				Skipped.Add(FString::Printf(TEXT("%s: overlaps world geometry %s"), *Where, *Solid->GetActor()->GetName()));
+				continue;
+			}
+			TArray<FOverlapResult> Pawns;
+			World->OverlapMultiByObjectType(Pawns, BoxCentre, Rotation, PawnsOnly, FCollisionShape::MakeBox(Half), Params);
+			const FOverlapResult* PawnHit = Pawns.FindByPredicate([](const FOverlapResult& Overlap) { return Cast<APawn>(Overlap.GetActor()) != nullptr; });
+			if (PawnHit)
+			{
+				Skipped.Add(FString::Printf(TEXT("%s: a fighter stands there (%s)"), *Where, *PawnHit->GetActor()->GetName()));
+				continue;
+			}
+			const FSide* NearSpawn = nullptr;
+			for (const FSide* Side : { &Attackers, &Defenders })
+			{
+				if (FMath::Abs(static_cast<float>(Side->Spawn.Z) - GroundZ) < 300.f && PmcZoneCover::FootprintDistance(Block, Side->Spawn) < Config.SpawnClearCm)
+				{
+					NearSpawn = Side;
+					break;
+				}
+			}
+			if (NearSpawn)
+			{
+				Skipped.Add(FString::Printf(TEXT("%s: within %.1f m of side %s's spawn"), *Where, Config.SpawnClearCm / 100.f, *NearSpawn->Label));
+				continue;
+			}
+			// The engine cube is 100 cm a side round its centre: scaled to depth x length x height, standing on the ground.
+			const FTransform Transform(Rotation, FVector(Block.Centre.X, Block.Centre.Y, GroundZ + Block.HalfExtent.Z),
+				FVector(Block.HalfExtent.X * 2.f / 100.f, Block.HalfExtent.Y * 2.f / 100.f, Block.HalfExtent.Z * 2.f / 100.f));
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+			AStaticMeshActor* Actor = World->SpawnActor<AStaticMeshActor>(AStaticMeshActor::StaticClass(), Transform, SpawnParams);
+			UStaticMeshComponent* Mesh = Actor ? Actor->GetStaticMeshComponent() : nullptr;
+			if (!Mesh)
+			{
+				Skipped.Add(FString::Printf(TEXT("%s: the actor did not spawn"), *Where));
+				continue;
+			}
+			Actor->Tags.Add(ZoneCoverTag);
+			// Movable first: a Static component refuses a new mesh once the world has begun play.
+			Mesh->SetMobility(EComponentMobility::Movable);
+			Mesh->SetStaticMesh(Cube);
+			Mesh->SetCollisionProfileName(UCollisionProfile::BlockAll_ProfileName);
+			Mesh->SetCanEverAffectNavigation(true);
+			Actor->SetActorTransform(Transform);
+			FNavigationSystem::UpdateComponentData(*Mesh);
+			State.ZoneCoverActors.Add(Actor);
+			State.ZoneCoverBlocks.Add(Block);
+			Placed += FString::Printf(TEXT("%s%s%s yaw %.0f (%.1f m)"), Placed.IsEmpty() ? TEXT("") : TEXT("; "), *Where, Block.bPulledIn ? TEXT(" pulled in") : TEXT(""),
+				Block.YawDeg, Block.DistCm / 100.f);
+		}
+		State.ZoneCoverSkipped = Skipped.Num();
+		if (!State.ZoneCoverActors.IsEmpty())
+		{
+			if (UFiringPositionSubsystem* Service = World->GetSubsystem<UFiringPositionSubsystem>())
+			{
+				Service->InvalidateCache();
+			}
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] zone cover: %d blocks at %s (approach dir %.0f deg %s, %.0f x %.0f x %.0f cm, zone r %.0f m; skipped %d%s%s)"),
+			State.ZoneCoverActors.Num(), Placed.IsEmpty() ? TEXT("-") : *Placed, State.ZoneCoverApproachYaw,
+			bFromPath ? TEXT("from the attackers' nav path entering the zone") : TEXT("toward the attackers' spawn (no path entry)"), Config.LengthCm, Config.DepthCm,
+			Config.HeightCm, Radius / 100.f, Skipped.Num(), Skipped.IsEmpty() ? TEXT("") : TEXT(": "), *FString::Join(Skipped, TEXT("; ")));
+		return State.ZoneCoverActors.Num();
+	}
+
+	/** After the navmesh rebuild: how many blocks cut the navmesh (no navmesh point right over the footprint's centre) - the evidence they affect navigation. */
+	void CheckZoneCoverNav(FState& State, UWorld* World)
+	{
+		UNavigationSystemV1* Nav = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+		State.ZoneCoverNavCut = 0;
+		for (const FPmcZoneCoverBlock& Block : State.ZoneCoverBlocks)
+		{
+			FNavLocation OnNav;
+			const bool bOnNav = Nav && Nav->ProjectPointToNavigation(Block.Centre + FVector(0.f, 0.f, 30.f), OnNav, FVector(5.f, 5.f, Block.HalfExtent.Z * 2.f + 60.f));
+			State.ZoneCoverNavCut += bOnNav ? 0 : 1;
+		}
+		UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] zone cover: navmesh %s after %.1f s, cut under %d of %d blocks"),
+			State.bZoneCoverNavReady ? TEXT("rebuilt") : TEXT("STILL BUSY (timeout)"), State.StageTime, State.ZoneCoverNavCut, State.ZoneCoverBlocks.Num());
+	}
+
+	/**
+	 * A round's placement half: the seed, the attacker, the scenario site / spawns / objective and its reach (no fighter yet). SpawnRound is the rest; with
+	 * ZoneCover=1 the zone cover goes in between (T-08 slice 2), else both run in the same step exactly as before. False = no PMC / squad subsystem.
+	 */
+	bool PrepareRound(FState& State, UWorld* World)
 	{
 		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
 		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
 		if (!Pmc || !Squad)
 		{
-			return;
+			return false;
 		}
 		++State.Round;
 		// The round's own seed (base + round - 1, the trainer's convention): Rounds=1 Seed=<it> replays this round - its spawns, looks,
@@ -3303,6 +3635,31 @@ namespace PmcArena
 				UE_LOG(LogCodexTactics, Warning, TEXT("%s"), *Line);
 			}
 		}
+		State.Prep.Seed = Seed;
+		State.Prep.AttackerIndex = AttackerIndex;
+		State.Prep.Scenario = Scenario;
+		State.Prep.ScenarioRequested = ScenarioRequested;
+		State.Prep.bTacticalRound = bTacticalRound;
+		State.Prep.bRandomPair = bRandomPair;
+		return true;
+	}
+
+	/** A round's spawn half (after PrepareRound): weather, both squads, their orders and the objective, the round's result record, the track. */
+	void SpawnRound(FState& State, UWorld* World)
+	{
+		UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World);
+		USquadSubsystem* Squad = World->GetSubsystem<USquadSubsystem>();
+		if (!Pmc || !Squad)
+		{
+			return;
+		}
+		const int32 Seed = State.Prep.Seed;
+		const bool bAAttacks = State.bAAttacks;
+		const int32 AttackerIndex = State.Prep.AttackerIndex;
+		const EPmcScenario Scenario = State.Prep.Scenario;
+		const FString ScenarioRequested = State.Prep.ScenarioRequested;
+		const bool bTacticalRound = State.Prep.bTacticalRound;
+		const bool bRandomPair = State.Prep.bRandomPair;
 		State.Clock = FPmcObjectiveClock();
 		State.Clock.HoldSeconds = State.Config.HoldSeconds;
 		const FString Weather = ApplyWeather(State, World, Scenario == EPmcScenario::Blizzard);
@@ -3471,6 +3828,20 @@ namespace PmcArena
 		Result.bReachAttacker = State.bReachAttacker;
 		Result.bReachDefender = State.bReachDefender;
 		Result.bTacticalMap = State.bTacticalMap;
+		// T-08 slice 2: the variant switches and the zone cover (rounds[].config).
+		Result.bZoneCover = State.Options.bZoneCover;
+		Result.bDefenceRoles = State.Options.bDefenceRoles;
+		Result.bRule4AfterFire = State.bRule4AfterFire;
+		Result.bDefenceUse = State.bDefenceUse;
+		Result.bKeepOccupier = State.bKeepOccupier;
+		Result.bDefenceRolesEnabled = State.bDefenceRolesEnabled;
+		Result.ZoneCoverBlocks = State.ZoneCoverBlocks.Num();
+		Result.ZoneCoverSkipped = State.ZoneCoverSkipped;
+		Result.bZoneCoverFromPath = State.bZoneCoverFromPath;
+		Result.bZoneCoverNavReady = State.bZoneCoverNavReady;
+		Result.ZoneCoverNavCut = State.ZoneCoverNavCut;
+		Result.ZoneCoverApproachYaw = State.ZoneCoverApproachYaw;
+		Result.ZoneCoverFightersInside = CountFightersInsideZoneCover(State);
 		if (bTacticalRound)
 		{
 			Result.RouteM = 0.f;
@@ -3576,6 +3947,7 @@ namespace PmcArena
 		Result.ObjectiveResult = Outcome.ObjectiveResult;
 		Result.AttackerHeld = State.Clock.Held;
 		SampleTrack(State, World, TrackInterval); // the last sample
+		ClearZoneCover(State, World); // T-08 slice 2: the next round places its own (the breather + the nav gate let the navmesh heal)
 		Result.EndReason = Outcome.Reason;
 		if (State.Options.Opponent == EOpponent::Script)
 		{
@@ -3872,6 +4244,37 @@ namespace PmcArena
 				Horde->RefreshConfig();
 				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] the horde is %s in the arena (Codex.Horde.Enabled 0)"), Horde->GetConfig().bEnabled ? TEXT("STILL ON") : TEXT("off"));
 			}
+			// T-08 slice 2 (designer decisions 2026-11-21): the run's defence variant. DefenceRoles=1 turns on firing_positions.defence_use + keep_occupier
+			// (world-wide, but only the defence reads them) and defence_roles.enabled; Rule4AfterFire=0|1 overrides defence_roles.rule4_after_first_fire.
+			// Without the args nothing is overridden: the shipped JSON decides (today's behaviour).
+			{
+				UFiringPositionSubsystem* FiringService = World->GetSubsystem<UFiringPositionSubsystem>();
+				if (State.Options.bDefenceRoles && FiringService)
+				{
+					FFiringPositionConfig Firing = FiringService->GetConfig();
+					Firing.bDefenceUse = true;
+					Firing.bKeepOccupier = true;
+					FiringService->SetConfig(Firing);
+				}
+				if (State.Options.bDefenceRoles || State.Options.Rule4AfterFire >= 0)
+				{
+					FPmcDefenceRolesConfig Roles = Pmc->GetDefenceRolesConfig();
+					Roles.bEnabled = Roles.bEnabled || State.Options.bDefenceRoles;
+					if (State.Options.Rule4AfterFire >= 0)
+					{
+						Roles.bRule4AfterFirstFire = State.Options.Rule4AfterFire == 1;
+					}
+					Pmc->SetDefenceRolesConfig(Roles);
+				}
+				State.bDefenceUse = FiringService && FiringService->GetConfig().bDefenceUse;
+				State.bKeepOccupier = FiringService && FiringService->GetConfig().bKeepOccupier;
+				State.bDefenceRolesEnabled = Pmc->GetDefenceRolesConfig().bEnabled;
+				State.bRule4AfterFire = Pmc->GetDefenceRolesConfig().bRule4AfterFirstFire;
+				UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] variant: ZoneCover=%d DefenceRoles=%d Rule4AfterFire=%s -> defence_use %d, keep_occupier %d, defence_roles.enabled %d, rule4_after_first_fire %d"),
+					State.Options.bZoneCover ? 1 : 0, State.Options.bDefenceRoles ? 1 : 0,
+					State.Options.Rule4AfterFire < 0 ? TEXT("json") : (State.Options.Rule4AfterFire == 1 ? TEXT("1") : TEXT("0")), State.bDefenceUse ? 1 : 0,
+					State.bKeepOccupier ? 1 : 0, State.bDefenceRolesEnabled ? 1 : 0, State.bRule4AfterFire ? 1 : 0);
+			}
 			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] objective %s: radius %.0f m, hold %.0f s, offset %.2f (%s); scenario %s"), State.Options.bObjective ? TEXT("on") : TEXT("off"),
 				State.Config.ObjectiveRadiusCm / 100.f, State.Config.HoldSeconds, State.Config.ObjectiveOffsetFrac, *State.Config.Source,
 				State.Options.Scenario < 0 ? TEXT("random") : PmcCommanderRules::ScenarioName(static_cast<EPmcScenario>(State.Options.Scenario)));
@@ -3887,11 +4290,38 @@ namespace PmcArena
 			return true;
 		}
 		case 1: // a round starts
-			StartRound(State, World);
+			PrepareRound(State, World);
+			// T-08 slice 2 (ZoneCover=1): the blocks first, then the navmesh rebuild of their dirty areas (stage 5) before any squad spawns / plans.
+			if (State.Options.bZoneCover && PlaceZoneCover(State, World) > 0)
+			{
+				State.Stage = 5;
+				State.StageTime = 0.f;
+				return true;
+			}
+			SpawnRound(State, World);
 			State.Stage = 2;
 			State.StageTime = 0.f;
 			SamplePositions(State, *World);
 			return true;
+		case 5: // ZoneCover=1: wait for the navmesh to take the blocks (at least ZoneCoverNavMinWaitSeconds, then until idle; a timeout goes on, flagged)
+		{
+			const bool bBusy = UNavigationSystemV1::IsNavigationBeingBuiltOrLocked(World);
+			if ((State.StageTime < ZoneCoverNavMinWaitSeconds || bBusy) && State.StageTime < ZoneCoverNavTimeoutSeconds)
+			{
+				return true;
+			}
+			State.bZoneCoverNavReady = !bBusy;
+			if (bBusy)
+			{
+				UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] zone cover: the navmesh is still busy after %.0f s - the round starts anyway"), ZoneCoverNavTimeoutSeconds);
+			}
+			CheckZoneCoverNav(State, World);
+			SpawnRound(State, World);
+			State.Stage = 2;
+			State.StageTime = 0.f;
+			SamplePositions(State, *World);
+			return true;
+		}
 		case 2: // the fight
 		{
 			SampleTrack(State, World, StepSeconds);
@@ -4072,7 +4502,7 @@ namespace PmcArena
 
 	static FAutoConsoleCommandWithWorldAndArgs Command(
 		TEXT("CodexTactics.PmcArena"),
-		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot|script script=run|bound time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical; writes Saved/Arena/<timestamp>.json, then exits."),
+		TEXT("PMC self-play arena: rounds=N seed=S weightsA=<file> weightsB=<file> opponent=pmc|player|bot|script script=run|bound time=<s> squad=<n> distance=<cm> shot=0|1 objective=0|1 scenario=random|skirmish|chokepoint|street|roofs|blizzard|tactical zonecover=0|1 defenceroles=0|1 rule4afterfire=0|1; writes Saved/Arena/<timestamp>.json, then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&Run));
 
 	static FAutoConsoleCommandWithWorldAndArgs SmokeCommand(

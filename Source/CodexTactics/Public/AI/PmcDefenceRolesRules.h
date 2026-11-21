@@ -81,6 +81,11 @@ struct CODEXTACTICS_API FPmcDefenceRolesConfig
 	int32 MaxZonePosts = 24;
 	/** "max_path_queries" (6): nav-path queries per hammer per defence refresh (his fall-back plan). */
 	int32 MaxPathQueries = 6;
+	/**
+	 * "rule4_after_first_fire" (false; T-08 slice 2, designer decision 2026-11-21): rule 4 ("not in time") may fire only once the defence has fired its
+	 * first shot of the round. false = slice 1 (rule 4 fires on the clock alone). Arena arg Rule4AfterFire=0|1 overrides it for one run.
+	 */
+	bool bRule4AfterFirstFire = false;
 };
 
 /** What the squad knows when it decides about ONE hammer. */
@@ -141,7 +146,8 @@ namespace PmcDefenceRoles
 	/**
 	 * The three rules for one hammer. Rule 1: nobody holds the zone and an attacker is within ZoneNearCm of its edge. Rule 2: an attacker is nearer the objective
 	 * than the kill zone by more than BypassMarginCm, and the defence has fired (before its first shot only rules 1 and 4 may force a fall-back). Rule 4: the
-	 * attackers' time to the zone edge (nearest attacker, AttackerSpeedCm) is less than the hammer's path time + NotInTimeMarginS. No known attacker = no rule.
+	 * attackers' time to the zone edge (nearest attacker, AttackerSpeedCm) is less than the hammer's path time + NotInTimeMarginS; with bRule4AfterFirstFire
+	 * only after the defence has fired (SlackS is still computed before that). No known attacker = no rule.
 	 * The finish gate: AttackersDown >= FinishDownMin holds everybody (bHeldByFinish) whatever the rules say.
 	 */
 	CODEXTACTICS_API FPmcFallBackDecision DecideFallBack(const FPmcFallBackSituation& Situation, const FPmcDefenceRolesConfig& Config);
