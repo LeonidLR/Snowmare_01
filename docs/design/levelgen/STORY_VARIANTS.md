@@ -3,7 +3,7 @@
 Designer 2026-11-21: every story must also have **preset variants** that can be chosen in advance (forced) - not only the
 emergent variation (building geometry, seed, author). This proposal covers the 6 implemented stories (1, 3, 4, 7, 9, 10) on the
 new khrushchevka plans (court-side stair cores, 2-4 sections, 3 flats per landing, sections meet only at the roof).
-Status: **proposal for the designer**; nothing implemented. Story catalogue: `docs/design/levelgen/gdd/building-stories.md` (branch
+Status: **approved by the designer 2026-11-21** (answers below); not implemented yet - queued after the khrushchevka plan pass and the kit look for all blocks. Story catalogue: `docs/design/levelgen/gdd/building-stories.md` (branch
 claude/building-generator), code `Tools/TrainingGround/src/levelgen/buildingStories.ts`, config `Content/Data/LevelGen/building_stories.json`.
 
 ## Data model
@@ -64,3 +64,8 @@ claude/building-generator), code `Tools/TrainingGround/src/levelgen/buildingStor
 1. Is this list right? Add / remove variants per story.
 2. Should a map pick variants randomly by weight (with forcing in the Training Ground), or always force them by hand?
 3. Variants 3b / 9a / 9c depend on window vault - fine to ship them now as "visual until the clips land"?
+
+## Designer answers (2026-11-21)
+1. The variant list is right as written.
+2. Random by weight per map, with manual correction (force story + variant per building in the Training Ground).
+3. Yes - ship the window-vault variants now; they are visual-only until the window-climb clips land.
