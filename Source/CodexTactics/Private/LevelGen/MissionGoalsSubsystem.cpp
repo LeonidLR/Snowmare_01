@@ -1,8 +1,10 @@
 #include "LevelGen/MissionGoalsSubsystem.h"
 
+#include "Characters/EnemyCharacter.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
 #include "CodexTactics.h"
+#include "Combat/EnemyRegistrySubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Core/MissionSubsystem.h"
@@ -44,9 +46,10 @@ namespace MissionGoalsSubsystemLocal
 			for (int32 Index = 0; Index < Goals->GetGoalCount(); ++Index)
 			{
 				const FMissionGoal& Goal = Goals->GetGoals()[Index];
-				UE_LOG(LogCodexTactics, Display, TEXT("  %s %s at %s r %.0f%s: %s"), *Goal.Id, MissionGoalsRules::KindToString(Goal.Kind),
+				UE_LOG(LogCodexTactics, Display, TEXT("  %s %s at %s r %.0f%s: %s%s"), *Goal.Id, MissionGoalsRules::KindToString(Goal.Kind),
 					*Goal.Location.ToCompactString(), Goal.RadiusCm, Goal.Area.Num() >= 3 ? TEXT(" (room area)") : TEXT(""),
-					Goals->IsGoalReached(Index) ? TEXT("REACHED") : TEXT("open"));
+					Goals->IsGoalReached(Index) ? TEXT("REACHED") : TEXT("open"),
+					Goals->IsGoalBlocked(Index) ? TEXT(", BLOCKED (enemy in the zone)") : (Goals->IsGoalContested(Index) ? TEXT(", contested") : TEXT("")));
 			}
 		}));
 
@@ -59,6 +62,30 @@ namespace MissionGoalsSubsystemLocal
 	{
 		const UCapsuleComponent* Capsule = Operative->GetCapsuleComponent();
 		return Operative->GetActorLocation() - FVector(0.f, 0.f, Capsule ? Capsule->GetScaledCapsuleHalfHeight() : 0.f);
+	}
+
+	/** One "Enemy"-tagged actor for the zone-clear rule: monsters (AEnemyCharacter), hostile PMC fighters, any other tagged actor. */
+	FMissionGoalHostile MakeHostile(const AActor& Actor)
+	{
+		FMissionGoalHostile Hostile;
+		Hostile.Feet = Actor.GetActorLocation() - FVector(0.f, 0.f, Actor.GetSimpleCollisionHalfHeight());
+		const UHealthComponent* Health = nullptr;
+		if (const AEnemyCharacter* Enemy = Cast<AEnemyCharacter>(&Actor))
+		{
+			Health = Enemy->GetHealthComponent();
+			Hostile.bDying = Enemy->IsDying();
+		}
+		else if (const AOperativeCharacter* Fighter = Cast<AOperativeCharacter>(&Actor))
+		{
+			Health = Fighter->HealthComponent;
+			Hostile.bDying = Fighter->IsKilledInAction(); // a fallen PMC fighter keeps his "Enemy" tag
+		}
+		else
+		{
+			Health = Actor.FindComponentByClass<UHealthComponent>();
+		}
+		Hostile.bAlive = !Health || Health->IsAlive();
+		return Hostile;
 	}
 }
 
@@ -122,6 +149,9 @@ bool UMissionGoalsSubsystem::LoadFromFile(const FString& Path)
 	}
 	File = MoveTemp(Parsed);
 	Reached.Init(false, File.Goals.Num());
+	Contested.Init(false, File.Goals.Num());
+	Blocked.Init(false, File.Goals.Num());
+	BlockAnnounced.Init(false, File.Goals.Num());
 	LoadedPath = Path;
 	bActive = true;
 	bCompleted = false;
@@ -143,6 +173,7 @@ void UMissionGoalsSubsystem::RestoreReachedGoals(const TArray<FString>& GoalIds)
 			Marker->SetGoalShown(!Reached[Index]);
 		}
 	}
+	Blocked.Init(false, File.Goals.Num()); // the next check finds the zone state again
 	// Loading state is not reaching a goal: no events, messages or CompleteLevel call.
 	bCompleted = bActive && MissionGoalsRules::AreAllReached(Reached);
 	EvaluateIn = 0.f;
@@ -160,6 +191,9 @@ void UMissionGoalsSubsystem::ClearGoals()
 	Markers.Reset();
 	File = FMissionGoalsFile();
 	Reached.Reset();
+	Contested.Reset();
+	Blocked.Reset();
+	BlockAnnounced.Reset();
 	LoadedPath.Reset();
 	bActive = false;
 	bCompleted = false;
@@ -203,7 +237,7 @@ AMissionGoalMarkerActor* UMissionGoalsSubsystem::GetMarker(int32 Index) const
 
 FString UMissionGoalsSubsystem::GetHudLine() const
 {
-	return bActive ? MissionGoalsRules::FormatHudLine(GetReachedCount(), GetGoalCount()) : FString();
+	return bActive ? MissionGoalsRules::FormatHudLine(GetReachedCount(), GetGoalCount(), IsAnyGoalBlocked()) : FString();
 }
 
 void UMissionGoalsSubsystem::Tick(float DeltaTime)
@@ -253,11 +287,17 @@ void UMissionGoalsSubsystem::EvaluateNow()
 			Feet.Add(GoalWalkerFeet(Operative));
 		}
 	}
+	TArray<FMissionGoalHostile> Hostiles;
+	GatherHostiles(Hostiles);
+	const TArray<FVector> Resisting = MissionGoalsRules::ResistingFeet(Hostiles);
 	if (Living.IsEmpty())
 	{
+		UpdateZoneState(Resisting, {});
 		return;
 	}
-	const TArray<FMissionGoalHit> Hits = MissionGoalsRules::UpdateReached(File, Reached, Feet);
+	TArray<int32> BlockedGoals;
+	const TArray<FMissionGoalHit> Hits = MissionGoalsRules::UpdateReached(File, Reached, Feet, Resisting, &BlockedGoals);
+	UpdateZoneState(Resisting, BlockedGoals);
 	AOperativeCharacter* Last = nullptr;
 	for (const FMissionGoalHit& Hit : Hits)
 	{
@@ -267,6 +307,42 @@ void UMissionGoalsSubsystem::EvaluateNow()
 	if (!Hits.IsEmpty() && MissionGoalsRules::AreAllReached(Reached))
 	{
 		HandleAllReached(Last);
+	}
+}
+
+void UMissionGoalsSubsystem::GatherHostiles(TArray<FMissionGoalHostile>& OutHostiles) const
+{
+	OutHostiles.Reset();
+	for (const AActor* Actor : UEnemyRegistrySubsystem::GetTaggedEnemies(GetWorld()))
+	{
+		if (IsValid(Actor))
+		{
+			OutHostiles.Add(MissionGoalsSubsystemLocal::MakeHostile(*Actor));
+		}
+	}
+}
+
+void UMissionGoalsSubsystem::UpdateZoneState(TConstArrayView<FVector> ResistingFeet, TConstArrayView<int32> BlockedGoals)
+{
+	Contested.SetNum(File.Goals.Num());
+	Blocked.SetNum(File.Goals.Num());
+	BlockAnnounced.SetNum(File.Goals.Num());
+	for (int32 Index = 0; Index < File.Goals.Num(); ++Index)
+	{
+		const FMissionGoal& Goal = File.Goals[Index];
+		Contested[Index] = !Reached[Index] && MissionGoalsRules::IsGoalContested(Goal, ResistingFeet, File.FloorToleranceCm);
+		BlockAnnounced[Index] = BlockAnnounced[Index] && Contested[Index]; // one radio line per contested spell, not per step in / out
+		const bool bNowBlocked = BlockedGoals.Contains(Index);
+		if (bNowBlocked && !Blocked[Index] && !BlockAnnounced[Index])
+		{
+			BlockAnnounced[Index] = true;
+			UE_LOG(LogCodexTactics, Display, TEXT("[MissionGoals] %s blocked: the squad is in the zone, a resisting enemy too"), *Goal.Id);
+			if (UGameMessageSubsystem* Messages = GetWorld() ? GetWorld()->GetSubsystem<UGameMessageSubsystem>() : nullptr)
+			{
+				Messages->PostMessage(LOCTEXT("HQ", "HQ"), LOCTEXT("GoalZoneNotClear", "Objective zone not secure: clear it of the enemy."));
+			}
+		}
+		Blocked[Index] = bNowBlocked;
 	}
 }
 

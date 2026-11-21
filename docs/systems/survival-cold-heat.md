@@ -133,3 +133,35 @@ Hounds outside the lake perimeter "feared the heat" of the running generator thr
 60 cm barricade under the line does not block; rule `EnemyAIRules::FeelsHeat`). Blocked = no flight, no "FEAR OF FIRE!", no detour. The operatives'
 warming is unchanged (distance only). Checks: `CodexTactics.Characters.EnemyAI.HeatFearNeedsClearLine`, `HeatFearWallSmoke` (a hound 3.5 m from a
 6 m heat behind two 3 m walls: no fear; in the open: fear at once; a frostbitten behind one wall: none, the wall removed: fear).
+
+## Cold indoors on generated maps, per-level weather strength (T-021, designer 2026-11-19)
+
+**Bug:** on `L_Gen_Depot_1_X6` the cold did not stop in a closed building. `UColdSurvivalComponent::GatherEnvironment` lowered the zone
+multiplier only through `ACameraZoneVolume` (Closed 0, Shelter 0.5); the level-generator builder (`Scripts/Editor/build_levelgen_map.py`) places no
+camera zones (the X6 map holds 0 of them), so every generated building was open air.
+
+**Rule (designer model, `Survival/ColdShelterRules`, numbers in `Content/Data/Survival/cold_shelter.json`):**
+- Indoors = the feet inside a building footprint of the map's `levelgen_layout` (`PmcDefenceRules::ParseLayout` / `BuildingAt` / `RoofZ`, reused),
+  above its ground and 30 cm under its roof slab. A camera zone, when one holds the operative, still wins (hand-made maps unchanged).
+- Each building's exterior openings weigh door 3, window 1, loophole 0.5, wall breach / roof hole 4. `leak` = weight of the open ones (open, kicked
+  out, broken, breached) / weight of all; sealed = 0, airtightness = 1 - leak. The generator writes no opening state: a doorway gap with no
+  leaf (a door with no state) starts OPEN with a draught (designer 2026-11-19, `ColdShelterRules::IsOpeningInitiallyOpen`), a stateless window
+  starts sealed (glazed) until a runtime glass / boarded state exists, roof holes start open; an explicit door state (closed / locked) wins.
+- Base multiplier = `leak * leak_to_cold` (1.0): all sealed 0 (the cold then warms, like a Closed zone), a fully open building 1.
+- Draught: within `draught_full_m` (3.5 m) of an open opening on the SAME storey the multiplier is 1, falling linearly to the base at
+  `draught_fade_m` (10 m). Indoor multiplier = max(base, draught). Openings on other storeys only count in the leak.
+- These are shares of the OUTDOOR cold (G012, 2026-11-20): the zone multiplier indoors = indoor multiplier x the wave's `cold_drain_mult`,
+  so by an open door it is exactly the street's cold in a storm wave too (it was a hard 1). The weather multiplier applies after it, the
+  same indoors and out (`ColdRules::CombineZoneWeather`). A campfire's "indoors" (`ACampfireActor::IsIndoors`) only lowers its noise
+  radius - walls muffle sound whatever the windows - so it stays "inside any layout building", no leak threshold (lead decision, G012).
+- Live state: `UColdShelterSubsystem::SetOpeningOpen(BuildingId, OpeningId, bOpen)` / `SetOpeningOpenAt(XY, Storey, Radius, bOpen)` recomputes ONE
+  building's leak and fires `OnLeakChanged` (no per-tick scan). No door / window / breach actor exists at runtime yet (generated doors are wall
+  gaps, windows holes), so the layout states are the initial state and the setters are the hook for them.
+- The campfire's indoor test and the blizzard-walk shelter test use `UColdShelterSubsystem::IsShelteredLocation` (camera zone OR a layout building).
+
+**Per-level weather strength:** level JSON `environment.weather_strength` (0..2, default 1) -> weather cold multiplier `1 + (blended - 1) * strength`
+(`EnvironmentRules::ApplyWeatherStrength`; 1 = the table exactly). The cold only; visuals / roster / clock are untouched.
+
+**Verify:** `CodexTactics.Survival.ColdShelter.*` (sealed 0, leak 1/14 and 6/14, draught 1 at 2 m / base at 10 m / linear, same-storey, inside / roof Z,
+camera zone wins, parse, config, weather strength 0 / 1 / 2); `ColdIndoorsSmoke` on `L_Gen_Depot_1_X6` (sealed building 0, kicked door leaks + draughts,
+event fires, outside open air).

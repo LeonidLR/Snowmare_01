@@ -1,7 +1,7 @@
 {
- "lead": "worker",
- "since": "2026-11-19T17:33:42+02:00",
- "from": "main",
+ "lead": "main",
+ "since": "2026-11-20T13:45:00+02:00",
+ "from": "worker",
  "handover_branch": "main",
- "note": "T-05 phase b WIP (accept on Crossroads/Alley x30), T-021 cold airtightness WIP, bgen bot mantle gating -> firing gaps -> S2.3, T-022/023 TG editing not started; night loop + guard running"
+ "note": "worker stand-in session died at the 08:34 reboot; main lead resumed, merged T-021 + T-022/023 + goal-zone-clear"
 }

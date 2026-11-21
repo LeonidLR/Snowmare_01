@@ -418,6 +418,21 @@ The layout's `objectives.goals` (stage 2, `objectives.ts`) are the generated map
   / main menu with the level's `gate_exit` timings).
 - **Smoke** `CodexTactics.MissionGoalsSmoke` on `L_Gen_Test_X2` (teleports the squad to each goal: counted, no victory before the last, the level
   end after it). Pending the designer: the 300 cm radius, the marker look, the room rule.
+- **Zone clear (designer 2026-11-20, branch `worker/goal-zone-clear`).** A goal is NOT reached while a resisting enemy stands in its zone; it
+  counts on the first check after the zone is cleared with an operative still in it. Zone = the reach zone (same floor within
+  `floor_tolerance_cm`; a room goal: its room polygon `area`; else a circle of the goal's `radius_cm` / the file's `default_radius_cm`).
+  Resisting = an actor with the "Enemy" tag (monsters `AEnemyCharacter`, hostile PMC fighters `AOperativeCharacter` TeamId != 0, other tagged
+  actors) that is alive (health > 0) and not dying / killed in action - seen or unseen (the sight system hides unseen enemies; they still hold
+  the zone); a critically wounded fighter (still fires prone) and a knocked-down one resist. Pure `MissionGoalsRules::IsResisting` /
+  `IsGoalContested` / `UpdateReached(..., ResistingHostileFeet, OutBlocked)`; the squad in a contested countable goal = BLOCKED: HUD line
+  `GOALS: n/N - CLEAR THE ZONE` (red), one HQ radio line per contested spell, `Codex.MissionGoals.Dump` shows BLOCKED / contested. In a
+  `sequence` a blocked goal holds the chain.
+- **Goal zones on the HUD and the minimap (designer 2026-11-20).** Every unreached goal is drawn as its ZONE (`MissionGoalsRules::BuildZoneOutline`:
+  the room polygon or the real-radius circle): on the ground (`ACodexTacticsHUD::DrawMissionGoalZones`, a projected outline, orange; red +
+  "ENEMY IN ZONE" while blocked) and on the corner / full map (`DrawMapView`, under the icons; the objective diamond stays as the pointer). The
+  hologram ring stays as before (a room goal's ring is still shrunk to fit the room). The red state shows only while the squad is IN the zone
+  (no reveal of unseen enemies from afar). The smoke now puts an "Enemy" stand-in in the first goal's zone: not counted / blocked / HUD
+  "CLEAR THE ZONE" for 3 s, counted once it is removed.
 
 ## 9. Status
 

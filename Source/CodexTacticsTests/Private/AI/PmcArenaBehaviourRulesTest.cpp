@@ -136,6 +136,42 @@ bool FPmcArenaBehaviourJsonTest::RunTest(const FString&)
 	TestEqual(TEXT("choke is a 'lower' metric"), Metrics->GetObjectField(TEXT("time_in_chokepoint_s"))->GetStringField(TEXT("direction")), FString(TEXT("lower")));
 	TestEqual(TEXT("quiet spells are 'context'"), Metrics->GetObjectField(TEXT("quiet_spells"))->GetStringField(TEXT("direction")), FString(TEXT("context")));
 	TestEqual(TEXT("an absent metric is 0"), Metrics->GetObjectField(TEXT("overwatch_kills"))->GetNumberField(TEXT("value")), 0.0);
+
+	// Counting only (G011). The JSON value above stays 0 when the round recorded no kill.
+	{
+		FPmcOverwatchKillNote Note;
+		Note.Side = 1;
+		Note.PostKind = EPmcPostKind::Overwatch;
+		Note.bAtPost = true;
+		Note.HitTimeS = 10.f;
+		TestTrue(TEXT("on an Overwatch post, not on a roof spot"), CountsAsOverwatchKill(Note, 12.f));
+		Note.bAtPost = false;
+		Note.bAtOverwatchSpot = true;
+		TestTrue(TEXT("on a roof spot, post left"), CountsAsOverwatchKill(Note, 13.f));
+		Note.bAtOverwatchSpot = false;
+		TestFalse(TEXT("Overwatch post left and not on a spot"), CountsAsOverwatchKill(Note, 12.f));
+		Note.bAtPost = true;
+		Note.PostKind = EPmcPostKind::Window;
+		TestFalse(TEXT("a window post is not an overwatch kill"), CountsAsOverwatchKill(Note, 12.f));
+		Note.PostKind = EPmcPostKind::Ambush;
+		TestFalse(TEXT("an ambush post is not an overwatch kill"), CountsAsOverwatchKill(Note, 12.f));
+		Note.PostKind = EPmcPostKind::LadderRoof;
+		TestFalse(TEXT("a ladder roof is not an overwatch kill"), CountsAsOverwatchKill(Note, 12.f));
+		Note.PostKind = EPmcPostKind::None;
+		TestFalse(TEXT("no post and no spot"), CountsAsOverwatchKill(Note, 12.f));
+		Note.bAtOverwatchSpot = true;
+		Note.Side = 0;
+		Note.HitTimeS = 10.f;
+		TestTrue(TEXT("age 3.0 still counts"), CountsAsOverwatchKill(Note, 13.f));
+		TestFalse(TEXT("age 3.01 does not"), CountsAsOverwatchKill(Note, 13.01f));
+		TestTrue(TEXT("a negative delta still counts"), CountsAsOverwatchKill(Note, 9.f));
+		Note.Side = INDEX_NONE;
+		TestFalse(TEXT("no side does not count"), CountsAsOverwatchKill(Note, 10.f));
+		Note.Side = 2;
+		TestFalse(TEXT("side 2 does not count"), CountsAsOverwatchKill(Note, 10.f));
+		TestEqual(TEXT("a taken walk counts"), PostMoveIncrement(true), 1);
+		TestEqual(TEXT("a refused walk does not"), PostMoveIncrement(false), 0);
+	}
 	const TSharedPtr<FJsonValue> AbsentGuard = Metrics->GetObjectField(TEXT("guard_near_access_share"))->TryGetField(TEXT("value"));
 	TestTrue(TEXT("no access: guard_near_access_share is JSON null, not 0"), AbsentGuard.IsValid() && AbsentGuard->Type == EJson::Null);
 	TestEqual(TEXT("Value() of an n/a guard share is 0 for numeric callers"), Behaviour.Value(TEXT("guard_near_access_share")), 0.f);

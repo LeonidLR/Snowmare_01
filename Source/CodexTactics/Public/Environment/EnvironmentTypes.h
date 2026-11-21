@@ -655,4 +655,12 @@ struct CODEXTACTICS_API FEnvironmentLevelSettings
 	/** Section 19.6: "exposure_bias" (EV, default 0, clamped -4..4): added to the presenter's exposure bias on this level. */
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "-4", ClampMax = "4"))
 	float ExposureBias = 0.f;
+
+	/**
+	 * "weather_strength" (T-021, default 1, clamped 0..2): how hard the weather bites THIS level's cold. The weather cold multiplier in
+	 * force becomes 1 + (blended - 1) * strength (EnvironmentRules::ApplyWeatherStrength): 1 = the table exactly, 0 = weather has no
+	 * cold effect, 2 = twice the deviation (a Blizzard 2.0 -> 3.0). The cold only; visuals, roster and the clock are not touched.
+	 */
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Environment", meta = (ClampMin = "0", ClampMax = "2"))
+	float WeatherStrength = 1.f;
 };

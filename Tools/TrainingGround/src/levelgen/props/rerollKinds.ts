@@ -13,6 +13,8 @@ import { runFastGate } from './fastGate.ts';
 import { validateStatic } from './validator.ts';
 import { buildPowerLayer, POWER_LAYER_ID, readPowerConfig, validatePowerLinks } from './power.ts';
 import { applyRouteClearance, type RouteClearanceStats } from './routeClearance.ts';
+import type { Vec2 } from '../../movement/geometry.ts';
+import { rerollLayerInZone } from './zoneReroll.ts';
 
 /** The placement kinds, in the order the autogen re-rolls them (rerollAll). */
 export const PLACED_KINDS = ['crates', 'barrels', 'turrets', 'mines', 'loot'] as const;
@@ -36,6 +38,12 @@ export interface RerollRequest {
   ids: readonly string[];
   /** The seed of a layer for this re-roll (the UI: the shown seed, or seed + 1 for «Сгенерировать всё»). */
   seedFor: (layer: PropLayer) => number;
+  /**
+   * T-023: re-roll only INSIDE this polygon (UE cm; a box / polygon / lasso of the region tools). Objects outside it, locked / hand /
+   * pinned objects, locked layers and `pmc_charges` stay exactly as they are; the power network is not rebuilt (it is shared by the
+   * whole map) - the power layer is skipped and its links are only checked. Absent = the whole layer (the normal re-roll).
+   */
+  zone?: readonly Vec2[];
 }
 
 export interface RerollOutcome {
@@ -48,6 +56,8 @@ export interface RerollOutcome {
   powerRebuilt: boolean;
   /** Warnings worth showing (a locked power layer with stale links, attach orphans, power link issues). */
   notes: string[];
+  /** A zone re-roll's totals over the re-rolled layers (absent for a whole-layer re-roll). */
+  zone?: { removed: number; added: number; droppedSpacing: number; keptOutside: number; keptPinned: number };
 }
 
 const emptyStats = (): RouteClearanceStats => ({ droppedCrates: 0, droppedBarrels: 0, droppedMines: 0, droppedLoot: 0, droppedTotal: 0, pmcChargesInside: [] });
@@ -72,15 +82,33 @@ export function rerollPropsLayers(
     if (!layer) { out.skipped.push({ id, reason: 'слой не найден' }); continue; }
     const v = rerollSupport(layer, file.frozen);
     if (!v.ok) { out.skipped.push({ id, reason: v.reason }); continue; }
+    if (req.zone && (layer.kind as string) === POWER_LAYER_ID) { out.skipped.push({ id, reason: 'сеть питания общая для всей карты: по зоне не перебрасывается (перебросьте слой power целиком)' }); continue; }
     wanted.push(layer);
   }
+  const zone = req.zone;
+  if (zone) out.zone = { removed: 0, added: 0, droppedSpacing: 0, keptOutside: 0, keptPinned: 0 };
+  // the ids of the objects this call creates (a zone re-roll's clearance / validator only judge those)
+  const freshIds = new Set<string>();
+  // zone re-roll: objects of other layers that were attached to an object the zone removed (judged at the end, after every layer is done)
+  const orphanCandidates = new Set<string>();
 
   // 1. placement of the placed kinds, in the autogen's order
   const placed = new Set<string>();
   for (const kind of PLACED_KINDS) {
     for (const layer of wanted) {
       if ((layer.kind as string) !== kind) continue;
-      rerollLayer(file, balance, view, layer.id, req.seedFor(layer), layout);
+      if (zone) {
+        const z = rerollLayerInZone(file, balance, view, layer.id, req.seedFor(layer), zone);
+        for (const id of z.added) freshIds.add(id);
+        out.zone!.removed += z.removed;
+        out.zone!.added += z.added.length;
+        out.zone!.droppedSpacing += z.droppedSpacing;
+        out.zone!.keptOutside += z.keptOutside;
+        out.zone!.keptPinned += z.keptPinned;
+        for (const id of z.orphaned) orphanCandidates.add(id);
+      } else {
+        rerollLayer(file, balance, view, layer.id, req.seedFor(layer), layout);
+      }
       placed.add(layer.id);
       out.rerolled.push(layer.id);
     }
@@ -88,11 +116,23 @@ export function rerollPropsLayers(
 
   // 2. the 088 route clearance + the static validator, on the re-rolled layers only (the designer's pinned objects stay)
   if (placed.size > 0) {
-    out.clearance = applyRouteClearance(file, layout, cfg, { only: placed, keepLockedObjects: true });
+    // a zone re-roll: everything it did not create is pinned for the clearance (temporarily), so only the fresh objects are judged
+    const pins: { o: PropObject; had: boolean; was: unknown }[] = [];
+    if (zone) {
+      for (const l of file.layers) {
+        if (!placed.has(l.id)) continue;
+        for (const o of l.objects) if (!freshIds.has(o.id) && o.locked !== true) { pins.push({ o, had: Object.prototype.hasOwnProperty.call(o, 'locked'), was: o.locked }); o.locked = true; }
+      }
+    }
+    try {
+      out.clearance = applyRouteClearance(file, layout, cfg, { only: placed, keepLockedObjects: true });
+    } finally {
+      for (const p of pins) { if (p.had) p.o.locked = p.was as boolean; else delete p.o.locked; }
+    }
     const resolved = applyOverrides(file);
     const drop = validateStatic(view, resolved.objects, resolved.keepOuts, balance).dropped;
     const mine = new Set<string>();
-    for (const l of file.layers) if (placed.has(l.id)) for (const o of l.objects) mine.add(o.id);
+    for (const l of file.layers) if (placed.has(l.id)) for (const o of l.objects) if (!zone || freshIds.has(o.id)) mine.add(o.id);
     const ids = new Set(drop.filter((r) => mine.has(r.object.id) && !r.object.locked).map((r) => r.object.id));
     if (ids.size > 0) {
       for (const l of file.layers) if (placed.has(l.id)) l.objects = l.objects.filter((o) => !ids.has(o.id));
@@ -104,7 +144,12 @@ export function rerollPropsLayers(
   const powerLayer = file.layers.find((l) => (l.kind as string) === POWER_LAYER_ID);
   const powerAsked = wanted.some((l) => (l.kind as string) === POWER_LAYER_ID);
   const upstream = wanted.some((l) => l.kind === 'turrets' || l.kind === 'loot');
-  if (powerLayer && (powerAsked || upstream)) {
+  if (zone && powerLayer && upstream) {
+    // the generators' links to the turrets / loot of the zone could now be stale: only reported, the network is not rebuilt (outside stays)
+    const kindOfLayer = new Map(file.layers.map((l) => [l.id, l.kind as string]));
+    const issues = validatePowerLinks(applyOverrides(file).objects, kindOfLayer, balance, view.spawnPos);
+    if (issues.length > 0) out.notes.push(`Сеть питания: ${issues.length} замечаний после зоны (${issues.slice(0, 2).map((i) => i.reason).join('; ')}); перебросьте слой power целиком`);
+  } else if (powerLayer && (powerAsked || upstream)) {
     if (powerLayer.locked) {
       out.notes.push('Слой power закреплён: связи генераторов с турелями могли устареть');
     } else {
@@ -152,6 +197,20 @@ export function rerollPropsLayers(
         return o !== undefined && o.attach !== undefined && !byId.has(o.attach);
       }),
     };
+  }
+  // 6. a zone re-roll: whatever is still attached to a removed object is reported (the game's validator drops it at load); layers re-rolled
+  // in the same call have already replaced theirs, so only the real leftovers are named
+  if (zone && orphanCandidates.size > 0) {
+    const left: PropObject[] = [];
+    for (const l of file.layers) for (const o of l.objects) if (orphanCandidates.has(o.id) && o.attach !== undefined && !byId.has(o.attach)) left.push(o);
+    if (left.length > 0) {
+      out.notes.push(`${left.length} объектов (${left.slice(0, 3).map((o) => o.id).join(', ')}${left.length > 3 ? ', …' : ''}) были привязаны к убранным в зоне; перебросьте и их слой (игра их уберёт при загрузке)`);
+      const leftIds = new Set(left.map((o) => o.id));
+      for (const l of file.layers) {
+        const mine = l.objects.filter((o) => leftIds.has(o.id));
+        if (mine.length > 0) l.report = { ...(l.report ?? {}), warnings: [...(l.report?.warnings ?? []), ...mine.map((o) => `attach_orphaned ${o.id}`)] };
+      }
+    }
   }
   return out;
 }

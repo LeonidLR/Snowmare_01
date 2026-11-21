@@ -19,3 +19,5 @@ A stall (active and quiet too long; blocked / waiting without a reason or longer
 chat topic `lanes` (to all: the designer's task board shows it and it wakes waiting agents), appended to
 `Saved/Lanes/alerts.log` (the lead's Monitor tails it) and `Saved/Lanes/status.json` is rewritten each run.
 `python Scripts/Tools/lane_watchdog.py --list` shows every lane and its age.
+- Paired A/B digest for seed batches: `python Scripts/Tools/paired_ab.py <folderA> <folderB> [--tune-seeds 1-10]` (see brief 093).
+- Smoke repeats & flake measurement: `powershell -File Scripts/smoke_parallel.ps1 -Commands <Smoke> -Repeat <N> [-RepeatSeeds] [-Jobs <J>]` (see brief 094).

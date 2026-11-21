@@ -1,0 +1,22 @@
+{
+  "comment": "T-021 cold indoors on GENERATED maps (designer 2026-11-19): read by UColdShelterSubsystem with the map's levelgen layout; pure rule Survival/ColdShelterRules, tests CodexTactics.Survival.ColdShelter.*. A building's leak = the weight of its open (broken / kicked out / open / breached) openings / the weight of all its openings; an intact closed door or glazed window is sealed. The generator writes no opening states: a doorway gap with NO door leaf (a door with no state) starts OPEN with a draught (designer 2026-11-19), a stateless window starts sealed (glazed) until a runtime glass / boarded state exists; runtime changes arrive through UColdShelterSubsystem::SetOpeningOpen. The building's base cold multiplier = leak * leak_to_cold (all sealed 0, a fully open building 1 = open air); within draught_full_m of an OPEN opening on the SAME storey the multiplier is 1, falling linearly to the base at draught_fade_m; indoors = max(base, strongest draught). A camera zone, when one holds the operative, still wins (hand-made maps unchanged). A missing key keeps the code default. Distances in metres here (cm in code), weights are relative.",
+  "weights": {
+    "_comment": "Share of one opening in the leak. door 3, window 1, wall breach 4 (designer 2026-11-19); a roof hole counts as a breach; a loophole (a 20-40 cm slit) is a half window.",
+    "door": 3.0,
+    "window": 1.0,
+    "loophole": 0.5,
+    "breach": 4.0
+  },
+  "leak_to_cold": 1.0,
+  "_comment_leak_to_cold": "Base multiplier = leak * this. 1.0: a fully open building is as cold as open air, a sealed one has no accumulation (and warms, as a Closed camera zone does).",
+  "draught_full_m": 3.5,
+  "_comment_draught_full_m": "Designer: it is cold within 3-4 m of a kicked-out door. Same storey only; the multiplier is 1 (outdoor) inside this radius of an open opening.",
+  "draught_fade_m": 10.0,
+  "_comment_draught_fade_m": "The draught has fallen to the building's base multiplier at this distance (linear between draught_full_m and here).",
+  "roof_margin_cm": 30.0,
+  "_comment_roof_margin_cm": "The feet must be this far below the roof slab to count as inside (on the roof they stand on the slab).",
+  "ground_margin_cm": 100.0,
+  "_comment_ground_margin_cm": "The feet may be this far below the layout's ground and still count as inside (a sunken threshold).",
+  "storey_tolerance_cm": 50.0,
+  "_comment_storey_tolerance_cm": "Feet this far below the next slab count as already on that storey (ramps, stairs) for the same-storey draught."
+}
