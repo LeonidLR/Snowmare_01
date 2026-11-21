@@ -129,7 +129,8 @@ class LegacyGuaranteeTest(unittest.TestCase):
                     op["state"] = {"door": "open", "window": "broken"}.get(op["kind"], "fixed")
             self.assertEqual(base, _plan(v2), name)
             self.assertEqual(base, _plan(explicit_v1), name)
-            self.assertFalse([s for s in base if "collision" in s or "affects_navigation" in s], name)
+            # a switchback core's lane wall blocks sight only by design (0302a4ca: affects_navigation False, pawn collision ignored)
+            self.assertFalse([s for s in base if ("collision" in s or "affects_navigation" in s) and "lane_wall" not in s.get("tags", [])], name)
 
     def test_fire_escape_ladder_adds_nothing(self):
         lay = _load("L_Gen_Train_1")

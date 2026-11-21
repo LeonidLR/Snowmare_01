@@ -5,6 +5,9 @@ Soviet panel-block pack (three flats per landing round a half-landing switchback
 living rooms; `Tools/TrainingGround/src/levelgen/buildings/kitPlan.ts`, `building_plans.json` `recipes.block_kit`), flat-door roles follow
 the units, and every /2 layout carries structure classes and window vault data (data only). Status and open questions:
 `docs/design/levelgen/S2_ROOMS_PLAN.md` (STATUS block), designer summary `docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md`.
+2026-11-22: the khrushchevka has a gable door (template `gable_door`: an end-wall ground door into the end flat's ground-storey vestibule) and
+balcony slots on its street living rooms (`balcony_slots`); stories 3 and 4 hold on it, story 9 only with a locked gable door (F4: a closed one is
+nearer than any back window - designer question). Tests `buildings/kitGable.test.ts`.
 
 **Test branch `claude/bgen-test` (2026-11-21 night):** building-generator merged in, engine-checked locally. Fix: a switchback core's 10 cm
 lane wall now blocks sight only (builder: `affects_navigation` False + pawn collision ignored, tag `lane_wall`) - in some tile / voxel

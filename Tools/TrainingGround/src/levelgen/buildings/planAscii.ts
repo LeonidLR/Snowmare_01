@@ -88,6 +88,10 @@ export function buildingToAscii(b0: GenBuilding, floor: number): string {
   const units = new Map<string, BuildingUnit>((b.units ?? []).map((u) => [u.id, u]));
   const letters = new Map<string, string>();
   const label = (r: GenRoom): string => {
+    // a flat's letter index is taken by its first room in id order whatever that room's kind (a kit flat's bath / hall come first) - the
+    // order planOverlay.ts numbers the flats in, so both name a flat with the same letter
+    const fu = r.unit ? units.get(r.unit) : undefined;
+    if (fu && !letters.has(fu.column)) letters.set(fu.column, String(letters.size));
     if (r.kind === 'stairwell') return 'K';
     if (r.kind === 'corridor') return 'L';
     if (r.kind === 'lobby') return 'O';

@@ -1,5 +1,14 @@
 # S2 plan - room layouts (building generator, levelgen v3)
 
+> **STATUS 2026-11-22 - khrushchevka gable door + balcony slots (branch `claude/building-generator`; designer summary: `BGEN_KIT_PLANS_2026-11-21.md`
+> section 8).** Template `block_khrushchevka` `gable_door` (ends low / high / both / none, both from `both_min_sections`, `vestibule_uses`, `state`;
+> `BuildingSpec.gable_door` = a plan end or a gable's draft side, `gable_door_state`): an exterior ground door (role entry) on an end wall into the
+> end flat's court row - hall + its corridor + kitchen = the ground-storey vestibule (kind lobby, zone common) to the tambour / floor landing; the
+> upper storeys keep three flats per landing; the loop rule treats the vestibule pocket as a dead end. `balcony_slots` (min_storey, uses, rate):
+> slot windows on the street living rooms from storey 1 (`markKitSlots`), story 4 builds its balcony + escape on one column. F4 on a khrushchevka:
+> story 3 holds (fast = the kicked court door, quiet = the gable door); story 9 holds only with a non-quiet gable door (`gable_door_state: locked`) -
+> a closed gable door is nearer than any back window. Tests `buildings/kitGable.test.ts`.
+
 > **STATUS 2026-11-21 - kit pattern step 1 (branch `claude/building-generator`, not merged; designer summary in Russian:
 > `BGEN_KIT_PLANS_2026-11-21.md`).**
 > - **Block plans = a template catalog** (`building_plans.json` `recipes.block.templates`; default `block_khrushchevka`, series 1-464, planner
@@ -21,7 +30,7 @@
 > - **Engine (worker, before the 4 m core)**: path check 7/9, islands 1 for B_x / B_b20 / offices, 2 for B_y / B_b18 (one flight each without navmesh:
 >   the 150 cm flights between two walls - fixed by the 4 m core, NOT re-checked: worker frozen for the night baseline); walk smoke 5/9, walk legs
 >   28/32, entry legs 52/86 - the squad legs into 5 m2 halls are a formation question (designer Q7 in the summary), not a jam.
-> - **Not done**: windows / balconies / doors on the kit (story 4 has no balcony slots on kit blocks yet), openable doors (next step), the engine
+> - **Not done**: windows / doors on the kit grid (balcony slots: done 2026-11-22, above), openable doors (next step), the engine
 >   re-check of the 4 m core, the rebuilt L_Gen_BgenPlans.umap is not committed (rebuild: `Scripts/levelgen_build_map.ps1 -Layout gen_bgen_plans_check
 >   -Target /Game/Maps/Generated/L_Gen_BgenPlans`).
 

@@ -11,6 +11,7 @@ import type { BandPlan, PlanCell, CellKind, CellBand } from './bandPlan.ts';
 import type { OpeningRole } from './planDoors.ts';
 import { rng } from '../../movement/geometry.ts';
 import { fnv1a } from '../props/rng.ts';
+import type { DoorState } from '../schema.ts';
 import { STAIR_RUN_PER_RISE } from '../schema.ts';
 
 /** The residential block templates (building_plans.json recipes.block.templates): id -> entry; `default` names the default one. */
@@ -56,6 +57,17 @@ export type KitFlat = 'A' | 'B' | 'C';
 
 /** One door the kit plan wants: the two cells it joins, its role and (optionally) the preferred centre along the shared wall. */
 export interface KitDoor { a: string; b: string; role: OpeningRole; at?: number }
+
+/** Which gables get the gable door (template gable_door.ends): 'low' = the end wall at u = 0, 'high' = at u = L. */
+export type GableChoice = 'low' | 'high' | 'both' | 'none';
+export const GABLE_CHOICES: readonly GableChoice[] = ['low', 'high', 'both', 'none'];
+
+/**
+ * A gable door of a kit block (designer decision 2026-11-22; template gable_door): an exterior door on the end wall `wall`, ground storey only,
+ * into the end flat's court row (`cells` = its vestibule_uses cells, a common vestibule on the ground storey) that leads to the section's tambour
+ * or floor landing through the flat's own entry door. `door` = the vestibule cell holding the door, `c` = the door centre along the gable (v, cm).
+ */
+export interface KitGable { wall: 'u0' | 'uL'; section: number; unit: string; cells: string[]; door: string; c: number; /** The door's opening state (absent = the default). */ state?: DoorState }
 
 /** One section of a kit block. */
 export interface KitSection {
@@ -109,6 +121,10 @@ export interface KitPlanInput {
   seed: number;
   /** The block template id (building_plans.json recipes.block.templates; absent = templates.default). */
   template?: string;
+  /** Which gables get a gable door (absent = the template's gable_door.ends / both_min_sections). */
+  gable?: GableChoice;
+  /** The gable door's opening state (absent = the template's gable_door.state; null there = the default). */
+  gableState?: DoorState;
 }
 
 type Rand = () => number;
@@ -253,6 +269,41 @@ function buildSection(bld: Builder, index: number, s0: number, S: number, D: num
   return sec;
 }
 
+/** The gable walls of a block of `sections` sections: the caller's choice, else the template's ends (both from both_min_sections sections). */
+function gableWalls(choice: GableChoice | undefined, sections: number): ('u0' | 'uL')[] {
+  const gd = TT.gable_door;
+  let ends: GableChoice = choice ?? (gd.ends as GableChoice);
+  if (choice === undefined && ends !== 'none' && gd.both_min_sections && sections >= gd.both_min_sections) ends = 'both';
+  return ends === 'low' ? ['u0'] : ends === 'high' ? ['uL'] : ends === 'both' ? ['u0', 'uL'] : [];
+}
+
+type RawGable = Omit<KitGable, 'cells' | 'door'> & { keys: string[]; doorKey: string };
+
+/**
+ * The gable vestibule on `wall` (cell keys, before the ids): the end section's flat on that gable, its vestibule_uses cells (its court row: hall +
+ * kitchen, and the flat's corridor that opens onto the hall), the door in the cell on the gable at the court corner. A string = why there is none.
+ */
+function gableVestibule(cells: readonly RawCell[], sections: readonly KitSection[], wall: 'u0' | 'uL', L: number): RawGable | string {
+  const sec = wall === 'u0' ? sections[0] : sections[sections.length - 1];
+  const touches = (c: RawCell): boolean => (wall === 'u0' ? c.u0 === 0 : c.u1 === L);
+  const end = cells.find((c) => c.section === sec.index && c.unit && touches(c));
+  if (!end?.unit) return `gable door (${wall}): no flat on the gable`;
+  const unit = end.unit;
+  const uses = TT.gable_door.vestibule_uses as string[];
+  const ves = cells.filter((c) => c.unit === unit && c.use !== undefined && uses.includes(c.use));
+  if (!ves.some((c) => c.use === 'hall')) return `gable door (${wall}): ${unit} has no hall among ${uses.join(' / ')}`;
+  const door = ves.find((c) => touches(c) && c.v0 === 0);
+  if (!door) return `gable door (${wall}): no ${uses.join(' / ')} cell of ${unit} on the gable at the court corner`;
+  const half = BUILDING_PLANS.constants.openings.door_cm / 2;
+  const opts = steps(door.v0 + half, door.v1 - half);
+  if (!opts.length) return `gable door (${wall}): ${unit}'s ${door.use} gable span ${door.v1 - door.v0} cm < the door`;
+  const mid = (door.v0 + door.v1) / 2;
+  // nearest the span's middle; a tie goes to the centre farther from the court corner (the kit entrance module clears the corner)
+  let c = opts[0];
+  for (const x of opts) if (Math.abs(x - mid) < Math.abs(c - mid) - 1e-9 || (Math.abs(Math.abs(x - mid) - Math.abs(c - mid)) <= 1e-9 && x > c)) c = x;
+  return { wall, section: sec.index, unit, keys: ves.map((x) => x.key), doorKey: door.key, c };
+}
+
 /**
  * Plans a residential block with the kit pattern. Deterministic: same input -> same plan. `kind: 'fallback'` (with the reason) when the footprint
  * fits no kit section; the caller then tries the S2.3 sections planner, then the BSP.
@@ -285,12 +336,27 @@ export function planKitBlock(inp: KitPlanInput): BandPlan {
     const sections: KitSection[] = [];
     let s0 = 0;
     widths.forEach((S, i) => { sections.push(buildSection(bld, i, s0, S, D, three, r)); s0 += S; });
+    // the gable doors (template gable_door) and the balcony columns (template balcony_slots.rate; own stream, the plan's draws stay as they were)
+    const rawGables: RawGable[] = [];
+    for (const wall of gableWalls(inp.gable, sections.length)) {
+      const g = gableVestibule(bld.cells, sections, wall, L);
+      if (typeof g === 'string') { planNotes.push(g); continue; }
+      rawGables.push(g);
+      const to = sections[g.section].tambour && !g.unit.endsWith('C') ? 'tambour' : 'floor landing';
+      const uses = bld.cells.filter((c) => g.keys.includes(c.key)).map((c) => c.use).join(' + ');
+      planNotes.push(`gable door (${wall}): on the ground storey ${g.unit}'s ${uses} are the gable vestibule (to the ${to}); its other rooms open onto it, no kitchen on that storey`);
+    }
+    const rb = rng(fnv1a(`${inp.seed}|kit|balcony`));
+    const units = [...new Set(bld.cells.map((c) => c.unit).filter((u): u is string => !!u))].sort();
+    const balconyColumns = units.filter(() => rb() < TT.balcony_slots.rate);
     // ids: sorted like bandPlan's finish (u0, v0, u1, v1), c<k>; the door list is rewritten from keys to ids
     const sorted = [...bld.cells].sort((a, b) => a.u0 - b.u0 || a.v0 - b.v0 || a.u1 - b.u1 || a.v1 - b.v1);
     const idOf = new Map<string, string>();
     const cells: PlanCell[] = sorted.map((c, i) => { idOf.set(c.key, `c${i}`); const { key: _k, ...rest } = c; void _k; return { id: `c${i}`, ...rest }; });
     const doors = bld.doors.map((d) => ({ ...d, a: idOf.get(d.a)!, b: idOf.get(d.b)! }));
-    const plan: BandPlan = { kind: 'bands', L, D, bays: [], cells, archetype: 'block', pattern: 'kit', kit: { sections, doors, notes: planNotes, template: tid } };
+    const gState = inp.gableState ?? ((TT.gable_door.state ?? undefined) as DoorState | undefined);
+    const gables: KitGable[] = rawGables.map(({ keys, doorKey, ...g }) => ({ ...g, cells: keys.map((k) => idOf.get(k)!), door: idOf.get(doorKey)!, ...(gState ? { state: gState } : {}) }));
+    const plan: BandPlan = { kind: 'bands', L, D, bays: [], cells, archetype: 'block', pattern: 'kit', kit: { sections, doors, notes: planNotes, template: tid, gables, balconyColumns } };
     const problems = validateKitPlan(plan);
     if (!problems.length) return plan;
     reason = `invalid: ${problems[0]}`;
@@ -335,6 +401,13 @@ export function validateKitPlan(plan: BandPlan): string[] {
   }
   for (const sec of plan.kit.sections) {
     if (!plan.cells.some((c) => c.kind === 'core' && c.section === sec.index)) out.push(`section ${sec.index}: no core`);
+  }
+  for (const g of plan.kit.gables ?? []) {
+    const c = byId.get(g.door);
+    const half = BUILDING_PLANS.constants.openings.door_cm / 2;
+    if (!c || !g.cells.includes(g.door)) { out.push(`gable ${g.wall}: door cell ${g.door} not in its vestibule`); continue; }
+    if ((g.wall === 'u0' ? c.u0 !== 0 : c.u1 !== L) || g.c - half < c.v0 || g.c + half > c.v1 || g.c % G) out.push(`gable ${g.wall}: door at v ${g.c} off ${c.id}'s gable span`);
+    if (!g.cells.some((id) => byId.get(id)?.use === 'hall')) out.push(`gable ${g.wall}: the vestibule has no hall`);
   }
   return out;
 }
