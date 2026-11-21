@@ -1030,7 +1030,17 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         elif w.get("kind") == "interior" and bid in by_partitions and not (bid in switchback_buildings and LANE_WALL_RE.search(w["id"])):
             continue  # built from its partitions[] above (a switchback core's lane walls are no partitions: built below)
         elif w.get("kind") == "interior":
-            specs.append(wall_cube(w["id"], "Buildings/%s/L%d" % (bid, lvl), w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), ["interior", "building=" + bid, "floor=%d" % lvl] + structure_tags(w)))
+            spec = wall_cube(w["id"], "Buildings/%s/L%d" % (bid, lvl), w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), ["interior", "building=" + bid, "floor=%d" % lvl] + structure_tags(w))
+            if LANE_WALL_RE.search(w["id"]):
+                # 2026-11-21 night (nav lab, docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md): the 10 cm wall between a switchback's two flights
+                # broke Recast in some tile / voxel alignments - the whole core column (ground landing, flights, next landing) came out without
+                # navmesh (L_Gen_BgenPlans B_b18 / B_y, showcase S10). Now it only blocks sight and the camera: the navmesh ignores it and so
+                # do pawns (a nav-only removal left pawns cutting its end on the mid landing and sticking there: nav lab Y_1_c1). The flights
+                # are 0.5 storey apart along it, so nobody crosses sideways except at its ends, where both flights meet the same landing.
+                spec["affects_navigation"] = False
+                spec["collision"] = {"pawn": "ignore"}
+                spec["tags"] = spec["tags"] + ["lane_wall"]
+            specs.append(spec)
             interior_by_building_floor.setdefault((bid, lvl), []).append(w)
         else:
             ext_by_building.setdefault(bid, []).append(w)

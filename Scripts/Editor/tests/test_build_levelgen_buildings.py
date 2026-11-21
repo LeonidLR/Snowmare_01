@@ -455,6 +455,11 @@ class SwitchbackStairTest(unittest.TestCase):
         labels = [s["label"] for s in specs]
         self.assertIn("B_k_lanewall_f0", labels)
         self.assertNotIn("B_k_part_f0_0_x", labels)
+        # 2026-11-21 night: it blocks sight only - not the navmesh (the thin wall broke whole core columns in some tile alignments), not pawns
+        lane = next(s for s in specs if s["label"] == "B_k_lanewall_f0")
+        self.assertIs(lane.get("affects_navigation"), False)
+        self.assertEqual(lane.get("collision"), {"pawn": "ignore"})
+        self.assertIn("lane_wall", lane["tags"])
 
     def test_two_ramps_and_a_mid_landing(self):
         specs = builder._stair_specs("B_k", dict(self.STAIR), 0.0, "Buildings/B_k")
