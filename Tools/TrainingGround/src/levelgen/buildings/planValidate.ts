@@ -7,10 +7,11 @@ import type { Vec2 } from '../../movement/geometry.ts';
 import type { TraversalIssue, TraversalSeverity } from '../buildingTraversal.ts';
 import { toBuildingFrame } from '../rotation.ts';
 import type { GenBuilding, GenLayout, GenPartition, GenRoom, Stair, WallOpening } from '../schema.ts';
-import { STAIR_APPROACH_CM } from '../schema.ts';
+import { STAIR_APPROACH_CM, isSwitchback, stairFlights } from '../schema.ts';
 import type { Box, CoreFlight } from '../windowClearance.ts';
 import { boxesOverlap, coreBoxesOn } from '../windowClearance.ts';
 import { BUILDING_PLANS } from './bandPlan.ts';
+import { KIT } from './kitPlan.ts';
 
 const C = BUILDING_PLANS.constants;
 const O = C.openings;
@@ -133,6 +134,7 @@ function roomTiling(b: GenBuilding, rooms: GenRoom[], issues: TraversalIssue[]):
 
 function offGrid(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: TraversalIssue[]): void {
   const fp = b.footprint;
+  const grid = b.plan?.pattern === 'kit' ? KIT.grid_cm : C.grid_cm; // the kit's rooms lie on the designer's 50 cm grid
   // the edge a stair-core room makes at its depth (200 / 350 from a building wall) is off the 100 grid by design; its neighbours share it
   const core: [number[], number[]] = [[], []];
   for (const r of rooms) {
@@ -148,8 +150,8 @@ function offGrid(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: Tra
   for (const r of rooms) {
     for (const a of [0, 1] as const) {
       for (const e of [r.bounds.min[a], r.bounds.max[a]]) {
-        if (onGrid(e - fp[0][a], C.grid_cm) || core[a].some((c) => near(c, e))) continue;
-        issues.push({ severity: PLAN_SEVERITY.off_grid, code: 'off_grid', ref: r.id, message: `${r.id}: its ${axisName[a]} edge at ${Math.round(e)} is ${Math.round(e - fp[0][a])} cm from the footprint corner, off the ${C.grid_cm} grid` });
+        if (onGrid(e - fp[0][a], grid) || core[a].some((c) => near(c, e))) continue;
+        issues.push({ severity: PLAN_SEVERITY.off_grid, code: 'off_grid', ref: r.id, message: `${r.id}: its ${axisName[a]} edge at ${Math.round(e)} is ${Math.round(e - fp[0][a])} cm from the footprint corner, off the ${grid} grid` });
       }
     }
   }
@@ -171,9 +173,19 @@ function roomSize(b: GenBuilding, rooms: GenRoom[], issues: TraversalIssue[]): v
   const suiteFits = (u: number, v: number): boolean => range(u, C.end_bay_cm.min, C.end_bay_cm.max) && v >= C.room_cm.min - TOL;
   const roomFits = (u: number, v: number): boolean => range(u, C.room_cm.min, C.room_cm.max) && range(v, C.room_cm.min, C.room_cm.max);
   const serviceFits = (u: number, v: number): boolean => range(v, C.service_room.depth_min_cm, C.service_room.depth_max_cm) && range(u, C.service_room.width_min_cm, C.service_room.width_max_cm);
+  const kitAreas = KIT.room_area_m2 as Record<string, number[]>;
   for (const r of rooms) {
     const a = rectOf(r), w = a.x1 - a.x0, h = a.y1 - a.y0, u = alongY ? h : w, v = alongY ? w : h;
     const dims = `${Math.round(u)} x ${Math.round(v)} cm (u x v)`;
+    if (r.use) {
+      // a kit room: the kit's area band of its use; living rooms at least one 3 m bay wide; the core = the kit's stair cell
+      const m2 = (w * h) / 1e4, band = kitAreas[r.use];
+      if (r.use === 'landing') {
+        if (!uv(u, v, (uu, vv) => near(uu, KIT.core.width_cm) && near(vv, KIT.core.depth_cm))) bad(r, `a kit stair core is ${dims}, not ${KIT.core.width_cm} x ${KIT.core.depth_cm}`);
+      } else if (band && (m2 < band[0] - 0.01 || m2 > band[1] + 0.01)) bad(r, `a kit ${r.use} of ${m2.toFixed(2)} m2 (${dims}), outside ${band[0]}-${band[1]} m2`);
+      if (r.use === 'living' && Math.min(w, h) < KIT.full_flat.living_min_cm - TOL) bad(r, `a kit living room ${Math.round(Math.min(w, h))} cm narrow (< ${KIT.full_flat.living_min_cm})`);
+      continue;
+    }
     const kind = r.kind ?? 'room';
     switch (kind) {
       case 'room': case 'lobby':
@@ -260,7 +272,9 @@ function storeyNoLoop(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues
   const severity: TraversalSeverity = b.stories?.length ? 'warning' : PLAN_SEVERITY.storey_no_loop;
   for (let f = 0; f < b.floors; f++) {
     // the stair core joins its corridor by two portals: a loop through it needs no room, so it stays out of the graph
-    const rs = rooms.filter((r) => r.floor === f && r.kind !== 'stairwell');
+    // 3.5 rule 3 checks the loop "with its dead-end units removed": a kit flat (one entry each) is a dead end by design
+    const deadEnd = new Set((b.units ?? []).filter((u) => u.floor === f && u.dead_end).flatMap((u) => u.rooms));
+    const rs = rooms.filter((r) => r.floor === f && r.kind !== 'stairwell' && !(b.plan?.pattern === 'kit' && deadEnd.has(r.id)));
     const counted = rs.filter(isRoomy).length;
     if (counted < 3) continue;
     const ids = new Set(rs.map((r) => r.id));
@@ -304,14 +318,19 @@ function segmentBox(p: Placed): Box {
 }
 
 function openingIntoCore(b: GenBuilding, placed: Placed[], issues: TraversalIssue[]): void {
-  const flights: CoreFlight[] = stairwellFlights(b).map((st) => ({ pos: toBuildingFrame(b, st.pos), top: toBuildingFrame(b, st.top), from: st.from, to: st.to }));
-  if (!flights.length) return;
+  // a switchback's floor landing IS its approach (the flats open onto it): only its flight bodies, its mid landing and the gaps are kept clear
+  const flights: CoreFlight[] = stairwellFlights(b).filter((st) => !isSwitchback(st)).map((st) => ({ pos: toBuildingFrame(b, st.pos), top: toBuildingFrame(b, st.top), from: st.from, to: st.to }));
+  const bodies = (f: number): Box[] => stairwellFlights(b).filter((st) => isSwitchback(st) && st.from === f).flatMap((st) => [
+    ...stairFlights(st).map((fl) => flightBody(toBuildingFrame(b, fl.a), toBuildingFrame(b, fl.b))),
+    ...(st.mid_rect ? [[[Math.min(st.mid_rect[0][0], st.mid_rect[1][0]), Math.min(st.mid_rect[0][1], st.mid_rect[1][1])], [Math.max(st.mid_rect[0][0], st.mid_rect[1][0]), Math.max(st.mid_rect[0][1], st.mid_rect[1][1])]] as Box] : []),
+  ]);
+  if (!stairwellFlights(b).length) return;
   const gaps = (f: number): Box[] => (b.floors_detail ?? []).filter((fd) => fd.floor === f).flatMap((fd) => (fd.gaps ?? []).filter((g) => g.kind === 'stairwell').map((g): Box => {
     const pts = g.poly.map((q) => toBuildingFrame(b, q));
     return [[Math.min(...pts.map((q) => q[0])), Math.min(...pts.map((q) => q[1]))], [Math.max(...pts.map((q) => q[0])), Math.max(...pts.map((q) => q[1]))]];
   }));
   const cache = new Map<number, Box[]>();
-  const boxes = (f: number): Box[] => { let x = cache.get(f); if (!x) { x = [...coreBoxesOn(f, flights, [], 1), ...gaps(f)]; cache.set(f, x); } return x; };
+  const boxes = (f: number): Box[] => { let x = cache.get(f); if (!x) { x = [...(flights.length ? coreBoxesOn(f, flights, [], 1) : []), ...bodies(f), ...gaps(f)]; cache.set(f, x); } return x; };
   for (const p of placed) {
     if (!isDoorOrWindow(p) || p.op.role === 'portal') continue;
     const seg = segmentBox(p);
@@ -321,9 +340,25 @@ function openingIntoCore(b: GenBuilding, placed: Placed[], issues: TraversalIssu
   }
 }
 
+/** A flight's ramp body (its lane between the two ends, half a flight to each side), building frame. */
+function flightBody(a: Vec2, c: Vec2): Box {
+  const hw = 75, alongX = Math.abs(c[0] - a[0]) >= Math.abs(c[1] - a[1]);
+  return alongX ? [[Math.min(a[0], c[0]), a[1] - hw], [Math.max(a[0], c[0]), a[1] + hw]] : [[a[0] - hw, Math.min(a[1], c[1])], [a[0] + hw, Math.max(a[1], c[1])]];
+}
+
 function stairPadUnlinked(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: TraversalIssue[]): void {
   const doors = placed.filter((p) => p.op.kind === 'door' && p.op.links);
-  for (const st of stairwellFlights(b)) {
+  // a switchback's pads are its own floor landing (inside the stairwell room): the room needs a door on each storey the stair starts / arrives on
+  for (const st of stairwellFlights(b).filter(isSwitchback)) {
+    const at = toBuildingFrame(b, st.pos);
+    for (const floor of st.to < b.floors ? [st.from, st.to] : [st.from]) {
+      const room = rooms.find((r) => r.kind === 'stairwell' && r.floor === floor && at[0] >= r.bounds.min[0] - TOL && at[0] <= r.bounds.max[0] + TOL && at[1] >= r.bounds.min[1] - TOL && at[1] <= r.bounds.max[1] + TOL);
+      const ref = `${st.id} landing f${floor}`;
+      if (!room) issues.push({ severity: PLAN_SEVERITY.stair_pad_unlinked, code: 'stair_pad_unlinked', ref, message: `${st.id}: its floor landing on storey ${floor} lies in no stairwell room` });
+      else if (!doors.some((p) => p.op.floor === floor && p.op.links!.includes(room.id))) issues.push({ severity: PLAN_SEVERITY.stair_pad_unlinked, code: 'stair_pad_unlinked', ref, message: `${st.id}: the floor landing on storey ${floor} has no door` });
+    }
+  }
+  for (const st of stairwellFlights(b).filter((x) => !isSwitchback(x))) {
     const pos = toBuildingFrame(b, st.pos), top = toBuildingFrame(b, st.top);
     const d: Vec2 = [top[0] - pos[0], top[1] - pos[1]];
     if (Math.hypot(d[0], d[1]) < 1) continue;
@@ -378,8 +413,9 @@ function windowRule(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues: 
       if (d.op.kind !== 'door' || d.part || d.op.floor !== w.op.floor || !near(d.pos[1 - wall.along], wall.line)) continue;
       ends.push([`the door ${d.ref}`, d.pos[wall.along], (d.op.width ?? O.door_cm) / 2]);
     }
+    const clearCm = b.plan?.pattern === 'kit' ? KIT.window_clear_cm : O.window_clear_cm;
     for (const [what, at, other] of ends) {
-      if (gap(at, other) + TOL < O.window_clear_cm) issues.push({ severity: PLAN_SEVERITY.window_rule, code: 'window_rule', ref: w.ref, message: `${w.ref}: ${Math.round(gap(at, other))} cm from ${what} (< ${O.window_clear_cm})` });
+      if (gap(at, other) + TOL < clearCm) issues.push({ severity: PLAN_SEVERITY.window_rule, code: 'window_rule', ref: w.ref, message: `${w.ref}: ${Math.round(gap(at, other))} cm from ${what} (< ${clearCm})` });
     }
     for (const o of windows) {
       if (o === w || o.op.floor !== w.op.floor || !near(o.pos[1 - wall.along], wall.line)) continue;

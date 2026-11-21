@@ -67,7 +67,7 @@ export function cellRect(f: PlanFrame, c: PlanCell): [Vec2, Vec2] {
 }
 
 /** A wall segment two cells share: `axis` 'u' = horizontal (const v = `at`) over u in [lo, hi]; 'v' = vertical (const u = `at`) over v in [lo, hi]. */
-export interface SharedSeg { a: PlanCell; b: PlanCell; axis: 'u' | 'v'; at: number; lo: number; hi: number; /** Two corridor cells: an open boundary, no wall. */ seam: boolean }
+export interface SharedSeg { a: PlanCell; b: PlanCell; axis: 'u' | 'v'; at: number; lo: number; hi: number; /** Two corridor cells of the same unit (or both common): an open boundary, no wall. */ seam: boolean }
 
 /** Every shared edge of the plan, cell pairs in the plan's order. A seam (two corridor cells) is flagged: it has neither a partition nor a door. */
 export function sharedSegs(plan: BandPlan): SharedSeg[] {
@@ -77,7 +77,7 @@ export function sharedSegs(plan: BandPlan): SharedSeg[] {
     for (let j = i + 1; j < cs.length; ++j) {
       const a = cs[i], b = cs[j];
       const lu = Math.max(a.u0, b.u0), hu = Math.min(a.u1, b.u1), lv = Math.max(a.v0, b.v0), hv = Math.min(a.v1, b.v1);
-      const seam = a.kind === 'corridor' && b.kind === 'corridor';
+      const seam = a.kind === 'corridor' && b.kind === 'corridor' && a.unit === b.unit; // a flat's hall / corridor never opens onto a common corridor
       if ((a.v1 === b.v0 || b.v1 === a.v0) && hu > lu) out.push({ a, b, axis: 'u', at: a.v1 === b.v0 ? a.v1 : b.v1, lo: lu, hi: hu, seam });
       if ((a.u1 === b.u0 || b.u1 === a.u0) && hv > lv) out.push({ a, b, axis: 'v', at: a.u1 === b.u0 ? a.u1 : b.u1, lo: lv, hi: hv, seam });
     }

@@ -78,7 +78,8 @@ test('a storied block: the old story (a fire escape + its ladder) is dropped wit
   const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [], building_plans: true };
   let n = 4 * 7919;
   const random = (): number => { n = (n * 1103515245 + 12345) & 0x7fffffff; return n / 0x7fffffff; };
-  addBuilding(d, 'B_t', [[20.37, 15.21], [38.77, 25.51]], { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: true, stairwell: true, set_piece: 'facade', archetype: 'block', doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true }, random);
+  // the S2.3 block: story 4 needs the balcony slot windows, which the kit pattern does not mark yet (the window / balcony step comes after it)
+  addBuilding(d, 'B_t', [[20.37, 15.21], [38.77, 25.51]], { height: 2 * LEVEL_HEIGHT, floors: 2, enterable: true, roof_walkable: true, stairwell: true, set_piece: 'facade', archetype: 'block', doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_pattern: 'sections' }, random);
   const l0 = finalizeDraftToLayout(d, [90, 90], { name: 't', profile: 't', seed: 1, params: { ...DEFAULT_PARAMS, size_m: [90, 90], building_plans: true }, start: [4, 2], end: [36, 58] });
   const b0 = byId(l0, 'B_t'), c = [(b0.footprint[0][0] + b0.footprint[1][0]) / 2, (b0.footprint[0][1] + b0.footprint[1][1]) / 2];
   const layout: GenLayout = { ...l0, routes: [{ id: 'R', mandatory: true, points: [[c[0] - 3000, c[1] + 1500], [c[0] + 3000, c[1] + 1500]] } as never] };

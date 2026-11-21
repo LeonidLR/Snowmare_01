@@ -68,6 +68,11 @@ namespace LevelGenRampSmoke
 		int32 LevelTo = 0;
 		FBox2D Roof = FBox2D(ForceInit);         // the building's footprint
 		TArray<FVector2D> Holes;                  // roof holes on the top level (half 120 / stairwell openings)
+		// A half-landing switchback (kit block cores, docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md): flight a Foot -> Turn (half rise),
+		// the mid landing, flight b Mid -> Top. Dir = up flight a, Inward = along flight b onto the floor landing.
+		bool bSwitchback = false;
+		FVector2D Turn = FVector2D::ZeroVector;
+		FVector2D Mid = FVector2D::ZeroVector;
 	};
 
 	struct FLeg
@@ -293,9 +298,10 @@ namespace LevelGenRampSmoke
 			FNavLocation Out;
 			// Recast can end the sloping polygon below the straight line to the slab.
 			// Widen the vertical probe locally without allowing a different storey.
-			const double ExpectedZ = FMath::Lerp(static_cast<double>(Z0), static_cast<double>(Z1), T);
+			const double ZEnd = Stair.bSwitchback ? (static_cast<double>(Z0) + Z1) * 0.5 : static_cast<double>(Z1);
+			const double ExpectedZ = FMath::Lerp(static_cast<double>(Z0), ZEnd, T);
 			const double LowZ = FMath::Max(ExpectedZ - 110.0, Z0 - 25.0);
-			const double HighZ = FMath::Min(ExpectedZ + 80.0, Z1 + 40.0);
+			const double HighZ = FMath::Min(ExpectedZ + 80.0, ZEnd + 40.0);
 			const bool bOn = Nav->ProjectPointToNavigation(FVector(P.X, P.Y, (LowZ + HighZ) * 0.5), Out,
 				FVector(30.0, 30.0, (HighZ - LowZ) * 0.5))
 				&& Out.Location.Z >= LowZ && Out.Location.Z <= HighZ;
@@ -316,6 +322,26 @@ namespace LevelGenRampSmoke
 				TopOnNav = Landing.Location;
 				bTopOnNav = true;
 				break;
+			}
+		}
+		if (Stair.bSwitchback)
+		{
+			// the second flight from the mid landing (half a storey up) onto the next floor landing
+			const double ZMid = (static_cast<double>(Z0) + Z1) * 0.5;
+			const double LengthB = FVector2D::Distance(Stair.Mid, Stair.Top);
+			Samples += TEXT(" |");
+			for (double D = 0.0; D <= LengthB + 1.0; D += 100.0)
+			{
+				const double T = FMath::Clamp(D / FMath::Max(LengthB, 1.0), 0.0, 1.0);
+				const FVector2D P = Stair.Mid + (Stair.Top - Stair.Mid).GetSafeNormal() * D;
+				const double ExpectedZ = FMath::Lerp(ZMid, static_cast<double>(Z1), T);
+				const double LowZ = FMath::Max(ExpectedZ - 110.0, ZMid - 25.0);
+				const double HighZ = FMath::Min(ExpectedZ + 80.0, Z1 + 40.0);
+				FNavLocation Out;
+				const bool bOn = Nav->ProjectPointToNavigation(FVector(P.X, P.Y, (LowZ + HighZ) * 0.5), Out, FVector(30.0, 30.0, (HighZ - LowZ) * 0.5))
+					&& Out.Location.Z >= LowZ && Out.Location.Z <= HighZ;
+				Samples += bOn ? FString::Printf(TEXT(" %.0f"), Out.Location.Z) : FString(TEXT(" ---"));
+				bConnected &= bOn;
 			}
 		}
 		const FString Note = bTopOnNav ? PathNote(World, OnNav(World, From), TopOnNav, nullptr) : TEXT("no top-level navmesh");
@@ -364,9 +390,18 @@ namespace LevelGenRampSmoke
 				Stair.Kind = S->GetStringField(TEXT("kind"));
 				Stair.Foot = ReadPoint(S, TEXT("pos"));
 				Stair.Top = ReadPoint(S, TEXT("top"));
-				const FVector2D Mid = S->HasField(TEXT("mid")) ? ReadPoint(S, TEXT("mid")) : Stair.Top;
+				FVector2D Mid = S->HasField(TEXT("mid")) ? ReadPoint(S, TEXT("mid")) : Stair.Top;
 				Stair.Dir = (Mid - Stair.Foot).GetSafeNormal();
 				Stair.Inward = Stair.Kind == TEXT("external") ? (Stair.Top - Mid).GetSafeNormal() : Stair.Dir;
+				if (Stair.Kind == TEXT("stairwell") && S->HasField(TEXT("turn")) && S->HasField(TEXT("mid")))
+				{
+					Stair.bSwitchback = true;
+					Stair.Turn = ReadPoint(S, TEXT("turn"));
+					Stair.Mid = Mid;
+					Stair.Dir = (Stair.Turn - Stair.Foot).GetSafeNormal();
+					Stair.Inward = (Stair.Top - Stair.Mid).GetSafeNormal();
+					Mid = Stair.Turn; // LogRampNav's first segment = flight a
+				}
 				Stair.LevelFrom = static_cast<int32>(S->GetNumberField(TEXT("from")));
 				Stair.LevelTo = static_cast<int32>(S->GetNumberField(TEXT("to")));
 				Stair.Roof = Roof;
@@ -382,7 +417,15 @@ namespace LevelGenRampSmoke
 					{
 						const FVector2D OPos = ReadPoint(O, TEXT("pos"));
 						const FVector2D OTop = ReadPoint(O, TEXT("top"));
-						Stair.Holes.Add(OTop - (OTop - OPos).GetSafeNormal() * 175.0);
+						if (O->HasField(TEXT("turn")) && O->HasField(TEXT("mid")))
+						{
+							// a switchback's opening: the whole core beyond its floor landing (both flights + the mid landing)
+							Stair.Holes.Add((OPos + OTop + ReadPoint(O, TEXT("turn")) + ReadPoint(O, TEXT("mid"))) * 0.25);
+						}
+						else
+						{
+							Stair.Holes.Add(OTop - (OTop - OPos).GetSafeNormal() * 175.0);
+						}
 					}
 				}
 				FVector TopOnNav = FVector::ZeroVector;
@@ -418,7 +461,9 @@ namespace LevelGenRampSmoke
 					Leg.Kind = Kind;
 					Leg.Stair = Index;
 					// The group's click lands right past the stair's top (the player clicks where the stair arrives); the others further in.
-					Leg.Goal = Stair.LevelFrom > 0 ? TopOnNav : RoofGoal(State, State.Stairs[Index], Kind == ELegKind::Group ? 250.f : 600.f);
+					// a switchback below the roof arrives on a floor landing between closed flat doors: the goal is that landing, never a roof-style goal
+					Leg.Goal = Stair.LevelFrom > 0 || (Stair.bSwitchback && Stair.LevelTo < Floors) ? TopOnNav
+						: RoofGoal(State, State.Stairs[Index], Kind == ELegKind::Group ? 250.f : 600.f);
 					Leg.Limit = 60.f + Rise / 10.f;
 					State.Legs.Add(Leg);
 				}
@@ -482,15 +527,25 @@ namespace LevelGenRampSmoke
 		{
 			Side = -Side;
 		}
-		const TArray<FVector2D> Spots = bStairwell
+		// A switchback's mouth is its floor landing (200 cm deep, both lanes wide): every spot on it, the back man in its middle.
+		const FVector2D Across = (Stair.Top - Stair.Foot).GetSafeNormal();
+		const TArray<FVector2D> Spots = Stair.bSwitchback
+			? TArray<FVector2D>{ Stair.Foot - Stair.Dir * 60.0, Stair.Foot - Stair.Dir * 60.0 + Across * 170.0, Stair.Foot - Stair.Dir * 130.0 + Across * 85.0,
+				Stair.Foot - Stair.Dir * 150.0 + Across * 170.0 }
+			: bStairwell
 			? TArray<FVector2D>{ Stair.Foot - Stair.Dir * 50.0 + Side * 40.0, Stair.Foot + Side * 120.0, Stair.Foot - Stair.Dir * 40.0 + Side * 260.0, Stair.Foot + Side * 260.0 + Stair.Dir * 100.0 }
 			: TArray<FVector2D>{ Stair.Foot - Stair.Dir * 120.0 + Side * 60.0, Stair.Foot - Stair.Dir * 120.0 - Side * 60.0, Stair.Foot - Stair.Dir * 260.0,
 				Stair.Foot - Stair.Dir * 260.0 + Side * 130.0 };
 		// A spot behind a wall (IsMouthSpot) gives way to the next free one in the mouth: behind the foot along the flight's axis (the open floor a
 		// stairwell in a stair core has there), the back man the farthest. The spots of the maps before the cores stay as they were.
-		const TArray<FVector2D> BackSpots{ Stair.Foot - Stair.Dir * 260.0, Stair.Foot - Stair.Dir * 260.0 + Side * 60.0, Stair.Foot - Stair.Dir * 260.0 - Side * 60.0,
+		const TArray<FVector2D> BackSpots = Stair.bSwitchback
+			? TArray<FVector2D>{ Stair.Foot - Stair.Dir * 150.0, Stair.Foot - Stair.Dir * 120.0 + Across * 170.0, Stair.Foot - Stair.Dir * 100.0 + Across * 85.0 }
+			: TArray<FVector2D>{ Stair.Foot - Stair.Dir * 260.0, Stair.Foot - Stair.Dir * 260.0 + Side * 60.0, Stair.Foot - Stair.Dir * 260.0 - Side * 60.0,
 			Stair.Foot - Stair.Dir * 200.0 };
-		const TArray<FVector2D> NearSpots{ Stair.Foot - Stair.Dir * 120.0 + Side * 60.0, Stair.Foot - Stair.Dir * 120.0 - Side * 60.0, Stair.Foot - Stair.Dir * 60.0,
+		const TArray<FVector2D> NearSpots = Stair.bSwitchback
+			? TArray<FVector2D>{ Stair.Foot - Stair.Dir * 60.0, Stair.Foot - Stair.Dir * 60.0 + Across * 170.0, Stair.Foot - Stair.Dir * 150.0 + Across * 170.0,
+				Stair.Foot - Stair.Dir * 100.0 + Across * 85.0, Stair.Foot - Stair.Dir * 150.0 }
+			: TArray<FVector2D>{ Stair.Foot - Stair.Dir * 120.0 + Side * 60.0, Stair.Foot - Stair.Dir * 120.0 - Side * 60.0, Stair.Foot - Stair.Dir * 60.0,
 			Stair.Foot - Stair.Dir * 180.0 };
 		TArray<FVector2D> Chosen;
 		const auto Pick = [&](const FVector2D& First, const TArray<FVector2D>& Others, FVector& OutAt, FVector2D& OutAsked)

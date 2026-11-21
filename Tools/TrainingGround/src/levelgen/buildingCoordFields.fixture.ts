@@ -23,12 +23,12 @@ export const ALL_FIELDS_BUILDING: Full<GenBuilding> = {
   "partitions": [{ "id": "B_all_p0", "start": [1500, 2000], "end": [1500, 2800], "floor": 0, "height": 300, "thickness": 20,
     "openings": [{ "id": "B_all_p0_d", "kind": "door", "pos": [1500, 2450], "floor": 0, "wall": "B_all_p0", "width": 120, "sill_height": 0, "top_height": 210, "yaw": 90, "state": "closed", "links": ["B_all_r0", "B_all_r2"], "role": "room", "module": "wall_door_200", "slot": "escape" }] }],
   "floors_detail": [{ "floor": 1, "height_z": 300, "gaps": [{ "id": "B_all_g0", "poly": [[2000, 2100], [2150, 2100], [2150, 2500]], "kind": "stairwell" }],
-    "rooms": [{ "id": "B_all_r1", "floor": 1, "bounds": { "min": [1010, 2010], "max": [1490, 2790] }, "kind": "room", "door_ids": ["B_all_w0"], "unit": "suite", "zone": "wing_a", "walls": ["B_all_W"], "anchor": [1250, 2400] }] }],
+    "rooms": [{ "id": "B_all_r1", "floor": 1, "bounds": { "min": [1010, 2010], "max": [1490, 2790] }, "kind": "room", "use": "living", "door_ids": ["B_all_w0"], "unit": "suite", "zone": "wing_a", "walls": ["B_all_W"], "anchor": [1250, 2400] }] }],
   "hatches": [{ "id": "B_all_h0", "pos": [1800, 2200], "floor": 1, "size": [100, 100], "ladder_id": "LAD_B_all_h0" }],
   "parapets": [{ "wall_id": "B_all_N", "start": [1000, 2000], "end": [2200, 2000], "height_cm": 100, "thickness_cm": 20 }],
-  "rooms": [{ "id": "B_all_r0", "floor": 0, "bounds": { "min": [1020, 2020], "max": [1480, 2780] }, "kind": "hall", "door_ids": ["B_all_p0_d"], "unit": "suite", "zone": "common", "walls": ["B_all_S"], "anchor": [1250, 2400] }],
+  "rooms": [{ "id": "B_all_r0", "floor": 0, "bounds": { "min": [1020, 2020], "max": [1480, 2780] }, "kind": "hall", "use": "hall", "door_ids": ["B_all_p0_d"], "unit": "suite", "zone": "common", "walls": ["B_all_S"], "anchor": [1250, 2400] }],
   "mantle_edges": [{ "id": "B_all_m0", "start": [1000, 2250], "end": [1000, 2350], "floor": 1, "base_z": 300, "height_cm": 95, "normal": [-1, 0], "kind": "window", "building": "B_all", "wall": "B_all_W" }],
-  "stairs": [{ "id": "B_all_s0", "pos": [2050, 2150], "from": 0, "to": 1, "kind": "stairwell", "top": [2050, 2580], "mid": [2050, 2400], "blocked": "rubble", "down_only": false }],
+  "stairs": [{ "id": "B_all_s0", "pos": [2050, 2150], "from": 0, "to": 1, "kind": "stairwell", "top": [2050, 2580], "mid": [2050, 2400], "turn": [2050, 2300], "mid_rect": [[2000, 2380], [2200, 2540]], "blocked": "rubble", "down_only": false }],
   "roof_holes": [[1300, 2600]],
   "floor_holes": [{ "pos": [1250, 2250], "floor": 1 }],
   "set_piece": "facade",
@@ -43,6 +43,6 @@ export const ALL_FIELDS_BUILDING: Full<GenBuilding> = {
   "breach_route": { "legs": [{ "from": "street", "to": "B_all_r0", "mode": "explosive" }], "cost": 70, "detour": 7, "cost_hash": "00000000" },
   "fast_entry": "B_all_w0",
   "quiet_entry": "B_all_w0",
-  "plan": { "v": 1, "kind": "bands", "seed": 12345, "core_wall": "B_all_N", "street_wall": "B_all_S", "variant": "double", "fallback": "none", "sections": 2 },
+  "plan": { "v": 1, "kind": "bands", "seed": 12345, "core_wall": "B_all_N", "street_wall": "B_all_S", "variant": "double", "fallback": "none", "sections": 2, "pattern": "kit", "notes": ["n"] },
   "units": [{ "id": "B_all_u_f1_s0L", "kind": "flat", "floor": 1, "rooms": ["B_all_r1"], "entries": ["B_all_p0_d"], "column": "B_all_col_s0L", "dead_end": true, "run_cm": 640 }]
 };

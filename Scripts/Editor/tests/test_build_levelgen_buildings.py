@@ -424,5 +424,53 @@ class BuildLevelGenBuildingsTest(unittest.TestCase):
         self.assertEqual(specs["AMB_corner"]["tags"], [builder.AMBUSH_TAG])
 
 
+class SwitchbackStairTest(unittest.TestCase):
+    """Kit block cores (docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md): a half-landing switchback stair = two ramps of half the storey
+    rise each + a mid landing slab at the half level; no straight-flight hole (the generator's floors_detail gap opens the slab)."""
+
+    STAIR = {"id": "B_k_stair_0", "kind": "stairwell", "from": 0, "to": 1, "pos": [90.0, 215.0], "turn": [90.0, 430.0], "mid": [260.0, 430.0],
+             "top": [260.0, 215.0], "mid_rect": [[10.0, 430.0], [340.0, 590.0]]}
+
+    def test_two_ramps_and_a_mid_landing(self):
+        specs = builder._stair_specs("B_k", dict(self.STAIR), 0.0, "Buildings/B_k")
+        self.assertEqual([s["label"] for s in specs], ["B_k_B_k_stair_0", "B_k_B_k_stair_0_b", "B_k_B_k_stair_0_midlanding"])
+        a, b, mid = specs
+        # each ramp rises half a storey (150 cm) over the 215 cm run: 34.9 deg, walkable (<= 44)
+        for ramp in (a, b):
+            self.assertAlmostEqual(abs(ramp["pitch"]), 34.9, places=1)
+            self.assertLessEqual(abs(ramp["pitch"]), 44.0)
+        self.assertGreater(a["pitch"], 0.0)  # pos -> turn rises
+        self.assertAlmostEqual(a["location"][2], 75.0 - builder.SLAB / 2.0)
+        self.assertAlmostEqual(b["location"][2], 225.0 - builder.SLAB / 2.0)
+        self.assertAlmostEqual(mid["location"][2], 150.0 - builder.SLAB / 2.0)  # the slab top at the half level
+        self.assertAlmostEqual(mid["scale"][0] * 100.0, 330.0)
+        self.assertAlmostEqual(mid["scale"][1] * 100.0, 160.0)
+        self.assertIn("mid_landing", mid["tags"])
+        self.assertTrue(all("switchback" in s["tags"] for s in specs))
+
+    def test_upper_storey_heights(self):
+        st = dict(self.STAIR, id="B_k_stair_1", **{"from": 1, "to": 2})
+        a, b, mid = builder._stair_specs("B_k", st, 10.0, "Buildings/B_k")
+        self.assertAlmostEqual(mid["location"][2], 10.0 + 450.0 - builder.SLAB / 2.0)
+        self.assertAlmostEqual(b["location"][2], 10.0 + 525.0 - builder.SLAB / 2.0)
+
+    def test_blocked_switchback_blocks_both_flights(self):
+        specs = builder._stair_specs("B_k", dict(self.STAIR, blocked="rubble"), 0.0, "Buildings/B_k")
+        self.assertEqual(sum(1 for s in specs if "flight_block" in s.get("tags", [])), 2)
+        self.assertEqual(sum(1 for s in specs if s.get("kind") == "nav_modifier"), 2)
+
+    def test_no_straight_hole_for_a_switchback(self):
+        """A planned building with one switchback stair: the floor-1 slab is cut by the floors_detail gap only (one hole), never by
+        stairwell_hole_rect across the two lanes."""
+        b = {"id": "B_k", "footprint": [[0.0, 0.0], [1400.0, 2000.0]], "floors": 2, "height": 600, "enterable": True, "roof_walkable": False,
+             "openings": [], "partitions": [], "plan": {"v": 1, "kind": "bands"}, "stairs": [dict(self.STAIR)],
+             "floors_detail": [{"floor": 1, "height_z": 300, "gaps": [{"id": "g", "kind": "stairwell", "poly": [[10, 215], [340, 215], [340, 590], [10, 590]]}]}]}
+        layout = {"walls": [], "buildings": [b], "ladders": [], "mantle_edges": []}
+        specs = builder._walls_and_buildings_extended(layout, 0.0, set(), {}, {})
+        floor1 = [s for s in specs if "floor_slab" in s.get("tags", []) and "floor=1" in s.get("tags", [])]
+        area = sum(s["scale"][0] * s["scale"][1] * 1e4 for s in floor1)
+        self.assertAlmostEqual(area, 1400.0 * 2000.0 - 330.0 * 375.0, delta=1.0)
+
+
 if __name__ == "__main__":
     unittest.main()

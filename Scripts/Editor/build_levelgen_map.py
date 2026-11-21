@@ -448,9 +448,38 @@ def blocked_flight_specs(label, folder, a, b, z0, z1, kind, width=STAIR_W):
     return out
 
 
+def is_switchback(s):
+    """A half-landing switchback stairwell (Training Ground kitPlan.ts / schema.ts isSwitchback): `turn` and `mid` set."""
+    return s.get("kind") == "stairwell" and bool(s.get("turn")) and bool(s.get("mid"))
+
+
+def switchback_specs(bid, s, gz, folder):
+    """A switchback stair (kit block, docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md): flight a pos -> turn (from -> half level), the
+    mid landing slab (`mid_rect`, building frame, top at the half level), flight b mid -> top (half level -> to). Blocked: both flights
+    get the blocked-flight extras. The slab opening above is the generator's floors_detail gap (no stairwell_hole_rect)."""
+    z0, z1 = gz + z_of(int(s["from"])), gz + z_of(int(s["to"]))
+    zm = (z0 + z1) / 2.0
+    label = "%s_%s" % (bid, s["id"])
+    tags = ["stair=%s" % s["id"], "switchback"]
+    out = [ramp(label, folder, s["pos"], s["turn"], z0, zm, tags=list(tags) + ["flight=a"]),
+           ramp(label + "_b", folder, s["mid"], s["top"], zm, z1, tags=list(tags) + ["flight=b"])]
+    if s.get("mid_rect"):
+        (ax, ay), (bx, by) = s["mid_rect"]
+        out.append(rect_slab(label + "_midlanding", folder, min(ax, bx), min(ay, by), max(ax, bx), max(ay, by), zm, list(tags) + ["mid_landing"]))
+    if s.get("blocked"):
+        for o in out[:2]:
+            o["tags"] = o["tags"] + ["stair_blocked=%s" % s["blocked"]]
+        out.extend(blocked_flight_specs(label, folder, s["pos"], s["turn"], z0, zm, s["blocked"]))
+        out.extend(blocked_flight_specs(label + "_b", folder, s["mid"], s["top"], zm, z1, s["blocked"]))
+        report("blocked switchback %s (%s): ramps kept, blocking boxes + NavArea_Null + rubble" % (label, s["blocked"]))
+    return out
+
+
 def _stair_specs(bid, s, gz, folder):
     """A building stair's ramp (+ landing for an external flight with a mid point), plus the blocked-flight extras when
-    s["blocked"] is set (absent on every /1 stair: the legacy specs, unchanged)."""
+    s["blocked"] is set (absent on every /1 stair: the legacy specs, unchanged). A switchback: switchback_specs."""
+    if is_switchback(s):
+        return switchback_specs(bid, s, gz, folder)
     z0, z1 = gz + z_of(int(s["from"])), gz + z_of(int(s["to"]))
     label = "%s_%s" % (bid, s["id"])
     out = []
@@ -889,7 +918,7 @@ def _walls_and_buildings_legacy(layout, gz, chimneys, frames, gaps):
         for h in b.get("floor_holes", []):
             holes_by_floor.setdefault(int(h["floor"]), []).append(h["pos"])
         for s in b.get("stairs", []):
-            if s.get("kind") == "stairwell":
+            if s.get("kind") == "stairwell" and not is_switchback(s):
                 # legacy layouts keep their square hole (bit-identical rebuilds); the extended path uses stairwell_hole_rect
                 end = s["top"]
                 d = (end[0] - s["pos"][0], end[1] - s["pos"][1])
@@ -1032,7 +1061,7 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         for h in b.get("floor_holes", []):
             holes_by_floor.setdefault(int(h["floor"]), []).append(h["pos"])
         for s in b.get("stairs", []):
-            if s.get("kind") == "stairwell":
+            if s.get("kind") == "stairwell" and not is_switchback(s):
                 # head room over the flight's last STAIRWELL_HOLE, only as wide as the flight (BUILDING_GENERATOR.md 2026-11-18:
                 # a square hole cut the neighbouring lane of the switchback core, where the next flight starts)
                 holes_by_floor.setdefault(int(s["to"]), []).append(stairwell_hole_rect(s["pos"], s["top"]))

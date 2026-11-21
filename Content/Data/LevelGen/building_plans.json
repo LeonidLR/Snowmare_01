@@ -55,7 +55,23 @@
       "section_cm": { "min": 1700, "max": 2300 },
       "slot_min_storey": 1,
       "p_three_storeys": 0.35,
-      "dead_end_min_run_cm": 800
+      "dead_end_min_run_cm": 800,
+      "pattern": "kit"
+    },
+    "block_kit": {
+      "comment": "Kit pattern of the residential block (docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md; measured from the Soviet panel-block pack: KIT_PILOT_2026-11-20.md, Saved/KitDump). Used when recipes.block.pattern is 'kit'; a footprint it cannot cut falls back to the S2.3 sections planner (recipes.block), then to the BSP. Plan frame as everywhere: u along the facade, v across, v = 0 = the court wall. A section = [flat A | tambour T | core K | flat C] along u; K (core.width_cm x core.depth_cm) and T (tambour_cm x core.depth_cm) stand on the court wall, flat B takes the street band over T + K (v = core depth .. D), A and C run the full depth. The core is a half-landing switchback: the floor landing (landing_cm) on the court side - the ground storey's court door opens onto it -, two flights per storey (each half the storey rise, 35 deg run) in two lanes, the mid landing (mid_landing_cm) at the far (inner) end; flats are entered from the landing (C) and from the tambour (A, B). A section under three_flat_min_depth_cm deep (the street band too shallow for flat B) is a two-flat section [A | K | C] (A and C full depth, both entered from the landing). Rooms on the 50 cm grid (designer 2026-11-20); every door keeps today's 150 cm (a door needs a 200 cm wall, so baths are 200 deep - the kit's 80 cm doors would allow 3 m2 baths: open question). Windows keep window_clear_cm (50, the kit's window grid in 3 m bays) from partitions and corners instead of the office's 120, so a 300 cm kitchen gets its window (the full window pass is a later step). Room areas: hall ~5-9, bath ~5-11, kitchen ~6-14, living ~9-35 m2 (room_area_m2 = the tolerance the TS tests check).",
+      "grid_cm": 50,
+      "min_depth_cm": 1000,
+      "max_depth_cm": 1500,
+      "three_flat_min_depth_cm": 1100,
+      "core": { "width_cm": 350, "depth_cm": 600, "landing_cm": 200, "mid_landing_cm": 160, "flight_w_cm": 150, "lane_gap_cm": 10, "wall_inner_cm": 15, "partition_half_cm": 10 },
+      "tambour_cm": 300,
+      "full_flat_cm": { "min": 550, "max": 800 },
+      "full_flat": { "spine_cm": 250, "hall_depth_cm": 250, "kitchen_depth_cm": 250, "bath_depth_cm": 200, "living_min_cm": 300, "street_living_cm": { "min": 350, "max": 550 } },
+      "street_flat": { "hall_width_cm": 500, "hall_depth_cm": 200, "kitchen_width_cm": 300, "kitchen_max_depth_cm": 400 },
+      "living_rooms": { "A": 2, "B": 1, "C": 3 },
+      "window_clear_cm": 50,
+      "room_area_m2": { "hall": [4, 10], "corridor": [1, 30], "bath": [3, 11.5], "kitchen": [5, 16], "living": [9, 45], "tambour": [5, 25] }
     }
   }
 }

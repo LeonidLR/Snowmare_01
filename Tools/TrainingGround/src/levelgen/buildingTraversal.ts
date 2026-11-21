@@ -8,7 +8,7 @@ import type { Vec2 } from '../movement/geometry.ts';
 import { toBuildingFrame } from './rotation.ts';
 import { assignRoles } from './buildingRoles.ts';
 import type { BuildingRole, GenBuilding, GenLayout, Stair } from './schema.ts';
-import { LEVEL_HEIGHT, OPENING_DEFAULTS, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE } from './schema.ts';
+import { LEVEL_HEIGHT, OPENING_DEFAULTS, STAIR_APPROACH_CM, STAIR_RUN_PER_RISE, isSwitchback, stairFlights } from './schema.ts';
 import { windowOntoCore, windowPartitionClash } from './windowClearance.ts';
 import type { PlanCode } from './buildings/planValidate.ts';
 import { PLAN_SEVERITY, checkPlan, isCorridorEndWindow } from './buildings/planValidate.ts';
@@ -182,7 +182,44 @@ function blockedOn(b: GenBuilding, l: GenLayout, level: number, box: Box): strin
   return null;
 }
 
+/**
+ * A half-landing switchback (kit block, kitPlan.ts): each flight keeps the 35-degree run for its half rise; the approach at the first flight's foot
+ * (behind `pos`, level `from`) and the landing after the second flight's top (past `top`, level `to`) are solid and free; both flight ends on the
+ * mid landing lie on `mid_rect`; the slab gap of level `to` stays off that landing (gap_overshoot).
+ */
+function checkSwitchback(l: GenLayout, b: GenBuilding, st: Stair, issues: TraversalIssue[]): void {
+  const fl = stairFlights(st).map((x) => ({ ...x, a: toBuildingFrame(b, x.a), b: toBuildingFrame(b, x.b) }));
+  for (const f of fl) {
+    const L = len(sub(f.b, f.a)), rise = (f.z1 - f.z0) * LEVEL_HEIGHT;
+    if (L + TRAVERSAL.runTol < rise * STAIR_RUN_PER_RISE) issues.push({ severity: TRAVERSAL_SEVERITY.stair_steep, code: 'stair_steep', ref: st.id, message: `${st.id}: a flight runs ${Math.round(L)} cm for a ${rise} cm rise (> 35 deg)` });
+  }
+  const unit = (p: Vec2, q: Vec2): Vec2 => { const d = sub(q, p), L = len(d) || 1; return [d[0] / L, d[1] / L]; };
+  const ua = unit(fl[0].a, fl[0].b), ub = unit(fl[1].a, fl[1].b);
+  const foot = strip(fl[0].a, mul(ua, -1), TRAVERSAL.approachDepth, TRAVERSAL.flightWidth);
+  const arrive = strip(fl[1].b, ub, TRAVERSAL.approachDepth, TRAVERSAL.flightWidth);
+  if (!solidAt(b, st.from, foot)) issues.push({ severity: TRAVERSAL_SEVERITY.stair_foot_no_floor, code: 'stair_foot_no_floor', ref: st.id, message: `${st.id}: no solid floor in the ${TRAVERSAL.approachDepth} cm approach at its foot (level ${st.from})` });
+  if (!solidAt(b, st.to, arrive)) issues.push({ severity: TRAVERSAL_SEVERITY.stair_top_no_floor, code: 'stair_top_no_floor', ref: st.id, message: `${st.id}: no solid floor in the ${TRAVERSAL.approachDepth} cm landing after its top (level ${st.to})` });
+  const bf = blockedOn(b, l, st.from, foot);
+  if (bf) issues.push({ severity: TRAVERSAL_SEVERITY.stair_foot_blocked, code: 'stair_foot_blocked', ref: st.id, message: `${st.id}: ${bf} stands in the approach at its foot` });
+  const bt = st.to < b.floors ? blockedOn(b, l, st.to, arrive) : null;
+  if (bt) issues.push({ severity: TRAVERSAL_SEVERITY.stair_top_blocked, code: 'stair_top_blocked', ref: st.id, message: `${st.id}: ${bt} stands in the landing after its top` });
+  const r = st.mid_rect;
+  const onMid = (p: Vec2): boolean => !!r && p[0] >= Math.min(r[0][0], r[1][0]) - 1 && p[0] <= Math.max(r[0][0], r[1][0]) + 1 && p[1] >= Math.min(r[0][1], r[1][1]) - 1 && p[1] <= Math.max(r[0][1], r[1][1]) + 1;
+  if (!onMid(fl[0].b) || !onMid(fl[1].a)) issues.push({ severity: TRAVERSAL_SEVERITY.stair_top_no_floor, code: 'stair_top_no_floor', ref: st.id, message: `${st.id}: a flight end on the mid landing lies off its mid_rect` });
+  const fd = (b.floors_detail ?? []).find((x) => x.floor === st.to);
+  for (const g of fd?.gaps ?? []) {
+    if (g.kind !== 'stairwell') continue;
+    const poly = g.poly.map((p) => toBuildingFrame(b, p));
+    const gx0 = Math.min(...poly.map((p) => p[0])), gx1 = Math.max(...poly.map((p) => p[0])), gy0 = Math.min(...poly.map((p) => p[1])), gy1 = Math.max(...poly.map((p) => p[1]));
+    const ox = Math.min(gx1, arrive[1][0]) - Math.max(gx0, arrive[0][0]), oy = Math.min(gy1, arrive[1][1]) - Math.max(gy0, arrive[0][1]);
+    if (ox > TRAVERSAL.gapOvershootTol && oy > TRAVERSAL.gapOvershootTol) {
+      issues.push({ severity: TRAVERSAL_SEVERITY.gap_overshoot, code: 'gap_overshoot', ref: st.id, message: `${st.id}: the slab gap ${g.id ?? ''} cuts ${Math.round(Math.min(ox, oy))} cm into the floor landing after its top` });
+    }
+  }
+}
+
 function checkFlight(l: GenLayout, b: GenBuilding, st: Stair, issues: TraversalIssue[]): void {
+  if (isSwitchback(st)) { checkSwitchback(l, b, st, issues); return; }
   const pos = toBuildingFrame(b, st.pos), top = toBuildingFrame(b, st.top);
   const d = sub(top, pos), L = len(d);
   if (L < 1) return;
@@ -229,7 +266,7 @@ function checkWindows(l: GenLayout, b: GenBuilding, issues: TraversalIssue[]): v
   const windows = (b.openings ?? []).filter((op) => op.kind === 'window' && op.pos);
   if (!windows.length) return;
   const flights = (b.stairs ?? []).filter((st) => st.kind === 'stairwell' && st.pos && st.top)
-    .map((st) => ({ pos: toBuildingFrame(b, st.pos), top: toBuildingFrame(b, st.top), from: st.from, to: st.to }));
+    .flatMap((st) => stairFlights(st).map((f) => ({ pos: toBuildingFrame(b, f.a), top: toBuildingFrame(b, f.b), from: Math.floor(f.z0), to: Math.ceil(f.z1) })));
   const laneWalls = l.walls.filter((w) => w.building === b.id && w.kind === 'interior' && /_lanewall_f\d+$/.test(w.id))
     .map((w) => ({ a: toBuildingFrame(b, w.a), b: toBuildingFrame(b, w.b), floor: w.floor ?? 0, thickness: w.thickness ?? 10 }));
   // a planned building's corridor-end window (150 in a 200 corridor) sits 25 cm from the corridor walls by design (S2_ROOMS_PLAN.md 3.6)
@@ -287,8 +324,15 @@ export function validateBuilding(l: GenLayout, b: GenBuilding): BuildingTraversa
   for (const st of b.stairs ?? []) {
     if (st.kind !== 'stairwell') continue;
     const hw = TRAVERSAL.flightWidth / 2, ap = TRAVERSAL.approachDepth;
-    const fx0 = Math.min(st.pos[0], st.top[0]) - (st.pos[0] === st.top[0] ? hw : ap), fx1 = Math.max(st.pos[0], st.top[0]) + (st.pos[0] === st.top[0] ? hw : ap);
-    const fy0 = Math.min(st.pos[1], st.top[1]) - (st.pos[1] === st.top[1] ? hw : ap), fy1 = Math.max(st.pos[1], st.top[1]) + (st.pos[1] === st.top[1] ? hw : ap);
+    let fx0 = Math.min(st.pos[0], st.top[0]) - (st.pos[0] === st.top[0] ? hw : ap), fx1 = Math.max(st.pos[0], st.top[0]) + (st.pos[0] === st.top[0] ? hw : ap);
+    let fy0 = Math.min(st.pos[1], st.top[1]) - (st.pos[1] === st.top[1] ? hw : ap), fy1 = Math.max(st.pos[1], st.top[1]) + (st.pos[1] === st.top[1] ? hw : ap);
+    if (isSwitchback(st)) {
+      // the whole two-lane core: every flight end, half a flight across the lanes, the approach along them
+      const ends = stairFlights(st).flatMap((f) => [f.a, f.b]), xs = ends.map((p) => p[0]), ys = ends.map((p) => p[1]);
+      const alongX = st.pos[1] === st.turn![1];
+      fx0 = Math.min(...xs) - (alongX ? ap : hw); fx1 = Math.max(...xs) + (alongX ? ap : hw);
+      fy0 = Math.min(...ys) - (alongX ? hw : ap); fy1 = Math.max(...ys) + (alongX ? hw : ap);
+    }
     for (const o of l.buildings) {
       if (o.id === b.id) continue;
       const [[ox0, oy0], [ox1, oy1]] = o.footprint;

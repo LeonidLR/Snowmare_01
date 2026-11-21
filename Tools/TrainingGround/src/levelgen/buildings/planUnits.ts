@@ -63,11 +63,13 @@ function runOf(cells: PlanCell[], doors: PlanOpening[], entry: PlanOpening, insi
 export function planUnits(plan: BandPlan, openings: PlanOpening[], lobbies: readonly string[], storeys: number): PlanUnit[] {
   if (plan.archetype !== 'block') return [];
   const out: PlanUnit[] = [];
-  const keys = [...new Set(plan.cells.filter((c) => c.flat !== undefined && c.section !== undefined).map((c) => `s${c.section}${c.flat}`))].sort();
+  // a kit plan names the flat on every cell (`unit`); an S2.3 plan by section + side
+  const keyOf = (c: PlanCell): string | null => (plan.pattern === 'kit' ? c.unit ?? null : c.flat !== undefined && c.section !== undefined ? `s${c.section}${c.flat}` : null);
+  const keys = [...new Set(plan.cells.map(keyOf).filter((k): k is string => !!k))].sort();
   for (let storey = 0; storey < storeys; ++storey) {
     const doors = openings.filter((o) => o.storey === storey && o.kind === 'door');
     for (const key of keys) {
-      const cells = plan.cells.filter((c) => c.flat !== undefined && c.section !== undefined && `s${c.section}${c.flat}` === key && !(storey === 0 && lobbies.includes(c.id)));
+      const cells = plan.cells.filter((c) => keyOf(c) === key && !(storey === 0 && lobbies.includes(c.id)));
       if (!cells.length) continue;
       const ids = new Set(cells.map((c) => c.id));
       const entries = doors.filter((d) => d.role !== 'portal' && d.links[1] !== 'street' && d.links.filter((l) => ids.has(l)).length === 1);
@@ -75,6 +77,8 @@ export function planUnits(plan: BandPlan, openings: PlanOpening[], lobbies: read
       if (entries.length === 1) {
         const inside = entries[0].links.find((l) => ids.has(l))!;
         const portals = doors.filter((d) => d.role === 'portal' && plan.cells.some((c) => c.kind === 'core' && c.section === Number(key.slice(1, -1)) && d.links.includes(c.id)));
+        // a kit core has no pad portals: the walk starts at the core's court door / landing door nearest the entry (the floor landing)
+        if (!portals.length && plan.pattern === 'kit') portals.push(...doors.filter((d) => plan.cells.some((c) => c.kind === 'core' && c.section === Number(key.slice(1, -1)) && d.links.includes(c.id))));
         unit.dead_end = true;
         unit.run_cm = runOf(cells, doors.filter((d) => d.links.every((l) => ids.has(l))), entries[0], inside, portals);
       }
@@ -82,4 +86,24 @@ export function planUnits(plan: BandPlan, openings: PlanOpening[], lobbies: read
     }
   }
   return out;
+}
+
+/**
+ * The role of every door follows the units (S2.9 smoke: 24 role mismatches on the S2.3 ground floors - a flat entry with the role `room`, a
+ * `unit_entry` joining a lobby to the landing): a door joining exactly one room of a unit of its storey to a room outside the unit is a
+ * `unit_entry`; a door that was planned as `unit_entry` but joins two common rooms (a ground lobby taken out of its flat) or two rooms of one flat
+ * becomes a plain `room` door. Portals, exterior doors and windows keep their roles. Mutates `openings`; returns how many roles changed.
+ */
+export function fixEntryRoles(openings: PlanOpening[], units: readonly PlanUnit[]): number {
+  const unitOf = new Map<string, string>();
+  for (const u of units) for (const c of u.cells) unitOf.set(`${u.storey}|${c}`, u.key);
+  let changed = 0;
+  for (const o of openings) {
+    if (o.kind !== 'door' || o.role === 'portal' || o.links[1] === 'street') continue;
+    const a = unitOf.get(`${o.storey}|${o.links[0]}`), b = unitOf.get(`${o.storey}|${o.links[1]}`);
+    const entry = (a === undefined) !== (b === undefined) || (a !== undefined && b !== undefined && a !== b);
+    if (entry && o.role !== 'unit_entry') { o.role = 'unit_entry'; ++changed; }
+    else if (!entry && o.role === 'unit_entry') { o.role = 'room'; ++changed; }
+  }
+  return changed;
 }
