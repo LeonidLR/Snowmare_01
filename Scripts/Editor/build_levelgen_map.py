@@ -465,16 +465,17 @@ def switchback_specs(bid, s, gz, folder):
     zm = (z0 + z1) / 2.0
     label = "%s_%s" % (bid, s["id"])
     tags = ["stair=%s" % s["id"], "switchback"]
-    out = [ramp(label, folder, s["pos"], s["turn"], z0, zm, tags=list(tags) + ["flight=a"]),
-           ramp(label + "_b", folder, s["mid"], s["top"], zm, z1, tags=list(tags) + ["flight=b"])]
+    w = float(s.get("width") or STAIR_W)
+    out = [ramp(label, folder, s["pos"], s["turn"], z0, zm, width=w, tags=list(tags) + ["flight=a"]),
+           ramp(label + "_b", folder, s["mid"], s["top"], zm, z1, width=w, tags=list(tags) + ["flight=b"])]
     if s.get("mid_rect"):
         (ax, ay), (bx, by) = s["mid_rect"]
         out.append(rect_slab(label + "_midlanding", folder, min(ax, bx), min(ay, by), max(ax, bx), max(ay, by), zm, list(tags) + ["mid_landing"]))
     if s.get("blocked"):
         for o in out[:2]:
             o["tags"] = o["tags"] + ["stair_blocked=%s" % s["blocked"]]
-        out.extend(blocked_flight_specs(label, folder, s["pos"], s["turn"], z0, zm, s["blocked"]))
-        out.extend(blocked_flight_specs(label + "_b", folder, s["mid"], s["top"], zm, z1, s["blocked"]))
+        out.extend(blocked_flight_specs(label, folder, s["pos"], s["turn"], z0, zm, s["blocked"], width=w))
+        out.extend(blocked_flight_specs(label + "_b", folder, s["mid"], s["top"], zm, z1, s["blocked"], width=w))
         report("blocked switchback %s (%s): ramps kept, blocking boxes + NavArea_Null + rubble" % (label, s["blocked"]))
     return out
 

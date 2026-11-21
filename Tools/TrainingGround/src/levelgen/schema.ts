@@ -397,6 +397,8 @@ export interface Stair {
   turn?: Vec2;
   /** Switchback stairwell only: the mid landing slab, [min, max] in the BUILDING frame (like `footprint`, building_coord_fields.json: a world rect cannot turn), its top half a storey above `from`. */
   mid_rect?: [Vec2, Vec2];
+  /** Switchback stairwell only: the width of each flight, cm (the kit template's flight_w_cm; absent = STAIR_FLIGHT_W 150). */
+  width?: number;
   /** Schema /2: the flight is impassable (stories 4, 13); the validator removes its edge (S1 later). */
   blocked?: 'rubble' | 'burnt' | 'barricade';
   /** Schema /2: one-way, top -> foot only. */

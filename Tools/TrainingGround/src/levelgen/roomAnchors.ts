@@ -111,7 +111,7 @@ function buildingCtx(b: GenBuilding): BuildingCtx {
       if (st.from !== floor && st.to !== floor) continue;
       if (isSwitchback(st)) {
         // a half-landing switchback: both flight bodies, and its mid landing over the floor it starts on (130 cm under it: no standing room)
-        const fl = stairFlights(st).map((x) => segBox(F(x.a), F(x.b), ANCHOR_FLIGHT_HALF_W_CM));
+        const fl = stairFlights(st).map((x) => segBox(F(x.a), F(x.b), st.width ? st.width / 2 + 5 : ANCHOR_FLIGHT_HALF_W_CM));
         common.push(...fl);
         if (st.from === floor && st.mid_rect) { const [[x0, y0], [x1, y1]] = st.mid_rect; common.push(aabb(Math.min(x0, x1), Math.min(y0, y1), Math.max(x0, x1), Math.max(y0, y1))); }
         if (st.to === floor && !st.blocked && !st.down_only && fl[1].len > 1e-9) arrivals.push({ top: F(st.top), u: fl[1].u });

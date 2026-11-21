@@ -1158,7 +1158,7 @@ function switchbackCore(bid: string, f: PlanFrame, coreU0: number, upTo: number,
   const midRect = R(g.uIn[0], g.vMid, g.uIn[1], g.vFar);
   for (let n = 0; n < upTo; n++) {
     stairs.push({ id: `${idBase}_stair_${n}`, pos: P(g.lane[0], g.vLanding), turn: P(g.lane[0], g.vMid), mid: P(g.lane[1], g.vMid), top: P(g.lane[1], g.vLanding),
-      from: n, to: n + 1, kind: 'stairwell', mid_rect: midRect });
+      from: n, to: n + 1, kind: 'stairwell', mid_rect: midRect, width: KIT.core.flight_w_cm });
   }
   const box = R(coreU0, 0, coreU0 + KIT.core.width_cm, KIT.core.depth_cm);
   const gap = R(g.uIn[0], g.vLanding, g.uIn[1], g.vFar);

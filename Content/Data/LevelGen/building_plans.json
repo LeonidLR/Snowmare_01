@@ -108,11 +108,11 @@
           "max_depth_cm": 1500,
           "three_flat_min_depth_cm": 1100,
           "core": {
-            "width_cm": 350,
+            "width_cm": 400,
             "depth_cm": 600,
             "landing_cm": 200,
             "mid_landing_cm": 160,
-            "flight_w_cm": 150,
+            "flight_w_cm": 180,
             "lane_gap_cm": 10,
             "wall_inner_cm": 15,
             "partition_half_cm": 10

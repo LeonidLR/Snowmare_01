@@ -28,7 +28,7 @@ export const ALL_FIELDS_BUILDING: Full<GenBuilding> = {
   "parapets": [{ "wall_id": "B_all_N", "start": [1000, 2000], "end": [2200, 2000], "height_cm": 100, "thickness_cm": 20 }],
   "rooms": [{ "id": "B_all_r0", "floor": 0, "bounds": { "min": [1020, 2020], "max": [1480, 2780] }, "kind": "hall", "use": "hall", "door_ids": ["B_all_p0_d"], "unit": "suite", "zone": "common", "walls": ["B_all_S"], "anchor": [1250, 2400] }],
   "mantle_edges": [{ "id": "B_all_m0", "start": [1000, 2250], "end": [1000, 2350], "floor": 1, "base_z": 300, "height_cm": 95, "normal": [-1, 0], "kind": "window", "building": "B_all", "wall": "B_all_W" }],
-  "stairs": [{ "id": "B_all_s0", "pos": [2050, 2150], "from": 0, "to": 1, "kind": "stairwell", "top": [2050, 2580], "mid": [2050, 2400], "turn": [2050, 2300], "mid_rect": [[2000, 2380], [2200, 2540]], "blocked": "rubble", "down_only": false }],
+  "stairs": [{ "id": "B_all_s0", "pos": [2050, 2150], "from": 0, "to": 1, "kind": "stairwell", "top": [2050, 2580], "mid": [2050, 2400], "turn": [2050, 2300], "mid_rect": [[2000, 2380], [2200, 2540]], "width": 180, "blocked": "rubble", "down_only": false }],
   "roof_holes": [[1300, 2600]],
   "floor_holes": [{ "pos": [1250, 2250], "floor": 1 }],
   "set_piece": "facade",
