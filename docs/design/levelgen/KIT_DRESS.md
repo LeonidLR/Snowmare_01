@@ -24,6 +24,10 @@ Story showcase views (2026-11-21 night, `STORY_SHOWCASE_2026-11-22.md`): `KIT_DR
 every building's front 3/4, each story element close up - locked / sealed door, rubble flight + roof-off, fire escape, roof ladder, broken
 windows, snow ramp), `KIT_DRESS_SHOT_PREFIX=showcase_`, `KIT_DRESS_SHOTS_DIR=Saved\StoryShowcase\shots`, with
 `kit_dress.ps1 -Layout Content\Data\LevelGen\accepted\gen_story_showcase.json -Target /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit`.
+2026-11-22 (khrushchevka gable door + balcony slots): a gable door is a ground door on a short side -> the same entrance bay (door + porch +
+canopy) and its own story view `<bid>_gable_door`; a story-4 balcony door of a planned building (a real opening, role balcony, matched to its
+balcony by `door_id`) gets the kit balcony-door bay + the balcony scaled to the balcony rect; a building with story balconies gets no
+decorative `slot_balconies` (they stood beside the escape).
 
 `-Ref` runs `kit_dress.py export <ref> gen_bgen_plans_check`: `git show` of that branch's builder (`build_levelgen_map.py`, its two helper
 modules, `building_coord_fields.json`, `levelgen_v2.json`) and accepted layout into `Saved/KitBlocks/builder/<ref>/` (read only; no checkout).

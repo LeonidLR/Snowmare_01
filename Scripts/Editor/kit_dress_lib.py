@@ -465,6 +465,8 @@ class Dresser:
         self.stretch = {}
         self.plane_mesh = table.get("plane_mesh", "/Engine/BasicShapes/Plane.Plane")
         self.edges = edges_of(b)
+        # balcony door id -> balcony id: a planned building's story-4 door is a real opening (role balcony) without the builder's `balcony` field
+        self.balcony_of_door = {x["door_id"]: x["id"] for x in (b.get("balconies") or []) if x.get("door_id")}
         self.stair_rects = []
         self.stair_rooms = {}
         for r in b.get("rooms", []) or []:
@@ -602,6 +604,10 @@ class Dresser:
         street = self.street_edge()
         self.street = street
         nslot = int(S.get("slot_balconies", 0) or 0)
+        if self.b.get("balconies"):
+            # a story built real balconies on this building (story 4: balcony + fire escape on one slot column): no decorative ones beside them
+            # (2026-11-22: a visual balcony next to the escape overlapped its bay, and balconies stand only where an escape is)
+            nslot = 0
         slots = []
         for (en, f), lst in ops.items():
             for op, s, w in lst:
@@ -698,7 +704,7 @@ class Dresser:
                 if kind == "door" and abs(w - hw) > hw * self.max_dev + 1.0:
                     self.note("balcony door %s %.0f cm, kit door %.0f cm (the kit wall narrows it)" % (op.get("id"), w, hw))
                 bays.append((start, start + mod, bd["door_hole"][0], mod - bd["window_hole"][1], "balc",
-                             {"op": op, "real": bool(op.get("balcony")), "visual": kind != "door"}))
+                             {"op": op, "real": bool(op.get("balcony") or self.balcony_of_door.get(op.get("id"))), "visual": kind != "door"}))
                 continue
             if kind == "door":
                 self.note("door %s on storey %d of %s: no balcony_door modules in series %s - left grey" % (op.get("id"), f, e.name, self.sname))
@@ -823,7 +829,8 @@ class Dresser:
     def balcony(self, e, s0, z0, op, real):
         bd = self.S["balcony_door"]
         bx = bd.get("balcony_x") or [11, 289]
-        bal = next((x for x in self.b.get("balconies", []) or [] if x.get("id") == op.get("balcony")), None) if real else None
+        bid = op.get("balcony") or self.balcony_of_door.get(op.get("id"))
+        bal = next((x for x in self.b.get("balconies", []) or [] if x.get("id") == bid), None) if real else None
         anchor = e.at(s0, e.t / 2.0) + (z0,)
         scale = (1.0, 1.0, 1.0)
         if bal is not None:

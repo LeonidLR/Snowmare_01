@@ -618,8 +618,8 @@ def _opening_view(name, b, p, edges, cams, gz, z_at=160.0, dist=650.0, side=-260
 def story_cameras(layout):
     """The story showcase views (docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md): the whole map, every building's front 3/4 (the facade
     of its front door: the exterior ground door nearest the mandatory route), and the story elements of every building - a locked / sealed
-    door, the rubble-blocked flight (roof off, from above) and the fire escape, the facade roof ladder, the broken back windows, the snow
-    ramp. Same tuple as cameras(): (name, location, pitch, yaw, fov, hide roofs)."""
+    door, the gable door (a ground door on a short side), the rubble-blocked flight (roof off, from above) and the fire escape, the facade
+    roof ladder, the broken back windows, the snow ramp. Same tuple as cameras(): (name, location, pitch, yaw, fov, hide roofs)."""
     gz = float(layout.get("ground_z", 0.0))
     (bx0, by0), (bx1, by1) = layout["bounds"]["min"], layout["bounds"]["max"]
     cx, cy = (bx0 + bx1) / 2.0, (by0 + by1) / 2.0
@@ -659,7 +659,10 @@ def story_cameras(layout):
         cams.append(("%s_front_34" % bid, loc, pitch, yaw, 50.0, False))
         CAM_NORMALS["%s_front_34" % bid] = fe.n
         for o in doors:
-            if o.get("state") in ("locked", "sealed", "barricaded"):
+            if not K.edge_of_point(edges, o["pos"]).long:
+                # a khrushchevka's gable door (template gable_door, 2026-11-22): its own close-up whatever its state (S09: locked)
+                _opening_view("%s_gable_door" % bid, b, o["pos"], edges, cams, gz)
+            elif o.get("state") in ("locked", "sealed", "barricaded"):
                 _opening_view("%s_door_%s" % (bid, o["state"]), b, o["pos"], edges, cams, gz)
         broken = [o for o in ops if o.get("kind") == "window" and o.get("state") == "broken"]
         if broken:

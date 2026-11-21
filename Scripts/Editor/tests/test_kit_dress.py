@@ -282,6 +282,37 @@ class DressLayoutTest(unittest.TestCase):
         os.environ.pop("KIT_DRESS_BUILDER", None)
 
 
+class StoryShowcaseDressTest(unittest.TestCase):
+    """The dressed story showcase (gen_story_showcase, 2026-11-22: six khrushchevka blocks with a gable door each): every ground door - the
+    court entrances and the gable door - gets a kit entrance (door bay + porch + canopy); the story-4 balconies get the kit balcony door bay +
+    balcony and no decorative balcony stands beside them."""
+
+    def test_gable_doors_and_story_balconies(self):
+        path = os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "accepted", "gen_story_showcase.json")
+        if not os.path.exists(path):
+            self.skipTest("no gen_story_showcase layout")
+        B, layout, specs, dressed, t = DressLayoutTest.plan(path)
+        gables = 0
+        for b in layout["buildings"]:
+            d = dressed[b["id"]]
+            edges = K.edges_of(b)
+            ground = [o for o in b.get("openings", []) if o.get("kind") == "door" and int(o.get("floor", 0)) == 0 and K.edge_of_point(edges, o["pos"])]
+            gables += sum(1 for o in ground if not K.edge_of_point(edges, o["pos"]).long)
+            for part in ("facade_entrance_bay", "porch", "canopy"):
+                self.assertEqual(d["parts"].get(part, 0), len(ground), (b["id"], part))
+            real = b.get("balconies") or []
+            if real:
+                self.assertEqual(d["parts"].get("balcony", 0), len(real), b["id"])
+                self.assertEqual(d["parts"].get("facade_balcony_bay", 0), len(real), b["id"])
+                # (an upper balcony's escape ladder leaves an open gap in the wall beside its door bay: a REVIEW note, not checked here)
+                self.assertFalse([n for n in d["notes"] if "visual only" in n], b["id"])
+        self.assertEqual(gables, len(layout["buildings"]), "one gable door per house")
+
+    @classmethod
+    def tearDownClass(cls):
+        os.environ.pop("KIT_DRESS_LAYOUT", None)
+
+
 class StoryCamerasTest(unittest.TestCase):
     """The story showcase views (kit_dress.py story_cameras, KIT_DRESS_SHOT_SET=story) on gen_story_showcase: every building's front and
     the close-up of each story element the layout carries."""
@@ -303,6 +334,11 @@ class StoryCamerasTest(unittest.TestCase):
             self.assertIn(want, names)
         for b in layout["buildings"]:
             self.assertIn("%s_front_34" % b["id"], names)
+            # a khrushchevka's gable door (a ground door on a short side) gets its close-up (2026-11-22)
+            edges = K.edges_of(b)
+            if any(o.get("kind") == "door" and int(o.get("floor", 0)) == 0 and not (K.edge_of_point(edges, o["pos"]) or edges[0]).long
+                   for o in b.get("openings", []) if K.edge_of_point(edges, o["pos"])):
+                self.assertIn("%s_gable_door" % b["id"], names)
         for name, loc, pitch, yaw, fov, hide in cams:
             self.assertTrue(-90.0 <= pitch <= 30.0, (name, pitch))   # a roof ladder view looks up a little
             self.assertTrue(all(math.isfinite(v) for v in loc), name)

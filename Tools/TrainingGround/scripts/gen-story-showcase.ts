@@ -44,26 +44,31 @@ interface Spec {
   doorSides: Side[];
   windowSides: Side[];
   roof_walkable: boolean;
+  /** A khrushchevka's gable door (template gable_door, designer 2026-11-22): the draft side of the gable that gets it; absent = the template's end. */
+  gable_door?: Side;
+  /** The gable door's opening state (absent = the default, closed). */
+  gable_door_state?: 'locked';
 }
-// 2026-11-21 night (kit block plans, docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md): khrushchevka blocks (template block_khrushchevka:
-// court-side switchback core, ONE door per section, on the court wall) wherever the story holds on them, else the closest working house:
-//  - S01 open, S07 roof ladder: khrushchevka, one section; S07 three storeys = the tallest -> overwatch (story 7 is a detour: needs
-//    objective / garrison / overwatch). S10 snow drift: khrushchevka, two sections (37 m) at right angles to the street (the sealed front
-//    door is the one nearer the street, the second section's door and the ramp window are the two ways in).
-//  - S03 locked door: the S2.3 template (block_sections). On a kit block every door is on the court wall, so with the near door locked the
-//    fast and the quiet entry are the same other door (parallel to the street) or a gable window (at right angles) - F4 rolls story 3 back.
-//  - S04 rubble + fire escape: the S2.3 template - the kit plans have no balcony slots yet (BGEN_KIT_PLANS_2026-11-21.md section 7).
-//  - S09 locked door + broken back windows: an office (the old S09) - story 9's quiet entry must be a broken back window, and both block
-//    planners put a second door nearer than those windows (kit: the court door; S2.3: its gable door).
-// Top row (y 30..42): street wall south; bottom row (y 68..80): street wall north; the mandatory street at y 55.
+// 2026-11-22 (khrushchevka gable door + balcony slots, docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md): ALL six houses are block_khrushchevka
+// (court-side switchback core, one court door per section, plus the gable door into the end flat's ground-floor vestibule; balcony slots on the
+// street living rooms from storey 1):
+//  - S01 open, S07 roof ladder: one section, the street wall to the street (in from the court or the gable); S07 three storeys = the
+//    tallest -> overwatch (story 7 is a detour: objective / garrison / overwatch).
+//  - S03 locked door: the COURT faces the street (its door = the front, kicked; the court windows boarded) - the quiet way is round to the
+//    gable door (F4: fast = the kick, quiet = the gable door).
+//  - S04 rubble + fire escape: three storeys, the street wall to the street; the escape stands on a balcony slot column of the street wall.
+//  - S09 locked door + broken back windows: the court faces the street as S03, the gable door LOCKED (a utility end door): with a closed
+//    gable door the quiet route takes it (it is nearer than any back window) and F4 rolls story 9 back - see the guide's questions.
+//  - S10 snow drift: two sections (37 m) at right angles to the street; the gable door on the FAR gable (the near one would be the front).
+// Top row (y 30..42), bottom row (y 68..80); the mandatory street at y 55.
 const N: Side = 'north', S: Side = 'south';
 const specs: Spec[] = [
-  { id: 'S01_open', stories: ['open'], archetype: 'block', x: 8, y: 30, w: 20.0, h: 12.0, floors: 2, seed: 11, doorSides: [S], windowSides: [S, N], roof_walkable: true },
-  { id: 'S03_locked_door', stories: ['locked_door'], archetype: 'block', plan_template: 'block_sections', x: 46, y: 30, w: 20.2, h: 12.2, floors: 2, seed: 13, doorSides: [S, N], windowSides: [S, N], roof_walkable: true },
-  { id: 'S04_rubble_escape', stories: ['rubble_escape'], archetype: 'block', plan_template: 'block_sections', x: 101, y: 30, w: 20.2, h: 12.2, floors: 3, seed: 2, doorSides: [S], windowSides: [S, N], roof_walkable: true },
-  { id: 'S07_roof_outside', stories: ['roof_outside'], archetype: 'block', x: 8, y: 68, w: 20.0, h: 12.0, floors: 3, seed: 1, doorSides: [N], windowSides: [N, S], roof_walkable: true },
-  { id: 'S09_broken_back_windows', stories: ['locked_door', 'broken_back_windows'], archetype: 'office', x: 46, y: 68, w: 18.4, h: 10.3, floors: 2, seed: 2, doorSides: [N, S], windowSides: [N, S], roof_walkable: true },
-  { id: 'S10_snow_drift', stories: ['snow_drift'], archetype: 'block', x: 101, y: 65, w: 12.0, h: 37.0, floors: 2, seed: 1, doorSides: ['west'], windowSides: ['west', 'east'], roof_walkable: true },
+  { id: 'S01_open', stories: ['open'], archetype: 'block', x: 8, y: 30, w: 20.0, h: 12.0, floors: 2, seed: 11, doorSides: [S], windowSides: [S, N], roof_walkable: true, gable_door: 'west' },
+  { id: 'S03_locked_door', stories: ['locked_door'], archetype: 'block', x: 46, y: 30, w: 20.2, h: 12.2, floors: 2, seed: 13, doorSides: [N], windowSides: [N, S], roof_walkable: true, gable_door: 'east' },
+  { id: 'S04_rubble_escape', stories: ['rubble_escape'], archetype: 'block', x: 101, y: 30, w: 20.2, h: 12.2, floors: 3, seed: 2, doorSides: [S], windowSides: [S, N], roof_walkable: true, gable_door: 'west' },
+  { id: 'S07_roof_outside', stories: ['roof_outside'], archetype: 'block', x: 8, y: 68, w: 20.0, h: 12.0, floors: 3, seed: 1, doorSides: [N], windowSides: [N, S], roof_walkable: true, gable_door: 'west' },
+  { id: 'S09_broken_back_windows', stories: ['locked_door', 'broken_back_windows'], archetype: 'block', x: 46, y: 68, w: 20.2, h: 12.2, floors: 2, seed: 2, doorSides: [S], windowSides: [S, N], roof_walkable: true, gable_door: 'east', gable_door_state: 'locked' },
+  { id: 'S10_snow_drift', stories: ['snow_drift'], archetype: 'block', x: 101, y: 65, w: 12.0, h: 37.0, floors: 2, seed: 1, doorSides: ['west'], windowSides: ['west', 'east'], roof_walkable: true, gable_door: 'south' },
 ];
 
 const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [], ...(plans ? { building_plans: true } : {}) };
@@ -73,6 +78,7 @@ for (const s of specs) {
   addBuilding(d, s.id, [[s.x, s.y], [s.x + s.w, s.y + s.h]], {
     height: s.floors * LEVEL_HEIGHT, floors: s.floors, enterable: true, roof_walkable: s.roof_walkable, stairwell: true, set_piece: 'facade', archetype: s.archetype,
     doorSides: s.doorSides, windowSides: s.windowSides, partitionRooms: true, ...(s.plan_template ? { plan_template: s.plan_template } : {}),
+    ...(s.gable_door ? { gable_door: s.gable_door } : {}), ...(s.gable_door_state ? { gable_door_state: s.gable_door_state } : {}),
   }, random);
 }
 d.routes.push({ id: 'R_main', pace: 'walk', points: [START, END], mandatory: true, layers: ['ground', 'ground'], links: [], set_pieces: ['street'] });

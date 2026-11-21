@@ -16,6 +16,9 @@ legs 32/32, one island per building - the remaining walk failures are the flat-h
 compress and enter = a formation task; `Scripts/Tools/walk_report_breakdown.py` splits them out, the gate is unchanged). The smoke's roof
 target moves off a switchback roof opening. Story showcase: `docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md` (grey
 `/Game/Maps/Generated/L_Gen_StoryShowcase`, dressed untracked `/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit`, `kit_dress.py` story shots).
+2026-11-22: all six showcase houses are khrushchevka blocks (gable door + balcony slots merged from the generator branch; S09 has a locked
+gable door - story 9's F4 needs it, designer question in the guide); kit_dress dresses gable doors as entrances and story-4 balconies with the
+kit balcony door + balcony (no decorative slot balconies beside them).
 
 **Обновление за 2026-11-18, main `50c0f915`.** Ожидающие подъёма бойцы смотрят наружу даже рядом с пропсами (`ccdec8d3`), появление пропсов X6 и X4 стало плавнее (`13be5a16`), сгенерированные карты используют холод и погоду (`6dbc9e38`). G007 исправил атаки на пандусе (`e24a6d6f`). Из задачи 044 в main вошёл выстрел из приседа за высоким углом (`e4558688`). Ошибки PeekMines и Suppression остаются открытыми. Antigravity 083/083c расширили покрытие архива QD и проверку настроек тренера (`b41973d8`, `d72b9629`). В AgentChat компактнее сообщения об ожидании (`7e4715d9`), инструменты API поддерживают второй ключ (`b9170e47`). Загрузка, пауза у бочки и урок аптечки обновлены в `4db03229`. Подробности в разделе «Сделано (2026-11-18)» файла TASK_BOARD.
 

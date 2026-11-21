@@ -81,8 +81,9 @@ test('layers assignment: every entity of every shipped map is in exactly one lay
     assert.equal(entities.length, n, `${name}: every entity of the file is enumerated`);
     // what the designer's layers hold
     assert.ok(a.byLayer.roads.every((e) => e.type === 'zone' && (e.id.startsWith('Z_ST_') || e.set_piece === 'street')), `${name}: roads = street zones only`);
-    // gen_bgen_plans_check = the S2.3 engine fixture (blocks / offices on open ground, no streets by design)
-    if (!name.startsWith('gen_bgen_plans_check')) assert.ok(a.byLayer.roads.length >= 1, `${name}: has roads`);
+    // gen_bgen_plans_check = the S2.3 engine fixture, gen_story_showcase = the story showcase (houses on open ground, a mandatory route but no
+    // street zones): no streets by design
+    if (!name.startsWith('gen_bgen_plans_check') && !name.startsWith('gen_story_showcase')) assert.ok(a.byLayer.roads.length >= 1, `${name}: has roads`);
     assert.equal(a.byLayer.buildings.filter((e) => e.type === 'building').length, l.buildings.length);
     assert.equal(a.byLayer.bridges.length, l.cut?.crossings.length ?? 0);
     assert.equal(a.byLayer.objectives.length, l.objectives ? 1 + l.objectives.goals.length : 0);
