@@ -22,6 +22,7 @@ import type {
   BuildingFloor,
   CoverKind,
   Door,
+  DoorState,
   FloorGap,
   GenBuilding,
   GenCover,
@@ -69,7 +70,8 @@ import type { PlanDoorsOpts, PlanOpening, WallKey } from './buildings/planDoors.
 import { WALL_ORDER, planDoors, wallSpan } from './buildings/planDoors.ts';
 import { planWindows } from './buildings/planWindows.ts';
 import { fixEntryRoles, planUnits } from './buildings/planUnits.ts';
-import { DEFAULT_BLOCK_TEMPLATE, blockTemplate, kitStairGeom, kitTemplate, planKitBlock, templateForSeries } from './buildings/kitPlan.ts';
+import type { GableChoice } from './buildings/kitPlan.ts';
+import { DEFAULT_BLOCK_TEMPLATE, GABLE_CHOICES, blockTemplate, kitStairGeom, kitTemplate, planKitBlock, templateForSeries } from './buildings/kitPlan.ts';
 import { annotateStructure, annotateWindowVault } from './structureClasses.ts';
 import { fnv1a } from './props/rng.ts';
 
@@ -796,6 +798,13 @@ export interface BuildingSpec {
   plan_template?: string;
   /** A residential block's building series (e.g. '1-464'): picks the template with that series when no plan_template is named. */
   series?: string;
+  /**
+   * A kit block's gable door(s) (template gable_door, designer 2026-11-22): a plan end ('low' u = 0 / 'high' u = L / 'both' / 'none') or the draft
+   * side of a gable ('north' ...; a long side is ignored -> the template's ends); absent = the template's gable_door.ends.
+   */
+  gable_door?: GableChoice | Side;
+  /** The gable door's opening state (e.g. 'locked': a utility end door); absent = the template's gable_door.state, else the default. */
+  gable_door_state?: DoorState;
 }
 
 export { addWall, fenceRect, addBuilding, addLadderAt, splitWall };
@@ -1087,9 +1096,13 @@ function addPlannedBlock(d: Draft, bid: string, r: Rect, s: BuildingSpec, random
   let kitWhy: string | undefined;
   const tpl = blockTemplate(s.plan_template ?? templateForSeries(s.series) ?? DEFAULT_BLOCK_TEMPLATE);
   if (tpl.planner === 'kit_sections') {
-    const kit = planKitBlock({ L: sn.L, D: sn.D, seed: planSeed, template: tpl.id });
+    const fk: PlanFrame = { alongY, coreSide: longSides.includes(first) ? OPPOSITE[first] : alongY ? 'west' : 'north', cx0, cy0, cx1, cy1 };
+    // the gable door: a plan end, or a draft side mapped to its plan end wall (a long side: the template's choice)
+    const gd = s.gable_door, ends = wallSides(fk);
+    const gable: GableChoice | undefined = gd === undefined ? undefined : (GABLE_CHOICES as readonly string[]).includes(gd) ? gd as GableChoice
+      : ends.u0 === gd ? 'low' : ends.uL === gd ? 'high' : undefined;
+    const kit = planKitBlock({ L: sn.L, D: sn.D, seed: planSeed, template: tpl.id, gable, ...(s.gable_door_state ? { gableState: s.gable_door_state } : {}) });
     if (kit.kind === 'bands' && kit.kit) {
-      const fk: PlanFrame = { alongY, coreSide: longSides.includes(first) ? OPPOSITE[first] : alongY ? 'west' : 'north', cx0, cy0, cx1, cy1 };
       const pk = planShell(d, bid, rp, s, random);
       pk.cores = kit.kit.sections.map((sec, k) => switchbackCore(bid, fk, sec.core.u0, coreTop, k, tpl.id));
       if (pk.cores.every((c) => !!c.stairs.length || coreTop <= 0)) {
@@ -1229,6 +1242,7 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
       role: o.role,
       module: o.module,
       ...(o.slot ? { slot: o.slot } : {}),
+      ...(o.state ? { state: o.state } : {}),
     };
   };
   const along = (side: Side, q: Vec2): number => (side === 'north' || side === 'south' ? q[0] : q[1]);

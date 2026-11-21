@@ -9,7 +9,7 @@
 import cfg from '../../../../../Content/Data/LevelGen/building_plans.json' with { type: 'json' };
 import { rng } from '../../movement/geometry.ts';
 import { fnv1a } from '../props/rng.ts';
-import type { KitDoor, KitSection, RoomUse } from './kitPlan.ts';
+import type { KitDoor, KitGable, KitSection, RoomUse } from './kitPlan.ts';
 import { validateKitPlan } from './kitPlan.ts';
 
 /** The plan constants and recipes (building_plans.json). */
@@ -64,7 +64,13 @@ export interface BandPlan {
   /** 'kit' = the kit-pattern block of kitPlan.ts (sections in `kit`, no bays). */
   pattern?: 'kit';
   /** Kit plans: the sections, the doors the planner wants (planDoors.ts realises them) and why a section has fewer flats / rooms. */
-  kit?: { sections: KitSection[]; doors: KitDoor[]; notes: string[]; /** The block template id (recipes.block.templates). */ template: string };
+  kit?: {
+    sections: KitSection[]; doors: KitDoor[]; notes: string[]; /** The block template id (recipes.block.templates). */ template: string;
+    /** The gable doors (template gable_door): the end wall, the ground-storey vestibule cells, the door's cell and centre. */
+    gables?: KitGable[];
+    /** The flats (unit keys, e.g. 's0A') whose street rooms carry balcony slots (template balcony_slots.rate). */
+    balconyColumns?: string[];
+  };
 }
 
 export interface BandPlanInput {

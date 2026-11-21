@@ -19,13 +19,14 @@ import type { BandPlan, PlanCell } from './bandPlan.ts';
 const area = (c: PlanCell): number => ((c.u1 - c.u0) * (c.v1 - c.v0)) / 1e4;
 const FIXTURES: [number, number][] = [[1800, 1000], [2000, 1400], [3600, 1200], [3700, 1200]];
 
-function kitBlock(w: number, h: number, floors = 2, seed = 4, opts: { pattern?: 'kit' | 'sections'; roof?: boolean } = {}): { l: GenLayout; b: GenBuilding } {
+function kitBlock(w: number, h: number, floors = 2, seed = 4, opts: { pattern?: 'kit' | 'sections'; roof?: boolean; gable?: 'none' } = {}): { l: GenLayout; b: GenBuilding } {
   const d: Draft = { walls: [], buildings: [], ladders: [], covers: [], zones: [], routes: [], spawn_points: [], ambush_points: [], patrol_routes: [], mantle_edges: [], keepFree: [], building_plans: true };
   let n = seed * 7919;
   const random = (): number => { n = (n * 1103515245 + 12345) & 0x7fffffff; return n / 0x7fffffff; };
   addBuilding(d, 'B_k', [[20.37, 15.21], [20.37 + w, 15.21 + h]], {
     height: floors * LEVEL_HEIGHT, floors, enterable: true, roof_walkable: opts.roof ?? true, stairwell: true, set_piece: 'facade', archetype: 'block',
     doorSides: ['south'], windowSides: ['south', 'north'], partitionRooms: true, plan_template: opts.pattern === 'sections' ? 'block_sections' : 'block_khrushchevka',
+    ...(opts.gable ? { gable_door: opts.gable } : {}),
   }, random);
   const l = finalizeDraftToLayout(d, [90, 90], { name: 't', profile: 't', seed: 1, params: { ...DEFAULT_PARAMS, size_m: [90, 90], building_plans: true }, start: [4, 2], end: [36, 58] });
   return { l, b: l.buildings.find((x) => x.id === 'B_k')! };
@@ -116,8 +117,9 @@ test('CodexTactics.LevelGen.KitPlan.StairGeom: the switchback fits the core - 35
 // ---- (2) the generated building --------------------------------------------------------------------------------------------------------
 
 test('CodexTactics.LevelGen.KitPlan.Generated: flat doors are unit_entry (and nothing else is), the court door opens into the core, halls windowless, every room reachable, 0 validator errors', () => {
+  // the court entrances only (gable_door 'none'): the gable door and its ground vestibule have their own tests (kitGable.test.ts)
   for (const [w, h, floors] of [[18.4, 10.3, 2], [20.2, 14.1, 3], [36.5, 12.2, 2], [37.1, 12.6, 3]] as const) {
-    const { l, b } = kitBlock(w, h, floors);
+    const { l, b } = kitBlock(w, h, floors, 4, { gable: 'none' });
     assert.equal(b.plan?.kind, 'bands');
     assert.equal(b.plan?.pattern, 'kit');
     assert.deepEqual(errorsOf(b, l), [], `${w} x ${h}`);

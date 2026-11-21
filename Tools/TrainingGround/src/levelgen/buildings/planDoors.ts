@@ -10,6 +10,7 @@ import type { BandPlan, PlanCell } from './bandPlan.ts';
 import { BUILDING_PLANS } from './bandPlan.ts';
 import { rng } from '../../movement/geometry.ts';
 import { fnv1a } from '../props/rng.ts';
+import type { DoorState } from '../schema.ts';
 
 const C = BUILDING_PLANS.constants;
 const O = C.openings;
@@ -40,6 +41,8 @@ export interface PlanOpening {
   links: [string, string];
   /** Exterior openings only. */
   wall?: WallKey;
+  /** An exterior door's opening state when the plan names one (kit gable door: template gable_door.state); absent = the default. */
+  state?: DoorState;
 }
 
 export interface PlanDoorsOpts {
@@ -435,12 +438,19 @@ function kitDoors(ctx: Ctx): Door[] {
   return out;
 }
 
-/** The exterior doors of a kit plan (storey 0): one per section, in the court wall (v = 0) at the middle of the stair core: the floor landing. */
-function kitEntrances(plan: BandPlan): { slot: Slot; wall: WallKey }[] {
-  const out: { slot: Slot; wall: WallKey }[] = [];
+/**
+ * The exterior doors of a kit plan (storey 0): one per section, in the court wall (v = 0) at the middle of the stair core: the floor landing; then
+ * the gable doors (plan.kit.gables, template gable_door) in their vestibule cell on the end wall, with their door state (absent = the default).
+ */
+function kitEntrances(plan: BandPlan): { slot: Slot; wall: WallKey; state?: DoorState }[] {
+  const out: { slot: Slot; wall: WallKey; state?: DoorState }[] = [];
   for (const sec of plan.kit?.sections ?? []) {
     const cell = plan.cells.find((c) => c.kind === 'core' && c.section === sec.index);
     if (cell) out.push({ slot: { cell, c: snap(sec.core.u0 + sec.core.width / 2) }, wall: 'v0' });
+  }
+  for (const g of plan.kit?.gables ?? []) {
+    const cell = plan.cells.find((c) => c.id === g.door);
+    if (cell) out.push({ slot: { cell, c: g.c }, wall: g.wall, ...(g.state ? { state: g.state } : {}) });
   }
   return out;
 }
@@ -475,7 +485,7 @@ export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult 
 
   // Exterior doors (storey 0): the slot nearest to the target along the wall; none -> the next free wall + a warning.
   const taken = new Set<string>(), holding = new Set<WallKey>();
-  const exterior: { slot: Slot; wall: WallKey }[] = plan.pattern === 'kit' ? kitEntrances(plan) : [];
+  const exterior: { slot: Slot; wall: WallKey; state?: DoorState }[] = plan.pattern === 'kit' ? kitEntrances(plan) : [];
   // a kit block is entered from the court only, through each section's stair core (the caller's door walls / draws are not used)
   for (const { wall, t } of plan.pattern === 'kit' ? [] : opts.doorWalls) {
     if (plan.archetype === 'block' && (wall === 'vD' || wall === 'v0')) {
@@ -516,15 +526,18 @@ export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult 
       });
     }
     if (storey > 0) continue;
-    exterior.forEach(({ slot, wall }, i) => {
+    exterior.forEach(({ slot, wall, state }, i) => {
       const w = wallInfo(plan, wall);
       openings.push({
         id: id(), storey, kind: 'door', role: 'entry', module: i === 0 ? 'wall_door_300' : 'wall_door_200', axis: w.axis, at: w.at, c: slot.c,
-        width: O.door_cm, links: [slot.cell.id, 'street'], wall,
+        width: O.door_cm, links: [slot.cell.id, 'street'], wall, ...(state ? { state } : {}),
       });
     });
   }
-  const lobbies = [...new Set(exterior.filter((e) => e.slot.cell.kind !== 'corridor' && e.slot.cell.kind !== 'core').map((e) => e.slot.cell.id))]
-    .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1))); // a corridor end stays a corridor, not a lobby
+  // a corridor end stays a corridor, not a lobby; a kit gable's whole vestibule (the end flat's hall / corridor / kitchen) is the ground lobby
+  const lobbies = [...new Set([
+    ...exterior.filter((e) => e.slot.cell.kind !== 'corridor' && e.slot.cell.kind !== 'core').map((e) => e.slot.cell.id),
+    ...(plan.kit?.gables ?? []).flatMap((g) => g.cells),
+  ])].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
   return { openings, lobbies, warnings };
 }

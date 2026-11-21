@@ -275,6 +275,16 @@ function storeyNoLoop(b: GenBuilding, rooms: GenRoom[], placed: Placed[], issues
     // the stair core joins its corridor by two portals: a loop through it needs no room, so it stays out of the graph
     // 3.5 rule 3 checks the loop "with its dead-end units removed": a kit flat (one entry each) is a dead end by design
     const deadEnd = new Set((b.units ?? []).filter((u) => u.floor === f && u.dead_end).flatMap((u) => u.rooms));
+    if (b.plan?.pattern === 'kit') {
+      // a kit gable door's ground vestibule (the only lobby of a kit block) and the end flat's rooms that open onto it: one pocket hanging off the
+      // section by the flat's own entry door (the gable door is exterior) - a dead end like every kit flat
+      const lobbies = new Set(rooms.filter((r) => r.floor === f && r.kind === 'lobby').map((r) => r.id));
+      for (const id of lobbies) deadEnd.add(id);
+      const doors = new Map(placed.filter((p) => p.op.kind === 'door' && p.op.floor === f && p.op.id).map((p) => [p.op.id!, p.op]));
+      for (const u of (b.units ?? []).filter((x) => x.floor === f && x.entries.length && x.entries.every((e) => doors.get(e)?.links?.some((l) => lobbies.has(l))))) {
+        for (const r of u.rooms) deadEnd.add(r);
+      }
+    }
     const rs = rooms.filter((r) => r.floor === f && r.kind !== 'stairwell' && !(b.plan?.pattern === 'kit' && deadEnd.has(r.id)));
     const counted = rs.filter(isRoomy).length;
     if (counted < 3) continue;

@@ -62,9 +62,26 @@ export function planWindows(plan: BandPlan, opts: PlanWindowsOpts): PlanOpening[
         }
       }
     }
-    if (plan.archetype === 'block' && storey >= BLOCK.slot_min_storey) markSlots(plan, out.filter((o) => o.storey === storey));
+    if (plan.pattern === 'kit') markKitSlots(plan, storey, out.filter((o) => o.storey === storey));
+    else if (plan.archetype === 'block' && storey >= BLOCK.slot_min_storey) markSlots(plan, out.filter((o) => o.storey === storey));
   }
   return out;
+}
+
+/**
+ * Kit block slots (template balcony_slots; story 4): from min_storey every street-wall (v = D) window of a room whose use is in `uses` and whose
+ * flat is a balcony column (plan.kit.balconyColumns, drawn by `rate`) is a balcony / fire-escape slot - the same windows on every storey, so a
+ * flat's slots stack. Only markers: no balcony is built until story 4 turns one column into balcony doors + balconies + the escape.
+ */
+function markKitSlots(plan: BandPlan, storey: number, windows: PlanOpening[]): void {
+  const bs = kitTemplate(plan.kit?.template).balcony_slots;
+  if (storey < bs.min_storey) return;
+  const cols = new Set(plan.kit?.balconyColumns ?? []);
+  const byId = new Map(plan.cells.map((c) => [c.id, c]));
+  for (const w of windows) {
+    const cell = byId.get(w.links[0]);
+    if (w.wall === 'vD' && cell?.unit && cols.has(cell.unit) && cell.use && (bs.uses as string[]).includes(cell.use)) w.slot = 'balcony';
+  }
 }
 
 /**

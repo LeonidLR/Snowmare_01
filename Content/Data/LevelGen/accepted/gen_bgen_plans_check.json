@@ -51,8 +51,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_x",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_x_part_f0_1_0",
@@ -136,8 +136,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_x",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_x_part_f0_5_1",
@@ -153,8 +153,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_x",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_x_part_f0_6_0",
@@ -170,8 +170,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_x",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_x_part_f0_7_0",
@@ -2772,6 +2772,23 @@
     -4663
    ],
    "b": [
+    3404,
+    -4663
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_x",
+   "structure": "load_bearing",
+   "material": "concrete_panel"
+  },
+  {
+   "id": "B_x_W_1",
+   "a": [
+    3254,
+    -4663
+   ],
+   "b": [
     2279,
     -4663
    ],
@@ -2883,8 +2900,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_y_part_f0_1_0",
@@ -2968,8 +2985,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_y_part_f0_5_1",
@@ -2985,8 +3002,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_y_part_f0_6_0",
@@ -3002,8 +3019,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_y_part_f0_7_0",
@@ -3036,8 +3053,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_y_part_f0_9_0",
@@ -3053,8 +3070,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_y_part_f0_10_0",
@@ -7290,6 +7307,23 @@
     337
    ],
    "b": [
+    3404,
+    337
+   ],
+   "height": 900,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_y",
+   "structure": "load_bearing",
+   "material": "concrete_panel"
+  },
+  {
+   "id": "B_y_W_1",
+   "a": [
+    3254,
+    337
+   ],
+   "b": [
     2279,
     337
    ],
@@ -7437,8 +7471,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b18",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_b18_part_f0_1_0",
@@ -7539,8 +7573,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b18",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_b18_part_f0_7_0",
@@ -8321,6 +8355,23 @@
     -4663
    ],
    "b": [
+    804,
+    -4663
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_b18",
+   "structure": "load_bearing",
+   "material": "concrete_panel"
+  },
+  {
+   "id": "B_b18_W_1",
+   "a": [
+    654,
+    -4663
+   ],
+   "b": [
     -121,
     -4663
    ],
@@ -8397,8 +8448,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b20",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_b20_part_f0_1_0",
@@ -8499,8 +8550,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b20",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_b20_part_f0_6_1",
@@ -8516,8 +8567,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b20",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_b20_part_f0_7_0",
@@ -8567,8 +8618,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b20",
-   "structure": "partition",
-   "material": "plaster"
+   "structure": "load_bearing",
+   "material": "concrete_panel"
   },
   {
    "id": "B_b20_part_f0_9_0",
@@ -10614,6 +10665,23 @@
     -1863
    ],
    "b": [
+    804,
+    -1863
+   ],
+   "height": 900,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_b20",
+   "structure": "load_bearing",
+   "material": "concrete_panel"
+  },
+  {
+   "id": "B_b20_W_1",
+   "a": [
+    654,
+    -1863
+   ],
+   "b": [
     -521,
     -1863
    ],
@@ -12623,6 +12691,14 @@
      ],
      "floor": 0,
      "wall": "B_x_N"
+    },
+    {
+     "pos": [
+      3329,
+      -4663
+     ],
+     "floor": 0,
+     "wall": "B_x_W"
     }
    ],
    "openings": [
@@ -12663,6 +12739,28 @@
      "yaw": 0,
      "links": [
       "B_x_r_f0_c27",
+      "street"
+     ],
+     "role": "entry",
+     "module": "wall_door_200",
+     "structure": "load_bearing",
+     "material": "concrete_panel"
+    },
+    {
+     "id": "B_x_f0_d38",
+     "kind": "door",
+     "pos": [
+      3329,
+      -4663
+     ],
+     "floor": 0,
+     "wall": "B_x_W",
+     "width": 150,
+     "sill_height": 0,
+     "top_height": 240,
+     "yaw": 270,
+     "links": [
+      "B_x_r_f0_c0",
       "street"
      ],
      "role": "entry",
@@ -13157,6 +13255,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -13209,6 +13308,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -13261,6 +13361,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -13339,6 +13440,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -13391,6 +13493,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -13417,6 +13520,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -13517,8 +13621,8 @@
      "floor": 0,
      "thickness": 20,
      "openings": [],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_x_part_f0_1",
@@ -13603,14 +13707,14 @@
         "B_x_r_f0_c5",
         "B_x_r_f0_c1"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_x_part_f0_4",
@@ -13679,14 +13783,14 @@
         "B_x_r_f0_c5",
         "B_x_r_f0_c2"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_x_part_f0_6",
@@ -13717,14 +13821,14 @@
         "B_x_r_f0_c5",
         "B_x_r_f0_c3"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_x_part_f0_7",
@@ -13787,7 +13891,7 @@
         "B_x_r_f0_c6",
         "B_x_r_f0_c4"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
        "structure": "load_bearing",
        "material": "concrete_panel"
@@ -17451,15 +17555,16 @@
        -4363
       ]
      },
-     "kind": "room",
+     "kind": "lobby",
      "use": "kitchen",
-     "unit": "B_x_u_f0_s0C",
+     "zone": "common",
      "walls": [
       "B_x_N",
       "B_x_W"
      ],
      "door_ids": [
       "B_x_f0_d13",
+      "B_x_f0_d38",
       "B_x_f0_w0"
      ],
      "anchor": [
@@ -17567,9 +17672,9 @@
        -4113
       ]
      },
-     "kind": "corridor",
+     "kind": "lobby",
      "use": "hall",
-     "unit": "B_x_u_f0_s0C",
+     "zone": "common",
      "walls": [
       "B_x_N"
      ],
@@ -17596,9 +17701,9 @@
        -4113
       ]
      },
-     "kind": "corridor",
+     "kind": "lobby",
      "use": "corridor",
-     "unit": "B_x_u_f0_s0C",
+     "zone": "common",
      "walls": [],
      "door_ids": [
       "B_x_f0_d14",
@@ -20367,6 +20472,7 @@
     "sections": 2,
     "pattern": "kit",
     "notes": [
+     "gable door (u0): on the ground storey s0C's hall + corridor + kitchen are the gable vestibule (to the floor landing); its other rooms open onto it, no kitchen on that storey",
      "s0C: 550 cm too narrow to split the street room (2 living rooms instead of 3)",
      "s1C: 550 cm too narrow to split the street room (2 living rooms instead of 3)"
     ],
@@ -20414,19 +20520,16 @@
      "kind": "flat",
      "floor": 0,
      "rooms": [
-      "B_x_r_f0_c0",
       "B_x_r_f0_c1",
       "B_x_r_f0_c2",
-      "B_x_r_f0_c3",
-      "B_x_r_f0_c4",
-      "B_x_r_f0_c5"
+      "B_x_r_f0_c3"
      ],
      "entries": [
-      "B_x_f0_d12"
+      "B_x_f0_d14",
+      "B_x_f0_d15",
+      "B_x_f0_d16"
      ],
-     "column": "B_x_col_s0C",
-     "dead_end": true,
-     "run_cm": 407
+     "column": "B_x_col_s0C"
     },
     {
      "id": "B_x_u_f0_s1A",
@@ -20629,6 +20732,14 @@
      ],
      "floor": 0,
      "wall": "B_y_N"
+    },
+    {
+     "pos": [
+      3329,
+      337
+     ],
+     "floor": 0,
+     "wall": "B_y_W"
     }
    ],
    "openings": [
@@ -20669,6 +20780,28 @@
      "yaw": 0,
      "links": [
       "B_y_r_f0_c28",
+      "street"
+     ],
+     "role": "entry",
+     "module": "wall_door_200",
+     "structure": "load_bearing",
+     "material": "concrete_panel"
+    },
+    {
+     "id": "B_y_f0_d40",
+     "kind": "door",
+     "pos": [
+      3329,
+      337
+     ],
+     "floor": 0,
+     "wall": "B_y_W",
+     "width": 150,
+     "sill_height": 0,
+     "top_height": 240,
+     "yaw": 270,
+     "links": [
+      "B_y_r_f0_c0",
       "street"
      ],
      "role": "entry",
@@ -21215,6 +21348,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21293,6 +21427,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21319,6 +21454,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21371,6 +21507,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21423,6 +21560,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21475,6 +21613,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21501,6 +21640,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21579,6 +21719,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21683,6 +21824,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21761,6 +21903,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21787,6 +21930,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21839,6 +21983,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21891,6 +22036,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21943,6 +22089,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -21969,6 +22116,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -22047,6 +22195,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -22095,8 +22244,8 @@
      "floor": 0,
      "thickness": 20,
      "openings": [],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_y_part_f0_1",
@@ -22181,14 +22330,14 @@
         "B_y_r_f0_c5",
         "B_y_r_f0_c1"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_y_part_f0_4",
@@ -22257,14 +22406,14 @@
         "B_y_r_f0_c5",
         "B_y_r_f0_c2"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_y_part_f0_6",
@@ -22295,14 +22444,14 @@
         "B_y_r_f0_c5",
         "B_y_r_f0_c3"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_y_part_f0_7",
@@ -22349,14 +22498,14 @@
         "B_y_r_f0_c6",
         "B_y_r_f0_c4"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_y_part_f0_9",
@@ -22371,8 +22520,8 @@
      "floor": 0,
      "thickness": 20,
      "openings": [],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_y_part_f0_10",
@@ -28316,15 +28465,16 @@
        637
       ]
      },
-     "kind": "room",
+     "kind": "lobby",
      "use": "kitchen",
-     "unit": "B_y_u_f0_s0A",
+     "zone": "common",
      "walls": [
       "B_y_N",
       "B_y_W"
      ],
      "door_ids": [
       "B_y_f0_d7",
+      "B_y_f0_d40",
       "B_y_f0_w0"
      ],
      "anchor": [
@@ -28432,9 +28582,9 @@
        887
       ]
      },
-     "kind": "corridor",
+     "kind": "lobby",
      "use": "hall",
-     "unit": "B_y_u_f0_s0A",
+     "zone": "common",
      "walls": [
       "B_y_N"
      ],
@@ -28461,9 +28611,9 @@
        887
       ]
      },
-     "kind": "corridor",
+     "kind": "lobby",
      "use": "corridor",
-     "unit": "B_y_u_f0_s0A",
+     "zone": "common",
      "walls": [],
      "door_ids": [
       "B_y_f0_d8",
@@ -32945,6 +33095,9 @@
     "variant": "block",
     "sections": 2,
     "pattern": "kit",
+    "notes": [
+     "gable door (u0): on the ground storey s0A's hall + corridor + kitchen are the gable vestibule (to the tambour); its other rooms open onto it, no kitchen on that storey"
+    ],
     "template": "block_khrushchevka"
    },
    "units": [
@@ -32953,19 +33106,16 @@
      "kind": "flat",
      "floor": 0,
      "rooms": [
-      "B_y_r_f0_c0",
       "B_y_r_f0_c1",
       "B_y_r_f0_c2",
-      "B_y_r_f0_c3",
-      "B_y_r_f0_c4",
-      "B_y_r_f0_c5"
+      "B_y_r_f0_c3"
      ],
      "entries": [
-      "B_y_f0_d6"
+      "B_y_f0_d8",
+      "B_y_f0_d9",
+      "B_y_f0_d10"
      ],
-     "column": "B_y_col_s0A",
-     "dead_end": true,
-     "run_cm": 706
+     "column": "B_y_col_s0A"
     },
     {
      "id": "B_y_u_f0_s0B",
@@ -33312,6 +33462,14 @@
      ],
      "floor": 0,
      "wall": "B_b18_N"
+    },
+    {
+     "pos": [
+      729,
+      -4663
+     ],
+     "floor": 0,
+     "wall": "B_b18_W"
     }
    ],
    "openings": [
@@ -33334,6 +33492,28 @@
      ],
      "role": "entry",
      "module": "wall_door_300",
+     "structure": "load_bearing",
+     "material": "concrete_panel"
+    },
+    {
+     "id": "B_b18_f0_d12",
+     "kind": "door",
+     "pos": [
+      729,
+      -4663
+     ],
+     "floor": 0,
+     "wall": "B_b18_W",
+     "width": 150,
+     "sill_height": 0,
+     "top_height": 240,
+     "yaw": 270,
+     "links": [
+      "B_b18_r_f0_c0",
+      "street"
+     ],
+     "role": "entry",
+     "module": "wall_door_200",
      "structure": "load_bearing",
      "material": "concrete_panel"
     },
@@ -33616,6 +33796,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -33668,6 +33849,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -33694,6 +33876,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -33720,6 +33903,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -33772,6 +33956,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -33820,8 +34005,8 @@
      "floor": 0,
      "thickness": 20,
      "openings": [],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_b18_part_f0_1",
@@ -33922,14 +34107,14 @@
         "B_b18_r_f0_c5",
         "B_b18_r_f0_c1"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_b18_part_f0_5",
@@ -33998,14 +34183,14 @@
         "B_b18_r_f0_c5",
         "B_b18_r_f0_c3"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_b18_part_f0_7",
@@ -34090,7 +34275,7 @@
         "B_b18_r_f0_c6",
         "B_b18_r_f0_c4"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
        "structure": "load_bearing",
        "material": "concrete_panel"
@@ -35128,15 +35313,16 @@
        -4113
       ]
      },
-     "kind": "room",
+     "kind": "lobby",
      "use": "kitchen",
-     "unit": "B_b18_u_f0_s0C",
+     "zone": "common",
      "walls": [
       "B_b18_N",
       "B_b18_W"
      ],
      "door_ids": [
       "B_b18_f0_d6",
+      "B_b18_f0_d12",
       "B_b18_f0_w0"
      ],
      "anchor": [
@@ -35244,9 +35430,9 @@
        -3863
       ]
      },
-     "kind": "corridor",
+     "kind": "lobby",
      "use": "hall",
-     "unit": "B_b18_u_f0_s0C",
+     "zone": "common",
      "walls": [
       "B_b18_N"
      ],
@@ -35273,9 +35459,9 @@
        -3863
       ]
      },
-     "kind": "corridor",
+     "kind": "lobby",
      "use": "corridor",
-     "unit": "B_b18_u_f0_s0C",
+     "zone": "common",
      "walls": [],
      "door_ids": [
       "B_b18_f0_d7",
@@ -36457,7 +36643,8 @@
     "sections": 1,
     "pattern": "kit",
     "notes": [
-     "depth 1000 < 1100: the street band is too shallow for flat B - two flats per landing"
+     "depth 1000 < 1100: the street band is too shallow for flat B - two flats per landing",
+     "gable door (u0): on the ground storey s0C's hall + corridor + kitchen are the gable vestibule (to the floor landing); its other rooms open onto it, no kitchen on that storey"
     ],
     "template": "block_khrushchevka"
    },
@@ -36486,20 +36673,16 @@
      "kind": "flat",
      "floor": 0,
      "rooms": [
-      "B_b18_r_f0_c0",
       "B_b18_r_f0_c1",
       "B_b18_r_f0_c2",
       "B_b18_r_f0_c3",
-      "B_b18_r_f0_c4",
-      "B_b18_r_f0_c5",
       "B_b18_r_f0_c7"
      ],
      "entries": [
-      "B_b18_f0_d5"
+      "B_b18_f0_d7",
+      "B_b18_f0_d8"
      ],
-     "column": "B_b18_col_s0C",
-     "dead_end": true,
-     "run_cm": 531
+     "column": "B_b18_col_s0C"
     },
     {
      "id": "B_b18_u_f1_s0A",
@@ -36568,6 +36751,14 @@
      ],
      "floor": 0,
      "wall": "B_b20_N"
+    },
+    {
+     "pos": [
+      729,
+      -1863
+     ],
+     "floor": 0,
+     "wall": "B_b20_W"
     }
    ],
    "openings": [
@@ -36590,6 +36781,28 @@
      ],
      "role": "entry",
      "module": "wall_door_300",
+     "structure": "load_bearing",
+     "material": "concrete_panel"
+    },
+    {
+     "id": "B_b20_f0_d20",
+     "kind": "door",
+     "pos": [
+      729,
+      -1863
+     ],
+     "floor": 0,
+     "wall": "B_b20_W",
+     "width": 150,
+     "sill_height": 0,
+     "top_height": 240,
+     "yaw": 270,
+     "links": [
+      "B_b20_r_f0_c0",
+      "street"
+     ],
+     "role": "entry",
+     "module": "wall_door_200",
      "structure": "load_bearing",
      "material": "concrete_panel"
     },
@@ -36950,6 +37163,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -37002,6 +37216,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -37028,6 +37243,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -37080,6 +37296,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -37236,6 +37453,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -37288,6 +37506,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -37314,6 +37533,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -37366,6 +37586,7 @@
      ],
      "role": "window",
      "module": "wall_window_200",
+     "slot": "balcony",
      "structure": "load_bearing",
      "material": "concrete_panel",
      "sill_cm": 95,
@@ -37466,8 +37687,8 @@
      "floor": 0,
      "thickness": 20,
      "openings": [],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_b20_part_f0_1",
@@ -37552,14 +37773,14 @@
         "B_b20_r_f0_c6",
         "B_b20_r_f0_c1"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_b20_part_f0_4",
@@ -37644,14 +37865,14 @@
         "B_b20_r_f0_c6",
         "B_b20_r_f0_c2"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_b20_part_f0_7",
@@ -37720,14 +37941,14 @@
         "B_b20_r_f0_c6",
         "B_b20_r_f0_c4"
        ],
-       "role": "room",
+       "role": "unit_entry",
        "module": "wall_door_200",
-       "structure": "partition",
-       "material": "plaster"
+       "structure": "load_bearing",
+       "material": "concrete_panel"
       }
      ],
-     "structure": "partition",
-     "material": "plaster"
+     "structure": "load_bearing",
+     "material": "concrete_panel"
     },
     {
      "id": "B_b20_part_f0_9",
@@ -37774,7 +37995,7 @@
         "B_b20_r_f0_c7",
         "B_b20_r_f0_c5"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
        "structure": "load_bearing",
        "material": "concrete_panel"
@@ -40613,15 +40834,16 @@
        -1463
       ]
      },
-     "kind": "room",
+     "kind": "lobby",
      "use": "kitchen",
-     "unit": "B_b20_u_f0_s0C",
+     "zone": "common",
      "walls": [
       "B_b20_N",
       "B_b20_W"
      ],
      "door_ids": [
       "B_b20_f0_d13",
+      "B_b20_f0_d20",
       "B_b20_f0_w0"
      ],
      "anchor": [
@@ -40758,9 +40980,9 @@
        -1213
       ]
      },
-     "kind": "corridor",
+     "kind": "lobby",
      "use": "hall",
-     "unit": "B_b20_u_f0_s0C",
+     "zone": "common",
      "walls": [
       "B_b20_N"
      ],
@@ -40787,9 +41009,9 @@
        -1213
       ]
      },
-     "kind": "corridor",
+     "kind": "lobby",
      "use": "corridor",
-     "unit": "B_b20_u_f0_s0C",
+     "zone": "common",
      "walls": [],
      "door_ids": [
       "B_b20_f0_d14",
@@ -43198,6 +43420,9 @@
     "variant": "block",
     "sections": 1,
     "pattern": "kit",
+    "notes": [
+     "gable door (u0): on the ground storey s0C's hall + corridor + kitchen are the gable vestibule (to the floor landing); its other rooms open onto it, no kitchen on that storey"
+    ],
     "template": "block_khrushchevka"
    },
    "units": [
@@ -43243,20 +43468,17 @@
      "kind": "flat",
      "floor": 0,
      "rooms": [
-      "B_b20_r_f0_c0",
       "B_b20_r_f0_c1",
       "B_b20_r_f0_c2",
       "B_b20_r_f0_c3",
-      "B_b20_r_f0_c4",
-      "B_b20_r_f0_c5",
-      "B_b20_r_f0_c6"
+      "B_b20_r_f0_c4"
      ],
      "entries": [
-      "B_b20_f0_d12"
+      "B_b20_f0_d14",
+      "B_b20_f0_d15",
+      "B_b20_f0_d16"
      ],
-     "column": "B_b20_col_s0C",
-     "dead_end": true,
-     "run_cm": 457
+     "column": "B_b20_col_s0C"
     },
     {
      "id": "B_b20_u_f1_s0A",

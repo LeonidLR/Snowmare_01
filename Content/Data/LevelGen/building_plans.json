@@ -145,6 +145,19 @@
             "C": 3
           },
           "window_clear_cm": 50,
+          "gable_door": {
+            "comment": "Designer decision 2026-11-22: a second exterior door (role entry) on an END wall (gable), ground storey only. ends = which gable gets it: 'low' (plan u = 0), 'high' (u = L), 'both' or 'none'; a block of both_min_sections sections or more gets both; BuildingSpec.gable_door overrides (a plan end or the draft side of a gable). The door opens into the end flat's court row - its hall and kitchen (vestibule_uses; the flat's corridor joins them: an open seam with the hall) - which on the ground storey is a common vestibule leading to the section's tambour (three flats) or floor landing (two flats), like the end-section utility door of a 1-464 block; the upper storeys keep their three flats per landing unchanged. The ground-storey end flat keeps its bath and living rooms (entered from the vestibule) and loses its kitchen; plan.notes records it. The door sits in the vestibule cell on the gable at the court corner (the kitchen), centred in its gable span on the 50 grid. state = the door's opening state (null = the generator's default for an exterior door).",
+            "ends": "low",
+            "both_min_sections": 3,
+            "vestibule_uses": ["kitchen", "hall", "corridor"],
+            "state": null
+          },
+          "balcony_slots": {
+            "comment": "Balcony / fire-escape slots (S2_ROOMS_PLAN.md 3.6, story 4): on every storey from min_storey the street-wall (v = D) windows of the rooms whose use is in uses get slot 'balcony' - add 'kitchen' to give street kitchens slots too. rate = the share of flat columns that get slots (drawn per flat from the plan seed, the same on every storey). A slot is only a marker: designer 2026-11-19 - no balcony without a fire escape, so nothing is built from it until story 4 turns one column's slots into balcony doors + balconies + the escape.",
+            "min_storey": 1,
+            "uses": ["living"],
+            "rate": 1.0
+          },
           "room_area_m2": {
             "hall": [
               4,
