@@ -31,6 +31,9 @@ class FJsonObject;
  *   distance from E: the first man in goes deepest, so the next never has to pass him. No spaced place: the place farthest from everyone given
  *   out if that keeps half MinSpacingCm, else his slot stays (no room inside: he waits outside rather than on a team-mate); no candidate at
  *   all: the slot stays.
+ * - Line tests (FFormationConfinedLineTests, the runtime's navmesh): every place (kept or new) must be seen from the entry point on a clear line
+ *   that keeps JambClearCm from the navmesh edge (no place round a door jamb's corner - none such: the filter is dropped); "reachable" also
+ *   needs his own straight navmesh line to it, unless he still stands farther out than the entry point (he walks in through the door).
  *
  * Content/Data/AI/squad_confined.json (snake_case keys, metres where the key says _m; a missing key keeps the default), read on the first
  * FormationConfinedTuning::Get(); console Codex.Formation.Confined (-1 = the file's "enabled", 0 = off - the old slots, 1 = on).
@@ -77,6 +80,21 @@ struct CODEXTACTICS_API FFormationConfinedTuning
 	float PassFreeCm = 80.f;
 	/** Walking to his compressed place a follower faces his walk (no formation look, no backward walk) until this near it, cm (face_walk_cm). */
 	float FaceWalkCm = 100.f;
+	/**
+	 * Lead review 2026-11-22 (the follower's 40 cm capsule snagged the door jamb on a place round the corner behind the door; the navmesh agent
+	 * radius is 35 cm and stays - a project decision): a place must be in a clear navmesh line from the entry point whose every sample (but the
+	 * last EndSkip) keeps this from the navmesh edge - with the 35 cm erosion a 45 cm clearance from the geometry, more than the capsule, cm
+	 * (jamb_clear_cm; 0 = the line only).
+	 */
+	float JambClearCm = 10.f;
+	/** The entry line's clearance samples are this far apart, cm (jamb_sample_cm). */
+	float JambSampleCm = 20.f;
+	/**
+	 * Lead review 2026-11-22 (grey showcase S03: a man stood in the hall's door, a place 160 cm out along the one ray through it): a ray longer
+	 * than this x both its neighbours is a GAP (a door seen through by one ray); unless its neighbours are themselves long (> this x the median -
+	 * a corridor's axis) its places reach only as far as the shorter neighbour - inside the room, not in the door (gap_factor; 0 = off).
+	 */
+	float GapFactor = 1.5f;
 };
 
 /** A probed pocket: its centre and the free navmesh distance along each world-aligned ray (FormationConfinedRules::RayDir). */
@@ -85,6 +103,17 @@ struct FFormationConfinedPocket
 	FVector2D Center = FVector2D::ZeroVector;
 	/** Free[i] = the free distance along RayDir(i, Free.Num()), cm (at most the probe length). */
 	TArray<float> Free;
+};
+
+/**
+ * The runtime's navmesh line tests for CompressSlots (Lead review 2026-11-22; unset functions = no test). FromEntry(Place): a clear navmesh line
+ * from the entry point to Place keeping JambClearCm from the navmesh edge (no place round a jamb corner behind the door). Straight(From, To):
+ * a clear navmesh line (a follower's own straight way to a place).
+ */
+struct FFormationConfinedLineTests
+{
+	TFunction<bool(const FVector2D& Place)> FromEntry;
+	TFunction<bool(const FVector2D& From, const FVector2D& To)> Straight;
 };
 
 /** One follower slot to compress: the formation's slot and (when known) where its man stands now. */
@@ -123,7 +152,10 @@ namespace FormationConfinedRules
 	/** The free distance toward Dir (any length): the smaller of the two rays bracketing it (conservative); 0 for an empty pocket. */
 	CODEXTACTICS_API float FreeToward(const FFormationConfinedPocket& Pocket, const FVector2D& Dir);
 
-	/** Point lies inside the pocket: within PocketRadius of the centre and WallMarginCm short of FreeToward its direction (the centre itself: true). */
+	/** How far places reach along ray Ray: min(PocketRadius, its free distance - WallMarginCm, a gap ray's shorter neighbour - WallMarginCm) (GapFactor). */
+	CODEXTACTICS_API float RayReach(const FFormationConfinedPocket& Pocket, int32 Ray, const FFormationConfinedTuning& Tuning);
+
+	/** Point lies inside the pocket: within PocketRadius of the centre and WallMarginCm short of FreeToward its direction, not beyond a gap ray's reach (the centre itself: true). */
 	CODEXTACTICS_API bool IsInside(const FFormationConfinedPocket& Pocket, const FVector2D& Point, const FFormationConfinedTuning& Tuning);
 
 	/**
@@ -153,7 +185,8 @@ namespace FormationConfinedRules
 	 * every slot as Desired, nothing replaced.
 	 */
 	CODEXTACTICS_API FFormationConfinedResult CompressSlots(const FFormationConfinedPocket& Pocket, TArrayView<const FFormationConfinedSlot> Slots,
-		const TOptional<FVector2D>& LeaderAt, const TOptional<FVector2D>& EntryFrom, const FFormationConfinedTuning& Tuning);
+		const TOptional<FVector2D>& LeaderAt, const TOptional<FVector2D>& EntryFrom, const FFormationConfinedTuning& Tuning,
+		const FFormationConfinedLineTests* Lines = nullptr);
 }
 
 namespace FormationConfinedTuning

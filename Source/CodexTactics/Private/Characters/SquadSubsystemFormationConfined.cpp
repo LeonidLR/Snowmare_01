@@ -12,12 +12,15 @@
 #include "AIController.h"
 #include "HAL/IConsoleManager.h"
 #include "Navigation/CrowdFollowingComponent.h"
+#include "NavMesh/RecastNavMesh.h"
 #include "NavigationSystem.h"
 
 namespace SquadSubsystemFormationConfinedLocal
 {
 	/** Speed below which the leader counts as standing (the pocket round where he stands), cm/s. */
 	constexpr float ConfinedStandingSpeed = 15.f;
+	/** The entry line's clearance samples stop this short of the place (a place may stand near a wall), cm. */
+	constexpr double EntryEndSkipCm = 30.0;
 	/** The pocket centre must project onto the navmesh within this box, cm. */
 	const FVector ConfinedProjectExtent(50.f, 50.f, 250.f);
 
@@ -108,6 +111,7 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 			Confined.Pocket.Free.Add(bHit ? static_cast<float>(FVector::Dist2D(Start.Location, Hit)) : Tuning.ProbeCm);
 		}
 		Confined.bPocketValid = true;
+		++Confined.ProbeStamp;
 		if (FormationDebugLevel() >= 1)
 		{
 			FString Rays;
@@ -157,7 +161,47 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 		return;
 	}
 	const FVector2D LeaderAt(Feet);
-	const FFormationConfinedResult Result = FormationConfinedRules::CompressSlots(Confined.Pocket, Slots, LeaderAt, Confined.EntryFrom, Tuning);
+	// Lead review 2026-11-22: the navmesh line tests (a place round a jamb corner behind the door is no place). The entry test is cached per
+	// pocket and entry point (its clearance samples are the costly part); a follower's own straight line is one raycast.
+	const ARecastNavMesh* Recast = Cast<ARecastNavMesh>(Nav->GetDefaultNavDataInstance(FNavigationSystem::DontCreate));
+	const double Z = Confined.CenterZ;
+	if (!Confined.EntryFrom.IsSet() || !Confined.EntryCacheFrom.Equals(Confined.EntryFrom.GetValue(), 1.0) || Confined.EntryCacheStamp != Confined.ProbeStamp)
+	{
+		Confined.EntryCache.Reset();
+		Confined.EntryCacheFrom = Confined.EntryFrom.Get(FVector2D::ZeroVector);
+		Confined.EntryCacheStamp = Confined.ProbeStamp;
+	}
+	FFormationConfinedLineTests Lines;
+	Lines.Straight = [World, Z](const FVector2D& From, const FVector2D& To)
+	{
+		FVector Hit;
+		return !UNavigationSystemV1::NavigationRaycast(World, FVector(From, Z), FVector(To, Z), Hit);
+	};
+	Lines.FromEntry = [this, World, Recast, Z, &Tuning](const FVector2D& Place)
+	{
+		const FIntPoint Key(FMath::RoundToInt32(Place.X), FMath::RoundToInt32(Place.Y));
+		if (const bool* Known = Confined.EntryCache.Find(Key))
+		{
+			return *Known;
+		}
+		const FVector2D From = Confined.EntryFrom.Get(Confined.Pocket.Center);
+		FVector Hit;
+		bool bClear = !UNavigationSystemV1::NavigationRaycast(World, FVector(From, Z), FVector(Place, Z), Hit);
+		const double Length = FVector2D::Distance(From, Place);
+		if (bClear && Recast && Tuning.JambClearCm > 0.f && Length > EntryEndSkipCm)
+		{
+			// Every sample but the place's own end keeps the clearance from the navmesh edge: a line that cuts a jamb corner comes within it.
+			const int32 Steps = FMath::Max(1, FMath::CeilToInt32((Length - EntryEndSkipCm) / FMath::Max(Tuning.JambSampleCm, 5.f)));
+			for (int32 Step = 0; Step <= Steps && bClear; ++Step)
+			{
+				const FVector2D At = From + (Place - From) * ((Length - EntryEndSkipCm) * Step / Steps / Length);
+				bClear = Recast->FindDistanceToWall(FVector(At, Z), nullptr, Tuning.JambClearCm + 1.f) >= Tuning.JambClearCm;
+			}
+		}
+		Confined.EntryCache.Add(Key, bClear);
+		return bClear;
+	};
+	const FFormationConfinedResult Result = FormationConfinedRules::CompressSlots(Confined.Pocket, Slots, LeaderAt, Confined.EntryFrom, Tuning, &Lines);
 	if (!Result.bConfined)
 	{
 		Off(TEXT("open ground"));

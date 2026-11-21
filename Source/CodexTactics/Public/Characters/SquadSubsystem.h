@@ -1643,6 +1643,11 @@ private:
 		int32 ReplacedCount = 0;
 		/** Followers whose crowd separation + obstacle avoidance the rule switched off (restored when it ends): they held them at the hall door. */
 		TArray<TWeakObjectPtr<AOperativeCharacter>> NoSeparation;
+		/** Each probe's number, and the entry line tests (FFormationConfinedLineTests::FromEntry) cached for one probe and entry point. */
+		uint32 ProbeStamp = 0;
+		uint32 EntryCacheStamp = 0;
+		FVector2D EntryCacheFrom = FVector2D::ZeroVector;
+		TMap<FIntPoint, bool> EntryCache;
 	};
 	FFormationConfinedState Confined;
 	/** Crowd separation + obstacle avoidance of Operative on / off (UCrowdFollowingComponent; the rule's own switch, Confined.NoSeparation). */

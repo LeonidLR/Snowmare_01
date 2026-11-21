@@ -100,7 +100,37 @@ bool FormationConfinedRules::IsInside(const FFormationConfinedPocket& Pocket, co
 	{
 		return true;
 	}
-	return Distance <= PocketRadius(Pocket, Tuning) && Distance <= FreeToward(Pocket, Offset / Distance) - Tuning.WallMarginCm;
+	if (Distance > PocketRadius(Pocket, Tuning) || Distance > FreeToward(Pocket, Offset / Distance) - Tuning.WallMarginCm)
+	{
+		return false;
+	}
+	// Not beyond a gap ray's reach (a door): the nearest ray's own cap.
+	const int32 Count = Pocket.Free.Num();
+	double Angle = FMath::Atan2(Offset.Y, Offset.X);
+	if (Angle < 0.0)
+	{
+		Angle += 2.0 * UE_DOUBLE_PI;
+	}
+	const int32 Nearest = FMath::RoundToInt32(Angle / (2.0 * UE_DOUBLE_PI / static_cast<double>(Count))) % Count;
+	return Distance <= RayReach(Pocket, Nearest, Tuning) + 0.01f;
+}
+
+float FormationConfinedRules::RayReach(const FFormationConfinedPocket& Pocket, int32 Ray, const FFormationConfinedTuning& Tuning)
+{
+	const int32 Count = Pocket.Free.Num();
+	if (Count == 0 || !Pocket.Free.IsValidIndex(Ray))
+	{
+		return 0.f;
+	}
+	float Reach = FMath::Min(PocketRadius(Pocket, Tuning), Pocket.Free[Ray] - Tuning.WallMarginCm);
+	const float Before = Pocket.Free[(Ray + Count - 1) % Count];
+	const float After = Pocket.Free[(Ray + 1) % Count];
+	if (Tuning.GapFactor > 0.f && Pocket.Free[Ray] > Tuning.GapFactor * FMath::Max(Before, After)
+		&& FMath::Min(Before, After) <= Tuning.GapFactor * Median(Pocket.Free))
+	{
+		Reach = FMath::Min(Reach, FMath::Min(Before, After) - Tuning.WallMarginCm); // a door seen through by this ray alone: its places stay in the room
+	}
+	return Reach;
 }
 
 bool FormationConfinedRules::IsOnEntry(const FFormationConfinedPocket& Pocket, const TOptional<FVector2D>& EntryFrom, const FVector2D& Point,
@@ -171,7 +201,7 @@ TArray<FVector2D> FormationConfinedRules::Candidates(const FFormationConfinedPoc
 	for (int32 Ray = 0; Ray < Count; ++Ray)
 	{
 		const FVector2D Dir = RayDir(Ray, Count);
-		const float Reach = FMath::Min(Radius, Pocket.Free[Ray] - Tuning.WallMarginCm);
+		const float Reach = RayReach(Pocket, Ray, Tuning);
 		float Last = 0.f;
 		for (float R = Tuning.MinSpacingCm; R <= Reach + 0.01f; R += Step)
 		{
@@ -189,7 +219,8 @@ TArray<FVector2D> FormationConfinedRules::Candidates(const FFormationConfinedPoc
 }
 
 FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationConfinedPocket& Pocket, TArrayView<const FFormationConfinedSlot> Slots,
-	const TOptional<FVector2D>& LeaderAt, const TOptional<FVector2D>& EntryFrom, const FFormationConfinedTuning& Tuning)
+	const TOptional<FVector2D>& LeaderAt, const TOptional<FVector2D>& EntryFrom, const FFormationConfinedTuning& Tuning,
+	const FFormationConfinedLineTests* Lines)
 {
 	using namespace FormationConfinedLocal;
 	FFormationConfinedResult Result;
@@ -210,6 +241,9 @@ FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationC
 	{
 		return bWay && DistanceToSegment(Point, LeaderAt.GetValue(), Pocket.Center) < Tuning.WayHalfWidthCm;
 	};
+	// Lead review 2026-11-22: a place round a door jamb's corner (not in a clear line with clearance from the entry point) is no place.
+	const bool bEntryLines = Lines && Lines->FromEntry && EntryFrom.IsSet();
+	const auto SeenFromEntry = [&](const FVector2D& Point) { return !bEntryLines || Lines->FromEntry(Point); };
 	TArray<FVector2D> Given{ Pocket.Center };
 	const auto Nearest = [&Given](const FVector2D& Point)
 	{
@@ -226,7 +260,7 @@ FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationC
 	for (int32 Index = 0; Index < Slots.Num(); ++Index)
 	{
 		const FVector2D& Desired = Slots[Index].Desired;
-		if (IsInside(Pocket, Desired, Tuning) && !OnWay(Desired) && !IsOnEntry(Pocket, EntryFrom, Desired, Tuning) && !IsPastLeader(Pocket, EntryFrom, Desired, Tuning) && Nearest(Desired) >= Tuning.MinSpacingCm - TieCm)
+		if (IsInside(Pocket, Desired, Tuning) && !OnWay(Desired) && !IsOnEntry(Pocket, EntryFrom, Desired, Tuning) && !IsPastLeader(Pocket, EntryFrom, Desired, Tuning) && SeenFromEntry(Desired) && Nearest(Desired) >= Tuning.MinSpacingCm - TieCm)
 		{
 			Given.Add(Desired);
 		}
@@ -249,6 +283,15 @@ FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationC
 	TArray<FVector2D> Pool = Candidates(Pocket, Tuning);
 	Pool.RemoveAll(OnWay);
 	Pool.RemoveAll([&](const FVector2D& Point) { return IsPastLeader(Pocket, EntryFrom, Point, Tuning); }); // never: he would push into the leader for good
+	if (bEntryLines)
+	{
+		TArray<FVector2D> Seen = Pool;
+		Seen.RemoveAll([&](const FVector2D& Point) { return !SeenFromEntry(Point); });
+		if (!Seen.IsEmpty())
+		{
+			Pool = MoveTemp(Seen); // none seen from the door (a bad entry point): the filter is dropped, never worse than without it
+		}
+	}
 	TArray<bool> OnEntryLine;
 	for (const FVector2D& Point : Pool)
 	{
@@ -263,8 +306,15 @@ FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationC
 		}
 		const FVector2D Ref = RefOf(Index);
 		// He walks there straight past nobody: his line keeps PassClearCm from every place given out (the leader's too) he is not already beside.
+		// He still stands farther out than the entry point: he walks in through the door (the entry test covers his way); else his own line.
+		const bool bWalksInThroughDoor = EntryFrom.IsSet()
+			&& FVector2D::Distance(Ref, Pocket.Center) > FVector2D::Distance(EntryFrom.GetValue(), Pocket.Center);
 		const auto Reachable = [&](const FVector2D& Point)
 		{
+			if (Lines && Lines->Straight && !bWalksInThroughDoor && !Lines->Straight(Ref, Point))
+			{
+				return false;
+			}
 			for (const FVector2D& Each : Given)
 			{
 				if (FVector2D::Distance(Each, Ref) >= Tuning.PassClearCm && DistanceToSegment(Each, Ref, Point) < Tuning.PassClearCm)
@@ -367,6 +417,9 @@ FFormationConfinedTuning FormationConfinedTuning::FromJson(const FJsonObject& Js
 	ReadConfinedNumber(Json, TEXT("depth_weight"), Tuning.DepthWeight, 0.f, 10.f);
 	ReadConfinedNumber(Json, TEXT("pass_free_cm"), Tuning.PassFreeCm, 0.f, 300.f);
 	ReadConfinedNumber(Json, TEXT("face_walk_cm"), Tuning.FaceWalkCm, 0.f, 1000.f);
+	ReadConfinedNumber(Json, TEXT("jamb_clear_cm"), Tuning.JambClearCm, 0.f, 100.f);
+	ReadConfinedNumber(Json, TEXT("jamb_sample_cm"), Tuning.JambSampleCm, 5.f, 100.f);
+	ReadConfinedNumber(Json, TEXT("gap_factor"), Tuning.GapFactor, 0.f, 10.f);
 	return Tuning;
 }
 
