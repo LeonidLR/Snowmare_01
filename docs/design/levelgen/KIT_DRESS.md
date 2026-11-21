@@ -20,6 +20,11 @@ powershell -ExecutionPolicy Bypass -File Scripts\kit_dress.ps1 -Ref claude/build
 python Scripts/Editor/kit_dress.py plan [layout.json] [builder root]                                   # counts, no editor
 ```
 
+Story showcase views (2026-11-21 night, `STORY_SHOWCASE_2026-11-22.md`): `KIT_DRESS_SHOT_SET=story` (kit_dress.py `story_cameras`: overview,
+every building's front 3/4, each story element close up - locked / sealed door, rubble flight + roof-off, fire escape, roof ladder, broken
+windows, snow ramp), `KIT_DRESS_SHOT_PREFIX=showcase_`, `KIT_DRESS_SHOTS_DIR=Saved\StoryShowcase\shots`, with
+`kit_dress.ps1 -Layout Content\Data\LevelGen\accepted\gen_story_showcase.json -Target /Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit`.
+
 `-Ref` runs `kit_dress.py export <ref> gen_bgen_plans_check`: `git show` of that branch's builder (`build_levelgen_map.py`, its two helper
 modules, `building_coord_fields.json`, `levelgen_v2.json`) and accepted layout into `Saved/KitBlocks/builder/<ref>/` (read only; no checkout).
 The dresser then uses THAT builder, so a layout with fields this checkout's builder does not know yet (the switchback cores) is built the

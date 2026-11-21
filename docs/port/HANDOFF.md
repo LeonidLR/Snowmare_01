@@ -6,6 +6,14 @@ living rooms; `Tools/TrainingGround/src/levelgen/buildings/kitPlan.ts`, `buildin
 the units, and every /2 layout carries structure classes and window vault data (data only). Status and open questions:
 `docs/design/levelgen/S2_ROOMS_PLAN.md` (STATUS block), designer summary `docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md`.
 
+**Test branch `claude/bgen-test` (2026-11-21 night):** building-generator merged in, engine-checked locally. Fix: a switchback core's 10 cm
+lane wall now blocks sight only (builder: `affects_navigation` False + pawn collision ignored, tag `lane_wall`) - in some tile / voxel
+alignments it made Recast drop the whole core column (B_y / B_b18, nav lab `scripts/gen-nav-lab.ts`); L_Gen_BgenPlans now path 9/9, walk
+legs 32/32, one island per building - the remaining walk failures are the flat-hall squad entries (designer 2026-11-21: the squad must
+compress and enter = a formation task; `Scripts/Tools/walk_report_breakdown.py` splits them out, the gate is unchanged). The smoke's roof
+target moves off a switchback roof opening. Story showcase: `docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md` (grey
+`/Game/Maps/Generated/L_Gen_StoryShowcase`, dressed untracked `/Game/Maps/KitPilot/L_Gen_StoryShowcase_Kit`, `kit_dress.py` story shots).
+
 **Обновление за 2026-11-18, main `50c0f915`.** Ожидающие подъёма бойцы смотрят наружу даже рядом с пропсами (`ccdec8d3`), появление пропсов X6 и X4 стало плавнее (`13be5a16`), сгенерированные карты используют холод и погоду (`6dbc9e38`). G007 исправил атаки на пандусе (`e24a6d6f`). Из задачи 044 в main вошёл выстрел из приседа за высоким углом (`e4558688`). Ошибки PeekMines и Suppression остаются открытыми. Antigravity 083/083c расширили покрытие архива QD и проверку настроек тренера (`b41973d8`, `d72b9629`). В AgentChat компактнее сообщения об ожидании (`7e4715d9`), инструменты API поддерживают второй ключ (`b9170e47`). Загрузка, пауза у бочки и урок аптечки обновлены в `4db03229`. Подробности в разделе «Сделано (2026-11-18)» файла TASK_BOARD.
 
 **Актуальный срез: 2026-11-17, main `b840758c`.** В main вошли ThreatFacingRules — возврат к заданному игроком направлению через 3 секунды после боя; F-2 / FormationLeaderCornerRules — лидер занимает угол, ведомые остаются позади; F-3 — верх препятствия: шаг с подъёмом, двойной клик: бег с подъёмом, грань: укрытие; F-4a / UMissionGoalsSubsystem — файлы целей, оранжевые маркеры и миникарта, GOALS n/N, завершение уровня через существующий выход.

@@ -65,7 +65,10 @@ SERIES_FILE = os.environ.get("KIT_DRESS_SERIES") or os.path.join(PROJECT_DIR, "C
 DRESS = os.environ.get("KIT_DRESS_DRESS", "1") != "0"
 FILLER_MODE = os.environ.get("KIT_DRESS_FILLER", "overlap")
 OUT_DIR = os.path.join(PROJECT_DIR, "Saved", "KitBlocks")
-SHOTS_DIR = os.path.join(OUT_DIR, "shots")
+SHOTS_DIR = os.environ.get("KIT_DRESS_SHOTS_DIR") or os.path.join(OUT_DIR, "shots")
+# "story" = the story showcase views (story_cameras: overview, every building's front 3/4, each story element's close-up) instead of the
+# kit block views (cameras)
+SHOT_SET = os.environ.get("KIT_DRESS_SHOT_SET", "kit")
 SHOT_PREFIX = os.environ.get("KIT_DRESS_SHOT_PREFIX", "kitblocks_")
 SHOT_ONLY = [s for s in os.environ.get("KIT_DRESS_SHOT_ONLY", "").split(",") if s]
 CAM_TAG = "KitDressCam"
@@ -600,6 +603,104 @@ def cameras(layout, table):
     return cams
 
 
+def _opening_view(name, b, p, edges, cams, gz, z_at=160.0, dist=650.0, side=-260.0, height=230.0, nearest=False):
+    """A close-up of an exterior opening at p from outside its facade (3/4, eye height); nothing when p is on no footprint side (nearest:
+    the nearest side, for things standing off the wall - a fire escape's balconies)."""
+    e = min(edges, key=lambda x: x.perp(p)) if nearest else K.edge_of_point(edges, p)
+    if e is None:
+        return
+    loc = vadd(tuple(p), vmul(e.n, dist), vmul(e.d, side)) + (gz + height,)
+    pitch, yaw = look(loc, tuple(p) + (gz + z_at,))
+    cams.append((name, loc, pitch, yaw, 55.0, False))
+    CAM_NORMALS[name] = e.n
+
+
+def story_cameras(layout):
+    """The story showcase views (docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md): the whole map, every building's front 3/4 (the facade
+    of its front door: the exterior ground door nearest the mandatory route), and the story elements of every building - a locked / sealed
+    door, the rubble-blocked flight (roof off, from above) and the fire escape, the facade roof ladder, the broken back windows, the snow
+    ramp. Same tuple as cameras(): (name, location, pitch, yaw, fov, hide roofs)."""
+    gz = float(layout.get("ground_z", 0.0))
+    (bx0, by0), (bx1, by1) = layout["bounds"]["min"], layout["bounds"]["max"]
+    cx, cy = (bx0 + bx1) / 2.0, (by0 + by1) / 2.0
+    span = max(bx1 - bx0, by1 - by0)
+    cams = []
+    loc = (bx0 - 0.35 * span, cy - 0.55 * span, gz + 0.55 * span)
+    p, y = look(loc, (cx, cy, gz))
+    cams.append(("overview_34", loc, p, y, 55.0, False))
+    h = (by1 - by0 + 1500.0) / (2.0 * math.tan(math.radians(25.0))) + gz + 1000.0
+    cams.append(("map_top_down", (cx, cy, h), -89.9, 0.0, 50.0, False))
+    route = next((r["points"] for r in layout.get("routes", []) if r.get("mandatory")), [])
+
+    def route_dist(q):
+        best = float("inf")
+        for a, c in zip(route, route[1:]):
+            vx, vy = c[0] - a[0], c[1] - a[1]
+            L2 = vx * vx + vy * vy or 1.0
+            t = max(0.0, min(1.0, ((q[0] - a[0]) * vx + (q[1] - a[1]) * vy) / L2))
+            best = min(best, math.hypot(q[0] - a[0] - t * vx, q[1] - a[1] - t * vy))
+        return best
+
+    for b in layout["buildings"]:
+        if not b.get("enterable"):
+            continue
+        bid = b["id"]
+        edges = K.edges_of(b)
+        floors = int(b["floors"])
+        H = 300.0 * floors
+        ops = b.get("openings", []) or []
+        doors = [o for o in ops if o.get("kind") == "door" and int(o.get("floor", 0)) == 0 and K.edge_of_point(edges, o["pos"]) is not None]
+        front = min(doors, key=lambda o: route_dist(o["pos"]), default=None)
+        fe = K.edge_of_point(edges, front["pos"]) if front else max(edges, key=lambda e: e.L)
+        c = fe.at(fe.L / 2.0)
+        far = 0.75 * fe.L + 900.0
+        loc = vadd(c, vmul(fe.n, far), vmul(fe.d, -0.45 * fe.L - 300.0)) + (gz + 700.0 + 100.0 * floors,)
+        pitch, yaw = look(loc, c + (gz + H * 0.45,))
+        cams.append(("%s_front_34" % bid, loc, pitch, yaw, 50.0, False))
+        CAM_NORMALS["%s_front_34" % bid] = fe.n
+        for o in doors:
+            if o.get("state") in ("locked", "sealed", "barricaded"):
+                _opening_view("%s_door_%s" % (bid, o["state"]), b, o["pos"], edges, cams, gz)
+        broken = [o for o in ops if o.get("kind") == "window" and o.get("state") == "broken"]
+        if broken:
+            p0 = broken[len(broken) // 2]["pos"]
+            _opening_view("%s_broken_windows" % bid, b, p0, edges, cams, gz, z_at=140.0, dist=900.0, side=-450.0, height=300.0)
+        for st in b.get("stairs", []) or []:
+            if not st.get("blocked"):
+                continue
+            far_pt = st.get("turn") or st["top"]
+            v = K.unit((far_pt[0] - st["pos"][0], far_pt[1] - st["pos"][1]))
+            z0 = gz + 300.0 * int(st["from"])
+            back = (st["pos"][0] - v[0] * 160.0, st["pos"][1] - v[1] * 160.0)
+            eye = back + (z0 + 175.0,)
+            pitch, yaw = look(eye, (st["pos"][0] + v[0] * 150.0, st["pos"][1] + v[1] * 150.0, z0 + 60.0))
+            cams.append(("%s_stair_%s_interior" % (bid, st["blocked"]), eye, pitch, yaw, 85.0, False))
+            mid = ((st["pos"][0] + far_pt[0]) / 2.0, (st["pos"][1] + far_pt[1]) / 2.0)
+            loc = (mid[0] + 450.0, mid[1] - 550.0, gz + 900.0)
+            pitch, yaw = look(loc, mid + (z0 + 50.0,))
+            # the flight sits under the upper slabs: a cutaway (roofs, floor slabs and the kit dressing hidden) shows the rubble boxes
+            cams.append(("%s_stair_%s_cutaway" % (bid, st["blocked"]), loc, pitch, yaw, 55.0, "cutaway"))
+            break
+        for fx in b.get("fire_escapes", []) or []:
+            at = fx.get("at") or fx.get("ground")
+            _opening_view("%s_fire_escape" % bid, b, at, edges, cams, gz, z_at=300.0, dist=1100.0, side=-500.0, height=450.0, nearest=True)
+            break
+        for lad in layout.get("ladders", []) or []:
+            if lad.get("id") == "LAD_%s_roof" % bid:
+                _opening_view("%s_roof_ladder" % bid, b, lad["pos"], edges, cams, gz, z_at=H * 0.55, dist=1000.0, side=-450.0, height=350.0, nearest=True)
+        for ramp in b.get("snow_ramps", []) or []:
+            target = next((o for o in ops if o.get("id") == ramp.get("to_opening")), None)
+            if target is None:
+                continue
+            fr = ramp["from"]
+            v = K.unit((target["pos"][0] - fr[0], target["pos"][1] - fr[1]))
+            side = (-v[1], v[0])
+            loc = (fr[0] - v[0] * 500.0 + side[0] * 450.0, fr[1] - v[1] * 500.0 + side[1] * 450.0, gz + 350.0)
+            pitch, yaw = look(loc, ((fr[0] + target["pos"][0]) / 2.0, (fr[1] + target["pos"][1]) / 2.0, gz + 200.0))
+            cams.append(("%s_snow_drift" % bid, loc, pitch, yaw, 55.0, False))
+    return cams
+
+
 def game_world():
     return unreal.find_object(None, "%s.%s" % (TARGET, TARGET.rsplit("/", 1)[-1]))
 
@@ -662,7 +763,8 @@ def shots():
         layout = json.load(f)
     table = load_table()
     block = showcase_block(layout, table)
-    cams = [c for c in cameras(layout, table) if not SHOT_ONLY or c[0] in SHOT_ONLY]
+    all_cams = story_cameras(layout) if SHOT_SET == "story" else cameras(layout, table)
+    cams = [c for c in all_cams if not SHOT_ONLY or c[0] in SHOT_ONLY]
     state = {"t": 0.0, "stage": 0, "shot": 0, "wait": 0.0, "handle": None, "hidden": []}
     REPORT.append("shots %s %s (prefix %s, layout %s)" % (TARGET, datetime.datetime.now().isoformat(), SHOT_PREFIX, layout_rel))
     names = ["%s%s.png" % (SHOT_PREFIX, c[0]) for c in cams]
@@ -713,16 +815,21 @@ def shots():
                 if block is not None:
                     proxy_checks(w, layout, block)
                 cam.get_editor_property("camera_component").set_editor_property("constrain_aspect_ratio", False)
-                roof_actors, roof_comps = [], []
+                roof_actors, roof_comps, slab_actors, kit_comps = [], [], [], []
                 for a in unreal.GameplayStatics.get_all_actors_of_class(w, unreal.StaticMeshActor):
                     tags = [str(t) for t in a.tags]
                     if "roof_slab" in tags or "kit_roof" in tags:
                         roof_actors.append(a)
+                    if "floor_slab" in tags:
+                        slab_actors.append(a)
                     if KIT_TAG in tags:
                         for c in a.get_components_by_class(unreal.InstancedStaticMeshComponent):
+                            kit_comps.append(c)
                             if "kit_roof" in [str(t) for t in c.component_tags]:
                                 roof_comps.append(c)
                 state["roof"] = (roof_actors, roof_comps)
+                # "cutaway" (story shots of a ground-floor element): roofs, every floor slab and the whole kit dressing hidden
+                state["cutaway"] = (roof_actors + slab_actors, kit_comps)
                 state["stage"] = 1
                 state["wait"] = state["t"] + 4.0
                 return
@@ -738,7 +845,7 @@ def shots():
                     return
                 name, loc, pitch, yaw, fov, hide_roof = cams[state["shot"]]
                 if hide_roof:
-                    ra, rc = state["roof"]
+                    ra, rc = state["cutaway"] if hide_roof == "cutaway" else state["roof"]
                     for a in ra:
                         a.set_actor_hidden_in_game(True)
                     for c in rc:

@@ -258,8 +258,10 @@ class DressLayoutTest(unittest.TestCase):
         return dressed
 
     def test_this_checkout(self):
+        # since the merge of claude/building-generator (2026-11-21 night) this checkout's layout has the kit block plans: switchback cores
         dressed = self.check(LAYOUT)
-        self.assertTrue(all(d["parts"].get("stair_flight_block") for b, d in dressed.items() if d["archetype"] == "block"))
+        self.assertTrue(all(d["parts"].get("stair_switchback_set") or d["parts"].get("stair_flight_block")
+                            for b, d in dressed.items() if d["archetype"] == "block"))
 
     def test_exported_kit_plans(self):
         roots = sorted(glob.glob(os.path.join(PROJECT_DIR, "Saved", "KitBlocks", "builder", "*")))
@@ -278,6 +280,32 @@ class DressLayoutTest(unittest.TestCase):
     def tearDownClass(cls):
         os.environ.pop("KIT_DRESS_LAYOUT", None)
         os.environ.pop("KIT_DRESS_BUILDER", None)
+
+
+class StoryCamerasTest(unittest.TestCase):
+    """The story showcase views (kit_dress.py story_cameras, KIT_DRESS_SHOT_SET=story) on gen_story_showcase: every building's front and
+    the close-up of each story element the layout carries."""
+
+    def test_every_story_element_gets_a_view(self):
+        path = os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "accepted", "gen_story_showcase.json")
+        if not os.path.exists(path):
+            self.skipTest("no gen_story_showcase layout")
+        with open(path, encoding="utf-8") as f:
+            layout = json.load(f)
+        sys.modules.pop("kit_dress", None)
+        import kit_dress  # noqa: E402
+        cams = kit_dress.story_cameras(layout)
+        names = [c[0] for c in cams]
+        self.assertEqual(len(names), len(set(names)), names)
+        for want in ("overview_34", "map_top_down", "S03_locked_door_door_locked", "S04_rubble_escape_stair_rubble_interior", "S04_rubble_escape_stair_rubble_cutaway", "S04_rubble_escape_fire_escape",
+                     "S07_roof_outside_roof_ladder", "S09_broken_back_windows_broken_windows", "S09_broken_back_windows_door_locked",
+                     "S10_snow_drift_snow_drift", "S10_snow_drift_door_sealed"):
+            self.assertIn(want, names)
+        for b in layout["buildings"]:
+            self.assertIn("%s_front_34" % b["id"], names)
+        for name, loc, pitch, yaw, fov, hide in cams:
+            self.assertTrue(-90.0 <= pitch <= 30.0, (name, pitch))   # a roof ladder view looks up a little
+            self.assertTrue(all(math.isfinite(v) for v in loc), name)
 
 
 if __name__ == "__main__":
