@@ -10,10 +10,16 @@
 # Results: Saved\Worker\nightloop\<date>\<job>-c<k>\ (worker_seed_batch result folders) + one line per job in
 # Saved\Worker\nightloop\<date>\digest.log (dayloop_digest.py) - the morning report reads that file.
 # Stop for a night: create Saved\Worker\STOP_NIGHTLOOP (the guard then neither starts nor restarts it).
-#   05:30-07:30 (-TrainerFrom .. -TrainerUntil): the weight trainer (night_trainer.py, run pmc-v6-qd2; designer 11-19: 2 h of
-#   the night for the trainer, the rest for tasks).
+#   05:30-07:30 (-TrainerFrom .. -TrainerUntil): the 2 h window at the end of the night (designer 11-19). -WindowMode:
+#   ab (default since designer 2026-11-21 "Давай 2, потом 3": the window runs the paired A/B queue, the trainer stays disabled
+#   until its evaluation is fixed after T-08) - every Saved\Worker\ab_queue\*.ps1 (untracked, survives the checkout reset; name
+#   order) runs as its own process with -StopAt <window end> and is then moved to ab_queue\done\ (.log beside it); the item
+#   uses its own checkout (CodexTactics-slot1), never this one; a still-running item is killed (process tree) 5 min after the
+#   window end, so the night ends by -Until. Empty queue = normal jobs. trainer = the weight trainer (night_trainer.py, run
+#   pmc-v6-qd2) as before.
 param([string]$Repo = 'C:\Work\CodexTactics', [string]$Until = '07:45', [int]$Jobs = 4, [switch]$Once,
       [string]$TrainerFrom = '05:30', [string]$TrainerUntil = '07:30', [string]$TrainerRunId = 'pmc-v6-qd2',
+      [ValidateSet('ab', 'trainer')][string]$WindowMode = 'ab',
       [string]$Py = 'C:\Users\User\AppData\Local\Programs\Python\Python312\python.exe')
 $ErrorActionPreference = 'Continue'
 Set-Location $Repo
@@ -71,9 +77,37 @@ $k = 0
 Beat 'start'; L "night loop start pid $PID until $($deadline.ToString('s'))"
 function TrainerAt([string]$hhmm) { $t = [datetime]::ParseExact($hhmm, 'HH:mm', $null); return $deadline.Date.Add($t.TimeOfDay) }
 $script:TrainerDone = $false
+function RunAbWindow {
+    # Designer 2026-11-21: the window runs the paired A/B queue (enemy AI session), not the trainer.
+    $qdir = Join-Path $Repo 'Saved\Worker\ab_queue'; $done = Join-Path $qdir 'done'
+    New-Item -ItemType Directory -Force $done | Out-Null
+    if (-not @(Get-ChildItem $qdir -Filter '*.ps1' -File -ErrorAction SilentlyContinue).Count) {
+        L 'A/B window: queue empty - normal jobs'; $script:TrainerDone = $true; return
+    }
+    if (-not (TakeLock)) { L 'A/B window: worker busy 30 min - trying again after the next job'; return }
+    try {
+        $stopAt = TrainerAt $TrainerUntil
+        while ((Get-Date) -lt $stopAt) {
+            $item = Get-ChildItem $qdir -Filter '*.ps1' -File -ErrorAction SilentlyContinue | Sort-Object Name | Select-Object -First 1
+            if (-not $item) { L 'A/B window: queue drained'; break }
+            $tag = '{0}-{1}' -f (Get-Date -Format 'yyyyMMdd-HHmm'), $item.BaseName
+            $run = Join-Path $done ($tag + '.ps1'); Move-Item $item.FullName $run -Force
+            $ilog = Join-Path $done ($tag + '.log')
+            L "A/B item start: $($item.Name) (stop at $($stopAt.ToString('s')))"
+            $p = Start-Process powershell.exe -WindowStyle Hidden -PassThru -ArgumentList @('-NoProfile', '-ExecutionPolicy', 'Bypass',
+                '-Command', "& '$run' -StopAt '$($stopAt.ToString('s'))' *> '$ilog'; exit `$LASTEXITCODE")
+            while (-not $p.HasExited) {
+                if ((Get-Date) -ge $stopAt.AddMinutes(5)) { L "A/B item $($item.Name) past the window - killing its tree"; & taskkill.exe /T /F /PID $p.Id *> $null; break }
+                Beat "A/B item $($item.Name) running until $($stopAt.ToString('s'))"; Start-Sleep 60
+            }
+            L "A/B item end: $($item.Name) exit $(if ($p.HasExited) { $p.ExitCode } else { 'killed' })"
+        }
+    } finally { ReleaseLock; $script:TrainerDone = $true; Beat 'after A/B window' }
+}
 function MaybeTrainer {
     # Designer 2026-11-19: 2 hours of the night for the trainer (the end of the night), the rest for tasks.
     if ($script:TrainerDone -or (Get-Date) -lt (TrainerAt $TrainerFrom) -or (Get-Date) -ge (TrainerAt $TrainerUntil)) { return }
+    if ($WindowMode -eq 'ab') { RunAbWindow; return }
     if (-not (TakeLock)) { L 'trainer window: worker busy 30 min - trying again after the next job'; return }
     try {
         $env:CODEX_LOCK_HELD = '1'; $env:CODEX_AGENT = 'night-trainer'

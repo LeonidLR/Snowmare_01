@@ -21,3 +21,6 @@ chat topic `lanes` (to all: the designer's task board shows it and it wakes wait
 `python Scripts/Tools/lane_watchdog.py --list` shows every lane and its age.
 - Paired A/B digest for seed batches: `python Scripts/Tools/paired_ab.py <folderA> <folderB> [--tune-seeds 1-10]` (see brief 093).
 - Smoke repeats & flake measurement: `powershell -File Scripts/smoke_parallel.ps1 -Commands <Smoke> -Repeat <N> [-RepeatSeeds] [-Jobs <J>]` (see brief 094).
+
+## Night window 05:30-07:30 (designer 2026-11-21)
+The worker night loop's last 2 h run the paired A/B queue (`Saved/Worker/ab_queue/*.ps1`, owner: the enemy-AI session), not the weight trainer (`worker_night_loop.ps1 -WindowMode ab`; `-WindowMode trainer` restores it). The trainer returns only after T-08 with its evaluation fixed. Every queued item ends by itself at `-StopAt`, the loop kills it 5 min later; the night still ends by 07:45.
