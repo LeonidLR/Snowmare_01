@@ -1,4 +1,5 @@
 #include "Characters/EnemyAnimInstance.h"
+#include "Core/CodexGameplayRandom.h"
 #include "Animation/AnimMontage.h"
 #include "Animation/AnimSequenceBase.h"
 #include "Characters/EnemyAnimRules.h"
@@ -50,7 +51,7 @@ void UEnemyAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
 	// Godot enemy_base.gd: a random idle clip per enemy.
-	IdleAnimation = IdleAnimations.IsEmpty() ? nullptr : IdleAnimations[FMath::RandRange(0, IdleAnimations.Num() - 1)].Get();
+	IdleAnimation = IdleAnimations.IsEmpty() ? nullptr : IdleAnimations[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, IdleAnimations.Num() - 1)].Get();
 }
 
 void UEnemyAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
@@ -116,7 +117,7 @@ void UEnemyAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 
 float UEnemyAnimInstance::NotifyAttack()
 {
-	AttackVariant = AttackAnimations.IsEmpty() ? FMath::RandRange(0, 2) : FMath::RandRange(0, AttackAnimations.Num() - 1);
+	AttackVariant = AttackAnimations.IsEmpty() ? CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, 2) : CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, AttackAnimations.Num() - 1);
 	AttackTimer = AttackHoldTime;
 	bIsAttacking = true;
 	UAnimSequenceBase* Clip = PickClip(AttackAnimations, AttackVariant);
@@ -131,7 +132,7 @@ float UEnemyAnimInstance::NotifyAttack()
 
 void UEnemyAnimInstance::NotifyHit()
 {
-	HitVariant = HitAnimations.IsEmpty() ? FMath::RandRange(0, 2) : FMath::RandRange(0, HitAnimations.Num() - 1);
+	HitVariant = HitAnimations.IsEmpty() ? CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, 2) : CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, HitAnimations.Num() - 1);
 	HitTimer = HitHoldTime;
 	bIsHit = true;
 	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
@@ -177,7 +178,7 @@ void UEnemyAnimInstance::NotifyDeath()
 	{
 		return;
 	}
-	UAnimSequenceBase* Clip = DeathAnimations.IsEmpty() ? nullptr : DeathAnimations[FMath::RandRange(0, DeathAnimations.Num() - 1)].Get();
+	UAnimSequenceBase* Clip = DeathAnimations.IsEmpty() ? nullptr : DeathAnimations[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, DeathAnimations.Num() - 1)].Get();
 	if (Clip)
 	{
 		PlayOneShot(Clip, DeathPlayRate, FMath::Min(DeathStartOffset, Clip->GetPlayLength() * 0.9f), true);
@@ -228,9 +229,9 @@ namespace EnemyAnimExtrasLocal
 	constexpr uint32 RunVariantSalt = 13;
 	constexpr uint32 IdleBreakSalt = 14;
 
-	UAnimSequenceBase* RandomClipOf(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips)
+	UAnimSequenceBase* RandomClipOf(const TArray<TObjectPtr<UAnimSequenceBase>>& Clips, const UObject* Context)
 	{
-		return Clips.IsEmpty() ? nullptr : Clips[FMath::RandRange(0, Clips.Num() - 1)].Get();
+		return Clips.IsEmpty() ? nullptr : Clips[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, Context, 0, Clips.Num() - 1)].Get();
 	}
 }
 
@@ -327,7 +328,7 @@ UAnimSequenceBase* UEnemyAnimInstance::GetIdleBreakClip() const
 float UEnemyAnimInstance::NotifyAlert()
 {
 	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
-	UAnimSequenceBase* Clip = EnemyAnimExtrasLocal::RandomClipOf(AlertAnimations);
+	UAnimSequenceBase* Clip = EnemyAnimExtrasLocal::RandomClipOf(AlertAnimations, this);
 	if (!Clip || bIsDead || bIsJumping || (Owner && (Owner->IsKnockedDown() || Owner->IsDying() || Owner->IsLadderBusy())))
 	{
 		return 0.f;
@@ -340,7 +341,7 @@ float UEnemyAnimInstance::NotifyAlert()
 float UEnemyAnimInstance::NotifyEntrance()
 {
 	const AEnemyCharacter* Owner = Cast<AEnemyCharacter>(TryGetPawnOwner());
-	UAnimSequenceBase* Clip = EnemyAnimExtrasLocal::RandomClipOf(EntranceAnimations);
+	UAnimSequenceBase* Clip = EnemyAnimExtrasLocal::RandomClipOf(EntranceAnimations, this);
 	if (!Clip || bIsDead || (Owner && (Owner->IsKnockedDown() || Owner->IsDying() || Owner->IsLadderBusy())))
 	{
 		return 0.f;

@@ -1,4 +1,5 @@
 #include "Characters/RageComponent.h"
+#include "Core/CodexGameplayRandom.h"
 #include "Combat/EncounterQueries.h"
 #include "Combat/EnemyRegistrySubsystem.h"
 #include "Misc/App.h"
@@ -102,7 +103,7 @@ void URageComponent::OnIncomingHit(AActor* Attacker, bool bCrit)
 	{
 		return;
 	}
-	const float Roll = ForcedRollForTesting >= 0.f ? ForcedRollForTesting : FMath::FRand();
+	const float Roll = ForcedRollForTesting >= 0.f ? ForcedRollForTesting : CodexRandom::FRand(ECodexRandomStream::Combat, this);
 	ForcedRollForTesting = -1.f;
 	if (RageRules::CanEnterRage(Config, Health->GetCurrentHealth() / FMath::Max(1.f, Health->GetMaxHealth()), Operative->CurrentClip, Roll, GetCurrentChance()))
 	{
@@ -180,7 +181,7 @@ AActor* URageComponent::FindAnyEnemyInReach() const
 			InReach.Add(Enemy);
 		}
 	}
-	return InReach.IsEmpty() ? nullptr : InReach[FMath::RandRange(0, InReach.Num() - 1)];
+	return InReach.IsEmpty() ? nullptr : InReach[CodexRandom::RandRange(ECodexRandomStream::Combat, this, 0, InReach.Num() - 1)];
 }
 
 void URageComponent::UpdateAura(bool bShow)

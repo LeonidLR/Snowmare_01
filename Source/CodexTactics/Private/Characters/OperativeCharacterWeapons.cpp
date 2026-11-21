@@ -4,6 +4,7 @@
 // _can_begin_weapon_shot, _consume_ammo_after_shot, _auto_switch_on_empty, _evaluate_ai_grenade_opportunity).
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/CodexGameplayRandom.h"
 
 #include "Combat/CombatCheats.h"
 
@@ -281,7 +282,7 @@ void AOperativeCharacter::StartReload()
 	{
 		if (UGameMessageSubsystem* Messages = World->GetSubsystem<UGameMessageSubsystem>())
 		{
-			Messages->PostMessage(DisplayName, FText::FromString(Callouts[FMath::RandHelper(UE_ARRAY_COUNT(Callouts))]));
+			Messages->PostMessage(DisplayName, FText::FromString(Callouts[CodexRandom::RandHelper(ECodexRandomStream::Cosmetic, this, UE_ARRAY_COUNT(Callouts))]));
 		}
 	}
 }
@@ -393,7 +394,7 @@ bool AOperativeCharacter::TryAIGrenadeThrow()
 	{
 		const TCHAR* Callouts[] = { TEXT("💣 Grenade out! Get down!"), TEXT("🧨 They're bunched up! Catch this!"),
 			TEXT("💣 Grenade away! Heads down!"), TEXT("🧨 Eat this, bastards!") };
-		Messages->PostMessage(DisplayName, FText::FromString(Callouts[FMath::RandRange(0, 3)]));
+		Messages->PostMessage(DisplayName, FText::FromString(Callouts[CodexRandom::RandRange(ECodexRandomStream::Cosmetic, this, 0, 3)]));
 	}
 	return Grenade != nullptr;
 }

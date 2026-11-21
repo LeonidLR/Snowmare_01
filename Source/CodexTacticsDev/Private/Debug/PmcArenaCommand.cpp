@@ -92,6 +92,7 @@
 #include "Combat/ProjectileSubsystem.h"
 #include "Combat/SightRules.h"
 #include "Combat/SuppressionRules.h"
+#include "Core/CodexGameplayRandom.h"
 #include "Containers/Ticker.h"
 #include "Data/LevelJsonRules.h"
 #include "Environment/EnvironmentSubsystem.h"
@@ -3023,6 +3024,10 @@ namespace PmcArena
 	{
 		if (World)
 		{
+			if (UCodexGameplayRandom* Random = UCodexGameplayRandom::Get(World))
+			{
+				Random->Unseed(); // back to the global draws (an arena run in a PIE / editor world)
+			}
 			if (UPmcSquadSubsystem* Pmc = UPmcSquadSubsystem::Get(World))
 			{
 				Pmc->DestroyTeam(TeamA);
@@ -3225,6 +3230,13 @@ namespace PmcArena
 		// The round's own seed (base + round - 1, the trainer's convention): Rounds=1 Seed=<it> replays this round - its spawns, looks,
 		// weapons AND its attacker (by the seed's parity, not the round index).
 		const int32 Seed = State.Options.Seed + State.Round - 1;
+		// ai/arena-determinism: the gameplay random streams (combat / AI / cosmetic) restart from the round seed, so the round's hit,
+		// crit, dodge and knockdown rolls replay too - not only its setup. Seeded before the spawns (their anim picks draw already).
+		if (UCodexGameplayRandom* Random = UCodexGameplayRandom::Get(World))
+		{
+			Random->Seed(static_cast<uint32>(Seed));
+			UE_LOG(LogCodexTactics, Display, TEXT("[PmcArena] rng seeded seed=%d round=%d"), Seed, State.Round);
+		}
 		State.AreaRejects = 0;
 		for (FSide& Side : State.Sides)
 		{
