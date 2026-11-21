@@ -30,6 +30,12 @@ walk to the place and their crowd separation / obstacle avoidance are off while 
 Walk smoke (budget 1500): flat entry legs showcase 74 -> 99/120, kit 77 -> 102/120, L_Gen_BgenPlans 65 -> 83/100; hall-question legs 44 -> 20,
 41 -> 17, 34 -> 16 (gate unchanged, still FAIL). Left: a follower's 40 cm capsule snags the door jamb when his place lies round the corner right
 behind the door (navmesh agent radius 35 cm; "stuck and failed to move" on the jamb), and some legs still take > 2 x solo.
+2026-11-22 Lead review round: a place must be seen from the entry point on a clear navmesh line whose samples keep `jamb_clear_cm` (10) from
+the navmesh edge (35 cm erosion + 10 > the 40 cm capsule; the navmesh agent radius is unchanged - a designer decision), a follower already inside
+needs his own clear line, and a ray that sees through a door alone reaches only its shorter neighbour (`gap_factor`; the grey S03 leg whose
+man stood in the door). Final build walk smoke: showcase 95/120, kit 98/120, L_Gen_BgenPlans 81/100 (hall legs 24 / 21 / 17); run-to-run
+spread is about +-4 legs (the previous build gave 99 / 102 / 83). Open: STUCK followers at the door are still the main hall failure; grey
+S09 r_f0_c13 -> r_f0_c17 (not a hall) went 2.02 -> 5.50.
 
 **Обновление за 2026-11-18, main `50c0f915`.** Ожидающие подъёма бойцы смотрят наружу даже рядом с пропсами (`ccdec8d3`), появление пропсов X6 и X4 стало плавнее (`13be5a16`), сгенерированные карты используют холод и погоду (`6dbc9e38`). G007 исправил атаки на пандусе (`e24a6d6f`). Из задачи 044 в main вошёл выстрел из приседа за высоким углом (`e4558688`). Ошибки PeekMines и Suppression остаются открытыми. Antigravity 083/083c расширили покрытие архива QD и проверку настроек тренера (`b41973d8`, `d72b9629`). В AgentChat компактнее сообщения об ожидании (`7e4715d9`), инструменты API поддерживают второй ключ (`b9170e47`). Загрузка, пауза у бочки и урок аптечки обновлены в `4db03229`. Подробности в разделе «Сделано (2026-11-18)» файла TASK_BOARD.
 
