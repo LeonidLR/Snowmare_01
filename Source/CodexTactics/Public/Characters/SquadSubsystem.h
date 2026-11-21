@@ -8,6 +8,7 @@
 #include "Characters/SquadWoundPaceRules.h"
 #include "Characters/FirePostureRules.h"
 #include "Formation/FormationBypassRules.h"
+#include "Formation/FormationConfinedRules.h"
 #include "Formation/FormationCornerHoldRules.h"
 #include "Formation/FormationCornerRules.h"
 #include "Formation/FormationCoverRules.h"
@@ -1620,6 +1621,34 @@ private:
 	void UpdateFormationLeaderCorner(const AOperativeCharacter& LeaderRef);
 	/** F-2: this frame's follower places kept off the claimed corner (FormationLeaderCornerRules::KeepSlotsBehind on Sectors.FrameSlots). */
 	void ApplyFormationLeaderCorner();
+	/**
+	 * Designer decision 2026-11-21 ("the whole squad must enter"): in a confined navmesh pocket round the leader's arrival (a flat hall, a
+	 * 2.5 m corridor) this frame's follower slots that lie outside it move inside (FormationConfinedRules::CompressSlots on Sectors.FrameSlots;
+	 * not the wall order / its slide / a box selection). SquadSubsystemFormationConfined.cpp.
+	 */
+	void ApplyFormationConfined(const AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime);
+	/** The confined pocket probed for ApplyFormationConfined (held while its wanted centre stays within recenter_cm). */
+	struct FFormationConfinedState
+	{
+		bool bPocketValid = false;
+		FFormationConfinedPocket Pocket;
+		/** The navmesh height of the pocket centre, cm. */
+		double CenterZ = 0.0;
+		/** Where the squad came in from: the leader's position when this pocket was first probed (unset: he stood at its centre). */
+		TOptional<FVector2D> EntryFrom;
+		/** Seconds since the pocket was probed. */
+		float AgeSeconds = 0.f;
+		/** The rule moved slots last frame (logs a change), and how many. */
+		bool bActive = false;
+		int32 ReplacedCount = 0;
+		/** Followers whose crowd separation + obstacle avoidance the rule switched off (restored when it ends): they held them at the hall door. */
+		TArray<TWeakObjectPtr<AOperativeCharacter>> NoSeparation;
+	};
+	FFormationConfinedState Confined;
+	/** Crowd separation + obstacle avoidance of Operative on / off (UCrowdFollowingComponent; the rule's own switch, Confined.NoSeparation). */
+	void SetConfinedCrowdSeparation(AOperativeCharacter& Operative, bool bSeparation);
+	/** The rule ends this frame (Solo, the followers hold, not in force): crowd separation back on; bKeepPocket = the probed pocket stays for reuse. */
+	void EndFormationConfined(const TCHAR* Why, bool bKeepPocket = false);
 	/** v2.1.1 (user "6A"): Look through FormationSectorRules::ClearLook unless the member is exempt (FormationGuardRuntime::ShouldClearLook). */
 	float ClearFormationLook(const AOperativeCharacter& Member, EFormationRole Role, bool bLeader, float Look);
 	/**
