@@ -20,6 +20,17 @@ target moves off a switchback roof opening. Story showcase: `docs/design/levelge
 gable door - story 9's F4 needs it, designer question in the guide); kit_dress dresses gable doors as entrances and story-4 balconies with the
 kit balcony door + balcony (no decorative slot balconies beside them).
 
+**Formation compresses in confined spaces (`claude/bgen-test`, 2026-11-22; designer decision 2026-11-21 "the whole squad must enter").** In a
+confined navmesh pocket round the leader's arrival (16 navmesh rays round his destination, median free distance <= 2 m - a flat hall, a 2.5 m
+corridor; open ground never qualifies, the formation there is unchanged) the follower slots that lie outside it move to places inside it
+(`Formation/FormationConfinedRules` pure, `Characters/SquadSubsystemFormationConfined.cpp` runtime): off the leader's way and the entry line,
+never past the leader in a one-body-wide hall, the first man in goes deepest; the automatic wall layout is skipped there, the followers face their
+walk to the place and their crowd separation / obstacle avoidance are off while compressed (the 4 m crowd query held them at the door). Tunables
+`Content/Data/AI/squad_confined.json`; A/B `Codex.Formation.Confined 0`, `Codex.Formation.ConfinedCrowd 1`; tests `CodexTactics.Formation.Confined.*`.
+Walk smoke (budget 1500): flat entry legs showcase 74 -> 99/120, kit 77 -> 102/120, L_Gen_BgenPlans 65 -> 83/100; hall-question legs 44 -> 20,
+41 -> 17, 34 -> 16 (gate unchanged, still FAIL). Left: a follower's 40 cm capsule snags the door jamb when his place lies round the corner right
+behind the door (navmesh agent radius 35 cm; "stuck and failed to move" on the jamb), and some legs still take > 2 x solo.
+
 **Обновление за 2026-11-18, main `50c0f915`.** Ожидающие подъёма бойцы смотрят наружу даже рядом с пропсами (`ccdec8d3`), появление пропсов X6 и X4 стало плавнее (`13be5a16`), сгенерированные карты используют холод и погоду (`6dbc9e38`). G007 исправил атаки на пандусе (`e24a6d6f`). Из задачи 044 в main вошёл выстрел из приседа за высоким углом (`e4558688`). Ошибки PeekMines и Suppression остаются открытыми. Antigravity 083/083c расширили покрытие архива QD и проверку настроек тренера (`b41973d8`, `d72b9629`). В AgentChat компактнее сообщения об ожидании (`7e4715d9`), инструменты API поддерживают второй ключ (`b9170e47`). Загрузка, пауза у бочки и урок аптечки обновлены в `4db03229`. Подробности в разделе «Сделано (2026-11-18)» файла TASK_BOARD.
 
 **Актуальный срез: 2026-11-17, main `b840758c`.** В main вошли ThreatFacingRules — возврат к заданному игроком направлению через 3 секунды после боя; F-2 / FormationLeaderCornerRules — лидер занимает угол, ведомые остаются позади; F-3 — верх препятствия: шаг с подъёмом, двойной клик: бег с подъёмом, грань: укрытие; F-4a / UMissionGoalsSubsystem — файлы целей, оранжевые маркеры и миникарта, GOALS n/N, завершение уровня через существующий выход.
