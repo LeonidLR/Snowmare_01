@@ -70,6 +70,7 @@ import { WALL_ORDER, planDoors, wallSpan } from './buildings/planDoors.ts';
 import { planWindows } from './buildings/planWindows.ts';
 import { fixEntryRoles, planUnits } from './buildings/planUnits.ts';
 import { KIT, kitStairGeom, planKitBlock } from './buildings/kitPlan.ts';
+import { annotateStructure, annotateWindowVault } from './structureClasses.ts';
 import { fnv1a } from './props/rng.ts';
 
 type Rect = [Vec2, Vec2];
@@ -675,6 +676,9 @@ export function finalizeDraftToLayout(d: Draft, size: Vec2, meta: FinalizeMeta):
   };
   const heightGate = runObstacleHeightGate(layout);
   if (heightGate.gate === 'fail') throw new Error(heightGate.errors.map((e) => e.reason).join('; '));
+  // schema /2: structural class / material of every wall and opening, the vault data of every window (structureClasses.ts; data only).
+  // Plans off (/1) the layout stays byte for byte what it was.
+  if (d.building_plans) annotateWindowVault(annotateStructure(layout));
   // every room of an enterable building gets its walkable anchor (building frame; rotateContent moves it by the coord table)
   return addRoomAnchors(layout);
 }

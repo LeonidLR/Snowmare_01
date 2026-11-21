@@ -127,6 +127,16 @@ export interface WallOpening {
   module?: string;
   /** Schema /2: a window marked as the place of a balcony / fire-escape door (blocks, S2.3: one per flat and storey from 1; story 4 turns it into a door). */
   slot?: 'balcony' | 'escape';
+  /** Schema /2 (structureClasses.ts, structure_classes.json): the host wall's structural class and material (future destruction; nothing reads it yet). */
+  structure?: 'load_bearing' | 'partition' | 'annex' | 'facade';
+  material?: 'concrete_panel' | 'brick' | 'plaster' | 'wood' | 'sheet_metal';
+  /** Schema /2 windows (structureClasses.ts annotateWindowVault): can a body vault / climb through it (sill height class, width, a landing outside). */
+  vaultable?: boolean;
+  /** Schema /2 windows: the sill height and the opening width the vault rule read, cm. */
+  sill_cm?: number;
+  width_cm?: number;
+  /** Schema /2 windows: what a body climbing out lands on. */
+  vault_onto?: 'ground' | 'balcony' | 'roof' | 'none';
 }
 export type { OpeningRole };
 
@@ -193,6 +203,9 @@ export interface GenPartition {
   thickness?: number;
   /** Door or window openings along this partition wall. */
   openings?: WallOpening[];
+  /** Schema /2 (structureClasses.ts): structural class and material of the wall. */
+  structure?: 'load_bearing' | 'partition' | 'annex' | 'facade';
+  material?: 'concrete_panel' | 'brick' | 'plaster' | 'wood' | 'sheet_metal';
 }
 
 export interface FloorGap {
@@ -362,6 +375,9 @@ export interface GenWall extends LayoutWall {
   kind?: WallKind;
   /** The building this wall belongs to (perimeter / interior / parapet). */
   building?: string;
+  /** Schema /2 (structureClasses.ts, structure_classes.json): structural class and material of the segment (future destruction; nothing reads it yet). */
+  structure?: 'load_bearing' | 'partition' | 'annex' | 'facade';
+  material?: 'concrete_panel' | 'brick' | 'plaster' | 'wood' | 'sheet_metal';
 }
 
 export interface Door { pos: Vec2; floor: number; /** The wall id the door is cut into. */ wall?: string }

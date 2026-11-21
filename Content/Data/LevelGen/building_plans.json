@@ -36,6 +36,13 @@
       "window_two_max_cm": 800,
       "window_pitch_cm": 400,
       "window_two_inset_cm": 200
+    },
+    "window_vault": {
+      "comment": "Window vault data (lead addendum 2026-11-21; Tools/TrainingGround/src/levelgen/structureClasses.ts annotateWindowVault, schema /2 layouts): a window is vaultable when it is at least min_width_cm wide, its sill is one of the obstacle_heights.json classes in sill_classes (the mantle clip heights the obstacles are standardised to) and there is something to land on outside - the ground (storey 0), a balcony at the window or a walkable roof within roof_step_cm of the storey (probed probe_out_cm outside the wall).",
+      "min_width_cm": 80,
+      "sill_classes": ["low_vault", "low_mantle", "high_mantle"],
+      "probe_out_cm": 60,
+      "roof_step_cm": 35
     }
   },
   "recipes": {

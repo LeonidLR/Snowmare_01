@@ -472,5 +472,42 @@ class SwitchbackStairTest(unittest.TestCase):
         self.assertAlmostEqual(area, 1400.0 * 2000.0 - 330.0 * 375.0, delta=1.0)
 
 
+class StructureVaultTagsTest(unittest.TestCase):
+    """Lead addendum 2026-11-21 (data only): the builder carries the layout's structure / material of walls, partitions and openings and the window
+    vault data as actor tags; a record without them adds no tag (the /1 bit-identical rebuilds)."""
+
+    def test_tags_from_the_records(self):
+        self.assertEqual(builder.structure_tags({"structure": "load_bearing", "material": "concrete_panel"}), ["structure=load_bearing", "material=concrete_panel"])
+        self.assertEqual(builder.structure_tags({}), [])
+        self.assertEqual(builder.vault_tags({"kind": "window", "vaultable": True, "vault_onto": "ground"}), ["vaultable=1", "vault_onto=ground"])
+        self.assertEqual(builder.vault_tags({"kind": "window", "vaultable": False}), ["vaultable=0"])
+        self.assertEqual(builder.vault_tags({"kind": "window"}), [])
+
+    def test_walls_partitions_and_window_sills_carry_them(self):
+        cls = {"structure": "load_bearing", "material": "concrete_panel"}
+        win = dict({"id": "B_v_w0", "kind": "window", "pos": [500.0, 0.0], "floor": 0, "width": 150.0, "sill_height": 95.0, "top_height": 245.0,
+                    "vaultable": True, "vault_onto": "ground"}, **cls)
+        door = {"id": "B_v_d0", "kind": "door", "pos": [400.0, 500.0], "floor": 0, "width": 150.0, "sill_height": 0.0, "top_height": 240.0,
+                "structure": "partition", "material": "plaster"}
+        b = {"id": "B_v", "footprint": [[0.0, 0.0], [1000.0, 1000.0]], "floors": 1, "height": 300, "enterable": True, "roof_walkable": False,
+             "openings": [win], "plan": {"v": 1, "kind": "bands"},
+             "partitions": [{"id": "B_v_p0", "start": [0.0, 500.0], "end": [1000.0, 500.0], "floor": 0, "thickness": 20, "openings": [door],
+                             "structure": "partition", "material": "plaster"}]}
+        walls = [dict({"id": "B_v_N", "a": [0.0, 0.0], "b": [1000.0, 0.0], "height": 300, "thickness": 30, "kind": "building", "building": "B_v"}, **cls),
+                 {"id": "F_1", "a": [2000.0, 0.0], "b": [2500.0, 0.0], "height": 140, "thickness": 10, "kind": "fence", "structure": "annex", "material": "sheet_metal"}]
+        layout = {"schema": "codex.levelgen_layout/2", "walls": walls, "buildings": [b], "ladders": [], "mantle_edges": []}
+        specs = builder._walls_and_buildings_extended(layout, 0.0, set(), {}, {})
+        outer = [s for s in specs if s["label"].startswith("B_v_N") and s["tags"][0] == "building"]  # the wall pieces (not the window glass state actor)
+        self.assertTrue(outer and all("structure=load_bearing" in s["tags"] and "material=concrete_panel" in s["tags"] for s in outer))
+        sill = next(s for s in specs if "window_sill" in s["tags"])
+        self.assertIn("vaultable=1", sill["tags"])
+        self.assertIn("vault_onto=ground", sill["tags"])
+        self.assertIn("structure=load_bearing", sill["tags"])
+        part = [s for s in specs if s["label"].startswith("B_v_p0")]
+        self.assertTrue(part and all("structure=partition" in s["tags"] and "material=plaster" in s["tags"] for s in part))
+        fence = next(s for s in specs if s["label"] == "F_1")
+        self.assertIn("structure=annex", fence["tags"])
+
+
 if __name__ == "__main__":
     unittest.main()

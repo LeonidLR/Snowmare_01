@@ -611,6 +611,24 @@ def _has_combat_building_features(layout):
     return False
 
 
+def structure_tags(rec):
+    """Schema /2 data tags (lead addendum 2026-11-21, Training Ground structureClasses.ts): a wall / partition / opening record's structural
+    class and material as actor tags structure=<class> / material=<material>. Absent fields add nothing (a /1 layout builds bit for bit)."""
+    out = []
+    if rec.get("structure"):
+        out.append("structure=%s" % rec["structure"])
+    if rec.get("material"):
+        out.append("material=%s" % rec["material"])
+    return out
+
+
+def vault_tags(op):
+    """Schema /2 window vault data as tags on the window's sill: vaultable=0|1 and vault_onto=<ground|balcony|roof|none> (absent: none)."""
+    if "vaultable" not in op:
+        return []
+    return ["vaultable=%d" % int(bool(op["vaultable"]))] + (["vault_onto=%s" % op["vault_onto"]] if op.get("vault_onto") else [])
+
+
 def _slice_wall_with_openings(label_prefix, folder, a, b, z0, thickness, floor_idx, building_id, wall_kind, openings, base_tags, exit_intervals=None, state_of=None):
     """The wall a..b cut round its openings (sills, lintels); state_of(opening) -> the effective state adds the opening-state
     actors after each cut-out (opening_state_specs; nothing for open / broken)."""
@@ -661,14 +679,14 @@ def _slice_wall_with_openings(label_prefix, folder, a, b, z0, thickness, floor_i
                     sill_tags = ["building=" + building_id, "floor=%d" % floor_idx, "loophole_sill"]
                 else:
                     sill_kind_tag = "window_sill" if floor_idx == 0 else "mantle_sill"
-                    sill_tags = ["building=" + building_id, "floor=%d" % floor_idx, sill_kind_tag, "CodexMantleEdge"]
-                out.append(wall_cube("%s_o%d_sill" % (label_prefix, idx), folder, pt(c0), pt(c1), z0, sill_h, thickness, sill_tags))
+                    sill_tags = ["building=" + building_id, "floor=%d" % floor_idx, sill_kind_tag, "CodexMantleEdge"] + vault_tags(op)
+                out.append(wall_cube("%s_o%d_sill" % (label_prefix, idx), folder, pt(c0), pt(c1), z0, sill_h, thickness, sill_tags + structure_tags(op)))
             lintel_h = LEVEL_HEIGHT - top_h
             if lintel_h >= 2.0:
                 lintel_tags = ["building=" + building_id, "floor=%d" % floor_idx, "opening_lintel"]
                 if op_kind == "door":
                     lintel_tags.append("door_lintel")
-                out.append(wall_cube("%s_o%d_lintel" % (label_prefix, idx), folder, pt(c0), pt(c1), z0 + top_h, lintel_h, thickness, lintel_tags))
+                out.append(wall_cube("%s_o%d_lintel" % (label_prefix, idx), folder, pt(c0), pt(c1), z0 + top_h, lintel_h, thickness, lintel_tags + structure_tags(op)))
             if state_of is not None:
                 out.extend(opening_state_specs("%s_o%d" % (label_prefix, idx), folder, pt(c0), pt(c1), z0, thickness, floor_idx, building_id, op, state_of(op)))
         cur = max(cur, c1)
@@ -964,7 +982,7 @@ def _partition_wall_specs(layout, b, gz):
             orig[id(o)] = op
             ops.append(o)
         state_of = lambda o, _orig=orig: effective_opening_state(layout, b, _orig.get(id(o), o))  # noqa: E731
-        base = ["interior", "building=" + bid, "floor=%d" % lvl]
+        base = ["interior", "building=" + bid, "floor=%d" % lvl] + structure_tags(pt)
         pieces = _slice_wall_with_openings(pt["id"], "Buildings/%s/L%d" % (bid, lvl), pt["start"], pt["end"], gz + z_of(lvl),
                                            float(pt.get("thickness", 20.0)), lvl, bid, "interior", ops, base, state_of=state_of)
         for s in pieces:
@@ -990,11 +1008,11 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         bid = w.get("building")
         lvl = int(w.get("floor", 0))
         if not bid or bid not in b_by_id:
-            specs.append(wall_cube(w["id"], "Walls/L%d" % lvl, w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), [w.get("kind", "wall")] + _wall_mantle_tags(w, mantle_edges)))
+            specs.append(wall_cube(w["id"], "Walls/L%d" % lvl, w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), [w.get("kind", "wall")] + _wall_mantle_tags(w, mantle_edges) + structure_tags(w)))
         elif w.get("kind") == "interior" and bid in by_partitions:
             continue  # built from its partitions[] above
         elif w.get("kind") == "interior":
-            specs.append(wall_cube(w["id"], "Buildings/%s/L%d" % (bid, lvl), w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), ["interior", "building=" + bid, "floor=%d" % lvl]))
+            specs.append(wall_cube(w["id"], "Buildings/%s/L%d" % (bid, lvl), w["a"], w["b"], gz + z_of(lvl), float(w["height"]), float(w["thickness"]), ["interior", "building=" + bid, "floor=%d" % lvl] + structure_tags(w)))
             interior_by_building_floor.setdefault((bid, lvl), []).append(w)
         else:
             ext_by_building.setdefault(bid, []).append(w)
@@ -1028,9 +1046,9 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
         f0_walls = [w for w in raw_ext if int(w.get("floor", 0)) == 0]
         for w in f0_walls:
             if not b.get("openings"):
-                specs.append(wall_cube(w["id"], "Buildings/%s/L0" % bid, w["a"], w["b"], gz, min(LEVEL_HEIGHT, float(w["height"])), float(w["thickness"]), [w.get("kind", "building"), "building=" + bid, "floor=0"]))
+                specs.append(wall_cube(w["id"], "Buildings/%s/L0" % bid, w["a"], w["b"], gz, min(LEVEL_HEIGHT, float(w["height"])), float(w["thickness"]), [w.get("kind", "building"), "building=" + bid, "floor=0"] + structure_tags(w)))
             else:
-                specs.extend(_slice_wall_with_openings(w["id"], "Buildings/%s/L0" % bid, w["a"], w["b"], gz, float(w["thickness"]), 0, bid, w.get("kind", "building"), openings, [w.get("kind", "building"), "building=" + bid, "floor=0"], state_of=state_of))
+                specs.extend(_slice_wall_with_openings(w["id"], "Buildings/%s/L0" % bid, w["a"], w["b"], gz, float(w["thickness"]), 0, bid, w.get("kind", "building"), openings, [w.get("kind", "building"), "building=" + bid, "floor=0"] + structure_tags(w), state_of=state_of))
 
         # Ground exterior door lintels (210..300 cm)
         ext_doors_f0 = [op for op in openings if op.get("kind") == "door" and int(op.get("floor", 0)) == 0]
@@ -1053,8 +1071,9 @@ def _walls_and_buildings_extended(layout, gz, chimneys, frames, gaps):
                 # Apply ladder exit gaps targeting this upper floor if any exist
                 dummy_walls = [dict(e, id="%s_f%d" % (e["id"], f), floor=f, height=LEVEL_HEIGHT) for e in unified_edges]
                 f_gaps = levelgen_ladders.exit_gaps(dict(layout, walls=dummy_walls), list(frames.values()))
+                outer_tags = structure_tags(raw_b_ext[0]) if raw_b_ext else []
                 for ew in levelgen_ladders.split_walls(dummy_walls, f_gaps):
-                    specs.extend(_slice_wall_with_openings(ew["id"], "Buildings/%s/L%d" % (bid, f), ew["a"], ew["b"], z_f, float(ew["thickness"]), f, bid, ew.get("kind", "building"), openings, [ew.get("kind", "building"), "building=" + bid, "floor=%d" % f], state_of=state_of))
+                    specs.extend(_slice_wall_with_openings(ew["id"], "Buildings/%s/L%d" % (bid, f), ew["a"], ew["b"], z_f, float(ew["thickness"]), f, bid, ew.get("kind", "building"), openings, [ew.get("kind", "building"), "building=" + bid, "floor=%d" % f] + outer_tags, state_of=state_of))
 
         # Slabs, floor_holes, stairwell holes, floors_detail[].gaps, hatches
         holes_by_floor = {}
