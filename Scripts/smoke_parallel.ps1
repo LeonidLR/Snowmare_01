@@ -35,9 +35,14 @@ param(
     # this checkout's HEAD + binaries go there, logs + result JSON come back to the usual places), otherwise / when not possible here.
     # on = worker or fail, off = always here. Default: env CODEX_SMOKE_REMOTE, else auto.
     [ValidateSet("", "auto", "on", "off")][string]$Remote = "",
+    # Arguments appended to every smoke's console command in -ExecCmds, after that smoke's test_map.json smokeOptions "args"
+    # (e.g. "Seed=12" or "Rounds=1 Seed=42"). "{n}" = the run number of -Repeat (1..N; 1 without -Repeat): -Repeat 20 -SmokeArgs "Seed={n}"
+    # runs seeds 1..20 of a command that parses Seed= (the PmcArena smokes) - reproducible, unlike -RepeatSeeds.
+    [string]$SmokeArgs = "",
     # Run each smoke N times to measure flakiness (Saved\Logs\Smoke-<Name>-r<k>.log). Duplicate names in -Commands also preserve count.
     [int]$Repeat = 1,
-    # When repeating: run k replaces -FixedSeed with -Seed=k so runs vary random rolls under CPU cycles instead of fixed seed 0.
+    # When repeating: drop -FixedSeed so FMath is seeded from the cycle counter (UE has no integer seed argument) - the runs
+    # differ but are NOT reproducible. For reproducible seeds use -SmokeArgs "Seed={n}" on smokes that parse Seed=.
     # Without -RepeatSeeds: repeats keep -FixedSeed (measuring machine load / timing noise only).
     [switch]$RepeatSeeds
 )
@@ -47,7 +52,7 @@ if (-not $Remote) { $Remote = $(if ($env:CODEX_SMOKE_REMOTE) { $env:CODEX_SMOKE_
 if ($Remote -ne "off" -and @($Commands | Where-Object { $_ }).Count) {
     & (Join-Path $PSScriptRoot "Tools\smoke_remote.ps1") -Mode $Remote -Commands $Commands -Jobs $Jobs -Map $Map -TimeoutSeconds $TimeoutSeconds `
         -Serial:$Serial -NoRetry:$NoRetry -RealTime:$RealTime -ResultJson $ResultJson -PreCmds $PreCmds -ExtraArgs $ExtraArgs `
-        -Repeat $Repeat -RepeatSeeds:$RepeatSeeds
+        -Repeat $Repeat -RepeatSeeds:$RepeatSeeds -SmokeArgs $SmokeArgs
     if ($LASTEXITCODE -ne 99) { exit $LASTEXITCODE }
 }
 $EngineRoot = "C:\Program Files\Epic Games\UE_5.8"
@@ -112,11 +117,8 @@ function Get-ClockArgs([string]$Name, [int]$RepeatIndex = 0) {
     $fps = [int](Get-Option $Name "fixedStepFps" $defaults.Value.fixedStepFps) # a smoke may need a finer step (per-frame metrics)
     if ($fps -le 0) { return "" }
     $clock = "-UseFixedTimeStep -FPS=$fps"
-    if ($RepeatSeeds -and $RepeatIndex -gt 0) {
-        $clock += " -Seed=$RepeatIndex"
-    } elseif ($defaults.Value.fixedSeed) {
-        $clock += " -FixedSeed"
-    }
+    # -RepeatSeeds drops -FixedSeed: FMath is seeded from the cycle counter (UE has no integer seed argument) - runs differ, NOT reproducible.
+    if ($defaults.Value.fixedSeed -and -not ($RepeatSeeds -and $RepeatIndex -gt 0)) { $clock += " -FixedSeed" }
     return $clock
 }
 
@@ -136,7 +138,9 @@ function Start-SmokeProcess($Task) {
     # A "rendered" smoke (test_map smokeOptions, e.g. SnowTracksSmoke reads a render target back) needs a real RHI: offscreen instead of -nullrhi.
     $rhi = $(if (Get-Option $Name "rendered" $false) { "-RenderOffscreen -ResX=1280 -ResY=720" } else { "-nullrhi" })
     # Start-Process takes one argument string: quote the paths (the project path has a space).
-    $exec = $(if ($PreCmds) { "$PreCmds,CodexTactics.$Name" } else { "CodexTactics.$Name" })
+    $cmdArgs = (((Get-Option $Name "args" "") + " " + $SmokeArgs).Trim()) -replace '\{n\}', "$RepeatIndex"
+    $cmdWithArgs = $(if ($cmdArgs) { "CodexTactics.$Name $cmdArgs" } else { "CodexTactics.$Name" })
+    $exec = $(if ($PreCmds) { "$PreCmds,$cmdWithArgs" } else { $cmdWithArgs })
     $gameArgs = "`"$Project`" $map -game $rhi -nosplash -nosound -unattended -windowed -FORCELOGFLUSH -NoTelemetry `"-ExecCmds=$exec`" `"-abslog=$log`" $extra"
     Wait-DesignerPriority
     $proc = Start-Process "$EngineRoot\Engine\Binaries\Win64\UnrealEditor-Cmd.exe" -ArgumentList $gameArgs -WindowStyle Hidden -PassThru
