@@ -103,5 +103,11 @@ $issues = $lines | Where-Object { $_ -match "(error|warning)" -and $_ -notmatch 
 $issues | Select-Object -First 40 | ForEach-Object { Write-Host $_ }
 if (@($issues).Count -gt 40) { Write-Host ("... {0} more issue lines" -f (@($issues).Count - 40)) }
 $lines | Where-Object { $_ -match "^Result:|Total execution time" } | ForEach-Object { Write-Host $_ }
+# Guard (2026-11-21): a failed compile was seen returning exit 0 on the worker, and callers trusted it. The UBT log decides:
+# no "Result: Succeeded" line, or any "Result: Failed" line, means failure whatever Build.bat returned.
+if ($code -eq 0 -and (-not ($lines -match '^Result: Succeeded') -or ($lines -match '^Result: Failed'))) {
+    Write-Host "Build.bat returned 0 but the log has no 'Result: Succeeded' - reporting failure (exit 6)." -ForegroundColor Red
+    $code = 6
+}
 Write-Host "Exit code $code. Full log: $LogFile ($((Get-Item $LogFile).Length) bytes)"
 exit $code
