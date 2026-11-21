@@ -175,7 +175,32 @@ namespace LevelGenBuildingsSmoke
 		bool bWalkableRoof = false;
 		if (Building.TryGetBoolField(TEXT("roof_walkable"), bWalkableRoof) && bWalkableRoof)
 		{
-			Targets.Add({ TEXT("roof"), TEXT("roof"), FVector(Centre, GroundZ + Floors * StoreyHeight), Frame.Footprint });
+			// The footprint centre, unless it lies in the roof's opening over a switchback core that reaches the roof (a kit block 10 m
+			// deep has its core mid-building: B_b18 2026-11-21 "target off navmesh roof"): then just past that opening along the long axis.
+			FVector2D RoofPoint = Centre;
+			for (const auto& Value : Array(Building, TEXT("stairs")))
+			{
+				const FJsonObject& Stair = *Value->AsObject();
+				const FJsonObjects* MidRect = nullptr;
+				if (Stair.GetIntegerField(TEXT("to")) != Floors || !Stair.TryGetArrayField(TEXT("mid_rect"), MidRect) || MidRect->Num() < 2)
+				{
+					continue;
+				}
+				FBox2D Hole(ForceInit);
+				Hole += Point(Stair, TEXT("pos"));
+				Hole += Point(Stair, TEXT("top"));
+				Hole += Point((*MidRect)[0]->AsArray());
+				Hole += Point((*MidRect)[1]->AsArray());
+				if (!Hole.ExpandBy(60.0).IsInsideOrOn(RoofPoint))
+				{
+					continue;
+				}
+				const FVector2D Size = Frame.Footprint.GetSize();
+				const int32 Axis = Size.X >= Size.Y ? 0 : 1;
+				const double Sign = RoofPoint[Axis] >= Hole.GetCenter()[Axis] ? 1.0 : -1.0;
+				RoofPoint[Axis] = (Sign > 0.0 ? Hole.Max[Axis] : Hole.Min[Axis]) + Sign * 120.0;
+			}
+			Targets.Add({ TEXT("roof"), TEXT("roof"), FVector(RoofPoint, GroundZ + Floors * StoreyHeight), Frame.Footprint });
 		}
 		return Targets;
 	}
