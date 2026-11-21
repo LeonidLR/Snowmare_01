@@ -1000,7 +1000,7 @@ export const LevelGenDepartment: React.FC = () => {
       </div>
 
       {activeTab === 'props' ? (
-        <PropsPanel mapName={currentEntry?.map ?? null} propsId={currentEntry?.propsId || null} onDirtyChange={setPropsDirty} />
+        <PropsPanel mapName={currentEntry?.map ?? null} propsId={currentEntry?.propsId || null} layoutId={currentEntry?.layout || null} onDirtyChange={setPropsDirty} />
       ) : (
         <div className="p-6 flex flex-col gap-6">
         <MapWeatherSection map={currentEntry?.map ?? null} hasLevelJson={!!currentEntry?.levelJson} onDirtyChange={setWeatherDirty} />

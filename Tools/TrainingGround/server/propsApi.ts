@@ -262,11 +262,18 @@ export interface SavePropsResult {
   props: LevelPropsFile;
 }
 
+export interface SavePropsCreate {
+  /** Layout id written only when this call creates a missing props file (task 097). */
+  layout?: string;
+  layout_hash?: string;
+}
+
 export function savePropsData(
   mapOrName: string,
   baseRevision: number,
   layers: PropLayer[],
-  overrides?: PropOverride[]
+  overrides?: PropOverride[],
+  create?: SavePropsCreate,
 ): SavePropsResult {
   if (!isValidPropsName(mapOrName)) {
     throw {
@@ -330,7 +337,24 @@ export function savePropsData(
   }
 
   if (!fs.existsSync(targetPath)) {
-    throw { status: 404, message: `Props file "${mapOrName}" not found at ${targetPath}` };
+    // Task 097: «Сохранить» on a map that has no props file creates Content/Data/LevelGen/props/<map>.props.json.
+    // Only base_revision 0 may create. A stale revision still 404s and writes nothing.
+    if (baseRevision !== 0) {
+      throw { status: 404, message: `Props file "${mapOrName}" not found at ${targetPath}` };
+    }
+    const layout = create?.layout && isValidPropsName(create.layout) ? create.layout : clean;
+    const created: LevelPropsFile = {
+      schema: 'codex.levelgen_props/1',
+      map: clean,
+      layout,
+      layout_hash: typeof create?.layout_hash === 'string' ? create.layout_hash : '',
+      revision: 1,
+      frozen: false,
+      layers,
+    };
+    if (overrides !== undefined) created.overrides = overrides;
+    writeAtomic(targetPath, formatPropsCanonical(created));
+    return { success: true, revision: created.revision, props: created };
   }
 
   const currentRaw = fs.readFileSync(targetPath, 'utf8');
@@ -436,8 +460,13 @@ export function setupPropsApi(use: Use): void {
           return sendJson(res, 400, { error: 'layers must be an array' });
         }
         const overrides = body.overrides as PropOverride[] | undefined;
+        const layout = typeof body.layout === 'string' ? body.layout : undefined;
+        const layoutHash = typeof body.layout_hash === 'string' ? body.layout_hash : undefined;
 
-        const result = savePropsData(map || String(body.map ?? ''), baseRevision, layers, overrides);
+        const result = savePropsData(map || String(body.map ?? ''), baseRevision, layers, overrides, {
+          layout,
+          layout_hash: layoutHash,
+        });
         sendJson(res, 200, result);
       } catch (err: any) {
         const status = err && typeof err.status === 'number' ? err.status : 500;
