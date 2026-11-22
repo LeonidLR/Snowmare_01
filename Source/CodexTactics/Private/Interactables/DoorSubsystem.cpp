@@ -36,6 +36,8 @@
 #include "Navigation/PathFollowingComponent.h"
 #include "NavigationData.h"
 #include "NavigationPath.h"
+#include "Characters/SquadSubsystem.h"
+#include "Interactables/MantleNavigation.h"
 #include "NavigationSystem.h"
 #include "NavMesh/NavMeshPath.h"
 #include "NavMesh/RecastNavMesh.h"
@@ -1203,7 +1205,12 @@ bool UDoorSubsystem::RedirectMoveToLockedDoor(AOperativeCharacter& Operative, co
 	{
 		return false;
 	}
-	const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, Operative.GetActorLocation(), Goal, &Operative);
+	// His squad's way: no shut window without a window order / Solo (MantleNavigation::NoWindowVariant) - else a window route reads as
+	// "reachable" while his own formation move cannot take it.
+	const USquadSubsystem* WaySquad = World->GetSubsystem<USquadSubsystem>();
+	const TSubclassOf<UNavigationQueryFilter> WayFilter = WaySquad && !WaySquad->IsWindowOrder() && !WaySquad->IsSoloMode()
+		? MantleNavigation::NoWindowVariant(nullptr, true) : TSubclassOf<UNavigationQueryFilter>();
+	const UNavigationPath* Path = Nav->FindPathToLocationSynchronously(World, Operative.GetActorLocation(), Goal, &Operative, WayFilter);
 	const bool bReachable = Path && Path->IsValid() && !Path->IsPartial()
 		&& (Path->PathPoints.IsEmpty() || FVector::Dist2D(Path->PathPoints.Last(), Goal) <= DoorSubsystemLocal::PathShortCm);
 	if (bReachable)
@@ -1261,8 +1268,8 @@ bool UDoorSubsystem::RedirectMoveToLockedDoor(AOperativeCharacter& Operative, co
 			{
 				continue;
 			}
-			if (Reaches(Nav->FindPathToLocationSynchronously(World, From, NearNav.Location, &Operative), NearNav.Location)
-				&& Reaches(Nav->FindPathToLocationSynchronously(World, FarNav.Location, Goal, &Operative), Goal))
+			if (Reaches(Nav->FindPathToLocationSynchronously(World, From, NearNav.Location, &Operative, WayFilter), NearNav.Location)
+				&& Reaches(Nav->FindPathToLocationSynchronously(World, FarNav.Location, Goal, &Operative, WayFilter), Goal))
 			{
 				Best = Door;
 			}
