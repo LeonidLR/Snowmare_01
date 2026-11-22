@@ -376,6 +376,17 @@ FString DoorRules::FindClipPath(const FDoorTuning& Tuning, const FString& Skelet
 	return Clip == EDoorClip::Kick ? Tuning.KickMontage : Tuning.HandOpenMontage;
 }
 
+float DoorRules::GetClipApproachCm(EDoorClip Clip, const FDoorTuning& Tuning)
+{
+	const float* Cm = Tuning.MontageApproachCm.Find(ClipKindName(Clip));
+	return Cm ? *Cm : Tuning.ApproachCm;
+}
+
+bool DoorRules::HasClipApproach(EDoorClip Clip, const FDoorTuning& Tuning)
+{
+	return Tuning.MontageApproachCm.Contains(ClipKindName(Clip));
+}
+
 float DoorRules::GetContactSeconds(EDoorClip Clip, bool bClipPlays, const FDoorTuning& Tuning)
 {
 	if (bClipPlays)
@@ -463,6 +474,81 @@ bool DoorRules::IsPathStoppedByDoor(const FVector2D& LocalPawn, const FVector2D&
 	const bool bPawnSide = LocalPawn.Y * EndSide >= -GoalBeyondCm; // he stands on the path end's side (or in the doorway)
 	const bool bGoalBeyond = LocalGoal.Y * EndSide <= -GoalBeyondCm;
 	return bEndNear && bPawnSide && bGoalBeyond;
+}
+
+TArray<FDoorKitDoorway> DoorRules::PairKitOpenLeaves(const TArray<FDoorKitLeafPiece>& Leaves, float ToleranceCm)
+{
+	TArray<FDoorKitDoorway> Out;
+	TArray<bool> Used;
+	Used.Init(false, Leaves.Num());
+	// Pairs first: leaf A's doorway runs along its -Y; leaf B's hinge sits 2 x width along it, facing the same way.
+	for (int32 A = 0; A < Leaves.Num(); ++A)
+	{
+		if (Used[A])
+		{
+			continue;
+		}
+		const FDoorKitLeafPiece& L = Leaves[A];
+		const FVector2D Dir = -L.Right.GetSafeNormal();
+		const FVector2D Expected = L.Hinge + Dir * (2.f * L.WidthCm);
+		for (int32 B = 0; B < Leaves.Num(); ++B)
+		{
+			if (B == A || Used[B] || FVector2D::DotProduct(L.Along.GetSafeNormal(), Leaves[B].Along.GetSafeNormal()) < 0.95f
+				|| FVector2D::Distance(Leaves[B].Hinge, Expected) > ToleranceCm)
+			{
+				continue;
+			}
+			FDoorKitDoorway& Door = Out.AddDefaulted_GetRef();
+			Door.Center = (L.Hinge + Leaves[B].Hinge) * 0.5f;
+			Door.Tangent = Dir;
+			Door.WidthCm = static_cast<float>(FVector2D::Distance(L.Hinge, Leaves[B].Hinge));
+			Door.LeafA = A;
+			Door.LeafB = B;
+			Used[A] = Used[B] = true;
+			break;
+		}
+	}
+	for (int32 A = 0; A < Leaves.Num(); ++A)
+	{
+		if (Used[A])
+		{
+			continue;
+		}
+		const FVector2D Dir = -Leaves[A].Right.GetSafeNormal();
+		FDoorKitDoorway& Door = Out.AddDefaulted_GetRef();
+		Door.Center = Leaves[A].Hinge + Dir * (Leaves[A].WidthCm * 0.5f);
+		Door.Tangent = Dir;
+		Door.WidthCm = Leaves[A].WidthCm;
+		Door.LeafA = A;
+	}
+	return Out;
+}
+
+bool DoorRules::RayHitsLeaf(const FVector& LocalStart, const FVector& LocalEnd, float LeafWidthCm, float ThicknessCm, float HeightCm, bool bNegativeX,
+	float SlackCm)
+{
+	const float X0 = bNegativeX ? -LeafWidthCm : 0.f;
+	const float X1 = bNegativeX ? 0.f : LeafWidthCm;
+	const FBox Box(FVector(X0 - SlackCm, -ThicknessCm * 0.5f - SlackCm, 0.f), FVector(X1 + SlackCm, ThicknessCm * 0.5f + SlackCm, HeightCm + SlackCm));
+	const FVector Delta = LocalEnd - LocalStart;
+	if (Delta.IsNearlyZero())
+	{
+		return Box.IsInside(LocalStart);
+	}
+	return FMath::LineBoxIntersection(Box, LocalStart, LocalEnd, Delta);
+}
+
+bool DoorRules::IsInShutDoorwaySnap(const FVector2D& Local, float HalfWidthCm, float DepthCm)
+{
+	return FMath::Abs(Local.X) <= HalfWidthCm + 10.f && FMath::Abs(Local.Y) <= DepthCm;
+}
+
+float DoorRules::FacingErrorDeg(const FVector2D& Forward, const FVector2D& LocalOperativeSide, const FVector2D& DoorNormal)
+{
+	const float Side = LocalOperativeSide.Y >= 0.f ? 1.f : -1.f;
+	const FVector2D Into = (-DoorNormal * Side).GetSafeNormal();
+	const float Dot = FMath::Clamp(FVector2D::DotProduct(Forward.GetSafeNormal(), Into), -1.f, 1.f);
+	return FMath::RadiansToDegrees(FMath::Acos(Dot));
 }
 
 float DoorRules::GoalBehindDoorSide(const FVector2D& LocalGoal, float HalfWidthCm, float ReachCm)
@@ -611,6 +697,24 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 			}
 		}
 	}
+	for (const TPair<const TCHAR*, TMap<FString, float>*>& Field : { TPair<const TCHAR*, TMap<FString, float>*>(TEXT("montage_root_cm"), &Tuning.MontageRootCm),
+		TPair<const TCHAR*, TMap<FString, float>*>(TEXT("montage_approach_cm"), &Tuning.MontageApproachCm) })
+	{
+		const TSharedPtr<FJsonObject>* Map = nullptr;
+		if (Json.TryGetObjectField(Field.Key, Map) && Map && Map->IsValid())
+		{
+			Field.Value->Reset();
+			for (const TPair<FString, TSharedPtr<FJsonValue>>& Entry : (*Map)->Values)
+			{
+				double Cm = 0.0;
+				if (!Entry.Key.StartsWith(TEXT("_")) && Entry.Value.IsValid() && Entry.Value->TryGetNumber(Cm))
+				{
+					Field.Value->Add(Entry.Key.ToLower(), FMath::Clamp(static_cast<float>(Cm), 0.f, 1000.f));
+				}
+			}
+		}
+	}
+	ReadDoorNumber(Json, TEXT("montage_approach_slack_cm"), Tuning.MontageApproachSlackCm, 5.f, 200.f);
 	const TSharedPtr<FJsonObject>* Breach = nullptr;
 	if (Json.TryGetObjectField(TEXT("breach"), Breach) && Breach && Breach->IsValid())
 	{

@@ -445,6 +445,19 @@ bool FDoorsBreachChoiceTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the shipped file keeps the R1 switch OFF"), !File.bEnabled);
 	TestTrue(TEXT("shot locks are pushed open (R2)"), File.bLockShotPush);
 	TestTrue(TEXT("the operatives clip set"), File.MontageSets.Contains(TEXT("default")) && File.MontageSets[TEXT("default")].Num() == 6);
+	// Root motion (designer 2026-11-22, option a): every clip kind has its start pose, and it lies far enough out for the travel to the leaf.
+	for (const EDoorClip Clip : { EDoorClip::Open, EDoorClip::Kick, EDoorClip::Push })
+	{
+		const TCHAR* Kind = DoorRules::ClipKindName(Clip);
+		TestTrue(FString::Printf(TEXT("%s: a measured start pose"), Kind), DoorRules::HasClipApproach(Clip, File));
+		TestTrue(FString::Printf(TEXT("%s: a root travel"), Kind), File.MontageRootCm.Contains(Kind));
+	}
+	TestTrue(TEXT("the push starts farther out than the hand open (its long walk-in)"),
+		DoorRules::GetClipApproachCm(EDoorClip::Push, File) > DoorRules::GetClipApproachCm(EDoorClip::Open, File));
+	FDoorTuning Plain;
+	Plain.ApproachCm = 100.f;
+	TestFalse(TEXT("no data: no start pose"), DoorRules::HasClipApproach(EDoorClip::Kick, Plain));
+	TestEqual(TEXT("no data: approach_cm"), DoorRules::GetClipApproachCm(EDoorClip::Kick, Plain), 100.f);
 	return true;
 }
 
@@ -531,6 +544,62 @@ bool FDoorsKeyGoalTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("goal A grants the key (empty ids dropped)"), File.Goals.Num() == 2 && File.Goals[0].GrantKeys.Num() == 1
 		&& File.Goals[0].GrantKeys[0] == TEXT("S09_broken_back_windows"));
 	TestTrue(TEXT("goal B grants nothing"), File.Goals.Num() == 2 && File.Goals[1].GrantKeys.IsEmpty());
+	return true;
+}
+
+DOORS_TEST(FDoorsKitOpenLeavesTest, "Click.OpenKitLeavesPair")
+bool FDoorsKitOpenLeavesTest::RunTest(const FString& Parameters)
+{
+	// kit_dress_lib.leaves: an open leaf stands out of the wall (+X = the wall normal n), its +Y = rot90(n) = -d (the wall direction d);
+	// a pair: hinge 0 at the doorway's start, hinge 1 two leaf widths along d. Wall along +X world here (d = +X), n = +Y.
+	TArray<FDoorKitLeafPiece> Leaves;
+	FDoorKitLeafPiece A;
+	A.Hinge = FVector2D(100.f, 0.f);
+	A.Along = FVector2D(0.f, 1.f);
+	A.Right = FVector2D(-1.f, 0.f);
+	A.WidthCm = 75.f;
+	FDoorKitLeafPiece B = A;
+	B.Hinge = FVector2D(250.f, 0.f);
+	FDoorKitLeafPiece Single = A;
+	Single.Hinge = FVector2D(1000.f, 0.f);
+	Single.WidthCm = 80.f;
+	Leaves = { B, Single, A };
+	const TArray<FDoorKitDoorway> Ways = DoorRules::PairKitOpenLeaves(Leaves);
+	TestEqual(TEXT("one pair + one single"), Ways.Num(), 2);
+	const FDoorKitDoorway* Pair = Ways.FindByPredicate([](const FDoorKitDoorway& W) { return W.LeafB != INDEX_NONE; });
+	TestTrue(TEXT("the pair found whatever the order"), Pair != nullptr);
+	if (Pair)
+	{
+		TestTrue(TEXT("pair centre between the hinges"), Pair->Center.Equals(FVector2D(175.f, 0.f), 0.5f));
+		TestEqual(TEXT("pair width = the hinge distance"), Pair->WidthCm, 150.f);
+		TestTrue(TEXT("the wall direction d"), Pair->Tangent.Equals(FVector2D(1.f, 0.f), 0.01f));
+	}
+	const FDoorKitDoorway* One = Ways.FindByPredicate([](const FDoorKitDoorway& W) { return W.LeafB == INDEX_NONE; });
+	TestTrue(TEXT("a single leaf: its doorway on its -Y side"), One && One->Center.Equals(FVector2D(1040.f, 0.f), 0.5f) && One->WidthCm == 80.f);
+	return true;
+}
+
+DOORS_TEST(FDoorsClickPriorityTest, "Click.OpenLeafRayAndShutSnap")
+bool FDoorsClickPriorityTest::RunTest(const FString& Parameters)
+{
+	// An open leaf (no collision): the cursor ray through it is the door; a ray past it is not.
+	TestTrue(TEXT("down through the leaf"), DoorRules::RayHitsLeaf(FVector(40.f, 300.f, 600.f), FVector(40.f, -60.f, 0.f), 80.f, 5.f, 205.f, false, 10.f));
+	TestFalse(TEXT("past its free edge"), DoorRules::RayHitsLeaf(FVector(200.f, 300.f, 600.f), FVector(200.f, -60.f, 0.f), 80.f, 5.f, 205.f, false, 10.f));
+	TestTrue(TEXT("leaf B runs along -X"), DoorRules::RayHitsLeaf(FVector(-40.f, 300.f, 600.f), FVector(-40.f, -60.f, 0.f), 80.f, 5.f, 205.f, true, 10.f));
+	TestFalse(TEXT("over its top"), DoorRules::RayHitsLeaf(FVector(40.f, 300.f, 900.f), FVector(40.f, -300.f, 600.f), 80.f, 5.f, 205.f, false, 10.f));
+	// A shut doorway: the floor right at it is the door (the click must not become a cover hug on the jamb).
+	TestTrue(TEXT("the floor in the doorway"), DoorRules::IsInShutDoorwaySnap(FVector2D(10.f, 30.f), 60.f, 45.f));
+	TestTrue(TEXT("by the jamb"), DoorRules::IsInShutDoorwaySnap(FVector2D(68.f, -20.f), 60.f, 45.f));
+	TestFalse(TEXT("a step away in the room"), DoorRules::IsInShutDoorwaySnap(FVector2D(0.f, 120.f), 60.f, 45.f));
+	TestFalse(TEXT("along the wall"), DoorRules::IsInShutDoorwaySnap(FVector2D(150.f, 10.f), 60.f, 45.f));
+	// The kick facing: square to the leaf from his side = 0 deg; sideways = 90.
+	TestTrue(TEXT("facing the leaf from +Y"), DoorRules::FacingErrorDeg(FVector2D(0.f, -1.f), FVector2D(0.f, 100.f), FVector2D(0.f, 1.f)) < 1.f);
+	TestTrue(TEXT("facing the leaf from -Y"), DoorRules::FacingErrorDeg(FVector2D(0.f, 1.f), FVector2D(10.f, -100.f), FVector2D(0.f, 1.f)) < 1.f);
+	TestTrue(TEXT("turned sideways: 90"), FMath::IsNearlyEqual(DoorRules::FacingErrorDeg(FVector2D(1.f, 0.f), FVector2D(0.f, 100.f), FVector2D(0.f, 1.f)), 90.f, 0.5f));
+	// Click actions: an open door's click shuts it, a shut one's opens it.
+	EDoorAction Action;
+	TestTrue(TEXT("open -> close"), DoorRules::ChooseClickAction(EDoorLeafState::Open, false, false, false, false, Action) && Action == EDoorAction::Close);
+	TestTrue(TEXT("closed -> open"), DoorRules::ChooseClickAction(EDoorLeafState::Closed, false, false, false, false, Action) && Action == EDoorAction::Open);
 	return true;
 }
 

@@ -157,12 +157,17 @@ public:
 
 	/** A pawn's capsule stands in the doorway (|y| < 45 cm): a closing door waits / refuses. */
 	bool IsDoorwayOccupied() const;
+	/** Who stands in the doorway (names, for the log). */
+	FString DescribeDoorwayOccupants() const;
 
 	/** The middle of leaf LeafIndex's footprint (0 = A, 1 = B) at floor height, in its current pose. */
 	FVector GetLeafFootprintMid(int32 LeafIndex) const;
 
 	/** A click on the floor at Point is a click on this OPEN door's leaf (within doors.json click_snap_cm of a leaf's footprint). */
 	bool IsNearOpenLeaf(const FVector& Point) const;
+
+	/** The cursor ray Start -> End passes through one of this OPEN door's leaves (their collision is off while open). */
+	bool IsRayOnOpenLeaf(const FVector& Start, const FVector& End) const;
 
 	/** One of the door's own components (leaves) - the click / trace hit is this door. */
 	bool OwnsComponent(const UPrimitiveComponent* Component) const;

@@ -87,6 +87,25 @@ struct CODEXTACTICS_API FDoorBreachAbility
 	bool bCanKick = true;
 };
 
+/** One open kit leaf instance (kit_part=door_leaf_open) on the ground plane: its hinge, its +X (the leaf) and +Y, its width. */
+struct CODEXTACTICS_API FDoorKitLeafPiece
+{
+	FVector2D Hinge = FVector2D::ZeroVector;
+	FVector2D Along = FVector2D(1.f, 0.f);
+	FVector2D Right = FVector2D(0.f, 1.f);
+	float WidthCm = 80.f;
+};
+
+/** An open doorway found from kit open leaves (DoorRules::PairKitOpenLeaves): its centre on the wall line, the wall direction, width. */
+struct CODEXTACTICS_API FDoorKitDoorway
+{
+	FVector2D Center = FVector2D::ZeroVector;
+	FVector2D Tangent = FVector2D(1.f, 0.f);
+	float WidthCm = 80.f;
+	int32 LeafA = INDEX_NONE;
+	int32 LeafB = INDEX_NONE;
+};
+
 /** How the navmesh treats a doorway in a state (ADR-0003 "after R1" column). */
 enum class EDoorPassage : uint8
 {
@@ -187,6 +206,18 @@ struct CODEXTACTICS_API FDoorTuning
 	TMap<FString, TMap<FString, FString>> MontageSets;
 	/** "montage_contact_s": per clip kind ("open" / "kick" / "push") the seconds from the clip start to the hand / foot on the leaf. */
 	TMap<FString, float> MontageContactSeconds;
+	/**
+	 * "montage_root_cm": per clip kind the root-motion travel of the clip (the designer's pack, root motion baked from the pelvis by
+	 * setup_door_animation.py): the capsule moves this far forward over the montage (logged / checked by the smokes).
+	 */
+	TMap<FString, float> MontageRootCm;
+	/**
+	 * "montage_approach_cm": per clip kind how far in front of the leaf plane he starts the clip (its start pose): the root motion then brings
+	 * him to the leaf at the contact time and leaves him at the doorway, not inside the leaf. A kind not listed: approach_cm.
+	 */
+	TMap<FString, float> MontageApproachCm;
+	/** "montage_approach_slack_cm": a clip starts once his feet are this close to its start point (or he stopped walking near the door). */
+	float MontageApproachSlackCm = 45.f;
 	/** "montage_swap_lr": 1 = the pack's L / R mean the other side (swap the pick). */
 	bool bMontageSwapLR = false;
 	/** "breach.enabled": enemies whose path ends at a LOCKED door breach it (their archetype's actions) instead of stopping. */
@@ -323,6 +354,12 @@ namespace DoorRules
 	 */
 	CODEXTACTICS_API FString FindClipPath(const FDoorTuning& Tuning, const FString& SkeletonName, bool bUseDefault, EDoorClip Clip, EDoorSide Side);
 
+	/** Where he starts a clip, cm in front of the leaf plane: montage_approach_cm of its kind, else approach_cm. */
+	CODEXTACTICS_API float GetClipApproachCm(EDoorClip Clip, const FDoorTuning& Tuning);
+
+	/** The clip has a measured start pose (montage_approach_cm lists its kind): he walks to it before the clip starts. */
+	CODEXTACTICS_API bool HasClipApproach(EDoorClip Clip, const FDoorTuning& Tuning);
+
 	/** Seconds from the start of the work to the leaf moving / the kick landing: the clip's contact time when a clip plays, else hand_open_s / kick_s / push_s. */
 	CODEXTACTICS_API float GetContactSeconds(EDoorClip Clip, bool bClipPlays, const FDoorTuning& Tuning);
 
@@ -357,6 +394,26 @@ namespace DoorRules
 	 * its level, is the one to breach. Returns the side of the goal (+1 / -1), 0 when not behind it.
 	 */
 	CODEXTACTICS_API float GoalBehindDoorSide(const FVector2D& LocalGoal, float HalfWidthCm, float ReachCm);
+
+	/**
+	 * The doorways of OPEN doors on a kit-dressed map (the builder places no leaf for an open door; kit_dress places open leaves, standing
+	 * out of the wall - kit_dress_lib.leaves: the leaf's +X is the wall normal, its doorway lies on its -Y side from the hinge). Two leaves
+	 * facing the same way whose hinges are 2 x width apart along -Y are a pair (one doorway, both hinges); the rest are single leaves.
+	 */
+	CODEXTACTICS_API TArray<FDoorKitDoorway> PairKitOpenLeaves(const TArray<FDoorKitLeafPiece>& Leaves, float ToleranceCm = 15.f);
+
+	/**
+	 * Does the cursor ray (door frame of one leaf: the hinge at the origin, the leaf along +X - or -X when bNegativeX - its thickness on Y,
+	 * floor at Z 0) pass through that leaf's box (SlackCm round it)? The click on an OPEN leaf (its collision is off).
+	 */
+	CODEXTACTICS_API bool RayHitsLeaf(const FVector& LocalStart, const FVector& LocalEnd, float LeafWidthCm, float ThicknessCm, float HeightCm, bool bNegativeX,
+		float SlackCm);
+
+	/** A floor click at Local (door frame) right in front of / in a SHUT doorway counts as the door (|x| <= half + 10, |y| <= DepthCm). */
+	CODEXTACTICS_API bool IsInShutDoorwaySnap(const FVector2D& Local, float HalfWidthCm, float DepthCm);
+
+	/** Degrees between his facing and the way into the door from his side (smokes: every kick attempt faces the leaf). */
+	CODEXTACTICS_API float FacingErrorDeg(const FVector2D& Forward, const FVector2D& LocalOperativeSide, const FVector2D& DoorNormal);
 
 	/** A deterministic roll 0..1 of Seed and Salt (the same pair always gives the same value). */
 	CODEXTACTICS_API float DeterministicRoll(int32 Seed, uint32 Salt);

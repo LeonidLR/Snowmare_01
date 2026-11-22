@@ -52,8 +52,14 @@ public:
 	/** The nearest door whose doorway centre is within RadiusCm (planar, same level) of Point. */
 	ADoorActor* FindNearestDoor(const FVector& Point, float RadiusCm) const;
 
-	/** A cursor hit that means a door: on one of its leaves, or on the floor next to an open leaf (doors.json click_snap_cm). */
+	/**
+	 * A cursor hit that means a door (it wins over the cover hug / cover ghost): on one of its leaves; the cursor ray through an OPEN leaf
+	 * (no collision while open) or the floor next to it (click_snap_cm); the floor in / right at a SHUT doorway.
+	 */
 	ADoorActor* FindClickedDoor(const FHitResult& Hit) const;
+
+	/** Doors made from open kit leaves (open doorways of a kit-dressed map) at the adoption (smokes). */
+	int32 GetOpenKitDoors() const { return OpenKitDoors; }
 
 	/**
 	 * An operative's door order (designer spec 2026-11-22, DoorRules::ChooseClickAction): single click - an unlocked door opens by hand
@@ -111,6 +117,26 @@ public:
 	/** The door clips chosen since the adoption ("open_r", "kick_l", "push_r" ...; the last 256) and the montages played (smokes). */
 	const TArray<FString>& GetClipLog() const { return ClipLog; }
 	int32 GetMontagesPlayed() const { return MontagesPlayed; }
+
+	/** One door clip's root-motion move, measured on the capsule (smokes, the log). */
+	struct FClipMove
+	{
+		FString Key;
+		/** A kick: degrees between his facing and the way into the door at the clip start / at the impact (every attempt faces the leaf). */
+		float StartFacingErrorDeg = 0.f;
+		float ImpactFacingErrorDeg = -1.f;
+		/** His feet's move from the clip start to its end along / across his facing, cm. */
+		float ForwardCm = 0.f;
+		float SideCm = 0.f;
+		/** The move from just before the end to 0.3 s after it (a pop back would show here), cm. */
+		float AfterEndCm = 0.f;
+		/** montage_root_cm of the clip's kind (0 = unknown). */
+		float ExpectedCm = 0.f;
+	};
+	/** The measured moves since the adoption (the last 64). */
+	const TArray<FClipMove>& GetClipMoves() const { return ClipMoves; }
+	/** Every kick attempt's facing off the leaf at its impact, degrees (smokes). */
+	const TArray<float>& GetKickFacings() const { return KickFacings; }
 	const FString& GetLastMontageName() const { return LastMontageName; }
 
 	/** Drops Operative's pending door order (another order replaced it). */
@@ -163,6 +189,12 @@ private:
 		TSet<EDoorAction> Tried;
 		/** A breach: the side of the door he works it from (+1 / -1; 0 = his own side). */
 		float BreachSide = 0.f;
+		/** The yaw the door work holds him at (set when the work starts; the facing lock). */
+		TOptional<float> FaceYaw;
+		/** Seconds since the order's last walk-up started (a stopped walk short of the point still acts after a moment). */
+		float WalkAge = 0.f;
+		/** R2 root motion: the order walks to its clip's start pose (montage_approach_cm) before the clip. */
+		bool bClipApproach = false;
 		/** Lock bursts fired in this order (a breach fires up to breach.lock_shots). */
 		int32 Shots = 0;
 	};
@@ -223,12 +255,49 @@ private:
 	/** Starts kick attempt Order.Attempts (the leg, the clip, the time to the impact). */
 	void StartKickAttempt(FPendingOrder& Order, AOperativeCharacter& Operative, ADoorActor& Door);
 	/** Plays a door clip on Pawn (doors.json montages for its skeleton); returns its length (0 = none played). Logs the montage name. */
-	float PlayClip(ACharacter& Pawn, EDoorClip Clip, EDoorSide Side);
+	float PlayClip(ACharacter& Pawn, EDoorClip Clip, EDoorSide Side, const ADoorActor* Door = nullptr);
+	/** Open kit doorways (kit_part=door_leaf_open instances) become open doors; returns how many. */
+	int32 AdoptKitOpenLeaves();
+	/** The pawn's clips move him (root motion): his skeleton plays the operatives' default set (the PMC body's set plays in place for now). */
+	bool UsesRootMotionClips(const ACharacter& Pawn) const;
+	/** Holds the facing of everyone working a door (orders at work, clips playing); releases the rest. */
+	void TickFacingLocks();
 	/** The side of the handle for Pawn at Door. */
 	EDoorSide HandSideFor(const AActor& Pawn, const ADoorActor& Door) const;
 	/** A deterministic roll (or the forced test value, consumed). */
 	float RollFor(float& Forced, const ADoorActor& Door, const AActor& Pawn, int32 Attempt, const TCHAR* What) const;
 	void AddTrace(const AActor* Pawn, const FString& Step);
+	/** The clip an Open / Kick order plays (open / push / kick). */
+	EDoorClip ClipOf(const FPendingOrder& Order, const ADoorActor& Door) const;
+	/** Turns him square to the leaf plane (the clip's root motion runs along his facing). */
+	void FaceDoor(AOperativeCharacter& Operative, const ADoorActor& Door) const;
+	void TickClipWatches();
+
+	/** A playing clip whose capsule move is measured. */
+	struct FClipWatch
+	{
+		TWeakObjectPtr<ACharacter> Pawn;
+		FString Key;
+		FVector Start = FVector::ZeroVector;
+		FVector Forward = FVector::ForwardVector;
+		double EndAt = 0.0;
+		bool bPre = false;
+		FVector Pre = FVector::ZeroVector;
+		float ExpectedCm = 0.f;
+		float StartFacingErrorDeg = 0.f;
+		TWeakObjectPtr<const ADoorActor> Door;
+		/** His feet last tick (a jump = a teleport: the move is not measured). */
+		FVector Last = FVector::ZeroVector;
+		bool bTeleported = false;
+		/** Another clip of his started before the after-end sample (the next kick): no pop measured. */
+		bool bFollowed = false;
+	};
+	TArray<FClipWatch> ClipWatches;
+	TMap<TWeakObjectPtr<AOperativeCharacter>, float> FacingLocks;
+	int32 OpenKitDoors = 0;
+	float LastKickImpactFacingDeg = 0.f;
+	TArray<float> KickFacings;
+	TArray<FClipMove> ClipMoves;
 	/** Runs the order's action; true when the order is done (acted or refused). */
 	bool Act(FPendingOrder& Order);
 	/** The work of Order is over (its timer ran out): true when the order is done. */

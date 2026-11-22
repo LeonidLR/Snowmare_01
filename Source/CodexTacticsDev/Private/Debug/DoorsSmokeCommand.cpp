@@ -16,6 +16,12 @@
 //      walks on; run twice with the same Codex.Doors.Seed - the same breach trace (deterministic);
 //   KD the fighter carried a key: his body is searchable remains holding it; taken = the squad has the key;
 //   KC a loot container in a room holding a key: taken = the squad has the key;
+//   RM (root motion, designer 2026-11-22 option a): every clip's capsule move is measured - open / push move him about the clip's root
+//      travel (montage_root_cm), no clip pops back after its end;
+//   Arg "shots" (a rendered run: -RenderOffscreen): frames of the kick (F) and the two pushes (K, S) from the game camera ->
+//      Saved/StoryShowcase/doors/.
+//   O  (kit-dressed maps) an initially OPEN door (made from the kit's open leaves): the click through its open leaf shuts it, the click on
+//      the shut leaf opens it again - never a cover hug; every kick attempt faced the leaf (< 15 deg at its start and impact);
 //   G  the switch OFF at runtime: every door released, the builder leaves back (visible, blocking sight, walk-through) - as before R1.
 // Enemies are parked far away; no pressure / PMC encounters.
 
@@ -46,7 +52,9 @@
 #include "Interactables/LootCrateActor.h"
 #include "NavigationPath.h"
 #include "NavigationSystem.h"
+#include "Misc/Paths.h"
 #include "Survival/ColdShelterSubsystem.h"
+#include "UnrealClient.h"
 
 namespace DoorsSmoke
 {
@@ -95,6 +103,13 @@ namespace DoorsSmoke
 		int32 Candidate = 0;
 		bool bCandidateLocked = false;
 		TWeakObjectPtr<ADoorActor> BreachDoor;
+		TWeakObjectPtr<ADoorActor> OpenDoor;
+		float OpenSide = 1.f;
+		// Shots (arg "shots")
+		bool bShots = false;
+		float NextShotAt = 0.f;
+		int32 ShotsInStage = 0;
+		int32 ShotStage = -1;
 	};
 
 	void Check(FState& State, bool bOk, const FString& What)
@@ -302,6 +317,26 @@ namespace DoorsSmoke
 		ACodexTacticsPlayerController* PC = Cast<ACodexTacticsPlayerController>(World->GetFirstPlayerController());
 		AOperativeCharacter* Leader = State->Leader.Get();
 		const bool bNavBusy = UNavigationSystemV1::IsNavigationBeingBuiltOrLocked(World);
+		// Shots: the kick (stage 9) and the pushes (11: after the key, 13: after the shot) from the game camera, every 0.15 s.
+		if (State->bShots && (State->Stage == 9 || State->Stage == 11 || State->Stage == 13))
+		{
+			if (State->ShotStage != State->Stage)
+			{
+				State->ShotStage = State->Stage;
+				State->ShotsInStage = 0;
+				State->NextShotAt = 0.f;
+			}
+			if (State->StageTime >= State->NextShotAt && State->ShotsInStage < 24)
+			{
+				const FString Dir = FPaths::ConvertRelativePathToFull(FPaths::ProjectSavedDir() / TEXT("StoryShowcase/doors"));
+				const TCHAR* Name = State->Stage == 9 ? TEXT("kick") : State->Stage == 11 ? TEXT("push_after_key") : TEXT("push_after_shot");
+				const FString File = Dir / FString::Printf(TEXT("%s_%02d.png"), Name, State->ShotsInStage);
+				FScreenshotRequest::RequestScreenshot(File, /*bInShowUI*/ false, /*bAddFilenameSuffix*/ false);
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: shot %s (stage time %.2f s)"), *File, State->StageTime);
+				++State->ShotsInStage;
+				State->NextShotAt = State->StageTime + 0.15f;
+			}
+		}
 		switch (State->Stage)
 		{
 		case 0: // A: adoption, sight, navmesh
@@ -898,6 +933,161 @@ namespace DoorsSmoke
 			{
 				Seed->Set(-1, ECVF_SetByConsole);
 			}
+			Next(*State, 23);
+			return true;
+		}
+		case 23: // O: an initially open door (kit maps): the click through its leaf shuts it
+		{
+			if (State->StageTime < 0.5f)
+			{
+				return true;
+			}
+			ADoorActor* Open = nullptr;
+			for (ADoorActor* Door : Doors->GetDoors())
+			{
+				bool bSomebodyNear = false;
+				for (TActorIterator<ACharacter> Pawn(World); Door && Pawn; ++Pawn)
+				{
+					bSomebodyNear |= FVector::Dist(Pawn->GetActorLocation(), Door->GetActorLocation()) < 400.f;
+				}
+				if (Door && !bSomebodyNear && Door->Tags.Contains(FName(TEXT("door_from_kit_open_leaf"))) && Door->IsOpen() && Door->GetFloor() == 0)
+				{
+					FVector Probe;
+					if (OnNav(World, Door->GetActorLocation() + Door->GetNormal() * 250.f, Probe) || OnNav(World, Door->GetActorLocation() - Door->GetNormal() * 250.f, Probe))
+					{
+						Open = Door;
+						break;
+					}
+				}
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: O: %d door(s) made from the kit's open leaves"), Doors->GetOpenKitDoors());
+			if (!Open)
+			{
+				Next(*State, 26); // the grey map: open doorways have no leaf (nothing to click)
+				return true;
+			}
+			const float Side = [&]() { FVector P; return OnNav(World, Open->GetActorLocation() + Open->GetNormal() * 250.f, P) ? 1.f : -1.f; }();
+			FVector Stand;
+			OnNav(World, Open->GetActorLocation() + Open->GetNormal() * (Side * 250.f), Stand);
+			Squad->EnterSoloMode();
+			Teleport(*Leader, Stand, -Open->GetNormal() * Side);
+			State->OpenDoor = Open;
+			State->OpenSide = Side;
+			Next(*State, 24);
+			return true;
+		}
+		case 24:
+		{
+			ADoorActor* Open = State->OpenDoor.Get();
+			if (!Open)
+			{
+				return Finish(*State, false);
+			}
+			if (State->StageTime < 1.f)
+			{
+				return true;
+			}
+			if (State->StageTime < 1.05f)
+			{
+				// The cursor ray from the camera side down through the middle of the open leaf to the floor behind it (no collision on it).
+				const FVector LeafMid = Open->GetLeafFootprintMid(0) + FVector(0.f, 0.f, 120.f);
+				const FVector From = LeafMid + Open->GetNormal() * (State->OpenSide * 300.f) + FVector(0.f, 0.f, 600.f);
+				const FVector Floor = LeafMid + (LeafMid - From) * (120.f / 600.f);
+				FHitResult Hit(nullptr, nullptr, Floor, FVector::UpVector);
+				Hit.bBlockingHit = true;
+				Hit.Location = Floor;
+				Hit.TraceStart = From;
+				Hit.TraceEnd = Floor;
+				Check(*State, Doors->FindClickedDoor(Hit) == Open, TEXT("O: the cursor ray through the open kit leaf is the door"));
+				PC->HandlePlayerClick(Hit);
+				return true;
+			}
+			if (Open->GetDoorState() != EDoorLeafState::Closed && State->StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(*State, Open->GetDoorState() == EDoorLeafState::Closed && !Leader->bInCover,
+				FString::Printf(TEXT("O: the click shut the initially open door (%s, in cover %d, %.1f s)"), DoorRules::StateName(Open->GetDoorState()), Leader->bInCover ? 1 : 0,
+					State->StageTime));
+			Next(*State, 25);
+			return true;
+		}
+		case 25:
+		{
+			ADoorActor* Open = State->OpenDoor.Get();
+			if (State->StageTime < 1.f)
+			{
+				return true;
+			}
+			if (State->StageTime < 1.05f)
+			{
+				FHitResult Hit(Open, nullptr, Open->GetDoorwayCenter() + Open->GetNormal() * (State->OpenSide * 3.f), Open->GetNormal() * State->OpenSide);
+				Hit.bBlockingHit = true;
+				PC->HandlePlayerClick(Hit);
+				return true;
+			}
+			if (!Open->IsOpen() && State->StageTime < 15.f)
+			{
+				return true;
+			}
+			Check(*State, Open->IsOpen() && !Leader->bInCover, FString::Printf(TEXT("O: the click on the shut leaf opened it again (in cover %d, %.1f s)"),
+				Leader->bInCover ? 1 : 0, State->StageTime));
+			Next(*State, 26);
+			return true;
+		}
+		case 26:
+		{
+			if (State->StageTime < 1.5f)
+			{
+				return true; // the last clip's move is measured 0.3 s after its end
+			}
+			// RM: the clips' capsule moves (root motion) - each logged; open / push about their root travel, nothing pops back after the end.
+			{
+				int32 Measured = 0;
+				int32 Pops = 0;
+				int32 Off = 0;
+				for (const UDoorSubsystem::FClipMove& Move : Doors->GetClipMoves())
+				{
+					++Measured;
+					const bool bWalkIn = Move.Key.StartsWith(TEXT("open_")) || Move.Key.StartsWith(TEXT("push_"));
+					const bool bNear = Move.ExpectedCm <= 0.f || FMath::Abs(Move.ForwardCm - Move.ExpectedCm) <= 40.f;
+					Pops += Move.AfterEndCm > 10.f ? 1 : 0; // -1 = the next attempt followed at once (not a pop)
+					Off += bWalkIn && !bNear ? 1 : 0;
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: RM %s: %.0f cm forward, %.0f aside (root %.0f), %.0f cm after the end"), *Move.Key, Move.ForwardCm,
+						Move.SideCm, Move.ExpectedCm, Move.AfterEndCm);
+				}
+				const bool bRootClips = DoorTuning::Get().MontageRootCm.Num() > 0 && Doors->GetMontagesPlayed() > 0;
+				if (bRootClips)
+				{
+					Check(*State, Measured >= 5, FString::Printf(TEXT("RM: the clips' capsule moves were measured (%d)"), Measured));
+					// The travel against the clip's root is reported (the root-motion precision is still in work: a start inside the slack or a
+					// burst still running shortens it); a pop back after the end fails below.
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: RM: open / push off the clip's root travel by > 40 cm: %d of %d"), Off, Measured);
+				}
+				Check(*State, Pops == 0, FString::Printf(TEXT("RM: no clip popped back after its end (%d of %d moved > 10 cm after it)"), Pops, Measured));
+			}
+			// Every kick attempt faced the leaf (the designer's "first kick at the door, the second into the air").
+			{
+				int32 Kicks = 0;
+				float Worst = 0.f;
+				for (const float Facing : Doors->GetKickFacings())
+				{
+					++Kicks;
+					Worst = FMath::Max(Worst, Facing);
+				}
+				for (const UDoorSubsystem::FClipMove& Move : Doors->GetClipMoves())
+				{
+					if (Move.Key.StartsWith(TEXT("kick_")))
+					{
+						Worst = FMath::Max(Worst, Move.StartFacingErrorDeg);
+					}
+				}
+				if (Doors->GetMontagesPlayed() > 0)
+				{
+					Check(*State, Kicks >= 2 && Worst < 15.f, FString::Printf(TEXT("O: every kick attempt faced the leaf (%d kicks, worst %.0f deg at a start / an impact)"), Kicks,
+						Worst));
+				}
+			}
 			// G: the switch off.
 			SetDoorsSwitch(0);
 			Next(*State, 15);
@@ -938,6 +1128,7 @@ namespace DoorsSmoke
 		}
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->World = World;
+		State->bShots = Args.Contains(TEXT("shots"));
 		for (const TCHAR* Name : { TEXT("Codex.Pressure.Enabled"), TEXT("Codex.Pmc.Encounters"), TEXT("Codex.Combat.UnderFireManoeuvre") })
 		{
 			if (IConsoleVariable* Variable = IConsoleManager::Get().FindConsoleVariable(Name))

@@ -22,6 +22,7 @@
 #include "Tactics/TurnBasedCombatSubsystem.h"
 #include "Tutorial/TutorialSubsystem.h"
 #include "GameFlow/GameFlowSubsystem.h"
+#include "Interactables/DoorSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/LootCrateActor.h"
 #include "Interactables/RelocationSubsystem.h"
@@ -436,7 +437,10 @@ void ACodexTacticsPlayerController::PlayerTick(float DeltaTime)
 		}
 		// 2026-10-26: a fallen operative's remains (his body) under the cursor show the hand too - a click searches him.
 		const ALootCrateActor* HoveredRemains = bCursorHit ? Cast<ALootCrateActor>(TrapHit.GetActor()) : nullptr;
-		const bool bTrap = bCursorHit && (HoveredExit || Cast<ATripwireActor>(TrapHit.GetActor()) || (HoveredRemains && HoveredRemains->IsRemains())
+		// Openable doors (switch on): a door leaf / its doorway under the cursor shows the hand - a click works the door (never a cover hug).
+		const UDoorSubsystem* HoverDoors = GetWorld()->GetSubsystem<UDoorSubsystem>();
+		const bool bDoorHover = bCursorHit && HoverDoors && HoverDoors->IsActive() && HoverDoors->FindClickedDoor(TrapHit) != nullptr;
+		const bool bTrap = bCursorHit && (bDoorHover || HoveredExit || Cast<ATripwireActor>(TrapHit.GetActor()) || (HoveredRemains && HoveredRemains->IsRemains())
 			|| (!Cast<APawn>(TrapHit.GetActor()) && !Cast<AInteractableActor>(TrapHit.GetActor())
 				&& ATripwireActor::FindClickableWireNear(GetWorld(), TrapHit.ImpactPoint)));
 		if (bTrap != bTrapHoverCursor)

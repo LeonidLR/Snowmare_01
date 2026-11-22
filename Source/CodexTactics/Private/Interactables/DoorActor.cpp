@@ -3,10 +3,12 @@
 #include "AI/StealthLureSubsystem.h"
 #include "CodexTactics.h"
 #include "Components/BoxComponent.h"
+#include "Components/CapsuleComponent.h"
 #include "Components/InstancedStaticMeshComponent.h"
 #include "Components/StaticMeshComponent.h"
 #include "Core/PlayerCommands.h"
 #include "Engine/StaticMesh.h"
+#include "Engine/OverlapResult.h"
 #include "Engine/World.h"
 #include "NavAreas/NavArea_Null.h"
 #include "NavigationSystem.h"
@@ -439,8 +441,32 @@ FVector ADoorActor::GetApproachPoint(const FVector& From) const
 
 bool ADoorActor::IsDoorwayOccupied() const
 {
+	// Only a pawn's CAPSULE counts (a skeletal mesh on the Pawn channel - an arm of the man who just opened it - is no body in the doorway).
+	TArray<FOverlapResult> Overlaps;
 	const FCollisionShape Shape = FCollisionShape::MakeBox(FVector(Setup_.WidthCm * 0.5f, DoorActorLocal::DoorwayHalfDepthCm, Setup_.HeightCm * 0.5f - 5.f));
-	return GetWorld()->OverlapAnyTestByObjectType(GetDoorwayCenter(), GetActorQuat(), FCollisionObjectQueryParams(ECC_Pawn), Shape);
+	GetWorld()->OverlapMultiByObjectType(Overlaps, GetDoorwayCenter(), GetActorQuat(), FCollisionObjectQueryParams(ECC_Pawn), Shape);
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		if (Cast<UCapsuleComponent>(Overlap.GetComponent()))
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+FString ADoorActor::DescribeDoorwayOccupants() const
+{
+	TArray<FOverlapResult> Overlaps;
+	const FCollisionShape Shape = FCollisionShape::MakeBox(FVector(Setup_.WidthCm * 0.5f, DoorActorLocal::DoorwayHalfDepthCm, Setup_.HeightCm * 0.5f - 5.f));
+	GetWorld()->OverlapMultiByObjectType(Overlaps, GetDoorwayCenter(), GetActorQuat(), FCollisionObjectQueryParams(ECC_Pawn), Shape);
+	TArray<FString> Names;
+	for (const FOverlapResult& Overlap : Overlaps)
+	{
+		const UPrimitiveComponent* Component = Overlap.GetComponent();
+		Names.AddUnique(FString::Printf(TEXT("%s.%s"), Overlap.GetActor() ? *Overlap.GetActor()->GetName() : TEXT("?"), Component ? *Component->GetName() : TEXT("?")));
+	}
+	return FString::Join(Names, TEXT(", "));
 }
 
 FVector ADoorActor::GetLeafFootprintMid(int32 LeafIndex) const
@@ -465,6 +491,26 @@ bool ADoorActor::IsNearOpenLeaf(const FVector& Point) const
 		const FVector End = Start + Hinge->GetForwardVector() * (Index == 0 ? LeafWidth : -LeafWidth);
 		const FVector Closest = FMath::ClosestPointOnSegment(FVector(Point.X, Point.Y, Start.Z), Start, FVector(End.X, End.Y, Start.Z));
 		if (FVector::Dist2D(Closest, Point) <= Snap)
+		{
+			return true;
+		}
+	}
+	return false;
+}
+
+bool ADoorActor::IsRayOnOpenLeaf(const FVector& Start, const FVector& End) const
+{
+	if (State != EDoorLeafState::Open || bBroken)
+	{
+		return false;
+	}
+	const float LeafWidth = Setup_.WidthCm / LeafCount;
+	for (int32 Index = 0; Index < LeafCount; ++Index)
+	{
+		const USceneComponent* Hinge = Index == 0 ? HingeA.Get() : HingeB.Get();
+		const FTransform Xf = Hinge->GetComponentTransform();
+		if (DoorRules::RayHitsLeaf(Xf.InverseTransformPosition(Start), Xf.InverseTransformPosition(End), LeafWidth, FMath::Max(Setup_.ThicknessCm, 5.f),
+			Setup_.HeightCm, Index == 1, 10.f))
 		{
 			return true;
 		}

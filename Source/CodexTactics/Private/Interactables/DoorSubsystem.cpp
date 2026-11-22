@@ -48,6 +48,12 @@ namespace DoorSubsystemLocal
 	constexpr float BashReachSlackCm = 60.f;
 	/** A path whose end lies this close to its goal was not cut short. */
 	constexpr float PathShortCm = 150.f;
+	/** A close order stands this far in front of the leaf plane, and acts only once his feet are OutOfDoorwayCm out of it (his 40 cm capsule
+	 * clear of the doorway's 45 cm occupancy box). */
+	constexpr float CloseStandCm = 140.f;
+	constexpr float OutOfDoorwayCm = 90.f;
+	/** A floor click this close to a SHUT door's leaf plane (within its width) is a click on the door. */
+	constexpr float ShutDoorSnapCm = 45.f;
 	/** The clip log keeps this many entries (smokes index into it). */
 	constexpr int32 ClipLogMax = 256;
 	/** A monster's "path stopped by that door" note counts this long, s. */
@@ -192,6 +198,8 @@ void UDoorSubsystem::Tick(float DeltaTime)
 	TickBreachDetection(DeltaTime);
 	TickBashes(DeltaTime);
 	TickResumes(DeltaTime);
+	TickClipWatches();
+	TickFacingLocks();
 }
 
 int32 UDoorSubsystem::AdoptLeaves()
@@ -290,6 +298,8 @@ int32 UDoorSubsystem::AdoptLeaves()
 		Doors.Add(Door);
 		++Made;
 	}
+	OpenKitDoors = AdoptKitOpenLeaves();
+	Made += OpenKitDoors;
 	Held.Init(0.f, Doors.Num());
 	Keys.Reset();
 	for (const FString& Key : Tuning.StartKeys)
@@ -303,9 +313,89 @@ int32 UDoorSubsystem::AdoptLeaves()
 	GiveUps.Reset();
 	BreachCheckIn = 0.f;
 	ExplosionHandle = Explosions::OnDetonated().AddUObject(this, &UDoorSubsystem::HandleExplosion);
-	UE_LOG(LogCodexTactics, Display, TEXT("Doors: R1 on - %d door(s) from %d leaf actor(s) (auto-open %.2f s, kick %s, %d start key(s), %d found); kit-dressed: %d / %d hidden-proxy door(s) got %d kit leaf instance(s); breach %s, roll seed %d"),
-		Made, Leaves.Num(), Tuning.AutoOpenDelaySeconds, Tuning.bKickEnabled ? TEXT("on") : TEXT("off"), Keys.Num(), FoundKeys.Num(), KitDoors, HiddenProxyDoors,
+	UE_LOG(LogCodexTactics, Display, TEXT("Doors: R1 on - %d door(s) from %d leaf actor(s) + %d open kit doorway(s) (auto-open %.2f s, kick %s, %d start key(s), %d found); kit-dressed: %d / %d hidden-proxy door(s) got %d kit leaf instance(s); breach %s, roll seed %d"),
+		Made, Leaves.Num(), OpenKitDoors, Tuning.AutoOpenDelaySeconds, Tuning.bKickEnabled ? TEXT("on") : TEXT("off"), Keys.Num(), FoundKeys.Num(), KitDoors, HiddenProxyDoors,
 		KitInstancesLifted, Tuning.bBreachEnabled ? TEXT("on") : TEXT("off"), DoorTuning::GetRollSeed());
+	return Made;
+}
+
+int32 UDoorSubsystem::AdoptKitOpenLeaves()
+{
+	UWorld* World = GetWorld();
+	int32 Made = 0;
+	for (TActorIterator<AActor> It(World); It; ++It)
+	{
+		FString BuildingId;
+		if (!DoorRules::FindTagValue(It->Tags, TEXT("kit_building"), BuildingId))
+		{
+			continue;
+		}
+		TInlineComponentArray<UInstancedStaticMeshComponent*> Components(*It);
+		for (UInstancedStaticMeshComponent* Component : Components)
+		{
+			if (!Component->GetStaticMesh() || !Component->ComponentTags.Contains(FName(TEXT("kit_part=door_leaf_open"))))
+			{
+				continue;
+			}
+			FString FloorText;
+			int32 Floor = 0;
+			if (DoorRules::FindTagValue(Component->ComponentTags, TEXT("floor"), FloorText))
+			{
+				LexFromString(Floor, *FloorText);
+			}
+			const FBoxSphereBounds Bounds = Component->GetStaticMesh()->GetBounds();
+			TArray<FDoorKitLeafPiece> Pieces;
+			TArray<FTransform> Transforms;
+			for (int32 Index = 0; Index < Component->GetInstanceCount(); ++Index)
+			{
+				FTransform Instance;
+				if (!Component->GetInstanceTransform(Index, Instance, /*bWorldSpace*/ true) || Instance.GetScale3D().GetMin() < 0.01)
+				{
+					continue;
+				}
+				FDoorKitLeafPiece& Piece = Pieces.AddDefaulted_GetRef();
+				Piece.Hinge = FVector2D(Instance.GetLocation());
+				Piece.Along = FVector2D(Instance.GetUnitAxis(EAxis::X)).GetSafeNormal();
+				Piece.Right = FVector2D(Instance.GetUnitAxis(EAxis::Y)).GetSafeNormal();
+				Piece.WidthCm = static_cast<float>(Bounds.BoxExtent.X * 2.0 * FMath::Abs(Instance.GetScale3D().X));
+				Transforms.Add(Instance);
+			}
+			for (const FDoorKitDoorway& Doorway : DoorRules::PairKitOpenLeaves(Pieces))
+			{
+				const FTransform& First = Transforms[Doorway.LeafA];
+				const float HeightCm = static_cast<float>(Bounds.BoxExtent.Z * 2.0 * FMath::Abs(First.GetScale3D().Z));
+				const FVector Center(Doorway.Center.X, Doorway.Center.Y, First.GetLocation().Z);
+				if (Doorway.WidthCm < 30.f || HeightCm < 100.f || FindNearestDoor(Center + FVector(0.f, 0.f, 50.f), 40.f))
+				{
+					continue;
+				}
+				FDoorSetup Setup;
+				Setup.WidthCm = Doorway.WidthCm;
+				Setup.HeightCm = HeightCm;
+				Setup.ThicknessCm = 5.f;
+				Setup.Frame = FTransform(FRotator(0.f, FVector(Doorway.Tangent, 0.f).Rotation().Yaw, 0.f), Center);
+				Setup.State = EDoorLeafState::Open;
+				Setup.BuildingId = BuildingId;
+				Setup.Floor = Floor;
+				Setup.bVisualHidden = true; // the kit's own open leaves are lifted onto the hinges
+				FActorSpawnParameters Params;
+				Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+				ADoorActor* Door = World->SpawnActor<ADoorActor>(ADoorActor::StaticClass(), Setup.Frame, Params);
+				if (!Door)
+				{
+					continue;
+				}
+				Door->Setup(Setup);
+				Door->Tags.Add(FName(*FString::Printf(TEXT("building=%s"), *BuildingId)));
+				Door->Tags.Add(FName(*FString::Printf(TEXT("floor=%d"), Floor)));
+				Door->Tags.Add(FName(TEXT("door_actor")));
+				Door->Tags.Add(FName(TEXT("door_from_kit_open_leaf")));
+				LiftKitLeaves(*Door);
+				Doors.Add(Door);
+				++Made;
+			}
+		}
+	}
 	return Made;
 }
 
@@ -496,11 +586,21 @@ ADoorActor* UDoorSubsystem::FindClickedDoor(const FHitResult& Hit) const
 	{
 		return Door;
 	}
+	const bool bRay = !Hit.TraceStart.IsNearlyZero() && !Hit.TraceStart.Equals(Hit.ImpactPoint, 1.0);
 	for (ADoorActor* Door : Doors)
 	{
-		if (Door && Door->IsNearOpenLeaf(Hit.ImpactPoint))
+		if (!Door)
 		{
-			return Door;
+			continue;
+		}
+		if (Door->IsOpen() && (Door->IsNearOpenLeaf(Hit.ImpactPoint) || (bRay && Door->IsRayOnOpenLeaf(Hit.TraceStart, Hit.ImpactPoint))))
+		{
+			return Door; // an open leaf (its collision is off): the ray through it or the floor by it
+		}
+		if (!Door->IsOpen() && Door->IsAtDoorLevel(Hit.ImpactPoint)
+			&& DoorRules::IsInShutDoorwaySnap(Door->ToLocal(Hit.ImpactPoint), Door->GetWidthCm() * 0.5f, DoorSubsystemLocal::ShutDoorSnapCm))
+		{
+			return Door; // the floor in / right at a shut doorway
 		}
 	}
 	return nullptr;
@@ -689,11 +789,26 @@ bool UDoorSubsystem::WalkUp(FPendingOrder& Order, AOperativeCharacter& Operative
 	case EDoorAction::Blast:
 		Order.Approach = Door.GetActorLocation() + Door.GetNormal() * (Side * Tuning.BlastStandCm);
 		break;
+	case EDoorAction::Open:
+	case EDoorAction::Kick:
+	{
+		// R2 root motion: he starts the clip at its start pose, square to the leaf (montage_approach_cm) - the clip walks him to the leaf.
+		const EDoorClip Clip = ClipOf(Order, Door);
+		Order.bClipApproach = DoorRules::HasClipApproach(Clip, DoorTuning::Get()) && UsesRootMotionClips(Operative);
+		Order.Approach = Door.GetActorLocation() + Door.GetNormal() * (Side * (Order.bClipApproach ? DoorRules::GetClipApproachCm(Clip, DoorTuning::Get())
+			: DoorTuning::Get().ApproachCm));
+		break;
+	}
+	case EDoorAction::Close:
+		// Out of the doorway first (the open clip leaves him in it): the doorway's occupancy box must be clear of his capsule.
+		Order.Approach = Door.GetActorLocation() + Door.GetNormal() * (Side * DoorSubsystemLocal::CloseStandCm);
+		break;
 	default:
 		Order.Approach = Order.BreachSide != 0.f ? Door.GetActorLocation() + Door.GetNormal() * (Side * DoorTuning::Get().ApproachCm) : Door.GetApproachPoint(Feet);
 		break;
 	}
 	Order.WorkLeft = -1.f;
+	Order.WalkAge = 0.f;
 	if (IsInReach(Order, Operative, Door))
 	{
 		return true;
@@ -727,9 +842,26 @@ bool UDoorSubsystem::IsInReach(const FPendingOrder& Order, const AOperativeChara
 		const float Cm = static_cast<float>(FVector::Dist2D(Feet, Door.GetActorLocation()));
 		return Cm >= Tuning.BlastStandCm * 0.8f && Cm <= Tuning.BlastStandCm * 1.6f && Door.IsAtDoorLevel(Feet);
 	}
+	if (Order.bClipApproach && (Order.Action == EDoorAction::Open || Order.Action == EDoorAction::Kick))
+	{
+		// At the clip's start pose; or (the walk could not get there) standing still by the door after a moment.
+		const bool bAtStart = FVector::Dist2D(Feet, Order.Approach) <= Tuning.MontageApproachSlackCm;
+		const bool bStuckNear = Order.WalkAge >= 1.5f && !Operative.IsMoving()
+			&& FVector::Dist2D(Feet, Door.GetActorLocation()) <= DoorRules::GetClipApproachCm(ClipOf(Order, Door), Tuning) + 100.f;
+		return (bAtStart || bStuckNear) && Door.IsAtDoorLevel(Feet);
+	}
+	if (Order.Action == EDoorAction::Close)
+	{
+		// R2 root motion: the open clip leaves him in the doorway - he steps out of it (to the approach point) before he shuts the door.
+		const bool bOut = FMath::Abs(Door.ToLocal(Feet).Y) >= DoorSubsystemLocal::OutOfDoorwayCm;
+		const bool bNear = FVector::Dist2D(Feet, Door.GetActorLocation()) <= Tuning.InteractReachCm
+			|| (Order.WalkAge >= 1.5f && !Operative.IsMoving() && FVector::Dist2D(Feet, Door.GetActorLocation()) <= DoorSubsystemLocal::CloseStandCm + 100.f);
+		return bOut && bNear && Door.IsAtDoorLevel(Feet);
+	}
 	if (Order.Action != EDoorAction::ShootLock)
 	{
-		return FVector::Dist2D(Feet, Door.GetActorLocation()) <= Tuning.InteractReachCm && Door.IsAtDoorLevel(Feet);
+		const bool bStoppedNear = Order.WalkAge >= 1.5f && !Operative.IsMoving() && FVector::Dist2D(Feet, Door.GetActorLocation()) <= Tuning.InteractReachCm + 100.f;
+		return (FVector::Dist2D(Feet, Door.GetActorLocation()) <= Tuning.InteractReachCm || bStoppedNear) && Door.IsAtDoorLevel(Feet);
 	}
 	// The lock shot: in range with a clear line from his chest to the lock (the leaf itself is the only thing it may hit).
 	const FVector Eye = Operative.GetActorLocation() + FVector(0.f, 0.f, 50.f);
@@ -753,7 +885,7 @@ EDoorSide UDoorSubsystem::HandSideFor(const AActor& Pawn, const ADoorActor& Door
 	return DoorRules::ChooseHandSide(Door.ToLocal(Pawn.GetActorLocation()), Door.GetHandleLocalX(), DoorTuning::Get().bMontageSwapLR);
 }
 
-float UDoorSubsystem::PlayClip(ACharacter& Pawn, EDoorClip Clip, EDoorSide Side)
+float UDoorSubsystem::PlayClip(ACharacter& Pawn, EDoorClip Clip, EDoorSide Side, const ADoorActor* Door)
 {
 	const FString Key = DoorRules::ClipKey(Clip, Side);
 	ClipLog.Add(Key);
@@ -790,6 +922,25 @@ float UDoorSubsystem::PlayClip(ACharacter& Pawn, EDoorClip Clip, EDoorSide Side)
 	{
 		++MontagesPlayed;
 		LastMontageName = Asset->GetName();
+		for (FClipWatch& Earlier : ClipWatches)
+		{
+			if (Earlier.Pawn.Get() == &Pawn)
+			{
+				Earlier.bFollowed = true; // the next attempt starts before the earlier one's after-end sample
+			}
+		}
+		FClipWatch& Watch = ClipWatches.AddDefaulted_GetRef();
+		Watch.Pawn = &Pawn;
+		Watch.Key = Key;
+		Watch.Start = DoorSubsystemLocal::FeetOf(Pawn);
+		Watch.Forward = Pawn.GetActorForwardVector().GetSafeNormal2D();
+		Watch.EndAt = GetWorld()->GetTimeSeconds() + Length;
+		const float* Expected = DoorTuning::Get().MontageRootCm.Find(DoorRules::ClipKindName(Clip));
+		Watch.ExpectedCm = Expected && UsesRootMotionClips(Pawn) ? *Expected : 0.f;
+		Watch.Last = Watch.Start;
+		Watch.Door = Door;
+		Watch.StartFacingErrorDeg = Door ? DoorRules::FacingErrorDeg(FVector2D(Pawn.GetActorForwardVector()), Door->ToLocal(Pawn.GetActorLocation()),
+			FVector2D(Door->GetNormal())) : 0.f;
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s plays %s (%s, skeleton %s, %.2f s)"), *Pawn.GetName(), *Asset->GetName(), *Key, *Skeleton, Length);
 	return Length;
@@ -805,6 +956,122 @@ float UDoorSubsystem::RollFor(float& Forced, const ADoorActor& Door, const AActo
 	}
 	const FString DoorId = Door.GetBuildingId() + TEXT("/") + Door.GetOpeningId() + (Door.GetOpeningId().IsEmpty() ? Door.GetName() : FString());
 	return DoorRules::DeterministicRoll(DoorTuning::GetRollSeed(), DoorRules::RollSalt(DoorId, Pawn.GetName(), Attempt, What));
+}
+
+bool UDoorSubsystem::UsesRootMotionClips(const ACharacter& Pawn) const
+{
+	// The operatives' default set (UE4 copies, root motion baked) moves the capsule; a skeleton with its own set (the PMC body: the pack's
+	// clips by bone name) plays them in place for now - its root motion does not come through the bone-name playback.
+	return Pawn.IsA<AOperativeCharacter>() && !DoorTuning::Get().MontageSets.Contains(DoorSubsystemLocal::SkeletonNameOf(Pawn));
+}
+
+EDoorClip UDoorSubsystem::ClipOf(const FPendingOrder& Order, const ADoorActor& Door) const
+{
+	return Order.Action == EDoorAction::Kick ? EDoorClip::Kick : DoorRules::ChooseOpenClip(Order.bPush || Door.IsLockForced());
+}
+
+void UDoorSubsystem::FaceDoor(AOperativeCharacter& Operative, const ADoorActor& Door) const
+{
+	// Square to the leaf plane, towards the leaf from his side; held by the facing lock (TickFacingLocks) for the whole door work.
+	const float Side = Door.ToLocal(Operative.GetActorLocation()).Y >= 0.f ? 1.f : -1.f;
+	const float Yaw = (-Door.GetNormal() * Side).Rotation().Yaw;
+	Operative.SetActorRotation(FRotator(0.f, Yaw, 0.f));
+	Operative.SetDoorFacingLock(Yaw);
+}
+
+void UDoorSubsystem::TickFacingLocks()
+{
+	TMap<TWeakObjectPtr<AOperativeCharacter>, float> Now;
+	const double Time = GetWorld()->GetTimeSeconds();
+	for (const FPendingOrder& Order : Orders)
+	{
+		AOperativeCharacter* Operative = Order.Operative.Get();
+		const ADoorActor* Door = Order.Door.Get();
+		if (Operative && Door && Order.WorkLeft >= 0.f)
+		{
+			// At work (also between two kicks): square to the leaf from his side.
+			const float Side = Door->ToLocal(Operative->GetActorLocation()).Y >= 0.f ? 1.f : -1.f;
+			Now.Add(Operative, (Order.Action == EDoorAction::ShootLock ? (Door->GetLockPoint() - Operative->GetActorLocation()).GetSafeNormal2D()
+				: -Door->GetNormal() * Side).Rotation().Yaw);
+		}
+	}
+	for (const FClipWatch& Watch : ClipWatches)
+	{
+		AOperativeCharacter* Operative = Cast<AOperativeCharacter>(Watch.Pawn.Get());
+		if (Operative && Time < Watch.EndAt && !Now.Contains(Operative))
+		{
+			Now.Add(Operative, Watch.Forward.Rotation().Yaw); // the rest of a clip that moved him (root motion): his clip facing
+		}
+	}
+	for (const TPair<TWeakObjectPtr<AOperativeCharacter>, float>& Old : FacingLocks)
+	{
+		if (AOperativeCharacter* Operative = Old.Key.Get(); Operative && !Now.Contains(Old.Key))
+		{
+			Operative->SetDoorFacingLock(TOptional<float>()); // released: the door work is over
+		}
+	}
+	for (const TPair<TWeakObjectPtr<AOperativeCharacter>, float>& Lock : Now)
+	{
+		if (AOperativeCharacter* Operative = Lock.Key.Get())
+		{
+			Operative->SetDoorFacingLock(Lock.Value);
+		}
+	}
+	FacingLocks = MoveTemp(Now);
+}
+
+void UDoorSubsystem::TickClipWatches()
+{
+	const double Now = GetWorld()->GetTimeSeconds();
+	for (int32 Index = ClipWatches.Num() - 1; Index >= 0; --Index)
+	{
+		FClipWatch& Watch = ClipWatches[Index];
+		ACharacter* Pawn = Watch.Pawn.Get();
+		if (!Pawn)
+		{
+			ClipWatches.RemoveAt(Index);
+			continue;
+		}
+		const FVector Feet = DoorSubsystemLocal::FeetOf(*Pawn);
+		if (FVector::Dist2D(Feet, Watch.Last) > 60.f)
+		{
+			Watch.bTeleported = true; // a jump in one tick: teleported (a smoke stage), not the clip
+		}
+		Watch.Last = Feet;
+		if (!Watch.bPre && Now >= Watch.EndAt - 0.1)
+		{
+			Watch.bPre = true;
+			Watch.Pre = Feet;
+		}
+		if (Now < Watch.EndAt + 0.3)
+		{
+			continue;
+		}
+		if (Watch.bTeleported)
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s %s - teleported meanwhile, its move not measured"), *Pawn->GetName(), *Watch.Key);
+			ClipWatches.RemoveAt(Index);
+			continue;
+		}
+		const FVector Move = Watch.Pre - Watch.Start;
+		FClipMove Result;
+		Result.Key = Watch.Key;
+		Result.ForwardCm = static_cast<float>(FVector::DotProduct(Move, Watch.Forward));
+		Result.SideCm = static_cast<float>(FVector::DotProduct(Move, FVector::CrossProduct(FVector::UpVector, Watch.Forward)));
+		Result.AfterEndCm = Watch.bFollowed ? -1.f : static_cast<float>(FVector::Dist2D(Feet, Watch.Pre));
+		Result.ExpectedCm = Watch.ExpectedCm;
+		Result.StartFacingErrorDeg = Watch.StartFacingErrorDeg;
+		const ADoorActor* WatchDoor = Watch.Door.Get();
+		UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s %s moved %.0f cm forward, %.0f cm aside (clip root %.0f cm); start %s, end %s, %.0f cm after the end; from the leaf plane %.0f -> %.0f cm"),
+			*Pawn->GetName(), *Watch.Key, Result.ForwardCm, Result.SideCm, Result.ExpectedCm, *Watch.Start.ToCompactString(), *Watch.Pre.ToCompactString(),
+			Result.AfterEndCm, WatchDoor ? WatchDoor->ToLocal(Watch.Start).Y : 0.f, WatchDoor ? WatchDoor->ToLocal(Watch.Pre).Y : 0.f);
+		ClipMoves.Add(Result);
+		if (ClipMoves.Num() > 64)
+		{
+			ClipMoves.RemoveAt(0);
+		}
+		ClipWatches.RemoveAt(Index);
+	}
 }
 
 void UDoorSubsystem::AddTrace(const AActor* Pawn, const FString& Step)
@@ -828,8 +1095,8 @@ FString UDoorSubsystem::GetBreachTrace(const AActor* Pawn) const
 void UDoorSubsystem::StartKickAttempt(FPendingOrder& Order, AOperativeCharacter& Operative, ADoorActor& Door)
 {
 	const EDoorSide Leg = DoorRules::ChooseKickLeg(Order.KickFirst, Order.Attempts);
-	Operative.FaceAimAt(Door.GetLockPoint());
-	Order.ClipSeconds = PlayClip(Operative, EDoorClip::Kick, Leg);
+	FaceDoor(Operative, Door);
+	Order.ClipSeconds = PlayClip(Operative, EDoorClip::Kick, Leg, &Door);
 	Order.WorkLeft = DoorRules::GetContactSeconds(EDoorClip::Kick, Order.ClipSeconds > 0.f, DoorTuning::Get());
 	Order.bRecover = false;
 }
@@ -852,16 +1119,18 @@ bool UDoorSubsystem::Act(FPendingOrder& Order)
 			return true; // open already (somebody walked through), or locked meanwhile
 		}
 		Operative->StopOperative();
-		Operative->FaceAimAt(Door->GetLockPoint());
+		FaceDoor(*Operative, *Door);
 		// R2: the push after the key / a shot lock, the hand open otherwise; the leaf moves at the clip's contact time.
-		const EDoorClip Clip = DoorRules::ChooseOpenClip(Order.bPush || Door->IsLockForced());
-		Order.ClipSeconds = PlayClip(*Operative, Clip, HandSideFor(*Operative, *Door));
+		const EDoorClip Clip = ClipOf(Order, *Door);
+		Order.ClipSeconds = PlayClip(*Operative, Clip, HandSideFor(*Operative, *Door), Door);
 		Order.WorkLeft = DoorRules::GetContactSeconds(Clip, Order.ClipSeconds > 0.f, Tuning);
 		break;
 	}
 	case EDoorAction::Close:
 		if (!Door->CloseDoor(Operative) && Door->IsOpen() && !Door->IsBroken())
 		{
+			UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s cannot shut %s - %s (in the doorway: %s)"), *Operative->GetName(), *Door->GetName(),
+				Door->IsSwinging() ? TEXT("it swings") : TEXT("somebody in the doorway"), *Door->DescribeDoorwayOccupants());
 			PostLine(LOCTEXT("Doorway", "Somebody is in the doorway."));
 		}
 		return true;
@@ -950,7 +1219,12 @@ bool UDoorSubsystem::FinishWork(FPendingOrder& Order)
 			}
 			Order.Action = EDoorAction::Open;
 			Order.bPush = true;
-			return Act(Order);
+			// R2 root motion: the push starts at its own start pose (montage_approach_cm push) - he steps back to it, then shoves the door.
+			if (!WalkUp(Order, *Operative, *Door, false))
+			{
+				return true;
+			}
+			return IsInReach(Order, *Operative, *Door) ? Act(Order) : false;
 		}
 		return true;
 	case EDoorAction::ShootLock:
@@ -1005,10 +1279,23 @@ bool UDoorSubsystem::FinishWork(FPendingOrder& Order)
 			RollFor(KickRollForTesting, *Door, *Operative, Order.Attempts, TEXT("kick")),
 			RollFor(InjuryRollForTesting, *Door, *Operative, Order.Attempts, TEXT("injury")), Tuning);
 		const EDoorSide Leg = DoorRules::ChooseKickLeg(Order.KickFirst, Order.Attempts);
+		const float ImpactFacing = DoorRules::FacingErrorDeg(FVector2D(Operative->GetActorForwardVector()), Door->ToLocal(Operative->GetActorLocation()),
+			FVector2D(Door->GetNormal()));
+		for (int32 W = ClipWatches.Num() - 1; W >= 0; --W)
+		{
+			if (ClipWatches[W].Pawn.Get() == Operative)
+			{
+				ClipWatches[W].StartFacingErrorDeg = FMath::Max(ClipWatches[W].StartFacingErrorDeg, ImpactFacing); // the worse of start / impact
+				break;
+			}
+		}
+		LastKickImpactFacingDeg = ImpactFacing;
+		KickFacings.Add(ImpactFacing);
 		++Order.Attempts;
 		++KickAttempts;
-		UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s kicks %s (attempt %d/%d, %s leg%s): open %.2f -> %s, injury %.2f -> %s"), *Operative->GetName(), *Door->GetName(),
-			Order.Attempts, Tuning.KickMaxAttempts, Leg == EDoorSide::Left ? TEXT("left") : TEXT("right"), Door->IsHeavy() ? TEXT(", heavy") : TEXT(""),
+		UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s kicks %s (attempt %d/%d, %s leg, facing off the leaf %.0f deg%s): open %.2f -> %s, injury %.2f -> %s"),
+			*Operative->GetName(), *Door->GetName(), Order.Attempts, Tuning.KickMaxAttempts, Leg == EDoorSide::Left ? TEXT("left") : TEXT("right"), ImpactFacing,
+			Door->IsHeavy() ? TEXT(", heavy") : TEXT(""),
 			Kick.OpenChance, Kick.bOpens ? TEXT("gives") : TEXT("holds"), Kick.InjuryChance, Kick.bInjures ? TEXT("hurt") : TEXT("fine"));
 		if (Order.bBreach)
 		{
@@ -1120,6 +1407,7 @@ void UDoorSubsystem::TickOrders(float DeltaTime)
 		ADoorActor* Door = Order.Door.Get();
 		AOperativeCharacter* Operative = Order.Operative.Get();
 		Order.Age += DeltaTime;
+		Order.WalkAge += DeltaTime;
 		const float Budget = Tuning.InteractTimeoutSeconds + Tuning.UnlockSeconds + Tuning.KickSeconds * Tuning.KickMaxAttempts
 			+ (Order.bBreach ? Tuning.InteractTimeoutSeconds * 2.f : 0.f);
 		if (!Door || !Operative || Order.Age > Budget || !IsAlive(Operative))

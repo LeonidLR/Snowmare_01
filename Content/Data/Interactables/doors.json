@@ -65,6 +65,10 @@
     }
   },
   "montage_contact_s": { "open": 0.73, "kick": 0.55, "push": 0.8 },
+  "_comment_r2_root_motion": "Root motion (designer 2026-11-22, option a): the clips move the capsule (the pelvis travel baked into the root by setup_door_animation.py). montage_root_cm: the clip's root travel (operatives' copies; the PMC's are 74 / 105 / 196) - the smokes check the capsule's move against it. montage_approach_cm: he starts the clip this far in front of the leaf plane, square to it (its start pose): the root reaches the leaf at the contact (open 42, kick 21, push 188 cm of travel) and he ends at the doorway (open 14, push 26 cm in front of the plane; a kick that gives carries him through, one that holds stops at the leaf). He starts once within montage_approach_slack_cm of the start point.",
+  "montage_root_cm": { "open": 81, "kick": 115, "push": 214 },
+  "montage_approach_cm": { "open": 95, "kick": 95, "push": 240 },
+  "montage_approach_slack_cm": 25,
   "_comment_r2_breach": "R2 enemies vs LOCKED doors (designer 2026-11-22: enemies do all the operatives' door actions). An enemy whose path (cut short: partial) ends within detect_cm of a locked doorway with its goal behind it - or, when the partial path stops elsewhere (a storey below the goal), a locked door at the goal's level within goal_door_cm of the goal, the goal behind it - breaches the door with its archetype's actions in this ESCALATION order: key (a key it carries: Codex/level data GiveKeyToPawn), shoot (a hostile operative's lock burst, lock_shot_chance of his weapon, up to lock_shots bursts), kick (kick_chance_*, up to kick_max_attempts, the noise, his injury rule), blast (a grenade thrown from blast_stand_cm, out of its own blast). Then it walks on to its goal. Ran out of actions = it leaves that door alone for give_up_s. pmc = the hostile operatives (the operative's own door work + clips); monsters bash in place (no clips) - shoot / blast are operative-only. An archetype not listed uses default. Rolls are deterministic: roll_seed (console Codex.Doors.Seed, -DoorSeed=) + door + pawn + attempt.",
   "breach": {
     "enabled": 1,
