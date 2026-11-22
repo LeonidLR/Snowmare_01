@@ -307,11 +307,39 @@ void ADoorActor::SetFixedSwing(float Sign, float OpenDeg)
 	}
 }
 
+void ADoorActor::SetSwingSides(float DegPlus, float DegMinus, bool bBlocksPlus, bool bBlocksMinus, float RestSign)
+{
+	bSwingSides = true;
+	bFixedSwing = false;
+	SideDegPlus_ = DegPlus;
+	SideDegMinus_ = DegMinus;
+	bBlocksPlus_ = bBlocksPlus;
+	bBlocksMinus_ = bBlocksMinus;
+	SwingSign_ = RestSign >= 0.f ? 1.f : -1.f;
+	OpenDeg_ = SwingSign_ > 0.f ? SideDegPlus_ : SideDegMinus_;
+	if (OpenAlpha > 0.f)
+	{
+		ApplyLeafPose(); // an open door (a kit-open leaf) stands on its rest side at once
+	}
+}
+
 void ADoorActor::GetOpenLeafSegments(TArray<TPair<FVector, FVector>>& OutSegments) const
 {
 	OutSegments.Reset();
 	TArray<TPair<FVector2D, FVector2D>> Local;
-	DoorRules::OpenLeafSegments(Setup_.WidthCm, LeafCount, bFixedSwing ? FixedSign_ : SwingSign_, OpenDeg_ > 0.f ? OpenDeg_ : DoorTuning::Get().SwingDegrees, Local);
+	DoorRules::OpenLeafSegments(Setup_.WidthCm, LeafCount, bFixedSwing && !bSwingSides ? FixedSign_ : SwingSign_, OpenDeg_ > 0.f ? OpenDeg_ : DoorTuning::Get().SwingDegrees, Local);
+	const FVector Origin = GetActorLocation();
+	for (const TPair<FVector2D, FVector2D>& Segment : Local)
+	{
+		OutSegments.Emplace(Origin + GetTangent() * Segment.Key.X + GetNormal() * Segment.Key.Y, Origin + GetTangent() * Segment.Value.X + GetNormal() * Segment.Value.Y);
+	}
+}
+
+void ADoorActor::GetSideLeafSegments(float Sign, TArray<TPair<FVector, FVector>>& OutSegments) const
+{
+	OutSegments.Reset();
+	TArray<TPair<FVector2D, FVector2D>> Local;
+	DoorRules::OpenLeafSegments(Setup_.WidthCm, LeafCount, Sign >= 0.f ? 1.f : -1.f, bSwingSides ? GetSideDeg(Sign) : GetOpenDeg(), Local);
 	const FVector Origin = GetActorLocation();
 	for (const TPair<FVector2D, FVector2D>& Segment : Local)
 	{
@@ -366,7 +394,13 @@ void ADoorActor::StartSwing(bool bOpen, float Sign)
 	{
 		// The door's own side (designer 2026-11-22, item 3: chosen at the adoption so the open leaf lies clear of doorways / stairs), else away
 		// from the opener (R1).
-		SwingSign_ = bFixedSwing ? FixedSign_ : Sign;
+		// swing_from_opener (designer 2026-11-22): away from the opener at that side's free angle.
+		SwingSign_ = bSwingSides ? (Sign >= 0.f ? 1.f : -1.f) : bFixedSwing ? FixedSign_ : Sign;
+		if (bSwingSides)
+		{
+			OpenDeg_ = SwingSign_ > 0.f ? SideDegPlus_ : SideDegMinus_;
+		}
+		bOpenedInPlay_ = true;
 		ApplyCollision(false); // passes at once: nobody is swept by the leaf
 		ApplyNav();
 	}
@@ -408,6 +442,7 @@ void ADoorActor::Tick(float DeltaSeconds)
 		}
 		const EDoorLeafState Old = State;
 		State = EDoorLeafState::Closed;
+		bOpenedInPlay_ = false;
 		ApplyCollision(true);
 		ApplyNav();
 		NotifyChanged(Old, nullptr, false);

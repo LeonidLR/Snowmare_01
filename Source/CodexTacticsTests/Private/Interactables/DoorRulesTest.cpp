@@ -218,7 +218,7 @@ bool FDoorsTuningTest::RunTest(const FString& Parameters)
 	TestTrue(TEXT("the shotgun is the best lock breaker"), DoorRules::GetLockPower(TEXT("shotgun"), File) >= DoorRules::GetLockPower(TEXT("m16"), File)
 		&& DoorRules::GetLockPower(TEXT("shotgun"), File) >= DoorRules::GetLockPower(TEXT("pistol"), File));
 	TestEqual(TEXT("an entrance is steel"), DoorRules::ResolveStrength(FString(), TEXT("entry"), false, TEXT("S01_f0_d19"), File), EDoorStrength::Steel);
-	TestEqual(TEXT("a story lock is reinforced"), DoorRules::ResolveStrength(FString(), TEXT("entry"), true, TEXT("S03_f0_d19"), File), EDoorStrength::Reinforced);
+	TestEqual(TEXT("a story lock is steel (designer 2026-11-22)"), DoorRules::ResolveStrength(FString(), TEXT("entry"), true, TEXT("S03_f0_d19"), File), EDoorStrength::Steel);
 	TestTrue(TEXT("the squad starts without keys"), File.StartKeys.IsEmpty());
 	TestEqual(TEXT("N_kick 15 m"), File.KickNoiseCm, 1500.f);
 	TestEqual(TEXT("single leaf up to 130 cm (kit sizes)"), File.SingleLeafMaxCm, 130.f);
@@ -796,3 +796,41 @@ bool FDoorsSwingSideTest::RunTest(const FString& Parameters)
 }
 
 #endif // WITH_DEV_AUTOMATION_TESTS
+
+DOORS_TEST(FDoorsSwingFromOpenerTest, "Swing.FromOpenerClosesBehind")
+bool FDoorsSwingFromOpenerTest::RunTest(const FString& Parameters)
+{
+	// Designer 2026-11-22 (agents test): every door clip pushes the leaf away, so the leaf swings AWAY from the opener; where it then lies
+	// over another doorway / a stair it closes behind the squad. Door frame as in Swing.SideClearOfDoorways (100 cm leaf hinged at x -50).
+	using namespace DoorRules;
+	const auto Box = [](float X0, float Y0, float X1, float Y1, uint8 Kind)
+	{
+		return FDoorSwingObstacle{ FBox2D(FVector2D(X0, Y0), FVector2D(X1, Y1)), Kind };
+	};
+	TestEqual(TEXT("an opener on +Y pushes the leaf to -Y"), SwingSign(40.f), -1.f);
+	TestEqual(TEXT("an opener on -Y pushes the leaf to +Y"), SwingSign(-40.f), 1.f);
+
+	FDoorSwingSides Sides = ChooseSwingSides(100.f, 1, {}, 90.f, 30.f);
+	TestTrue(TEXT("nothing round it: both sides open fully, neither closes behind"), FMath::IsNearlyEqual(Sides.DegPlus, 90.f)
+		&& FMath::IsNearlyEqual(Sides.DegMinus, 90.f) && !Sides.bBlocksPlus && !Sides.bBlocksMinus);
+
+	// The tambour: the next doorway's approach zone on +Y - that side still opens fully (the zone is not a wall) but closes behind.
+	Sides = ChooseSwingSides(100.f, 1, { Box(-140.f, 20.f, -40.f, 160.f, 1) }, 90.f, 30.f);
+	TestTrue(FString::Printf(TEXT("tambour: +Y opens fully (%.0f) and closes behind"), Sides.DegPlus), FMath::IsNearlyEqual(Sides.DegPlus, 90.f) && Sides.bBlocksPlus);
+	TestTrue(TEXT("tambour: the street side is free"), FMath::IsNearlyEqual(Sides.DegMinus, 90.f) && !Sides.bBlocksMinus);
+
+	// A wall on -Y stops the leaf short (a limited angle, never below the minimum) but is no reason to close behind.
+	Sides = ChooseSwingSides(100.f, 1, { Box(-60.f, -30.f, 60.f, -20.f, 0) }, 90.f, 10.f);
+	TestTrue(FString::Printf(TEXT("a wall on -Y: a limited angle (%.0f deg), not closing behind"), Sides.DegMinus), Sides.DegMinus < 90.f && Sides.DegMinus >= 10.f
+		&& !Sides.bBlocksMinus);
+	// A stair mouth by the hinge on -Y (met at ~71 deg, before the full swing; the wall beyond the leaf's reach): closes behind.
+	Sides = ChooseSwingSides(100.f, 1, { Box(-60.f, -130.f, 60.f, -120.f, 0), Box(-60.f, -40.f, -40.f, -30.f, 2) }, 90.f, 10.f);
+	TestTrue(FString::Printf(TEXT("a stair on -Y: opens fully (%.0f) and closes behind"), Sides.DegMinus), FMath::IsNearlyEqual(Sides.DegMinus, 90.f) && Sides.bBlocksMinus);
+
+	TestTrue(TEXT("close behind: blocking side, nobody to come, quiet long enough"), ShouldCloseBehind(true, false, false, 1.5f, 1.5f));
+	TestFalse(TEXT("not while somebody is still to come through"), ShouldCloseBehind(true, false, true, 5.f, 1.5f));
+	TestFalse(TEXT("not on somebody in the doorway"), ShouldCloseBehind(true, true, false, 5.f, 1.5f));
+	TestFalse(TEXT("not before the quiet time"), ShouldCloseBehind(true, false, false, 1.f, 1.5f));
+	TestFalse(TEXT("a free side stays open"), ShouldCloseBehind(false, false, false, 5.f, 1.5f));
+	return true;
+}

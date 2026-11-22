@@ -419,34 +419,87 @@ namespace DoorsSmoke
 				const bool bFile = FFileHelper::LoadFileToString(FileText, *DoorTuning::GetDefaultPath())
 					&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(FileText), FileJson) && FileJson.IsValid();
 				const FDoorTuning Shipped = bFile ? DoorTuning::FromJson(*FileJson) : FDoorTuning();
-				Check(*State, bFile && Locked && DoorRules::ResolveStrength(FString(), Locked->GetRole(), true, Locked->GetOpeningId(), Shipped) == EDoorStrength::Reinforced,
-					TEXT("A2: with the shipped doors.json the story-locked S03 entrance is reinforced"));
+				Check(*State, bFile && Locked && DoorRules::ResolveStrength(FString(), Locked->GetRole(), true, Locked->GetOpeningId(), Shipped) == EDoorStrength::Steel,
+					TEXT("A2: with the shipped doors.json the story-locked S03 entrance is steel (designer 2026-11-22)"));
 				Check(*State, bFile && DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Reinforced, Shipped) == 0.f
 					&& DoorRules::GetLockShotChance(TEXT("pistol"), EDoorStrength::Steel, Shipped) >= DoorRules::GetKickChance(EDoorLeafState::Locked, EDoorStrength::Steel, Shipped),
 					TEXT("A2: one strength rule - no kick on reinforced, a kick never likelier than the pistol"));
 			}
-			// A3 (designer 2026-11-22, item 3): no open leaf lies over another doorway's approach zone or a stair mouth; entrances open outward.
+			// A3 (designer 2026-11-22): swing_from_opener - a leaf opens AWAY from the opener (every door clip pushes it away); a side whose open
+			// leaf lies over another doorway's approach zone or a stair mouth must be one that closes behind the squad (independent world test).
+			// The old swing_fixed rule (item 3): no open leaf over another doorway, entrances outward.
 			{
+				const bool bFromOpener = DoorTuning::Get().bSwingFromOpener;
 				const float Depth = DoorTuning::Get().SwingZoneDepthCm;
 				int32 Leaves = 0;
 				int32 Overlapping = 0;
+				int32 Unflagged = 0;
+				int32 FlaggedSides = 0;
 				int32 Entrances = 0;
 				int32 Outward = 0;
-				int32 Limited = 0;
 				FString Bad;
+				const auto LeafOverPlace = [Doors, Depth](const ADoorActor& Door, const TPair<FVector, FVector>& Segment, FString& OutWhat)
+				{
+					for (const DoorRules::FLayoutPlace& Place : Doors->GetLayoutPlaces())
+					{
+						if (FMath::Abs(Place.Center.Z - Door.GetActorLocation().Z) > 120.f || (!Place.bStair && (Place.Id == Door.GetOpeningId()
+							|| FVector::Dist2D(Place.Center, Door.GetActorLocation()) < 30.f)))
+						{
+							continue;
+						}
+						const FVector2D N = Place.bStair ? FVector2D(1.f, 0.f) : Place.Normal.GetSafeNormal();
+						const FVector2D T(-N.Y, N.X);
+						const float HalfT = Place.bStair ? Place.WidthCm * 0.5f : Place.WidthCm * 0.5f + 10.f;
+						const float HalfN = Place.bStair ? Place.WidthCm * 0.5f : Depth;
+						for (int32 Sample = 1; Sample <= 10; ++Sample)
+						{
+							const FVector2D P = FMath::Lerp(FVector2D(Segment.Key), FVector2D(Segment.Value), Sample / 10.f) - FVector2D(Place.Center);
+							if (FMath::Abs(FVector2D::DotProduct(P, T)) < HalfT - 1.f && FMath::Abs(FVector2D::DotProduct(P, N)) < HalfN - 1.f)
+							{
+								OutWhat = FString::Printf(TEXT("%s %s"), Place.bStair ? TEXT("stair") : TEXT("doorway"), *Place.Id);
+								return true;
+							}
+						}
+					}
+					return false;
+				};
 				for (const ADoorActor* Door : Doors->GetDoors())
 				{
 					if (!Door)
 					{
 						continue;
 					}
-					Limited += Door->GetOpenDeg() < DoorTuning::Get().SwingDegrees - 0.5f ? 1 : 0;
+					if (bFromOpener)
+					{
+						for (const float Sign : { 1.f, -1.f })
+						{
+							TArray<TPair<FVector, FVector>> Segments;
+							Door->GetSideLeafSegments(Sign, Segments);
+							bool bOver = false;
+							FString What;
+							for (const TPair<FVector, FVector>& Segment : Segments)
+							{
+								++Leaves;
+								bOver = LeafOverPlace(*Door, Segment, What) || bOver;
+							}
+							Overlapping += bOver ? 1 : 0;
+							FlaggedSides += Door->SideBlocks(Sign) ? 1 : 0;
+							if (bOver && !Door->SideBlocks(Sign))
+							{
+								++Unflagged;
+								if (Bad.Len() < 700)
+								{
+									Bad += FString::Printf(TEXT(" [%s %s side %+.0f over %s, not closing behind]"), *Door->GetBuildingId(), *Door->GetOpeningId(), Sign, *What);
+								}
+							}
+						}
+						continue;
+					}
 					TArray<TPair<FVector, FVector>> Segments;
 					Door->GetOpenLeafSegments(Segments);
 					if (Door->GetRole() == TEXT("entry"))
 					{
 						++Entrances;
-						// Outward: the leaf's free end lies outside the building (no ceiling over it).
 						const FVector End = Segments.IsEmpty() ? Door->GetActorLocation() : Segments[0].Value;
 						FHitResult Ceiling;
 						const FVector Up = End + FVector(0.f, 0.f, 100.f);
@@ -456,36 +509,29 @@ namespace DoorsSmoke
 					for (const TPair<FVector, FVector>& Segment : Segments)
 					{
 						++Leaves;
-						bool bHit = false;
-						for (const DoorRules::FLayoutPlace& Place : Doors->GetLayoutPlaces())
+						FString What;
+						const bool bHit = LeafOverPlace(*Door, Segment, What);
+						if (bHit && Bad.Len() < 700)
 						{
-							if (bHit || FMath::Abs(Place.Center.Z - Door->GetActorLocation().Z) > 120.f || (!Place.bStair && (Place.Id == Door->GetOpeningId()
-								|| FVector::Dist2D(Place.Center, Door->GetActorLocation()) < 30.f)))
-							{
-								continue;
-							}
-							// Independent world-space test: samples along the leaf inside the place's zone (the doorway's own frame).
-							const FVector2D N = Place.bStair ? FVector2D(1.f, 0.f) : Place.Normal.GetSafeNormal();
-							const FVector2D T(-N.Y, N.X);
-							const float HalfT = Place.bStair ? Place.WidthCm * 0.5f : Place.WidthCm * 0.5f + 10.f;
-							const float HalfN = Place.bStair ? Place.WidthCm * 0.5f : Depth;
-							for (int32 Sample = 1; Sample <= 10 && !bHit; ++Sample)
-							{
-								const FVector2D P = FMath::Lerp(FVector2D(Segment.Key), FVector2D(Segment.Value), Sample / 10.f) - FVector2D(Place.Center);
-								bHit = FMath::Abs(FVector2D::DotProduct(P, T)) < HalfT - 1.f && FMath::Abs(FVector2D::DotProduct(P, N)) < HalfN - 1.f;
-							}
-							if (bHit && Bad.Len() < 700)
-							{
-								Bad += FString::Printf(TEXT(" [%s %s over %s %s]"), *Door->GetBuildingId(), *Door->GetOpeningId(), Place.bStair ? TEXT("stair") : TEXT("doorway"), *Place.Id);
-							}
+							Bad += FString::Printf(TEXT(" [%s %s over %s]"), *Door->GetBuildingId(), *Door->GetOpeningId(), *What);
 						}
 						Overlapping += bHit ? 1 : 0;
 					}
 				}
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: A3: %d open leaves, %d entrances (%d open outward), %d doors with a limited angle"), Leaves, Entrances, Outward, Limited);
-				Check(*State, DoorTuning::Get().bSwingFixed && Leaves > 0 && Overlapping == 0,
-					FString::Printf(TEXT("A3: no open leaf over another doorway's approach zone or a stair mouth (%d of %d leaves)%s"), Overlapping, Leaves, *Bad));
-				Check(*State, Entrances > 0 && Outward == Entrances, FString::Printf(TEXT("A3: every entrance opens outward (%d / %d)"), Outward, Entrances));
+				if (bFromOpener)
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: A3: swing_from_opener - %d leaves on both sides, %d side(s) over a doorway / stair, %d side(s) close behind"),
+						Leaves, Overlapping, FlaggedSides);
+					Check(*State, Leaves > 0 && Unflagged == 0,
+						FString::Printf(TEXT("A3: every side whose open leaf lies over a doorway / stair closes behind the squad (%d unflagged)%s"), Unflagged, *Bad));
+				}
+				else
+				{
+					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: A3: %d open leaves, %d entrances (%d open outward)"), Leaves, Entrances, Outward);
+					Check(*State, DoorTuning::Get().bSwingFixed && Leaves > 0 && Overlapping == 0,
+						FString::Printf(TEXT("A3: no open leaf over another doorway's approach zone or a stair mouth (%d of %d leaves)%s"), Overlapping, Leaves, *Bad));
+					Check(*State, Entrances > 0 && Outward == Entrances, FString::Printf(TEXT("A3: every entrance opens outward (%d / %d)"), Outward, Entrances));
+				}
 			}
 			if (!Front || !Back || !Locked || !Gable)
 			{
@@ -1359,8 +1405,8 @@ namespace DoorsSmoke
 				Variable->Set(0, ECVF_SetByConsole);
 			}
 		}
-		// Door strength (designer 2026-11-22): the shipped data makes story-locked doors reinforced (no kick, only a shotgun at the lock); the
-		// stages F (kick) / S (an m16 at the lock) need kickable, shootable story doors - here they are steel (stage A checks the shipped rule).
+		// Door strength (designer 2026-11-22 "steel"): story-locked doors are steel in the shipped data too; the stages F (kick) / S (an m16 at
+		// the lock) need kickable, shootable story doors - kept pinned to steel here so a later data change does not break them.
 		{
 			FDoorTuning Smoke = DoorTuning::Get();
 			Smoke.StrengthStoryLocked = TEXT("steel");

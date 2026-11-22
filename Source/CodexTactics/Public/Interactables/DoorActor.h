@@ -120,11 +120,25 @@ public:
 	 * adoption: clear of walls, other doorways and stair mouths, an entrance outward). Without it a leaf swings away from whoever opens it (R1).
 	 */
 	void SetFixedSwing(float Sign, float OpenDeg);
+	/**
+	 * swing_from_opener (designer 2026-11-22): the leaf swings away from the opener at that side's angle; RestSign = the side a door that is
+	 * open from the start (a kit-open leaf) stands on. bBlocks* = that side's open leaf lies over another doorway / a stair: it closes behind.
+	 */
+	void SetSwingSides(float DegPlus, float DegMinus, bool bBlocksPlus, bool bBlocksMinus, float RestSign);
+	bool HasSwingSides() const { return bSwingSides; }
+	/** The side the leaf is open to now (+1 / -1; the opener stood on the other side). */
+	float GetSwingSign() const { return SwingSign_; }
+	/** swing_from_opener: the leaf, open to its current side, lies over another doorway / a stair mouth (it closes behind the squad). */
+	bool OpenSideBlocks() const { return bSwingSides && bOpenedInPlay_ && (SwingSign_ > 0.f ? bBlocksPlus_ : bBlocksMinus_); }
 	bool HasFixedSwing() const { return bFixedSwing; }
 	float GetFixedSwingSign() const { return FixedSign_; }
 	float GetOpenDeg() const { return OpenDeg_ > 0.f ? OpenDeg_ : DoorTuning::Get().SwingDegrees; }
 	/** The open leaves' segments on the floor (world, at the leaf's full open pose; smokes: no leaf over another doorway). */
 	void GetOpenLeafSegments(TArray<TPair<FVector, FVector>>& OutSegments) const;
+	/** swing_from_opener: the leaves fully open to side Sign (world segments), that side's angle and whether it closes behind. */
+	void GetSideLeafSegments(float Sign, TArray<TPair<FVector, FVector>>& OutSegments) const;
+	float GetSideDeg(float Sign) const { return Sign > 0.f ? SideDegPlus_ : SideDegMinus_; }
+	bool SideBlocks(float Sign) const { return Sign > 0.f ? bBlocksPlus_ : bBlocksMinus_; }
 	/** The number of leaves (1, or 2 for a wide doorway). */
 	int32 GetLeafCount() const { return LeafCount; }
 
@@ -252,6 +266,13 @@ private:
 	float FixedSign_ = 1.f;
 	/** The open angle (0 = doors.json swing_deg). */
 	float OpenDeg_ = 0.f;
+	bool bSwingSides = false;
+	float SideDegPlus_ = 90.f;
+	float SideDegMinus_ = 90.f;
+	bool bBlocksPlus_ = false;
+	bool bBlocksMinus_ = false;
+	/** Opened by somebody during play (not a door open from the start): only such a leaf closes behind the squad. */
+	bool bOpenedInPlay_ = false;
 	bool bSwinging = false;
 	bool bKicked = false;
 	bool bLockShot = false;

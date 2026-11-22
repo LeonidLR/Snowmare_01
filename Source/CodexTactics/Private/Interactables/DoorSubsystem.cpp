@@ -206,6 +206,7 @@ void UDoorSubsystem::Tick(float DeltaTime)
 		return;
 	}
 	TickAutoOpen(DeltaTime);
+	TickCloseBehind(DeltaTime);
 	TickOrders(DeltaTime);
 	TickBreachDetection(DeltaTime);
 	TickBashes(DeltaTime);
@@ -358,10 +359,11 @@ void UDoorSubsystem::ChooseSwings()
 	SwingOutward = 0;
 	SwingOneSideBlocked = 0;
 	int32 ObstacleCount = 0;
-	if (!Tuning.bSwingFixed)
+	if (!Tuning.bSwingFixed && !Tuning.bSwingFromOpener)
 	{
 		return;
 	}
+	int32 BlockingSides = 0;
 	for (ADoorActor* Door : Doors)
 	{
 		if (!Door || Door->IsBroken())
@@ -376,7 +378,18 @@ void UDoorSubsystem::ChooseSwings()
 			Tuning.SwingDegrees, Tuning.SwingMinDeg);
 		// A side that does not swing fully: the R1 rule (away from the opener) would have put the leaf there for an opener on the other side.
 		SwingOneSideBlocked += FMath::Min(Choice.FreeDegPlus, Choice.FreeDegMinus) < Tuning.SwingDegrees - 0.5f ? 1 : 0;
-		Door->SetFixedSwing(Choice.Sign, Choice.OpenDeg);
+		if (Tuning.bSwingFromOpener)
+		{
+			// Designer 2026-11-22: away from the opener; the old choice stays only as the rest side of a door open from the start.
+			const DoorRules::FDoorSwingSides Sides = DoorRules::ChooseSwingSides(Door->GetWidthCm(), Door->GetLeafCount(), Obstacles, Tuning.SwingDegrees,
+				Tuning.SwingMinDeg);
+			Door->SetSwingSides(Sides.DegPlus, Sides.DegMinus, Sides.bBlocksPlus, Sides.bBlocksMinus, Choice.Sign);
+			BlockingSides += (Sides.bBlocksPlus ? 1 : 0) + (Sides.bBlocksMinus ? 1 : 0);
+		}
+		else
+		{
+			Door->SetFixedSwing(Choice.Sign, Choice.OpenDeg);
+		}
 		SwingLimited += Choice.OpenDeg < Tuning.SwingDegrees - 0.5f ? 1 : 0;
 		SwingOutward += Preferred != 0.f && Choice.Sign == Preferred ? 1 : 0;
 		static const TCHAR* const Kinds[] = { TEXT("a wall"), TEXT("a doorway"), TEXT("a stair") };
@@ -387,6 +400,113 @@ void UDoorSubsystem::ChooseSwings()
 	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Doors: swing sides chosen for %d door(s) - %d entrance(s) outward, %d with a limited angle, %d with one side blocked (R1 would swing into it from the other side); %d obstacles (%d layout doorways / stair mouths)"),
 		Doors.Num(), SwingOutward, SwingLimited, SwingOneSideBlocked, ObstacleCount, LayoutPlaces.Num());
+	if (Tuning.bSwingFromOpener)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Doors: swing_from_opener - leaves open away from the opener; %d door side(s) close behind the squad (open leaf over a doorway / stair)"),
+			BlockingSides);
+	}
+}
+
+void UDoorSubsystem::TickCloseBehind(float DeltaTime)
+{
+	using namespace DoorSubsystemLocal;
+	const FDoorTuning& Tuning = DoorTuning::Get();
+	CloseQuiet.SetNumZeroed(Doors.Num());
+	if (!Tuning.bSwingFromOpener)
+	{
+		return;
+	}
+	CloseBehindAccum += DeltaTime;
+	if (CloseBehindAccum < 0.25f)
+	{
+		return;
+	}
+	const float Step = CloseBehindAccum;
+	CloseBehindAccum = 0.f;
+	TArray<FPawnSample> Pawns;
+	bool bSampled = false;
+	for (int32 DoorIndex = 0; DoorIndex < Doors.Num(); ++DoorIndex)
+	{
+		ADoorActor* Door = Doors[DoorIndex];
+		if (!Door || Door->GetDoorState() != EDoorLeafState::Open || Door->IsSwinging() || Door->IsBroken() || !Door->OpenSideBlocks())
+		{
+			CloseQuiet[DoorIndex] = 0.f;
+			continue;
+		}
+		if (!bSampled)
+		{
+			SamplePawns(*GetWorld(), Pawns);
+			bSampled = true;
+		}
+		const float HalfWidth = Door->GetWidthCm() * 0.5f;
+		const FVector Centre = Door->GetDoorwayCenter();
+		bool bToCome = false;
+		for (const FPawnSample& Sample : Pawns)
+		{
+			if (!Door->IsAtDoorLevel(Sample.Feet))
+			{
+				continue;
+			}
+			const FVector2D Local = Door->ToLocal(Sample.Feet);
+			// On the opener's side (the leaf is open AWAY from him) and near: still to come through.
+			const bool bNearApproach = Local.Y * Door->GetSwingSign() < 0.f && FVector::Dist2D(Sample.Feet, Centre) <= Tuning.CloseBehindRadiusCm;
+			bool bPathThrough = false;
+			if (!bNearApproach && Sample.Path.Num() >= 2)
+			{
+				TArray<FVector2D> LocalPath;
+				LocalPath.Reserve(Sample.Path.Num());
+				for (const FVector& Point : Sample.Path)
+				{
+					LocalPath.Add(Door->ToLocal(Point));
+				}
+				bPathThrough = DoorRules::PathCrossesDoorway(LocalPath, HalfWidth, Tuning.PathLookAheadCm);
+			}
+			if (bNearApproach || bPathThrough)
+			{
+				bToCome = true;
+				break;
+			}
+		}
+		const bool bOccupied = Door->IsDoorwayOccupied();
+		CloseQuiet[DoorIndex] = bToCome || bOccupied ? 0.f : CloseQuiet[DoorIndex] + Step;
+		if (DoorRules::ShouldCloseBehind(true, bOccupied, bToCome, CloseQuiet[DoorIndex], Tuning.CloseBehindSeconds) && Door->CloseDoor(nullptr))
+		{
+			CloseQuiet[DoorIndex] = 0.f;
+			++CloseBehindCount;
+			UE_LOG(LogCodexTactics, Display, TEXT("Doors: %s (%s %s) closes behind the squad - its open leaf lay over a doorway / stair"), *Door->GetName(),
+				*Door->GetBuildingId(), *Door->GetOpeningId());
+		}
+	}
+}
+
+int32 UDoorSubsystem::CloseInteriorDoors()
+{
+	if (!DoorTuning::Get().bStartInteriorClosed || !GetWorld())
+	{
+		return 0;
+	}
+	int32 Shut = 0;
+	for (ADoorActor* Door : Doors)
+	{
+		if (!Door || Door->IsBroken() || Door->GetDoorState() != EDoorLeafState::Open || Door->GetRole() == TEXT("entry"))
+		{
+			continue;
+		}
+		// An inner door: a ceiling over both sides, 80 cm off the doorway (an outside door has the open sky on one side).
+		bool bInner = true;
+		for (const float Side : { 1.f, -1.f })
+		{
+			const FVector Probe = Door->GetDoorwayCenter() + Door->GetNormal() * (80.f * Side);
+			FHitResult Ceiling;
+			FCollisionQueryParams Params(SCENE_QUERY_STAT(DoorInnerCeiling), false, Door);
+			bInner = bInner && GetWorld()->LineTraceSingleByChannel(Ceiling, Probe, Probe + FVector(0.f, 0.f, 600.f), ECC_Visibility, Params);
+		}
+		if (bInner && Door->ForceState(EDoorLeafState::Closed, nullptr))
+		{
+			++Shut;
+		}
+	}
+	return Shut;
 }
 
 bool UDoorSubsystem::IsKnownLocked(const ADoorActor& Door) const
@@ -500,6 +620,7 @@ int32 UDoorSubsystem::AdoptLeaves()
 	}
 	OpenKitDoors = AdoptKitOpenLeaves();
 	ChooseSwings();
+	const int32 ShutInner = CloseInteriorDoors();
 	Made += OpenKitDoors;
 	Held.Init(0.f, Doors.Num());
 	Keys.Reset();
@@ -517,6 +638,10 @@ int32 UDoorSubsystem::AdoptLeaves()
 	UE_LOG(LogCodexTactics, Display, TEXT("Doors: R1 on - %d door(s) from %d leaf actor(s) + %d open kit doorway(s) (auto-open %.2f s, kick %s, %d start key(s), %d found); kit-dressed: %d / %d hidden-proxy door(s) got %d kit leaf instance(s); breach %s, roll seed %d"),
 		Made, Leaves.Num(), OpenKitDoors, Tuning.AutoOpenDelaySeconds, Tuning.bKickEnabled ? TEXT("on") : TEXT("off"), Keys.Num(), FoundKeys.Num(), KitDoors, HiddenProxyDoors,
 		KitInstancesLifted, Tuning.bBreachEnabled ? TEXT("on") : TEXT("off"), DoorTuning::GetRollSeed());
+	if (ShutInner > 0)
+	{
+		UE_LOG(LogCodexTactics, Display, TEXT("Doors: start_interior_closed - %d inner door(s) open from the start are shut"), ShutInner);
+	}
 	UE_LOG(LogCodexTactics, Display, TEXT("Doors: strengths of the shut doors - wood %d, steel %d, reinforced %d (%d layout door openings read)"), ByStrength[0], ByStrength[1],
 		ByStrength[2], LayoutDoors.Num());
 	return Made;

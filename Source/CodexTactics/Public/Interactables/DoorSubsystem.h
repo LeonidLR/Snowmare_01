@@ -264,6 +264,8 @@ private:
 	};
 
 	void TickAutoOpen(float DeltaTime);
+	/** swing_from_opener: an open leaf over another doorway / a stair closes once nobody is still to come through (designer 2026-11-22). */
+	void TickCloseBehind(float DeltaTime);
 	void TickOrders(float DeltaTime);
 	/** R2: enemies whose path ends at a locked door start a breach (every breach.interval_s). */
 	void TickBreachDetection(float DeltaTime);
@@ -350,6 +352,8 @@ private:
 	TMap<FString, FBox2D> LayoutFootprints;
 	/** Picks every door's open side / angle (DoorRules::ChooseSwing; doors.json swing_fixed). */
 	void ChooseSwings();
+	/** start_interior_closed: shuts every inner door open from the start (both sides under a roof); returns how many. */
+	int32 CloseInteriorDoors();
 	/** +1 / -1: the side of Door's frame outside its building's footprint (0 unknown). */
 	float OutwardSign(const ADoorActor& Door) const;
 	int32 SwingLimited = 0;
@@ -363,6 +367,10 @@ private:
 	TArray<TObjectPtr<ADoorActor>> Doors;
 
 	TArray<float> Held;
+	/** TickCloseBehind: per door, how long nobody has been still to come through. */
+	TArray<float> CloseQuiet;
+	float CloseBehindAccum = 0.f;
+	int32 CloseBehindCount = 0;
 	TArray<FProxy> Proxies;
 	TArray<FPendingOrder> Orders;
 	TSet<FString> Keys;

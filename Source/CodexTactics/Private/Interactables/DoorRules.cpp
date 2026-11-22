@@ -668,6 +668,36 @@ DoorRules::FDoorSwingChoice DoorRules::ChooseSwing(float WidthCm, int32 LeafCoun
 	return Choice;
 }
 
+DoorRules::FDoorSwingSides DoorRules::ChooseSwingSides(float WidthCm, int32 LeafCount, const TArray<FDoorSwingObstacle>& Obstacles, float MaxDeg, float MinDeg)
+{
+	TArray<FDoorSwingObstacle> Walls;
+	for (const FDoorSwingObstacle& Obstacle : Obstacles)
+	{
+		if (Obstacle.Kind == 0)
+		{
+			Walls.Add(Obstacle);
+		}
+	}
+	FDoorSwingSides Sides;
+	const float Low = FMath::Min(MinDeg, MaxDeg);
+	for (const float Sign : { 1.f, -1.f })
+	{
+		const float WallDeg = FreeSwingDeg(WidthCm, LeafCount, Sign, Walls, MaxDeg);
+		const float AllDeg = FreeSwingDeg(WidthCm, LeafCount, Sign, Obstacles, MaxDeg);
+		const float Deg = FMath::Clamp(WallDeg, Low, MaxDeg);
+		// A doorway / stair met before the wall would stop the leaf (a wall-limited side is not "blocking": the wall stops it first).
+		const bool bBlocks = AllDeg < WallDeg - 0.5f;
+		(Sign > 0.f ? Sides.DegPlus : Sides.DegMinus) = Deg;
+		(Sign > 0.f ? Sides.bBlocksPlus : Sides.bBlocksMinus) = bBlocks;
+	}
+	return Sides;
+}
+
+bool DoorRules::ShouldCloseBehind(bool bSideBlocks, bool bDoorwayOccupied, bool bSomebodyToCome, float QuietSeconds, float NeedSeconds)
+{
+	return bSideBlocks && !bDoorwayOccupied && !bSomebodyToCome && QuietSeconds >= NeedSeconds;
+}
+
 FDoorKickOutcome DoorRules::ResolveKick(EDoorLeafState State, EDoorStrength Strength, bool bHeavy, float HealthFraction, float RollOpen, float RollInjury,
 	const FDoorTuning& Tuning)
 {
@@ -1031,6 +1061,10 @@ FDoorTuning DoorTuning::FromJson(const FJsonObject& Json, const FDoorTuning& Bas
 	ReadDoorNumber(Json, TEXT("single_leaf_max_cm"), Tuning.SingleLeafMaxCm, 40.f, 400.f);
 	ReadDoorNumber(Json, TEXT("swing_deg"), Tuning.SwingDegrees, 10.f, 180.f);
 	ReadDoorFlag(Json, TEXT("swing_fixed"), Tuning.bSwingFixed);
+	ReadDoorFlag(Json, TEXT("swing_from_opener"), Tuning.bSwingFromOpener);
+	ReadDoorFlag(Json, TEXT("start_interior_closed"), Tuning.bStartInteriorClosed);
+	ReadDoorNumber(Json, TEXT("close_behind_s"), Tuning.CloseBehindSeconds, 0.f, 60.f);
+	ReadDoorNumber(Json, TEXT("close_behind_radius_cm"), Tuning.CloseBehindRadiusCm, 0.f, 3000.f);
 	ReadDoorNumber(Json, TEXT("swing_min_deg"), Tuning.SwingMinDeg, 0.f, 180.f);
 	ReadDoorNumber(Json, TEXT("swing_zone_depth_cm"), Tuning.SwingZoneDepthCm, 0.f, 400.f);
 	ReadDoorNumber(Json, TEXT("nav_entering_cost_cm"), Tuning.NavEnteringCostCm, 0.f, 10000.f);

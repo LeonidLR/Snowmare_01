@@ -184,6 +184,20 @@ struct CODEXTACTICS_API FDoorTuning
 	 * "swing_min_deg"); 0 = R1 (away from whoever opens it). "swing_zone_depth_cm": a doorway's approach zone reaches this far each side.
 	 */
 	bool bSwingFixed = true;
+	/**
+	 * "swing_from_opener" (designer 2026-11-22, after the agents test: every door clip - hand, push, kick - pushes the leaf AWAY): a leaf
+	 * swings away from whoever opens it (outside -> in, inside -> out), at that side's free angle against walls (DoorRules::ChooseSwingSides);
+	 * where the open leaf lies over another doorway's approach zone / a stair mouth it CLOSES BEHIND once nobody is still to come through
+	 * ("close_behind_s" quiet, nobody within "close_behind_radius_cm" on the opener's side or with a path through it). Wins over swing_fixed.
+	 */
+	bool bSwingFromOpener = true;
+	/**
+	 * "start_interior_closed" (designer 2026-11-22, agents test: "many doors inside are open - for now every inner door is shut"): at the
+	 * adoption every door open from the start whose both sides are under a roof (an inner door: flat / room / hall doors) is shut.
+	 */
+	bool bStartInteriorClosed = true;
+	float CloseBehindSeconds = 1.5f;
+	float CloseBehindRadiusCm = 300.f;
 	float SwingMinDeg = 30.f;
 	float SwingZoneDepthCm = 100.f;
 	/** "nav_entering_cost_cm": the navmesh price of a closed door (t_open x walk speed, opening-states F1). */
@@ -467,6 +481,24 @@ namespace DoorRules
 	 */
 	CODEXTACTICS_API FDoorSwingChoice ChooseSwing(float WidthCm, int32 LeafCount, float PreferredSign, const TArray<FDoorSwingObstacle>& Obstacles, float MaxDeg,
 		float MinDeg = 30.f);
+
+	/** Each side's open angle (against walls / fixed pieces only) and whether the leaf open there lies over another doorway / a stair mouth. */
+	struct FDoorSwingSides
+	{
+		float DegPlus = 90.f;
+		float DegMinus = 90.f;
+		bool bBlocksPlus = false;
+		bool bBlocksMinus = false;
+	};
+
+	/**
+	 * swing_from_opener (designer 2026-11-22): per side, the angle the leaves swing to before a wall (Kind 0) stops them (never below MinDeg),
+	 * and "blocks" = a doorway approach zone / stair mouth (Kind 1 / 2) is met before that angle - such a door closes behind the squad.
+	 */
+	CODEXTACTICS_API FDoorSwingSides ChooseSwingSides(float WidthCm, int32 LeafCount, const TArray<FDoorSwingObstacle>& Obstacles, float MaxDeg, float MinDeg = 30.f);
+
+	/** Close behind: the open side blocks, nobody stands in the doorway or is still to come through, and it has been so for NeedSeconds. */
+	CODEXTACTICS_API bool ShouldCloseBehind(bool bSideBlocks, bool bDoorwayOccupied, bool bSomebodyToCome, float QuietSeconds, float NeedSeconds);
 
 	/** Does one of Keys open this door: "*", the opening id, the building id (every locked door of it) or the door's own key tag. */
 	CODEXTACTICS_API bool KeyFits(const TSet<FString>& Keys, const FString& BuildingId, const FString& OpeningId, const FString& DoorKeyId);
