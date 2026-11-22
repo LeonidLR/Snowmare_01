@@ -199,6 +199,8 @@ namespace PmcTraversalSmoke
 	{
 		FString Id;
 		FString Reason;
+		/** "<kind>[ up/over| down]: <reason without the [..] suffix>" - the printed failure groups. */
+		FString GroupKey;
 		FVector Start = FVector::ZeroVector;
 		FVector End = FVector::ZeroVector;
 	};
@@ -367,7 +369,8 @@ namespace PmcTraversalSmoke
 		}
 		else
 		{
-			Stats.Failures.Add({ Leg.Id, Reason, Leg.LinkStart, Leg.LinkEnd });
+			const FString SubKind = Leg.Kind == ELinkKind::Mantle ? FString(Leg.bMantleDown ? TEXT("down") : TEXT("up/over")) : FString();
+			Stats.Failures.Add({ Leg.Id, Reason, PmcTraversalRules::FailureGroupKey(KindName(Leg.Kind), SubKind, Reason), Leg.LinkStart, Leg.LinkEnd });
 			UE_LOG(LogCodexTactics, Display, TEXT("Smoke: [%s] %s %s FAIL (%s) link %s -> %s, nav goal %s, walker feet %s"), *Pass.Name,
 				KindName(Leg.Kind), *Leg.Id, *Reason, *Vec(Leg.LinkStart), *Vec(Leg.LinkEnd), *Vec(Leg.NavGoal), Walker ? *Vec(Feet(*Walker)) : TEXT("-"));
 		}
@@ -752,6 +755,12 @@ namespace PmcTraversalSmoke
 		return !State.bPathChecked ? TEXT("no path seen") : State.bPathUsesLink ? TEXT("link on path") : TEXT("path avoided link");
 	}
 
+	/** Stairs: was the march itself walked (the feet in the flight's mid band) before the failure? */
+	FString StairNote(const FState& State, const FLeg& Leg)
+	{
+		return Leg.Kind != ELinkKind::Stair ? FString() : State.bOnLink ? FString(TEXT(", march seen")) : FString(TEXT(", no march seen"));
+	}
+
 	FString PhaseNote(const AOperativeCharacter& Walker, const FLeg& Leg)
 	{
 		if (Walker.IsMantling())
@@ -770,9 +779,15 @@ namespace PmcTraversalSmoke
 		{
 			return TEXT("mid drop");
 		}
-		const float ToStart = static_cast<float>(FVector::Dist2D(Walker.GetActorLocation(), Leg.LinkStart));
-		const float ToEnd = static_cast<float>(FVector::Dist2D(Walker.GetActorLocation(), Leg.LinkEnd));
-		return ToEnd < 250.f ? TEXT("at link end") : ToStart < 250.f ? TEXT("at link start") : TEXT("walking");
+		// Re-review 095: the nearer end in 3D (feet) - a walker at the base under a top's 2D spot is "at link start", not "end".
+		const FVector FeetNow = Feet(Walker);
+		const float ToStart = static_cast<float>(FVector::Dist(FeetNow, Leg.LinkStart));
+		const float ToEnd = static_cast<float>(FVector::Dist(FeetNow, Leg.LinkEnd));
+		if (FMath::Min(ToStart, ToEnd) >= 250.f)
+		{
+			return TEXT("walking");
+		}
+		return ToEnd < ToStart ? TEXT("at link end") : TEXT("at link start");
 	}
 
 	void PrintPass(const FPass& Pass)
@@ -801,7 +816,7 @@ namespace PmcTraversalSmoke
 				for (const FFailure& Fail : KS.Failures)
 				{
 					List += FString::Printf(TEXT("%s[%s: %s %s->%s]"), List.IsEmpty() ? TEXT("") : TEXT(", "), *Fail.Id, *Fail.Reason, *Vec(Fail.Start), *Vec(Fail.End));
-					Keys.Add(FString::Printf(TEXT("%s: %s"), KindName(Kind), *Fail.Reason));
+					Keys.Add(Fail.GroupKey);
 				}
 				UE_LOG(LogCodexTactics, Display, TEXT("Smoke [%s]: %s failed %d: %s"), *Pass.Name, KindName(Kind), KS.Failures.Num(), *List);
 			}
@@ -858,12 +873,30 @@ namespace PmcTraversalSmoke
 				continue;
 			}
 			bPass &= Pass.bRan;
+			// Re-review 095: mantle up/over and down are judged apart; a filtered run (-TraversalOnly / kinds) judges what it sampled
+			// (an empty plan already fails above), an unfiltered one also fails a kind it sampled nothing of.
+			const bool bUnfiltered = State.OnlyFilter.IsEmpty();
+			auto Judge = [&bPass](int32 Crossed, int32 Sampled, bool bRequired)
+			{
+				if (Sampled > 0 || bRequired)
+				{
+					bPass &= PmcTraversalRules::MeetsBar(Crossed, Sampled);
+				}
+			};
 			for (int32 k = 0; k < NumKinds; ++k)
 			{
 				const ELinkKind Kind = static_cast<ELinkKind>(k);
-				if (KindWanted(State, Kind) && State.OnlyFilter.IsEmpty())
+				const FKindStats& KS = Pass.Stats[k];
+				const bool bRequired = bUnfiltered && KindWanted(State, Kind);
+				if (Kind == ELinkKind::Mantle)
 				{
-					bPass &= PmcTraversalRules::MeetsBar(Pass.Stats[k].Crossed, Pass.Stats[k].Sampled);
+					Judge(KS.UpCrossed, KS.UpSampled, false);
+					Judge(KS.DownCrossed, KS.DownSampled, false);
+					Judge(KS.Crossed, KS.Sampled, bRequired);
+				}
+				else
+				{
+					Judge(KS.Crossed, KS.Sampled, bRequired);
 				}
 			}
 		}
@@ -1255,16 +1288,39 @@ namespace PmcTraversalSmoke
 			const float Radius = Leg.Kind == ELinkKind::Ladder ? State.Config.LadderArriveRadiusCm : State.Config.ArriveRadiusCm;
 			if (PmcTraversalRules::HasArrived(Arrival, Radius, State.Config.LevelToleranceCm))
 			{
+				const bool bRescued = Walker->LedgeFall && Walker->LedgeFall->GetRescueCount() > State.InitialRescues;
+				if (State.bOnLink && Leg.Kind == ELinkKind::Drop)
+				{
+					// Re-review 095: the link taken is not enough - a drop that missed its lower surface or ended in the off-navmesh
+					// rescue teleport (log: drop_327 after an 882 cm rescue, drop_291 "MISSED the link's lower surface") is no crossing.
+					const ULedgeFallComponent* Fall = Walker->LedgeFall;
+					if (bRescued)
+					{
+						EndLeg(State, TEXT("drop: rescued off navmesh"));
+					}
+					else if (!Fall || Fall->GetDropCount() <= State.InitialDropCount)
+					{
+						EndLeg(State, TEXT("drop: link taken, no drop counted"));
+					}
+					else if (!Fall->DidLastDropLandOnTarget())
+					{
+						EndLeg(State, TEXT("drop: missed the lower surface"));
+					}
+					else
+					{
+						EndLeg(State, FString());
+					}
+					return true;
+				}
 				if (State.bOnLink)
 				{
 					EndLeg(State, FString());
 					return true;
 				}
-				const bool bRescued = Walker->LedgeFall && Walker->LedgeFall->GetRescueCount() > State.InitialRescues;
 				switch (Leg.Kind)
 				{
 				case ELinkKind::Stair:
-					EndLeg(State, TEXT("bypassed stair"));
+					EndLeg(State, TEXT("bypassed stair, no march seen"));
 					break;
 				case ELinkKind::Ladder:
 					EndLeg(State, State.bOtherLink ? TEXT("climbed another ladder") : TEXT("bypassed ladder"));
@@ -1292,12 +1348,13 @@ namespace PmcTraversalSmoke
 			}
 			else if (State.Progress.IsStuck(Now, Location, State.Config.StuckMoveCm, State.Config.StuckSeconds))
 			{
-				EndLeg(State, FString::Printf(TEXT("stuck (%s)"), *PhaseNote(*Walker, Leg)));
+				EndLeg(State, FString::Printf(TEXT("stuck (%s)%s"), *PhaseNote(*Walker, Leg), *StairNote(State, Leg)));
 				return true;
 			}
 			if (Now - State.LegStartTime > Leg.TimeoutSeconds)
 			{
-				EndLeg(State, FString::Printf(TEXT("timed out %.0f s (%s)"), Leg.TimeoutSeconds, *PhaseNote(*Walker, Leg)));
+				// The budget goes after " [" - the failure group key leaves it out (re-review 095: "23 s" / "33 s" split one group).
+				EndLeg(State, FString::Printf(TEXT("timed out (%s)%s [budget %.0f s]"), *PhaseNote(*Walker, Leg), *StairNote(State, Leg), Leg.TimeoutSeconds));
 				return true;
 			}
 			return true;

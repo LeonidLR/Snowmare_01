@@ -65,6 +65,17 @@ namespace PmcTraversalRules
 		return Sampled > 0 ? 100.0 * static_cast<double>(Crossed) / static_cast<double>(Sampled) : 0.0;
 	}
 
+	FString FailureGroupKey(const FString& Kind, const FString& SubKind, const FString& Reason)
+	{
+		FString Core = Reason;
+		if (const int32 Bracket = Core.Find(TEXT(" [")); Bracket != INDEX_NONE)
+		{
+			Core.LeftInline(Bracket);
+		}
+		const bool bWithSub = !SubKind.IsEmpty() && !Core.StartsWith(TEXT("mantle "));
+		return bWithSub ? FString::Printf(TEXT("%s %s: %s"), *Kind, *SubKind, *Core) : FString::Printf(TEXT("%s: %s"), *Kind, *Core);
+	}
+
 	TArray<TPair<FString, int32>> GroupCounts(TConstArrayView<FString> Keys)
 	{
 		TMap<FString, int32> Counts;

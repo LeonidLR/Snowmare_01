@@ -89,6 +89,16 @@ bool FPmcTraversalBarTest::RunTest(const FString&)
 		TestEqual(TEXT("Single last"), Groups[2].Value, 1);
 	}
 	TestEqual(TEXT("No keys -> no groups"), GroupCounts({}).Num(), 0);
+
+	// Re-review 095: timeout budgets ("23 s" / "33 s") must not split one group; mantles keep up/over vs down.
+	TestEqual(TEXT("Budget suffix dropped"), FailureGroupKey(TEXT("stairs"), FString(), TEXT("timed out (walking), march seen [budget 23 s]")),
+		FString(TEXT("stairs: timed out (walking), march seen")));
+	TestEqual(TEXT("Same group for another budget"), FailureGroupKey(TEXT("stairs"), FString(), TEXT("timed out (walking), march seen [budget 33 s]")),
+		FailureGroupKey(TEXT("stairs"), FString(), TEXT("timed out (walking), march seen [budget 23 s]")));
+	TestEqual(TEXT("Mantle direction added"), FailureGroupKey(TEXT("mantles"), TEXT("down"), TEXT("stuck (at link start)")),
+		FString(TEXT("mantles down: stuck (at link start)")));
+	TestEqual(TEXT("Not twice when the reason names it"), FailureGroupKey(TEXT("mantles"), TEXT("up/over"), TEXT("mantle up/over: no climb (path avoided link)")),
+		FString(TEXT("mantles: mantle up/over: no climb (path avoided link)")));
 	return true;
 }
 

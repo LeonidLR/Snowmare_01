@@ -62,6 +62,12 @@ namespace PmcTraversalRules
 	/** Crossed / Sampled in percent (0 when nothing was sampled). */
 	CODEXTACTICS_API double RatePercent(int32 Crossed, int32 Sampled);
 
+	/**
+	 * The failure group key: "<Kind>: <Reason>" without the reason's detail suffix (from " [" on, e.g. "[budget 23 s]") so equal causes
+	 * group together; SubKind (mantle "up/over" / "down") is added to Kind unless the reason already starts with "mantle ".
+	 */
+	CODEXTACTICS_API FString FailureGroupKey(const FString& Kind, const FString& SubKind, const FString& Reason);
+
 	/** Counts equal keys; sorted by count (most first), then key (deterministic order for the printed failure groups). */
 	CODEXTACTICS_API TArray<TPair<FString, int32>> GroupCounts(TConstArrayView<FString> Keys);
 }
