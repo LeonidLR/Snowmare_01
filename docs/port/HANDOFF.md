@@ -19,6 +19,12 @@ target moves off a switchback roof opening. Story showcase: `docs/design/levelge
 2026-11-22: all six showcase houses are khrushchevka blocks (gable door + balcony slots merged from the generator branch; S09 has a locked
 gable door - story 9's F4 needs it, designer question in the guide); kit_dress dresses gable doors as entrances and story-4 balconies with the
 kit balcony door + balcony (no decorative slot balconies beside them).
+2026-11-22 (afternoon, merge 867b0788 of 6b1a5c70): the gable door opens on a ground-floor service room (dvornitskaya / shchitovaya / ZhEK);
+story 9 locks the gable door itself, so `gen-story-showcase.ts` no longer sets S09's `gable_door_state` (field kept). Grey showcase + BgenPlans
+rebuilt, dressed kit map rebuilt: LevelGenBuildingsSmoke 6/6, 6/6, 9/9, IslandsProbe 0 multi-island buildings on all three. kit_dress story views
+`<bid>_service_room_interior` (eye from the gable door) + `<bid>_service_bay_cutaway`. Tooling for worker A/B: smoke_parallel / smoke_remote /
+worker_sync from main (-Repeat, -RepeatSeeds, -SmokeArgs) + `smoke_parallel -ForceMap` (-Map wins over the smoke's map option, its -LevelJson
+follows) + an explicit -TimeoutSeconds extends a shorter smoke "timeout" option; walk smoke `tag=<s>` -> buildings_walk_<map>_<s>.json.
 
 **Formation compresses in confined spaces (`claude/bgen-test`, 2026-11-22; designer decision 2026-11-21 "the whole squad must enter").** In a
 confined navmesh pocket round the leader's arrival (16 navmesh rays round his destination, median free distance <= 2 m - a flat hall, a 2.5 m

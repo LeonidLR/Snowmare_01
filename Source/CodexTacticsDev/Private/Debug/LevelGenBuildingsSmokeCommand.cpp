@@ -361,6 +361,8 @@ namespace LevelGenBuildingsSmoke
 		bool bSquad = true;
 		/** walk mode: wall-clock budget of the whole run, seconds (under the runner's timeout). */
 		double BudgetSeconds = 540.0;
+		/** walk mode: report file suffix (tag=<s>: buildings_walk_<map>_<s>.json) - parallel repeats on one map each keep their report. */
+		FString ReportTag;
 	};
 
 	void StartWalk(UWorld& World, const FOptions& Options, const TSharedPtr<FJsonObject>& Layout, const FJsonObjects& PathResults,
@@ -890,7 +892,9 @@ namespace LevelGenBuildingsSmoke
 		Report->SetObjectField(TEXT("drift"), Drift);
 		Report->SetArrayField(TEXT("buildings"), BuildingsJson);
 		const FString Dir = FPaths::ProjectSavedDir() / TEXT("LevelGen");
-		const FString ReportPath = Dir / FString::Printf(TEXT("buildings_walk_%s.json"), *Walk.MapName);
+		const FString ReportPath = Dir / (Walk.Options.ReportTag.IsEmpty()
+			? FString::Printf(TEXT("buildings_walk_%s.json"), *Walk.MapName)
+			: FString::Printf(TEXT("buildings_walk_%s_%s.json"), *Walk.MapName, *Walk.Options.ReportTag));
 		FString Json;
 		const bool bWritten = FJsonSerializer::Serialize(Report, TJsonWriterFactory<>::Create(&Json))
 			&& FPlatformFileManager::Get().GetPlatformFile().CreateDirectoryTree(*Dir)
@@ -1371,6 +1375,10 @@ namespace LevelGenBuildingsSmoke
 			{
 				Options.bSquad = Arg.Mid(6) != TEXT("0");
 			}
+			else if (Arg.StartsWith(TEXT("tag=")))
+			{
+				Options.ReportTag = FPaths::MakeValidFileName(Arg.Mid(4));
+			}
 			else if (Arg.StartsWith(TEXT("budget=")))
 			{
 				if (!LexTryParseString(Options.BudgetSeconds, *Arg.Mid(7)) || Options.BudgetSeconds <= 0.0)
@@ -1451,8 +1459,8 @@ namespace LevelGenBuildingsSmoke
 	static FAutoConsoleCommandWithWorldAndArgs WalkCommand(
 		TEXT("CodexTactics.LevelGenBuildingsWalkSmoke"),
 		TEXT("S2.9 / P0b: CodexTactics.LevelGenBuildingsSmoke walk=1 - the path check, then the leader walks every enterable building (door -> ")
-		TEXT("landings -> roof) and the squad goes through every flat entry (squad <= 2 x solo); [minpass=<0..1>, default 1] [only=] [squad=0] [budget=<s>]. ")
-		TEXT("Writes Saved/LevelGen/buildings_walk_<map>.json, then exits."),
+		TEXT("landings -> roof) and the squad goes through every flat entry (squad <= 2 x solo); [minpass=<0..1>, default 1] [only=] [squad=0] [budget=<s>] [tag=<s>]. ")
+		TEXT("Writes Saved/LevelGen/buildings_walk_<map>.json (tag=<s>: buildings_walk_<map>_<s>.json), then exits."),
 		FConsoleCommandWithWorldAndArgsDelegate::CreateStatic(&RunWalk));
 }
 
