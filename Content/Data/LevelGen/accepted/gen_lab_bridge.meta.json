@@ -1,0 +1,25 @@
+{
+ "at": "2026-11-22T12:00:00.000Z",
+ "score": 1,
+ "summary": [
+  "# Level generator - gen_lab_bridge (profile lab_bridge, seed 3)",
+  "score 1.0 | route COMPLETABLE | Lab Bridge",
+  "counts: buildings 1, covers 3, walls 5"
+ ],
+ "verdicts": [
+  {
+   "client": "jev",
+   "model": "jev-latest",
+   "fits": true,
+   "confidence": 1,
+   "quality": 5,
+   "reasons": [
+    "Lab layout gen_lab_bridge: matches smart-enemies-roadmap.md T-02 spec"
+   ],
+   "fixes": [],
+   "costUsd": 0,
+   "offline": true,
+   "at": "2026-11-22T12:00:00.000Z"
+  }
+ ]
+}

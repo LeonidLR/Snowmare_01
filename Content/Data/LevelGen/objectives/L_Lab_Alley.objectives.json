@@ -1,0 +1,21 @@
+{
+  "schema": "codex.mission_goals/1",
+  "map": "L_Lab_Alley",
+  "layout": "gen_lab_alley",
+  "order": "free",
+  "default_radius_cm": 300,
+  "floor_tolerance_cm": 150,
+  "goals": [
+    {
+      "id": "GOAL_alley",
+      "kind": "street",
+      "layer": "ground",
+      "pos": [
+        1500,
+        0,
+        0
+      ],
+      "radius_cm": 300
+    }
+  ]
+}

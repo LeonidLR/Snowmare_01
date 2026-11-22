@@ -1,0 +1,25 @@
+{
+ "at": "2026-11-22T12:00:00.000Z",
+ "score": 1,
+ "summary": [
+  "# Level generator - gen_lab_crossroads (profile lab_crossroads, seed 1)",
+  "score 1.0 | route COMPLETABLE | Lab Crossroads",
+  "counts: buildings 0, covers 5, walls 5"
+ ],
+ "verdicts": [
+  {
+   "client": "jev",
+   "model": "jev-latest",
+   "fits": true,
+   "confidence": 1,
+   "quality": 5,
+   "reasons": [
+    "Lab layout gen_lab_crossroads: matches smart-enemies-roadmap.md T-02 spec"
+   ],
+   "fixes": [],
+   "costUsd": 0,
+   "offline": true,
+   "at": "2026-11-22T12:00:00.000Z"
+  }
+ ]
+}

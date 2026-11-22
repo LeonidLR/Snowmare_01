@@ -1,0 +1,60 @@
+{
+  "$schema": "../Schemas/level_config.schema.json",
+  "level_id": "L_Lab_Bridge",
+  "level_name": "Lab Bridge (Smart Enemies T-02)",
+  "description": "Lab test fixture for smart enemies roadmap T-02 (Lab Bridge): gen_lab_bridge. Built by Scripts/Editor/build_levelgen_map.py.",
+  "combat_start": "ambush",
+  "ambush_fight": "skirmish",
+  "susanin_wave": 0,
+  "horde_enabled": false,
+  "prep_phase_duration": 60,
+  "wave_rest_duration": 20,
+  "intro_dialogue": false,
+  "environment": {
+    "locked": false
+  },
+  "cheats": {
+    "immortal": true,
+    "infinite_ammo": true
+  },
+  "levelgen_layout": "Content/Data/LevelGen/accepted/gen_lab_bridge.json",
+  "minimap": {
+    "floors_cm": [
+      300
+    ]
+  },
+  "drop_links": true,
+  "waves": [
+    {
+      "wave_index": 1,
+      "name": "Wave 1",
+      "max_simultaneous_enemies": 2,
+      "spawns": [
+        {
+          "enemy_type": "FROSTBITTEN",
+          "count": 2,
+          "spawn_lane": "ANY",
+          "spawn_delay_sec": 1,
+          "initial_delay_sec": 0
+        }
+      ],
+      "wave_modifiers": {
+        "enemy_hp_mult": 1,
+        "enemy_damage_mult": 1,
+        "enemy_speed_mult": 1,
+        "cold_drain_mult": 1
+      }
+    }
+  ],
+  "squad_loadout": {
+    "simulation_mode": "EXPLORE_AND_COLLECT",
+    "preset_tier": "STANDARD"
+  },
+  "pressure": {
+    "first_event_sec": 30,
+    "interval_sec": 90,
+    "group_min": 2,
+    "group_max": 4,
+    "max_alive": 8
+  }
+}
