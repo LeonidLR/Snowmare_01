@@ -516,6 +516,11 @@ bool FTacticalMapCommittedFilesTest::RunTest(const FString&)
 			TestEqual(TEXT("x4 roofs"), File.OverwatchRoofs.Num(), 22);
 			TestEqual(TEXT("x4 hiding spots"), File.HidingSpots.Num(), 150);
 			TestEqual(TEXT("x4 ladder-only roofs"), File.LadderOnlyRoofs.Num(), 7);
+			TestEqual(TEXT("x4 walkable roofs"), File.WalkableRoofs.Num(), 22);
+			TestEqual(TEXT("x4 open crossings"), File.OpenCrossings.Num(), 16);
+			TestEqual(TEXT("x4 goal sites"), File.GoalSites.Num(), 25);
+			TestTrue(TEXT("x4 places have building attribution"), File.Chokepoints.ContainsByPredicate([](const FTacticalChokepoint& C) { return !C.Building.IsEmpty(); }));
+			TestTrue(TEXT("x4 hiding spots have building attribution"), File.HidingSpots.ContainsByPredicate([](const FTacticalHidingSpot& H) { return !H.Building.IsEmpty(); }));
 			const FTacticalRuntimeConfig Config;
 			if (!TestTrue(TEXT("x4 has a top place"), File.Chokepoints.Num() > 0))
 			{

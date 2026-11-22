@@ -16,12 +16,13 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import type { Vec2 } from '../movement/geometry.ts';
-import { closestOnSegment, dirOf, dist, yawOf } from '../movement/geometry.ts';
+import { closestOnSegment, dirOf, dist, distToWall, pointInPoly, segmentsIntersect, yawOf } from '../movement/geometry.ts';
 import type { Conditions, LayoutAnalysis } from './chokepoints.ts';
 import { analyzeLayout, CHOKE, geometryHash, samplePolyline, threatNumbers } from './chokepoints.ts';
-import { layerZ } from './missionGoals.ts';
+import { coverPoly } from './layers.ts';
+import { layerZ, LEVEL_HEIGHT_CM } from './missionGoals.ts';
 import { footprintPoly, inFootprint } from './rotation.ts';
-import type { GenBuilding, GenLayout } from './schema.ts';
+import type { GenBuilding, GenCover, GenLayout } from './schema.ts';
 import { NEVER_CLIMBABLE } from './schema.ts';
 
 export const TACTICAL_MAP_SCHEMA = 'codex.tactical_map/2';
@@ -29,6 +30,15 @@ export const TACTICAL_MAP_SCHEMA_V1 = 'codex.tactical_map/1';
 export const TACTICAL_MAP_SCHEMA_V2 = 'codex.tactical_map/2';
 /** The window's stand point lies this far inside the building behind the window point, cm (a man at the sill, not in the wall). */
 export const WINDOW_STAND_INSET_CM = 60;
+
+/** Thresholds for tactical open crossings and goal sites. */
+export const COVER_DISTANCE_THRESHOLD_CM = 200;
+export const MIN_CROSSING_LENGTH_CM = 1000;
+export const SEEING_COVER_MAX_DIST_CM = 4000;
+export const GOAL_SITE_RADIUS_CM = 2500;
+export const GOAL_SITE_SECTOR_ARC_DEG = 90;
+export const ROUTE_SAMPLE_STEP_CM = 100;
+export const BUILDING_ASSOCIATION_MARGIN_CM = 200;
 
 export type Vec3 = [number, number, number];
 
@@ -144,15 +154,18 @@ export function roofAccessDetails(l: GenLayout, b: GenBuilding): TacticalRoofAcc
   const z = layerZ(l, layer);
   const res: TacticalRoofAccess[] = [];
   for (const s of (b.stairs ?? []).filter((s) => s.to >= b.floors)) {
-    const topPt: Vec2 = s.top ?? s.pos ?? [0, 0];
+    const topPt: Vec2 | undefined = s.top ?? s.pos;
+    if (!topPt) continue;
     res.push({ id: s.id, kind: 'stairs', top: at(topPt, z) });
   }
-  for (const k of l.ladders.filter((k) => k.to === layer)) {
-    const topPt: Vec2 = k.top ?? k.pos ?? [0, 0];
+  for (const k of (l.ladders ?? []).filter((k) => k.to === layer)) {
+    const topPt: Vec2 | undefined = k.top ?? k.pos;
+    if (!topPt) continue;
     res.push({ id: k.id, kind: 'ladder', top: at(topPt, z) });
   }
   for (const h of (b.hatches ?? [])) {
-    const topPt: Vec2 = h.pos ?? [0, 0];
+    const topPt: Vec2 | undefined = h.pos;
+    if (!topPt) continue;
     res.push({ id: h.id, kind: 'hatch', top: at(topPt, z) });
   }
   return res.sort((a, b) => a.kind.localeCompare(b.kind) || a.id.localeCompare(b.id));
@@ -165,105 +178,226 @@ export function accessKind(access: readonly string[]): 'stairs' | 'ladder' | 'ha
   return access.length ? 'hatch' : 'none';
 }
 
-/** Resolves building and storey for a 2D or 3D point if it falls within a building footprint. */
-export function buildingAndFloorAt(l: GenLayout, pos: Vec2 | Vec3, defaultZ: number): { building: string; floor: number } | undefined {
+/**
+ * Resolves building and storey for a 2D or 3D point or obstacle context.
+ * Checks inside footprint (or within margin of building), obstacle walls, or chokepoint sides.
+ */
+export function buildingAndFloorAt(
+  l: GenLayout,
+  pos: Vec2 | Vec3,
+  defaultZ: number,
+  margin = BUILDING_ASSOCIATION_MARGIN_CM,
+  coverSource?: string,
+  sideA?: { src?: string; dist_m?: number } | null,
+  sideB?: { src?: string; dist_m?: number } | null,
+): { building: string; floor: number } | undefined {
+  // 1. If explicit cover wall is given and belongs to a building
+  if (coverSource && coverSource.startsWith('wall:')) {
+    const wid = coverSource.slice(5);
+    const w = (l.walls ?? []).find((x) => x.id === wid);
+    if (w && w.building) {
+      return { building: w.building, floor: w.floor ?? 0 };
+    }
+  }
+
+  // 2. If sides of a chokepoint indicate building walls
+  let sideBest: { building: string; floor: number; dist_m: number } | null = null;
+  for (const s of [sideA, sideB]) {
+    if (s && s.src && s.src.startsWith('wall:')) {
+      const wid = s.src.slice(5);
+      const w = (l.walls ?? []).find((x) => x.id === wid);
+      if (w && w.building && (s.dist_m === undefined || s.dist_m <= 3.0)) {
+        const d = s.dist_m ?? 0;
+        if (!sideBest || d < sideBest.dist_m) {
+          sideBest = { building: w.building, floor: w.floor ?? 0, dist_m: d };
+        }
+      }
+    }
+  }
+  if (sideBest) {
+    return { building: sideBest.building, floor: sideBest.floor };
+  }
+
+  // 3. Check building footprint (strict inside first, then within threshold margin)
   const p2: Vec2 = [pos[0], pos[1]];
-  const b = l.buildings.find((x) => inFootprint(x, p2));
-  if (!b) return undefined;
-  const z = pos.length > 2 && pos[2] !== undefined ? pos[2] : defaultZ;
-  const floor = Math.max(0, Math.round((z - defaultZ) / 300));
-  return { building: b.id, floor };
+  const bInside = (l.buildings ?? []).find((x) => inFootprint(x, p2, 0));
+  if (bInside) {
+    const z = pos.length > 2 && pos[2] !== undefined ? pos[2] : defaultZ;
+    const floor = Math.max(0, Math.round((z - defaultZ) / LEVEL_HEIGHT_CM));
+    return { building: bInside.id, floor };
+  }
+
+  if (margin > 0) {
+    const bNear = (l.buildings ?? []).find((x) => inFootprint(x, p2, margin));
+    if (bNear) {
+      const z = pos.length > 2 && pos[2] !== undefined ? pos[2] : defaultZ;
+      const floor = Math.max(0, Math.round((z - defaultZ) / LEVEL_HEIGHT_CM));
+      return { building: bNear.id, floor };
+    }
+  }
+
+  return undefined;
 }
 
 /**
  * Finds route segments >= 10 m with no cover within 2 m (200 cm) of the path,
- * along with the cover objects seeing them (within 40 m of the segment).
+ * along with the cover objects seeing them (within 40 m of the segment with clear LOS).
  */
 export function findOpenCrossings(l: GenLayout, groundZ: number): TacticalOpenCrossing[] {
   const out: TacticalOpenCrossing[] = [];
   if (!l.routes || !l.routes.length) return out;
   const covers = l.covers ?? [];
+  const buildings = l.buildings ?? [];
+  const walls = (l.walls ?? []).filter((w) => (w.floor ?? 0) === 0);
+
+  const coverPolys = covers.map((c) => coverPoly(c));
+  const buildingPolys = buildings.map((b) => ({ b, poly: footprintPoly(b) }));
+
+  function distToPoly(p: Vec2, poly: readonly Vec2[]): number {
+    if (pointInPoly(p, poly)) return 0;
+    let minD = Infinity;
+    for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length];
+      const d = dist(p, closestOnSegment(p, a, b).point);
+      if (d < minD) minD = d;
+    }
+    return minD;
+  }
+
+  function distToCover(p: Vec2, c: GenCover, poly: readonly Vec2[]): number {
+    if (dist(p, c.pos) > 600) return dist(p, c.pos) - 200;
+    return distToPoly(p, poly);
+  }
+
+  function distToBuilding(p: Vec2, bp: { b: GenBuilding; poly: readonly Vec2[] }): number {
+    if (inFootprint(bp.b, p)) return 0;
+    return distToPoly(p, bp.poly);
+  }
+
+  function minCoverDistance(p: Vec2): number {
+    let minD = Infinity;
+    for (let i = 0; i < covers.length; i++) {
+      const d = distToCover(p, covers[i], coverPolys[i]);
+      if (d < minD) {
+        minD = d;
+        if (minD <= COVER_DISTANCE_THRESHOLD_CM) return minD;
+      }
+    }
+    for (let i = 0; i < walls.length; i++) {
+      const d = distToWall(p, walls[i]);
+      if (d < minD) {
+        minD = d;
+        if (minD <= COVER_DISTANCE_THRESHOLD_CM) return minD;
+      }
+    }
+    for (let i = 0; i < buildingPolys.length; i++) {
+      const d = distToBuilding(p, buildingPolys[i]);
+      if (d < minD) {
+        minD = d;
+        if (minD <= COVER_DISTANCE_THRESHOLD_CM) return minD;
+      }
+    }
+    return minD;
+  }
+
+  // Blocker edges for line-of-sight checks (building footprints and tall ground walls > 150 cm)
+  const blockerEdges: { a: Vec2; b: Vec2 }[] = [];
+  for (const bp of buildingPolys) {
+    for (let i = 0; i < bp.poly.length; i++) {
+      blockerEdges.push({ a: bp.poly[i], b: bp.poly[(i + 1) % bp.poly.length] });
+    }
+  }
+  for (const w of walls) {
+    if (w.height > 150) {
+      blockerEdges.push({ a: w.a, b: w.b });
+    }
+  }
+
+  function hasLos(p1: Vec2, p2: Vec2): boolean {
+    for (const e of blockerEdges) {
+      if (segmentsIntersect(p1, p2, e.a, e.b)) return false;
+    }
+    return true;
+  }
 
   for (let rIdx = 0; rIdx < l.routes.length; rIdx++) {
     const route = l.routes[rIdx];
     if (!route.points || route.points.length < 2) continue;
     const rId = route.id || `R_${rIdx + 1}`;
-    const samples = samplePolyline(route.points, 100);
+    const samples = samplePolyline(route.points, ROUTE_SAMPLE_STEP_CM);
     if (samples.length < 2) continue;
 
     const minCoverDists: number[] = new Array(samples.length);
     const isOpen: boolean[] = new Array(samples.length);
     for (let i = 0; i < samples.length; i++) {
-      let minD = Infinity;
-      const p = samples[i];
-      for (const c of covers) {
-        const d = dist(p, c.pos);
-        if (d < minD) minD = d;
-      }
-      minCoverDists[i] = minD;
-      isOpen[i] = minD > 200;
+      const d = minCoverDistance(samples[i]);
+      minCoverDists[i] = d;
+      isOpen[i] = d > COVER_DISTANCE_THRESHOLD_CM;
     }
 
     let start = -1;
     let crossIdx = 1;
+
+    const processRun = (sIdx: number, eIdx: number) => {
+      const runSamples = samples.slice(sIdx, eIdx + 1);
+      let runLenCm = 0;
+      for (let k = 0; k < runSamples.length - 1; k++) {
+        runLenCm += dist(runSamples[k], runSamples[k + 1]);
+      }
+      if (runLenCm < MIN_CROSSING_LENGTH_CM) return;
+
+      let minC = Infinity;
+      for (let k = sIdx; k <= eIdx; k++) {
+        if (minCoverDists[k] < minC) minC = minCoverDists[k];
+      }
+
+      const seeing: string[] = [];
+      for (const c of covers) {
+        let minD = Infinity;
+        let closestPt: Vec2 | null = null;
+        for (let k = 0; k < runSamples.length - 1; k++) {
+          const res = closestOnSegment(c.pos, runSamples[k], runSamples[k + 1]);
+          const d = dist(c.pos, res.point);
+          if (d < minD) {
+            minD = d;
+            closestPt = res.point;
+          }
+        }
+        if (minD <= SEEING_COVER_MAX_DIST_CM && closestPt) {
+          if (
+            hasLos(c.pos, closestPt) ||
+            hasLos(c.pos, runSamples[0]) ||
+            hasLos(c.pos, runSamples[runSamples.length - 1])
+          ) {
+            seeing.push(c.id);
+          }
+        }
+      }
+      seeing.sort();
+
+      out.push({
+        id: `OC_${rId}_${crossIdx++}`,
+        route: rId,
+        start: at(runSamples[0], groundZ),
+        end: at(runSamples[runSamples.length - 1], groundZ),
+        length_m: r1(runLenCm / 100),
+        nearest_cover_cm: r0(minC),
+        seeing_covers: seeing,
+      });
+    };
+
     for (let i = 0; i < samples.length; i++) {
       if (isOpen[i]) {
         if (start < 0) start = i;
       } else {
         if (start >= 0) {
-          const runSamples = (i - 1) - start;
-          const runCm = runSamples * 100;
-          if (runCm >= 1000) {
-            let minC = Infinity;
-            for (let k = start; k < i; k++) {
-              if (minCoverDists[k] < minC) minC = minCoverDists[k];
-            }
-            const pStart = samples[start], pEnd = samples[i - 1];
-            const seeing: string[] = [];
-            for (const c of covers) {
-              const dSeg = dist(c.pos, closestOnSegment(c.pos, pStart, pEnd).point);
-              if (dSeg <= 4000) seeing.push(c.id);
-            }
-            seeing.sort();
-            out.push({
-              id: `OC_${rId}_${crossIdx++}`,
-              route: rId,
-              start: at(pStart, groundZ),
-              end: at(pEnd, groundZ),
-              length_m: r1(runCm / 100),
-              nearest_cover_cm: r0(minC),
-              seeing_covers: seeing,
-            });
-          }
+          processRun(start, i - 1);
           start = -1;
         }
       }
     }
     if (start >= 0) {
-      const runSamples = (samples.length - 1) - start;
-      const runCm = runSamples * 100;
-      if (runCm >= 1000) {
-        let minC = Infinity;
-        for (let k = start; k < samples.length; k++) {
-          if (minCoverDists[k] < minC) minC = minCoverDists[k];
-        }
-        const pStart = samples[start], pEnd = samples[samples.length - 1];
-        const seeing: string[] = [];
-        for (const c of covers) {
-          const dSeg = dist(c.pos, closestOnSegment(c.pos, pStart, pEnd).point);
-          if (dSeg <= 4000) seeing.push(c.id);
-        }
-        seeing.sort();
-        out.push({
-          id: `OC_${rId}_${crossIdx++}`,
-          route: rId,
-          start: at(pStart, groundZ),
-          end: at(pEnd, groundZ),
-          length_m: r1(runCm / 100),
-          nearest_cover_cm: r0(minC),
-          seeing_covers: seeing,
-        });
-      }
+      processRun(start, samples.length - 1);
     }
   }
 
@@ -283,7 +417,7 @@ export function findGoalSites(l: GenLayout, groundZ: number): TacticalGoalSite[]
   for (const g of goals) {
     for (const c of covers) {
       const d = dist(g.pos, c.pos);
-      if (d <= 2500) {
+      if (d <= GOAL_SITE_RADIUS_CM) {
         const dist_m = r1(d / 100);
         const facing_yaw = r1(yawOf([g.pos[0] - c.pos[0], g.pos[1] - c.pos[1]]));
         out.push({
@@ -292,7 +426,7 @@ export function findGoalSites(l: GenLayout, groundZ: number): TacticalGoalSite[]
           pos: at(c.pos, groundZ),
           dist_m,
           facing_yaw,
-          sector_arc_deg: 90,
+          sector_arc_deg: GOAL_SITE_SECTOR_ARC_DEG,
           cover_kind: c.kind,
           cover_height_cm: c.size ? c.size[2] : 100,
         });
@@ -334,7 +468,7 @@ export function tacticalMapFor(l: GenLayout, mapName: string, layoutName = l.nam
       drop_spots: [...c.numbers.drop_spots], windows: [...c.numbers.windows], overwatch: [...c.numbers.overwatch], hiding_spots: [...c.numbers.hiding_spots],
       reveal_m: c.numbers.reveal_m, reveal_stealth_m: c.numbers.reveal_stealth_m,
     };
-    const bf = buildingAndFloorAt(l, c.pos, groundZ);
+    const bf = buildingAndFloorAt(l, c.pos, groundZ, BUILDING_ASSOCIATION_MARGIN_CM, undefined, c.numbers?.side_a, c.numbers?.side_b);
     if (bf) {
       item.building = bf.building;
       item.floor = bf.floor;
@@ -372,7 +506,7 @@ export function tacticalMapFor(l: GenLayout, mapName: string, layoutName = l.nam
       stealth_only: h.stealth_only, blind: h.blind, rush_m: h.rush_m, cover: h.cover, cover_height_cm: h.cover_height_cm,
       threatens: { line: h.threatens.line, ...(h.threatens.route ? { route: h.threatens.route } : {}), pos: at(h.threatens.pos, groundZ) }, ...(h.place ? { place: h.place } : {}),
     };
-    const bf = buildingAndFloorAt(l, h.pos, groundZ);
+    const bf = buildingAndFloorAt(l, h.pos, groundZ, BUILDING_ASSOCIATION_MARGIN_CM, h.cover);
     if (bf) {
       item.building = bf.building;
       item.floor = bf.floor;

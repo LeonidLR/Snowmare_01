@@ -17,9 +17,11 @@ import { tacticalMapFor, writeTacticalMapFile } from '../src/levelgen/tacticalMa
 
 const root = findProjectRoot();
 const accepted = (n: string) => path.join(root, 'Content/Data/LevelGen/accepted', `${n}.json`);
+// Default targets for batch regeneration: X4 and X2.
+// WARNING (090 review): X6 is intentionally excluded from defaults to protect the designer's uncommitted edits.
+// For X6, explicit command-line pairs must be passed if approved by the lead.
 const DEFAULT_TARGETS: [string, string][] = [
   [accepted('gen_ref_01_02_depot_1_x4'), 'L_Gen_Depot_X4'],
-  [accepted('gen_ref_01_02_depot_1_x6'), 'L_Gen_Depot_1_X6'],
   [accepted('gen_ref_01_02_depot_1_x2'), 'L_Gen_Test_X2'],
 ];
 

@@ -233,6 +233,13 @@ describe('tactical map runtime file (TACTICAL_MAP P1)', () => {
     // LEVELGEN_LAYERS_REPORT.md §7: Depot x4 = 46 places, 7 drop spots, 163 windows, 22 roofs, 150 hiding spots
     assert.deepEqual([f.chokepoints.length, f.drop_spots.length, f.windows.length, f.overwatch_roofs.length, f.hiding_spots.length], [46, 7, 163, 22, 150]);
     assert.ok(f.ladder_only_roofs.length > 0, 'the x4 Depot has ladder-only roofs');
+    assert.equal(f.walkable_roofs?.length, 22, 'x4 Depot has 22 walkable roofs');
+    assert.equal(f.goal_sites?.length, 25, 'x4 Depot has 25 goal sites');
+    assert.equal(f.open_crossings?.length, 16, 'x4 Depot has 16 open crossings');
+    assert.ok(f.chokepoints.some((c) => c.building !== undefined), 'places have building attribution');
+    assert.ok(f.hiding_spots.some((h) => h.building !== undefined), 'hiding spots have building attribution');
+    assert.ok(f.open_crossings?.every((oc) => oc.length_m >= 10), 'all open crossings >= 10m');
+    assert.ok(f.open_crossings?.every((oc) => oc.nearest_cover_cm >= 200), 'all open crossings nearest cover >= 200cm');
     assert.ok(f.chokepoints.every((c, i) => i === 0 || c.score <= f.chokepoints[i - 1].score), 'sorted by score');
   });
 });
