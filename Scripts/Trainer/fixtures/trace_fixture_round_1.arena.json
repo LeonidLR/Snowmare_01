@@ -26,7 +26,7 @@
       "sides": {
         "A": {
           "role": "attacker",
-          "members": ["Operator Vance", "Operator Roux", "Operator Hayes"]
+          "members": ["Operator Vance", "Operator Roux", "Operator Lind"]
         },
         "B": {
           "role": "defender",
@@ -35,9 +35,12 @@
       },
       "defence": {
         "open_idle_s": [
-          { "id": "Operator Lind", "total_s": 12.4, "before_contact_s": 8.2 },
-          { "id": "Operator Cross", "total_s": 15.0, "before_contact_s": 10.5 },
-          { "id": "Operator Shaw", "total_s": 9.2, "before_contact_s": 5.3 }
+          { "fighter_index": 0, "id": "Operator Vance", "side": "A", "total_s": 99.0, "before_contact_s": 88.0 },
+          { "fighter_index": 1, "id": "Operator Roux", "side": "A", "total_s": 77.0, "before_contact_s": 66.0 },
+          { "fighter_index": 2, "id": "Operator Lind", "side": "A", "total_s": 99.0, "before_contact_s": 88.0 },
+          { "fighter_index": 3, "id": "Operator Lind", "side": "B", "total_s": 12.4, "before_contact_s": 8.2 },
+          { "fighter_index": 4, "id": "Operator Cross", "side": "B", "total_s": 15.0, "before_contact_s": 10.5 },
+          { "fighter_index": 5, "id": "Operator Shaw", "side": "B", "total_s": 9.2, "before_contact_s": 5.3 }
         ]
       }
     },
@@ -62,7 +65,7 @@
       "sides": {
         "A": {
           "role": "attacker",
-          "members": ["Operator Vance", "Operator Roux", "Operator Hayes"]
+          "members": ["Operator Vance", "Operator Roux", "Operator Lind"]
         },
         "B": {
           "role": "defender",
@@ -71,9 +74,12 @@
       },
       "defence": {
         "open_idle_s": [
-          { "id": "Operator Lind", "total_s": 8.0, "before_contact_s": 4.0 },
-          { "id": "Operator Cross", "total_s": 11.0, "before_contact_s": 6.0 },
-          { "id": "Operator Shaw", "total_s": 7.0, "before_contact_s": 3.0 }
+          { "fighter_index": 0, "id": "Operator Vance", "side": "A", "total_s": 99.0, "before_contact_s": 88.0 },
+          { "fighter_index": 1, "id": "Operator Roux", "side": "A", "total_s": 77.0, "before_contact_s": 66.0 },
+          { "fighter_index": 2, "id": "Operator Lind", "side": "A", "total_s": 99.0, "before_contact_s": 88.0 },
+          { "fighter_index": 3, "id": "Operator Lind", "side": "B", "total_s": 8.0, "before_contact_s": 4.0 },
+          { "fighter_index": 4, "id": "Operator Cross", "side": "B", "total_s": 11.0, "before_contact_s": 6.0 },
+          { "fighter_index": 5, "id": "Operator Shaw", "side": "B", "total_s": 7.0, "before_contact_s": 3.0 }
         ]
       }
     }

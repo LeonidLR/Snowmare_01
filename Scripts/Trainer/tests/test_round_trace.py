@@ -42,6 +42,16 @@ class TestPmcRoundTrace(unittest.TestCase):
         r1, r0 = prt.parse_round_identifier(1, num_rounds=2, zero_based=True)
         self.assertEqual((r1, r0), (2, 1))
 
+        # Reject round 0 without zero-based
+        with self.assertRaises(ValueError):
+            prt.parse_round_identifier(0, num_rounds=2)
+        with self.assertRaises(ValueError):
+            prt.parse_round_identifier("0", num_rounds=2)
+
+        # Round 0 with zero-based flag succeeds
+        r1_0, r0_0 = prt.parse_round_identifier(0, num_rounds=2, zero_based=True)
+        self.assertEqual((r1_0, r0_0), (1, 0))
+
         # Invalid format
         with self.assertRaises(ValueError):
             prt.parse_round_identifier("rX", num_rounds=2)
@@ -123,12 +133,17 @@ class TestPmcRoundTrace(unittest.TestCase):
         self.assertAlmostEqual(obj["height_m"], 9.1, places=1)
         self.assertEqual(obj["level"], 3)
 
-        # Exposure stats: from arena.json open_idle_s ground truth
+        # Exposure stats: from arena.json open_idle_s ground truth (defender Lind gets 12.4s, NOT attacker Lind's 99.0s!)
         st_lind = metrics["exposure_stats"]["Operator Lind"]
         self.assertEqual(st_lind["total_stand_s"], 12.4)
         self.assertEqual(st_lind["pre_contact_stand_s"], 8.2)
+        self.assertEqual(st_lind["source"], "arena.defence.open_idle_s")
         self.assertEqual(st_lind["first_shot_t"], 10.2)
         self.assertEqual(st_lind["shots_fired"], 1)
+
+        # Post assignment: range_cm extracted from post line
+        self.assertIn("Operator Lind", metrics["posts_assigned"])
+        self.assertEqual(metrics["posts_assigned"]["Operator Lind"]["range_cm"], 3200.0)
 
         st_cross = metrics["exposure_stats"]["Operator Cross"]
         self.assertEqual(st_cross["total_stand_s"], 15.0)
@@ -143,9 +158,10 @@ class TestPmcRoundTrace(unittest.TestCase):
         # Attacker decision (Operator Vance -> Advance) must NOT be attributed to defenders!
         self.assertNotIn("Operator Vance", metrics["decisions_by_fighter"])
 
-        # Log fire events passed through to metrics
+        # Log fire events passed through to metrics with relative time t
         self.assertEqual(len(metrics["log_fire_events"]), 2)
         self.assertEqual(metrics["log_fire_events"][0]["action"], "holds his fire")
+        self.assertIsNotNone(metrics["log_fire_events"][0]["t"])
 
         # Hypotheses H1 - H4
         hyp = metrics["hypotheses"]
@@ -175,6 +191,7 @@ class TestPmcRoundTrace(unittest.TestCase):
         self.assertIn("Storey Level: **3** | Height: **9.1 m**", md)
         self.assertIn("Operator Lind", md)
         self.assertIn("12.4 s", md)
+        self.assertIn("arena.defence.open_idle_s", md)
         self.assertIn("Holds Fire", md)
         self.assertIn("Opens Fire", md)
         self.assertIn("H1 (Ground Objective Pull)", md)
@@ -199,6 +216,24 @@ class TestPmcRoundTrace(unittest.TestCase):
         )
         self.assertEqual(res_r0.returncode, 0, f"CLI with r0 failed: {res_r0.stderr}")
         self.assertIn("PMC Round Decision Trace: Round r0", res_r0.stdout)
+
+        # Test rejection of round 0 without --zero-based
+        res_0 = subprocess.run(
+            [sys.executable, str(script_path), str(self.arena_file), "--round", "0"],
+            capture_output=True,
+            text=True,
+        )
+        self.assertNotEqual(res_0.returncode, 0)
+        self.assertIn("Round 0 is ambiguous", res_0.stderr)
+
+        # Test direct track file CLI input
+        res_track = subprocess.run(
+            [sys.executable, str(script_path), str(self.track_file)],
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(res_track.returncode, 0, f"CLI with track file failed: {res_track.stderr}")
+        self.assertIn("PMC Round Decision Trace: Round 1", res_track.stdout)
 
 
 if __name__ == "__main__":

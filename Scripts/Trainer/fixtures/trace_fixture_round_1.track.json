@@ -11,7 +11,7 @@
   "fighters": [
     { "id": "Operator Vance", "name": "Vance", "side": "A", "team": 1, "weapon": "ak" },
     { "id": "Operator Roux", "name": "Roux", "side": "A", "team": 1, "weapon": "shotgun" },
-    { "id": "Operator Hayes", "name": "Hayes", "side": "A", "team": 1, "weapon": "sniper" },
+    { "id": "Operator Lind", "name": "Lind", "side": "A", "team": 1, "weapon": "sniper" },
     { "id": "Operator Lind", "name": "Lind", "side": "B", "team": 2, "weapon": "m16" },
     { "id": "Operator Cross", "name": "Cross", "side": "B", "team": 2, "weapon": "m16" },
     { "id": "Operator Shaw", "name": "Shaw", "side": "B", "team": 2, "weapon": "m16" }

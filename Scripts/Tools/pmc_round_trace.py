@@ -67,17 +67,24 @@ def parse_round_identifier(
         except ValueError:
             raise ValueError(f"Invalid clip round format: '{round_arg}'. Expected 'r0', 'r1', etc.")
         idx_1 = idx_0 + 1
-    elif zero_based or s == "0":
+    elif zero_based:
         try:
             idx_0 = int(s)
         except ValueError:
             raise ValueError(f"Invalid round index: '{round_arg}'.")
         idx_1 = idx_0 + 1
+    elif s == "0":
+        raise ValueError(
+            "Round 0 is ambiguous: rounds are 1-based by default. "
+            "Use '--round 1' for the first round, or pass '--zero-based' / '-0' (or use 'r0') for 0-based clip index."
+        )
     else:
         try:
             idx_1 = int(s)
         except ValueError:
             raise ValueError(f"Invalid round number: '{round_arg}'.")
+        if idx_1 < 1:
+            raise ValueError(f"Round number must be >= 1 (got {idx_1}). Use --zero-based or 'r0' for 0-based clip indexing.")
         idx_0 = idx_1 - 1
 
     if num_rounds > 0 and (idx_0 < 0 or idx_0 >= num_rounds):
@@ -139,7 +146,7 @@ def resolve_track_file(
         if p.is_file():
             return p
 
-    arena_dir = arena_path.parent
+    arena_dir = arena_path if arena_path.is_dir() else arena_path.parent
     if round_obj and round_obj.get("track"):
         track_ref = Path(round_obj["track"])
         if track_ref.is_file():
@@ -182,7 +189,7 @@ def resolve_log_file(arena_path: Path, explicit_log: Optional[str] = None) -> Op
         if p.is_file():
             return p
 
-    arena_dir = arena_path.parent
+    arena_dir = arena_path if arena_path.is_dir() else arena_path.parent
     base_name = arena_path.name
     if base_name.endswith(".arena.json"):
         stem = base_name[:-len(".arena.json")]
@@ -286,6 +293,23 @@ def parse_log_for_round(
     else:
         return res
 
+    # Time regex for UE log lines
+    time_re = re.compile(r"\[\d{4}\.\d{2}\.\d{2}-(\d{2})\.(\d{2})\.(\d{2}):(\d{3})\]")
+
+    def extract_time_s(line_text: str) -> Optional[float]:
+        tm = time_re.search(line_text)
+        if tm:
+            h, m, s, ms = tm.groups()
+            return int(h) * 3600 + int(m) * 60 + int(s) + int(ms) / 1000.0
+        return None
+
+    round_hdr_re = re.compile(r"\[PmcArena\]\s+round\s+\d+:")
+    t_round_start: Optional[float] = None
+    for line in round_lines:
+        if round_hdr_re.search(line):
+            t_round_start = extract_time_s(line)
+            break
+
     # Regexes for PmcAI log entries
     spawn_re = re.compile(
         r"\[PmcAI\]\s+team\s+(\d+):\s+spawned\s+Operator\s+([A-Za-z0-9_-]+)\s+\(([^)]*)\)\s+at\s+V\(([^)]*)\)"
@@ -313,7 +337,13 @@ def parse_log_for_round(
         m_s = spawn_re.search(line)
         if m_s:
             team, name, look, pos_str = m_s.groups()
-            res["spawned"][name] = {"team": int(team), "look": look, "pos": pos_str}
+            look_parts = [p.strip() for p in look.split(",")]
+            weapon = next((p for p in look_parts if not p.startswith("look ")), "n/a")
+            spawn_entry = {"team": int(team), "look": look, "pos": pos_str, "weapon": weapon}
+            res["spawned"][(int(team), name)] = spawn_entry
+            res["spawned"][(int(team), f"Operator {name}")] = spawn_entry
+            res["spawned"][name] = spawn_entry
+            res["spawned"][f"Operator {name}"] = spawn_entry
             continue
 
         m_p = post_re.search(line)
@@ -337,9 +367,18 @@ def parse_log_for_round(
                         post_info["danger"] = float(part.split()[1])
                     except Exception:
                         pass
+                elif part.startswith("range"):
+                    try:
+                        r_toks = part.split()
+                        post_info["range_cm"] = float(r_toks[1])
+                    except Exception:
+                        pass
                 else:
                     post_info["post_id"] = part
+            res["posts"][(int(team), name)] = post_info
+            res["posts"][(int(team), f"Operator {name}")] = post_info
             res["posts"][name] = post_info
+            res["posts"][f"Operator {name}"] = post_info
             continue
 
         m_o = order_re.search(line)
@@ -377,12 +416,17 @@ def parse_log_for_round(
         m_fi = fire_re.search(line)
         if m_fi:
             team, name, action, dist_cm, att_off = m_fi.groups()
+            t_line = extract_time_s(line)
+            rel_t: Optional[float] = None
+            if t_line is not None and t_round_start is not None and t_line >= t_round_start:
+                rel_t = round(t_line - t_round_start, 1)
             res["fire_events"].append({
                 "team": int(team),
                 "who": f"Operator {name}",
                 "action": "holds his fire" if "holds" in action else "opens fire",
                 "dist_m": float(dist_cm) / 100.0,
                 "attention_off": float(att_off),
+                "t": rel_t,
             })
             continue
 
@@ -409,6 +453,41 @@ def parse_log_for_round(
             continue
 
     return res
+
+
+def synthesize_round_from_track(track_data: dict, round_1based: int) -> Tuple[dict, dict]:
+    """Synthesize rnd and arena_meta dicts directly from a track.json structure."""
+    scenario = track_data.get("scenario", "unknown")
+    map_name = track_data.get("map", "unknown")
+    seed = track_data.get("seed")
+    winner = track_data.get("winner", "None")
+    duration_s = float(track_data.get("duration_s", 0.0) or 0.0)
+    obj = track_data.get("objective") or {}
+    attacker = obj.get("attacker")
+    def_side = "A" if attacker == "B" else "B" if attacker == "A" else None
+
+    rnd = {
+        "round": round_1based,
+        "scenario": scenario,
+        "map": map_name,
+        "seed": seed,
+        "winner": winner,
+        "end_reason": track_data.get("end_reason", "elimination" if winner != "None" else "timeout"),
+        "duration_s": duration_s,
+        "objective": obj,
+        "attacker": attacker,
+        "sides": {
+            "A": {"role": "defender" if def_side == "A" else "attacker"},
+            "B": {"role": "defender" if def_side == "B" else "attacker"},
+        } if def_side else {},
+    }
+    arena_meta = {
+        "scenario": scenario,
+        "map": map_name,
+        "seed": seed,
+        "num_rounds": 1,
+    }
+    return rnd, arena_meta
 
 
 def compute_trace_metrics(
@@ -450,6 +529,13 @@ def compute_trace_metrics(
                 def_side = s_name
             elif role == "attacker":
                 atk_side = s_name
+    if not def_side or not atk_side:
+        attacker_val = rnd.get("attacker")
+        if not attacker_val and track and isinstance(track.get("objective"), dict):
+            attacker_val = track["objective"].get("attacker")
+        if attacker_val:
+            atk_side = str(attacker_val)
+            def_side = "A" if atk_side == "B" else "B"
     if not def_side:
         def_side = "B" if "B" in sides else "A"
     if not atk_side:
@@ -476,13 +562,23 @@ def compute_trace_metrics(
 
     # If track has no fighters, populate from log spawned
     if not def_fighters and log_data.get("spawned"):
-        for name, s_info in log_data["spawned"].items():
-            def_fighters.append({
-                "id": f"Operator {name}",
-                "name": name,
-                "side": def_side,
-                "team": s_info.get("team"),
-            })
+        for key, s_info in log_data["spawned"].items():
+            if isinstance(key, tuple):
+                team, name = key
+            else:
+                name = key
+                team = s_info.get("team")
+            # Side A = team 1, Side B = team 2 in UE log convention
+            expected_team = 1 if def_side == "A" else 2
+            if team is not None and team != expected_team:
+                continue
+            if not any(df["id"] in (name, f"Operator {name}") for df in def_fighters):
+                def_fighters.append({
+                    "id": f"Operator {name}" if not name.startswith("Operator ") else name,
+                    "name": name[len("Operator "):] if name.startswith("Operator ") else name,
+                    "side": def_side,
+                    "team": team,
+                })
 
     # Close range stats from track_stats
     close_stats_def = side_stats(track, def_side) if track else None
@@ -522,19 +618,31 @@ def compute_trace_metrics(
                 })
                 break
 
-    # Seconds standing in the open per defender
+    # Seconds standing in the open per defender (C++ open_idle_s with fighter_index and side)
     arena_defence = rnd.get("defence") or {}
     arena_idle_arr = arena_defence.get("open_idle_s") or []
-    idle_by_fighter_id: Dict[str, dict] = {}
+    idle_by_idx: Dict[int, dict] = {}
+    idle_by_side_id: Dict[Tuple[str, str], dict] = {}
     for entry in arena_idle_arr:
         if isinstance(entry, dict):
+            fi_idx = entry.get("fighter_index")
+            if fi_idx is not None:
+                idle_by_idx[int(fi_idx)] = entry
             ef_id = entry.get("id")
+            ef_side = entry.get("side")
             if ef_id:
-                idle_by_fighter_id[ef_id] = entry
-                if ef_id.startswith("Operator "):
-                    idle_by_fighter_id[ef_id[len("Operator "):]] = entry
+                id_str = str(ef_id)
+                short_id = id_str[len("Operator "):] if id_str.startswith("Operator ") else id_str
+                full_id = f"Operator {short_id}"
+                if ef_side:
+                    s_str = str(ef_side)
+                    idle_by_side_id[(s_str, id_str)] = entry
+                    idle_by_side_id[(s_str, short_id)] = entry
+                    idle_by_side_id[(s_str, full_id)] = entry
                 else:
-                    idle_by_fighter_id[f"Operator {ef_id}"] = entry
+                    idle_by_side_id[("", id_str)] = entry
+                    idle_by_side_id[("", short_id)] = entry
+                    idle_by_side_id[("", full_id)] = entry
 
     exposure_stats: Dict[str, dict] = {}
     for f in def_fighters:
@@ -548,14 +656,28 @@ def compute_trace_metrics(
         first_shot_hit = None
         first_shot_target = None
         shots_fired = 0
+        open_idle_source = "none"
 
         # Ground truth from arena.json if available
-        matched_idle = idle_by_fighter_id.get(fid) or idle_by_fighter_id.get(fname)
+        matched_idle = None
+        if fi is not None and fi in idle_by_idx:
+            matched_idle = idle_by_idx[fi]
+        elif (def_side, fid) in idle_by_side_id:
+            matched_idle = idle_by_side_id[(def_side, fid)]
+        elif (def_side, fname) in idle_by_side_id:
+            matched_idle = idle_by_side_id[(def_side, fname)]
+        elif ("", fid) in idle_by_side_id:
+            matched_idle = idle_by_side_id[("", fid)]
+        elif ("", fname) in idle_by_side_id:
+            matched_idle = idle_by_side_id[("", fname)]
+
         if matched_idle is not None:
             total_stand_s = float(matched_idle.get("total_s", 0.0))
             pre_contact_stand_s = float(matched_idle.get("before_contact_s", 0.0))
             idle_stand_s = pre_contact_stand_s
+            open_idle_source = "arena.defence.open_idle_s"
         elif fi is not None and states:
+            open_idle_source = "track states"
             for tick, state_row in enumerate(states):
                 t_cur = tick * dt
                 if fi < len(state_row) and state_row[fi]:
@@ -589,20 +711,26 @@ def compute_trace_metrics(
             "first_shot_hit": first_shot_hit,
             "first_shot_target": first_shot_target,
             "shots_fired": shots_fired,
+            "source": open_idle_source,
         }
 
     # Initial posts assigned to defenders
     posts_assigned: Dict[str, dict] = {}
+    f_posts_map = log_data.get("posts", {})
     for f in def_fighters:
         fid = f["id"]
         fname = f.get("name") or (fid[len("Operator "):] if fid.startswith("Operator ") else fid)
-        if fname in log_data.get("posts", {}):
-            posts_assigned[fid] = log_data["posts"][fname]
-        elif fid in log_data.get("posts", {}):
-            posts_assigned[fid] = log_data["posts"][fid]
+        f_team = f.get("team")
+        post = None
+        if f_team is not None:
+            post = f_posts_map.get((int(f_team), fname)) or f_posts_map.get((int(f_team), fid))
+        if post is None:
+            post = f_posts_map.get(fname) or f_posts_map.get(fid)
+        if post:
+            posts_assigned[fid] = post
 
     # Evaluate Hypotheses H1 - H4
-    h1_verdict, h1_evidence = evaluate_h1(scenario, obj, rnd, log_data, decisions_by_fighter)
+    h1_verdict, h1_evidence = evaluate_h1(scenario, obj, rnd, log_data, decisions_by_fighter, t_first_contact)
     h2_verdict, h2_evidence = evaluate_h2(posts_assigned, decisions_by_fighter, log_data, def_fighters)
     h3_verdict, h3_evidence = evaluate_h3(log_data, exposure_stats, rnd, def_fighters)
     h4_verdict, h4_evidence = evaluate_h4(log_data, exposure_stats, t_first_contact, shots, def_fighters)
@@ -635,6 +763,7 @@ def compute_trace_metrics(
         "close_stats_def": close_stats_def,
         "close_stats_atk": close_stats_atk,
         "log_fire_events": log_data.get("fire_events", []),
+        "log_spawned": log_data.get("spawned", {}),
         "hypotheses": {
             "H1": {"verdict": h1_verdict, "evidence": h1_evidence},
             "H2": {"verdict": h2_verdict, "evidence": h2_evidence},
@@ -651,7 +780,14 @@ def compute_trace_metrics(
     }
 
 
-def evaluate_h1(scenario: str, obj: dict, rnd: dict, log_data: dict, decisions: dict) -> Tuple[str, str]:
+def evaluate_h1(
+    scenario: str,
+    obj: dict,
+    rnd: dict,
+    log_data: dict,
+    decisions: dict,
+    t_contact: Optional[float] = None,
+) -> Tuple[str, str]:
     """H1: Ground-objective scenario -> cases 3 and 4 applied (no defence site, pulled onto point)."""
     obj_z = obj.get("z", 0.0) or 0.0
     is_ground = (obj_z < 200.0) or (scenario in ("tactical", "street", "chokepoint", "random") and obj_z < 250.0)
@@ -662,6 +798,10 @@ def evaluate_h1(scenario: str, obj: dict, rnd: dict, log_data: dict, decisions: 
 
     objective_orders = [d for d in all_decisions if d.get("decision") == "Objective"]
     obj_order_ratio = len(objective_orders) / len(all_decisions) if all_decisions else 0.0
+    pre_contact_obj_orders = [
+        d for d in objective_orders
+        if t_contact is not None and d.get("t", 0.0) <= t_contact
+    ]
 
     if not is_ground:
         return (
@@ -669,14 +809,26 @@ def evaluate_h1(scenario: str, obj: dict, rnd: dict, log_data: dict, decisions: 
             f"Scenario is '{scenario}' with objective at Z={obj_z:.0f} cm (roof/upper elevation). H1 assumes a ground-objective scenario.",
         )
 
-    if objective_orders or obj_order_ratio > 0.2:
+    if not all_decisions:
+        return (
+            "CANNOT TELL",
+            f"Ground objective at Z={obj_z:.0f} cm, but no defender tactical decisions were recorded.",
+        )
+
+    if obj_order_ratio > 0.2 or pre_contact_obj_orders:
         evidence = (
             f"Ground objective at Z={obj_z:.0f} cm. Defenders received {len(objective_orders)} Objective orders "
-            f"({obj_order_ratio * 100:.1f}% of decisions), pulling them onto the objective point."
+            f"({obj_order_ratio * 100:.1f}% of decisions"
         )
+        if pre_contact_obj_orders:
+            evidence += f", {len(pre_contact_obj_orders)} before contact at t={t_contact}s"
+        evidence += "), pulling them onto the objective point."
         return "HOLDS", evidence
     else:
-        return "CANNOT TELL", f"Ground objective at Z={obj_z:.0f} cm, but defenders did not exhibit excessive Objective orders."
+        return "DOES NOT HOLD", (
+            f"Ground objective at Z={obj_z:.0f} cm, but defenders were not pulled onto the point "
+            f"({len(objective_orders)} Objective orders, ratio {obj_order_ratio * 100:.1f}% <= 20%, none before contact)."
+        )
 
 
 def evaluate_h2(
@@ -686,6 +838,9 @@ def evaluate_h2(
     def_fighters: list,
 ) -> Tuple[str, str]:
     """H2: Defenders had tactical posts along route and left them on contact at long range."""
+    if not log_data.get("found") or not log_data.get("round_found"):
+        return "CANNOT TELL", "No execution log available; defender tactical post assignments are unknown."
+
     fighters_with_posts = [fid for fid, p in posts.items() if p.get("role") and p.get("role") != "custom"]
     if not fighters_with_posts:
         return "DOES NOT HOLD", "Defenders had no tactical posts along the route; spawned directly on/near the point."
@@ -784,8 +939,6 @@ def evaluate_h4(
     ]
 
     hold_events = [fe for fe in fire_events if fe.get("action") == "holds his fire"]
-    attention_delays = [fe for fe in fire_events if fe.get("attention_off", 1.0) < 0.9]
-    very_close_fires = [fe for fe in fire_events if fe.get("action") == "opens fire" and fe.get("dist_m", 100.0) < 15.0]
 
     first_def_shots = [st["first_shot_t"] for st in exposure_stats.values() if st["first_shot_t"] is not None]
     min_def_shot = min(first_def_shots) if first_def_shots else None
@@ -801,19 +954,16 @@ def evaluate_h4(
             f"(threat at {he['dist_m']:.1f}m, attention off {he['attention_off']:.2f})."
         )
         return "HOLDS", evidence
-    elif attention_delays or very_close_fires:
-        details = []
-        if attention_delays:
-            details.append(f"attention delay active (attention off={attention_delays[0]['attention_off']:.2f})")
-        if very_close_fires:
-            details.append(f"enemy allowed to close to {very_close_fires[0]['dist_m']:.1f}m before opening fire")
-        evidence = f"Firing delay observed: {', '.join(details)}. First defender shot at t={min_def_shot}s."
-        return "HOLDS", evidence
     elif gap_s is not None and gap_s > 3.0:
-        evidence = f"Defenders delayed opening fire by {gap_s:.1f}s after contact was established."
+        evidence = (
+            f"Defenders delayed opening fire by {gap_s:.1f}s after contact was established "
+            f"(first shot at t={min_def_shot:.1f}s vs contact at t={t_contact:.1f}s)."
+        )
         return "HOLDS", evidence
+    elif gap_s is not None:
+        return "DOES NOT HOLD", f"Defenders opened fire promptly ({gap_s:.1f}s after contact at t={t_contact:.1f}s); no ShouldHoldFire hold lines recorded."
     else:
-        return "CANNOT TELL", f"First shot gap={gap_s}s; no explicit attention-off penalty line recorded."
+        return "CANNOT TELL", "No defender shots or ShouldHoldFire hold lines recorded."
 
 
 def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int, str]) -> str:
@@ -843,7 +993,16 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
     md.append("|---|---|---|---|---|---|")
     for f in metrics["def_fighters"]:
         fid = f["id"]
+        fname = f.get("name") or (fid[len("Operator "):] if fid.startswith("Operator ") else fid)
         post = metrics["posts_assigned"].get(fid)
+        f_team = f.get("team")
+        spawn_map = metrics.get("log_spawned", {})
+        spawn_info = None
+        if f_team is not None:
+            spawn_info = spawn_map.get((int(f_team), fname)) or spawn_map.get((int(f_team), fid))
+        if spawn_info is None:
+            spawn_info = spawn_map.get(fname) or spawn_map.get(fid)
+        weapon = (spawn_info.get("weapon") if spawn_info else None) or f.get("weapon") or "n/a"
         if post:
             role = post.get("role", "custom")
             coord = post.get("post_id") or post.get("pos", "spawn")
@@ -854,7 +1013,7 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
             coord = "Spawn ring"
             score_s = "n/a"
             danger_s = "0.00"
-        md.append(f"| **{fid}** | {f.get('weapon') or 'm16'} | `{role}` | `{coord}` | {score_s} | {danger_s} |")
+        md.append(f"| **{fid}** | {weapon} | `{role}` | `{coord}` | {score_s} | {danger_s} |")
     md.append("")
 
     md.append("## 3. Order Sequence & Decision Timeline (Spawn to Engagement)")
@@ -864,31 +1023,37 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
     timeline_rows = []
     for fid, d_list in metrics["decisions_by_fighter"].items():
         for d in d_list:
-            timeline_rows.append((d["t"], fid, d["decision"], f"{d['score']:.2f}", d.get("why") or "tactic eval"))
+            t_val = d["t"]
+            timeline_rows.append((t_val, fid, d["decision"], f"{d['score']:.2f}", d.get("why") or "tactic eval", f"{t_val:.1f} s"))
 
     for fe in metrics.get("log_fire_events", []):
         act_label = "Holds Fire" if fe.get("action") == "holds his fire" else "Opens Fire"
+        t_val = fe.get("t")
+        t_sort = t_val if t_val is not None else (metrics["first_contact_s"] or 0.0)
+        t_display = f"{t_val:.1f} s" if t_val is not None else "t n/a"
         timeline_rows.append((
-            metrics["first_contact_s"] or 0.0,
+            t_sort,
             fe["who"],
             act_label,
             "-",
             f"threat at {fe['dist_m']:.1f}m, attention off {fe['attention_off']:.2f}",
+            t_display,
         ))
 
     timeline_rows.sort(key=lambda r: (r[0], r[1]))
 
     for r in timeline_rows[:25]:
-        phase_mark = " *(pre-contact)*" if metrics["first_contact_s"] and r[0] <= metrics["first_contact_s"] else ""
-        md.append(f"| {r[0]:.1f} s{phase_mark} | {r[1]} | **{r[2]}** | {r[3]} | {r[4]} |")
+        t_disp = r[5]
+        phase_mark = " *(pre-contact)*" if (metrics["first_contact_s"] and r[0] <= metrics["first_contact_s"] and t_disp != "t n/a") else ""
+        md.append(f"| {t_disp}{phase_mark} | {r[1]} | **{r[2]}** | {r[3]} | {r[4]} |")
 
     if not timeline_rows:
         md.append("| 0.0 s | Defenders | Spawn / Hold | - | Initial scenario deployment |")
     md.append("")
 
     md.append("## 4. Exposure & Engagement Metrics")
-    md.append("| Defender | Total Standing in Open (s) | Pre-Contact Standing (s) | First Shot Time (s) | Hits / Targets |")
-    md.append("|---|---|---|---|---|")
+    md.append("| Defender | Total Standing in Open (s) | Pre-Contact Standing (s) | Source | First Shot Time (s) | Hits / Targets |")
+    md.append("|---|---|---|---|---|---|")
     for f in metrics["def_fighters"]:
         fid = f["id"]
         st = metrics["exposure_stats"].get(fid, {})
@@ -896,9 +1061,10 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
         hits_str = f"{st.get('shots_fired', 0)} shots"
         if st.get("first_shot_target"):
             hits_str += f" (first -> {st['first_shot_target']})"
+        src_str = f"`{st.get('source', 'n/a')}`"
         md.append(
             f"| **{fid}** | {st.get('total_stand_s', 0.0):.1f} s | {st.get('pre_contact_stand_s', 0.0):.1f} s | "
-            f"{first_shot_s} | {hits_str} |"
+            f"{src_str} | {first_shot_s} | {hits_str} |"
         )
     md.append("")
 
@@ -928,7 +1094,7 @@ def format_markdown_report(metrics: dict, arena_path: Path, round_arg: Union[int
 
 def main():
     parser = argparse.ArgumentParser(description="Generate 1-page PMC round decision timeline and evaluate H1-H4.")
-    parser.add_argument("arena", help="Path to arena result JSON file (e.g. *.arena.json)")
+    parser.add_argument("arena", help="Path to arena result JSON file, track file, or .arena directory")
     parser.add_argument(
         "--round",
         "-r",
@@ -947,31 +1113,90 @@ def main():
     args = parser.parse_args()
 
     arena_path = Path(args.arena)
-    if not arena_path.is_file():
-        sys.stderr.write(f"Error: Arena file not found: {arena_path}\n")
+    if not arena_path.exists():
+        sys.stderr.write(f"Error: Path not found: {arena_path}\n")
         sys.exit(1)
 
-    try:
-        arena_data = json.loads(arena_path.read_text(encoding="utf-8"))
-    except Exception as e:
-        sys.stderr.write(f"Error: Failed to parse arena JSON {arena_path}: {e}\n")
-        sys.exit(1)
-
-    try:
-        rnd, arena_meta, round_1based, round_0based = parse_arena_round(arena_data, args.round, args.zero_based)
-    except ValueError as e:
-        sys.stderr.write(f"Error: {e}\n")
-        sys.exit(1)
-
-    track_path = resolve_track_file(arena_path, round_1based, round_0based, args.track, rnd)
     track_data = None
-    if track_path and track_path.is_file():
+    arena_meta = {}
+    rnd = {}
+    round_1based = 1
+    round_0based = 0
+
+    if arena_path.is_dir():
+        arena_json_path = arena_path / "arena.json"
+        if arena_json_path.is_file():
+            try:
+                arena_data = json.loads(arena_json_path.read_text(encoding="utf-8"))
+                rnd, arena_meta, round_1based, round_0based = parse_arena_round(arena_data, args.round, args.zero_based)
+                track_path = resolve_track_file(arena_json_path, round_1based, round_0based, args.track, rnd)
+            except ValueError as e:
+                sys.stderr.write(f"Error: {e}\n")
+                sys.exit(1)
+        else:
+            try:
+                round_1based, round_0based = parse_round_identifier(args.round, num_rounds=0, zero_based=args.zero_based)
+            except ValueError as e:
+                sys.stderr.write(f"Error: {e}\n")
+                sys.exit(1)
+
+            if args.track:
+                track_path = Path(args.track)
+            else:
+                track_candidates = [
+                    arena_path / f"round_{round_1based}.track.json",
+                    arena_path / f"round_{round_0based}.track.json",
+                ]
+                track_path = next((p for p in track_candidates if p.is_file()), None)
+                if not track_path:
+                    all_tracks = sorted(arena_path.glob("round_*.track.json"))
+                    if all_tracks:
+                        track_path = all_tracks[0]
+
+            if not track_path or not track_path.is_file():
+                sys.stderr.write(f"Error: No round track files found in directory {arena_path}\n")
+                sys.exit(1)
+
+            track_data = json.loads(track_path.read_text(encoding="utf-8"))
+            rnd, arena_meta = synthesize_round_from_track(track_data, round_1based)
+
+    elif arena_path.is_file():
+        if arena_path.name.endswith(".track.json"):
+            track_path = arena_path
+            track_data = json.loads(track_path.read_text(encoding="utf-8"))
+            trk_round = track_data.get("round", 1)
+            round_1based = int(trk_round)
+            round_0based = round_1based - 1
+            rnd, arena_meta = synthesize_round_from_track(track_data, round_1based)
+        else:
+            try:
+                arena_data = json.loads(arena_path.read_text(encoding="utf-8"))
+            except Exception as e:
+                sys.stderr.write(f"Error: Failed to parse arena JSON {arena_path}: {e}\n")
+                sys.exit(1)
+
+            if arena_data.get("schema") == "codex.pmc_arena_track/1" or ("fighters" in arena_data and "rounds" not in arena_data):
+                track_path = arena_path
+                track_data = arena_data
+                trk_round = track_data.get("round", 1)
+                round_1based = int(trk_round)
+                round_0based = round_1based - 1
+                rnd, arena_meta = synthesize_round_from_track(track_data, round_1based)
+            else:
+                try:
+                    rnd, arena_meta, round_1based, round_0based = parse_arena_round(arena_data, args.round, args.zero_based)
+                except ValueError as e:
+                    sys.stderr.write(f"Error: {e}\n")
+                    sys.exit(1)
+                track_path = resolve_track_file(arena_path, round_1based, round_0based, args.track, rnd)
+
+    if track_data is None and track_path and track_path.is_file():
         try:
             track_data = json.loads(track_path.read_text(encoding="utf-8"))
         except Exception as e:
             sys.stderr.write(f"Warning: Failed to parse track file {track_path}: {e}\n")
 
-    log_path = resolve_log_file(arena_path, args.log)
+    log_path = resolve_log_file(arena_path if arena_path.is_file() else (arena_path / "arena.json"), args.log)
     log_data = parse_log_for_round(log_path, round_1based, round_0based)
 
     metrics = compute_trace_metrics(rnd, arena_meta, track_data, log_data)
