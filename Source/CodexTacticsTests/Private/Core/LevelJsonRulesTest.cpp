@@ -3,6 +3,9 @@
 #include "Data/LevelJsonRules.h"
 #include "Dom/JsonObject.h"
 #include "HAL/FileManager.h"
+#include "Misc/FileHelper.h"
+#include "Serialization/JsonReader.h"
+#include "Serialization/JsonSerializer.h"
 #include "Misc/Paths.h"
 
 #if WITH_DEV_AUTOMATION_TESTS
@@ -78,6 +81,15 @@ bool FLevelJsonFilesParseTest::RunTest(const FString&)
 	for (const FString& File : Files)
 	{
 		if (FPaths::GetBaseFilename(File) == TEXT("stage_template"))
+		{
+			continue;
+		}
+		// Layout-only files (Gemini 096 lab layouts, 2026-11-22: only "levelgen_layout", no combat yet) are valid JSON without waves.
+		FString Text;
+		TSharedPtr<FJsonObject> Root;
+		if (FFileHelper::LoadFileToString(Text, *(LevelJsonRules::GetLevelsDirectory() / File))
+			&& FJsonSerializer::Deserialize(TJsonReaderFactory<>::Create(Text), Root) && Root.IsValid()
+			&& Root->HasField(TEXT("levelgen_layout")) && !Root->HasField(TEXT("waves")))
 		{
 			continue;
 		}
