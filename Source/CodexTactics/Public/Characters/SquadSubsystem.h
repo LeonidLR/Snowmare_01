@@ -8,6 +8,7 @@
 #include "Characters/SquadWoundPaceRules.h"
 #include "Characters/FirePostureRules.h"
 #include "Formation/FormationBypassRules.h"
+#include "Formation/FormationConfinedRules.h"
 #include "Formation/FormationCornerHoldRules.h"
 #include "Formation/FormationCornerRules.h"
 #include "Formation/FormationCoverRules.h"
@@ -1234,6 +1235,8 @@ private:
 		bool bCatchUp = false;
 		/** Bug 2026-10-28: stepping aside out of the leader's own walk (FormationRuntime::YieldFromLeaderWay); logged once per yield. */
 		bool bYielding = false;
+		/** Entry order: he walks to a step-round point beside a standing body on his way to his confined place (logs the start). */
+		bool bConfinedStepping = false;
 		/** Rules v2.6 (Q2 = b): the lagging rear guard faces forwards while he catches up (FormationSectorRules::RearCatchUp's hysteresis). */
 		bool bRearTurned = false;
 		/** Item 2 (2026-11-03): the wall-leadership re-form's rear cover faces his walk while his place is far (FormationWallLeadership::ReformRearFacesWalk). */
@@ -1620,6 +1623,57 @@ private:
 	void UpdateFormationLeaderCorner(const AOperativeCharacter& LeaderRef);
 	/** F-2: this frame's follower places kept off the claimed corner (FormationLeaderCornerRules::KeepSlotsBehind on Sectors.FrameSlots). */
 	void ApplyFormationLeaderCorner();
+	/**
+	 * Designer decision 2026-11-21 ("the whole squad must enter"): in a confined navmesh pocket round the leader's arrival (a flat hall, a
+	 * 2.5 m corridor) this frame's follower slots that lie outside it move inside (FormationConfinedRules::CompressSlots on Sectors.FrameSlots;
+	 * not the wall order / its slide / a box selection). SquadSubsystemFormationConfined.cpp.
+	 */
+	void ApplyFormationConfined(const AOperativeCharacter& LeaderRef, bool bLeaderMoving, float DeltaTime);
+	/** The confined pocket probed for ApplyFormationConfined (held while its wanted centre stays within recenter_cm). */
+	struct FFormationConfinedState
+	{
+		bool bPocketValid = false;
+		FFormationConfinedPocket Pocket;
+		/** The navmesh height of the pocket centre, cm. */
+		double CenterZ = 0.0;
+		/** Where the squad came in from: the leader's position when this pocket was first probed (unset: he stood at its centre). */
+		TOptional<FVector2D> EntryFrom;
+		/** Seconds since the pocket was probed. */
+		float AgeSeconds = 0.f;
+		/** The rule moved slots last frame (logs a change), and how many. */
+		bool bActive = false;
+		int32 ReplacedCount = 0;
+		/** Followers whose crowd separation + obstacle avoidance the rule switched off (restored when it ends): they held them at the hall door. */
+		TArray<TWeakObjectPtr<AOperativeCharacter>> NoSeparation;
+		/** Each probe's number, and the entry line tests (FFormationConfinedLineTests::FromEntry) cached for one probe and entry point. */
+		uint32 ProbeStamp = 0;
+		uint32 EntryCacheStamp = 0;
+		FVector2D EntryCacheFrom = FVector2D::ZeroVector;
+		TMap<FIntPoint, bool> EntryCache;
+		/** The throat tests (FFormationConfinedLineTests::InRoom) cached for one probe. */
+		TMap<FIntPoint, bool> RoomCache;
+		/** The place each follower was given last frame (FFormationConfinedSlot::Held). */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, FVector2D> HeldPlaces;
+		/** Codex.Formation.Debug 2: the places last logged. */
+		FString LastLoggedPlaces;
+		/** Entry order (depth queue): the inside entry point of this pocket's way in (FormationConfinedRules::EntryOnPath; unset = the cost rule). */
+		TOptional<FVector2D> EntryInside;
+		/** Entry order: each follower's queue rank last frame (FFormationConfinedSlot::PrevRank). */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, int32> QueueRanks;
+		/** Entry order: each follower's navmesh way to the inside entry point, cm, and its age (refreshed every QueueRefreshSeconds). */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, float> ToEntryCm;
+		float ToEntryAge = 0.f;
+		/** Entry order block detection: how long each follower has stood away from his place, s, and his swap cooldown, s. */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, float> StillSeconds;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, float> SwapCooldown;
+		/** Entry order: the queue last logged. */
+		FString LastLoggedQueue;
+	};
+	FFormationConfinedState Confined;
+	/** Crowd separation + obstacle avoidance of Operative on / off (UCrowdFollowingComponent; the rule's own switch, Confined.NoSeparation). */
+	void SetConfinedCrowdSeparation(AOperativeCharacter& Operative, bool bSeparation);
+	/** The rule ends this frame (Solo, the followers hold, not in force): crowd separation back on; bKeepPocket = the probed pocket stays for reuse. */
+	void EndFormationConfined(const TCHAR* Why, bool bKeepPocket = false);
 	/** v2.1.1 (user "6A"): Look through FormationSectorRules::ClearLook unless the member is exempt (FormationGuardRuntime::ShouldClearLook). */
 	float ClearFormationLook(const AOperativeCharacter& Member, EFormationRole Role, bool bLeader, float Look);
 	/**

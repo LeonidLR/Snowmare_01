@@ -54,4 +54,51 @@ namespace VaultRules
 	 * each end of a 3 m barricade lay outside it, open navmesh for the enemies under a solid box.
 	 */
 	CODEXTACTICS_API FVector NavAreaExtent(const FBox& LocalBounds, const FVector& Scale, float PaddingCm = NavAreaPaddingCm);
+
+	/**
+	 * The walk after a vault arc (vault, obstacle step-off, mantle hop), bug 2026-11-22 (doors R1: L_Gen_StoryShowcase S03 / S09 "door_1 ->
+	 * storey_0" - the story's front door locked, the route goes in through a ground-floor window and the operative stopped behind the sill).
+	 * Godot vault_resume_target dropped the order when the goal lay within 0.6 m of the landing or more than ~84 deg off the vault direction
+	 * (dot < 0.1): Godot walks STRAIGHT at target_position, so a goal behind the obstacle meant walking back into it and vaulting again. Here the
+	 * resumed order is a new navmesh path from the landing spot (RequestMove), so the angle says nothing - a window into a room, a barricade
+	 * crossed mid-turn, a step-off sideways off an obstacle top all have their goal far off the arc's direction. The rule now:
+	 *  - no order (or no path) when the arc began, or the goal within ResumeArrivedCm of the landing -> the walk ends there (the old rule);
+	 *  - the arc crossed BACK over the obstacle the previous arc of the same walk crossed (bRecrossing, IsRecrossing) and the goal lies behind
+	 *    it (dot < ResumeBehindDot, the old angle gate) -> the walk ends (the ping-pong guard: a goal inside / on the obstacle, each arc
+	 *    landing past it - at most one crossing back);
+	 *  - otherwise the walk goes on to the goal, whatever the angle.
+	 */
+	constexpr float ResumeArrivedCm = 60.f;
+	constexpr float ResumeBehindDot = 0.1f;
+	/** A later vault belongs to the same walk when its goal is within this of the previous one's and it starts within RecrossWindowSeconds. */
+	constexpr float RecrossGoalToleranceCm = 100.f;
+	constexpr float RecrossWindowSeconds = 20.f;
+
+	enum class EVaultResume : uint8
+	{
+		Resume,   // walk on to the goal
+		NoOrder,  // nothing to resume
+		AtGoal,   // landed on (next to) the goal
+		PingPong  // crossed back over the same obstacle and the goal lies behind it again
+	};
+
+	struct FVaultResumeFacts
+	{
+		/** A move order with a path when the arc began (its goal = Goal). */
+		bool bHasOrder = false;
+		FVector Start = FVector::ZeroVector;
+		FVector Landing = FVector::ZeroVector;
+		FVector Goal = FVector::ZeroVector;
+		/** IsRecrossing of this arc. */
+		bool bRecrossing = false;
+	};
+
+	CODEXTACTICS_API EVaultResume DecideResume(const FVaultResumeFacts& Facts);
+
+	/**
+	 * Whether a vault crosses back over the obstacle the previous vault of the same walk crossed: the same obstacle, the previous vault
+	 * resumed its walk, the direction reversed (dot < 0), the same goal (RecrossGoalToleranceCm) and within RecrossWindowSeconds of it.
+	 */
+	CODEXTACTICS_API bool IsRecrossing(bool bSameObstacle, bool bPreviousResumed, const FVector& PreviousDirection, const FVector& Direction,
+		const FVector& PreviousGoal, const FVector& Goal, float SecondsSincePrevious);
 }
