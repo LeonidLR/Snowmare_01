@@ -1366,7 +1366,20 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 				&& FVector2D::Distance(FVector2D(OnNav.Location), Point) <= FormationYieldNavSnapCm
 				&& !UNavigationSystemV1::NavigationRaycast(GetWorld(), Feet, OnNav.Location, Hit);
 		};
-		if (const TOptional<FVector2D> Step = FormationConfinedRules::StepRoundBody(Here, MoveTarget, Bodies, FormationConfinedTuning::Get(), Walkable); Step.IsSet())
+		const FFormationConfinedTuning& ConfinedTuning = FormationConfinedTuning::Get();
+		// The leader makes room (2026-11-22): by the door, the standing leader first on his way and no side to step round him (the jambs on one
+		// side, the hall wall on the other), or only one whose straight way grazes him (the step point is on the navmesh, the way to it through
+		// his body) - he would push into him for good; the next ApplyFormationConfined steps the leader deeper.
+		const bool bRoomCheck = ConfinedTuning.LeaderRoomCm > 0.f && Confined.EntryInside.IsSet()
+			&& FVector2D::Distance(Here, Confined.EntryInside.GetValue()) <= 2.f * FMath::Max(ConfinedTuning.DoorMouthCm, ConfinedTuning.MinSpacingCm)
+			&& FormationConfinedRules::FirstBodyOnWay(Here, MoveTarget, Bodies, ConfinedTuning) == 0;
+		const TOptional<FVector2D> Step = FormationConfinedRules::StepRoundBody(Here, MoveTarget, Bodies, ConfinedTuning, Walkable);
+		if (bRoomCheck && (!Step.IsSet() || FormationConfinedRules::DistanceToSegment(Bodies[0], Here, Step.GetValue())
+			< ConfinedTuning.MinSpacingCm - FormationConfinedRules::LeaderRoomGrazeCm))
+		{
+			Confined.bLeaderRoomRequest = true;
+		}
+		if (Step.IsSet())
 		{
 			if (!Follower.bConfinedStepping)
 			{

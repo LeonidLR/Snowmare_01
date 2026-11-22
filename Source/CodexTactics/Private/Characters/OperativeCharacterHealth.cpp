@@ -3,6 +3,7 @@
 // Godot reference: Scenes/movements/player.gd (take_damage, die, corpse_loot). Knockdown: Sprint 14 (UE-only).
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/CodexGameplayRandom.h"
 
 #include "AI/PmcSquadSubsystem.h"
 #include "CodexTactics.h"
@@ -479,7 +480,7 @@ float AOperativeCharacter::ResolveIncomingHit(EOperativeHitKind Kind, float Amou
 		Squad->NotifyMemberAttacked(this);
 	}
 	// 1. Dodge on luck (Godot: luck 25 -> 10 %).
-	const float DodgeRoll = ForcedDodgeRollForTesting >= 0.f ? (ForcedDodgeRollForTesting >= 1.f ? -1.f : 101.f) : FMath::FRand() * 100.f;
+	const float DodgeRoll = ForcedDodgeRollForTesting >= 0.f ? (ForcedDodgeRollForTesting >= 1.f ? -1.f : 101.f) : CodexRandom::FRand(ECodexRandomStream::Combat, this) * 100.f;
 	ForcedDodgeRollForTesting = -1.f;
 	if (OperativeHitRules::IsDodged(Kind, DodgeRoll, Luck))
 	{

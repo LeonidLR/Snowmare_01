@@ -33,5 +33,10 @@
   "block_radius_cm": 95,
   "block_cooldown_s": 2.0,
   "_comment_body_clear": "body_clear_cm: a follower whose straight way to his confined place passes a standing body (the leader, a team-mate) closer than this (head on, not a graze the capsules slide past) walks first to a step-round point beside it (min_spacing_cm + 5 out, on the way's side, the other side when that is off the navmesh; the navmesh ignores bodies and the followers' crowd avoidance is off while compressed). 0 = off.",
-  "body_clear_cm": 55
+  "body_clear_cm": 55,
+  "_comment_door_mouth": "door_mouth_cm (2026-11-22, the walk smoke's remaining STUCK hall legs): the ground within this of the inside entry point is the way in of every man behind. A man standing in it is not through the door yet (dealt from there - his own straight navmesh line to every place cut by the jamb - he took the entry point itself and stood in the door for good, the man behind him on the landing); he is dealt from the inside entry point like the men outside. A place in it goes only to the last man of the queue. 0 = off.",
+  "door_mouth_cm": 70,
+  "_comment_leader_room": "leader_room_cm (2026-11-22, the same STUCK legs): the leader standing at his click just inside a hall door (85 cm in, the 2.3 m hall's middle) leaves no body's width between himself and the jambs - the first man in pushed into him from the door mouth and the man behind waited on the landing. When a follower near the door (within 2 x max(door_mouth_cm, min_spacing_cm) of the inside entry point) has the standing leader first on his way and no side to step round him, the leader steps straight away from the inside entry point until leader_room_cm from it, at most leader_room_max_cm (he stays by his click), on the navmesh - once per player order. 0 = off.",
+  "leader_room_cm": 130,
+  "leader_room_max_cm": 60
 }

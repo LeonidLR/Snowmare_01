@@ -472,6 +472,31 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 				InRoom, Recast ? Recast->FindDistanceToWall(FVector(Confined.Pocket.Center, Z), nullptr, 500.f) : -1.0);
 		}
 	}
+	// The leader makes room (2026-11-22, the walk smoke's STUCK hall legs): a follower by the door found the standing leader first on his way
+	// with no side to step round him - the leader steps straight away from the inside entry point (once per player order, at most
+	// leader_room_max_cm, on the navmesh); the pocket follows him and the queue is dealt again round his new spot.
+	const bool bRoomRequest = Confined.bLeaderRoomRequest;
+	Confined.bLeaderRoomRequest = false;
+	AOperativeCharacter* const LeaderMutable = GetLeader();
+	if (bRoomRequest && Result.bQueued && LeaderMutable == &LeaderRef && !bLeaderMoving && LeaderRef.GetVelocity().Size2D() < ConfinedStandingSpeed
+		&& !LeaderRef.HasOwnMoveOrder() && Confined.LeaderRoomSerial.Get(LeaderRef.GetMoveOrderSerial() + 1u) != LeaderRef.GetMoveOrderSerial())
+	{
+		const FVector2D EntryIn = Queue.EntryInside;
+		const FVector2D Away = (LeaderAt - EntryIn).GetSafeNormal();
+		const float ProbeCm = Tuning.LeaderRoomMaxCm + Tuning.WallMarginCm + 1.f;
+		FVector Hit;
+		const float FreeAhead = UNavigationSystemV1::NavigationRaycast(World, Feet, Feet + FVector(Away * ProbeCm, 0.0), Hit)
+			? static_cast<float>(FVector::Dist2D(Feet, Hit)) : ProbeCm;
+		const TOptional<FVector2D> Step = FormationConfinedRules::LeaderRoomStep(LeaderAt, EntryIn, FreeAhead, Tuning);
+		FNavLocation OnNav;
+		if (Step.IsSet() && Nav->ProjectPointToNavigation(FVector(Step.GetValue(), Feet.Z), OnNav, ConfinedProjectExtent))
+		{
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] confined: the leader makes room - %s at (%.0f, %.0f), %.0f cm from the door's inside point (%.0f, %.0f), steps to (%.0f, %.0f)"),
+				*LeaderRef.DisplayName.ToString(), LeaderAt.X, LeaderAt.Y, FVector2D::Distance(LeaderAt, EntryIn), EntryIn.X, EntryIn.Y, OnNav.Location.X, OnNav.Location.Y);
+			LeaderMutable->OrderMoveTo(OnNav.Location, /*bSprint*/ false);
+		}
+		Confined.LeaderRoomSerial = LeaderRef.GetMoveOrderSerial(); // tried for this order (stepped or not): never again until his next one
+	}
 	Confined.bActive = true;
 	Confined.ReplacedCount = Result.ReplacedCount;
 }

@@ -23,6 +23,8 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "HAL/IConsoleManager.h"
+#include "CodexTactics.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Interactables/RadiusRingSubsystem.h"
 #include "Falls/LedgeFallComponent.h"
@@ -328,6 +330,17 @@ bool AOperativeCharacter::IsPanicking() const
 
 void AOperativeCharacter::Tick(float DeltaTime)
 {
+#if !UE_BUILD_SHIPPING
+	// Determinism hunt (2026-11-22): Codex.Random.Trace 2 also logs every fighter's exact state each tick, to diff two runs of one seed.
+	static const IConsoleVariable* TraceVar = IConsoleManager::Get().FindConsoleVariable(TEXT("Codex.Random.Trace"));
+	if (TraceVar && TraceVar->GetInt() >= 2)
+	{
+		const FVector L = GetActorLocation();
+		const FVector V = GetVelocity();
+		UE_LOG(LogCodexTactics, Display, TEXT("[RngPos] f=%llu w=%.4f %s p=%.3f,%.3f,%.3f v=%.3f,%.3f yaw=%.3f"), static_cast<unsigned long long>(GFrameCounter),
+			GetWorld() ? GetWorld()->GetTimeSeconds() : -1.0, *GetName(), L.X, L.Y, L.Z, V.X, V.Y, GetActorRotation().Yaw);
+	}
+#endif
 	const float TickYawBefore = static_cast<float>(GetActorRotation().Yaw);
 	Super::Tick(DeltaTime);
 	UpdateCriticalWound(); // the critical wound: down and crawling only until healed (CriticalWoundRules, OperativeCharacterStance.cpp)
