@@ -149,6 +149,8 @@ namespace PmcArena
 
 	struct FOptions
 	{
+		/** Key=Value arguments no option reads (2026-11-22: a silently ignored ZoneCover=1 cost a 300-seed run) - the arena refuses to run. */
+		TArray<FString> UnknownKeys;
 		int32 Rounds = 1;
 		int32 Seed = 1;
 		FString WeightsA;
@@ -607,6 +609,10 @@ namespace PmcArena
 				{
 					UE_LOG(LogCodexTactics, Warning, TEXT("[PmcArena] Script=%s is not a script mode (run | bound): run"), *Value);
 				}
+			}
+			else
+			{
+				Options.UnknownKeys.Add(Key);
 			}
 		}
 		return Options;
@@ -4010,6 +4016,15 @@ namespace PmcArena
 		TSharedRef<FState> State = MakeShared<FState>();
 		State->Options = Parse(Args);
 		State->Options.bSmoke |= bSmoke;
+		if (State->Options.UnknownKeys.Num() > 0)
+		{
+			// A typo or an option this build does not have (an A/B arm run on the wrong branch) must not play a plain round instead.
+			const FString Keys = FString::Join(State->Options.UnknownKeys, TEXT(", "));
+			UE_LOG(LogCodexTactics, Error, TEXT("[PmcArena] unknown argument(s): %s - not an option of this build; the arena does not run"), *Keys);
+			Check(*State, false, FString::Printf(TEXT("every arena argument is known (unknown: %s)"), *Keys));
+			Finish(*State, World, false);
+			return;
+		}
 		if (bSmoke)
 		{
 			State->Options.Rounds = 1;
