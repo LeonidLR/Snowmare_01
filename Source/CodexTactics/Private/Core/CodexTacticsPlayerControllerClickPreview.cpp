@@ -21,6 +21,8 @@
 #include "Formation/FormationWallEndRules.h"
 #include "GameFramework/Pawn.h"
 #include "HAL/IConsoleManager.h"
+#include "Interactables/DoorActor.h"
+#include "Interactables/DoorSubsystem.h"
 #include "Interactables/InteractableActor.h"
 #include "Interactables/MantleNavigation.h"
 #include "Interactables/TripwireActor.h"
@@ -87,7 +89,7 @@ FHitResult ACodexTacticsPlayerController::LowerBuildingHit(const FHitResult& Hit
 	UWorld* World = GetWorld();
 	const AActor* HitActor = Hit.GetActor();
 	if (ControllerClickPreviewLocal::CVarLowerHighHits.GetValueOnGameThread() == 0 || !Leader || !World || !HitActor || HitActor->IsA<APawn>()
-		|| HitActor->IsA<AInteractableActor>() || HitActor->IsA<ACoverGhostActor>())
+		|| HitActor->IsA<AInteractableActor>() || HitActor->IsA<ACoverGhostActor>() || HitActor->IsA<ADoorActor>())
 	{
 		return Hit;
 	}
@@ -137,6 +139,11 @@ bool ACodexTacticsPlayerController::IsClickPreviewBypass(const FHitResult& Hit) 
 	// The ordinary click's own targets: a ladder, an EXIT arrow, a wire, an object, a body, a silhouette, an enemy.
 	if (HitActor->IsA<ALadderActor>() || HitActor->IsA<AInteriorExitArrowActor>() || HitActor->IsA<ATripwireActor>() || HitActor->IsA<AInteractableActor>()
 		|| (HitActor->IsA<APawn>() && !HitActor->IsA<AVehiclePawn>()) || HitActor->IsA<AEnemyGhostActor>() || HitActor->ActorHasTag(FName(TEXT("Enemy"))))
+	{
+		return true;
+	}
+	// Openable doors R1 (switch on only): a click on a door leaf / by an open leaf is the door order, not a breach or cover ghost.
+	if (const UDoorSubsystem* Doors = GetWorld()->GetSubsystem<UDoorSubsystem>(); Doors && Doors->FindClickedDoor(Hit))
 	{
 		return true;
 	}

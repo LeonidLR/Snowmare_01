@@ -15,6 +15,8 @@
 #include "Combat/CombatTimeModeRules.h"
 #include "Interactables/BarrelActor.h"
 #include "Interactables/DeployableActor.h"
+#include "Interactables/DoorActor.h"
+#include "Interactables/DoorSubsystem.h"
 #include "UI/FloatingTextSubsystem.h"
 #include "Combat/HealthComponent.h"
 #include "CodexTactics.h"
@@ -237,6 +239,22 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 		Hit = FHitResult(nullptr, nullptr, Target, FVector::UpVector);
 		Hit.bBlockingHit = true;
 		UE_LOG(LogCodexTactics, Display, TEXT("Click on ladder %s: a move to its %s end"), *Ladder->GetName(), bLeaderAbove ? TEXT("bottom") : TEXT("top"));
+	}
+
+	// Openable doors R1 (designer 2026-11-21 / door spec 2026-11-22, behind Codex.Doors.Openable): a click on a door leaf (or on the floor by
+	// an open leaf) sends the leader to it (UDoorSubsystem): click = open by hand / shut / the key, double click = kick, Ctrl + click on a
+	// locked door = shoot the lock. Real time / exploring only: the pause and the grid take the click as before.
+	if (UDoorSubsystem* Doors = GetWorld()->GetSubsystem<UDoorSubsystem>(); Doors && Doors->IsActive())
+	{
+		const UGameFlowSubsystem* DoorFlow = GetWorld()->GetSubsystem<UGameFlowSubsystem>();
+		const ECodexCombatMode DoorMode = DoorFlow ? DoorFlow->GetCombatMode() : ECodexCombatMode::None;
+		ADoorActor* Door = DoorMode == ECodexCombatMode::None || DoorMode == ECodexCombatMode::RealTime ? Doors->FindClickedDoor(Hit) : nullptr;
+		const bool bDoorDouble = Door && Doors->NoteClick(Door, FApp::GetCurrentTime(), DoubleClickSeconds);
+		if (Door && Doors->RequestInteraction(Door, Leader, bDoorDouble, IsAttackModifierDown()))
+		{
+			return;
+		}
+		Doors->CancelInteraction(Leader); // any other click replaces his door order
 	}
 
 	// Rev 5g (user request 2026-10-14): an EXIT arrow at a door of the building whose interior camera shows - the squad (Solo: the
