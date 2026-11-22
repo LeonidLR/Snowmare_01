@@ -259,10 +259,14 @@ namespace FormationConfinedLocal
 			return IsInside(Pocket, Point, Tuning) && !OnWay(Point) && !IsOnEntry(Pocket, EntryFrom, Point, Tuning) && !IsPastLeader(Pocket, EntryFrom, Point, Tuning)
 				&& SeenFromEntry(Point) && InRoom(Point);
 		};
+		// The door mouth (DoorMouthCm round the inside entry point): the way in of every man behind.
+		const auto InMouth = [&](const FVector2D& Point) { return Tuning.DoorMouthCm > 0.f && FVector2D::Distance(Point, In) < Tuning.DoorMouthCm; };
+		// A man standing in the door mouth is not through yet: dealt from there (his own straight line to every place cut by the jamb) he took
+		// the entry point itself and stood in the door for good, the man behind him on the landing (the walk smoke's STUCK hall legs).
 		const auto Through = [&](int32 Index)
 		{
 			const TOptional<FVector2D>& At = Slots[Index].Occupant;
-			return At.IsSet() && IsInside(Pocket, At.GetValue(), Tuning) && InRoom(At.GetValue());
+			return At.IsSet() && IsInside(Pocket, At.GetValue(), Tuning) && InRoom(At.GetValue()) && !InMouth(At.GetValue());
 		};
 		TArray<FVector2D> Given{ Pocket.Center };
 		TArray<FConfinedWay> Ways;
@@ -351,10 +355,13 @@ namespace FormationConfinedLocal
 			}
 		}
 
-		for (const int32 OpenIndex : Order)
+		for (int32 Turn = 0; Turn < Order.Num(); ++Turn)
 		{
-			const int32 Index = Open[OpenIndex];
+			const int32 Index = Open[Order[Turn]];
 			const bool bThrough = Through(Index);
+			// A place in the door mouth only for the last man in (nobody walks in behind him).
+			const bool bMouthBarred = Turn + 1 < Order.Num();
+			const auto Barred = [&](const FVector2D& Point) { return bMouthBarred && InMouth(Point); };
 			const FVector2D Ref = bThrough ? Slots[Index].Occupant.GetValue() : In;
 			const auto WayClear = [&](const FVector2D& Point)
 			{
@@ -400,7 +407,7 @@ namespace FormationConfinedLocal
 						// takes him past the leader (the walk smoke's first man took the entry point itself when his own line tests failed).
 						const int32 Candidate = Tier == 3 && !Ways.IsEmpty() ? Pool.Num() - 1 - Each : Each;
 						const FVector2D& Point = Pool[Candidate];
-						if (!Spaced(Point, Tuning.MinSpacingCm) || (Tier <= 1 && OnEntryLines[PoolIndex][Candidate]) || (Tier == 0 && !OffEarlierWays(Point))
+						if (Barred(Point) || !Spaced(Point, Tuning.MinSpacingCm) || (Tier <= 1 && OnEntryLines[PoolIndex][Candidate]) || (Tier == 0 && !OffEarlierWays(Point))
 							|| (Tier <= 2 && !WayClear(Point)))
 						{
 							continue;
@@ -416,6 +423,10 @@ namespace FormationConfinedLocal
 				float BestRoom = -1.f;
 				for (const FVector2D& Point : All)
 				{
+					if (Barred(Point))
+					{
+						continue;
+					}
 					float Room = TNumericLimits<float>::Max();
 					for (const FVector2D& Each : Given)
 					{
@@ -550,14 +561,13 @@ TArray<int32> FormationConfinedRules::QueueOrder(TArrayView<const float> Keys, T
 	return Order;
 }
 
-TOptional<FVector2D> FormationConfinedRules::StepRoundBody(const FVector2D& Here, const FVector2D& Place, TArrayView<const FVector2D> Bodies,
-	const FFormationConfinedTuning& Tuning, const TFunction<bool(const FVector2D&)>& IsWalkable)
+int32 FormationConfinedRules::FirstBodyOnWay(const FVector2D& Here, const FVector2D& Place, TArrayView<const FVector2D> Bodies, const FFormationConfinedTuning& Tuning)
 {
 	const FVector2D Way = Place - Here;
 	const double Length = Way.Size();
 	if (Tuning.BodyClearCm <= 0.f || Length < 1.0)
 	{
-		return TOptional<FVector2D>();
+		return INDEX_NONE;
 	}
 	const FVector2D Dir = Way / Length;
 	// The first body ahead on the way, closer to it than the clearance.
@@ -576,10 +586,36 @@ TOptional<FVector2D> FormationConfinedRules::StepRoundBody(const FVector2D& Here
 			FirstAlong = Along;
 		}
 	}
+	return First;
+}
+
+TOptional<FVector2D> FormationConfinedRules::LeaderRoomStep(const FVector2D& LeaderAt, const FVector2D& EntryInside, float FreeAheadCm, const FFormationConfinedTuning& Tuning)
+{
+	const FVector2D Away = LeaderAt - EntryInside;
+	const double Distance = Away.Size();
+	if (Tuning.LeaderRoomCm <= 0.f || Distance < 1.0)
+	{
+		return TOptional<FVector2D>(); // off, or he stands on the entry point itself (no way to tell "away")
+	}
+	const double Step = FMath::Min3(static_cast<double>(Tuning.LeaderRoomCm) - Distance, static_cast<double>(Tuning.LeaderRoomMaxCm),
+		static_cast<double>(FreeAheadCm - Tuning.WallMarginCm));
+	if (Step < LeaderRoomMinStepCm)
+	{
+		return TOptional<FVector2D>();
+	}
+	return LeaderAt + Away / Distance * Step;
+}
+
+TOptional<FVector2D> FormationConfinedRules::StepRoundBody(const FVector2D& Here, const FVector2D& Place, TArrayView<const FVector2D> Bodies,
+	const FFormationConfinedTuning& Tuning, const TFunction<bool(const FVector2D&)>& IsWalkable)
+{
+	const int32 First = FirstBodyOnWay(Here, Place, Bodies, Tuning);
 	if (First == INDEX_NONE)
 	{
 		return TOptional<FVector2D>();
 	}
+	const FVector2D Dir = (Place - Here).GetSafeNormal();
+	const double FirstAlong = FVector2D::DotProduct(Bodies[First] - Here, Dir);
 	// Out from the body toward the way (its own side first; on the line: the left of his walk first).
 	const FVector2D Body = Bodies[First];
 	const FVector2D Closest = Here + Dir * FirstAlong;
@@ -851,6 +887,9 @@ FFormationConfinedTuning FormationConfinedTuning::FromJson(const FJsonObject& Js
 	ReadConfinedNumber(Json, TEXT("block_radius_cm"), Tuning.BlockRadiusCm, 40.f, 300.f);
 	ReadConfinedNumber(Json, TEXT("block_cooldown_s"), Tuning.BlockCooldownSeconds, 0.f, 30.f);
 	ReadConfinedNumber(Json, TEXT("body_clear_cm"), Tuning.BodyClearCm, 0.f, 200.f);
+	ReadConfinedNumber(Json, TEXT("door_mouth_cm"), Tuning.DoorMouthCm, 0.f, 200.f);
+	ReadConfinedNumber(Json, TEXT("leader_room_cm"), Tuning.LeaderRoomCm, 0.f, 400.f);
+	ReadConfinedNumber(Json, TEXT("leader_room_max_cm"), Tuning.LeaderRoomMaxCm, 0.f, 200.f);
 	return Tuning;
 }
 

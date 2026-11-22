@@ -40,7 +40,8 @@ class FJsonObject;
  *   just past the door throat, the door side EntryBackCm back along the way) the places are dealt as a depth queue - QueueSlots: a man through
  *   the door keeps his held place; the others, nearest the door first (QueueOrder, hysteresis), take the deepest free place from the inside
  *   entry point that keeps the spacing, lies off every earlier man's way in and has his own way clear (pools: seen from the door + in the room,
- *   in the room, any; the last tier the shallowest); a detected block (BlockedBy) swaps two held places. The runtime walks a man round a
+ *   in the room, any; the last tier the shallowest); a detected block (BlockedBy) swaps two held places. A man in the DOOR MOUTH (within
+ *   DoorMouthCm of the inside entry point) is not through yet, and a place there goes to the last man only. The runtime walks a man round a
  *   standing body head on his way (StepRoundBody). No queue input / entry_queue 0: the cost rule above.
  * Content/Data/AI/squad_confined.json (snake_case keys, metres where the key says _m; a missing key keeps the default), read on the first
  * FormationConfinedTuning::Get(); console Codex.Formation.Confined (-1 = the file's "enabled", 0 = off - the old slots, 1 = on).
@@ -141,6 +142,24 @@ struct CODEXTACTICS_API FFormationConfinedTuning
 	 * inside the door; at 80 a 76 cm graze in the doorway sent him round the leader's far side), cm (body_clear_cm; 0 = off).
 	 */
 	float BodyClearCm = 55.f;
+	/**
+	 * Entry order, the DOOR MOUTH (2026-11-22, the walk smoke's remaining STUCK hall legs): the ground within this of the inside entry point is
+	 * the way in of every man behind. (1) A man standing in it is not "through the door" yet - his own straight navmesh line to every place in
+	 * the room is cut by the jamb, so dealt from there he got the entry point itself (depth 5) and stood in the door for good while the man
+	 * behind him waited on the landing; he is dealt from the inside entry point like the men outside. (2) A place in it goes only to the LAST
+	 * man of the queue (nobody walks in behind him). Cm (door_mouth_cm; 0 = off: the rule before).
+	 */
+	float DoorMouthCm = 70.f;
+	/**
+	 * Entry order, the LEADER MAKES ROOM (2026-11-22, the same STUCK legs): the leader standing at his click just inside a hall door (85 cm in,
+	 * the 2.3 m hall's middle) leaves no body's width between himself and the jambs - the first man in pushed into him from the door mouth
+	 * (velocity 0, no walkable side to step round him) and the man behind waited on the landing. When a follower near the door has the
+	 * leader first on his way and no side to step round him, the standing leader steps straight away from the inside entry point until he is
+	 * this far from it - once per player order (leader_room_cm; 0 = off).
+	 */
+	float LeaderRoomCm = 130.f;
+	/** ... at most this far from where he stands (he stays by his click), cm (leader_room_max_cm). */
+	float LeaderRoomMaxCm = 60.f;
 };
 
 /**
@@ -310,6 +329,28 @@ namespace FormationConfinedRules
 
 	/** StepRoundBody's margin beyond the body clearance, cm. */
 	inline constexpr float StepRoundMarginCm = 5.f;
+
+	/**
+	 * The body StepRoundBody walks round: the first of Bodies ahead on the straight way Here -> Place (projected strictly between them) closer
+	 * than BodyClearCm to it; INDEX_NONE: none (or BodyClearCm 0).
+	 */
+	CODEXTACTICS_API int32 FirstBodyOnWay(const FVector2D& Here, const FVector2D& Place, TArrayView<const FVector2D> Bodies, const FFormationConfinedTuning& Tuning);
+
+	/**
+	 * The leader makes room (FFormationConfinedTuning::LeaderRoomCm): where the standing leader at LeaderAt steps to - straight away from the
+	 * inside entry point until LeaderRoomCm from it, at most LeaderRoomMaxCm and FreeAheadCm - WallMarginCm (the navmesh free distance that way).
+	 * Unset: off, already that far from the door, or a step under LeaderRoomMinStepCm.
+	 */
+	CODEXTACTICS_API TOptional<FVector2D> LeaderRoomStep(const FVector2D& LeaderAt, const FVector2D& EntryInside, float FreeAheadCm, const FFormationConfinedTuning& Tuning);
+
+	/** LeaderRoomStep's shortest step, cm. */
+	inline constexpr float LeaderRoomMinStepCm = 10.f;
+
+	/**
+	 * The runtime's leader-room request also fires when the step-round point's straight way passes the leader closer than MinSpacingCm minus
+	 * this (two capsules touch at 80 cm: a graze the capsules slide past is let through), cm.
+	 */
+	inline constexpr float LeaderRoomGrazeCm = 10.f;
 }
 
 namespace FormationConfinedTuning
