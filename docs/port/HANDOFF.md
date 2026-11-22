@@ -1,5 +1,15 @@
 # HANDOFF — CodexTactics (UE 5.8 port of Operation: Cold Silence)
 
+**Story-showcase labels (`claude/bgen-test`, 2026-11-22, designer test item 6; dev overlay, CodexTacticsDev).** `UStoryLabelSubsystem` draws
+on the game canvas (debug draw "Game": PIE, -game, screenshots) the story of every house ("3 · Запертая дверь", layout `buildings[].stories`)
+over its roof and the state of every shut door ("заперта" / "закрыта" / "заколочена" / "завалена" from the leaf tags; with the doors on the
+live state, the strength and "открыта"; the story that set it). Door labels follow the cutaway (`StoryLabelRules::IsDoorLabelHidden`: inside a
+house only his storey, outside the ground storey + story doors). Console `Codex.Debug.StoryLabels` -1 = the showcase maps only. The texts are
+Russian (a test overlay for the designer, not HUD): pure rules in the runtime `Private/Debug` (the player-text guard skips it), tests
+`CodexTactics.Debug.StoryLabels.*` 3/3. Pictures: `CodexTactics.StoryShowcaseFixShots` (needs rendering) -> `Saved/StoryShowcase/fixes/`
+(31 per map: the street, every house, every entrance's leaf swing oblique + top). Designer summary: `docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md`
+"Исправления по вашему тесту".
+
 **Doors: the open leaf's side (`claude/bgen-test`, 2026-11-22, designer test item 3; game C++ + doors.json).** Every door now opens to one
 side chosen at the adoption (`DoorRules::ChooseSwing`, `doors.json swing_fixed`): clear of walls, of every other doorway's approach zone
 (leafless layout doorways too) and of stair mouths; entrances open OUTWARD; where neither side is free the angle is limited (>= 30 deg).
