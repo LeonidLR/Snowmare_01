@@ -44,6 +44,19 @@ off the navmesh; its vault area is switched back on and refreshed at the new spo
 gap; a barricade pushed into it by a mate with the real push task, then a freshly placed one: box off the navmesh, the path straight through both
 ways ~7 m, the leader vaults over and back).
 
+### The walk goes on after a vault whatever the angle (bug 2026-11-22, doors R1)
+
+With openable doors on, `LevelGenBuildingsWalkSmoke` on `L_Gen_StoryShowcase` lost S03 / S09 "door_1 -> storey_0": the story's front door is
+locked, the route goes in through a ground-floor window, and after the vault over the sill the operative stopped. Cause: `UpdateVault` kept the
+Godot `vault_resume_target` gate - resume only when the goal lies within ~84 deg of the vault direction (dot >= 0.1). Godot walks STRAIGHT at
+its target, so a goal behind the obstacle meant walking back into it; here the resumed order is a new navmesh path from the landing spot
+(`RequestMove`), and a room goal to the side of a window (or a step-off sideways off an obstacle top, a barricade crossed mid-turn) is a normal
+case. Rule now (`VaultRules::DecideResume`, every arc: vault, obstacle step-off, mantle hop): no order / the goal within 60 cm of the landing ->
+the walk ends; otherwise it goes on, whatever the angle. The ping-pong guard that replaces the gate (`VaultRules::IsRecrossing`, `TryVault`
+remembers the last vault's obstacle / direction / goal / time): a vault back over the obstacle the previous vault of the same walk crossed
+(same goal within 1 m, within 20 s, reversed direction, the previous one resumed) ends the walk when the goal lies behind it again (a goal on /
+inside the obstacle) - at most one crossing back. Tests `CodexTactics.Characters.Vault.Resume`.
+
 ### Falls and drops (game designer items 6 / 10 / 11a, 2026-11-03, branch `fix/falls-and-drops`)
 
 The play-test on the generated map `L_Gen_Depot_1`: (6) on a raised bridge / roof an operative never stepped past the edge (the navmesh kept every

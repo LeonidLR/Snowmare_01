@@ -18,8 +18,17 @@ entries 71, 71 vs 70, 70 of 78; path check 6/6 and 9/9 everywhere. The 2 lost wa
 the story's LOCKED front door, the route goes round through a ground window and the vault does not resume the walk (`UpdateVault` resumes
 only when the target lies within ~84 deg of the vault direction - pre-existing vault rule, exposed by real locked doors). Open: the 14 kit
 doors without a lifted leaf (12 entrances: `SM_SH_Ent_Door_Steel` is one frame + leaf module, pivot 165 cm off the doorway centre - needs a
-leaf-only instance from kit_dress; 2 balcony escape doors: no kit leaf) stay static on the dressed map; the vault resume; keys as loot;
+leaf-only instance from kit_dress; 2 balcony escape doors: no kit leaf) stay static on the dressed map; the vault resume (fixed, below); keys as loot;
 kick / hand / key clips; enemies vs doors; door states in saves. Door actors carry the leaf's building= / floor= tags (storey cutaway).
+
+**Vault resume fixed (`claude/bgen-test` a3d8c0e4 + 20733cc2, 2026-11-22; isolated vault code + test, cherry-pickable to main).** The ~84 deg
+gate in `UpdateVault` (Godot `vault_resume_target`; Godot walks straight, here the resume is a new navmesh path) is replaced by
+`VaultRules::DecideResume`: after any arc (vault, step-off, mantle hop) the walk goes on whatever the angle; only a vault back over the same
+obstacle of the same walk (`VaultRules::IsRecrossing`) with the goal behind it again ends it (ping-pong guard). Tests
+`CodexTactics.Characters.Vault.*` 3/3; VaultSmoke, DepotVaultSmoke, BarricadeVaultBackSmoke, BarricadeContactSmoke, MantleSmoke,
+MantleDescentSmoke PASS. Showcase walk (local, fixed 60, -SquadStart=formation, budget 1500, two runs each): doors ON walk legs 21/21, 21/21
+(was 17/21), flat entries 72, 72 of 84; doors OFF 21/21, 21/21 (was 19/21), entries 73, 73; BgenPlans walk 32/32, entries 70/78. The walk
+smoke verdict stays FAIL on the known follower-STUCK hall legs (entry queue item above). Rule: [stances-and-movement](../systems/stances-and-movement.md).
 
 **Storey cutaway (`claude/bgen-test`, 2026-11-22; designer bug, top priority: "in the dressed khrushchevka showcase I cannot see what
 happens inside").** Root cause: `URoofCutawaySubsystem` only cut static meshes whose bottom is above the selected man's head, found by an
