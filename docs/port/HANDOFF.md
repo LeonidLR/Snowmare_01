@@ -52,6 +52,19 @@ at the door by his team-mate's body (78-80 cm apart, velocity 0) whose place lie
 from an entry point INSIDE the doorway (the leader's first position within the room radius; within the 160 cm pocket radius it lies on the
 landing and the door line test drops out), the man first through the door takes the deepest reachable place, the next the next; re-rank only
 when a man is blocked (no progress while a team-mate stands within two radii on his way). A plain place swap was tried and gave nothing.
+Entry order (2026-11-22, done): why round 2's inside entry point raised the slow legs - it was taken from the leader's walk and moved mid-walk
+into the door throat, where the jamb test saw 0 places, the filter was dropped and the places were dealt again as the men reached the door
+(one right at the door's inner mouth: the 78-80 cm blocker; B_y diagnostics). Now (`FormationConfinedRules` `EntryOnPath` / `QueueOrder` /
+`QueueSlots` / `StepRoundBody`, runtime `SquadSubsystemFormationConfined.cpp`): the inside entry point comes from the squad's navmesh way in
+(the leader's path to the pocket centre, else the farthest follower's) once per pocket, the door side `entry_back_cm` back along it (entry line);
+the jamb test runs from the inside point; places rank by depth from it, the man nearest the door (navmesh way, `queue_hysteresis_cm`) takes the
+deepest that keeps the spacing, lies off every earlier man's way in and has his own way clear (pools seen+in room / in room / any; the last tier
+the shallowest); a man through the door keeps his place; a block (standing `block_s` with a mate on his way) swaps held places; a follower
+walks round a standing body head on his way (`body_clear_cm` 55: the first man in pushed into the leader standing 60 cm inside the door); a
+confined place has no slot velocity (the feed-forward sent the first move 120 cm past it). Switch `entry_queue` / `Codex.Formation.ConfinedQueue 0`.
+Tried and dropped: `arrive_m` 4.5 (compress from the order) - B_y 36 -> 23/40. Walk smoke (budget 1500) final: showcase 100 -> 104/120, kit
+100 -> 104/120, BgenPlans 81 -> 85/100; hall legs STUCK/ratio/STOPPED 6/14/0 -> 10/6/0, 7/11/2 -> 11/5/0, 8/6/3 -> 6/5/3 - the slow legs are
+mostly gone, STUCK is not: in the showcase halls the first man (no way past the standing leader) still takes a shallow place by the door.
 
 **Обновление за 2026-11-18, main `50c0f915`.** Ожидающие подъёма бойцы смотрят наружу даже рядом с пропсами (`ccdec8d3`), появление пропсов X6 и X4 стало плавнее (`13be5a16`), сгенерированные карты используют холод и погоду (`6dbc9e38`). G007 исправил атаки на пандусе (`e24a6d6f`). Из задачи 044 в main вошёл выстрел из приседа за высоким углом (`e4558688`). Ошибки PeekMines и Suppression остаются открытыми. Antigravity 083/083c расширили покрытие архива QD и проверку настроек тренера (`b41973d8`, `d72b9629`). В AgentChat компактнее сообщения об ожидании (`7e4715d9`), инструменты API поддерживают второй ключ (`b9170e47`). Загрузка, пауза у бочки и урок аптечки обновлены в `4db03229`. Подробности в разделе «Сделано (2026-11-18)» файла TASK_BOARD.
 
