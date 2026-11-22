@@ -74,7 +74,7 @@ namespace SquadSubsystemFormationLocal
 	/**
 	 * A follower's goal ON the leader's floor (designer 2026-11-22, "stuck on the stairwell": a slot over the stairwell opening has no floor
 	 * at the leader's level - the move projected it onto the flight above / below and he climbed there and pushed, FormationStairSmoke S10).
-	 * The navmesh at XY within FormationYieldLevelCm of FloorZ, else the nearest such point on rings out to 3 m, else XY at FloorZ unchanged.
+	 * FloorZ is a FEET height (not the capsule centre). The navmesh at XY within FormationYieldLevelCm of FloorZ, else the nearest such point on rings out to 3 m, else XY at FloorZ unchanged.
 	 */
 	FVector SnapGoalToFloor(const UWorld* World, const FVector2D& XY, float FloorZ)
 	{
@@ -1486,11 +1486,14 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	// Designer 2026-11-22 ("stuck on the stairwell"): a man on the next flight right over his slot (152 cm up, FormationStairSmoke S10) passed the
 	// 150 cm bypass level test as "the same level" - 40 cm off his slot in 2D, the follow law crawled him at ~0 and he stood on the stairs. For
 	// following, half a flight (FollowerLevelCm) already is another level: he walks the navmesh way to his slot.
+	// LeaderFloorZ / SlotLocation.Z are capsule-centre heights; the navmesh lies at the feet (fix 2026-11-22: snapped at the centre height, the
+	// goal landed on the flight ~150 cm above the leader's floor - the follower climbed it, FormationStairSmoke S10).
+	const float LeaderHalfHeight = LeaderRef.GetSimpleCollisionHalfHeight();
 	if (bLeaderLevel && FMath::Abs(static_cast<float>(Operative.GetActorLocation().Z) - LeaderFloorZ) > FollowerLevelCm)
 	{
 		Follower.bParked = false;
 		Follower.bCatchUp = true;
-		Operative.FollowTo(SnapGoalToFloor(GetWorld(), FVector2D(SlotLocation), LeaderFloorZ),
+		Operative.FollowTo(SnapGoalToFloor(GetWorld(), FVector2D(SlotLocation), LeaderFloorZ - LeaderHalfHeight),
 			SquadWoundPaceRules::CapFixedSpeed(FormationTuning::Get().PaceWalkSpeed, Top, bWoundCap, SquadWoundPaceTuning::Get(), bWoundCap));
 		return true;
 	}
@@ -1513,7 +1516,7 @@ bool USquadSubsystem::UpdateSectorFollower(FFollowerState& Follower, AOperativeC
 	const FVector2D Destination = FormationRuntime::LeadDestination(MoveTarget, SlotVelocity);
 	// Item 2 (2026-11-03): into a wall order's place the path's own braking is short - FollowerMove's arrival law already slows him (with both
 	// the last metre was a 2-40 cm/s crawl for seconds: the "shuffle in place").
-	const EOperativeOrderResult Result = Operative.FollowTo(SnapGoalToFloor(GetWorld(), Destination, static_cast<float>(SlotLocation.Z)), Move.Speed,
+	const EOperativeOrderResult Result = Operative.FollowTo(SnapGoalToFloor(GetWorld(), Destination, static_cast<float>(SlotLocation.Z) - LeaderHalfHeight), Move.Speed,
 		Sectors.bWallOrder && bWall ? SquadWallTuning::Get().WallPathBrakingCm : -1.f);
 	if (CVarFormationDebug.GetValueOnGameThread() >= 2)
 	{
