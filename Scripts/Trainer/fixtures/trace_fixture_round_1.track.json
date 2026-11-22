@@ -1,0 +1,38 @@
+{
+  "schema": "codex.pmc_arena_track/1",
+  "run": "20261122-090000",
+  "round": 1,
+  "map": "L_Gen_Depot_1",
+  "seed": 211024966,
+  "dt": 0.2,
+  "units": "cm",
+  "winner": "B",
+  "duration_s": 61.8,
+  "fighters": [
+    { "id": "Operator Vance", "name": "Vance", "side": "A", "team": 1, "weapon": "ak" },
+    { "id": "Operator Roux", "name": "Roux", "side": "A", "team": 1, "weapon": "shotgun" },
+    { "id": "Operator Hayes", "name": "Hayes", "side": "A", "team": 1, "weapon": "sniper" },
+    { "id": "Operator Lind", "name": "Lind", "side": "B", "team": 2, "weapon": "m16" },
+    { "id": "Operator Cross", "name": "Cross", "side": "B", "team": 2, "weapon": "m16" },
+    { "id": "Operator Shaw", "name": "Shaw", "side": "B", "team": 2, "weapon": "m16" }
+  ],
+  "events": [
+    { "t": 0.0, "type": "tactic", "who": "Operator Vance", "side": "A", "team": 1, "decision": "Advance", "score": 1.10, "why": "initial push" },
+    { "t": 0.0, "type": "tactic", "who": "Operator Lind", "side": "B", "team": 2, "decision": "Ambush", "score": 1.54, "why": "post defence" },
+    { "t": 3.5, "type": "tactic", "who": "Operator Lind", "side": "B", "team": 2, "decision": "FallBack", "score": 1.27, "why": "threat spotted" },
+    { "t": 10.2, "type": "shot", "from": "Operator Lind", "to": "Operator Vance", "side": "B", "hit": true },
+    { "t": 61.8, "type": "kill", "who": "Operator Vance", "by": "Operator Lind" }
+  ],
+  "frames": [
+    [
+      [-1000, -1925, 10], [-1100, -1925, 10], [-1200, -1925, 10],
+      [-8425, -1925, 910], [-8425, -1825, 910], [-8425, -1725, 910]
+    ]
+  ],
+  "states": [
+    [
+      [0, "stand", 100, "Advance"], [0, "stand", 100, "Advance"], [0, "stand", 100, "Advance"],
+      [159, "stand", 100, "Ambush"], [159, "stand", 100, "Hold"], [159, "stand", 100, "Hold"]
+    ]
+  ]
+}

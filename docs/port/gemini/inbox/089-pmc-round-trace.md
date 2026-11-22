@@ -12,3 +12,13 @@ T-03 scripted opponent + T-04 position metrics are in main (PmcCrossroadsSmoke /
 the arena's dead post_moves / overwatch_kills counting (main 9726082b); paired A/B tool Scripts/Tools/paired_ab.py (your 093) - use it
 for any before / after numbers; T-05 / T-08 are NOT in main (worker/* branches, ships off). Push note: the pre-push guard refuses
 gemini/* changes outside its allowlist (Scripts/ is outside) - commit locally, FINISH in chat, Claude merges; never edit the hook.
+
+## Allowed paths
+- Scripts/Tools/pmc_round_trace.py
+- Scripts/Trainer/tests/test_round_trace.py
+- Scripts/Trainer/fixtures/**
+- docs/port/gemini/outbox/**
+- docs/port/gemini/inbox/089-pmc-round-trace.md
+- .gemini/**
+- gemini/**
+

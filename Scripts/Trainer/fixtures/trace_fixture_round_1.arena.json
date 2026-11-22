@@ -1,0 +1,81 @@
+{
+  "schema": "codex.pmc_arena/1",
+  "map": "/Game/Maps/Generated/L_Gen_Depot_1",
+  "scenario": "roofs",
+  "seed": 211024966,
+  "rounds": [
+    {
+      "index": 1,
+      "scenario": "roofs",
+      "map": "/Game/Maps/Generated/L_Gen_Depot_1",
+      "seed": 211024966,
+      "winner": "B",
+      "end_reason": "elimination",
+      "duration_s": 61.8,
+      "track": "trace_fixture_round_1.track.json",
+      "objective": {
+        "enabled": true,
+        "x": -3701,
+        "y": 6034,
+        "z": 910,
+        "radius_m": 6,
+        "hold_s": 15,
+        "result": "eliminated",
+        "level": 3
+      },
+      "sides": {
+        "A": {
+          "role": "attacker",
+          "members": ["Operator Vance", "Operator Roux", "Operator Hayes"]
+        },
+        "B": {
+          "role": "defender",
+          "members": ["Operator Lind", "Operator Cross", "Operator Shaw"]
+        }
+      },
+      "defence": {
+        "open_idle_s": [
+          { "id": "Operator Lind", "total_s": 12.4, "before_contact_s": 8.2 },
+          { "id": "Operator Cross", "total_s": 15.0, "before_contact_s": 10.5 },
+          { "id": "Operator Shaw", "total_s": 9.2, "before_contact_s": 5.3 }
+        ]
+      }
+    },
+    {
+      "index": 2,
+      "scenario": "roofs",
+      "map": "/Game/Maps/Generated/L_Gen_Depot_1",
+      "seed": 211024967,
+      "winner": "A",
+      "end_reason": "objective",
+      "duration_s": 45.0,
+      "objective": {
+        "enabled": true,
+        "x": -3701,
+        "y": 6034,
+        "z": 910,
+        "radius_m": 6,
+        "hold_s": 15,
+        "result": "captured",
+        "level": 3
+      },
+      "sides": {
+        "A": {
+          "role": "attacker",
+          "members": ["Operator Vance", "Operator Roux", "Operator Hayes"]
+        },
+        "B": {
+          "role": "defender",
+          "members": ["Operator Lind", "Operator Cross", "Operator Shaw"]
+        }
+      },
+      "defence": {
+        "open_idle_s": [
+          { "id": "Operator Lind", "total_s": 8.0, "before_contact_s": 4.0 },
+          { "id": "Operator Cross", "total_s": 11.0, "before_contact_s": 6.0 },
+          { "id": "Operator Shaw", "total_s": 7.0, "before_contact_s": 3.0 }
+        ]
+      }
+    }
+  ]
+}
