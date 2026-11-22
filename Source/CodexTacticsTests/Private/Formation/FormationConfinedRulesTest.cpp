@@ -391,6 +391,27 @@ bool FFormationConfinedGapTest::RunTest(const FString&)
 	return true;
 }
 
+FORMATION_CONFINED_TEST(FFormationConfinedHeldTest, "HeldPlaceStaysThroatPlaceGoes")
+bool FFormationConfinedHeldTest::RunTest(const FString&)
+{
+	// The 2.5 m hall entered from -X: a man walking in keeps the place he was given while it is valid (no swap as he moves); a held place that
+	// became invalid (beyond a throat now) is replaced; a candidate beyond a throat (InRoom false: y < -60) is never given.
+	using namespace FormationConfinedTestLocal;
+	const FFormationConfinedTuning Tuning;
+	const FFormationConfinedPocket Pocket = RoomPocket(FVector2D::ZeroVector, 90.f, 90.f, 45.f, Tuning);
+	const FVector2D Entry(-150.0, 0.0);
+	FFormationConfinedSlot Walker = Slot(FVector2D(-330.0, 0.0), FVector2D(-200.0, 60.0));
+	Walker.Held = FormationConfinedRules::RayDir(13, Tuning.ProbeRays) * 80.0; // ray 13 at 80 cm, a valid place
+	const FFormationConfinedResult Kept = FormationConfinedRules::CompressSlots(Pocket, TArray<FFormationConfinedSlot>{ Walker }, TOptional<FVector2D>(), Entry, Tuning);
+	TestTrue(TEXT("the held place stays (the cheapest would be elsewhere now)"), Kept.Places[0].Equals(Walker.Held.GetValue(), 1e-6));
+	FFormationConfinedLineTests Lines;
+	Lines.InRoom = [](const FVector2D& Place) { return Place.Y >= -60.0; };
+	const FFormationConfinedResult Moved = FormationConfinedRules::CompressSlots(Pocket, TArray<FFormationConfinedSlot>{ Walker }, TOptional<FVector2D>(), Entry, Tuning, &Lines);
+	TestFalse(TEXT("a held place beyond a throat is dropped"), Moved.Places[0].Equals(Walker.Held.GetValue(), 1.0));
+	TestTrue(*FString::Printf(TEXT("the new place (%.0f, %.0f) is in the room"), Moved.Places[0].X, Moved.Places[0].Y), Moved.Places[0].Y >= -60.0);
+	return true;
+}
+
 FORMATION_CONFINED_TEST(FFormationConfinedTuningTest, "TuningFromJsonAndFile")
 bool FFormationConfinedTuningTest::RunTest(const FString&)
 {
@@ -441,6 +462,7 @@ bool FFormationConfinedTuningTest::RunTest(const FString&)
 	TestEqual(TEXT("jamb_clear_cm"), FromFile.JambClearCm, Defaults.JambClearCm);
 	TestEqual(TEXT("jamb_sample_cm"), FromFile.JambSampleCm, Defaults.JambSampleCm);
 	TestEqual(TEXT("gap_factor"), FromFile.GapFactor, Defaults.GapFactor);
+	TestEqual(TEXT("throat_clear_cm"), FromFile.ThroatClearCm, Defaults.ThroatClearCm);
 	return true;
 }
 

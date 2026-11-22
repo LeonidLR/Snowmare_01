@@ -19,6 +19,11 @@ namespace SquadSubsystemFormationConfinedLocal
 {
 	/** Speed below which the leader counts as standing (the pocket round where he stands), cm/s. */
 	constexpr float ConfinedStandingSpeed = 15.f;
+	/** The throat test needs a centre this much roomier than ThroatClearCm (FindDistanceToWall at the centre >= ThroatClearCm / this). */
+	constexpr float ThroatCentreRatio = 0.7f;
+	/** ... and samples the line from this far out of the centre to this short of the place, cm. */
+	constexpr double ThroatStartCm = 40.0;
+	constexpr double ThroatEndSkipCm = 10.0;
 	/** The entry line's clearance samples stop this short of the place (a place may stand near a wall), cm. */
 	constexpr double EntryEndSkipCm = 30.0;
 	/** The pocket centre must project onto the navmesh within this box, cm. */
@@ -91,8 +96,10 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 			return;
 		}
 		Confined.Pocket.Center = FVector2D(Start.Location);
+		Confined.RoomCache.Reset();
 		if (bNewPocket)
 		{
+			Confined.HeldPlaces.Reset();
 			// The door the squad walks in through: toward where the leader is now (kept on a refresh of the same pocket).
 			Confined.EntryFrom.Reset();
 			if (FVector2D::Distance(FVector2D(Feet), Confined.Pocket.Center) > Tuning.WayMinCm)
@@ -125,7 +132,8 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 		}
 	}
 
-	// The entry point: where the leader first walks within the pocket radius (just inside the door) - set once per pocket.
+	// The entry point: where the leader first walks within the pocket radius - set once per pocket. (Lead review round 2 tried the room radius
+	// - just inside the door, so the door line tests see past the jambs: fewer STUCK, more legs over 2 x solo on B_y / S10 - reverted.)
 	const float Radius = FormationConfinedRules::PocketRadius(Confined.Pocket, Tuning);
 	const double LeaderToCenter = FVector2D::Distance(FVector2D(Feet), Confined.Pocket.Center);
 	if (Confined.EntryFrom.IsSet() && FVector2D::Distance(Confined.EntryFrom.GetValue(), Confined.Pocket.Center) > Radius
@@ -137,6 +145,7 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 	// This frame's follower slots with their men.
 	TArray<FFormationConfinedSlot> Slots;
 	TArray<int32> SlotIndices;
+	TArray<TWeakObjectPtr<AOperativeCharacter>> SlotMembers;
 	for (const FFollowerState& Follower : Followers)
 	{
 		const AOperativeCharacter* Operative = Follower.Operative.Get();
@@ -153,7 +162,12 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 		FFormationConfinedSlot& Slot = Slots.AddDefaulted_GetRef();
 		Slot.Desired = Sectors.FrameSlots[Index].Position;
 		Slot.Occupant = FVector2D(Operative->GetActorLocation());
+		if (const FVector2D* Held = Confined.HeldPlaces.Find(Follower.Operative))
+		{
+			Slot.Held = *Held;
+		}
 		SlotIndices.Add(Index);
+		SlotMembers.Add(Follower.Operative);
 	}
 	if (Slots.IsEmpty())
 	{
@@ -201,15 +215,46 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 		Confined.EntryCache.Add(Key, bClear);
 		return bClear;
 	};
+	Lines.InRoom = [this, Recast, Z, &Tuning](const FVector2D& Place)
+	{
+		if (!Recast || Tuning.ThroatClearCm <= 0.f)
+		{
+			return true;
+		}
+		const FIntPoint Key(FMath::RoundToInt32(Place.X), FMath::RoundToInt32(Place.Y));
+		if (const bool* Known = Confined.RoomCache.Find(Key))
+		{
+			return *Known;
+		}
+		const FVector2D From = Confined.Pocket.Center;
+		// A roomy centre only (a one-body-wide hall is narrow everywhere - no throat to tell).
+		bool bIn = Recast->FindDistanceToWall(FVector(From, Z), nullptr, Tuning.ThroatClearCm / ThroatCentreRatio + 1.f) < Tuning.ThroatClearCm / ThroatCentreRatio;
+		const double Length = FVector2D::Distance(From, Place);
+		for (double At = ThroatStartCm; !bIn && At < Length - ThroatEndSkipCm; At += FMath::Max(Tuning.JambSampleCm, 5.f))
+		{
+			if (Recast->FindDistanceToWall(FVector(From + (Place - From) * (At / Length), Z), nullptr, Tuning.ThroatClearCm + 1.f) < Tuning.ThroatClearCm)
+			{
+				Confined.RoomCache.Add(Key, false);
+				return false;
+			}
+		}
+		Confined.RoomCache.Add(Key, true);
+		return true;
+	};
 	const FFormationConfinedResult Result = FormationConfinedRules::CompressSlots(Confined.Pocket, Slots, LeaderAt, Confined.EntryFrom, Tuning, &Lines);
 	if (!Result.bConfined)
 	{
 		Off(TEXT("open ground"));
 		return;
 	}
+	Confined.HeldPlaces.Reset();
 	for (int32 Each = 0; Each < SlotIndices.Num(); ++Each)
 	{
 		Sectors.FrameSlots[SlotIndices[Each]].Position = Result.Places[Each];
+		if (Result.Replaced[Each])
+		{
+			Confined.HeldPlaces.Add(SlotMembers[Each], Result.Places[Each]);
+		}
 	}
 	if (CVarConfinedCrowd.GetValueOnGameThread() == 0)
 	{
@@ -228,6 +273,30 @@ void USquadSubsystem::ApplyFormationConfined(const AOperativeCharacter& LeaderRe
 		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] confined: %d of %d follower slot(s) moved into the pocket at (%.0f, %.0f) (median %.0f cm, %s)"),
 			Result.ReplacedCount, Slots.Num(), Confined.Pocket.Center.X, Confined.Pocket.Center.Y, FormationConfinedRules::Median(Confined.Pocket.Free),
 			FormationNames::ToString(Sectors.Formation));
+	}
+	// Codex.Formation.Debug 2: the line tests' effect and the places given, once per change of places.
+	if (FormationDebugLevel() >= 2)
+	{
+		FString Places;
+		for (int32 Each = 0; Each < SlotIndices.Num(); ++Each)
+		{
+			Places += FString::Printf(TEXT(" (%.0f, %.0f)%s"), Result.Places[Each].X, Result.Places[Each].Y, Result.Replaced[Each] ? TEXT("") : TEXT(" kept"));
+		}
+		if (Places != Confined.LastLoggedPlaces)
+		{
+			Confined.LastLoggedPlaces = Places;
+			int32 Seen = 0;
+			int32 InRoom = 0;
+			const TArray<FVector2D> All = FormationConfinedRules::Candidates(Confined.Pocket, Tuning);
+			for (const FVector2D& Each : All)
+			{
+				Seen += Lines.FromEntry(Each) ? 1 : 0;
+				InRoom += Lines.InRoom(Each) ? 1 : 0;
+			}
+			UE_LOG(LogCodexTactics, Display, TEXT("[Formation] confined places:%s - candidates %d, seen from the door %d (entry %s), in the room %d; centre wall distance %.0f cm"),
+				*Places, All.Num(), Seen, Confined.EntryFrom.IsSet() ? *FString::Printf(TEXT("(%.0f, %.0f)"), Confined.EntryFrom->X, Confined.EntryFrom->Y) : TEXT("-"),
+				InRoom, Recast ? Recast->FindDistanceToWall(FVector(Confined.Pocket.Center, Z), nullptr, 500.f) : -1.0);
+		}
 	}
 	Confined.bActive = true;
 	Confined.ReplacedCount = Result.ReplacedCount;
@@ -257,6 +326,7 @@ void USquadSubsystem::EndFormationConfined(const TCHAR* Why, bool bKeepPocket)
 		}
 	}
 	Confined.NoSeparation.Reset();
+	Confined.HeldPlaces.Reset();
 	if (Confined.bActive)
 	{
 		UE_LOG(LogCodexTactics, Display, TEXT("[Formation] confined: off (%s)"), Why);

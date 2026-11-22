@@ -244,6 +244,13 @@ FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationC
 	// Lead review 2026-11-22: a place round a door jamb's corner (not in a clear line with clearance from the entry point) is no place.
 	const bool bEntryLines = Lines && Lines->FromEntry && EntryFrom.IsSet();
 	const auto SeenFromEntry = [&](const FVector2D& Point) { return !bEntryLines || Lines->FromEntry(Point); };
+	const auto InRoom = [&](const FVector2D& Point) { return !Lines || !Lines->InRoom || Lines->InRoom(Point); };
+	// A valid place for him now: inside, off the leader's way and the entry line, not past the leader, seen from the door, in the room.
+	const auto Valid = [&](const FVector2D& Point)
+	{
+		return IsInside(Pocket, Point, Tuning) && !OnWay(Point) && !IsOnEntry(Pocket, EntryFrom, Point, Tuning) && !IsPastLeader(Pocket, EntryFrom, Point, Tuning)
+			&& SeenFromEntry(Point) && InRoom(Point);
+	};
 	TArray<FVector2D> Given{ Pocket.Center };
 	const auto Nearest = [&Given](const FVector2D& Point)
 	{
@@ -255,18 +262,31 @@ FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationC
 		return Best;
 	};
 
-	// 1. A slot already inside the pocket, off the leader's way and spaced, stays.
+	// 1. A slot already a valid place stays; then a place held from last frame that is still valid (no frame-to-frame swaps).
 	TArray<int32> Open;
 	for (int32 Index = 0; Index < Slots.Num(); ++Index)
 	{
 		const FVector2D& Desired = Slots[Index].Desired;
-		if (IsInside(Pocket, Desired, Tuning) && !OnWay(Desired) && !IsOnEntry(Pocket, EntryFrom, Desired, Tuning) && !IsPastLeader(Pocket, EntryFrom, Desired, Tuning) && SeenFromEntry(Desired) && Nearest(Desired) >= Tuning.MinSpacingCm - TieCm)
+		if (Valid(Desired) && Nearest(Desired) >= Tuning.MinSpacingCm - TieCm)
 		{
 			Given.Add(Desired);
 		}
 		else
 		{
 			Open.Add(Index);
+		}
+	}
+	for (int32 Each = Open.Num() - 1; Each >= 0; --Each)
+	{
+		const int32 Index = Open[Each];
+		const TOptional<FVector2D>& Held = Slots[Index].Held;
+		if (Held.IsSet() && Valid(Held.GetValue()) && Nearest(Held.GetValue()) >= Tuning.MinSpacingCm - TieCm)
+		{
+			Result.Places[Index] = Held.GetValue();
+			Result.Replaced[Index] = true;
+			++Result.ReplacedCount;
+			Given.Add(Held.GetValue());
+			Open.RemoveAt(Each);
 		}
 	}
 	if (Open.IsEmpty())
@@ -283,10 +303,10 @@ FFormationConfinedResult FormationConfinedRules::CompressSlots(const FFormationC
 	TArray<FVector2D> Pool = Candidates(Pocket, Tuning);
 	Pool.RemoveAll(OnWay);
 	Pool.RemoveAll([&](const FVector2D& Point) { return IsPastLeader(Pocket, EntryFrom, Point, Tuning); }); // never: he would push into the leader for good
-	if (bEntryLines)
+	if (bEntryLines || (Lines && Lines->InRoom))
 	{
 		TArray<FVector2D> Seen = Pool;
-		Seen.RemoveAll([&](const FVector2D& Point) { return !SeenFromEntry(Point); });
+		Seen.RemoveAll([&](const FVector2D& Point) { return !SeenFromEntry(Point) || !InRoom(Point); });
 		if (!Seen.IsEmpty())
 		{
 			Pool = MoveTemp(Seen); // none seen from the door (a bad entry point): the filter is dropped, never worse than without it
@@ -420,6 +440,7 @@ FFormationConfinedTuning FormationConfinedTuning::FromJson(const FJsonObject& Js
 	ReadConfinedNumber(Json, TEXT("jamb_clear_cm"), Tuning.JambClearCm, 0.f, 100.f);
 	ReadConfinedNumber(Json, TEXT("jamb_sample_cm"), Tuning.JambSampleCm, 5.f, 100.f);
 	ReadConfinedNumber(Json, TEXT("gap_factor"), Tuning.GapFactor, 0.f, 10.f);
+	ReadConfinedNumber(Json, TEXT("throat_clear_cm"), Tuning.ThroatClearCm, 0.f, 200.f);
 	return Tuning;
 }
 

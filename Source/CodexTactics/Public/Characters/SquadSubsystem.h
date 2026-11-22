@@ -1648,6 +1648,12 @@ private:
 		uint32 EntryCacheStamp = 0;
 		FVector2D EntryCacheFrom = FVector2D::ZeroVector;
 		TMap<FIntPoint, bool> EntryCache;
+		/** The throat tests (FFormationConfinedLineTests::InRoom) cached for one probe. */
+		TMap<FIntPoint, bool> RoomCache;
+		/** The place each follower was given last frame (FFormationConfinedSlot::Held). */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, FVector2D> HeldPlaces;
+		/** Codex.Formation.Debug 2: the places last logged. */
+		FString LastLoggedPlaces;
 	};
 	FFormationConfinedState Confined;
 	/** Crowd separation + obstacle avoidance of Operative on / off (UCrowdFollowingComponent; the rule's own switch, Confined.NoSeparation). */
