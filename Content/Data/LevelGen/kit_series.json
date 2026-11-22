@@ -21,8 +21,10 @@
         {"id": "wide", "wall": "Facade/SM_SH_Wall_Facade_wide_28", "glass": "Openings/SM_SH_Win_PVC_wide_28", "hole": [41, 259], "hole_z": [85, 225]}
       ],
       "balcony_door": {"wall": "Facade/SM_SH_Wall_Facade_balc_28", "glass": "Openings/SM_SH_Win_PVC_balc_28", "door_hole": [35, 110], "window_hole": [130, 260],
+                       "leaf": {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "height_target_cm": 215, "mat": "MI_SH_Door", "inset_cm": 24},
                        "balcony": "Balconies/SM_SH_Balc_Panel", "balcony_x": [11, 289], "balcony_depth_cm": 102},
       "entrance": {"wall": "Facade/SM_SH_StairEnt_Facade_23", "height_cm": 230, "door": "Openings/SM_SH_Ent_Door_Steel", "hole": [85, 215],
+                   "leaf": {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "mat": "MI_SH_SteelDoor", "inset_cm": 9.5},
                    "porch": "Props/SM_SH_Ent_Porch", "porch_z_cm": 10, "canopy": "Props/SM_SH_Ent_Canopy", "canopy_z_cm": 222},
       "stair_column": {"wall": "Facade/SM_SH_StairWall_Facade_28_w", "glass": "Openings/SM_SH_StairGlass_PVC", "height_cm": 280,
                        "strip": "Facade/SM_SH_StairWall_Facade_14_x", "strip_height_cm": 140},
@@ -67,8 +69,10 @@
         {"id": "win", "wall": "Facade/SM_SH_Wall_BrickR_win_28", "glass": "Openings/SM_SH_Win_Wood_win_28", "hole": [75, 225], "hole_z": [85, 225]}
       ],
       "balcony_door": {"wall": "Facade/SM_SH_Wall_BrickR_balc_28", "glass": "Openings/SM_SH_Win_Wood_balc_28", "door_hole": [35, 110], "window_hole": [130, 260],
+                       "leaf": {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "height_target_cm": 215, "mat": "MI_SH_Door", "inset_cm": 24},
                        "balcony": "Balconies/SM_SH_Balc_Brick", "balcony_x": [10, 290], "balcony_depth_cm": 103},
       "entrance": {"wall": "Facade/SM_SH_StairEnt_BrickR_23", "height_cm": 230, "door": "Openings/SM_SH_Ent_Door_Wood", "hole": [85, 215],
+                   "leaf": {"mesh": "Openings/SM_SH_Door_Int", "width_cm": 80, "height_cm": 205, "mat": "MI_SH_Door", "inset_cm": 9.5},
                    "porch": "Props/SM_SH_Ent_Porch", "porch_z_cm": 10, "canopy": "Props/SM_SH_Ent_Canopy", "canopy_z_cm": 222},
       "stair_column": {"wall": "Facade/SM_SH_StairWall_BrickR_28_w", "glass": "Openings/SM_SH_StairGlass_Wood", "height_cm": 280,
                        "strip": "Facade/SM_SH_StairWall_BrickR_14_x", "strip_height_cm": 140},

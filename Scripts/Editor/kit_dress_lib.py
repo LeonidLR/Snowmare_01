@@ -790,6 +790,10 @@ class Dresser:
                 self.add(bd["wall"], e.d, e.n, anchor, scale=(1.0, 1.0, sz), part="facade_balcony_bay")
                 self.add(bd["glass"], e.d, e.n, anchor, scale=(1.0, 1.0, sz), part="balcony_door_window")
                 self.consume_state(op, ("window_glass", "door_leaf"))
+                if not data["visual"] and self.state_of(op) in ("closed", "locked"):
+                    # doors R2 (designer 2026-11-22): a balcony / fire-escape door that can be shut gets a separate leaf in the door hole -
+                    # the openable door lifts it onto its hinge (the glass unit stays static)
+                    self.door_leaf_in_hole(e, s0 + bd["door_hole"][0], bd["door_hole"][1] - bd["door_hole"][0], z0, bd.get("leaf"), "balcony_door_leaf")
                 if data["real"] or data["visual"]:
                     self.balcony(e, s0, z0, op, data["real"])
                 self.radiator(e, s0 + (bd["window_hole"][0] + bd["window_hole"][1]) / 2.0, z0)
@@ -800,7 +804,15 @@ class Dresser:
                 state = self.state_of(op)
                 self.add(ent["wall"], e.d, e.n, anchor, scale=(sx, 1.0, sz), part="facade_entrance_bay")
                 if state in ("closed", "locked"):
-                    self.add(ent["door"], e.d, e.n, anchor, scale=(sx, 1.0, sz), part="entrance_door")
+                    if ent.get("leaf"):
+                        # doors R2 (designer 2026-11-22): the frame stays static (the bay's hole), a separate leaf fills the hole - the
+                        # openable door lifts it onto its hinge (the combined frame + leaf module SM_SH_Ent_Door_* is no longer placed)
+                        if ent.get("frame"):
+                            self.add(ent["frame"], e.d, e.n, anchor, scale=(sx, 1.0, sz), part="entrance_frame")
+                        hole = ent["hole"]
+                        self.door_leaf_in_hole(e, s0 + hole[0] * sx, (hole[1] - hole[0]) * sx, z0, ent["leaf"], "entrance_leaf")
+                    else:
+                        self.add(ent["door"], e.d, e.n, anchor, scale=(sx, 1.0, sz), part="entrance_door")
                     self.consume_state(op, ("door_leaf",))
                 col = next((c for c in columns if c["entry"] is not None and c["entry"][0] is op), None)
                 if col is None:
@@ -827,6 +839,19 @@ class Dresser:
                 self.add(S["solid"], e.d, e.n, (p[0], p[1], z0), scale=(fw / mod, 1.0, sz), part="facade_solid")
             cur = max(cur, s1)
             cur_jamb = 0.0 if kind in ("open", "keep", "column") else jr
+
+    def door_leaf_in_hole(self, e, s_hinge, width, z0, leaf, part):
+        """A separate door leaf in a facade hole: leaf = {"mesh", "width_cm", "height_cm", "mat", "inset_cm"} (mesh pivot at its hinge corner,
+        +X along the leaf, like the interior leaves); hinged at s_hinge, `width` cm wide (scaled), height_cm x storey scale, inset_cm in
+        from the outer face. Doors R2: the openable door lifts the instance onto its hinge."""
+        if not leaf or not leaf.get("mesh"):
+            self.note("%s: no leaf mesh in series %s - the doorway stays without a leaf" % (part, self.sname))
+            return None
+        sx = width / float(leaf.get("width_cm", 80.0))
+        sz = float(leaf.get("height_target_cm", leaf.get("height_cm", 205.0))) * self.sz / float(leaf.get("height_cm", 205.0))
+        p = e.at(s_hinge, e.t / 2.0 - float(leaf.get("inset_cm", 9.5)))
+        return self.add(leaf["mesh"], e.d, e.n, (p[0], p[1], z0), local=tuple(leaf.get("local", (0, 0, 0))), scale=(sx, 1.0, sz), part=part,
+                        mat=leaf.get("mat"))
 
     def consume_state(self, op, kinds):
         for sp in self.state_actors.get(op.get("id"), []):

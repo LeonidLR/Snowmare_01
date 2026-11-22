@@ -308,6 +308,24 @@ class StoryShowcaseDressTest(unittest.TestCase):
                 self.assertFalse([n for n in d["notes"] if "visual only" in n], b["id"])
         self.assertEqual(gables, len(layout["buildings"]), "one gable door per house")
 
+    def test_entrance_and_escape_doors_get_separate_leaves(self):
+        """Doors R2 (designer 2026-11-22): a shut (closed / locked) entrance gets a separate leaf in the bay's hole instead of the combined
+        frame + leaf module (the frame stays static, the openable door swings the leaf); a shut balcony / fire-escape door gets a leaf too."""
+        path = os.path.join(PROJECT_DIR, "Content", "Data", "LevelGen", "accepted", "gen_story_showcase.json")
+        if not os.path.exists(path):
+            self.skipTest("no gen_story_showcase layout")
+        B, layout, specs, dressed, t = DressLayoutTest.plan(path)
+        leaves = combined = escape = 0
+        for b in layout["buildings"]:
+            parts = dressed[b["id"]]["parts"]
+            leaves += parts.get("entrance_leaf", 0)
+            combined += parts.get("entrance_door", 0)
+            escape += parts.get("balcony_door_leaf", 0)
+            self.assertLessEqual(parts.get("entrance_leaf", 0), parts.get("facade_entrance_bay", 0), b["id"])
+        self.assertEqual(combined, 0, "the combined frame + leaf module is no longer placed")
+        self.assertGreater(leaves, 0, "shut entrances get a leaf")
+        self.assertGreaterEqual(escape, 2, "the story-4 escape doors get a leaf")
+
     @classmethod
     def tearDownClass(cls):
         os.environ.pop("KIT_DRESS_LAYOUT", None)
