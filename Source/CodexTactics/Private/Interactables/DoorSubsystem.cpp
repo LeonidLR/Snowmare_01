@@ -203,6 +203,15 @@ int32 UDoorSubsystem::AdoptLeaves()
 			continue;
 		}
 		Door->Setup(Setup);
+		// The leaf's building= / floor= / opening= tags go along: the storey cutaway (URoofCutawaySubsystem) hides the door with its storey.
+		for (const FName& Tag : Leaf->Tags)
+		{
+			if (Tag != FName(TEXT("door_leaf")) && Tag != FName(TEXT("KitDressProxy")))
+			{
+				Door->Tags.AddUnique(Tag);
+			}
+		}
+		Door->Tags.AddUnique(FName(TEXT("door_actor")));
 		Proxies.Add({ Leaf, Leaf->IsHidden(), Leaf->GetActorEnableCollision() });
 		Leaf->SetActorHiddenInGame(true);
 		Leaf->SetActorEnableCollision(false);
@@ -236,6 +245,8 @@ int32 UDoorSubsystem::LiftKitLeaves(ADoorActor& Door) const
 	const float HalfWidth = Door.GetWidthCm() * 0.5f;
 	const float DoorZ = static_cast<float>(Door.GetActorLocation().Z);
 	int32 Lifted = 0;
+	double NearestCm = 400.0;
+	FString Nearest;
 	for (TActorIterator<AActor> It(GetWorld()); It; ++It)
 	{
 		if (!It->Tags.Contains(KitTag))
@@ -263,12 +274,18 @@ int32 UDoorSubsystem::LiftKitLeaves(ADoorActor& Door) const
 					Door.AddLiftedInstance(Component, Index, Instance);
 					++Lifted;
 				}
+				else if (const double Cm = FVector::Dist(Instance.GetLocation(), Door.GetActorLocation()); Cm < NearestCm)
+				{
+					NearestCm = Cm;
+					Nearest = FString::Printf(TEXT("%s #%d at local (%.0f, %.0f, dz %.0f)"), *Component->GetName(), Index, Local.X, Local.Y, Dz);
+				}
 			}
 		}
 	}
 	if (Lifted == 0)
 	{
-		UE_LOG(LogCodexTactics, Verbose, TEXT("Doors: no kit leaf found for %s %s"), *Door.GetBuildingId(), *Door.GetOpeningId());
+		UE_LOG(LogCodexTactics, Display, TEXT("Doors: no kit leaf in the doorway of %s %s (%.0f cm wide); nearest kit leaf piece: %s"), *Door.GetBuildingId(),
+			*Door.GetOpeningId(), Door.GetWidthCm(), Nearest.IsEmpty() ? TEXT("none within 4 m") : *Nearest);
 	}
 	return Lifted;
 }
