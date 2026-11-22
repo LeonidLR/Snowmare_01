@@ -362,9 +362,12 @@ namespace FormationConfinedLocal
 				{
 					return false;
 				}
-				for (const FVector2D& Each : Given)
+				// The standing leader (Given[0], the pocket centre) is walked round by the runtime's step round (BodyClearCm): only the
+				// team-mates' places block a way here (else the first man in, every way past the leader "blocked", took the shallowest
+				// place - in the door's inner mouth).
+				for (int32 Each = Tuning.BodyClearCm > 0.f ? 1 : 0; Each < Given.Num(); ++Each)
 				{
-					if (FVector2D::Distance(Each, Ref) >= Tuning.PassClearCm && DistanceToSegment(Each, Ref, Point) < Tuning.PassClearCm)
+					if (FVector2D::Distance(Given[Each], Ref) >= Tuning.PassClearCm && DistanceToSegment(Given[Each], Ref, Point) < Tuning.PassClearCm)
 					{
 						return false;
 					}
@@ -383,8 +386,8 @@ namespace FormationConfinedLocal
 				return true;
 			};
 			// Per pool (the strictest first), tiers: off the earlier ways + off the entry line + his way clear; off the entry line + his way
-			// clear; his way clear; spaced only. The last tier (his way passes a place given out) takes the SHALLOWEST place: he stops short
-			// instead of pushing past a team-mate to the deepest one (the walk smoke's second man on the first man's way in).
+			// clear; his way clear; spaced only. The last tier (his way passes a place given out) takes the SHALLOWEST place for a later man: he
+			// stops short instead of pushing past a team-mate to the deepest one (the walk smoke's second man on the first man's way in).
 			TOptional<FVector2D> Chosen;
 			for (int32 PoolIndex = 0; PoolIndex < 3 && !Chosen.IsSet(); ++PoolIndex)
 			{
@@ -393,7 +396,9 @@ namespace FormationConfinedLocal
 				{
 					for (int32 Each = 0; Each < Pool.Num(); ++Each)
 					{
-						const int32 Candidate = Tier == 3 ? Pool.Num() - 1 - Each : Each;
+						// The first man in (no way given before him) never takes the shallowest: nobody stands in his way, the step round
+						// takes him past the leader (the walk smoke's first man took the entry point itself when his own line tests failed).
+						const int32 Candidate = Tier == 3 && !Ways.IsEmpty() ? Pool.Num() - 1 - Each : Each;
 						const FVector2D& Point = Pool[Candidate];
 						if (!Spaced(Point, Tuning.MinSpacingCm) || (Tier <= 1 && OnEntryLines[PoolIndex][Candidate]) || (Tier == 0 && !OffEarlierWays(Point))
 							|| (Tier <= 2 && !WayClear(Point)))
