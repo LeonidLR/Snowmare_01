@@ -146,10 +146,18 @@
           },
           "window_clear_cm": 50,
           "gable_door": {
-            "comment": "Designer decision 2026-11-22: a second exterior door (role entry) on an END wall (gable), ground storey only. ends = which gable gets it: 'low' (plan u = 0), 'high' (u = L), 'both' or 'none'; a block of both_min_sections sections or more gets both; BuildingSpec.gable_door overrides (a plan end or the draft side of a gable). The door opens into the end flat's court row - its hall and kitchen (vestibule_uses; the flat's corridor joins them: an open seam with the hall) - which on the ground storey is a common vestibule leading to the section's tambour (three flats) or floor landing (two flats), like the end-section utility door of a 1-464 block; the upper storeys keep their three flats per landing unchanged. The ground-storey end flat keeps its bath and living rooms (entered from the vestibule) and loses its kitchen; plan.notes records it. The door sits in the vestibule cell on the gable at the court corner (the kitchen), centred in its gable span on the 50 grid. state = the door's opening state (null = the generator's default for an exterior door).",
+            "comment": "Designer decision 2026-11-22 (revised same day): a second exterior door (role entry) on an END wall (gable), ground storey only. ends = which gable gets it: 'low' (plan u = 0), 'high' (u = L), 'both' or 'none'; a block of both_min_sections sections or more gets both; BuildingSpec.gable_door overrides (a plan end or the draft side of a gable). The door opens into a SERVICE ROOM, not a flat: on the ground storey the whole end flat of the gable (its cells cannot be cut - the kitchen, bath and street living rooms all reach the gable, a partial flat would lose its kitchen) becomes a non-residential service bay (zone 'service', kind 'service', no unit): the cell on the gable at the court corner (the flat's kitchen cell) is the main service room, entered by the gable door, centred in its gable span on the 50 grid; its label is drawn from service_room.types by the plan seed; the flat's hall and corridor stay passages, the stair door (the flat's own entry) is the interior door to the section's tambour (three flats) or floor landing (two flats); the bath is a service WC, the street living rooms are annex rooms labelled from service_room.annex_labels. The upper storeys keep their three flats per landing unchanged; the ground storey of that section has two flats. plan.notes records it. state = the door's opening state (null = the generator's default for an exterior door; story 9 locks a gable door itself: building_stories.json gable_door_state).",
             "ends": "low",
             "both_min_sections": 3,
-            "vestibule_uses": ["kitchen", "hall", "corridor"],
+            "service_room": {
+              "types": [
+                { "id": "janitor", "label": "дворницкая" },
+                { "id": "switchboard", "label": "щитовая" },
+                { "id": "housing_office", "label": "ЖЭК" }
+              ],
+              "annex_labels": ["кладовая", "подсобка", "инвентарная"],
+              "bath_label": "санузел"
+            },
             "state": null
           },
           "balcony_slots": {

@@ -5,9 +5,9 @@ Soviet panel-block pack (three flats per landing round a half-landing switchback
 living rooms; `Tools/TrainingGround/src/levelgen/buildings/kitPlan.ts`, `building_plans.json` `recipes.block_kit`), flat-door roles follow
 the units, and every /2 layout carries structure classes and window vault data (data only). Status and open questions:
 `docs/design/levelgen/S2_ROOMS_PLAN.md` (STATUS block), designer summary `docs/design/levelgen/BGEN_KIT_PLANS_2026-11-21.md`.
-2026-11-22: the khrushchevka has a gable door (template `gable_door`: an end-wall ground door into the end flat's ground-storey vestibule) and
-balcony slots on its street living rooms (`balcony_slots`); stories 3 and 4 hold on it, story 9 only with a locked gable door (F4: a closed one is
-nearer than any back window - designer question). Tests `buildings/kitGable.test.ts`.
+2026-11-22: the khrushchevka has a gable door (template `gable_door`: an end-wall ground door into a ground-floor SERVICE ROOM - the whole end flat of the gable is a service bay
+дворницкая / щитовая / ЖЭК with a stair door; upper storeys unchanged, designer 2026-11-22) and balcony slots on its street living rooms
+(`balcony_slots`); stories 3 and 4 hold on it, story 9 locks the gable door itself (`building_stories.json gable_door_state`; no manual override needed). Tests `buildings/kitGable.test.ts`.
 
 **Обновление за 2026-11-18, main `50c0f915`.** Ожидающие подъёма бойцы смотрят наружу даже рядом с пропсами (`ccdec8d3`), появление пропсов X6 и X4 стало плавнее (`13be5a16`), сгенерированные карты используют холод и погоду (`6dbc9e38`). G007 исправил атаки на пандусе (`e24a6d6f`). Из задачи 044 в main вошёл выстрел из приседа за высоким углом (`e4558688`). Ошибки PeekMines и Suppression остаются открытыми. Antigravity 083/083c расширили покрытие архива QD и проверку настроек тренера (`b41973d8`, `d72b9629`). В AgentChat компактнее сообщения об ожидании (`7e4715d9`), инструменты API поддерживают второй ключ (`b9170e47`). Загрузка, пауза у бочки и урок аптечки обновлены в `4db03229`. Подробности в разделе «Сделано (2026-11-18)» файла TASK_BOARD.
 

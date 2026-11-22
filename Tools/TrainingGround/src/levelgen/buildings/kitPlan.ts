@@ -52,7 +52,7 @@ function useTemplate(id?: string): void {
 }
 
 /** What a room of a kit flat is for (GenRoom.use). The core cell is the 'landing' (it holds the floor landing and the flights). */
-export type RoomUse = 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'tambour' | 'landing';
+export type RoomUse = 'hall' | 'corridor' | 'bath' | 'kitchen' | 'living' | 'tambour' | 'landing' | 'service';
 export type KitFlat = 'A' | 'B' | 'C';
 
 /** One door the kit plan wants: the two cells it joins, its role and (optionally) the preferred centre along the shared wall. */
@@ -63,11 +63,13 @@ export type GableChoice = 'low' | 'high' | 'both' | 'none';
 export const GABLE_CHOICES: readonly GableChoice[] = ['low', 'high', 'both', 'none'];
 
 /**
- * A gable door of a kit block (designer decision 2026-11-22; template gable_door): an exterior door on the end wall `wall`, ground storey only,
- * into the end flat's court row (`cells` = its vestibule_uses cells, a common vestibule on the ground storey) that leads to the section's tambour
- * or floor landing through the flat's own entry door. `door` = the vestibule cell holding the door, `c` = the door centre along the gable (v, cm).
+ * A gable door of a kit block (designer decision 2026-11-22; template gable_door): an exterior door on the end wall `wall`, ground storey only, into
+ * a SERVICE ROOM. `cells` = the service bay: every cell of the end flat `unit` (on the ground storey it is no flat - zone 'service', kind 'service'
+ * except the hall / corridor passages), `door` = the main service room (the cell on the gable at the court corner), `c` = the door centre along the
+ * gable (v, cm), `type` / `labels` = what the rooms are (template service_room: the main room's type id, a label per cell id). The flat's own entry
+ * door from the tambour / floor landing is the interior stair door.
  */
-export interface KitGable { wall: 'u0' | 'uL'; section: number; unit: string; cells: string[]; door: string; c: number; /** The door's opening state (absent = the default). */ state?: DoorState }
+export interface KitGable { wall: 'u0' | 'uL'; section: number; unit: string; cells: string[]; door: string; c: number; type: string; labels: Record<string, string>; /** The door's opening state (absent = the default). */ state?: DoorState }
 
 /** One section of a kit block. */
 export interface KitSection {
@@ -277,23 +279,23 @@ function gableWalls(choice: GableChoice | undefined, sections: number): ('u0' | 
   return ends === 'low' ? ['u0'] : ends === 'high' ? ['uL'] : ends === 'both' ? ['u0', 'uL'] : [];
 }
 
-type RawGable = Omit<KitGable, 'cells' | 'door'> & { keys: string[]; doorKey: string };
+type RawGable = Omit<KitGable, 'cells' | 'door' | 'labels'> & { keys: string[]; doorKey: string; labels: Record<string, string> };
 
 /**
- * The gable vestibule on `wall` (cell keys, before the ids): the end section's flat on that gable, its vestibule_uses cells (its court row: hall +
- * kitchen, and the flat's corridor that opens onto the hall), the door in the cell on the gable at the court corner. A string = why there is none.
+ * The gable service bay on `wall` (cell keys, before the ids): the end section's flat on that gable (all its cells - they cannot be cut, the kitchen,
+ * bath and street living rooms all reach the gable), the door in its cell on the gable at the court corner (the kitchen). The main room's type is
+ * drawn from the template's service_room.types, the annex rooms' labels from annex_labels, on a stream of their own. A string = why there is none.
  */
-function gableVestibule(cells: readonly RawCell[], sections: readonly KitSection[], wall: 'u0' | 'uL', L: number): RawGable | string {
+function gableService(cells: readonly RawCell[], sections: readonly KitSection[], wall: 'u0' | 'uL', L: number, seed: number): RawGable | string {
   const sec = wall === 'u0' ? sections[0] : sections[sections.length - 1];
   const touches = (c: RawCell): boolean => (wall === 'u0' ? c.u0 === 0 : c.u1 === L);
   const end = cells.find((c) => c.section === sec.index && c.unit && touches(c));
   if (!end?.unit) return `gable door (${wall}): no flat on the gable`;
   const unit = end.unit;
-  const uses = TT.gable_door.vestibule_uses as string[];
-  const ves = cells.filter((c) => c.unit === unit && c.use !== undefined && uses.includes(c.use));
-  if (!ves.some((c) => c.use === 'hall')) return `gable door (${wall}): ${unit} has no hall among ${uses.join(' / ')}`;
-  const door = ves.find((c) => touches(c) && c.v0 === 0);
-  if (!door) return `gable door (${wall}): no ${uses.join(' / ')} cell of ${unit} on the gable at the court corner`;
+  const bay = cells.filter((c) => c.unit === unit);
+  if (!bay.some((c) => c.use === 'hall')) return `gable door (${wall}): ${unit} has no hall (the stair passage)`;
+  const door = bay.find((c) => touches(c) && c.v0 === 0);
+  if (!door) return `gable door (${wall}): no cell of ${unit} on the gable at the court corner`;
   const half = BUILDING_PLANS.constants.openings.door_cm / 2;
   const opts = steps(door.v0 + half, door.v1 - half);
   if (!opts.length) return `gable door (${wall}): ${unit}'s ${door.use} gable span ${door.v1 - door.v0} cm < the door`;
@@ -301,7 +303,14 @@ function gableVestibule(cells: readonly RawCell[], sections: readonly KitSection
   // nearest the span's middle; a tie goes to the centre farther from the court corner (the kit entrance module clears the corner)
   let c = opts[0];
   for (const x of opts) if (Math.abs(x - mid) < Math.abs(c - mid) - 1e-9 || (Math.abs(Math.abs(x - mid) - Math.abs(c - mid)) <= 1e-9 && x > c)) c = x;
-  return { wall, section: sec.index, unit, keys: ves.map((x) => x.key), doorKey: door.key, c };
+  const sr = TT.gable_door.service_room, rs = rng(fnv1a(`${seed}|kit|service|${wall}`));
+  const type = pick(rs, sr.types);
+  const labels: Record<string, string> = { [door.key]: type.label };
+  for (const x of bay) {
+    if (x.key === door.key || x.use === 'hall' || x.use === 'corridor') continue;
+    labels[x.key] = x.use === 'bath' ? sr.bath_label : pick(rs, sr.annex_labels);
+  }
+  return { wall, section: sec.index, unit, keys: bay.map((x) => x.key), doorKey: door.key, c, type: type.id, labels };
 }
 
 /**
@@ -339,12 +348,11 @@ export function planKitBlock(inp: KitPlanInput): BandPlan {
     // the gable doors (template gable_door) and the balcony columns (template balcony_slots.rate; own stream, the plan's draws stay as they were)
     const rawGables: RawGable[] = [];
     for (const wall of gableWalls(inp.gable, sections.length)) {
-      const g = gableVestibule(bld.cells, sections, wall, L);
+      const g = gableService(bld.cells, sections, wall, L, inp.seed);
       if (typeof g === 'string') { planNotes.push(g); continue; }
       rawGables.push(g);
       const to = sections[g.section].tambour && !g.unit.endsWith('C') ? 'tambour' : 'floor landing';
-      const uses = bld.cells.filter((c) => g.keys.includes(c.key)).map((c) => c.use).join(' + ');
-      planNotes.push(`gable door (${wall}): on the ground storey ${g.unit}'s ${uses} are the gable vestibule (to the ${to}); its other rooms open onto it, no kitchen on that storey`);
+      planNotes.push(`gable door (${wall}): on the ground storey the end flat ${g.unit} is a service bay (${g.labels[g.doorKey]} at the gable door, stair door to the ${to}); the section has two flats on that storey, ${g.unit} again from storey 1`);
     }
     const rb = rng(fnv1a(`${inp.seed}|kit|balcony`));
     const units = [...new Set(bld.cells.map((c) => c.unit).filter((u): u is string => !!u))].sort();
@@ -355,7 +363,7 @@ export function planKitBlock(inp: KitPlanInput): BandPlan {
     const cells: PlanCell[] = sorted.map((c, i) => { idOf.set(c.key, `c${i}`); const { key: _k, ...rest } = c; void _k; return { id: `c${i}`, ...rest }; });
     const doors = bld.doors.map((d) => ({ ...d, a: idOf.get(d.a)!, b: idOf.get(d.b)! }));
     const gState = inp.gableState ?? ((TT.gable_door.state ?? undefined) as DoorState | undefined);
-    const gables: KitGable[] = rawGables.map(({ keys, doorKey, ...g }) => ({ ...g, cells: keys.map((k) => idOf.get(k)!), door: idOf.get(doorKey)!, ...(gState ? { state: gState } : {}) }));
+    const gables: KitGable[] = rawGables.map(({ keys, doorKey, labels, ...g }) => ({ ...g, cells: keys.map((k) => idOf.get(k)!), door: idOf.get(doorKey)!, labels: Object.fromEntries(Object.entries(labels).map(([k, v]) => [idOf.get(k)!, v])), ...(gState ? { state: gState } : {}) }));
     const plan: BandPlan = { kind: 'bands', L, D, bays: [], cells, archetype: 'block', pattern: 'kit', kit: { sections, doors, notes: planNotes, template: tid, gables, balconyColumns } };
     const problems = validateKitPlan(plan);
     if (!problems.length) return plan;
@@ -405,14 +413,15 @@ export function validateKitPlan(plan: BandPlan): string[] {
   for (const g of plan.kit.gables ?? []) {
     const c = byId.get(g.door);
     const half = BUILDING_PLANS.constants.openings.door_cm / 2;
-    if (!c || !g.cells.includes(g.door)) { out.push(`gable ${g.wall}: door cell ${g.door} not in its vestibule`); continue; }
+    if (!c || !g.cells.includes(g.door)) { out.push(`gable ${g.wall}: door cell ${g.door} not in its service bay`); continue; }
     if ((g.wall === 'u0' ? c.u0 !== 0 : c.u1 !== L) || g.c - half < c.v0 || g.c + half > c.v1 || g.c % G) out.push(`gable ${g.wall}: door at v ${g.c} off ${c.id}'s gable span`);
-    if (!g.cells.some((id) => byId.get(id)?.use === 'hall')) out.push(`gable ${g.wall}: the vestibule has no hall`);
+    if (!g.cells.some((id) => byId.get(id)?.use === 'hall')) out.push(`gable ${g.wall}: the service bay has no hall (stair passage)`);
+    if (!g.cells.every((id) => byId.get(id)?.unit === g.unit)) out.push(`gable ${g.wall}: the service bay is not one flat`);
   }
   return out;
 }
 
-const USE_GLYPH: Record<RoomUse, string> = { hall: 'h', corridor: 'c', bath: 'b', kitchen: 'k', living: 'L', tambour: 'T', landing: 'S' };
+const USE_GLYPH: Record<RoomUse, string> = { hall: 'h', corridor: 'c', bath: 'b', kitchen: 'k', living: 'L', tambour: 'T', landing: 'S', service: 'v' };
 
 /**
  * One char per 50 cm (the kit grid), v = D on the top row (the street), v = 0 at the bottom (the court). Each cell paints its use glyph (h hall,

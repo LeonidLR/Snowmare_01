@@ -51,8 +51,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_x",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_x_part_f0_1_0",
@@ -136,8 +136,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_x",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_x_part_f0_5_1",
@@ -153,8 +153,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_x",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_x_part_f0_6_0",
@@ -170,8 +170,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_x",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_x_part_f0_7_0",
@@ -2900,8 +2900,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_y_part_f0_1_0",
@@ -2985,8 +2985,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_y_part_f0_5_1",
@@ -3002,8 +3002,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_y_part_f0_6_0",
@@ -3019,8 +3019,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_y",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_y_part_f0_7_0",
@@ -7471,8 +7471,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b18",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_b18_part_f0_1_0",
@@ -7573,8 +7573,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b18",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_b18_part_f0_7_0",
@@ -8448,8 +8448,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b20",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_b20_part_f0_1_0",
@@ -8550,8 +8550,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b20",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_b20_part_f0_6_1",
@@ -8567,8 +8567,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b20",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_b20_part_f0_7_0",
@@ -8618,8 +8618,8 @@
    "thickness": 20,
    "kind": "interior",
    "building": "B_b20",
-   "structure": "load_bearing",
-   "material": "concrete_panel"
+   "structure": "partition",
+   "material": "plaster"
   },
   {
    "id": "B_b20_part_f0_9_0",
@@ -13621,8 +13621,8 @@
      "floor": 0,
      "thickness": 20,
      "openings": [],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_x_part_f0_1",
@@ -13707,14 +13707,14 @@
         "B_x_r_f0_c5",
         "B_x_r_f0_c1"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_x_part_f0_4",
@@ -13783,14 +13783,14 @@
         "B_x_r_f0_c5",
         "B_x_r_f0_c2"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_x_part_f0_6",
@@ -13821,14 +13821,14 @@
         "B_x_r_f0_c5",
         "B_x_r_f0_c3"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_x_part_f0_7",
@@ -17555,9 +17555,10 @@
        -4363
       ]
      },
-     "kind": "lobby",
-     "use": "kitchen",
-     "zone": "common",
+     "kind": "service",
+     "use": "service",
+     "label": "щитовая",
+     "zone": "service",
      "walls": [
       "B_x_N",
       "B_x_W"
@@ -17587,7 +17588,8 @@
      },
      "kind": "service",
      "use": "bath",
-     "unit": "B_x_u_f0_s0C",
+     "label": "санузел",
+     "zone": "service",
      "walls": [
       "B_x_W"
      ],
@@ -17612,9 +17614,10 @@
        -4363
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_x_u_f0_s0C",
+     "kind": "service",
+     "use": "service",
+     "label": "инвентарная",
+     "zone": "service",
      "walls": [
       "B_x_W"
      ],
@@ -17641,9 +17644,10 @@
        -4113
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_x_u_f0_s0C",
+     "kind": "service",
+     "use": "service",
+     "label": "кладовая",
+     "zone": "service",
      "walls": [
       "B_x_S",
       "B_x_W"
@@ -17672,9 +17676,9 @@
        -4113
       ]
      },
-     "kind": "lobby",
+     "kind": "corridor",
      "use": "hall",
-     "zone": "common",
+     "zone": "service",
      "walls": [
       "B_x_N"
      ],
@@ -17701,9 +17705,9 @@
        -4113
       ]
      },
-     "kind": "lobby",
+     "kind": "corridor",
      "use": "corridor",
-     "zone": "common",
+     "zone": "service",
      "walls": [],
      "door_ids": [
       "B_x_f0_d14",
@@ -20472,7 +20476,7 @@
     "sections": 2,
     "pattern": "kit",
     "notes": [
-     "gable door (u0): on the ground storey s0C's hall + corridor + kitchen are the gable vestibule (to the floor landing); its other rooms open onto it, no kitchen on that storey",
+     "gable door (u0): on the ground storey the end flat s0C is a service bay (щитовая at the gable door, stair door to the floor landing); the section has two flats on that storey, s0C again from storey 1",
      "s0C: 550 cm too narrow to split the street room (2 living rooms instead of 3)",
      "s1C: 550 cm too narrow to split the street room (2 living rooms instead of 3)"
     ],
@@ -20514,22 +20518,6 @@
      "column": "B_x_col_s0B",
      "dead_end": true,
      "run_cm": 1066
-    },
-    {
-     "id": "B_x_u_f0_s0C",
-     "kind": "flat",
-     "floor": 0,
-     "rooms": [
-      "B_x_r_f0_c1",
-      "B_x_r_f0_c2",
-      "B_x_r_f0_c3"
-     ],
-     "entries": [
-      "B_x_f0_d14",
-      "B_x_f0_d15",
-      "B_x_f0_d16"
-     ],
-     "column": "B_x_col_s0C"
     },
     {
      "id": "B_x_u_f0_s1A",
@@ -22244,8 +22232,8 @@
      "floor": 0,
      "thickness": 20,
      "openings": [],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_y_part_f0_1",
@@ -22330,14 +22318,14 @@
         "B_y_r_f0_c5",
         "B_y_r_f0_c1"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_y_part_f0_4",
@@ -22406,14 +22394,14 @@
         "B_y_r_f0_c5",
         "B_y_r_f0_c2"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_y_part_f0_6",
@@ -22444,14 +22432,14 @@
         "B_y_r_f0_c5",
         "B_y_r_f0_c3"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_y_part_f0_7",
@@ -28465,9 +28453,10 @@
        637
       ]
      },
-     "kind": "lobby",
-     "use": "kitchen",
-     "zone": "common",
+     "kind": "service",
+     "use": "service",
+     "label": "ЖЭК",
+     "zone": "service",
      "walls": [
       "B_y_N",
       "B_y_W"
@@ -28497,7 +28486,8 @@
      },
      "kind": "service",
      "use": "bath",
-     "unit": "B_y_u_f0_s0A",
+     "label": "санузел",
+     "zone": "service",
      "walls": [
       "B_y_W"
      ],
@@ -28522,9 +28512,10 @@
        637
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_y_u_f0_s0A",
+     "kind": "service",
+     "use": "service",
+     "label": "инвентарная",
+     "zone": "service",
      "walls": [
       "B_y_W"
      ],
@@ -28551,9 +28542,10 @@
        887
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_y_u_f0_s0A",
+     "kind": "service",
+     "use": "service",
+     "label": "инвентарная",
+     "zone": "service",
      "walls": [
       "B_y_S",
       "B_y_W"
@@ -28582,9 +28574,9 @@
        887
       ]
      },
-     "kind": "lobby",
+     "kind": "corridor",
      "use": "hall",
-     "zone": "common",
+     "zone": "service",
      "walls": [
       "B_y_N"
      ],
@@ -28611,9 +28603,9 @@
        887
       ]
      },
-     "kind": "lobby",
+     "kind": "corridor",
      "use": "corridor",
-     "zone": "common",
+     "zone": "service",
      "walls": [],
      "door_ids": [
       "B_y_f0_d8",
@@ -33096,27 +33088,11 @@
     "sections": 2,
     "pattern": "kit",
     "notes": [
-     "gable door (u0): on the ground storey s0A's hall + corridor + kitchen are the gable vestibule (to the tambour); its other rooms open onto it, no kitchen on that storey"
+     "gable door (u0): on the ground storey the end flat s0A is a service bay (ЖЭК at the gable door, stair door to the tambour); the section has two flats on that storey, s0A again from storey 1"
     ],
     "template": "block_khrushchevka"
    },
    "units": [
-    {
-     "id": "B_y_u_f0_s0A",
-     "kind": "flat",
-     "floor": 0,
-     "rooms": [
-      "B_y_r_f0_c1",
-      "B_y_r_f0_c2",
-      "B_y_r_f0_c3"
-     ],
-     "entries": [
-      "B_y_f0_d8",
-      "B_y_f0_d9",
-      "B_y_f0_d10"
-     ],
-     "column": "B_y_col_s0A"
-    },
     {
      "id": "B_y_u_f0_s0B",
      "kind": "flat",
@@ -34005,8 +33981,8 @@
      "floor": 0,
      "thickness": 20,
      "openings": [],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_b18_part_f0_1",
@@ -34107,14 +34083,14 @@
         "B_b18_r_f0_c5",
         "B_b18_r_f0_c1"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_b18_part_f0_5",
@@ -34183,14 +34159,14 @@
         "B_b18_r_f0_c5",
         "B_b18_r_f0_c3"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_b18_part_f0_7",
@@ -35313,9 +35289,10 @@
        -4113
       ]
      },
-     "kind": "lobby",
-     "use": "kitchen",
-     "zone": "common",
+     "kind": "service",
+     "use": "service",
+     "label": "ЖЭК",
+     "zone": "service",
      "walls": [
       "B_b18_N",
       "B_b18_W"
@@ -35345,7 +35322,8 @@
      },
      "kind": "service",
      "use": "bath",
-     "unit": "B_b18_u_f0_s0C",
+     "label": "санузел",
+     "zone": "service",
      "walls": [
       "B_b18_W"
      ],
@@ -35370,9 +35348,10 @@
        -4163
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_b18_u_f0_s0C",
+     "kind": "service",
+     "use": "service",
+     "label": "кладовая",
+     "zone": "service",
      "walls": [
       "B_b18_S",
       "B_b18_W"
@@ -35400,9 +35379,10 @@
        -3863
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_b18_u_f0_s0C",
+     "kind": "service",
+     "use": "service",
+     "label": "кладовая",
+     "zone": "service",
      "walls": [
       "B_b18_S"
      ],
@@ -35430,9 +35410,9 @@
        -3863
       ]
      },
-     "kind": "lobby",
+     "kind": "corridor",
      "use": "hall",
-     "zone": "common",
+     "zone": "service",
      "walls": [
       "B_b18_N"
      ],
@@ -35459,9 +35439,9 @@
        -3863
       ]
      },
-     "kind": "lobby",
+     "kind": "corridor",
      "use": "corridor",
-     "zone": "common",
+     "zone": "service",
      "walls": [],
      "door_ids": [
       "B_b18_f0_d7",
@@ -35515,9 +35495,10 @@
        -3463
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_b18_u_f0_s0C",
+     "kind": "service",
+     "use": "service",
+     "label": "подсобка",
+     "zone": "service",
      "walls": [
       "B_b18_S"
      ],
@@ -36644,7 +36625,7 @@
     "pattern": "kit",
     "notes": [
      "depth 1000 < 1100: the street band is too shallow for flat B - two flats per landing",
-     "gable door (u0): on the ground storey s0C's hall + corridor + kitchen are the gable vestibule (to the floor landing); its other rooms open onto it, no kitchen on that storey"
+     "gable door (u0): on the ground storey the end flat s0C is a service bay (ЖЭК at the gable door, stair door to the floor landing); the section has two flats on that storey, s0C again from storey 1"
     ],
     "template": "block_khrushchevka"
    },
@@ -36667,22 +36648,6 @@
      "column": "B_b18_col_s0A",
      "dead_end": true,
      "run_cm": 432
-    },
-    {
-     "id": "B_b18_u_f0_s0C",
-     "kind": "flat",
-     "floor": 0,
-     "rooms": [
-      "B_b18_r_f0_c1",
-      "B_b18_r_f0_c2",
-      "B_b18_r_f0_c3",
-      "B_b18_r_f0_c7"
-     ],
-     "entries": [
-      "B_b18_f0_d7",
-      "B_b18_f0_d8"
-     ],
-     "column": "B_b18_col_s0C"
     },
     {
      "id": "B_b18_u_f1_s0A",
@@ -37687,8 +37652,8 @@
      "floor": 0,
      "thickness": 20,
      "openings": [],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_b20_part_f0_1",
@@ -37773,14 +37738,14 @@
         "B_b20_r_f0_c6",
         "B_b20_r_f0_c1"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_b20_part_f0_4",
@@ -37865,14 +37830,14 @@
         "B_b20_r_f0_c6",
         "B_b20_r_f0_c2"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_b20_part_f0_7",
@@ -37941,14 +37906,14 @@
         "B_b20_r_f0_c6",
         "B_b20_r_f0_c4"
        ],
-       "role": "unit_entry",
+       "role": "room",
        "module": "wall_door_200",
-       "structure": "load_bearing",
-       "material": "concrete_panel"
+       "structure": "partition",
+       "material": "plaster"
       }
      ],
-     "structure": "load_bearing",
-     "material": "concrete_panel"
+     "structure": "partition",
+     "material": "plaster"
     },
     {
      "id": "B_b20_part_f0_9",
@@ -40834,9 +40799,10 @@
        -1463
       ]
      },
-     "kind": "lobby",
-     "use": "kitchen",
-     "zone": "common",
+     "kind": "service",
+     "use": "service",
+     "label": "щитовая",
+     "zone": "service",
      "walls": [
       "B_b20_N",
       "B_b20_W"
@@ -40866,7 +40832,8 @@
      },
      "kind": "service",
      "use": "bath",
-     "unit": "B_b20_u_f0_s0C",
+     "label": "санузел",
+     "zone": "service",
      "walls": [
       "B_b20_W"
      ],
@@ -40891,9 +40858,10 @@
        -1463
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_b20_u_f0_s0C",
+     "kind": "service",
+     "use": "service",
+     "label": "кладовая",
+     "zone": "service",
      "walls": [
       "B_b20_W"
      ],
@@ -40920,9 +40888,10 @@
        -1563
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_b20_u_f0_s0C",
+     "kind": "service",
+     "use": "service",
+     "label": "инвентарная",
+     "zone": "service",
      "walls": [
       "B_b20_S",
       "B_b20_W"
@@ -40951,9 +40920,10 @@
        -1213
       ]
      },
-     "kind": "room",
-     "use": "living",
-     "unit": "B_b20_u_f0_s0C",
+     "kind": "service",
+     "use": "service",
+     "label": "инвентарная",
+     "zone": "service",
      "walls": [
       "B_b20_S"
      ],
@@ -40980,9 +40950,9 @@
        -1213
       ]
      },
-     "kind": "lobby",
+     "kind": "corridor",
      "use": "hall",
-     "zone": "common",
+     "zone": "service",
      "walls": [
       "B_b20_N"
      ],
@@ -41009,9 +40979,9 @@
        -1213
       ]
      },
-     "kind": "lobby",
+     "kind": "corridor",
      "use": "corridor",
-     "zone": "common",
+     "zone": "service",
      "walls": [],
      "door_ids": [
       "B_b20_f0_d14",
@@ -43421,7 +43391,7 @@
     "sections": 1,
     "pattern": "kit",
     "notes": [
-     "gable door (u0): on the ground storey s0C's hall + corridor + kitchen are the gable vestibule (to the floor landing); its other rooms open onto it, no kitchen on that storey"
+     "gable door (u0): on the ground storey the end flat s0C is a service bay (щитовая at the gable door, stair door to the floor landing); the section has two flats on that storey, s0C again from storey 1"
     ],
     "template": "block_khrushchevka"
    },
@@ -43462,23 +43432,6 @@
      "column": "B_b20_col_s0B",
      "dead_end": true,
      "run_cm": 1604
-    },
-    {
-     "id": "B_b20_u_f0_s0C",
-     "kind": "flat",
-     "floor": 0,
-     "rooms": [
-      "B_b20_r_f0_c1",
-      "B_b20_r_f0_c2",
-      "B_b20_r_f0_c3",
-      "B_b20_r_f0_c4"
-     ],
-     "entries": [
-      "B_b20_f0_d14",
-      "B_b20_f0_d15",
-      "B_b20_f0_d16"
-     ],
-     "column": "B_b20_col_s0C"
     },
     {
      "id": "B_b20_u_f1_s0A",

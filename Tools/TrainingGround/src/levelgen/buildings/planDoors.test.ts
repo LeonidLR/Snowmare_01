@@ -317,7 +317,7 @@ test('CodexTactics.LevelGen.PlanDoors.Fallback: a wall without a slot moves the 
   const none = planDoors(bare, { storeys: 1, seed: 1, core: null, doorWalls: [{ wall: 'v0', t: 0.5 }] });
   assert.ok(none.warnings.includes('exterior_door_none:v0'));
   const fb = planDoors({ ...plan, kind: 'fallback', cells: [] }, { storeys: 1, seed: 1, core: null, doorWalls: [] });
-  assert.deepEqual(fb, { openings: [], lobbies: [], warnings: ['plan_fallback'] });
+  assert.deepEqual(fb, { openings: [], lobbies: [], service: [], warnings: ['plan_fallback'] });
 });
 
 // Expected openings, checked by hand against the rules (crossing axes, 200 jamb, 50 grid, facing, legacy t); fixed by seed 7 / seed 3.
