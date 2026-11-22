@@ -38,10 +38,10 @@
     { "id": "bgen.entry_legs.showcase", "title_ru": "Витрина: заходы отряда в квартиру (отряд <= 2 x одиночка)", "target": ">= 0.95", "unit": "share",
       "source": "Saved/LevelGen/buildings_walk_L_Gen_StoryShowcase_Kit.json", "last_known": { "value": 0.85, "n": 120, "date": "2026-11-21", "note_ru": "102 из 120" } },
     { "id": "ai.determinism.same_seed", "title_ru": "Повторяемость: один сид 10 раз -> одинаковый исход", "target": ">= 10/10", "unit": "runs",
-      "source": "enemy-ai det_runner", "last_known": { "value": "8/10 (1 поток); main 0/10", "date": "2026-11-22" } },
+      "source": "enemy-ai det_runner", "last_known": { "value": "Перекрёсток 10/10, крыша 29/30 (ветка ai/arena-determinism)", "date": "2026-11-22" } },
     { "id": "defence.crossroads.win_rate", "title_ru": "Перекрёсток: победы обороны", "target": ">= 0.60", "min_n": 150, "unit": "share",
       "also_ru": ["захваты <= 10 %", "убито атакующих >= 2,0 за раунд"], "source": "paired_ab.py --json",
-      "last_known": { "value": 0.51, "n": 149, "date": "2026-11-21", "note_ru": "plain, слайс 2" } }
+      "last_known": { "value": 0.47, "n": 300, "date": "2026-11-22", "note_ru": "база: сиды 1060-1359, захваты 11 %, убито 1,76 за раунд; разные наборы сидов дают 45 % / 49 %" } }
   ],
   "tasks": [
     { "id": "bgen-confined-formation", "title_ru": "Отряд сжимается в тесных комнатах и коридорах", "stage": "S1", "week": "2026-11-22..28",
