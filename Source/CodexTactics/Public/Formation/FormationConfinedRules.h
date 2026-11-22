@@ -16,7 +16,7 @@ class FJsonObject;
  *   free navmesh distance (the navmesh is already eroded by the agent radius).
  * - CONFINED when the median of Free <= ConfinedMedianCm (a door's or a corridor's few long rays do not lift the median); open ground is never
  *   confined - the formation there is unchanged.
- * - The ENTRY point E = where the squad comes in (the runtime: where the leader first walked within the pocket radius - just inside the door);
+ * - The ENTRY point E = where the squad comes in (the runtime: where the leader first walked within the pocket radius - at or just outside the door);
  *   unset = unknown (he stood there).
  * - A follower's formation slot STAYS when it lies inside the pocket (within the pocket radius = max(median, MinSpacingCm, MinRadiusCm) and
  *   WallMarginCm short of the free distance toward it), off the leader's remaining way (WayHalfWidthCm round the segment from where he walks
@@ -33,7 +33,8 @@ class FJsonObject;
  *   all: the slot stays.
  * - Line tests (FFormationConfinedLineTests, the runtime's navmesh): every place (kept or new) must be seen from the entry point on a clear line
  *   that keeps JambClearCm from the navmesh edge (no place round a door jamb's corner - none such: the filter is dropped); "reachable" also
- *   needs his own straight navmesh line to it, unless he still stands farther out than the entry point (he walks in through the door).
+ *   needs his own straight navmesh line to it, unless he still stands farther out than the entry point (he walks in through the door); no
+ *   place beyond a throat on the line from the centre (InRoom). A man keeps the place he was given last frame (Held) while it is still valid.
  *
  * Content/Data/AI/squad_confined.json (snake_case keys, metres where the key says _m; a missing key keeps the default), read on the first
  * FormationConfinedTuning::Get(); console Codex.Formation.Confined (-1 = the file's "enabled", 0 = off - the old slots, 1 = on).
@@ -47,8 +48,11 @@ struct CODEXTACTICS_API FFormationConfinedTuning
 	int32 ProbeRays = 16;
 	/** Each ray's length, cm (probe_m, metres in the file). */
 	float ProbeCm = 450.f;
-	/** The pocket is confined when the median free distance is at most this, cm (confined_median_m, metres in the file). */
-	float ConfinedMedianCm = 200.f;
+	/**
+	 * The pocket is confined when the median free distance is at most this, cm (confined_median_m, metres in the file). 1.7 m (Lead review round
+	 * 2): flat halls (median 0.5-1.5 m) and 2.5 m corridors compress, a 3.5 x 5 m living room (1.86 m, grey S09 r_f0_c17) does not.
+	 */
+	float ConfinedMedianCm = 170.f;
 	/** Two bodies' centres (the operative capsule is 40 cm): spacing between the places and from the pocket centre, cm (min_spacing_cm). */
 	float MinSpacingCm = 80.f;
 	/** A place stays this short of the free (already agent-eroded) navmesh distance toward it, cm (wall_margin_cm). */
@@ -95,6 +99,11 @@ struct CODEXTACTICS_API FFormationConfinedTuning
 	 * a corridor's axis) its places reach only as far as the shorter neighbour - inside the room, not in the door (gap_factor; 0 = off).
 	 */
 	float GapFactor = 1.5f;
+	/**
+	 * Lead review round 2: a THROAT on the line from the centre to a place - the navmesh edge nearer than this (a door) while the centre keeps
+	 * more than ThroatClearCm / 0.7 - puts the place out of the room (FFormationConfinedLineTests::InRoom), cm (throat_clear_cm; 0 = off).
+	 */
+	float ThroatClearCm = 30.f;
 };
 
 /** A probed pocket: its centre and the free navmesh distance along each world-aligned ray (FormationConfinedRules::RayDir). */
@@ -114,6 +123,11 @@ struct FFormationConfinedLineTests
 {
 	TFunction<bool(const FVector2D& Place)> FromEntry;
 	TFunction<bool(const FVector2D& From, const FVector2D& To)> Straight;
+	/**
+	 * Lead review round 2 (2026-11-22): InRoom(Place) - the line from the pocket centre to Place passes no THROAT (a door: the navmesh narrows
+	 * below ThroatClearCm on the way while the centre itself is roomier) - a place out in a doorway seen through by two rays is no place.
+	 */
+	TFunction<bool(const FVector2D& Place)> InRoom;
 };
 
 /** One follower slot to compress: the formation's slot and (when known) where its man stands now. */
@@ -121,6 +135,11 @@ struct FFormationConfinedSlot
 {
 	FVector2D Desired = FVector2D::ZeroVector;
 	TOptional<FVector2D> Occupant;
+	/**
+	 * Lead review round 2 (2026-11-22): the place this rule gave him last frame - kept while it is still a valid place (the walk smoke's men
+	 * swapped places frame by frame as they moved, across the hall and back).
+	 */
+	TOptional<FVector2D> Held;
 };
 
 /** CompressSlots' result: each slot's place and whether the rule moved it. */
