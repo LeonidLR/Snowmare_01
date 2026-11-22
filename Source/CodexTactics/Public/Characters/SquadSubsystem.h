@@ -1235,6 +1235,8 @@ private:
 		bool bCatchUp = false;
 		/** Bug 2026-10-28: stepping aside out of the leader's own walk (FormationRuntime::YieldFromLeaderWay); logged once per yield. */
 		bool bYielding = false;
+		/** Entry order: he walks to a step-round point beside a standing body on his way to his confined place (logs the start). */
+		bool bConfinedStepping = false;
 		/** Rules v2.6 (Q2 = b): the lagging rear guard faces forwards while he catches up (FormationSectorRules::RearCatchUp's hysteresis). */
 		bool bRearTurned = false;
 		/** Item 2 (2026-11-03): the wall-leadership re-form's rear cover faces his walk while his place is far (FormationWallLeadership::ReformRearFacesWalk). */
@@ -1654,6 +1656,18 @@ private:
 		TMap<TWeakObjectPtr<AOperativeCharacter>, FVector2D> HeldPlaces;
 		/** Codex.Formation.Debug 2: the places last logged. */
 		FString LastLoggedPlaces;
+		/** Entry order (depth queue): the inside entry point of this pocket's way in (FormationConfinedRules::EntryOnPath; unset = the cost rule). */
+		TOptional<FVector2D> EntryInside;
+		/** Entry order: each follower's queue rank last frame (FFormationConfinedSlot::PrevRank). */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, int32> QueueRanks;
+		/** Entry order: each follower's navmesh way to the inside entry point, cm, and its age (refreshed every QueueRefreshSeconds). */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, float> ToEntryCm;
+		float ToEntryAge = 0.f;
+		/** Entry order block detection: how long each follower has stood away from his place, s, and his swap cooldown, s. */
+		TMap<TWeakObjectPtr<AOperativeCharacter>, float> StillSeconds;
+		TMap<TWeakObjectPtr<AOperativeCharacter>, float> SwapCooldown;
+		/** Entry order: the queue last logged. */
+		FString LastLoggedQueue;
 	};
 	FFormationConfinedState Confined;
 	/** Crowd separation + obstacle avoidance of Operative on / off (UCrowdFollowingComponent; the rule's own switch, Confined.NoSeparation). */
