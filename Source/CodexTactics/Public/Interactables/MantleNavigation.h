@@ -81,6 +81,49 @@ public:
 	UNavFilter_NoCrawlTrapLiteralNoMantle();
 };
 
+/**
+ * Formation moves with the window sills closed too (designer 2026-11-22: in formation the men follow their commander through the doors and
+ * never jump through a window; Solo / a box selection may - faster, loud). MantleNavigation::NoWindowVariant.
+ */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_OperativeNoMantleNoWindow : public UNavFilter_OperativeNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_OperativeNoMantleNoWindow();
+};
+
+/** UNavFilter_NoCrawlNoMantle with the window sills closed (formation). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_NoCrawlNoMantleNoWindow : public UNavFilter_NoCrawlNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_NoCrawlNoMantleNoWindow();
+};
+
+/** UNavFilter_TrapLiteralNoMantle with the window sills closed (formation). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_TrapLiteralNoMantleNoWindow : public UNavFilter_TrapLiteralNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_TrapLiteralNoMantleNoWindow();
+};
+
+/** UNavFilter_NoCrawlTrapLiteralNoMantle with the window sills closed (formation). */
+UCLASS()
+class CODEXTACTICS_API UNavFilter_NoCrawlTrapLiteralNoMantleNoWindow : public UNavFilter_NoCrawlTrapLiteralNoMantle
+{
+	GENERATED_BODY()
+
+public:
+	UNavFilter_NoCrawlTrapLiteralNoMantleNoWindow();
+};
+
 /** One measured mantle site (MantleNavigation::ProbeSite): the probe for the rules plus the geometry the climb needs. */
 struct FMantleSite
 {
@@ -220,6 +263,8 @@ namespace MantleNavigation
 	CODEXTACTICS_API void CloseMantleArea(TArray<struct FNavigationFilterArea>& Areas, bool bAlsoDown);
 
 	/** The operative filter with the mantle closed for a filter class ChooseMoveFilter would use (null = the default filter). */
+	/** Formation (designer 2026-11-22): the NoMantle filter with the window sills closed as well (null -> UNavFilter_OperativeNoMantleNoWindow). */
+	CODEXTACTICS_API TSubclassOf<UNavigationQueryFilter> NoWindowVariant(TSubclassOf<UNavigationQueryFilter> Filter);
 	CODEXTACTICS_API TSubclassOf<UNavigationQueryFilter> NoMantleVariant(TSubclassOf<UNavigationQueryFilter> Filter);
 
 	/** A hit on geometry that blocks a walking capsule (no pawns; overlap-only volumes left out - docs/port/TRAPS.md). */

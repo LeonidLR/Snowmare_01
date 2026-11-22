@@ -65,6 +65,12 @@ public:
 	 */
 	int32 EmitNoise(const FVector& Location, EStealthLureKind Kind, const AActor* Source, float RadiusOverrideCm = -1.f, FName EventKind = NAME_None);
 
+	/**
+	 * The sound spread indicator of a loud action (designer 2026-11-22: a window broken on the way): rings on the ground grow from Location
+	 * to RadiusCm (ANoiseRingActor; Seconds, Pulses waves). Visual only - EmitNoise does the hearing.
+	 */
+	void ShowNoiseRing(const FVector& Location, float RadiusCm, float Seconds = 1.6f, int32 Pulses = 3);
+
 	/** The enemies that would hear a lure of Kind at Location now (no effect); RadiusOverrideCm as EmitNoise. */
 	TArray<AEnemyCharacter*> FindListeners(const FVector& Location, EStealthLureKind Kind, float RadiusOverrideCm = -1.f) const;
 

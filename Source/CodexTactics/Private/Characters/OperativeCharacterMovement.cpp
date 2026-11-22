@@ -4,6 +4,7 @@
 // _process_leader_movement).
 
 #include "Characters/OperativeCharacter.h"
+#include "Interactables/VaultNavigation.h"
 #include "AI/PmcEncounterNav.h"
 #include "Tactics/TurnBasedCombatSubsystem.h"
 
@@ -512,7 +513,11 @@ TSubclassOf<UNavigationQueryFilter> AOperativeCharacter::ChooseMoveFilter() cons
 	default: break;
 	}
 	// Mantling slice 1: the mantle links (UNavArea_Mantle) are open only for the operative the player commands in Solo (bMantlePathAllowed).
-	return bMantlePathAllowed ? Filter : MantleNavigation::NoMantleVariant(Filter);
+	const TSubclassOf<UNavigationQueryFilter> Chosen = bMantlePathAllowed ? Filter : MantleNavigation::NoMantleVariant(Filter);
+	// Window sills (designer 2026-11-22): Solo / a box selection may climb through a window on the way (faster, loud - no tactical entry);
+	// in FORMATION the men follow their commander through the doors only.
+	// A click on a window sill (SetWindowOrder) opens them for the whole order: the formation follows its commander through the window.
+	return MoveSquad && !MoveSquad->IsSoloMode() && !MoveSquad->IsWindowOrder() && !bMantlePathAllowed ? MantleNavigation::NoWindowVariant(Chosen) : Chosen;
 }
 
 bool AOperativeCharacter::SteerOwnMoveVia(const FVector& Via)

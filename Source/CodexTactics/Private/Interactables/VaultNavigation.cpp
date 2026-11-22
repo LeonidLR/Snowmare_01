@@ -23,11 +23,20 @@ UNavArea_Vault::UNavArea_Vault()
 	DrawColor = FColor(255, 200, 40);
 }
 
+UNavArea_WindowVault::UNavArea_WindowVault()
+{
+	FixedAreaEnteringCost = VaultRules::WindowEnteringCostCm;
+	DrawColor = FColor(255, 120, 40);
+}
+
 UNavFilter_NoVault::UNavFilter_NoVault()
 {
 	FNavigationFilterArea& Area = Areas.AddDefaulted_GetRef();
 	Area.AreaClass = UNavArea_Vault::StaticClass();
 	Area.bIsExcluded = true;
+	FNavigationFilterArea& Window = Areas.AddDefaulted_GetRef();
+	Window.AreaClass = UNavArea_WindowVault::StaticClass();
+	Window.bIsExcluded = true;
 	// Sprint 09: the squad's tripwires cost the operatives a detour, not the enemies (they do not know where they are).
 	FNavigationFilterArea& Wire = Areas.AddDefaulted_GetRef();
 	Wire.AreaClass = UNavArea_Tripwire::StaticClass();
@@ -161,6 +170,13 @@ namespace VaultNavigation
 		return nullptr;
 	}
 
+	void CloseWindowArea(TArray<FNavigationFilterArea>& Areas)
+	{
+		FNavigationFilterArea& Window = Areas.AddDefaulted_GetRef();
+		Window.AreaClass = UNavArea_WindowVault::StaticClass();
+		Window.bIsExcluded = true;
+	}
+
 	void MakeVaultable(AActor* Actor)
 	{
 		if (!Actor || Actor->FindComponentByClass<UNavModifierComponent>())
@@ -177,7 +193,9 @@ namespace VaultNavigation
 		// The shapes no longer affect navigation, so the modifier falls back to its failsafe box: size it to the real obstacle
 		// (2026-10-25; the 2 x 2 m default left the ends of a 3 m barricade open to the enemies' paths).
 		Modifier->FailsafeExtent = VaultRules::NavAreaExtent(Actor->CalculateComponentsBoundingBoxInLocalSpace(false), Actor->GetActorScale3D());
-		Modifier->SetAreaClass(UNavArea_Vault::StaticClass());
+		// A window sill is the dear vault: the squad takes the door when there is one (designer 2026-11-22).
+		static const FName WindowSillTag(TEXT("window_sill"));
+		Modifier->SetAreaClass(Actor->ActorHasTag(WindowSillTag) ? UNavArea_WindowVault::StaticClass() : UNavArea_Vault::StaticClass());
 		Modifier->RegisterComponent();
 	}
 }

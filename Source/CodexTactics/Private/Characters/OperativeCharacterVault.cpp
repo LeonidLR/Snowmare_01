@@ -3,6 +3,8 @@
 // Godot reference: Scenes/movements/player.gd (try_vault_obstacle, is_vaulting). Pure rules: Characters/VaultRules.
 
 #include "Characters/OperativeCharacter.h"
+#include "Core/PlayerCommands.h"
+#include "AI/StealthLureSubsystem.h"
 
 #include "CodexTactics.h"
 #include "Characters/OperativeAIController.h"
@@ -167,6 +169,23 @@ bool AOperativeCharacter::TryVault(const FVector& InDirection, bool bForceWhenBl
 	VaultLanding = FVector(LandingXY.X, LandingXY.Y, Land.ImpactPoint.Z + HalfHeight);
 	SetActorRotation(FRotator(0.f, Direction.Rotation().Yaw, 0.f));
 	UE_LOG(LogCodexTactics, Log, TEXT("%s vaults over %s (%.0f cm)"), *DisplayName.ToString(), *Front.GetActor()->GetName(), Height);
+	// Designer 2026-11-22: the first climb through a (shut) window breaks it - loud: a lure noise every enemy in earshot investigates and the
+	// sound spread rings on the ground. A broken window is quiet afterwards.
+	static const FName WindowSillTag(TEXT("window_sill"));
+	static const FName WindowBrokenTag(TEXT("window_broken"));
+	if (AActor* Sill = Front.GetActor(); Sill && Sill->ActorHasTag(WindowSillTag) && !Sill->ActorHasTag(WindowBrokenTag))
+	{
+		Sill->Tags.Add(WindowBrokenTag);
+		const FVector NoisePoint(Front.ImpactPoint.X, Front.ImpactPoint.Y, GroundZ + 5.f);
+		if (UStealthLureSubsystem* Lure = World->GetSubsystem<UStealthLureSubsystem>())
+		{
+			const int32 Heard = Lure->EmitNoise(NoisePoint, EStealthLureKind::Throw, this, VaultRules::WindowBreakNoiseCm, FName(TEXT("WindowBreak")));
+			Lure->ShowNoiseRing(NoisePoint, VaultRules::WindowBreakNoiseCm);
+			UE_LOG(LogCodexTactics, Display, TEXT("[Window] %s breaks the window %s climbing through: noise %.0f m, %d enemies heard it"), *DisplayName.ToString(),
+				*Sill->GetName(), VaultRules::WindowBreakNoiseCm / 100.f, Heard);
+		}
+		GameplayEvents::Raise(this, FName(TEXT("WindowBroken")), Sill);
+	}
 	return true;
 }
 

@@ -20,6 +20,19 @@ public:
 	UNavArea_Vault();
 };
 
+/**
+ * Navmesh area over a ground-floor window sill (tag "window_sill"): a vault, but dear to enter (VaultRules::WindowEnteringCostCm) -
+ * the squad goes in through a door unless the door is far round (designer 2026-11-22). Closed to the enemies like every vault area.
+ */
+UCLASS()
+class CODEXTACTICS_API UNavArea_WindowVault : public UNavArea_Vault
+{
+	GENERATED_BODY()
+
+public:
+	UNavArea_WindowVault();
+};
+
 /** Query filter of the enemies: vault areas are closed. */
 UCLASS()
 class CODEXTACTICS_API UNavFilter_NoVault : public UNavigationQueryFilter
@@ -63,6 +76,9 @@ namespace VaultNavigation
 	 * to the enemies' paths - a zombie walking round it ran into the solid end and stuck there.
 	 */
 	CODEXTACTICS_API void MakeVaultable(AActor* Actor);
+
+	/** Closes the window-sill vault area (UNavArea_WindowVault) in a filter: formation moves never path through a window (designer 2026-11-22). */
+	CODEXTACTICS_API void CloseWindowArea(TArray<struct FNavigationFilterArea>& Areas);
 
 	/** The vault area MakeVaultable added to Actor (named "VaultNavModifier"); null for an actor that was never made vaultable. */
 	CODEXTACTICS_API UNavModifierComponent* FindVaultNavModifier(const AActor* Actor);

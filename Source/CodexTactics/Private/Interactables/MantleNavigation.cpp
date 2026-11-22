@@ -152,6 +152,47 @@ UNavFilter_NoCrawlTrapLiteralNoMantle::UNavFilter_NoCrawlTrapLiteralNoMantle()
 	MantleNavigation::CloseMantleArea(Areas, false);
 }
 
+UNavFilter_OperativeNoMantleNoWindow::UNavFilter_OperativeNoMantleNoWindow()
+{
+	VaultNavigation::CloseWindowArea(Areas);
+}
+
+UNavFilter_NoCrawlNoMantleNoWindow::UNavFilter_NoCrawlNoMantleNoWindow()
+{
+	VaultNavigation::CloseWindowArea(Areas);
+}
+
+UNavFilter_TrapLiteralNoMantleNoWindow::UNavFilter_TrapLiteralNoMantleNoWindow()
+{
+	VaultNavigation::CloseWindowArea(Areas);
+}
+
+UNavFilter_NoCrawlTrapLiteralNoMantleNoWindow::UNavFilter_NoCrawlTrapLiteralNoMantleNoWindow()
+{
+	VaultNavigation::CloseWindowArea(Areas);
+}
+
+TSubclassOf<UNavigationQueryFilter> MantleNavigation::NoWindowVariant(TSubclassOf<UNavigationQueryFilter> Filter)
+{
+	if (!Filter || Filter == UNavFilter_OperativeNoMantle::StaticClass())
+	{
+		return UNavFilter_OperativeNoMantleNoWindow::StaticClass();
+	}
+	if (Filter == UNavFilter_NoCrawlNoMantle::StaticClass())
+	{
+		return UNavFilter_NoCrawlNoMantleNoWindow::StaticClass();
+	}
+	if (Filter == UNavFilter_TrapLiteralNoMantle::StaticClass())
+	{
+		return UNavFilter_TrapLiteralNoMantleNoWindow::StaticClass();
+	}
+	if (Filter == UNavFilter_NoCrawlTrapLiteralNoMantle::StaticClass())
+	{
+		return UNavFilter_NoCrawlTrapLiteralNoMantleNoWindow::StaticClass();
+	}
+	return Filter;
+}
+
 TSubclassOf<UNavigationQueryFilter> MantleNavigation::NoMantleVariant(TSubclassOf<UNavigationQueryFilter> Filter)
 {
 	if (!Filter)

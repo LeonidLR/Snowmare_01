@@ -277,6 +277,13 @@ public:
 	bool IsSoloMode() const { return bIsSoloMode; }
 
 	/**
+	 * The player's current order goes through a window (a click on a window sill, designer 2026-11-22): the window sills are open to every
+	 * member's path for it - in FORMATION the men follow their commander through the window (loud), not only in Solo. Cleared by the next click.
+	 */
+	void SetWindowOrder(bool bOn) { bWindowOrder = bOn; }
+	bool IsWindowOrder() const { return bWindowOrder; }
+
+	/**
 	 * Solo without ties and the autonomy off (game designer 2026-11-09, Codex.Squad.SoloIndependent): every operative holds exactly where
 	 * he was sent - he fires from his spot by his fire mode, but no manoeuvre under fire / cover of his own (UnderFireRules::bSoloHold).
 	 */
@@ -1901,6 +1908,7 @@ private:
 	float SlotSwapCooldownRemaining = 0.f;
 	bool bFollowersHolding = false;
 	bool bIsSoloMode = false;
+	bool bWindowOrder = false;
 	/** Rev 5h: the Solo was entered by a spotted trap (no leash). */
 	bool bTrapSolo = false;
 	/** The level start's mode is applied / was chosen (ApplyLevelStartMode). */

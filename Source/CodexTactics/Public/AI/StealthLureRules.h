@@ -182,6 +182,12 @@ namespace StealthLureRules
 	/** Open-air hearing radius of Kind, cm. */
 	CODEXTACTICS_API float GetRadius(const FStealthLureParams& Params, EStealthLureKind Kind);
 
+	/**
+	 * The sound spread indicator (designer 2026-11-22, ANoiseRingActor): Pulses waves one after another over Seconds, each growing from 0 to
+	 * RadiusCm (eased out) in Seconds / Pulses. The radius at Elapsed; -1 once Seconds are over (the indicator goes).
+	 */
+	CODEXTACTICS_API float NoisePulseRadius(float Elapsed, float Seconds, int32 Pulses, float RadiusCm);
+
 	/** Cooldown after Kind, s. */
 	CODEXTACTICS_API float GetCooldown(const FStealthLureParams& Params, EStealthLureKind Kind);
 

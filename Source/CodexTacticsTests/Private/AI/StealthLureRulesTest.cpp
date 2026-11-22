@@ -333,4 +333,18 @@ bool FStealthLureRetargetTest::RunTest(const FString& Parameters)
 	return true;
 }
 
+STEALTH_LURE_TEST(FStealthLureNoisePulseTest, "NoiseRing.Pulses")
+bool FStealthLureNoisePulseTest::RunTest(const FString& Parameters)
+{
+	// Designer 2026-11-22: the sound spread indicator of a broken window - waves grow from the noise point to its radius, then it goes.
+	using namespace StealthLureRules;
+	TestEqual(TEXT("a wave starts at the point"), NoisePulseRadius(0.f, 1.5f, 3, 1500.f), 0.f);
+	TestTrue(TEXT("it grows"), NoisePulseRadius(0.25f, 1.5f, 3, 1500.f) > NoisePulseRadius(0.1f, 1.5f, 3, 1500.f));
+	TestTrue(TEXT("it nearly reaches the radius at the end of its period"), NoisePulseRadius(0.499f, 1.5f, 3, 1500.f) > 1490.f);
+	TestTrue(TEXT("the next wave starts small again"), NoisePulseRadius(0.51f, 1.5f, 3, 1500.f) < 200.f);
+	TestEqual(TEXT("over: the indicator goes"), NoisePulseRadius(1.5f, 1.5f, 3, 1500.f), -1.f);
+	TestEqual(TEXT("before the start: nothing"), NoisePulseRadius(-0.1f, 1.5f, 3, 1500.f), -1.f);
+	return true;
+}
+
 #endif // WITH_DEV_AUTOMATION_TESTS

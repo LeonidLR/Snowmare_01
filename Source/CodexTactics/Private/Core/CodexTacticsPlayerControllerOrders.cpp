@@ -45,6 +45,7 @@
 #include "GameFlow/LevelEncounterSubsystem.h"
 #include "Characters/OperativeCharacter.h"
 #include "Characters/SquadSubsystem.h"
+#include "Components/CapsuleComponent.h"
 #include "Engine/World.h"
 #include "HAL/PlatformTime.h"
 #include "Vehicles/VehiclePawn.h"
@@ -230,6 +231,7 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 	{
 		return;
 	}
+	Squad->SetWindowOrder(false); // only the click on a window sill (below) opens the windows to the squad's paths
 	// Ladders (docs/design/LADDERS.md 7.1): a click on a climbable ladder (its click proxy) = a move to the link point at its other end
 	// (the path then runs through the ladder's nav link); a decoration ladder has no proxy collision.
 	if (const ALadderActor* Ladder = Cast<ALadderActor>(Hit.GetActor()); Ladder && Ladder->IsClimbable())
@@ -475,6 +477,29 @@ void ACodexTacticsPlayerController::HandleWorldHit(const FHitResult& InHit)
 			IssueCtrlClick(Hit);
 		}
 		return;
+	}
+
+	// Designer 2026-11-22: a click on a ground-floor window sill = through that window - the leader goes to the window's far side (the side away
+	// from him) and climbs through on the way (breaking it the first time: loud); the window sills are open to every member's path for this
+	// order (SetWindowOrder), so the formation follows him through it. The click then goes on as a plain ground order to that point.
+	if (AActor* Sill = Hit.GetActor(); Sill && Sill->ActorHasTag(FName(TEXT("window_sill"))) && !GetActiveTurnBased())
+	{
+		const FBox Local = Sill->CalculateComponentsBoundingBoxInLocalSpace(false);
+		const FVector Size = Local.GetSize() * Sill->GetActorScale3D().GetAbs();
+		const FVector Across = (Size.X < Size.Y ? Sill->GetActorForwardVector() : Sill->GetActorRightVector()).GetSafeNormal2D();
+		const float Thickness = static_cast<float>(FMath::Min(Size.X, Size.Y));
+		const FVector Center = Sill->GetActorTransform().TransformPosition(Local.GetCenter());
+		const float Side = FVector::DotProduct(Leader->GetActorLocation() - Center, Across) >= 0.0 ? -1.f : 1.f;
+		const FVector Beyond = Center + Across * (Side * (Thickness * 0.5f + 120.f));
+		const FVector TraceStart = Hit.TraceStart;
+		Hit = FHitResult();
+		Hit.bBlockingHit = true;
+		Hit.ImpactPoint = Hit.Location = FVector(Beyond.X, Beyond.Y, Leader->GetActorLocation().Z - Leader->GetCapsuleComponent()->GetScaledCapsuleHalfHeight());
+		Hit.ImpactNormal = Hit.Normal = FVector::UpVector;
+		Hit.TraceStart = TraceStart;
+		Squad->SetWindowOrder(true);
+		UE_LOG(LogCodexTactics, Display, TEXT("Click on the window sill %s: through the window to %s (window paths open for this order)"), *Sill->GetName(),
+			*Hit.ImpactPoint.ToCompactString());
 	}
 
 	// Mantling slice 1 (game designer 2026-11-15, trigger C; docs/design/MANTLING.md 11.6): in Solo a plain click on a reachable ledge top

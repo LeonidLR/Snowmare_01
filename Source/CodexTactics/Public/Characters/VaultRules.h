@@ -19,6 +19,15 @@ namespace VaultRules
 	constexpr float ApexOffset = 15.f;
 	constexpr float MinApex = 40.f;
 	constexpr float Cooldown = 1.2f;
+	/**
+	 * A ground-floor window sill (builder tag "window_sill") is a vault area of its own (UNavArea_WindowVault). Designer 2026-11-22: in
+	 * FORMATION it is closed (the men follow their commander through the doors - MantleNavigation::NoWindowVariant); in Solo / a box
+	 * selection the men may climb through on the way (faster, loud: no tactical entry) when it saves more than this much walking - about
+	 * the price of a shut door (doors.json nav_entering_cost_cm 350).
+	 */
+	constexpr float WindowEnteringCostCm = 400.f;
+	/** The first climb through a window breaks it (designer 2026-11-22): a lure noise of this radius (as a door kick, 15 m) and the indicator. */
+	constexpr float WindowBreakNoiseCm = 1500.f;
 
 	/** Obstacle Height (above the feet) and the landing floor LandingStep (relative to the feet) allow a vault. */
 	CODEXTACTICS_API bool CanVault(float Height, bool bHasLanding, float LandingStep);
