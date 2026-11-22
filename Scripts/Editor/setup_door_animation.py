@@ -16,6 +16,11 @@ Writes (nothing in the pack folder, no skeleton / ABP / engine asset saved):
   /Game/Animations/Door/UE4/AM_Door_{Open,Kick,Push}_{L,R}   montages, slot FullBody (ABP_Operative's full-body slot)
   /Game/Animations/Door/Pmc/AM_Door_{Open,Kick,Push}_{L,R}   montages of the pack clips themselves (DEPEND on the untracked pack)
 /Game/Animations is untracked (designer packs): these assets are derived from the untracked pack and are not committed.
+ROOT MOTION (designer 2026-11-22, option a): the pack clips walk the pelvis forward with no root motion (open 74, kick 104, push 195 cm) -
+in place they slid and snapped back. The kick / push clips carry it on their root bone already (only root motion was off); the open clips
+move the pelvis alone. Every copy whose root stands still gets the pelvis's smoothed horizontal travel baked into the root track (the pelvis keeps
+its height and its sway - the residual about the smoothed path), root motion on (root lock: first frame): the montage drives the capsule.
+The PMC montages use baked COPIES of the pack clips (/Game/Animations/Door/Pmc/anim_OpenDoor_*; the pack itself is never written).
 Measures per clip the CONTACT time (hand / foot furthest forward = on the leaf / the kick lands) -> doors.json montage_contact_s
 (the averages are printed; the game uses them to time the leaf), the clip length, root motion and the pelvis travel.
 
@@ -69,6 +74,7 @@ def load(path):
 
 def pose_at(clip, t, mesh=None):
     options = unreal.AnimPoseEvaluationOptions()
+    options.set_editor_property("extract_root_motion", False)  # the baked root travel stays in the pose (contact / reach unchanged)
     if mesh:
         options.set_editor_property("optional_skeletal_mesh", mesh)
     return unreal.AnimPoseExtensions.get_anim_pose_at_time(clip, min(t, clip.get_editor_property("sequence_length") - 0.001), options)
@@ -89,9 +95,72 @@ def contact(clip, bone, mesh=None, forward="y", fps=30.0):
     return first, best, pelvis, length
 
 
-def make_montage(dest, name, clip):
+def root_of(clip, frame):
+    return unreal.AnimationLibrary.get_bone_poses_for_frame(clip, ["root"], frame, False)[0].translation
+
+
+def bake_root_motion(clip, window_s=0.3):
+    """The pelvis's smoothed horizontal travel (root space X / Y, a moving average over window_s) moves onto the root track; the pelvis
+    keeps its height and the sway about the smoothed path. Root motion on, root lock = first frame. Returns (end travel, frames, skipped)."""
+    model = clip.get_editor_property("data_model_interface")
+    keys = model.get_number_of_keys()
+    first, last = root_of(clip, 0), root_of(clip, keys - 1)
+    moved = ((last.x - first.x) ** 2 + (last.y - first.y) ** 2) ** 0.5
+    if moved > 5.0:
+        if not DRY:
+            clip.set_editor_property("enable_root_motion", True)
+            clip.set_editor_property("force_root_lock", False)
+            clip.set_editor_property("root_motion_root_lock", unreal.RootMotionRootLock.ANIM_FIRST_FRAME)
+        return moved, keys, True  # the root moves already (baked before / by the retarget): a re-run must not zero it
+    bones = [str(b) for b in model.get_bone_track_names()]
+    if "root" not in bones:
+        bones = ["root"] + bones
+    tracks = {b: ([], [], []) for b in bones}
+    for f in range(keys):
+        for b, t in zip(bones, unreal.AnimationLibrary.get_bone_poses_for_frame(clip, bones, f, False)):
+            tracks[b][0].append(unreal.Vector(t.translation.x, t.translation.y, t.translation.z))
+            tracks[b][1].append(unreal.Quat(t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w))
+            tracks[b][2].append(unreal.Vector(t.scale3d.x, t.scale3d.y, t.scale3d.z))
+    length = clip.get_editor_property("sequence_length")
+    half = max(1, int(round(window_s * 0.5 * (keys - 1) / max(length, 0.001))))
+    pel = list(tracks["pelvis"][0])
+    raw = [(p.x - pel[0].x, p.y - pel[0].y) for p in pel]
+    smooth = []
+    for f in range(keys):
+        lo, hi = max(0, f - half), min(keys - 1, f + half)
+        n = hi - lo + 1
+        smooth.append((sum(raw[i][0] for i in range(lo, hi + 1)) / n, sum(raw[i][1] for i in range(lo, hi + 1)) / n))
+    # the ends: the root starts at 0 and ends at the full travel (no offset left in the pelvis at the first / last frame)
+    s0, s1 = smooth[0], smooth[-1]
+    for f in range(keys):
+        a = f / float(max(1, keys - 1))
+        smooth[f] = (smooth[f][0] - s0[0] * (1 - a) + (raw[-1][0] - s1[0]) * a, smooth[f][1] - s0[1] * (1 - a) + (raw[-1][1] - s1[1]) * a)
+    root0 = tracks["root"][0][0]
+    for f in range(keys):
+        dx, dy = smooth[f]
+        tracks["root"][0][f] = unreal.Vector(root0.x + dx, root0.y + dy, root0.z)
+        p = pel[f]
+        tracks["pelvis"][0][f] = unreal.Vector(p.x - dx, p.y - dy, p.z)
+    if not DRY:
+        ctrl = clip.controller
+        ctrl.open_bracket(unreal.Text("door root motion"), False)
+        ctrl.remove_all_bone_tracks(False)
+        for b in bones:
+            ctrl.add_bone_track(b, False)
+            ctrl.set_bone_track_keys(b, tracks[b][0], tracks[b][1], tracks[b][2], False)
+        ctrl.close_bracket(False)
+        clip.set_editor_property("enable_root_motion", True)
+        clip.set_editor_property("force_root_lock", False)
+        try:
+            clip.set_editor_property("root_motion_root_lock", unreal.RootMotionRootLock.ANIM_FIRST_FRAME)
+        except Exception as error:  # noqa: BLE001
+            say(f"root_motion_root_lock: {error}")
+    return (raw[-1][0] ** 2 + raw[-1][1] ** 2) ** 0.5, keys, False
+
+
+def make_montage(dest, name, clip, force=False):
     path = f"{dest}/{name}"
-    if library.does_asset_exist(path) and RESET and not DRY:
+    if library.does_asset_exist(path) and (RESET or force) and not DRY:
         library.delete_asset(path)
     if library.does_asset_exist(path):
         montage = library.load_asset(path)
@@ -161,8 +230,22 @@ if todo and retargeter and source_mesh and target_mesh:
                 library.save_loaded_asset(asset, False)
     say(f"retargeted {len(todo)} clip(s) onto {target_mesh.get_name()} -> {OUT_UE4}{' (in memory)' if DRY else ''}")
 
-# 2. Measurements + montages.
+# 1b. PMC copies of the pack clips (same skeleton; the pack is never written).
+pmc_copies = {}
+for key, (clip_name, _, _) in CLIPS.items():
+    dest = f"{OUT_PMC}/{clip_name}"
+    if library.does_asset_exist(dest) and not RESET:
+        pmc_copies[key] = library.load_asset(dest)
+    elif key in pack and not DRY:
+        if library.does_asset_exist(dest):
+            library.delete_asset(dest)
+        pmc_copies[key] = library.duplicate_asset(pack[key].get_path_name().split(".")[0], dest)
+        say(f"copied {clip_name} -> {dest}")
+
+# 2. Root motion, measurements, montages.
 contacts = {"open": [], "kick": [], "push": []}
+roots = {"open": [], "kick": [], "push": []}
+at_contact = {"open": [], "kick": [], "push": []}
 report = {"clips": {}}
 for key, (clip_name, montage_name, bone) in CLIPS.items():
     kind = key.split("_")[0]
@@ -173,14 +256,35 @@ for key, (clip_name, montage_name, bone) in CLIPS.items():
                                 "pelvis_travel_cm": [round(pelvis.x, 1), round(pelvis.y, 1), round(pelvis.z, 1)]}
         say(f"{clip_name}: {bone} on the leaf at {t:.2f} s (reach {reach:.0f} cm) of {length:.2f} s; pelvis travel "
             f"({pelvis.x:.0f}, {pelvis.y:.0f}, {pelvis.z:.0f}) cm")
-        make_montage(OUT_PMC, montage_name, pack[key])
-    if key in copies:
-        if target_mesh:
-            t2, reach2, _, _ = contact(copies[key], bone, target_mesh)
-            say(f"  retargeted copy: {bone} on the leaf at {t2:.2f} s (reach {reach2:.0f} cm)")
-        make_montage(OUT_UE4, montage_name, copies[key])
+    for label, dest, clip, mesh in (("UE4", OUT_UE4, copies.get(key), target_mesh), ("Pmc", OUT_PMC, pmc_copies.get(key), None)):
+        if not clip:
+            continue
+        travel, frames, skipped = bake_root_motion(clip)
+        if not DRY:
+            library.save_loaded_asset(clip, False)
+        keys = clip.get_editor_property("data_model_interface").get_number_of_keys()
+        length = clip.get_editor_property("sequence_length")
+        tc, reach2, _, _ = contact(clip, bone, mesh)
+        fc = min(keys - 1, int(round(tc / max(length, 0.001) * (keys - 1))))
+        r0, rc, r1 = root_of(clip, 0), root_of(clip, fc), root_of(clip, keys - 1)
+        end_cm = ((r1.x - r0.x) ** 2 + (r1.y - r0.y) ** 2) ** 0.5
+        contact_cm = ((rc.x - r0.x) ** 2 + (rc.y - r0.y) ** 2) ** 0.5
+        if label == "UE4":
+            roots[kind].append(end_cm)
+            at_contact[kind].append(contact_cm)
+        report["clips"].setdefault(key, {})[label] = {"root_end_cm": round(end_cm, 1), "root_at_contact_cm": round(contact_cm, 1),
+                                                      "root_end_xy": [round(r1.x - r0.x, 1), round(r1.y - r0.y, 1)], "contact_s": round(tc, 3),
+                                                      "baked_before": skipped, "frames": frames}
+        say(f"  {label} {clip_name}: root motion {'kept (baked before)' if skipped else 'baked'} - root travel {end_cm:.0f} cm "
+            f"(x {r1.x - r0.x:.0f}, y {r1.y - r0.y:.0f}), {contact_cm:.0f} cm at the contact {tc:.2f} s, {frames} frames, root motion "
+            f"{clip.get_editor_property('enable_root_motion')}")
+        make_montage(dest, montage_name, clip, force=(label == "Pmc"))
 report["montage_contact_s"] = {k: round(sum(v) / len(v), 2) for k, v in contacts.items() if v}
+report["montage_root_cm"] = {k: round(sum(v) / len(v)) for k, v in roots.items() if v}
+report["montage_root_at_contact_cm"] = {k: round(sum(v) / len(v)) for k, v in at_contact.items() if v}
 say(f"doors.json montage_contact_s (measured): {json.dumps(report['montage_contact_s'])}")
+say(f"doors.json montage_root_cm (UE4 copies): {json.dumps(report['montage_root_cm'])}; root travel at the contact: "
+    f"{json.dumps(report['montage_root_at_contact_cm'])}")
 say("DRY RUN: nothing saved" if DRY else "done")
 logs = os.path.join(unreal.Paths.project_saved_dir(), "Logs")
 os.makedirs(logs, exist_ok=True)
