@@ -70,13 +70,13 @@
           "crouch_fire_exit_left": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchL_Aim1_End",
           "crouch_ao_right": "/Game/Animations/CoverIndoor/UE4/AO_CoverIndoor_CrouchR",
           "crouch_ao_left": "/Game/Animations/CoverIndoor/UE4/AO_CoverIndoor_CrouchL",
-          "crouch_over_fire_enter_right": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchR_Aim2_Start",
+          "crouch_over_fire_enter_right": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchL_Aim2_Start",
           "crouch_over_fire_enter_left": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchL_Aim2_Start",
-          "crouch_over_fire_idle_right": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchR_Aim2_Idle",
+          "crouch_over_fire_idle_right": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchL_Aim2_Idle",
           "crouch_over_fire_idle_left": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchL_Aim2_Idle",
-          "crouch_over_fire_exit_right": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchR_Aim2_End",
+          "crouch_over_fire_exit_right": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchL_Aim2_End",
           "crouch_over_fire_exit_left": "/Game/Animations/CoverIndoor/UE4/AS_Cover_CrouchL_Aim2_End",
-          "crouch_over_ao_right": "/Game/Animations/CoverIndoor/UE4/AO_CoverIndoor_CrouchR_Over",
+          "crouch_over_ao_right": "/Game/Animations/CoverIndoor/UE4/AO_CoverIndoor_CrouchL_Over",
           "crouch_over_ao_left": "/Game/Animations/CoverIndoor/UE4/AO_CoverIndoor_CrouchL_Over"
         },
         "SK_PmcOperator_Skeleton": {
@@ -132,20 +132,21 @@
           "crouch_fire_exit_left": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchL_Aim1_End",
           "crouch_ao_right": "/Game/Animations/CoverIndoor/Pmc/AO_CoverIndoor_CrouchR",
           "crouch_ao_left": "/Game/Animations/CoverIndoor/Pmc/AO_CoverIndoor_CrouchL",
-          "crouch_over_fire_enter_right": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchR_Aim2_Start",
+          "crouch_over_fire_enter_right": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchL_Aim2_Start",
           "crouch_over_fire_enter_left": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchL_Aim2_Start",
-          "crouch_over_fire_idle_right": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchR_Aim2_Idle",
+          "crouch_over_fire_idle_right": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchL_Aim2_Idle",
           "crouch_over_fire_idle_left": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchL_Aim2_Idle",
-          "crouch_over_fire_exit_right": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchR_Aim2_End",
+          "crouch_over_fire_exit_right": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchL_Aim2_End",
           "crouch_over_fire_exit_left": "/Game/Animations/CoverIndoor/Pmc/AS_Cover_CrouchL_Aim2_End",
-          "crouch_over_ao_right": "/Game/Animations/CoverIndoor/Pmc/AO_CoverIndoor_CrouchR_Over",
+          "crouch_over_ao_right": "/Game/Animations/CoverIndoor/Pmc/AO_CoverIndoor_CrouchL_Over",
           "crouch_over_ao_left": "/Game/Animations/CoverIndoor/Pmc/AO_CoverIndoor_CrouchL_Over"
         }
       },
       "shimmy_clip_speed": {
-        "stand": 110,
-        "crouch": 147
-      }
+        "stand": 121,
+        "crouch": 162
+      },
+      "_comment_over_right": "The mirrored right-side Aim/2 copies (AS_Cover_CrouchR_Aim2_*) hold the rifle LEFT-handed (a mirror swaps the hands; the weapon sits on hand_r), so the right side plays the pack's LEFT over-the-top clips until the designer decides (2026-11-22). shimmy_clip_speed = the UE4 copies' pace (the retarget scales travel x1.09; PMC 110 / 148)."
     }
   }
 }
