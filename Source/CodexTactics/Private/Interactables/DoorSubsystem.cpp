@@ -842,6 +842,10 @@ bool UDoorSubsystem::IsInReach(const FPendingOrder& Order, const AOperativeChara
 		const float Cm = static_cast<float>(FVector::Dist2D(Feet, Door.GetActorLocation()));
 		return Cm >= Tuning.BlastStandCm * 0.8f && Cm <= Tuning.BlastStandCm * 1.6f && Door.IsAtDoorLevel(Feet);
 	}
+	if ((Order.Action == EDoorAction::Open || Order.Action == EDoorAction::Kick) && Operative.HasQuickFireOrder())
+	{
+		return false; // the lock burst is still firing: the push / kick clip starts once it is over (it would cut the clip's root motion)
+	}
 	if (Order.bClipApproach && (Order.Action == EDoorAction::Open || Order.Action == EDoorAction::Kick))
 	{
 		// At the clip's start pose; or (the walk could not get there) standing still by the door after a moment.
