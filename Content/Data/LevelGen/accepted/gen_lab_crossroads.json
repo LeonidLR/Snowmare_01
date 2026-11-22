@@ -183,9 +183,9 @@
  ],
  "zones": [
   {
-   "id": "Z_crossroads",
+   "id": "Z_ST_crossroads",
    "kind": "open",
-   "set_piece": "open_square",
+   "set_piece": "street",
    "poly": [
     [
      -1000,

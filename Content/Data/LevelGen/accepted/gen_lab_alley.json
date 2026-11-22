@@ -1788,9 +1788,9 @@
  "covers": [],
  "zones": [
   {
-   "id": "Z_alley",
+   "id": "Z_ST_alley",
    "kind": "open",
-   "set_piece": "alley",
+   "set_piece": "street",
    "poly": [
     [
      -1500,

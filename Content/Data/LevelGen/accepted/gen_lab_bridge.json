@@ -385,9 +385,9 @@
  ],
  "zones": [
   {
-   "id": "Z_bridge",
+   "id": "Z_ST_bridge",
    "kind": "open",
-   "set_piece": "cut_crossing",
+   "set_piece": "street",
    "poly": [
     [
      -1000,

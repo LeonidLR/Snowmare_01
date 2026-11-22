@@ -10,7 +10,7 @@
 
 ## 1. Сводка выполненных работ
 
-В соответствии со спецификацией **T-02** из `docs/design/gdd/smart-enemies-roadmap.md:171-193` и заданием `docs/port/gemini/inbox/096-lab-layouts.md`, в генераторе уровней Training Ground реализован модуль `Tools/TrainingGround/src/levelgen/labLayouts.ts` и юнит-тесты `labLayouts.test.ts`.
+В соответствии со спецификацией **T-02** из `docs/design/gdd/smart-enemies-roadmap.md:171-193` и заданием `docs/port/gemini/inbox/096-lab-layouts.md`, в генераторе уровней Training Ground реализован генератор макетов и юнит-тесты в `Tools/TrainingGround/src/levelgen/labLayouts.test.ts`.
 
 Созданы и экспортированы:
 1. **Три принятых макета (Accepted Layouts)**:
@@ -201,14 +201,13 @@ python Scripts/Editor/build_levelgen_map.py -Layout gen_lab_bridge -Map L_Lab_Br
 
 ## 5. Валидация и гейты качества
 
-| Проверка | Команда | Результат | Примечания |
-|---|---|---|---|
-| Спецификация T-02 | `node --test src/levelgen/labLayouts.test.ts` | **PASS (4/4)** | Все проверки размеров, дистанций, укрытий, ступеней и ребер |
-| Typecheck TS | `npm run typecheck` | **PASS (exit 0)** | 0 ошибок компиляции TypeScript |
-| Общий тестовый набор | `npm test` | **PASS (593/593)** | 0 падений во всех 62 тестовых файлах |
-| Проверка списков уровней | `node --test src/utils/levelList.test.ts` | **PASS (6/6)** | Новые уровни `L_Lab_*` корректно включены в группу Labs & tests |
-| Форматирование git | `git diff --check` | **PASS (0 whitespace)** | 0 замечаний |
-| Triage Audit (Jev) | `python Scripts/Tools/typesafe_triage.py --audit-diff --agent gemini` | **PASS** | Boundary Breach: PASS, Risk Rating: 0.3 / 4 |
+| Claim | Evidence | Details |
+|---|---|---|
+| Спецификация T-02 соблюдена для всех 3 макетов | node --test src/levelgen/labLayouts.test.ts (PASS 4/4) | Размеры <= 80x80m, дистанции, укрытия, лестница 16 ступеней, мост |
+| Typecheck TypeScript без ошибок | npm run typecheck (tsc exit code 0) | 0 ошибок компиляции в Tools/TrainingGround |
+| Общий тестовый набор Training Ground проходит | npm test (PASS 593/593) | Включая layers.test.ts (8/8) и levelList.test.ts (6/6) |
+| Отсутствие пробельных ошибок git | git diff --check (0 замечаний) | 0 пробельных ошибок |
+| Безопасность и границы Jev | python Scripts/Tools/typesafe_triage.py --audit-diff --agent gemini | Boundary Breach: PASS, Risk Rating: 0.3 / 4 |
 
 ---
 
