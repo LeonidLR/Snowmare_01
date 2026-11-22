@@ -58,10 +58,6 @@ namespace FormationStairSmoke
 		int32 Passed = 0;
 		TArray<FCase> Cases;
 		int32 CaseIndex = 0;
-		/** The case's storey is reachable only through a window (S04: ladder + window): the window was clicked first, the goal click waits. */
-		bool bWindowFirst = false;
-		/** This case climbs a window (more time: the window, the ladder queue). */
-		bool bWindowCase = false;
 		FDelegateHandle EndFrameHandle;
 	};
 
@@ -289,23 +285,12 @@ namespace FormationStairSmoke
 			{
 				return true;
 			}
-			R.bWindowFirst = false;
-			R.bWindowCase = false;
 			if (AActor* Window = WindowOnTheWay(*World, *Leader, C.Goal))
 			{
-				// The player's way: a click on that window (its sill - the window order), then on the goal once the leader is through.
-				const FBox Box = Window->GetComponentsBoundingBox(true);
-				FHitResult WindowClick(Window, nullptr, FVector(Box.GetCenter().X, Box.GetCenter().Y, Box.Max.Z), FVector::UpVector);
-				WindowClick.bBlockingHit = true;
-				WindowClick.Location = WindowClick.ImpactPoint;
-				WindowClick.TraceStart = WindowClick.ImpactPoint + FVector(0.f, 0.f, 1200.f);
-				PC->HandlePlayerClick(WindowClick);
-				R.bWindowFirst = true;
-				R.bWindowCase = true;
-				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s storey %d -> %d is reachable only through a window - the squad gets a window order on %s first"), *C.Building,
-					C.From, C.From + 1, *Window->GetName());
+				// Lead 2026-11-23: no story makes a storey window-only (S04's escape is a ladder + a balcony DOOR) - a gap, never worked round.
+				UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s storey %d -> %d is reachable only through the window %s - a stair / door gap"), *C.Building, C.From,
+					C.From + 1, *Window->GetName());
 			}
-			else
 			{
 				FHitResult Click(nullptr, nullptr, C.Goal, FVector::UpVector);
 				Click.bBlockingHit = true;
@@ -328,21 +313,6 @@ namespace FormationStairSmoke
 				bAll &= FMath::Abs(FeetZ(*Member) - C.ToZ) < 40.f && FVector::Dist2D(Member->GetActorLocation(), Leader->GetActorLocation()) < TogetherCm;
 			}
 			const float Seconds = R.StepFrame / 60.f;
-			if (R.bWindowFirst && R.StepFrame > 30)
-			{
-				const AAIController* WindowAI = Cast<AAIController>(Leader->GetController());
-				const bool bLeaderIdle = !WindowAI || WindowAI->GetMoveStatus() != EPathFollowingStatus::Moving;
-				if (bLeaderIdle && !Leader->IsVaulting())
-				{
-					R.bWindowFirst = false;
-					FHitResult Click(nullptr, nullptr, C.Goal, FVector::UpVector);
-					Click.bBlockingHit = true;
-					Click.Location = C.Goal;
-					Click.TraceStart = C.Goal + FVector(0.f, 0.f, 1200.f);
-					PC->HandlePlayerClick(Click);
-					UE_LOG(LogCodexTactics, Display, TEXT("Smoke info: %s through the window at %.1f s (leader feet %.0f) - now the goal click"), *C.Building, Seconds, FeetZ(*Leader));
-				}
-			}
 			if (R.StepFrame == 20)
 			{
 				// Where the click sent the leader: the order's goal and his path's end (a goal on the storey below = the click went down a storey).
@@ -356,7 +326,7 @@ namespace FormationStairSmoke
 					*Leader->GetLastMoveDestination().ToCompactString(), Path.IsValid() && Path->GetPathPoints().Num() ? *Path->GetEndLocation().ToCompactString() : TEXT("-"),
 					Path.IsValid() ? Path->GetPathPoints().Num() : 0, Path.IsValid() && Path->IsPartial() ? 1 : 0, bGoalNav ? *GoalOnNav.Location.ToCompactString() : TEXT("none"));
 			}
-			if ((!bAll || R.bWindowFirst) && Seconds < LegSeconds * (R.bWindowCase ? 1.5f : 1.f))
+			if (!bAll && Seconds < LegSeconds)
 			{
 				return true;
 			}
