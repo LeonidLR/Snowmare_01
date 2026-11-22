@@ -1,6 +1,8 @@
 # Indoor cover animations (Riffle Cover Animation pack)
 
-Status: **design, waiting for the designer's answers** (2026-11-22). Branch `claude/indoor-cover`.
+Status: **approved** - the designer took every recommendation (2026-11-22): Q1 (a) he binds the ABP Aim Offset Player's Blend Space pin
+to `ActiveAimOffset`; Q2 (a) Aim/2 at windows as it is; Q3 (a) Aim/2 mirrored for the right side; Q4 (a) PMC fighters indoors use the set
+too; Q5 (a) shimmy start / stop / turn clips for walks of 1.5 m and more, shorter side-steps loop only. Branch `claude/indoor-cover`.
 Request (designer 2026-11-22): use the pack `/Game/Riffle_Cover_Animation` for moving along and holding walls **inside buildings**
 (outdoors keeps the M4 Cover Pack set); standing + crouched; real aiming (aim offsets), grenades and reloads from cover; at a window the
 operative crouches under it and rises to aim / fire through it. Later the same set becomes the stealth wall movement and maybe a second
