@@ -86,6 +86,9 @@ export const STORY_COMPATIBLE: Partial<Record<StoryId, readonly Exclude<StoryId,
  */
 export const LOUD_FRONT_STATES: readonly DoorState[] = storiesJson.loud_front_states as DoorState[];
 
+/** The state a story gives the building's gable door(s) (building_stories.json `gable_door_state`; story 9: locked). */
+export const GABLE_DOOR_STATE: Partial<Record<StoryId, DoorState>> = storiesJson.gable_door_state as Partial<Record<StoryId, DoorState>>;
+
 // ---- bricks -------------------------------------------------------------------------------------------------------------------------
 
 /** How a blocked flight is blocked (schema /2 Stair.blocked). */
@@ -656,6 +659,20 @@ export function backWindows(l: GenLayout, b: GenBuilding): { front: { ref: strin
   return { front, side, refs };
 }
 
+/**
+ * The gable doors of a building: its exterior ground doors on a side that is neither the front door's side nor the opposite one (a khrushchevka's
+ * end-wall door, template gable_door), that are not in `state` already. Empty without a front door.
+ */
+export function gableDoors(l: GenLayout, b: GenBuilding, state?: DoorState): { ref: string; opening: WallOpening }[] {
+  const front = frontDoorAnyState(l, b);
+  if (!front) return [];
+  const side = openingSide(b, front.opening), back = OPPOSITE_SIDE[side];
+  return unifyOpenings(b)
+    .map((opening, i) => ({ ref: openingRef(b, i), opening }))
+    .filter(({ opening: o }) => o.kind === 'door' && (o.floor ?? 0) === 0 && classifyOpening(l, b, o).exterior && openingSide(b, o) !== side && openingSide(b, o) !== back
+      && (state === undefined || effectiveOpeningState(l, b, o) !== state));
+}
+
 /** Story 3's boarded facade: the exterior ground windows on `side` that are not boarded already. */
 export function frontGroundWindows(l: GenLayout, b: GenBuilding, side: Side): WallOpening[] {
   return unifyOpenings(b).filter((o) => o.kind === 'window' && (o.floor ?? 0) === 0 && openingSide(b, o) === side && classifyOpening(l, b, o).exterior && effectiveOpeningState(l, b, o) !== 'boarded');
@@ -701,7 +718,10 @@ export function storyRecipe(l: GenLayout, b: GenBuilding, story: StoryId): Brick
       // default ('glazed' in /2)
       const back = backWindows(l, b);
       if (!back || !(LOUD_FRONT_STATES as readonly string[]).includes(effectiveOpeningState(l, b, back.front.opening))) return null;
-      return back.refs.length ? [{ kind: 'window_state', target: back.side, state: 'broken', floor: 0 }] : null;
+      // a gable door the story would leave as the nearest quiet entry is locked by the story itself (building_stories.json gable_door_state)
+      const gs = GABLE_DOOR_STATE.broken_back_windows;
+      const gable: Brick[] = gs ? gableDoors(l, b, gs).map(({ ref }) => ({ kind: 'door_state', door: ref, state: gs })) : [];
+      return back.refs.length ? [{ kind: 'window_state', target: back.side, state: 'broken', floor: 0 }, ...gable] : null;
     }
     case 'snow_drift': {
       // >= 2 storeys, a front door, and a storey-1 window on the front facade where the ramp fits (nearest the door first)
@@ -853,7 +873,7 @@ export function applyRecipe(layout: GenLayout, building: GenBuilding, storyId: S
     if (added.length) return rollback(added.map((i) => i.code).join(', '));
     // choice stories (rule 7 / F4): fast and quiet enter by different exterior openings, one of them the story's lever
     if (STORY_CATALOGUE[storyId].type === 'choice') {
-      const lever = choiceLever(recipe);
+      const lever = storyId === 'broken_back_windows' ? undefined : choiceLever(recipe); // story 9's lever is its back window (backOk), its gable lock is no lever
       const r = computeBuildingRoutes(swap(work, copy), copy);
       // story 9: the quiet entry is one of the broken back windows and the fast entry on the front facade (the front door, or a
       // glazed front window shattered - "front glazed")

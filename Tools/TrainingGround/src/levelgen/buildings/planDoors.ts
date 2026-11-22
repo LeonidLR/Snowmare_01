@@ -61,6 +61,8 @@ export interface PlanDoorsResult {
   openings: PlanOpening[];
   /** The cells holding an exterior door: the caller makes them kind 'lobby' on storey 0. */
   lobbies: string[];
+  /** Kit gable service bays (template gable_door): every cell of the end flat on storey 0 - not a lobby, not a flat there (zone 'service'). */
+  service: string[];
   /** `exterior_door_fallback:<wall>-><wall>`, `exterior_door_none:<wall>`, `door_jamb_relaxed:<cell>`, `no_corridor_door:<cell>`, `no_door:<cell>`, `plan_fallback`. */
   warnings: string[];
 }
@@ -440,17 +442,17 @@ function kitDoors(ctx: Ctx): Door[] {
 
 /**
  * The exterior doors of a kit plan (storey 0): one per section, in the court wall (v = 0) at the middle of the stair core: the floor landing; then
- * the gable doors (plan.kit.gables, template gable_door) in their vestibule cell on the end wall, with their door state (absent = the default).
+ * the gable doors (plan.kit.gables, template gable_door) in their service room on the end wall, with their door state (absent = the default).
  */
-function kitEntrances(plan: BandPlan): { slot: Slot; wall: WallKey; state?: DoorState }[] {
-  const out: { slot: Slot; wall: WallKey; state?: DoorState }[] = [];
+function kitEntrances(plan: BandPlan): { slot: Slot; wall: WallKey; state?: DoorState; gable?: true }[] {
+  const out: { slot: Slot; wall: WallKey; state?: DoorState; gable?: true }[] = [];
   for (const sec of plan.kit?.sections ?? []) {
     const cell = plan.cells.find((c) => c.kind === 'core' && c.section === sec.index);
     if (cell) out.push({ slot: { cell, c: snap(sec.core.u0 + sec.core.width / 2) }, wall: 'v0' });
   }
   for (const g of plan.kit?.gables ?? []) {
     const cell = plan.cells.find((c) => c.id === g.door);
-    if (cell) out.push({ slot: { cell, c: g.c }, wall: g.wall, ...(g.state ? { state: g.state } : {}) });
+    if (cell) out.push({ slot: { cell, c: g.c }, wall: g.wall, gable: true, ...(g.state ? { state: g.state } : {}) });
   }
   return out;
 }
@@ -463,7 +465,7 @@ function kitEntrances(plan: BandPlan): { slot: Slot; wall: WallKey; state?: Door
  */
 export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult {
   const warnings: string[] = [];
-  if (plan.kind !== 'bands') return { openings: [], lobbies: [], warnings: ['plan_fallback'] };
+  if (plan.kind !== 'bands') return { openings: [], lobbies: [], service: [], warnings: ['plan_fallback'] };
   const ctx: Ctx = { plan, segs: sharedSegs(plan), r: rng(fnv1a(`${opts.seed}|doors`)), warnings, cache: new Map(), stats: opts.stats };
   const cells = [...plan.cells].sort(byId);
   const interior: Door[] = [];
@@ -485,7 +487,7 @@ export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult 
 
   // Exterior doors (storey 0): the slot nearest to the target along the wall; none -> the next free wall + a warning.
   const taken = new Set<string>(), holding = new Set<WallKey>();
-  const exterior: { slot: Slot; wall: WallKey; state?: DoorState }[] = plan.pattern === 'kit' ? kitEntrances(plan) : [];
+  const exterior: { slot: Slot; wall: WallKey; state?: DoorState; gable?: true }[] = plan.pattern === 'kit' ? kitEntrances(plan) : [];
   // a kit block is entered from the court only, through each section's stair core (the caller's door walls / draws are not used)
   for (const { wall, t } of plan.pattern === 'kit' ? [] : opts.doorWalls) {
     if (plan.archetype === 'block' && (wall === 'vD' || wall === 'v0')) {
@@ -534,10 +536,9 @@ export function planDoors(plan: BandPlan, opts: PlanDoorsOpts): PlanDoorsResult 
       });
     });
   }
-  // a corridor end stays a corridor, not a lobby; a kit gable's whole vestibule (the end flat's hall / corridor / kitchen) is the ground lobby
-  const lobbies = [...new Set([
-    ...exterior.filter((e) => e.slot.cell.kind !== 'corridor' && e.slot.cell.kind !== 'core').map((e) => e.slot.cell.id),
-    ...(plan.kit?.gables ?? []).flatMap((g) => g.cells),
-  ])].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
-  return { openings, lobbies, warnings };
+  // a corridor end stays a corridor, not a lobby; a kit gable door's room is a service room (res.service), not a lobby
+  const lobbies = [...new Set(exterior.filter((e) => !e.gable && e.slot.cell.kind !== 'corridor' && e.slot.cell.kind !== 'core').map((e) => e.slot.cell.id))]
+    .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+  const service = [...new Set((plan.kit?.gables ?? []).flatMap((g) => g.cells))].sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)));
+  return { openings, lobbies, service, warnings };
 }

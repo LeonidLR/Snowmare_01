@@ -66,7 +66,7 @@ export interface BandPlan {
   /** Kit plans: the sections, the doors the planner wants (planDoors.ts realises them) and why a section has fewer flats / rooms. */
   kit?: {
     sections: KitSection[]; doors: KitDoor[]; notes: string[]; /** The block template id (recipes.block.templates). */ template: string;
-    /** The gable doors (template gable_door): the end wall, the ground-storey vestibule cells, the door's cell and centre. */
+    /** The gable doors (template gable_door): the end wall, the ground-storey service bay cells (the end flat), the main service room's cell, the door's centre, the room labels. */
     gables?: KitGable[];
     /** The flats (unit keys, e.g. 's0A') whose street rooms carry balcony slots (template balcony_slots.rate). */
     balconyColumns?: string[];

@@ -1219,7 +1219,7 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
   }
   const windows = planWindows(plan, { storeys: s.floors, doors: res.openings, blocked });
   const block = plan.archetype === 'block';
-  const units = block ? planUnits(plan, res.openings, res.lobbies, s.floors) : [];
+  const units = block ? planUnits(plan, res.openings, [...res.lobbies, ...res.service], s.floors) : [];
   if (block) fixEntryRoles(res.openings, units); // roles follow the flats (the S2.9 ground-floor mismatches)
   const unitOf = new Map<string, string>(); // `${storey}|${cell id}` -> unit id
   for (const u of units) for (const c of u.cells) unitOf.set(`${u.storey}|${c}`, `${bid}_u_f${u.storey}_${u.key}`);
@@ -1293,6 +1293,8 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
   }
   // 7. rooms: one per cell and storey
   const lobbies = new Set(res.lobbies);
+  const service = new Set(res.service); // a kit gable's ground service bay (storey 0): service rooms + passages of zone 'service', no flat
+  const gableOf = (id: string) => (plan.kit?.gables ?? []).find((g) => g.cells.includes(id));
   const doorIds = new Map<string, string[]>();
   for (const o of [...res.openings, ...windows]) {
     for (const link of o.links) if (link !== 'street') doorIds.set(roomId(o.storey, link), [...(doorIds.get(roomId(o.storey, link)) ?? []), `${bid}_${o.id}`]);
@@ -1300,14 +1302,16 @@ function emitPlanned(a: PlannedArgs): DraftBuilding {
   for (let storey = 0; storey < s.floors; storey++) {
     for (const cell of plan.cells) {
       const id = roomId(storey, cell.id), [min, max] = cellRect(f, cell);
-      const kind: GenRoom['kind'] = storey === 0 && lobbies.has(cell.id) && cell.kind !== 'service' ? 'lobby' : cell.kind === 'core' ? 'stairwell' : cell.kind === 'corridor' ? 'corridor' : cell.kind === 'service' ? 'service' : 'room';
+      const svc = storey === 0 && service.has(cell.id), label = svc ? gableOf(cell.id)?.labels[cell.id] : undefined;
+      const kind: GenRoom['kind'] = svc && cell.kind === 'room' ? 'service' : storey === 0 && lobbies.has(cell.id) && cell.kind !== 'service' ? 'lobby' : cell.kind === 'core' ? 'stairwell' : cell.kind === 'corridor' ? 'corridor' : cell.kind === 'service' ? 'service' : 'room';
       const ids = [...(doorIds.get(id) ?? []), ...(seamIds.get(id) ?? [])];
       p.rooms.push({
         id, floor: storey, bounds: { min, max }, kind,
         ...(cell.kind === 'end' ? { unit: 'suite' } : {}),
-        ...(cell.use ? { use: cell.use } : {}),
+        ...(cell.use ? { use: svc && label && cell.use !== 'bath' ? 'service' : cell.use } : {}),
+        ...(label ? { label } : {}),
         ...(unitOf.has(`${storey}|${cell.id}`) ? { unit: unitOf.get(`${storey}|${cell.id}`) } : {}),
-        ...(block && !unitOf.has(`${storey}|${cell.id}`) ? { zone: 'common' } : {}),
+        ...(block && !unitOf.has(`${storey}|${cell.id}`) ? { zone: svc ? 'service' : 'common' } : {}),
         walls: WALL_ORDER.filter((key) => wallSpan(plan, cell, key)).map((key) => sideId(sides[key])),
         ...(ids.length ? { door_ids: ids } : {}),
       });

@@ -1,13 +1,15 @@
 # S2 plan - room layouts (building generator, levelgen v3)
 
 > **STATUS 2026-11-22 - khrushchevka gable door + balcony slots (branch `claude/building-generator`; designer summary: `BGEN_KIT_PLANS_2026-11-21.md`
-> section 8).** Template `block_khrushchevka` `gable_door` (ends low / high / both / none, both from `both_min_sections`, `vestibule_uses`, `state`;
-> `BuildingSpec.gable_door` = a plan end or a gable's draft side, `gable_door_state`): an exterior ground door (role entry) on an end wall into the
-> end flat's court row - hall + its corridor + kitchen = the ground-storey vestibule (kind lobby, zone common) to the tambour / floor landing; the
-> upper storeys keep three flats per landing; the loop rule treats the vestibule pocket as a dead end. `balcony_slots` (min_storey, uses, rate):
+> section 8).** Template `block_khrushchevka` `gable_door` (ends low / high / both / none, both from `both_min_sections`, `service_room`, `state`;
+> `BuildingSpec.gable_door` = a plan end or a gable's draft side, `gable_door_state`): an exterior ground door (role entry) on an end wall into a SERVICE
+> ROOM (designer 2026-11-22, revised): on the ground storey the whole end flat is a non-residential service bay (zone `service`, rooms kind `service` with
+> `GenRoom.label` дворницкая / щитовая / ЖЭК for the main room by the plan seed, hall + corridor stay passages, no flat, no lobby), its kitchen cell at the
+> gable's court corner holds the door, the flat's entry is the interior stair door to the tambour / floor landing; the upper storeys keep three flats per
+> landing; the loop rule treats the service pocket (zone `service`) as a dead end. `balcony_slots` (min_storey, uses, rate):
 > slot windows on the street living rooms from storey 1 (`markKitSlots`), story 4 builds its balcony + escape on one column. F4 on a khrushchevka:
-> story 3 holds (fast = the kicked court door, quiet = the gable door); story 9 holds only with a non-quiet gable door (`gable_door_state: locked`) -
-> a closed gable door is nearer than any back window. Tests `buildings/kitGable.test.ts`.
+> story 3 holds (fast = the kicked court door, quiet = the gable door); story 9 locks the gable door itself (building_stories.json `gable_door_state`,
+> a brick `door_state(gable,locked)`; `BuildingSpec.gable_door_state` stays an optional override), so 3 + 9 hold with the plain closed gable door. Tests `buildings/kitGable.test.ts`.
 
 > **STATUS 2026-11-21 - kit pattern step 1 (branch `claude/building-generator`, not merged; designer summary in Russian:
 > `BGEN_KIT_PLANS_2026-11-21.md`).**
