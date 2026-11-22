@@ -46,19 +46,20 @@ interface Spec {
   roof_walkable: boolean;
   /** A khrushchevka's gable door (template gable_door, designer 2026-11-22): the draft side of the gable that gets it; absent = the template's end. */
   gable_door?: Side;
-  /** The gable door's opening state (absent = the default, closed). */
+  /** The gable door's opening state override (absent = the default: closed, or what the story sets - story 9 locks it itself). */
   gable_door_state?: 'locked';
 }
 // 2026-11-22 (khrushchevka gable door + balcony slots, docs/design/levelgen/STORY_SHOWCASE_2026-11-22.md): ALL six houses are block_khrushchevka
-// (court-side switchback core, one court door per section, plus the gable door into the end flat's ground-floor vestibule; balcony slots on the
+// (court-side switchback core, one court door per section, plus the gable door into a ground-floor service room - dvornitskaya / shchitovaya /
+// ZhEK, the end flat's ground storey, with a door to the stairwell; balcony slots on the
 // street living rooms from storey 1):
 //  - S01 open, S07 roof ladder: one section, the street wall to the street (in from the court or the gable); S07 three storeys = the
 //    tallest -> overwatch (story 7 is a detour: objective / garrison / overwatch).
 //  - S03 locked door: the COURT faces the street (its door = the front, kicked; the court windows boarded) - the quiet way is round to the
 //    gable door (F4: fast = the kick, quiet = the gable door).
 //  - S04 rubble + fire escape: three storeys, the street wall to the street; the escape stands on a balcony slot column of the street wall.
-//  - S09 locked door + broken back windows: the court faces the street as S03, the gable door LOCKED (a utility end door): with a closed
-//    gable door the quiet route takes it (it is nearer than any back window) and F4 rolls story 9 back - see the guide's questions.
+//  - S09 locked door + broken back windows: the court faces the street as S03; story 9 locks the gable door itself (building_stories.json
+//    gable_door_state, designer 2026-11-22) - no manual override here, the spec field stays for other layouts.
 //  - S10 snow drift: two sections (37 m) at right angles to the street; the gable door on the FAR gable (the near one would be the front).
 // Top row (y 30..42), bottom row (y 68..80); the mandatory street at y 55.
 const N: Side = 'north', S: Side = 'south';
@@ -67,7 +68,7 @@ const specs: Spec[] = [
   { id: 'S03_locked_door', stories: ['locked_door'], archetype: 'block', x: 46, y: 30, w: 20.2, h: 12.2, floors: 2, seed: 13, doorSides: [N], windowSides: [N, S], roof_walkable: true, gable_door: 'east' },
   { id: 'S04_rubble_escape', stories: ['rubble_escape'], archetype: 'block', x: 101, y: 30, w: 20.2, h: 12.2, floors: 3, seed: 2, doorSides: [S], windowSides: [S, N], roof_walkable: true, gable_door: 'west' },
   { id: 'S07_roof_outside', stories: ['roof_outside'], archetype: 'block', x: 8, y: 68, w: 20.0, h: 12.0, floors: 3, seed: 1, doorSides: [N], windowSides: [N, S], roof_walkable: true, gable_door: 'west' },
-  { id: 'S09_broken_back_windows', stories: ['locked_door', 'broken_back_windows'], archetype: 'block', x: 46, y: 68, w: 20.2, h: 12.2, floors: 2, seed: 2, doorSides: [S], windowSides: [S, N], roof_walkable: true, gable_door: 'east', gable_door_state: 'locked' },
+  { id: 'S09_broken_back_windows', stories: ['locked_door', 'broken_back_windows'], archetype: 'block', x: 46, y: 68, w: 20.2, h: 12.2, floors: 2, seed: 2, doorSides: [S], windowSides: [S, N], roof_walkable: true, gable_door: 'east' },
   { id: 'S10_snow_drift', stories: ['snow_drift'], archetype: 'block', x: 101, y: 65, w: 12.0, h: 37.0, floors: 2, seed: 1, doorSides: ['west'], windowSides: ['west', 'east'], roof_walkable: true, gable_door: 'south' },
 ];
 
