@@ -73,6 +73,7 @@ namespace CoverIndoorSmoke
 		bool bShotTaken = false;
 		bool bOutdoorOrdered = false;
 		float WalkCm = 0.f;
+		double InCoverSince = 0.0;
 		TSet<FString> KindsSeen;
 		TSet<FString> ClipsSeen;
 		TWeakObjectPtr<ACameraActor> Camera;
@@ -240,17 +241,28 @@ namespace CoverIndoorSmoke
 			return;
 		}
 		const FVector Chest = Op.GetActorLocation() + FVector(0.f, 0.f, 20.f);
-		// Into the room (the wall normal points off the wall towards him), a little to the side and up; stopped short of whatever is in the way.
-		const FVector Dir = (Slot.WallNormal * 0.75f + Slot.RightTangent() * 0.25f + FVector(0.f, 0.f, 0.55f)).GetSafeNormal();
-		FVector Eye = Chest + Dir * 300.f;
-		FHitResult Block;
+		// Into the room (the wall normal points off the wall towards him): of a fan of directions in front of him the one with the most free
+		// room (traced from his chest, his gear ignored), the camera stopped short of whatever is in the way.
 		FCollisionQueryParams Params(TEXT("CoverIndoorSmokeCamera"), false, &Op);
 		TArray<AActor*> Attached;
-		Op.GetAttachedActors(Attached, true, true); // his weapon / gear: the trace starts inside them
+		Op.GetAttachedActors(Attached, true, true);
 		Params.AddIgnoredActors(Attached);
-		if (World->LineTraceSingleByChannel(Block, Chest + Dir * 50.f, Eye, ECC_Visibility, Params))
+		FVector Eye = Chest + Slot.WallNormal * 250.f + FVector(0.f, 0.f, 180.f);
+		float BestFree = -1.f;
+		for (const float YawDeg : { 0.f, 25.f, -25.f, 50.f, -50.f, 70.f, -70.f })
 		{
-			Eye = Block.Location - Dir * 25.f;
+			for (const float UpDeg : { 40.f, 25.f, 55.f })
+			{
+				const FVector Flat = Slot.WallNormal.RotateAngleAxis(YawDeg, FVector::UpVector);
+				const FVector Dir = (Flat * FMath::Cos(FMath::DegreesToRadians(UpDeg)) + FVector(0.f, 0.f, FMath::Sin(FMath::DegreesToRadians(UpDeg)))).GetSafeNormal();
+				FHitResult Block;
+				const float Free = World->LineTraceSingleByChannel(Block, Chest, Chest + Dir * 320.f, ECC_Visibility, Params) ? Block.Distance : 320.f;
+				if (Free > BestFree + 20.f)
+				{
+					BestFree = Free;
+					Eye = Chest + Dir * FMath::Max(Free - 25.f, 60.f);
+				}
+			}
 		}
 		Camera->SetActorLocationAndRotation(Eye, (Chest - Eye).Rotation());
 		Camera->GetCameraComponent()->SetFieldOfView(80.f);
@@ -705,13 +717,23 @@ namespace CoverIndoorSmoke
 				}
 				return;
 			}
-			if (!Op->bInCover && T < 14.0)
+			// Keep him in view: an operative far off camera gets its animation throttled (no cover layer update - the set would never be judged).
+			AimCamera(World, *Op, Op->bInCover ? Op->GetCoverSlot() : R.High);
+			if (R.Frame % 120 == 0)
 			{
+				UE_LOG(LogCodexTactics, Display, TEXT("CoverIndoorSmoke: outdoor t=%.1f in cover %d, anim updated %llu frames ago, set '%s' context %s, clips %d, at %s"), T,
+					Op->bInCover ? 1 : 0, GFrameCounter - Anim->GetLastAnimUpdateFrame(), *Anim->GetActiveCoverAnimSet(), *Anim->GetCoverAnimContext(),
+					Anim->GetCoverClipLog().Num(), *Op->GetActorLocation().ToCompactString());
+			}
+			if (!Op->bInCover && T < 20.0)
+			{
+				R.InCoverSince = Now;
 				return;
 			}
-			if (T < 4.0)
+			ShotOnce(R.InCoverSince - R.StepStart + 2.0, T, TEXT("outdoor_native_m4"));
+			if (Now - R.InCoverSince < 2.5)
 			{
-				return;
+				return; // judged in cover, the layer has run its entry
 			}
 			FString Building;
 			int32 Storey = INDEX_NONE;
