@@ -42,6 +42,29 @@ $LogDir = Join-Path $Repo "Saved\Trainer"
 New-Item -ItemType Directory -Force $LogDir | Out-Null
 $Log = Join-Path $LogDir "scheduler.log"
 
+# Gate check (smart-enemies T-10): run_night_trainer refuses to start without a fresh gate file
+$GatePassFile = Join-Path $LogDir "gate_pass.json"
+$GateMaxAgeHours = 24
+$GateFresh = $false
+if (Test-Path $GatePassFile) {
+    $Age = ((Get-Date) - (Get-Item $GatePassFile).LastWriteTime).TotalHours
+    if ($Age -le $GateMaxAgeHours) {
+        try {
+            $gateDoc = Get-Content -Raw -Encoding UTF8 $GatePassFile | ConvertFrom-Json
+            if ($gateDoc.passed -eq $true) {
+                $GateFresh = $true
+            }
+        } catch {
+            $GateFresh = $false
+        }
+    }
+}
+if (-not $Mock -and -not $GateFresh) {
+    Add-Content -Encoding UTF8 $Log "[$($Now.ToString('s'))] REFUSED start of ${RunId} - no fresh gate pass file ($GatePassFile missing, expired, or not passed)"
+    Write-Host "run_night_trainer: REFUSED - training gate pass file ($GatePassFile) missing, expired, or invalid. Run 'night_trainer.py --check-gate' first." -ForegroundColor Red
+    exit 1
+}
+
 # Watchdog rule (2026-11-06): "is the trainer running?" = a live python process with night_trainer.py on its command line,
 # NEVER the scheduled task's state (a task can read Ready while its python child still runs - a false restart started a
 # duplicate). night_trainer.py's own single-instance lock (Saved\Trainer\night_trainer.lock) backs this up.
