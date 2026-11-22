@@ -36,7 +36,7 @@ SCENARIO_MAP = {
 
 
 def parse_seed_spec(spec: str) -> List[int]:
-    """Parse seed specifications like '20' (1..20), '1-20', or '1,2,5,10'."""
+    """Parse seed specifications like '20' (1..20), '20..50', '1-20', or '1,2,5,10'."""
     spec = spec.strip()
     if not spec:
         return list(range(1, 21))
@@ -46,6 +46,8 @@ def parse_seed_spec(spec: str) -> List[int]:
         n = int(spec)
         return list(range(1, n + 1))
 
+    # Handle '20..50' range notation
+    spec = spec.replace("..", "-")
     seeds: List[int] = []
     parts = [p.strip() for p in spec.split(",") if p.strip()]
     for p in parts:
@@ -74,97 +76,28 @@ def resolve_smoke_command(scenario_or_smoke: str) -> str:
     return f"{scenario_or_smoke}Smoke"
 
 
-def run_single_smoke_seed(
-    smoke: str,
-    seed: int,
-    timeout_s: int = 180,
-    remote: str = "auto",
-    mock: bool = False,
-    mock_fail_seeds: Optional[Set[int]] = None,
-) -> dict:
-    """Run a single smoke on a specific seed and parse outcome."""
-    if mock:
-        is_fail = bool(mock_fail_seeds and seed in mock_fail_seeds)
-        return {
-            "smoke": smoke,
-            "seed": seed,
-            "passed": not is_fail,
-            "duration_s": 12.5,
-            "log": f"Mock-Smoke-{smoke}-{seed}.log",
-            "failure_reason": "Mock failure: objective captured by attackers" if is_fail else None,
-            "decisions": [
-                {"t": 0.0, "who": "Operator Lind", "order": "Ambush", "score": 1.5},
-                {"t": 3.5, "who": "Operator Lind", "order": "FallBack", "score": 1.2},
-            ] if is_fail else [],
-        }
-
-    script_path = REPO_ROOT / "Scripts" / "smoke_parallel.ps1"
-    temp_json = LOG_DIR / f"SmokeParallel-seed-{seed}-{os.getpid()}.json"
-
-    cmd = [
-        "powershell",
-        "-ExecutionPolicy", "Bypass",
-        "-File", str(script_path),
-        "-Commands", smoke,
-        "-SmokeArgs", f"Seed={seed}",
-        "-ResultJson", str(temp_json),
-        "-Remote", remote,
-        "-TimeoutSeconds", str(timeout_s),
-        "-Serial",
-    ]
-
-    proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
-    passed = False
-    duration_s = 0.0
-    log_path = None
+def parse_failed_log(log_path: Optional[str]) -> Tuple[Optional[str], List[dict]]:
+    """Extract failure reason and AI decisions from a failed smoke log."""
     fail_reason = None
-
-    if temp_json.is_file():
-        try:
-            data = json.loads(temp_json.read_text(encoding="utf-8"))
-            results = data.get("results") or []
-            if results:
-                r0 = results[0]
-                state = r0.get("State", "")
-                passed = (state in ("PASS", "PASS*"))
-                duration_s = float(r0.get("Seconds", 0.0))
-                log_path = r0.get("Log")
-                if not passed:
-                    fail_reason = r0.get("Reason") or "Smoke test failed verification"
-        except Exception:
-            pass
-        finally:
-            try:
-                temp_json.unlink()
-            except OSError:
-                pass
-    else:
-        passed = (proc.returncode == 0)
-
-    # Extract log details if failed
     decisions = []
-    if not passed and log_path and Path(log_path).is_file():
+    if log_path and Path(log_path).is_file():
         try:
-            log_lines = Path(log_path).read_text(encoding="utf-8", errors="replace").splitlines()
+            log_lines = Path(log_path).read_text(encoding="utf-8-sig", errors="replace").splitlines()
             for line in log_lines:
                 if "Smoke RESULT: FAIL" in line:
                     fail_reason = line.strip()
                 if "[PmcAI]" in line and "->" in line:
                     m = re.search(r"Operator\s+([A-Za-z0-9_-]+)\s+->\s+([A-Za-z0-9_-]+)\s+\(score\s+([0-9.]+)", line)
                     if m:
-                        decisions.append({"t": 0.0, "who": f"Operator {m.group(1)}", "order": m.group(2), "score": float(m.group(3))})
+                        decisions.append({
+                            "t": 0.0,
+                            "who": f"Operator {m.group(1)}",
+                            "order": m.group(2),
+                            "score": float(m.group(3)),
+                        })
         except Exception:
             pass
-
-    return {
-        "smoke": smoke,
-        "seed": seed,
-        "passed": passed,
-        "duration_s": duration_s,
-        "log": str(log_path) if log_path else None,
-        "failure_reason": fail_reason,
-        "decisions": decisions,
-    }
+    return fail_reason, decisions
 
 
 def run_scenario_regression(
@@ -174,14 +107,101 @@ def run_scenario_regression(
     remote: str = "auto",
     mock: bool = False,
     mock_fail_seeds: Optional[Set[int]] = None,
+    timeout_s: int = 180,
 ) -> dict:
-    """Run regression sweep for a scenario across a list of seeds."""
+    """Run regression sweep for a scenario across a list of seeds in batch (Review 091 Point 2)."""
     smoke = resolve_smoke_command(scenario)
     results: List[dict] = []
 
-    for seed in seeds:
-        res = run_single_smoke_seed(smoke, seed, remote=remote, mock=mock, mock_fail_seeds=mock_fail_seeds)
-        results.append(res)
+    if mock:
+        for seed in seeds:
+            is_fail = bool(mock_fail_seeds and seed in mock_fail_seeds)
+            results.append({
+                "smoke": smoke,
+                "seed": seed,
+                "passed": not is_fail,
+                "duration_s": 12.5,
+                "log": f"Mock-Smoke-{smoke}-{seed}.log",
+                "failure_reason": "Mock failure: objective captured by attackers" if is_fail else None,
+                "decisions": [
+                    {"t": 0.0, "who": "Operator Lind", "order": "Ambush", "score": 1.5},
+                    {"t": 3.5, "who": "Operator Lind", "order": "FallBack", "score": 1.2},
+                ] if is_fail else [],
+            })
+    else:
+        # Batch smoke execution: invoke smoke_parallel.ps1 ONCE per scenario
+        script_path = REPO_ROOT / "Scripts" / "smoke_parallel.ps1"
+        temp_json = LOG_DIR / f"SmokeParallel-batch-{smoke}-{os.getpid()}.json"
+
+        cmd = [
+            "powershell",
+            "-ExecutionPolicy", "Bypass",
+            "-File", str(script_path),
+            "-Commands", smoke,
+            "-Repeat", str(len(seeds)),
+            "-SmokeArgs", "Seed={n}",
+            "-NoRetry",
+            "-Jobs", str(parallel),
+            "-ResultJson", str(temp_json),
+            "-Remote", remote,
+            "-TimeoutSeconds", str(timeout_s),
+        ]
+
+        proc = subprocess.run(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+
+        batch_results = []
+        if temp_json.is_file():
+            try:
+                # UTF-8-SIG to cleanly handle PowerShell UTF-8 BOM (Review 091 Point 1)
+                data = json.loads(temp_json.read_text(encoding="utf-8-sig"))
+                batch_results = data.get("results") or []
+            except Exception as e:
+                print(f"[scenario_regression] Warning: failed to parse {temp_json}: {e}", file=sys.stderr)
+            finally:
+                try:
+                    temp_json.unlink()
+                except OSError:
+                    pass
+
+        # Parse each result row
+        for i, seed in enumerate(seeds):
+            row = None
+            if i < len(batch_results):
+                row = batch_results[i]
+                for r in batch_results:
+                    if r.get("Repeat") == (i + 1):
+                        row = r
+                        break
+
+            if row:
+                state = row.get("State", "")
+                passed = (state in ("PASS", "PASS*"))
+                duration_s = float(row.get("Seconds", 0.0))
+                log_path = row.get("Log")
+                fail_reason = row.get("Reason")
+            else:
+                passed = (proc.returncode == 0)
+                duration_s = 0.0
+                log_path = str(LOG_DIR / f"Smoke-{smoke}-r{i+1}.log")
+                fail_reason = "No result row found in batch output" if not passed else None
+
+            decisions = []
+            if not passed:
+                extracted_reason, decisions = parse_failed_log(log_path)
+                if extracted_reason:
+                    fail_reason = extracted_reason
+                elif not fail_reason:
+                    fail_reason = "Smoke test failed verification"
+
+            results.append({
+                "smoke": smoke,
+                "seed": seed,
+                "passed": passed,
+                "duration_s": duration_s,
+                "log": str(log_path) if log_path else None,
+                "failure_reason": fail_reason,
+                "decisions": decisions,
+            })
 
     passed_count = sum(1 for r in results if r["passed"])
     failed_results = [r for r in results if not r["passed"]]
@@ -204,10 +224,44 @@ def run_scenario_regression(
     }
 
 
-def compare_with_yesterday(today_data: dict, yesterday_data: dict) -> dict:
-    """Compare today's sweep with yesterday's to find regressions and flaky seeds."""
-    y_results = yesterday_data.get("seeds") or {}
-    t_results = {r["seed"]: r["passed"] for r in today_data.get("results", [])}
+def extract_seed_results(data: dict, scenario: Optional[str] = None) -> Dict[int, bool]:
+    """Extract a mapping of seed -> passed (bool) from single or multi-scenario regression JSON."""
+    res: Dict[int, bool] = {}
+
+    # 1. Multi-scenario structure: {"scenarios": [{"scenario": "...", "smoke": "...", "results": [...]}, ...]}
+    if "scenarios" in data and isinstance(data["scenarios"], list):
+        for sc_data in data["scenarios"]:
+            sc_name = sc_data.get("scenario")
+            sm_name = sc_data.get("smoke")
+            if scenario:
+                target_smoke = resolve_smoke_command(scenario)
+                if sc_name != scenario and sm_name != target_smoke and sm_name != scenario:
+                    continue
+            for r in sc_data.get("results", []):
+                if "seed" in r and "passed" in r:
+                    res[int(r["seed"])] = bool(r["passed"])
+        if res:
+            return res
+
+    # 2. Single scenario results list: {"results": [{"seed": 1, "passed": True}, ...]}
+    if "results" in data and isinstance(data["results"], list):
+        for r in data["results"]:
+            if "seed" in r and "passed" in r:
+                res[int(r["seed"])] = bool(r["passed"])
+        if res:
+            return res
+
+    # 3. Direct/legacy seed mapping: {"seeds": {1: True, 2: False}}
+    if "seeds" in data and isinstance(data["seeds"], dict):
+        return {int(k): bool(v) for k, v in data["seeds"].items()}
+
+    return res
+
+
+def compare_with_yesterday(today_data: dict, yesterday_data: dict, scenario: Optional[str] = None) -> dict:
+    """Compare today's sweep with yesterday's to find regressions and flaky seeds (Review 091 Point 3)."""
+    t_results = extract_seed_results(today_data, scenario)
+    y_results = extract_seed_results(yesterday_data, scenario)
 
     regressions = []  # passed yesterday, failed today
     fixes = []        # failed yesterday, passed today
@@ -227,10 +281,10 @@ def compare_with_yesterday(today_data: dict, yesterday_data: dict) -> dict:
                 flaky.append(seed)
 
     return {
-        "regressions": regressions,
-        "fixes": fixes,
-        "flaky_seeds": flaky,
-        "stable_seeds": stable_pass,
+        "regressions": sorted(regressions),
+        "fixes": sorted(fixes),
+        "flaky_seeds": sorted(flaky),
+        "stable_seeds": sorted(stable_pass),
     }
 
 
@@ -308,8 +362,14 @@ def main():
     seeds = parse_seed_spec(args.seeds)
     is_day_mode = args.day or (not args.night and len(seeds) <= 50 and args.scenario != "all")
 
-    if args.scenario == "all" or args.night:
-        scenarios = ["crossroads", "alley", "roofs"]
+    if args.scenario == "all" or args.night or "," in args.scenario:
+        if args.scenario == "all" or (args.night and args.scenario == "crossroads"):
+            scenarios = list(SCENARIO_MAP.keys())
+        elif "," in args.scenario:
+            scenarios = [s.strip() for s in args.scenario.split(",") if s.strip()]
+        else:
+            scenarios = [args.scenario]
+
         all_results = []
         for sc in scenarios:
             res = run_scenario_regression(sc, seeds, parallel=args.parallel, remote=args.remote, mock=args.mock)
@@ -318,19 +378,35 @@ def main():
         comparison = None
         if args.compare_yesterday and os.path.isfile(args.compare_yesterday):
             try:
-                yest = json.loads(Path(args.compare_yesterday).read_text(encoding="utf-8"))
-                # Compare first scenario as sample
-                if all_results:
-                    comparison = compare_with_yesterday(all_results[0], yest)
-            except Exception:
-                pass
+                yest = json.loads(Path(args.compare_yesterday).read_text(encoding="utf-8-sig"))
+                comparison = compare_with_yesterday({"scenarios": all_results}, yest)
+            except Exception as e:
+                print(f"[scenario_regression] Warning: failed to compare with yesterday: {e}", file=sys.stderr)
 
         md_output = format_night_report(all_results, comparison)
         json_output = {"date": dt.date.today().isoformat(), "scenarios": all_results, "comparison": comparison}
     else:
         res = run_scenario_regression(args.scenario, seeds, parallel=args.parallel, remote=args.remote, mock=args.mock)
+        comparison = None
+        if args.compare_yesterday and os.path.isfile(args.compare_yesterday):
+            try:
+                yest = json.loads(Path(args.compare_yesterday).read_text(encoding="utf-8-sig"))
+                comparison = compare_with_yesterday(res, yest, scenario=args.scenario)
+            except Exception as e:
+                print(f"[scenario_regression] Warning: failed to compare with yesterday: {e}", file=sys.stderr)
+
         md_output = format_day_digest(res)
-        json_output = res
+        if comparison:
+            reg = comparison.get("regressions") or []
+            fix = comparison.get("fixes") or []
+            flaky = comparison.get("flaky_seeds") or []
+            if reg or fix or flaky:
+                md_output += f"\n\n### Yesterday Comparison:"
+                md_output += f"\n- **Regressions**: {', '.join(str(s) for s in reg) if reg else 'None'}"
+                md_output += f"\n- **Fixes**: {', '.join(str(s) for s in fix) if fix else 'None'}"
+                md_output += f"\n- **Flaky**: {', '.join(str(s) for s in flaky) if flaky else 'None'}"
+
+        json_output = dict(res, comparison=comparison)
 
     if args.out_md:
         p = Path(args.out_md)

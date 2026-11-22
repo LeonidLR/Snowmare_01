@@ -105,33 +105,49 @@ def main(argv=None) -> int:
 def _check_gate(args, cfg) -> int:
     probe_data = None
     if args.gate_probe and os.path.isfile(args.gate_probe):
-        with open(args.gate_probe, "r", encoding="utf-8") as f:
+        with open(args.gate_probe, "r", encoding="utf-8-sig") as f:
             probe_data = json.load(f)
 
     baseline_data = None
     baseline_path = args.gate_baseline or os.path.join(args.repo_root, "Saved", "Trainer", "baseline.json")
     if os.path.isfile(baseline_path):
-        with open(baseline_path, "r", encoding="utf-8") as f:
+        with open(baseline_path, "r", encoding="utf-8-sig") as f:
             baseline_data = json.load(f)
 
     sweep_data = None
     sweep_path = args.gate_sweep or os.path.join(args.repo_root, "Saved", "Reports", "sweep-result.json")
     if os.path.isfile(sweep_path):
-        with open(sweep_path, "r", encoding="utf-8") as f:
+        with open(sweep_path, "r", encoding="utf-8-sig") as f:
             sweep_data = json.load(f)
 
     gate_res = evaluate_training_gate(cfg, probe_data=probe_data, baseline_data=baseline_data, sweep_data=sweep_data)
 
+    trainer_saved = os.path.join(args.repo_root, "Saved", "Trainer")
+    os.makedirs(trainer_saved, exist_ok=True)
+    pass_file = os.path.join(trainer_saved, "gate_pass.json")
+    blocked_file = os.path.join(trainer_saved, "gate_blocked.json")
+
     out_path = args.gate_out
     if not out_path:
-        trainer_saved = os.path.join(args.repo_root, "Saved", "Trainer")
-        os.makedirs(trainer_saved, exist_ok=True)
-        fname = "gate_pass.json" if gate_res["passed"] else "gate_blocked.json"
-        out_path = os.path.join(trainer_saved, fname)
+        out_path = pass_file if gate_res["passed"] else blocked_file
 
     os.makedirs(os.path.dirname(os.path.abspath(out_path)), exist_ok=True)
     with open(out_path, "w", encoding="utf-8") as f:
         json.dump(gate_res, f, indent=2)
+
+    # Stale gate pass deletion on BLOCKED (Review 091 Point 4)
+    if not gate_res["passed"]:
+        if os.path.isfile(pass_file):
+            try:
+                os.remove(pass_file)
+            except OSError:
+                pass
+    else:
+        if os.path.isfile(blocked_file):
+            try:
+                os.remove(blocked_file)
+            except OSError:
+                pass
 
     status_str = "PASS" if gate_res["passed"] else "BLOCKED"
     print(f"============================================================")

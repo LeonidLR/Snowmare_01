@@ -46,53 +46,124 @@ def extract_used_metrics(config: dict) -> Set[str]:
     return metrics
 
 
+def extract_penalty_metrics(config: dict) -> Set[str]:
+    """Extract metric identifiers that act as penalties (e.g. friendly_fire, stuck_events)."""
+    penalties: Set[str] = set()
+    fitness = config.get("fitness") or {}
+    pen_block = fitness.get("penalties") or {}
+    for k in pen_block.keys():
+        if not k.startswith("_"):
+            penalties.add(k)
+    return penalties
+
+
+def _extract_node_value(node: Any) -> Optional[float]:
+    """Extract a finite float from a numeric leaf, or a dict with {'value': X}."""
+    if isinstance(node, bool) or node is None:
+        return None
+    if isinstance(node, (int, float)):
+        if math.isnan(node) or math.isinf(node):
+            return None
+        return float(node)
+    if isinstance(node, dict):
+        val = node.get("value")
+        if isinstance(val, (int, float)) and not isinstance(val, bool):
+            if math.isnan(val) or math.isinf(val):
+                return None
+            return float(val)
+    return None
+
+
 def get_metric_value_from_round(rnd: dict, metric: str, side: str = "A") -> Any:
-    """Retrieve the value of a metric from round or defence block or sides block."""
+    """Retrieve the value of a metric from round or defence block or sides block.
+
+    Checks:
+    1. defence block: numeric or {'value': X}
+    2. sides.<side>.behaviour.metrics.<k>.value or sides.<side>.behaviour.<k>
+    3. round.behaviour.metrics.<k>.value or round.behaviour.<k>
+    4. sides.<side> direct stats: damage_dealt, hp_lost, kills, survivors
+    5. top-level round[metric]
+    """
     # 1. Check defence block first
     defence = rnd.get("defence") or {}
     if metric in defence:
-        return defence[metric]
+        val = _extract_node_value(defence[metric])
+        if val is not None:
+            return val
+        if defence[metric] is None:
+            return None
 
-    # 2. Check candidate side (A) or role
+    # 2. Check candidate side (A) behaviour
     sides = rnd.get("sides") or {}
     side_info = sides.get(side) or {}
+    beh = side_info.get("behaviour")
+    if isinstance(beh, dict):
+        # Rich behaviour document format: {"schema": "...", "metrics": {metric: {"value": X}}}
+        metrics_dict = beh.get("metrics")
+        if isinstance(metrics_dict, dict) and metric in metrics_dict:
+            val = _extract_node_value(metrics_dict[metric])
+            if val is not None:
+                return val
+        if metric in beh:
+            val = _extract_node_value(beh[metric])
+            if val is not None:
+                return val
+
+    # 3. Check top-level round behaviour
+    rnd_beh = rnd.get("behaviour")
+    if isinstance(rnd_beh, dict):
+        metrics_dict = rnd_beh.get("metrics")
+        if isinstance(metrics_dict, dict) and metric in metrics_dict:
+            val = _extract_node_value(metrics_dict[metric])
+            if val is not None:
+                return val
+        if metric in rnd_beh:
+            val = _extract_node_value(rnd_beh[metric])
+            if val is not None:
+                return val
+
+    # 4. Direct stats on candidate side
     if metric in side_info:
-        return side_info[metric]
+        val = _extract_node_value(side_info[metric])
+        if val is not None:
+            return val
+        if side_info[metric] is None:
+            return None
 
-    # Check opponent side (B)
-    opp_side = "B" if side == "A" else "A"
-    opp_info = sides.get(opp_side) or {}
-
-    # Derived metrics
+    # Core round/side scalar stats (without fake proxies)
     if metric == "damage_dealt":
-        return side_info.get("damage_dealt", 0.0)
-    elif metric == "damage_taken" or metric == "hp_lost":
-        return side_info.get("hp_lost", 0.0)
+        return _extract_node_value(side_info.get("damage_dealt"))
+    elif metric in ("damage_taken", "hp_lost"):
+        return _extract_node_value(side_info.get("hp_lost"))
     elif metric == "kills":
-        return side_info.get("kills", 0)
+        return _extract_node_value(side_info.get("kills"))
     elif metric == "survivors":
-        return side_info.get("survivors", 0)
-    elif metric == "moves":
-        return side_info.get("moves", side_info.get("flanks_attempted", 0))
-    elif metric == "flanks_completed":
-        return side_info.get("flanks_succeeded", 0)
-    elif metric == "time_in_contact_s":
-        return rnd.get("duration_s", 0.0)
+        return _extract_node_value(side_info.get("survivors"))
 
-    # 3. Check top-level round
+    # 5. Check top-level round
     if metric in rnd:
-        return rnd[metric]
+        val = _extract_node_value(rnd[metric])
+        if val is not None:
+            return val
+        if rnd[metric] is None:
+            return None
 
     return None
 
 
-def check_metric_liveness(probe_rounds: List[dict], metrics_used: Set[str], side: str = "A") -> Tuple[bool, List[str]]:
+def check_metric_liveness(
+    probe_rounds: List[dict],
+    metrics_used: Set[str],
+    side: str = "A",
+    penalty_metrics: Optional[Set[str]] = None,
+) -> Tuple[bool, List[str]]:
     """G2 Metric Liveness: ensure metrics used by fitness / descriptors are not dead / constant.
 
     A metric fails if:
     - It is None across all probe rounds (e.g. guard_share is None).
-    - It is constant 0 across all probe rounds (e.g. overwatch_kills == 0).
-    - It has 0 variance across all probe rounds.
+    - It is constant 0 across all probe rounds (e.g. overwatch_kills == 0),
+      UNLESS it is an active penalty metric (where 0 indicates zero violations/clean round).
+    - It has 0 variance across all probe rounds (except zero-valued penalties).
     """
     if not probe_rounds:
         return False, ["No probe rounds provided for metric liveness evaluation"]
@@ -102,6 +173,7 @@ def check_metric_liveness(probe_rounds: List[dict], metrics_used: Set[str], side
 
     for m in sorted(metrics_used):
         values = [get_metric_value_from_round(r, m, side) for r in probe_rounds]
+        is_penalty = bool(penalty_metrics and m in penalty_metrics)
 
         # Case 1: All None
         if all(v is None for v in values):
@@ -116,14 +188,15 @@ def check_metric_liveness(probe_rounds: List[dict], metrics_used: Set[str], side
 
         # Case 2: All exactly 0
         if all(v == 0.0 for v in num_vals):
-            dead_metrics.append(f"Metric '{m}' is zero across all {len(num_vals)} probe rounds (dead metric)")
+            if not is_penalty:
+                dead_metrics.append(f"Metric '{m}' is zero across all {len(num_vals)} probe rounds (dead metric)")
             continue
 
         # Case 3: Constant value (0 variance)
         if len(num_vals) > 1:
             mean = sum(num_vals) / len(num_vals)
             var = sum((v - mean) ** 2 for v in num_vals) / len(num_vals)
-            if var == 0.0:
+            if var == 0.0 and not (is_penalty and mean == 0.0):
                 dead_metrics.append(f"Metric '{m}' is constant ({mean}) with zero variance across {len(num_vals)} probe rounds")
 
     passed = len(dead_metrics) == 0
@@ -190,7 +263,7 @@ def check_smoke_health(sweep_data: Optional[dict], required_smokes: Optional[Lis
         if clean_req not in res_dict:
             # If not in sweep, mark missing
             failed.append(f"Required smoke '{clean_req}' not found in latest sweep")
-        elif res_dict[clean_req] not in ("PASS", "PASS*", "KNOWN_FAIL"):
+        elif res_dict[clean_req] not in ("PASS", "PASS*", "KNOWN_FAIL", "KNOWN-FAIL"):
             failed.append(f"Required smoke '{clean_req}' failed (state: {res_dict[clean_req]})")
 
     passed = len(failed) == 0
@@ -206,9 +279,10 @@ def evaluate_training_gate(
 ) -> dict:
     """Run all training gate checks and return structured diagnostic results."""
     used_metrics = extract_used_metrics(config)
+    penalty_metrics = extract_penalty_metrics(config)
     probe_rounds = (probe_data.get("rounds") if probe_data else None) or []
 
-    g2_pass, g2_reasons = check_metric_liveness(probe_rounds, used_metrics)
+    g2_pass, g2_reasons = check_metric_liveness(probe_rounds, used_metrics, penalty_metrics=penalty_metrics)
     g3_pass, g3_reasons = check_baseline_sufficiency(baseline_data)
     g1_pass, g1_reasons = check_smoke_health(sweep_data, required_smokes)
 

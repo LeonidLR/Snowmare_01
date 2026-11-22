@@ -49,12 +49,19 @@ $GateFresh = $false
 if (Test-Path $GatePassFile) {
     $Age = ((Get-Date) - (Get-Item $GatePassFile).LastWriteTime).TotalHours
     if ($Age -le $GateMaxAgeHours) {
-        $GateFresh = $true
+        try {
+            $gateDoc = Get-Content -Raw -Encoding UTF8 $GatePassFile | ConvertFrom-Json
+            if ($gateDoc.passed -eq $true) {
+                $GateFresh = $true
+            }
+        } catch {
+            $GateFresh = $false
+        }
     }
 }
 if (-not $Mock -and -not $GateFresh) {
-    Add-Content -Encoding UTF8 $Log "[$($Now.ToString('s'))] REFUSED start of ${RunId} - no fresh gate file ($GatePassFile missing or older than $GateMaxAgeHours h)"
-    Write-Host "run_night_trainer: REFUSED - training gate pass file ($GatePassFile) missing or expired. Run 'night_trainer.py --check-gate' first." -ForegroundColor Red
+    Add-Content -Encoding UTF8 $Log "[$($Now.ToString('s'))] REFUSED start of ${RunId} - no fresh gate pass file ($GatePassFile missing, expired, or not passed)"
+    Write-Host "run_night_trainer: REFUSED - training gate pass file ($GatePassFile) missing, expired, or invalid. Run 'night_trainer.py --check-gate' first." -ForegroundColor Red
     exit 1
 }
 

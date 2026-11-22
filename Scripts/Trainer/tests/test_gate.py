@@ -75,14 +75,135 @@ class TestTrainingGate(unittest.TestCase):
         self.assertFalse(gate_res["checks"]["G2_metric_liveness"]["passed"])
 
     def test_gate_passes_healthy_probe(self):
-        healthy_rounds = [
-            {"defence": {"overwatch_kills": 1, "guard_share": 0.8}, "sides": {"A": {"kills": 2, "damage_dealt": 150}}},
-            {"defence": {"overwatch_kills": 0, "guard_share": 0.6}, "sides": {"A": {"kills": 1, "damage_dealt": 80}}},
-            {"defence": {"overwatch_kills": 2, "guard_share": 0.7}, "sides": {"A": {"kills": 3, "damage_dealt": 220}}},
+        """Healthy probe matching codex.pmc_arena_behaviour/1 schema must pass all liveness checks."""
+        used_metrics = extract_used_metrics(self.config)
+        healthy_rounds = []
+        for i in range(6):
+            # Vary values across rounds so variance > 0
+            v = float(i + 1)
+            behaviour_metrics = {
+                "time_in_contact_s": {"value": 25.0 + v * 3.0, "unit": "s"},
+                "flanks_completed": {"value": 1.0 + (i % 2), "unit": "count"},
+                "moves": {"value": 4.0 + v, "unit": "count"},
+                "ambush_success": {"value": 0.15 + (v * 0.05), "unit": "ratio"},
+                "flanks_succeeded": {"value": 1.0 + (i % 2), "unit": "count"},
+                "suppression_s": {"value": 5.0 + v * 2.0, "unit": "s"},
+                "ambushes": {"value": 1.0 + (i % 2), "unit": "count"},
+                "retreats_survived": {"value": float(i % 2), "unit": "count"},
+                "heals": {"value": float(i % 3), "unit": "count"},
+                "damage_from_concealment": {"value": 20.0 + v * 5.0, "unit": "hp"},
+                "first_strike": {"value": float(i % 2), "unit": "flag"},
+                "objective_win": {"value": float((i + 1) % 2), "unit": "flag"},
+                "strikes_unobserved": {"value": float(i % 2), "unit": "count"},
+                "friendly_fire": {"value": 0.0, "unit": "count"},
+                "stuck_events": {"value": 0.0, "unit": "count"},
+            }
+            round_obj = {
+                "index": i + 1,
+                "scenario": "tactical",
+                "duration_s": 80.0 + v * 5.0,
+                "defence": {
+                    "overwatch_kills": 1 if i % 2 == 0 else 2,
+                    "guard_share": 0.6 + (v * 0.03),
+                    "spread_m": 20.0 + v,
+                    "shared_cover_pairs": i,
+                    "objective_share": 0.5 + (v * 0.05),
+                },
+                "sides": {
+                    "A": {
+                        "role": "attacker",
+                        "kills": 1 + (i % 3),
+                        "damage_dealt": 100.0 + v * 20.0,
+                        "hp_lost": 40.0 + v * 10.0,
+                        "survivors": 2 + (i % 2),
+                        "behaviour": {
+                            "schema": "codex.pmc_arena_behaviour/1",
+                            "metrics": behaviour_metrics,
+                        },
+                    },
+                    "B": {"role": "defender", "kills": 1, "damage_dealt": 50.0, "hp_lost": 150.0, "survivors": 1},
+                },
+            }
+            healthy_rounds.append(round_obj)
+
+        probe_data = {"schema": "codex.pmc_arena/1", "rounds": healthy_rounds}
+        baseline_data = {
+            "rounds": [{"scenario": "crossroads"} for _ in range(35)] + [{"scenario": "alley"} for _ in range(35)]
+        }
+        sweep_data = {
+            "results": [
+                {"Name": "PmcCrossroadsSmoke", "State": "PASS"},
+                {"Name": "PmcAlleySmoke", "State": "PASS"},
+                {"Name": "PmcRoofDefenceSmoke", "State": "PASS"},
+                {"Name": "PmcStalemateSmoke", "State": "KNOWN-FAIL"},
+            ]
+        }
+
+        gate_res = evaluate_training_gate(
+            self.config, probe_data=probe_data, baseline_data=baseline_data, sweep_data=sweep_data
+        )
+        self.assertTrue(gate_res["passed"], f"Healthy probe must pass all gate checks: {gate_res['reasons']}")
+        self.assertTrue(gate_res["checks"]["G2_metric_liveness"]["passed"])
+        self.assertTrue(gate_res["checks"]["G1_smoke_health"]["passed"])
+        self.assertTrue(gate_res["checks"]["G3_baseline_sufficiency"]["passed"])
+
+    def test_penalties_zero_not_flagged_as_dead(self):
+        """Zero values for penalty metrics (friendly_fire, stuck_events) must not be flagged as dead."""
+        used_metrics = {"friendly_fire", "stuck_events", "kills"}
+        penalty_metrics = {"friendly_fire", "stuck_events"}
+        rounds = [
+            {"sides": {"A": {"kills": 1, "behaviour": {"metrics": {"friendly_fire": {"value": 0.0}, "stuck_events": {"value": 0.0}}}}}},
+            {"sides": {"A": {"kills": 2, "behaviour": {"metrics": {"friendly_fire": {"value": 0.0}, "stuck_events": {"value": 0.0}}}}}},
+            {"sides": {"A": {"kills": 3, "behaviour": {"metrics": {"friendly_fire": {"value": 0.0}, "stuck_events": {"value": 0.0}}}}}},
         ]
-        used = {"overwatch_kills", "guard_share", "kills", "damage_dealt"}
-        passed, issues = check_metric_liveness(healthy_rounds, used)
-        self.assertTrue(passed, f"Healthy probe should pass, issues: {issues}")
+        passed, dead = check_metric_liveness(rounds, used_metrics, penalty_metrics=penalty_metrics)
+        self.assertTrue(passed, f"Zero penalties must be accepted, got: {dead}")
+
+    def test_dead_behaviour_metric_detected(self):
+        """If a behaviour metric is constant 0.0, it must be flagged as dead."""
+        used_metrics = {"time_in_contact_s", "kills"}
+        rounds = [
+            {"sides": {"A": {"kills": 1, "behaviour": {"metrics": {"time_in_contact_s": {"value": 0.0}}}}}},
+            {"sides": {"A": {"kills": 2, "behaviour": {"metrics": {"time_in_contact_s": {"value": 0.0}}}}}},
+            {"sides": {"A": {"kills": 3, "behaviour": {"metrics": {"time_in_contact_s": {"value": 0.0}}}}}},
+        ]
+        passed, dead = check_metric_liveness(rounds, used_metrics)
+        self.assertFalse(passed)
+        self.assertTrue(any("time_in_contact_s" in d for d in dead))
+
+    def test_no_fake_proxies(self):
+        """gate.py must not fall back to duration_s when time_in_contact_s is missing."""
+        from nighttrainer.gate import get_metric_value_from_round
+        round_without_contact = {
+            "duration_s": 120.0,
+            "sides": {"A": {"kills": 2}},
+        }
+        val = get_metric_value_from_round(round_without_contact, "time_in_contact_s")
+        self.assertIsNone(val, f"time_in_contact_s must be None when absent, not duration_s proxy ({val})")
+
+    def test_smoke_health_known_fail_variants(self):
+        """Both KNOWN_FAIL and KNOWN-FAIL (written by smoke_parallel.ps1) must be accepted."""
+        sweep_hyphen = {
+            "results": [
+                {"Name": "PmcCrossroadsSmoke", "State": "PASS"},
+                {"Name": "PmcAlleySmoke", "State": "PASS"},
+                {"Name": "PmcRoofDefenceSmoke", "State": "PASS"},
+                {"Name": "PmcStalemateSmoke", "State": "KNOWN-FAIL"},
+            ]
+        }
+        passed_hyphen, _ = check_smoke_health(sweep_hyphen)
+        self.assertTrue(passed_hyphen, "KNOWN-FAIL must be accepted in smoke health")
+
+        sweep_underscore = {
+            "results": [
+                {"Name": "PmcCrossroadsSmoke", "State": "PASS"},
+                {"Name": "PmcAlleySmoke", "State": "PASS"},
+                {"Name": "PmcRoofDefenceSmoke", "State": "PASS"},
+                {"Name": "PmcStalemateSmoke", "State": "KNOWN_FAIL"},
+            ]
+        }
+        passed_underscore, _ = check_smoke_health(sweep_underscore)
+        self.assertTrue(passed_underscore, "KNOWN_FAIL must be accepted in smoke health")
 
     def test_baseline_sufficiency(self):
         # 1. Missing baseline
@@ -144,6 +265,35 @@ class TestTrainingGate(unittest.TestCase):
         self.assertEqual(proc.returncode, 1, "night_trainer.py --check-gate must exit 1 when dead metrics exist")
         self.assertIn("TRAINING GATE: BLOCKED", proc.stdout)
 
+    def test_stale_gate_pass_deleted_on_blocked(self):
+        """When gate is blocked, any stale gate_pass.json must be deleted to prevent false starts."""
+        import tempfile
+        import shutil
+        from night_trainer import _check_gate
+
+        temp_dir = tempfile.mkdtemp(prefix="test_gate_hygiene_")
+        try:
+            saved_trainer = Path(temp_dir) / "Saved" / "Trainer"
+            saved_trainer.mkdir(parents=True, exist_ok=True)
+            stale_pass = saved_trainer / "gate_pass.json"
+            stale_pass.write_text(json.dumps({"passed": True, "comment": "stale"}), encoding="utf-8")
+            self.assertTrue(stale_pass.is_file())
+
+            class DummyArgs:
+                gate_probe = str(self.dead_metrics_fixture)
+                gate_baseline = None
+                gate_sweep = None
+                gate_out = None
+                repo_root = temp_dir
+
+            code = _check_gate(DummyArgs(), self.config)
+            self.assertEqual(code, 1, "_check_gate must return 1 on blocked gate")
+            self.assertFalse(stale_pass.is_file(), "stale gate_pass.json must be deleted when gate is blocked")
+            blocked_file = saved_trainer / "gate_blocked.json"
+            self.assertTrue(blocked_file.is_file(), "gate_blocked.json must be written on blocked gate")
+        finally:
+            shutil.rmtree(temp_dir, ignore_errors=True)
+
 
 class TestScenarioRegression(unittest.TestCase):
     def test_seed_spec_parsing(self):
@@ -173,6 +323,33 @@ class TestScenarioRegression(unittest.TestCase):
         self.assertEqual(cmp["regressions"], [2])
         self.assertEqual(cmp["fixes"], [3])
         self.assertEqual(cmp["stable_seeds"], [1])
+
+    def test_regression_comparison_with_results_format(self):
+        """Today and yesterday both having 'results' lists as written by scenario_regression.py."""
+        today = {"results": [{"seed": 1, "passed": True}, {"seed": 2, "passed": False}, {"seed": 3, "passed": True}]}
+        yesterday = {"results": [{"seed": 1, "passed": True}, {"seed": 2, "passed": True}, {"seed": 3, "passed": False}]}
+        cmp = sr.compare_with_yesterday(today, yesterday)
+        self.assertEqual(cmp["regressions"], [2])
+        self.assertEqual(cmp["fixes"], [3])
+        self.assertEqual(cmp["stable_seeds"], [1])
+
+    def test_regression_comparison_multi_scenario(self):
+        """Multi-scenario nightly report comparison."""
+        today = {
+            "scenarios": [
+                {"scenario": "crossroads", "results": [{"seed": 1, "passed": False}, {"seed": 2, "passed": True}]},
+                {"scenario": "alley", "results": [{"seed": 1, "passed": True}]},
+            ]
+        }
+        yesterday = {
+            "scenarios": [
+                {"scenario": "crossroads", "results": [{"seed": 1, "passed": True}, {"seed": 2, "passed": True}]},
+                {"scenario": "alley", "results": [{"seed": 1, "passed": True}]},
+            ]
+        }
+        cmp = sr.compare_with_yesterday(today, yesterday, scenario="crossroads")
+        self.assertEqual(cmp["regressions"], [1])
+        self.assertEqual(cmp["stable_seeds"], [2])
 
 
 if __name__ == "__main__":
