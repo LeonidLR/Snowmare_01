@@ -37,21 +37,7 @@
  ],
  "walls": [
   {
-   "id": "W_enc_S",
-   "a": [
-    -2200,
-    400
-   ],
-   "b": [
-    -800,
-    400
-   ],
-   "height": 300,
-   "thickness": 25,
-   "kind": "wall"
-  },
-  {
-   "id": "W_enc_W",
+   "id": "W_cross_near_S",
    "a": [
     -2200,
     400
@@ -61,49 +47,63 @@
     1600
    ],
    "height": 300,
-   "thickness": 25,
+   "thickness": 20,
    "kind": "wall"
   },
   {
-   "id": "W_enc_N",
+   "id": "W_cross_near_W",
    "a": [
     -2200,
-    1600
+    400
    ],
    "b": [
     -800,
-    1600
+    400
    ],
    "height": 300,
-   "thickness": 25,
+   "thickness": 20,
    "kind": "wall"
   },
   {
-   "id": "W_enc_E1",
+   "id": "W_cross_near_N",
    "a": [
     -800,
     400
    ],
    "b": [
     -800,
-    900
+    1600
    ],
    "height": 300,
-   "thickness": 25,
+   "thickness": 20,
    "kind": "wall"
   },
   {
-   "id": "W_enc_E2",
+   "id": "W_cross_near_E1",
    "a": [
-    -800,
-    1100
+    -2200,
+    1600
+   ],
+   "b": [
+    -1600,
+    1600
+   ],
+   "height": 300,
+   "thickness": 20,
+   "kind": "wall"
+  },
+  {
+   "id": "W_cross_near_E2",
+   "a": [
+    -1400,
+    1600
    ],
    "b": [
     -800,
     1600
    ],
    "height": 300,
-   "thickness": 25,
+   "thickness": 20,
    "kind": "wall"
   }
  ],
@@ -216,7 +216,7 @@
      0
     ],
     [
-     -1500,
+     -2000,
      0
     ],
     [
@@ -224,7 +224,7 @@
      0
     ],
     [
-     1500,
+     2000,
      0
     ],
     [

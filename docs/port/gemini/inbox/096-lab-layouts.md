@@ -25,7 +25,7 @@ Touch any existing map, accepted layout or export (X2 / X4 / X6, Depot, BgenPlan
 ## Gate
 `npm test` + typecheck in Tools/TrainingGround | `python Scripts/Tools/typesafe_triage.py --audit-diff --agent gemini` | `git diff --check`.
 Allowed paths: `Content/Data/LevelGen/accepted/gen_lab_*`, `Content/Data/LevelGen/{tactical,objectives,props}/L_Lab_*`,
-`Content/Data/LevelJson/L_Lab_*.json`, `Tools/TrainingGround/src/**/*.test.ts` (one new test file), `docs/port/gemini/**`.
+`Content/Data/LevelJson/L_Lab_*.json`, `Tools/TrainingGround/src/**/*.test.ts` (one new test file), `Tools/TrainingGround/scripts/**`, `docs/port/gemini/**`.
 
 ## Report
 `docs/port/gemini/outbox/096-lab-layouts.report.md` (Russian): per map what is in it (ASCII sketch), what the data model could not

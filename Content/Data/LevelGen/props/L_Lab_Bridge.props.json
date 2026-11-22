@@ -11,7 +11,7 @@
 			"id": "crates",
 			"kind": "crates",
 			"enabled": true,
-			"seed": 3,
+			"seed": 1,
 			"locked": false,
 			"preset": "crates_default",
 			"rules": {
@@ -39,57 +39,57 @@
 			},
 			"objects": [
 				{
-					"id": "crates_00000003_0",
+					"id": "crates_00000001_0",
 					"variant": "crate_s",
-					"pos": [2800, 1800],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false
-				},
-				{
-					"id": "crates_00000003_1",
-					"variant": "crate_l",
-					"pos": [700, -2250],
-					"walk_layer": "ground",
-					"yaw": 0,
-					"locked": false
-				},
-				{
-					"id": "crates_00000003_2",
-					"variant": "crate_s",
-					"pos": [-350, -350],
+					"pos": [850, -1350],
 					"walk_layer": "ground",
 					"yaw": 90,
 					"locked": false
 				},
 				{
-					"id": "crates_00000003_3",
-					"variant": "crate_s",
-					"pos": [350, -350],
+					"id": "crates_00000001_1",
+					"variant": "crate_l",
+					"pos": [1000, 2100],
 					"walk_layer": "ground",
 					"yaw": 270,
 					"locked": false
 				},
 				{
-					"id": "crates_00000003_4",
-					"variant": "crate_s",
-					"pos": [-2900, -1850],
-					"walk_layer": "ground",
-					"yaw": 90,
-					"locked": false
-				},
-				{
-					"id": "crates_00000003_5",
-					"variant": "crate_s",
-					"pos": [-2250, 2200],
+					"id": "crates_00000001_2",
+					"variant": "crate_l",
+					"pos": [450, 600],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false
 				},
 				{
-					"id": "crates_00000003_6",
+					"id": "crates_00000001_3",
 					"variant": "crate_s",
-					"pos": [950, 1400],
+					"pos": [1050, -1950],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_4",
+					"variant": "crate_s",
+					"pos": [2600, 2500],
+					"walk_layer": "ground",
+					"yaw": 180,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_5",
+					"variant": "crate_s",
+					"pos": [-1900, 1950],
+					"walk_layer": "ground",
+					"yaw": 270,
+					"locked": false
+				},
+				{
+					"id": "crates_00000001_6",
+					"variant": "crate_l",
+					"pos": [-700, 800],
 					"walk_layer": "ground",
 					"yaw": 90,
 					"locked": false
@@ -121,7 +121,7 @@
 			"id": "barrels",
 			"kind": "barrels",
 			"enabled": true,
-			"seed": 3,
+			"seed": 1,
 			"locked": false,
 			"preset": "barrels_default",
 			"rules": {
@@ -142,40 +142,40 @@
 			},
 			"objects": [
 				{
-					"id": "barrels_00000003_0",
-					"variant": "barrel",
-					"pos": [-2500, -1900],
+					"id": "barrels_00000001_0",
+					"variant": "barrel_explosive",
+					"pos": [-400, 2100],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
-					"cluster": "barrels_00000003_0"
+					"cluster": "barrels_00000001_0"
 				},
 				{
-					"id": "barrels_00000003_1",
+					"id": "barrels_00000001_1",
 					"variant": "barrel",
-					"pos": [-2500, -2000],
+					"pos": [-1900, 2500],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
-					"cluster": "barrels_00000003_0"
+					"cluster": "barrels_00000001_1"
 				},
 				{
-					"id": "barrels_00000003_2",
+					"id": "barrels_00000001_2",
 					"variant": "barrel",
-					"pos": [-2400, -1900],
+					"pos": [-1900, 2400],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
-					"cluster": "barrels_00000003_0"
+					"cluster": "barrels_00000001_1"
 				},
 				{
-					"id": "barrels_00000003_3",
+					"id": "barrels_00000001_3",
 					"variant": "barrel",
-					"pos": [-1500, 2050],
+					"pos": [-1950, 2450],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
-					"cluster": "barrels_00000003_3"
+					"cluster": "barrels_00000001_1"
 				}
 			],
 			"report": {
@@ -189,7 +189,7 @@
 					"keepout": 0,
 					"ladder": 0,
 					"other": 0,
-					"other_layer": 271,
+					"other_layer": 290,
 					"route": 284,
 					"spacing": 0,
 					"spawn": 3871
@@ -197,14 +197,14 @@
 				"requested": 4,
 				"short_by": 0,
 				"status": "ok",
-				"warnings": ["explosive_short 2"]
+				"warnings": ["explosive_short 1"]
 			}
 		},
 		{
 			"id": "turrets",
 			"kind": "turrets",
 			"enabled": true,
-			"seed": 3,
+			"seed": 1,
 			"locked": false,
 			"preset": "turrets_default",
 			"rules": {
@@ -241,7 +241,7 @@
 			"id": "mines",
 			"kind": "mines",
 			"enabled": true,
-			"seed": 3,
+			"seed": 1,
 			"locked": false,
 			"preset": "mines_default",
 			"rules": {
@@ -262,18 +262,28 @@
 			},
 			"objects": [
 				{
-					"id": "mines_00000003_1",
+					"id": "mines_00000001_0",
+					"variant": "mine_crate",
+					"pos": [450, 600],
+					"walk_layer": "ground",
+					"yaw": 0,
+					"locked": false,
+					"attach": "crates_00000001_2",
+					"trigger": "crate_open"
+				},
+				{
+					"id": "mines_00000001_1",
 					"variant": "mine_proximity",
-					"pos": [-150, 2150],
+					"pos": [50, -1850],
 					"walk_layer": "cut",
 					"yaw": 0,
 					"locked": false,
 					"trigger": "proximity"
 				},
 				{
-					"id": "mines_00000003_2",
+					"id": "mines_00000001_2",
 					"variant": "mine_proximity",
-					"pos": [100, -1300],
+					"pos": [100, 1100],
 					"walk_layer": "cut",
 					"yaw": 0,
 					"locked": false,
@@ -317,7 +327,7 @@
 					"other": 0,
 					"other_layer": 0,
 					"route": 63,
-					"spacing": 58,
+					"spacing": 50,
 					"spawn": 1
 				},
 				"requested": 3,
@@ -330,7 +340,7 @@
 			"id": "loot",
 			"kind": "loot",
 			"enabled": true,
-			"seed": 3,
+			"seed": 1,
 			"locked": false,
 			"preset": "loot_default",
 			"rules": {
@@ -338,27 +348,27 @@
 			},
 			"objects": [
 				{
-					"id": "loot_00000003_0",
+					"id": "loot_00000001_0",
 					"variant": "loot_crate",
-					"pos": [2800, 1800],
+					"pos": [1000, 2100],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
-					"attach": "crates_00000003_0",
+					"attach": "crates_00000001_1",
 					"loot_table": "med_common"
 				},
 				{
-					"id": "loot_00000003_1",
+					"id": "loot_00000001_1",
 					"variant": "loot_crate",
-					"pos": [-2250, 2200],
+					"pos": [-700, 800],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
-					"attach": "crates_00000003_5",
-					"loot_table": "ammo_common"
+					"attach": "crates_00000001_6",
+					"loot_table": "med_common"
 				},
 				{
-					"id": "loot_00000003_2",
+					"id": "loot_00000001_2",
 					"variant": "loot_pile",
 					"pos": [1200, -1050],
 					"walk_layer": "ground",
@@ -369,8 +379,8 @@
 			],
 			"report": {
 				"budget": {
-					"left": 140,
-					"spent": 160,
+					"left": 120,
+					"spent": 180,
 					"value": 300
 				},
 				"containers": {
@@ -407,14 +417,14 @@
 				"requested": 3,
 				"short_by": 0,
 				"status": "ok",
-				"warnings": ["budget_left 140"]
+				"warnings": ["budget_left 120"]
 			}
 		},
 		{
 			"id": "power",
 			"kind": "power",
 			"enabled": true,
-			"seed": 3,
+			"seed": 1,
 			"locked": false,
 			"preset": "power_default",
 			"rules": {},

@@ -32,7 +32,7 @@
   "yaw": 90
  },
  "end": [
-  1500,
+  1350,
   0
  ],
  "walls": [
@@ -59,21 +59,6 @@
    ],
    "b": [
     -1500,
-    767
-   ],
-   "height": 300,
-   "thickness": 30,
-   "kind": "building",
-   "building": "B_low"
-  },
-  {
-   "id": "B_low_S_1",
-   "a": [
-    -1500,
-    947
-   ],
-   "b": [
-    -1500,
     1600
    ],
    "height": 300,
@@ -85,6 +70,21 @@
    "id": "B_low_W_0",
    "a": [
     1200,
+    200
+   ],
+   "b": [
+    23,
+    200
+   ],
+   "height": 300,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_low"
+  },
+  {
+   "id": "B_low_W_1",
+   "a": [
+    -157,
     200
    ],
    "b": [
@@ -148,6 +148,21 @@
    ],
    "b": [
     1500,
+    -158
+   ],
+   "height": 600,
+   "thickness": 30,
+   "kind": "building",
+   "building": "B_two_storey"
+  },
+  {
+   "id": "B_two_storey_S_1",
+   "a": [
+    1500,
+    22
+   ],
+   "b": [
+    1500,
     1000
    ],
    "height": 600,
@@ -159,21 +174,6 @@
    "id": "B_two_storey_W_0",
    "a": [
     2700,
-    -1000
-   ],
-   "b": [
-    2231,
-    -1000
-   ],
-   "height": 600,
-   "thickness": 30,
-   "kind": "building",
-   "building": "B_two_storey"
-  },
-  {
-   "id": "B_two_storey_W_1",
-   "a": [
-    2051,
     -1000
    ],
    "b": [
@@ -204,11 +204,11 @@
    "id": "B_two_storey_part_f0_0_0",
    "a": [
     2700,
-    0
+    160
    ],
    "b": [
     2454,
-    0
+    160
    ],
    "height": 300,
    "thickness": 20,
@@ -219,11 +219,11 @@
    "id": "B_two_storey_part_f0_0_1",
    "a": [
     2274,
-    0
+    160
    ],
    "b": [
     1500,
-    0
+    160
    ],
    "height": 300,
    "thickness": 20,
@@ -233,12 +233,12 @@
   {
    "id": "B_two_storey_part_f0_1_0",
    "a": [
-    1920,
+    2100,
     -1000
    ],
    "b": [
-    1920,
-    -590
+    2100,
+    -510
    ],
    "height": 300,
    "thickness": 20,
@@ -248,12 +248,12 @@
   {
    "id": "B_two_storey_part_f0_1_1",
    "a": [
-    1920,
-    -410
+    2100,
+    -330
    ],
    "b": [
-    1920,
-    0
+    2100,
+    160
    ],
    "height": 300,
    "thickness": 20,
@@ -263,12 +263,12 @@
   {
    "id": "B_two_storey_part_f0_2_0",
    "a": [
-    1920,
-    0
+    2100,
+    160
    ],
    "b": [
-    1920,
-    410
+    2100,
+    490
    ],
    "height": 300,
    "thickness": 20,
@@ -278,11 +278,11 @@
   {
    "id": "B_two_storey_part_f0_2_1",
    "a": [
-    1920,
-    590
+    2100,
+    670
    ],
    "b": [
-    1920,
+    2100,
     1000
    ],
    "height": 300,
@@ -407,41 +407,97 @@
    "doors": [
     {
      "pos": [
-      -1500,
-      857
+      -67,
+      200
      ],
      "floor": 0,
-     "wall": "B_low_S"
+     "wall": "B_low_W"
     }
    ],
    "openings": [
     {
-     "id": "B_low_door_south_1",
+     "id": "B_low_door_west_1",
      "kind": "door",
      "pos": [
-      -1500,
-      857
+      -67,
+      200
      ],
      "floor": 0,
-     "wall": "B_low_S",
+     "wall": "B_low_W",
      "width": 120,
      "sill_height": 0,
      "top_height": 210,
-     "yaw": 180
+     "yaw": 270
     },
     {
-     "id": "B_low_win_south_f0_2",
+     "id": "B_low_win_west_f0_1",
      "kind": "window",
      "pos": [
-      -1500,
-      1083
+      707,
+      200
      ],
      "floor": 0,
-     "wall": "B_low_S",
+     "wall": "B_low_W",
      "width": 120,
      "sill_height": 95,
      "top_height": 210,
-     "yaw": 180
+     "yaw": 270
+    },
+    {
+     "id": "B_low_win_west_f0_2",
+     "kind": "window",
+     "pos": [
+      364,
+      200
+     ],
+     "floor": 0,
+     "wall": "B_low_W",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_low_win_west_f0_4",
+     "kind": "window",
+     "pos": [
+      -321,
+      200
+     ],
+     "floor": 0,
+     "wall": "B_low_W",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_low_win_west_f0_5",
+     "kind": "window",
+     "pos": [
+      -664,
+      200
+     ],
+     "floor": 0,
+     "wall": "B_low_W",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 270
+    },
+    {
+     "id": "B_low_win_west_f0_6",
+     "kind": "window",
+     "pos": [
+      -1007,
+      200
+     ],
+     "floor": 0,
+     "wall": "B_low_W",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 270
     }
    ],
    "partitions": [],
@@ -464,31 +520,115 @@
      },
      "kind": "room",
      "door_ids": [
-      "B_low_door_south_1"
+      "B_low_door_west_1"
      ]
     }
    ],
    "mantle_edges": [
     {
-     "id": "me_B_low_win_south_f0_2",
+     "id": "me_B_low_win_west_f0_1",
      "start": [
-      -1500,
-      1023
+      767,
+      200
      ],
      "end": [
-      -1500,
-      1143
+      647,
+      200
      ],
      "floor": 0,
      "base_z": 0,
      "height_cm": 95,
      "normal": [
-      -1,
-      0
+      0,
+      -1
      ],
      "kind": "window",
      "building": "B_low",
-     "wall": "B_low_S"
+     "wall": "B_low_W"
+    },
+    {
+     "id": "me_B_low_win_west_f0_2",
+     "start": [
+      424,
+      200
+     ],
+     "end": [
+      304,
+      200
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_low",
+     "wall": "B_low_W"
+    },
+    {
+     "id": "me_B_low_win_west_f0_4",
+     "start": [
+      -261,
+      200
+     ],
+     "end": [
+      -381,
+      200
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_low",
+     "wall": "B_low_W"
+    },
+    {
+     "id": "me_B_low_win_west_f0_5",
+     "start": [
+      -604,
+      200
+     ],
+     "end": [
+      -724,
+      200
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_low",
+     "wall": "B_low_W"
+    },
+    {
+     "id": "me_B_low_win_west_f0_6",
+     "start": [
+      -947,
+      200
+     ],
+     "end": [
+      -1067,
+      200
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      0,
+      -1
+     ],
+     "kind": "window",
+     "building": "B_low",
+     "wall": "B_low_W"
     }
    ],
    "stairs": [],
@@ -515,55 +655,125 @@
    "doors": [
     {
      "pos": [
-      2141,
-      -1000
+      1500,
+      -68
      ],
      "floor": 0,
-     "wall": "B_two_storey_W"
+     "wall": "B_two_storey_S"
     }
    ],
    "openings": [
     {
-     "id": "B_two_storey_door_west_1",
+     "id": "B_two_storey_door_south_1",
      "kind": "door",
      "pos": [
-      2141,
-      -1000
+      1500,
+      -68
      ],
      "floor": 0,
-     "wall": "B_two_storey_W",
+     "wall": "B_two_storey_S",
      "width": 120,
      "sill_height": 0,
      "top_height": 210,
-     "yaw": 270
+     "yaw": 180
     },
     {
-     "id": "B_two_storey_win_west_f1_1",
+     "id": "B_two_storey_win_south_f0_1",
      "kind": "window",
      "pos": [
-      2250,
-      -1000
+      1500,
+      -510
      ],
-     "floor": 1,
-     "wall": "B_two_storey_W",
+     "floor": 0,
+     "wall": "B_two_storey_S",
      "width": 120,
      "sill_height": 95,
      "top_height": 210,
-     "yaw": 270
+     "yaw": 180
     },
     {
-     "id": "B_two_storey_win_west_f1_2",
+     "id": "B_two_storey_win_south_f1_1",
      "kind": "window",
      "pos": [
-      1950,
-      -1000
+      1500,
+      -510
      ],
      "floor": 1,
-     "wall": "B_two_storey_W",
+     "wall": "B_two_storey_S",
      "width": 120,
      "sill_height": 95,
      "top_height": 210,
-     "yaw": 270
+     "yaw": 180
+    },
+    {
+     "id": "B_two_storey_win_south_f1_2",
+     "kind": "window",
+     "pos": [
+      1500,
+      -170
+     ],
+     "floor": 1,
+     "wall": "B_two_storey_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_two_storey_win_south_f0_3",
+     "kind": "window",
+     "pos": [
+      1500,
+      170
+     ],
+     "floor": 0,
+     "wall": "B_two_storey_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_two_storey_win_south_f1_3",
+     "kind": "window",
+     "pos": [
+      1500,
+      170
+     ],
+     "floor": 1,
+     "wall": "B_two_storey_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_two_storey_win_south_f0_4",
+     "kind": "window",
+     "pos": [
+      1500,
+      510
+     ],
+     "floor": 0,
+     "wall": "B_two_storey_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
+    },
+    {
+     "id": "B_two_storey_win_south_f1_4",
+     "kind": "window",
+     "pos": [
+      1500,
+      510
+     ],
+     "floor": 1,
+     "wall": "B_two_storey_S",
+     "width": 120,
+     "sill_height": 95,
+     "top_height": 210,
+     "yaw": 180
     },
     {
      "id": "B_two_storey_win_north_f0_1",
@@ -678,116 +888,60 @@
      "yaw": 0
     },
     {
-     "id": "B_two_storey_win_south_f0_1",
+     "id": "B_two_storey_win_west_f0_1",
      "kind": "window",
      "pos": [
-      1500,
-      -510
+      2250,
+      -1000
      ],
      "floor": 0,
-     "wall": "B_two_storey_S",
+     "wall": "B_two_storey_W",
      "width": 120,
      "sill_height": 95,
      "top_height": 210,
-     "yaw": 180
+     "yaw": 270
     },
     {
-     "id": "B_two_storey_win_south_f1_1",
+     "id": "B_two_storey_win_west_f1_1",
      "kind": "window",
      "pos": [
-      1500,
-      -510
+      2250,
+      -1000
      ],
      "floor": 1,
-     "wall": "B_two_storey_S",
+     "wall": "B_two_storey_W",
      "width": 120,
      "sill_height": 95,
      "top_height": 210,
-     "yaw": 180
+     "yaw": 270
     },
     {
-     "id": "B_two_storey_win_south_f0_2",
+     "id": "B_two_storey_win_west_f0_2",
      "kind": "window",
      "pos": [
-      1500,
-      -170
+      1950,
+      -1000
      ],
      "floor": 0,
-     "wall": "B_two_storey_S",
+     "wall": "B_two_storey_W",
      "width": 120,
      "sill_height": 95,
      "top_height": 210,
-     "yaw": 180
+     "yaw": 270
     },
     {
-     "id": "B_two_storey_win_south_f1_2",
+     "id": "B_two_storey_win_west_f1_2",
      "kind": "window",
      "pos": [
-      1500,
-      -170
+      1950,
+      -1000
      ],
      "floor": 1,
-     "wall": "B_two_storey_S",
+     "wall": "B_two_storey_W",
      "width": 120,
      "sill_height": 95,
      "top_height": 210,
-     "yaw": 180
-    },
-    {
-     "id": "B_two_storey_win_south_f0_3",
-     "kind": "window",
-     "pos": [
-      1500,
-      170
-     ],
-     "floor": 0,
-     "wall": "B_two_storey_S",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 180
-    },
-    {
-     "id": "B_two_storey_win_south_f1_3",
-     "kind": "window",
-     "pos": [
-      1500,
-      170
-     ],
-     "floor": 1,
-     "wall": "B_two_storey_S",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 180
-    },
-    {
-     "id": "B_two_storey_win_south_f0_4",
-     "kind": "window",
-     "pos": [
-      1500,
-      510
-     ],
-     "floor": 0,
-     "wall": "B_two_storey_S",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 180
-    },
-    {
-     "id": "B_two_storey_win_south_f1_4",
-     "kind": "window",
-     "pos": [
-      1500,
-      510
-     ],
-     "floor": 1,
-     "wall": "B_two_storey_S",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 180
+     "yaw": 270
     }
    ],
    "partitions": [
@@ -795,11 +949,11 @@
      "id": "B_two_storey_part_f0_0",
      "start": [
       2700,
-      0
+      160
      ],
      "end": [
       1500,
-      0
+      160
      ],
      "floor": 0,
      "thickness": 20,
@@ -809,7 +963,7 @@
        "kind": "door",
        "pos": [
         2364,
-        0
+        160
        ],
        "floor": 0,
        "width": 120,
@@ -821,12 +975,12 @@
     {
      "id": "B_two_storey_part_f0_1",
      "start": [
-      1920,
+      2100,
       -1000
      ],
      "end": [
-      1920,
-      0
+      2100,
+      160
      ],
      "floor": 0,
      "thickness": 20,
@@ -835,8 +989,8 @@
        "id": "B_two_storey_partdoor_f0_1",
        "kind": "door",
        "pos": [
-        1920,
-        -500
+        2100,
+        -420
        ],
        "floor": 0,
        "width": 120,
@@ -848,11 +1002,11 @@
     {
      "id": "B_two_storey_part_f0_2",
      "start": [
-      1920,
-      0
+      2100,
+      160
      ],
      "end": [
-      1920,
+      2100,
       1000
      ],
      "floor": 0,
@@ -862,8 +1016,8 @@
        "id": "B_two_storey_partdoor_f0_2",
        "kind": "door",
        "pos": [
-        1920,
-        500
+        2100,
+        580
        ],
        "floor": 0,
        "width": 120,
@@ -1121,17 +1275,16 @@
      "floor": 0,
      "bounds": {
       "min": [
-       1920,
+       2100,
        -1000
       ],
       "max": [
        2700,
-       0
+       160
       ]
      },
      "kind": "room",
      "door_ids": [
-      "B_two_storey_door_west_1",
       "B_two_storey_partdoor_f0_0",
       "B_two_storey_partdoor_f0_1"
      ]
@@ -1145,12 +1298,13 @@
        -1000
       ],
       "max": [
-       1920,
-       0
+       2100,
+       160
       ]
      },
      "kind": "room",
      "door_ids": [
+      "B_two_storey_door_south_1",
       "B_two_storey_partdoor_f0_1"
      ]
     },
@@ -1159,8 +1313,8 @@
      "floor": 0,
      "bounds": {
       "min": [
-       1920,
-       0
+       2100,
+       160
       ],
       "max": [
        2700,
@@ -1179,10 +1333,10 @@
      "bounds": {
       "min": [
        1500,
-       0
+       160
       ],
       "max": [
-       1920,
+       2100,
        1000
       ]
      },
@@ -1268,46 +1422,151 @@
    ],
    "mantle_edges": [
     {
-     "id": "me_B_two_storey_win_west_f1_1",
+     "id": "me_B_two_storey_win_south_f0_1",
      "start": [
-      2310,
-      -1000
+      1500,
+      -570
      ],
      "end": [
-      2190,
-      -1000
+      1500,
+      -450
      ],
-     "floor": 1,
-     "base_z": 300,
+     "floor": 0,
+     "base_z": 0,
      "height_cm": 95,
      "normal": [
-      0,
-      -1
+      -1,
+      0
      ],
      "kind": "window",
      "building": "B_two_storey",
-     "wall": "B_two_storey_W"
+     "wall": "B_two_storey_S"
     },
     {
-     "id": "me_B_two_storey_win_west_f1_2",
+     "id": "me_B_two_storey_win_south_f1_1",
      "start": [
-      2010,
-      -1000
+      1500,
+      -570
      ],
      "end": [
-      1890,
-      -1000
+      1500,
+      -450
      ],
      "floor": 1,
      "base_z": 300,
      "height_cm": 95,
      "normal": [
-      0,
-      -1
+      -1,
+      0
      ],
      "kind": "window",
      "building": "B_two_storey",
-     "wall": "B_two_storey_W"
+     "wall": "B_two_storey_S"
+    },
+    {
+     "id": "me_B_two_storey_win_south_f1_2",
+     "start": [
+      1500,
+      -230
+     ],
+     "end": [
+      1500,
+      -110
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_two_storey",
+     "wall": "B_two_storey_S"
+    },
+    {
+     "id": "me_B_two_storey_win_south_f0_3",
+     "start": [
+      1500,
+      110
+     ],
+     "end": [
+      1500,
+      230
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_two_storey",
+     "wall": "B_two_storey_S"
+    },
+    {
+     "id": "me_B_two_storey_win_south_f1_3",
+     "start": [
+      1500,
+      110
+     ],
+     "end": [
+      1500,
+      230
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_two_storey",
+     "wall": "B_two_storey_S"
+    },
+    {
+     "id": "me_B_two_storey_win_south_f0_4",
+     "start": [
+      1500,
+      450
+     ],
+     "end": [
+      1500,
+      570
+     ],
+     "floor": 0,
+     "base_z": 0,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_two_storey",
+     "wall": "B_two_storey_S"
+    },
+    {
+     "id": "me_B_two_storey_win_south_f1_4",
+     "start": [
+      1500,
+      450
+     ],
+     "end": [
+      1500,
+      570
+     ],
+     "floor": 1,
+     "base_z": 300,
+     "height_cm": 95,
+     "normal": [
+      -1,
+      0
+     ],
+     "kind": "window",
+     "building": "B_two_storey",
+     "wall": "B_two_storey_S"
     },
     {
      "id": "me_B_two_storey_win_north_f0_1",
@@ -1478,172 +1737,88 @@
      "wall": "B_two_storey_N"
     },
     {
-     "id": "me_B_two_storey_win_south_f0_1",
+     "id": "me_B_two_storey_win_west_f0_1",
      "start": [
-      1500,
-      -570
+      2310,
+      -1000
      ],
      "end": [
-      1500,
-      -450
+      2190,
+      -1000
      ],
      "floor": 0,
      "base_z": 0,
      "height_cm": 95,
      "normal": [
-      -1,
-      0
+      0,
+      -1
      ],
      "kind": "window",
      "building": "B_two_storey",
-     "wall": "B_two_storey_S"
+     "wall": "B_two_storey_W"
     },
     {
-     "id": "me_B_two_storey_win_south_f1_1",
+     "id": "me_B_two_storey_win_west_f1_1",
      "start": [
-      1500,
-      -570
+      2310,
+      -1000
      ],
      "end": [
-      1500,
-      -450
+      2190,
+      -1000
      ],
      "floor": 1,
      "base_z": 300,
      "height_cm": 95,
      "normal": [
-      -1,
-      0
+      0,
+      -1
      ],
      "kind": "window",
      "building": "B_two_storey",
-     "wall": "B_two_storey_S"
+     "wall": "B_two_storey_W"
     },
     {
-     "id": "me_B_two_storey_win_south_f0_2",
+     "id": "me_B_two_storey_win_west_f0_2",
      "start": [
-      1500,
-      -230
+      2010,
+      -1000
      ],
      "end": [
-      1500,
-      -110
+      1890,
+      -1000
      ],
      "floor": 0,
      "base_z": 0,
      "height_cm": 95,
      "normal": [
-      -1,
-      0
+      0,
+      -1
      ],
      "kind": "window",
      "building": "B_two_storey",
-     "wall": "B_two_storey_S"
+     "wall": "B_two_storey_W"
     },
     {
-     "id": "me_B_two_storey_win_south_f1_2",
+     "id": "me_B_two_storey_win_west_f1_2",
      "start": [
-      1500,
-      -230
+      2010,
+      -1000
      ],
      "end": [
-      1500,
-      -110
+      1890,
+      -1000
      ],
      "floor": 1,
      "base_z": 300,
      "height_cm": 95,
      "normal": [
-      -1,
-      0
+      0,
+      -1
      ],
      "kind": "window",
      "building": "B_two_storey",
-     "wall": "B_two_storey_S"
-    },
-    {
-     "id": "me_B_two_storey_win_south_f0_3",
-     "start": [
-      1500,
-      110
-     ],
-     "end": [
-      1500,
-      230
-     ],
-     "floor": 0,
-     "base_z": 0,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_two_storey",
-     "wall": "B_two_storey_S"
-    },
-    {
-     "id": "me_B_two_storey_win_south_f1_3",
-     "start": [
-      1500,
-      110
-     ],
-     "end": [
-      1500,
-      230
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_two_storey",
-     "wall": "B_two_storey_S"
-    },
-    {
-     "id": "me_B_two_storey_win_south_f0_4",
-     "start": [
-      1500,
-      450
-     ],
-     "end": [
-      1500,
-      570
-     ],
-     "floor": 0,
-     "base_z": 0,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_two_storey",
-     "wall": "B_two_storey_S"
-    },
-    {
-     "id": "me_B_two_storey_win_south_f1_4",
-     "start": [
-      1500,
-      450
-     ],
-     "end": [
-      1500,
-      570
-     ],
-     "floor": 1,
-     "base_z": 300,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_two_storey",
-     "wall": "B_two_storey_S"
+     "wall": "B_two_storey_W"
     },
     {
      "id": "me_B_two_storey_para_N",
@@ -1765,10 +1940,10 @@
   {
    "id": "LAD_B_two_storey",
    "pos": [
-    2159,
-    -1010
+    1490,
+    -250
    ],
-   "yaw": 270,
+   "yaw": 180,
    "rungs": 16,
    "plinth_cm": 17.6,
    "from": "ground",
@@ -1776,12 +1951,12 @@
    "level_from": 0,
    "level_to": 2,
    "foot": [
-    2159,
-    -1110
+    1390,
+    -250
    ],
    "top": [
-    2159,
-    -900
+    1600,
+    -250
    ]
   }
  ],
@@ -1829,11 +2004,11 @@
      0
     ],
     [
-     1200,
+     1000,
      0
     ],
     [
-     1500,
+     1350,
      0
     ]
    ],
@@ -1860,7 +2035,7 @@
      2000
     ],
     [
-     1500,
+     1350,
      0
     ]
    ],
@@ -1892,14 +2067,119 @@
  "patrol_routes": [],
  "mantle_edges": [
   {
-   "id": "me_B_low_win_south_f0_2",
+   "id": "me_B_low_win_west_f0_1",
    "start": [
-    -1500,
-    1023
+    767,
+    200
    ],
    "end": [
-    -1500,
-    1143
+    647,
+    200
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_W"
+  },
+  {
+   "id": "me_B_low_win_west_f0_2",
+   "start": [
+    424,
+    200
+   ],
+   "end": [
+    304,
+    200
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_W"
+  },
+  {
+   "id": "me_B_low_win_west_f0_4",
+   "start": [
+    -261,
+    200
+   ],
+   "end": [
+    -381,
+    200
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_W"
+  },
+  {
+   "id": "me_B_low_win_west_f0_5",
+   "start": [
+    -604,
+    200
+   ],
+   "end": [
+    -724,
+    200
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_W"
+  },
+  {
+   "id": "me_B_low_win_west_f0_6",
+   "start": [
+    -947,
+    200
+   ],
+   "end": [
+    -1067,
+    200
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    0,
+    -1
+   ],
+   "kind": "window",
+   "building": "B_low",
+   "wall": "B_low_W"
+  },
+  {
+   "id": "me_B_two_storey_win_south_f0_1",
+   "start": [
+    1500,
+    -570
+   ],
+   "end": [
+    1500,
+    -450
    ],
    "floor": 0,
    "base_z": 0,
@@ -1909,50 +2189,134 @@
     0
    ],
    "kind": "window",
-   "building": "B_low",
-   "wall": "B_low_S"
+   "building": "B_two_storey",
+   "wall": "B_two_storey_S"
   },
   {
-   "id": "me_B_two_storey_win_west_f1_1",
+   "id": "me_B_two_storey_win_south_f1_1",
    "start": [
-    2310,
-    -1000
+    1500,
+    -570
    ],
    "end": [
-    2190,
-    -1000
+    1500,
+    -450
    ],
    "floor": 1,
    "base_z": 300,
    "height_cm": 95,
    "normal": [
-    0,
-    -1
+    -1,
+    0
    ],
    "kind": "window",
    "building": "B_two_storey",
-   "wall": "B_two_storey_W"
+   "wall": "B_two_storey_S"
   },
   {
-   "id": "me_B_two_storey_win_west_f1_2",
+   "id": "me_B_two_storey_win_south_f1_2",
    "start": [
-    2010,
-    -1000
+    1500,
+    -230
    ],
    "end": [
-    1890,
-    -1000
+    1500,
+    -110
    ],
    "floor": 1,
    "base_z": 300,
    "height_cm": 95,
    "normal": [
-    0,
-    -1
+    -1,
+    0
    ],
    "kind": "window",
    "building": "B_two_storey",
-   "wall": "B_two_storey_W"
+   "wall": "B_two_storey_S"
+  },
+  {
+   "id": "me_B_two_storey_win_south_f0_3",
+   "start": [
+    1500,
+    110
+   ],
+   "end": [
+    1500,
+    230
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_two_storey",
+   "wall": "B_two_storey_S"
+  },
+  {
+   "id": "me_B_two_storey_win_south_f1_3",
+   "start": [
+    1500,
+    110
+   ],
+   "end": [
+    1500,
+    230
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_two_storey",
+   "wall": "B_two_storey_S"
+  },
+  {
+   "id": "me_B_two_storey_win_south_f0_4",
+   "start": [
+    1500,
+    450
+   ],
+   "end": [
+    1500,
+    570
+   ],
+   "floor": 0,
+   "base_z": 0,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_two_storey",
+   "wall": "B_two_storey_S"
+  },
+  {
+   "id": "me_B_two_storey_win_south_f1_4",
+   "start": [
+    1500,
+    450
+   ],
+   "end": [
+    1500,
+    570
+   ],
+   "floor": 1,
+   "base_z": 300,
+   "height_cm": 95,
+   "normal": [
+    -1,
+    0
+   ],
+   "kind": "window",
+   "building": "B_two_storey",
+   "wall": "B_two_storey_S"
   },
   {
    "id": "me_B_two_storey_win_north_f0_1",
@@ -2123,172 +2487,88 @@
    "wall": "B_two_storey_N"
   },
   {
-   "id": "me_B_two_storey_win_south_f0_1",
+   "id": "me_B_two_storey_win_west_f0_1",
    "start": [
-    1500,
-    -570
+    2310,
+    -1000
    ],
    "end": [
-    1500,
-    -450
+    2190,
+    -1000
    ],
    "floor": 0,
    "base_z": 0,
    "height_cm": 95,
    "normal": [
-    -1,
-    0
+    0,
+    -1
    ],
    "kind": "window",
    "building": "B_two_storey",
-   "wall": "B_two_storey_S"
+   "wall": "B_two_storey_W"
   },
   {
-   "id": "me_B_two_storey_win_south_f1_1",
+   "id": "me_B_two_storey_win_west_f1_1",
    "start": [
-    1500,
-    -570
+    2310,
+    -1000
    ],
    "end": [
-    1500,
-    -450
+    2190,
+    -1000
    ],
    "floor": 1,
    "base_z": 300,
    "height_cm": 95,
    "normal": [
-    -1,
-    0
+    0,
+    -1
    ],
    "kind": "window",
    "building": "B_two_storey",
-   "wall": "B_two_storey_S"
+   "wall": "B_two_storey_W"
   },
   {
-   "id": "me_B_two_storey_win_south_f0_2",
+   "id": "me_B_two_storey_win_west_f0_2",
    "start": [
-    1500,
-    -230
+    2010,
+    -1000
    ],
    "end": [
-    1500,
-    -110
+    1890,
+    -1000
    ],
    "floor": 0,
    "base_z": 0,
    "height_cm": 95,
    "normal": [
-    -1,
-    0
+    0,
+    -1
    ],
    "kind": "window",
    "building": "B_two_storey",
-   "wall": "B_two_storey_S"
+   "wall": "B_two_storey_W"
   },
   {
-   "id": "me_B_two_storey_win_south_f1_2",
+   "id": "me_B_two_storey_win_west_f1_2",
    "start": [
-    1500,
-    -230
+    2010,
+    -1000
    ],
    "end": [
-    1500,
-    -110
+    1890,
+    -1000
    ],
    "floor": 1,
    "base_z": 300,
    "height_cm": 95,
    "normal": [
-    -1,
-    0
+    0,
+    -1
    ],
    "kind": "window",
    "building": "B_two_storey",
-   "wall": "B_two_storey_S"
-  },
-  {
-   "id": "me_B_two_storey_win_south_f0_3",
-   "start": [
-    1500,
-    110
-   ],
-   "end": [
-    1500,
-    230
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_two_storey",
-   "wall": "B_two_storey_S"
-  },
-  {
-   "id": "me_B_two_storey_win_south_f1_3",
-   "start": [
-    1500,
-    110
-   ],
-   "end": [
-    1500,
-    230
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_two_storey",
-   "wall": "B_two_storey_S"
-  },
-  {
-   "id": "me_B_two_storey_win_south_f0_4",
-   "start": [
-    1500,
-    450
-   ],
-   "end": [
-    1500,
-    570
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_two_storey",
-   "wall": "B_two_storey_S"
-  },
-  {
-   "id": "me_B_two_storey_win_south_f1_4",
-   "start": [
-    1500,
-    450
-   ],
-   "end": [
-    1500,
-    570
-   ],
-   "floor": 1,
-   "base_z": 300,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_two_storey",
-   "wall": "B_two_storey_S"
+   "wall": "B_two_storey_W"
   },
   {
    "id": "me_B_two_storey_para_N",
@@ -2404,7 +2684,7 @@
    {
     "id": "GOAL_alley",
     "pos": [
-     1500,
+     1350,
      0
     ],
     "layer": "ground",

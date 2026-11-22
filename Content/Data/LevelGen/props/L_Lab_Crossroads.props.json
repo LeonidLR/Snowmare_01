@@ -200,7 +200,7 @@
 				{
 					"id": "barrels_00000001_0",
 					"variant": "barrel_explosive",
-					"pos": [-1900, 2900],
+					"pos": [-2000, 2900],
 					"walk_layer": "ground",
 					"yaw": 0,
 					"locked": false,
@@ -240,7 +240,7 @@
 				"kept": 0,
 				"placed": 4,
 				"rejected": {
-					"blocked": 877,
+					"blocked": 871,
 					"door": 0,
 					"keepout": 0,
 					"ladder": 0,
@@ -248,7 +248,7 @@
 					"other_layer": 617,
 					"route": 754,
 					"spacing": 0,
-					"spawn": 3390
+					"spawn": 3391
 				},
 				"requested": 4,
 				"short_by": 0,

@@ -1,25 +1,10 @@
 {
- "at": "2026-11-22T12:00:00.000Z",
- "score": 1,
+ "at": "2026-11-22T12:43:38.391Z",
+ "note": "Standalone combat lab layout for smart enemies T-02 (layouts part); score and AI verdicts not computed",
  "summary": [
-  "# Level generator - gen_lab_bridge (profile lab_bridge, seed 3)",
-  "score 1.0 | route COMPLETABLE | Lab Bridge",
-  "counts: buildings 1, covers 3, walls 5"
- ],
- "verdicts": [
-  {
-   "client": "jev",
-   "model": "jev-latest",
-   "fits": true,
-   "confidence": 1,
-   "quality": 5,
-   "reasons": [
-    "Lab layout gen_lab_bridge: matches smart-enemies-roadmap.md T-02 spec"
-   ],
-   "fixes": [],
-   "costUsd": 0,
-   "offline": true,
-   "at": "2026-11-22T12:00:00.000Z"
-  }
+  "# Level generator - gen_lab_bridge (Lab Bridge)",
+  "Combat lab layout for smart enemies roadmap (T-02). Map: L_Lab_Bridge",
+  "bounds: [-3000, -2500] .. [3000, 2500] cm",
+  "buildings: 1, covers: 3, routes: 1"
  ]
 }

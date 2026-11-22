@@ -2,7 +2,7 @@
   "schema": "codex.tactical_map/2",
   "map": "L_Lab_Bridge",
   "layout": "gen_lab_bridge",
-  "geometry_hash": "9762a1f3dbe1a381",
+  "geometry_hash": "9fb63028cf86e909",
   "analysis_version": 1,
   "analysis_source": "computed",
   "conditions": {
@@ -29,13 +29,12 @@
     "ladder_only_factor": 0.65
   },
   "chokepoints": [
-    {"id":"CP_01","kind":"only_way","kind_name":"единственный путь","tags":["narrow","only_way","window_fire"],"score":0.441,"layer":"ground","pos":[-253,0,0],"line":[[-322,202,0],[-300,3,0],[-103,0,0],[97,0,0],[197,0,0]],"poly":[[-124,224],[-165,150],[-101,200],[97,200],[197,200],[197,-200],[97,-200],[-104,-200],[-436,-145],[-521,179]],"length_m":7,"width_m":4,"lane_m":1.06,"route":"mandatory","sources":["objectives","route:R_main","street:Z_ST_bridge"],"alternative":"detour","detour_m":33.2,"drop_spots":[],"windows":["B_overlook_win_south_f0_1","B_overlook_win_south_f0_2","B_overlook_win_south_f0_3"],"overwatch":[],"hiding_spots":[],"reveal_m":null,"reveal_stealth_m":null}
+    {"id":"CP_01","kind":"only_way","kind_name":"единственный путь","tags":["narrow","only_way","window_fire"],"score":0.408,"layer":"ground","pos":[-253,0,0],"line":[[-322,202,0],[-300,3,0],[-103,0,0],[97,0,0],[197,0,0]],"poly":[[-124,224],[-165,150],[-101,200],[97,200],[197,200],[197,-200],[97,-200],[-104,-200],[-436,-145],[-521,179]],"length_m":7,"width_m":4,"lane_m":1.06,"route":"mandatory","sources":["objectives","route:R_main","street:Z_ST_bridge"],"alternative":"detour","detour_m":33.2,"drop_spots":[],"windows":["B_overlook_win_east_f0_1","B_overlook_win_east_f0_2"],"overwatch":[],"hiding_spots":[],"reveal_m":null,"reveal_stealth_m":null}
   ],
   "drop_spots": [],
   "windows": [
-    {"id":"B_overlook_win_south_f0_1","building":"B_overlook","floor":0,"layer":"ground","kind":"window","pos":[650,-1350,0],"stand":[710,-1350,0],"yaw":180,"covered_m":72,"min_dist_m":14.4,"places":["CP_01"]},
-    {"id":"B_overlook_win_south_f0_2","building":"B_overlook","floor":0,"layer":"ground","kind":"window","pos":[650,-1050,0],"stand":[710,-1050,0],"yaw":180,"covered_m":78,"min_dist_m":10.9,"places":["CP_01"]},
-    {"id":"B_overlook_win_south_f0_3","building":"B_overlook","floor":0,"layer":"ground","kind":"window","pos":[650,-750,0],"stand":[710,-750,0],"yaw":180,"covered_m":78,"min_dist_m":8.1,"places":["CP_01"]}
+    {"id":"B_overlook_win_east_f0_1","building":"B_overlook","floor":0,"layer":"ground","kind":"window","pos":[1367,-300,0],"stand":[1367,-360,0],"yaw":90,"covered_m":48,"min_dist_m":2.7,"places":["CP_01"]},
+    {"id":"B_overlook_win_east_f0_2","building":"B_overlook","floor":0,"layer":"ground","kind":"window","pos":[1083,-300,0],"stand":[1083,-360,0],"yaw":90,"covered_m":48,"min_dist_m":2.6,"places":["CP_01"]}
   ],
   "overwatch_roofs": [],
   "hiding_spots": [

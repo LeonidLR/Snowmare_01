@@ -155,46 +155,32 @@
      "yaw": 0
     },
     {
-     "id": "B_overlook_win_south_f0_1",
+     "id": "B_overlook_win_east_f0_1",
      "kind": "window",
      "pos": [
-      650,
-      -1350
+      1367,
+      -300
      ],
      "floor": 0,
-     "wall": "B_overlook_S",
+     "wall": "B_overlook_E",
      "width": 120,
      "sill_height": 95,
      "top_height": 210,
-     "yaw": 180
+     "yaw": 90
     },
     {
-     "id": "B_overlook_win_south_f0_2",
+     "id": "B_overlook_win_east_f0_2",
      "kind": "window",
      "pos": [
-      650,
-      -1050
+      1083,
+      -300
      ],
      "floor": 0,
-     "wall": "B_overlook_S",
+     "wall": "B_overlook_E",
      "width": 120,
      "sill_height": 95,
      "top_height": 210,
-     "yaw": 180
-    },
-    {
-     "id": "B_overlook_win_south_f0_3",
-     "kind": "window",
-     "pos": [
-      650,
-      -750
-     ],
-     "floor": 0,
-     "wall": "B_overlook_S",
-     "width": 120,
-     "sill_height": 95,
-     "top_height": 210,
-     "yaw": 180
+     "yaw": 90
     }
    ],
    "partitions": [],
@@ -223,67 +209,46 @@
    ],
    "mantle_edges": [
     {
-     "id": "me_B_overlook_win_south_f0_1",
+     "id": "me_B_overlook_win_east_f0_1",
      "start": [
-      650,
-      -1410
+      1427,
+      -300
      ],
      "end": [
-      650,
-      -1290
+      1307,
+      -300
      ],
      "floor": 0,
      "base_z": 0,
      "height_cm": 95,
      "normal": [
-      -1,
-      0
+      0,
+      1
      ],
      "kind": "window",
      "building": "B_overlook",
-     "wall": "B_overlook_S"
+     "wall": "B_overlook_E"
     },
     {
-     "id": "me_B_overlook_win_south_f0_2",
+     "id": "me_B_overlook_win_east_f0_2",
      "start": [
-      650,
-      -1110
+      1143,
+      -300
      ],
      "end": [
-      650,
-      -990
+      1023,
+      -300
      ],
      "floor": 0,
      "base_z": 0,
      "height_cm": 95,
      "normal": [
-      -1,
-      0
+      0,
+      1
      ],
      "kind": "window",
      "building": "B_overlook",
-     "wall": "B_overlook_S"
-    },
-    {
-     "id": "me_B_overlook_win_south_f0_3",
-     "start": [
-      650,
-      -810
-     ],
-     "end": [
-      650,
-      -690
-     ],
-     "floor": 0,
-     "base_z": 0,
-     "height_cm": 95,
-     "normal": [
-      -1,
-      0
-     ],
-     "kind": "window",
-     "building": "B_overlook",
-     "wall": "B_overlook_S"
+     "wall": "B_overlook_E"
     }
    ],
    "stairs": [],
@@ -316,6 +281,11 @@
   "crossings": [
    {
     "id": "crossing_deck",
+    "pos": [
+     25,
+     30
+    ],
+    "width": 4,
     "kind": "bridge",
     "poly": [
      [
@@ -516,67 +486,46 @@
    "kind": "crate"
   },
   {
-   "id": "me_B_overlook_win_south_f0_1",
+   "id": "me_B_overlook_win_east_f0_1",
    "start": [
-    650,
-    -1410
+    1427,
+    -300
    ],
    "end": [
-    650,
-    -1290
+    1307,
+    -300
    ],
    "floor": 0,
    "base_z": 0,
    "height_cm": 95,
    "normal": [
-    -1,
-    0
+    0,
+    1
    ],
    "kind": "window",
    "building": "B_overlook",
-   "wall": "B_overlook_S"
+   "wall": "B_overlook_E"
   },
   {
-   "id": "me_B_overlook_win_south_f0_2",
+   "id": "me_B_overlook_win_east_f0_2",
    "start": [
-    650,
-    -1110
+    1143,
+    -300
    ],
    "end": [
-    650,
-    -990
+    1023,
+    -300
    ],
    "floor": 0,
    "base_z": 0,
    "height_cm": 95,
    "normal": [
-    -1,
-    0
+    0,
+    1
    ],
    "kind": "window",
    "building": "B_overlook",
-   "wall": "B_overlook_S"
-  },
-  {
-   "id": "me_B_overlook_win_south_f0_3",
-   "start": [
-    650,
-    -810
-   ],
-   "end": [
-    650,
-    -690
-   ],
-   "floor": 0,
-   "base_z": 0,
-   "height_cm": 95,
-   "normal": [
-    -1,
-    0
-   ],
-   "kind": "window",
-   "building": "B_overlook",
-   "wall": "B_overlook_S"
+   "wall": "B_overlook_E"
   }
  ],
  "pressure": {

@@ -2,7 +2,7 @@
   "schema": "codex.tactical_map/2",
   "map": "L_Lab_Crossroads",
   "layout": "gen_lab_crossroads",
-  "geometry_hash": "ba0d73f9477002f4",
+  "geometry_hash": "8732af823d156bf2",
   "analysis_version": 1,
   "analysis_source": "computed",
   "conditions": {
@@ -33,8 +33,8 @@
   "windows": [],
   "overwatch_roofs": [],
   "hiding_spots": [
-    {"id":"HS_01","layer":"ground","pos":[-725,475,0],"facing_yaw":-87,"reveal_normal_m":5.1,"reveal_stealth_m":5.1,"stealth_only":false,"blind":false,"rush_m":4.7,"cover":"wall:W_enc_E1","cover_height_cm":300,"threatens":{"line":"route:R_main","route":"R_main","pos":[-700,0,0]}},
-    {"id":"HS_02","layer":"ground","pos":[1675,425,0],"facing_yaw":-54.5,"reveal_normal_m":7.2,"reveal_stealth_m":7.2,"stealth_only":false,"blind":false,"rush_m":3.3,"cover":"cover:cov_cross_4","cover_height_cm":95,"threatens":{"line":"route:R_main","route":"R_main","pos":[1870,152,0]}}
+    {"id":"HS_01","layer":"ground","pos":[-725,475,0],"facing_yaw":-87,"reveal_normal_m":5.1,"reveal_stealth_m":5.1,"stealth_only":false,"blind":false,"rush_m":4.7,"cover":"wall:W_cross_near_N","cover_height_cm":300,"threatens":{"line":"route:R_main","route":"R_main","pos":[-700,0,0]}},
+    {"id":"HS_02","layer":"ground","pos":[1675,-425,0],"facing_yaw":86.2,"reveal_normal_m":6.6,"reveal_stealth_m":6.6,"stealth_only":false,"blind":false,"rush_m":2.5,"cover":"cover:cov_cross_3","cover_height_cm":95,"threatens":{"line":"route:R_main","route":"R_main","pos":[1693,-154,0]}}
   ],
   "ladder_only_roofs": [],
   "walkable_roofs": [],

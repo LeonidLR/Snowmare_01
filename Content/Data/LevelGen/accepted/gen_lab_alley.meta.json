@@ -1,25 +1,10 @@
 {
- "at": "2026-11-22T12:00:00.000Z",
- "score": 1,
+ "at": "2026-11-22T12:43:38.389Z",
+ "note": "Standalone combat lab layout for smart enemies T-02 (layouts part); score and AI verdicts not computed",
  "summary": [
-  "# Level generator - gen_lab_alley (profile lab_alley, seed 2)",
-  "score 1.0 | route COMPLETABLE | Lab Alley",
-  "counts: buildings 2, covers 0, walls 23"
- ],
- "verdicts": [
-  {
-   "client": "jev",
-   "model": "jev-latest",
-   "fits": true,
-   "confidence": 1,
-   "quality": 5,
-   "reasons": [
-    "Lab layout gen_lab_alley: matches smart-enemies-roadmap.md T-02 spec"
-   ],
-   "fixes": [],
-   "costUsd": 0,
-   "offline": true,
-   "at": "2026-11-22T12:00:00.000Z"
-  }
+  "# Level generator - gen_lab_alley (Lab Alley)",
+  "Combat lab layout for smart enemies roadmap (T-02). Map: L_Lab_Alley",
+  "bounds: [-3000, -2500] .. [3000, 2500] cm",
+  "buildings: 2, covers: 0, routes: 2"
  ]
 }
