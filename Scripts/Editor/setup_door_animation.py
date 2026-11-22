@@ -8,28 +8,37 @@ Skeleton check: the clips sit on the pack's own UE5 mannequin skeleton (/Game/Fr
 SK_Mannequin; strings of the .uasset, confirmed here by the loaded clips). Our operatives are on the UE4 mannequin hierarchy
 (UE4_Mannequin_Skeleton: SK_Post_Apo_Survivor_a; the Female_Soldier body plays the same copies in the game) -> IK retarget like the cold
 idles / storm walk (setup_operative_storm_animation.py): the M4 pack's RTG_UE5Manny_UE4Manny with its "Blend to Source" op off IN MEMORY
-(never saved). The PMC operator (SK_PmcOperator_Skeleton) has the pack's UE5 hierarchy (+ root_inner) -> its montages use the pack clips
-by bone name (as the shotgun / pistol pack clips, docs/systems/animation-setup.md; Montage_Play does not check compatible skeletons).
+(never saved). The PMC operator (SK_PmcOperator_Skeleton) has the pack's UE5 hierarchy (+ root_inner, identity between root and pelvis).
+Played by bone name (the first R2 set: copies of the pack clips on the pack skeleton) the clips lost their root motion - the PMC capsule did
+not move (0 cm). Designer 2026-11-22 "door animations for the PMC": the PMC set is IK-RETARGETED onto SKM_PmcOperator like the launcher set
+(setup_launcher_animation.py body "Pmc"): a transient retargeter (the M4 pack's RTG_UE4Manny_UE5Manny op stack, IK_Mannequin on BOTH sides -
+the pack and the PMC body are UE5 Manny hierarchies; auto-mapped chains, "Blend to Source" off; never saved, deleted at the end), then the
+same root motion bake as the operatives' copies. Old PMC copies still on the pack skeleton are replaced (with their montages) by a re-run.
 
 Writes (nothing in the pack folder, no skeleton / ABP / engine asset saved):
   /Game/Animations/Door/UE4/anim_OpenDoor_*         retargeted copies (root motion off: the clips play in place)
   /Game/Animations/Door/UE4/AM_Door_{Open,Kick,Push}_{L,R}   montages, slot FullBody (ABP_Operative's full-body slot)
-  /Game/Animations/Door/Pmc/AM_Door_{Open,Kick,Push}_{L,R}   montages of the pack clips themselves (DEPEND on the untracked pack)
+  /Game/Animations/Door/Pmc/anim_OpenDoor_*         copies retargeted onto SKM_PmcOperator (skeleton SK_PmcOperator_Skeleton)
+  /Game/Animations/Door/Pmc/AM_Door_{Open,Kick,Push}_{L,R}   montages of those copies, slot FullBody
+  /Game/Animations/Door/_Tmp/RTG_DoorPack_Pmc_TMP    the transient retargeter (deleted again at the end of the run)
 /Game/Animations is untracked (designer packs): these assets are derived from the untracked pack and are not committed.
 ROOT MOTION (designer 2026-11-22, option a): the pack clips walk the pelvis forward with no root motion (open 74, kick 104, push 195 cm) -
 in place they slid and snapped back. The kick / push clips carry it on their root bone already (only root motion was off); the open clips
 move the pelvis alone. Every copy whose root stands still gets the pelvis's smoothed horizontal travel baked into the root track (the pelvis keeps
 its height and its sway - the residual about the smoothed path), root motion on (root lock: first frame): the montage drives the capsule.
-The PMC montages use baked COPIES of the pack clips (/Game/Animations/Door/Pmc/anim_OpenDoor_*; the pack itself is never written).
+The PMC montages use the baked retargeted copies (/Game/Animations/Door/Pmc/anim_OpenDoor_*; the pack itself is never written); the
+PMC body's root_inner track (identity) is counted into the pelvis travel, its rotation is checked (logged when it turns).
 Measures per clip the CONTACT time (hand / foot furthest forward = on the leaf / the kick lands) -> doors.json montage_contact_s
 (the averages are printed; the game uses them to time the leaf), the clip length, root motion and the pelvis travel.
 
 Run with every editor of this project closed:
   UnrealEditor-Cmd.exe CodexTactics.uproject -run=pythonscript -script="<abs path, forward slashes>" -unattended -nullrhi -nosplash
 CODEX_DOOR_DRYRUN=1: retarget in memory and measure only. CODEX_RESET_DOOR_CLIPS=1: redo existing copies / montages.
+CODEX_DOOR_BODIES=UE4,Pmc (default both) limits the sets made / measured.
 Result: Saved/Logs/setup_door_animation.txt (+ setup_door_animation.json with the measured contact times).
 """
 import json
+import math
 import os
 
 import unreal
@@ -43,6 +52,11 @@ PACK_MESH = "/Game/Free_Interaction_Animation/Demo/Characters/Mannequins/Meshes/
 RETARGETER = "/Game/M4_Cover_Pack/Demo/Characters/Mannequin_UE4/Rigs/RTG_UE5Manny_UE4Manny"
 TARGET_MESH = "/Game/Post_Apo_Survivor/Models/SK_Post_Apo_Survivor_a"
 PMC_MESH = "/Game/Characters/Enemies/PMC/Operator/SKM_PmcOperator"
+PMC_SKELETON = "SK_PmcOperator_Skeleton"
+IK_UE5 = "/Game/M4_Cover_Pack/Demo/Characters/Mannequins/Rigs/IK_Mannequin"
+TEMPLATE_RTG_UE5 = "/Game/M4_Cover_Pack/Demo/Characters/Mannequin_UE4/Rigs/RTG_UE4Manny_UE5Manny"
+TMP = "/Game/Animations/Door/_Tmp"
+BODIES = [b.strip() for b in os.environ.get("CODEX_DOOR_BODIES", "UE4,Pmc").split(",") if b.strip() in ("UE4", "Pmc")]
 OUT_UE4 = "/Game/Animations/Door/UE4"
 OUT_PMC = "/Game/Animations/Door/Pmc"
 FULL_BODY_SLOT = "FullBody"
@@ -124,7 +138,14 @@ def bake_root_motion(clip, window_s=0.3):
     length = clip.get_editor_property("sequence_length")
     half = max(1, int(round(window_s * 0.5 * (keys - 1) / max(length, 0.001))))
     pel = list(tracks["pelvis"][0])
-    raw = [(p.x - pel[0].x, p.y - pel[0].y) for p in pel]
+    # The PMC body: root -> root_inner -> pelvis. root_inner is identity in its reference pose; its translation (if the retarget keys any)
+    # counts into the travel, and the pelvis offset below stays valid while root_inner does not turn (checked, logged).
+    inner = tracks["root_inner"][0] if "root_inner" in tracks else [unreal.Vector(0.0, 0.0, 0.0)] * keys
+    if "root_inner" in tracks:
+        turn = max(2.0 * math.degrees(math.acos(min(1.0, abs(q.w)))) for q in tracks["root_inner"][1])
+        if turn > 1.0:
+            say(f"  {clip.get_name()}: root_inner turns {turn:.1f} deg - the pelvis offset is taken in its parent's axes")
+    raw = [(pel[f].x + inner[f].x - pel[0].x - inner[0].x, pel[f].y + inner[f].y - pel[0].y - inner[0].y) for f in range(keys)]
     smooth = []
     for f in range(keys):
         lo, hi = max(0, f - half), min(keys - 1, f + half)
@@ -156,6 +177,55 @@ def bake_root_motion(clip, window_s=0.3):
         except Exception as error:  # noqa: BLE001
             say(f"root_motion_root_lock: {error}")
     return (raw[-1][0] ** 2 + raw[-1][1] ** 2) ** 0.5, keys, False
+
+
+def rekey(clip):
+    """Re-key the clip from its own frames (drops the key data an IK retarget leaves behind, as setup_launcher_animation.py's rebake)."""
+    model = clip.get_editor_property("data_model_interface")
+    bones = [str(b) for b in model.get_bone_track_names()]
+    keys = model.get_number_of_keys()
+    tracks = {b: ([], [], []) for b in bones}
+    for f in range(keys):
+        for b, t in zip(bones, unreal.AnimationLibrary.get_bone_poses_for_frame(clip, bones, f, False)):
+            tracks[b][0].append(unreal.Vector(t.translation.x, t.translation.y, t.translation.z))
+            tracks[b][1].append(unreal.Quat(t.rotation.x, t.rotation.y, t.rotation.z, t.rotation.w))
+            tracks[b][2].append(unreal.Vector(t.scale3d.x, t.scale3d.y, t.scale3d.z))
+    ctrl = clip.controller
+    ctrl.open_bracket(unreal.Text("door rekey"), False)
+    ctrl.remove_all_bone_tracks(False)
+    for b in bones:
+        ctrl.add_bone_track(b, False)
+        ctrl.set_bone_track_keys(b, tracks[b][0], tracks[b][1], tracks[b][2], False)
+    ctrl.close_bracket(False)
+
+
+def make_pmc_retargeter():
+    """UE5 Manny (the pack) -> UE5 Manny (the PMC body), transient: RTG_UE4Manny_UE5Manny's op stack, IK_Mannequin on both sides."""
+    template, ik = load(TEMPLATE_RTG_UE5), load(IK_UE5)
+    if not template or not ik:
+        return None
+    if library.does_asset_exist(f"{TMP}/RTG_DoorPack_Pmc_TMP"):
+        library.delete_asset(f"{TMP}/RTG_DoorPack_Pmc_TMP")
+    rtg = tools.duplicate_asset("RTG_DoorPack_Pmc_TMP", TMP, template)
+    if not rtg:
+        return None
+    ctrl = unreal.IKRetargeterController.get_controller(rtg)
+    ctrl.set_ik_rig(unreal.RetargetSourceOrTarget.SOURCE, ik)
+    ctrl.set_ik_rig(unreal.RetargetSourceOrTarget.TARGET, ik)
+    for side in (unreal.RetargetSourceOrTarget.SOURCE, unreal.RetargetSourceOrTarget.TARGET):
+        try:
+            ctrl.assign_ik_rig_to_all_ops(side, ik)
+        except Exception as error:  # noqa: BLE001 - older signature / source not per op
+            say(f"assign_ik_rig_to_all_ops({side}): {error}")
+    try:
+        ctrl.auto_map_chains(unreal.AutoMapChainType.EXACT, True)
+    except Exception as error:  # noqa: BLE001
+        say(f"auto_map_chains: {error}")
+    index = ctrl.get_index_of_op_by_name("Blend to Source")
+    if index >= 0:
+        ctrl.set_retarget_op_enabled(index, False)
+    say(f"transient retargeter UE5 -> UE5 (IK_Mannequin both sides), ops {ctrl.get_num_retarget_ops()}, 'Blend to Source' off")
+    return rtg
 
 
 def make_montage(dest, name, clip, force=False):
@@ -204,11 +274,13 @@ copies = {}
 todo = []
 for key, (clip_name, _, _) in CLIPS.items():
     dest = f"{OUT_UE4}/{clip_name}"
+    if "UE4" not in BODIES:
+        break
     if library.does_asset_exist(dest) and not RESET:
         copies[key] = library.load_asset(dest)
     elif key in pack:
         todo.append(key)
-if todo and retargeter and source_mesh and target_mesh:
+if todo and retargeter and source_mesh and target_mesh and "UE4" in BODIES:
     controller = unreal.IKRetargeterController.get_controller(retargeter)
     index = controller.get_index_of_op_by_name("Blend to Source")
     if index >= 0:
@@ -230,22 +302,54 @@ if todo and retargeter and source_mesh and target_mesh:
                 library.save_loaded_asset(asset, False)
     say(f"retargeted {len(todo)} clip(s) onto {target_mesh.get_name()} -> {OUT_UE4}{' (in memory)' if DRY else ''}")
 
-# 1b. PMC copies of the pack clips (same skeleton; the pack is never written).
+# 1b. PMC copies: IK-retargeted onto SKM_PmcOperator (a copy still on the pack skeleton - the first R2 set - is redone).
 pmc_copies = {}
-for key, (clip_name, _, _) in CLIPS.items():
+pmc_todo = []
+for key, (clip_name, montage_name, _) in CLIPS.items():
+    if "Pmc" not in BODIES:
+        break
     dest = f"{OUT_PMC}/{clip_name}"
-    if library.does_asset_exist(dest) and not RESET:
-        pmc_copies[key] = library.load_asset(dest)
-    elif key in pack and not DRY:
-        if library.does_asset_exist(dest):
-            library.delete_asset(dest)
-        pmc_copies[key] = library.duplicate_asset(pack[key].get_path_name().split(".")[0], dest)
-        say(f"copied {clip_name} -> {dest}")
+    existing = library.load_asset(dest) if library.does_asset_exist(dest) else None
+    on_body = existing is not None and existing.get_editor_property("skeleton").get_name() == PMC_SKELETON
+    if existing is not None and on_body and not RESET:
+        pmc_copies[key] = existing
+    elif key in pack:
+        if existing is not None:
+            say(f"PMC {clip_name}: on {existing.get_editor_property('skeleton').get_name()} - redone by the retarget")
+        pmc_todo.append(key)
+pmc_retargeter = make_pmc_retargeter() if pmc_todo and source_mesh and pmc_mesh else None
+if pmc_todo and pmc_retargeter:
+    if not DRY:
+        for key in pmc_todo:
+            # the montage first (it references the old copy), then the copy itself
+            for path in (f"{OUT_PMC}/{CLIPS[key][1]}", f"{OUT_PMC}/{CLIPS[key][0]}"):
+                if library.does_asset_exist(path):
+                    library.delete_asset(path)
+    registry = unreal.AssetRegistryHelpers.get_asset_registry()
+    by_pack_name = {str(d.asset_name): d for d in registry.get_assets_by_path(PACK, recursive=False)}
+    datas = [by_pack_name[CLIPS[k][0]] for k in pmc_todo if CLIPS[k][0] in by_pack_name]
+    result = unreal.IKRetargetBatchOperation.duplicate_and_retarget(datas, source_mesh, pmc_mesh, pmc_retargeter, target_path=OUT_PMC,
+                                                                    include_referenced_assets=False, overwrite_existing_files=True)
+    by_name = {str(d.asset_name): d.get_asset() for d in result}
+    for key in pmc_todo:
+        asset = by_name.get(CLIPS[key][0])
+        if isinstance(asset, unreal.AnimSequence):
+            asset.set_editor_property("enable_root_motion", False)
+            asset.set_editor_property("force_root_lock", True)
+            rekey(asset)
+            pmc_copies[key] = asset
+            say(f"PMC {CLIPS[key][0]}: retargeted onto {pmc_mesh.get_name()} (skeleton {asset.get_editor_property('skeleton').get_name()})")
+            if not DRY:
+                library.save_loaded_asset(asset, False)
+        else:
+            say(f"PMC {CLIPS[key][0]}: the retarget gave no clip")
+    say(f"retargeted {len(pmc_todo)} clip(s) onto {pmc_mesh.get_name()} -> {OUT_PMC}{' (in memory)' if DRY else ''}")
 
 # 2. Root motion, measurements, montages.
 contacts = {"open": [], "kick": [], "push": []}
 roots = {"open": [], "kick": [], "push": []}
 at_contact = {"open": [], "kick": [], "push": []}
+pmc_roots = {"open": [], "kick": [], "push": []}
 report = {"clips": {}}
 for key, (clip_name, montage_name, bone) in CLIPS.items():
     kind = key.split("_")[0]
@@ -256,7 +360,7 @@ for key, (clip_name, montage_name, bone) in CLIPS.items():
                                 "pelvis_travel_cm": [round(pelvis.x, 1), round(pelvis.y, 1), round(pelvis.z, 1)]}
         say(f"{clip_name}: {bone} on the leaf at {t:.2f} s (reach {reach:.0f} cm) of {length:.2f} s; pelvis travel "
             f"({pelvis.x:.0f}, {pelvis.y:.0f}, {pelvis.z:.0f}) cm")
-    for label, dest, clip, mesh in (("UE4", OUT_UE4, copies.get(key), target_mesh), ("Pmc", OUT_PMC, pmc_copies.get(key), None)):
+    for label, dest, clip, mesh in (("UE4", OUT_UE4, copies.get(key), target_mesh), ("Pmc", OUT_PMC, pmc_copies.get(key), pmc_mesh)):
         if not clip:
             continue
         travel, frames, skipped = bake_root_motion(clip)
@@ -272,6 +376,8 @@ for key, (clip_name, montage_name, bone) in CLIPS.items():
         if label == "UE4":
             roots[kind].append(end_cm)
             at_contact[kind].append(contact_cm)
+        else:
+            pmc_roots[kind].append(end_cm)
         report["clips"].setdefault(key, {})[label] = {"root_end_cm": round(end_cm, 1), "root_at_contact_cm": round(contact_cm, 1),
                                                       "root_end_xy": [round(r1.x - r0.x, 1), round(r1.y - r0.y, 1)], "contact_s": round(tc, 3),
                                                       "baked_before": skipped, "frames": frames}
@@ -282,9 +388,15 @@ for key, (clip_name, montage_name, bone) in CLIPS.items():
 report["montage_contact_s"] = {k: round(sum(v) / len(v), 2) for k, v in contacts.items() if v}
 report["montage_root_cm"] = {k: round(sum(v) / len(v)) for k, v in roots.items() if v}
 report["montage_root_at_contact_cm"] = {k: round(sum(v) / len(v)) for k, v in at_contact.items() if v}
+report["pmc_root_cm"] = {k: round(sum(v) / len(v)) for k, v in pmc_roots.items() if v}
 say(f"doors.json montage_contact_s (measured): {json.dumps(report['montage_contact_s'])}")
 say(f"doors.json montage_root_cm (UE4 copies): {json.dumps(report['montage_root_cm'])}; root travel at the contact: "
     f"{json.dumps(report['montage_root_at_contact_cm'])}")
+say(f"PMC copies root travel (vs the UE4 copies' montage_root_cm): {json.dumps(report['pmc_root_cm'])}")
+if pmc_retargeter:
+    library.delete_loaded_asset(pmc_retargeter)
+    if library.does_directory_exist(TMP):
+        library.delete_directory(TMP)
 say("DRY RUN: nothing saved" if DRY else "done")
 logs = os.path.join(unreal.Paths.project_saved_dir(), "Logs")
 os.makedirs(logs, exist_ok=True)
